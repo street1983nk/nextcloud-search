@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: executing
-stopped_at: 20-05 gebaut und committet (ecf8bd2, fff9aba, e6185c9, 42f6add), Gates lokal gruen, NICHT gepusht
-last_updated: "2026-09-25T11:20:00.000Z"
-last_activity: 2026-09-25 -- 20-05 ausgefuehrt, Italienisch ausgeliefert
+stopped_at: 20-06 gebaut und committet (3f76cdc, e7ed056, d40e335), Gates lokal gruen, NICHT gepusht
+last_updated: "2026-09-25T12:20:00.000Z"
+last_activity: 2026-09-25 -- 20-06 ausgefuehrt, Niederlaendisch ausgeliefert
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 38
-  completed_plans: 34
+  completed_plans: 35
   percent: 46
 ---
 
@@ -21,12 +21,40 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 20 (ui-kataloge) laeuft; 20-01 abgenommen, 20-02 bis 20-05 gebaut
+**Current focus:** Phase 20 (ui-kataloge) laeuft; 20-01 abgenommen, 20-02 bis 20-06 gebaut
 
 ## Current Position
 
-Phase: 20 (ui-kataloge-es-it-nl-pt), 5 of 9 gebaut; Phase 19 COMPLETE 25.09.2026
-Status: 20-05 (der italienische Katalog) ist gebaut und committet (ecf8bd2 it.json plus it.js,
+Phase: 20 (ui-kataloge-es-it-nl-pt), 6 of 9 gebaut; Phase 19 COMPLETE 25.09.2026
+Status: 20-06 (der niederlaendische Katalog) ist gebaut und committet (3f76cdc nl.json plus
+nl.js, e7ed056 Gate-Eintrag, d40e335 docs/l10n-dutch.md). DREI Commits statt vier: der
+Rule-3-Fix am Vokabular-Gate, den 20-04 und 20-05 brauchten, war hier nicht noetig.
+php/l10n/nl.json und nl.js fuehren dieselben 202 Schluessel wie de.json, fuenf Pluralwerte mit
+ZWEI Formen (nicht drei wie es/it), pluralForm nplurals=2; plural=(n != 1); zeichengleich aus
+docs/l10n-catalogues.md und zeichengleich mit der deutschen Regel. L10N_CATALOGUES fuehrt jetzt
+ZWOELF Eintraege. VALUES_THAT_MAY_EQUAL_THEIR_KEY["nl"] fuehrt VIER begruendete Eintraege
+(Findling, %1$s in %2$s, PDF und Spreadsheets), gemessen per Lauf mit leerem Mapping: acht
+Funde, vier Schluessel ueber zwei Dateien. Spreadsheets ist der Eintrag, den weder Spanisch
+noch Italienisch hat. docs/l10n-dutch.md (534 Zeilen, neun Abschnitte, 202 Tabellenzeilen)
+traegt den datierten Vorbehalt vom 25.09.2026 mit dem Satz "von keinem Muttersprachler
+gelesen". Das Gate hat KEINE Logikaenderung gebraucht: 55 Zufuegungen, 0 Loeschungen (mehr als
+die 39 bei Italienisch, und der Unterschied ist vollstaendig der Begruendungsabsatz). Suite
+2879 passed / 15 skipped, ruff/pyright/vulture gruen. NICHT gepusht.
+BEFUND 1: die gestellte Gegenprobe aus 20-02 ist eingeloest, und zwar ueber eine Sprache, die
+es jetzt wirklich gibt. scan_plural_rule("nl.json","nl",GERMAN_PLURAL_FORM) liefert [],
+dieselbe Zeichenkette fuer es liefert zwei Funde, und eine FREMDE Regel fuer nl liefert weiter
+einen Fund: das Gate ist fuer nl nicht blind geworden.
+BEFUND 2: das Vokabular-Gate faellt ueber docs/l10n-dutch.md NICHT (0 Stammtreffer), anders als
+bei Spanisch (61) und Italienisch (9). Das Niederlaendische schreibt Datei als bestand und
+Speicherort als opslag. Die Prognose aus 20-04 stimmte fuer nl; gemessen wurde sie trotzdem.
+Fuer pt in 20-07 lautet sie weiter "kein Treffer", Stand: einmal bestaetigt, zweimal knapp
+daneben.
+BEFUND 3: zwei niederlaendische Pluralwerte tragen zweimal denselben Wortlaut (%n uur und
+en nog %n). Das ist korrekt und kein Kopierfehler: Massangaben bleiben nach einem Zahlwort im
+Singular (twee uur), und der zweite Satz traegt kein beugbares Hauptwort.
+KAT-01 und KAT-02 bleiben ungehakt (beide umfassen zehn Katalogdateien, sechs stehen).
+
+Vorheriger Stand: 20-05 (der italienische Katalog) ist gebaut und committet (ecf8bd2 it.json plus it.js,
 fff9aba Gate-Eintrag, e6185c9 docs/l10n-italian.md, 42f6add Rule-3-Fix am Vokabular-Gate).
 php/l10n/it.json und it.js fuehren dieselben 202 Schluessel wie de.json, fuenf Pluralwerte mit
 drei Formen (Form 1 gleich Form 2), pluralForm mit nplurals=3 zeichengleich aus
@@ -48,7 +76,6 @@ benutzt dort das englische Wort), sondern ueber dem fuer den Speicherort, neun T
 zehnter Treffer war die echte deutsche Form in einer Erklaerzeile und ist umformuliert und
 nicht mitentschuldigt worden. MITZUNEHMEN: das Gate laufen lassen und die Treffer lesen, statt
 der Prognose der Vorgaengersprache zu glauben; sie ging zweimal knapp daneben.
-KAT-01 und KAT-02 bleiben ungehakt (beide umfassen zehn Katalogdateien, vier stehen).
 
 Vorheriger Stand: 20-04 (der spanische Katalog) ist gebaut und committet (7dd61fd es.json, c61955d es.js
 plus Gate-Eintrag, 64527aa docs/l10n-spanish.md, aa9f36a Rule-3-Fix am Vokabular-Gate).
@@ -121,29 +148,32 @@ Instanz den Erststempel der Verzeichnismarken; Folge: Feldplan blieb LEGACY, rot
 Fix-Beweis). Endstand-CI 36096526219 GRUEN 4/4 inkl. arm64. Suite 2877 passed / 15 skipped.
 LEHRE: ein Audit-Fix, der einen Schreiber entfernt, braucht die Frage "wer schreibt das
 sonst noch auf JEDEM Pfad" plus einen Frischinstanz-Fall, bevor er reist.
-Last activity: 2026-09-25 -- 20-05 ausgefuehrt, keine offene Owner-Frage in Phase 20
+Last activity: 2026-09-25 -- 20-06 ausgefuehrt, keine offene Owner-Frage in Phase 20
 
 Progress: [████......] 46% (3 von 7 Phasen)
 
 ## Naechster Schritt
 
-**20-06 ausfuehren** (Niederlaendisch: zwei Dateien mit ZWEI Pluralformen, die zeichengleiche
-deutsche Regel als benannter Sonderfall, Eintrag in L10N_CATALOGUES und in
-VALUES_THAT_MAY_EQUAL_THEIR_KEY, docs/l10n-dutch.md mit datiertem Vorbehalt). Danach 20-07 bis
-20-09, dann Phase 21 (nl-Komposita, eigenes Tor, streichbar) und Phase 22 (Messanfahrt
-BL-F03).
-Mitzunehmen in 20-06 bis 20-08, aus 20-04 und 20-05 gemessen:
+**20-07 ausfuehren** (Portugiesisch: VIER Dateien, pt_PT und pt_BR je json und js, KEINE
+pt.json, Eintraege in L10N_CATALOGUES und in VALUES_THAT_MAY_EQUAL_THEIR_KEY je Code,
+docs/l10n-portuguese.md dreispaltig mit datiertem Vorbehalt). Danach 20-08 und 20-09, dann
+Phase 21 (nl-Komposita, eigenes Tor, streichbar) und Phase 22 (Messanfahrt BL-F03).
+Mitzunehmen in 20-07 und 20-08, aus 20-04 bis 20-06 gemessen:
 1. Die .json und die .js einer Sprache gehoeren in EINEN Commit. Das Pluralregel-Gate liest zu
    jeder vorhandenen php/l10n/<code>.json die zugehoerige .js unbedingt; eine alleinstehende
    .json faellt mit FileNotFoundError, also ist der Zwischenstand keine halbe Arbeit, sondern
-   eine kaputte Suite. Der Gate-Eintrag bleibt ein eigener Commit.
+   eine kaputte Suite. Der Gate-Eintrag bleibt ein eigener Commit. Fuer 20-07 mit dem Zusatz,
+   dass dort VIER Dateien entstehen: jedes Paar ein Commit, oder alle vier einer.
 2. Jede neue Sprache braucht einen eigenen Eintrag in VALUES_THAT_MAY_EQUAL_THEIR_KEY, sonst
    faellt das Vollstaendigkeitsgate mit dem Sprachcode. Die Liste wird gefunden (Lauf mit
-   leerem Mapping) und nicht geraten; es hatte zwei Schluessel, it drei, fr fuenf. Fuer nl ist
-   mit mehr zu rechnen, weil Niederlaendisch mehrere dieser Woerter wie das Englische schreibt.
+   leerem Mapping) und nicht geraten; es hatte zwei Schluessel, it drei, nl vier, fr fuenf.
+   Bei nl kam Spreadsheets dazu, und zwar NICHT bei den Woertern, bei denen man es erwartet
+   haette (file heisst bestand, folder heisst map): die Groesse war vorhersagbar, der Schluessel
+   nicht.
 3. Beim Vokabular-Gate in tests/test_public_artifacts.py wird gemessen und nicht prognostiziert.
-   Die Vorhersage aus 20-04 stimmte fuer it in der Wirkung, aber im falschen Wort. Fuer nl und
-   pt lautet die Prognose weiter "kein Treffer"; sie ist zweimal knapp danebengegangen.
+   Die Vorhersage aus 20-04 stimmte fuer it in der Wirkung, aber im falschen Wort, und fuer nl
+   ganz (0 Treffer, kein AUSNAHMEN-Eintrag noetig). Fuer pt lautet die Prognose weiter "kein
+   Treffer"; Stand: einmal bestaetigt, zweimal knapp daneben.
 4. Ein echter Treffer der gesperrten deutschen Form wird umformuliert und nie mit dem
    Dateieintrag mitentschuldigt: die Ausnahme gilt je Datei und deckt sonst genau den Fehler,
    den die Familie fangen soll.
@@ -289,6 +319,22 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
   wechselt zwischen Infinitivanweisung und Sie-Form; das Italienische kann beides, also wechselt
   es mit. So bleibt der Wechsel eine Eigenschaft der Quelle statt eine Nachlaessigkeit der
   Uebersetzung, und wer ihn vereinheitlichen will, findet die Stellen im deutschen Katalog.
+- Eine gestellte Gegenprobe wird eingeloest, sobald es die Sprache gibt, fuer die sie gestellt
+  wurde (20-06). 20-02 hat scan_plural_rule sprachbewusst gemacht, weil nl die deutsche
+  Regelzeichenkette zu Recht fuehrt; der Beleg dafuer war bis 20-06 ein Testrumpf ohne Datei.
+  Jetzt steht der Dreifachaufruf: nl mit der deutschen Zeichenkette liefert [], es mit
+  derselben liefert zwei Funde, und nl mit einer FREMDEN Regel liefert weiter einen Fund. Die
+  dritte Zeile ist die tragende: ein Gate, das fuer eine Sprache blind geworden waere, haette
+  dieselbe erste Zeile geliefert.
+- Ein Sonderfall, der wie ein Fehler aussieht, steht an beiden Orten, an denen ihn jemand
+  dafuer halten koennte (20-06): im Kommentarabsatz des Gates und in der Sprachdoku, jeweils
+  mit der ausdruecklichen Bitte, den Scanner nicht zu reparieren. Der Absatz ist der Grund,
+  warum der nl-Gate-Diff 55 Zeilen hat und der it-Diff 39; die Parametrisierung selbst ist bei
+  beiden unberuehrt geblieben, und nl war die erste neue Sprache mit abweichender Formenzahl.
+- Zwei gleiche Formen in einem Pluralwert koennen die richtige Uebersetzung sein (20-06).
+  %n uur steht im Niederlaendischen zweimal gleich, weil Massangaben nach einem Zahlwort im
+  Singular bleiben (twee uur, drie kilometer); bei minuut und dag gilt das nicht. Wer so etwas
+  fuer einen Kopierfehler haelt, "repariert" eine korrekte Zeile.
 - Ein Wortstamm-Gate auf einer Sprache stolpert ueber die Homographen einer anderen (20-04,
   bestaetigt und berichtigt in 20-05). Fuer Italienisch traf es nicht das Wort fuer Datei (das
   Italienische benutzt dort das englische Wort), sondern das fuer den Speicherort. Die Prognose
@@ -379,5 +425,5 @@ auf resolved gesetzt).
 ## Session Continuity
 
 Last session: 2026-09-25
-Stopped at: 20-05 ausgefuehrt und committet (ecf8bd2, fff9aba, e6185c9, 42f6add), SUMMARY geschrieben, Gates lokal gruen, NICHT gepusht; kein Checkpoint in diesem Plan
-Resume file: .planning/phases/20-ui-kataloge-es-it-nl-pt/20-05-SUMMARY.md (naechster Schritt: 20-06 ausfuehren; der Orchestrator pusht gesammelt)
+Stopped at: 20-06 ausgefuehrt und committet (3f76cdc, e7ed056, d40e335), SUMMARY geschrieben, Gates lokal gruen, NICHT gepusht; kein Checkpoint in diesem Plan
+Resume file: .planning/phases/20-ui-kataloge-es-it-nl-pt/20-06-SUMMARY.md (naechster Schritt: 20-07 ausfuehren; der Orchestrator pusht gesammelt)

@@ -149,7 +149,7 @@ Plans:
 - [x] 20-03-PLAN.md: Scanner parametrisiert statt kopiert, plus Prozent- und Pipe-Scanner gegen die zwei stillen Seitenzerstoerer -- gebaut 25.09.2026 (32f6e47, d2ddcb4, 106ce1e)
 - [x] 20-04-PLAN.md: Spanisch, zwei Dateien, Gate-Eintrag, docs/l10n-spanish.md mit datiertem Vorbehalt -- gebaut 25.09.2026 (7dd61fd, c61955d, 64527aa, aa9f36a)
 - [x] 20-05-PLAN.md: Italienisch, zwei Dateien, Gate-Eintrag, docs/l10n-italian.md mit datiertem Vorbehalt -- gebaut 25.09.2026 (ecf8bd2, fff9aba, e6185c9, 42f6add)
-- [ ] 20-06-PLAN.md: Niederlaendisch mit zwei Pluralformen und der zeichengleichen deutschen Regel als benanntem Sonderfall
+- [x] 20-06-PLAN.md: Niederlaendisch mit zwei Pluralformen und der zeichengleichen deutschen Regel als benanntem Sonderfall -- gebaut 25.09.2026 (3f76cdc, e7ed056, d40e335)
 - [ ] 20-07-PLAN.md: pt_PT, keine pt.json, docs/l10n-portuguese.md dreispaltig angelegt
 - [ ] 20-08-PLAN.md: pt_BR als eigene Varietaet, Unterschieds-Gate statt Textgleichheit, sechzehn Kataloge im Tupel
 - [ ] 20-09-PLAN.md: CI-Sprachbeweis je Code in integration.yml, Sichtprobe in fuenf Sprachen (Checkpoint), Schlussabschnitt
