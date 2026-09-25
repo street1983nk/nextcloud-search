@@ -236,7 +236,15 @@ def expected_marks() -> dict[str, str] | None:
         # A missing Dutch artifact under a language set with nl lands here as
         # well, since FileNotFoundError is an OSError: no comparison rather than
         # a reading side that fails (T-21-06-04).
-        except OSError:
+        #
+        # UnicodeDecodeError beside it is the second net of review finding CR-01
+        # of phase 21. Both word list modules read their artifacts with
+        # errors="replace" now, so a byte that is not UTF-8 takes the rebuild
+        # path; should a strict read ever come back, this call runs in the
+        # lifespan through report_version_drift, and the class is a ValueError
+        # that no OSError catch holds. A comparison that cannot be made is a
+        # warning and never a container that does not start (M-18-06).
+        except (OSError, UnicodeDecodeError):
             LOGGER.warning("the constituent list is unavailable, version marks cannot be compared")
             return None
         # The one mark that does not come from the index side. It is added here

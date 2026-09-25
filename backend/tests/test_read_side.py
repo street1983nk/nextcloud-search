@@ -774,6 +774,31 @@ def test_the_startup_drift_report_survives_a_state_database_that_is_no_database(
     assert str(volume) not in caplog.text, "and it says so without a path"
 
 
+def test_the_startup_drift_report_survives_a_word_list_that_does_not_decode(
+    volume: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The second net of review finding CR-01 of phase 21.
+
+    Both word list modules read with errors="replace" now, so this shape should
+    not arise from the volume any more. Should a strict read come back, the
+    UnicodeDecodeError is a ValueError that no OSError catch holds, and this call
+    runs in the lifespan: the answer has to be the unprovable comparison and a
+    line in the log, never a container that does not start.
+    """
+    open_store(volume / "state.db").close()
+
+    def a_strict_read_of_a_broken_artifact() -> object:
+        raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
+
+    monkeypatch.setattr(resources, "build_artifact", a_strict_read_of_a_broken_artifact)
+
+    with caplog.at_level(logging.WARNING, logger="findling.api.resources"):
+        resources.report_version_drift()
+        assert resources.expected_marks() is None
+
+    assert any("version marks cannot be compared" in record.getMessage() for record in caplog.records)
+
+
 def test_the_startup_drift_report_survives_a_zero_byte_state_database(
     volume: Path, caplog: pytest.LogCaptureFixture
 ) -> None:

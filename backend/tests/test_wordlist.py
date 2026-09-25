@@ -226,6 +226,38 @@ def test_a_tampered_artifact_is_rebuilt_from_the_source(source: Path, tmp_path: 
     assert second.digest == first.digest
 
 
+def test_an_artifact_that_is_not_utf8_is_rebuilt_instead_of_raising(source: Path, tmp_path: Path) -> None:
+    """Review finding CR-01 of phase 21, on the German twin it named.
+
+    The strict read raised a UnicodeDecodeError in front of the digest check,
+    and that class escapes every catch between here and the lifespan. Replaced
+    bytes fail the comparison instead, and the recipe runs again.
+    """
+    target = tmp_path / "dict" / "de.txt"
+    first = build_artifact(source, target)
+
+    target.write_bytes(b"\xff\xfe\x00kaputt\n")
+    second = build_artifact(source, target)
+
+    assert second.rebuilt is True
+    assert second.entries == first.entries
+    assert second.digest == first.digest
+
+
+def test_a_digest_file_that_is_not_utf8_is_rebuilt_instead_of_raising(source: Path, tmp_path: Path) -> None:
+    """The same for the digest file, which the cache key reads first."""
+    target = tmp_path / "dict" / "de.txt"
+    first = build_artifact(source, target)
+    digest_path = target.with_name(target.name + DIGEST_SUFFIX)
+
+    digest_path.write_bytes(b"\xc3\x28\n")
+    second = build_artifact(source, target)
+
+    assert second.rebuilt is True
+    assert second.digest == first.digest
+    assert digest_path.read_text(encoding="utf-8").strip() == first.digest
+
+
 def test_the_artifact_round_trips_umlauts(source: Path, tmp_path: Path) -> None:
     target = tmp_path / "dict" / "de.txt"
     build_artifact(source, target)

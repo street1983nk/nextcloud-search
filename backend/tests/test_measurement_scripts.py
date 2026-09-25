@@ -1060,8 +1060,15 @@ PHP_TREE_HASH_TODAY = "a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab
 # _read_digest, so a byte that is not UTF-8 fails the digest comparison and takes
 # the rebuild path instead of raising a UnicodeDecodeError out of the lifespan.
 # No file came and none went, so PACKAGE_FILES_TODAY stays at 57.
+# Moved on 2026-09-25 by the second half of the same fix: two of the 57 files
+# changed their bytes. index/wordlist.py, the German twin the finding named as
+# pre-existing, got the same errors="replace" reads through _read_artifact and
+# _read_digest, and api/resources.py catches UnicodeDecodeError beside OSError
+# in expected_marks, the second net in front of report_version_drift in the
+# lifespan (M-18-06). No file came and none went, so PACKAGE_FILES_TODAY stays
+# at 57.
 PACKAGE_FILES_TODAY = 57
-PACKAGE_TREE_HASH_TODAY = "95052fa345384214ee2757e3fdc46f870c9d2a0435efa9a3a13b7382b088bd92"
+PACKAGE_TREE_HASH_TODAY = "ce1a24b04c304dec0bf7d094a0f99a157ab870202cb820d2dc10513fca778e88"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
