@@ -649,7 +649,15 @@ jobs:
           # every run); at two occurrences sed would rewrite a line nobody aimed
           # at, at none it would rewrite nothing and the whole proof below would
           # run against an instance with de,en and still look green.
-          occurrences=$(grep -cF '<default>de,en</default>' findling-src/backend/appinfo/info.xml || true)
+          # Counted as occurrences and not as lines, audit finding L-19-07.
+          # grep -c answers the number of LINES with at least one hit, so two
+          # occurrences on one line pass a guard whose whole sentence is "exactly
+          # once", and the sed below carries no 1 either and would replace both.
+          # The info.xml is formatted one element per line today, so the case is
+          # out of reach; the guard claimed something other than what it measured,
+          # and that is the sort of gap that surfaces the day somebody reformats
+          # the file.
+          occurrences=$(grep -oF '<default>de,en</default>' findling-src/backend/appinfo/info.xml | wc -l)
           if [ "${occurrences}" != "1" ]; then
             echo "::error::the shipped language default stands ${occurrences} times in findling-src/backend/appinfo/info.xml and not once, so the substitution below would miss or hit the wrong line"
             grep -n '<default>' findling-src/backend/appinfo/info.xml
@@ -849,6 +857,16 @@ jobs:
             echo "::error::no app password could be taken, so the language set of this instance could not be read at all"
             exit 1
           fi
+          # Audit finding L-19-06, and both lines are cheap insurance rather
+          # than a leak that was measured. Only the length is ever printed, so
+          # nothing writes the value today; a later set -x, an error message
+          # from curl or a run with ACTIONS_STEP_DEBUG would write it
+          # unredacted, and the file underneath holds it in the clear on the
+          # runner for the rest of the job. The credential belongs to a
+          # throwaway instance whose admin password is the word password,
+          # which is why this is two lines and not a design.
+          echo "::add-mask::${apppw}"
+          rm -f "${RUNNER_TEMP}/language-apppw.txt"
           echo "app password: obtained (length ${#apppw})"
 
           overview="${RUNNER_TEMP}/language-overview.json"
@@ -1087,6 +1105,61 @@ jobs:
                 ;;
             esac
           done
+
+          # -- and the removal is measured instead of assumed ------------------
+          # Audit finding L-19-05. The removal in Nextcloud and the
+          # disappearance from the Findling index are two events, and between
+          # them lie the delete job of the events listener and the cron round
+          # that carries it out. The paragraph above justifies the removal with
+          # the stock the later steps were measured on, and that justification
+          # only holds once the index has caught up. Nothing waited for it, and
+          # a thing this file measures everywhere else was set here.
+          #
+          # Measured and reported, and deliberately not a gate yet. A hard
+          # failure here would be a new runtime assertion on a timing nobody has
+          # ever read on this instance, and it would take the whole pipeline down
+          # for a suspicion. What is needed first is how far the two events
+          # really lie apart, and the lines below are that reading. They drive
+          # the same cron round the poll loop above drives, because nothing else
+          # moves the queue at this point of the job. Once a run has printed the
+          # figure, the budget is measured rather than guessed, and this block
+          # becomes the loop that exits non zero, in the shape of the one above.
+          gone_by=$(( $(date +%s) + 60 ))
+          rounds_gone=0
+          present="es it nl pt"
+          while [ -n "${present}" ] && [ "$(date +%s)" -lt "${gone_by}" ]; do
+            rounds_gone=$(( rounds_gone + 1 ))
+            timeout 300 php -f cron.php > "${RUNNER_TEMP}/language-gone-cron-${rounds_gone}.log" 2>&1 || true
+            left=""
+            for lang in ${present}; do
+              case "${lang}" in
+                es) term=alemanes ;;
+                it) term=informazioni ;;
+                nl) term=beinvloeden ;;
+                pt) term=pais ;;
+                *) echo "::error::unknown language code ${lang}"; exit 1 ;;
+              esac
+              status=$(curl -s -o "${RUNNER_TEMP}/language-gone-${lang}.json" -w '%{http_code}' \
+                -u "testuser:${TESTUSER_PASS}" \
+                -H 'OCS-APIRequest: true' \
+                -H 'Accept: application/json' \
+                "http://localhost:8080/ocs/v2.php/search/providers/findling/search?term=${term}")
+              if [ "${status}" != "200" ] \
+                || ! jq -e '.ocs.data.entries | length == 0' \
+                     "${RUNNER_TEMP}/language-gone-${lang}.json" > /dev/null 2>&1; then
+                left="${left} ${lang}"
+              fi
+            done
+            present=$(echo "${left}" | sed -e 's/^ *//' -e 's/ *$//')
+            if [ -n "${present}" ]; then
+              sleep 5
+            fi
+          done
+          if [ -z "${present}" ]; then
+            echo "the four language documents are out of the index again after ${rounds_gone} cron round(s)"
+          else
+            echo "::warning::[${present}] still answer a hit ${rounds_gone} cron round(s) and 60s after the removal, so the stock of the steps below is not yet the one they were measured against (L-19-05)"
+          fi
 
       # The four steps below are the runtime half of the lockstep promise of
       # D-11, and they sit here rather than anywhere else on purpose: the step
@@ -3864,14 +3937,16 @@ jobs:
           # so the registration below uses it. The language jump is ordered
           # later and on purpose, by "Store upgrade 6" and through the
           # environment of the container rather than through this file.
-          if [ "$(grep -cF '<default>de,en,es,it,nl,pt</default>' "${RUNNER_TEMP}/info-citest.xml")" != "1" ]; then
+          # Occurrences and not lines, for the reason written at the first of
+          # these three guards (L-19-07).
+          if [ "$(grep -oF '<default>de,en,es,it,nl,pt</default>' "${RUNNER_TEMP}/info-citest.xml" | wc -l)" != "1" ]; then
             echo "::error::info-citest.xml does not carry the six language default exactly once, so the line this step reverts is not the line plan 19-07 wrote"
             grep -n '<default>' "${RUNNER_TEMP}/info-citest.xml"
             exit 1
           fi
           sed 's|<default>de,en,es,it,nl,pt</default>|<default>de,en</default>|' \
             "${RUNNER_TEMP}/info-citest.xml" > "${RUNNER_TEMP}/info-upgrade.xml"
-          if [ "$(grep -cF '<default>de,en</default>' "${RUNNER_TEMP}/info-upgrade.xml")" != "1" ]; then
+          if [ "$(grep -oF '<default>de,en</default>' "${RUNNER_TEMP}/info-upgrade.xml" | wc -l)" != "1" ]; then
             echo "::error::the upgrade info.xml does not carry the shipped language default exactly once"
             grep -n '<default>' "${RUNNER_TEMP}/info-upgrade.xml"
             exit 1
@@ -4337,6 +4412,16 @@ jobs:
             echo "::error::no app password could be taken, so the rebuild banner could not be read while the run is on"
             exit 1
           fi
+          # Audit finding L-19-06, and both lines are cheap insurance rather
+          # than a leak that was measured. Only the length is ever printed, so
+          # nothing writes the value today; a later set -x, an error message
+          # from curl or a run with ACTIONS_STEP_DEBUG would write it
+          # unredacted, and the file underneath holds it in the clear on the
+          # runner for the rest of the job. The credential belongs to a
+          # throwaway instance whose admin password is the word password,
+          # which is why this is two lines and not a design.
+          echo "::add-mask::${apppw}"
+          rm -f "${RUNNER_TEMP}/rebuild-apppw.txt"
           echo "app password: obtained (length ${#apppw})"
 
           # One overview call and nothing else, the status code on stdout and
