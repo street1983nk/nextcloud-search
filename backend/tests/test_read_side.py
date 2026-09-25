@@ -33,8 +33,9 @@ from findling.api import resources
 from findling.config import settings
 from findling.index.open import LANGUAGES_MARK
 from findling.index.rebuild import stamp_after_swap
-from findling.index.schema import FIELD_BODY_ES
-from findling.query.rewrite import LEGACY_PLAN
+from findling.index.schema import FIELD_BODY_ES, FIELD_BODY_NL, FIELD_FILE_ID
+from findling.index.writer import IndexRecord
+from findling.query.rewrite import LEGACY_PLAN, build_query
 from findling.store.repo import EMBEDDING_MARK, Store, open_store
 from findling.worker.poller import _open_state, _open_writer
 
@@ -508,6 +509,52 @@ def test_a_fresh_container_searches_the_chains_it_was_switched_on_with(
     assert side is not None
     assert side.field_plan.fields != LEGACY_PLAN.fields
     assert FIELD_BODY_ES in side.field_plan.fields
+
+
+def test_a_fresh_container_finds_a_dutch_compound_through_its_constituent(
+    volume: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Success criterion 2 of phase 21 on the reading side of a fresh container.
+
+    The writer and the reading side open the index each on their own, and both
+    have to register the splitting chain under the nl name: a writer on the
+    Snowball chain would index the compound whole, a reading side on it would
+    ask ``belast`` of a field that holds ``gemeent`` and ``belast`` as the
+    splitting chain wrote them, and either way the answer would be empty.
+    """
+    monkeypatch.setenv("FINDLING_LANGUAGES", "de,en,es,it,nl,pt")
+    settings.cache_clear()
+    write_wordlist(volume)
+    write_wordlist_nl(volume)
+
+    store = _open_state()
+    writer = _open_writer(store)
+    writer.add(
+        IndexRecord(
+            file_id=41,
+            storage_id=7,
+            name="aanslag.pdf",
+            title="aanslag",
+            path="/aanslag.pdf",
+            ext="pdf",
+            body="De gemeentebelastingen voor dit jaar zijn verhoogd.",
+            mtime=1_700_000_000,
+        )
+    )
+    writer.flush()
+    writer.close()
+    store.close()
+
+    side = resources.read_side()
+    assert side is not None
+    assert FIELD_BODY_NL in side.field_plan.fields
+    side.index.reload()
+    searcher = side.index.searcher()
+    rewritten = build_query(side.index, "belasting", plan=side.field_plan)
+    assert rewritten.query is not None
+    found = [searcher.doc(address).get_first(FIELD_FILE_ID) for _, address in searcher.search(rewritten.query, 10).hits]
+
+    assert found == [41]
 
 
 def test_the_version_marks_are_dropped_with_the_read_side(

@@ -1043,8 +1043,14 @@ PHP_TREE_HASH_TODAY = "a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab
 # bytes. index/open.py takes a keyword-only dutch with the default None and
 # registers the nl name as dutch_chain_for(dutch), still free and without an if.
 # No file came and none went, so PACKAGE_FILES_TODAY stays at 57.
+# Moved on 2026-09-25 by Plan 21-07, task 2: six of the 57 files changed their
+# bytes. worker/poller.py, api/resources.py, index/rebuild.py (transfer_documents
+# and _make_the_target_fit_this_code) and tools/one_load.py hand
+# dutch=dutch_digest_for(languages) to open_index, index/bench.py and
+# tools/index_status.py name dutch=None. No file came and none went, so
+# PACKAGE_FILES_TODAY stays at 57.
 PACKAGE_FILES_TODAY = 57
-PACKAGE_TREE_HASH_TODAY = "dbc5caa2f5cb1d90f9cba63ea62fa2a021c69cc060148836ad11056eec1086a4"
+PACKAGE_TREE_HASH_TODAY = "f2a0b1f800816982426dc9e3ad41b0ad5c9973ce23354cf435900c583d10409f"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

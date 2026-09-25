@@ -284,7 +284,9 @@ def measure(
 ) -> dict[str, float | int | str]:
     """Run one measurement and return its numbers."""
     constituents, source = _constituents(wordlist)
-    index = open_index(directory, constituents)
+    # The bench measures the German chain and writes no Dutch field, so the
+    # Dutch automaton stays out of the figure it reports.
+    index = open_index(directory, constituents, dutch=None)
     body = _body(words)
 
     writer = IndexBatchWriter(index, directory=directory)

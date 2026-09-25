@@ -887,6 +887,39 @@ def test_the_dutch_choice_gate_sees_a_caller_without_it() -> None:
     assert callers_without_the_dutch_choice(staged, "staged.py") == [3, 9]
 
 
+def test_every_caller_in_src_names_the_dutch_choice() -> None:
+    """No caller in src decides the Dutch chain by leaning on the default.
+
+    The default of ``dutch`` is None for the tests. A src caller that leaned on
+    it would open a Dutch installation with the Snowball chain, and the index
+    would quietly stop splitting the compounds its mark says it splits.
+    """
+    files = sorted(PACKAGE_ROOT.rglob("*.py"))
+    assert files, "the package root moved and the gate would look at nothing"
+    found: dict[str, list[int]] = {}
+    calls = 0
+    for path in files:
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=str(path))
+        calls += sum(
+            1
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and (
+                (isinstance(node.func, ast.Name) and node.func.id == "open_index")
+                or (isinstance(node.func, ast.Attribute) and node.func.attr == "open_index")
+            )
+        )
+        missing = callers_without_the_dutch_choice(source, str(path))
+        if missing:
+            found[str(path.relative_to(PACKAGE_ROOT))] = missing
+
+    assert found == {}, f"callers of open_index without dutch: {found}"
+    # Nine callers today: poller, resources, one_load, bench, index_status and
+    # four in rebuild. Fewer means the walk lost files.
+    assert calls >= 9, calls
+
+
 def test_a_write_goes_through_when_only_german_is_switched_on(monkeypatch: pytest.MonkeyPatch, index_dir: Path) -> None:
     # The measured failure of pitfall 2, held as a statement about behaviour and
     # not about source text: FINDLING_LANGUAGES=de is the narrowest set an

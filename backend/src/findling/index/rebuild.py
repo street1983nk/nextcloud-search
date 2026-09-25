@@ -134,7 +134,7 @@ from findling.index.schema import (
     FIELD_TITLE,
 )
 from findling.index.wordlist import build_artifact
-from findling.index.wordlist_nl import dutch_mark
+from findling.index.wordlist_nl import dutch_digest_for, dutch_mark
 from findling.store.repo import Store, index_bytes
 
 LOGGER = logging.getLogger("findling.index.rebuild")
@@ -558,8 +558,13 @@ def transfer_documents(
     the one point where stopping costs nothing at all.
     """
     active = tuple(settings().languages if languages is None else languages)
-    source = open_index(source_dir, constituents)
-    target = open_index(target_dir, constituents)
+    # One Dutch choice for both directories, out of the set the run writes.
+    # The target is what matters: _document_from rebuilds body_nl out of the
+    # stored body_de text, and the chain registered on the target is what
+    # splits it, so switching nl on re-analyses the stock without a reindex.
+    dutch = dutch_digest_for(active)
+    source = open_index(source_dir, constituents, dutch=dutch)
+    target = open_index(target_dir, constituents, dutch=dutch)
     reader = open_reader(source)
     cursor = _resume_cursor(target)
     # Read after the resume, because the reload it does is what makes the count
@@ -957,7 +962,9 @@ def _discard_the_target(target: Path, why: str) -> None:
     discard_directory(target)
 
 
-def _make_the_target_fit_this_code(target: Path, constituents: Sequence[str], wanted: str) -> None:
+def _make_the_target_fit_this_code(
+    target: Path, constituents: Sequence[str], wanted: str, *, dutch: str | None
+) -> None:
     """Leave a usable target of this code standing, and remove anything else.
 
     Three states and three answers, and the two that remove something are the
@@ -999,14 +1006,14 @@ def _make_the_target_fit_this_code(target: Path, constituents: Sequence[str], wa
         # call serves the resume and the fresh start alike. The handle is
         # dropped with the expression, because a directory that is still held
         # cannot be removed on Windows and must not be removed on Linux.
-        open_index(target, constituents)
+        open_index(target, constituents, dutch=dutch)
     # Deliberately every exception. What tantivy raises over a half written
     # meta.json is its business, and the answer is the same for all of them:
     # there is no path anywhere else in this system that ever throws a broken
     # target away, so the rebuild used to fail at this very line at every start.
     except Exception as error:
         _discard_the_target(target, f"it could not be opened, an {type(error).__name__}")
-        open_index(target, constituents)
+        open_index(target, constituents, dutch=dutch)
     (target / TARGET_MARK_FILE).write_text(wanted, encoding="utf-8")
 
 
@@ -1209,7 +1216,9 @@ def rebuild_the_index(
         # remove the directory the band run is about to open and because it
         # writes into it. Anything the volume holds under this name that was not
         # made by this code and for these marks goes here (H-18-02, H-18-04).
-        _make_the_target_fit_this_code(target, artifact.entries, fingerprint(expected))
+        _make_the_target_fit_this_code(
+            target, artifact.entries, fingerprint(expected), dutch=dutch_digest_for(resolved.languages)
+        )
         # The band size is named here rather than left to the default of the
         # function, because this is the call site that runs in a container: the
         # figure is the memory of one step and the crash granularity of the whole

@@ -45,7 +45,7 @@ from findling.embed.model import EmbeddingModel
 from findling.index.open import LANGUAGES_MARK, SCHEMA_MARK, expected_versions, open_index, open_reader
 from findling.index.schema import BODY_FIELD, FIELD_NAME, FIELD_TITLE
 from findling.index.wordlist import build_artifact
-from findling.index.wordlist_nl import dutch_mark
+from findling.index.wordlist_nl import dutch_digest_for, dutch_mark
 from findling.query.rewrite import BODY_BOOST, EMPTY_PLAN, LEGACY_PLAN, NAME_BOOST, TITLE_BOOST, FieldPlan
 from findling.store.repo import EMBEDDING_MARK, LEGACY_LANGUAGES, VECTOR_ONLY_MARKS, Store, open_read_only
 from findling.store.vectors import EMBEDDING_MODEL, VectorStore, embedding_mark, open_vectors
@@ -690,7 +690,10 @@ def read_side() -> ReadSide | None:
         store: Store | None = None
         vectors: VectorStore | None = None
         try:
-            index = open_index(resolved.index_dir, build_artifact().entries)
+            # The reading side asks body_nl with the same chain the writer
+            # filled it with, so it names the Dutch choice out of the same
+            # language set; a missing or foreign list lands in the except below.
+            index = open_index(resolved.index_dir, build_artifact().entries, dutch=dutch_digest_for(resolved.languages))
             # Once per index, not once per query: configuring the reader costs
             # 0.10 ms while a whole search costs 0.005 ms. The searcher it returns
             # is a snapshot and deliberately not kept; the reload policy is what

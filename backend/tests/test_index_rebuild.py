@@ -1717,6 +1717,47 @@ def test_a_dutch_drift_is_one_the_rebuild_answers(
     assert drift == []
 
 
+def test_the_rebuild_splits_the_dutch_compounds_of_an_existing_index(
+    volume: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Switching nl on re-analyses body_nl of the stock with the splitting chain, without a full reindex.
+
+    The stock is written under the plain Snowball chain, the way every index
+    before plan 21-07 was. The band run rebuilds body_nl out of the stored
+    body_de text through the chain of the target, so the target has to be
+    opened with the Dutch list for the compound to become findable through its
+    constituent. The generation stays where it was: the text is carried over and
+    not read again from the files.
+    """
+    monkeypatch.setenv("FINDLING_LANGUAGES", "de,en,nl")
+    settings.cache_clear()
+    digest_nl = write_wordlist_nl(volume)
+    digest = write_wordlist(volume)
+    source = open_index(volume / "index", CONSTITUENTS, dutch=None)
+    _stage(source, [_document(1, **{FIELD_BODY_DE: "De gemeentebelastingen voor dit jaar zijn verhoogd."})])
+    del source
+    gc.collect()
+    store = open_store(volume / "state.db", meta=expected_versions(digest, ",".join(settings().languages)))
+    store.write_meta(_SCHEMA_MARK, str(SCHEMA_VERSION))
+    store.write_meta(LANGUAGES_MARK, ",".join(settings().languages))
+    store.write_meta(DUTCH_MARK, "off")
+    generation = store.read_meta()["index_version"]
+
+    verdict = _led_by(store, _Hands())
+    marks = store.read_meta()
+    store.close()
+
+    live = open_index(settings().index_dir, CONSTITUENTS, dutch=digest_nl)
+    live.reload()
+    hits = live.searcher().search(live.parse_query("belasting", ["body_nl"]), limit=5).hits
+
+    assert verdict == REBUILD_THROUGH
+    assert len(hits) == 1
+    assert marks["index_version"] == generation
+    assert marks[DUTCH_MARK] == dutch_mark(settings().languages)
+    assert marks[DUTCH_MARK].endswith(digest_nl)
+
+
 def test_the_progress_rests_before_the_run_and_carries_two_numbers_during_it(
     volume: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

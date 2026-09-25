@@ -124,7 +124,7 @@ from findling.index.schema import (
     FIELD_TITLE,
 )
 from findling.index.wordlist import SYSTEM_WORDLIST, build_artifact, read_count
-from findling.index.wordlist_nl import dutch_mark
+from findling.index.wordlist_nl import dutch_digest_for, dutch_mark
 from findling.store.repo import FileMeta, open_store
 from findling.store.vectors import open_vectors
 from findling.worker import poller as poller_module
@@ -223,14 +223,14 @@ def _meta() -> FileMeta:
     )
 
 
-def _write_index(directory: Path, constituents: Sequence[str]) -> None:
+def _write_index(directory: Path, constituents: Sequence[str], *, dutch: str | None) -> None:
     """Write and commit the one document the search below has to find.
 
     Field by field and never through keyword arguments: a keyword built document
     puts an I64 into the U64 column of the file id, and the indexing thread
     panics after the Python call has already returned.
     """
-    index = open_index(directory, constituents)
+    index = open_index(directory, constituents, dutch=dutch)
     writer = index.writer(heap_size=WRITER_HEAP_BYTES, num_threads=1)
     document = Document()
     document.add_unsigned(FIELD_FILE_ID, FILE_ID)
@@ -261,7 +261,7 @@ def seed_volume(source: Path = SYSTEM_WORDLIST) -> None:
     """
     artifact = build_artifact(source=source)
     resolved = settings()
-    _write_index(resolved.index_dir, artifact.entries)
+    _write_index(resolved.index_dir, artifact.entries, dutch=dutch_digest_for(resolved.languages))
 
     languages = resolved.languages
     marks = expected_versions(artifact.digest, ",".join(languages), dutch_mark=dutch_mark(languages))

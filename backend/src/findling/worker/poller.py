@@ -87,7 +87,7 @@ from findling.index.open import (
 )
 from findling.index.rebuild import MARKS_A_REBUILD_ANSWERS
 from findling.index.wordlist import build_artifact
-from findling.index.wordlist_nl import dutch_mark
+from findling.index.wordlist_nl import dutch_digest_for, dutch_mark
 from findling.index.writer import FLUSH_PAUSED_LOW_DISK, IndexBatchWriter, IndexRecord
 from findling.nc import client as nc_client
 from findling.nc.client import (
@@ -379,7 +379,7 @@ def _open_writer(store: Store, *, vectors: VectorStore | None = None) -> IndexBa
     languages = resolved.languages
     marks = expected_versions(artifact.digest, ",".join(languages), dutch_mark=dutch_mark(languages))
     stamp_a_new_directory(store, resolved.index_dir, marks)
-    index = open_index(resolved.index_dir, artifact.entries)
+    index = open_index(resolved.index_dir, artifact.entries, dutch=dutch_digest_for(languages))
     _raise_generation_for_lost_index(index, store)
     return IndexBatchWriter(index, directory=resolved.index_dir, vectors=vectors)
 
