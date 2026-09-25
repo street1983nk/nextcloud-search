@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: executing
-stopped_at: Plan 22-03 abgeschlossen (94c, 95c, 98d, 2afafb4 e32fcb3)
-last_updated: "2026-09-25T22:05:00.000Z"
-last_activity: 2026-09-25, Plan 22-03 ausgeführt
+stopped_at: Plan 22-04 abgeschlossen (00-wegwerf.sh, 00-typwechsel.sh, b5f27b1 e072b15)
+last_updated: "2026-09-25T22:12:00.000Z"
+last_activity: 2026-09-26, Plan 22-04 ausgeführt
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 59
-  completed_plans: 50
-  percent: 85
+  completed_plans: 51
+  percent: 86
 ---
 
 # Project State
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 ## Current Position
 
 Phase: 22 (messanfahrt-bl-f03), EXECUTING
-Plan: 4 of 12
-Status: Ready to execute 22-04 (Owner-Stopps: 22-06 Push-Freigabe, 22-07 Rechenblatt vor Boxstart, 22-12 Abnahme)
+Plan: 5 of 12
+Status: Ready to execute 22-05 (Owner-Stopps: 22-06 Push-Freigabe, 22-07 Rechenblatt vor Boxstart, 22-12 Abnahme)
 
 Aktueller Stand: PHASE 21 KOMPLETT 25.09.2026 (9/9 Plaene, goal-backward verified passed 9/9,
 phase.complete gelaufen, STATE von Hand nachgezogen). Niederlaendische Komposita sind Ende-zu-
@@ -236,13 +236,23 @@ Instanz den Erststempel der Verzeichnismarken; Folge: Feldplan blieb LEGACY, rot
 Fix-Beweis). Endstand-CI 36096526219 GRUEN 4/4 inkl. arm64. Suite 2877 passed / 15 skipped.
 LEHRE: ein Audit-Fix, der einen Schreiber entfernt, braucht die Frage "wer schreibt das
 sonst noch auf JEDEM Pfad" plus einen Frischinstanz-Fall, bevor er reist.
-Last activity: 2026-09-25, Plan 22-03 ausgeführt
+Last activity: 2026-09-26, Plan 22-04 ausgeführt
 
-Progress: [████████░░] 85% (50 von 59 Plänen, 5 von 7 Phasen)
+Progress: [█████████░] 86% (51 von 59 Plänen, 5 von 7 Phasen)
 
 ## Naechster Schritt
 
-**22-04 ausführen** (00-wegwerf.sh, 00-typwechsel.sh). 22-03 ist fertig: 94c-bodensatz-zyklen.sh
+**22-05 ausführen** (00-lauf.sh, 00-abholen.sh, 00-ablauf.md mit E1 bis E14, README-Gerüst).
+22-04 ist fertig: 00-wegwerf.sh (B3 W3 N 1/2 auf cpuset 0,1 unter 2g plus Einzelmodus, B5
+embed.bench threads 1/2 x batch 2/8 mit rss_sampler.sh am Bench-Namen, B4 N 1 bis 16 und T 1 bis
+8 auf nproc gekürzt; 50 kein Leerlauf oder keine Zahl in B3/B5, 51 fremder Container oder keine
+Zahl in B4) und 00-typwechsel.sh (vorpruefung instanceInitiatedShutdownBehavior stop sonst 52,
+hin m7g.4xlarge mit Rückfall 2xlarge und Ende auf m7g.large, zurueck ohne start, preis über
+get-products; 53 bei Typ- oder Zustandsabweichung) mit test_v13_wegwerf.py (b5f27b1, e072b15),
+nur lokal. Achtung 22-07/22-09: dem Konto fehlt laut aws_box.sh evtl. pricing:GetProducts, dann
+endet preis mit 1 und der B4-Satz wird von Hand aus der öffentlichen Liste gelesen.
+
+Vorher: 22-03 ist fertig: 94c-bodensatz-zyklen.sh
 (Marke A, Zyklus 1, C1, Zyklus 2, C2 in einem Containerleben; 46 Zyklus offen, 47 Schalter nicht
 120), 95c-kaltstart.sh (Trefferpflicht der ersten kalten Suche, hoechstens 3 Zyklen, sonst 48) und
 98d-dismax-probe.py (summe, dismax_t00/t01, altplan; 49 bei ungleicher Treffermenge) mit
@@ -325,7 +335,7 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
 |-------|-------|-------|----------|
 | 20 | 9 | - | - |
 | 21 | 9 | 1 Tag | - |
-| 22 | 3/12 | 12 min (22-01), 30 min (22-02), 35 min (22-03) | - |
+| 22 | 4/12 | 12 min (22-01), 30 min (22-02), 35 min (22-03), 25 min (22-04) | - |
 
 ## Accumulated Context
 
@@ -349,6 +359,11 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
   Die dismax-Regel steht nicht im Skript, sondern kommt in 00-ablauf.md (22-03).
 - 94c und 95c lesen das Passwort aus der Umgebung, sonst aus PWFILE ($HOME/work/.pw/admin);
   95c wertet loaded vor der kalten Suche als ungültigen Zyklus (22-03).
+- Wegwerf-Blöcke lesen das Produkt nur (Vorrat, runState, Startzeitpunkt vor und nach dem
+  Block); B5-Container laufen abgesetzt unter festem Namen, max anon kommt aus den CSV-Zeilen
+  von rss_sampler.sh, nicht aus dessen Schlusszeile (22-04).
+- Die Rohdatei des Typwechsels trägt Instanzkennung und Adresse nur als Platzhalter; die
+  Ausgabe von aws_box.sh geht nach stderr. hin fährt die Shutdown-Vorprüfung selbst mit (22-04).
 
 - Ein CI-Sprachbeweis liest seinen Erwartungswert aus dem Katalog und traegt die Abwesenheit
   des englischen Quellsatzes als eigentliche Zusicherung (20-09). Ein Satz in der YAML waere
@@ -633,6 +648,6 @@ Sonst keine (die drei Debug-Sessions aus v1.1 sind am 21.09.2026 formal auf reso
 
 ## Session Continuity
 
-Last session: 2026-09-25T22:05:00.000Z
-Stopped at: Plan 22-03 abgeschlossen
-Resume file: .planning/phases/22-messanfahrt-bl-f03/22-04-PLAN.md
+Last session: 2026-09-25T22:12:00.000Z
+Stopped at: Plan 22-04 abgeschlossen
+Resume file: .planning/phases/22-messanfahrt-bl-f03/22-05-PLAN.md
