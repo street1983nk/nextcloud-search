@@ -210,6 +210,39 @@ RUN apt-get update \
     && install -D -m 0444 /usr/share/doc/wngerman/copyright \
         /usr/local/share/findling/COPYING.wngerman
 
+# The Dutch word list, installed beside the German one and for the same reasons.
+#
+# Measured in this very base image on 2026-09-25: /usr/share/dict/dutch has
+# 413288 lines and 5096240 bytes, and the package is Architecture: all, so amd64
+# and arm64 read byte identical data. Source package dutch, upstream OpenTaal.
+#
+# The version is pinned exactly, epoch included. The list decides how a Dutch
+# compound falls apart, so a silent change of the package would be a silent
+# change of every search result of every Dutch document. When trixie moves the
+# package, this build fails loudly and somebody records the new numbers.
+#
+# Nothing here is fetched at run time. The artifact dict/nl-full.txt is produced
+# at start up by findling.index.wordlist_nl, and only when Dutch is active in
+# FINDLING_LANGUAGES; its SHA-256 is recorded as the meta mark wordlist_hash_nl.
+#
+# DEBIAN_FRONTEND=noninteractive because dictionaries-common asks through debconf
+# which list should be the default as soon as a second one is installed; without
+# it a build could stop at a question nobody sees.
+#
+# CC-BY-3.0 obligation: the licence notice, the licence text and the attribution
+# to OpenTaal have to travel with the image, because the image is what is
+# distributed. As above, the copyright file is copied to a stable place of ours,
+# and both tests are the fail closed half: an image without the list or without
+# its licence text must not be built at all. THIRD-PARTY.md says the same.
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        wdutch=1:2.20.19+1-3 \
+    && rm -rf /var/lib/apt/lists/* \
+    && test -s /usr/share/dict/dutch \
+    && test -s /usr/share/doc/wdutch/copyright \
+    && install -D -m 0444 /usr/share/doc/wdutch/copyright \
+        /usr/local/share/findling/COPYING.wdutch
+
 # The OCR engine and its language data, installed in the runtime stage and
 # staying there, for the same reason the word list above does: a scanned PDF has
 # to become searchable on a box behind a firewall, and a first start that
