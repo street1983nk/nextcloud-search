@@ -160,6 +160,60 @@ def test_a_tampered_artifact_is_rebuilt_from_the_source(source: Path, tmp_path: 
     assert second.digest == first.digest
 
 
+def test_an_artifact_that_is_not_utf8_is_rebuilt_instead_of_raising(source: Path, tmp_path: Path) -> None:
+    """Review finding CR-01: undecodable bytes are one more shape of a broken artifact.
+
+    The strict read raised a UnicodeDecodeError in front of the digest
+    comparison, nothing on the way up to the lifespan caught that class, and the
+    container did not start, at every restart again. Replaced bytes change the
+    content, so the digest comparison fails and the rebuild path runs.
+    """
+    target = tmp_path / "dict" / "nl-full.txt"
+    first = build_artifact_nl(source, target)
+
+    target.write_bytes(b"\xff\xfe\x00kaputt\n")
+    second = build_artifact_nl(source, target)
+
+    assert second.rebuilt is True
+    assert second.entries == first.entries
+    assert second.digest == first.digest
+    assert target.read_text(encoding="utf-8").split() == first.entries
+
+
+def test_a_digest_file_that_is_not_utf8_is_rebuilt_instead_of_raising(source: Path, tmp_path: Path) -> None:
+    """The same for the file next to it: a digest that describes no list is a mismatch."""
+    target = tmp_path / "dict" / "nl-full.txt"
+    first = build_artifact_nl(source, target)
+    digest_path = target.with_name(target.name + DIGEST_SUFFIX)
+
+    digest_path.write_bytes(b"\xff\xfe\x00kaputt\n")
+    second = build_artifact_nl(source, target)
+
+    assert second.rebuilt is True
+    assert second.digest == first.digest
+    assert digest_path.read_text(encoding="utf-8").strip() == first.digest
+
+
+def test_the_mark_survives_undecodable_bytes_on_the_volume(
+    source: Path, storage: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The path the lifespan takes: dutch_mark over the cache key, then the build.
+
+    Both files are broken at once, so the cache key read and the fail closed
+    check each meet a byte that is not UTF-8. The answer is the digest of the
+    recipe, never an exception.
+    """
+    del storage
+    monkeypatch.setattr(wordlist_nl, "SYSTEM_WORDLIST_NL", source)
+    expected = dutch_digest_for(("de", "en", "nl"))
+    target = artifact_path_nl()
+
+    target.write_bytes(b"\xff\xfe\x00kaputt\n")
+    target.with_name(target.name + DIGEST_SUFFIX).write_bytes(b"\xc3\x28\n")
+
+    assert dutch_mark(("de", "en", "nl")) == f"{DUTCH_CHAIN_VERSION}:{expected}"
+
+
 def test_the_cache_never_answers_for_a_missing_artifact(source: Path, tmp_path: Path) -> None:
     target = tmp_path / "dict" / "nl-full.txt"
     first = build_artifact_nl(source, target)

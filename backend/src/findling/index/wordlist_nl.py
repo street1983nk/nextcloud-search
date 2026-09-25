@@ -144,8 +144,28 @@ def _digest_path(target: Path) -> Path:
 
 
 def _read_artifact(target: Path) -> list[str]:
-    """Read an artifact back into the list it was written from."""
-    return [line for line in target.read_text(encoding=ENCODING).split("\n") if line]
+    """Read an artifact back into the list it was written from.
+
+    ``errors="replace"`` and never the strict read, and that is the fail closed
+    contract of this module rather than a leniency (review finding CR-01). A byte
+    that is not UTF-8 (bit rot, half a block, a hand edit) used to raise a
+    UnicodeDecodeError before the digest could be compared, and nothing on the
+    way up catches that class: report_version_drift in the lifespan let it out,
+    and the container did not start, at every restart again. Replaced bytes
+    change the content, so the digest comparison fails and the artifact is
+    rebuilt from the source exactly like a tampered one.
+    """
+    return [line for line in target.read_text(encoding=ENCODING, errors="replace").split("\n") if line]
+
+
+def _read_digest(digest_path: Path) -> str:
+    """Read the recorded digest, with undecodable bytes as a mismatch and not a raise.
+
+    Same reasoning as :func:`_read_artifact`: a digest file with a byte that is
+    not UTF-8 is a digest that describes no list, and the answer to that is the
+    rebuild path, never an exception out of the lifespan.
+    """
+    return digest_path.read_text(encoding=ENCODING, errors="replace").strip()
 
 
 # ---------------------------------------------------------------------------
@@ -176,7 +196,7 @@ def _artifact_key(target: Path, digest_path: Path) -> _CacheKey | None:
         return None
     try:
         status = target.stat()
-        recorded = digest_path.read_text(encoding=ENCODING).strip()
+        recorded = _read_digest(digest_path)
     except OSError:
         return None
     if not recorded:
@@ -215,7 +235,7 @@ def _load_artifact(source: Path, target: Path, digest_path: Path) -> Artifact:
     if target.is_file() and digest_path.is_file():
         entries = _read_artifact(target)
         _READ_COUNT += 1
-        recorded = digest_path.read_text(encoding=ENCODING).strip()
+        recorded = _read_digest(digest_path)
         if recorded and recorded == wordlist_hash(entries):
             LOGGER.info(
                 "dutch constituent list read from the volume, %d entries, read %d in this process",

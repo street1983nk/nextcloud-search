@@ -1054,8 +1054,14 @@ PHP_TREE_HASH_TODAY = "a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab
 # chain had no compound splitter; it now names dutch_chain_for. Comment only, no
 # schema change and no SCHEMA_VERSION move. No file came and none went, so
 # PACKAGE_FILES_TODAY stays at 57.
+# Moved on 2026-09-25 by the fix of review finding CR-01 of phase 21: one of the
+# 57 files changed its bytes. index/wordlist_nl.py reads the artifact and its
+# digest file with errors="replace" through _read_artifact and the new
+# _read_digest, so a byte that is not UTF-8 fails the digest comparison and takes
+# the rebuild path instead of raising a UnicodeDecodeError out of the lifespan.
+# No file came and none went, so PACKAGE_FILES_TODAY stays at 57.
 PACKAGE_FILES_TODAY = 57
-PACKAGE_TREE_HASH_TODAY = "3b5a73832db7a893c08afaa6fbdb6bf979c5c259b898494cb4b500f142f048b5"
+PACKAGE_TREE_HASH_TODAY = "95052fa345384214ee2757e3fdc46f870c9d2a0435efa9a3a13b7382b088bd92"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
