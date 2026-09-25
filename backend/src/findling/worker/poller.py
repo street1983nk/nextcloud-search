@@ -78,7 +78,13 @@ from findling.embed.model import (
 from findling.extract.dispatch import Route, extension_of, judge
 from findling.extract.errors import ExtractionOutcome, Reason, State
 from findling.extract.sandbox import extract_guarded
-from findling.index.open import expected_versions, open_index, stamp_after_rebuild, start_rebuild_on_drift
+from findling.index.open import (
+    expected_versions,
+    open_index,
+    stamp_a_new_directory,
+    stamp_after_rebuild,
+    start_rebuild_on_drift,
+)
 from findling.index.wordlist import build_artifact
 from findling.index.writer import FLUSH_PAUSED_LOW_DISK, IndexBatchWriter, IndexRecord
 from findling.nc import client as nc_client
@@ -350,9 +356,20 @@ def _open_writer(store: Store, *, vectors: VectorStore | None = None) -> IndexBa
     The vector stock travels in because ``drop_document`` has to take the
     vectors of a file with it, and this is the only place that knows whether
     this container has a stock at all.
+
+    It is also the one place in the container that CREATES the live index
+    directory: the reading side asks ``Index.exists`` first and answers None
+    for a volume without one, and the rebuild refuses such a volume outright.
+    That is why the first stamp of the two directory marks stands here, in
+    front of the creation and nowhere else (see
+    :func:`findling.index.open.stamp_a_new_directory`).
     """
     resolved = settings()
     artifact = build_artifact()
+    # In front of open_index and not behind it, because open_index is what
+    # creates the directory and the reading side opens the moment it is there.
+    # On a volume that has an index this is one stat call and no write.
+    stamp_a_new_directory(store, resolved.index_dir, expected_versions(artifact.digest, ",".join(resolved.languages)))
     index = open_index(resolved.index_dir, artifact.entries)
     _raise_generation_for_lost_index(index, store)
     return IndexBatchWriter(index, directory=resolved.index_dir, vectors=vectors)

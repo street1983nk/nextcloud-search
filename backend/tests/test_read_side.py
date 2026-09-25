@@ -36,6 +36,7 @@ from findling.index.rebuild import stamp_after_swap
 from findling.index.schema import FIELD_BODY_ES
 from findling.query.rewrite import LEGACY_PLAN
 from findling.store.repo import EMBEDDING_MARK, Store, open_store
+from findling.worker.poller import _open_state, _open_writer
 
 THREADS = 4
 
@@ -470,6 +471,39 @@ def test_the_field_plan_follows_the_stamp_behind_the_bar(indexed_volume: Corpus)
     assert FIELD_BODY_ES in second.field_plan.fields
     assert FIELD_BODY_ES in second.field_plan.boosts
     assert second.field_plan.boosts[FIELD_BODY_ES] < second.field_plan.boosts["body_en"]
+
+
+def test_a_fresh_container_searches_the_chains_it_was_switched_on_with(
+    volume: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The counter case to the one above, on the volume that has no index yet.
+
+    The case above stamps the two marks the way a rebuild stamps them, and there
+    is a second way to arrive at a directory of this code: to build it. An
+    installation that is switched on for the first time has nothing to rebuild,
+    so no rebuild runs, and the directory the writer creates carries the current
+    schema and every chain of the current set from its first byte.
+
+    Asserted through the reading side rather than through the marks, because the
+    marks are a means and this is the end: a container that was started with
+    Spanish switched on has to reach ``body_es`` with a bare word. Between
+    2026-09-25 and this case it did not, and no log line said so (deploy-harp
+    run 36086044755, the leg "Language proof").
+    """
+    monkeypatch.setenv("FINDLING_LANGUAGES", "de,en,es,it,nl,pt")
+    settings.cache_clear()
+    write_wordlist(volume)
+
+    store = _open_state()
+    writer = _open_writer(store)
+    writer.close()
+    store.close()
+
+    side = resources.read_side()
+
+    assert side is not None
+    assert side.field_plan.fields != LEGACY_PLAN.fields
+    assert FIELD_BODY_ES in side.field_plan.fields
 
 
 def test_the_version_marks_are_dropped_with_the_read_side(

@@ -45,11 +45,11 @@ from fastapi.testclient import TestClient
 from tantivy import Index
 
 from conftest import write_wordlist
-from findling.config import settings
+from findling.config import SCHEMA_VERSION, settings
 from findling.extract.dispatch import Route
 from findling.extract.dispatch import extract as dispatch_extract
 from findling.extract.errors import ExtractionOutcome, Reason
-from findling.index.open import expected_versions, open_index
+from findling.index.open import LANGUAGES_MARK, SCHEMA_MARK, expected_versions, open_index
 from findling.index.schema import FIELD_BODY_DE, FIELD_FILE_ID, FIELD_NAME
 from findling.index.writer import IndexBatchWriter
 from findling.main import APP, active_poller, enabled_handler
@@ -75,6 +75,7 @@ from findling.worker.poller import (
     STAND_DOWN_TICK_SECONDS,
     Poller,
     _open_state,
+    _open_writer,
     _raise_generation_for_lost_index,
 )
 
@@ -2407,6 +2408,51 @@ def test_a_state_database_created_by_the_poller_carries_the_version_marks(volume
         assert opened.version_mismatch(expected_versions(digest, ",".join(settings().languages))) == []
     finally:
         opened.close()
+
+
+def test_a_fresh_volume_carries_the_two_marks_of_the_directory_it_builds(
+    volume: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The installation that has no index yet, and the leg of the CI that asked.
+
+    The neighbour above says the seed leaves the state database agreeing with
+    this code. It cannot say anything about the two marks of a directory,
+    because the seed is forbidden to write the language one and because the
+    schema one it writes is a fact about a directory that does not exist at the
+    moment of the seed.
+
+    So this case walks the path a container really walks on a fresh volume: the
+    state database is opened, the writer is opened, and the writer is what
+    creates the index directory. Afterwards both marks have to stand, because
+    since phase 19 they are what
+    :func:`findling.api.resources.field_plan_for` computes the field list of a
+    search out of. Without them an installation that switched four languages on
+    searches ``body_de`` and ``body_en`` for the rest of its life, whatever
+    FINDLING_LANGUAGES says, and nothing anywhere says so. That is what the CI
+    leg "Language proof, the four new chains answer on the ordinary search
+    route" of deploy-harp run 36086044755 measured on all four legs.
+
+    Six languages and not the factory pair on purpose: with ``de,en`` the absent
+    mark is excused by ``_languages_are_legacy`` and the case would be green
+    without a mark being written anywhere.
+    """
+    monkeypatch.setenv("FINDLING_LANGUAGES", "de,en,es,it,nl,pt")
+    settings.cache_clear()
+    digest = write_wordlist(volume)
+    languages = ",".join(settings().languages)
+    assert languages == "de,en,es,it,nl,pt"
+
+    store = _open_state()
+    writer = _open_writer(store)
+    try:
+        marks = store.read_meta()
+
+        assert marks.get(SCHEMA_MARK) == str(SCHEMA_VERSION)
+        assert marks.get(LANGUAGES_MARK) == languages
+        assert store.version_mismatch(expected_versions(digest, languages)) == []
+    finally:
+        writer.close()
+        store.close()
 
 
 async def test_the_resources_open_off_the_event_loop(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:

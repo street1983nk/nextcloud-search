@@ -288,6 +288,63 @@ def start_rebuild_on_drift(store: Store, expected: Mapping[str, str]) -> int | N
 _MARKS_OF_A_DIRECTORY: Final = frozenset({_LOCAL_GENERATION, SCHEMA_MARK, LANGUAGES_MARK})
 
 
+def stamp_a_new_directory(store: Store, path: Path, expected: Mapping[str, str]) -> bool:
+    """Write the two marks of an index directory that is about to be built empty.
+
+    Answers True when it wrote them and False when ``path`` already holds an
+    index, which is every start of every container after the first one.
+
+    **The one gap the fix of M-19-05 left, named as such.** That finding took
+    the two marks above out of :func:`stamp_after_rebuild`, and the reason it
+    gives is sound: that stamp stands behind a pass over the holdings in a
+    directory that was already there, and no pass over documents makes a claim
+    about the layout of a directory true. What the fix did not see is that the
+    same stamp was also the only writer of those two marks on a volume that
+    never had an index at all, because no rebuild runs there either
+    (:func:`findling.index.rebuild.rebuild_the_index` answers such a volume with
+    NO_LIVE_DIRECTORY). A fresh installation therefore carried no language mark
+    at all, :func:`findling.api.resources.field_plan_for` read the absent mark
+    as ``LEGACY_LANGUAGES``, and a bare word reached ``body_de`` and ``body_en``
+    for the life of the installation whatever FINDLING_LANGUAGES said. The CI
+    leg "Language proof, the four new chains answer on the ordinary search
+    route" of deploy-harp run 36086044755 answered all four new chains with
+    nothing, on all four legs, and it is the only leg that asks in a language
+    outside the legacy pair.
+
+    **Why this place may make a claim the other one may not.** There is no
+    directory here. The caller creates it in the next line out of
+    :func:`findling.index.schema.build_schema`, under the schema of this code
+    and with every chain of this code registered, so an empty directory of the
+    current layout and the current language set is precisely what the two marks
+    say. The other stamp describes work over documents that somebody else's code
+    may have written; this one describes a directory that does not exist yet and
+    can therefore hold nothing that contradicts it. The refusal above is what
+    keeps it that way: a directory that is already there is never restamped
+    here, whatever it carries, so the upgrade path of M-19-05 passes this
+    function untouched.
+
+    **It is asked in front of the creation and not behind it.** The reading side
+    of the container opens as soon as the directory is there and computes its
+    field list once per opening, so a stamp behind the creation leaves a window
+    in which a search reads marks nobody has written yet and keeps that list for
+    as long as its handles live. That is the same window audit finding H-19-01
+    closed on the other side of the swap, and the cheapest way not to have it
+    here is to write first.
+
+    ``index_version`` is not among the two, for the reason the comment on
+    :data:`_MARKS_OF_A_DIRECTORY` gives: the stored generation is a floor and
+    the expected one is the baseline of the code.
+    """
+    if path.is_dir() and Index.exists(str(path)):
+        return False
+    store.write_meta(SCHEMA_MARK, expected[SCHEMA_MARK])
+    store.write_meta(LANGUAGES_MARK, expected[LANGUAGES_MARK])
+    LOGGER.info(
+        "this volume holds no index yet; the schema and language marks of the directory about to be built are written"
+    )
+    return True
+
+
 def stamp_after_rebuild(store: Store, expected: Mapping[str, str]) -> bool:
     """Write the marks of the running code once the rebuild is through.
 

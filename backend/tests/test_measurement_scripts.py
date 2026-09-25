@@ -1001,7 +1001,7 @@ PHP_TREE_HASH_TODAY = "a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab
 # the two allocations per query are kept with the reason written beside them
 # (L-19-03). No file came and none went, so PACKAGE_FILES_TODAY stays at 56.
 PACKAGE_FILES_TODAY = 56
-PACKAGE_TREE_HASH_TODAY = "6c950d2f9bb70dea7ebd35f9ffee99a76d1062862ad6589f9397bf4575660c06"
+PACKAGE_TREE_HASH_TODAY = "52f0fe82887467d73cc0ab3b20402d8104b8f0e2ed60ed06492f8dc16283166d"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
