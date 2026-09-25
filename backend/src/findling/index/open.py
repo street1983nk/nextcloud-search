@@ -273,6 +273,21 @@ def start_rebuild_on_drift(store: Store, expected: Mapping[str, str]) -> int | N
     return generation
 
 
+# The marks :func:`stamp_after_rebuild` never writes, because none of them is a
+# statement about the pass that stamp stands behind.
+#
+# ``index_version`` is the local generation, which stands above the baseline of
+# the code precisely because a rebuild happened; writing the baseline back would
+# make every verdict of the finished run look stale.
+#
+# The other two describe an index DIRECTORY: the layout it was built under and
+# the body chains that were written into it. They are written by
+# :func:`findling.index.rebuild.stamp_after_swap` alone, behind the directory
+# swap, because that is the only place where what they claim is true
+# (audit finding M-19-05).
+_MARKS_OF_A_DIRECTORY: Final = frozenset({_LOCAL_GENERATION, SCHEMA_MARK, LANGUAGES_MARK})
+
+
 def stamp_after_rebuild(store: Store, expected: Mapping[str, str]) -> bool:
     """Write the marks of the running code once the rebuild is through.
 
@@ -309,6 +324,19 @@ def stamp_after_rebuild(store: Store, expected: Mapping[str, str]) -> bool:
     in a mark that is missing and touches nothing that is there, because an
     existing database has to keep the marks its index was really built with.
     This function is the opposite operation and therefore a separate one.
+
+    **Three marks are deliberately left out**, and the list is
+    :data:`_MARKS_OF_A_DIRECTORY`. The generation for the reason above; the
+    schema mark and the language mark since audit finding M-19-05, because they
+    describe an index directory and this stamp runs after a pass over the
+    holdings **in the directory that is already there**. Writing them here is
+    the "two stampers under one name" that
+    :func:`findling.index.rebuild.stamp_after_swap` exists to avoid (T-18-07-03):
+    a run that ended in RUN_INCOMPLETE or RUN_STOPPED_EARLY gives the poller
+    back, the next idle pass finds an empty queue, and both marks would then
+    declare a directory current that was never rebuilt. Since phase 19 those two
+    also decide which fields a search reaches, so the claim would not merely be
+    wrong, it would be acted on.
     """
     stored = store.read_meta()
     if not store.version_mismatch(expected) and not stored.get(REBUILD_MARK):
@@ -324,7 +352,7 @@ def stamp_after_rebuild(store: Store, expected: Mapping[str, str]) -> bool:
         return False
 
     for key, value in expected.items():
-        if key == _LOCAL_GENERATION:
+        if key in _MARKS_OF_A_DIRECTORY:
             continue
         store.write_meta(key, value)
     store.write_meta(REBUILD_MARK, "")

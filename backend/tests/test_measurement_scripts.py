@@ -966,8 +966,16 @@ PHP_TREE_HASH_TODAY = "a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab
 # build_query that turns it into the same empty answer a line without a term
 # gets, because an empty field list is the one input that makes the lenient
 # parser raise. No file came and none went, so PACKAGE_FILES_TODAY stays at 56.
+# Moved on 2026-09-25 by the fix of audit finding M-19-05: exactly one of the 56
+# files changed its bytes, index/open.py, where stamp_after_rebuild got
+# _MARKS_OF_A_DIRECTORY and skips all three of them instead of the local
+# generation alone. The schema mark and the language mark describe an index
+# directory, that stamp stands behind a pass over the holdings in the directory
+# that is already there, and index.rebuild.stamp_after_swap behind the swap is
+# the one place where what the two claim is true. No file came and none went, so
+# PACKAGE_FILES_TODAY stays at 56.
 PACKAGE_FILES_TODAY = 56
-PACKAGE_TREE_HASH_TODAY = "89e45546b0840e7d3c439f4c10add726890f904a921e55ce41a16ea5c1164d02"
+PACKAGE_TREE_HASH_TODAY = "43c25a1d404d88978f6c0e15c551c3c75a60963d90ab95bcc632bc5cacde56ec"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

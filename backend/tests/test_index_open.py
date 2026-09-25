@@ -36,6 +36,8 @@ from findling.index.analyzer import (
     cached_german_analyzer,
 )
 from findling.index.open import (
+    LANGUAGES_MARK,
+    SCHEMA_MARK,
     TANTIVY_VERSION,
     expected_versions,
     open_index,
@@ -846,6 +848,49 @@ def test_the_stamp_leaves_the_local_generation_alone(tmp_path: Path) -> None:
     assert store.index_version == generation
     assert store.is_unchanged(4711, "hash-of-b") is True
     store.close()
+
+
+def test_the_stamp_leaves_the_two_marks_of_a_directory_alone(tmp_path: Path) -> None:
+    """Audit finding M-19-05, and the state it is about is an ordinary one.
+
+    This stamp stands behind a pass over the holdings in the directory that is
+    already there. The schema mark and the language mark describe a directory
+    and not a pass, and the one place where what they claim is true is behind
+    the directory swap, which is why
+    :func:`findling.index.rebuild.stamp_after_swap` is a second stamper with a
+    gate of its own (T-18-07-03).
+
+    The volume below is the one every installation upgrading from 1.2.0 stands
+    on: a directory of the old layout and the old pair of chains, a container
+    that wants six, and a word list that has moved as well. The drift the crawl
+    can answer is the word list, and that is the one this stamp may write. If it
+    wrote the other two, the marks would promise thirteen fields on a directory
+    that carries nine, and since phase 19 that promise is not merely wrong: it
+    is what a search computes its field list from.
+    """
+    store = _drifted_store(tmp_path)
+    expected = expected_versions(DIGEST, "de,en,es")
+    store.write_meta(SCHEMA_MARK, "1")
+    store.write_meta(LANGUAGES_MARK, "de,en")
+    start_rebuild_on_drift(store, expected)
+    store.record(
+        4711,
+        FileMeta(storage_id=3, root_id=2, path="a/b.txt", title="b.txt", mime="text/plain", size=7, mtime=1, etag="e"),
+        "indexed",
+        None,
+        content_hash="hash-of-b",
+    )
+
+    assert stamp_after_rebuild(store, expected) is True
+
+    marks = store.read_meta()
+    store.close()
+
+    assert marks[SCHEMA_MARK] == "1"
+    assert marks[LANGUAGES_MARK] == "de,en"
+    # And the mark of the pass that really happened is written, because a stamp
+    # that wrote nothing at all would leave the banner up for ever.
+    assert marks["wordlist_hash"] == DIGEST
 
 
 def test_a_restart_in_the_middle_does_not_start_the_rebuild_over(tmp_path: Path) -> None:
