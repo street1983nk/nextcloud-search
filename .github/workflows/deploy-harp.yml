@@ -1112,12 +1112,12 @@ jobs:
             echo ""
             echo "### Language proof on ${{ matrix.server-version }} / ${{ matrix.runner }}"
             echo ""
-            echo "- es, it, nl and pt each answered on the ordinary search route after ${rounds} cron rounds"
+            echo "- all five cases (es, it, nl, pt and nlc) answered on the ordinary search route after ${rounds} cron rounds"
             echo "- the nl compound case (gemeentebelastingen asked as belasting) answered there as well"
             echo "- the result page answered with the same five files, one call per case"
           } >> "${GITHUB_STEP_SUMMARY}"
 
-          # -- and the four documents go again --------------------------------
+          # -- and the five documents go again --------------------------------
           # The proof is complete at the line above, and the files are taken out
           # so that the stock of this user is the stock every later step of this
           # job was measured against. One of those steps is the reason: "Store
@@ -1126,7 +1126,7 @@ jobs:
           # and whether a foreign document lands inside the semantic band of
           # 14.0 around the best neighbour is a measurement and not a deduction
           # (the comment above the fill corpus says exactly that about its own
-          # words). Leaving four foreign language documents in the home would
+          # words). Leaving five foreign language documents in the home would
           # put that question to a proof that never asked it.
           for lang in es it nl pt nlc; do
             status=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \
