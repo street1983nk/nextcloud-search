@@ -35,6 +35,7 @@ from findling.index.analyzer import (
     TOKENIZER_NL,
     TOKENIZER_PT,
     cached_german_analyzer,
+    dutch_chain_for,
     english_analyzer,
     name_analyzer,
     snowball_analyzer,
@@ -139,13 +140,22 @@ def stored_only_analyzer() -> TextAnalyzer:
     return TextAnalyzerBuilder(Tokenizer.simple()).filter(Filter.remove_long(_DROP_EVERY_TOKEN)).build()
 
 
-def open_index(path: Path, constituents: Sequence[str]) -> Index:
+def open_index(path: Path, constituents: Sequence[str], *, dutch: str | None = None) -> Index:
     """Create or open the index at ``path`` and register its eight analyzers.
 
     ``constituents`` is the prepared word list from
     :func:`findling.index.wordlist.load_constituents`; it decides how German text
     is split and therefore what the index contains, which is why its digest is
     one of the version marks in :func:`expected_versions`.
+
+    ``dutch`` is the digest of the Dutch constituent list from
+    :func:`findling.index.wordlist_nl.dutch_digest_for`, or None while nl is not
+    configured. It decides which chain stands behind the nl name and never
+    whether one does. The default None is there for the roughly hundred test
+    calls that open German indexes; every caller in src names the choice
+    explicitly, and ``tests/test_index_open.py`` holds that with a gate
+    (``test_every_caller_in_src_names_the_dutch_choice``), so no production path
+    decides it silently.
 
     The directory is created when it is missing. It lives inside the container's
     own persistent volume and is never a Nextcloud node; the read-only gate holds
@@ -172,7 +182,13 @@ def open_index(path: Path, constituents: Sequence[str]) -> Index:
     # field code turns into a tantivy language, and are never repeated here.
     index.register_tokenizer(TOKENIZER_ES, snowball_analyzer(SNOWBALL_NAME["es"]))
     index.register_tokenizer(TOKENIZER_IT, snowball_analyzer(SNOWBALL_NAME["it"]))
-    index.register_tokenizer(TOKENIZER_NL, snowball_analyzer(SNOWBALL_NAME["nl"]))
+    # The Dutch chain follows the language set in its variant and never in its
+    # presence, so the line stays free like the three around it. Without nl,
+    # body_nl stays empty and field_plan_for in findling.api.resources never asks
+    # it, so the plain Snowball variant is neutral there and saves the 17.6 MB of
+    # the Dutch automaton; with nl the splitting chain answers, with the list
+    # behind the folding (D-07). dutch_chain_for makes the choice, not this line.
+    index.register_tokenizer(TOKENIZER_NL, dutch_chain_for(dutch))
     index.register_tokenizer(TOKENIZER_PT, snowball_analyzer(SNOWBALL_NAME["pt"]))
     index.register_tokenizer(TOKENIZER_NAME, name_analyzer())
     index.register_tokenizer(TOKENIZER_STORED_ONLY, stored_only_analyzer())

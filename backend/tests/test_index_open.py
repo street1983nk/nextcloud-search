@@ -26,7 +26,7 @@ from textwrap import dedent
 import pytest
 from tantivy import Document, Filter, Index, TextAnalyzer, TextAnalyzerBuilder, Tokenizer
 
-from conftest import open_schema_1_index
+from conftest import open_schema_1_index, write_wordlist_nl
 from findling.config import INDEX_VERSION, SCHEMA_VERSION, SNOWBALL_NAME, settings
 from findling.index.analyzer import (
     ANALYZER_VERSION,
@@ -34,6 +34,7 @@ from findling.index.analyzer import (
     TOKENIZER_DE,
     build_count,
     cached_german_analyzer,
+    dutch_build_count,
 )
 from findling.index.open import (
     DUTCH_MARK,
@@ -66,6 +67,7 @@ from findling.index.schema import (
     build_schema,
 )
 from findling.index.wordlist import FUGEN, wordlist_hash
+from findling.index.wordlist_nl import dutch_digest_for, read_count_nl
 from findling.store.repo import FileMeta, Store, open_store
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "src" / "findling"
@@ -750,6 +752,139 @@ def test_every_caller_in_src_names_the_dutch_mark() -> None:
     # and rebuild. Fewer means the walk lost files, which would be a green gate
     # over nothing.
     assert calls >= 6, calls
+
+
+# -- the Dutch chain behind the language set (plan 21-07) --------------------
+#
+# The registration of the nl chain stays free, as the gate above demands; what
+# follows the language set is which variant stands behind the name. Without nl
+# the plain Snowball chain answers for body_nl and no Dutch list is read. With
+# nl the splitting chain answers, and a Dutch compound is found through its
+# constituent. The behaviour is held here, the choice at every caller below.
+
+# The sentence of success criterion 2, and the question that must reach it.
+DUTCH_COMPOUND_SENTENCE = "De gemeentebelastingen voor dit jaar zijn verhoogd."
+DUTCH_CONSTITUENT = "belasting"
+
+# The language set of a Dutch container, as settings() hands it out.
+DUTCH_LANGUAGES = ("de", "en", "nl")
+
+
+def _write_dutch(index: Index, body: str = DUTCH_COMPOUND_SENTENCE) -> None:
+    """Write one document with the text in body_de and body_nl, field by field."""
+    writer = index.writer(heap_size=15_000_000, num_threads=1)
+    document = Document()
+    document.add_unsigned(FIELD_FILE_ID, 1)
+    document.add_unsigned(FIELD_STORAGE_ID, 7)
+    document.add_text(FIELD_BODY_DE, body)
+    document.add_text(FIELD_BODY_NL, body)
+    writer.add_document(document)
+    writer.commit()
+    writer.wait_merging_threads()
+    index.reload()
+
+
+def _switch_dutch_on(volume: Path, monkeypatch: pytest.MonkeyPatch) -> str | None:
+    """Put the Dutch list on the volume, switch nl on and return the digest the callers hand in."""
+    write_wordlist_nl(volume)
+    monkeypatch.setenv("FINDLING_LANGUAGES", ",".join(DUTCH_LANGUAGES))
+    settings.cache_clear()
+    return dutch_digest_for(settings().languages)
+
+
+def test_with_dutch_the_constituent_finds_the_compound(volume: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    dutch = _switch_dutch_on(volume, monkeypatch)
+    assert dutch is not None
+
+    index = open_index(volume / "index", CONSTITUENTS, dutch=dutch)
+    _write_dutch(index)
+
+    assert _hits(index, DUTCH_CONSTITUENT, [FIELD_BODY_NL]) == 1
+
+
+def test_without_the_dutch_splitter_the_constituent_finds_nothing(
+    volume: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The negative control of the test above, both halves in one test like its
+    # German model: the same volume, the same text, the same question, and the
+    # only difference is the variant behind the nl name.
+    dutch = _switch_dutch_on(volume, monkeypatch)
+
+    without = open_index(volume / "without", CONSTITUENTS, dutch=None)
+    _write_dutch(without)
+
+    assert _hits(without, DUTCH_CONSTITUENT, [FIELD_BODY_NL]) == 0
+
+    shipped = open_index(volume / "shipped", CONSTITUENTS, dutch=dutch)
+    _write_dutch(shipped)
+
+    assert _hits(shipped, DUTCH_CONSTITUENT, [FIELD_BODY_NL]) == 1
+
+
+def test_without_dutch_no_dutch_automaton_is_built(volume: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The list lies on the volume on purpose: a reader that reached for it would
+    # find it, so an unchanged read counter says that nothing reached for it.
+    write_wordlist_nl(volume)
+    monkeypatch.setenv("FINDLING_LANGUAGES", "de,en")
+    settings.cache_clear()
+    builds, reads = dutch_build_count(), read_count_nl()
+
+    dutch = dutch_digest_for(settings().languages)
+    index = open_index(volume / "index", CONSTITUENTS, dutch=dutch)
+    _write_dutch(index)
+
+    assert dutch is None
+    assert dutch_build_count() == builds
+    assert read_count_nl() == reads
+
+
+def test_two_openings_with_dutch_build_one_automaton(volume: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    dutch = _switch_dutch_on(volume, monkeypatch)
+    before = dutch_build_count()
+
+    open_index(volume / "first", CONSTITUENTS, dutch=dutch)
+    open_index(volume / "second", CONSTITUENTS, dutch=dutch)
+
+    assert dutch_build_count() - before <= 1
+
+
+def callers_without_the_dutch_choice(source: str, filename: str) -> list[int]:
+    """Line numbers of every call of open_index that does not name ``dutch``.
+
+    The same reading as the Dutch mark gate above: syntax tree, bare name and
+    attribute alike, and a comment or a docstring is no call.
+    """
+    missing: list[int] = []
+    for node in ast.walk(ast.parse(source, filename=filename)):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        name = func.id if isinstance(func, ast.Name) else func.attr if isinstance(func, ast.Attribute) else None
+        if name != "open_index":
+            continue
+        if not any(keyword.arg == "dutch" for keyword in node.keywords):
+            missing.append(node.lineno)
+    return missing
+
+
+def test_the_dutch_choice_gate_sees_a_caller_without_it() -> None:
+    # The self test of the gate below: a reader that found nothing would be
+    # green on the day a caller forgot the Dutch choice.
+    staged = dedent(
+        """
+        def _open_writer():
+            index = open_index(resolved.index_dir, artifact.entries)
+            named = open_index(
+                directory,
+                constituents,
+                dutch=dutch_digest_for(languages),
+            )
+            other = open.open_index(directory, constituents)
+            # open_index(directory, constituents) in a comment is not a call
+            return index, named, other
+        """
+    )
+    assert callers_without_the_dutch_choice(staged, "staged.py") == [3, 9]
 
 
 def test_a_write_goes_through_when_only_german_is_switched_on(monkeypatch: pytest.MonkeyPatch, index_dir: Path) -> None:

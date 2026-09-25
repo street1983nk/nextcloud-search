@@ -1039,8 +1039,12 @@ PHP_TREE_HASH_TODAY = "a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab
 # hand dutch_mark(languages) to expected_versions explicitly, and
 # tools/index_status.py reports the seventh mark as wordlistHashNl. No file came
 # and none went, so PACKAGE_FILES_TODAY stays at 57.
+# Moved on 2026-09-25 by Plan 21-07, task 1: one of the 57 files changed its
+# bytes. index/open.py takes a keyword-only dutch with the default None and
+# registers the nl name as dutch_chain_for(dutch), still free and without an if.
+# No file came and none went, so PACKAGE_FILES_TODAY stays at 57.
 PACKAGE_FILES_TODAY = 57
-PACKAGE_TREE_HASH_TODAY = "81587ca3fdf3df5eec2242dd311bec3cd8b7919789342e95bc2eb70515149536"
+PACKAGE_TREE_HASH_TODAY = "dbc5caa2f5cb1d90f9cba63ea62fa2a021c69cc060148836ad11056eec1086a4"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
