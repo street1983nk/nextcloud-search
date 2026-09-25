@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: ready_to_plan
-stopped_at: Phase 21 komplett (9/9, verified passed, Review-Fixes drin), naechster Schritt secure-phase 21, dann plan-phase 22
+stopped_at: Phase 21 komplett und THREAT-SECURE (32/32, de8e128), naechster Schritt discuss/plan-phase 22
 last_updated: 2026-09-25T16:42:24.124Z
 last_activity: 2026-09-25 -- Phase 21 ausgefuehrt, verifiziert und abgeschlossen
 progress:
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 Phase: 22
 Plan: Not started
-Status: Ready to plan (secure-phase 21 steht davor)
+Status: Ready to plan (secure-phase 21 ERLEDIGT 25.09., SECURED 32/32, de8e128)
 
 Aktueller Stand: PHASE 21 KOMPLETT 25.09.2026 (9/9 Plaene, goal-backward verified passed 9/9,
 phase.complete gelaufen, STATE von Hand nachgezogen). Niederlaendische Komposita sind Ende-zu-
@@ -242,8 +242,8 @@ Progress: [███████...] 71% (5 von 7 Phasen)
 
 ## Naechster Schritt
 
-**secure-phase 21** (Security-Gate, 21-SECURITY.md fehlt noch), ausserdem die lokalen
-Fix- und Tracking-Commits pushen (24c33fa..HEAD), danach **discuss/plan-phase 22**
+**discuss/plan-phase 22** (secure-phase 21 ERLEDIGT 25.09.: SECURED 32/32, drei
+akzeptierte Restrisiken AR-21-01..03, Commit de8e128; alle Phase-21-Commits gepusht)
 (Messanfahrt BL-F03; beim Planen die Mitmessliste aus
 .planning/research/BL-F04-vorarbeit-2026-09-25.md einarbeiten plus Rechenblatt der
 Boxstunden VOR Start, Owner-Beschluss 25.09.). Phase 21 ist KOMPLETT: Verifikation passed
@@ -595,5 +595,5 @@ auf resolved gesetzt).
 ## Session Continuity
 
 Last session: 2026-09-25
-Stopped at: Phase 21 komplett (verified passed, Review 1C/2W gefixt, CI-Beweise gruen), Fix- und Tracking-Commits ab 24c33fa noch lokal
-Resume file: .planning/phases/21-niederlaendische-komposita/21-VERIFICATION.md (naechster Schritt: secure-phase 21, Push der lokalen Commits, dann plan-phase 22 mit Mitmessliste)
+Stopped at: Phase 21 komplett, verified passed, THREAT-SECURE 32/32 (de8e128), alles gepusht
+Resume file: .planning/phases/21-niederlaendische-komposita/21-VERIFICATION.md (naechster Schritt: discuss/plan-phase 22 mit Mitmessliste und Rechenblatt)
