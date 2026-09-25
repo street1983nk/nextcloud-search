@@ -103,16 +103,23 @@ Vorgabe de,en (71cf028).
 Planung 24.09.: Research b2ef69f,
 Pattern-Karte, Plaene 51525d5, Checker PASS, Warnungen behoben 3c35186. Phase 20 geplant
 (a8d40fd, Checker PASS, f32bdec). Phase 18 davor KOMPLETT (12/12, CI-Beweis 36026836087).
-Last activity: 2026-09-25 -- 19-09 ausgefuehrt (Doku der Frageseite, CI-Lauf 36074155306 gruen auf 4/4, Laufzeit eingetragen)
+Audit der Phase 19 (19-REVIEW.md, 1H/5M/7L) behoben am 25.09.2026 in 6f35cbe..7f75456:
+H-19-01 und alle fuenf MEDIUM gefixt, sechs der sieben LOW gefixt, L-19-05 misst die
+Loeschverzoegerung und warnt, statt ohne gemessenes Budget zu gaten, L-19-03 bewusst
+abgelehnt mit Begruendung im Code; jeder Befund ein eigener Commit mit nachgezogener
+Ratsche, Gates und volle Suite (2875/15) vor jedem Commit gruen, nichts gepusht.
+Last activity: 2026-09-25 -- Audit-Befunde der Phase 19 behoben (6f35cbe..7f75456, 8 Commits)
 
 Progress: [███.......] 32% (2 von 7 Phasen)
 
 ## Naechster Schritt
 
-Phase 19 ist gebaut: alle neun Plaene ausgefuehrt, der Beweis eingeholt. Offen sind
-die zwei Abschlussschritte der Phase, in dieser Reihenfolge: Phasenverifikation
-(`/gsd:verify-phase 19`) und danach der Security-, Bug- und Performance-Audit nach der
-Owner-Regel vom 15.08.2026. Die Verifikation hat alles, was sie braucht: Laufnummer
+Phase 19 ist gebaut: alle neun Plaene ausgefuehrt, der Beweis eingeholt. Der Audit nach
+der Owner-Regel vom 15.08.2026 ist gefahren UND behoben (19-REVIEW.md, Commits
+6f35cbe..7f75456); offen ist daraus nur der Nachlauf der CI (Push steht aus) und die
+PHP-Seite von M-19-03, die in den Plan gehoert, der die Adminseite besitzt (Phase 20).
+Der letzte offene Abschlussschritt ist damit die Phasenverifikation
+(`/gsd:verify-phase 19`); sie hat alles, was sie braucht: Laufnummer
 36074155306, vier gruene Aeste (stable33/amd64, stable34/amd64, stable34/arm64,
 stable35/amd64), der Sprachbeweis viermal erschienen und viermal erfolgreich, die
 Kette 0, 0, 1 in Store upgrade 3, 5 und 6.

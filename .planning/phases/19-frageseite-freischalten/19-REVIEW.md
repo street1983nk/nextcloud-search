@@ -9,6 +9,9 @@ findings:
   low: 7
   total: 13
 status: issues_found
+fixed: 2026-09-25
+fix_status: all_addressed
+fix_range: 6f35cbe..7f75456
 ---
 
 # Phase 19: Security-, Bug- und Performance-Audit
@@ -17,6 +20,11 @@ status: issues_found
 **Spanne:** 982a39b..HEAD (41 Commits)
 **Tiefe:** deep (Produktionscode vollstaendig, Aufrufketten ueber Modulgrenzen, CI-Strecke, neue Waechter)
 **Ergebnis:** 1 HIGH, 5 MEDIUM, 7 LOW. Kein CRITICAL.
+**Behebung:** 2026-09-25, Commits `6f35cbe..7f75456` (8 Stueck, je ein Befund
+oder eine Befundgruppe). HIGH und alle fuenf MEDIUM behoben, sechs der sieben
+LOW behoben, L-19-05 gemessen statt gegated (Begruendung beim Befund). Gates vor
+jedem Commit gruen: ruff, ruff format, pyright (latest), vulture, volle Suite
+(2875 passed, 15 skipped).
 
 ## Zusammenfassung
 
@@ -44,6 +52,22 @@ ist dazugekommen (L-19-03).
 ## HIGH
 
 ### H-19-01: Der Feldplan ueberlebt das Stempeln der Marken, die ihn bestimmen
+
+**BEHOBEN** in `6f35cbe`. Beide Pfade. Der Fensterpfad wie vorgeschlagen:
+`stamp_after_swap` steht jetzt im `try` des Tauschs und VOR
+`let_read_side_open()`, das Fenster ist zu. Der Pollerpfad abweichend vom
+Vorschlag und begruendet: `worker/poller.py` importiert `api.resources` nicht
+(Schichtregel des Moduls, siehe Kopf von `index/rebuild.py`), deshalb nimmt
+`Poller` einen `marks_stamped`-Callback, den die Lifespan mit
+`resources.reset_read_side` fuellt, genau an der Naht, an der sie auch die
+beiden Riegelhaelften in den Umbau reicht. Rot-vor-Fix gefahren: der
+Reihenfolgetest in `test_index_rebuild.py` hielt die alte Reihenfolge als
+Erwartung fest und fiel (`At index 3 diff: 'let_read_side_open' != 'stamp'`); er
+liest jetzt zusaetzlich die Marken in dem Moment, in dem der Riegel faellt.
+`test_read_side.py:441-449` ist umgedreht: die Aussage "einmal je Oeffnung, nie
+je Anfrage" und die Invariante "ein Stempel hinter dem Riegel wird von der
+naechsten Oeffnung gesehen" sind jetzt zwei Aussagen statt einer, die den Befund
+als Erwartung hielt. Dazu zwei Pollerfaelle und ein Lifespan-Verdrahtungsfall.
 
 **Kategorie:** bug (stille Wirkungslosigkeit der ganzen Phase)
 
@@ -139,6 +163,16 @@ liefern, ohne dass der Test selbst `reset_read_side()` ruft.
 
 ### M-19-01: Die Gegenprobe prueft nicht den Plan, den sie herausgibt
 
+**BEHOBEN** in `ec823b8`. `_probed` fragt jeden Namen, der zum Parser geht,
+genau einmal (Feldliste, Gewichte, Dateinamen-Antwort), laesst die fehlenden
+weg statt den ganzen Plan fallen zu lassen, und `field_plan_for` ist eine
+Kaskade: berechneter Plan, dann Bestandsplan, beide geprobt, dann `EMPTY_PLAN`.
+`build_query` bekommt die Kurzschlusszeile, weil eine leere Feldliste die eine
+Eingabe ist, die den lenient-Parser werfen laesst. Abweichung vom Vorschlag:
+der Entwurf im Bericht probt `body_es` zweimal (einmal aus `fields`, einmal aus
+`boosts`) und schreibt dann zwei Warnzeilen fuer ein Feld; `asked` haelt das auf
+eine.
+
 **Kategorie:** security / bug (Verfuegbarkeit des Suchpfads)
 
 **Datei:** `backend/src/findling/api/resources.py:418-433`
@@ -201,6 +235,12 @@ Suchtext ohne Term, statt die Ausnahme zu provozieren.
 
 ### M-19-02: `BODY_BOOST` und `BODY_FIELD` stehen ohne Gleichschritt nebeneinander
 
+**BEHOBEN** in `9f8c142`, Testseite wie vorgeschlagen: Mengengleichheit ueber
+`BODY_BOOST`, `BODY_FIELD` und `SUPPORTED_LANGUAGES`, dazu eine Gegenprobe mit
+ausgeduennter Gewichtstabelle gegen ein echtes Verzeichnis, und die
+Rueckfallzeile im vorhandenen Mengenfall. Kein Produktionscode: die Abbildungen
+sind bewusst geschlossen, gefehlt hat der Fall, der es merkt.
+
 **Kategorie:** bug
 
 **Dateien:** `backend/src/findling/query/rewrite.py:111`, `backend/src/findling/api/resources.py:414`
@@ -236,6 +276,16 @@ def test_every_body_field_has_exactly_one_weight() -> None:
 ```
 
 ### M-19-03: Der Rueckfall auf den Bestandsplan ist von aussen unsichtbar
+
+**BEHOBEN** in `315eaf0`. `languagesSearched` steht neben `languagesActive` und
+`languagesFilled` und kommt aus dem Feldplan; `plan_falls_short` misst beim
+Oeffnen, ob der Plan weniger erreicht als die Marken versprechen, haengt als
+`ReadSide.plan_is_short` daneben und ist die fuenfte Ursache in `degraded()`.
+Bewusst NICHT mitgezogen: die PHP-Seite. Der Fixvorschlag des Berichts verlangt
+sie nicht, die Phase fasst `php/` nicht an, und ein dritter Platzhalter in einem
+in drei Sprachen uebersetzten Satz (plus l10n-Paare und PHP-Baumhash) gehoert in
+den Plan, der die Seite besitzt. Der Wert reist in der Antwort mit, die die
+Seite ohnehin holt, und der Merker ist ueber `degraded` schon heute sichtbar.
 
 **Kategorie:** bug (Betreibbarkeit)
 
@@ -273,6 +323,11 @@ ist der Merker da.
 
 ### M-19-04: Das aeussere `except Exception` macht Programmierfehler zur Betriebsmeldung
 
+**BEHOBEN** in `f33799c`, wie vorgeschlagen: der aeussere Fang sagt `error`
+statt `warning` und einen eigenen Satz ("in this build"), die erwartete
+Sondenausnahme wird eine Ebene tiefer pro Feld gefangen und benannt. Verhalten
+unveraendert, die Unterscheidung ist les- und alarmierbar.
+
 **Kategorie:** bug (Diagnostizierbarkeit)
 
 **Datei:** `backend/src/findling/api/resources.py:434-440`
@@ -294,6 +349,15 @@ ist ein Fehler dieses Builds" sagt statt "die Marken passen nicht". Verhalten bl
 die Unterscheidung wird les- und alarmierbar.
 
 ### M-19-05: `stamp_after_rebuild` schreibt Marken, fuer die es nicht zustaendig ist
+
+**BEHOBEN** in `252ada4`, wie vorgeschlagen: `_MARKS_OF_A_DIRECTORY` haelt die
+drei Marken, die dieser Stempel nicht schreibt, mit je einer Begruendung
+daneben. Die Aufrufstellen wurden vorher geprueft: `_aged_state` und
+`_drifted_store` saeen Schema und Sprachen passend und driften nur ueber den
+Wortlisten-Digest, `_seed_meta` laesst die Sprachmarke ohnehin aus und
+`_languages_are_legacy` liest ihre Abwesenheit als Bestand. `test_lifecycle`,
+`test_poller` und `test_index_open` bleiben gruen ohne Nacharbeit; ein neuer
+Fall haelt die beiden Marken gegen den Stempel fest.
 
 **Kategorie:** bug
 
@@ -337,6 +401,8 @@ _DIRECTORY_MARKS: Final = frozenset({SCHEMA_MARK, LANGUAGES_MARK, _LOCAL_GENERAT
 
 ### L-19-01: Die Sprachmarke wird ohne `strip` und ohne `lower` gelesen
 
+**BEHOBEN** in `62f3d4a`, wie vorgeschlagen, mit vier parametrisierten Faellen.
+
 **Kategorie:** bug
 **Datei:** `backend/src/findling/api/resources.py:403-404`
 
@@ -350,6 +416,11 @@ Hand kommen kann, und behandelt jede andere Unschaerfe ausdruecklich tolerant.
 **Fix:** `active = {code.strip().lower() for code in stored.split(",") if code.strip()} or set(LEGACY_LANGUAGES)`
 
 ### L-19-02: `FieldPlan` ist eingefroren, `boosts` ist es nicht
+
+**BEHOBEN** in `62f3d4a`: `MappingProxyType` in `LEGACY_PLAN`, in `EMPTY_PLAN`
+und in jedem berechneten Plan; die Annotation war bereits `Mapping`, also aendert
+sich kein Aufrufer. Der Hash-Punkt bleibt bestehen (auch ein Proxy hasht nicht)
+und steht jetzt als bekannte Grenze im Docstring.
 
 **Kategorie:** security (Haertung) / quality
 **Dateien:** `backend/src/findling/query/rewrite.py:92`, `backend/src/findling/query/rewrite.py:128-133`
@@ -370,6 +441,12 @@ Funktion mit `plan`-Parameter waere eine unangenehme Ueberraschung.
 
 ### L-19-03: Zwei neue Allokationen je Anfrage im heissen Pfad
 
+**BEWUSST ABGELEHNT**, dokumentiert in `62f3d4a` neben der Zeile, was der
+Bericht als zweite Moeglichkeit ausdruecklich anbietet. Acht Eintraege gegen
+einen mit 2,26 us gemessenen Parser, beide Werte gehen in eine native Erweiterung,
+die behalten darf, was sie bekommt, und die Alternative legt eine zweite
+Darstellung der Feldliste auf einen Wert, dessen ganzer Sinn es ist, EINE zu sein.
+
 **Kategorie:** performance
 **Datei:** `backend/src/findling/query/rewrite.py:621-622`
 
@@ -389,6 +466,8 @@ nur noch liest. Alternativ bewusst ablehnen und den Grund neben die Zeile schrei
 
 ### L-19-04: Der Docstring von `build_query` verspricht mehr, als M-1 haelt
 
+**BEHOBEN** in `62f3d4a`, wie vorgeschlagen.
+
 **Kategorie:** quality
 **Datei:** `backend/src/findling/query/rewrite.py:551-556`
 
@@ -405,6 +484,18 @@ in `plan`: a `ValueError` out of the parser, which is why `plan` is computed aga
 directory and never composed here (M-1)."
 
 ### L-19-05: Der Sprachbeweis wartet nicht, bis seine vier Dokumente aus dem Index sind
+
+**TEILWEISE BEHOBEN** in `7f75456`: gemessen und gemeldet, kein hartes Gate.
+Begruendung. Erstens gibt es `term_hits` in diesem Schritt nicht, die Funktion
+steht in "Store upgrade" und Shellfunktionen ueberleben keinen Schrittwechsel.
+Zweitens, und das ist der Grund: nach dem DELETE treibt nichts mehr die
+Warteschlange, die Loeschung wird erst von einer Cron-Runde ausgetragen, und
+niemand hat je gemessen, wie lange das auf dieser Instanz dauert. Ein hartes
+Gate auf eine ungemessene Zeit kann die ganze Strecke rot faerben, ohne dass
+etwas kaputt ist. Der eingebaute Block treibt die Cron-Runde, fragt die vier
+Fragen, sagt nach wie vielen Runden die Dokumente draussen sind und warnt sonst
+mit den Sprachen, die noch antworten. Sobald ein Lauf die Zahl gedruckt hat, ist
+das Budget gemessen und der Block kann das Gate werden.
 
 **Kategorie:** bug (CI-Verlaesslichkeit)
 **Datei:** `.github/workflows/deploy-harp.yml:1067-1089`
@@ -427,6 +518,9 @@ Zeile 3258).
 
 ### L-19-06: Das Anwendungskennwort der CI wird nicht maskiert
 
+**BEHOBEN** in `7f75456`, wie vorgeschlagen, an beiden Stellen
+(`language-apppw.txt` und `rebuild-apppw.txt`).
+
 **Kategorie:** security (CI)
 **Datei:** `.github/workflows/deploy-harp.yml:838-852`
 
@@ -446,6 +540,9 @@ mit dem Admin-Kennwort `password`. Deshalb LOW und nicht hoeher.
 `grep` mit `rm -f` wegnehmen. Dasselbe gilt fuer `rebuild-apppw.txt` in "Store upgrade 6".
 
 ### L-19-07: `grep -cF` zaehlt Zeilen, nicht Vorkommen
+
+**BEHOBEN** in `7f75456`, wie vorgeschlagen. Dritte Stelle gleicher Bauart
+(`info-upgrade.xml`, Zeile 3875 des alten Stands) mitgezogen.
 
 **Kategorie:** bug (CI-Waechter)
 **Dateien:** `.github/workflows/deploy-harp.yml:652`, `.github/workflows/deploy-harp.yml:3867`
@@ -606,3 +703,9 @@ ueberein.
 _Geprueft: 2026-09-25_
 _Pruefer: Claude (gsd-code-reviewer), adversarial_
 _Tiefe: deep_
+
+_Behoben: 2026-09-25, Commits `6f35cbe..7f75456`_
+_Behebung: Claude (gsd-code-fixer)_
+_Offen aus dieser Runde: L-19-05 als Messung statt als Gate (Begruendung beim
+Befund); die PHP-Seite von M-19-03 gehoert in den Plan, der die Adminseite
+besitzt._
