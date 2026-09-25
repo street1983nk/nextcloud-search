@@ -20,6 +20,9 @@ has to handle; identifiers stay ASCII as the project rules require.
 
 import ast
 import logging
+import threading
+import time
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from textwrap import dedent
 
@@ -28,6 +31,7 @@ from tantivy import Document, Filter, Index, TextAnalyzer, TextAnalyzerBuilder, 
 
 from conftest import open_schema_1_index, write_wordlist_nl
 from findling.config import INDEX_VERSION, SCHEMA_VERSION, SNOWBALL_NAME, settings
+from findling.index import analyzer
 from findling.index.analyzer import (
     ANALYZER_VERSION,
     MAX_TOKEN_CHARS,
@@ -846,6 +850,80 @@ def test_two_openings_with_dutch_build_one_automaton(volume: Path, monkeypatch: 
     open_index(volume / "second", CONSTITUENTS, dutch=dutch)
 
     assert dutch_build_count() - before <= 1
+
+
+def _at_once(work: Callable[[], object], count: int = 4) -> list[object]:
+    """Run one callable in ``count`` threads released by one barrier, return every answer.
+
+    The barrier is the whole point: started one after the other the threads would
+    mostly serialise on their own, the first would fill the cache and no other
+    would ever reach the miss the lock is about.
+    """
+    barrier = threading.Barrier(count)
+    answers: list[object] = [None] * count
+    failures: list[BaseException] = []
+
+    def gated(slot: int) -> None:
+        barrier.wait(30)
+        try:
+            answers[slot] = work()
+        # Handed back to the test thread, where the assertion below reads it.
+        except BaseException as error:
+            failures.append(error)
+
+    workers = [threading.Thread(target=gated, args=(slot,)) for slot in range(count)]
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join(60)
+    assert not failures, failures
+    return answers
+
+
+def _slow_down(monkeypatch: pytest.MonkeyPatch, name: str) -> None:
+    """Stretch a build to the width the box measures, so the race window is real."""
+    real = getattr(analyzer, name)
+
+    def slow(constituents: Sequence[str]) -> TextAnalyzer:
+        time.sleep(0.2)
+        return real(constituents)
+
+    monkeypatch.setattr(analyzer, name, slow)
+
+
+def test_four_threads_opening_with_dutch_at_once_build_one_automaton(
+    volume: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review finding WR-01: the single threaded case above cannot see the race.
+
+    The poller, the band run and the reading side open in threads of their own,
+    and a lookup outside a lock let every one of them miss the cache inside the
+    build window and build an automaton of its own.
+    """
+    dutch = _switch_dutch_on(volume, monkeypatch)
+    assert dutch is not None
+    monkeypatch.setattr(analyzer, "_CACHED_DUTCH", {})
+    _slow_down(monkeypatch, "dutch_analyzer")
+    before = dutch_build_count()
+
+    answers = _at_once(lambda: analyzer.dutch_chain_for(dutch))
+
+    assert dutch_build_count() - before == 1
+    assert all(answer is answers[0] for answer in answers)
+
+
+def test_four_threads_asking_for_the_german_automaton_at_once_build_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The pre-existing twin of the same class, closed with the same lock pattern."""
+    monkeypatch.setattr(analyzer, "_CACHED_GERMAN", {})
+    _slow_down(monkeypatch, "german_analyzer")
+    before = build_count()
+
+    answers = _at_once(lambda: cached_german_analyzer("race", CONSTITUENTS))
+
+    assert build_count() - before == 1
+    assert all(answer is answers[0] for answer in answers)
 
 
 def callers_without_the_dutch_choice(source: str, filename: str) -> list[int]:

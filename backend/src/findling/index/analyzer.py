@@ -117,6 +117,7 @@ directly behind the fold:
 
 import gc
 import logging
+import threading
 import time
 import unicodedata
 from collections.abc import Sequence
@@ -170,6 +171,17 @@ MAX_NAME_CHARS = 60
 # stacking a second 23 MB next to it.
 _CACHED_GERMAN: dict[str, TextAnalyzer] = {}
 
+# One lock around lookup and build, for each of the two caches (review finding
+# WR-01 of phase 21). The reading side opens under its own lock in
+# api/resources.py, but the poller and the band run open in threads of their own
+# without it, and the build between a miss and the insert takes 0.4 to 0.8 s. Two
+# openings inside that window each missed the cache and each built an automaton,
+# and the loser stayed resident through the tokenizer registration of its index
+# object: exactly the second 23 MB this cache exists to prevent. Two locks and
+# not one, so that a German build does not hold a Dutch lookup that is a hit, and
+# plain locks, because nothing below takes either of them twice.
+_GERMAN_LOCK = threading.Lock()
+
 # How often the automaton was really built in this process. Read by the test that
 # proves the singleton works; a counter is the only way to tell a cache hit from
 # a cheap rebuild from the outside.
@@ -185,6 +197,11 @@ def build_count() -> int:
 # A second automaton of roughly 17.6 MB, paid only while nl is configured, and
 # never twice for the same list.
 _CACHED_DUTCH: dict[str, TextAnalyzer] = {}
+
+# The Dutch half of the pair of locks above. dutch_chain_for holds it across the
+# read of the artifact as well, so two threads also never put the list into
+# memory twice.
+_DUTCH_LOCK = threading.Lock()
 
 _DUTCH_BUILD_COUNT = 0
 
@@ -376,14 +393,18 @@ def cached_german_analyzer(digest: str, constituents: Sequence[str]) -> TextAnal
     The single supported way to get an analyser in the running app. Two calls
     with the same digest return the same object; a different digest replaces it,
     because the old one describes a tokenisation the index no longer uses.
+
+    Lookup and build stand under one lock, so two threads that arrive together
+    build one automaton and not two (review finding WR-01 of phase 21).
     """
-    cached = _CACHED_GERMAN.get(digest)
-    if cached is not None:
-        return cached
-    analyzer = german_analyzer(constituents)
-    _CACHED_GERMAN.clear()
-    _CACHED_GERMAN[digest] = analyzer
-    return analyzer
+    with _GERMAN_LOCK:
+        cached = _CACHED_GERMAN.get(digest)
+        if cached is not None:
+            return cached
+        analyzer = german_analyzer(constituents)
+        _CACHED_GERMAN.clear()
+        _CACHED_GERMAN[digest] = analyzer
+        return analyzer
 
 
 def dutch_analyzer(constituents: Sequence[str]) -> TextAnalyzer:
@@ -425,6 +446,12 @@ def dutch_analyzer(constituents: Sequence[str]) -> TextAnalyzer:
 
 def cached_dutch_analyzer(digest: str, constituents: Sequence[str]) -> TextAnalyzer:
     """Return the process wide Dutch analyser for this list, built at most once."""
+    with _DUTCH_LOCK:
+        return _cached_dutch_analyzer_locked(digest, constituents)
+
+
+def _cached_dutch_analyzer_locked(digest: str, constituents: Sequence[str]) -> TextAnalyzer:
+    """Lookup and build of the Dutch cache. The caller holds ``_DUTCH_LOCK``."""
     cached = _CACHED_DUTCH.get(digest)
     if cached is not None:
         return cached
@@ -446,16 +473,22 @@ def dutch_chain_for(digest: str | None) -> TextAnalyzer:
 
     The list is a local here and gone after the build (D-02), so the process
     keeps the automaton and not the roughly 19.6 MB of Python strings behind it.
+
+    The whole miss, read and build included, stands under ``_DUTCH_LOCK``
+    (review finding WR-01 of phase 21): the poller, the band run and the reading
+    side open in threads of their own, and a lookup outside the lock let two of
+    them each read the list and each build an automaton.
     """
     if digest is None:
         return snowball_analyzer(SNOWBALL_NAME["nl"])
-    cached = _CACHED_DUTCH.get(digest)
-    if cached is not None:
-        return cached
-    artifact = build_artifact_nl()
-    if artifact.digest != digest:
-        raise ValueError("the dutch constituent list on the volume does not carry the expected digest")
-    return cached_dutch_analyzer(digest, artifact.entries)
+    with _DUTCH_LOCK:
+        cached = _CACHED_DUTCH.get(digest)
+        if cached is not None:
+            return cached
+        artifact = build_artifact_nl()
+        if artifact.digest != digest:
+            raise ValueError("the dutch constituent list on the volume does not carry the expected digest")
+        return _cached_dutch_analyzer_locked(digest, artifact.entries)
 
 
 # ---------------------------------------------------------------------------
