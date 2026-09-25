@@ -151,9 +151,9 @@ deutschen Übersetzung.
 | `No background job of this app has run yet. Background jobs may not be running.` | Noch kein Hintergrundauftrag dieser App ist gelaufen. Möglicherweise laufen die Hintergrundaufträge nicht. | Aucune tâche de fond de cette application n'a encore été exécutée. Les tâches de fond ne fonctionnent peut-être pas. |
 | `Indexing is running.` | Die Indexierung läuft. | L'indexation est en cours. |
 | `The numbers could not be refreshed. The figures below are the last ones this page received.` | Die Zahlen konnten nicht aktualisiert werden. Die Werte unten sind die letzten, die diese Seite bekommen hat. | Les chiffres n'ont pas pu être actualisés. Les valeurs ci-dessous sont les dernières que cette page a reçues. |
-| `%n minute` | %n Minute / %n Minuten | %n minute / %n minutes |
-| `%n hour` | %n Stunde / %n Stunden | %n heure / %n heures |
-| `%n day` | %n Tag / %n Tage | %n jour / %n jours |
+| `_%n minute_::_%n minutes_` | %n Minute / %n Minuten | %n minute / %n minutes |
+| `_%n hour_::_%n hours_` | %n Stunde / %n Stunden | %n heure / %n heures |
+| `_%n day_::_%n days_` | %n Tag / %n Tage | %n jour / %n jours |
 | `Waiting in the queue` | Wartet in der Warteschlange | En attente dans la file |
 | `Being processed` | Wird gerade verarbeitet | En cours de traitement |
 | `Indexed` | Indexiert | Indexé |
@@ -187,7 +187,7 @@ deutschen Übersetzung.
 | `State` | Zustand | État |
 | `Show example paths` | Beispielpfade anzeigen | Afficher les exemples de chemins |
 | `Hide example paths` | Beispielpfade verbergen | Masquer les exemples de chemins |
-| `and %n more` | und %n weitere / und %n weitere | et %n autre / et %n autres |
+| `_and %n more_::_and %n more_` | und %n weitere / und %n weitere | et %n autre / et %n autres |
 | `File no longer exists (ID %s)` | Datei existiert nicht mehr (ID %s) | Le fichier n'existe plus (ID %s) |
 | `%s (in the trash bin)` | %s (im Papierkorb) | %s (dans la corbeille) |
 | `Indexed, text truncated` | Indexiert, Text gekürzt | Indexé, texte tronqué |
@@ -255,7 +255,7 @@ deutschen Übersetzung.
 | `Attempts so far: %s` | Bisherige Versuche: %s | Tentatives jusqu'ici : %s |
 | `The next background run picks this file up (%s).` | Der nächste Hintergrundlauf holt diese Datei ab (%s). | Le prochain passage en arrière-plan prendra ce fichier en charge (%s). |
 | `The content of this file is searchable.` | Der Inhalt dieser Datei ist durchsuchbar. | Le contenu de ce fichier peut être trouvé par la recherche. |
-| `A worker holds this file. The claim runs out in %n second if nothing acknowledges it.` | Ein Arbeiter hält diese Datei. Der Anspruch läuft in %n Sekunde aus, wenn ihn niemand quittiert. / Ein Arbeiter hält diese Datei. Der Anspruch läuft in %n Sekunden aus, wenn ihn niemand quittiert. | Un processus de traitement détient ce fichier. La réservation expire dans %n seconde si personne ne la confirme. / Un processus de traitement détient ce fichier. La réservation expire dans %n secondes si personne ne la confirme. |
+| `_A worker holds this file. The claim runs out in %n second if nothing acknowledges it._::_A worker holds this file. The claim runs out in %n seconds if nothing acknowledges it._` | Ein Arbeiter hält diese Datei. Der Anspruch läuft in %n Sekunde aus, wenn ihn niemand quittiert. / Ein Arbeiter hält diese Datei. Der Anspruch läuft in %n Sekunden aus, wenn ihn niemand quittiert. | Un processus de traitement détient ce fichier. La réservation expire dans %n seconde si personne ne la confirme. / Un processus de traitement détient ce fichier. La réservation expire dans %n secondes si personne ne la confirme. |
 | `Rules and limits` | Regeln und Grenzen | Règles et limites |
 | `Excluded folders` | Ausgeschlossene Ordner | Dossiers exclus |
 | `Prefix match on the path as the lists on this page show it, no wildcards and no patterns. Example: Backups` | Präfix-Vergleich auf dem Pfad, wie ihn die Listen dieser Seite zeigen, keine Platzhalter und keine Muster. Beispiel: Backups | Comparaison par préfixe sur le chemin tel que les listes de cette page l'affichent, sans caractères génériques ni motifs. Exemple : Backups |
@@ -451,6 +451,23 @@ ersetzen, der auf der Zielhardware neunzehn Stunden kostet.
 
 Mit diesen drei Zeilen stehen 202 Schlüssel in `de.json`, und die harte Zahl im Gate steht
 auf 202.
+
+**Nachtrag 25.09.2026 (Phase 20, Plan 20-01).** Die fünf Pluralschlüssel heißen in der
+Tabelle oben jetzt `_<singular>_::_<plural>_` statt nur `<singular>`, weil Nextcloud sie
+genau unter diesem zusammengesetzten Namen nachschlägt: `L10N::n` setzt den Bezeichner aus
+Singular und Plural zusammen, und findet es ihn nicht, liefert es den **englischen**
+Quellstring. Gemessen an der laufenden Testinstanz antworteten `de` und `fr` vor diesem
+Plan bei jeder Anzahl außer eins mit `2 days` und `5 days`; über alle mitgelieferten Apps
+derselben Instanz stehen 120 von 120 Plural-Einträgen zusammengesetzt und keiner blank.
+Betroffen sind `php/l10n/fr.json` und `php/l10n/fr.js` ebenso wie die vier deutschen
+Dateien, alle sechs in einem Commit, weil ein halber Umbau das Schlüsselgleichheits-Gate G1
+rot macht.
+
+**Kein französischer Wortlaut ist dabei angefasst worden.** Die Werte der fünf Zeilen
+stehen unverändert da, in derselben Reihenfolge und mit denselben zwei Formen; geändert hat
+sich ausschließlich der Schlüssel, unter dem sie abgelegt sind. Die Abnahmen vom
+11.09., 19.09. und 24.09.2026 bleiben damit vollständig gültig, und es ist keine ungelesene
+Zeile hinzugekommen. Die Zahl steht weiterhin auf 202.
 
 ## Warum die Tabelle der Ergebnisseite 24 Zeilen hat
 

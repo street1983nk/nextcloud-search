@@ -1681,8 +1681,23 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     from the table in docs/l10n-french.md and carries the dated reservation of
     24.09.2026 there: it is machine checked and the owner has not read it yet.
 
-    This paragraph carries the same duty as the four above it. Whoever raises
-    the figure next writes the next paragraph.
+    It still stands at 202 on 25.09.2026, and what moved that day was not the
+    figure but five of the names it counts: plan 20-01 of phase 20 put the five
+    plural keys into the shape Nextcloud looks them up under,
+    ``_<singular>_::_<plural>_``. Findling had carried them as the bare singular
+    since the first catalogue, and the price of that was measured against the
+    running instance rather than reasoned about: ``de`` and ``fr`` answered
+    ``n('%n day', '%n days', 2)`` with ``2 days``, and so did every number above
+    one. ``L10N::n`` builds the composite identifier, looks it up, and falls back
+    to the English plural when it is not there; the bundled ``@nextcloud/l10n``
+    does the same in the browser. Over every app that instance ships, 120 of 120
+    plural entries carry the composite form and none carries the bare one. The
+    figure is untouched by all of it: five keys renamed in place, in all six
+    catalogues in one commit, because half a rename is a red G1.
+
+    This paragraph carries the same duty as the four above it, and it carries it
+    for a renamed key as much as for a raised figure. Whoever moves the number,
+    or one of the names it counts, writes the next paragraph.
     """
     for language, twin in ((L10N_JSON, L10N_DE_DE_JSON), (L10N_JS, L10N_DE_DE_JS)):
         assert twin.is_file(), f"{twin.name} is missing, so everybody on de_DE reads this app in English"
