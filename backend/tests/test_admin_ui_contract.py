@@ -117,6 +117,13 @@ L10N_FR_JS = REPO_ROOT / "php" / "l10n" / "fr.js"
 # so that a seventh file is added in one place and every gate sees it.
 L10N_CATALOGUES = (L10N_JSON, L10N_JS, L10N_DE_DE_JSON, L10N_DE_DE_JS, L10N_FR_JSON, L10N_FR_JS)
 
+# The common proof of every catalogue of milestone v1.3, written by plan 20-02:
+# where Nextcloud looks for a catalogue, which plural rule each language declares
+# and which form PHP and the browser pick. It is read here for one paragraph of
+# it, the block of shipped rules, because a document and a constant that say the
+# same thing have to be able to call each other wrong.
+L10N_DOCUMENTATION = REPO_ROOT / "docs" / "l10n-catalogues.md"
+
 ADMIN_VIEW = REPO_ROOT / "php" / "lib" / "Service" / "AdminViewService.php"
 FILE_STATE = REPO_ROOT / "php" / "lib" / "Service" / "FileStateService.php"
 
@@ -445,6 +452,20 @@ def catalogue_of(path: Path) -> dict[str, str | list[str]]:
     if path.suffix == ".json":
         return json.loads(source)["translations"]
     return json.loads(source[source.index("{") : source.rindex("}") + 1])
+
+
+# A line of the rule block of the documentation: a language code, at least two
+# spaces, and the rule that language ships, to the end of the line. The two
+# spaces are what tells this block from the table above it, where the code is
+# followed by the number of forms and by a column saying whether both Nextclouds
+# of the version window agree; there the word ``nplurals`` stands in the fourth
+# column and not in the second.
+DECLARED_RULE = re.compile(r"^(\w+) {2,}(nplurals=.+;)$", re.MULTILINE)
+
+
+def rules_declared_in(text: str) -> dict[str, str]:
+    """The plural rule per language code as the documentation writes it down."""
+    return dict(DECLARED_RULE.findall(text))
 
 
 def language_code_of(path: Path) -> str:
@@ -1039,12 +1060,19 @@ def _sources() -> list[tuple[str, str, Scanner]]:
 # -- the real tree ---------------------------------------------------------
 
 
-def test_the_six_files_of_the_two_pages_exist() -> None:
+def test_every_file_of_the_two_pages_exists() -> None:
     # The anti vacuity clause. Every scanner below returns an empty list for a
     # file that is not there, so a gate that lost its files would look perfect.
     # Six paths since plan 09-06, and the count is the point of the clause: a
     # gate that reads nothing reports nothing, so the cleanest possible run of
     # this file is also the one in which it has stopped judging anything at all.
+    #
+    # The number left the name with plan 20-03. It was the last one in this file
+    # that would have to be dragged along at a change nobody makes for its sake:
+    # a third page brings eight paths, and a name that still said six would be
+    # the note the next reader trusts instead of the tuple. The count itself
+    # stays where it belongs, in the list below, which is the only place it can
+    # be wrong and be seen.
     missing = [
         path.name
         for path in (TEMPLATE, STYLESHEET, SCRIPT, PAGE_TEMPLATE, PAGE_STYLESHEET, PAGE_SCRIPT)
@@ -1659,6 +1687,14 @@ def test_the_seven_sentences_of_the_engine_line_are_in_the_german_catalogue() ->
     search answers with full text hits and pays the load again in the
     background. The number word is in the name of this test on purpose, so that
     a raised figure and a name still saying six cannot stand side by side.
+
+    The self check of plan 20-03 read this name and left it standing, with the
+    reason here rather than in a commit message. Neither the seven nor the word
+    German counts catalogues: the seven counts the states of the engine, and the
+    German catalogue is the reference every other one is held against by
+    ``test_every_catalogue_carries_the_same_keys``. A sentence that reached
+    ``de.json`` reaches every other catalogue through that gate, and a tenth
+    language changes nothing in this name.
     """
     template = TEMPLATE.read_text(encoding="utf-8")
     script = SCRIPT.read_text(encoding="utf-8")
@@ -1935,13 +1971,19 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     assert len(keys_of["de.json"]) == 202
 
 
-def test_all_six_catalogues_carry_the_same_keys() -> None:
+def test_every_catalogue_carries_the_same_keys() -> None:
     """G1 of plan 11-08: which sentences does every language of this app answer?
 
     Six files since the French catalogue arrived, three language codes, one key
     set. A key written into one language and forgotten in the others is half a
     surface: the page speaks French in one line and English in the next, and a
     user cannot tell which of the two is the complete one.
+
+    The name carried the number six until plan 20-03, and the number was right
+    for as long as it was right. A test name that has to be dragged along at
+    every new catalogue is a name that will one day not be dragged along, and
+    then it says six over sixteen files. ``L10N_CATALOGUES`` stays the one place
+    that grows; the name no longer counts along with it.
 
     This gate stands next to
     ``test_the_german_catalogue_covers_both_german_language_codes`` and does not
@@ -1950,6 +1992,13 @@ def test_all_six_catalogues_carry_the_same_keys() -> None:
     nobody wants, and docs/l10n-french.md says so in point 3 of "Bedingung,
     unter der der franzoesische Katalog kommt". What takes its place for French
     is the placeholder parity of G3.
+
+    It will expressly not hold for the two Portuguese files either, and that is
+    worth writing down before they arrive. ``pt_PT`` and ``pt_BR`` are two
+    varieties with different everyday words, not one language under two codes the
+    way ``de`` and ``de_DE`` are; a text equality check over them would look like
+    the German one and would in fact nail one of the two to wordings that are
+    wrong on its side of the Atlantic.
 
     A missing file is a failure that names it. Without that line the gate would
     compare five files, or one, and report a clean tree over a catalogue that is
@@ -2028,8 +2077,8 @@ def test_every_catalogue_value_carries_a_wording_of_its_language() -> None:
     assert len(scan_completeness("sample.json", dirty, {"Reason": "argued for this sample"})) == 2
 
 
-def test_no_french_value_loses_or_invents_a_placeholder() -> None:
-    """G3 of plan 11-08: does every value still name what it talks about?
+def test_no_catalogue_value_loses_or_invents_a_placeholder() -> None:
+    """G3 of plan 11-08, over every catalogue since plan 20-03.
 
     The replacement for the text equality of the German twins, and the one
     invariant a translation can keep word for word. Nextcloud fills these values
@@ -2037,20 +2086,33 @@ def test_no_french_value_loses_or_invents_a_placeholder() -> None:
     file name missing, and a value that invented one renders an argument that
     does not exist. Neither produces an error anybody sees.
 
+    The walk over every catalogue is not extra work this gate does on the side,
+    it is what the gate is for. A lost ``%2$s`` takes from the sentence the file
+    it is talking about, and that is the same damage in every language; running
+    the check over French alone was the shape of the plan that introduced it and
+    never a statement that the other catalogues cannot lose a placeholder. The
+    scanner itself is unchanged since plan 20-01, where it learnt to split a
+    composite plural key at its mark, and it was language blind before that.
+
     Multisets and not sets, so two identical directives are two and not one, and
     over every form of a plural value, because the second form is where a
     dropped ``%n`` hides.
     """
+    missing = [path.name for path in L10N_CATALOGUES if not path.is_file()]
+    assert missing == [], f"catalogues are missing: {missing}"
+
     findings = [
-        message
-        for path in (L10N_FR_JSON, L10N_FR_JS)
-        for message in scan_placeholder_parity(path.name, catalogue_of(path))
+        message for path in L10N_CATALOGUES for message in scan_placeholder_parity(path.name, catalogue_of(path))
     ]
 
     assert findings == []
     # The anti vacuity clause: a catalogue without directives would be judged
-    # perfect by a scan that has nothing to compare.
-    assert [key for key in catalogue_of(L10N_FR_JSON) if PRINTF_DIRECTIVE.search(key)] != []
+    # perfect by a scan that has nothing to compare, and it is asked of every
+    # file now that every file is scanned.
+    without = [
+        path.name for path in L10N_CATALOGUES if not any(PRINTF_DIRECTIVE.search(key) for key in catalogue_of(path))
+    ]
+    assert without == [], f"catalogues without a single directive to compare: {without}"
     # The split of plan 20-01 reads both ways, and these two lines are what say
     # so. A composite key whose two forms are both right is silent; without the
     # split it would report both of them, because the key carries two %n and
@@ -2186,6 +2248,34 @@ def test_every_catalogue_carries_the_plural_rule_of_its_language() -> None:
     assert scan_plural_rule("sample.json", "nl", GERMAN_PLURAL_FORM) == []
 
 
+def test_the_rule_table_of_the_documentation_and_the_constant_are_one_string() -> None:
+    """The proof and the gate it is checked against have to say the same thing.
+
+    ``docs/l10n-catalogues.md`` carries the rules Findling ships, read out of
+    ``core/l10n/`` of both Nextclouds of the version window on 25.09.2026, and
+    ``PLURAL_FORM_OF`` carries the same eight strings. Plan 20-02 compared them
+    once by hand, eight out of eight, and left the comparison as a number in a
+    summary; this gate is what keeps it true.
+
+    The drift this prevents is not cosmetic. Plans 20-04 to 20-08 cast ten
+    catalogue files from the table in that document, and the gate above judges
+    those files against the constant. A document that drifted from the constant
+    would put a wrong ``pluralForm`` into ten files and the gate would report it
+    as ten broken catalogues, in a phase in which the document is the thing
+    everybody trusts. One of the two has to be able to call the other wrong.
+    """
+    parsed = rules_declared_in(L10N_DOCUMENTATION.read_text(encoding="utf-8"))
+
+    differing = sorted(parsed.items() ^ PLURAL_FORM_OF.items())
+    assert differing == [], f"the document and the constant differ: {differing}"
+    # The anti vacuity clause: a document whose block was reformatted would parse
+    # to nothing, and nothing equals nothing only if the constant is empty too.
+    assert len(parsed) == len(PLURAL_FORM_OF)
+    # And the reading can go red: the same block with one character changed in
+    # the French line is a different mapping.
+    assert rules_declared_in("fr     nplurals=2; plural=(n >= 1);\n") == {"fr": "nplurals=2; plural=(n >= 1);"}
+
+
 def test_every_reason_of_the_closed_list_has_a_label_and_a_remedy() -> None:
     """DI-04-03 from the reading end: a group without words is a blank cell.
 
@@ -2214,6 +2304,11 @@ def test_all_three_files_carry_the_same_sentence_about_a_stall() -> None:
     catalogue. Two of them agreeing and the third one left behind is a page that
     changes its accusation three seconds after it opened, or one that is German
     on the server and English in the browser.
+
+    The three in the name counts those three places and not the catalogues of
+    this app, which is why the self check of plan 20-03 left it standing: a new
+    language adds a file to ``L10N_CATALOGUES`` and nothing here, because the
+    key set gate over that tuple is what carries the sentence into it.
     """
     catalogue = json.loads(L10N_JSON.read_text(encoding="utf-8"))["translations"]
 
