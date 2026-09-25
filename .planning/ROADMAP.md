@@ -237,7 +237,46 @@ Plans:
   5. Die Runbook-Disziplin ist gehalten (Cron-Intervall-Gate als erzwungene Messbedingung, Digest-Wechsel protokolliert), und der Owner nimmt die Messphase ab.
   6. NEU (Owner 25.09.2026, BL-F04-Mitmessliste aus .planning/research/BL-F04-vorarbeit-2026-09-25.md Abschnitt 1): dieselbe Anfahrt erhebt die BL-F04-Basiszahlen B1-B3+B5 (Kernbelegung je Phase, OCR-Charge im Produkt, Speicher je zusaetzlichem OCR-Slot inkl. OMP_THREAD_LIMIT-Vergleich, onnx-Threads/Batch auf Graviton3) UND B4 (FREIGEGEBEN: Typwechsel m7g.4xlarge, Skalierungskurve 1/2/4/8/12/16 Kerne, ~1,25 h / ~1,00 USD; vorher entscheidet die kostenlose 4-Kern-CI-Kurve, ob B4 noch noetig ist). Die drei neuen Messskripte (cpu_sampler.sh, Speicher je Prozess, Slot-Probe) sind ZUSATZAUFTRAG dieser Phase, ohne Box baubar und vorab auf dem arm64-CI-Runner erprobt; rss_sampler.sh bleibt unveraendert. NL-Automat-RAM misst der CI-arm64-Runner, nicht die Box. Rechenblatt (Kriterium 1) MIT den Mitmessposten rechnen (+~2,7 h, +~1,30 USD gegenueber reinem BL-F03).
 
-**Plans**: TBD
+**Plans**: 12 Pläne in 9 Wellen
+
+**Wave 1**
+
+- [ ] 22-01-PLAN.md: W1 cpu_sampler.sh, W2 proc_anon_sampler.sh, W3 ocr_slot_probe.py, W4-Job auf arm64 mit F4-Definition
+- [ ] 22-02-PLAN.md: 92d (Wechsel ohne --rm-data, occ upgrade), 92e (Neubau mit Umgebung), 90e (Einzelliste, Markentor), 91m (M-01-Leser)
+- [ ] 22-03-PLAN.md: 94c (Bodensatz-Zyklus 2), 95c (Kaltstart mit Trefferpflicht), 98d (dismax-Probe) mit Unit-Test
+- [ ] 22-04-PLAN.md: 00-wegwerf.sh (B3, B5, B4) und 00-typwechsel.sh (Shutdown-Vorprüfung, m7g.4xlarge)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 22-05-PLAN.md: 00-lauf.sh (Timer, Blockfolge, Streichlogik D-05), 00-abholen.sh, 00-ablauf.md mit E1 bis E14, README-Gerüst
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 22-06-PLAN.md: Generalprobe lokal, Owner-Freigabe Push, W4-Lauf in CI, F4 und B7
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 22-07-PLAN.md: Rechenblatt, Owner-Checkpoint (44/6-Weg, Deckelvariante, dismax-Regel), Antworten einfrieren
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 22-08-PLAN.md: Vorbedingungen, Aufbau, unbeaufsichtigter Lauf mit hartem Timer, Abholen bis zur Selbstabschaltung
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 22-09-PLAN.md: B4 auf m7g.4xlarge oder begründeter Entfall, Abbau, Kosten gegen Deckel, Lückenbericht
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 22-10-PLAN.md: MESS-09-Entscheid nach E10, dismax umgesetzt (rewrite.py, Ratsche) oder dokumentiert verworfen
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [ ] 22-11-PLAN.md: Zahlen nach docs/performance.md, Urteile E1 bis E14, Runbook-Nachträge, Prüfsummen-Wächter
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
+- [ ] 22-12-PLAN.md: Audit, Owner-Abnahme der Messphase, Push mit CI-Beweis, Anforderungen und STATE nachziehen
 
 ### Phase 23: Haertung und Store-Einreichung 1.3.0
 
@@ -264,10 +303,10 @@ Plans:
 | 12-16 (Archiv) | v1.2 | 63/63 | Complete | 2026-09-21 |
 | 17. Owner-Tor und Analyseketten | v1.3 | 8/8 | Complete   | 2026-09-23 |
 | 18. Schema, Marken und Umbauweg | v1.3 | 12/12 | Complete   | 2026-09-24 |
-| 19. Frageseite freischalten | v1.3 | 9/9 | Executing | - |
+| 19. Frageseite freischalten | v1.3 | 9/9 | Complete    | 2026-09-25 |
 | 20. UI-Kataloge es/it/nl/pt | v1.3 | 9/9 | Complete    | 2026-09-25 |
 | 21. Niederlaendische Komposita | v1.3 | 9/9 | Complete    | 2026-09-25 |
-| 22. Messanfahrt BL-F03 | v1.3 | 0/TBD | Not started | - |
+| 22. Messanfahrt BL-F03 | v1.3 | 0/12 | Planned | - |
 | 23. Haertung und Store-Einreichung 1.3.0 | v1.3 | 0/TBD | Not started | - |
 
 ## Requirement-Abdeckung v1.3

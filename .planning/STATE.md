@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
-status: planning
-stopped_at: Phase 22 context gathered
-last_updated: "2026-09-25T20:07:59.133Z"
-last_activity: 2026-09-25
+status: executing
+stopped_at: Phase 22 geplant (12 Plaene, 9 Wellen, Checker 0 Blocker/2 Warnungen)
+last_updated: "2026-09-25T21:09:05.867Z"
+last_activity: 2026-09-25, Phase 22 geplant
 progress:
   total_phases: 7
   completed_phases: 5
-  total_plans: 47
+  total_plans: 59
   completed_plans: 47
   percent: 71
 ---
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 Phase: 22
 Plan: Not started
-Status: Ready to plan (secure-phase 21 ERLEDIGT 25.09., SECURED 32/32, de8e128)
+Status: Ready to execute (Research 7b9791d, 12 Plaene; Owner-Stopps: 22-06 Push-Freigabe, 22-07 Rechenblatt vor Boxstart, 22-12 Abnahme)
 
 Aktueller Stand: PHASE 21 KOMPLETT 25.09.2026 (9/9 Plaene, goal-backward verified passed 9/9,
 phase.complete gelaufen, STATE von Hand nachgezogen). Niederlaendische Komposita sind Ende-zu-
@@ -236,7 +236,7 @@ Instanz den Erststempel der Verzeichnismarken; Folge: Feldplan blieb LEGACY, rot
 Fix-Beweis). Endstand-CI 36096526219 GRUEN 4/4 inkl. arm64. Suite 2877 passed / 15 skipped.
 LEHRE: ein Audit-Fix, der einen Schreiber entfernt, braucht die Frage "wer schreibt das
 sonst noch auf JEDEM Pfad" plus einen Frischinstanz-Fall, bevor er reist.
-Last activity: 2026-09-25
+Last activity: 2026-09-25, Phase 22 geplant
 
 Progress: [███████...] 71% (5 von 7 Phasen)
 
