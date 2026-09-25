@@ -98,6 +98,10 @@ GOLD_LANGUAGES = "de,en"
 # the digest would be a number nobody could check against anything.
 WNGERMAN_PIN = "wngerman=20161207-15"
 
+# The Debian package the Dutch word list comes out of, held for the same reason:
+# wordlist_hash_nl is a digest of that list. The epoch 1: belongs to the version.
+WDUTCH_PIN = "wdutch=1:2.20.19+1-3"
+
 # The pin the banner above grows out of. Named here because a moved pin and a
 # moved mark are the same event seen from two sides. The patch number may move
 # with a decision behind it; the format half above may not.
@@ -353,6 +357,17 @@ def test_the_word_list_is_held_through_its_debian_pin() -> None:
     pin is exact in backend/Dockerfile and it stays exact.
     """
     assert WNGERMAN_PIN in DOCKERFILE.read_text(encoding="utf-8"), WNGERMAN_PIN
+
+
+def test_the_dutch_word_list_is_held_through_its_debian_pin() -> None:
+    """wordlist_hash_nl hangs on wdutch, so wdutch is what gets pinned.
+
+    The Dutch mark is a digest of the list this package ships. A bump of wdutch
+    changes how Dutch compounds fall apart and therefore what the index holds
+    for every Dutch document. The pin is exact in backend/Dockerfile, epoch
+    included, and it stays exact.
+    """
+    assert WDUTCH_PIN in DOCKERFILE.read_text(encoding="utf-8"), WDUTCH_PIN
 
 
 def test_the_engine_is_held_through_its_exact_pin() -> None:

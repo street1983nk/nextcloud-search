@@ -51,6 +51,26 @@ carry `path-exclude /usr/share/doc/*` in `/etc/dpkg/dpkg.cfg.d`, and only a
 obligation must not depend on a dpkg configuration line in a base image somebody
 else maintains, so the build copies the file and fails if it is missing.
 
+## The Dutch word list
+
+Added in phase 21. Same construction as the German word list above: the list is
+installed from a pinned Debian package, its licence text is copied to a path of
+our own, and the build fails if either is missing.
+
+| Item | Value |
+|---|---|
+| Debian package | `wdutch`, version `1:2.20.19+1-3`, `Architecture: all` |
+| Source package | `dutch`, upstream OpenTaal |
+| Origin | Debian trixie archive, installed with `apt-get` during the image build |
+| File in the image | `/usr/share/dict/dutch` (413288 lines, 5096240 bytes) |
+| Licence | **CC-BY-3.0** (`debian/copyright`, `Files: wordlist/*`); upstream `wordlist/LICENSE.txt` leaves the choice between BSD-3-Clause and/or CC BY 3.0, and Findling ships it under CC-BY-3.0 as the Debian package declares |
+| Attribution | OpenTaal, https://www.opentaal.org |
+| Licence text in the image | `/usr/local/share/findling/COPYING.wdutch`, copied from `/usr/share/doc/wdutch/copyright`, mode 0444 |
+| Derived artifact | `$APP_PERSISTENT_STORAGE/dict/nl-full.txt`, produced at start up only when Dutch is active; it is an adaptation of the list (filtered to length 4 to 14 and alphabetic entries, then ASCII folded), and its SHA-256 is recorded as the meta mark `wordlist_hash_nl` |
+
+`wdutch` depends on `dictionaries-common` as well, which is already listed above
+under the German word list; no further package enters the image with it.
+
 ## The OCR engine and its language data
 
 Added in phase 3. Same construction as the word list above and for the same
@@ -319,15 +339,16 @@ is not part of any release artifact.
 The first of the commands below no longer waits for somebody to remember it: the
 step **"The word list, its version and its licence in this image"** in
 `.github/workflows/docker.yml` asks the same four questions of the image this
-run just pushed, on both architectures, and fails the build when the package
+run just pushed, for both word lists (German and Dutch) and on both
+architectures, and fails the build when the package
 version, the line count, the byte count, the licence text or its read only mode
 do not match what this file states. The hand version stays here because a reader
 of this file should be able to check it without a pipeline.
 
 ```bash
-# the word list and its licence, inside the built image
+# both word lists and their licences, inside the built image
 docker run --rm ghcr.io/street1983nk/findling_backend:dev \
-    sh -c 'wc -lc /usr/share/dict/ngerman; head -3 /usr/local/share/findling/COPYING.wngerman'
+    sh -c 'wc -lc /usr/share/dict/ngerman; head -3 /usr/local/share/findling/COPYING.wngerman; wc -lc /usr/share/dict/dutch; head -3 /usr/local/share/findling/COPYING.wdutch'
 
 # the OCR engine, its models and both licence texts, inside the built image
 docker run --rm --entrypoint sh ghcr.io/street1983nk/findling_backend:dev \
