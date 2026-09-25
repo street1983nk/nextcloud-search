@@ -805,11 +805,13 @@ def test_the_run_plan_strike_order_carries_the_constants_of_the_run_script() -> 
 
 
 @pytest.mark.parametrize("path", [RUN_PLAN, REPORT], ids=["run-plan", "report"])
-def test_the_run_plan_and_the_report_carry_no_dash_and_no_carriage_return(path: Path) -> None:
-    """The typography rule of this project, for the two documents of the run directory."""
-    raw = path.read_bytes()
-    assert b"\r" not in raw, path.name
-    text = raw.decode("utf-8")
+def test_the_run_plan_and_the_report_carry_no_dash(path: Path) -> None:
+    """The typography rule of this project, for the two documents of the run directory.
+
+    No carriage return check here: Markdown is outside the eol rules of
+    .gitattributes, so a checkout with core.autocrlf may legitimately add them.
+    """
+    text = path.read_text(encoding="utf-8")
     assert not [dash for dash in DASHES if dash in text], path.name
 
 
