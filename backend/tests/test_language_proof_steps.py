@@ -31,9 +31,11 @@ The other four statements, in the order they matter:
    that meets the document term only through the Spanish chain has nothing to
    mark in the German one. A probe that asserted on the excerpt would go red on a
    working search, which is the most expensive kind of wrong.
-3. The step names all four documents and all four questions. A proof that lost a
-   language would be a proof of three languages with the name of four.
-4. The step calls the result page four times, once per language. That route had
+3. The step names every document and every question, five cases: the four
+   chains of phase 19 and the Dutch compound case of phase 21, so nl stands
+   twice (chain and compound). A proof that lost a case would be a proof of four
+   cases with the name of five.
+4. The step calls the result page five times, once per case. That route had
    never been touched by any CI step of this repository before phase 19, and the
    second half of the criterion is written about it.
 
@@ -94,22 +96,30 @@ PROOF_STEP = "Language proof, the four new chains answer on the ordinary search 
 # they assert and those tails are allowed to change.
 GATED_STEPS = ("Store upgrade 5,", "Store upgrade 6,")
 
-# The four languages, named through the file name of their proof document. A
-# bare "es" would be found inside "these" and inside half the English prose of
-# that step, so it would be a check that cannot go red.
-DOCUMENTS = ("language-proof-es.txt", "language-proof-it.txt", "language-proof-nl.txt", "language-proof-pt.txt")
+# The five cases, named through the file name of their proof document: the four
+# chains of phase 19 and the Dutch compound case of phase 21 (nlc), so nl stands
+# twice, once for the chain and once for the compound. A bare "es" would be
+# found inside "these" and inside half the English prose of that step, so it
+# would be a check that cannot go red.
+DOCUMENTS = (
+    "language-proof-es.txt",
+    "language-proof-it.txt",
+    "language-proof-nl.txt",
+    "language-proof-pt.txt",
+    "language-proof-nlc.txt",
+)
 
-# The four questions, each named twice: once as the term the OCS route is asked
-# with and once as the query the result page is asked with. Asserting the bare
-# word would be weaker than it looks, because "pais" stands inside the accented
-# "paises" of the Portuguese document as well.
-QUESTIONS = ("alemanes", "informazioni", "beinvloeden", "pais")
+# The five questions, one per case, each named twice: once as the term the OCS
+# route is asked with and once as the query the result page is asked with.
+# Asserting the bare word would be weaker than it looks, because "pais" stands
+# inside the accented "paises" of the Portuguese document as well.
+QUESTIONS = ("alemanes", "informazioni", "beinvloeden", "pais", "belasting")
 
-# The call of the result page. The parameter is "query" and not "term":
-# PageController::term() reads getParam('query'), and a call with ?term= answers
-# 200 with the empty landing page.
+# The call of the result page, once per case and so five times. The parameter is
+# "query" and not "term": PageController::term() reads getParam('query'), and a
+# call with ?term= answers 200 with the empty landing page.
 PAGE_CALL = "apps/findling/?query="
-PAGE_CALLS_EXPECTED = 4
+PAGE_CALLS_EXPECTED = 5
 
 # The assertion that has to survive and the one that must not appear.
 COUNT_ASSERTION = "entries | length"
@@ -158,8 +168,8 @@ CLAIMS = (
     "the proof step carries no if: condition",
     "the proof step asserts on the number of entries",
     "the proof step does not assert on the excerpt of the first entry",
-    "the proof step names all four proof documents",
-    "the proof step names all four questions, on both routes",
+    "the proof step names every proof document",
+    "the proof step names every question, on both routes",
     f"the proof step calls the result page {PAGE_CALLS_EXPECTED} times",
 )
 
@@ -284,7 +294,7 @@ def scan_proof_step(steps: list[Step]) -> list[str]:
     if calls != PAGE_CALLS_EXPECTED:
         findings.append(
             f"the step '{PROOF_STEP}' calls the result page {calls} times and not {PAGE_CALLS_EXPECTED}, "
-            "so the second half of criterion 1 does not stand for every language"
+            "so the second half of criterion 1 does not stand for every case"
         )
     return findings
 
@@ -446,7 +456,8 @@ def test_the_step_asserts_on_the_count_and_never_on_the_excerpt() -> None:
     assert EXCERPT_ASSERTION not in body
 
 
-def test_the_step_names_all_four_documents_and_all_four_questions() -> None:
+def test_the_step_names_every_document_and_every_question() -> None:
+    # Five cases since phase 21: the four chains and the nl compound case.
     body = _named(collect_steps(WORKFLOW.read_text(encoding="utf-8")), PROOF_STEP)[0].body
 
     assert [document for document in DOCUMENTS if document not in body] == []
@@ -454,7 +465,8 @@ def test_the_step_names_all_four_documents_and_all_four_questions() -> None:
     assert [question for question in QUESTIONS if f"{PAGE_CALL}{question}" not in body] == []
 
 
-def test_the_step_calls_the_result_page_once_per_language() -> None:
+def test_the_step_calls_the_result_page_once_per_case() -> None:
+    # One literal call per case, nl counted twice (chain and compound).
     body = _named(collect_steps(WORKFLOW.read_text(encoding="utf-8")), PROOF_STEP)[0].body
 
     assert body.count(PAGE_CALL) == PAGE_CALLS_EXPECTED
@@ -517,12 +529,13 @@ jobs:
     steps:
       - name: Language proof, the four new chains answer on the ordinary search route
         run: |
-          for lang in es it nl pt; do
+          for lang in es it nl pt nlc; do
             case "${lang}" in
               es) term=alemanes ;;
               it) term=informazioni ;;
               nl) term=beinvloeden ;;
               pt) term=pais ;;
+              nlc) term=belasting ;;
             esac
             curl "http://localhost:8080/ocs/v2.php/search/providers/findling/search?term=${term}"
             jq -e '.ocs.data.entries | length >= 1' "hit-${lang}.json"
@@ -530,11 +543,13 @@ jobs:
             jq -e '.title == "language-proof-it.txt"' two.json
             jq -e '.title == "language-proof-nl.txt"' three.json
             jq -e '.title == "language-proof-pt.txt"' four.json
+            jq -e --arg file language-proof-nlc.txt '.title == $file' five.json
           done
           curl 'http://localhost:8080/index.php/apps/findling/?query=alemanes'
           curl 'http://localhost:8080/index.php/apps/findling/?query=informazioni'
           curl 'http://localhost:8080/index.php/apps/findling/?query=beinvloeden'
           curl 'http://localhost:8080/index.php/apps/findling/?query=pais'
+          curl 'http://localhost:8080/index.php/apps/findling/?query=belasting'
 
       - name: Store upgrade 3, the state of the released installation, before anything moves
         if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04'
@@ -648,7 +663,34 @@ def test_a_result_page_call_that_went_missing_is_reported() -> None:
 
     assert len(findings) == 2
     assert any("does not ask the result page for 'pais'" in finding for finding in findings)
-    assert any("calls the result page 3 times and not 4" in finding for finding in findings)
+    assert any("calls the result page 4 times and not 5" in finding for finding in findings)
+
+
+def test_a_compound_result_page_call_that_went_missing_is_reported() -> None:
+    # The fifth call of phase 21, the one the compound case adds. Removing it
+    # must cost the same two findings as removing any of the four others.
+    source = _CLEAN.replace(
+        "          curl 'http://localhost:8080/index.php/apps/findling/?query=belasting'\n",
+        "",
+        1,
+    )
+
+    assert source != _CLEAN
+    findings = scan(source)
+
+    assert len(findings) == 2
+    assert any("does not ask the result page for 'belasting'" in finding for finding in findings)
+    assert any("calls the result page 4 times and not 5" in finding for finding in findings)
+
+
+def test_a_compound_case_that_lost_its_question_is_reported() -> None:
+    source = _CLEAN.replace("              nlc) term=belasting ;;\n", "", 1)
+
+    assert source != _CLEAN
+    findings = scan(source)
+
+    assert len(findings) == 1
+    assert "does not ask the search route for 'belasting'" in findings[0]
 
 
 def test_a_language_that_lost_its_document_is_reported() -> None:
@@ -658,6 +700,16 @@ def test_a_language_that_lost_its_document_is_reported() -> None:
 
     assert len(findings) == 1
     assert "does not name language-proof-nl.txt" in findings[0]
+
+
+def test_the_compound_case_that_lost_its_document_is_reported() -> None:
+    source = _CLEAN.replace("jq -e --arg file language-proof-nlc.txt '.title == $file' five.json\n", "", 1)
+
+    assert source != _CLEAN
+    findings = scan(source)
+
+    assert len(findings) == 1
+    assert "does not name language-proof-nlc.txt" in findings[0]
 
 
 def test_a_counter_sample_without_its_condition_is_reported() -> None:
