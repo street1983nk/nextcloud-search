@@ -87,6 +87,15 @@ EMBEDDING_MARK: Final = "embedding_version"
 # tests/test_store_repo.py fails the moment the two spellings part company.
 _LANGUAGES_MARK: Final = "languages"
 
+# The seventh mark, the Dutch constituent list body_nl was split with, and the
+# value it carries when there is none (decision D-06 of phase 21). Both are
+# findling.index.open.DUTCH_MARK and findling.index.wordlist_nl.DUTCH_LIST_OFF on
+# the index side, and literals here for the reason given above: the store does
+# not import the index side. A case in tests/test_store_repo.py holds the two
+# spellings of each together.
+_DUTCH_MARK: Final = "wordlist_hash_nl"
+_DUTCH_LIST_OFF: Final = "off"
+
 # What a body field in the field can be, and deliberately not what the factory
 # setting is today.
 #
@@ -188,6 +197,11 @@ UNKNOWN_VERSION: Final = "unknown"
 # twice: EMBEDDING_MARK is left out of index.open.expected_versions and added by
 # api/resources.py afterwards, and stamp_after_rebuild skips index_version with
 # a paragraph of its own. This is the third of that kind and not a new habit.
+#
+# A second expected mark is missing for the same reason since plan 21-05: the
+# Dutch list mark wordlist_hash_nl. Seeding it would write the list the container
+# would use today as if body_nl on disk had been split with it, and the
+# installation switching Dutch on would never rebuild (threat T-21-05-01).
 _DEFAULT_META: Final[Mapping[str, str]] = {
     STORE_SCHEMA_MARK: SCHEMA_VERSION,
     "schema_version": UNKNOWN_VERSION,
@@ -734,15 +748,16 @@ class Store:
         and ``backend/tests/test_language_analyzers.py`` (owner decision E-17-7
         option a of 2026-09-23).
 
-        ``schema_version`` and ``languages`` are the two remaining marks that
-        are not equalities, and both of them are exceptions about the past
-        rather than loosened comparisons. A stored schema generation this code
-        can still query is no drift, and neither is a language mark that was
-        never written while the expectation stays inside what any release could
-        have built. The two rules and the reasons they are provable stand at
-        :func:`_schema_is_legacy` and :func:`_languages_are_legacy`; both fall
-        closed, and both stop applying the moment a rebuild has written a real
-        value.
+        ``schema_version``, ``languages`` and ``wordlist_hash_nl`` are the three
+        remaining marks that are not equalities, and all of them are exceptions
+        about the past rather than loosened comparisons. A stored schema
+        generation this code can still query is no drift, neither is a language
+        mark that was never written while the expectation stays inside what any
+        release could have built, and neither is a Dutch list mark that was
+        never written while the expectation is ``off``. The three rules and the
+        reasons they are provable stand at :func:`_schema_is_legacy`,
+        :func:`_languages_are_legacy` and :func:`_dutch_list_is_legacy`; all
+        fall closed, and all stop applying the moment a real value is written.
 
         Since phase 6 the answer can also contain a mark that says nothing about
         the tantivy index at all. ``embedding_version`` diverging means the
@@ -766,6 +781,8 @@ class Store:
             if key == _SCHEMA_MARK and _schema_is_legacy(current, value):
                 continue
             if key == _LANGUAGES_MARK and _languages_are_legacy(current, value):
+                continue
+            if key == _DUTCH_MARK and _dutch_list_is_legacy(current, value):
                 continue
             diverging.append(key)
         return diverging
@@ -1489,6 +1506,26 @@ def _languages_are_legacy(stored: str | None, expected: str) -> bool:
     return set(expected.split(",")) <= set(LEGACY_LANGUAGES)
 
 
+def _dutch_list_is_legacy(stored: str | None, expected: str) -> bool:
+    """True when the Dutch list mark was never written and the expectation is off.
+
+    The same shape as the language exception above, and provable for the same
+    kind of reason: no build before phase 21 split body_nl with a constituent
+    list, so a directory that carries no mark was built without one, which is exactly
+    what an expectation of ``off`` describes. An installation without Dutch
+    therefore upgrades without a banner and without a rebuild (success criterion
+    4 of phase 21, decision D-06).
+
+    It falls closed everywhere else. An absent mark against a real list is the
+    installation switching Dutch on and has to rebuild; a written value, even
+    ``off`` or an empty string, is compared and never excused, so switching Dutch
+    off again or a new list is a drift as well.
+    """
+    if stored is not None:
+        return False
+    return expected == _DUTCH_LIST_OFF
+
+
 def open_store(path: Path | str, *, meta: Mapping[str, str] | None = None) -> Store:
     """Open the state database for writing, creating it when it is absent.
 
@@ -1541,18 +1578,19 @@ def open_store(path: Path | str, *, meta: Mapping[str, str] | None = None) -> St
 def _seed_meta(store: Store, meta: Mapping[str, str] | None) -> None:
     """Write the meta keys that are missing, touch none that are present.
 
-    With one named exception, and it is the whole reason the language mark is
-    worth having. The caller hands in the marks of the running code, so seeding
-    that mark would write the language set the container currently wishes for as
-    if it were the set the index on disk was built with. The comment above
-    _DEFAULT_META spells the consequence out; the mark is written in one place
-    only, by findling.index.open.stamp_after_rebuild, and only once the work
-    that makes it true is through.
+    With two named exceptions, and they are the whole reason the language mark
+    and the Dutch list mark are worth having. The caller hands in the marks of
+    the running code, so seeding either would write what the container
+    currently wishes for as if it were what the index on disk was built with.
+    The comment above _DEFAULT_META spells the consequence out; both marks are
+    written only where a directory is built with what they claim, and only once
+    the work that makes it true is through.
     """
     stored = store.read_meta()
     seed = dict(_DEFAULT_META)
     seed.update(meta or {})
     seed.pop(_LANGUAGES_MARK, None)
+    seed.pop(_DUTCH_MARK, None)
     # Provenance, generated rather than defaulted: created_at dates the database
     # in a support case, instance_id tells two copies of the same volume apart.
     seed.setdefault("created_at", str(int(time.time())))

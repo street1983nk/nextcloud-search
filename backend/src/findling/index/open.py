@@ -41,6 +41,7 @@ from findling.index.analyzer import (
 )
 from findling.index.schema import TOKENIZER_STORED_ONLY, build_schema
 from findling.index.wordlist import wordlist_hash
+from findling.index.wordlist_nl import DUTCH_LIST_OFF
 from findling.store.repo import Store
 
 LOGGER = logging.getLogger("findling.index.open")
@@ -74,6 +75,24 @@ _LOCAL_GENERATION: Final = "index_version"
 # field outside ("de", "en"); that exception lives next to the comparison, in
 # findling.store.repo._languages_are_legacy, and nowhere else.
 LANGUAGES_MARK: Final = "languages"
+
+# The seventh mark, and it travels exactly like the sixth (decision D-06 of phase
+# 21). It names the Dutch constituent list body_nl on disk was BUILT with, as
+# "off" or "<chain version>:<digest>", and never the list the running container
+# would use today. The wish arrives as the dutch_mark parameter of
+# expected_versions below; the stored side is written only where a directory is
+# built with that list, by stamp_a_new_directory here and behind the directory
+# swap, and never by stamp_after_rebuild, which is why it stands in
+# _MARKS_OF_A_DIRECTORY.
+#
+# The same two consequences as for the language mark follow. The seed in
+# findling.store.repo skips this key by name, because a seeded mark would
+# silence exactly the installation that switches Dutch on (threat T-18-05-01).
+# And a missing value is legacy only while the expectation is "off": no build
+# before phase 21 split body_nl with a list, so an absent mark and an expectation
+# of off describe the same directory. That exception lives next to the comparison,
+# in findling.store.repo._dutch_list_is_legacy, and nowhere else.
+DUTCH_MARK: Final = "wordlist_hash_nl"
 
 # The mark that names the layout of the schema the directory on disk was built
 # under, and a public name since plan 19-03 because a second reader arrived.
@@ -178,7 +197,7 @@ def open_reader(index: Index) -> Searcher:
     return index.searcher()
 
 
-def expected_versions(digest: str, languages: str) -> dict[str, str]:
+def expected_versions(digest: str, languages: str, *, dutch_mark: str = DUTCH_LIST_OFF) -> dict[str, str]:
     """Return the version marks an index built by this code must carry.
 
     The comparison itself lives in :meth:`findling.store.repo.Store.version_mismatch`:
@@ -200,6 +219,15 @@ def expected_versions(digest: str, languages: str) -> dict[str, str]:
     SUPPORTED_LANGUAGES and not over the admin's input, so "es,de" and "de,es"
     arrive here as the same string and an index that never needed a rebuild is
     left alone (owner decision E-17-4 option a of 2026-09-23).
+
+    ``dutch_mark`` is the third value that depends on the environment of the
+    caller, and it is handed in for the same reason: it names the Dutch list of
+    one volume, and only when the container wants Dutch at all. Every caller
+    builds it as ``wordlist_nl.dutch_mark(settings().languages)``, which answers
+    ``off`` without touching the volume when nl is inactive; a gate of plan
+    21-06 holds that for every caller in src. The default ``off`` is the value of
+    every installation without Dutch, and the mark stands last so that the order
+    of the six older marks does not move.
     """
     return {
         SCHEMA_MARK: str(SCHEMA_VERSION),
@@ -208,6 +236,7 @@ def expected_versions(digest: str, languages: str) -> dict[str, str]:
         "wordlist_hash": digest,
         "tantivy_version": TANTIVY_VERSION,
         LANGUAGES_MARK: languages,
+        DUTCH_MARK: dutch_mark,
     }
 
 
@@ -298,16 +327,19 @@ def start_rebuild_on_drift(
 # the code precisely because a rebuild happened; writing the baseline back would
 # make every verdict of the finished run look stale.
 #
-# The other two describe an index DIRECTORY: the layout it was built under and
-# the body chains that were written into it. They are written by
-# :func:`findling.index.rebuild.stamp_after_swap` alone, behind the directory
-# swap, because that is the only place where what they claim is true
-# (audit finding M-19-05).
-_MARKS_OF_A_DIRECTORY: Final = frozenset({_LOCAL_GENERATION, SCHEMA_MARK, LANGUAGES_MARK})
+# The other three describe an index DIRECTORY: the layout it was built under,
+# the body chains that were written into it, and the Dutch list body_nl was
+# split with. They are written behind the directory swap and in front of the
+# creation of a new directory, because those are the only places where what
+# they claim is true (audit finding M-19-05, decision D-06 of phase 21).
+_MARKS_OF_A_DIRECTORY: Final = frozenset({_LOCAL_GENERATION, SCHEMA_MARK, LANGUAGES_MARK, DUTCH_MARK})
 
 
 def stamp_a_new_directory(store: Store, path: Path, expected: Mapping[str, str]) -> bool:
-    """Write the two marks of an index directory that is about to be built empty.
+    """Write the three marks of an index directory that is about to be built empty.
+
+    Schema, language set and, since plan 21-05, the Dutch list; the paragraphs
+    below were written when there were two and hold for the third unchanged.
 
     Answers True when it wrote them and False when ``path`` already holds an
     index, which is every start of every container after the first one.
@@ -357,8 +389,12 @@ def stamp_a_new_directory(store: Store, path: Path, expected: Mapping[str, str])
         return False
     store.write_meta(SCHEMA_MARK, expected[SCHEMA_MARK])
     store.write_meta(LANGUAGES_MARK, expected[LANGUAGES_MARK])
+    # The seventh mark belongs to the same directory for the same reason: the
+    # directory about to be built is split with the Dutch list of this code, or
+    # with none when the mark is off (decision D-06 of phase 21).
+    store.write_meta(DUTCH_MARK, expected[DUTCH_MARK])
     LOGGER.info(
-        "this volume holds no index yet; the schema and language marks of the directory about to be built are written"
+        "this volume holds no index yet; the schema, language and dutch list marks of the new directory are written"
     )
     return True
 
@@ -400,7 +436,7 @@ def stamp_after_rebuild(store: Store, expected: Mapping[str, str]) -> bool:
     existing database has to keep the marks its index was really built with.
     This function is the opposite operation and therefore a separate one.
 
-    **Three marks are deliberately left out**, and the list is
+    **Four marks are deliberately left out**, and the list is
     :data:`_MARKS_OF_A_DIRECTORY`. The generation for the reason above; the
     schema mark and the language mark since audit finding M-19-05, because they
     describe an index directory and this stamp runs after a pass over the
@@ -411,7 +447,15 @@ def stamp_after_rebuild(store: Store, expected: Mapping[str, str]) -> bool:
     back, the next idle pass finds an empty queue, and both marks would then
     declare a directory current that was never rebuilt. Since phase 19 those two
     also decide which fields a search reaches, so the claim would not merely be
-    wrong, it would be acted on.
+    wrong, it would be acted on. The Dutch list mark joined them in plan 21-05
+    for the same reason: a pass over the holdings does not split body_nl with a
+    new list.
+
+    **A consequence of that, named because the Dutch mark inherits it** (finding
+    of plan 21-01): the fingerprint below is emptied although a skipped mark may
+    still drift, so under the fullreindex way out the next start raises the
+    generation again. Held by a case in ``tests/test_index_rebuild.py``; the
+    band run of plan 21-06 is the answer that writes the mark behind the swap.
     """
     stored = store.read_meta()
     if not store.version_mismatch(expected) and not stored.get(REBUILD_MARK):
