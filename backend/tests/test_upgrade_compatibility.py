@@ -46,6 +46,11 @@ PYPROJECT = BACKEND_ROOT / "pyproject.toml"
 # engine as the provenance of every chain measurement.
 MEASURE_CHAINS = BACKEND_ROOT.parent / "scripts" / "dev" / "measure_chains.sh"
 
+# The measurement script of the Dutch compound recipe (plan 21-04). It installs
+# the engine and the Dutch word list in a throwaway container, so it spells out
+# both pins, and both have to be the pins the image ships.
+MEASURE_COMPOUNDS_NL = BACKEND_ROOT.parent / "scripts" / "dev" / "measure_compounds_nl.sh"
+
 # The index format both pinned tantivy releases report. It is the half of the
 # banner that decides whether the files on disk can still be opened at all, and
 # since the owner decision E-17-7 option a of 2026-09-23 it is also the half the
@@ -394,3 +399,18 @@ def test_the_measurement_script_names_the_pinned_engine() -> None:
         f"{MEASURE_CHAINS.name} does not name {TANTIVY_PIN}; the pin moved in pyproject.toml and the "
         "provenance line of every chain measurement stayed behind"
     )
+
+
+def test_the_dutch_measurement_script_names_the_pinned_engine() -> None:
+    """The Dutch recipe measurement runs on the engine and the list the image ships.
+
+    scripts/dev/measure_compounds_nl.sh installs tantivy and wdutch into a
+    throwaway container and measures the recipe there. The German script still
+    names 0.26.0; this one must name the current pin, and it must name the
+    wdutch pin of backend/Dockerfile, otherwise the recipe numbers describe a
+    list the product does not carry.
+    """
+    script = MEASURE_COMPOUNDS_NL.read_text(encoding="utf-8")
+
+    assert TANTIVY_PIN in script, f"{MEASURE_COMPOUNDS_NL.name} does not name {TANTIVY_PIN}"
+    assert WDUTCH_PIN in script, f"{MEASURE_COMPOUNDS_NL.name} does not name {WDUTCH_PIN}"

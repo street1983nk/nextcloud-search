@@ -1,0 +1,94 @@
+# Niederlaendische Komposita und Waechter fuer die Rezeptmessung, Phase 21.
+#
+# Woher die Faelle stammen: aus der Research vom 25.09.2026 zur Phase 21,
+# Abschnitt "Rezept B 4-14, Fall fuer Fall" und Waechterliste, Quelle
+# /usr/share/dict/dutch aus dem Debian-Paket wdutch=1:2.20.19+1-3, gemessen mit
+# tantivy==0.26.2. Der Bericht liegt in docs/measurements/2026-09-komposita-nl/.
+#
+# Was eine Zeile bedeutet: zwei Woerter sind ein Kompositum und das Glied, ueber
+# das ein Mensch es sucht ("kompositum glied"). Ein Wort ist ein Waechter, also
+# ein Wort, das nicht zerfallen darf: Alltagswoerter und lange Nicht-Komposita.
+#
+# Ein Treffer heisst: das einzige Token des Glieds steht unter den Token des
+# Kompositums. Ein Waechter haelt, wenn er genau ein Token ergibt.
+#
+# Erwartet unter Rezept B 4-14: 28 Komposita, davon 21 ueber ihr Glied gefunden
+# (ohne Splitter 0 von 28); 33 Waechter, davon 32 einteilig. Der eine
+# mehrteilige Waechter ist belastingplichtige (belast, plichtig), ein echtes
+# Kompositum und keine Fehlzerlegung.
+#
+# Ein Wort, ueber das ein Test eine Behauptung aufstellt, muss hier stehen.
+# Trema und Akzent sind hier Daten in einer Textdatei und keine Verletzung der
+# Code-Regel.
+#
+# Vorbehalt A4, datiert 2026-09-25: kein Muttersprachler hat die Faelle gelesen.
+# Auswahl und Glieder stammen aus Verwaltungsvokabular, nicht aus einer
+# muttersprachlichen Pruefung.
+
+# Komposita, die ueber ihr Glied gefunden werden.
+gemeentebelastingen belasting
+gemeentebelasting belasting
+inkomstenbelasting belasting
+waterschapsbelasting belasting
+belastingaangifte aangifte
+huurovereenkomst overeenkomst
+arbeidsovereenkomst overeenkomst
+koopovereenkomst overeenkomst
+bestemmingsplan bestemming
+omgevingsvergunning vergunning
+parkeervergunning vergunning
+zorgverzekering verzekering
+ziektekostenverzekering verzekering
+kinderopvangtoeslag toeslag
+gemeenteraadsvergadering vergadering
+begrotingswijziging wijziging
+afvalstoffenheffing heffing
+subsidieaanvraag aanvraag
+vergaderverslag verslag
+coördinatiecentrum centrum
+coordinatiecentrum centrum
+
+# Benannte Grenzen: das Kompositum steht selbst in der Liste (oder ein laengeres
+# Teilstueck wie zaakbelasting), und ein Eintrag wird nie zerlegt.
+onroerendezaakbelasting belasting
+bouwvergunning vergunning
+huurtoeslag toeslag
+verkeersboete boete
+jaarrekening rekening
+factuurnummer nummer
+opzegtermijn termijn
+
+# Waechter.
+overeenkomst
+vergadering
+belasting
+gemeente
+verzekering
+aangifte
+rekening
+bestemming
+onderwerp
+beleid
+afspraak
+opdracht
+handtekening
+bijlage
+voorwaarden
+herinnering
+betaling
+verantwoordelijkheid
+beschikbaarheid
+vertegenwoordiger
+gemeentelijke
+ontwikkelingen
+overeenkomsten
+belastingplichtige
+aansprakelijkheid
+verplichtingen
+onderhandelingen
+tegemoetkoming
+burgemeester
+wethouder
+ondernemer
+aanbesteding
+openbaarheid
