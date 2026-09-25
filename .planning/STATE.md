@@ -108,6 +108,11 @@ H-19-01 und alle fuenf MEDIUM gefixt, sechs der sieben LOW gefixt, L-19-05 misst
 Loeschverzoegerung und warnt, statt ohne gemessenes Budget zu gaten, L-19-03 bewusst
 abgelehnt mit Begruendung im Code; jeder Befund ein eigener Commit mit nachgezogener
 Ratsche, Gates und volle Suite (2875/15) vor jedem Commit gruen, nichts gepusht.
+Regression aus dem Audit-Erstfix 252ada4 (M-19-05) behoben in ff0f5cf: seitdem stempelte auf
+einer frischen Instanz niemand mehr die Marken schema_version und languages, der Feldplan fiel
+dauerhaft auf de,en zurueck und die CI-Strecke "Language proof" war in Lauf 36086044755 auf
+allen vier Aesten rot; der Erststempel steht jetzt in index/open.py::stamp_a_new_directory vor
+der Erzeugung des Verzeichnisses, zwei neue Faelle halten ihn fest, Suite 2877/15 gruen.
 Last activity: 2026-09-25 -- Audit-Befunde der Phase 19 behoben (6f35cbe..7f75456, 8 Commits)
 
 Progress: [███.......] 32% (2 von 7 Phasen)

@@ -359,6 +359,48 @@ Wortlisten-Digest, `_seed_meta` laesst die Sprachmarke ohnehin aus und
 `test_poller` und `test_index_open` bleiben gruen ohne Nacharbeit; ein neuer
 Fall haelt die beiden Marken gegen den Stempel fest.
 
+**NACHTRAG 2026-09-25: Der Erstfix erzeugte eine Regression, endgueltig behoben in
+`ff0f5cf`.**
+
+`252ada4` nahm die beiden Verzeichnismarken aus `stamp_after_rebuild` heraus,
+ohne zu sehen, dass derselbe Stempel auf einer frischen Instanz ihr **einziger**
+Schreiber war: dort laeuft kein Umbau (`rebuild_the_index` antwortet einem Band
+ohne Verzeichnis mit `NO_LIVE_DIRECTORY`), also stempelt `stamp_after_swap` nie.
+Seit `252ada4` trug eine Neuinstallation gar keine Sprachmarke mehr,
+`field_plan_for` las die fehlende Marke als `LEGACY_LANGUAGES`, und ein blosses
+Wort erreichte fuer die Lebensdauer der Installation nur `body_de` und
+`body_en`, gleich was FINDLING_LANGUAGES sagte. Gemessen von deploy-harp-Lauf
+36086044755 auf HEAD `60dd3f3`: die Strecke "Language proof, the four new chains
+answer on the ordinary search route" fand auf allen vier Matrixaesten ueber 600
+Sekunden keine der vier neuen Sprachen. Der Vorgaengerlauf 36076006854 auf
+`da3858e` war mit derselben Strecke 4/4 gruen. Die Unit-Suite blieb gruen, weil
+kein Fall den Weg einer frischen Instanz lief: `_drifted_store` und
+`_aged_state` saeen die Marken, und die Fixtures des Leseseiten-Suites stempeln
+von Hand.
+
+Der Befund selbst bleibt richtig und der Fix bleibt stehen: ein Stempel hinter
+einem Durchlauf ueber die Bestaende **im vorhandenen Verzeichnis** darf die
+beiden Marken nicht schreiben. Der Erststempel einer frischen Instanz ist eine
+andere Aussage und steht seit `ff0f5cf` an der Stelle, an der sie wahr wird:
+`findling.index.open.stamp_a_new_directory`, aufgerufen von
+`worker/poller.py::_open_writer` **vor** `open_index`, also bevor das
+Verzeichnis ueberhaupt entsteht. Ein Verzeichnis, das schon da ist, wird dort
+nie nachgestempelt, gleich was es traegt, womit der Upgrade-Pfad dieses Befunds
+unberuehrt bleibt. Vor der Erzeugung und nicht danach, weil die Leseseite in
+dem Moment oeffnet, in dem das Verzeichnis existiert, und ihre Feldliste einmal
+pro Oeffnung berechnet (dasselbe Fenster, das H-19-01 auf der anderen Seite des
+Tauschs geschlossen hat).
+
+Zwei neue Faelle halten das fest, beide vor dem Fix rot:
+`tests/test_poller.py::test_a_fresh_volume_carries_the_two_marks_of_the_directory_it_builds`
+(die Marken stehen nach `_open_state` plus `_open_writer`) und
+`tests/test_read_side.py::test_a_fresh_container_searches_the_chains_it_was_switched_on_with`
+(die Wirkung: der Feldplan eines frischen Containers erreicht `body_es`). Der
+Fall aus `252ada4`,
+`test_the_stamp_leaves_the_two_marks_of_a_directory_alone`, bleibt unveraendert
+gueltig und gruen: er steht auf einem Band mit vorhandenem Verzeichnis und
+vorhandenen Marken.
+
 **Kategorie:** bug
 
 **Datei:** `backend/src/findling/index/open.py:326-330`
