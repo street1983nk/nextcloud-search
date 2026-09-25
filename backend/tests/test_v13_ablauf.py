@@ -1,0 +1,501 @@
+"""The watchmen over the run script, the fetch script and the run plan of the v1.3 trip, plan 22-05.
+
+00-lauf.sh drives the whole trip on the box without anybody watching: the hard
+stop of D-01 and D-02 as a shutdown timer that is read back, the order of the
+blocks, the strike order of D-05, and the separation of BL-F03 and BL-F04 (no
+BL-F04 block changes an environment variable of the product container).
+00-abholen.sh fetches the raw data to the development machine every ten
+minutes, so that a hard stop loses nothing that was already written.
+00-ablauf.md carries the expectations, the abort catalogue and the rules, and
+it has to be committed before the first box minute (pattern 5 of the research).
+
+None of the three has run on a box, and section 7.1 of the runbook forbids a
+change during the paid trip, so what can be held without a box is held here.
+The house rules of the directory (shebang, no carriage return, no dash, no
+machine path, no password on a command line) come from test_measurement_scripts
+through NARROW_SCOPE_DIRS; this file holds what is particular to each file.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+import shutil
+import subprocess
+import time
+from pathlib import Path
+
+import pytest
+
+from test_measurement_scripts import V13_RUN_DIR, a_boxless_run
+
+RUN_SCRIPT = V13_RUN_DIR / "00-lauf.sh"
+FETCH_SCRIPT = V13_RUN_DIR / "00-abholen.sh"
+RUN_PLAN = V13_RUN_DIR / "00-ablauf.md"
+REPORT = V13_RUN_DIR.parent / "README.md"
+
+A_DIGEST = "sha256:" + "0" * 64
+
+# The three rebuilds of the product container the run may do, and no fourth.
+THE_THREE_REBUILDS = {
+    "FINDLING_EMBED_IDLE_RELEASE_SECONDS=120",
+    "FINDLING_EMBED_IDLE_RELEASE_SECONDS=0",
+    "FINDLING_LANGUAGES=de,en,es,it,nl,pt",
+}
+
+# The blocks of way a in their order, each with the call that proves the block
+# is the one the plan names. The order is the one of must_haves in 22-05.
+WAY_A = (
+    ("block_marken", '90e-einzelliste.py" marken'),
+    ("block_92d", '92d-wechsel.sh"'),
+    ("block_cron_vorher", '97-cron-vorpruefung.sh" vorher'),
+    ("indexgroesse de-en", "index-bytes"),
+    ("block_m01", '"$LAST"'),
+    ("block_bodensatz", '94c-bodensatz-zyklen.sh"'),
+    ("block_99d", '99d-filter-sortierung.sh"'),
+    ("block_b2", '"$ADRESSE/remote.php/dav/files/$BENUTZER"'),
+    ("block_umbau", "FINDLING_LANGUAGES=de,en,es,it,nl,pt"),
+    ("block_98d", "98d-dismax-probe.py"),
+    ("block_b3", '00-wegwerf.sh" b3'),
+    ("block_b5", '00-wegwerf.sh" b5'),
+    ("block_endmessungen", '90-bestand.sh"'),
+    ("block_92c", '92c-wechsel.sh"'),
+)
+
+
+def code_of(text: str) -> str:
+    """The lines of a shell file that are not comments."""
+    return "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+
+
+def function_of(code: str, name: str) -> str:
+    """The body of one shell function, from its head to the closing brace."""
+    start = code.index(f"{name}() {{")
+    return code[start : code.index("\n}\n", start)]
+
+
+def run_code() -> str:
+    return code_of(RUN_SCRIPT.read_text(encoding="utf-8"))
+
+
+def in_order(text: str, needles: list[str]) -> None:
+    """Every needle is in the text, each one after the one before it."""
+    position = -1
+    for needle in needles:
+        found = text.find(needle, position + 1)
+        assert found > position, (needle, needles)
+        position = found
+
+
+def body_of_the_block(code: str, block: str) -> str:
+    """The function a call in a way names, or the helper the call goes to."""
+    name = block.split()[0]
+    return function_of(code, name)
+
+
+def laufwerte(path: Path, **werte: str) -> Path:
+    """A run value file with the complete set, minus what is handed in as empty."""
+    complete = {
+        "DECKEL_MINUTEN": "1440",
+        "BOX_START_EPOCH": str(int(time.time()) - 600),
+        "B4_GEPLANT": "ja",
+        "EINZELWEG": "a",
+        "ABBILD_DIGEST": A_DIGEST,
+        "PWFILE": (path.parent / "kein-pw").as_posix(),
+        "PWFILE_LASTTEST": (path.parent / "kein-pw").as_posix(),
+    }
+    complete.update(werte)
+    lines = [f"{name}={wert}" for name, wert in complete.items() if wert != ""]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+    return path
+
+
+# ---------------------------------------------------------------------------
+# 00-lauf.sh, the run script.
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+@pytest.mark.parametrize(
+    "werte",
+    [
+        {"DECKEL_MINUTEN": ""},
+        {"BOX_START_EPOCH": ""},
+        {"DECKEL_MINUTEN": "0"},
+        {"DECKEL_MINUTEN": "zwoelf"},
+        {"BOX_START_EPOCH": "gestern"},
+        {"BOX_START_EPOCH": str(int(time.time()) + 86_400)},
+        {"B4_GEPLANT": "vielleicht"},
+        {"EINZELWEG": "c"},
+        {"EINZELWEG": ""},
+        {"ABBILD_DIGEST": "latest"},
+        {"ABBILD_DIGEST": "sha256:" + "0" * 63},
+    ],
+    ids=[
+        "no-cap",
+        "no-start",
+        "cap-zero",
+        "cap-word",
+        "start-word",
+        "start-in-the-future",
+        "b4-maybe",
+        "way-c",
+        "no-way",
+        "digest-tag",
+        "digest-short",
+    ],
+)
+def test_the_run_script_refuses_a_run_without_its_values(tmp_path: Path, werte: dict[str, str]) -> None:
+    """Without cap, start, B4 plan, way or digest the run ends with 2, before any file (a_boxless_run)."""
+    (tmp_path / "werte").mkdir()
+    datei = laufwerte(tmp_path / "werte" / "v13-lauf.env", **werte)
+    rohdaten = V13_RUN_DIR.parent / "rohdaten"
+    before = rohdaten.exists()
+    answer = a_boxless_run(RUN_SCRIPT, tmp_path / "out", ["ablauf"], umgebung={"LAUFWERTE": datei.as_posix()})
+    assert answer.returncode == 2, answer
+    assert "Benutzung:" in answer.stderr
+    assert answer.stdout == ""
+    assert not (tmp_path / "out").exists()
+    assert rohdaten.exists() == before
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+def test_the_run_script_refuses_a_run_without_a_value_file(tmp_path: Path) -> None:
+    """No file, no cap, no run."""
+    answer = a_boxless_run(
+        RUN_SCRIPT, tmp_path / "out", ["ablauf"], umgebung={"LAUFWERTE": (tmp_path / "fehlt").as_posix()}
+    )
+    assert answer.returncode == 2, answer
+    assert "DECKEL_MINUTEN" in answer.stderr
+    assert "Benutzung:" in answer.stderr
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+@pytest.mark.parametrize("arguments", [[], ["los"], ["start", "b3"], ["B4"]], ids=["none", "los", "start-b3", "B4"])
+def test_the_run_script_names_four_subcommands_and_refuses_everything_else(
+    tmp_path: Path, arguments: list[str]
+) -> None:
+    """start, ablauf, status and b4, and nothing else."""
+    answer = a_boxless_run(RUN_SCRIPT, tmp_path / "out", arguments)
+    assert answer.returncode == 2, answer
+    for befehl in ("start", "ablauf", "status", "b4"):
+        assert befehl in answer.stderr
+    assert answer.stdout == ""
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+def test_the_run_script_b4_needs_the_rest_minutes(tmp_path: Path) -> None:
+    """b4 sets its timer out of DECKEL_REST_MINUTEN, so without them it does not start."""
+    (tmp_path / "werte").mkdir()
+    datei = laufwerte(tmp_path / "werte" / "v13-lauf.env")
+    answer = a_boxless_run(RUN_SCRIPT, tmp_path / "out", ["b4"], umgebung={"LAUFWERTE": datei.as_posix()})
+    assert answer.returncode == 2, answer
+    assert "DECKEL_REST_MINUTEN" in answer.stderr
+
+
+def test_the_run_script_reads_its_values_without_executing_the_file() -> None:
+    """The value file is parsed line by line, never sourced."""
+    code = run_code()
+    assert 'LAUFWERTE="${LAUFWERTE:-$HOME/work/v13-lauf.env}"' in RUN_SCRIPT.read_text(encoding="utf-8")
+    assert '. "$LAUFWERTE"' not in code
+    assert "source " not in code
+    for name in (
+        "DECKEL_MINUTEN",
+        "BOX_START_EPOCH",
+        "B4_GEPLANT",
+        "EINZELWEG",
+        "ABBILD_DIGEST",
+        "DECKEL_REST_MINUTEN",
+        "PWFILE",
+    ):
+        assert f"$(laufwert {name})" in code, name
+
+
+def test_the_run_script_sets_the_timer_before_every_block() -> None:
+    """shutdown -h +rest, read back out of the systemd file, before the first measuring block."""
+    code = run_code()
+    timer = function_of(code, "timer_setzen")
+    in_order(timer, ['sudo shutdown -h +"$rest"', 'sudo cat "$GEPLANT_DATEI"', "exit 55", "timer-abschaltung"])
+    assert timer.count("exit 55") >= 3
+    assert '"$OUT/00-timer.txt"' in timer
+    ablauf = code[code.index('timer_setzen "$(rest_bis_deckel)"') :]
+    in_order(
+        ablauf,
+        ['timer_setzen "$(rest_bis_deckel)"', "altverzeichnisse_pruefen", "abtaster_neu start", "a) weg_a ;;"],
+    )
+    deckel = function_of(code, "rest_bis_deckel")
+    assert "DECKEL_MINUTEN - (jetzt - BOX_START_EPOCH) / 60" in deckel
+    assert "trap signal_abbruch TERM" in code
+    assert "00-abbruch-durch-signal" in function_of(code, "signal_abbruch")
+
+
+# Four stand ins for the box: sudo that runs its command, shutdown that logs and
+# optionally plans, git that reports what the test wants, and a notification
+# chain that does nothing. None of them reaches a network.
+STUB_SUDO = '#!/bin/sh\n[ "${1:-}" = -E ] && shift\nexec "$@"\n'
+STUB_SHUTDOWN = """#!/bin/sh
+printf '%s\\n' "$*" >>"$STUB/shutdown"
+if [ "${STUB_PLANEN:-}" = 1 ] && [ "$1" = -h ]; then
+    case "$2" in
+    +*)
+        minuten=${2#+}
+        printf 'USEC=%s\\nMODE=poweroff\\n' "$((($(date +%s) + minuten * 60) * 1000000))" >"$GEPLANT_DATEI"
+        ;;
+    esac
+fi
+exit 0
+"""
+STUB_GIT = '#!/bin/sh\nprintf "%s" "${STUB_GIT:-}"\n'
+STUB_CHAIN = '#!/bin/sh\nprintf \'%s\\n\' "$*" >>"$STUB/meldungen"\n'
+
+
+def a_stubbed_run(tmp_path: Path, umgebung: dict[str, str]) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
+    """00-lauf.sh ablauf in a copy of its directory, against the stand ins above."""
+    skripte = tmp_path / "lauf" / "skripte"
+    skripte.mkdir(parents=True)
+    shutil.copy(RUN_SCRIPT, skripte / "00-lauf.sh")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for name, inhalt in (("sudo", STUB_SUDO), ("shutdown", STUB_SHUTDOWN), ("git", STUB_GIT)):
+        (bin_dir / name).write_text(inhalt, encoding="utf-8", newline="\n")
+        (bin_dir / name).chmod(0o755)
+    kette = tmp_path / "kette.sh"
+    kette.write_text(STUB_CHAIN, encoding="utf-8", newline="\n")
+    stub = tmp_path / "stub"
+    stub.mkdir()
+    (tmp_path / "werte").mkdir()
+    datei = laufwerte(tmp_path / "werte" / "v13-lauf.env")
+    environment: dict[str, str | None] = {
+        "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+        "LAUFWERTE": datei.as_posix(),
+        "MELDEKETTE": kette.as_posix(),
+        "GEPLANT_DATEI": (tmp_path / "scheduled").as_posix(),
+        "STUB": stub.as_posix(),
+        **umgebung,
+    }
+    answer = a_boxless_run(skripte / "00-lauf.sh", tmp_path / "out", ["ablauf"], umgebung=environment)
+    return answer, tmp_path / "lauf" / "rohdaten", stub
+
+
+def text_of(path: Path) -> str:
+    return path.read_text(encoding="utf-8") if path.is_file() else ""
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+def test_the_run_script_ends_with_55_when_the_timer_cannot_be_read_back(tmp_path: Path) -> None:
+    """A shutdown that leaves no scheduled file is no cap, and without a cap nothing is measured."""
+    answer, rohdaten, stub = a_stubbed_run(tmp_path, {})
+    assert answer.returncode == 55, answer
+    assert "timer-unlesbar" in text_of(rohdaten / "00-timer.txt")
+    lauf = text_of(rohdaten / "00-lauf.txt")
+    assert "tor-abbruch p0-timer rueckgabe 55" in lauf
+    assert "00-abbruch" in lauf
+    assert "altverzeichnisse-sauber" not in lauf
+    calls = text_of(stub / "shutdown").splitlines()
+    assert calls, calls
+    assert re.fullmatch(r"-h \+14[23]\d", calls[0]), calls
+    assert "Tor-Abbruch 55" in text_of(stub / "meldungen")
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+def test_the_run_script_ends_with_54_on_a_dirty_old_directory_after_the_timer(tmp_path: Path) -> None:
+    """The timer stands first; a dirty v1.2 directory then ends the run and pulls the timer forward."""
+    answer, rohdaten, stub = a_stubbed_run(
+        tmp_path, {"STUB_PLANEN": "1", "STUB_GIT": " M docs/measurements/2026-09-v12-messung/rohdaten/90-bestand.txt"}
+    )
+    assert answer.returncode == 54, answer
+    timer = text_of(rohdaten / "00-timer.txt")
+    assert "timer-gesetzt" in timer
+    assert "timer-abschaltung" in timer
+    assert "timer-vorgezogen" in timer
+    lauf = text_of(rohdaten / "00-lauf.txt")
+    in_order(lauf, ["p0-timer-start", "timer-abschaltung", "p0-timer-ende", "altverzeichnisse-sauber nein"])
+    assert "tor-abbruch p0-timer rueckgabe 54" in lauf
+    calls = text_of(stub / "shutdown").splitlines()
+    assert calls[-1] == "-h +60", calls
+
+
+def test_the_run_script_drives_way_a_in_the_order_of_the_plan() -> None:
+    """Marks, 92d, cron, index size, M-01, cold start, residue, 99d, B2, rebuild, dismax, B3, B5, end, 92c."""
+    code = run_code()
+    weg = function_of(code, "weg_a")
+    in_order(weg, [block for block, _ in WAY_A])
+    for block, needle in WAY_A:
+        assert needle in body_of_the_block(code, block), (block, needle)
+    m01 = function_of(code, "block_m01")
+    in_order(m01, ['"$LAST"', '95c-kaltstart.sh"'])
+    assert 'LAST="${LAST:-$REPO/scripts/ops/search_load.py}"' in code
+    bodensatz = function_of(code, "block_bodensatz")
+    in_order(bodensatz, ["=120", '94c-bodensatz-zyklen.sh"', "=0"])
+    assert 'block_b2 "$BESTAND_SNAPSHOT"' in weg
+    assert 'BESTAND_SNAPSHOT="52111 37 0"' in code
+    assert "exit 56" in function_of(code, "block_b2")
+    assert weg.rstrip().endswith("block_92c")
+
+
+def test_the_run_script_way_b_reindexes_first_and_never_switches_with_92d() -> None:
+    """Way b: both 92c runs and the full reindex before the single list, no 92d, no 92c at the end."""
+    code = run_code()
+    weg = function_of(code, "weg_b")
+    in_order(weg, ["block_92c", "block_vollreindex", "block_einzelliste", "block_cron_vorher", "block_umbau"])
+    assert weg.count("block_92c") == 1
+    assert "block_92d" not in weg
+    assert "block_marken" not in weg
+    assert not weg.rstrip().endswith("block_92c")
+    assert "exit 58" in function_of(code, "block_vollreindex")
+    assert "a) weg_a ;;" in code
+    assert "b) weg_b ;;" in code
+
+
+def test_the_run_script_restarts_both_samplers_after_every_rebuild() -> None:
+    """Every rebuild or restart of the product container is followed by new samplers (pitfall 4)."""
+    code = run_code()
+    samplers = function_of(code, "abtaster_neu")
+    in_order(samplers, ["abtaster_stoppen", '"$CPU_SAMPLER"', '"$RSS_SAMPLER"'])
+    text = RUN_SCRIPT.read_text(encoding="utf-8")
+    assert 'CPU_SAMPLER="${CPU_SAMPLER:-$REPO/scripts/ops/cpu_sampler.sh}"' in text
+    assert 'RSS_SAMPLER="${RSS_SAMPLER:-$REPO/scripts/ops/rss_sampler.sh}"' in text
+    assert "$ABTASTTAKT" in samplers
+    assert 'ABTASTTAKT="${ABTASTTAKT:-5}"' in text
+    # Each call of a tool that rebuilds or restarts the container, and the
+    # sampler restart that has to follow it inside the same function.
+    for function, tool in (
+        ("block_92d", '92d-wechsel.sh"'),
+        ("neubau_92e", '92e-umgebung.sh"'),
+        ("block_bodensatz", '94c-bodensatz-zyklen.sh"'),
+        ("block_m01", '95c-kaltstart.sh"'),
+        ("block_92c", '"$NACHFOLGE/92c-wechsel.sh" || rc=$?\n    lauf_zeile "92c-regulaer'),
+    ):
+        body = function_of(code, function)
+        in_order(body, [tool, "abtaster_neu"])
+    rebuild_calls = [line for line in code.splitlines() if 'sh "$SKRIPTE/92e-umgebung.sh"' in line]
+    assert rebuild_calls == ['    sh "$SKRIPTE/92e-umgebung.sh" "$1" || rc=$?'], rebuild_calls
+
+
+def test_the_run_script_asks_for_time_only_before_the_blocks_that_may_fall() -> None:
+    """zeit_fuer before B2, B3, B5 and B4, before no mandatory block; the reserves follow D-05."""
+    code = run_code()
+    for weg in ("weg_a", "weg_b"):
+        body = function_of(code, weg)
+        asked = re.findall(r"if zeit_fuer (b\d) ", body)
+        assert asked == ["b2", "b3", "b5"], (weg, asked)
+        for block in asked:
+            in_order(body, [f"if zeit_fuer {block} ", f"block_{block}"])
+    assert "if zeit_fuer b4 " in function_of(code, "abschluss")
+    assert set(re.findall(r"zeit_fuer (\w+) ", code)) == {"b2", "b3", "b5", "b4"}
+    reserve = function_of(code, "reserve_fuer")
+    arms = dict(re.findall(r"^\s+(b\d)\) (.*)$", reserve, flags=re.MULTILINE))
+    assert "b4_teil" in arms["b5"]
+    assert "b3_teil" in arms["b5"]
+    assert "b4_teil" not in arms["b2"]
+    assert "b4_teil" not in arms["b3"]
+    assert "b4_teil=$PLAN_B4" in reserve
+    assert "b3_teil=$PLAN_B3" in reserve
+    for name, wert in (("B2", 45), ("B3", 15), ("B5", 12), ("B4", 75), ("ENDE", 15), ("92C", 30), ("ABHOLEN", 20)):
+        assert f"PLAN_{name}={wert}\n" in code, name
+    streichen = function_of(code, "zeit_fuer")
+    assert '"$OUT/00-gestrichen.txt"' in streichen
+    assert "gestrichen %s rest %s bedarf %s" in streichen
+    assert "return 1" in streichen
+
+
+def test_the_run_script_never_touches_the_ocr_languages_and_rebuilds_three_ways() -> None:
+    """No BL-F04 block changes the product; 92e only with 120, 0 and the six languages."""
+    text = RUN_SCRIPT.read_text(encoding="utf-8")
+    assert "FINDLING_OCR_LANGUAGES" not in text
+    code = code_of(text)
+    rebuilds = set(re.findall(r"^\s*neubau_92e (\S+) ", code, flags=re.MULTILINE))
+    assert rebuilds == THE_THREE_REBUILDS
+    for block in ("block_b3", "block_b5", "block_98d", "block_endmessungen"):
+        assert "neubau_92e" not in function_of(code, block), block
+        assert "docker update" not in function_of(code, block), block
+
+
+def test_the_run_script_sets_loglevel_1_for_m01_and_puts_it_back() -> None:
+    """Read and logged before, 1 during the stages and the cold start, the read value after; 57 without a line."""
+    m01 = function_of(run_code(), "block_m01")
+    in_order(
+        m01,
+        [
+            "occ config:system:get loglevel",
+            "loglevel-vorher",
+            "occ config:system:set loglevel --value=1 --type=integer",
+            '"$LAST"',
+            '91m-langsame-aufrufe.py"',
+            '95c-kaltstart.sh"',
+            "--stufe kaltstart",
+            'occ config:system:set loglevel --value="$loglevel_vorher" --type=integer',
+            "exit 57",
+        ],
+    )
+    assert "occ config:system:delete loglevel" in m01
+
+
+def test_the_run_script_points_every_tool_at_its_own_run_directory() -> None:
+    """OUT is set once and exported; the two old directories must be clean, else 54."""
+    code = run_code()
+    assignments = [line.strip() for line in code.splitlines() if re.match(r"^\s*OUT=", line)]
+    assert assignments == ['OUT="$LAUF/rohdaten"'], assignments
+    assert "\nexport OUT\n" in code
+    assert 'LAUF=$(cd "$SKRIPTE/.." && pwd)' in code
+    guard = function_of(code, "altverzeichnisse_pruefen")
+    in_order(guard, ['git -C "$REPO" status --porcelain -- "$ALT_V12" "$ALT_NACHFOLGE"', "exit 54"])
+    assert 'ALT_V12="docs/measurements/2026-09-v12-messung"' in code
+    assert 'ALT_NACHFOLGE="docs/measurements/2026-09-nachfolgefassungen"' in code
+    assert "altverzeichnisse_pruefen" in function_of(code, "abschluss")
+
+
+def test_the_run_script_waits_for_the_last_fetch_before_it_switches_itself_off() -> None:
+    """00-FERTIG, then the fetch mark younger than it for at most ABHOL_WARTE, then shutdown now."""
+    code = run_code()
+    abschluss = function_of(code, "abschluss")
+    in_order(abschluss, ['[ "$B4_GEPLANT" = ja ]', "b4_vorbereiten", '"$OUT/00-FERTIG"', "abholung_abwarten"])
+    in_order(abschluss, ['abholung_abwarten "$OUT/00-FERTIG"', "sudo shutdown -h now"])
+    warten = function_of(code, "abholung_abwarten")
+    in_order(warten, ["ABHOL_WARTE))", 'cat "$ABGEHOLT"', '-gt "$marke"'])
+    text = RUN_SCRIPT.read_text(encoding="utf-8")
+    assert 'ABGEHOLT="${ABGEHOLT:-$HOME/work/abgeholt}"' in text
+    assert re.search(r'ABHOL_WARTE="\$\{ABHOL_WARTE:-\d+\}"', text)
+    vorbereiten = function_of(code, "b4_vorbereiten")
+    in_order(vorbereiten, ['sudo rm -f "$GRUB_DROPIN"', "sudo update-grub"])
+    assert 'GRUB_DROPIN="${GRUB_DROPIN:-/etc/default/grub.d/99-mem4g.cfg}"' in text
+
+
+def test_the_run_script_b4_resets_the_timer_stops_everything_and_switches_off() -> None:
+    """After the type switch: timer out of the rest, every container down, B4, B4-FERTIG, shutdown."""
+    code = run_code()
+    b4 = code[code.index('if [ "$BEFEHL" = b4 ]; then') : code.index('timer_setzen "$(rest_bis_deckel)"')]
+    in_order(
+        b4,
+        [
+            'timer_setzen "$DECKEL_REST_MINUTEN"',
+            "sudo docker ps -q",
+            "sudo docker stop $laufende",
+            '00-wegwerf.sh" b4',
+            '"$OUT/B4-FERTIG"',
+            'abholung_abwarten "$OUT/B4-FERTIG"',
+            "sudo shutdown -h now",
+        ],
+    )
+
+
+def test_the_run_script_starts_detached_and_fully_redirected() -> None:
+    """start is the 96-volllauf.sh pattern: setsid nohup, nothing holds the ssh session."""
+    code = run_code()
+    assert 'setsid nohup sh "$SKRIPTE/00-lauf.sh" "$ZIELBEFEHL" >>"$PROTOKOLL" 2>&1 </dev/null &' in code
+    enter = function_of(code, "block_betreten")
+    leave = function_of(code, "block_verlassen")
+    assert '"$1-start $(utc)"' in enter
+    assert '"$1-ende $(utc)"' in leave
+    assert 'LAUFDATEI="$OUT/00-lauf.txt"' in code
+    assert 'chmod 700 "$WORK"' in code
+
+
+def test_the_run_script_keeps_the_load_password_out_of_99d() -> None:
+    """E7: the password of the load account lives in a subshell of the stages only."""
+    code = run_code()
+    m01 = function_of(code, "block_m01")
+    assert '(\n            FINDLING_LOAD_PASSWORD=$(sudo cat "$PWFILE_LAST"' in m01
+    assert code.count("export FINDLING_LOAD_PASSWORD") == 1
+    d99 = function_of(code, "block_99d")
+    in_order(d99, ["unset FINDLING_LOAD_PASSWORD", "99d-umgebung", '99d-filter-sortierung.sh"'])
+    assert 'PWFILE="$PWFILE_LAST" sh "$NACHFOLGE/99d-filter-sortierung.sh"' in d99
