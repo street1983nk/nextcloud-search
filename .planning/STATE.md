@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
-status: ready_to_plan
-stopped_at: Phase 20 komplett (9/9, verified passed, Review resolved, CI 11/11 gruen, gepusht bis 9e5d0eb)
-last_updated: 2026-09-25T11:32:09.472Z
-last_activity: 2026-09-25 -- Phase 20 abgeschlossen: Verifikation passed 9/9, Review WR-01..03 gefixt, CI-Sprachbeweis-Erstlauf gruen (Run 36126493024), beide Pushes gruen
+status: executing
+stopped_at: 20-09 ausgefuehrt und committet (1c80e26, 530bb7c, c5102d1), Sichtprobe vom Owner approved, Gates lokal gruen, NICHT gepusht
+last_updated: "2026-09-25T14:05:24.226Z"
+last_activity: 2026-09-25 -- Phase 21 planning complete
 progress:
   total_phases: 7
   completed_phases: 4
-  total_plans: 38
+  total_plans: 47
   completed_plans: 38
   percent: 57
 ---
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 ## Current Position
 
 Phase: 21 von 23 (niederlaendische Komposita), Milestone-Phasen 17-23
-Status: Phase 20 COMPLETE 25.09.2026 (verified passed 9/9), Phase 21 bereit zum Planen
+Status: Ready to execute
 Schritt "The result page answers in every new language (core lang)" im Job search-parity,
 530bb7c docs/l10n-catalogues.md Abschnitt "Stand nach Phase 20", c5102d1 SUMMARY). Der Schritt
 liest den Erwartungswert zur Laufzeit aus apps/findling/l10n/<code>.json, prueft je Code es, it,
@@ -206,7 +206,7 @@ Instanz den Erststempel der Verzeichnismarken; Folge: Feldplan blieb LEGACY, rot
 Fix-Beweis). Endstand-CI 36096526219 GRUEN 4/4 inkl. arm64. Suite 2877 passed / 15 skipped.
 LEHRE: ein Audit-Fix, der einen Schreiber entfernt, braucht die Frage "wer schreibt das
 sonst noch auf JEDEM Pfad" plus einen Frischinstanz-Fall, bevor er reist.
-Last activity: 2026-09-25
+Last activity: 2026-09-25 -- Phase 21 planning complete
 
 Progress: [█████.....] 57% (4 von 7 Phasen)
 
@@ -227,29 +227,35 @@ Textgleichheits-Gates, und die Spalte PT_BR in docs/l10n-portuguese.md, die die 
 auf vier Spalten hebt). Danach 20-09, dann Phase 21 (nl-Komposita, eigenes Tor, streichbar) und
 Phase 22 (Messanfahrt BL-F03).
 Mitzunehmen in 20-08, aus 20-04 bis 20-07 gemessen:
+
 1. Die .json und die .js einer Sprache gehoeren in EINEN Commit. Das Pluralregel-Gate liest zu
    jeder vorhandenen php/l10n/<code>.json die zugehoerige .js unbedingt; eine alleinstehende
    .json faellt mit FileNotFoundError, also ist der Zwischenstand keine halbe Arbeit, sondern
    eine kaputte Suite. Der Gate-Eintrag bleibt ein eigener Commit. In 20-07 ist das erneut
    nachgefahren worden (pt_PT.js beiseitegelegt, Absturz reproduziert, Datei zurueckgelegt).
+
 2. Jede neue Sprache braucht einen eigenen Eintrag in VALUES_THAT_MAY_EQUAL_THEIR_KEY, sonst
    faellt das Vollstaendigkeitsgate mit dem Sprachcode. Die Liste wird gefunden (Lauf mit
    leerem Mapping) und nicht geraten; es hatte zwei Schluessel, pt_PT zwei, it drei, nl vier,
    fr fuenf. Bei nl kam Spreadsheets dazu, und zwar NICHT bei den Woertern, bei denen man es
    erwartet haette (file heisst bestand, folder heisst map): die Groesse war vorhersagbar, der
    Schluessel nicht. Bei pt_PT faellt %1$s in %2$s weg, weil das Portugiesische em schreibt.
+
 3. Beim Vokabular-Gate in tests/test_public_artifacts.py wird gemessen und nicht prognostiziert.
    Die Vorhersage aus 20-04 stimmte fuer it in der Wirkung, aber im falschen Wort, und fuer nl
    und pt_PT ganz (je 0 Treffer, kein AUSNAHMEN-Eintrag noetig). Fuer pt_BR lautet die Prognose
    ebenfalls "kein Treffer", weil arquivo mit arqu anfaengt; Stand: zweimal bestaetigt, zweimal
    knapp daneben.
+
 4. Ein echter Treffer der gesperrten deutschen Form wird umformuliert und nie mit dem
    Dateieintrag mitentschuldigt: die Ausnahme gilt je Datei und deckt sonst genau den Fehler,
    den die Familie fangen soll.
+
 5. Die Giessform aus 20-01 zuerst gegen den unveraenderten Bestand pruefen (cast(alt) == alt,
    inzwischen zwoelf von zwoelf), dann erst schreiben. Listenwerte muessen einzeilig gefaltet
    werden; der erste Anlauf in 20-07 lief mit null von zwoelf, genau daran. Das Giessskript
    bleibt ausserhalb des Arbeitsbaums.
+
 6. Ein literales Prozentzeichen wird %% geschrieben, besser noch umformuliert.
 7. Fuer 20-08 eigens: es gibt KEIN Textgleichheits-Gate pt_PT gegen pt_BR, und der
    Kommentarabsatz ueber L10N_PT_PT_JSON sagt das ausdruecklich. Das Gegenstueck ist ein Gate
@@ -401,14 +407,17 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
   (FileNotFoundError, 1 failed / 51 passed). Plan 20-04 hat diesen Zwischenstand committet, hier
   ist er vermieden. Die Alternative, das Gate an den Zwischenstand anzupassen, waere die
   Logikaenderung gewesen, die dieser Plan gerade beweisen sollte nicht zu brauchen.
+
 - Eine Parametrisierung ist erst bewiesen, wenn eine zweite neue Sprache sie nicht anfasst
   (20-05). Der Gate-Diff fuer Italienisch zeigt 39 Zufuegungen und 0 Loeschungen, verteilt auf
   Konstantenpaar, Tupel-Eintrag und Ausnahmeliste; kein Scanner, kein Testrumpf, keine Zahl im
   Testnamen. Das ist die Zahl, an der 20-06 bis 20-08 sich messen lassen muessen.
+
 - Die Anrede einer Uebersetzung folgt Zeile fuer Zeile der Quelle (20-05). Der deutsche Katalog
   wechselt zwischen Infinitivanweisung und Sie-Form; das Italienische kann beides, also wechselt
   es mit. So bleibt der Wechsel eine Eigenschaft der Quelle statt eine Nachlaessigkeit der
   Uebersetzung, und wer ihn vereinheitlichen will, findet die Stellen im deutschen Katalog.
+
 - Eine gestellte Gegenprobe wird eingeloest, sobald es die Sprache gibt, fuer die sie gestellt
   wurde (20-06). 20-02 hat scan_plural_rule sprachbewusst gemacht, weil nl die deutsche
   Regelzeichenkette zu Recht fuehrt; der Beleg dafuer war bis 20-06 ein Testrumpf ohne Datei.
@@ -416,43 +425,51 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
   derselben liefert zwei Funde, und nl mit einer FREMDEN Regel liefert weiter einen Fund. Die
   dritte Zeile ist die tragende: ein Gate, das fuer eine Sprache blind geworden waere, haette
   dieselbe erste Zeile geliefert.
+
 - Ein Sonderfall, der wie ein Fehler aussieht, steht an beiden Orten, an denen ihn jemand
   dafuer halten koennte (20-06): im Kommentarabsatz des Gates und in der Sprachdoku, jeweils
   mit der ausdruecklichen Bitte, den Scanner nicht zu reparieren. Der Absatz ist der Grund,
   warum der nl-Gate-Diff 55 Zeilen hat und der it-Diff 39; die Parametrisierung selbst ist bei
   beiden unberuehrt geblieben, und nl war die erste neue Sprache mit abweichender Formenzahl.
+
 - Zwei gleiche Formen in einem Pluralwert koennen die richtige Uebersetzung sein (20-06).
   %n uur steht im Niederlaendischen zweimal gleich, weil Massangaben nach einem Zahlwort im
   Singular bleiben (twee uur, drie kilometer); bei minuut und dag gilt das nicht. Wer so etwas
   fuer einen Kopierfehler haelt, "repariert" eine korrekte Zeile.
+
 - Eine Datei, die jedes Gate passiert und die niemand laedt, wird nicht gebaut (20-07). Der
   Kern kennt den Code pt nicht, getL10nFilesForApp kuerzt pt_PT nicht auf pt, und ein Nutzer
   kann auf pt nicht stehen; eine php/l10n/pt.json waere deshalb Arbeit ohne Leser. Das Verbot
   ist ein Abnahmekriterium und kein Hinweis, und der gemessene Grund steht an beiden Orten, an
   denen jemand ihn suchen wuerde: docs/l10n-catalogues.md Abschnitt 1 und der Kommentarabsatz
   ueber L10N_PT_PT_JSON.
+
 - Ein Codepaar kann zwei Wortlautsaetze tragen statt zweimal denselben (20-07). pt_PT und
   pt_BR sind das ausdrueckliche Gegenteil von de und de_DE, deren Textgleichheit ein Gate
   haelt. Ein Textgleichheits-Gate fuer das portugiesische Paar wird deshalb NICHT gebaut; es
   wuerde eine der beiden Varietaeten dauerhaft in den falschen Woertern festhalten. Das
   positive Gegenstueck ist ein Gate ueber die benannten Unterschiede und gehoert zu 20-08,
   wenn die zweite Datei existiert.
+
 - Eine Gegenprobe wird mit der AEHNLICHSTEN fremden Regel gefahren und nicht mit der
   auffaelligsten (20-07). Fuer nl war die deutsche Zeichenkette die richtige Probe, weil nl
   sie zu Recht fuehrt; fuer pt_PT ist es die spanische, die sich nur im Vorderzweig
   unterscheidet (n == 1 ? 0 gegen (n == 0 || n == 1) ? 0) und beide Male nplurals=3 mit
   derselben Millionenklausel traegt. Gemessen: ein Fund. Das ist der wahrscheinliche Fehler,
   und ein Gate, das nur grobe Unterschiede findet, haette ihn durchgelassen.
+
 - Eine Probe, die im Gegenstand keinen Gegenstand hat, wird als solche benannt (20-07). Zwei
   der vier Varietaetsproben des Plans (ecra, a transferir) kommen im Katalog nicht vor, weil
   kein Schluessel von einem Bildschirm oder einem Download spricht. Die Doku zaehlt die Werte
   aus (56, 1, kommt nicht vor, kommt nicht vor), statt vier Pruefungen zu behaupten, von denen
   zwei leerlaufen. Die Wortwahltabelle nennt die beiden Woerter trotzdem, damit der naechste
   solche Schluessel nicht in der falschen Varietaet hereinkommt.
+
 - Eine Tabelle, die spaeter eine Spalte bekommt, bekommt sie spaeter und nicht leer (20-07).
   docs/l10n-portuguese.md fuehrt heute drei Spalten und einen Hinweis unmittelbar ueber der
   Tabelle, der Plan 20-08 nennt. Eine leere vierte Spalte sieht aus wie 202 vergessene
   Uebersetzungen.
+
 - Ein Wortstamm-Gate auf einer Sprache stolpert ueber die Homographen einer anderen (20-04,
   bestaetigt und berichtigt in 20-05). Fuer Italienisch traf es nicht das Wort fuer Datei (das
   Italienische benutzt dort das englische Wort), sondern das fuer den Speicherort. Die Prognose
@@ -480,6 +497,7 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
   baut, nimmt keinen Parameter entgegen, der ein Anfragetext ist oder einer sein kann, also
   ist eine Erkennung der Anfrage nicht verboten, sondern nicht anschliessbar
   (backend/tests/test_no_language_detection.py, 0b59fca).
+
 - Katalogzahl beim Planstart aus `php/l10n/de.json` ZAEHLEN (Stand Research 199, nicht 174).
 
 ### Termine und Owner-Checkpoints

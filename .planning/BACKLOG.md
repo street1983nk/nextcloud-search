@@ -280,6 +280,19 @@ KERNFALL von BL-F04, nicht die Kuer; Profil-Vorschlag per Hardware-Erkennung
 beim ersten Start pruefen (erkannte Kerne/RAM, Admin bestaetigt). Der Default-
 Fallback bleibt das 4-GB-Versprechen (Entscheid 24.09. unveraendert).
 
+**OWNER-ENTSCHEIDE 25.09.2026 (nach BL-F04-Vorarbeit-Research,
+.planning/research/BL-F04-vorarbeit-2026-09-25.md):**
+(1) Phase-22-Mitmessliste B1-B3+B5 UND B4 freigegeben (Details im
+Roadmap-Kriterium 6 der Phase 22); (2) die drei Messskripte sind
+Zusatzauftrag der Phase 22; (3) MODELLWAHL BLEIBT IN v1.4 (gegen die
+Research-Empfehlung "herausnehmen"). HARTE FOLGE: die Marken-Reparatur
+gehoert mit in den v1.4-Umfang, denn die Vektor-Marke (store/vectors.py,
+Stand 25.09. Zeile ~273) kennt nur den Modellnamen, nicht die
+Gewichts-Genauigkeit; ein int8/fp32-Wechsel desselben Modells wuerde sonst
+still alte und neue Vektoren mischen. Offen fuers v1.4-Tor: Weg des Profils
+in den Container (erstes Tor laut Research) und Anteile je Profil im
+Owner-Wortlaut.
+
 **OWNER-ENTSCHEID 25.09.2026: KEINE APP-SPALTUNG** ("wir spalten nicht").
 Erwogen war eine zweite Store-App fuer leistungsstarke Boxen; verworfen wegen
 doppelter Wartung (2 Store-Eintraege wuerden 4), Entscheidungslast beim
