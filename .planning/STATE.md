@@ -4,8 +4,8 @@ milestone: v1.3
 milestone_name: Sprachausbau
 status: executing
 stopped_at: 20-09 ausgefuehrt und committet (1c80e26, 530bb7c, c5102d1), Sichtprobe vom Owner approved, Gates lokal gruen, NICHT gepusht
-last_updated: "2026-09-25T14:05:24.226Z"
-last_activity: 2026-09-25 -- Phase 21 planning complete
+last_updated: "2026-09-25T14:07:56.637Z"
+last_activity: 2026-09-25 -- Phase 21 execution started
 progress:
   total_phases: 7
   completed_phases: 4
@@ -21,12 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 21 (niederlaendische Komposita): discuss/plan steht an; vorher secure-phase 20
+**Current focus:** Phase 21 — niederlaendische-komposita
 
 ## Current Position
 
-Phase: 21 von 23 (niederlaendische Komposita), Milestone-Phasen 17-23
-Status: Ready to execute
+Phase: 21 (niederlaendische-komposita) — EXECUTING
+Plan: 1 of 9
+Status: Executing Phase 21
 Schritt "The result page answers in every new language (core lang)" im Job search-parity,
 530bb7c docs/l10n-catalogues.md Abschnitt "Stand nach Phase 20", c5102d1 SUMMARY). Der Schritt
 liest den Erwartungswert zur Laufzeit aus apps/findling/l10n/<code>.json, prueft je Code es, it,
@@ -206,7 +207,7 @@ Instanz den Erststempel der Verzeichnismarken; Folge: Feldplan blieb LEGACY, rot
 Fix-Beweis). Endstand-CI 36096526219 GRUEN 4/4 inkl. arm64. Suite 2877 passed / 15 skipped.
 LEHRE: ein Audit-Fix, der einen Schreiber entfernt, braucht die Frage "wer schreibt das
 sonst noch auf JEDEM Pfad" plus einen Frischinstanz-Fall, bevor er reist.
-Last activity: 2026-09-25 -- Phase 21 planning complete
+Last activity: 2026-09-25 -- Phase 21 execution started
 
 Progress: [█████.....] 57% (4 von 7 Phasen)
 

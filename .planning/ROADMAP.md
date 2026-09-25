@@ -193,9 +193,9 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 21-01-PLAN.md: Vorfragen per Test: D-08 fullreindex-Stempel und Poller-Drift-Falle (Fix: Band-Drift hebt keine Generation)
-- [ ] 21-02-PLAN.md: wdutch ins Abbild, docker.yml-Gate, THIRD-PARTY.md (CC-BY-3.0), Pin-Test
-- [ ] 21-08-PLAN.md: CI-Kompositumfall gemeentebelastingen/belasting im Language proof
+- [x] 21-01-PLAN.md: Vorfragen per Test: D-08 fullreindex-Stempel und Poller-Drift-Falle (Fix: Band-Drift hebt keine Generation)
+- [x] 21-02-PLAN.md: wdutch ins Abbild, docker.yml-Gate, THIRD-PARTY.md (CC-BY-3.0), Pin-Test
+- [x] 21-08-PLAN.md: CI-Kompositumfall gemeentebelastingen/belasting im Language proof
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -266,7 +266,7 @@ Plans:
 | 18. Schema, Marken und Umbauweg | v1.3 | 12/12 | Complete   | 2026-09-24 |
 | 19. Frageseite freischalten | v1.3 | 9/9 | Executing | - |
 | 20. UI-Kataloge es/it/nl/pt | v1.3 | 9/9 | Complete    | 2026-09-25 |
-| 21. Niederlaendische Komposita | v1.3 | 0/TBD | Not started | - |
+| 21. Niederlaendische Komposita | v1.3 | 3/9 | In Progress|  |
 | 22. Messanfahrt BL-F03 | v1.3 | 0/TBD | Not started | - |
 | 23. Haertung und Store-Einreichung 1.3.0 | v1.3 | 0/TBD | Not started | - |
 
