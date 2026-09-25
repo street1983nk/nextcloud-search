@@ -199,7 +199,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 21-03-PLAN.md: wordlist_nl.py (Rezept B 4-14, Liste freigegeben) und Splitterkette hinter der Faltung
+- [x] 21-03-PLAN.md: wordlist_nl.py (Rezept B 4-14, Liste freigegeben) und Splitterkette hinter der Faltung
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -266,7 +266,7 @@ Plans:
 | 18. Schema, Marken und Umbauweg | v1.3 | 12/12 | Complete   | 2026-09-24 |
 | 19. Frageseite freischalten | v1.3 | 9/9 | Executing | - |
 | 20. UI-Kataloge es/it/nl/pt | v1.3 | 9/9 | Complete    | 2026-09-25 |
-| 21. Niederlaendische Komposita | v1.3 | 3/9 | In Progress|  |
+| 21. Niederlaendische Komposita | v1.3 | 4/9 | In Progress|  |
 | 22. Messanfahrt BL-F03 | v1.3 | 0/TBD | Not started | - |
 | 23. Haertung und Store-Einreichung 1.3.0 | v1.3 | 0/TBD | Not started | - |
 
