@@ -526,6 +526,15 @@ printf '%s\\n' "$*" >>"$STUB/ssh"
 exit 0
 """
 
+# ssh-keygen -F <host> -f <file>, answered by a plain search for the host.
+STUB_SSH_KEYGEN = """#!/bin/sh
+printf '%s\\n' "$*" >>"$STUB/ssh-keygen"
+[ "$1" = -F ] && [ "$3" = -f ] || exit 2
+grep -q "^$2 " "$4"
+"""
+
+KNOWN_HOST_LINE = "box.example.invalid ssh-ed25519 AAAAattrappe\n"
+
 
 def a_stubbed_fetch(
     tmp_path: Path, umgebung: dict[str, str | None]
@@ -539,9 +548,13 @@ def a_stubbed_fetch(
     ssh = tmp_path / "ssh"
     ssh.write_text(STUB_SSH, encoding="utf-8", newline="\n")
     ssh.chmod(0o755)
+    keygen = tmp_path / "ssh-keygen"
+    keygen.write_text(STUB_SSH_KEYGEN, encoding="utf-8", newline="\n")
+    keygen.chmod(0o755)
     state = tmp_path / "zustand"
     state.mkdir()
     (state / "findling-loadtest").write_text("attrappe\n", encoding="utf-8", newline="\n")
+    (state / "known_hosts").write_text(KNOWN_HOST_LINE, encoding="utf-8", newline="\n")
     lokal = tmp_path / "lokal"
     environment: dict[str, str | None] = {
         "BOX_ADRESSE": "box.example.invalid",
@@ -549,6 +562,7 @@ def a_stubbed_fetch(
         "LOKAL": lokal.as_posix(),
         "SCP": scp.as_posix(),
         "SSH": ssh.as_posix(),
+        "SSH_KEYGEN": keygen.as_posix(),
         "STUB": stub.as_posix(),
         "ABHOLTAKT": "0",
         **umgebung,
@@ -593,6 +607,44 @@ def test_the_fetch_script_refuses_without_the_key_of_the_state_directory(tmp_pat
     assert answer.returncode == 2, answer
     assert "FINDLING_LOADTEST_DIR" in answer.stderr
     assert "Benutzung:" in answer.stderr
+    assert not (tmp_path / "lokal").exists()
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+@pytest.mark.parametrize("known_hosts", ["", "andere.example.invalid ssh-ed25519 AAAAattrappe\n", None])
+def test_the_fetch_script_refuses_a_box_its_known_hosts_does_not_know(tmp_path: Path, known_hosts: str | None) -> None:
+    """Found in the dress rehearsal of 22-06: no known_hosts in the state directory.
+
+    StrictHostKeyChecking=yes against it failed every round, and the fetch ended
+    only after three rounds, while the box waited for its mark. Now it is 2
+    before the first scp.
+    """
+    stub = tmp_path / "stub"
+    stub.mkdir()
+    keygen = tmp_path / "ssh-keygen"
+    keygen.write_text(STUB_SSH_KEYGEN, encoding="utf-8", newline="\n")
+    keygen.chmod(0o755)
+    state = tmp_path / "zustand"
+    state.mkdir()
+    (state / "findling-loadtest").write_text("attrappe\n", encoding="utf-8", newline="\n")
+    if known_hosts is not None:
+        (state / "known_hosts").write_text(known_hosts, encoding="utf-8", newline="\n")
+    answer = a_boxless_run(
+        FETCH_SCRIPT,
+        tmp_path / "out",
+        [],
+        umgebung={
+            "BOX_ADRESSE": "box.example.invalid",
+            "FINDLING_LOADTEST_DIR": state.as_posix(),
+            "LOKAL": (tmp_path / "lokal").as_posix(),
+            "SCP": (tmp_path / "kein-scp").as_posix(),
+            "SSH_KEYGEN": keygen.as_posix(),
+            "STUB": stub.as_posix(),
+        },
+    )
+    assert answer.returncode == 2, answer
+    assert "known_hosts" in answer.stderr
+    assert "box.example.invalid" not in answer.stderr
     assert not (tmp_path / "lokal").exists()
 
 

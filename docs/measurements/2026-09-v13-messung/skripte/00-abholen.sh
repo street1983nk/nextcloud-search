@@ -58,6 +58,7 @@ B4_GEPLANT="${B4_GEPLANT:-nein}"
 LOG="${LOG:-$STATE_DIR/v13-abholen.log}"
 SCP="${SCP:-scp}"
 SSH="${SSH:-ssh}"
+SSH_KEYGEN="${SSH_KEYGEN:-ssh-keygen}"
 
 benutzung() {
     cat >&2 <<'HINWEIS'
@@ -77,6 +78,19 @@ if [ -z "${BOX_ADRESSE:-}" ]; then
 fi
 if [ ! -r "$SCHLUESSEL" ]; then
     echo "00-abholen: der Schluessel in FINDLING_LOADTEST_DIR ist nicht lesbar" >&2
+    echo "00-abholen: das Runbook legt ihn unter ~/.ssh/findling-loadtest ab; vorher kopieren oder SCHLUESSEL setzen" >&2
+    benutzung
+    exit 2
+fi
+# StrictHostKeyChecking=yes gegen eine Datei, die die Box nicht kennt, scheitert
+# bei jedem Versuch, und das Skript endete erst nach drei Takten mit 1, also
+# nach einer halben Stunde, in der die Box auf ihre Abholmarke wartet. Befund
+# der Generalprobe 22-06: im Zustandsverzeichnis lag keine known_hosts. Die
+# Pruefung steht deshalb hier, vor dem ersten Takt, und ssh-keygen -F liest auch
+# gehashte Eintraege.
+if [ ! -s "$BEKANNT" ] || ! "$SSH_KEYGEN" -F "$BOX_ADRESSE" -f "$BEKANNT" >/dev/null 2>&1; then
+    echo "00-abholen: die known_hosts in FINDLING_LOADTEST_DIR kennt BOX_ADRESSE nicht" >&2
+    echo "00-abholen: den Hostschluessel der Box vorher nach dem Runbook pruefen und dort eintragen" >&2
     benutzung
     exit 2
 fi
