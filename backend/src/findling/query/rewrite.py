@@ -33,6 +33,7 @@ import logging
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Final
 
 from tantivy import FieldType, Index, Occur, Query
@@ -81,6 +82,18 @@ class FieldPlan:
     document and never removes it. Its keys stay inside ``fields`` for the reason
     in the paragraph above.
 
+    It is a ``Mapping`` in the annotation and a ``MappingProxyType`` in every
+    value this module builds, which is audit finding L-19-02. ``frozen=True``
+    freezes the assignment of the attribute and nothing about the object behind
+    it, so a plain dict here would leave the frozen fallback plan editable from
+    anywhere in the process, which is the one thing it must not be. The proxy is
+    not a deep copy and does not have to be: the values are floats.
+
+    A plan is unhashable either way, before and after that change, because
+    neither a dict nor a proxy over one hashes. Nothing hashes a plan today; a
+    ``functools.cache`` over a function taking one would be an unpleasant
+    surprise, and this sentence is here so that it is a known one.
+
     ``title_only`` is what the same bare word searches once the built in
     Nextcloud filter for "file name instead of content" is set. It is not a
     second plan and not a subset by construction: it is the other answer of this
@@ -125,12 +138,21 @@ BODY_BOOST: Final = {"de": 1.0, "en": 0.8, "es": 0.6, "it": 0.6, "nl": 0.6, "pt"
 # one spelling in this file.
 LEGACY_PLAN: Final = FieldPlan(
     fields=(FIELD_BODY_DE, FIELD_BODY_EN, FIELD_NAME, FIELD_TITLE),
-    boosts={
-        FIELD_NAME: NAME_BOOST,
-        FIELD_TITLE: TITLE_BOOST,
-        FIELD_BODY_DE: BODY_BOOST["de"],
-        FIELD_BODY_EN: BODY_BOOST["en"],
-    },
+    # Behind a read only view, audit finding L-19-02. ``frozen=True`` protects
+    # the assignment of the field and not the object behind it, and this one is
+    # the fail closed line of the whole phase: a single
+    # ``LEGACY_PLAN.boosts["body_es"] = 0.6`` anywhere in the process would turn
+    # the value that exists to keep a name out of the parser into the very
+    # ValueError it is held against, on every installation coming from 1.2.0 and
+    # for as long as the container lives.
+    boosts=MappingProxyType(
+        {
+            FIELD_NAME: NAME_BOOST,
+            FIELD_TITLE: TITLE_BOOST,
+            FIELD_BODY_DE: BODY_BOOST["de"],
+            FIELD_BODY_EN: BODY_BOOST["en"],
+        }
+    ),
     title_only=(FIELD_NAME,),
 )
 
@@ -145,7 +167,7 @@ LEGACY_PLAN: Final = FieldPlan(
 # directory now like every other plan, and this is what is left when even that
 # probe keeps nothing: a container that answers every search empty and says so in
 # its log, rather than one that answers every search with an exception.
-EMPTY_PLAN: Final = FieldPlan(fields=(), boosts={}, title_only=())
+EMPTY_PLAN: Final = FieldPlan(fields=(), boosts=MappingProxyType({}), title_only=())
 
 # SRCH-03 file type. Nextcloud has no built in filter for it, so it travels
 # inside the search line and is translated into a required term on the extension.
@@ -563,9 +585,20 @@ def build_query(
     """Turn a search line into a query, its filters and the parser's complaints.
 
     Never raises on user input. A stray quotation mark, a regular expression, a
-    field that does not exist: all of them come back as an entry in ``errors``
-    together with a query that finds nothing, because an exception here is an
-    HTTP 500 and a search bar that stays broken until somebody redeploys.
+    field that does not exist **in the typed line**: all of them come back as an
+    entry in ``errors`` together with a query that finds nothing, because an
+    exception here is an HTTP 500 and a search bar that stays broken until
+    somebody redeploys.
+
+    A field that does not exist in ``plan`` is the other case and it is not
+    covered by that sentence, which is audit finding L-19-04. Measured on
+    tantivy 0.26.2 (19-RESEARCH M-1), both ``default_field_names`` and
+    ``field_boosts`` answer a name the schema does not know with a ``ValueError``
+    out of the parser, and nothing here catches it. That is the whole reason
+    ``plan`` is computed against the directory in
+    :func:`findling.api.resources.field_plan_for` and never composed at a call
+    site: the lenient parser is lenient about what a user types and about
+    nothing else.
 
     ``groups``, ``since`` and ``until`` are the structured half of the filter,
     the one the result page sets. They are keyword arguments with a default so
@@ -647,6 +680,15 @@ def build_query(
             one_term=one_term,
         )
 
+    # The list above and this copy are the two allocations per query that audit
+    # finding L-19-03 names, and they are kept on purpose. Both are at most eight
+    # entries against a parser measured at 2,26 us, so the cost is under the
+    # noise of one call; both cross into a native extension, which may keep what
+    # it is handed; and the alternative, two ready made forms cached on the
+    # frozen value through object.__setattr__ in a __post_init__, would put a
+    # second representation of the field list beside the first one for a saving
+    # nothing can measure. A plan is one value, and that is worth more here than
+    # two allocations of eight.
     parsed, errors = index.parse_query_lenient(
         rewritten,
         default_field_names=searched,

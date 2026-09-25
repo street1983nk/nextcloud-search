@@ -286,6 +286,35 @@ def test_a_state_database_beside_an_older_directory_falls_back_and_says_so(
     assert chr(92) not in lines[0]
 
 
+@pytest.mark.parametrize("stored", ["de, en ,es", "DE,EN,ES", " de,en,es ", "de,,en,es"])
+def test_the_language_mark_is_read_stripped_and_lowered(stored: str, schema_2_index: Index) -> None:
+    # Audit finding L-19-01. The write side cannot produce any of these four
+    # today, but this function reads a file that comes out of a backup, out of an
+    # older release or out of a hand, and it treats every other unsharpness of
+    # that file tolerantly. Unstripped, "de, en" loses a whole language without a
+    # word anywhere; unlowered, "DE,EN" keeps nothing at all and falls back to
+    # the legacy pair on an instance that runs six chains.
+    plan = field_plan_for({SCHEMA_MARK: CURRENT_SCHEMA, LANGUAGES_MARK: stored}, schema_2_index)
+
+    assert plan.fields == (FIELD_BODY_DE, FIELD_BODY_EN, FIELD_BODY_ES, FIELD_NAME, FIELD_TITLE)
+
+
+def test_the_weights_of_a_plan_cannot_be_edited_from_anywhere(schema_2_index: Index) -> None:
+    # Audit finding L-19-02. frozen=True protects the assignment of the attribute
+    # and nothing about the object behind it, and this attribute is the fail
+    # closed line of the whole phase: one assignment on the frozen plan would
+    # turn the value that exists to keep a name out of the parser into the very
+    # ValueError the first half of this file provokes, on every installation
+    # coming from 1.2.0 and for as long as the container lives.
+    computed = field_plan_for({SCHEMA_MARK: CURRENT_SCHEMA, LANGUAGES_MARK: "de,en,es"}, schema_2_index)
+
+    for plan in (LEGACY_PLAN, EMPTY_PLAN, computed):
+        with pytest.raises(TypeError):
+            plan.boosts[FIELD_BODY_ES] = 0.6  # type: ignore[index]
+
+    assert FIELD_BODY_ES not in LEGACY_PLAN.boosts
+
+
 def test_a_plan_that_reaches_less_than_the_marks_promise_is_short(schema_2_index: Index) -> None:
     """Audit finding M-19-03, the measurement the admin page was missing.
 

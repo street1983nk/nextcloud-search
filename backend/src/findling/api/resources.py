@@ -34,6 +34,7 @@ import time
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 from typing import Final
 
 from tantivy import Index
@@ -362,7 +363,14 @@ def _of_the_marks(marks: Mapping[str, str]) -> FieldPlan | None:
         return None
 
     stored = marks.get(LANGUAGES_MARK, "")
-    active = {code for code in stored.split(",") if code} or set(LEGACY_LANGUAGES)
+    # Stripped and lowered, audit finding L-19-01. The write side cannot produce
+    # "de, en" or "DE,EN" today, because config._languages iterates over
+    # SUPPORTED_LANGUAGES, but this reads a file that can come out of a backup,
+    # out of an older release or out of a hand. Unstripped, "de, en" loses a
+    # whole language without a word anywhere; unlowered, "DE,EN" keeps nothing
+    # at all and falls back. Every other unsharpness of this mark is treated
+    # tolerantly here, and these two are the cheapest of them.
+    active = {code.strip().lower() for code in stored.split(",") if code.strip()} or set(LEGACY_LANGUAGES)
     # Iterated over BODY_FIELD and never over the mark, because that mapping
     # IS the schema field order and because a code nobody knows has no field
     # to contribute. body_de gets no exception of any kind: it is written
@@ -375,7 +383,14 @@ def _of_the_marks(marks: Mapping[str, str]) -> FieldPlan | None:
     boosts = {BODY_FIELD[code]: BODY_BOOST[code] for code in BODY_FIELD if code in active}
     boosts[FIELD_NAME] = NAME_BOOST
     boosts[FIELD_TITLE] = TITLE_BOOST
-    return FieldPlan(fields=(*bodies, FIELD_NAME, FIELD_TITLE), boosts=boosts, title_only=(FIELD_NAME,))
+    # Behind a read only view like the frozen plan next door, and for the reason
+    # written there (L-19-02): the dict above is finished at this line and a plan
+    # that can be edited from anywhere is not a plan.
+    return FieldPlan(
+        fields=(*bodies, FIELD_NAME, FIELD_TITLE),
+        boosts=MappingProxyType(boosts),
+        title_only=(FIELD_NAME,),
+    )
 
 
 def _probed(plan: FieldPlan, index: Index) -> FieldPlan | None:
@@ -438,7 +453,7 @@ def _probed(plan: FieldPlan, index: Index) -> FieldPlan | None:
         return None
     return FieldPlan(
         fields=fields,
-        boosts={name: weight for name, weight in plan.boosts.items() if name in kept},
+        boosts=MappingProxyType({name: weight for name, weight in plan.boosts.items() if name in kept}),
         title_only=tuple(name for name in plan.title_only if name in kept),
     )
 

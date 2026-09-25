@@ -990,8 +990,18 @@ PHP_TREE_HASH_TODAY = "a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab
 # languagesActive and languagesFilled, filled in the volume answer and carried
 # over in the counting half like every other reading of this process. No file
 # came and none went, so PACKAGE_FILES_TODAY stays at 56.
+# Moved on 2026-09-25 by the four LOW findings of the phase 19 audit that touch
+# the package: two of the 56 files changed their bytes. api/resources.py reads
+# the language mark stripped and lowered (L-19-01) and hands its boosts out
+# behind a MappingProxyType (L-19-02). query/rewrite.py does the same for
+# LEGACY_PLAN and EMPTY_PLAN, whose weights were an ordinary dict reachable from
+# the whole process although the value exists to be the frozen fallback
+# (L-19-02); the docstring of build_query now says that the lenient parser is
+# lenient about a typed field name and not about one in the plan (L-19-04); and
+# the two allocations per query are kept with the reason written beside them
+# (L-19-03). No file came and none went, so PACKAGE_FILES_TODAY stays at 56.
 PACKAGE_FILES_TODAY = 56
-PACKAGE_TREE_HASH_TODAY = "6b1734ddd7c2a0d88d42cab0ebc1ec1a78b794e147ca86c48f0494b04366964b"
+PACKAGE_TREE_HASH_TODAY = "6c950d2f9bb70dea7ebd35f9ffee99a76d1062862ad6589f9397bf4575660c06"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
