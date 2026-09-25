@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: executing
-stopped_at: Phase 19 KOMPLETT (Verifikation passed 4/4, Audit behoben, Endstand-CI 36096526219 gruen 4/4)
-last_updated: "2026-09-25T04:35:00.000Z"
-last_activity: 2026-09-25 -- Phase 19 abgeschlossen
+stopped_at: 20-01 gebaut und committet (51e0ea4, 5389009), BLOCKIERENDER CHECKPOINT: Owner-Sichtprobe des Vorher-Nachher-Belegs steht aus
+last_updated: "2026-09-25T05:45:00.000Z"
+last_activity: 2026-09-25 -- 20-01 ausgefuehrt, Checkpoint offen
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 38
-  completed_plans: 29
+  completed_plans: 30
   percent: 43
 ---
 
@@ -21,12 +21,25 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 19 KOMPLETT; naechste: Phase 20 (ui-kataloge, geplant) ausfuehren
+**Current focus:** Phase 20 (ui-kataloge) laeuft; 20-01 gebaut, wartet auf die Owner-Sichtprobe
 
 ## Current Position
 
-Phase: 19 (frageseite-freischalten), COMPLETE 25.09.2026; Phase 20 (ui-kataloge) geplant, 0 of 9
-Status: Phase 19 KOMPLETT: 9/9 Plaene (Detail in den 19-0N-SUMMARY.md), Verifikation passed
+Phase: 20 (ui-kataloge-es-it-nl-pt), 1 of 9 gebaut; Phase 19 COMPLETE 25.09.2026
+Status: 20-01 (Pluralschluessel-Fix der sechs Bestandskataloge) ist gebaut und committet
+(51e0ea4 Scanner, 5389009 Kataloge), aber NICHT abgenommen: der blockierende Checkpoint
+Task 3 wartet auf die Owner-Sichtprobe. Alle fuenf Pluralschluessel stehen in de/de_DE/fr
+(json und js) jetzt als _<singular>_::_<plural>_, die Zahl 202 ist unveraendert, 5 geaenderte
+Zeilen je Datei, kein Baumhash bewegt. Gemessen an der laufenden Instanz: vorher antworteten
+de und fr ab n=2 mit "2 days", jetzt mit "2 Tage" und "2 jours" (Vorher-Haelfte neu erhoben
+aus den HEAD~1-Bytes unter der Wegwerf-App-ID l10nprobe, beides am 25.09. auf derselben
+Nextcloud). Suite 2877 passed / 15 skipped, ruff/pyright/vulture gruen. NICHT gepusht.
+KAT-01 bleibt ungehakt: die Anforderung verlangt zehn neue Dateien, nicht die Bestandsreparatur.
+LEHRE: das Giessrezept der Research schrieb Listenwerte dreizeilig, der Bestand schreibt sie
+einzeilig; eine Giessform wird zuerst gegen den unveraenderten Bestand byteweise geprueft,
+sonst bewegt der "Fuenf-Zeilen-Fix" 30 Zeilen je Datei.
+
+Vorheriger Stand: Phase 19 KOMPLETT: 9/9 Plaene (Detail in den 19-0N-SUMMARY.md), Verifikation passed
 (4/4 Kriterien, fb604bc), LEX-05 abgehakt, Audit 1H/5M behoben + 6/7 LOW gefixt (Bericht
 8eac0f4, Fixes 6f35cbe..60dd3f3). Eine Audit-Fix-Regression (M-19-05 nahm einer frischen
 Instanz den Erststempel der Verzeichnismarken; Folge: Feldplan blieb LEGACY, roter CI-Lauf
@@ -34,15 +47,18 @@ Instanz den Erststempel der Verzeichnismarken; Folge: Feldplan blieb LEGACY, rot
 Fix-Beweis). Endstand-CI 36096526219 GRUEN 4/4 inkl. arm64. Suite 2877 passed / 15 skipped.
 LEHRE: ein Audit-Fix, der einen Schreiber entfernt, braucht die Frage "wer schreibt das
 sonst noch auf JEDEM Pfad" plus einen Frischinstanz-Fall, bevor er reist.
-Last activity: 2026-09-25 -- Phase 19 abgeschlossen
+Last activity: 2026-09-25 -- 20-01 ausgefuehrt, Owner-Checkpoint offen
 
 Progress: [████......] 43% (3 von 7 Phasen)
 
 ## Naechster Schritt
 
-`/gsd:execute-phase 20` (UI-Kataloge es/it/nl/pt; 9 Plaene in 9 Wellen; 20-01 Pluralfix und
-20-09 Schlussabnahme sind Checkpoints mit Owner-Sichtprobe). Danach Phase 21 (nl-Komposita,
-eigenes Tor, streichbar) und Phase 22 (Messanfahrt BL-F03).
+**Dem Owner die Sichtprobe von 20-01 vorlegen** (Abschnitt "CHECKPOINT" in
+.planning/phases/20-ui-kataloge-es-it-nl-pt/20-01-SUMMARY.md): die sechs Zeilen der
+Sondenausgabe und die Frage, ob die Reparatur der bestehenden de/fr-Kataloge gewollt ist.
+Antwort "approved" -> pushen und mit 20-02 weiterfahren. Danach die restlichen sieben Plaene
+der Phase 20, dann Phase 21 (nl-Komposita, eigenes Tor, streichbar) und Phase 22
+(Messanfahrt BL-F03).
 Offene Kleinigkeit aus 19: zwei DEFAULT_FIELDS-Prosastellen in
 backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt sie mit).
 
@@ -128,6 +144,15 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
   trotzdem eine tragende Zusage reissen, weil die tragenden Zusagen auf genau einem
   Ast stehen.
 
+- Ein Pluralschluessel heisst in einem Nextcloud-Katalog `_<singular>_::_<plural>_` und
+  niemals blank (20-01). `L10N::n` baut diesen Bezeichner selbst und faellt sonst auf den
+  englischen Quellstring zurueck; `@nextcloud/l10n` tut im Browser dasselbe. Findling hat
+  die fuenf Schluessel seit dem ersten Katalog blank gefuehrt, gemessen antworteten de und
+  fr bis zum 25.09.2026 ab n=2 mit "2 days". Die zehn neuen Kataloge der Plaene 20-04 bis
+  20-08 erben dieses Format; wer ihn blank schreibt, liefert eine halb englische Seite aus.
+  Zwei Folgeregeln: der Paritaetsscanner muss an der Marke teilen (sonst faellt er falsch
+  rot), und die Paare stehen an der Aufrufstelle, nicht im Katalog.
+
 - D-04-Linie (v1.1): index-kompatibel ueber Minor-Spruenge. v1.3 verletzt sie bewusst und
   nur fuer Instanzen, die eine neue Sprache einschalten; der Bruch braucht den Owner-Entscheid
   in Phase 17.
@@ -145,6 +170,11 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
 - Katalogzahl beim Planstart aus `php/l10n/de.json` ZAEHLEN (Stand Research 199, nicht 174).
 
 ### Termine und Owner-Checkpoints
+
+- **Beim Owner offen (NEU 25.09., blockiert Phase 20):** Sichtprobe zu Plan 20-01. Der
+  Pluralschluessel-Fix aendert die BESTEHENDEN deutschen und franzoesischen Kataloge und geht
+  damit ueber den Phasenauftrag hinaus; kein Wortlaut ist angefasst, nur der Schluesselname.
+  Vorher-Nachher-Beleg und die drei Pruefpunkte stehen in 20-01-SUMMARY.md.
 
 - **Beim Owner offen:** Store-Token-Rotation (apps.nextcloud.com/account/token);
   Outlook-Entwurf an Denny senden; InfraNode ntfy-401-Entscheid.
@@ -201,5 +231,5 @@ auf resolved gesetzt).
 ## Session Continuity
 
 Last session: 2026-09-25
-Stopped at: 19-09 abgeschlossen und committet (d8cd69a, 4ea3f20, 71cf028, da3858e), SUMMARY geschrieben, CI-Lauf 36074155306 gruen auf 4/4, alles gepusht
-Resume file: .planning/phases/19-frageseite-freischalten/19-09-SUMMARY.md (naechster Schritt: Verifikation und Audit der Phase 19)
+Stopped at: 20-01 ausgefuehrt und committet (51e0ea4, 5389009), SUMMARY geschrieben, Gates lokal gruen, NICHT gepusht; angehalten am blockierenden Checkpoint Task 3 (Owner-Sichtprobe des Vorher-Nachher-Belegs)
+Resume file: .planning/phases/20-ui-kataloge-es-it-nl-pt/20-01-SUMMARY.md (naechster Schritt: Owner-Antwort einholen, dann pushen und 20-02 starten)

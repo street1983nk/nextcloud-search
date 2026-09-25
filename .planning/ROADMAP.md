@@ -144,7 +144,7 @@ Plans:
 **Plans**: 9 Plaene in 9 Wellen
 
 Plans:
-- [ ] 20-01-PLAN.md: Pluralschluessel-Fix der sechs Bestandskataloge, Scanner teilt an `_::_`, Vorher-Nachher-Beleg (Checkpoint)
+- [x] 20-01-PLAN.md: Pluralschluessel-Fix der sechs Bestandskataloge, Scanner teilt an `_::_`, Vorher-Nachher-Beleg (Checkpoint) -- gebaut 25.09.2026 (51e0ea4, 5389009), Owner-Sichtprobe steht aus
 - [ ] 20-02-PLAN.md: Ladepfad- und Pluralbeweis als docs/l10n-catalogues.md, PLURAL_FORM_OF je Sprachcode, php/l10n/** in python.yml
 - [ ] 20-03-PLAN.md: Scanner parametrisiert statt kopiert, plus Prozent- und Pipe-Scanner gegen die zwei stillen Seitenzerstoerer
 - [ ] 20-04-PLAN.md: Spanisch, zwei Dateien, Gate-Eintrag, docs/l10n-spanish.md mit datiertem Vorbehalt
