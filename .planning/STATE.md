@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: executing
-stopped_at: Phase 22 geplant (12 Plaene, 9 Wellen, Checker 0 Blocker/2 Warnungen)
-last_updated: "2026-09-25T21:09:05.867Z"
-last_activity: 2026-09-25, Phase 22 geplant
+stopped_at: Plan 22-01 abgeschlossen (W1 bis W4, aa56d76 8234aed b8448e4)
+last_updated: "2026-09-25T21:21:19.443Z"
+last_activity: 2026-09-25, Plan 22-01 ausgeführt
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 59
-  completed_plans: 47
-  percent: 71
+  completed_plans: 48
+  percent: 81
 ---
 
 # Project State
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 22, Messanfahrt BL-F03 (vorher secure-phase 21)
+**Current focus:** Phase 22, Messanfahrt BL-F03
 
 ## Current Position
 
-Phase: 22
-Plan: Not started
-Status: Ready to execute (Research 7b9791d, 12 Plaene; Owner-Stopps: 22-06 Push-Freigabe, 22-07 Rechenblatt vor Boxstart, 22-12 Abnahme)
+Phase: 22 (messanfahrt-bl-f03), EXECUTING
+Plan: 2 of 12
+Status: Ready to execute 22-02 (Owner-Stopps: 22-06 Push-Freigabe, 22-07 Rechenblatt vor Boxstart, 22-12 Abnahme)
 
 Aktueller Stand: PHASE 21 KOMPLETT 25.09.2026 (9/9 Plaene, goal-backward verified passed 9/9,
 phase.complete gelaufen, STATE von Hand nachgezogen). Niederlaendische Komposita sind Ende-zu-
@@ -236,13 +236,18 @@ Instanz den Erststempel der Verzeichnismarken; Folge: Feldplan blieb LEGACY, rot
 Fix-Beweis). Endstand-CI 36096526219 GRUEN 4/4 inkl. arm64. Suite 2877 passed / 15 skipped.
 LEHRE: ein Audit-Fix, der einen Schreiber entfernt, braucht die Frage "wer schreibt das
 sonst noch auf JEDEM Pfad" plus einen Frischinstanz-Fall, bevor er reist.
-Last activity: 2026-09-25, Phase 22 geplant
+Last activity: 2026-09-25, Plan 22-01 ausgeführt
 
-Progress: [███████...] 71% (5 von 7 Phasen)
+Progress: [████████░░] 81% (48 von 59 Plänen, 5 von 7 Phasen)
 
 ## Naechster Schritt
 
-**discuss/plan-phase 22** (secure-phase 21 ERLEDIGT 25.09.: SECURED 32/32, drei
+**22-02 ausführen** (92d, 92e, 90e, 91m). 22-01 ist fertig: W1 cpu_sampler.sh, W2
+proc_anon_sampler.sh, W3 ocr_slot_probe.py und der W4-Job `slots` in measure.yml stehen
+(aa56d76, 8234aed, b8448e4), nur lokal committet; der W4-CI-Lauf folgt in 22-06 nach
+Push-Freigabe. MESS-07 bleibt offen, bis die Box-Anfahrt gelaufen ist.
+
+Vorher: **discuss/plan-phase 22** (secure-phase 21 ERLEDIGT 25.09.: SECURED 32/32, drei
 akzeptierte Restrisiken AR-21-01..03, Commit de8e128; alle Phase-21-Commits gepusht)
 (Messanfahrt BL-F03; beim Planen die Mitmessliste aus
 .planning/research/BL-F04-vorarbeit-2026-09-25.md einarbeiten plus Rechenblatt der
@@ -309,10 +314,18 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
 |-------|-------|-------|----------|
 | 20 | 9 | - | - |
 | 21 | 9 | 1 Tag | - |
+| 22 | 1/12 | 12 min (22-01) | - |
 
 ## Accumulated Context
 
 ### Entscheidungen, die v1.3 tragen
+
+- F4 (Grundlage D-03, Schwelle 1,5) ist vor dem CI-Lauf festgeschrieben (22-01): Median der
+  Seiten je Sekunde bei N = 4 auf cpuset 0-3 geteilt durch N = 1 auf cpuset 0, drei Runden.
+  Fehlt ein Wert oder verliert eine Runde einen Slot, schreibt der Job "F4 unbestimmt" und
+  scheitert.
+- W3 zählt einen abgeschnittenen oder fehlgeschlagenen Slot als verloren, fährt je Worker
+  einen ungezählten Vorlauf und importiert findling und pypdfium2 erst in Funktionen (22-01).
 
 - Ein CI-Sprachbeweis liest seinen Erwartungswert aus dem Katalog und traegt die Abwesenheit
   des englischen Quellsatzes als eigentliche Zusicherung (20-09). Ein Satz in der YAML waere
@@ -594,6 +607,6 @@ auf resolved gesetzt).
 
 ## Session Continuity
 
-Last session: 2026-09-25T20:07:59.113Z
-Stopped at: Phase 22 context gathered
-Resume file: .planning/phases/22-messanfahrt-bl-f03/22-CONTEXT.md
+Last session: 2026-09-25T21:21:19.419Z
+Stopped at: Plan 22-01 abgeschlossen
+Resume file: .planning/phases/22-messanfahrt-bl-f03/22-02-PLAN.md
