@@ -36,12 +36,14 @@ from findling.index.analyzer import (
     cached_german_analyzer,
 )
 from findling.index.open import (
+    DUTCH_MARK,
     LANGUAGES_MARK,
     SCHEMA_MARK,
     TANTIVY_VERSION,
     expected_versions,
     open_index,
     open_reader,
+    stamp_a_new_directory,
     stamp_after_rebuild,
     start_rebuild_on_drift,
 )
@@ -475,6 +477,7 @@ def test_expected_versions_names_every_mark_the_store_compares() -> None:
         "wordlist_hash": DIGEST,
         "tantivy_version": TANTIVY_VERSION,
         "languages": LANGUAGES,
+        "wordlist_hash_nl": "off",
     }
     assert all(isinstance(value, str) for value in expected.values())
 
@@ -891,6 +894,55 @@ def test_the_stamp_leaves_the_two_marks_of_a_directory_alone(tmp_path: Path) -> 
     # And the mark of the pass that really happened is written, because a stamp
     # that wrote nothing at all would leave the banner up for ever.
     assert marks["wordlist_hash"] == DIGEST
+
+
+def test_the_stamp_after_rebuild_leaves_the_dutch_mark_alone(tmp_path: Path) -> None:
+    """The seventh mark describes a directory as well, so this stamp skips it.
+
+    Same volume shape as the case above, with Dutch switched on: a pass over the
+    holdings in the directory that is already there does not split body_nl with
+    a new list, so the mark must stay absent and keep speaking (T-21-05-02).
+    """
+    store = _drifted_store(tmp_path)
+    expected = expected_versions(DIGEST, LANGUAGES, dutch_mark="1:d")
+    start_rebuild_on_drift(store, expected)
+    store.record(
+        4711,
+        FileMeta(storage_id=3, root_id=2, path="a/b.txt", title="b.txt", mime="text/plain", size=7, mtime=1, etag="e"),
+        "indexed",
+        None,
+        content_hash="hash-of-b",
+    )
+
+    assert stamp_after_rebuild(store, expected) is True
+
+    marks = store.read_meta()
+    diverging = store.version_mismatch(expected)
+    store.close()
+
+    assert DUTCH_MARK not in marks
+    assert diverging == [DUTCH_MARK]
+    assert marks["wordlist_hash"] == DIGEST
+
+
+def test_a_new_directory_is_stamped_with_the_dutch_mark(tmp_path: Path) -> None:
+    """The row "fresh installation with Dutch" of the state table.
+
+    There is no directory yet, so the one about to be built is split with the
+    list of this code, and the mark may say so in front of the creation. Nothing
+    sets the mark by hand here: the stamp is the only writer.
+    """
+    expected = expected_versions(DIGEST, LANGUAGES, dutch_mark="1:d")
+    store = open_store(tmp_path / "state.db", meta=expected)
+    try:
+        assert DUTCH_MARK not in store.read_meta()
+
+        assert stamp_a_new_directory(store, tmp_path / "index", expected) is True
+
+        assert store.read_meta()[DUTCH_MARK] == "1:d"
+        assert store.version_mismatch(expected) == []
+    finally:
+        store.close()
 
 
 def test_a_restart_in_the_middle_does_not_start_the_rebuild_over(tmp_path: Path) -> None:

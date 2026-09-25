@@ -29,11 +29,14 @@ from pathlib import Path
 
 import pytest
 
-from findling.index.open import LANGUAGES_MARK, expected_versions
+from findling.index.open import DUTCH_MARK, LANGUAGES_MARK, expected_versions
+from findling.index.wordlist_nl import DUTCH_LIST_OFF
 from findling.store.repo import (
     _ACL_DOCUMENTS_SQL,
     _ACL_ROWS_SQL,
     _DEFAULT_META,
+    _DUTCH_LIST_OFF,
+    _DUTCH_MARK,
     _SCHEMA_MARK,
     EMBEDDING_MARK,
     LEGACY_LANGUAGES,
@@ -45,6 +48,7 @@ from findling.store.repo import (
     VECTOR_ONLY_MARKS,
     FileMeta,
     Store,
+    _dutch_list_is_legacy,
     _index_format_matches,
     _languages_are_legacy,
     _schema_is_legacy,
@@ -392,6 +396,86 @@ def test_the_language_exception_falls_closed(store: Store) -> None:
     assert _languages_are_legacy("de,en", "de,en,es") is False
     assert _languages_are_legacy("", "de,en") is False
     assert set(LEGACY_LANGUAGES) == {"de", "en"}
+
+
+# -- the seventh mark and its exception ---------------------------------------
+#
+# Decision D-06 of phase 21: the Dutch constituent list becomes a version mark,
+# wordlist_hash_nl, and it travels exactly like the language mark. It names the
+# list body_nl on disk was split with and never the wish of the container, it is
+# never seeded, and an absent value is legacy only while the expectation is off.
+# One case per row of the state table of the phase research. No case below sets
+# the mark to the expected value and then asks for silence, except the one row
+# that describes exactly that state (pitfall 1).
+
+
+def test_an_absent_dutch_mark_is_legacy_while_dutch_is_off(store: Store) -> None:
+    # Success criterion 4: an installation without Dutch upgrades, the mark is
+    # not in its database, and nothing about it may start a rebuild.
+    assert DUTCH_MARK not in store.read_meta()
+
+    assert store.version_mismatch({DUTCH_MARK: DUTCH_LIST_OFF}) == []
+
+
+def test_switching_dutch_on_is_a_drift_of_the_dutch_mark(store: Store) -> None:
+    # The case the mark exists for: nothing on disk was split with a Dutch list.
+    assert DUTCH_MARK not in store.read_meta()
+
+    assert store.version_mismatch({DUTCH_MARK: "1:d"}) == [DUTCH_MARK]
+
+
+def test_an_unchanged_dutch_list_is_no_drift(store: Store) -> None:
+    # The one row of the table that describes a written mark equal to the wish.
+    store.write_meta(DUTCH_MARK, "1:d")
+
+    assert store.version_mismatch({DUTCH_MARK: "1:d"}) == []
+
+
+def test_a_new_dutch_list_is_a_drift(store: Store) -> None:
+    store.write_meta(DUTCH_MARK, "1:alt")
+
+    assert store.version_mismatch({DUTCH_MARK: "1:neu"}) == [DUTCH_MARK]
+
+
+def test_switching_dutch_off_again_is_a_drift(store: Store) -> None:
+    # The counter direction: once written, a value is compared and never excused,
+    # so going back to off is a difference too.
+    store.write_meta(DUTCH_MARK, "1:d")
+
+    assert store.version_mismatch({DUTCH_MARK: DUTCH_LIST_OFF}) == [DUTCH_MARK]
+
+
+def test_the_dutch_mark_is_never_written_by_the_seed(tmp_path: Path) -> None:
+    """Pitfall 1 again, held for the seventh mark.
+
+    A seeded mark would write the wish of the running container as if the index
+    on disk had been split with that list, and the drift of switching Dutch on
+    would be gone before anybody looked at it (threat T-21-05-01).
+    """
+    expected = expected_versions("ein-digest", "de,en", dutch_mark="1:d")
+    opened = open_store(tmp_path / "state.db", meta=expected)
+    try:
+        assert DUTCH_MARK not in opened.read_meta()
+        # And it still speaks: the seed skipped it, so the comparison runs.
+        assert opened.version_mismatch(expected) == [DUTCH_MARK]
+    finally:
+        opened.close()
+
+
+def test_the_dutch_exception_falls_closed() -> None:
+    # Only an absent mark against off is legacy. A written off, an empty value
+    # and an absent mark against a real list are all compared (T-21-05-03).
+    assert _dutch_list_is_legacy(None, "off") is True
+    assert _dutch_list_is_legacy(None, "1:d") is False
+    assert _dutch_list_is_legacy("off", "1:d") is False
+    assert _dutch_list_is_legacy("", "off") is False
+
+
+def test_the_two_spellings_of_the_dutch_mark_agree() -> None:
+    # The store spells both literals itself because it does not import the index
+    # side; this case is what keeps the two spellings together.
+    assert DUTCH_MARK == _DUTCH_MARK
+    assert DUTCH_LIST_OFF == _DUTCH_LIST_OFF
 
 
 # -- the schema mark and its exception ----------------------------------------

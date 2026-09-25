@@ -50,6 +50,7 @@ from findling.index.schema import (
     TOKENIZER_STORED_ONLY,
 )
 from findling.index.wordlist import DIGEST_SUFFIX, ENCODING, artifact_path, wordlist_hash
+from findling.index.wordlist_nl import artifact_path_nl
 from findling.main import APP
 from findling.store.repo import FileMeta, open_store
 from findling.store.vectors import open_vectors
@@ -63,6 +64,9 @@ APP_CREDENTIAL = "unit-test-credential"
 CONSTITUENTS = (
     (Path(__file__).resolve().parent / "fixtures" / "constituents_de.txt").read_text(encoding=ENCODING).split()
 )
+
+# The measured Dutch fixture subset of plan 21-04, one entry per line.
+CONSTITUENTS_NL_FILE: Final = Path(__file__).resolve().parent / "fixtures" / "constituents_nl.txt"
 
 # How many documents a filled fixture volume carries. Named rather than repeated,
 # because the two schema generation fixtures below have to hold the same number
@@ -147,6 +151,23 @@ def write_wordlist(root: Path) -> str:
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text("\n".join(CONSTITUENTS) + "\n", encoding=ENCODING)
     digest = wordlist_hash(CONSTITUENTS)
+    target.with_name(target.name + DIGEST_SUFFIX).write_text(digest + "\n", encoding=ENCODING)
+    return digest
+
+
+def write_wordlist_nl(root: Path) -> str:
+    """Put the Dutch constituent artifact into the volume and return its digest.
+
+    The Dutch twin of :func:`write_wordlist`, for the same reason: with artifact
+    and digest in place ``build_artifact_nl`` reads the file and never looks for
+    the wdutch package. The list is the measured fixture subset of plan 21-04,
+    and the name comes from ``artifact_path_nl`` rather than being spelled here.
+    """
+    entries = [line for line in CONSTITUENTS_NL_FILE.read_text(encoding=ENCODING).split("\n") if line]
+    target = root / "dict" / artifact_path_nl().name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("\n".join(entries) + "\n", encoding=ENCODING)
+    digest = wordlist_hash(entries)
     target.with_name(target.name + DIGEST_SUFFIX).write_text(digest + "\n", encoding=ENCODING)
     return digest
 
