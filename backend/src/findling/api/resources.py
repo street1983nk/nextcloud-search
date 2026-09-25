@@ -230,23 +230,33 @@ def expected_marks() -> dict[str, str] | None:
     with _LOCK:
         if _MARKS is not None and _MARKS[0] == dictionary:
             return dict(_MARKS[1])
+        languages = settings().languages
+        # UnicodeDecodeError beside OSError in both catches is the second net of
+        # review finding CR-01 of phase 21. Both word list modules read their
+        # artifacts with errors="replace" now, so a byte that is not UTF-8 takes
+        # the rebuild path; should a strict read ever come back, this call runs in
+        # the lifespan through report_version_drift, and the class is a
+        # ValueError that no OSError catch holds. A comparison that cannot be
+        # made is a warning and never a container that does not start (M-18-06).
         try:
-            languages = settings().languages
-            marks = expected_versions(build_artifact().digest, ",".join(languages), dutch_mark=dutch_mark(languages))
-        # A missing Dutch artifact under a language set with nl lands here as
-        # well, since FileNotFoundError is an OSError: no comparison rather than
-        # a reading side that fails (T-21-06-04).
-        #
-        # UnicodeDecodeError beside it is the second net of review finding CR-01
-        # of phase 21. Both word list modules read their artifacts with
-        # errors="replace" now, so a byte that is not UTF-8 takes the rebuild
-        # path; should a strict read ever come back, this call runs in the
-        # lifespan through report_version_drift, and the class is a ValueError
-        # that no OSError catch holds. A comparison that cannot be made is a
-        # warning and never a container that does not start (M-18-06).
+            german = build_artifact().digest
         except (OSError, UnicodeDecodeError):
-            LOGGER.warning("the constituent list is unavailable, version marks cannot be compared")
+            LOGGER.warning("the german constituent list is unavailable, version marks cannot be compared")
             return None
+        # Two catches and not one, so the log line names the list that failed
+        # (review finding IN-01 of phase 21). A missing Dutch artifact under a
+        # language set with nl lands here, since FileNotFoundError is an
+        # OSError: no comparison rather than a reading side that fails
+        # (T-21-06-04). What version_drift answers for it stays
+        # UNPROVEN_WORDLIST on purpose: "wordlist_hash_nl" is one of the marks a
+        # band run answers, so naming it there would start a rebuild over a list
+        # that cannot be read.
+        try:
+            dutch = dutch_mark(languages)
+        except (OSError, UnicodeDecodeError):
+            LOGGER.warning("the dutch constituent list is unavailable, version marks cannot be compared")
+            return None
+        marks = expected_versions(german, ",".join(languages), dutch_mark=dutch)
         # The one mark that does not come from the index side. It is added here
         # and not in expected_versions() on purpose: that function feeds
         # start_rebuild_on_drift, which answers a difference by raising the index

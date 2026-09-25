@@ -1082,8 +1082,14 @@ PHP_TREE_HASH_TODAY = "a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab
 # disabled and is switched on later answers a drift of the schema, language or
 # Dutch mark without a restart. No file came and none went, so
 # PACKAGE_FILES_TODAY stays at 57.
+# Moved on 2026-09-25 by the fix of review finding IN-01 of phase 21: one of the
+# 57 files changed its bytes. api/resources.py reads the German digest and the
+# Dutch mark in two catches of expected_marks, so the warning names the list that
+# failed; the answer of version_drift stays UNPROVEN_WORDLIST, because the Dutch
+# mark is one a band run answers. No file came and none went, so
+# PACKAGE_FILES_TODAY stays at 57.
 PACKAGE_FILES_TODAY = 57
-PACKAGE_TREE_HASH_TODAY = "8d74e330f275d70ba72d471fd5b30ece7e643c115fbd548ae1b500729d5c3167"
+PACKAGE_TREE_HASH_TODAY = "2bdb18eded0d717a043f11fae398b8cd25d6e549756e6ed3f743839d30c09504"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

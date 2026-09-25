@@ -799,6 +799,35 @@ def test_the_startup_drift_report_survives_a_word_list_that_does_not_decode(
     assert any("version marks cannot be compared" in record.getMessage() for record in caplog.records)
 
 
+def test_an_unavailable_dutch_list_is_named_as_the_dutch_list(
+    volume: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Review finding IN-01 of phase 21: the log line says which list failed.
+
+    The German list is on the volume and reads; only the Dutch side fails. The
+    answer of version_drift stays the unprovable German name on purpose, because
+    the Dutch mark is one a band run answers.
+    """
+    write_wordlist(volume)
+    store = open_store(volume / "state.db")
+
+    def a_missing_dutch_source(languages: Sequence[str]) -> str:
+        del languages
+        raise FileNotFoundError
+
+    monkeypatch.setattr(resources, "dutch_mark", a_missing_dutch_source)
+
+    try:
+        with caplog.at_level(logging.WARNING, logger="findling.api.resources"):
+            assert resources.version_drift(store) == [resources.UNPROVEN_WORDLIST]
+    finally:
+        store.close()
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("dutch constituent list is unavailable" in message for message in messages)
+    assert not any("german constituent list" in message for message in messages)
+
+
 def test_the_startup_drift_report_survives_a_zero_byte_state_database(
     volume: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
