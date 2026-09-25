@@ -24,6 +24,7 @@ import logging
 import time
 from functools import partial
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 import pytest
 from fastapi.testclient import TestClient
@@ -45,9 +46,13 @@ from findling.main import (
     _release_when_idle,
     _run_the_rebuild,
     _stand_the_poller_down,
+    enabled_handler,
 )
 from findling.store.repo import Store, open_store
 from findling.worker.poller import Poller, default_poller
+
+if TYPE_CHECKING:
+    from findling.nc.client import AsyncNextcloudApp
 
 
 def _a_writer_on_the_live_directory() -> IndexBatchWriter:
@@ -617,6 +622,85 @@ def test_the_rebuild_task_stays_away_from_a_container_that_was_never_enabled(
 
     with TestClient(APP):
         pass
+
+    assert fake.starts == 0
+
+
+def _enable_on_the_loop_of_the_lifespan(client: TestClient) -> str:
+    """Send the enable the way AppAPI does: on the event loop the lifespan runs on.
+
+    The portal of the test client is that loop. Awaiting the handler on the loop
+    of the test instead would hang the task it creates on a loop the shutdown of
+    the lifespan never sees.
+    """
+    assert client.portal is not None
+    return client.portal.call(enabled_handler, True, cast("AsyncNextcloudApp", None))
+
+
+def test_an_enable_after_a_disabled_start_rebuilds_what_the_marks_ask_for(
+    indexed_volume: object, volume: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review finding WR-02: the enable asks the question the lifespan asks.
+
+    Since plan 21-01 a drift of the language mark raises no generation any more,
+    because the band run answers it. The band run used to be started by the
+    lifespan alone, so a container that came up disabled and was switched on
+    afterwards indexed with the drift unanswered until the next restart.
+    """
+    del indexed_volume
+    fake = _FakeRebuildTask()
+    _install_the_three_tasks(monkeypatch, fake)
+    _mark_the_index_as_built_for_another_language_set(volume)
+
+    with TestClient(APP) as client:
+        assert fake.starts == 0, "a container that was never enabled rebuilds nothing at its start"
+        assert _enable_on_the_loop_of_the_lifespan(client) == ""
+        # The task is created on the loop of the lifespan; one round trip over
+        # the portal lets it take its first step.
+        assert client.portal is not None
+        client.portal.call(asyncio.sleep, 0)
+        assert fake.starts == 1
+
+    assert fake.stops == 1
+    assert fake.task is not None
+    assert fake.task.done() is True
+
+
+def test_a_second_enable_does_not_start_a_second_rebuild(
+    indexed_volume: object, volume: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """AppAPI sends the enable again after every update, and a run takes hours.
+
+    The run in flight is the answer to the drift; a second one beside it would
+    open a second writer on the same target directory.
+    """
+    del indexed_volume
+    fake = _FakeRebuildTask()
+    _install_the_three_tasks(monkeypatch, fake)
+    _mark_the_index_as_built_for_another_language_set(volume)
+    settings().armed_marker.write_text("", encoding="utf-8")
+
+    with TestClient(APP) as client:
+        assert client.portal is not None
+        client.portal.call(asyncio.sleep, 0)
+        assert fake.starts == 1, "the start of an enabled container rebuilds"
+        assert _enable_on_the_loop_of_the_lifespan(client) == ""
+        client.portal.call(asyncio.sleep, 0)
+        assert fake.starts == 1
+
+    assert fake.stops == 1
+
+
+def test_an_enable_on_agreeing_marks_starts_no_rebuild(indexed_volume: object, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The ordinary enable, which must stay as cheap as it was."""
+    del indexed_volume
+    fake = _FakeRebuildTask()
+    _install_the_three_tasks(monkeypatch, fake)
+
+    with TestClient(APP) as client:
+        assert _enable_on_the_loop_of_the_lifespan(client) == ""
+        assert client.portal is not None
+        client.portal.call(asyncio.sleep, 0)
 
     assert fake.starts == 0
 

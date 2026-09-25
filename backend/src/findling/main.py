@@ -71,6 +71,14 @@ _POLLER: Poller | None = None
 # the difference between a task that does nothing and no task at all.
 _RECONCILE: Reconcile | None = None
 
+# The fourth task and the stop event it runs under, at module level for the
+# reason the two above are: since review finding WR-02 of phase 21 the AppAPI
+# handler starts it too, and the handler takes no application object. The event
+# exists while the lifespan is up and is None outside it; a handler that finds
+# None has no lifespan to hang a task on and starts nothing.
+_REBUILDING: asyncio.Task[None] | None = None
+_STOP_REBUILD: asyncio.Event | None = None
+
 # How finely the container notices that the idle span has run out. It is the
 # resolution of the idle clock and not the span itself: the smallest span an
 # admin may configure is 60 s, so an unload lands within less than half of the
@@ -271,8 +279,60 @@ async def enabled_handler(enabled: bool, nc: AsyncNextcloudApp) -> str:
             task.arm()
     if not enabled:
         _forget_the_enable()
+    # The same question the lifespan asks behind its arming, and the fix of
+    # review finding WR-02 of phase 21. Since plan 21-01 a drift of the schema,
+    # language or Dutch mark raises no generation any more, because the band run
+    # answers it; but the band run was only ever started by the lifespan, and
+    # only for a container that was enabled when it started. A container that
+    # starts disabled and is then switched on here indexed away with the drift
+    # unanswered and the reindex banner standing until the next restart.
+    #
+    # Caught whole, and the type name only, by the rule of this module: the
+    # enable has succeeded at this point, and a rebuild question that cannot be
+    # answered is a line in the log and never an enable that fails.
+    if enabled and not shared_volume:
+        try:
+            await _start_the_rebuild_if_due()
+        except Exception as error:
+            LOGGER.error("the rebuild question could not be asked at the enable, an %s", type(error).__name__)
     LOGGER.info("findling backend %s", "enabled" if enabled else "disabled")
     return ""
+
+
+async def _start_the_rebuild_if_due() -> bool:
+    """Create the fourth task when the marks ask for it and none is running.
+
+    One place for the three conditions the lifespan and the enable share: a
+    lifespan that is up (the stop event exists and is not set), no run already
+    in flight, and marks that ask for a directory rebuild. The caller decides
+    about the two conditions that differ between them, the mark of the last
+    enable and the shared volume.
+
+    The stop event and the running task are read a second time behind the
+    thread hop, and that is not redundancy: the question runs in a worker thread
+    for as long as the state database takes, and a shutdown or a second enable
+    can arrive on the loop in between. Nothing is awaited between the second
+    read and the creation, so on the one event loop nothing can come between
+    them either.
+    """
+    global _REBUILDING
+    if not _a_rebuild_may_start():
+        return False
+    if not await asyncio.to_thread(_rebuild_is_due):
+        return False
+    stop = _STOP_REBUILD
+    if stop is None or not _a_rebuild_may_start():
+        return False
+    _REBUILDING = asyncio.create_task(_rebuild_the_index_directory(stop))
+    LOGGER.info("findling rebuilds the index directory the changed version marks ask for")
+    return True
+
+
+def _a_rebuild_may_start() -> bool:
+    """True while a lifespan is up and no rebuild of this process is in flight."""
+    if _STOP_REBUILD is None or _STOP_REBUILD.is_set():
+        return False
+    return _REBUILDING is None or _REBUILDING.done()
 
 
 async def _guarded_reconcile(reconcile: Reconcile, stop_event: asyncio.Event) -> None:
@@ -800,11 +860,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # And nothing is rebuilt while nothing is armed. A container that was
     # deployed and never enabled holds no tantivy lock and touches no volume, and
     # a rebuild would be the largest possible way of breaking that promise.
+    #
+    # The event and the task live at module level since review finding WR-02 of
+    # phase 21, because the enable handler asks the same question for a
+    # container that starts disabled and is switched on later; the shutdown
+    # below therefore waits for whichever of the two created the task.
+    global _REBUILDING, _STOP_REBUILD
     stop_rebuild = asyncio.Event()
-    rebuilding: asyncio.Task[None] | None = None
-    if was_enabled and not shared_volume.other and await asyncio.to_thread(_rebuild_is_due):
-        rebuilding = asyncio.create_task(_rebuild_the_index_directory(stop_rebuild))
-        LOGGER.info("findling rebuilds the index directory the changed version marks ask for")
+    _STOP_REBUILD = stop_rebuild
+    _REBUILDING = None
+    if was_enabled and not shared_volume.other:
+        await _start_the_rebuild_if_due()
 
     try:
         yield
@@ -823,12 +889,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # inside a worker thread, and what it loses is that band and never more
         # than that band, because the commit behind every band is what the next
         # start resumes in.
+        rebuilding = _REBUILDING
         if rebuilding is not None:
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(asyncio.shield(rebuilding), timeout=REBUILD_STOP_SECONDS)
             if not rebuilding.done():
                 rebuilding.cancel()
                 await asyncio.gather(rebuilding, return_exceptions=True)
+        _REBUILDING = None
+        _STOP_REBUILD = None
 
         with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(asyncio.shield(indexing), timeout=POLLER_STOP_SECONDS)

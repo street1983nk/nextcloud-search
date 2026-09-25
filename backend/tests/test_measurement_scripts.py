@@ -1074,8 +1074,16 @@ PHP_TREE_HASH_TODAY = "a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab
 # the build through _cached_dutch_analyzer_locked, so threads that open at once
 # build one automaton and not one each. No file came and none went, so
 # PACKAGE_FILES_TODAY stays at 57.
+# Moved on 2026-09-25 by the fix of review finding WR-02 of phase 21: one of the
+# 57 files changed its bytes. main.py keeps the fourth task and its stop event at
+# module level (_REBUILDING, _STOP_REBUILD), puts the three shared conditions
+# into _start_the_rebuild_if_due and _a_rebuild_may_start, and enabled_handler
+# asks the rebuild question behind its arming, so a container that starts
+# disabled and is switched on later answers a drift of the schema, language or
+# Dutch mark without a restart. No file came and none went, so
+# PACKAGE_FILES_TODAY stays at 57.
 PACKAGE_FILES_TODAY = 57
-PACKAGE_TREE_HASH_TODAY = "1f5486e8a9f9fc540ced25e693519261a2f127d82a22a5bc9120b95b4b9a6890"
+PACKAGE_TREE_HASH_TODAY = "8d74e330f275d70ba72d471fd5b30ece7e643c115fbd548ae1b500729d5c3167"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
