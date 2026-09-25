@@ -26,6 +26,20 @@ on:
       # start nothing today, and the breakage would surface on the next commit
       # that happens to touch backend/** and be blamed on the wrong one.
       - 'docs/measurements/**'
+      # And once more for the l10n catalogues, since plan 20-02. The catalogue
+      # gates live in backend/tests/test_admin_ui_contract.py, their subject
+      # lives in php/l10n/, and a commit that only touches catalogues starts
+      # php.yml and integration.yml today but not one single catalogue gate. A
+      # gate that does not start cannot fall red: a catalogue that lost a key,
+      # declared the wrong plural rule or carried an em dash would ship, and the
+      # breakage would surface on the next commit that happens to touch
+      # backend/** and be blamed on the wrong one. The entry names the catalogue
+      # directory and deliberately not the whole of php/, because the rule at
+      # the head of this file says a commit must not spend runner minutes on
+      # gates that do not judge it, and a change to a template or to the PHP
+      # service is judged by integration.yml, which carries php/** in both of
+      # its lists already. Only the l10n catalogues are this workflow's business.
+      - 'php/l10n/**'
   pull_request:
     paths:
       - 'backend/**'
@@ -34,6 +48,11 @@ on:
       # Same reason as in the push list above: the gate of the measurement
       # scripts has to see its own subject.
       - 'docs/measurements/**'
+      # Same reason as in the push list above: the catalogue gates of
+      # test_admin_ui_contract.py have to see their own subject, and a pull
+      # request that changed nothing but a catalogue would otherwise be merged
+      # without a single l10n gate ever having run.
+      - 'php/l10n/**'
   # The measurement job below runs on these two only. It costs minutes and it
   # guards no regression, it produces a number, so it has no business in the loop
   # that has to answer a pull request quickly.
