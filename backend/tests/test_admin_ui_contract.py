@@ -113,9 +113,38 @@ L10N_DE_DE_JS = REPO_ROOT / "php" / "l10n" / "de_DE.js"
 L10N_FR_JSON = REPO_ROOT / "php" / "l10n" / "fr.json"
 L10N_FR_JS = REPO_ROOT / "php" / "l10n" / "fr.js"
 
-# All six catalogues in the order the gates below name them. Held as one tuple
-# so that a seventh file is added in one place and every gate sees it.
-L10N_CATALOGUES = (L10N_JSON, L10N_JS, L10N_DE_DE_JSON, L10N_DE_DE_JS, L10N_FR_JSON, L10N_FR_JS)
+# The fourth language, since plan 20-04, and the first of the four that
+# milestone v1.3 adds. Two files and not four, for the same reason as French:
+# one language, one code. The code is ``es`` and not ``es_ES`` because that is
+# the code the core carries for plain Spanish, and a catalogue under a code the
+# core does not know is a file Nextcloud never opens.
+#
+# The core ships ``es_EC`` and ``es_MX`` next to ``es``; Findling deliberately
+# ships neither, by the same decision that parks ``fr_CA``. A user on Spanish
+# (Mexico) therefore sees Findling in English, and the three reasons for that
+# are written out in section 2 of docs/l10n-catalogues.md, where the next reader
+# finds an argument to refute rather than a forgotten file to suspect.
+#
+# The wordings are cast from the table in docs/l10n-spanish.md. That document
+# carries a dated reservation and says in so many words that no native speaker
+# has read them: machine translation plus the open community review of the app
+# store, which is the accepted process E-17-5 and not an oversight. Both l10n
+# files of this language are cast from the same table in one pass.
+L10N_ES_JSON = REPO_ROOT / "php" / "l10n" / "es.json"
+L10N_ES_JS = REPO_ROOT / "php" / "l10n" / "es.js"
+
+# All catalogues in the order the gates below name them. Held as one tuple so
+# that the next file is added in one place and every gate sees it.
+L10N_CATALOGUES = (
+    L10N_JSON,
+    L10N_JS,
+    L10N_DE_DE_JSON,
+    L10N_DE_DE_JS,
+    L10N_FR_JSON,
+    L10N_FR_JS,
+    L10N_ES_JSON,
+    L10N_ES_JS,
+)
 
 # The common proof of every catalogue of milestone v1.3, written by plan 20-02:
 # where Nextcloud looks for a catalogue, which plural rule each language declares
@@ -409,6 +438,15 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
         "%1$s in %2$s": "two placeholders and the preposition between them, which German spells the same way",
         "PDF": "the proper name of a file format, the same abbreviation in every language of this tree",
         "Text": "the same word in German, and an invented difference would be a mistranslation",
+    },
+    # Spanish, read off the file on 25.09.2026 rather than guessed: the gate was
+    # run once with an empty list and reported four findings, two keys over two
+    # files. Both are proper names, and both would be a mistranslation if a
+    # difference were invented for them. Every other value of es.json carries a
+    # Spanish wording, which is why this list is shorter than the French one.
+    "es": {
+        "Findling": "the name of the app, the same word in every language of this tree",
+        "PDF": "the proper name of a file format, the same abbreviation in every language of this tree",
     },
     "fr": {
         "Findling": "the name of the app, the same word in all three languages",
