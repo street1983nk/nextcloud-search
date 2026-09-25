@@ -797,6 +797,26 @@ def scan_key_sets(keys_of: Mapping[str, frozenset[str]]) -> list[str]:
     ]
 
 
+def scan_value_equality(
+    name: str,
+    json_half: Mapping[str, str | list[str]],
+    js_half: Mapping[str, str | list[str]],
+) -> list[str]:
+    """Findings over the two files of one language: a key whose values differ.
+
+    The ``.json`` is what the server reads and the ``.js`` is what the browser
+    reads, so a value that drifted in one half only is a page on which PHP says
+    one sentence and the script another. A key that stands in only one half is a
+    finding here as well, and not left to the key set gate alone, so that this
+    scan says something true about every key it was handed.
+    """
+    return [
+        f"{name}: .json and .js carry different values for {key!r}"
+        for key in sorted(set(json_half) | set(js_half))
+        if json_half.get(key) != js_half.get(key)
+    ]
+
+
 def scan_completeness(
     name: str,
     catalogue: Mapping[str, str | list[str]],
@@ -2346,10 +2366,10 @@ def test_the_two_portuguese_catalogues_are_two() -> None:
     this one does not ask for any other difference either: where the two
     varieties agree, the values agree, and that is correct.
 
-    The .json halves are compared and not the .js ones, because the key set gate
-    and the cast of each .js out of its .json already hold the two halves of one
-    language together; a second comparison over the .js would be the same
-    question asked twice.
+    The .json halves are compared and not the .js ones, because
+    ``test_the_two_halves_of_every_language_carry_the_same_values`` holds the two
+    halves of one language together, key by key and value by value; a second
+    comparison over the .js would be the same question asked twice.
     """
     missing = [path.name for path in (L10N_PT_PT_JSON, L10N_PT_BR_JSON) if not path.is_file()]
     assert missing == [], f"catalogues are missing: {missing}"
@@ -2371,6 +2391,56 @@ def test_the_two_portuguese_catalogues_are_two() -> None:
     # A key of the list that one catalogue lost is a finding and not a silent
     # skip, so the list cannot quietly turn into names that no longer exist.
     assert len(scan_named_difference("a.json", same, "b.json", {}, {"Files": "ficheiros against arquivos"})) == 1
+
+
+def test_the_two_halves_of_every_language_carry_the_same_values() -> None:
+    """The .json and the .js of one language code say the same thing, word for word.
+
+    The key set gate compares keys and nothing else, and the plural rule gate
+    counts the forms of the .json only. A value corrected in one half, or a third
+    plural form lost in the .js alone, passed both of them: same keys, same
+    placeholders in every form that is there, same rule. The server then renders
+    one sentence and the browser another, which is the drift every other gate of
+    this file is written against. The .js files were cast out of their .json,
+    and that was a step of their making and never a check; this gate is the check.
+
+    The pairs are taken from ``L10N_CATALOGUES`` and not from a second list, so a
+    language that arrives there is compared here without a line of its own. A
+    code whose tuple carries only one of its two files is a finding that names
+    it, because a pair of one would be compared against nothing and pass.
+    """
+    missing = [path.name for path in L10N_CATALOGUES if not path.is_file()]
+    assert missing == [], f"catalogues are missing: {missing}"
+
+    halves_of: dict[str, dict[str, Path]] = {}
+    for path in L10N_CATALOGUES:
+        halves_of.setdefault(language_code_of(path), {})[path.suffix] = path
+    unpaired = sorted(code for code, halves in halves_of.items() if set(halves) != {".json", ".js"})
+    assert unpaired == [], f"language codes without both a .json and a .js: {unpaired}"
+    # The anti vacuity clause: a walk over no pairs would report a clean tree.
+    assert {"de", "de_DE", "fr"} <= set(halves_of), f"a shipped language lost its files: {sorted(halves_of)}"
+
+    findings = [
+        message
+        for code, halves in halves_of.items()
+        for message in scan_value_equality(code, catalogue_of(halves[".json"]), catalogue_of(halves[".js"]))
+    ]
+
+    assert findings == []
+    # And the scan can go red, in all three shapes of a drift: a sentence worded
+    # differently in the .js, a plural that lost its third form there, and a key
+    # that stands in one half only.
+    json_half: dict[str, str | list[str]] = {
+        "Reason": "Motivo",
+        "_%n day_::_%n days_": ["%n día", "%n días", "%n días"],
+        "Files": "Archivos",
+    }
+    js_half: dict[str, str | list[str]] = {
+        "Reason": "Motivos",
+        "_%n day_::_%n days_": ["%n día", "%n días"],
+    }
+    assert len(scan_value_equality("es", json_half, js_half)) == 3
+    assert scan_value_equality("es", json_half, dict(json_half)) == []
 
 
 def test_every_catalogue_value_carries_a_wording_of_its_language() -> None:

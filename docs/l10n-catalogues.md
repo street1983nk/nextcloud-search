@@ -394,6 +394,7 @@ Alle stehen in `backend/tests/test_admin_ui_contract.py`. Die ersten fünf laufe
 | `test_the_german_catalogue_covers_both_german_language_codes` | `de` und `de_DE` sind textgleich, dazu die harte Zahl 202 |
 | `test_the_two_translation_files_carry_the_same_keys` | `de.json` und `de.js` führen dieselben Schlüssel |
 | `test_the_two_portuguese_catalogues_are_two` | `pt_PT` und `pt_BR` unterscheiden sich unter den elf Schlüsseln von `PORTUGUESE_WORDINGS_THAT_MUST_DIFFER`, und nur dort wird ein Unterschied verlangt |
+| `test_the_two_halves_of_every_language_carry_the_same_values` | `.json` und `.js` jedes Sprachcodes tragen dieselben Werte, Form für Form; läuft ebenfalls über `L10N_CATALOGUES` |
 
 **Was geprüft ist:** Vollständigkeit, Platzhalter, Pluralformen, Typografie und die zwei
 Seitenzerstörer. **Was nicht geprüft ist:** die Wortwahl. Kein Gate kann sagen, ob ein
