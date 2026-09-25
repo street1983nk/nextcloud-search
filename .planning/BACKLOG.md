@@ -273,6 +273,13 @@ gemessene Startpunkt.
 BL-F04 der Kern des naechsten Milestones (v1.4), kein blosser Kandidat mehr.
 Beim /gsd:new-milestone nach dem v1.3-Abschluss zuerst diesen Eintrag laden.
 
+**OWNER-STEUERUNG 25.09.2026 (Gewichtung):** Die MEHRHEIT der Nutzer hat
+deutlich mehr Kerne und mehr RAM als die 4-GB-Referenzbox, und die Tendenz
+geht weiter in diese Richtung. Folge: Nebenlaeufigkeit/Parallelitaet ist der
+KERNFALL von BL-F04, nicht die Kuer; Profil-Vorschlag per Hardware-Erkennung
+beim ersten Start pruefen (erkannte Kerne/RAM, Admin bestaetigt). Der Default-
+Fallback bleibt das 4-GB-Versprechen (Entscheid 24.09. unveraendert).
+
 **OWNER-ENTSCHEID 25.09.2026: KEINE APP-SPALTUNG** ("wir spalten nicht").
 Erwogen war eine zweite Store-App fuer leistungsstarke Boxen; verworfen wegen
 doppelter Wartung (2 Store-Eintraege wuerden 4), Entscheidungslast beim
