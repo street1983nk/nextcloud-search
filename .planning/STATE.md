@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: executing
-stopped_at: Plan 22-01 abgeschlossen (W1 bis W4, aa56d76 8234aed b8448e4)
-last_updated: "2026-09-25T21:21:19.443Z"
-last_activity: 2026-09-25, Plan 22-01 ausgeführt
+stopped_at: Plan 22-02 abgeschlossen (92d, 92e, 90e, 91m, 9686b1e 0701cca)
+last_updated: "2026-09-25T21:45:00.000Z"
+last_activity: 2026-09-25, Plan 22-02 ausgeführt
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 59
-  completed_plans: 48
-  percent: 81
+  completed_plans: 49
+  percent: 83
 ---
 
 # Project State
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 ## Current Position
 
 Phase: 22 (messanfahrt-bl-f03), EXECUTING
-Plan: 2 of 12
-Status: Ready to execute 22-02 (Owner-Stopps: 22-06 Push-Freigabe, 22-07 Rechenblatt vor Boxstart, 22-12 Abnahme)
+Plan: 3 of 12
+Status: Ready to execute 22-03 (Owner-Stopps: 22-06 Push-Freigabe, 22-07 Rechenblatt vor Boxstart, 22-12 Abnahme)
 
 Aktueller Stand: PHASE 21 KOMPLETT 25.09.2026 (9/9 Plaene, goal-backward verified passed 9/9,
 phase.complete gelaufen, STATE von Hand nachgezogen). Niederlaendische Komposita sind Ende-zu-
@@ -236,13 +236,18 @@ Instanz den Erststempel der Verzeichnismarken; Folge: Feldplan blieb LEGACY, rot
 Fix-Beweis). Endstand-CI 36096526219 GRUEN 4/4 inkl. arm64. Suite 2877 passed / 15 skipped.
 LEHRE: ein Audit-Fix, der einen Schreiber entfernt, braucht die Frage "wer schreibt das
 sonst noch auf JEDEM Pfad" plus einen Frischinstanz-Fall, bevor er reist.
-Last activity: 2026-09-25, Plan 22-01 ausgeführt
+Last activity: 2026-09-25, Plan 22-02 ausgeführt
 
-Progress: [████████░░] 81% (48 von 59 Plänen, 5 von 7 Phasen)
+Progress: [████████░░] 83% (49 von 59 Plänen, 5 von 7 Phasen)
 
 ## Naechster Schritt
 
-**22-02 ausführen** (92d, 92e, 90e, 91m). 22-01 ist fertig: W1 cpu_sampler.sh, W2
+**22-03 ausführen** (94c, 95c, 98d). 22-02 ist fertig: 92d-wechsel.sh (ohne --rm-data, occ
+upgrade mit Rückgabewert 40, Bestandstor 52111/37/0 mit 41), 92e-umgebung.sh (Neubau mit einem
+Schalter, 42/43), 90e-einzelliste.py (Einzelliste und Markentor 0/44/45) und
+91m-langsame-aufrufe.py im Laufverzeichnis 2026-09-v13-messung (9686b1e, 0701cca), nur lokal.
+
+Vorher: 22-01 ist fertig: W1 cpu_sampler.sh, W2
 proc_anon_sampler.sh, W3 ocr_slot_probe.py und der W4-Job `slots` in measure.yml stehen
 (aa56d76, 8234aed, b8448e4), nur lokal committet; der W4-CI-Lauf folgt in 22-06 nach
 Push-Freigabe. MESS-07 bleibt offen, bis die Box-Anfahrt gelaufen ist.
@@ -314,7 +319,7 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
 |-------|-------|-------|----------|
 | 20 | 9 | - | - |
 | 21 | 9 | 1 Tag | - |
-| 22 | 1/12 | 12 min (22-01) | - |
+| 22 | 2/12 | 12 min (22-01), 30 min (22-02) | - |
 
 ## Accumulated Context
 
@@ -326,6 +331,12 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
   scheitert.
 - W3 zählt einen abgeschnittenen oder fehlgeschlagenen Slot als verloren, fährt je Worker
   einen ungezählten Vorlauf und importiert findling und pypdfium2 erst in Funktionen (22-01).
+- 92d ist der erste Wechsel der Anfahrt: PHP-Hälfte und occ upgrade VOR dem unregister (ohne
+  Schalter), die Instanzzählung unmittelbar darüber. Das Bestandstor liest indexiert aus der
+  state.db des laufenden Containers und übersprungen/fehlgeschlagen aus occ findling:index,
+  weil die PHP-Hälfte indexed nie schreibt; es verlangt eine Marke für das Bestehen (22-02).
+- Das Markentor 90e folgt den gelockerten Vergleichen des Stores (index_version als
+  Untergrenze, tantivy_version nach index_format); 44 gewinnt gegen 45 (22-02).
 
 - Ein CI-Sprachbeweis liest seinen Erwartungswert aus dem Katalog und traegt die Abwesenheit
   des englischen Quellsatzes als eigentliche Zusicherung (20-09). Ein Satz in der YAML waere
@@ -602,11 +613,14 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
 
 ## Deferred Items
 
-Keine offenen Deferred Items (die drei Debug-Sessions aus v1.1 sind am 21.09.2026 formal
-auf resolved gesetzt).
+- 22-02: 92c endet bei einem unerwarteten Abbruch im Phase-B-Block mit 0 (Klasse L-03); in
+  92d und 92e abgefangen, 92c selbst unverändert. Details in
+  .planning/phases/22-messanfahrt-bl-f03/deferred-items.md.
+
+Sonst keine (die drei Debug-Sessions aus v1.1 sind am 21.09.2026 formal auf resolved gesetzt).
 
 ## Session Continuity
 
-Last session: 2026-09-25T21:21:19.419Z
-Stopped at: Plan 22-01 abgeschlossen
-Resume file: .planning/phases/22-messanfahrt-bl-f03/22-02-PLAN.md
+Last session: 2026-09-25T21:45:00.000Z
+Stopped at: Plan 22-02 abgeschlossen
+Resume file: .planning/phases/22-messanfahrt-bl-f03/22-03-PLAN.md

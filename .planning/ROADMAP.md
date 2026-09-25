@@ -242,7 +242,7 @@ Plans:
 **Wave 1**
 
 - [x] 22-01-PLAN.md: W1 cpu_sampler.sh, W2 proc_anon_sampler.sh, W3 ocr_slot_probe.py, W4-Job auf arm64 mit F4-Definition
-- [ ] 22-02-PLAN.md: 92d (Wechsel ohne --rm-data, occ upgrade), 92e (Neubau mit Umgebung), 90e (Einzelliste, Markentor), 91m (M-01-Leser)
+- [x] 22-02-PLAN.md: 92d (Wechsel ohne --rm-data, occ upgrade), 92e (Neubau mit Umgebung), 90e (Einzelliste, Markentor), 91m (M-01-Leser)
 - [ ] 22-03-PLAN.md: 94c (Bodensatz-Zyklus 2), 95c (Kaltstart mit Trefferpflicht), 98d (dismax-Probe) mit Unit-Test
 - [ ] 22-04-PLAN.md: 00-wegwerf.sh (B3, B5, B4) und 00-typwechsel.sh (Shutdown-Vorprüfung, m7g.4xlarge)
 
@@ -306,7 +306,7 @@ Plans:
 | 19. Frageseite freischalten | v1.3 | 9/9 | Complete    | 2026-09-25 |
 | 20. UI-Kataloge es/it/nl/pt | v1.3 | 9/9 | Complete    | 2026-09-25 |
 | 21. Niederlaendische Komposita | v1.3 | 9/9 | Complete    | 2026-09-25 |
-| 22. Messanfahrt BL-F03 | v1.3 | 1/12 | In Progress | - |
+| 22. Messanfahrt BL-F03 | v1.3 | 2/12 | In Progress | - |
 | 23. Haertung und Store-Einreichung 1.3.0 | v1.3 | 0/TBD | Not started | - |
 
 ## Requirement-Abdeckung v1.3
