@@ -4706,8 +4706,9 @@ jobs:
           # The log of the window, and the log of the whole life of this
           # container, as two files. The window is what assurance 7 is about,
           # because an indexing pass AFTER the rebuild is ordinary work and not
-          # a violation; the whole log is what assurance 8 is about, because the
-          # drift line is written once per drift and the question is how often.
+          # a violation; the whole log is what assurance 8 is about, because a
+          # drift line written at any point of the life of this container is a
+          # raised generation, and the band run is supposed to need none.
           window_log="${RUNNER_TEMP}/rebuild-window.log"
           whole_log="${RUNNER_TEMP}/rebuild-exapp.log"
           docker logs --until "${rebuild_end}" "${container}" > "${window_log}" 2>&1
@@ -4848,23 +4849,27 @@ jobs:
             fi
           fi
 
-          echo "--- 8, exactly one drift line, not none and not two ---"
+          echo "--- 8, no drift line: the band run answers the language jump, no generation is raised ---"
           # The sentence start_rebuild_on_drift writes when it raises the
-          # generation, counted over the whole life of this container. One is
-          # the right answer: the poller opens the state database at its start,
-          # finds the language mark of the old set and says so once. Two would
-          # mean the fingerprint next to the generation did not hold, so a
-          # restart in the middle of a rebuild would start the rebuild again,
-          # which is the REBUILD_MARK promise of findling.index.open. None would
-          # mean the drift was never noticed at all, and then the rebuild that
-          # did run was ordered by something this proof did not see.
+          # generation, counted over the whole life of this container. None is
+          # the right answer since plan 21-01 (owner decision of 2026-09-25):
+          # the poller opens the state database with the schema mark and the
+          # language mark exempted (answered_elsewhere=MARKS_A_REBUILD_ANSWERS),
+          # because the band run carries the documents over and makes both
+          # marks true. Until then this assurance demanded exactly one line,
+          # and that line was a raised generation: every stored verdict went
+          # stale and the next crawl read every file again, a full reindex
+          # behind the re-analysis that exists to spare it. One or more lines
+          # here mean that raise is back. That the drift was noticed at all is
+          # proved elsewhere in this step: the rebuild banner was observed up
+          # and the languages mark moved, and neither happens without it.
           drift=$(grep -c 'built by different code' "${whole_log}" || true)
-          if [ "${drift}" != "1" ]; then
-            echo "::error::the container log carries ${drift} line(s) of start_rebuild_on_drift and exactly one is the right number"
+          if [ "${drift}" != "0" ]; then
+            echo "::error::the container log carries ${drift} line(s) of start_rebuild_on_drift, so the language jump raised the generation and ordered a full reindex behind the band run"
             grep -n 'built by different code' "${whole_log}" || true
             fail=1
           else
-            echo "exactly one start_rebuild_on_drift line in $(wc -l < "${whole_log}") lines of container log"
+            echo "no start_rebuild_on_drift line in $(wc -l < "${whole_log}") lines of container log"
           fi
 
           echo "--- 9, the vector stock is byte for byte the same file ---"
@@ -4923,7 +4928,7 @@ jobs:
             echo "- the schema mark moved by exactly one step, the languages mark reads \`${REBUILD_LANGUAGES_NORMALISED}\`"
             echo "- the rebuild banner was observed up while the run was on and down after it, in ${running_rounds} of ${rounds} readings"
             echo "- unchanged: the hits for Belehrung, Auszug and Erinnerung, the document counts, the work stock"
-            echo "- a search inside the run answered with hits, no indexing pass ran during it, exactly one \`built by different code\` line"
+            echo "- a search inside the run answered with hits, no indexing pass ran during it, no \`built by different code\` line (no generation raised)"
             echo "- \`vectors.db\` is byte for byte the same file"
             echo "- the Spanish question \`alemanes\` went from 0 hits to 1 across the rebuild: nought on the released installation, nought after the upgrade and before this rebuild, one after it"
           } >> "${GITHUB_STEP_SUMMARY}"

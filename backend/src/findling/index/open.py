@@ -230,7 +230,9 @@ def fingerprint(expected: Mapping[str, str]) -> str:
     return hashlib.sha256(material.encode("utf-8")).hexdigest()[:16]
 
 
-def start_rebuild_on_drift(store: Store, expected: Mapping[str, str]) -> int | None:
+def start_rebuild_on_drift(
+    store: Store, expected: Mapping[str, str], *, answered_elsewhere: frozenset[str] = frozenset()
+) -> int | None:
     """Raise the local generation when the index was built by other code.
 
     Returns the new generation, or None when there is nothing to rebuild.
@@ -255,8 +257,24 @@ def start_rebuild_on_drift(store: Store, expected: Mapping[str, str]) -> int | N
     **What it does not do is declare anything current.** The marks stay as they
     are, so the banner stays up for as long as the work is not through. That is
     :func:`stamp_after_rebuild`'s job and nobody else's.
+
+    **Why a drift answered elsewhere must not raise the generation.**
+    ``answered_elsewhere`` names the marks another remedy takes care of, and the
+    poller hands in :data:`findling.index.rebuild.MARKS_A_REBUILD_ANSWERS`: the
+    schema mark and the language mark, which the band run makes true by carrying
+    the documents over. Raising the generation for one of those would turn the
+    re-analysis the owner chose in phase 17 into a full reindex of every file on
+    top of it. The planning probe of 2026-09-25 (a volume built under de,en,
+    opened under de,en,nl) and CI run 36072411846 ("Store upgrade 5") both saw
+    exactly that: the generation went from 1 to 2 on the opening alone. The
+    exempted marks stay drifted, so the band run still sees what it has to
+    answer, and a drift of any other mark still raises. The fingerprint is still
+    taken over the whole expectation. The fallback branch of
+    :func:`findling.index.rebuild.rebuild_the_index` calls this function without
+    the argument on purpose, because there the crawl is the chosen remedy for
+    the language drift as well.
     """
-    if not store.version_mismatch(expected):
+    if not [name for name in store.version_mismatch(expected) if name not in answered_elsewhere]:
         return None
 
     wanted = fingerprint(expected)
