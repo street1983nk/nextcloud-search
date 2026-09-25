@@ -410,3 +410,230 @@ jobs:
           path: ${{ env.OUT }}/*
           if-no-files-found: error
           retention-days: 30
+
+  # W4 of phase 22: the OCR slot curve on the target architecture, in the free
+  # arm64 runner and not in paid box time. It answers decision D-03 before the
+  # cost sheet of the box run is written: does a second, third or fourth OCR
+  # slot buy throughput, or only memory. A job of its own and not a step of the
+  # matrix above, because it has one architecture only and the job above is
+  # left exactly as it was, so that its numbers stay comparable with the runs
+  # already quoted in the reports.
+  #
+  # Every container of this job that runs the product image runs with
+  # --network none (T-22-04). The one container that does not is the B7 probe
+  # at the end, which is a plain python base image that installs the pinned
+  # Dutch word list and the pinned engine through apt and pip; it sees no
+  # product data and no secret.
+  slots:
+    name: W4 slot curve on arm64
+    runs-on: ubuntu-24.04-arm
+    # Three slot counts of three timed rounds of an eight page scan, plus one
+    # warm up each, the single mode, three bench runs and the B7 probe. On four
+    # arm cores that is well inside half an hour; forty minutes is a bound and
+    # not the default 360.
+    timeout-minutes: 40
+    steps:
+      # The same three pins as the job above (test_workflow_pins.py, rule 5).
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The same input check as in the job above: the input is read out of the
+      # environment inside the shell and matched against a pattern before it
+      # reaches a command line (T-22-03).
+      - name: Resolve the image to a digest
+        id: image
+        env:
+          IMAGE_REF: ${{ inputs.image_ref }}
+        run: |
+          ref="${IMAGE_REF:-dev}"
+          if ! printf '%s' "${ref}" | grep -Eq '^(sha256:[0-9a-f]{64}|[A-Za-z0-9._-]{1,128})$'; then
+            echo "the image reference ${ref} is neither a digest nor a plain tag"
+            exit 1
+          fi
+          case "${ref}" in
+            sha256:*) target="${IMAGE}@${ref}" ;;
+            *)        target="${IMAGE}:${ref}" ;;
+          esac
+          docker pull "${target}"
+          digest=$(docker image inspect --format '{{join .RepoDigests ","}}' "${target}")
+          echo "requested ${target}"
+          echo "digest    ${digest}"
+          echo "target=${target}" >> "${GITHUB_OUTPUT}"
+          echo "digest=${digest}" >> "${GITHUB_OUTPUT}"
+
+      - name: The image has to carry the measuring tool
+        env:
+          TARGET: ${{ steps.image.outputs.target }}
+        run: |
+          if ! docker run --rm --network none --entrypoint python "${TARGET}" \
+              -m findling.embed.bench --help > /dev/null; then
+            echo "this image has no findling.embed.bench."
+            exit 1
+          fi
+          mkdir -p "${OUT}"
+
+      # What the numbers below are numbers of (T-06-07). The cpu sets of the
+      # steps below assume four visible cores, and this sheet is where a runner
+      # with fewer would show.
+      - name: Write down the machine
+        env:
+          TARGET: ${{ steps.image.outputs.target }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          {
+            echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "runner=ubuntu-24.04-arm"
+            echo "role=w4"
+            echo "arch=$(uname -m)"
+            echo "kernel=$(uname -r)"
+            echo "cpus=$(nproc)"
+            echo "image=${TARGET}"
+            echo "digest=${DIGEST}"
+            echo "run=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo "commit=${GITHUB_SHA}"
+          } | tee "${OUT}/machine.txt"
+          echo "::group::lscpu"
+          lscpu | tee -a "${OUT}/machine.txt"
+          echo "::endgroup::"
+          echo "::group::memory"
+          free -m | tee -a "${OUT}/machine.txt"
+          echo "::endgroup::"
+
+      # The scan the probe reads: eight synthetic pages out of the generator of
+      # the load corpus, with a fixed seed, so every run of this job reads the
+      # same pixels. Never a user file. The generator needs its pinned font,
+      # which it finds two directories above itself, hence the two mounts under
+      # one root. The container writes as the runner user, because the image
+      # user cannot write into a directory of the runner.
+      - name: A, the synthetic scan
+        env:
+          TARGET: ${{ steps.image.outputs.target }}
+        run: |
+          mkdir -p "${RUNNER_TEMP}/scan"
+          docker run --rm --network none --user "$(id -u):$(id -g)" \
+            -e PYTHONDONTWRITEBYTECODE=1 \
+            -v "${GITHUB_WORKSPACE}/scripts/dev:/repo/scripts/dev:ro" \
+            -v "${GITHUB_WORKSPACE}/testdata/fonts:/repo/testdata/fonts:ro" \
+            -v "${RUNNER_TEMP}/scan:/scan" \
+            --entrypoint /app/.venv/bin/python "${TARGET}" \
+            -c 'import sys; sys.path.insert(0, "/repo/scripts/dev"); import build_load_corpus as corpus; open("/scan/scan-8.pdf", "wb").write(corpus._scan_pdf(corpus.Rng("phase-22-w4", "scan-8"), 8))'
+          {
+            echo "pages=8"
+            echo "bytes=$(stat -c %s "${RUNNER_TEMP}/scan/scan-8.pdf")"
+            echo "sha256=$(sha256sum "${RUNNER_TEMP}/scan/scan-8.pdf" | cut -d' ' -f1)"
+          } | tee "${OUT}/scan.txt"
+
+      # W3 for N = 1, 2 and 4, and the cpu set grows with N: one slot on one
+      # core, two on two, four on four. That is the curve D-03 asks about, a
+      # slot per core, and the cpu set is what makes cpus_visible in the output
+      # true. scripts/ops is not in the image, so the probe is mounted.
+      - name: B, W3 slot curve
+        env:
+          TARGET: ${{ steps.image.outputs.target }}
+        run: |
+          for combination in "1 0" "2 0,1" "4 0-3"; do
+            set -- ${combination}
+            echo "::group::slots $1 on cpu set $2"
+            docker run --rm --network none --cpuset-cpus "$2" \
+              -v "${GITHUB_WORKSPACE}/scripts/ops:/ops:ro" \
+              -v "${RUNNER_TEMP}/scan:/scan:ro" \
+              --entrypoint /app/.venv/bin/python "${TARGET}" \
+              /ops/ocr_slot_probe.py --slots "$1" --rounds 3 --scan /scan/scan-8.pdf \
+              | tee "${OUT}/w3-slots-$1.txt"
+            echo "::endgroup::"
+          done
+
+      # W3 single mode on four cores: tesseract on one rendered page with
+      # OMP_THREAD_LIMIT=1 and without it. It checks the sentence of
+      # docs/performance.md that says tesseract uses both cores.
+      - name: C, W3 single mode
+        env:
+          TARGET: ${{ steps.image.outputs.target }}
+        run: |
+          docker run --rm --network none --cpuset-cpus 0-3 \
+            -v "${GITHUB_WORKSPACE}/scripts/ops:/ops:ro" \
+            -v "${RUNNER_TEMP}/scan:/scan:ro" \
+            --entrypoint /app/.venv/bin/python "${TARGET}" \
+            /ops/ocr_slot_probe.py --mode single --rounds 3 --scan /scan/scan-8.pdf \
+            | tee "${OUT}/w3-single.txt"
+
+      # The embedding side of the same question: tokens per second with 1, 2
+      # and 4 threads, each on a cpu set of the same width.
+      - name: D, embedding threads
+        env:
+          TARGET: ${{ steps.image.outputs.target }}
+        run: |
+          for combination in "1 0" "2 0,1" "4 0-3"; do
+            set -- ${combination}
+            echo "::group::threads $1 on cpu set $2"
+            docker run --rm --network none --cpuset-cpus "$2" \
+              --entrypoint python "${TARGET}" \
+              -m findling.embed.bench --mode tokens-per-second \
+              --batch 2 --sequence 512 --threads "$1" \
+              | tee "${OUT}/bench-threads-$1.txt"
+            echo "::endgroup::"
+          done
+
+      # B7: the resident memory of the Dutch automaton, natively on arm64,
+      # with the call form of the script head. The memory mode writes ram.txt
+      # with three runs; the case numbers of the same run go along beside it.
+      - name: E, B7 Dutch automaton memory
+        run: |
+          sh scripts/dev/measure_compounds_nl.sh "${RUNNER_TEMP}/b7"
+          cp "${RUNNER_TEMP}/b7/ram.txt" "${OUT}/b7-nl-automat.txt"
+          cp "${RUNNER_TEMP}/b7/kennzahlen.txt" "${OUT}/b7-kennzahlen.txt"
+          cat "${OUT}/b7-nl-automat.txt"
+
+      # F4, defined here before the first run and not after it:
+      #
+      #   F4 = pages per second at N = 4 on --cpuset-cpus 0-3, divided by pages
+      #        per second at N = 1 on --cpuset-cpus 0, each the median of three
+      #        timed rounds (pages_per_second_median of w3-slots-4.txt over the
+      #        one of w3-slots-1.txt).
+      #
+      # D-03 applies its threshold of 1.5 to this number. A missing or non
+      # numeric median, a median of zero at N = 1, or any round with a lost
+      # slot leaves F4 undetermined, and then the step writes "F4 unbestimmt"
+      # and fails rather than hand over a quotient of a broken run.
+      # It runs even when the B7 step above failed: B7 is the first thing to
+      # go when time is short (D-05), F4 is what the job is for.
+      - name: F, F4
+        if: ${{ !cancelled() }}
+        run: |
+          median() {
+            awk '$1 == "pages_per_second_median" { print $2 }' "$1" 2>/dev/null || true
+          }
+          one=$(median "${OUT}/w3-slots-1.txt")
+          four=$(median "${OUT}/w3-slots-4.txt")
+          lost=$(cat "${OUT}"/w3-slots-*.txt 2>/dev/null | awk '
+            $1 == "round" { for (i = 1; i < NF; i++) if ($i == "failed_slots" && $(i + 1) != "0") n++ }
+            END { print n + 0 }')
+          valid=yes
+          for value in "${one}" "${four}"; do
+            case "${value}" in
+              '' | *[!0-9.]*) valid=no ;;
+            esac
+          done
+          if [ "${valid}" = yes ] && [ "${lost}" = 0 ] && awk -v one="${one}" 'BEGIN { exit !(one > 0) }'; then
+            awk -v one="${one}" -v four="${four}" 'BEGIN { printf "F4 %.3f\n", four / one }' | tee "${OUT}/f4.txt"
+          else
+            echo "F4 unbestimmt" | tee "${OUT}/f4.txt"
+            echo "n1=${one:-missing} n4=${four:-missing} rounds_with_lost_slots=${lost}"
+            exit 1
+          fi
+
+      - name: Hand the raw output over
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: w4-arm64
+          path: ${{ env.OUT }}/*
+          if-no-files-found: error
+          retention-days: 30
