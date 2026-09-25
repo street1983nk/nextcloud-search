@@ -345,3 +345,103 @@ Die harte Zahl im Gate steht in
 `test_the_german_catalogue_covers_both_german_language_codes`, und der Docstring darüber
 verlangt wörtlich, dass wer sie anfasst den nächsten Absatz schreibt. Wer nur die
 Schlüssel**namen** ändert, schreibt ihn ebenfalls: der Absatz ist das Gedächtnis dieser Datei.
+
+**Nachgezählt am 25.09.2026, Plan 20-09:** weiterhin **202** Schlüssel, davon **5**
+Pluralschlüssel. Die Zahl hat sich zwischen Plan 20-02 und dem Ende der Phase nicht bewegt.
+
+---
+
+## Stand nach Phase 20
+
+Alle Zahlen dieses Abschnitts sind am 25.09.2026 aus dem Baum gezählt.
+
+### 1. Die ausgelieferten Dateien
+
+Unter `php/l10n/` liegen **16** Dateien: **acht** Sprachcodes, je eine `.json` für PHP und eine
+`.js` für den Browser, jede mit denselben 202 Schlüsseln.
+
+| Sprachcode | Dateien | Sprachdokument | ausgeliefert seit |
+|---|---|---|---|
+| `de` | `de.json`, `de.js` | keines, Deutsch ist die Bezugssprache | Phase 9 |
+| `de_DE` | `de_DE.json`, `de_DE.js` | keines, textgleich mit `de` | Phase 9 |
+| `fr` | `fr.json`, `fr.js` | `docs/l10n-french.md` | Plan 11-08 |
+| `es` | `es.json`, `es.js` | `docs/l10n-spanish.md` | Plan 20-04 |
+| `it` | `it.json`, `it.js` | `docs/l10n-italian.md` | Plan 20-05 |
+| `nl` | `nl.json`, `nl.js` | `docs/l10n-dutch.md` | Plan 20-06 |
+| `pt_PT` | `pt_PT.json`, `pt_PT.js` | `docs/l10n-portuguese.md` | Plan 20-07 |
+| `pt_BR` | `pt_BR.json`, `pt_BR.js` | `docs/l10n-portuguese.md` | Plan 20-08 |
+
+Deutsch hat kein eigenes Sprachdokument, weil es die Sprache ist, gegen die jede andere
+Tabelle geschrieben wird: die Schlüsselmenge von `de.json` ist die Menge, die alle anderen
+Kataloge führen müssen. Die beiden portugiesischen Codes teilen sich ein Dokument mit vier
+Spalten, weil ihre Unterschiede an einer Stelle nebeneinander lesbar sein sollen. Eine
+`php/l10n/pt.json` gibt es nicht und wird es nicht geben, der Grund steht in Abschnitt 1.
+
+### 2. Die Gates, die die Kataloge halten
+
+Alle stehen in `backend/tests/test_admin_ui_contract.py`. Die ersten fünf laufen über das Tupel
+`L10N_CATALOGUES` und nehmen jede weitere Sprache mit, sobald sie dort eingetragen ist.
+
+| Gate | sichert zu |
+|---|---|
+| `test_no_file_of_the_page_carries_a_dash_or_an_emoji` | Typografie: kein Gedankenstrich und kein Symbolzeichen in einer der sechzehn Dateien |
+| `test_every_catalogue_carries_the_same_keys` | Vollständigkeit der Schlüssel: jede Datei führt genau die Schlüsselmenge von `de.json`, kein Schlüssel fehlt, keiner ist zu viel |
+| `test_every_catalogue_value_carries_a_wording_of_its_language` | Vollständigkeit der Werte: kein Wert ist gleich seinem englischen Schlüssel, außer den je Sprachcode benannten Ausnahmen in `VALUES_THAT_MAY_EQUAL_THEIR_KEY` |
+| `test_no_catalogue_value_loses_or_invents_a_placeholder` | Platzhalter: jeder Wert trägt dieselben `%s`, `%1$s`, `%n` wie sein Schlüssel |
+| `test_no_catalogue_value_can_break_the_page` | die zwei Seitenzerstörer: kein nacktes Prozentzeichen (weiße Seite über `vsprintf`) und kein senkrechter Strich (englische Fehlermeldung über die Pluralverbindung) |
+| `test_every_catalogue_carries_the_plural_rule_of_its_language` | Pluralformen: `pluralForm` und das vierte Argument von `OC.L10N.register` sind je Code die Regel aus `PLURAL_FORM_OF`, und jeder Pluralwert trägt `FORM_COUNT_OF` Formen |
+| `test_the_rule_table_of_the_documentation_and_the_constant_are_one_string` | die Regeltabelle in Abschnitt 3 dieses Dokuments und `PLURAL_FORM_OF` sind zeichengleich |
+| `test_the_german_catalogue_covers_both_german_language_codes` | `de` und `de_DE` sind textgleich, dazu die harte Zahl 202 |
+| `test_the_two_translation_files_carry_the_same_keys` | `de.json` und `de.js` führen dieselben Schlüssel |
+| `test_the_two_portuguese_catalogues_are_two` | `pt_PT` und `pt_BR` unterscheiden sich unter den elf Schlüsseln von `PORTUGUESE_WORDINGS_THAT_MUST_DIFFER`, und nur dort wird ein Unterschied verlangt |
+
+**Was geprüft ist:** Vollständigkeit, Platzhalter, Pluralformen, Typografie und die zwei
+Seitenzerstörer. **Was nicht geprüft ist:** die Wortwahl. Kein Gate kann sagen, ob ein
+spanischer Satz richtig, rund oder höflich ist; es kann nur sagen, dass er da ist, dass er die
+Seite nicht zerlegt und dass er die Platzhalter an der richtigen Stelle trägt.
+
+### 3. Der CI-Beweis
+
+Der Job `search-parity` in `.github/workflows/integration.yml` führt seit Plan 20-09 den
+Schritt "The result page answers in every new language (core lang)". Er steht nach der
+Anmeldung der Konten und vor dem ersten Suchszenario und tut für jeden der fünf Codes `es`,
+`it`, `nl`, `pt_PT`, `pt_BR` dasselbe:
+
+1. den Wert zum Schlüssel `Search your file contents` aus der installierten
+   `apps/findling/l10n/<code>.json` lesen; ist er leer oder gleich dem Schlüssel, bricht der
+   Schritt ab,
+2. die Nutzersprache des Owner-Kontos mit `occ user:setting ... core lang <code>` setzen,
+3. die Ergebnisseite ohne Suchbegriff mit der Sitzung dieses Kontos abrufen und HTTP 200
+   verlangen,
+4. prüfen, dass die Antwort den übersetzten Titel enthält **und** den englischen Titel nicht
+   mehr enthält.
+
+Danach setzt ein `trap` die Nutzersprache auf ihren Ausgangswert zurück, auch nach einem
+Fehlschlag; war keiner gesetzt, wird die Einstellung gelöscht.
+
+**Was er beweist:** dass jede der fünf Dateien auf dem normalen Ladeweg der Nextcloud gefunden
+und benutzt wird, also Dateiname, Sprachauflösung und Einbindung stimmen. Das ist der Fehler,
+den kein Schlüsselgate sehen kann. Der Erwartungswert kommt aus dem Katalog, also veraltet der
+Schritt nicht, wenn ein Wortlaut berichtigt wird.
+
+**Was er nicht beweist:** er fragt einen Satz je Sprache, auf einer Seite, serverseitig
+gerendert. Die Adminseite, die Ergebnisseite mit Treffern, die Sätze, die erst das Skript im
+Browser schreibt, und die Pluralformen sieht er nicht. Das bleibt die Aufgabe der Gates und der
+menschlichen Sichtprobe aus Plan 20-09.
+
+### 4. Der Vorbehalt und die benannten Grenzen
+
+**Die vier neuen Sprachen sind maschinell erzeugt und von keinem Muttersprachler gelesen
+worden.** Das ist der gesperrte Entscheid E-17-5, Option a: Korrektur über das offene
+Community-Review, das jede App im Nextcloud App Store hat, und die Auslieferung wartet nicht
+darauf. Jedes der vier Sprachdokumente trägt den Vorbehalt datiert in seinem eigenen Abschnitt;
+Französisch ist davon ausgenommen, weil es vom Owner abgenommen ist.
+
+Die benannten Grenzen, an einer Stelle gesammelt:
+
+| Grenze | Folge | ausgeführt in |
+|---|---|---|
+| `es_EC` und `es_MX` werden nicht ausgeliefert | ein Nutzer auf Spanisch (Mexiko) oder (Ecuador) sieht Findling auf Englisch | Abschnitt 2 dieses Dokuments |
+| die portugiesische Rechtschreibreform wird nicht vereinheitlicht | die Kataloge schreiben durchgehend die reformierte Form (`atualizar`, nicht `actualizar`), ohne Gate darüber | `docs/l10n-portuguese.md` |
+| keine getrennten Suchwortlaute für `pt_PT` und `pt_BR` | die Varietäten unterscheiden sich in der Oberfläche; Index, Wortzerlegung und Trefferbewertung sind für beide dieselben | `docs/l10n-portuguese.md` |
+| bei n gleich 0 wählen PHP und JS für die portugiesischen Codes verschiedene Formen | für `pt_PT` zeigt eine auf 0 Sekunden gerundete Sperrzeile im Server-HTML eine andere Endung als nach dem ersten Poll; für `pt_BR` wählen beide Seiten gemessen dieselbe Form | Abschnitt 5 dieses Dokuments |
