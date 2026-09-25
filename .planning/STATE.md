@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: executing
-stopped_at: 20-06 gebaut und committet (3f76cdc, e7ed056, d40e335), Gates lokal gruen, NICHT gepusht
-last_updated: "2026-09-25T12:20:00.000Z"
-last_activity: 2026-09-25 -- 20-06 ausgefuehrt, Niederlaendisch ausgeliefert
+stopped_at: 20-07 gebaut und committet (e3fc290, 2824a4b, 7ae78d6), Gates lokal gruen, NICHT gepusht
+last_updated: "2026-09-25T13:15:00.000Z"
+last_activity: 2026-09-25 -- 20-07 ausgefuehrt, europaeisches Portugiesisch ausgeliefert
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 38
-  completed_plans: 35
+  completed_plans: 36
   percent: 46
 ---
 
@@ -21,12 +21,44 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 20 (ui-kataloge) laeuft; 20-01 abgenommen, 20-02 bis 20-06 gebaut
+**Current focus:** Phase 20 (ui-kataloge) laeuft; 20-01 abgenommen, 20-02 bis 20-07 gebaut
 
 ## Current Position
 
-Phase: 20 (ui-kataloge-es-it-nl-pt), 6 of 9 gebaut; Phase 19 COMPLETE 25.09.2026
-Status: 20-06 (der niederlaendische Katalog) ist gebaut und committet (3f76cdc nl.json plus
+Phase: 20 (ui-kataloge-es-it-nl-pt), 7 of 9 gebaut; Phase 19 COMPLETE 25.09.2026
+Status: 20-07 (der europaeisch-portugiesische Katalog) ist gebaut und committet (e3fc290
+pt_PT.json plus pt_PT.js, 2824a4b Gate-Eintrag, 7ae78d6 docs/l10n-portuguese.md). DREI Commits,
+wie bei Niederlaendisch: der Rule-3-Fix am Vokabular-Gate war wieder nicht noetig.
+php/l10n/pt_PT.json und pt_PT.js fuehren dieselben 202 Schluessel wie de.json, fuenf Pluralwerte
+mit DREI Formen (Form 1 gleich Form 2), pluralForm
+nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % 1000000 == 0 ? 1 : 2;
+zeichengleich aus docs/l10n-catalogues.md. L10N_CATALOGUES fuehrt jetzt VIERZEHN Eintraege.
+VALUES_THAT_MAY_EQUAL_THEIR_KEY["pt_PT"] fuehrt ZWEI begruendete Eintraege (Findling, PDF),
+gemessen per Lauf mit leerem Mapping: vier Funde, zwei Schluessel ueber zwei Dateien. Das ist
+die KUERZESTE Liste des Baums, gleichauf mit Spanisch; %1$s in %2$s faellt weg, weil das
+Portugiesische em schreibt, und Spreadsheets faellt weg, weil es folhas de calculo heisst.
+docs/l10n-portuguese.md (566 Zeilen, neun Abschnitte PLUS "Was diese Kataloge nicht leisten",
+202 Tabellenzeilen in drei Spalten) traegt den datierten Vorbehalt vom 25.09.2026 mit dem Satz
+"von keinem Muttersprachler gelesen". Es gibt KEINE php/l10n/pt.json und keine pt.js, und es
+gibt KEIN Textgleichheits-Gate pt_PT gegen pt_BR. Das Gate hat KEINE Logikaenderung gebraucht:
+56 Zufuegungen, 0 Loeschungen (it 39, nl 55, pt_PT 56; der Unterschied ist jedes Mal der
+Begruendungsabsatz). Suite 2879 passed / 15 skipped, ruff/pyright/vulture gruen. NICHT gepusht.
+BEFUND 1: die schaerfere Gegenprobe des Pluralregel-Scanners ist gefahren. pt_PT mit der
+SPANISCHEN Regel liefert einen Fund, obwohl sich die beiden Regeln nur im Vorderzweig
+unterscheiden (n == 1 ? 0 gegen (n == 0 || n == 1) ? 0). Das ist der wahrscheinliche Fehler,
+nicht die deutsche Regel, und das Gate faengt ihn.
+BEFUND 2: das Vokabular-Gate faellt ueber docs/l10n-portuguese.md NICHT (0 Stammtreffer), wie
+bei nl und anders als bei es (61) und it (9). Das Portugiesische schreibt Datei als ficheiro
+und Speicherort als armazenamento. Die Prognose aus 20-04 stimmt damit zweimal in Folge. Fuer
+pt_BR in 20-08 lautet sie ebenfalls "kein Treffer" (arquivo faengt mit arqu an), und das ist
+eine NEUE Prognose, die gemessen gehoert.
+BEFUND 3: zwei der vier Varietaetsproben aus dem Plan (ecra, a transferir) haben in diesem
+Katalog keinen Gegenstand, weil kein Schluessel von einem Bildschirm oder einem laufenden
+Download spricht. Die Doku sagt das mit gezaehlten Werten, statt eine Pruefung vorzutaeuschen;
+ficheiro steht 56 mal, utilizador 1 mal, arquivo/usuario/tela je 0 mal.
+KAT-01 und KAT-02 bleiben ungehakt (beide umfassen zehn Katalogdateien, acht stehen).
+
+Vorheriger Stand: 20-06 (der niederlaendische Katalog) ist gebaut und committet (3f76cdc nl.json plus
 nl.js, e7ed056 Gate-Eintrag, d40e335 docs/l10n-dutch.md). DREI Commits statt vier: der
 Rule-3-Fix am Vokabular-Gate, den 20-04 und 20-05 brauchten, war hier nicht noetig.
 php/l10n/nl.json und nl.js fuehren dieselben 202 Schluessel wie de.json, fuenf Pluralwerte mit
@@ -52,7 +84,7 @@ daneben.
 BEFUND 3: zwei niederlaendische Pluralwerte tragen zweimal denselben Wortlaut (%n uur und
 en nog %n). Das ist korrekt und kein Kopierfehler: Massangaben bleiben nach einem Zahlwort im
 Singular (twee uur), und der zweite Satz traegt kein beugbares Hauptwort.
-KAT-01 und KAT-02 bleiben ungehakt (beide umfassen zehn Katalogdateien, sechs stehen).
+KAT-01 und KAT-02 blieben dort ungehakt (beide umfassen zehn Katalogdateien, sechs standen).
 
 Vorheriger Stand: 20-05 (der italienische Katalog) ist gebaut und committet (ecf8bd2 it.json plus it.js,
 fff9aba Gate-Eintrag, e6185c9 docs/l10n-italian.md, 42f6add Rule-3-Fix am Vokabular-Gate).
@@ -148,39 +180,51 @@ Instanz den Erststempel der Verzeichnismarken; Folge: Feldplan blieb LEGACY, rot
 Fix-Beweis). Endstand-CI 36096526219 GRUEN 4/4 inkl. arm64. Suite 2877 passed / 15 skipped.
 LEHRE: ein Audit-Fix, der einen Schreiber entfernt, braucht die Frage "wer schreibt das
 sonst noch auf JEDEM Pfad" plus einen Frischinstanz-Fall, bevor er reist.
-Last activity: 2026-09-25 -- 20-06 ausgefuehrt, keine offene Owner-Frage in Phase 20
+Last activity: 2026-09-25 -- 20-07 ausgefuehrt, keine offene Owner-Frage in Phase 20
 
 Progress: [████......] 46% (3 von 7 Phasen)
 
 ## Naechster Schritt
 
-**20-07 ausfuehren** (Portugiesisch: VIER Dateien, pt_PT und pt_BR je json und js, KEINE
-pt.json, Eintraege in L10N_CATALOGUES und in VALUES_THAT_MAY_EQUAL_THEIR_KEY je Code,
-docs/l10n-portuguese.md dreispaltig mit datiertem Vorbehalt). Danach 20-08 und 20-09, dann
-Phase 21 (nl-Komposita, eigenes Tor, streichbar) und Phase 22 (Messanfahrt BL-F03).
-Mitzunehmen in 20-07 und 20-08, aus 20-04 bis 20-06 gemessen:
+**20-08 ausfuehren** (brasilianisches Portugiesisch: pt_BR.json und pt_BR.js als EIGENE
+Wortlaute und ausdruecklich KEINE Kopie von pt_PT, Eintrag in L10N_CATALOGUES und in
+VALUES_THAT_MAY_EQUAL_THEIR_KEY, das UNTERSCHIEDS-Gate ueber die benannten Woerter statt eines
+Textgleichheits-Gates, und die Spalte PT_BR in docs/l10n-portuguese.md, die die Tabelle von drei
+auf vier Spalten hebt). Danach 20-09, dann Phase 21 (nl-Komposita, eigenes Tor, streichbar) und
+Phase 22 (Messanfahrt BL-F03).
+Mitzunehmen in 20-08, aus 20-04 bis 20-07 gemessen:
 1. Die .json und die .js einer Sprache gehoeren in EINEN Commit. Das Pluralregel-Gate liest zu
    jeder vorhandenen php/l10n/<code>.json die zugehoerige .js unbedingt; eine alleinstehende
    .json faellt mit FileNotFoundError, also ist der Zwischenstand keine halbe Arbeit, sondern
-   eine kaputte Suite. Der Gate-Eintrag bleibt ein eigener Commit. Fuer 20-07 mit dem Zusatz,
-   dass dort VIER Dateien entstehen: jedes Paar ein Commit, oder alle vier einer.
+   eine kaputte Suite. Der Gate-Eintrag bleibt ein eigener Commit. In 20-07 ist das erneut
+   nachgefahren worden (pt_PT.js beiseitegelegt, Absturz reproduziert, Datei zurueckgelegt).
 2. Jede neue Sprache braucht einen eigenen Eintrag in VALUES_THAT_MAY_EQUAL_THEIR_KEY, sonst
    faellt das Vollstaendigkeitsgate mit dem Sprachcode. Die Liste wird gefunden (Lauf mit
-   leerem Mapping) und nicht geraten; es hatte zwei Schluessel, it drei, nl vier, fr fuenf.
-   Bei nl kam Spreadsheets dazu, und zwar NICHT bei den Woertern, bei denen man es erwartet
-   haette (file heisst bestand, folder heisst map): die Groesse war vorhersagbar, der Schluessel
-   nicht.
+   leerem Mapping) und nicht geraten; es hatte zwei Schluessel, pt_PT zwei, it drei, nl vier,
+   fr fuenf. Bei nl kam Spreadsheets dazu, und zwar NICHT bei den Woertern, bei denen man es
+   erwartet haette (file heisst bestand, folder heisst map): die Groesse war vorhersagbar, der
+   Schluessel nicht. Bei pt_PT faellt %1$s in %2$s weg, weil das Portugiesische em schreibt.
 3. Beim Vokabular-Gate in tests/test_public_artifacts.py wird gemessen und nicht prognostiziert.
    Die Vorhersage aus 20-04 stimmte fuer it in der Wirkung, aber im falschen Wort, und fuer nl
-   ganz (0 Treffer, kein AUSNAHMEN-Eintrag noetig). Fuer pt lautet die Prognose weiter "kein
-   Treffer"; Stand: einmal bestaetigt, zweimal knapp daneben.
+   und pt_PT ganz (je 0 Treffer, kein AUSNAHMEN-Eintrag noetig). Fuer pt_BR lautet die Prognose
+   ebenfalls "kein Treffer", weil arquivo mit arqu anfaengt; Stand: zweimal bestaetigt, zweimal
+   knapp daneben.
 4. Ein echter Treffer der gesperrten deutschen Form wird umformuliert und nie mit dem
    Dateieintrag mitentschuldigt: die Ausnahme gilt je Datei und deckt sonst genau den Fehler,
    den die Familie fangen soll.
 5. Die Giessform aus 20-01 zuerst gegen den unveraenderten Bestand pruefen (cast(alt) == alt,
-   inzwischen acht von acht), dann erst schreiben. Listenwerte muessen einzeilig gefaltet
-   werden. Das Giessskript bleibt ausserhalb des Arbeitsbaums.
+   inzwischen zwoelf von zwoelf), dann erst schreiben. Listenwerte muessen einzeilig gefaltet
+   werden; der erste Anlauf in 20-07 lief mit null von zwoelf, genau daran. Das Giessskript
+   bleibt ausserhalb des Arbeitsbaums.
 6. Ein literales Prozentzeichen wird %% geschrieben, besser noch umformuliert.
+7. Fuer 20-08 eigens: es gibt KEIN Textgleichheits-Gate pt_PT gegen pt_BR, und der
+   Kommentarabsatz ueber L10N_PT_PT_JSON sagt das ausdruecklich. Das Gegenstueck ist ein Gate
+   ueber die BENANNTEN Unterschiede. Zwei der vier Probewoerter des Plans (ecra gegen tela,
+   a transferir gegen baixando) kommen im Katalog gar nicht vor; ein Unterschieds-Gate, das
+   sie prueft, prueft nichts. Tragfaehig sind ficheiro gegen arquivo (56 Stellen), utilizador
+   gegen usuario (1 Stelle) und die fuenf weiteren Varietaetswoerter, die 20-07 aufgenommen
+   hat: palavra-passe gegen senha, reciclagem gegen lixeira, registo gegen registro,
+   folhas de calculo gegen planilhas, texto integral gegen texto completo.
 Offene Kleinigkeit aus 19: zwei DEFAULT_FIELDS-Prosastellen in
 backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt sie mit).
 
@@ -335,6 +379,34 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
   %n uur steht im Niederlaendischen zweimal gleich, weil Massangaben nach einem Zahlwort im
   Singular bleiben (twee uur, drie kilometer); bei minuut und dag gilt das nicht. Wer so etwas
   fuer einen Kopierfehler haelt, "repariert" eine korrekte Zeile.
+- Eine Datei, die jedes Gate passiert und die niemand laedt, wird nicht gebaut (20-07). Der
+  Kern kennt den Code pt nicht, getL10nFilesForApp kuerzt pt_PT nicht auf pt, und ein Nutzer
+  kann auf pt nicht stehen; eine php/l10n/pt.json waere deshalb Arbeit ohne Leser. Das Verbot
+  ist ein Abnahmekriterium und kein Hinweis, und der gemessene Grund steht an beiden Orten, an
+  denen jemand ihn suchen wuerde: docs/l10n-catalogues.md Abschnitt 1 und der Kommentarabsatz
+  ueber L10N_PT_PT_JSON.
+- Ein Codepaar kann zwei Wortlautsaetze tragen statt zweimal denselben (20-07). pt_PT und
+  pt_BR sind das ausdrueckliche Gegenteil von de und de_DE, deren Textgleichheit ein Gate
+  haelt. Ein Textgleichheits-Gate fuer das portugiesische Paar wird deshalb NICHT gebaut; es
+  wuerde eine der beiden Varietaeten dauerhaft in den falschen Woertern festhalten. Das
+  positive Gegenstueck ist ein Gate ueber die benannten Unterschiede und gehoert zu 20-08,
+  wenn die zweite Datei existiert.
+- Eine Gegenprobe wird mit der AEHNLICHSTEN fremden Regel gefahren und nicht mit der
+  auffaelligsten (20-07). Fuer nl war die deutsche Zeichenkette die richtige Probe, weil nl
+  sie zu Recht fuehrt; fuer pt_PT ist es die spanische, die sich nur im Vorderzweig
+  unterscheidet (n == 1 ? 0 gegen (n == 0 || n == 1) ? 0) und beide Male nplurals=3 mit
+  derselben Millionenklausel traegt. Gemessen: ein Fund. Das ist der wahrscheinliche Fehler,
+  und ein Gate, das nur grobe Unterschiede findet, haette ihn durchgelassen.
+- Eine Probe, die im Gegenstand keinen Gegenstand hat, wird als solche benannt (20-07). Zwei
+  der vier Varietaetsproben des Plans (ecra, a transferir) kommen im Katalog nicht vor, weil
+  kein Schluessel von einem Bildschirm oder einem Download spricht. Die Doku zaehlt die Werte
+  aus (56, 1, kommt nicht vor, kommt nicht vor), statt vier Pruefungen zu behaupten, von denen
+  zwei leerlaufen. Die Wortwahltabelle nennt die beiden Woerter trotzdem, damit der naechste
+  solche Schluessel nicht in der falschen Varietaet hereinkommt.
+- Eine Tabelle, die spaeter eine Spalte bekommt, bekommt sie spaeter und nicht leer (20-07).
+  docs/l10n-portuguese.md fuehrt heute drei Spalten und einen Hinweis unmittelbar ueber der
+  Tabelle, der Plan 20-08 nennt. Eine leere vierte Spalte sieht aus wie 202 vergessene
+  Uebersetzungen.
 - Ein Wortstamm-Gate auf einer Sprache stolpert ueber die Homographen einer anderen (20-04,
   bestaetigt und berichtigt in 20-05). Fuer Italienisch traf es nicht das Wort fuer Datei (das
   Italienische benutzt dort das englische Wort), sondern das fuer den Speicherort. Die Prognose
@@ -425,5 +497,5 @@ auf resolved gesetzt).
 ## Session Continuity
 
 Last session: 2026-09-25
-Stopped at: 20-06 ausgefuehrt und committet (3f76cdc, e7ed056, d40e335), SUMMARY geschrieben, Gates lokal gruen, NICHT gepusht; kein Checkpoint in diesem Plan
-Resume file: .planning/phases/20-ui-kataloge-es-it-nl-pt/20-06-SUMMARY.md (naechster Schritt: 20-07 ausfuehren; der Orchestrator pusht gesammelt)
+Stopped at: 20-07 ausgefuehrt und committet (e3fc290, 2824a4b, 7ae78d6), SUMMARY geschrieben, Gates lokal gruen, NICHT gepusht; kein Checkpoint in diesem Plan
+Resume file: .planning/phases/20-ui-kataloge-es-it-nl-pt/20-07-SUMMARY.md (naechster Schritt: 20-08 ausfuehren; der Orchestrator pusht gesammelt)
