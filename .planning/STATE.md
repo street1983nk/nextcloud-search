@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: executing
-stopped_at: 20-08 gebaut und committet (592980d, f79254c, cd38e2d), Gates lokal gruen, NICHT gepusht
-last_updated: "2026-09-25T14:10:00.000Z"
-last_activity: 2026-09-25 -- 20-08 ausgefuehrt, brasilianisches Portugiesisch ausgeliefert, KAT-01/KAT-02 abgehakt
+stopped_at: 20-09 gebaut und committet (1c80e26, 530bb7c, c5102d1), Sichtprobe vom Owner abgenommen, NICHT gepusht
+last_updated: "2026-09-25T17:00:00.000Z"
+last_activity: 2026-09-25 -- 20-09 ausgefuehrt, CI-Sprachbeweis gebaut, Sichtprobe in fuenf Sprachen approved; alle 9 Plaene der Phase 20 fertig
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 38
-  completed_plans: 37
+  completed_plans: 38
   percent: 46
 ---
 
@@ -21,12 +21,25 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 20 (ui-kataloge) laeuft; 20-01 abgenommen, 20-02 bis 20-08 gebaut
+**Current focus:** Phase 20 (ui-kataloge): alle 9 Plaene gebaut, 20-01 und 20-09 vom Owner abgenommen; offen: Push + erster CI-Lauf des Sprachbeweises, Verifikation, Audit
 
 ## Current Position
 
-Phase: 20 (ui-kataloge-es-it-nl-pt), 8 of 9 gebaut; Phase 19 COMPLETE 25.09.2026
-Status: 20-08 (der brasilianisch-portugiesische Katalog) ist gebaut und committet (592980d
+Phase: 20 (ui-kataloge-es-it-nl-pt), 9 of 9 gebaut; Phase 19 COMPLETE 25.09.2026
+Status: 20-09 (CI-Sprachbeweis, Sichtprobe, Schlussabschnitt) ist gebaut und committet (1c80e26
+Schritt "The result page answers in every new language (core lang)" im Job search-parity,
+530bb7c docs/l10n-catalogues.md Abschnitt "Stand nach Phase 20", c5102d1 SUMMARY). Der Schritt
+liest den Erwartungswert zur Laufzeit aus apps/findling/l10n/<code>.json, prueft je Code es, it,
+nl, pt_PT, pt_BR Anwesenheit des uebersetzten Titels UND Abwesenheit von "Search your file
+contents", setzt die Nutzersprache per trap zurueck. ERSTER ECHTER LAUF STEHT AUS (kommt mit dem
+Push durch den Orchestrator, Lauf-Beleg in 20-09-SUMMARY.md nachtragen). Sichtprobe per
+Playwright an findling-nextcloud: fuenf Sprachen, Adminseite plus drei Ergebnisseiten, 0
+englische Reste aus Findling, Pluralform bei n=16 sichtbar, en-Gegenprobe 37 Funde; Owner
+"approved" 25.09.2026. Ausgangswert admin=de, testuser=de wiederhergestellt, git status leer.
+Instanz-Eingriffe: occ upgrade (Findling 1.1.0 auf 1.2.0, stand seit 21.09. aus) und Backend
+per register-exapp.sh neu gestartet. Suite 2880 passed / 15 skipped, Gates gruen. NICHT gepusht.
+
+Vorheriger Stand: 20-08 (der brasilianisch-portugiesische Katalog) ist gebaut und committet (592980d
 pt_BR.json plus pt_BR.js, f79254c Gate, cd38e2d docs/l10n-portuguese.md, ca4f6a9 SUMMARY).
 Eigene Wortlaute statt Kopie: arquivo, usuario, tela, senha, lixeira, planilhas, conteiner,
 Gerundium; run = a execucao, worker = o processo de indexacao (anders als pt_PT). 72 von 202
@@ -200,9 +213,12 @@ Progress: [████......] 46% (3 von 7 Phasen)
 
 ## Naechster Schritt
 
-**20-09 ausfuehren** (CI-Sprachbeweis je Code in integration.yml, Sichtprobe in fuenf Sprachen
-als Checkpoint, Schlussabschnitt). 20-08 ist erledigt; der Block darunter ist der Stand vor 20-08
-und bleibt als Herleitung stehen.
+**Push (Orchestrator), dann den ersten Lauf von integration.yml/search-parity pruefen** und den
+Lauf-Beleg in 20-09-SUMMARY.md nachtragen; danach Verifikation Phase 20 und Security/Bug/
+Performance-Audit, dann Phase 21. 20-09 ist erledigt; die Bloecke darunter sind Herleitung.
+
+Vorher: **20-09 ausfuehren** (CI-Sprachbeweis je Code in integration.yml, Sichtprobe in fuenf
+Sprachen als Checkpoint, Schlussabschnitt).
 
 Vorher: **20-08 ausfuehren** (brasilianisches Portugiesisch: pt_BR.json und pt_BR.js als EIGENE
 Wortlaute und ausdruecklich KEINE Kopie von pt_PT, Eintrag in L10N_CATALOGUES und in
@@ -257,6 +273,12 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
 ## Accumulated Context
 
 ### Entscheidungen, die v1.3 tragen
+
+- Ein CI-Sprachbeweis liest seinen Erwartungswert aus dem Katalog und traegt die Abwesenheit
+  des englischen Quellsatzes als eigentliche Zusicherung (20-09). Ein Satz in der YAML waere
+  eine Behauptung ueber den Wortlaut von gestern; ein Katalog, der nur halb geladen wird, faellt
+  erst an der Abwesenheitspruefung. Geteilter Instanzzustand (Nutzersprache) wird per trap
+  zurueckgesetzt, und eine Rest-Suche bekommt eine en-Gegenprobe, sonst beweist ihre Null nichts.
 
 - Zwei Varietaeten werden durch ein POSITIVES Gate zwei gehalten (20-08):
   PORTUGUESE_WORDINGS_THAT_MUST_DIFFER nennt elf Schluessel mit Wortpaar, statt einer
@@ -521,5 +543,5 @@ auf resolved gesetzt).
 ## Session Continuity
 
 Last session: 2026-09-25
-Stopped at: 20-08 ausgefuehrt und committet (592980d, f79254c, cd38e2d, ca4f6a9), SUMMARY geschrieben, Gates lokal gruen, NICHT gepusht; kein Checkpoint in diesem Plan
-Resume file: .planning/phases/20-ui-kataloge-es-it-nl-pt/20-08-SUMMARY.md (naechster Schritt: 20-09 ausfuehren; der Orchestrator pusht gesammelt)
+Stopped at: 20-09 ausgefuehrt und committet (1c80e26, 530bb7c, c5102d1), Sichtprobe vom Owner approved, Gates lokal gruen, NICHT gepusht
+Resume file: .planning/phases/20-ui-kataloge-es-it-nl-pt/20-09-SUMMARY.md (naechster Schritt: Push durch den Orchestrator, CI-Lauf des Sprachbeweises belegen, dann Verifikation Phase 20)
