@@ -547,6 +547,95 @@ def scan_placeholder_parity(name: str, catalogue: Mapping[str, str | list[str]])
     return violations
 
 
+# The hint every finding of the percent scanner ends with. It stands here once
+# because both shapes of the finding, the one about a key and the one about a
+# form, have to say the same thing: the fix is not to remove the percent sign
+# but to double it.
+PERCENT_HINT = "a literal percent sign is written %%"
+
+# The same for the pipe scanner, and it names the cause rather than the fix,
+# because there is no spelling that works: the character is the separator
+# Nextcloud joins the plural forms with, and a wording that needs one has to say
+# it with another word.
+PIPE_HINT = "a pipe character, which Nextcloud reserves as the plural separator"
+
+
+def _carries_a_bare_percent(text: str) -> bool:
+    """Whether a text carries a percent sign outside a recognised directive.
+
+    A counting comparison and deliberately no second regular expression: the
+    number of ``%`` characters of the text has to equal the number of ``%``
+    characters the directives of ``PRINTF_DIRECTIVE`` consume in it. ``%%`` is
+    two and is consumed as two, ``%1$s`` and ``%s`` are one each, and anything
+    left over is a percent sign that stands on its own.
+
+    A second regular expression for "a percent sign that is not a directive"
+    would be a second definition of a directive, and the two would drift on the
+    day somebody adds ``%1$d`` to the first one.
+    """
+    return text.count("%") != sum(match.count("%") for match in PRINTF_DIRECTIVE.findall(text))
+
+
+def scan_percent_discipline(name: str, catalogue: Mapping[str, str | list[str]]) -> list[str]:
+    """Findings of a catalogue: a percent sign that is not part of a directive.
+
+    The measured reason, and it is not a matter of taste.
+    ``OC\\L10N\\L10NString::__toString`` ends in ``vsprintf($text, $parameters)``,
+    and ``vsprintf("50 % de los archivos", [])`` throws
+    ``ValueError: The arguments array must contain 1 items, 0 given`` under PHP
+    8.5.9 (20-RESEARCH.md, pitfall 3, measured 24.09.2026). That is not a wrong
+    sentence on the page, it is no page at all, and the four languages this phase
+    is written for write percent exactly that way: Spanish and Portuguese put a
+    space between the number and the sign.
+
+    ``scan_placeholder_parity`` cannot see this. It counts the directives it
+    recognises on both sides and finds none on either, so a value with a bare
+    percent sign is parity perfect and lethal at the same time.
+
+    The scan runs over the **key** as well as over every form of the value. An
+    English source string with a bare percent sign is the same broken page one
+    level earlier, and it would reach the page through ``de.json`` before any
+    translation of it exists.
+    """
+    violations: list[str] = []
+    for key, value in catalogue.items():
+        if _carries_a_bare_percent(key):
+            violations.append(f"{name}: the key {key!r} carries a bare percent sign; {PERCENT_HINT}")
+        violations.extend(
+            f"{name}: {key!r} form {index} carries a bare percent sign; {PERCENT_HINT}"
+            for index, form in enumerate(forms_of(value))
+            if _carries_a_bare_percent(form)
+        )
+    return violations
+
+
+def scan_pipe_character(name: str, catalogue: Mapping[str, str | list[str]]) -> list[str]:
+    """Findings of a catalogue: a value or a key carrying a pipe character.
+
+    ``L10NString::__toString`` joins the plural forms with ``|`` and gives up
+    before it starts if the text already carries one:
+    ``if (str_contains($pipeCheck, '|')) return 'Can not use pipe character in
+    translations';``. The user then reads that English sentence instead of the
+    translation, on a page that is otherwise entirely in their language
+    (20-RESEARCH.md, pitfall 4).
+
+    The tree carries zero pipes today, so this gate is green from its first day,
+    and that is exactly why the staged lines of its gate matter more here than
+    anywhere else: a scan over a clean tree and a scan whose body was deleted
+    report the same empty list.
+    """
+    violations: list[str] = []
+    for key, value in catalogue.items():
+        if "|" in key:
+            violations.append(f"{name}: the key {key!r} carries {PIPE_HINT}")
+        violations.extend(
+            f"{name}: {key!r} form {index} carries {PIPE_HINT}"
+            for index, form in enumerate(forms_of(value))
+            if "|" in form
+        )
+    return violations
+
+
 def scan_plural_rule(name: str, code: str, plural_form: str) -> list[str]:
     """Findings of one catalogue: the plural rule it declares for its language.
 
@@ -1976,6 +2065,60 @@ def test_no_french_value_loses_or_invents_a_placeholder() -> None:
     # plural whose first form dropped its %n while the second one kept it.
     dirty: dict[str, str | list[str]] = {"%1$s in %2$s": "%1$s dans", "_%n day_::_%n days_": ["jour", "%n jours"]}
     assert len(scan_placeholder_parity("sample.json", dirty)) == 2
+
+
+def test_no_catalogue_value_can_break_the_page() -> None:
+    """The two wordings that take the page down rather than get it wrong.
+
+    Every gate above this one judges whether a sentence says the right thing.
+    These two judge whether the page survives it at all, and both findings come
+    out of the same PHP method: ``L10NString::__toString`` fills a sentence with
+    ``vsprintf`` and joins plural forms with ``|``. A bare percent sign makes the
+    first throw a ``ValueError`` and leaves a white page, a pipe character makes
+    the second give up and replaces the sentence with an English error message.
+    The reasons in full stand in the two scanner docstrings.
+
+    One gate for two scanners because they answer one question, "can a wording
+    break this page", and because both run over ``L10N_CATALOGUES`` and take
+    every later language along by themselves.
+
+    Four staged lines and not one. The tree is clean for both scanners today, and
+    a scan that reports nothing over a clean tree looks exactly like a scan whose
+    body was deleted; the percent scanner therefore has to report the Spanish
+    wording, stay silent on its doubled form, and name the form number when the
+    finding is in a plural form, and the pipe scanner has to report a pipe.
+    """
+    missing = [path.name for path in L10N_CATALOGUES if not path.is_file()]
+    assert missing == [], f"catalogues are missing: {missing}"
+
+    findings = [
+        message
+        for path in L10N_CATALOGUES
+        for scan in (scan_percent_discipline, scan_pipe_character)
+        for message in scan(path.name, catalogue_of(path))
+    ]
+
+    assert findings == []
+    # The wording of pitfall 3, word for word: Spanish and Portuguese put a space
+    # between the number and the percent sign, and this is the value that would
+    # throw in vsprintf.
+    bare: dict[str, str | list[str]] = {"Half of the files": "50 % de los archivos"}
+    assert len(scan_percent_discipline("sample.json", bare)) == 1
+    # And the doubled form is the fix and not a second finding. Without this line
+    # a scanner that simply forbade the percent sign would pass, and it would
+    # forbid the one spelling that works.
+    doubled: dict[str, str | list[str]] = {"Half of the files": "50 %% de los archivos"}
+    assert scan_percent_discipline("sample.json", doubled) == []
+    # A pipe in a value, reported once.
+    piped: dict[str, str | list[str]] = {"Two things": "a | b"}
+    assert len(scan_pipe_character("sample.json", piped)) == 1
+    # And a plural whose second form carries the bare percent sign: one finding,
+    # and it names the form, because "somewhere in this value" is not something
+    # anybody can fix without reading the whole catalogue.
+    plural: dict[str, str | list[str]] = {"_%n percent_::_%n percent_": ["%n %%", "%n %"]}
+    assert scan_percent_discipline("sample.json", plural) == [
+        f"sample.json: '_%n percent_::_%n percent_' form 1 carries a bare percent sign; {PERCENT_HINT}"
+    ]
 
 
 def test_every_catalogue_carries_the_plural_rule_of_its_language() -> None:
