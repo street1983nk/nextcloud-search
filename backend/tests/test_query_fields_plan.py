@@ -44,7 +44,7 @@ from pathlib import Path
 import pytest
 from tantivy import Index, SchemaBuilder
 
-from findling.api.resources import field_plan_for
+from findling.api.resources import field_plan_for, plan_falls_short
 from findling.config import SCHEMA_VERSION, SUPPORTED_LANGUAGES
 from findling.index.open import LANGUAGES_MARK, SCHEMA_MARK, expected_versions
 from findling.index.schema import (
@@ -284,6 +284,33 @@ def test_a_state_database_beside_an_older_directory_falls_back_and_says_so(
     # that wrote this line is never handed a search term at all.
     assert "/" not in lines[0]
     assert chr(92) not in lines[0]
+
+
+def test_a_plan_that_reaches_less_than_the_marks_promise_is_short(schema_2_index: Index) -> None:
+    """Audit finding M-19-03, the measurement the admin page was missing.
+
+    Inclusion and not equality: every candidate plan is built out of the marks or
+    is the frozen legacy one, and the probe only ever takes names away, so a plan
+    that is wider than the promise is not a state this code can produce. Asking
+    for inclusion means a later candidate cannot make this answer wrong merely by
+    being wider.
+
+    The second pair is the state of every installation coming from 1.2.0: the
+    marks give no permission, so what they promise is the legacy four, and a
+    container that searches exactly those four is complete rather than short.
+    Calling that one degraded would put the banner up on every instance in the
+    field that has not rebuilt yet, which is the opposite of what the flag says.
+    """
+    promised = {SCHEMA_MARK: CURRENT_SCHEMA, LANGUAGES_MARK: "de,en,es"}
+
+    assert plan_falls_short(promised, field_plan_for(promised, schema_2_index)) is False
+    assert plan_falls_short(promised, LEGACY_PLAN) is True
+    assert plan_falls_short(promised, EMPTY_PLAN) is True
+
+    no_permission = {SCHEMA_MARK: "1", LANGUAGES_MARK: "de,en,es"}
+
+    assert plan_falls_short(no_permission, LEGACY_PLAN) is False
+    assert plan_falls_short(no_permission, EMPTY_PLAN) is True
 
 
 def test_a_plan_that_could_not_be_computed_at_all_is_an_error_and_not_a_warning(

@@ -61,6 +61,7 @@ from findling.index.rebuild import RebuildProgress
 from findling.index.schema import BODY_FIELD, FIELD_FILE_ID, FIELD_STORAGE_ID
 from findling.index.wordlist import DIGEST_SUFFIX, ENCODING, artifact_path, wordlist_hash
 from findling.main import APP
+from findling.query.rewrite import LEGACY_PLAN
 from findling.store.repo import FileMeta, open_store
 from findling.store.vectors import EMBEDDING_DIMENSIONS, Chunk, open_vectors
 
@@ -97,6 +98,11 @@ FIELDS = {
     # fourth of them is the reason it did not start.
     "languagesActive",
     "languagesFilled",
+    # The third language value, added by the fix of audit finding M-19-03: what a
+    # question really reaches, read out of the field plan. The two above are an
+    # intention and a measurement of the index, and the fallback that can make
+    # both of them lie happens between them.
+    "languagesSearched",
     "rebuildRunning",
     "rebuildDone",
     "rebuildTotal",
@@ -962,6 +968,66 @@ def test_the_filled_languages_name_the_chains_that_really_carry_terms(
     answer = _status(client, sign("admin"))
 
     assert answer["languagesFilled"] == "de,es"
+
+
+def test_the_searched_languages_name_the_chains_a_question_really_reaches(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    # The third value of the group, added by audit finding M-19-03. On a healthy
+    # volume it agrees with the mark, and that agreement is the whole point: the
+    # value is worth reading because it can disagree, and the case below is what
+    # that looks like.
+    store = open_store(indexed_volume.root / "state.db")
+    store.write_meta("languages", "de,en,es")
+    store.close()
+    # The plan hangs on the handles of the reading side and is computed when they
+    # are opened, so a mark written under an open side is seen after the side is
+    # let go and not before. That is the same order the directory swap keeps.
+    resources.reset_read_side()
+
+    answer = _status(client, sign("admin"))
+
+    assert answer["languagesActive"] == "de,en,es"
+    assert answer["languagesSearched"] == "de,en,es"
+
+
+def test_a_field_plan_that_fell_back_is_visible_and_counts_as_degraded(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Audit finding M-19-03, written out as the page used to show it.
+
+    The mark promises three chains, the term dictionary carries what it carries,
+    and the question reaches two, because the plan fell back. Both values the
+    page had went on saying three and nothing anywhere said two. The third value
+    says it, and the degraded flag says that this container is answering
+    incompletely, which is the one merker the search side already reads.
+    """
+    store = open_store(indexed_volume.root / "state.db")
+    store.write_meta("languages", "de,en,es")
+    store.close()
+    real = resources.read_side()
+    assert real is not None
+    fallen_back = ReadSide(
+        index=real.index,
+        store=real.store,
+        index_dir=real.index_dir,
+        vectors=real.vectors,
+        generation=real.generation,
+        field_plan=LEGACY_PLAN,
+        plan_is_short=True,
+    )
+    monkeypatch.setattr(resources, "read_side", lambda: fallen_back)
+
+    answer = _status(client, sign("admin"))
+
+    assert answer["languagesActive"] == "de,en,es"
+    assert answer["languagesSearched"] == "de,en"
+    assert resources.degraded(fallen_back) is True
 
 
 def test_a_chain_that_is_switched_off_is_not_probed_at_all(

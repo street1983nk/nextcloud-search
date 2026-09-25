@@ -152,6 +152,15 @@ class ReadSide:
     # without a plan searches the four fields every release up to 1.2.0 searched,
     # which every index of both generations answers.
     field_plan: FieldPlan = LEGACY_PLAN
+    # Whether that plan reaches fewer fields than the stored marks promise, which
+    # is the one state the two language values of the admin page cannot show
+    # (audit finding M-19-03). Both of them would go on saying "six chains are
+    # switched on and filled" while a question reaches two, because one is read
+    # out of the marks and the other out of the term dictionary, and neither is
+    # read out of the plan. It is measured here, beside the plan and out of the
+    # same marks, because that is the one moment both are in hand; degraded()
+    # reads it without measuring anything.
+    plan_is_short: bool = False
 
 
 _OPEN: ReadSide | None = None
@@ -434,6 +443,54 @@ def _probed(plan: FieldPlan, index: Index) -> FieldPlan | None:
     )
 
 
+def plan_falls_short(marks: Mapping[str, str], plan: FieldPlan) -> bool:
+    """True when this plan reaches fewer fields than these marks promise.
+
+    Audit finding M-19-03, and the value it answers is the one the admin page
+    was missing. ``languagesActive`` comes out of the marks and
+    ``languagesFilled`` out of the term dictionary, so both of them go on saying
+    six while a question reaches two: the fallback happens between them, in the
+    plan, and nothing read the plan.
+
+    Inclusion and not equality, because a plan that reaches MORE than the marks
+    promise is not a thing this code can produce: every candidate is built out of
+    the marks or is the frozen legacy plan, and the probe only ever takes names
+    away. Asking for inclusion means a later candidate cannot make this answer
+    wrong by being wider.
+
+    Never raises, like everything on this path. A promise that cannot be read at
+    all is the fault :func:`field_plan_for` has just written its error line
+    about, and a container whose own field list could not be computed is not one
+    to call complete.
+    """
+    try:
+        promised = _of_the_marks(marks) or LEGACY_PLAN
+    # Deliberately every exception, for the reason in the docstring above.
+    except Exception:
+        return True
+    return not set(promised.fields) <= set(plan.fields)
+
+
+def searched_languages() -> tuple[str, ...]:
+    """The language codes a bare word really reaches, in schema order.
+
+    The third language value of the admin page and the only one that comes out
+    of the field plan. ``languagesActive`` is what the marks promise and
+    ``languagesFilled`` is what the term dictionary carries; this is what a
+    question touches, and until audit finding M-19-03 it was the one of the three
+    that nothing reported, although it is the only one a search actually obeys.
+
+    Costs nothing beyond the open: the plan is an attribute of the reading side,
+    computed once when the handles were built. An empty answer means there is no
+    reading side at all, which is the same shape :func:`filled_languages` uses
+    for the same state.
+    """
+    side = read_side()
+    if side is None:
+        return ()
+    return tuple(code for code, field in BODY_FIELD.items() if field in side.field_plan.fields)
+
+
 def field_plan_for(marks: Mapping[str, str], index: Index) -> FieldPlan:
     """What a bare word searches on this directory, read out of its two marks.
 
@@ -640,13 +697,15 @@ def read_side() -> ReadSide | None:
             except Exception as error:
                 LOGGER.warning("the marks of the directory could not be read, an %s", type(error).__name__)
                 marks = {}
+            plan = field_plan_for(marks, index)
             _OPEN = ReadSide(
                 index=index,
                 store=store,
                 index_dir=resolved.index_dir,
                 vectors=vectors,
                 generation=_GENERATION,
-                field_plan=field_plan_for(marks, index),
+                field_plan=plan,
+                plan_is_short=plan_falls_short(marks, plan),
             )
             store = None
             vectors = None
@@ -760,11 +819,19 @@ def let_the_read_side_open() -> None:
 def degraded(side: ReadSide | None) -> bool:
     """True when this container is answering, but not from a complete index.
 
-    Four causes, one flag: there is no index yet, the index was built by a
-    different tokenisation, the volume is too full for the indexer to commit, or
-    embedding is switched on and there is no vector stock to answer with. The
+    Five causes, one flag: there is no index yet, the index was built by a
+    different tokenisation, the volume is too full for the indexer to commit,
+    embedding is switched on and there is no vector stock to answer with, or a
+    question reaches fewer fields than the marks of the directory promise. The
     PHP side gets one boolean out of it so that it can stay quiet instead of
     guessing, and phase 4 builds the status page out of the same answers.
+
+    The fifth cause is audit finding M-19-03 and it is the cheapest of the five:
+    it was measured when the handles were opened and is read off
+    :attr:`ReadSide.plan_is_short` here. An instance whose search reaches two
+    chains while its marks name six answers demonstrably incompletely, and that
+    is what this flag is for; until the finding it was the one incomplete answer
+    of this container that nothing anywhere reported.
 
     The fourth cause is the one phase 6 added, and it is a statement about
     completeness rather than about a fault. A container whose second track has
@@ -793,7 +860,7 @@ def degraded(side: ReadSide | None) -> bool:
         if cached is not None and cached[0] == side.index_dir and now - cached[1] < DEGRADED_TTL_SECONDS:
             return cached[2]
         missing_vectors = side.vectors is None and settings().embed_enabled
-        verdict = missing_vectors or bool(version_drift(side.store)) or low_disk()
+        verdict = side.plan_is_short or missing_vectors or bool(version_drift(side.store)) or low_disk()
         if side.generation == _GENERATION:
             # And not otherwise. The side was taken outside this lock, so a
             # reset may have happened in between, and remembering a verdict

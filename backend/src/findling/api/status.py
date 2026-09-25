@@ -200,6 +200,15 @@ class StatusResponse(BaseModel):
     # switched on yesterday and has seen no document is in the first and not in
     # the second, and so is every chain of a rebuild that is halfway through.
     languagesFilled: str = ""
+    # Which of them a question really reaches, read out of the field plan of the
+    # reading side (audit finding M-19-03). The third statement of the group and
+    # the only one a search obeys: the two above are the marks and the term
+    # dictionary, and the fallback of findling.api.resources.field_plan_for
+    # happens between them, in the plan. An instance whose marks name six chains
+    # and whose plan fell back answered "six switched on, six filled" while it
+    # searched two, and the only trace of that was one log line per opening.
+    # Empty means there is no reading side at all, exactly as it does above.
+    languagesSearched: str = ""
     # The three readings of the band run of this process, out of
     # findling.index.rebuild. They describe a run and never a queue: a container
     # that is not rebuilding answers false, nought and nought, which is the
@@ -298,6 +307,7 @@ def _volume() -> StatusResponse:
         engineState=engine_state(),
         languagesActive=",".join(resolved.languages),
         languagesFilled=",".join(resources.filled_languages()),
+        languagesSearched=",".join(resources.searched_languages()),
         rebuildRunning=progress.running,
         rebuildDone=progress.documents_carried,
         rebuildTotal=progress.documents_total,
@@ -407,6 +417,11 @@ def _of(store: Store, volume: StatusResponse) -> StatusResponse:
         # are a property of the index directory, and the state database has
         # nothing to say about them.
         languagesFilled=volume.languagesFilled,
+        # Carried over for the same reason, and it is the value to read next to
+        # the mark above: that one is what the directory was built for, this one
+        # is what a question reaches. Two lines that disagree are a fallback, and
+        # the degraded flag says so as well (M-19-03).
+        languagesSearched=volume.languagesSearched,
         rebuildRunning=volume.rebuildRunning,
         rebuildDone=volume.rebuildDone,
         rebuildTotal=volume.rebuildTotal,

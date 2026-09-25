@@ -981,8 +981,17 @@ PHP_TREE_HASH_TODAY = "a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab
 # per field, so what reaches the outer catch is this build contradicting itself;
 # the two used to be one line and an operator could not tell them apart. No file
 # came and none went, so PACKAGE_FILES_TODAY stays at 56.
+# Moved on 2026-09-25 by the fix of audit finding M-19-03: two of the 56 files
+# changed their bytes. api/resources.py got plan_falls_short, which holds the
+# plan that goes out against the plan the marks promise, ReadSide.plan_is_short,
+# which carries that answer beside the plan it is about, searched_languages,
+# which reads the codes a question reaches out of the plan, and a degraded() of
+# five causes instead of four. api/status.py got languagesSearched beside
+# languagesActive and languagesFilled, filled in the volume answer and carried
+# over in the counting half like every other reading of this process. No file
+# came and none went, so PACKAGE_FILES_TODAY stays at 56.
 PACKAGE_FILES_TODAY = 56
-PACKAGE_TREE_HASH_TODAY = "c098479d2b6acb5949174ec9184e4598c7b81b175f1003634fe1cdd8fb33fd37"
+PACKAGE_TREE_HASH_TODAY = "6b1734ddd7c2a0d88d42cab0ebc1ec1a78b794e147ca86c48f0494b04366964b"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
