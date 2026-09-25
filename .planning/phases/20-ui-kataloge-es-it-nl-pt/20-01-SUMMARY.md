@@ -225,3 +225,6 @@ Keine.
 
 Alle neun genannten Dateien liegen im Baum, beide Commit-Hashes (`51e0ea4`, `5389009`) stehen in
 der Historie. Kein Eintrag fehlt.
+
+
+**OWNER-GO 25.09.2026:** Checkpoint abgenommen (Owner-Antwort "weiter" auf die vorgelegte Sichtprobe; Vorher/Nachher-Sonde und Bestandsreparatur de/fr freigegeben). Ausfuehrung laeuft weiter mit Welle 2.
