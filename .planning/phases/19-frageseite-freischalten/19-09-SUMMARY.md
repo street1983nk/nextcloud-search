@@ -335,9 +335,10 @@ None - no external service configuration required.
   "Known limits", ausgeschrieben mit Messung, Codestelle und Alternative.
 - **Der Phasen-Audit (Security, Bugs, Performance) steht aus**, nach der Owner-Regel vom 15.08.2026.
   Er ist der Phasenabschlussschritt und nicht Teil dieses Plans.
-- **Ein Nachlauf des Workflows lief zum Zeitpunkt dieser Summary**, ausgeloest vom Commit `da3858e`.
-  Dieser Commit aendert ausschliesslich einen YAML-Kommentar im `env:`-Block, also keine Zeile, die
-  ein Schritt ausfuehrt; der Beweis dieser Phase ist 36074155306.
+- **Der Nachlauf auf dem Endstand ist ebenfalls gruen.** Der Commit `da3858e` aendert nur einen
+  YAML-Kommentar im `env:`-Block, also keine Zeile, die ein Schritt ausfuehrt, und der Lauf, den er
+  ausgeloest hat, ist trotzdem eingeholt worden: **36076006854, alle vier Aeste erfolgreich**. Der
+  Beweis dieser Phase bleibt 36074155306, der Endstand des Zweiges ist damit ebenfalls belegt.
 
 ## Verification
 
@@ -398,6 +399,6 @@ Arbeitsverzeichnis traegt ausser den Planungsdateien nichts Offenes; die Einmal-
 Doku, Research und Workflow bearbeitet wurden, liegen ausserhalb des Repos im Temp-Verzeichnis und
 stehen in keinem Commit.
 
-Der Lauf, den der Commit `da3858e` ausgeloest hat (36076006854), lief zum Zeitpunkt dieser Zeile
-noch. Er aendert nur einen YAML-Kommentar im `env:`-Block und keine Zeile, die ein Schritt ausfuehrt;
-der Beweis dieser Phase bleibt 36074155306.
+Der Lauf, den der Commit `da3858e` ausgeloest hat, ist nachtraeglich eingeholt worden und ist
+ebenfalls auf allen vier Aesten gruen: **36076006854**. Er aendert nur einen YAML-Kommentar im
+`env:`-Block; der Beweis dieser Phase bleibt 36074155306.
