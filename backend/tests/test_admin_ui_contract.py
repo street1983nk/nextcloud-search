@@ -383,13 +383,42 @@ JS_PLURAL_FORM = re.compile(r'\n"([^"]*)"\);\s*\Z')
 # is for. The alternative not taken is a threshold of five, and it would have
 # covered a fourth chip nobody translated exactly as quietly as it covers these
 # three.
-FRENCH_VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
-    "Findling": "the name of the app, the same word in all three languages",
-    "Page %s": "Page is the same word in French, and a difference would be a loss",
-    "PDF": "the proper name of a file format, the same abbreviation in all three languages",
-    "Documents": "the same word in French, and an invented difference would be a mistranslation",
-    "Images": "the same word in French, and an invented difference would be a mistranslation",
+#
+# Since plan 20-03 the list is one entry of a table per language code, and the
+# paragraph above is the reason for every one of them and not only for the
+# French one. A language whose code is missing from this table is a failure that
+# names it rather than an empty mapping: a language without a list of exceptions
+# is a language whose exceptions nobody argued, and that is exactly the state in
+# which a forgotten wording travels as an intended one.
+#
+# German is not the empty entry it looks like it should be. The German values
+# are the reference the others are compared against, so the expectation was that
+# no German value equals its English key; the tree says otherwise and was read on
+# 25.09.2026 rather than assumed. Four keys do, and each of them is a proper name
+# or a word German writes the way English does.
+VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
+    "de": {
+        "Findling": "the name of the app, the same word in every language of this tree",
+        "%1$s in %2$s": "two placeholders and the preposition between them, which German spells the same way",
+        "PDF": "the proper name of a file format, the same abbreviation in every language of this tree",
+        "Text": "the same word in German, and an invented difference would be a mistranslation",
+    },
+    "fr": {
+        "Findling": "the name of the app, the same word in all three languages",
+        "Page %s": "Page is the same word in French, and a difference would be a loss",
+        "PDF": "the proper name of a file format, the same abbreviation in all three languages",
+        "Documents": "the same word in French, and an invented difference would be a mistranslation",
+        "Images": "the same word in French, and an invented difference would be a mistranslation",
+    },
 }
+
+# ``de_DE`` carries the same words as ``de`` by the decision written above
+# ``L10N_DE_DE_JSON``, so it carries the same exceptions. It is bound to the
+# German entry instead of being spelled out a second time, because two copies of
+# one list are two things that have to stay equal and
+# ``test_the_german_catalogue_covers_both_german_language_codes`` already holds
+# the sameness of the words themselves.
+VALUES_THAT_MAY_EQUAL_THEIR_KEY["de_DE"] = VALUES_THAT_MAY_EQUAL_THEIR_KEY["de"]
 
 # The printf directives a value has to carry in the same number as its key: the
 # numbered form with the dollar sign, the plain one, the %n of the plural forms
@@ -418,6 +447,18 @@ def catalogue_of(path: Path) -> dict[str, str | list[str]]:
     return json.loads(source[source.index("{") : source.rindex("}") + 1])
 
 
+def language_code_of(path: Path) -> str:
+    """The language code a catalogue file belongs to, read off its name.
+
+    ``fr.json`` is ``fr`` and ``pt_BR.js`` is ``pt_BR``: the code is everything
+    before the suffix, and the underscore of a regional code is part of it. This
+    is one line and stands here all the same, because the alternative is a second
+    table from file to code next to ``L10N_CATALOGUES``, and a second table is a
+    second place where a new language is forgotten.
+    """
+    return path.stem
+
+
 def scan_key_sets(keys_of: Mapping[str, frozenset[str]]) -> list[str]:
     """Findings over the catalogues: a file whose key set differs from the first."""
     reference_name = next(iter(keys_of))
@@ -429,8 +470,12 @@ def scan_key_sets(keys_of: Mapping[str, frozenset[str]]) -> list[str]:
     ]
 
 
-def scan_french_completeness(name: str, catalogue: Mapping[str, str | list[str]]) -> list[str]:
-    """Findings of the French catalogue: a value empty or still in English.
+def scan_completeness(
+    name: str,
+    catalogue: Mapping[str, str | list[str]],
+    exceptions: Mapping[str, str],
+) -> list[str]:
+    """Findings of one catalogue: a value empty or still in English.
 
     The emptiness runs over every form, because an empty second plural form is
     a blank line on the page for every number above one. The identity with the
@@ -440,11 +485,17 @@ def scan_french_completeness(name: str, catalogue: Mapping[str, str | list[str]]
     further exception for a value that is translated. It is the same reading the
     machine checks of docs/l10n-french.md take, where the count of values equal
     to their source string is five, every one of them named.
+
+    The exceptions arrive as a parameter since plan 20-03, and that is the whole
+    difference to the French scanner this one used to be. A module constant made
+    this function one that happened to run over French; a parameter makes it the
+    same function for every language, and the caller is the one place that
+    decides which language it is judging.
     """
     violations: list[str] = []
     for key, value in catalogue.items():
         violations.extend(f"{name}: {key!r} has an empty value" for form in forms_of(value) if form.strip() == "")
-        if value == key and key not in FRENCH_VALUES_THAT_MAY_EQUAL_THEIR_KEY:
+        if value == key and key not in exceptions:
             violations.append(f"{name}: {key!r} is still the English source string")
     return violations
 
@@ -1827,36 +1878,65 @@ def test_all_six_catalogues_carry_the_same_keys() -> None:
     assert len(scan_key_sets(drifted)) == 1
 
 
-def test_every_french_value_carries_a_french_wording() -> None:
-    """G2 of plan 11-08: is there a key that never received its translation?
+def test_every_catalogue_value_carries_a_wording_of_its_language() -> None:
+    """G2 of plan 11-08, over every catalogue since plan 20-03.
 
     Empty or identical to the English source string are the two shapes an
     untranslated entry takes, and both of them ship a catalogue that claims a
     completeness it does not have. That is the outcome docs/l10n-french.md was
     written to prevent: 24 of 174 strings produce a half French surface.
 
-    The five exceptions are named in ``FRENCH_VALUES_THAT_MAY_EQUAL_THEIR_KEY``
-    with their reason, and they are a list rather than a count on purpose: two
-    since plan 11-08, three more with the file type chips of phase 13.
+    The exceptions are named in ``VALUES_THAT_MAY_EQUAL_THEIR_KEY`` per language
+    code, with their reason, and they are a list rather than a count on purpose:
+    two since plan 11-08, three more with the file type chips of phase 13, and
+    four of their own for German since this plan read the tree instead of
+    assuming it.
+
+    A language code without an entry in that table is a failure that names the
+    code. It would be cheaper to hand an empty mapping to an unknown language and
+    let the scan run, and it would be wrong: an empty mapping is a claim that
+    this language has no intended sameness with English, and nobody made that
+    claim. The gate asks for the claim before it judges the catalogue.
     """
+    missing = [path.name for path in L10N_CATALOGUES if not path.is_file()]
+    assert missing == [], f"catalogues are missing: {missing}"
+
+    unargued = sorted(
+        {language_code_of(path) for path in L10N_CATALOGUES} - set(VALUES_THAT_MAY_EQUAL_THEIR_KEY),
+    )
+    assert unargued == [], f"languages without a list of exceptions: {unargued}"
+
     findings = [
         message
-        for path in (L10N_FR_JSON, L10N_FR_JS)
-        for message in scan_french_completeness(path.name, catalogue_of(path))
+        for path in L10N_CATALOGUES
+        for message in scan_completeness(
+            path.name,
+            catalogue_of(path),
+            VALUES_THAT_MAY_EQUAL_THEIR_KEY[language_code_of(path)],
+        )
     ]
 
     assert findings == []
-    # The exceptions are exceptions of this tree and not of a former one: both
-    # keys still exist, so neither line of the list covers nothing.
-    french = catalogue_of(L10N_FR_JSON)
-    assert [key for key in FRENCH_VALUES_THAT_MAY_EQUAL_THEIR_KEY if key not in french] == []
+    # The exceptions are exceptions of this tree and not of a former one: every
+    # key of every list still exists, so no line of any list covers nothing.
+    stale = sorted(
+        f"{code}: {key}"
+        for code, exceptions in VALUES_THAT_MAY_EQUAL_THEIR_KEY.items()
+        for key in exceptions
+        if key not in catalogue_of(REPO_ROOT / "php" / "l10n" / f"{code}.json")
+    )
+    assert stale == [], f"exceptions for keys that no longer exist: {stale}"
     # And the scan can go red, in both of its shapes.
     dirty: dict[str, str | list[str]] = {
         "Reason": "Reason",
         "Files": "",
         "_and %n more_::_and %n more_": ["et %n autre", ""],
     }
-    assert len(scan_french_completeness("sample.json", dirty)) == 3
+    assert len(scan_completeness("sample.json", dirty, {})) == 3
+    # And the exceptions are read rather than carried along: the same catalogue
+    # with "Reason" argued is one finding fewer. Without this line a scanner that
+    # ignored its third argument would look exactly as green as this one.
+    assert len(scan_completeness("sample.json", dirty, {"Reason": "argued for this sample"})) == 2
 
 
 def test_no_french_value_loses_or_invents_a_placeholder() -> None:
