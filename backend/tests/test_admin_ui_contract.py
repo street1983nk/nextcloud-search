@@ -396,15 +396,50 @@ def scan_french_completeness(name: str, catalogue: Mapping[str, str | list[str]]
     return violations
 
 
+def expected_directives_per_form(key: str) -> tuple[list[str], list[str]]:
+    """The directives a key demands of its first form and of every further one.
+
+    Nextcloud keeps a plural under ``_<singular>_::_<plural>_``, so such a key is
+    the concatenation of two source strings and not one. It therefore carries
+    every directive twice while each form carries it once, and a comparison
+    against the whole key would hold every translated plural for incomplete. Cut
+    at the mark, drop the leading underscore of the left half and the trailing
+    one of the right, and each form is judged against the source string it really
+    translates: the singular half against form 0, the plural half against the
+    rest.
+
+    A key without the mark keeps the reading of before: one expectation for all
+    forms. The cut lives here and only here, so that the scanner below reads as
+    one comparison and a second shape of the same split cannot drift in.
+    """
+    if "_::_" not in key:
+        expected = sorted(PRINTF_DIRECTIVE.findall(key))
+        return expected, expected
+
+    singular, plural = key.split("_::_", 1)
+    return (
+        sorted(PRINTF_DIRECTIVE.findall(singular.removeprefix("_"))),
+        sorted(PRINTF_DIRECTIVE.findall(plural.removesuffix("_"))),
+    )
+
+
 def scan_placeholder_parity(name: str, catalogue: Mapping[str, str | list[str]]) -> list[str]:
-    """Findings of a catalogue: a value whose directives are not those of its key."""
+    """Findings of a catalogue: a value whose directives are not those of its key.
+
+    The expectation comes from ``expected_directives_per_form`` and is two
+    expectations rather than one, because a plural key is two source strings
+    glued together; the reason stands in that docstring. The finding names the
+    form it was made in, so that a loss in the second form does not read like a
+    loss in the first.
+    """
     violations: list[str] = []
     for key, value in catalogue.items():
-        expected = sorted(PRINTF_DIRECTIVE.findall(key))
-        for form in forms_of(value):
+        first_form, further_forms = expected_directives_per_form(key)
+        for index, form in enumerate(forms_of(value)):
+            expected = first_form if index == 0 else further_forms
             found = sorted(PRINTF_DIRECTIVE.findall(form))
             if found != expected:
-                violations.append(f"{name}: {key!r} carries {found} where its key carries {expected}")
+                violations.append(f"{name}: {key!r} form {index} carries {found} where its key carries {expected}")
     return violations
 
 
@@ -1731,7 +1766,11 @@ def test_every_french_value_carries_a_french_wording() -> None:
     french = catalogue_of(L10N_FR_JSON)
     assert [key for key in FRENCH_VALUES_THAT_MAY_EQUAL_THEIR_KEY if key not in french] == []
     # And the scan can go red, in both of its shapes.
-    dirty: dict[str, str | list[str]] = {"Reason": "Reason", "Files": "", "and %n more": ["et %n autre", ""]}
+    dirty: dict[str, str | list[str]] = {
+        "Reason": "Reason",
+        "Files": "",
+        "_and %n more_::_and %n more_": ["et %n autre", ""],
+    }
     assert len(scan_french_completeness("sample.json", dirty)) == 3
 
 
@@ -1758,9 +1797,19 @@ def test_no_french_value_loses_or_invents_a_placeholder() -> None:
     # The anti vacuity clause: a catalogue without directives would be judged
     # perfect by a scan that has nothing to compare.
     assert [key for key in catalogue_of(L10N_FR_JSON) if PRINTF_DIRECTIVE.search(key)] != []
-    # And it can go red: a lost numbered placeholder, and a plural whose second
-    # form dropped its %n while the first one kept it.
-    dirty: dict[str, str | list[str]] = {"%1$s in %2$s": "%1$s dans", "%n day": ["%n jour", "jours"]}
+    # The split of plan 20-01 reads both ways, and these two lines are what say
+    # so. A composite key whose two forms are both right is silent; without the
+    # split it would report both of them, because the key carries two %n and
+    # each form carries one.
+    composite: dict[str, str | list[str]] = {"_%n day_::_%n days_": ["%n jour", "%n jours"]}
+    assert scan_placeholder_parity("sample.json", composite) == []
+    # And the split swallows nothing: the plural half still demands its %n, so a
+    # second form without one is exactly one finding.
+    lost: dict[str, str | list[str]] = {"_%n day_::_%n days_": ["%n jour", "jours"]}
+    assert len(scan_placeholder_parity("sample.json", lost)) == 1
+    # And it can go red in the other half too: a lost numbered placeholder, and a
+    # plural whose first form dropped its %n while the second one kept it.
+    dirty: dict[str, str | list[str]] = {"%1$s in %2$s": "%1$s dans", "_%n day_::_%n days_": ["jour", "%n jours"]}
     assert len(scan_placeholder_parity("sample.json", dirty)) == 2
 
 
