@@ -316,6 +316,59 @@ def scan_page_script_for_interception(name: str, source: str) -> list[str]:
 FRENCH_PLURAL_FORM = "nplurals=2; plural=(n > 1);"
 GERMAN_PLURAL_FORM = "nplurals=2; plural=(n != 1);"
 
+# The rule every language code of this tree declares, mapped to the string its
+# catalogues have to carry. Read verbatim on 25.09.2026 out of
+# ``core/l10n/<code>.json`` of both Nextclouds of the version window, 34.0.3 and
+# 35.0.0, which carry the same string character for character; the reading and
+# the command that repeats it stand in docs/l10n-catalogues.md, section 3.
+#
+# Five of the eight codes have no catalogue file yet and stand here all the same,
+# because the rule comes out of the core file and not out of our catalogue.
+# Keeping the read ones apart from the unread ones would mean maintaining one
+# table twice and deciding, on the day a file arrives, which of the two halves
+# was right.
+#
+# ``fr`` is the single entry that is not the core rule. Nextcloud 34 and 35 run
+# French with ``nplurals=3``; Findling ships two forms since plan 11-08, and that
+# variant is correct in both of its halves. Changing it would reword sentences
+# the owner accepted on three dates, for nothing. It is also why this is a
+# mapping and no longer two constants: ``fr`` stays at two forms while ``es``
+# goes to three, and a gate with two constants cannot hold both at once.
+PLURAL_FORM_OF = {
+    "de": GERMAN_PLURAL_FORM,
+    "de_DE": GERMAN_PLURAL_FORM,
+    "fr": FRENCH_PLURAL_FORM,
+    "es": "nplurals=3; plural=n == 1 ? 0 : n != 0 && n % 1000000 == 0 ? 1 : 2;",
+    "it": "nplurals=3; plural=n == 1 ? 0 : n != 0 && n % 1000000 == 0 ? 1 : 2;",
+    "nl": GERMAN_PLURAL_FORM,
+    "pt_PT": "nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % 1000000 == 0 ? 1 : 2;",
+    "pt_BR": "nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % 1000000 == 0 ? 1 : 2;",
+}
+
+# How many forms a plural value of each catalogue has to carry. Written down and
+# deliberately not parsed out of the ``nplurals=`` of the rule above: a parsed
+# number would hang on the very string this gate judges, so a catalogue that
+# declared a wrong rule would build itself a matching expectation and both halves
+# of the gate would agree on the same mistake. Two numbers from two sources
+# disagree loudly; one number from one source cannot disagree at all.
+FORM_COUNT_OF = {
+    "de": 2,
+    "de_DE": 2,
+    "fr": 2,
+    "es": 3,
+    "it": 3,
+    "nl": 2,
+    "pt_PT": 3,
+    "pt_BR": 3,
+}
+
+# The plural rule of a ``.js`` catalogue is the fourth argument of
+# ``OC.L10N.register`` and therefore the last quoted string of the file. It is
+# cut out here instead of being looked for with ``in``, so that both halves of a
+# language go through the same scanner: a ``.js`` that merely contains the right
+# rule somewhere would pass a containment test while declaring another one.
+JS_PLURAL_FORM = re.compile(r'\n"([^"]*)"\);\s*\Z')
+
 # The named exceptions of gate G2, taken from the section "Ausnahmen fuer das
 # Vollstaendigkeitsgate G2" of docs/l10n-french.md. A list and deliberately not
 # a threshold: a number that says "this many values may equal their key" covers
@@ -443,13 +496,30 @@ def scan_placeholder_parity(name: str, catalogue: Mapping[str, str | list[str]])
     return violations
 
 
-def scan_french_plural_rule(name: str, plural_form: str) -> list[str]:
-    """Findings of a French catalogue: the plural rule it declares."""
+def scan_plural_rule(name: str, code: str, plural_form: str) -> list[str]:
+    """Findings of one catalogue: the plural rule it declares for its language.
+
+    Two findings and not one, because a wrong rule and a rule copied out of the
+    German catalogue are two different mistakes and the second one names its
+    cause: German answers n = 0 with the plural, and a file that took its rule
+    from de.js is wrong at exactly that one number and right everywhere else,
+    which is how it survives every diff.
+
+    The German check is language aware, and Dutch is the case that forced it to
+    be. ``nl`` declares ``nplurals=2; plural=(n != 1);``, the same string as
+    German, character for character, because that is the rule of both languages.
+    A scan that reported "carries the German plural rule" on sight would be red
+    forever on a Dutch catalogue in which nothing whatsoever is wrong, and a red
+    gate that is right to be ignored is worse than no gate. The German rule is
+    therefore only a finding when it is the German one *and* not the one this
+    code is supposed to carry.
+    """
+    expected = PLURAL_FORM_OF[code]
     violations: list[str] = []
-    if GERMAN_PLURAL_FORM in plural_form:
-        violations.append(f"{name}: carries the German plural rule, which answers n = 0 with the plural")
-    if plural_form != FRENCH_PLURAL_FORM:
-        violations.append(f"{name}: carries {plural_form!r} and not {FRENCH_PLURAL_FORM!r}")
+    if GERMAN_PLURAL_FORM in plural_form and expected != GERMAN_PLURAL_FORM:
+        violations.append(f"{name}: carries the German plural rule, which is not the rule of {code}")
+    if plural_form != expected:
+        violations.append(f"{name}: carries {plural_form!r} and not the {expected!r} of {code}")
     return violations
 
 
@@ -1828,33 +1898,69 @@ def test_no_french_value_loses_or_invents_a_placeholder() -> None:
     assert len(scan_placeholder_parity("sample.json", dirty)) == 2
 
 
-def test_the_french_catalogues_carry_the_french_plural_rule() -> None:
-    """G4 of plan 11-08: which plural rule does French ship, in both files?
+def test_every_catalogue_carries_the_plural_rule_of_its_language() -> None:
+    """G4 of plan 11-08, judged per language code since plan 20-02.
 
-    The rule stands twice, as ``pluralForm`` in fr.json and as the fourth
-    argument of ``OC.L10N.register`` in fr.js, and the two have to be the same
-    string. It is the value a copy of de.js gets wrong, and it is wrong at
-    exactly one number: at n = 0 French wants the singular and the German rule
-    answers with the plural.
+    The rule stands twice per language, as ``pluralForm`` in the ``.json`` and as
+    the fourth argument of ``OC.L10N.register`` in the ``.js``, and the two have
+    to be the same string. Until this plan the gate asked one question for
+    French and one for German, with the number of forms nailed into the body as
+    a literal 2. Spanish, Italian and both Portuguese carry three forms, so the
+    literal had to go, and the two constants had to become a table.
+
+    The loop walks the codes of ``PLURAL_FORM_OF`` that have a file today and
+    takes the rest along by itself on the day their files arrive. A code of
+    ``PLURAL_FORM_OF`` without a file is deliberately not a finding here: a
+    missing catalogue is the business of the key set gate over
+    ``L10N_CATALOGUES``, and two gates for one question are one question too
+    many.
     """
-    rule = json.loads(L10N_FR_JSON.read_text(encoding="utf-8"))["pluralForm"]
-    script = L10N_FR_JS.read_text(encoding="utf-8")
-
-    assert scan_french_plural_rule(L10N_FR_JSON.name, rule) == []
-    assert rule in script, "fr.js does not carry the rule of fr.json"
-    assert GERMAN_PLURAL_FORM not in script
-
-    # The five plural keys, the same ones as in German, with two forms each.
-    french = catalogue_of(L10N_FR_JSON)
     german = catalogue_of(L10N_JSON)
-    plural_keys = sorted(key for key, value in french.items() if isinstance(value, list))
-    assert plural_keys == sorted(key for key, value in german.items() if isinstance(value, list))
-    assert len(plural_keys) == 5
-    assert [key for key in plural_keys if len(french[key]) != 2] == []
+    german_plural_keys = sorted(key for key, value in german.items() if isinstance(value, list))
+    assert len(german_plural_keys) == 5
 
-    # And the assertion can go red. The German rule is reported twice, once as
-    # itself and once as the rule that is not the French one.
-    assert len(scan_french_plural_rule("sample.json", GERMAN_PLURAL_FORM)) == 2
+    present = [code for code in PLURAL_FORM_OF if (REPO_ROOT / "php" / "l10n" / f"{code}.json").is_file()]
+    # The anti vacuity clause of the loop: a rename that took the files away
+    # would leave the walk with nothing to do and the gate green over a tree
+    # without a single catalogue.
+    assert {"de", "de_DE", "fr"} <= set(present), f"a shipped catalogue lost its file: {sorted(present)}"
+
+    findings: list[str] = []
+    for code in present:
+        path_json = REPO_ROOT / "php" / "l10n" / f"{code}.json"
+        path_js = REPO_ROOT / "php" / "l10n" / f"{code}.js"
+        script = path_js.read_text(encoding="utf-8")
+        declared = JS_PLURAL_FORM.search(script)
+
+        findings.extend(
+            scan_plural_rule(path_json.name, code, json.loads(path_json.read_text(encoding="utf-8"))["pluralForm"])
+        )
+        if declared is None:
+            findings.append(f"{path_js.name}: declares no rule as the fourth argument of OC.L10N.register")
+        else:
+            findings.extend(scan_plural_rule(path_js.name, code, declared.group(1)))
+
+        catalogue = catalogue_of(path_json)
+        plural_keys = sorted(key for key, value in catalogue.items() if isinstance(value, list))
+        if plural_keys != german_plural_keys:
+            drift = sorted(set(plural_keys) ^ set(german_plural_keys))
+            findings.append(f"{path_json.name}: its plural keys differ from the German ones in {drift}")
+        findings.extend(
+            f"{path_json.name}: {key!r} carries {len(catalogue[key])} forms where {code} wants {FORM_COUNT_OF[code]}"
+            for key in plural_keys
+            if len(catalogue[key]) != FORM_COUNT_OF[code]
+        )
+
+    assert findings == []
+    # And the scan can go red, in both of its shapes. Spanish handed the German
+    # rule is reported twice, once as the copied German rule and once as the rule
+    # that is not the Spanish one.
+    assert len(scan_plural_rule("sample.json", "es", GERMAN_PLURAL_FORM)) == 2
+    # Dutch handed the same string is reported not at all, because for Dutch it
+    # is the right rule. This line is the one that keeps the gate usable once
+    # nl.json exists; without it the language aware check reads like an oversight
+    # and the next reader takes it back out.
+    assert scan_plural_rule("sample.json", "nl", GERMAN_PLURAL_FORM) == []
 
 
 def test_every_reason_of_the_closed_list_has_a_label_and_a_remedy() -> None:
