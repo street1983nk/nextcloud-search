@@ -44,7 +44,7 @@ from findling.embed.model import EmbeddingModel
 from findling.index.open import LANGUAGES_MARK, SCHEMA_MARK, expected_versions, open_index, open_reader
 from findling.index.schema import BODY_FIELD, FIELD_NAME, FIELD_TITLE
 from findling.index.wordlist import build_artifact
-from findling.query.rewrite import BODY_BOOST, LEGACY_PLAN, NAME_BOOST, TITLE_BOOST, FieldPlan
+from findling.query.rewrite import BODY_BOOST, EMPTY_PLAN, LEGACY_PLAN, NAME_BOOST, TITLE_BOOST, FieldPlan
 from findling.store.repo import EMBEDDING_MARK, LEGACY_LANGUAGES, VECTOR_ONLY_MARKS, Store, open_read_only
 from findling.store.vectors import EMBEDDING_MODEL, VectorStore, embedding_mark, open_vectors
 
@@ -335,6 +335,105 @@ def _read_only_vectors(path: Path) -> VectorStore | None:
         return None
 
 
+def _of_the_marks(marks: Mapping[str, str]) -> FieldPlan | None:
+    """The plan the two stored marks describe, None when they give no permission.
+
+    The two gates of :func:`field_plan_for` in one place, so that what follows
+    them reads as the cascade it is. Both of them answer None rather than a plan
+    of their own: a gate that picked the fallback itself would be a second place
+    deciding what the fallback is, and the caller is the one place that probes
+    it.
+
+    The reasoning of both gates is in the docstring of the caller. In short: a
+    schema mark that is not literally the current one is no permission, and a
+    language mark that names no code this schema knows leaves nothing to search
+    in.
+    """
+    if marks.get(SCHEMA_MARK) != str(SCHEMA_VERSION):
+        return None
+
+    stored = marks.get(LANGUAGES_MARK, "")
+    active = {code for code in stored.split(",") if code} or set(LEGACY_LANGUAGES)
+    # Iterated over BODY_FIELD and never over the mark, because that mapping
+    # IS the schema field order and because a code nobody knows has no field
+    # to contribute. body_de gets no exception of any kind: it is written
+    # unconditionally, but an instance that switched German off did not mean
+    # a question against the German chain (19-RESEARCH pitfall 7).
+    bodies = tuple(BODY_FIELD[code] for code in BODY_FIELD if code in active)
+    if not bodies:
+        return None
+
+    boosts = {BODY_FIELD[code]: BODY_BOOST[code] for code in BODY_FIELD if code in active}
+    boosts[FIELD_NAME] = NAME_BOOST
+    boosts[FIELD_TITLE] = TITLE_BOOST
+    return FieldPlan(fields=(*bodies, FIELD_NAME, FIELD_TITLE), boosts=boosts, title_only=(FIELD_NAME,))
+
+
+def _probed(plan: FieldPlan, index: Index) -> FieldPlan | None:
+    """The plan without the names this directory does not carry, None when nothing is left.
+
+    Audit finding M-19-01. The probe used to run over the body fields of the
+    computed plan alone and answered one field that raised with the whole legacy
+    plan, which left two holes in a gate that is otherwise closed: ``name`` and
+    ``title`` went out unprobed although they travel in the same two parameters
+    and raise in the same way, and the plan that was fallen back to had never
+    been held against the directory at all. A fallback nobody probed is the one
+    plan that is guaranteed to raise on the day one of those four names moves,
+    and a gate with an unprobed back side is not a gate.
+
+    So every name that reaches the parser is asked for here, out of both halves
+    of the value and out of the file name answer as well, and what cannot be
+    asked for is left out instead of taking the rest of the plan with it. A plan
+    of four fields costs four ``doc_freq(field, "")`` calls at 0.26 us each
+    (19-RESEARCH measurement M-2), a plan of six languages costs eight, and all
+    of them are paid once per opening of the reading side rather than once per
+    keystroke.
+
+    One warning per dropped name, with the field name and the type of the
+    exception in it and nothing else: no path, no search term, and no search term
+    reaches this function in the first place. It is a warning and not the debug
+    line of :func:`filled_languages`, because a name the marks promise and the
+    directory does not carry means the two halves of a volume do not belong
+    together.
+
+    None and not an empty plan, so that the caller can tell "this plan kept
+    nothing" from "this plan is the answer" in one branch. The empty plan is what
+    it decides on afterwards, and :func:`findling.query.rewrite.build_query`
+    turns that one into an empty answer rather than into a raising parser call.
+    """
+    searcher = index.searcher()
+    kept: list[str] = []
+    # Asked once per name and not once per mention. Every name of a plan stands
+    # in at least two of the three halves, so a set of what has been asked is
+    # what keeps one missing field to one log line instead of two.
+    asked: set[str] = set()
+    for field in (*plan.fields, *plan.boosts, *plan.title_only):
+        if field in asked:
+            continue
+        asked.add(field)
+        try:
+            searcher.doc_freq(field, "")
+        # Deliberately every exception: the measured one is a ValueError out of
+        # tantivy, and a directory that answers a lookup with something else is
+        # no better a place to search in.
+        except Exception as error:
+            LOGGER.warning(
+                "the field %s is not in the directory the marks describe, an %s, it is left out of the search",
+                field,
+                type(error).__name__,
+            )
+            continue
+        kept.append(field)
+    fields = tuple(name for name in plan.fields if name in kept)
+    if not fields:
+        return None
+    return FieldPlan(
+        fields=fields,
+        boosts={name: weight for name, weight in plan.boosts.items() if name in kept},
+        title_only=tuple(name for name in plan.title_only if name in kept),
+    )
+
+
 def field_plan_for(marks: Mapping[str, str], index: Index) -> FieldPlan:
     """What a bare word searches on this directory, read out of its two marks.
 
@@ -370,16 +469,16 @@ def field_plan_for(marks: Mapping[str, str], index: Index) -> FieldPlan:
     does not know is passed over and the remaining ones stand; if nothing
     remains, the legacy plan is the answer again.
 
-    **The counter probe at the directory itself.** One ``doc_freq(field, "")``
-    per body field, measured at 0.26 us a call (19-RESEARCH measurement M-2) and
-    paid once per open rather than once per keystroke. It catches the one state
-    the mark cannot see: a ``state.db`` restored from a backup beside an older
-    index directory, where the mark promises thirteen fields and the directory
-    holds nine. One field that raises drops the WHOLE plan back to the legacy
-    one, because a plan is one value and half of it is not a plan, and it is a
-    warning rather than the debug line of :func:`filled_languages` because a
-    probe that fails here means the two halves of a volume do not belong
-    together.
+    **The counter probe at the directory itself**, and since audit finding
+    M-19-01 it stands under every plan that leaves here, the fallback included.
+    It catches the one state the mark cannot see: a ``state.db`` restored from a
+    backup beside an older index directory, where the mark promises thirteen
+    fields and the directory holds nine. What it does with a name that raises is
+    written at :func:`_probed`; what this function does with the answer is the
+    cascade below. The legacy plan is the second candidate and not the certain
+    answer, because it names four fields that a later schema generation may drop
+    or rename, and a fallback that raises is a worse failure than the one it was
+    reached for.
 
     **Never raises**, deliberately and with every exception caught. This runs
     inside the try of :func:`read_side`, where an exception would cost the whole
@@ -397,40 +496,17 @@ def field_plan_for(marks: Mapping[str, str], index: Index) -> FieldPlan:
     a detector is not forbidden here, it has nothing to attach to.
     """
     try:
-        if marks.get(SCHEMA_MARK) != str(SCHEMA_VERSION):
-            return LEGACY_PLAN
-
-        stored = marks.get(LANGUAGES_MARK, "")
-        active = {code for code in stored.split(",") if code} or set(LEGACY_LANGUAGES)
-        # Iterated over BODY_FIELD and never over the mark, because that mapping
-        # IS the schema field order and because a code nobody knows has no field
-        # to contribute. body_de gets no exception of any kind: it is written
-        # unconditionally, but an instance that switched German off did not mean
-        # a question against the German chain (19-RESEARCH pitfall 7).
-        bodies = tuple(BODY_FIELD[code] for code in BODY_FIELD if code in active)
-        if not bodies:
-            return LEGACY_PLAN
-
-        boosts = {BODY_FIELD[code]: BODY_BOOST[code] for code in BODY_FIELD if code in active}
-        boosts[FIELD_NAME] = NAME_BOOST
-        boosts[FIELD_TITLE] = TITLE_BOOST
-
-        searcher = index.searcher()
-        for field in bodies:
-            try:
-                searcher.doc_freq(field, "")
-            # One field, and the whole plan. The log line carries the field name
-            # and the type of the exception, the way the lines of read_side() and
-            # filled_languages() do, and it carries no path and no search term.
-            except Exception as error:
-                LOGGER.warning(
-                    "the field %s is not in the directory the marks describe, an %s, the search keeps the legacy plan",
-                    field,
-                    type(error).__name__,
-                )
-                return LEGACY_PLAN
-
-        return FieldPlan(fields=(*bodies, FIELD_NAME, FIELD_TITLE), boosts=boosts, title_only=(FIELD_NAME,))
+        computed = _of_the_marks(marks)
+        probed = None if computed is None else _probed(computed, index)
+        if probed is not None:
+            return probed
+        # The cascade of M-19-01, and both of its steps are the same question
+        # asked of the directory: what is left of the plan the marks describe,
+        # and failing that, what is left of the four names every release up to
+        # 1.2.0 searched. A directory that answers neither is a directory no
+        # search can reach, and the empty plan says exactly that instead of
+        # handing the parser a name it will raise on.
+        return _probed(LEGACY_PLAN, index) or EMPTY_PLAN
     # Deliberately every exception, for the reason in the docstring above.
     except Exception as error:
         LOGGER.warning(

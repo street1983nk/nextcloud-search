@@ -42,7 +42,7 @@ import logging
 from pathlib import Path
 
 import pytest
-from tantivy import Index
+from tantivy import Index, SchemaBuilder
 
 from findling.api.resources import field_plan_for
 from findling.config import SCHEMA_VERSION
@@ -55,7 +55,7 @@ from findling.index.schema import (
     FIELD_NAME,
     FIELD_TITLE,
 )
-from findling.query.rewrite import BODY_BOOST, LEGACY_PLAN, build_query
+from findling.query.rewrite import BODY_BOOST, EMPTY_PLAN, LEGACY_PLAN, build_query
 from findling.store.repo import LEGACY_LANGUAGES, open_store
 
 # The mark a directory carries once the rebuild of phase 18 has run on it. Read
@@ -284,6 +284,88 @@ def test_a_state_database_beside_an_older_directory_falls_back_and_says_so(
     # that wrote this line is never handed a search term at all.
     assert "/" not in lines[0]
     assert chr(92) not in lines[0]
+
+
+def _a_directory_carrying(root: Path, *fields: str) -> Index:
+    """A real tantivy directory that carries exactly these field names.
+
+    The one thing the two fixtures of this file cannot stage: a directory that is
+    missing a name the plans hold for it. Both of them are built by the real
+    schema builders, and both of those are closed on purpose, so a directory that
+    has lost a field is staged by hand or not at all. The default tokeniser is
+    deliberate as well, because what is asked of this directory is whether a name
+    is in it and never how it analyses anything.
+    """
+    builder = SchemaBuilder()
+    for field in fields:
+        builder.add_text_field(field, stored=False)
+    root.mkdir(parents=True, exist_ok=True)
+    return Index(builder.build(), path=str(root))
+
+
+def test_a_body_field_the_directory_lacks_is_left_out_and_the_rest_of_the_plan_stands(
+    schema_1_index: Index,
+) -> None:
+    # Audit finding M-19-01, the cheap half. Until that finding one name the
+    # directory did not carry dropped the whole plan back to the legacy four,
+    # which on this volume means the search would have reached body_en, a chain
+    # this instance did not ask for, and would not have reached what its mark
+    # really promises. The plan that goes out now is the intersection of the two
+    # statements: what the marks ask for and what the directory carries.
+    plan = field_plan_for({SCHEMA_MARK: CURRENT_SCHEMA, LANGUAGES_MARK: "de,es"}, schema_1_index)
+
+    assert plan.fields == (FIELD_BODY_DE, FIELD_NAME, FIELD_TITLE)
+    assert FIELD_BODY_ES not in plan.boosts
+    assert FIELD_BODY_EN not in plan.fields, "the fallback would have brought a chain nobody asked for"
+    assert set(plan.boosts) == set(plan.fields)
+
+    rewritten = build_query(schema_1_index, "vertrag", plan=plan)
+
+    assert rewritten.errors == []
+    assert rewritten.query is not None
+
+
+def test_the_file_name_and_the_title_are_probed_like_every_other_name(tmp_path: Path) -> None:
+    # The first of the two holes M-19-01 names: both of these travel to the
+    # parser in the same two parameters as the body fields and raise in the same
+    # way, and until that finding the probe never asked for either of them. They
+    # are latent today, because no directory in the field is missing one; they
+    # become the guaranteed empty search bar on the day a schema generation
+    # renames one of them.
+    thin = _a_directory_carrying(tmp_path / "thin", FIELD_BODY_DE, FIELD_BODY_EN, FIELD_NAME)
+
+    plan = field_plan_for({SCHEMA_MARK: CURRENT_SCHEMA, LANGUAGES_MARK: ",".join(LEGACY_LANGUAGES)}, thin)
+
+    assert plan.fields == (FIELD_BODY_DE, FIELD_BODY_EN, FIELD_NAME)
+    assert FIELD_TITLE not in plan.fields
+    assert FIELD_TITLE not in plan.boosts
+
+    rewritten = build_query(thin, "vertrag", plan=plan)
+
+    assert rewritten.errors == []
+    assert rewritten.query is not None
+
+
+def test_a_directory_that_carries_none_of_the_names_ends_in_the_empty_plan(tmp_path: Path) -> None:
+    # The second hole of M-19-01, and the whole reason the fallback is probed
+    # rather than trusted: every path that used to give up handed out a plan that
+    # had never been held against the directory. The counter probe below is what
+    # that plan would have done here, and it is the exception this file exists to
+    # keep out of the search path. An empty answer with a warning in the log is a
+    # container an admin can read; a ValueError per keystroke is not.
+    stranger = _a_directory_carrying(tmp_path / "stranger", "haystack")
+
+    with pytest.raises(ValueError, match=FIELD_BODY_DE):
+        stranger.parse_query_lenient("vertrag", default_field_names=list(LEGACY_PLAN.fields))
+
+    plan = field_plan_for({SCHEMA_MARK: CURRENT_SCHEMA, LANGUAGES_MARK: "de,en,es"}, stranger)
+
+    assert plan == EMPTY_PLAN
+
+    rewritten = build_query(stranger, "vertrag", plan=plan)
+
+    assert rewritten.query is None
+    assert rewritten.errors == []
 
 
 @pytest.mark.parametrize(

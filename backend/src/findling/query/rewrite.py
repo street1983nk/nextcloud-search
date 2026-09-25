@@ -134,6 +134,19 @@ LEGACY_PLAN: Final = FieldPlan(
     title_only=(FIELD_NAME,),
 )
 
+# The plan of a directory that answers none of the names anybody holds for it,
+# and the one value build_query turns into an empty answer instead of a query.
+#
+# Audit finding M-19-01. Until that finding the fallback of
+# findling.api.resources.field_plan_for was the legacy plan and nothing stood
+# behind it, so a directory that had lost one of the four legacy fields would
+# have been answered with a plan naming it, which is the ValueError this whole
+# value exists to keep out of the search path. The fallback is probed against the
+# directory now like every other plan, and this is what is left when even that
+# probe keeps nothing: a container that answers every search empty and says so in
+# its log, rather than one that answers every search with an exception.
+EMPTY_PLAN: Final = FieldPlan(fields=(), boosts={}, title_only=())
+
 # SRCH-03 file type. Nextcloud has no built in filter for it, so it travels
 # inside the search line and is translated into a required term on the extension.
 TYPE_PREFIX: Final = "type:"
@@ -616,9 +629,27 @@ def build_query(
             one_term=one_term,
         )
 
+    searched = list(plan.title_only) if title_only else list(plan.fields)
+    if not searched:
+        # No field, no query, and the same empty answer as a line without a term
+        # above. A plan reaches this state when the directory knows none of the
+        # names its marks promise and none of the legacy four either, which is
+        # audit finding M-19-01: the alternative is handing an empty field list
+        # to the parser, and an empty list is the one input that turns the
+        # lenient parser into a raising one. The reason is already in the log,
+        # one warning per dropped field, written where the plan was computed.
+        return RewrittenQuery(
+            query=None,
+            text="",
+            extensions=extensions,
+            errors=[],
+            operators=operators,
+            one_term=one_term,
+        )
+
     parsed, errors = index.parse_query_lenient(
         rewritten,
-        default_field_names=list(plan.title_only) if title_only else list(plan.fields),
+        default_field_names=searched,
         field_boosts=dict(plan.boosts),
         conjunction_by_default=True,
         allow_regexes=False,

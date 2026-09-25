@@ -955,8 +955,19 @@ PHP_TREE_HASH_TODAY = "a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab
 # the two halves of the bar into the rebuild, so the worker package goes on
 # importing nothing from the API package. No file came and none went, so
 # PACKAGE_FILES_TODAY stays at 56.
+# Moved on 2026-09-25 by the fix of audit finding M-19-01: two of the 56 files
+# changed their bytes. api/resources.py split field_plan_for into the two gates
+# of the marks (_of_the_marks) and the probe at the directory (_probed), and the
+# probe now runs over every name that reaches the parser, the file name and the
+# title included, drops the ones the directory does not carry instead of dropping
+# the whole plan, and runs under the fallback as well: the answer is the first of
+# the computed plan, the legacy plan and the empty plan that keeps a field.
+# query/rewrite.py got EMPTY_PLAN beside LEGACY_PLAN and the short circuit in
+# build_query that turns it into the same empty answer a line without a term
+# gets, because an empty field list is the one input that makes the lenient
+# parser raise. No file came and none went, so PACKAGE_FILES_TODAY stays at 56.
 PACKAGE_FILES_TODAY = 56
-PACKAGE_TREE_HASH_TODAY = "d970acade422a3efbe71f89cae9bd22c247ee915c3fd91ed840d9ba6db816221"
+PACKAGE_TREE_HASH_TODAY = "89e45546b0840e7d3c439f4c10add726890f904a921e55ce41a16ea5c1164d02"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
