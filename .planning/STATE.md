@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: executing
-stopped_at: 20-04 gebaut und committet (7dd61fd, c61955d, 64527aa, aa9f36a), Gates lokal gruen, NICHT gepusht
-last_updated: "2026-09-25T10:05:00.000Z"
-last_activity: 2026-09-25 -- 20-04 ausgefuehrt, Spanisch ausgeliefert
+stopped_at: 20-05 gebaut und committet (ecf8bd2, fff9aba, e6185c9, 42f6add), Gates lokal gruen, NICHT gepusht
+last_updated: "2026-09-25T11:20:00.000Z"
+last_activity: 2026-09-25 -- 20-05 ausgefuehrt, Italienisch ausgeliefert
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 38
-  completed_plans: 33
-  percent: 45
+  completed_plans: 34
+  percent: 46
 ---
 
 # Project State
@@ -21,12 +21,36 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 20 (ui-kataloge) laeuft; 20-01 abgenommen, 20-02 bis 20-04 gebaut
+**Current focus:** Phase 20 (ui-kataloge) laeuft; 20-01 abgenommen, 20-02 bis 20-05 gebaut
 
 ## Current Position
 
-Phase: 20 (ui-kataloge-es-it-nl-pt), 4 of 9 gebaut; Phase 19 COMPLETE 25.09.2026
-Status: 20-04 (der spanische Katalog) ist gebaut und committet (7dd61fd es.json, c61955d es.js
+Phase: 20 (ui-kataloge-es-it-nl-pt), 5 of 9 gebaut; Phase 19 COMPLETE 25.09.2026
+Status: 20-05 (der italienische Katalog) ist gebaut und committet (ecf8bd2 it.json plus it.js,
+fff9aba Gate-Eintrag, e6185c9 docs/l10n-italian.md, 42f6add Rule-3-Fix am Vokabular-Gate).
+php/l10n/it.json und it.js fuehren dieselben 202 Schluessel wie de.json, fuenf Pluralwerte mit
+drei Formen (Form 1 gleich Form 2), pluralForm mit nplurals=3 zeichengleich aus
+docs/l10n-catalogues.md und zeichengleich mit der spanischen Regel. L10N_CATALOGUES fuehrt
+jetzt ZEHN Eintraege. VALUES_THAT_MAY_EQUAL_THEIR_KEY["it"] fuehrt DREI begruendete Eintraege
+(Findling, PDF und %1$s in %2$s), gemessen per Lauf mit leerem Mapping: einer mehr als
+Spanisch, weil das Italienische dieselbe Praeposition schreibt wie das Englische.
+docs/l10n-italian.md (477 Zeilen, neun Abschnitte, 202 Tabellenzeilen) traegt den datierten
+Vorbehalt vom 25.09.2026 mit dem Satz "von keinem Muttersprachler gelesen". Das Gate hat KEINE
+Logikaenderung gebraucht: 39 Zufuegungen, 0 Loeschungen. Suite 2879 passed / 15 skipped,
+ruff/pyright/vulture gruen. NICHT gepusht.
+BEFUND 1 (Rule 3): eine alleinstehende <code>.json macht die Suite kaputt, nicht nur rot. Das
+Pluralregel-Gate liest zu jeder vorhandenen .json die .js unbedingt und faellt mit
+FileNotFoundError. Deshalb stehen it.json und it.js in EINEM Commit; der Gate-Eintrag bleibt
+ein eigener. MITZUNEHMEN IN 20-06 BIS 20-08: derselbe Commit-Zuschnitt.
+BEFUND 2 (Rule 3, behoben): das Vokabular-Gate fiel auch ueber der italienischen Doku, aber
+ueber einem ANDEREN Wort als vorhergesagt: nicht ueber dem Wort fuer Datei (das Italienische
+benutzt dort das englische Wort), sondern ueber dem fuer den Speicherort, neun Treffer. Ein
+zehnter Treffer war die echte deutsche Form in einer Erklaerzeile und ist umformuliert und
+nicht mitentschuldigt worden. MITZUNEHMEN: das Gate laufen lassen und die Treffer lesen, statt
+der Prognose der Vorgaengersprache zu glauben; sie ging zweimal knapp daneben.
+KAT-01 und KAT-02 bleiben ungehakt (beide umfassen zehn Katalogdateien, vier stehen).
+
+Vorheriger Stand: 20-04 (der spanische Katalog) ist gebaut und committet (7dd61fd es.json, c61955d es.js
 plus Gate-Eintrag, 64527aa docs/l10n-spanish.md, aa9f36a Rule-3-Fix am Vokabular-Gate).
 php/l10n/es.json und es.js fuehren dieselben 202 Schluessel wie de.json, fuenf Pluralwerte mit
 drei Formen (Form 1 gleich Form 2), pluralForm mit nplurals=3 zeichengleich aus
@@ -97,26 +121,36 @@ Instanz den Erststempel der Verzeichnismarken; Folge: Feldplan blieb LEGACY, rot
 Fix-Beweis). Endstand-CI 36096526219 GRUEN 4/4 inkl. arm64. Suite 2877 passed / 15 skipped.
 LEHRE: ein Audit-Fix, der einen Schreiber entfernt, braucht die Frage "wer schreibt das
 sonst noch auf JEDEM Pfad" plus einen Frischinstanz-Fall, bevor er reist.
-Last activity: 2026-09-25 -- 20-04 ausgefuehrt, keine offene Owner-Frage in Phase 20
+Last activity: 2026-09-25 -- 20-05 ausgefuehrt, keine offene Owner-Frage in Phase 20
 
-Progress: [████......] 45% (3 von 7 Phasen)
+Progress: [████......] 46% (3 von 7 Phasen)
 
 ## Naechster Schritt
 
-**20-05 planen und ausfuehren** (Italienisch: zwei Dateien, Eintrag in L10N_CATALOGUES und in
-VALUES_THAT_MAY_EQUAL_THEIR_KEY, docs/l10n-italian.md mit datiertem Vorbehalt). Danach 20-06
-bis 20-09, dann Phase 21 (nl-Komposita, eigenes Tor, streichbar) und Phase 22 (Messanfahrt
+**20-06 ausfuehren** (Niederlaendisch: zwei Dateien mit ZWEI Pluralformen, die zeichengleiche
+deutsche Regel als benannter Sonderfall, Eintrag in L10N_CATALOGUES und in
+VALUES_THAT_MAY_EQUAL_THEIR_KEY, docs/l10n-dutch.md mit datiertem Vorbehalt). Danach 20-07 bis
+20-09, dann Phase 21 (nl-Komposita, eigenes Tor, streichbar) und Phase 22 (Messanfahrt
 BL-F03).
-Mitzunehmen in 20-05 bis 20-08, aus 20-04 gemessen:
-1. Jede neue Sprache braucht einen eigenen Eintrag in VALUES_THAT_MAY_EQUAL_THEIR_KEY, sonst
+Mitzunehmen in 20-06 bis 20-08, aus 20-04 und 20-05 gemessen:
+1. Die .json und die .js einer Sprache gehoeren in EINEN Commit. Das Pluralregel-Gate liest zu
+   jeder vorhandenen php/l10n/<code>.json die zugehoerige .js unbedingt; eine alleinstehende
+   .json faellt mit FileNotFoundError, also ist der Zwischenstand keine halbe Arbeit, sondern
+   eine kaputte Suite. Der Gate-Eintrag bleibt ein eigener Commit.
+2. Jede neue Sprache braucht einen eigenen Eintrag in VALUES_THAT_MAY_EQUAL_THEIR_KEY, sonst
    faellt das Vollstaendigkeitsgate mit dem Sprachcode. Die Liste wird gefunden (Lauf mit
-   leerem Mapping) und nicht geraten; fuer es waren es zwei Schluessel, nicht fuenf wie bei fr.
-2. Italienisch braucht zusaetzlich einen AUSNAHMEN-Eintrag in tests/test_public_artifacts.py,
-   Familie vokabular: das italienische Wort fuer Datei traegt denselben gesperrten Wortstamm
-   wie das spanische. Portugiesisch und Niederlaendisch nicht.
-3. Die Giessform aus 20-01 zuerst gegen den unveraenderten Bestand pruefen (cast(alt) == alt,
-   sechs von sechs), dann erst schreiben. Listenwerte muessen einzeilig gefaltet werden.
-4. Ein literales Prozentzeichen wird %% geschrieben, besser noch umformuliert.
+   leerem Mapping) und nicht geraten; es hatte zwei Schluessel, it drei, fr fuenf. Fuer nl ist
+   mit mehr zu rechnen, weil Niederlaendisch mehrere dieser Woerter wie das Englische schreibt.
+3. Beim Vokabular-Gate in tests/test_public_artifacts.py wird gemessen und nicht prognostiziert.
+   Die Vorhersage aus 20-04 stimmte fuer it in der Wirkung, aber im falschen Wort. Fuer nl und
+   pt lautet die Prognose weiter "kein Treffer"; sie ist zweimal knapp danebengegangen.
+4. Ein echter Treffer der gesperrten deutschen Form wird umformuliert und nie mit dem
+   Dateieintrag mitentschuldigt: die Ausnahme gilt je Datei und deckt sonst genau den Fehler,
+   den die Familie fangen soll.
+5. Die Giessform aus 20-01 zuerst gegen den unveraenderten Bestand pruefen (cast(alt) == alt,
+   inzwischen acht von acht), dann erst schreiben. Listenwerte muessen einzeilig gefaltet
+   werden. Das Giessskript bleibt ausserhalb des Arbeitsbaums.
+6. Ein literales Prozentzeichen wird %% geschrieben, besser noch umformuliert.
 Offene Kleinigkeit aus 19: zwei DEFAULT_FIELDS-Prosastellen in
 backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt sie mit).
 
@@ -241,7 +275,26 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
   Page %s, Documents und Images im Spanischen eigene Woerter haben. Eine Zahl waere hier die
   falsche Groesse gewesen.
 
-- Ein Wortstamm-Gate auf einer Sprache stolpert ueber die Homographen einer anderen (20-04).
+- Ein Katalogpaar ist ein Commit und nicht zwei (20-05). Das Pluralregel-Gate laeuft ueber die
+  Codes von PLURAL_FORM_OF, die heute eine .json haben, und liest zu jedem die .js unbedingt.
+  Eine alleinstehende it.json bringt es nicht rot zum Fallen, sondern zum Absturz
+  (FileNotFoundError, 1 failed / 51 passed). Plan 20-04 hat diesen Zwischenstand committet, hier
+  ist er vermieden. Die Alternative, das Gate an den Zwischenstand anzupassen, waere die
+  Logikaenderung gewesen, die dieser Plan gerade beweisen sollte nicht zu brauchen.
+- Eine Parametrisierung ist erst bewiesen, wenn eine zweite neue Sprache sie nicht anfasst
+  (20-05). Der Gate-Diff fuer Italienisch zeigt 39 Zufuegungen und 0 Loeschungen, verteilt auf
+  Konstantenpaar, Tupel-Eintrag und Ausnahmeliste; kein Scanner, kein Testrumpf, keine Zahl im
+  Testnamen. Das ist die Zahl, an der 20-06 bis 20-08 sich messen lassen muessen.
+- Die Anrede einer Uebersetzung folgt Zeile fuer Zeile der Quelle (20-05). Der deutsche Katalog
+  wechselt zwischen Infinitivanweisung und Sie-Form; das Italienische kann beides, also wechselt
+  es mit. So bleibt der Wechsel eine Eigenschaft der Quelle statt eine Nachlaessigkeit der
+  Uebersetzung, und wer ihn vereinheitlichen will, findet die Stellen im deutschen Katalog.
+- Ein Wortstamm-Gate auf einer Sprache stolpert ueber die Homographen einer anderen (20-04,
+  bestaetigt und berichtigt in 20-05). Fuer Italienisch traf es nicht das Wort fuer Datei (das
+  Italienische benutzt dort das englische Wort), sondern das fuer den Speicherort. Die Prognose
+  der Vorgaengersprache sagt die Wirkung voraus und nicht das Wort; gelesen wird die Fundliste.
+  Und ein echter Treffer der deutschen Form wird umformuliert, nicht mitentschuldigt: der
+  Entwurf trug einen, die Zaehlung ging danach von zehn auf neun zurueck.
   Die Sperre des Vokabular-Gates sucht die deutsche Form eines Begriffs, also den Stamm ohne
   die englische Endung, und das spanische Wort fuer Datei faengt genau damit an; die neue
   Sprachdoku fiel mit 61 Treffern rot, keiner davon die gesuchte Form. Der Ausweg ist der
@@ -326,5 +379,5 @@ auf resolved gesetzt).
 ## Session Continuity
 
 Last session: 2026-09-25
-Stopped at: 20-04 ausgefuehrt und committet (7dd61fd, c61955d, 64527aa, aa9f36a), SUMMARY geschrieben, Gates lokal gruen, NICHT gepusht; kein Checkpoint in diesem Plan
-Resume file: .planning/phases/20-ui-kataloge-es-it-nl-pt/20-04-SUMMARY.md (naechster Schritt: 20-05 ausfuehren; der Orchestrator pusht gesammelt)
+Stopped at: 20-05 ausgefuehrt und committet (ecf8bd2, fff9aba, e6185c9, 42f6add), SUMMARY geschrieben, Gates lokal gruen, NICHT gepusht; kein Checkpoint in diesem Plan
+Resume file: .planning/phases/20-ui-kataloge-es-it-nl-pt/20-05-SUMMARY.md (naechster Schritt: 20-06 ausfuehren; der Orchestrator pusht gesammelt)
