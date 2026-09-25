@@ -502,8 +502,15 @@ zyklus() {
         else
             sed 's/^/  /' "$WORK/digest.err" 2>/dev/null || true
         fi
-        SPITZE=$(awk -F: '/^total, peak:/ {gsub(/[^0-9]/, "", $2); print $2; exit}' \
-            "$WORK/digest.txt" 2>/dev/null || true)
+        # Die erste ganze Zahl der Zeile und nicht alle Ziffern des Feldes nach
+        # dem ersten Doppelpunkt: rss_digest.py schreibt "total, peak: 1698 MB,
+        # at 2026-09-25T23:15:00Z", und das Feld reicht bis in die Uhrzeit. Die
+        # Vorgaengerin 94b klebte so Datum und Stunde an die Megabyte
+        # (11142026092103 in ihrer Rohdatei); Befund der Generalprobe 22-06.
+        SPITZE=$(awk '/^total, peak:/ {
+                for (i = 3; i <= NF; i++) if ($i ~ /^[0-9]+$/) { print $i; exit }
+                exit
+            }' "$WORK/digest.txt" 2>/dev/null || true)
         [ -n "${SPITZE:-}" ] || SPITZE=unlesbar
         protokoll "abtastreihe-spitze-mb $SPITZE"
         if [ "$SPITZE" = unlesbar ] && [ "$WEITER" = ja ]; then

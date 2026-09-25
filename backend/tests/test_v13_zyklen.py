@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import re
 import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -72,6 +73,33 @@ def test_the_residue_cycles_take_three_marks_and_print_both_differences() -> Non
     assert code.index("marke marke-c1") < code.index("zyklus 2") < code.index("marke marke-c2")
     assert 'protokoll "zyklus2-minus-a $(differenz_mb "$C2" "$A")"' in code
     assert 'protokoll "zyklus2-minus-c1 $(differenz_mb "$C2" "$C1")"' in code
+
+
+@pytest.mark.skipif(shutil.which("awk") is None, reason="no awk on this machine")
+def test_the_residue_cycles_read_the_peak_in_megabytes_and_not_the_clock() -> None:
+    """The peak line of rss_digest.py carries a time stamp behind the megabytes.
+
+    Found in the dress rehearsal of 22-06: the reader of 94b took every digit
+    after the first colon and wrote 16982026092523 for a peak of 1698 MB. The
+    awk program of 94c is taken out of the file and fed the line exactly as
+    rss_digest.py prints it.
+    """
+    text = RESIDUE_CYCLES.read_text(encoding="utf-8")
+    found = re.search(r"SPITZE=\$\(awk '(.*?)' \"\$WORK/digest\.txt\"", text, re.DOTALL)
+    assert found is not None
+    awk = shutil.which("awk")
+    assert awk is not None
+    digest = "shared samples:   83\ntotal, mean:      1168 MB\ntotal, peak:      1698 MB, at 2026-09-25T23:15:00Z\n"
+    answer = subprocess.run(  # noqa: S603 - an argument list, never a shell
+        [awk, found.group(1)],
+        input=digest,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    assert answer.returncode == 0, answer
+    assert answer.stdout.strip() == "1698"
 
 
 def test_the_residue_cycles_rebuild_nothing_between_c1_and_c2() -> None:
