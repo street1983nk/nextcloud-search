@@ -26,14 +26,14 @@ decisions:
   - "RAM-Posten als eigener Nachtrag vom 25.09.2026 vor 'Reproduzieren' plus Zeile in 'Stand dieses Berichts', weil performance.md keinen Abschnitt mit den deutschen Automatenposten hat"
   - "Deutscher Automat in performance.md mit 42,1 MB (arm64 nativ, grundlast-fein Schritt 10) zitiert, nicht mit den 41,9 MB aus dem Plan"
 metrics:
-  duration: ca. 30 min bis zum Checkpoint
-  completed: offen (Checkpoint Task 3)
-  tasks: 2 von 3 (Task 3 wartet auf Owner-Freigabe)
+  duration: ca. 30 min bis zum Checkpoint, dazu ca. 20 min CI
+  completed: 2026-09-25
+  tasks: 3 von 3
 ---
 
 # Phase 21 Plan 09: Doku, Schlussprüfung und CI-Beweis Summary
 
-Die niederländische Kompositumkette ist dokumentiert (Referenzseite, RAM-Posten mit Budget gegen 2.000 MB, Richtigstellung der 23 MB), der letzte veraltete Code-Kommentar ist nachgezogen, und lokal sind Suite und alle sieben Gates grün. Push und CI-Beweis warten auf die Owner-Freigabe.
+Die niederländische Kompositumkette ist dokumentiert (Referenzseite, RAM-Posten mit Budget gegen 2.000 MB, Richtigstellung der 23 MB), der letzte veraltete Code-Kommentar ist nachgezogen, und lokal sind Suite und alle sieben Gates grün. Nach Owner-Freigabe gepusht; im CI-Lauf 36157139922 sind der Kompositumfall nlc auf allen vier Matrixzeilen und Store upgrade 5 grün.
 
 ## Tasks
 
@@ -41,7 +41,7 @@ Die niederländische Kompositumkette ist dokumentiert (Referenzseite, RAM-Posten
 |------|------|--------|---------|
 | 1 | Doku und der letzte Kommentar im Code | 193100e | docs/dutch-analyzer.md, docs/language-analyzers.md, docs/performance.md, schema.py, test_measurement_scripts.py |
 | 2 | Schlussprüfung lokal | (kein Codecommit, Ergebnis hier) | keine; der Baumhash passte, test_measurement_scripts.py blieb unberührt |
-| 3 | Owner-Freigabe für den Push und der CI-Beweis | OFFEN | 21-09-SUMMARY.md |
+| 3 | Owner-Freigabe für den Push und der CI-Beweis | Push d074075..3563715, SUMMARY-Nachtrag im Folgecommit | 21-09-SUMMARY.md |
 
 ## Task 1: Doku
 
@@ -75,11 +75,25 @@ Akzeptanz: "Compounds are German only" 0, "dutch-analyzer.md" 1, `wordlist_hash_
 | D-06 Marke nicht gesät, Legacy-Regel | hält | `backend/tests/test_store_repo.py:448` `test_the_dutch_mark_is_never_written_by_the_seed`, Z. 412 `test_an_absent_dutch_mark_is_legacy_while_dutch_is_off`, Z. 465 `test_the_dutch_exception_falls_closed` (Tests aus 21-05) |
 | D-07 Splitter hinter der Faltung | hält | `backend/tests/test_dutch_analyzer.py:187` `test_the_dutch_chain_stands_in_the_measured_order`, Z. 217 `test_the_splitter_stands_behind_the_fold`, Gegenprobe Z. 199 |
 | D-08 fullreindex stempelt die Verzeichnismarken nicht | festgeschrieben | `backend/tests/test_index_rebuild.py:1484` `test_the_full_reindex_way_out_leaves_the_marks_of_a_directory_as_they_were`, Z. 1544 `..._raises_the_generation_once_per_drift` (21-01); in dutch-analyzer.md dokumentiert |
-| D-09 Bestand ohne nl unberührt, Store upgrade 5 unverändert | hält lokal | Schritt "Store upgrade 5, the seven assurances after the upgrade" (`deploy-harp.yml:4118`, 238 Zeilen) byteidentisch gegen `origin/main` (d074075) und gegen den Stand vor der Phase; CI-Beweis steht aus (Task 3) |
+| D-09 Bestand ohne nl unberührt, Store upgrade 5 unverändert | hält, in CI belegt (Lauf 36157139922) | Schritt "Store upgrade 5, the seven assurances after the upgrade" (`deploy-harp.yml:4118`, 238 Zeilen) byteidentisch gegen `origin/main` (d074075) und gegen den Stand vor der Phase; CI-Schritt grün, siehe Task 3 |
 
-## Task 3: Checkpoint (OFFEN)
+## Task 3: Owner-Freigabe und CI-Beweis
 
-Wartet auf Owner-Freigabe "approved". Danach: `git push`, `gh run list --limit 10`, `gh run watch` je Lauf, Laufnummern und Ergebnisse der Schritte "Language proof, the four new chains answer on the ordinary search route" (Fall nlc, erste Datei `language-proof-nlc.txt` für `belasting`) und "Store upgrade 5, the seven assurances after the upgrade" hier eintragen. Nicht gepusht: 49 Commits seit `origin/main` (d074075), von `6999581` bis `193100e` plus dieser SUMMARY-Commit.
+- **Owner-Freigabe:** "approved", 2026-09-25, über den Orchestrator am Checkpoint übermittelt.
+- **Push:** `d074075..3563715 main -> main`, 49 Phase-Commits plus der Checkpoint-SUMMARY-Commit.
+- **Ausgelöste Läufe (alle 2026-09-25T15:52:54Z, alle success):**
+
+| Workflow | Lauf | Ergebnis | Dauer |
+|---|---|---|---|
+| HaRP deploy | 36157139922 | success | 15m33s |
+| Integration | 36157139819 | success | 9m22s |
+| Python gates | 36157139949 | success | 3m22s |
+| Resilience | 36157139966 | success | 12m52s |
+| Multi-arch image | 36157140005 | success | 1m57s |
+
+- **"Language proof, the four new chains answer on the ordinary search route":** success auf allen vier Matrixzeilen (stable33/8.2, stable34/8.2 amd64, stable34/8.2 arm64, stable35/8.3). Fall nlc je Zeile im Log: `language-proof-nlc.txt uploaded over WebDAV, HTTP 201`, `nlc: the ordinary search route brings back language-proof-nlc.txt` (Frage `belasting`), `nlc: the result page carries language-proof-nlc.txt`, danach `removed again, HTTP 204`.
+- **"Store upgrade 5, the seven assurances after the upgrade":** success auf stable34/8.2 amd64 (auf den drei anderen Zeilen per Bedingung skipped, wie im Workflow vorgesehen). Log: vier Versionsmarken unverändert (schemaVersion 1, indexVersion 1, analyzerVersion 1, wordlistHash `b1f64012...`), Dokumentzahlen unverändert (94/94/7/6), `rebuildState = idle`, "no reindex banner: backend.reindexRequired is false", "no start_rebuild_on_drift line in 42 lines of container log", Abschluss "all seven assurances hold". Damit ist D-09 in CI belegt: Bestand ohne nl sieht keinen Hinweis und keinen Lauf.
+- Kein roter Lauf, keine Zusicherung geändert.
 
 ## Deviations from Plan
 
@@ -93,10 +107,11 @@ Keine.
 
 ## Threat Flags
 
-Keine neue Oberfläche. T-21-09-01 mitigiert (Werte aus `rohdaten/ram.txt`, Quelle verlinkt, 23-MB-Richtigstellung), T-21-09-03 mitigiert (kein Push vor dem Checkpoint). T-21-09-02 greift erst in Task 3.
+Keine neue Oberfläche. T-21-09-01 mitigiert (Werte aus `rohdaten/ram.txt`, Quelle verlinkt, 23-MB-Richtigstellung), T-21-09-03 mitigiert (kein Push vor dem Checkpoint). T-21-09-02 nicht ausgelöst (kein roter Lauf, keine Zusicherung geändert).
 
 ## Self-Check: PASSED
 
 - FOUND: docs/dutch-analyzer.md, geänderte Dateien in 193100e
-- FOUND: Commit 193100e
+- FOUND: Commits 193100e, 3563715 (auf origin/main)
+- FOUND: CI-Läufe 36157139922, 36157139819, 36157139949, 36157139966, 36157140005, alle success
 - Baumhash-Test grün, Suite 2973 passed / 15 skipped
