@@ -207,7 +207,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 21-05-PLAN.md: siebte Marke wordlist_hash_nl in Store und open.py, Zustandstabelle als Tests, Upgrade-Gold
+- [x] 21-05-PLAN.md: siebte Marke wordlist_hash_nl in Store und open.py, Zustandstabelle als Tests, Upgrade-Gold
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -266,7 +266,7 @@ Plans:
 | 18. Schema, Marken und Umbauweg | v1.3 | 12/12 | Complete   | 2026-09-24 |
 | 19. Frageseite freischalten | v1.3 | 9/9 | Executing | - |
 | 20. UI-Kataloge es/it/nl/pt | v1.3 | 9/9 | Complete    | 2026-09-25 |
-| 21. Niederlaendische Komposita | v1.3 | 5/9 | In Progress|  |
+| 21. Niederlaendische Komposita | v1.3 | 6/9 | In Progress|  |
 | 22. Messanfahrt BL-F03 | v1.3 | 0/TBD | Not started | - |
 | 23. Haertung und Store-Einreichung 1.3.0 | v1.3 | 0/TBD | Not started | - |
 
