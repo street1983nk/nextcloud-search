@@ -164,17 +164,18 @@ Plans:
   2. Nutzer findet `gemeentebelastingen` ueber `belasting`; der zugehoerige CI-Sprachfall wird ohne Splitter rot.
   3. Lizenzlage (`wdutch`/OpenTaal, BSD-3-Clause + CC-BY-3.0) ist dokumentiert und das RAM-Budget des zweiten Automaten (rund 23 MB) ist VOR dem Bau gemessen; das Gesamtbudget auf der 4-GB-Box haelt.
   4. Eine eigene Digest-Marke loest den Umbau nur bei aktivem Niederlaendisch aus; eine Bestandsinstallation ohne nl sieht keinen Rebuild-Hinweis und keinen Lauf.
-**Plans**: 8 Plaene in 6 Wellen
+**Plans**: 9 Plaene in 7 Wellen
 
 Plans:
 - [ ] 21-01-PLAN.md: Vorfragen per Test: D-08 fullreindex-Stempel und Poller-Drift-Falle (Fix: Band-Drift hebt keine Generation)
 - [ ] 21-02-PLAN.md: wdutch ins Abbild, docker.yml-Gate, THIRD-PARTY.md (CC-BY-3.0), Pin-Test
 - [ ] 21-03-PLAN.md: wordlist_nl.py (Rezept B 4-14, Liste freigegeben) und Splitterkette hinter der Faltung
 - [ ] 21-04-PLAN.md: Messwerkzeug, Rezept- und RAM-Messung im Repo, Fixture, gemessene Tabellen-Tests
-- [ ] 21-05-PLAN.md: siebte Marke wordlist_hash_nl wie die Sprachmarke, Zustandstabelle als Tests
-- [ ] 21-06-PLAN.md: gated Registrierung der nl-Kette, alle Aufrufer, Re-Analyse-Beweis
-- [ ] 21-07-PLAN.md: CI-Kompositumfall gemeentebelastingen/belasting im Language proof
-- [ ] 21-08-PLAN.md: Doku, Budget, Schlusspruefung, Owner-Freigabe Push und CI-Beweis
+- [ ] 21-05-PLAN.md: siebte Marke wordlist_hash_nl in Store und open.py, Zustandstabelle als Tests, Upgrade-Gold
+- [ ] 21-06-PLAN.md: Band-Umbau beantwortet die nl-Marke, alle expected_versions-Aufrufer, AST-Gate, index_status
+- [ ] 21-07-PLAN.md: gated Registrierung der nl-Kette, alle open_index-Aufrufer, Re-Analyse-Beweis
+- [ ] 21-08-PLAN.md: CI-Kompositumfall gemeentebelastingen/belasting im Language proof
+- [ ] 21-09-PLAN.md: Doku, Budget, Schlusspruefung, Owner-Freigabe Push und CI-Beweis
 **Research-Flag**: ja (`--research-phase 21`, eigene Rezeptmessung wie beim deutschen Splitter)
 
 ### Phase 22: Messanfahrt BL-F03

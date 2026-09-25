@@ -483,23 +483,28 @@ Der Kommentarblock muss die Querprobe oben zitieren ("red without split_compound
 | A4 | Die 28/33 selbst gewählten Testfälle sind repräsentativ für niederländische Verwaltungssprache; kein Muttersprachler hat sie gelesen | Rezeptmessung | Trefferquote im Feld weicht ab; Fallliste im Plan von einem Muttersprachler gegenlesen lassen oder als Vorbehalt datieren (wie die Kataloge in Phase 20) |
 | A5 | Unter FULL_REINDEX_FALLBACK werden Verzeichnismarken nicht gestempelt | Pitfall 8 | Aus Code gelesen, nicht per Test belegt; vor dem Bau verifizieren |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Lizenzwahl BSD-3-Clause oder CC BY 3.0 (oder beide nennen)?**
    - What we know: upstream erlaubt beides nach Wahl; Debian nennt CC-BY-3.0; beide permissiv.
    - What's unclear: welche Formulierung der Owner in THIRD-PARTY.md und Store-Text will.
    - Recommendation: beide nennen, CC-BY-3.0 als die von Debian ausgewiesene führen, Pflichten beider erfüllen. Entscheid ins Tor-Dokument.
+   - RESOLVED: Teilentscheid in 21-GO-ENTSCHEID.md (CC-BY-3.0 laut Debian-Lizenzdatei, Upstream-Wahlfreiheit BSD-3/CC-BY-3.0 als Anmerkung); umgesetzt in Plan 21-02 (THIRD-PARTY.md).
 2. **Niederländische Liste im Prozess halten (37,2 MB) oder nach dem Bau freigeben (17,6 MB)?**
    - What we know: die Suchseite braucht nur den Digest; der deutsche Cache existiert, weil `build_artifact()` auf der Suchseite ein zweites Mal gerufen wird.
    - Recommendation: freigeben; Digest aus der `.sha256`-Datei mit Identitätsschlüssel (Pfad, Digest, Größe, mtime) cachen, Automat-Singleton je Digest wie Deutsch. Zähler `read_count`/`build_count` als Testhebel übernehmen.
+   - RESOLVED: Teilentscheid in 21-GO-ENTSCHEID.md (Liste nach dem Bau freigeben); umgesetzt in Plan 21-03, gemessen in Plan 21-04.
 3. **Fenster 4-14 oder 4-12?**
    - Recommendation: 4-14 (21/28, 0 Fehlzerlegungen). 4-12 bringt 4 Treffer mehr und einen Junk-Term; das ist das verworfene deutsche Rezept D. Entscheid mit der Zahlentabelle ins Tor-Dokument.
+   - RESOLVED: Teilentscheid in 21-GO-ENTSCHEID.md (Rezept B, Fenster 4-14); umgesetzt in Plan 21-03.
 4. **Stempelt der `fullreindex`-Ausweg die Verzeichnismarken?**
    - What we know: `stamp_after_rebuild` überspringt `_MARKS_OF_A_DIRECTORY`, `stamp_after_swap` läuft nur im Band-Umbau.
    - Recommendation: Der Planer prüft das mit einem Test gegen den bestehenden Code, bevor die nl-Marke dazukommt; ist es eine bekannte Grenze, erbt die nl-Marke sie dokumentiert.
+   - RESOLVED: per Test in Plan 21-01 (D-08-Stempeltest); die nl-Marke erbt das Ergebnis in Plan 21-06.
 5. **Zeigt die Adminseite den nl-Digest (`wordlistHashNl`)?**
    - What we know: `status.py` zeigt `wordlistHash`; `test_admin_ui_contract.py` hält Schlüssellisten.
    - Recommendation: Discretion; nur wenn es billig ist, sonst Banner genügt.
+   - RESOLVED: Claude's Discretion laut 21-CONTEXT.md; Entscheid in Plan 21-06: `wordlistHashNl` nur in tools/index_status.py, Adminseite ohne eigenen Schlüssel, Banner genügt.
 
 ## Environment Availability
 
