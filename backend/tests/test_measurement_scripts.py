@@ -1013,8 +1013,16 @@ PHP_TREE_HASH_TODAY = "a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab
 # keeps the digest and never the entries, and a language gate that reads nothing
 # while nl is not configured. No caller in the running app uses it yet. None went,
 # so PACKAGE_FILES_TODAY moves to 57.
+# Moved on 2026-09-25 by plan 21-03, task 2: one of the 57 files changed its
+# bytes. index/analyzer.py got the Dutch splitter chain dutch_analyzer behind the
+# fold, its singleton cached_dutch_analyzer with dutch_build_count, the choice
+# dutch_chain_for that keeps the plain Snowball chain without nl and fails closed
+# on a digest the volume does not hold, and the docstring paragraph that names
+# wordlist_hash_nl as the exception to raising ANALYZER_VERSION. No caller in
+# the running app uses it yet. No file came and none went, so
+# PACKAGE_FILES_TODAY stays at 57.
 PACKAGE_FILES_TODAY = 57
-PACKAGE_TREE_HASH_TODAY = "e24a1437dada4dd646bb815be09edfbd27a3bd70c6cffe366f8578b8b63fd2be"
+PACKAGE_TREE_HASH_TODAY = "fb57a62ef328c2f663e48384d76fc1c0a617945056f1e86a0fbdd370cdb46741"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

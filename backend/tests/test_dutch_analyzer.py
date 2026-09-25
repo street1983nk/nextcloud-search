@@ -19,7 +19,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
-from test_analyzer import ANALYZER_SOURCE, filter_chain
 
 from findling.config import settings
 from findling.index import analyzer
@@ -32,6 +31,7 @@ from findling.index.analyzer import (
     snowball_analyzer,
 )
 from findling.index.wordlist_nl import DUTCH_CHAIN_VERSION, TUSSENKLANKEN, build_artifact_nl
+from test_analyzer import ANALYZER_SOURCE, filter_chain
 
 if TYPE_CHECKING:
     from collections.abc import Iterator

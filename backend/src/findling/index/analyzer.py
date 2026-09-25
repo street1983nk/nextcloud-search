@@ -85,6 +85,34 @@ below is reached by exactly one of them, the English one, token identically.
 Raising the mark out of caution would order a reindex on every installation in
 the field for a change no index can see. The mark rises in phase 18, together
 with the schema that first names the new languages.
+
+And one named exception to the sentence, just as load bearing: the Dutch
+splitter chain of phase 21 does not move ANALYZER_VERSION. It is carried by a
+mark of its own, wordlist_hash_nl, whose value is the digest of the Dutch list
+together with DUTCH_CHAIN_VERSION from findling.index.wordlist_nl, and which
+reads "off" while nl is not configured. Raising ANALYZER_VERSION instead would
+order a full reindex of roughly 19 h on every installation in the field, with
+or without Dutch, for a chain only the Dutch field sees (D-05). A change to
+dutch_analyzer below raises DUTCH_CHAIN_VERSION, not ANALYZER_VERSION.
+
+Dutch chain, recipe B 4-14, the Snowball chain above with the splitter put in
+directly behind the fold:
+
+    | # | Filter                        | Why exactly here                      |
+    |---|-------------------------------|---------------------------------------|
+    | 0 | Tokenizer.simple              | As in every chain                     |
+    | 1 | lowercase                     | The list is lowercase                 |
+    | 2 | ascii_fold                    | Where phase 17 measured it. The list  |
+    |   |                               | is folded, so the splitter must see   |
+    |   |                               | folded tokens: coordinatiecentrum     |
+    |   |                               | without the trema comes apart too     |
+    | 3 | split_compound(list)          | Unstemmed, folded tokens              |
+    | 4 | custom_stopword(TUSSENKLANKEN)| No bare "s" in the index              |
+    | 5 | stopword("dutch")             | As in the Snowball chain              |
+    | 6 | custom_stopword(folded)       | As in the Snowball chain, empty for   |
+    |   |                               | Dutch                                 |
+    | 7 | remove_long(48)               | Behind the splitter, German reasons   |
+    | 8 | stemmer("dutch")              | Last                                  |
 """
 
 import gc
@@ -96,9 +124,10 @@ from pathlib import Path
 
 from tantivy import Filter, TextAnalyzer, TextAnalyzerBuilder, Tokenizer
 
-from findling.config import DEFAULT_COMPOUND_DICT, LANGUAGE_ALLOWLIST, settings
+from findling.config import DEFAULT_COMPOUND_DICT, LANGUAGE_ALLOWLIST, SNOWBALL_NAME, settings
 from findling.index.stopwords import FOLDED_STOPWORDS
 from findling.index.wordlist import FUGEN, SYSTEM_WORDLIST, load_constituents, rss_bytes, wordlist_hash
+from findling.index.wordlist_nl import TUSSENKLANKEN, build_artifact_nl
 
 LOGGER = logging.getLogger("findling.index.analyzer")
 
@@ -150,6 +179,19 @@ _BUILD_COUNT = 0
 def build_count() -> int:
     """Return how many German automata this process has built."""
     return _BUILD_COUNT
+
+
+# The Dutch counterpart of the two above, keyed on the digest of the Dutch list.
+# A second automaton of roughly 17.6 MB, paid only while nl is configured, and
+# never twice for the same list.
+_CACHED_DUTCH: dict[str, TextAnalyzer] = {}
+
+_DUTCH_BUILD_COUNT = 0
+
+
+def dutch_build_count() -> int:
+    """Return how many Dutch automata this process has built."""
+    return _DUTCH_BUILD_COUNT
 
 
 def normalize(text: str) -> str:
@@ -342,6 +384,78 @@ def cached_german_analyzer(digest: str, constituents: Sequence[str]) -> TextAnal
     _CACHED_GERMAN.clear()
     _CACHED_GERMAN[digest] = analyzer
     return analyzer
+
+
+def dutch_analyzer(constituents: Sequence[str]) -> TextAnalyzer:
+    """Build the Dutch splitter chain over an already folded constituent list.
+
+    ``constituents`` comes from :func:`findling.index.wordlist_nl.load_constituents_nl`,
+    is folded and already contains the linking elements. They come back out as
+    custom stopwords directly behind the splitter, read from the same
+    TUSSENKLANKEN constant. The rest of the chain is the Snowball chain of
+    :func:`snowball_analyzer` for Dutch, filter for filter.
+
+    Callers in the running app go through :func:`dutch_chain_for`.
+    """
+    global _DUTCH_BUILD_COUNT
+
+    name = SNOWBALL_NAME["nl"]
+    started = time.perf_counter()
+    analyzer = (
+        TextAnalyzerBuilder(Tokenizer.simple())
+        .filter(Filter.lowercase())
+        .filter(Filter.ascii_fold())
+        .filter(Filter.split_compound(list(constituents)))
+        .filter(Filter.custom_stopword(list(TUSSENKLANKEN)))
+        .filter(Filter.stopword(name))
+        .filter(Filter.custom_stopword(list(FOLDED_STOPWORDS[SNOWBALL_NAME["nl"]])))
+        .filter(Filter.remove_long(MAX_TOKEN_CHARS))
+        .filter(Filter.stemmer(name))
+        .build()
+    )
+    _DUTCH_BUILD_COUNT += 1
+    LOGGER.info(
+        "dutch automaton built from %d entries in %.3f s, build %d in this process",
+        len(constituents),
+        time.perf_counter() - started,
+        _DUTCH_BUILD_COUNT,
+    )
+    return analyzer
+
+
+def cached_dutch_analyzer(digest: str, constituents: Sequence[str]) -> TextAnalyzer:
+    """Return the process wide Dutch analyser for this list, built at most once."""
+    cached = _CACHED_DUTCH.get(digest)
+    if cached is not None:
+        return cached
+    analyzer = dutch_analyzer(constituents)
+    _CACHED_DUTCH.clear()
+    _CACHED_DUTCH[digest] = analyzer
+    return analyzer
+
+
+def dutch_chain_for(digest: str | None) -> TextAnalyzer:
+    """Return the chain for the Dutch field under the given list digest.
+
+    None means nl is not configured, and the field keeps the plain Snowball
+    chain it has had since phase 17, without a list and without an automaton.
+    A digest answers from the cache when its automaton was already built, and
+    otherwise reads the artifact on the volume. When the volume holds another
+    list than the one the digest names, this fails closed: a chain over a list
+    the mark does not describe would tokenise differently from the index.
+
+    The list is a local here and gone after the build (D-02), so the process
+    keeps the automaton and not the roughly 19.6 MB of Python strings behind it.
+    """
+    if digest is None:
+        return snowball_analyzer(SNOWBALL_NAME["nl"])
+    cached = _CACHED_DUTCH.get(digest)
+    if cached is not None:
+        return cached
+    artifact = build_artifact_nl()
+    if artifact.digest != digest:
+        raise ValueError("the dutch constituent list on the volume does not carry the expected digest")
+    return cached_dutch_analyzer(digest, artifact.entries)
 
 
 # ---------------------------------------------------------------------------
