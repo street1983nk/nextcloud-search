@@ -40,6 +40,19 @@ on:
       # service is judged by integration.yml, which carries php/** in both of
       # its lists already. Only the l10n catalogues are this workflow's business.
       - 'php/l10n/**'
+      # And once more for the l10n documents, since the review of phase 20.
+      # test_the_rule_table_of_the_documentation_and_the_constant_are_one_string
+      # parses the rule block of docs/l10n-catalogues.md, and
+      # backend/tests/test_public_artifacts.py carries named vocabulary
+      # exceptions for docs/l10n-spanish.md and docs/l10n-italian.md that go
+      # stale when those files change. The language documents are also the
+      # declared source of the catalogues, so a change there is a change to the
+      # subject of these gates. A commit that only reformats the rule block
+      # would start nothing today, and the breakage would surface on the next
+      # commit that happens to touch backend/** and be blamed on the wrong one.
+      # The glob covers docs/l10n-catalogues.md and every language document in
+      # one line.
+      - 'docs/l10n-*.md'
   pull_request:
     paths:
       - 'backend/**'
@@ -53,6 +66,9 @@ on:
       # request that changed nothing but a catalogue would otherwise be merged
       # without a single l10n gate ever having run.
       - 'php/l10n/**'
+      # Same reason as in the push list above: the rule table gate and the
+      # vocabulary exceptions have to see the l10n documents they judge.
+      - 'docs/l10n-*.md'
   # The measurement job below runs on these two only. It costs minutes and it
   # guards no regression, it produces a number, so it has no business in the loop
   # that has to answer a pull request quickly.
