@@ -1,0 +1,204 @@
+diff --git a/backend/src/findling/index/open.py b/backend/src/findling/index/open.py
+index 427c856..ef21078 100644
+--- a/backend/src/findling/index/open.py
++++ b/backend/src/findling/index/open.py
+@@ -230,7 +230,9 @@ def fingerprint(expected: Mapping[str, str]) -> str:
+     return hashlib.sha256(material.encode("utf-8")).hexdigest()[:16]
+ 
+ 
+-def start_rebuild_on_drift(store: Store, expected: Mapping[str, str]) -> int | None:
++def start_rebuild_on_drift(
++    store: Store, expected: Mapping[str, str], *, answered_elsewhere: frozenset[str] = frozenset()
++) -> int | None:
+     """Raise the local generation when the index was built by other code.
+ 
+     Returns the new generation, or None when there is nothing to rebuild.
+@@ -255,8 +257,24 @@ def start_rebuild_on_drift(store: Store, expected: Mapping[str, str]) -> int | N
+     **What it does not do is declare anything current.** The marks stay as they
+     are, so the banner stays up for as long as the work is not through. That is
+     :func:`stamp_after_rebuild`'s job and nobody else's.
++
++    **Why a drift answered elsewhere must not raise the generation.**
++    ``answered_elsewhere`` names the marks another remedy takes care of, and the
++    poller hands in :data:`findling.index.rebuild.MARKS_A_REBUILD_ANSWERS`: the
++    schema mark and the language mark, which the band run makes true by carrying
++    the documents over. Raising the generation for one of those would turn the
++    re-analysis the owner chose in phase 17 into a full reindex of every file on
++    top of it. The planning probe of 2026-09-25 (a volume built under de,en,
++    opened under de,en,nl) and CI run 36072411846 ("Store upgrade 5") both saw
++    exactly that: the generation went from 1 to 2 on the opening alone. The
++    exempted marks stay drifted, so the band run still sees what it has to
++    answer, and a drift of any other mark still raises. The fingerprint is still
++    taken over the whole expectation. The fallback branch of
++    :func:`findling.index.rebuild.rebuild_the_index` calls this function without
++    the argument on purpose, because there the crawl is the chosen remedy for
++    the language drift as well.
+     """
+-    if not store.version_mismatch(expected):
++    if not [name for name in store.version_mismatch(expected) if name not in answered_elsewhere]:
+         return None
+ 
+     wanted = fingerprint(expected)
+diff --git a/backend/src/findling/worker/poller.py b/backend/src/findling/worker/poller.py
+index 816f163..5db4b93 100644
+--- a/backend/src/findling/worker/poller.py
++++ b/backend/src/findling/worker/poller.py
+@@ -85,6 +85,7 @@ from findling.index.open import (
+     stamp_after_rebuild,
+     start_rebuild_on_drift,
+ )
++from findling.index.rebuild import MARKS_A_REBUILD_ANSWERS
+ from findling.index.wordlist import build_artifact
+ from findling.index.writer import FLUSH_PAUSED_LOW_DISK, IndexBatchWriter, IndexRecord
+ from findling.nc import client as nc_client
+@@ -343,10 +344,14 @@ def _open_state() -> Store:
+     generation has moved. Raising it declares nothing current; the marks are
+     written by :func:`findling.index.open.stamp_after_rebuild` and only after
+     the last file has been judged by this code.
++
++    A drift of the schema mark or the language mark alone is left to the band
++    run and raises nothing here, because a raised generation would add a full
++    reindex behind the re-analysis that makes it unnecessary (plan 21-01).
+     """
+     expected = expected_versions(build_artifact().digest, ",".join(settings().languages))
+     store = open_store(settings().state_db, meta=expected)
+-    start_rebuild_on_drift(store, expected)
++    start_rebuild_on_drift(store, expected, answered_elsewhere=MARKS_A_REBUILD_ANSWERS)
+     return store
+ 
+ 
+diff --git a/backend/tests/test_measurement_scripts.py b/backend/tests/test_measurement_scripts.py
+index e13b135..05ba84f 100644
+--- a/backend/tests/test_measurement_scripts.py
++++ b/backend/tests/test_measurement_scripts.py
+@@ -1000,8 +1000,15 @@ PHP_TREE_HASH_TODAY = "a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab
+ # lenient about a typed field name and not about one in the plan (L-19-04); and
+ # the two allocations per query are kept with the reason written beside them
+ # (L-19-03). No file came and none went, so PACKAGE_FILES_TODAY stays at 56.
++# Moved on 2026-09-25 by plan 21-01: two of the 56 files changed their bytes.
++# index/open.py gave start_rebuild_on_drift a keyword-only answered_elsewhere,
++# the marks another remedy answers and that therefore raise no generation, and
++# worker/poller.py hands MARKS_A_REBUILD_ANSWERS in from _open_state, so a drift
++# of the schema mark or the language mark alone is left to the band run instead
++# of adding a full reindex behind it. No file came and none went, so
++# PACKAGE_FILES_TODAY stays at 56.
+ PACKAGE_FILES_TODAY = 56
+-PACKAGE_TREE_HASH_TODAY = "52f0fe82887467d73cc0ab3b20402d8104b8f0e2ed60ed06492f8dc16283166d"
++PACKAGE_TREE_HASH_TODAY = "a67a1aa17a45774c7b6e35b7cac745e125e157263f604624a05e4da854fcc775"
+ 
+ # The raw reading of the run, so that the constant above cannot drift away from
+ # the file it was read out of.
+diff --git a/backend/tests/test_poller.py b/backend/tests/test_poller.py
+index 2c4279f..0f759dc 100644
+--- a/backend/tests/test_poller.py
++++ b/backend/tests/test_poller.py
+@@ -49,7 +49,7 @@ from findling.config import SCHEMA_VERSION, settings
+ from findling.extract.dispatch import Route
+ from findling.extract.dispatch import extract as dispatch_extract
+ from findling.extract.errors import ExtractionOutcome, Reason
+-from findling.index.open import LANGUAGES_MARK, SCHEMA_MARK, expected_versions, open_index
++from findling.index.open import LANGUAGES_MARK, REBUILD_MARK, SCHEMA_MARK, expected_versions, open_index
+ from findling.index.schema import FIELD_BODY_DE, FIELD_FILE_ID, FIELD_NAME
+ from findling.index.writer import IndexBatchWriter
+ from findling.main import APP, active_poller, enabled_handler
+@@ -2455,6 +2455,100 @@ def test_a_fresh_volume_carries_the_two_marks_of_the_directory_it_builds(
+         store.close()
+ 
+ 
++def _a_volume_built_under_the_factory_pair(volume: Path, monkeypatch: pytest.MonkeyPatch) -> int:
++    """Walk the path of a fresh container under de,en, close it, and name its generation.
++
++    The state database is opened and the writer is opened, because the writer is
++    what creates the directory and stamps its two marks. What the three cases
++    below then change is what an admin or an update changes between two starts.
++    """
++    monkeypatch.setenv("FINDLING_LANGUAGES", "de,en")
++    settings.cache_clear()
++    write_wordlist(volume)
++    store = _open_state()
++    writer = _open_writer(store)
++    try:
++        assert store.read_meta().get(LANGUAGES_MARK) == "de,en"
++        return store.index_version
++    finally:
++        writer.close()
++        store.close()
++
++
++def _switch_dutch_on(monkeypatch: pytest.MonkeyPatch) -> None:
++    monkeypatch.setenv("FINDLING_LANGUAGES", "de,en,nl")
++    settings.cache_clear()
++
++
++def test_a_drift_the_band_rebuild_answers_does_not_raise_the_generation(
++    volume: Path, monkeypatch: pytest.MonkeyPatch
++) -> None:
++    """A new language is answered by the band run, not by a full reindex.
++
++    Planning probe of 2026-09-25 and the protocol of CI run 36072411846 ("Store
++    upgrade 5") saw the same thing: a volume built under de,en, a container
++    started under de,en,nl, and the opening of the state database raised the
++    generation from 1 to 2. A raised generation makes every stored verdict stale,
++    so the next crawl read every file again, which is the full reindex of about
++    19 hours that the band run of phase 17 exists to spare. The language drift
++    has to stay on record, because it is what starts the band run.
++    """
++    before = _a_volume_built_under_the_factory_pair(volume, monkeypatch)
++    _switch_dutch_on(monkeypatch)
++
++    store = _open_state()
++    try:
++        after = store.index_version
++        marks = store.read_meta()
++        drift = store.version_mismatch(expected_versions(write_wordlist(volume), ",".join(settings().languages)))
++    finally:
++        store.close()
++
++    assert after == before
++    assert not marks.get(REBUILD_MARK)
++    assert LANGUAGES_MARK in drift
++
++
++def test_a_drift_only_a_crawl_answers_still_raises_the_generation(
++    volume: Path, monkeypatch: pytest.MonkeyPatch
++) -> None:
++    """The counter direction of the case above (T-21-01-01).
++
++    A moved analyzer version needs the documents read again, and the raised
++    generation is what orders that read. Exempting it along with the language
++    mark would leave an index tokenised by code nobody can query it with.
++    """
++    before = _a_volume_built_under_the_factory_pair(volume, monkeypatch)
++    aged = _open_state()
++    aged.write_meta("analyzer_version", "0")
++    aged.close()
++
++    store = _open_state()
++    try:
++        after = store.index_version
++    finally:
++        store.close()
++
++    assert after == before + 1
++
++
++def test_a_drift_of_both_kinds_raises_the_generation(volume: Path, monkeypatch: pytest.MonkeyPatch) -> None:
++    """A language drift does not shield a crawl drift that arrives with it."""
++    before = _a_volume_built_under_the_factory_pair(volume, monkeypatch)
++    aged = _open_state()
++    aged.write_meta("analyzer_version", "0")
++    aged.close()
++    _switch_dutch_on(monkeypatch)
++
++    store = _open_state()
++    try:
++        after = store.index_version
++    finally:
++        store.close()
++
++    assert after == before + 1
++
++
+ async def test_the_resources_open_off_the_event_loop(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:
+     """Perf audit M1: opening must not stall the loop that answers /heartbeat.
+ 
