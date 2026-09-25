@@ -124,6 +124,7 @@ from findling.index.schema import (
     FIELD_TITLE,
 )
 from findling.index.wordlist import SYSTEM_WORDLIST, build_artifact, read_count
+from findling.index.wordlist_nl import dutch_mark
 from findling.store.repo import FileMeta, open_store
 from findling.store.vectors import open_vectors
 from findling.worker import poller as poller_module
@@ -262,7 +263,9 @@ def seed_volume(source: Path = SYSTEM_WORDLIST) -> None:
     resolved = settings()
     _write_index(resolved.index_dir, artifact.entries)
 
-    store = open_store(resolved.state_db, meta=expected_versions(artifact.digest, ",".join(resolved.languages)))
+    languages = resolved.languages
+    marks = expected_versions(artifact.digest, ",".join(languages), dutch_mark=dutch_mark(languages))
+    store = open_store(resolved.state_db, meta=marks)
     try:
         store.replace_acl(FILE_ID, [MEASURE_USER])
         store.record(FILE_ID, _meta(), "indexed")

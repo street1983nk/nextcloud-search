@@ -130,6 +130,41 @@ def test_the_empty_report_carries_the_language_mark_as_an_empty_value(tmp_path: 
     assert index_status.collect(db, tmp_path / "index")["languages"] == "de,en,es"
 
 
+def test_the_report_carries_seven_version_keys_and_the_dutch_mark_among_them(tmp_path: Path) -> None:
+    """The seventh version key, empty until something stamps it, then the stored value.
+
+    Seven and not "at least seven": a mark that gets added to the store without
+    a line in the report is a mark the upgrade leg of the CI run cannot see.
+    """
+    version_keys = {
+        "schemaVersion",
+        "indexVersion",
+        "analyzerVersion",
+        "wordlistHash",
+        "tantivyVersion",
+        "languages",
+        "wordlistHashNl",
+    }
+    empty = index_status.empty_report()
+    assert version_keys <= set(empty)
+    assert empty["wordlistHashNl"] == ""
+
+    db = tmp_path / "state.db"
+    _state_database(db)
+    assert index_status.collect(db, tmp_path / "index")["wordlistHashNl"] == ""
+    # Written rather than seeded, because the seed skips this mark by name like
+    # the language mark (plan 21-05).
+    stamped = open_store(db)
+    try:
+        stamped.write_meta("wordlist_hash_nl", "1:abc")
+    finally:
+        stamped.close()
+
+    report = index_status.collect(db, tmp_path / "index")
+    assert report["wordlistHashNl"] == "1:abc"
+    assert set(index_status._VERSION_KEYS) == version_keys
+
+
 def test_a_state_without_rows_is_a_zero_and_not_a_missing_key(tmp_path: Path) -> None:
     # The whole promise of the status output: "no failures" and "the counter is
     # broken" have to look different from each other.

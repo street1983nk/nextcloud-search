@@ -676,6 +676,82 @@ def test_open_index_registers_eight_chains_and_hangs_none_of_them_on_a_condition
     assert len(BODY_FIELD) + 2 == EXPECTED_REGISTRATIONS
 
 
+def callers_without_the_dutch_mark(source: str, filename: str) -> list[int]:
+    """Line numbers of every call of expected_versions that does not name dutch_mark.
+
+    Read off the syntax tree, like the registration reader above: a call spread
+    over three lines is one Call node, and a comment or a docstring that spells
+    the name out is not a call at all. Both a bare name and an attribute count,
+    so ``open.expected_versions(...)`` cannot slip past.
+    """
+    missing: list[int] = []
+    for node in ast.walk(ast.parse(source, filename=filename)):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        name = func.id if isinstance(func, ast.Name) else func.attr if isinstance(func, ast.Attribute) else None
+        if name != "expected_versions":
+            continue
+        if not any(keyword.arg == "dutch_mark" for keyword in node.keywords):
+            missing.append(node.lineno)
+    return missing
+
+
+def test_the_dutch_mark_gate_sees_a_caller_without_it() -> None:
+    # The self test of the gate below: a reader that found nothing would be
+    # green on the day a caller forgot the Dutch mark.
+    staged = dedent(
+        """
+        def _open_state():
+            expected = expected_versions(build_artifact().digest, ",".join(settings().languages))
+            named = expected_versions(
+                digest,
+                languages,
+                dutch_mark=dutch_mark(settings().languages),
+            )
+            other = open.expected_versions(digest, languages)
+            # expected_versions(digest, languages) in a comment is not a call
+            return expected, named, other
+        """
+    )
+    assert callers_without_the_dutch_mark(staged, "staged.py") == [3, 9]
+
+
+def test_every_caller_in_src_names_the_dutch_mark() -> None:
+    """D-06: every caller in src builds the Dutch value itself, none falls back on off.
+
+    The default of ``dutch_mark`` is there for the tests and for a store that
+    never saw nl. A src caller that leaned on it would expect off on an
+    installation that runs nl with a list, report a drift nothing answers and,
+    in the poller, compare the stamp against the wrong value (T-21-06-03).
+    """
+    files = sorted(PACKAGE_ROOT.rglob("*.py"))
+    assert files, "the package root moved and the gate would look at nothing"
+    found: dict[str, list[int]] = {}
+    calls = 0
+    for path in files:
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=str(path))
+        calls += sum(
+            1
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and (
+                (isinstance(node.func, ast.Name) and node.func.id == "expected_versions")
+                or (isinstance(node.func, ast.Attribute) and node.func.attr == "expected_versions")
+            )
+        )
+        missing = callers_without_the_dutch_mark(source, str(path))
+        if missing:
+            found[str(path.relative_to(PACKAGE_ROOT))] = missing
+
+    assert found == {}, f"callers of expected_versions without dutch_mark: {found}"
+    # Six callers today: three in the poller, one each in resources, one_load
+    # and rebuild. Fewer means the walk lost files, which would be a green gate
+    # over nothing.
+    assert calls >= 6, calls
+
+
 def test_a_write_goes_through_when_only_german_is_switched_on(monkeypatch: pytest.MonkeyPatch, index_dir: Path) -> None:
     # The measured failure of pitfall 2, held as a statement about behaviour and
     # not about source text: FINDLING_LANGUAGES=de is the narrowest set an

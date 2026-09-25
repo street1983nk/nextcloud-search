@@ -70,6 +70,11 @@ _VERSION_KEYS: Final = {
     # apart. An empty value here therefore means 1.2.0 or an index this code has
     # not stamped yet, never "the tool could not look".
     "languages": "languages",
+    # The seventh mark, since phase 21: the Dutch chain version and the digest
+    # of the Dutch list the body_nl field was analysed with, or off. An empty
+    # value means an index this code has not stamped yet or one on which nl was
+    # never active, since the mark is never seeded.
+    "wordlistHashNl": "wordlist_hash_nl",
 }
 
 # A version mark this tool could not read at all. Deliberately different from

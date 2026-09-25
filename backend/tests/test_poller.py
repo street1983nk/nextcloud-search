@@ -2440,8 +2440,10 @@ def test_a_fresh_volume_carries_the_two_marks_of_the_directory_it_builds(
     monkeypatch.setenv("FINDLING_LANGUAGES", "de,en,es,it,nl,pt")
     settings.cache_clear()
     digest = write_wordlist(volume)
+    digest_nl = write_wordlist_nl(volume)
     languages = ",".join(settings().languages)
     assert languages == "de,en,es,it,nl,pt"
+    dutch = dutch_mark(settings().languages)
 
     store = _open_state()
     writer = _open_writer(store)
@@ -2450,7 +2452,10 @@ def test_a_fresh_volume_carries_the_two_marks_of_the_directory_it_builds(
 
         assert marks.get(SCHEMA_MARK) == str(SCHEMA_VERSION)
         assert marks.get(LANGUAGES_MARK) == languages
-        assert store.version_mismatch(expected_versions(digest, languages)) == []
+        # The third mark of a directory, stamped with the list on the volume.
+        assert marks.get(DUTCH_MARK) == dutch
+        assert dutch.endswith(digest_nl)
+        assert store.version_mismatch(expected_versions(digest, languages, dutch_mark=dutch)) == []
     finally:
         writer.close()
         store.close()
@@ -2476,9 +2481,11 @@ def _a_volume_built_under_the_factory_pair(volume: Path, monkeypatch: pytest.Mon
         store.close()
 
 
-def _switch_dutch_on(monkeypatch: pytest.MonkeyPatch) -> None:
+def _switch_dutch_on(volume: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Switch nl on the way a container does it: the setting and the Dutch list on the volume."""
     monkeypatch.setenv("FINDLING_LANGUAGES", "de,en,nl")
     settings.cache_clear()
+    write_wordlist_nl(volume)
 
 
 def test_a_drift_the_band_rebuild_answers_does_not_raise_the_generation(
@@ -2495,7 +2502,7 @@ def test_a_drift_the_band_rebuild_answers_does_not_raise_the_generation(
     has to stay on record, because it is what starts the band run.
     """
     before = _a_volume_built_under_the_factory_pair(volume, monkeypatch)
-    _switch_dutch_on(monkeypatch)
+    _switch_dutch_on(volume, monkeypatch)
 
     store = _open_state()
     try:
@@ -2539,7 +2546,7 @@ def test_a_drift_of_both_kinds_raises_the_generation(volume: Path, monkeypatch: 
     aged = _open_state()
     aged.write_meta("analyzer_version", "0")
     aged.close()
-    _switch_dutch_on(monkeypatch)
+    _switch_dutch_on(volume, monkeypatch)
 
     store = _open_state()
     try:
@@ -2559,9 +2566,8 @@ def test_a_dutch_drift_does_not_raise_the_generation(volume: Path, monkeypatch: 
     and a raised generation would order the crawl of every file behind it. The
     drift itself stays on record, since it is what starts the band run.
     """
-    _switch_dutch_on(monkeypatch)
+    _switch_dutch_on(volume, monkeypatch)
     write_wordlist(volume)
-    write_wordlist_nl(volume)
     built = _open_state()
     writer = _open_writer(built)
     writer.close()

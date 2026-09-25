@@ -87,6 +87,7 @@ from findling.index.open import (
 )
 from findling.index.rebuild import MARKS_A_REBUILD_ANSWERS
 from findling.index.wordlist import build_artifact
+from findling.index.wordlist_nl import dutch_mark
 from findling.index.writer import FLUSH_PAUSED_LOW_DISK, IndexBatchWriter, IndexRecord
 from findling.nc import client as nc_client
 from findling.nc.client import (
@@ -349,7 +350,8 @@ def _open_state() -> Store:
     run and raises nothing here, because a raised generation would add a full
     reindex behind the re-analysis that makes it unnecessary (plan 21-01).
     """
-    expected = expected_versions(build_artifact().digest, ",".join(settings().languages))
+    languages = settings().languages
+    expected = expected_versions(build_artifact().digest, ",".join(languages), dutch_mark=dutch_mark(languages))
     store = open_store(settings().state_db, meta=expected)
     start_rebuild_on_drift(store, expected, answered_elsewhere=MARKS_A_REBUILD_ANSWERS)
     return store
@@ -374,7 +376,9 @@ def _open_writer(store: Store, *, vectors: VectorStore | None = None) -> IndexBa
     # In front of open_index and not behind it, because open_index is what
     # creates the directory and the reading side opens the moment it is there.
     # On a volume that has an index this is one stat call and no write.
-    stamp_a_new_directory(store, resolved.index_dir, expected_versions(artifact.digest, ",".join(resolved.languages)))
+    languages = resolved.languages
+    marks = expected_versions(artifact.digest, ",".join(languages), dutch_mark=dutch_mark(languages))
+    stamp_a_new_directory(store, resolved.index_dir, marks)
     index = open_index(resolved.index_dir, artifact.entries)
     _raise_generation_for_lost_index(index, store)
     return IndexBatchWriter(index, directory=resolved.index_dir, vectors=vectors)
@@ -1992,7 +1996,8 @@ class Poller:
         pass: the moment this answers True it is never called again.
         """
         try:
-            marks = expected_versions(build_artifact().digest, ",".join(settings().languages))
+            languages = settings().languages
+            marks = expected_versions(build_artifact().digest, ",".join(languages), dutch_mark=dutch_mark(languages))
             stamped = stamp_after_rebuild(self._store_or_die(), marks)
             if stamped and self._marks_stamped is not None:
                 self._marks_stamped()

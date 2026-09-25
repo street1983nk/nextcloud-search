@@ -45,6 +45,7 @@ from findling.embed.model import EmbeddingModel
 from findling.index.open import LANGUAGES_MARK, SCHEMA_MARK, expected_versions, open_index, open_reader
 from findling.index.schema import BODY_FIELD, FIELD_NAME, FIELD_TITLE
 from findling.index.wordlist import build_artifact
+from findling.index.wordlist_nl import dutch_mark
 from findling.query.rewrite import BODY_BOOST, EMPTY_PLAN, LEGACY_PLAN, NAME_BOOST, TITLE_BOOST, FieldPlan
 from findling.store.repo import EMBEDDING_MARK, LEGACY_LANGUAGES, VECTOR_ONLY_MARKS, Store, open_read_only
 from findling.store.vectors import EMBEDDING_MODEL, VectorStore, embedding_mark, open_vectors
@@ -230,7 +231,11 @@ def expected_marks() -> dict[str, str] | None:
         if _MARKS is not None and _MARKS[0] == dictionary:
             return dict(_MARKS[1])
         try:
-            marks = expected_versions(build_artifact().digest, ",".join(settings().languages))
+            languages = settings().languages
+            marks = expected_versions(build_artifact().digest, ",".join(languages), dutch_mark=dutch_mark(languages))
+        # A missing Dutch artifact under a language set with nl lands here as
+        # well, since FileNotFoundError is an OSError: no comparison rather than
+        # a reading side that fails (T-21-06-04).
         except OSError:
             LOGGER.warning("the constituent list is unavailable, version marks cannot be compared")
             return None

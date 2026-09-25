@@ -28,7 +28,7 @@ from typing import cast
 import pytest
 from tantivy import Index
 
-from conftest import Corpus, write_index, write_state, write_wordlist
+from conftest import Corpus, write_index, write_state, write_wordlist, write_wordlist_nl
 from findling.api import resources
 from findling.config import settings
 from findling.index.open import LANGUAGES_MARK
@@ -493,6 +493,10 @@ def test_a_fresh_container_searches_the_chains_it_was_switched_on_with(
     monkeypatch.setenv("FINDLING_LANGUAGES", "de,en,es,it,nl,pt")
     settings.cache_clear()
     write_wordlist(volume)
+    # Since plan 21-06 every caller builds the Dutch mark, which reads the
+    # Dutch artifact under a set with nl, so the volume carries it like a
+    # container does.
+    write_wordlist_nl(volume)
 
     store = _open_state()
     writer = _open_writer(store)
