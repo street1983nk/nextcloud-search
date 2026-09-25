@@ -908,6 +908,24 @@ jobs:
           # into such a term. They also do not overlap each other, which is what
           # lets each of the four searches below name the single file it has to
           # bring back.
+          #
+          # A fifth case, nlc, is the compound case of phase 21, and it is the
+          # reason nl appears twice in this step (once for the chain, once for
+          # the compound). It is red without split_compound, measured 2026-09-25
+          # over the shipped chains for the document "De gemeentebelastingen
+          # voor dit jaar zijn verhoogd." and the question belasting:
+          #
+          #   de             doc [de, gemeentebelasting, voor, dit, jaar, zijn, verhoogd]  q [belasting]  no hit
+          #   en             doc [..., gemeentebelastingen, ...]                         q [belast]     no hit
+          #   nl without     doc [gemeentebelast, jar, verhoogd]                         q [belast]     no hit
+          #   nl with        doc [gemeent, belast, jar, verhoogd]                        q [belast]     HIT
+          #
+          # The question is a single word, so the one term rule (see the comment
+          # on the vector half in "Store upgrade 3" further down) answers it out
+          # of the word index alone and no semantic neighbour can make this case
+          # green. None of gemeente, belasting or verhoogd is a term another
+          # proof of this workflow counts (checked by grep on 2026-09-25 before
+          # this case was added), and the sentence is plain ASCII.
           printf 'Esta es una carta de la empresa alemana sobre el contrato de arrendamiento.\n' \
             > "${RUNNER_TEMP}/language-proof-es.txt"
           printf 'Questa informazione riguarda la riunione con il fornitore.\n' \
@@ -916,8 +934,10 @@ jobs:
             > "${RUNNER_TEMP}/language-proof-nl.txt"
           printf 'Os nossos clientes vivem em outros pa\303\255ses da Europa.\n' \
             > "${RUNNER_TEMP}/language-proof-pt.txt"
+          printf 'De gemeentebelastingen voor dit jaar zijn verhoogd.\n' \
+            > "${RUNNER_TEMP}/language-proof-nlc.txt"
 
-          for lang in es it nl pt; do
+          for lang in es it nl pt nlc; do
             status=$(curl -s -o /dev/null -w '%{http_code}' \
               -T "${RUNNER_TEMP}/language-proof-${lang}.txt" \
               -u "testuser:${TESTUSER_PASS}" \
@@ -947,19 +967,28 @@ jobs:
           # the direction that declares a healthy run dead (T-06.1-52).
           deadline=$(( $(date +%s) + LANGUAGE_PROOF_BUDGET_SECONDS ))
           rounds=0
-          missing="es it nl pt"
+          # One table from case code to question, read by the poll loop here
+          # and by the disappearance measurement at the end of this step, so
+          # that the two can never ask for different words. Called without a
+          # subshell, which is what lets the exit of an unknown code end the
+          # step.
+          set_term() {
+            case "$1" in
+              es) term=alemanes ;;
+              it) term=informazioni ;;
+              nl) term=beinvloeden ;;
+              pt) term=pais ;;
+              nlc) term=belasting ;;
+              *) echo "::error::unknown language code $1"; exit 1 ;;
+            esac
+          }
+          missing="es it nl pt nlc"
           while [ "$(date +%s)" -lt "${deadline}" ]; do
             rounds=$(( rounds + 1 ))
             timeout 300 php -f cron.php > "${RUNNER_TEMP}/language-cron-${rounds}.log" 2>&1 || true
             still=""
             for lang in ${missing}; do
-              case "${lang}" in
-                es) term=alemanes ;;
-                it) term=informazioni ;;
-                nl) term=beinvloeden ;;
-                pt) term=pais ;;
-                *) echo "::error::unknown language code ${lang}"; exit 1 ;;
-              esac
+              set_term "${lang}"
               # entries | length, and never the subline of the first entry. The
               # gate in backend/tests/test_language_proof_steps.py reads this
               # step for that second name and goes red on it, which is why this
@@ -1009,9 +1038,9 @@ jobs:
           fi
 
           # The hit is a hit of the right file, asserted rather than assumed.
-          # Each of the four questions is answered by exactly one of the four
+          # Each of the five questions is answered by exactly one of the five
           # documents, which is why the first entry can be named at all.
-          for lang in es it nl pt; do
+          for lang in es it nl pt nlc; do
             if ! jq -e --arg file "language-proof-${lang}.txt" \
                  '.ocs.data.entries[0].title == $file' \
                  "${RUNNER_TEMP}/language-hit-${lang}.json" > /dev/null; then
@@ -1022,7 +1051,7 @@ jobs:
             echo "${lang}: the ordinary search route brings back language-proof-${lang}.txt"
           done
 
-          # -- the result page, four calls and one per language ---------------
+          # -- the result page, five calls and one per case -------------------
           # The second half of criterion 1, and the half no step of this
           # workflow had ever touched. PageController::index carries
           # NoAdminRequired, NoCSRFRequired and FrontpageRoute
@@ -1038,9 +1067,10 @@ jobs:
           # proves nothing. The assertion below is what makes that impossible,
           # because an empty page carries no file name.
           #
-          # Four literal calls and no loop, so that the text gate of
+          # Five literal calls and no loop, so that the text gate of
           # backend/tests/test_language_proof_steps.py can count them and see
-          # one per language rather than one call it cannot attribute.
+          # one per case rather than one call it cannot attribute. nl has two
+          # cases, the chain (beinvloeden) and the compound (belasting).
           curl -s -o "${RUNNER_TEMP}/language-page-es.html" -w '%{http_code}' \
             -u "testuser:${TESTUSER_PASS}" \
             'http://localhost:8080/index.php/apps/findling/?query=alemanes' \
@@ -1057,8 +1087,12 @@ jobs:
             -u "testuser:${TESTUSER_PASS}" \
             'http://localhost:8080/index.php/apps/findling/?query=pais' \
             > "${RUNNER_TEMP}/language-page-pt.code"
+          curl -s -o "${RUNNER_TEMP}/language-page-nlc.html" -w '%{http_code}' \
+            -u "testuser:${TESTUSER_PASS}" \
+            'http://localhost:8080/index.php/apps/findling/?query=belasting' \
+            > "${RUNNER_TEMP}/language-page-nlc.code"
 
-          for lang in es it nl pt; do
+          for lang in es it nl pt nlc; do
             status=$(cat "${RUNNER_TEMP}/language-page-${lang}.code")
             if [ "${status}" != "200" ]; then
               echo "::error::the result page of the ${lang} question answered HTTP ${status}"
@@ -1079,7 +1113,8 @@ jobs:
             echo "### Language proof on ${{ matrix.server-version }} / ${{ matrix.runner }}"
             echo ""
             echo "- es, it, nl and pt each answered on the ordinary search route after ${rounds} cron rounds"
-            echo "- the result page answered with the same four files, one call per language"
+            echo "- the nl compound case (gemeentebelastingen asked as belasting) answered there as well"
+            echo "- the result page answered with the same five files, one call per case"
           } >> "${GITHUB_STEP_SUMMARY}"
 
           # -- and the four documents go again --------------------------------
@@ -1093,7 +1128,7 @@ jobs:
           # (the comment above the fill corpus says exactly that about its own
           # words). Leaving four foreign language documents in the home would
           # put that question to a proof that never asked it.
-          for lang in es it nl pt; do
+          for lang in es it nl pt nlc; do
             status=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \
               -u "testuser:${TESTUSER_PASS}" \
               "http://localhost:8080/remote.php/dav/files/testuser/language-proof-${lang}.txt")
@@ -1126,19 +1161,13 @@ jobs:
           # becomes the loop that exits non zero, in the shape of the one above.
           gone_by=$(( $(date +%s) + 60 ))
           rounds_gone=0
-          present="es it nl pt"
+          present="es it nl pt nlc"
           while [ -n "${present}" ] && [ "$(date +%s)" -lt "${gone_by}" ]; do
             rounds_gone=$(( rounds_gone + 1 ))
             timeout 300 php -f cron.php > "${RUNNER_TEMP}/language-gone-cron-${rounds_gone}.log" 2>&1 || true
             left=""
             for lang in ${present}; do
-              case "${lang}" in
-                es) term=alemanes ;;
-                it) term=informazioni ;;
-                nl) term=beinvloeden ;;
-                pt) term=pais ;;
-                *) echo "::error::unknown language code ${lang}"; exit 1 ;;
-              esac
+              set_term "${lang}"
               status=$(curl -s -o "${RUNNER_TEMP}/language-gone-${lang}.json" -w '%{http_code}' \
                 -u "testuser:${TESTUSER_PASS}" \
                 -H 'OCS-APIRequest: true' \
@@ -1156,7 +1185,7 @@ jobs:
             fi
           done
           if [ -z "${present}" ]; then
-            echo "the four language documents are out of the index again after ${rounds_gone} cron round(s)"
+            echo "the five language documents are out of the index again after ${rounds_gone} cron round(s)"
           else
             echo "::warning::[${present}] still answer a hit ${rounds_gone} cron round(s) and 60s after the removal, so the stock of the steps below is not yet the one they were measured against (L-19-05)"
           fi
