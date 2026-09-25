@@ -14,7 +14,9 @@ through NARROW_SCOPE_DIRS; this file holds what is particular to each tool.
 
 from __future__ import annotations
 
+import json
 import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -27,6 +29,7 @@ from test_measurement_scripts import (
 )
 
 THROWAWAY = V13_RUN_DIR / "00-wegwerf.sh"
+TYPE_SWITCH = V13_RUN_DIR / "00-typwechsel.sh"
 
 # A digest of the right shape. It names no image anywhere, and none of the
 # boxless runs below gets as far as asking for one.
@@ -247,3 +250,335 @@ def test_the_throwaway_runner_builds_its_scan_out_of_the_generator_and_never_a_u
         assert "files/" not in mount, mount
         assert "ncdata" not in mount, mount
     assert 'SCAN_DIR=$(mktemp -d "$WORK/scan.XXXXXX")' in code
+
+
+# ---------------------------------------------------------------------------
+# 00-typwechsel.sh, the type switch on the development machine.
+
+# Two values that stand for the credentials in the runs below. They are no
+# credentials of any account; the runs prove that neither reaches an output.
+ACCESS_STAND_IN = "zugang-attrappe-0815"
+SIGNING_STAND_IN = "geheim-attrappe-4711"
+# The identifier the stub state file carries, and an address of a private
+# range: neither may reach the raw file, where only placeholders stand.
+STUB_INSTANCE = "i-attrappe"
+STUB_ADDRESS = "10.0.0.1"
+
+# The AWS command line, played by a shell script. It logs every call, keeps the
+# instance type in a file and answers the queries of the tool in text form.
+STUB_AWS = """#!/bin/sh
+printf '%s\\n' "$*" >>"$STUB/aufrufe"
+case "$*" in
+*describe-instance-attribute*) printf '%s\\n' "$STUB_SHUTDOWN"; exit 0 ;;
+*modify-instance-attribute*)
+    [ "${STUB_KLEBT:-}" = 1 ] && exit 0
+    for a in "$@"; do
+        case "$a" in Value=*) printf '%s\\n' "${a#Value=}" >"$STUB/typ" ;; esac
+    done
+    exit 0 ;;
+*InstanceType*) cat "$STUB/typ"; exit 0 ;;
+*State.Name*) printf '%s\\n' "${STUB_ZUSTAND:-stopped}"; exit 0 ;;
+*PublicIpAddress*) printf '%s\\n' "$STUB_ADRESSE"; exit 0 ;;
+*pricing*) [ -n "${STUB_PREIS:-}" ] && cat "$STUB_PREIS"; exit 0 ;;
+esac
+exit 1
+"""
+
+# aws_box.sh, played the same way: stop always works, start fails for every
+# type named in STUB_OHNE_KAPAZITAET, which is what a capacity shortage does.
+STUB_AWS_BOX = """#!/bin/sh
+printf 'aws_box %s\\n' "$1" >>"$STUB/aufrufe"
+case "$1" in
+stop) exit 0 ;;
+start)
+    typ=$(cat "$STUB/typ")
+    case " ${STUB_OHNE_KAPAZITAET:-} " in *" $typ "*) exit 1 ;; esac
+    exit 0 ;;
+esac
+exit 2
+"""
+
+
+def a_stubbed_switch(
+    tmp_path: Path,
+    arguments: list[str],
+    umgebung: dict[str, str | None] | None = None,
+) -> tuple[subprocess.CompletedProcess[str], Path, list[str]]:
+    """00-typwechsel.sh against a stub CLI and a stub aws_box.sh, and what it left."""
+    stub = tmp_path / "stub"
+    stub.mkdir(parents=True)
+    (stub / "typ").write_text("m7g.large\n", encoding="utf-8", newline="\n")
+    (stub / "aufrufe").write_text("", encoding="utf-8", newline="\n")
+    aws = tmp_path / "aws"
+    aws.write_text(STUB_AWS, encoding="utf-8", newline="\n")
+    aws.chmod(0o755)
+    aws_box = tmp_path / "aws_box.sh"
+    aws_box.write_text(STUB_AWS_BOX, encoding="utf-8", newline="\n")
+    state = tmp_path / "zustand"
+    state.mkdir()
+    (state / "box.env").write_text(f"BOX_INSTANCE_ID={STUB_INSTANCE}\n", encoding="utf-8", newline="\n")
+    out = tmp_path / "out"
+    environment: dict[str, str | None] = {
+        "AWS_ACCESS_KEY_ID": ACCESS_STAND_IN,
+        "AWS_SECRET_ACCESS_KEY": SIGNING_STAND_IN,
+        "AWS_CLI": aws.as_posix(),
+        "AWS_BOX": aws_box.as_posix(),
+        "FINDLING_LOADTEST_DIR": state.as_posix(),
+        "STUB": stub.as_posix(),
+        "STUB_SHUTDOWN": "stop",
+        "STUB_ADRESSE": STUB_ADDRESS,
+        **(umgebung or {}),
+    }
+    answer = a_boxless_run(TYPE_SWITCH, out, arguments, umgebung=environment)
+    calls = (stub / "aufrufe").read_text(encoding="utf-8").splitlines()
+    return answer, out / "00-typwechsel.txt", calls
+
+
+def raw_of(path: Path) -> str:
+    return path.read_text(encoding="utf-8") if path.is_file() else ""
+
+
+def switch_code() -> str:
+    return code_of(TYPE_SWITCH.read_text(encoding="utf-8"))
+
+
+def test_the_type_switch_says_it_never_runs_on_the_box() -> None:
+    """The credentials write to EC2; the box must never see them (T-22-13)."""
+    text = TYPE_SWITCH.read_text(encoding="utf-8")
+    assert "NIE AUF DER BOX AUSFUEHREN" in text
+    assert "die AWS-Zugangsdaten duerfen die Box nie erreichen" in text
+
+
+def test_the_type_switch_turns_the_windows_path_rewriting_off() -> None:
+    """Git for Windows rewrites unix looking arguments; the pattern of aws_box.sh."""
+    code = switch_code()
+    assert "MSYS_NO_PATHCONV=1" in code
+    assert "MSYS2_ARG_CONV_EXCL='*'" in code
+    assert "export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL" in code
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+@pytest.mark.parametrize(
+    "arguments",
+    [[], ["weg"], ["hin", "jetzt"], ["preis"], ["preis", "M7G.large"], ["preis", "m7g large"], ["preis", ".m7g"]],
+    ids=["none", "unknown", "hin-extra", "preis-bare", "preis-upper", "preis-space", "preis-dot"],
+)
+def test_the_type_switch_names_four_steps_and_refuses_everything_else(tmp_path: Path, arguments: list[str]) -> None:
+    """2 and the usage, before a credential is asked for and before any file."""
+    answer = a_boxless_run(TYPE_SWITCH, tmp_path, arguments)
+    assert answer.returncode == 2, answer
+    assert "Benutzung:" in answer.stderr
+    for step in ("vorpruefung", "hin", "zurueck", "preis"):
+        assert step in answer.stderr
+    assert answer.stdout == ""
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_the_type_switch_demands_both_credentials_and_never_prints_them() -> None:
+    """Two names, one mention each, and no line that echoes either of them."""
+    text = TYPE_SWITCH.read_text(encoding="utf-8")
+    for name in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"):
+        assert f': "${{{name}:?' in text, name
+        expanding = [line for line in text.splitlines() if f"${name}" in line or f"${{{name}" in line]
+        assert len(expanding) == 1, expanding
+        assert not [line for line in text.splitlines() if ("echo" in line or "printf" in line) and name in line]
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+@pytest.mark.parametrize("missing", ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"])
+def test_the_type_switch_refuses_to_run_without_a_credential(tmp_path: Path, missing: str) -> None:
+    """A missing credential ends the run before the raw file and before any call."""
+    answer, raw, calls = a_stubbed_switch(tmp_path, ["vorpruefung"], umgebung={missing: None})
+    assert answer.returncode != 0, answer
+    assert not raw.exists()
+    assert calls == []
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+@pytest.mark.parametrize("behaviour", ["terminate", "", "unlesbar"])
+def test_the_type_switch_ends_with_52_when_a_shutdown_would_not_be_a_stop(tmp_path: Path, behaviour: str) -> None:
+    """shutdown -h is the hard stop of D-02 only where the attribute says stop."""
+    answer, raw, calls = a_stubbed_switch(tmp_path, ["vorpruefung"], umgebung={"STUB_SHUTDOWN": behaviour})
+    assert answer.returncode == 52, answer
+    text = raw_of(raw)
+    assert "shutdown-ist-stopp nein" in text
+    assert "TYPWECHSEL-VORPRUEFUNG-FERTIG" not in text
+    assert any("--attribute instanceInitiatedShutdownBehavior" in call for call in calls), calls
+    assert not [call for call in calls if "modify-instance-attribute" in call or call.startswith("aws_box")]
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+def test_the_type_switch_passes_the_precheck_for_stop(tmp_path: Path) -> None:
+    answer, raw, _ = a_stubbed_switch(tmp_path, ["vorpruefung"])
+    assert answer.returncode == 0, answer
+    text = raw_of(raw)
+    assert "shutdown-verhalten stop" in text
+    assert "shutdown-ist-stopp ja" in text
+    assert "TYPWECHSEL-VORPRUEFUNG-FERTIG" in text
+    assert "typwechsel-vorpruefung " in text
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+def test_the_type_switch_goes_there_by_stop_modify_start_and_reads_the_type_back(tmp_path: Path) -> None:
+    """hin: precheck, stop, modify to m7g.4xlarge, start, read back; placeholders in the raw file."""
+    answer, raw, calls = a_stubbed_switch(tmp_path, ["hin"])
+    assert answer.returncode == 0, answer
+    stop = calls.index("aws_box stop")
+    modify = next(n for n, call in enumerate(calls) if "modify-instance-attribute" in call)
+    start = calls.index("aws_box start")
+    precheck = next(n for n, call in enumerate(calls) if "describe-instance-attribute" in call)
+    assert precheck < stop < modify < start
+    assert "Value=m7g.4xlarge" in calls[modify]
+    assert any("InstanceType" in call for call in calls[start:]), calls
+    text = raw_of(raw)
+    for line in ("typ-gefordert m7g.4xlarge", "typ-ist m7g.4xlarge", "TYPWECHSEL-HIN-FERTIG"):
+        assert line in text, line
+    for step in ("hin-start", "hin-gestoppt", "hin-laeuft", "hin-ende"):
+        assert f"typwechsel-{step} " in text, step
+    assert "b4-rueckfall" not in text
+    assert "instanz <instanzkennung>" in text
+    assert "adresse-neu <adresse-der-box>" in text
+    assert STUB_INSTANCE not in text
+    assert STUB_ADDRESS not in text
+    # The address goes to the terminal, because the A record has to follow it.
+    assert STUB_ADDRESS in answer.stderr
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+def test_the_type_switch_falls_back_to_the_2xlarge_without_capacity(tmp_path: Path) -> None:
+    """No m7g.4xlarge in the zone: m7g.2xlarge, and the line that says so (Pitfall 9)."""
+    answer, raw, calls = a_stubbed_switch(tmp_path, ["hin"], umgebung={"STUB_OHNE_KAPAZITAET": "m7g.4xlarge"})
+    assert answer.returncode == 0, answer
+    text = raw_of(raw)
+    assert "b4-rueckfall m7g.2xlarge" in text
+    assert "typ-ist m7g.2xlarge" in text
+    assert "start-gescheitert typ m7g.4xlarge zustand stopped" in text
+    assert calls.count("aws_box start") == 2
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+def test_the_type_switch_ends_on_the_reference_type_when_neither_large_type_starts(tmp_path: Path) -> None:
+    """B4 falls away (D-05), the box stays stopped on m7g.large, and the run ends with 0."""
+    answer, raw, calls = a_stubbed_switch(
+        tmp_path, ["hin"], umgebung={"STUB_OHNE_KAPAZITAET": "m7g.4xlarge m7g.2xlarge"}
+    )
+    assert answer.returncode == 0, answer
+    text = raw_of(raw)
+    assert "b4-entfallen kapazitaet" in text
+    assert "typ-ist m7g.large" in text
+    assert calls.count("aws_box start") == 2
+    assert "Value=m7g.large" in [call for call in calls if "modify-instance-attribute" in call][-1]
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+def test_the_type_switch_ends_with_53_when_the_type_read_back_differs(tmp_path: Path) -> None:
+    """The modify was accepted and the type did not move: 53 and no end mark."""
+    answer, raw, _ = a_stubbed_switch(tmp_path, ["hin"], umgebung={"STUB_KLEBT": "1"})
+    assert answer.returncode == 53, answer
+    text = raw_of(raw)
+    assert "typ-abweichung gefordert m7g.4xlarge ist m7g.large" in text
+    assert "TYPWECHSEL-HIN-FERTIG" not in text
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+def test_the_type_switch_ends_with_53_when_a_failed_start_leaves_the_box_running(tmp_path: Path) -> None:
+    """A start that failed with a running box is no capacity case, and no modify may follow."""
+    answer, raw, calls = a_stubbed_switch(
+        tmp_path, ["hin"], umgebung={"STUB_OHNE_KAPAZITAET": "m7g.4xlarge", "STUB_ZUSTAND": "running"}
+    )
+    assert answer.returncode == 53, answer
+    assert "zustand-abweichung gefordert stopped ist running" in raw_of(raw)
+    assert len([call for call in calls if "modify-instance-attribute" in call]) == 1
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+def test_the_type_switch_comes_back_by_stop_and_modify_without_a_start(tmp_path: Path) -> None:
+    """zurueck: stop, m7g.large, read back, no start; the uptime on the large type from the stamps."""
+    first, raw, _ = a_stubbed_switch(tmp_path / "hin", ["hin"])
+    assert first.returncode == 0, first
+    answer, raw_back, calls = a_stubbed_switch(tmp_path / "zurueck", ["zurueck"])
+    assert answer.returncode == 0, answer
+    assert calls.count("aws_box stop") == 1
+    assert "aws_box start" not in calls
+    assert "Value=m7g.large" in next(call for call in calls if "modify-instance-attribute" in call)
+    text = raw_of(raw_back)
+    assert "typ-ist m7g.large" in text
+    for step in ("zurueck-start", "zurueck-gestoppt", "zurueck-ende"):
+        assert f"typwechsel-{step} " in text, step
+    assert "TYPWECHSEL-ZURUECK-FERTIG" in text
+    # Without a hin in the same raw file there is no interval to count.
+    assert "b4-laufzeit-s unbestimmt" in text
+    assert raw.is_file()
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+def test_the_type_switch_counts_the_uptime_on_the_large_type_from_its_own_stamps(tmp_path: Path) -> None:
+    """hin and zurueck into one raw file give a whole number of seconds for the hand arithmetic."""
+    out = tmp_path / "gemeinsam"
+    first, _, _ = a_stubbed_switch(tmp_path / "a", ["hin"], umgebung={"OUT": out.as_posix()})
+    assert first.returncode == 0, first
+    answer, _, _ = a_stubbed_switch(tmp_path / "b", ["zurueck"], umgebung={"OUT": out.as_posix()})
+    assert answer.returncode == 0, answer
+    lines = [line for line in raw_of(out / "00-typwechsel.txt").splitlines() if line.startswith("b4-laufzeit-s ")]
+    assert len(lines) == 1, lines
+    assert lines[0].split()[1].isdigit(), lines
+
+
+def test_the_type_switch_asks_the_price_api_with_six_filters_and_loads_no_price_list() -> None:
+    code = switch_code()
+    command = next(line for line in commands_of(code) if "pricing get-products" in line)
+    for field in ("instanceType", "location", "operatingSystem", "tenancy", "preInstalledSw", "capacitystatus"):
+        assert f"Field={field}," in command, field
+    assert "--service-code AmazonEC2" in command
+    assert "PREIS_REGION='us-east-1'" in code
+    assert "PREIS_ORT='EU (Frankfurt)'" in code
+    for bulk in ("index.csv", "index.json", "offers/v1.0", "curl"):
+        assert bulk not in code, bulk
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+def test_the_type_switch_prints_the_one_rate_the_price_api_answers(tmp_path: Path) -> None:
+    product = {
+        "terms": {"OnDemand": {"X.Y": {"priceDimensions": {"X.Y.Z": {"pricePerUnit": {"USD": "0.7824000000"}}}}}}
+    }
+    answer_file = tmp_path / "preis.json"
+    answer_file.write_text(json.dumps({"PriceList": [json.dumps(product)]}), encoding="utf-8", newline="\n")
+    answer, raw, calls = a_stubbed_switch(
+        tmp_path, ["preis", "m7g.4xlarge"], umgebung={"STUB_PREIS": answer_file.as_posix()}
+    )
+    assert answer.returncode == 0, answer
+    text = raw_of(raw)
+    assert "preis m7g.4xlarge 0.7824000000" in text
+    assert "typwechsel-preis " in text
+    assert any("--region us-east-1" in call and "Value=m7g.4xlarge" in call for call in calls), calls
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+def test_the_type_switch_ends_red_when_the_price_api_gives_no_rate(tmp_path: Path) -> None:
+    """The account may lack pricing:GetProducts; then the line says unlesbar and the run is not green."""
+    answer, raw, _ = a_stubbed_switch(tmp_path, ["preis", "m7g.4xlarge"])
+    assert answer.returncode == 1, answer
+    text = raw_of(raw)
+    assert "preis m7g.4xlarge unlesbar" in text
+    assert "TYPWECHSEL-PREIS-FERTIG" not in text
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+@pytest.mark.parametrize("step", [["vorpruefung"], ["hin"], ["zurueck"], ["preis", "m7g.large"]], ids=str)
+def test_the_type_switch_never_prints_a_credential(tmp_path: Path, step: list[str]) -> None:
+    """Neither value reaches stdout, stderr or the raw file, on any step (T-22-13)."""
+    answer, raw, calls = a_stubbed_switch(tmp_path, step)
+    for sentinel in (ACCESS_STAND_IN, SIGNING_STAND_IN):
+        assert sentinel not in answer.stdout
+        assert sentinel not in answer.stderr
+        assert sentinel not in raw_of(raw)
+        assert not [call for call in calls if sentinel in call]
+
+
+def test_the_type_switch_goes_through_aws_box_for_stop_and_start() -> None:
+    code = switch_code()
+    assert 'AWS_BOX="${AWS_BOX:-$REPO/scripts/ops/aws_box.sh}"' in code
+    assert 'sh "$AWS_BOX" "$@" >&2' in code
+    for forbidden in ("stop-instances", "start-instances", "terminate-instances"):
+        assert forbidden not in code, forbidden
+    assert {"exit 52", "exit 53"} <= aborts_of(code)
