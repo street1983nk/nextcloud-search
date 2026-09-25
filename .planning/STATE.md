@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: executing
-stopped_at: Plan 22-04 abgeschlossen (00-wegwerf.sh, 00-typwechsel.sh, b5f27b1 e072b15)
-last_updated: "2026-09-25T22:12:00.000Z"
-last_activity: 2026-09-26, Plan 22-04 ausgeführt
+stopped_at: Plan 22-05 abgeschlossen (00-lauf.sh, 00-abholen.sh, 00-ablauf.md, README, 433c531 3f0807d 5fdb8e5)
+last_updated: "2026-09-26T09:30:00.000Z"
+last_activity: 2026-09-26, Plan 22-05 ausgeführt
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 59
-  completed_plans: 51
-  percent: 86
+  completed_plans: 52
+  percent: 88
 ---
 
 # Project State
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 ## Current Position
 
 Phase: 22 (messanfahrt-bl-f03), EXECUTING
-Plan: 5 of 12
-Status: Ready to execute 22-05 (Owner-Stopps: 22-06 Push-Freigabe, 22-07 Rechenblatt vor Boxstart, 22-12 Abnahme)
+Plan: 6 of 12
+Status: Ready to execute 22-06 (Owner-Stopps: 22-06 Push-Freigabe, 22-07 Rechenblatt vor Boxstart, 22-12 Abnahme)
 
 Aktueller Stand: PHASE 21 KOMPLETT 25.09.2026 (9/9 Plaene, goal-backward verified passed 9/9,
 phase.complete gelaufen, STATE von Hand nachgezogen). Niederlaendische Komposita sind Ende-zu-
@@ -236,14 +236,24 @@ Instanz den Erststempel der Verzeichnismarken; Folge: Feldplan blieb LEGACY, rot
 Fix-Beweis). Endstand-CI 36096526219 GRUEN 4/4 inkl. arm64. Suite 2877 passed / 15 skipped.
 LEHRE: ein Audit-Fix, der einen Schreiber entfernt, braucht die Frage "wer schreibt das
 sonst noch auf JEDEM Pfad" plus einen Frischinstanz-Fall, bevor er reist.
-Last activity: 2026-09-26, Plan 22-04 ausgeführt
+Last activity: 2026-09-26, Plan 22-05 ausgeführt
 
-Progress: [█████████░] 86% (51 von 59 Plänen, 5 von 7 Phasen)
+Progress: [█████████░] 88% (52 von 59 Plänen, 5 von 7 Phasen)
 
 ## Naechster Schritt
 
-**22-05 ausführen** (00-lauf.sh, 00-abholen.sh, 00-ablauf.md mit E1 bis E14, README-Gerüst).
-22-04 ist fertig: 00-wegwerf.sh (B3 W3 N 1/2 auf cpuset 0,1 unter 2g plus Einzelmodus, B5
+**22-06 ausführen** (Generalprobe lokal, Owner-Freigabe Push, W4-Lauf in CI, F4 und B7). OWNER-STOPP: Push.
+22-05 ist fertig: 00-lauf.sh (start/ablauf/status/b4; Timer sudo shutdown -h +<Rest> mit
+Rücklesung, sonst 55; Weg a und b; zeit_fuer/reserve_fuer nach D-05; Abtaster je Containerleben;
+54 Altverzeichnisse, 56 B2-Rückkehr, 57 M-01-Gegenprobe, 58 Umbau/Vollreindex-Frist oder
+embedded bewegt; nach Abbruch Timer auf 60 min vorgezogen), 00-abholen.sh (scp alle 10 min,
+Abholmarke ~/work/abgeholt, kein git), 00-ablauf.md (E1 bis E14, Katalog 40 bis 58, Abschnitt 6
+LEER bis 22-07, F4 wörtlich), README-Gerüst mit Freigabezeile offen; test_v13_ablauf.py 51 Fälle
+(433c531, 3f0807d, 5fdb8e5), nur lokal. Für 22-06 prüfen: Weg b fährt 92c ohne occ upgrade
+(Risiko "requires upgrade"), Felder der Admin-Übersicht gegen echte Antwort, Logzeile des Umbaus
+in docker logs; Schlüssel für 00-abholen.sh nach $FINDLING_LOADTEST_DIR/findling-loadtest kopieren.
+
+Vorher: 22-04 ist fertig: 00-wegwerf.sh (B3 W3 N 1/2 auf cpuset 0,1 unter 2g plus Einzelmodus, B5
 embed.bench threads 1/2 x batch 2/8 mit rss_sampler.sh am Bench-Namen, B4 N 1 bis 16 und T 1 bis
 8 auf nproc gekürzt; 50 kein Leerlauf oder keine Zahl in B3/B5, 51 fremder Container oder keine
 Zahl in B4) und 00-typwechsel.sh (vorpruefung instanceInitiatedShutdownBehavior stop sonst 52,
@@ -335,7 +345,7 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
 |-------|-------|-------|----------|
 | 20 | 9 | - | - |
 | 21 | 9 | 1 Tag | - |
-| 22 | 4/12 | 12 min (22-01), 30 min (22-02), 35 min (22-03), 25 min (22-04) | - |
+| 22 | 5/12 | 12 min (22-01), 30 min (22-02), 35 min (22-03), 25 min (22-04), 75 min (22-05) | - |
 
 ## Accumulated Context
 
@@ -364,6 +374,11 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
   von rss_sampler.sh, nicht aus dessen Schlusszeile (22-04).
 - Die Rohdatei des Typwechsels trägt Instanzkennung und Adresse nur als Platzhalter; die
   Ausgabe von aws_box.sh geht nach stderr. hin fährt die Shutdown-Vorprüfung selbst mit (22-04).
+- 00-lauf.sh bricht nur an Zustandstoren ab (90e, 92d, 92e, 97 vorher, 54 bis 58); ein
+  Messwerkzeug ohne oder mit roter Zahl ist ein Befund, und der Lauf misst weiter. Der Timer
+  steht vor jedem Wächter; nach einem Abbruch wird er auf 60 min vorgezogen (22-05).
+- 93-nullstand.sh läuft nach dem regulären 92c (Gegenprobe des geleerten Volumens); die
+  B2-Rückkehr gilt in Weg a gegen 52111/37/0, in Weg b gegen den Bestand vor B2 (22-05).
 
 - Ein CI-Sprachbeweis liest seinen Erwartungswert aus dem Katalog und traegt die Abwesenheit
   des englischen Quellsatzes als eigentliche Zusicherung (20-09). Ein Satz in der YAML waere
@@ -648,6 +663,6 @@ Sonst keine (die drei Debug-Sessions aus v1.1 sind am 21.09.2026 formal auf reso
 
 ## Session Continuity
 
-Last session: 2026-09-25T22:12:00.000Z
-Stopped at: Plan 22-04 abgeschlossen
-Resume file: .planning/phases/22-messanfahrt-bl-f03/22-05-PLAN.md
+Last session: 2026-09-26T09:30:00.000Z
+Stopped at: Plan 22-05 abgeschlossen
+Resume file: .planning/phases/22-messanfahrt-bl-f03/22-06-PLAN.md
