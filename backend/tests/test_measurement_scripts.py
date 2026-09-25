@@ -67,6 +67,9 @@ V12_RUN_DIR = MEASUREMENTS_DIR / "2026-09-v12-messung" / "skripte"
 # The run directory of the two successor fassungen of A1, the acceptance of
 # 21.09.2026. It holds no raw data and never will: neither of its files ran.
 SUCCESSOR_RUN_DIR = MEASUREMENTS_DIR / "2026-09-nachfolgefassungen" / "skripte"
+# The run directory of the v1.3 trip of phase 22. Its tools are written before
+# the box stands, so until the trip none of them ran either.
+V13_RUN_DIR = MEASUREMENTS_DIR / "2026-09-v13-messung" / "skripte"
 TREE_HASH = RUN_DIR / "40b-baumhash.py"
 TREE_HASH_PROOF = RUN_DIR / "40b-baumhash.sh"
 OPS_GATE = Path(__file__).resolve().parent / "test_ops_scripts.py"
@@ -89,7 +92,11 @@ OPS_GATE = Path(__file__).resolve().parent / "test_ops_scripts.py"
 # promise that no password stands on a command line has to reach it. The other
 # two promises, no machine shape outside a comment and no carriage return,
 # reach it for the same reason they reach the other three.
-NARROW_SCOPE_DIRS = (RUN_DIR, FIX_RUN_DIR, V12_RUN_DIR, SUCCESSOR_RUN_DIR)
+#
+# Five since plan 22-02. The run directory of the v1.3 trip is written from
+# scratch under these rules, and its image switch and its environment rebuild
+# are copied onto the same box as the rest, so all three promises reach it.
+NARROW_SCOPE_DIRS = (RUN_DIR, FIX_RUN_DIR, V12_RUN_DIR, SUCCESSOR_RUN_DIR, V13_RUN_DIR)
 
 # The driven fassung of the language cases and its successor. The first one is
 # evidence and must not move, the second one is the fix of DI-10-02.
@@ -1675,7 +1682,8 @@ def measurement_scripts() -> list[Path]:
 def scripts_of_this_run() -> list[Path]:
     """Every script of the run directories written under these rules.
 
-    Four directories since plan 16-03. The successor fassung of the language
+    Five directories since plan 22-02, the fifth being the run directory of the
+    v1.3 trip. The successor fassung of the language
     cases lives in one of its own since plan 11-03, and the three promises below
     have to reach it: it creates an account, it reads a password and it is
     copied onto the same box as the rest. The run directory of v1.2 came third,
@@ -1884,7 +1892,7 @@ def test_the_password_gate_fires_on_a_staged_sample() -> None:
 # would have left that line standing next to a script that never produced it.
 
 
-def test_the_narrow_scope_covers_the_four_run_directories_written_under_these_rules() -> None:
+def test_the_narrow_scope_covers_the_five_run_directories_written_under_these_rules() -> None:
     """Widening the narrow scope is a decision, so it is pinned here.
 
     The semantic run of 05.09. stays outside on purpose (45-suchlast.py reaches
@@ -1894,15 +1902,19 @@ def test_the_narrow_scope_covers_the_four_run_directories_written_under_these_ru
     reason, and its probe is named here so that the widening is checked against
     a file rather than against a directory that may still be empty. The run
     directory of the successor fassungen joined in plan 16-03, and both of its
-    files are named here for that same reason.
+    files are named here for that same reason. The run directory of the v1.3
+    trip joined in plan 22-02, and its two box tools of that plan are named
+    here for the same reason again.
     """
-    assert NARROW_SCOPE_DIRS == (RUN_DIR, FIX_RUN_DIR, V12_RUN_DIR, SUCCESSOR_RUN_DIR)
+    assert NARROW_SCOPE_DIRS == (RUN_DIR, FIX_RUN_DIR, V12_RUN_DIR, SUCCESSOR_RUN_DIR, V13_RUN_DIR)
     found = scripts_of_this_run()
     assert SUCCESSOR_LANGUAGE_CASES in found
     assert DRIVEN_LANGUAGE_CASES in found
     assert STOCK_PROBE in found
     assert SUCCESSOR_IMAGE_SWITCH in found
     assert SUCCESSOR_FILTER_SORT in found
+    assert V13_RUN_DIR / "92d-wechsel.sh" in found
+    assert V13_RUN_DIR / "92e-umgebung.sh" in found
     assert not [path for path in found if path.parent.parent.name == "2026-09-05-semantiklauf-m7g"]
 
 
