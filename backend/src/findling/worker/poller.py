@@ -416,9 +416,20 @@ class Poller:
         batch_max_bytes: int | None = None,
         cooldown_start: float | None = None,
         cooldown_max: float | None = None,
+        marks_stamped: Callable[[], None] | None = None,
     ) -> None:
         resolved = settings()
         self._store = store
+        # Who to tell when the version marks moved, and None means nobody is
+        # listening, which is what every test that is not about this and every
+        # one off tool hands in.
+        #
+        # The lifespan hands in findling.api.resources.reset_read_side, exactly
+        # as it hands the two halves of the bar into the rebuild, and for the
+        # same reason: the reading half of the container derives from the marks
+        # this poller writes, and the worker package does not import the API
+        # package to find that out (audit finding H-19-01).
+        self._marks_stamped = marks_stamped
         self._writer = writer
         self._owns_resources = store is None and writer is None
         self._tmp_dir = resolved.tmp_dir if tmp_dir is None else tmp_dir
@@ -1947,10 +1958,23 @@ class Poller:
         A failure is swallowed on purpose. This is bookkeeping about the index
         and not the index: a locked database here must not end a pass whose
         documents are durable, and the next idle poll asks again.
+
+        **And whoever derives from the marks is told, once.** Audit finding
+        H-19-01: the reading half of the container computes the field list of a
+        search out of the stored marks and holds it for as long as its handles
+        live, so a writer of marks that says nothing leaves a process answering
+        out of a list that describes the state before this call. The callback is
+        inside the try for the reason above it: a reset that raised would leave
+        ``_marks_unproven`` standing, and the next idle poll simply asks again.
+        The flag is also why this costs one reset per process and not one per
+        pass: the moment this answers True it is never called again.
         """
         try:
             marks = expected_versions(build_artifact().digest, ",".join(settings().languages))
-            return stamp_after_rebuild(self._store_or_die(), marks)
+            stamped = stamp_after_rebuild(self._store_or_die(), marks)
+            if stamped and self._marks_stamped is not None:
+                self._marks_stamped()
+            return stamped
         except Exception as error:
             LOGGER.warning("could not refresh the version marks, %s", type(error).__name__)
             return False
@@ -2214,14 +2238,19 @@ class Poller:
         self._starved_announced = False
 
 
-def default_poller() -> Poller:
+def default_poller(*, marks_stamped: Callable[[], None] | None = None) -> Poller:
     """The poller of the running container; its resources open on the first pass.
 
     Nothing is opened here. The lifespan builds this object while the backend may
     still be disabled, and a container that opened the index writer at that point
     would hold the tantivy lock without ever indexing anything.
+
+    ``marks_stamped`` is passed through rather than defaulted here, because the
+    one thing this poller has to tell lives in the API package and this package
+    does not import it. The lifespan is where the two halves meet, and it is
+    already the place that hands the reading side into the rebuild.
     """
-    return Poller()
+    return Poller(marks_stamped=marks_stamped)
 
 
 def _skip_verdicts(verdicts: Sequence[_Verdict], handover: Sequence[int]) -> dict[int, str]:

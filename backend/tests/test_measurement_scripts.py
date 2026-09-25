@@ -942,8 +942,21 @@ PHP_TREE_HASH_TODAY = "a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab
 # plan, and a doc_freq probe against the directory itself catches the one state
 # the mark cannot see, a state.db restored beside an older index directory. No
 # file came and none went, so PACKAGE_FILES_TODAY stays at 56.
+# Moved on 2026-09-25 by the fix of audit finding H-19-01: three of the 56 files
+# changed their bytes. index/rebuild.py stamps the schema mark and the language
+# mark inside the try of the swap and in front of let_read_side_open() instead of
+# behind it, so that the first search after the bar comes down computes its field
+# list out of the marks of the directory that is there rather than out of the
+# marks of the one that has just been retired. worker/poller.py took a
+# marks_stamped callback, which it calls once when its own stamp answers that the
+# marks are current again, because that stamp writes while the reading side is
+# wide open and nothing dropped it afterwards. main.py hands
+# resources.reset_read_side into default_poller, the same seam at which it hands
+# the two halves of the bar into the rebuild, so the worker package goes on
+# importing nothing from the API package. No file came and none went, so
+# PACKAGE_FILES_TODAY stays at 56.
 PACKAGE_FILES_TODAY = 56
-PACKAGE_TREE_HASH_TODAY = "9718e2236177deec4853504461eda54e6a0aea79e5951e19d1ce10c678242989"
+PACKAGE_TREE_HASH_TODAY = "d970acade422a3efbe71f89cae9bd22c247ee915c3fd91ed840d9ba6db816221"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

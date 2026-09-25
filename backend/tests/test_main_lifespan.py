@@ -541,7 +541,7 @@ def _install_the_three_tasks(monkeypatch: pytest.MonkeyPatch, rebuild: _FakeRebu
     fourth task start at all.
     """
     poller = _FakeIndexingTask()
-    monkeypatch.setattr("findling.main.default_poller", lambda: poller)
+    monkeypatch.setattr("findling.main.default_poller", lambda **_: poller)
     monkeypatch.setattr("findling.main.default_reconcile", lambda: _FakeIndexingTask())
     monkeypatch.setattr("findling.main._rebuild_the_index_directory", rebuild.run)
     return poller
@@ -669,7 +669,7 @@ def test_the_clean_up_path_runs_before_the_indexing_task_is_created(
         journal.append("clean up")
         return "nothing"
 
-    def note_the_poller() -> _FakeIndexingTask:
+    def note_the_poller(**_: object) -> _FakeIndexingTask:
         journal.append("poller")
         return _FakeIndexingTask()
 
@@ -680,6 +680,39 @@ def test_the_clean_up_path_runs_before_the_indexing_task_is_created(
         pass
 
     assert journal == ["clean up", "poller"]
+
+
+def test_the_lifespan_hands_the_release_of_the_reading_side_into_the_poller(
+    indexed_volume: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The wiring of audit finding H-19-01, read where the decision is taken.
+
+    The poller writes the version marks on an idle pass, and since phase 19 the
+    field list of a search is computed out of those marks once per opening of
+    the reading side. A poller that told nobody would leave the process
+    answering out of the list it computed before that write, for as long as it
+    lives, and no case inside the poller suite can see that: every one of them
+    hands its own recorder in. So this one reads what the lifespan really hands
+    over, and it reads it as a keyword, because the worker package deliberately
+    imports nothing from the API package and this is the one seam where the two
+    meet.
+    """
+    del indexed_volume
+    handed: list[dict[str, object]] = []
+    fake = _FakeRebuildTask()
+    monkeypatch.setattr("findling.main._rebuild_the_index_directory", fake.run)
+    monkeypatch.setattr("findling.main.default_reconcile", lambda: _FakeIndexingTask())
+
+    def note_the_poller(**handed_in: object) -> _FakeIndexingTask:
+        handed.append(handed_in)
+        return _FakeIndexingTask()
+
+    monkeypatch.setattr("findling.main.default_poller", note_the_poller)
+
+    with TestClient(APP):
+        pass
+
+    assert handed == [{"marks_stamped": resources.reset_read_side}]
 
 
 async def test_the_rebuild_hands_the_real_stand_down_and_arm_of_the_poller_into_the_run(

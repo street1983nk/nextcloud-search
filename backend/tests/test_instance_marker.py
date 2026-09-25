@@ -100,7 +100,7 @@ def armed_poller(volume: Path, monkeypatch: pytest.MonkeyPatch) -> _FakePoller:
     """
     del volume
     poller = _FakePoller()
-    monkeypatch.setattr("findling.main.default_poller", lambda: poller)
+    monkeypatch.setattr("findling.main.default_poller", lambda **_: poller)
     settings().armed_marker.write_text("", encoding="utf-8")
     return poller
 

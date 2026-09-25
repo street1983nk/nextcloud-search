@@ -32,9 +32,10 @@ lives. The rule decides how a run of this module ends as well: the writer waits
 for its merging threads, the reference is dropped, and nothing is handed out
 that still holds the target.
 
-*The order of the swap, and the order is its whole content.* Six steps, and
+*The order of the swap, and the order is its whole content.* Seven steps, and
 every one of them is there because leaving it out is a way of arriving at a
-container that answers out of a directory nobody can point at any more:
+container that answers out of a directory nobody can point at any more, or at
+one that answers out of a field list nobody built:
 
 1. commit the target index, ``wait_merging_threads()`` on its writer, let the
    object go. A writer holds a lock file, and a merging thread holds segments
@@ -53,22 +54,27 @@ container that answers out of a directory nobody can point at any more:
    anything is renamed.
 3. bar the reading side with an explicit ``hold_the_read_side_shut()``, over
    in :mod:`findling.api.resources`, and let it open again once the two renames
-   are behind. That cache is keyed on ``index_dir``, the swap does not move
-   ``index_dir``, and the invalidation branch inside ``read_side()`` therefore
-   never fires on its own. Emptying it is not enough either: between the
-   emptying and the first rename a search used to open the live directory again
-   and keep the handle, which is the very thing step 3 exists to prevent, so the
-   bar stands for the width of the two renames and ``read_side()`` answers None
-   while it is up (M-18-03).
+   and the stamp behind them are through. That cache is keyed on ``index_dir``,
+   the swap does not move ``index_dir``, and the invalidation branch inside
+   ``read_side()`` therefore never fires on its own. Emptying it is not enough
+   either: between the emptying and the first rename a search used to open the
+   live directory again and keep the handle, which is the very thing step 3
+   exists to prevent, so the bar stands for the width of the two renames and
+   ``read_side()`` answers None while it is up (M-18-03).
 4. rename ``index`` to ``index.retired``.
 5. rename ``index.rebuild`` to ``index``.
 6. remove ``index.retired``.
+7. stamp the schema mark and the language mark, still behind the bar. The
+   first search after the bar comes down reads its field list out of exactly
+   these two marks, so a stamp on the other side of the release leaves a window
+   in which that list is computed from the directory that has just gone, and the
+   process keeps it until it is restarted (H-19-01).
 
 Steps 4 and 5 are :func:`swap_in`, and there is deliberately nothing between
 them: between the two renames the volume holds no directory called ``index`` at
 all, and that window is the one state a crash can leave behind (T-18-07-02).
-Steps 1 to 3 are led by :func:`rebuild_the_index`, and the two of them that
-reach outside this module arrive as callbacks rather than as imports. This
+Steps 1 to 3 and step 7 are led by :func:`rebuild_the_index`, and the two of
+them that reach outside this module arrive as callbacks rather than as imports. This
 module does not import :mod:`findling.api.resources` and it does not import
 :mod:`findling.worker.poller`: the reading half of the container may draw from
 the index, never the other way round, and the poller is already the caller of
@@ -897,6 +903,16 @@ def stamp_after_swap(store: Store, languages: str) -> None:
     earlier it would write a mark that describes a directory nobody is reading
     from, which is precisely the state the version marks exist to make visible.
 
+    **And it is called before the bar over the reading side comes down**, which
+    is the other half of that call site and audit finding H-19-01. The two marks
+    written here are what :func:`findling.api.resources.field_plan_for` computes
+    the field list of a search out of, once per opening of the reading side. A
+    search that opens between the release and this call therefore reads the
+    marks of the directory that has just been retired and keeps the field list
+    of it for the life of the process, which on a container that has just gained
+    four language chains means the rebuild is through and four of the chains are
+    never searched.
+
     ``languages`` arrives as ``",".join(settings().languages)`` from the caller,
     exactly as it does at the four call sites of
     :func:`findling.index.open.expected_versions`, because the stored mark and
@@ -1037,8 +1053,9 @@ def rebuild_the_index(
     4. make the target directory fit this code, or remove it,
     5. carry the documents over, band by band,
     6. ask the final probe,
-    7. bar the reading side and swap the directories, then let it open again,
-    8. stamp the two marks and let the indexing task go again.
+    7. bar the reading side, swap the directories and stamp the two marks, then
+       let it open again,
+    8. let the indexing task go again.
 
     **Step 4 is the one the audit of this phase added**, and it is there because
     a half filled target survives a code change and a language change while the
@@ -1235,20 +1252,32 @@ def rebuild_the_index(
         drop_read_side()
         try:
             swapped = swap_in(target, live, should_stop)
+            if not swapped:
+                return RUN_STOPPED_EARLY
+            # The mark travelled with the directory and has done its work: it says
+            # "this half filled target belongs to this code", and there is nothing
+            # half filled here any more. Removed after the swap and not before it,
+            # so that a rename which fails leaves a target the next start still
+            # recognises as its own. A removal that fails costs sixteen bytes in the
+            # live directory and nothing else, which is why it is suppressed rather
+            # than reported.
+            with contextlib.suppress(OSError):
+                (live / TARGET_MARK_FILE).unlink(missing_ok=True)
+            # Stamped while the bar is still up, and the order of these two lines
+            # is audit finding H-19-01. Since phase 19 the two marks this writes
+            # decide which fields a bare word searches, and that decision is taken
+            # once per opening of the reading side. Stamped after the release,
+            # the first search of the window between the two opens the swapped
+            # directory, computes its field list out of the marks of the directory
+            # that has just gone, and answers out of that list until the container
+            # is restarted: the rebuild is through, the directory carries thirteen
+            # fields, the search reaches two of them, and no log line anywhere
+            # says so. Three writes on a table of a dozen rows is what the window
+            # of M-18-03 grows by, and for that width a search answers empty,
+            # which is the documented state of this window anyway.
+            stamp_after_swap(store, languages)
         finally:
             let_read_side_open()
-        if not swapped:
-            return RUN_STOPPED_EARLY
-        # The mark travelled with the directory and has done its work: it says
-        # "this half filled target belongs to this code", and there is nothing
-        # half filled here any more. Removed after the swap and not before it,
-        # so that a rename which fails leaves a target the next start still
-        # recognises as its own. A removal that fails costs sixteen bytes in the
-        # live directory and nothing else, which is why it is suppressed rather
-        # than reported.
-        with contextlib.suppress(OSError):
-            (live / TARGET_MARK_FILE).unlink(missing_ok=True)
-        stamp_after_swap(store, languages)
         return REBUILD_THROUGH
     finally:
         arm()

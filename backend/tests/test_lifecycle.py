@@ -280,7 +280,7 @@ class _FakePoller(_FakeReconcile):
 def _install_poller(monkeypatch: pytest.MonkeyPatch, replacement: _FakePoller) -> _FakePoller:
     # The real poller would open the index and the state database as soon as it
     # is armed, and these tests are about the arming and not about a pass.
-    monkeypatch.setattr("findling.main.default_poller", lambda: replacement)
+    monkeypatch.setattr("findling.main.default_poller", lambda **_: replacement)
     return replacement
 
 

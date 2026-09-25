@@ -703,7 +703,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # the state database before it is armed, so a container that is deployed but
     # not yet enabled holds no tantivy lock and touches no volume.
     stop_indexing = asyncio.Event()
-    _POLLER = default_poller()
+    # The one thing the poller tells the reading half, and the lifespan is where
+    # the two halves meet: the poller writes the version marks on an idle pass,
+    # and the field list of a search is computed out of those marks once per
+    # opening of the reading side (audit finding H-19-01). Handed in the same way
+    # the two halves of the bar are handed into the rebuild, so that the worker
+    # package keeps importing nothing from the API package.
+    _POLLER = default_poller(marks_stamped=resources.reset_read_side)
     indexing = asyncio.create_task(_POLLER.run(stop_indexing))
 
     # The second task, and only when the comparison is switched on. Not starting

@@ -32,6 +32,7 @@ from conftest import Corpus, write_index, write_state, write_wordlist
 from findling.api import resources
 from findling.config import settings
 from findling.index.open import LANGUAGES_MARK
+from findling.index.rebuild import stamp_after_swap
 from findling.index.schema import FIELD_BODY_ES
 from findling.query.rewrite import LEGACY_PLAN
 from findling.store.repo import EMBEDDING_MARK, Store, open_store
@@ -423,32 +424,45 @@ def test_the_degraded_verdict_is_dropped_with_the_read_side(indexed_volume: Corp
     assert resources.degraded(fresh) is True
 
 
-def test_the_field_plan_is_dropped_with_the_read_side(indexed_volume: Corpus) -> None:
+def test_the_field_plan_follows_the_stamp_behind_the_bar(indexed_volume: Corpus) -> None:
     # The case that carries the decision not to give the field plan a cache of
     # its own. What a separate cache would have had to build, an invalidation
     # that survives a directory swap under an unchanged path, is exactly what
     # this one already does, so the plan hangs on the handles and is let go with
     # them.
     #
+    # **Turned around on 2026-09-25 by audit finding H-19-01.** Up to then this
+    # case wrote the language mark, deliberately called no reset and asserted
+    # that the plan had not moved, with the reasoning that a plan which moves
+    # without a reset is a plan computed per query. That reasoning is right and
+    # the assertion was still the bug written down as an expectation: it proved
+    # that nothing is recomputed, and it was read as if it proved that the marks
+    # and the plan cannot part company. They could, and on a real installation
+    # they did, for the life of the process.
+    #
+    # So the two statements are separated here. The first is the cost: two
+    # searches in a row share one handle and one plan. The second is the
+    # invariant: the marks are stamped the way the swap stamps them, behind the
+    # bar and never beside it, and the first opening after the bar comes down
+    # carries the field list the new directory really answers. The test calls no
+    # reset of its own; the bar is the reset.
+    #
     # The volume is seeded without a language mark, which is what every volume
     # looks like before a rebuild has stamped one, so the first plan is the
-    # legacy pair. The mark is then written the way rebuild.stamp_after_swap
-    # writes it.
+    # legacy pair.
     first = resources.read_side()
     assert first is not None
     assert first.field_plan.fields == LEGACY_PLAN.fields
+    assert resources.read_side() is first, "the plan is computed once per opening and never per query"
 
-    writable = open_store(indexed_volume.root / "state.db")
-    writable.write_meta(LANGUAGES_MARK, "de,en,es")
-    writable.close()
+    resources.hold_the_read_side_shut()
+    try:
+        writable = open_store(indexed_volume.root / "state.db")
+        stamp_after_swap(writable, "de,en,es")
+        writable.close()
+    finally:
+        resources.let_the_read_side_open()
 
-    # The reset is deliberately left out here: a plan that moved without one
-    # would mean it is computed per query after all, which is the cost this
-    # whole field exists to avoid.
-    again = resources.read_side()
-    assert again is first
-
-    resources.reset_read_side()
     second = resources.read_side()
 
     assert second is not None

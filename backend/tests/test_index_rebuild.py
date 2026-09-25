@@ -1255,8 +1255,17 @@ class _Hands:
     went quiet does. The case that hands in a False builds its own.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, store: Store | None = None) -> None:
         self.journal: list[str] = []
+        # What the state database said at the moment the bar came down, or None
+        # when this recorder was built without a handle to look through. The
+        # whole of audit finding H-19-01 is readable in these two marks: the
+        # first search after the bar comes down computes its field plan out of
+        # them, so a stamp that stands behind the release writes them into a
+        # process that has already read the old ones and keeps its answer until
+        # it is restarted.
+        self.marks_when_the_bar_came_down: dict[str, str] | None = None
+        self._store = store
 
     def stand_down(self) -> bool:
         self.journal.append("stand_down")
@@ -1270,6 +1279,8 @@ class _Hands:
 
     def let_read_side_open(self) -> None:
         self.journal.append("let_read_side_open")
+        if self._store is not None:
+            self.marks_when_the_bar_came_down = dict(self._store.read_meta())
 
 
 def _led_by(store: Store, hands: _Hands, should_stop: Callable[[], bool] | None = None) -> str:
@@ -1327,7 +1338,7 @@ def _a_volume_that_asks_for_a_rebuild(volume: Path, documents: int = 5) -> Store
 def test_the_run_stands_down_before_the_first_document_and_arms_behind_the_stamp(
     volume: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The whole order in one journal, and the two ends of it are the claim.
+    """The whole order in one journal, and the three claims it carries.
 
     The stand down has to be in front of the first written document, because a
     document the poller writes into the source below the cursor after the band
@@ -1336,9 +1347,20 @@ def test_the_run_stands_down_before_the_first_document_and_arms_behind_the_stamp
     behind the stamp, because the marks are what the next start reads: a poller
     let go one line earlier would index into a directory whose marks still
     describe the one before it.
+
+    **The stamp has to stand in front of the release, and that is audit finding
+    H-19-01.** Since phase 19 the two marks this stamp writes decide which fields
+    a bare word searches, and that decision is taken once per opening of the
+    reading side. With the stamp behind the release there is a window between the
+    two in which a search opens the swapped directory, reads the marks of the
+    directory that is gone and keeps the field list of it for the life of the
+    process: the rebuild is through, the directory carries thirteen fields, and
+    the search reaches two of them until somebody restarts the container. The
+    journal holds the order, and the marks read at the moment the bar comes down
+    hold the content of it.
     """
     store = _a_volume_that_asks_for_a_rebuild(volume)
-    hands = _Hands()
+    hands = _Hands(store)
     honest_document = _document_from
     honest_stamp = stamp_after_swap
 
@@ -1359,8 +1381,13 @@ def test_the_run_stands_down_before_the_first_document_and_arms_behind_the_stamp
     store.close()
 
     assert verdict == REBUILD_THROUGH
-    assert hands.journal == ["stand_down", "document", "drop_read_side", "let_read_side_open", "stamp", "arm"]
+    assert hands.journal == ["stand_down", "document", "drop_read_side", "stamp", "let_read_side_open", "arm"]
     assert marks[_SCHEMA_MARK] == str(SCHEMA_VERSION)
+    # The first search after the bar comes down finds both marks current, so the
+    # field plan it computes is the one the new directory really answers.
+    assert hands.marks_when_the_bar_came_down is not None
+    assert hands.marks_when_the_bar_came_down[_SCHEMA_MARK] == str(SCHEMA_VERSION)
+    assert hands.marks_when_the_bar_came_down[LANGUAGES_MARK] == ",".join(settings().languages)
     assert _documents_in(volume / "index") == 5
     assert not (volume / "index.rebuild").exists()
     assert not (volume / "index.retired").exists()

@@ -324,6 +324,7 @@ def _poller(
     clients: list[object] | None = None,
     fetched: list[int] | None = None,
     extract: _Extractor | None = None,
+    marks_stamped: Callable[[], None] | None = None,
 ) -> Poller:
     """Wire a poller to fakes, counting client creations when asked to."""
 
@@ -342,6 +343,7 @@ def _poller(
         queue_factory=lambda nc: cast("Any", queue),
         fetch=_gateway(bodies or {}, fetched),
         extract=_Extractor() if extract is None else extract,
+        marks_stamped=marks_stamped,
     )
 
 
@@ -2807,6 +2809,87 @@ async def test_a_rebuild_survives_a_restart_of_the_container(
         assert second.index_version == generation
     finally:
         second.close()
+
+
+async def test_a_pass_that_stamps_the_marks_tells_the_reading_side_once(
+    volume: Path, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    """Audit finding H-19-01, the half of it that carries no time window at all.
+
+    Since phase 19 the field list of a search is computed out of the stored
+    marks, once per opening of the reading side, and this pass writes those
+    marks while that side is wide open. A poller that said nothing would leave
+    the process answering out of the list it computed before the rebuild was
+    through: the marks would promise six language chains, the directory would
+    carry them, and the search would reach two of them until somebody restarted
+    the container.
+
+    The three passes are the three things this has to get right: nothing is said
+    while there is still work, it is said the moment the marks are current, and
+    it is not said again afterwards, because the flag behind the stamp makes
+    this one release per process rather than one per idle pass.
+    """
+    digest = write_wordlist(volume)
+    expected = expected_versions(digest, ",".join(settings().languages))
+    _aged_state(volume)
+    told: list[str] = []
+
+    store = _open_state()
+    try:
+        queue = _FakeQueue(ClaimResult(jobs=(_job(),)))
+        poller = _poller(
+            store=store,
+            writer=writer,
+            tmp_path=tmp_path,
+            queue=queue,
+            marks_stamped=lambda: told.append("let go"),
+        )
+
+        worked = await poller.run_once()
+        assert worked.indexed == 1
+        assert told == [], "the queue has not run dry, so nothing is stamped and nothing is said"
+
+        empty = await poller.run_once()
+
+        assert empty.state == ROUND_EMPTY
+        assert store.version_mismatch(expected) == []
+        assert told == ["let go"]
+
+        await poller.run_once()
+
+        assert told == ["let go"], "the flag behind the stamp is down, so this costs one release per process"
+    finally:
+        store.close()
+
+
+async def test_a_pass_that_may_not_stamp_yet_tells_nobody(
+    volume: Path, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The other side of H-19-01, and the reason the release hangs off the answer
+    # of the stamp rather than off the idle pass: an unfinished rebuild writes
+    # no mark, so there is nothing anybody has to be told about, and a reading
+    # side dropped here would cost every search of this container a reopen for
+    # as long as the rebuild runs.
+    write_wordlist(volume)
+    _aged_state(volume)
+    told: list[str] = []
+
+    store = _open_state()
+    try:
+        poller = _poller(
+            store=store,
+            writer=writer,
+            tmp_path=tmp_path,
+            queue=_FakeQueue(),
+            marks_stamped=lambda: told.append("let go"),
+        )
+
+        result = await poller.run_once()
+
+        assert result.state == ROUND_EMPTY
+        assert told == []
+    finally:
+        store.close()
 
 
 async def test_a_pass_that_cannot_write_the_marks_still_ends(
