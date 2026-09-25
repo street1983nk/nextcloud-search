@@ -1007,8 +1007,14 @@ PHP_TREE_HASH_TODAY = "a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab
 # of the schema mark or the language mark alone is left to the band run instead
 # of adding a full reindex behind it. No file came and none went, so
 # PACKAGE_FILES_TODAY stays at 56.
-PACKAGE_FILES_TODAY = 56
-PACKAGE_TREE_HASH_TODAY = "a67a1aa17a45774c7b6e35b7cac745e125e157263f604624a05e4da854fcc775"
+# Moved on 2026-09-25 by plan 21-03, task 1: one file came. index/wordlist_nl.py
+# is the Dutch sibling of index/wordlist.py, recipe B 4-14 with a folded list,
+# the linking elements s, e and en, an artifact that fails closed, a cache that
+# keeps the digest and never the entries, and a language gate that reads nothing
+# while nl is not configured. No caller in the running app uses it yet. None went,
+# so PACKAGE_FILES_TODAY moves to 57.
+PACKAGE_FILES_TODAY = 57
+PACKAGE_TREE_HASH_TODAY = "e24a1437dada4dd646bb815be09edfbd27a3bd70c6cffe366f8578b8b63fd2be"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

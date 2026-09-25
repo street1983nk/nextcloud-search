@@ -179,9 +179,7 @@ def test_the_artifact_lives_on_the_volume(storage: Path) -> None:
     assert artifact_path_nl() == storage / "dict" / "nl-full.txt"
 
 
-def test_the_digest_is_read_once_per_process(
-    source: Path, storage: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_the_digest_is_read_once_per_process(source: Path, storage: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(wordlist_nl, "SYSTEM_WORDLIST_NL", source)
     reads = read_count_nl()
 
