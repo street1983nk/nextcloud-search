@@ -1448,3 +1448,140 @@ def test_the_report_puts_the_hits_per_request_next_to_the_hits_total() -> None:
     # with. A list at the end would be a footnote to a number nobody re-reads.
     assert keys.index("vorlaufsonde") == 0, keys
     assert keys.index("empty_result_groups") == keys.index("failure_kinds") + 1, keys
+
+
+# W3 of phase 22, the OCR slot probe. It runs inside the product image with
+# scripts/ops mounted read only, so the house rules of the load tool apply to it
+# with one difference that is named rather than hidden: it imports the product,
+# because driving the product's own extraction child is the whole point of it.
+
+OCR_SLOT_PROBE = OPS_DIR / "ocr_slot_probe.py"
+OCR_SLOT_PROBE_MODULE = "findling_ocr_slot_probe"
+
+# The two packages outside the standard library the probe may import, each
+# inside a function and never at module level. findling is the product under
+# measurement. pypdfium2 renders the page of the single mode exactly the way
+# findling.extract.raster does, which takes a document of that library.
+OCR_SLOT_PROBE_PACKAGES = frozenset({"findling", "pypdfium2"})
+
+# The resource counter that misses the tesseract grandchildren of a long lived
+# worker child, assembled so this file does not carry the name it forbids.
+CHILD_RESOURCE_COUNTER = "RUSAGE_" + "CHILDREN"
+
+
+def ocr_slot_probe_module() -> ModuleType:
+    """The probe, loaded from its path, in the shape of search_load_module."""
+    specification = importlib.util.spec_from_file_location(OCR_SLOT_PROBE_MODULE, OCR_SLOT_PROBE)
+    assert specification is not None, OCR_SLOT_PROBE
+    assert specification.loader is not None, OCR_SLOT_PROBE
+    module = importlib.util.module_from_spec(specification)
+    sys.modules[OCR_SLOT_PROBE_MODULE] = module
+    specification.loader.exec_module(module)
+    return module
+
+
+def test_the_slot_probe_starts_with_a_python_shebang() -> None:
+    assert OCR_SLOT_PROBE.read_bytes().startswith(b"#!/usr/bin/env python3\n")
+
+
+def test_the_slot_probe_carries_neither_a_dash_nor_a_carriage_return() -> None:
+    raw = OCR_SLOT_PROBE.read_bytes()
+    assert b"\r" not in raw
+    text = raw.decode("utf-8")
+    for dash in DASHES:
+        assert dash not in text, f"{dash!r} in {OCR_SLOT_PROBE.name}"
+
+
+def test_the_slot_probe_carries_no_path_of_one_machine() -> None:
+    assert machine_shapes(OCR_SLOT_PROBE.read_text(encoding="utf-8")) == []
+
+
+def test_the_slot_probe_imports_the_product_only_inside_functions() -> None:
+    """Module level is standard library only; the two named exceptions come late.
+
+    Late, so the argument check and the report can be loaded and tested on a
+    machine without the product, and so a run that fails its arguments has not
+    paid for the import of the extraction stack.
+    """
+    text = OCR_SLOT_PROBE.read_text(encoding="utf-8")
+    outside = imported_packages(text) - set(sys.stdlib_module_names)
+    assert outside <= OCR_SLOT_PROBE_PACKAGES, sorted(outside)
+    top_level: set[str] = set()
+    for node in ast.parse(text).body:
+        if isinstance(node, ast.Import):
+            top_level.update(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            top_level.add(node.module.split(".")[0])
+    assert not top_level - set(sys.stdlib_module_names), sorted(top_level)
+
+
+def test_the_slot_probe_drives_the_extraction_worker_over_the_ocr_route() -> None:
+    text = OCR_SLOT_PROBE.read_text(encoding="utf-8")
+    assert "ExtractionWorker" in text
+    assert 'route="ocr"' in text
+    assert "sched_getaffinity" in text
+    assert "cpu.stat" in text
+    assert "memory.stat" in text
+    assert CHILD_RESOURCE_COUNTER not in text
+
+
+def test_the_slot_probe_refuses_zero_slots_and_a_missing_scan(tmp_path: Path) -> None:
+    probe = ocr_slot_probe_module()
+    scan = tmp_path / "scan-8.pdf"
+    scan.write_bytes(b"%PDF-1.4\n")
+    assert probe.main(["--slots", "0", "--scan", str(scan)]) == 2
+    assert probe.main(["--slots", "1"]) == 2
+    assert probe.main(["--slots", "1", "--scan", str(tmp_path / "absent.pdf")]) == 2
+
+
+def test_the_slot_probe_loads_and_refuses_without_importing_the_product(tmp_path: Path) -> None:
+    """In a fresh interpreter, where findling is importable and nothing has imported it yet."""
+    code = (
+        "import importlib.util, sys\n"
+        f"spec = importlib.util.spec_from_file_location({OCR_SLOT_PROBE_MODULE!r}, {OCR_SLOT_PROBE.as_posix()!r})\n"
+        "module = importlib.util.module_from_spec(spec)\n"
+        f"sys.modules[{OCR_SLOT_PROBE_MODULE!r}] = module\n"
+        "spec.loader.exec_module(module)\n"
+        f"code = module.main(['--slots', '0', '--scan', {tmp_path.as_posix()!r}])\n"
+        "print(code, 'findling' in sys.modules)\n"
+    )
+    finished = subprocess.run(  # noqa: S603 - fixed argument list, no shell string
+        [sys.executable, "-c", code], capture_output=True, text=True, timeout=60, check=False
+    )
+    assert finished.returncode == 0, finished.stderr
+    assert finished.stdout.split() == ["2", "False"], finished.stdout
+
+
+def test_the_slot_probe_reports_numbers_and_never_the_text() -> None:
+    """The report of a staged series: exactly the named lines, no extracted text."""
+    probe = ocr_slot_probe_module()
+    extracted = "Grundstuecksverkehrsgenehmigung der Familie Beispiel"
+    indexed = SimpleNamespace(state="indexed", reason=None, text=extracted)
+    cut = SimpleNamespace(state="indexed", reason="truncated", text=extracted)
+    rounds = [
+        probe.round_from_outcomes(1, 10.0, 8, [indexed, indexed], 1_000, 2_000_000),
+        probe.round_from_outcomes(2, 8.0, 8, [indexed, indexed], None, None),
+        probe.round_from_outcomes(3, 16.0, 8, [indexed, cut], -5, 1_500_000),
+    ]
+    lines = probe.report_lines("aarch64", 2, 2, rounds)
+    assert extracted not in "\n".join(lines)
+    assert [line.split()[0] for line in lines] == [
+        "arch",
+        "cpus_visible",
+        "slots",
+        "round",
+        "round",
+        "round",
+        "pages_per_second_median",
+    ]
+    for line in lines[3:6]:
+        words = line.split()
+        assert "anon_bytes_delta" in words, line
+        assert "cpu_usec" in words, line
+    assert lines[3] == (
+        "round 1 wall_seconds 10.000 pages_per_second 1.600 anon_bytes_delta 1000 cpu_usec 2000000 failed_slots 0"
+    )
+    assert "anon_bytes_delta na cpu_usec na" in lines[4]
+    # The truncated slot is a lost slot: its pages are not counted.
+    assert lines[5].endswith("failed_slots 1")
+    assert lines[6] == "pages_per_second_median 1.600"
