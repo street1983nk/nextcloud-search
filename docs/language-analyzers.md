@@ -437,13 +437,13 @@ maintenance and its own licence, for a class of documents this product has not
 measured. The pair that matters most in practice, accented against flat, is
 handled by the fold and is asserted in rows 3 and 5 of the table above.
 
-**Compounds are German only.** `Filter.split_compound` runs in the German chain
-alone, because it needs a constituent list and the project ships exactly one.
-Dutch is the other compounding language in this set and it gets nothing here;
-the Dutch constituent list is scheduled for phase 21 and is deliberately not
-improvised now. The alternative would be to run the German list against Dutch
-text, which produces wrong splits rather than missing ones, and a wrong split is
-harder to notice than an unsplit word.
+**Compounds are German and Dutch.** Since phase 21 the Dutch chain carries its
+own constituent list (`wdutch`, recipe B 4-14, folded) and its own splitter, and
+it splits only while `nl` is active; without `nl` the Dutch field keeps the
+plain Snowball chain of this page. The German list is never applied to Dutch
+text, because it produces wrong splits rather than missing ones, and a wrong
+split is harder to notice than an unsplit word. List, filter order, version mark
+and the seven named limits stand in `docs/dutch-analyzer.md`.
 
 **Five words that fall through every list.** `già`, `però` and `così` in
 Italian and `aún` and `sólo` in Spanish are in no built in Snowball list, so

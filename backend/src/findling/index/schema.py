@@ -167,8 +167,8 @@ def build_schema() -> Schema:
     # Italian. Not stored, like every body field but the German one, because the
     # snippet is cut out of body_de and a second copy would buy nothing.
     builder.add_text_field(FIELD_BODY_IT, stored=False, tokenizer_name=TOKENIZER_IT)
-    # Dutch. Its chain has no compound splitter; the Dutch compounds are their
-    # own question and their own phase, and the field does not wait for it.
+    # Dutch. Its chain splits compounds only when Dutch is active (see
+    # findling.index.analyzer.dutch_chain_for); the field itself did not change for it.
     builder.add_text_field(FIELD_BODY_NL, stored=False, tokenizer_name=TOKENIZER_NL)
     # Portuguese, the fourth and last of the v1.3 build out. Measured with the
     # three above: the four empty fields cost 0.40 percent of directory size.

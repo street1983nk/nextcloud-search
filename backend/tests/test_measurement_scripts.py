@@ -1049,8 +1049,13 @@ PHP_TREE_HASH_TODAY = "a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab
 # dutch=dutch_digest_for(languages) to open_index, index/bench.py and
 # tools/index_status.py name dutch=None. No file came and none went, so
 # PACKAGE_FILES_TODAY stays at 57.
+# Moved on 2026-09-25 by Plan 21-09: one of the 57 files changed its bytes.
+# index/schema.py rewrote the comment above FIELD_BODY_NL, which said the Dutch
+# chain had no compound splitter; it now names dutch_chain_for. Comment only, no
+# schema change and no SCHEMA_VERSION move. No file came and none went, so
+# PACKAGE_FILES_TODAY stays at 57.
 PACKAGE_FILES_TODAY = 57
-PACKAGE_TREE_HASH_TODAY = "f2a0b1f800816982426dc9e3ad41b0ad5c9973ce23354cf435900c583d10409f"
+PACKAGE_TREE_HASH_TODAY = "3b5a73832db7a893c08afaa6fbdb6bf979c5c259b898494cb4b500f142f048b5"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

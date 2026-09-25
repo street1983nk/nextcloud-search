@@ -161,6 +161,7 @@ zwei Reihen auf zwei Architekturen mehr sagen als eine.
 | **Nachtrag: MEM-02 an seiner Messgröße, ARM m7g.large** | **gemessen, `rueckkehr-zur-grundlast-mb` = 377,5 (Marke B 1.109,4 MB minus Marke C 731,9 MB), über der Schwelle 300 MB; Bodensatz 628,0 MB als eigene Zahl; die Sichtprobe aus 14-12 (376,3 MB ohne `malloc_trim`) bleibt ein Hinweis** | 2026-09-21 |
 | **Nachtrag: Wiederaufwärm-Kosten der Entladung, ARM m7g.large** | **gemessen, vier Ausprägungen; erste Suche kalt 1.996 ms (minus 496 ms gegen die Decke von 1,5 s) und warm 1.418 ms (plus 82 ms), Nachwärmdauer 0 s; der Vorschlagswert 900 s bleibt mit Vorbehalt (Betreiberentscheid 21.09.2026)** | 2026-09-21 |
 | **Nachtrag: Filter und Sortierung, ARM m7g.large, Erstmessung** | **gemessen, relevance 341,3 ms Median gegen newest 175,2 ms und oldest 174,7 ms (Faktor 1,95), drei Seiten unter Filter geblättert ohne doppelte Kennung; ohne Vergleichszeile, weil beides erst in Phase 13 entstanden ist** | 2026-09-21 |
+| **Nachtrag: niederländischer Automat, amd64** | **gemessen, 24,2 bis 25,3 MB nur bei aktivem nl, Liste freigegeben; Summe mit der Store-Spitze 1.838,0 MB, Reserve 162,0 MB gegen 2.000 MB; native ARM-Zahl in Phase 22** | 2026-09-25 |
 
 Was fehlt, ist hier ausdrücklich als fehlend benannt und nicht ausgelassen.
 
@@ -4403,6 +4404,54 @@ wurde ausgelassen, um Box-Zeit zu sparen; er kostet auf der Vergleichsinstanz
 0,318 s je Anfrage, die kein angemeldeter Nutzer zahlt, und zwei Berichte sind
 nur über denselben Anmeldeweg vergleichbar. Die Auslassung steht als
 Protokollzeile in der Rohdatei.
+
+### Nachtrag vom 25.09.2026: der niederländische Automat
+
+Seit Phase 21 zerlegt die niederländische Kette Komposita mit einer eigenen
+Konstituentenliste (`wdutch`, Rezept B 4-14, 316.740 Einträge). Das kostet einen
+zweiten Automaten neben dem deutschen, und zwar **nur bei aktivem nl**: ohne
+`nl` in `FINDLING_LANGUAGES` wird die Liste nicht gelesen und kein Automat
+gebaut, der Posten ist dann 0 MB.
+
+Gemessen am 25.09.2026 vor der Verdrahtung, produktnah in der Reihenfolge des
+laufenden Containers (deutsche Liste und deutscher Automat gebaut, dann
+niederländische Liste gelesen, Automat gebaut, Liste freigegeben), `VmRSS`, jeder
+Lauf in einem frischen Container, amd64, Megabyte dezimal. Quelle:
+`docs/measurements/2026-09-komposita-nl/`, Abschnitt 4, Rohdatei
+`rohdaten/ram.txt`.
+
+| Posten | Wert |
+|---|---|
+| niederländischer Automat, Liste freigegeben, Lauf 1 / 2 / 3 | 24,22 / 25,25 / 25,19 MB |
+| Spanne über sechs Läufe in zwei Messungen | **24,2 bis 25,3 MB** |
+| davon der Automat selbst (Diagnose mit `malloc_trim(0)`) | 15,1 bis 16,1 MB |
+| Bedingung | nur bei aktivem nl |
+
+Der Unterschied zwischen 25,3 und 16 MB ist freigegebener Heap, den glibc nicht
+an das Betriebssystem zurückgibt. Der laufende Container ruft kein
+`malloc_trim`, deshalb rechnet das Budget mit dem höheren, produktnahen Wert.
+Ein früherer Wert von 17,6 MB aus der Research-Sonde lud das Findling-Paket
+nicht und gilt für das Produkt nicht.
+
+| Budgetrechnung | Wert |
+|---|---|
+| Grenzwert | 2.000 MB |
+| gemessener Spitzenwert `anon` (ARM, mit Semantik, Nachmessung 07.09.2026) | 1.812,7 MB |
+| plus niederländischer Automat, höchster Lauf | 25,3 MB |
+| **Summe** | **1.838,0 MB** |
+| **Reserve** | **162,0 MB** |
+
+Das Budget hält auch mit nl. Die "rund 23 MB" aus Roadmap und Anforderung
+KOMP-01 sind die Phase-2-Schätzung des deutschen Automaten und gelten für
+Niederländisch nicht; der deutsche Posten ist längst gemessen (Liste 21,9 MB,
+Automat 42,1 MB, arm64 nativ, `docs/measurements/2026-09-grundlast-fein/`), und
+dass die niederländische Zahl in der Nähe der alten Schätzung liegt, ist Zufall.
+Gemessen ist amd64; beim deutschen Automaten lagen amd64 und natives arm64 unter
+0,5 MB auseinander, die Übertragung auf ARM bleibt trotzdem eine Annahme (A1).
+Die native ARM-Zahl wird in Phase 22 nachgemessen.
+
+Rezept, Kette, Versionsmarke `wordlist_hash_nl` und Umbauweg stehen in
+`docs/dutch-analyzer.md`.
 
 ## Reproduzieren
 
