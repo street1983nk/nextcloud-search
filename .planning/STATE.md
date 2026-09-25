@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
-status: executing
-stopped_at: 20-09 gebaut und committet (1c80e26, 530bb7c, c5102d1), Sichtprobe vom Owner abgenommen, NICHT gepusht
-last_updated: "2026-09-25T17:00:00.000Z"
-last_activity: 2026-09-25 -- 20-09 ausgefuehrt, CI-Sprachbeweis gebaut, Sichtprobe in fuenf Sprachen approved; alle 9 Plaene der Phase 20 fertig
+status: ready_to_plan
+stopped_at: Phase 20 komplett (9/9, verified passed, Review resolved, CI 11/11 gruen, gepusht bis 9e5d0eb)
+last_updated: 2026-09-25T11:32:09.472Z
+last_activity: 2026-09-25 -- Phase 20 abgeschlossen: Verifikation passed 9/9, Review WR-01..03 gefixt, CI-Sprachbeweis-Erstlauf gruen (Run 36126493024), beide Pushes gruen
 progress:
   total_phases: 7
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 38
   completed_plans: 38
-  percent: 46
+  percent: 57
 ---
 
 # Project State
@@ -21,23 +21,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 20 (ui-kataloge): alle 9 Plaene gebaut, 20-01 und 20-09 vom Owner abgenommen; offen: Push + erster CI-Lauf des Sprachbeweises, Verifikation, Audit
+**Current focus:** Phase 21 (niederlaendische Komposita): discuss/plan steht an; vorher secure-phase 20
 
 ## Current Position
 
-Phase: 20 (ui-kataloge-es-it-nl-pt), 9 of 9 gebaut; Phase 19 COMPLETE 25.09.2026
-Status: 20-09 (CI-Sprachbeweis, Sichtprobe, Schlussabschnitt) ist gebaut und committet (1c80e26
+Phase: 21 von 23 (niederlaendische Komposita), Milestone-Phasen 17-23
+Status: Phase 20 COMPLETE 25.09.2026 (verified passed 9/9), Phase 21 bereit zum Planen
 Schritt "The result page answers in every new language (core lang)" im Job search-parity,
 530bb7c docs/l10n-catalogues.md Abschnitt "Stand nach Phase 20", c5102d1 SUMMARY). Der Schritt
 liest den Erwartungswert zur Laufzeit aus apps/findling/l10n/<code>.json, prueft je Code es, it,
 nl, pt_PT, pt_BR Anwesenheit des uebersetzten Titels UND Abwesenheit von "Search your file
-contents", setzt die Nutzersprache per trap zurueck. ERSTER ECHTER LAUF STEHT AUS (kommt mit dem
-Push durch den Orchestrator, Lauf-Beleg in 20-09-SUMMARY.md nachtragen). Sichtprobe per
+contents", setzt die Nutzersprache per trap zurueck. ERSTER ECHTER LAUF GRUEN (Push d52d2e5, Run 36126493024, Beleg in 20-09-SUMMARY.md nachgetragen). Sichtprobe per
 Playwright an findling-nextcloud: fuenf Sprachen, Adminseite plus drei Ergebnisseiten, 0
 englische Reste aus Findling, Pluralform bei n=16 sichtbar, en-Gegenprobe 37 Funde; Owner
 "approved" 25.09.2026. Ausgangswert admin=de, testuser=de wiederhergestellt, git status leer.
 Instanz-Eingriffe: occ upgrade (Findling 1.1.0 auf 1.2.0, stand seit 21.09. aus) und Backend
-per register-exapp.sh neu gestartet. Suite 2880 passed / 15 skipped, Gates gruen. NICHT gepusht.
+per register-exapp.sh neu gestartet. Suite nach Review-Fixes 2881 passed / 15 skipped, Gates gruen. Gepusht bis 9e5d0eb, alle 11 CI-Laeufe beider Pushes gruen. Code-Review 0C/3W/3I, WR-01..03 gefixt (cde0aab, 245f020, 69c7186), IN-01..03 dokumentiert offen.
 
 Vorheriger Stand: 20-08 (der brasilianisch-portugiesische Katalog) ist gebaut und committet (592980d
 pt_BR.json plus pt_BR.js, f79254c Gate, cd38e2d docs/l10n-portuguese.md, ca4f6a9 SUMMARY).
@@ -207,15 +206,16 @@ Instanz den Erststempel der Verzeichnismarken; Folge: Feldplan blieb LEGACY, rot
 Fix-Beweis). Endstand-CI 36096526219 GRUEN 4/4 inkl. arm64. Suite 2877 passed / 15 skipped.
 LEHRE: ein Audit-Fix, der einen Schreiber entfernt, braucht die Frage "wer schreibt das
 sonst noch auf JEDEM Pfad" plus einen Frischinstanz-Fall, bevor er reist.
-Last activity: 2026-09-25 -- 20-07 ausgefuehrt, keine offene Owner-Frage in Phase 20
+Last activity: 2026-09-25
 
-Progress: [████......] 46% (3 von 7 Phasen)
+Progress: [█████.....] 57% (4 von 7 Phasen)
 
 ## Naechster Schritt
 
-**Push (Orchestrator), dann den ersten Lauf von integration.yml/search-parity pruefen** und den
-Lauf-Beleg in 20-09-SUMMARY.md nachtragen; danach Verifikation Phase 20 und Security/Bug/
-Performance-Audit, dann Phase 21. 20-09 ist erledigt; die Bloecke darunter sind Herleitung.
+**secure-phase 20** (Security-Gate, SECURITY.md fehlt noch), danach **discuss/plan-phase 21**
+(niederlaendische Komposita, Research-Flag laut Roadmap). Phase 20 ist KOMPLETT: Verifikation
+passed 9/9, Review-Warnings gefixt, CI-Erstlauf des Sprachbeweises gruen, alles gepusht.
+Die Bloecke darunter sind Herleitung.
 
 Vorher: **20-09 ausfuehren** (CI-Sprachbeweis je Code in integration.yml, Sichtprobe in fuenf
 Sprachen als Checkpoint, Schlussabschnitt).
@@ -268,7 +268,7 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 20 | 9 | - | - |
 
 ## Accumulated Context
 
