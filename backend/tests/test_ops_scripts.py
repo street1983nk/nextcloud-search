@@ -34,6 +34,8 @@ from __future__ import annotations
 import ast
 import importlib.util
 import json
+import os
+import shutil
 import subprocess
 import sys
 import urllib.error
@@ -50,6 +52,10 @@ RSS_SAMPLER = OPS_DIR / "rss_sampler.sh"
 HETZNER_BOX = OPS_DIR / "hetzner_box.sh"
 AWS_BOX = OPS_DIR / "aws_box.sh"
 SEARCH_LOAD = OPS_DIR / "search_load.py"
+# The two samplers of phase 22, W1 and W2. Same frame as the memory sampler and
+# therefore in the same fixture below.
+CPU_SAMPLER = OPS_DIR / "cpu_sampler.sh"
+PROC_ANON_SAMPLER = OPS_DIR / "proc_anon_sampler.sh"
 
 # Assembled from code points so that this file does not carry the characters it
 # forbids and fail on itself.
@@ -101,7 +107,10 @@ def imported_packages(text: str) -> set[str]:
     return packages
 
 
-@pytest.fixture(params=[RSS_SAMPLER, HETZNER_BOX, AWS_BOX], ids=lambda path: path.name)
+@pytest.fixture(
+    params=[RSS_SAMPLER, HETZNER_BOX, AWS_BOX, CPU_SAMPLER, PROC_ANON_SAMPLER],
+    ids=lambda path: path.name,
+)
 def script(request: pytest.FixtureRequest) -> Path:
     return Path(request.param)
 
@@ -143,6 +152,103 @@ def test_the_sampler_refuses_rather_than_writing_zeroes() -> None:
     text = RSS_SAMPLER.read_text(encoding="utf-8")
     assert "no readable memory.stat" in text
     assert "not one sample was written" in text
+
+
+# W1, the core usage sampler of phase 22. Its promises are the ones of the memory
+# sampler with cpu.stat in place of memory.stat, plus one of its own: a container
+# rebuild removes the cgroup halfway through a run, and the sampler has to end
+# that run with a closing line rather than die quietly under set -eu (22-RESEARCH
+# pitfall 4).
+
+
+def test_the_cpu_sampler_knows_both_cgroup_driver_layouts() -> None:
+    text = CPU_SAMPLER.read_text(encoding="utf-8")
+    assert "system.slice/docker-" in text
+    assert "/docker/$CONTAINER_ID" in text
+
+
+def test_the_cpu_sampler_reads_the_cgroup_instead_of_asking_the_client() -> None:
+    text = CPU_SAMPLER.read_text(encoding="utf-8")
+    assert DOCKER_MEMORY_SHORTCUT not in text
+    assert "cpu.stat" in text
+    assert "usage_usec" in text
+    assert "/proc/stat" in text
+    assert "PREFIX='findling-cpu'" in text
+
+
+def test_the_cpu_sampler_refuses_rather_than_writing_zeroes() -> None:
+    text = CPU_SAMPLER.read_text(encoding="utf-8")
+    assert "no readable cpu.stat" in text
+    assert "not one sample was written" in text
+
+
+def test_the_cpu_sampler_checks_the_cgroup_before_every_read() -> None:
+    """The check sits inside the loop and leads to the closing line, not to a crash."""
+    text = CPU_SAMPLER.read_text(encoding="utf-8")
+    loop = text[text.index("while :; do") :]
+    assert '[ ! -r "$CGROUP/cpu.stat" ]' in loop
+    assert "finish 'cgroup gone'" in loop
+    assert "trap 'finish signal' INT TERM" in text
+
+
+def test_the_cpu_sampler_ends_without_a_data_line_when_there_is_no_cpu_stat(tmp_path: Path) -> None:
+    """Behaviour, not text: a staged docker and a cgroup directory without cpu.stat.
+
+    The cgroup directory exists and is empty, which is the shape a cgroup v1 host
+    or a nested setup leaves behind. The sampler has to refuse with a non zero
+    return and without writing a single line into its output file.
+    """
+    shell = shutil.which("sh")
+    if shell is None:
+        pytest.skip("no POSIX sh on this machine, the text gates above still hold")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake_docker = bin_dir / "docker"
+    fake_docker.write_text("#!/bin/sh\necho 0123abcd\n", encoding="utf-8", newline="\n")
+    fake_docker.chmod(0o755)
+    cgroup_root = tmp_path / "cgroup"
+    (cgroup_root / "system.slice" / "docker-0123abcd.scope").mkdir(parents=True)
+    output = tmp_path / "cpu.csv"
+    environment = {
+        **os.environ,
+        "PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}",
+        "FINDLING_CGROUP_ROOT": cgroup_root.as_posix(),
+    }
+    finished = subprocess.run(  # noqa: S603 - fixed argument list, no shell string
+        [shell, CPU_SAMPLER.as_posix(), "staged", "1", output.as_posix()],
+        capture_output=True,
+        text=True,
+        env=environment,
+        timeout=30,
+        check=False,
+    )
+    assert finished.returncode != 0, finished.stderr
+    assert "no readable cpu.stat" in finished.stderr
+    assert not output.exists() or output.read_text(encoding="utf-8") == ""
+
+
+# W2, the per process anon sampler. The one promise that is its own: it reads
+# three fields of the status file and never the argument list of a process,
+# which can carry file paths of the instance being indexed (T-02-14).
+
+# Assembled so this file does not carry the word it forbids in a script.
+PROC_ARGUMENT_FILE = "cmd" + "line"
+
+
+def test_the_anon_sampler_reads_three_fields_and_never_the_argument_list() -> None:
+    text = PROC_ANON_SAMPLER.read_text(encoding="utf-8")
+    assert "RssAnon" in text
+    assert "VmHWM" in text
+    assert "/status" in text
+    assert PROC_ARGUMENT_FILE not in text
+    assert "/environ" not in text
+
+
+def test_the_anon_sampler_refuses_rather_than_writing_zeroes() -> None:
+    text = PROC_ANON_SAMPLER.read_text(encoding="utf-8")
+    assert "PREFIX='findling-anon'" in text
+    assert "not one sample was written" in text
+    assert DOCKER_MEMORY_SHORTCUT not in text
 
 
 def test_the_box_tool_names_its_four_subcommands_in_the_usage() -> None:
