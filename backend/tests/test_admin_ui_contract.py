@@ -650,6 +650,11 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
         "PDF": "the proper name of a file format, the same abbreviation in all three languages",
         "Documents": "the same word in French, and an invented difference would be a mistranslation",
         "Images": "the same word in French, and an invented difference would be a mistranslation",
+        # Since the review of phase 20, when G2 learnt to hold a plural value
+        # against the two halves of its key. Before that no plural value could be
+        # a finding at all, which is why this entry was never needed and is not a
+        # wording that changed.
+        "_%n minute_::_%n minutes_": "the same words in French in both forms, a difference would be a mistranslation",
     },
 }
 
@@ -838,12 +843,32 @@ def scan_completeness(
     this function one that happened to run over French; a parameter makes it the
     same function for every language, and the caller is the one place that
     decides which language it is judging.
+
+    A plural value is held against the two halves of its key since the review of
+    phase 20. Plan 20-01 renamed the plural keys to ``_<singular>_::_<plural>_``,
+    and a list never equals a string, so from that plan on the identity check
+    could not report a plural value at all: ``["%n day", "%n days", "%n days"]``
+    in es.json passed it. The key is cut at the mark the way
+    ``expected_directives_per_form`` cuts it, form 0 is compared with the
+    singular half and every further form with the plural half, and the value is
+    a finding when every form is the English one. Every form and not any form,
+    for the reason of the paragraph above: a single form that English and the
+    target language write alike is a translation and not a forgotten line. A
+    plural that is English in every form and is so on purpose, like the French
+    ``%n minute`` / ``%n minutes``, needs a named exception like any other value.
     """
     violations: list[str] = []
     for key, value in catalogue.items():
         violations.extend(f"{name}: {key!r} has an empty value" for form in forms_of(value) if form.strip() == "")
-        if value == key and key not in exceptions:
+        if key in exceptions:
+            continue
+        if value == key:
             violations.append(f"{name}: {key!r} is still the English source string")
+        elif isinstance(value, list) and "_::_" in key:
+            singular, plural = key.split("_::_", 1)
+            english = [singular.removeprefix("_")] + [plural.removesuffix("_")] * (len(value) - 1)
+            if value == english:
+                violations.append(f"{name}: {key!r} is still the English source string in every form")
     return violations
 
 
@@ -2502,6 +2527,20 @@ def test_every_catalogue_value_carries_a_wording_of_its_language() -> None:
     # with "Reason" argued is one finding fewer. Without this line a scanner that
     # ignored its third argument would look exactly as green as this one.
     assert len(scan_completeness("sample.json", dirty, {"Reason": "argued for this sample"})) == 2
+    # And a plural value that is English in every form is a finding, in two and
+    # in three forms. This is the shape the rename of plan 20-01 had made
+    # invisible: a list never equals the string of its key.
+    english: dict[str, str | list[str]] = {
+        "_%n day_::_%n days_": ["%n day", "%n days", "%n days"],
+        "_%n hour_::_%n hours_": ["%n hour", "%n hours"],
+    }
+    assert len(scan_completeness("sample.json", english, {})) == 2
+    # One form that happens to be English is a translation and no finding, like a
+    # singular "%n minute" next to a translated plural; and the named exception
+    # is read for a plural key exactly as for a sentence.
+    one_form: dict[str, str | list[str]] = {"_%n minute_::_%n minutes_": ["%n minute", "%n minuti"]}
+    assert scan_completeness("sample.json", one_form, {}) == []
+    assert scan_completeness("sample.json", english, dict.fromkeys(english, "argued for this sample")) == []
 
 
 def test_no_catalogue_value_loses_or_invents_a_placeholder() -> None:

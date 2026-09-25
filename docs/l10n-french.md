@@ -333,10 +333,11 @@ deutschen Übersetzung.
 ## Ausnahmen für das Vollständigkeitsgate G2
 
 Gate G2 von Plan 11-08 fordert, dass kein FR-Wert leer und keiner mit dem englischen
-Quellstring identisch ist. Genau fünf Schlüssel sind es absichtlich: zwei seit Plan
-11-08 und drei seit Plan 13-11. Das ist eine benannte Liste und ausdrücklich **keine**
+Quellstring identisch ist. Genau sechs Schlüssel sind es absichtlich: zwei seit Plan
+11-08, drei seit Plan 13-11 und ein Pluralschlüssel seit dem Review der Phase 20 (siehe
+den Nachtrag vom 25.09.2026 unten). Das ist eine benannte Liste und ausdrücklich **keine**
 Toleranzschwelle: eine Schwelle würde einen vergessenen Wortlaut mitdecken, eine Liste
-nicht. Die Liste darf deshalb wachsen, die Zahl fünf ist keine Grenze, sondern das
+nicht. Die Liste darf deshalb wachsen, die Zahl sechs ist keine Grenze, sondern das
 Ergebnis des Zählens, und jeder Eintrag trägt seinen Grund bei sich.
 
 - `Findling`: Eigenname der App, in allen drei Sprachen derselbe. Steht als Schlüssel in de.json und muss deshalb in fr.json stehen, hat aber keinen eigenen Wortlaut.
@@ -344,6 +345,7 @@ Ergebnis des Zählens, und jeder Eintrag trägt seinen Grund bei sich.
 - `PDF`: Eigenname eines Dateiformats, in allen drei Sprachen dasselbe Kürzel.
 - `Documents`: Im Französischen dasselbe Wort wie im Englischen. Eine erfundene Abweichung wäre eine falsche Übersetzung.
 - `Images`: Im Französischen dasselbe Wort wie im Englischen. Eine erfundene Abweichung wäre eine falsche Übersetzung.
+- `_%n minute_::_%n minutes_`: `%n minute` / `%n minutes` ist im Französischen in beiden Formen dasselbe wie im Englischen. Eine erfundene Abweichung wäre eine falsche Übersetzung.
 
 **Befund zu `Findling`, weil diese Datei bisher das Gegenteil behauptet hat.** Der
 Abschnitt "Warum die Tabelle der Ergebnisseite 24 Zeilen hat" unten sagt, `Findling` sei
@@ -468,6 +470,17 @@ stehen unverändert da, in derselben Reihenfolge und mit denselben zwei Formen; 
 sich ausschließlich der Schlüssel, unter dem sie abgelegt sind. Die Abnahmen vom
 11.09., 19.09. und 24.09.2026 bleiben damit vollständig gültig, und es ist keine ungelesene
 Zeile hinzugekommen. Die Zahl steht weiterhin auf 202.
+
+**Nachtrag 25.09.2026 (Review der Phase 20, WR-02).** Die Umbenennung aus Plan 20-01 hat
+Gate G2 für die fünf Pluralschlüssel still abgeschaltet: G2 verglich den Wert mit dem
+Schlüssel, und eine Liste ist einem zusammengesetzten Schlüssel nie gleich. Seit diesem
+Nachtrag teilt G2 den Schlüssel an der Marke `_::_` und hält Form 0 gegen die
+Singular-Hälfte und jede weitere Form gegen die Plural-Hälfte; ein Befund ist ein Wert, der
+in jeder Form englisch ist. Genau ein französischer Wert ist das, und zu Recht:
+`%n minute` / `%n minutes`. Er steht deshalb als sechster Eintrag in der Liste oben. Die
+Zeile "FR-Wert identisch mit dem englischen Quellstring" der maschinellen Prüfungen misst
+weiterhin den Wert gegen den ganzen Schlüssel und bleibt bei 5; unter der neuen Lesart von
+G2 sind es 6. Kein Wortlaut ist angefasst worden.
 
 ## Warum die Tabelle der Ergebnisseite 24 Zeilen hat
 
