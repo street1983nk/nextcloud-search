@@ -19,7 +19,7 @@
 
 ### Niederländische Komposita (KOMP, eigene Phase mit eigenem Tor)
 
-- [ ] **KOMP-01**: Nutzer findet niederländische Komposita über ihre Glieder (`gemeentebelastingen` über `belasting`) via `split_compound` mit `wdutch`/OpenTaal-Wortliste (BSD-3-Clause + CC-BY-3.0, lizenzklar); eigene Digest-Marke (löst NUR bei aktivem Niederländisch einen Rebuild aus, nie bei Bestandsinstallationen ohne nl), RAM-Budget des zweiten Automaten (~23 MB) vor dem Bau gemessen. Fällt bei Terminnot als Ganzes, nicht halb
+- [x] **KOMP-01**: Nutzer findet niederländische Komposita über ihre Glieder (`gemeentebelastingen` über `belasting`) via `split_compound` mit `wdutch`/OpenTaal-Wortliste (BSD-3-Clause + CC-BY-3.0, lizenzklar); eigene Digest-Marke (löst NUR bei aktivem Niederländisch einen Rebuild aus, nie bei Bestandsinstallationen ohne nl), RAM-Budget des zweiten Automaten (~23 MB) vor dem Bau gemessen. Fällt bei Terminnot als Ganzes, nicht halb
 
 ### UI-Kataloge (KAT)
 
@@ -69,7 +69,7 @@
 | LEX-05 | Phase 19 (Frageseite freischalten) | Complete (25.09.2026, Verifikation 4/4, CI 36074155306/36076006854) |
 | KAT-01 | Phase 20 (UI-Kataloge es/it/nl/pt) | Complete |
 | KAT-02 | Phase 20 (UI-Kataloge es/it/nl/pt) | Complete |
-| KOMP-01 | Phase 21 (Niederländische Komposita) | Pending |
+| KOMP-01 | Phase 21 (Niederländische Komposita) | Complete |
 | MESS-07 | Phase 22 (Messanfahrt BL-F03) | Pending |
 | MESS-08 | Phase 22 (Messanfahrt BL-F03) | Pending |
 | MESS-09 | Phase 22 (Messanfahrt BL-F03) | Pending |

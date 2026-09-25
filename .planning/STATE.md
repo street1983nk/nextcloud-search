@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
-status: executing
-stopped_at: 20-09 ausgefuehrt und committet (1c80e26, 530bb7c, c5102d1), Sichtprobe vom Owner approved, Gates lokal gruen, NICHT gepusht
-last_updated: "2026-09-25T14:07:56.637Z"
-last_activity: 2026-09-25 -- Phase 21 execution started
+status: ready_to_plan
+stopped_at: Phase 21 komplett (9/9, verified passed, Review-Fixes drin), naechster Schritt secure-phase 21, dann plan-phase 22
+last_updated: 2026-09-25T16:42:24.124Z
+last_activity: 2026-09-25 -- Phase 21 ausgefuehrt, verifiziert und abgeschlossen
 progress:
   total_phases: 7
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 47
-  completed_plans: 38
-  percent: 57
+  completed_plans: 47
+  percent: 71
 ---
 
 # Project State
@@ -21,14 +21,43 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 21 — niederlaendische-komposita
+**Current focus:** Phase 22, Messanfahrt BL-F03 (vorher secure-phase 21)
 
 ## Current Position
 
-Phase: 21 (niederlaendische-komposita) — EXECUTING
-Plan: 1 of 9
-Status: Executing Phase 21
-Schritt "The result page answers in every new language (core lang)" im Job search-parity,
+Phase: 22
+Plan: Not started
+Status: Ready to plan (secure-phase 21 steht davor)
+
+Aktueller Stand: PHASE 21 KOMPLETT 25.09.2026 (9/9 Plaene, goal-backward verified passed 9/9,
+phase.complete gelaufen, STATE von Hand nachgezogen). Niederlaendische Komposita sind Ende-zu-
+Ende verdrahtet: wdutch 1:2.20.19+1-3 gepinnt im Abbild (CC-BY-3.0 in THIRD-PARTY.md, vier
+Abbildpruefungen in docker.yml), wordlist_nl.py mit Rezept B 4-14 (Faltung vor Zerlegung,
+Fugenlaute s/e/en, fail-closed ueber Digest, nur Digest im Speicher), Splitterkette hinter der
+Faltung mit Cache und Lock, siebte Marke wordlist_hash_nl in Store und Index-Tier (nie
+vorbelegt, nur hinter Verzeichnistausch), Band-Umbau beantwortet jede nl-Drift OHNE Vollreindex
+(D-08: fullreindex-Ausweg stempelt nicht; Poller-Fix answered_elsewhere nach Owner-Entscheid,
+CI-Zusicherung 8 auf "keine Drift-Zeile" umgestellt), alle Aufrufer uebergeben die Marke
+ausdruecklich (AST-Gates mit Gegenprobe), index_status meldet wordlistHashNl, Messwerkzeug
+scripts/dev/measure_compounds_nl.sh reproduziert die Researchzahlen exakt (316.740 Eintraege,
+21/28 Komposita ueber ihr Glied, 32/33 Waechter). CI-Sprachbeweis Fall nlc
+(gemeentebelastingen/belasting) GRUEN auf allen vier Matrixzeilen, Store upgrade 5 "all seven
+assurances hold" (D-09 in CI belegt). Push d074075..3563715, fuenf CI-Laeufe gruen
+(36157139922 HaRP deploy, 36157139819, 36157139949, 36157139966, 36157140005).
+Code-Review 1C/2W/5I: CR-01 (UnicodeDecodeError vor Digest-Vergleich, Container-Startschleife)
+GEFIXT inkl. deutschem Zwilling wordlist.py, WR-01 (Lock um Automaten-Cache, Thread-Test)
+GEFIXT, WR-02 (Band-Rebuild auch im enabled_handler) GEFIXT, IN-02/03 mitgenommen, IN-01
+bewusst teilweise (voller Fix braeuchte eigenen Driftnamen, der keinen Rebuild ausloest),
+IN-04/05 dokumentiert offen. Suite nach Fixes 2985 passed / 15 skipped, alle Gates gruen.
+Review-Fixes und Abschluss-Doku sind NOCH NICHT gepusht (Push d074075..3563715 war der
+Owner-Checkpoint; die Fix-Commits 24c33fa..66c2ade plus Tracking liegen lokal).
+RAM-BEFUND 21-04: zweiter Automat kostet produktnah 24,2-25,3 MB statt 17,6 MB der Research
+(glibc gibt freigegebenen Speicher nicht zurueck); Budget haelt: 1.838,0 gegen 2.000 MB,
+Reserve 162 MB; performance.md nennt den produktnahen Wert. Offener Doku-Befund: Messbericht
+21-04 Abschnitt 4.3 nennt 41,9 MB fuer den deutschen Automaten, Quelle grundlast-fein sagt
+42,1 MB; performance.md zitiert korrekt 42,1.
+
+Vorheriger Stand (20-09): Schritt "The result page answers in every new language (core lang)" im Job search-parity,
 530bb7c docs/l10n-catalogues.md Abschnitt "Stand nach Phase 20", c5102d1 SUMMARY). Der Schritt
 liest den Erwartungswert zur Laufzeit aus apps/findling/l10n/<code>.json, prueft je Code es, it,
 nl, pt_PT, pt_BR Anwesenheit des uebersetzten Titels UND Abwesenheit von "Search your file
@@ -207,15 +236,18 @@ Instanz den Erststempel der Verzeichnismarken; Folge: Feldplan blieb LEGACY, rot
 Fix-Beweis). Endstand-CI 36096526219 GRUEN 4/4 inkl. arm64. Suite 2877 passed / 15 skipped.
 LEHRE: ein Audit-Fix, der einen Schreiber entfernt, braucht die Frage "wer schreibt das
 sonst noch auf JEDEM Pfad" plus einen Frischinstanz-Fall, bevor er reist.
-Last activity: 2026-09-25 -- Phase 21 execution started
+Last activity: 2026-09-25
 
-Progress: [█████.....] 57% (4 von 7 Phasen)
+Progress: [███████...] 71% (5 von 7 Phasen)
 
 ## Naechster Schritt
 
-**secure-phase 20** (Security-Gate, SECURITY.md fehlt noch), danach **discuss/plan-phase 21**
-(niederlaendische Komposita, Research-Flag laut Roadmap). Phase 20 ist KOMPLETT: Verifikation
-passed 9/9, Review-Warnings gefixt, CI-Erstlauf des Sprachbeweises gruen, alles gepusht.
+**secure-phase 21** (Security-Gate, 21-SECURITY.md fehlt noch), ausserdem die lokalen
+Fix- und Tracking-Commits pushen (24c33fa..HEAD), danach **discuss/plan-phase 22**
+(Messanfahrt BL-F03; beim Planen die Mitmessliste aus
+.planning/research/BL-F04-vorarbeit-2026-09-25.md einarbeiten plus Rechenblatt der
+Boxstunden VOR Start, Owner-Beschluss 25.09.). Phase 21 ist KOMPLETT: Verifikation passed
+9/9, Review 1C/2W gefixt, CI-Beweis nlc und Store upgrade 5 gruen.
 Die Bloecke darunter sind Herleitung.
 
 Vorher: **20-09 ausfuehren** (CI-Sprachbeweis je Code in integration.yml, Sichtprobe in fuenf
@@ -276,6 +308,7 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 20 | 9 | - | - |
+| 21 | 9 | 1 Tag | - |
 
 ## Accumulated Context
 
@@ -562,5 +595,5 @@ auf resolved gesetzt).
 ## Session Continuity
 
 Last session: 2026-09-25
-Stopped at: 20-09 ausgefuehrt und committet (1c80e26, 530bb7c, c5102d1), Sichtprobe vom Owner approved, Gates lokal gruen, NICHT gepusht
-Resume file: .planning/phases/20-ui-kataloge-es-it-nl-pt/20-09-SUMMARY.md (naechster Schritt: Push durch den Orchestrator, CI-Lauf des Sprachbeweises belegen, dann Verifikation Phase 20)
+Stopped at: Phase 21 komplett (verified passed, Review 1C/2W gefixt, CI-Beweise gruen), Fix- und Tracking-Commits ab 24c33fa noch lokal
+Resume file: .planning/phases/21-niederlaendische-komposita/21-VERIFICATION.md (naechster Schritt: secure-phase 21, Push der lokalen Commits, dann plan-phase 22 mit Mitmessliste)
