@@ -14,3 +14,7 @@
 ## Aus 22-02
 
 - **92c-wechsel.sh (und damit die Vorlage von 92d): ein unerwarteter Abbruch im Phase-B-Block endet mit 0.** Bricht ein Befehl innerhalb von `{ ... } 2>&1 | tee "$ZIEL"` unter `set -eu` ab, verlässt er nur die Subshell; die Verweigerungen unterhalb der Pipeline finden keine Arbeitsdatei und das Werkzeug meldet `92C-WECHSEL-FERTIG` mit 0. Das ist dieselbe Klasse wie L-03, nur für jeden anderen Befehl des Blocks. In 92d ist die Folge durch das fail-closed Bestandstor abgefangen (fehlt die Marke `bestand-bestanden`, endet 92d mit 41), in 92e durch die Endmarke `block-durchgelaufen` (sonst 43). 92c selbst bleibt unverändert, weil es eine Nachfolgefassung mit eigenem Wächter ist; ein Fix gehört in eine eventuelle 92c-Nachfolge nach der Anfahrt.
+
+## Aus 22-10
+
+- **Leerer Kaltstart geklärt, Nachfreigabe braucht eine Wahl des Weges.** Ursache: Die erste hybride Suche nach Neustart lädt bei `FINDLING_EMBED_IDLE_RELEASE_SECONDS=0` die Modellgewichte selbst (`query_may_load`) und reißt den PHP-Deckel von 1,5 s (m01-Kaltstartzeilen `innerMs 1505` bis `1596` gegen `ceilingMs 1500.0`), HTTP 200 mit leerer Gruppe. Das ist der bekannte Vorfall vom 10.09.2026, der allgemeine Fall steht als Backlog-Punkt. Eine unveränderte 95c-Nachmessung liefert wieder 0 Treffer. Owner-Wahl vor jeder Nachfreigabe (README 6.11): (a) Schalter an, (b) einwortiger Begriff, (c) erst Produktfix. Nicht in 22-10 gefixt: Das wäre eine Änderung am ausgelieferten Verhalten bei jedem Containerstart, also ein Owner-Entscheid.

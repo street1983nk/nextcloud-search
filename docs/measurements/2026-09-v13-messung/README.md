@@ -742,3 +742,45 @@ vor einer neuen Messung. Vier der zehn festen Mehrwortbegriffe (`Vertrag
 beenden`, `Widerspruch einlegen`, `Rechnung bezahlen`, `Termin absagen`)
 haben in diesem Korpus unter jeder Form 0 Treffer und gehen mit RBO 1,0 in
 alle drei Mediane gleich ein.
+
+### 6.11 Nachtrag zu 6.9: die Ursache des leeren Kaltstarts (26.09.2026, Plan 22-10)
+
+Die Ursache ist aus den Rohdaten geklärt, eine Nachmessung ist dafür nicht
+nötig. Die erste kalte Suche endete in beiden 95c-Läufen am Deckel des
+PHP-Aufrufs und nicht an einer leeren Treffermenge:
+
+- `rohdaten/m01-langsame-aufrufe-kaltstart-lasttest.txt`: drei Aufrufe
+  `/search innerMs 1505.7`, `1505.6` und `1505.1` gegen `ceilingMs 1500.0`,
+  um 12:42:03Z, 12:42:10Z und 12:42:17Z, also je einer pro Kaltzyklus aus
+  `rohdaten/95c-kaltstart-lasttest.txt`. Der erste Lauf unter `admin` zeigt
+  dasselbe Bild (`rohdaten/m01-langsame-aufrufe.txt`, Stufe `kaltstart`:
+  `innerMs 1513.3`, `1596.3` und `1563.3`).
+- Die gemessenen 1.828 bis 2.109 ms der Nutzerroute sind dieser Deckel
+  (`ExAppService::REQUEST_TIMEOUT_SECONDS`, 1,5 s) plus der Aufwand der Route
+  (0,33 bis 0,55 s, darin der Basic-Auth-Anteil von rund 0,32 s, Befund M-03). Nextcloud antwortet danach mit HTTP 200
+  und einer Gruppe ohne Containerhälfte.
+- Der Begriff `Bescheid Antrag` hat zwei Wörter, die Runde ist also hybrid, und
+  der Entladeschalter stand in beiden Läufen auf 0 (`entladeschalter-ist 0`).
+  Bei 0 erlaubt `findling.embed.engine.query_may_load` der ersten Suche, die
+  Modellgewichte selbst zu laden. Das Laden dauert länger als 1,5 s. Es ist
+  genau der Vorfall vom 10.09.2026 (1.838,4 ms gegen denselben Deckel, Docstring
+  von `query_may_load`, `../2026-09-vergleichsmessung-m7g/` Abschnitte 9.2 und
+  19.4). Dort ist der allgemeine Fall ohne Schalter bewusst als Backlog-Punkt
+  zurückgestellt.
+- Warm lieferte derselbe Begriff unter `lasttest` 26 Treffer
+  (`rohdaten/zusatz-korpus-und-kaltstart.txt`). Unter `admin` waren es 0, weil
+  das Konto nur 64 eigene Dateien hat. Der Wechsel auf das Suchkonto
+  `lasttest` räumte also einen echten Grund aus, aber nicht den
+  entscheidenden.
+
+**Folge für die Nachfreigabe (D-02).** Eine Nachmessung von 95c mit
+unverändertem Aufbau (Schalter 0, zweiwortiger Begriff) liefert wieder 0
+Treffer, und zwar deterministisch. Einen gültigen Kaltstart mit Trefferpflicht
+gibt es nur auf einem von drei Wegen, und jeder ist ein Owner-Entscheid:
+(a) Messung mit eingeschaltetem Entladeschalter, dann antwortet die erste Suche
+lexikalisch und lädt im Hintergrund nach; (b) ein einwortiger Begriff, der
+lexikalisch bleibt; (c) vorher der zurückgestellte Produktfix für den
+allgemeinen Fall. Ohne diese Wahl ist die rund 0,24 USD teure Nachmessung
+nicht sinnvoll. Der Befund ist ein bekanntes Produktverhalten und keine neue
+Fehlerklasse: Nach jedem Neustart mit Schalter 0 zeigt die erste
+Mehrwortsuche in der Unified Search keine Findling-Treffer.
