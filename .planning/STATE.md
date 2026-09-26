@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 ## Current Position
 
 Phase: 22 (messanfahrt-bl-f03), EXECUTING
-Plan: 8 of 12
-Status: 22-08 am FUENFTEN CHECKPOINT: 92e-Alias-Fix (be35cfe) wirkt, 92d und Bewaffnung ok (backendReachable True), aber Tor 59 im Rueckweg aus falschem Kriterium (rebuildTotal>0 gilt nur im Umbau). Box GESTOPPT; gesamt 1,44 h / 0,167 USD. README 6.5
+Plan: 9 of 12
+Status: 22-08 abgeschlossen: Ablauf regulaer bis 00-FERTIG (b4 vorbereitet), Box hat sich selbst abgeschaltet und steht GESTOPPT fuer 22-09 (B4, Abbau). m7g.large 2,02 h / 0,232 USD. Luecke: Kaltstartlatenz mit Treffern (95c 48 auch unter lasttest). Naechster Plan 22-09
 
 Aktueller Stand: PHASE 21 KOMPLETT 25.09.2026 (9/9 Plaene, goal-backward verified passed 9/9,
 phase.complete gelaufen, STATE von Hand nachgezogen). Niederlaendische Komposita sind Ende-zu-
@@ -650,11 +650,9 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
 
 ### Offene Blocker
 
-- 22-08 (26.09.2026): Tor 41 durch Owner-Entscheid (Sollwert 52137 / 44 / 6) geloest. Neu: Tor 58 im Umbau,
-  ein Werkzeugfehler in block_umbau von 00-lauf.sh (Ausgangswert von embedded aus einer Statuszeile
-  vor der Bereitschaft des Backends). Box gestoppt, Container traegt schon sechs Sprachen, der Umbau
-  ist angefangen. Befunde 95c 48 (0 Treffer als admin), 94c 32 (Abtastspitze), 99d 34 (Vorrat 2).
-  Fortsetzung ist Owner-Entscheid.
+- 22-08 (26.09.2026) erledigt: Tore 41, 58, 59 durch Entscheide und Fixe geloest, Ablauf regulaer
+  beendet. Offen fuer 22-10/22-11: Kaltstart kalt 0 Treffer, warm 26 (95c 48), 94c 32, B5 50.
+  Fuer 22-09: nach JEDEM Maschinenstart erst bewaffnen (backendReachable true), Timer absolut setzen.
 
 - Kill-Kriterium: kuendigt Nextcloud eine Elasticsearch-freie Volltextsuche mit OCR an,
   wird das Projekt neu bewertet. Geprueft 21.09.2026: NICHT ausgeloest. Ende September
@@ -698,6 +696,6 @@ Sonst keine (die drei Debug-Sessions aus v1.1 sind am 21.09.2026 formal auf reso
 
 ## Session Continuity
 
-Last session: 2026-09-26T12:35:00.000Z
-Stopped at: Plan 22-08 fuenfter Checkpoint, Kriterium des Rueckwegs falsch (Box gestoppt)
-Resume file: .planning/phases/22-messanfahrt-bl-f03/22-08-PLAN.md
+Last session: 2026-09-26T13:20:00.000Z
+Stopped at: Plan 22-08 abgeschlossen (Box gestoppt fuer 22-09)
+Resume file: .planning/phases/22-messanfahrt-bl-f03/22-09-PLAN.md
