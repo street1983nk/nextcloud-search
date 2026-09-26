@@ -196,14 +196,51 @@ final class QueueServiceReaderTest extends TestCase {
 		self::assertSame([], $this->service()->claim(32, 1_000_000));
 	}
 
-	public function testAFileNobodyReachesAnyMoreStaysGone(): void {
-		// The old meaning of gone, kept: every name was asked and none of them
-		// resolved the id to a file.
+	public function testAFileTheWrapperHidesFromEveryMemberIsUnreadableAndNotGone(): void {
+		// The review finding behind the second fix of #14. The ACL wrapper can
+		// hide a node entirely, and then the lookup answers nothing for every
+		// member, exactly as for a deleted file. The mount cache still names
+		// anna and bernd, and it only does so for an id the file cache still
+		// holds, so the file is there and gone would be a claim nobody checked.
 		$this->mountsFor(['anna', 'bernd']);
 		$this->foldersResolving(['anna' => null, 'bernd' => null]);
 		$this->fileStateService->expects(self::once())
 			->method('record')
-			->with(self::FILE_ID, 'skipped', 'gone');
+			->with(self::FILE_ID, 'skipped', 'unreadable');
+
+		self::assertSame([], $this->service()->claim(32, 1_000_000));
+	}
+
+	public function testAReaderBehindTheTryLimitMakesTheFileUnreadableAndNotGone(): void {
+		// Twenty one members, and only the last one in alphabetical order may
+		// read the file. The first twenty are asked and the twenty first is
+		// not, because each name costs a mount setup. The verdict is
+		// unreadable, which is true, and never gone, which the truncated list
+		// cannot know.
+		$userIds = [];
+		$nodes = [];
+		for ($i = 1; $i <= 21; $i++) {
+			$userId = sprintf('member%02d', $i);
+			$userIds[] = $userId;
+			$nodes[$userId] = $i === 21 ? $this->file(true) : $this->file(false);
+		}
+		$this->mountsFor($userIds);
+		$this->foldersResolving($nodes);
+		$this->fileStateService->expects(self::once())
+			->method('record')
+			->with(self::FILE_ID, 'skipped', 'unreadable');
+
+		self::assertSame([], $this->service()->claim(32, 1_000_000));
+	}
+
+	public function testAMemberWhoseFolderCannotBeSetUpMakesTheFileUnreadableAndNotGone(): void {
+		// A mount row whose user is gone since it was written: the folder of
+		// that name cannot be built, and the file is still in the file cache.
+		$this->mountsFor(['anna']);
+		$this->rootFolder->method('getUserFolder')->willThrowException(new \RuntimeException('no such user'));
+		$this->fileStateService->expects(self::once())
+			->method('record')
+			->with(self::FILE_ID, 'skipped', 'unreadable');
 
 		self::assertSame([], $this->service()->claim(32, 1_000_000));
 	}

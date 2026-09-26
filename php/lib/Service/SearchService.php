@@ -483,21 +483,19 @@ class SearchService {
 	 * backend/tests/test_php_acl_boundary.py counts both calls in this one file
 	 * and nowhere else.
 	 *
-	 * @param bool|null $reachable set to true when the id resolved to a file
-	 *                             for this user at all, readable or not. A
-	 *                             caller that has to tell "not there" from
-	 *                             "there, and closed to this user" reads it;
-	 *                             the search does not, on purpose, because for
-	 *                             a hit the two are the same outcome.
+	 * There is deliberately no answer to "reachable, but closed". The ACL
+	 * wrapper of groupfolders does not only take the read bit away, it can hide
+	 * the node entirely, and then the lookup answers exactly what it answers for
+	 * a file that does not exist. A caller that read a reachable flag out of
+	 * this method would call the hidden file deleted, which is the wrong
+	 * sentence of issue #14 in a new place; the queue draws that line out of
+	 * the mount cache instead, see QueueService::readerOf().
 	 */
-	public static function readableFile(Folder $userFolder, int $fileId, ?bool &$reachable = null): ?File {
-		$reachable = false;
+	public static function readableFile(Folder $userFolder, int $fileId): ?File {
 		$node = $userFolder->getFirstNodeById($fileId);
 		if (!$node instanceof File) {
 			return null;
 		}
-
-		$reachable = true;
 
 		return $node->isReadable() ? $node : null;
 	}

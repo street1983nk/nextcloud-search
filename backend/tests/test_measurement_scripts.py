@@ -595,8 +595,16 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # named user does not reach the file. The fix touches js/admin.js as well, whose
 # result card now prints uid/files/rest; the recipe globs **/*.php, so it does
 # not move this figure.
+# Moved on 2026-09-26 by the review of issue #14, first fix: four of the 70
+# files changed their bytes and none came or went. QueueService.php writes
+# skipped(unreadable) for every file the mount cache still knows users for and
+# none of the users asked may read, gone only for a file it knows no user for;
+# SearchService.php lost the reachable flag of readableFile(), which could not
+# tell a node the ACL wrapper hides from a deleted one; AdminViewService.php
+# carries the reworded label and remedy; QueueServiceReaderTest.php holds the
+# hidden node, the try limit and the folder that cannot be set up.
 PHP_FILES_TODAY = 70
-PHP_TREE_HASH_TODAY = "00bfaa178f6adf9a56b80611bdadc06a1883056541a3a3e615e87fc0ee86f190"
+PHP_TREE_HASH_TODAY = "81fb59fbcb00632dc52a56df50244be7c307c68215b61b1fd048162bb7805d0f"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

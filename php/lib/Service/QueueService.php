@@ -121,8 +121,9 @@ class QueueService {
 	 * The two reasons describe() answers with when a row cannot be handed out.
 	 *
 	 * Both are skipped reasons of FileStateService::STATE_REASONS. gone is the
-	 * file nobody reaches any more, unreadable the file that is there and that
-	 * none of the users asked may read (issue #14).
+	 * file the mount cache knows no user for any more, unreadable the file it
+	 * still knows users for and that none of the users asked may read (issue
+	 * #14). The line between the two is drawn at readerOf().
 	 */
 	private const SKIP_GONE = 'gone';
 	private const SKIP_UNREADABLE = 'unreadable';
@@ -626,8 +627,9 @@ class QueueService {
 
 	/**
 	 * Build the source object of one row, or the skipped reason of a row that
-	 * cannot be handed out: gone when nobody reaches the file any more,
-	 * unreadable when it is there and none of the users asked may read it.
+	 * cannot be handed out: gone when the mount cache knows no user for the
+	 * file any more, unreadable when it still knows some and none of the users
+	 * asked may read it.
 	 *
 	 * The folder cache of the running claim travels in by reference (perf audit
 	 * M8). It is a parameter and not a field so that its lifetime is visible at
@@ -845,11 +847,20 @@ class QueueService {
 	 * so a retried row is still read in the same context as before; what changed
 	 * is that a name which cannot read the file is passed over.
 	 *
-	 * The two answers without a reader are two different sentences for an
-	 * admin. gone means no user of the list reaches the file at all, which is
-	 * what it always meant. unreadable means at least one of them reaches it and
-	 * none of the ones asked may read it, and that is a permission setting and
-	 * not a deletion.
+	 * Without a reader the answer is always unreadable and never gone, and the
+	 * reason is where the list comes from. usersFor() asks the mount cache,
+	 * which joins oc_mounts with oc_filecache, so a list that is not empty
+	 * says the file id is still in the file cache: the file is there. gone is
+	 * the answer of describe() for an empty list, the one case that can assert
+	 * a deletion. Everything a non empty list can end in is a sentence about
+	 * permissions and not about existence: a member the ACL wrapper hands a
+	 * node without the read bit, a member the wrapper hides the node from
+	 * entirely (the lookup then answers nothing, exactly as for a missing
+	 * file, so the two cannot be told apart from here, and that is why this
+	 * method does not try), a member whose home folder cannot be set up, and a
+	 * list longer than the names that were asked. Calling any of them gone
+	 * wrote "the file was deleted" for a file that was not, which is the
+	 * sentence of the issue.
 	 *
 	 * The loop is capped at MAX_READER_TRIES names, and the cap is a cost and
 	 * not a guess. Every name costs a mount setup and a lookup, the list holds
@@ -857,29 +868,28 @@ class QueueService {
 	 * Folder that only one member may read would otherwise set up hundreds of
 	 * file systems inside a single request. The ordinary case is one try,
 	 * exactly as before, and the home folders stay cached for the whole claim.
+	 * A file whose only reader sorts behind the cap is therefore unreadable as
+	 * well, and the remedy says which names are asked, so that sentence stays
+	 * true: the first MAX_READER_TRIES users in alphabetical order.
 	 *
-	 * @param list<string> $userIds sorted, as usersFor() hands them out
+	 * @param non-empty-list<string> $userIds sorted, as usersFor() hands them out
 	 * @param array<string, ?Folder> $folders home folders resolved during this claim
 	 * @return array{0:string, 1:Folder, 2:File}|string
 	 */
 	private function readerOf(int $fileId, array $userIds, array &$folders): array|string {
-		$reached = false;
 		foreach (array_slice($userIds, 0, self::MAX_READER_TRIES) as $userId) {
 			$userFolder = $this->userFolder($userId, $folders);
 			if ($userFolder === null) {
 				continue;
 			}
 
-			$reachable = false;
-			$file = SearchService::readableFile($userFolder, $fileId, $reachable);
+			$file = SearchService::readableFile($userFolder, $fileId);
 			if ($file !== null) {
 				return [$userId, $userFolder, $file];
 			}
-
-			$reached = $reached || $reachable;
 		}
 
-		return $reached ? self::SKIP_UNREADABLE : self::SKIP_GONE;
+		return self::SKIP_UNREADABLE;
 	}
 
 	/**

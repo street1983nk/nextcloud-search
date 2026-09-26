@@ -356,6 +356,14 @@ Nutzer lesen darf. Beide stehen in allen 16 Dateien, die Tabellen der fünf Spra
 führen die zwei Zeilen. Die übrigen Zahlen dieser Dokumente (202 und die Abnahmezeilen) sind der
 Stand ihres Plantags und bleiben so stehen.
 
+**Umbenannt am 26.09.2026, Issue #14, Review:** weiterhin **204** Schlüssel. Bezeichnung und
+Abhilfe von `skipped(unreadable)` haben neue Schlüsselnamen, weil der alte Wortlaut ("Not
+readable for any user") mehr behauptete, als die Warteschlange prüft: gefragt werden höchstens
+die ersten 20 Nutzer einer Datei in alphabetischer Reihenfolge, und seit dem Review steht das
+Urteil auch dann, wenn der ACL-Wrapper die Datei vor allen gefragten Nutzern ganz verbirgt. Die
+neuen Schlüssel sagen beides: die Datei ist noch da, und gefragt wurden die ersten 20. Alle 16
+Dateien und die Tabellen der fünf Sprachdokumente sind im selben Commit umgestellt.
+
 ---
 
 ## Stand nach Phase 20

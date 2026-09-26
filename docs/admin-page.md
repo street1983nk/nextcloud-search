@@ -387,10 +387,16 @@ Mitglieder in dieser Reihenfolge und liest als der erste, für den die Datei
 erreichbar und lesbar ist. Gefragt werden höchstens 20 Mitglieder je Datei, weil
 jedes davon einen Mount-Aufbau kostet.
 
-Erreicht mindestens ein Mitglied die Datei, darf aber keines der gefragten sie
-lesen, steht sie als `skipped(unreadable)` in der Fehlerliste ("Not readable for
-any user") und nicht mehr als `skipped(gone)`. Die Abhilfe ist eine
-Berechtigung im Team Folder, keine gelöschte Datei. Wer die Datei später finden
+Kennt der Mount-Cache noch Nutzer für die Datei, darf aber keiner der gefragten
+sie lesen, steht sie als `skipped(unreadable)` in der Fehlerliste ("Not readable
+for the users asked") und nicht mehr als `skipped(gone)`. Das gilt auch, wenn
+der ACL-Wrapper die Datei vor den gefragten Nutzern ganz verbirgt, wenn ein
+Nutzer der Liste nicht mehr aufgebaut werden kann und wenn der einzige Leser
+hinter den ersten 20 steht: einen Mount-Eintrag gibt es nur für eine Datei, die
+noch im Datei-Cache steht, also ist sie nicht gelöscht. `skipped(gone)` bleibt
+der Datei vorbehalten, für die der Mount-Cache keinen einzigen Nutzer mehr
+kennt. Die Abhilfe ist eine Berechtigung im Team Folder, keine gelöschte
+Datei. Wer die Datei später finden
 darf, entscheidet davon unabhängig die Nachprüfung jeder Suche.
 
 Eine Grenze, ehrlich benannt: ein Urteil `skipped(gone)` aus der Zeit vor diesem
