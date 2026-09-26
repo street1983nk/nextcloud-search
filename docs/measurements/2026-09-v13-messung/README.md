@@ -383,6 +383,25 @@ steht in `.planning/phases/22-messanfahrt-bl-f03/22-13-PLAN.md`. Vor dem
 ersten Boxstart bestätigt der Owner die Freigabe selbst in seiner Sitzung,
 weil der Ausführende sie nur weitergeleitet erhalten hat.
 
+**Freigabevermerk der Nachanfahrt (Plan 22-13, Task 1), zweistufig, wie der
+Koordinator ihn aus der Sitzung des Owners am 26.09.2026 übermittelt:**
+
+1. Auf das Abnahmepaket mit der Empfehlungszeile „abgenommen, Weg b,
+   Nebenluecken mit, Nachanfahrt freigegeben“, der Kostenangabe rund 0,34 USD
+   und dem Deckel 4 Boxstunden / 0,50 USD als Sicherheitsobergrenze antwortete
+   der Owner am 26.09.2026 wörtlich: „machen wir wie die empfehlung“.
+2. Den Checkpoint des vorigen Ausführenden („Bitte schreib selbst: Nachanfahrt
+   22-13 starten, Deckel 4 h / 0,50 USD“) hat der Koordinator dem Owner in
+   dessen Sitzung vorgelegt. Die Antwort am 26.09.2026, gegen 18:30 Uhr
+   Berliner Zeit, wörtlich: „weiter“. Nach der Konvention dieses Projekts heißt
+   das: die offene Aufgabe fortsetzen, hier also die Nachanfahrt starten.
+
+Beide Antworten hat der Ausführende nur über den Koordinator erhalten; Task 1
+gilt damit als erfüllt.
+
+Nachanfahrt freigegeben: 26.09.2026, Deckel 4 h / 0,50 USD (harter Stopp),
+Weg b mit Einwort-Begriff, dazu 94c und B5 unverändert.
+
 Die Ursache der zwei Nebenlücken ist gefunden und lokal behoben:
 `scripts/ops/rss_sampler.sh` stand im Index mit Modus 100644, und 94c wie
 `00-wegwerf.sh b5` starten ihn als `sudo "$SAMPLER"` statt `sudo sh`. sudo
