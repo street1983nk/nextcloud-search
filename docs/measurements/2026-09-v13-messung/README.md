@@ -416,3 +416,39 @@ empfehlung“, also Option A: Sollwert des Snapshots 52.137 / 44 / 6 in 92d und
 in `00-lauf.sh`, E2 und E3 neu gefasst (`skripte/00-ablauf.md`, Abschnitt 3 und
 Nachtrag in Abschnitt 6), Neustart mit dem Restdeckel ab LaunchTime 04:59:25Z.
 Die zweite Fahrt schreibt wieder nach `rohdaten/`.
+
+### 6.2 Zweite Fahrt, Tor-Abbruch in PII, Rückgabewert 58 (26.09.2026)
+
+**Was lief.** Start 05:38:31Z mit 1315 Restminuten (`rohdaten/04-wiederanlauf.txt`,
+`00-timer.txt`). 92d mit 0, Bestandstor 52.137 / 44 / 6 bestanden. Cron vorher 300 s,
+Indexgröße de,en 786.508.818 Byte, M-01 alle fünf Stufen, Bodensatz mit
+`zyklus2-minus-c1 30.5`, B2 vollständig: 140 Scans, Vorrat 0 um 06:12:18Z,
+Rückkehr auf 52.137 / 44 / 6 um 06:16:54Z.
+
+**Drei Befunde ohne Abbruch** (`00-lauf.txt`, Zeilen `befund`):
+
+- 95c endete mit **48**: die Suche „Bescheid Antrag“ als `admin` lieferte in
+  allen drei Kaltzyklen 0 Treffer (Latenzen 2.028, 2.109, 2.084 ms). Damit ist
+  auch die M-01-Gegenprobe nicht entschieden.
+- 94c endete mit **32**: die Kennzahlen stehen (`zyklus2-minus-c1 30.5`), nur
+  `abtastreihe-spitze-mb` ist unlesbar (`rss_digest: no series with a
+  findling-rss prefix`).
+- 99d endete mit **34**: der Arbeitsvorrat stand bei 2 (`bestand-steht=nein`),
+  unmittelbar nach den Uploads und Löschungen von 94c.
+
+**Der Abbruch.** 92e baute den Container mit sechs Sprachen neu (0), und
+`00-lauf.sh` las die erste Statuszeile um 06:16:59Z, 4 s nach dem
+Containerstart. Das Backend antwortete da noch nicht: `embedded 0`,
+`rebuildTotal 0`, `languagesActive` leer. Die zweite Zeile um 06:17:29Z trug die
+echten Werte (`embedded 52137`, Umbau 2.500 von 52.137). Das Werkzeug nahm die
+0 als Ausgangswert, meldete `embedded-bewegt von 0 auf 52137` und endete mit
+**58**. Die Vektorspur hat sich nicht bewegt: 52.137 ist der Bestand. Die Box
+ist um 06:18Z abgeholt und angehalten worden. Diese Uptime: 0,73 h, 0,0843 USD.
+Zusammen mit der ersten Fahrt sind das 0,98 h und 0,113 USD.
+
+**Stand der Box.** Gestoppt, mitten im Umbau: der Container trägt
+`FINDLING_LANGUAGES=de,en,es,it,nl,pt`, `index.rebuild` hatte 72.649.972 Byte.
+Nach einem Start nimmt das Backend den Umbau vermutlich von selbst wieder auf.
+Eine saubere Wandzeitmessung verlangt dann entweder den Rückweg über 92e auf
+de,en vor dem nächsten Umbau oder das Hinnehmen eines angefangenen Umbaus.
+Beides ist ein Owner-Entscheid.

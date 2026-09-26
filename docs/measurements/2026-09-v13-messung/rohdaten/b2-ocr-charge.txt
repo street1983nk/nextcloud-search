@@ -24,3 +24,68 @@ b2-lesung 2026-09-26T05:58:07Z vorrat 132
 b2-lesung 2026-09-26T05:58:23Z vorrat 132
 b2-lesung 2026-09-26T05:58:38Z vorrat 132
 b2-lesung 2026-09-26T05:58:54Z vorrat 132
+b2-lesung 2026-09-26T05:59:09Z vorrat 130
+b2-lesung 2026-09-26T05:59:25Z vorrat 130
+b2-lesung 2026-09-26T05:59:40Z vorrat 130
+b2-lesung 2026-09-26T05:59:56Z vorrat 130
+b2-lesung 2026-09-26T06:00:11Z vorrat 128
+b2-lesung 2026-09-26T06:00:26Z vorrat 128
+b2-lesung 2026-09-26T06:00:42Z vorrat 128
+b2-lesung 2026-09-26T06:00:57Z vorrat 128
+b2-lesung 2026-09-26T06:01:13Z vorrat 126
+b2-lesung 2026-09-26T06:01:28Z vorrat 126
+b2-lesung 2026-09-26T06:01:44Z vorrat 126
+b2-lesung 2026-09-26T06:01:59Z vorrat 126
+b2-lesung 2026-09-26T06:02:15Z vorrat 124
+b2-lesung 2026-09-26T06:02:30Z vorrat 124
+b2-lesung 2026-09-26T06:02:46Z vorrat 124
+b2-lesung 2026-09-26T06:03:01Z vorrat 124
+b2-lesung 2026-09-26T06:03:17Z vorrat 122
+b2-lesung 2026-09-26T06:03:32Z vorrat 118
+b2-lesung 2026-09-26T06:03:48Z vorrat 116
+b2-lesung 2026-09-26T06:04:03Z vorrat 112
+b2-lesung 2026-09-26T06:04:19Z vorrat 108
+b2-lesung 2026-09-26T06:04:34Z vorrat 104
+b2-lesung 2026-09-26T06:04:50Z vorrat 102
+b2-lesung 2026-09-26T06:05:05Z vorrat 98
+b2-lesung 2026-09-26T06:05:20Z vorrat 94
+b2-lesung 2026-09-26T06:05:36Z vorrat 90
+b2-lesung 2026-09-26T06:05:51Z vorrat 86
+b2-lesung 2026-09-26T06:06:07Z vorrat 82
+b2-lesung 2026-09-26T06:06:22Z vorrat 80
+b2-lesung 2026-09-26T06:06:38Z vorrat 76
+b2-lesung 2026-09-26T06:06:53Z vorrat 72
+b2-lesung 2026-09-26T06:07:09Z vorrat 68
+b2-lesung 2026-09-26T06:07:24Z vorrat 66
+b2-lesung 2026-09-26T06:07:40Z vorrat 62
+b2-lesung 2026-09-26T06:07:55Z vorrat 58
+b2-lesung 2026-09-26T06:08:11Z vorrat 54
+b2-lesung 2026-09-26T06:08:26Z vorrat 50
+b2-lesung 2026-09-26T06:08:42Z vorrat 48
+b2-lesung 2026-09-26T06:08:57Z vorrat 44
+b2-lesung 2026-09-26T06:09:12Z vorrat 40
+b2-lesung 2026-09-26T06:09:28Z vorrat 36
+b2-lesung 2026-09-26T06:09:43Z vorrat 32
+b2-lesung 2026-09-26T06:09:59Z vorrat 30
+b2-lesung 2026-09-26T06:10:14Z vorrat 26
+b2-lesung 2026-09-26T06:10:30Z vorrat 22
+b2-lesung 2026-09-26T06:10:45Z vorrat 18
+b2-lesung 2026-09-26T06:11:01Z vorrat 14
+b2-lesung 2026-09-26T06:11:16Z vorrat 12
+b2-lesung 2026-09-26T06:11:32Z vorrat 8
+b2-lesung 2026-09-26T06:11:47Z vorrat 4
+b2-lesung 2026-09-26T06:12:03Z vorrat 0
+b2-lesung 2026-09-26T06:12:18Z vorrat 0
+b2-vorrat-null 2026-09-26T06:12:18Z gesehen ja
+b2-ordner-geloescht 2026-09-26T06:12:19Z
+b2-rueckkehr 2026-09-26T06:12:19Z bestand 52277 44 6
+b2-rueckkehr 2026-09-26T06:12:50Z bestand 52277 44 6
+b2-rueckkehr 2026-09-26T06:13:20Z bestand 52277 44 6
+b2-rueckkehr 2026-09-26T06:13:51Z bestand 52277 44 6
+b2-rueckkehr 2026-09-26T06:14:21Z bestand 52277 44 6
+b2-rueckkehr 2026-09-26T06:14:52Z bestand 52277 44 6
+b2-rueckkehr 2026-09-26T06:15:22Z bestand 52277 44 6
+b2-rueckkehr 2026-09-26T06:15:53Z bestand 52277 44 6
+b2-rueckkehr 2026-09-26T06:16:23Z bestand 52277 44 6
+b2-rueckkehr 2026-09-26T06:16:54Z bestand 52137 44 6
+b2-rueckkehr-ende 2026-09-26T06:16:54Z bestand 52137 44 6 soll 52137 44 6

@@ -8,3 +8,13 @@ wirkung runde=1 vorrat=0 scheiben=0 lesungen=1 2026-09-26T05:51:31Z
 wirkung runde=2 vorrat=140 scheiben=1 lesungen=2 2026-09-26T05:53:32Z
 wirkung runde=3 vorrat=138 scheiben=1 lesungen=3 2026-09-26T05:55:33Z
 wirkung runde=4 vorrat=134 scheiben=1 lesungen=4 2026-09-26T05:57:33Z
+wirkung runde=5 vorrat=130 scheiben=1 lesungen=5 2026-09-26T05:59:34Z
+wirkung runde=6 vorrat=126 scheiben=1 lesungen=6 2026-09-26T06:01:34Z
+wirkung runde=7 vorrat=118 scheiben=1 lesungen=7 2026-09-26T06:03:35Z
+wirkung runde=8 vorrat=90 scheiben=1 lesungen=8 2026-09-26T06:05:35Z
+wirkung runde=9 vorrat=62 scheiben=1 lesungen=9 2026-09-26T06:07:35Z
+wirkung runde=10 vorrat=34 scheiben=1 lesungen=10 2026-09-26T06:09:36Z
+wirkung runde=11 vorrat=6 scheiben=1 lesungen=11 2026-09-26T06:11:36Z
+wirkung runde=12 vorrat=0 scheiben=1 lesungen=12 2026-09-26T06:13:37Z
+wirkung runde=13 vorrat=140 scheiben=2 lesungen=13 2026-09-26T06:15:37Z
+wirkung runde=14 vorrat=0 scheiben=2 lesungen=14 2026-09-26T06:17:38Z
