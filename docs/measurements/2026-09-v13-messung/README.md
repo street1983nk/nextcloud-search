@@ -355,3 +355,57 @@ Einbettung T 4 gegen T 1: 3,87).
 
 Offen. Wird nach der Anfahrt geschrieben: Urteil je Erwartung E1 bis E14,
 gestrichene Blöcke und Lücken, Kosten gegen den Deckel.
+
+### 6.1 Tor-Abbruch in P1, Rückgabewert 41 (26.09.2026)
+
+**Was geschah.** Aufbau nach Runbook, Blöcke 1 bis 13, von 04:58:54Z bis
+05:10Z (`rohdaten/02-vorbedingungen.txt`, `03-aufbau.txt`), Vorprüfung
+`shutdown-verhalten stop` (`00-typwechsel.txt`). `00-lauf.sh start` um
+05:10:34Z, Timer auf 2026-09-27T03:33:34Z gesetzt und zurückgelesen
+(`00-timer.txt`, Modus poweroff). Das Markentor bestand (`90e-marken.txt`,
+`marken-urteil umbau`), die Einzelliste lief mit 0. 92d fuhr Phase A und B bis
+zum Ende: Baumhash-Beweis ja, `occ upgrade` 0, Volumen nach dem unregister
+erhalten, Registrierung ja, Grenze 2147483648/0. Dann das Bestandstor:
+
+```
+bestandstor indexiert 52137 uebersprungen 44 fehlgeschlagen 6
+bestandstor-erwartet indexiert 52111 uebersprungen 37 fehlgeschlagen 0
+bestandstor-bestanden nein
+```
+
+92d endete mit **41**, `00-lauf.sh` mit `tor-abbruch p1-92d rueckgabe 41`
+(05:13:43Z) und zog den Timer auf 60 Minuten vor. Um 05:14Z sind die Rohdaten
+abgeholt und die Box per `aws_box.sh stop` angehalten worden: 0,25 Boxstunden,
+0,0287 USD. Sie steht gestoppt, mit Volumen, Korpus und dem Stand nach 92d.
+
+**Die Ursache, aus den Rohdaten.** Der Snapshot trägt nicht 52.111 / 37 / 0,
+sondern bereits **52.137 / 44 / 6**: die Einzelliste (`90e-einzelliste.json`)
+zählt je Zustand 52137 indexiert, 44 übersprungen, 6 fehlgeschlagen und nennt
+alle 50 einzeln (22 `too_large`, 16 `empty_text`, 4 `image_not_ocrable`, 2
+`encrypted`, 5 `corrupt`, 1 `empty_file`). Die Differenz 26 / 7 / 6 ist genau
+der 39-Dateien-Korpus des Kontos `sprachfall`, und der liegt im Snapshot: das
+Konto besteht, unter `ncdata/sprachfall/files` stehen 39 Dateien
+(`03-aufbau.txt`, Abschnitt Sprachfall-Bestand). 98b hatte sie am 10.09.
+hochgeladen, der Snapshot vom 11.09. hat sie mitsamt ihrem Indexstand
+aufgenommen. Die Beschreibung des Snapshots (52111 Dokumente) und das Tor aus
+E2 nannten den Stand vor diesem Upload.
+
+**Folgen, ohne Entscheid.**
+
+- E2 ist nach dem Wortlaut verfehlt; die Zahl, die das Tor gelesen hat, ist die
+  des Snapshots und kein Schaden der Box. Der Wechsel selbst ist gelungen.
+- Frage 1 steht auf einer falschen Annahme: die 44 / 6 der v1.2-Box sind
+  **reproduzierbar**, sie sind der Stand des Snapshots, und die Einzelliste
+  benennt sie bereits einzeln (MESS-07 Punkt 4). E3 („37 und 0“) ist damit
+  ebenfalls verfehlt, im Sinne von MESS-07 aber übererfüllt.
+- MESS-09: die Sprachfall-Dateien stehen im Bestand, Bedingung 2 der
+  dismax-Regel ist zuzuordnen (deferred-items 22-07).
+- Ein Weiterlauf braucht zwei Sollwerte, die heute im Werkzeug stehen: das
+  Bestandstor von 92d (per Umgebung `BESTAND_INDEXIERT`,
+  `BESTAND_UEBERSPRUNGEN`, `BESTAND_FEHLGESCHLAGEN` einstellbar) und die
+  Rückkehr nach B2 in `00-lauf.sh` (`BESTAND_SNAPSHOT="52111 37 0"`, als
+  Konstante fest, sonst 56). Ein Werkzeug wird in bezahlter Zeit nicht
+  geändert (Runbook 7.1); die Fortsetzung ist ein Owner-Entscheid (D-02).
+- Der Deckel zählt ab `BOX_START_EPOCH` (LaunchTime 04:59:25Z); verbraucht
+  sind 0,25 h von 24 h. Der gestoppte Zustand kostet nur die Platten, rund
+  0,31 USD je Tag.
