@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
-status: ready_to_plan
-stopped_at: Phase 22 komplett (22-12 Abnahme, 22-13 Nachanfahrt schliesst MESS-07); fix/issue-14-teamfolder-acl gemergt 257caac (Kandidat für 1.3.0), naechster Schritt plan-phase 23
-last_updated: "2026-09-26T18:45:00.000Z"
-last_activity: 2026-09-26, Merge fix/issue-14-teamfolder-acl (257caac), CI auf main 6/6 grün
+status: completed
+stopped_at: Phase 23 context gathered
+last_updated: "2026-09-26T19:42:24.219Z"
+last_activity: 2026-09-26, Plan 22-06 abgeschlossen
 progress:
   total_phases: 7
   completed_phases: 6
@@ -396,37 +396,50 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
   Seiten je Sekunde bei N = 4 auf cpuset 0-3 geteilt durch N = 1 auf cpuset 0, drei Runden.
   Fehlt ein Wert oder verliert eine Runde einen Slot, schreibt der Job "F4 unbestimmt" und
   scheitert.
+
 - W3 zählt einen abgeschnittenen oder fehlgeschlagenen Slot als verloren, fährt je Worker
   einen ungezählten Vorlauf und importiert findling und pypdfium2 erst in Funktionen (22-01).
+
 - 92d ist der erste Wechsel der Anfahrt: PHP-Hälfte und occ upgrade VOR dem unregister (ohne
   Schalter), die Instanzzählung unmittelbar darüber. Das Bestandstor liest indexiert aus der
   state.db des laufenden Containers und übersprungen/fehlgeschlagen aus occ findling:index,
   weil die PHP-Hälfte indexed nie schreibt; es verlangt eine Marke für das Bestehen (22-02).
+
 - Das Markentor 90e folgt den gelockerten Vergleichen des Stores (index_version als
   Untergrenze, tantivy_version nach index_format); 44 gewinnt gegen 45 (22-02).
+
 - 98d prüft die Treffermengengleichheit Summe gegen per-Wort-dismax über zwei
   Differenzzählungen (Must a, MustNot b) ohne Tiefendeckel; Mehrwortzeilen mit Operator,
   Phrase, Klammer, Dateityp oder Umlautvariante sind rueckfall und nur mit der Summe gemessen.
   Die dismax-Regel steht nicht im Skript, sondern kommt in 00-ablauf.md (22-03).
+
 - 94c und 95c lesen das Passwort aus der Umgebung, sonst aus PWFILE ($HOME/work/.pw/admin);
   95c wertet loaded vor der kalten Suche als ungültigen Zyklus (22-03).
+
 - Wegwerf-Blöcke lesen das Produkt nur (Vorrat, runState, Startzeitpunkt vor und nach dem
   Block); B5-Container laufen abgesetzt unter festem Namen, max anon kommt aus den CSV-Zeilen
   von rss_sampler.sh, nicht aus dessen Schlusszeile (22-04).
+
 - Die Rohdatei des Typwechsels trägt Instanzkennung und Adresse nur als Platzhalter; die
   Ausgabe von aws_box.sh geht nach stderr. hin fährt die Shutdown-Vorprüfung selbst mit (22-04).
+
 - 00-lauf.sh bricht nur an Zustandstoren ab (90e, 92d, 92e, 97 vorher, 54 bis 58); ein
   Messwerkzeug ohne oder mit roter Zahl ist ein Befund, und der Lauf misst weiter. Der Timer
   steht vor jedem Wächter; nach einem Abbruch wird er auf 60 min vorgezogen (22-05).
+
 - 93-nullstand.sh läuft nach dem regulären 92c (Gegenprobe des geleerten Volumens); die
   B2-Rückkehr gilt in Weg a gegen 52111/37/0, in Weg b gegen den Bestand vor B2 (22-05).
+
 - D-03 angewandt: F4 = 3,955 im arm64-Runner, B4 wird gefahren; Box-Digest-Kandidat
   sha256:40ca8c2b...3e3e, Abbildstrecke Lauf 174; Beweis auf der Box bleibt der Baumhash (22-06).
+
 - 92d nimmt von occ upgrade 0 und 3 (ERROR_UP_TO_DATE) an; Phase B ist per probe-92d.yml im CI
   geprobt, dispatch-only, Start standardmaessig v1.1.0 wie der Snapshot (22-06).
+
 - Gefahrene Fassungen der v1.3 sind gepinnt (sha256 plus Bytezahl, Muster DRIVEN_V12) und
   brauchen je eine Endzeile in den Rohdaten; der Kopfsatz NOT_DRIVEN bleibt byteweise, das
   Fahrdatum steht im Bericht 6.14. Ein Fix ist ab jetzt eine Nachfolgefassung (22-11).
+
 - Der tesseract-Satz performance.md:2887 ist per datiertem Nachtrag berichtigt, nicht
   ersetzt: im Produkt ein Kern je Seite (OMP_THREAD_LIMIT=1), zwei OCR-Slots bringen auf
   m7g.large Faktor 1,97 (22-11).
@@ -681,6 +694,7 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
 
 - 22-09 (26.09.2026) erledigt: B4 gefahren, Box abgebaut, Deckel gehalten. Offen: Owner-Nachfreigabe
   (D-02) fuer die Kaltstart-Pflichtzahl, erst nach Ursachenklaerung in 22-10/22-11 (README 6.9).
+
 - 22-08 (26.09.2026) erledigt: Tore 41, 58, 59 durch Entscheide und Fixe geloest, Ablauf regulaer
   beendet. Offen fuer 22-10/22-11: Kaltstart kalt 0 Treffer, warm 26 (95c 48), 94c 32, B5 50.
   Fuer 22-09: nach JEDEM Maschinenstart erst bewaffnen (backendReachable true), Timer absolut setzen.
@@ -730,6 +744,6 @@ Sonst keine (die drei Debug-Sessions aus v1.1 sind am 21.09.2026 formal auf reso
 
 ## Session Continuity
 
-Last session: 2026-09-26T14:05:00.000Z
-Stopped at: Plan 22-10 abgeschlossen (MESS-09: Summe, verworfen)
-Resume file: .planning/phases/22-messanfahrt-bl-f03/22-11-PLAN.md
+Last session: 2026-09-26T19:42:24.201Z
+Stopped at: Phase 23 context gathered
+Resume file: .planning/phases/23-haertung-und-store-einreichung-1-3-0/23-CONTEXT.md
