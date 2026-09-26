@@ -358,6 +358,7 @@ inspect)
         ;;
     *'.Config.Image'*) printf 'ghcr.io/street1983nk/findling_backend:dev\n' ;;
     *'NetworkMode'*) printf 'nextcloud-aio\n' ;;
+    *'Aliases'*) printf '%b' "${FAKE_ALIASE:-}" ;;
     *'RestartPolicy'*) printf 'unless-stopped\n' ;;
     *'.Config.Entrypoint'*) printf '%s\n' "${FAKE_ENTRYPOINT:-[\"/entrypoint.sh\"]}" ;;
     *'.Config.Cmd'*) printf 'null\n' ;;
@@ -459,6 +460,48 @@ def test_the_rebuild_changes_one_line_and_keeps_the_secret_invisible(tmp_path: P
     assert "speichergrenze-ist 2147483648/0" in answer.stdout
     assert "entladeschalter-ist 0 werksstand" in answer.stdout
     assert "tunnel-zertifikate keine" in answer.stdout
+
+
+def aliases_of_the_create(state: Path) -> list[str]:
+    """The --network-alias values the fake docker create was handed, in order."""
+    calls = (state / "aufrufe").read_text(encoding="utf-8")
+    create = next(line for line in calls.splitlines() if line.startswith("docker create"))
+    words = create.split()
+    return [words[index + 1] for index, word in enumerate(words) if word == "--network-alias"]
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+def test_the_rebuild_gives_a_container_without_alias_the_app_id(tmp_path: Path) -> None:
+    """Finding of the trip on 26.09.2026: a rebuild without alias is lost to HaRP after its restart.
+
+    The old container stands in the network without an alias of its own (only
+    its name and its short id, which docker gives every container), so the new
+    one gets the app id.
+    """
+    answer, state, _ = a_rebuild_against_a_fake_docker(
+        tmp_path,
+        "FINDLING_LANGUAGES=de,en",
+        FAKE_ALIASE="nextcloud-aio|nc_app_findling_backend\\nnextcloud-aio|cafe0123\\n",
+    )
+    assert answer.returncode == 0, answer
+    assert aliases_of_the_create(state) == ["findling_backend"]
+    assert "netz-aliase findling_backend quelle app-kennung" in answer.stdout
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+def test_the_rebuild_carries_the_aliases_the_old_container_had(tmp_path: Path) -> None:
+    """An alias in the network of the container is carried once, one in another network is not."""
+    answer, state, _ = a_rebuild_against_a_fake_docker(
+        tmp_path,
+        "FINDLING_LANGUAGES=de,en",
+        FAKE_ALIASE=(
+            "nextcloud-aio|findling_backend\\nnextcloud-aio|nc_app_findling_backend\\n"
+            "nextcloud-aio|findling_backend\\nanderes-netz|fremd\\n"
+        ),
+    )
+    assert answer.returncode == 0, answer
+    assert aliases_of_the_create(state) == ["findling_backend"]
+    assert "netz-aliase findling_backend  quelle alter-container" in answer.stdout
 
 
 @pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")

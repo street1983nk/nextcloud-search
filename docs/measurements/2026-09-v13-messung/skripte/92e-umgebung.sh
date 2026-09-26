@@ -34,6 +34,9 @@
 # Restart-Policy und NetworkMode. Das Netz wird aus .HostConfig.NetworkMode
 # uebernommen und nicht als host verlangt: auf der Box laeuft der Container im
 # Netz, das AppAPI ihm gegeben hat, und die CI-Fassung kennt nur den Fall host.
+# Dazu die Netzaliase des alten Containers in diesem Netz, und traegt er keinen,
+# die App-Kennung: HaRP findet die ExApp nach seinem naechsten Neustart sonst
+# nicht mehr (Befund der Anfahrt am 26.09.2026, README 6.4).
 # Entrypoint und Cmd werden gegen das Abbild geprueft und nicht uebernommen;
 # ueberschreibt der Container eins von beiden, endet das Werkzeug mit 43, bevor
 # etwas entfernt wird. Traegt der Container unter /certs/frp die drei Dateien des
@@ -68,7 +71,7 @@
 # Die Zeilen, die dieses Werkzeug schreibt:
 #
 #   neubau-start, schalter-gefordert, container-lesbar, abbild-ist,
-#   netz-ist, restart-ist, entrypoint-gleich, umgebung-namen, schalter-vorher,
+#   netz-ist, restart-ist, netz-aliase, entrypoint-gleich, umgebung-namen, schalter-vorher,
 #   mounts-uebernommen, labels-uebernommen, tunnel-zertifikate,
 #   neubau-gelungen, speichergrenze-ist, grenze-erwartet, grenze-gesetzt,
 #   schalter-ist, entladeschalter-ist, neubau-fertig
@@ -135,6 +138,9 @@ esac
 SKRIPTE=$(cd "$(dirname "$0")" && pwd)
 OUT="${OUT:-$SKRIPTE/../rohdaten}"
 CONTAINER="${CONTAINER:-nc_app_findling_backend}"
+# Die App-Kennung der ExApp, unter der HaRP sie im Netz sucht; der Alias des
+# Neubaus, wenn der alte Container keinen traegt.
+APP_KENNUNG="${APP_KENNUNG:-findling_backend}"
 # Die harte Grenze in Byte und der Swap-Anteil, so wie die cgroup sie meldet;
 # dieselben Vorgaben und dieselbe Begruendung wie in 92c.
 ERWARTETE_GRENZE="${ERWARTETE_GRENZE:-2147483648}"
@@ -199,6 +205,36 @@ wert_von() {
         if [ -z "${abbild:-}" ] || [ -z "${netz:-}" ]; then
             : >"$WORK/gestalt-fremd"
         fi
+    fi
+
+    if [ ! -f "$WORK/gestalt-fremd" ]; then
+        # Die Netzaliase (Nachtrag 26.09.2026, Befund README 6.4 der Anfahrt).
+        # HaRP loest die ExApp ueber ihre App-Kennung im Namensdienst des Netzes
+        # auf; ein Neubau ohne Alias ist nach dem naechsten Neustart von HaRP
+        # nicht mehr erreichbar. Uebernommen werden die Aliase des alten
+        # Containers in genau diesem Netz, ohne seinen Namen und ohne seine
+        # Kurzkennung, die Docker jedem Container von selbst gibt. Traegt er
+        # keinen, bekommt der neue die App-Kennung. Die Netze host, bridge und
+        # none kennen keine Aliase.
+        : >"$WORK/aliase.list"
+        case "$netz" in
+        host | bridge | none | container:*)
+            echo "netz-aliase keine quelle netz-ohne-aliase"
+            ;;
+        *)
+            kurz=$(feld '{{.Id}}' | cut -c1-12 || true)
+            feld '{{range $name, $netz := .NetworkSettings.Networks}}{{range $netz.Aliases}}{{$name}}|{{.}}{{println}}{{end}}{{end}}' |
+                awk -F'|' -v netz="$netz" -v name="$CONTAINER" -v kurz="${kurz:-}" \
+                    '$1 == netz && $2 != "" && $2 != name && $2 != kurz && !gesehen[$2]++ { print $2 }' \
+                    >"$WORK/aliase.list" || true
+            if [ -s "$WORK/aliase.list" ]; then
+                printf 'netz-aliase %s quelle alter-container\n' "$(tr '\n' ' ' <"$WORK/aliase.list")"
+            else
+                printf '%s\n' "$APP_KENNUNG" >"$WORK/aliase.list"
+                printf 'netz-aliase %s quelle app-kennung\n' "$APP_KENNUNG"
+            fi
+            ;;
+        esac
     fi
 
     if [ ! -f "$WORK/gestalt-fremd" ]; then
@@ -289,6 +325,11 @@ wert_von() {
                 set -- "$@" --label "$label"
             fi
         done <"$WORK/labels.list"
+        while IFS= read -r alias; do
+            if [ -n "$alias" ]; then
+                set -- "$@" --network-alias "$alias"
+            fi
+        done <"$WORK/aliase.list"
         sudo docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
         if sudo docker create "$@" "$abbild" >/dev/null 2>"$WORK/create.err"; then
             if [ -f "$WORK/zertifikate.tar" ]; then
