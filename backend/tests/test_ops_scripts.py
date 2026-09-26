@@ -35,6 +35,7 @@ import ast
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -225,6 +226,59 @@ def test_the_cpu_sampler_ends_without_a_data_line_when_there_is_no_cpu_stat(tmp_
     assert finished.returncode != 0, finished.stderr
     assert "no readable cpu.stat" in finished.stderr
     assert not output.exists() or output.read_text(encoding="utf-8") == ""
+
+
+# A sampler a measuring tool starts as sudo "$VAR" runs only with its execute bit
+# in the index: sudo refuses a file without it ("command not found"), the
+# sampler never starts, and the series stays empty. That is what emptied the
+# peak of 94c (finding 32) and the RAM of B5 (finding 50) on 2026-09-26, both
+# callers of rss_sampler.sh, which was 100644. Callers through sudo sh are
+# independent of the bit and are not asked here.
+MEASUREMENT_TOOL_DIRS = (
+    OPS_DIR.parents[1] / "docs" / "measurements" / "2026-09-v12-messung" / "skripte",
+    OPS_DIR.parents[1] / "docs" / "measurements" / "2026-09-v13-messung" / "skripte",
+)
+
+
+def _index_modes() -> dict[str, str]:
+    """Mode of every file under scripts/ops as the git index records it."""
+    listing = subprocess.run(
+        ["git", "ls-files", "-s", "scripts/ops"],  # noqa: S607 - git from the path, as in CI
+        cwd=OPS_DIR.parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if listing.returncode != 0:
+        pytest.skip("no git index to read the modes from")
+    modes: dict[str, str] = {}
+    for line in listing.stdout.splitlines():
+        meta, _, path = line.partition("\t")
+        modes[Path(path).name] = meta.split()[0]
+    return modes
+
+
+def _samplers_started_through_sudo_directly() -> set[str]:
+    """The names under scripts/ops that a measuring tool starts as sudo "$VAR"."""
+    names: set[str] = set()
+    for directory in MEASUREMENT_TOOL_DIRS:
+        for tool in sorted(directory.glob("*.sh")):
+            code = "\n".join(
+                line for line in tool.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#")
+            )
+            defaults = dict(re.findall(r'^([A-Z_]+)="\$\{\1:-\$REPO/scripts/ops/([^}"]+)\}"', code, flags=re.MULTILINE))
+            for variable in re.findall(r'sudo "\$([A-Z_]+)"', code):
+                if variable in defaults:
+                    names.add(defaults[variable])
+    return names
+
+
+def test_every_sampler_started_through_sudo_directly_is_executable_in_the_index() -> None:
+    started = _samplers_started_through_sudo_directly()
+    assert "rss_sampler.sh" in started, started
+    modes = _index_modes()
+    not_executable = sorted(name for name in started if modes.get(name) != "100755")
+    assert not_executable == [], not_executable
 
 
 # W2, the per process anon sampler. The one promise that is its own: it reads
