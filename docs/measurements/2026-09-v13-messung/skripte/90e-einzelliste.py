@@ -17,7 +17,7 @@ it, because the raw data of a trip are committed to a public repository
 (T-22-07). The reason is a code from the closed list in store/repo.py and never
 free text, which is what schema.sql says over the column. Next to the list
 stands the count per state over every row that is not a tombstone, so that the
-52.111 / 37 / 0 of the snapshot can be read off the same file.
+52.137 / 44 / 6 of the snapshot can be read off the same file.
 
 ``marken`` is the mark gate of phase 0. It prints every row of the meta table
 as ``marke <name> <wert>`` and compares the pairs handed in with --erwartung

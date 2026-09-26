@@ -162,17 +162,36 @@ def test_the_image_switch_keeps_its_old_aborts_and_adds_40_and_41_below_the_pipe
     assert not aborts_of(code_of(block))
 
 
+def test_the_stock_of_the_snapshot_stands_the_same_in_92d_and_in_the_run_script() -> None:
+    """Two tools carry the stock of the snapshot, and they must not drift apart.
+
+    92d holds it as the defaults of its gate, 00-lauf.sh as BESTAND_SNAPSHOT for
+    the return after B2. The owner confirmed 52137 / 44 / 6 at checkpoint 22-08.
+    """
+    gate = IMAGE_SWITCH.read_text(encoding="utf-8")
+    zahlen = [
+        re.search(rf'^{name}="\$\{{{name}:-(\d+)\}}"$', gate, flags=re.MULTILINE)
+        for name in ("BESTAND_INDEXIERT", "BESTAND_UEBERSPRUNGEN", "BESTAND_FEHLGESCHLAGEN")
+    ]
+    assert all(zahlen), zahlen
+    lauf = (V13_RUN_DIR / "00-lauf.sh").read_text(encoding="utf-8")
+    treffer = re.search(r'^BESTAND_SNAPSHOT="([\d ]+)"$', lauf, flags=re.MULTILINE)
+    assert treffer is not None
+    assert treffer.group(1).split() == [z.group(1) for z in zahlen if z is not None]
+    assert treffer.group(1) == "52137 44 6"
+
+
 def test_the_image_switch_hangs_41_on_the_stock_gate_of_the_snapshot() -> None:
-    """The gate reads 52111 / 37 / 0 and fails closed.
+    """The gate reads 52137 / 44 / 6, the stock of the snapshot, and fails closed.
 
     Fail closed means the refusal asks for the mark of PASSING: a block that
     broke off before the gate leaves no mark, and that ends with 41 instead of
     the 0 that L-03 was about.
     """
     text = IMAGE_SWITCH.read_text(encoding="utf-8")
-    assert 'BESTAND_INDEXIERT="${BESTAND_INDEXIERT:-52111}"' in text
-    assert 'BESTAND_UEBERSPRUNGEN="${BESTAND_UEBERSPRUNGEN:-37}"' in text
-    assert 'BESTAND_FEHLGESCHLAGEN="${BESTAND_FEHLGESCHLAGEN:-0}"' in text
+    assert 'BESTAND_INDEXIERT="${BESTAND_INDEXIERT:-52137}"' in text
+    assert 'BESTAND_UEBERSPRUNGEN="${BESTAND_UEBERSPRUNGEN:-44}"' in text
+    assert 'BESTAND_FEHLGESCHLAGEN="${BESTAND_FEHLGESCHLAGEN:-6}"' in text
     assert "printf 'bestandstor indexiert %s uebersprungen %s fehlgeschlagen %s\\n'" in text
     assert "occ findling:index" in code_of(text)
     # indexed from the state database of the running container, read only.

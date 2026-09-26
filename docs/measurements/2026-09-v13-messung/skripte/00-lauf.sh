@@ -135,7 +135,10 @@ B2_ORDNER="${B2_ORDNER:-mess22-b2}"
 B2_DECKEL="${B2_DECKEL:-2400}"
 B2_RUECKKEHR_FRIST="${B2_RUECKKEHR_FRIST:-1800}"
 # Der Bestand des Snapshots, das Tor von 92d; in Weg b gilt der Stand vor B2.
-BESTAND_SNAPSHOT="52111 37 0"
+# Bis zum 26.09.2026 stand hier 52111 37 0; der Snapshot traegt die 39
+# Sprachfall-Dateien vom 10.09. mit, Owner-Entscheid am Checkpoint 22-08.
+# Gleich den Vorgaben BESTAND_* in 92d-wechsel.sh (test_v13_wechsel.py).
+BESTAND_SNAPSHOT="52137 44 6"
 VOLLREINDEX_TAKT="${VOLLREINDEX_TAKT:-120}"
 VOLLREINDEX_RUHE="${VOLLREINDEX_RUHE:-8}"
 

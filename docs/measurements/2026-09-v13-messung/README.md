@@ -360,7 +360,8 @@ gestrichene Blöcke und Lücken, Kosten gegen den Deckel.
 
 **Was geschah.** Aufbau nach Runbook, Blöcke 1 bis 13, von 04:58:54Z bis
 05:10Z (`rohdaten/02-vorbedingungen.txt`, `03-aufbau.txt`), Vorprüfung
-`shutdown-verhalten stop` (`00-typwechsel.txt`). `00-lauf.sh start` um
+`shutdown-verhalten stop` (`00-typwechsel.txt`). Die Rohdaten dieser ersten
+Fahrt liegen unverändert in `rohdaten/lauf1-tor41/`. `00-lauf.sh start` um
 05:10:34Z, Timer auf 2026-09-27T03:33:34Z gesetzt und zurückgelesen
 (`00-timer.txt`, Modus poweroff). Das Markentor bestand (`90e-marken.txt`,
 `marken-urteil umbau`), die Einzelliste lief mit 0. 92d fuhr Phase A und B bis
@@ -379,7 +380,7 @@ abgeholt und die Box per `aws_box.sh stop` angehalten worden: 0,25 Boxstunden,
 0,0287 USD. Sie steht gestoppt, mit Volumen, Korpus und dem Stand nach 92d.
 
 **Die Ursache, aus den Rohdaten.** Der Snapshot trägt nicht 52.111 / 37 / 0,
-sondern bereits **52.137 / 44 / 6**: die Einzelliste (`90e-einzelliste.json`)
+sondern bereits **52.137 / 44 / 6**: die Einzelliste (`lauf1-tor41/90e-einzelliste.json`)
 zählt je Zustand 52137 indexiert, 44 übersprungen, 6 fehlgeschlagen und nennt
 alle 50 einzeln (22 `too_large`, 16 `empty_text`, 4 `image_not_ocrable`, 2
 `encrypted`, 5 `corrupt`, 1 `empty_file`). Die Differenz 26 / 7 / 6 ist genau
@@ -409,3 +410,9 @@ E2 nannten den Stand vor diesem Upload.
 - Der Deckel zählt ab `BOX_START_EPOCH` (LaunchTime 04:59:25Z); verbraucht
   sind 0,25 h von 24 h. Der gestoppte Zustand kostet nur die Platten, rund
   0,31 USD je Tag.
+
+**Entscheid (26.09.2026, Checkpoint 22-08).** Owner, wörtlich: „wie deine
+empfehlung“, also Option A: Sollwert des Snapshots 52.137 / 44 / 6 in 92d und
+in `00-lauf.sh`, E2 und E3 neu gefasst (`skripte/00-ablauf.md`, Abschnitt 3 und
+Nachtrag in Abschnitt 6), Neustart mit dem Restdeckel ab LaunchTime 04:59:25Z.
+Die zweite Fahrt schreibt wieder nach `rohdaten/`.

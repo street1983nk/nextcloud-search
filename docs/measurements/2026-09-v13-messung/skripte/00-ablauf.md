@@ -77,7 +77,7 @@ UTC-Stempel nach `rohdaten/00-lauf.txt`. Der Timer steht vor jedem Messblock.
 | PI | M-01 und Kaltstart | `loglevel` lesen, auf 1, fünf Stufen, `91m` je Stufe, `95c-kaltstart.sh`, `91m` über das Kaltstart-Fenster, `loglevel` zurück | 50 | Pflicht |
 | PI | Bodensatz | `92e-umgebung.sh` Frist 120, `94c-bodensatz-zyklen.sh`, `92e-umgebung.sh` Frist 0 | 30 | Pflicht |
 | PI | Filter und Sortierung | `99d-filter-sortierung.sh` ohne `FINDLING_LOAD_PASSWORD` in der Umgebung | 10 | Pflicht |
-| PI | B2 | 120 einseitige und 20 achtseitige synthetische Scans per WebDAV, `files:scan`, W2 bei 1 s, `97 waehrend`, Ordner löschen, Rückkehr auf 52.111 / 37 / 0 | 45 | `zeit_fuer b2` |
+| PI | B2 | 120 einseitige und 20 achtseitige synthetische Scans per WebDAV, `files:scan`, W2 bei 1 s, `97 waehrend`, Ordner löschen, Rückkehr auf 52.137 / 44 / 6 (bis 26.09.2026: 52.111 / 37 / 0, Abschnitt 6, Checkpoint 22-08) | 45 | `zeit_fuer b2` |
 | PII | Umbau auf sechs Sprachen | `92e-umgebung.sh FINDLING_LANGUAGES=de,en,es,it,nl,pt`, Statusreihe alle 30 s, Platz alle 60 s, `97 waehrend` | 180 | Pflicht |
 | PII | Indexgröße sechs Felder | `du -sb` nach dem Tausch | 5 | Pflicht |
 | PII | dismax-Probe | `98d-dismax-probe.py` per `docker cp` und `docker exec` | 20 | Pflicht |
@@ -136,10 +136,24 @@ ist ein Ergebnis und kein Grund für eine zweite Anfahrt.
 - **E2, Bestandstor.** Nach 92d steht der Snapshot auf **52.111 indexiert, 37
   übersprungen, 0 fehlgeschlagen**. Quelle: `90-bestand.txt` der v1.2 und der
   Wechsel ohne `--rm-data`.
+  **Neufassung vom 26.09.2026** (Owner-Entscheid am Checkpoint 22-08, Abschnitt
+  6): **52.137 indexiert, 44 übersprungen, 6 fehlgeschlagen.** Die erste
+  Fahrt hat am Bestandstor genau diese Zahlen gelesen und mit 41 abgebrochen
+  (`rohdaten/lauf1-tor41/`, README 6.1). Der Snapshot vom 11.09. enthält die
+  39 Sprachfall-Dateien, die 98b am 10.09. in das Konto `sprachfall` geladen
+  hat, samt ihrem Indexstand; die Differenz 26 / 7 / 6 ist dieser Korpus. Die
+  Zahl 52.111 der Snapshot-Beschreibung ist der Stand vor diesem Upload. Das
+  Urteil über die erste Fassung steht fest: verfehlt; gemessen wird gegen die
+  Neufassung.
 - **E3, Einzelliste.** Die Liste nennt **37 übersprungene und 0
   fehlgeschlagene** Dateien einzeln, jede mit Kennung, Endung, Größe und
   Grundcode. Gilt für Weg a; die 44 / 6 der v1.2-Box sind ohne Ende-Snapshot
   nicht mehr lesbar.
+  **Neufassung vom 26.09.2026**, aus demselben Grund wie E2: die Liste nennt
+  **44 übersprungene und 6 fehlgeschlagene** Dateien einzeln. Die 44 / 6 der
+  v1.2-Box sind damit der Stand des Snapshots und nicht unlesbar; ob es
+  dieselben Dateien sind wie auf der v1.2-Box, sagt keine Rohdatei. Das
+  Urteil über die erste Fassung: verfehlt.
 - **E4, M-01.** Das Maximum von `innerMs` liegt in **allen fünf Stufen unter
   `ceilingMs` 1.500**. Quelle: die Decke des inneren Aufrufs in
   `php/lib/Service/ExAppService.php`; gezählt werden nur Aufrufe ab 1.000 ms,
@@ -204,7 +218,7 @@ der Lauf misst weiter.
 | Wert | Skript | Bedingung | Folge im Ablauf |
 |---|---|---|---|
 | **40** | `92d-wechsel.sh` | `occ upgrade` ist gescheitert; unregister und register sind dann nicht gefahren | Abbruch |
-| **41** | `92d-wechsel.sh` | das Bestandstor nach der Registrierung meldet nicht 52.111 / 37 / 0, oder eine der drei Zahlen war nicht lesbar | Abbruch |
+| **41** | `92d-wechsel.sh` | das Bestandstor nach der Registrierung meldet nicht 52.137 / 44 / 6 (bis 26.09.2026: 52.111 / 37 / 0), oder eine der drei Zahlen war nicht lesbar | Abbruch |
 | **42** | `92e-umgebung.sh` | die harte Grenze steht nach dem Neubau nicht in der cgroup | Abbruch |
 | **43** | `92e-umgebung.sh` | der Container ist nicht in der nachbaubaren Gestalt, der Neubau ist gescheitert, oder der neue Container trägt den Schalter nicht | Abbruch |
 | **44** | `90e-einzelliste.py marken` | eine Marke außerhalb der drei Umbau-Marken und außerhalb von `embedding_version` weicht ab oder fehlt | Abbruch, kein Wechsel |
@@ -219,7 +233,7 @@ der Lauf misst weiter.
 | **53** | `00-typwechsel.sh hin` oder `zurueck` | der zurückgelesene Typ oder Zustand weicht vom geforderten ab | B4 entfällt oder der Abbau läuft von Hand (Entwicklungsmaschine) |
 | **54** | `00-lauf.sh` | das v1.2- oder das Nachfolgeverzeichnis im Box-Klon ist nicht sauber (`git status --porcelain` nicht leer), beim Start oder im Abschluss | Abbruch |
 | **55** | `00-lauf.sh` | die geplante Abschaltung ist nicht zurückzulesen, ist kein Herunterfahren, liegt mehr als 120 s neben dem Deckel, oder der Deckel ist beim Start schon erreicht | Abbruch vor jeder Messung |
-| **56** | `00-lauf.sh` | nach B2 kehrt der Bestand in der Frist nicht auf den Stand vor B2 zurück (Weg a: 52.111 / 37 / 0) | Abbruch |
+| **56** | `00-lauf.sh` | nach B2 kehrt der Bestand in der Frist nicht auf den Stand vor B2 zurück (Weg a: 52.137 / 44 / 6, bis 26.09.2026: 52.111 / 37 / 0) | Abbruch |
 | **57** | `00-lauf.sh` | die Gegenprobe von M-01 findet im Kaltstart-Fenster keine Zeile: das Level oder der Leser ist falsch, nicht das Backend | Abbruch, nach dem Zurücksetzen von `loglevel` |
 | **58** | `00-lauf.sh` | `embedded` bewegt sich während des Umbaus, oder der Umbau (in Weg b der Vollreindex) erreicht die Frist 20 Minuten vor dem Timer | Abbruch |
 
@@ -326,6 +340,21 @@ Erfüllt keiner alle drei, lautet der Entscheid **Summe** (das ausgelieferte
 Verhalten bleibt). Fehlt eine der Kennzahlen, endet die Probe mit 49, oder ist
 für keine der zehn Sprachfall-Anfragen die eigene Datei zuzuordnen, heißt der
 Entscheid **nicht entschieden**.
+
+**Nachtrag vom 26.09.2026, Checkpoint 22-08 (nach dem Boxstart).** Die erste
+Fahrt brach in P1 am Bestandstor von 92d mit 41 ab: gelesen 52.137 / 44 / 6,
+erwartet 52.111 / 37 / 0 (README 6.1). Vorgelegt war als Empfehlung Option A,
+die Sollwerte auf den Stand des Snapshots umzustellen und weiterzufahren. Die
+Antwort des Owners, wörtlich:
+
+> wie deine empfehlung
+
+Beschlossen: der Sollwert des Snapshots ist **52.137 / 44 / 6**, in 92d (Vorgabe
+des Bestandstors) und in `00-lauf.sh` (`BESTAND_SNAPSHOT`, Rückkehr nach B2).
+E2 und E3 tragen die Neufassung mit Begründung. Der Satz oben, dass nach dem
+Boxstart hier nichts mehr geändert wird, gilt für alles andere weiter; dieser
+Nachtrag ist die einzige Ausnahme und trägt seinen eigenen Owner-Entscheid.
+Deckel, Weg, B4-Plan und dismax-Regel bleiben unverändert.
 
 ---
 

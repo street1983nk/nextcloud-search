@@ -327,7 +327,7 @@ def test_the_run_script_drives_way_a_in_the_order_of_the_plan() -> None:
     bodensatz = function_of(code, "block_bodensatz")
     in_order(bodensatz, ["=120", '94c-bodensatz-zyklen.sh"', "=0"])
     assert 'block_b2 "$BESTAND_SNAPSHOT"' in weg
-    assert 'BESTAND_SNAPSHOT="52111 37 0"' in code
+    assert 'BESTAND_SNAPSHOT="52137 44 6"' in code
     assert "exit 56" in function_of(code, "block_b2")
     assert weg.rstrip().endswith("block_92c")
 

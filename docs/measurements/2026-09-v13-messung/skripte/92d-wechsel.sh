@@ -6,8 +6,8 @@
 # docs/measurements/2026-09-nachfolgefassungen/skripte/92c-wechsel.sh, und ihr
 # Anlass ist Befund 1 der Recherche zu Phase 22, der Reihenfolgezwang. 92c
 # leert in Phase B mit unregister --rm-data das Datenvolumen des Backends, und
-# auf diesem Volumen liegt der fertige Index des Snapshots mit 52.111
-# indexierten, 37 uebersprungenen und 0 fehlgeschlagenen Dateien. Ist er weg,
+# auf diesem Volumen liegt der fertige Index des Snapshots mit 52.137
+# indexierten, 44 uebersprungenen und 6 fehlgeschlagenen Dateien. Ist er weg,
 # braucht die Messung des Umbaus (MESS-08) zuerst einen Vollreindex von rund 19
 # Stunden, und das sprengt den Deckel der Anfahrt. Der erste Wechsel der
 # Anfahrt ist deshalb diese Fassung; 92c bleibt das Werkzeug fuer einen Lauf,
@@ -21,7 +21,7 @@
 # **Die zwei Aenderungen gegen 92c.**
 #
 # 1. **unregister ohne --rm-data.** Das Volumen des Snapshots bleibt mit
-#    52.111 / 37 / 0 stehen, und die Registrierung darunter haengt den neuen
+#    52.137 / 44 / 6 stehen, und die Registrierung darunter haengt den neuen
 #    Container an genau dieses Volumen, weil sein Name allein aus der
 #    App-Kennung folgt. Die Zaehlung der laufenden Nextcloud-Instanzen bleibt
 #    trotzdem Pflicht und steht weiter unmittelbar ueber dem unregister: ein
@@ -29,7 +29,7 @@
 #    ExApp jeder Instanz an diesem Docker-Dienst. Neu ist das Bestandstor nach
 #    der Registrierung: indexiert aus der state.db des laufenden Containers,
 #    uebersprungen und fehlgeschlagen aus occ findling:index, und weicht eine
-#    der drei Zahlen von 52111 / 37 / 0 ab, endet das Werkzeug mit **41**.
+#    der drei Zahlen von 52137 / 44 / 6 ab, endet das Werkzeug mit **41**.
 #    indexiert kommt nicht aus occ, weil die PHP-Haelfte diese Zahl nie
 #    schreibt; occ findling:index sagt das in seiner eigenen Ausgabe
 #    ("indexed is counted by the backend container and never written here").
@@ -189,8 +189,8 @@
 #   39 die harte Grenze hat die Registrierung nicht ueberlebt
 #   40 occ upgrade ist gescheitert (Schritt 1b), also weder 0 noch 3;
 #      unregister und register sind dann nicht gefahren
-#   41 das Bestandstor nach der Registrierung meldet nicht 52111 indexiert, 37
-#      uebersprungen und 0 fehlgeschlagen, oder eine der drei Zahlen war nicht
+#   41 das Bestandstor nach der Registrierung meldet nicht 52137 indexiert, 44
+#      uebersprungen und 6 fehlgeschlagen, oder eine der drei Zahlen war nicht
 #      lesbar
 #
 # **Die Zeilen, die dieses Werkzeug schreibt**, ausgeschrieben statt aus dem
@@ -308,12 +308,17 @@ ERWARTETER_SWAP="${ERWARTETER_SWAP:-0}"
 # Der Name des Entladeschalters aus Phase 14. Er reist als Umgebungsvariable der
 # ExApp und wird nach der Registrierung neu abgelesen.
 ENTLADESCHALTER="${ENTLADESCHALTER:-FINDLING_EMBED_IDLE_RELEASE_SECONDS}"
-# Das Bestandstor aus Aenderung 1, die drei Zahlen des Snapshots vom 10.09.2026
-# (Runbook Abschnitt 5). Stellschrauben nur fuer die Generalprobe gegen eine
+# Das Bestandstor aus Aenderung 1, die drei Zahlen des Snapshots vom 11.09.2026.
+# Bis zum 26.09.2026 standen hier 52111 / 37 / 0 (Runbook Abschnitt 5, der Stand
+# vor dem Upload der 39 Sprachfall-Dateien am 10.09.); die Anfahrt hat am
+# Bestandstor 52137 / 44 / 6 gelesen, und der Owner hat diesen Stand am
+# 26.09.2026 als Sollwert bestaetigt (Checkpoint 22-08). Dieselben drei Zahlen
+# stehen als BESTAND_SNAPSHOT in 00-lauf.sh; test_v13_wechsel.py prueft, dass
+# beide Stellen gleich sind. Stellschrauben nur fuer die Generalprobe gegen eine
 # lokale Test-Nextcloud; auf der Box gelten die Vorgaben.
-BESTAND_INDEXIERT="${BESTAND_INDEXIERT:-52111}"
-BESTAND_UEBERSPRUNGEN="${BESTAND_UEBERSPRUNGEN:-37}"
-BESTAND_FEHLGESCHLAGEN="${BESTAND_FEHLGESCHLAGEN:-0}"
+BESTAND_INDEXIERT="${BESTAND_INDEXIERT:-52137}"
+BESTAND_UEBERSPRUNGEN="${BESTAND_UEBERSPRUNGEN:-44}"
+BESTAND_FEHLGESCHLAGEN="${BESTAND_FEHLGESCHLAGEN:-6}"
 
 mkdir -p "$OUT"
 ZIEL="${ZIEL:-$OUT/92d-wechsel.txt}"
@@ -710,7 +715,7 @@ fi
             sudo docker logs --timestamps --since "$START" "$CONTAINER" 2>&1 | tail -30 || true
         fi
 
-        echo "=== 17. Das Bestandstor, 52111 / 37 / 0, nach der Registrierung ==="
+        echo "=== 17. Das Bestandstor, 52137 / 44 / 6, nach der Registrierung ==="
         # Neu in dieser Fassung, und es ist der Beweis fuer Aenderung 1: steht
         # der Snapshot nach dem Wechsel noch da, ist MESS-08 ohne Vollreindex
         # messbar. indexiert kommt aus der state.db des laufenden Containers,
