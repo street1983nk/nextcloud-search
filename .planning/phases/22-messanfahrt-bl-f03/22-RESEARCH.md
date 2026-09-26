@@ -469,16 +469,21 @@ Der m7g.4xlarge-Satz ist gerechnet (8 x 0,0978 = 0,7824 USD/h plus Speicher und 
 | A8 | `RUSAGE_CHILDREN` erfasst die Enkel der langlebigen Kinder nicht | Alternatives | W3-CPU-Zahl zu klein; deshalb cgroup `cpu.stat` |
 | A9 | `workflow_dispatch` kann `measure.yml` gegen einen Ref mit geänderter Workflowdatei fahren, solange die Datei auf `main` existiert | W4 | sonst Push auf `main` vor W4 nötig (Owner-Freigabe Push) |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Wie werden die 6 Fehlschläge und 44 Übersprungenen benannt?** (MESS-07, Owner)
    - What we know: das v1.2-Volume ist ohne Ende-Snapshot zerstört; keine Rohdatei nennt Dateien; der Snapshot trägt 52.111 / 37 / 0.
    - What's unclear: ob der Owner (a) "37 des Snapshots einzeln benannt, 44/6 dokumentiert nicht reproduzierbar" akzeptiert, (b) einen v1.3-Vollreindex bezahlt (rund +20 h, dann 92c zuerst, Deckel rund 40 h / 4,70 USD neu zu rechnen), der eine NEUE Endzahl einzeln benennt, oder (c) einen Teilweg (nur die in v1.2 hinzugekommenen Dateien erneut: Sprachfall-Upload, MEM-02-Dateien).
    - Recommendation: (a) als Standard in das Rechenblatt, (b) und (c) mit Kosten daneben; Entscheid am Checkpoint.
+   - RESOLVED: Owner-Entscheid am Checkpoint 22-07 (26.09.2026): Weg a, `EINZELWEG=a`; festgehalten in `docs/measurements/2026-09-v13-messung/skripte/00-ablauf.md` Abschnitt 6 und README Abschnitt 4. Kein Block teilweg.
 2. **Welcher Deckel gilt, 24 h oder 3,00 USD?** Mit B4 greift 3,00 USD bei rund 17,4 h. Recommendation: Rechenblatt mit 24 h und rund 3,80 USD vorlegen oder 3,00 USD mit effektiv rund 17,4 h; Owner wählt.
+   - RESOLVED: Owner-Entscheid am Checkpoint 22-07 (26.09.2026): Variante Stunden, 24 h mit B4, höchstens 3,76 USD, `DECKEL_MINUTEN=1354`, `DECKEL_REST_MINUTEN=86` (Plan 22-07).
 3. **Nach welcher Regel "fällt die Messung für disjunction_max aus"?** Recommendation: vorher festschreiben, z. B. "Vorteil, wenn der Median von RBO@10 gegen den Altplan unter dismax um mindestens 0,05 höher liegt als unter der Summe, kein Sprachfall-Eigenrang schlechter wird und die lexikalische Latenz um höchstens 20 Prozent steigt"; tie 0.0 gegen 0.1 mitmessen. Zahlen sind Vorschlag [ASSUMED].
+   - RESOLVED: Owner-Entscheid am Checkpoint 22-07 (26.09.2026): der Vorschlag gilt; tie 0.0 und 0.1 nach derselben Regel, bei beiden erfüllt der höhere RBO-Median, bei Gleichstand 0.0. Ohne Ermessen ausformuliert in 00-ablauf.md Abschnitt 6 und E10 (Plan 22-07).
 4. **W4-Faktor exakt definieren.** Recommendation: F4 = Seiten je Sekunde bei N = 4 auf `--cpuset-cpus 0-3` geteilt durch Seiten je Sekunde bei N = 1 auf `--cpuset-cpus 0`, Median aus drei Runden; D-03 wendet die Schwelle 1,5 auf F4 an. Vor dem CI-Lauf in den Plan schreiben.
+   - RESOLVED: Definition in Plan 22-01 in `measure.yml` festgeschrieben, in 22-06 gemessen (F4 = 3,955), vom Owner am Checkpoint 22-07 (26.09.2026) bestätigt; `B4_GEPLANT=ja`.
 5. **Wo liegt `nextcloud.log` in AIO?** Vermutlich im Datenverzeichnis (`/mnt/ncdata/nextcloud.log` im Nextcloud-Container) [ASSUMED]; der Leser nimmt den Pfad aus `occ config:system:get logfile`/`datadirectory`.
+   - RESOLVED: per Umsetzung, keine Vorannahme nötig: `00-lauf.sh` und `91m-langsame-aufrufe.py` (Plan 22-02) lesen den Pfad auf der Box aus `occ config:system:get logfile`, sonst `datadirectory` plus `nextcloud.log` (Rückfall `/mnt/ncdata/nextcloud.log`); die Gegenprobe von M-01 (Wert 57) fängt einen falschen Pfad ab.
 
 ## Environment Availability
 

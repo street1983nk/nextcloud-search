@@ -835,14 +835,26 @@ def test_the_run_plan_quotes_f4_as_the_w4_job_defines_it() -> None:
     assert "B4_GEPLANT=nein" in section
 
 
-def test_the_run_plan_leaves_the_owner_decisions_open() -> None:
-    """Section 6 is filled at checkpoint 22-07; the research rule stands there as a proposal only."""
+def test_the_run_plan_freezes_the_owner_decisions_of_checkpoint_22_07() -> None:
+    """Section 6 carries the owner answer word for word, dated, and the dismax rule with its figures."""
     section = plan_sections()["## 6. Owner-Entscheide"]
-    assert section.count("Antwort: offen (Checkpoint 22-07).") == 3
-    assert "Vorschlag der Research, nicht beschlossen" in section
-    assert "Frage 1" in section
-    assert "Frage 2" in section
-    assert "Frage 3" in section
+    assert "Antwort: offen" not in section
+    assert "> machen wir nach deiner empfehlung\n" in section
+    assert "> Weg a, Deckel stunden, dismax vorschlag, F4 bestaetigt, freigegeben\n" in section
+    assert section.count("Antwort (26.09.2026):") == 3
+    for question in ("Frage 1", "Frage 2", "Frage 3"):
+        assert question in section, question
+    for fixed in ("**Weg a.**", "`EINZELWEG=a`", "**Variante Stunden.**", "`DECKEL_MINUTEN=1354`"):
+        assert fixed in section, fixed
+    assert "`DECKEL_REST_MINUTEN=86`" in section
+    assert "`B4_GEPLANT=ja`" in section
+    flat = " ".join(section.split())
+    for figure in ("**0,05**", "**1,20-fache**", "**0.0**", "dismax_t00", "dismax_t01", "rbo10_gegen_altplan"):
+        assert figure in flat, figure
+    e10 = plan_sections()["## 3. Die Erwartung, vorher aufgeschrieben"]
+    e10 = " ".join(e10[e10.index("- **E10,") : e10.index("- **E11,")].split())
+    for figure in ("**0,05**", "**1,20-fache**", "26.09.2026"):
+        assert figure in e10, figure
 
 
 def test_the_run_plan_strike_order_carries_the_constants_of_the_run_script() -> None:
@@ -867,11 +879,19 @@ def test_the_run_plan_and_the_report_carry_no_dash(path: Path) -> None:
     assert not [dash for dash in DASHES if dash in text], path.name
 
 
-def test_the_run_plan_report_frame_waits_for_the_release() -> None:
-    """One release line, open until checkpoint 22-07, and the empty frames of the report."""
+def test_the_run_plan_report_carries_the_release_and_the_run_values() -> None:
+    """One release line from checkpoint 22-07, the run values it implies, and the frames of the report."""
     text = REPORT.read_text(encoding="utf-8")
     assert text.count("Anfahrt freigegeben:") == 1
-    assert "\nAnfahrt freigegeben: offen (Owner-Checkpoint 22-07)\n" in text
+    release = (
+        "\nAnfahrt freigegeben: 26.09.2026, Deckel 24 h / 3,76 USD (Variante stunden), "
+        "Weg a, B4 gefahren (F4 = 3,955)\n"
+    )
+    assert release in text
+    values = sections_of(text)["## 4. Laufwerte"]
+    rows = dict(re.findall(r"^\| `([A-Z0-9_]+)` \| ([^|]+?) \|", values, flags=re.MULTILINE))
+    assert rows == {"DECKEL_MINUTEN": "1354", "DECKEL_REST_MINUTEN": "86", "B4_GEPLANT": "ja", "EINZELWEG": "a"}, rows
+    assert int(rows["DECKEL_MINUTEN"]) + int(rows["DECKEL_REST_MINUTEN"]) == 24 * 60
     headings = [line for line in text.splitlines() if line.startswith("## ")]
     for name in ("Rechenblatt", "W4-Vorabkurve", "Generalprobe", "Laufwerte", "Offene Owner-Fragen", "Bericht"):
         assert any(name in heading for heading in headings), name

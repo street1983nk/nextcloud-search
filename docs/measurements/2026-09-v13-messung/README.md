@@ -8,11 +8,11 @@ Wandzeit des Umbaus) und MESS-09 (der disjunction_max-Entscheid), dazu die
 BL-F04-Mitmessliste B1 bis B6. Der Ablauf und die vorher aufgeschriebene
 Erwartung stehen in `skripte/00-ablauf.md`, die Rohdaten in `rohdaten/`.
 
-Anfahrt freigegeben: offen (Owner-Checkpoint 22-07)
+Anfahrt freigegeben: 26.09.2026, Deckel 24 h / 3,76 USD (Variante stunden), Weg a, B4 gefahren (F4 = 3,955)
 
-Die Freigabe erteilt der Owner am Checkpoint 22-07, zusammen mit den Antworten
-auf die drei Fragen in `skripte/00-ablauf.md`, Abschnitt 6. Vor dieser Zeile
-läuft keine Boxminute.
+Die Freigabe hat der Owner am Checkpoint 22-07 erteilt, zusammen mit den
+Antworten auf die drei Fragen in `skripte/00-ablauf.md`, Abschnitt 6, und mit
+dem Freigabeumfang aus 1.5. Beides ist vor der ersten Boxminute committet.
 
 **Zur Schreibweise.** Die Abschnittsüberschriften stehen ohne Umlaute, weil
 Prüfungen und Verweise auf sie zeigen. Der Fließtext benutzt echte Umlaute.
@@ -250,15 +250,31 @@ nicht als geprobt gelesen wird:
 
 ## 4. Laufwerte
 
-Offen. Wird am Checkpoint 22-07 gefüllt: `DECKEL_MINUTEN`,
-`DECKEL_REST_MINUTEN`, `B4_GEPLANT`, `EINZELWEG`, mit Herleitung aus dem
-gewählten Deckel.
+Festgelegt am 26.09.2026 aus dem Owner-Entscheid (Variante Stunden, Weg a,
+F4 bestätigt). Diese Werte kommen auf der Box in die Laufwertedatei
+(`LAUFWERTE`, Vorgabe `$HOME/work/v13-lauf.env`, außerhalb des Repos);
+`BOX_START_EPOCH` und `ABBILD_DIGEST` setzt der Aufbau am Anfahrtstag.
+
+| Laufwert | Wert | Herleitung |
+|---|---|---|
+| `DECKEL_MINUTEN` | 1354 | Variante Stunden: 24 h = 1440 min gesamt, minus der B4-Posten mit Zuschlag (86 min); zählt ab `BOX_START_EPOCH` samt Handaufbau, höchstens 22,57 h zu 0,115841 USD = 2,614 USD |
+| `DECKEL_REST_MINUTEN` | 86 | B4-Posten 75 min mal 1,15 = 86,25 min, abgerundet; `00-lauf.sh b4` setzt damit den Timer nach dem Typwechsel, höchstens 1,43 h zu 0,800141 USD = 1,147 USD |
+| `B4_GEPLANT` | ja | D-03: F4 = 3,955 (`rohdaten/w4-ci-arm64/f4.txt`) ist mindestens 1,5; die Definition (N 4 gegen N 1) hat der Owner bestätigt |
+| `EINZELWEG` | a | Frage 1, Weg a: die 37 des Snapshots einzeln in P0, die 44 / 6 der v1.2-Box nicht reproduzierbar; `00-lauf.sh` unverändert |
+
+Gesamt höchstens 24,0 Boxstunden und 3,76 USD; der Rechenwert des Plans liegt
+bei 15,95 h / 2,83 USD (1.2). Stillstand mit gestoppter Box kostet nur die
+Platten und ist nicht eingerechnet.
 
 ## 5. Offene Owner-Fragen
 
-Vorgelegt am 26.09.2026. Keine der drei Fragen ist hier beantwortet; die
-Antworten kommen wörtlich und mit Datum in `skripte/00-ablauf.md`, Abschnitt 6,
-und werden vor dem Boxstart committet.
+Vorgelegt am 26.09.2026, beantwortet am 26.09.2026 (Checkpoint 22-07). Die
+Antwort des Owners, „machen wir nach deiner empfehlung“, auf die Empfehlung
+„Weg a, Deckel stunden, dismax vorschlag, F4 bestaetigt, freigegeben“: Weg a,
+Variante Stunden, die dismax-Regel des Research-Vorschlags, F4 wie angewandt,
+Anfahrt freigegeben. Wortlaut, Datum und die beschlossene Regel ohne Ermessen
+stehen in `skripte/00-ablauf.md`, Abschnitt 6. Die Fragen bleiben unten in der
+vorgelegten Form stehen.
 
 ### Frage 1: Wie werden die 6 Fehlschläge und 44 Übersprungenen benannt?
 

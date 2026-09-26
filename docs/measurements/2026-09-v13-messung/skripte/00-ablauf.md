@@ -164,8 +164,14 @@ ist ein Ergebnis und kein Grund für eine zweite Anfahrt.
   Planwert nimmt keine Verbesserung vorweg (Runbook 2.1).
 - **E10, dismax.** Die Probe liefert je Form die Kennzahlen, auf die die Regel
   aus Abschnitt 6 zeigt, und die Treffermenge von Summe und per-Wort-dismax ist
-  gleich (sonst 49). Der Entscheid selbst folgt allein der Regel in
-  Abschnitt 6.
+  gleich (sonst 49). Der Entscheid folgt allein der am 26.09.2026 beschlossenen
+  Regel in Abschnitt 6: **dismax**, wenn für `dismax_t00` oder `dismax_t01` der
+  Median von `rbo10_gegen_altplan` mindestens **0,05** über dem von `summe`
+  liegt, kein Sprachfall-Eigenrang schlechter wird und der Median von
+  `latenz_ms` höchstens das **1,20-fache** von `summe` ist; erfüllen beide
+  tie-Werte, gilt der mit dem höheren RBO-Median, bei Gleichstand **0.0**.
+  Sonst **Summe**. Die Erwartung selbst nimmt keinen der beiden Ausgänge
+  vorweg.
 - **E11, 92c.** Der Lauf mit einem Daemon, den es nicht gibt, endet mit **36**
   (`92c-fehlschlag-rueckgabewert 36`, „registrierung-gelungen nein“), der
   reguläre Lauf mit **0** (`92c-regulaer-rueckgabewert 0`).
@@ -252,9 +258,18 @@ einen Prüfsummen-Wächter ersetzt, und der Bericht nennt das Fahrdatum.
 
 ## 6. Owner-Entscheide
 
-Dieser Abschnitt ist **leer**. Er wird am Checkpoint 22-07 mit den Antworten
-des Owners wörtlich und mit Datum gefüllt und **vor dem Boxstart** committet.
-Keine der drei Fragen ist hier vorab beantwortet.
+Beantwortet am Checkpoint 22-07 am **26.09.2026**, vor jeder Boxminute, und
+mit diesem Commit eingefroren. Die Antwort des Owners, wörtlich:
+
+> machen wir nach deiner empfehlung
+
+Die Empfehlung, auf die sie antwortet, stand wörtlich in der Form des
+Checkpoints:
+
+> Weg a, Deckel stunden, dismax vorschlag, F4 bestaetigt, freigegeben
+
+Daraus folgen die drei Antworten unten und die Laufwerte in `../README.md`,
+Abschnitt 4. Nach dem Boxstart wird hier nichts mehr geändert.
 
 **Frage 1: Wie werden die 6 Fehlschläge und 44 Übersprungenen benannt?**
 (a) die 37 des Snapshots einzeln, die 44 / 6 dokumentiert nicht
@@ -262,23 +277,55 @@ reproduzierbar; (b) ein v1.3-Vollreindex (rund +20 h, 92c zuerst, Deckel neu zu
 rechnen), der eine neue Endzahl einzeln benennt; (c) ein Teilweg über die in
 v1.2 hinzugekommenen Dateien.
 
-Antwort: offen (Checkpoint 22-07).
+Antwort (26.09.2026): **Weg a.** Die 37 übersprungenen Dateien des Snapshots
+werden in P0 einzeln benannt (`90e-einzelliste.json`), die 44 / 6 der v1.2-Box
+sind als nicht reproduzierbar dokumentiert. `EINZELWEG=a`; `00-lauf.sh` bleibt
+unverändert, der Block `teilweg` wird nicht gebaut.
 
 **Frage 2: Welcher Deckel gilt, 24 h oder 3,00 USD?** Mit B4 greift der
 USD-Deckel schon bei rund 17,4 h Gesamtzeit.
 
-Antwort: offen (Checkpoint 22-07).
+Antwort (26.09.2026): **Variante Stunden.** 24 Boxstunden gesamt, B4 darin,
+höchstens 3,76 USD (README 1.3). `DECKEL_MINUTEN=1354` für den m7g.large-Teil,
+`DECKEL_REST_MINUTEN=86` für B4 auf m7g.4xlarge.
 
 **Frage 3: Nach welcher Regel fällt die Messung für disjunction_max aus?**
 
-Antwort: offen (Checkpoint 22-07).
+Antwort (26.09.2026): **Der Vorschlag der Research gilt**, und die
+F4-Definition aus Abschnitt 8 ist bestätigt (F4 = 3,955, `B4_GEPLANT=ja`). Der
+Vorschlag lautete:
 
-> **Vorschlag der Research, nicht beschlossen** (22-RESEARCH, Open Question 3):
 > Vorteil für dismax, wenn der Median von RBO@10 gegen den Altplan unter dismax
 > um mindestens 0,05 höher liegt als unter der Summe, kein Sprachfall-Eigenrang
 > schlechter wird und die lexikalische Latenz um höchstens 20 Prozent steigt;
-> tie 0.0 gegen 0.1 wird mitgemessen. Die Zahlen sind ein Vorschlag, den der
-> Owner annimmt, ändert oder verwirft.
+> tie 0.0 gegen 0.1 wird mitgemessen.
+
+Beschlossen in dieser Form, ohne Ermessen. Die Kennzahlen sind Zeilen von
+`98d-dismax-probe.txt`; `<t>` steht für `dismax_t00` und `dismax_t01`, die beide
+einzeln geprüft werden:
+
+1. **RBO.** `kennzahl rbo10_gegen_altplan <t>` ist mindestens um **0,05**
+   größer als `kennzahl rbo10_gegen_altplan summe`.
+2. **Sprachfall-Eigenrang.** In keiner der zehn Sprachfall-Anfragen (die
+   Anfragen 11 bis 20, Reihenfolge von `SPRACHFAELLE`) steht die eigene Datei
+   des Falls in der Zeile `spitze <t>` auf einem schlechteren Rang als in der
+   Zeile `spitze summe`; aus der Spitze gefallen, während sie unter `summe`
+   darin stand, zählt als schlechter. Eine Anfrage der Klasse `rueckfall`
+   (die Probe misst sie nur mit `summe`, das Produkt antwortet unverändert)
+   zählt nicht als schlechter. Die Kennung der eigenen Datei ordnet der Bericht
+   aus dem Bestand der Box zu; veröffentlicht wird nur die Kennung. Eine
+   Anfrage, deren eigene Datei nicht zuzuordnen ist, zählt nicht als
+   schlechter.
+3. **Latenz.** `kennzahl latenz_ms <t>` ist höchstens das **1,20-fache** von
+   `kennzahl latenz_ms summe`.
+
+**Entscheid.** Erfüllt mindestens ein `<t>` alle drei Bedingungen, lautet der
+Entscheid **dismax**, mit dem tie-Wert, der sie erfüllt; erfüllen beide, gilt
+der mit dem höheren Median aus Bedingung 1, bei gleichem Median **0.0**.
+Erfüllt keiner alle drei, lautet der Entscheid **Summe** (das ausgelieferte
+Verhalten bleibt). Fehlt eine der Kennzahlen, endet die Probe mit 49, oder ist
+für keine der zehn Sprachfall-Anfragen die eigene Datei zuzuordnen, heißt der
+Entscheid **nicht entschieden**.
 
 ---
 
