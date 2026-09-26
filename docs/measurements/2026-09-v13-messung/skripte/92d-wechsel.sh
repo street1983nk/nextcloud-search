@@ -44,8 +44,9 @@
 #    Registrierung aus 92c gelesen: der Aufruf schreibt in eine eigene Datei
 #    unter WORK, sein Rueckgabewert wird unmittelbar danach geprueft und als
 #    occ-upgrade-rueckgabewert protokolliert, und erst danach laeuft seine
-#    Ausgabe in die Rohdatei. Ist er ungleich 0, faellt der Rest der Phase B
-#    aus, und unterhalb der Pipeline endet das Werkzeug mit **40**.
+#    Ausgabe in die Rohdatei. Ist er weder 0 noch 3 (3 ist ERROR_UP_TO_DATE,
+#    nichts zu tun, und kein Fehlschlag), faellt der Rest der Phase B aus, und
+#    unterhalb der Pipeline endet das Werkzeug mit **40**.
 #
 # **Was ausdruecklich gleich bleibt**, damit ein Bericht dieser Fassung neben
 # einem Bericht von 92c gelesen werden kann:
@@ -186,8 +187,8 @@
 #      war nicht lesbar
 #   38 der Arbeitsbaum ist nicht sauber
 #   39 die harte Grenze hat die Registrierung nicht ueberlebt
-#   40 occ upgrade ist gescheitert (Schritt 1b); unregister und register sind
-#      dann nicht gefahren
+#   40 occ upgrade ist gescheitert (Schritt 1b), also weder 0 noch 3;
+#      unregister und register sind dann nicht gefahren
 #   41 das Bestandstor nach der Registrierung meldet nicht 52111 indexiert, 37
 #      uebersprungen und 0 fehlgeschlagen, oder eine der drei Zahlen war nicht
 #      lesbar
@@ -201,7 +202,7 @@
 #   abbild-id-ist
 #   baumhash-zeilen, baumhash-gleich, baumhash-beweis
 #   php-verzeichnis-ist, php-app-ist
-#   occ-upgrade-rueckgabewert, occ-upgrade-gelungen
+#   occ-upgrade-rueckgabewert, occ-upgrade-gelungen, occ-upgrade-stand
 #   unregister-rueckgabewert, volumen-nach-unregister
 #   registrierung-rueckgabewert, registrierung-gelungen
 #   speichergrenze-ist, grenze-erwartet, grenze-gesetzt
@@ -536,14 +537,26 @@ fi
     occ upgrade >"$upgradelog" 2>&1 || upgrade_status=$?
     cat "$upgradelog"
     printf 'occ-upgrade-rueckgabewert %s\n' "$upgrade_status"
-    if [ "$upgrade_status" -eq 0 ]; then
+    # 0 und 3 sind beide ein gelungenes upgrade. 3 ist ERROR_UP_TO_DATE der
+    # Nextcloud (core/Command/Upgrade.php): es gab nichts zu tun, etwa weil die
+    # PHP-Haelfte schon auf diesem Stand war oder ein zweiter Lauf dieses
+    # Werkzeugs folgt. deploy-harp.yml fuehrt dieselbe Regel ("Store upgrade 4").
+    # Die erste Fassung verlangte 0 allein und haette einen zweiten Lauf mit 40
+    # abgewiesen, obwohl nichts gescheitert war; Befund der CI-Probe von 22-06.
+    case "$upgrade_status" in
+    0 | 3)
         echo "occ-upgrade-gelungen ja"
-    else
+        if [ "$upgrade_status" -eq 3 ]; then
+            echo "occ-upgrade-stand aktuell"
+        fi
+        ;;
+    *)
         echo "occ-upgrade-gelungen nein"
         : >"$WORK/upgrade-fehlt"
         echo "-- Das upgrade ist gescheitert. unregister und register fallen aus, und"
         echo "   dieser Lauf endet unterhalb der Pipeline. --"
-    fi
+        ;;
+    esac
     occ app:enable "$PHP_APP" 2>&1 || true
     occ app:list 2>&1 | grep -i -A1 "$PHP_APP" | head -6 || true
     printf 'php-app-ist %s\n' "$PHP_APP"

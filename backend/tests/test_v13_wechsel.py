@@ -126,6 +126,28 @@ def test_the_image_switch_reads_the_return_of_occ_upgrade_outside_the_tee() -> N
     assert block.split("\nfi\n")[0].rstrip().endswith("exit 40")
 
 
+def test_the_image_switch_counts_up_to_date_as_a_successful_upgrade() -> None:
+    """occ upgrade answers 3 (ERROR_UP_TO_DATE) when there is nothing to do.
+
+    The first version accepted 0 alone and would have refused a second run of
+    the tool, or a companion already on this version, with 40 although nothing
+    had failed. deploy-harp.yml ("Store upgrade 4") measured 3 as the answer of
+    an instance that is up to date. Exactly 0 and 3 pass, every other value
+    marks the upgrade as failed.
+    """
+    code = code_of(IMAGE_SWITCH.read_text(encoding="utf-8"))
+    start = code.index('case "$upgrade_status" in')
+    block = code[start : code.index("esac", start)]
+    passing, _, failing = block.partition("*)")
+    assert re.search(r"^\s*0 \| 3\)\s*$", passing, re.MULTILINE), passing
+    assert "occ-upgrade-gelungen ja" in passing
+    assert "upgrade-fehlt" not in passing
+    assert ': >"$WORK/upgrade-fehlt"' in failing
+    assert "occ-upgrade-gelungen nein" in failing
+    # The old comparison against 0 alone is gone.
+    assert '[ "$upgrade_status" -eq 0 ]; then\n        echo "occ-upgrade-gelungen ja"' not in code
+
+
 def test_the_image_switch_keeps_its_old_aborts_and_adds_40_and_41_below_the_pipeline() -> None:
     """36 to 39 stay where 92c put them; 40 and 41 are new and stand below the tee."""
     text = IMAGE_SWITCH.read_text(encoding="utf-8")
