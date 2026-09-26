@@ -574,8 +574,16 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # AdminViewService.php its label and its remedy. The fix touches the sixteen
 # catalogue files as well; the recipe globs **/*.php, so none of them is in this
 # tree and none of them moves this figure.
-PHP_FILES_TODAY = 68
-PHP_TREE_HASH_TODAY = "a3eadc72341f7e5e2badfe9a56e605cd1314a9040186a84f01f500783a1c6884"
+# Moved on 2026-09-26 by the fix of issue #14, second commit, and the count
+# moves from 68 to 69: tests/Unit/QueueServiceReaderTest.php is new and holds
+# the choice of the reader. Two of the 68 changed their bytes. SearchService.php
+# gained the static readableFile(), the one place that resolves a file id and
+# asks the readability question, and its own recheck calls it. QueueService.php
+# asks it for every user it tries as the reader of a file, up to twenty, and
+# writes skipped(unreadable) when the file is reachable and none of them may
+# read it.
+PHP_FILES_TODAY = 69
+PHP_TREE_HASH_TODAY = "4bd070003da433f40794513ca3ae5a7021f02c122940d39c28ba12a3cbc3ae73"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

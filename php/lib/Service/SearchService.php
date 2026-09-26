@@ -8,6 +8,7 @@ use OCA\Findling\Text\PlainText;
 use OCP\Files\Cache\IFileAccess;
 use OCP\Files\Config\IUserMountCache;
 use OCP\Files\File;
+use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\IUser;
 use Psr\Log\LoggerInterface;
@@ -346,20 +347,14 @@ class SearchService {
 
 				$rechecks++;
 				$consumed++;
-				$node = $userFolder->getFirstNodeById($candidate['fileId']);
-				if (!$node instanceof File) {
-					continue;
-				}
-
-				// The stricter question, asked right after the type check
-				// (security audit L5). Reaching a node is not the same as being
-				// allowed to read it, and a hit for a document whose content
-				// the user may not open is the one outcome this class exists to
-				// prevent. It belongs here rather than anywhere further down:
-				// two lines later a title and a path of that node would already
-				// have been read, and one call later a snippet of its content
-				// would exist.
-				if (!$node->isReadable()) {
+				// Both questions in one call, see readableFile() below. The
+				// stricter of the two, readability, is asked right after the
+				// type check (security audit L5), and that call is the whole
+				// reason it happens before anything else: two lines later a
+				// title and a path of that node would already have been read,
+				// and one call later a snippet of its content would exist.
+				$node = self::readableFile($userFolder, $candidate['fileId']);
+				if ($node === null) {
 					continue;
 				}
 
@@ -464,6 +459,47 @@ class SearchService {
 			$degraded,
 			$ceilingReached ? SearchOutcome::FAILURE_OFFSET_CEILING : null,
 		);
+	}
+
+	/**
+	 * The file behind an id, as this user may read it, or null.
+	 *
+	 * The two questions of the permission chain in one place, and the only
+	 * place in php/lib that asks them. The resolution through the user's own
+	 * folder answers "is it reachable for them", the readability question right
+	 * behind it answers "may they read it", and on a Team Folder with advanced
+	 * permissions the two differ: the ACL wrapper of groupfolders hands out a
+	 * node that resolves perfectly well while the per folder rules take the
+	 * read bit away.
+	 *
+	 * It is static and public since issue #14, and that is the fix of the
+	 * issue rather than a convenience. The search boundary above was the only
+	 * caller that asked both questions. The queue asked only the first one when
+	 * it picked the user whose context the bytes are read in, and so did the
+	 * content gateway when it served them; a Team Folder member who can reach a
+	 * file and may not read it was therefore chosen as the reader, and the file
+	 * ended as skipped(gone) although it was there all along. Every caller now
+	 * asks here, so the question cannot be half asked a second time, and
+	 * backend/tests/test_php_acl_boundary.py counts both calls in this one file
+	 * and nowhere else.
+	 *
+	 * @param bool|null $reachable set to true when the id resolved to a file
+	 *                             for this user at all, readable or not. A
+	 *                             caller that has to tell "not there" from
+	 *                             "there, and closed to this user" reads it;
+	 *                             the search does not, on purpose, because for
+	 *                             a hit the two are the same outcome.
+	 */
+	public static function readableFile(Folder $userFolder, int $fileId, ?bool &$reachable = null): ?File {
+		$reachable = false;
+		$node = $userFolder->getFirstNodeById($fileId);
+		if (!$node instanceof File) {
+			return null;
+		}
+
+		$reachable = true;
+
+		return $node->isReadable() ? $node : null;
 	}
 
 	/**
