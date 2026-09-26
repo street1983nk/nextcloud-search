@@ -372,6 +372,17 @@ eine Nachanfahrt ist mit rund 0,34 USD geplant. Audit:
 Multi-arch image 36249089300, Resilience 36249089326, HaRP deploy 36249089333.
 MESS-07 bleibt offen, bis die Kaltstartzahl mit Treffern steht.
 
+**Freigabeweg der Nachanfahrt (D-02), wie der Koordinator ihn am 26.09.2026
+berichtet.** Dem Owner wurde in seiner Sitzung das Abnahmepaket mit der
+Kurzform-Empfehlung „abgenommen, Weg b, Nebenlücken mit, Nachanfahrt
+freigegeben“ und der Kostenangabe rund 0,34 USD für alle drei Lücken
+vorgelegt; die Antwort, wörtlich: „machen wir wie die empfehlung“. Den Deckel
+von 4 Boxstunden und 0,50 USD hat der Koordinator als Sicherheitsobergrenze
+über der Schätzung gesetzt, harter Stopp wie in der Hauptanfahrt. Der Ablauf
+steht in `.planning/phases/22-messanfahrt-bl-f03/22-13-PLAN.md`. Vor dem
+ersten Boxstart bestätigt der Owner die Freigabe selbst in seiner Sitzung,
+weil der Ausführende sie nur weitergeleitet erhalten hat.
+
 Die Ursache der zwei Nebenlücken ist gefunden und lokal behoben:
 `scripts/ops/rss_sampler.sh` stand im Index mit Modus 100644, und 94c wie
 `00-wegwerf.sh b5` starten ihn als `sudo "$SAMPLER"` statt `sudo sh`. sudo
