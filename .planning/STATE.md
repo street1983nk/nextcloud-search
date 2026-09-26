@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: ready_to_plan
-stopped_at: Phase 22 komplett (22-12 Abnahme, 22-13 Nachanfahrt schliesst MESS-07); naechster Schritt vor Phase 23 der Merge von fix/issue-14-teamfolder-acl, dann plan-phase 23
-last_updated: "2026-09-26T17:15:00.000Z"
-last_activity: 2026-09-26, Nachanfahrt 22-13 (0,37 h, 0,0427 USD) und Abschluss 22-12
+stopped_at: Phase 22 komplett (22-12 Abnahme, 22-13 Nachanfahrt schliesst MESS-07); fix/issue-14-teamfolder-acl gemergt 257caac (Kandidat für 1.3.0), naechster Schritt plan-phase 23
+last_updated: "2026-09-26T18:45:00.000Z"
+last_activity: 2026-09-26, Merge fix/issue-14-teamfolder-acl (257caac), CI auf main 6/6 grün
 progress:
   total_phases: 7
   completed_phases: 6
@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 23, Haertung und Store-Einreichung 1.3.0 (vorher Merge fix/issue-14-teamfolder-acl)
+**Current focus:** Phase 23, Haertung und Store-Einreichung 1.3.0 (Fix #14 gemergt 257caac)
 
 ## Current Position
 
@@ -31,8 +31,9 @@ Status: PHASE 22 KOMPLETT. Owner-Abnahme 26.09.2026 ("machen wir wie die empfehl
 Nachanfahrt 22-13 (Owner-Nachfreigabe zweistufig: "machen wir wie die empfehlung", dann "weiter", beide ueber den Koordinator, Vermerk im README): Aufbau aus dem Korpus-Snapshot ohne Abweichung, Timer absolut 20:20Z, 92d 0 mit Bestand 52.137 / 44 / 6, backendReachable true. 95c mit Einwort-Begriff "Bescheid" unter lasttest, Schalter 0: erste kalte Suche 2.617 ms, 26 Treffer, gueltig im ersten Zyklus, Gegenprobe 2 Zeilen (E5 fuer den Einwortfall gehalten, Nachtrag 6.12; Urteil der Hauptanfahrt bleibt verfehlt). 94c: abtastreihe-spitze-mb 1688, Zyklus 2 minus C1 27,4. B5: anon 542 MB bei batch 2, 877 MB bei batch 8, Threads kosten keinen Speicher. Box abgebaut ohne Ende-Snapshot, 0 Ressourcen ueber 17 Regionen ausser dem Korpus-Snapshot, A-Record weg. Kosten 0,37 h / 0,0427 USD gegen Deckel 4 h / 0,50 USD (gehalten). Commits 0de526b (Freigabevermerk), ea32513 (Rohdaten rohdaten-nachanfahrt/), ec15950 (Bericht 6.15, performance.md).
 Kosten der Phase gesamt: Hauptanfahrt 2,32 h / 0,4716 USD (Deckel 24 h / 3,76 USD gehalten) plus Nachanfahrt 0,37 h / 0,0427 USD. Urteile E1 bis E14: 11 gehalten, 3 verfehlt (E4, E5, E8), E5 per Nachtrag fuer den Einwortfall gehalten. dismax-Entscheid: Summe, disjunction_max verworfen (MESS-09).
 Offene Befunde (deferred-items 22-13): V-22-01 (erste Mehrwortsuche nach Containerstart bei Schalter 0 ohne Findling-Treffer) zeigt sich auch an der Auszugsroute api/snippets.py, die die Einwortregel nicht kennt (Backlog, Owner-Entscheid); 00-typwechsel.sh vorpruefung schreibt ohne OUT nach rohdaten/ (in der Nachanfahrt von Hand zurueckgesetzt, Werkzeug bleibt gefahren und pruefsummengeschuetzt). Korpus-Snapshot bleibt (Wiedervorlage beim Milestone-Close).
-OFFENER PUNKT VOR PHASE 23: der Merge von Branch fix/issue-14-teamfolder-acl steht an (von dieser Phase unberuehrt).
-Naechster Schritt: Merge fix/issue-14-teamfolder-acl, dann /gsd:plan-phase 23.
+Merge fix/issue-14-teamfolder-acl: gemergt 257caac, Kandidat für 1.3.0 (Phase 23). Merge-Commit ohne Konflikt (--no-ff, Branch-Kopf e2ef470), php/-Baum gleich dem Branch, Ledger PHP_TREE_HASH_TODAY und PHP_FILES_TODAY 70 aus dem Branch neben den Prüfsummen-Wächtern aus 22-11. Lokale Gates grün (ruff, format, pyright latest 0 Fehler, vulture, pytest 3324 passed / 15 skipped, php -l 70/0 im nextcloud:35-Image), CI auf main 6/6 grün, Image findling_backend:dev sha256:61327a32c55da58815549c2fc5aadd938f92f7fee984d91d58b61089061ec497. Branch und Worktree bleiben vorerst, kein Issue-Kommentar (die Release-Notiz trägt den Hinweis), kein Tag.
+OFFENE OWNER-ENTSCHEIDUNG: was mit alten skipped(gone)-Zeilen geschieht, die vor dem Fix für Team-Folder-Dateien geschrieben wurden, die der damals gewählte Leser nicht sah (neu einreihen oder stehen lassen).
+Naechster Schritt: /gsd:plan-phase 23.
 
 Vorher 22-11 abgeschlossen: docs/performance.md traegt "Die v1.3-Anfahrt vom 26.09.2026" (M-01 warm hoechstens 1.080,6 ms, Stufe 1 kalt 1.512,5; 92c 36/0, 99d 0; Bodensatz Zyklus 2 +30,5 MB; Einzelliste alle 50; Kaltstart LUECKE, geschlossen in 22-13; Index 1,82-fach, Umbau 581 s; B1-B7). Commits 44bba82, b497cc0.
 
