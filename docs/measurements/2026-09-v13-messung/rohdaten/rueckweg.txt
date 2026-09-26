@@ -1,0 +1,27 @@
+rueckweg-start 2026-09-26T11:53:02Z index 787051223 index.rebuild 237275422
+{"embedded": 0, "languagesActive": "", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T11:55:21Z"}
+{"embedded": 0, "languagesActive": "", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T11:55:34Z"}
+{"embedded": 0, "languagesActive": "", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T11:55:46Z"}
+{"embedded": 0, "languagesActive": "", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T11:55:58Z"}
+{"embedded": 0, "languagesActive": "", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T11:56:10Z"}
+{"embedded": 0, "languagesActive": "", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T11:56:22Z"}
+{"embedded": 0, "languagesActive": "", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T11:56:35Z"}
+{"embedded": 0, "languagesActive": "", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T11:56:47Z"}
+{"embedded": 0, "languagesActive": "", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T11:56:59Z"}
+{"embedded": 0, "languagesActive": "", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T11:57:11Z"}
+{"embedded": 0, "languagesActive": "", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T11:57:23Z"}
+{"embedded": 0, "languagesActive": "", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T11:57:36Z"}
+{"embedded": 0, "languagesActive": "", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T11:57:48Z"}
+{"embedded": 0, "languagesActive": "", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T11:58:00Z"}
+{"embedded": 0, "languagesActive": "", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T11:58:12Z"}
+{"embedded": 0, "languagesActive": "", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T11:58:24Z"}
+{"embedded": 0, "languagesActive": "", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T11:58:37Z"}
+{"embedded": 0, "languagesActive": "", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T11:58:49Z"}
+{"embedded": 0, "languagesActive": "", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T11:59:01Z"}
+{"embedded": 0, "languagesActive": "", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T11:59:13Z"}
+{"embedded": 0, "languagesActive": "", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T11:59:25Z"}
+{"embedded": 0, "languagesActive": "", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T11:59:38Z"}
+{"embedded": 0, "languagesActive": "", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T11:59:50Z"}
+{"embedded": 0, "languagesActive": "", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:00:02Z"}
+{"embedded": 0, "languagesActive": "", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:00:14Z"}
+rueckweg-antwort 2026-09-26T12:00:24Z geantwortet nein rebuild-laeuft false sprachen 

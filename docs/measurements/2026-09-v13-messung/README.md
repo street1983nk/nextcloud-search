@@ -452,3 +452,22 @@ Nach einem Start nimmt das Backend den Umbau vermutlich von selbst wieder auf.
 Eine saubere Wandzeitmessung verlangt dann entweder den Rückweg über 92e auf
 de,en vor dem nächsten Umbau oder das Hinnehmen eines angefangenen Umbaus.
 Beides ist ein Owner-Entscheid.
+
+### 6.3 Wiedereinstieg ab PII, Tor-Abbruch 59 (26.09.2026)
+
+Owner-Entscheid A („ja bitte“), Fix in aecca7d. Start 11:52:32Z, `00-lauf.sh
+start ab-pii` um 11:53:01Z. Den Timer hat `shutdown +941` auf 03:34:01Z gesetzt,
+wegen der Minutenrundung 36 s hinter dem Deckelende. Er ist sofort absolut auf
+**2026-09-27T03:33:00Z** gesetzt und zurückgelesen worden (`00-timer.txt`).
+Markentor 0, Bestand 52.137 / 44 / 6. Der Rückweg über 92e auf de,en lief mit 0.
+Danach meldete die Admin-Übersicht sieben Minuten lang nur Nullen, das Werkzeug
+endete mit **59**.
+
+**Ursache:** Die Übersicht antwortete 200 mit `backendReachable false`. Der
+Container lief und war bewaffnet, der Name löste auf. Nextcloud erreichte das
+Backend über AppAPI aber nicht, weil nach dem Maschinenstart der wiederkehrende
+Handgriff aus Runbook Block 11 fehlte (`app_api:app:disable` und `enable`). Er
+ist ein Bedienfehler dieses Wiederanlaufs, kein Werkzeug- und kein Boxbefund.
+Das Tor hat fail-closed gehalten, der halbe `index.rebuild` (237 MB) ist nicht
+verworfen worden. Uptime 0,16 h, 0,0189 USD. Gesamt bisher 1,14 h und
+0,132 USD. Die Box ist gestoppt (`rohdaten/04-wiederanlauf.txt`).

@@ -40,3 +40,29 @@ ruecklesung /run/systemd/shutdown/scheduled: MODE=poweroff, USEC gleich der zeil
 rechnerischer rest 1354 - (05:38:32Z - 04:59:25Z) = 1315 minuten, also der restdeckel und
 nicht die vollen 1354.
 abholschleife neu gestartet (takt 600, B4_GEPLANT=ja).
+
+-- wiedereinstieg ab-pii, 2026-09-26 nachmittag --
+owner-entscheid a ("ja bitte") am checkpoint nach tor 58; werkzeug-fix aecca7d, gepusht,
+gates gruen, bevor die box lief. zeitrechnung 11:36Z: rund 957 min wand bis 03:33Z gegen
+rund 560 min geplanten rest samt b4 und abbau, keine streichung.
+aws_box.sh start 11:52:32Z, a-record auf die neue adresse, hostschluessel gleich. box-klon
+per git checkout -f auf aecca7d (die rohdaten der zweiten fahrt waren committet und
+byteweise gleich), die fuenf handgeschriebenen dateien im klon entfernt. free -h 3.8Gi.
+der container der zweiten fahrt (sechs sprachen) hatte den umbau beim hochfahren wieder
+aufgenommen: index.rebuild 236954803 byte um 11:52:49Z.
+00-lauf.sh start ab-pii 11:53:01Z:
+  timer-gesetzt rest-minuten 941, abschaltung 2026-09-27T03:34:01Z (minutenrundung von
+  shutdown +N, 36 s hinter dem deckelende 03:33:25Z). von hand sofort auf absolut 03:33
+  gesetzt und zurueckgelesen: 2026-09-27T03:33:00Z, modus poweroff (zeile timer-nachgezogen).
+  markentor 0 (marken-urteil umbau), bestand 52137 44 6 gleich soll.
+  rueckweg: 92e FINDLING_LANGUAGES=de,en 0, container neu 11:53:03Z.
+  25 statuszeilen bis 12:00:24Z, alle embedded 0, rebuildTotal 0, languagesActive leer.
+  tor-abbruch rueckweg 59 "das Backend antwortet nach dem Rueckweg auf de,en nicht",
+  timer auf 60 min vorgezogen.
+ursache, von hand gelesen: die admin-uebersicht antwortet 200 mit backendReachable false.
+der container lief, der poller meldete "indexing is armed", und der name loeste in box und
+container auf. nextcloud erreichte das backend ueber appapi nicht: nach dem maschinenstart
+fehlte die bewaffnung app_api:app:disable und enable (runbook block 11, wiederkehrender
+handgriff). sie ist im wiederanlauf der zweiten fahrt gefahren worden, in diesem nicht.
+das tor 59 hat richtig gehalten; der halbe index.rebuild ist NICHT verworfen worden.
+rohdaten 12:01:58Z abgeholt, box per aws_box.sh stop angehalten: 0,16 h, 0,0189 USD.

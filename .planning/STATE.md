@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 Phase: 22 (messanfahrt-bl-f03), EXECUTING
 Plan: 8 of 12
-Status: 22-08 am ZWEITEN CHECKPOINT (Owner-Entscheid): Option A umgesetzt (26e5e8f), zweite Fahrt bis B2 vollstaendig, dann Tor-Abbruch 58 im Umbau (erste Statuszeile vor Backend-Bereitschaft, embedded 0). Box GESTOPPT mitten im Umbau; gesamt 0,98 h / 0,113 USD. Rohdaten ac521ff, Bericht README 6.1 und 6.2
+Status: 22-08 am DRITTEN CHECKPOINT: Fix aecca7d (Tor 58, ab-pii) gefahren, Wiedereinstieg brach im Rueckweg mit 59 ab (backendReachable false, Bewaffnung nach Maschinenstart fehlte). Box GESTOPPT, Timer war absolut 2026-09-27T03:33Z; gesamt 1,14 h / 0,132 USD. Bericht README 6.3
 
 Aktueller Stand: PHASE 21 KOMPLETT 25.09.2026 (9/9 Plaene, goal-backward verified passed 9/9,
 phase.complete gelaufen, STATE von Hand nachgezogen). Niederlaendische Komposita sind Ende-zu-
@@ -698,6 +698,6 @@ Sonst keine (die drei Debug-Sessions aus v1.1 sind am 21.09.2026 formal auf reso
 
 ## Session Continuity
 
-Last session: 2026-09-26T06:25:00.000Z
-Stopped at: Plan 22-08 zweiter Checkpoint nach Tor-Abbruch 58 (Box gestoppt)
+Last session: 2026-09-26T12:05:00.000Z
+Stopped at: Plan 22-08 dritter Checkpoint nach Tor-Abbruch 59 im Wiedereinstieg (Box gestoppt)
 Resume file: .planning/phases/22-messanfahrt-bl-f03/22-08-PLAN.md

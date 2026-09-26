@@ -60,3 +60,24 @@ umbau-containerstart 2026-09-26T06:16:55.214633596Z
 97-waehrend-umbau beendet-durch-lauf 2026-09-26T06:17:29Z
 tor-abbruch p2-umbau rueckgabe 58 grund embedded hat sich waehrend des Umbaus bewegt, die Umbauzeit ist keine reine Umbauzeit 2026-09-26T06:17:30Z
 00-abbruch 2026-09-26T06:17:30Z block p2-umbau rueckgabe 58
+p0-timer-ab-pii-start 2026-09-26T11:53:01Z
+timer-abschaltung 2026-09-27T03:34:01Z
+p0-timer-ab-pii-ende 2026-09-26T11:53:01Z
+altverzeichnisse-sauber ja
+beiseite 00-ABBRUCH nach fahrt2-00-ABBRUCH
+beiseite umbau-status.jsonl nach fahrt2-umbau-status.jsonl
+beiseite umbau-platz.txt nach fahrt2-umbau-platz.txt
+beiseite 97-cron-vorpruefung-waehrend-umbau.txt nach fahrt2-97-cron-vorpruefung-waehrend-umbau.txt
+lauf ab-pii weg a b4-geplant ja abbild sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+abtaster leben 8 nach ab-pii containerstart 2026-09-26T11:52:27.200357554Z 2026-09-26T11:53:01Z
+p0-marken-ab-pii-start 2026-09-26T11:53:01Z
+90e-marken-rueckgabewert 0
+p0-marken-ab-pii-ende 2026-09-26T11:53:01Z
+p0-bestand-ab-pii-start 2026-09-26T11:53:01Z
+bestand-ab-pii 52137 44 6 soll 52137 44 6
+p0-bestand-ab-pii-ende 2026-09-26T11:53:02Z
+rueckweg-start 2026-09-26T11:53:02Z
+92e FINDLING_LANGUAGES=de,en rueckgabewert 0
+abtaster leben 9 nach rueckweg containerstart 2026-09-26T11:53:03.023164077Z 2026-09-26T11:53:03Z
+tor-abbruch rueckweg rueckgabe 59 grund das Backend antwortet nach dem Rueckweg auf de,en nicht 2026-09-26T12:00:24Z
+00-abbruch 2026-09-26T12:00:25Z block rueckweg rueckgabe 59
