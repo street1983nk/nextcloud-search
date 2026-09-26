@@ -66,9 +66,13 @@ FIX_RUN_DIR = MEASUREMENTS_DIR / "2026-09-werkzeugfixe" / "skripte"
 V12_RUN_DIR = MEASUREMENTS_DIR / "2026-09-v12-messung" / "skripte"
 # The run directory of the two successor fassungen of A1, the acceptance of
 # 21.09.2026. It holds no raw data and never will: neither of its files ran.
+# Addendum of 26.09.2026: both files ran on the v1.3 trip; their raw data lie in
+# that run directory, not in this one (DRIVEN_SUCCESSOR_FASSUNGEN).
 SUCCESSOR_RUN_DIR = MEASUREMENTS_DIR / "2026-09-nachfolgefassungen" / "skripte"
 # The run directory of the v1.3 trip of phase 22. Its tools are written before
-# the box stands, so until the trip none of them ran either.
+# the box stands, so until the trip none of them ran either. Addendum of
+# 26.09.2026: the trip ran, and every tool of it is pinned in
+# test_v13_gefahren.py (DRIVEN_V13_FASSUNGEN).
 V13_RUN_DIR = MEASUREMENTS_DIR / "2026-09-v13-messung" / "skripte"
 TREE_HASH = RUN_DIR / "40b-baumhash.py"
 TREE_HASH_PROOF = RUN_DIR / "40b-baumhash.sh"
@@ -109,7 +113,8 @@ SUCCESSOR_LANGUAGE_CASES = FIX_RUN_DIR / "98b-sprachfaelle.sh"
 # acceptance criterion was form, digest and static analysis. That sentence
 # stands in the head of each file and is asserted below, because a fassung
 # somebody later mistakes for a measured one is the finding these two would
-# otherwise create.
+# otherwise create. Addendum of 26.09.2026: both ran on the v1.3 trip and are
+# pinned in DRIVEN_SUCCESSOR_FASSUNGEN; the head sentence stays byte for byte.
 SUCCESSOR_IMAGE_SWITCH = SUCCESSOR_RUN_DIR / "92c-wechsel.sh"
 SUCCESSOR_FILTER_SORT = SUCCESSOR_RUN_DIR / "99d-filter-sortierung.sh"
 NOT_DRIVEN = "DIESE FASSUNG IST NICHT GEFAHREN"
@@ -354,6 +359,17 @@ DRIVEN_V12_FASSUNGEN: dict[str, tuple[str, int]] = {
     "97-cron-vorpruefung.sh": ("0c84c4ff1b47e23435428c5a58b0f28ab7397ba7e90c3912ab50392ba41eae72", 26252),
     "98c-sprachfaelle.sh": ("18ed06b498ad836fa9bb01b4f05a9fe99004eaaaae6743f73a6bfd44b1d87694", 44073),
     "99c-filter-sortierung.sh": ("dda76234d8ee7d8e54ebb73289c705509681cbd23d5646db3c60b1da36425d97", 29065),
+}
+
+# The two successor fassungen of auflage A1, gefahren am 26.09.2026,
+# docs/measurements/2026-09-v13-messung (report section 6.14). Same shape and
+# same reason as DRIVEN_V12_FASSUNGEN: sha256 over the bytes and the byte count,
+# written down and not recomputed. They replace the watchmen that held both
+# files to "never ran"; the head sentence that says so stays in each file byte
+# for byte and is still asserted below.
+DRIVEN_SUCCESSOR_FASSUNGEN: dict[str, tuple[str, int]] = {
+    "92c-wechsel.sh": ("60ee8ec710e7324ca1a82709924bf1ef8830f908b0fd4c36559f84d7886742d2", 35825),
+    "99d-filter-sortierung.sh": ("84f572b3aa4c51a18bd419cb4a379f6d62cae0f6f2d9d97d60d836d5089f12bb", 34205),
 }
 
 # The two files of the full run that can be held to a promise without a box: the
@@ -2951,10 +2967,65 @@ def test_the_six_driven_v12_fassungen_are_the_ones_the_run_order_names() -> None
 # DRIVEN_V12_FASSUNGEN deliberately does NOT grow by these two files. Those six
 # digests are the evidence of a paid trip; a seventh entry would freeze a
 # fassung that never ran and put it on the same shelf as the ones that did.
+#
+# Addendum of 26.09.2026, plan 22-11: both successors ran, on the v1.3 trip
+# (docs/measurements/2026-09-v13-messung, report section 6.14). They are now
+# pinned in DRIVEN_SUCCESSOR_FASSUNGEN and still not in DRIVEN_V12_FASSUNGEN,
+# because they ran on another trip than those six. Their head sentence stays
+# byte for byte, which is what the two NOT_DRIVEN assertions below keep: it
+# records the state at the time of writing, and removing it would itself be a
+# change of a driven fassung.
+
+
+@pytest.mark.parametrize("name", sorted(DRIVEN_SUCCESSOR_FASSUNGEN), ids=sorted(DRIVEN_SUCCESSOR_FASSUNGEN))
+def test_the_driven_successor_fassung_stays_byte_identical(name: str) -> None:
+    """92c and 99d ran on 26.09.2026, so from then on they are evidence as well.
+
+    92c wrote 92c-wechsel-fehlschlag.txt (36) and 92c-wechsel.txt (0), 99d
+    wrote 99d-filter-sortierung.txt and its repetition (0), all under
+    docs/measurements/2026-09-v13-messung/rohdaten/. The box is gone.
+    """
+    digest, size = DRIVEN_SUCCESSOR_FASSUNGEN[name]
+    path = SUCCESSOR_RUN_DIR / name
+    assert path.is_file(), path
+    raw = path.read_bytes()
+    assert len(raw) == size, DRIVEN_FASSUNG_RULE
+    assert hashlib.sha256(raw).hexdigest() == digest, DRIVEN_FASSUNG_RULE
+
+
+def test_the_watchman_of_the_driven_successor_fassungen_fires_on_a_single_changed_byte(tmp_path: Path) -> None:
+    """The mutation probe of the two pins, on copies in tmp_path and never on the files."""
+    assert set(DRIVEN_SUCCESSOR_FASSUNGEN) == {SUCCESSOR_IMAGE_SWITCH.name, SUCCESSOR_FILTER_SORT.name}
+    for name, (digest, size) in DRIVEN_SUCCESSOR_FASSUNGEN.items():
+        copy = tmp_path / name
+        shutil.copyfile(SUCCESSOR_RUN_DIR / name, copy)
+        raw = copy.read_bytes()
+        assert hashlib.sha256(raw).hexdigest() == digest
+        middle = len(raw) // 2
+        with copy.open("wb") as handle:
+            handle.write(raw[:middle] + bytes([raw[middle] ^ 0x01]) + raw[middle + 1 :])
+        changed = copy.read_bytes()
+        assert len(changed) == size
+        assert hashlib.sha256(changed).hexdigest() != digest
+        assert hashlib.sha256(raw + b" ").hexdigest() != digest
+
+
+def test_the_driven_successor_fassungen_left_their_return_values_in_the_v13_raw_data() -> None:
+    """The pins stand on raw lines, not on a claim: the run log names both return values."""
+    log = (V13_RUN_DIR.parent / "rohdaten" / "00-lauf.txt").read_text(encoding="utf-8")
+    assert "92c-fehlschlag-rueckgabewert 36 erwartet 36" in log
+    assert "92c-regulaer-rueckgabewert 0 erwartet 0" in log
+    assert "99d-wiederholung-rueckgabewert 0" in log
+    assert "99d-umgebung FINDLING_LOAD_PASSWORD ungesetzt" in log
+    report = (V13_RUN_DIR.parent / "README.md").read_text(encoding="utf-8")
+    section = report[report.index("### 6.14 Gefahrene Fassungen") :]
+    assert "26.09.2026" in section
+    assert "`92c-wechsel.sh`" in section
+    assert "`99d-filter-sortierung.sh`" in section
 
 
 def test_the_successor_of_the_image_switch_points_at_the_driven_fassung_and_lives_beside_it() -> None:
-    """92c names 92b with its full path, names L-03, and says that it never ran."""
+    """92c names 92b with its full path, names L-03, and keeps its head sentence byte for byte."""
     text = SUCCESSOR_IMAGE_SWITCH.read_text(encoding="utf-8")
     assert "docs/measurements/2026-09-v12-messung/skripte/92b-wechsel.sh" in text
     assert "L-03" in text
@@ -2993,7 +3064,7 @@ def test_the_successor_of_the_image_switch_checks_the_occ_return_before_the_filt
 
 
 def test_the_successor_of_the_filter_sort_tool_points_at_the_driven_fassung_and_lives_beside_it() -> None:
-    """99d names 99c with its full path, names L-04, and says that it never ran."""
+    """99d names 99c with its full path, names L-04, and keeps its head sentence byte for byte."""
     text = SUCCESSOR_FILTER_SORT.read_text(encoding="utf-8")
     assert "docs/measurements/2026-09-v12-messung/skripte/99c-filter-sortierung.sh" in text
     assert "L-04" in text
