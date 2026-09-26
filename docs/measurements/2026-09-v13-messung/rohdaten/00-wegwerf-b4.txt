@@ -1,0 +1,191 @@
+wegwerf-b4-start 2026-09-26T13:21:53Z
+wegwerf-block b4
+abbild-digest sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+box-arch aarch64 kerne 16
+b4-start 2026-09-26T13:21:53Z
+b4-laufende-container 0
+b4-kerne 16
+b4-arch aarch64
+b4-kernel-mem ungesetzt
+b4-grenze keine
+b4-slots 1 2 4 8 12 16
+b4-threads 1 2 4 8
+scan-start 2026-09-26T13:21:53Z
+scan-seiten 8
+scan-bytes 2800698
+scan-sha256 60ad8fd1dcee97b2d9a86f23b48683e59d664e25a06f8bebd4bf93fb68759343
+-- W3 slots 1 auf cpuset 0 --
+scan scan-8.pdf
+arch aarch64
+cpus_visible 1
+slots 1
+round 1 wall_seconds 30.514 pages_per_second 0.262 anon_bytes_delta 9768960 cpu_usec 30504458 failed_slots 0
+round 2 wall_seconds 30.458 pages_per_second 0.263 anon_bytes_delta -9789440 cpu_usec 30448493 failed_slots 0
+round 3 wall_seconds 30.435 pages_per_second 0.263 anon_bytes_delta 12288 cpu_usec 30425663 failed_slots 0
+pages_per_second_median 0.263
+probe-zahl b4-slots-1.txt pages_per_second_median 0.263
+-- W3 slots 2 auf cpuset 0-1 --
+scan scan-8.pdf
+arch aarch64
+cpus_visible 2
+slots 2
+round 1 wall_seconds 30.425 pages_per_second 0.526 anon_bytes_delta 409600 cpu_usec 60829702 failed_slots 0
+round 2 wall_seconds 30.420 pages_per_second 0.526 anon_bytes_delta 28672 cpu_usec 60814803 failed_slots 0
+round 3 wall_seconds 30.436 pages_per_second 0.526 anon_bytes_delta 49152 cpu_usec 60853302 failed_slots 0
+pages_per_second_median 0.526
+probe-zahl b4-slots-2.txt pages_per_second_median 0.526
+-- W3 slots 4 auf cpuset 0-3 --
+scan scan-8.pdf
+arch aarch64
+cpus_visible 4
+slots 4
+round 1 wall_seconds 30.392 pages_per_second 1.053 anon_bytes_delta 815104 cpu_usec 121497915 failed_slots 0
+round 2 wall_seconds 30.452 pages_per_second 1.051 anon_bytes_delta 69632 cpu_usec 121596330 failed_slots 0
+round 3 wall_seconds 30.406 pages_per_second 1.052 anon_bytes_delta 135168 cpu_usec 121557024 failed_slots 0
+pages_per_second_median 1.052
+probe-zahl b4-slots-4.txt pages_per_second_median 1.052
+-- W3 slots 8 auf cpuset 0-7 --
+scan scan-8.pdf
+arch aarch64
+cpus_visible 8
+slots 8
+round 1 wall_seconds 30.449 pages_per_second 2.102 anon_bytes_delta 1634304 cpu_usec 243069079 failed_slots 0
+round 2 wall_seconds 30.441 pages_per_second 2.102 anon_bytes_delta 163840 cpu_usec 243100570 failed_slots 0
+round 3 wall_seconds 30.423 pages_per_second 2.104 anon_bytes_delta 290816 cpu_usec 243164424 failed_slots 0
+pages_per_second_median 2.102
+probe-zahl b4-slots-8.txt pages_per_second_median 2.102
+-- W3 slots 12 auf cpuset 0-11 --
+scan scan-8.pdf
+arch aarch64
+cpus_visible 12
+slots 12
+round 1 wall_seconds 30.465 pages_per_second 3.151 anon_bytes_delta 2457600 cpu_usec 364898737 failed_slots 0
+round 2 wall_seconds 30.485 pages_per_second 3.149 anon_bytes_delta 258048 cpu_usec 365166954 failed_slots 0
+round 3 wall_seconds 30.474 pages_per_second 3.150 anon_bytes_delta 438272 cpu_usec 365265389 failed_slots 0
+pages_per_second_median 3.150
+probe-zahl b4-slots-12.txt pages_per_second_median 3.150
+-- W3 slots 16 auf cpuset 0-15 --
+scan scan-8.pdf
+arch aarch64
+cpus_visible 16
+slots 16
+round 1 wall_seconds 30.685 pages_per_second 4.171 anon_bytes_delta 3264512 cpu_usec 487473642 failed_slots 0
+round 2 wall_seconds 30.664 pages_per_second 4.174 anon_bytes_delta 380928 cpu_usec 488341128 failed_slots 0
+round 3 wall_seconds 30.684 pages_per_second 4.172 anon_bytes_delta 569344 cpu_usec 487353973 failed_slots 0
+pages_per_second_median 4.172
+probe-zahl b4-slots-16.txt pages_per_second_median 4.172
+-- embed.bench threads 1 batch 2 sequence 512 auf cpuset 0 --
+[0;93m2026-09-26 13:34:14.021360252 [W:onnxruntime:Default, telemetry.cc:800 operator()] Failed to persist telemetry device ID; using an in-memory identifier[m
+mode=tokens-per-second
+arch=aarch64
+cpus=1
+python=3.13.15
+sqlite=3.46.1
+model_dir=/usr/local/share/findling/model
+batch=2
+sequence=512
+threads=1
+rounds=20
+tokens_per_round=1024
+tokens_total=20480
+p50_ms=456.690
+p95_ms=458.705
+max_ms=475.091
+tokens_per_second_p50=2242.2
+tokens_per_second_p95=2232.4
+tokens_per_second_mean=2238.6
+wall_seconds=9.148
+probe-zahl b4-bench-1.txt tokens_per_second_p50 2242.2
+-- embed.bench threads 2 batch 2 sequence 512 auf cpuset 0-1 --
+[0;93m2026-09-26 13:34:25.635820715 [W:onnxruntime:Default, telemetry.cc:800 operator()] Failed to persist telemetry device ID; using an in-memory identifier[m
+mode=tokens-per-second
+arch=aarch64
+cpus=2
+python=3.13.15
+sqlite=3.46.1
+model_dir=/usr/local/share/findling/model
+batch=2
+sequence=512
+threads=2
+rounds=20
+tokens_per_round=1024
+tokens_total=20480
+p50_ms=239.047
+p95_ms=240.171
+max_ms=250.167
+tokens_per_second_p50=4283.7
+tokens_per_second_p95=4263.6
+tokens_per_second_mean=4273.3
+wall_seconds=4.793
+probe-zahl b4-bench-2.txt tokens_per_second_p50 4283.7
+-- embed.bench threads 4 batch 2 sequence 512 auf cpuset 0-3 --
+[0;93m2026-09-26 13:34:32.184358281 [W:onnxruntime:Default, telemetry.cc:800 operator()] Failed to persist telemetry device ID; using an in-memory identifier[m
+mode=tokens-per-second
+arch=aarch64
+cpus=4
+python=3.13.15
+sqlite=3.46.1
+model_dir=/usr/local/share/findling/model
+batch=2
+sequence=512
+threads=4
+rounds=20
+tokens_per_round=1024
+tokens_total=20480
+p50_ms=134.567
+p95_ms=135.141
+max_ms=141.933
+tokens_per_second_p50=7609.6
+tokens_per_second_p95=7577.3
+tokens_per_second_mean=7587.7
+wall_seconds=2.699
+probe-zahl b4-bench-4.txt tokens_per_second_p50 7609.6
+-- embed.bench threads 8 batch 2 sequence 512 auf cpuset 0-7 --
+[0;93m2026-09-26 13:34:36.531526600 [W:onnxruntime:Default, telemetry.cc:800 operator()] Failed to persist telemetry device ID; using an in-memory identifier[m
+mode=tokens-per-second
+arch=aarch64
+cpus=8
+python=3.13.15
+sqlite=3.46.1
+model_dir=/usr/local/share/findling/model
+batch=2
+sequence=512
+threads=8
+rounds=20
+tokens_per_round=1024
+tokens_total=20480
+p50_ms=75.937
+p95_ms=76.187
+max_ms=80.392
+tokens_per_second_p50=13484.8
+tokens_per_second_p95=13440.7
+tokens_per_second_mean=13452.6
+wall_seconds=1.522
+probe-zahl b4-bench-8.txt tokens_per_second_p50 13484.8
+b4-ende 2026-09-26T13:34:39Z
+=== Der Protokollblock, als Block zitierbar ===
+wegwerf-block b4
+abbild-digest sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+box-arch aarch64 kerne 16
+b4-laufende-container 0
+b4-kerne 16
+b4-arch aarch64
+b4-kernel-mem ungesetzt
+b4-grenze keine
+b4-slots 1 2 4 8 12 16
+b4-threads 1 2 4 8
+scan-seiten 8
+scan-bytes 2800698
+scan-sha256 60ad8fd1dcee97b2d9a86f23b48683e59d664e25a06f8bebd4bf93fb68759343
+probe-zahl b4-slots-1.txt pages_per_second_median 0.263
+probe-zahl b4-slots-2.txt pages_per_second_median 0.526
+probe-zahl b4-slots-4.txt pages_per_second_median 1.052
+probe-zahl b4-slots-8.txt pages_per_second_median 2.102
+probe-zahl b4-slots-12.txt pages_per_second_median 3.150
+probe-zahl b4-slots-16.txt pages_per_second_median 4.172
+probe-zahl b4-bench-1.txt tokens_per_second_p50 2242.2
+probe-zahl b4-bench-2.txt tokens_per_second_p50 4283.7
+probe-zahl b4-bench-4.txt tokens_per_second_p50 7609.6
+probe-zahl b4-bench-8.txt tokens_per_second_p50 13484.8
+wegwerf-b4-ende 2026-09-26T13:34:39Z
+B4-FERTIG

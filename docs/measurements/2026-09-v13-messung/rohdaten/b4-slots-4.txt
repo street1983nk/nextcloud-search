@@ -1,0 +1,8 @@
+scan scan-8.pdf
+arch aarch64
+cpus_visible 4
+slots 4
+round 1 wall_seconds 30.392 pages_per_second 1.053 anon_bytes_delta 815104 cpu_usec 121497915 failed_slots 0
+round 2 wall_seconds 30.452 pages_per_second 1.051 anon_bytes_delta 69632 cpu_usec 121596330 failed_slots 0
+round 3 wall_seconds 30.406 pages_per_second 1.052 anon_bytes_delta 135168 cpu_usec 121557024 failed_slots 0
+pages_per_second_median 1.052

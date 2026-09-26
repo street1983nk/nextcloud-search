@@ -2,3 +2,47 @@ typwechsel-vorpruefung 2026-09-26T04:59:59Z epoch 1790398799
 shutdown-verhalten stop
 shutdown-ist-stopp ja
 TYPWECHSEL-VORPRUEFUNG-FERTIG
+typwechsel-vorpruefung 2026-09-26T13:20:31Z epoch 1790428831
+shutdown-verhalten stop
+shutdown-ist-stopp ja
+typwechsel-hin-start 2026-09-26T13:20:32Z epoch 1790428832
+instanz <instanzkennung>
+typ-vorher m7g.large
+typwechsel-hin-gestoppt 2026-09-26T13:20:37Z epoch 1790428837
+typ-gefordert m7g.4xlarge
+typwechsel-hin-laeuft 2026-09-26T13:20:59Z epoch 1790428859
+typ-ist m7g.4xlarge
+adresse-neu <adresse-der-box>
+typwechsel-hin-ende 2026-09-26T13:21:01Z epoch 1790428861
+TYPWECHSEL-HIN-FERTIG
+typwechsel-zurueck-start 2026-09-26T13:38:43Z epoch 1790429923
+instanz <instanzkennung>
+typ-vorher m7g.4xlarge
+typwechsel-zurueck-gestoppt 2026-09-26T13:38:48Z epoch 1790429928
+typ-gefordert m7g.large
+typ-ist m7g.large
+b4-laufzeit-s 1069
+typwechsel-zurueck-ende 2026-09-26T13:38:50Z epoch 1790429930
+TYPWECHSEL-ZURUECK-FERTIG
+
+-- handnotizen der entwicklungsmaschine, plan 22-09 task 1 --
+b4-entscheid gefahren: B4_GEPLANT=ja (F4 3,955), 00-FERTIG "b4 vorbereitet", kein harter stopp,
+  restdeckel variante stunden 24 h minus 2,02 h m7g.large = 21,98 h, b4-posten 1,44 h, traegt.
+b4-start-aws 2026-09-26T13:20:56Z (aws_box.sh start, waiter running; LaunchTime 13:20:40Z)
+b4-deckel-ende 2026-09-26T14:46:56Z (start plus 86 min)
+deckel-rest-minuten-gesetzt 84 um 13:21Z (86 minus die minuten seit dem start, abgerundet),
+  in der laufwertedatei der box; 00-lauf.sh b4 setzte den timer auf 14:45:42Z, unter dem
+  deckelende, zurueckgelesen (00-timer.txt); kein nachziehen noetig, weil die rundung von +N
+  hier nicht ueber das deckelende fuehrt.
+bekannte-hosts: der hostschluessel der neuen adresse ist derselbe wie vor dem typwechsel
+  (ssh-keyscan gegen die vorhandenen eintraege), eintrag fuer die neue adresse ergaenzt.
+abholen-neu-gestartet 2026-09-26T13:21:40Z mit der neuen adresse, takt 300 s,
+  letzte abholung 13:37:43Z, ende "fertig"
+b4-fertig-box 2026-09-26T13:34:39Z rueckgabe 0
+stopped-gesehen 2026-09-26T13:38:24Z (abfrage alle 60 s; selbstabschaltung nach der abholung)
+b4-laufzeit-hand 1069 s = 0,2969 h aus typwechsel-hin-laeuft bis typwechsel-zurueck-gestoppt
+  (obere schranke; LaunchTime bis stopped-gesehen waeren 1064 s)
+hinweis pitfall 9: aws_box.sh stop in "zurueck" meldete 0,30 h / 0,0334 USD zum gepinnten
+  m7g.large-satz; diese zahl gilt nicht, gerechnet wird in 93-kosten-und-verbleib.txt.
+hinweis: aws_box.sh stop in "hin" lief gegen die schon gestoppte box und schrieb eine
+  uptime 0,70 h in box.env, die keine ist (LaunchTime 12:38Z bis 13:20Z, gestoppt seit 13:13Z).
