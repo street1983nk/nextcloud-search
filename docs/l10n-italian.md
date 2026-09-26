@@ -252,6 +252,7 @@ aus Plan 20-03. Diese Tabelle kann also nicht an einem Wortlaut zerbrechen.
 | `Remove the matching entry under "Excluded folders".` | Den passenden Eintrag unter "Ausgeschlossene Ordner" entfernen. | Rimuovere la voce corrispondente in "Cartelle escluse". |
 | `Not readable for the users asked` | Für die gefragten Nutzer nicht lesbar | Non leggibile per gli utenti interpellati |
 | `The file is still there. Check the advanced permissions of the Team Folder: Findling reads a file only as a user who may open it and asks the first 20 of its users in alphabetical order.` | Die Datei ist noch vorhanden. Die erweiterten Berechtigungen des Team Folders prüfen: Findling liest eine Datei nur als Nutzer, der sie öffnen darf, und fragt die ersten 20 ihrer Nutzer in alphabetischer Reihenfolge. | Il file esiste ancora. Controllare le autorizzazioni avanzate del Team Folder: Findling legge un file solo per conto di un utente che può aprirlo e interpella i primi 20 dei suoi utenti in ordine alfabetico. |
+| `The user named in front of the path may not open this file. The diagnosis is about the file itself.` | Der vor dem Pfad genannte Nutzer darf diese Datei nicht öffnen. Die Diagnose gilt der Datei selbst. | L'utente indicato davanti al percorso non può aprire questo file. La diagnosi riguarda il file stesso. |
 | `File is empty` | Datei ist leer | Il file è vuoto |
 | `None. The file has 0 bytes.` | Keine. Die Datei hat 0 Byte. | Nessuna. Il file ha 0 byte. |
 | `File damaged` | Datei beschädigt | File danneggiato |

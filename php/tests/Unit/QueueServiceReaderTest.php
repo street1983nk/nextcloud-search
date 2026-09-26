@@ -172,6 +172,26 @@ final class QueueServiceReaderTest extends TestCase {
 		self::assertSame('bernd', $sources[self::ROW_ID]['fetchAs'] ?? null);
 	}
 
+	public function testTheReportedTeamFolderWithTheFirstTwoOfFourMembersClosedIsReadByTheThird(): void {
+		// The instance of the reporter of #14: four members of admins-hh, and
+		// the ACL closes the file to the first two in alphabetical order, one
+		// by hiding the node and one by taking the read bit away. carla reads
+		// it, dora is not asked, and the access list still names all four.
+		$this->mountsFor(['dora', 'carla', 'bernd', 'anna']);
+		$this->foldersResolving([
+			'anna' => null,
+			'bernd' => $this->file(false),
+			'carla' => $this->file(true),
+			'dora' => $this->file(true),
+		]);
+		$this->fileStateService->expects(self::never())->method('record');
+
+		$sources = $this->service()->claim(32, 1_000_000);
+
+		self::assertSame('carla', $sources[self::ROW_ID]['fetchAs'] ?? null);
+		self::assertSame(['anna', 'bernd', 'carla', 'dora'], $sources[self::ROW_ID]['userIds'] ?? null);
+	}
+
 	public function testTheFirstNameStaysTheReaderWhenItMayRead(): void {
 		// The ordinary file, and the order is unchanged: a retried row is read
 		// in the same context as before the fix.

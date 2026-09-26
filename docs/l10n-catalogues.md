@@ -364,6 +364,12 @@ Urteil auch dann, wenn der ACL-Wrapper die Datei vor allen gefragten Nutzern gan
 neuen Schlüssel sagen beides: die Datei ist noch da, und gefragt wurden die ersten 20. Alle 16
 Dateien und die Tabellen der fünf Sprachdokumente sind im selben Commit umgestellt.
 
+**Nachgezählt am 26.09.2026, Issue #14, Review:** **205** Schlüssel, davon weiterhin **5**
+Pluralschlüssel. Der neue ist der Satz, den die Ergebniskarte der Einzelabfrage anhängt, wenn
+der vor dem Pfad genannte Nutzer die Datei nicht öffnen darf: gefunden über ein anderes Mitglied
+des Team Folders oder erreicht ohne Leserecht. Er steht in allen 16 Dateien, die Tabellen der
+fünf Sprachdokumente führen die Zeile.
+
 ---
 
 ## Stand nach Phase 20

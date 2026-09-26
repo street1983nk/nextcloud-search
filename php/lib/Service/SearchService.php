@@ -10,6 +10,7 @@ use OCP\Files\Config\IUserMountCache;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
+use OCP\Files\Node;
 use OCP\IUser;
 use Psr\Log\LoggerInterface;
 
@@ -492,7 +493,19 @@ class SearchService {
 	 * the mount cache instead, see QueueService::readerOf().
 	 */
 	public static function readableFile(Folder $userFolder, int $fileId): ?File {
-		$node = $userFolder->getFirstNodeById($fileId);
+		return self::readableNode($userFolder->getFirstNodeById($fileId));
+	}
+
+	/**
+	 * The same readability question for a node the caller already holds.
+	 *
+	 * For a caller that resolved the node through the user's folder by path
+	 * rather than by id: resolving it a second time by id only to ask the
+	 * question would cost a second lookup for the node already in hand. The
+	 * question itself stays here, in the one place that asks it, and
+	 * backend/tests/test_php_acl_boundary.py still counts one call.
+	 */
+	public static function readableNode(?Node $node): ?File {
 		if (!$node instanceof File) {
 			return null;
 		}

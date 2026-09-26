@@ -214,6 +214,7 @@ aus Plan 20-03. Diese Tabelle kann also nicht an einem Wortlaut zerbrechen.
 | `Remove the matching entry under "Excluded folders".` | Den passenden Eintrag unter "Ausgeschlossene Ordner" entfernen. | Quite la entrada correspondiente en "Carpetas excluidas". |
 | `Not readable for the users asked` | Für die gefragten Nutzer nicht lesbar | No legible para los usuarios consultados |
 | `The file is still there. Check the advanced permissions of the Team Folder: Findling reads a file only as a user who may open it and asks the first 20 of its users in alphabetical order.` | Die Datei ist noch vorhanden. Die erweiterten Berechtigungen des Team Folders prüfen: Findling liest eine Datei nur als Nutzer, der sie öffnen darf, und fragt die ersten 20 ihrer Nutzer in alphabetischer Reihenfolge. | El archivo sigue existiendo. Compruebe los permisos avanzados de la Team Folder: Findling solo lee un archivo en nombre de un usuario que puede abrirlo y consulta a los primeros 20 de sus usuarios en orden alfabético. |
+| `The user named in front of the path may not open this file. The diagnosis is about the file itself.` | Der vor dem Pfad genannte Nutzer darf diese Datei nicht öffnen. Die Diagnose gilt der Datei selbst. | El usuario indicado delante de la ruta no puede abrir este archivo. El diagnóstico se refiere al archivo en sí. |
 | `File is empty` | Datei ist leer | El archivo está vacío |
 | `None. The file has 0 bytes.` | Keine. Die Datei hat 0 Byte. | Ninguna. El archivo tiene 0 bytes. |
 | `File damaged` | Datei beschädigt | Archivo dañado |

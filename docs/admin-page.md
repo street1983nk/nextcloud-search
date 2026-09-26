@@ -415,6 +415,16 @@ Home-Pfad ohne Nutzer bleibt unbeantwortet, weil jeder Nutzer einen eigenen
 hat. Die Ergebniskarte zeigt den Pfad mit Nutzer davor, so wie die Abfrage ihn
 zurücknimmt.
 
+Mit Nutzer davor, etwa `anna/files/admins-hh/Vertrag.pdf`, fragt die Abfrage
+zuerst Annas eigenen Ordner. Verbergen die erweiterten Berechtigungen die Datei
+vor ihr, versucht sie andere Mitglieder, aber nur, wenn Anna den Pfad über
+denselben Mount trägt wie sie: derselbe Speicherstamm am selben Mount-Punkt.
+Nur dann ist die gefundene Datei die, nach der gefragt wurde. Fehlt die Datei in
+Annas Home oder ist Anna kein Mitglied, bleibt die Antwort "keine Datei", und
+keine gleichnamige Datei eines anderen Nutzers tritt an ihre Stelle. Darf der
+genannte Nutzer die Datei nicht öffnen, sagt die Karte das in einem eigenen
+Satz; die Diagnose gilt dann der Datei selbst.
+
 ## Der Pfadraum der Ausschlüsse
 
 Ein Ausschluss ist ein Pfad-Präfix, ohne Muster und ohne Platzhalter (D-06), und

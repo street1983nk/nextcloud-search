@@ -236,13 +236,119 @@ final class PathResolverServiceTest extends TestCase {
 	public function testANamedUserWhoDoesNotReachTheFileFallsBackToTheMounts(): void {
 		// The reference the card prints for a Team Folder names one member, and
 		// that member can be the one the rules hide the file from.
+		// The third query asks anna's own mounts at the path, and she has the
+		// same mount as bernd, so the file bernd reads is the file she named.
 		$this->mounts([
 			self::row('anna', '/anna/files/admins-hh/', 9),
 			self::row('bernd', '/bernd/files/admins-hh/', 9),
 		]);
+		$this->answers[] = [self::row('anna', '/anna/files/admins-hh/', 9)];
 		$this->folders(['anna' => null, 'bernd' => $this->file(true)]);
 
-		self::assertSame(self::FILE_ID, $this->resolver()->resolveReference('anna/files/admins-hh/Vertrag.pdf'));
+		self::assertSame(
+			['fileId' => self::FILE_ID, 'namedUserMayNotRead' => true],
+			$this->resolver()->resolve('anna/files/admins-hh/Vertrag.pdf'),
+		);
+		self::assertSame(3, $this->queries);
+	}
+
+	// -- the fallback of a named reference, restricted (review finding) -------
+
+	public function testTheReportedTeamFolderWithTheFirstTwoOfFourMembersClosedResolves(): void {
+		// The instance of the reporter of #14: four members of admins-hh, and
+		// the ACL closes the file to the first two in alphabetical order. The
+		// one is hidden from it, the other reaches it without the read bit;
+		// carla may read it and is the one it is resolved through, dora is
+		// never asked.
+		$this->mounts([
+			self::row('anna', '/anna/files/admins-hh/', 9),
+			self::row('bernd', '/bernd/files/admins-hh/', 9),
+			self::row('carla', '/carla/files/admins-hh/', 9),
+			self::row('dora', '/dora/files/admins-hh/', 9),
+		]);
+		$this->folders([
+			'anna' => null,
+			'bernd' => $this->file(false),
+			'carla' => $this->file(true),
+		]);
+
+		self::assertSame(
+			['fileId' => self::FILE_ID, 'namedUserMayNotRead' => false],
+			$this->resolver()->resolve('admins-hh/Vertrag.pdf'),
+		);
+	}
+
+	public function testTheReporterNamingHimselfInFrontOfAFileHeMayNotReadGetsTheFileWithTheHint(): void {
+		// The second half of the report: the path with the reporter's own uid in
+		// front, anna/files/admins-hh/..., answered "no file" because the folder
+		// rules hide the file from anna. Her own mount is the Team Folder, so
+		// the fallback is the same file, carla may read it, and the card says
+		// that the named user may not open it.
+		$this->mounts([
+			self::row('anna', '/anna/files/admins-hh/', 9),
+			self::row('bernd', '/bernd/files/admins-hh/', 9),
+			self::row('carla', '/carla/files/admins-hh/', 9),
+			self::row('dora', '/dora/files/admins-hh/', 9),
+		]);
+		$this->answers[] = [self::row('anna', '/anna/files/admins-hh/', 9)];
+		$this->folders([
+			'anna' => null,
+			'bernd' => $this->file(false),
+			'carla' => $this->file(true),
+		]);
+
+		self::assertSame(
+			['fileId' => self::FILE_ID, 'namedUserMayNotRead' => true],
+			$this->resolver()->resolve('anna/files/admins-hh/Vertrag.pdf'),
+		);
+	}
+
+	public function testANamedUserWhoReachesTheFileWithoutTheReadBitGetsTheFileWithTheHint(): void {
+		// The other shape of the same ACL: the node is there for anna and the
+		// read bit is not. It is the file she named, no mount is asked, and the
+		// card still says she may not open it.
+		$this->folders(['anna' => $this->file(false)]);
+		$this->db->expects(self::never())->method('getQueryBuilder');
+
+		self::assertSame(
+			['fileId' => self::FILE_ID, 'namedUserMayNotRead' => true],
+			$this->resolver()->resolve('anna/files/admins-hh/Vertrag.pdf'),
+		);
+	}
+
+	public function testANamedUserWithoutTheMountDoesNotFallBackToSomebodyElsesFile(): void {
+		// The review finding. anna has no admins-hh mount; whatever her home
+		// holds or misses under that name, bernd's Team Folder file of the same
+		// name is a different file, and the answer is the null of every other
+		// refusal. bernd is never asked.
+		$this->mounts([self::row('bernd', '/bernd/files/admins-hh/', 9)]);
+		$this->answers[] = [];
+		$this->folders(['anna' => null]);
+
+		self::assertNull($this->resolver()->resolve('anna/files/admins-hh/Vertrag.pdf'));
+		self::assertSame(3, $this->queries);
+	}
+
+	public function testANamedUserWhoDoesNotExistGetsTheSameNullAsANonMember(): void {
+		// T-04-38: no answer here may tell a missing user from an existing one.
+		$this->mounts([self::row('bernd', '/bernd/files/admins-hh/', 9)]);
+		$this->answers[] = [];
+		$this->folders([]);
+
+		self::assertNull($this->resolver()->resolve('nobody/files/admins-hh/Vertrag.pdf'));
+	}
+
+	public function testANamedUserWhoseMountAtThePathIsDeeperDoesNotFallBack(): void {
+		// anna sees another mount below admins-hh at that path, so her
+		// admins-hh/Unter/Vertrag.pdf is not the file of the Team Folder.
+		$this->mounts([self::row('bernd', '/bernd/files/admins-hh/', 9)]);
+		$this->answers[] = [
+			self::row('anna', '/anna/files/admins-hh/', 9),
+			self::row('anna', '/anna/files/admins-hh/Unter/', 12),
+		];
+		$this->folders(['anna' => null, 'bernd' => $this->file(true)]);
+
+		self::assertNull($this->resolver()->resolve('anna/files/admins-hh/Unter/Vertrag.pdf'));
 	}
 
 	public function testAFileNoMemberMayReadIsRefused(): void {

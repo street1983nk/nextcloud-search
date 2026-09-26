@@ -10,6 +10,7 @@ use OCP\Files\Cache\ICacheEntry;
 use OCP\Files\Cache\IFileAccess;
 use OCP\Files\Config\ICachedMountFileInfo;
 use OCP\Files\Config\IUserMountCache;
+use OCP\Files\File;
 use OCP\Files\IRootFolder;
 use OCP\IDBConnection;
 use Psr\Log\LoggerInterface;
@@ -123,6 +124,24 @@ final class PathResolverService {
 	 * the instance (T-04-38).
 	 */
 	public function resolveReference(string $input): ?int {
+		return $this->resolve($input)['fileId'] ?? null;
+	}
+
+	/**
+	 * The same lookup as resolveReference(), with the one fact the result card
+	 * owes the admin on top: whether the user the reference names may open the
+	 * file at all.
+	 *
+	 * ``namedUserMayNotRead`` is true for a reference with an owner in two
+	 * cases of a Team Folder with advanced permissions (issue #14): the owner
+	 * reaches the file without the read bit, or the folder rules hide it from
+	 * the owner and it was found through another member of the same mount.
+	 * The card then says so, because the diagnosis is about the file and the
+	 * admin typed a user in front of it who may not open it.
+	 *
+	 * @return array{fileId:int, namedUserMayNotRead:bool}|null
+	 */
+	public function resolve(string $input): ?array {
 		$reference = trim($input);
 		if ($reference === '') {
 			$this->refuse();
@@ -139,7 +158,7 @@ final class PathResolverService {
 
 			$fileId = (int)$reference;
 
-			return $fileId > 0 ? $fileId : null;
+			return $fileId > 0 ? ['fileId' => $fileId, 'namedUserMayNotRead' => false] : null;
 		}
 
 		return $this->fileIdOfPath($reference);
@@ -218,8 +237,22 @@ final class PathResolverService {
 	 * on the instance, so a home path without one cannot be resolved at all.
 	 * A path inside a Team Folder or a share can, since issue #14, because the
 	 * mounts that carry it say whose it is: ``admins-hh/Vertrag.pdf`` is resolved
-	 * over them, see fileIdOverMounts(), and so is the rest of a named reference
-	 * whose user does not reach the file.
+	 * over them, see fileIdOverMounts().
+	 *
+	 * A named reference falls back to the mounts only under one condition, and
+	 * the condition is the review finding it fixes: the file found must be the
+	 * file the reference names. The named user has to carry the path through
+	 * the same mount as the members who are asked, the same storage root at the
+	 * same mount point, and then the rest of the path is the same file inside
+	 * that storage for every one of them. That is the case of a Team Folder
+	 * whose advanced permissions hide the file from the named member. It is
+	 * not the case of a file that is missing under the named user's home, or
+	 * of a user who is not a member of the folder at all, and both stay the
+	 * null of every other refusal rather than an answer about somebody else's
+	 * file of the same name. Whether the lookup failed on the ACL or on a
+	 * missing file cannot be told from the exception, which is the same
+	 * NotFoundException for both; the mount rows can tell whose storage the
+	 * path lies in, and that is the question that decides.
 	 *
 	 * A segment of two dots is refused and not filtered. Filtering would answer
 	 * about a file the administrator did not ask about, which is worse than
@@ -246,8 +279,10 @@ final class PathResolverService {
 	 * spelling this page shows carries a backslash: the error list writes
 	 * ``alice/files/Ordner/x.pdf`` and the short form is ``alice:Ordner/x.pdf``.
 	 * Dropping the conversion adds no path space, it removes one.
+	 *
+	 * @return array{fileId:int, namedUserMayNotRead:bool}|null
 	 */
-	private function fileIdOfPath(string $input): ?int {
+	private function fileIdOfPath(string $input): ?array {
 		$candidate = (string)preg_replace('#/+#', '/', $input);
 		$candidate = trim($candidate, '/');
 		if ($candidate === '') {
@@ -264,25 +299,33 @@ final class PathResolverService {
 
 		[$uid, $relative] = $this->splitOwner($candidate);
 		if ($uid !== '' && $relative !== '') {
-			$fileId = $this->fileIdForUser($uid, $relative);
-			if ($fileId !== null) {
-				return $fileId;
+			$own = $this->fileIdForUser($uid, $relative);
+			if ($own !== null) {
+				return ['fileId' => $own['fileId'], 'namedUserMayNotRead' => !$own['readable']];
 			}
 
 			// Named, and not reachable for the one named. On a Team Folder that
 			// is the ordinary case rather than a typing error: the result card
 			// prints a member of the folder next to the path, and the advanced
 			// permissions of the folder can hide that very file from that very
-			// member. The rest of the reference is therefore tried once more
-			// over the mounts, below, and the answer does not depend on whether
-			// the named user exists at all, so this adds no way of asking which
-			// users do (T-04-38).
-			$candidate = $relative;
+			// member. The rest of the reference is tried over the mounts, but
+			// only through the mount the named user has at that path, see the
+			// docblock above. The answer is the same null for a user who does
+			// not exist and for one who is no member, so this adds no way of
+			// asking which users exist (T-04-38).
+			$fileId = $this->fileIdOverMounts($relative, $uid);
+			if ($fileId !== null) {
+				return ['fileId' => $fileId, 'namedUserMayNotRead' => true];
+			}
+
+			$this->refuse();
+
+			return null;
 		}
 
 		$fileId = $this->fileIdOverMounts($candidate);
 		if ($fileId !== null) {
-			return $fileId;
+			return ['fileId' => $fileId, 'namedUserMayNotRead' => false];
 		}
 
 		$this->refuse();
@@ -291,9 +334,16 @@ final class PathResolverService {
 	}
 
 	/**
-	 * A path relative to one user's files folder, as a file id, or null.
+	 * A path relative to one user's files folder, as a file id with whether
+	 * that user may read it, or null.
+	 *
+	 * The readability does not decide the answer: the admin asks about the
+	 * file, and a file the named user reaches without the read bit is still
+	 * that file. It decides the sentence the card adds.
+	 *
+	 * @return array{fileId:int, readable:bool}|null
 	 */
-	private function fileIdForUser(string $uid, string $relative): ?int {
+	private function fileIdForUser(string $uid, string $relative): ?array {
 		try {
 			// Every failure caught on purpose. getUserFolder() signals a missing
 			// user with a class from the private namespace of the server and a
@@ -309,8 +359,14 @@ final class PathResolverService {
 		}
 
 		$fileId = $node->getId();
+		if ($fileId <= 0) {
+			return null;
+		}
 
-		return $fileId > 0 ? $fileId : null;
+		// A folder is no file to read and gets no sentence about reading.
+		$readable = !$node instanceof File || SearchService::readableNode($node) !== null;
+
+		return ['fileId' => $fileId, 'readable' => $readable];
 	}
 
 	/**
@@ -350,8 +406,13 @@ final class PathResolverService {
 	 * that sits beside the path or below it is not counted as a root of it.
 	 * They are scans over oc_mounts, asked once per lookup of the admin page
 	 * and never per file.
+	 *
+	 * With an owner the lookup is the fallback of a named reference, and it
+	 * answers only when that owner carries the path through the very mount
+	 * the members are asked through; the owner is not asked again, their own
+	 * lookup has already failed.
 	 */
-	private function fileIdOverMounts(string $candidate): ?int {
+	private function fileIdOverMounts(string $candidate, string $owner = ''): ?int {
 		$prefixes = self::leadingFoldersOf($candidate);
 		if ($prefixes === []) {
 			// A single segment is either a home file or a mount point itself,
@@ -377,7 +438,16 @@ final class PathResolverService {
 			return null;
 		}
 
-		foreach (array_slice($carriers['users'], 0, self::MAX_PATH_READERS) as $uid) {
+		$readers = $carriers['users'];
+		if ($owner !== '') {
+			if (!$this->carriesThrough($owner, $carriers, $prefixes, $candidate)) {
+				return null;
+			}
+
+			$readers = array_values(array_filter($readers, static fn (string $uid): bool => $uid !== $owner));
+		}
+
+		foreach (array_slice($readers, 0, self::MAX_PATH_READERS) as $uid) {
 			try {
 				$userFolder = $this->rootFolder->getUserFolder($uid);
 				$node = $userFolder->get($candidate);
@@ -395,6 +465,57 @@ final class PathResolverService {
 		}
 
 		return null;
+	}
+
+	/**
+	 * Whether a named user carries a path through the one mount the members
+	 * carry it through: the same root at the same mount point.
+	 *
+	 * Asked with a query of its own, filtered by the user, because the member
+	 * rows are capped and the named user may sort behind the cap. A failing
+	 * query is a no, which keeps the fallback closed rather than open.
+	 *
+	 * @param array{root:int, inside:string, users:list<string>} $carriers
+	 * @param non-empty-list<string> $prefixes
+	 */
+	private function carriesThrough(string $owner, array $carriers, array $prefixes, string $candidate): bool {
+		try {
+			$rows = $this->mountsOfUser($owner, $prefixes);
+		} catch (\Throwable $e) {
+			$this->logger->debug('Findling: the mount lookup for a named reference failed', ['exception' => $e]);
+
+			return false;
+		}
+
+		$own = self::carriersOfMountedPath($rows, $candidate);
+
+		return $own !== null
+			&& $own['users'] === [$owner]
+			&& $own['root'] === $carriers['root']
+			&& $own['inside'] === $carriers['inside'];
+	}
+
+	/**
+	 * The mount rows of one user at a leading folder of the path, of every
+	 * root: a mount of another root deeper than the Team Folder is what that
+	 * user sees at the path, and carriersOfMountedPath() has to see it too in
+	 * order to say no.
+	 *
+	 * @param non-empty-list<string> $prefixes
+	 * @return list<array<string, mixed>>
+	 */
+	private function mountsOfUser(string $owner, array $prefixes): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('user_id', 'mount_point', 'root_id')
+			->from('mounts')
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($owner)))
+			->andWhere($this->mountedAtOneOf($qb, $prefixes));
+		$result = $qb->executeQuery();
+		/** @var list<array<string, mixed>> $rows */
+		$rows = $result->fetchAll();
+		$result->closeCursor();
+
+		return $rows;
 	}
 
 	/**

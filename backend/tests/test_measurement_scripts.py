@@ -610,8 +610,18 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # only for the one root that survived; the mounts of all members have to agree
 # on the root and on the depth. PathResolverServiceTest.php holds the second
 # root behind the members, the limits of both queries and the two depths.
+# Moved on 2026-09-26 by the review of issue #14, third fix: five of the 70
+# files changed their bytes and none came or went. PathResolverService.php
+# falls back from a named reference to the mounts only when the named user
+# carries the path through the same mount as the members asked, and reports
+# whether that user may read the file; SearchService.php gained readableNode(),
+# the readability question for a node already in hand, which readableFile()
+# now asks through; AdminViewService.php adds the sentence of the result card
+# for a named user who may not open the file; PathResolverServiceTest.php and
+# QueueServiceReaderTest.php hold the fallback cases and the Team Folder of the
+# reporter, four members and the first two closed.
 PHP_FILES_TODAY = 70
-PHP_TREE_HASH_TODAY = "654866c59dee6922532debe95a19d2c70ccfe8f9a61d15dc62cfba1d351b4d0f"
+PHP_TREE_HASH_TODAY = "acd05c6dd19affdc586b3e7240f530943a27cf54440f16065c4521aff7cad1c8"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

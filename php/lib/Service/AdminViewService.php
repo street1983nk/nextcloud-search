@@ -699,7 +699,8 @@ final class AdminViewService {
 	 * }
 	 */
 	public function diagnose(string $input, string $userId): array {
-		$fileId = $this->pathResolver->resolveReference($input);
+		$resolved = $this->pathResolver->resolve($input);
+		$fileId = $resolved['fileId'] ?? null;
 		if ($fileId === null) {
 			// Nothing was asked of the container, so nothing was missed either:
 			// this answer comes entirely from this side and does not depend on a
@@ -729,6 +730,18 @@ final class AdminViewService {
 			?? $this->stageFourVerdictOfThisSide($fileId)
 			?? $this->stageFiveVerdictOfTheContainer($container, $reachable)
 			?? $this->stageSixNotSeenYet($container);
+
+		if ($resolved['namedUserMayNotRead'] ?? false) {
+			// The admin typed a user in front of the path who may not open the
+			// file, and the card answers about the file anyway, found through
+			// another member of its Team Folder or reached without the read bit
+			// (issue #14). Saying so keeps the card from reading as "this user
+			// can open it". The sentence names nobody: the user is the one the
+			// admin typed, and the member who could read it stays unnamed.
+			$hint = $this->l10n->t('The user named in front of the path may not open this file. The diagnosis is about the file itself.');
+			$note = is_string($verdict['note'] ?? null) ? $verdict['note'] : '';
+			$verdict['note'] = $note === '' ? $hint : $note . ' ' . $hint;
+		}
 
 		return $this->diagnosis($fileId, $facts, $reachable, $verdict);
 	}

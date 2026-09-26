@@ -89,6 +89,7 @@ OC.L10N.register(
     "Remove the matching entry under \"Excluded folders\".": "Den passenden Eintrag unter \"Ausgeschlossene Ordner\" entfernen.",
     "Not readable for the users asked": "Für die gefragten Nutzer nicht lesbar",
     "The file is still there. Check the advanced permissions of the Team Folder: Findling reads a file only as a user who may open it and asks the first 20 of its users in alphabetical order.": "Die Datei ist noch vorhanden. Die erweiterten Berechtigungen des Team Folders prüfen: Findling liest eine Datei nur als Nutzer, der sie öffnen darf, und fragt die ersten 20 ihrer Nutzer in alphabetischer Reihenfolge.",
+    "The user named in front of the path may not open this file. The diagnosis is about the file itself.": "Der vor dem Pfad genannte Nutzer darf diese Datei nicht öffnen. Die Diagnose gilt der Datei selbst.",
     "File is empty": "Datei ist leer",
     "None. The file has 0 bytes.": "Keine. Die Datei hat 0 Byte.",
     "File damaged": "Datei beschädigt",

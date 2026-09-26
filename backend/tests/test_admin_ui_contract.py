@@ -2317,6 +2317,17 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     outside German and English are machine translations under the same dated
     reservation as the rest of those tables. Whoever moves it next writes the
     next paragraph.
+
+    It stands at 205 since the review of issue #14 on the same day. The two
+    keys of skipped(unreadable) were renamed, which moves no figure, to say
+    what the queue checks: the first twenty users of a file in alphabetical
+    order, and a file that is still there. The one new key is the sentence the
+    result card of the lookup adds when the user typed in front of a path may
+    not open the file it names, found through another member of its Team Folder
+    or reached without the read bit. It went into all sixteen files in one
+    commit, the five tables carry its row, and the wordings outside German and
+    English stand under the same dated reservation. Whoever moves it next writes
+    the next paragraph.
     """
     for language, twin in ((L10N_JSON, L10N_DE_DE_JSON), (L10N_JS, L10N_DE_DE_JS)):
         assert twin.is_file(), f"{twin.name} is missing, so everybody on de_DE reads this app in English"
@@ -2341,7 +2352,7 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     }
 
     assert len(set(map(frozenset, keys_of.values()))) == 1, f"the four catalogues disagree: {sorted(keys_of)}"
-    assert len(keys_of["de.json"]) == 204
+    assert len(keys_of["de.json"]) == 205
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:
