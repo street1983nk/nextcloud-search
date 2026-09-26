@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace OCA\Findling\Service;
 
+use OCP\DB\QueryBuilder\ICompositeExpression;
+use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\Files\Cache\ICacheEntry;
 use OCP\Files\Cache\IFileAccess;
 use OCP\Files\Config\ICachedMountFileInfo;
@@ -71,11 +73,13 @@ final class PathResolverService {
 	private int $refused = 0;
 
 	/**
-	 * How many rows of oc_mounts one lookup of a path without owner reads.
+	 * How many member rows of oc_mounts one lookup of a path without owner
+	 * reads, for the one root that carries the path.
 	 *
-	 * A Team Folder has one row per member, and the rows are only needed to
-	 * learn which root carries the path and who may be asked; two hundred is
-	 * far more than the users that are actually tried below.
+	 * A Team Folder has one row per member, and these rows only say who may be
+	 * asked; two hundred is far more than the users that are actually tried
+	 * below. Which root carries the path is a separate DISTINCT query that this
+	 * cap does not touch, see fileIdOverMounts().
 	 */
 	private const MAX_MOUNT_ROWS = 200;
 
@@ -317,53 +321,63 @@ final class PathResolverService {
 	 * owner cannot say whose. For a Team Folder or a share it can. Its mount
 	 * point is a row of oc_mounts, ``/anna/files/admins-hh/``, one per member,
 	 * and every one of those rows names the same storage root. So the lookup
-	 * asks which mounts sit at the beginning of the path, takes the users of
+	 * asks which mounts sit at a leading part of the path, takes the users of
 	 * exactly one root, and resolves the path in their folders one after the
 	 * other until one of them hands out a file they may read.
 	 *
 	 * Three refusals, and each of them keeps an answer from being a guess:
 	 * no mount carries the path, which is every home path; the mounts that
 	 * carry it belong to more than one root, which is two different shares that
-	 * happen to be mounted under the same name for different users; and none of
-	 * the users tried may read the file. The last one costs a retype of the
-	 * reference with the owner in front of it, which still resolves a file the
-	 * owner can reach.
+	 * happen to be mounted under the same name for different users, or one
+	 * mount nested in another; and none of the users tried may read the file.
+	 * The last one costs a retype of the reference with the owner in front of
+	 * it, which still resolves a file the owner can reach.
+	 *
+	 * Two queries and not one, and the split is the review finding it fixes.
+	 * The roots are asked first, as DISTINCT values and without the row cap of
+	 * the members: a cap on member rows ordered by user id could cut a second
+	 * root off behind two hundred members of the first one, and the refusal
+	 * of an ambiguous path would then never see the ambiguity. Two distinct
+	 * values are all the refusal needs, so that query stops at two. Only for
+	 * the single root that survives are the members fetched, and those are
+	 * capped at MAX_MOUNT_ROWS, because each of them is a candidate reader and
+	 * no more than MAX_PATH_READERS of them are ever asked.
 	 *
 	 * The mount rows come out of a query and not out of IUserMountCache,
 	 * because that interface answers per user or per id and this question has
-	 * neither: it has a path. The query is a scan over oc_mounts with a LIKE,
-	 * asked once per lookup of the admin page and never per file, and it is
-	 * capped at MAX_MOUNT_ROWS rows. The users are capped at MAX_PATH_READERS,
-	 * because each of them costs a mount setup.
+	 * neither: it has a path. Both queries match the mount point against the
+	 * leading folders of the path exactly, ``/%/files/admins-hh/``, so a mount
+	 * that sits beside the path or below it is not counted as a root of it.
+	 * They are scans over oc_mounts, asked once per lookup of the admin page
+	 * and never per file.
 	 */
 	private function fileIdOverMounts(string $candidate): ?int {
-		$segments = explode('/', $candidate);
-		if (count($segments) < 2) {
+		$prefixes = self::leadingFoldersOf($candidate);
+		if ($prefixes === []) {
 			// A single segment is either a home file or a mount point itself,
 			// and a mount point is a folder, which is no file to diagnose.
 			return null;
 		}
 
 		try {
-			$qb = $this->db->getQueryBuilder();
-			$qb->select('user_id', 'mount_point', 'root_id')
-				->from('mounts')
-				->where($qb->expr()->like(
-					'mount_point',
-					$qb->createNamedParameter('/%/files/' . $this->db->escapeLikeParameter($segments[0]) . '/%'),
-				))
-				->orderBy('user_id')
-				->setMaxResults(self::MAX_MOUNT_ROWS);
-			$result = $qb->executeQuery();
-			$rows = $result->fetchAll();
-			$result->closeCursor();
+			$roots = $this->rootsCarrying($prefixes);
+			if (count($roots) !== 1) {
+				return null;
+			}
+
+			$rows = $this->membersOfRoot($roots[0], $prefixes);
 		} catch (\Throwable $e) {
 			$this->logger->debug('Findling: the mount lookup for a path without owner failed', ['exception' => $e]);
 
 			return null;
 		}
 
-		foreach (array_slice(self::readersOfMountedPath($rows, $candidate), 0, self::MAX_PATH_READERS) as $uid) {
+		$carriers = self::carriersOfMountedPath($rows, $candidate);
+		if ($carriers === null) {
+			return null;
+		}
+
+		foreach (array_slice($carriers['users'], 0, self::MAX_PATH_READERS) as $uid) {
 			try {
 				$userFolder = $this->rootFolder->getUserFolder($uid);
 				$node = $userFolder->get($candidate);
@@ -384,24 +398,141 @@ final class PathResolverService {
 	}
 
 	/**
-	 * The users whose mounts carry a path without owner, in the order of the
-	 * rows, or nothing when the path is carried by no mount or by more than one
-	 * storage root.
+	 * The distinct storage roots mounted at a leading folder of the path, at
+	 * most two of them.
 	 *
-	 * A row carries the path when its mount point is ``/<user>/files/`` plus a
-	 * leading part of the path that stops at a segment boundary and leaves at
-	 * least one segment for the file. Of several rows of one user the deepest
-	 * one counts, because a mount inside a mount is what that user sees at that
-	 * path. Public and static for the same reason as the arithmetic of
-	 * QueueService: it is the part of the lookup that can be asked without a
-	 * Nextcloud.
+	 * Not capped by rows: DISTINCT folds the one row per member of a Team
+	 * Folder into one value, and the limit of two stops at the first proof of
+	 * an ambiguity, which is all the caller needs to know.
+	 *
+	 * @param non-empty-list<string> $prefixes
+	 * @return list<int>
+	 */
+	private function rootsCarrying(array $prefixes): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->selectDistinct('root_id')
+			->from('mounts')
+			->where($this->mountedAtOneOf($qb, $prefixes))
+			->setMaxResults(2);
+		$result = $qb->executeQuery();
+		$rows = $result->fetchAll();
+		$result->closeCursor();
+
+		$roots = [];
+		foreach ($rows as $row) {
+			$root = (int)($row['root_id'] ?? 0);
+			if ($root > 0) {
+				$roots[$root] = true;
+			}
+		}
+
+		return array_keys($roots);
+	}
+
+	/**
+	 * The mount rows of one root at a leading folder of the path, capped.
+	 *
+	 * Ordered by user id so that the same lookup asks the same members in the
+	 * same order. When the cap is reached the rows of the last user may be cut
+	 * in the middle, and a user whose deepest mount fell behind the cap would
+	 * be read at the wrong depth, so that user is dropped rather than guessed.
+	 *
+	 * @param non-empty-list<string> $prefixes
+	 * @return list<array<string, mixed>>
+	 */
+	private function membersOfRoot(int $root, array $prefixes): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('user_id', 'mount_point', 'root_id')
+			->from('mounts')
+			->where($qb->expr()->eq('root_id', $qb->createNamedParameter($root, IQueryBuilder::PARAM_INT)))
+			->andWhere($this->mountedAtOneOf($qb, $prefixes))
+			->orderBy('user_id')
+			->setMaxResults(self::MAX_MOUNT_ROWS);
+		$result = $qb->executeQuery();
+		/** @var list<array<string, mixed>> $rows */
+		$rows = $result->fetchAll();
+		$result->closeCursor();
+
+		if (count($rows) >= self::MAX_MOUNT_ROWS) {
+			$lastRow = end($rows);
+			$last = is_array($lastRow) ? ($lastRow['user_id'] ?? null) : null;
+			$rows = array_values(array_filter(
+				$rows,
+				static fn (array $row): bool => ($row['user_id'] ?? null) !== $last,
+			));
+		}
+
+		return $rows;
+	}
+
+	/**
+	 * The condition "the mount point is /<someone>/files/ plus one of these
+	 * leading folders", as one disjunction of exact LIKE patterns.
+	 *
+	 * @param non-empty-list<string> $prefixes
+	 */
+	private function mountedAtOneOf(IQueryBuilder $qb, array $prefixes): ICompositeExpression {
+		$patterns = [];
+		foreach ($prefixes as $prefix) {
+			$patterns[] = $qb->expr()->like(
+				'mount_point',
+				$qb->createNamedParameter('/%/files/' . $this->db->escapeLikeParameter($prefix)),
+			);
+		}
+
+		return $qb->expr()->orX(...$patterns);
+	}
+
+	/**
+	 * Every leading folder of a path, with its trailing slash, shallowest
+	 * first: ``a/b/c.pdf`` has ``a/`` and ``a/b/``. The last segment is the
+	 * file and never a mount point of it.
+	 *
+	 * @return list<string>
+	 */
+	public static function leadingFoldersOf(string $candidate): array {
+		$prefixes = [];
+		$prefix = '';
+		foreach (array_slice(explode('/', $candidate), 0, -1) as $segment) {
+			$prefix .= $segment . '/';
+			$prefixes[] = $prefix;
+		}
+
+		return $prefixes;
+	}
+
+	/**
+	 * The users whose mounts carry a path without owner, in the order of the
+	 * rows, or nothing when no mount carries the path or more than one does.
 	 *
 	 * @param list<array<string, mixed>> $rows user_id, mount_point and root_id
 	 * @return list<string>
 	 */
 	public static function readersOfMountedPath(array $rows, string $candidate): array {
+		return self::carriersOfMountedPath($rows, $candidate)['users'] ?? [];
+	}
+
+	/**
+	 * The one mount that carries a path without owner, as its root, its mount
+	 * point below the files folder and the users who have it, or null when no
+	 * mount carries the path or more than one does.
+	 *
+	 * A row carries the path when its mount point is ``/<user>/files/`` plus a
+	 * leading part of the path that stops at a segment boundary and leaves at
+	 * least one segment for the file. Of several rows of one user the deepest
+	 * one counts, because a mount inside a mount is what that user sees at that
+	 * path. The deepest mounts of all users have to agree on the root AND on
+	 * the depth: one root mounted at ``a/`` for one user and at ``a/b/`` for
+	 * another puts two different files at ``a/b/c.pdf``. Public and static for
+	 * the same reason as the arithmetic of QueueService: it is the part of the
+	 * lookup that can be asked without a Nextcloud.
+	 *
+	 * @param list<array<string, mixed>> $rows user_id, mount_point and root_id
+	 * @return array{root:int, inside:string, users:list<string>}|null
+	 */
+	public static function carriersOfMountedPath(array $rows, string $candidate): ?array {
 		$path = $candidate . '/';
-		/** @var array<string, array{0:int, 1:int}> $deepest user to mount point length and root */
+		/** @var array<string, array{0:string, 1:int}> $deepest user to mount point below files and root */
 		$deepest = [];
 		foreach ($rows as $row) {
 			$uid = is_string($row['user_id'] ?? null) ? $row['user_id'] : '';
@@ -417,17 +548,23 @@ final class PathResolverService {
 				continue;
 			}
 
-			if (!isset($deepest[$uid]) || strlen($inside) > $deepest[$uid][0]) {
-				$deepest[$uid] = [strlen($inside), $root];
+			if (!isset($deepest[$uid]) || strlen($inside) > strlen($deepest[$uid][0])) {
+				$deepest[$uid] = [$inside, $root];
 			}
 		}
 
-		$roots = array_unique(array_map(static fn (array $one): int => $one[1], $deepest));
-		if (count($roots) !== 1) {
-			return [];
+		$mounts = array_unique(array_map(static fn (array $one): string => $one[1] . ':' . $one[0], $deepest));
+		if (count($mounts) !== 1) {
+			return null;
 		}
 
-		return array_map('strval', array_keys($deepest));
+		$one = reset($deepest);
+
+		return [
+			'root' => $one[1],
+			'inside' => $one[0],
+			'users' => array_map('strval', array_keys($deepest)),
+		];
 	}
 
 	/**

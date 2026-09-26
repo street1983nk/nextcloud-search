@@ -6,6 +6,7 @@ namespace OCA\Findling\Tests\Unit;
 
 use OCA\Findling\Service\PathResolverService;
 use OCP\DB\IResult;
+use OCP\DB\QueryBuilder\ICompositeExpression;
 use OCP\DB\QueryBuilder\IExpressionBuilder;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\Files\Cache\IFileAccess;
@@ -43,8 +44,20 @@ final class PathResolverServiceTest extends TestCase {
 	private IRootFolder&MockObject $rootFolder;
 	private IDBConnection&MockObject $db;
 
-	/** @var list<array<string, mixed>> */
-	private array $mountRows = [];
+	/**
+	 * What the queries of one lookup answer, in the order they are asked.
+	 * The first is the DISTINCT root query, the second the member rows of the
+	 * one root that survived it. A query nobody staged answers nothing.
+	 *
+	 * @var list<list<array<string, mixed>>>
+	 */
+	private array $answers = [];
+
+	/** How many queries were executed. */
+	private int $queries = 0;
+
+	/** The limits the queries were given, in order. @var list<?int> */
+	private array $limits = [];
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -52,26 +65,54 @@ final class PathResolverServiceTest extends TestCase {
 		$this->rootFolder = $this->createMock(IRootFolder::class);
 		$this->db = $this->createMock(IDBConnection::class);
 		$this->db->method('escapeLikeParameter')->willReturnCallback(
-			static fn (string $value): string => addcslashes($value, '\\_%'),
+			static fn (string $value): string => addcslashes($value, '\_%'),
 		);
 
-		$expr = $this->createMock(IExpressionBuilder::class);
-		$expr->method('like')->willReturn('mount_point LIKE :p');
-		$qb = $this->createMock(IQueryBuilder::class);
-		$qb->method('select')->willReturnSelf();
-		$qb->method('from')->willReturnSelf();
-		$qb->method('where')->willReturnSelf();
-		$qb->method('orderBy')->willReturnSelf();
-		$qb->method('setMaxResults')->willReturnSelf();
-		$qb->method('expr')->willReturn($expr);
-		$qb->method('createNamedParameter')->willReturn(':p');
-		$qb->method('executeQuery')->willReturnCallback(function (): IResult {
-			$result = $this->createMock(IResult::class);
-			$result->method('fetchAll')->willReturn($this->mountRows);
+		$this->db->method('getQueryBuilder')->willReturnCallback(function (): IQueryBuilder {
+			$expr = $this->createMock(IExpressionBuilder::class);
+			$expr->method('like')->willReturn('mount_point LIKE :p');
+			$expr->method('eq')->willReturn('root_id = :r');
+			$expr->method('orX')->willReturn($this->createMock(ICompositeExpression::class));
+			$qb = $this->createMock(IQueryBuilder::class);
+			$limit = null;
+			$qb->method('select')->willReturnSelf();
+			$qb->method('selectDistinct')->willReturnSelf();
+			$qb->method('from')->willReturnSelf();
+			$qb->method('where')->willReturnSelf();
+			$qb->method('andWhere')->willReturnSelf();
+			$qb->method('orderBy')->willReturnSelf();
+			$qb->method('setMaxResults')->willReturnCallback(function (?int $max) use ($qb, &$limit): IQueryBuilder {
+				$limit = $max;
 
-			return $result;
+				return $qb;
+			});
+			$qb->method('expr')->willReturn($expr);
+			$qb->method('createNamedParameter')->willReturn(':p');
+			$qb->method('executeQuery')->willReturnCallback(function () use (&$limit): IResult {
+				$this->queries++;
+				$this->limits[] = $limit;
+				$result = $this->createMock(IResult::class);
+				$result->method('fetchAll')->willReturn(array_shift($this->answers) ?? []);
+
+				return $result;
+			});
+
+			return $qb;
 		});
-		$this->db->method('getQueryBuilder')->willReturn($qb);
+	}
+
+	/**
+	 * The two answers of an owner-less lookup: the distinct roots of the
+	 * member rows, then the member rows themselves.
+	 *
+	 * @param list<array<string, mixed>> $rows
+	 */
+	private function mounts(array $rows): void {
+		$roots = array_values(array_unique(array_map(static fn (array $row): int => (int)$row['root_id'], $rows)));
+		$this->answers = [
+			array_map(static fn (int $root): array => ['root_id' => $root], $roots),
+			$rows,
+		];
 	}
 
 	private function resolver(): PathResolverService {
@@ -183,10 +224,10 @@ final class PathResolverServiceTest extends TestCase {
 	public function testATeamFolderPathWithoutUserResolvesThroughAMemberWhoMayRead(): void {
 		// anna sorts first and the folder rules hide the file from her; bernd
 		// may read it, so the path names a file after all.
-		$this->mountRows = [
+		$this->mounts([
 			self::row('anna', '/anna/files/admins-hh/', 9),
 			self::row('bernd', '/bernd/files/admins-hh/', 9),
-		];
+		]);
 		$this->folders(['anna' => null, 'bernd' => $this->file(true)]);
 
 		self::assertSame(self::FILE_ID, $this->resolver()->resolveReference('admins-hh/Vertrag.pdf'));
@@ -195,17 +236,17 @@ final class PathResolverServiceTest extends TestCase {
 	public function testANamedUserWhoDoesNotReachTheFileFallsBackToTheMounts(): void {
 		// The reference the card prints for a Team Folder names one member, and
 		// that member can be the one the rules hide the file from.
-		$this->mountRows = [
+		$this->mounts([
 			self::row('anna', '/anna/files/admins-hh/', 9),
 			self::row('bernd', '/bernd/files/admins-hh/', 9),
-		];
+		]);
 		$this->folders(['anna' => null, 'bernd' => $this->file(true)]);
 
 		self::assertSame(self::FILE_ID, $this->resolver()->resolveReference('anna/files/admins-hh/Vertrag.pdf'));
 	}
 
 	public function testAFileNoMemberMayReadIsRefused(): void {
-		$this->mountRows = [self::row('anna', '/anna/files/admins-hh/', 9)];
+		$this->mounts([self::row('anna', '/anna/files/admins-hh/', 9)]);
 		$this->folders(['anna' => $this->file(false)]);
 
 		self::assertNull($this->resolver()->resolveReference('admins-hh/Vertrag.pdf'));
@@ -214,10 +255,58 @@ final class PathResolverServiceTest extends TestCase {
 	public function testAHomePathWithoutUserIsStillRefused(): void {
 		// Every user has a Documents folder, no mount row carries it, and the
 		// folders are never asked.
-		$this->mountRows = [];
+		$this->answers = [[]];
 		$this->rootFolder->expects(self::never())->method('getUserFolder');
 
 		self::assertNull($this->resolver()->resolveReference('Documents/Bericht.pdf'));
+		self::assertSame(1, $this->queries, 'no root, so no member rows are fetched');
+	}
+
+	// -- the roots are asked apart from the members (review finding) ----------
+
+	public function testASecondRootIsSeenWhateverTheMembersOfTheFirstOne(): void {
+		// The case of the finding. Two hundred members of root 9 used to fill
+		// the row cap in user order, and the one member of root 4 behind them
+		// never reached the refusal. The DISTINCT query sees both roots, the
+		// path is refused, and neither the member rows nor a folder is asked.
+		$this->answers = [[['root_id' => 9], ['root_id' => 4]]];
+		$this->rootFolder->expects(self::never())->method('getUserFolder');
+
+		self::assertNull($this->resolver()->resolveReference('Shared/Bericht.pdf'));
+		self::assertSame(1, $this->queries);
+	}
+
+	public function testTheRootQueryStopsAtTwoAndOnlyTheMembersAreCapped(): void {
+		$this->mounts([self::row('bernd', '/bernd/files/admins-hh/', 9)]);
+		$this->folders(['bernd' => $this->file(true)]);
+
+		self::assertSame(self::FILE_ID, $this->resolver()->resolveReference('admins-hh/Vertrag.pdf'));
+		self::assertSame([2, 200], $this->limits);
+	}
+
+	public function testOneRootAtTwoDepthsIsAmbiguousAndCarriesNothing(): void {
+		// The same root at a/ for anna and at a/b/ for bernd puts two
+		// different files at a/b/c.pdf, root/b/c.pdf and root/c.pdf.
+		$carriers = PathResolverService::carriersOfMountedPath([
+			self::row('anna', '/anna/files/a/', 9),
+			self::row('bernd', '/bernd/files/a/b/', 9),
+		], 'a/b/c.pdf');
+
+		self::assertNull($carriers);
+	}
+
+	public function testTheCarriersNameTheirRootAndTheirMountPoint(): void {
+		$carriers = PathResolverService::carriersOfMountedPath([
+			self::row('anna', '/anna/files/admins-hh/', 9),
+			self::row('bernd', '/bernd/files/admins-hh/', 9),
+		], 'admins-hh/Unterordner/Vertrag.pdf');
+
+		self::assertSame(['root' => 9, 'inside' => 'admins-hh/', 'users' => ['anna', 'bernd']], $carriers);
+	}
+
+	public function testTheLeadingFoldersOfAPathAreItsPossibleMountPoints(): void {
+		self::assertSame(['a/', 'a/b/'], PathResolverService::leadingFoldersOf('a/b/c.pdf'));
+		self::assertSame([], PathResolverService::leadingFoldersOf('c.pdf'));
 	}
 
 	public function testGarbageIsRefused(): void {

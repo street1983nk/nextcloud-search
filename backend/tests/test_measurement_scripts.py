@@ -603,8 +603,15 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # tell a node the ACL wrapper hides from a deleted one; AdminViewService.php
 # carries the reworded label and remedy; QueueServiceReaderTest.php holds the
 # hidden node, the try limit and the folder that cannot be set up.
+# Moved on 2026-09-26 by the review of issue #14, second fix: two of the 70
+# files changed their bytes and none came or went. PathResolverService.php asks
+# the roots under a path without owner as a DISTINCT query of their own, which
+# the member cap of two hundred rows no longer reaches, and fetches the members
+# only for the one root that survived; the mounts of all members have to agree
+# on the root and on the depth. PathResolverServiceTest.php holds the second
+# root behind the members, the limits of both queries and the two depths.
 PHP_FILES_TODAY = 70
-PHP_TREE_HASH_TODAY = "81fb59fbcb00632dc52a56df50244be7c307c68215b61b1fd048162bb7805d0f"
+PHP_TREE_HASH_TODAY = "654866c59dee6922532debe95a19d2c70ccfe8f9a61d15dc62cfba1d351b4d0f"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
