@@ -587,8 +587,16 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # the bytes only for a file SearchService::readableFile() hands out, so a node
 # without the read bit answers the same 404 as a missing one, and
 # GatewayControllerTest.php holds that case.
-PHP_FILES_TODAY = 69
-PHP_TREE_HASH_TODAY = "ca988e2f13ffbf85b8f74369e70a7eddd60405b2883062b9b669572121209bea"
+# Moved on 2026-09-26 by the fix of issue #14, fourth commit, and the count
+# moves from 69 to 70: tests/Unit/PathResolverServiceTest.php is new. One of
+# the 69 changed its bytes. PathResolverService.php resolves a path without
+# owner over the oc_mounts rows that carry it, one storage root and up to
+# twenty members, and tries the rest of a named reference the same way when the
+# named user does not reach the file. The fix touches js/admin.js as well, whose
+# result card now prints uid/files/rest; the recipe globs **/*.php, so it does
+# not move this figure.
+PHP_FILES_TODAY = 70
+PHP_TREE_HASH_TODAY = "00bfaa178f6adf9a56b80611bdadc06a1883056541a3a3e615e87fc0ee86f190"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

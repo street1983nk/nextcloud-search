@@ -676,6 +676,15 @@
     const fileId = whole(view.fileId)
     const checkedAt = whole(view.checkedAt)
     const path = typeof view.path === 'string' ? view.path : ''
+    const uid = typeof view.uid === 'string' ? view.uid : ''
+    // The card prints the reference the lookup takes back, uid/files/rest,
+    // the same shape the error list hands to the lookup (issue #14). The bare
+    // path was what an admin copied, and a path without its user is not a
+    // reference for a home file. A trashed file keeps its own path, because it
+    // is not under files/ any more and that path already starts with the user.
+    const reference = view.trashed !== true && uid !== '' && path !== ''
+      ? uid + '/files/' + path
+      : path
     const label = typeof view.label === 'string' ? view.label : ''
     const remedy = typeof view.remedy === 'string' ? view.remedy : ''
     const note = typeof view.note === 'string' ? view.note : ''
@@ -695,7 +704,7 @@
     // (review finding WR-04). A function's return value is inserted literally.
     text('findling-diagnosis-path', view.trashed === true
       ? t('findling', '%s (in the trash bin)').replace('%s', function () { return path })
-      : path)
+      : reference)
     text('findling-diagnosis-label', label)
     text('findling-diagnosis-remedy', remedy)
     text('findling-diagnosis-note', note)

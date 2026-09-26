@@ -9,6 +9,7 @@ use OCP\Files\Cache\IFileAccess;
 use OCP\Files\Config\ICachedMountFileInfo;
 use OCP\Files\Config\IUserMountCache;
 use OCP\Files\IRootFolder;
+use OCP\IDBConnection;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -69,10 +70,29 @@ final class PathResolverService {
 	 */
 	private int $refused = 0;
 
+	/**
+	 * How many rows of oc_mounts one lookup of a path without owner reads.
+	 *
+	 * A Team Folder has one row per member, and the rows are only needed to
+	 * learn which root carries the path and who may be asked; two hundred is
+	 * far more than the users that are actually tried below.
+	 */
+	private const MAX_MOUNT_ROWS = 200;
+
+	/**
+	 * How many members are asked to resolve a path without owner, at most.
+	 *
+	 * Each of them costs a mount setup, and the same twenty as the reader
+	 * choice of QueueService: a file that twenty members of its folder may not
+	 * read is one whose owner is worth typing in front of the path.
+	 */
+	private const MAX_PATH_READERS = 20;
+
 	public function __construct(
 		private IUserMountCache $mountCache,
 		private IFileAccess $fileAccess,
 		private IRootFolder $rootFolder,
+		private IDBConnection $db,
 		private LoggerInterface $logger,
 	) {
 	}
@@ -187,11 +207,15 @@ final class PathResolverService {
 	/**
 	 * A path in the notation Nextcloud keeps, as a file id.
 	 *
-	 * Two spellings are accepted, and both name a user, because a path without
-	 * one cannot be resolved at all: a relative path exists once per user on the
-	 * instance. ``alice/files/Ordner/x.pdf`` is the spelling the error list of
-	 * this page shows next to the owner, and ``alice:Ordner/x.pdf`` is the short
-	 * form for somebody who has the owner and the relative path in front of them.
+	 * Two spellings name a user: ``alice/files/Ordner/x.pdf`` is the spelling the
+	 * error list and the result card of this page show, and
+	 * ``alice:Ordner/x.pdf`` is the short form for somebody who has the owner and
+	 * the relative path in front of them. A relative path exists once per user
+	 * on the instance, so a home path without one cannot be resolved at all.
+	 * A path inside a Team Folder or a share can, since issue #14, because the
+	 * mounts that carry it say whose it is: ``admins-hh/Vertrag.pdf`` is resolved
+	 * over them, see fileIdOverMounts(), and so is the rest of a named reference
+	 * whose user does not reach the file.
 	 *
 	 * A segment of two dots is refused and not filtered. Filtering would answer
 	 * about a file the administrator did not ask about, which is worse than
@@ -235,12 +259,37 @@ final class PathResolverService {
 		}
 
 		[$uid, $relative] = $this->splitOwner($candidate);
-		if ($uid === '' || $relative === '') {
-			$this->refuse();
+		if ($uid !== '' && $relative !== '') {
+			$fileId = $this->fileIdForUser($uid, $relative);
+			if ($fileId !== null) {
+				return $fileId;
+			}
 
-			return null;
+			// Named, and not reachable for the one named. On a Team Folder that
+			// is the ordinary case rather than a typing error: the result card
+			// prints a member of the folder next to the path, and the advanced
+			// permissions of the folder can hide that very file from that very
+			// member. The rest of the reference is therefore tried once more
+			// over the mounts, below, and the answer does not depend on whether
+			// the named user exists at all, so this adds no way of asking which
+			// users do (T-04-38).
+			$candidate = $relative;
 		}
 
+		$fileId = $this->fileIdOverMounts($candidate);
+		if ($fileId !== null) {
+			return $fileId;
+		}
+
+		$this->refuse();
+
+		return null;
+	}
+
+	/**
+	 * A path relative to one user's files folder, as a file id, or null.
+	 */
+	private function fileIdForUser(string $uid, string $relative): ?int {
 		try {
 			// Every failure caught on purpose. getUserFolder() signals a missing
 			// user with a class from the private namespace of the server and a
@@ -251,7 +300,6 @@ final class PathResolverService {
 			$node = $this->rootFolder->getUserFolder($uid)->get($relative);
 		} catch (\Throwable $e) {
 			$this->logger->debug('Findling: a lookup reference resolved to nothing', ['exception' => $e]);
-			$this->refuse();
 
 			return null;
 		}
@@ -259,6 +307,127 @@ final class PathResolverService {
 		$fileId = $node->getId();
 
 		return $fileId > 0 ? $fileId : null;
+	}
+
+	/**
+	 * A path without an owner, resolved over the mounts that carry it (#14).
+	 *
+	 * ``admins-hh/Vertrag.pdf`` names no user, and for a home directory that is
+	 * the end of it: every user has a Documents folder, so a path without an
+	 * owner cannot say whose. For a Team Folder or a share it can. Its mount
+	 * point is a row of oc_mounts, ``/anna/files/admins-hh/``, one per member,
+	 * and every one of those rows names the same storage root. So the lookup
+	 * asks which mounts sit at the beginning of the path, takes the users of
+	 * exactly one root, and resolves the path in their folders one after the
+	 * other until one of them hands out a file they may read.
+	 *
+	 * Three refusals, and each of them keeps an answer from being a guess:
+	 * no mount carries the path, which is every home path; the mounts that
+	 * carry it belong to more than one root, which is two different shares that
+	 * happen to be mounted under the same name for different users; and none of
+	 * the users tried may read the file. The last one costs a retype of the
+	 * reference with the owner in front of it, which still resolves a file the
+	 * owner can reach.
+	 *
+	 * The mount rows come out of a query and not out of IUserMountCache,
+	 * because that interface answers per user or per id and this question has
+	 * neither: it has a path. The query is a scan over oc_mounts with a LIKE,
+	 * asked once per lookup of the admin page and never per file, and it is
+	 * capped at MAX_MOUNT_ROWS rows. The users are capped at MAX_PATH_READERS,
+	 * because each of them costs a mount setup.
+	 */
+	private function fileIdOverMounts(string $candidate): ?int {
+		$segments = explode('/', $candidate);
+		if (count($segments) < 2) {
+			// A single segment is either a home file or a mount point itself,
+			// and a mount point is a folder, which is no file to diagnose.
+			return null;
+		}
+
+		try {
+			$qb = $this->db->getQueryBuilder();
+			$qb->select('user_id', 'mount_point', 'root_id')
+				->from('mounts')
+				->where($qb->expr()->like(
+					'mount_point',
+					$qb->createNamedParameter('/%/files/' . $this->db->escapeLikeParameter($segments[0]) . '/%'),
+				))
+				->orderBy('user_id')
+				->setMaxResults(self::MAX_MOUNT_ROWS);
+			$result = $qb->executeQuery();
+			$rows = $result->fetchAll();
+			$result->closeCursor();
+		} catch (\Throwable $e) {
+			$this->logger->debug('Findling: the mount lookup for a path without owner failed', ['exception' => $e]);
+
+			return null;
+		}
+
+		foreach (array_slice(self::readersOfMountedPath($rows, $candidate), 0, self::MAX_PATH_READERS) as $uid) {
+			try {
+				$userFolder = $this->rootFolder->getUserFolder($uid);
+				$node = $userFolder->get($candidate);
+			} catch (\Throwable $e) {
+				// Hidden from this member by the folder rules, or a member who
+				// is gone since the row was written: the next one is asked.
+				$this->logger->debug('Findling: a member did not reach a path without owner', ['exception' => $e]);
+				continue;
+			}
+
+			$file = SearchService::readableFile($userFolder, $node->getId());
+			if ($file !== null && $file->getId() > 0) {
+				return $file->getId();
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * The users whose mounts carry a path without owner, in the order of the
+	 * rows, or nothing when the path is carried by no mount or by more than one
+	 * storage root.
+	 *
+	 * A row carries the path when its mount point is ``/<user>/files/`` plus a
+	 * leading part of the path that stops at a segment boundary and leaves at
+	 * least one segment for the file. Of several rows of one user the deepest
+	 * one counts, because a mount inside a mount is what that user sees at that
+	 * path. Public and static for the same reason as the arithmetic of
+	 * QueueService: it is the part of the lookup that can be asked without a
+	 * Nextcloud.
+	 *
+	 * @param list<array<string, mixed>> $rows user_id, mount_point and root_id
+	 * @return list<string>
+	 */
+	public static function readersOfMountedPath(array $rows, string $candidate): array {
+		$path = $candidate . '/';
+		/** @var array<string, array{0:int, 1:int}> $deepest user to mount point length and root */
+		$deepest = [];
+		foreach ($rows as $row) {
+			$uid = is_string($row['user_id'] ?? null) ? $row['user_id'] : '';
+			$mountPoint = is_string($row['mount_point'] ?? null) ? $row['mount_point'] : '';
+			$root = (int)($row['root_id'] ?? 0);
+			$home = '/' . $uid . '/files/';
+			if ($uid === '' || $root <= 0 || !str_starts_with($mountPoint, $home)) {
+				continue;
+			}
+
+			$inside = substr($mountPoint, strlen($home));
+			if ($inside === '' || !str_ends_with($inside, '/') || strlen($inside) >= strlen($path) || !str_starts_with($path, $inside)) {
+				continue;
+			}
+
+			if (!isset($deepest[$uid]) || strlen($inside) > $deepest[$uid][0]) {
+				$deepest[$uid] = [strlen($inside), $root];
+			}
+		}
+
+		$roots = array_unique(array_map(static fn (array $one): int => $one[1], $deepest));
+		if (count($roots) !== 1) {
+			return [];
+		}
+
+		return array_map('strval', array_keys($deepest));
 	}
 
 	/**
