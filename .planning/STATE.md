@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 Phase: 22 (messanfahrt-bl-f03), EXECUTING
 Plan: 8 of 12
-Status: 22-07 abgeschlossen, Anfahrt freigegeben (Freigabezeile 26.09.2026 committet). Naechster Plan 22-08 (Vorbedingungen, Aufbau, unbeaufsichtigter Lauf); danach Owner-Stopp 22-12 Abnahme
+Status: 22-08 am CHECKPOINT (Owner-Entscheid): Aufbau fertig, 00-lauf.sh brach in P1 am Bestandstor von 92d mit 41 ab (Snapshot traegt 52137 / 44 / 6 statt 52111 / 37 / 0). Box GESTOPPT (0,25 h, 0,0287 USD), Rohdaten committet (110838d, 6fa85a4), Bericht README 6.1
 
 Aktueller Stand: PHASE 21 KOMPLETT 25.09.2026 (9/9 Plaene, goal-backward verified passed 9/9,
 phase.complete gelaufen, STATE von Hand nachgezogen). Niederlaendische Komposita sind Ende-zu-
@@ -650,6 +650,11 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
 
 ### Offene Blocker
 
+- 22-08 (26.09.2026): Tor-Abbruch 41 in 92d. Der Korpus-Snapshot traegt 52137 / 44 / 6 (39
+  Sprachfall-Dateien vom 10.09. mitindexiert), die Sollwerte von 92d und BESTAND_SNAPSHOT in
+  00-lauf.sh sagen 52111 / 37 / 0. Box gestoppt, Fortsetzung ist Owner-Entscheid (D-02); ein
+  Weiterlauf braucht die neuen Sollwerte in beiden Werkzeugen (Runbook 7.1: nicht in bezahlter Zeit).
+
 - Kill-Kriterium: kuendigt Nextcloud eine Elasticsearch-freie Volltextsuche mit OCR an,
   wird das Projekt neu bewertet. Geprueft 21.09.2026: NICHT ausgeloest. Ende September
   einmalig die Conference-Nachberichte ansehen, danach quartalsweise.
@@ -692,6 +697,6 @@ Sonst keine (die drei Debug-Sessions aus v1.1 sind am 21.09.2026 formal auf reso
 
 ## Session Continuity
 
-Last session: 2026-09-26T06:00:00.000Z
-Stopped at: Plan 22-07 abgeschlossen
+Last session: 2026-09-26T05:20:00.000Z
+Stopped at: Plan 22-08 Checkpoint nach Tor-Abbruch 41 (Box gestoppt)
 Resume file: .planning/phases/22-messanfahrt-bl-f03/22-08-PLAN.md
