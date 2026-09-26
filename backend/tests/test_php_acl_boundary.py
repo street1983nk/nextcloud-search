@@ -61,22 +61,20 @@ READABILITY = "isReadable"
 # per folder rules.
 BOUNDARY = "Service/SearchService.php"
 
-# Every place that resolves a file id, with how often it does so. Two files
-# since issue #14, each a boundary of its own:
-#
-# * the search boundary, whose one resolution sits in readableFile() next to
-#   the readability question. The search asks it for every candidate, and the
-#   queue asks it for every user it tries as the reader of a file, which is why
-#   QueueService.php left this register with that fix,
-# * the content gateway, which opens the bytes for the container and is kept
-#   from foreign containers by rejectForeignCaller rather than by this line.
+# Every place that resolves a file id, with how often it does so. One file
+# since issue #14: the search boundary, whose one resolution sits in
+# readableFile() next to the readability question. The search asks it for
+# every candidate, the queue for every user it tries as the reader of a file,
+# and the content gateway before it opens the bytes for the container, which is
+# why QueueService.php and GatewayController.php left this register with that
+# fix. The gateway is still kept from foreign containers by
+# rejectForeignCaller and not by this line.
 #
 # The register is a ratchet: a plan that adds a resolution adds it here, and a
 # plan that removes one removes it here. A file that is not named is a finding,
 # whatever it does with the node.
 RESOLUTION_REGISTER = {
     BOUNDARY: 1,
-    "Controller/GatewayController.php": 1,
 }
 
 # Block comments, line comments and both kinds of string literal, in the order

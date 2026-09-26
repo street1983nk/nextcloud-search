@@ -582,8 +582,13 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # asks it for every user it tries as the reader of a file, up to twenty, and
 # writes skipped(unreadable) when the file is reachable and none of them may
 # read it.
+# Moved on 2026-09-26 by the fix of issue #14, third commit: two of the 69
+# files changed their bytes and none came or went. GatewayController.php serves
+# the bytes only for a file SearchService::readableFile() hands out, so a node
+# without the read bit answers the same 404 as a missing one, and
+# GatewayControllerTest.php holds that case.
 PHP_FILES_TODAY = 69
-PHP_TREE_HASH_TODAY = "4bd070003da433f40794513ca3ae5a7021f02c122940d39c28ba12a3cbc3ae73"
+PHP_TREE_HASH_TODAY = "ca988e2f13ffbf85b8f74369e70a7eddd60405b2883062b9b669572121209bea"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
