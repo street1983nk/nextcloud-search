@@ -236,6 +236,7 @@ der Lauf misst weiter.
 | **56** | `00-lauf.sh` | nach B2 kehrt der Bestand in der Frist nicht auf den Stand vor B2 zurück (Weg a: 52.137 / 44 / 6, bis 26.09.2026: 52.111 / 37 / 0) | Abbruch |
 | **57** | `00-lauf.sh` | die Gegenprobe von M-01 findet im Kaltstart-Fenster keine Zeile: das Level oder der Leser ist falsch, nicht das Backend | Abbruch, nach dem Zurücksetzen von `loglevel` |
 | **58** | `00-lauf.sh` | `embedded` bewegt sich während des Umbaus, oder der Umbau (in Weg b der Vollreindex) erreicht die Frist 20 Minuten vor dem Timer | Abbruch |
+| **59** | `00-lauf.sh` | nur im Wiedereinstieg `ab-pii` (Checkpoint 22-08): der Bestand ist vor oder nach dem Rückweg auf de,en nicht `BESTAND_SNAPSHOT`, das Backend antwortet nach dem Rückweg nicht, ein Umbau läuft, oder `index.rebuild` bleibt nach dem Verwerfen stehen | Abbruch |
 
 Die Werte 36 bis 39 von `92d-wechsel.sh` bedeuten dasselbe wie in 92c und
 führen in `00-lauf.sh` ebenfalls zum Abbruch, ebenso 25 und 26 des
@@ -355,6 +356,29 @@ E2 und E3 tragen die Neufassung mit Begründung. Der Satz oben, dass nach dem
 Boxstart hier nichts mehr geändert wird, gilt für alles andere weiter; dieser
 Nachtrag ist die einzige Ausnahme und trägt seinen eigenen Owner-Entscheid.
 Deckel, Weg, B4-Plan und dismax-Regel bleiben unverändert.
+
+**Zweiter Nachtrag vom 26.09.2026, Checkpoint 22-08 nach dem Tor 58.** Die
+zweite Fahrt brach im Umbau mit 58 ab. Die erste Statuszeile kam 4 s nach dem
+Containerstart mit `embedded 0`, bevor das Backend geantwortet hatte (README
+6.2). Vorgelegt war Option A: Werkzeug-Fix außerhalb der bezahlten Zeit,
+Rückweg auf de,en, Einstieg ab PII, 95c unter `lasttest` und 99d nach Vorrat 0.
+Die Antwort des Owners auf „Soll ich (A) umsetzen?“, wörtlich:
+
+> ja bitte
+
+Umgesetzt, bevor die Box wieder lief:
+
+- `block_umbau` nimmt `embedded` erst aus einer Statuszeile, hinter der das
+  Backend geantwortet hat (`rebuildTotal` über 0).
+- `00-lauf.sh ab-pii` ist der Wiedereinstieg. Der Timer rechnet denselben
+  Rest ab `BOX_START_EPOCH` wie der Ablauf, der Deckel wird also nicht länger.
+  Danach laufen das Markentor und der Bestand kurz, der Rückweg über 92e auf
+  de,en mit Verwerfen des halben `index.rebuild` und Tor 59, dann der Kaltstart
+  unter `lasttest` samt M-01-Gegenprobe (95c mit `SUCHKONTO`, die Sitzung für
+  die Bereitschaftsprobe bleibt `admin`) und 99d, sobald der Vorrat zweimal 0
+  ist. Danach folgen PII und PIII wie in Weg a.
+- M-01, Bodensatz und B2 laufen nicht noch einmal. Ihre Zahlen stammen aus der
+  zweiten Fahrt.
 
 ---
 

@@ -42,6 +42,14 @@
 # PASSWORT_ENV traegt, sonst aus der Datei, auf die PWFILE zeigt; nie von einer
 # Kommandozeile (T-22-11).
 #
+# **Das Suchkonto** (Nachtrag 26.09.2026, Owner-Entscheid am Checkpoint 22-08).
+# Die Bereitschaftsprobe liest die Admin-Seite und braucht deshalb die Sitzung
+# von BENUTZER. Die gemessene Suche laeuft unter SUCHKONTO mit dem Passwort aus
+# SUCH_PWFILE; beide fallen auf BENUTZER und PWFILE zurueck, sodass der Aufruf
+# ohne sie derselbe bleibt wie in der zweiten Fahrt. Anlass: als admin fand die
+# erste kalte Suche in allen drei Zyklen 0 Treffer, der Lastkorpus liegt unter
+# dem Konto lasttest.
+#
 # Die Exit-Codes:
 #
 #   2  das Werkzeug wurde mit einem Argument gerufen, oder KALTZYKLEN_MAX liegt
@@ -84,6 +92,8 @@ ADRESSE="${ADRESSE:-https://loadtest.infranode.dev}"
 BENUTZER="${BENUTZER:-admin}"
 PASSWORT_ENV="${PASSWORT_ENV:-FINDLING_ADMIN_PASSWORD}"
 PWFILE="${PWFILE:-$HOME/work/.pw/admin}"
+SUCHKONTO="${SUCHKONTO:-$BENUTZER}"
+SUCH_PWFILE="${SUCH_PWFILE:-$PWFILE}"
 UEBERSICHT="${UEBERSICHT:-/apps/findling/admin/overview}"
 # Zwei Woerter, weil eine einwortige Zeile allein aus dem Wortindex beantwortet
 # wird (Plan 06.1-20). In 95b lieferte dieser Begriff warm 26 Treffer.
@@ -109,12 +119,25 @@ fi
 if [ ! -s "$PWFELD" ]; then
     PASSWORT_QUELLE=keine
 fi
+# Das Passwort der Suche: dasselbe Feld, solange das Suchkonto das der Sitzung
+# ist, sonst aus SUCH_PWFILE, nie aus der Umgebung und nie von der Kommandozeile.
+SUCHFELD="$WORK/suchfeld"
+: >"$SUCHFELD"
+chmod 600 "$SUCHFELD"
+if [ "$SUCHKONTO" = "$BENUTZER" ] && [ "$SUCH_PWFILE" = "$PWFILE" ]; then
+    cat "$PWFELD" >"$SUCHFELD"
+else
+    sudo cat "$SUCH_PWFILE" 2>/dev/null | tr -d '\n' >"$SUCHFELD" || true
+fi
+if [ ! -s "$SUCHFELD" ]; then
+    PASSWORT_QUELLE=keine
+fi
 CURLRC="$WORK/curlrc"
 : >"$CURLRC"
 chmod 600 "$CURLRC"
 {
-    printf 'user = "%s:' "$BENUTZER"
-    cat "$PWFELD"
+    printf 'user = "%s:' "$SUCHKONTO"
+    cat "$SUCHFELD"
     printf '"\n'
 } >"$CURLRC"
 JAR="$WORK/cookies.txt"
@@ -230,6 +253,7 @@ lies() {
 
     echo "=== 1. Die Pflichtzeilen, VOR der Messung ==="
     protokoll "passwort-quelle $PASSWORT_QUELLE"
+    protokoll "suchkonto $SUCHKONTO sitzung $BENUTZER"
     if sudo docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$CONTAINER" \
         >"$WORK/umgebung" 2>/dev/null; then
         SCHALTER=$(awk -F= '/^FINDLING_EMBED_IDLE_RELEASE_SECONDS=/ {print $2; exit}' "$WORK/umgebung")

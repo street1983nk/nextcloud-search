@@ -27,9 +27,15 @@
 #
 # Unterbefehle:
 #
-#   start [ablauf|b4]   startet den Ablauf (oder b4) abgesetzt ueber setsid
-#                       nohup, voll umgeleitet nach rohdaten/00-lauf-protokoll.txt
+#   start [ablauf|b4|ab-pii]
+#                       startet den Ablauf (oder b4, oder ab-pii) abgesetzt ueber
+#                       setsid nohup, voll umgeleitet nach rohdaten/00-lauf-protokoll.txt
 #   ablauf              der ganze Ablauf im Vordergrund (start ruft diesen)
+#   ab-pii              der Wiedereinstieg nach dem Tor 58 der zweiten Fahrt
+#                       (Owner-Entscheid am Checkpoint 22-08, 26.09.2026): Timer
+#                       auf den Rest, Markentor und Bestand kurz, Rueckweg auf
+#                       de,en mit Verwerfen des halben index.rebuild, Kaltstart
+#                       unter lasttest, 99d nach Vorrat 0, dann PII und PIII
 #   status              letzte Blockzeile, geplante Abschaltung, Streichungen
 #   b4                  nach dem Typwechsel auf m7g.4xlarge: Timer aus
 #                       DECKEL_REST_MINUTEN neu, alle Container anhalten,
@@ -74,6 +80,9 @@
 #   57  die Gegenprobe von M-01 findet im Kaltstart-Fenster keine Zeile
 #   58  der Umbau (oder der Vollreindex in Weg b) laeuft in die Frist vor dem
 #       Timer, oder embedded bewegt sich waehrend des Umbaus
+#   59  ab-pii: der Rueckweg auf de,en ist nicht sauber (Backend antwortet
+#       nicht, ein Umbau laeuft, index.rebuild bleibt, oder der Bestand ist
+#       nicht BESTAND_SNAPSHOT)
 #   sonst der Rueckgabewert des Werkzeugs, dessen Tor gerissen ist (36 bis 45)
 #
 # ASCII, weil die Box ihr Gebietsschema nicht garantiert.
@@ -124,6 +133,8 @@ ANON_TAKT="${ANON_TAKT:-1}"
 UMBAU_TAKT="${UMBAU_TAKT:-30}"
 PLATZ_TAKT="${PLATZ_TAKT:-60}"
 STUFEN="${STUFEN:-1 4 8 12 16}"
+# Der Begriff der Kaltstartprobe, wie in 95c.
+KALT_BEGRIFF="${KALT_BEGRIFF:-Bescheid Antrag}"
 RUNDEN="${RUNDEN:-10}"
 PAUSE="${PAUSE:-20}"
 
@@ -165,13 +176,18 @@ PLAN_98D=20
 PLAN_ENDE=15
 PLAN_92C=30
 PLAN_ABHOLEN=20
+# Die Fristen des Wiedereinstiegs ab-pii: wie lange das Backend nach dem
+# Rueckweg zum Antworten hat, und wie lange 99d auf einen Vorrat 0 wartet.
+RUECKWEG_FRIST="${RUECKWEG_FRIST:-300}"
+VORRAT_FRIST="${VORRAT_FRIST:-1200}"
 
 benutzung() {
     cat >&2 <<'HINWEIS'
-Benutzung: ./00-lauf.sh start [ablauf|b4] | ablauf | status | b4
+Benutzung: ./00-lauf.sh start [ablauf|b4|ab-pii] | ablauf | ab-pii | status | b4
 
   start    startet den Ablauf (oder b4) abgesetzt, voll umgeleitet
   ablauf   der Ablauf im Vordergrund, Weg a oder b nach EINZELWEG
+  ab-pii   Wiedereinstieg ab PII nach dem Tor 58 der zweiten Fahrt (nur Weg a)
   status   letzte Blockzeile, geplante Abschaltung, gestrichene Bloecke
   b4       nach dem Typwechsel: Timer aus DECKEL_REST_MINUTEN, Container
            anhalten, 00-wegwerf.sh b4, B4-FERTIG, Abschaltung
@@ -194,11 +210,11 @@ case "$BEFEHL" in
 start)
     ZIELBEFEHL="${2:-ablauf}"
     case "$ZIELBEFEHL" in
-    ablauf | b4) ;;
-    *) verweigern "start kennt nur ablauf und b4, nicht '$ZIELBEFEHL'" ;;
+    ablauf | b4 | ab-pii) ;;
+    *) verweigern "start kennt nur ablauf, b4 und ab-pii, nicht '$ZIELBEFEHL'" ;;
     esac
     ;;
-ablauf | b4 | status) ZIELBEFEHL=$BEFEHL ;;
+ablauf | b4 | ab-pii | status) ZIELBEFEHL=$BEFEHL ;;
 *) verweigern "ohne bekannten Unterbefehl laeuft nichts" ;;
 esac
 
@@ -244,7 +260,7 @@ PWFILE_ADMIN="${PWFILE_ADMIN:-$HOME/work/.pw/admin}"
 PWFILE_LAST="${PWFILE_LAST:-$HOME/work/.pw/lasttest}"
 
 case "$ZIELBEFEHL" in
-ablauf)
+ablauf | ab-pii)
     ist_zahl "$DECKEL_MINUTEN" && [ "$DECKEL_MINUTEN" -gt 0 ] ||
         verweigern "DECKEL_MINUTEN fehlt in $LAUFWERTE oder ist keine Zahl ueber 0"
     ist_zahl "$BOX_START_EPOCH" && [ "$BOX_START_EPOCH" -gt 0 ] ||
@@ -260,6 +276,9 @@ ablauf)
     a | b) ;;
     *) verweigern "EINZELWEG muss a oder b sein" ;;
     esac
+    # Der Wiedereinstieg kennt nur Weg a: in Weg b gaebe es kein 92c am Ende.
+    [ "$ZIELBEFEHL" != ab-pii ] || [ "$EINZELWEG" = a ] ||
+        verweigern "ab-pii gilt nur fuer EINZELWEG=a"
     digest_pruefen
     ;;
 b4)
@@ -647,6 +666,14 @@ print("unlesbar" if wert is None else str(wert).lower())
 ' "$2" 2>/dev/null || printf 'unlesbar\n'
 }
 
+# Hat das Backend hinter dieser Statuszeile geantwortet? Ja, wenn rebuildTotal
+# eine Zahl ueber 0 ist: der Bestand des Snapshots ist nie leer, und ein
+# Backend, das noch startet, meldet 0 oder gar nichts (Tor 58 der zweiten Fahrt).
+backend_hat_geantwortet() {
+    gesamt=$(feld_von "$1" rebuildTotal)
+    ist_zahl "$gesamt" && [ "$gesamt" -gt 0 ]
+}
+
 # 97-cron-vorpruefung.sh waehrend neben einem Block, abgesetzt. Sein
 # Rueckgabewert ist ein Befund ueber den Takt und kein Tor dieses Laufs.
 cron_waehrend_starten() {
@@ -684,21 +711,23 @@ neubau_92e() {
 # --- Die Bloecke -------------------------------------------------------------
 
 block_marken() {
-    block_betreten p0-marken
+    marken_block=${1:-p0-marken}
+    marken_datei=${2:-90e-marken.txt}
+    block_betreten "$marken_block"
     rc=0
     sudo python3 "$SKRIPTE/90e-einzelliste.py" marken --database "$DATENBANK" \
         --erwartung "$ERWARTUNG_ANALYZER" --erwartung "$ERWARTUNG_INDEX" \
         --erwartung "$ERWARTUNG_STORE" --erwartung "$ERWARTUNG_SCHEMA" \
         --erwartung "$ERWARTUNG_WORTLISTE" --erwartung "$ERWARTUNG_TANTIVY" \
         --erwartung "$ERWARTUNG_VEKTOREN" --erwartung "$ERWARTUNG_SPRACHEN" \
-        >"$OUT/90e-marken.txt" 2>&1 || rc=$?
-    cat "$OUT/90e-marken.txt"
+        >"$OUT/$marken_datei" 2>&1 || rc=$?
+    cat "$OUT/$marken_datei"
     lauf_zeile "90e-marken-rueckgabewert $rc"
     if [ "$rc" -ne 0 ]; then
         tor_melden "$rc" "das Markentor (44 Index, 45 Vektorspur) ist gerissen, kein Wechsel"
         exit "$rc"
     fi
-    block_verlassen p0-marken
+    block_verlassen "$marken_block"
 }
 
 block_einzelliste() {
@@ -976,6 +1005,15 @@ block_umbau() {
         zeile=$(statuszeile)
         printf '%s\n' "$zeile" >>"$UMBAU"
         eingebettet=$(feld_von "$zeile" embedded)
+        # Befund der zweiten Fahrt (Tor 58, 26.09.2026): die erste Zeile kam 4 s
+        # nach dem Containerstart und trug embedded 0 und rebuildTotal 0, weil
+        # das Backend noch nicht geantwortet hatte; 30 s spaeter stand embedded
+        # auf dem Bestand. Eine Zeile zaehlt deshalb erst, wenn das Backend
+        # geantwortet hat, und das heisst hier: rebuildTotal ist eine Zahl ueber 0.
+        if ! backend_hat_geantwortet "$zeile"; then
+            printf 'statuszeile-ohne-antwort %s\n' "$(utc)" >>"$PLATZ"
+            eingebettet=''
+        fi
         if ist_zahl "$eingebettet"; then
             if [ -z "$embedded_erst" ]; then
                 embedded_erst=$eingebettet
@@ -1215,6 +1253,218 @@ weg_b() {
     block_endmessungen
 }
 
+# --- Der Wiedereinstieg ab-pii (Checkpoint 22-08, Owner-Entscheid A) --------
+
+# Der Bestand kurz, ohne 92d: der Wechsel ist in der zweiten Fahrt gelungen, und
+# ein zweiter Wechsel ist kein Messgegenstand.
+block_bestand_kurz() {
+    block_betreten p0-bestand-ab-pii
+    ist=$(bestand_lesen)
+    lauf_zeile "bestand-ab-pii $ist soll $BESTAND_SNAPSHOT"
+    if [ "$ist" != "$BESTAND_SNAPSHOT" ]; then
+        tor_melden 59 "vor dem Rueckweg steht der Bestand auf $ist statt $BESTAND_SNAPSHOT"
+        exit 59
+    fi
+    block_verlassen p0-bestand-ab-pii
+}
+
+# Zurueck auf de,en, damit die Wandzeit des Umbaus einen sauberen Anfang hat.
+# Der Container der zweiten Fahrt traegt sechs Sprachen und einen halb
+# gefuellten index.rebuild. Das Backend laesst einen solchen Ordner stehen
+# (recover_the_index_directories, Zustand 2), und ein spaeterer Umbau setzte am
+# Cursor darin fort; er wird deshalb hier verworfen, und zwar erst, wenn das
+# Backend unter de,en geantwortet hat und kein Umbau laeuft, also niemand einen
+# Griff auf den Ordner hat.
+block_rueckweg() {
+    block_betreten rueckweg
+    RUECK="$OUT/rueckweg.txt"
+    printf 'rueckweg-start %s index %s index.rebuild %s\n' "$(utc)" \
+        "$(groesse_von "$VOLUME/index")" "$(groesse_von "$VOLUME/index.rebuild")" | tee -a "$RUECK"
+    neubau_92e FINDLING_LANGUAGES=de,en rueckweg
+    anmelden || true
+    beginn=$(date +%s)
+    geantwortet=nein
+    zeile=''
+    while [ $(($(date +%s) - beginn)) -le "$RUECKWEG_FRIST" ]; do
+        zeile=$(statuszeile)
+        printf '%s\n' "$zeile" >>"$RUECK"
+        if backend_hat_geantwortet "$zeile"; then
+            geantwortet=ja
+            break
+        fi
+        sleep 10
+    done
+    laeuft=$(feld_von "$zeile" rebuildRunning)
+    sprachen=$(feld_von "$zeile" languagesActive)
+    printf 'rueckweg-antwort %s geantwortet %s rebuild-laeuft %s sprachen %s\n' "$(utc)" \
+        "$geantwortet" "$laeuft" "$sprachen" | tee -a "$RUECK"
+    if [ "$geantwortet" != ja ]; then
+        tor_melden 59 "das Backend antwortet nach dem Rueckweg auf de,en nicht"
+        exit 59
+    fi
+    if [ "$laeuft" != false ] || [ "$sprachen" != de,en ]; then
+        tor_melden 59 "nach dem Rueckweg laeuft ein Umbau ($laeuft) oder die Sprachen sind $sprachen"
+        exit 59
+    fi
+    if sudo test -d "$VOLUME/index.rebuild"; then
+        sudo rm -rf "$VOLUME/index.rebuild"
+        printf 'index-rebuild-verworfen %s\n' "$(utc)" | tee -a "$RUECK"
+    else
+        printf 'index-rebuild-fehlt-schon %s\n' "$(utc)" | tee -a "$RUECK"
+    fi
+    if sudo test -e "$VOLUME/index.rebuild"; then
+        tor_melden 59 "index.rebuild steht nach dem Verwerfen noch"
+        exit 59
+    fi
+    ist=$(bestand_lesen)
+    printf 'rueckweg-ende %s index %s index.rebuild %s bestand %s soll %s\n' "$(utc)" \
+        "$(groesse_von "$VOLUME/index")" "$(groesse_von "$VOLUME/index.rebuild")" "$ist" "$BESTAND_SNAPSHOT" |
+        tee -a "$RUECK"
+    if [ "$ist" != "$BESTAND_SNAPSHOT" ]; then
+        tor_melden 59 "nach dem Rueckweg steht der Bestand auf $ist statt $BESTAND_SNAPSHOT"
+        exit 59
+    fi
+    block_verlassen rueckweg
+}
+
+# Treffer einer warmen Suche unter einem Konto, nur die Zahl. Das Passwort geht
+# ueber eine curl-Konfiguration 600 unter WORK, nie ueber die Kommandozeile.
+treffer_unter() {
+    feld="$WORK/feld-$1"
+    rc_datei="$WORK/curlrc-$1"
+    : >"$feld"
+    chmod 600 "$feld"
+    sudo cat "$2" 2>/dev/null | tr -d '\n' >"$feld" || true
+    : >"$rc_datei"
+    chmod 600 "$rc_datei"
+    {
+        printf 'user = "%s:' "$1"
+        cat "$feld"
+        printf '"\n'
+    } >"$rc_datei"
+    curl -sS -G -K "$rc_datei" -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+        --data-urlencode "term=$KALT_BEGRIFF" --data-urlencode "limit=100" \
+        -o "$WORK/treffer-$1.json" "$ADRESSE/ocs/v2.php/search/providers/findling/search" 2>/dev/null || true
+    jq -r '.ocs.data.entries | length' "$WORK/treffer-$1.json" 2>/dev/null || printf 'unklar\n'
+    rm -f "$feld" "$rc_datei"
+}
+
+# Der Kaltstart unter lasttest, samt M-01-Gegenprobe im Kaltstart-Fenster. Vorher
+# der Beleg, wem der Korpus gehoert: die Zahl der Dateien je Konto und die
+# Treffer einer warmen Suche je Konto, keine Namen.
+block_kaltstart_lasttest() {
+    block_betreten kaltstart-lasttest
+    ZUSATZ="$OUT/zusatz-korpus-und-kaltstart.txt"
+    for konto in "$BENUTZER" "$KONTO"; do
+        dateien=$(sudo find "$DATA_ROOT/ncdata/$konto/files" -type f 2>/dev/null | wc -l | tr -d ' ')
+        printf 'korpus-konto %s dateien %s\n' "$konto" "$dateien" | tee -a "$ZUSATZ"
+    done
+    printf 'warmsuche-konto %s begriff %s treffer %s\n' "$BENUTZER" "$KALT_BEGRIFF" \
+        "$(treffer_unter "$BENUTZER" "$PWFILE_ADMIN")" | tee -a "$ZUSATZ"
+    printf 'warmsuche-konto %s begriff %s treffer %s\n' "$KONTO" "$KALT_BEGRIFF" \
+        "$(treffer_unter "$KONTO" "$PWFILE_LAST")" | tee -a "$ZUSATZ"
+    M01Z="$OUT/m01-langsame-aufrufe-kaltstart-lasttest.txt"
+    loglevel_vorher=$(occ config:system:get loglevel 2>/dev/null || true)
+    printf 'loglevel-vorher %s %s\n' "${loglevel_vorher:-ungesetzt}" "$(utc)" | tee -a "$M01Z"
+    occ config:system:set loglevel --value=1 --type=integer >/dev/null 2>&1 || true
+    rc=0
+    PWFILE="$PWFILE_ADMIN" SUCHKONTO="$KONTO" SUCH_PWFILE="$PWFILE_LAST" \
+        ZIEL="$OUT/95c-kaltstart-lasttest.txt" sh "$SKRIPTE/95c-kaltstart.sh" || rc=$?
+    lauf_zeile "95c-lasttest-rueckgabewert $rc"
+    abtaster_neu kaltstart-lasttest
+    fenster=$(awk '$1 == "kaltstart-fenster" {print $2, $3}' "$OUT/95c-kaltstart-lasttest.txt" 2>/dev/null | tail -1 || true)
+    gegenprobe=unklar
+    if [ -n "${fenster:-}" ]; then
+        nextcloud_log_holen
+        python3 "$SKRIPTE/91m-langsame-aufrufe.py" --log "$WORK/nextcloud.log" \
+            --von "${fenster% *}" --bis "${fenster#* }" --stufe kaltstart >"$WORK/kaltstart-91m.txt" 2>&1 || true
+        cat "$WORK/kaltstart-91m.txt" >>"$M01Z"
+        gegenprobe=$(awk '$1 == "stufe" && $2 == "kaltstart" {print $4; exit}' "$WORK/kaltstart-91m.txt")
+    fi
+    if [ -n "${loglevel_vorher:-}" ]; then
+        occ config:system:set loglevel --value="$loglevel_vorher" --type=integer >/dev/null 2>&1 || true
+    else
+        occ config:system:delete loglevel >/dev/null 2>&1 || true
+    fi
+    printf 'loglevel-danach %s %s\n' "$(occ config:system:get loglevel 2>/dev/null || echo ungesetzt)" "$(utc)" |
+        tee -a "$M01Z"
+    if [ "$rc" -ne 0 ]; then
+        befund "95c unter $KONTO endete mit $rc, die Kaltstartlatenz hat keine gueltige erste Suche; M-01-Gegenprobe nicht entschieden"
+    else
+        printf 'm01-gegenprobe kaltstart langsame-aufrufe %s\n' "${gegenprobe:-unklar}" | tee -a "$M01Z"
+        case "${gegenprobe:-unklar}" in
+        '' | 0 | unklar)
+            tor_melden 57 "die Gegenprobe von M-01 findet im Kaltstart-Fenster unter $KONTO keine Zeile"
+            exit 57
+            ;;
+        esac
+    fi
+    block_verlassen kaltstart-lasttest
+}
+
+# 99d noch einmal, erst wenn der Arbeitsvorrat zweimal hintereinander 0 ist
+# (Befund 34 der zweiten Fahrt: Vorrat 2 direkt nach 94c).
+block_99d_wiederholung() {
+    block_betreten 99d-wiederholung
+    VORRAT="$OUT/99d-wiederholung-vorrat.txt"
+    beginn=$(date +%s)
+    null_in_folge=0
+    vorrat=unlesbar
+    while [ $(($(date +%s) - beginn)) -le "$VORRAT_FRIST" ]; do
+        occ findling:index >"$WORK/99d-vorrat.txt" 2>&1 || true
+        vorrat=$(vorrat_von "$WORK/99d-vorrat.txt")
+        printf 'vorrat-lesung %s vorrat %s\n' "$(utc)" "$vorrat" >>"$VORRAT"
+        if [ "$vorrat" -eq 0 ]; then
+            null_in_folge=$((null_in_folge + 1))
+            [ "$null_in_folge" -lt 2 ] || break
+        else
+            null_in_folge=0
+        fi
+        sleep 30
+    done
+    lauf_zeile "99d-wiederholung-vorrat $vorrat null-in-folge $null_in_folge"
+    [ "$null_in_folge" -ge 2 ] || befund "der Arbeitsvorrat ist in $VORRAT_FRIST s nicht auf 0 gefallen ($vorrat)"
+    unset FINDLING_LOAD_PASSWORD 2>/dev/null || true
+    lastvariable=ungesetzt
+    [ -z "${FINDLING_LOAD_PASSWORD:-}" ] || lastvariable=gesetzt
+    lauf_zeile "99d-umgebung FINDLING_LOAD_PASSWORD $lastvariable"
+    rc=0
+    PWFILE="$PWFILE_LAST" ZIEL="$OUT/99d-filter-sortierung-wiederholung.txt" \
+        sh "$NACHFOLGE/99d-filter-sortierung.sh" || rc=$?
+    lauf_zeile "99d-wiederholung-rueckgabewert $rc"
+    [ "$rc" -eq 0 ] || befund "99d (Wiederholung) endete mit $rc"
+    block_verlassen 99d-wiederholung
+}
+
+# Die Dateien der zweiten Fahrt, an die ab-pii anhaengen wuerde, bekommen einen
+# eigenen Namen, damit zwei Umbauten nicht in einer Reihe stehen.
+fahrt2_beiseite() {
+    for name in 00-ABBRUCH umbau-status.jsonl umbau-platz.txt 97-cron-vorpruefung-waehrend-umbau.txt; do
+        if [ -f "$OUT/$name" ]; then
+            mv "$OUT/$name" "$OUT/fahrt2-$name"
+            lauf_zeile "beiseite $name nach fahrt2-$name"
+        fi
+    done
+}
+
+weg_ab_pii() {
+    block_marken p0-marken-ab-pii 90e-marken-ab-pii.txt
+    block_bestand_kurz
+    block_rueckweg
+    block_kaltstart_lasttest
+    block_99d_wiederholung
+    block_umbau
+    block_98d
+    if zeit_fuer b3 "$PLAN_B3" "$(reserve_fuer b3)"; then
+        block_b3
+    fi
+    if zeit_fuer b5 "$PLAN_B5" "$(reserve_fuer b5)"; then
+        block_b5
+    fi
+    block_endmessungen
+    block_92c
+}
+
 # --- Die Fallen --------------------------------------------------------------
 
 signal_abbruch() {
@@ -1269,6 +1519,25 @@ if [ "$BEFEHL" = b4 ]; then
     melden "v1.3 B4 fertig" "00-wegwerf.sh b4 endete mit $rc. Die Box wartet auf die Abholung und schaltet dann ab." default
     abholung_abwarten "$OUT/B4-FERTIG"
     sudo shutdown -h now >/dev/null 2>&1 || true
+    exit 0
+fi
+
+# Der Wiedereinstieg ab PII. Der Timer rechnet denselben Rest ab
+# BOX_START_EPOCH wie der Ablauf und wird damit nie laenger als der Deckel.
+if [ "$BEFEHL" = ab-pii ]; then
+    block_betreten p0-timer-ab-pii
+    timer_setzen "$(rest_bis_deckel)"
+    block_verlassen p0-timer-ab-pii
+    altverzeichnisse_pruefen
+    fahrt2_beiseite
+    lauf_zeile "lauf ab-pii weg $EINZELWEG b4-geplant $B4_GEPLANT abbild $ABBILD_DIGEST"
+    melden "v1.3 Wiedereinstieg ab PII" "Abschaltung $(date -u -d "@$(cat "$WORK/timer-epoch")" +%H:%MZ)." default
+    # Die Abtaster zaehlen weiter, damit keine Datei der zweiten Fahrt
+    # ueberschrieben wird.
+    LEBEN=$(find "$OUT" -maxdepth 1 -name 'b1-cpu-*.csv' | wc -l | tr -d ' ')
+    abtaster_neu ab-pii
+    weg_ab_pii
+    abschluss
     exit 0
 fi
 

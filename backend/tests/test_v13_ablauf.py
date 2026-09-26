@@ -22,6 +22,7 @@ import os
 import re
 import shutil
 import subprocess
+import textwrap
 import time
 from pathlib import Path
 
@@ -42,6 +43,9 @@ THE_THREE_REBUILDS = {
     "FINDLING_EMBED_IDLE_RELEASE_SECONDS=0",
     "FINDLING_LANGUAGES=de,en,es,it,nl,pt",
 }
+# The fourth rebuild exists only in the re-entry ab-pii (checkpoint 22-08): the
+# way back to de,en, so that the wall time of the rebuild has a clean start.
+THE_WAY_BACK = "FINDLING_LANGUAGES=de,en"
 
 # The blocks of way a in their order, each with the call that proves the block
 # is the one the plan names. The order is the one of must_haves in 22-05.
@@ -404,7 +408,10 @@ def test_the_run_script_never_touches_the_ocr_languages_and_rebuilds_three_ways(
     assert "FINDLING_OCR_LANGUAGES" not in text
     code = code_of(text)
     rebuilds = set(re.findall(r"^\s*neubau_92e (\S+) ", code, flags=re.MULTILINE))
-    assert rebuilds == THE_THREE_REBUILDS
+    assert rebuilds == {*THE_THREE_REBUILDS, THE_WAY_BACK}
+    assert f"neubau_92e {THE_WAY_BACK} " in function_of(code, "block_rueckweg")
+    for block in ("block_umbau", "block_bodensatz", "block_m01", "block_b2"):
+        assert THE_WAY_BACK + " " not in function_of(code, block), block
     for block in ("block_b3", "block_b5", "block_98d", "block_endmessungen"):
         assert "neubau_92e" not in function_of(code, block), block
         assert "docker update" not in function_of(code, block), block
@@ -752,8 +759,8 @@ def test_the_run_plan_names_every_abort_value_from_40_to_58_once() -> None:
     """One row per value, with script, condition and consequence (pattern 4, numbers continued)."""
     section = plan_sections()["## 4. Woran der Lauf abgebrochen wird"]
     rows = re.findall(r"^\| \*\*(\d+)\*\* \|(.*)$", section, flags=re.MULTILINE)
-    assert sorted(int(value) for value, _ in rows) == list(range(40, 59)), rows
-    for value in range(40, 59):
+    assert sorted(int(value) for value, _ in rows) == list(range(40, 60)), rows
+    for value in range(40, 60):
         assert section.count(f"**{value}**") == 1, value
     for value, rest in rows:
         cells = [cell.strip() for cell in rest.strip().strip("|").split("|")]
@@ -765,13 +772,13 @@ def test_the_run_plan_names_every_abort_value_from_40_to_58_once() -> None:
 
 
 def test_the_run_plan_catalogue_matches_the_exits_of_the_run_script() -> None:
-    """54 to 58 are exits of 00-lauf.sh, and 00-lauf.sh carries no other literal value."""
+    """54 to 59 are exits of 00-lauf.sh, and 00-lauf.sh carries no other literal value."""
     section = plan_sections()["## 4. Woran der Lauf abgebrochen wird"]
     own = {int(value) for value in re.findall(r"^\| \*\*(\d+)\*\* \| `00-lauf\.sh`", section, flags=re.MULTILINE)}
-    assert own == {54, 55, 56, 57, 58}
+    assert own == {54, 55, 56, 57, 58, 59}
     exits = {int(value) for value in re.findall(r"^\s*exit (\d+)$", run_code(), flags=re.MULTILINE)}
     # 143 is the end by signal (the hard stop itself), and the section says so.
-    assert exits == {0, 2, 54, 55, 56, 57, 58, 143}, exits
+    assert exits == {0, 2, 54, 55, 56, 57, 58, 59, 143}, exits
     assert "143" in section
     assert "00-abbruch-durch-signal" in section
 
@@ -897,3 +904,142 @@ def test_the_run_plan_report_carries_the_release_and_the_run_values() -> None:
         assert any(name in heading for heading in headings), name
     for heading in headings:
         assert not set(heading) & set(UMLAUTS), heading
+
+
+# --- The re-entry ab-pii and the fix of gate 58 (checkpoint 22-08) -----------
+
+FIRST_LINE_BEFORE_THE_ANSWER = (
+    '{"embedded": 0, "languagesActive": "", "rebuildDone": 0, "rebuildRunning": false, '
+    '"rebuildTotal": 0, "zeit": "2026-09-26T06:16:59Z"}'
+)
+SECOND_LINE_WITH_THE_ANSWER = (
+    '{"embedded": 52137, "languagesActive": "de,en,es,it,nl,pt", "rebuildDone": 2500, '
+    '"rebuildRunning": true, "rebuildTotal": 52137, "zeit": "2026-09-26T06:17:29Z"}'
+)
+
+
+def the_answer_reader() -> str:
+    """ist_zahl, feld_von and backend_hat_geantwortet, cut out of the run script."""
+    code = run_code()
+    return "\n".join(function_of(code, name) + "\n}" for name in ("ist_zahl", "feld_von", "backend_hat_geantwortet"))
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+@pytest.mark.skipif(shutil.which("python3") is None, reason="feld_von reads the line with python3")
+def test_the_rebuild_takes_embedded_only_from_a_line_the_backend_answered() -> None:
+    """Gate 58 of the second trip: first line 0 four seconds after the start, 30 s later 52137.
+
+    The first line must not count as the starting value of embedded, the second
+    one must, and with it as the start value embedded has not moved.
+    """
+    shell = shutil.which("sh")
+    assert shell is not None
+    driver = the_answer_reader() + textwrap.dedent(
+        """
+        erst=''
+        for zeile in "$ERSTE" "$ZWEITE"; do
+            eingebettet=$(feld_von "$zeile" embedded)
+            if ! backend_hat_geantwortet "$zeile"; then
+                echo ohne-antwort
+                eingebettet=''
+            fi
+            if ist_zahl "$eingebettet"; then
+                if [ -z "$erst" ]; then
+                    erst=$eingebettet
+                    echo "erst $erst"
+                elif [ "$eingebettet" != "$erst" ]; then
+                    echo bewegt
+                fi
+            fi
+        done
+        """
+    )
+    answer = subprocess.run(  # noqa: S603 - a fixed shell and a driver cut out of the run script
+        [shell, "-c", driver],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "ERSTE": FIRST_LINE_BEFORE_THE_ANSWER, "ZWEITE": SECOND_LINE_WITH_THE_ANSWER},
+        timeout=60,
+    )
+    assert answer.returncode == 0, answer
+    assert answer.stdout.split("\n")[:2] == ["ohne-antwort", "erst 52137"], answer.stdout
+    assert "bewegt" not in answer.stdout
+
+
+def test_the_rebuild_asks_for_the_answer_before_it_takes_the_start_value() -> None:
+    """The check stands in block_umbau between reading embedded and keeping it."""
+    umbau = function_of(run_code(), "block_umbau")
+    in_order(umbau, ["eingebettet=$(feld_von", "backend_hat_geantwortet", "embedded_erst=$eingebettet"])
+
+
+def test_the_re_entry_checks_the_gates_and_skips_the_blocks_of_the_second_trip() -> None:
+    """ab-pii: timer from the same rest, marks and stock short, way back, then PII and PIII."""
+    code = run_code()
+    weg = function_of(code, "weg_ab_pii")
+    in_order(
+        weg,
+        [
+            "block_marken p0-marken-ab-pii 90e-marken-ab-pii.txt",
+            "block_bestand_kurz",
+            "block_rueckweg",
+            "block_kaltstart_lasttest",
+            "block_99d_wiederholung",
+            "block_umbau",
+            "block_98d",
+            "block_b3",
+            "block_b5",
+            "block_endmessungen",
+            "block_92c",
+        ],
+    )
+    for skipped in ("block_92d", "block_m01", "block_bodensatz", "block_b2 ", "block_cron_vorher", "block_99d\n"):
+        assert skipped not in weg, skipped
+    einstieg = code[code.index('if [ "$BEFEHL" = ab-pii ]; then') :]
+    in_order(einstieg, ['timer_setzen "$(rest_bis_deckel)"', "altverzeichnisse_pruefen", "weg_ab_pii", "abschluss"])
+    # Way a only: the re-entry ends with 92c.
+    assert "ab-pii gilt nur fuer EINZELWEG=a" in code
+
+
+def test_the_way_back_discards_the_half_filled_directory_only_when_nobody_holds_it() -> None:
+    """The half filled index.rebuild goes after the answer, with no rebuild running, and the stock is gated."""
+    rueck = function_of(run_code(), "block_rueckweg")
+    in_order(
+        rueck,
+        [
+            "neubau_92e FINDLING_LANGUAGES=de,en rueckweg",
+            "backend_hat_geantwortet",
+            '[ "$laeuft" != false ]',
+            'sudo rm -rf "$VOLUME/index.rebuild"',
+            "bestand_lesen",
+            '[ "$ist" != "$BESTAND_SNAPSHOT" ]',
+        ],
+    )
+    assert rueck.count("exit 59") == 4
+
+
+def test_the_cold_start_of_the_re_entry_searches_as_the_load_account() -> None:
+    """95c logs in as admin for the readiness probe and searches as lasttest; 99d waits for stock 0."""
+    code = run_code()
+    kalt = function_of(code, "block_kaltstart_lasttest")
+    assert 'SUCHKONTO="$KONTO"' in kalt
+    assert 'SUCH_PWFILE="$PWFILE_LAST"' in kalt
+    assert 'ZIEL="$OUT/95c-kaltstart-lasttest.txt"' in kalt
+    in_order(kalt, ["korpus-konto", "warmsuche-konto", "--value=1", "95c-kaltstart.sh", "91m-langsame-aufrufe.py"])
+    wiederholung = function_of(code, "block_99d_wiederholung")
+    in_order(
+        wiederholung,
+        ["occ findling:index", "null_in_folge", "unset FINDLING_LOAD_PASSWORD", "99d-filter-sortierung.sh"],
+    )
+    assert 'ZIEL="$OUT/99d-filter-sortierung-wiederholung.txt"' in wiederholung
+
+
+def test_the_cold_start_tool_keeps_its_old_call_when_no_search_account_is_named() -> None:
+    """95c: SUCHKONTO and SUCH_PWFILE fall back to BENUTZER and PWFILE, and the search runs under SUCHKONTO."""
+    text = (V13_RUN_DIR / "95c-kaltstart.sh").read_text(encoding="utf-8")
+    assert 'SUCHKONTO="${SUCHKONTO:-$BENUTZER}"' in text
+    assert 'SUCH_PWFILE="${SUCH_PWFILE:-$PWFILE}"' in text
+    assert 'printf \'user = "%s:\' "$SUCHKONTO"' in text
+    assert 'protokoll "suchkonto $SUCHKONTO sitzung $BENUTZER"' in text
+    # The readiness probe stays with the session of BENUTZER.
+    assert '--data-urlencode "user=$BENUTZER"' in text
