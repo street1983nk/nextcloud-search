@@ -1,0 +1,6 @@
+arch aarch64
+cpus_visible 4
+omp_env_preset no
+rounds 3
+omp_limit_1 wall_seconds 3.470 cpu_usec 3471539 failed 0
+omp_unset wall_seconds 2.485 cpu_usec 5737664 failed 0

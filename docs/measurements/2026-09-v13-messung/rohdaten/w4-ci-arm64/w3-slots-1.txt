@@ -1,0 +1,7 @@
+arch aarch64
+cpus_visible 1
+slots 1
+round 1 wall_seconds 27.814 pages_per_second 0.288 anon_bytes_delta 9768960 cpu_usec 27806585 failed_slots 0
+round 2 wall_seconds 27.851 pages_per_second 0.287 anon_bytes_delta -9789440 cpu_usec 27844572 failed_slots 0
+round 3 wall_seconds 27.802 pages_per_second 0.288 anon_bytes_delta 12288 cpu_usec 27793235 failed_slots 0
+pages_per_second_median 0.288
