@@ -361,6 +361,25 @@ gestrichene Blöcke und Lücken, Kosten gegen den Deckel.
 Fassungen in 6.14; Kosten in 6.8, Lücken in 6.9 und 6.11. Die Abschnitte 6.1
 bis 6.11 bleiben als Protokoll der Anfahrt stehen.
 
+**Abgenommen: 26.09.2026** (Plan 22-12, Checkpoint Task 2, über den Koordinator
+übermittelt). Owner, wörtlich: „machen wir wie die empfehlung“. Aufgelöst heißt
+das: Messphase abgenommen, MESS-07 offen, MESS-08 erfüllt, MESS-09 erfüllt;
+für die Kaltstartzahl Weg b (Einwort-Begriff), die zwei Nebenlücken
+(Spitze der Bodensatz-Abtastreihe, RAM je onnx-Kombination) werden mitgemessen,
+eine Nachanfahrt ist mit rund 0,34 USD geplant. Audit:
+`docs/audits/2026-09-phase-22/README.md`. CI-Läufe auf dem Push-Commit
+`db1cfe6`, alle grün: Python gates 36249089269, Integration 36249089298,
+Multi-arch image 36249089300, Resilience 36249089326, HaRP deploy 36249089333.
+MESS-07 bleibt offen, bis die Kaltstartzahl mit Treffern steht.
+
+Die Ursache der zwei Nebenlücken ist gefunden und lokal behoben:
+`scripts/ops/rss_sampler.sh` stand im Index mit Modus 100644, und 94c wie
+`00-wegwerf.sh b5` starten ihn als `sudo "$SAMPLER"` statt `sudo sh`. sudo
+verweigert eine Datei ohne Ausführungsbit, der Abtaster lief also nie, und
+beide Reihen blieben leer (Befund 32 und 50). Der Inhalt des Abtasters ist
+unverändert, nur das Bit ist gesetzt; ein Wächter in
+`backend/tests/test_ops_scripts.py` hält es für jeden so gestarteten Abtaster.
+
 ### 6.1 Tor-Abbruch in P1, Rückgabewert 41 (26.09.2026)
 
 **Was geschah.** Aufbau nach Runbook, Blöcke 1 bis 13, von 04:58:54Z bis
