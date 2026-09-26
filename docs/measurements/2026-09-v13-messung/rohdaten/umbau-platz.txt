@@ -1,0 +1,14 @@
+statuszeile-ohne-antwort 2026-09-26T12:43:08Z
+platz 2026-09-26T12:43:08Z index 787051223 index.rebuild 3683
+platz 2026-09-26T12:44:09Z index 787051223 index.rebuild 143795471
+platz 2026-09-26T12:45:10Z index 787051223 index.rebuild 295830426
+platz 2026-09-26T12:46:11Z index 787051223 index.rebuild 448268005
+platz 2026-09-26T12:47:11Z index 787051223 index.rebuild 600869456
+platz 2026-09-26T12:48:12Z index 787051223 index.rebuild 753331847
+platz 2026-09-26T12:49:13Z index 787051223 index.rebuild 906023847
+platz 2026-09-26T12:50:14Z index 787051223 index.rebuild 1047341843
+platz 2026-09-26T12:51:15Z index 787051223 index.rebuild 1198318087
+platz 2026-09-26T12:52:15Z index 787051223 index.rebuild 1348713655
+statuszeile-ohne-antwort 2026-09-26T12:53:17Z
+platz 2026-09-26T12:53:17Z index 1431953684 index.rebuild unlesbar
+platz-nachher 2026-09-26T12:53:17Z index 1431953684 index.rebuild unlesbar

@@ -99,3 +99,67 @@ rueckweg-start 2026-09-26T12:25:15Z
 abtaster leben 11 nach rueckweg containerstart 2026-09-26T12:25:15.749215097Z 2026-09-26T12:25:16Z
 tor-abbruch rueckweg rueckgabe 59 grund das Backend antwortet nach dem Rueckweg auf de,en nicht 2026-09-26T12:30:25Z
 00-abbruch 2026-09-26T12:30:26Z block rueckweg rueckgabe 59
+p0-timer-ab-pii-start 2026-09-26T12:41:48Z
+timer-abschaltung 2026-09-27T03:33:48Z
+p0-timer-ab-pii-ende 2026-09-26T12:41:48Z
+altverzeichnisse-sauber ja
+beiseite 00-ABBRUCH nach fahrt2-00-ABBRUCH
+lauf ab-pii weg a b4-geplant ja abbild sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+abtaster leben 12 nach ab-pii containerstart 2026-09-26T12:41:18.21637991Z 2026-09-26T12:41:48Z
+p0-marken-ab-pii-start 2026-09-26T12:41:48Z
+90e-marken-rueckgabewert 0
+p0-marken-ab-pii-ende 2026-09-26T12:41:48Z
+p0-bestand-ab-pii-start 2026-09-26T12:41:48Z
+bestand-ab-pii 52137 44 6 soll 52137 44 6
+p0-bestand-ab-pii-ende 2026-09-26T12:41:49Z
+rueckweg-start 2026-09-26T12:41:49Z
+92e FINDLING_LANGUAGES=de,en rueckgabewert 0
+abtaster leben 13 nach rueckweg containerstart 2026-09-26T12:41:50.077433349Z 2026-09-26T12:41:50Z
+rueckweg-ende 2026-09-26T12:41:52Z
+kaltstart-lasttest-start 2026-09-26T12:41:52Z
+95c-lasttest-rueckgabewert 48
+abtaster leben 14 nach kaltstart-lasttest containerstart 2026-09-26T12:42:11.790399618Z 2026-09-26T12:42:18Z
+befund kaltstart-lasttest 95c unter lasttest endete mit 48, die Kaltstartlatenz hat keine gueltige erste Suche; M-01-Gegenprobe nicht entschieden 2026-09-26T12:42:21Z
+kaltstart-lasttest-ende 2026-09-26T12:42:21Z
+99d-wiederholung-start 2026-09-26T12:42:21Z
+99d-wiederholung-vorrat 0 null-in-folge 2
+99d-umgebung FINDLING_LOAD_PASSWORD ungesetzt
+99d-wiederholung-rueckgabewert 0
+99d-wiederholung-ende 2026-09-26T12:43:04Z
+p2-umbau-start 2026-09-26T12:43:04Z
+92e FINDLING_LANGUAGES=de,en,es,it,nl,pt rueckgabewert 0
+abtaster leben 15 nach umbau containerstart 2026-09-26T12:43:05.453666634Z 2026-09-26T12:43:05Z
+umbau-containerstart 2026-09-26T12:43:05.453666634Z
+97-waehrend-umbau beendet-durch-lauf 2026-09-26T12:53:17Z
+umbau-wandzeit-s 581 von 2026-09-26T12:43:05.453666634Z bis 2026-09-26T12:52:46.263883561Z
+p2-umbau-ende 2026-09-26T12:53:17Z
+indexgroesse-sechs-felder-start 2026-09-26T12:53:17Z
+indexgroesse-sechs-felder-ende 2026-09-26T12:53:17Z
+98d-start 2026-09-26T12:53:17Z
+98d-rueckgabewert 0 fehlerzeilen 0
+98d-ende 2026-09-26T12:53:33Z
+zeit-fuer b3 rest 880 bedarf 80
+b3-start 2026-09-26T12:53:33Z
+b3-rueckgabewert 0
+b3-ende 2026-09-26T12:58:16Z
+zeit-fuer b5 rest 875 bedarf 152
+b5-start 2026-09-26T12:58:16Z
+b5-rueckgabewert 50
+befund b5 00-wegwerf.sh b5 endete mit 50 2026-09-26T12:59:57Z
+b5-ende 2026-09-26T12:59:57Z
+endmessungen-start 2026-09-26T12:59:57Z
+90-bestand-rueckgabewert 0
+endmessungen-ende 2026-09-26T13:00:06Z
+92c-start 2026-09-26T13:00:06Z
+92c-fehlschlag-rueckgabewert 36 erwartet 36
+92c-regulaer-rueckgabewert 0 erwartet 0
+abtaster leben 16 nach 92c containerstart 2026-09-26T13:00:20.180564352Z 2026-09-26T13:00:23Z
+93-nullstand-rueckgabewert 0
+92c-ende 2026-09-26T13:06:25Z
+abschluss-start 2026-09-26T13:06:25Z
+altverzeichnisse-sauber ja
+zeit-fuer b4 rest 867 bedarf 95
+b4-vorbereitung-start 2026-09-26T13:06:25Z
+b4-vorbereitet grub-dropin-entfernt ja
+b4-vorbereitung-ende 2026-09-26T13:06:26Z
+abschluss-ende 2026-09-26T13:06:26Z

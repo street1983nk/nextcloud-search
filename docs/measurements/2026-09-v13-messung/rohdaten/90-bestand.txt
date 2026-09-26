@@ -1,0 +1,133 @@
+bestand 2026-09-26T12:59:57Z
+=== The machine ===
+arch=aarch64 cores=2
+               total        used        free      shared  buff/cache   available
+Mem:           3.8Gi       1.3Gi       1.0Gi       287Mi       1.9Gi       2.5Gi
+-- the memory cap that makes the parity, read back and not assumed --
+BOOT_IMAGE=/vmlinuz-7.0.0-1012-aws root=PARTUUID=c5b109a8-81d8-4d10-8ddb-fe7c835a13a0 ro console=tty1 console=ttyS0 nvme_core.io_timeout=4294967295 mem=4G panic=-1
+mem-cap-gefunden ja (mem=4G)
+=== The Nextcloud instances on this docker daemon ===
+-- every running container, so the count below can be checked --
+nc_app_findling_backend  ghcr.io/street1983nk/findling_backend:dev  Up 16 minutes
+findling-registry  registry:2  Up 20 minutes
+nextcloud-aio-apache  ghcr.io/nextcloud-releases/aio-apache:latest  Up 20 minutes (healthy)
+nextcloud-aio-nextcloud  ghcr.io/nextcloud-releases/aio-nextcloud:latest  Up 20 minutes (healthy)
+nextcloud-aio-redis  ghcr.io/nextcloud-releases/aio-redis:latest  Up 20 minutes (healthy)
+nextcloud-aio-database  ghcr.io/nextcloud-releases/aio-postgresql:latest  Up 20 minutes (healthy)
+nextcloud-aio-harp  ghcr.io/nextcloud-releases/aio-harp:latest  Up 20 minutes (healthy)
+nextcloud-aio-notify-push  ghcr.io/nextcloud-releases/aio-notify-push:latest  Up 20 minutes (healthy)
+nextcloud-aio-mastercontainer  nextcloud/all-in-one:latest  Up 20 minutes (healthy)
+nextcloud-instanzen 1
+nextcloud-einzahl ja
+=== The container, as the machine start left it ===
+Image=ghcr.io/street1983nk/findling_backend:dev StartedAt=2026-09-26T12:43:05.453666634Z Memory=2147483648 MemorySwap=2147483648 RestartCount=0 OOMKilled=false
+=== memory.events, read BEFORE any intervention ===
+low 0
+high 0
+max 762
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+-- memory.events.local, for completeness --
+low 0
+high 0
+max 762
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+=== memory.stat and the counters, anon and memory.current side by side ===
+anon 307281920
+file 973275136
+slab 34723104
+memory.current=1316786176
+memory.peak=2147483648
+memory.max=2147483648
+memory.swap.max=0
+=== Whether the parked container was armed at all: passes since its start ===
+container-start 2026-09-26T12:43:05.453666634Z
+pass-finished lines: 0
+-- the tail of this start, so the number is readable and not asserted --
+2026-09-26T12:51:14.918504651Z INFO:     172.18.0.9:54424 - "GET /status HTTP/1.1" 200 OK
+2026-09-26T12:51:14.945374131Z INFO:     172.18.0.9:54424 - "GET /rates HTTP/1.1" 200 OK
+2026-09-26T12:51:45.299371485Z INFO:     172.18.0.9:39416 - "GET /status HTTP/1.1" 200 OK
+2026-09-26T12:51:45.325961221Z INFO:     172.18.0.9:39416 - "GET /rates HTTP/1.1" 200 OK
+2026-09-26T12:52:15.647475518Z INFO:     172.18.0.9:56696 - "GET /status HTTP/1.1" 200 OK
+2026-09-26T12:52:15.671517153Z INFO:     172.18.0.9:56696 - "GET /rates HTTP/1.1" 200 OK
+2026-09-26T12:52:46.014867463Z INFO:     172.18.0.9:37046 - "GET /status HTTP/1.1" 200 OK
+2026-09-26T12:52:46.041188391Z INFO:     172.18.0.9:37046 - "GET /rates HTTP/1.1" 200 OK
+2026-09-26T12:52:46.213806384Z INFO:findling.index.rebuild:carried 52137 documents over into the new index directory
+2026-09-26T12:52:46.263883561Z INFO:findling.index.rebuild:the rebuilt index directory is in place; the schema, language and Dutch marks are current again
+2026-09-26T12:52:46.264193715Z INFO:findling:the index rebuild ended: the rebuilt directory is in place and the two marks are current again
+2026-09-26T12:52:46.366903075Z INFO:findling.worker.poller:indexing is armed and the work stock is empty, the next file is picked up as it arrives
+2026-09-26T12:53:16.916534272Z INFO:     172.18.0.9:43066 - "GET /status HTTP/1.1" 200 OK
+2026-09-26T12:53:16.940040001Z INFO:     172.18.0.9:43066 - "GET /rates HTTP/1.1" 200 OK
+2026-09-26T12:53:17.242536554Z INFO:     172.18.0.9:43066 - "GET /status HTTP/1.1" 200 OK
+2026-09-26T12:53:17.266208482Z INFO:     172.18.0.9:43066 - "GET /rates HTTP/1.1" 200 OK
+2026-09-26T12:53:35.812128150Z INFO:     172.18.0.9:59700 - "GET /status HTTP/1.1" 200 OK
+2026-09-26T12:53:35.837580077Z INFO:     172.18.0.9:59700 - "GET /rates HTTP/1.1" 200 OK
+2026-09-26T12:58:18.582770234Z INFO:     172.18.0.9:51446 - "GET /status HTTP/1.1" 200 OK
+2026-09-26T12:58:18.607289934Z INFO:     172.18.0.9:51446 - "GET /rates HTTP/1.1" 200 OK
+=== The space on the data root, with a number ===
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/nvme1n1     59G   36G   21G  64% /mnt/findling
+Filesystem     1G-blocks  Used Available Use% Mounted on
+/dev/nvme1n1         59G   36G       21G  64% /mnt/findling
+-- what the images occupy, the old 06-11-arm among them --
+ghcr.io/street1983nk/findling_backend:<none>  1.1GB  40ca8c2b9786
+ghcr.io/street1983nk/findling_backend:dev  1.1GB  4f150bb1cfb6
+localhost:5000/findling_backend:06-11-arm  1.05GB  5703f8d208c4
+localhost:5000/findling_backend:05-21-arm-wegwerf-workers2  570MB  b0c3d9a1481d
+localhost:5000/findling_backend:05-21-arm  569MB  e7e5c3c1ca5f
+ghcr.io/nextcloud/nextcloud-appapi-harp:release  334MB  603fdf5ca280
+nextcloud:34.0.3-apache  2.21GB  b97df9e0e1ee
+ghcr.io/nextcloud-releases/aio-nextcloud:latest  1.74GB  8ab1de1ca1e5
+nextcloud/all-in-one:latest  384MB  8ef360995740
+ghcr.io/nextcloud-releases/aio-notify-push:latest  23.4MB  f990f8529d8f
+ghcr.io/nextcloud-releases/aio-redis:latest  160MB  664431f94510
+ghcr.io/nextcloud-releases/aio-postgresql:latest  427MB  a0c7abc15435
+ghcr.io/nextcloud-releases/aio-domaincheck:latest  27.9MB  34eb385af1da
+ghcr.io/nextcloud-releases/aio-apache:latest  289MB  d0fece673d23
+ghcr.io/nextcloud-releases/aio-harp:latest  311MB  d6d43f35088a
+nginx:1.27-alpine  76.8MB  65645c7bb6a0
+registry:2  36.3MB  a3d8aaa63ed8
+-- images, containers, volumes and build cache in one place --
+TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
+Images          21        12        11.78GB   6.541GB (55%)
+Containers      9         9         581.6kB   0B (0%)
+Local Volumes   11        10        4.15GB    905.8MB (21%)
+Build Cache     42        0         2.681GB   1.422GB
+=== The volume of the ExApp, and what is left in it ===
+nc_app_findling_backend_data
+total 79160
+drwxr-xr-x 5 ubuntu ubuntu     4096 Sep 26 12:52 .
+drwx-----x 3 root   root       4096 Sep  9 09:32 ..
+-rw-r--r-- 1 ubuntu ubuntu        0 Sep 26 12:41 armed.marker
+drwxr-xr-x 2 ubuntu ubuntu     4096 Sep 26 06:16 dict
+drwxr-xr-x 2 ubuntu ubuntu     4096 Sep 26 12:52 index
+-rw-r--r-- 1 ubuntu ubuntu       80 Sep  9 09:32 instance.json
+-rw-r--r-- 1 ubuntu ubuntu 16392192 Sep 26 11:52 state.db
+-rw-r--r-- 1 ubuntu ubuntu    32768 Sep 26 12:52 state.db-shm
+-rw-r--r-- 1 ubuntu ubuntu    20632 Sep 26 12:52 state.db-wal
+drwxr-xr-x 2 ubuntu ubuntu     4096 Sep 26 06:11 tmp
+-rw-r--r-- 1 ubuntu ubuntu 64544768 Sep 26 12:02 vectors.db
+-rw-r--r-- 1 ubuntu ubuntu    32768 Sep 26 12:43 vectors.db-shm
+-rw-r--r-- 1 ubuntu ubuntu        0 Sep 26 12:24 vectors.db-wal
+=== The corpus, which is the part that survived 07.09. ===
+19G	/mnt/findling/ncdata/lasttest/files/loadtest
+=== The marks in state.db, but only if there is a state.db ===
+  analyzer_version = 1
+  created_at = 1788946328
+  embedding_version = multilingual-e5-small/int8/384/1024
+  index_version = 1
+  instance_id = 2bd6daea1f19451591e590954ed2b799
+  languages = de,en,es,it,nl,pt
+  rebuild_for = 
+  schema_version = 2
+  store_schema_version = 2
+  tantivy_version = tantivy v0.26.2, index_format v7
+  wordlist_hash = b1f64012ca7f5b6e57de2cb1bafa2521cb6606f3ccef5d6fd17396edc808dde0
+  wordlist_hash_nl = 1:ee7f3b8380c752835692db8fbf1350786955d4fca13e94506812a23eece107a2
+  files by state: [('failed', 6), ('indexed', 52137), ('skipped', 44)]
+bestand-ende 2026-09-26T13:00:06Z

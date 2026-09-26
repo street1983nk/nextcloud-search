@@ -1,0 +1,29 @@
+neubau-start 2026-09-26T12:43:04Z
+schalter-gefordert FINDLING_LANGUAGES de,en,es,it,nl,pt
+=== 1. Der Container, wie er jetzt laeuft, aus docker inspect ===
+container-lesbar ja
+abbild-ist ghcr.io/street1983nk/findling_backend:dev
+netz-ist nextcloud-aio
+restart-ist unless-stopped
+netz-aliase findling_backend  quelle alter-container
+=== 2. Entrypoint und Cmd gegen das Abbild, nicht uebernommen ===
+entrypoint-gleich ja
+=== 3. Die Umgebung, ohne die Zielzeile und mit der neuen ===
+schalter-vorher FINDLING_LANGUAGES de,en
+umgebung-namen AA_VERSION APP_DISPLAY_NAME APP_HOST APP_ID APP_PERSISTENT_STORAGE APP_PORT APP_SECRET APP_VERSION COMPUTE_DEVICE FINDLING_COMPOUND_DICT FINDLING_EMBED_IDLE_RELEASE_SECONDS FINDLING_EMBED_MODEL_DIR FINDLING_LANGUAGES FINDLING_LOG_LEVEL FINDLING_MAX_FILE_BYTES FINDLING_OCR_DPI FINDLING_OCR_ENABLED FINDLING_OCR_JOB_SECONDS FINDLING_OCR_LANGUAGES FINDLING_OCR_MAX_PAGES FINDLING_OCR_PAGE_SECONDS FINDLING_RECONCILE_ENABLED FINDLING_RECONCILE_HOUR FINDLING_RECONCILE_MIN_INTERVAL_HOURS FINDLING_RECONCILE_QUIET_MAX FINDLING_RECONCILE_SLICE FINDLING_VEC0_PATH GPG_KEY HF_HUB_OFFLINE NEXTCLOUD_URL PATH PYTHONUNBUFFERED PYTHON_SHA256 PYTHON_VERSION 
+=== 4. Mounts und Labels ===
+mounts-uebernommen type=volume,source=nc_app_findling_backend_data,target=/nc_app_findling_backend_data 
+labels-uebernommen org.opencontainers.image.description org.opencontainers.image.licenses org.opencontainers.image.source org.opencontainers.image.title 
+=== 5. Die Zertifikate des HaRP-Tunnels, falls der Container welche traegt ===
+tunnel-zertifikate keine
+=== 6. Der Neubau: entfernen, anlegen, Zertifikate, starten ===
+neubau-gelungen ja
+=== 7. Die harte Grenze, neu gesetzt, weil ein Neubau sie wegwirft ===
+-- zurueckgelesen aus der cgroup und nicht aus dem Klienten --
+speichergrenze-ist 2147483648/0
+grenze-erwartet 2147483648/0
+grenze-gesetzt ja
+=== 8. Der Schalter und der Entladeschalter, aus dem neuen Container ===
+schalter-ist FINDLING_LANGUAGES de,en,es,it,nl,pt
+entladeschalter-ist 0
+neubau-fertig 2026-09-26T12:43:05Z

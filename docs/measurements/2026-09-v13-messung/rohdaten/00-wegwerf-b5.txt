@@ -1,0 +1,133 @@
+wegwerf-b5-start 2026-09-26T12:58:16Z
+wegwerf-block b5
+abbild-digest sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+box-arch aarch64 kerne 2
+b5-start 2026-09-26T12:58:16Z
+b5-produktstart-vorher 2026-09-26T12:43:05.453666634Z
+passwort-quelle datei
+leerlauf-arbeitsvorrat 0
+leerlauf-runstate idle
+leerlauf ja
+b5-abtaster /home/ubuntu/work/nextcloud-search/scripts/ops/rss_sampler.sh, unveraendert gerufen, intervall 1 s
+-- embed.bench threads 1 batch 2 sequence 512 auf cpuset 0,1 --
+[0;93m2026-09-26 12:58:19.114574151 [W:onnxruntime:Default, telemetry.cc:800 operator()] Failed to persist telemetry device ID; using an in-memory identifier[m
+mode=tokens-per-second
+arch=aarch64
+cpus=2
+python=3.13.15
+sqlite=3.46.1
+model_dir=/usr/local/share/findling/model
+batch=2
+sequence=512
+threads=1
+rounds=20
+tokens_per_round=1024
+tokens_total=20480
+p50_ms=555.071
+p95_ms=564.887
+max_ms=576.233
+tokens_per_second_p50=1844.8
+tokens_per_second_p95=1812.8
+tokens_per_second_mean=1838.3
+wall_seconds=11.141
+b5-rueckgabe threads 1 batch 2 0
+b5-max-anon threads 1 batch 2 unlesbar abtastungen 0
+probe-zahl b5-threads-1-batch-2.txt tokens_per_second_p50 1844.8
+-- embed.bench threads 1 batch 8 sequence 512 auf cpuset 0,1 --
+[0;93m2026-09-26 12:58:32.771203972 [W:onnxruntime:Default, telemetry.cc:800 operator()] Failed to persist telemetry device ID; using an in-memory identifier[m
+mode=tokens-per-second
+arch=aarch64
+cpus=2
+python=3.13.15
+sqlite=3.46.1
+model_dir=/usr/local/share/findling/model
+batch=8
+sequence=512
+threads=1
+rounds=20
+tokens_per_round=4096
+tokens_total=81920
+p50_ms=2248.784
+p95_ms=2304.419
+max_ms=2319.872
+tokens_per_second_p50=1821.4
+tokens_per_second_p95=1777.5
+tokens_per_second_mean=1816.3
+wall_seconds=45.103
+b5-rueckgabe threads 1 batch 8 0
+b5-max-anon threads 1 batch 8 unlesbar abtastungen 0
+probe-zahl b5-threads-1-batch-8.txt tokens_per_second_p50 1821.4
+-- embed.bench threads 2 batch 2 sequence 512 auf cpuset 0,1 --
+[0;93m2026-09-26 12:59:22.205373066 [W:onnxruntime:Default, telemetry.cc:800 operator()] Failed to persist telemetry device ID; using an in-memory identifier[m
+mode=tokens-per-second
+arch=aarch64
+cpus=2
+python=3.13.15
+sqlite=3.46.1
+model_dir=/usr/local/share/findling/model
+batch=2
+sequence=512
+threads=2
+rounds=20
+tokens_per_round=1024
+tokens_total=20480
+p50_ms=296.779
+p95_ms=437.694
+max_ms=496.831
+tokens_per_second_p50=3450.4
+tokens_per_second_p95=2339.5
+tokens_per_second_mean=3176.9
+wall_seconds=6.447
+b5-rueckgabe threads 2 batch 2 0
+b5-max-anon threads 2 batch 2 unlesbar abtastungen 0
+probe-zahl b5-threads-2-batch-2.txt tokens_per_second_p50 3450.4
+-- embed.bench threads 2 batch 8 sequence 512 auf cpuset 0,1 --
+[0;93m2026-09-26 12:59:30.649444962 [W:onnxruntime:Default, telemetry.cc:800 operator()] Failed to persist telemetry device ID; using an in-memory identifier[m
+mode=tokens-per-second
+arch=aarch64
+cpus=2
+python=3.13.15
+sqlite=3.46.1
+model_dir=/usr/local/share/findling/model
+batch=8
+sequence=512
+threads=2
+rounds=20
+tokens_per_round=4096
+tokens_total=81920
+p50_ms=1198.994
+p95_ms=1308.143
+max_ms=1374.818
+tokens_per_second_p50=3416.2
+tokens_per_second_p95=3131.2
+tokens_per_second_mean=3364.6
+wall_seconds=24.347
+b5-rueckgabe threads 2 batch 8 0
+b5-max-anon threads 2 batch 8 unlesbar abtastungen 0
+probe-zahl b5-threads-2-batch-8.txt tokens_per_second_p50 3416.2
+b5-produktstart-nachher 2026-09-26T12:43:05.453666634Z
+b5-ende 2026-09-26T12:59:57Z
+=== Der Protokollblock, als Block zitierbar ===
+wegwerf-block b5
+abbild-digest sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+box-arch aarch64 kerne 2
+b5-produktstart-vorher 2026-09-26T12:43:05.453666634Z
+passwort-quelle datei
+leerlauf-arbeitsvorrat 0
+leerlauf-runstate idle
+leerlauf ja
+b5-abtaster /home/ubuntu/work/nextcloud-search/scripts/ops/rss_sampler.sh, unveraendert gerufen, intervall 1 s
+b5-rueckgabe threads 1 batch 2 0
+b5-max-anon threads 1 batch 2 unlesbar abtastungen 0
+probe-zahl b5-threads-1-batch-2.txt tokens_per_second_p50 1844.8
+b5-rueckgabe threads 1 batch 8 0
+b5-max-anon threads 1 batch 8 unlesbar abtastungen 0
+probe-zahl b5-threads-1-batch-8.txt tokens_per_second_p50 1821.4
+b5-rueckgabe threads 2 batch 2 0
+b5-max-anon threads 2 batch 2 unlesbar abtastungen 0
+probe-zahl b5-threads-2-batch-2.txt tokens_per_second_p50 3450.4
+b5-rueckgabe threads 2 batch 8 0
+b5-max-anon threads 2 batch 8 unlesbar abtastungen 0
+probe-zahl b5-threads-2-batch-8.txt tokens_per_second_p50 3416.2
+b5-produktstart-nachher 2026-09-26T12:43:05.453666634Z
+wegwerf-b5-ende 2026-09-26T12:59:57Z

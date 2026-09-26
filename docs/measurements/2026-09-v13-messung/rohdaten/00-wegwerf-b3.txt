@@ -1,0 +1,63 @@
+wegwerf-b3-start 2026-09-26T12:53:33Z
+wegwerf-block b3
+abbild-digest sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+box-arch aarch64 kerne 2
+b3-start 2026-09-26T12:53:33Z
+b3-produktstart-vorher 2026-09-26T12:43:05.453666634Z
+passwort-quelle datei
+leerlauf-arbeitsvorrat 0
+leerlauf-runstate idle
+leerlauf ja
+scan-start 2026-09-26T12:53:35Z
+scan-seiten 8
+scan-bytes 2800698
+scan-sha256 60ad8fd1dcee97b2d9a86f23b48683e59d664e25a06f8bebd4bf93fb68759343
+-- W3 slots 1 auf cpuset 0,1 --
+scan scan-8.pdf
+arch aarch64
+cpus_visible 2
+slots 1
+round 1 wall_seconds 30.373 pages_per_second 0.263 anon_bytes_delta 9768960 cpu_usec 30311551 failed_slots 0
+round 2 wall_seconds 30.317 pages_per_second 0.264 anon_bytes_delta -9785344 cpu_usec 30245305 failed_slots 0
+round 3 wall_seconds 30.282 pages_per_second 0.264 anon_bytes_delta 12288 cpu_usec 30223628 failed_slots 0
+pages_per_second_median 0.264
+probe-zahl b3-slots-1.txt pages_per_second_median 0.264
+-- W3 slots 2 auf cpuset 0,1 --
+scan scan-8.pdf
+arch aarch64
+cpus_visible 2
+slots 2
+round 1 wall_seconds 30.854 pages_per_second 0.519 anon_bytes_delta 409600 cpu_usec 60639196 failed_slots 0
+round 2 wall_seconds 31.228 pages_per_second 0.512 anon_bytes_delta 24576 cpu_usec 60668751 failed_slots 0
+round 3 wall_seconds 30.803 pages_per_second 0.519 anon_bytes_delta 53248 cpu_usec 60631056 failed_slots 0
+pages_per_second_median 0.519
+probe-zahl b3-slots-2.txt pages_per_second_median 0.519
+-- W3 Einzelmodus auf cpuset 0,1 --
+scan scan-8.pdf
+arch aarch64
+cpus_visible 2
+omp_env_preset no
+rounds 3
+omp_limit_1 wall_seconds 3.753 cpu_usec 3749104 failed 0
+omp_unset wall_seconds 6.382 cpu_usec 8957108 failed 0
+probe-zahl b3-single.txt rounds 3
+b3-produktstart-nachher 2026-09-26T12:43:05.453666634Z
+b3-ende 2026-09-26T12:58:16Z
+=== Der Protokollblock, als Block zitierbar ===
+wegwerf-block b3
+abbild-digest sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+box-arch aarch64 kerne 2
+b3-produktstart-vorher 2026-09-26T12:43:05.453666634Z
+passwort-quelle datei
+leerlauf-arbeitsvorrat 0
+leerlauf-runstate idle
+leerlauf ja
+scan-seiten 8
+scan-bytes 2800698
+scan-sha256 60ad8fd1dcee97b2d9a86f23b48683e59d664e25a06f8bebd4bf93fb68759343
+probe-zahl b3-slots-1.txt pages_per_second_median 0.264
+probe-zahl b3-slots-2.txt pages_per_second_median 0.519
+probe-zahl b3-single.txt rounds 3
+b3-produktstart-nachher 2026-09-26T12:43:05.453666634Z
+wegwerf-b3-ende 2026-09-26T12:58:16Z
+B3-FERTIG

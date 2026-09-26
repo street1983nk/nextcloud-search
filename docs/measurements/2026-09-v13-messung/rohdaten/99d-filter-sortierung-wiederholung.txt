@@ -1,0 +1,111 @@
+filter-sortierung-start 2026-09-26T12:42:52Z
+messblock=Filter und Sortierung auf dem Vollbestand (D-01, Owner-Entscheid 19.09.2026)
+erstmessung=ja, es gibt keinen v1.1-Wert fuer Sortierung oder Blaettern unter Filter
+route=seitenroute, weil nur sie types und sort traegt (Befund 13-12)
+begriff Bescheid+Antrag (zwei Woerter, siehe Kopf), runden je zeile 5, seiten 3
+rangregel: Wert an Rang ceil(0,50 * n) bzw. ceil(0,95 * n) der sortierten
+Reihe, ohne Interpolation, wie Abschnitt 2 des Seitenbudget-Berichts
+nachbar-container nextcloud-aio-nextcloud, arbeitskopie /home/ubuntu/work/nextcloud-search
+=== 1. Die Pflichtzeilen, VOR der Messung ===
+-- Ohne sie sind die Zahlen daneben nicht falsch, sie sind unbelegt (Abschnitt 6.4) --
+entladeschalter-ist=0
+entladeschalter-passt-zum-block=ja, dieser Block laeuft auf 0
+containerstart-ist=2026-09-26T12:42:11.790399618Z
+speichergrenze-ist=2147483648/0
+filter-typgruppe-ist=pdf
+anmeldeweg-ist=sitzung
+anmeldeweg-zweite-haelfte=verzichtet, um Box-Zeit zu sparen; Basic Auth kostet auf der Vergleichsinstanz 0,318 s je Anfrage (Befund M-03), die kein angemeldeter Nutzer zahlt, und zwei Berichte sind nur ueber denselben Anmeldeweg vergleichbar
+sortiermodi-ist=relevance newest oldest
+=== 2. Steht der Bestand? ===
+-- Die Endzahl des Volllaufs muss stehen. Gegen einen wachsenden Bestand
+   gefahren, maesse die Sortierung zwei verschiedene Bestaende unter einer
+   Zahl (Abschnitt 7.1, Rueckgabewert 34). --
+bestand-arbeitsvorrat=0
+bestand-steht=ja
+=== 3. Die Sitzung ===
+anmeldung ok, konto lasttest, weg sitzung
+=== 4. Block A: Sortierung auf grossem Bestand ===
+-- Dieselbe Anfrage dreimal, je ueber die Seitenroute mit Sitzung. Unter
+   Sortierung gibt es keine Fusion: der Zweig ist rein lexikalisch und jeder
+   Treffer traegt score = 0.0 (13-02). --
+-- Modus relevance, Adresse https://loadtest.infranode.dev/apps/findling/?query=Bescheid+Antrag&sort=relevance --
+      5 200
+sortierung-relevance-ms-median=327.6
+sortierung-relevance-ms-p95=1134.5
+sortierung-relevance-treffer=25
+-- Modus newest, Adresse https://loadtest.infranode.dev/apps/findling/?query=Bescheid+Antrag&sort=newest --
+      5 200
+sortierung-newest-ms-median=167.6
+sortierung-newest-ms-p95=187.8
+sortierung-newest-treffer=25
+-- Modus oldest, Adresse https://loadtest.infranode.dev/apps/findling/?query=Bescheid+Antrag&sort=oldest --
+      5 200
+sortierung-oldest-ms-median=166.6
+sortierung-oldest-ms-p95=791.8
+sortierung-oldest-treffer=25
+sortierung-ohne-vektorhaelfte=ja
+-- Die Zeile darueber im Klartext: unter newest und oldest gibt es keine
+   Fusion, der Zweig ist rein lexikalisch und jeder Treffer traegt
+   score = 0.0. Die drei Zahlen sind untereinander vergleichbar; gegen
+   relevance nur bedingt, weil relevance die Fusion beider Listen
+   einschliesst und die beiden anderen sie gar nicht fahren. --
+=== 5. Block B: Blaettern unter Filter ===
+-- Seite 1 wird gebaut, jede weitere wird GEZOGEN. Der Weiter-Link traegt
+   Cursor und Fingerabdruck; eine selbstgebaute Adresse ohne fp maesse den
+   stillen Rueckfall auf Seite 1 und nicht das Blaettern (13-08). --
+-- Seite 1, Adresse https://loadtest.infranode.dev/apps/findling/?query=Bescheid+Antrag&types=pdf&sort=relevance --
+      5 200
+blaettern-seite-1-ms=358.0
+blaettern-seite-1-treffer=25
+blaettern-seite-1-gemeldete-seitenzahl=1
+blaettern-seite-1-kennungen-doppelt=keine
+blaettern-weiter-link-nach-seite-1=gezogen
+-- Seite 2, Adresse https://loadtest.infranode.dev/apps/findling/?cursors=0.25&page=2&fp=87a6b519&query=Bescheid%20Antrag&types=pdf --
+      5 200
+blaettern-seite-2-ms=331.5
+blaettern-seite-2-treffer=25
+blaettern-seite-2-gemeldete-seitenzahl=2
+blaettern-seite-2-kennungen-doppelt=keine
+blaettern-weiter-link-nach-seite-2=gezogen
+-- Seite 3, Adresse https://loadtest.infranode.dev/apps/findling/?cursors=0.25.50&page=3&fp=87a6b519&query=Bescheid%20Antrag&types=pdf --
+      5 200
+blaettern-seite-3-ms=323.8
+blaettern-seite-3-treffer=25
+blaettern-seite-3-gemeldete-seitenzahl=3
+blaettern-seite-3-kennungen-doppelt=keine
+=== Der Protokollblock, als Block zitierbar ===
+entladeschalter-ist=0
+entladeschalter-passt-zum-block=ja, dieser Block laeuft auf 0
+containerstart-ist=2026-09-26T12:42:11.790399618Z
+speichergrenze-ist=2147483648/0
+filter-typgruppe-ist=pdf
+anmeldeweg-ist=sitzung
+anmeldeweg-zweite-haelfte=verzichtet, um Box-Zeit zu sparen; Basic Auth kostet auf der Vergleichsinstanz 0,318 s je Anfrage (Befund M-03), die kein angemeldeter Nutzer zahlt, und zwei Berichte sind nur ueber denselben Anmeldeweg vergleichbar
+sortiermodi-ist=relevance newest oldest
+bestand-arbeitsvorrat=0
+bestand-steht=ja
+sortierung-relevance-ms-median=327.6
+sortierung-relevance-ms-p95=1134.5
+sortierung-relevance-treffer=25
+sortierung-newest-ms-median=167.6
+sortierung-newest-ms-p95=187.8
+sortierung-newest-treffer=25
+sortierung-oldest-ms-median=166.6
+sortierung-oldest-ms-p95=791.8
+sortierung-oldest-treffer=25
+sortierung-ohne-vektorhaelfte=ja
+blaettern-seite-1-ms=358.0
+blaettern-seite-1-treffer=25
+blaettern-seite-1-gemeldete-seitenzahl=1
+blaettern-seite-1-kennungen-doppelt=keine
+blaettern-weiter-link-nach-seite-1=gezogen
+blaettern-seite-2-ms=331.5
+blaettern-seite-2-treffer=25
+blaettern-seite-2-gemeldete-seitenzahl=2
+blaettern-seite-2-kennungen-doppelt=keine
+blaettern-weiter-link-nach-seite-2=gezogen
+blaettern-seite-3-ms=323.8
+blaettern-seite-3-treffer=25
+blaettern-seite-3-gemeldete-seitenzahl=3
+blaettern-seite-3-kennungen-doppelt=keine
+filter-sortierung-ende 2026-09-26T12:43:04Z

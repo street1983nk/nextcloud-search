@@ -1,0 +1,2 @@
+rss_sampler: container=nc_app_findling_backend cgroup=/sys/fs/cgroup/system.slice/docker-4a79e468ab54e6880f68ccd5add0bb5ea7c007ef3264ad9cbe96b75205d2867b.scope interval=5s
+awk: fatal: cannot open file `/sys/fs/cgroup/system.slice/docker-4a79e468ab54e6880f68ccd5add0bb5ea7c007ef3264ad9cbe96b75205d2867b.scope/memory.stat' for reading: No such file or directory

@@ -1,0 +1,20 @@
+[0;93m2026-09-26 12:58:19.114574151 [W:onnxruntime:Default, telemetry.cc:800 operator()] Failed to persist telemetry device ID; using an in-memory identifier[m
+mode=tokens-per-second
+arch=aarch64
+cpus=2
+python=3.13.15
+sqlite=3.46.1
+model_dir=/usr/local/share/findling/model
+batch=2
+sequence=512
+threads=1
+rounds=20
+tokens_per_round=1024
+tokens_total=20480
+p50_ms=555.071
+p95_ms=564.887
+max_ms=576.233
+tokens_per_second_p50=1844.8
+tokens_per_second_p95=1812.8
+tokens_per_second_mean=1838.3
+wall_seconds=11.141

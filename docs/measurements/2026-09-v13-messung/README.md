@@ -521,3 +521,86 @@ im Rückweg aber falsch, denn dort gilt gerade der Ruhezustand ohne Umbau. Das
 ist ein Fehler in meinem Fix aecca7d, nicht an der Box. Das halbe
 `index.rebuild` ist nicht verworfen worden. Uptime 0,16 h, 0,0190 USD, gesamt
 bisher 1,44 h und 0,167 USD. Die Box ist gestoppt.
+
+### 6.6 Laufende
+
+**Ende: regulär.** `rohdaten/00-FERTIG`: `fertig 2026-09-26T13:06:26Z ... weg a
+b4 vorbereitet`. Die Box hat nach der letzten Abholung (13:12:52Z) selbst
+abgeschaltet, stopped seit spätestens 13:13:39Z. Kein harter Stopp: der Timer
+stand absolut auf 2026-09-27T03:33:00Z und wurde nicht erreicht. Die Box bleibt
+gestoppt für 22-09 (B4, Abbau). Der Grub-Drop-in `mem=4G` ist entfernt
+(`b4-vorbereitet grub-dropin-entfernt ja`).
+
+**Kosten m7g.large, sechs Uptimes** (`aws_box.sh stop`, gepinnter Satz): 0,25 h
++ 0,73 h + 0,16 h + 0,14 h + 0,16 h + 0,58 h = **2,02 h, 0,232 USD**. Deckel des
+m7g.large-Teils: 22,57 h / 2,614 USD. Gestoppte Zeit kostet nur die Platten.
+
+**Die Blöcke mit Start- und Endstempel** (`rohdaten/00-lauf.txt`; Fahrt 1 in
+`rohdaten/lauf1-tor41/00-lauf.txt`):
+
+| Fahrt | Block | Start | Ende |
+|---|---|---|---|
+| 1 | p0-timer, p0-marken, einzelliste | 05:10:34Z | 05:10:35Z |
+| 1 | p1-92d | 05:10:35Z | Tor 41, 05:13:43Z |
+| 2 | p0-timer, p0-marken, einzelliste | 05:38:31Z | 05:38:31Z |
+| 2 | p1-92d | 05:38:31Z | 05:39:01Z |
+| 2 | cron-vorher | 05:39:01Z | 05:39:02Z |
+| 2 | indexgroesse-de-en | 05:39:02Z | 05:39:02Z |
+| 2 | m01 (fünf Stufen, 95c) | 05:39:02Z | 05:43:09Z |
+| 2 | bodensatz | 05:43:09Z | 05:50:26Z |
+| 2 | 99d | 05:50:26Z | 05:50:26Z |
+| 2 | b2 | 05:50:26Z | 06:16:54Z |
+| 2 | p2-umbau | 06:16:54Z | Tor 58, 06:17:30Z |
+| ab-pii 1 | p0-timer, p0-marken, p0-bestand | 11:53:01Z | 11:53:02Z |
+| ab-pii 1 | rueckweg | 11:53:02Z | Tor 59, 12:00:24Z |
+| ab-pii 2 | p0-timer, p0-marken, p0-bestand | 12:25:14Z | 12:25:15Z |
+| ab-pii 2 | rueckweg | 12:25:15Z | Tor 59, 12:30:25Z |
+| ab-pii 3 | p0-timer, p0-marken, p0-bestand | 12:41:48Z | 12:41:49Z |
+| ab-pii 3 | rueckweg (`index.rebuild` verworfen, Bestand 52.137 / 44 / 6) | 12:41:49Z | 12:41:52Z |
+| ab-pii 3 | kaltstart-lasttest | 12:41:52Z | 12:42:21Z |
+| ab-pii 3 | 99d-wiederholung | 12:42:21Z | 12:43:04Z |
+| ab-pii 3 | p2-umbau (`umbau-wandzeit-s 581`) | 12:43:04Z | 12:53:17Z |
+| ab-pii 3 | indexgroesse-sechs-felder (1.431.953.684 Byte) | 12:53:17Z | 12:53:17Z |
+| ab-pii 3 | 98d (Rückgabe 0) | 12:53:17Z | 12:53:33Z |
+| ab-pii 3 | b3 (Rückgabe 0) | 12:53:33Z | 12:58:16Z |
+| ab-pii 3 | b5 (Rückgabe 50) | 12:58:16Z | 12:59:57Z |
+| ab-pii 3 | endmessungen (90-bestand 0) | 12:59:57Z | 13:00:06Z |
+| ab-pii 3 | 92c (Fehlschlag 36, regulär 0, 93-nullstand 0) | 13:00:06Z | 13:06:25Z |
+| ab-pii 3 | b4-vorbereitung, abschluss | 13:06:25Z | 13:06:26Z |
+
+Zwischen den Fahrten liegen die Bewaffnung und 92d von Hand
+(`rohdaten/ab-pii-92d/`, 12:24Z: 92d 0, Bestandstor bestanden;
+`backendReachable True` um 12:25:04Z und 12:41:38Z).
+
+**Gestrichene Blöcke:** keine. `00-gestrichen.txt` gibt es nicht; jede
+`zeit_fuer`-Prüfung (B2, B3, B5, B4) hatte Rest. B7 lief nach D-05 im CI.
+
+**Lücken und Befunde, gegen die Pflichtliste gestellt** (Erfolgskriterien 2
+und 3, B1):
+
+- **Kaltstartlatenz mit Trefferpflicht (MESS-07): Lücke.** 95c endete zweimal
+  mit 48. Als `admin` (Fahrt 2) lieferten die kalten Suchen 0 Treffer, 2.028
+  bis 2.109 ms. Als `lasttest` (ab-pii 3, Sitzung `admin`) ebenfalls 0 Treffer
+  bei 1.828 und 1.832 ms, obwohl dieselbe Suche warm 26 Treffer liefert. Der
+  Korpus gehört `lasttest`: 52.114 Dateien gegen 64 unter `admin`
+  (`zusatz-korpus-und-kaltstart.txt`). Damit ist auch die M-01-Gegenprobe im
+  Kaltstart-Fenster nicht entschieden. Warum eine kalte Suche leer zurückkommt,
+  die warm trifft, beantwortet dieser Lauf nicht. Das gehört in die Auswertung
+  (22-10/22-11).
+- **M-01 Laststufen:** alle fünf Stufen gefahren (`m01-stufe-*.json`,
+  `m01-langsame-aufrufe.txt`).
+- **Bodensatz:** `zyklus2-minus-c1 30.5`; Befund 32, weil nur
+  `abtastreihe-spitze-mb` unlesbar ist.
+- **99d:** Fahrt 2 mit 34 (Vorrat 2); Wiederholung nach Vorrat 0 mit **0**
+  (`99d-filter-sortierung-wiederholung.txt`).
+- **92c-Paar:** 36 und 0 wie erwartet (E11).
+- **Einzelliste:** 50 Dateien einzeln benannt (44 übersprungen, 6
+  fehlgeschlagen).
+- **MESS-08:** Indexgröße de,en 786.508.818 Byte, sechs Felder 1.431.953.684
+  Byte; Umbau-Wandzeit 581 s. Die Wandzeit ist die des dritten Anlaufs mit
+  frisch verworfenem `index.rebuild`, gemessen ab Containerstart.
+- **MESS-09:** 98d mit 0.
+- **B1:** Abtaster je Containerleben, 16 Leben (`b1-cpu-*`, `b1-rss-*`).
+- **B2:** gefahren. **B3:** gefahren (0). **B5:** Befund 50: Durchsatz in
+  allen vier Kombinationen gelesen, der RAM-Abtaster lieferte 0 Abtastungen
+  (`b5-max-anon ... unlesbar`). **B4:** vorbereitet, folgt in 22-09.

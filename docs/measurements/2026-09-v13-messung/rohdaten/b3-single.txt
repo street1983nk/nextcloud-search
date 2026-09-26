@@ -1,0 +1,7 @@
+scan scan-8.pdf
+arch aarch64
+cpus_visible 2
+omp_env_preset no
+rounds 3
+omp_limit_1 wall_seconds 3.753 cpu_usec 3749104 failed 0
+omp_unset wall_seconds 6.382 cpu_usec 8957108 failed 0

@@ -7,3 +7,11 @@ entladeschalter 0
 sprachen de,en
 harp-fehler-2min 1
 backendReachable True 2026-09-26T12:25:04Z
+bewaffnung-start 2026-09-26T12:41:06Z nach maschinenstart 12:39:04Z
+nextcloud-instanzen 1
+disable ExApp findling_backend successfully disabled.
+enable ExApp findling_backend successfully enabled.
+grenze 2147483648/0
+entladeschalter 0
+sprachen de,en
+backendReachable True 2026-09-26T12:41:38Z

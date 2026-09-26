@@ -1,0 +1,130 @@
+nullstand-start 2026-09-26T13:00:23Z
+volumen: /mnt/findling/docker/volumes/nc_app_findling_backend_data/_data
+=== memory.events, reading 3 of the run, BEFORE the restart is issued ===
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+anon 139128832
+file 23306240
+slab 3034072
+memory.current=166486016 memory.peak=166486016 memory.max=2147483648
+=== Source 1: the contents of the volume ===
+total 312
+drwxr-xr-x 4 ubuntu ubuntu   4096 Sep 26 13:00 .
+drwx-----x 3 root   root     4096 Sep 26 13:00 ..
+-rw-r--r-- 1 ubuntu ubuntu      0 Sep 26 13:00 armed.marker
+drwxr-xr-x 2 ubuntu ubuntu   4096 Sep 26 13:00 dict
+drwxr-xr-x 2 ubuntu ubuntu   4096 Sep 26 13:00 index
+-rw-r--r-- 1 ubuntu ubuntu     80 Sep 26 13:00 instance.json
+-rw-r--r-- 1 ubuntu ubuntu   4096 Sep 26 13:00 state.db
+-rw-r--r-- 1 ubuntu ubuntu  32768 Sep 26 13:00 state.db-shm
+-rw-r--r-- 1 ubuntu ubuntu 168952 Sep 26 13:00 state.db-wal
+-rw-r--r-- 1 ubuntu ubuntu   4096 Sep 26 13:00 vectors.db
+-rw-r--r-- 1 ubuntu ubuntu  32768 Sep 26 13:00 vectors.db-shm
+-rw-r--r-- 1 ubuntu ubuntu  49472 Sep 26 13:00 vectors.db-wal
+state.db vorhanden, groesse in byte: 4096
+vectors.db vorhanden, groesse in byte: 4096
+tantivy-verzeichnis vorhanden, dateien: 3, groesse: 12K
+=== Source 2 and 4: the end states and the work stock, over occ ===
+Work stock
+  scheduled            0
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              44
+  failed               6
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-09-26 11:52:53 (67 minutes ago)
+-- source 4, the work stock of the PHP half, as one number --
+arbeitsvorrat-vorher 0
+-- source 2, the end states as Nextcloud recorded them --
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              44
+  failed               6
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+=== Source 3: the marks in meta, but only if there is a state.db ===
+  analyzer_version = 1
+  created_at = 1790427623
+  embedding_version = unknown
+  index_version = 1
+  instance_id = 4dfbb6f3e2364862a416c6cf8f8b8403
+  languages = de,en
+  schema_version = 2
+  store_schema_version = 2
+  tantivy_version = tantivy v0.26.2, index_format v7
+  wordlist_hash = b1f64012ca7f5b6e57de2cb1bafa2521cb6606f3ccef5d6fd17396edc808dde0
+  wordlist_hash_nl = off
+  files by state: []
+=== The rebuild, queued with -n so the command does not ask back ===
+restart-start 2026-09-26T13:00:24Z
+The crawl was queued. It starts with the next run of the background jobs.
+
+Work stock
+  scheduled            0
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              44
+  failed               6
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-09-26 11:52:53 (67 minutes ago)
+restart-ende 2026-09-26T13:00:24Z
+-- if the line above says 'Nothing was changed.' the -n did not take --
+=== The frist of 360 seconds, against the slowest clock involved ===
+-- 300 s poller backoff and two rounds of the five minute system cron --
+frist-ende 2026-09-26T13:06:24Z
+=== The work stock after the frist, which is the verdict of this step ===
+Work stock
+  scheduled            517
+  handed to the worker 32
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              44
+  failed               6
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-09-26 13:04:24 (2 minutes ago)
+arbeitsvorrat-nachher 549
+arbeitsvorrat-da ja
+-- the log of the container over the frist, so the poller is readable --
+2026-09-26T13:06:22.427354456Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/173?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-26T13:06:22.565913342Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/174?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-26T13:06:22.700362476Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/175?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-26T13:06:22.940440435Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/176?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-26T13:06:23.071140582Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/177?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-26T13:06:23.133872593Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/178?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-26T13:06:23.207619930Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/179?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-26T13:06:23.350266331Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/180?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-26T13:06:23.517686094Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/181?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-26T13:06:23.576502514Z INFO:findling.index.writer:committed 30 documents
+2026-09-26T13:06:23.660227487Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=30 skipped=2 failed=0 unchanged=0 requeued=32 embedded=0 committed=30
+2026-09-26T13:06:23.895950093Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/182?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-26T13:06:24.040690087Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/183?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-26T13:06:24.116155048Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/184?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-26T13:06:24.260394439Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/185?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-26T13:06:24.387609225Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/186?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-26T13:06:24.550604002Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/187?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-26T13:06:24.628140053Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/188?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-26T13:06:24.685710178Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/189?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-26T13:06:24.849615928Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/190?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-26T13:06:24.996403681Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/191?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-26T13:06:25.078087724Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/192?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-26T13:06:25.161260052Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/193?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-26T13:06:25.232487031Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/194?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-26T13:06:25.421796104Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/195?userId=lasttest "HTTP/1.1 200 OK"
+nullstand-ende 2026-09-26T13:06:25Z
