@@ -12,15 +12,24 @@ name: 92d probe
 # option B: a CI run of its own.
 #
 # What it drives, in the order of the box. A fresh Nextcloud in a container,
-# HaRP in front of the docker socket, the RELEASED installation of
-# UPGRADE_FROM_TAG (companion and image), the reference corpus indexed and
-# waited out. Then 92d itself, unchanged, against that installation: the
-# companion of this commit forces a real occ upgrade, the unregister keeps the
-# volume, the registration hangs the new container onto it, and the stock gate
-# is handed the counts measured before the switch. Asserted afterwards and
+# HaRP in front of the docker socket, the RELEASED installation of the input
+# from_tag (companion and image), the reference corpus indexed and waited out.
+# Then 92d itself, unchanged, against that installation: the companion of this
+# commit replaces the released one and occ upgrade runs, the unregister keeps
+# the volume, the registration hangs the new container onto it, and the stock
+# gate is handed the counts measured before the switch. Asserted afterwards and
 # independently of 92d: the same counts out of the container, the same volume
-# with the same creation time, and a search that still answers. A second run
-# with a stock that differs by one has to end with 41.
+# with the same creation time, the companion of this commit installed, and a
+# search that still answers. A second run with a stock that differs by one has
+# to end with 41.
+#
+# Why the default start is v1.1.0 and not the newest release. The corpus
+# snapshot of the box was written on 2026-09-11 from the v1.1 box, so the box
+# switches from a v1.1 companion and a v1.1 volume. Until the version bump of
+# phase 23 this tree still carries 1.2.0 in both info.xml; a start at v1.2.0
+# therefore gives occ upgrade nothing to do (first run of this workflow,
+# 36216798070: "No upgrade required."), and a start at v1.1.0 is the one that
+# drives the app update the box will see.
 #
 # Dispatch only. It installs a whole Nextcloud and pulls two backend images, and
 # nothing about it changes between two commits that leave 92d alone; a push run
@@ -39,6 +48,11 @@ on:
         required: false
         type: string
         default: ''
+      from_tag:
+        description: 'Release tag of the installation 92d switches away from'
+        required: false
+        type: string
+        default: 'v1.1.0'
 
 permissions:
   contents: read
@@ -57,9 +71,6 @@ env:
   NEXTCLOUD: nextcloud-probe
   DAEMON: harp_proxy_host
   CONTAINER: nc_app_findling_backend
-  # The released installation the switch starts from, the same value
-  # deploy-harp.yml upgrades from.
-  UPGRADE_FROM_TAG: v1.2.0
   ADMIN_PASS: 'findling-probe-92d-2026'
   DRAIN_BUDGET_SECONDS: '900'
   SWITCH: docs/measurements/2026-09-v13-messung/skripte/92d-wechsel.sh
@@ -75,6 +86,7 @@ jobs:
     timeout-minutes: 60
     env:
       IMAGE_DIGEST_INPUT: ${{ inputs.image_digest }}
+      FROM_TAG_INPUT: ${{ inputs.from_tag }}
     steps:
       - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -91,6 +103,12 @@ jobs:
           fi
           echo "ABBILD_DIGEST=${ref}" >> "${GITHUB_ENV}"
           echo "switching to ${ref}"
+          UPGRADE_FROM_TAG="${FROM_TAG_INPUT:-v1.1.0}"
+          if ! printf '%s' "${UPGRADE_FROM_TAG}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "the tag ${UPGRADE_FROM_TAG} is not a release tag of the shape vX.Y.Z"
+            exit 1
+          fi
+          echo "UPGRADE_FROM_TAG=${UPGRADE_FROM_TAG}" >> "${GITHUB_ENV}"
           git fetch --no-tags --depth 1 origin "refs/tags/${UPGRADE_FROM_TAG}:refs/tags/${UPGRADE_FROM_TAG}"
           mkdir -p "${RUNNER_TEMP}/old/php" "${RUNNER_TEMP}/logs"
           git archive "${UPGRADE_FROM_TAG}" php | tar -x -C "${RUNNER_TEMP}/old"
@@ -300,11 +318,17 @@ jobs:
           done
           grep -q "^volumen-nach-unregister ${BEFORE_VOLUME} *$" "${raw}" \
             || { echo "::error::the volume ${BEFORE_VOLUME} is not named after the unregister"; exit 1; }
-          # A real upgrade: the companion of this commit is installed now.
+          # The companion of this commit is the installed one now, and when the
+          # start version differs from it, the app update really happened.
+          old=$(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' "${RUNNER_TEMP}/old/php/appinfo/info.xml" | head -1)
           new=$(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' php/appinfo/info.xml | head -1)
           installed=$(occ config:app:get findling installed_version)
-          echo "companion on disk ${new}, installed ${installed}"
-          [ "${installed}" = "${new}" ] || { echo "::error::occ upgrade did not install the companion"; exit 1; }
+          echo "companion started at ${old}, on disk ${new}, installed ${installed}"
+          [ "${installed}" = "${new}" ] || { echo "::error::the companion of this commit is not the installed one"; exit 1; }
+          if [ "${old}" = "${new}" ]; then
+            echo "::warning::start and target companion are both ${new}, so occ upgrade had no app update to do"
+          fi
+          sed -n '/=== 7b\. /,/^occ-upgrade-gelungen/p' "${raw}"
 
       - name: The stock after the switch, read independently
         run: |
@@ -326,7 +350,7 @@ jobs:
 
       # The negative case: the same switch a second time, told a stock that is
       # one file off. It has to end with 41, and the upgrade in front of it has
-      # nothing to do, so this run also carries the answer 3 of occ upgrade.
+      # nothing to do; 92d accepts 0 and 3 for that answer.
       - name: 92d, a stock that differs ends with 41
         run: |
           status=0

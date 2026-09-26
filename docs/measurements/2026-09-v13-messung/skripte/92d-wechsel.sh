@@ -541,8 +541,10 @@ fi
     # Nextcloud (core/Command/Upgrade.php): es gab nichts zu tun, etwa weil die
     # PHP-Haelfte schon auf diesem Stand war oder ein zweiter Lauf dieses
     # Werkzeugs folgt. deploy-harp.yml fuehrt dieselbe Regel ("Store upgrade 4").
-    # Die erste Fassung verlangte 0 allein und haette einen zweiten Lauf mit 40
-    # abgewiesen, obwohl nichts gescheitert war; Befund der CI-Probe von 22-06.
+    # Die erste Fassung verlangte 0 allein und haette eine Nextcloud, die 3
+    # meldet, mit 40 abgewiesen, obwohl nichts gescheitert war; Befund beim Bau
+    # der CI-Probe von 22-06 (probe-92d.yml) aus deploy-harp.yml gelesen. Die
+    # Probe selbst sah auf Nextcloud 34 fuer "No upgrade required." eine 0.
     case "$upgrade_status" in
     0 | 3)
         echo "occ-upgrade-gelungen ja"
