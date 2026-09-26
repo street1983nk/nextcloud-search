@@ -349,6 +349,13 @@ Schlüssel**namen** ändert, schreibt ihn ebenfalls: der Absatz ist das Gedächt
 **Nachgezählt am 25.09.2026, Plan 20-09:** weiterhin **202** Schlüssel, davon **5**
 Pluralschlüssel. Die Zahl hat sich zwischen Plan 20-02 und dem Ende der Phase nicht bewegt.
 
+**Nachgezählt am 26.09.2026, Issue #14:** **204** Schlüssel, davon weiterhin **5**
+Pluralschlüssel. Die zwei neuen sind Bezeichnung und Abhilfe des Grundes
+`skipped(unreadable)`: eine Datei in einem Team Folder, die da ist und die keiner der gefragten
+Nutzer lesen darf. Beide stehen in allen 16 Dateien, die Tabellen der fünf Sprachdokumente
+führen die zwei Zeilen. Die übrigen Zahlen dieser Dokumente (202 und die Abnahmezeilen) sind der
+Stand ihres Plantags und bleiben so stehen.
+
 ---
 
 ## Stand nach Phase 20

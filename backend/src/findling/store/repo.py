@@ -271,6 +271,7 @@ STATE_REASONS: Final[Mapping[str, frozenset[str | None]]] = {
             "gone",
             "image_not_ocrable",  # a picture too small or too flat to carry text
             "excluded",  # an admin rule, not a property of the file
+            "unreadable",  # a permission setting, not a deletion (#14)
         }
     ),
     "failed": frozenset(

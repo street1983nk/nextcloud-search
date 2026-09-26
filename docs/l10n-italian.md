@@ -250,6 +250,8 @@ aus Plan 20-03. Diese Tabelle kann also nicht an einem Wortlaut zerbrechen.
 | `None.` | Keine. | Nessuna. |
 | `Excluded by a rule` | Durch Regel ausgeschlossen | Escluso da una regola |
 | `Remove the matching entry under "Excluded folders".` | Den passenden Eintrag unter "Ausgeschlossene Ordner" entfernen. | Rimuovere la voce corrispondente in "Cartelle escluse". |
+| `Not readable for any user` | Für keinen Nutzer lesbar | Non leggibile da alcun utente |
+| `Check the advanced permissions of the Team Folder. Findling only reads a file as a user who may open it.` | Die erweiterten Berechtigungen des Team Folders prüfen. Findling liest eine Datei nur als Nutzer, der sie öffnen darf. | Controllare le autorizzazioni avanzate del Team Folder. Findling legge un file solo per conto di un utente che può aprirlo. |
 | `File is empty` | Datei ist leer | Il file è vuoto |
 | `None. The file has 0 bytes.` | Keine. Die Datei hat 0 Byte. | Nessuna. Il file ha 0 byte. |
 | `File damaged` | Datei beschädigt | File danneggiato |

@@ -2308,6 +2308,15 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     community review in the app store. The figure is untouched by all of it, and
     that is the point of writing it down: sixteen files now move whenever it
     moves. Whoever moves it next writes the next paragraph.
+
+    It stands at 204 since 26.09.2026, and the rise of two is issue #14: the
+    label and the remedy of the new reason skipped(unreadable), which the queue
+    writes for a Team Folder file that is there and that none of the users it
+    asked may read. Both keys went into all sixteen files in one commit, the
+    tables of the five language documents carry the two rows, and the wordings
+    outside German and English are machine translations under the same dated
+    reservation as the rest of those tables. Whoever moves it next writes the
+    next paragraph.
     """
     for language, twin in ((L10N_JSON, L10N_DE_DE_JSON), (L10N_JS, L10N_DE_DE_JS)):
         assert twin.is_file(), f"{twin.name} is missing, so everybody on de_DE reads this app in English"
@@ -2332,7 +2341,7 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     }
 
     assert len(set(map(frozenset, keys_of.values()))) == 1, f"the four catalogues disagree: {sorted(keys_of)}"
-    assert len(keys_of["de.json"]) == 202
+    assert len(keys_of["de.json"]) == 204
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:

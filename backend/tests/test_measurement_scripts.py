@@ -568,8 +568,14 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # variable is not read without one either. The fix touches js/admin.js and the
 # six catalogue files as well; the recipe globs **/*.php, so none of them is in
 # this tree and none of them moves this figure.
+# Moved on 2026-09-26 by the fix of issue #14, first commit: two of the 68
+# files changed their bytes and none came or went. FileStateService.php carries
+# the new reason unreadable in its flat list and in its pair mapping, and
+# AdminViewService.php its label and its remedy. The fix touches the sixteen
+# catalogue files as well; the recipe globs **/*.php, so none of them is in this
+# tree and none of them moves this figure.
 PHP_FILES_TODAY = 68
-PHP_TREE_HASH_TODAY = "a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab6a8abba"
+PHP_TREE_HASH_TODAY = "a3eadc72341f7e5e2badfe9a56e605cd1314a9040186a84f01f500783a1c6884"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
@@ -1100,8 +1106,13 @@ PHP_TREE_HASH_TODAY = "a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab
 # index/open.py cite the Dutch automaton as roughly 24 to 25 MB, the product
 # close figure of docs/performance.md, instead of the withdrawn 17.6 MB of the
 # research probe. No file came and none went, so PACKAGE_FILES_TODAY stays at 57.
+# Moved on 2026-09-26 by the fix of issue #14: two of the 57 files changed their
+# bytes. extract/errors.py and store/repo.py carry the new skipped reason
+# unreadable in the closed list, because the PHP half writes it and the three
+# lists are held equal by test_extract_errors.py. No file came and none went, so
+# PACKAGE_FILES_TODAY stays at 57.
 PACKAGE_FILES_TODAY = 57
-PACKAGE_TREE_HASH_TODAY = "728461aceae56b8433a27cca6005b73303362733fb5973c9f6da4954dbcceda2"
+PACKAGE_TREE_HASH_TODAY = "b5608980ff343d0144392223aff24d9a90b2dfc90bf013f10c6f61853ef92131"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

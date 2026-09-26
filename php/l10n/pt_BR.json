@@ -86,6 +86,8 @@
         "None.": "Nenhuma.",
         "Excluded by a rule": "Excluído por uma regra",
         "Remove the matching entry under \"Excluded folders\".": "Remova a entrada correspondente em \"Pastas excluídas\".",
+        "Not readable for any user": "Não legível por nenhum usuário",
+        "Check the advanced permissions of the Team Folder. Findling only reads a file as a user who may open it.": "Verifique as permissões avançadas da Team Folder. O Findling só lê um arquivo em nome de um usuário que possa abri-lo.",
         "File is empty": "O arquivo está vazio",
         "None. The file has 0 bytes.": "Nenhuma. O arquivo tem 0 bytes.",
         "File damaged": "Arquivo danificado",

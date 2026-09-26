@@ -86,6 +86,8 @@
         "None.": "Geen.",
         "Excluded by a rule": "Door een regel uitgesloten",
         "Remove the matching entry under \"Excluded folders\".": "De passende vermelding onder \"Uitgesloten mappen\" verwijderen.",
+        "Not readable for any user": "Voor geen enkele gebruiker leesbaar",
+        "Check the advanced permissions of the Team Folder. Findling only reads a file as a user who may open it.": "De geavanceerde rechten van de Team Folder controleren. Findling leest een bestand alleen namens een gebruiker die het mag openen.",
         "File is empty": "Bestand is leeg",
         "None. The file has 0 bytes.": "Geen. Het bestand heeft 0 bytes.",
         "File damaged": "Bestand beschadigd",

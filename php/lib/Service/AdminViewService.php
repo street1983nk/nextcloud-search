@@ -375,6 +375,10 @@ final class AdminViewService {
 			'Excluded by a rule',
 			'Remove the matching entry under "Excluded folders".',
 		],
+		'unreadable' => [
+			'Not readable for any user',
+			'Check the advanced permissions of the Team Folder. Findling only reads a file as a user who may open it.',
+		],
 		'empty_file' => [
 			'File is empty',
 			'None. The file has 0 bytes.',

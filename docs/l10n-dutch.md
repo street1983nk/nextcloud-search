@@ -291,6 +291,8 @@ aus Plan 20-03. Diese Tabelle kann also nicht an einem Wortlaut zerbrechen.
 | `None.` | Keine. | Geen. |
 | `Excluded by a rule` | Durch Regel ausgeschlossen | Door een regel uitgesloten |
 | `Remove the matching entry under "Excluded folders".` | Den passenden Eintrag unter "Ausgeschlossene Ordner" entfernen. | De passende vermelding onder "Uitgesloten mappen" verwijderen. |
+| `Not readable for any user` | Für keinen Nutzer lesbar | Voor geen enkele gebruiker leesbaar |
+| `Check the advanced permissions of the Team Folder. Findling only reads a file as a user who may open it.` | Die erweiterten Berechtigungen des Team Folders prüfen. Findling liest eine Datei nur als Nutzer, der sie öffnen darf. | De geavanceerde rechten van de Team Folder controleren. Findling leest een bestand alleen namens een gebruiker die het mag openen. |
 | `File is empty` | Datei ist leer | Bestand is leeg |
 | `None. The file has 0 bytes.` | Keine. Die Datei hat 0 Byte. | Geen. Het bestand heeft 0 bytes. |
 | `File damaged` | Datei beschädigt | Bestand beschadigd |

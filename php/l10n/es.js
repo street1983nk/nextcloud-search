@@ -87,6 +87,8 @@ OC.L10N.register(
     "None.": "Ninguna.",
     "Excluded by a rule": "Excluido por una regla",
     "Remove the matching entry under \"Excluded folders\".": "Quite la entrada correspondiente en \"Carpetas excluidas\".",
+    "Not readable for any user": "No legible para ningún usuario",
+    "Check the advanced permissions of the Team Folder. Findling only reads a file as a user who may open it.": "Compruebe los permisos avanzados de la Team Folder. Findling solo lee un archivo en nombre de un usuario que puede abrirlo.",
     "File is empty": "El archivo está vacío",
     "None. The file has 0 bytes.": "Ninguna. El archivo tiene 0 bytes.",
     "File damaged": "Archivo dañado",

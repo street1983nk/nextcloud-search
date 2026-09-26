@@ -212,6 +212,8 @@ aus Plan 20-03. Diese Tabelle kann also nicht an einem Wortlaut zerbrechen.
 | `None.` | Keine. | Ninguna. |
 | `Excluded by a rule` | Durch Regel ausgeschlossen | Excluido por una regla |
 | `Remove the matching entry under "Excluded folders".` | Den passenden Eintrag unter "Ausgeschlossene Ordner" entfernen. | Quite la entrada correspondiente en "Carpetas excluidas". |
+| `Not readable for any user` | Für keinen Nutzer lesbar | No legible para ningún usuario |
+| `Check the advanced permissions of the Team Folder. Findling only reads a file as a user who may open it.` | Die erweiterten Berechtigungen des Team Folders prüfen. Findling liest eine Datei nur als Nutzer, der sie öffnen darf. | Compruebe los permisos avanzados de la Team Folder. Findling solo lee un archivo en nombre de un usuario que puede abrirlo. |
 | `File is empty` | Datei ist leer | El archivo está vacío |
 | `None. The file has 0 bytes.` | Keine. Die Datei hat 0 Byte. | Ninguna. El archivo tiene 0 bytes. |
 | `File damaged` | Datei beschädigt | Archivo dañado |

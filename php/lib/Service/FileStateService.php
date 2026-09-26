@@ -111,6 +111,7 @@ class FileStateService {
 		'gone',
 		'image_not_ocrable',
 		'excluded',
+		'unreadable',
 		// failed
 		'empty_file',
 		'corrupt',
@@ -158,6 +159,7 @@ class FileStateService {
 			'gone',
 			'image_not_ocrable',
 			'excluded',
+			'unreadable',
 		],
 		'failed' => [
 			'empty_file',
