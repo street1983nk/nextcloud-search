@@ -22,9 +22,115 @@ Adressen, Kennungen und Passwörter der Box stehen in keiner Zeile dieser Datei.
 
 ## 1. Rechenblatt
 
-Offen. Wird vor dem Checkpoint 22-07 gefüllt: Planwerte je Block aus
-`skripte/00-ablauf.md`, Abschnitt 2, der Deckel D-01 als eigene Zeile und B4
-als eigener Deckelposten.
+Vorgelegt am 26.09.2026 für den Checkpoint 22-07, vor jeder Boxminute.
+Rechenweg nach Runbook 2.5: Planwert je Posten, Summe, Zuschlag 15 Prozent,
+mal Stundensatz. Die Planwerte stammen aus dem Rechenblatt-Entwurf der
+Research (v1.2-Ist als Untergrenze); die Blockminuten in `skripte/00-ablauf.md`,
+Abschnitt 2, summieren sich ohne Aufbau, Abbau und Wartezeit auf 499 min und
+liegen damit 22 min über den 477 min derselben Posten hier, weil sie das
+Abholen (20 min) und die Timerschritte mitzählen. Beides trägt der Zuschlag.
+
+### 1.1 Die Sätze, am 26.09.2026 gelesen
+
+`scripts/ops/aws_box.sh prices` (26.09.2026, lief mit 0) bestätigt Typ und
+Platten: m7g.large, 2 vCPU arm64, 40 GB gp3 Systemplatte und 60 GB gp3
+Datenvolumen, und nennt die gepinnten Sätze. Die Preis-API ist für dieses
+Konto gesperrt: `00-typwechsel.sh preis m7g.4xlarge` und `preis m7g.large`
+endeten am 26.09.2026 um 04:25Z beide mit 1 („preis ... unlesbar“, kein
+`pricing:GetProducts` in der Richtlinie). Die Ausgabe ging in ein Verzeichnis
+außerhalb des Repos, `rohdaten/` ist unberührt. Die Instanzsätze sind deshalb
+von Hand aus der öffentlichen On-Demand-Preiskarte gelesen, die auch die
+Preisseite von AWS speist: `https://b0.p.awsstatic.com/pricing/2.0/meteredUnitMaps/ec2/USD/current/ec2-ondemand-without-sec-sel/EU%20(Frankfurt)/Linux/index.json`,
+gelesen am 26.09.2026, Veröffentlichungsstempel der Karte
+`2026-09-25T17:45:21Z` (48 KB statt der über ein Gigabyte großen Liste der
+Region).
+
+| Satz | USD je Stunde, netto | Quelle |
+|---|---:|---|
+| m7g.large, Instanz | 0,0978 | Preiskarte 26.09.2026, gleich dem gepinnten Satz in `aws_box.sh` |
+| m7g.4xlarge, Instanz | 0,7821 | Preiskarte 26.09.2026 (m7g.2xlarge 0,3910, m7g.xlarge 0,1955, also linear) |
+| gp3, 100 GB zu 0,0952 je GB und Monat, 730 h | 0,013041 | gepinnt in `aws_box.sh`, am 26.09.2026 nicht neu gelesen |
+| öffentliche IPv4-Adresse | 0,0050 | gepinnt in `aws_box.sh`, am 26.09.2026 nicht neu gelesen |
+| **Box als m7g.large, gesamt** | **0,115841** | 0,0978 + 0,0050 + 0,013041 |
+| **Box als m7g.4xlarge, gesamt** | **0,800141** | 0,7821 + 0,0050 + 0,013041 |
+
+Die Research hatte den 4xlarge-Satz auf rund 0,80 USD je Stunde geschätzt
+(Annahme A6); gelesen ist 0,800141. Die Verfügbarkeit von m7g.4xlarge in
+eu-central-1c bleibt ungeprüft bis zum Typwechsel (Rückfall m7g.2xlarge, dann
+fehlen die Stufen 12 und 16).
+
+### 1.2 Die Posten, Weg a
+
+| Posten | Planwert | Herleitung |
+|---|---:|---|
+| Handaufbau und Wiederaufbau (Runbook-Blöcke 1 bis 13) | 1 h 30 min | Ist v1.2 rund 0 h 40 min, als Untergrenze; Aufschlag für neue Fallen |
+| Markenlesung und Einzelliste der 37 (P0) | 0 h 10 min | read-only, Sekunden |
+| Wechsel 92d mit `occ upgrade` | 0 h 45 min | Ist 0 h 32 min in drei Läufen der v1.2 |
+| Zustandsprüfung, Cron vorher, Indexgröße de,en | 0 h 15 min | |
+| M-01 (Level, fünf Stufen, Leser) | 0 h 30 min | Ist Stufen 0 h 06 min |
+| Kaltstart mit Trefferpflicht (bis drei Zyklen) | 0 h 20 min | Ist 95b 0 h 07 min für vier Ausprägungen |
+| Bodensatz, Zyklen 1 und 2, zwei Neubauten | 0 h 30 min | Ist 94b 0 h 03 min je Zyklus bei 120 s |
+| 99d | 0 h 10 min | Ist 99c 11 s |
+| B2 samt Löschen und Rückkehr | 0 h 45 min | Vorarbeit 40 min |
+| Umbau MESS-08 auf sechs Sprachen samt Indexgröße | 3 h 00 min | obere Schätzung, keine Verbesserung vorweggenommen |
+| disjunction_max-Probe (98d) | 0 h 20 min | |
+| B3 und B5 | 0 h 27 min | Vorarbeit 15 und 12 min |
+| Endmessungen, Kostenrohdatei | 0 h 15 min | |
+| 92c, Fehlschlag und regulär, Nullstand | 0 h 30 min | |
+| Abbau bis Stop | 0 h 10 min | Ist 0 h 05 min |
+| Warte- und Sitzungszeit (Tore, Handgriffe) | 3 h 00 min | v1.2: 25,75 h Box gegen rund 21 h gestempelt |
+| **Summe m7g.large** | **12 h 37 min** | 757 min; mal 1,15 = **870,6 min = 14,51 h**; mal 0,115841 = **1,681 USD** |
+| **B4 auf m7g.4xlarge, eigener Deckelposten (D-01)** | **1 h 15 min** | 75 min; mal 1,15 = **86,25 min = 1,44 h**; mal 0,800141 = **1,150 USD**; Status nach D-03: **gefahren, F4 = 3,955** (`rohdaten/w4-ci-arm64/f4.txt`: `F4 3.955`, Schwelle 1,5) |
+| **Rechenwert gesamt** | | **15,95 h / 2,83 USD** |
+| **Deckel D-01** | | **24 Boxstunden / rund 3,00 USD**; die beiden Zahlen widersprechen sich mit B4, siehe 1.3 |
+
+B7 steht in keiner Zeile: im CI gemessen (Abschnitt 2), auf der Box entfällt
+es (D-05). Stillstandszeiten, in denen die Box gestoppt ist (Typwechsel, nach
+dem Abholen), kosten nur die Platten, 0,013 USD je Stunde, und sind nicht
+eingerechnet. Der Korpus-Snapshot kostet unabhängig von der Anfahrt 2,79 bis
+2,99 USD im Monat.
+
+### 1.3 Die zwei Deckelvarianten, gerechnet (Pitfall 3)
+
+Beide Varianten halten den B4-Posten mit seinem Planwert samt Zuschlag
+(86 min) als eigenen Timer; der m7g.large-Teil ist der Rest. `DECKEL_MINUTEN`
+zählt ab `BOX_START_EPOCH`, also mit dem Handaufbau, und endet mit dem
+Herunterfahren vor dem Typwechsel; `DECKEL_REST_MINUTEN` setzt `00-lauf.sh b4`
+nach dem Typwechsel neu.
+
+| | Variante Stunden | Variante USD |
+|---|---|---|
+| Regel | 24 h gesamt, B4 darin | 3,00 USD gesamt, B4 darin |
+| `DECKEL_REST_MINUTEN` (B4, m7g.4xlarge) | 86 | 86 |
+| B4 höchstens | 1,43 h, 1,147 USD | 1,43 h, 1,147 USD |
+| `DECKEL_MINUTEN` (m7g.large) | 1354 (= 1440 minus 86) | 959 (= 1,853 USD durch 0,115841, abgerundet) |
+| m7g.large höchstens | 22,57 h, 2,614 USD | 15,98 h, 1,852 USD |
+| **Gesamt höchstens** | **24,0 h / 3,76 USD** | **17,4 h / 3,00 USD** |
+| Reserve des m7g.large-Teils gegen den Planwert 871 min | 483 min | 88 min |
+
+Die Research nannte für die Variante Stunden rund 3,64 bis 3,80 USD; mit dem
+gelesenen 4xlarge-Satz sind es 3,76 USD. In der Variante USD greift der Deckel
+nach 17,4 Boxstunden, obwohl die 24 h nicht verbraucht sind; der Planwert
+passt hinein, die Reserve ist aber mit 88 min kleiner als die Warte- und
+Sitzungszeit der v1.2, und Streichungen nach D-05 werden wahrscheinlicher.
+
+### 1.4 Harter Stopp und Streichreihenfolge
+
+| Regel | Wortlaut |
+|---|---|
+| **D-02** | Bei Erreichen des Deckels harter Stopp der Box, fehlende Messungen als Lücken im Bericht, Nachfreigabe nur durch den Owner. Der Timer auf der Box (`shutdown -h`) ist der Stopp; er wird nicht verlängert. |
+| **D-05** | Streichreihenfolge bei knapper Boxzeit: **B7** (im CI erledigt, läuft nie auf der Box), dann **B5**, dann **B4**, dann **B2 und B3**. Die Pflichtzahlen der Erfolgskriterien 2 und 3 und **B1** fallen nie. |
+
+### 1.5 Freigabeumfang
+
+Die Freigabe am Checkpoint umfasst: Aufbau nach Runbook aus dem
+Korpus-Snapshot, den A-Record über den vorhandenen DNS-Zugang, den Typwechsel
+auf m7g.4xlarge für B4 nach D-03 (Rückfall m7g.2xlarge) und zurück, und den
+Abbau ohne Ende-Snapshot (der Korpus-Snapshot bleibt). Dazu zur Kenntnis
+(`deferred-items.md`): 92d installiert die PHP-Hälfte als **1.2.0** auf eine
+Box, deren Snapshot v1.1 trägt, weil der Versionssprung auf 1.3.0 zu Phase 23
+gehört; die Migration `Version001300Date20260924000000` läuft auf der Box
+deshalb nicht. Kein Messgegenstand hängt daran.
 
 ## 2. W4-Vorabkurve
 
@@ -150,7 +256,84 @@ gewählten Deckel.
 
 ## 5. Offene Owner-Fragen
 
-Offen. Die drei Fragen stehen in `skripte/00-ablauf.md`, Abschnitt 6.
+Vorgelegt am 26.09.2026. Keine der drei Fragen ist hier beantwortet; die
+Antworten kommen wörtlich und mit Datum in `skripte/00-ablauf.md`, Abschnitt 6,
+und werden vor dem Boxstart committet.
+
+### Frage 1: Wie werden die 6 Fehlschläge und 44 Übersprungenen benannt?
+
+**Die Lage.** Die 52.137 / 44 / 6 sind der Endstand der v1.2-Box
+(`docs/measurements/2026-09-v12-messung/rohdaten/93-kosten-und-verbleib.txt`).
+Deren Volume ist am 21.09.2026 ohne Ende-Snapshot zerstört worden (Owner-Entscheid
+Frage B aus 15-08, Beleg
+`docs/measurements/2026-09-v12-messung/rohdaten/07-snapshot-und-abbau.txt`
+und `93-kosten-und-verbleib.txt`), keine Rohdatei nennt die Dateien. Der
+Korpus-Snapshot trägt 52.111 / 37 / 0 (v1.1-Box, 11.09.2026).
+
+**Was in v1.2 hinzukam, aus Skripten und Rohdaten der v1.2 ermittelt.** Zwei
+Uploads, sonst keiner:
+
+- `98c-sprachfaelle.sh`: die **39 Dateien** von `testdata/corpus` über WebDAV
+  in das Konto `sprachfall` (`05-sprachfaelle.txt`: `dateien-hochgeladen 39`,
+  Upload 17 s, Arbeitsvorrat nach rund 6 min leer). Darunter stehen die
+  absichtlich kaputten und bösartigen Dateien 24 bis 39 (abgeschnittener
+  Trailer, kaputte xref, Zip-Bombe, AES-256, Seitenbaum-Zyklus und andere),
+  dazu Null-Byte-, Passwort- und Scan-Dateien 01 bis 23.
+- `94b-grundlast-rueckkehr.sh` (MEM-02): **12 kleine Textdateien**, alle
+  eingebettet (52.137 auf 52.149) und danach wieder gelöscht
+  (`indexlauf-korpus-entfernt=204`). Sie tragen zu 44 / 6 nichts bei.
+
+Die Differenz zwischen Snapshot und v1.2-Endstand ist 26 / 7 / 6, zusammen 39,
+genau die Größe des Korpus. Der CI-Lauf `probe-92d.yml` (Lauf-ID 36217297257)
+hat denselben Korpus auf arm64 mit v1.1.0 indexiert und ebenfalls **26 / 7 / 6**
+gezählt. Das ist ein Befund aus Zählungen, keine Benennung: ob die 7 und 6 der
+v1.2-Box genau diese Dateien waren, ist auf keiner Box gelesen, und ob die 39
+schon im Snapshot liegen (98b hatte sie am 10.09. hochgeladen, der Snapshot
+entstand am 11.09.), zeigt erst die Einzelliste in P0.
+
+| Weg | Was benannt wird | Zusatzzeit | Deckel und Kosten | Folge |
+|---|---|---|---|---|
+| **(a)** | die **37 übersprungenen** des Snapshots einzeln (P0, `90e-einzelliste.json`); die 44 / 6 der v1.2-Box als **nicht reproduzierbar** dokumentiert | 0 (P0 ist schon im Plan) | wie 1.3: 24 h / 3,76 USD oder 17,4 h / 3,00 USD | MESS-07 Punkt 4 wird mit dem vorhandenen Datenbestand erfüllt, nicht mit den ursprünglichen 44 / 6. `00-lauf.sh` bleibt unverändert |
+| **(b)** | ein **v1.3-Vollreindex** von leer, dessen neue Endzahl einzeln benannt wird (`90e-einzelliste-nach-vollreindex.json`) | **rund +20 h** (Vollreindex v1.2: 19 h 20 min, dazu die acht Leerlauflesungen); dafür entfällt 92d (45 min) | Planwert m7g.large 31 h 52 min, mal 1,15 = 36,65 h = 4,245 USD; mit B4 **38,1 h / 5,40 USD**. Ein Deckel von **40 h** hieße `DECKEL_MINUTEN` 2314 und `DECKEL_REST_MINUTEN` 86, höchstens **5,61 USD**, Reserve 115 min. Die Research nannte 4,70 USD; das waren 40 h zum m7g.large-Satz ohne den 4xlarge-Satz für B4. Unter 3,00 USD ist Weg b nicht möglich | Reihenfolge 92c zuerst. **Neues Risiko:** in Weg b läuft 92c vor jedem `occ upgrade`. Bringt 92c die PHP-Hälfte 1.2.0 auf die v1.1-Instanz des Snapshots, steht die Nextcloud danach vermutlich auf „requires upgrade“, und die Registrierung findet `app_api:app` nicht (Befund Lauf 1 der v1.2). Das ist weder lokal noch im CI geprobt (Abschnitt 3); in Weg a fährt 92d das upgrade vorher |
+| **(c)** | **Teilweg:** die 39 Korpusdateien aus 98c erneut, in einen eigenen Ordner, und deren Fehlschläge und Übersprungene einzeln (`90e-teilweg.json`); die MEM-02-Dateien entfallen, weil sie alle eingebettet wurden | Planwert rund **25 min** (Upload, `files:scan`, Warten auf Vorrat 0 wie in 98c rund 6 min, `90e liste`, Ordner löschen, Rückkehr auf 52.111 / 37 / 0); mal 1,15 rund 29 min | rund **0,06 USD**; passt in beide Varianten aus 1.3, in der Variante USD sinkt die Reserve von 88 auf rund 59 min | benennt die Dateien, die die Differenz 7 / 6 sehr wahrscheinlich ausmachen, aber nicht die 44 / 6 der v1.2-Box selbst. Der Block `teilweg` wird erst nach dem Entscheid in `00-lauf.sh` gebaut und getestet (nach 92d, vor „Cron vorher“), Rückkehrtor mit 56 |
+
+### Frage 2: Welcher Deckel gilt?
+
+D-01 nennt 24 Boxstunden und rund 3,00 USD. Mit B4 auf m7g.4xlarge passen
+beide Zahlen nicht zusammen (Rechnung in 1.3):
+
+- **Variante Stunden:** 24 h gelten, B4 darin; höchstens **3,76 USD**.
+  Timerwerte `DECKEL_MINUTEN` 1354, `DECKEL_REST_MINUTEN` 86.
+- **Variante USD:** 3,00 USD gelten, B4 darin; höchstens **17,4 h**
+  Gesamtzeit. Timerwerte `DECKEL_MINUTEN` 959, `DECKEL_REST_MINUTEN` 86.
+
+Bei Weg b gilt keine der beiden; dann ist der Deckel neu festzulegen (Zeile
+Weg b oben).
+
+### Frage 3: Nach welcher Regel fällt die Messung für disjunction_max aus, und gilt F4 so?
+
+**Die Regel.** Sie muss vor der Messung feststehen (D-04, E10). Der
+**Vorschlag der Research, nicht beschlossen**, wörtlich aus
+`skripte/00-ablauf.md`, Abschnitt 6:
+
+> Vorteil für dismax, wenn der Median von RBO@10 gegen den Altplan unter dismax
+> um mindestens 0,05 höher liegt als unter der Summe, kein Sprachfall-Eigenrang
+> schlechter wird und die lexikalische Latenz um höchstens 20 Prozent steigt;
+> tie 0.0 gegen 0.1 wird mitgemessen.
+
+Die Schwellen 0,05 und 20 Prozent sind ohne Relevanzurteile gesetzt
+(Annahme A7). Der Owner nimmt den Vorschlag an, legt andere Schwellen fest oder
+eine andere Regel; offen ist dabei auch, welche Rolle tie 0.0 und 0.1 im
+Entscheid spielen.
+
+**Die F4-Definition.** Angewandt wie in `skripte/00-ablauf.md`, Abschnitt 8:
+Seiten je Sekunde bei N = 4 auf `--cpuset-cpus 0-3` geteilt durch Seiten je
+Sekunde bei N = 1 auf `--cpuset-cpus 0`, je Median dreier Runden. Gemessen
+1,139 durch 0,288, **F4 = 3,955** (Abschnitt 2); nach D-03 ist B4 damit
+gefahren. Der Owner bestätigt die Definition oder nennt eine Alternative, die
+aus den vorhandenen CI-Rohdaten in `rohdaten/w4-ci-arm64/` ohne neuen Lauf
+rechenbar ist (etwa N = 2 gegen N = 1: 1,997, oder die Tokens je Sekunde der
+Einbettung T 4 gegen T 1: 3,87).
 
 ## 6. Bericht
 
