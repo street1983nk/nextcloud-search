@@ -264,7 +264,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 22-09-PLAN.md: B4 auf m7g.4xlarge oder begründeter Entfall, Abbau, Kosten gegen Deckel, Lückenbericht
+- [x] 22-09-PLAN.md: B4 auf m7g.4xlarge oder begründeter Entfall, Abbau, Kosten gegen Deckel, Lückenbericht
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
@@ -306,7 +306,7 @@ Plans:
 | 19. Frageseite freischalten | v1.3 | 9/9 | Complete    | 2026-09-25 |
 | 20. UI-Kataloge es/it/nl/pt | v1.3 | 9/9 | Complete    | 2026-09-25 |
 | 21. Niederlaendische Komposita | v1.3 | 9/9 | Complete    | 2026-09-25 |
-| 22. Messanfahrt BL-F03 | v1.3 | 8/12 | In Progress | - |
+| 22. Messanfahrt BL-F03 | v1.3 | 9/12 | In Progress | - |
 | 23. Haertung und Store-Einreichung 1.3.0 | v1.3 | 0/TBD | Not started | - |
 
 ## Requirement-Abdeckung v1.3
