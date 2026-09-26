@@ -1,0 +1,3 @@
+findling-rss timestamp,anon,file,slab,current,peak
+findling-rss 1790401386,546512896,210993152,2023400,760770560,832176128
+findling-rss summary samples=1 max_anon=546512896 peak=na events=[unreadable] oom_killed=false

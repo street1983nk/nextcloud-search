@@ -1,0 +1,42 @@
+der wiederanlauf nach dem tor-abbruch 41, plan 22-08, 2026-09-26
+geheimnisregel wie in 03-aufbau.txt: keine adresse, keine lebende kennung, kein
+passwortinhalt. diese datei entsteht nur auf der entwicklungsmaschine; auf der box
+ist sie nicht, damit das abholen sie nicht ueberschreibt.
+
+-- owner-entscheid --
+checkpoint 22-08, antwort woertlich: "wie deine empfehlung" (option a). sollwert des
+snapshots 52137 / 44 / 6 in 92d und 00-lauf.sh, commit 26e5e8f, gepusht. rohdaten der
+ersten fahrt in lauf1-tor41/.
+
+-- zwischen den fahrten --
+box gestoppt 05:14Z bis 05:35:06Z (aws_box.sh stop und start). die gestoppte zeit
+zaehlt im deckel mit, weil 00-lauf.sh den rest ab BOX_START_EPOCH (LaunchTime
+04:59:25Z) rechnet; kein neuer startwert.
+die alte abholschleife lief noch (zwei fehlversuche) und wurde vor dem start von hand
+beendet, damit sie die alten dateien der box nicht nach rohdaten/ zurueckholt.
+
+-- start --
+aws_box.sh start: running seit 05:35:06Z, ssh-regel war schon auf der eigenen adresse,
+BOX_IP angehaengt. a-record per api des zonenverwalters auf die neue adresse (success,
+ttl 120, nicht proxied). hostschluessel per ssh-keyscan: ed25519, ecdsa, rsa gleich den
+fingerabdruecken aus 03-aufbau.txt.
+box-klon: die unversionierten rohdaten der ersten fahrt nach ~/work/lauf1-rohdaten
+(14 dateien, ausserhalb des klons), git checkout 26e5e8f, core.fileMode false, chmod +x
+wie in 03-aufbau.txt, git status --porcelain 0 zeilen, BESTAND_SNAPSHOT="52137 44 6",
+92d-vorgaben 52137 / 44 / 6. danach im box-klon die vier handgeschriebenen dateien
+00-typwechsel.txt, 01, 02 und 03 entfernt, damit das abholen die lokale fassung nicht
+ueberschreibt (v1.2- und nachfolgeverzeichnis weiter sauber, 0 zeilen). abholmarke
+~/work/abgeholt entfernt.
+nach dem maschinenstart (runbook, wiederkehrende handgriffe): name loest auf der box und
+im backend-container auf die neue adresse auf, status.php 200 (05:37:21Z); df 35G belegt,
+3.9Gi; nextcloud-instanzen 1; app_api:app:disable und enable erfolgreich; docker update
+2g, grenze 2147483648/0; gezaehlter pollerdurchgang 3.
+
+-- zweite fahrt --
+00-lauf.sh start um 05:38:31Z.
+timer-gesetzt 2026-09-26T05:38:31Z rest-minuten 1315 modus poweroff
+timer-abschaltung 2026-09-27T03:33:31Z
+ruecklesung /run/systemd/shutdown/scheduled: MODE=poweroff, USEC gleich der zeile oben.
+rechnerischer rest 1354 - (05:38:32Z - 04:59:25Z) = 1315 minuten, also der restdeckel und
+nicht die vollen 1354.
+abholschleife neu gestartet (takt 600, B4_GEPLANT=ja).

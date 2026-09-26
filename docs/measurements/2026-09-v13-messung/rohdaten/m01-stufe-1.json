@@ -1,0 +1,146 @@
+{
+ "vorlaufsonde": [
+  "vorlaufsonde 2026-09-26T05:39:06Z, 10 begriffe im container gefragt",
+  "ohne treffer: Mahnung",
+  "ohne treffer: Rechnung bezahlen",
+  "ohne treffer: Termin absagen",
+  "ohne treffer: Vertrag beenden",
+  "ohne treffer: Widerspruch einlegen",
+  "bestand=0 fenster=0 begriff=Vertrag beenden",
+  "bestand=51031 fenster=100 begriff=Kuendigung",
+  "bestand=0 fenster=0 begriff=Widerspruch einlegen",
+  "bestand=51167 fenster=100 begriff=Bescheid",
+  "bestand=0 fenster=0 begriff=Rechnung bezahlen",
+  "bestand=0 fenster=0 begriff=Mahnung",
+  "bestand=0 fenster=0 begriff=Termin absagen",
+  "bestand=51090 fenster=100 begriff=Mitteilung",
+  "bestand=50296 fenster=100 begriff=Antrag stellen",
+  "bestand=51095 fenster=100 begriff=Beschluss"
+ ],
+ "started": "2026-09-26T05:39:06Z",
+ "target": "https://loadtest.infranode.dev",
+ "user": "lasttest",
+ "concurrency": 1,
+ "rounds": 10,
+ "limit": 5,
+ "min_hits": 1,
+ "requests": 10,
+ "answered": 2,
+ "failures": 8,
+ "failure_kinds": {
+  "EmptyResultGroup": 8
+ },
+ "empty_result_groups": {
+  "gesamt": 8,
+  "ohne-treffer": 5,
+  "fehlschlag": 3
+ },
+ "hits_total": 12,
+ "hits_per_request": 1.2,
+ "budget_ms": 2500,
+ "memory": {
+  "before": {
+   "at": "2026-09-26T05:39:06Z",
+   "anon": 116940800,
+   "file": 11182080,
+   "slab": 3129608,
+   "memory.current": 132366336,
+   "memory.peak": 207101952
+  },
+  "during": [
+   {
+    "at": "2026-09-26T05:39:08Z",
+    "anon": 123424768,
+    "file": 19128320,
+    "slab": 3290352,
+    "memory.current": 147083264,
+    "memory.peak": 207101952
+   },
+   {
+    "at": "2026-09-26T05:39:10Z",
+    "anon": 136835072,
+    "file": 32346112,
+    "slab": 3292256,
+    "memory.current": 173862912,
+    "memory.peak": 207101952
+   },
+   {
+    "at": "2026-09-26T05:39:12Z",
+    "anon": 403390464,
+    "file": 37552128,
+    "slab": 3389048,
+    "memory.current": 446312448,
+    "memory.peak": 459288576
+   },
+   {
+    "at": "2026-09-26T05:39:14Z",
+    "anon": 407076864,
+    "file": 48017408,
+    "slab": 3679224,
+    "memory.current": 460845056,
+    "memory.peak": 460845056
+   },
+   {
+    "at": "2026-09-26T05:39:16Z",
+    "anon": 412733440,
+    "file": 57958400,
+    "slab": 4124480,
+    "memory.current": 476893184,
+    "memory.peak": 477114368
+   },
+   {
+    "at": "2026-09-26T05:39:17Z",
+    "anon": 551178240,
+    "file": 66703360,
+    "slab": 4217896,
+    "memory.current": 624492544,
+    "memory.peak": 704544768
+   },
+   {
+    "at": "2026-09-26T05:39:19Z",
+    "anon": 551915520,
+    "file": 80031744,
+    "slab": 4246768,
+    "memory.current": 638787584,
+    "memory.peak": 704544768
+   },
+   {
+    "at": "2026-09-26T05:39:21Z",
+    "anon": 552607744,
+    "file": 94187520,
+    "slab": 4293648,
+    "memory.current": 653279232,
+    "memory.peak": 704544768
+   },
+   {
+    "at": "2026-09-26T05:39:22Z",
+    "anon": 552660992,
+    "file": 106770432,
+    "slab": 4317720,
+    "memory.current": 666230784,
+    "memory.peak": 704544768
+   },
+   {
+    "at": "2026-09-26T05:39:24Z",
+    "anon": 552722432,
+    "file": 119877632,
+    "slab": 4351824,
+    "memory.current": 679124992,
+    "memory.peak": 704544768
+   }
+  ],
+  "after": {
+   "at": "2026-09-26T05:39:24Z",
+   "anon": 552722432,
+   "file": 119877632,
+   "slab": 4351824,
+   "memory.current": 679124992,
+   "memory.peak": 704544768
+  }
+ },
+ "ended": "2026-09-26T05:39:24Z",
+ "p50_ms": 1985.2,
+ "p95_ms": 2145.7,
+ "max_ms": 2145.7,
+ "p95_within_budget": true
+}

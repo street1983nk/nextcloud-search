@@ -1,0 +1,4 @@
+indexgroesse-de-en 2026-09-26T05:39:02Z
+index-bytes 786508818
+index-rebuild-bytes unlesbar
+bestand 52137 44 6

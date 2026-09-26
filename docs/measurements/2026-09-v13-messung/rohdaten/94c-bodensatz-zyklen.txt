@@ -1,0 +1,109 @@
+bodensatz-zyklen-start 2026-09-26T05:43:10Z
+ruhezeit 120 s, karenz 45 s, abtastintervall 5 s, zyklus-deckel 900 s, dateien je zyklus 12
+abtaster /home/ubuntu/work/nextcloud-search/scripts/ops/rss_sampler.sh, digest /home/ubuntu/work/nextcloud-search/scripts/ops/rss_digest.py, beide unveraendert gerufen
+nachbar-container nextcloud-aio-nextcloud, laufkennung 20260926T054310Z
+=== 1. Die Pflichtzeilen, VOR der Messung ===
+passwort-quelle datei
+entladeschalter-ist 120
+entladeschalter-passt-zum-block ja, 120
+speichergrenze-ist 2147483648/0
+=== 2. Neustart und Marke A ===
+-- Der einzige Neustart dieses Werkzeugs. Danach bleibt der Container bis
+   Marke C2 derselbe. --
+containerstart-nach-neustart 2026-09-26T05:43:11.078141798Z
+anmeldung ok
+bereit-nach-s 1 zustand cold
+marke-a 107.9 MB anon 113176576 byte
+marke-a-memory-current 145395712
+marke-a-engine-zustand cold
+marke-a-containerstart 2026-09-26T05:43:11.078141798Z
+=== Zyklus 1: Korpus nach mess07-bodensatz/20260926T054310Z-c1, files:scan, warten ===
+zyklus1-vorher eingebettet 52137 arbeitsvorrat 0
+zyklus1-hochgeladen 12 von 12
+| Folders | Files | New | Updated | Removed | Errors | Elapsed time |
++---------+-------+-----+---------+---------+--------+--------------+
+| 1       | 12    | 0   | 0       | 0       | 0      | 00:00:00     |
++---------+-------+-----+---------+---------+--------+--------------+
+zyklus1-start 2026-09-26T05:43:24Z
+zyklus1-zwischenstand s=15 eingebettet=52149 arbeitsvorrat=0
+zyklus1-ende 2026-09-26T05:43:39Z
+zyklus1-nachher eingebettet 52149 arbeitsvorrat 0
+zyklus1-dauer-s 15 von hoechstens 900
+zyklus1-indexlauf-stattgefunden ja
+-- Die Ruhezeit: 120 s plus 45 s Karenz, dann muss unloaded stehen --
+zyklus1-engine-zustand-nach-ruhezeit unloaded
+marke-c1 730.2 MB anon 765718528 byte
+marke-c1-memory-current 880955392
+marke-c1-engine-zustand unloaded
+marke-c1-containerstart 2026-09-26T05:43:11.078141798Z
+=== Zyklus 2: Korpus nach mess07-bodensatz/20260926T054310Z-c2, files:scan, warten ===
+zyklus2-vorher eingebettet 52149 arbeitsvorrat 0
+zyklus2-hochgeladen 12 von 12
+| Folders | Files | New | Updated | Removed | Errors | Elapsed time |
++---------+-------+-----+---------+---------+--------+--------------+
+| 1       | 12    | 0   | 0       | 0       | 0      | 00:00:00     |
++---------+-------+-----+---------+---------+--------+--------------+
+zyklus2-start 2026-09-26T05:46:34Z
+zyklus2-zwischenstand s=15 eingebettet=52149 arbeitsvorrat=12
+zyklus2-zwischenstand s=31 eingebettet=52149 arbeitsvorrat=12
+zyklus2-zwischenstand s=46 eingebettet=52149 arbeitsvorrat=4
+zyklus2-zwischenstand s=63 eingebettet=52161 arbeitsvorrat=0
+zyklus2-ende 2026-09-26T05:47:37Z
+zyklus2-nachher eingebettet 52161 arbeitsvorrat 0
+zyklus2-dauer-s 63 von hoechstens 900
+zyklus2-indexlauf-stattgefunden ja
+-- Die Ruhezeit: 120 s plus 45 s Karenz, dann muss unloaded stehen --
+zyklus2-engine-zustand-nach-ruhezeit unloaded
+marke-c2 760.8 MB anon 797732864 byte
+marke-c2-memory-current 914894848
+marke-c2-engine-zustand unloaded
+marke-c2-containerstart 2026-09-26T05:43:11.078141798Z
+-- rss_digest.py ueber die Abtastreihe von Marke A bis zum Ende --
+  rss_digest: no series with a findling-rss prefix under /tmp/tmp.S0eUQYMiI2/abtastung
+abtastreihe-spitze-mb unlesbar
+=== 3. Das Ergebnis ===
+zyklus1-minus-a 622.3
+zyklus2-minus-a 652.8
+zyklus2-minus-c1 30.5
+-- zyklus2-minus-c1 nahe null: der Bodensatz faellt einmal an. Nahe
+   zyklus1-minus-a: er waechst mit jedem Indexlauf. --
+=== 4. Die Ordner der Zyklen, wieder entfernt ===
+ordner-entfernt 204 mess07-bodensatz/20260926T054310Z-c1
+ordner-entfernt 204 mess07-bodensatz/20260926T054310Z-c2
+=== Der Protokollblock, als Block zitierbar ===
+passwort-quelle datei
+entladeschalter-ist 120
+entladeschalter-passt-zum-block ja, 120
+speichergrenze-ist 2147483648/0
+containerstart-nach-neustart 2026-09-26T05:43:11.078141798Z
+marke-a 107.9 MB anon 113176576 byte
+marke-a-memory-current 145395712
+marke-a-engine-zustand cold
+marke-a-containerstart 2026-09-26T05:43:11.078141798Z
+zyklus1-vorher eingebettet 52137 arbeitsvorrat 0
+zyklus1-hochgeladen 12 von 12
+zyklus1-nachher eingebettet 52149 arbeitsvorrat 0
+zyklus1-dauer-s 15 von hoechstens 900
+zyklus1-indexlauf-stattgefunden ja
+zyklus1-engine-zustand-nach-ruhezeit unloaded
+marke-c1 730.2 MB anon 765718528 byte
+marke-c1-memory-current 880955392
+marke-c1-engine-zustand unloaded
+marke-c1-containerstart 2026-09-26T05:43:11.078141798Z
+zyklus2-vorher eingebettet 52149 arbeitsvorrat 0
+zyklus2-hochgeladen 12 von 12
+zyklus2-nachher eingebettet 52161 arbeitsvorrat 0
+zyklus2-dauer-s 63 von hoechstens 900
+zyklus2-indexlauf-stattgefunden ja
+zyklus2-engine-zustand-nach-ruhezeit unloaded
+marke-c2 760.8 MB anon 797732864 byte
+marke-c2-memory-current 914894848
+marke-c2-engine-zustand unloaded
+marke-c2-containerstart 2026-09-26T05:43:11.078141798Z
+abtastreihe-spitze-mb unlesbar
+zyklus1-minus-a 622.3
+zyklus2-minus-a 652.8
+zyklus2-minus-c1 30.5
+ordner-entfernt 204 mess07-bodensatz/20260926T054310Z-c1
+ordner-entfernt 204 mess07-bodensatz/20260926T054310Z-c2
+bodensatz-zyklen-ende 2026-09-26T05:50:24Z

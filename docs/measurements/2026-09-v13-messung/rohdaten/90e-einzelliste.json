@@ -1,0 +1,381 @@
+{
+ "datenbank": "state.db",
+ "spalten_von_files": [
+  "file_id",
+  "storage_id",
+  "root_id",
+  "path",
+  "title",
+  "mime",
+  "size",
+  "mtime",
+  "etag",
+  "content_hash",
+  "text_chars",
+  "state",
+  "reason",
+  "attempts",
+  "ocr_used",
+  "indexed_at",
+  "index_version",
+  "deleted_at"
+ ],
+ "zaehlung_je_state": {
+  "failed": 6,
+  "indexed": 52137,
+  "skipped": 44
+ },
+ "einzelliste_anzahl": 50,
+ "einzelliste": [
+  {
+   "file_id": 52284,
+   "endung": "pdf",
+   "groesse": 0,
+   "state": "failed",
+   "reason": "empty_file"
+  },
+  {
+   "file_id": 52302,
+   "endung": "pdf",
+   "groesse": 641,
+   "state": "failed",
+   "reason": "corrupt"
+  },
+  {
+   "file_id": 52304,
+   "endung": "pdf",
+   "groesse": 627,
+   "state": "failed",
+   "reason": "corrupt"
+  },
+  {
+   "file_id": 52305,
+   "endung": "pdf",
+   "groesse": 527,
+   "state": "failed",
+   "reason": "corrupt"
+  },
+  {
+   "file_id": 52306,
+   "endung": "pdf",
+   "groesse": 239,
+   "state": "failed",
+   "reason": "corrupt"
+  },
+  {
+   "file_id": 52311,
+   "endung": "pdf",
+   "groesse": 433,
+   "state": "failed",
+   "reason": "corrupt"
+  },
+  {
+   "file_id": 52,
+   "endung": "jpg",
+   "groesse": 457744,
+   "state": "skipped",
+   "reason": "empty_text"
+  },
+  {
+   "file_id": 53,
+   "endung": "jpg",
+   "groesse": 797325,
+   "state": "skipped",
+   "reason": "empty_text"
+  },
+  {
+   "file_id": 55,
+   "endung": "jpg",
+   "groesse": 474653,
+   "state": "skipped",
+   "reason": "empty_text"
+  },
+  {
+   "file_id": 57,
+   "endung": "jpg",
+   "groesse": 167989,
+   "state": "skipped",
+   "reason": "empty_text"
+  },
+  {
+   "file_id": 58,
+   "endung": "jpg",
+   "groesse": 593508,
+   "state": "skipped",
+   "reason": "empty_text"
+  },
+  {
+   "file_id": 59,
+   "endung": "jpg",
+   "groesse": 567689,
+   "state": "skipped",
+   "reason": "empty_text"
+  },
+  {
+   "file_id": 60,
+   "endung": "jpg",
+   "groesse": 427030,
+   "state": "skipped",
+   "reason": "empty_text"
+  },
+  {
+   "file_id": 63,
+   "endung": "png",
+   "groesse": 50598,
+   "state": "skipped",
+   "reason": "image_not_ocrable"
+  },
+  {
+   "file_id": 781,
+   "endung": "csv",
+   "groesse": 55989217,
+   "state": "skipped",
+   "reason": "too_large"
+  },
+  {
+   "file_id": 5972,
+   "endung": "csv",
+   "groesse": 55934721,
+   "state": "skipped",
+   "reason": "too_large"
+  },
+  {
+   "file_id": 6684,
+   "endung": "csv",
+   "groesse": 56004297,
+   "state": "skipped",
+   "reason": "too_large"
+  },
+  {
+   "file_id": 9055,
+   "endung": "csv",
+   "groesse": 55921773,
+   "state": "skipped",
+   "reason": "too_large"
+  },
+  {
+   "file_id": 10822,
+   "endung": "csv",
+   "groesse": 55930145,
+   "state": "skipped",
+   "reason": "too_large"
+  },
+  {
+   "file_id": 12643,
+   "endung": "csv",
+   "groesse": 55997589,
+   "state": "skipped",
+   "reason": "too_large"
+  },
+  {
+   "file_id": 12649,
+   "endung": "csv",
+   "groesse": 56021509,
+   "state": "skipped",
+   "reason": "too_large"
+  },
+  {
+   "file_id": 15439,
+   "endung": "csv",
+   "groesse": 55944029,
+   "state": "skipped",
+   "reason": "too_large"
+  },
+  {
+   "file_id": 19429,
+   "endung": "csv",
+   "groesse": 56012461,
+   "state": "skipped",
+   "reason": "too_large"
+  },
+  {
+   "file_id": 23946,
+   "endung": "csv",
+   "groesse": 55938205,
+   "state": "skipped",
+   "reason": "too_large"
+  },
+  {
+   "file_id": 25056,
+   "endung": "csv",
+   "groesse": 55966649,
+   "state": "skipped",
+   "reason": "too_large"
+  },
+  {
+   "file_id": 29344,
+   "endung": "csv",
+   "groesse": 55989269,
+   "state": "skipped",
+   "reason": "too_large"
+  },
+  {
+   "file_id": 29442,
+   "endung": "csv",
+   "groesse": 56004037,
+   "state": "skipped",
+   "reason": "too_large"
+  },
+  {
+   "file_id": 30882,
+   "endung": "csv",
+   "groesse": 55982301,
+   "state": "skipped",
+   "reason": "too_large"
+  },
+  {
+   "file_id": 34601,
+   "endung": "csv",
+   "groesse": 55904353,
+   "state": "skipped",
+   "reason": "too_large"
+  },
+  {
+   "file_id": 35042,
+   "endung": "csv",
+   "groesse": 55981677,
+   "state": "skipped",
+   "reason": "too_large"
+  },
+  {
+   "file_id": 43902,
+   "endung": "csv",
+   "groesse": 55986721,
+   "state": "skipped",
+   "reason": "too_large"
+  },
+  {
+   "file_id": 44282,
+   "endung": "csv",
+   "groesse": 55988333,
+   "state": "skipped",
+   "reason": "too_large"
+  },
+  {
+   "file_id": 46892,
+   "endung": "csv",
+   "groesse": 55958849,
+   "state": "skipped",
+   "reason": "too_large"
+  },
+  {
+   "file_id": 49470,
+   "endung": "csv",
+   "groesse": 55977101,
+   "state": "skipped",
+   "reason": "too_large"
+  },
+  {
+   "file_id": 50186,
+   "endung": "jpg",
+   "groesse": 457744,
+   "state": "skipped",
+   "reason": "empty_text"
+  },
+  {
+   "file_id": 50187,
+   "endung": "jpg",
+   "groesse": 797325,
+   "state": "skipped",
+   "reason": "empty_text"
+  },
+  {
+   "file_id": 50189,
+   "endung": "jpg",
+   "groesse": 474653,
+   "state": "skipped",
+   "reason": "empty_text"
+  },
+  {
+   "file_id": 50191,
+   "endung": "jpg",
+   "groesse": 167989,
+   "state": "skipped",
+   "reason": "empty_text"
+  },
+  {
+   "file_id": 50192,
+   "endung": "jpg",
+   "groesse": 593508,
+   "state": "skipped",
+   "reason": "empty_text"
+  },
+  {
+   "file_id": 50193,
+   "endung": "jpg",
+   "groesse": 567689,
+   "state": "skipped",
+   "reason": "empty_text"
+  },
+  {
+   "file_id": 50194,
+   "endung": "jpg",
+   "groesse": 427030,
+   "state": "skipped",
+   "reason": "empty_text"
+  },
+  {
+   "file_id": 50197,
+   "endung": "png",
+   "groesse": 50598,
+   "state": "skipped",
+   "reason": "image_not_ocrable"
+  },
+  {
+   "file_id": 51704,
+   "endung": "csv",
+   "groesse": 55977881,
+   "state": "skipped",
+   "reason": "too_large"
+  },
+  {
+   "file_id": 52280,
+   "endung": "pdf",
+   "groesse": 814,
+   "state": "skipped",
+   "reason": "empty_text"
+  },
+  {
+   "file_id": 52283,
+   "endung": "png",
+   "groesse": 140,
+   "state": "skipped",
+   "reason": "image_not_ocrable"
+  },
+  {
+   "file_id": 52285,
+   "endung": "pdf",
+   "groesse": 923,
+   "state": "skipped",
+   "reason": "encrypted"
+  },
+  {
+   "file_id": 52300,
+   "endung": "png",
+   "groesse": 131,
+   "state": "skipped",
+   "reason": "image_not_ocrable"
+  },
+  {
+   "file_id": 52309,
+   "endung": "pdf",
+   "groesse": 602,
+   "state": "skipped",
+   "reason": "empty_text"
+  },
+  {
+   "file_id": 52312,
+   "endung": "docx",
+   "groesse": 66154,
+   "state": "skipped",
+   "reason": "too_large"
+  },
+  {
+   "file_id": 52316,
+   "endung": "pdf",
+   "groesse": 1398,
+   "state": "skipped",
+   "reason": "encrypted"
+  }
+ ]
+}

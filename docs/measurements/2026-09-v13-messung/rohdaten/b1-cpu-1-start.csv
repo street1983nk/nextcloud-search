@@ -1,0 +1,7 @@
+findling-cpu epoch,usage_usec,box_total_jiffies,box_idle_jiffies,uptime_usec
+findling-cpu 1790401111,1630741,43038,37229,216010000
+findling-cpu 1790401116,1636970,44028,37737,221020000
+findling-cpu 1790401121,1641957,45029,38230,226040000
+findling-cpu 1790401126,1647163,46027,38716,231050000
+findling-cpu 1790401131,1652130,47028,39213,236060000
+findling-cpu summary samples=5 mean_cores=0.001 max_cores=0.001 reason=cgroup gone

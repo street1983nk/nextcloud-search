@@ -1,0 +1,3 @@
+findling-cpu epoch,usage_usec,box_total_jiffies,box_idle_jiffies,uptime_usec
+findling-cpu 1790401824,10859800,185333,145106,929470000
+findling-cpu summary samples=1 mean_cores=na max_cores=na reason=signal

@@ -1,0 +1,27 @@
+cron-vorpruefung-vorher-start 2026-09-26T05:39:01Z
+soll-intervall 300 s, toleranz 10 prozent
+=== 1. Der Hintergrundauftrags-Modus der Instanz ===
+-- Sollwert cron. ajax und webcron takten nach Besuchern und nicht nach einer Uhr --
+cron-modus-ist cron
+=== 2. Das Intervall, aus den bekannten Quellen der Reihe nach ===
+-- Quelle aio-cron-container: die Schlafdauer der Cron-Schleife im Container --
+=== 3. Das Ergebnis, als Pflichtzeile des Messprotokolls ===
+cron-intervall-quelle aio-cron-container
+cron-intervall-ist 300
+=== 4. Das Soll setzen und zuruecklesen, statt es nur zu pruefen ===
+-- D-07 verlangt, dass der Ablauf den Systemcron der Messinstanz EXPLIZIT auf
+   fuenf Minuten setzt. Das Setzen ist ein Handgriff auf der Box und steht hier
+   als Befehl, nicht als Behauptung: --
+cron-soll-setzen-befehl sudo crontab -u www-data -e, Minutenfeld der cron.php-Zeile auf */5 setzen
+cron-soll-setzen-befehl-aio Schlafdauer in nextcloud-aio-nextcloud:/cron.sh auf 300 setzen und den Container neu starten
+-- DIESER SCHRITT IST IN PHASE 15 ERSTMALS VOLLZOGEN. Bis dahin ist er gelesen
+   und nicht gefahren, und dieses Skript tut nicht so, als waere er es. --
+-- Die Ruecklesung fragt die beiden Konfigurationsquellen erneut. Die dritte
+   Quelle wird nicht wiederholt: sie ist eine Messung und kostet ihre Frist ein
+   zweites Mal, ohne eine Konfiguration zurueckzulesen. --
+cron-soll-ruecklesung 300
+=== 5. Der Protokollblock, als Block zitierbar ===
+cron-modus-ist cron
+cron-intervall-quelle aio-cron-container
+cron-intervall-ist 300
+cron-vorpruefung-vorher-ende 2026-09-26T05:39:02Z

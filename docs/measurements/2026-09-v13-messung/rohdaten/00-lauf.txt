@@ -1,0 +1,53 @@
+p0-timer-start 2026-09-26T05:38:31Z
+timer-abschaltung 2026-09-27T03:33:31Z
+p0-timer-ende 2026-09-26T05:38:31Z
+altverzeichnisse-sauber ja
+lauf weg a b4-geplant ja abbild sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+abtaster leben 1 nach start containerstart 2026-09-26T05:37:34.019011299Z 2026-09-26T05:38:31Z
+p0-marken-start 2026-09-26T05:38:31Z
+90e-marken-rueckgabewert 0
+p0-marken-ende 2026-09-26T05:38:31Z
+einzelliste-start 2026-09-26T05:38:31Z
+90e-liste-rueckgabewert 0 datei 90e-einzelliste.json
+einzelliste-ende 2026-09-26T05:38:31Z
+p1-92d-start 2026-09-26T05:38:31Z
+92d-rueckgabewert 0
+abtaster leben 2 nach 92d containerstart 2026-09-26T05:38:58.273475674Z 2026-09-26T05:39:01Z
+p1-92d-ende 2026-09-26T05:39:01Z
+cron-vorher-start 2026-09-26T05:39:01Z
+97-vorher-rueckgabewert 0
+cron-vorher-ende 2026-09-26T05:39:02Z
+indexgroesse-de-en-start 2026-09-26T05:39:02Z
+indexgroesse-de-en-ende 2026-09-26T05:39:02Z
+m01-start 2026-09-26T05:39:02Z
+m01-stufe-1-von 2026-09-26T05:39:03Z
+m01-stufe-1-bis 2026-09-26T05:39:24Z
+m01-stufe-4-von 2026-09-26T05:39:45Z
+m01-stufe-4-bis 2026-09-26T05:39:56Z
+m01-stufe-8-von 2026-09-26T05:40:17Z
+m01-stufe-8-bis 2026-09-26T05:40:37Z
+m01-stufe-12-von 2026-09-26T05:40:57Z
+m01-stufe-12-bis 2026-09-26T05:41:26Z
+m01-stufe-16-von 2026-09-26T05:41:47Z
+m01-stufe-16-bis 2026-09-26T05:42:24Z
+95c-rueckgabewert 48
+abtaster leben 3 nach kaltstart containerstart 2026-09-26T05:43:00.345874398Z 2026-09-26T05:43:06Z
+befund m01 95c endete mit 48, die Kaltstartlatenz hat keine gueltige erste Suche; M-01-Gegenprobe nicht entschieden 2026-09-26T05:43:09Z
+m01-ende 2026-09-26T05:43:09Z
+bodensatz-start 2026-09-26T05:43:09Z
+92e FINDLING_EMBED_IDLE_RELEASE_SECONDS=120 rueckgabewert 0
+abtaster leben 4 nach ttl-120 containerstart 2026-09-26T05:43:10.533128166Z 2026-09-26T05:43:10Z
+94c-rueckgabewert 32
+abtaster leben 5 nach bodensatz containerstart 2026-09-26T05:43:11.078141798Z 2026-09-26T05:50:24Z
+92e FINDLING_EMBED_IDLE_RELEASE_SECONDS=0 rueckgabewert 0
+abtaster leben 6 nach ttl-0 containerstart 2026-09-26T05:50:25.52577405Z 2026-09-26T05:50:25Z
+befund bodensatz 94c endete mit 32, der Bodensatz hat keine Zahl 2026-09-26T05:50:25Z
+bodensatz-ende 2026-09-26T05:50:26Z
+99d-start 2026-09-26T05:50:26Z
+99d-umgebung FINDLING_LOAD_PASSWORD ungesetzt
+99d-rueckgabewert 34
+befund 99d 99d endete mit 34 2026-09-26T05:50:26Z
+99d-ende 2026-09-26T05:50:26Z
+zeit-fuer b2 rest 1303 bedarf 310
+b2-start 2026-09-26T05:50:26Z
+b2-bestand-soll 52137 44 6

@@ -1,0 +1,1 @@
+rss_sampler: container=nc_app_findling_backend cgroup=/sys/fs/cgroup/system.slice/docker-fdced4d853b57c22670b8143dd5b335d1e963b08e500b788b6631cef2e75b881.scope interval=5s

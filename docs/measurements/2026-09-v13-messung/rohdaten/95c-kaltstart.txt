@@ -1,0 +1,62 @@
+kaltstart-start 2026-09-26T05:42:45Z
+begriff Bescheid Antrag, deckel der antwortliste 100, trefferzaehlung-quelle jq, kaltzyklen hoechstens 3
+=== 1. Die Pflichtzeilen, VOR der Messung ===
+passwort-quelle datei
+entladeschalter-ist 0
+speichergrenze-ist 2147483648/0
+=== Kaltzyklus 1 von hoechstens 3 ===
+kaltzyklus 1 containerstart 2026-09-26T05:42:45.996639032Z
+anmeldung ok
+bereit-nach-s 1 zustand cold
+-- Der Seitencache des Wirts, geleert. Die Messung ist in beiden Haelften kalt --
+               total        used        free      shared  buff/cache   available
+Mem:           3.9Gi       1.5Gi       2.1Gi       286Mi       802Mi       2.4Gi
+Swap:             0B          0B          0B
+kaltzyklus 1 engine-zustand-vor-suche cold
+kaltzyklus 1 ms 2028 code 200 treffer 0
+kaltzyklus 1 ungueltig keine-treffer
+=== Kaltzyklus 2 von hoechstens 3 ===
+kaltzyklus 2 containerstart 2026-09-26T05:42:53.091951106Z
+anmeldung ok
+bereit-nach-s 1 zustand cold
+-- Der Seitencache des Wirts, geleert. Die Messung ist in beiden Haelften kalt --
+               total        used        free      shared  buff/cache   available
+Mem:           3.9Gi       1.4Gi       2.1Gi       286Mi       802Mi       2.5Gi
+Swap:             0B          0B          0B
+kaltzyklus 2 engine-zustand-vor-suche cold
+kaltzyklus 2 ms 2109 code 200 treffer 0
+kaltzyklus 2 ungueltig keine-treffer
+=== Kaltzyklus 3 von hoechstens 3 ===
+kaltzyklus 3 containerstart 2026-09-26T05:43:00.345874398Z
+anmeldung ok
+bereit-nach-s 1 zustand cold
+-- Der Seitencache des Wirts, geleert. Die Messung ist in beiden Haelften kalt --
+               total        used        free      shared  buff/cache   available
+Mem:           3.9Gi       1.4Gi       2.1Gi       286Mi       804Mi       2.4Gi
+Swap:             0B          0B          0B
+kaltzyklus 3 engine-zustand-vor-suche cold
+kaltzyklus 3 ms 2084 code 200 treffer 0
+kaltzyklus 3 ungueltig keine-treffer
+kaltzyklen-gefahren 3
+kaltstart-gueltig nein
+kaltstart-fenster 2026-09-26T05:42:45Z 2026-09-26T05:43:06Z
+=== Der Protokollblock, als Block zitierbar ===
+passwort-quelle datei
+entladeschalter-ist 0
+speichergrenze-ist 2147483648/0
+kaltzyklus 1 containerstart 2026-09-26T05:42:45.996639032Z
+kaltzyklus 1 engine-zustand-vor-suche cold
+kaltzyklus 1 ms 2028 code 200 treffer 0
+kaltzyklus 1 ungueltig keine-treffer
+kaltzyklus 2 containerstart 2026-09-26T05:42:53.091951106Z
+kaltzyklus 2 engine-zustand-vor-suche cold
+kaltzyklus 2 ms 2109 code 200 treffer 0
+kaltzyklus 2 ungueltig keine-treffer
+kaltzyklus 3 containerstart 2026-09-26T05:43:00.345874398Z
+kaltzyklus 3 engine-zustand-vor-suche cold
+kaltzyklus 3 ms 2084 code 200 treffer 0
+kaltzyklus 3 ungueltig keine-treffer
+kaltzyklen-gefahren 3
+kaltstart-gueltig nein
+kaltstart-fenster 2026-09-26T05:42:45Z 2026-09-26T05:43:06Z
+kaltstart-ende 2026-09-26T05:43:06Z

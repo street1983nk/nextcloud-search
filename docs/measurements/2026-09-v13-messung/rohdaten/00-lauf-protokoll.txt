@@ -1,0 +1,684 @@
+p0-timer-start 2026-09-26T05:38:31Z
+timer-abschaltung 2026-09-27T03:33:31Z
+p0-timer-ende 2026-09-26T05:38:31Z
+altverzeichnisse-sauber ja
+lauf weg a b4-geplant ja abbild sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+abtaster leben 1 nach start containerstart 2026-09-26T05:37:34.019011299Z 2026-09-26T05:38:31Z
+p0-marken-start 2026-09-26T05:38:31Z
+marke analyzer_version 1
+marke created_at 1788946328
+marke embedding_version multilingual-e5-small/int8/384/1024
+marke index_version 1
+marke instance_id 2bd6daea1f19451591e590954ed2b799
+marke schema_version 1
+marke store_schema_version 2
+marke tantivy_version tantivy v0.26.0, index_format v7
+marke wordlist_hash b1f64012ca7f5b6e57de2cb1bafa2521cb6606f3ccef5d6fd17396edc808dde0
+marke-gleich analyzer_version
+marke-gleich index_version
+marke-gleich store_schema_version
+marke-umbau schema_version ist 1 erwartet 2
+legacy-schritt schema_version 1 nach 2
+marke-gleich wordlist_hash
+marke-gleich tantivy_version
+marke-gleich embedding_version
+marke-umbau languages ist fehlt erwartet de,en
+marken-urteil umbau
+90e-marken-rueckgabewert 0
+p0-marken-ende 2026-09-26T05:38:31Z
+einzelliste-start 2026-09-26T05:38:31Z
+90e-liste-rueckgabewert 0 datei 90e-einzelliste.json
+einzelliste-ende 2026-09-26T05:38:31Z
+p1-92d-start 2026-09-26T05:38:31Z
+wechsel-vorlauf 2026-09-26T05:38:31Z
+abbild: ghcr.io/street1983nk/findling_backend@sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+repo: /home/ubuntu/work/nextcloud-search
+abbild-digest-gefordert sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+=== 1. Wie viele Nextcloud-Instanzen laufen an diesem Docker-Dienst ===
+-- jeder laufende Container, damit die Zahl darunter nachpruefbar ist --
+nc_app_findling_backend  ghcr.io/street1983nk/findling_backend:dev  Up 57 seconds
+findling-registry  registry:2  Up 3 minutes
+nextcloud-aio-apache  ghcr.io/nextcloud-releases/aio-apache:latest  Up 3 minutes (healthy)
+nextcloud-aio-nextcloud  ghcr.io/nextcloud-releases/aio-nextcloud:latest  Up 3 minutes (healthy)
+nextcloud-aio-redis  ghcr.io/nextcloud-releases/aio-redis:latest  Up 3 minutes (healthy)
+nextcloud-aio-database  ghcr.io/nextcloud-releases/aio-postgresql:latest  Up 3 minutes (healthy)
+nextcloud-aio-harp  ghcr.io/nextcloud-releases/aio-harp:latest  Up 3 minutes (healthy)
+nextcloud-aio-notify-push  ghcr.io/nextcloud-releases/aio-notify-push:latest  Up 3 minutes (healthy)
+nextcloud-aio-mastercontainer  nextcloud/all-in-one:latest  Up 3 minutes (healthy)
+nextcloud-instanzen 1
+=== 2. Der Arbeitsbaum und die Kopie der info.xml, vor dem Pull ===
+die Fassung dieses Baums: <version>1.2.0</version>
+der image-tag dieses Baums: <image-tag>1.2.0</image-tag>
+Hinweis: der image-tag ist nicht 1.1.0; das sed unten stellt, was dort steht, auf dev
+			<registry>ghcr.io</registry>
+			<image>street1983nk/findling_backend</image>
+			<image-tag>dev</image-tag>
+die Kopie bleibt als /home/ubuntu/work/nextcloud-search/docs/measurements/2026-09-v13-messung/rohdaten/92d-info-box.xml liegen, damit der Bericht zeigen kann, womit registriert wurde
+-- und der Arbeitsbaum muss von alldem unberuehrt sein (T-10-18) --
+arbeitsbaum-unberuehrt ja
+=== 3. Das Abbild, per Digest gezogen und nicht ueber :dev ===
+ghcr.io/street1983nk/findling_backend@sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e: Pulling from street1983nk/findling_backend
+Digest: sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+Status: Image is up to date for ghcr.io/street1983nk/findling_backend@sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+ghcr.io/street1983nk/findling_backend@sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+Id=sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e Arch=arm64 Created=2026-09-25T16:46:09.97812468Z Digest=ghcr.io/street1983nk/findling_backend@sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+abbild-digest-ist sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+abbild-id-ist sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+abbild-digest-gleich ja
+=== 4. Der Baumhash, als eigener Schritt mit eigener Rohdatei ===
+1 of 3: the package inside the image
+2 of 3: the package in the working tree
+3 of 3: the php half in the working tree
+baumhash-start 2026-09-26T05:38:33Z
+abbild: ghcr.io/street1983nk/findling_backend@sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+digest=ghcr.io/street1983nk/findling_backend@sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e arch=arm64 created=2026-09-25T16:46:09.97812468Z
+repo: /home/ubuntu/work/nextcloud-search
+=== The tree hash of the package INSIDE the image ===
+dateien: 57
+baumhash: 728461aceae56b8433a27cca6005b73303362733fb5973c9f6da4954dbcceda2
+=== The tree hash of the package in the working tree ===
+dateien: 57
+baumhash: 728461aceae56b8433a27cca6005b73303362733fb5973c9f6da4954dbcceda2
+=== The tree hash of the php half in the working tree ===
+dateien: 68
+baumhash: a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab6a8abba
+=== The verdict ===
+abbild-baumhash: 728461aceae56b8433a27cca6005b73303362733fb5973c9f6da4954dbcceda2
+arbeitsbaum-baumhash: 728461aceae56b8433a27cca6005b73303362733fb5973c9f6da4954dbcceda2
+baumhash-gleich ja
+baumhash-ende 2026-09-26T05:38:33Z
+40B-BAUMHASH-FERTIG
+40b-baumhash-rueckgabewert 0
+baumhash-zeilen 3 (drei werden erwartet)
+baumhash-gleich ja
+baumhash-beweis ja
+=== 5. Was das Abbild fuer die semantische Haelfte und fuer die OCR mitbringt ===
+-- das Modellverzeichnis --
+total 136992
+drwxr-xr-x 2 root root      4096 Sep 25 16:46 .
+drwxr-xr-x 1 root root      4096 Sep 25 16:46 ..
+-rw-r--r-- 1 root root       653 Sep 25 16:46 config.json
+-rw-r--r-- 1 root root 118101091 Sep 25 16:46 model.onnx
+-rw-r--r-- 1 root root   5069051 Sep 25 16:46 sentencepiece.bpe.model
+-rw-r--r-- 1 root root       167 Sep 25 16:46 special_tokens_map.json
+-rw-r--r-- 1 root root  17082730 Sep 25 16:46 tokenizer.json
+-rw-r--r-- 1 root root       443 Sep 25 16:46 tokenizer_config.json
+-- sha256 der int8-Datei, also des Abbildinhalts und nicht des Arbeitsbaums --
+8da4c9ba0ad59f58e8566839425d7fd6339d31414d0ce5cba2d7d0afb75dd8b6  /usr/local/share/findling/model/model.onnx
+-- die wirklich installierten Tesseract-Sprachen --
+List of available languages in "/usr/share/tesseract-ocr/5/tessdata/" (10):
+dan
+deu
+eng
+est
+fra
+ita
+nld
+osd
+por
+spa
+-- die Vorgabewerte der Umgebung --
+FINDLING_EMBED_MODEL_DIR=/usr/local/share/findling/model
+FINDLING_VEC0_PATH=/usr/local/lib/findling/vec0.so
+HF_HUB_OFFLINE=1
+wechsel-vorlauf-ende 2026-09-26T05:38:53Z
+wechsel-vorlauf 2026-09-26T05:38:31Z
+abbild: ghcr.io/street1983nk/findling_backend@sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+repo: /home/ubuntu/work/nextcloud-search
+abbild-digest-gefordert sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+=== 1. Wie viele Nextcloud-Instanzen laufen an diesem Docker-Dienst ===
+-- jeder laufende Container, damit die Zahl darunter nachpruefbar ist --
+nc_app_findling_backend  ghcr.io/street1983nk/findling_backend:dev  Up 57 seconds
+findling-registry  registry:2  Up 3 minutes
+nextcloud-aio-apache  ghcr.io/nextcloud-releases/aio-apache:latest  Up 3 minutes (healthy)
+nextcloud-aio-nextcloud  ghcr.io/nextcloud-releases/aio-nextcloud:latest  Up 3 minutes (healthy)
+nextcloud-aio-redis  ghcr.io/nextcloud-releases/aio-redis:latest  Up 3 minutes (healthy)
+nextcloud-aio-database  ghcr.io/nextcloud-releases/aio-postgresql:latest  Up 3 minutes (healthy)
+nextcloud-aio-harp  ghcr.io/nextcloud-releases/aio-harp:latest  Up 3 minutes (healthy)
+nextcloud-aio-notify-push  ghcr.io/nextcloud-releases/aio-notify-push:latest  Up 3 minutes (healthy)
+nextcloud-aio-mastercontainer  nextcloud/all-in-one:latest  Up 3 minutes (healthy)
+nextcloud-instanzen 1
+=== 2. Der Arbeitsbaum und die Kopie der info.xml, vor dem Pull ===
+die Fassung dieses Baums: <version>1.2.0</version>
+der image-tag dieses Baums: <image-tag>1.2.0</image-tag>
+Hinweis: der image-tag ist nicht 1.1.0; das sed unten stellt, was dort steht, auf dev
+			<registry>ghcr.io</registry>
+			<image>street1983nk/findling_backend</image>
+			<image-tag>dev</image-tag>
+die Kopie bleibt als /home/ubuntu/work/nextcloud-search/docs/measurements/2026-09-v13-messung/rohdaten/92d-info-box.xml liegen, damit der Bericht zeigen kann, womit registriert wurde
+-- und der Arbeitsbaum muss von alldem unberuehrt sein (T-10-18) --
+arbeitsbaum-unberuehrt ja
+=== 3. Das Abbild, per Digest gezogen und nicht ueber :dev ===
+ghcr.io/street1983nk/findling_backend@sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e: Pulling from street1983nk/findling_backend
+Digest: sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+Status: Image is up to date for ghcr.io/street1983nk/findling_backend@sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+ghcr.io/street1983nk/findling_backend@sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+Id=sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e Arch=arm64 Created=2026-09-25T16:46:09.97812468Z Digest=ghcr.io/street1983nk/findling_backend@sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+abbild-digest-ist sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+abbild-id-ist sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+abbild-digest-gleich ja
+=== 4. Der Baumhash, als eigener Schritt mit eigener Rohdatei ===
+1 of 3: the package inside the image
+2 of 3: the package in the working tree
+3 of 3: the php half in the working tree
+baumhash-start 2026-09-26T05:38:33Z
+abbild: ghcr.io/street1983nk/findling_backend@sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+digest=ghcr.io/street1983nk/findling_backend@sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e arch=arm64 created=2026-09-25T16:46:09.97812468Z
+repo: /home/ubuntu/work/nextcloud-search
+=== The tree hash of the package INSIDE the image ===
+dateien: 57
+baumhash: 728461aceae56b8433a27cca6005b73303362733fb5973c9f6da4954dbcceda2
+=== The tree hash of the package in the working tree ===
+dateien: 57
+baumhash: 728461aceae56b8433a27cca6005b73303362733fb5973c9f6da4954dbcceda2
+=== The tree hash of the php half in the working tree ===
+dateien: 68
+baumhash: a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab6a8abba
+=== The verdict ===
+abbild-baumhash: 728461aceae56b8433a27cca6005b73303362733fb5973c9f6da4954dbcceda2
+arbeitsbaum-baumhash: 728461aceae56b8433a27cca6005b73303362733fb5973c9f6da4954dbcceda2
+baumhash-gleich ja
+baumhash-ende 2026-09-26T05:38:33Z
+40B-BAUMHASH-FERTIG
+40b-baumhash-rueckgabewert 0
+baumhash-zeilen 3 (drei werden erwartet)
+baumhash-gleich ja
+baumhash-beweis ja
+=== 5. Was das Abbild fuer die semantische Haelfte und fuer die OCR mitbringt ===
+-- das Modellverzeichnis --
+total 136992
+drwxr-xr-x 2 root root      4096 Sep 25 16:46 .
+drwxr-xr-x 1 root root      4096 Sep 25 16:46 ..
+-rw-r--r-- 1 root root       653 Sep 25 16:46 config.json
+-rw-r--r-- 1 root root 118101091 Sep 25 16:46 model.onnx
+-rw-r--r-- 1 root root   5069051 Sep 25 16:46 sentencepiece.bpe.model
+-rw-r--r-- 1 root root       167 Sep 25 16:46 special_tokens_map.json
+-rw-r--r-- 1 root root  17082730 Sep 25 16:46 tokenizer.json
+-rw-r--r-- 1 root root       443 Sep 25 16:46 tokenizer_config.json
+-- sha256 der int8-Datei, also des Abbildinhalts und nicht des Arbeitsbaums --
+8da4c9ba0ad59f58e8566839425d7fd6339d31414d0ce5cba2d7d0afb75dd8b6  /usr/local/share/findling/model/model.onnx
+-- die wirklich installierten Tesseract-Sprachen --
+List of available languages in "/usr/share/tesseract-ocr/5/tessdata/" (10):
+dan
+deu
+eng
+est
+fra
+ita
+nld
+osd
+por
+spa
+-- die Vorgabewerte der Umgebung --
+FINDLING_EMBED_MODEL_DIR=/usr/local/share/findling/model
+FINDLING_VEC0_PATH=/usr/local/lib/findling/vec0.so
+HF_HUB_OFFLINE=1
+wechsel-vorlauf-ende 2026-09-26T05:38:53Z
+wechsel-start 2026-09-26T05:38:53Z
+=== 6. Der Datenspeicher vor dem Wechsel, und er muss danach derselbe sein ===
+nc_app_findling_backend_data
+=== 7. Die PHP-Haelfte dieses Stands, in den Container der Nextcloud ===
+php-verzeichnis-ist findling
+total 112
+drwxrwxr-x 10 www-data www-data  4096 Sep 26 05:06 .
+drwxr-xr-x  9 www-data www-data  4096 Sep 26 05:38 ..
+-rw-rw-r--  1 www-data www-data     0 Sep 26 05:06 .gitkeep
+drwxrwxr-x  2 www-data www-data  4096 Sep 26 05:06 appinfo
+=== 7b. occ upgrade, Schritt 1b des Runbooks, mit gelesenem Rueckgabewert ===
+No upgrade required.
+
+Note: This command triggers the upgrade actions associated with a new version. The new version's updated source files must be deployed in advance.
+See the upgrade documentation: https://docs.nextcloud.com/server/33/go.php?to=admin-update for more information.
+occ-upgrade-rueckgabewert 0
+occ-upgrade-gelungen ja
+findling already enabled
+  - findling: 1.2.0
+  - firstrunwizard: 6.0.0
+php-app-ist findling
+=== 8. Die Zaehlung noch einmal, unmittelbar ueber dem unregister ===
+nextcloud-instanzen-vor-unregister 1
+=== 8b. unregister OHNE Schalter, das Volumen des Snapshots bleibt ===
+ExApp findling_backend successfully disabled.
+ExApp findling_backend successfully removed
+ExApp findling_backend successfully unregistered.
+unregister-rueckgabewert 0
+-- der Datenspeicher danach, er muss noch da sein --
+volumen-nach-unregister nc_app_findling_backend_data 
+=== 10. Die Registrierung ueber AppAPI, die zugleich die Scharfstellung ist ===
+register-start 2026-09-26T05:38:55Z
+ExApp findling_backend deployed successfully.
+ExApp findling_backend successfully registered.
+registrierung-rueckgabewert 0
+registrierung-gelungen ja
+register-ende 2026-09-26T05:39:00Z
+=== 11. Die harte Grenze, neu gesetzt, weil eine Registrierung sie wegwirft ===
+Image=ghcr.io/street1983nk/findling_backend:dev StartedAt=2026-09-26T05:38:58.273475674Z Restart=unless-stopped
+-- zurueckgelesen aus der cgroup und nicht aus dem Klienten --
+speichergrenze-ist 2147483648/0
+grenze-erwartet 2147483648/0
+grenze-gesetzt ja
+=== 12. Die Stellung des Entladeschalters, unmittelbar daneben ===
+entladeschalter-ist 0
+=== 13. memory.events, und anon neben memory.current wie ueberall in diesem Lauf ===
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+anon 138797056
+file 671744
+slab 2910760
+memory.current=119525376 memory.peak=145604608
+=== 14. Der Zustand der ExApp und das erhaltene Volumen, von dem sie startet ===
+ExApps:
+findling_backend (Array): 1.2.0 [enabled]
+nc_app_findling_backend_data
+total 78680
+drwxr-xr-x 5 findling findling     4096 Sep 26 05:38 .
+drwxr-xr-x 1 root     root         4096 Sep 26 05:38 ..
+-rw-r--r-- 1 findling findling        0 Sep 26 05:38 armed.marker
+drwxr-xr-x 2 findling findling     4096 Sep  9 09:32 dict
+drwxr-xr-x 2 findling findling    12288 Sep 10 14:20 index
+-rw-r--r-- 1 findling findling       80 Sep  9 09:32 instance.json
+-rw-r--r-- 1 findling findling 16338944 Sep 26 05:14 state.db
+-rw-r--r-- 1 findling findling    32768 Sep 26 05:38 state.db-shm
+-rw-r--r-- 1 findling findling        0 Sep 26 05:38 state.db-wal
+drwxr-xr-x 2 findling findling     4096 Sep 10 23:44 tmp
+-rw-r--r-- 1 findling findling 64126976 Sep 10 21:52 vectors.db
+-rw-r--r-- 1 findling findling    32768 Sep 26 05:38 vectors.db-shm
+-rw-r--r-- 1 findling findling        0 Sep 26 05:38 vectors.db-wal
+=== 15. Laeuft der Container auf der geprueften Abbildkennung? ===
+abbild-im-container-ist sha256:a3580ecf48d056f7c01e98432a540a8be091f747e6231562c24f728e4919b440
+baumhash-im-laufenden-container 728461aceae56b8433a27cca6005b73303362733fb5973c9f6da4954dbcceda2
+abbild-im-container-gleich ja
+=== 16. Das Protokoll dieses Starts ===
+containerstart-ist 2026-09-26T05:38:58.273475674Z
+2026-09-26T05:38:58.371837703Z harp_connect: HP_SHARED_KEY is not set, no HaRP tunnel is opened, the app listens on APP_PORT
+2026-09-26T05:38:58.371863850Z entrypoint: binding mode tcp 0.0.0.0:23000
+2026-09-26T05:38:58.372389814Z init: no HaRP tunnel in this deployment, watching the application only
+2026-09-26T05:38:59.309162877Z INFO:     Started server process [8]
+2026-09-26T05:38:59.309253439Z INFO:     Waiting for application startup.
+2026-09-26T05:38:59.310691506Z INFO:findling:findling backend starting, binding mode: tcp 0.0.0.0:23000
+2026-09-26T05:38:59.348256928Z INFO:findling.index.wordlist:constituent list read from the volume, 276496 entries, read 1 in this process
+2026-09-26T05:38:59.348756108Z INFO:     Application startup complete.
+2026-09-26T05:38:59.349168653Z INFO:     Uvicorn running on http://0.0.0.0:23000 (Press CTRL+C to quit)
+2026-09-26T05:38:59.482572073Z INFO:     172.18.0.2:58704 - "GET /heartbeat HTTP/1.1" 200 OK
+2026-09-26T05:38:59.498169663Z INFO:     172.18.0.2:58704 - "POST /init HTTP/1.1" 200 OK
+2026-09-26T05:38:59.976657949Z INFO:     172.18.0.2:58704 - "GET /heartbeat HTTP/1.1" 200 OK
+2026-09-26T05:38:59.988189416Z INFO:findling:findling backend enabled
+2026-09-26T05:38:59.988517771Z INFO:     172.18.0.2:58704 - "PUT /enabled?enabled=1 HTTP/1.1" 200 OK
+2026-09-26T05:39:00.347481476Z INFO:findling.index.analyzer:german automaton built from 276496 entries in 0.334 s, build 1 in this process
+2026-09-26T05:39:00.583456198Z INFO:findling.worker.poller:indexing is armed and the work stock is empty, the next file is picked up as it arrives
+=== 17. Das Bestandstor, 52137 / 44 / 6, nach der Registrierung ===
+Work stock
+  scheduled            0
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              44
+  failed               6
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-09-09 09:40:29 (24238 minutes ago)
+bestandstor indexiert 52137 uebersprungen 44 fehlgeschlagen 6
+bestandstor-erwartet indexiert 52137 uebersprungen 44 fehlgeschlagen 6
+bestandstor-bestanden ja
+wechsel-ende 2026-09-26T05:39:01Z
+92D-WECHSEL-FERTIG
+92d-rueckgabewert 0
+abtaster leben 2 nach 92d containerstart 2026-09-26T05:38:58.273475674Z 2026-09-26T05:39:01Z
+p1-92d-ende 2026-09-26T05:39:01Z
+cron-vorher-start 2026-09-26T05:39:01Z
+cron-vorpruefung-vorher-start 2026-09-26T05:39:01Z
+soll-intervall 300 s, toleranz 10 prozent
+=== 1. Der Hintergrundauftrags-Modus der Instanz ===
+-- Sollwert cron. ajax und webcron takten nach Besuchern und nicht nach einer Uhr --
+cron-modus-ist cron
+=== 2. Das Intervall, aus den bekannten Quellen der Reihe nach ===
+-- Quelle aio-cron-container: die Schlafdauer der Cron-Schleife im Container --
+=== 3. Das Ergebnis, als Pflichtzeile des Messprotokolls ===
+cron-intervall-quelle aio-cron-container
+cron-intervall-ist 300
+=== 4. Das Soll setzen und zuruecklesen, statt es nur zu pruefen ===
+-- D-07 verlangt, dass der Ablauf den Systemcron der Messinstanz EXPLIZIT auf
+   fuenf Minuten setzt. Das Setzen ist ein Handgriff auf der Box und steht hier
+   als Befehl, nicht als Behauptung: --
+cron-soll-setzen-befehl sudo crontab -u www-data -e, Minutenfeld der cron.php-Zeile auf */5 setzen
+cron-soll-setzen-befehl-aio Schlafdauer in nextcloud-aio-nextcloud:/cron.sh auf 300 setzen und den Container neu starten
+-- DIESER SCHRITT IST IN PHASE 15 ERSTMALS VOLLZOGEN. Bis dahin ist er gelesen
+   und nicht gefahren, und dieses Skript tut nicht so, als waere er es. --
+-- Die Ruecklesung fragt die beiden Konfigurationsquellen erneut. Die dritte
+   Quelle wird nicht wiederholt: sie ist eine Messung und kostet ihre Frist ein
+   zweites Mal, ohne eine Konfiguration zurueckzulesen. --
+cron-soll-ruecklesung 300
+=== 5. Der Protokollblock, als Block zitierbar ===
+cron-modus-ist cron
+cron-intervall-quelle aio-cron-container
+cron-intervall-ist 300
+cron-vorpruefung-vorher-ende 2026-09-26T05:39:02Z
+97-CRON-VORPRUEFUNG-FERTIG
+97-vorher-rueckgabewert 0
+cron-vorher-ende 2026-09-26T05:39:02Z
+indexgroesse-de-en-start 2026-09-26T05:39:02Z
+indexgroesse-de-en 2026-09-26T05:39:02Z
+index-bytes 786508818
+index-rebuild-bytes unlesbar
+bestand 52137 44 6
+indexgroesse-de-en-ende 2026-09-26T05:39:02Z
+m01-start 2026-09-26T05:39:02Z
+loglevel-vorher 2 2026-09-26T05:39:03Z
+loglevel-waehrend 1
+m01-stufe-1-von 2026-09-26T05:39:03Z
+m01-stufe-1-bis 2026-09-26T05:39:24Z
+m01-stufe-4-von 2026-09-26T05:39:45Z
+m01-stufe-4-bis 2026-09-26T05:39:56Z
+m01-stufe-8-von 2026-09-26T05:40:17Z
+m01-stufe-8-bis 2026-09-26T05:40:37Z
+m01-stufe-12-von 2026-09-26T05:40:57Z
+m01-stufe-12-bis 2026-09-26T05:41:26Z
+m01-stufe-16-von 2026-09-26T05:41:47Z
+m01-stufe-16-bis 2026-09-26T05:42:24Z
+kaltstart-start 2026-09-26T05:42:45Z
+begriff Bescheid Antrag, deckel der antwortliste 100, trefferzaehlung-quelle jq, kaltzyklen hoechstens 3
+=== 1. Die Pflichtzeilen, VOR der Messung ===
+passwort-quelle datei
+entladeschalter-ist 0
+speichergrenze-ist 2147483648/0
+=== Kaltzyklus 1 von hoechstens 3 ===
+kaltzyklus 1 containerstart 2026-09-26T05:42:45.996639032Z
+anmeldung ok
+bereit-nach-s 1 zustand cold
+-- Der Seitencache des Wirts, geleert. Die Messung ist in beiden Haelften kalt --
+               total        used        free      shared  buff/cache   available
+Mem:           3.9Gi       1.5Gi       2.1Gi       286Mi       802Mi       2.4Gi
+Swap:             0B          0B          0B
+kaltzyklus 1 engine-zustand-vor-suche cold
+kaltzyklus 1 ms 2028 code 200 treffer 0
+kaltzyklus 1 ungueltig keine-treffer
+=== Kaltzyklus 2 von hoechstens 3 ===
+kaltzyklus 2 containerstart 2026-09-26T05:42:53.091951106Z
+anmeldung ok
+bereit-nach-s 1 zustand cold
+-- Der Seitencache des Wirts, geleert. Die Messung ist in beiden Haelften kalt --
+               total        used        free      shared  buff/cache   available
+Mem:           3.9Gi       1.4Gi       2.1Gi       286Mi       802Mi       2.5Gi
+Swap:             0B          0B          0B
+kaltzyklus 2 engine-zustand-vor-suche cold
+kaltzyklus 2 ms 2109 code 200 treffer 0
+kaltzyklus 2 ungueltig keine-treffer
+=== Kaltzyklus 3 von hoechstens 3 ===
+kaltzyklus 3 containerstart 2026-09-26T05:43:00.345874398Z
+anmeldung ok
+bereit-nach-s 1 zustand cold
+-- Der Seitencache des Wirts, geleert. Die Messung ist in beiden Haelften kalt --
+               total        used        free      shared  buff/cache   available
+Mem:           3.9Gi       1.4Gi       2.1Gi       286Mi       804Mi       2.4Gi
+Swap:             0B          0B          0B
+kaltzyklus 3 engine-zustand-vor-suche cold
+kaltzyklus 3 ms 2084 code 200 treffer 0
+kaltzyklus 3 ungueltig keine-treffer
+kaltzyklen-gefahren 3
+kaltstart-gueltig nein
+kaltstart-fenster 2026-09-26T05:42:45Z 2026-09-26T05:43:06Z
+=== Der Protokollblock, als Block zitierbar ===
+passwort-quelle datei
+entladeschalter-ist 0
+speichergrenze-ist 2147483648/0
+kaltzyklus 1 containerstart 2026-09-26T05:42:45.996639032Z
+kaltzyklus 1 engine-zustand-vor-suche cold
+kaltzyklus 1 ms 2028 code 200 treffer 0
+kaltzyklus 1 ungueltig keine-treffer
+kaltzyklus 2 containerstart 2026-09-26T05:42:53.091951106Z
+kaltzyklus 2 engine-zustand-vor-suche cold
+kaltzyklus 2 ms 2109 code 200 treffer 0
+kaltzyklus 2 ungueltig keine-treffer
+kaltzyklus 3 containerstart 2026-09-26T05:43:00.345874398Z
+kaltzyklus 3 engine-zustand-vor-suche cold
+kaltzyklus 3 ms 2084 code 200 treffer 0
+kaltzyklus 3 ungueltig keine-treffer
+kaltzyklen-gefahren 3
+kaltstart-gueltig nein
+kaltstart-fenster 2026-09-26T05:42:45Z 2026-09-26T05:43:06Z
+kaltstart-ende 2026-09-26T05:43:06Z
+95c-kaltstart: nach 3 Kaltzyklen hat keine erste kalte Suche Treffer geliefert
+95c-kaltstart: eine leere Antwort ist keine Kaltstartzahl und wird nicht herausgerechnet
+95c-rueckgabewert 48
+abtaster leben 3 nach kaltstart containerstart 2026-09-26T05:43:00.345874398Z 2026-09-26T05:43:06Z
+loglevel-danach 2 2026-09-26T05:43:09Z
+befund m01 95c endete mit 48, die Kaltstartlatenz hat keine gueltige erste Suche; M-01-Gegenprobe nicht entschieden 2026-09-26T05:43:09Z
+m01-ende 2026-09-26T05:43:09Z
+bodensatz-start 2026-09-26T05:43:09Z
+neubau-start 2026-09-26T05:43:09Z
+schalter-gefordert FINDLING_EMBED_IDLE_RELEASE_SECONDS 120
+=== 1. Der Container, wie er jetzt laeuft, aus docker inspect ===
+container-lesbar ja
+abbild-ist ghcr.io/street1983nk/findling_backend:dev
+netz-ist nextcloud-aio
+restart-ist unless-stopped
+=== 2. Entrypoint und Cmd gegen das Abbild, nicht uebernommen ===
+entrypoint-gleich ja
+=== 3. Die Umgebung, ohne die Zielzeile und mit der neuen ===
+schalter-vorher FINDLING_EMBED_IDLE_RELEASE_SECONDS 0
+umgebung-namen AA_VERSION APP_DISPLAY_NAME APP_HOST APP_ID APP_PERSISTENT_STORAGE APP_PORT APP_SECRET APP_VERSION COMPUTE_DEVICE FINDLING_COMPOUND_DICT FINDLING_EMBED_IDLE_RELEASE_SECONDS FINDLING_EMBED_MODEL_DIR FINDLING_LANGUAGES FINDLING_LOG_LEVEL FINDLING_MAX_FILE_BYTES FINDLING_OCR_DPI FINDLING_OCR_ENABLED FINDLING_OCR_JOB_SECONDS FINDLING_OCR_LANGUAGES FINDLING_OCR_MAX_PAGES FINDLING_OCR_PAGE_SECONDS FINDLING_RECONCILE_ENABLED FINDLING_RECONCILE_HOUR FINDLING_RECONCILE_MIN_INTERVAL_HOURS FINDLING_RECONCILE_QUIET_MAX FINDLING_RECONCILE_SLICE FINDLING_VEC0_PATH GPG_KEY HF_HUB_OFFLINE NEXTCLOUD_URL PATH PYTHONUNBUFFERED PYTHON_SHA256 PYTHON_VERSION 
+=== 4. Mounts und Labels ===
+mounts-uebernommen type=volume,source=nc_app_findling_backend_data,target=/nc_app_findling_backend_data 
+labels-uebernommen org.opencontainers.image.description org.opencontainers.image.licenses org.opencontainers.image.source org.opencontainers.image.title 
+=== 5. Die Zertifikate des HaRP-Tunnels, falls der Container welche traegt ===
+tunnel-zertifikate keine
+=== 6. Der Neubau: entfernen, anlegen, Zertifikate, starten ===
+neubau-gelungen ja
+=== 7. Die harte Grenze, neu gesetzt, weil ein Neubau sie wegwirft ===
+-- zurueckgelesen aus der cgroup und nicht aus dem Klienten --
+speichergrenze-ist 2147483648/0
+grenze-erwartet 2147483648/0
+grenze-gesetzt ja
+=== 8. Der Schalter und der Entladeschalter, aus dem neuen Container ===
+schalter-ist FINDLING_EMBED_IDLE_RELEASE_SECONDS 120
+entladeschalter-ist 120
+neubau-fertig 2026-09-26T05:43:10Z
+92E-UMGEBUNG-FERTIG
+92e FINDLING_EMBED_IDLE_RELEASE_SECONDS=120 rueckgabewert 0
+abtaster leben 4 nach ttl-120 containerstart 2026-09-26T05:43:10.533128166Z 2026-09-26T05:43:10Z
+bodensatz-zyklen-start 2026-09-26T05:43:10Z
+ruhezeit 120 s, karenz 45 s, abtastintervall 5 s, zyklus-deckel 900 s, dateien je zyklus 12
+abtaster /home/ubuntu/work/nextcloud-search/scripts/ops/rss_sampler.sh, digest /home/ubuntu/work/nextcloud-search/scripts/ops/rss_digest.py, beide unveraendert gerufen
+nachbar-container nextcloud-aio-nextcloud, laufkennung 20260926T054310Z
+=== 1. Die Pflichtzeilen, VOR der Messung ===
+passwort-quelle datei
+entladeschalter-ist 120
+entladeschalter-passt-zum-block ja, 120
+speichergrenze-ist 2147483648/0
+=== 2. Neustart und Marke A ===
+-- Der einzige Neustart dieses Werkzeugs. Danach bleibt der Container bis
+   Marke C2 derselbe. --
+containerstart-nach-neustart 2026-09-26T05:43:11.078141798Z
+anmeldung ok
+bereit-nach-s 1 zustand cold
+marke-a 107.9 MB anon 113176576 byte
+marke-a-memory-current 145395712
+marke-a-engine-zustand cold
+marke-a-containerstart 2026-09-26T05:43:11.078141798Z
+=== Zyklus 1: Korpus nach mess07-bodensatz/20260926T054310Z-c1, files:scan, warten ===
+zyklus1-vorher eingebettet 52137 arbeitsvorrat 0
+zyklus1-hochgeladen 12 von 12
+| Folders | Files | New | Updated | Removed | Errors | Elapsed time |
++---------+-------+-----+---------+---------+--------+--------------+
+| 1       | 12    | 0   | 0       | 0       | 0      | 00:00:00     |
++---------+-------+-----+---------+---------+--------+--------------+
+zyklus1-start 2026-09-26T05:43:24Z
+zyklus1-zwischenstand s=15 eingebettet=52149 arbeitsvorrat=0
+zyklus1-ende 2026-09-26T05:43:39Z
+zyklus1-nachher eingebettet 52149 arbeitsvorrat 0
+zyklus1-dauer-s 15 von hoechstens 900
+zyklus1-indexlauf-stattgefunden ja
+-- Die Ruhezeit: 120 s plus 45 s Karenz, dann muss unloaded stehen --
+zyklus1-engine-zustand-nach-ruhezeit unloaded
+marke-c1 730.2 MB anon 765718528 byte
+marke-c1-memory-current 880955392
+marke-c1-engine-zustand unloaded
+marke-c1-containerstart 2026-09-26T05:43:11.078141798Z
+=== Zyklus 2: Korpus nach mess07-bodensatz/20260926T054310Z-c2, files:scan, warten ===
+zyklus2-vorher eingebettet 52149 arbeitsvorrat 0
+zyklus2-hochgeladen 12 von 12
+| Folders | Files | New | Updated | Removed | Errors | Elapsed time |
++---------+-------+-----+---------+---------+--------+--------------+
+| 1       | 12    | 0   | 0       | 0       | 0      | 00:00:00     |
++---------+-------+-----+---------+---------+--------+--------------+
+zyklus2-start 2026-09-26T05:46:34Z
+zyklus2-zwischenstand s=15 eingebettet=52149 arbeitsvorrat=12
+zyklus2-zwischenstand s=31 eingebettet=52149 arbeitsvorrat=12
+zyklus2-zwischenstand s=46 eingebettet=52149 arbeitsvorrat=4
+zyklus2-zwischenstand s=63 eingebettet=52161 arbeitsvorrat=0
+zyklus2-ende 2026-09-26T05:47:37Z
+zyklus2-nachher eingebettet 52161 arbeitsvorrat 0
+zyklus2-dauer-s 63 von hoechstens 900
+zyklus2-indexlauf-stattgefunden ja
+-- Die Ruhezeit: 120 s plus 45 s Karenz, dann muss unloaded stehen --
+zyklus2-engine-zustand-nach-ruhezeit unloaded
+marke-c2 760.8 MB anon 797732864 byte
+marke-c2-memory-current 914894848
+marke-c2-engine-zustand unloaded
+marke-c2-containerstart 2026-09-26T05:43:11.078141798Z
+-- rss_digest.py ueber die Abtastreihe von Marke A bis zum Ende --
+  rss_digest: no series with a findling-rss prefix under /tmp/tmp.S0eUQYMiI2/abtastung
+abtastreihe-spitze-mb unlesbar
+=== 3. Das Ergebnis ===
+zyklus1-minus-a 622.3
+zyklus2-minus-a 652.8
+zyklus2-minus-c1 30.5
+-- zyklus2-minus-c1 nahe null: der Bodensatz faellt einmal an. Nahe
+   zyklus1-minus-a: er waechst mit jedem Indexlauf. --
+=== 4. Die Ordner der Zyklen, wieder entfernt ===
+ordner-entfernt 204 mess07-bodensatz/20260926T054310Z-c1
+ordner-entfernt 204 mess07-bodensatz/20260926T054310Z-c2
+=== Der Protokollblock, als Block zitierbar ===
+passwort-quelle datei
+entladeschalter-ist 120
+entladeschalter-passt-zum-block ja, 120
+speichergrenze-ist 2147483648/0
+containerstart-nach-neustart 2026-09-26T05:43:11.078141798Z
+marke-a 107.9 MB anon 113176576 byte
+marke-a-memory-current 145395712
+marke-a-engine-zustand cold
+marke-a-containerstart 2026-09-26T05:43:11.078141798Z
+zyklus1-vorher eingebettet 52137 arbeitsvorrat 0
+zyklus1-hochgeladen 12 von 12
+zyklus1-nachher eingebettet 52149 arbeitsvorrat 0
+zyklus1-dauer-s 15 von hoechstens 900
+zyklus1-indexlauf-stattgefunden ja
+zyklus1-engine-zustand-nach-ruhezeit unloaded
+marke-c1 730.2 MB anon 765718528 byte
+marke-c1-memory-current 880955392
+marke-c1-engine-zustand unloaded
+marke-c1-containerstart 2026-09-26T05:43:11.078141798Z
+zyklus2-vorher eingebettet 52149 arbeitsvorrat 0
+zyklus2-hochgeladen 12 von 12
+zyklus2-nachher eingebettet 52161 arbeitsvorrat 0
+zyklus2-dauer-s 63 von hoechstens 900
+zyklus2-indexlauf-stattgefunden ja
+zyklus2-engine-zustand-nach-ruhezeit unloaded
+marke-c2 760.8 MB anon 797732864 byte
+marke-c2-memory-current 914894848
+marke-c2-engine-zustand unloaded
+marke-c2-containerstart 2026-09-26T05:43:11.078141798Z
+abtastreihe-spitze-mb unlesbar
+zyklus1-minus-a 622.3
+zyklus2-minus-a 652.8
+zyklus2-minus-c1 30.5
+ordner-entfernt 204 mess07-bodensatz/20260926T054310Z-c1
+ordner-entfernt 204 mess07-bodensatz/20260926T054310Z-c2
+bodensatz-zyklen-ende 2026-09-26T05:50:24Z
+94c-bodensatz-zyklen: eine Marke oder die Abtastreihe hat keine Zahl hergegeben
+94c-rueckgabewert 32
+abtaster leben 5 nach bodensatz containerstart 2026-09-26T05:43:11.078141798Z 2026-09-26T05:50:24Z
+neubau-start 2026-09-26T05:50:24Z
+schalter-gefordert FINDLING_EMBED_IDLE_RELEASE_SECONDS 0
+=== 1. Der Container, wie er jetzt laeuft, aus docker inspect ===
+container-lesbar ja
+abbild-ist ghcr.io/street1983nk/findling_backend:dev
+netz-ist nextcloud-aio
+restart-ist unless-stopped
+=== 2. Entrypoint und Cmd gegen das Abbild, nicht uebernommen ===
+entrypoint-gleich ja
+=== 3. Die Umgebung, ohne die Zielzeile und mit der neuen ===
+schalter-vorher FINDLING_EMBED_IDLE_RELEASE_SECONDS 120
+umgebung-namen AA_VERSION APP_DISPLAY_NAME APP_HOST APP_ID APP_PERSISTENT_STORAGE APP_PORT APP_SECRET APP_VERSION COMPUTE_DEVICE FINDLING_COMPOUND_DICT FINDLING_EMBED_IDLE_RELEASE_SECONDS FINDLING_EMBED_MODEL_DIR FINDLING_LANGUAGES FINDLING_LOG_LEVEL FINDLING_MAX_FILE_BYTES FINDLING_OCR_DPI FINDLING_OCR_ENABLED FINDLING_OCR_JOB_SECONDS FINDLING_OCR_LANGUAGES FINDLING_OCR_MAX_PAGES FINDLING_OCR_PAGE_SECONDS FINDLING_RECONCILE_ENABLED FINDLING_RECONCILE_HOUR FINDLING_RECONCILE_MIN_INTERVAL_HOURS FINDLING_RECONCILE_QUIET_MAX FINDLING_RECONCILE_SLICE FINDLING_VEC0_PATH GPG_KEY HF_HUB_OFFLINE NEXTCLOUD_URL PATH PYTHONUNBUFFERED PYTHON_SHA256 PYTHON_VERSION 
+=== 4. Mounts und Labels ===
+mounts-uebernommen type=volume,source=nc_app_findling_backend_data,target=/nc_app_findling_backend_data 
+labels-uebernommen org.opencontainers.image.description org.opencontainers.image.licenses org.opencontainers.image.source org.opencontainers.image.title 
+=== 5. Die Zertifikate des HaRP-Tunnels, falls der Container welche traegt ===
+tunnel-zertifikate keine
+=== 6. Der Neubau: entfernen, anlegen, Zertifikate, starten ===
+neubau-gelungen ja
+=== 7. Die harte Grenze, neu gesetzt, weil ein Neubau sie wegwirft ===
+-- zurueckgelesen aus der cgroup und nicht aus dem Klienten --
+speichergrenze-ist 2147483648/0
+grenze-erwartet 2147483648/0
+grenze-gesetzt ja
+=== 8. Der Schalter und der Entladeschalter, aus dem neuen Container ===
+schalter-ist FINDLING_EMBED_IDLE_RELEASE_SECONDS 0
+entladeschalter-ist 0
+neubau-fertig 2026-09-26T05:50:25Z
+92E-UMGEBUNG-FERTIG
+92e FINDLING_EMBED_IDLE_RELEASE_SECONDS=0 rueckgabewert 0
+abtaster leben 6 nach ttl-0 containerstart 2026-09-26T05:50:25.52577405Z 2026-09-26T05:50:25Z
+befund bodensatz 94c endete mit 32, der Bodensatz hat keine Zahl 2026-09-26T05:50:25Z
+bodensatz-ende 2026-09-26T05:50:26Z
+99d-start 2026-09-26T05:50:26Z
+99d-umgebung FINDLING_LOAD_PASSWORD ungesetzt
+filter-sortierung-start 2026-09-26T05:50:26Z
+messblock=Filter und Sortierung auf dem Vollbestand (D-01, Owner-Entscheid 19.09.2026)
+erstmessung=ja, es gibt keinen v1.1-Wert fuer Sortierung oder Blaettern unter Filter
+route=seitenroute, weil nur sie types und sort traegt (Befund 13-12)
+begriff Bescheid+Antrag (zwei Woerter, siehe Kopf), runden je zeile 5, seiten 3
+rangregel: Wert an Rang ceil(0,50 * n) bzw. ceil(0,95 * n) der sortierten
+Reihe, ohne Interpolation, wie Abschnitt 2 des Seitenbudget-Berichts
+nachbar-container nextcloud-aio-nextcloud, arbeitskopie /home/ubuntu/work/nextcloud-search
+=== 1. Die Pflichtzeilen, VOR der Messung ===
+-- Ohne sie sind die Zahlen daneben nicht falsch, sie sind unbelegt (Abschnitt 6.4) --
+entladeschalter-ist=0
+entladeschalter-passt-zum-block=ja, dieser Block laeuft auf 0
+containerstart-ist=2026-09-26T05:50:25.52577405Z
+speichergrenze-ist=2147483648/0
+filter-typgruppe-ist=pdf
+anmeldeweg-ist=sitzung
+anmeldeweg-zweite-haelfte=verzichtet, um Box-Zeit zu sparen; Basic Auth kostet auf der Vergleichsinstanz 0,318 s je Anfrage (Befund M-03), die kein angemeldeter Nutzer zahlt, und zwei Berichte sind nur ueber denselben Anmeldeweg vergleichbar
+sortiermodi-ist=relevance newest oldest
+=== 2. Steht der Bestand? ===
+-- Die Endzahl des Volllaufs muss stehen. Gegen einen wachsenden Bestand
+   gefahren, maesse die Sortierung zwei verschiedene Bestaende unter einer
+   Zahl (Abschnitt 7.1, Rueckgabewert 34). --
+bestand-arbeitsvorrat=2
+bestand-steht=nein
+=== Der Protokollblock, als Block zitierbar ===
+entladeschalter-ist=0
+entladeschalter-passt-zum-block=ja, dieser Block laeuft auf 0
+containerstart-ist=2026-09-26T05:50:25.52577405Z
+speichergrenze-ist=2147483648/0
+filter-typgruppe-ist=pdf
+anmeldeweg-ist=sitzung
+anmeldeweg-zweite-haelfte=verzichtet, um Box-Zeit zu sparen; Basic Auth kostet auf der Vergleichsinstanz 0,318 s je Anfrage (Befund M-03), die kein angemeldeter Nutzer zahlt, und zwei Berichte sind nur ueber denselben Anmeldeweg vergleichbar
+sortiermodi-ist=relevance newest oldest
+bestand-arbeitsvorrat=2
+bestand-steht=nein
+filter-sortierung-ende 2026-09-26T05:50:26Z
+99d-filter-sortierung: der Arbeitsvorrat war nicht leer, der Bestand wuchs noch
+99d-filter-sortierung: die Endzahl des Volllaufs muss stehen, sonst misst die
+99d-filter-sortierung: Sortierung zwei verschiedene Bestaende unter einer Zahl
+99d-rueckgabewert 34
+befund 99d 99d endete mit 34 2026-09-26T05:50:26Z
+99d-ende 2026-09-26T05:50:26Z
+zeit-fuer b2 rest 1303 bedarf 310
+b2-start 2026-09-26T05:50:26Z
+b2-bestand-soll 52137 44 6
+b2-scans 140 von 140 seiten 280
+b2-upload-vor 2026-09-26T05:51:32Z
+b2-upload-nach 2026-09-26T05:52:57Z hochgeladen 140 von 140
+| Folders | Files | New | Updated | Removed | Errors | Elapsed time |
++---------+-------+-----+---------+---------+--------+--------------+
+| 1       | 140   | 0   | 0       | 0       | 0      | 00:00:00     |
++---------+-------+-----+---------+---------+--------+--------------+
