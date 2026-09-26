@@ -584,8 +584,79 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # variable is not read without one either. The fix touches js/admin.js and the
 # six catalogue files as well; the recipe globs **/*.php, so none of them is in
 # this tree and none of them moves this figure.
-PHP_FILES_TODAY = 68
-PHP_TREE_HASH_TODAY = "a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab6a8abba"
+# Moved on 2026-09-26 by the fix of issue #14, first commit: two of the 68
+# files changed their bytes and none came or went. FileStateService.php carries
+# the new reason unreadable in its flat list and in its pair mapping, and
+# AdminViewService.php its label and its remedy. The fix touches the sixteen
+# catalogue files as well; the recipe globs **/*.php, so none of them is in this
+# tree and none of them moves this figure.
+# Moved on 2026-09-26 by the fix of issue #14, second commit, and the count
+# moves from 68 to 69: tests/Unit/QueueServiceReaderTest.php is new and holds
+# the choice of the reader. Two of the 68 changed their bytes. SearchService.php
+# gained the static readableFile(), the one place that resolves a file id and
+# asks the readability question, and its own recheck calls it. QueueService.php
+# asks it for every user it tries as the reader of a file, up to twenty, and
+# writes skipped(unreadable) when the file is reachable and none of them may
+# read it.
+# Moved on 2026-09-26 by the fix of issue #14, third commit: two of the 69
+# files changed their bytes and none came or went. GatewayController.php serves
+# the bytes only for a file SearchService::readableFile() hands out, so a node
+# without the read bit answers the same 404 as a missing one, and
+# GatewayControllerTest.php holds that case.
+# Moved on 2026-09-26 by the fix of issue #14, fourth commit, and the count
+# moves from 69 to 70: tests/Unit/PathResolverServiceTest.php is new. One of
+# the 69 changed its bytes. PathResolverService.php resolves a path without
+# owner over the oc_mounts rows that carry it, one storage root and up to
+# twenty members, and tries the rest of a named reference the same way when the
+# named user does not reach the file. The fix touches js/admin.js as well, whose
+# result card now prints uid/files/rest; the recipe globs **/*.php, so it does
+# not move this figure.
+# Moved on 2026-09-26 by the review of issue #14, first fix: four of the 70
+# files changed their bytes and none came or went. QueueService.php writes
+# skipped(unreadable) for every file the mount cache still knows users for and
+# none of the users asked may read, gone only for a file it knows no user for;
+# SearchService.php lost the reachable flag of readableFile(), which could not
+# tell a node the ACL wrapper hides from a deleted one; AdminViewService.php
+# carries the reworded label and remedy; QueueServiceReaderTest.php holds the
+# hidden node, the try limit and the folder that cannot be set up.
+# Moved on 2026-09-26 by the review of issue #14, second fix: two of the 70
+# files changed their bytes and none came or went. PathResolverService.php asks
+# the roots under a path without owner as a DISTINCT query of their own, which
+# the member cap of two hundred rows no longer reaches, and fetches the members
+# only for the one root that survived; the mounts of all members have to agree
+# on the root and on the depth. PathResolverServiceTest.php holds the second
+# root behind the members, the limits of both queries and the two depths.
+# Moved on 2026-09-26 by the review of issue #14, third fix: five of the 70
+# files changed their bytes and none came or went. PathResolverService.php
+# falls back from a named reference to the mounts only when the named user
+# carries the path through the same mount as the members asked, and reports
+# whether that user may read the file; SearchService.php gained readableNode(),
+# the readability question for a node already in hand, which readableFile()
+# now asks through; AdminViewService.php adds the sentence of the result card
+# for a named user who may not open the file; PathResolverServiceTest.php and
+# QueueServiceReaderTest.php hold the fallback cases and the Team Folder of the
+# reporter, four members and the first two closed.
+# Moved on 2026-09-26 by the review of issue #14, fourth fix: two of the 70
+# files changed their bytes and none came or went. PathResolverService.php asks
+# SearchService::readableNode() about the node get() handed out instead of
+# resolving it a second time by id per member tried, and
+# PathResolverServiceTest.php holds that no second resolution happens. The
+# resolution register of test_php_acl_boundary.py does not move: no file
+# resolves a file id that did not before.
+# Moved on 2026-09-26 by the review of issue #14, fifth fix: five of the 70
+# files changed their bytes and none came or went. PathResolverService.php
+# builds the reference the lookup takes back, uid/files/rest for a file in the
+# files folder and the absolute path without its slash for anything else, and
+# hands it through inspect() and describeMany(); AdminViewService.php carries
+# it in the diagnosis and in the examples of the error list, and
+# templates/admin.php takes it for the lookup button instead of concatenating;
+# DiagnoseCommand.php names the new key in its shape; PathResolverServiceTest.php
+# holds the files case, the case outside the files folder, the trash bin and
+# the round trip. js/admin.js prints the field as it comes and no longer puts
+# uid/files/ in front of the path; the recipe globs **/*.php, so it does not
+# move this figure.
+PHP_FILES_TODAY = 70
+PHP_TREE_HASH_TODAY = "2e59ceb5ab0cd64564dc28653c53504ce9c1456cb2816ea77f0835497b32621b"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
@@ -1116,8 +1187,13 @@ PHP_TREE_HASH_TODAY = "a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab
 # index/open.py cite the Dutch automaton as roughly 24 to 25 MB, the product
 # close figure of docs/performance.md, instead of the withdrawn 17.6 MB of the
 # research probe. No file came and none went, so PACKAGE_FILES_TODAY stays at 57.
+# Moved on 2026-09-26 by the fix of issue #14: two of the 57 files changed their
+# bytes. extract/errors.py and store/repo.py carry the new skipped reason
+# unreadable in the closed list, because the PHP half writes it and the three
+# lists are held equal by test_extract_errors.py. No file came and none went, so
+# PACKAGE_FILES_TODAY stays at 57.
 PACKAGE_FILES_TODAY = 57
-PACKAGE_TREE_HASH_TODAY = "728461aceae56b8433a27cca6005b73303362733fb5973c9f6da4954dbcceda2"
+PACKAGE_TREE_HASH_TODAY = "b5608980ff343d0144392223aff24d9a90b2dfc90bf013f10c6f61853ef92131"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

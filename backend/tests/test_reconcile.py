@@ -707,7 +707,10 @@ def test_a_row_that_is_given_up_costs_the_batch_no_slot_and_no_budget() -> None:
     claim = source[source.index("public function claim(") : source.index("public function enqueue(")]
 
     assert claim.index("repeatedly_stuck") < claim.index("$rows--")
-    assert claim.index("'skipped', 'gone'") < claim.index("$budget = max(")
+    # Since issue #14 the skipped reason of an undeliverable row comes out of
+    # describe(), gone or unreadable, so the write-off carries a variable and
+    # not the literal; the order it is held to is the same.
+    assert claim.index("$this->finish($row, 'skipped', $source)") < claim.index("$budget = max(")
 
 
 def test_the_slice_route_hands_the_verdict_over_with_the_page() -> None:

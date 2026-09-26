@@ -90,6 +90,7 @@ final class GatewayControllerTest extends TestCase {
 		// part of the assertion and not an implementation detail. Gate A in
 		// backend/tests holds the allowlist of ways to open a file at all.
 		$file->expects(self::once())->method('fopen')->with('r')->willReturn($stream);
+		$file->method('isReadable')->willReturn(true);
 
 		$userFolder = $this->createMock(Folder::class);
 		$userFolder->method('getFirstNodeById')->with(11)->willReturn($file);
@@ -100,6 +101,32 @@ final class GatewayControllerTest extends TestCase {
 		self::assertInstanceOf(StreamResponse::class, $response);
 
 		fclose($stream);
+	}
+
+	public function testAFileTheUserReachesAndMayNotReadIsNotServed(): void {
+		// Issue #14 from the gateway side. A Team Folder member whose advanced
+		// permissions take the read bit away still resolves the node; the bytes
+		// must not travel in their name, and the answer is word for word the
+		// one for a file that does not exist, so it cannot be used to probe.
+		$closed = $this->createMock(File::class);
+		$closed->method('isReadable')->willReturn(false);
+		$closed->expects(self::never())->method('fopen');
+
+		$userFolder = $this->createMock(Folder::class);
+		$userFolder->method('getFirstNodeById')->willReturnCallback(
+			static fn (int $fileId): ?File => $fileId === 11 ? $closed : null,
+		);
+		$this->rootFolder->method('getUserFolder')->with('alice')->willReturn($userFolder);
+
+		$controller = $this->controller($this->backendAppId());
+		$unreadable = $controller->getFileContents(11, 'alice');
+		$missing = $controller->getFileContents(999999, 'alice');
+
+		self::assertInstanceOf(DataResponse::class, $unreadable);
+		self::assertInstanceOf(DataResponse::class, $missing);
+		self::assertSame(Http::STATUS_NOT_FOUND, $unreadable->getStatus());
+		self::assertSame($missing->getStatus(), $unreadable->getStatus());
+		self::assertSame($missing->getData(), $unreadable->getData());
 	}
 
 	public function testACallFromAForeignExAppIsRefused(): void {

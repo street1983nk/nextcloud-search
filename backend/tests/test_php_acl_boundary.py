@@ -17,15 +17,17 @@ So the assertions below read the sources, in the shape
 
 **The two questions are not the same question, and the gate treats them
 differently.** Resolving a file id through the user's own folder answers "is
-this reachable for them" and is asked at three places in this tree, each for a
-different job: the search boundary, the content gateway that hands bytes to the
-container behind ``rejectForeignCaller``, and the crawl, which asks a node for
-its size and says in its own comment that it is not a permission control. A
-register below names all three with their counts, so a fourth one cannot appear
-quietly. The readability question is the search boundary itself: it is what
-tells a reachable node from a readable one on a team folder, and it is asked at
-exactly one place in the whole tree. A second recheck loop needs it, so pinning
-it to one is what makes the second loop impossible rather than merely absent.
+this reachable for them", and the readability question answers "may they read
+it"; on a team folder with advanced permissions the two differ. Both are asked
+in one static method of the search boundary, ``SearchService::readableFile``,
+and every other caller goes through it. Until issue #14 the queue asked only
+the first question when it picked the user whose context a file is read in, so
+a team folder member the ACL closed a file to was chosen as the reader and the
+file ended as skipped(gone). A register below names every file that resolves a
+file id with its count, so a new resolution cannot appear quietly, and the
+readability question is pinned to exactly one call in the whole tree. A second
+recheck loop needs it, so pinning it to one is what makes the second loop
+impossible rather than merely absent.
 
 **Grep hygiene is part of the job here, not a detail.** The PHP sources of this
 repository explain both names in prose: two event listeners, the queue service
@@ -59,22 +61,20 @@ READABILITY = "isReadable"
 # per folder rules.
 BOUNDARY = "Service/SearchService.php"
 
-# Every place that resolves a file id, with how often it does so. Three jobs,
-# three files, and each of them is a boundary of its own:
-#
-# * the search boundary, which decides what a search may show,
-# * the content gateway, which opens the bytes for the container and is kept
-#   from foreign containers by rejectForeignCaller rather than by this line,
-# * the crawl, which resolves a node for its size and states in its own comment
-#   that a stale prefilter costs result quality and never confidentiality.
+# Every place that resolves a file id, with how often it does so. One file
+# since issue #14: the search boundary, whose one resolution sits in
+# readableFile() next to the readability question. The search asks it for
+# every candidate, the queue for every user it tries as the reader of a file,
+# and the content gateway before it opens the bytes for the container, which is
+# why QueueService.php and GatewayController.php left this register with that
+# fix. The gateway is still kept from foreign containers by
+# rejectForeignCaller and not by this line.
 #
 # The register is a ratchet: a plan that adds a resolution adds it here, and a
 # plan that removes one removes it here. A file that is not named is a finding,
 # whatever it does with the node.
 RESOLUTION_REGISTER = {
     BOUNDARY: 1,
-    "Controller/GatewayController.php": 1,
-    "Service/QueueService.php": 1,
 }
 
 # Block comments, line comments and both kinds of string literal, in the order
@@ -183,7 +183,7 @@ def test_the_readability_question_is_asked_at_exactly_one_place() -> None:
     assert readability_findings(php_sources()) == []
 
 
-def test_every_file_that_resolves_a_file_id_is_one_of_the_three_registered_ones() -> None:
+def test_every_file_that_resolves_a_file_id_is_a_registered_one() -> None:
     assert resolution_findings(php_sources()) == []
 
 

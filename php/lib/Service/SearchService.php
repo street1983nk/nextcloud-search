@@ -8,7 +8,9 @@ use OCA\Findling\Text\PlainText;
 use OCP\Files\Cache\IFileAccess;
 use OCP\Files\Config\IUserMountCache;
 use OCP\Files\File;
+use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
+use OCP\Files\Node;
 use OCP\IUser;
 use Psr\Log\LoggerInterface;
 
@@ -346,20 +348,14 @@ class SearchService {
 
 				$rechecks++;
 				$consumed++;
-				$node = $userFolder->getFirstNodeById($candidate['fileId']);
-				if (!$node instanceof File) {
-					continue;
-				}
-
-				// The stricter question, asked right after the type check
-				// (security audit L5). Reaching a node is not the same as being
-				// allowed to read it, and a hit for a document whose content
-				// the user may not open is the one outcome this class exists to
-				// prevent. It belongs here rather than anywhere further down:
-				// two lines later a title and a path of that node would already
-				// have been read, and one call later a snippet of its content
-				// would exist.
-				if (!$node->isReadable()) {
+				// Both questions in one call, see readableFile() below. The
+				// stricter of the two, readability, is asked right after the
+				// type check (security audit L5), and that call is the whole
+				// reason it happens before anything else: two lines later a
+				// title and a path of that node would already have been read,
+				// and one call later a snippet of its content would exist.
+				$node = self::readableFile($userFolder, $candidate['fileId']);
+				if ($node === null) {
 					continue;
 				}
 
@@ -464,6 +460,57 @@ class SearchService {
 			$degraded,
 			$ceilingReached ? SearchOutcome::FAILURE_OFFSET_CEILING : null,
 		);
+	}
+
+	/**
+	 * The file behind an id, as this user may read it, or null.
+	 *
+	 * The two questions of the permission chain in one place, and the only
+	 * place in php/lib that asks them. The resolution through the user's own
+	 * folder answers "is it reachable for them", the readability question right
+	 * behind it answers "may they read it", and on a Team Folder with advanced
+	 * permissions the two differ: the ACL wrapper of groupfolders hands out a
+	 * node that resolves perfectly well while the per folder rules take the
+	 * read bit away.
+	 *
+	 * It is static and public since issue #14, and that is the fix of the
+	 * issue rather than a convenience. The search boundary above was the only
+	 * caller that asked both questions. The queue asked only the first one when
+	 * it picked the user whose context the bytes are read in, and so did the
+	 * content gateway when it served them; a Team Folder member who can reach a
+	 * file and may not read it was therefore chosen as the reader, and the file
+	 * ended as skipped(gone) although it was there all along. Every caller now
+	 * asks here, so the question cannot be half asked a second time, and
+	 * backend/tests/test_php_acl_boundary.py counts both calls in this one file
+	 * and nowhere else.
+	 *
+	 * There is deliberately no answer to "reachable, but closed". The ACL
+	 * wrapper of groupfolders does not only take the read bit away, it can hide
+	 * the node entirely, and then the lookup answers exactly what it answers for
+	 * a file that does not exist. A caller that read a reachable flag out of
+	 * this method would call the hidden file deleted, which is the wrong
+	 * sentence of issue #14 in a new place; the queue draws that line out of
+	 * the mount cache instead, see QueueService::readerOf().
+	 */
+	public static function readableFile(Folder $userFolder, int $fileId): ?File {
+		return self::readableNode($userFolder->getFirstNodeById($fileId));
+	}
+
+	/**
+	 * The same readability question for a node the caller already holds.
+	 *
+	 * For a caller that resolved the node through the user's folder by path
+	 * rather than by id: resolving it a second time by id only to ask the
+	 * question would cost a second lookup for the node already in hand. The
+	 * question itself stays here, in the one place that asks it, and
+	 * backend/tests/test_php_acl_boundary.py still counts one call.
+	 */
+	public static function readableNode(?Node $node): ?File {
+		if (!$node instanceof File) {
+			return null;
+		}
+
+		return $node->isReadable() ? $node : null;
 	}
 
 	/**

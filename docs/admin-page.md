@@ -377,6 +377,57 @@ Storage ist AUS, weil ein entferntes Laufwerk jede Annahme über Lesedauer und
 Datenmenge sprengt und niemand erwartet, dass die Installation einer App
 anfängt, ein Mehr-Terabyte-Share durch HTTP zu ziehen.
 
+### Team Folders mit erweiterten Berechtigungen: wer eine Datei liest
+
+Findling liest jede Datei im Namen eines Nutzers, der sie sieht. Bei einem Team
+Folder sind das alle Mitglieder, und mit erweiterten Berechtigungen (ACL) darf
+nicht jedes Mitglied jede Datei lesen. Seit Issue #14 nimmt die Warteschlange
+deshalb nicht mehr blind den alphabetisch ersten Nutzer, sondern fragt die
+Mitglieder in dieser Reihenfolge und liest als der erste, für den die Datei
+erreichbar und lesbar ist. Gefragt werden höchstens 20 Mitglieder je Datei, weil
+jedes davon einen Mount-Aufbau kostet.
+
+Kennt der Mount-Cache noch Nutzer für die Datei, darf aber keiner der gefragten
+sie lesen, steht sie als `skipped(unreadable)` in der Fehlerliste ("Not readable
+for the users asked") und nicht mehr als `skipped(gone)`. Das gilt auch, wenn
+der ACL-Wrapper die Datei vor den gefragten Nutzern ganz verbirgt, wenn ein
+Nutzer der Liste nicht mehr aufgebaut werden kann und wenn der einzige Leser
+hinter den ersten 20 steht: einen Mount-Eintrag gibt es nur für eine Datei, die
+noch im Datei-Cache steht, also ist sie nicht gelöscht. `skipped(gone)` bleibt
+der Datei vorbehalten, für die der Mount-Cache keinen einzigen Nutzer mehr
+kennt. Die Abhilfe ist eine Berechtigung im Team Folder, keine gelöschte
+Datei. Wer die Datei später finden
+darf, entscheidet davon unabhängig die Nachprüfung jeder Suche.
+
+Eine Grenze, ehrlich benannt: ein Urteil `skipped(gone)` aus der Zeit vor diesem
+Fix an einer vorhandenen Team-Folder-Datei war dieser Fehler, und es bleibt in
+der Tabelle der Nextcloud-Seite stehen. Die Quittung des Containers nimmt nur
+`failed`-Urteile zurück, übersprungene bewusst nicht (siehe
+`QueueService::acknowledge`). Eine Änderung an der Datei stellt sie über den
+Ereignis-Listener zwar neu in die Warteschlange, der alte Eintrag in der
+Fehlerliste verschwindet dadurch aber nicht. Das ist auf einer echten Instanz
+mit Team-Folder-ACL noch nicht nachgemessen.
+
+Die Einzelabfrage nimmt Pfade in einem Team Folder oder einer Freigabe auch ohne
+Nutzer davor, etwa `admins-hh/Vertrag.pdf`: aufgelöst wird über die Mounts, die
+den Pfad tragen, und nur wenn sie zu genau einem Speicherstamm gehören. Ein
+Home-Pfad ohne Nutzer bleibt unbeantwortet, weil jeder Nutzer einen eigenen
+hat. Die Ergebniskarte zeigt den Pfad mit Nutzer davor, so wie die Abfrage ihn
+zurücknimmt. Diese Schreibweise baut der Server und nicht das Skript der Seite:
+eine Datei außerhalb des files-Ordners, etwa im Papierkorb oder unter den
+Versionen, zeigt die Karte mit ihrem eigenen Pfad, der schon mit dem Nutzer
+beginnt, und nicht mehr doppelt mit `uid/files/` davor.
+
+Mit Nutzer davor, etwa `anna/files/admins-hh/Vertrag.pdf`, fragt die Abfrage
+zuerst Annas eigenen Ordner. Verbergen die erweiterten Berechtigungen die Datei
+vor ihr, versucht sie andere Mitglieder, aber nur, wenn Anna den Pfad über
+denselben Mount trägt wie sie: derselbe Speicherstamm am selben Mount-Punkt.
+Nur dann ist die gefundene Datei die, nach der gefragt wurde. Fehlt die Datei in
+Annas Home oder ist Anna kein Mitglied, bleibt die Antwort "keine Datei", und
+keine gleichnamige Datei eines anderen Nutzers tritt an ihre Stelle. Darf der
+genannte Nutzer die Datei nicht öffnen, sagt die Karte das in einem eigenen
+Satz; die Diagnose gilt dann der Datei selbst.
+
 ## Der Pfadraum der Ausschlüsse
 
 Ein Ausschluss ist ein Pfad-Präfix, ohne Muster und ohne Platzhalter (D-06), und
@@ -496,6 +547,9 @@ occ findling:diagnose testuser/files/corpus/09-bescheid.pdf
 
 # als Kurzform aus Besitzer und Pfad relativ zum files-Ordner
 occ findling:diagnose testuser:corpus/09-bescheid.pdf
+
+# als Pfad in einem Team Folder, ohne Nutzer davor
+occ findling:diagnose admins-hh/Vertrag.pdf
 ```
 
 Ausgegeben werden Zustand, Grundcode, Label, Abhilfe, Pfad, Besitzer, Datei-Id,

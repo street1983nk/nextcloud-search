@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace OCA\Findling\Controller;
 
 use OCA\Findling\AppInfo\Application;
+use OCA\Findling\Service\SearchService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\Http\StreamResponse;
 use OCP\AppFramework\OCSController;
-use OCP\Files\File;
 use OCP\Files\IRootFolder;
 use OCP\IRequest;
 use Psr\Log\LoggerInterface;
@@ -65,11 +65,17 @@ class GatewayController extends OCSController {
 		}
 
 		try {
-			$file = $this->rootFolder->getUserFolder($userId)->getFirstNodeById($fileId);
-			// Not visible to this user and not existing at all deliberately give
-			// the same answer, so the gateway cannot be used to probe for files
-			// the user is not allowed to see.
-			if (!$file || !$file instanceof File) {
+			// Reachable and readable, both asked in the one place that asks them
+			// (issue #14). A Team Folder member the advanced permissions close a
+			// file to reaches a node without the read bit, and the bytes must not
+			// travel in the name of somebody who may not open them. The queue
+			// already names a reader who may, so this refusal is the backstop for
+			// a permission that changed between the claim and the fetch.
+			$file = SearchService::readableFile($this->rootFolder->getUserFolder($userId), $fileId);
+			// Not visible to this user, not readable for them and not existing at
+			// all deliberately give the same answer, so the gateway cannot be used
+			// to probe for files the user is not allowed to see.
+			if ($file === null) {
 				return new DataResponse(['error' => 'Node is not a file or could not be found.'], Http::STATUS_NOT_FOUND);
 			}
 

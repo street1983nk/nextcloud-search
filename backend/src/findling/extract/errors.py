@@ -65,6 +65,7 @@ class Reason(StrEnum):
     GONE = "gone"
     IMAGE_NOT_OCRABLE = "image_not_ocrable"  # a picture too small or too flat to carry text
     EXCLUDED = "excluded"  # an admin rule keeps this file out of the index, the file itself is untouched
+    UNREADABLE = "unreadable"  # written by the PHP half: no user asked may read it, a Team Folder ACL (#14)
 
     # failed, the things we wanted to do and could not
     EMPTY_FILE = "empty_file"
@@ -94,6 +95,7 @@ STATE_REASONS: Final[Mapping[State, frozenset[Reason | None]]] = {
             Reason.GONE,
             Reason.IMAGE_NOT_OCRABLE,
             Reason.EXCLUDED,  # an admin rule, not a property of the file
+            Reason.UNREADABLE,  # a permission setting, not a deletion (#14)
         }
     ),
     State.FAILED: frozenset(

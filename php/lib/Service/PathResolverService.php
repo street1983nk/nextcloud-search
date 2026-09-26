@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace OCA\Findling\Service;
 
+use OCP\DB\QueryBuilder\ICompositeExpression;
+use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\Files\Cache\ICacheEntry;
 use OCP\Files\Cache\IFileAccess;
 use OCP\Files\Config\ICachedMountFileInfo;
 use OCP\Files\Config\IUserMountCache;
+use OCP\Files\File;
 use OCP\Files\IRootFolder;
+use OCP\IDBConnection;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -69,10 +73,31 @@ final class PathResolverService {
 	 */
 	private int $refused = 0;
 
+	/**
+	 * How many member rows of oc_mounts one lookup of a path without owner
+	 * reads, for the one root that carries the path.
+	 *
+	 * A Team Folder has one row per member, and these rows only say who may be
+	 * asked; two hundred is far more than the users that are actually tried
+	 * below. Which root carries the path is a separate DISTINCT query that this
+	 * cap does not touch, see fileIdOverMounts().
+	 */
+	private const MAX_MOUNT_ROWS = 200;
+
+	/**
+	 * How many members are asked to resolve a path without owner, at most.
+	 *
+	 * Each of them costs a mount setup, and the same twenty as the reader
+	 * choice of QueueService: a file that twenty members of its folder may not
+	 * read is one whose owner is worth typing in front of the path.
+	 */
+	private const MAX_PATH_READERS = 20;
+
 	public function __construct(
 		private IUserMountCache $mountCache,
 		private IFileAccess $fileAccess,
 		private IRootFolder $rootFolder,
+		private IDBConnection $db,
 		private LoggerInterface $logger,
 	) {
 	}
@@ -99,6 +124,24 @@ final class PathResolverService {
 	 * the instance (T-04-38).
 	 */
 	public function resolveReference(string $input): ?int {
+		return $this->resolve($input)['fileId'] ?? null;
+	}
+
+	/**
+	 * The same lookup as resolveReference(), with the one fact the result card
+	 * owes the admin on top: whether the user the reference names may open the
+	 * file at all.
+	 *
+	 * ``namedUserMayNotRead`` is true for a reference with an owner in two
+	 * cases of a Team Folder with advanced permissions (issue #14): the owner
+	 * reaches the file without the read bit, or the folder rules hide it from
+	 * the owner and it was found through another member of the same mount.
+	 * The card then says so, because the diagnosis is about the file and the
+	 * admin typed a user in front of it who may not open it.
+	 *
+	 * @return array{fileId:int, namedUserMayNotRead:bool}|null
+	 */
+	public function resolve(string $input): ?array {
 		$reference = trim($input);
 		if ($reference === '') {
 			$this->refuse();
@@ -115,7 +158,7 @@ final class PathResolverService {
 
 			$fileId = (int)$reference;
 
-			return $fileId > 0 ? $fileId : null;
+			return $fileId > 0 ? ['fileId' => $fileId, 'namedUserMayNotRead' => false] : null;
 		}
 
 		return $this->fileIdOfPath($reference);
@@ -148,7 +191,7 @@ final class PathResolverService {
 	 * already open at that point.
 	 *
 	 * @return array{
-	 *     uid:string, path:string, shares:int, trashed:bool,
+	 *     uid:string, path:string, reference:string, shares:int, trashed:bool,
 	 *     storageId:int, mime:string, size:int, internalPath:string
 	 * }|null
 	 */
@@ -175,6 +218,7 @@ final class PathResolverService {
 		return [
 			'uid' => $owner['uid'] ?? '',
 			'path' => $owner['path'] ?? '',
+			'reference' => $owner['reference'] ?? '',
 			'shares' => $owner['shares'] ?? 0,
 			'trashed' => $owner['trashed'] ?? false,
 			'storageId' => $entry instanceof ICacheEntry ? $entry->getStorageId() : 0,
@@ -187,11 +231,29 @@ final class PathResolverService {
 	/**
 	 * A path in the notation Nextcloud keeps, as a file id.
 	 *
-	 * Two spellings are accepted, and both name a user, because a path without
-	 * one cannot be resolved at all: a relative path exists once per user on the
-	 * instance. ``alice/files/Ordner/x.pdf`` is the spelling the error list of
-	 * this page shows next to the owner, and ``alice:Ordner/x.pdf`` is the short
-	 * form for somebody who has the owner and the relative path in front of them.
+	 * Two spellings name a user: ``alice/files/Ordner/x.pdf`` is the spelling the
+	 * error list and the result card of this page show, and
+	 * ``alice:Ordner/x.pdf`` is the short form for somebody who has the owner and
+	 * the relative path in front of them. A relative path exists once per user
+	 * on the instance, so a home path without one cannot be resolved at all.
+	 * A path inside a Team Folder or a share can, since issue #14, because the
+	 * mounts that carry it say whose it is: ``admins-hh/Vertrag.pdf`` is resolved
+	 * over them, see fileIdOverMounts().
+	 *
+	 * A named reference falls back to the mounts only under one condition, and
+	 * the condition is the review finding it fixes: the file found must be the
+	 * file the reference names. The named user has to carry the path through
+	 * the same mount as the members who are asked, the same storage root at the
+	 * same mount point, and then the rest of the path is the same file inside
+	 * that storage for every one of them. That is the case of a Team Folder
+	 * whose advanced permissions hide the file from the named member. It is
+	 * not the case of a file that is missing under the named user's home, or
+	 * of a user who is not a member of the folder at all, and both stay the
+	 * null of every other refusal rather than an answer about somebody else's
+	 * file of the same name. Whether the lookup failed on the ACL or on a
+	 * missing file cannot be told from the exception, which is the same
+	 * NotFoundException for both; the mount rows can tell whose storage the
+	 * path lies in, and that is the question that decides.
 	 *
 	 * A segment of two dots is refused and not filtered. Filtering would answer
 	 * about a file the administrator did not ask about, which is worse than
@@ -218,8 +280,10 @@ final class PathResolverService {
 	 * spelling this page shows carries a backslash: the error list writes
 	 * ``alice/files/Ordner/x.pdf`` and the short form is ``alice:Ordner/x.pdf``.
 	 * Dropping the conversion adds no path space, it removes one.
+	 *
+	 * @return array{fileId:int, namedUserMayNotRead:bool}|null
 	 */
-	private function fileIdOfPath(string $input): ?int {
+	private function fileIdOfPath(string $input): ?array {
 		$candidate = (string)preg_replace('#/+#', '/', $input);
 		$candidate = trim($candidate, '/');
 		if ($candidate === '') {
@@ -235,12 +299,52 @@ final class PathResolverService {
 		}
 
 		[$uid, $relative] = $this->splitOwner($candidate);
-		if ($uid === '' || $relative === '') {
+		if ($uid !== '' && $relative !== '') {
+			$own = $this->fileIdForUser($uid, $relative);
+			if ($own !== null) {
+				return ['fileId' => $own['fileId'], 'namedUserMayNotRead' => !$own['readable']];
+			}
+
+			// Named, and not reachable for the one named. On a Team Folder that
+			// is the ordinary case rather than a typing error: the result card
+			// prints a member of the folder next to the path, and the advanced
+			// permissions of the folder can hide that very file from that very
+			// member. The rest of the reference is tried over the mounts, but
+			// only through the mount the named user has at that path, see the
+			// docblock above. The answer is the same null for a user who does
+			// not exist and for one who is no member, so this adds no way of
+			// asking which users exist (T-04-38).
+			$fileId = $this->fileIdOverMounts($relative, $uid);
+			if ($fileId !== null) {
+				return ['fileId' => $fileId, 'namedUserMayNotRead' => true];
+			}
+
 			$this->refuse();
 
 			return null;
 		}
 
+		$fileId = $this->fileIdOverMounts($candidate);
+		if ($fileId !== null) {
+			return ['fileId' => $fileId, 'namedUserMayNotRead' => false];
+		}
+
+		$this->refuse();
+
+		return null;
+	}
+
+	/**
+	 * A path relative to one user's files folder, as a file id with whether
+	 * that user may read it, or null.
+	 *
+	 * The readability does not decide the answer: the admin asks about the
+	 * file, and a file the named user reaches without the read bit is still
+	 * that file. It decides the sentence the card adds.
+	 *
+	 * @return array{fileId:int, readable:bool}|null
+	 */
+	private function fileIdForUser(string $uid, string $relative): ?array {
 		try {
 			// Every failure caught on purpose. getUserFolder() signals a missing
 			// user with a class from the private namespace of the server and a
@@ -251,14 +355,341 @@ final class PathResolverService {
 			$node = $this->rootFolder->getUserFolder($uid)->get($relative);
 		} catch (\Throwable $e) {
 			$this->logger->debug('Findling: a lookup reference resolved to nothing', ['exception' => $e]);
-			$this->refuse();
 
 			return null;
 		}
 
 		$fileId = $node->getId();
+		if ($fileId <= 0) {
+			return null;
+		}
 
-		return $fileId > 0 ? $fileId : null;
+		// A folder is no file to read and gets no sentence about reading.
+		$readable = !$node instanceof File || SearchService::readableNode($node) !== null;
+
+		return ['fileId' => $fileId, 'readable' => $readable];
+	}
+
+	/**
+	 * A path without an owner, resolved over the mounts that carry it (#14).
+	 *
+	 * ``admins-hh/Vertrag.pdf`` names no user, and for a home directory that is
+	 * the end of it: every user has a Documents folder, so a path without an
+	 * owner cannot say whose. For a Team Folder or a share it can. Its mount
+	 * point is a row of oc_mounts, ``/anna/files/admins-hh/``, one per member,
+	 * and every one of those rows names the same storage root. So the lookup
+	 * asks which mounts sit at a leading part of the path, takes the users of
+	 * exactly one root, and resolves the path in their folders one after the
+	 * other until one of them hands out a file they may read.
+	 *
+	 * Three refusals, and each of them keeps an answer from being a guess:
+	 * no mount carries the path, which is every home path; the mounts that
+	 * carry it belong to more than one root, which is two different shares that
+	 * happen to be mounted under the same name for different users, or one
+	 * mount nested in another; and none of the users tried may read the file.
+	 * The last one costs a retype of the reference with the owner in front of
+	 * it, which still resolves a file the owner can reach.
+	 *
+	 * Two queries and not one, and the split is the review finding it fixes.
+	 * The roots are asked first, as DISTINCT values and without the row cap of
+	 * the members: a cap on member rows ordered by user id could cut a second
+	 * root off behind two hundred members of the first one, and the refusal
+	 * of an ambiguous path would then never see the ambiguity. Two distinct
+	 * values are all the refusal needs, so that query stops at two. Only for
+	 * the single root that survives are the members fetched, and those are
+	 * capped at MAX_MOUNT_ROWS, because each of them is a candidate reader and
+	 * no more than MAX_PATH_READERS of them are ever asked.
+	 *
+	 * The mount rows come out of a query and not out of IUserMountCache,
+	 * because that interface answers per user or per id and this question has
+	 * neither: it has a path. Both queries match the mount point against the
+	 * leading folders of the path exactly, ``/%/files/admins-hh/``, so a mount
+	 * that sits beside the path or below it is not counted as a root of it.
+	 * They are scans over oc_mounts, asked once per lookup of the admin page
+	 * and never per file.
+	 *
+	 * With an owner the lookup is the fallback of a named reference, and it
+	 * answers only when that owner carries the path through the very mount
+	 * the members are asked through; the owner is not asked again, their own
+	 * lookup has already failed.
+	 */
+	private function fileIdOverMounts(string $candidate, string $owner = ''): ?int {
+		$prefixes = self::leadingFoldersOf($candidate);
+		if ($prefixes === []) {
+			// A single segment is either a home file or a mount point itself,
+			// and a mount point is a folder, which is no file to diagnose.
+			return null;
+		}
+
+		try {
+			$roots = $this->rootsCarrying($prefixes);
+			if (count($roots) !== 1) {
+				return null;
+			}
+
+			$rows = $this->membersOfRoot($roots[0], $prefixes);
+		} catch (\Throwable $e) {
+			$this->logger->debug('Findling: the mount lookup for a path without owner failed', ['exception' => $e]);
+
+			return null;
+		}
+
+		$carriers = self::carriersOfMountedPath($rows, $candidate);
+		if ($carriers === null) {
+			return null;
+		}
+
+		$readers = $carriers['users'];
+		if ($owner !== '') {
+			if (!$this->carriesThrough($owner, $carriers, $prefixes, $candidate)) {
+				return null;
+			}
+
+			$readers = array_values(array_filter($readers, static fn (string $uid): bool => $uid !== $owner));
+		}
+
+		foreach (array_slice($readers, 0, self::MAX_PATH_READERS) as $uid) {
+			try {
+				$node = $this->rootFolder->getUserFolder($uid)->get($candidate);
+			} catch (\Throwable $e) {
+				// Hidden from this member by the folder rules, or a member who
+				// is gone since the row was written: the next one is asked.
+				$this->logger->debug('Findling: a member did not reach a path without owner', ['exception' => $e]);
+				continue;
+			}
+
+			// The node in hand is asked directly. Resolving it a second time by
+			// id only to ask the readability question cost a second lookup per
+			// member tried (review finding); the question itself stays in
+			// SearchService, the one place that asks it.
+			$file = SearchService::readableNode($node);
+			if ($file !== null && $file->getId() > 0) {
+				return $file->getId();
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * Whether a named user carries a path through the one mount the members
+	 * carry it through: the same root at the same mount point.
+	 *
+	 * Asked with a query of its own, filtered by the user, because the member
+	 * rows are capped and the named user may sort behind the cap. A failing
+	 * query is a no, which keeps the fallback closed rather than open.
+	 *
+	 * @param array{root:int, inside:string, users:list<string>} $carriers
+	 * @param non-empty-list<string> $prefixes
+	 */
+	private function carriesThrough(string $owner, array $carriers, array $prefixes, string $candidate): bool {
+		try {
+			$rows = $this->mountsOfUser($owner, $prefixes);
+		} catch (\Throwable $e) {
+			$this->logger->debug('Findling: the mount lookup for a named reference failed', ['exception' => $e]);
+
+			return false;
+		}
+
+		$own = self::carriersOfMountedPath($rows, $candidate);
+
+		return $own !== null
+			&& $own['users'] === [$owner]
+			&& $own['root'] === $carriers['root']
+			&& $own['inside'] === $carriers['inside'];
+	}
+
+	/**
+	 * The mount rows of one user at a leading folder of the path, of every
+	 * root: a mount of another root deeper than the Team Folder is what that
+	 * user sees at the path, and carriersOfMountedPath() has to see it too in
+	 * order to say no.
+	 *
+	 * @param non-empty-list<string> $prefixes
+	 * @return list<array<string, mixed>>
+	 */
+	private function mountsOfUser(string $owner, array $prefixes): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('user_id', 'mount_point', 'root_id')
+			->from('mounts')
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($owner)))
+			->andWhere($this->mountedAtOneOf($qb, $prefixes));
+		$result = $qb->executeQuery();
+		/** @var list<array<string, mixed>> $rows */
+		$rows = $result->fetchAll();
+		$result->closeCursor();
+
+		return $rows;
+	}
+
+	/**
+	 * The distinct storage roots mounted at a leading folder of the path, at
+	 * most two of them.
+	 *
+	 * Not capped by rows: DISTINCT folds the one row per member of a Team
+	 * Folder into one value, and the limit of two stops at the first proof of
+	 * an ambiguity, which is all the caller needs to know.
+	 *
+	 * @param non-empty-list<string> $prefixes
+	 * @return list<int>
+	 */
+	private function rootsCarrying(array $prefixes): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->selectDistinct('root_id')
+			->from('mounts')
+			->where($this->mountedAtOneOf($qb, $prefixes))
+			->setMaxResults(2);
+		$result = $qb->executeQuery();
+		$rows = $result->fetchAll();
+		$result->closeCursor();
+
+		$roots = [];
+		foreach ($rows as $row) {
+			$root = (int)($row['root_id'] ?? 0);
+			if ($root > 0) {
+				$roots[$root] = true;
+			}
+		}
+
+		return array_keys($roots);
+	}
+
+	/**
+	 * The mount rows of one root at a leading folder of the path, capped.
+	 *
+	 * Ordered by user id so that the same lookup asks the same members in the
+	 * same order. When the cap is reached the rows of the last user may be cut
+	 * in the middle, and a user whose deepest mount fell behind the cap would
+	 * be read at the wrong depth, so that user is dropped rather than guessed.
+	 *
+	 * @param non-empty-list<string> $prefixes
+	 * @return list<array<string, mixed>>
+	 */
+	private function membersOfRoot(int $root, array $prefixes): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('user_id', 'mount_point', 'root_id')
+			->from('mounts')
+			->where($qb->expr()->eq('root_id', $qb->createNamedParameter($root, IQueryBuilder::PARAM_INT)))
+			->andWhere($this->mountedAtOneOf($qb, $prefixes))
+			->orderBy('user_id')
+			->setMaxResults(self::MAX_MOUNT_ROWS);
+		$result = $qb->executeQuery();
+		/** @var list<array<string, mixed>> $rows */
+		$rows = $result->fetchAll();
+		$result->closeCursor();
+
+		if (count($rows) >= self::MAX_MOUNT_ROWS) {
+			$lastRow = end($rows);
+			$last = is_array($lastRow) ? ($lastRow['user_id'] ?? null) : null;
+			$rows = array_values(array_filter(
+				$rows,
+				static fn (array $row): bool => ($row['user_id'] ?? null) !== $last,
+			));
+		}
+
+		return $rows;
+	}
+
+	/**
+	 * The condition "the mount point is /<someone>/files/ plus one of these
+	 * leading folders", as one disjunction of exact LIKE patterns.
+	 *
+	 * @param non-empty-list<string> $prefixes
+	 */
+	private function mountedAtOneOf(IQueryBuilder $qb, array $prefixes): ICompositeExpression {
+		$patterns = [];
+		foreach ($prefixes as $prefix) {
+			$patterns[] = $qb->expr()->like(
+				'mount_point',
+				$qb->createNamedParameter('/%/files/' . $this->db->escapeLikeParameter($prefix)),
+			);
+		}
+
+		return $qb->expr()->orX(...$patterns);
+	}
+
+	/**
+	 * Every leading folder of a path, with its trailing slash, shallowest
+	 * first: ``a/b/c.pdf`` has ``a/`` and ``a/b/``. The last segment is the
+	 * file and never a mount point of it.
+	 *
+	 * @return list<string>
+	 */
+	public static function leadingFoldersOf(string $candidate): array {
+		$prefixes = [];
+		$prefix = '';
+		foreach (array_slice(explode('/', $candidate), 0, -1) as $segment) {
+			$prefix .= $segment . '/';
+			$prefixes[] = $prefix;
+		}
+
+		return $prefixes;
+	}
+
+	/**
+	 * The users whose mounts carry a path without owner, in the order of the
+	 * rows, or nothing when no mount carries the path or more than one does.
+	 *
+	 * @param list<array<string, mixed>> $rows user_id, mount_point and root_id
+	 * @return list<string>
+	 */
+	public static function readersOfMountedPath(array $rows, string $candidate): array {
+		return self::carriersOfMountedPath($rows, $candidate)['users'] ?? [];
+	}
+
+	/**
+	 * The one mount that carries a path without owner, as its root, its mount
+	 * point below the files folder and the users who have it, or null when no
+	 * mount carries the path or more than one does.
+	 *
+	 * A row carries the path when its mount point is ``/<user>/files/`` plus a
+	 * leading part of the path that stops at a segment boundary and leaves at
+	 * least one segment for the file. Of several rows of one user the deepest
+	 * one counts, because a mount inside a mount is what that user sees at that
+	 * path. The deepest mounts of all users have to agree on the root AND on
+	 * the depth: one root mounted at ``a/`` for one user and at ``a/b/`` for
+	 * another puts two different files at ``a/b/c.pdf``. Public and static for
+	 * the same reason as the arithmetic of QueueService: it is the part of the
+	 * lookup that can be asked without a Nextcloud.
+	 *
+	 * @param list<array<string, mixed>> $rows user_id, mount_point and root_id
+	 * @return array{root:int, inside:string, users:list<string>}|null
+	 */
+	public static function carriersOfMountedPath(array $rows, string $candidate): ?array {
+		$path = $candidate . '/';
+		/** @var array<string, array{0:string, 1:int}> $deepest user to mount point below files and root */
+		$deepest = [];
+		foreach ($rows as $row) {
+			$uid = is_string($row['user_id'] ?? null) ? $row['user_id'] : '';
+			$mountPoint = is_string($row['mount_point'] ?? null) ? $row['mount_point'] : '';
+			$root = (int)($row['root_id'] ?? 0);
+			$home = '/' . $uid . '/files/';
+			if ($uid === '' || $root <= 0 || !str_starts_with($mountPoint, $home)) {
+				continue;
+			}
+
+			$inside = substr($mountPoint, strlen($home));
+			if ($inside === '' || !str_ends_with($inside, '/') || strlen($inside) >= strlen($path) || !str_starts_with($path, $inside)) {
+				continue;
+			}
+
+			if (!isset($deepest[$uid]) || strlen($inside) > strlen($deepest[$uid][0])) {
+				$deepest[$uid] = [$inside, $root];
+			}
+		}
+
+		$mounts = array_unique(array_map(static fn (array $one): string => $one[1] . ':' . $one[0], $deepest));
+		if (count($mounts) !== 1) {
+			return null;
+		}
+
+		$one = reset($deepest);
+
+		return [
+			'root' => $one[1],
+			'inside' => $one[0],
+			'users' => array_map('strval', array_keys($deepest)),
+		];
 	}
 
 	/**
@@ -305,7 +736,17 @@ final class PathResolverService {
 	 * An empty answer means the file has no cache entry any more, so it is
 	 * really gone rather than merely invisible.
 	 *
-	 * @return array{uid:string,path:string,shares:int,trashed:bool}|null
+	 * ``reference`` is the spelling of the file that the lookup of the admin
+	 * page takes back, built here and not in the script of the page (issue
+	 * #14, review). For a file under ``/<uid>/files/`` it is
+	 * ``<uid>/files/<path>``, the spelling of the error list. For anything
+	 * else, a file in the trash bin or in any other folder of the user that is
+	 * not the files folder, it is the absolute path without its leading slash,
+	 * which already starts with the user: the page used to put
+	 * ``<uid>/files/`` in front of that as well and printed
+	 * ``anna/files/anna/files_trashbin/...``, a reference that named nothing.
+	 *
+	 * @return array{uid:string,path:string,reference:string,shares:int,trashed:bool}|null
 	 */
 	public function describe(int $fileId): ?array {
 		if ($fileId <= 0) {
@@ -326,12 +767,13 @@ final class PathResolverService {
 			$absolute = $owner->getPath();
 			$prefix = '/' . $uid . '/files/';
 			$trashed = str_starts_with($absolute, '/' . $uid . '/files_trashbin/');
+			$inFiles = str_starts_with($absolute, $prefix);
+			$path = $inFiles ? substr($absolute, strlen($prefix)) : ltrim($absolute, '/');
 
 			return [
 				'uid' => $uid,
-				'path' => str_starts_with($absolute, $prefix)
-					? substr($absolute, strlen($prefix))
-					: ltrim($absolute, '/'),
+				'path' => $path,
+				'reference' => $inFiles && $path !== '' ? $uid . '/files/' . $path : ltrim($absolute, '/'),
 				'shares' => count($mounts) - 1,
 				// A file in the trash bin still has a cache entry, and saying so is
 				// a diagnosis rather than a detail: the search dropped it on
@@ -370,7 +812,7 @@ final class PathResolverService {
 	 *
 	 * @param list<int> $fileIds
 	 * @return array<int, array{
-	 *     resolved:bool, uid:string, path:string, shares:int, trashed:bool,
+	 *     resolved:bool, uid:string, path:string, reference:string, shares:int, trashed:bool,
 	 *     exists:bool, mime:string, size:int
 	 * }> keyed by file id, one entry per positive id that was asked for
 	 */
@@ -405,6 +847,7 @@ final class PathResolverService {
 				'resolved' => $owner !== null,
 				'uid' => $owner['uid'] ?? '',
 				'path' => $owner['path'] ?? '',
+				'reference' => $owner['reference'] ?? '',
 				'shares' => $owner['shares'] ?? 0,
 				'trashed' => $owner['trashed'] ?? false,
 				'exists' => $entry instanceof ICacheEntry || $owner !== null,

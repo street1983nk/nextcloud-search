@@ -349,6 +349,27 @@ Schlüssel**namen** ändert, schreibt ihn ebenfalls: der Absatz ist das Gedächt
 **Nachgezählt am 25.09.2026, Plan 20-09:** weiterhin **202** Schlüssel, davon **5**
 Pluralschlüssel. Die Zahl hat sich zwischen Plan 20-02 und dem Ende der Phase nicht bewegt.
 
+**Nachgezählt am 26.09.2026, Issue #14:** **204** Schlüssel, davon weiterhin **5**
+Pluralschlüssel. Die zwei neuen sind Bezeichnung und Abhilfe des Grundes
+`skipped(unreadable)`: eine Datei in einem Team Folder, die da ist und die keiner der gefragten
+Nutzer lesen darf. Beide stehen in allen 16 Dateien, die Tabellen der fünf Sprachdokumente
+führen die zwei Zeilen. Die übrigen Zahlen dieser Dokumente (202 und die Abnahmezeilen) sind der
+Stand ihres Plantags und bleiben so stehen.
+
+**Umbenannt am 26.09.2026, Issue #14, Review:** weiterhin **204** Schlüssel. Bezeichnung und
+Abhilfe von `skipped(unreadable)` haben neue Schlüsselnamen, weil der alte Wortlaut ("Not
+readable for any user") mehr behauptete, als die Warteschlange prüft: gefragt werden höchstens
+die ersten 20 Nutzer einer Datei in alphabetischer Reihenfolge, und seit dem Review steht das
+Urteil auch dann, wenn der ACL-Wrapper die Datei vor allen gefragten Nutzern ganz verbirgt. Die
+neuen Schlüssel sagen beides: die Datei ist noch da, und gefragt wurden die ersten 20. Alle 16
+Dateien und die Tabellen der fünf Sprachdokumente sind im selben Commit umgestellt.
+
+**Nachgezählt am 26.09.2026, Issue #14, Review:** **205** Schlüssel, davon weiterhin **5**
+Pluralschlüssel. Der neue ist der Satz, den die Ergebniskarte der Einzelabfrage anhängt, wenn
+der vor dem Pfad genannte Nutzer die Datei nicht öffnen darf: gefunden über ein anderes Mitglied
+des Team Folders oder erreicht ohne Leserecht. Er steht in allen 16 Dateien, die Tabellen der
+fünf Sprachdokumente führen die Zeile.
+
 ---
 
 ## Stand nach Phase 20

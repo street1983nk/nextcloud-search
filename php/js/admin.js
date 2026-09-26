@@ -676,6 +676,14 @@
     const fileId = whole(view.fileId)
     const checkedAt = whole(view.checkedAt)
     const path = typeof view.path === 'string' ? view.path : ''
+    // The card prints the reference the lookup takes back, and it prints it
+    // as the server built it (issue #14, review). Putting uid/files/ in front
+    // of the path here doubled it for every file outside the files folder,
+    // whose path already starts with the user. The bare path stands in only
+    // for an answer without a reference.
+    const reference = typeof view.reference === 'string' && view.reference !== ''
+      ? view.reference
+      : path
     const label = typeof view.label === 'string' ? view.label : ''
     const remedy = typeof view.remedy === 'string' ? view.remedy : ''
     const note = typeof view.note === 'string' ? view.note : ''
@@ -695,7 +703,7 @@
     // (review finding WR-04). A function's return value is inserted literally.
     text('findling-diagnosis-path', view.trashed === true
       ? t('findling', '%s (in the trash bin)').replace('%s', function () { return path })
-      : path)
+      : reference)
     text('findling-diagnosis-label', label)
     text('findling-diagnosis-remedy', remedy)
     text('findling-diagnosis-note', note)

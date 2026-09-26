@@ -8,6 +8,7 @@ use OCA\Findling\Db\QueueFile;
 use OCA\Findling\Db\QueueMapper;
 use OCP\Files\Cache\ICacheEntry;
 use OCP\Files\Config\IUserMountCache;
+use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\IDBConnection;
@@ -107,6 +108,27 @@ class QueueService {
 	private const MAX_USERS = 500;
 
 	/**
+	 * How many users of one file are asked whether they may read it, before
+	 * the row is given up as skipped(unreadable) (issue #14).
+	 *
+	 * Twenty, and the argument is at readerOf(). The ordinary file is read by
+	 * the first name of its list; the number only matters on a Team Folder whose
+	 * advanced permissions close a file to most of its members.
+	 */
+	private const MAX_READER_TRIES = 20;
+
+	/**
+	 * The two reasons describe() answers with when a row cannot be handed out.
+	 *
+	 * Both are skipped reasons of FileStateService::STATE_REASONS. gone is the
+	 * file the mount cache knows no user for any more, unreadable the file it
+	 * still knows users for and that none of the users asked may read (issue
+	 * #14). The line between the two is drawn at readerOf().
+	 */
+	private const SKIP_GONE = 'gone';
+	private const SKIP_UNREADABLE = 'unreadable';
+
+	/**
 	 * How many rows of one kind a single claim may take.
 	 *
 	 * The cheap kinds are large, because a permission change is a row and not a
@@ -170,7 +192,9 @@ class QueueService {
 	 * The keys of the returned map are queue row ids, because that is exactly
 	 * what comes back on acknowledgement. A row that cannot be described any
 	 * more, because the file disappeared between queueing and collecting, is not
-	 * delivered: it is deleted and recorded as skipped(gone). Leaving it in place
+	 * delivered: it is deleted and recorded as skipped(gone), or as
+	 * skipped(unreadable) when the file is there and none of the users asked may
+	 * read it (issue #14). Leaving it in place
 	 * would mean it travels through the lock timeout again and again until the
 	 * end of time.
 	 *
@@ -188,6 +212,7 @@ class QueueService {
 	public function claim(int $limit, int $maxBytes): array {
 		$sources = [];
 		$gone = 0;
+		$unreadable = 0;
 		$givenUp = 0;
 
 		// Both ceilings of the caller are spent across the kinds and not handed
@@ -235,9 +260,13 @@ class QueueService {
 				}
 
 				$source = $this->describe($row, $folders);
-				if ($source === null) {
-					$this->finish($row, 'skipped', 'gone');
-					$gone++;
+				if (is_string($source)) {
+					$this->finish($row, 'skipped', $source);
+					if ($source === self::SKIP_UNREADABLE) {
+						$unreadable++;
+					} else {
+						$gone++;
+					}
 					continue;
 				}
 
@@ -249,6 +278,13 @@ class QueueService {
 
 		if ($gone > 0) {
 			$this->logger->info('Findling: dropped queued files that are gone', ['count' => $gone]);
+		}
+
+		if ($unreadable > 0) {
+			// A count and nothing else, same as the line above. Worth its own
+			// line because the remedy is a permission setting of a Team Folder
+			// and not a deletion (issue #14).
+			$this->logger->info('Findling: skipped queued files no user asked may read', ['count' => $unreadable]);
 		}
 
 		if ($givenUp > 0) {
@@ -590,17 +626,19 @@ class QueueService {
 	}
 
 	/**
-	 * Build the source object of one row, or null when the file cannot be
-	 * resolved any more.
+	 * Build the source object of one row, or the skipped reason of a row that
+	 * cannot be handed out: gone when the mount cache knows no user for the
+	 * file any more, unreadable when it still knows some and none of the users
+	 * asked may read it.
 	 *
 	 * The folder cache of the running claim travels in by reference (perf audit
 	 * M8). It is a parameter and not a field so that its lifetime is visible at
 	 * the call site: it lives for one claim and not a second longer.
 	 *
 	 * @param array<string, ?Folder> $folders home folders resolved during this claim
-	 * @return array<string, mixed>|null
+	 * @return array<string, mixed>|string
 	 */
-	private function describe(QueueFile $row, array &$folders): ?array {
+	private function describe(QueueFile $row, array &$folders): array|string {
 		$fileId = $row->getFileId();
 
 		// The one place where the kind of a row decides what its source object
@@ -688,7 +726,7 @@ class QueueService {
 		$access = $this->usersFor($fileId);
 		$userIds = $access['users'];
 		if ($userIds === []) {
-			return null;
+			return self::SKIP_GONE;
 		}
 
 		// Two different questions, and therefore two fields. userIds is the
@@ -698,17 +736,11 @@ class QueueService {
 		// read. Who may read a file in order to index it and who may find it are
 		// not the same question, and collapsing them into one field is how a
 		// prefilter silently turns into a permission model.
-		$fetchAs = $userIds[0];
-
-		$userFolder = $this->userFolder($fetchAs, $folders);
-		if ($userFolder === null) {
-			return null;
+		$reader = $this->readerOf($fileId, $userIds, $folders);
+		if (!is_array($reader)) {
+			return $reader;
 		}
-
-		$node = $userFolder->getFirstNodeById($fileId);
-		if ($node === null) {
-			return null;
-		}
+		[$fetchAs, $userFolder, $node] = $reader;
 
 		$size = $node->getSize();
 
@@ -798,6 +830,66 @@ class QueueService {
 			'fetchAs' => $fetchAs,
 			'isUpdate' => $row->getIsUpdate(),
 		];
+	}
+
+	/**
+	 * The first user of the list who may read the file, with their folder and
+	 * the node, or the reason why there is none.
+	 *
+	 * Issue #14 is the reason this is a loop and not the first entry of the
+	 * list. Every member of a Team Folder has a mount on its files, so every
+	 * member stands in the list, and with advanced permissions some of them
+	 * reach a file they may not read: the ACL wrapper of groupfolders either
+	 * hides the node from them or hands it out without the read bit. The first
+	 * name in alphabetical order used to be the reader regardless, and a file
+	 * that name could not open was written off as skipped(gone), permanently and
+	 * with a remedy that said the file had been deleted. The list stays sorted,
+	 * so a retried row is still read in the same context as before; what changed
+	 * is that a name which cannot read the file is passed over.
+	 *
+	 * Without a reader the answer is always unreadable and never gone, and the
+	 * reason is where the list comes from. usersFor() asks the mount cache,
+	 * which joins oc_mounts with oc_filecache, so a list that is not empty
+	 * says the file id is still in the file cache: the file is there. gone is
+	 * the answer of describe() for an empty list, the one case that can assert
+	 * a deletion. Everything a non empty list can end in is a sentence about
+	 * permissions and not about existence: a member the ACL wrapper hands a
+	 * node without the read bit, a member the wrapper hides the node from
+	 * entirely (the lookup then answers nothing, exactly as for a missing
+	 * file, so the two cannot be told apart from here, and that is why this
+	 * method does not try), a member whose home folder cannot be set up, and a
+	 * list longer than the names that were asked. Calling any of them gone
+	 * wrote "the file was deleted" for a file that was not, which is the
+	 * sentence of the issue.
+	 *
+	 * The loop is capped at MAX_READER_TRIES names, and the cap is a cost and
+	 * not a guess. Every name costs a mount setup and a lookup, the list holds
+	 * up to MAX_USERS of them, and a claim of thirty two files of a large Team
+	 * Folder that only one member may read would otherwise set up hundreds of
+	 * file systems inside a single request. The ordinary case is one try,
+	 * exactly as before, and the home folders stay cached for the whole claim.
+	 * A file whose only reader sorts behind the cap is therefore unreadable as
+	 * well, and the remedy says which names are asked, so that sentence stays
+	 * true: the first MAX_READER_TRIES users in alphabetical order.
+	 *
+	 * @param non-empty-list<string> $userIds sorted, as usersFor() hands them out
+	 * @param array<string, ?Folder> $folders home folders resolved during this claim
+	 * @return array{0:string, 1:Folder, 2:File}|string
+	 */
+	private function readerOf(int $fileId, array $userIds, array &$folders): array|string {
+		foreach (array_slice($userIds, 0, self::MAX_READER_TRIES) as $userId) {
+			$userFolder = $this->userFolder($userId, $folders);
+			if ($userFolder === null) {
+				continue;
+			}
+
+			$file = SearchService::readableFile($userFolder, $fileId);
+			if ($file !== null) {
+				return [$userId, $userFolder, $file];
+			}
+		}
+
+		return self::SKIP_UNREADABLE;
 	}
 
 	/**

@@ -213,6 +213,9 @@ deutschen Übersetzung.
 | `None.` | Keine. | Aucune. |
 | `Excluded by a rule` | Durch Regel ausgeschlossen | Exclu par une règle |
 | `Remove the matching entry under "Excluded folders".` | Den passenden Eintrag unter "Ausgeschlossene Ordner" entfernen. | Supprimer l'entrée correspondante sous "Dossiers exclus". |
+| `Not readable for the users asked` | Für die gefragten Nutzer nicht lesbar | Illisible pour les utilisateurs consultés |
+| `The file is still there. Check the advanced permissions of the Team Folder: Findling reads a file only as a user who may open it and asks the first 20 of its users in alphabetical order.` | Die Datei ist noch vorhanden. Die erweiterten Berechtigungen des Team Folders prüfen: Findling liest eine Datei nur als Nutzer, der sie öffnen darf, und fragt die ersten 20 ihrer Nutzer in alphabetischer Reihenfolge. | Le fichier existe toujours. Vérifier les autorisations avancées du Team Folder : Findling ne lit un fichier qu'au nom d'un utilisateur autorisé à l'ouvrir et consulte les 20 premiers de ses utilisateurs par ordre alphabétique. |
+| `The user named in front of the path may not open this file. The diagnosis is about the file itself.` | Der vor dem Pfad genannte Nutzer darf diese Datei nicht öffnen. Die Diagnose gilt der Datei selbst. | L'utilisateur indiqué devant le chemin n'est pas autorisé à ouvrir ce fichier. Le diagnostic porte sur le fichier lui-même. |
 | `File is empty` | Datei ist leer | Fichier vide |
 | `None. The file has 0 bytes.` | Keine. Die Datei hat 0 Byte. | Aucune. Le fichier fait 0 octet. |
 | `File damaged` | Datei beschädigt | Fichier endommagé |
