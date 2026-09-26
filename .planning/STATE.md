@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: executing
-stopped_at: Plan 22-09 abgeschlossen (B4 gefahren, Box abgebaut, 2,32 h / 0,4716 USD gegen Deckel 24 h / 3,76 USD gehalten); naechster Schritt 22-10
-last_updated: "2026-09-26T13:50:00.000Z"
-last_activity: 2026-09-26, Plan 22-09 abgeschlossen (B4, Abbau, Kosten, Lueckenbericht)
+stopped_at: Plan 22-10 abgeschlossen (MESS-09 entschieden: Summe bleibt, disjunction_max dokumentiert verworfen; Kaltstart-Ursache geklaert); naechster Schritt 22-11
+last_updated: "2026-09-26T14:05:00.000Z"
+last_activity: 2026-09-26, Plan 22-10 abgeschlossen (MESS-09 nach E10, Summe, verworfen)
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 59
-  completed_plans: 56
-  percent: 95
+  completed_plans: 57
+  percent: 97
 ---
 
 # Project State
@@ -26,8 +26,10 @@ See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 ## Current Position
 
 Phase: 22 (messanfahrt-bl-f03), EXECUTING
-Plan: 10 of 12
-Status: 22-09 abgeschlossen: B4 auf m7g.4xlarge mit 0 (N 1 bis 16, T 1 bis 8, 16 Kerne, nicht gekuerzt), Box abgebaut ohne Ende-Snapshot, Verbleib null ueber 17 Regionen, Schluesselpaar und A-Record weg, Korpus-Snapshot bleibt. Anfahrt gesamt 2,32 h / 0,4716 USD, Deckel 24 h / 3,76 USD gehalten. Luecken README 6.9: Kaltstart mit Trefferpflicht (Pflichtzahl, Nachfreigabe D-02 noetig, erst Ursache in 22-10/22-11), 94c-Spitze, B5-RAM. Naechster Plan 22-10
+Plan: 11 of 12
+Status: 22-10 abgeschlossen: MESS-09 nach E10 auf 98d entschieden, Urteil E10 gehalten, Entscheid Summe, Folge verworfen (RBO@10-Median gegen Altplan: Summe 0,9531, tie 0.0 0,8399, tie 0.1 0,9633; Schwelle +0,05 von keinem erreicht, lag mit 1,0031 ueber dem RBO-Hoechstwert). rewrite.py unveraendert, keine Ratsche. Verwerfung in docs/language-analyzers.md, README 6.10, Kopf test_field_plan_ranking.py. KALTSTART-URSACHE GEKLAERT (README 6.11): erste hybride Suche laedt bei Schalter 0 das Modell und reisst den PHP-Deckel 1,5 s (m01 innerMs 1505-1596), bekannter Vorfall 10.09.; unveraenderte Nachmessung liefert wieder 0 Treffer, Owner muss vor der Nachfreigabe Weg a (Schalter an), b (einwortiger Begriff) oder c (erst Produktfix) waehlen. Commits f0eec86, 6d9952a, 1ef5977. Naechster Plan 22-11
+
+Vorher 22-09 abgeschlossen: B4 auf m7g.4xlarge mit 0 (N 1 bis 16, T 1 bis 8, 16 Kerne, nicht gekuerzt), Box abgebaut ohne Ende-Snapshot, Verbleib null ueber 17 Regionen, Schluesselpaar und A-Record weg, Korpus-Snapshot bleibt. Anfahrt gesamt 2,32 h / 0,4716 USD, Deckel 24 h / 3,76 USD gehalten. Luecken README 6.9: Kaltstart mit Trefferpflicht (Pflichtzahl, Nachfreigabe D-02 noetig, erst Ursache in 22-10/22-11), 94c-Spitze, B5-RAM. Naechster Plan 22-10
 
 Vorher 22-08 abgeschlossen: Ablauf regulaer bis 00-FERTIG (b4 vorbereitet), Box hat sich selbst abgeschaltet und steht GESTOPPT fuer 22-09 (B4, Abbau). m7g.large 2,02 h / 0,232 USD. Luecke: Kaltstartlatenz mit Treffern (95c 48 auch unter lasttest). Naechster Plan 22-09
 
@@ -244,7 +246,10 @@ Progress: [█████████░] 90% (53 von 59 Plänen, 5 von 7 Phase
 
 ## Naechster Schritt
 
-**22-10 ausführen** (MESS-09-Entscheid aus 98d-dismax-probe.txt nach E10). 22-09 ist fertig: B4 gefahren (8ed671c),
+**22-11 ausführen** (Bericht). 22-10 ist fertig: MESS-09 = Summe, verworfen; Kaltstart-Ursache in README 6.11,
+Owner-Wahl a/b/c vor der Nachfreigabe D-02.
+
+Vorher: **22-10 ausführen** (MESS-09-Entscheid aus 98d-dismax-probe.txt nach E10). 22-09 ist fertig: B4 gefahren (8ed671c),
 Kosten vor dem Abbau gepusht (38f2307), Abbau und Bericht 6.7 bis 6.9 (4bafbe3). Offen fuer den Owner: Nachfreigabe
 der Kaltstart-Nachmessung (D-02, rund 0,24 USD), sinnvoll erst nach geklaerter Ursache.
 
@@ -369,7 +374,7 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
 |-------|-------|-------|----------|
 | 20 | 9 | - | - |
 | 21 | 9 | 1 Tag | - |
-| 22 | 9/12 | 12 min (22-01), 30 min (22-02), 35 min (22-03), 25 min (22-04), 75 min (22-05), 35 min (22-06 Task 3 und Probe), 25 min (22-07 Task 3), ca. 8 h 20 min Wand (22-08), 35 min (22-09) | - |
+| 22 | 10/12 | 12 min (22-01), 30 min (22-02), 35 min (22-03), 25 min (22-04), 75 min (22-05), 35 min (22-06 Task 3 und Probe), 25 min (22-07 Task 3), ca. 8 h 20 min Wand (22-08), 35 min (22-09), 30 min (22-10) | - |
 
 ## Accumulated Context
 
@@ -693,8 +698,11 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
 
 ## Deferred Items
 
-- 22-07: Sprachfall-Eigenrang der dismax-Regel hat in 98d keine eigene Zeile; Zuordnung der eigenen
-  Datei aus dem Bestand der Box, sonst MESS-09 "nicht entschieden". Details in deferred-items.md.
+- 22-10: Leerer Kaltstart geklaert (Modell-Laden bei Schalter 0 reisst 1,5 s), Nachmessung erst nach
+  Owner-Wahl a/b/c sinnvoll. Details in deferred-items.md und README 6.11.
+
+- 22-07: Sprachfall-Eigenrang der dismax-Regel hat in 98d keine eigene Zeile; in 22-10 erledigt ueber die
+  Kennungen aus 2026-09-v12-messung/rohdaten/05-sprachfaelle.txt (alle acht Faelle zugeordnet).
 
 - 22-02: 92c endet bei einem unerwarteten Abbruch im Phase-B-Block mit 0 (Klasse L-03); in
   92d und 92e abgefangen, 92c selbst unverändert. Details in
@@ -704,6 +712,6 @@ Sonst keine (die drei Debug-Sessions aus v1.1 sind am 21.09.2026 formal auf reso
 
 ## Session Continuity
 
-Last session: 2026-09-26T13:50:00.000Z
-Stopped at: Plan 22-09 abgeschlossen (Box abgebaut)
-Resume file: .planning/phases/22-messanfahrt-bl-f03/22-10-PLAN.md
+Last session: 2026-09-26T14:05:00.000Z
+Stopped at: Plan 22-10 abgeschlossen (MESS-09: Summe, verworfen)
+Resume file: .planning/phases/22-messanfahrt-bl-f03/22-11-PLAN.md

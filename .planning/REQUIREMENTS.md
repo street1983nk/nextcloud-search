@@ -30,7 +30,7 @@
 
 - [ ] **MESS-07**: EINE Box-Anfahrt liefert das BL-F03-Bündel: M-01-Zahl (innerer Aufruf auf Zielhardware), Wirkungsnachmessung 92c/99d auf der Box, Bodensatz-Zyklus 2, die 6 Fehlschläge und 44 übersprungenen Dateien einzeln benannt, Kaltstartlatenz sauber (kein Leerbegriff). Rechenblatt + Kostendeckel VOR dem Start zur Owner-Freigabe; Runbook-Disziplin (Cron-Intervall-Gate, Digest-Wechsel, Rohdaten committen)
 - [ ] **MESS-08**: Dieselbe Anfahrt misst die neuen v1.3-Zahlen: reale Indexgröße bei sechs befüllten Sprachfeldern am Korpus-Snapshot und Wandzeit des Re-Analyse-Umbaus (Schätzung 1 bis 3 h gegen 19 h 20 min Vollreindex belegen)
-- [ ] **MESS-09**: Der disjunction_max-Entscheid fällt auf Messbasis: Rangverschiebung `disjunction_max_query` gegen Score-Summe auf echten Daten; bei belegtem Vorteil umgesetzt, sonst dokumentiert verworfen
+- [x] **MESS-09**: Der disjunction_max-Entscheid fällt auf Messbasis: Rangverschiebung `disjunction_max_query` gegen Score-Summe auf echten Daten; bei belegtem Vorteil umgesetzt, sonst dokumentiert verworfen
 
 ### Härtung und Release (HART/REL, Fortsetzung ab HART-03/REL-02)
 
@@ -72,7 +72,7 @@
 | KOMP-01 | Phase 21 (Niederländische Komposita) | Complete |
 | MESS-07 | Phase 22 (Messanfahrt BL-F03) | Pending |
 | MESS-08 | Phase 22 (Messanfahrt BL-F03) | Pending |
-| MESS-09 | Phase 22 (Messanfahrt BL-F03) | Pending |
+| MESS-09 | Phase 22 (Messanfahrt BL-F03) | Complete |
 | HART-04 | Phase 23 (Härtung und Store-Einreichung 1.3.0) | Pending |
 | HART-05 | Phase 23 (Härtung und Store-Einreichung 1.3.0) | Pending |
 | REL-03 | Phase 23 (Härtung und Store-Einreichung 1.3.0) | Pending |
