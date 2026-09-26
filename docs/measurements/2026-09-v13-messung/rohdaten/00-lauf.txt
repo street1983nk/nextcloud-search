@@ -1,0 +1,16 @@
+p0-timer-start 2026-09-26T05:10:34Z
+timer-abschaltung 2026-09-27T03:33:34Z
+p0-timer-ende 2026-09-26T05:10:35Z
+altverzeichnisse-sauber ja
+lauf weg a b4-geplant ja abbild sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+abtaster leben 1 nach start containerstart 2026-09-26T05:08:52.952554259Z 2026-09-26T05:10:35Z
+p0-marken-start 2026-09-26T05:10:35Z
+90e-marken-rueckgabewert 0
+p0-marken-ende 2026-09-26T05:10:35Z
+einzelliste-start 2026-09-26T05:10:35Z
+90e-liste-rueckgabewert 0 datei 90e-einzelliste.json
+einzelliste-ende 2026-09-26T05:10:35Z
+p1-92d-start 2026-09-26T05:10:35Z
+92d-rueckgabewert 41
+tor-abbruch p1-92d rueckgabe 41 grund der Wechsel 92d ist gescheitert (36 bis 41) 2026-09-26T05:13:43Z
+00-abbruch 2026-09-26T05:13:43Z block p1-92d rueckgabe 41

@@ -1,0 +1,19 @@
+marke analyzer_version 1
+marke created_at 1788946328
+marke embedding_version multilingual-e5-small/int8/384/1024
+marke index_version 1
+marke instance_id 2bd6daea1f19451591e590954ed2b799
+marke schema_version 1
+marke store_schema_version 2
+marke tantivy_version tantivy v0.26.0, index_format v7
+marke wordlist_hash b1f64012ca7f5b6e57de2cb1bafa2521cb6606f3ccef5d6fd17396edc808dde0
+marke-gleich analyzer_version
+marke-gleich index_version
+marke-gleich store_schema_version
+marke-umbau schema_version ist 1 erwartet 2
+legacy-schritt schema_version 1 nach 2
+marke-gleich wordlist_hash
+marke-gleich tantivy_version
+marke-gleich embedding_version
+marke-umbau languages ist fehlt erwartet de,en
+marken-urteil umbau

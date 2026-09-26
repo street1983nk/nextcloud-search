@@ -1,0 +1,4 @@
+typwechsel-vorpruefung 2026-09-26T04:59:59Z epoch 1790398799
+shutdown-verhalten stop
+shutdown-ist-stopp ja
+TYPWECHSEL-VORPRUEFUNG-FERTIG

@@ -1,0 +1,47 @@
+die fuenfzehn vorbedingungen ohne box-zeit, abschnitt 3 des runbooks, plan 22-08
+abgearbeitet 2026-09-26 zwischen 04:56Z und 04:59Z auf der entwicklungsmaschine,
+region eu-central-1, bevor die erste kostenpflichtige ressource entstand
+
+geheimnisregel dieser datei wie in 01-aws-lesende-proben.txt: keine adresse,
+keine lebende kennung, kein passwortinhalt, keine kontokennung. pfade dieser
+maschine stehen als platzhalter.
+
+freigabe vor allem anderen gelesen: README.md der anfahrt, zeile
+  Anfahrt freigegeben: 26.09.2026, Deckel 24 h / 3,76 USD (Variante stunden), Weg a, B4 gefahren (F4 = 3,955)
+das datum ist gesetzt, der aufbau darf beginnen.
+
+-- die fuenfzehn zeilen, je eine mit ergebnis --
+01 CI_LAUF: erfuellt. gh run list --workflow=integration.yml --status success --limit 1 -> 36216793673 (c1c934b, 2026-09-26T04:05:35Z). die v1.3-werkzeuge lesen CI_LAUF nicht mehr (kein werkzeug dieses laufs nennt die variable); die zeile bleibt als stand des tages.
+02 sicherung der systemplatte: erfuellt. <zustandsverzeichnis>/systemplatte-2026-09/home-ubuntu-work.tar.gz vorhanden, 3971065 byte, 435 eintraege, sha256 fad3e7ce6c7f73cc85a108ce6511941326435934e87cce0c6df5f2d0a6a3584a, gleich 07-snapshot-und-abbau.txt der werkzeugfixe abschnitt 4. vermerk: die sicherung traegt KEIN .pw (dort ausdruecklich "ohne .pw"); die passwortdateien der box entstehen aus <zustandsverzeichnis>/passwoerter-2026-09/konten.env (namen admin, lasttest, sprachfall, driftfall), wie in der v1.2.
+03 aws-anmeldung: erfuellt. AWS_ACCESS_KEY_ID und AWS_SECRET_ACCESS_KEY aus einer datei ausserhalb des arbeitsbaums in die umgebung gelesen; kein wert in einem argument oder protokoll.
+04 lesende snapshot-probe: erfuellt. State completed, Progress 100%, VolumeSize 60 (01-aws-lesende-proben.txt abschnitt 1).
+05 tag des snapshots: erfuellt. purpose=findling-corpus-keep (ebenda abschnitt 2).
+06 werkzeuge: erfuellt. aws-cli/2.36.39, gh 2.92.0, Python 3.13.1, uv 0.11.7, jq-1.8.1, OpenSSH_10.3p1. dig fehlt weiterhin; rueckfaelle nslookup und curl --resolve.
+07 jq auf der box: offen bis block 8, dort per apt-get install docker.io jq wie in der v1.2; ergebnis in 03-aufbau.txt.
+08 dns-zugang fuer loadtest.infranode.dev: erfuellt. der vorhandene zugang des betreiber-werkzeugkastens (ausserhalb des arbeitsbaums) meldet token active; die zone traegt fuer den namen derzeit keinen eintrag (0 records). freigabeumfang 1.5 des README: a-record ueber diesen zugang.
+09 deckel-rechenblatt freigegeben: erfuellt. README abschnitt 1 und freigabezeile oben; laufwerte DECKEL_MINUTEN 1354, DECKEL_REST_MINUTEN 86, B4_GEPLANT ja, EINZELWEG a.
+10 schluesselpaar findling-loadtest in aws: erfuellt im sinne der zeile. describe-key-pairs -> InvalidKeyPair.NotFound; kein delete-key-pair noetig.
+11 alte .pub: erfuellt. unter <ssh-verzeichnis> lagen privater teil und .pub vom 20.09. (paar der v1.2, in aws geloescht) und eine .pub vom 04.09.; alle drei vor block 2 beiseite gelegt (endung .alt-2026-09-20), block 2 schreibt beide teile neu.
+12 herkunft des arbeitsbaums: erfuellt. klon https://github.com/street1983nk/nextcloud-search.git nach /home/ubuntu/work/nextcloud-search (der pfad, den 00-abholen.sh als BOXREPO erwartet), zielcommit 471a1b3 (kopf von main = origin/main), dazu git config core.fileMode false und chmod +x im v13- und im v12-werkzeugverzeichnis. zum zielcommit siehe den vermerk unten.
+13 konfigurationstexte docker und containerd: erfuellt. /etc/docker/daemon.json: { "data-root": "/mnt/findling/docker" }; /etc/containerd/config.toml: version = 2 und root = "/mnt/findling/containerd". beide vor dem ersten daemon-start.
+14 FINDLING_LOAD_PASSWORD in der umgebung: entfaellt. 99d liest sein passwort aus PWFILE, und E7 verlangt gerade, dass die variable in seiner umgebung NICHT steht; die laststufen von M-01 setzen sie in 00-lauf.sh nur in einer subshell aus ~/work/.pw/lasttest.
+15 eigene oeffentliche adresse: erfuellt. aus dem adressdienst gelesen und als ipv4 geparst; block 1 setzt die ssh-regel darauf (<eigene-adresse>/32).
+
+-- vermerk zum zielcommit des klons --
+der box-digest-kandidat sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+stammt aus der abbildstrecke des commits 59f05fe (lauf 174, 36215893830). am
+2026-09-26 um 05:00Z zeigt :dev auf sha256:6e24f6e4431c503a577b8be5155588077ee6e38fb34bad379a38e4dec2942273
+(abbildstrecke 36219176987 auf 471a1b3). zwischen 59f05fe und 471a1b3 aendert
+sich unter backend/, php/, scripts/ und testdata/ nur backend/tests (zwei
+testdateien); backend/src und php sind byteweise gleich. der kandidat bleibt
+damit das gemessene abbild (README abschnitt 2, letzter absatz), der spaetere
+digest ist ein neuer zeiger auf denselben baum und wird nicht benutzt.
+der klon steht auf 471a1b3 und nicht auf 59f05fe, weil 59f05fe den fix bbf929e
+von 92d-wechsel.sh (occ upgrade 3 zaehlt als gelungen) noch nicht traegt; die
+in 22-06 im ci geprobte fassung von 92d ist die von bbf929e. der beweis, dass
+abbild und klon denselben stand haben, bleibt der baumhash in 92d
+(baumhash-beweis ja), nicht der commit.
+
+-- bilanz --
+erfuellt 13 (01 bis 06, 08 bis 13, 15), offen bis block 8: 07, entfaellt: 14.
+abbruch keiner.

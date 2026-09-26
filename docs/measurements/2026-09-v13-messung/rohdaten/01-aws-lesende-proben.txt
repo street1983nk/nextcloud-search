@@ -1,0 +1,58 @@
+lesende aws-proben vor der ersten kostenpflichtigen ressource, plan 22-08 (task 1)
+erhoben 2026-09-26 ab 04:56Z, region eu-central-1, auf der entwicklungsmaschine
+werkzeug: aws cli v2 2.36.39
+
+alle proben lesend und kostenlos. hier entsteht keine ressource.
+
+geheimnisregel dieser datei, wie in der v1.2 (runbook, kopf): keine
+ip-adresse, keine lebende instanz- oder volumekennung, keine kontokennung, kein
+passwortinhalt. auch die kennung des korpus-snapshots steht als <korpus-snapshot>
+(es ist der aus runbook abschnitt 1, der gate-test kennt fuer v1.3 keine ausnahme). die anmeldewerte
+kamen aus einer datei ausserhalb des arbeitsbaums in die umgebung und stehen in
+keinem argument und in keinem protokoll.
+
+-- 1 der snapshot --
+kommando:
+  aws ec2 describe-snapshots --region eu-central-1 \
+      --snapshot-ids <korpus-snapshot>
+antwort:
+  State                   completed
+  Progress                100%
+  VolumeSize              60
+  StartTime               2026-09-11T07:47:07.582000+00:00
+  CompletionTime          2026-09-11T08:36:36.061000+00:00
+  FullSnapshotSizeInBytes 55415668736
+  Encrypted               false
+  StorageTier             standard
+  Description             findling corpus and index, v1.1 comparison run
+                          2026-09-10, 52111 documents
+erwartung (v1.2, 01-aws-lesende-proben.txt abschnitt 1): State completed,
+Progress 100%, VolumeSize 60. urteil: alle drei gehalten, uebrige felder
+unveraendert gegen den 14.09. und den 19.09.
+
+-- 2 die tags des snapshots --
+kommando:
+  aws ec2 describe-tags --region eu-central-1 \
+      --filters "Name=resource-id,Values=<korpus-snapshot>"
+antwort:
+  snapshot  Name     findling-corpus-2026-09
+  snapshot  purpose  findling-corpus-keep
+urteil: gehalten. restore taggt das volume pflichtmaessig um.
+
+-- 3 das schluesselpaar --
+kommando:
+  aws ec2 describe-key-pairs --region eu-central-1 --key-names findling-loadtest
+antwort:
+  InvalidKeyPair.NotFound: The key pair 'findling-loadtest' does not exist
+urteil: kein altes paar in aws (der abbau vom 21.09. hat es mitgeloescht, nachtrag
+aus 15-15). block 2 legt ein neues an, ohne vorheriges delete-key-pair.
+
+-- 4 ueberbleibsel, damit nichts doppelt entsteht --
+  security group findling-loadtest        keine
+  instanzen mit Name=findling-loadtest    keine (pending, running, stopping, stopped)
+  volumes mit purpose=findling-phase5     keine
+  default-vpc                             vorhanden (<vpc>)
+  default-subnetz in eu-central-1c        vorhanden (<subnetz>)
+  abbild aus runbook block 3           available, arm64,
+                                          ubuntu-noble-24.04-arm64-server-20260904
+urteil: das konto ist sauber, der aufbau beginnt bei block 1.

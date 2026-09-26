@@ -1,0 +1,210 @@
+der aufbau der messbox, bloecke 1 bis 13 des runbooks (13b entfaellt, 92d
+uebernimmt den abbildwechsel), plan 22-08
+gefahren 2026-09-26, unbeaufsichtigte anfahrt, region eu-central-1, zone eu-central-1c
+
+geheimnisregel dieser datei, wie in 02-vorbedingungen.txt: keine ip-adresse,
+keine lebende instanz- oder volumekennung, kein passwortinhalt, keine
+kontokennung, keine uuid des datentraegers. auch die kennung des korpus-snapshots
+steht als <korpus-snapshot> (der aus runbook abschnitt 1). jeder block schreibt beim betreten und verlassen einen
+utc-stempel (runbook 2.1, nachtrag 21.09.).
+
+block-1-start 2026-09-26T04:58:54Z
+block-1-ende 2026-09-26T04:58:58Z
+-- block 1: security group --
+create-security-group findling-loadtest im default-vpc, GroupId geliefert (<sg>),
+authorize-security-group-ingress: Return True, vier regeln:
+  tcp 22-22 <eigene-adresse>/32 (beschreibung owner), tcp 80-80, tcp 443-443,
+  udp 443-443 auf <ganzes-netz>
+urteil: wie erwartet.
+
+block-2-start 2026-09-26T04:59:09Z
+block-2-ende 2026-09-26T04:59:10Z
+-- block 2: schluesselpaar --
+create-key-pair findling-loadtest ohne vorheriges delete (01, abschnitt 3), privater teil
+beginnt mit der pem-kopfzeile eines rsa-privatschluessels, rechte -rw-------, 2048 bit rsa; .pub
+ausdruecklich mit ssh-keygen -y abgeleitet. kopie des privaten teils ins
+zustandsverzeichnis, wo 00-abholen.sh ihn erwartet (rechte 600).
+urteil: wie erwartet, keine der beiden v1.2-abweichungen.
+
+block-3-start 2026-09-26T04:59:23Z
+block-3-ende 2026-09-26T04:59:42Z
+-- block 3: instanz --
+run-instances mit dem abbild aus runbook block 3, m7g.large, default-subnetz in eu-central-1c,
+40 gb gp3 root mit DeleteOnTermination=true, tags Name=findling-loadtest
+purpose=findling-phase5, dazu ausdruecklich --instance-initiated-shutdown-behavior stop
+(abweichung zum runbook-rezept, das den wert der vorgabe ueberlaesst: der harte
+stopp der anfahrt ist ein shutdown -h aus der box, D-02).
+antwort: InstanceId geliefert (<instanz>), Placement.AvailabilityZone eu-central-1c,
+InstanceType m7g.large, wait instance-running ohne ausgabe.
+LaunchTime 2026-09-26T04:59:25+00:00: beginn der bezahlten zeit, BOX_START_EPOCH.
+urteil: wie erwartet.
+
+block-4-start 2026-09-26T04:59:56Z
+block-4-ende 2026-09-26T04:59:58Z
+vorpruefung-start 2026-09-26T04:59:58Z
+vorpruefung-ende 2026-09-26T05:00:00Z
+-- block 4: box.env --
+BOX_INSTANCE_ID und BOX_SECURITY_GROUP von hand in <zustandsverzeichnis>/box.env,
+umask 077, anhaengend. rueckleseprobe aws_box.sh status: <instanz> m7g.large running
+in eu-central-1c, <adresse>, 40 G gp3, running 0.0 hours since 2026-09-26T04:59:25+00:00.
+urteil: wie erwartet, kein "no state file".
+
+-- vorpruefung des harten stopps, unmittelbar nach block 3 und 4 --
+00-typwechsel.sh vorpruefung, rueckgabe 0, rohdatei 00-typwechsel.txt:
+  shutdown-verhalten stop, shutdown-ist-stopp ja
+urteil: ein shutdown -h aus der box ist ein stopp, kein terminate. der timer von
+00-lauf.sh ist damit ein sicherer deckel.
+
+-- hostschluessel der box, vor der ersten ssh-sitzung --
+ssh-keyscan gegen die adresse, fingerabdruecke gegen get-console-output
+(cloud-init, BEGIN SSH HOST KEY FINGERPRINTS) verglichen: ed25519, ecdsa und rsa
+gleich. known_hosts ins zustandsverzeichnis, wo 00-abholen.sh sie erwartet.
+erste sitzung: aarch64, 2 kerne, 7.6Gi vor mem=4G.
+
+block-5-start 2026-09-26T05:00:31Z
+block-5-ende 2026-09-26T05:01:32Z
+-- block 5: harte speichergrenze mem=4G --
+drop-in /etc/default/grub.d/99-mem4g.cfg erweitert die bestehende zeile, update-grub,
+neustart. rueckleseprobe: free -h 3.9Gi, nproc 2, uname -m aarch64, /proc/cmdline mit mem=4G.
+urteil: wie erwartet.
+
+block-6-start 2026-09-26T05:01:32Z
+block-6-ende 2026-09-26T05:01:45Z
+-- block 6: volume aus dem snapshot --
+aws_box.sh restore ohne argument, rueckgabe 0. woertlich bis auf platzhalter:
+  no snapshot was handed in, using <korpus-snapshot>
+  State completed, Progress 100%, VolumeSize 60, Encrypted False,
+  Description findling corpus and index, v1.1 comparison run 2026-09-10, 52111 documents
+  creating a 60 GB gp3 volume in eu-central-1c from <korpus-snapshot>
+  tags of <volume> after the retagging: Name=findling-corpus purpose=findling-phase5
+  waiting for volume <volume> to become available
+  attaching <volume> to <instanz> as /dev/sdf
+  this subcommand ends at the attach
+urteil: wie erwartet.
+
+block-7-start 2026-09-26T05:01:53Z
+block-7-ende 2026-09-26T05:02:16Z
+-- block 7: datentraeger mounten --
+lsblk -b: genau ein datentraeger mit 64424509440 byte neben der 42949672960-byte-
+systemplatte. typ ext4, uuid aus blkid (steht hier nicht), fstab-zeile
+UUID=<uuid> /mnt/findling ext4 defaults,nofail 0 2, mount -a.
+rueckleseprobe: df -h 59G gesamt, 35G belegt, 62%;
+ls: containerd corpus docker drillkorpus lost+found ncdata (wie in der v1.2).
+urteil: wie erwartet.
+
+block-8-start 2026-09-26T05:02:16Z
+block-8-ende 2026-09-26T05:03:47Z
+-- block 8: docker-data-root und containerd-wurzel, BEVOR der daemon startet --
+in dieser reihenfolge, die drei schritte der v1.2 in einem zug:
+  1. /etc/docker/daemon.json { "data-root": "/mnt/findling/docker" } und
+     /etc/containerd/config.toml version = 2, root = "/mnt/findling/containerd",
+     beide VOR der installation
+  2. apt-get install docker.io jq mit --force-confold (die vorab geschriebene
+     config.toml bleibt), docker 29.1.3, jq-1.7 (vorbedingung 07 damit erfuellt)
+  3. containerd und docker neu gestartet
+rueckleseprobe: Docker Root Dir /mnt/findling/docker, Storage Driver overlayfs,
+driver-type io.containerd.snapshotter.v1, 16 abbilder mit namen, alle neun
+container der messbox starten von selbst (findling-registry, nc_app_findling_backend,
+nextcloud-aio-apache, -database, -harp, -mastercontainer, -nextcloud,
+-notify-push, -redis); curl localhost:5000/v2/_catalog {"repositories":["findling_backend"]}.
+nebenbei: ubuntu in die gruppe docker (die werkzeuge rufen sudo docker).
+urteil: wie erwartet, keine der v1.2-abweichungen 4 und 5 mehr.
+
+block-9-start 2026-09-26T05:03:47Z
+block-9-ende 2026-09-26T05:04:35Z
+-- block 9: systemplatte zurueckspielen --
+scp der sicherung, tar xzf nach /home/ubuntu, kopie in /tmp geloescht.
+gegenprobe auf der box: 435 eintraege, sha256 fad3e7ce6c7f73cc85a108ce6511941326435934e87cce0c6df5f2d0a6a3584a
+(gleich 02-vorbedingungen.txt zeile 02). nach dem auspacken: 385 dateien, 13M.
+passwortdateien: ~/work/.pw (700) mit admin und lasttest (600, je 28 byte, ohne
+zeilenumbruch) aus <zustandsverzeichnis>/passwoerter-2026-09/konten.env, per ssh-stdin
+geschrieben, kein wert in einem argument. die sicherung selbst traegt kein .pw.
+urteil: wie erwartet (die v1.2-richtigstellungen 13M und kein arbeitsbaum gelten).
+
+block-10-start 2026-09-26T05:04:35Z
+block-10-ende 2026-09-26T05:05:17Z
+-- block 10: a-record --
+namensaufloesung-ist=a-record
+gesetzt ueber den vorhandenen dns-zugang des betreiber-werkzeugkastens (freigabeumfang
+1.5 des README), api des zonenverwalters: success True, typ A, ttl 120, nicht proxied.
+vorher stand fuer den namen kein eintrag in der zone (02, zeile 08).
+rueckleseprobe: nslookup gegen einen oeffentlichen resolver loest auf genau eine
+adresse auf, gleich der instanzadresse; https://loadtest.infranode.dev/status.php
+200, installed true, maintenance false, needsDbUpgrade false, version 33.0.8.
+anmeldeprobe von der box aus, webdav propfind depth 0 mit den passwortdateien:
+admin 207, lasttest 207 (siehe zeile darunter).
+urteil: erfuellt, weg 1 von 3.
+
+abweichung 1, block 10: der name loeste auf der box und im backend-container zuerst
+NICHT auf (NXDOMAIN, soa-ttl 1800 der zone), obwohl er von aussen schon stimmte. die
+aio-container hatten ihn beim ersten start in block 8 abgefragt, bevor der record
+stand, und der resolver der vpc hielt die negative antwort. in der v1.2 bestand noch
+ein alter record gleichen namens, deshalb fiel das dort nicht auf. aufgeloest um
+05:08:09Z, ohne /etc/hosts-pin, rund 3 min nach dem record. lehre fuer das runbook:
+block 10 vor dem ersten daemon-start von block 8 setzen, sobald die adresse steht.
+
+abweichung 2, block 10: die anmeldeprobe endete zuerst mit 401 fuer admin und
+lasttest. die passwoerter aus konten.env gehoeren zum stand der v1.2-box (20.09.),
+der snapshot ist vom 11.09. vollzug wie am 05.09.: occ user:resetpassword
+--password-from-env fuer beide konten, der wert nur ueber stdin in den container,
+"Successfully reset password" je konto. danach webdav propfind admin 207, lasttest 207.
+kein messgegenstand haengt an den passwoertern.
+
+block-11-start 2026-09-26T05:08:50Z
+block-11-ende 2026-09-26T05:10:07Z
+-- block 11: bewaffnung nach DI-05-36 --
+occ app_api:app:disable findling_backend: ExApp findling_backend successfully disabled.
+occ app_api:app:enable findling_backend: ExApp findling_backend successfully enabled.
+gezaehlter pollerdurchgang (docker logs --since 2m, grep -c poll): 1, zeile
+  "indexing is armed and the work stock is empty, the next file is picked up as it arrives"
+urteil: erfuellt, zaehlung groesser null, kein resume-vorrat.
+
+block-12-start 2026-09-26T05:10:07Z
+block-12-ende 2026-09-26T05:10:08Z
+block-13-start 2026-09-26T05:10:08Z
+block-13-ende 2026-09-26T05:10:08Z
+-- block 12: harte speichergrenze des containers --
+docker update --memory=2g --memory-swap=2g, danach aus der cgroup:
+  memory.max       2147483648
+  memory.swap.max  0
+urteil: erfuellt gegen die richtiggestellte erwartung (2147483648/0, runbook block 12).
+92d baut den container spaeter neu und setzt die grenze selbst wieder.
+
+-- block 13: genau eine nextcloud am docker-dienst --
+docker ps zaehlt nextcloud-aio-nextcloud: 1
+docker volume ls | grep findling: nc_app_findling_backend_data
+urteil: erfuellt.
+
+-- block 13b: entfaellt --
+den abbildwechsel uebernimmt 92d-wechsel.sh im unbeaufsichtigten ablauf (P1), ohne
+--rm-data und mit occ upgrade; digest und baumhash stehen in 92d-wechsel.txt.
+
+-- klon auf der box --
+git clone https://github.com/street1983nk/nextcloud-search.git nach
+/home/ubuntu/work/nextcloud-search, checkout 471a1b3 (begruendung in
+02-vorbedingungen.txt, vermerk zum zielcommit), git config core.fileMode false,
+chmod +x in docs/measurements/2026-09-v13-messung/skripte, im v1.2- und im
+nachfolgeverzeichnis. git status --porcelain: 0 zeilen. ls -l zeigt -rwxrwxr-x
+an allen werkzeugen des v13-verzeichnisses.
+
+-- laufwerte --
+~/work/v13-lauf.env auf der box, rechte -rw-------:
+  DECKEL_MINUTEN=1354
+  BOX_START_EPOCH=1790398765 (LaunchTime 2026-09-26T04:59:25Z aus describe-instances)
+  B4_GEPLANT=ja
+  EINZELWEG=a
+  ABBILD_DIGEST=sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+  DECKEL_REST_MINUTEN=86
+PWFILE und PWFILE_LASTTEST fehlen mit absicht: die vorgaben ~/work/.pw/admin und
+~/work/.pw/lasttest gelten. rechnerische abschaltung: 2026-09-27T03:33:25Z.
+
+-- sprachfall-bestand fuer MESS-09 (deferred-items 22-07) --
+konto sprachfall im snapshot vorhanden (occ user:list: admin, driftfall, lasttest,
+sprachfall), unter ncdata/sprachfall/files 39 dateien, gleich den 39 von
+testdata/corpus, die 98b am 10.09. hochgeladen hat. die dateien der sprachfaelle
+stehen also im bestand, bedingung 2 der dismax-regel ist zuzuordnen. nichts wurde
+hochgeladen oder veraendert. driftfall: 0 dateien. gelesen wurde nur die zahl, keine namen.
+
+-- zwischenstand nach block 13 --
+die box steht nach runbook, der harte stopp ist als stop belegt, die laufwerte liegen
+auf der box. naechster schritt: 00-lauf.sh start (plan 22-08, task 2).
