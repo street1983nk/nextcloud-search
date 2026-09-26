@@ -283,6 +283,22 @@ The legacy plan itself answered in 3.8983 ms. Raw data, the rule and its
 application are in `docs/measurements/2026-09-v13-messung/`, section 6.10 of its
 README, and the raw file is `rohdaten/98d-dismax-probe.txt`.
 
+**disjunction_max was measured and rejected on 2026-09-26.** The rule was fixed
+by the owner before the box started (`skripte/00-ablauf.md` of that measurement,
+section 6, question 3): dismax only if, for tie 0.0 or tie 0.1, the median RBO@10
+against the legacy plan lies at least 0.05 above the one of the sum, no language
+case ranks its own file worse, and the median latency stays at or below 1.20
+times the one of the sum. Neither tie value meets the first condition: tie 0.0
+lies 0.1132 below the sum and tie 0.1 only 0.0102 above it. The other two
+conditions hold for both (no own file ranks worse, latency 0.90 and 1.00 times
+the sum). A search line therefore keeps running through one
+`parse_query_lenient` over all fields of the plan, with the field contributions
+added up as described above, and `findling.query.rewrite` is unchanged. One
+observation belongs next to the verdict without moving it: at 0.9531 the sum
+already stands so close to the legacy plan that the threshold of 1.0031 lay
+above the largest value an RBO can take. Any other rule would be a new decision
+before a new measurement.
+
 **The cost of the field plan: one `read_meta()` plus one `doc_freq` probe per
 body field, at 0.26 us a call.** Measurement M-2 of the phase 19 research,
 2026-09-24, 20000 runs against tantivy 0.26.2, next to 2.26 us for

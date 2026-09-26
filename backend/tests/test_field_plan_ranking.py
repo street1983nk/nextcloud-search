@@ -51,9 +51,9 @@ second one mean anything.
 
 **The number this file was also written for.** ``TIPPING_BOOST`` below is the
 weight at which statement 3 stops holding on this probe, found by a sweep and
-not by an estimate. Phase 22 has to weigh a different query shape against the
-summation described above, and REQUIREMENTS MESS-09 binds that decision to a
-measurement on real data; this is the figure it starts from, and plan 19-09
+not by an estimate. Phase 22 weighed a different query shape against the
+summation described above, and REQUIREMENTS MESS-09 bound that decision to a
+measurement on real data; this is the figure it started from, and plan 19-09
 carries it into ``docs/language-analyzers.md`` so that nobody has to look for it.
 
 **What this file does not prove.** Nothing about an installation. Three documents
@@ -61,7 +61,13 @@ are not a corpus, and ``TIPPING_BOOST`` is a property of this probe rather than 
 threshold of the product. It proves nothing about the analyzer chains themselves,
 which is ``test_language_analyzers.py``, and nothing about which fields a plan
 names, which is ``test_query_fields_plan.py``. It prepares no change of query
-shape either: that decision belongs to phase 22 and stays there.
+shape either, and none is coming: per word ``disjunction_max`` was measured and
+rejected on 2026-09-26 (MESS-09, plan 22-10). On the 52,137 files of the v1.3
+measurement box the median RBO@10 against the legacy plan was 0.9531 for the
+sum, 0.8399 for dismax at tie 0.0 and 0.9633 at tie 0.1, and the rule fixed
+before the trip asked for at least 0.05 above the sum. The summation measured
+here is therefore the shipped behaviour, and these four statements guard it.
+Source: ``docs/measurements/2026-09-v13-messung/``, section 6.10 of its README.
 """
 
 from __future__ import annotations
@@ -113,11 +119,10 @@ BUILD_OUT: Final = tuple(code for code in SUPPORTED_LANGUAGES if code not in LEG
 # What it is good for. The shipped 0.6 sits 0.21 below the edge on this probe, so
 # the promise of success criterion 3 holds here with room rather than by a hair,
 # and the counter probe at 1.0 is above the edge, so it really does turn the
-# order over instead of failing to notice that it could not. Phase 22 weighs
-# Query.disjunction_max_query against the summation this file measures, and per
-# REQUIREMENTS MESS-09 that decision is bound to a measurement on real data; this
-# is the figure that measurement is set up against, and nothing in this module
-# prepares the change itself.
+# order over instead of failing to notice that it could not. Phase 22 weighed
+# Query.disjunction_max_query against the summation this file measures, on real
+# data as REQUIREMENTS MESS-09 demands, and rejected it on 2026-09-26 (see the
+# module docstring); the summation stays, and so does this figure as its guard.
 #
 # What it is not. Three documents in a temporary directory. The edge moves with
 # the length of the texts and with how many chains reach each document, so this
