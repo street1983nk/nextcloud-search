@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: executing
-stopped_at: Plan 22-10 abgeschlossen (MESS-09 entschieden: Summe bleibt, disjunction_max dokumentiert verworfen; Kaltstart-Ursache geklaert); naechster Schritt 22-11
-last_updated: "2026-09-26T14:05:00.000Z"
-last_activity: 2026-09-26, Plan 22-10 abgeschlossen (MESS-09 nach E10, Summe, verworfen)
+stopped_at: Plan 22-11 abgeschlossen (Zahlen in performance.md, Urteile E1-E14 11 gehalten / 3 verfehlt, Runbook-Nachtraege, Pruefsummen-Waechter); naechster Schritt 22-12
+last_updated: "2026-09-26T16:30:00.000Z"
+last_activity: 2026-09-26, Plan 22-11 abgeschlossen (Auswertung, Urteile, Pruefsummen)
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 59
-  completed_plans: 57
-  percent: 97
+  completed_plans: 58
+  percent: 98
 ---
 
 # Project State
@@ -26,8 +26,10 @@ See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 ## Current Position
 
 Phase: 22 (messanfahrt-bl-f03), EXECUTING
-Plan: 11 of 12
-Status: 22-10 abgeschlossen: MESS-09 nach E10 auf 98d entschieden, Urteil E10 gehalten, Entscheid Summe, Folge verworfen (RBO@10-Median gegen Altplan: Summe 0,9531, tie 0.0 0,8399, tie 0.1 0,9633; Schwelle +0,05 von keinem erreicht, lag mit 1,0031 ueber dem RBO-Hoechstwert). rewrite.py unveraendert, keine Ratsche. Verwerfung in docs/language-analyzers.md, README 6.10, Kopf test_field_plan_ranking.py. KALTSTART-URSACHE GEKLAERT (README 6.11): erste hybride Suche laedt bei Schalter 0 das Modell und reisst den PHP-Deckel 1,5 s (m01 innerMs 1505-1596), bekannter Vorfall 10.09.; unveraenderte Nachmessung liefert wieder 0 Treffer, Owner muss vor der Nachfreigabe Weg a (Schalter an), b (einwortiger Begriff) oder c (erst Produktfix) waehlen. Commits f0eec86, 6d9952a, 1ef5977. Naechster Plan 22-11
+Plan: 12 of 12
+Status: 22-11 abgeschlossen: docs/performance.md traegt "Die v1.3-Anfahrt vom 26.09.2026" (M-01 warm hoechstens 1.080,6 ms, Stufe 1 kalt 1.512,5; 92c 36/0, 99d 0; Bodensatz Zyklus 2 +30,5 MB; Einzelliste alle 50; Kaltstart LUECKE; Index 1,82-fach, Umbau 581 s; B1-B7), Nachtrag "tesseract und die Kerne" (Satz Zeile 2887 fuer das Produkt widerlegt: OMP_THREAD_LIMIT=1, ungesetzt 1,70-mal langsamer, zwei Slots Faktor 1,97), Kosten 2,32 h / 0,4716 USD. README 6.12 Urteile: 11 gehalten, 3 verfehlt (E4, E5, E8). Runbook: 92d statt 13b, 00-lauf.sh Timer/Abholen, Vorpruefung, Bewaffnung nach jedem Start, B4-Typwechsel, Fallen. Pruefsummen: DRIVEN_V13_FASSUNGEN (11) in test_v13_gefahren.py, DRIVEN_SUCCESSOR_FASSUNGEN (92c, 99d). MESS-08 abgehakt, MESS-07 OFFEN (Kaltstart mit Trefferpflicht fehlt; Owner muss Weg a/b/c waehlen und neu freigeben, rund 0,24 USD). Commits 44bba82, b497cc0. Suite 3322 passed. Naechster Plan 22-12
+
+Vorher 22-10 abgeschlossen: MESS-09 nach E10 auf 98d entschieden, Urteil E10 gehalten, Entscheid Summe, Folge verworfen (RBO@10-Median gegen Altplan: Summe 0,9531, tie 0.0 0,8399, tie 0.1 0,9633; Schwelle +0,05 von keinem erreicht, lag mit 1,0031 ueber dem RBO-Hoechstwert). rewrite.py unveraendert, keine Ratsche. Verwerfung in docs/language-analyzers.md, README 6.10, Kopf test_field_plan_ranking.py. KALTSTART-URSACHE GEKLAERT (README 6.11): erste hybride Suche laedt bei Schalter 0 das Modell und reisst den PHP-Deckel 1,5 s (m01 innerMs 1505-1596), bekannter Vorfall 10.09.; unveraenderte Nachmessung liefert wieder 0 Treffer, Owner muss vor der Nachfreigabe Weg a (Schalter an), b (einwortiger Begriff) oder c (erst Produktfix) waehlen. Commits f0eec86, 6d9952a, 1ef5977. Naechster Plan 22-11
 
 Vorher 22-09 abgeschlossen: B4 auf m7g.4xlarge mit 0 (N 1 bis 16, T 1 bis 8, 16 Kerne, nicht gekuerzt), Box abgebaut ohne Ende-Snapshot, Verbleib null ueber 17 Regionen, Schluesselpaar und A-Record weg, Korpus-Snapshot bleibt. Anfahrt gesamt 2,32 h / 0,4716 USD, Deckel 24 h / 3,76 USD gehalten. Luecken README 6.9: Kaltstart mit Trefferpflicht (Pflichtzahl, Nachfreigabe D-02 noetig, erst Ursache in 22-10/22-11), 94c-Spitze, B5-RAM. Naechster Plan 22-10
 
@@ -246,7 +248,9 @@ Progress: [█████████░] 90% (53 von 59 Plänen, 5 von 7 Phase
 
 ## Naechster Schritt
 
-**22-11 ausführen** (Bericht). 22-10 ist fertig: MESS-09 = Summe, verworfen; Kaltstart-Ursache in README 6.11,
+**22-12 ausführen** (Audit, Owner-Abnahme der Messphase, Push). 22-11 ist fertig: Zahlen in performance.md, Urteile, Runbook, Pruefsummen (44bba82, b497cc0). Am Checkpoint 22-12 vorlegen: MESS-07 offen wegen Kaltstart-Luecke, Owner-Wahl a/b/c plus Nachfreigabe D-02 (rund 0,24 USD, alle drei Luecken 0,34 USD); 41,9/42,1-Befund 21-04 weiter offen.
+
+Vorher: **22-11 ausführen** (Bericht). 22-10 ist fertig: MESS-09 = Summe, verworfen; Kaltstart-Ursache in README 6.11,
 Owner-Wahl a/b/c vor der Nachfreigabe D-02.
 
 Vorher: **22-10 ausführen** (MESS-09-Entscheid aus 98d-dismax-probe.txt nach E10). 22-09 ist fertig: B4 gefahren (8ed671c),
@@ -374,7 +378,7 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
 |-------|-------|-------|----------|
 | 20 | 9 | - | - |
 | 21 | 9 | 1 Tag | - |
-| 22 | 10/12 | 12 min (22-01), 30 min (22-02), 35 min (22-03), 25 min (22-04), 75 min (22-05), 35 min (22-06 Task 3 und Probe), 25 min (22-07 Task 3), ca. 8 h 20 min Wand (22-08), 35 min (22-09), 30 min (22-10) | - |
+| 22 | 11/12 | 12 min (22-01), 30 min (22-02), 35 min (22-03), 25 min (22-04), 75 min (22-05), 35 min (22-06 Task 3 und Probe), 25 min (22-07 Task 3), ca. 8 h 20 min Wand (22-08), 35 min (22-09), 30 min (22-10), 75 min (22-11) | - |
 
 ## Accumulated Context
 
@@ -412,6 +416,12 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
   sha256:40ca8c2b...3e3e, Abbildstrecke Lauf 174; Beweis auf der Box bleibt der Baumhash (22-06).
 - 92d nimmt von occ upgrade 0 und 3 (ERROR_UP_TO_DATE) an; Phase B ist per probe-92d.yml im CI
   geprobt, dispatch-only, Start standardmaessig v1.1.0 wie der Snapshot (22-06).
+- Gefahrene Fassungen der v1.3 sind gepinnt (sha256 plus Bytezahl, Muster DRIVEN_V12) und
+  brauchen je eine Endzeile in den Rohdaten; der Kopfsatz NOT_DRIVEN bleibt byteweise, das
+  Fahrdatum steht im Bericht 6.14. Ein Fix ist ab jetzt eine Nachfolgefassung (22-11).
+- Der tesseract-Satz performance.md:2887 ist per datiertem Nachtrag berichtigt, nicht
+  ersetzt: im Produkt ein Kern je Seite (OMP_THREAD_LIMIT=1), zwei OCR-Slots bringen auf
+  m7g.large Faktor 1,97 (22-11).
 
 - Ein CI-Sprachbeweis liest seinen Erwartungswert aus dem Katalog und traegt die Abwesenheit
   des englischen Quellsatzes als eigentliche Zusicherung (20-09). Ein Satz in der YAML waere
