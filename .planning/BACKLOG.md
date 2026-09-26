@@ -213,6 +213,16 @@ Phase-15-Messung zerstoert den v1.1-Vergleich (D-04-Linie).
 plus zwei neue Messauftraege: Indexgroesse bei sechs Sprachfeldern, Wandzeit des
 Re-Analyse-Umbaus). Dieser Eintrag bleibt nur als Herkunftsbeleg stehen.
 
+**STAND 26.09.2026: GEMESSEN, EIN PUNKT OFFEN.** Anfahrt am 26.09.2026
+(`docs/measurements/2026-09-v13-messung/`, Zahlen in `docs/performance.md`,
+Abschnitt "Die v1.3-Anfahrt vom 26.09.2026"). Punkte 1 bis 4 haben ihre Zahl:
+M-01 hält warm die Decke (Stufe 1 lief kalt und riss sie), 92c 36 / 0 und 99d
+0, Bodensatz Zyklus 2 plus 30,5 MB, Einzelliste mit allen 50 Dateien. Punkt 5
+bleibt eine Lücke: die erste kalte Mehrwortsuche lädt bei Entladeschalter 0 das
+Modell und reißt den PHP-Deckel, also 0 Treffer. Eine Nachmessung (rund
+0,24 USD) braucht vorher die Wahl des Weges und eine neue Freigabe durch den
+Owner.
+
 **Auslöser:** Owner-Entscheid 21.09.2026 beim v1.2-Abschluss: das Buendel wird
 als Messphase in den NAECHSTEN Milestone aufgenommen, keine eigenstaendige
 Anfahrt vorher. Der Korpus-Snapshot `snap-03f1d1d9ad9262704` bleibt dafuer
@@ -235,6 +245,14 @@ Die fuenf Punkte, alle nur auf einer Box messbar, alle mit Herkunftsbeleg:
 4. **Die 6 Fehlschlaege und 44 uebersprungenen Dateien** der Endzahl
    52.137/44/6 einzeln benennen (Messbericht Abschnitt 10 Punkt 4);
    vermutlich reicht Volume mounten + DB/Log lesen, kein Reindex.
+   **Vermerk vom 26.09.2026:** Die Annahme "Volume mounten + DB/Log lesen"
+   war falsch, siehe `docs/measurements/2026-09-v13-messung`: das Volume der
+   v1.2-Box ist am 21.09.2026 ohne Ende-Snapshot zerstört worden, es gab
+   nichts mehr zu mounten. Erfüllt ist der Punkt trotzdem ohne Reindex, weil
+   der Korpus-Snapshot selbst schon 52.137 / 44 / 6 trägt (die 39
+   Sprachfall-Dateien vom 10.09. liegen darin). Die Einzelliste aus seiner
+   `state.db` nennt alle 50 einzeln, Bericht Abschnitt 6.13,
+   `docs/performance.md` Abschnitt "Die v1.3-Anfahrt vom 26.09.2026".
 5. **Kaltstartlatenz sauber:** der Messrequest von DI-07-02 traf einen
    Leerbegriff (`EmptyResultGroup`); anon-Spitze und Wandzeit stehen, die
    Latenzaussage nicht (Messbericht Abschnitt 10 Punkt 6).

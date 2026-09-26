@@ -2897,6 +2897,34 @@ Notiert als DI-05-37: dass `INDEX_WORKERS` nichts steuert, ist im Quelltext
 nicht falsch beschrieben, aber es steht auch nirgends. Ein Leser, der die Zeile
 findet, hält sie für einen Schalter.
 
+### Nachtrag vom 26.09.2026: tesseract und die Kerne
+
+Der Satz in der Tabelle oben, tesseract nutze auf dieser Maschine bereits beide
+Kerne für eine Seite, stand ohne Messung. Er bleibt als Stand vor der Messung
+stehen; gemessen ist jetzt Folgendes, auf ARM m7g.large mit 2 Kernen, im
+Wegwerf-Container desselben Abbilds, eine gerenderte Seite aus der achtseitigen
+Scandatei, drei Runden (B3 single der v1.3-Anfahrt, Rohdatei
+`docs/measurements/2026-09-v13-messung/rohdaten/b3-single.txt`):
+
+| tesseract-Aufruf | Wandzeit | CPU-Zeit | belegte Kerne im Mittel |
+|---|---:|---:|---:|
+| `OMP_THREAD_LIMIT=1` | 3,753 s | 3,75 s | 1,00 |
+| ungesetzt | 6,382 s | 8,96 s | 1,40 |
+
+**Für das Produkt ist der Satz falsch.** Findling ruft tesseract immer mit
+`OMP_THREAD_LIMIT=1` (`backend/src/findling/extract/ocr.py`), eine Seite belegt
+also genau einen Kern, und der Poller arbeitet die Dateien nacheinander ab. Die
+Produktlast der Anfahrt zeigt dasselbe: während der OCR-Charge B2 belegte der
+Container im Mittel 0,90 von 2 Kernen. Ohne die Grenze würde tesseract zwar
+beide Kerne anfassen, auf dieser Box aber 1,70-mal langsamer. Der CI-Runner
+mit 4 Kernen zeigte ungesetzt das Gegenteil (1,40-mal schneller); die Box ist
+die Zielhardware, und dort gilt die Zahl aus B3.
+
+Damit fällt auch der Schluss der Tabellenzeile: ein zweiter Arbeiter lohnt
+sich auf zwei Kernen sehr wohl. Zwei OCR-Slots bringen auf derselben Box den
+Faktor 1,97 (0,264 gegen 0,519 Seiten je Sekunde, B3). Die Einordnung steht
+im Abschnitt „Die v1.3-Anfahrt vom 26.09.2026“ weiter unten.
+
 ## Der Semantik-Volllauf: dieselbe Box, mit der zweiten Spur
 
 Der Lauf, der die Store-Zahl seit dem 06.09.2026 trägt. Dieselbe Maschine, derselbe
@@ -4155,6 +4183,28 @@ ebenso auf, bei null Abbrüchen. **Die p95-Zahlen oben bleiben, wie sie sind:**
 sie stammen aus dem Lauf vom 10.09. mittags, und die Nachmessung hat das
 Werkzeug geprüft und nicht die Zusage neu gemessen.
 
+### Die v1.3-Anfahrt, AWS, 26.09.2026
+
+Gerechnet, nicht abgelesen, aus den Stempeln und den am 26.09.2026 gelesenen
+Sätzen (die Preis-API ist für dieses Konto weiter gesperrt). Quelle:
+`docs/measurements/2026-09-v13-messung/rohdaten/93-kosten-und-verbleib.txt`
+und der Bericht dort, Abschnitt 6.8.
+
+| Posten | Stunden | USD netto |
+|---|---:|---:|
+| m7g.large, sechs Uptimes zu 0,115841 USD je Stunde | 2,02 | 0,2340 |
+| m7g.4xlarge für B4, 1.069 s zu 0,800141 USD je Stunde | 0,30 | 0,2376 |
+| **laufend gesamt** | **2,32** | **0,4716** |
+| Platten bei gestoppter Box, 6,37 h (obere Schranke) | | 0,0831 |
+| **mit Stillstand** | | **0,5547** |
+
+Der Deckel, Variante Stunden mit 24 Boxstunden und höchstens 3,76 USD, ist
+gehalten, und zwar mit 21,68 h und 3,29 USD Abstand. Der Rechenwert des Plans
+lag bei 15,95 h und 2,83 USD. Er ist unterschritten, weil der Umbau 581 s statt
+der geplanten 3 h dauerte und die Box an den vier Tor-Abbrüchen gestoppt
+wartete. Die Box ist ohne Ende-Snapshot abgebaut; es bleibt allein der
+Korpus-Snapshot zu 2,79 bis 2,99 USD im Monat.
+
 ## Die v1.2-Anfahrt vom 20. und 21.09.2026
 
 Die fünf Abschnitte dieses Kapitels sind **Nachträge** und keine Ersetzungen.
@@ -4452,6 +4502,298 @@ Die native ARM-Zahl wird in Phase 22 nachgemessen.
 
 Rezept, Kette, Versionsmarke `wordlist_hash_nl` und Umbauweg stehen in
 `docs/dutch-analyzer.md`.
+
+## Die v1.3-Anfahrt vom 26.09.2026
+
+Auch dieses Kapitel besteht aus **Nachträgen** und nicht aus Ersetzungen: jede
+ältere Zahl bleibt gültig für die Bedingungen, unter denen sie entstanden ist.
+Die Anfahrt trägt die fünf offenen Boxzahlen aus BL-F03 (MESS-07), die zwei
+Zahlen der sechs Sprachfelder (MESS-08), den disjunction_max-Entscheid
+(MESS-09) und die Basiszahlen der BL-F04-Mitmessliste.
+
+**Die Maschine, für alle Zahlen dieses Kapitels außer B4 und B7:** ARM
+m7g.large in eu-central-1c, aarch64, 2 Kerne, `mem=4G`, harte Containergrenze
+`memory.max` 2.147.483.648 Byte bei `memory.swap.max` 0, Korpus-Volume aus dem
+Korpus-Snapshot, Bestand 52.137 indexiert, 44 übersprungen, 6 fehlgeschlagen.
+Abbild per Digest
+`sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e`,
+Beweis der Identität ist der Baumhash (`baumhash-beweis ja`). B4 lief auf
+derselben Box nach einem Typwechsel auf m7g.4xlarge (16 Kerne), B7 im
+kostenlosen arm64-Runner des CI.
+
+**Die Quelle jeder Zahl** ist
+[`docs/measurements/2026-09-v13-messung/`](measurements/2026-09-v13-messung/README.md),
+Abschnitte 6.6 bis 6.14; dort steht zu jeder Zahl ihre Rohdatei. Die
+Erwartungen E1 bis E14 standen vor der Anfahrt fest. Elf sind gehalten, drei
+verfehlt (E4 M-01, E5 Kaltstart, E8 Indexfaktor), Bericht Abschnitt 6.12. Die
+Box ist am 26.09.2026 abgebaut worden.
+
+### Nachtrag vom 26.09.2026: M-01, der innere Aufruf auf Zielhardware
+
+Gemessen am 26.09.2026 von 05:39:03Z bis 05:42:24Z, fünf Stufen zu je zehn
+Runden, Konto `lasttest`, Loglevel 1 während der Reihe. Gezählt sind die
+Zeilen, die das Produkt ab 1.000 ms schreibt, gegen `ceilingMs` 1.500
+(Rohdateien `m01-langsame-aufrufe.txt`, `m01-stufe-*.json`).
+
+| Stufe | Aufrufe ab 1.000 ms | davon über 1.500 ms | Maximum `innerMs` | p95 Nutzerroute v1.3 | p95 v1.2 |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 10 | 9 | 1.512,5 ms | 2.145,7 ms | 480,5 ms |
+| 4 | 0 | 0 | keins | 1.366,3 ms | 1.006,8 ms |
+| 8 | 0 | 0 | keins | 1.953,5 ms | 1.992,0 ms |
+| 12 | 1 | 0 | 1.021,7 ms | 2.845,4 ms | 2.950,6 ms |
+| 16 | 3 | 0 | 1.080,6 ms | 3.813,1 ms | 4.091,1 ms |
+
+**Warm hält der innere Aufruf die Decke, in den Stufen 4 bis 16 mit mindestens
+419 ms Abstand.** Stufe 1 ist keine warme Stufe: sie begann 5 s nach einem
+Containerstart, und `anon` stieg in ihr von 116,9 auf 552,7 MB. Die Stufe hat
+also das Modell geladen und zeigt denselben Befund wie der Kaltstart unten.
+Die Erwartung E4 (alle fünf Stufen unter 1.500 ms) ist deshalb verfehlt. Dass
+die Nullen der Stufen 4 und 8 echte Nullen sind, belegt der Leser selbst: in
+derselben Reihe hat er in drei Stufen und in beiden Kaltstart-Fenstern Zeilen
+gefunden, bei null kaputten Zeilen. Die p95-Spalte ist eine Nebenzahl und kein
+Regressionsurteil, weil Stufe 1 kalt war; ob die 359 ms mehr auf Stufe 4 noch
+Nachwirkung davon sind, sagt dieser Lauf nicht.
+
+### Nachtrag vom 26.09.2026: die Wirkung von 92c und 99d
+
+Beide Nachfolgefassungen sind auf der Box gefahren und seitdem
+prüfsummengeschützt (Rohdateien `00-lauf.txt`, `92c-wechsel-fehlschlag.txt`,
+`92c-wechsel.txt`, `99d-filter-sortierung-wiederholung.txt`).
+
+| Probe | Ergebnis |
+|---|---|
+| 92c gegen einen Daemon, den es nicht gibt | Rückgabewert **36**, `registrierung-gelungen nein` |
+| 92c regulär | Rückgabewert **0**, `registrierung-gelungen ja`, Grenze `2147483648/0`, danach Nullstand mit 0 |
+| 99d ohne `FINDLING_LOAD_PASSWORD` in der Umgebung | Rückgabewert **0**, Passwort aus der Datei |
+
+Der erste 99d-Lauf endete mit 34, weil der Arbeitsvorrat nach dem Bodensatz
+noch bei 2 stand; die Wiederholung nach zweimal Vorrat 0 lief mit 0. Die
+Zahlen der Wiederholung liegen nahe an der Erstmessung der v1.2: relevance
+Median 327,6 ms (v1.2 341,3), newest 167,6 ms (175,2), oldest 166,6 ms
+(174,7), Blättern 358,0 / 331,5 / 323,8 ms bei je 25 Treffern und ohne
+doppelte Kennung.
+
+### Nachtrag vom 26.09.2026: der Bodensatz im zweiten Zyklus
+
+Gemessen am 26.09.2026 von 05:43:10Z bis 05:50:24Z, Entladefrist 120 s, je
+Zyklus zwölf kleine Textdateien über WebDAV, `anon` aus `memory.stat`. Das
+Werkzeug schreibt wie in der v1.2 „MB“ für 2^20 Byte (Rohdatei
+`94c-bodensatz-zyklen.txt`).
+
+| Marke | v1.2, ein Zyklus | **v1.3, zwei Zyklen** |
+|---|---:|---:|
+| A, vor dem Indexlauf, `cold` | 103,9 MB | **107,9 MB** |
+| C1, nach Zyklus 1 und Ruhezeit, `unloaded` | 731,9 MB | **730,2 MB** |
+| C2, nach Zyklus 2 und Ruhezeit, `unloaded` | | **760,8 MB** |
+| Bodensatz nach Zyklus 1 (C1 minus A) | 628,0 MB | **622,3 MB** |
+| **Zyklus 2 minus C1** | | **30,5 MB** |
+
+**Der Bodensatz fällt einmal an und wächst danach kaum.** Ein zweiter
+Einbettungszyklus mit Entladung legt 30,5 MB dazu, gegen die Schwelle von
+50 MB aus E6 (gehalten). Eine zweite Entladung senkt ihn aber auch nicht: wer
+einmal eingebettet hat, bleibt bei rund 730 bis 760 MB.
+
+Luecke: Spitze der Abtastreihe über beide Zyklen (`abtastreihe-spitze-mb`),
+Grund `rss_digest.py` fand keine Reihe mit dem Präfix `findling-rss` (94c
+Befund 32), Nachfreigabe offen. Die Kennzahlen darüber hängen nicht an ihr.
+Zur Lesart der älteren Rohdatei, weil derselbe Feldname dort vorkommt: in
+`docs/measurements/2026-09-v12-messung/rohdaten/94b-grundlast-rueckkehr.txt`
+steht `abtastreihe-spitze-mb=11142026092103`. Der alte Leser hat Datum und
+Stunde an die Zahl geklebt; gemeint sind 1.114 MB (Zeile `total, peak:`
+derselben Datei). Der Fehler ist in 94c behoben, die gefahrene Rohdatei der
+v1.2 bleibt, wie sie ist.
+
+### Nachtrag vom 26.09.2026: die übersprungenen und fehlgeschlagenen Dateien, einzeln
+
+Gelesen am 26.09.2026 um 05:38:31Z aus `state.db` des Korpus-Volumes, ohne
+Reindex (Rohdatei `90e-einzelliste.json`). Die Annahme vor der Anfahrt war, die
+44 / 6 der v1.2-Box seien ohne Ende-Snapshot nicht mehr lesbar und der
+Snapshot trage 52.111 / 37 / 0. Die erste Fahrt hat am Bestandstor gezeigt,
+dass der Snapshot vom 11.09.2026 bereits 52.137 / 44 / 6 trägt, weil die 39
+Sprachfall-Dateien vom 10.09.2026 samt Indexstand darin liegen (Bericht
+Abschnitt 6.1). Der beschlossene Weg a benennt deshalb nicht 37, sondern alle
+50. Ob es dieselben Dateien wie auf der v1.2-Box sind, sagt keine Rohdatei;
+die Zählung ist gleich.
+
+| Zustand | Grund | Endung | Kennung (Größe in Byte) |
+|---|---|---|---|
+| fehlgeschlagen | `empty_file` | pdf | 52284 (0) |
+| fehlgeschlagen | `corrupt` | pdf | 52302 (641), 52304 (627), 52305 (527), 52306 (239), 52311 (433) |
+| übersprungen | `too_large` | csv | 781 (55.989.217), 5972 (55.934.721), 6684 (56.004.297), 9055 (55.921.773), 10822 (55.930.145), 12643 (55.997.589), 12649 (56.021.509), 15439 (55.944.029), 19429 (56.012.461), 23946 (55.938.205), 25056 (55.966.649), 29344 (55.989.269), 29442 (56.004.037), 30882 (55.982.301), 34601 (55.904.353), 35042 (55.981.677), 43902 (55.986.721), 44282 (55.988.333), 46892 (55.958.849), 49470 (55.977.101), 51704 (55.977.881) |
+| übersprungen | `too_large` | docx | 52312 (66.154) |
+| übersprungen | `empty_text` | jpg | 52 (457.744), 53 (797.325), 55 (474.653), 57 (167.989), 58 (593.508), 59 (567.689), 60 (427.030), 50186 (457.744), 50187 (797.325), 50189 (474.653), 50191 (167.989), 50192 (593.508), 50193 (567.689), 50194 (427.030) |
+| übersprungen | `empty_text` | pdf | 52280 (814), 52309 (602) |
+| übersprungen | `image_not_ocrable` | png | 63 (50.598), 50197 (50.598), 52283 (140), 52300 (131) |
+| übersprungen | `encrypted` | pdf | 52285 (923), 52316 (1.398) |
+
+Summe: 6 fehlgeschlagen, 44 übersprungen (22 + 16 + 4 + 2). Veröffentlicht
+sind nur Kennung, Endung, Größe und Grund, keine Pfade. Die Kennungen ab 52280
+sind der Sprachfall-Korpus mit seinen absichtlich kaputten Dateien; die
+Bildgruppen 52 bis 63 und 50186 bis 50197 tragen paarweise gleiche Größen.
+
+### Nachtrag vom 26.09.2026: die Kaltstartlatenz mit Trefferpflicht
+
+Luecke: Latenz der ersten kalten Suche mit Treffern, Grund die erste hybride
+Suche nach einem Neustart lädt bei Entladeschalter 0 das Modell selbst und
+reißt dabei den PHP-Deckel, Nachfreigabe offen.
+
+Gemessen ist, was statt der Zahl kam, in zwei Läufen zu je drei Kaltzyklen
+mit geleertem Seitencache, Begriff „Bescheid Antrag“ (Rohdateien
+`95c-kaltstart.txt`, `95c-kaltstart-lasttest.txt`,
+`m01-langsame-aufrufe-kaltstart-lasttest.txt`):
+
+| Lauf | erste Suche, Nutzerroute | Treffer | innerer Aufruf |
+|---|---|---:|---|
+| Konto `admin`, 05:42Z | 2.028 / 2.109 / 2.084 ms | 0 | 1.513,3 / 1.596,3 / 1.563,3 ms |
+| Konto `lasttest`, 12:42Z | 1.832 / 1.828 / 1.892 ms | 0 | 1.505,7 / 1.505,6 / 1.505,1 ms |
+
+Jeder innere Aufruf endete am Deckel von 1,5 s, und Nextcloud antwortete mit
+HTTP 200 und einer Gruppe ohne Containerteil. Warm liefert derselbe Begriff
+unter `lasttest` 26 Treffer. Das ist das bekannte Verhalten vom 10.09.2026:
+nach jedem Neustart mit Entladeschalter 0 zeigt die erste Mehrwortsuche in der
+Unified Search keine Findling-Treffer. Die Vergleichszahl der v1.2 (2.051 ms,
+Ausprägung 3 oben, ebenfalls mit 0 Treffern) bleibt damit ohne gültigen
+Nachfolger. Eine unveränderte Nachmessung liefert wieder 0 Treffer. Vor einer
+Nachfreigabe (rund 0,24 USD) steht deshalb eine Wahl des Weges durch den Owner:
+Messung mit eingeschaltetem Entladeschalter, ein einwortiger Begriff, oder
+vorher der zurückgestellte Produktfix (Bericht Abschnitt 6.11). Beides ist
+offen, zugesagt ist keine Nachmessung.
+
+### Nachtrag vom 26.09.2026: Indexgröße und Umbau-Wandzeit bei sechs Sprachfeldern
+
+Gemessen am 26.09.2026, Umbau von `FINDLING_LANGUAGES=de,en` auf
+`de,en,es,it,nl,pt` über 52.137 Dokumente, gezählt ab dem Containerstart
+12:43:05Z bis zur letzten Umbaumeldung 12:52:46Z (Rohdateien `00-lauf.txt`,
+`indexgroesse-de-en.txt`, `indexgroesse-sechs-felder.txt`, `umbau-platz.txt`,
+`umbau-status.jsonl`).
+
+| Größe | Wert |
+|---|---:|
+| Index bei de,en | 786.508.818 Byte (786,5 MB) |
+| **Index bei sechs Feldern** | **1.431.953.684 Byte (1.432,0 MB)** |
+| Faktor | **1,82** |
+| Platz während des Umbaus, letzte Lesung (alter Index plus `index.rebuild`) | 2.135.764.878 Byte |
+| obere Schranke kurz vor dem Tausch | 2.219.004.907 Byte |
+| **Umbau-Wandzeit** | **581 s (9 min 41 s)** |
+| gegen den v1.2-Vollreindex von 19 h 20 min | rund 120-mal kürzer |
+
+**Der Umbau kostet Minuten und keinen Vollreindex.** Die Schätzung vor der
+Messung lag bei 1 bis 3 h; ihre obere Grenze (E9) hält mit großem Abstand, und
+die Schätzung selbst war zu vorsichtig: gemessen ist rund ein Sechstel ihrer
+Untergrenze. Die Vektorspur blieb während des Umbaus bei 52.137, es wurde
+nichts neu eingebettet. Der Index wächst um den Faktor 1,82 und nicht, wie
+erwartet, um 2,0 bis 3,0 (E8 verfehlt; die Erwartung rechnete mit 0,372 je
+Kette aus einer Stichprobe von 2.000 Dokumenten). Wer vier Sprachen dazunimmt,
+braucht während des Umbaus freien Platz in der Größe des neuen Index, hier rund
+1,43 GB neben dem alten.
+
+### Nachtrag vom 26.09.2026: MESS-09, disjunction_max
+
+Gemessen am 26.09.2026 nach dem Umbau auf sechs Felder, 60 Anfragen, je fünf
+Wiederholungen (Rohdatei `98d-dismax-probe.txt`). Der Entscheid folgte allein
+der vorab beschlossenen Regel: **Summe bleibt, disjunction_max ist
+verworfen.** Der Median von RBO@10 gegen den Altplan liegt bei 0,9531 unter der
+Summe, 0,8399 unter tie 0.0 und 0,9633 unter tie 0.1; die Regel verlangte
+mindestens 0,05 über der Summe. Offen vermerkt: diese Schwelle lag bei 1,0031
+und damit über dem Höchstwert 1 eines RBO, sie war auf diesen Daten nicht
+erreichbar. Das ist eine Eigenschaft der vorab beschlossenen Regel und kein
+nachträgliches Ermessen. Die Begründung und die Zahlen stehen in
+[`docs/language-analyzers.md`](language-analyzers.md) und im Bericht,
+Abschnitt 6.10.
+
+### Nachtrag vom 26.09.2026: die BL-F04-Basiszahlen
+
+Diese Zahlen sind Basiszahlen für die Kernskalierung in v1.4 und kein Urteil
+über das heutige Produkt, das seriell arbeitet.
+
+**B1, Kernbelegung je Phase** (m7g.large, 2 Kerne; Container aus `cpu.stat`,
+Box aus `/proc/stat`; Rohdateien `b1-cpu-*.csv`):
+
+| Phase | Container, Mittel | Container, höchstens | Box belegt |
+|---|---:|---:|---:|
+| M-01, alle Stufen | 0,20 | 0,53 | 1,04 |
+| M-01, Stufe 16 | 0,37 | 0,53 | 1,87 |
+| OCR-Charge B2 | 0,90 | 1,18 | 1,15 |
+| Umbau auf sechs Felder | 1,03 | 1,25 | 1,13 |
+| disjunction_max-Probe | 0,80 | 0,94 | 1,04 |
+
+Unter Suchlast trägt die Nextcloud den größeren Teil der Box: auf Stufe 16
+belegt der Container 0,37 Kerne und die Box 1,87. Während der OCR bleibt neben
+dem Container r = 0,25 Kerne belegt.
+
+**B2, OCR unter Produktlast** (140 Scans, 280 Seiten, 120 einseitig und 20
+achtseitig; Rohdateien `b2-ocr-charge.txt`, `b2-anon.csv`):
+
+| Größe | Wert |
+|---|---:|
+| Sekunden je Seite, ab Upload-Ende (1.146 s) | 4,09 s |
+| Sekunden je Datei, ebenso | 8,19 s |
+| Sekunden je Seite, ab der letzten Lesung vor der ersten Abnahme (05:54:46Z, 1.037 s) | 3,70 s |
+| Vergleich: 120 Scans in 8 min 36 s am 07.09.2026 | rund 4,3 s je Seite |
+| `RssAnon` Hauptprozess, höchstens (Entladeschalter 0) | 1.257,5 MiB |
+| `RssAnon` Sandbox-Kind, höchstens | 136,4 MiB |
+| `RssAnon` tesseract, höchstens, über 280 Aufrufe | 98,8 MiB |
+| Summe aller Prozesse je Abtastung, Spitze | 1.435,8 MiB |
+
+**B3, ein zweiter OCR-Slot auf zwei Kernen** (Wegwerf-Container,
+`--cpuset-cpus 0,1`, 2 GiB; Rohdateien `b3-slots-1.txt`, `b3-slots-2.txt`):
+0,264 Seiten je Sekunde mit einem Slot, 0,519 mit zwei, **Faktor 1,97**
+gegen die Rauschschwelle 1,05. Jeder Slot belegt genau einen Kern. Der
+bleibende Speicherzuwachs je Runde lag bei zwei Slots unter 0,5 MB; eine
+Spitze je Slot misst diese Probe nicht, die Größenordnung zeigt B2
+(Sandbox-Kind plus tesseract rund 235 MiB). Zum tesseract-Einzelmodus siehe
+den Nachtrag „tesseract und die Kerne“ weiter oben.
+
+**B4, Kernskalierung auf m7g.4xlarge** (16 Kerne, keine Speichergrenze;
+Rohdateien `b4-slots-*.txt`, `b4-bench-*.txt`):
+
+| Kerne N | OCR-Seiten je Sekunde | Faktor | Threads T | Tokens je Sekunde | Faktor |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 0,263 | 1,00 | 1 | 2.242,2 | 1,00 |
+| 2 | 0,526 | 2,00 | 2 | 4.283,7 | 1,91 |
+| 4 | 1,052 | 4,00 | 4 | 7.609,6 | 3,39 |
+| 8 | 2,102 | 7,99 | 8 | 13.484,8 | 6,01 |
+| 12 | 3,150 | 11,98 | | | |
+| 16 | 4,172 | 15,86 | | | |
+
+OCR-Slots skalieren bis 16 Kerne fast linear, die Einbettung über die Threads
+eines Aufrufs deutlich unterlinear. Der CI-Runner mit 4 Kernen hatte vorab
+denselben Verlauf gezeigt (Faktor 3,955 bei N 4).
+
+**B5, Einbettung auf zwei Kernen** (m7g.large, `--cpuset-cpus 0,1`, Sequenz
+512; Rohdateien `b5-threads-*-batch-*.txt`): threads 1 mit batch 2 1.844,8 und
+mit batch 8 1.821,4 Tokens je Sekunde, threads 2 mit batch 2 3.450,4 und mit
+batch 8 3.416,2. Der zweite Thread bringt den Faktor 1,87, Batch 8 bringt
+nichts.
+
+Luecke: Speicher je onnx-Kombination (B5), Grund der RAM-Abtaster gegen den
+Bench-Container lieferte 0 Abtastungen (Befund 50), Nachfreigabe offen.
+
+**B6, ist der Umbau einkernig?** Ja: 1,03 Kerne im Mittel (Tabelle B1). Der
+Hebel dagegen, Tantivy `num_threads` im Umbauweg, bleibt für v1.4 benannt. Bei
+einem Umbau von 9 min 41 s ist er auf diesem Bestand wenige Minuten wert.
+
+**B7, der niederländische Automat nativ auf arm64:** 22,99 MB in drei Läufen,
+gemessen im CI-Runner (`rohdaten/w4-ci-arm64/b7-nl-automat.txt`). Das liegt
+unter den 24,2 bis 25,3 MB der produktnahen amd64-Messung im Nachtrag vom
+25.09.2026 oben; die Budgetrechnung dort bleibt mit dem höheren Wert auf der
+sicheren Seite.
+
+### Nachtrag vom 26.09.2026: was fehlt
+
+Kein Deckel ist gerissen und kein Block gestrichen. Drei Zahlen fehlen, weil
+ihr Werkzeug einen Befund statt einer Zahl geliefert hat; sie stehen oben je
+an ihrem Ort als Lücke:
+
+| Lücke | Anforderung | Nachmessung |
+|---|---|---|
+| Kaltstartlatenz mit Trefferpflicht | MESS-07, Pflichtzahl | rund 0,24 USD, erst nach Wahl des Weges durch den Owner |
+| Spitze der Bodensatz-Abtastreihe | MESS-07, Nebenzahl | rund 0,27 USD |
+| Speicher je onnx-Kombination | BL-F04 B5 | rund 0,23 USD |
+
+Zusammen in einer Anfahrt rund 0,34 USD. Jede Nachmessung braucht eine neue
+Freigabe durch den Owner; die Box ist abgebaut, sie begänne mit dem Aufbau aus
+dem Korpus-Snapshot.
 
 ## Reproduzieren
 

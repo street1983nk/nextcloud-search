@@ -167,6 +167,33 @@ Vorschlagswert 900 s selbst bleibt anderswo eine gekennzeichnete Schätzung
 nicht, und ein Protokoll, das die Abweichung ohne ihren Grund führt, macht aus
 einem Entscheid eine Gewohnheit.
 
+**Nachtrag vom 26.09.2026: die Ist-Werte der v1.3-Anfahrt.** Diesmal hat jeder
+Block seine Zeitmarken geschrieben (`docs/measurements/2026-09-v13-messung/rohdaten/00-lauf.txt`),
+die Spalte ist also belegt und nicht geschätzt. Die Planwerte stehen im
+Rechenblatt des Berichts dort, Abschnitt 1.2.
+
+| Posten | Planwert v1.3 | Ist v1.3, gestempelt |
+|---|---:|---:|
+| Handaufbau und Wiederaufbau, Blöcke 1 bis 13 | 1 h 30 min | rund 0 h 12 min (04:58:54Z bis 05:10Z) |
+| Wechsel 92d mit `occ upgrade` | 0 h 45 min | 0 h 00 min 30 s (Fahrt 2) |
+| M-01, fünf Stufen samt Kaltstart | 0 h 30 min plus 0 h 20 min | 0 h 04 min 07 s |
+| Bodensatz, zwei Zyklen | 0 h 30 min | 0 h 07 min 17 s |
+| B2 samt Löschen und Rückkehr | 0 h 45 min | 0 h 26 min 28 s |
+| Umbau auf sechs Sprachen | 3 h 00 min | **0 h 09 min 41 s** |
+| B3 und B5 | 0 h 27 min | 0 h 06 min 24 s |
+| 92c, Fehlschlag und regulär, Nullstand | 0 h 30 min | 0 h 06 min 19 s |
+| B4 auf m7g.4xlarge | 1 h 15 min | 0 h 17 min 49 s Box-Laufzeit |
+| **Summe** | **15,95 h mit Zuschlag** | **2,32 h Box-Laufzeit gesamt** |
+
+**Was diese Spalte lehrt.** Der Planwert des Umbaus war mit Absicht der obere
+Rand der Schätzung, und er lag um den Faktor 18 zu hoch. Er bleibt trotzdem der
+richtige Planwert für die Anfahrt, die ihn zum ersten Mal misst: die Reserve
+hat hier nichts gekostet, weil der Timer die Box nach dem letzten Block selbst
+abschaltet. Die teuersten Minuten waren die Tor-Abbrüche und die Fallen weiter
+unten (Nachtrag in Abschnitt 7), und in diesen Minuten stand die Box gestoppt.
+Wer den nächsten Deckel rechnet, nimmt diese Ist-Werte als Untergrenze je
+Posten und schlägt die Wartezeit gesondert auf, wie schon nach der v1.2.
+
 ### 2.2 Posten, die guenstiger werden
 
 | Posten | Wirkung |
@@ -322,6 +349,29 @@ werden:**
   erledigt, weil `jq` im selben `apt-get install` mitkam, mit dem Docker
   installiert werden musste (Block 8). Die Zeile bleibt stehen: sie erledigt
   sich nur so lange von selbst, wie Block 8 ohnehin Pakete installiert.
+
+**Nachtrag vom 26.09.2026: eine sechzehnte Vorbedingung, und drei Vermerke aus
+der v1.3-Anfahrt.**
+
+- **Neu: `00-typwechsel.sh vorpruefung` vor dem Start eines Laufs mit Timer.**
+  Das Werkzeug liest `instanceInitiatedShutdownBehavior` der Instanz. Der harte
+  Stopp einer unbeaufsichtigten Anfahrt ist ein `shutdown -h` aus der Box
+  heraus, und der ist nur dann ein Stopp, wenn dieser Wert `stop` heißt; bei
+  `terminate` wären Volume und Korpus weg. Jeder andere Wert endet mit 52, und
+  die Anfahrt beginnt nicht. Am 26.09.2026 gefahren mit `shutdown-verhalten
+  stop`; die Instanz ist dafür schon in Block 3 mit
+  `--instance-initiated-shutdown-behavior stop` erzeugt worden.
+- **Zeile 14 gilt für 99d nicht mehr:** `99d-filter-sortierung.sh` liest das
+  Passwort aus der Passwortdatei und lief ohne `FINDLING_LOAD_PASSWORD` mit 0.
+  Die Sicherung trägt aber keine `.pw`-Dateien; sie entstehen vor dem ersten
+  Messblock aus der Kontendatei, und wenn die Passwörter nicht zum Snapshot
+  passen (401), per `occ user:resetpassword` mit dem Wert nur über stdin.
+- **Die Preis-API bleibt gesperrt** (`00-typwechsel.sh preis` endet mit 1).
+  Die Sätze werden am Anfahrtstag aus der öffentlichen On-Demand-Preiskarte
+  gelesen; der Weg steht im v1.3-Bericht, Abschnitt 1.1.
+- **Den A-Record vor dem ersten Start des Daemons setzen.** Der Namensdienst
+  der VPC merkt sich eine negative Antwort rund drei Minuten; wer den Record
+  erst danach setzt, wartet diese Zeit in der bezahlten Zeit ab.
 
 ---
 
@@ -767,6 +817,24 @@ grün, während nichts lief. Marke: `in Phase 15 erstmals vollzogen`.
 (`03-aufbau.txt`): `successfully disabled`, `successfully enabled`, gezählter
 Poller-Durchgang **3**. Keine Abweichung.
 
+**Nachtrag vom 26.09.2026: nach JEDEM Maschinenstart, und der Beleg ist die
+Admin-Übersicht.** Die v1.3-Anfahrt ist zweimal an diesem Block gescheitert.
+Beim ersten Wiedereinstieg fehlte er ganz (Tor 59). Beim zweiten hing `enable`,
+weil HaRP die App-Kennung nicht mehr auflösen konnte: der Container war von
+`92e-umgebung.sh` nachgebaut und trug im Netz `nextcloud-aio` keinen Alias.
+Drei Regeln folgen daraus:
+
+1. Nach jedem Start der Maschine, auch nach einem Typwechsel mit Produkt,
+   zuerst dieser Block und Block 12, dann messen.
+2. Bewaffnet ist der Container erst, wenn die Admin-Übersicht
+   `backendReachable true` meldet. Ein gezählter Poller-Durchgang zeigt nur den
+   Weg vom Backend zur Nextcloud, nicht den zurück.
+3. Die Bewaffnung greift nur an einem Container mit dem Alias
+   `findling_backend`. AppAPI legt ihn selbst an; `92e-umgebung.sh` nimmt die
+   Aliase seit be35cfe mit (`netz-aliase findling_backend`). Steht ein Container
+   ohne Alias, geht vor die Bewaffnung eine Registrierung über AppAPI ohne
+   `--rm-data`, wie in 92d.
+
 ### Block 12: Harte Speichergrenze des Containers
 
 ```sh
@@ -973,6 +1041,23 @@ achtzehn Werkzeuge mit `100644` im Index stehen. Was tatsächlich nötig war:
 einmal `chmod +x *.sh *.py` im Laufverzeichnis, **vor** diesem Block, mit
 `ls -l` als Rückleseprobe. Der Handgriff steht jetzt in der Tabelle der
 wiederkehrenden Handgriffe in Abschnitt 4.
+
+**Nachtrag vom 26.09.2026: 92d ersetzt Block 13b für jede Anfahrt, die den
+Snapshot-Index braucht.** Dieser Block wechselt das Abbild mit
+`unregister --rm-data` und baut danach neu auf; das ist richtig für einen
+Volllauf und falsch für jede Anfahrt, die am vorhandenen Index misst (Umbau,
+Bodensatz, Einzelliste). Für sie gilt
+`docs/measurements/2026-09-v13-messung/skripte/92d-wechsel.sh`: dieselbe Kette
+mit Schritt 1b (`occ upgrade`, dessen Rückgabewerte 0 und 3 als gelungen
+gelten; 3 heißt, es war nichts zu tun), unregister **ohne** `--rm-data`, das
+Volume mit unveränderter Erstellungszeit zurückgelesen, dann Registrierung,
+harte Grenze, Baumhash im laufenden Container und ein Bestandstor, das den
+Stand des Snapshots verlangt (sonst Rückgabewert 41). Am 26.09.2026 gefahren,
+zweimal mit 0. **Der Sollwert des Bestandstors ist 52.137 indexiert, 44
+übersprungen, 6 fehlgeschlagen**, nicht die 52.111 aus der Beschreibung des
+Snapshots: der Snapshot vom 11.09.2026 trägt die 39 Sprachfall-Dateien vom
+10.09.2026 samt Indexstand mit. Die erste Fahrt der v1.3 ist genau daran mit
+41 gescheitert. Block 13b bleibt für einen Volllauf von leer stehen, wie er ist.
 
 ---
 
@@ -1379,6 +1464,44 @@ letzten Marke wieder entfernt, damit der Bestand der Box derselbe bleibt, gegen
 den Schritt 9 misst. In Phase 15 so gefahren und in der Rohdatei belegt
 (`indexlauf-korpus-entfernt`).
 
+**Nachtrag vom 26.09.2026: die unbeaufsichtigte Anfahrt mit `00-lauf.sh`,
+Timer und Abholen.** Die v1.3-Anfahrt lief nicht als begleitete Sitzung,
+sondern als ein Werkzeug auf der Box
+(`docs/measurements/2026-09-v13-messung/skripte/00-lauf.sh`) mit einem
+Gegenstück auf der Entwicklungsmaschine (`00-abholen.sh`):
+
+- **Der Timer ist der Deckel.** `00-lauf.sh start` setzt beim Start ein
+  `shutdown -h` auf das Deckelende, gezählt ab der LaunchTime und nicht ab dem
+  Skriptstart, und liest es zurück (Rückgabewert 55, wenn das nicht gelingt).
+  `shutdown +N` rundet auf die Minute und lag am 26.09.2026 bis zu 48 s über
+  dem Deckel; seitdem wird der Timer nach jedem Start **absolut** gesetzt
+  (`shutdown -h HH:MM`) und zurückgelesen. Ein Tor-Abbruch zieht den Timer auf
+  60 Minuten vor.
+- **Die Selbstabschaltung wartet auf das Abholen.** Nach dem letzten Block
+  schreibt der Lauf `00-FERTIG` (für B4 `B4-FERTIG`) und fährt erst herunter,
+  wenn die Abholmarke jünger ist als diese Datei. `00-abholen.sh` holt alle 600
+  s das Rohdatenverzeichnis per scp und setzt die Marke. Es committet nichts;
+  die Rohdaten gehen vor dem Commit durch `test_public_artifacts.py`. Nach
+  einem Typwechsel hat die Box eine neue Adresse: den Hostschlüssel per
+  `ssh-keyscan` gegen den alten prüfen, erst dann den Eintrag für die neue
+  Adresse anlegen, dann `00-abholen.sh` mit der neuen Adresse neu starten.
+- **Wiedereinstieg statt Neustart.** Bricht ein Lauf an einem Tor ab, fährt
+  `00-lauf.sh start ab-pii` nach dem Entscheid nur die fehlenden Blöcke, mit
+  kurzem Markentor und Bestandstor davor, und mit demselben Deckelende.
+
+**Die Fallen, die in dieser Anfahrt Zeit gekostet haben**, jede mit ihrer
+Behebung (v1.3-Bericht, Abschnitte 6.1 bis 6.5):
+
+| Falle | Folge | Behebung |
+|---|---|---|
+| Der Snapshot trägt einen anderen Bestand, als seine Beschreibung sagt | Tor 41 in Fahrt 1 | Sollwert 52.137 / 44 / 6 (Nachtrag bei Block 13b) |
+| Die erste Statuszeile nach einem Containerstart kommt vor der Antwort des Backends (`embedded 0`) | Tor 58 im Umbau | Werte erst aus einer beantworteten Statuszeile nehmen; im Umbau heißt das `rebuildTotal` über 0 (aecca7d) |
+| Das Antwortkriterium des Umbaus gilt im Ruhezustand nicht | Tor 59 im Rückweg | eigenes Kriterium in Ruhe: `languagesActive` gesetzt und `embedded` über 0 (65f8399) |
+| Bewaffnung nach dem Maschinenstart vergessen | Tor 59 im Rückweg | Nachtrag bei Block 11 |
+| 92e baut den Container ohne Netzalias nach | `enable` hängt, HaRP findet `findling_backend` nicht | 92e nimmt die Aliase mit (be35cfe) |
+| `shutdown +N` rundet auf die Minute | Timer bis zu 48 s über dem Deckel | Timer absolut setzen |
+| `aws_box.sh stop` gegen eine schon gestoppte Box | Scheinuptime in `box.env` (0,70 h) | nicht zählen; die Kosten aus den echten Uptimes und Stempeln rechnen |
+
 ### 7.1 Die Rueckgabewerte, vollstaendig
 
 | Bedingung | Wo sie greift | Folge |
@@ -1624,6 +1747,31 @@ theoretisch ist.
 Die Platzhalter aus Abschnitt 4 gelten weiter. `<instanz>`, `<volume>` und
 `<sg>` stehen für die Kennungen der laufenden Box und kommen aus `box.env`
 beziehungsweise aus `aws_box.sh status`.
+
+**Nachtrag vom 26.09.2026: der B4-Typwechsel vor dem Abbau, und ein Abbau ohne
+Ende-Snapshot.** Die v1.3-Anfahrt hat vor dem Abbau den Typ gewechselt, um B4
+auf 16 Kernen zu messen (`00-typwechsel.sh`, Rohdatei `00-typwechsel.txt`):
+
+1. `00-lauf.sh` schließt auf m7g.large mit `b4 vorbereitet` ab und entfernt
+   den Grub-Drop-in `mem=4G`, damit die große Maschine ihren Speicher sieht.
+2. `00-typwechsel.sh hin`: Vorprüfung, `aws_box.sh stop`,
+   `modify-instance-attribute` auf m7g.4xlarge, Start, Typ zurückgelesen;
+   Rückfall m7g.2xlarge, sonst entfällt B4 nach D-05.
+3. A-Record und known_hosts für die neue Adresse wie im Nachtrag zu Abschnitt
+   7. Die Restminuten für den Timer zählen ab dem AWS-Start: am 26.09.2026
+   waren es 84 statt 86, weil zwei Minuten schon verstrichen waren.
+4. `00-lauf.sh b4` hält alle Container an und fährt die Wegwerf-Probe; ohne
+   Produkt ist keine Bewaffnung nötig. Danach Abholen und Selbstabschaltung.
+5. `00-typwechsel.sh zurueck` stellt m7g.large wieder ein, ohne Start. Die
+   B4-Kosten werden von Hand aus den Stempeln `typwechsel-hin-laeuft` und
+   `typwechsel-zurueck-gestoppt` mal dem gelesenen Satz gerechnet, nicht aus
+   `BOX_LAST_UPTIME_COST_USD`, das nur den m7g.large-Satz kennt.
+
+Danach folgt der Abbau ab Schritt 2, am 26.09.2026 **ohne** Ende-Snapshot
+(Schritt 3 ohne `snapshot`), weil die Messdateien der Anfahrt gerade nicht in
+den Korpus gehören. Die Kostenrohdatei wurde vor dem `destroy` committet und
+gepusht, der Verbleib danach angehängt. Übrig blieb allein der
+Korpus-Snapshot.
 
 ### Schritt 1: Endmessungen und Gegenproben, VOR jedem zerstoerenden Schritt
 

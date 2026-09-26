@@ -356,6 +356,11 @@ Einbettung T 4 gegen T 1: 3,87).
 Offen. Wird nach der Anfahrt geschrieben: Urteil je Erwartung E1 bis E14,
 gestrichene Blöcke und Lücken, Kosten gegen den Deckel.
 
+**Nachtrag vom 26.09.2026 (Plan 22-11):** geschrieben. Die Urteile stehen in
+6.12, die ausgewerteten Zahlen in 6.13, die Prüfsummen der gefahrenen
+Fassungen in 6.14; Kosten in 6.8, Lücken in 6.9 und 6.11. Die Abschnitte 6.1
+bis 6.11 bleiben als Protokoll der Anfahrt stehen.
+
 ### 6.1 Tor-Abbruch in P1, Rückgabewert 41 (26.09.2026)
 
 **Was geschah.** Aufbau nach Runbook, Blöcke 1 bis 13, von 04:58:54Z bis
@@ -784,3 +789,182 @@ allgemeinen Fall. Ohne diese Wahl ist die rund 0,24 USD teure Nachmessung
 nicht sinnvoll. Der Befund ist ein bekanntes Produktverhalten und keine neue
 Fehlerklasse: Nach jedem Neustart mit Schalter 0 zeigt die erste
 Mehrwortsuche in der Unified Search keine Findling-Treffer.
+
+### 6.12 Urteile E1 bis E14 (26.09.2026, Plan 22-11)
+
+Die Erwartungen stehen unverändert in `skripte/00-ablauf.md`, Abschnitt 3;
+E2 und E3 dort mit der Neufassung vom Checkpoint 22-08, über deren erste
+Fassung das Urteil in derselben Datei bereits festgeschrieben ist. Hier steht
+je Erwartung genau ein Urteil und sein Beleg. Die Zahlen stammen aus den
+Rohdateien in `rohdaten/`; ihre Auswertung steht in 6.13.
+
+| Erwartung | Urteil | Beleg |
+|---|---|---|
+| E1, Marken | gehalten | `90e-marken.txt` und `90e-marken-ab-pii.txt`: Rückgabe 0, `marken-urteil umbau`; nur die drei Umbau-Marken weichen ab |
+| E2, Bestandstor (Neufassung 52.137 / 44 / 6) | gehalten | 92d mit 0 in Fahrt 2 und von Hand vor ab-pii 2 (`ab-pii-92d/`), Bestandstor jeweils bestanden; die erste Fassung ist am Tor 41 der Fahrt 1 gescheitert (6.1) |
+| E3, Einzelliste (Neufassung 44 / 6) | gehalten | `90e-einzelliste.json`: Zählung 52.137 / 44 / 6, 50 Einträge mit Kennung, Endung, Größe und Grundcode, keine Pfade |
+| E4, M-01 | verfehlt | `m01-langsame-aufrufe.txt`: Stufe 1 hat 10 Zeilen, 9 davon über `ceilingMs` 1.500 (Maximum 1.512,5); die Stufe lief 5 s nach einem Containerstart und hat das Modell geladen (6.13). Stufen 4 und 8 ohne Zeile, 12 mit Maximum 1.021,7, 16 mit Maximum 1.080,6 |
+| E5, Kaltstart | verfehlt | `95c-kaltstart.txt`, `95c-kaltstart-lasttest.txt`: in beiden Läufen je drei Kaltzyklen mit 0 Treffern (2.028, 2.109, 2.084 ms und 1.832, 1.828, 1.892 ms), Ursache in 6.11; die Gegenprobe fand je drei Zeilen im Kaltstart-Fenster |
+| E6, Bodensatz | gehalten | `94c-bodensatz-zyklen.txt`: `zyklus2-minus-c1 30.5` MB gegen höchstens 50 MB |
+| E7, 99d | gehalten | `00-lauf.txt`: `99d-umgebung FINDLING_LOAD_PASSWORD ungesetzt`, `99d-wiederholung-rueckgabewert 0`; der Lauf der Fahrt 2 endete mit 34 bei Arbeitsvorrat 2 und hat nichts gemessen |
+| E8, Indexfaktor | verfehlt | `indexgroesse-de-en.txt` 786.508.818 Byte, `indexgroesse-sechs-felder.txt` 1.431.953.684 Byte, Faktor 1,82 unter dem Band 2,0 bis 3,0 |
+| E9, Umbau-Wandzeit | gehalten | `00-lauf.txt`: `umbau-wandzeit-s 581`, also 9 min 41 s gegen höchstens 3 h |
+| E10, dismax | gehalten | 6.10: alle Kennzahlen geliefert, Treffermengen gleich, Entscheid Summe nach der Regel |
+| E11, 92c | gehalten | `00-lauf.txt`: `92c-fehlschlag-rueckgabewert 36 erwartet 36`, `92c-regulaer-rueckgabewert 0 erwartet 0`; `92c-wechsel-fehlschlag.txt`: `registrierung-gelungen nein` |
+| E12, B6 | gehalten | `b1-cpu-15-umbau.csv` im Umbaufenster 12:43:05Z bis 12:52:46Z: 1,025 Kerne im Mittel, höchstens 1,251 |
+| E13, B3 | gehalten | `b3-slots-1.txt` 0,264, `b3-slots-2.txt` 0,519 Seiten je Sekunde, Faktor 1,97 gegen mindestens 1,05 |
+| E14, B2 | gehalten | `b2-ocr-charge.txt`: 280 Seiten in 1.146 s ab Upload-Ende, 4,09 s je Seite gegen rund 4,3 s vom 07.09.2026; E14 nennt kein Band, der Wert liegt 5 Prozent darunter |
+
+**Zählung:** elf gehalten, drei verfehlt (E4, E5, E8), keine ohne Urteil. Eine
+verfehlte Erwartung ist ein Ergebnis und kein Grund für eine zweite Anfahrt
+(`skripte/00-ablauf.md`, Abschnitt 3).
+
+**Nachtrag zu Abschnitt 2 (W4, Einzelmodus).** Der Satz dort, der
+tesseract-Satz in `docs/performance.md` halte, gilt für den CI-Runner mit
+4 Kernen und ohne Grenze. Auf der Box (B3 single, 6.13) ist ungesetzt
+langsamer als `OMP_THREAD_LIMIT=1`, und das Produkt setzt die Grenze immer.
+Die Berichtigung steht als datierter Nachtrag in `docs/performance.md`.
+
+### 6.13 Auswertung der Rohdaten (26.09.2026, Plan 22-11)
+
+Megabyte sind dezimal (10^6 Byte), wo nicht MiB steht. Ausnahme ist der
+Bodensatz: 94c schreibt wie 94b der v1.2 „MB“ für 2^20 Byte, und die Werte
+stehen hier so, wie das Werkzeug sie schreibt, damit sie mit v1.2
+vergleichbar bleiben. Uhrzeiten UTC.
+
+**M-01, innerer Aufruf je Stufe** (`m01-langsame-aufrufe.txt`, Stufen aus
+`m01-stufe-*.json`, Loglevel 1 während der Reihe, danach zurück auf 2):
+
+| Stufe | Aufrufe ab 1.000 ms | davon über 1.500 ms | Maximum `innerMs` | p95 Nutzerroute | Ergebnisgruppen ohne Containerteil (davon Fehlschlag) |
+|---:|---:|---:|---:|---:|---|
+| 1 | 10 | 9 | 1.512,5 | 2.145,7 ms | 8 (3) |
+| 4 | 0 | 0 | keins | 1.366,3 ms | 4 (0) |
+| 8 | 0 | 0 | keins | 1.953,5 ms | 9 (0) |
+| 12 | 1 | 0 | 1.021,7 | 2.845,4 ms | 15 (1) |
+| 16 | 3 | 0 | 1.080,6 | 3.813,1 ms | 20 (0) |
+| Kaltstart `admin` | 3 | 3 | 1.596,3 | | |
+| Kaltstart `lasttest` | 3 | 3 | 1.505,7 | | |
+
+Stufe 1 begann 5 s nach dem Containerstart aus 92d (`abtaster leben 2`,
+05:38:58Z). Die cgroup-Größe `anon` stieg während der Stufe von 116,9 MB auf
+552,7 MB (`m01-stufe-1.json`, `memory.before` und `after`): die Stufe hat das
+Modell geladen und ist damit eine Kaltmessung mit demselben Befund wie 6.11.
+Dass die Nullen der Stufen 4 und 8 echte Nullen sind, belegt der Leser selbst:
+in derselben Reihe hat er in Stufe 1, 12, 16 und in beiden Kaltstart-Fenstern
+Zeilen gefunden, `kaputte-zeilen 0` in jeder Stufe. Die Spalte
+„ohne Containerteil“ zählt die fünf Begriffe ohne Treffer im Korpus mit.
+
+**92c und 99d** (`00-lauf.txt`, `92c-wechsel-fehlschlag.txt`,
+`92c-wechsel.txt`, `99d-filter-sortierung-wiederholung.txt`): 92c mit einem
+Daemon, den es nicht gibt, 36 und `registrierung-gelungen nein`; regulär 0,
+`registrierung-gelungen ja`, Grenze `2147483648/0`, danach `93-nullstand.sh`
+mit 0. 99d ohne `FINDLING_LOAD_PASSWORD` in der Umgebung mit 0, Passwort aus
+der Datei, Sitzung `lasttest`: relevance Median 327,6 ms, newest 167,6 ms,
+oldest 166,6 ms, Blättern 358,0 / 331,5 / 323,8 ms bei je 25 Treffern und
+ohne doppelte Kennung.
+
+**Bodensatz** (`94c-bodensatz-zyklen.txt`, Entladefrist 120 s, 12 Dateien je
+Zyklus): Marke A 107,9 MB (`cold`), C1 730,2 MB, C2 760,8 MB (je `unloaded`);
+`zyklus1-minus-a` 622,3, `zyklus2-minus-a` 652,8, `zyklus2-minus-c1` 30,5 MB.
+Die v1.2 hatte A 103,9, C 731,9 und 628,0 MB Bodensatz. Die zweite Entladung
+senkt den Bodensatz nicht, und ein zweiter Zyklus legt nur 30,5 MB dazu.
+
+**Einzelliste** (`90e-einzelliste.json`, P0 der Fahrt 2, gelesen aus
+`state.db` ohne Reindex): 44 übersprungen, 6 fehlgeschlagen, je einzeln in
+`docs/performance.md`. Nach Grund: 22 `too_large` (21 CSV zu rund 56 MB, eine
+DOCX mit 66.154 Byte), 16 `empty_text` (14 JPG, 2 PDF), 4
+`image_not_ocrable` (PNG), 2 `encrypted` (PDF); fehlgeschlagen 5 `corrupt`
+und 1 `empty_file` (je PDF). Die 14 JPG sind zwei Siebenergruppen mit
+paarweise gleicher Größe (Kennungen 52 bis 60 und 50186 bis 50194).
+
+**MESS-08** (`indexgroesse-*.txt`, `umbau-platz.txt`, `umbau-status.jsonl`,
+`00-lauf.txt`): de,en 786.508.818 Byte, sechs Felder 1.431.953.684 Byte,
+Faktor 1,821. Auf der Platte lagen während des Umbaus beide Verzeichnisse
+nebeneinander; die letzte Platzlesung davor (12:52:15Z) zeigt
+787.051.223 + 1.348.713.655 = 2.135.764.878 Byte, die obere Schranke kurz vor
+dem Tausch ist 787.051.223 + 1.431.953.684 = 2.219.004.907 Byte. Wandzeit 581 s
+ab Containerstart für 52.137 Dokumente, rund 90 Dokumente je Sekunde;
+gegen 19 h 20 min (69.600 s) des v1.2-Vollreindex rund 120-mal kürzer.
+`embedded` stand durchgehend auf 52.137.
+
+**B1, Kernbelegung je Phase** (`b1-cpu-*.csv`, Delta `usage_usec` durch
+Wandzeit; Box aus `/proc/stat`, 2 Kerne, an den Blockstempeln aus
+`00-lauf.txt` und den Rohdateien):
+
+| Phase | Fenster | Container, Mittel | Container, höchstens | Box belegt |
+|---|---|---:|---:|---:|
+| M-01, alle Stufen | 05:39:02Z bis 05:42:24Z | 0,196 | 0,530 | 1,040 |
+| M-01, Stufe 16 | 05:41:47Z bis 05:42:24Z | 0,372 | 0,530 | 1,869 |
+| Bodensatz, Zyklus 1 | 05:43:24Z bis 05:43:39Z | 0,389 | 0,504 | 1,043 |
+| Bodensatz, Zyklus 2 | 05:46:34Z bis 05:47:37Z | 0,051 | 0,431 | 0,130 |
+| B2, OCR bis Vorrat 0 | 05:50:26Z bis 06:12:18Z | 0,901 | 1,175 | 1,151 |
+| Umbau MESS-08 | 12:43:05Z bis 12:52:46Z | 1,025 | 1,251 | 1,125 |
+| 98d | 12:53:17Z bis 12:53:33Z | 0,802 | 0,936 | 1,043 |
+| B3 (Wegwerf-Container) | 12:53:33Z bis 12:58:16Z | 0,001 | 0,004 | 1,501 |
+| B5 (Wegwerf-Container) | 12:58:16Z bis 12:59:57Z | 0,001 | 0,001 | 1,348 |
+
+Die Zusammenfassung von `b1-cpu-2-92d.csv` (`mean_cores=0.000`) ist nicht
+verwendbar, weil 95c den Container im selben Leben neu gestartet hat und der
+Zähler dabei zurückfiel; das M-01-Fenster liegt davor und ist sauber.
+
+**B2** (`b2-ocr-charge.txt`, `b2-anon.csv`): 140 Scans, 280 Seiten, Upload
+05:51:32Z bis 05:52:57Z, erste Abnahme des Vorrats zwischen den Lesungen
+05:54:46Z und 05:55:01Z, erste Lesung mit Vorrat 0 um 06:12:03Z. Ab
+Upload-Ende 1.146 s, 4,09 s je Seite und 8,19 s je Datei; ab 05:54:46Z
+1.037 s, 3,70 s je Seite. r, die Kernbelegung außerhalb des
+Containers während der OCR, ist 1,151 minus 0,901 = 0,25 Kerne. Speicher je
+Prozess (`RssAnon`, Abtastung 1 s): Hauptprozess höchstens 1.257,5 MiB
+(`VmHWM` 1.336,0 MiB) bei Entladeschalter 0, drei Sandbox-Kinder höchstens
+136,4 MiB (`VmHWM` 161,2), 280 tesseract-Aufrufe höchstens 98,8 MiB (`VmHWM`
+114,2), die Summe je Abtastung höchstens 1.435,8 MiB um 06:03:38Z.
+
+**B3** (`b3-slots-*.txt`, `b3-single.txt`, Wegwerf-Container,
+`--cpuset-cpus 0,1`, 2 GiB): N 1 0,264 und N 2 0,519 Seiten je Sekunde,
+Faktor 1,97; CPU-Zeit je Runde 30,3 s bei N 1 und 60,6 s bei N 2, also ein
+Kern je Slot. `anon_bytes_delta` je Runde bei N 2 höchstens 0,41 MB: das ist
+der bleibende Zuwachs, keine Spitze je Slot. Einzelmodus:
+`OMP_THREAD_LIMIT=1` 3,753 s Wand bei 3,75 s CPU, ungesetzt 6,382 s Wand bei
+8,96 s CPU. Ohne Grenze belegt tesseract im Mittel 1,40 Kerne und braucht
+1,70-mal so lange.
+
+**B4** (6.7, m7g.4xlarge, 16 Kerne, ohne Speichergrenze): Faktoren gegen N 1
+bei N 2, 4, 8, 12, 16: 2,00, 4,00, 7,99, 11,98, 15,86. Einbettung gegen T 1
+bei T 2, 4, 8: 1,91, 3,39, 6,01. `anon_bytes_delta` bei N 16 höchstens
+3,26 MB je Runde.
+
+**B5** (`b5-threads-*-batch-*.txt`, m7g.large, `--cpuset-cpus 0,1`, Sequenz
+512, p50): threads 1 batch 2 1.844,8, threads 1 batch 8 1.821,4, threads 2
+batch 2 3.450,4, threads 2 batch 8 3.416,2 Tokens je Sekunde. Der zweite
+Thread bringt Faktor 1,87, Batch 8 bringt nichts (minus 1,0 bis 1,3 Prozent).
+Der Speicher je Kombination fehlt (6.9).
+
+**B6:** einkernig ja, 1,025 Kerne im Umbau (Tabelle B1). Der Umbau dauert aber
+9 min 41 s und nicht über eine Stunde; Tantivy `num_threads` bleibt als
+v1.4-Hebel benannt, sein Gewinn ist auf diesem Bestand höchstens einige
+Minuten.
+
+**B7:** im CI, Abschnitt 2: 22,99 MB.
+
+### 6.14 Gefahrene Fassungen und ihre Pruefsummen (26.09.2026, Plan 22-11)
+
+Gefahren am **26.09.2026** auf der Box dieser Anfahrt: `92c-wechsel.sh` und
+`99d-filter-sortierung.sh` aus `docs/measurements/2026-09-nachfolgefassungen/`
+(92c Fehlschlag und regulär 13:00:06Z bis 13:06:25Z; 99d um 05:50:26Z und in
+der Wiederholung 12:42:21Z bis 12:43:04Z) und alle Werkzeuge dieses
+Verzeichnisses: `00-lauf.sh`, `00-abholen.sh`, `00-typwechsel.sh`,
+`00-wegwerf.sh` (b3, b5, b4), `90e-einzelliste.py`, `91m-langsame-aufrufe.py`,
+`92d-wechsel.sh`, `92e-umgebung.sh`, `94c-bodensatz-zyklen.sh`,
+`95c-kaltstart.sh` und `98d-dismax-probe.py`. Gestrichen ist keines
+(`00-gestrichen.txt` gibt es nicht).
+
+Die Prüfsumme gilt der zuletzt gefahrenen Fassung, also dem Stand, mit dem
+ab-pii 3 und B4 liefen (`00-lauf.sh` aus 65f8399, `92e-umgebung.sh` aus
+be35cfe, `95c-kaltstart.sh` aus aecca7d, `92d-wechsel.sh` und
+`90e-einzelliste.py` aus 26e5e8f). Die früheren Fahrten liefen mit älteren
+Fassungen derselben Werkzeuge; welche Änderung wann kam, steht in 6.1 bis 6.5.
+Der Kopfsatz „DIESE FASSUNG IST NICHT GEFAHREN“ bleibt in jeder dieser Dateien
+byteweise stehen, wie bei 92c vorgesehen (`skripte/00-ablauf.md`, Abschnitt 5);
+er beschreibt den Stand beim Schreiben. Die Prüfsummen stehen in
+`backend/tests/test_v13_gefahren.py` (`DRIVEN_V13_FASSUNGEN`) und für 92c und
+99d in `backend/tests/test_measurement_scripts.py`
+(`DRIVEN_SUCCESSOR_FASSUNGEN`).
