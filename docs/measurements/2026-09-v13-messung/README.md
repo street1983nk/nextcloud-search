@@ -114,7 +114,8 @@ laufen drei Nextcloud-Instanzen, eine davon die Test-Nextcloud.
 | `91m` | Kaltstart-Fenster aus 95c, loglevel 1 und zurück auf 2 | Zeilen gezählt, kein `unklar` | zuerst `langsame-aufrufe 0` bei einer vorhandenen Zeile, nach dem Fix `langsame-aufrufe 1` | **behoben** (463fcfe, a65c9c5): Nextcloud 34 schreibt `innerMs` und `ceilingMs` als Zeichenketten, der Leser nahm nur JSON-Zahlen und zählte die Zeile als kaputt. Auf der Box hätte jede Stufe 0 gemeldet und die Gegenprobe den Lauf mit 57 beendet |
 | `92e` | Entladefrist 120, dann 0 | 0, Grenze und Schalter zurückgelesen | 0 und 0, `speichergrenze-ist 2147483648/0`, `entladeschalter-ist 120` und `0` | keiner |
 | `92e` | Sprachen de,en,es,it,nl,pt, dann de,en | 0, Umbau mit Logzeile | 0 und 0; „the rebuilt index directory is in place“ nach 5 s, mit derselben Suche wie in `00-lauf.sh` gefunden | keiner |
-| `92d` | lokaler Digest, Daemon der Probe | 41 nach `occ upgrade` und Registrierung | **37** in Phase A: die Zählung meldet 3 Nextcloud-Instanzen am Docker-Dienst; Phase A lief ganz (Digest gleich, Baumhash dreifach, `baumhash-beweis ja`) | **offen**: Phase B (`occ upgrade`, unregister ohne `--rm-data`, Registrierung, Bestandstor) ist nicht geprobt. Das Tor 37 hat richtig gehalten; es mit einer anderen Zählung zu umgehen hätte die Nachbarinstanzen getroffen |
+| `92d` | lokaler Digest, Daemon der Probe | 41 nach `occ upgrade` und Registrierung | **37** in Phase A: die Zählung meldet 3 Nextcloud-Instanzen am Docker-Dienst; Phase A lief ganz (Digest gleich, Baumhash dreifach, `baumhash-beweis ja`) | Das Tor 37 hat richtig gehalten; es mit einer anderen Zählung zu umgehen hätte die Nachbarinstanzen getroffen. Phase B lief deshalb im CI (nächste Zeile) |
+| `92d` Phase B, CI | `probe-92d.yml` im arm64-Runner: Container-Nextcloud 34 mit HaRP, v1.1.0 installiert (Companion und Abbild), Referenzkorpus indexiert, dann 92d per Box-Digest-Kandidat; Gegenprobe mit einem Bestand, der um eins daneben liegt | 0 mit `92D-WECHSEL-FERTIG`; Gegenprobe 41 | Lauf 2 (Lauf-ID 36217297257) grün: `occ upgrade` fuhr das App-Update 1.1.0 auf 1.2.0 mit 0, unregister 0, `volumen-nach-unregister nc_app_findling_backend_data` mit unveränderter Erstellungszeit, Registrierung ja, `speichergrenze-ist 2147483648/0`, Baumhash im laufenden Container gleich, Bestandstor 26 / 7 / 6 bestanden, danach dieselben Zahlen aus dem Container und ein Treffer der Suche; Gegenprobe 41 mit `bestandstor-bestanden nein` und unverändertem Bestand | **behoben** (bbf929e): 92d nahm von `occ upgrade` nur 0 an, `deploy-harp.yml` belegt 3 (ERROR_UP_TO_DATE) als Antwort ohne Arbeit; jetzt gelten 0 und 3. Lauf 1 (36216798070) startete ab v1.2.0 und hatte kein App-Update, weil der Baum bis Phase 23 noch 1.2.0 trägt |
 | `94c` | Frist 120, drei Dateien je Zyklus | Marken A, C1, C2, Rückgabe 0 | 0, A, C1 und C2 geschrieben, beide Ordner entfernt | **behoben** (5d97688): `abtastreihe-spitze-mb` klebte Datum und Stunde an die Megabyte (16982026092523 statt 1698); Probe wiederholt mit 1698 |
 | `95c` | Begriff mit lokalen Treffern | `kaltstart-gueltig ja` | 0, `kaltstart-gueltig ja` im ersten Kaltzyklus | keiner |
 | `98d` | `docker cp` und `docker exec` im Produktcontainer, de,en und nach dem Umbau auf sechs Sprachen | 0 oder 49 mit Analyse | 0 und 0 (4 und 8 Felder), keine `treffermenge-ungleich`-Zeile | keiner |
@@ -127,10 +128,11 @@ laufen drei Nextcloud-Instanzen, eine davon die Test-Nextcloud.
 **Was die Generalprobe nicht beantworten konnte**, und es steht hier, damit es
 nicht als geprobt gelesen wird:
 
-- **92d Phase B.** `occ upgrade`, das unregister ohne `--rm-data`, die
-  Registrierung über HaRP und das Bestandstor sind vor der Anfahrt nicht
-  gelaufen. Ein Ort, an dem das ohne Nachbarinstanzen ginge, wäre ein eigener
-  CI-Lauf nach dem Muster von `deploy-harp.yml`.
+- **92d Phase B auf der Box selbst.** Im CI gelaufen (Tabelle oben), mit einer
+  Container-Nextcloud aus `nextcloud:34-apache` statt AIO, 39 Dateien statt
+  52.111 und einem v1.1.0-Volumen, das dort frisch indexiert wurde. Ob das
+  Volumen des Snapshots dieselben Marken trägt, liest erst die Box (Research,
+  Annahme A1).
 - **Weg b und 92c ohne `occ upgrade`.** In Weg b läuft 92c vor jedem
   `occ upgrade`. Bringt 92c eine PHP-Hälfte mit neuer Version auf eine Instanz
   mit älterer, steht die Nextcloud danach vermutlich auf „requires upgrade“, und

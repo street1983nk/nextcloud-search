@@ -3,7 +3,8 @@
 ## Aus 22-06 (Generalprobe)
 
 - **v1.2-Rohdatei 94b-grundlast-rueckkehr.txt: `abtastreihe-spitze-mb=11142026092103`.** Derselbe Leserfehler, den 94c in 5d97688 behoben hat: `awk -F:` nahm alle Ziffern des Feldes bis in den Zeitstempel. Gemeint sind 1.114 MB (Zeile `total, peak:` von rss_digest.py in derselben Datei). 94b ist gefahren und prüfsummengeschützt, die Rohdatei bleibt; der v1.2-Bericht zitiert den Wert nicht. Wer ihn zitiert, liest 1.114 MB.
-- **92d Phase B ungeprobt** (occ upgrade, unregister ohne --rm-data, Registrierung über HaRP, Bestandstor): lokal nicht fahrbar, weil am Docker-Dienst drei Nextcloud-Instanzen laufen und das Tor 37 richtig hält. Owner-Frage am Checkpoint 22-06/22-07.
+- ~~**92d Phase B ungeprobt**~~ **erledigt 26.09.** (Owner-Option B, eigener CI-Lauf): `probe-92d.yml` Lauf 2 (36217297257) grün, v1.1.0 auf den Baum mit echtem App-Update, Volumen und Bestand bleiben, Gegenprobe 41. Befund behoben in bbf929e (occ upgrade 3 zählt als gelungen).
+- **Versionssprung auf 1.3.0 fehlt noch im Baum** (beide info.xml tragen 1.2.0, Sprung gehört zu Phase 23). Folge für die Anfahrt: 92d installiert die PHP-Hälfte als 1.2.0; die Migration `Version001300Date20260924000000` (entfernt nur den gemerkten Backend-Versionsschlüssel) läuft auf der Box erst mit dem Sprung. Kein Messgegenstand hängt daran; nur zur Kenntnis.
 - **Weg b: 92c läuft vor jedem occ upgrade.** Risiko aus 22-05, lokal nicht probbar; Owner-Frage am Checkpoint 22-07 (Weg-Wahl).
 
 ## Aus 22-02
