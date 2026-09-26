@@ -1,0 +1,370 @@
+name: 92d probe
+
+# Phase B of the image switch 92d, driven once outside paid box time.
+#
+# Why this workflow exists. docs/measurements/2026-09-v13-messung/skripte/
+# 92d-wechsel.sh is the first switch of the v1.3 box trip, and runbook section
+# 7.1 says no tool runs on the box for the first time. The local dress
+# rehearsal of plan 22-06 drove its phase A completely, and its phase B (occ
+# upgrade, unregister WITHOUT --rm-data, registration, stock gate) could not
+# run there: the shared local docker daemon hosts three Nextcloud instances,
+# and the count gate 37 refused, correctly. Owner decision of 2026-09-26,
+# option B: a CI run of its own.
+#
+# What it drives, in the order of the box. A fresh Nextcloud in a container,
+# HaRP in front of the docker socket, the RELEASED installation of
+# UPGRADE_FROM_TAG (companion and image), the reference corpus indexed and
+# waited out. Then 92d itself, unchanged, against that installation: the
+# companion of this commit forces a real occ upgrade, the unregister keeps the
+# volume, the registration hangs the new container onto it, and the stock gate
+# is handed the counts measured before the switch. Asserted afterwards and
+# independently of 92d: the same counts out of the container, the same volume
+# with the same creation time, and a search that still answers. A second run
+# with a stock that differs by one has to end with 41.
+#
+# Dispatch only. It installs a whole Nextcloud and pulls two backend images, and
+# nothing about it changes between two commits that leave 92d alone; a push run
+# would slow every push for a statement that is made once per trip.
+#
+# The container Nextcloud and not the composite action setup-test-nc, and the
+# reason is the tool under test: 92d reaches Nextcloud through docker exec and
+# docker cp into /var/www/html, as on the box, and counts the running Nextcloud
+# containers by image name. A PHP builtin server on the runner would have to be
+# emulated, and an emulated box proves the emulation.
+on:
+  workflow_dispatch:
+    inputs:
+      image_digest:
+        description: 'sha256:... index digest of ghcr.io/street1983nk/findling_backend to switch to; empty resolves :dev'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: probe-92d-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The same pin as deploy-harp.yml and scripts/dev/compose-harp.yaml.
+  HARP_IMAGE: ghcr.io/nextcloud/nextcloud-appapi-harp@sha256:603fdf5ca2802235fd4e40301476dd2fafff409e84a42f8cb3b8f2e17c22ce39
+  # By tag and not by digest, and that is forced by the tool under test: 92d
+  # counts running Nextcloud containers by the pattern (^|/)nextcloud: in the
+  # image name, and a digest reference would count 0 and end the run with 37.
+  NEXTCLOUD_IMAGE: nextcloud:34-apache
+  NEXTCLOUD: nextcloud-probe
+  DAEMON: harp_proxy_host
+  CONTAINER: nc_app_findling_backend
+  # The released installation the switch starts from, the same value
+  # deploy-harp.yml upgrades from.
+  UPGRADE_FROM_TAG: v1.2.0
+  ADMIN_PASS: 'findling-probe-92d-2026'
+  DRAIN_BUDGET_SECONDS: '900'
+  SWITCH: docs/measurements/2026-09-v13-messung/skripte/92d-wechsel.sh
+
+jobs:
+  probe-92d:
+    name: 92d phase B on arm64
+    # The box is an m7g, so the probe runs on the architecture of the box.
+    runs-on: ubuntu-24.04-arm
+    # Install, one indexing pass of the reference corpus, three registrations
+    # of about a minute each. Measured nowhere yet; sixty is a bound and not
+    # the default 360.
+    timeout-minutes: 60
+    env:
+      IMAGE_DIGEST_INPUT: ${{ inputs.image_digest }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Resolve the digest and fetch the released tag
+        run: |
+          ref="${IMAGE_DIGEST_INPUT}"
+          if [ -z "${ref}" ]; then
+            ref=$(docker buildx imagetools inspect ghcr.io/street1983nk/findling_backend:dev --format '{{.Manifest.Digest}}')
+          fi
+          if ! printf '%s' "${ref}" | grep -Eq '^sha256:[0-9a-f]{64}$'; then
+            echo "the digest ${ref} does not have the shape sha256:<64 hex>"
+            exit 1
+          fi
+          echo "ABBILD_DIGEST=${ref}" >> "${GITHUB_ENV}"
+          echo "switching to ${ref}"
+          git fetch --no-tags --depth 1 origin "refs/tags/${UPGRADE_FROM_TAG}:refs/tags/${UPGRADE_FROM_TAG}"
+          mkdir -p "${RUNNER_TEMP}/old/php" "${RUNNER_TEMP}/logs"
+          git archive "${UPGRADE_FROM_TAG}" php | tar -x -C "${RUNNER_TEMP}/old"
+          git show "${UPGRADE_FROM_TAG}:backend/appinfo/info.xml" > "${RUNNER_TEMP}/old/info.xml"
+          grep -E '<version>|<image-tag>' "${RUNNER_TEMP}/old/info.xml" | head -3
+          grep -m1 '<version>' "${RUNNER_TEMP}/old/php/appinfo/info.xml"
+
+      # --net host for the same reason deploy-harp.yml gives for HaRP: the
+      # ExApp container lands in the network namespace of the runner and has to
+      # reach Nextcloud and HaRP on localhost. Apache binds port 80 there.
+      - name: Start the container Nextcloud
+        run: |
+          docker run -d --name "${NEXTCLOUD}" --net host \
+            -e SQLITE_DATABASE=nextcloud \
+            -e NEXTCLOUD_ADMIN_USER=admin \
+            -e NEXTCLOUD_ADMIN_PASSWORD="${ADMIN_PASS}" \
+            -e NEXTCLOUD_TRUSTED_DOMAINS='localhost 127.0.0.1' \
+            "${NEXTCLOUD_IMAGE}"
+          for _ in $(seq 1 90); do
+            if curl -sf -m 5 http://localhost/status.php | jq -e '.installed == true' > /dev/null 2>&1; then
+              curl -s http://localhost/status.php
+              echo
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "the container Nextcloud did not report installed"
+          docker logs "${NEXTCLOUD}" | tail -60
+          exit 1
+
+      - name: Start HaRP and the front proxy, register the daemon
+        run: |
+          occ() { docker exec --user www-data "${NEXTCLOUD}" php occ "$@"; }
+          harp_key=$(openssl rand -hex 16)
+          echo "::add-mask::${harp_key}"
+          mkdir -p "${RUNNER_TEMP}/certs"
+          docker run -d --name appapi-harp --net host \
+            -e HP_SHARED_KEY="${harp_key}" \
+            -e NC_INSTANCE_URL="http://localhost" \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "${RUNNER_TEMP}/certs:/certs" \
+            "${HARP_IMAGE}"
+          cat > "${RUNNER_TEMP}/exapps-proxy.conf" <<'CONF'
+          server {
+            listen 8090;
+            location /exapps/ {
+              proxy_pass http://127.0.0.1:8780;
+              proxy_http_version 1.1;
+              proxy_set_header Host $host;
+              proxy_read_timeout 1800s;
+              proxy_send_timeout 1800s;
+            }
+            location / {
+              proxy_pass http://127.0.0.1:80;
+              proxy_http_version 1.1;
+              proxy_set_header Host $host;
+              proxy_read_timeout 300s;
+              client_max_body_size 512M;
+            }
+          }
+          CONF
+          docker run -d --name exapps-proxy --net host \
+            -v "${RUNNER_TEMP}/exapps-proxy.conf:/etc/nginx/conf.d/default.conf:ro" \
+            nginx:1.27-alpine
+          ready=""
+          for _ in $(seq 1 45); do
+            nc_code=$(curl -s -o /dev/null -m 5 -w '%{http_code}' http://localhost:8090/status.php || true)
+            harp_code=$(curl -s -o /dev/null -m 5 -w '%{http_code}' \
+              -H "harp-shared-key: ${harp_key}" -H 'docker-engine-port: 24000' \
+              http://localhost:8090/exapps/app_api/v1.44/_ping || true)
+            if [ "${nc_code}" = 200 ] && [ "${harp_code}" = 200 ]; then
+              ready=yes
+              break
+            fi
+            sleep 2
+          done
+          if [ -z "${ready}" ]; then
+            echo "front proxy not ready: status.php ${nc_code}, docker engine route ${harp_code}"
+            docker logs appapi-harp | tail -40 || true
+            exit 1
+          fi
+          occ app:enable app_api
+          occ background:cron
+          timeout 30 docker exec --user www-data "${NEXTCLOUD}" php occ app_api:daemon:register \
+            "${DAEMON}" "Harp Proxy (Host)" docker-install http localhost:8780 \
+            http://localhost:8090 \
+            --harp --harp_frp_address localhost:8782 \
+            --harp_shared_key "${harp_key}" \
+            --net host --set-default
+          occ app_api:daemon:list
+
+      # The installation 92d switches away from: both halves of the released
+      # tag, the companion out of the tag and the image the tag's info.xml
+      # names, pulled by HaRP from ghcr.io exactly as a store install does.
+      - name: Install the released version
+        run: |
+          occ() { docker exec --user www-data "${NEXTCLOUD}" php occ "$@"; }
+          docker cp "${RUNNER_TEMP}/old/php" "${NEXTCLOUD}:/var/www/html/custom_apps/findling"
+          docker exec "${NEXTCLOUD}" chown -R 33:33 /var/www/html/custom_apps/findling
+          occ app:enable findling
+          docker cp "${RUNNER_TEMP}/old/info.xml" "${NEXTCLOUD}:/tmp/info-old.xml"
+          docker exec "${NEXTCLOUD}" chown 33:33 /tmp/info-old.xml
+          timeout 900 docker exec --user www-data "${NEXTCLOUD}" php occ \
+            app_api:app:register findling_backend "${DAEMON}" --info-xml /tmp/info-old.xml --wait-finish
+          docker ps --format '{{.Names}}  {{.Image}}  {{.Status}}'
+          echo "companion installed: $(occ config:app:get findling installed_version)"
+
+      # The reference corpus in the account of admin, and nothing else in it:
+      # the skeleton files go first, so every file of the account is a corpus
+      # file and the drain condition below is exact rather than a lower bound.
+      - name: Index the reference corpus and wait it out
+        run: |
+          occ() { docker exec --user www-data "${NEXTCLOUD}" php occ "$@"; }
+          docker exec "${NEXTCLOUD}" sh -c 'rm -rf /var/www/html/data/admin/files/*'
+          docker cp testdata/corpus "${NEXTCLOUD}:/var/www/html/data/admin/files/corpus"
+          docker exec "${NEXTCLOUD}" chown -R 33:33 /var/www/html/data/admin/files
+          occ files:scan --all
+          occ findling:index --restart --no-interaction
+          expected=$(find testdata/corpus -type f | wc -l)
+          report() {
+            docker exec "${CONTAINER}" sh -c 'python -m findling.tools.index_status --db "${APP_PERSISTENT_STORAGE}/state.db"'
+          }
+          open_rows() {
+            occ findling:index | awk '
+              $1 == "scheduled" { scheduled = $2 }
+              /^  handed to the worker/ { running = $NF }
+              END { print (scheduled + 0) + (running + 0) }'
+          }
+          deadline=$(( $(date +%s) + DRAIN_BUDGET_SECONDS ))
+          rounds=0
+          drained=""
+          while [ "$(date +%s)" -lt "${deadline}" ]; do
+            rounds=$(( rounds + 1 ))
+            timeout 300 docker exec --user www-data "${NEXTCLOUD}" php -f /var/www/html/cron.php \
+              > "${RUNNER_TEMP}/logs/cron-${rounds}.log" 2>&1 || true
+            state=$(report)
+            indexed=$(echo "${state}" | jq -r '.indexed')
+            skipped=$(echo "${state}" | jq -r '.skipped')
+            failed=$(echo "${state}" | jq -r '.failed')
+            open=$(open_rows)
+            echo "round ${rounds}: open=${open} indexed=${indexed} skipped=${skipped} failed=${failed}"
+            if [ "${open}" -eq 0 ] && [ $(( indexed + skipped + failed )) -ge "${expected}" ]; then
+              drained=yes
+              break
+            fi
+            sleep 5
+          done
+          if [ -z "${drained}" ]; then
+            echo "::error::the indexing pass did not finish within ${DRAIN_BUDGET_SECONDS} s"
+            occ findling:index || true
+            docker logs "${CONTAINER}" 2>&1 | tail -60 || true
+            exit 1
+          fi
+          echo "drained after ${rounds} cron rounds, ${expected} corpus files"
+
+      # The stock before the switch, out of two places, and the volume with its
+      # creation time. 92d is handed the numbers the way it reads them itself
+      # (indexed out of the state database, skipped and failed out of occ); the
+      # assertions after the switch read them again out of the container tool,
+      # which is the independent half.
+      - name: The stock before the switch
+        run: |
+          occ() { docker exec --user www-data "${NEXTCLOUD}" php occ "$@"; }
+          docker exec "${CONTAINER}" sh -c 'python -m findling.tools.index_status --db "${APP_PERSISTENT_STORAGE}/state.db"' \
+            | jq -c '{indexed, skipped, failed}' | tee "${RUNNER_TEMP}/logs/stock-before.json"
+          occ findling:index | tee "${RUNNER_TEMP}/logs/occ-index-before.txt"
+          indexed=$(jq -r '.indexed' "${RUNNER_TEMP}/logs/stock-before.json")
+          skipped=$(awk '$1 == "skipped" {print $2; exit}' "${RUNNER_TEMP}/logs/occ-index-before.txt")
+          failed=$(awk '$1 == "failed" {print $2; exit}' "${RUNNER_TEMP}/logs/occ-index-before.txt")
+          volume=$(docker volume ls --filter name=findling_backend --format '{{.Name}}')
+          created=$(docker volume inspect --format '{{.CreatedAt}}' "${volume}")
+          if [ -z "${indexed}" ] || [ "${indexed}" = 0 ] || [ -z "${volume}" ]; then
+            echo "::error::nothing indexed or no volume, so a switch that keeps the stock would prove nothing"
+            exit 1
+          fi
+          {
+            echo "BEFORE_INDEXED=${indexed}"
+            echo "BEFORE_SKIPPED=${skipped}"
+            echo "BEFORE_FAILED=${failed}"
+            echo "BEFORE_VOLUME=${volume}"
+            echo "BEFORE_CREATED=${created}"
+          } | tee -a "${GITHUB_ENV}"
+
+      # 92d unchanged, with the switches its head names for a rehearsal. OUT
+      # points outside the checkout; the checkout is REPO, so the tree hash
+      # compares the image against the commit of this run.
+      - name: 92d, the switch that keeps the stock
+        run: |
+          occ() { docker exec --user www-data "${NEXTCLOUD}" php occ "$@"; }
+          status=0
+          OUT="${RUNNER_TEMP}/92d-positiv" REPO="${GITHUB_WORKSPACE}" \
+            BESTAND_INDEXIERT="${BEFORE_INDEXED}" \
+            BESTAND_UEBERSPRUNGEN="${BEFORE_SKIPPED}" \
+            BESTAND_FEHLGESCHLAGEN="${BEFORE_FAILED}" \
+            sh "${SWITCH}" > "${RUNNER_TEMP}/logs/92d-positiv.log" 2>&1 || status=$?
+          tail -40 "${RUNNER_TEMP}/logs/92d-positiv.log"
+          echo "92d answered ${status}"
+          raw="${RUNNER_TEMP}/92d-positiv/92d-wechsel.txt"
+          grep -E '^(nextcloud-instanzen|baumhash-beweis|occ-upgrade-|unregister-rueckgabewert|volumen-nach-unregister|registrierung-|grenze-gesetzt|entladeschalter-ist|abbild-im-container-gleich|bestandstor)' "${raw}" || true
+          if [ "${status}" != 0 ] || ! tail -n 1 "${RUNNER_TEMP}/logs/92d-positiv.log" | grep -qx '92D-WECHSEL-FERTIG'; then
+            echo "::error::92d did not end with 0 and 92D-WECHSEL-FERTIG"
+            exit 1
+          fi
+          for line in 'occ-upgrade-rueckgabewert 0' 'unregister-rueckgabewert 0' 'registrierung-gelungen ja' \
+                      'grenze-gesetzt ja' 'abbild-im-container-gleich ja' 'bestandstor-bestanden ja'; do
+            grep -qx "${line}" "${raw}" || { echo "::error::the raw file lacks the line: ${line}"; exit 1; }
+          done
+          grep -q "^volumen-nach-unregister ${BEFORE_VOLUME} *$" "${raw}" \
+            || { echo "::error::the volume ${BEFORE_VOLUME} is not named after the unregister"; exit 1; }
+          # A real upgrade: the companion of this commit is installed now.
+          new=$(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' php/appinfo/info.xml | head -1)
+          installed=$(occ config:app:get findling installed_version)
+          echo "companion on disk ${new}, installed ${installed}"
+          [ "${installed}" = "${new}" ] || { echo "::error::occ upgrade did not install the companion"; exit 1; }
+
+      - name: The stock after the switch, read independently
+        run: |
+          docker exec "${CONTAINER}" sh -c 'python -m findling.tools.index_status --db "${APP_PERSISTENT_STORAGE}/state.db"' \
+            | jq -c '{indexed, skipped, failed}' | tee "${RUNNER_TEMP}/logs/stock-after.json"
+          if ! diff "${RUNNER_TEMP}/logs/stock-before.json" "${RUNNER_TEMP}/logs/stock-after.json"; then
+            echo "::error::the stock changed across the switch"
+            exit 1
+          fi
+          created=$(docker volume inspect --format '{{.CreatedAt}}' "${BEFORE_VOLUME}")
+          echo "volume ${BEFORE_VOLUME} created ${created}, before ${BEFORE_CREATED}"
+          [ "${created}" = "${BEFORE_CREATED}" ] || { echo "::error::the volume is not the one of the old installation"; exit 1; }
+          code=$(curl -s -o "${RUNNER_TEMP}/logs/search.json" -w '%{http_code}' -u "admin:${ADMIN_PASS}" \
+            -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+            'http://localhost/ocs/v2.php/search/providers/findling/search?term=Belehrung')
+          echo "search answered HTTP ${code} with $(jq -r '.ocs.data.entries | length' "${RUNNER_TEMP}/logs/search.json") entries"
+          [ "${code}" = 200 ] && jq -e '.ocs.data.entries | length >= 1' "${RUNNER_TEMP}/logs/search.json" > /dev/null \
+            || { echo "::error::the kept index does not answer a search after the switch"; exit 1; }
+
+      # The negative case: the same switch a second time, told a stock that is
+      # one file off. It has to end with 41, and the upgrade in front of it has
+      # nothing to do, so this run also carries the answer 3 of occ upgrade.
+      - name: 92d, a stock that differs ends with 41
+        run: |
+          status=0
+          OUT="${RUNNER_TEMP}/92d-negativ" REPO="${GITHUB_WORKSPACE}" \
+            BESTAND_INDEXIERT=$(( BEFORE_INDEXED + 1 )) \
+            BESTAND_UEBERSPRUNGEN="${BEFORE_SKIPPED}" \
+            BESTAND_FEHLGESCHLAGEN="${BEFORE_FAILED}" \
+            sh "${SWITCH}" > "${RUNNER_TEMP}/logs/92d-negativ.log" 2>&1 || status=$?
+          tail -20 "${RUNNER_TEMP}/logs/92d-negativ.log"
+          echo "92d answered ${status}"
+          raw="${RUNNER_TEMP}/92d-negativ/92d-wechsel.txt"
+          grep -E '^(occ-upgrade-|registrierung-gelungen|bestandstor)' "${raw}" || true
+          [ "${status}" = 41 ] || { echo "::error::92d answered ${status} and not 41"; exit 1; }
+          grep -qx 'bestandstor-bestanden nein' "${raw}" || { echo "::error::no failed stock gate line"; exit 1; }
+          grep -qx 'occ-upgrade-gelungen ja' "${raw}" || { echo "::error::the second upgrade was not accepted"; exit 1; }
+          docker exec "${CONTAINER}" sh -c 'python -m findling.tools.index_status --db "${APP_PERSISTENT_STORAGE}/state.db"' \
+            | jq -c '{indexed, skipped, failed}' | tee "${RUNNER_TEMP}/logs/stock-after-negative.json"
+          diff "${RUNNER_TEMP}/logs/stock-before.json" "${RUNNER_TEMP}/logs/stock-after-negative.json" \
+            || { echo "::error::the refused run changed the stock"; exit 1; }
+
+      - name: Collect the raw files and the logs
+        if: ${{ always() }}
+        run: |
+          mkdir -p "${RUNNER_TEMP}/probe"
+          cp -r "${RUNNER_TEMP}/logs" "${RUNNER_TEMP}/probe/" 2>/dev/null || true
+          for run in 92d-positiv 92d-negativ; do
+            [ -d "${RUNNER_TEMP}/${run}" ] && cp -r "${RUNNER_TEMP}/${run}" "${RUNNER_TEMP}/probe/" || true
+          done
+          docker logs "${NEXTCLOUD}" > "${RUNNER_TEMP}/probe/nextcloud.log" 2>&1 || true
+          docker logs appapi-harp > "${RUNNER_TEMP}/probe/harp.log" 2>&1 || true
+          docker logs "${CONTAINER}" > "${RUNNER_TEMP}/probe/exapp.log" 2>&1 || true
+          docker ps -a --format '{{.Names}}  {{.Image}}  {{.Status}}' > "${RUNNER_TEMP}/probe/containers.txt" || true
+
+      - name: Upload the raw files and the logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: probe-92d
+          path: ${{ runner.temp }}/probe
+          if-no-files-found: warn
+          retention-days: 30
