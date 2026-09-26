@@ -1,0 +1,56 @@
+kosten- und verbleibsrechnung der v1.3-anfahrt, plan 22-09 task 2
+teil 1 bis 4 geschrieben 2026-09-26 VOR dem abbau, damit sie ihn ueberleben
+(aws_box.sh destroy loescht box.env; runbook abschnitt 8 schritt 2).
+teil 5 (verbleib) nach dem abbau angehaengt.
+
+geheimnisregel: keine ip-adresse, keine lebende instanz- oder volumekennung,
+keine kontokennung, keine snapshotkennung (der korpus-snapshot steht als
+<korpus-snapshot>).
+
+-- 1 die saetze (README 1.1, gelesen 26.09.2026) --
+m7g.large, instanz                0,0978 USD/h
+m7g.4xlarge, instanz              0,7821 USD/h
+gp3 100 GB (40 + 60), 730 h        0,013041 USD/h
+oeffentliche ipv4                 0,0050 USD/h
+box als m7g.large, laufend        0,115841 USD/h
+box als m7g.4xlarge, laufend      0,800141 USD/h
+box gestoppt (nur platten)        0,013041 USD/h
+
+-- 2 die uptimes auf m7g.large, aus box.env (aws_box.sh stop) --
+BOX_STOPPED_ISO=2026-09-26T05:14:17Z BOX_LAST_UPTIME_HOURS=0.25 BOX_LAST_UPTIME_COST_USD=0.0287
+BOX_STOPPED_ISO=2026-09-26T06:18:29Z BOX_LAST_UPTIME_HOURS=0.73 BOX_LAST_UPTIME_COST_USD=0.0843
+BOX_STOPPED_ISO=2026-09-26T12:02:02Z BOX_LAST_UPTIME_HOURS=0.16 BOX_LAST_UPTIME_COST_USD=0.0189
+BOX_STOPPED_ISO=2026-09-26T12:12:58Z BOX_LAST_UPTIME_HOURS=0.14 BOX_LAST_UPTIME_COST_USD=0.0164
+BOX_STOPPED_ISO=2026-09-26T12:31:14Z BOX_LAST_UPTIME_HOURS=0.16 BOX_LAST_UPTIME_COST_USD=0.0190
+BOX_STOPPED_ISO=2026-09-26T13:13:52Z BOX_LAST_UPTIME_HOURS=0.58 BOX_LAST_UPTIME_COST_USD=0.0648
+summe m7g.large 2,02 h
+
+nicht gezaehlt, weil keine uptime:
+BOX_STOPPED_ISO=2026-09-26T13:20:34Z BOX_LAST_UPTIME_HOURS=0.70 BOX_LAST_UPTIME_COST_USD=0.0772
+  (00-typwechsel.sh hin rief aws_box.sh stop gegen die seit 13:13Z gestoppte box;
+  die zahl ist LaunchTime 12:38Z bis 13:20Z und enthaelt die gestoppte zeit)
+BOX_STOPPED_ISO=2026-09-26T13:38:46Z BOX_LAST_UPTIME_HOURS=0.30 BOX_LAST_UPTIME_COST_USD=0.0334
+  (die b4-uptime zum gepinnten m7g.large-satz, pitfall 9; von hand in teil 3)
+
+-- 3 b4 auf m7g.4xlarge, von hand aus den stempeln (00-typwechsel.txt) --
+typwechsel-hin-laeuft       2026-09-26T13:20:59Z epoch 1790428859
+typwechsel-zurueck-gestoppt 2026-09-26T13:38:48Z epoch 1790429928
+b4-laufzeit-s 1069 = 0,2969 h (obere schranke; LaunchTime 13:20:40Z bis stopped
+  gesehen 13:38:24Z waeren 1064 s)
+b4 0,2969 h mal 0,800141 USD/h = 0,2376 USD
+b4-deckel 86 min = 1,43 h / 1,147 USD: gehalten, verbraucht 17,8 min
+
+-- 4 die rechnung --
+m7g.large 2,02 h mal 0,115841 USD/h = 0,2340 USD
+m7g.4xlarge 0,2969 h mal 0,800141 USD/h = 0,2376 USD
+boxstunden laufend 2,32 h, 0,4716 USD
+gesamt 2,32 h 0,4716 USD
+deckel stunden 24,00 h / 3,76 USD gehalten
+  (variante stunden, owner 26.09.2026; differenz 21,68 h / 3,29 USD unter dem deckel)
+m7g.large-teil gegen seinen deckel 22,57 h / 2,614 USD: gehalten
+rechenwert des plans 15,95 h / 2,83 USD: unterschritten, weil der umbau 581 s
+  statt 3 h dauerte und die wartezeiten der tor-abbrueche bei gestoppter box lagen
+
+ausserhalb des deckels (README 1.2: stillstand kostet nur die platten und ist
+nicht eingerechnet): die gestoppte zeit der platten, gerechnet in teil 5 mit dem
+zeitpunkt des abbaus.
