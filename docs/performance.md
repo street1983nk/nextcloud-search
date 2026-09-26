@@ -4593,9 +4593,15 @@ Einbettungszyklus mit Entladung legt 30,5 MB dazu, gegen die Schwelle von
 50 MB aus E6 (gehalten). Eine zweite Entladung senkt ihn aber auch nicht: wer
 einmal eingebettet hat, bleibt bei rund 730 bis 760 MB.
 
-Luecke: Spitze der Abtastreihe über beide Zyklen (`abtastreihe-spitze-mb`),
-Grund `rss_digest.py` fand keine Reihe mit dem Präfix `findling-rss` (94c
-Befund 32), Nachfreigabe offen. Die Kennzahlen darüber hängen nicht an ihr.
+**Spitze der Abtastreihe über beide Zyklen (`abtastreihe-spitze-mb`): 1.688 MB**
+(Nachanfahrt vom 26.09.2026, 94c unverändert, Rohdatei
+`rohdaten-nachanfahrt/94c-bodensatz-zyklen.txt`). In der Hauptanfahrt blieb die
+Reihe leer (94c Befund 32), weil `rss_sampler.sh` ohne Ausführungsbit im Index
+stand und sudo ihn nicht startete (behoben in e23780c). Dieselbe Fahrt bestätigt
+die Kennzahlen darüber: A 108,2 MB, C1 729,3 MB, C2 756,7 MB, Bodensatz nach
+Zyklus 1 621,1 MB, Zyklus 2 minus C1 27,4 MB. Die Spitze liegt während der
+Einbettung, mit geladenem Modell, und damit unter der harten Grenze des
+Containers von 2 GiB.
 Zur Lesart der älteren Rohdatei, weil derselbe Feldname dort vorkommt: in
 `docs/measurements/2026-09-v12-messung/rohdaten/94b-grundlast-rueckkehr.txt`
 steht `abtastreihe-spitze-mb=11142026092103`. Der alte Leser hat Datum und
@@ -4633,11 +4639,37 @@ Bildgruppen 52 bis 63 und 50186 bis 50197 tragen paarweise gleiche Größen.
 
 ### Nachtrag vom 26.09.2026: die Kaltstartlatenz mit Trefferpflicht
 
-Luecke: Latenz der ersten kalten Suche mit Treffern, Grund die erste hybride
-Suche nach einem Neustart lädt bei Entladeschalter 0 das Modell selbst und
-reißt dabei den PHP-Deckel, Nachfreigabe offen.
+**Kaltstartlatenz mit Trefferpflicht: 2.617 ms, 26 Treffer** (Nachanfahrt,
+Einwort-Begriff; Hybrid-Fall bleibt als V-22-01 dokumentiert). Gemessen am
+26.09.2026 um 16:45Z mit `95c-kaltstart.sh` unverändert, Begriff `Bescheid`,
+Suchkonto `lasttest`, Entladeschalter 0, gültig im ersten Kaltzyklus
+(Neustart, sync, drop_caches; Rohdateien
+`rohdaten-nachanfahrt/95c-kaltstart-einwort.txt`,
+`m01-langsame-aufrufe-kaltstart-einwort.txt`, `begriff-warm.txt`). Warm
+lieferte derselbe Begriff vorher 26 Treffer bei 2.537 und 1.676 ms.
 
-Gemessen ist, was statt der Zahl kam, in zwei Läufen zu je drei Kaltzyklen
+| Größe | Wert |
+|---|---:|
+| erste kalte Suche, Nutzerroute | **2.617 ms, 26 Treffer** |
+| Bezug v1.2, Ausprägung 3 (zweiwortig, 0 Treffer) | 2.051 ms |
+| M-01-Gegenprobe im Kaltstart-Fenster | 2 Zeilen: `/snippets` 1.510,5 ms, `/search` 1.505,4 ms, je gegen `ceilingMs` 1.500 |
+| unmittelbar folgende zweite Suche | 1.830 ms, **0 Treffer** |
+
+**Was die Zahl enthält.** Eine einwortige Zeile wird allein aus dem Wortindex
+beantwortet, die Suche selbst lädt kein Modell. Die Route für die Auszüge
+(`api/snippets.py`) kennt diese Regel aber nicht: bei Entladeschalter 0 lädt sie
+die Gewichte selbst und endet am Deckel von 1,5 s. Die 2.617 ms sind also die
+Suche mit Treffern plus der gerissene Auszugsaufruf; die Treffer kommen an,
+ihre Auszüge nicht; die Zuordnung der beiden Zeilen folgt ihren Zeitstempeln.
+Die zweite Suche eine Sekunde später endete ebenfalls am Deckel, mit 0
+Treffern, vermutlich weil das Laden der Gewichte noch lief und die zwei Kerne
+belegte; eine Rohdatei, die das direkt zeigt, gibt es nicht. Das ist dieselbe Ursache
+wie V-22-01 (Audit der Phase 22), hier an der Auszugsroute sichtbar, und kein
+neuer Befund des Messwerkzeugs. Die Erwartung E5 (Treffer größer 0, Gegenprobe
+mindestens eine Zeile) hält damit nachträglich, Bericht Abschnitt 6.12,
+Nachtrag.
+
+Die Hauptanfahrt hatte statt der Zahl dies gemessen, in zwei Läufen zu je drei Kaltzyklen
 mit geleertem Seitencache, Begriff „Bescheid Antrag“ (Rohdateien
 `95c-kaltstart.txt`, `95c-kaltstart-lasttest.txt`,
 `m01-langsame-aufrufe-kaltstart-lasttest.txt`):
@@ -4657,7 +4689,8 @@ Nachfolger. Eine unveränderte Nachmessung liefert wieder 0 Treffer. Vor einer
 Nachfreigabe (rund 0,24 USD) steht deshalb eine Wahl des Weges durch den Owner:
 Messung mit eingeschaltetem Entladeschalter, ein einwortiger Begriff, oder
 vorher der zurückgestellte Produktfix (Bericht Abschnitt 6.11). Beides ist
-offen, zugesagt ist keine Nachmessung.
+offen, zugesagt ist keine Nachmessung. *(Stand vor der Nachanfahrt. Der Owner
+hat am 26.09.2026 den einwortigen Begriff gewählt; die Zahl steht oben.)*
 
 ### Nachtrag vom 26.09.2026: Indexgröße und Umbau-Wandzeit bei sechs Sprachfeldern
 
@@ -4766,8 +4799,24 @@ mit batch 8 1.821,4 Tokens je Sekunde, threads 2 mit batch 2 3.450,4 und mit
 batch 8 3.416,2. Der zweite Thread bringt den Faktor 1,87, Batch 8 bringt
 nichts.
 
-Luecke: Speicher je onnx-Kombination (B5), Grund der RAM-Abtaster gegen den
-Bench-Container lieferte 0 Abtastungen (Befund 50), Nachfreigabe offen.
+**Speicher je onnx-Kombination** (Nachanfahrt vom 26.09.2026, `00-wegwerf.sh
+b5` unverändert, `anon` des Bench-Containers im Sekundentakt; Rohdateien
+`rohdaten-nachanfahrt/b5-max-anon-*.txt`, `00-wegwerf-b5.txt`):
+
+| threads | batch | `anon`, höchstens | Abtastungen | Tokens je Sekunde (Nachanfahrt) |
+|---:|---:|---:|---:|---:|
+| 1 | 2 | 542,3 MB | 13 | 1.835,0 |
+| 1 | 8 | 877,3 MB | 49 | 1.809,1 |
+| 2 | 2 | 542,2 MB | 8 | 3.424,0 |
+| 2 | 8 | 877,4 MB | 27 | 3.410,2 |
+
+MB steht hier für 2^20 Byte, wie das Werkzeug es schreibt. **Der Speicher hängt
+an der Batchgröße und nicht an den Threads:** batch 8 kostet rund 335 MB mehr
+als batch 2 und bringt keinen Durchsatz; der zweite Thread kostet keinen
+Speicher und bringt den Faktor 1,87. In der Hauptanfahrt lieferte der Abtaster
+0 Abtastungen (Befund 50), aus demselben Grund wie beim Bodensatz (fehlendes
+Ausführungsbit, behoben in e23780c). Die Durchsatzzahlen der Nachanfahrt liegen
+0,2 bis 0,8 Prozent unter denen der Hauptanfahrt.
 
 **B6, ist der Umbau einkernig?** Ja: 1,03 Kerne im Mittel (Tabelle B1). Der
 Hebel dagegen, Tantivy `num_threads` im Umbauweg, bleibt für v1.4 benannt. Bei
@@ -4794,6 +4843,15 @@ an ihrem Ort als Lücke:
 Zusammen in einer Anfahrt rund 0,34 USD. Jede Nachmessung braucht eine neue
 Freigabe durch den Owner; die Box ist abgebaut, sie begänne mit dem Aufbau aus
 dem Korpus-Snapshot.
+
+**Nachtrag, Nachanfahrt vom 26.09.2026 (Plan 22-13): alle drei Lücken sind
+geschlossen.** Freigegeben mit Deckel 4 h / 0,50 USD, gefahren von 16:35:31Z
+bis 16:57Z, 0,37 Boxstunden, 0,0427 USD. Die Werte stehen oben an ihrem Ort:
+Kaltstartlatenz 2.617 ms mit 26 Treffern (Einwort-Begriff; der Hybrid-Fall
+bleibt als V-22-01 dokumentiert), Spitze der Bodensatz-Abtastreihe 1.688 MB,
+Speicher je onnx-Kombination 542 bis 877 MB. Rohdaten in
+`docs/measurements/2026-09-v13-messung/rohdaten-nachanfahrt/`, Bericht
+Abschnitt 6.15.
 
 ## Reproduzieren
 

@@ -868,6 +868,18 @@ Rohdateien in `rohdaten/`; ihre Auswertung steht in 6.13.
 verfehlte Erwartung ist ein Ergebnis und kein Grund für eine zweite Anfahrt
 (`skripte/00-ablauf.md`, Abschnitt 3).
 
+**Nachtrag zu E5 vom 26.09.2026 (Plan 22-13, Nachanfahrt).** Das Urteil oben
+bleibt stehen: in der Hauptanfahrt ist E5 verfehlt. Die vom Owner nachgefreigegebene
+Nachanfahrt (Weg b aus 6.11, einwortiger Begriff `Bescheid`, Suchkonto
+`lasttest`, Entladeschalter 0) hat E5 in seinem Wortlaut erfüllt:
+`rohdaten-nachanfahrt/95c-kaltstart-einwort.txt` meldet im ersten Kaltzyklus
+**26 Treffer bei 2.617 ms** (`kaltstart-gueltig ja`), gestellt gegen die
+2.051 ms der v1.2, und die Gegenprobe im Kaltstart-Fenster findet **zwei
+Zeilen** (`m01-langsame-aufrufe-kaltstart-einwort.txt`). Urteil der
+Nachanfahrt über E5: **gehalten**, für den einwortigen Fall. Der zweiwortige,
+hybride Fall bleibt als V-22-01 dokumentiert. Einzelheiten und der Befund an der
+Auszugsroute stehen in 6.15.
+
 **Nachtrag zu Abschnitt 2 (W4, Einzelmodus).** Der Satz dort, der
 tesseract-Satz in `docs/performance.md` halte, gilt für den CI-Runner mit
 4 Kernen und ohne Grenze. Auf der Box (B3 single, 6.13) ist ungesetzt
@@ -1017,3 +1029,56 @@ er beschreibt den Stand beim Schreiben. Die Prüfsummen stehen in
 `backend/tests/test_v13_gefahren.py` (`DRIVEN_V13_FASSUNGEN`) und für 92c und
 99d in `backend/tests/test_measurement_scripts.py`
 (`DRIVEN_SUCCESSOR_FASSUNGEN`).
+
+### 6.15 Nachanfahrt (26.09.2026, Plan 22-13)
+
+Freigegeben nach dem Vermerk oben unter „Freigabeweg der Nachanfahrt“, Deckel
+4 h / 0,50 USD, harter Stopp. Rohdaten in `rohdaten-nachanfahrt/`; `rohdaten/`
+der Hauptanfahrt ist unverändert.
+
+**Ablauf.** Aufbau nach Runbook aus dem Korpus-Snapshot, Blöcke 1 bis 13 ohne
+Abweichung am Produkt (`02-vorbedingungen.txt`, `03-aufbau.txt`). LaunchTime
+16:35:31Z. Der A-Record stand vor dem ersten Start des Docker-Dienstes, der
+negative Namenscache der Hauptanfahrt trat nicht auf. Timer absolut auf
+**2026-09-26T20:20:00Z** (LaunchTime plus 4 h minus 15 min Abholreserve),
+zurückgelesen nach dem Setzen, nach dem Neustart in Block 5 und vor 94c
+(`00-timer.txt`). Box-Klon auf 0de526b, `rss_sampler.sh` im Index `100755`.
+Markentor 0 (`90e-marken.txt`). 92d mit dem Abbild der Hauptanfahrt: 0,
+Baumhash-Beweis ja, Bestandstor **52.137 / 44 / 6 bestanden**
+(`92d-wechsel.txt`). Bewaffnung nach Block 11 und 12, `backendReachable true`
+um 16:44:51Z (`bewaffnung.txt`). Der Einwort-Begriff `Bescheid` lieferte warm
+unter `lasttest` 26 Treffer (`begriff-warm.txt`).
+
+| Block | Zeit (UTC) | Rückgabe | Zahl |
+|---|---|---:|---|
+| 95c, `BEGRIFF=Bescheid`, `SUCHKONTO=lasttest`, Schalter 0 | 16:45:30Z bis 16:45:55Z | 0 | erste kalte Suche **2.617 ms, 26 Treffer**, Kaltzyklus 1 gültig; Gegenprobe 2 Zeilen |
+| 92e Frist 120, 94c, 92e Frist 0 | 16:46:22Z bis 16:54:41Z | 0, 0, 0 | `abtastreihe-spitze-mb` **1688**; `zyklus2-minus-c1` 27,4 |
+| `00-wegwerf.sh b5` | 16:54:48Z bis 16:56:30Z | 0 | `b5-max-anon` 542,3 / 877,3 / 542,2 / 877,4 MB, je 8 bis 49 Abtastungen |
+
+**Befund an der Auszugsroute, ohne Abbruch.** Die Gegenprobe zeigt im
+Kaltstart-Fenster `/snippets` mit 1.510,5 ms und `/search` mit 1.505,4 ms,
+beide am Deckel von 1,5 s. Die erste Suche hat ihre 26 Treffer lexikalisch
+geliefert; die Auszugsroute (`api/snippets.py`) kennt die Einwortregel nicht und
+lädt bei Schalter 0 die Gewichte selbst. Die gemessenen 2.617 ms enthalten
+diesen gerissenen Auszugsaufruf. Die Warmsuche von 95c eine Sekunde später
+endete ebenfalls am Deckel, mit 0 Treffern. Das ist die Ursache von V-22-01 an
+einer zweiten Route; ein Produktfix gehört wie V-22-01 in den Backlog und nicht
+in diese Phase (`deferred-items.md`).
+
+**Laufende und Kosten.** Abgeholt 16:56Z, `aws_box.sh destroy` 16:56:57Z bis
+16:57:38Z mit 0, ohne Ende-Snapshot. Instanz, Volume, Security Group und
+Schlüsselpaar gegen die API gelöscht, A-Record entfernt, über 17 Regionen 0
+Ressourcen außer dem Korpus-Snapshot (`07-abbau.txt`). Uptime 0,37 h,
+**0,0427 USD** (`93-kosten.txt`). **Deckel 4 h / 0,50 USD: gehalten**, 3,63 h
+und 0,457 USD darunter. Der Timer wurde nicht erreicht.
+
+**Eine Abweichung, ohne Folge für die Zahlen.** `00-typwechsel.sh vorpruefung`
+schreibt ohne gesetztes `OUT` nach `rohdaten/` und hat dort an
+`00-typwechsel.txt` vier Zeilen angehängt. Die Zeilen sind nach
+`rohdaten-nachanfahrt/00-typwechsel.txt` übernommen und die Datei der
+Hauptanfahrt ist mit `git checkout` auf ihren committeten Stand zurückgesetzt
+worden, bevor irgendetwas committet wurde; `git status --porcelain` über
+`rohdaten/` war danach und vor jedem Commit leer.
+
+**Folge.** Die drei Lücken aus 6.9 sind geschlossen, die Werte stehen in
+`docs/performance.md`. MESS-07 ist damit Ende zu Ende geliefert.
