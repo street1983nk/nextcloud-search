@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: executing
-stopped_at: Plan 22-06 abgeschlossen (Push freigegeben und erfolgt, W4 F4 3,955, 92d Phase B im CI gruen); naechster Schritt 22-07 Rechenblatt, Owner-Stopp
-last_updated: "2026-09-26T04:30:00.000Z"
-last_activity: 2026-09-26, Plan 22-06 abgeschlossen (Push, W4, probe-92d)
+stopped_at: Plan 22-07 abgeschlossen (Owner-Freigabe 26.09., Weg a, Deckel 24 h / 3,76 USD, dismax-Regel eingefroren); naechster Schritt 22-08 Anfahrt
+last_updated: "2026-09-26T06:00:00.000Z"
+last_activity: 2026-09-26, Plan 22-07 abgeschlossen (Rechenblatt, Owner-Entscheide, Laufwerte)
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 59
-  completed_plans: 53
-  percent: 90
+  completed_plans: 54
+  percent: 92
 ---
 
 # Project State
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 ## Current Position
 
 Phase: 22 (messanfahrt-bl-f03), EXECUTING
-Plan: 7 of 12
-Status: 22-06 abgeschlossen. Naechster Plan 22-07 (Rechenblatt, Owner-Checkpoint vor Boxstart); danach Owner-Stopp 22-12 Abnahme. Keine Boxminute ohne Freigabezeile
+Plan: 8 of 12
+Status: 22-07 abgeschlossen, Anfahrt freigegeben (Freigabezeile 26.09.2026 committet). Naechster Plan 22-08 (Vorbedingungen, Aufbau, unbeaufsichtigter Lauf); danach Owner-Stopp 22-12 Abnahme
 
 Aktueller Stand: PHASE 21 KOMPLETT 25.09.2026 (9/9 Plaene, goal-backward verified passed 9/9,
 phase.complete gelaufen, STATE von Hand nachgezogen). Niederlaendische Komposita sind Ende-zu-
@@ -242,7 +242,17 @@ Progress: [█████████░] 90% (53 von 59 Plänen, 5 von 7 Phase
 
 ## Naechster Schritt
 
-**22-07 ausführen** (Rechenblatt, Owner-Checkpoint: 44/6-Weg, Deckelvariante, dismax-Regel). OWNER-STOPP vor Boxstart.
+**22-08 ausführen** (Vorbedingungen, Aufbau aus dem Korpus-Snapshot, unbeaufsichtigter Lauf mit hartem Timer, Abholen).
+22-07 ist fertig: Owner "machen wir nach deiner empfehlung" (26.09.2026) auf "Weg a, Deckel stunden, dismax vorschlag,
+F4 bestaetigt, freigegeben". Laufwerte (README Abschnitt 4): DECKEL_MINUTEN=1354, DECKEL_REST_MINUTEN=86,
+B4_GEPLANT=ja, EINZELWEG=a; Deckel 24 h / hoechstens 3,76 USD. dismax-Regel ohne Ermessen in 00-ablauf.md
+Abschnitt 6 und E10 (RBO@10-Median +0,05, kein Sprachfall-Eigenrang schlechter, Latenz hoechstens 1,20-fach;
+beide tie-Werte, Gleichstand 0.0). Commits 00c5598, 9ee4e70. 00-lauf.sh unveraendert (kein teilweg).
+Fuer 22-08: in P0 festhalten, ob die Sprachfall-Dateien im Snapshot-Bestand stehen (sonst MESS-09 nach der
+Regel "nicht entschieden", deferred-items.md 22-07). Preis-API fuer das Konto gesperrt (kein pricing:GetProducts),
+Saetze von Hand aus der oeffentlichen Preiskarte gelesen.
+
+Vorher: 22-07 ausführen (Rechenblatt, Owner-Checkpoint: 44/6-Weg, Deckelvariante, dismax-Regel).
 22-06 ist fertig: Push 61255f3..59f05fe (Owner "weiter" 26.09.), alle CI-Laeufe gruen. W4 im arm64-Runner
 (measure.yml Lauf 4, 36216002856): F4 3,955, D-03 angewandt, B4 gefahren (B4_GEPLANT=ja), K1 nicht
 ausgeloest; B7 22,99 MB nativ arm64. Box-Digest-Kandidat sha256:40ca8c2b...3e3e (docker.yml Lauf 174,
@@ -353,7 +363,7 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
 |-------|-------|-------|----------|
 | 20 | 9 | - | - |
 | 21 | 9 | 1 Tag | - |
-| 22 | 6/12 | 12 min (22-01), 30 min (22-02), 35 min (22-03), 25 min (22-04), 75 min (22-05), 35 min (22-06 Task 3 und Probe) | - |
+| 22 | 7/12 | 12 min (22-01), 30 min (22-02), 35 min (22-03), 25 min (22-04), 75 min (22-05), 35 min (22-06 Task 3 und Probe), 25 min (22-07 Task 3) | - |
 
 ## Accumulated Context
 
@@ -614,6 +624,10 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
 
 ### Termine und Owner-Checkpoints
 
+- **ERLEDIGT 26.09.:** Checkpoint 22-07, Anfahrt freigegeben (Weg a, Deckel Variante Stunden
+  24 h / 3,76 USD, dismax-Regel = Research-Vorschlag, F4 bestaetigt). Vermerk in 22-07-PLAN.md
+  unter `<result>` und in 00-ablauf.md Abschnitt 6.
+
 - **ERLEDIGT 25.09.:** Sichtprobe zu Plan 20-01 vom Owner abgenommen (Antwort "weiter"). Die
   Reparatur der bestehenden de/fr-Kataloge ist freigegeben, Phase 20 laeuft ohne offene
   Owner-Frage weiter. Vermerk in 20-01-SUMMARY.md, Zeile "OWNER-GO 25.09.2026".
@@ -667,6 +681,9 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
 
 ## Deferred Items
 
+- 22-07: Sprachfall-Eigenrang der dismax-Regel hat in 98d keine eigene Zeile; Zuordnung der eigenen
+  Datei aus dem Bestand der Box, sonst MESS-09 "nicht entschieden". Details in deferred-items.md.
+
 - 22-02: 92c endet bei einem unerwarteten Abbruch im Phase-B-Block mit 0 (Klasse L-03); in
   92d und 92e abgefangen, 92c selbst unverändert. Details in
   .planning/phases/22-messanfahrt-bl-f03/deferred-items.md.
@@ -675,6 +692,6 @@ Sonst keine (die drei Debug-Sessions aus v1.1 sind am 21.09.2026 formal auf reso
 
 ## Session Continuity
 
-Last session: 2026-09-26T04:30:00.000Z
-Stopped at: Plan 22-06 abgeschlossen
-Resume file: .planning/phases/22-messanfahrt-bl-f03/22-07-PLAN.md
+Last session: 2026-09-26T06:00:00.000Z
+Stopped at: Plan 22-07 abgeschlossen
+Resume file: .planning/phases/22-messanfahrt-bl-f03/22-08-PLAN.md
