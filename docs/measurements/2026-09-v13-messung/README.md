@@ -604,3 +604,80 @@ und 3, B1):
 - **B2:** gefahren. **B3:** gefahren (0). **B5:** Befund 50: Durchsatz in
   allen vier Kombinationen gelesen, der RAM-Abtaster lieferte 0 Abtastungen
   (`b5-max-anon ... unlesbar`). **B4:** vorbereitet, folgt in 22-09.
+
+### 6.7 B4 auf m7g.4xlarge (26.09.2026, Plan 22-09)
+
+**Gefahren**, nach D-03 (`B4_GEPLANT=ja`, F4 = 3,955) und im Restdeckel:
+Variante Stunden, 24 h minus 2,02 h m7g.large, der B4-Posten mit 1,44 h passt.
+`00-typwechsel.sh hin` stellte den Typ ohne Rückfall auf m7g.4xlarge
+(`typ-ist m7g.4xlarge`, 13:20:59Z). `DECKEL_REST_MINUTEN` stand auf 84, das
+sind 86 Minuten ab dem Start abzüglich der schon verstrichenen, und
+`00-lauf.sh b4` setzte den Timer auf 14:45:42Z und las ihn zurück. Das liegt
+vor dem Deckelende 14:46:56Z. Neun Container wurden angehalten, der
+Wegwerf-Block lief ohne laufenden Container mit 16 Kernen und ohne
+`mem`-Grenze (`b4-grenze keine`, nicht gekürzt). `00-wegwerf.sh b4` endete mit
+**0** (`B4-FERTIG` 13:34:39Z). Nach der Abholung hat sich die Box selbst
+abgeschaltet. `00-typwechsel.sh zurueck` stellte den Typ auf m7g.large zurück
+(`b4-laufzeit-s 1069`).
+
+| N (W3, cpuset 0 bis N-1) | `pages_per_second_median` | T (embed.bench, batch 2, seq 512) | `tokens_per_second_p50` |
+|---:|---:|---:|---:|
+| 1 | 0,263 | 1 | 2.242,2 |
+| 2 | 0,526 | 2 | 4.283,7 |
+| 4 | 1,052 | 4 | 7.609,6 |
+| 8 | 2,102 | 8 | 13.484,8 |
+| 12 | 3,150 | | |
+| 16 | 4,172 | | |
+
+Rohdaten: `b4-slots-{1,2,4,8,12,16}.txt`, `b4-bench-{1,2,4,8}.txt` und
+`00-wegwerf-b4.txt`. Ausgewertet wird in 22-10/22-11.
+
+### 6.8 Kosten und Deckel
+
+Die Rechnung steht in `rohdaten/93-kosten-und-verbleib.txt`. Der B4-Anteil ist
+von Hand aus den Stempeln gerechnet und nicht aus
+`BOX_LAST_UPTIME_COST_USD` (Pitfall 9).
+
+| Posten | Stunden | USD netto |
+|---|---:|---:|
+| m7g.large, sechs Uptimes | 2,02 | 0,2340 |
+| B4 auf m7g.4xlarge, 1.069 s | 0,30 | 0,2376 |
+| **laufend gesamt** | **2,32** | **0,4716** |
+| Platten bei gestoppter Box, 6,37 h (obere Schranke, außerhalb des Deckels) | | 0,0831 |
+| **mit Stillstand** | | **0,5547** |
+
+**Deckel D-01, Variante Stunden, 24 h / 3,76 USD: gehalten**, 21,68 h und
+3,29 USD darunter. Der B4-Posten (86 min / 1,147 USD) ist mit 17,8 min
+gehalten. Der Rechenwert des Plans, 15,95 h / 2,83 USD, ist deutlich
+unterschritten. Der Umbau dauerte 581 s statt der geplanten 3 h, und die
+Wartezeit an den Tor-Abbrüchen lag bei gestoppter Box.
+
+**Abbau** (`rohdaten/07-abbau.txt`): 13:41:10Z, `aws_box.sh destroy` mit 0,
+ohne Ende-Snapshot. Instanz, Datenvolume, Security Group und Schlüsselpaar
+sind gegen die API als gelöscht zurückgelesen (`InvalidKeyPair.NotFound`). Der
+Tag-Sweep ist sauber, und der A-Record ist entfernt. Über 17 Regionen stehen 0
+Instanzen, 0 Volumes, 0 Adressen und 0 Schlüsselpaare. Es bleibt allein der
+Korpus-Snapshot (`purpose=findling-corpus-keep`, 2,79 bis 2,99 USD im Monat),
+Wiedervorlage beim Milestone-Close.
+
+### 6.9 Luecken
+
+Kein Deckel ist gerissen, kein Block fiel durch einen harten Stopp aus, und
+kein Block wurde gestrichen. Drei Zahlen fehlen trotzdem, weil ihr Werkzeug
+einen Befund statt einer Zahl geliefert hat (6.6):
+
+| Fehlende Messung | Anforderung | Stand | Nachmessung, Planwert |
+|---|---|---|---|
+| Kaltstartlatenz mit Trefferpflicht der ersten Suche, damit auch die M-01-Gegenprobe im Kaltstart-Fenster | **MESS-07, Pflichtzahl** (Erfolgskriterium 2) | 95c zweimal 48, kalt 0 Treffer, warm 26; die Ursache ist offen | Aufbau 1 h 30 min und Kaltstart 20 min, mal 1,15 gleich 2,11 h, rund **0,24 USD** |
+| `abtastreihe-spitze-mb` des Bodensatzes | MESS-07, Nebenzahl (`zyklus2-minus-c1 30.5` liegt vor) | 94c Befund 32, Leser unlesbar | Aufbau und Bodensatz, 2,30 h, rund 0,27 USD |
+| RAM je onnx-Kombination | B5 (BL-F04-Mitmessliste) | Befund 50, Durchsatz aller vier Kombinationen liegt vor, der Abtaster lieferte 0 Abtastungen | Aufbau und B5, 1,96 h, rund 0,23 USD |
+
+Zusammen in einer Anfahrt: 2,91 h, rund 0,34 USD. Die Box ist abgebaut, jede
+Nachmessung beginnt also mit dem Aufbau aus dem Korpus-Snapshot. Ohne geklärte
+Ursache des leeren Kaltstarts würde eine Nachmessung von 95c voraussichtlich
+wieder 0 Treffer liefern. Die Ursache gehört deshalb zuerst in die Auswertung
+(22-10/22-11).
+
+**Nachfreigabe durch den Owner noetig (D-02)** für die Pflichtzahl
+Kaltstartlatenz mit Trefferpflicht. Die zwei übrigen Lücken sind keine
+Pflichtzahlen. Über ihre Nachmessung entscheidet der Owner mit.

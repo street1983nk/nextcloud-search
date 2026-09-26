@@ -1,0 +1,68 @@
+abbau der v1.3-messbox, plan 22-09 task 2, nach runbook abschnitt 8 ab schritt 2
+gefahren 2026-09-26 nach B4 und nach der committeten und gepushten
+kostenrechnung (93-kosten-und-verbleib.txt, commit 38f2307, vor dem abbau auf origin).
+
+geheimnisregel: keine ip-adresse, keine lebende instanz-, volume-, gruppen-,
+snapshot- oder kontokennung, kein pfad der entwicklungsmaschine.
+
+-- schritt 1: endmessungen --
+2026-09-26T13:06:26Z erledigt im ablauf (90-bestand.txt, 92c, 93-nullstand.txt,
+  00-FERTIG), B4 in 00-wegwerf-b4.txt; nichts mehr an der laufenden maschine offen.
+
+-- schritt 2: kosten- und schadenshistorie --
+2026-09-26T13:39Z 93-kosten-und-verbleib.txt teil 1 bis 4 geschrieben (alle zeilen
+  mit kosten und laufzeiten aus box.env, keine mit kennung), committet und gepusht
+  als 38f2307, vor dem ersten zerstoerenden aufruf.
+
+-- schritt 3 und 4: stop und snapshot --
+2026-09-26T13:38:48Z box gestoppt (00-typwechsel.sh zurueck, typ m7g.large zurueckgelesen).
+kein ende-snapshot, owner-freigabe (README 1.5, abbau ohne ende-snapshot): die B2-dateien
+  gehoeren nicht in den korpus-snapshot, und 92c hat das volume geleert (93-nullstand.txt).
+  schritt 4 entfaellt damit.
+
+-- schritt 5: sicherung von box.env --
+2026-09-26T13:40Z box.env kopiert in das zustandsverzeichnis ausserhalb des repos
+  (<zustandsverzeichnis>/box.env.vor-abbau-2026-09-26), als FINDLING_STATE_BACKUP benannt.
+
+-- schritt 6: der abbau selbst --
+2026-09-26T13:40:43Z FINDLING_STATE_BACKUP=<sicherung> aws_box.sh destroy
+  the history of this box is backed up in <sicherung>
+  terminating instance <instanz>
+  deleting volume <volume>
+  deleting security group <sg>
+  deleting key pair findling-loadtest
+  instance <instanz> is gone, verified against the api
+  volume <volume> is gone, verified against the api
+  security group <sg> is gone, verified against the api
+  key pair findling-loadtest is gone, verified against the api
+  expected to outlive this box, tagged purpose=findling-corpus-keep: <korpus-snapshot>
+  volume <volume> carries purpose=findling-phase5, the resource itself is gone
+  nothing that carries purpose=findling-phase5 exists any more
+  every resource of this run is gone and box.env is removed
+2026-09-26T13:41:10Z destroy-ende rueckgabe 0
+schluesselpaar zurueckgelesen 2026-09-26T13:41:20Z: describe-key-pairs --key-names
+  findling-loadtest antwortet InvalidKeyPair.NotFound (vorbedingung 10 der naechsten
+  anfahrt erfuellt), describe-key-pairs in eu-central-1: 0 paare
+a-record 2026-09-26T13:43:26Z loadtest.infranode.dev ueber die api des zonenverwalters
+  entfernt (delete success True); zurueckgelesen: 0 eintraege fuer den namen
+
+-- schritt 7: tag-sweep ueber beide tagwerte, eu-central-1, 2026-09-26T13:41:20Z --
+purpose=findling-phase5: 2 treffer, instance <instanz> und volume <volume>, beide die
+  gerade abgebauten; der tag-index laeuft nach (runbook schritt 7). zurueckgelesen nach
+  art: 0 nicht terminierte instanzen, 0 volumes in der region, also kein ueberbleibsel.
+purpose=findling-corpus-keep: 1 treffer, snapshot <korpus-snapshot>, der gewollte.
+
+-- schritt 8: kostenueberblick ueber alle 17 freigeschalteten regionen, 13:41Z --
+je region gelesen: instanzen (pending, running, stopping, stopped, shutting-down),
+  volumes, elastische adressen, schluesselpaare, eigene snapshots
+ap-south-1 eu-north-1 eu-west-3 eu-west-2 eu-west-1 ap-northeast-3 ap-northeast-2
+ap-northeast-1 ca-central-1 sa-east-1 ap-southeast-1 ap-southeast-2 us-east-1
+us-east-2 us-west-1 us-west-2: je 0 / 0 / 0 / 0 / 0
+eu-central-1: 0 instanzen, 0 volumes, 0 adressen, 0 schluesselpaare, 1 snapshot
+  (<korpus-snapshot>, completed, 60 GB), 0 eigene abbilder
+
+-- schritt 9: was bewusst stehen bleibt --
+korpus-snapshot <korpus-snapshot>, tag purpose=findling-corpus-keep, 2,79 bis 2,99 USD
+  je monat; wiedervorlage beim milestone-close (runbook schritt 9).
+die sicherung von box.env und die kontopasswoerter, ausserhalb des repos.
+sonst nichts.

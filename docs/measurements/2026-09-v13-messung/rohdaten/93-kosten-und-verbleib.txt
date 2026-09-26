@@ -54,3 +54,16 @@ rechenwert des plans 15,95 h / 2,83 USD: unterschritten, weil der umbau 581 s
 ausserhalb des deckels (README 1.2: stillstand kostet nur die platten und ist
 nicht eingerechnet): die gestoppte zeit der platten, gerechnet in teil 5 mit dem
 zeitpunkt des abbaus.
+
+-- 5 nach dem abbau (angehaengt 2026-09-26, 07-abbau.txt) --
+abbau 2026-09-26T13:41:10Z, aws_box.sh destroy rueckgabe 0
+platten gestoppt: systemplatte ab 04:59:42Z, datenvolume ab 05:01:45Z, bis 13:41:10Z,
+  zusammen hoechstens 8,69 h mal 100 GB, davon 2,32 h in den laufenden saetzen;
+  gestoppt 6,37 h mal 0,013041 USD/h = 0,0831 USD (obere schranke)
+gesamt-mit-stillstand 2,32 h laufend 0,5547 USD (0,4716 laufend plus 0,0831 platten)
+der deckel D-01 bleibt davon unberuehrt (README 1.2, 4): 24 h / 3,76 USD gehalten.
+verbleib 0 Instanzen, 0 Volumes, 0 Adressen, 0 Schluesselpaare
+  (zurueckgelesen 13:41:20Z ueber 17 regionen; schluesselpaar findling-loadtest
+  InvalidKeyPair.NotFound; a-record entfernt, 0 eintraege)
+bleibt: <korpus-snapshot> (purpose=findling-corpus-keep, 60 GB, completed),
+  2,79 bis 2,99 USD je monat, wiedervorlage beim milestone-close
