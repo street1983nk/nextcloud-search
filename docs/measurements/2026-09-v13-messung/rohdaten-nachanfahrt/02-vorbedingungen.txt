@@ -1,0 +1,49 @@
+die vorbedingungen ohne box-zeit, abschnitt 3 des runbooks, nachanfahrt plan 22-13
+abgearbeitet 2026-09-26 zwischen 16:33Z und 16:35Z auf der entwicklungsmaschine,
+region eu-central-1, bevor die erste kostenpflichtige ressource entstand
+
+geheimnisregel wie in rohdaten/02-vorbedingungen.txt: keine adresse, keine lebende
+kennung, kein passwortinhalt, keine kontokennung. pfade dieser maschine stehen als
+platzhalter.
+
+freigabe vor allem anderen gelesen: README.md der anfahrt, zeile
+  Nachanfahrt freigegeben: 26.09.2026, Deckel 4 h / 0,50 USD (harter Stopp)
+mit dem zweistufigen freigabevermerk darueber (commit 0de526b, gepusht vor dem aufbau).
+
+-- die zeilen, je eine mit ergebnis --
+01 CI_LAUF: erfuellt im sinne des tages. die laeufe auf 33e4fc6 sind gruen (Python gates
+   36253334461, Integration 36253334499, Multi-arch image 36253334446, Resilience
+   36253334457, HaRP deploy 36253334520). kein werkzeug dieser anfahrt liest CI_LAUF.
+02 sicherung der systemplatte: erfuellt. <zustandsverzeichnis>/systemplatte-2026-09/home-ubuntu-work.tar.gz,
+   sha256 fad3e7ce6c7f73cc85a108ce6511941326435934e87cce0c6df5f2d0a6a3584a, gleich der hauptanfahrt.
+   die passwortdateien entstehen aus <zustandsverzeichnis>/passwoerter-2026-09/konten.env.
+03 aws-anmeldung: erfuellt. die zwei variablen aus einer datei ausserhalb des arbeitsbaums
+   in die umgebung gelesen; kein wert in einem argument oder protokoll.
+04 lesende snapshot-probe: erfuellt. State completed, Progress 100%, VolumeSize 60, Encrypted False.
+05 tag des snapshots: erfuellt. purpose=findling-corpus-keep, Name=findling-corpus-2026-09.
+06 werkzeuge: erfuellt. aws-cli/2.36.39, gh 2.92.0, Python 3.13.1, uv 0.11.7, jq-1.8.1, OpenSSH_10.3p1.
+07 jq auf der box: in block 8 mit docker.io installiert (jq-1.7).
+08 dns-zugang: erfuellt. zugang des betreiber-werkzeugkastens (ausserhalb des arbeitsbaums),
+   token active; fuer den namen stand vorher kein eintrag in der zone (0 records).
+09 deckel freigegeben: erfuellt, zeile oben. 4 boxstunden, 0,50 usd, harter stopp.
+10 schluesselpaar findling-loadtest in aws: InvalidKeyPair.NotFound, nichts zu loeschen.
+11 alte .pub: privater teil und .pub der hauptanfahrt (paar in aws geloescht) vor block 2
+   beiseite gelegt (endung .alt-2026-09-26); block 2 schreibt beide teile neu.
+12 herkunft des arbeitsbaums: klon https://github.com/street1983nk/nextcloud-search.git nach
+   /home/ubuntu/work/nextcloud-search, zielcommit 0de526b (kopf von main = origin/main, nach
+   e23780c, traegt also das ausfuehrungsbit von rss_sampler.sh), core.fileMode false, chmod +x
+   in den drei werkzeugverzeichnissen. zwischen 471a1b3 (klon der hauptanfahrt) und 0de526b
+   aendert sich unter backend/src, php, scripts und testdata nur der modus von
+   scripts/ops/rss_sampler.sh; das abbild der hauptanfahrt
+   (sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e) bleibt das gemessene,
+   der beweis ist der baumhash in 92d.
+13 konfigurationstexte docker und containerd: wie in der hauptanfahrt, vor dem ersten daemon-start.
+14 FINDLING_LOAD_PASSWORD: entfaellt, kein block dieser anfahrt liest die variable.
+15 eigene oeffentliche adresse: aus dem adressdienst gelesen und als ipv4 geparst; block 1 setzt
+   die ssh-regel darauf (<eigene-adresse>/32).
+16 00-typwechsel.sh vorpruefung: nach block 4 gefahren, siehe 03-aufbau.txt.
+vorab geprueft, lesend: in eu-central-1 keine instanz, kein volume und keine security group
+mit dem namen findling-loadtest.
+
+-- bilanz --
+erfuellt, abbruch keiner.

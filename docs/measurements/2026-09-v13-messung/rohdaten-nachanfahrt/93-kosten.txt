@@ -1,0 +1,18 @@
+kosten der nachanfahrt, plan 22-13, von hand aus uptime mal gepinntem satz
+geheimnisregel: keine kennung, kein pfad.
+
+uptime: LaunchTime 2026-09-26T16:35:31Z bis destroy-ende 16:57:38Z (obere schranke,
+terminiert wurde um 16:56:57Z und spaeter), 1.327 s = 0,3686 h. eine uptime, kein stopp,
+kein typwechsel.
+
+saetze (aws_box.sh status, gepinnte oeffentliche on-demand-saetze wie in der hauptanfahrt):
+  m7g.large                 0,097800 usd/h   x 0,3686 h = 0,0361 usd
+  100 gb gp3 (40 root + 60) 0,013041 usd/h   x 0,3686 h = 0,0048 usd
+  oeffentliche adresse      0,005000 usd/h   x 0,3686 h = 0,0018 usd
+  gesamt netto                                            0,0427 usd
+
+deckel 4 h / 0,50 usd: gehalten, 3,63 h und 0,457 usd darunter.
+der planwert der nachfreigabe (2,91 h, rund 0,34 usd) ist unterschritten: der aufbau lief
+ohne abweichung in 9 minuten, die drei bloecke in 11 minuten.
+nach dem abbau kostet allein der korpus-snapshot weiter (purpose=findling-corpus-keep,
+wie vor der anfahrt, wiedervorlage beim milestone-close).

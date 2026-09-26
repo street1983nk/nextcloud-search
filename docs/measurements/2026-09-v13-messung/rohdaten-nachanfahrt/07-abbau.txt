@@ -1,0 +1,45 @@
+abbau der nachanfahrt, plan 22-13 task 5, nach runbook abschnitt 8
+geheimnisregel: keine ip-adresse, keine lebende instanz-, volume-, gruppen-, snapshot-
+oder kontokennung, kein pfad der entwicklungsmaschine.
+
+-- bloecke dieser anfahrt, auf der box --
+95c (einwort)  16:45:30Z bis 16:45:55Z  rueckgabe 0
+92e ttl 120    16:46:22Z bis 16:46:41Z  rueckgabe 0
+94c            16:46:49Z bis 16:54:04Z  rueckgabe 0
+92e ttl 0      16:54:17Z bis 16:54:41Z  rueckgabe 0, danach backendReachable true, vorrat 0
+b5             16:54:48Z bis 16:56:30Z  rueckgabe 0 (B5-FERTIG)
+abholung       16:56Z, alle 19 dateien der box nach rohdaten-nachanfahrt/, ohne
+               eine handgeschriebene datei zu ueberschreiben.
+
+-- kein ende-snapshot --
+der korpus-snapshot bleibt unveraendert (plan 22-13). 94c hat 24 dateien hochgeladen und
+wieder geloescht; sie gehoeren nicht in den korpus.
+
+-- der abbau selbst --
+2026-09-26T16:56:57Z FINDLING_STATE_BACKUP=<sicherung> aws_box.sh destroy
+  terminating instance <instanz>
+  deleting volume <volume>
+  deleting security group <sg>
+  deleting key pair findling-loadtest
+  instance, volume, security group und key pair: is gone, verified against the api
+  expected to outlive this box, tagged purpose=findling-corpus-keep: <korpus-snapshot>
+  nothing that carries purpose=findling-phase5 exists any more
+  every resource of this run is gone and <sicherung> is removed
+2026-09-26T16:57:38Z destroy-ende rueckgabe 0
+a-record 2026-09-26T16:57:5xZ ueber die api des zonenverwalters entfernt (success true),
+  zurueckgelesen: 0 eintraege fuer den namen.
+schluesselpaar zurueckgelesen 16:57:57Z: InvalidKeyPair.NotFound.
+
+-- tag-sweep, eu-central-1, 16:58Z --
+describe-tags purpose=findling-phase5: instance und volume, die gerade abgebauten; der
+  tag-index laeuft nach. zurueckgelesen nach art: instanz terminated, 0 volumes.
+describe-tags purpose=findling-corpus-keep: 1 snapshot, der gewollte, State completed.
+(die tagging-api resourcegroupstaggingapi ist fuer das konto nicht freigegeben,
+AccessDenied; der sweep lief deshalb ueber describe-tags.)
+
+-- kostenueberblick ueber alle 17 regionen, 16:58Z --
+instanzen (pending bis shutting-down) / volumes / adressen / schluesselpaare / eigene snapshots:
+ap-south-1 eu-north-1 eu-west-3 eu-west-2 eu-west-1 ap-northeast-3 ap-northeast-2
+ap-northeast-1 ca-central-1 sa-east-1 ap-southeast-1 ap-southeast-2 us-east-1 us-east-2
+us-west-1 us-west-2: je 0 / 0 / 0 / 0 / 0
+eu-central-1: 0 / 0 / 0 / 0 / 1 (der korpus-snapshot)

@@ -1,0 +1,373 @@
+wechsel-vorlauf 2026-09-26T16:40:58Z
+abbild: ghcr.io/street1983nk/findling_backend@sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+repo: /home/ubuntu/work/nextcloud-search
+abbild-digest-gefordert sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+=== 1. Wie viele Nextcloud-Instanzen laufen an diesem Docker-Dienst ===
+-- jeder laufende Container, damit die Zahl darunter nachpruefbar ist --
+nc_app_findling_backend  ghcr.io/street1983nk/findling_backend:dev  Up 2 minutes
+findling-registry  registry:2  Up 2 minutes
+nextcloud-aio-apache  ghcr.io/nextcloud-releases/aio-apache:latest  Up 2 minutes (healthy)
+nextcloud-aio-nextcloud  ghcr.io/nextcloud-releases/aio-nextcloud:latest  Up 2 minutes (healthy)
+nextcloud-aio-redis  ghcr.io/nextcloud-releases/aio-redis:latest  Up 2 minutes (healthy)
+nextcloud-aio-database  ghcr.io/nextcloud-releases/aio-postgresql:latest  Up 2 minutes (healthy)
+nextcloud-aio-harp  ghcr.io/nextcloud-releases/aio-harp:latest  Up 2 minutes (healthy)
+nextcloud-aio-notify-push  ghcr.io/nextcloud-releases/aio-notify-push:latest  Up 2 minutes (healthy)
+nextcloud-aio-mastercontainer  nextcloud/all-in-one:latest  Up 2 minutes (healthy)
+nextcloud-instanzen 1
+=== 2. Der Arbeitsbaum und die Kopie der info.xml, vor dem Pull ===
+die Fassung dieses Baums: <version>1.2.0</version>
+der image-tag dieses Baums: <image-tag>1.2.0</image-tag>
+Hinweis: der image-tag ist nicht 1.1.0; das sed unten stellt, was dort steht, auf dev
+			<registry>ghcr.io</registry>
+			<image>street1983nk/findling_backend</image>
+			<image-tag>dev</image-tag>
+die Kopie bleibt als ../rohdaten-nachanfahrt/92d-info-box.xml liegen, damit der Bericht zeigen kann, womit registriert wurde
+-- und der Arbeitsbaum muss von alldem unberuehrt sein (T-10-18) --
+arbeitsbaum-unberuehrt ja
+=== 3. Das Abbild, per Digest gezogen und nicht ueber :dev ===
+ghcr.io/street1983nk/findling_backend@sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e: Pulling from street1983nk/findling_backend
+74832724a48f: Pulling fs layer
+5613211afab8: Pulling fs layer
+6cf65b1158ad: Pulling fs layer
+5d4421a5db43: Pulling fs layer
+a31568c11db1: Pulling fs layer
+50a5effddda0: Pulling fs layer
+4c72d84f2937: Pulling fs layer
+2eb73f93cbef: Pulling fs layer
+fe26060e8c7a: Pulling fs layer
+a06e9c046ff4: Pulling fs layer
+44136fa355b3: Already exists
+6a0d68f90d52: Download complete
+74832724a48f: Download complete
+5613211afab8: Download complete
+4c72d84f2937: Download complete
+a06e9c046ff4: Download complete
+2eb73f93cbef: Download complete
+fe26060e8c7a: Download complete
+5613211afab8: Pull complete
+a31568c11db1: Download complete
+6cf65b1158ad: Download complete
+50a5effddda0: Download complete
+6cf65b1158ad: Pull complete
+5d4421a5db43: Download complete
+5d4421a5db43: Pull complete
+a31568c11db1: Pull complete
+50a5effddda0: Pull complete
+4c72d84f2937: Pull complete
+a06e9c046ff4: Pull complete
+2eb73f93cbef: Pull complete
+fe26060e8c7a: Pull complete
+74832724a48f: Pull complete
+Digest: sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+Status: Downloaded newer image for ghcr.io/street1983nk/findling_backend@sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+ghcr.io/street1983nk/findling_backend@sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+Id=sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e Arch=arm64 Created=2026-09-25T16:46:09.97812468Z Digest=ghcr.io/street1983nk/findling_backend@sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+abbild-digest-ist sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+abbild-id-ist sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+abbild-digest-gleich ja
+=== 4. Der Baumhash, als eigener Schritt mit eigener Rohdatei ===
+1 of 3: the package inside the image
+2 of 3: the package in the working tree
+3 of 3: the php half in the working tree
+baumhash-start 2026-09-26T16:41:09Z
+abbild: ghcr.io/street1983nk/findling_backend@sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+digest=ghcr.io/street1983nk/findling_backend@sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e arch=arm64 created=2026-09-25T16:46:09.97812468Z
+repo: /home/ubuntu/work/nextcloud-search
+=== The tree hash of the package INSIDE the image ===
+dateien: 57
+baumhash: 728461aceae56b8433a27cca6005b73303362733fb5973c9f6da4954dbcceda2
+=== The tree hash of the package in the working tree ===
+dateien: 57
+baumhash: 728461aceae56b8433a27cca6005b73303362733fb5973c9f6da4954dbcceda2
+=== The tree hash of the php half in the working tree ===
+dateien: 68
+baumhash: a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab6a8abba
+=== The verdict ===
+abbild-baumhash: 728461aceae56b8433a27cca6005b73303362733fb5973c9f6da4954dbcceda2
+arbeitsbaum-baumhash: 728461aceae56b8433a27cca6005b73303362733fb5973c9f6da4954dbcceda2
+baumhash-gleich ja
+baumhash-ende 2026-09-26T16:41:09Z
+40B-BAUMHASH-FERTIG
+40b-baumhash-rueckgabewert 0
+baumhash-zeilen 3 (drei werden erwartet)
+baumhash-gleich ja
+baumhash-beweis ja
+=== 5. Was das Abbild fuer die semantische Haelfte und fuer die OCR mitbringt ===
+-- das Modellverzeichnis --
+total 136992
+drwxr-xr-x 2 root root      4096 Sep 25 16:46 .
+drwxr-xr-x 1 root root      4096 Sep 25 16:46 ..
+-rw-r--r-- 1 root root       653 Sep 25 16:46 config.json
+-rw-r--r-- 1 root root 118101091 Sep 25 16:46 model.onnx
+-rw-r--r-- 1 root root   5069051 Sep 25 16:46 sentencepiece.bpe.model
+-rw-r--r-- 1 root root       167 Sep 25 16:46 special_tokens_map.json
+-rw-r--r-- 1 root root  17082730 Sep 25 16:46 tokenizer.json
+-rw-r--r-- 1 root root       443 Sep 25 16:46 tokenizer_config.json
+-- sha256 der int8-Datei, also des Abbildinhalts und nicht des Arbeitsbaums --
+8da4c9ba0ad59f58e8566839425d7fd6339d31414d0ce5cba2d7d0afb75dd8b6  /usr/local/share/findling/model/model.onnx
+-- die wirklich installierten Tesseract-Sprachen --
+List of available languages in "/usr/share/tesseract-ocr/5/tessdata/" (10):
+dan
+deu
+eng
+est
+fra
+ita
+nld
+osd
+por
+spa
+-- die Vorgabewerte der Umgebung --
+FINDLING_EMBED_MODEL_DIR=/usr/local/share/findling/model
+FINDLING_VEC0_PATH=/usr/local/lib/findling/vec0.so
+HF_HUB_OFFLINE=1
+wechsel-vorlauf-ende 2026-09-26T16:41:10Z
+wechsel-vorlauf 2026-09-26T16:40:58Z
+abbild: ghcr.io/street1983nk/findling_backend@sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+repo: /home/ubuntu/work/nextcloud-search
+abbild-digest-gefordert sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+=== 1. Wie viele Nextcloud-Instanzen laufen an diesem Docker-Dienst ===
+-- jeder laufende Container, damit die Zahl darunter nachpruefbar ist --
+nc_app_findling_backend  ghcr.io/street1983nk/findling_backend:dev  Up 2 minutes
+findling-registry  registry:2  Up 2 minutes
+nextcloud-aio-apache  ghcr.io/nextcloud-releases/aio-apache:latest  Up 2 minutes (healthy)
+nextcloud-aio-nextcloud  ghcr.io/nextcloud-releases/aio-nextcloud:latest  Up 2 minutes (healthy)
+nextcloud-aio-redis  ghcr.io/nextcloud-releases/aio-redis:latest  Up 2 minutes (healthy)
+nextcloud-aio-database  ghcr.io/nextcloud-releases/aio-postgresql:latest  Up 2 minutes (healthy)
+nextcloud-aio-harp  ghcr.io/nextcloud-releases/aio-harp:latest  Up 2 minutes (healthy)
+nextcloud-aio-notify-push  ghcr.io/nextcloud-releases/aio-notify-push:latest  Up 2 minutes (healthy)
+nextcloud-aio-mastercontainer  nextcloud/all-in-one:latest  Up 2 minutes (healthy)
+nextcloud-instanzen 1
+=== 2. Der Arbeitsbaum und die Kopie der info.xml, vor dem Pull ===
+die Fassung dieses Baums: <version>1.2.0</version>
+der image-tag dieses Baums: <image-tag>1.2.0</image-tag>
+Hinweis: der image-tag ist nicht 1.1.0; das sed unten stellt, was dort steht, auf dev
+			<registry>ghcr.io</registry>
+			<image>street1983nk/findling_backend</image>
+			<image-tag>dev</image-tag>
+die Kopie bleibt als ../rohdaten-nachanfahrt/92d-info-box.xml liegen, damit der Bericht zeigen kann, womit registriert wurde
+-- und der Arbeitsbaum muss von alldem unberuehrt sein (T-10-18) --
+arbeitsbaum-unberuehrt ja
+=== 3. Das Abbild, per Digest gezogen und nicht ueber :dev ===
+ghcr.io/street1983nk/findling_backend@sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e: Pulling from street1983nk/findling_backend
+74832724a48f: Pulling fs layer
+5613211afab8: Pulling fs layer
+6cf65b1158ad: Pulling fs layer
+5d4421a5db43: Pulling fs layer
+a31568c11db1: Pulling fs layer
+50a5effddda0: Pulling fs layer
+4c72d84f2937: Pulling fs layer
+2eb73f93cbef: Pulling fs layer
+fe26060e8c7a: Pulling fs layer
+a06e9c046ff4: Pulling fs layer
+44136fa355b3: Already exists
+6a0d68f90d52: Download complete
+74832724a48f: Download complete
+5613211afab8: Download complete
+4c72d84f2937: Download complete
+a06e9c046ff4: Download complete
+2eb73f93cbef: Download complete
+fe26060e8c7a: Download complete
+5613211afab8: Pull complete
+a31568c11db1: Download complete
+6cf65b1158ad: Download complete
+50a5effddda0: Download complete
+6cf65b1158ad: Pull complete
+5d4421a5db43: Download complete
+5d4421a5db43: Pull complete
+a31568c11db1: Pull complete
+50a5effddda0: Pull complete
+4c72d84f2937: Pull complete
+a06e9c046ff4: Pull complete
+2eb73f93cbef: Pull complete
+fe26060e8c7a: Pull complete
+74832724a48f: Pull complete
+Digest: sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+Status: Downloaded newer image for ghcr.io/street1983nk/findling_backend@sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+ghcr.io/street1983nk/findling_backend@sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+Id=sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e Arch=arm64 Created=2026-09-25T16:46:09.97812468Z Digest=ghcr.io/street1983nk/findling_backend@sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+abbild-digest-ist sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+abbild-id-ist sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+abbild-digest-gleich ja
+=== 4. Der Baumhash, als eigener Schritt mit eigener Rohdatei ===
+1 of 3: the package inside the image
+2 of 3: the package in the working tree
+3 of 3: the php half in the working tree
+baumhash-start 2026-09-26T16:41:09Z
+abbild: ghcr.io/street1983nk/findling_backend@sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e
+digest=ghcr.io/street1983nk/findling_backend@sha256:40ca8c2b9786151640665c378a522f200905ae428d8bbcadebdc2097c7925e3e arch=arm64 created=2026-09-25T16:46:09.97812468Z
+repo: /home/ubuntu/work/nextcloud-search
+=== The tree hash of the package INSIDE the image ===
+dateien: 57
+baumhash: 728461aceae56b8433a27cca6005b73303362733fb5973c9f6da4954dbcceda2
+=== The tree hash of the package in the working tree ===
+dateien: 57
+baumhash: 728461aceae56b8433a27cca6005b73303362733fb5973c9f6da4954dbcceda2
+=== The tree hash of the php half in the working tree ===
+dateien: 68
+baumhash: a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab6a8abba
+=== The verdict ===
+abbild-baumhash: 728461aceae56b8433a27cca6005b73303362733fb5973c9f6da4954dbcceda2
+arbeitsbaum-baumhash: 728461aceae56b8433a27cca6005b73303362733fb5973c9f6da4954dbcceda2
+baumhash-gleich ja
+baumhash-ende 2026-09-26T16:41:09Z
+40B-BAUMHASH-FERTIG
+40b-baumhash-rueckgabewert 0
+baumhash-zeilen 3 (drei werden erwartet)
+baumhash-gleich ja
+baumhash-beweis ja
+=== 5. Was das Abbild fuer die semantische Haelfte und fuer die OCR mitbringt ===
+-- das Modellverzeichnis --
+total 136992
+drwxr-xr-x 2 root root      4096 Sep 25 16:46 .
+drwxr-xr-x 1 root root      4096 Sep 25 16:46 ..
+-rw-r--r-- 1 root root       653 Sep 25 16:46 config.json
+-rw-r--r-- 1 root root 118101091 Sep 25 16:46 model.onnx
+-rw-r--r-- 1 root root   5069051 Sep 25 16:46 sentencepiece.bpe.model
+-rw-r--r-- 1 root root       167 Sep 25 16:46 special_tokens_map.json
+-rw-r--r-- 1 root root  17082730 Sep 25 16:46 tokenizer.json
+-rw-r--r-- 1 root root       443 Sep 25 16:46 tokenizer_config.json
+-- sha256 der int8-Datei, also des Abbildinhalts und nicht des Arbeitsbaums --
+8da4c9ba0ad59f58e8566839425d7fd6339d31414d0ce5cba2d7d0afb75dd8b6  /usr/local/share/findling/model/model.onnx
+-- die wirklich installierten Tesseract-Sprachen --
+List of available languages in "/usr/share/tesseract-ocr/5/tessdata/" (10):
+dan
+deu
+eng
+est
+fra
+ita
+nld
+osd
+por
+spa
+-- die Vorgabewerte der Umgebung --
+FINDLING_EMBED_MODEL_DIR=/usr/local/share/findling/model
+FINDLING_VEC0_PATH=/usr/local/lib/findling/vec0.so
+HF_HUB_OFFLINE=1
+wechsel-vorlauf-ende 2026-09-26T16:41:10Z
+wechsel-start 2026-09-26T16:41:10Z
+=== 6. Der Datenspeicher vor dem Wechsel, und er muss danach derselbe sein ===
+nc_app_findling_backend_data
+=== 7. Die PHP-Haelfte dieses Stands, in den Container der Nextcloud ===
+php-verzeichnis-ist findling
+total 112
+drwxrwxr-x 10 www-data www-data  4096 Sep 26 16:39 .
+drwxr-xr-x  9 www-data www-data  4096 Sep 26 16:41 ..
+-rw-rw-r--  1 www-data www-data     0 Sep 26 16:39 .gitkeep
+drwxrwxr-x  2 www-data www-data  4096 Sep 26 16:39 appinfo
+=== 7b. occ upgrade, Schritt 1b des Runbooks, mit gelesenem Rueckgabewert ===
+Setting log level to debug
+Turned on maintenance mode
+Updating database schema
+Updated database
+Updating <findling> ...
+Updated <findling> to 1.2.0
+Update app calendar from App Store
+Update app contacts from App Store
+Update app notes from App Store
+Starting code integrity check...
+Finished code integrity check
+Update successful
+Turned off maintenance mode
+Resetting log level
+occ-upgrade-rueckgabewert 0
+occ-upgrade-gelungen ja
+findling already enabled
+  - findling: 1.2.0
+  - firstrunwizard: 6.0.0
+php-app-ist findling
+=== 8. Die Zaehlung noch einmal, unmittelbar ueber dem unregister ===
+nextcloud-instanzen-vor-unregister 1
+=== 8b. unregister OHNE Schalter, das Volumen des Snapshots bleibt ===
+ExApp findling_backend successfully disabled.
+ExApp findling_backend successfully removed
+ExApp findling_backend successfully unregistered.
+unregister-rueckgabewert 0
+-- der Datenspeicher danach, er muss noch da sein --
+volumen-nach-unregister nc_app_findling_backend_data 
+=== 10. Die Registrierung ueber AppAPI, die zugleich die Scharfstellung ist ===
+register-start 2026-09-26T16:43:49Z
+ExApp findling_backend deployed successfully.
+ExApp findling_backend successfully registered.
+registrierung-rueckgabewert 0
+registrierung-gelungen ja
+register-ende 2026-09-26T16:43:53Z
+=== 11. Die harte Grenze, neu gesetzt, weil eine Registrierung sie wegwirft ===
+Image=ghcr.io/street1983nk/findling_backend:dev StartedAt=2026-09-26T16:43:52.175625685Z Restart=unless-stopped
+-- zurueckgelesen aus der cgroup und nicht aus dem Klienten --
+speichergrenze-ist 2147483648/0
+grenze-erwartet 2147483648/0
+grenze-gesetzt ja
+=== 12. Die Stellung des Entladeschalters, unmittelbar daneben ===
+entladeschalter-ist 0
+=== 13. memory.events, und anon neben memory.current wie ueberall in diesem Lauf ===
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+anon 120516608
+file 7077888
+slab 3051752
+memory.current=127221760 memory.peak=152252416
+=== 14. Der Zustand der ExApp und das erhaltene Volumen, von dem sie startet ===
+ExApps:
+findling_backend (Array): 1.2.0 [enabled]
+nc_app_findling_backend_data
+total 78680
+drwxr-xr-x 5 findling findling     4096 Sep 26 16:43 .
+drwxr-xr-x 1 root     root         4096 Sep 26 16:43 ..
+-rw-r--r-- 1 findling findling        0 Sep 26 16:43 armed.marker
+drwxr-xr-x 2 findling findling     4096 Sep  9 09:32 dict
+drwxr-xr-x 2 findling findling    12288 Sep 10 14:20 index
+-rw-r--r-- 1 findling findling       80 Sep  9 09:32 instance.json
+-rw-r--r-- 1 findling findling 16338944 Sep 26 16:38 state.db
+-rw-r--r-- 1 findling findling    32768 Sep 26 16:43 state.db-shm
+-rw-r--r-- 1 findling findling        0 Sep 26 16:43 state.db-wal
+drwxr-xr-x 2 findling findling     4096 Sep 10 23:44 tmp
+-rw-r--r-- 1 findling findling 64126976 Sep 10 21:52 vectors.db
+-rw-r--r-- 1 findling findling    32768 Sep 26 16:43 vectors.db-shm
+-rw-r--r-- 1 findling findling        0 Sep 26 16:43 vectors.db-wal
+=== 15. Laeuft der Container auf der geprueften Abbildkennung? ===
+abbild-im-container-ist sha256:17860ac4481a39009b285bd4a8b29fbc0a1e59c357977b201a420756fa54cf16
+baumhash-im-laufenden-container 728461aceae56b8433a27cca6005b73303362733fb5973c9f6da4954dbcceda2
+abbild-im-container-gleich ja
+=== 16. Das Protokoll dieses Starts ===
+containerstart-ist 2026-09-26T16:43:52.175625685Z
+2026-09-26T16:43:52.291665499Z harp_connect: HP_SHARED_KEY is not set, no HaRP tunnel is opened, the app listens on APP_PORT
+2026-09-26T16:43:52.291847150Z entrypoint: binding mode tcp 0.0.0.0:23000
+2026-09-26T16:43:52.293075068Z init: no HaRP tunnel in this deployment, watching the application only
+2026-09-26T16:43:53.288134767Z INFO:     Started server process [8]
+2026-09-26T16:43:53.288204146Z INFO:     Waiting for application startup.
+2026-09-26T16:43:53.289975220Z INFO:findling:findling backend starting, binding mode: tcp 0.0.0.0:23000
+2026-09-26T16:43:53.332367292Z INFO:findling.index.wordlist:constituent list read from the volume, 276496 entries, read 1 in this process
+2026-09-26T16:43:53.333317586Z INFO:     Application startup complete.
+2026-09-26T16:43:53.333850503Z INFO:     Uvicorn running on http://0.0.0.0:23000 (Press CTRL+C to quit)
+2026-09-26T16:43:53.442605752Z INFO:     172.18.0.5:50358 - "GET /heartbeat HTTP/1.1" 200 OK
+2026-09-26T16:43:53.459436774Z INFO:     172.18.0.5:50358 - "POST /init HTTP/1.1" 200 OK
+2026-09-26T16:43:53.764593360Z INFO:     172.18.0.5:50358 - "GET /heartbeat HTTP/1.1" 200 OK
+2026-09-26T16:43:53.775795106Z INFO:findling:findling backend enabled
+2026-09-26T16:43:53.775989124Z INFO:     172.18.0.5:50358 - "PUT /enabled?enabled=1 HTTP/1.1" 200 OK
+2026-09-26T16:43:54.129296513Z INFO:findling.index.analyzer:german automaton built from 276496 entries in 0.333 s, build 1 in this process
+2026-09-26T16:43:54.422637068Z INFO:findling.worker.poller:indexing is armed and the work stock is empty, the next file is picked up as it arrives
+=== 17. Das Bestandstor, 52137 / 44 / 6, nach der Registrierung ===
+Work stock
+  scheduled            0
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              44
+  failed               6
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-09-09 09:40:29 (24903 minutes ago)
+bestandstor indexiert 52137 uebersprungen 44 fehlgeschlagen 6
+bestandstor-erwartet indexiert 52137 uebersprungen 44 fehlgeschlagen 6
+bestandstor-bestanden ja
+wechsel-ende 2026-09-26T16:43:57Z
+92D-WECHSEL-FERTIG

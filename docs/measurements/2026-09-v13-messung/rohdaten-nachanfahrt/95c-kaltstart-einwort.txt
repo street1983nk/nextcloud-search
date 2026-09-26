@@ -1,0 +1,36 @@
+kaltstart-start 2026-09-26T16:45:32Z
+begriff Bescheid, deckel der antwortliste 100, trefferzaehlung-quelle jq, kaltzyklen hoechstens 3
+=== 1. Die Pflichtzeilen, VOR der Messung ===
+passwort-quelle datei
+suchkonto lasttest sitzung admin
+entladeschalter-ist 0
+speichergrenze-ist 2147483648/0
+=== Kaltzyklus 1 von hoechstens 3 ===
+kaltzyklus 1 containerstart 2026-09-26T16:45:42.582846423Z
+anmeldung ok
+bereit-nach-s 1 zustand cold
+-- Der Seitencache des Wirts, geleert. Die Messung ist in beiden Haelften kalt --
+               total        used        free      shared  buff/cache   available
+Mem:           3.8Gi       1.4Gi       2.1Gi       309Mi       795Mi       2.5Gi
+Swap:             0B          0B          0B
+kaltzyklus 1 engine-zustand-vor-suche cold
+kaltzyklus 1 ms 2617 code 200 treffer 26
+kaltstart-ms 2617
+warmsuche ms 1830 code 200 treffer 0
+kaltzyklen-gefahren 1
+kaltstart-gueltig ja
+kaltstart-fenster 2026-09-26T16:45:32Z 2026-09-26T16:45:52Z
+=== Der Protokollblock, als Block zitierbar ===
+passwort-quelle datei
+suchkonto lasttest sitzung admin
+entladeschalter-ist 0
+speichergrenze-ist 2147483648/0
+kaltzyklus 1 containerstart 2026-09-26T16:45:42.582846423Z
+kaltzyklus 1 engine-zustand-vor-suche cold
+kaltzyklus 1 ms 2617 code 200 treffer 26
+kaltstart-ms 2617
+warmsuche ms 1830 code 200 treffer 0
+kaltzyklen-gefahren 1
+kaltstart-gueltig ja
+kaltstart-fenster 2026-09-26T16:45:32Z 2026-09-26T16:45:52Z
+kaltstart-ende 2026-09-26T16:45:52Z

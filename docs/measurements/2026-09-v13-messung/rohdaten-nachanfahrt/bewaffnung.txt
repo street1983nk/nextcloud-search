@@ -1,0 +1,9 @@
+bewaffnung der nachanfahrt, runbook block 11 und 12, nach dem maschinenstart und nach 92d
+bewaffnung-start 2026-09-26T16:44:27Z
+aliase nextcloud-aio:[findling_backend]
+disable ExApp findling_backend successfully disabled.
+enable ExApp findling_backend successfully enabled.
+grenze 2147483648/0
+entladeschalter 0
+sprachen de,en
+backendReachable true runState idle 2026-09-26T16:44:51Z

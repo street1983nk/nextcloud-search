@@ -1,0 +1,9 @@
+loglevel-vorher 2 2026-09-26T16:45:31Z
+loglevel-waehrend 1
+95c-einwort-rueckgabewert 0
+stufe kaltstart langsame-aufrufe 2
+aufruf 2026-09-26T16:45:50Z /snippets innerMs 1510.5 ceilingMs 1500.0
+aufruf 2026-09-26T16:45:51Z /search innerMs 1505.4 ceilingMs 1500.0
+maximum innerMs 1510.5 ceilingMs 1500.0
+kaputte-zeilen 0
+loglevel-danach 2 2026-09-26T16:45:55Z

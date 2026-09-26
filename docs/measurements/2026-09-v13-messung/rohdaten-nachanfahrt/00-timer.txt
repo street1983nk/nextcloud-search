@@ -1,0 +1,11 @@
+der timer der nachanfahrt, plan 22-13, 2026-09-26
+deckel 4 boxstunden / 0,50 usd, harter stopp. beginn der bezahlten zeit ist die
+LaunchTime 2026-09-26T16:35:31Z (describe-instances, BOX_START_EPOCH 1790440531).
+deckelende rechnerisch 2026-09-26T20:35:31Z, abholreserve 15 min, timer also absolut
+auf 2026-09-26T20:20:00Z. jede zeile ist gesetzt und aus
+/run/systemd/shutdown/scheduled zurueckgelesen.
+
+timer-gesetzt 2026-09-26T16:36:41Z absolut 2026-09-26T20:20:00Z (shutdown -h 20:20)
+timer-ruecklesung USEC=1790454000000000 MODE=poweroff (2026-09-26T20:20:00Z)
+timer-nach-neustart-block-5 2026-09-26T16:37:08Z absolut 2026-09-26T20:20:00Z, ruecklesung USEC=1790454000000000 MODE=poweroff
+timer-vor-94c 2026-09-26T16:46:22Z absolut 2026-09-26T20:20:00Z erneut gesetzt, ruecklesung USEC=1790454000000000

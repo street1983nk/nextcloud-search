@@ -1,0 +1,8 @@
+der einwort-begriff der nachanfahrt, warm verifiziert, plan 22-13 task 3
+konto lasttest, nutzerroute /ocs/v2.php/search/providers/findling/search, limit 100
+ein einziges wort ohne operator: die zeile bleibt lexikalisch (one_term, api/search.py)
+gelesen 2026-09-26T16:45:00Z bis 16:45:05Z, nach der bewaffnung (backendReachable true)
+begriff Bescheid ms 2537 code 200 treffer 26
+begriff Bescheid ms 1676 code 200 treffer 26
+urteil: treffer groesser 0, der begriff traegt den 95c-lauf. "Bescheid" ist das erste
+wort des zweiwortigen vorgabebegriffs "Bescheid Antrag" der hauptanfahrt.

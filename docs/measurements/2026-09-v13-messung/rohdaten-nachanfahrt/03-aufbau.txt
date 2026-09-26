@@ -1,0 +1,84 @@
+der aufbau der nachanfahrt, bloecke 1 bis 13 des runbooks, dann 92d und bewaffnung, plan 22-13
+gefahren 2026-09-26, region eu-central-1, zone eu-central-1c
+
+geheimnisregel wie in rohdaten/03-aufbau.txt: keine ip-adresse, keine lebende instanz-,
+volume- oder gruppenkennung, kein passwortinhalt, keine kontokennung, keine uuid.
+
+block-1 2026-09-26T16:35:12Z bis 16:35:16Z
+  security group findling-loadtest im default-vpc (<sg>), zusaetzlich getaggt
+  purpose=findling-phase5; authorize: Return True, vier regeln: tcp 22 auf
+  <eigene-adresse>/32, tcp 80, tcp 443, udp 443 auf <ganzes-netz>.
+block-2 16:35:16Z bis 16:35:18Z
+  create-key-pair findling-loadtest (zusaetzlich getaggt purpose=findling-phase5), pem-kopfzeile
+  eines rsa-privatschluessels, rechte 600, .pub mit ssh-keygen -y abgeleitet, kopie ins
+  zustandsverzeichnis.
+block-3 16:35:28Z bis 16:35:49Z
+  run-instances wie in der hauptanfahrt: m7g.large, abbild aus runbook block 3, default-subnetz
+  eu-central-1c, 40 gb gp3 root mit DeleteOnTermination, --instance-initiated-shutdown-behavior stop.
+  LaunchTime 2026-09-26T16:35:31Z: beginn der bezahlten zeit, BOX_START_EPOCH 1790440531.
+block-4 16:35:49Z bis 16:35:52Z
+  BOX_INSTANCE_ID und BOX_SECURITY_GROUP von hand in <zustandsverzeichnis>/box.env, umask 077.
+  aws_box.sh status: m7g.large running in eu-central-1c, running 0.0 hours since 16:35:31.
+vorpruefung 16:36:03Z bis 16:36:04Z
+  00-typwechsel.sh vorpruefung: shutdown-verhalten stop, shutdown-ist-stopp ja (00-typwechsel.txt).
+a-record 16:36:05Z bis 16:36:06Z
+  vor dem ersten daemon-start gesetzt (runbook abschnitt 3, nachtrag 26.09.): success true,
+  typ A, ttl 120, nicht proxied.
+hostschluessel
+  ssh-keyscan gegen die adresse, fingerabdruecke gegen get-console-output (cloud-init,
+  BEGIN SSH HOST KEY FINGERPRINTS): ecdsa, ed25519 und rsa gleich. known_hosts ins
+  zustandsverzeichnis, die alte fassung daneben gesichert.
+timer 16:36:41Z
+  sudo shutdown -h 20:20, zurueckgelesen USEC=1790454000000000 MODE=poweroff (00-timer.txt).
+block-5 16:36:52Z bis 16:37:10Z
+  drop-in 99-mem4g.cfg, update-grub, neustart. danach der timer sofort erneut absolut auf 20:20
+  (ein neustart verwirft /run/systemd/shutdown/scheduled), zurueckgelesen wie oben.
+  free -h 3.8Gi, nproc 2, aarch64, /proc/cmdline mit mem=4G.
+block-6 16:37:16Z bis 16:37:24Z
+  aws_box.sh restore ohne argument: State completed, Progress 100%, VolumeSize 60, Encrypted False,
+  Description findling corpus and index, v1.1 comparison run 2026-09-10, 52111 documents;
+  tags nach dem umtaggen Name=findling-corpus purpose=findling-phase5; attach als /dev/sdf.
+block-7 16:37:31Z bis 16:37:36Z
+  genau ein datentraeger mit 64424509440 byte, ext4, fstab ueber die uuid mit nofail, mount -a.
+  df 59G gesamt, 35G belegt, 62%; ls: containerd corpus docker drillkorpus lost+found ncdata.
+block-8 16:37:44Z bis 16:38:57Z
+  daemon.json (data-root /mnt/findling/docker) und containerd config.toml (version 2, root
+  /mnt/findling/containerd) vor der installation, apt-get install docker.io jq mit
+  --force-confold: docker 29.1.3, jq-1.7. Docker Root Dir /mnt/findling/docker, Storage Driver
+  overlayfs, io.containerd.snapshotter.v1, 16 abbilder, alle neun container der messbox laufen,
+  registry antwortet {"repositories":["findling_backend"]}.
+block-9 16:39:05Z bis 16:39:10Z
+  sicherung per scp, sha256 fad3e7ce...3584a auf der box gleich, 435 eintraege, 385 dateien, 13M,
+  kopie in /tmp geloescht. ~/work/.pw (700) mit admin und lasttest (600, je 28 byte) per
+  ssh-stdin aus konten.env.
+klon 16:39:18Z bis 16:39:20Z
+  git clone, checkout 0de526b, core.fileMode false, git ls-files -s scripts/ops/rss_sampler.sh
+  100755, ls -l -rwxrwxr-x; chmod +x in den werkzeugverzeichnissen, git status --porcelain 0 zeilen.
+block-10 16:39:20Z bis 16:40:23Z
+  namensaufloesung-ist=a-record: oeffentlicher resolver, box und backend-container loesen auf die
+  instanzadresse auf, ohne negativen cache (record vor dem daemon-start). status.php 200,
+  installed true, maintenance false, needsDbUpgrade false, version 33.0.8 (wie in der hauptanfahrt).
+  anmeldeprobe webdav propfind depth 0: zuerst admin 401 und lasttest 401 (passwoerter der
+  v1.2-box gegen den snapshot vom 11.09., wie in der hauptanfahrt), dann occ user:resetpassword
+  --password-from-env mit dem wert nur ueber stdin, "Successfully reset password" je konto,
+  danach admin 207, lasttest 207.
+block-13 16:40:49Z
+  nextcloud-instanzen 1, volume nc_app_findling_backend_data.
+markentor 16:40:49Z bis 16:40:50Z
+  90e-einzelliste.py marken mit den erwartungen aus 00-lauf.sh: rueckgabe 0, marken-urteil umbau
+  (90e-marken.txt). nur schema_version und languages weichen ab, wie in der hauptanfahrt.
+92d 16:40:58Z bis 16:43:57Z
+  92d-wechsel.sh mit OUT=rohdaten-nachanfahrt und dem abbild der hauptanfahrt: rueckgabe 0,
+  baumhash-beweis ja, occ upgrade 0, registrierung ja, grenze 2147483648/0, entladeschalter 0,
+  abbild-im-container-gleich ja, bestandstor 52137 / 44 / 6 bestanden (92d-wechsel.txt,
+  92d-konsole.txt, 40b-baumhash.txt).
+  92d gehoert nicht zu den bloecken 1 bis 13: der snapshot traegt das abbild vom 10.09., das
+  weder den entladeschalter noch die v1.3-routen kennt. ohne 92d misst 95c ein anderes produkt.
+block-11 und 12 16:44:26Z bis 16:44:51Z
+  alias nextcloud-aio:[findling_backend], app_api:app:disable und enable erfolgreich,
+  docker update 2g, grenze aus der cgroup 2147483648/0, entladeschalter 0, sprachen de,en,
+  admin-uebersicht backendReachable true, runState idle um 16:44:51Z (bewaffnung.txt).
+
+-- zwischenstand --
+bestand wie der snapshot, backendReachable true, timer zurueckgelesen. es folgen der
+einwort-begriff (begriff-warm.txt), 95c, 94c und b5.
