@@ -681,3 +681,64 @@ wieder 0 Treffer liefern. Die Ursache gehört deshalb zuerst in die Auswertung
 **Nachfreigabe durch den Owner noetig (D-02)** für die Pflichtzahl
 Kaltstartlatenz mit Trefferpflicht. Die zwei übrigen Lücken sind keine
 Pflichtzahlen. Über ihre Nachmessung entscheidet der Owner mit.
+
+### 6.10 MESS-09, disjunction_max nach der Regel E10 (26.09.2026, Plan 22-10)
+
+Quelle ist `rohdaten/98d-dismax-probe.txt`, gefahren 12:53:17Z bis 12:53:33Z
+im Produktcontainer nach dem Umbau auf sechs Felder (`00-lauf.txt`:
+`98d-rueckgabewert 0 fehlerzeilen 0`). 60 Anfragen: 10 feste Begriffe, 10
+Sprachfälle, 40 Stichprobe; 33 einwortig, 22 mehrwortig, 5 Rückfall
+(Operator, Phrase oder Feld, nur unter `summe` gemessen). Plan mit 8 Feldern,
+Tiefe 100, je Anfrage und Form 5 Wiederholungen. Bezug jeder Rangzahl ist der
+Altplan (`body_de`, `body_en`, Name, Titel).
+
+| Kennzahl (Median über alle Anfragen) | `summe` | `dismax_t00` | `dismax_t01` | `altplan` |
+|---|---:|---:|---:|---:|
+| `rbo10_gegen_altplan` | **0,9531** | **0,8399** | **0,9633** | |
+| davon einwortig | 0,9720 | 0,8745 | 0,9849 | |
+| davon mehrwortig | 0,8805 | 0,8297 | 0,9040 | |
+| `overlap10_gegen_altplan` | 1,0000 | 0,9000 | 1,0000 | |
+| `rangverschiebung_gegen_altplan` | 4,0208 | 8,9213 | 3,4545 | |
+| `latenz_ms` | **4,7667** | **4,2832** | **4,7697** | 3,8983 |
+
+Die Treffermenge ist in allen 55 Nicht-Rückfall-Anfragen unter allen Formen
+gleich (sonst hätte 98d mit 49 geendet; eigens nachgezählt, keine Abweichung).
+
+**Die Regel, angewandt** (`skripte/00-ablauf.md`, Abschnitt 6, Frage 3):
+
+| Bedingung | Schwelle | `dismax_t00` | `dismax_t01` |
+|---|---|---|---|
+| 1. RBO-Median mindestens 0,05 über `summe` | ≥ 1,0031 | 0,8399, **nein** (−0,1132) | 0,9633, **nein** (+0,0102) |
+| 2. kein Sprachfall-Eigenrang schlechter | | ja | ja |
+| 3. Latenz-Median höchstens 1,20 × `summe` | ≤ 5,7200 ms | 4,2832, ja (0,90) | 4,7697, ja (1,00) |
+
+Zu Bedingung 2: Die Kennung der eigenen Datei stammt aus dem Bestand, wie ihn
+die v1.2-Box vergeben hat (`../2026-09-v12-messung/rohdaten/05-sprachfaelle.txt`,
+Zeilen `fall <n> ... traegt die Kennung`). Der Snapshot trägt dieselben 39
+Dateien des Kontos `sprachfall` (`rohdaten/03-aufbau.txt`, Abschnitt
+Sprachfall-Bestand). Zugeordnet sind damit alle acht Nicht-Rückfall-Fälle:
+Mueller 52290, Belehrung 52293, Auszug 52294 und Erinnerung 52308 stehen unter
+allen drei Formen auf Rang 1 (je ein Treffer); Genehmigung und bescheid
+(52287), Frist (52288) und Vertrag (52289) stehen unter keiner Form in der
+Spitze 10, also auch unter `summe` nicht. Die Fälle 5 und 7 (`"drei Monate"`,
+`type:pdf bescheid`) sind Rückfall und zählen nach der Regel nicht. Unter
+`dismax_t01` ist die Spitze 10 jedes Sprachfalls außerdem Kennung für Kennung
+gleich der unter `summe`.
+
+**Urteil E10: gehalten.** Die Probe hat jede Kennzahl geliefert, die
+Treffermengen sind gleich, und der Entscheid folgt allein der Regel.
+**Entscheid: Summe**, weil keiner der beiden tie-Werte Bedingung 1 erfüllt.
+tie 0.1 liegt näher am Altplan als tie 0.0 (0,9633 gegen 0,8399); tie 0.0
+verdrängt bei zehn Einwortanfragen die ganze Spitze 10 des Altplans
+(Overlap 0,0). **Folge: verworfen.** Das ausgelieferte Verhalten bleibt,
+`backend/src/findling/query/rewrite.py` ist unverändert.
+
+Vermerkt, ohne am Urteil etwas zu ändern: Die Schwelle aus Bedingung 1 lag auf
+diesen Daten bei 1,0031 und damit über dem Höchstwert 1 jedes RBO. Die Summe
+steht dem Altplan schon so nah (0,9531), dass keine Form sie um 0,05 hätte
+übertreffen können. Das ist eine Eigenschaft der vorab beschlossenen Regel und
+kein Ermessen im Nachhinein; eine andere Regel wäre ein neuer Owner-Entscheid
+vor einer neuen Messung. Vier der zehn festen Mehrwortbegriffe (`Vertrag
+beenden`, `Widerspruch einlegen`, `Rechnung bezahlen`, `Termin absagen`)
+haben in diesem Korpus unter jeder Form 0 Treffer und gehen mit RBO 1,0 in
+alle drei Mediane gleich ein.

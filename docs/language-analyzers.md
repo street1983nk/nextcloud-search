@@ -262,6 +262,27 @@ says and no more: tantivy adds the field contributions up (measurement M-3 of th
 phase 19 research), so a boost damps a multi field hit and never removes it, and
 an index with more filled body fields moves the edge.
 
+**The same question on real data: per word `disjunction_max` against the sum.**
+Measured on 2026-09-26 on the v1.3 measurement box, after the rebuild to six body
+fields, by `98d-dismax-probe.py` inside the product container: 60 questions (10
+fixed terms, 10 language cases, 40 drawn out of the load corpus), a plan of eight
+fields, depth 100, five repetitions per question and form. Every rank figure is
+taken against the legacy plan (`body_de`, `body_en`, file name, title), and the
+hit set was the same under every form. Where the 0.81 above is a property of a
+three document probe, this is the stock of a real installation, 52,137 files.
+
+| Median over all questions | sum (shipped) | dismax, tie 0.0 | dismax, tie 0.1 |
+|---|---:|---:|---:|
+| RBO@10 against the legacy plan | 0.9531 | 0.8399 | 0.9633 |
+| of which one word | 0.9720 | 0.8745 | 0.9849 |
+| of which several words | 0.8805 | 0.8297 | 0.9040 |
+| overlap@10 against the legacy plan | 1.0000 | 0.9000 | 1.0000 |
+| lexical latency, ms | 4.7667 | 4.2832 | 4.7697 |
+
+The legacy plan itself answered in 3.8983 ms. Raw data, the rule and its
+application are in `docs/measurements/2026-09-v13-messung/`, section 6.10 of its
+README, and the raw file is `rohdaten/98d-dismax-probe.txt`.
+
 **The cost of the field plan: one `read_meta()` plus one `doc_freq` probe per
 body field, at 0.26 us a call.** Measurement M-2 of the phase 19 research,
 2026-09-24, 20000 runs against tantivy 0.26.2, next to 2.26 us for
