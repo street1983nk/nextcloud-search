@@ -413,7 +413,10 @@ Nutzer davor, etwa `admins-hh/Vertrag.pdf`: aufgelöst wird über die Mounts, di
 den Pfad tragen, und nur wenn sie zu genau einem Speicherstamm gehören. Ein
 Home-Pfad ohne Nutzer bleibt unbeantwortet, weil jeder Nutzer einen eigenen
 hat. Die Ergebniskarte zeigt den Pfad mit Nutzer davor, so wie die Abfrage ihn
-zurücknimmt.
+zurücknimmt. Diese Schreibweise baut der Server und nicht das Skript der Seite:
+eine Datei außerhalb des files-Ordners, etwa im Papierkorb oder unter den
+Versionen, zeigt die Karte mit ihrem eigenen Pfad, der schon mit dem Nutzer
+beginnt, und nicht mehr doppelt mit `uid/files/` davor.
 
 Mit Nutzer davor, etwa `anna/files/admins-hh/Vertrag.pdf`, fragt die Abfrage
 zuerst Annas eigenen Ordner. Verbergen die erweiterten Berechtigungen die Datei

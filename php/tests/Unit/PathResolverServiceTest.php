@@ -10,12 +10,14 @@ use OCP\DB\QueryBuilder\ICompositeExpression;
 use OCP\DB\QueryBuilder\IExpressionBuilder;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\Files\Cache\IFileAccess;
+use OCP\Files\Config\ICachedMountFileInfo;
 use OCP\Files\Config\IUserMountCache;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
 use OCP\IDBConnection;
+use OCP\IUser;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -43,6 +45,7 @@ final class PathResolverServiceTest extends TestCase {
 
 	private IRootFolder&MockObject $rootFolder;
 	private IDBConnection&MockObject $db;
+	private IUserMountCache&MockObject $mountCache;
 
 	/**
 	 * What the queries of one lookup answer, in the order they are asked.
@@ -64,6 +67,7 @@ final class PathResolverServiceTest extends TestCase {
 
 		$this->rootFolder = $this->createMock(IRootFolder::class);
 		$this->db = $this->createMock(IDBConnection::class);
+		$this->mountCache = $this->createMock(IUserMountCache::class);
 		$this->db->method('escapeLikeParameter')->willReturnCallback(
 			static fn (string $value): string => addcslashes($value, '\_%'),
 		);
@@ -117,7 +121,7 @@ final class PathResolverServiceTest extends TestCase {
 
 	private function resolver(): PathResolverService {
 		return new PathResolverService(
-			$this->createMock(IUserMountCache::class),
+			$this->mountCache,
 			$this->createMock(IFileAccess::class),
 			$this->rootFolder,
 			$this->db,
@@ -166,6 +170,64 @@ final class PathResolverServiceTest extends TestCase {
 				return $folders[$uid];
 			},
 		);
+	}
+
+	// -- the reference the card prints (review finding) ----------------------
+
+	/**
+	 * The mount the owner of FILE_ID is found through, a home mount.
+	 */
+	private function ownerMount(string $uid, string $absolute): void {
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($uid);
+		$mount = $this->createMock(ICachedMountFileInfo::class);
+		$mount->method('getUser')->willReturn($user);
+		$mount->method('getPath')->willReturn($absolute);
+		$mount->method('getRootInternalPath')->willReturn('');
+		$this->mountCache->method('getMountsForFileId')->with(self::FILE_ID)->willReturn([$mount]);
+	}
+
+	public function testAFileInTheFilesFolderIsReferencedWithUserAndFiles(): void {
+		$this->ownerMount('anna', '/anna/files/admins-hh/Vertrag.pdf');
+
+		$described = $this->resolver()->describe(self::FILE_ID);
+
+		self::assertSame('admins-hh/Vertrag.pdf', $described['path'] ?? null);
+		self::assertSame('anna/files/admins-hh/Vertrag.pdf', $described['reference'] ?? null);
+	}
+
+	public function testAFileOutsideTheFilesFolderIsReferencedByItsOwnPathAndNotDoubled(): void {
+		// The finding: the card put anna/files/ in front of a path that
+		// already starts with anna, and printed anna/files/anna/files_versions/...
+		// The reference is the absolute path without its slash, once.
+		$this->ownerMount('anna', '/anna/files_versions/admins-hh/Vertrag.pdf.v1727350000');
+
+		$described = $this->resolver()->describe(self::FILE_ID);
+
+		self::assertSame('anna/files_versions/admins-hh/Vertrag.pdf.v1727350000', $described['path'] ?? null);
+		self::assertSame('anna/files_versions/admins-hh/Vertrag.pdf.v1727350000', $described['reference'] ?? null);
+		self::assertStringNotContainsString('anna/files/anna', $described['reference'] ?? '');
+	}
+
+	public function testATrashedFileIsReferencedByItsTrashPath(): void {
+		$this->ownerMount('anna', '/anna/files_trashbin/files/Vertrag.pdf.d1727350000');
+
+		$described = $this->resolver()->describe(self::FILE_ID);
+
+		self::assertTrue($described['trashed'] ?? false);
+		self::assertSame('anna/files_trashbin/files/Vertrag.pdf.d1727350000', $described['reference'] ?? null);
+	}
+
+	public function testTheReferenceOfTheCardResolvesBackToTheSameFile(): void {
+		// The round trip the card exists for: what describe() prints, the
+		// lookup takes back.
+		$this->ownerMount('anna', '/anna/files/Vertraege/Miete.pdf');
+		$this->folders(['anna' => $this->file(true)]);
+		$resolver = $this->resolver();
+
+		$reference = $resolver->describe(self::FILE_ID)['reference'] ?? '';
+
+		self::assertSame(self::FILE_ID, $resolver->resolveReference($reference));
 	}
 
 	// -- the pure half: which rows carry a path -------------------------------

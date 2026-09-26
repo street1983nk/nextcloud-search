@@ -676,14 +676,13 @@
     const fileId = whole(view.fileId)
     const checkedAt = whole(view.checkedAt)
     const path = typeof view.path === 'string' ? view.path : ''
-    const uid = typeof view.uid === 'string' ? view.uid : ''
-    // The card prints the reference the lookup takes back, uid/files/rest,
-    // the same shape the error list hands to the lookup (issue #14). The bare
-    // path was what an admin copied, and a path without its user is not a
-    // reference for a home file. A trashed file keeps its own path, because it
-    // is not under files/ any more and that path already starts with the user.
-    const reference = view.trashed !== true && uid !== '' && path !== ''
-      ? uid + '/files/' + path
+    // The card prints the reference the lookup takes back, and it prints it
+    // as the server built it (issue #14, review). Putting uid/files/ in front
+    // of the path here doubled it for every file outside the files folder,
+    // whose path already starts with the user. The bare path stands in only
+    // for an answer without a reference.
+    const reference = typeof view.reference === 'string' && view.reference !== ''
+      ? view.reference
       : path
     const label = typeof view.label === 'string' ? view.label : ''
     const remedy = typeof view.remedy === 'string' ? view.remedy : ''

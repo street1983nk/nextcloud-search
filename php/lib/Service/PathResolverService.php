@@ -191,7 +191,7 @@ final class PathResolverService {
 	 * already open at that point.
 	 *
 	 * @return array{
-	 *     uid:string, path:string, shares:int, trashed:bool,
+	 *     uid:string, path:string, reference:string, shares:int, trashed:bool,
 	 *     storageId:int, mime:string, size:int, internalPath:string
 	 * }|null
 	 */
@@ -218,6 +218,7 @@ final class PathResolverService {
 		return [
 			'uid' => $owner['uid'] ?? '',
 			'path' => $owner['path'] ?? '',
+			'reference' => $owner['reference'] ?? '',
 			'shares' => $owner['shares'] ?? 0,
 			'trashed' => $owner['trashed'] ?? false,
 			'storageId' => $entry instanceof ICacheEntry ? $entry->getStorageId() : 0,
@@ -735,7 +736,17 @@ final class PathResolverService {
 	 * An empty answer means the file has no cache entry any more, so it is
 	 * really gone rather than merely invisible.
 	 *
-	 * @return array{uid:string,path:string,shares:int,trashed:bool}|null
+	 * ``reference`` is the spelling of the file that the lookup of the admin
+	 * page takes back, built here and not in the script of the page (issue
+	 * #14, review). For a file under ``/<uid>/files/`` it is
+	 * ``<uid>/files/<path>``, the spelling of the error list. For anything
+	 * else, a file in the trash bin or in any other folder of the user that is
+	 * not the files folder, it is the absolute path without its leading slash,
+	 * which already starts with the user: the page used to put
+	 * ``<uid>/files/`` in front of that as well and printed
+	 * ``anna/files/anna/files_trashbin/...``, a reference that named nothing.
+	 *
+	 * @return array{uid:string,path:string,reference:string,shares:int,trashed:bool}|null
 	 */
 	public function describe(int $fileId): ?array {
 		if ($fileId <= 0) {
@@ -756,12 +767,13 @@ final class PathResolverService {
 			$absolute = $owner->getPath();
 			$prefix = '/' . $uid . '/files/';
 			$trashed = str_starts_with($absolute, '/' . $uid . '/files_trashbin/');
+			$inFiles = str_starts_with($absolute, $prefix);
+			$path = $inFiles ? substr($absolute, strlen($prefix)) : ltrim($absolute, '/');
 
 			return [
 				'uid' => $uid,
-				'path' => str_starts_with($absolute, $prefix)
-					? substr($absolute, strlen($prefix))
-					: ltrim($absolute, '/'),
+				'path' => $path,
+				'reference' => $inFiles && $path !== '' ? $uid . '/files/' . $path : ltrim($absolute, '/'),
 				'shares' => count($mounts) - 1,
 				// A file in the trash bin still has a cache entry, and saying so is
 				// a diagnosis rather than a detail: the search dropped it on
@@ -800,7 +812,7 @@ final class PathResolverService {
 	 *
 	 * @param list<int> $fileIds
 	 * @return array<int, array{
-	 *     resolved:bool, uid:string, path:string, shares:int, trashed:bool,
+	 *     resolved:bool, uid:string, path:string, reference:string, shares:int, trashed:bool,
 	 *     exists:bool, mime:string, size:int
 	 * }> keyed by file id, one entry per positive id that was asked for
 	 */
@@ -835,6 +847,7 @@ final class PathResolverService {
 				'resolved' => $owner !== null,
 				'uid' => $owner['uid'] ?? '',
 				'path' => $owner['path'] ?? '',
+				'reference' => $owner['reference'] ?? '',
 				'shares' => $owner['shares'] ?? 0,
 				'trashed' => $owner['trashed'] ?? false,
 				'exists' => $entry instanceof ICacheEntry || $owner !== null,

@@ -627,8 +627,20 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # PathResolverServiceTest.php holds that no second resolution happens. The
 # resolution register of test_php_acl_boundary.py does not move: no file
 # resolves a file id that did not before.
+# Moved on 2026-09-26 by the review of issue #14, fifth fix: five of the 70
+# files changed their bytes and none came or went. PathResolverService.php
+# builds the reference the lookup takes back, uid/files/rest for a file in the
+# files folder and the absolute path without its slash for anything else, and
+# hands it through inspect() and describeMany(); AdminViewService.php carries
+# it in the diagnosis and in the examples of the error list, and
+# templates/admin.php takes it for the lookup button instead of concatenating;
+# DiagnoseCommand.php names the new key in its shape; PathResolverServiceTest.php
+# holds the files case, the case outside the files folder, the trash bin and
+# the round trip. js/admin.js prints the field as it comes and no longer puts
+# uid/files/ in front of the path; the recipe globs **/*.php, so it does not
+# move this figure.
 PHP_FILES_TODAY = 70
-PHP_TREE_HASH_TODAY = "99a8c5c28ca24078477a3bddd2946ed4496b827004082050431351c20c30baf3"
+PHP_TREE_HASH_TODAY = "2e59ceb5ab0cd64564dc28653c53504ce9c1456cb2816ea77f0835497b32621b"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

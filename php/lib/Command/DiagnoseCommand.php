@@ -130,7 +130,7 @@ class DiagnoseCommand extends Command {
 	 * stands where there is nothing.
 	 *
 	 * @param array{
-	 *     found:bool, fileId:int, path:string, uid:string, trashed:bool,
+	 *     found:bool, fileId:int, path:string, reference:string, uid:string, trashed:bool,
 	 *     shares:int, state:string, reason:string, label:string, remedy:string,
 	 *     checkedAt:int, backendReachable:bool, note:string
 	 * } $answer

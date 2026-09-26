@@ -693,7 +693,7 @@ final class AdminViewService {
 	 * not, and the shortest way to keep the two apart is to carry neither.
 	 *
 	 * @return array{
-	 *     found:bool, fileId:int, path:string, uid:string, trashed:bool,
+	 *     found:bool, fileId:int, path:string, reference:string, uid:string, trashed:bool,
 	 *     shares:int, state:string, reason:string, label:string, remedy:string,
 	 *     checkedAt:int, backendReachable:bool, note:string
 	 * }
@@ -747,7 +747,7 @@ final class AdminViewService {
 	}
 
 	/**
-	 * The thirteen keys of a diagnosis, never sparse and never partial.
+	 * The fourteen keys of a diagnosis, never sparse and never partial.
 	 *
 	 * Same rule as overview(): a caller that has to ask whether a key exists ends
 	 * up writing one default in the template and a different one in the script,
@@ -756,10 +756,10 @@ final class AdminViewService {
 	 * unknown rather than to an empty string, because the card has a chip for
 	 * unknown and none for nothing.
 	 *
-	 * @param array{uid:string,path:string,shares:int,trashed:bool,storageId:int,mime:string,size:int,internalPath:string}|null $facts
+	 * @param array{uid:string,path:string,reference:string,shares:int,trashed:bool,storageId:int,mime:string,size:int,internalPath:string}|null $facts
 	 * @param array<string,mixed> $verdict whatever the stage that answered filled in
 	 * @return array{
-	 *     found:bool, fileId:int, path:string, uid:string, trashed:bool,
+	 *     found:bool, fileId:int, path:string, reference:string, uid:string, trashed:bool,
 	 *     shares:int, state:string, reason:string, label:string, remedy:string,
 	 *     checkedAt:int, backendReachable:bool, note:string
 	 * }
@@ -773,6 +773,11 @@ final class AdminViewService {
 			// template prints it with the escaping printer and the script writes
 			// it into a text node, so there is no third rule for it here.
 			'path' => is_string($facts['path'] ?? null) ? $facts['path'] : '',
+			// The spelling the lookup takes back, built by PathResolverService
+			// and printed by the card as it is (issue #14, review): the script
+			// used to put uid/files/ in front of the path itself and doubled it
+			// for a file outside the files folder.
+			'reference' => is_string($facts['reference'] ?? null) ? $facts['reference'] : '',
 			'uid' => is_string($facts['uid'] ?? null) ? $facts['uid'] : '',
 			'trashed' => ($facts['trashed'] ?? false) === true,
 			'shares' => is_int($facts['shares'] ?? null) ? max(0, $facts['shares']) : 0,
@@ -802,7 +807,7 @@ final class AdminViewService {
 	 * read as a deletion, which is what makes "it was indexed and has since been
 	 * deleted" an honest sentence instead of the misreading of pitfall 6.
 	 *
-	 * @param array{uid:string,path:string,shares:int,trashed:bool,storageId:int,mime:string,size:int,internalPath:string}|null $facts
+	 * @param array{uid:string,path:string,reference:string,shares:int,trashed:bool,storageId:int,mime:string,size:int,internalPath:string}|null $facts
 	 * @param array<string,mixed> $container
 	 * @return array<string,mixed>|null
 	 */
@@ -847,7 +852,7 @@ final class AdminViewService {
 	 * lies decides more than what it is, and what it is decides more than how
 	 * large it is.
 	 *
-	 * @param array{uid:string,path:string,shares:int,trashed:bool,storageId:int,mime:string,size:int,internalPath:string} $facts
+	 * @param array{uid:string,path:string,reference:string,shares:int,trashed:bool,storageId:int,mime:string,size:int,internalPath:string} $facts
 	 * @return array<string,mixed>|null
 	 */
 	private function stageTwoRulesOfToday(array $facts): ?array {
@@ -1258,6 +1263,7 @@ final class AdminViewService {
 			$examples[] = [
 				'fileId' => $row['fileId'],
 				'path' => is_string($one['path'] ?? null) ? $one['path'] : '',
+				'reference' => is_string($one['reference'] ?? null) ? $one['reference'] : '',
 				'uid' => is_string($one['uid'] ?? null) ? $one['uid'] : '',
 				'shares' => is_int($one['shares'] ?? null) ? max(0, $one['shares']) : 0,
 				'trashed' => ($one['trashed'] ?? false) === true,

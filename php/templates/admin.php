@@ -701,12 +701,16 @@ $chip = static function (string $state, string $reason) use ($l, $skippedIcon, $
 												? $l->t('File no longer exists (ID %s)', [(string)$fileId])
 												: ($trashed ? $l->t('%s (in the trash bin)', [$path]) : $path);
 											// The lookup takes a path in the shape the
-											// placeholder teaches, uid/files/rest, and a
-											// trashed or vanished file is not at that
-											// path any more: those rows carry only the
-											// id, which the lookup resolves either way.
-											$lookupPath = ($resolved && !$trashed && $uid !== '' && $path !== '')
-												? $uid . '/files/' . $path
+											// placeholder teaches, uid/files/rest, and
+											// PathResolverService builds exactly that as
+											// the reference (issue #14, review). A file
+											// outside the files folder has no such path,
+											// and neither has a trashed or vanished one:
+											// those rows carry only the id, which the
+											// lookup resolves either way.
+											$reference = is_string($example['reference'] ?? null) ? $example['reference'] : '';
+											$lookupPath = ($resolved && !$trashed && $uid !== '' && str_starts_with($reference, $uid . '/files/'))
+												? $reference
 												: '';
 											?>
 											<li>
