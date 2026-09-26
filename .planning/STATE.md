@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 Phase: 22 (messanfahrt-bl-f03), EXECUTING
 Plan: 8 of 12
-Status: 22-08 am VIERTEN CHECKPOINT: Bewaffnung nachgeholt, app_api:app:enable hing, weil der von 92e gebaute Container keinen Netzalias traegt (HaRP: Cannot resolve findling_backend). Werkzeugbefund 92e, Box GESTOPPT, nichts gemessen; gesamt 1,28 h / 0,148 USD. README 6.4
+Status: 22-08 am FUENFTEN CHECKPOINT: 92e-Alias-Fix (be35cfe) wirkt, 92d und Bewaffnung ok (backendReachable True), aber Tor 59 im Rueckweg aus falschem Kriterium (rebuildTotal>0 gilt nur im Umbau). Box GESTOPPT; gesamt 1,44 h / 0,167 USD. README 6.5
 
 Aktueller Stand: PHASE 21 KOMPLETT 25.09.2026 (9/9 Plaene, goal-backward verified passed 9/9,
 phase.complete gelaufen, STATE von Hand nachgezogen). Niederlaendische Komposita sind Ende-zu-
@@ -698,6 +698,6 @@ Sonst keine (die drei Debug-Sessions aus v1.1 sind am 21.09.2026 formal auf reso
 
 ## Session Continuity
 
-Last session: 2026-09-26T12:20:00.000Z
-Stopped at: Plan 22-08 vierter Checkpoint, Befund 92e ohne Netzalias (Box gestoppt)
+Last session: 2026-09-26T12:35:00.000Z
+Stopped at: Plan 22-08 fuenfter Checkpoint, Kriterium des Rueckwegs falsch (Box gestoppt)
 Resume file: .planning/phases/22-messanfahrt-bl-f03/22-08-PLAN.md

@@ -25,3 +25,35 @@ rueckweg-start 2026-09-26T11:53:02Z index 787051223 index.rebuild 237275422
 {"embedded": 0, "languagesActive": "", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:00:02Z"}
 {"embedded": 0, "languagesActive": "", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:00:14Z"}
 rueckweg-antwort 2026-09-26T12:00:24Z geantwortet nein rebuild-laeuft false sprachen 
+rueckweg-start 2026-09-26T12:25:15Z index 787051223 index.rebuild 237604867
+{"embedded": 52137, "languagesActive": "de,en", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:25:17Z"}
+{"embedded": 52137, "languagesActive": "de,en", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:25:28Z"}
+{"embedded": 52137, "languagesActive": "de,en", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:25:38Z"}
+{"embedded": 52137, "languagesActive": "de,en", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:25:48Z"}
+{"embedded": 52137, "languagesActive": "de,en", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:25:58Z"}
+{"embedded": 52137, "languagesActive": "de,en", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:26:09Z"}
+{"embedded": 52137, "languagesActive": "de,en", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:26:19Z"}
+{"embedded": 52137, "languagesActive": "de,en", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:26:29Z"}
+{"embedded": 52137, "languagesActive": "de,en", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:26:40Z"}
+{"embedded": 52137, "languagesActive": "de,en", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:26:50Z"}
+{"embedded": 52137, "languagesActive": "de,en", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:27:00Z"}
+{"embedded": 52137, "languagesActive": "de,en", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:27:10Z"}
+{"embedded": 52137, "languagesActive": "de,en", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:27:21Z"}
+{"embedded": 52137, "languagesActive": "de,en", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:27:31Z"}
+{"embedded": 52137, "languagesActive": "de,en", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:27:41Z"}
+{"embedded": 52137, "languagesActive": "de,en", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:27:51Z"}
+{"embedded": 52137, "languagesActive": "de,en", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:28:02Z"}
+{"embedded": 52137, "languagesActive": "de,en", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:28:12Z"}
+{"embedded": 52137, "languagesActive": "de,en", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:28:22Z"}
+{"embedded": 52137, "languagesActive": "de,en", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:28:33Z"}
+{"embedded": 52137, "languagesActive": "de,en", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:28:43Z"}
+{"embedded": 52137, "languagesActive": "de,en", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:28:53Z"}
+{"embedded": 52137, "languagesActive": "de,en", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:29:03Z"}
+{"embedded": 52137, "languagesActive": "de,en", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:29:14Z"}
+{"embedded": 52137, "languagesActive": "de,en", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:29:24Z"}
+{"embedded": 52137, "languagesActive": "de,en", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:29:34Z"}
+{"embedded": 52137, "languagesActive": "de,en", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:29:44Z"}
+{"embedded": 52137, "languagesActive": "de,en", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:29:55Z"}
+{"embedded": 52137, "languagesActive": "de,en", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:30:05Z"}
+{"embedded": 52137, "languagesActive": "de,en", "rebuildDone": 0, "rebuildRunning": false, "rebuildTotal": 0, "zeit": "2026-09-26T12:30:15Z"}
+rueckweg-antwort 2026-09-26T12:30:25Z geantwortet nein rebuild-laeuft false sprachen de,en

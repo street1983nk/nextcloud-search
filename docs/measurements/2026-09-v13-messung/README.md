@@ -498,3 +498,26 @@ fertig, die App steht in AppAPI vermutlich auf deaktiviert. Der Container
 trägt de,en, das halbe `index.rebuild` (237 MB) liegt noch auf dem Volumen.
 Weiterarbeit braucht einen Werkzeugentscheid, weil jeder weitere 92e-Neubau
 (Rückweg, Umbau) denselben Container ohne Alias baut.
+
+### 6.5 Fix 92e gefahren, Tor 59 aus dem eigenen Kriterium des Rückwegs (26.09.2026)
+
+Owner-Entscheid A zum Befund 92e, Fix in be35cfe. Start 12:21:40Z, Timer sofort
+absolut auf 2026-09-27T03:33:00Z, zurückgelesen. 92d lief mit 0 (Ausgabe in
+`rohdaten/ab-pii-92d/`): Baumhash-Beweis ja, `occ upgrade` 0, Registrierung ja,
+Grenze 2147483648/0, Entladeschalter 0, Bestandstor 52.137 / 44 / 6 bestanden.
+Der von AppAPI gebaute Container trägt den Alias `findling_backend`, das
+bestätigt den Befund aus 6.4. Die Bewaffnung ging diesmal durch (`disable` und
+`enable` erfolgreich), die Übersicht meldete um 12:25:04Z `backendReachable
+True` (`ab-pii-92d/bewaffnung.txt`). `ab-pii` startete um 12:25:14Z, der Timer
+wurde danach wieder absolut auf 03:33:00Z gezogen. Markentor 0, Bestand
+52.137 / 44 / 6. Der Rückweg über 92e lief mit 0, und der neue Container trägt
+den Alias (`netz-aliase findling_backend quelle alter-container`).
+
+**Warum trotzdem 59:** Das Backend antwortete vom ersten Takt an mit
+`embedded 52137` und `languagesActive de,en`. Nur `rebuildTotal` stand auf 0,
+und zu Recht: unter de,en ist kein Umbau fällig. Das Kriterium
+`backend_hat_geantwortet` (`rebuildTotal` über 0) ist für den Umbau richtig,
+im Rückweg aber falsch, denn dort gilt gerade der Ruhezustand ohne Umbau. Das
+ist ein Fehler in meinem Fix aecca7d, nicht an der Box. Das halbe
+`index.rebuild` ist nicht verworfen worden. Uptime 0,16 h, 0,0190 USD, gesamt
+bisher 1,44 h und 0,167 USD. Die Box ist gestoppt.
