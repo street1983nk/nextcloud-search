@@ -471,3 +471,30 @@ ist ein Bedienfehler dieses Wiederanlaufs, kein Werkzeug- und kein Boxbefund.
 Das Tor hat fail-closed gehalten, der halbe `index.rebuild` (237 MB) ist nicht
 verworfen worden. Uptime 0,16 h, 0,0189 USD. Gesamt bisher 1,14 h und
 0,132 USD. Die Box ist gestoppt (`rohdaten/04-wiederanlauf.txt`).
+
+### 6.4 Bewaffnung nachgeholt, Befund in 92e (26.09.2026)
+
+Owner-Entscheid A zum Tor 59: Box starten, zuerst bewaffnen, dann `ab-pii`.
+Start 12:04:44Z, A-Record nachgezogen, Hostschlüssel gleich. Ein
+Sicherheitstimer stand sofort absolut auf 2026-09-27T03:33:00Z, zurückgelesen.
+Eine Nextcloud am Docker-Dienst, `app_api:app:disable` erfolgreich, dann hing
+`app_api:app:enable` fünf Minuten ohne Antwort. HaRP meldete dabei alle 6 s
+`Cannot resolve 'findling_backend' to IP address`.
+
+**Befund:** Der Container, den `92e-umgebung.sh` im Rückweg gebaut hat, steht im
+Netz `nextcloud-aio` ohne Alias (`aliases []`, Hostname zufällig). 92e übernimmt
+Abbild, Umgebung, Mounts, Labels, Restart-Policy und NetworkMode, aber keine
+Netzaliase. Der Kopf des CI-Musters sagt dazu, dort gebe es keine
+(`deploy-harp.yml`, Netz `host`). Auf der Box löst HaRP die App-Kennung über
+den Namensdienst des Netzes auf. In der zweiten Fahrt fiel das nicht auf,
+weil HaRP die Adresse aus der Registrierung durch 92d noch kannte. Nach dem
+Maschinenstart musste er neu auflösen und fand keinen Namen mehr. Damit
+erklärt sich auch das `backendReachable false` des Tors 59: die fehlende
+Bewaffnung war nicht die einzige Ursache.
+
+Die Box ist um 12:13Z angehalten worden, nichts wurde gemessen. Uptime 0,14 h,
+0,0164 USD, gesamt bisher 1,28 h und 0,148 USD. Stand: `enable` war nicht
+fertig, die App steht in AppAPI vermutlich auf deaktiviert. Der Container
+trägt de,en, das halbe `index.rebuild` (237 MB) liegt noch auf dem Volumen.
+Weiterarbeit braucht einen Werkzeugentscheid, weil jeder weitere 92e-Neubau
+(Rückweg, Umbau) denselben Container ohne Alias baut.

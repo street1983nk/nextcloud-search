@@ -380,6 +380,23 @@ Umgesetzt, bevor die Box wieder lief:
 - M-01, Bodensatz und B2 laufen nicht noch einmal. Ihre Zahlen stammen aus der
   zweiten Fahrt.
 
+**Merksatz, gilt auch für 22-09 (Typwechsel für B4): nach JEDEM Maschinenstart
+erst bewaffnen, dann messen.** Also `occ app_api:app:disable findling_backend`,
+dann `enable`, danach `docker update --memory=2g --memory-swap=2g` und die
+Grenze aus der cgroup zurücklesen (Runbook Block 11 und 12). Belegt ist die
+Bewaffnung erst, wenn die Admin-Übersicht `backendReachable true` meldet. Ein
+gezählter Poller-Durchgang reicht dafür nicht: der zeigt nur den Weg vom
+Backend zur Nextcloud, nicht den Weg zurück. Der Wiedereinstieg vom 26.09.2026
+ist an genau diesem fehlenden Schritt mit 59 gescheitert (README 6.3).
+
+**Voraussetzung dafür, gefunden beim Nachholen (README 6.4):** Die Bewaffnung
+greift nur an einem Container, den AppAPI selbst angelegt hat. Ein von
+`92e-umgebung.sh` nachgebauter Container trägt im Netz `nextcloud-aio` keinen
+Alias. HaRP löst die App-Kennung `findling_backend` nach einem Neustart
+deshalb nicht mehr auf, und `enable` hängt. Solange 92e keine Aliase mitnimmt,
+steht vor dem Bewaffnen nach einem Maschinenstart eine Registrierung über
+AppAPI (wie in 92d, ohne `--rm-data`).
+
 ---
 
 ## 7. Streichreihenfolge

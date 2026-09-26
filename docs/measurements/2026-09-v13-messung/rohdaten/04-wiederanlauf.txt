@@ -66,3 +66,15 @@ fehlte die bewaffnung app_api:app:disable und enable (runbook block 11, wiederke
 handgriff). sie ist im wiederanlauf der zweiten fahrt gefahren worden, in diesem nicht.
 das tor 59 hat richtig gehalten; der halbe index.rebuild ist NICHT verworfen worden.
 rohdaten 12:01:58Z abgeholt, box per aws_box.sh stop angehalten: 0,16 h, 0,0189 USD.
+
+-- bewaffnung nachgeholt, 2026-09-26 12:04Z bis 12:13Z --
+owner-entscheid a zum tor 59. aws_box.sh start 12:04:44Z, a-record nachgezogen,
+hostschluessel gleich. sicherheitstimer sofort absolut: shutdown -h 03:33, zurueckgelesen
+2026-09-27T03:33:00Z. name und status.php 200 um 12:06:50Z.
+nextcloud-instanzen 1. app_api:app:disable: successfully disabled. app_api:app:enable:
+keine antwort nach 5 min. harp-protokoll alle 6 s: Cannot resolve 'findling_backend' to IP
+address (85 zeilen). container nc_app_findling_backend: netz nextcloud-aio, aliases [],
+hostname zufaellig, 4 labels; der rueckweg-neubau von 92e hatte "tunnel-zertifikate keine".
+befund: 92e nimmt keine netzaliase mit; nach dem maschinenstart loest harp die app-kennung
+nicht mehr auf. kein 00-lauf.sh gestartet, nichts gemessen.
+box per aws_box.sh stop angehalten: 0,14 h, 0,0164 USD.
