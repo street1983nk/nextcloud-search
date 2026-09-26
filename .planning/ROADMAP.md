@@ -55,7 +55,7 @@ Details im Archiv: .planning/milestones/v1.2-ROADMAP.md
 - [x] **Phase 19: Frageseite freischalten** - Die Anfrage erreicht die neuen Felder, erst nachdem der Umbau bewiesen ist (komplett 25.09.2026, Verifikation 4/4, Audit 1H/5M behoben, CI 36096526219 gruen 4/4)
 - [x] **Phase 20: UI-Kataloge es/it/nl/pt** - Zehn neue Katalogdateien im Gleichstand mit EN/DE/FR (Parallelpfad) (completed 2026-09-25)
 - [x] **Phase 21: Niederlaendische Komposita** - Eigenes Tor, faellt bei Terminnot als Ganzes (completed 2026-09-25)
-- [ ] **Phase 22: Messanfahrt BL-F03** - Eine Box-Anfahrt fuer fuenf offene und zwei neue Zahlen
+- [x] **Phase 22: Messanfahrt BL-F03** - Eine Box-Anfahrt fuer fuenf offene und zwei neue Zahlen (completed 2026-09-26, Owner-Abnahme, Nachanfahrt 22-13 schliesst MESS-07)
 - [ ] **Phase 23: Haertung und Store-Einreichung 1.3.0** - Aufraeumbefunde, dokumentierte Grenzen, signiertes App-Paar im Store
 
 **Ausfuehrungsreihenfolge und Sicherheitsbedingung:** 17 -> 18 -> 19 ist keine Aufwandsgruppierung, sondern eine Sicherheitsbedingung. Zwischen "Schema erweitert" und "Umbau fertig" liegt auf jeder Bestandsinstallation ein Zeitfenster, in dem eine geoeffnete Query-Feldliste zum Totalausfall fuehrt (`parse_query_lenient`-ValueError, vom Suchpfad zu einer dauerhaft leeren degraded-Antwort verschluckt). Phase 20 ist der einzige echte Parallelpfad und kann waehrend der Wartezeit am Owner-Tor laufen. Phase 21 haengt an Phase 19 und ist als Ganzes streichbar.
@@ -237,7 +237,7 @@ Plans:
   5. Die Runbook-Disziplin ist gehalten (Cron-Intervall-Gate als erzwungene Messbedingung, Digest-Wechsel protokolliert), und der Owner nimmt die Messphase ab.
   6. NEU (Owner 25.09.2026, BL-F04-Mitmessliste aus .planning/research/BL-F04-vorarbeit-2026-09-25.md Abschnitt 1): dieselbe Anfahrt erhebt die BL-F04-Basiszahlen B1-B3+B5 (Kernbelegung je Phase, OCR-Charge im Produkt, Speicher je zusaetzlichem OCR-Slot inkl. OMP_THREAD_LIMIT-Vergleich, onnx-Threads/Batch auf Graviton3) UND B4 (FREIGEGEBEN: Typwechsel m7g.4xlarge, Skalierungskurve 1/2/4/8/12/16 Kerne, ~1,25 h / ~1,00 USD; vorher entscheidet die kostenlose 4-Kern-CI-Kurve, ob B4 noch noetig ist). Die drei neuen Messskripte (cpu_sampler.sh, Speicher je Prozess, Slot-Probe) sind ZUSATZAUFTRAG dieser Phase, ohne Box baubar und vorab auf dem arm64-CI-Runner erprobt; rss_sampler.sh bleibt unveraendert. NL-Automat-RAM misst der CI-arm64-Runner, nicht die Box. Rechenblatt (Kriterium 1) MIT den Mitmessposten rechnen (+~2,7 h, +~1,30 USD gegenueber reinem BL-F03).
 
-**Plans**: 12 Pläne in 9 Wellen
+**Plans**: 13 Pläne in 10 Wellen
 
 **Wave 1**
 
@@ -276,7 +276,11 @@ Plans:
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
-- [ ] 22-12-PLAN.md: Audit, Owner-Abnahme der Messphase, Push mit CI-Beweis, Anforderungen und STATE nachziehen
+- [x] 22-12-PLAN.md: Audit, Owner-Abnahme der Messphase, Push mit CI-Beweis, Anforderungen und STATE nachziehen
+
+**Wave 10** *(gap closure, Owner-Nachfreigabe 26.09.2026)*
+
+- [x] 22-13-PLAN.md: Nachanfahrt, Kaltstart mit Einwort-Begriff, Spitze der Bodensatz-Abtastreihe, RAM je onnx-Kombination
 
 ### Phase 23: Haertung und Store-Einreichung 1.3.0
 
@@ -306,7 +310,7 @@ Plans:
 | 19. Frageseite freischalten | v1.3 | 9/9 | Complete    | 2026-09-25 |
 | 20. UI-Kataloge es/it/nl/pt | v1.3 | 9/9 | Complete    | 2026-09-25 |
 | 21. Niederlaendische Komposita | v1.3 | 9/9 | Complete    | 2026-09-25 |
-| 22. Messanfahrt BL-F03 | v1.3 | 11/12 | In Progress | - |
+| 22. Messanfahrt BL-F03 | v1.3 | 13/13 | Complete | 2026-09-26 |
 | 23. Haertung und Store-Einreichung 1.3.0 | v1.3 | 0/TBD | Not started | - |
 
 ## Requirement-Abdeckung v1.3

@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
-status: executing
-stopped_at: Plan 22-11 abgeschlossen (Zahlen in performance.md, Urteile E1-E14 11 gehalten / 3 verfehlt, Runbook-Nachtraege, Pruefsummen-Waechter); naechster Schritt 22-12
-last_updated: "2026-09-26T16:30:00.000Z"
-last_activity: 2026-09-26, Plan 22-11 abgeschlossen (Auswertung, Urteile, Pruefsummen)
+status: ready_to_plan
+stopped_at: Phase 22 komplett (22-12 Abnahme, 22-13 Nachanfahrt schliesst MESS-07); naechster Schritt vor Phase 23 der Merge von fix/issue-14-teamfolder-acl, dann plan-phase 23
+last_updated: "2026-09-26T17:15:00.000Z"
+last_activity: 2026-09-26, Nachanfahrt 22-13 (0,37 h, 0,0427 USD) und Abschluss 22-12
 progress:
   total_phases: 7
-  completed_phases: 5
-  total_plans: 59
-  completed_plans: 58
-  percent: 98
+  completed_phases: 6
+  total_plans: 60
+  completed_plans: 60
+  percent: 86
 ---
 
 # Project State
@@ -21,13 +21,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 22, Messanfahrt BL-F03
+**Current focus:** Phase 23, Haertung und Store-Einreichung 1.3.0 (vorher Merge fix/issue-14-teamfolder-acl)
 
 ## Current Position
 
-Phase: 22 (messanfahrt-bl-f03), EXECUTING
-Plan: 12 of 12
-Status: 22-11 abgeschlossen: docs/performance.md traegt "Die v1.3-Anfahrt vom 26.09.2026" (M-01 warm hoechstens 1.080,6 ms, Stufe 1 kalt 1.512,5; 92c 36/0, 99d 0; Bodensatz Zyklus 2 +30,5 MB; Einzelliste alle 50; Kaltstart LUECKE; Index 1,82-fach, Umbau 581 s; B1-B7), Nachtrag "tesseract und die Kerne" (Satz Zeile 2887 fuer das Produkt widerlegt: OMP_THREAD_LIMIT=1, ungesetzt 1,70-mal langsamer, zwei Slots Faktor 1,97), Kosten 2,32 h / 0,4716 USD. README 6.12 Urteile: 11 gehalten, 3 verfehlt (E4, E5, E8). Runbook: 92d statt 13b, 00-lauf.sh Timer/Abholen, Vorpruefung, Bewaffnung nach jedem Start, B4-Typwechsel, Fallen. Pruefsummen: DRIVEN_V13_FASSUNGEN (11) in test_v13_gefahren.py, DRIVEN_SUCCESSOR_FASSUNGEN (92c, 99d). MESS-08 abgehakt, MESS-07 OFFEN (Kaltstart mit Trefferpflicht fehlt; Owner muss Weg a/b/c waehlen und neu freigeben, rund 0,24 USD). Commits 44bba82, b497cc0. Suite 3322 passed. Naechster Plan 22-12
+Phase: 22 (messanfahrt-bl-f03), COMPLETE 26.09.2026 (13/13 Plaene, von Hand nachgezogen, kein phase.complete)
+Plan: 13 of 13
+Status: PHASE 22 KOMPLETT. Owner-Abnahme 26.09.2026 ("machen wir wie die empfehlung", README "Abgenommen: 26.09.2026", Audit docs/audits/2026-09-phase-22/). MESS-07, MESS-08, MESS-09 alle Complete.
+Nachanfahrt 22-13 (Owner-Nachfreigabe zweistufig: "machen wir wie die empfehlung", dann "weiter", beide ueber den Koordinator, Vermerk im README): Aufbau aus dem Korpus-Snapshot ohne Abweichung, Timer absolut 20:20Z, 92d 0 mit Bestand 52.137 / 44 / 6, backendReachable true. 95c mit Einwort-Begriff "Bescheid" unter lasttest, Schalter 0: erste kalte Suche 2.617 ms, 26 Treffer, gueltig im ersten Zyklus, Gegenprobe 2 Zeilen (E5 fuer den Einwortfall gehalten, Nachtrag 6.12; Urteil der Hauptanfahrt bleibt verfehlt). 94c: abtastreihe-spitze-mb 1688, Zyklus 2 minus C1 27,4. B5: anon 542 MB bei batch 2, 877 MB bei batch 8, Threads kosten keinen Speicher. Box abgebaut ohne Ende-Snapshot, 0 Ressourcen ueber 17 Regionen ausser dem Korpus-Snapshot, A-Record weg. Kosten 0,37 h / 0,0427 USD gegen Deckel 4 h / 0,50 USD (gehalten). Commits 0de526b (Freigabevermerk), ea32513 (Rohdaten rohdaten-nachanfahrt/), ec15950 (Bericht 6.15, performance.md).
+Kosten der Phase gesamt: Hauptanfahrt 2,32 h / 0,4716 USD (Deckel 24 h / 3,76 USD gehalten) plus Nachanfahrt 0,37 h / 0,0427 USD. Urteile E1 bis E14: 11 gehalten, 3 verfehlt (E4, E5, E8), E5 per Nachtrag fuer den Einwortfall gehalten. dismax-Entscheid: Summe, disjunction_max verworfen (MESS-09).
+Offene Befunde (deferred-items 22-13): V-22-01 (erste Mehrwortsuche nach Containerstart bei Schalter 0 ohne Findling-Treffer) zeigt sich auch an der Auszugsroute api/snippets.py, die die Einwortregel nicht kennt (Backlog, Owner-Entscheid); 00-typwechsel.sh vorpruefung schreibt ohne OUT nach rohdaten/ (in der Nachanfahrt von Hand zurueckgesetzt, Werkzeug bleibt gefahren und pruefsummengeschuetzt). Korpus-Snapshot bleibt (Wiedervorlage beim Milestone-Close).
+OFFENER PUNKT VOR PHASE 23: der Merge von Branch fix/issue-14-teamfolder-acl steht an (von dieser Phase unberuehrt).
+Naechster Schritt: Merge fix/issue-14-teamfolder-acl, dann /gsd:plan-phase 23.
+
+Vorher 22-11 abgeschlossen: docs/performance.md traegt "Die v1.3-Anfahrt vom 26.09.2026" (M-01 warm hoechstens 1.080,6 ms, Stufe 1 kalt 1.512,5; 92c 36/0, 99d 0; Bodensatz Zyklus 2 +30,5 MB; Einzelliste alle 50; Kaltstart LUECKE, geschlossen in 22-13; Index 1,82-fach, Umbau 581 s; B1-B7). Commits 44bba82, b497cc0.
 
 Vorher 22-10 abgeschlossen: MESS-09 nach E10 auf 98d entschieden, Urteil E10 gehalten, Entscheid Summe, Folge verworfen (RBO@10-Median gegen Altplan: Summe 0,9531, tie 0.0 0,8399, tie 0.1 0,9633; Schwelle +0,05 von keinem erreicht, lag mit 1,0031 ueber dem RBO-Hoechstwert). rewrite.py unveraendert, keine Ratsche. Verwerfung in docs/language-analyzers.md, README 6.10, Kopf test_field_plan_ranking.py. KALTSTART-URSACHE GEKLAERT (README 6.11): erste hybride Suche laedt bei Schalter 0 das Modell und reisst den PHP-Deckel 1,5 s (m01 innerMs 1505-1596), bekannter Vorfall 10.09.; unveraenderte Nachmessung liefert wieder 0 Treffer, Owner muss vor der Nachfreigabe Weg a (Schalter an), b (einwortiger Begriff) oder c (erst Produktfix) waehlen. Commits f0eec86, 6d9952a, 1ef5977. Naechster Plan 22-11
 
