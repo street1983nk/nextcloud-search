@@ -620,8 +620,15 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # for a named user who may not open the file; PathResolverServiceTest.php and
 # QueueServiceReaderTest.php hold the fallback cases and the Team Folder of the
 # reporter, four members and the first two closed.
+# Moved on 2026-09-26 by the review of issue #14, fourth fix: two of the 70
+# files changed their bytes and none came or went. PathResolverService.php asks
+# SearchService::readableNode() about the node get() handed out instead of
+# resolving it a second time by id per member tried, and
+# PathResolverServiceTest.php holds that no second resolution happens. The
+# resolution register of test_php_acl_boundary.py does not move: no file
+# resolves a file id that did not before.
 PHP_FILES_TODAY = 70
-PHP_TREE_HASH_TODAY = "acd05c6dd19affdc586b3e7240f530943a27cf54440f16065c4521aff7cad1c8"
+PHP_TREE_HASH_TODAY = "99a8c5c28ca24078477a3bddd2946ed4496b827004082050431351c20c30baf3"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

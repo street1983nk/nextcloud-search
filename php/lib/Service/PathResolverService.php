@@ -449,8 +449,7 @@ final class PathResolverService {
 
 		foreach (array_slice($readers, 0, self::MAX_PATH_READERS) as $uid) {
 			try {
-				$userFolder = $this->rootFolder->getUserFolder($uid);
-				$node = $userFolder->get($candidate);
+				$node = $this->rootFolder->getUserFolder($uid)->get($candidate);
 			} catch (\Throwable $e) {
 				// Hidden from this member by the folder rules, or a member who
 				// is gone since the row was written: the next one is asked.
@@ -458,7 +457,11 @@ final class PathResolverService {
 				continue;
 			}
 
-			$file = SearchService::readableFile($userFolder, $node->getId());
+			// The node in hand is asked directly. Resolving it a second time by
+			// id only to ask the readability question cost a second lookup per
+			// member tried (review finding); the question itself stays in
+			// SearchService, the one place that asks it.
+			$file = SearchService::readableNode($node);
 			if ($file !== null && $file->getId() > 0) {
 				return $file->getId();
 			}

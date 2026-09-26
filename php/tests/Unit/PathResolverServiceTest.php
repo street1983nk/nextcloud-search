@@ -351,6 +351,19 @@ final class PathResolverServiceTest extends TestCase {
 		self::assertNull($this->resolver()->resolve('anna/files/admins-hh/Unter/Vertrag.pdf'));
 	}
 
+	public function testAMemberIsAskedAboutTheNodeInHandAndNotResolvedTwice(): void {
+		// The efficiency finding: the node comes out of get() by path, and the
+		// readability question is asked of that node. A second resolution by
+		// id per member tried was a second lookup for the node already there.
+		$this->mounts([self::row('anna', '/anna/files/admins-hh/', 9)]);
+		$folder = $this->createMock(Folder::class);
+		$folder->method('get')->willReturn($this->file(true));
+		$folder->expects(self::never())->method('getFirstNodeById');
+		$this->rootFolder->method('getUserFolder')->willReturn($folder);
+
+		self::assertSame(self::FILE_ID, $this->resolver()->resolveReference('admins-hh/Vertrag.pdf'));
+	}
+
 	public function testAFileNoMemberMayReadIsRefused(): void {
 		$this->mounts([self::row('anna', '/anna/files/admins-hh/', 9)]);
 		$this->folders(['anna' => $this->file(false)]);
