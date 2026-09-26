@@ -674,6 +674,20 @@ backend_hat_geantwortet() {
     ist_zahl "$gesamt" && [ "$gesamt" -gt 0 ]
 }
 
+# Hat das Backend im RUHEZUSTAND geantwortet, also ohne laufenden Umbau? Dort
+# ist rebuildTotal zu Recht 0 (Tor 59 der Fahrt vom 26.09.2026, 12:30Z), und
+# das Kriterium von oben passt nicht. Ja, wenn die Sprachen gemeldet sind und
+# embedded eine Zahl ueber 0 ist: ein Backend, das noch startet oder nicht
+# erreichbar ist, meldet beides leer oder 0.
+backend_antwortet_in_ruhe() {
+    sprachen_ist=$(feld_von "$1" languagesActive)
+    eingebettet_ist=$(feld_von "$1" embedded)
+    case "$sprachen_ist" in
+    '' | unlesbar) return 1 ;;
+    esac
+    ist_zahl "$eingebettet_ist" && [ "$eingebettet_ist" -gt 0 ]
+}
+
 # 97-cron-vorpruefung.sh waehrend neben einem Block, abgesetzt. Sein
 # Rueckgabewert ist ein Befund ueber den Takt und kein Tor dieses Laufs.
 cron_waehrend_starten() {
@@ -1288,7 +1302,7 @@ block_rueckweg() {
     while [ $(($(date +%s) - beginn)) -le "$RUECKWEG_FRIST" ]; do
         zeile=$(statuszeile)
         printf '%s\n' "$zeile" >>"$RUECK"
-        if backend_hat_geantwortet "$zeile"; then
+        if backend_antwortet_in_ruhe "$zeile"; then
             geantwortet=ja
             break
         fi

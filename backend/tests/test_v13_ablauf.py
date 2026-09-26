@@ -921,7 +921,10 @@ SECOND_LINE_WITH_THE_ANSWER = (
 def the_answer_reader() -> str:
     """ist_zahl, feld_von and backend_hat_geantwortet, cut out of the run script."""
     code = run_code()
-    return "\n".join(function_of(code, name) + "\n}" for name in ("ist_zahl", "feld_von", "backend_hat_geantwortet"))
+    return "\n".join(
+        function_of(code, name) + "\n}"
+        for name in ("ist_zahl", "feld_von", "backend_hat_geantwortet", "backend_antwortet_in_ruhe")
+    )
 
 
 @pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
@@ -1008,7 +1011,7 @@ def test_the_way_back_discards_the_half_filled_directory_only_when_nobody_holds_
         rueck,
         [
             "neubau_92e FINDLING_LANGUAGES=de,en rueckweg",
-            "backend_hat_geantwortet",
+            "backend_antwortet_in_ruhe",
             '[ "$laeuft" != false ]',
             'sudo rm -rf "$VOLUME/index.rebuild"',
             "bestand_lesen",
@@ -1043,3 +1046,60 @@ def test_the_cold_start_tool_keeps_its_old_call_when_no_search_account_is_named(
     assert 'protokoll "suchkonto $SUCHKONTO sitzung $BENUTZER"' in text
     # The readiness probe stays with the session of BENUTZER.
     assert '--data-urlencode "user=$BENUTZER"' in text
+
+
+LINE_AT_REST_OF_THE_WAY_BACK = (
+    '{"embedded": 52137, "languagesActive": "de,en", "rebuildDone": 0, "rebuildRunning": false, '
+    '"rebuildTotal": 0, "zeit": "2026-09-26T12:25:17Z"}'
+)
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+@pytest.mark.skipif(shutil.which("python3") is None, reason="feld_von reads the line with python3")
+@pytest.mark.parametrize(
+    ("zeile", "erwartet"),
+    [
+        (LINE_AT_REST_OF_THE_WAY_BACK, "ruhe-ja umbau-nein"),
+        (FIRST_LINE_BEFORE_THE_ANSWER, "ruhe-nein umbau-nein"),
+        (SECOND_LINE_WITH_THE_ANSWER, "ruhe-ja umbau-ja"),
+    ],
+    ids=["way-back-at-rest", "no-answer", "rebuild-running"],
+)
+def test_the_way_back_takes_a_line_at_rest_as_an_answer(zeile: str, erwartet: str) -> None:
+    """Gate 59 of 12:30Z: embedded 52137, de,en and rebuildTotal 0 is an answer at rest.
+
+    The criterion of the rebuild stays as it was, and a line of zeros is no
+    answer to either of them.
+    """
+    shell = shutil.which("sh")
+    assert shell is not None
+    driver = the_answer_reader() + textwrap.dedent(
+        """
+        if backend_antwortet_in_ruhe "$ZEILE"; then r=ruhe-ja; else r=ruhe-nein; fi
+        if backend_hat_geantwortet "$ZEILE"; then u=umbau-ja; else u=umbau-nein; fi
+        echo "$r $u"
+        """
+    )
+    answer = subprocess.run(  # noqa: S603 - a fixed shell and a driver cut out of the run script
+        [shell, "-c", driver],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "ZEILE": zeile},
+        timeout=60,
+    )
+    assert answer.returncode == 0, answer
+    assert answer.stdout.strip() == erwartet
+
+
+def test_the_answer_of_the_rebuild_is_asked_only_where_a_rebuild_runs() -> None:
+    """backend_hat_geantwortet in block_umbau only; the way back asks for an answer at rest."""
+    code = run_code()
+    nutzer = [
+        name
+        for name in re.findall(r"^([a-z_0-9]+)\(\) \{$", code, flags=re.MULTILINE)
+        if name not in {"backend_hat_geantwortet", "backend_antwortet_in_ruhe"}
+        and "backend_hat_geantwortet" in function_of(code, name)
+    ]
+    assert nutzer == ["block_umbau"], nutzer
+    assert "backend_antwortet_in_ruhe" in function_of(code, "block_rueckweg")
