@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: executing
-stopped_at: Plan 22-06 Task 1 fertig (Generalprobe, 463fcfe a65c9c5 5d97688 c24f142 399ff7e), wartet am Checkpoint Task 2 auf Push-Freigabe; Task 3 (W4) offen, kein SUMMARY
-last_updated: "2026-09-26T23:45:00.000Z"
-last_activity: 2026-09-26, Plan 22-06 Task 1 (Generalprobe) ausgeführt, Checkpoint Push-Freigabe
+stopped_at: Plan 22-06 abgeschlossen (Push freigegeben und erfolgt, W4 F4 3,955, 92d Phase B im CI gruen); naechster Schritt 22-07 Rechenblatt, Owner-Stopp
+last_updated: "2026-09-26T04:30:00.000Z"
+last_activity: 2026-09-26, Plan 22-06 abgeschlossen (Push, W4, probe-92d)
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 59
-  completed_plans: 52
-  percent: 88
+  completed_plans: 53
+  percent: 90
 ---
 
 # Project State
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 ## Current Position
 
 Phase: 22 (messanfahrt-bl-f03), EXECUTING
-Plan: 6 of 12
-Status: 22-06 am Checkpoint Task 2 (Push-Freigabe offen); Fortsetzung ist Task 3 (Push, W4-Lauf, F4) nach "push freigegeben". Owner-Stopps danach: 22-07 Rechenblatt vor Boxstart, 22-12 Abnahme
+Plan: 7 of 12
+Status: 22-06 abgeschlossen. Naechster Plan 22-07 (Rechenblatt, Owner-Checkpoint vor Boxstart); danach Owner-Stopp 22-12 Abnahme. Keine Boxminute ohne Freigabezeile
 
 Aktueller Stand: PHASE 21 KOMPLETT 25.09.2026 (9/9 Plaene, goal-backward verified passed 9/9,
 phase.complete gelaufen, STATE von Hand nachgezogen). Niederlaendische Komposita sind Ende-zu-
@@ -236,13 +236,21 @@ Instanz den Erststempel der Verzeichnismarken; Folge: Feldplan blieb LEGACY, rot
 Fix-Beweis). Endstand-CI 36096526219 GRUEN 4/4 inkl. arm64. Suite 2877 passed / 15 skipped.
 LEHRE: ein Audit-Fix, der einen Schreiber entfernt, braucht die Frage "wer schreibt das
 sonst noch auf JEDEM Pfad" plus einen Frischinstanz-Fall, bevor er reist.
-Last activity: 2026-09-26, Plan 22-05 ausgeführt
+Last activity: 2026-09-26, Plan 22-06 abgeschlossen
 
-Progress: [█████████░] 88% (52 von 59 Plänen, 5 von 7 Phasen)
+Progress: [█████████░] 90% (53 von 59 Plänen, 5 von 7 Phasen)
 
 ## Naechster Schritt
 
-**22-06 ausführen** (Generalprobe lokal, Owner-Freigabe Push, W4-Lauf in CI, F4 und B7). OWNER-STOPP: Push.
+**22-07 ausführen** (Rechenblatt, Owner-Checkpoint: 44/6-Weg, Deckelvariante, dismax-Regel). OWNER-STOPP vor Boxstart.
+22-06 ist fertig: Push 61255f3..59f05fe (Owner "weiter" 26.09.), alle CI-Laeufe gruen. W4 im arm64-Runner
+(measure.yml Lauf 4, 36216002856): F4 3,955, D-03 angewandt, B4 gefahren (B4_GEPLANT=ja), K1 nicht
+ausgeloest; B7 22,99 MB nativ arm64. Box-Digest-Kandidat sha256:40ca8c2b...3e3e (docker.yml Lauf 174,
+Commit 59f05fe). 92d Phase B im CI geprobt (probe-92d.yml Lauf 2, 36217297257, ab v1.1.0: App-Update
+1.1.0 auf 1.2.0, Volumen und Bestand 26/7/6 bleiben, Gegenprobe 41); Fix bbf929e: occ upgrade 0 und 3
+gelten. Gepusht bis 2745b2c, SUMMARY-Commit folgt. Hinweis: beide info.xml tragen noch 1.2.0 (Sprung Phase 23).
+
+Vorher: 22-06 ausführen (Generalprobe lokal, Owner-Freigabe Push, W4-Lauf in CI, F4 und B7).
 22-05 ist fertig: 00-lauf.sh (start/ablauf/status/b4; Timer sudo shutdown -h +<Rest> mit
 Rücklesung, sonst 55; Weg a und b; zeit_fuer/reserve_fuer nach D-05; Abtaster je Containerleben;
 54 Altverzeichnisse, 56 B2-Rückkehr, 57 M-01-Gegenprobe, 58 Umbau/Vollreindex-Frist oder
@@ -345,7 +353,7 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
 |-------|-------|-------|----------|
 | 20 | 9 | - | - |
 | 21 | 9 | 1 Tag | - |
-| 22 | 5/12 | 12 min (22-01), 30 min (22-02), 35 min (22-03), 25 min (22-04), 75 min (22-05) | - |
+| 22 | 6/12 | 12 min (22-01), 30 min (22-02), 35 min (22-03), 25 min (22-04), 75 min (22-05), 35 min (22-06 Task 3 und Probe) | - |
 
 ## Accumulated Context
 
@@ -379,6 +387,10 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
   steht vor jedem Wächter; nach einem Abbruch wird er auf 60 min vorgezogen (22-05).
 - 93-nullstand.sh läuft nach dem regulären 92c (Gegenprobe des geleerten Volumens); die
   B2-Rückkehr gilt in Weg a gegen 52111/37/0, in Weg b gegen den Bestand vor B2 (22-05).
+- D-03 angewandt: F4 = 3,955 im arm64-Runner, B4 wird gefahren; Box-Digest-Kandidat
+  sha256:40ca8c2b...3e3e, Abbildstrecke Lauf 174; Beweis auf der Box bleibt der Baumhash (22-06).
+- 92d nimmt von occ upgrade 0 und 3 (ERROR_UP_TO_DATE) an; Phase B ist per probe-92d.yml im CI
+  geprobt, dispatch-only, Start standardmaessig v1.1.0 wie der Snapshot (22-06).
 
 - Ein CI-Sprachbeweis liest seinen Erwartungswert aus dem Katalog und traegt die Abwesenheit
   des englischen Quellsatzes als eigentliche Zusicherung (20-09). Ein Satz in der YAML waere
@@ -663,6 +675,6 @@ Sonst keine (die drei Debug-Sessions aus v1.1 sind am 21.09.2026 formal auf reso
 
 ## Session Continuity
 
-Last session: 2026-09-26T09:30:00.000Z
-Stopped at: Plan 22-05 abgeschlossen
-Resume file: .planning/phases/22-messanfahrt-bl-f03/22-06-PLAN.md
+Last session: 2026-09-26T04:30:00.000Z
+Stopped at: Plan 22-06 abgeschlossen
+Resume file: .planning/phases/22-messanfahrt-bl-f03/22-07-PLAN.md
