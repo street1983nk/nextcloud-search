@@ -783,6 +783,32 @@ def test_the_run_plan_catalogue_matches_the_exits_of_the_run_script() -> None:
     assert "00-abbruch-durch-signal" in section
 
 
+# An end value in code: exit or return in a shell or Python tool, or a module
+# constant in a Python tool (98d names its 49 TREFFERMENGE_UNGLEICH).
+_OWN_END_VALUE = re.compile(r"\b(?:exit|return) (4\d|5\d)\b|^[A-Z_]+ = (4\d|5\d)$", flags=re.MULTILINE)
+
+
+def test_every_value_of_the_catalogue_lives_in_the_tool_it_names_and_in_no_other() -> None:
+    """Audit phase 22: 40 to 59 are unique across the tools of the trip, not only in 00-lauf.sh.
+
+    Read from the lines that are not comments, so that a comment naming a value
+    can neither satisfy the first half nor trip the second.
+    """
+    section = plan_sections()["## 4. Woran der Lauf abgebrochen wird"]
+    owner: dict[int, str] = {}
+    for value, rest in re.findall(r"^\| \*\*(\d+)\*\* \| `([^`]+?\.(?:sh|py))", section, flags=re.MULTILINE):
+        owner[int(value)] = rest.split()[0]
+    assert sorted(owner) == list(range(40, 60)), owner
+    found: dict[int, set[str]] = {}
+    for tool in sorted([*V13_RUN_DIR.glob("*.sh"), *V13_RUN_DIR.glob("*.py")]):
+        code = code_of(tool.read_text(encoding="utf-8"))
+        for match in _OWN_END_VALUE.finditer(code):
+            found.setdefault(int(match.group(1) or match.group(2)), set()).add(tool.name)
+    for value, name in owner.items():
+        assert found.get(value) == {name}, (value, name, found.get(value))
+    assert set(found) <= set(owner), sorted(set(found) - set(owner))
+
+
 def test_the_run_plan_writes_down_e1_to_e14_with_a_number() -> None:
     """Pattern 5: every expectation stands with its figure before the first box minute."""
     section = plan_sections()["## 3. Die Erwartung, vorher aufgeschrieben"]
@@ -1039,7 +1065,7 @@ def test_the_cold_start_of_the_re_entry_searches_as_the_load_account() -> None:
 
 def test_the_cold_start_tool_keeps_its_old_call_when_no_search_account_is_named() -> None:
     """95c: SUCHKONTO and SUCH_PWFILE fall back to BENUTZER and PWFILE, and the search runs under SUCHKONTO."""
-    text = (V13_RUN_DIR / "95c-kaltstart.sh").read_text(encoding="utf-8")
+    text = code_of((V13_RUN_DIR / "95c-kaltstart.sh").read_text(encoding="utf-8"))
     assert 'SUCHKONTO="${SUCHKONTO:-$BENUTZER}"' in text
     assert 'SUCH_PWFILE="${SUCH_PWFILE:-$PWFILE}"' in text
     assert 'printf \'user = "%s:\' "$SUCHKONTO"' in text

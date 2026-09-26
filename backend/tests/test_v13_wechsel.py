@@ -194,8 +194,10 @@ def test_the_image_switch_hangs_41_on_the_stock_gate_of_the_snapshot() -> None:
     assert 'BESTAND_FEHLGESCHLAGEN="${BESTAND_FEHLGESCHLAGEN:-6}"' in text
     assert "printf 'bestandstor indexiert %s uebersprungen %s fehlgeschlagen %s\\n'" in text
     assert "occ findling:index" in code_of(text)
-    # indexed from the state database of the running container, read only.
-    assert "?mode=ro" in text
+    # indexed from the state database of the running container, read only. Read
+    # out of the lines that are not comments (audit phase 22), so that a comment
+    # naming the mode cannot stand in for the connect that uses it.
+    assert 'sqlite3.connect("file:" + pfad + "?mode=ro", uri=True)' in code_of(text)
     _, _, unten = the_three_parts_of(text)
     block = unten[unten.index('if [ ! -f "$WORK/bestand-bestanden" ]; then') :]
     assert block.split("\nfi\n")[0].rstrip().endswith("exit 41")

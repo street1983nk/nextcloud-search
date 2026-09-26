@@ -98,9 +98,11 @@ def test_the_throwaway_runner_isolates_every_docker_run() -> None:
         assert "--network none" in command, command
         assert "--cpuset-cpus" in command, command
         assert '"$IMAGE"' in command, command
-    text = THROWAWAY.read_text(encoding="utf-8")
-    assert text.count("--network none") >= text.count("docker run")
-    assert 'IMAGE="$ABBILD_REPO@$ABBILD_DIGEST"' in text
+    # Counted over the lines that are not comments (audit phase 22): a comment
+    # naming --network none must not make up for a docker run without it.
+    code = throwaway_code()
+    assert code.count("--network none") >= code.count("docker run")
+    assert 'IMAGE="$ABBILD_REPO@$ABBILD_DIGEST"' in code
 
 
 def test_the_throwaway_runner_drives_b3_on_two_cores_under_2g() -> None:
