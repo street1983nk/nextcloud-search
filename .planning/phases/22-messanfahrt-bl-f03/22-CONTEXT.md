@@ -144,7 +144,7 @@ Rechenblatt fahren. Alles nach Runbook-Disziplin (docs/runbook-messbox.md).
 
 - Tantivy `num_threads` als v1.4-Hebel fuer den Umbauweg (haengt an B6-Ergebnis;
   Vergleichsmessung gehoert in CI, nicht auf die Box) , Research Abschnitt 1.2.
-- Marken-Reparatur vectors.py (Gewichts-Praezision in embedding_version) —
+- Marken-Reparatur vectors.py (Gewichts-Praezision in embedding_version),
   bereits im v1.4-Umfang (Owner 25.09.).
 
 </deferred>
