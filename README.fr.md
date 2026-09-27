@@ -38,9 +38,9 @@ reconnaissance optique.
   indexés et la recherche sémantique active, le conteneur a atteint un pic de
   1 764 Mo de mémoire anonyme résidente, sous une limite stricte de 2 Go imposée
   par le noyau.
-- Après une indexation, le modèle déchargé, le conteneur reste à 731,9 Mo de
-  mémoire résidente (mesuré le 21.09.2026 sur une machine m7g.large arm64 avec
-  l'image v1.2 livrée, méthode et données brutes dans
+- Après une indexation, le modèle déchargé, le conteneur reste à 730,2 Mo de
+  mémoire résidente (mesuré le 26.09.2026 sur une machine m7g.large arm64 avec
+  l'image v1.3, méthode et données brutes dans
   [docs/performance.md](docs/performance.md)).
 - CPU : 2 cœurs suffisent, amd64 et arm64, pas de GPU
 

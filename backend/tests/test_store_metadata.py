@@ -75,7 +75,8 @@ reading and not a comparison this file can make.
 Two promises joined that list on 21.09.2026, with plan 16-12, and both of them
 had been shipped for a while before anything held them:
 
-* **the measured figure of decision E1**, 731.9 MB resident after an index run.
+* **the measured figure of decision E1**, resident after an index run, 731.9 MB
+  then and 730.2 MB since decision D-09 of phase 23 (plan 23-07).
   It stands at nine places, six store texts and three READMEs, and until this
   plan no check compared a README number with an info.xml number at all. Three
   cases hold it against ``README.en.md`` and both ``info.xml``, one mutation
@@ -344,7 +345,15 @@ MEASURED_SENTENCE_FR = (
 # spelling, which is how a figure that nine public texts repeat could have
 # drifted apart unnoticed. The three cases below are the three places the
 # success criterion names.
-RESIDENT_FIGURE = "731.9"
+#
+# 27.09.2026, decision D-09 of phase 23, plan 23-07: 731.9 became 730.2. The
+# measure is the same, the image is another one: mark C1 of the v1.3 run of
+# 26.09.2026 (docs/performance.md, section "Die v1.3-Anfahrt vom 26.09.2026"),
+# resident after one embedding cycle and the idle wait with the model unloaded,
+# anon of memory.stat on an m7g.large with native arm64; the raw file is
+# docs/measurements/2026-09-v13-messung/rohdaten/94c-bodensatz-zyklen.txt.
+# 731.9 MB stays right for the v1.2 image and is no longer what any text says.
+RESIDENT_FIGURE = "730.2"
 
 # The same figure with the decimal comma, derived and not typed a second time.
 # Two spellings written down twice are two figures, and telling them apart later
@@ -403,6 +412,34 @@ CONNECTOR_SENTENCES = {
         "documents avec exactement les droits de l'utilisateur qui demande, et aucun contenu ne quitte votre "
         "serveur."
     ),
+}
+
+# The known limitations of the language work (HART-05, owner decision D-06 of
+# phase 23): a block of its own in every one of the six descriptions, under a
+# heading per language, with exactly four points. The French heading keeps the
+# space before the colon, like every other heading of the French texts.
+LIMITATION_HEADINGS = {
+    DEFAULT_LANGUAGE: "Known limitations:",
+    "de": "Bekannte Grenzen:",
+    "fr": "Limites connues :",
+}
+LIMITATION_COUNT = 4
+
+# Where the long form of those limitations lives, and the heading of the short
+# list inside it. D-06 asks for the English list of the store text to stand in
+# this document character for character, so that a store text and the page it
+# summarises cannot say two different things.
+LANGUAGE_ANALYZERS_DOC = REPO_ROOT / "docs" / "language-analyzers.md"
+LANGUAGE_ANALYZERS_HEADING = "### Known limitations (short list, HART-05)"
+
+# How the language line of decision D-11 opens in each language. It is the last
+# point of the first block and stands right before the limitation heading, with
+# one empty line between them, so that a reader sees which languages exist
+# before reading what they cannot do.
+LANGUAGE_LINE_OPENINGS = {
+    DEFAULT_LANGUAGE: "- Search languages:",
+    "de": "- Suchsprachen:",
+    "fr": "- Langues de recherche :",
 }
 
 
@@ -786,8 +823,8 @@ def scan_resident_figure(name: str, source: str, spelling: str = RESIDENT_SPELLI
     """The one measured figure of decision E1, held against one text.
 
     The spelling is an argument for the same reason the wording of the measured
-    sentence is one: English writes 731.9 MB, German writes 731,9 MB and French
-    writes 731,9 Mo, and a gate that knew only one of the three would be green
+    sentence is one: English writes 730.2 MB, German writes 730,2 MB and French
+    writes 730,2 Mo, and a gate that knew only one of the three would be green
     over a file that quietly carries another language's number.
 
     Whitespace is collapsed first, because a README wraps its lines where an
@@ -885,6 +922,137 @@ def scan_connector_sentence(name: str, source: str) -> list[str]:
             violations.append(
                 f"{name}: the description for {_named(language)} carries the cross reference to the MCP "
                 f"Connector {found} times, and the rule of docs/store-listing.md is exactly one (HART-02)"
+            )
+
+    return violations
+
+
+def list_under(text: str, heading: str) -> list[str] | None:
+    """The points of the list right under a heading line, up to the next empty line.
+
+    None when the heading is not there at all, so that a missing block and an
+    empty one are two different findings. A point is a line that opens with a
+    dash and a space; the first line under the heading that is not one ends the
+    list, which is how a point that lost its dash shows up as a missing point.
+    """
+    lines = [line.rstrip() for line in text.splitlines()]
+    if heading not in lines:
+        return None
+
+    points: list[str] = []
+    for line in lines[lines.index(heading) + 1 :]:
+        if not line.startswith("- "):
+            break
+        points.append(line)
+
+    return points
+
+
+def _descriptions(name: str, source: str) -> tuple[list[tuple[str, str]], list[str]]:
+    """Every description of one info.xml as (language, text), or the finding that it is broken."""
+    try:
+        info = ElementTree.fromstring(strip_xml_comments(source))  # noqa: S314
+    except ElementTree.ParseError as broken:
+        return [], [f"{name}: is not well formed XML ({broken})"]
+
+    return [(element.get("lang", DEFAULT_LANGUAGE), element.text or "") for element in info.findall("description")], []
+
+
+def scan_limitations(name: str, source: str) -> list[str]:
+    """The four known limitations of D-06 under their heading, in every description.
+
+    A block that is gone and a block that lost or gained a point are both
+    findings, and each one names the half and the language, because the six
+    texts are edited by hand and the one that was edited alone is the one to
+    look at.
+    """
+    descriptions, broken = _descriptions(name, source)
+    violations = list(broken)
+    for language, text in descriptions:
+        if language not in LIMITATION_HEADINGS:
+            continue
+        points = list_under(text, LIMITATION_HEADINGS[language])
+        if points is None:
+            violations.append(
+                f"{name}: the description for {_named(language)} has no block "
+                f"{LIMITATION_HEADINGS[language]!r} (D-06, HART-05)"
+            )
+        elif len(points) != LIMITATION_COUNT:
+            violations.append(
+                f"{name}: the description for {_named(language)} carries {len(points)} known limitations "
+                f"and D-06 asks for exactly {LIMITATION_COUNT}"
+            )
+
+    return violations
+
+
+def scan_language_line(name: str, source: str) -> list[str]:
+    """The language line of D-11, right before the limitation heading in every description.
+
+    Right before means: the line above the heading is empty, and the line above
+    that one opens like the language line of its language. A language line that
+    moved elsewhere, or a heading that lost it, is reported with half and
+    language.
+    """
+    descriptions, broken = _descriptions(name, source)
+    violations = list(broken)
+    for language, text in descriptions:
+        if language not in LANGUAGE_LINE_OPENINGS:
+            continue
+        lines = [line.rstrip() for line in text.splitlines()]
+        heading = LIMITATION_HEADINGS[language]
+        at = lines.index(heading) if heading in lines else -1
+        if at < 2 or lines[at - 1] != "" or not lines[at - 2].startswith(LANGUAGE_LINE_OPENINGS[language]):
+            violations.append(
+                f"{name}: the description for {_named(language)} does not carry the language line "
+                f"{LANGUAGE_LINE_OPENINGS[language]!r} right before {heading!r} (D-11)"
+            )
+
+    return violations
+
+
+def documented_limitations(doc: str) -> list[str] | None:
+    """The short list of docs/language-analyzers.md, or None when its section is gone.
+
+    The heading there is followed by an explanatory paragraph, so the list is
+    the first run of points after the heading rather than the line under it.
+    """
+    lines = [line.rstrip() for line in doc.splitlines()]
+    if LANGUAGE_ANALYZERS_HEADING not in lines:
+        return None
+
+    after = lines[lines.index(LANGUAGE_ANALYZERS_HEADING) + 1 :]
+    first = next((at for at, line in enumerate(after) if line.startswith("- ")), len(after))
+    points: list[str] = []
+    for line in after[first:]:
+        if not line.startswith("- "):
+            break
+        points.append(line)
+
+    return points
+
+
+def scan_limitations_against_doc(name: str, source: str, doc: str) -> list[str]:
+    """The English limitations of one info.xml against the short list of the doc, character for character.
+
+    D-06 says the store text and docs/language-analyzers.md carry the same
+    list. A comparison is the only way that claim can go red: two lists that
+    are each four points long can still say different things.
+    """
+    documented = documented_limitations(doc)
+    if documented is None:
+        return [f"docs/language-analyzers.md: has no section {LANGUAGE_ANALYZERS_HEADING!r}"]
+
+    descriptions, broken = _descriptions(name, source)
+    violations = list(broken)
+    for language, text in descriptions:
+        if language != DEFAULT_LANGUAGE:
+            continue
+        shipped = list_under(text, LIMITATION_HEADINGS[DEFAULT_LANGUAGE]) or []
+        if shipped != documented:
+            violations.append(
+                f"{name}: the English known limitations differ from the short list in "
+                f"docs/language-analyzers.md (D-06): store {shipped!r}, doc {documented!r}"
             )
 
     return violations
@@ -1003,6 +1171,53 @@ def test_the_connector_sentence_stands_once_in_all_three_languages_of_both_halve
         message
         for path in (PHP_INFO, BACKEND_INFO)
         for message in scan_connector_sentence(
+            f"{path.parent.parent.name}/appinfo/info.xml", path.read_text(encoding="utf-8")
+        )
+    ]
+
+    assert violations == []
+
+
+def test_the_language_analyzers_doc_carries_its_short_list_before_it_is_compared() -> None:
+    # The anti vacuity clause of the comparison below: a doc that lost its
+    # section, or a section that lost its list, would otherwise be compared as
+    # an empty list against an empty list and pass.
+    documented = documented_limitations(LANGUAGE_ANALYZERS_DOC.read_text(encoding="utf-8"))
+
+    assert documented is not None
+    assert len(documented) == LIMITATION_COUNT
+
+
+def test_every_description_carries_the_four_known_limitations_under_its_heading() -> None:
+    # D-06 and HART-05 over all six descriptions at once.
+    violations = [
+        message
+        for path in (PHP_INFO, BACKEND_INFO)
+        for message in scan_limitations(f"{path.parent.parent.name}/appinfo/info.xml", path.read_text(encoding="utf-8"))
+    ]
+
+    assert violations == []
+
+
+def test_the_english_known_limitations_of_both_halves_stand_verbatim_in_the_doc() -> None:
+    doc = LANGUAGE_ANALYZERS_DOC.read_text(encoding="utf-8")
+    violations = [
+        message
+        for path in (PHP_INFO, BACKEND_INFO)
+        for message in scan_limitations_against_doc(
+            f"{path.parent.parent.name}/appinfo/info.xml", path.read_text(encoding="utf-8"), doc
+        )
+    ]
+
+    assert violations == []
+
+
+def test_the_language_line_stands_right_before_the_limitations_in_all_six_descriptions() -> None:
+    # D-11: the languages that exist, read right before what they cannot do.
+    violations = [
+        message
+        for path in (PHP_INFO, BACKEND_INFO)
+        for message in scan_language_line(
             f"{path.parent.parent.name}/appinfo/info.xml", path.read_text(encoding="utf-8")
         )
     ]
@@ -1244,9 +1459,9 @@ def test_the_spellings_of_the_figure_do_not_stand_in_for_one_another() -> None:
     # The decimal point and the decimal comma are one measurement and two
     # texts. A gate that accepted either spelling everywhere would be green
     # over a German text that had picked up the English number.
-    assert scan_resident_figure("sample.md", "731,9 MB", RESIDENT_SPELLING[DEFAULT_LANGUAGE]) != []
-    assert scan_resident_figure("sample.md", "731.9 MB", RESIDENT_SPELLING["de"]) != []
-    assert scan_resident_figure("sample.md", "731,9 MB", RESIDENT_SPELLING["fr"]) != []
+    assert scan_resident_figure("sample.md", "730,2 MB", RESIDENT_SPELLING[DEFAULT_LANGUAGE]) != []
+    assert scan_resident_figure("sample.md", "730.2 MB", RESIDENT_SPELLING["de"]) != []
+    assert scan_resident_figure("sample.md", "730,2 MB", RESIDENT_SPELLING["fr"]) != []
 
 
 def test_the_hardware_requirements_are_not_counted_as_measured_figures() -> None:
@@ -1257,16 +1472,16 @@ def test_the_hardware_requirements_are_not_counted_as_measured_figures() -> None
     hardware line names three, and two of them are what an instance has to
     bring rather than what a container was seen to use.
     """
-    english = "- RAM: 4 GB is enough, 731.9 MB resident after an index run, under a hard 2 GB limit (measured)"
-    french = "- RAM : 4 Go suffisent, 731,9 Mo residents apres une indexation, sous une limite stricte de 2 Go"
+    english = "- RAM: 4 GB is enough, 730.2 MB resident after an index run, under a hard 2 GB limit (measured)"
+    french = "- RAM : 4 Go suffisent, 730,2 Mo residents apres une indexation, sous une limite stricte de 2 Go"
 
-    assert MEASURED_FIGURE.findall(english) == ["731.9 MB"]
-    assert MEASURED_FIGURE.findall(french) == ["731,9 Mo"]
+    assert MEASURED_FIGURE.findall(english) == ["730.2 MB"]
+    assert MEASURED_FIGURE.findall(french) == ["730,2 Mo"]
 
 
 def test_a_second_measured_figure_in_a_description_is_reported() -> None:
     doubled = PHP_INFO.read_text(encoding="utf-8").replace(
-        "731.9 MB resident after an index run", "731.9 MB resident after an index run, 103.2 MB idle", 1
+        "730.2 MB resident after an index run", "730.2 MB resident after an index run, 103.2 MB idle", 1
     )
 
     violations = scan_one_measured_figure("php/appinfo/info.xml", doubled)
@@ -1276,7 +1491,7 @@ def test_a_second_measured_figure_in_a_description_is_reported() -> None:
 
 
 def test_a_description_that_lost_its_measured_figure_is_reported_by_the_short_text_rule() -> None:
-    emptied = PHP_INFO.read_text(encoding="utf-8").replace(", 731.9 MB resident after an index run", "", 1)
+    emptied = PHP_INFO.read_text(encoding="utf-8").replace(", 730.2 MB resident after an index run", "", 1)
 
     violations = scan_one_measured_figure("php/appinfo/info.xml", emptied)
 
@@ -1317,6 +1532,80 @@ def test_the_two_new_scans_report_a_broken_document_instead_of_raising() -> None
     assert len(scan_resident_figure_of_an_info("sample.xml", broken)) == 1
     assert len(scan_one_measured_figure("sample.xml", broken)) == 1
     assert len(scan_connector_sentence("sample.xml", broken)) == 1
+    assert len(scan_limitations("sample.xml", broken)) == 1
+    assert len(scan_language_line("sample.xml", broken)) == 1
+
+
+def test_a_description_that_lost_a_known_limitation_is_reported_with_half_and_language() -> None:
+    # A staged real file, as in the other mutation cases: the German block of
+    # the backend half loses its third point, and only that one text is named.
+    point = "- Zusammengesetzte Wörter werden nur für Deutsch und Niederländisch zerlegt\n"
+    source = BACKEND_INFO.read_text(encoding="utf-8")
+    assert point in source
+
+    violations = scan_limitations("backend/appinfo/info.xml", source.replace(point, "", 1))
+
+    assert len(violations) == 1
+    assert "backend/appinfo/info.xml" in violations[0]
+    assert "lang=de" in violations[0]
+    assert f"carries {LIMITATION_COUNT - 1} known limitations" in violations[0]
+
+
+def test_a_description_that_lost_its_limitation_block_is_reported() -> None:
+    source = PHP_INFO.read_text(encoding="utf-8").replace(LIMITATION_HEADINGS["fr"], "Limites :", 1)
+
+    violations = scan_limitations("php/appinfo/info.xml", source)
+
+    assert len(violations) == 1
+    assert "lang=fr" in violations[0]
+    assert "has no block" in violations[0]
+
+
+def test_a_doc_list_that_differs_in_one_character_fails_the_comparison() -> None:
+    # One letter of the doc changes and both halves are reported, because both
+    # ship the list the doc no longer carries.
+    doc = LANGUAGE_ANALYZERS_DOC.read_text(encoding="utf-8")
+    mutated = doc.replace(
+        "- Compound words are split for German and Dutch only",
+        "- Compound words are split for German and Dutch onlY",
+        1,
+    )
+    assert mutated != doc
+
+    violations = [
+        message
+        for path in (PHP_INFO, BACKEND_INFO)
+        for message in scan_limitations_against_doc(path.name, path.read_text(encoding="utf-8"), mutated)
+    ]
+
+    assert len(violations) == 2
+    assert all("differ from the short list" in message for message in violations)
+
+
+def test_a_doc_without_its_short_list_section_is_reported() -> None:
+    doc = LANGUAGE_ANALYZERS_DOC.read_text(encoding="utf-8").replace(LANGUAGE_ANALYZERS_HEADING, "### Gone", 1)
+
+    violations = scan_limitations_against_doc("php/appinfo/info.xml", PHP_INFO.read_text(encoding="utf-8"), doc)
+
+    assert len(violations) == 1
+    assert "has no section" in violations[0]
+
+
+def test_a_language_line_that_moved_away_from_the_limitations_is_reported() -> None:
+    # The English language line of the companion half is swapped with the
+    # privacy point above it: both lines are still there, and the order of D-11
+    # is not.
+    source = PHP_INFO.read_text(encoding="utf-8")
+    language = "- Search languages: German and English by default, Spanish, Italian, Dutch and Portuguese available"
+    privacy = "- Privacy: everything runs locally, no telemetry, nothing leaves your server"
+    swapped = source.replace(f"{privacy}\n{language}", f"{language}\n{privacy}", 1)
+    assert swapped != source
+
+    violations = scan_language_line("php/appinfo/info.xml", swapped)
+
+    assert len(violations) == 1
+    assert "the English default" in violations[0]
+    assert "(D-11)" in violations[0]
 
 
 # -- the store rules that no schema of ours states: images and the two lists --

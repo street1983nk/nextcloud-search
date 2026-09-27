@@ -83,7 +83,7 @@ Weiter in der Wiedervorlage (NICHT in v1.3): Sortierung nach Name/Groesse (Schem
 - **Sprache**: Code/README Englisch, Projektkommunikation Deutsch; keine Em-Dashes; echte Umlaute nur in deutscher Prosa, nie in Code; Kataloge EN/DE/FR im Gleichstand (vier Gates)
 - **Qualitätsgates**: ruff-Vollregelsatz, pyright basic, vulture, CI-Gates, lokal grün vor Commit; Audit-Gate nach jeder Phase (MEDIUM+ fixen, LOW dokumentiert entscheiden)
 - **Security/Privacy**: Berechtigungs-Durchgriff strikt; keine Inhalte verlassen den Server; keine Telemetrie
-- **Store-Regeln**: Kurztext-Regel (Faktenlisten, Owner-Abnahme vor Einreichung); eine Messzahl steht an drei Stellen (README.en.md + beide info.xml); Tag im Store nie verschieben
+- **Store-Regeln**: Kurztext-Regel (Faktenlisten, Owner-Abnahme vor Einreichung); eine Messzahl (730,2 MB); alle Fundstellen hält das Gate test_store_metadata.py (RESIDENT_FIGURE); Tag im Store nie verschieben
 
 ## Key Decisions
 

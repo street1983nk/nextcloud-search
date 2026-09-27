@@ -33,9 +33,9 @@ CSV, and images (JPEG, PNG, TIFF, WebP) through OCR.
 - RAM: 4 GB is enough. On a 4-GB ARM64 box with 52,111 indexed documents and
   the semantic search active, the container peaked at 1,764 MB of resident
   anonymous memory, under a hard 2 GB limit enforced by the kernel.
-- After an index run, with the model unloaded, the container sits at 731.9 MB
-  of resident memory (measured 2026-09-21 on an m7g.large arm64 box against the
-  shipped v1.2 image, method and raw data in
+- After an index run, with the model unloaded, the container sits at 730.2 MB
+  of resident memory (measured 2026-09-26 on an m7g.large arm64 box against the
+  v1.3 image, method and raw data in
   [docs/performance.md](docs/performance.md)).
 - CPU: 2 cores are enough, amd64 and arm64, no GPU
 

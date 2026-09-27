@@ -107,13 +107,12 @@ bleibt. Die 4 GB und die harte 2-GB-Grenze sind Anforderungen und keine
 Messzahlen; die 103,2 kommt in keinem der sechs Texte mehr vor, statt neben
 der neuen Zahl zu stehen.
 
-**Stand dieser Datei:** Die sechs Texte unten sind seit dem 21.09.2026 der
-Entwurf für 1.2.0 und noch nicht ausgeliefert. Beide `info.xml` und die drei
-READMEs tragen bis zur Abnahme weiter die Fassung mit 103,2 MB; die wörtliche
-Übernahme ist Plan 16-12 und findet erst nach der Owner-Abnahme statt. Wer in
-diesem Fenster einen Unterschied zwischen dieser Datei und einer `info.xml`
-findet, hat den erwarteten Zwischenstand vor sich und keine Drift. Der Entwurf
-mit allen Gegenüberstellungen steht unten im Abschnitt "Entwurf v1.2.0".
+**Stand dieser Datei:** Die sechs Texte unten sind die Fassung 1.3.0, vom
+Owner am 27.09.2026 abgenommen und in Plan 23-07 am 27.09.2026 wörtlich in
+beide `info.xml` übernommen. Vorlage und beide `info.xml` sind damit
+wortgleich; ein Unterschied zwischen ihnen ist Drift. Die Messzahl ist 730,2 MB
+(D-09), in den sechs Texten und in den drei READMEs. Der Entwurf mit allen
+Gegenüberstellungen steht unten im Abschnitt "Entwurf v1.3.0".
 
 ---
 
@@ -150,6 +149,13 @@ What Findling does:
 - Every result is permission-checked by Nextcloud
 - No configuration: the first index run starts on its own
 - Privacy: everything runs locally, no telemetry, nothing leaves your server
+- Search languages: German and English by default, Spanish, Italian, Dutch and Portuguese available
+
+Known limitations:
+- Spanish: año and ano are treated as the same word
+- Portuguese: spellings before and after the spelling reform are not unified
+- Compound words are split for German and Dutch only
+- French has no full text analysis chain for document text
 
 Together with the [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector), Findling forms the retrieval layer for your own RAG: AI assistants search your document contents with exactly the rights of the asking user, and no content leaves your server.
 
@@ -160,7 +166,7 @@ Supported file types:
 
 Requirements:
 - Nextcloud 33 to 35, apps: AppAPI, Findling Backend (External Apps), Findling
-- RAM: 4 GB is enough, 731.9 MB resident after an index run, under a hard 2 GB limit (measured)
+- RAM: 4 GB is enough, 730.2 MB resident after an index run, under a hard 2 GB limit (measured)
 - CPU: 2 cores are enough, amd64 and arm64
 
 Enterprise support and paid add-ons: request a quote at admin@infranode.dev
@@ -174,6 +180,13 @@ Was Findling kann:
 - Jeder Treffer wird von Nextcloud rechtegeprüft
 - Keine Konfiguration: der erste Indexlauf startet von selbst
 - Datenschutz: alles läuft lokal, keine Telemetrie, nichts verlässt den Server
+- Suchsprachen: Deutsch und Englisch voreingestellt, Spanisch, Italienisch, Niederländisch und Portugiesisch verfügbar
+
+Bekannte Grenzen:
+- Spanisch: año und ano gelten als dasselbe Wort
+- Portugiesisch: Schreibweisen vor und nach der Rechtschreibreform werden nicht vereinheitlicht
+- Zusammengesetzte Wörter werden nur für Deutsch und Niederländisch zerlegt
+- Französisch hat keine eigene Analysekette für den Dokumenttext
 
 Zusammen mit dem [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) ergibt Findling die Retrieval-Schicht für Ihr eigenes RAG: KI-Assistenten durchsuchen Ihre Dokumentinhalte mit genau den Rechten des fragenden Nutzers, und kein Inhalt verlässt Ihren Server.
 
@@ -184,7 +197,7 @@ Unterstützte Dateitypen:
 
 Anforderungen:
 - Nextcloud 33 bis 35, Apps: AppAPI, Findling Backend (External Apps), Findling
-- RAM: 4 GB genügen, 731,9 MB resident nach einem Indexlauf, unter einer harten 2-GB-Grenze (gemessen)
+- RAM: 4 GB genügen, 730,2 MB resident nach einem Indexlauf, unter einer harten 2-GB-Grenze (gemessen)
 - CPU: 2 Kerne genügen, amd64 und arm64
 
 Enterprise-Support und bezahlte Add-ons: Angebot anfordern unter admin@infranode.dev
@@ -198,6 +211,13 @@ Ce que Findling sait faire :
 - Chaque résultat est vérifié par Nextcloud selon vos droits
 - Aucune configuration : la première indexation démarre d'elle-même
 - Confidentialité : tout fonctionne localement, aucune télémétrie, rien ne quitte votre serveur
+- Langues de recherche : allemand et anglais par défaut, espagnol, italien, néerlandais et portugais disponibles
+
+Limites connues :
+- Espagnol : año et ano sont traités comme le même mot
+- Portugais : les graphies d'avant et d'après la réforme orthographique ne sont pas unifiées
+- Les mots composés ne sont découpés que pour l'allemand et le néerlandais
+- Le français n'a pas de chaîne d'analyse plein texte pour le contenu des documents
 
 Avec le [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector), Findling forme la couche de récupération de votre propre RAG : les assistants IA cherchent dans le contenu de vos documents avec exactement les droits de l'utilisateur qui demande, et aucun contenu ne quitte votre serveur.
 
@@ -208,7 +228,7 @@ Types de fichiers pris en charge :
 
 Prérequis :
 - Nextcloud 33 à 35, applications : AppAPI, Findling Backend (External Apps), Findling
-- RAM : 4 Go suffisent, 731,9 Mo résidents après une indexation, sous une limite stricte de 2 Go (mesuré)
+- RAM : 4 Go suffisent, 730,2 Mo résidents après une indexation, sous une limite stricte de 2 Go (mesuré)
 - CPU : 2 cœurs suffisent, amd64 et arm64
 
 Support entreprise et modules payants : demande de devis à admin@infranode.dev
@@ -244,6 +264,13 @@ What Findling Backend is:
 - Runs entirely inside your own instance and does nothing without the Findling app
 - Never modifies your files
 - Privacy: everything runs locally, no telemetry, nothing leaves your server
+- Search languages: German and English by default, Spanish, Italian, Dutch and Portuguese available
+
+Known limitations:
+- Spanish: año and ano are treated as the same word
+- Portuguese: spellings before and after the spelling reform are not unified
+- Compound words are split for German and Dutch only
+- French has no full text analysis chain for document text
 
 Together with the [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector), Findling forms the retrieval layer for your own RAG: AI assistants search your document contents with exactly the rights of the asking user, and no content leaves your server.
 
@@ -254,7 +281,7 @@ Supported file types:
 
 Requirements:
 - Nextcloud 33 to 35, apps: AppAPI, Findling Backend (External Apps), Findling
-- RAM: 4 GB is enough, 731.9 MB resident after an index run, under a hard 2 GB limit (measured)
+- RAM: 4 GB is enough, 730.2 MB resident after an index run, under a hard 2 GB limit (measured)
 - CPU: 2 cores are enough, amd64 and arm64
 
 Enterprise support and paid add-ons: request a quote at admin@infranode.dev
@@ -266,6 +293,13 @@ Was Findling Backend ist:
 - Läuft komplett in Ihrer eigenen Instanz und tut ohne die App Findling nichts
 - Verändert nie Ihre Dateien
 - Datenschutz: alles läuft lokal, keine Telemetrie, nichts verlässt den Server
+- Suchsprachen: Deutsch und Englisch voreingestellt, Spanisch, Italienisch, Niederländisch und Portugiesisch verfügbar
+
+Bekannte Grenzen:
+- Spanisch: año und ano gelten als dasselbe Wort
+- Portugiesisch: Schreibweisen vor und nach der Rechtschreibreform werden nicht vereinheitlicht
+- Zusammengesetzte Wörter werden nur für Deutsch und Niederländisch zerlegt
+- Französisch hat keine eigene Analysekette für den Dokumenttext
 
 Zusammen mit dem [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) ergibt Findling die Retrieval-Schicht für Ihr eigenes RAG: KI-Assistenten durchsuchen Ihre Dokumentinhalte mit genau den Rechten des fragenden Nutzers, und kein Inhalt verlässt Ihren Server.
 
@@ -276,7 +310,7 @@ Unterstützte Dateitypen:
 
 Anforderungen:
 - Nextcloud 33 bis 35, Apps: AppAPI, Findling Backend (External Apps), Findling
-- RAM: 4 GB genügen, 731,9 MB resident nach einem Indexlauf, unter einer harten 2-GB-Grenze (gemessen)
+- RAM: 4 GB genügen, 730,2 MB resident nach einem Indexlauf, unter einer harten 2-GB-Grenze (gemessen)
 - CPU: 2 Kerne genügen, amd64 und arm64
 
 Enterprise-Support und bezahlte Add-ons: Angebot anfordern unter admin@infranode.dev
@@ -288,6 +322,13 @@ Ce qu'est Findling Backend :
 - Fonctionne entièrement dans votre propre instance et ne fait rien sans l'application Findling
 - Ne modifie jamais vos fichiers
 - Confidentialité : tout fonctionne localement, aucune télémétrie, rien ne quitte votre serveur
+- Langues de recherche : allemand et anglais par défaut, espagnol, italien, néerlandais et portugais disponibles
+
+Limites connues :
+- Espagnol : año et ano sont traités comme le même mot
+- Portugais : les graphies d'avant et d'après la réforme orthographique ne sont pas unifiées
+- Les mots composés ne sont découpés que pour l'allemand et le néerlandais
+- Le français n'a pas de chaîne d'analyse plein texte pour le contenu des documents
 
 Avec le [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector), Findling forme la couche de récupération de votre propre RAG : les assistants IA cherchent dans le contenu de vos documents avec exactement les droits de l'utilisateur qui demande, et aucun contenu ne quitte votre serveur.
 
@@ -298,7 +339,7 @@ Types de fichiers pris en charge :
 
 Prérequis :
 - Nextcloud 33 à 35, applications : AppAPI, Findling Backend (External Apps), Findling
-- RAM : 4 Go suffisent, 731,9 Mo résidents après une indexation, sous une limite stricte de 2 Go (mesuré)
+- RAM : 4 Go suffisent, 730,2 Mo résidents après une indexation, sous une limite stricte de 2 Go (mesuré)
 - CPU : 2 cœurs suffisent, amd64 et arm64
 
 Support entreprise et modules payants : demande de devis à admin@infranode.dev
@@ -1223,6 +1264,13 @@ Die Antwort in Issue #14 bleibt ein Entwurf, bis das Release steht; gepostet
 wird sie in Plan 23-09 und nur mit dem Wort des Owners. Die Übernahme in beide
 `info.xml` und die drei READMEs ist Plan 23-07 und findet nach dieser Abnahme
 statt.
+
+Übernommen in Plan 23-07 am 27.09.2026: die sechs Texte aus Teil 4 zeichengleich
+in beide `info.xml` und in die sechs Texte oben in dieser Datei, der Text aus
+Teil 5 in `backend/appinfo/info.xml`, die README-Zeile aus Teil 3 in alle drei
+READMEs. `RESIDENT_FIGURE` in `backend/tests/test_store_metadata.py` steht auf
+730.2, und ein Gate hält die vier Grenzen, die Sprachzeile und die englische
+Liste in `docs/language-analyzers.md` fest.
 
 ---
 
