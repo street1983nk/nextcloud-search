@@ -382,7 +382,9 @@ public function postSchemaChange(IOutput $output, Closure $schemaClosure, array 
 | A4 | Das Ladefenster auf der m7g.large liegt bei grob 0,5 bis 1,8 s | Pattern 3 | mittel; abgeleitet aus dem Vorfall 1.838,4 ms (Suche inkl. Laden) und den 95b-Werten, nicht getrennt gemessen |
 | A5 | `APPSTORE_TOKEN` ist zum Abgabezeitpunkt noch gültig | Runtime State | gering; die Probe vor dem Dispatch fängt es |
 
-## Open Questions
+## Open Questions (RESOLVED, Owner-Nachentscheide 27.09., festgehalten als D-08 bis D-11 in 23-CONTEXT.md)
+
+> Aufloesung: OQ1 -> D-08 (Restrisiko akzeptiert, KEIN Schnellpfad in model.py; Plaene 23-01/23-04). OQ2 -> D-09 (730,2 MB; 23-03/23-07). OQ3 -> D-10 (PHPUnit UND Upgrade-CI; 23-05/23-06). OQ4 -> Claude's Discretion in CONTEXT (ja, #14-Fix im Audit; 23-08). OQ5 -> D-11 (Sprachzeile ja; 23-03/23-07). OQ6 -> Claude's Discretion (Quelle je Zahl nennen; 23-03).
 
 1. **Reicht "erste Anfrage geschützt" für D-01?**
    - What we know: Warmlauf nach dem Senden schützt die erste Antwort; im Ladefenster (GIL gehalten) können folgende Anfragen den Deckel reißen; `/snippets` degradiert weich, eine zweite `/search` kann leer enden.

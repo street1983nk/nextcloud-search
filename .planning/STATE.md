@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
-status: completed
+status: executing
 stopped_at: Phase 23 context gathered
-last_updated: "2026-09-26T19:42:24.219Z"
-last_activity: 2026-09-26, Plan 22-06 abgeschlossen
+last_updated: "2026-09-27T00:33:31.762Z"
+last_activity: 2026-09-27 -- Phase 23 planning complete
 progress:
   total_phases: 7
   completed_phases: 6
-  total_plans: 60
+  total_plans: 69
   completed_plans: 60
   percent: 86
 ---
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 Phase: 22 (messanfahrt-bl-f03), COMPLETE 26.09.2026 (13/13 Plaene, von Hand nachgezogen, kein phase.complete)
 Plan: 13 of 13
-Status: PHASE 22 KOMPLETT. Owner-Abnahme 26.09.2026 ("machen wir wie die empfehlung", README "Abgenommen: 26.09.2026", Audit docs/audits/2026-09-phase-22/). MESS-07, MESS-08, MESS-09 alle Complete.
+Status: Ready to execute
 Nachanfahrt 22-13 (Owner-Nachfreigabe zweistufig: "machen wir wie die empfehlung", dann "weiter", beide ueber den Koordinator, Vermerk im README): Aufbau aus dem Korpus-Snapshot ohne Abweichung, Timer absolut 20:20Z, 92d 0 mit Bestand 52.137 / 44 / 6, backendReachable true. 95c mit Einwort-Begriff "Bescheid" unter lasttest, Schalter 0: erste kalte Suche 2.617 ms, 26 Treffer, gueltig im ersten Zyklus, Gegenprobe 2 Zeilen (E5 fuer den Einwortfall gehalten, Nachtrag 6.12; Urteil der Hauptanfahrt bleibt verfehlt). 94c: abtastreihe-spitze-mb 1688, Zyklus 2 minus C1 27,4. B5: anon 542 MB bei batch 2, 877 MB bei batch 8, Threads kosten keinen Speicher. Box abgebaut ohne Ende-Snapshot, 0 Ressourcen ueber 17 Regionen ausser dem Korpus-Snapshot, A-Record weg. Kosten 0,37 h / 0,0427 USD gegen Deckel 4 h / 0,50 USD (gehalten). Commits 0de526b (Freigabevermerk), ea32513 (Rohdaten rohdaten-nachanfahrt/), ec15950 (Bericht 6.15, performance.md).
 Kosten der Phase gesamt: Hauptanfahrt 2,32 h / 0,4716 USD (Deckel 24 h / 3,76 USD gehalten) plus Nachanfahrt 0,37 h / 0,0427 USD. Urteile E1 bis E14: 11 gehalten, 3 verfehlt (E4, E5, E8), E5 per Nachtrag fuer den Einwortfall gehalten. dismax-Entscheid: Summe, disjunction_max verworfen (MESS-09).
 Offene Befunde (deferred-items 22-13): V-22-01 (erste Mehrwortsuche nach Containerstart bei Schalter 0 ohne Findling-Treffer) zeigt sich auch an der Auszugsroute api/snippets.py, die die Einwortregel nicht kennt (Backlog, Owner-Entscheid); 00-typwechsel.sh vorpruefung schreibt ohne OUT nach rohdaten/ (in der Nachanfahrt von Hand zurueckgesetzt, Werkzeug bleibt gefahren und pruefsummengeschuetzt). Korpus-Snapshot bleibt (Wiedervorlage beim Milestone-Close).
@@ -250,7 +250,7 @@ Instanz den Erststempel der Verzeichnismarken; Folge: Feldplan blieb LEGACY, rot
 Fix-Beweis). Endstand-CI 36096526219 GRUEN 4/4 inkl. arm64. Suite 2877 passed / 15 skipped.
 LEHRE: ein Audit-Fix, der einen Schreiber entfernt, braucht die Frage "wer schreibt das
 sonst noch auf JEDEM Pfad" plus einen Frischinstanz-Fall, bevor er reist.
-Last activity: 2026-09-26, Plan 22-06 abgeschlossen
+Last activity: 2026-09-27 -- Phase 23 planning complete
 
 Progress: [█████████░] 90% (53 von 59 Plänen, 5 von 7 Phasen)
 

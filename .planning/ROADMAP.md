@@ -297,14 +297,34 @@ Plans:
 **Plans**: 9 plans in 7 waves
 
 Plans:
+**Wave 1**
+
 - [ ] 23-01-PLAN.md , Kaltstart-Fix im Produktpfad (query_may_load immer False, Warmlauf per BackgroundTasks, Einwortregel /snippets)
 - [ ] 23-02-PLAN.md , HART-04: fastembed-Pin raus, tokenizers/numpy direkt, Lockfile, THIRD-PARTY, Abwesenheitsprüfung im Abbild
 - [ ] 23-03-PLAN.md , Store-Textentwurf 1.3.0 (Sprachzeile, Known limitations, 730,2 MB, Changelog) mit Owner-Abnahme
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 23-04-PLAN.md , Kaltstart-CI-Bruchstellen (integration, probe, one_load), Doku, CI-Nachmessung
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 23-05-PLAN.md , gone-Reparaturlauf als Migration Version001300Date20260927000000 mit PHPUnit
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 23-06-PLAN.md , Versionen 1.3.0, gone-Saat im Upgrade-Ast, Store install/upgrade/Umbau, probe-92d
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 23-07-PLAN.md , Übernahme der Store-Texte in beide info.xml und READMEs, Gates
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 23-08-PLAN.md , Launch-Härtung und Phasenaudit mit Owner-Abnahme
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
 - [ ] 23-09-PLAN.md , Tag, Signierung, Einreichung 2x HTTP 201, Issue-#14-Antwort, Zustandspflege
 
 ## Progress
