@@ -86,6 +86,19 @@ EMBEDDING_DIMENSIONS: Final = 384
 # that read one as the other would answer nonsense rather than nothing.
 ELEMENT_TYPE: Final = "int8"
 
+# The precision of the model weights, which is a different thing from the type
+# above. Both weight variants write int8 vectors, because the output is
+# quantised by to_int8 in embed/model.py whatever the weights were, so
+# ELEMENT_TYPE says nothing about the weights and cannot stand in for them. The
+# vectors of an int8 model and of an fp32 model are still not comparable, which
+# is why the precision is a part of the embedding mark (MOD-01).
+WEIGHTS_INT8: Final = "int8"
+# The full precision original of the same model, the opt-in of phase 25.
+WEIGHTS_FP32: Final = "fp32"
+# Every precision the mark can name. A value outside this set is refused rather
+# than written, because a mark nobody can compare against is a drift forever.
+WEIGHT_PRECISIONS: Final = frozenset({WEIGHTS_INT8, WEIGHTS_FP32})
+
 # The environment variable the image sets to the copy of vec0 it baked in.
 # Read here and handed to open_vectors as an argument with a default, so that a
 # path can never arrive from a request: enable_load_extension loads machine code
@@ -255,22 +268,50 @@ _DISTANCE_EXPRESSION: Final = "vec_distance_l2(v.embedding, vec_int8(?))"
 EMBEDDING_MODEL: Final = "multilingual-e5-small"
 
 
-def embedding_mark(model: str, *, tokens: int) -> str:
+def embedding_mark(model: str, *, tokens: int, weights: str = WEIGHTS_INT8) -> str:
     """The value of the ``embedding_version`` mark for one build.
 
-    Four things decide whether a stored vector still means what this container
-    thinks it means, and all four are in here: the model, the quantisation of
-    its output, the number of dimensions, and the token cap the chunks were cut
-    at. A change to any one of them makes the stored stock incomparable with a
-    freshly computed query vector, and the mark is what makes that visible
-    instead of turning it into quietly worse results.
+    Five things decide whether a stored vector still means what this container
+    thinks it means, and all five are in here: the model, the precision of its
+    weights, the quantisation of its output, the number of dimensions, and the
+    token cap the chunks were cut at. The quantisation of the output is int8 for
+    every build (:data:`ELEMENT_TYPE`); the precision of the weights is what an
+    admin can choose, and an int8 model and an fp32 model of the same name give
+    different vectors for the same passage. A change to any one of the five
+    makes the stored stock incomparable with a freshly computed query vector,
+    and the mark is what makes that visible instead of turning it into quietly
+    worse results.
+
+    int8 weights are spelled by absence: the mark of an int8 build is byte for
+    byte the four part mark every release up to 1.3.x wrote, so an upgrade sees
+    no drift and re-embeds nothing (MOD-01). fp32 appends a fifth part. There is
+    deliberately no normalising comparison anywhere; the equality of the strings
+    is the whole rule.
+
+    From phase 25 on, ``weights`` has to be the precision of the model that was
+    ACTUALLY loaded and not the one that was asked for. A verdict of "fp32 is not
+    available, int8 stays active" must write the int8 mark, or the stock would
+    claim vectors it does not hold.
 
     The mark says nothing about the tantivy index and must not: the vector half
     can be rebuilt on its own, which is the whole reason it lives in a file of
     its own. The rule that keeps the two apart is
     :data:`findling.store.repo.VECTOR_ONLY_MARKS`.
+
+    Raises:
+        ValueError: ``weights`` is not one of :data:`WEIGHT_PRECISIONS`. The
+            message does not repeat the value (names in logs, never values).
+
     """
-    return f"{model}/{ELEMENT_TYPE}/{EMBEDDING_DIMENSIONS}/{tokens}"
+    base = f"{model}/{ELEMENT_TYPE}/{EMBEDDING_DIMENSIONS}/{tokens}"
+    if weights == WEIGHTS_INT8:
+        # int8 is expressed by absence, so that an upgrade never sees a drift
+        # and no installation pays a forced reindex (MOD-01).
+        return base
+    if weights not in WEIGHT_PRECISIONS:
+        msg = "unknown weight precision"
+        raise ValueError(msg)
+    return f"{base}/{weights}"
 
 
 def default_extension_path() -> str:

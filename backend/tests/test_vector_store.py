@@ -37,6 +37,9 @@ import pytest
 
 from findling.store.vectors import (
     EMBEDDING_DIMENSIONS,
+    WEIGHT_PRECISIONS,
+    WEIGHTS_FP32,
+    WEIGHTS_INT8,
     Chunk,
     DimensionMismatch,
     ExtensionUnavailable,
@@ -387,6 +390,33 @@ def test_the_embedding_mark_carries_model_quantisation_dimensions_and_cap() -> N
 
     assert mark == "multilingual-e5-small/int8/384/1024"
     assert embedding_mark("multilingual-e5-small", tokens=512) != mark
+
+
+def test_int8_weights_are_the_default_and_leave_the_mark_as_it_was() -> None:
+    # int8 is spelled by absence, so an installation of 1.3.x reads no drift
+    # after an upgrade (MOD-01): the explicit call and the default are one value.
+    implicit = embedding_mark("multilingual-e5-small", tokens=1024)
+    explicit = embedding_mark("multilingual-e5-small", tokens=1024, weights=WEIGHTS_INT8)
+
+    assert explicit == implicit == "multilingual-e5-small/int8/384/1024"
+
+
+def test_fp32_weights_append_a_fifth_part_to_the_mark() -> None:
+    mark = embedding_mark("multilingual-e5-small", tokens=1024, weights=WEIGHTS_FP32)
+
+    assert mark == "multilingual-e5-small/int8/384/1024/fp32"
+    assert mark != embedding_mark("multilingual-e5-small", tokens=1024)
+
+
+def test_an_unknown_weight_precision_is_refused_without_naming_it() -> None:
+    with pytest.raises(ValueError, match="unknown weight precision") as caught:
+        embedding_mark("multilingual-e5-small", tokens=1024, weights="fp16")
+
+    assert "fp16" not in str(caught.value)
+
+
+def test_the_weight_precisions_are_exactly_int8_and_fp32() -> None:
+    assert frozenset({"int8", "fp32"}) == WEIGHT_PRECISIONS
 
 
 def test_every_statement_of_the_schema_is_if_not_exists() -> None:

@@ -35,6 +35,7 @@ from pathlib import Path
 
 from findling.index.open import DUTCH_MARK, LANGUAGES_MARK, TANTIVY_VERSION, expected_versions
 from findling.store.repo import open_store
+from findling.store.vectors import EMBEDDING_MODEL, embedding_mark
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 DOCKERFILE = BACKEND_ROOT / "Dockerfile"
@@ -316,6 +317,26 @@ def test_an_index_built_by_this_code_carries_the_marks_of_v1_3() -> None:
     findings = drift_findings(expected_versions("digest-egal", GOLD_LANGUAGES), GOLD_V1_3)
 
     assert findings == [], findings
+
+
+# The vector mark every installation up to 1.3.x carries in its state.db. A
+# literal and not a composition of the constants of vectors.py, for the reason
+# GOLD_LANGUAGES gives: a gold value that follows the code it guards guards
+# nothing.
+GOLD_VECTOR_MARK_V1_3 = "multilingual-e5-small/int8/384/1024"
+
+
+def test_the_vector_mark_of_an_int8_build_is_the_mark_of_v1_3() -> None:
+    """The int8 build writes byte for byte what 1.3.x wrote (MOD-01).
+
+    Since 1.4 the mark can carry the precision of the model weights, and int8 is
+    spelled by absence precisely so that this value does not move. **A red test
+    here is a question for the owner and not a repair:** any difference makes
+    the poller answer a drift on every existing installation, which empties the
+    vector stock and embeds it again, in the order of five hours per box.
+    """
+    assert embedding_mark(EMBEDDING_MODEL, tokens=1024) == "multilingual-e5-small/int8/384/1024"
+    assert embedding_mark(EMBEDDING_MODEL, tokens=1024) == GOLD_VECTOR_MARK_V1_3
 
 
 def test_the_schema_mark_moved_by_exactly_one_step() -> None:

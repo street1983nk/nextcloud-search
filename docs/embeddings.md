@@ -699,6 +699,17 @@ Tokendeckel verstellt hatte, bekommt eine Marke über einem Bestand, der zu ihr
 nicht passt. Der Handgriff dagegen ist `occ findling:index --restart`, und er ist
 für die Fassung v1.0.0 gegenstandslos, weil es keine ältere Fassung im Feld gibt.
 
+**Nachtrag 1.4: die Marke trägt die Gewichtspräzision (MOD-01).** Seit 1.4 steht
+in der Marke auch, mit welcher Präzision die Modellgewichte gerechnet haben. int8
+wird durch Abwesenheit geschrieben: die Marke eines int8-Baus ist Byte für Byte
+die Marke bis 1.3.x, `multilingual-e5-small/int8/384/1024`, und
+Bestandsinstallationen betten beim Aufstieg deshalb nichts neu ein. fp32 hängt
+`/fp32` an. Ein Wechsel von int8 zu fp32 oder zurück ist damit ein Drift wie jeder
+andere und löst die Kette oben aus, in beide Richtungen. Die gespeicherten Vektoren
+sind in beiden Fällen int8, nur die Marke kann die beiden Bestände
+auseinanderhalten. Der fp32-Nachladeweg selbst (Nachladen bei Opt-in mit
+Digest-Prüfung, D-24-05) kommt mit Phase 25; der Start lädt weiterhin nichts.
+
 ## 9. Die Skalen: der Deckel des Vektorscans ist keine Störung
 
 **Die Zeile, um die es geht.** Im Protokoll steht bei jeder semantischen Anfrage
