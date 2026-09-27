@@ -1223,8 +1223,13 @@ PHP_TREE_HASH_TODAY = "d28262d9643285aa62dff1225692aac9adb95106d1182bf5b6b562d8a
 # refuses a batch that is in flight, not one that has just finished. One of the
 # 57 files changed its bytes, no file came or went, so PACKAGE_FILES_TODAY
 # stays at 57.
+# Moved on 2026-09-27 by plan 24-01 (MOD-01): store/vectors.py got
+# WEIGHTS_INT8, WEIGHTS_FP32 and WEIGHT_PRECISIONS beside ELEMENT_TYPE, and
+# embedding_mark a keyword weights whose int8 default leaves the mark byte for
+# byte where 1.3.x left it, while fp32 appends a fifth part. One of the 57 files
+# changed its bytes, no file came or went, so PACKAGE_FILES_TODAY stays at 57.
 PACKAGE_FILES_TODAY = 57
-PACKAGE_TREE_HASH_TODAY = "924b9c40270c6627cb311d07a1cfeee98c6a2f0fe290fc44ed11bb0bce21f881"
+PACKAGE_TREE_HASH_TODAY = "1eb811ad32929627580925dac428ce5fbef652378c9143388389f3fb3cfa18c6"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
