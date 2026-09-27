@@ -1223,8 +1223,15 @@ PHP_TREE_HASH_TODAY = "d28262d9643285aa62dff1225692aac9adb95106d1182bf5b6b562d8a
 # refuses a batch that is in flight, not one that has just finished. One of the
 # 57 files changed its bytes, no file came or went, so PACKAGE_FILES_TODAY
 # stays at 57.
-PACKAGE_FILES_TODAY = 57
-PACKAGE_TREE_HASH_TODAY = "924b9c40270c6627cb311d07a1cfeee98c6a2f0fe290fc44ed11bb0bce21f881"
+# Moved on 2026-09-27 by plan 24-02 (profile groundwork, PROF-01/PROF-03/HW-01),
+# and the count moves with the hash: hardware.py arrived, the neutral
+# cgroup-aware detection of cores and memory, so 57 becomes 58. config.py
+# changed its bytes as the second file, for the profile constants (shares,
+# caps, r, slot cost, suggestion thresholds) and explicit_int_from_environment;
+# settings() and Settings did not move. One file came and none went, so
+# PACKAGE_FILES_TODAY moves to 58.
+PACKAGE_FILES_TODAY = 58
+PACKAGE_TREE_HASH_TODAY = "fb364ad604739798aa997ed21d7dbd8097f879275c46c27ddfff3c219e34798b"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
