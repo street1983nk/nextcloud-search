@@ -264,6 +264,17 @@ jobs:
       LOCAL_REGISTRY: 'localhost:5000'
       LOCAL_IMAGE_TAG: 'citest'
 
+      # The one word the gone verdict of "Store upgrade 2b" is sown on (D-10),
+      # and a constant here rather than a literal in two steps, because the
+      # step that sows it and the assurance that demands its repair have to
+      # ask for the same word. Invented on purpose: no file of the reference
+      # corpus, of the fill corpus or of the Spanish document carries it, and
+      # it is not a compound of any word they carry, so exactly one file of
+      # the account can ever answer it. "Store upgrade 2b" asks for it before
+      # anything is sown and demands nought, which is that claim measured
+      # rather than assumed.
+      SEED_TERM: 'quorvintax'
+
       # The dispatch input, resolved once here so that every step below asks
       # one name instead of reaching into the inputs context four times. On a
       # push and on a pull request the context is empty and this renders to the
@@ -3279,6 +3290,132 @@ jobs:
           done
           echo "the three terms of the reference corpus still bring back exactly one file each, with the fill corpus in the index"
 
+      # =====================================================================
+      # The seed of D-10, and why it has to exist at all (plan 23-06).
+      #
+      # Version001300Date20260927000000 hands every skipped(gone) verdict back
+      # to the content track once and deletes the verdict, which is the repair
+      # of issue #14. PHPUnit proves the migration against mocks (plan 23-05).
+      # This is the second half D-10 asks for: the same migration, on a real
+      # instance, inside a real occ upgrade. And on the reference corpus it
+      # would be a no-op, because nothing in it is a file in a Team Folder read
+      # by the wrong user, so no gone verdict ever arises (RESEARCH A3).
+      # Assurance 3 of "Store upgrade 5" would then hold and prove nothing
+      # about the repair. So the verdict is sown here, in the shape issue #14
+      # left it behind: a readable file of the ordinary user, never indexed,
+      # not in the queue, with skipped(gone) in findling_file_state.
+      #
+      # The file is a new one and not a file the index already holds, and that
+      # is the stronger of the two variants: a file the container never saw
+      # can only become findable through the requeue of the migration, so a
+      # hit after the upgrade is the repair and nothing else. The race that
+      # could spoil it is the container claiming the file between the scan and
+      # the verdict, and there is only one party that could do that: the
+      # container, through its own poller. It is paused for exactly that
+      # window. files:scan fires no node event (the listener of this app
+      # listens to NodeCreatedEvent and its kin, which only the file view
+      # dispatches), and once the verdict is written the reconcile of the
+      # container sees an end state and leaves the file alone, which is
+      # precisely how issue #14 made its verdicts permanent.
+      #
+      # The migration runs only in the branch "the instance performed the app
+      # update" of "Store upgrade 4", which needs the tree to carry a newer
+      # version than UPGRADE_FROM_TAG. In the equal version branch the verdict
+      # stays, and assurance 3b turns red, which is the right answer: an
+      # upgrade that did not run the repair did not repair anything.
+      # =====================================================================
+      - name: Store upgrade 2b, a gone verdict the way issue #14 wrote it (D-10)
+        if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
+        run: |
+          container="${UPGRADE_OLD_CONTAINER}"
+          seed_dir=data/testuser/files/gone-seed
+          seed_name=upgrade-gone-seed.txt
+          q() {
+            sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" "$1"
+          }
+          # The hit count of the seed word, fail closed the way term_hits of
+          # "Store upgrade 3" is: a status other than 200 or a body jq cannot
+          # read is a finding and never a count of nought.
+          seed_hits() {
+            body="${RUNNER_TEMP}/seed-term.json"
+            code=$(curl -s -o "${body}" -w '%{http_code}' \
+              -u "testuser:${TESTUSER_PASS}" \
+              -H 'OCS-APIRequest: true' \
+              -H 'Accept: application/json' \
+              "http://localhost:8080/ocs/v2.php/search/providers/findling/search?term=${SEED_TERM}")
+            count=$(jq -r '.ocs.data.entries | length' "${body}" 2> /dev/null || true)
+            case "${code}:${count}" in
+              200:[0-9]*) printf '%s\n' "${count}" ;;
+              *)
+                echo "the search for the seed word answered HTTP ${code} without a readable entry list" >&2
+                head -c 600 "${body}" >&2
+                return 1
+                ;;
+            esac
+          }
+
+          # Before anything is sown: the word finds nothing on this
+          # installation, so a hit after the upgrade cannot be one that was
+          # there all along.
+          hits=$(seed_hits) || exit 1
+          if [ "${hits}" != "0" ]; then
+            echo "::error::the seed word already brings back ${hits} file(s) before anything was sown, so it is not the invented word SEED_TERM claims it is"
+            exit 1
+          fi
+
+          # The window the container must not see. The trap unpauses on every
+          # way out of this step, because a paused container left behind would
+          # turn every later step into a red run about something else.
+          docker pause "${container}" > /dev/null
+          trap 'docker unpause "${container}" > /dev/null 2>&1 || true' EXIT
+          mkdir -p "${seed_dir}"
+          # The words follow the rule of the fill corpus in "Store upgrade 2":
+          # none of them carries Belehrung, Auszug, Erinnerung, alemanes,
+          # florpel or findling-canary, so the assurances that count those
+          # terms keep counting exactly what they counted before.
+          {
+            echo "Die Notiz ${SEED_TERM} beschreibt einen Stapel Holzkisten im Keller."
+            echo "Sie liegt im Ordner des Nutzers und ist fuer ihn lesbar."
+          } > "${seed_dir}/${seed_name}"
+          "${RUNNER_TEMP}/nc-occ.sh" files:scan --path="/testuser/files/gone-seed"
+
+          storage=$(q "SELECT numeric_id FROM oc_storages WHERE id = 'home::testuser';")
+          file_id=$(q "SELECT fileid FROM oc_filecache WHERE storage = '${storage}' AND path = 'files/gone-seed/${seed_name}';")
+          case "${storage}:${file_id}" in
+            [0-9]*:[0-9]*) ;;
+            *)
+              echo "::error::the scan left no file id for the seed (storage '${storage}', file id '${file_id}')"
+              exit 1
+              ;;
+          esac
+          # Exactly what issue #14 left behind: no queue row, a gone verdict.
+          q "DELETE FROM oc_findling_queue WHERE file_id = ${file_id};"
+          q "INSERT INTO oc_findling_file_state (file_id, state, reason, updated_at) VALUES (${file_id}, 'skipped', 'gone', datetime('now'));"
+          docker unpause "${container}" > /dev/null
+          trap - EXIT
+
+          # Fail closed, all three, before anything goes on.
+          verdicts=$(q "SELECT COUNT(*) FROM oc_findling_file_state WHERE file_id = ${file_id} AND state = 'skipped' AND reason = 'gone';")
+          if [ "${verdicts}" != "1" ]; then
+            echo "::error::the seed carries ${verdicts} skipped(gone) verdict(s) instead of one"
+            exit 1
+          fi
+          queued=$(q "SELECT COUNT(*) FROM oc_findling_queue WHERE file_id = ${file_id};")
+          if [ "${queued}" != "0" ]; then
+            echo "::error::the seed has ${queued} queue row(s), so the container could index it without any migration"
+            exit 1
+          fi
+          hits=$(seed_hits) || exit 1
+          if [ "${hits}" != "0" ]; then
+            echo "::error::the seed word brings back ${hits} file(s) right after sowing, so the container indexed the seed before the upgrade and the repair would prove nothing"
+            exit 1
+          fi
+          echo "sown: one readable file, never indexed, no queue row, skipped(gone) in findling_file_state"
+          {
+            echo "UPGRADE_SEED_FILE_ID=${file_id}"
+            echo "UPGRADE_SEED_NAME=${seed_name}"
+          } >> "${GITHUB_ENV}"
+
       - name: Store upgrade 3, the state of the released installation, before anything moves
         if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
         run: |
@@ -4115,10 +4252,56 @@ jobs:
       # that is a statement and not a gap: the day a mark really moves,
       # assertion 2 below turns red before the two absence assertions do, and the
       # question that follows belongs to the owner and not to a test edit.
+      #
+      # The seed of "Store upgrade 2b" and what it does to assurance 3, since
+      # plan 23-06 (D-10). The migration of 1.3.0 hands the one sown gone
+      # verdict back to the content track and deletes it, and the container
+      # indexes the file through its poller. That moves exactly three counters
+      # and each by exactly one: Nextcloud records one skipped file less, and
+      # the container holds one document and one indexed file more. Those three
+      # are therefore compared against "before, moved by one" and not against
+      # "before"; every other counter of block 3 stays under unchanged, word
+      # for word, because the seed touches none of them. The work stock above
+      # all: scheduled and running still have to be what they were, which is
+      # why the snapshot below waits until the requeued row is worked off
+      # before it is taken, with a deadline in the shape of the drain of
+      # "Store upgrade 2" (and UPGRADE_DRAIN_BUDGET_SECONDS, because one text
+      # file is a small part of that pass and no second number is invented).
+      # The wait asks the poller alone and runs no cron.php, so no background
+      # job gets a chance to queue work the unchanged lines would then catch.
+      #
+      # Assurance 3b states the repair itself, and it is the half the counters
+      # cannot carry on their own: the sown file id has no skipped(gone)
+      # verdict any more, and the seed word finds exactly that file. The
+      # migration runs only in the branch "the instance performed the app
+      # update" of "Store upgrade 4"; in the equal version branch 3 and 3b are
+      # red, and that is correct, because no repair ran.
       - name: Store upgrade 5, the seven assurances after the upgrade
         if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
         run: |
           . "${RUNNER_TEMP}/upgrade-probe.sh"
+
+          # The requeued seed worked off before the snapshot (D-10), see the
+          # comment above this step.
+          deadline=$(( $(date +%s) + UPGRADE_DRAIN_BUDGET_SECONDS ))
+          settled=""
+          while [ "$(date +%s)" -lt "${deadline}" ]; do
+            open=$("${RUNNER_TEMP}/nc-occ.sh" findling:index | awk '
+              $1 == "scheduled" { scheduled = $2 }
+              /^  handed to the worker/ { running = $NF }
+              END { print (scheduled + 0) + (running + 0) }')
+            seed=$(term_hits "${SEED_TERM}" 2> /dev/null || echo "unreadable")
+            if [ "${open}" = "0" ] && [ "${seed}" = "1" ]; then
+              settled="yes"
+              break
+            fi
+            echo "open=${open} seed hits=${seed}, $(( deadline - $(date +%s) ))s left"
+            sleep 5
+          done
+          if [ -z "${settled}" ]; then
+            echo "::warning::the requeued seed was not worked off within UPGRADE_DRAIN_BUDGET_SECONDS, the assurances below name what is missing"
+          fi
+
           snapshot "${RUNNER_TEMP}/upgrade-after.json" after
           before="${RUNNER_TEMP}/upgrade-before.json"
           after="${RUNNER_TEMP}/upgrade-after.json"
@@ -4189,16 +4372,58 @@ jobs:
             echo "moved on purpose  .marks.tantivyVersion ${was} to ${now}, same index format half (E-17-7 option a)"
           fi
 
-          echo "--- 3, the same document counts ---"
-          unchanged '.container.docs' "the number of documents in the index changed, so the upgrade added or lost documents"
-          unchanged '.container.indexed' "the container counts a different number of indexed files after the upgrade"
+          # Exactly before plus step, for the three counters the seed of
+          # "Store upgrade 2b" moves (D-10); both values have to be numbers.
+          moved_by_seed() {
+            path="$1"
+            step="$2"
+            meaning="$3"
+            was=$(jq -r "${path}" "${before}")
+            now=$(jq -r "${path}" "${after}")
+            case "${was}:${now}" in
+              [0-9]*:[0-9]*) ;;
+              *) echo "::error::${path} is not a number on both sides (${was}, ${now})"; fail=1; return ;;
+            esac
+            if [ "$(( was + step ))" != "${now}" ]; then
+              echo "::error::${meaning}: ${path} was ${was} before the upgrade and is ${now} after it, and the one sown gone verdict allows exactly ${step}"
+              fail=1
+            else
+              echo "moved by ${step}  ${path} ${was} to ${now}   (the seed of D-10)"
+            fi
+          }
+
+          echo "--- 3, the same document counts, apart from the one repaired seed ---"
+          moved_by_seed '.container.docs' 1 "the number of documents in the index moved by something other than the one repaired seed"
+          moved_by_seed '.container.indexed' 1 "the container counts indexed files that moved by something other than the one repaired seed"
           unchanged '.container.skipped' "the container counts a different number of skipped files after the upgrade"
           unchanged '.container.failed' "the container counts a different number of failed files after the upgrade"
-          unchanged '.nextcloud.skipped' "Nextcloud recorded a different number of skipped files after the upgrade"
+          moved_by_seed '.nextcloud.skipped' -1 "Nextcloud's skipped files moved by something other than the one sown gone verdict the migration had to delete"
           unchanged '.nextcloud.failed' "Nextcloud recorded a different number of failed files after the upgrade"
           unchanged '.nextcloud.scheduled' "the work stock is not empty after the upgrade, so something requeued work nobody asked for"
           unchanged '.nextcloud.running' "a worker holds queue rows after the upgrade, so something requeued work nobody asked for"
           unchanged '.container.rebuildState' "a rebuild directory appeared or went away across the upgrade, and no step of this block rebuilds anything"
+
+          echo "--- 3b, the seeded gone verdict is repaired (D-10) ---"
+          verdicts=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
+            "SELECT COUNT(*) FROM oc_findling_file_state WHERE file_id = ${UPGRADE_SEED_FILE_ID} AND state = 'skipped' AND reason = 'gone';")
+          if [ "${verdicts}" != "0" ]; then
+            echo "::error::the sown file still carries ${verdicts} skipped(gone) verdict(s) after the upgrade, so the migration of 1.3.0 did not repair it"
+            grep -n 'gone' "${RUNNER_TEMP}/upgrade-occ.txt" || true
+            fail=1
+          else
+            echo "the sown file carries no skipped(gone) verdict any more"
+          fi
+          if ! seed=$(term_hits "${SEED_TERM}"); then
+            echo "::error::the search for the seed word did not answer readably after the upgrade"
+            fail=1
+          elif [ "${seed}" != "1" ] \
+               || ! jq -e --arg name "${UPGRADE_SEED_NAME}" '.ocs.data.entries[0].title == $name' "${RUNNER_TEMP}/upgrade-term.json" > /dev/null; then
+            echo "::error::the seed word brings back ${seed} file(s) after the upgrade instead of the one repaired file ${UPGRADE_SEED_NAME}"
+            jq -r '.ocs.data.entries[]?.title' "${RUNNER_TEMP}/upgrade-term.json" || true
+            fail=1
+          else
+            echo "the seed word finds ${UPGRADE_SEED_NAME}, the file the verdict of issue #14 had hidden"
+          fi
 
           echo "--- 4, no reindex banner ---"
           if jq -e '.reindexBanner' "${after}" > /dev/null; then
@@ -4312,7 +4537,8 @@ jobs:
             echo ""
             echo "- companion \`${UPGRADE_OLD_COMPANION}\` out of the release assets, upgraded to \`${UPGRADE_NEW_COMPANION}\` of this commit"
             echo "- the container was unregistered without the data removing flag and registered again on the volume \`${UPGRADE_VOLUME}\`"
-            echo "- unchanged: the hits for Belehrung, Auszug and Erinnerung, four of the five index marks and the index format half of the fifth, the document counts, the work stock"
+            echo "- unchanged: the hits for Belehrung, Auszug and Erinnerung, four of the five index marks and the index format half of the fifth, the document counts apart from the one repaired seed, the work stock"
+            echo "- the gone verdict sown before the upgrade (D-10) is gone after it, and \`${SEED_TERM}\` finds the file it had hidden"
             echo "- no reindex banner, no \`start_rebuild_on_drift\` line in the container log"
             echo "- the languages mark was missing from the report before and is present and empty after, which is the mark arriving without a rebuild having stamped it"
             echo "- the Spanish question \`alemanes\` still answers with nought hits, because the field list of a question hangs on the stored schema mark and not on the code"
