@@ -480,8 +480,8 @@ USER findling
 # value is ignored, because the app binds a unix socket there instead.
 #
 # HF_HUB_OFFLINE is a net, not a proof, and the difference is worth one line.
-# What it does: huggingface-hub and requests arrive in this image through
-# fastembed, and with this variable set the library refuses to resolve a name
+# What it does: huggingface-hub arrives in this image through tokenizers,
+# and with this variable set the library refuses to resolve a name
 # instead of quietly reaching for the network when it misses something in its
 # cache. What it does not do: it does not stop any other code from opening a
 # socket, and it is not evidence that nothing does. The evidence is the offline

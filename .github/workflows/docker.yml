@@ -220,6 +220,26 @@ jobs:
             --entrypoint python \
             "${IMAGE}@${DIGEST}" /probe/test_vec_extension_probe.py
 
+      # HART-04 of phase 23, asked of the artefact and not of pyproject.toml.
+      # fastembed was pinned but never imported, and it dragged requests into
+      # the image; both are gone from the lockfile. tokenizers and numpy used to
+      # come in as dependencies of fastembed and are direct edges now, because without
+      # tokenizers the semantic half switches itself off without an error at
+      # build time. This step checks the container as built against that list:
+      # the two removed packages must not be importable, the two declared ones
+      # must be.
+      #
+      # What it does NOT check: versions. Those are pinned in backend/uv.lock and
+      # installed with uv sync --frozen, and a second copy of them here would
+      # only be a place for the numbers to drift apart. One ::error:: line per
+      # finding, so a run that fails names every wrong package at once.
+      - name: The image carries no fastembed and no requests (HART-04)
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          docker run --rm --network none --entrypoint python \
+            "${IMAGE}@${DIGEST}" -c "import sys; from importlib.util import find_spec; bad = [m for m in (None if find_spec('fastembed') is None else '::error::fastembed is importable in the image, HART-04 removed it', None if find_spec('requests') is None else '::error::requests is importable in the image, it left with fastembed', None if find_spec('tokenizers') is not None else '::error::tokenizers is missing from the image, it is a direct dependency', None if find_spec('numpy') is not None else '::error::numpy is missing from the image, it is a direct dependency') if m]; print('\n'.join(bad) if bad else 'fastembed and requests absent, tokenizers and numpy present'); sys.exit(1 if bad else 0)"
+
       # Criterion 3 of phase 8, asked of the artefact and not of the recipe.
       # backend/Dockerfile already runs test -s on the word list and on its
       # licence, and that check stays where it is: it is what makes an image
@@ -340,9 +360,10 @@ jobs:
       #
       # HF_HUB_OFFLINE=1 stands in backend/Dockerfile and it is a net, not a
       # proof. It makes huggingface-hub refuse to resolve a name; it does not
-      # stop any other code from opening a socket, and fastembed brought two
-      # network libraries, huggingface-hub and requests, into an image that is
-      # not allowed to speak to the outside world at all. The store text makes a
+      # stop any other code from opening a socket, and tokenizers still brings
+      # a network library, huggingface-hub, into an image that is not allowed
+      # to speak to the outside world at all (requests left the image with
+      # fastembed in phase 23, see the HART-04 step above). The store text makes a
       # statement about that. The only thing that can carry the statement is
       # this: the container starts with --network none, embeds a small stock of
       # its own making and answers a paraphrase out of it.
