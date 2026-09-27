@@ -81,6 +81,33 @@ final class SettingsService {
 	public const KEY_LAST_INDEXED = 'last_indexed_count';
 
 	/**
+	 * The performance profile the container runs with (D-24-01, path B).
+	 *
+	 * Public because ProfileController hands it to the container and the admin
+	 * page of phase 27 will write it: one place names the key, so a second
+	 * spelling cannot create a key nobody reads. In phase 24 the only way to
+	 * write it is ``occ config:app:set findling profile --value=standard``; the
+	 * container pulls the value once per round, nothing pushes it.
+	 */
+	public const KEY_PROFILE = 'profile';
+
+	/**
+	 * The closed set of profile names, and the only names profile() hands out.
+	 *
+	 * Has to stay identical to PROFILE_NAMES in backend/src/findling/profile.py.
+	 * A parity test on the Python side compares the two textually, which is why
+	 * this list keeps exactly this one line spelling.
+	 */
+	public const PROFILES = ['economy', 'standard', 'performance'];
+
+	/**
+	 * The profile of a fresh install and of every value outside the set: the
+	 * frugal one, because the hardware target is a small box and a wrong guess
+	 * upwards costs memory, a wrong guess downwards only speed.
+	 */
+	public const PROFILE_DEFAULT = 'economy';
+
+	/**
 	 * The lower end of the size cap, one megabyte.
 	 *
 	 * Below it the setting would stop being a limit and start being an outage:
@@ -229,6 +256,31 @@ final class SettingsService {
 	 */
 	public function indexExternalStorage(): bool {
 		return $this->appConfig->getValueBool(Application::APP_ID, self::KEY_INDEX_EXTERNAL_STORAGE, false);
+	}
+
+	/**
+	 * The profile in force, always a name out of PROFILES.
+	 *
+	 * Validated on read and not only on write, because the write path of phase
+	 * 24 is ``occ config:app:set``, the unchecked second way in that the save()
+	 * docblock names: a typo there must not reach the container as a profile it
+	 * does not know. A value outside the set falls back to PROFILE_DEFAULT and
+	 * is counted by reject(), which never logs the value itself.
+	 */
+	public function profile(): string {
+		$stored = $this->appConfig->getValueString(
+			Application::APP_ID,
+			self::KEY_PROFILE,
+			self::PROFILE_DEFAULT,
+		);
+
+		if (!in_array($stored, self::PROFILES, true)) {
+			$this->reject();
+
+			return self::PROFILE_DEFAULT;
+		}
+
+		return $stored;
 	}
 
 	/**
