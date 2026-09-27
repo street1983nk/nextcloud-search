@@ -309,7 +309,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 23-05-PLAN.md , gone-Reparaturlauf als Migration Version001300Date20260927000000 mit PHPUnit
+- [x] 23-05-PLAN.md , gone-Reparaturlauf als Migration Version001300Date20260927000000 mit PHPUnit
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -342,7 +342,7 @@ Plans:
 | 20. UI-Kataloge es/it/nl/pt | v1.3 | 9/9 | Complete    | 2026-09-25 |
 | 21. Niederlaendische Komposita | v1.3 | 9/9 | Complete    | 2026-09-25 |
 | 22. Messanfahrt BL-F03 | v1.3 | 13/13 | Complete | 2026-09-26 |
-| 23. Haertung und Store-Einreichung 1.3.0 | v1.3 | 4/9 | In Progress|  |
+| 23. Haertung und Store-Einreichung 1.3.0 | v1.3 | 5/9 | In Progress|  |
 
 ## Requirement-Abdeckung v1.3
 
