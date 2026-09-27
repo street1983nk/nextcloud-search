@@ -313,7 +313,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 23-06-PLAN.md , Versionen 1.3.0, gone-Saat im Upgrade-Ast, Store install/upgrade/Umbau, probe-92d
+- [x] 23-06-PLAN.md , Versionen 1.3.0, gone-Saat im Upgrade-Ast, Store install/upgrade/Umbau, probe-92d
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -342,7 +342,7 @@ Plans:
 | 20. UI-Kataloge es/it/nl/pt | v1.3 | 9/9 | Complete    | 2026-09-25 |
 | 21. Niederlaendische Komposita | v1.3 | 9/9 | Complete    | 2026-09-25 |
 | 22. Messanfahrt BL-F03 | v1.3 | 13/13 | Complete | 2026-09-26 |
-| 23. Haertung und Store-Einreichung 1.3.0 | v1.3 | 5/9 | In Progress|  |
+| 23. Haertung und Store-Einreichung 1.3.0 | v1.3 | 6/9 | In Progress|  |
 
 ## Requirement-Abdeckung v1.3
 
