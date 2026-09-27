@@ -28,8 +28,17 @@ Findling 1.3.0 steht als signiertes App-Paar im Store, mit ehrlich dokumentierte
 ### Audit-Tiefe
 - **D-07:** Security-Audit VOLL ueber die ganze App (wie vor jeder Abgabe). Bug- und Performance-Audit GEZIELT auf die seit 1.2.0 geaenderten Pfade: Schema/Marken/Umbauweg (18), Frageseite (19), Kataloge es/it/nl/pt (20), NL-Komposita (21), Kaltstart-Fix und gone-Reparaturlauf (23). Begruendung: Phasen 17-22 hatten je eigene Audits. Endstand bleibt 0 CRIT / 0 HIGH, MEDIUM behoben, LOW dokumentiert entschieden.
 
+### Nachentscheide zur Research (Owner 27.09., am Research-Ergebnis)
+- **D-08:** Kaltstart-Restrisiko AKZEPTIERT: Das Hintergrundladen startet nach dem Antwortversand (BackgroundTasks-Weg); die erste Anfrage ist geschuetzt. Anfragen, die WAEHREND des Ladefensters eintreffen (onnxruntime haelt beim Session-Aufbau den GIL), koennen den 1,5-s-Deckel weiterhin reissen. KEIN zusaetzlicher lockfreier Schnellpfad in embed/model.py (Owner hat den groesseren Eingriff abgelehnt). Das Ladefenster wird ehrlich in Doku und Test benannt.
+- **D-09:** Die EINE Messzahl im Store-Text ist 730,2 MB (v1.3-Abbild), an allen drei Stellen.
+- **D-10:** Der gone-Reparaturlauf (D-04) wird DOPPELT bewiesen: PHPUnit-Migrationstest UND positiver Nachweis in der Upgrade-CI (deploy-harp Store upgrade: vorher gone-Zeile saeen, nachher indexiert; Zusicherung 3 in deploy-harp.yml:4192-4200 sauber erweitern, nicht aufweichen).
+- **D-11:** Der Store-Text bekommt eine Faktenzeile zu den Indexsprachen (de/en/es/it/nl/pt) direkt vor den Known limitations, damit die Grenzliste einen Bezug hat.
+
 ### Claude's Discretion
-- Mechanik des Hintergrundladens (Task/Lock-Zuschnitt, Doppelstart-Schutz) und Nachweis (Test + Nachmessung der Kaltstartroute in CI).
+- Mechanik des Hintergrundladens (Task-Zuschnitt, Doppelstart-Schutz) und Nachweis (Test + Nachmessung der Kaltstartroute in CI); die drei bekannten CI-Bruchstellen (integration.yml-Paraphrase-Kaltsuche, probe_image_search.py, one_load.py) reisen mit dem Fix.
+- Issue-14-Fix (Merge 257caac) kommt MIT in das gezielte Bug-/Performance-Audit (seit 1.2.0 geaendert, ohne eigenes Phasenaudit).
+- Doku-Befund 41,9 vs. 42,1 MB: Messquelle je Zahl nennen statt still anzugleichen.
+- Mit dem Kaltstart-Fix mitpruefen: Text der Umgebungsvariable in backend/appinfo/info.xml:469 und docs/admin-page.md:137-138 (sagen heute das Gegenteil des neuen Verhaltens).
 - Zuschnitt des Reparaturlaufs (Migrationsschritt vs. Startup-Job), solange er einmalig laeuft und idempotent ist.
 - HART-04-Weg: fastembed==0.8.0-Pin entfernen oder Import belegen, numpy sauber deklarieren oder eliminieren; Ergebnis muss die Abhaengigkeitsliste dem Container-Ist angleichen.
 - Reihenfolge der Haertungsschritte; E2E-Strecken nach dem probe-92d.yml-Muster.
