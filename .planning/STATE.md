@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
-status: executing
-stopped_at: Phase 23 context gathered
-last_updated: "2026-09-27T00:35:00.017Z"
-last_activity: 2026-09-27 -- Phase 23 execution started
+status: milestone_complete
+stopped_at: Milestone complete (Phase 23 was final phase)
+last_updated: 2026-09-27T08:32:32.517Z
+last_activity: 2026-09-27 -- Findling 1.3.0 im Store, Phase 23 komplett, Milestone v1.3 baulich fertig
 progress:
   total_phases: 7
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 69
-  completed_plans: 60
-  percent: 86
+  completed_plans: 69
+  percent: 100
 ---
 
 # Project State
@@ -21,18 +21,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 23 — Haertung und Store-Einreichung 1.3.0
+**Current focus:** Milestone complete
 
 ## Current Position
 
-Phase: 23 (Haertung und Store-Einreichung 1.3.0) — EXECUTING
-Plan: 1 of 9
-Status: Executing Phase 23
-Nachanfahrt 22-13 (Owner-Nachfreigabe zweistufig: "machen wir wie die empfehlung", dann "weiter", beide ueber den Koordinator, Vermerk im README): Aufbau aus dem Korpus-Snapshot ohne Abweichung, Timer absolut 20:20Z, 92d 0 mit Bestand 52.137 / 44 / 6, backendReachable true. 95c mit Einwort-Begriff "Bescheid" unter lasttest, Schalter 0: erste kalte Suche 2.617 ms, 26 Treffer, gueltig im ersten Zyklus, Gegenprobe 2 Zeilen (E5 fuer den Einwortfall gehalten, Nachtrag 6.12; Urteil der Hauptanfahrt bleibt verfehlt). 94c: abtastreihe-spitze-mb 1688, Zyklus 2 minus C1 27,4. B5: anon 542 MB bei batch 2, 877 MB bei batch 8, Threads kosten keinen Speicher. Box abgebaut ohne Ende-Snapshot, 0 Ressourcen ueber 17 Regionen ausser dem Korpus-Snapshot, A-Record weg. Kosten 0,37 h / 0,0427 USD gegen Deckel 4 h / 0,50 USD (gehalten). Commits 0de526b (Freigabevermerk), ea32513 (Rohdaten rohdaten-nachanfahrt/), ec15950 (Bericht 6.15, performance.md).
-Kosten der Phase gesamt: Hauptanfahrt 2,32 h / 0,4716 USD (Deckel 24 h / 3,76 USD gehalten) plus Nachanfahrt 0,37 h / 0,0427 USD. Urteile E1 bis E14: 11 gehalten, 3 verfehlt (E4, E5, E8), E5 per Nachtrag fuer den Einwortfall gehalten. dismax-Entscheid: Summe, disjunction_max verworfen (MESS-09).
-Offene Befunde (deferred-items 22-13): V-22-01 (erste Mehrwortsuche nach Containerstart bei Schalter 0 ohne Findling-Treffer) zeigt sich auch an der Auszugsroute api/snippets.py, die die Einwortregel nicht kennt (Backlog, Owner-Entscheid); 00-typwechsel.sh vorpruefung schreibt ohne OUT nach rohdaten/ (in der Nachanfahrt von Hand zurueckgesetzt, Werkzeug bleibt gefahren und pruefsummengeschuetzt). Korpus-Snapshot bleibt (Wiedervorlage beim Milestone-Close).
-Merge fix/issue-14-teamfolder-acl: gemergt 257caac, Kandidat für 1.3.0 (Phase 23). Merge-Commit ohne Konflikt (--no-ff, Branch-Kopf e2ef470), php/-Baum gleich dem Branch, Ledger PHP_TREE_HASH_TODAY und PHP_FILES_TODAY 70 aus dem Branch neben den Prüfsummen-Wächtern aus 22-11. Lokale Gates grün (ruff, format, pyright latest 0 Fehler, vulture, pytest 3324 passed / 15 skipped, php -l 70/0 im nextcloud:35-Image), CI auf main 6/6 grün, Image findling_backend:dev sha256:61327a32c55da58815549c2fc5aadd938f92f7fee984d91d58b61089061ec497. Branch und Worktree bleiben vorerst, kein Issue-Kommentar (die Release-Notiz trägt den Hinweis), kein Tag.
-OFFENE OWNER-ENTSCHEIDUNG: was mit alten skipped(gone)-Zeilen geschieht, die vor dem Fix für Team-Folder-Dateien geschrieben wurden, die der damals gewählte Leser nicht sah (neu einreihen oder stehen lassen).
+Phase: 23 (Haertung und Store-Einreichung 1.3.0) - COMPLETE 2026-09-27
+Milestone v1.3: alle 7 Phasen (17-23) komplett, 69/69 Plaene.
+**FINDLING 1.3.0 IST IM STORE:** Submission-Lauf 36304007154 mit 2x HTTP 201, beide Store-Seiten zeigen 1.3.0 (NC 34+35), Tag v1.3.0 auf 744d7e4 (nie verschieben). Verification passed 4/4 (23-VERIFICATION.md), Review 0C/2W/3I mit beiden Warnings gefixt (79ad925), CI auf 79ad925 6/6 gruen.
+Phase-23-Kern: Kaltstart-Fix (erste Suche lexikalisch + Hintergrundladen, 973 ms MIT Treffern; D-08-Restrisiko dokumentiert), gone-Reparatur-Migration mit Upgrade-CI-Beweis (skipped 8 auf 7), HART-04 (fastembed raus, Absenz-Check), Store-Texte mit Grenzliste/Sprachzeile/730,2 MB (Gates halten), Audit 0C/0H/1M-behoben (F-23-01 Reload-Bug seit Phase 14).
+Issue #14: Antwort gepostet (issuecomment-5853918446), Issue bleibt offen (budachst bestaetigt nach Upgrade). Die gone-Frage ist ENTSCHIEDEN und gebaut (Reparaturlauf beim Upgrade, D-04).
+NAECHSTES: secure-phase 23 (SECURITY.md fehlt, Audit 2026-09-phase-23 als Vorlage), dann complete-milestone v1.3 (KEIN neuer v*-Tag; Snapshot snap-03f1d1d9ad9262704 = Wiedervorlage). Danach v1.4 = BL-F04 (Erstindex-Beschleunigung).
+Offene Merker: deferred-items.md Phase 23 (F-23-04 + idle-Guard = v1.4-Backlog, IN-01..03 dokumentiert); Aufraeumen Worktree issue-14 + Branch fix/issue-14-teamfolder-acl.
 Naechster Schritt: /gsd:plan-phase 23.
 
 Vorher 22-11 abgeschlossen: docs/performance.md traegt "Die v1.3-Anfahrt vom 26.09.2026" (M-01 warm hoechstens 1.080,6 ms, Stufe 1 kalt 1.512,5; 92c 36/0, 99d 0; Bodensatz Zyklus 2 +30,5 MB; Einzelliste alle 50; Kaltstart LUECKE, geschlossen in 22-13; Index 1,82-fach, Umbau 581 s; B1-B7). Commits 44bba82, b497cc0.
@@ -250,7 +249,7 @@ Instanz den Erststempel der Verzeichnismarken; Folge: Feldplan blieb LEGACY, rot
 Fix-Beweis). Endstand-CI 36096526219 GRUEN 4/4 inkl. arm64. Suite 2877 passed / 15 skipped.
 LEHRE: ein Audit-Fix, der einen Schreiber entfernt, braucht die Frage "wer schreibt das
 sonst noch auf JEDEM Pfad" plus einen Frischinstanz-Fall, bevor er reist.
-Last activity: 2026-09-27 -- Phase 23 execution started
+Last activity: 2026-09-27
 
 Progress: [█████████░] 90% (53 von 59 Plänen, 5 von 7 Phasen)
 
@@ -387,6 +386,7 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
 | 20 | 9 | - | - |
 | 21 | 9 | 1 Tag | - |
 | 22 | 11/12 | 12 min (22-01), 30 min (22-02), 35 min (22-03), 25 min (22-04), 75 min (22-05), 35 min (22-06 Task 3 und Probe), 25 min (22-07 Task 3), ca. 8 h 20 min Wand (22-08), 35 min (22-09), 30 min (22-10), 75 min (22-11) | - |
+| 23 | 9 | - | - |
 
 ## Accumulated Context
 

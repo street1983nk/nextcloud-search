@@ -342,7 +342,7 @@ Plans:
 | 20. UI-Kataloge es/it/nl/pt | v1.3 | 9/9 | Complete    | 2026-09-25 |
 | 21. Niederlaendische Komposita | v1.3 | 9/9 | Complete    | 2026-09-25 |
 | 22. Messanfahrt BL-F03 | v1.3 | 13/13 | Complete | 2026-09-26 |
-| 23. Haertung und Store-Einreichung 1.3.0 | v1.3 | 9/9 | Complete   | 2026-09-27 |
+| 23. Haertung und Store-Einreichung 1.3.0 | v1.3 | 9/9 | Complete    | 2026-09-27 |
 
 ## Requirement-Abdeckung v1.3
 
