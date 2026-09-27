@@ -1428,18 +1428,23 @@ jobs:
       # feature it was asked to watch.
       #
       # findling.tools.one_load builds its own volume, indexes one document,
-      # runs one real search round, wires the second track, and then releases
-      # the weights and drives one more real round, in that order. The order is
-      # the anti-vacuity clause: the search side has to bring the engine loads
-      # to one on its own, so a run that never reaches the model reports a zero
+      # runs one real search round plus the handler path behind it, wires the
+      # second track, and then releases the weights and drives one more real
+      # round, in that order. The order is the anti-vacuity clause: search plus
+      # handler path have to bring the engine loads to one, the way a real
+      # caller does since the cold start fix of plan 23-01 (the round only
+      # requests the warm run, the handler loads it after the answer is out),
+      # so a run that never reaches the model reports a zero
       # and fails rather than passing quietly, which is exactly the shape the
       # ceiling above would have shipped. The fourth phase carries the same
       # clause one step further on: a release that freed nothing leaves the
       # engine where it was, so unloads == 0 is a finding here and never a
       # quiet green. The tool exits non zero with a named finding for every
       # number that is not what the promise says, and its ability to go red is
-      # proven in backend/tests/test_one_load.py by five cases that bring the
-      # regressions back through monkeypatch.
+      # proven in backend/tests/test_one_load.py by six cases that bring the
+      # regressions back through monkeypatch. The report carries two durations,
+      # search-ms for the round and warm-ms for the warm run behind it; both
+      # are printed and never judged.
       - name: One engine and one constituent list per process
         run: |
           status=0

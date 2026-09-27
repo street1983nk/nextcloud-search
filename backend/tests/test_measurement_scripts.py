@@ -1199,8 +1199,13 @@ PHP_TREE_HASH_TODAY = "2e59ceb5ab0cd64564dc28653c53504ce9c1456cb2816ea77f0835497
 # through BackgroundTasks after the response, and api/snippets.py reads the one
 # term, operator and titleOnly rule of the search path. PACKAGE_FILES_TODAY
 # stays at 57.
+# Moved on 2026-09-27 by plan 23-04: tools/one_load.py drives the handler path
+# after the cold start fix. The search side is one real round plus
+# "if warm_wanted(): warm()", and the report carries search-ms and warm-ms
+# instead of the single cold search duration. One of the 57 files changed its
+# bytes, no file came or went, so PACKAGE_FILES_TODAY stays at 57.
 PACKAGE_FILES_TODAY = 57
-PACKAGE_TREE_HASH_TODAY = "31ae5df472f4d9da72d97415424a4d1d366e7e5cf2c4f420d96ef4637aa0f7b1"
+PACKAGE_TREE_HASH_TODAY = "6d2a697c4053cac39d246a42b005cd1a35443a233bfb781c871bf8231aaed65e"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

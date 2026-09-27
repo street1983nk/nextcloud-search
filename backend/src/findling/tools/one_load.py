@@ -42,9 +42,13 @@ asserts "one load" is green for nothing when the load path is never entered. So
 the search side runs BEFORE the second track, and its own number is asserted:
 
 1. the indexing side seeds a volume and reads the constituent list once,
-2. the search side runs one real round, which has to bring the engine loads to
-   exactly one, so a measurement that never reached the model reports a zero and
-   fails instead of passing,
+2. the search side runs one real round and then the handler path behind it,
+   which together have to bring the engine loads to exactly one, so a
+   measurement that never reached the model reports a zero and fails instead of
+   passing. Since the cold start fix of plan 23-01 the round itself never loads
+   (D-01): it answers out of the lexical list and asks for the warm run, and
+   the handler of ``/search`` runs ``warm`` once the answer is out. The driver
+   goes that same way (plan 23-04), so a search that stops asking is caught,
 3. the second track wires itself the way a pass does and embeds one document,
    and the engine loads have to still be one, which is the sharing itself,
 4. the weights are released and one more real round fetches them back, which is
@@ -59,30 +63,32 @@ therefore a finding here and never a quiet green. It is the trap the memory
 ceiling would have shipped, one phase further on: a gate that watches a release
 path the measurement never enters.
 
-Every number is measured through the real call: ``api/search.py::one_round`` for
-the search side and for the warm window, and ``Poller._wire_the_second_track``
-for the track, so a caller that stops going through the holder is caught rather
-than a caller this tool wrote itself.
+Every number is measured through the real call: ``api/search.py::one_round``
+plus the handler path ``if warm_wanted(): warm()`` for the search side and for
+the warm window, and ``Poller._wire_the_second_track`` for the track, so a
+caller that stops going through the holder is caught rather than a caller this
+tool wrote itself.
 
 **It builds its own volume.** A fresh directory per run, seeded with one
 document, one permission row and an empty vector stock. That is exactly what the
 measurement container lacks, and it costs one tantivy commit and one query.
 
-**The ninth number is a duration, and it is reported and never judged.** The
-one search round this tool drives is the round that brings the engine loads from
-zero to one, so the wall clock around it is a cold start duration and it costs
-one line. A millisecond ceiling over that line would be the mirror image of the
-memory ceiling this repository already turned down: on a shared runner it goes
-red for runner load and not for the thing it names, and the argument is written
-out in ``resilience.yml`` in the comment before the ratchet step. So the number
-travels in the report, the runs collect the series, and ``findings()`` does not
-look at it.
+**The last two numbers are durations, and they are reported and never
+judged.** Since plan 23-04 there are two of them, because the cold start has two
+halves: ``search_ms`` is the wall clock around the round itself, which answers
+without the weights, and ``warm_ms`` the one around the warm run of the handler
+path behind it, which is the load. A millisecond ceiling over either line would
+be the mirror image of the memory ceiling this repository already turned down:
+on a shared runner it goes red for runner load and not for the thing it names,
+and the argument is written out in ``resilience.yml`` in the comment before the
+ratchet step. So the numbers travel in the report, the runs collect the series,
+and ``findings()`` does not look at them.
 
 **Why that series is worth having next to the integration run.** This tool runs
 on every push and its number is a load inside one process, without Apache, the
-AppAPI and the PHP half. The figure that carries the report comes from the cold
-semantic search of the ``index-search-e2e`` job in ``integration.yml``, which
-goes the whole way a user goes. Two numbers over two ways, and neither of them
+AppAPI and the PHP half. The figures that carry the report come from the first
+search after a restart and the warm run behind it in the ``index-search-e2e``
+job of ``integration.yml``, which goes the whole way a user goes. Two numbers over two ways, and neither of them
 pretends to be the other.
 
 Run it with::
@@ -110,7 +116,7 @@ from tantivy import Document
 from findling.api.search import one_round
 from findling.config import settings
 from findling.embed.engine import reset as forget_the_engine
-from findling.embed.engine import shared_model
+from findling.embed.engine import shared_model, warm, warm_wanted
 from findling.embed.model import load_count, unload_count
 from findling.index.open import expected_versions, open_index
 from findling.index.schema import (
@@ -165,7 +171,7 @@ EXPECTED: Final = 1
 
 @dataclass(frozen=True, slots=True)
 class Report:
-    """The eight counters one run of the measurement comes to, and one duration.
+    """The eight counters one run of the measurement comes to, and two durations.
 
     Two counters per side rather than one at the end, because the difference
     between them is the statement: the constituent list may only be read by the
@@ -178,11 +184,13 @@ class Report:
     release in front of it is a second engine, and it is the difference between
     them that carries the promise.
 
-    The ninth field is the odd one out: it is an observation and not a gate.
-    ``findings()`` reads the eight counters and never the duration, because a
-    millisecond ceiling on a shared runner would go red for runner load instead
-    of for the load path it names, which is the same argument the comment before
-    the ratchet step of ``resilience.yml`` makes for the resident memory series.
+    The last two fields are the odd ones out: they are observations and not a
+    gate. ``findings()`` reads the eight counters and never a duration, because
+    a millisecond ceiling on a shared runner would go red for runner load
+    instead of for the load path it names, which is the same argument the
+    comment before the ratchet step of ``resilience.yml`` makes for the resident
+    memory series. ``warm_ms`` is nought when the handler path found no warm
+    run owed, which is itself one of the findings the counters name.
     """
 
     wordlist_reads_after_index: int
@@ -193,7 +201,8 @@ class Report:
     engine_loads_after_rewarm: int
     candidates: int
     passage_vectors: int
-    cold_search_ms: float
+    search_ms: float
+    warm_ms: float
 
     def lines(self) -> list[str]:
         """The report as plain key=value lines, for a log a shell can read."""
@@ -206,7 +215,8 @@ class Report:
             f"engine-loads-after-rewarm={self.engine_loads_after_rewarm}",
             f"candidates={self.candidates}",
             f"passage-vectors={self.passage_vectors}",
-            f"cold-search-ms={round(self.cold_search_ms, 1)}",
+            f"search-ms={round(self.search_ms, 1)}",
+            f"warm-ms={round(self.warm_ms, 1)}",
         ]
 
 
@@ -275,16 +285,50 @@ def seed_volume(source: Path = SYSTEM_WORDLIST) -> None:
     open_vectors(resolved.vectors_db).close()
 
 
-def drive_the_search_side() -> int:
+def run_the_search() -> int:
     """Run one real search round and return how many candidates it came to.
 
     ``one_round`` and not a hand written path: it is the function the endpoint
     calls, it opens the read side, and it builds the semantic bundle out of
     ``resources.query_model()``. Every one of those steps is a place where a
     second engine or a second read of the word list would come back.
+
+    Since the cold start fix of plan 23-01 this round never loads the weights
+    itself (D-01): with a cold engine it answers out of the lexical list and
+    asks for the warm run through ``request_warm()``.
     """
     page = one_round(MEASURE_USER, QUERY, SEARCH_LIMIT, 0, False)
     return len(page.candidates)
+
+
+def follow_the_handler_path() -> bool:
+    """Do what the handler of ``/search`` does behind its answer.
+
+    ``if warm_wanted(): warm()``, the two calls the handler hands to
+    ``BackgroundTasks`` once the response is out (plan 23-01), here in the
+    calling thread because there is no response to wait for. True when a warm
+    run was owed and ran.
+
+    The driver goes this way so that it measures what a real caller sets off:
+    a search that stops asking for the warm run leaves ``warm_wanted()`` False,
+    nothing is loaded, and the counter of the second phase reads nought
+    instead of being brought to one by a load this tool ordered by itself.
+    """
+    if warm_wanted():
+        return warm()
+    return False
+
+
+def drive_the_search_side() -> int:
+    """One real search round plus the handler path, and its candidate count.
+
+    The whole of what one search sets off since plan 23-04: the round, which
+    requests, and the handler path, which loads. With a cold holder the loads go
+    from nought to one across the two, and never inside the round.
+    """
+    candidates = run_the_search()
+    follow_the_handler_path()
+    return candidates
 
 
 def drive_the_second_track() -> int:
@@ -354,13 +398,18 @@ def measure(root: Path, *, source: Path = SYSTEM_WORDLIST) -> Report:
     seed_volume(source)
     reads_after_index = read_count() - reads_at_start
 
-    # The clock sits in the caller and not in the driver, because the driver is
+    # The clocks sit in the caller and not in the driver, because the driver is
     # the thing under measurement: a stopwatch inside it would time its own
-    # unpacking as well. This round is the one that brings the engine loads from
-    # zero to one, so what it times is a cold start.
-    started = time.perf_counter()
-    candidates = drive_the_search_side()
-    cold_search_ms = (time.perf_counter() - started) * 1000.0
+    # unpacking as well. The two halves of drive_the_search_side are timed one
+    # by one: the search requests, the handler path loads, the loads go from
+    # zero to one. The first clock is what the waiting user pays, the second
+    # the warm run behind the answer (plan 23-04).
+    started = time.monotonic()
+    candidates = run_the_search()
+    search_ms = (time.monotonic() - started) * 1000.0
+    started = time.monotonic()
+    warm_ran = follow_the_handler_path()
+    warm_ms = (time.monotonic() - started) * 1000.0 if warm_ran else 0.0
     reads_after_search = read_count() - reads_at_start
     loads_after_search = load_count() - loads_at_start
 
@@ -385,9 +434,10 @@ def measure(root: Path, *, source: Path = SYSTEM_WORDLIST) -> Report:
     shared_model().release()
     unloads_after_release = unload_count() - unloads_at_start
 
-    # And back again through the real call path, the same one phase two used,
-    # and not through ``engine.warm()``. This tool has measured through the way
-    # a caller really goes since it was written, for the reason
+    # And back again through the real call path, the same one phase two used:
+    # the search round and the handler path behind it, and not a bare
+    # ``engine.warm()`` this tool would order by itself. This tool has measured
+    # through the way a caller really goes since it was written, for the reason
     # ``drive_the_search_side`` gives: a caller that stops going through the
     # holder has to be caught here and not measured around.
     drive_the_search_side()
@@ -402,7 +452,8 @@ def measure(root: Path, *, source: Path = SYSTEM_WORDLIST) -> Report:
         engine_loads_after_rewarm=loads_after_rewarm,
         candidates=candidates,
         passage_vectors=passages,
-        cold_search_ms=cold_search_ms,
+        search_ms=search_ms,
+        warm_ms=warm_ms,
     )
 
 
@@ -413,8 +464,9 @@ def findings(report: Report) -> list[str]:
     are different findings with different remedies, and a run that hit both has
     to say both.
 
-    ``cold_search_ms`` is deliberately absent from every branch below. It is
-    reported and not judged, for the reason the module docstring gives.
+    ``search_ms`` and ``warm_ms`` are deliberately absent from every branch
+    below. They are reported and not judged, for the reason the module
+    docstring gives.
 
     The last two branches are the warm window, and the first of the two is the
     anti-vacuity clause of phase four: a release that freed nothing makes the
@@ -438,8 +490,8 @@ def findings(report: Report) -> list[str]:
         found.append(
             f"the search side brought the engine to {report.engine_loads_after_search} loads, expected {EXPECTED}: "
             "a zero means this measurement never reached the model, so every number after it would be green for "
-            "nothing, and the causes are the embedding switched off, missing artifacts, or a search that turned "
-            "back before the semantic branch"
+            "nothing, and the causes are the embedding switched off, missing artifacts, a search that turned "
+            "back before the semantic branch, or a search that no longer asks for the warm run"
         )
     if report.engine_loads_after_worker != EXPECTED:
         found.append(
