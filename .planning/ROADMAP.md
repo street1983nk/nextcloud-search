@@ -317,7 +317,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 23-07-PLAN.md , Übernahme der Store-Texte in beide info.xml und READMEs, Gates
+- [x] 23-07-PLAN.md , Übernahme der Store-Texte in beide info.xml und READMEs, Gates
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
@@ -342,7 +342,7 @@ Plans:
 | 20. UI-Kataloge es/it/nl/pt | v1.3 | 9/9 | Complete    | 2026-09-25 |
 | 21. Niederlaendische Komposita | v1.3 | 9/9 | Complete    | 2026-09-25 |
 | 22. Messanfahrt BL-F03 | v1.3 | 13/13 | Complete | 2026-09-26 |
-| 23. Haertung und Store-Einreichung 1.3.0 | v1.3 | 6/9 | In Progress|  |
+| 23. Haertung und Store-Einreichung 1.3.0 | v1.3 | 7/9 | In Progress|  |
 
 ## Requirement-Abdeckung v1.3
 
