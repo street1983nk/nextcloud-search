@@ -26,6 +26,7 @@ from conftest import Corpus, body_of
 from findling.api import resources
 from findling.api import snippets as api_snippets
 from findling.config import settings
+from findling.embed import engine as engine_module
 from findling.embed.model import DIMENSIONS, EmbedOutcome
 from findling.store.vectors import Chunk, open_vectors
 
@@ -36,8 +37,13 @@ Sign = Callable[[str], dict[str, str]]
 TERM = "Kündigungsfrist"
 
 # A line that occurs in no document of this corpus, which the floor assertion of
-# the semantic case states rather than assumes.
-PARAPHRASE = "Weltraumbahnhof"
+# the semantic case states rather than assumes. Two words since phase 23 (D-02):
+# a one word line builds no semantic side on this route any more, exactly as on
+# /search, so the second excerpt path is only reached by a line of two words.
+PARAPHRASE = "Weltraumbahnhof Mondfähre"
+
+# A line with an exclusion, so the operator rule holds the vector half back.
+OPERATOR_TERM = "Kündigungsfrist -Weltraumbahnhof"
 
 # How much of the body the stored chunk of the semantic case covers. Short
 # enough to be well under the excerpt cap, so the assertion is about the place
@@ -423,10 +429,10 @@ def _watch_the_load_switch(monkeypatch: pytest.MonkeyPatch, seconds: str) -> _Lo
 
 @pytest.mark.parametrize(
     ("seconds", "expected"),
-    [("0", True), ("900", False)],
+    [("0", False), ("900", False)],
     ids=["release-off", "release-on"],
 )
-def test_the_excerpt_route_hands_the_model_what_the_release_switch_says(
+def test_the_excerpt_route_never_lets_the_model_load_whatever_the_switch_says(
     indexed_volume: Corpus,
     monkeypatch: pytest.MonkeyPatch,
     seconds: str,
@@ -434,7 +440,8 @@ def test_the_excerpt_route_hands_the_model_what_the_release_switch_says(
 ) -> None:
     # The same ceiling as the search route, in its own constant:
     # ExAppService::PAGE_REQUEST_TIMEOUT_SECONDS is 1.5 as well, and the
-    # unified search asks this route for every page of hits it shows.
+    # unified search asks this route for every page of hits it shows. Since
+    # phase 23 (D-01) no cut pays for the weights at any switch value.
     _stock_one_chunk(indexed_volume.root)
     model = _watch_the_load_switch(monkeypatch, seconds)
 
@@ -455,3 +462,45 @@ def test_the_excerpt_under_the_release_is_the_one_a_container_without_a_model_cu
     cut = api_snippets.excerpts(indexed_volume.alice, TERM, [ALICE_FILE], False)
 
     assert [text.file_id for text in cut] == [ALICE_FILE]
+
+
+@pytest.mark.parametrize(
+    ("line", "title_only"),
+    [(TERM, False), (OPERATOR_TERM, False), (PARAPHRASE, True)],
+    ids=["one-word", "operator", "title-only"],
+)
+def test_a_line_the_search_answers_lexically_builds_no_semantic_side_here(
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+    line: str,
+    title_only: bool,
+) -> None:
+    # D-02. For a one word line, an operator line and titleOnly the /search of
+    # the same body built no vector list, so there is no pure vector hit whose
+    # excerpt could be missing, and the model is not asked. The excerpt of the
+    # confirmed hit still comes back on the first path; under titleOnly the
+    # rewritten query names the title field only and the excerpt is empty text.
+    _stock_one_chunk(indexed_volume.root)
+    model = _watch_the_load_switch(monkeypatch, "0")
+
+    cut = api_snippets.excerpts(indexed_volume.alice, line, [ALICE_FILE], title_only)
+
+    assert model.seen == []
+    assert [text.file_id for text in cut] == [ALICE_FILE]
+
+
+def test_the_excerpt_route_orders_no_warm_run(
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # One place asks for the warm run, and it is /search: the /snippets of the
+    # same query follows it and has nothing to add.
+    _stock_one_chunk(indexed_volume.root)
+    _watch_the_load_switch(monkeypatch, "0")
+    asked: list[int] = []
+    monkeypatch.setattr(engine_module, "request_warm", lambda: asked.append(1))
+
+    api_snippets.excerpts(indexed_volume.alice, PARAPHRASE, [ALICE_FILE], False)
+
+    assert asked == []
+    assert not hasattr(api_snippets, "request_warm")

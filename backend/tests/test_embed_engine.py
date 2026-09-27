@@ -839,18 +839,20 @@ def test_every_answer_of_the_state_comes_out_of_the_closed_set(
 # ---------------------------------------------------------------------------
 
 
-def test_query_may_load_stays_true_while_the_release_is_switched_off(
-    model_home: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("seconds", ["0", "900"])
+def test_query_may_load_is_false_whatever_the_release_switch_says(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch, seconds: str
 ) -> None:
-    # The factory state, and the reason the rule is a function and not a
-    # constant: with the release switched off nothing about the first search of
-    # a container changes, and that is shipped behaviour this phase must not
-    # touch outside its own switch.
+    # Phase 23, D-01 (V-22-01, V-22-02). With the switch at nought the very
+    # first hybrid search after a container start paid for the weights inside
+    # the request and tore the 1.5 second ceiling of ExAppService (innerMs 1505
+    # to 1596 on the box of phase 22). No search loads in the request any more,
+    # at no switch value; the weights come in the background after the answer.
     assert model_home.is_dir()
-    monkeypatch.setenv("FINDLING_EMBED_IDLE_RELEASE_SECONDS", "0")
+    monkeypatch.setenv("FINDLING_EMBED_IDLE_RELEASE_SECONDS", seconds)
     settings.cache_clear()
 
-    assert query_may_load() is True
+    assert query_may_load() is False
 
 
 def test_query_may_load_turns_false_once_the_release_is_switched_on(
@@ -1188,18 +1190,19 @@ def no_warm_request() -> Iterator[None]:
 
 
 def _release_is_on(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The switch of MEM-01 on, which is the only state a warm run happens in."""
+    """The switch of MEM-01 on; since phase 23 a warm run also happens with it off."""
     monkeypatch.setenv("FINDLING_EMBED_IDLE_RELEASE_SECONDS", "900")
     settings.cache_clear()
 
 
 @pytest.mark.usefixtures("no_warm_request")
-def test_no_warm_run_is_wanted_while_the_release_is_switched_off(
+def test_a_warm_run_is_wanted_on_a_cold_start_while_the_release_is_switched_off(
     model_home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # With the switch off no search was ever refused a load, so nothing is owed
-    # a warm run. Asking for one anyway must not start one: that would be the
-    # behaviour change outside the switch that query_may_load refuses to make.
+    # Phase 23, D-01. With the switch off the first search after a container
+    # start is refused a load like every other search, so it is owed a warm run
+    # like every other refused search. Before phase 23 this answer was False and
+    # that first search paid for the weights itself.
     _pretend_a_model(model_home)
     _stand_in(monkeypatch)
     monkeypatch.setenv("FINDLING_EMBED_IDLE_RELEASE_SECONDS", "0")
@@ -1207,6 +1210,23 @@ def test_no_warm_run_is_wanted_while_the_release_is_switched_off(
     shared_model()
 
     request_warm()
+
+    assert warm_wanted() is True
+
+
+@pytest.mark.usefixtures("no_warm_request")
+@pytest.mark.parametrize("seconds", ["0", "900"])
+def test_no_warm_run_is_wanted_without_a_request(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch, seconds: str
+) -> None:
+    # Phase 23, D-03: nothing is warmed at container start. A holder that exists
+    # and a model that lies there are not a reason to pay for 118 MB of weights
+    # on a 4 GB box nobody is searching on; only a hybrid search asks.
+    _pretend_a_model(model_home)
+    _stand_in(monkeypatch)
+    monkeypatch.setenv("FINDLING_EMBED_IDLE_RELEASE_SECONDS", seconds)
+    settings.cache_clear()
+    shared_model()
 
     assert warm_wanted() is False
 
@@ -1264,13 +1284,18 @@ def test_a_warm_run_is_wanted_after_a_release_when_somebody_has_searched(
 
 
 @pytest.mark.usefixtures("no_warm_request")
-def test_ten_warm_runs_at_once_pay_for_exactly_one_load(model_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("seconds", ["0", "900"])
+def test_ten_warm_runs_at_once_pay_for_exactly_one_load(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch, seconds: str
+) -> None:
     # Success criterion 5 of the phase in a counter: one load per warm window.
     # Measured as a difference and never as a byte, for the reason the holder
-    # above is measured that way.
+    # above is measured that way. Since phase 23 (T-23-01) the warm run also
+    # happens with the switch at nought, so the promise is held at both values.
     _pretend_a_model(model_home)
     _stand_in(monkeypatch)
-    _release_is_on(monkeypatch)
+    monkeypatch.setenv("FINDLING_EMBED_IDLE_RELEASE_SECONDS", seconds)
+    settings.cache_clear()
     before = load_count()
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:

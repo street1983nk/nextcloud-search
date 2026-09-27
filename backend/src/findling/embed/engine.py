@@ -374,27 +374,31 @@ def query_may_load() -> bool:
     tested, and is what every container without a model has been doing all
     along (D-19).
 
-    **The rule hangs on the switch and does not hold in general.** The incident
+    **The answer is always False, at every value of the switch.** The incident
     of 2026-09-10 was the very first search of a container that had never
     unloaded anything: 1838.4 ms against the 1500 ms ceiling of
     ``ExAppService``, cURL error 28 in the Nextcloud log, an answer group
     without the container half, nought hits, and all of it invisible from the
     outside because the route answers HTTP 200
     (``docs/measurements/2026-09-vergleichsmessung-m7g/``, sections 9.2 and
-    19.4). A seam without the switch would stop that incident in general. It
-    would also be a change to shipped behaviour at the first search of every
-    container, outside the switch, and the one paid trip to the box of phase 15
-    would then measure two changes at once. The general case is carried as a
-    backlog item and is not forgotten.
+    19.4). Phase 14 tied the rule to the release switch and carried the general
+    case as a backlog item; the box of phase 22 then saw the same tear with the
+    switch at nought (innerMs 1505 to 1596, V-22-01, V-22-02). Phase 23 closes
+    the general case (D-01): no search loads in the request, at no switch
+    value. The first hybrid search answers out of the lexical list, asks for a
+    warm run through :func:`request_warm`, and the weights arrive after the
+    response has gone out.
 
     **Why the rule is here and not at the three places that build a
     ``SemanticSide``** (``api/search.py``, ``api/snippets.py``,
     ``api/diagnose.py``): three places are the place where the fourth one is
     forgotten. Every caller asks this function instead of repeating it.
 
-    Nothing is built and nothing is loaded here, for the reason
-    :func:`engine_state` gives for itself: this question sits on the path of
-    every single search. One setting is read, and that is the whole body.
+    **Why a function that answers a constant stays a function.** It is the one
+    seam the callers ask, and a later rule (a box that can afford the load, a
+    measured budget) goes in here and nowhere else. Nothing is built, nothing
+    is loaded and nothing is read here, for the reason :func:`engine_state`
+    gives for itself: this question sits on the path of every single search.
     """
     # ``api/diagnose.py::ranked_sides`` is the one caller that does **not** ask
     # this question and goes on loading (14-RESEARCH.md, open question 2). A
@@ -403,7 +407,7 @@ def query_may_load() -> bool:
     # diagnosis call warms the container up, so it must not be made before a
     # cold measurement. That consequence belongs in the runbook of plan 14-11
     # and is only named here.
-    return settings().embed_idle_release_seconds == 0
+    return False
 
 
 def release_if_idle(ttl_seconds: int) -> bool:
@@ -486,14 +490,16 @@ def released_count() -> int:
 def request_warm() -> None:
     """A search says that it answered without the weights.
 
-    The one way in. ``api/search.py`` calls it in plan 14-08, on the path of a
-    search that :func:`query_may_load` refused a load to, and nothing else in
-    the container ever sets the marker. The call is cheap on purpose: it takes
+    The one way in. ``api/search.py`` calls it (plan 14-08, and since phase 23
+    for every hybrid round, D-01) on the path of a search that
+    :func:`query_may_load` refused a load to, and nothing else in the container
+    ever sets the marker. ``api/snippets.py`` does not call it: the ``/search``
+    of the same query has asked already. The call is cheap on purpose: it takes
     :data:`_LOCK` for one assignment and never touches the holder, because it
     runs inside a request that has already spent its budget.
 
     Whether the warm run then really happens is not decided here.
-    :func:`warm_wanted` asks the four questions, and the caller that runs it
+    :func:`warm_wanted` asks the three questions, and the caller that runs it
     asks that one.
     """
     global _WARM_WANTED
@@ -505,12 +511,15 @@ def request_warm() -> None:
 def warm_wanted() -> bool:
     """Whether a warm run is owed, would help, and could work.
 
-    Four conditions and all of them have to hold. Somebody was refused a load
-    (:func:`request_warm`), the release is switched on at all, there is a holder
-    with a cold engine, and the artifacts are not remembered as absent. A
-    container without a model would otherwise be warmed once per refused search,
-    for ever, and every one of those runs would read a directory that has
-    nothing in it.
+    Three conditions and all of them have to hold. Somebody was refused a load
+    (:func:`request_warm`), there is a holder with a cold engine, and the
+    artifacts are not remembered as absent. A container without a model would
+    otherwise be warmed once per refused search, for ever, and every one of
+    those runs would read a directory that has nothing in it. The switch of the
+    release is not one of them since phase 23 (D-01): with it at nought the
+    first search after a start is refused a load like every other, and it is
+    owed the warm run like every other. Nothing is warmed without that request,
+    so a container nobody searches on stays cold (D-03).
 
     **Nothing is built and nothing is loaded here** (T-14-21). The holder is
     read through :func:`_held`, the same way :func:`release_if_idle` reads it
@@ -521,11 +530,6 @@ def warm_wanted() -> bool:
     with _LOCK:
         wanted = _WARM_WANTED
     if not wanted:
-        return False
-    if query_may_load():
-        # The switch is off, so no search was ever refused a load and there is
-        # nothing to make good. Warming here would be the behaviour change
-        # outside the switch that query_may_load exists to refuse.
         return False
 
     held = _held(settings().embed_model_dir)

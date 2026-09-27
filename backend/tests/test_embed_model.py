@@ -36,6 +36,8 @@ import inspect
 import json
 import logging
 import os
+import threading
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
@@ -545,6 +547,57 @@ def test_a_query_that_may_not_load_answers_normally_on_a_loaded_holder(model_dir
     assert len(outcome.vectors) == 1
     assert len(outcome.vectors[0]) == DIMENSIONS
     assert load_count() == before
+
+
+HOLD_SECONDS = 0.2
+SLACK_SECONDS = 0.02
+
+
+def test_a_query_inside_the_load_window_waits_for_the_model_lock(model_dir: Path, stand_in: StandIn) -> None:
+    """The accepted load window, named in a test (D-08).
+
+    While the warm run of phase 23 builds the session it holds the lock of the
+    holder, and a search that arrives in that window with ``may_load=False``
+    waits at the same lock before it answers the verdict. A lock free fast path
+    for ``may_load=False`` would close the window; the owner decided against
+    that larger change on 27.09.2026 (D-08), because the first answer after a
+    start is already protected by running the warm run after the response has
+    gone out. Thread A here stands in for ``_load`` by holding the lock for 200
+    ms. Whoever changes this behaviour has to change the text in
+    docs/embeddings.md with it.
+    """
+    engine = _model(model_dir)
+    lock = engine._lock  # pyright: ignore[reportPrivateUsage]
+    held = threading.Event()
+    release = threading.Event()
+
+    def hold_the_lock() -> None:
+        with lock:
+            held.set()
+            release.wait(5.0)
+
+    holder = threading.Thread(target=hold_the_lock)
+    holder.start()
+    assert held.wait(5.0), "the stand in for the load never took the lock"
+
+    answer: dict[str, Any] = {}
+
+    def ask() -> None:
+        started = time.monotonic()
+        answer["outcome"] = engine.embed_query("eine Anfrage", may_load=False)
+        answer["waited"] = time.monotonic() - started
+
+    asker = threading.Thread(target=ask)
+    asker.start()
+    time.sleep(HOLD_SECONDS)
+    release.set()
+    asker.join(5.0)
+    holder.join(5.0)
+
+    assert not asker.is_alive(), "the query never came back after the lock was free"
+    assert answer["waited"] >= HOLD_SECONDS - SLACK_SECONDS, "the query did not wait for the lock"
+    assert answer["outcome"].available is False
+    assert engine.loaded is False
 
 
 def test_the_index_track_has_no_switch_and_always_loads(model_dir: Path, stand_in: StandIn) -> None:
