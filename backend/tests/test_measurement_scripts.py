@@ -1250,8 +1250,13 @@ PHP_TREE_HASH_TODAY = "170f144a644cc86d73dc2c47881f814469fbb04f61639c5c626124a85
 # so PACKAGE_FILES_TODAY moves to 59. Measured again after the second task of
 # the plan, which added the process state (ProfileSnapshot, note_hardware,
 # note_chosen, snapshot, reset) to profile.py; the count stays at 59.
+# Moved on 2026-09-27 by plan 24-05 (profile wire, PROF-03): nc/client.py got
+# read_profile, the GET on /ocs/v2.php/apps/findling/profile, and nc/queue.py
+# got DocumentQueue.profile, which turns every failure and every name outside
+# PROFILE_NAMES into None. Two of the 59 files changed their bytes, no file came
+# or went, so PACKAGE_FILES_TODAY stays at 59.
 PACKAGE_FILES_TODAY = 59
-PACKAGE_TREE_HASH_TODAY = "15222184ccd52a8f82df8bf9f3399d0f3e2ac83a4afa221a4320773a3585e1aa"
+PACKAGE_TREE_HASH_TODAY = "d259597c3610930b4b9afd7d8593b71fa1aef156ab4dcfb43a7d5d36ab460a07"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

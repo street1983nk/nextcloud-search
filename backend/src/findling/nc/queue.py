@@ -43,10 +43,12 @@ from findling.nc.client import (
     ack_documents,
     claim_documents,
     queue_stats,
+    read_profile,
     requeue_documents,
     topup_documents,
     unlock_documents,
 )
+from findling.profile import PROFILE_NAMES
 
 LOGGER = logging.getLogger("findling.nc.queue")
 
@@ -499,6 +501,27 @@ class DocumentQueue:
         if payload.get("ran") is True or payload.get("pending") is True:
             return TOPUP_SUPPLIED
         return TOPUP_IDLE
+
+    async def profile(self) -> str | None:
+        """The profile name the admin stored, or None when there is none to read.
+
+        Only a name out of PROFILE_NAMES comes back (T-24-16); a value outside
+        the closed set is discarded exactly like a failed call, and the caller
+        then keeps whatever it read last (D-24-02).
+        """
+        try:
+            answer = await read_profile(self._nc)
+        except Exception:
+            # Same policy as top_up: a companion older than 1.4.0 answers 404
+            # here, and that costs one debug line per round, never the poller
+            # (D-24-02). No value and no exception text in the line (T-24-19).
+            LOGGER.debug("could not read the profile")
+            return None
+
+        value = (_mapping(answer) or {}).get("profile")
+        if isinstance(value, str) and value in PROFILE_NAMES:
+            return value
+        return None
 
     async def requeue(self, file_ids: Sequence[int], *, kind: str) -> CallResult:
         """Put files on another kind of job, the handover to the second track.
