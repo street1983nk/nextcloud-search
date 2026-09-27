@@ -826,6 +826,88 @@ VECTOR_MAX_DISTANCE_RANGE = (0.0, 254.0)
 VECTOR_DISTANCE_BAND = 14.0
 VECTOR_DISTANCE_BAND_RANGE = (0.0, 254.0)
 
+# ---------------------------------------------------------------------------
+# Profiles (v1.4, BL-F04)
+# ---------------------------------------------------------------------------
+#
+# Three performance profiles, Sparing, Standard and Performance. Sparing is the
+# measured behaviour of 1.3 and has no shares at all (D-24-03): it is the set of
+# constants above, unchanged. Standard and Performance derive their slot counts
+# from the detected hardware (findling/hardware.py) with the numbers below.
+#
+# Nothing here reads the environment and nothing here enters settings(). The
+# lru_cache above stays the static layer; profile values live outside it
+# (D-24-01), so a profile switch never has to invalidate a cache that half the
+# code base holds a reference into. An admin override of a single number is
+# read through explicit_int_from_environment, further down.
+#
+# Sources for every number: 24-CONTEXT.md decisions D-24-03, D-24-06 and
+# D-24-08, docs/performance.md (the slot measurements B1 to B3 around lines
+# 4737 to 4829) and the BL-F04 groundwork of 2026-09-25, section 3.2, table
+# "the three profiles, starting values".
+
+MIB = 1024 * 1024
+
+# r, the share of one core that Nextcloud itself keeps busy while Findling
+# indexes (measured B1). Subtracted from the core budget of Standard.
+NEXTCLOUD_CORE_LOAD = 0.25
+
+# Resident cost of one OCR slot, tesseract plus the rendered page (B2/B3). The
+# measurement covered the page band of the test corpus; a page far outside that
+# band (K2) can cost more, which the memory share and the reserve absorb.
+OCR_SLOT_COST_BYTES = 235 * MIB
+
+# Resident anonymous memory of the main process with the model weights loaded
+# (B2), 1257.5 MiB. Subtracted before the memory share is spread over slots.
+MAIN_PROCESS_BASELINE_BYTES = 1257 * MIB + MIB // 2
+
+# Standard: half the cores minus r, 40 percent of the memory, at most four OCR
+# slots. Worked example: Standard brings more than one OCR slot only from five
+# cores on, because four cores give floor(0.5 x 4 - 0.25) = 1. Conservative by
+# intent, the profile is the one a box gets without asking.
+PROFILE_STANDARD_CORE_SHARE = 0.5
+PROFILE_STANDARD_MEMORY_SHARE = 0.4
+PROFILE_STANDARD_OCR_SLOTS_MAX = 4
+PROFILE_STANDARD_RESERVE_SHARE = 0.20
+PROFILE_STANDARD_TEXT_SLOTS_MAX = 8
+PROFILE_STANDARD_EMBED_SLOTS = 1
+PROFILE_STANDARD_WRITER_HEAP_BYTES = 128_000_000
+PROFILE_STANDARD_WRITER_THREADS = 2
+PROFILE_STANDARD_OCR_MAX_PAGES = 100
+
+# Performance: all cores but one. Per D-24-08 there is NO additional deduction
+# of r here: the one core kept free covers r, and subtracting r on top would
+# contradict the store sentence "everything but one core".
+PROFILE_PERFORMANCE_CORES_KEPT_FREE = 1
+PROFILE_PERFORMANCE_MEMORY_SHARE = 0.6
+PROFILE_PERFORMANCE_OCR_SLOTS_MAX = 16
+PROFILE_PERFORMANCE_RESERVE_SHARE = 0.15
+PROFILE_PERFORMANCE_TEXT_SLOTS_MAX = 16
+PROFILE_PERFORMANCE_EMBED_SLOTS = 2
+PROFILE_PERFORMANCE_WRITER_HEAP_BYTES = 256_000_000
+PROFILE_PERFORMANCE_WRITER_THREADS = 2
+PROFILE_PERFORMANCE_OCR_MAX_PAGES = 150
+PROFILE_PERFORMANCE_ONNX_THREADS_MAX = 4
+
+# Sparing mirrors of values that today sit as literals outside this module:
+# num_threads=1 in index/writer.py and index/rebuild.py, THREADS in
+# embed/model.py. Pinned against the literal by tests, not read by the writer
+# or the model in v1.4 phase 24.
+WRITER_THREADS = 1
+EMBED_THREADS = 2
+
+# Suggestion thresholds (D-24-06): Standard is suggested from 6 GB and three
+# cores, Performance from 12 GB and six cores. Decimal gigabytes on purpose: a
+# nominal 8 GB box reports a MemTotal of about 7.7 GiB, a nominal 12 GB box
+# about 11.6 GiB = 12.4e9 byte, so binary thresholds would miss the very boxes
+# they name. The thresholds compare against memory.max, else MemTotal; the
+# slot formula compares against min(memory.max, MemAvailable) (research
+# recommendation, adopted in 24-CONTEXT.md).
+SUGGEST_STANDARD_MEMORY_BYTES = 6_000_000_000
+SUGGEST_STANDARD_CORES = 3
+SUGGEST_PERFORMANCE_MEMORY_BYTES = 12_000_000_000
+SUGGEST_PERFORMANCE_CORES = 6
+
 # Subdirectory used when APP_PERSISTENT_STORAGE is absent, which is the case in
 # tests and in a bare local run, never in a container deployed by AppAPI.
 FALLBACK_STORAGE_DIRNAME = "findling"
@@ -970,6 +1052,44 @@ def _bounded_int_from_environment(name: str, default: int, bounds: tuple[int, in
         return value
     LOGGER.warning("%s is outside the range this build was measured for, falling back to the default", name)
     return default
+
+
+def explicit_int_from_environment(name: str, default: int, bounds: tuple[int, int] | None = None) -> int | None:
+    """Return a whole number only when an admin deliberately chose it.
+
+    AppAPI sets every default declared in info.xml as a real environment
+    variable and stores it as a deploy option
+    (ExAppEnvVarsHelper::normalizeAndValidate). "The variable is set" is
+    therefore always true and says nothing; only "the value differs from the
+    declared default" is a statement by an admin. That is why this function
+    never asks whether the name is present in the environment, and why a value
+    equal to ``default`` yields None: an injected default must never overrule a
+    profile.
+
+    The parse rules are the ones of ``_int_from_environment``: empty, not a
+    whole number or below one is unusable. With ``bounds`` a value outside the
+    range is unusable as well. Unusable means None, the profile value stands.
+
+    It does not log. settings() reads the same names at start and already
+    warns about an unusable value; a second reader that warned again would
+    double every line in the boot log.
+    """
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        return None
+    if value < 1:
+        return None
+    if bounds is not None:
+        low, high = bounds
+        if not low <= value <= high:
+            return None
+    if value == default:
+        return None
+    return value
 
 
 def _bounded_float_from_environment(name: str, default: float, bounds: tuple[float, float]) -> float:
