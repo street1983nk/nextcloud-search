@@ -104,6 +104,60 @@
 
 ---
 
+## Milestone: v1.3, Sprachausbau
+
+**Shipped:** 2026-09-27
+**Phases:** 7 (17-23) | **Plans:** 69 | **Commits:** 475
+
+### What Was Built
+
+- Lexikalische Suche in vier neuen Sprachen (es/it/nl/pt): Analyseketten messend abgenommen, sechs Koerperfelder immer im Schema, Befuellung nach FINDLING_LANGUAGES, Werkseinstellung de,en unberuehrt
+- Re-Analyse-Umbau (index/rebuild.py): Sprachwechsel ohne Download/OCR/Neu-Einbettung, wiederaufnahmefaehig, Platzpruefung vorab, atomarer Tausch; CI-Beweis in beide Richtungen (UPGRADE_FROM_TAG=v1.2.0, spanische Kette 0-0-1)
+- Frageseite erst nach bewiesenem Umbauweg: Feldplan aus den gespeicherten Marken des Index, Boosts unterhalb body_en (Grenze 0,81 gemessen), Anti-Feature Spracherkennung als Quelltext-Waechter
+- Fuenf neue UI-Kataloge (es/it/nl/pt_PT/pt_BR, je 202 Schluessel) plus Pluralschluessel-Fix der Bestandskataloge; niederlaendische Komposita via wdutch/OpenTaal mit eigener Digest-Marke
+- Messanfahrt BL-F03: alle offenen v1.2-Zahlen plus Indexgroesse/Umbau-Wandzeit plus BL-F04-Basiszahlen aus einer Anfahrt; dismax auf Messbasis verworfen
+- Release 1.3.0: Kaltstart-Fix (973 ms MIT Treffern statt 0), fastembed raus, gone-Reparatur-Migration, Grenzliste in Store-Text und Doku, Audit 0C/0H, Submission 2x HTTP 201, secure-phase SECURED 46/46
+
+### What Worked
+
+- Die Sicherheitsbedingung als Phasenreihenfolge (17 Schema-Entscheide, 18 Umbau bewiesen, 19 Frageseite erst danach): der Totalausfall-Pfad des Zwischenzustands war zu keinem Zeitpunkt erreichbar
+- Owner-Tor als eigene erste Phase: alle acht Grundsatzentscheide schriftlich, bevor Code sie implizit traf; die Milestone-Richtung stand ab Tag eins
+- Messend abnehmen statt uebernehmen: ascii_fold-Position je Sprache, Rangprobe-Grenze 0,81, Pluralregeln aus den Kerndateien gelesen; zwei Research-Widersprueche so aufgeloest statt geerbt
+- Parametrisierung durch die zweite neue Sprache bewiesen (Gate-Diffs 39/55/56 Zufuegungen, 0 Loeschungen Logik)
+- Ganze Phasen in einer Session per auto_advance-Kette (Phase 23: 9 Plaene, 7 Wellen, inkl. Owner-Stopps und Einreichung)
+- Kostendeckel erneut gehalten (Plan 15,95 h / 2,83 USD gegen Deckel 24 h / 3,76 USD), Nachanfahrt 22-13 als benannte Nachfreigabe D-02 statt stiller Ueberziehung
+
+### What Was Inefficient
+
+- Eine gemeinsam genutzte Beweisdatei (info-citest.xml) wurde fuer eine Strecke geaendert und riss drei D-04-Zusicherungen einer anderen (Lauf 36072411846); Leser einer geteilten Datei werden gesucht (grep), nicht erinnert
+- Die Kaltstartmessung der Anfahrt lieferte zuerst eine leere Antwort (kalt 0 Treffer): eine Latenzzahl ohne Trefferpflicht misst nichts; kostete die Nachanfahrt 22-13
+- Zwei Phase-23-Tests saeten die Store-Datei mit 0644, der Strict-Opener verweigerte nur auf POSIX (lokal Windows gruen, CI rot); Regel: wer den Store direkt saet UND strict oeffnet, setzt die Datei vorher auf 0600
+- phase.complete verfaelscht STATE.md-Frontmatter und laesst ROADMAP-Zusatznotizen stehen; in dieser Phase erneut von Hand nachgezogen (bekannter SDK-Schaden, dritter Vorfall)
+- Debug-Sessions upgrade5/upgrade6 blieben ZUM DRITTEN MAL bis zum Milestone-Close offen, obwohl der bestaetigende deploy-harp-Lauf laengst gruen war
+
+### Patterns Established
+
+- Zwischenzustands-Risiken als Phasengrenze modellieren (Schema/Umbau getrennt von Query-Freischaltung), nicht als Task-Reihenfolge innerhalb einer Phase
+- Ein CI-Sprachbeweis liest seine Erwartung aus dem Katalog, nicht aus der YAML; Abwesenheit des englischen Quellsatzes ist die eigentliche Zusicherung
+- Migration je Minor-Sprung plus Reparaturlauf fuer Altschaeden im selben Upgrade (gone-Reparatur, D-04)
+- Kaltstart-Messungen tragen Trefferpflicht (Einwort-Begriff, lexikalisch beantwortbar)
+- Store-Saat in Tests: Datei vor dem Strict-Open auf 0600
+
+### Key Lessons
+
+1. Ein Fenster, in dem ein Zwischenzustand gefaehrlich ist, gehoert in die Phasenstruktur; die Reihenfolge 17-18-19 war der Grund, warum der riskanteste Pfad des Milestones nie erreichbar war
+2. Wer eine gemeinsam genutzte Beweisdatei aendert, sucht ihre Leser mit grep statt sich zu erinnern; ein Lauf kann auf drei von vier Aesten gruen sein und trotzdem die tragende Zusage reissen
+3. Eine Messzahl ohne Trefferpflicht (Kaltstart, Leerbegriff) ist keine Zahl; die Pflicht gehoert ins Messwerkzeug, nicht in die Auswertung
+4. Debug-Sessions beim Merge des Fixes auf resolved stempeln; drittes Mal in Folge erst beim Close passiert, der Stempel gehoert an den Fix-Commit
+
+### Cost Observations
+
+- Modellmix: model_profile quality (Executor/Planner/Researcher opus, Checker/Verifier sonnet)
+- AWS-Kosten: eine Anfahrt unter Deckel (Plan 15,95 h / 2,83 USD, Deckel 24 h / 3,76 USD) plus Nachanfahrt 22-13 (D-02, ~0,24 USD); Snapshot ~2,85 USD/Monat laufend (Behalten-Entscheid)
+- 5 Kalendertage fuer 69 Plaene (23.09. bis 27.09.), 475 Commits; Phase 23 komplett in einer Session
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -113,6 +167,7 @@
 | v1.0 | 7 (1-6 + 06.1) | 103 | Launch-Haertungsphase 06.1 als Muster etabliert; Audit-Gate je Phase |
 | v1.1 | 5 (7-11) | 37 | Erste Phase mit CONTEXT.md (discuss-phase); Checkpoint-Plaene mit Kostendeckel; Bestandsaufnahme vor Neubau |
 | v1.2 | 5 (12-16) | 63 | Messgroessen vor dem Bau festgeschrieben (Gate gegen die bequemere Groesse); fristgebundener Entscheid in Phase 1 verankert; eine Anfahrt fuer alle Belege |
+| v1.3 | 7 (17-23) | 69 | Sicherheitsbedingung als Phasenreihenfolge (17-18-19); Owner-Tor als eigene erste Phase; auto_advance-Ketten (ganze Phasen in einer Session); secure-phase je Milestone-Abschluss |
 
 ### Cumulative Quality
 
@@ -121,10 +176,12 @@
 | v1.0 | ~1.750 Python + PHP-Suite | 51.961 Docs auf Zielhardware, 0 failed |
 | v1.1 | ~2.000 Python + 185 PHP | 52.111 Docs ohne OOM; 6 CI-Workflows inkl. Fremdinstallation + Upgrade |
 | v1.2 | 2.491 Python + PHP-Suite | 7/7 Tag-Laeufe gruen; Entladung belegt (377,5 MB Rueckkehr zur Grundlast); Audit 0 CRIT / 0 HIGH |
+| v1.3 | ~3.000 Python + PHP-Suite | 7/7 Tag-Laeufe gruen; Audit 0 CRIT / 0 HIGH; secure-phase SECURED 46/46; CI 6/6 inkl. HaRP |
 
 ### Top Lessons (Verified Across Milestones)
 
 1. Die Haertungsphase jenseits des Happy Path findet in jedem Milestone echte Produktfehler, die die Testsuite nicht fand (v1.0: 06.1-Befunde; v1.1: stumme Suche nach Minor-Upgrade, Sprachfallback; v1.2: ueberholte Zugangsmarke, nicht tragender Flake-Fix)
 2. Owner-Checkpoints mit hartem Deckel (Kosten, Wortlaute, Einreichung) verhindern teure Alleingaenge, ohne die Autonomie der Wellen zu bremsen
 3. Beweis-Tests, deren Rot-Faehigkeit per Mutation belegt ist, sind die einzigen, deren Gruen etwas bedeutet
-4. Debug-Sessions gehoeren beim Merge des Fixes auf resolved gestempelt, nicht beim Milestone-Close (in v1.1 und v1.2 liegengeblieben)
+4. Debug-Sessions gehoeren beim Merge des Fixes auf resolved gestempelt, nicht beim Milestone-Close (in v1.1, v1.2 und v1.3 liegengeblieben)
+5. Die Haertungsphase fand auch in v1.3 echte Produktfehler (Kaltstart-Leerantwort im Produktpfad, Reload-Bug F-23-01 seit Phase 14); das Muster traegt ueber vier Milestones

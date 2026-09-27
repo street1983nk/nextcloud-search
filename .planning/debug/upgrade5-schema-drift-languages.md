@@ -1,8 +1,8 @@
 ---
-status: awaiting_human_verify
+status: resolved
 trigger: "deploy-harp run 35989391950, Job stable34/ubuntu-24.04, Block 'Store upgrade 5': Upgrade v1.2.0 -> HEAD auf Bestandsinstallation (de,en) loest start_rebuild_on_drift aus (Generation 1->2, Reindex-Banner true) und marks.languages wird '' statt abwesend/de,en"
 created: 2026-09-24
-updated: 2026-09-24
+updated: 2026-09-27
 ---
 
 ## Current Focus
@@ -116,3 +116,7 @@ Matrix-Aesten. "Store upgrade 5" haelt alle sechs Zusicherungen (Bestand
 unberuehrt, languages-Marke legitim abwesend), "Store upgrade 6" alle neun
 (Umbau beobachtet, Schema genau eine Stufe, Sprachmarke de,en,es,
 Vektorbestand byteidentisch). Beide Wurzelursachen bestaetigt behoben.
+
+## Verifikation 2026-09-27
+
+Bestaetigungsbedingung erfuellt: deploy-harp-Lauf 36305643230 auf 79ad925 (main) = success am 27.09.2026, inklusive der Store-upgrade-Bloecke. Findling 1.3.0 ist mit diesem Stand im Store (Submission-Lauf 36304007154, 2x HTTP 201). Status daher auf resolved gesetzt beim Milestone-Close v1.3.

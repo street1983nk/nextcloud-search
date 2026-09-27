@@ -1,5 +1,27 @@
 # Project Milestones: Findling (Nextcloud Zero-Config-Suche)
 
+## v1.3 Sprachausbau (Shipped: 2026-09-27)
+
+**Delivered:** Findling 1.3.0 im Nextcloud App Store (beide Apps, Submission-Lauf 36304007154 mit 2x HTTP 201, Tag v1.3.0 auf 744d7e4): lexikalische Suche in Spanisch, Italienisch, Niederlaendisch und Portugiesisch mit Re-Analyse-Umbau statt Vollreindex, UI in fuenf neuen Katalogen (es/it/nl/pt_BR/pt_PT), niederlaendische Komposita-Zerlegung, alle offenen Boxzahlen aus v1.2 nachgemessen, Kaltstart-Fix (erste Suche antwortet lexikalisch statt leer).
+
+**Phases completed:** 17 bis 23 (7 Phasen, 69 Plaene, 83 Tasks)
+
+**Timeline:** 23.09. bis 27.09.2026 (5 Tage, 475 Commits, 585 Dateien, ~119.400 Zeilen hinzugefuegt)
+
+**Key accomplishments:**
+
+- Vier Analyseketten es/it/nl/pt messend abgenommen (ascii_fold-Position je Sprache gemessen entschieden, nicht uebernommen), tantivy auf 0.26.2 gepinnt, Sprach-Positivliste statt Rust-Panic; das Schema traegt immer sechs Koerperfelder, befuellt wird nur nach FINDLING_LANGUAGES, Werkseinstellung bleibt de,en
+- Re-Analyse-Umbau (index/rebuild.py): Bestandsindex wandert ohne Download, OCR oder Neu-Einbettung ins neue Schema; wiederaufnahmefaehig nach Neustart, Platzpruefung vorab, der alte Index bedient Anfragen bis zum atomaren Tausch; Sprachmenge als sechster Versionsmerker, Bestandsinstallationen mit de,en upgraden ohne Umbau; CI beweist beide Richtungen (UPGRADE_FROM_TAG=v1.2.0, spanische Kette 0-0-1)
+- Frageseite erst nach bewiesenem Umbauweg freigeschaltet: der Feldplan haengt an den gespeicherten Marken des geoeffneten Index statt an einer Konstante, Boosts der neuen Felder unterhalb body_en (Grenze 0,81 gemessen), Anti-Feature Spracherkennung als Quelltext-Waechter in der Suite
+- UI in fuenf neuen Katalogen (es, it, nl, pt_PT, pt_BR) mit je 202 Schluesseln im Gleichstand; der Pluralschluessel-Fix macht die DE/FR-Plurale erstmals korrekt; niederlaendische Komposita via wdutch/OpenTaal-Wortliste mit eigener Digest-Marke (Umbau nur bei aktivem nl, gemeentebelastingen ueber belasting)
+- Messanfahrt BL-F03: fuenf offene v1.2-Zahlen plus zwei neue v1.3-Zahlen (Indexgroesse bei sechs befuellten Feldern, Umbau-Wandzeit gegen 19 h 20 min Vollreindex) plus BL-F04-Basiszahlen aus EINER Anfahrt unter Kostendeckel (Plan 15,95 h / 2,83 USD), dismax auf Messbasis dokumentiert verworfen, Owner-Abnahme 26.09. mit Nachanfahrt 22-13
+- Haertung und Release 1.3.0: Kaltstart-Fix (Kaltsuche 973 ms MIT Treffern statt 0, kein Vorwaermen), fastembed-Pin raus mit Absenz-Check im Abbild (HART-04), gone-Reparatur-Migration mit Upgrade-CI-Beweis, Grenzliste des Sprachausbaus in Store-Text und Doku (HART-05), Audit 0 CRIT / 0 HIGH, Submission 2x HTTP 201, secure-phase 23 SECURED 46/46
+
+**Vorbehalte:** Ladefenster D-08 nur in CI gemessen, nicht auf Zielhardware (akzeptiert als AR-23-01); Store-Rendering der Texte nicht nachgesehen (Zwei-Tempi-Cache). Offene Artefakte beim Close: keine (die zwei Debug-Sessions upgrade5/upgrade6 am 27.09. mit deploy-harp-Beleg 36305643230 resolved).
+
+---
+
+
 ## v1.2 Messbeleg und Ausbau (Shipped: 2026-09-21)
 
 **Delivered:** Findling 1.2.0 im Nextcloud App Store (beide Apps, Submission-Lauf 35618848300 mit 2x HTTP 201): Filter und Sortierung auf der Ergebnisseite, Modell-Entladung im Leerlauf hinter einem ab Werk ausgeschalteten Schalter, 6 OCR-Sprachen, alle offenen Messbelege des Milestones aus der einen bezahlten Box-Anfahrt, Upgrade-Beweis 1.1.0 auf 1.2.0 live in CI.

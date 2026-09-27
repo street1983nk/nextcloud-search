@@ -2,24 +2,24 @@
 
 ## What This Is
 
-Findling ist eine Nextcloud-ExApp, die die kaputte Suche repariert: ein Container mit OCR, klassischer Volltextsuche und semantischer Suche, per Klick aus dem Nextcloud App Store installierbar, ohne Elasticsearch-Gebastel. Ergebnisse erscheinen in der normalen Unified Search (via schlanker PHP-Companion-App) und seit v1.1 zusaetzlich auf einer eigenen Ergebnisseite mit Paginierung, seit v1.2 dort mit Dateityp-Filter, Zeitraumfilter und Datums-Sortierung. Optional gibt der Container sein Modell im Leerlauf frei (Schalter ab Werk aus). Dreisprachig (EN/DE/FR). Zielgruppe: Selfhoster und kleine Organisationen auf typischer Hardware (4-8 GB RAM, oft ARM), für die das offizielle fulltextsearch-Framework (jahrelang verwaist, weiterhin Elasticsearch-gekoppelt) keine Option ist.
+Findling ist eine Nextcloud-ExApp, die die kaputte Suche repariert: ein Container mit OCR, klassischer Volltextsuche und semantischer Suche, per Klick aus dem Nextcloud App Store installierbar, ohne Elasticsearch-Gebastel. Ergebnisse erscheinen in der normalen Unified Search (via schlanker PHP-Companion-App) und seit v1.1 zusaetzlich auf einer eigenen Ergebnisseite mit Paginierung, seit v1.2 dort mit Dateityp-Filter, Zeitraumfilter und Datums-Sortierung. Optional gibt der Container sein Modell im Leerlauf frei (Schalter ab Werk aus). Seit v1.3 beherrscht die lexikalische Suche neben Deutsch und Englisch auch Spanisch, Italienisch, Niederlaendisch und Portugiesisch (Sprachwechsel per Re-Analyse-Umbau statt Vollreindex), die Oberflaeche spricht acht Sprachen (EN/DE/FR/ES/IT/NL/pt_PT/pt_BR). Zielgruppe: Selfhoster und kleine Organisationen auf typischer Hardware (4-8 GB RAM, oft ARM), für die das offizielle fulltextsearch-Framework (jahrelang verwaist, weiterhin Elasticsearch-gekoppelt) keine Option ist.
 
 ## Core Value
 
 Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
 
-## Current State (nach v1.2, 2026-09-21)
+## Current State (nach v1.3, 2026-09-27)
 
-**Shipped:** Findling 1.2.0 im Nextcloud App Store (beide Apps signiert, Submission 21.09.2026, Lauf 35618848300, je HTTP 201).
+**Shipped:** Findling 1.3.0 im Nextcloud App Store (beide Apps signiert, Submission 27.09.2026, Lauf 36304007154, je HTTP 201, Tag v1.3.0 auf 744d7e4).
 
-- Filter (sechs Typgruppen, Zeitraum) und Datums-Sortierung auf der Ergebnisseite; Filter reisen in der URL, Rechtegrenze unveraendert (Paritaetstest deckt die neuen Parameter)
-- Modell-Entladung im Leerlauf hinter TTL-Schalter (ab Werk aus): beide Speicherhalter zusammen, Rueckkehr zur Grundlast 377,5 MB an der Messgroesse belegt (docs/measurements/2026-09-v12-messung/), erste Suche danach antwortet lexikalisch unter der 1,5-s-Decke
-- Alle offenen Messbelege des Milestones aus EINER Box-Anfahrt (Deckel 46 h / 5,40 USD, verbraucht 25,75 h / 2,98 USD); Ergebnisse in docs/performance.md; bekannter Bodensatz 628,0 MB nach Indexlauf mit entladenem Modell
-- 6 OCR-Sprachen (deu, eng, fra + ita, nld, spa als Positivliste von neun), stable35-Fenster vollzogen (NC 33-35, stable35-Ast muss-gruen)
-- Upgrade-Beweis 1.1.0 auf 1.2.0 Ende zu Ende in CI, Migration Version001200Date20260921000000 (Pflicht je Minor-Sprung)
-- Volle Suite 2.491 Python-Tests bestanden / 15 uebersprungen; Tag v1.2.0 auf f827145 mit 7/7 gruenen Tag-Laeufen
-- Korpus-Snapshot snap-03f1d1d9ad9262704 bewusst behalten (Owner 21.09., ~2,9 USD/Monat, einzige laufende Box-Kostenstelle)
-- Downloads Stand 21.09.: Findling 623 Release-Downloads
+- Lexikalische Suche in sechs Sprachen (de, en + es, it, nl, pt): vier neue Analyseketten messend abgenommen, Schema traegt immer sechs Koerperfelder, befuellt wird nur nach FINDLING_LANGUAGES (Werk bleibt de,en; Bestandsinstallationen upgraden ohne Umbau)
+- Re-Analyse-Umbau (index/rebuild.py): Sprachwechsel ohne Download, OCR oder Neu-Einbettung; wiederaufnahmefaehig, Platzpruefung vorab, atomarer Tausch, Fortschritt auf der Adminseite; CI beweist beide Richtungen (UPGRADE_FROM_TAG=v1.2.0)
+- Niederlaendische Komposita via wdutch/OpenTaal (siebte Marke wordlist_hash_nl, Umbau nur bei aktivem nl); UI-Kataloge es/it/nl/pt_PT/pt_BR mit je 202 Schluesseln, Pluralschluessel-Fix macht DE/FR-Plurale erstmals korrekt
+- Kaltstart-Fix: erste Suche antwortet lexikalisch sofort (973 ms MIT Treffern statt 0), Gewichte laden im Hintergrund nur nach Anforderung, kein Vorwaermen beim Start
+- Messanfahrt BL-F03 abgeschlossen: alle fuenf offenen v1.2-Zahlen plus Indexgroesse/Umbau-Wandzeit plus BL-F04-Basiszahlen aus einer Anfahrt (Plan 15,95 h / 2,83 USD), dismax auf Messbasis verworfen; Ergebnisse in docs/performance.md
+- HART-04: fastembed raus, tokenizers/numpy direkt deklariert, Absenz-Check im Abbild; gone-Reparatur-Migration Version001300Date20260927000000 mit Upgrade-CI-Beweis
+- Audit Phase 23: 0 CRIT / 0 HIGH (F-23-01 Reload-Bug seit Phase 14 gefixt); secure-phase 23 SECURED 46/46 (23-SECURITY.md); CI 6/6 gruen inkl. HaRP auf 79ad925
+- Korpus-Snapshot snap-03f1d1d9ad9262704 weiter behalten (Standard-Tier, ~2,85 USD/Monat, einzige laufende Box-Kostenstelle); Wiedervorlage beim v1.4-Close
 
 ## Requirements
 
@@ -43,19 +43,21 @@ Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inkl
 - ✓ Modell-Entladung im Leerlauf, beide Speicherhalter, ab Werk aus, one_load-Zusage neu gefasst (MEM-01..05), v1.2
 - ✓ Messwerkzeug + Runbook vor der Anfahrt, eine bezahlte Box-Anfahrt mit allen Messbelegen, Cron-Intervall als erzwungene Messbedingung (MESS-04..06), v1.2
 - ✓ Haertungen DI-11-02/03/05/06, BL-F01-Schlusssatz dreisprachig, stable35-Entscheid, Store-Einreichung 1.2.0 mit Upgrade-Beweis (HART-01..03, REL-02), v1.2
+- ✓ Lexikalische Suche es/it/nl/pt: Analyseketten, sechs Koerperfelder, Re-Analyse-Umbau, Frageseite (LEX-01..08), v1.3
+- ✓ Niederlaendische Komposita ueber ihre Glieder mit eigener Digest-Marke (KOMP-01), v1.3
+- ✓ UI-Kataloge es/it/nl/pt_PT/pt_BR im Gleichstand, 202 Schluessel, Pluralfix (KAT-01..02), v1.3
+- ✓ Messanfahrt BL-F03: fuenf offene plus zwei neue Zahlen plus BL-F04-Basiszahlen aus einer Anfahrt, dismax-Entscheid auf Messbasis (MESS-07..09), v1.3
+- ✓ Aufraeumbefunde fastembed/numpy geschlossen, Grenzen des Sprachausbaus dokumentiert, Store-Einreichung 1.3.0 (HART-04..05, REL-03), v1.3
 
 ### Active
 
-(v1.3 Sprachausbau, Owner-Entscheid 23.09.2026; REQ-IDs entstehen in REQUIREMENTS.md.)
+(v1.4 noch nicht aufgesetzt; Owner-Linie: v1.4 = BL-F04 SPEED, Vorarbeit-Research und Basiszahlen liegen vor, keine eigene Box-Anfahrt noetig. REQ-IDs entstehen mit /gsd:new-milestone.)
 
-- Lexikalische Suche fuer es/it/nl/pt: Tantivy-Sprachfelder, Migration, Reindex-Frage (Phasen 17-19 komplett)
-- UI-Kataloge es/it/nl/pt (Phase 20 komplett)
-- Niederlaendische Komposita ueber ihre Glieder, KOMP-01 (Phase 21 komplett 25.09.2026: wdutch-Rezept B 4-14, siebte Marke wordlist_hash_nl, Band-Umbau statt Vollreindex, CI-Beweis nlc)
-- Messanfahrt-Buendel BL-F03 (fuenf offene Boxzahlen)
-- Aufraeumbefunde fastembed/numpy
-- Store-Einreichung 1.3.0
+- BL-F04 SPEED: Indexier-Durchsatz auf Zielhardware (Kandidat, Owner-Entscheid beim Milestone-Start)
+- Franzoesisches Koerperfeld (FR hat OCR + Katalog, aber keine lexikalische Kette; benannte Luecke)
+- Deferred aus Phase 23: F-23-04, idle-Guard EmbeddingModel.release()
 
-Weiter in der Wiedervorlage (NICHT in v1.3): Sortierung nach Name/Groesse (Schema-Sprung), Mimetype-Gruppen aus files.mime, geplantes Vorwaermen, Pro-Schiene (Index-Verschluesselung, External Storage, ISV-Entscheid 03.11.).
+Weiter in der Wiedervorlage: Sortierung nach Name/Groesse (Schema-Sprung), Mimetype-Gruppen aus files.mime, geplantes Vorwaermen, Pro-Schiene (Index-Verschluesselung, External Storage, ISV-Entscheid 03.11.).
 
 ### Out of Scope
 
@@ -68,7 +70,7 @@ Weiter in der Wiedervorlage (NICHT in v1.3): Sortierung nach Name/Groesse (Schem
 
 ## Context
 
-- Stand 11.09.2026: zwei Milestones geliefert (v1.0 am 07.09., v1.1 am 11.09.), Backend Python 3.13/Tantivy/fastembed, Companion PHP, ~2.000 Python-Tests + 185 PHP-Tests, 6 CI-Workflows inkl. Fremdinstallations- und Upgrade-Strecke (deploy-harp), Messberichte unter docs/measurements/.
+- Stand 27.09.2026: vier Milestones geliefert (v1.0 am 07.09., v1.1 am 11.09., v1.2 am 21.09., v1.3 am 27.09.), Backend Python 3.13/Tantivy (onnxruntime/tokenizers direkt, fastembed seit v1.3 raus), Companion PHP, ~3.000 Python-Tests + PHP-Suite, 6 CI-Workflows inkl. Fremdinstallations- und Upgrade-Strecke (deploy-harp), Messberichte unter docs/measurements/.
 - ZenDiS hat den Schwester-Connector installiert und praesentiert ihn auf der Smart Country Convention; ISV-Call mit Nextcloud (Fabrice Mous) am 14.09.2026, Findling + Backend + Connector tragen das Enterprise-Flag im Store.
 - Kill-Kriterium weiter aktiv: Nextcloud GmbH hat fulltextsearch am 12.08.2026 reaktiviert; kündigt sie eine Elasticsearch-freie Volltextsuche mit OCR an (Nextcloud Conference September), wird neu bewertet. Die Differenzierer bleiben: kein Elasticsearch, OCR eingebaut, Semantik, kleines RAM-Budget, deutsche Komposita, Ergebnisseite.
 - Historischer Rechercheteil (Marktlücke 15.08.2026, Stack-Entscheide, Pitfalls des alten fulltextsearch) steht im v1.0-Archiv und in docs/; die nicht verhandelbaren Betriebsregeln gelten weiter: Fortschritt in der DB, failed/skipped sichtbar, Nur-Lesen-Invariante auf Nutzerdateien, Rechteprüfung vor Snippet-Erzeugung, INDEX_WORKERS=1.
@@ -109,19 +111,26 @@ Weiter in der Wiedervorlage (NICHT in v1.3): Sortierung nach Name/Groesse (Schem
 | Sortierung als rein lexikalischer Modus (Score 0.0, RRF aus) | tantivy liefert unter order_by_field den Feldwert statt des Scores | ✓ Good, kein Pseudo-Ranking ausgeliefert |
 | 6 OCR-Sprachen (Owner-Entscheid "Mitfahren") | Sprachpakete sind arch-neutral und billig, Positivliste deckelt | ✓ Good, sechs eigene Bau-Prüfungen, Standard bleibt deu+eng+fra |
 | stable35-Entscheid als eigener fristgebundener Plan in der ERSTEN Phase | Frist 16.09. lag zwei Tage nach Milestone-Start | ✓ Good, am Stichtag vollzogen, Beweislauf 4/4 grün |
+| Re-Analyse-Umbau statt Vollreindex beim Sprachwechsel (Owner-Tor 17, alle acht Entscheide Option a) | Vollreindex kostet 19 h 20 min auf Zielhardware, Re-Analyse nutzt gespeicherte Felder | ✓ Good, Umbau in CI in beide Richtungen bewiesen, Bestandsinstallationen unberuehrt |
+| Schema traegt IMMER sechs Koerperfelder, Befuellung nach FINDLING_LANGUAGES | Leere Felder kosten gemessen nichts, ein Schema statt Varianten | ✓ Good, keine Schema-Verzweigung, Sprachmenge als sechster Merker |
+| Keine Spracherkennung, weder dokument- noch anfrageseitig (Anti-Feature, einstimmig) | Stiller Totalausfall bei Fehlerkennung, Anfragen im Mittel 2,4 Terme | ✓ Good, als Quelltext-Waechter in der Suite festgehalten |
+| Frageseite erst NACH bewiesenem Umbauweg freischalten (17→18→19 als Sicherheitsbedingung) | Zwischenzustands-Fenster haette Totalausfall bedeutet (parse_query_lenient-ValueError) | ✓ Good, kein Zwischenzustand mit leerer Suche erreichbar |
+| dismax gegen Score-Summe auf Messbasis entschieden | Rangverschiebung nur auf echten Daten beurteilbar | ✓ Good, gemessen und dokumentiert verworfen (MESS-09) |
+| Kein Vorwaermen beim Start, Kaltstart lexikalisch sofort, Ladefenster-Restrisiko akzeptiert (D-03/D-08) | RAM-Budget auf 4-GB-Boxen schlaegt Latenzkomfort | ✓ Good, Kaltsuche 973 ms MIT Treffern statt 0; Restrisiko als AR-23-01 dokumentiert |
+| gone-Reparaturlauf als Upgrade-Migration (D-04, Issue #14) | Arbeit ist genau die, die ohne den Bug angefallen waere | ✓ Good, Upgrade-CI-Beweis skipped 8→7; budachst-Bestaetigung steht aus (Issue offen) |
 
-## Current Milestone: v1.3 Sprachausbau
+## Next Milestone Goals
+
+v1.4 ist noch nicht aufgesetzt (`/gsd:new-milestone`). Owner-Linie vom 27.09.2026: **v1.4 = BL-F04 SPEED** (Indexier-Durchsatz auf Zielhardware). Die Vorarbeit liegt vor: Research .planning/research/BL-F04-vorarbeit-2026-09-25.md, Basiszahlen B1-B5 aus der Phase-22-Anfahrt in docs/performance.md, keine eigene Box-Anfahrt noetig.
+
+<details>
+<summary>Archiv: Milestone-Beschreibung v1.3 (abgeschlossen 2026-09-27)</summary>
 
 **Goal:** Die lexikalische Suche beherrscht Spanisch, Italienisch, Niederlaendisch und Portugiesisch (Tantivy-Sprachfelder mit sauberer Migration), und die fuenf offenen Boxzahlen aus v1.2 werden nachgemessen.
 
-**Target features:**
-- BL-F02 Baustein 2: Tantivy-Sprachfelder es/it/nl/pt, Schema-Migration (Pflicht je Minor-Sprung), Reindex-Frage geklaert
-- BL-F02 Baustein 3: UI-Kataloge es/it/nl/pt (je 174 Schluessel, maschinell plus Community-Review statt Muttersprachler-Gate)
-- BL-F03: Messanfahrt-Buendel als eigene Messphase (M-01-Zahl, 92c/99d-Wirkung, Bodensatz-Zyklus 2, die 44+6 Dateien, Kaltstartlatenz); Rechenblatt + Deckel VOR Boxstart zur Owner-Freigabe
-- Aufraeumbefunde: fastembed-Pin unbenutzt, numpy undeklariert
-- Store-Release 1.3.0 (Haertung + Einreichung wie gehabt)
+**Ergebnis:** Alles geliefert, v1.3.0 am 27.09.2026 eingereicht (2x HTTP 201, Lauf 36304007154, Tag v1.3.0 auf 744d7e4). Benannte Vorbehalte: Ladefenster D-08 nur in CI gemessen (AR-23-01), Store-Rendering der Texte nicht nachgesehen. Details: .planning/milestones/v1.3-ROADMAP.md und MILESTONES.md.
 
-**Key context:** Reddit-Nachfrage + EU-Outreach-Zusagen (OS2ai, GovChat-NL, Buerokratt); OCR-Baustein 1 faehrt schon in v1.2.0 mit. Kill-Kriterium 21.09. geprueft: nicht ausgeloest. Snapshot snap-03f1d1d9ad9262704 steht fuer die Messphase bereit. Owner-Entscheid 23.09.2026.
+</details>
 
 <details>
 <summary>Archiv: Milestone-Beschreibung v1.2 (abgeschlossen 2026-09-21)</summary>
@@ -161,4 +170,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-25, Phase 21 komplett (Milestone v1.3 Sprachausbau)*
+*Last updated: 2026-09-27 after v1.3 milestone*

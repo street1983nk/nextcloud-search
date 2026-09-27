@@ -1,8 +1,8 @@
 ---
-status: awaiting_human_verify
+status: resolved
 trigger: "deploy-harp Lauf 35997241359, Job stable34/ubuntu-24.04, Block 'Store upgrade 6': nach dem Containerneubau aus docker inspect mit FINDLING_LANGUAGES=es,de,en meldet der Schritt nach 300 s und 133 Runden 'the rebuild did not finish within REBUILD_BUDGET_SECONDS=300'; die Containerlogs zeigen frpc in einer Reconnect-Schleife mit 'connect to server error: EOF' und 'session shutdown'"
 created: 2026-09-24
-updated: 2026-09-24
+updated: 2026-09-27
 ---
 
 ## Current Focus
@@ -290,3 +290,7 @@ Matrix-Aesten. "Store upgrade 5" haelt alle sechs Zusicherungen (Bestand
 unberuehrt, languages-Marke legitim abwesend), "Store upgrade 6" alle neun
 (Umbau beobachtet, Schema genau eine Stufe, Sprachmarke de,en,es,
 Vektorbestand byteidentisch). Beide Wurzelursachen bestaetigt behoben.
+
+## Verifikation 2026-09-27
+
+Bestaetigungsbedingung erfuellt: deploy-harp-Lauf 36305643230 auf 79ad925 (main) = success am 27.09.2026, inklusive der Store-upgrade-Bloecke. Findling 1.3.0 ist mit diesem Stand im Store (Submission-Lauf 36304007154, 2x HTTP 201). Status daher auf resolved gesetzt beim Milestone-Close v1.3.
