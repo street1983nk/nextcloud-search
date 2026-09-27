@@ -1202,7 +1202,27 @@ Er ist selbst kein Store-Text.
 
 ## Die Abnahme
 
-Textabnahme 1.3.0: <Datum>, ausstehend.
+Textabnahme 1.3.0: **2026-09-27, im Wortlaut: "Text abgenommen".** Der Owner
+hat die sechs Texte, den Text der Umgebungsvariable, die Changelog-Zeile und
+den Entwurf der Antwort in Issue #14 gesehen und wie vorgelegt abgenommen.
+
+Zu den drei Fragen des Checkpoints, je im Wortlaut der Auswahl:
+
+- **F1, der vierte Grenzpunkt: "So lassen".** Er bleibt "French has no full
+  text analysis chain for document text", in DE und FR wie oben.
+- **F2, die Auszug-Grenze in `docs/language-analyzers.md`: "Ankündigung
+  anpassen".** Die Grenze "A hit found through a new language field alone
+  comes back without an excerpt" bleibt in der Doku und wird nicht mehr für
+  den Store-Text angekündigt; die Kurzliste bleibt bei den vier Punkten aus
+  D-06. Eingearbeitet am 27.09.2026.
+- **F3, das gemessene Abbild: "Ja, reicht".** Die Formulierung "gegen das
+  v1.3-Abbild" mit dem Messdatum 26.09.2026 bleibt; eine Nachmessung am
+  Release-Abbild 1.3.0 gibt es nicht.
+
+Die Antwort in Issue #14 bleibt ein Entwurf, bis das Release steht; gepostet
+wird sie in Plan 23-09 und nur mit dem Wort des Owners. Die Übernahme in beide
+`info.xml` und die drei READMEs ist Plan 23-07 und findet nach dieser Abnahme
+statt.
 
 ---
 
