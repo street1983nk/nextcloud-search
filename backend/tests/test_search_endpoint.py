@@ -30,6 +30,7 @@ from typing import Any, cast
 
 import numpy
 import pytest
+from fastapi import BackgroundTasks
 from fastapi.testclient import TestClient
 
 from conftest import Corpus
@@ -57,6 +58,10 @@ TERM = "Kündigungsfrist"
 # builds a vector half: one word is answered by the word index alone and an
 # operator asks for a precision the model cannot honour.
 TWO_WORD_TERM = "Kündigungsfrist Vertrag"
+
+# One word that the corpus holds, so the word index answers it and the one term
+# rule keeps the vector half from being built at all.
+ONE_WORD_TERM = "Kündigungsfrist"
 
 # A line with an exclusion, so the operator rule holds the vector half back
 # before any switch of this phase is ever read.
@@ -536,18 +541,19 @@ def _watch_the_load_switch(monkeypatch: pytest.MonkeyPatch, seconds: str) -> _Lo
 
 @pytest.mark.parametrize(
     ("seconds", "expected"),
-    [("0", True), ("900", False)],
+    [("0", False), ("900", False)],
     ids=["release-off", "release-on"],
 )
-def test_the_search_route_hands_the_model_what_the_release_switch_says(
+def test_the_search_route_never_lets_the_model_load_whatever_the_switch_says(
     indexed_volume: Corpus,
     monkeypatch: pytest.MonkeyPatch,
     seconds: str,
     expected: bool,
 ) -> None:
-    # Off is the shipped behaviour and has to stay byte for byte what it was.
-    # On is the answer to 2026-09-10: 1838.4 ms against a ceiling of 1500 ms,
-    # and this route is the one that carries it.
+    # The answer to 2026-09-10 (1838.4 ms against a ceiling of 1500 ms) and,
+    # since phase 23, to V-22-01/V-22-02 as well: with the switch off the first
+    # search after a start tore the same ceiling (innerMs 1505 to 1596). No
+    # round of this route pays for the weights at any switch value (D-01).
     model = _watch_the_load_switch(monkeypatch, seconds)
 
     api_search.one_round(indexed_volume.bob, TWO_WORD_TERM, 20, 0, False)
@@ -583,7 +589,7 @@ def test_a_round_under_the_release_answers_the_way_a_container_without_a_model_d
     _watch_the_load_switch(monkeypatch, "900")
     released = api_search.one_round(indexed_volume.bob, TWO_WORD_TERM, 20, 0, False)
 
-    assert off.seen == [True]
+    assert off.seen == [False]
     assert [hit.fileId for hit in shipped.candidates] != []
     assert [hit.fileId for hit in released.candidates] == [hit.fileId for hit in shipped.candidates]
     assert released.degraded is False
@@ -602,12 +608,10 @@ SEARCH_SOURCE = Path(str(api_search.__file__))
 # of a case that only asks whether something happened.
 BLOCKED_WARM_SECONDS = 5.0
 
-# The patience of the cases that wait for a background run to ARRIVE. A long
-# deadline is free here, because it is only ever spent when the case fails
-# anyway; the same case with a short one goes red under load without any defect
-# behind it. Where a case claims an UPPER BOUND instead, the short deadline is
-# the statement itself and stays at BLOCKED_WARM_SECONDS.
-ARRIVAL_SECONDS = 30.0
+# ARRIVAL_SECONDS, the patience of the cases that waited for a loose task to
+# arrive, left with phase 23: BackgroundTasks runs the warm run after the
+# response inside the request's own lifecycle, so there is nothing loose left
+# to wait for.
 
 # What the answer of a handler that does not wait has to fit into. Well under
 # the block above, so the case says something even on a slow machine.
@@ -699,15 +703,18 @@ def _count_the_warm_runs(monkeypatch: pytest.MonkeyPatch) -> tuple[list[int], th
     return runs, ran
 
 
-def test_with_the_release_off_the_handler_starts_nothing(
+def test_with_the_release_off_a_cold_start_gets_exactly_one_run_after_the_answer(
     client: TestClient,
     sign: Sign,
     indexed_volume: Corpus,
     monkeypatch: pytest.MonkeyPatch,
     warm_ground: Path,
 ) -> None:
-    # The shipped behaviour, and there is no background run in it. Counted in
-    # runs and in pending tasks, never in errors (pitfall 4).
+    # Phase 23, D-01 and D-08. With the switch at nought the first hybrid search
+    # after a start used to pay for the weights inside the request (V-22-01,
+    # V-22-02). It now answers lexically and orders one warm run, which the
+    # test client, like uvicorn, runs after the response has been sent.
+    # Counted in runs and never in errors (pitfall 4).
     assert warm_ground.is_dir()
     _release(monkeypatch, "0")
     runs, ran = _count_the_warm_runs(monkeypatch)
@@ -715,60 +722,75 @@ def test_with_the_release_off_the_handler_starts_nothing(
     answer = _search(client, sign(indexed_volume.bob), query=TWO_WORD_TERM)
 
     assert answer["candidates"] != []
-    assert ran.wait(0.25) is False
-    assert runs == []
-    assert not api_search._WARM_TASKS
+    assert ran.is_set() is True
+    assert runs == [1]
 
 
-async def test_with_the_release_on_a_cold_engine_gets_exactly_one_run(
+@pytest.mark.parametrize("seconds", ["0", "900"], ids=["release-off", "release-on"])
+async def test_a_cold_engine_gets_exactly_one_run_and_it_waits_for_the_answer(
     indexed_volume: Corpus,
     monkeypatch: pytest.MonkeyPatch,
     warm_ground: Path,
+    seconds: str,
 ) -> None:
-    """One round, one background run, and the run is waited for rather than hoped for.
+    """One round, one background run, and the run is ordered and not started.
 
     The round was meant semantically, answered without the weights, and says so
-    at the place where that fact arises. The handler on the loop then orders the
-    run and goes on building the answer.
+    at the place where that fact arises. The handler then hands the run to
+    ``BackgroundTasks``, which Starlette runs only after the response has been
+    sent in full (D-01, D-08).
 
-    **The second case of this block that does not go through the test client,
-    and finding M-16-01 of the phase 16 audit is why.** ``TestClient`` opens a
-    blocking portal per request and closes it again when the request is over,
-    and a task the handler created with ``create_task`` is a loose task on that
-    loop rather than a child of the portal: whether it gets its first slot
-    before the portal goes down is a race, and a race is exactly what this case
-    used to lose. It lost it four times in CI on 21.09.2026 (runs 35586354661,
-    35594647359, 35596116820 and 35597353833), WITH the thirty second deadline
-    of plan 16-01 already in place, which is the proof that the deadline was
-    never the reason: a run that was cancelled before it started does not
-    arrive after thirty seconds either. Under uvicorn the loop outlives the
-    request, and that is the situation reproduced here, exactly as the
-    neighbouring case above does it.
-
-    Nothing is softened by the move. The case says more than before, not less:
-    it waits for the task instead of for an event, so a run that never happens
-    fails here rather than somewhere else, and ``runs == [1]`` is now read after
-    the run is finished rather than in the middle of it.
+    **Finding M-16-01 of the phase 16 audit does not exist any more.** The
+    handler used to order the run with ``create_task`` as a loose task on the
+    loop, and whether it got its first slot before the ``TestClient`` portal
+    went down was a race that this case lost four times in CI on 21.09.2026.
+    ``BackgroundTasks`` is part of the response, so there is no loose task and
+    no race. The handler is still called directly here, because a direct call
+    is the only way to look at the ordered run before it has happened.
     """
-    # Read as a name and not as a directory, like the neighbouring case: an
-    # async function that asks the file system is what ASYNC240 keeps out.
+    # Read as a name and not as a directory: an async function that asks the
+    # file system is what ASYNC240 keeps out.
     assert str(warm_ground).endswith("model")
-    _release(monkeypatch, "900")
+    _release(monkeypatch, seconds)
     runs, ran = _count_the_warm_runs(monkeypatch)
 
     async def signed_in(_nc: Any) -> str:
         return indexed_volume.bob
 
     monkeypatch.setattr(api_search, "current_user_id", signed_in)
+    background = BackgroundTasks()
 
-    answer = await api_search.search(SearchRequest(query=TWO_WORD_TERM), cast(Any, None))
+    answer = await api_search.search(SearchRequest(query=TWO_WORD_TERM), cast(Any, None), background)
 
     assert answer.candidates != []
-    ordered = set(api_search._WARM_TASKS)
-    assert ordered, "the handler ordered no run at all"
-    await asyncio.wait_for(asyncio.gather(*ordered), ARRIVAL_SECONDS)
+    assert len(background.tasks) == 1, "the handler ordered no run, or more than one"
+    assert background.tasks[0].func is api_search.warm
+    assert runs == [], "the run must not start before the answer is out"
+
+    await background()
+
     assert ran.is_set() is True
     assert runs == [1]
+
+
+def test_a_one_word_search_orders_no_warm_run(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+    warm_ground: Path,
+) -> None:
+    # The one term rule builds no vector half, so nobody was refused a load and
+    # nothing is owed. A warm run per one word keystroke would pay 118 MB for a
+    # search that never asks the model anything.
+    assert warm_ground.is_dir()
+    _release(monkeypatch, "0")
+    runs, _ran = _count_the_warm_runs(monkeypatch)
+
+    answer = _search(client, sign(indexed_volume.bob), query=ONE_WORD_TERM)
+
+    assert answer["candidates"] != []
+    assert runs == []
 
 
 def test_with_the_release_on_a_loaded_engine_is_not_warmed_again(
@@ -797,24 +819,21 @@ async def test_the_answer_does_not_wait_for_the_warm_run(
     monkeypatch: pytest.MonkeyPatch,
     warm_ground: Path,
 ) -> None:
-    """The run blocks for five seconds and the answer has one.
+    """The run would block for five seconds and the answer has one.
 
-    **The one case in this block that does not go through the test client**,
-    and the reason is a property of the client rather than of the handler.
-    ``TestClient`` opens a blocking portal per request and closes it again when
-    the request is over, and closing waits for every task that was started
-    inside it. So a measurement taken around ``client.post`` reports the length
-    of the background run whatever the handler does, which would make this case
-    fail against correct code and pass against nothing. Under uvicorn the loop
-    outlives the request, which is the situation reproduced here: the handler
-    is awaited on the loop of this case, and the task is still in flight when
-    the answer is in hand.
+    The handler is awaited directly, because ``TestClient`` runs the background
+    tasks of a response before ``client.post`` returns, so a measurement around
+    it would report the length of the run whatever the handler does. Awaited
+    here, the handler hands the run to ``BackgroundTasks`` and returns; the run
+    has not even started when the answer is in hand (D-01, D-08).
     """
     assert str(warm_ground).endswith("model")
     _release(monkeypatch, "900")
     gate = threading.Event()
+    started_runs: list[int] = []
 
     def blocked_warm() -> bool:
+        started_runs.append(1)
         gate.wait(BLOCKED_WARM_SECONDS)
         return True
 
@@ -823,82 +842,84 @@ async def test_the_answer_does_not_wait_for_the_warm_run(
 
     monkeypatch.setattr(api_search, "warm", blocked_warm)
     monkeypatch.setattr(api_search, "current_user_id", signed_in)
+    background = BackgroundTasks()
 
     started = time.monotonic()
-    answer = await api_search.search(SearchRequest(query=TWO_WORD_TERM), cast(Any, None))
+    answer = await api_search.search(SearchRequest(query=TWO_WORD_TERM), cast(Any, None), background)
     spent = time.monotonic() - started
 
     assert answer.candidates != []
     assert spent < ANSWER_BUDGET_SECONDS
-    assert len(api_search._WARM_TASKS) == 1, "the answer is out while the run is still going"
+    assert len(background.tasks) == 1, "the run is ordered while the answer is out"
+    assert started_runs == [], "and it has not started yet"
 
     gate.set()
-    await asyncio.wait_for(next(iter(api_search._WARM_TASKS)), ARRIVAL_SECONDS)
+    await asyncio.wait_for(background(), BLOCKED_WARM_SECONDS)
+    assert started_runs == [1]
 
 
+@pytest.mark.parametrize("seconds", ["0", "900"], ids=["release-off", "release-on"])
 def test_ten_searches_in_a_row_do_not_pay_for_ten_loads(
     client: TestClient,
     sign: Sign,
     indexed_volume: Corpus,
     monkeypatch: pytest.MonkeyPatch,
     warm_ground: Path,
+    seconds: str,
 ) -> None:
-    # T-14-28 in a counter: a search load that started a run per request would
-    # turn every keystroke of the unified search into 118 MB of work. Measured
-    # as a difference of the load counter, never as a byte and never as a
-    # failure count.
+    # T-14-28 and T-23-01 in a counter: a search load that started a run per
+    # request would turn every keystroke of the unified search into 118 MB of
+    # work. Measured as a difference of the load counter, never as a byte and
+    # never as a failure count. The test client runs the background task of
+    # each response before post returns, so no waiting loop is needed.
     assert warm_ground.is_dir()
-    _release(monkeypatch, "900")
+    _release(monkeypatch, seconds)
     before = load_count()
 
     for _ in range(10):
         answer = _search(client, sign(indexed_volume.bob), query=TWO_WORD_TERM)
         assert answer["candidates"] != []
 
-    deadline = time.monotonic() + ARRIVAL_SECONDS
-    while api_search._WARM_TASKS and time.monotonic() < deadline:
-        time.sleep(0.05)
-
-    assert load_count() - before <= 1, "ten searches are one load at most and never ten"
+    assert load_count() - before == 1, "ten searches are one load and never ten"
     assert engine_module.shared_model().loaded is True, "and it is one and not nought: a run really happened"
 
 
-def test_the_handler_holds_its_task_and_never_waits_for_it() -> None:
+def test_the_handler_orders_the_run_through_background_tasks_and_never_waits() -> None:
     """The gate at the syntax tree, beside the cases that watch the behaviour.
 
     Three things a behavioural case cannot see the next time somebody rewrites
-    this handler: that the task is created exactly once, that nothing awaits
-    its result, and that a reference is kept while it runs. Without the last
-    one the garbage collector may take a running task away, which is a
-    documented trap of ``asyncio.create_task`` and a failure nobody ever sees
-    in a log (T-14-30).
+    this handler: that the run is ordered exactly once and through
+    ``BackgroundTasks``, that nothing awaits it, and that no loose
+    ``create_task`` comes back. A loose task was the M-16-01 race and needed a
+    module set to survive the garbage collector (T-14-30); ``BackgroundTasks``
+    needs neither (phase 23, D-01).
     """
     source = SEARCH_SOURCE.read_text(encoding="utf-8")
     tree = ast.parse(source)
     handler = next(node for node in ast.walk(tree) if isinstance(node, ast.AsyncFunctionDef) and node.name == "search")
 
+    ordered = [
+        node
+        for node in ast.walk(handler)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "add_task"
+        and [arg.id for arg in node.args if isinstance(arg, ast.Name)] == ["warm"]
+    ]
     created = [
         node
         for node in ast.walk(handler)
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "create_task"
     ]
-    awaited = [
+    awaited_warm = [
         node
         for node in ast.walk(handler)
         if isinstance(node, ast.Await)
-        and isinstance(node.value, ast.Call)
-        and isinstance(node.value.func, ast.Attribute)
-        and node.value.func.attr == "create_task"
+        and any(isinstance(inner, ast.Name) and inner.id == "warm" for inner in ast.walk(node))
     ]
-    assigned = {
-        target.id
-        for node in ast.walk(tree)
-        if isinstance(node, ast.AnnAssign | ast.Assign)
-        for target in (node.targets if isinstance(node, ast.Assign) else [node.target])
-        if isinstance(target, ast.Name)
-    }
+    annotations = [arg.annotation.id for arg in handler.args.args if isinstance(arg.annotation, ast.Name)]
 
-    assert len(created) == 1, "one task and no more"
-    assert awaited == [], "the answer never waits for the run"
-    assert "_WARM_TASKS" in assigned, "the reference lives in a module set"
-    assert "add_done_callback" in source, "and it is handed back when the run ends"
+    assert len(ordered) == 1, "one ordered run and no more"
+    assert created == [], "no loose task on the loop"
+    assert awaited_warm == [], "the answer never waits for the run"
+    assert "BackgroundTasks" in annotations, "the handler takes the background tasks of its response"
