@@ -56,7 +56,7 @@ Details im Archiv: .planning/milestones/v1.2-ROADMAP.md
 - [x] **Phase 20: UI-Kataloge es/it/nl/pt** - Zehn neue Katalogdateien im Gleichstand mit EN/DE/FR (Parallelpfad) (completed 2026-09-25)
 - [x] **Phase 21: Niederlaendische Komposita** - Eigenes Tor, faellt bei Terminnot als Ganzes (completed 2026-09-25)
 - [x] **Phase 22: Messanfahrt BL-F03** - Eine Box-Anfahrt fuer fuenf offene und zwei neue Zahlen (completed 2026-09-26, Owner-Abnahme, Nachanfahrt 22-13 schliesst MESS-07)
-- [ ] **Phase 23: Haertung und Store-Einreichung 1.3.0** - Aufraeumbefunde, dokumentierte Grenzen, signiertes App-Paar im Store
+- [x] **Phase 23: Haertung und Store-Einreichung 1.3.0** - Aufraeumbefunde, dokumentierte Grenzen, signiertes App-Paar im Store (completed 2026-09-27)
 
 **Ausfuehrungsreihenfolge und Sicherheitsbedingung:** 17 -> 18 -> 19 ist keine Aufwandsgruppierung, sondern eine Sicherheitsbedingung. Zwischen "Schema erweitert" und "Umbau fertig" liegt auf jeder Bestandsinstallation ein Zeitfenster, in dem eine geoeffnete Query-Feldliste zum Totalausfall fuehrt (`parse_query_lenient`-ValueError, vom Suchpfad zu einer dauerhaft leeren degraded-Antwort verschluckt). Phase 20 ist der einzige echte Parallelpfad und kann waehrend der Wartezeit am Owner-Tor laufen. Phase 21 haengt an Phase 19 und ist als Ganzes streichbar.
 
@@ -325,7 +325,7 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 23-09-PLAN.md , Tag, Signierung, Einreichung 2x HTTP 201, Issue-#14-Antwort, Zustandspflege
+- [x] 23-09-PLAN.md , Tag, Signierung, Einreichung 2x HTTP 201, Issue-#14-Antwort, Zustandspflege
 
 ## Progress
 
@@ -342,7 +342,7 @@ Plans:
 | 20. UI-Kataloge es/it/nl/pt | v1.3 | 9/9 | Complete    | 2026-09-25 |
 | 21. Niederlaendische Komposita | v1.3 | 9/9 | Complete    | 2026-09-25 |
 | 22. Messanfahrt BL-F03 | v1.3 | 13/13 | Complete | 2026-09-26 |
-| 23. Haertung und Store-Einreichung 1.3.0 | v1.3 | 8/9 | In Progress|  |
+| 23. Haertung und Store-Einreichung 1.3.0 | v1.3 | 9/9 | Complete   | 2026-09-27 |
 
 ## Requirement-Abdeckung v1.3
 
