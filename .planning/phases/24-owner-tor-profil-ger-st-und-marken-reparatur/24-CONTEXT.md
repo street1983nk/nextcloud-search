@@ -31,6 +31,10 @@ Die Grundsatzentscheide des Milestones v1.4 sind schriftlich und datiert gefalle
 - **D-24-06 (Owner, 27.09.2026):** Vorschlags-Schwellen nach Research 3.2: Standard wird ab 6 GB und 3 Kernen vorgeschlagen, Leistung ab 12 GB und 6 Kernen, darunter Sparsam. Nur Vorschlag über die Statusroute, nie automatisches Hochschalten.
 - **D-24-07 (Owner, 27.09.2026):** Bei Hardware-Schrumpfung bleibt das GESPEICHERTE Profil stehen; der Container arbeitet selbsttätig auf der größten noch passenden Stufe und meldet beides (gewählt vs. wirksam) über die Statusroute an die Seite. Wächst die Hardware wieder, gilt ohne Zutun wieder das gewählte Profil. Kein stilles Umschreiben von Admin-Entscheidungen.
 
+### Nachentscheid aus der Phase-Research (27.09.2026)
+- **D-24-08 (Owner, 27.09.2026):** Im Profil Leistung rechnet der Kernterm glatt Kerne-1, OHNE zusätzlichen Abzug der Nextcloud-Grundlast r (Research-Befund: wörtlich gerechnet ergäbe C-1-r praktisch C-2 Slots und widerspräche dem fixierten Store-Satz "alles bis auf einen Kern"). Die RAM-Schranke der Formel und der Speicherwächter (Phase 26) fangen Überlast ab. Für Standard bleibt der r-Abzug in der Formel.
+- Research-Empfehlungen übernommen (Claude-Discretion, keine Owner-Frage): Vorschlags-Schwellen (6/12 GB) rechnen gegen memory.max bzw. MemTotal, die Slot-Formel gegen MemAvailable (sonst schlüge eine typische 8-GB-Box Sparsam vor); Env-Var überstimmt nur, wenn ihr Wert gültig ist UND vom in info.xml deklarierten Default abweicht (AppAPI setzt Defaults als echte Env-Vars); Hardware-Erkennung läuft beim Start VOR dem Modellladen.
+
 ### Claude's Discretion
 - Download-Quelle und Signatur-/Digest-Mechanik des fp32-Nachladens (Researcher prüft; Festlegung spätestens im Phase-25-Plan, Phase 24 dokumentiert den Entscheid nur).
 - Technischer Schnitt der lru_cache-Schichtung in `config.py` (statisch vs. profilabhängig) und die genaue Form der OCS-Route.
