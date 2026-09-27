@@ -294,7 +294,18 @@ Plans:
   3. Fremdinstallation auf frischer Nextcloud und die Upgrade-Strecke 1.2.0 auf 1.3.0 inklusive Umbau-Fall sind Ende zu Ende gruen; das Audit nach der Haertung steht auf 0 CRIT / 0 HIGH, MEDIUM behoben, LOW dokumentiert entschieden.
   4. v1.3.0 ist eingereicht: beide Apps signiert, Submission mit 2x HTTP 201, Store-Texte gate-konform (Faktenliste, eine Messzahl an drei Stellen) und vom Owner vor der Abgabe abgenommen.
 
-**Plans**: TBD
+**Plans**: 9 plans in 7 waves
+
+Plans:
+- [ ] 23-01-PLAN.md , Kaltstart-Fix im Produktpfad (query_may_load immer False, Warmlauf per BackgroundTasks, Einwortregel /snippets)
+- [ ] 23-02-PLAN.md , HART-04: fastembed-Pin raus, tokenizers/numpy direkt, Lockfile, THIRD-PARTY, Abwesenheitsprüfung im Abbild
+- [ ] 23-03-PLAN.md , Store-Textentwurf 1.3.0 (Sprachzeile, Known limitations, 730,2 MB, Changelog) mit Owner-Abnahme
+- [ ] 23-04-PLAN.md , Kaltstart-CI-Bruchstellen (integration, probe, one_load), Doku, CI-Nachmessung
+- [ ] 23-05-PLAN.md , gone-Reparaturlauf als Migration Version001300Date20260927000000 mit PHPUnit
+- [ ] 23-06-PLAN.md , Versionen 1.3.0, gone-Saat im Upgrade-Ast, Store install/upgrade/Umbau, probe-92d
+- [ ] 23-07-PLAN.md , Übernahme der Store-Texte in beide info.xml und READMEs, Gates
+- [ ] 23-08-PLAN.md , Launch-Härtung und Phasenaudit mit Owner-Abnahme
+- [ ] 23-09-PLAN.md , Tag, Signierung, Einreichung 2x HTTP 201, Issue-#14-Antwort, Zustandspflege
 
 ## Progress
 
