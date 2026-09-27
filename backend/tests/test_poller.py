@@ -61,9 +61,11 @@ from findling.nc.queue import (
     TOPUP_UNAVAILABLE,
     CallResult,
     ClaimResult,
+    DocumentQueue,
     QueueJob,
     QueueStats,
 )
+from findling.profile import Profile, snapshot
 from findling.store.repo import FileMeta, Store, open_store
 from findling.worker.poller import (
     RETREAT_AFTER_ROUNDS,
@@ -154,6 +156,21 @@ def _job(
     )
 
 
+class _SessionWithoutProfileRoute:
+    """The session of a 1.3.x companion: the profile route is not there."""
+
+    async def ocs(self, method: str, path: str, **kwargs: Any) -> Any:
+        del method, kwargs
+        raise NextcloudException(404, reason=f"no route {path}")
+
+
+class _AppWithoutProfileRoute:
+    """Carries the session above and nothing else, which is all the read needs."""
+
+    def __init__(self) -> None:
+        self._session = _SessionWithoutProfileRoute()
+
+
 class _FakeQueue:
     """The four queue calls, answered from a script and recorded."""
 
@@ -174,10 +191,30 @@ class _FakeQueue:
         # a queue whose script ran out has nothing left to crawl.
         self.topups = 0
         self.topup_answer = TOPUP_IDLE
+        # What the profile read of a round answers. None by default, which is
+        # a companion without a stored choice: Economy stays in force, the
+        # state every existing test means (D-24-02).
+        self.profile_answer: str | None = None
+        # A companion older than 1.4.0: the read goes through the real
+        # DocumentQueue.profile over a session that answers 404, so the test
+        # proves the error path the poller really meets and not a fake raising
+        # where production code never raises.
+        self.profile_route_missing = False
+        self.profile_asks = 0
+        # The order of the calls that matter for D-24-01: profile before claim.
+        self.order: list[str] = []
+
+    async def profile(self) -> str | None:
+        self.profile_asks += 1
+        self.order.append("profile")
+        if self.profile_route_missing:
+            return await DocumentQueue(cast("AsyncNextcloudApp", _AppWithoutProfileRoute())).profile()
+        return self.profile_answer
 
     async def claim(self, *, limit: int, max_bytes: int) -> ClaimResult:
         del limit, max_bytes
         self.claims += 1
+        self.order.append("claim")
         return self._batches.pop(0) if self._batches else ClaimResult()
 
     async def top_up(self) -> str:
@@ -1731,6 +1768,65 @@ async def test_a_top_up_without_an_answer_walks_the_ordinary_ladder(
     assert seen == [15, 30, 60, 120]
 
 
+async def test_the_profile_is_read_once_per_round_before_the_claim(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # D-24-01: one read per round, and before the claim, because from phase 26
+    # on the size of the claim depends on the profile.
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)))
+    queue.profile_answer = "standard"
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: BODY_BYTES})
+
+    await poller.run_once()
+    await poller.run_once()
+
+    assert queue.profile_asks == 2
+    assert queue.order == ["profile", "claim", "profile", "claim"]
+    assert snapshot().chosen is Profile.STANDARD
+
+
+async def test_a_companion_without_the_profile_route_leaves_economy_in_force(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # K6: a new container next to a 1.3.x companion. The 404 goes through the
+    # real DocumentQueue.profile, the round ends as an ordinary empty round and
+    # Economy stays in force because nothing was ever readable (D-24-02).
+    queue = _FakeQueue()
+    queue.profile_route_missing = True
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    with caplog.at_level("DEBUG"):
+        result = await poller.run_once()
+
+    assert result.state == ROUND_EMPTY
+    assert queue.order == ["profile", "claim"]
+    assert snapshot().chosen is None
+    assert snapshot().effective is Profile.ECONOMY
+    assert "unexpected" not in caplog.text
+    assert "could not read the profile" in caplog.text
+
+
+async def test_a_failed_read_keeps_the_last_profile(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:
+    # T-24-18: a gateway hiccup must not flap the profile back to Economy. The
+    # last name read stays for the life of the process, through a round that
+    # reads nothing and through a round whose read fails outright.
+    queue = _FakeQueue()
+    queue.profile_answer = "standard"
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    await poller.run_once()
+    assert snapshot().chosen is Profile.STANDARD
+
+    queue.profile_answer = None
+    await poller.run_once()
+    assert snapshot().chosen is Profile.STANDARD
+
+    queue.profile_route_missing = True
+    await poller.run_once()
+    assert snapshot().chosen is Profile.STANDARD
+    assert queue.profile_asks == 3
+
+
 async def test_an_armed_container_with_an_empty_work_stock_says_so_once_per_arming(
     store: Store, writer: IndexBatchWriter, tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -1905,6 +2001,11 @@ class _WorkStock:
         self._refunds = refunds
         self.written_off: list[int] = []
         self.claims = 0
+
+    async def profile(self) -> str | None:
+        # The stock simulation is about deliveries, never about the profile:
+        # no stored choice, Economy in force.
+        return None
 
     async def top_up(self) -> str:
         # The stock is the whole crawl in these tests: nothing is ever pending

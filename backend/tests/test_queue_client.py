@@ -61,6 +61,7 @@ UNLOCK_PATH = "/ocs/v2.php/apps/findling/queues/documents/unlock"
 REQUEUE_PATH = "/ocs/v2.php/apps/findling/queues/documents/requeue"
 STATS_PATH = "/ocs/v2.php/apps/findling/queues/documents/stats"
 TOPUP_PATH = "/ocs/v2.php/apps/findling/queues/documents/topup"
+PROFILE_PATH = "/ocs/v2.php/apps/findling/profile"
 
 # One row exactly as QueueService::describe builds it, keys included. The queue
 # row id is the key of the map and arrives as a string, because that is what a
@@ -431,6 +432,47 @@ async def test_top_up_survives_a_companion_without_the_route() -> None:
     assert await _queue(session).top_up() == TOPUP_UNAVAILABLE
 
 
+async def test_profile_returns_the_name_the_admin_stored() -> None:
+    # D-24-01: the companion keeps the choice, the container asks once per round.
+    session = _FakeSession({("GET", PROFILE_PATH): {"profile": "standard"}})
+
+    assert await _queue(session).profile() == "standard"
+    assert session.calls[0][:2] == ("GET", PROFILE_PATH)
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [{"profile": "turbo"}, {"profile": 3}, {"profile": None}, {}, [], "standard", None],
+)
+async def test_profile_discards_anything_outside_the_closed_set(answer: object) -> None:
+    # T-24-16: a value from outside this process picks nothing unless it is one
+    # of the three names; everything else reads like a failed call.
+    session = _FakeSession({("GET", PROFILE_PATH): answer})
+
+    assert await _queue(session).profile() is None
+
+
+@pytest.mark.parametrize(
+    "error",
+    [OSError("404 no such route"), TimeoutError("gateway"), RuntimeError("anything")],
+)
+async def test_profile_survives_a_companion_without_the_route(
+    error: Exception, caplog: pytest.LogCaptureFixture
+) -> None:
+    # D-24-02 and K6: a 1.3 companion answers 404 here. One debug line without
+    # any value in it, never an exception through the poller loop.
+    session = _FakeSession(error=error)
+
+    with caplog.at_level(logging.DEBUG, logger="findling.nc.queue"):
+        assert await _queue(session).profile() is None
+
+    records = [r for r in caplog.records if r.name == "findling.nc.queue"]
+    assert len(records) == 1
+    assert records[0].levelno == logging.DEBUG
+    assert str(error) not in records[0].getMessage()
+    assert records[0].args in (None, ())
+
+
 async def test_stats_returns_the_counters_of_the_queue() -> None:
     session = _FakeSession({("GET", STATS_PATH): {"scheduled": 7, "running": 2, "failed": 1}})
 
@@ -517,6 +559,7 @@ def test_the_queue_paths_stand_as_literals_at_the_call_site() -> None:
     assert source.count('"/ocs/v2.php/apps/findling/queues/documents/unlock"') == 1
     assert source.count('"/ocs/v2.php/apps/findling/queues/documents/requeue"') == 1
     assert source.count('"/ocs/v2.php/apps/findling/queues/documents/stats"') == 1
+    assert source.count('"/ocs/v2.php/apps/findling/profile"') == 1
 
 
 def test_the_queue_layer_names_no_forbidden_identifier() -> None:

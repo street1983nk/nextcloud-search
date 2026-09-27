@@ -108,6 +108,7 @@ from findling.nc.queue import (
     DocumentQueue,
     QueueJob,
 )
+from findling.profile import note_chosen
 from findling.store.repo import (
     ACL_ANY_USER,
     EMBEDDING_BACKLOG_MARK,
@@ -739,6 +740,15 @@ class Poller:
         # dead container and restarts it, so the cost of doing this on the loop is
         # not latency, it is a boot loop on exactly the hardware this app targets.
         queue = await asyncio.to_thread(self._open)
+
+        # The profile the admin chose, asked once per round (D-24-01) and before
+        # the claim, because from phase 26 on the size of the claim depends on
+        # it. A failed read changes nothing, the last name read stays in force
+        # and Economy before the first one (D-24-02). A change therefore takes
+        # effect after anything from seconds to about 25 minutes: an idle round
+        # waits up to POLL_COOLDOWN_MAX_SECONDS, an OCR round takes up to about
+        # 2 x 780 s. Nothing below reads the value yet.
+        note_chosen(await queue.profile())
 
         claim = await queue.claim(limit=self._batch_files, max_bytes=self._batch_max_bytes)
         if claim.unavailable:

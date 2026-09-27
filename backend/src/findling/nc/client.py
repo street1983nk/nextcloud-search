@@ -474,6 +474,20 @@ async def mounts(nc: AsyncNextcloudApp) -> object:
     )
 
 
+async def read_profile(nc: AsyncNextcloudApp) -> object:
+    """The profile the admin stored on the companion side (D-24-01).
+
+    Returned untyped on purpose, exactly like :func:`mounts`: the closed set of
+    names is checked in :mod:`findling.nc.queue`, and a type annotation here would
+    claim a guarantee this boundary cannot give. A GET, therefore no entry in
+    OCS_WRITE_ALLOWLIST, for the reason given at the top of this block.
+    """
+    return await nc._session.ocs(
+        "GET",
+        "/ocs/v2.php/apps/findling/profile",
+    )
+
+
 async def files_slice(nc: AsyncNextcloudApp, *, storage: int, root: int, after: int, limit: int) -> object:
     """One page of the file list of one mount, ordered by file id.
 
