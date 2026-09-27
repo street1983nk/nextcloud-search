@@ -93,7 +93,7 @@ final class ProfileControllerTest extends TestCase {
 		$this->storedProfile('turbo');
 
 		$this->logger->expects(self::once())->method('warning')->with(
-			self::isType('string'),
+			self::isString(),
 			self::callback(static function (array $context): bool {
 				return !str_contains(json_encode($context, JSON_THROW_ON_ERROR), 'turbo');
 			}),

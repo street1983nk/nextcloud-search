@@ -658,8 +658,12 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # Moved on 2026-09-27 by plan 23-05: two files came,
 # php/lib/Migration/Version001300Date20260927000000.php and its unit test (the
 # gone repair of issue #14, D-04); no file changed its bytes or went.
-PHP_FILES_TODAY = 72
-PHP_TREE_HASH_TODAY = "d28262d9643285aa62dff1225692aac9adb95106d1182bf5b6b562d8a152ac3b"
+# Moved on 2026-09-27 by plan 24-04: two files came,
+# php/lib/Controller/ProfileController.php and its unit test (the profile
+# route of path B, D-24-01), and SettingsService.php changed its bytes
+# (KEY_PROFILE, PROFILES and profile()); no file went.
+PHP_FILES_TODAY = 74
+PHP_TREE_HASH_TODAY = "170f144a644cc86d73dc2c47881f814469fbb04f61639c5c626124a8508afa13"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
