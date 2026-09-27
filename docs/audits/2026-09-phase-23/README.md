@@ -549,3 +549,40 @@ Auswahl:
 
 Keine Auflage, also kein benannter Auftrag. Offen bleibt, was Abschnitt 9 sagt:
 die Läufe des neuen Kopfes nach dem Push der Fixe und Erfolgskriterium 4.
+
+---
+
+## 11. Die Belegkette der Abgabe 1.3.0
+
+**Nachtrag vom 27.09.2026, aus Plan 23-09.** Das Audit oben steht auf dem Baum
+von `87e41cd`; dieser Abschnitt steht auf dem Tag `v1.3.0`. Jede Zeile trägt eine
+Zahl, eine Laufnummer oder einen Wortlaut. Keine ist geschätzt und keine ist aus
+einem früheren Release übernommen.
+
+Stand dieses Nachtrags: Zeilen 1 bis 5. Die Einreichung wartet auf das Wort des
+Owners; die Zeilen 6 bis 8 folgen nach dem Dispatch.
+
+| Nr. | Was | Beleg |
+|---|---|---|
+| 1 | **Tag** | `v1.3.0`, annotiert, Tagger street1983nk, auf `744d7e4662af67c728aa9482197990c414c92bd3`, gelesen mit `git rev-list -n 1 v1.3.0`; gepusht um 03:55:13Z |
+| 2 | **Release** | Lauf **36292802211**, success, genau vier Anhänge. Im Protokoll: `appinfo/signature.json was written and is not empty`, zweimal `the release signature is 684 base64 characters` und zweimal `Verified OK` aus der Gegenprobe der Signatur gegen das Zertifikat |
+| 3 | **Anhaenge** | `findling.tar.gz` **367.593 B**, `findling.tar.gz.sig` **684 B**, `findling_backend.tar.gz` **31.713 B**, `findling_backend.tar.gz.sig` **684 B**. Die Grenze des Stores liegt bei 20.971.520 B; die größere Hälfte liegt bei 1,8 Prozent davon und ist gegenüber v1.2.0 (309.484 B) um 58.109 B gewachsen |
+| 4 | **Container-Abbild** | `ghcr.io/street1983nk/findling_backend:1.3.0` ist `application/vnd.oci.image.index.v1+json` mit `linux/amd64` und `linux/arm64`, dazu die zwei Herkunftsbelege als `unknown/unknown`. Anonym abgefragt mit `docker manifest inspect` gegen einen leeren Konfigurationsordner, also ohne Anmeldung, und **vor** der Einreichung |
+| 5 | **Release-Notiz** | per `gh release edit v1.3.0 --notes-file` gesetzt; die erste Zeile ist die abgenommene Changelog-Zeile aus `docs/store-listing.md` Teil 6: "Files in team folders (groupfolders) that were wrongly skipped as deleted are now indexed, and the update requeues the affected entries once; thanks to budachst for the report (#14)." Danach die generierten Notizen |
+
+### Die sieben Tag-Laeufe, alle success
+
+Release archives for the app store **36292802211**, PHP and store metadata gates
+**36292802225**, Multi-arch image **36292802188**, HaRP deploy **36292802231**,
+Python gates **36292802242**, Integration **36292802244**, Resilience
+**36292802273**. Gestartet um 03:55:15Z, der letzte war um 04:10:15Z grün. Kein
+Lauf ist wiederholt worden.
+
+### Der Sitz des Tags
+
+Der Tag sitzt auf `744d7e4`, der Spitze von `main`. Gegenüber `87e41cd`, dem
+Kopf mit allen Befund-Fixen aus 23-08 und sechs grünen Werkbänken (Python gates
+36291849649, PHP 36291849698, Integration 36291849669, Resilience 36291849646,
+Multi-arch 36291849663, HaRP deploy 36291849691), tragen die zwei Commits
+danach nur Planungsdateien und diesen Bericht, keine Paketdatei. Vor dem Tag ist
+nichts committet worden.
