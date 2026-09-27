@@ -1032,6 +1032,39 @@ def test_release_if_idle_keeps_the_engine_a_warm_run_swapped_in(
     assert unload_count() == before
 
 
+def test_release_if_idle_keeps_an_engine_a_search_used_between_the_check_and_the_release(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The second race beside the instance swap above (review of phase 23,
+    # WR-02). The idle span is read outside _LOCK, so a search can embed on
+    # this very instance between that reading and the release, and
+    # EmbeddingModel.release() only refuses while a batch is IN flight, not
+    # when one has just finished. Letting go here would take the weights away
+    # right after a use and make the next search of the same user pay a
+    # reload. Driven like the swap above: the clock question itself does the
+    # work a concurrent search would do, because that is the one moment
+    # ordering alone cannot guard against.
+    clock = {"now": 1000.0}
+    engine = _an_idle_engine(model_home, monkeypatch, clock)
+    real_last_use = engine.last_use
+    raced: list[int] = []
+
+    def racing_last_use() -> float | None:
+        stamp = real_last_use()
+        if not raced:
+            raced.append(1)
+            # A search lands right after the idle reading and before the lock.
+            engine.embed_query("bauantrag")
+        return stamp
+
+    monkeypatch.setattr(engine, "last_use", racing_last_use)
+    before = unload_count()
+
+    assert release_if_idle(900) is False
+    assert engine.loaded is True, "weights a search has just used stay where they are"
+    assert unload_count() == before
+
+
 def test_release_if_idle_treats_a_holder_that_never_embedded_as_not_idle(
     model_home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
