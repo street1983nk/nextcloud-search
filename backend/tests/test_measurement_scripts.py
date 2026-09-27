@@ -1216,8 +1216,15 @@ PHP_TREE_HASH_TODAY = "d28262d9643285aa62dff1225692aac9adb95106d1182bf5b6b562d8a
 # docstring of warm() in embed/engine.py names both callers and how each keeps
 # the load off the event loop, instead of the one caller of phase 14. Docstring
 # only; one of the 57 files changed its bytes, PACKAGE_FILES_TODAY stays at 57.
+# Moved on 2026-09-27 by the fix of review finding WR-02: embed/engine.py reads
+# last_use a second time under _LOCK in release_if_idle, before the stale warm
+# request is cleared, because a search can embed on the very same instance
+# between the idle reading outside the lock and the release, and release() only
+# refuses a batch that is in flight, not one that has just finished. One of the
+# 57 files changed its bytes, no file came or went, so PACKAGE_FILES_TODAY
+# stays at 57.
 PACKAGE_FILES_TODAY = 57
-PACKAGE_TREE_HASH_TODAY = "af85a984aeeb5cad598733bc6a2889ef964ee03d52f400103c76c49216cf0e58"
+PACKAGE_TREE_HASH_TODAY = "924b9c40270c6627cb311d07a1cfeee98c6a2f0fe290fc44ed11bb0bce21f881"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
