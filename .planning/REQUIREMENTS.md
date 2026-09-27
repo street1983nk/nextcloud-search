@@ -34,9 +34,9 @@
 
 ### Härtung und Release (HART/REL, Fortsetzung ab HART-03/REL-02)
 
-- [ ] **HART-04**: Aufräumbefunde geschlossen: `fastembed==0.8.0`-Pin geklärt (unbenutzt entfernen oder Import belegen), `numpy` sauber deklariert oder als Abhängigkeit eliminiert
-- [ ] **HART-05**: Dokumentierte Grenzen des Sprachausbaus in Doku und Store-Text (año/ano fallen zusammen, pt-Rechtschreibreform wird nicht vereinheitlicht, Komposita nur de/nl, FR hat weiterhin kein Körperfeld)
-- [ ] **REL-03**: v1.3.0 eingereicht: signiertes App-Paar, Ende-zu-Ende-Upgrade-Beweis 1.2.0 auf 1.3.0 in CI (inkl. Umbau-Fall), Store-Texte gate-konform mit Owner-Abnahme, Submission mit 2x HTTP 201
+- [x] **HART-04**: Aufräumbefunde geschlossen: `fastembed==0.8.0`-Pin geklärt (unbenutzt entfernen oder Import belegen), `numpy` sauber deklariert oder als Abhängigkeit eliminiert
+- [x] **HART-05**: Dokumentierte Grenzen des Sprachausbaus in Doku und Store-Text (año/ano fallen zusammen, pt-Rechtschreibreform wird nicht vereinheitlicht, Komposita nur de/nl, FR hat weiterhin kein Körperfeld)
+- [x] **REL-03**: v1.3.0 eingereicht: signiertes App-Paar, Ende-zu-Ende-Upgrade-Beweis 1.2.0 auf 1.3.0 in CI (inkl. Umbau-Fall), Store-Texte gate-konform mit Owner-Abnahme, Submission mit 2x HTTP 201
 
 ## Future Requirements (deferred)
 
@@ -73,9 +73,9 @@
 | MESS-07 | Phase 22 (Messanfahrt BL-F03) | Complete (26.09.2026, Kaltstart mit Treffern aus der Nachanfahrt 22-13, Einwort-Begriff; Hybrid-Fall als V-22-01 dokumentiert) |
 | MESS-08 | Phase 22 (Messanfahrt BL-F03) | Complete |
 | MESS-09 | Phase 22 (Messanfahrt BL-F03) | Complete |
-| HART-04 | Phase 23 (Härtung und Store-Einreichung 1.3.0) | Pending |
-| HART-05 | Phase 23 (Härtung und Store-Einreichung 1.3.0) | Pending |
-| REL-03 | Phase 23 (Härtung und Store-Einreichung 1.3.0) | Pending |
+| HART-04 | Phase 23 (Härtung und Store-Einreichung 1.3.0) | Complete (27.09.2026, 23-02: `4cea879`, `40919b6`, docker.yml-Schritt HART-04 in Lauf 36285187622 auf beiden Plattformen; ausgeliefert im Tag-Lauf Multi-arch 36292802188) |
+| HART-05 | Phase 23 (Härtung und Store-Einreichung 1.3.0) | Complete (27.09.2026, 23-03/23-07: vier Grenzpunkte in allen sechs Store-Texten und in `docs/language-analyzers.md`, gehalten von `test_store_metadata.py`, Owner-Abnahme "Text abgenommen"; nicht nachgesehen ist, wie der Store die Texte rendert) |
+| REL-03 | Phase 23 (Härtung und Store-Einreichung 1.3.0) | Complete (27.09.2026, Tag `v1.3.0` auf `744d7e4`, Release 36292802211 mit vier signierten Anhängen, Upgrade-Beweis HaRP deploy 36292802231, Submission 36304007154 mit zweimal HTTP 201, Gegenprobe je App-Seite; Vorbehalt: Ladefenster D-08 nur in CI gemessen, nicht auf Zielhardware; Belegkette `docs/audits/2026-09-phase-23/README.md` Abschnitt 11) |
 
 **Abdeckung:** 17 von 17 v1.3-Requirements einer Phase zugeordnet, keine Waise, keine Doppelung.
 

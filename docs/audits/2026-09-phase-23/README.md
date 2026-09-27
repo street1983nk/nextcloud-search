@@ -468,7 +468,7 @@ Phase 16 und 22. Keine Aussage über eine Verschlechterung.
 | 1 | Aufräumbefunde geschlossen, Abhängigkeitsliste bildet das Container-Ist ab | **erfüllt** | 23-02: Commits `4cea879`, `40919b6`; docker.yml-Schritt HART-04 in Lauf 36285187622 success auf beiden Plattformen |
 | 2 | Admin liest in Doku und Store-Text, was der Sprachausbau nicht leistet | **erfüllt** | 23-03 und 23-07: vier Grenzpunkte in allen sechs Texten, zeichengleich zu `docs/language-analyzers.md`, gehalten von `test_store_metadata.py`; Owner-Abnahme "Text abgenommen" vom 27.09.2026 |
 | 3 | Fremdinstallation und Upgrade 1.2.0 auf 1.3.0 inklusive Umbau Ende zu Ende grün; Audit 0 CRIT / 0 HIGH, MEDIUM behoben, LOW entschieden | **erfüllt bis auf die CI des neuen Kopfes** | HaRP deploy 36288038636 und 36289457405, probe-92d 36288064261; dieser Bericht mit 0 / 0 / MEDIUM behoben; die Läufe nach dem Push der Fixe trägt der Orchestrator nach |
-| 4 | v1.3.0 eingereicht, 2x HTTP 201, Texte gate-konform und abgenommen | **offen, Abgabe folgt** in Plan 23-09 nach der Owner-Abnahme dieser Haertung | Texte abgenommen (23-03), Gates grün (23-07); Tag, Release und Einreichung stehen aus |
+| 4 | v1.3.0 eingereicht, 2x HTTP 201, Texte gate-konform und abgenommen | **erfüllt** (Nachtrag 27.09.2026, Plan 23-09) | Texte abgenommen (23-03), Gates grün (23-07); Tag `v1.3.0` auf `744d7e4`, Release 36292802211, Submission 36304007154 mit zweimal HTTP 201, Gegenprobe je App-Seite; Belegkette in Abschnitt 11 |
 
 ---
 
@@ -559,8 +559,8 @@ von `87e41cd`; dieser Abschnitt steht auf dem Tag `v1.3.0`. Jede Zeile trägt ei
 Zahl, eine Laufnummer oder einen Wortlaut. Keine ist geschätzt und keine ist aus
 einem früheren Release übernommen.
 
-Stand dieses Nachtrags: Zeilen 1 bis 5. Die Einreichung wartet auf das Wort des
-Owners; die Zeilen 6 bis 8 folgen nach dem Dispatch.
+Die Zeilen 1 bis 5 sind vor der Freigabe entstanden, die Zeilen 6 bis 8 nach
+dem Dispatch.
 
 | Nr. | Was | Beleg |
 |---|---|---|
@@ -569,6 +569,28 @@ Owners; die Zeilen 6 bis 8 folgen nach dem Dispatch.
 | 3 | **Anhaenge** | `findling.tar.gz` **367.593 B**, `findling.tar.gz.sig` **684 B**, `findling_backend.tar.gz` **31.713 B**, `findling_backend.tar.gz.sig` **684 B**. Die Grenze des Stores liegt bei 20.971.520 B; die größere Hälfte liegt bei 1,8 Prozent davon und ist gegenüber v1.2.0 (309.484 B) um 58.109 B gewachsen |
 | 4 | **Container-Abbild** | `ghcr.io/street1983nk/findling_backend:1.3.0` ist `application/vnd.oci.image.index.v1+json` mit `linux/amd64` und `linux/arm64`, dazu die zwei Herkunftsbelege als `unknown/unknown`. Anonym abgefragt mit `docker manifest inspect` gegen einen leeren Konfigurationsordner, also ohne Anmeldung, und **vor** der Einreichung |
 | 5 | **Release-Notiz** | per `gh release edit v1.3.0 --notes-file` gesetzt; die erste Zeile ist die abgenommene Changelog-Zeile aus `docs/store-listing.md` Teil 6: "Files in team folders (groupfolders) that were wrongly skipped as deleted are now indexed, and the update requeues the affected entries once; thanks to budachst for the report (#14)." Danach die generierten Notizen |
+| 6 | **Submission** | Lauf **36304007154**, success, gestartet um 07:43:58Z mit `tag=v1.3.0`, ohne `register`. Kein Lauf davor, kein Lauf danach |
+| 7 | **HTTP-Codes** | `release findling v1.3.0: HTTP 201` und `release findling_backend v1.3.0: HTTP 201`, je im Wortlaut der Laufausgabe |
+| 8 | **Gegenprobe** | Beide App-Seiten um 07:44:27Z **einzeln** abgefragt, `apps/findling` und `apps/findling_backend`, je HTTP 200: beide nennen **1.3.0** für Nextcloud 34 und 35, mit dem Download-Link auf den Anhang von `v1.3.0`. Die große Katalogdatei ist nicht als Beleg benutzt worden, sie hängt im Cache hinterher |
+
+### Die Freigabe des Owners
+
+Am 27.09.2026 am Checkpoint von Plan 23-09, Task 2, im Wortlaut der Auswahl:
+
+| Frage | Owner-Wort | Folge |
+|---|---|---|
+| Einreichung | "Einreichen" | Dispatch von `store-submit.yml` mit `tag=v1.3.0`, zwischen Freigabe und Dispatch keine andere Handlung am Repositorium |
+| Zugangsmarke | "Unveraendert" | keine 400/401-Probe, das hinterlegte Geheimnis ist benutzt worden; kein Wert steht in einer Datei, einer Laufausgabe oder diesem Bericht |
+| Issue-Text | "Mit Zitatzeile" | die Frage von budachst als Zitat voran, danach der abgenommene Wortlaut aus `docs/store-listing.md` Teil 6 unverändert |
+| Issue-Status | "Offen lassen" | Issue #14 ist nicht geschlossen worden |
+
+### Die Antwort in Issue #14
+
+Gepostet um 07:44:41Z, nach den zwei 201, als Antwort auf die letzte Frage von
+budachst (issuecomment-5849413214, "I can always throw the index away and start
+over, can't I?"):
+https://github.com/street1983nk/nextcloud-search/issues/14#issuecomment-5853918446.
+Das Issue steht weiter auf OPEN.
 
 ### Die sieben Tag-Laeufe, alle success
 
