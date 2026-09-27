@@ -24,6 +24,7 @@ replace is arithmetic, and what stays real is every decision this plan is about.
 
 from __future__ import annotations
 
+import functools
 import logging
 import sqlite3
 import time
@@ -54,7 +55,7 @@ from findling.store.repo import (
     Store,
     open_store,
 )
-from findling.store.vectors import EMBEDDING_MODEL, Chunk, VectorStore, embedding_mark, open_vectors
+from findling.store.vectors import EMBEDDING_MODEL, WEIGHTS_FP32, Chunk, VectorStore, embedding_mark, open_vectors
 from findling.worker import poller as poller_module
 from findling.worker.poller import (
     EMBED_INCOMPLETE,
@@ -1196,6 +1197,94 @@ async def test_an_abort_between_the_emptying_and_the_mark_leaves_the_drift_repea
 
     assert store.read_meta()[EMBEDDING_MARK] == _wanted_mark()
     assert queue.requeues == [([4711], KIND_EMBED)]
+
+
+# The mark an installation of 1.3.x left in its state.db, written as a literal:
+# four parts and no precision, because no release before 1.4 knew one.
+MARK_OF_V1_3 = "multilingual-e5-small/int8/384/1024"
+
+# The same build with fp32 weights, the value phase 25 writes for the opt-in.
+MARK_OF_FP32 = "multilingual-e5-small/int8/384/1024/fp32"
+
+_DRIFT_CHAIN = ("forget_all", f"write:{EMBEDDING_MARK}", f"requeue:{KIND_EMBED}")
+
+
+def _drift_chain(events: list[str]) -> list[str]:
+    """The three steps of the drift answer, in the order they happened."""
+    return [event for event in events if event in _DRIFT_CHAIN]
+
+
+async def test_a_v1_3_mark_without_a_precision_is_read_as_int8_and_nothing_is_re_embedded(
+    store: Store, writer: IndexBatchWriter, vectors: VectorStore, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Success criterion 5 of phase 24 and MOD-01. The upgrade from 1.3.x to 1.4
+    # must not look like a drift: the stored mark has no precision part, the
+    # build wants int8, and int8 is spelled by absence. A red test here means a
+    # reindex of roughly five hours on every existing installation.
+    assert settings().embed_token_cap == 1024, "the literal above is the mark of the factory token cap"
+    store.write_meta(EMBEDDING_MARK, MARK_OF_V1_3)
+    _judged(store, 4711)
+    _judged(store, 4712)
+    _fill(vectors, 4711)
+    _fill(vectors, 4712)
+    queue = _FakeQueue()
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, vectors=vectors)
+    events = _watched(monkeypatch, store, vectors, queue)
+
+    await poller.run_once()
+
+    assert _drift_chain(events) == []
+    assert queue.requeues == []
+    assert store.read_meta()[EMBEDDING_MARK] == MARK_OF_V1_3
+    assert vectors.chunk_count() > 0
+
+
+async def test_a_switch_from_fp32_to_int8_weights_re_embeds_the_stock(
+    store: Store, writer: IndexBatchWriter, vectors: VectorStore, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A stock written with fp32 weights under a build that is back on int8. The
+    # vectors are int8 either way and have the right width, which is exactly why
+    # only the mark can tell them apart (T-24-02).
+    assert settings().embed_token_cap == 1024, "the literal above is the mark of the factory token cap"
+    store.write_meta(EMBEDDING_MARK, MARK_OF_FP32)
+    _judged(store, 4711)
+    _judged(store, 4712)
+    _fill(vectors, 4711)
+    _fill(vectors, 4712)
+    queue = _FakeQueue()
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, vectors=vectors)
+    events = _watched(monkeypatch, store, vectors, queue)
+
+    await poller.run_once()
+
+    assert _drift_chain(events) == list(_DRIFT_CHAIN)
+    assert vectors.chunk_count() == 0
+    assert store.read_meta()[EMBEDDING_MARK] == MARK_OF_V1_3
+    assert queue.requeues == [([4711, 4712], KIND_EMBED)]
+
+
+async def test_a_switch_from_int8_to_fp32_weights_re_embeds_the_stock(
+    store: Store, writer: IndexBatchWriter, vectors: VectorStore, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The other direction. poller.py stays as it is; only the mark it asks for
+    # is the one a build with fp32 weights would compute.
+    assert settings().embed_token_cap == 1024, "the literal above is the mark of the factory token cap"
+    monkeypatch.setattr(poller_module, "embedding_mark", functools.partial(embedding_mark, weights=WEIGHTS_FP32))
+    store.write_meta(EMBEDDING_MARK, MARK_OF_V1_3)
+    _judged(store, 4711)
+    _judged(store, 4712)
+    _fill(vectors, 4711)
+    _fill(vectors, 4712)
+    queue = _FakeQueue()
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, vectors=vectors)
+    events = _watched(monkeypatch, store, vectors, queue)
+
+    await poller.run_once()
+
+    assert _drift_chain(events) == list(_DRIFT_CHAIN)
+    assert vectors.chunk_count() == 0
+    assert store.read_meta()[EMBEDDING_MARK] == MARK_OF_FP32
+    assert queue.requeues == [([4711, 4712], KIND_EMBED)]
 
 
 async def test_the_redelivery_carries_on_in_the_next_process(
