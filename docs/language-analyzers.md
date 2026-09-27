@@ -74,6 +74,13 @@ instance with born digital Spanish documents needs the Spanish chain and no
 Spanish scanner, and an instance that scans French post needs the French scanner
 while French has no chain in this build at all.
 
+**French has no full text analysis chain for document text.** There is no
+`body_fr` field, so French document text is analysed by the chains that are
+switched on and never by a French one: no French stemming, no French stop
+words. The French scanner makes a French scan readable, and it does not make
+French a search language. This is the fourth entry of the known limitations
+short list below.
+
 The combination that goes wrong quietly is the other one: a body language whose
 scanner is missing. Tesseract does not refuse a page in a language it was not
 asked for, it reads it with the wrong model and returns plausible looking
@@ -410,9 +417,10 @@ and the subline falls back to the path on the PHP side", as the docstring of tha
 function puts it, and the companion does exactly that. The alternative is an
 excerpt path per body field, which means six stored copies of every text instead
 of one, and the price is the size of the index on the machines this product is
-built for. Because of that price the limit is documented rather than repaired, and
-it is one of the entries phase 23 writes into the documentation and the store text
-(REL-03 criterion 2).
+built for. Because of that price the limit is documented rather than repaired. It
+stays in this documentation and is not part of the store text: the owner decision
+D-06 of phase 23 fixes the short list below at four entries, and on 27.09.2026 the
+owner confirmed that this limit is not added to it.
 
 **The number class with an accented suffix, Spanish.** `información` and
 `informacion` share the term `informacion`, and `informaciones` produces
@@ -493,11 +501,29 @@ it needs a provenance, it moves the supplement digest, and from the moment it
 exists, every later Snowball update has to be compared against it. Five words do
 not pay for that.
 
+### Known limitations (short list, HART-05)
+
+The short version of this section, in the wording the store text carries (owner
+decision D-06 of phase 23). The list below is character for character the
+English "Known limitations:" block of both store descriptions, drafted in
+`docs/store-listing.md`, section "Entwurf v1.3.0"; a change here is a change
+there.
+
+- Spanish: año and ano are treated as the same word
+- Portuguese: spellings before and after the spelling reform are not unified
+- Compound words are split for German and Dutch only
+- French has no full text analysis chain for document text
+
+The four entries point back to the long form: `año` equals `ano` above, no
+Portuguese orthographic unification above, compounds are German and Dutch
+above, and the paragraph on French next to the two language settings at the
+top of this page.
+
 **Footnote on the length of this page.** The owner rule of 07.09.2026 applies to
 store descriptions and READMEs, which are short lists of facts. This file is
 `docs/`, where the reasoning belongs, so it is allowed to be long. The short
-version for HART-05 is written in phase 23 and is put to the owner before it is
-published.
+version for HART-05 is the list above, redeemed in phase 23 and accepted by the
+owner on 27.09.2026.
 
 ## Licence and provenance
 
