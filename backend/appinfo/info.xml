@@ -406,7 +406,7 @@ Support entreprise et modules payants : demande de devis à admin@infranode.dev]
 			<variable>
 				<name>FINDLING_OCR_MAX_PAGES</name>
 				<display-name>Pages read per scanned document</display-name>
-				<description>A whole number between 1 and 500. Beyond it the document is indexed with the pages read so far and marked as shortened, rather than skipped: a 200 page scan stays findable through its first 30 pages. The default of 30 keeps one batch of the indexing queue below its lock timeout, so raising it a lot without also raising that timeout makes large scans look stuck. Anything outside the range falls back to the default.</description>
+				<description>A whole number between 1 and 500. Beyond it the document is indexed with the pages read so far and marked as shortened, rather than skipped: a 200 page scan stays findable through its first 30 pages. The default of 30 keeps one batch of the indexing queue below its lock timeout, so raising it a lot without also raising that timeout makes large scans look stuck. Anything outside the range falls back to the default. A value other than the default overrides the performance profile; to keep 30 pages under a larger profile, set 29 or 31.</description>
 				<default>30</default>
 			</variable>
 			<variable>

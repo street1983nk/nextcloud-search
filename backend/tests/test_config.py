@@ -33,17 +33,32 @@ from findling.config import (
     EMBED_LOCK_TIMEOUT_SECONDS,
     EMBED_MODEL_DIR,
     EMBED_SPECIAL_TOKENS,
+    EMBED_THREADS,
     EMBED_TOKEN_CAP,
     EMBED_TOKEN_CAP_RANGE,
     INDEX_WORKERS,
     MAX_TEXT_CHARS,
+    NEXTCLOUD_CORE_LOAD,
     OCR_CLAIM_BATCH,
     OCR_HARD_DEADLINE_MARGIN_SECONDS,
     OCR_JOB_SECONDS_MAX,
     OCR_LOCK_TIMEOUT_SECONDS,
+    OCR_SLOT_COST_BYTES,
+    PROFILE_PERFORMANCE_CORES_KEPT_FREE,
+    PROFILE_PERFORMANCE_MEMORY_SHARE,
+    PROFILE_PERFORMANCE_OCR_SLOTS_MAX,
+    PROFILE_STANDARD_CORE_SHARE,
+    PROFILE_STANDARD_MEMORY_SHARE,
+    PROFILE_STANDARD_OCR_SLOTS_MAX,
     REBUILD_FALLBACK_POSITIONS,
     SEARCH_SCAN_MAX,
+    SUGGEST_PERFORMANCE_CORES,
+    SUGGEST_PERFORMANCE_MEMORY_BYTES,
+    SUGGEST_STANDARD_CORES,
+    SUGGEST_STANDARD_MEMORY_BYTES,
     SUPPORTED_LANGUAGES,
+    WRITER_THREADS,
+    explicit_int_from_environment,
     settings,
 )
 
@@ -1129,3 +1144,98 @@ def test_the_vector_database_lies_beside_the_state_database(monkeypatch: pytest.
     # discardable without losing the full text half (plan 06-04).
     assert current.vectors_db == tmp_path / "vectors.db"
     assert current.vectors_db != current.state_db
+
+
+# ---------------------------------------------------------------------------
+# Profiles (v1.4, BL-F04): the explicit override reader
+# ---------------------------------------------------------------------------
+#
+# AppAPI injects every default declared in info.xml as a real environment
+# variable, so "is set" is always true. Only a valid value that differs from
+# the declared default is an admin statement that may overrule a profile.
+
+
+@pytest.mark.parametrize("raw", ["", "   ", "abc", "3.5", "0", "-4", "501"])
+def test_an_unusable_value_is_no_override(monkeypatch: pytest.MonkeyPatch, raw: str) -> None:
+    monkeypatch.setenv("FINDLING_OCR_MAX_PAGES", raw)
+
+    assert explicit_int_from_environment("FINDLING_OCR_MAX_PAGES", 30, (1, 500)) is None
+
+
+def test_an_absent_variable_is_no_override() -> None:
+    assert explicit_int_from_environment("FINDLING_OCR_MAX_PAGES", 30, (1, 500)) is None
+
+
+def test_the_injected_default_is_no_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FINDLING_OCR_MAX_PAGES", "30")
+
+    assert explicit_int_from_environment("FINDLING_OCR_MAX_PAGES", 30, (1, 500)) is None
+
+
+@pytest.mark.parametrize(("raw", "expected"), [("29", 29), (" 31 ", 31), ("500", 500), ("1", 1)])
+def test_a_value_other_than_the_default_overrides(monkeypatch: pytest.MonkeyPatch, raw: str, expected: int) -> None:
+    monkeypatch.setenv("FINDLING_OCR_MAX_PAGES", raw)
+
+    assert explicit_int_from_environment("FINDLING_OCR_MAX_PAGES", 30, (1, 500)) == expected
+
+
+def test_an_unbounded_override_accepts_any_positive_value(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FINDLING_WRITER_HEAP_BYTES", "128000000")
+
+    assert explicit_int_from_environment("FINDLING_WRITER_HEAP_BYTES", 50_000_000) == 128_000_000
+
+
+def test_the_override_reader_stays_silent(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    # settings() already warns about the same name at start; a second reader
+    # that warned again would double every line in the boot log.
+    monkeypatch.setenv("FINDLING_OCR_MAX_PAGES", "abc")
+
+    with caplog.at_level("DEBUG", logger="findling.config"):
+        explicit_int_from_environment("FINDLING_OCR_MAX_PAGES", 30, (1, 500))
+
+    assert not caplog.records
+
+
+def test_the_profile_numbers_do_not_touch_the_static_settings() -> None:
+    # The profile layer lives outside the lru_cache; settings() keeps its shape.
+    assert not hasattr(settings(), "index_workers")
+    assert not hasattr(settings(), "profile")
+    assert settings().ocr_max_pages == 30
+    assert settings().writer_heap_bytes == 50_000_000
+
+
+def test_the_profile_constants_carry_the_decided_numbers() -> None:
+    assert NEXTCLOUD_CORE_LOAD == 0.25
+    assert OCR_SLOT_COST_BYTES == 235 * 1024 * 1024
+    assert PROFILE_STANDARD_CORE_SHARE == 0.5
+    assert PROFILE_STANDARD_MEMORY_SHARE == 0.4
+    assert PROFILE_STANDARD_OCR_SLOTS_MAX == 4
+    assert PROFILE_PERFORMANCE_CORES_KEPT_FREE == 1
+    assert PROFILE_PERFORMANCE_MEMORY_SHARE == 0.6
+    assert PROFILE_PERFORMANCE_OCR_SLOTS_MAX == 16
+    # D-24-06: the suggestion thresholds, decimal on purpose.
+    assert SUGGEST_STANDARD_MEMORY_BYTES == 6_000_000_000
+    assert SUGGEST_STANDARD_CORES == 3
+    assert SUGGEST_PERFORMANCE_MEMORY_BYTES == 12_000_000_000
+    assert SUGGEST_PERFORMANCE_CORES == 6
+
+
+def test_the_sparing_mirrors_match_the_literals_they_mirror() -> None:
+    # WRITER_THREADS mirrors num_threads=1 in the writer and the rebuild,
+    # EMBED_THREADS mirrors THREADS in the model. Neither is read there yet, so
+    # the pin is against the source text.
+    source_root = Path(__file__).resolve().parents[1] / "src" / "findling"
+    writer = (source_root / "index" / "writer.py").read_text(encoding="utf-8")
+    rebuild = (source_root / "index" / "rebuild.py").read_text(encoding="utf-8")
+    model = (source_root / "embed" / "model.py").read_text(encoding="utf-8")
+
+    assert f"num_threads={WRITER_THREADS}" in writer
+    assert f"num_threads={WRITER_THREADS}" in rebuild
+    assert re.search(rf"^THREADS: Final = {EMBED_THREADS}$", model, re.MULTILINE)
+
+
+def test_the_standard_profile_is_conservative_on_four_cores() -> None:
+    # floor(0.5 * 4 - 0.25) = 1: Standard brings a second OCR slot only from
+    # five cores on, by intent.
+    assert int(PROFILE_STANDARD_CORE_SHARE * 4 - NEXTCLOUD_CORE_LOAD) == 1
+    assert int(PROFILE_STANDARD_CORE_SHARE * 5 - NEXTCLOUD_CORE_LOAD) == 2
