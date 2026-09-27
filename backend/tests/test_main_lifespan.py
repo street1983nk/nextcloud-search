@@ -32,6 +32,7 @@ from fastapi.testclient import TestClient
 from conftest import Corpus, write_wordlist
 from findling.api import resources
 from findling.config import settings
+from findling.hardware import Hardware
 from findling.index.open import LANGUAGES_MARK, open_index
 from findling.index.rebuild import POLLER_STILL_WRITING, REBUILD_THROUGH
 from findling.index.wordlist import build_artifact
@@ -47,7 +48,9 @@ from findling.main import (
     _run_the_rebuild,
     _stand_the_poller_down,
     enabled_handler,
+    lifespan,
 )
+from findling.profile import snapshot
 from findling.store.repo import Store, open_store
 from findling.worker.poller import Poller, default_poller
 
@@ -1102,3 +1105,74 @@ def test_the_stop_budget_of_the_rebuild_is_defined_and_used() -> None:
     code = [line for line in MAIN_SOURCE.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#")]
 
     assert sum(line.count("REBUILD_STOP_SECONDS") for line in code) >= 2
+
+
+_A_READING = Hardware(
+    cpu_count=8,
+    cpu_quota=None,
+    cores=8.0,
+    memory_limit_bytes=None,
+    memory_available_bytes=16_000_000_000,
+    memory_total_bytes=16_000_000_000,
+    architecture="aarch64",
+    cgroup="v2",
+)
+
+
+def test_the_start_reads_the_hardware_once_and_publishes_it(volume: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """HW-01: one reading per start, handed to the profile state.
+
+    The fake reading stands in for the machine the suite runs on, so the case
+    asserts the wiring and not the box it happens to run on.
+    """
+    del volume
+    calls: list[int] = []
+
+    def a_reading() -> Hardware:
+        calls.append(1)
+        return _A_READING
+
+    monkeypatch.setattr("findling.main.detect", a_reading)
+
+    with TestClient(APP) as client:
+        assert client.get("/heartbeat").status_code == 200
+
+    assert calls == [1]
+    assert snapshot().hardware is _A_READING
+    # Eight cores and 16 GB clear both thresholds of D-24-06 (12 GB, 6 cores).
+    assert snapshot().suggested == "performance"
+
+
+def test_a_hardware_reading_that_throws_does_not_keep_the_container_from_starting(
+    volume: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """T-24-22: detect is written never to raise, and the start does not rely on it."""
+    del volume
+
+    def a_reading_that_throws() -> Hardware:
+        raise PermissionError("/sys/fs/cgroup/a/path/the/log/must/never/carry")
+
+    monkeypatch.setattr("findling.main.detect", a_reading_that_throws)
+
+    with caplog.at_level(logging.WARNING, logger="findling"), TestClient(APP) as client:
+        answer = client.get("/heartbeat")
+
+    assert answer.status_code == 200
+    assert snapshot().hardware is None
+    assert snapshot().effective == "economy"
+    said = [record.getMessage() for record in caplog.records if "hardware detection failed" in record.getMessage()]
+    assert said, "the container says what it could not do"
+    assert "PermissionError" in said[0]
+    assert "/sys" not in said[0], "and it says it without a path"
+
+
+def test_the_hardware_is_read_off_the_loop_and_before_the_tasks() -> None:
+    """Static: the reading goes through a worker thread and precedes the poller.
+
+    It reads kernel files, which do not belong on the event loop while the
+    server comes up, and it has to happen before any model loads, because
+    Findling's own model lowers MemAvailable (24-RESEARCH.md, Pitfall 3).
+    """
+    source = inspect.getsource(lifespan)
+    assert source.count("to_thread(detect)") == 1
+    assert source.index("to_thread(detect)") < source.index("stop_indexing = asyncio.Event()")

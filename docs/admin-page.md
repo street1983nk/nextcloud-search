@@ -244,6 +244,12 @@ Fünf Quellen, und die Aufteilung ist eine Entscheidung und kein Zufall:
 - Aus `findling_scan_stats`: der Nenner des Deckungsgrads und die absichtlich
   ausgelassenen Dateien.
 
+Die Statusroute `GET /status` des Containers trägt seit 1.4 zusätzlich den
+Block `profile`: gewähltes, vorgeschlagenes und wirksames Profil, die beim Start
+erkannte Hardware, die berechneten Werte und je Wert die Quelle (`profile` oder
+`env`). Die Seite zeigt ihn ab Phase 27; bis dahin ist er nur in der Antwort der
+Route sichtbar. Regeln und Formel stehen in `docs/profiles.md`.
+
 ## Warum eine Differenz ein Signal ist und kein Fehler
 
 Die beiden Sichten dürfen sich widersprechen. Wenn der Container 4 000 Dateien

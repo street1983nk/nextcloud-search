@@ -55,12 +55,14 @@ from findling.api.status import NO_VECTORS_YET, STATE_UNREADABLE, VECTORS_UNREAD
 from findling.config import MAX_FILE_BYTES, settings
 from findling.embed.engine import ENGINE_COLD, ENGINE_DISABLED, ENGINE_MISSING, ENGINE_STATES
 from findling.embed.model import load_count
+from findling.hardware import Hardware
 from findling.index import rebuild
 from findling.index.open import open_index
 from findling.index.rebuild import RebuildProgress
 from findling.index.schema import BODY_FIELD, FIELD_FILE_ID, FIELD_STORAGE_ID
 from findling.index.wordlist import DIGEST_SUFFIX, ENCODING, artifact_path, wordlist_hash
 from findling.main import APP
+from findling.profile import note_chosen, note_hardware
 from findling.query.rewrite import LEGACY_PLAN
 from findling.store.repo import FileMeta, open_store
 from findling.store.vectors import EMBEDDING_DIMENSIONS, Chunk, open_vectors
@@ -107,6 +109,11 @@ FIELDS = {
     "rebuildDone",
     "rebuildTotal",
     "rebuildBlockedBytes",
+    # The block of plan 24-06 (HW-01, PROF-01): chosen, suggested, effective,
+    # the hardware of this start, the computed values and the source of each.
+    # One key on this level and a nested object below it, because the profile
+    # is one statement with parts and not ten loose numbers next to the counters.
+    "profile",
     "note",
 }
 
@@ -1174,3 +1181,147 @@ def test_a_refused_rebuild_reports_the_bytes_that_were_missing(
         rebuild._note_blocked_bytes(0)
 
     assert answer["rebuildBlockedBytes"] == 3_221_225_472
+
+
+# The two branches of report(): without a state database the answer is the
+# volume answer, with one it is rebuilt field by field in _of(). A process value
+# that is set in _volume() and not carried over in _of() vanishes silently on
+# every installation that has indexed anything, so each profile case runs in
+# both (24-RESEARCH.md, Pitfall 2).
+BRANCHES = ("volume", "indexed_volume")
+
+GIB = 1024**3
+
+# The economy row, written out rather than imported: the claim is that the
+# status route reports today's container value for value (PROF-02), and a test
+# that read the expected row out of the module under test would agree with any
+# drift of it.
+ECONOMY_VALUES = {
+    "ocrSlots": 1,
+    "textSlots": 1,
+    "embedSlots": 0,
+    "onnxThreads": 2,
+    "writerHeapBytes": 50_000_000,
+    "writerThreads": 1,
+    "embedBatchSize": 2,
+    "ocrMaxPages": 30,
+    "ocrDpi": 300,
+    "memoryReserveShare": None,
+}
+
+
+def _box(cores: int, threshold_bytes: int, formula_bytes: int) -> Hardware:
+    """A fake reading of the container, so no case depends on the test machine."""
+    return Hardware(
+        cpu_count=cores,
+        cpu_quota=None,
+        cores=float(cores),
+        memory_limit_bytes=None,
+        memory_available_bytes=formula_bytes,
+        memory_total_bytes=threshold_bytes,
+        architecture="x86_64",
+        cgroup="v2",
+    )
+
+
+def _profile(client: TestClient, sign: Sign, request: pytest.FixtureRequest, branch: str) -> dict[str, Any]:
+    request.getfixturevalue(branch)
+    answer = _status(client, sign("admin"))
+    assert set(answer) == FIELDS
+    return cast("dict[str, Any]", answer["profile"])
+
+
+@pytest.mark.parametrize("branch", BRANCHES)
+def test_a_container_that_knows_nothing_reports_economy(
+    client: TestClient, sign: Sign, request: pytest.FixtureRequest, branch: str
+) -> None:
+    # No hardware noted and no profile read: the resting state of every process
+    # before the lifespan ran, and the answer is today's container.
+    profile = _profile(client, sign, request, branch)
+
+    assert profile["chosen"] is None
+    assert profile["suggested"] == "economy"
+    assert profile["effective"] == "economy"
+    assert profile["downgraded"] is False
+    assert profile["hardware"] == {
+        "cores": None,
+        "coresWhole": None,
+        "cpuCount": None,
+        "cpuQuota": None,
+        "memoryLimitBytes": None,
+        "memoryAvailableBytes": None,
+        "memoryTotalBytes": None,
+        "architecture": "",
+        "cgroup": "",
+    }
+    assert profile["values"] == ECONOMY_VALUES
+    assert profile["sources"] == dict.fromkeys(ECONOMY_VALUES, "profile")
+
+
+@pytest.mark.parametrize("branch", BRANCHES)
+def test_a_big_box_that_chose_performance_reports_its_slots(
+    client: TestClient, sign: Sign, request: pytest.FixtureRequest, branch: str
+) -> None:
+    note_hardware(_box(16, 64_000_000_000, 64 * GIB))
+    note_chosen("performance")
+
+    profile = _profile(client, sign, request, branch)
+
+    assert profile["chosen"] == "performance"
+    assert profile["suggested"] == "performance"
+    assert profile["effective"] == "performance"
+    assert profile["downgraded"] is False
+    assert profile["values"]["ocrSlots"] == 15
+    assert profile["hardware"]["cores"] == 16.0
+    assert profile["hardware"]["coresWhole"] == 16
+    assert profile["hardware"]["memoryTotalBytes"] == 64_000_000_000
+
+
+@pytest.mark.parametrize("branch", BRANCHES)
+def test_a_shrunk_box_reports_the_chosen_and_the_effective_profile(
+    client: TestClient, sign: Sign, request: pytest.FixtureRequest, branch: str
+) -> None:
+    # D-24-07: the chosen profile is never rewritten. A box that shrank to 8 GB
+    # and four cores runs standard, and the answer says both, because an admin
+    # who chose performance and sees standard needs to know it was the box.
+    note_hardware(_box(4, 8_000_000_000, 8_000_000_000))
+    note_chosen("performance")
+
+    profile = _profile(client, sign, request, branch)
+
+    assert profile["chosen"] == "performance"
+    assert profile["effective"] == "standard"
+    assert profile["downgraded"] is True
+    assert profile["values"]["ocrSlots"] == 1
+
+
+@pytest.mark.parametrize("branch", BRANCHES)
+def test_an_admin_variable_that_differs_from_its_default_overrules_the_profile(
+    client: TestClient, sign: Sign, request: pytest.FixtureRequest, branch: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # PROF-03, one truth visible: the value that applies and where it came from.
+    monkeypatch.setenv("FINDLING_OCR_MAX_PAGES", "29")
+    note_hardware(_box(8, 16_000_000_000, 16 * GIB))
+    note_chosen("standard")
+
+    profile = _profile(client, sign, request, branch)
+
+    assert profile["effective"] == "standard"
+    assert profile["values"]["ocrMaxPages"] == 29
+    assert profile["sources"]["ocrMaxPages"] == "env"
+
+
+@pytest.mark.parametrize("branch", BRANCHES)
+def test_an_admin_variable_equal_to_its_default_leaves_the_profile_value(
+    client: TestClient, sign: Sign, request: pytest.FixtureRequest, branch: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # AppAPI sets every declared default as a real variable, so a value equal to
+    # it says nothing about the admin and must not pin the profile down.
+    monkeypatch.setenv("FINDLING_OCR_MAX_PAGES", "30")
+    note_hardware(_box(8, 16_000_000_000, 16 * GIB))
+    note_chosen("standard")
+
+    profile = _profile(client, sign, request, branch)
+
+    assert profile["values"]["ocrMaxPages"] == 100
+    assert profile["sources"]["ocrMaxPages"] == "profile"
