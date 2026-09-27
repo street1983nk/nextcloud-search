@@ -434,6 +434,18 @@ def release_if_idle(ttl_seconds: int) -> bool:
     holder is read a second time under :data:`_LOCK` and the release only
     happens when it is still the same object.
 
+    **The clock is read a second time under the lock as well** (review of
+    phase 23, WR-02). The same instance can be used between the idle reading
+    above and the release below: a search that embeds in that window moves
+    ``last_use``, and :meth:`~findling.embed.model.EmbeddingModel.release`
+    only refuses while a batch is in flight, not when one has just finished.
+    Without the second reading the weights would be let go right after a use
+    and the next search of the same user would answer lexically and pay a
+    background reload. The reading is lock free and cheap, and it shrinks the
+    window from the length of the idle check to microseconds; the full close,
+    an idle guard under the model's own lock inside ``release()``, is a v1.4
+    backlog note in the deferred items of phase 23.
+
     **The release itself is outside the lock.**
     :meth:`~findling.embed.model.EmbeddingModel.release` takes its own lock,
     lets go under it and then runs ``gc.collect()`` and ``malloc_trim(0)``
@@ -467,6 +479,14 @@ def release_if_idle(ttl_seconds: int) -> bool:
     global _WARM_WANTED
     with _LOCK:
         if _held(model_dir) is not held:
+            return False
+        # The clock, read again on the very same instance (WR-02). A search
+        # that embedded between the reading above and this lock has moved
+        # ``last_use``, and weights a search has just used are not idle,
+        # whatever the first reading said. Checked before the marker below is
+        # touched, so that fresh use keeps both its weights and its request.
+        stamp = held.last_use()
+        if stamp is None or time.monotonic() - stamp < ttl_seconds:
             return False
         # A warm request still standing here is older than the idle span, and
         # it is stale (audit 23-08, F-23-01). Every hybrid round asks for a
