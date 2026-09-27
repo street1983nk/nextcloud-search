@@ -25,6 +25,12 @@
 
 - **F-23-01 bis F-23-03:** behoben in diesem Plan, siehe Befundliste des Berichts. Kein Merker offen.
 
+## Aus dem Code-Review (23-REVIEW.md, 27.09.2026)
+
+- **WR-02-Restfenster, idle-Guard in `EmbeddingModel.release()` (v1.4-Backlog):** Der Review-Fix liest `last_use` in `release_if_idle` unter `_LOCK` erneut und verkleinert das TOCTOU-Fenster auf Mikrosekunden; vollständig schließen ließe es sich nur mit einer idle-since-Prüfung in `EmbeddingModel.release()` unter dessen eigenem `_lock` (der Embed läuft unter `model._lock`, nicht unter `_LOCK`). Bewusst nicht in 1.3.0 gebaut.
+  **Zieladresse:** `backend/src/findling/embed/model.py` (`release()`), plus Testfall in `test_embed_model.py`.
+- **IN-01 bis IN-03 (Info, dokumentiert, kein Fix in 1.3.0):** request_warm-Restfenster im Freigabepfad (durch den WR-02-Umbau mit verkleinert), Migrations-Log zählt Bandgrößen statt requeue-Ergebnis ("requeued 1 files"), monkeypatch-Restore der test_one_load-Fixture kann einen veralteten `_WARM_WANTED`-Wert wiederherstellen. Details in 23-REVIEW.md.
+
 ## Aus Issue #14 (27.09., ntfy-Meldung an den Owner)
 
 - **budachst fragt (26.09. 20:00Z): "I can always throw the index away and start over, can't I?"** Owner-Entscheid 27.09.: KEINE Zwischenantwort; die abgenommene Post-Release-Antwort (store-listing.md Teil 6, "requeues every entry ... nothing has to be done by hand") beantwortet die Frage mit. Fuer 23-09: beim Posten der Antwort auf diesen letzten Kommentar antworten, damit der Bezug stimmt.

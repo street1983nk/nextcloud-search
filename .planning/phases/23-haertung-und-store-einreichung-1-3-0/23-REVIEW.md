@@ -38,7 +38,14 @@ findings:
   warning: 2
   info: 3
   total: 5
-status: issues_found
+status: resolved
+resolved: 2026-09-27T08:06:55Z
+resolution:
+  WR-01: fixed
+  WR-02: fixed
+  IN-01: dokumentiert
+  IN-02: dokumentiert
+  IN-03: dokumentiert
 ---
 
 # Phase 23: Code Review Report
@@ -46,7 +53,7 @@ status: issues_found
 **Reviewed:** 2026-09-27T08:00:16Z
 **Depth:** standard
 **Files Reviewed:** 29
-**Status:** issues_found
+**Status:** resolved (2026-09-27: WR-01 und WR-02 gefixt, IN-01 bis IN-03 dokumentiert)
 
 ## Narrative Findings (AI reviewer)
 
@@ -63,6 +70,7 @@ Gefunden wurden zwei Warnungen (ein stehengebliebener, durch Messung widerlegter
 ### WR-01: release.yml traegt die widerlegte Pfadfilter-Behauptung weiter, die L-16-04 laut Audit 23-08 entfernt hat
 
 **File:** `.github/workflows/release.yml:172-177`
+**Outcome:** fixed (Commit dd7e408, Kommentar auf die gemessene Wahrheit umgestellt, Check unverändert als Defense in depth)
 **Issue:** Der Kommentar ueber dem Schritt "On a tag, the tag and both info.xml versions have to agree" begruendet die Duplikation mit: "docker.yml is path filtered on backend/**, so a release tag placed on a commit that does not touch the backend skips it entirely." Genau diese Aussage ist im selben Repository durch Messung widerlegt: docker.yml:19-24 (und der in 23-08 korrigierte Kopfkommentar von release.yml selbst, Zeilen 20-25) halten fest, dass der Pfadfilter einen Tag-Push nachweislich NICHT aufhaelt (Tag v1.0.0 auf einem store/media/**-Commit, Run 34140924599). Das 23-08-SUMMARY behauptet, die Kommentare in docker.yml UND release.yml wuerden das nicht mehr behaupten (L-16-04, Commit ea293cc); diese zweite Stelle in release.yml wurde uebersehen. Ein spaeterer Leser koennte auf Basis der falschen Begruendung den (weiterhin sinnvollen) Doppel-Check entfernen oder falsche Schluesse ueber das Tag-Verhalten von docker.yml ziehen.
 **Fix:** Kommentar auf die gemessene Wahrheit umstellen, den Check selbst behalten (Defense in depth), z. B.:
 ```yaml
@@ -77,6 +85,7 @@ Gefunden wurden zwei Warnungen (ein stehengebliebener, durch Messung widerlegter
 ### WR-02: release_if_idle liest last_use vor dem Lock und kann eine soeben benutzte Engine freigeben (TOCTOU)
 
 **File:** `backend/src/findling/embed/engine.py:459-481`
+**Outcome:** fixed (RED-Test 2a69aad, Fix b96525d: last_use unter _LOCK erneut gelesen, vor der Marker-Löschung; idle-Guard in EmbeddingModel.release() als v1.4-Backlog in deferred-items.md notiert)
 **Issue:** `release_if_idle` liest `held.last_use()` (Zeile 459) und prueft die Ruhespanne AUSSERHALB von `_LOCK`. Unter dem Lock wird nur die Identitaet des Halters geprueft (Zeile 469), nicht die Aktualitaet der Ruhespanne. Eine Suche, die zwischen dem last_use-Read und `held.release()` auf derselben Instanz einbettet (und `_last_use` auf jetzt setzt), verhindert die Freigabe nicht: `EmbeddingModel.release()` (model.py:660-670) verweigert nur, solange ein Batch IN FLIGHT ist, nicht, wenn er gerade fertig wurde. Folge: Die Gewichte werden unmittelbar nach einer Nutzung freigegeben, die naechste Suche desselben Nutzers antwortet rein lexikalisch und bezahlt einen Hintergrund-Reload. Der Fall ist selten (Tick der Release-Task muss mit dem Ende einer Ruhespanne und einer gleichzeitigen Suche zusammenfallen) und seit Phase 14 vorhanden, aber die Funktion wurde in dieser Phase (F-23-01) angefasst, und der Docstring dokumentiert nur den Instanztausch-Fall (T-14-20), nicht diesen.
 **Fix:** `held.last_use()` unter `_LOCK` erneut lesen (lockfreier, billiger Read) und bei einer bewegten Uhr False antworten:
 ```python
@@ -95,18 +104,21 @@ Das schliesst das Fenster nicht vollstaendig (der Embed laeuft unter `model._loc
 ### IN-01: Restrennfenster des F-23-01-Fixes: ein request_warm im Freigabefenster ueberlebt die Freigabe unverdient
 
 **File:** `backend/src/findling/embed/engine.py:466-481` und `backend/src/findling/api/search.py:305-326`
+**Outcome:** dokumentiert (kein Fix in 1.3.0; durch den WR-02-Umbau mit verkleinert, Eintrag in deferred-items.md)
 **Issue:** Jede hybride Runde ruft `request_warm()` VOR dem Embed (one_round baut die SemanticSide, fordert an, dann embeddet candidate_round). Setzt eine Suche den Marker, nachdem `release_if_idle` ihn unter `_LOCK` geloescht hat, aber bevor `held.release()` `_engine` nullt, und wird ihr Embed noch von der warmen Engine beantwortet, dann ueberlebt ein Marker die Freigabe, dem keine abgewiesene Suche gegenuebersteht. Der naechste Tick der Warm-/Release-Task laedt die Gewichte zurueck, ohne dass jemand sucht: das Symptom von F-23-01 in einem sehr schmalen Fenster. Selbstheilend und selten; die Kosten sind ein einzelner unnoetiger Lade-/Freigabezyklus.
 **Fix:** Wird durch den WR-02-Umbau mit verkleinert; alternativ den Marker erst NACH `held.release()` (bei True) loeschen, dann faellt der Fall mit dem dokumentierten "a search refused after the release sets it anew" zusammen. Als Randnotiz zum bestehenden F-23-01-Kommentar dokumentieren.
 
 ### IN-02: Migrationsausgabe zaehlt Bandgroessen statt requeue-Ergebnis und sagt "1 files"
 
 **File:** `php/lib/Migration/Version001300Date20260927000000.php:107-110`
+**Outcome:** dokumentiert (kein Fix in 1.3.0, Backlog; Eintrag in deferred-items.md)
 **Issue:** `$total += count($band)` zaehlt jede skipped(gone)-Zeile als "requeued", waehrend `QueueMapper::requeueAs` einen genaueren Wert zurueckgibt (dirty-Zeilen und Zeilen mit pendender Loeschung, `KIND_DELETE`, zaehlt er bewusst nicht). Die Info-Zeile "requeued %d files once judged gone" kann also ueberzeichnen; dazu die Grammatik "requeued 1 files" bei genau einem Treffer. Rein diagnostisch, das Verhalten der Migration (Requeue plus Loeschung je Band in einer Transaktion) ist korrekt.
 **Fix:** Rueckgabewert verwenden und Wortlaut praezisieren, z. B. `$total += $this->queueMapper->requeueAs($band, QueueMapper::KIND_CONTENT);` mit Meldung "handed %d gone verdicts back to the content track" (Testliterale in Version001300Date20260927000000Test.php muessten mitziehen); Backlog, kein Hotfix.
 
 ### IN-03: monkeypatch-Restore der test_one_load-Fixture stellt einen eventuell veralteten _WARM_WANTED-Wert wieder her
 
 **File:** `backend/tests/test_one_load.py:150-155`
+**Outcome:** dokumentiert (Testhygiene, kein Fix in 1.3.0; Eintrag in deferred-items.md)
 **Issue:** Die Fixture setzt den Marker per `monkeypatch.setattr(engine_module, "_WARM_WANTED", False)`. monkeypatch stellt beim Teardown den VOR-Testwert wieder her: hatte eine fruehere Suite den Marker auf True stehen lassen, kommt dieses True nach jedem one_load-Test zurueck und kann in spaetere Suiten ohne eigenen Guard lecken. test_embed_engine.py (`no_warm_request`, Zeilen 1177-1189) und test_search_endpoint.py (`warm_ground`) loeschen bewusst auf BEIDEN Seiten; diese Fixture nennt dieselbe Absicht im Kommentar, erreicht sie aber nur zur Setup-Zeit.
 **Fix:** Wie in `no_warm_request` explizit auf beiden Seiten setzen:
 ```python
