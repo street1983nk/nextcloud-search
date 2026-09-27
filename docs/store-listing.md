@@ -804,6 +804,408 @@ findet nach dieser Abnahme statt.
 
 ---
 
+# Entwurf v1.3.0, Plan 23-03, dem Owner vorgelegt am 27.09.2026
+
+Dieser Abschnitt ist der Textentwurf, den der Owner vor der Einreichung von
+1.3.0 sieht. Die sechs Texte oben tragen bis zur Übernahme weiter die Fassung
+1.2.0, und beide `info.xml` und die drei READMEs ebenso; die wörtliche
+Übernahme ist Plan 23-07 und findet erst nach der Abnahme statt. Wer in diesem
+Fenster einen Unterschied zwischen diesem Abschnitt und einer `info.xml`
+findet, hat den erwarteten Zwischenstand vor sich und keine Drift.
+
+Gesperrt und hier nur umgesetzt sind vier Owner-Entscheide der Phase 23: D-05
+(Changelog-Zeile mit Dank an budachst, Store-Text frei von #14), D-06 (vier
+Grenzen als Kurzliste im Store-Text und wortgleich in der Doku), D-09 (die eine
+Messzahl ist 730,2 MB) und D-11 (eine Faktenzeile zu den Indexsprachen direkt
+vor der Grenzliste). Geändert wird in den sechs Texten an genau drei Stellen:
+eine neue Zeile, ein neuer Block, eine getauschte Zahl. Alles andere bleibt
+Wort für Wort, wie es oben steht.
+
+## Teil 1: die Sprachzeile (D-11)
+
+Eine Zeile je Text, als letzter Spiegelstrich des ersten Blocks ("What Findling
+does:", "What Findling Backend is:" und ihre Gegenstücke), damit sie
+unmittelbar vor dem neuen Grenzblock steht. Keine Zahl, keine Kürzel. Die
+Zeile nennt den Werkzustand (Deutsch und Englisch voreingestellt) und die vier
+zuschaltbaren Sprachen, so wie die OCR-Zeile seit 1.2.0 "verfügbar" und
+"voreingestellt" trennt.
+
+> Englisch: Search languages: German and English by default, Spanish, Italian, Dutch and Portuguese available
+>
+> Deutsch: Suchsprachen: Deutsch und Englisch voreingestellt, Spanisch, Italienisch, Niederländisch und Portugiesisch verfügbar
+>
+> Französisch: Langues de recherche : allemand et anglais par défaut, espagnol, italien, néerlandais et portugais disponibles
+
+Die Suchsprachen und die OCR-Sprachen sind zwei Einstellungen
+(`FINDLING_LANGUAGES` und `FINDLING_OCR_LANGUAGES`, siehe
+`docs/language-analyzers.md`). Die erste Hälfte trägt deshalb beide Zeilen
+nebeneinander: die OCR-Zeile sagt, welche Scans gelesen werden, die Sprachzeile,
+in welchen Sprachen der Text danach durchsucht wird. Französisch steht in der
+OCR-Zeile und nicht in der Sprachzeile, und genau diesen Unterschied erklärt
+der vierte Grenzpunkt.
+
+## Teil 2: die Known limitations (D-06)
+
+Ein eigener Block im Listenstil der Beschreibung, direkt nach dem ersten Block
+und vor dem Satz zum MCP Connector. Genau vier Spiegelstriche in dieser
+Reihenfolge, ohne MB-Angabe, ohne Backticks, ohne Tabellen.
+
+> Englisch:
+>
+> Known limitations:
+> - Spanish: año and ano are treated as the same word
+> - Portuguese: spellings before and after the spelling reform are not unified
+> - Compound words are split for German and Dutch only
+> - French has no full text analysis chain for document text
+>
+> Deutsch:
+>
+> Bekannte Grenzen:
+> - Spanisch: año und ano gelten als dasselbe Wort
+> - Portugiesisch: Schreibweisen vor und nach der Rechtschreibreform werden nicht vereinheitlicht
+> - Zusammengesetzte Wörter werden nur für Deutsch und Niederländisch zerlegt
+> - Französisch hat keine eigene Analysekette für den Dokumenttext
+>
+> Französisch:
+>
+> Limites connues :
+> - Espagnol : año et ano sont traités comme le même mot
+> - Portugais : les graphies d'avant et d'après la réforme orthographique ne sont pas unifiées
+> - Les mots composés ne sont découpés que pour l'allemand et le néerlandais
+> - Le français n'a pas de chaîne d'analyse plein texte pour le contenu des documents
+
+Die Herkunft je Punkt, damit keiner behauptet ist: (1)
+`docs/language-analyzers.md`, Absatz "`año` equals `ano`, a bought recall";
+(2) derselbe Text, "No Portuguese orthographic unification"; (3) "Compounds are
+German and Dutch" und `docs/dutch-analyzer.md`; (4) der Absatz über die zwei
+Einstellungen am Anfang derselben Datei, der sagt, dass Französisch in diesem
+Bau keine Kette hat. Die englische Liste steht zeichengleich in
+`docs/language-analyzers.md` unter "Known limitations (short list, HART-05)",
+damit das Gate aus Plan 23-07 beide Stellen vergleichen kann.
+
+Die französische Typografie folgt den bestehenden FR-Texten: Leerzeichen vor
+dem Doppelpunkt, wie in "Ce que Findling sait faire :" und "Prérequis :".
+
+## Teil 3: die Messzahl (D-09)
+
+731,9 MB wird an jeder Fundstelle zu 730,2 MB: englisch 730.2 MB, deutsch
+730,2 MB, französisch 730,2 Mo. Die Messgröße bleibt dieselbe wie in 1.2.0,
+nur das gemessene Abbild ist ein anderes: Marke C1 der v1.3-Anfahrt vom
+26.09.2026, residenter Stand nach einem Einbettungszyklus und Ruhezeit mit
+entladenem Modell, gerechnet über `anon` aus `memory.stat`, AWS `m7g.large`
+mit nativem arm64 (`docs/performance.md`, Abschnitt "Die v1.3-Anfahrt vom
+26.09.2026", Nachtrag "der Bodensatz im zweiten Zyklus", Rohdatei
+`docs/measurements/2026-09-v13-messung/rohdaten/94c-bodensatz-zyklen.txt`).
+
+Die RAM-Zeile der sechs Texte, alt und neu:
+
+> Alt, Englisch: RAM: 4 GB is enough, 731.9 MB resident after an index run, under a hard 2 GB limit (measured)
+>
+> Neu, Englisch: RAM: 4 GB is enough, 730.2 MB resident after an index run, under a hard 2 GB limit (measured)
+>
+> Alt, Deutsch: RAM: 4 GB genügen, 731,9 MB resident nach einem Indexlauf, unter einer harten 2-GB-Grenze (gemessen)
+>
+> Neu, Deutsch: RAM: 4 GB genügen, 730,2 MB resident nach einem Indexlauf, unter einer harten 2-GB-Grenze (gemessen)
+>
+> Alt, Französisch: RAM : 4 Go suffisent, 731,9 Mo résidents après une indexation, sous une limite stricte de 2 Go (mesuré)
+>
+> Neu, Französisch: RAM : 4 Go suffisent, 730,2 Mo résidents après une indexation, sous une limite stricte de 2 Go (mesuré)
+
+Die Zeile der drei READMEs, alt und neu. Mit der Zahl wandern das Datum und
+das Abbild; das Wort "ausgelieferte" fällt weg, weil das gemessene v1.3-Abbild
+das Abbild der Anfahrt ist und nicht das Release-Abbild 1.3.0:
+
+> Alt, Englisch: After an index run, with the model unloaded, the container sits at 731.9 MB of resident memory (measured 2026-09-21 on an m7g.large arm64 box against the shipped v1.2 image, method and raw data in docs/performance.md).
+>
+> Neu, Englisch: After an index run, with the model unloaded, the container sits at 730.2 MB of resident memory (measured 2026-09-26 on an m7g.large arm64 box against the v1.3 image, method and raw data in docs/performance.md).
+>
+> Alt, Deutsch: Nach einem Indexlauf steht der Container mit entladenem Modell bei 731,9 MB residentem Speicher (gemessen am 21.09.2026 auf einer m7g.large mit arm64 gegen das ausgelieferte v1.2-Abbild, Methode und Rohdaten in docs/performance.md).
+>
+> Neu, Deutsch: Nach einem Indexlauf steht der Container mit entladenem Modell bei 730,2 MB residentem Speicher (gemessen am 26.09.2026 auf einer m7g.large mit arm64 gegen das v1.3-Abbild, Methode und Rohdaten in docs/performance.md).
+>
+> Alt, Französisch: Après une indexation, le modèle déchargé, le conteneur reste à 731,9 Mo de mémoire résidente (mesuré le 21.09.2026 sur une machine m7g.large arm64 avec l'image v1.2 livrée, méthode et données brutes dans docs/performance.md).
+>
+> Neu, Französisch: Après une indexation, le modèle déchargé, le conteneur reste à 730,2 Mo de mémoire résidente (mesuré le 26.09.2026 sur une machine m7g.large arm64 avec l'image v1.3, méthode et données brutes dans docs/performance.md).
+
+**Die Fundstellen, Stelle für Stelle, neun Stellen:**
+
+| Datei | Sprache | Was dort steht |
+|---|---|---|
+| `php/appinfo/info.xml` | EN | die RAM-Zeile des Blocks Requirements |
+| `php/appinfo/info.xml` | DE | die RAM-Zeile des Blocks Anforderungen |
+| `php/appinfo/info.xml` | FR | die RAM-Zeile des Blocks Prérequis |
+| `backend/appinfo/info.xml` | EN | dieselbe Zeile, zweite Hälfte |
+| `backend/appinfo/info.xml` | DE | dieselbe Zeile, zweite Hälfte |
+| `backend/appinfo/info.xml` | FR | dieselbe Zeile, zweite Hälfte |
+| `README.en.md` | EN | die Zeile nach dem Messsatz im Block Requirements |
+| `README.md` | DE | die Zeile nach dem Messsatz im Block Anforderungen |
+| `README.fr.md` | FR | die Zeile nach dem Messsatz im Block Prérequis |
+
+Dazu die Vorlage selbst, die sechs Texte oben in dieser Datei, und
+`RESIDENT_FIGURE` in `backend/tests/test_store_metadata.py`, das die Zahl
+mechanisch festhält; beide wechseln in Plan 23-07 mit.
+
+Wenn ROADMAP und D-09 von "drei Stellen" sprechen, sind die drei
+Artefaktgruppen gemeint: der README-Satz, die PHP-Hälfte und die
+Backend-Hälfte. Jede einzelne Fundstelle in jeder der drei Gruppen wechselt,
+also alle neun der Tabelle, und keine bleibt auf 731,9 MB stehen.
+
+Der Messsatz der READMEs (52.111 Dokumente, 1.764 MB Spitze) bleibt
+unverändert, aus demselben Grund wie in 1.2.0 (Teil 4 des Entwurfs v1.2.0):
+auch die v1.3-Anfahrt hat die Spitze eines Volllaufs nicht neu gemessen.
+
+## Teil 4: die sechs Texte 1.3.0 im Wortlaut
+
+Vollständig, damit sie nebeneinander gelesen werden können. `<name>` und
+`<summary>` beider Hälften bleiben unverändert und stehen deshalb nicht noch
+einmal hier.
+
+### App 1: `findling`, `<description>` (Englisch, ohne `lang`-Attribut)
+
+What Findling does:
+- Full text search in the normal Nextcloud search bar
+- OCR for scanned PDFs and images: nine languages available, German, English and French are the default
+- Semantic search: finds documents through paraphrases
+- Every result is permission-checked by Nextcloud
+- No configuration: the first index run starts on its own
+- Privacy: everything runs locally, no telemetry, nothing leaves your server
+- Search languages: German and English by default, Spanish, Italian, Dutch and Portuguese available
+
+Known limitations:
+- Spanish: año and ano are treated as the same word
+- Portuguese: spellings before and after the spelling reform are not unified
+- Compound words are split for German and Dutch only
+- French has no full text analysis chain for document text
+
+Together with the [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector), Findling forms the retrieval layer for your own RAG: AI assistants search your document contents with exactly the rights of the asking user, and no content leaves your server.
+
+Supported file types:
+- PDF (scanned too), DOCX, PPTX, XLSX, ODT, ODS, ODP
+- HTML, RTF, TXT, Markdown, CSV
+- Images through OCR: JPEG, PNG, TIFF, WebP
+
+Requirements:
+- Nextcloud 33 to 35, apps: AppAPI, Findling Backend (External Apps), Findling
+- RAM: 4 GB is enough, 730.2 MB resident after an index run, under a hard 2 GB limit (measured)
+- CPU: 2 cores are enough, amd64 and arm64
+
+Enterprise support and paid add-ons: request a quote at admin@infranode.dev
+
+### App 1: `findling`, `<description lang="de">`
+
+Was Findling kann:
+- Volltextsuche über die normale Nextcloud-Suchleiste
+- Texterkennung für gescannte PDFs und Bilder: neun Sprachen verfügbar, voreingestellt sind Deutsch, Englisch und Französisch
+- Semantische Suche: findet Dokumente auch über Umschreibungen
+- Jeder Treffer wird von Nextcloud rechtegeprüft
+- Keine Konfiguration: der erste Indexlauf startet von selbst
+- Datenschutz: alles läuft lokal, keine Telemetrie, nichts verlässt den Server
+- Suchsprachen: Deutsch und Englisch voreingestellt, Spanisch, Italienisch, Niederländisch und Portugiesisch verfügbar
+
+Bekannte Grenzen:
+- Spanisch: año und ano gelten als dasselbe Wort
+- Portugiesisch: Schreibweisen vor und nach der Rechtschreibreform werden nicht vereinheitlicht
+- Zusammengesetzte Wörter werden nur für Deutsch und Niederländisch zerlegt
+- Französisch hat keine eigene Analysekette für den Dokumenttext
+
+Zusammen mit dem [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) ergibt Findling die Retrieval-Schicht für Ihr eigenes RAG: KI-Assistenten durchsuchen Ihre Dokumentinhalte mit genau den Rechten des fragenden Nutzers, und kein Inhalt verlässt Ihren Server.
+
+Unterstützte Dateitypen:
+- PDF (auch gescannt), DOCX, PPTX, XLSX, ODT, ODS, ODP
+- HTML, RTF, TXT, Markdown, CSV
+- Bilder per Texterkennung: JPEG, PNG, TIFF, WebP
+
+Anforderungen:
+- Nextcloud 33 bis 35, Apps: AppAPI, Findling Backend (External Apps), Findling
+- RAM: 4 GB genügen, 730,2 MB resident nach einem Indexlauf, unter einer harten 2-GB-Grenze (gemessen)
+- CPU: 2 Kerne genügen, amd64 und arm64
+
+Enterprise-Support und bezahlte Add-ons: Angebot anfordern unter admin@infranode.dev
+
+### App 1: `findling`, `<description lang="fr">`
+
+Ce que Findling sait faire :
+- Recherche plein texte dans la barre de recherche normale de Nextcloud
+- Reconnaissance optique pour les PDF numérisés et les images : neuf langues disponibles, allemand, anglais et français par défaut
+- Recherche sémantique : trouve les documents par des périphrases
+- Chaque résultat est vérifié par Nextcloud selon vos droits
+- Aucune configuration : la première indexation démarre d'elle-même
+- Confidentialité : tout fonctionne localement, aucune télémétrie, rien ne quitte votre serveur
+- Langues de recherche : allemand et anglais par défaut, espagnol, italien, néerlandais et portugais disponibles
+
+Limites connues :
+- Espagnol : año et ano sont traités comme le même mot
+- Portugais : les graphies d'avant et d'après la réforme orthographique ne sont pas unifiées
+- Les mots composés ne sont découpés que pour l'allemand et le néerlandais
+- Le français n'a pas de chaîne d'analyse plein texte pour le contenu des documents
+
+Avec le [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector), Findling forme la couche de récupération de votre propre RAG : les assistants IA cherchent dans le contenu de vos documents avec exactement les droits de l'utilisateur qui demande, et aucun contenu ne quitte votre serveur.
+
+Types de fichiers pris en charge :
+- PDF (numérisés aussi), DOCX, PPTX, XLSX, ODT, ODS, ODP
+- HTML, RTF, TXT, Markdown, CSV
+- Images par reconnaissance optique : JPEG, PNG, TIFF, WebP
+
+Prérequis :
+- Nextcloud 33 à 35, applications : AppAPI, Findling Backend (External Apps), Findling
+- RAM : 4 Go suffisent, 730,2 Mo résidents après une indexation, sous une limite stricte de 2 Go (mesuré)
+- CPU : 2 cœurs suffisent, amd64 et arm64
+
+Support entreprise et modules payants : demande de devis à admin@infranode.dev
+
+### App 2: `findling_backend`, `<description>` (Englisch, ohne `lang`-Attribut)
+
+What Findling Backend is:
+- The External App behind the Findling search app: text extraction, OCR and the search index
+- Runs entirely inside your own instance and does nothing without the Findling app
+- Never modifies your files
+- Privacy: everything runs locally, no telemetry, nothing leaves your server
+- Search languages: German and English by default, Spanish, Italian, Dutch and Portuguese available
+
+Known limitations:
+- Spanish: año and ano are treated as the same word
+- Portuguese: spellings before and after the spelling reform are not unified
+- Compound words are split for German and Dutch only
+- French has no full text analysis chain for document text
+
+Together with the [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector), Findling forms the retrieval layer for your own RAG: AI assistants search your document contents with exactly the rights of the asking user, and no content leaves your server.
+
+Supported file types:
+- PDF (scanned too), DOCX, PPTX, XLSX, ODT, ODS, ODP
+- HTML, RTF, TXT, Markdown, CSV
+- Images through OCR: JPEG, PNG, TIFF, WebP
+
+Requirements:
+- Nextcloud 33 to 35, apps: AppAPI, Findling Backend (External Apps), Findling
+- RAM: 4 GB is enough, 730.2 MB resident after an index run, under a hard 2 GB limit (measured)
+- CPU: 2 cores are enough, amd64 and arm64
+
+Enterprise support and paid add-ons: request a quote at admin@infranode.dev
+
+### App 2: `findling_backend`, `<description lang="de">`
+
+Was Findling Backend ist:
+- Die External App hinter der Such-App Findling: Textauszug, Texterkennung und der Suchindex
+- Läuft komplett in Ihrer eigenen Instanz und tut ohne die App Findling nichts
+- Verändert nie Ihre Dateien
+- Datenschutz: alles läuft lokal, keine Telemetrie, nichts verlässt den Server
+- Suchsprachen: Deutsch und Englisch voreingestellt, Spanisch, Italienisch, Niederländisch und Portugiesisch verfügbar
+
+Bekannte Grenzen:
+- Spanisch: año und ano gelten als dasselbe Wort
+- Portugiesisch: Schreibweisen vor und nach der Rechtschreibreform werden nicht vereinheitlicht
+- Zusammengesetzte Wörter werden nur für Deutsch und Niederländisch zerlegt
+- Französisch hat keine eigene Analysekette für den Dokumenttext
+
+Zusammen mit dem [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) ergibt Findling die Retrieval-Schicht für Ihr eigenes RAG: KI-Assistenten durchsuchen Ihre Dokumentinhalte mit genau den Rechten des fragenden Nutzers, und kein Inhalt verlässt Ihren Server.
+
+Unterstützte Dateitypen:
+- PDF (auch gescannt), DOCX, PPTX, XLSX, ODT, ODS, ODP
+- HTML, RTF, TXT, Markdown, CSV
+- Bilder per Texterkennung: JPEG, PNG, TIFF, WebP
+
+Anforderungen:
+- Nextcloud 33 bis 35, Apps: AppAPI, Findling Backend (External Apps), Findling
+- RAM: 4 GB genügen, 730,2 MB resident nach einem Indexlauf, unter einer harten 2-GB-Grenze (gemessen)
+- CPU: 2 Kerne genügen, amd64 und arm64
+
+Enterprise-Support und bezahlte Add-ons: Angebot anfordern unter admin@infranode.dev
+
+### App 2: `findling_backend`, `<description lang="fr">`
+
+Ce qu'est Findling Backend :
+- L'External App derrière l'application de recherche Findling : extraction de texte, reconnaissance optique et index
+- Fonctionne entièrement dans votre propre instance et ne fait rien sans l'application Findling
+- Ne modifie jamais vos fichiers
+- Confidentialité : tout fonctionne localement, aucune télémétrie, rien ne quitte votre serveur
+- Langues de recherche : allemand et anglais par défaut, espagnol, italien, néerlandais et portugais disponibles
+
+Limites connues :
+- Espagnol : año et ano sont traités comme le même mot
+- Portugais : les graphies d'avant et d'après la réforme orthographique ne sont pas unifiées
+- Les mots composés ne sont découpés que pour l'allemand et le néerlandais
+- Le français n'a pas de chaîne d'analyse plein texte pour le contenu des documents
+
+Avec le [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector), Findling forme la couche de récupération de votre propre RAG : les assistants IA cherchent dans le contenu de vos documents avec exactement les droits de l'utilisateur qui demande, et aucun contenu ne quitte votre serveur.
+
+Types de fichiers pris en charge :
+- PDF (numérisés aussi), DOCX, PPTX, XLSX, ODT, ODS, ODP
+- HTML, RTF, TXT, Markdown, CSV
+- Images par reconnaissance optique : JPEG, PNG, TIFF, WebP
+
+Prérequis :
+- Nextcloud 33 à 35, applications : AppAPI, Findling Backend (External Apps), Findling
+- RAM : 4 Go suffisent, 730,2 Mo résidents après une indexation, sous une limite stricte de 2 Go (mesuré)
+- CPU : 2 cœurs suffisent, amd64 et arm64
+
+Support entreprise et modules payants : demande de devis à admin@infranode.dev
+
+## Teil 5: der Text der Umgebungsvariable `FINDLING_EMBED_IDLE_RELEASE_SECONDS`
+
+Die Beschreibung steht in `backend/appinfo/info.xml` und reist mit dem Release
+wie die Store-Texte. Nach dem Kaltstart-Fix (D-01) gilt für jeden Schalterwert:
+die erste Suche nach einem Start oder einer Freigabe antwortet aus dem
+Volltext, das Modell wird im Hintergrund geladen, die Semantik greift ab der
+nächsten Suche. Der alte Text sagt das nur für die Freigabe und nennt 0
+"off", was nach dem Fix nur noch "nie freigeben" heißt. Englisch, weil die
+Datei dort englisch ist.
+
+Alt (1.2.0):
+
+> A whole number of seconds, and 0 is the default and means off. Any other value has to lie between 60 and 86400; anything outside that range falls back to the default. When the model has been idle for this long, the container gives up the tokenizer, the splitter and the inference session, and the memory they hold goes back to the machine. The first search afterwards answers from the full text side while the model is warmed up again in the background, so nobody waits for it. A quarter of an hour, so 900, is a reasonable value to start with.
+
+Neu (Entwurf 1.3.0):
+
+> A whole number of seconds, and 0 is the default and means the model is never released. Any other value has to lie between 60 and 86400; anything outside that range falls back to the default. When the model has been idle for this long, the container gives up the tokenizer, the splitter and the inference session, and the memory they hold goes back to the machine. Whatever the value, the first search after a start or a release answers from the full text side while the model is loaded in the background, so nobody waits for it, and the semantic side joins from the next search on. A quarter of an hour, so 900, is a reasonable value to start with.
+
+`<display-name>` ("Release the model after idle seconds") und `<default>` (0)
+bleiben unverändert. Der XML-Kommentar über der Variable (die Freigabe sei aus,
+weil der Preis der ersten Suche nach einer Freigabe noch nicht gemessen sei)
+ist kein Store-Text; ihn zieht der Plan des Kaltstart-Fixes nach, zusammen mit
+`docs/admin-page.md`.
+
+## Teil 6: die Changelog-Zeile und die Antwort in Issue #14 (D-05)
+
+Die Changelog-Zeile für die GitHub-Release-Notiz 1.3.0, englisch, eine Zeile:
+
+> Files in team folders (groupfolders) that were wrongly skipped as deleted are now indexed, and the update requeues the affected entries once; thanks to budachst for the report (#14).
+
+Die Antwort in Issue #14, englisch, **nur Entwurf**: gepostet wird erst nach
+dem Release (Plan 23-09) und nur mit dem Wort des Owners.
+
+> Findling 1.3.0 contains the fix: files in team folders are no longer skipped as deleted. The update requeues every entry that was marked this way once, so nothing has to be done by hand, and the first scan afterwards takes a little longer. Thanks for the detailed report.
+
+Der Store-Kurztext und die sechs Beschreibungen bleiben frei von #14.
+
+## Teil 7: was bewusst nicht drin steht
+
+Dieser Abschnitt nennt die ausgeschlossenen Gegenstände beim Namen, weil eine
+Regel, die ihren Gegenstand verschweigt, von niemandem nachgeprüft werden kann.
+Er ist selbst kein Store-Text.
+
+- **Kein Wort zu #14 in den Store-Texten.** Der Fix steht in der
+  Changelog-Zeile und in der Antwort im Issue (D-05). Eine Store-Beschreibung
+  ist eine Faktenliste über die App und kein Änderungsverlauf.
+- **Keine zweite Messzahl.** Weder die C2-Zahl des zweiten Zyklus noch der
+  Bodensatz, die Spitze der Abtastreihe oder die Umbauzeit stehen in den
+  Texten. Die Grenzliste trägt keine MB-Angabe, und die Sprachzeile nennt keine
+  Zahl.
+- **Keine Messgeschichte.** Kein Vergleich 731,9 gegen 730,2 MB im Store-Text;
+  der Vergleich steht nur im Änderungsprotokoll unten.
+- **Nur die vier Grenzen aus D-06.** `docs/language-analyzers.md` führt
+  weitere gemessene Grenzen (Auszug ohne Fragment bei einem Treffer allein über
+  ein neues Sprachfeld, die Zahlklasse mit akzentuierter Endung, unregelmäßige
+  Plurale, fünf Funktionswörter). Sie bleiben in der Doku, weil D-06 die
+  Kurzliste auf vier Punkte festlegt.
+- **Kein Wort zum Kaltstart-Fix in den Store-Texten.** Er ändert das Verhalten
+  und nicht die Faktenliste; er steht im Text der Umgebungsvariable (Teil 5).
+
+## Die Abnahme
+
+Textabnahme 1.3.0: <Datum>, ausstehend.
+
+---
+
 # Änderungsprotokoll der Messzahl in den Store-Texten
 
 Eine ersetzte Zahl ohne Nachtrag lässt später nicht mehr erkennen, was früher
@@ -815,6 +1217,7 @@ Stand.
 |---|---|---|---|---|---|
 | 11.09.2026 | 11-09 | die RAM-Zeile der sechs Store-Texte bekommt erstmals eine Kernzahl | keine Zahl im Text | 103,2 MB, Grundlast im Leerlauf mit nie geladenem Modell, gemessen am 10.09.2026 auf m7g.large, Rohdatei `2026-09-vergleichsmessung-m7g/rohdaten/94-grundlast.txt` | Owner-Entscheid vom 11.09.2026, Fassung B |
 | 21.09.2026 | 16-11 | die RAM-Zeile der sechs Store-Texte und die Grundlast-Zeile der drei READMEs | 103,2 MB, Grundlast im Leerlauf mit nie geladenem Modell; bleibt für genau diese Bedingungen gültig und steht weiter in `docs/performance.md` | 731,9 MB, residenter Stand nach einem Indexlauf mit entladenem Modell, gemessen am 21.09.2026 auf m7g.large mit arm64 gegen das ausgelieferte v1.2-Abbild, Rohdatei `2026-09-v12-messung/rohdaten/94b-grundlast-rueckkehr.txt` (Marke C) | Entscheid E1 der Phase 16, gesperrt am 21.09.2026 |
+| 27.09.2026 (Entwurf, gilt ab der Übernahme in Plan 23-07) | 23-03 | die RAM-Zeile der sechs Store-Texte und die Zeile nach dem Messsatz der drei READMEs | 731,9 MB, residenter Stand nach einem Indexlauf mit entladenem Modell, gemessen am v1.2-Abbild; bleibt für das v1.2-Abbild gültig und steht weiter in `docs/performance.md` | 730,2 MB, dieselbe Messgröße (Marke C1, `anon`, m7g.large mit arm64), gemessen am 26.09.2026 am v1.3-Abbild, Rohdatei `2026-09-v13-messung/rohdaten/94c-bodensatz-zyklen.txt`, Quelle `docs/performance.md`, Abschnitt "Die v1.3-Anfahrt vom 26.09.2026" | Entscheid D-09 der Phase 23, gesperrt am 27.09.2026 |
 
 Drei Sätze, die zu diesem zweiten Eintrag gehören und ohne die er falsch
 gelesen werden kann:
@@ -830,3 +1233,9 @@ gelesen werden kann:
 3. **Die Spitze eines Volllaufs ist unberührt.** 52.111 Dokumente und 1.764 MB
    stammen aus der v1.1-Anfahrt, und der v1.2-Lauf hat sie nicht neu gemessen.
    Wer den Messsatz anfasst, misst vorher.
+
+Zum dritten Eintrag, ebenfalls ein Satz, ohne den er falsch gelesen werden
+kann: **1,7 MB weniger sind keine Verbesserung**, sondern zwei Abbilder in
+derselben Messgröße, und die Nachanfahrt vom selben Tag hat für C1 729,3 MB
+gelesen. Die Zahl wechselt, weil der Store-Text das Abbild beschreiben soll,
+das er begleitet, und 731,9 MB bleibt für das v1.2-Abbild richtig.

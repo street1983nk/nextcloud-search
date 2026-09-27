@@ -191,8 +191,14 @@ Das Budget der 4-GB-Box hält auch mit der höheren Zahl.
 
 Die "rund 23 MB" aus Roadmap und Anforderung KOMP-01 sind die alte Schätzung
 des DEUTSCHEN Automaten aus Phase 2 und gelten für Niederländisch nicht. Der
-deutsche Posten ist inzwischen gemessen (41,9 MB Automat plus 21,9 MB Liste,
-arm64 nativ, `docs/measurements/2026-09-grundlast-fein/`). Für Niederländisch
+deutsche Posten ist inzwischen gemessen, und zwar zweimal mit leicht
+verschiedenem Ergebnis. 41,9 MB Automat plus 21,9 MB Liste stammen aus
+`docs/measurements/2026-09-vergleichsmessung-m7g/`, Abschnitt 5.2, gemessen auf
+der m7g-Box selbst. 42,1 MB Automat plus 21,9 MB Liste stammen aus
+`docs/measurements/2026-09-grundlast-fein/`, arm64 nativ im CI-Runner, und das
+ist die Zahl, die `docs/performance.md` zitiert. Die 0,2 MB Abstand sind der
+Unterschied zweier Maschinen und kein Widerspruch (Nachtrag vom 27.09.2026,
+Plan 23-03: bis dahin stand hier 41,9 MB mit der Quelle der 42,1). Für Niederländisch
 gilt die Zahl dieses Berichts: 24,2 bis 25,3 MB produktnah auf amd64. Dass sie
 in der Nähe der alten Schätzung liegt, ist Zufall und keine Bestätigung.
 
