@@ -321,7 +321,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 23-08-PLAN.md , Launch-Härtung und Phasenaudit mit Owner-Abnahme
+- [x] 23-08-PLAN.md , Launch-Härtung und Phasenaudit mit Owner-Abnahme
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
@@ -342,7 +342,7 @@ Plans:
 | 20. UI-Kataloge es/it/nl/pt | v1.3 | 9/9 | Complete    | 2026-09-25 |
 | 21. Niederlaendische Komposita | v1.3 | 9/9 | Complete    | 2026-09-25 |
 | 22. Messanfahrt BL-F03 | v1.3 | 13/13 | Complete | 2026-09-26 |
-| 23. Haertung und Store-Einreichung 1.3.0 | v1.3 | 7/9 | In Progress|  |
+| 23. Haertung und Store-Einreichung 1.3.0 | v1.3 | 8/9 | In Progress|  |
 
 ## Requirement-Abdeckung v1.3
 
