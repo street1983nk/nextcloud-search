@@ -35,9 +35,9 @@ Markdown, CSV sowie Bilder (JPEG, PNG, TIFF, WebP) per Texterkennung.
   Dokumenten und aktiver semantischer Suche lag die Spitze des Containers bei
   1.764 MB residentem anonymem Speicher, unter einer harten 2-GB-Grenze, die der
   Kernel durchsetzt.
-- Nach einem Indexlauf steht der Container mit entladenem Modell bei 731,9 MB
-  residentem Speicher (gemessen am 21.09.2026 auf einer m7g.large mit arm64
-  gegen das ausgelieferte v1.2-Abbild, Methode und Rohdaten in
+- Nach einem Indexlauf steht der Container mit entladenem Modell bei 730,2 MB
+  residentem Speicher (gemessen am 26.09.2026 auf einer m7g.large mit arm64
+  gegen das v1.3-Abbild, Methode und Rohdaten in
   [docs/performance.md](docs/performance.md)).
 - CPU: 2 Kerne genügen, amd64 und arm64, keine GPU
 
