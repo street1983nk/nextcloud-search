@@ -10,7 +10,7 @@ regression colours a CI run rather than waiting for the next hand measurement
 on the arm64 box.
 
 **A watchman that cannot go red is worse than none**, which is the whole reason
-this file exists. Five cases below bring a regression back by hand, each one at
+this file exists. Six cases below bring a regression back by hand, each one at
 the seam the real defect would sit at, and every one of them has to make the
 tool fail:
 
@@ -21,6 +21,10 @@ tool fail:
 * the search never reaches the model at all, which is the vacuous green the
   planned RSS ceiling would have shipped: a gate that watches a load path the
   measurement does not enter,
+* the search stops asking for the warm run (plan 23-04): since the cold start
+  fix of plan 23-01 a round never loads by itself, the handler path
+  ``if warm_wanted(): warm()`` does, and a search that forgets
+  ``request_warm()`` would leave the container without semantics for good,
 * a release gives up the counter and not the pages, so the container reports a
   warm window that cost nothing while the weights lie in the heap the whole
   time,
@@ -32,7 +36,7 @@ test. Each of them is held against the green run in
 ``test_the_fourth_phase_releases_the_weights_and_fetches_them_back``, so neither
 of them can be passing against a tree that was red to begin with.
 
-None of the five touches shipped code. They are monkeypatches at module and
+None of the six touches shipped code. They are monkeypatches at module and
 class level, so what is proven is that the counters really are the thing the
 gate stands on, without a line of sabotage travelling into the image.
 """
@@ -47,7 +51,9 @@ import numpy
 import pytest
 
 from findling.api import resources
+from findling.api import search as search_module
 from findling.config import settings
+from findling.embed import engine as engine_module
 from findling.embed import model as model_module
 from findling.embed.chunker import ChunkSpan
 from findling.embed.engine import shared_model
@@ -142,6 +148,11 @@ def prepared(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     monkeypatch.setattr(poller_module, "open_tokenizer", lambda _directory: object())
     monkeypatch.setattr(poller_module, "make_splitter", lambda *_args, **_kwargs: object())
     monkeypatch.setattr(poller_module, "chunk_spans", _one_span)
+    # The warm request is a module global of the holder and outlives a case. A
+    # marker left standing by the case before would warm the engine here even
+    # when the search under test never asked, and the case that proves the
+    # tool goes red for exactly that would be green for the wrong reason.
+    monkeypatch.setattr(engine_module, "_WARM_WANTED", False)
 
     yield volume
     settings.cache_clear()
@@ -170,7 +181,39 @@ def test_one_process_pays_for_one_engine_and_one_word_list(prepared: Path) -> No
     )
     assert report.candidates == 1, "the seeded document has to be findable, or nothing above was measured"
     assert report.passage_vectors == 1
-    assert report.cold_search_ms > 0.0, "the round that loaded the engine took measurable time"
+    assert report.search_ms > 0.0, "the round itself took measurable time"
+    assert report.warm_ms > 0.0, "the handler path behind it really ran the warm run"
+
+
+def test_a_search_alone_never_loads_the_engine(prepared: Path) -> None:
+    # Plan 23-01, D-01: ``one_round`` answers out of the lexical list while the
+    # engine is cold and only asks for the warm run. This is the half of the
+    # driver that must not move the counter, so the other half can be proven
+    # to be the one that does.
+    one_load.seed_volume(FIXTURE_LIST)
+    engine_module.reset()
+    loads_before = model_module.load_count()
+
+    candidates = one_load.run_the_search()
+
+    assert candidates == 1, "the seeded document is found lexically"
+    assert model_module.load_count() == loads_before, "a search on its own never loads the weights"
+    assert engine_module.warm_wanted(), "but it has asked for the warm run"
+
+
+def test_the_driver_goes_the_handler_path_and_loads_exactly_once(prepared: Path) -> None:
+    # What a real caller sets off: the search, and behind it the handler, which
+    # runs ``warm`` once the answer is out. The driver goes both halves, so a
+    # cold holder comes to exactly one load and not to nought.
+    one_load.seed_volume(FIXTURE_LIST)
+    engine_module.reset()
+    loads_before = model_module.load_count()
+
+    candidates = one_load.drive_the_search_side()
+
+    assert candidates == 1
+    assert model_module.load_count() - loads_before == 1, "search plus handler path, one load"
+    assert not engine_module.warm_wanted(), "the request has been taken on"
 
 
 def test_the_fourth_phase_releases_the_weights_and_fetches_them_back(
@@ -194,17 +237,20 @@ def test_the_fourth_phase_releases_the_weights_and_fetches_them_back(
     assert "verdict=ok" in printed
 
 
-def test_the_cold_start_duration_is_a_line_of_its_own(prepared: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    # Weg A of the phase research: the wall clock around the one round that
-    # brings the engine loads from zero to one. It travels in the report the
-    # measurement step of resilience.yml already prints in full, so it needs no
-    # step of its own.
+def test_the_two_durations_are_lines_of_their_own(prepared: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    # Weg A of the phase research, split in two by plan 23-04: the wall clock
+    # around the round itself, and the one around the warm run the handler path
+    # starts behind it. They travel in the report the measurement step of
+    # resilience.yml already prints in full, so neither needs a step of its own.
     code = one_load.main(["--volume", str(prepared), "--source", str(FIXTURE_LIST)])
 
     printed = capsys.readouterr().out
     assert code == 0
-    duration = next(line for line in printed.splitlines() if line.startswith("cold-search-ms="))
-    assert float(duration.removeprefix("cold-search-ms=")) > 0.0
+    lines = printed.splitlines()
+    search = next(line for line in lines if line.startswith("search-ms="))
+    warm = next(line for line in lines if line.startswith("warm-ms="))
+    assert float(search.removeprefix("search-ms=")) > 0.0
+    assert float(warm.removeprefix("warm-ms=")) > 0.0
 
 
 def test_the_entry_point_prints_its_numbers_and_exits_zero(prepared: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -218,7 +264,7 @@ def test_the_entry_point_prints_its_numbers_and_exits_zero(prepared: Path, capsy
 
 
 # ---------------------------------------------------------------------------
-# The three ways it has to go red
+# The ways it has to go red
 # ---------------------------------------------------------------------------
 
 
@@ -228,7 +274,10 @@ def test_it_goes_red_when_the_search_side_builds_its_own_engine(
     # The state of the code before plan 06.1-02, put back at the exact seam it
     # was removed from: the read side stops asking the holder and constructs a
     # wrapper of its own, so the container carries two tokenizers and two
-    # sessions again.
+    # sessions again. Since the cold start fix (plan 23-01) the search never
+    # loads that wrapper itself, and the handler path can only warm the holder,
+    # which this search never filled. So the search side comes to nought loads
+    # while the track alone comes to one, and the tool names the zero.
     def own_engine() -> EmbeddingModel:
         resolved = settings()
         return EmbeddingModel(
@@ -243,8 +292,8 @@ def test_it_goes_red_when_the_search_side_builds_its_own_engine(
 
     printed = capsys.readouterr().out
     assert code == 1
-    assert "engine-loads-after-worker=2" in printed
-    assert "no longer share the holder" in printed
+    assert "engine-loads-after-search=0" in printed
+    assert "green for nothing" in printed
 
 
 def test_a_second_run_in_the_same_process_measures_a_load_and_not_a_cache_hit(prepared: Path) -> None:
@@ -294,6 +343,27 @@ def test_it_goes_red_when_the_search_never_reaches_the_model(prepared: Path, mon
     assert report.engine_loads_after_search == 0
     assert report.engine_loads_after_worker == 1, "the track alone still loads once, which is the trap"
     assert any("green for nothing" in finding for finding in one_load.findings(report))
+
+
+def test_it_goes_red_when_the_search_stops_asking_for_the_warm_run(
+    prepared: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Plan 23-04. Since the cold start fix the round never loads by itself, and
+    # ``request_warm()`` in ``one_round`` is the one way the weights are ever
+    # fetched for the search side. Silence it at that seam and the handler path
+    # finds nothing owed, the engine stays cold, and the tool has to say so
+    # rather than time a warm run that never happened.
+    with monkeypatch.context() as mutation:
+        mutation.setattr(search_module, "request_warm", lambda: None)
+        report = _measure(prepared / "mutated")
+
+    assert report.engine_loads_after_search == 0
+    assert report.warm_ms == 0.0, "no warm run, no duration"
+    assert any("green for nothing" in finding for finding in one_load.findings(report))
+
+    # The same tree with the mutation taken back, so the red above belongs to
+    # the mutation and not to a tree that was red to begin with.
+    assert one_load.findings(_measure(prepared / "clean")) == []
 
 
 def test_it_goes_red_when_a_release_leaves_two_engines_behind(
@@ -388,7 +458,8 @@ def test_every_counter_that_is_not_one_is_named() -> None:
         engine_loads_after_rewarm=0,
         candidates=0,
         passage_vectors=0,
-        cold_search_ms=12.5,
+        search_ms=12.5,
+        warm_ms=40.0,
     )
 
     assert len(one_load.findings(report)) == 8
@@ -412,7 +483,8 @@ def test_a_release_that_freed_nothing_is_a_finding() -> None:
         engine_loads_after_rewarm=1,
         candidates=1,
         passage_vectors=1,
-        cold_search_ms=12.5,
+        search_ms=12.5,
+        warm_ms=40.0,
     )
 
     trouble = one_load.findings(report)
@@ -431,7 +503,8 @@ def test_a_clean_report_names_nothing() -> None:
         engine_loads_after_rewarm=2,
         candidates=1,
         passage_vectors=1,
-        cold_search_ms=12.5,
+        search_ms=12.5,
+        warm_ms=40.0,
     )
 
     assert one_load.findings(report) == []
@@ -452,8 +525,10 @@ def test_the_duration_is_reported_and_never_judged() -> None:
         engine_loads_after_rewarm=2,
         candidates=1,
         passage_vectors=1,
-        cold_search_ms=900_000.0,
+        search_ms=900_000.0,
+        warm_ms=900_000.0,
     )
 
     assert one_load.findings(report) == []
-    assert "cold-search-ms=900000.0" in report.lines()
+    assert "search-ms=900000.0" in report.lines()
+    assert "warm-ms=900000.0" in report.lines()

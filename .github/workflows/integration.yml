@@ -1682,29 +1682,52 @@ jobs:
             || { echo "::error::the paraphrase matched lexically, so it is not a paraphrase on this corpus and a hit below would prove nothing about the vector half"; exit 1; }
           echo "the lexical half answers nothing to this query, so anything it finds below came out of the vector half"
 
-      # This step is also the cold start measurement of the phase, and it is the
-      # only one in this repository that measures a semantic search the way a
-      # user makes one: through Apache, the OCS route, the PHP provider, the
-      # AppAPI proxy and both halves of the container, on amd64. It is cold
-      # because the restart below takes the module global of the engine holder
-      # with it, so the round it makes is the round that loads the weights.
+      # This step is also the CI remeasurement of the cold start route (phase
+      # 23, D-01), and it is the only one in this repository that measures a
+      # search the way a user makes one: through Apache, the OCS route, the PHP
+      # provider, the AppAPI proxy and both halves of the container, on amd64.
       #
-      # The duration is printed and never compared against a bound, in any step
+      # Why the first search after the restart is no longer the semantic one.
+      # Until phase 22 the first hybrid round after a start loaded the weights
+      # inside the request, and on the box of phase 22 that round tore the
+      # 1.5 s ceiling of the PHP half (V-22-01, V-22-02) with the release
+      # switched off as well as on. Since plan 23-01 no search loads in the
+      # request at any switch value: the first round answers out of the lexical
+      # list and asks for the warm run, and the handler starts that run through
+      # BackgroundTasks once the answer has gone out. So the step now has three
+      # stages in this order:
+      #
+      #   (a) one cold search with a two word line that has lexical hits, which
+      #       has to come back with HTTP 200 and at least one hit, and whose
+      #       duration is printed;
+      #   (b) a wait of at most 120 s until /status reports engineState=loaded,
+      #       with the warm run duration printed as a number;
+      #   (c) the paraphrase, with the assertions it always had.
+      #
+      # What is not measured here is the load window (D-08): a request that
+      # arrives while the weights are being loaded can still tear the ceiling,
+      # because onnxruntime holds the GIL while it builds its session. The
+      # owner accepted that on 27.09.2026; docs/embeddings.md describes it and
+      # backend/tests/test_embed_model.py names the behaviour.
+      #
+      # The durations are printed and never compared against a bound, in any step
       # of this job. A millisecond ceiling on a shared GitHub runner goes red for
       # runner load and not for the thing it names, and the next reader raises
       # the lid instead of reading the finding. The same argument is written out
       # in resilience.yml in the comment before the ratchet step, where a
       # resident memory ceiling was turned down for the identical reason. What
-      # may go red here is what already does: a cold search that finds nothing.
+      # may go red here is what already does: a first search that finds
+      # nothing, a warm run that never arrives, and a paraphrase that finds
+      # nothing.
       #
-      # Two preconditions carry the number, and both are structural rather than
-      # hoped for.
+      # Two preconditions carry the paraphrase, and both are structural rather
+      # than hoped for.
       #
       # One, the line has to keep more than one word, and the step counts them.
       # Since the 06.1-20 addendum a single word line stays lexical
       # (backend/src/findling/api/search.py, rewritten.one_term), so a one word
-      # probe would measure that rule instead of the load and would report a fast
-      # search that never reached the model. Quotation marks, a leading minus, a
+      # probe would measure that rule instead of the vector half and would
+      # report a search that never reached the model. Quotation marks, a leading minus, a
       # field, a file type and titleOnly switch the semantic half off in the same
       # way; the gate asks about the word count alone, because that is the only
       # one of them a later edit of the PARAPHRASE_TERM line can bring about by
@@ -1793,13 +1816,14 @@ jobs:
             sleep 1
           done
           answer="${{ github.workspace }}/paraphrase-semantic.json"
+          first="${{ github.workspace }}/first-search.json"
 
           # Cold is asserted and never assumed (bug audit MEDIUM-4 of plan
           # 07-05). The restart takes the module global of the engine holder
           # with it, so the container SHOULD answer "cold" here, and everything
           # that could have made it warm in the meantime is invisible from the
           # outside: one row of the second track arriving between the restart
-          # and this line loads the very engine whose first load is being timed.
+          # and this line loads the very engine whose warm run is being timed.
           # The question goes to the container itself, through the route the
           # admin page reads, and reading it builds nothing and loads nothing
           # (T-07-04), so the gate cannot spoil the number it guards.
@@ -1810,39 +1834,87 @@ jobs:
           # the other one: going red here would turn a number nobody asserts
           # into a deadline, which is the shape this job turns down everywhere.
           auth=$(printf 'cold:%s' "${EXAPP_SECRET}" | base64 -w0)
-          status_answer=$(curl -sf -m 10 "http://127.0.0.1:${EXAPP_PORT}/status" \
-            -H 'EX-APP-ID: findling_backend' \
-            -H "EX-APP-VERSION: ${APP_VERSION}" \
-            -H "AUTHORIZATION-APP-API: ${auth}" || true)
-          engine_state=$(printf '%s' "${status_answer}" | jq -r '.engineState // empty' || true)
-          if [ -z "${engine_state}" ]; then
-            engine_state='unreported'
-          fi
-          echo "the restarted container reports engineState=${engine_state} before the search"
+          engine_state_now() {
+            state=$(curl -sf -m 10 "http://127.0.0.1:${EXAPP_PORT}/status" \
+              -H 'EX-APP-ID: findling_backend' \
+              -H "EX-APP-VERSION: ${APP_VERSION}" \
+              -H "AUTHORIZATION-APP-API: ${auth}" | jq -r '.engineState // empty' 2>/dev/null || true)
+            printf '%s' "${state:-unreported}"
+          }
+          engine_state=$(engine_state_now)
+          echo "the restarted container reports engineState=${engine_state} before the first search"
 
-          # The wall clock of one cold semantic search, around the request and
-          # nothing else, so that neither the restart nor the heartbeat wait
-          # counts into it.
+          # (a) The first search after the restart. Two words and not one: a
+          # single word line stays lexical by rule (rewritten.one_term), so it
+          # would never build the semantic half, never ask for the warm run,
+          # and stage (b) would wait for a load nothing ordered. "Frist Monate"
+          # is hybrid, carries no operator, and both words stand in the notice
+          # of termination of the corpus (NOTICE_FILE: the compound
+          # Kuendigungsfrist and "drei Monate", the terms the lexical steps
+          # above already search for), so the lexical list has a hit to answer
+          # with while the engine is cold. That hit is the promise of D-01: the
+          # first search comes back with results and not empty.
+          first_term='Frist Monate'
           start=$(date +%s%N)
-          curl -sfS -G -u "${OWNER_USER}:${OWNER_PASS}" \
+          first_code=$(curl -sS -G -u "${OWNER_USER}:${OWNER_PASS}" \
             -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
-            --data-urlencode "term=${PARAPHRASE_TERM}" \
-            'http://localhost:8080/ocs/v2.php/search/providers/findling/search' -o "${answer}"
-          elapsed_ms=$(( ( $(date +%s%N) - start ) / 1000000 ))
+            --data-urlencode "term=${first_term}" \
+            -w '%{http_code}' -o "${first}" \
+            'http://localhost:8080/ocs/v2.php/search/providers/findling/search' || true)
+          first_ms=$(( ( $(date +%s%N) - start ) / 1000000 ))
+          jq -r '.ocs.data.entries[]? | "  \(.title)  \(.resourceUrl)"' "${first}" || true
+          if [ "${first_code}" != "200" ] || ! jq -e '.ocs.data.entries | length > 0' "${first}" > /dev/null; then
+            echo "::error::the first search after a restart came back empty, the cold start fix does not hold (D-01)"
+            echo "HTTP ${first_code}"
+            cat "${first}" || true
+            exit 1
+          fi
           if [ "${engine_state}" = "cold" ]; then
-            echo "cold semantic search over apache, the ocs route, the php provider and both halves:" \
-              "${elapsed_ms} ms on amd64, runner ubuntu-24.04, database ${{ matrix.database }}," \
-              "corpus of ${EXPECTED_EMBEDDED} documents with vectors."
+            echo "first search after a restart, cold engine, over apache, the ocs route, the php provider and both halves:" \
+              "${first_ms} ms on amd64, runner ubuntu-24.04, database ${{ matrix.database }}, HTTP ${first_code}," \
+              "$(jq '.ocs.data.entries | length' "${first}") hits out of the lexical list."
           else
-            echo "semantic search over apache, the ocs route, the php provider and both halves:" \
-              "${elapsed_ms} ms on amd64, runner ubuntu-24.04, database ${{ matrix.database }}," \
-              "corpus of ${EXPECTED_EMBEDDED} documents with vectors." \
+            echo "first search after a restart over apache, the ocs route, the php provider and both halves:" \
+              "${first_ms} ms on amd64, runner ubuntu-24.04, database ${{ matrix.database }}, HTTP ${first_code}." \
               "WARM, NOT COMPARABLE: the engine reported ${engine_state} and not cold before this search," \
               "so this number does not belong in the cold start series of the phase."
           fi
           echo "the two ceilings this number runs against, printed for the reader and asserted nowhere:" \
             "1500 ms for one single container call (ExAppService::REQUEST_TIMEOUT_SECONDS) and" \
             "2500 ms for the whole result group (Provider::BUDGET_NANOSECONDS)."
+
+          # (b) The warm run the first search asked for, which the handler
+          # starts through BackgroundTasks once its answer is out. The clock
+          # starts at the end of the first search, so the number is the time
+          # from the answer to a loaded engine. 120 s is a deadline against a
+          # hang (T-23-14), not a claim about the duration: the load itself is
+          # a few seconds on a runner.
+          warm_start=$(date +%s)
+          warm_deadline=$(( warm_start + 120 ))
+          while :; do
+            engine_state=$(engine_state_now)
+            if [ "${engine_state}" = "loaded" ]; then
+              echo "warm run took $(( $(date +%s) - warm_start )) s from the end of the first search to engineState=loaded"
+              break
+            fi
+            if [ "$(date +%s)" -ge "${warm_deadline}" ]; then
+              echo "::error::the engine did not reach engineState=loaded within 120 s of the first search (last state ${engine_state}), so the warm run the first search asked for never arrived (D-01)"
+              exit 1
+            fi
+            sleep 1
+          done
+
+          # (c) The paraphrase, now against a loaded engine, with the
+          # assertions this step has always had.
+          start=$(date +%s%N)
+          curl -sfS -G -u "${OWNER_USER}:${OWNER_PASS}" \
+            -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+            --data-urlencode "term=${PARAPHRASE_TERM}" \
+            'http://localhost:8080/ocs/v2.php/search/providers/findling/search' -o "${answer}"
+          elapsed_ms=$(( ( $(date +%s%N) - start ) / 1000000 ))
+          echo "semantic search after the warm run over apache, the ocs route, the php provider and both halves:" \
+            "${elapsed_ms} ms on amd64, runner ubuntu-24.04, database ${{ matrix.database }}," \
+            "corpus of ${EXPECTED_EMBEDDED} documents with vectors."
           # The whole ranking into the log, with the resource url of every entry.
           # A gate whose evidence is a boolean makes the next reader rerun it.
           jq -r '.ocs.data.entries[] | "  \(.title)  \(.resourceUrl)"' "${answer}" || true
