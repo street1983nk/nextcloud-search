@@ -576,7 +576,10 @@ def warm() -> bool:
     a search line travels, so it must not be a search line: no user content and
     no file name reaches a log, a vector or a report through here (T-14-22).
 
-    Blocking, like every load. The caller runs it through ``asyncio.to_thread``.
+    Blocking, like every load, and never on the event loop. The release task of
+    ``main.py`` runs it through ``asyncio.to_thread``; the search handler hands
+    it to ``BackgroundTasks``, which runs a synchronous entry in its threadpool
+    once the response has gone out (phase 23, D-01).
     """
     global _WARM_WANTED, _WARMING
 

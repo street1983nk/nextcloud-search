@@ -1212,8 +1212,12 @@ PHP_TREE_HASH_TODAY = "d28262d9643285aa62dff1225692aac9adb95106d1182bf5b6b562d8a
 # request older than the idle span is stale and used to make the next tick of
 # the release task load the weights straight back. One of the 57 files changed
 # its bytes, no file came or went, so PACKAGE_FILES_TODAY stays at 57.
+# Moved on 2026-09-27 by plan 23-08, finding F-23-02 of the phase audit: the
+# docstring of warm() in embed/engine.py names both callers and how each keeps
+# the load off the event loop, instead of the one caller of phase 14. Docstring
+# only; one of the 57 files changed its bytes, PACKAGE_FILES_TODAY stays at 57.
 PACKAGE_FILES_TODAY = 57
-PACKAGE_TREE_HASH_TODAY = "71ca4ec8708a215558db342a77fe21259dea59592669f9a5bec07e2470e6d7d0"
+PACKAGE_TREE_HASH_TODAY = "af85a984aeeb5cad598733bc6a2889ef964ee03d52f400103c76c49216cf0e58"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
