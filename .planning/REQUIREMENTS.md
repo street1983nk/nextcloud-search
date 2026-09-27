@@ -49,7 +49,7 @@
 - Seiten-Parallelitaet innerhalb einer Datei (H4; fuer grosse Korpora deckt H2 dasselbe ab)
 - Tantivy num_threads fuer den UMBAU-Weg (nur falls B6 zeigt, dass der Umbau einkernig und lang ist)
 - Nachholweg fuer indexed(truncated) nach OCR_MAX_PAGES-Erhoehung
-- F-23-04 (Phase-23-Backlog), idle-Guard EmbeddingModel.release() (Kandidat: passt evtl. in eine v1.4-Phase, Roadmapper prueft)
+- F-23-04 (Phase-23-Backlog), idle-Guard EmbeddingModel.release() (Kandidat: Roadmap fuehrt ihn als Mitnahme-Kandidat in Phase 25, kein REQ; Plan-Schnitt entscheidet)
 
 ## Out of Scope
 
@@ -63,7 +63,22 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (wird von der Roadmap gefuellt) | | |
+| PROF-01 | Phase 24 | Pending |
+| PROF-02 | Phase 24 | Pending |
+| PROF-03 | Phase 24 | Pending |
+| MOD-01 | Phase 24 | Pending |
+| HW-01 | Phase 24 | Pending |
+| PAR-01 | Phase 25 | Pending |
+| PAR-04 | Phase 25 | Pending |
+| MOD-02 | Phase 25 | Pending |
+| PAR-02 | Phase 26 | Pending |
+| PAR-03 | Phase 26 | Pending |
+| PRUEF-01 | Phase 27 | Pending |
+| UI-01 | Phase 27 | Pending |
+| MESS-10 | Phase 28 | Pending |
+| REL-04 | Phase 29 | Pending |
+
+**Coverage:** 14/14 v1.4-Requirements zugeordnet, keine Waisen, keine Doppelungen.
 
 ---
-*Erstellt: 2026-09-27 aus BL-F04-Vorarbeit (25.09.) und Owner-Scope-Bestaetigung.*
+*Erstellt: 2026-09-27 aus BL-F04-Vorarbeit (25.09.) und Owner-Scope-Bestaetigung. Traceability: 2026-09-27 (Roadmap v1.4, Phasen 24 bis 29).*

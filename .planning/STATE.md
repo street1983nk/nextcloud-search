@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
 status: planning
-last_updated: "2026-09-27T11:48:23.896Z"
+last_updated: "2026-09-27T12:30:00.000Z"
 last_activity: 2026-09-27
 progress:
-  total_phases: 0
+  total_phases: 6
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,20 +20,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Planning next milestone (v1.4, Owner-Linie: BL-F04 SPEED)
+**Current focus:** v1.4 Leistungsprofile, Phase 24 (Owner-Tor, Profil-Gerüst und Marken-Reparatur)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-09-27 — Milestone v1.4 started
+Phase: 24 of 29 (Owner-Tor, Profil-Gerüst und Marken-Reparatur)
+Plan: 0 of TBD
+Status: Ready to plan
+Last activity: 2026-09-27 -- Roadmap v1.4 erstellt (Phasen 24 bis 29, 14/14 Requirements zugeordnet)
+
+Progress: [..........] 0%
 
 ## Naechster Schritt
 
-**/gsd:new-milestone** fuer v1.4. Owner-Linie: v1.4 = BL-F04 SPEED (Indexier-Durchsatz).
-Vorarbeit liegt vor: .planning/research/BL-F04-vorarbeit-2026-09-25.md plus Basiszahlen
-B1-B5 aus der Phase-22-Anfahrt in docs/performance.md; keine eigene Box-Anfahrt noetig.
+**/gsd:discuss-phase 24** bzw. **/gsd:plan-phase 24**. Phase 24 beginnt mit dem Owner-Tor:
+Weg des Profils in den Container (Wege A/B/C), Anteile je Profil im Owner-Wortlaut,
+fp32-Lieferweg (K7). Vor dem Tor kein Code, der diese Punkte beruehrt.
+Grundlage: .planning/research/BL-F04-vorarbeit-2026-09-25.md.
 
 ## Accumulated Context
 
@@ -53,6 +56,10 @@ Fuer v1.4 unmittelbar tragend:
 
 - Store-Regeln: eine Messzahl (730,2 MB), Gate test_store_metadata.py (RESIDENT_FIGURE),
   Tag im Store nie verschieben (v1.3.0 liegt auf 744d7e4).
+
+- Roadmap v1.4 (27.09.): Reihenfolge 24 -> 29 streng seriell als Sicherheitsbedingung
+  (MOD-01 vor jedem Modellschalter, H1 vor H2, N-Slot-Probe nach H2, Abnahme-Anfahrt vor
+  Release). Rueckfall bei K1: Phase 26 schrumpft auf Befund, Entscheid datiert vor H2-Bau.
 
 ### Termine und Owner-Checkpoints
 
@@ -77,7 +84,7 @@ Fuer v1.4 unmittelbar tragend:
 Aus Phase 23 (Details in phases-Archiv v1.3-phases/23-*/deferred-items.md):
 
 - F-23-04 -> v1.4-Backlog.
-- idle-Guard fuer EmbeddingModel.release() -> v1.4.
+- idle-Guard fuer EmbeddingModel.release() -> v1.4 (Mitnahme-Kandidat Phase 25, Plan-Schnitt prueft).
 - IN-01..03 dokumentiert offen (23-REVIEW.md).
 - Aufraeumen: Worktree nextcloud-search-worktrees/issue-14 plus Branch
   fix/issue-14-teamfolder-acl loeschen (Dateisperre pruefen).
@@ -103,9 +110,9 @@ Aeltere Merker:
 ## Session Continuity
 
 Last session: 2026-09-27
-Stopped at: Milestone v1.3 archiviert (secure-phase 23 + complete-milestone in einer Session)
-Resume file: —
+Stopped at: Roadmap v1.4 erstellt (Phasen 24 bis 29)
+Resume file: -
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Phase 24 starten mit /gsd:discuss-phase 24 (Owner-Tor zuerst)
