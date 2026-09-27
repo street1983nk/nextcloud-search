@@ -31,6 +31,7 @@ import pytest
 from fastapi.testclient import TestClient
 from tantivy import Document, Index, Schema, SchemaBuilder
 
+from findling import profile as profile_module
 from findling.config import settings
 from findling.embed import model as model_module
 from findling.embed.engine import note_cutter_failure
@@ -334,6 +335,22 @@ def forget_the_cutter_notice() -> Iterator[None]:
     note_cutter_failure(None)
     yield
     note_cutter_failure(None)
+
+
+@pytest.fixture(autouse=True)
+def forget_the_profile_state() -> Iterator[None]:
+    """No case inherits the hardware or the chosen profile of the case before it.
+
+    ``findling/profile.py`` holds both as module globals, because they describe
+    this process: the hardware is read once per start and the chosen profile
+    once per round. In a suite that one process runs every case, so a case that
+    noted a big box would otherwise decide which level another file reports.
+    Cleared on both sides, so the order the suite happens to run in cannot be
+    read off any answer.
+    """
+    profile_module.reset()
+    yield
+    profile_module.reset()
 
 
 @pytest.fixture(autouse=True)

@@ -1243,8 +1243,15 @@ PHP_TREE_HASH_TODAY = "170f144a644cc86d73dc2c47881f814469fbb04f61639c5c626124a85
 # both branches carried their own reading, the merged tree holds vectors.py,
 # config.py and hardware.py together, so the hash below is the reading over the
 # merged tree. PACKAGE_FILES_TODAY stays at 58.
-PACKAGE_FILES_TODAY = 58
-PACKAGE_TREE_HASH_TODAY = "a5a0e539e52d096ccb9aa1173a9d53b305b65fe988f835c6fd907e9b8e0c638c"
+# Moved on 2026-09-27 by plan 24-03 (profile core, PROF-01/PROF-02/HW-01), and
+# the count moves with the hash: profile.py arrived, the neutral resolver for
+# suggestion, effective level and value table plus the process state behind the
+# status route. No other file changed its bytes. One file came and none went,
+# so PACKAGE_FILES_TODAY moves to 59. Measured again after the second task of
+# the plan, which added the process state (ProfileSnapshot, note_hardware,
+# note_chosen, snapshot, reset) to profile.py; the count stays at 59.
+PACKAGE_FILES_TODAY = 59
+PACKAGE_TREE_HASH_TODAY = "15222184ccd52a8f82df8bf9f3399d0f3e2ac83a4afa221a4320773a3585e1aa"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
