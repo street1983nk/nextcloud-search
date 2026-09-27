@@ -464,9 +464,19 @@ def release_if_idle(ttl_seconds: int) -> bool:
         # not to be a moment away.
         return False
 
+    global _WARM_WANTED
     with _LOCK:
         if _held(model_dir) is not held:
             return False
+        # A warm request still standing here is older than the idle span, and
+        # it is stale (audit 23-08, F-23-01). Every hybrid round asks for a
+        # warm run whatever the state of the engine, so a search on a warm
+        # engine leaves the marker up, and :func:`warm_wanted` only said no
+        # because the engine was loaded. Left standing, the next tick of the
+        # release task would fetch the weights straight back after this very
+        # release, with nobody searching. Cleared under the same lock as the
+        # identity check, so a search refused after the release sets it anew.
+        _WARM_WANTED = False
 
     return held.release()
 

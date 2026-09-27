@@ -1207,8 +1207,13 @@ PHP_TREE_HASH_TODAY = "d28262d9643285aa62dff1225692aac9adb95106d1182bf5b6b562d8a
 # "if warm_wanted(): warm()", and the report carries search-ms and warm-ms
 # instead of the single cold search duration. One of the 57 files changed its
 # bytes, no file came or went, so PACKAGE_FILES_TODAY stays at 57.
+# Moved on 2026-09-27 by plan 23-08, finding F-23-01 of the phase audit:
+# embed/engine.py clears the warm request inside release_if_idle, because a
+# request older than the idle span is stale and used to make the next tick of
+# the release task load the weights straight back. One of the 57 files changed
+# its bytes, no file came or went, so PACKAGE_FILES_TODAY stays at 57.
 PACKAGE_FILES_TODAY = 57
-PACKAGE_TREE_HASH_TODAY = "6d2a697c4053cac39d246a42b005cd1a35443a233bfb781c871bf8231aaed65e"
+PACKAGE_TREE_HASH_TODAY = "71ca4ec8708a215558db342a77fe21259dea59592669f9a5bec07e2470e6d7d0"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
