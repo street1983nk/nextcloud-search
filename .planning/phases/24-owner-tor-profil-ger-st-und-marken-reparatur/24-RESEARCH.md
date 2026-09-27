@@ -394,12 +394,12 @@ Keine Umbenennungsphase im engeren Sinn, aber MOD-01 berührt gespeicherten Zust
 | A4 | Die Konstante `Kosten_je_Slot = 235 MiB` ist repräsentativ | Formelkonstanten | am oberen Band (680 MB) zu viele Slots gemeldet; Phase 24 meldet nur, verdrahtet nichts |
 | A5 | Wire-Namen der Profile englisch (`economy`, `standard`, `performance`) | Pattern 3 | reine Namensfrage; UI-Texte kommen aus Katalogen (Phase 27) |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Leistung-Kernterm: C - 1 oder C - 1 - r?**
+1. **Leistung-Kernterm: C - 1 oder C - 1 - r?** RESOLVED: Owner-Entscheid D-24-08 (27.09.2026), Empfehlung uebernommen: Leistung `C - 1` ohne r-Abzug, Standard mit r-Abzug.
    - What we know: D-24-03 nennt die Formel mit `- r` und "Kerne minus 1"; wörtlich ergibt das C - 2 Slots. D-24-04 (wörtlicher Store-Satz) verspricht "alles bis auf einen Kern".
    - Recommendation: Für Leistung den Kernterm als `C - 1` lesen (der eine freie Kern deckt das gemessene r = 0,25 ab), für Standard `floor(0,5 x C - r)` wörtlich. Das als datierte Deutung im Plan festhalten und dem Owner kurz zur Bestätigung zeigen, weil es den Store-Satz betrifft.
-2. **Messgröße für die Vorschlags-Schwellen (6 GB/12 GB):** `MemAvailable` (wörtlich HW-01) schlägt auf typischen 8-GB-AIO-Boxen eher Sparsam vor; `MemTotal` bzw. `memory.max` trifft das Owner-Bild "Box mit 6 GB".
+2. **Messgröße für die Vorschlags-Schwellen (6 GB/12 GB):** RESOLVED: siehe 24-CONTEXT.md Nachentscheid (Research-Empfehlungen uebernommen). `MemAvailable` (wörtlich HW-01) schlägt auf typischen 8-GB-AIO-Boxen eher Sparsam vor; `MemTotal` bzw. `memory.max` trifft das Owner-Bild "Box mit 6 GB".
    - Recommendation: Schwellen gegen `memory.max`, sonst `MemTotal`; Slotformel gegen `min(memory.max, MemAvailable)`. Beide Werte melden. Planer entscheidet, bei Zweifel Owner-Rückfrage.
 3. **PHP-Durchreichung der neuen Statusfelder schon in Phase 24?** `AdminViewService::backend()` baut Felder einzeln neu, neue Container-Felder erscheinen dort nicht von selbst.
    - Recommendation: in Phase 27 (UI) mitbauen; Phase 24 liefert nur die Container-Payload, wie die Roadmap sagt.
