@@ -93,9 +93,9 @@ Details im Archiv: .planning/milestones/v1.3-ROADMAP.md
 Plans:
 **Wave 1**
 
-- [ ] 24-01-PLAN.md , Vektor-Marke mit Gewichtspräzision, int8 bytegleich, Upgrade-Test (MOD-01), Welle 1
-- [ ] 24-02-PLAN.md , Profilkonstanten, Überstimmungsleser, cgroup-Hardware-Erkennung, Gleichstand info.xml (PROF-01, PROF-03, HW-01), Welle 1
-- [ ] 24-04-PLAN.md , PHP: SettingsService::profile() und OCS-Route GET /profile (PROF-03), Welle 1
+- [x] 24-01-PLAN.md , Vektor-Marke mit Gewichtspräzision, int8 bytegleich, Upgrade-Test (MOD-01), Welle 1
+- [x] 24-02-PLAN.md , Profilkonstanten, Überstimmungsleser, cgroup-Hardware-Erkennung, Gleichstand info.xml (PROF-01, PROF-03, HW-01), Welle 1
+- [x] 24-04-PLAN.md , PHP: SettingsService::profile() und OCS-Route GET /profile (PROF-03), Welle 1
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -191,7 +191,7 @@ Plans:
 | 7-11 (Archiv) | v1.1 | 37/37 | Complete | 2026-09-11 |
 | 12-16 (Archiv) | v1.2 | 63/63 | Complete | 2026-09-21 |
 | 17-23 (Archiv) | v1.3 | 69/69 | Complete | 2026-09-27 |
-| 24. Owner-Tor, Profil-Gerüst und Marken-Reparatur | v1.4 | 0/? | Not started | - |
+| 24. Owner-Tor, Profil-Gerüst und Marken-Reparatur | v1.4 | 3/6 | In Progress|  |
 | 25. Einbettungsspur und Modellwahl | v1.4 | 0/? | Not started | - |
 | 26. N OCR-Slots und Speicherwächter | v1.4 | 0/? | Not started | - |
 | 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 0/? | Not started | - |
