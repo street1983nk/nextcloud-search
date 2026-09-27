@@ -99,7 +99,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 24-03-PLAN.md , Profil-Resolver, Prozess-Zustand, Sparsam-Pin (PROF-01, PROF-02, HW-01), Welle 2
+- [x] 24-03-PLAN.md , Profil-Resolver, Prozess-Zustand, Sparsam-Pin (PROF-01, PROF-02, HW-01), Welle 2
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -191,7 +191,7 @@ Plans:
 | 7-11 (Archiv) | v1.1 | 37/37 | Complete | 2026-09-11 |
 | 12-16 (Archiv) | v1.2 | 63/63 | Complete | 2026-09-21 |
 | 17-23 (Archiv) | v1.3 | 69/69 | Complete | 2026-09-27 |
-| 24. Owner-Tor, Profil-Gerüst und Marken-Reparatur | v1.4 | 3/6 | In Progress|  |
+| 24. Owner-Tor, Profil-Gerüst und Marken-Reparatur | v1.4 | 4/6 | In Progress|  |
 | 25. Einbettungsspur und Modellwahl | v1.4 | 0/? | Not started | - |
 | 26. N OCR-Slots und Speicherwächter | v1.4 | 0/? | Not started | - |
 | 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 0/? | Not started | - |
