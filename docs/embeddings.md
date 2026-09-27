@@ -774,7 +774,7 @@ liegt weiter im Abbild, und der nächste Bedarf liest sie neu ein.
 
 | Wert | Bedeutung |
 |---|---|
-| `0` | aus, und das ist der Werksstand |
+| `0` | aus, und das ist der Werksstand: nach dem ersten Laden nie wieder freigeben. Auch bei `0` lädt keine Suche das Modell im Request (siehe "Der Kaltstart" weiter unten) |
 | `60` bis `86400` | eingeschaltet, mit dieser Ruhezeit |
 | alles andere | fällt auf den Werksstand zurück |
 
@@ -806,6 +806,30 @@ Stattdessen bestellt die Suche das Nachwärmen im Hintergrund und antwortet
 sofort. Die zweite Suche ist wieder vollständig. Bezahlt wird das je warmem
 Fenster genau einmal: zehn gleichzeitige Suchen lösen einen Ladevorgang aus und
 nicht zehn.
+
+**Der Kaltstart.** Dasselbe gilt seit Phase 23 für die erste Suche nach jedem
+Start des Containers, unabhängig vom Schalter (D-01). Bis Phase 22 lud die erste
+hybride Suche nach einem Start die Gewichte noch selbst, und auf der Messbox riss
+genau diese Suche die 1,5-Sekunden-Decke, mit ausgeschalteter Entladung ebenso
+wie mit eingeschalteter (V-22-01, V-22-02). Jetzt antwortet die erste Suche aus
+dem Volltext, und das Modell wird im Hintergrund geladen: der Handler von
+`/search` startet den Warmlauf über `BackgroundTasks`, also erst nachdem die
+Antwort vollständig verschickt ist. Eine einwortige Suche, eine Suche mit
+Operator und eine reine Titelsuche bleiben ohnehin lexikalisch und fordern
+keinen Warmlauf an; ein Container, auf dem niemand sucht, bleibt kalt (D-03).
+In CI misst der Schritt "The paraphrase finds the document with the second
+track" in `.github/workflows/integration.yml` diese Route nach: erste Suche
+mit Treffern, Warten bis `engineState=loaded`, danach die Paraphrase.
+
+**Das Ladefenster (D-08).** Das Laden startet nach dem Antwortversand, die erste
+Anfrage ist also geschützt. Anfragen, die eintreffen, während das Modell gerade
+geladen wird, können die 1,5-Sekunden-Decke trotzdem reißen, weil onnxruntime
+1.30.0 beim Aufbau der Inferenzsitzung den GIL hält und die Anfrage am Schloss
+des Halters wartet. `/snippets` degradiert dabei weich und liefert die Treffer
+ohne Auszug; eine zweite `/search` im selben Fenster kann leer enden. Dieses
+Restrisiko hat der Owner am 27.09.2026 akzeptiert. Der Test in
+`backend/tests/test_embed_model.py` (Plan 23-01) benennt das Verhalten: eine
+Anfrage ohne Ladeerlaubnis wartet, solange ein Ladevorgang das Schloss hält.
 
 **Was es bringt.** Der Vorprüflauf vom 19.09.2026 hat auf aarch64 gemessen, dass
 **100,0 Prozent** des beim Laden belegten Speichers wieder beim Betriebssystem

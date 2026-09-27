@@ -134,8 +134,8 @@ Anteil bleibt dagegen am Nenner, denn ohne Nenner gibt es nichts auszurechnen.
 | Meldung des Containers | Was auf der Seite steht | Was ein Admin tun kann |
 |---|---|---|
 | `loaded` | Das Modell liegt im Speicher, die semantische Suche antwortet. | nichts |
-| `cold` | Das Modell wird beim ersten Bedarf geladen. Das ist der Normalfall. | nichts, warten |
-| `unloaded` | Das Modell wurde zum Sparen freigegeben. Die nächste Suche antwortet mit Volltexttreffern und lädt es im Hintergrund nach. | nichts, das ist der eingeschaltete Sparbetrieb; wer die Nachladekosten nicht will, setzt `FINDLING_EMBED_IDLE_RELEASE_SECONDS` auf 0 |
+| `cold` | Das Modell wird beim ersten Bedarf geladen. Das ist der Normalfall. | nichts, warten. Genauer: Das Modell wird bei der ersten Suche im Hintergrund geladen; diese Suche antwortet mit Volltexttreffern. |
+| `unloaded` | Das Modell wurde zum Sparen freigegeben. Die nächste Suche antwortet mit Volltexttreffern und lädt es im Hintergrund nach. | nichts, das ist der eingeschaltete Sparbetrieb. `FINDLING_EMBED_IDLE_RELEASE_SECONDS` auf 0 heißt: nach dem ersten Laden nie wieder freigeben. Auch bei 0 lädt keine Suche das Modell im Request; die erste Suche nach einem Start antwortet mit Volltexttreffern. |
 | `disabled` | Die semantische Hälfte ist in den Einstellungen des Containers abgeschaltet. | `FINDLING_EMBED_ENABLED` setzen, wenn das nicht gewollt war |
 | `missing` | In diesem Abbild liegt kein Modell. | ein Abbild mit Modell einsetzen |
 | `waiting_for_retry` | Das Laden ist einmal gescheitert und wird in Kürze erneut versucht. | fünf Minuten warten, danach das Protokoll lesen |

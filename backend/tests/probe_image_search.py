@@ -8,10 +8,11 @@ the same way ``test_vec_extension_probe.py`` travels in.
 
 **Step one, offline.** ``HF_HUB_OFFLINE=1`` in ``backend/Dockerfile`` is a net
 and not a proof, and the difference is the whole reason this step exists.
-fastembed brought huggingface-hub and requests into an image that is not allowed
-to speak to the outside world, the store text makes a statement about that, and
-the only thing that can carry the statement is a container with its network cut
-that answers a paraphrase anyway. Two runs, so that the answer cannot be an
+The embedding stack of the image is onnxruntime plus tokenizers, and since
+HART-04 of phase 23 it carries neither fastembed nor requests; the image is not
+allowed to speak to the outside world, the store text makes a statement about
+that, and the only thing that can carry the statement is a container with its
+network cut that answers a paraphrase anyway. Two runs, so that the answer cannot be an
 accident: the same query against a volume without a vector stock has to find
 nothing at all, and against a volume with one it has to put the paraphrased
 document first.
@@ -68,6 +69,7 @@ from findling.api import resources
 from findling.api.search import one_round
 from findling.config import settings
 from findling.embed.chunker import chunk_spans, make_splitter
+from findling.embed.engine import request_warm, warm
 from findling.embed.model import EmbeddingModel, open_tokenizer, to_int8
 from findling.index.open import expected_versions, open_index
 from findling.index.schema import (
@@ -344,6 +346,16 @@ def offline_step() -> list[str]:
     chunks = write_vector_stock(root, CORPUS)
     print(f"vector stock                {chunks} chunks for {len(CORPUS)} documents")
     lexical = ask(LEXICAL_TERM, label="full text query")
+
+    # The shared holder is warmed through the product path before the
+    # paraphrase. write_vector_stock builds an EmbeddingModel of its own, so the
+    # shared holder of embed/engine.py is still cold here, and since the cold
+    # start fix of plan 23-01 a search never loads by itself: it answers out of
+    # the lexical list and asks for the warm run, which the handler of /search
+    # runs after its answer. request_warm() and warm() are those two halves.
+    request_warm()
+    warmed = warm()
+    print(f"warm run                    {warmed}")
     semantic = ask(PARAPHRASE, label="paraphrase, with vectors")
 
     return judge_offline(control, lexical, semantic)
