@@ -193,6 +193,14 @@ class _OneBatchQueue:
     def __init__(self, *jobs: QueueJob) -> None:
         self._batches = [tuple(jobs)]
         self.acknowledged: list[list[int]] = []
+        self.profile_answer: str | None = None
+        self.profile_asks = 0
+
+    async def profile(self) -> str | None:
+        # Needed although this fake has no top_up: the poller asks for the
+        # profile before every claim (D-24-01).
+        self.profile_asks += 1
+        return self.profile_answer
 
     async def claim(self, *, limit: int, max_bytes: int) -> ClaimResult:
         del limit, max_bytes

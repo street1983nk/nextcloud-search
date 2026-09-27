@@ -138,6 +138,14 @@ class _FakeQueue:
         self.unlocked: list[list[int]] = []
         self.requeues: list[tuple[list[int], str]] = []
         self.requeue_fails = False
+        self.profile_answer: str | None = None
+        self.profile_asks = 0
+
+    async def profile(self) -> str | None:
+        # The second track does not read the profile yet: no stored choice,
+        # Economy in force, exactly the state before phase 24.
+        self.profile_asks += 1
+        return self.profile_answer
 
     async def claim(self, *, limit: int, max_bytes: int) -> ClaimResult:
         del limit, max_bytes

@@ -1254,9 +1254,12 @@ PHP_TREE_HASH_TODAY = "170f144a644cc86d73dc2c47881f814469fbb04f61639c5c626124a85
 # read_profile, the GET on /ocs/v2.php/apps/findling/profile, and nc/queue.py
 # got DocumentQueue.profile, which turns every failure and every name outside
 # PROFILE_NAMES into None. Two of the 59 files changed their bytes, no file came
-# or went, so PACKAGE_FILES_TODAY stays at 59.
+# or went, so PACKAGE_FILES_TODAY stays at 59. Measured again after the second
+# task of the plan, which made worker/poller.py call note_chosen(await
+# queue.profile()) once per round before the claim; three of the 59 files have
+# changed their bytes now, the count stays at 59.
 PACKAGE_FILES_TODAY = 59
-PACKAGE_TREE_HASH_TODAY = "d259597c3610930b4b9afd7d8593b71fa1aef156ab4dcfb43a7d5d36ab460a07"
+PACKAGE_TREE_HASH_TODAY = "e1d97b44b0385bdababda4c8b1a716d21fe7d418525bb2299a432d3400eb0184"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
