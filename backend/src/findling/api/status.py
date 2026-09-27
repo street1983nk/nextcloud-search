@@ -77,6 +77,7 @@ import asyncio
 import logging
 import os
 import sqlite3
+from typing import Final
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
@@ -87,6 +88,7 @@ from findling.embed.engine import engine_state
 from findling.index.open import LANGUAGES_MARK
 from findling.index.rebuild import rebuild_blocked_bytes, rebuild_progress
 from findling.instance import volume_is_shared
+from findling.profile import snapshot
 from findling.store.repo import Store, index_bytes, open_read_only
 from findling.store.vectors import VectorStoreError, open_vectors
 
@@ -110,6 +112,58 @@ VECTORS_UNREADABLE = "the vector database exists but could not be read"
 # else's index. It names the page that explains the constellation because a
 # reader of this line cannot be expected to know how AppAPI names a volume.
 VOLUME_SHARED = "this volume belongs to another Nextcloud instance, indexing is off, see docs/uninstall.md"
+
+# The wire keys of the profile values and of their sources, field name to key.
+# Spelled out rather than derived by a case conversion, so that renaming a field
+# of ProfileValues is a change here on purpose and not a silent change on the
+# wire the admin page reads.
+PROFILE_VALUE_KEYS: Final = {
+    "ocr_slots": "ocrSlots",
+    "text_slots": "textSlots",
+    "embed_slots": "embedSlots",
+    "onnx_threads": "onnxThreads",
+    "writer_heap_bytes": "writerHeapBytes",
+    "writer_threads": "writerThreads",
+    "embed_batch_size": "embedBatchSize",
+    "ocr_max_pages": "ocrMaxPages",
+    "ocr_dpi": "ocrDpi",
+    "memory_reserve_share": "memoryReserveShare",
+}
+
+
+class HardwareReport(BaseModel):
+    """The one reading of this start, numbers only (HW-01).
+
+    None means the container could not tell, which is also the answer before
+    the lifespan read anything. No path is ever part of it.
+    """
+
+    cores: float | None = None
+    coresWhole: int | None = None
+    cpuCount: int | None = None
+    cpuQuota: float | None = None
+    memoryLimitBytes: int | None = None
+    memoryAvailableBytes: int | None = None
+    memoryTotalBytes: int | None = None
+    architecture: str = ""
+    cgroup: str = ""
+
+
+class ProfileReport(BaseModel):
+    """Chosen, suggested and effective profile, with the values and their sources.
+
+    ``chosen`` and ``effective`` are two fields on purpose (D-24-07): a box that
+    shrank keeps the chosen profile and runs a smaller one, and an admin has to
+    see both to know it was the box and not the setting.
+    """
+
+    chosen: str | None = None
+    effective: str = "economy"
+    suggested: str = "economy"
+    downgraded: bool = False
+    hardware: HardwareReport = Field(default_factory=HardwareReport)
+    values: dict[str, int | float | None] = Field(default_factory=dict)
+    sources: dict[str, str] = Field(default_factory=dict)
 
 
 class StatusResponse(BaseModel):
@@ -222,7 +276,50 @@ class StatusResponse(BaseModel):
     # only figure an admin can act on without doing the arithmetic of this
     # container a second time.
     rebuildBlockedBytes: int = 0
+    # The profile of this process (plan 24-06, HW-01, PROF-01): the hardware of
+    # this start, the suggestion, the chosen and the effective level, the values
+    # they stand for and per value whether the profile or an admin variable set
+    # it. A process value like engineState, so the state database knows nothing
+    # of it. Reported only: phase 24 switches nothing, and the page shows the
+    # block from phase 27 on.
+    profile: ProfileReport = Field(default_factory=ProfileReport)
     note: str = ""
+
+
+def _profile_report() -> ProfileReport:
+    """The profile state of this process as the wire spells it.
+
+    Reads ``findling.profile.snapshot()`` and nothing else. Nothing is measured,
+    loaded or written here: the hardware was read once at start, and a poll of
+    the admin page must not become a second reading (T-07-04, T-24-23).
+    """
+    state = snapshot()
+    hardware = state.hardware
+    reading = (
+        HardwareReport()
+        if hardware is None
+        else HardwareReport(
+            cores=hardware.cores,
+            coresWhole=hardware.cores_whole,
+            cpuCount=hardware.cpu_count,
+            cpuQuota=hardware.cpu_quota,
+            memoryLimitBytes=hardware.memory_limit_bytes,
+            memoryAvailableBytes=hardware.memory_available_bytes,
+            memoryTotalBytes=hardware.memory_total_bytes,
+            architecture=hardware.architecture,
+            cgroup=hardware.cgroup,
+        )
+    )
+    resolution = state.resolution
+    return ProfileReport(
+        chosen=None if state.chosen is None else state.chosen.value,
+        effective=state.effective.value,
+        suggested=state.suggested.value,
+        downgraded=state.downgraded,
+        hardware=reading,
+        values={key: getattr(resolution.values, field) for field, key in PROFILE_VALUE_KEYS.items()},
+        sources={key: resolution.sources[field] for field, key in PROFILE_VALUE_KEYS.items()},
+    )
 
 
 def _number(mark: str | None) -> int:
@@ -312,6 +409,7 @@ def _volume() -> StatusResponse:
         rebuildDone=progress.documents_carried,
         rebuildTotal=progress.documents_total,
         rebuildBlockedBytes=rebuild_blocked_bytes(),
+        profile=_profile_report(),
         lowDisk=resources.low_disk(),
         diskFreeBytes=free,
         diskTotalBytes=total,
@@ -426,6 +524,11 @@ def _of(store: Store, volume: StatusResponse) -> StatusResponse:
         rebuildDone=volume.rebuildDone,
         rebuildTotal=volume.rebuildTotal,
         rebuildBlockedBytes=volume.rebuildBlockedBytes,
+        # Carried over like the engine state: the profile is a value of this
+        # process and the state database has nothing to say about it. Left out
+        # here, it would vanish on every installation that has indexed anything
+        # (24-RESEARCH.md, Pitfall 2).
+        profile=volume.profile,
         note=volume.note,
         lowDisk=volume.lowDisk,
         diskFreeBytes=volume.diskFreeBytes,

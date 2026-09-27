@@ -1139,7 +1139,8 @@ def test_the_start_reads_the_hardware_once_and_publishes_it(volume: Path, monkey
 
     assert calls == [1]
     assert snapshot().hardware is _A_READING
-    assert snapshot().suggested == "standard"
+    # Eight cores and 16 GB clear both thresholds of D-24-06 (12 GB, 6 cores).
+    assert snapshot().suggested == "performance"
 
 
 def test_a_hardware_reading_that_throws_does_not_keep_the_container_from_starting(

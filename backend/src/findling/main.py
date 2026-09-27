@@ -51,9 +51,11 @@ from findling.api.snippets import ROUTER as SNIPPETS_ROUTER
 from findling.api.status import ROUTER as STATUS_ROUTER
 from findling.config import TESSERACT_NAME, settings
 from findling.embed.engine import release_if_idle, warm, warm_wanted
+from findling.hardware import detect
 from findling.index.rebuild import MARKS_A_REBUILD_ANSWERS, rebuild_the_index, recover_the_index_directories
 from findling.instance import claim_the_volume, volume_is_shared
 from findling.nc.client import AppAPIAuthMiddleware, AsyncNextcloudApp, run_app, set_handlers
+from findling.profile import note_hardware
 from findling.store.repo import open_read_only, open_store
 from findling.worker.poller import POLLER_STOP_SECONDS, STAND_DOWN_SECONDS, Poller, _pause, default_poller
 from findling.worker.reconcile import RECONCILE_STOP_SECONDS, Reconcile, default_reconcile
@@ -758,6 +760,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # them shaped differently, is a question every later reader has to ask and
     # answer, and that costs more than the hop.
     await asyncio.to_thread(warn_on_uncovered_languages)
+
+    # The fourth startup statement: what the container may use (HW-01). Read
+    # once per start and handed to the profile state, never measured again per
+    # round, and read here, before any task exists and before any model loads,
+    # because Findling's own model load lowers MemAvailable and a later reading
+    # would let the profile shrink against itself (24-RESEARCH.md, Pitfall 3).
+    # Said on a shared volume as well: the box is the box whoever the index
+    # belongs to.
+    #
+    # Through a worker thread because it reads kernel files. detect is written
+    # never to raise, and the start does not rely on that: a failure leaves the
+    # profile at economy, which is today's container, and says so with the type
+    # name only. No line of this start logs a hardware value.
+    try:
+        note_hardware(await asyncio.to_thread(detect))
+    except Exception as error:
+        LOGGER.warning("hardware detection failed with %s, the profile stays economy", type(error).__name__)
 
     # Exactly one indexing task, started silenced. It opens neither the index nor
     # the state database before it is armed, so a container that is deployed but

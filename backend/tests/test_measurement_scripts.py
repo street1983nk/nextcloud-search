@@ -1250,8 +1250,16 @@ PHP_TREE_HASH_TODAY = "170f144a644cc86d73dc2c47881f814469fbb04f61639c5c626124a85
 # so PACKAGE_FILES_TODAY moves to 59. Measured again after the second task of
 # the plan, which added the process state (ProfileSnapshot, note_hardware,
 # note_chosen, snapshot, reset) to profile.py; the count stays at 59.
+# Moved on 2026-09-27 by plan 24-06 (reporting side, HW-01/PROF-01/PROF-03):
+# main.py got the fourth startup statement note_hardware(await
+# asyncio.to_thread(detect)), api/status.py the HardwareReport and
+# ProfileReport models and the profile block in _volume() and _of(). Two of the
+# 59 files changed their bytes, no file came or went, so PACKAGE_FILES_TODAY
+# stays at 59. Plan 24-05 runs in parallel in the same wave and touches this
+# package as well; the reading below is for the tree of 24-06 alone and is
+# measured again after the merge.
 PACKAGE_FILES_TODAY = 59
-PACKAGE_TREE_HASH_TODAY = "15222184ccd52a8f82df8bf9f3399d0f3e2ac83a4afa221a4320773a3585e1aa"
+PACKAGE_TREE_HASH_TODAY = "705bcb9b69a91c4accc267db654d5a4b3266865162587ea8a6f379a04e5e8411"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
