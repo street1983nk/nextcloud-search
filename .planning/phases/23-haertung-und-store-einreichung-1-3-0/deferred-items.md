@@ -10,3 +10,17 @@
 
 - **Oberflaechentext der Admin-Seite (admin.php + 7 Sprachdateien) zum Zustand `cold`/`unloaded`:** Die Doku (`docs/admin-page.md`) ist praezisiert, der ausgelieferte Oberflaechentext selbst noch nicht. Owner-Frage am 23-08-Checkpoint: mitaendern (dann in 23-07/23-08 einarbeiten, 8 Dateien) oder so lassen (Doku erklaert den Unterschied)?
 - **`docs/performance.md:3480` nennt noch `cold-search-ms=`:** datierter Messbericht, bewusst nicht angefasst.
+
+## Aus 23-08 (Phasenaudit, docs/audits/2026-09-phase-23/README.md)
+
+- **F-23-04 (LOW): Admin-Suche nach einem Pfad ohne Besitzer lehnt in einem Randfall ab.**
+  `PathResolverService::rootsCarrying` sucht Einhängepunkte mit `/%/files/<Ordner>/`; das Prozentzeichen reicht über Schrägstriche und trifft auch einen tieferen Mount eines anderen Nutzers, dessen eigener Ordner `files` heißt. Dessen Wurzel zählt als zweite, und die Suche antwortet "nicht gefunden". Nie eine falsche Datei (`carriersOfMountedPath` verwirft die Zeile).
+  **Verdikt:** kein Fix in 1.3.0. **Begründung:** reine Admin-Route, falsch-negativ statt falsch-positiv, Umgehung vorhanden (Besitzer vor den Pfad setzen), und ein Umbau der Abfrage kurz vor der Abgabe bräuchte einen neuen PHPUnit-Fall plus HaRP-Lauf für einen Randfall ohne Meldung aus dem Feld.
+  **Zieladresse:** v1.4-Backlog, Datei `php/lib/Service/PathResolverService.php` (`rootsCarrying`, `mountedAtOneOf`): Muster auf `/<uid>/files/<Ordner>/` einengen, etwa über einen zweiten Filter `NOT LIKE '/%/%/files/%'` oder über den Abgleich in PHP vor dem Zählen der Wurzeln; Fall "tieferer Mount eines Ordners namens files" in `PathResolverServiceTest.php`.
+
+- **F-23-05 (LOW, Owner-Frage): Oberflächentext der Admin-Seite zu `cold`/`unloaded`** (Fortsetzung des Merkers aus 23-04).
+  Stand: `cold` sagt "The model is read when it is first needed. That is the normal state.", `unloaded` sagt "The model was released to save memory. The next search answers with full text hits and loads it again in the background." Beide Sätze stimmen nach dem Kaltstart-Fix; nur `cold` sagt nicht dazu, dass auch die erste Suche mit Volltexttreffern antwortet. `docs/admin-page.md` Spalte 3 sagt es.
+  **Entscheidungsvorschlag:** so lassen. Der Satz ist nicht falsch, eine Änderung heißt acht Dateien (admin.php plus sieben Sprachkataloge) mit neuen Übersetzungen kurz vor der Abgabe, und die Doku erklärt den Unterschied.
+  **Zieladresse, falls der Owner "mitändern" wählt:** Plan 23-08 als Fix vor 23-09 (admin.php Zeile 76, `php/l10n/*.js` und `*.json`, `test_admin_ui_contract.py`), danach Push und PHP-Lauf.
+
+- **F-23-01 bis F-23-03:** behoben in diesem Plan, siehe Befundliste des Berichts. Kein Merker offen.
