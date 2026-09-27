@@ -17,11 +17,12 @@ name: Release archives for the app store
 #     T-05-77: a public release 1.0.0 that is not in the store yet can be found
 #     and installed, and nobody asked for that.
 #
-# Deliberately NOT path filtered, unlike docker.yml. That workflow applies one
-# paths filter to every push event including tag pushes, so a release tag on a
-# commit that does not touch backend/** skips it. This workflow produces the
+# Deliberately NOT path filtered, unlike docker.yml. This workflow produces the
 # artefact that gets uploaded to the store, so a skipped run here is a release
-# that does not exist, and a filter that can cause it has no place in it.
+# that does not exist, and a filter that could ever cause it has no place in it.
+# The paths filter of docker.yml has been seen not to hold a tag push back
+# (v1.0.0 on a store/media/** commit, audit 16, L-16-04, closed in audit
+# 23-08), and this workflow does not depend on that observation staying true.
 #
 # There is no pull_request trigger, and that absence is the primary defence of
 # the two signing keys rather than a condition inside a step. docs/certificates.md

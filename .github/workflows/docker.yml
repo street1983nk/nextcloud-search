@@ -16,12 +16,12 @@ on:
     # disagree.
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
-    # One caveat, because GitHub applies one paths filter to every push event in
-    # this block, tag pushes included: a release tag has to sit on a commit that
-    # touches backend/**. Every release commit does, because it bumps the version
-    # and the image tag in backend/appinfo/info.xml. For a tag placed elsewhere,
-    # workflow_dispatch on that tag ref is the way in, and it takes the same
-    # release path.
+    # The paths filter below does not hold a tag push back. That is measured and
+    # not assumed (audit 16, L-16-04, closed in audit 23-08): tag v1.0.0 sits on a
+    # commit that touches only store/media/**, and this workflow still started as
+    # a push and built both architectures (run 34140924599); v1.0.1 showed the
+    # same. So a release tag may sit on any commit of main. workflow_dispatch on
+    # a tag ref stays the way in for a rerun, and it takes the same release path.
     paths:
       - 'backend/**'
       - '.github/workflows/docker.yml'

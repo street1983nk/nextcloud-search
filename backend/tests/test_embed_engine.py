@@ -1246,6 +1246,35 @@ def test_no_warm_run_is_wanted_while_the_engine_is_loaded(model_home: Path, monk
 
 
 @pytest.mark.usefixtures("no_warm_request")
+def test_a_release_does_not_inherit_the_warm_request_of_a_search_on_a_warm_engine(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Audit 23-08, F-23-01. Every hybrid round asks for a warm run, whatever
+    # the state of the engine, because ``query_may_load`` answers False at every
+    # switch value. A search on a warm engine therefore leaves the marker
+    # standing, ``warm_wanted`` says no only because the engine is loaded, and
+    # the release after the idle span used to find that marker waiting: the
+    # next tick of the release task fetched the weights straight back, 30 s
+    # after they were let go, although nobody had searched since. The release
+    # is the proof that nobody embedded for a whole span, so a request older
+    # than that span is owed nothing.
+    clock = {"now": 1000.0}
+    engine = _an_idle_engine(model_home, monkeypatch, clock)
+    _release_is_on(monkeypatch)
+    request_warm()
+    assert warm_wanted() is False, "the engine is warm, nothing is owed yet"
+
+    assert release_if_idle(900) is True
+    assert engine.loaded is False
+
+    assert warm_wanted() is False, "a request from before the idle span must not undo the release"
+
+    request_warm()
+
+    assert warm_wanted() is True, "a search refused after the release is owed the warm run"
+
+
+@pytest.mark.usefixtures("no_warm_request")
 def test_no_warm_run_is_wanted_on_a_container_without_a_model(
     model_home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

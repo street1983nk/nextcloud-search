@@ -464,9 +464,19 @@ def release_if_idle(ttl_seconds: int) -> bool:
         # not to be a moment away.
         return False
 
+    global _WARM_WANTED
     with _LOCK:
         if _held(model_dir) is not held:
             return False
+        # A warm request still standing here is older than the idle span, and
+        # it is stale (audit 23-08, F-23-01). Every hybrid round asks for a
+        # warm run whatever the state of the engine, so a search on a warm
+        # engine leaves the marker up, and :func:`warm_wanted` only said no
+        # because the engine was loaded. Left standing, the next tick of the
+        # release task would fetch the weights straight back after this very
+        # release, with nobody searching. Cleared under the same lock as the
+        # identity check, so a search refused after the release sets it anew.
+        _WARM_WANTED = False
 
     return held.release()
 
@@ -566,7 +576,10 @@ def warm() -> bool:
     a search line travels, so it must not be a search line: no user content and
     no file name reaches a log, a vector or a report through here (T-14-22).
 
-    Blocking, like every load. The caller runs it through ``asyncio.to_thread``.
+    Blocking, like every load, and never on the event loop. The release task of
+    ``main.py`` runs it through ``asyncio.to_thread``; the search handler hands
+    it to ``BackgroundTasks``, which runs a synchronous entry in its threadpool
+    once the response has gone out (phase 23, D-01).
     """
     global _WARM_WANTED, _WARMING
 
