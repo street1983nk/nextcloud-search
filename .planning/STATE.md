@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.3
-milestone_name: Sprachausbau
-status: Awaiting next milestone
-stopped_at: Milestone v1.3 archiviert
-last_updated: "2026-09-27T11:10:00.000Z"
-last_activity: 2026-09-27 , Milestone v1.3 completed and archived
+milestone: v1.4
+milestone_name: Leistungsprofile
+status: planning
+last_updated: "2026-09-27T11:48:23.896Z"
+last_activity: 2026-09-27
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 69
-  completed_plans: 69
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 
 ## Current Position
 
-Phase: Milestone v1.3 complete (Phasen 17-23 archiviert nach .planning/milestones/)
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-09-27 , v1.3 archiviert, secure-phase 23 SECURED 46/46 (c34367c)
+Status: Defining requirements
+Last activity: 2026-09-27 — Milestone v1.4 started
 
 ## Naechster Schritt
 
@@ -45,10 +44,13 @@ Fuer v1.4 unmittelbar tragend:
 
 - Kein Vorwaermen beim Start, Ladefenster-Restrisiko akzeptiert (D-03/D-08, AR-23-01);
   ein Schnellpfad in model.py ist bewusst NICHT gebaut.
+
 - dismax ist auf Messbasis verworfen (MESS-09); die Rangprobe-Grenze 0,81 steht in
   docs/language-analyzers.md.
+
 - Sprachmenge ist sechster Versionsmerker, wird nie gesaet; Schema-1-Bestand ist designierter
   Zwischenzustand, keine Drift (Debug upgrade5, vierte Ausnahme in version_mismatch).
+
 - Store-Regeln: eine Messzahl (730,2 MB), Gate test_store_metadata.py (RESIDENT_FIGURE),
   Tag im Store nie verschieben (v1.3.0 liegt auf 744d7e4).
 
@@ -56,10 +58,13 @@ Fuer v1.4 unmittelbar tragend:
 
 - **Issue #14 (budachst):** Antwort mit Zitat gepostet (issuecomment-5853918446), Issue bleibt
   OFFEN, bis budachst nach dem Upgrade bestaetigt. Nicht selbst schliessen (Owner-Regel).
+
 - **Kill-Kriterium:** Ende September einmalig die Nextcloud-Conference-Nachberichte ansehen,
   danach quartalsweise. Zuletzt geprueft 21.09.2026: NICHT ausgeloest.
+
 - **Findling-Pro-Entscheid:** vertagt auf 03.11.2026 (Go-Kriterium >=10 Grenzen-Anfragen oder
   1 Pilotkunde >250 Nutzer; Stand 21.09.: null Signale).
+
 - **Korpus-Snapshot snap-03f1d1d9ad9262704:** bleibt im Standard-Tier (~2,85 USD/Monat,
   dritter Behalten-Entscheid); naechste Wiedervorlage beim v1.4-Close.
 
@@ -81,11 +86,14 @@ Aeltere Merker:
 
 - Zwei Prosastellen nennen noch `DEFAULT_FIELDS`: `store/repo.py:128` und `:1448`
   (naechster Plan, der repo.py ohnehin oeffnet, nimmt sie mit).
+
 - Leerer Textauszug bei reinem Sprachfeld-Treffer (SnippetGenerator haengt an FIELD_BODY_DE,
   Annahme A5): seit v1.3 in der veroeffentlichten Grenzenliste; Behebung waere eigener Plan
   mit Owner-Entscheid.
+
 - run-Block "Store upgrade 3" in deploy-harp.yml bei ~20,7k Zeichen: vor einem
   ${{ }}-Ausdruck dort erst kuerzen oder Werte per env:-Block hereinreichen.
+
 - L-16-04-Kommentarfix beim naechsten Workflow-Plan (paths-Filter gilt nicht fuer Tag-Pushes).
 - Systemplatten-Skripte Phasen 5-6.1: Repo-Aufnahme erst nach Geheimnis-Durchsicht.
 - Estnischer Stemmer nicht verfuegbar: aktiv an die Buerokratt/OS2ai-Spur kommunizieren.

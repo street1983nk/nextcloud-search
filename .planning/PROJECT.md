@@ -51,11 +51,16 @@ Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inkl
 
 ### Active
 
-(v1.4 noch nicht aufgesetzt; Owner-Linie: v1.4 = BL-F04 SPEED, Vorarbeit-Research und Basiszahlen liegen vor, keine eigene Box-Anfahrt noetig. REQ-IDs entstehen mit /gsd:new-milestone.)
+(v1.4 Leistungsprofile, Owner-Bestaetigung 27.09.2026; REQ-IDs in REQUIREMENTS.md.)
 
-- BL-F04 SPEED: Indexier-Durchsatz auf Zielhardware (Kandidat, Owner-Entscheid beim Milestone-Start)
-- Franzoesisches Koerperfeld (FR hat OCR + Katalog, aber keine lexikalische Kette; benannte Luecke)
-- Deferred aus Phase 23: F-23-04, idle-Guard EmbeddingModel.release()
+- Leistungsprofile mit Anteils-Formeln, Sparsam Wert fuer Wert gepinnt
+- Einbettungsspur als Nebenlaeufer + N OCR-Slots (inkl. PHP-Anspruchsseite)
+- Hardware-Erkennung mit Profil-Vorschlag, Admin bestaetigt
+- Vorab-Pruefung vor dem Speichern + OOM-Rueckfall zur Laufzeit
+- Modellwahl (e5-small int8/fp32) inkl. Marken-Reparatur embedding_version
+- Admin-Settings-UI; Abnahme-Anfahrt am gebauten Produkt
+
+Nicht in v1.4 (Wiedervorlage): Franzoesisches Koerperfeld (benannte Luecke); F-23-04; idle-Guard EmbeddingModel.release() (Kandidat, beim Roadmapping pruefen).
 
 Weiter in der Wiedervorlage: Sortierung nach Name/Groesse (Schema-Sprung), Mimetype-Gruppen aus files.mime, geplantes Vorwaermen, Pro-Schiene (Index-Verschluesselung, External Storage, ISV-Entscheid 03.11.).
 
@@ -119,9 +124,19 @@ Weiter in der Wiedervorlage: Sortierung nach Name/Groesse (Schema-Sprung), Mimet
 | Kein Vorwaermen beim Start, Kaltstart lexikalisch sofort, Ladefenster-Restrisiko akzeptiert (D-03/D-08) | RAM-Budget auf 4-GB-Boxen schlaegt Latenzkomfort | ✓ Good, Kaltsuche 973 ms MIT Treffern statt 0; Restrisiko als AR-23-01 dokumentiert |
 | gone-Reparaturlauf als Upgrade-Migration (D-04, Issue #14) | Arbeit ist genau die, die ohne den Bug angefallen waere | ✓ Good, Upgrade-CI-Beweis skipped 8→7; budachst-Bestaetigung steht aus (Issue offen) |
 
-## Next Milestone Goals
+## Current Milestone: v1.4 Leistungsprofile
 
-v1.4 ist noch nicht aufgesetzt (`/gsd:new-milestone`). Owner-Linie vom 27.09.2026: **v1.4 = BL-F04 SPEED** (Indexier-Durchsatz auf Zielhardware). Die Vorarbeit liegt vor: Research .planning/research/BL-F04-vorarbeit-2026-09-25.md, Basiszahlen B1-B5 aus der Phase-22-Anfahrt in docs/performance.md, keine eigene Box-Anfahrt noetig.
+**Goal:** Findling passt seine Geschwindigkeit der Hardware an: Wer mehr als die 4-GB-Referenzbox hat, bekommt per Profil-Opt-in Parallelitaet (Einbettungsspur + N OCR-Slots), das 4-GB-Versprechen bleibt der unveraenderte Default.
+
+**Target features (Owner-Entscheide 24./25.09.2026, bestaetigt 27.09.):**
+- Leistungsprofile Sparsam/Standard/Leistung als Anteils-Formeln, nicht feste Slotzahlen; Sparsam Wert fuer Wert gegen heute gepinnt (Store-Zahl darf nicht wandern)
+- Nebenlaeufigkeit als Kernfall: Einbettungsspur als eigener Nebenlaeufer (H1), dann N OCR-Slots (H2); PHP-Seite zieht mit (Art-Filter am Anspruch, KIND_BATCH)
+- Hardware-Erkennung beim ersten Start mit Profil-VORSCHLAG, Admin bestaetigt; kein Zwang
+- Vorab-Pruefung "Test vor dem Speichern" (N-Slot-Probe, RAM-Rechnung, Verdikt) plus Laufzeit-Rueckfall bei OOM
+- Modellwahl bleibt drin (Owner 25.09. gegen die Research-Empfehlung), inkl. Marken-Reparatur (embedding_version um Gewichtspraezision erweitern, sonst stille Vektormischung)
+- Erste echte Admin-Settings-UI (ui-phase-Gate); keine App-Spaltung
+
+**Key context:** Vorarbeit .planning/research/BL-F04-vorarbeit-2026-09-25.md; Basiszahlen B1-B5 aus der Phase-22-Anfahrt (CI-Slot-Faktor F4 = 3,955, Skalierung real); KEINE Entdeckungs-Anfahrt noetig, aber eine Abnahme-Anfahrt am gebauten Produkt (Owner-Auflage: RAM-Messung je Stufe, bevor die UI sie anbietet). Offene Tor-Fragen der ersten Phase: Weg des Profils in den Container (Wege A/B/C), Anteile je Profil im Owner-Wortlaut, fp32-Lieferweg (K7).
 
 <details>
 <summary>Archiv: Milestone-Beschreibung v1.3 (abgeschlossen 2026-09-27)</summary>
@@ -170,4 +185,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-27 after v1.3 milestone*
+*Last updated: 2026-09-27, Milestone v1.4 Leistungsprofile gestartet*
