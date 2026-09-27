@@ -305,3 +305,87 @@ def test_slots_have_no_variable(monkeypatch: pytest.MonkeyPatch) -> None:
     resolution = resolve(Profile.ECONOMY, box(16, 64))
     assert resolution.values.ocr_slots == 1
     assert "ocr_slots" not in {key for key, source in resolution.sources.items() if source == "env"}
+
+
+# --- the process state ----------------------------------------------------------
+
+
+def test_the_resting_state_is_economy() -> None:
+    state = profile.snapshot()
+    assert state.hardware is None
+    assert state.chosen is None
+    assert state.suggested == Profile.ECONOMY
+    assert state.effective == Profile.ECONOMY
+    assert state.resolution.values == resolve(Profile.ECONOMY, None).values
+    assert not state.downgraded
+
+
+def test_a_big_box_runs_what_was_chosen() -> None:
+    profile.note_hardware(threshold_box(64e9, 16))
+    profile.note_chosen("performance")
+    state = profile.snapshot()
+    assert state.chosen == Profile.PERFORMANCE
+    assert state.suggested == Profile.PERFORMANCE
+    assert state.effective == Profile.PERFORMANCE
+    assert state.resolution.profile == Profile.PERFORMANCE
+    assert not state.downgraded
+
+
+def test_a_shrunk_box_lowers_only_the_effective_level() -> None:
+    """D-24-07: the chosen profile is never rewritten, only the effective one sinks."""
+    profile.note_hardware(threshold_box(8e9, 4))
+    profile.note_chosen("performance")
+    state = profile.snapshot()
+    assert state.chosen == Profile.PERFORMANCE
+    assert state.effective == Profile.STANDARD
+    assert state.resolution.profile == Profile.STANDARD
+    assert state.downgraded
+
+
+def test_a_tiny_box_falls_back_to_economy() -> None:
+    profile.note_hardware(threshold_box(4e9, 2))
+    profile.note_chosen("performance")
+    state = profile.snapshot()
+    assert state.chosen == Profile.PERFORMANCE
+    assert state.effective == Profile.ECONOMY
+    assert state.downgraded
+
+
+def test_none_or_unknown_never_changes_a_read_profile() -> None:
+    """D-24-02: a missing or garbled answer keeps what was read before."""
+    profile.note_hardware(threshold_box(64e9, 16))
+    profile.note_chosen("standard")
+    profile.note_chosen(None)
+    assert profile.snapshot().chosen == Profile.STANDARD
+    profile.note_chosen("turbo")
+    assert profile.snapshot().chosen == Profile.STANDARD
+    assert profile.snapshot().effective == Profile.STANDARD
+
+
+def test_never_read_stays_economy() -> None:
+    profile.note_hardware(threshold_box(64e9, 16))
+    profile.note_chosen(None)
+    state = profile.snapshot()
+    assert state.chosen is None
+    assert state.suggested == Profile.PERFORMANCE
+    assert state.effective == Profile.ECONOMY
+
+
+def test_reading_does_not_recompute() -> None:
+    profile.note_chosen("standard")
+    first = profile.snapshot()
+    assert profile.snapshot() is first
+    profile.note_chosen("standard")
+    assert profile.snapshot() is first
+    profile.note_chosen("performance")
+    assert profile.snapshot() is not first
+
+
+def test_reset_restores_the_resting_state() -> None:
+    profile.note_hardware(threshold_box(64e9, 16))
+    profile.note_chosen("performance")
+    profile.reset()
+    state = profile.snapshot()
+    assert state.hardware is None
+    assert state.chosen is None
+    assert state.effective == Profile.ECONOMY
