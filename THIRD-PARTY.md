@@ -199,14 +199,18 @@ with them.
 
 ## Python packages of the semantic path, and the model they run
 
-Added in phase 6. Four packages and one model, all pinned exactly in
-`backend/pyproject.toml` and `backend/uv.lock`. All four ship wheels; no
-`setup.py` runs at installation time.
+Added in phase 6. Five packages and one model, all pinned exactly in
+`backend/pyproject.toml` and `backend/uv.lock`. All five ship wheels; no
+`setup.py` runs at installation time. Phase 23 removed `fastembed`, which no
+module imported, and made its two dependencies that the code does import,
+`tokenizers` and `numpy`, direct entries on the versions the lockfile already
+held.
 
 | Package | Version | Licence | Source repository | Place in the image |
 |---|---|---|---|---|
-| `fastembed` | 0.8.0 | Apache-2.0 | github.com/qdrant/fastembed | `/app/.venv/lib/python3.13/site-packages/fastembed` |
-| `onnxruntime` | 1.29.0 | MIT | github.com/microsoft/onnxruntime | `/app/.venv/lib/python3.13/site-packages/onnxruntime` |
+| `tokenizers` | 0.23.2 | Apache-2.0 | github.com/huggingface/tokenizers | `/app/.venv/lib/python3.13/site-packages/tokenizers` |
+| `numpy` | 2.5.2 | BSD-3-Clause (wheel metadata: `BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0` for bundled parts) | github.com/numpy/numpy | `/app/.venv/lib/python3.13/site-packages/numpy` |
+| `onnxruntime` | 1.30.0 | MIT | github.com/microsoft/onnxruntime | `/app/.venv/lib/python3.13/site-packages/onnxruntime` |
 | `sqlite-vec` | 0.1.9 | Apache-2.0 | github.com/asg017/sqlite-vec | `/app/.venv/lib/python3.13/site-packages/sqlite_vec`, and the extension itself a second time at `/usr/local/lib/findling/vec0.so` |
 | `semantic-text-splitter` | 0.32.0 | MIT | github.com/benbrandt/text-splitter | `/app/.venv/lib/python3.13/site-packages/semantic_text_splitter` |
 
@@ -232,15 +236,18 @@ The model is not a package, so it gets its own table:
 | What is distributed | the **self quantised** int8 ONNX file plus the tokenizer and the configuration, under `/usr/local/share/findling/model`. The fp32 original stays in the build stage and never reaches the runtime image |
 | Why self quantised | the int8 file the upstream repository ships is `onnx/model_qint8_avx512_vnni.onnx`, and AVX512-VNNI is x86 only. On the ARM box this app targets it is unusable, so the build quantises `onnx/model.onnx` itself with `scripts/dev/quantize_model.py` |
 
-Two network libraries enter the image through `fastembed` and are listed here
-because they are distributed too: `huggingface-hub` 1.30.0 (Apache-2.0) and
-`requests` 2.34.2 (Apache-2.0). Neither is called at run time. The model and the
-tokenizer sit at fixed paths in the image, `HF_HUB_OFFLINE=1` is set in the
-runtime stage, and the probe of plan 06-01 as well as the offline test of plan
-06-10 run the container with `--network none`. `numpy`, `tokenizers`,
-`protobuf`, `flatbuffers` and the rest of the closure are resolved and pinned in
-`backend/uv.lock`, which stays the authoritative list of what lands in
-`/app/.venv`.
+One network library enters the image through `tokenizers` and is listed here
+because it is distributed too: `huggingface-hub` 1.30.0 (Apache-2.0). It is not
+called at run time. `requests` is no longer in the image; it came in with
+`fastembed` and left with it. The model and the tokenizer sit at fixed paths in
+the image, `HF_HUB_OFFLINE=1` stays set in the runtime stage because
+`huggingface-hub` is still there, and the probe of plan 06-01 as well as the
+offline test of plan 06-10 run the container with `--network none`. The image
+check of `.github/workflows/docker.yml` asserts on every build that neither
+`fastembed` nor `requests` is importable in the image and that `tokenizers` and
+`numpy` are. `protobuf`, `flatbuffers` and the rest of the closure are resolved
+and pinned in `backend/uv.lock`, which stays the authoritative list of what
+lands in `/app/.venv`.
 
 `usearch` is deliberately **not** installed. It is the documented way out if
 brute force KNN stops scaling, plan 06-04 writes that way out down in
