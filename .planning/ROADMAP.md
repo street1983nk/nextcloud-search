@@ -88,7 +88,15 @@ Details im Archiv: .planning/milestones/v1.3-ROADMAP.md
   4. Die Statusroute meldet erkannte Kerne, Speicher und Architektur cgroup-bewusst (process_cpu_count plus cpu.max, memory.max sonst MemAvailable) und das vorgeschlagene Profil, ohne etwas umzuschalten; bei simulierter Hardware-Schrumpfung fällt der Container selbsttätig auf die größte noch passende Stufe zurück und meldet das.
   5. Ein int8/fp32-Wechsel desselben Modells löst den automatischen Vektor-Reindex aus statt Vektoren still zu mischen; eine Bestandsinstallation mit alter Marke (ohne Präzisionsangabe) wird als int8 erkannt und NICHT neu eingebettet (Upgrade-Test).
 
-**Plans**: TBD
+**Plans**: 6 plans in 3 Wellen
+
+Plans:
+- [ ] 24-01-PLAN.md , Vektor-Marke mit Gewichtspräzision, int8 bytegleich, Upgrade-Test (MOD-01), Welle 1
+- [ ] 24-02-PLAN.md , Profilkonstanten, Überstimmungsleser, cgroup-Hardware-Erkennung, Gleichstand info.xml (PROF-01, PROF-03, HW-01), Welle 1
+- [ ] 24-03-PLAN.md , Profil-Resolver, Prozess-Zustand, Sparsam-Pin (PROF-01, PROF-02, HW-01), Welle 2
+- [ ] 24-04-PLAN.md , PHP: SettingsService::profile() und OCS-Route GET /profile (PROF-03), Welle 1
+- [ ] 24-05-PLAN.md , Profilabfrage je Poller-Runde, fehlertolerant, Gleichstand PHP/Python (PROF-03), Welle 3
+- [ ] 24-06-PLAN.md , Hardware im Lifespan, Profilblock in /status, Owner-Tor in docs/profiles.md (HW-01, PROF-01, PROF-03), Welle 3
 **Research-Flag**: ja (Wege A/B/C gegen lru_cache in config.py und AppAPI-Umgebungsmechanik; cgroup-Erkennung unter HaRP ungeprüft, Annahme A9)
 
 ### Phase 25: Einbettungsspur und Modellwahl
