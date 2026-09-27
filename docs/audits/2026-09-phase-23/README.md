@@ -11,7 +11,9 @@ low: 4
 total: 5
 status: medium_and_above_fixed
 fixed: [F-23-01, F-23-02, F-23-03]
-still_open: [F-23-04, F-23-05]
+decided: [F-23-05]
+still_open: [F-23-04]
+accepted: 2026-09-27
 closed_from_earlier: [V-22-01, V-22-02, L-16-01, L-16-04]
 ---
 
@@ -38,7 +40,8 @@ keinen Inhalt eines Geheimnisses.
 
 **Bilanz vorweg: kein CRITICAL, kein HIGH.** Ein MEDIUM, in diesem Plan mit Test
 behoben. Vier LOW: zwei behoben, einer mit Verdikt und Zieladresse
-weitergereicht, einer ist eine Owner-Frage mit Entscheidungsvorschlag. Dazu
+weitergereicht, einer vom Owner entschieden ("So lassen"). Die Haertung ist am
+27.09.2026 abgenommen (Abschnitt 10). Dazu
 schließt dieser Plan zwei Altbefunde aus Phase 16 (L-16-01 strukturell durch
 23-01, L-16-04 mit einem Kommentar-Fix), und die Phase selbst schließt die zwei
 Produktbefunde der Phase 22 (V-22-01, V-22-02).
@@ -351,7 +354,7 @@ ihrem Audit bewegt hat und ob ihre Schnittstellen zu Phase 23 halten.
 | `config.py` | neue Schalter mit Rückfall auf den Standard und Warnung mit Namen | gehalten | keiner |
 | `main.py` | Freigabe-Task: Warmlauf und Freigabe teilen keinen Tick | **Befund**: nach einer Freigabe fand der nächste Tick eine stehengebliebene Anforderung | **F-23-01** |
 | `worker/poller.py` | Umbau-Anbindung, Pause und Stopp | gehalten | keiner |
-| `php/templates/admin.php` | Ausgabe nur über `p()`, kein `print_unescaped`; Sprachzeile | gehalten; der Text zu `cold` bleibt nach dem Fix wahr | **F-23-05** (Owner-Frage) |
+| `php/templates/admin.php` | Ausgabe nur über `p()`, kein `print_unescaped`; Sprachzeile | gehalten; der Text zu `cold` bleibt nach dem Fix wahr | **F-23-05** (entschieden: so lassen) |
 | `php/js/admin.js` | kein `innerHTML`, kein `insertAdjacentHTML`; Referenz kommt aus PHP statt aus dem Skript (#14) | gehalten | keiner |
 | `Version001300Date20260924000000` | entfernt den gemerkten Backend-Versionsschlüssel, 6 Fälle | gehalten | keiner |
 | `Version001300Date20260927000000` | nur `skipped/gone`, Band 1000, eine Transaktion je Band, Rollback und Rethrow, idempotent; eine echt gelöschte Datei kommt über die leere Nutzerliste wieder als gone an | gehalten | keiner |
@@ -466,8 +469,8 @@ Phase 16 und 22. Keine Aussage über eine Verschlechterung.
 | F-23-01 | MEDIUM | Mit eingeschalteter Leerlauf-Freigabe lud der Container die Gewichte beim nächsten Tick der Freigabe-Task zurück, ohne dass jemand gesucht hatte. Jede hybride Runde setzt die Warmlauf-Anforderung, auch auf warmer Engine; `warm_wanted` sagte nur wegen der geladenen Engine nein, die Anforderung blieb stehen, und die Freigabe erbte sie. Vorbestehend seit dem Schalter der Phase 14, im Standard 0 ohne Wirkung | **behoben**: RED `5f9ca5f` (der Fall `test_a_release_does_not_inherit_the_warm_request_of_a_search_on_a_warm_engine` ist ohne Fix rot, mit Fix grün), Fix `0227289` in `embed/engine.py::release_if_idle`, Ledger mit datiertem Absatz; CI des neuen Kopfes steht aus |
 | F-23-02 | LOW | Der Docstring von `warm()` nannte nur den Aufrufer der Phase 14 (`asyncio.to_thread`), nicht den Suchhandler mit `BackgroundTasks` | **behoben** in `9304cfc`, Docstring allein, Ledger mit datiertem Absatz |
 | F-23-03 | LOW | Der XML-Kommentar über `FINDLING_EMBED_IDLE_RELEASE_SECONDS` in `backend/appinfo/info.xml` begründete den Standard 0 noch mit dem ungemessenen Preis der ersten Suche nach einer Freigabe; seit 1.3.0 zahlt keine Suche dafür | **behoben** in `b544842`, nur der Kommentar; Name, Text, Standard und Store-Texte unverändert |
-| F-23-04 | LOW | Die Admin-Suche nach einem Pfad ohne Besitzer (`PathResolverService::rootsCarrying`) sucht Einhängepunkte mit dem Muster `/%/files/<Ordner>/`. Das Prozentzeichen reicht über Schrägstriche, also trifft es auch einen tieferen Mount eines anderen Nutzers, dessen eigener Ordner `files` heißt, und zählt dessen Wurzel als zweite. Folge: eine Ablehnung ("nicht gefunden") für einen auflösbaren Pfad. Nie eine falsche Datei: `carriersOfMountedPath` verwirft die Zeile | **weitergereicht** in `deferred-items.md` mit Verdikt und Zieladresse v1.4-Backlog; Umgehung für den Admin: den Besitzer vor den Pfad setzen |
-| F-23-05 | LOW | Der Oberflächentext der Admin-Seite zu `cold` und `unloaded` (admin.php und sieben Sprachdateien) ist nach dem Kaltstart-Fix nicht angepasst; die Doku `docs/admin-page.md` ist präzisiert | **Owner-Frage** am Checkpoint dieses Plans, mit Entscheidungsvorschlag "so lassen" in `deferred-items.md` |
+| F-23-04 | LOW | Die Admin-Suche nach einem Pfad ohne Besitzer (`PathResolverService::rootsCarrying`) sucht Einhängepunkte mit dem Muster `/%/files/<Ordner>/`. Das Prozentzeichen reicht über Schrägstriche, also trifft es auch einen tieferen Mount eines anderen Nutzers, dessen eigener Ordner `files` heißt, und zählt dessen Wurzel als zweite. Folge: eine Ablehnung ("nicht gefunden") für einen auflösbaren Pfad. Nie eine falsche Datei: `carriersOfMountedPath` verwirft die Zeile | **weitergereicht** in `deferred-items.md` mit Verdikt und Zieladresse v1.4-Backlog, vom Owner am 27.09.2026 bestätigt ("Ja, v1.4-Backlog"); Umgehung für den Admin: den Besitzer vor den Pfad setzen |
+| F-23-05 | LOW | Der Oberflächentext der Admin-Seite zu `cold` und `unloaded` (admin.php und sieben Sprachdateien) ist nach dem Kaltstart-Fix nicht angepasst; die Doku `docs/admin-page.md` ist präzisiert | **entschieden, so lassen**: Owner-Wort "So lassen" vom 27.09.2026; beide Sätze stimmen, `docs/admin-page.md` erklärt den Unterschied |
 
 **Kein CRITICAL, kein HIGH, kein offener MEDIUM.**
 
@@ -517,6 +520,22 @@ Kennung und keinen Inhalt eines Geheimnisses**. `docs/` ist öffentlich, und
 dieser Bericht ist vor dem Commit durch `test_public_artifacts.py` gelaufen.
 
 **Die Freigabe der Haertung liegt beim Owner und nicht in diesem Bericht.** Sie
-ist am Tag dieses Berichts noch nicht erteilt; der Checkpoint ist Task 3 des
-Plans 23-08, und ohne ihn beginnt Plan 23-09 nicht (Owner-Regel vom
-06.09.2026).
+ist am Checkpoint von Task 3 des Plans 23-08 erteilt worden, siehe Abschnitt 10.
+
+---
+
+## 10. Abnahme
+
+Abgenommen: 27.09.2026
+
+Die Antwort des Owners am Checkpoint von Plan 23-08, Task 3, im Wortlaut der
+Auswahl:
+
+| Frage | Owner-Wort | Folge |
+|---|---|---|
+| A. Abnahme der Haertung | "Haertung abgenommen", ohne Auflagen | Plan 23-09 darf beginnen |
+| B. F-23-04 | "Ja, v1.4-Backlog" | kein Fix in 1.3.0, Verdikt und Zieladresse in `deferred-items.md` bestätigt |
+| C. Oberflächentext der Admin-Seite zu `cold` und `unloaded` (F-23-05) | "So lassen" | kein Umbau der acht Dateien, `docs/admin-page.md` genügt |
+
+Keine Auflage, also kein benannter Auftrag. Offen bleibt, was Abschnitt 9 sagt:
+die Läufe des neuen Kopfes nach dem Push der Fixe und Erfolgskriterium 4.
