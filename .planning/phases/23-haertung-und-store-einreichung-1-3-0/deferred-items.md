@@ -24,3 +24,7 @@
   **Zieladresse, falls der Owner "mitändern" wählt:** Plan 23-08 als Fix vor 23-09 (admin.php Zeile 76, `php/l10n/*.js` und `*.json`, `test_admin_ui_contract.py`), danach Push und PHP-Lauf.
 
 - **F-23-01 bis F-23-03:** behoben in diesem Plan, siehe Befundliste des Berichts. Kein Merker offen.
+
+## Aus Issue #14 (27.09., ntfy-Meldung an den Owner)
+
+- **budachst fragt (26.09. 20:00Z): "I can always throw the index away and start over, can't I?"** Owner-Entscheid 27.09.: KEINE Zwischenantwort; die abgenommene Post-Release-Antwort (store-listing.md Teil 6, "requeues every entry ... nothing has to be done by hand") beantwortet die Frage mit. Fuer 23-09: beim Posten der Antwort auf diesen letzten Kommentar antworten, damit der Bezug stimmt.
