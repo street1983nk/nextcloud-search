@@ -299,9 +299,9 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 23-01-PLAN.md , Kaltstart-Fix im Produktpfad (query_may_load immer False, Warmlauf per BackgroundTasks, Einwortregel /snippets)
-- [ ] 23-02-PLAN.md , HART-04: fastembed-Pin raus, tokenizers/numpy direkt, Lockfile, THIRD-PARTY, Abwesenheitsprüfung im Abbild
-- [ ] 23-03-PLAN.md , Store-Textentwurf 1.3.0 (Sprachzeile, Known limitations, 730,2 MB, Changelog) mit Owner-Abnahme
+- [x] 23-01-PLAN.md , Kaltstart-Fix im Produktpfad (query_may_load immer False, Warmlauf per BackgroundTasks, Einwortregel /snippets)
+- [x] 23-02-PLAN.md , HART-04: fastembed-Pin raus, tokenizers/numpy direkt, Lockfile, THIRD-PARTY, Abwesenheitsprüfung im Abbild
+- [x] 23-03-PLAN.md , Store-Textentwurf 1.3.0 (Sprachzeile, Known limitations, 730,2 MB, Changelog) mit Owner-Abnahme
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -342,7 +342,7 @@ Plans:
 | 20. UI-Kataloge es/it/nl/pt | v1.3 | 9/9 | Complete    | 2026-09-25 |
 | 21. Niederlaendische Komposita | v1.3 | 9/9 | Complete    | 2026-09-25 |
 | 22. Messanfahrt BL-F03 | v1.3 | 13/13 | Complete | 2026-09-26 |
-| 23. Haertung und Store-Einreichung 1.3.0 | v1.3 | 0/TBD | Not started | - |
+| 23. Haertung und Store-Einreichung 1.3.0 | v1.3 | 3/9 | In Progress|  |
 
 ## Requirement-Abdeckung v1.3
 
