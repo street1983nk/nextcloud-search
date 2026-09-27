@@ -147,11 +147,21 @@ einen Push laufen, **gleichzeitig grün**:
 | Multi-arch image | 36289457381 | success |
 | HaRP deploy | 36289457405 | success |
 
-Die Fixe dieses Plans (Abschnitt 7) sind noch nicht gepusht. Ein Worktree dieses
-Plans pusht weder `main` noch einen Wegwerfzweig; der Orchestrator merged und
-pusht und trägt die Läufe des neuen Kopfes nach. Betroffen sind alle sechs
-Werkbänke, weil `backend/src`, `backend/appinfo/info.xml` und zwei Workflows
-berührt sind.
+Die Fixe dieses Plans (Abschnitt 7) sind gepusht (Merge auf main, Push
+68b679a..87e41cd am 27.09.2026). Alle sechs Werkbänke des neuen Kopfes 87e41cd
+sind grün, nachgetragen vom Orchestrator:
+
+| Workflow | Lauf (87e41cd) | Ergebnis |
+|---|---|---|
+| Python gates | 36291849649 | success |
+| PHP and store metadata gates | 36291849698 | success |
+| Integration | 36291849669 | success |
+| Resilience | 36291849646 | success |
+| Multi-arch image | 36291849663 | success |
+| HaRP deploy | 36291849691 | success |
+
+Damit ist Erfolgskriterium 3 vollständig erfüllt und der Vorbehalt bei F-23-01
+("CI des neuen Kopfes steht aus") aufgelöst.
 
 ---
 
