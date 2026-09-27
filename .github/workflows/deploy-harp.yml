@@ -2889,9 +2889,10 @@ jobs:
       # The upgrade proof of plan 11-07, and success criterion 2 of phase 11:
       # an installation that really came out of the release assets of
       # UPGRADE_FROM_TAG is brought to the state of this commit, and the index
-      # it built survives that untouched. Since plan 16-09 that tag is v1.1.0
-      # and the jump is 1.1.0 to 1.2.0; the value and the reason for it stand at
-      # the top of this file and nowhere else.
+      # it built survives that untouched. Since plan 18-12 that tag is v1.2.0,
+      # and since plan 23-06 the jump is 1.2.0 to 1.3.0 (plan 16-09 had v1.1.0
+      # and 1.1.0 to 1.2.0); the value and the reason for it stand at the top
+      # of this file and nowhere else.
       #
       # Why the block stands at the end of the job and not between the store
       # install path and the six promises above it: those promises need the
@@ -4019,13 +4020,15 @@ jobs:
 
           # The two cases, both named, and both branches stay. They were
           # written in plan 11-07 for a version step that had not happened yet;
-          # since plan 16-07 the tree carries 1.2.0 against the 1.1.0 of
+          # since plan 23-06 the tree carries 1.3.0 against the 1.2.0 of
           # UPGRADE_FROM_TAG, so it is the FIRST branch that runs, and it is the
           # one that matters: it demands that the instance really performed the
           # app update. A silent "nothing happened" with a newer version on disk
           # would be a store update that leaves a user on the old migrations,
-          # and the migration of the minor jump (Version001200Date..., plan
-          # 16-07) is exactly what would then never run.
+          # and the migrations of the minor jump (Version001300Date..., among
+          # them the gone repair of plan 23-05 that "Store upgrade 2b" seeds
+          # for) are exactly what would then never run. Until plan 23-06 the
+          # same sentence named 1.2.0 against 1.1.0 and plan 16-07.
           #
           # The second branch is the equal version case. It ran while both sides
           # carried the same number, which was the state before plan 11-11 and
@@ -4044,7 +4047,7 @@ jobs:
             echo "the instance performed the app update: ${installed_before} to ${installed_after}"
           else
             echo "::notice::the companion of this commit carries ${new_companion}, the same version ${UPGRADE_FROM_TAG} published, so this run measures the file exchange without a version step"
-            echo "With the bump of plan 16-07 the tree carries 1.2.0 against the 1.1.0 of the tag, so the branch above is the one that is expected to run."
+            echo "With the bump of plan 23-06 the tree carries 1.3.0 against the 1.2.0 of the tag, so the branch above is the one that is expected to run."
             if [ "${installed_after}" != "${installed_before}" ]; then
               echo "::error::installed_version moved from ${installed_before} to ${installed_after} although both sides carry the same version"
               exit 1
@@ -4077,8 +4080,10 @@ jobs:
 
           # The new image, and it is the one this run built out of this commit.
           # Why not the reference the archive of this commit names: since plan
-          # 16-07 backend/appinfo/info.xml says image-tag 1.2.0, and that tag is
-          # not in the registry yet, because the release is plan 16-14. Before
+          # 23-06 backend/appinfo/info.xml says image-tag 1.3.0, and that tag is
+          # not in the registry yet, because the release of phase 23 comes
+          # after this proof (the same held for 1.2.0 between plan 16-07 and
+          # the release plan 16-14). Before
           # that bump the file said 1.0.3, which was the image the old half was
           # already running, so registering it again would have left the
           # container half of this upgrade a no-op. Both reasons end in the same
