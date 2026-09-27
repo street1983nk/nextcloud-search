@@ -5,7 +5,6 @@ or the sandbox; these cases pin the arithmetic of PROF-01, the value-for-value
 promise of PROF-02 and the fallback of HW-01 before anything is wired.
 """
 
-from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -37,11 +36,10 @@ OVERRIDE_NAMES = (
 
 
 @pytest.fixture(autouse=True)
-def _no_overrides(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+def _no_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every case starts without an admin override, whatever the shell carries."""
     for name in OVERRIDE_NAMES:
         monkeypatch.delenv(name, raising=False)
-    yield
 
 
 def box(
@@ -84,7 +82,7 @@ def threshold_box(threshold: float | None, cores: float | None) -> Hardware:
 
 
 def test_three_profiles_with_wire_names() -> None:
-    assert PROFILE_NAMES == frozenset({"economy", "standard", "performance"})
+    assert frozenset({"economy", "standard", "performance"}) == PROFILE_NAMES
     assert [p.value for p in profile.PROFILE_ORDER] == ["economy", "standard", "performance"]
 
 
