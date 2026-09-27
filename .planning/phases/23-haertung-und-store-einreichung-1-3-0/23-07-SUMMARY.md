@@ -101,3 +101,16 @@ Die abgenommenen Store-Texte 1.3.0 stehen jetzt zeichengleich in beiden info.xml
 
 - php/appinfo/info.xml, backend/appinfo/info.xml, README.md, README.en.md, README.fr.md, docs/store-listing.md, .planning/PROJECT.md und backend/tests/test_store_metadata.py: vorhanden und geändert
 - Commits 4daf712 und 388896a: vorhanden
+
+## CI-Belege nach dem Push (nachgetragen vom Orchestrator am 27.09.2026)
+
+Push 5642800..68b679a auf main, alle sechs Workflows gruen:
+
+| Workflow | Lauf | Ergebnis |
+|---|---|---|
+| Python gates | 36289457406 | success |
+| PHP and store metadata gates (inkl. neuer Grenzlisten-/Sprachzeilen-Gates und RESIDENT_FIGURE 730.2) | 36289457414 | success |
+| Integration | 36289457408 | success |
+| Resilience | 36289457454 | success |
+| Multi-arch image | 36289457381 | success |
+| HaRP deploy (Store install/upgrade auf den 1.3.0-Texten) | 36289457405 | success |
