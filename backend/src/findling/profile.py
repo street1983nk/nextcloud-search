@@ -249,3 +249,89 @@ def resolve(profile: Profile, hardware: Hardware | None) -> Resolution:
             sources[field] = SOURCE_ENV
     values = replace(base, **overridden)
     return Resolution(profile=profile, values=values, sources=MappingProxyType(sources))
+
+
+@dataclass(frozen=True, slots=True)
+class ProfileSnapshot:
+    """What this process knows about its profile: chosen, suggested, effective, values."""
+
+    hardware: Hardware | None
+    chosen: Profile | None
+    suggested: Profile
+    effective: Profile
+    resolution: Resolution
+
+    @property
+    def downgraded(self) -> bool:
+        """True when a chosen profile does not fit the box and a smaller one runs."""
+        return self.chosen is not None and self.effective != self.chosen
+
+
+def _compute(hardware: Hardware | None, chosen: Profile | None) -> ProfileSnapshot:
+    suggested = suggest(hardware)
+    level = effective(chosen, suggested)
+    return ProfileSnapshot(
+        hardware=hardware,
+        chosen=chosen,
+        suggested=suggested,
+        effective=level,
+        resolution=resolve(level, hardware),
+    )
+
+
+# The state of this process, held at module level and nowhere else, after the
+# build of rebuild_progress in findling.index.rebuild.
+#
+# The hardware is read once per start (the lifespan of plan 06 calls
+# note_hardware) and never measured again per round: Findling's own model load
+# lowers MemAvailable, so a second reading would let the profile flap against
+# itself (24-RESEARCH.md, Pitfall 3). If the box grows, the chosen profile
+# applies again from the next start on (D-24-07).
+#
+# The snapshot is computed only in note_hardware, note_chosen and reset.
+# resolve() reads the environment, which is fixed per process; computing it on
+# write means the status route never reads the environment on a poll.
+_HARDWARE: Hardware | None = None
+_CHOSEN: Profile | None = None
+_SNAPSHOT: ProfileSnapshot = _compute(None, None)
+
+
+def note_hardware(hardware: Hardware) -> None:
+    """Publish the reading of this start. Called once from the lifespan."""
+    global _HARDWARE, _SNAPSHOT
+    _HARDWARE = hardware
+    _SNAPSHOT = _compute(_HARDWARE, _CHOSEN)
+
+
+def note_chosen(value: str | None) -> None:
+    """Publish the profile the admin chose, as read from the companion this round.
+
+    None and anything outside PROFILE_NAMES change nothing (D-24-02): a missing
+    or tampered appconfig value must not move a profile that was read before.
+    The value is not logged. The snapshot is only recomputed on a change.
+    """
+    global _CHOSEN, _SNAPSHOT
+    if value is None or value not in PROFILE_NAMES:
+        return
+    chosen = Profile(value)
+    if chosen is _CHOSEN:
+        return
+    _CHOSEN = chosen
+    _SNAPSHOT = _compute(_HARDWARE, _CHOSEN)
+
+
+def snapshot() -> ProfileSnapshot:
+    """The profile state of this process right now.
+
+    Read by the status route and by nothing that decides anything in phase 24.
+    Nothing is opened and nothing is measured here.
+    """
+    return _SNAPSHOT
+
+
+def reset() -> None:
+    """Back to the resting state. For tests only; the container never forgets."""
+    global _HARDWARE, _CHOSEN, _SNAPSHOT
+    _HARDWARE = None
+    _CHOSEN = None
+    _SNAPSHOT = _compute(None, None)

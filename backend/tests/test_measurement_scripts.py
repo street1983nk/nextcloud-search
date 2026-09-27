@@ -1247,9 +1247,11 @@ PHP_TREE_HASH_TODAY = "170f144a644cc86d73dc2c47881f814469fbb04f61639c5c626124a85
 # the count moves with the hash: profile.py arrived, the neutral resolver for
 # suggestion, effective level and value table plus the process state behind the
 # status route. No other file changed its bytes. One file came and none went,
-# so PACKAGE_FILES_TODAY moves to 59.
+# so PACKAGE_FILES_TODAY moves to 59. Measured again after the second task of
+# the plan, which added the process state (ProfileSnapshot, note_hardware,
+# note_chosen, snapshot, reset) to profile.py; the count stays at 59.
 PACKAGE_FILES_TODAY = 59
-PACKAGE_TREE_HASH_TODAY = "e8e7d8957f68244dcd317336196b89d1a4ae7c1bf367a0870924cd14714b1a0c"
+PACKAGE_TREE_HASH_TODAY = "15222184ccd52a8f82df8bf9f3399d0f3e2ac83a4afa221a4320773a3585e1aa"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
