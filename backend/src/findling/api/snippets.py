@@ -201,13 +201,14 @@ def excerpts(
         # typed rather than a stored one, so no log line of this module or of
         # snippets_for may carry it (T-06-39).
         #
-        # The two rules of the search path (operators, one term) are not read
-        # here, for the reason D-13 already gives the distance gate: this call
-        # quotes documents the search has already handed out and the PHP side
-        # has already confirmed. It chooses no candidate, so holding the vector
-        # half back would take a confirmed hit its excerpt away and hand back
-        # nothing in return. The rules decide who gets into the list; this
-        # decides what the entry reads like.
+        # The rules of the search path (operators, one term, titleOnly) are
+        # read here too, from the same fields ``api/search.py`` reads, so there
+        # is no second definition of "one word" (the source stays
+        # ``query/rewrite.py::carries_one_term``). For those lines the /search
+        # of the same body built no vector list, so there is no pure vector hit
+        # whose excerpt could be missing, and asking the model would only cost
+        # a round with a ceiling (phase 23, D-02). There is no sort here, for
+        # the reason written at the model above.
         #
         # What the cut lets the model spend is asked for and not worked out
         # here. This route has a ceiling of its own,
@@ -216,12 +217,15 @@ def excerpts(
         # incident of 2026-09-10 was measured on its neighbour, 1838.4 ms
         # against 1500 ms, cURL error 28 and an answer group without the
         # container half, and a fetch of 118 MB costs exactly the same here.
-        # With the release switched on the cut therefore takes the first
+        # While the engine is cold the cut therefore always takes the first
         # excerpt path, which is what every document took before the second one
-        # existed, and the weights come back in the background. The rule lives
-        # in ``embed/engine.py::query_may_load`` and is not repeated here.
+        # existed. This route orders no warm run of its own: the /search of the
+        # same query has already asked for one, and one place that asks is
+        # enough. The rule lives in ``embed/engine.py::query_may_load`` and is
+        # not repeated here.
+        lexical_only = bool(rewritten.operators) or rewritten.one_term or title_only
         semantic = None
-        if side.vectors is not None and settings().embed_enabled:
+        if not lexical_only and side.vectors is not None and settings().embed_enabled:
             semantic = index_search.SemanticSide(
                 vectors=side.vectors,
                 model=resources.query_model(),

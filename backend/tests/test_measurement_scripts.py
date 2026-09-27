@@ -751,7 +751,7 @@ PHP_TREE_HASH_TODAY = "2e59ceb5ab0cd64564dc28653c53504ce9c1456cb2816ea77f0835497
 # exactly one of the 54 files changed its bytes, api/search.py, which now
 # asks request_warm where the round is built without the weights and
 # orders the warm run from the handler through asyncio.create_task, with
-# the module set _WARM_TASKS holding the task while it runs. No file came
+# a module set holding the task while it runs (gone with plan 23-01). No file came
 # and none went, so PACKAGE_FILES stays at 54.
 # Moved on 2026-09-19 a thirteenth time, by the first task of plan 14-09:
 # exactly one of the 54 files changed its bytes, embed/engine.py, which got
@@ -1192,8 +1192,15 @@ PHP_TREE_HASH_TODAY = "2e59ceb5ab0cd64564dc28653c53504ce9c1456cb2816ea77f0835497
 # unreadable in the closed list, because the PHP half writes it and the three
 # lists are held equal by test_extract_errors.py. No file came and none went, so
 # PACKAGE_FILES_TODAY stays at 57.
+# Moved on 2026-09-27 by plan 23-01 (cold start fix V-22-01/V-22-02): engine.py,
+# api/search.py, api/snippets.py changed their bytes, no file came or went.
+# embed/engine.py answers query_may_load with False at every switch value and
+# warm_wanted lost its switch-off block, api/search.py orders the warm run
+# through BackgroundTasks after the response, and api/snippets.py reads the one
+# term, operator and titleOnly rule of the search path. PACKAGE_FILES_TODAY
+# stays at 57.
 PACKAGE_FILES_TODAY = 57
-PACKAGE_TREE_HASH_TODAY = "b5608980ff343d0144392223aff24d9a90b2dfc90bf013f10c6f61853ef92131"
+PACKAGE_TREE_HASH_TODAY = "31ae5df472f4d9da72d97415424a4d1d366e7e5cf2c4f420d96ef4637aa0f7b1"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

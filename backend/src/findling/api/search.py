@@ -39,9 +39,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import partial
-from typing import Annotated, Any, Literal
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from findling.api import resources
@@ -62,14 +62,6 @@ from findling.query.rewrite import build_query
 LOGGER = logging.getLogger("findling.api.search")
 
 ROUTER = APIRouter()
-
-# The warm runs this process has in flight, and the only reason this set
-# exists is that ``asyncio.create_task`` keeps no reference of its own: a
-# task nobody holds may be collected while it runs, which is a documented
-# trap of the function and a failure that leaves no line in any log
-# (T-14-30). The entry is handed back by ``add_done_callback`` the moment
-# the run ends, so the set is empty on an idle container.
-_WARM_TASKS: set[asyncio.Task[Any]] = set()
 
 # The exact title the PHP companion accepts for a hit without a file behind it.
 # Every hit above file id 0 is resolved through the user's own folder over there
@@ -303,11 +295,13 @@ def one_round(
         # the first semantic search of a cold container took 1838.4 ms against
         # it: cURL error 28 in the Nextcloud log, HTTP 200 out of here, an
         # answer group without the container half and nought hits, with the
-        # unified search asking again at every keystroke. So with the release
-        # switched on this round answers out of the lexical list and the
-        # weights are fetched back in the background instead of while somebody
-        # waits. The rule itself lives in ``embed/engine.py::query_may_load``
-        # and is not repeated here.
+        # unified search asking again at every keystroke. The box of phase 22
+        # saw the same tear with the release switched off (innerMs 1505 to
+        # 1596, V-22-01, V-22-02). So this round always answers out of the
+        # lexical list while the engine is cold, and the weights are fetched in
+        # the background instead of while somebody waits (phase 23, D-01). The
+        # rule itself lives in ``embed/engine.py::query_may_load`` and is not
+        # repeated here.
         may_load = query_may_load()
         semantic = None
         lexical_only = bool(rewritten.operators) or rewritten.one_term or title_only or sort != "relevance"
@@ -360,6 +354,7 @@ def one_round(
 async def search(
     body: SearchRequest,
     nc: Annotated[AsyncNextcloudApp, Depends(anc_app)],
+    background: BackgroundTasks,
 ) -> SearchResponse:
     """Answer with the candidates this user may see, one page at a time."""
     user_id = await current_user_id(nc)
@@ -383,19 +378,22 @@ async def search(
     )
 
     if warm_wanted():
-        # The weights come back on the event loop this handler is already
-        # running on, and the answer below does not wait for them. The four
-        # alternatives were weighed in 14-RESEARCH.md 5.3 and all of them cost
-        # more: the unload task alone ticks every 30 seconds, so the user's
-        # second search would still be cold; a ``threading.Thread`` would be a
-        # second lifecycle beside the lifespan with no stop event of its own;
-        # and ``BackgroundTasks`` runs only after the response has gone out.
-        # ``create_task`` on the loop that is already here adds no coupling at
-        # all. The run itself blocks, like every load, so it goes through
-        # ``asyncio.to_thread`` (T-14-23).
-        task = asyncio.create_task(asyncio.to_thread(warm))
-        _WARM_TASKS.add(task)
-        task.add_done_callback(_WARM_TASKS.discard)
+        # The weights come back after this answer has been sent in full:
+        # Starlette runs a ``BackgroundTasks`` entry once the response is out,
+        # and a synchronous one like ``warm`` in its threadpool, so the load
+        # never blocks the event loop (T-14-23). Phase 14 chose a loose
+        # ``create_task`` precisely because it started earlier. Phase 23 turns
+        # that round: onnxruntime 1.30.0 holds the GIL while it builds the
+        # InferenceSession (onnxruntime_pybind_state.cc 2921-2977), so a run
+        # that starts while the answer is still being written stalls that very
+        # answer. "Only after the response has gone out" is now the property
+        # that protects the first answer (D-01). A request that arrives inside
+        # the load window can still tear the ceiling, because it waits at the
+        # lock of the holder; the owner accepted that on 27.09.2026 (D-08).
+        # ``BackgroundTasks`` also belongs to the response, so there is no
+        # loose task to hold against the garbage collector (T-14-30) and no
+        # race with the test client (M-16-01).
+        background.add_task(warm)
 
     hits: list[CanaryCandidate | Candidate] = []
     if text == CANARY_TERM:
