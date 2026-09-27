@@ -131,3 +131,27 @@ Aus dem Worktree kann nicht gepusht werden (Branch worktree-agent-*). Der Orches
 - Commits a69f523, c94dc1e und 7e6ad49 sind vorhanden
 - Alle 8 Dateien aus key-files sind vorhanden und geändert
 - STATE.md und ROADMAP.md sind unverändert
+
+## CI-Belege nach dem Push (Task 3, nachgetragen vom Orchestrator am 27.09.2026)
+
+Push fd2f93c..a5f6d50 auf main. Autorenprobe vor dem Push: nur street1983nk <k.cherif@outlook.de>, 0 Co-authored-Zeilen.
+
+| Workflow | Lauf | Ergebnis |
+|---|---|---|
+| Python gates | 36285187639 | success |
+| Integration | 36285187617 | success |
+| Resilience (Push; measurements skippt bei Push per Design) | 36285187618 | success |
+| Resilience (workflow_dispatch fuer den one_load-Beweis) | 36286121016 | success |
+| Multi-arch image (docker.yml) | 36285187622 | success |
+| HaRP deploy | 36285187628 | success |
+
+Beweiszeilen woertlich aus den Logs:
+
+- Integration, Kaltstart-Nachmessung: `first search after a restart, cold engine, over apache, the ocs route, the php provider and both halves: 973 ms on amd64, runner ubuntu-24.04, database mysql, HTTP 200, 1 hits out of the lexical list.`
+- Integration: `warm run took 0 s from the end of the first search to engineState=loaded` (beide Matrixzeilen)
+- Integration: `criterion 1 in the integration run: 10-kuendigung.docx found through a paraphrase, resource /index.php/f/31`
+- docker.yml, HART-04-Schritt "The image carries no fastembed and no requests (HART-04)": success (beide Plattform-Jobs, erster CI-Lauf des Schritts aus 23-02)
+- docker.yml, Offline-Beweis: `warm run                    True` und `the offline step is green` (beide Jobs)
+- resilience.yml, Schritt "One engine and one constituent list per process" (Dispatch-Lauf 36286121016, Job measurements): `engine-loads-after-search=1`, `search-ms=10.3`, `warm-ms=669.6`, `verdict=ok`
+
+Anmerkung: Der measurements-Job laeuft per Design nicht bei Push (`if: github.event_name != 'push'`); der Beweis kam aus einem manuellen Dispatch auf demselben Commit a5f6d50.
