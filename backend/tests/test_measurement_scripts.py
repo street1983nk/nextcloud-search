@@ -655,8 +655,11 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # the round trip. js/admin.js prints the field as it comes and no longer puts
 # uid/files/ in front of the path; the recipe globs **/*.php, so it does not
 # move this figure.
-PHP_FILES_TODAY = 70
-PHP_TREE_HASH_TODAY = "2e59ceb5ab0cd64564dc28653c53504ce9c1456cb2816ea77f0835497b32621b"
+# Moved on 2026-09-27 by plan 23-05: two files came,
+# php/lib/Migration/Version001300Date20260927000000.php and its unit test (the
+# gone repair of issue #14, D-04); no file changed its bytes or went.
+PHP_FILES_TODAY = 72
+PHP_TREE_HASH_TODAY = "d28262d9643285aa62dff1225692aac9adb95106d1182bf5b6b562d8a152ac3b"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
