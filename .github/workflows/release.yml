@@ -170,11 +170,12 @@ jobs:
           esac
 
       # Duplicates the check docker.yml already performs on a tag, and the
-      # duplication is the point. docker.yml is path filtered on backend/**, so
-      # a release tag placed on a commit that does not touch the backend skips
-      # it entirely. This workflow is the one that builds the file the store
-      # downloads, so it verifies the version itself instead of trusting a
-      # workflow that may not have run.
+      # duplication is the point: this workflow builds the file the store
+      # downloads, so it verifies the version itself instead of trusting
+      # another workflow. (The paths filter of docker.yml has been measured
+      # NOT to hold a tag push back, v1.0.0 on a store/media/** commit, run
+      # 34140924599, L-16-04; this check does not depend on that observation
+      # in either direction.)
       - name: On a tag, the tag and both info.xml versions have to agree
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
