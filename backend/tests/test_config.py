@@ -23,21 +23,27 @@ from pathlib import Path
 import pytest
 
 from findling.config import (
+    CUTTER_LOAD_BYTES,
     DEFAULT_LANGUAGES,
     DEFAULT_REBUILD_FALLBACK,
+    EMBED_ACTIVATION_BYTES,
     EMBED_CHUNK_TOKENS,
     EMBED_CLAIM_BATCH,
     EMBED_CONTEXT_TOKENS,
     EMBED_IDLE_RELEASE_SECONDS,
     EMBED_IDLE_RELEASE_SECONDS_RANGE,
+    EMBED_LANE_RESERVE_BYTES,
     EMBED_LOCK_TIMEOUT_SECONDS,
     EMBED_MODEL_DIR,
     EMBED_SPECIAL_TOKENS,
     EMBED_THREADS,
     EMBED_TOKEN_CAP,
     EMBED_TOKEN_CAP_RANGE,
+    EMBED_WEIGHTS_LOAD_BYTES,
+    FP32_EXTRA_BYTES,
     INDEX_WORKERS,
     MAX_TEXT_CHARS,
+    MIB,
     NEXTCLOUD_CORE_LOAD,
     OCR_CLAIM_BATCH,
     OCR_HARD_DEADLINE_MARGIN_SECONDS,
@@ -45,9 +51,11 @@ from findling.config import (
     OCR_LOCK_TIMEOUT_SECONDS,
     OCR_SLOT_COST_BYTES,
     PROFILE_PERFORMANCE_CORES_KEPT_FREE,
+    PROFILE_PERFORMANCE_EMBED_SLOTS,
     PROFILE_PERFORMANCE_MEMORY_SHARE,
     PROFILE_PERFORMANCE_OCR_SLOTS_MAX,
     PROFILE_STANDARD_CORE_SHARE,
+    PROFILE_STANDARD_EMBED_SLOTS,
     PROFILE_STANDARD_MEMORY_SHARE,
     PROFILE_STANDARD_OCR_SLOTS_MAX,
     REBUILD_FALLBACK_POSITIONS,
@@ -1232,6 +1240,48 @@ def test_the_sparing_mirrors_match_the_literals_they_mirror() -> None:
     assert f"num_threads={WRITER_THREADS}" in writer
     assert f"num_threads={WRITER_THREADS}" in rebuild
     assert re.search(rf"^THREADS: Final = {EMBED_THREADS}$", model, re.MULTILINE)
+
+
+FP32_MEASUREMENT_README = (
+    Path(__file__).resolve().parents[2] / "docs" / "measurements" / "2026-09-fp32-speicher" / "README.md"
+)
+
+
+def test_the_fp32_extra_bytes_are_the_measured_number() -> None:
+    # D-25-01: the extra resident memory of the fp32 weights is measured in
+    # plan 25-01; the constant and the measurement may not drift apart.
+    text = FP32_MEASUREMENT_README.read_text(encoding="utf-8")
+    match = re.search(r"FP32_EXTRA_BYTES = (\d+) \* MIB", text)
+
+    assert match is not None
+    assert int(match.group(1)) * MIB == FP32_EXTRA_BYTES
+    assert FP32_EXTRA_BYTES == 367 * MIB
+
+
+def test_the_embed_lane_constants_carry_the_measured_numbers() -> None:
+    # docs/embeddings.md: activations +26.4 MB, int8 weight load +391.9 MB;
+    # CLAUDE.md budget table: tokenizer and splitter 544.3 MB on amd64.
+    assert EMBED_ACTIVATION_BYTES == 27 * MIB
+    assert EMBED_WEIGHTS_LOAD_BYTES == 392 * MIB
+    assert CUTTER_LOAD_BYTES == 545 * MIB
+    # The parallel lane has to leave one OCR page of room.
+    assert EMBED_LANE_RESERVE_BYTES == OCR_SLOT_COST_BYTES
+
+
+def test_the_embed_slots_stay_as_decided() -> None:
+    # D-25-12: one embed runner in phase 25, embed_slots takes effect in phase 26.
+    assert PROFILE_STANDARD_EMBED_SLOTS == 1
+    assert PROFILE_PERFORMANCE_EMBED_SLOTS == 2
+
+
+def test_the_models_directory_sits_beside_the_dictionaries(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("APP_PERSISTENT_STORAGE", str(tmp_path))
+    settings.cache_clear()
+
+    current = settings()
+
+    assert current.models_dir == tmp_path / "models"
+    assert current.models_dir.parent == current.dict_dir.parent
 
 
 def test_the_standard_profile_is_conservative_on_four_cores() -> None:
