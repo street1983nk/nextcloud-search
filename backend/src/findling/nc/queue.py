@@ -34,6 +34,7 @@ not appear anywhere in this file, not even in a comment.
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
@@ -52,6 +53,11 @@ from findling.precision import PRECISION_NAMES
 from findling.profile import PROFILE_NAMES
 
 LOGGER = logging.getLogger("findling.nc.queue")
+
+# The shape of the guard's confirmation token (D-26-04): secrets.token_hex(16)
+# on the container side, preg_match('/^[0-9a-f]{32}$/') on the PHP side. Only a
+# value of exactly this shape leaves companion_choice (T-26-21).
+_TOKEN_PATTERN: Final = re.compile(r"[0-9a-f]{32}")
 
 # What the container can do with a row, spelled as the PHP side spells it.
 #
@@ -200,10 +206,15 @@ class CompanionChoice:
 
     Each value is None on its own when it is missing or outside its closed set
     (D-25-02 with the D-24-02 semantics): the caller then keeps what it read last.
+
+    ``confirmed`` is the way back of the memory guard (D-26-04): the token the
+    admin confirmed with occ, 32 lower case hex digits, or None. A 1.3 or early
+    1.4 companion does not know the field at all, which reads as None.
     """
 
     profile: str | None
     precision: str | None
+    confirmed: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -550,6 +561,10 @@ class DocumentQueue:
         None on its own, exactly like a failed call, and the caller then keeps
         whatever it read last (D-24-02, D-25-02). A 1.3 companion answers
         without the precision field, which reads as None.
+
+        The confirmation token of the memory guard (D-26-04) only comes back as
+        exactly 32 lower case hex digits (T-26-21); anything else, including a
+        missing field of a companion that predates it, is None.
         """
         try:
             answer = await read_profile(self._nc)
@@ -558,14 +573,16 @@ class DocumentQueue:
             # here, and that costs one debug line per round, never the poller
             # (D-24-02). No value and no exception text in the line (T-24-19).
             LOGGER.debug("could not read the profile route")
-            return CompanionChoice(profile=None, precision=None)
+            return CompanionChoice(profile=None, precision=None, confirmed=None)
 
         payload = _mapping(answer) or {}
         profile = payload.get("profile")
         precision = payload.get("precision")
+        confirmed = payload.get("confirmed")
         return CompanionChoice(
             profile=profile if isinstance(profile, str) and profile in PROFILE_NAMES else None,
             precision=precision if isinstance(precision, str) and precision in PRECISION_NAMES else None,
+            confirmed=confirmed if isinstance(confirmed, str) and _TOKEN_PATTERN.fullmatch(confirmed) else None,
         )
 
     async def requeue(self, file_ids: Sequence[int], *, kind: str) -> CallResult:

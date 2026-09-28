@@ -1405,8 +1405,16 @@ PHP_TREE_HASH_TODAY = "460e2d6b7a11903bb783b722693f113f0ace524d67bc8cae5a0335395
 # guard block of GET /status). No file came and none went, so
 # PACKAGE_FILES_TODAY stays at 66. The PHP pair does not move: no plan of this
 # wave touches a PHP file.
+# Moved on 2026-09-28 by plan 26-06 (the pass under N slots, PAR-02), the one
+# plan of wave 3: three of the 66 files changed their bytes. worker/poller.py
+# keeps two OCR rows per slot and hands the rest back at once, reads the OCR
+# rows as tasks through SlotGate and SlotPool with a barrier before the commit,
+# and runs every extraction in the executor of the pool; nc/queue.py reads the
+# confirmation token of the guard (CompanionChoice.confirmed); config.py only
+# changed a comment. No file came and none went, so PACKAGE_FILES_TODAY stays
+# at 66. The PHP pair does not move: this plan touches no PHP file.
 PACKAGE_FILES_TODAY = 66
-PACKAGE_TREE_HASH_TODAY = "2ae8b3bc9176abb6e5523632d9100c89936f6b92828409df8afd44ab4b848e91"
+PACKAGE_TREE_HASH_TODAY = "fbd506ebabab296c1b8c5e469566af4be88f76107c50e81635c1725404d3589a"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

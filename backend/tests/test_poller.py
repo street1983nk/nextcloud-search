@@ -50,7 +50,8 @@ from findling import lane
 from findling.config import SCHEMA_VERSION, settings
 from findling.extract.dispatch import Route
 from findling.extract.dispatch import extract as dispatch_extract
-from findling.extract.errors import ExtractionOutcome, Reason
+from findling.extract.errors import ChildKilled, ExtractionOutcome, Reason
+from findling.extract.pool import SlotPool
 from findling.hardware import Hardware
 from findling.index.open import DUTCH_MARK, LANGUAGES_MARK, REBUILD_MARK, SCHEMA_MARK, expected_versions, open_index
 from findling.index.schema import FIELD_BODY_DE, FIELD_FILE_ID, FIELD_NAME
@@ -206,6 +207,9 @@ class _FakeQueue:
         # The precision out of the same answer (D-25-02). None by default, a
         # 1.3 companion without the field.
         self.precision_answer: str | None = None
+        # The guard's confirmation token out of the same answer (D-26-04).
+        # None by default, a companion before plan 26-02.
+        self.confirmed_answer: str | None = None
         # A companion older than 1.4.0: the read goes through the real
         # DocumentQueue.companion_choice over a session that answers 404, so the
         # test proves the error path the poller really meets and not a fake
@@ -222,7 +226,9 @@ class _FakeQueue:
         self.order.append("profile")
         if self.profile_route_missing:
             return await DocumentQueue(cast("AsyncNextcloudApp", _AppWithoutProfileRoute())).companion_choice()
-        return CompanionChoice(profile=self.profile_answer, precision=self.precision_answer)
+        return CompanionChoice(
+            profile=self.profile_answer, precision=self.precision_answer, confirmed=self.confirmed_answer
+        )
 
     async def claim(self, *, limit: int, max_bytes: int, lane: str | None = None) -> ClaimResult:
         del limit, max_bytes
@@ -2184,8 +2190,8 @@ class _WorkStock:
 
     async def companion_choice(self) -> CompanionChoice:
         # The stock simulation is about deliveries, never about the profile:
-        # no stored choice, Economy and int8 in force.
-        return CompanionChoice(profile=None, precision=None)
+        # no stored choice, Economy and int8 in force, no guard confirmation.
+        return CompanionChoice(profile=None, precision=None, confirmed=None)
 
     async def top_up(self) -> str:
         # The stock is the whole crawl in these tests: nothing is ever pending
@@ -2610,10 +2616,15 @@ def test_the_blocking_work_runs_off_the_event_loop() -> None:
     source = POLLER_SOURCE.read_text(encoding="utf-8")
 
     assert source.count("to_thread") >= 2
-    for blocking in ("_writer_or_die().flush", "_writer_or_die().add", "_record_verdicts", "self._extract"):
+    for blocking in ("_writer_or_die().flush", "_writer_or_die().add", "_record_verdicts"):
         lines = [line for line in source.splitlines() if blocking in line and "to_thread" in line]
 
         assert lines, blocking
+    # Since phase 26 the extraction runs in the executor of the slot pool and
+    # never in the default one the search shares (Pitfall 5, issue #19).
+    assert "self._pool.call(self._extract" in source
+    assert "to_thread(self._extract" not in source
+    assert "self._pool.call(self._writer_or_die().add" in source
 
 
 def test_no_log_call_names_a_path_a_title_or_a_piece_of_text() -> None:
@@ -3696,3 +3707,351 @@ def test_after_a_cutter_release_no_half_pair_promises_the_track() -> None:
 
     assert worker.release_cutter() is True
     assert worker._track._embed_ready is False, "the pair is gone whole, so nothing promises the track"
+
+
+# -- the pass under N slots (plan 26-06, PAR-02) ------------------------------
+
+
+@dataclass(slots=True)
+class _SlotExtractor:
+    """An extractor that takes its time and counts how many run beside it.
+
+    Thread safe, because under several slots it is called from the threads of
+    the pool at once. It writes down the order of the calls, the thread names
+    and, per call, how many rows had been handed back by then, which is what
+    the test of "handed back before the first extraction" reads.
+    """
+
+    seconds: float = 0.2
+    error: BaseException | None = None
+    queue: _FakeQueue | None = None
+    poller: Poller | None = None
+    release: threading.Event | None = None
+    running: int = 0
+    most: int = 0
+    finished: int = 0
+    paths: list[str] = field(default_factory=list)
+    threads: list[str] = field(default_factory=list)
+    unlocked_at_call: list[int] = field(default_factory=list)
+    held_at_call: list[set[int]] = field(default_factory=list)
+    lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def __call__(
+        self,
+        path: str,
+        mime: str,
+        size: int,
+        *,
+        route: Route | None = None,
+        timeout_seconds: float | None = None,
+    ) -> ExtractionOutcome:
+        del mime, size, route, timeout_seconds
+        with self.lock:
+            self.running += 1
+            self.most = max(self.most, self.running)
+            self.paths.append(path)
+            self.threads.append(threading.current_thread().name)
+            if self.queue is not None:
+                self.unlocked_at_call.append(len(self.queue.unlocked))
+            if self.poller is not None:
+                self.held_at_call.append(set(self.poller._held))
+        try:
+            if self.release is not None:
+                self.release.wait(timeout=10)
+            else:
+                time.sleep(self.seconds)
+            if self.error is not None:
+                raise self.error
+            return ExtractionOutcome.indexed(BODY)
+        finally:
+            with self.lock:
+                self.running -= 1
+                self.finished += 1
+
+
+def _ocr_row(offset: int) -> QueueJob:
+    return _job(
+        300 + offset,
+        7000 + offset,
+        kind="ocr",
+        mime="application/pdf",
+        title=f"Scan{offset}.pdf",
+        path=f"Scans/Scan{offset}.pdf",
+    )
+
+
+def _slot_poller(
+    *,
+    store: Store,
+    writer: IndexBatchWriter,
+    tmp_path: Path,
+    queue: _FakeQueue,
+    extract: Any,
+    ocr_slots: int | None,
+    bodies: dict[int, bytes | BaseException | None] | None = None,
+) -> Poller:
+    return Poller(
+        store=store,
+        writer=writer,
+        tmp_dir=tmp_path / "tmp",
+        client_factory=lambda: cast("AsyncNextcloudApp", object()),
+        gateway_factory=lambda: cast("Any", _FakeGatewayClient()),
+        queue_factory=lambda nc: cast("Any", queue),
+        fetch=_gateway(bodies or {}),
+        extract=extract,
+        ocr_slots=ocr_slots,
+    )
+
+
+async def test_economy_reads_its_scans_one_after_the_other_on_the_same_wire(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # D-26-09, SC3: no hardware known, no choice stored, so Economy with one
+    # slot. The claim asks for no lane, nothing is handed back, and the two
+    # scans run one at a time in claim order, exactly as before phase 26.
+    jobs = (_ocr_row(0), _ocr_row(1))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    extract = _SlotExtractor(seconds=0.05)
+    poller = _slot_poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, extract=extract, ocr_slots=None)
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert queue.lanes == [None]
+    assert queue.unlocked == []
+    assert extract.most == 1
+    assert [Path(path).name for path in extract.paths] == ["job-300.part", "job-301.part"]
+    assert queue.acknowledged == [([300, 301], {})]
+
+
+async def test_four_slots_read_eight_scans_four_at_a_time_and_index_each_once(
+    store: Store, writer: IndexBatchWriter, index: Index, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # SC1 and T-26-19: at most four at once, every scan exactly once in the
+    # index, one commit for the whole pass and the acknowledgement behind it.
+    jobs = tuple(_ocr_row(offset) for offset in range(8))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    extract = _SlotExtractor(seconds=0.2)
+    poller = _slot_poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, extract=extract, ocr_slots=4)
+    flushes: list[int] = []
+    real_flush = writer.flush
+
+    def counting_flush() -> Any:
+        flushes.append(len(queue.acknowledged))
+        return real_flush()
+
+    monkeypatch.setattr(writer, "flush", counting_flush)
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert result.indexed == 8
+    assert extract.most == 4
+    assert extract.finished == 8
+    assert sorted(_stored_ids(index)) == [7000 + offset for offset in range(8)]
+    assert flushes == [0], "one commit, and no acknowledgement before it"
+    assert len(queue.acknowledged) == 1
+    assert queue.acknowledged[0][0] == [300 + offset for offset in range(8)]
+    assert queue.unlocked == []
+
+
+async def test_rows_beyond_two_per_slot_go_back_before_the_first_extraction(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # D-26-13, T-26-18: two slots keep four scans; the six after them go back
+    # through unlock before a single child starts, and leave the held set.
+    jobs = tuple(_ocr_row(offset) for offset in range(10))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    extract = _SlotExtractor(seconds=0.02, queue=queue)
+    poller = _slot_poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, extract=extract, ocr_slots=2)
+    extract.poller = poller
+
+    result = await poller.run_once()
+
+    handed_back = [300 + offset for offset in range(4, 10)]
+    assert queue.unlocked == [handed_back]
+    assert extract.unlocked_at_call
+    assert set(extract.unlocked_at_call) == {1}
+    assert all(not (held & set(handed_back)) for held in extract.held_at_call)
+    assert result.claimed == 4
+    assert extract.finished == 4
+    assert queue.acknowledged == [([300, 301, 302, 303], {})]
+
+
+async def test_the_slots_never_outnumber_the_scans_the_claim_delivered(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # D-26-07: an old companion hands out two OCR rows, so two slots at most,
+    # and a content row beside them waits for one of the two.
+    jobs = (
+        _ocr_row(0),
+        _ocr_row(1),
+        _job(401, 8001, mime="text/plain"),
+        _job(402, 8002, mime="text/plain"),
+    )
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    extract = _SlotExtractor(seconds=0.1)
+    poller = _slot_poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, extract=extract, ocr_slots=4)
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert extract.most == 2
+    assert extract.finished == 4
+
+
+async def test_every_extraction_runs_in_the_threads_of_the_pool(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # Pitfall 5: never the default executor the search shares, neither under
+    # several slots nor in the serial loop of a content row.
+    jobs = (_ocr_row(0), _ocr_row(1), _job(401, 8001, mime="text/plain"))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    extract = _SlotExtractor(seconds=0.01)
+    poller = _slot_poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, extract=extract, ocr_slots=2)
+
+    await poller.run_once()
+
+    assert len(extract.threads) == 3
+    assert all(name.startswith("findling-slot") for name in extract.threads), extract.threads
+
+
+async def test_a_gateway_that_fails_in_a_task_gives_every_row_back_behind_the_barrier(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    jobs = (_ocr_row(0), _ocr_row(1), _ocr_row(2))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    extract = _SlotExtractor(seconds=0.1)
+    poller = _slot_poller(
+        store=store,
+        writer=writer,
+        tmp_path=tmp_path,
+        queue=queue,
+        extract=extract,
+        ocr_slots=2,
+        bodies={7001: OSError("gateway down")},
+    )
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_GATEWAY_UNAVAILABLE
+    # The scans that did run had ended before the rows went back.
+    assert extract.running == 0
+    assert queue.unlocked == [[300, 301, 302]]
+    assert queue.acknowledged == []
+    assert store.file_row(7000) is None
+    assert store.file_row(7002) is None
+    assert poller.busy is False
+
+
+@pytest.mark.parametrize("slots", [1, 2])
+@pytest.mark.parametrize(("engine", "reason"), [(False, "corrupt"), (True, "ocr_failed")])
+async def test_a_killed_child_keeps_its_verdict_of_before_phase_26_for_now(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, slots: int, engine: bool, reason: str
+) -> None:
+    # The mapping until plan 26-09 brings the solo retry.
+    jobs = (_ocr_row(0), _ocr_row(1))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    extract = _SlotExtractor(seconds=0.01, error=ChildKilled(engine=engine))
+    poller = _slot_poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, extract=extract, ocr_slots=slots)
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert queue.acknowledged == [([], {300: reason, 301: reason})]
+
+
+async def test_an_embed_row_of_lane_all_waits_until_the_scans_are_through(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # IDX-08, D-25-11: in lane all the embedding runs inline, and it must not
+    # overlap with OCR, so the embed row starts behind the barrier.
+    jobs = (_ocr_row(0), _job(501, 9001, kind="embed"), _ocr_row(1))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    extract = _SlotExtractor(seconds=0.15)
+    poller = _slot_poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, extract=extract, ocr_slots=2)
+    seen: list[tuple[int, int]] = []
+
+    async def embed_row(self: object, job: QueueJob, done: list[int]) -> str:
+        del self
+        seen.append((extract.running, extract.finished))
+        done.append(job.queue_id)
+        return "no_stored_text"
+
+    monkeypatch.setattr(type(poller.track), "embed_row", embed_row)
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert extract.most == 2
+    assert seen == [(0, 2)]
+
+
+async def test_a_cancelled_pass_cancels_its_scans_and_the_rows_go_back(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    jobs = (_ocr_row(0), _ocr_row(1))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    release = threading.Event()
+    extract = _SlotExtractor(release=release)
+    poller = _slot_poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, extract=extract, ocr_slots=2)
+
+    running = asyncio.create_task(poller.run_once())
+    try:
+        for _ in range(500):
+            if extract.running == 2:
+                break
+            await asyncio.sleep(0.01)
+        assert extract.running == 2
+        running.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await running
+        scans = [task for task in asyncio.all_tasks() if "_scan_in_a_slot" in repr(task.get_coro())]
+        assert all(task.done() for task in scans)
+        assert await poller.unlock_held() == 2
+        assert queue.unlocked == [[300, 301]]
+    finally:
+        release.set()
+    for _ in range(500):
+        if extract.running == 0:
+            break
+        await asyncio.sleep(0.01)
+    # The cancelled scans never reach the writer, whatever their children did.
+    assert writer.pending == 0
+    assert queue.acknowledged == []
+
+
+async def test_the_pass_line_carries_the_slots_and_nothing_about_a_file(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    jobs = (_ocr_row(0), _ocr_row(1))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    extract = _SlotExtractor(seconds=0.01)
+    poller = _slot_poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, extract=extract, ocr_slots=2)
+
+    with caplog.at_level("INFO", logger="findling.worker.poller"):
+        await poller.run_once()
+
+    finished = [line for line in _poller_lines(caplog) if line.startswith("pass finished")]
+    assert len(finished) == 1
+    assert finished[0].endswith("slots=2")
+    for line in _poller_lines(caplog):
+        assert "Scan" not in line
+        assert ".pdf" not in line
+
+
+async def test_a_poller_closes_the_pool_it_built_and_leaves_a_handed_in_one_open(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    handed_in = SlotPool(2)
+    own = Poller(store=store, writer=writer, tmp_dir=tmp_path / "tmp")
+    borrowed = Poller(store=store, writer=writer, tmp_dir=tmp_path / "tmp", pool=handed_in)
+    try:
+        await own.aclose()
+        await borrowed.aclose()
+
+        with pytest.raises(RuntimeError):
+            own._pool.call(len, "x")
+        assert await handed_in.call(len, "abc") == 3
+    finally:
+        handed_in.close()

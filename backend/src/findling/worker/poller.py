@@ -4,7 +4,10 @@ The whole file exists for the sake of one ordering, so it is stated before any
 code. One pass over a batch does, in this order:
 
 1. take the batch and, per file, judge it, read the bytes, extract the text and
-   hand the document to the writer;
+   hand the document to the writer. From phase 26 on step 1 reads the OCR rows
+   concurrently, up to one per slot, and everything else stays serial; the
+   OCR tasks end at a barrier, and only behind it are their verdicts sorted,
+   in the loop thread and in claim order;
 2. **commit** the writer, which is the moment the index becomes durable;
 3. write the verdicts and the permissions into the state database;
 3b. hand the rows that are not finished on to a trailing track, OCR or embedding;
@@ -66,10 +69,15 @@ from typing import IO, Any, Final, cast
 from tantivy import Index
 
 from findling import lane
-from findling.config import settings
+from findling.config import (
+    OCR_HARD_DEADLINE_MARGIN_SECONDS,
+    PROFILE_PERFORMANCE_OCR_SLOTS_MAX,
+    ocr_rows_to_keep,
+    settings,
+)
 from findling.extract.dispatch import Route, extension_of, judge
-from findling.extract.errors import ExtractionOutcome, Reason, State
-from findling.extract.sandbox import extract_guarded
+from findling.extract.errors import ChildKilled, ExtractionOutcome, Reason, State
+from findling.extract.pool import SlotGate, SlotPool
 from findling.index.open import (
     expected_versions,
     open_index,
@@ -255,6 +263,29 @@ class _Verdict:
     ocr_used: bool = False
 
 
+@dataclass(frozen=True, slots=True)
+class _ScanResult:
+    """What reading one scan produced, before anybody judged it.
+
+    The OCR half of a row splits in two since phase 26: :meth:`Poller._scan`
+    fetches, extracts and hands a text to the writer, and it may run in a task
+    beside other scans; :meth:`Poller._judge_scan` sorts the verdict into the
+    lists of the pass, and it runs in the loop thread behind the barrier. The
+    state database is touched by neither of them, so the connection of the
+    poller never sees two threads at once (Pitfall 4).
+
+    ``outcome`` carries no text any more: the writer holds it by the time this
+    exists, and up to 32 scans waiting at the barrier must not keep 32 texts
+    alive (perf audit M2); the character count survives. ``content_hash`` is
+    None for a verdict that was reached without reading any bytes, gone or too
+    large.
+    """
+
+    job: QueueJob
+    outcome: ExtractionOutcome
+    content_hash: str | None = None
+
+
 class _HashingSink:
     """A sink that hashes the bytes it passes on.
 
@@ -404,7 +435,9 @@ class Poller:
         gateway_factory: GatewayFactory = new_gateway_client,
         queue_factory: QueueFactory = DocumentQueue,
         fetch: FetchFile = fetch_file_stream,
-        extract: ExtractFile = extract_guarded,
+        extract: ExtractFile | None = None,
+        pool: SlotPool | None = None,
+        ocr_slots: int | None = None,
         vectors: VectorStore | None = None,
         chunker: Chunker | None = None,
         model: PassageEmbedder | None = None,
@@ -433,7 +466,21 @@ class Poller:
         self._gateway_factory = gateway_factory
         self._queue_factory = queue_factory
         self._fetch = fetch
-        self._extract = extract
+        # The extraction children (PAR-02). Up to the Performance maximum of
+        # slots, built on first demand, so a Sparsam container starts exactly
+        # the one child it always started. Every extraction and every writer
+        # call out of an OCR task runs in the executor of this pool and never in
+        # the default executor the search shares (Pitfall 5, issue #19).
+        self._pool = pool if pool is not None else SlotPool(PROFILE_PERFORMANCE_OCR_SLOTS_MAX)
+        self._owns_pool = pool is None
+        self._extract: ExtractFile = extract if extract is not None else self._pool.run
+        # How many extractions may run at once. Its limit is set per pass to
+        # the slots of that pass; one until the first pass says otherwise.
+        self._gate = SlotGate(1)
+        # The slot count of the kill harness and the measuring ladder, which
+        # have to pin it; None reads it from the profile (Pitfall 10: no
+        # environment variable, the INDEX_WORKERS taboo holds).
+        self._ocr_slots = ocr_slots
         # The vector stock of the delete path: the writer takes the vectors of a
         # dropped document with it and a tombstone takes them off its file
         # (D-21), whether or not the embedding track ever runs.
@@ -678,6 +725,11 @@ class Poller:
         # Only what the track opened itself; whatever was handed in stays open.
         # A running fetch of the fp32 weights is cancelled and waited for.
         await self._track.aclose()
+        # The children of the pool, if this poller built it. close() halts a
+        # busy child at once and stops the free ones, which waits for their
+        # exit, so it runs off the loop.
+        if self._owns_pool:
+            await asyncio.to_thread(self._pool.close)
         if not self._owns_resources:
             return
         writer, self._writer = self._writer, None
@@ -737,12 +789,13 @@ class Poller:
         queue = await asyncio.to_thread(self._open)
 
         # The profile the admin chose, asked once per round (D-24-01) and before
-        # the claim, because from phase 26 on the size of the claim depends on
-        # it. A failed read changes nothing, the last name read stays in force
-        # and Economy before the first one (D-24-02). A change therefore takes
+        # the claim, because the lane of the claim, the OCR rows this pass keeps
+        # and the slots it reads them on all follow from it (D-26-07, D-26-13).
+        # A failed read changes nothing, the last name read stays in force and
+        # Economy before the first one (D-24-02). A change therefore takes
         # effect after anything from seconds to about 25 minutes: an idle round
         # waits up to POLL_COOLDOWN_MAX_SECONDS, an OCR round takes up to about
-        # 2 x 780 s. Nothing below reads the value yet.
+        # 2 x 780 s per slot.
         choice = await queue.companion_choice()
         note_chosen(choice.profile)
         # The precision key is read on the same answer (D-25-02); None changes
@@ -819,8 +872,9 @@ class Poller:
             return RoundResult(ROUND_EMPTY)
 
         self._held = {job.queue_id for job in claim.jobs}
+        jobs, slots = await self._keep_what_the_slots_finish(queue, claim.jobs)
         try:
-            return await self._work(queue, claim.jobs)
+            return await self._work(queue, jobs, slots)
         except sqlite3.Error as error:
             # The _abort semantics for a store that refused a write, "database is
             # locked" above all now that two tracks write (Pitfall 3). Before this
@@ -829,10 +883,44 @@ class Poller:
             # three such passes a healthy file ended as failed(repeatedly_stuck).
             # Now they go back unjudged and the pass pauses; the type name is the
             # whole line.
-            LOGGER.warning(
-                "indexing pass hit a store error, %s, %d rows handed back", type(error).__name__, len(claim.jobs)
-            )
-            return await self._abort(queue, len(claim.jobs), state=ROUND_PAUSED_STORE_ERROR)
+            LOGGER.warning("indexing pass hit a store error, %s, %d rows handed back", type(error).__name__, len(jobs))
+            return await self._abort(queue, len(jobs), state=ROUND_PAUSED_STORE_ERROR)
+
+    async def _keep_what_the_slots_finish(
+        self, queue: DocumentQueue, claimed: Sequence[QueueJob]
+    ) -> tuple[tuple[QueueJob, ...], int]:
+        """Hand back the OCR rows the slots of this pass cannot finish; name the slots.
+
+        D-26-13: every slot keeps OCR_ROWS_PER_SLOT rows, because each of them
+        may take its hard deadline plus the download margin and all of them
+        have to end inside one lease of 1800 s (D-26-06). The rest goes back at
+        once, before a single extraction starts, through unlock: the other half
+        gives the delivery back, so a row handed back here costs neither its
+        give-up budget nor a lock timeout (T-26-18). A row that went back
+        leaves ``_held`` and the pass with it.
+
+        An unlock that failed keeps the rows in the pass, which is the pass as
+        it ran before phase 26; the lease arithmetic of that case is the old
+        one, and the next pass trims again.
+
+        The slots are never more than the OCR rows the claim delivered
+        (D-26-07): an old companion that hands out two rows gets two slots at
+        most, whatever the profile allows. With no OCR row at all the pass has
+        one slot, and content extractions run one at a time as they always did.
+        """
+        ocr_rows = [job for job in claimed if job.kind == KIND_OCR]
+        target = self._ocr_slots if self._ocr_slots is not None else profile_snapshot().resolution.values.ocr_slots
+        keep = ocr_rows_to_keep(len(ocr_rows), target, int(self._ocr_hard_deadline) + OCR_HARD_DEADLINE_MARGIN_SECONDS)
+        excess = ocr_rows[keep:]
+        jobs = tuple(claimed)
+        if excess:
+            released = await queue.unlock([job.queue_id for job in excess])
+            if released.ok:
+                gone = {job.queue_id for job in excess}
+                self._held.difference_update(gone)
+                jobs = tuple(job for job in claimed if job.queue_id not in gone)
+                ocr_rows = ocr_rows[:keep]
+        return jobs, max(1, min(target, len(ocr_rows)))
 
     async def _runner_parked(self) -> bool:
         """True once the embed runner is parked, or when there is none.
@@ -853,8 +941,13 @@ class Poller:
             return False
         return True
 
-    async def _work(self, queue: DocumentQueue, jobs: Sequence[QueueJob]) -> RoundResult:
-        """Steps 1 to 4 over the rows of one claim, in the order the module docstring states."""
+    async def _work(self, queue: DocumentQueue, jobs: Sequence[QueueJob], slots: int = 1) -> RoundResult:
+        """Steps 1 to 4 over the rows of one claim, in the order the module docstring states.
+
+        ``slots`` is how many extractions step 1 may run at once. One is the
+        loop as it always was; from two on the OCR rows run as tasks (see
+        :meth:`_read_in_slots`), and steps 2 to 4 are the same either way.
+        """
         done: list[int] = []
         failed: dict[int, str] = {}
         verdicts: list[_Verdict] = []
@@ -874,21 +967,27 @@ class Poller:
         # 1. Per file: judge, read the bytes into scratch, extract, hand over to
         #    the writer. An abort anywhere in here costs nothing: the rows are
         #    still locked in Nextcloud and run in again after the lock timeout.
-        for job in jobs:
-            try:
-                counted = await self._handle(job, done, failed, verdicts, handover, embedding, embedded)
-            except _GatewayDown:
-                # The gateway says nothing about the file, so no verdict may be
-                # written for any of them. Give the whole batch back and wait.
-                return await self._abort(queue, len(jobs))
-            except _DiskTight:
-                # The same answer the flush below gives to the same condition,
-                # only from inside the loop: nothing of this pass is written,
-                # the rows go back unjudged and the pause is the operating state
-                # the status page names. Half a vector stock is the alternative.
-                LOGGER.warning("index paused, free space below the floor, %d rows handed back", len(jobs))
-                return await self._abort(queue, len(jobs), state=ROUND_PAUSED_LOW_DISK)
-            unchanged += counted
+        #    Under several slots an abort out of a task or out of the serial
+        #    rows waits for the barrier first, so no child of this pass is
+        #    still working when its rows go back.
+        await self._gate.set_limit(slots)
+        try:
+            if slots >= 2:
+                unchanged = await self._read_in_slots(jobs, done, failed, verdicts, handover, embedding, embedded)
+            else:
+                for job in jobs:
+                    unchanged += await self._handle(job, done, failed, verdicts, handover, embedding, embedded)
+        except _GatewayDown:
+            # The gateway says nothing about the file, so no verdict may be
+            # written for any of them. Give the whole batch back and wait.
+            return await self._abort(queue, len(jobs))
+        except _DiskTight:
+            # The same answer the flush below gives to the same condition,
+            # only from inside the loop: nothing of this pass is written,
+            # the rows go back unjudged and the pause is the operating state
+            # the status page names. Half a vector stock is the alternative.
+            LOGGER.warning("index paused, free space below the floor, %d rows handed back", len(jobs))
+            return await self._abort(queue, len(jobs), state=ROUND_PAUSED_LOW_DISK)
 
         # 2. The commit. From here the index is durable, and this is the earliest
         #    moment at which a verdict may be written down.
@@ -944,7 +1043,7 @@ class Poller:
         skipped = sum(1 for verdict in verdicts if verdict.outcome.state is State.SKIPPED)
         LOGGER.info(
             "pass finished, claimed=%d indexed=%d skipped=%d failed=%d unchanged=%d "
-            "requeued=%d embedded=%d committed=%d",
+            "requeued=%d embedded=%d committed=%d slots=%d",
             len(jobs),
             indexed,
             skipped,
@@ -953,6 +1052,7 @@ class Poller:
             requeued,
             len(embedded),
             flush.documents,
+            slots,
         )
         return RoundResult(
             ROUND_WORKED,
@@ -965,6 +1065,84 @@ class Poller:
             requeued=requeued,
             embedded=len(embedded),
         )
+
+    async def _read_in_slots(
+        self,
+        jobs: Sequence[QueueJob],
+        done: list[int],
+        failed: dict[int, str],
+        verdicts: list[_Verdict],
+        handover: list[int],
+        embedding: list[int],
+        embedded: list[int],
+    ) -> int:
+        """Step 1 under two slots or more. Returns the rows that needed no work.
+
+        **The OCR rows run as tasks**, each through the gate and on a child of
+        the pool, and each touches the network, a child, the scratch volume
+        and the writer, never the state database (T-26-20). **Every other row
+        runs serially** in claim order, as before; a content extraction takes
+        a slot of the same gate, so there are never more children at work than
+        the pass has slots. **Embed rows wait for the barrier**: they occur in
+        lane all only, where the embedding runs inline, and OCR and embedding
+        must not overlap there (IDX-08, D-25-11).
+
+        **The barrier** is one gather over every task. Only behind it, back in
+        the loop thread, are the scan results judged, in claim order, so the
+        verdicts land in the lists exactly where the serial loop would have
+        put them. A gateway or a disk that fails, in a task or in a serial row,
+        is raised behind the barrier and not before it: the rows go back only
+        once no child of this pass works on them any more. Any other exception
+        of a task is raised behind the barrier as well, the first in claim
+        order.
+
+        **A cancellation** cancels every task and travels on; the caller's
+        unlock_held gives the rows back. The child of a cancelled task runs to
+        its end in its thread, which the pool's close takes care of at shutdown.
+        """
+        tasks: list[asyncio.Task[_ScanResult]] = []
+        deferred: list[QueueJob] = []
+        stop: BaseException | None = None
+        unchanged = 0
+        try:
+            tasks = [asyncio.create_task(self._scan_in_a_slot(job)) for job in jobs if job.kind == KIND_OCR]
+            for job in jobs:
+                if job.kind == KIND_OCR:
+                    continue
+                if job.kind == KIND_EMBED:
+                    deferred.append(job)
+                    continue
+                try:
+                    unchanged += await self._handle(job, done, failed, verdicts, handover, embedding, embedded)
+                except (_GatewayDown, _DiskTight) as error:
+                    stop = error
+                    break
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+        except BaseException:
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            raise
+
+        errors = [result for result in results if isinstance(result, BaseException)]
+        if stop is not None:
+            errors.insert(0, stop)
+        for error in errors:
+            if isinstance(error, (_GatewayDown, _DiskTight)):
+                raise error
+        if errors:
+            raise errors[0]
+
+        for result in results:
+            self._judge_scan(cast("_ScanResult", result), done, failed, verdicts, embedding)
+        for job in deferred:
+            unchanged += await self._handle(job, done, failed, verdicts, handover, embedding, embedded)
+        return unchanged
+
+    async def _scan_in_a_slot(self, job: QueueJob) -> _ScanResult:
+        """One OCR row as a task: wait for a slot, then read the scan on it."""
+        async with self._gate.slot():
+            return await self._scan(job)
 
     # -- one file --------------------------------------------------------
 
@@ -1138,7 +1316,11 @@ class Poller:
                 # spending the engine time of the whole mount again.
                 outcome = ExtractionOutcome.skipped(Reason.NO_TEXT_LAYER)
             else:
-                outcome = await asyncio.to_thread(self._extract, str(read.path), job.mime, read.size)
+                # On a child of the pool and under a slot of the gate, so that
+                # a content row beside running OCR tasks never makes one child
+                # more than the pass has slots.
+                async with self._gate.slot():
+                    outcome = await self._extract_on_the_pool(str(read.path), job.mime, read.size)
         finally:
             # The scratch file holds user content. Leaving one behind is a
             # disclosure, and leaving one behind per job fills the volume.
@@ -1183,19 +1365,33 @@ class Poller:
         day an OCR run is repeated after a successful one the fast path would
         acknowledge the row without ever starting the engine. The bytes did not
         change; what changed is what is to be done with them.
+
+        Since phase 26 this is the serial pass of the two halves below, the
+        reading in :meth:`_scan` and the judging in :meth:`_judge_scan`; the
+        concurrent pass runs the same two with a barrier between them.
+        """
+        async with self._gate.slot():
+            result = await self._scan(job)
+        self._judge_scan(result, done, failed, verdicts, embedding)
+
+    async def _scan(self, job: QueueJob) -> _ScanResult:
+        """Fetch one scan, read it on a child of the pool, hand the text to the writer.
+
+        Safe to run in a task beside other scans: the fetch has its own scratch
+        file per queue row, the extraction and the writer call run in the
+        executor of the pool, and the writer is thread safe since plan 26-04.
+        It does not touch the state database and it collects no verdict; both
+        belong to the loop thread (Pitfall 4, T-26-20).
         """
         try:
             read = await self._fetch_file(job)
         except FileTooLargeError:
-            self._collect(job, ExtractionOutcome.skipped(Reason.TOO_LARGE), done, failed, verdicts)
-            return
+            return _ScanResult(job, ExtractionOutcome.skipped(Reason.TOO_LARGE))
         if read is None:
-            self._collect(job, ExtractionOutcome.skipped(Reason.GONE), done, failed, verdicts)
-            return
+            return _ScanResult(job, ExtractionOutcome.skipped(Reason.GONE))
 
         try:
-            outcome = await asyncio.to_thread(
-                self._extract,
+            outcome = await self._extract_on_the_pool(
                 str(read.path),
                 job.mime,
                 read.size,
@@ -1214,7 +1410,51 @@ class Poller:
             _discard(read.path)
 
         if outcome.state is State.INDEXED:
-            await asyncio.to_thread(self._writer_or_die().add, _record_of(job, outcome))
+            # Upsert on the file id under the writer's lock (T-26-19).
+            await self._pool.call(self._writer_or_die().add, _record_of(job, outcome))
+        return _ScanResult(job, replace(outcome, text=""), read.content_hash)
+
+    async def _extract_on_the_pool(
+        self,
+        path: str,
+        mime: str,
+        size: int,
+        *,
+        route: Route | None = None,
+        timeout_seconds: float | None = None,
+    ) -> ExtractionOutcome:
+        """Run the extraction in the executor of the pool, never in the default one.
+
+        A child killed from outside is mapped onto the verdict it got before
+        phase 26 for now, failed(ocr_failed) for a killed engine and
+        failed(corrupt) for a killed child, the mapping extract_guarded makes;
+        plan 26-09 replaces this with a solo retry under several slots.
+        """
+        kwargs: dict[str, Any] = {}
+        if route is not None:
+            kwargs["route"] = route
+        if timeout_seconds is not None:
+            kwargs["timeout_seconds"] = timeout_seconds
+        try:
+            return await self._pool.call(self._extract, path, mime, size, **kwargs)
+        except ChildKilled as killed:
+            return ExtractionOutcome.failed(Reason.OCR_FAILED if killed.engine else Reason.CORRUPT)
+
+    def _judge_scan(
+        self,
+        result: _ScanResult,
+        done: list[int],
+        failed: dict[int, str],
+        verdicts: list[_Verdict],
+        embedding: list[int],
+    ) -> None:
+        """Sort the verdict of one scan into the lists of the pass, in the loop thread."""
+        job, outcome = result.job, result.outcome
+        if result.content_hash is None:
+            # Gone or too large: no bytes were read, no engine time was spent,
+            # and the verdict is the one the content path gives the same case.
+            self._collect(job, outcome, done, failed, verdicts)
+            return
         # No handover to the OCR track, whatever came back. This row was that
         # handover, and putting it on the same track again is the endless loop of
         # T-03-704 from the other side.
@@ -1230,7 +1470,7 @@ class Poller:
         to_embed = self._goes_to_the_embedding_track(outcome)
         if to_embed:
             embedding.append(job.file_id)
-        self._collect(job, outcome, done, failed, verdicts, read.content_hash, hand_over=to_embed, ocr_used=True)
+        self._collect(job, outcome, done, failed, verdicts, result.content_hash, hand_over=to_embed, ocr_used=True)
 
     def _goes_to_the_ocr_track(self, outcome: ExtractionOutcome) -> bool:
         """True when this verdict becomes an OCR job instead of an end state.

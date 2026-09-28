@@ -573,6 +573,29 @@ def test_the_mirrored_php_numbers_behind_the_job_ceiling_are_the_real_ones() -> 
     assert _php_constant_entry(PHP_QUEUE_SERVICE, "KIND_BATCH", "KIND_OCR") == OCR_CLAIM_BATCH
 
 
+def test_the_ocr_ceiling_of_the_index_lane_is_the_mirrored_one() -> None:
+    # D-26-05 and D-26-14: the lane index claims OCR_CLAIM_BATCH_INDEX_LANE rows
+    # of ocr, the poller keeps two per slot and hands the rest straight back. The
+    # block name carries its own suffix, so the reader of KIND_BATCH above cannot
+    # stumble into this block and the other way round.
+    assert _php_constant_entry(PHP_QUEUE_SERVICE, "KIND_BATCH_INDEX_LANE", "KIND_OCR") == OCR_CLAIM_BATCH_INDEX_LANE
+    assert OCR_CLAIM_BATCH_INDEX_LANE == 32
+    assert _php_constant_entry(PHP_QUEUE_SERVICE, "KIND_BATCH", "KIND_OCR") == OCR_CLAIM_BATCH == 2
+
+
+def test_a_moved_index_lane_ceiling_makes_the_parity_gate_red(tmp_path: Path) -> None:
+    # The red probe of the gate above, staged the same way as the one below.
+    moved = tmp_path / "QueueService.php"
+    source = PHP_QUEUE_SERVICE.read_text(encoding="utf-8")
+    needle = f"QueueMapper::KIND_OCR => {OCR_CLAIM_BATCH_INDEX_LANE},"
+    assert source.count(needle) == 1
+    moved.write_text(source.replace(needle, "QueueMapper::KIND_OCR => 16,"), encoding="utf-8")
+
+    assert _php_constant_entry(moved, "KIND_BATCH_INDEX_LANE", "KIND_OCR") != OCR_CLAIM_BATCH_INDEX_LANE
+    # The lane all ceiling next to it is untouched by the change.
+    assert _php_constant_entry(moved, "KIND_BATCH", "KIND_OCR") == OCR_CLAIM_BATCH
+
+
 def test_the_mirrored_php_numbers_of_the_embedding_track_are_the_real_ones() -> None:
     # The same gate for the second track of phase 6. Both numbers live on the
     # PHP side and are mirrored here because a PHP constant has no import into

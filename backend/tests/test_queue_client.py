@@ -574,6 +574,57 @@ async def test_companion_choice_survives_a_companion_without_the_route(
     assert records[0].args in (None, ())
 
 
+# A made up confirmation token of the guard, not a secret (D-26-04).
+_CONFIRMATION = "0123456789abcdef0123456789abcdef"
+
+
+async def test_companion_choice_reads_the_confirmation_token() -> None:
+    # D-26-04: the way back of the memory guard travels in the same answer.
+    answer = {"profile": "standard", "precision": "int8", "confirmed": _CONFIRMATION}
+    session = _FakeSession({("GET", PROFILE_PATH): answer})
+
+    assert await _queue(session).companion_choice() == CompanionChoice(
+        profile="standard", precision="int8", confirmed=_CONFIRMATION
+    )
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param(None, id="null"),
+        pytest.param("ABC", id="short"),
+        pytest.param(_CONFIRMATION[:31], id="31-chars"),
+        pytest.param(_CONFIRMATION + "0", id="33-chars"),
+        pytest.param(_CONFIRMATION.upper(), id="upper-case"),
+        pytest.param(_CONFIRMATION[:31] + "g", id="not-hex"),
+        pytest.param(_CONFIRMATION + "\n", id="trailing-newline"),
+        pytest.param(12345, id="number"),
+    ],
+)
+async def test_a_malformed_confirmation_token_reads_as_none(value: object) -> None:
+    # T-26-21: only exactly 32 lower case hex digits count; the profile and the
+    # precision next to it are judged on their own.
+    session = _FakeSession({("GET", PROFILE_PATH): {"profile": "standard", "precision": "int8", "confirmed": value}})
+
+    assert await _queue(session).companion_choice() == CompanionChoice(
+        profile="standard", precision="int8", confirmed=None
+    )
+
+
+async def test_a_companion_without_the_confirmed_field_reads_as_none() -> None:
+    # The 1.3 companion and the 1.4 companion before plan 26-02 never send it.
+    session = _FakeSession({("GET", PROFILE_PATH): {"profile": "standard", "precision": "int8"}})
+
+    assert (await _queue(session).companion_choice()).confirmed is None
+
+
+@pytest.mark.parametrize("error", [OSError("500"), TimeoutError("gateway gone")])
+async def test_a_failed_profile_call_leaves_all_three_values_none(error: Exception) -> None:
+    session = _FakeSession(error=error)
+
+    assert await _queue(session).companion_choice() == CompanionChoice(profile=None, precision=None, confirmed=None)
+
+
 async def test_stats_returns_the_counters_of_the_queue() -> None:
     session = _FakeSession({("GET", STATS_PATH): {"scheduled": 7, "running": 2, "failed": 1}})
 

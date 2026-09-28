@@ -470,7 +470,7 @@ OCR_CLAIM_BATCH = 2
 
 # Mirror of QueueService::KIND_BATCH_INDEX_LANE[ocr], the OCR rows one claim of
 # lane index may hold (D-26-05, D-26-14): sixteen slots times two rows each.
-# The parity test against the PHP source follows with plan 26-06.
+# A parity test in tests/test_config.py reads it out of the PHP source.
 OCR_CLAIM_BATCH_INDEX_LANE = 32
 
 # Rows one slot finishes inside one lease at the ceiling of the job budget

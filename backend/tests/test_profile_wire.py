@@ -23,6 +23,8 @@ from findling.store.vectors import WEIGHTS_FP32, WEIGHTS_INT8
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SETTINGS_SERVICE = REPO_ROOT / "php" / "lib" / "Service" / "SettingsService.php"
 QUEUE_SERVICE = REPO_ROOT / "php" / "lib" / "Service" / "QueueService.php"
+PROFILE_CONTROLLER = REPO_ROOT / "php" / "lib" / "Controller" / "ProfileController.php"
+QUEUE_CLIENT = REPO_ROOT / "backend" / "src" / "findling" / "nc" / "queue.py"
 
 _PROFILES = re.compile(r"public const PROFILES = \[(.*?)\];", re.DOTALL)
 _DEFAULT = re.compile(r"public const PROFILE_DEFAULT = '(\w+)';")
@@ -100,3 +102,25 @@ def test_the_php_lane_set_matches_lanes() -> None:
     assert len(names) == len(set(names))
     assert frozenset(names) == LANES
     assert LANE_ALL in LANES
+
+
+def test_the_confirmation_token_travels_under_one_name_on_both_sides() -> None:
+    # D-26-04: the admin stores the token under profile_confirmed, the profile
+    # route answers it as "confirmed", and the container reads exactly that key.
+    # A rename on one side only would read as "never confirmed" and keep the
+    # guard's cap forever.
+    controller = PROFILE_CONTROLLER.read_text(encoding="utf-8")
+    queue_client = QUEUE_CLIENT.read_text(encoding="utf-8")
+    source = _source()
+
+    assert controller.count("'confirmed' =>") == 1
+    assert len(re.findall(r"public const KEY_PROFILE_CONFIRMED = 'profile_confirmed';", source)) == 1
+    assert queue_client.count('payload.get("confirmed")') == 1
+
+
+def test_both_sides_accept_the_same_token_shape() -> None:
+    # 32 lower case hex digits on both sides (T-26-21): the PHP pattern and the
+    # Python pattern must not drift apart, or a token one side accepts would be
+    # thrown away by the other.
+    assert "preg_match('/^[0-9a-f]{32}$/D', $stored)" in _source()
+    assert 're.compile(r"[0-9a-f]{32}")' in QUEUE_CLIENT.read_text(encoding="utf-8")
