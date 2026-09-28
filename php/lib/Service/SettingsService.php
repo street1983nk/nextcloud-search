@@ -108,6 +108,35 @@ final class SettingsService {
 	public const PROFILE_DEFAULT = 'economy';
 
 	/**
+	 * The precision of the embedding model (D-25-02), a key of its own.
+	 *
+	 * Separate from KEY_PROFILE on purpose: a profile is a question of speed
+	 * and memory, the precision decides which vectors are in the index, and a
+	 * change of it means a reindex of the vector track. Coupling the two would
+	 * turn a harmless profile change into exactly that. Handed to the container
+	 * through the profile route, in the same answer and the same round
+	 * (D-24-01). Until the admin page of phase 27 the only way to write it is
+	 * ``occ config:app:set findling model_precision --value=fp32``.
+	 */
+	public const KEY_MODEL_PRECISION = 'model_precision';
+
+	/**
+	 * The closed set of precision names, and the only names modelPrecision()
+	 * hands out.
+	 *
+	 * Has to stay identical to PRECISION_NAMES in backend/src/findling/precision.py.
+	 * A parity test on the Python side compares the two textually, which is why
+	 * this list keeps exactly this one line spelling.
+	 */
+	public const PRECISIONS = ['int8', 'fp32'];
+
+	/**
+	 * The precision of a fresh install: the int8 model baked into the image,
+	 * which needs no download and fits the small box.
+	 */
+	public const PRECISION_DEFAULT = 'int8';
+
+	/**
 	 * The lower end of the size cap, one megabyte.
 	 *
 	 * Below it the setting would stop being a limit and start being an outage:
@@ -278,6 +307,34 @@ final class SettingsService {
 			$this->reject();
 
 			return self::PROFILE_DEFAULT;
+		}
+
+		return $stored;
+	}
+
+	/**
+	 * The model precision in force, a name out of PRECISIONS, or null.
+	 *
+	 * An absent key is PRECISION_DEFAULT. A stored value outside the set is
+	 * counted by reject(), which never logs the value, and answered with null,
+	 * and that is the one deliberate difference to profile() above. A profile
+	 * that falls back to its default costs speed for one round; a precision that
+	 * fell back to int8 on a fp32 box would make the container reindex the
+	 * vector track and delete the fp32 model it downloaded, for a typo in occ.
+	 * null tells the container "not readable", and its rule for that is to keep
+	 * the last known precision (D-24-02, D-25-03).
+	 */
+	public function modelPrecision(): ?string {
+		$stored = $this->appConfig->getValueString(
+			Application::APP_ID,
+			self::KEY_MODEL_PRECISION,
+			self::PRECISION_DEFAULT,
+		);
+
+		if (!in_array($stored, self::PRECISIONS, true)) {
+			$this->reject();
+
+			return null;
 		}
 
 		return $stored;

@@ -17,9 +17,12 @@ use Psr\Log\LoggerInterface;
  *
  * The container asks once per round and nothing pushes, the same backpressure
  * rule the queue follows. One route, reading only, and the answer carries the
- * profile name and nothing else. The value lives in appconfig of this app and is
- * validated by SettingsService::profile(), so the container only ever sees a
- * name out of the closed set.
+ * profile name and the model precision and nothing else. Both values live in
+ * appconfig of this app under keys of their own and are validated by
+ * SettingsService::profile() and SettingsService::modelPrecision(), so the
+ * container only ever sees names out of the two closed sets, or null for a
+ * precision that is not one (D-25-02, D-25-03). One request per round carries
+ * both, so the precision needs no second polling path (D-24-01).
  *
  * This is a companion change and travels with release 1.4.0. A 1.3 companion
  * without this route is an expected state: the container treats the missing
@@ -42,8 +45,12 @@ class ProfileController extends OCSController {
 	/**
 	 * GET /ocs/v2.php/apps/findling/profile
 	 *
-	 * Answers with {"profile": "economy" | "standard" | "performance"}. A failure
-	 * to read answers as a failure (500 with an error field and no profile name),
+	 * Answers with {"profile": "economy" | "standard" | "performance",
+	 * "precision": "int8" | "fp32" | null}. null is a stored precision outside
+	 * the set; the container keeps its last known precision on it rather than
+	 * reindexing for a typo. A 1.3 container reads only the profile field and
+	 * ignores the second one. A failure to read answers as a failure (500 with
+	 * an error field and neither a profile nor a precision name),
 	 * because the container's rule for a failed read is to keep the LAST KNOWN
 	 * profile (D-24-02). A valid-looking default here would downgrade a running
 	 * standard or performance box to economy for at least one polling round.
@@ -58,7 +65,10 @@ class ProfileController extends OCSController {
 		}
 
 		try {
-			return new DataResponse(['profile' => $this->settingsService->profile()]);
+			return new DataResponse([
+				'profile' => $this->settingsService->profile(),
+				'precision' => $this->settingsService->modelPrecision(),
+			]);
 		} catch (\Throwable $e) {
 			// A static sentence; the exception travels in its own field, which
 			// Nextcloud renders under the admin's log level. The stored value is
