@@ -82,7 +82,7 @@ from typing import Final
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from findling import lane, precision
+from findling import guard, lane, precision
 from findling.api import resources
 from findling.config import settings
 from findling.embed.engine import engine_precision, engine_state
@@ -195,6 +195,34 @@ class LaneReport(BaseModel):
 
     mode: str = "inline"
     reason: str = ""
+
+
+class GuardReport(BaseModel):
+    """The memory guard of this process: the level it lowered to, why, and the way back.
+
+    ``chosen`` and ``effective`` are two fields on purpose, like those of the
+    profile (D-24-07): the guard never rewrites the chosen profile, it caps the
+    level in force, and an admin has to see both to know it was the guard and
+    not the setting (D-26-01). Both are read out of the profile snapshot, so
+    that there is one truth for them and not two. ``cap`` is the level the
+    guard lowered to and None without a lowering. ``cause`` is one word out of
+    the closed set ``findling.guard.CAUSES``, the empty string without a
+    lowering; ``since`` the epoch second of the lowering. ``token`` exists for
+    one purpose only: the admin confirms it through occ to lift the lowering
+    (D-26-04), and it is the empty string without one. The three slot fields
+    say what the throttle let run against what the profile asked for (D-26-02).
+    The route measures nothing for this block (T-26-27).
+    """
+
+    chosen: str | None = None
+    effective: str = "economy"
+    cap: str | None = None
+    cause: str = ""
+    since: int | None = None
+    token: str = ""
+    slotsTarget: int = 1
+    slotsInForce: int = 1
+    throttled: bool = False
 
 
 class StatusResponse(BaseModel):
@@ -322,6 +350,10 @@ class StatusResponse(BaseModel):
     # Where the embedding runs (plan 25-12, PAR-01). A process value like
     # engineState, so the state database knows nothing of it.
     lane: LaneReport = Field(default_factory=LaneReport)
+    # The memory guard (plan 26-08, PAR-03). A process value like engineState,
+    # so the state database knows nothing of it; the guard task keeps its own
+    # copy there and restores it at start.
+    guard: GuardReport = Field(default_factory=GuardReport)
     note: str = ""
 
 
@@ -383,6 +415,29 @@ def _lane_report() -> LaneReport:
     """The lane state of this process, out of ``findling.lane.snapshot()`` and nothing else."""
     state = lane.snapshot()
     return LaneReport(mode=state.mode, reason=state.reason)
+
+
+def _guard_report() -> GuardReport:
+    """The guard state of this process as the wire spells it.
+
+    Reads the snapshot of ``findling.guard`` and the profile snapshot, and
+    nothing else: no cgroup file, no counter. The guard task reads the kernel
+    on its own tick, and a poll of the admin page must not become a second
+    reading (T-07-04, T-26-27).
+    """
+    state = guard.snapshot()
+    levels = snapshot()
+    return GuardReport(
+        chosen=None if levels.chosen is None else levels.chosen.value,
+        effective=levels.effective.value,
+        cap=None if state.cap is None else state.cap.value,
+        cause=state.cause,
+        since=None if state.since is None else int(state.since),
+        token=state.token,
+        slotsTarget=state.slots_target,
+        slotsInForce=state.slots_in_force,
+        throttled=state.throttled,
+    )
 
 
 def _number(mark: str | None) -> int:
@@ -475,6 +530,7 @@ def _volume() -> StatusResponse:
         profile=_profile_report(),
         model=_model_report(),
         lane=_lane_report(),
+        guard=_guard_report(),
         lowDisk=resources.low_disk(),
         diskFreeBytes=free,
         diskTotalBytes=total,
@@ -601,6 +657,8 @@ def _of(store: Store, volume: StatusResponse) -> StatusResponse:
         # while its cursor is set, and the sweep clears it when it is through.
         model=volume.model.model_copy(update={"reembedRunning": bool(marks.get(EMBEDDING_BACKLOG_MARK, ""))}),
         lane=volume.lane,
+        # Carried over like the lane, for the same Pitfall 2.
+        guard=volume.guard,
         note=volume.note,
         lowDisk=volume.lowDisk,
         diskFreeBytes=volume.diskFreeBytes,
