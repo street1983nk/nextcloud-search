@@ -258,6 +258,42 @@ $modelLine = $reembedRunning && $hasEmbeddedFraction
 	? $l->t('Model: %1$s, re-embedding %2$s (%3$s of %4$s)', [$modelName, $count($embeddedPercent ?? 0) . "\u{00A0}%", $count($embedded), $count($indexable)])
 	: $l->t('Model: %1$s', [$modelName]);
 
+// The memory guard of plan 26-05 (D-26-01, D-26-02, D-26-04): which profile the
+// admin chose and which one is in force, why the guard lowered it, how to lift
+// the reduction, and whether it throttles the OCR slots. Every word of these
+// lines is built on this side out of the closed sets AdminViewService judged
+// the answer against, and the catalogue gives the wording; nothing the
+// container sends becomes a phrase of this page (T-25-14 pattern, T-26-16).
+// A container older than 1.4 sends no object guard, every field is null then,
+// and all three lines stay hidden. The way back is an occ command with the
+// confirmation token and deliberately not a button: the settings interface is
+// phase 27.
+$profileNames = ['economy' => $l->t('Economy'), 'standard' => $l->t('Standard'), 'performance' => $l->t('Performance')];
+$causeNames = [
+	'memory_max_repeated' => $l->t('memory tight, memory.events max twice'),
+	'oom_kill' => $l->t('a slot was killed for lack of memory'),
+	'unclean_end' => $l->t('the container ended during a multi slot pass'),
+];
+$guardCause = is_string($backend['guardCause'] ?? null) ? $backend['guardCause'] : '';
+$guardCauseName = $causeNames[$guardCause] ?? '';
+$guardChosenName = $profileNames[is_string($backend['guardChosen'] ?? null) ? $backend['guardChosen'] : ''] ?? '';
+$guardEffectiveName = $profileNames[is_string($backend['guardEffective'] ?? null) ? $backend['guardEffective'] : ''] ?? '';
+$guardShown = $guardCauseName !== '' && $guardChosenName !== '' && $guardEffectiveName !== '';
+$guardLine = $l->t('Profile: chosen %1$s, in force %2$s (%3$s)', [$guardChosenName, $guardEffectiveName, $guardCauseName]);
+$guardToken = is_string($backend['guardToken'] ?? null) ? $backend['guardToken'] : '';
+$wayBackShown = $guardCauseName !== '' && $guardToken !== '';
+// The command sits inside a code element of its own, so the sentence is
+// translated with a marker in place of the command and cut at that marker.
+// The translator keeps the word order of the language, and the command is
+// never part of a translated string.
+$wayBackMarker = "\u{E000}";
+$wayBackCommand = 'occ config:app:set findling profile_confirmed --value=' . $guardToken;
+$wayBackParts = explode($wayBackMarker, $l->t('To lift the reduction after checking the memory: %1$s', [$wayBackMarker]), 2) + ['', ''];
+$slotsInForce = is_int($backend['slotsInForce'] ?? null) ? $backend['slotsInForce'] : 0;
+$slotsTarget = is_int($backend['slotsTarget'] ?? null) ? $backend['slotsTarget'] : 0;
+$slotsShown = ($backend['slotsThrottled'] ?? null) === true;
+$slotsLine = $l->t('OCR slots: %1$s of %2$s, memory tight', [$count($slotsInForce), $count($slotsTarget)]);
+
 $tiles = [
 	['id' => 'findling-tile-indexed', 'label' => $l->t('Indexed'), 'value' => $indexed],
 	['id' => 'findling-tile-skipped', 'label' => $l->t('Skipped'), 'value' => $whole($_['skipped'] ?? 0)],
@@ -482,6 +518,19 @@ $banners = [
 	</div>
 
 	<p class="findling-run-state" id="findling-run-state" role="status" aria-live="polite"><?php p($status); ?></p>
+
+	<?php
+	/*
+	 * The memory guard of plan 26-05, directly under the run state because a
+	 * lowered profile and throttled slots are why a run goes slower than the
+	 * profile promised. Each line carries the hidden attribute when it does not
+	 * apply, like every other block of this page, and all three are hidden for
+	 * a container that did not send the object guard.
+	 */
+	?>
+	<p class="settings-hint" id="findling-guard"<?php if (!$guardShown) { ?> hidden<?php } ?>><?php p($guardLine); ?></p>
+	<p class="settings-hint" id="findling-guard-way-back"<?php if (!$wayBackShown) { ?> hidden<?php } ?>><?php p($wayBackParts[0]); ?><code><?php p($wayBackCommand); ?></code><?php p($wayBackParts[1]); ?></p>
+	<p class="settings-hint" id="findling-slots"<?php if (!$slotsShown) { ?> hidden<?php } ?>><?php p($slotsLine); ?></p>
 
 	<p class="findling-chips">
 		<span class="findling-chip findling-chip--queued">

@@ -189,6 +189,24 @@ final class AdminViewService {
 	private const PRECISIONS = ['int8', 'fp32'];
 
 	/**
+	 * The three profile names the memory guard of the container may report as
+	 * chosen or in force, as a closed list (plan 26-05, D-26-01).
+	 *
+	 * The page builds the profile name it shows out of one of these words, so a
+	 * value from outside the list never reaches the page (T-25-14 pattern).
+	 */
+	private const GUARD_PROFILES = ['economy', 'standard', 'performance'];
+
+	/**
+	 * The three causes of a reduction by the memory guard, as a closed list
+	 * (plan 26-05, D-26-01, D-26-02).
+	 *
+	 * The empty string of the protocol means "no reduction" and is not in the
+	 * list on purpose: it becomes null, and the line on the page stays hidden.
+	 */
+	private const GUARD_CAUSES = ['memory_max_repeated', 'oom_kill', 'unclean_end'];
+
+	/**
 	 * What a reason code may look like before it is passed on. The taxonomy of
 	 * FileStateService::REASONS is lower case and underscores, and a code that
 	 * does not fit that shape has no row in the display table anyway. Filtering
@@ -1841,6 +1859,19 @@ final class AdminViewService {
 	 * verdicts are shown from phase 27 on. A container older than that contract
 	 * leaves the object out, and the line on the page stays hidden (T-07-03).
 	 *
+	 * The seven fields of plan 26-05 are exceptions of that same kind. They are
+	 * read out of the object ``guard`` of the status answer, whose shape plan
+	 * 26-08 fixes: ``chosen`` (profile name or null), ``effective`` (profile
+	 * name), ``cap`` (profile name or null), ``cause`` (one of "",
+	 * "memory_max_repeated", "oom_kill", "unclean_end"), ``since`` (epoch
+	 * seconds or null), ``token`` (32 lower case hex digits or ""),
+	 * ``slotsTarget`` (int), ``slotsInForce`` (int) and ``throttled`` (bool).
+	 * Every word is judged against a closed set, the token against its shape,
+	 * the counters against being a non negative integer and the flag against
+	 * being a real boolean. A container older than 1.4 leaves the object out,
+	 * every one of the seven fields is null then, and the guard lines on the
+	 * page stay hidden (D-26-01, D-26-04).
+	 *
 	 * @param array<mixed>|null $answer the decoded body, or null when there was none
 	 * @return array<string,mixed>
 	 */
@@ -1889,6 +1920,24 @@ final class AdminViewService {
 			// container that did not say.
 			'precisionActive' => self::precision(self::modelField($answer, 'precisionActive')),
 			'reembedRunning' => self::strictFlag(self::modelField($answer, 'reembedRunning')),
+			// The memory guard of plan 26-05 (D-26-01): the profile the admin
+			// chose and the one in force, both words out of a closed set, so no
+			// container text becomes a phrase of the page (T-25-14 pattern).
+			'guardChosen' => self::profileName(self::guardField($answer, 'chosen')),
+			'guardEffective' => self::profileName(self::guardField($answer, 'effective')),
+			// Why the guard lowered the profile, one of three words, or null
+			// when it did not lower anything (D-26-01).
+			'guardCause' => self::guardCause(self::guardField($answer, 'cause')),
+			// The confirmation token of the way back, shown inside an occ
+			// command and nowhere else; only 32 lower case hex digits pass
+			// (D-26-04, no button in this phase).
+			'guardToken' => self::hexToken(self::guardField($answer, 'token')),
+			// The OCR slots the profile asks for and the ones in force, and
+			// whether the guard throttles them (D-26-02). Counters are non
+			// negative integers or null, the flag is a real boolean or null.
+			'slotsTarget' => self::guardCounter(self::guardField($answer, 'slotsTarget')),
+			'slotsInForce' => self::guardCounter(self::guardField($answer, 'slotsInForce')),
+			'slotsThrottled' => self::strictFlag(self::guardField($answer, 'throttled')),
 			'note' => $this->text($answer, 'note'),
 		];
 	}
@@ -1991,6 +2040,66 @@ final class AdminViewService {
 	 */
 	public static function strictFlag(mixed $value): ?bool {
 		return is_bool($value) ? $value : null;
+	}
+
+	/**
+	 * One field of the object ``guard`` of the container answer, or null.
+	 *
+	 * The same robustness as modelField() above (plan 26-05): an answer without
+	 * that object, which is what a container older than 1.4 looks like, and one
+	 * where it is not an object at all both give null. The value itself is
+	 * judged by profileName(), guardCause(), hexToken(), guardCounter() and
+	 * strictFlag().
+	 *
+	 * @param array<mixed> $answer
+	 */
+	public static function guardField(array $answer, string $key): mixed {
+		$guard = $answer['guard'] ?? null;
+
+		return is_array($guard) ? ($guard[$key] ?? null) : null;
+	}
+
+	/**
+	 * A profile name reported by the memory guard, one of three words, or null.
+	 *
+	 * Refused rather than cast or shortened, for the reason precision() is: the
+	 * word decides a line an admin reads (T-26-15).
+	 */
+	public static function profileName(mixed $value): ?string {
+		return is_string($value) && in_array($value, self::GUARD_PROFILES, true) ? $value : null;
+	}
+
+	/**
+	 * The cause of a reduction by the memory guard, one of three words, or null.
+	 *
+	 * Null for the empty string of the protocol as well, which means that the
+	 * guard lowered nothing, and for everything outside the list (T-26-15).
+	 */
+	public static function guardCause(mixed $value): ?string {
+		return is_string($value) && in_array($value, self::GUARD_CAUSES, true) ? $value : null;
+	}
+
+	/**
+	 * The confirmation token of the way back, 32 lower case hex digits, or null.
+	 *
+	 * The token ends up inside an occ command an admin copies, so anything that
+	 * does not have exactly that shape is refused and never trimmed (T-26-15,
+	 * T-26-16). The modifier D keeps the dollar from accepting a trailing
+	 * newline, which would otherwise end the copied command early.
+	 */
+	public static function hexToken(mixed $value): ?string {
+		return is_string($value) && preg_match('/^[0-9a-f]{32}$/D', $value) === 1 ? $value : null;
+	}
+
+	/**
+	 * A slot counter of the memory guard, a non negative integer, or null.
+	 *
+	 * The judgement of optionalCounter() for a value that has already been read
+	 * out of the object guard: a string "4" or a negative number is refused and
+	 * not cast (T-26-15).
+	 */
+	public static function guardCounter(mixed $value): ?int {
+		return is_int($value) && $value >= 0 ? $value : null;
 	}
 
 	/**
