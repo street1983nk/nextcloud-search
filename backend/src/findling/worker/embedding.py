@@ -42,6 +42,7 @@ import asyncio
 import contextlib
 import logging
 import sqlite3
+import threading
 import time
 from collections.abc import Awaitable, Callable, Sequence
 from pathlib import Path
@@ -364,9 +365,27 @@ class EmbeddingTrack:
         # them in. A count and not a flag, so that a second driver later on
         # cannot lower it under the first one.
         self._rows_in_work = 0
-        # Held around the embedding of a row and around the mark step. With one
-        # driver it orders nothing that was not already in order.
+        # Held around the rows of a round and around the mark step: it keeps the
+        # two drivers (inline in the indexing loop, and the embed runner) off
+        # the track at the same time. Inside one round of the runner, up to
+        # embed_slots rows run side by side since phase 26 (D-25-12), and the
+        # two locks below are what makes that sharing safe.
         self.lock = asyncio.Lock()
+        # Around the chunker, and around the build of the cutter. Neither the
+        # tokenizer (huggingface/tokenizers#1726) nor semantic-text-splitter
+        # promises thread safety, and two rows building the cutter at once
+        # would pay its 544,3 MB twice. A threading lock, because both run in
+        # a worker thread.
+        self._chunk_lock = threading.Lock()
+        # Around replace_acl and replace_chunks, and around the start state of
+        # the precision, which reads the state database. Each write takes
+        # BEGIN IMMEDIATE on one connection of this track, and two worker
+        # threads on the same connection would nest the second transaction
+        # into the first ("cannot start a transaction within a transaction").
+        # The engine itself stays unlocked: onnxruntime promises Run() on one
+        # session out of several threads, and its own in-flight counter is
+        # what keeps a release away from a running batch (D-25-12).
+        self._write_lock = asyncio.Lock()
         # The precision of the weights (MOD-02, plan 25-11). The fetch of the
         # fp32 file runs as a task of its own beside the rounds and outside
         # the lock, one at a time. The start state is settled once per track,
@@ -530,8 +549,11 @@ class EmbeddingTrack:
         # process is written, and not only at the first mark step: a row
         # embedded with the int8 of the image under an fp32 mark would be a
         # mixed stock nothing can tell apart afterwards (T-24-02). Two attribute
-        # reads per row once it is settled.
-        await self._prepare_the_precision()
+        # reads per row once it is settled. Under the write lock, because the
+        # first step reads the state database and may swap the engine, and two
+        # rows of one round must not do either at the same time.
+        async with self._write_lock:
+            await self._prepare_the_precision()
 
         # The first row of the process pays for the tokenizer and the splitter
         # here, in a thread, because the read of the 17 MB artifact and the
@@ -550,7 +572,7 @@ class EmbeddingTrack:
         # gate, so hopping into a thread to hear that would be the same cost for
         # the same nothing, once per row for five minutes.
         if (self._chunker is None or self._model is None) and not self._cutter_cooling_down:
-            await asyncio.to_thread(self._build_the_cutter)
+            await asyncio.to_thread(self._build_the_cutter_once)
 
         vectors, chunker, model = self._vectors, self._chunker, self._model
         if vectors is None or chunker is None or model is None:
@@ -566,7 +588,8 @@ class EmbeddingTrack:
         # is the pass that has to put it into the prefilter. One declarative
         # write against a file this pass is handling anyway, through the state
         # database connection of this track.
-        await asyncio.to_thread(self._store_or_die().replace_acl, job.file_id, acl_users(job))
+        async with self._write_lock:
+            await asyncio.to_thread(self._store_or_die().replace_acl, job.file_id, acl_users(job))
 
         index = self._index_or_die()
         body = await asyncio.to_thread(stored_body, index, index.schema, job.file_id)
@@ -576,7 +599,7 @@ class EmbeddingTrack:
             done.append(job.queue_id)
             return EMBED_NO_STORED_TEXT
 
-        spans = await asyncio.to_thread(chunker, body)
+        spans = await asyncio.to_thread(self._cut_alone, chunker, body)
         if not spans:
             done.append(job.queue_id)
             return EMBED_NO_STORED_TEXT
@@ -598,21 +621,37 @@ class EmbeddingTrack:
             done.append(job.queue_id)
             return EMBED_INCOMPLETE
 
-        await asyncio.to_thread(
-            vectors.replace_chunks,
-            job.file_id,
-            [
-                Chunk(
-                    ordinal=span.ordinal,
-                    char_start=span.char_start,
-                    char_end=span.char_end,
-                    embedding=to_int8(vector),
-                )
-                for span, vector in zip(spans, outcome.vectors, strict=True)
-            ],
-        )
+        chunks = [
+            Chunk(
+                ordinal=span.ordinal,
+                char_start=span.char_start,
+                char_end=span.char_end,
+                embedding=to_int8(vector),
+            )
+            for span, vector in zip(spans, outcome.vectors, strict=True)
+        ]
+        async with self._write_lock:
+            await asyncio.to_thread(vectors.replace_chunks, job.file_id, chunks)
         done.append(job.queue_id)
         return EMBED_WRITTEN
+
+    def _cut_alone(self, chunker: Chunker, body: str) -> list[ChunkSpan]:
+        """Run the chunker under its lock, in the worker thread the caller entered.
+
+        Tokenizer and splitter carry no promise of thread safety, and two rows
+        of one round may reach this line at the same moment (D-25-12).
+        """
+        with self._chunk_lock:
+            return chunker(body)
+
+    def _build_the_cutter_once(self) -> bool:
+        """Build the cutter under the chunker lock, so two rows never build it twice.
+
+        The second row to arrive waits for the first and then finds both
+        attributes set at the top of :meth:`_build_the_cutter`.
+        """
+        with self._chunk_lock:
+            return self._build_the_cutter()
 
     # -- the cutter ------------------------------------------------------
 
@@ -687,11 +726,11 @@ class EmbeddingTrack:
         """Build the tokenizer, the splitter and the engine, at the first row that needs them.
 
         The lazy half, and it runs once per process: the second call finds the
-        two attributes set and returns at the top. Sequential by construction
-        rather than by a lock of its own, because the rows are worked one after
-        the other under :attr:`lock`; :func:`findling.embed.engine.shared_model`
-        carries its own lock for the case that the read side asks at the same
-        moment.
+        two attributes set and returns at the top. The row path enters it
+        through :meth:`_build_the_cutter_once`, under the chunker lock, because
+        since phase 26 two rows of one round may ask at the same moment
+        (D-25-12); :func:`findling.embed.engine.shared_model` carries its own
+        lock for the case that the read side asks at the same moment.
 
         Nothing about the weights is loaded here. Asking ``shared_model`` for
         the engine reads no artifact, which is why it may be asked before it is
@@ -1337,9 +1376,11 @@ class EmbedRunner:
     inline as it always has. After a memory refusal the headroom is read again
     only after a full tick, so a box at the edge does not flap.
 
-    **One runner, one row at a time** (D-25-12). The rows of a claim are
-    embedded one after the other under the track lock; Performance gets no
-    second embedding beside the first.
+    **One runner, up to embed_slots rows at a time** (Performance 2, Standard
+    1; D-25-12, wired since phase 26). The rows of a claim run as tasks behind
+    a semaphore of embed_slots, all inside the track lock, so the inline rows
+    of the indexing loop and the mark step stay out. Chunker and writes of the
+    track carry locks of their own; the engine is shared unlocked.
 
     **Every way out without an acknowledgement unlocks.** A SQLite error or the
     disk floor hands every held row back and pauses; an exception the round did
@@ -1348,9 +1389,9 @@ class EmbedRunner:
     failed(repeatedly_stuck) through this runner (SC3, DI-05-23).
 
     **Economy in the middle of a round.** The level is asked again before every
-    row; when it turned Economy the round ends after the row in work, the rows
-    not reached go back per unlock, and :attr:`parked` is set, which is what the
-    indexing loop waits for in front of its claim.
+    row; when it turned Economy no further row starts, the rows in work end,
+    the rows not reached go back per unlock, and :attr:`parked` is set, which is
+    what the indexing loop waits for in front of its claim.
 
     It never touches the tantivy writer: the track reads the text through a
     handle of its own.
@@ -1524,30 +1565,60 @@ class EmbedRunner:
             return await self._work(queue, claim.jobs)
 
     async def _work(self, queue: DocumentQueue, jobs: Sequence[QueueJob]) -> str:
-        """Embed the rows of one claim one after the other, and account for each."""
+        """Embed the rows of one claim, up to embed_slots at a time, and account for each.
+
+        One task per embed row, all of them inside the track lock the caller
+        holds, and a semaphore of embed_slots in front of the row: Performance
+        runs two rows side by side, Standard one (D-25-12). A row asks the
+        level again once it has its slot and does not start when Economy
+        arrived or a row before it failed; the rows in work end, and the rest
+        goes back per unlock below the barrier (IDX-08, T-25-37).
+        """
         done: list[int] = []
-        stopped = False
-        try:
-            for job in jobs:
+        slots = asyncio.Semaphore(max(1, profile.snapshot().resolution.values.embed_slots))
+        # [Economy arrived, a row failed]. A list, so the tasks can set them.
+        halted = [False, False]
+
+        async def one(job: QueueJob) -> None:
+            async with slots:
+                if halted[1]:
+                    return
                 if not _level_allows_parallel():
-                    # Economy arrived in the middle of the claim: the row in work
-                    # is finished, the rest goes back below (IDX-08, T-25-37).
-                    stopped = True
-                    break
-                if job.kind != KIND_EMBED:
-                    # A row of another lane in an echoed answer is not this
-                    # runner's to judge; it goes back with the rest.
-                    continue
-                await self._track.embed_row(job, done)
-        except (sqlite3.Error, _DiskTight) as error:
+                    halted[0] = True
+                    return
+                try:
+                    await self._track.embed_row(job, done)
+                except BaseException:
+                    halted[1] = True
+                    raise
+
+        # A row of another lane in an echoed answer is not this runner's to
+        # judge; it gets no task and goes back with the rest.
+        tasks = [asyncio.ensure_future(one(job)) for job in jobs if job.kind == KIND_EMBED]
+        try:
+            outcomes = await asyncio.gather(*tasks, return_exceptions=True)
+        except asyncio.CancelledError:
+            # The round was cancelled: no row may keep running behind it. The
+            # held rows stay held, and the caller hands them back.
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            raise
+        failures = [outcome for outcome in outcomes if isinstance(outcome, BaseException)]
+        aborting = next((error for error in failures if isinstance(error, (sqlite3.Error, _DiskTight))), None)
+        if aborting is not None:
             # The _abort semantics of the poller: every held row back, a pause,
             # and no verdict at all (Pitfall 3).
             LOGGER.warning(
-                "the embed round handed %d rows back after %s and pauses", len(self._held), type(error).__name__
+                "the embed round handed %d rows back after %s and pauses", len(self._held), type(aborting).__name__
             )
             await self.unlock_held()
             self._back_off()
             return ROUND_PAUSED
+        if failures:
+            # Anything else is unexpected, and run() hands the rows back.
+            raise failures[0]
+        stopped = halted[0]
 
         rest = sorted(self._held.difference(done))
         if done:
