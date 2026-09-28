@@ -1542,3 +1542,146 @@ def test_the_start_downloads_nothing_and_asks_no_precision() -> None:
 
     assert "fetch_release_asset" not in source
     assert "procure_fp32" not in source
+
+
+# ---------------------------------------------------------------------------
+# The memory guard task (plan 26-10, PAR-03): restore before the poller, a task
+# while the lifespan runs, the pass mark cleared as the first act of the
+# shutdown (Pitfall 9).
+# ---------------------------------------------------------------------------
+
+
+class _FakeGuardWatch:
+    """A GuardWatch as far as the lifespan is concerned, writing into a shared journal."""
+
+    def __init__(self, journal: list[str], *, restore_raises: BaseException | None = None) -> None:
+        self.journal = journal
+        self.persist: list[bool] = []
+        self._restore_raises = restore_raises
+        self.stop_events: list[asyncio.Event] = []
+
+    def build(self, *, persist: bool = True) -> "_FakeGuardWatch":
+        """Stands in for the GuardWatch class the lifespan calls."""
+        self.persist.append(persist)
+        return self
+
+    async def restore(self) -> None:
+        self.journal.append("restore")
+        if self._restore_raises is not None:
+            raise self._restore_raises
+
+    async def run(self, stop_event: asyncio.Event) -> None:
+        self.journal.append("watch runs")
+        self.stop_events.append(stop_event)
+        await stop_event.wait()
+        self.journal.append("watch stops")
+
+    async def note_shutdown_begins(self) -> None:
+        self.journal.append("note_shutdown_begins")
+
+    async def aclose(self) -> None:
+        self.journal.append("watch aclose")
+
+
+class _JournalPoller(_FakeIndexingTask):
+    """A fake poller that says when its stop event arrived."""
+
+    def __init__(self, journal: list[str]) -> None:
+        super().__init__()
+        self.journal = journal
+
+    async def run(self, stop_event: asyncio.Event) -> None:
+        await stop_event.wait()
+        self.journal.append("poller stops")
+
+
+def _install_a_guard(monkeypatch: pytest.MonkeyPatch, watch: _FakeGuardWatch) -> _JournalPoller:
+    journal = watch.journal
+    poller = _JournalPoller(journal)
+
+    def the_poller(**_: object) -> _JournalPoller:
+        journal.append("poller")
+        return poller
+
+    def the_hardware(hardware: Hardware) -> None:
+        del hardware
+        journal.append("note_hardware")
+
+    monkeypatch.setattr("findling.main.default_poller", the_poller)
+    monkeypatch.setattr("findling.main.default_reconcile", lambda: _FakeIndexingTask())
+    monkeypatch.setattr("findling.main.detect", lambda: _A_READING)
+    monkeypatch.setattr("findling.main.note_hardware", the_hardware)
+    monkeypatch.setattr("findling.main.GuardWatch", watch.build)
+    return poller
+
+
+@pytest.mark.usefixtures("volume")
+def test_the_guard_restores_after_the_hardware_and_before_the_poller(monkeypatch: pytest.MonkeyPatch) -> None:
+    journal: list[str] = []
+    watch = _FakeGuardWatch(journal)
+    _install_a_guard(monkeypatch, watch)
+
+    with TestClient(APP) as client:
+        assert client.portal is not None
+        client.portal.call(asyncio.sleep, 0)
+
+    assert journal.index("note_hardware") < journal.index("restore") < journal.index("poller")
+    assert watch.persist == [True], "an own volume keeps the cap on disk"
+
+
+@pytest.mark.usefixtures("volume")
+def test_the_guard_runs_with_the_lifespan_and_ends_with_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    journal: list[str] = []
+    watch = _FakeGuardWatch(journal)
+    _install_a_guard(monkeypatch, watch)
+
+    with TestClient(APP) as client:
+        assert client.portal is not None
+        client.portal.call(asyncio.sleep, 0)
+        assert "watch runs" in journal
+        assert "watch stops" not in journal
+
+    assert journal.count("watch stops") == 1
+    assert journal[-1] == "watch aclose"
+    # The guard stops behind the poller: it watches the passes to the last one.
+    assert journal.index("poller stops") < journal.index("watch stops")
+
+
+@pytest.mark.usefixtures("volume")
+def test_the_pass_mark_is_cleared_before_any_stop_and_any_wait(monkeypatch: pytest.MonkeyPatch) -> None:
+    journal: list[str] = []
+    watch = _FakeGuardWatch(journal)
+    _install_a_guard(monkeypatch, watch)
+
+    with TestClient(APP):
+        pass
+
+    shutdown = journal[journal.index("note_shutdown_begins") :]
+    assert "poller stops" in shutdown
+    assert shutdown[0] == "note_shutdown_begins"
+    assert journal.count("note_shutdown_begins") == 1
+
+
+def test_the_pass_mark_is_the_first_statement_of_the_finally() -> None:
+    """Static, the order the behaviour case above sees once, held for every later edit."""
+    source = inspect.getsource(lifespan)
+    finally_block = source[source.index("finally:") :]
+    assert finally_block.index("note_shutdown_begins") < finally_block.index("stop_indexing.set()")
+
+
+@pytest.mark.usefixtures("volume")
+def test_a_restore_that_throws_does_not_keep_the_container_from_starting(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    journal: list[str] = []
+    watch = _FakeGuardWatch(journal, restore_raises=PermissionError("/a/path/the/log/must/never/carry"))
+    _install_a_guard(monkeypatch, watch)
+
+    with caplog.at_level(logging.WARNING, logger="findling"), TestClient(APP) as client:
+        assert client.get("/heartbeat").status_code == 200
+
+    said = [record.getMessage() for record in caplog.records if "could not restore" in record.getMessage()]
+    assert said
+    assert "PermissionError" in said[0]
+    assert "/a/path" not in said[0]
+    assert "poller" in journal, "the start went on to the poller"
