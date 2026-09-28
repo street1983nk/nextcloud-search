@@ -123,3 +123,26 @@ der ersten Ablesung gebaut, und int8 kostet nur Session plus ersten Batch, rund
 mit 216 bis 266 MB misst (`docs/measurements/2026-09-grundlast-fein/README.md`,
 Schritte 11b und 16). Mit fp32 wächst der Ladesprung der ersten Einbettung um die
 367 MiB dieses Berichts, auf grob 760 MB.
+
+## 6. Release
+
+Das Asset liegt im Release `model-e5-small-fp32-614241f` von
+`street1983nk/nextcloud-search`. Den Upload hat auf Delegation des Owners die
+Orchestrator-Sitzung ausgeführt: Release immutability vor dem Anlegen
+eingeschaltet, Release als Entwurf mit dem Asset angelegt, dann veröffentlicht
+(28.09.2026, 11:48:56 UTC), nicht als "Latest" markiert.
+
+Gegenprobe des Executors am 28.09.2026 um 11:51 UTC, unabhängig vom Upload
+(Rohdaten: `rohdaten/02-release-gegenprobe.txt`):
+
+| Prüfung | Ergebnis |
+|---|---|
+| `curl -sI` auf die feste Asset-URL | `302 Found` |
+| Umleitungshost | `release-assets.githubusercontent.com` |
+| Release laut GitHub-API | nicht Entwurf, `immutable: true`, genau ein Asset, "Latest" bleibt `v1.3.0` |
+| Größe und Digest laut GitHub-API | 470268510 Byte, `sha256:ca456c06...8665` |
+| vollständiger Download | 470268510 Byte, eine Umleitung, Status 200 |
+| sha256 des Downloads, zwei Werkzeuge (`sha256sum`, `certutil`) | beide `ca456c06b3a9505ddfd9131408916dd79290368331e7d76bb621f1cba6bc8665` |
+| Abgleich mit dem Pin aus `backend/Dockerfile` | gleich |
+
+Die heruntergeladene Prüfdatei lag außerhalb des Repos und ist danach gelöscht.
