@@ -24,9 +24,10 @@ from tantivy import Index
 
 from findling import precision, profile
 from findling.config import settings
+from findling.embed import model as model_module
 from findling.embed import weights as weights_module
 from findling.embed.chunker import ChunkSpan
-from findling.embed.engine import engine_precision
+from findling.embed.engine import engine_precision, shared_model
 from findling.embed.engine import reset as engine_reset
 from findling.embed.model import DIMENSIONS, EmbedOutcome
 from findling.extract.errors import ExtractionOutcome
@@ -43,7 +44,7 @@ from findling.nc.queue import (
     QueueStats,
 )
 from findling.precision import Precision
-from findling.store.repo import EMBEDDING_MARK, FileMeta, Store, open_store
+from findling.store.repo import EMBEDDING_BACKLOG_MARK, EMBEDDING_MARK, FileMeta, Store, open_store
 from findling.store.vectors import (
     EMBEDDING_MODEL,
     WEIGHTS_FP32,
@@ -54,7 +55,7 @@ from findling.store.vectors import (
     open_vectors,
 )
 from findling.worker import embedding as embedding_module
-from findling.worker.embedding import EmbeddingTrack
+from findling.worker.embedding import BACKLOG_START, EmbeddingTrack
 from findling.worker.poller import Poller
 
 CONSTITUENTS = (
@@ -458,6 +459,232 @@ async def test_closing_the_track_cancels_a_running_procurement(
     part = weights_module.fp32_weights_path(settings().models_dir).with_suffix(".onnx.part")
     assert part.is_relative_to(home)
     assert not part.exists()
+
+
+# -- the swap at the track boundary (D-25-07, D-25-09) ------------------------
+
+
+class _OldEngine:
+    """The engine a swap hands back, with a search that holds it for a while.
+
+    ``busy_for`` is how many releases it refuses, the way
+    ``EmbeddingModel.release`` refuses while a batch is in flight.
+    """
+
+    def __init__(self, events: list[str], *, busy_for: int = 0) -> None:
+        self._events = events
+        self.busy_for = busy_for
+        self.releases = 0
+        self.loaded = True
+
+    def release(self, *, idle_seconds: float | None = None) -> bool:
+        del idle_seconds
+        self.releases += 1
+        self._events.append("release")
+        if self.busy_for > 0:
+            self.busy_for -= 1
+            return False
+        self.loaded = False
+        return True
+
+
+def _recorded(
+    monkeypatch: pytest.MonkeyPatch, store: Store, vectors: VectorStore, *, busy_for: int = 0
+) -> tuple[list[str], list[_OldEngine]]:
+    """Record the chain at the objects that carry it: stock, meta, holder, state.
+
+    The order is the whole assertion, and an empty stock under a current mark
+    looks the same whichever way round it was written, so it is observed and
+    never derived from the state afterwards.
+    """
+    events: list[str] = []
+    olds: list[_OldEngine] = []
+    forget_all = vectors.forget_all
+    write_meta = store.write_meta
+    real_swap = embedding_module.swap_engine
+    real_note_active = embedding_module.note_active
+
+    def watched_forget_all() -> None:
+        events.append("forget_all")
+        forget_all()
+
+    def watched_write_meta(key: str, value: str) -> None:
+        events.append(f"{key}={value}")
+        write_meta(key, value)
+
+    def watched_swap(weights_path: Path | None, weights: str) -> Any:
+        events.append(f"swap_engine:{weights}")
+        real_swap(weights_path, weights)
+        old = _OldEngine(events, busy_for=busy_for)
+        olds.append(old)
+        return old
+
+    def watched_note_active(value: Precision) -> None:
+        events.append(f"note_active:{value.value}")
+        real_note_active(value)
+
+    monkeypatch.setattr(vectors, "forget_all", watched_forget_all)
+    monkeypatch.setattr(store, "write_meta", watched_write_meta)
+    monkeypatch.setattr(embedding_module, "swap_engine", watched_swap)
+    monkeypatch.setattr(embedding_module, "note_active", watched_note_active)
+    monkeypatch.setattr(embedding_module, "ENGINE_RELEASE_PAUSE_SECONDS", 0.0)
+    return events, olds
+
+
+def _chain(weights: str) -> list[str]:
+    return [
+        "forget_all",
+        f"{EMBEDDING_BACKLOG_MARK}={BACKLOG_START}",
+        f"{EMBEDDING_MARK}={_mark(weights)}",
+        f"swap_engine:{weights}",
+        "release",
+        f"note_active:{weights}",
+    ]
+
+
+def _assert_one_precision(store: Store) -> None:
+    """T-24-02: the stored mark, the held engine and the state name one precision."""
+    active = precision.snapshot().active
+    assert active is not None
+    assert store.read_meta()[EMBEDDING_MARK] == _mark(engine_precision())
+    assert engine_precision() == active.value
+
+
+async def _running_on_int8(store: Store, vectors: VectorStore, level: str = "standard") -> EmbeddingTrack:
+    _stocked(store, vectors, _mark(WEIGHTS_INT8))
+    profile.note_chosen(level)
+    precision.note_chosen_precision("int8")
+    track = _track(store, vectors)
+    await _step(track)
+    return track
+
+
+async def _running_on_fp32(home: Path, store: Store, vectors: VectorStore) -> EmbeddingTrack:
+    _place_the_file(home)
+    _stocked(store, vectors, _mark(WEIGHTS_FP32))
+    profile.note_chosen("standard")
+    precision.note_chosen_precision("fp32")
+    track = _track(store, vectors)
+    await _step(track)
+    assert precision.snapshot().active is Precision.FP32
+    return track
+
+
+async def test_a_sideloaded_file_is_taken_up_in_the_recorded_order_without_a_request(
+    home: Path, store: Store, vectors: VectorStore, fetch: _Fetch, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    track = await _running_on_int8(store, vectors)
+    _place_the_file(home)
+    events, olds = _recorded(monkeypatch, store, vectors)
+    queue = _FakeQueue()
+
+    precision.note_chosen_precision("fp32")
+    await _step(track, queue)
+
+    assert events == _chain(WEIGHTS_FP32)
+    assert fetch.calls == 0, "a verified sideload needs no request (D-25-06)"
+    assert precision.snapshot().active is Precision.FP32
+    assert engine_precision() == WEIGHTS_FP32
+    assert store.read_meta()[EMBEDDING_MARK].endswith(f"/{WEIGHTS_FP32}")
+    assert vectors.document_count() == 0
+    assert queue.requeues == [([4711, 4712], KIND_EMBED)]
+    assert [old.loaded for old in olds] == [False]
+    _assert_one_precision(store)
+
+
+async def test_procured_weights_are_taken_up_by_the_next_step(
+    home: Path, store: Store, vectors: VectorStore, fetch: _Fetch
+) -> None:
+    del home
+    track = await _running_on_int8(store, vectors)
+    precision.note_chosen_precision("fp32")
+    await _step(track)
+    await _procurement_ended(track)
+    assert precision.snapshot().active is Precision.INT8, "the fetch itself switches nothing"
+
+    await _step(track)
+
+    assert fetch.calls == 1
+    assert precision.snapshot().active is Precision.FP32
+    _assert_one_precision(store)
+
+
+async def test_an_old_engine_a_search_still_holds_is_released_once_the_search_is_done(
+    home: Path, store: Store, vectors: VectorStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    track = await _running_on_int8(store, vectors)
+    _place_the_file(home)
+    events, olds = _recorded(monkeypatch, store, vectors, busy_for=3)
+    loads = model_module.load_count()
+
+    precision.note_chosen_precision("fp32")
+    await _step(track)
+
+    (old,) = olds
+    assert old.releases == 4
+    assert old.loaded is False
+    assert events.count("release") == 4
+    assert events.index(f"note_active:{WEIGHTS_FP32}") > max(i for i, e in enumerate(events) if e == "release")
+    # Never two models: the new engine reads nothing until its first use.
+    assert shared_model().loaded is False
+    assert model_module.load_count() == loads
+
+
+async def test_the_way_back_to_int8_runs_the_same_chain_and_removes_the_file(
+    home: Path, store: Store, vectors: VectorStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    track = await _running_on_fp32(home, store, vectors)
+    target = weights_module.fp32_weights_path(settings().models_dir)
+    assert target.exists()
+    events, _olds = _recorded(monkeypatch, store, vectors)
+
+    precision.note_chosen_precision("int8")
+    await _step(track)
+
+    assert events == _chain(WEIGHTS_INT8)
+    assert not target.exists(), "the file goes, a sideloaded one as well (D-25-09)"
+    assert precision.snapshot().active is Precision.INT8
+    assert precision.snapshot().verdict == precision.VERDICT_NONE
+    _assert_one_precision(store)
+
+
+async def test_a_switch_to_economy_keeps_an_active_fp32(
+    home: Path, store: Store, vectors: VectorStore, fetch: _Fetch, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    track = await _running_on_fp32(home, store, vectors)
+    events, _olds = _recorded(monkeypatch, store, vectors)
+
+    profile.note_chosen("economy")
+    for _ in range(3):
+        await _step(track)
+
+    assert events == []
+    assert fetch.calls == 0
+    assert precision.snapshot().active is Precision.FP32
+    assert precision.snapshot().verdict == precision.VERDICT_ACTIVE_IN_ECONOMY
+    assert weights_module.fp32_weights_path(settings().models_dir).exists()
+    _assert_one_precision(store)
+
+
+async def test_a_second_change_during_a_running_reindex_starts_the_sweep_again(
+    home: Path, store: Store, vectors: VectorStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    track = await _running_on_int8(store, vectors)
+    _place_the_file(home)
+    precision.note_chosen_precision("fp32")
+    await _step(track)
+    assert precision.snapshot().active is Precision.FP32
+    # The sweep stands in the middle of its band when the admin changes again.
+    store.write_meta(EMBEDDING_BACKLOG_MARK, "4711")
+    events, _olds = _recorded(monkeypatch, store, vectors)
+    queue = _FakeQueue()
+
+    precision.note_chosen_precision("int8")
+    await _step(track, queue)
+
+    assert events[: len(_chain(WEIGHTS_INT8))] == _chain(WEIGHTS_INT8)
+    assert queue.requeues == [([4711, 4712], KIND_EMBED)], "the band starts at the first document again"
+    _assert_one_precision(store)
 
 
 # -- the poller reads the key every round (D-25-02) ---------------------------

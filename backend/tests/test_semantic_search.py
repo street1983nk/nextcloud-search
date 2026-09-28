@@ -72,8 +72,15 @@ from findling.index.search import (
     snippets_for,
 )
 from findling.query.rewrite import build_query
-from findling.store.repo import Store, open_store
-from findling.store.vectors import Chunk, VectorStore, open_vectors
+from findling.store.repo import EMBEDDING_MARK, Store, open_store
+from findling.store.vectors import (
+    EMBEDDING_MODEL,
+    WEIGHTS_FP32,
+    Chunk,
+    VectorStore,
+    embedding_mark,
+    open_vectors,
+)
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "constituents_de.txt"
 CONSTITUENTS = FIXTURE.read_text(encoding="utf-8").split()
@@ -1266,3 +1273,37 @@ def test_the_php_recheck_knows_nothing_about_the_switch(index: Index) -> None:
 
     assert sources != []
     assert [path.name for path in sources if "may_load" in path.read_text(encoding="utf-8")] == []
+
+
+# ---------------------------------------------------------------------------
+# A change of the precision: the search answers while the stock is rewritten
+# ---------------------------------------------------------------------------
+
+
+def test_a_search_during_the_reindex_of_a_precision_change_answers_every_lexical_hit(
+    index: Index, store: Store, tmp_path: Path
+) -> None:
+    # D-25-07, no blue and green: the swap emptied the stock and the mark
+    # already names fp32, so the vector half has nothing to answer from until
+    # the documents come back one by one. The lexical half answers in full, and
+    # nothing raises on the way.
+    store.write_meta(
+        EMBEDDING_MARK, embedding_mark(EMBEDDING_MODEL, tokens=settings().embed_token_cap, weights=WEIGHTS_FP32)
+    )
+    emptied = open_vectors(tmp_path / "vectors-after-the-swap.db")
+    try:
+        assert emptied.document_count() == 0
+        lexical = candidates(index, store, BOB, _query(index, TWO_WORD_TERM), limit=DOCUMENTS)
+        hybrid = candidates(
+            index,
+            store,
+            BOB,
+            _query(index, TWO_WORD_TERM),
+            limit=DOCUMENTS,
+            semantic=_side(emptied, TWO_WORD_TERM, answers={TWO_WORD_TERM: unit_vector(0)}),
+        )
+    finally:
+        emptied.close()
+
+    assert len(_ids(lexical)) == DOCUMENTS
+    assert _ids(hybrid) == _ids(lexical)
