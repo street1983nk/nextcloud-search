@@ -42,6 +42,7 @@ import asyncio
 import contextlib
 import logging
 import sqlite3
+import threading
 import time
 from collections.abc import Awaitable, Callable, Sequence
 from pathlib import Path
@@ -364,9 +365,27 @@ class EmbeddingTrack:
         # them in. A count and not a flag, so that a second driver later on
         # cannot lower it under the first one.
         self._rows_in_work = 0
-        # Held around the embedding of a row and around the mark step. With one
-        # driver it orders nothing that was not already in order.
+        # Held around the rows of a round and around the mark step: it keeps the
+        # two drivers (inline in the indexing loop, and the embed runner) off
+        # the track at the same time. Inside one round of the runner, up to
+        # embed_slots rows run side by side since phase 26 (D-25-12), and the
+        # two locks below are what makes that sharing safe.
         self.lock = asyncio.Lock()
+        # Around the chunker, and around the build of the cutter. Neither the
+        # tokenizer (huggingface/tokenizers#1726) nor semantic-text-splitter
+        # promises thread safety, and two rows building the cutter at once
+        # would pay its 544,3 MB twice. A threading lock, because both run in
+        # a worker thread.
+        self._chunk_lock = threading.Lock()
+        # Around replace_acl and replace_chunks, and around the start state of
+        # the precision, which reads the state database. Each write takes
+        # BEGIN IMMEDIATE on one connection of this track, and two worker
+        # threads on the same connection would nest the second transaction
+        # into the first ("cannot start a transaction within a transaction").
+        # The engine itself stays unlocked: onnxruntime promises Run() on one
+        # session out of several threads, and its own in-flight counter is
+        # what keeps a release away from a running batch (D-25-12).
+        self._write_lock = asyncio.Lock()
         # The precision of the weights (MOD-02, plan 25-11). The fetch of the
         # fp32 file runs as a task of its own beside the rounds and outside
         # the lock, one at a time. The start state is settled once per track,
@@ -530,8 +549,11 @@ class EmbeddingTrack:
         # process is written, and not only at the first mark step: a row
         # embedded with the int8 of the image under an fp32 mark would be a
         # mixed stock nothing can tell apart afterwards (T-24-02). Two attribute
-        # reads per row once it is settled.
-        await self._prepare_the_precision()
+        # reads per row once it is settled. Under the write lock, because the
+        # first step reads the state database and may swap the engine, and two
+        # rows of one round must not do either at the same time.
+        async with self._write_lock:
+            await self._prepare_the_precision()
 
         # The first row of the process pays for the tokenizer and the splitter
         # here, in a thread, because the read of the 17 MB artifact and the
@@ -550,7 +572,7 @@ class EmbeddingTrack:
         # gate, so hopping into a thread to hear that would be the same cost for
         # the same nothing, once per row for five minutes.
         if (self._chunker is None or self._model is None) and not self._cutter_cooling_down:
-            await asyncio.to_thread(self._build_the_cutter)
+            await asyncio.to_thread(self._build_the_cutter_once)
 
         vectors, chunker, model = self._vectors, self._chunker, self._model
         if vectors is None or chunker is None or model is None:
@@ -566,7 +588,8 @@ class EmbeddingTrack:
         # is the pass that has to put it into the prefilter. One declarative
         # write against a file this pass is handling anyway, through the state
         # database connection of this track.
-        await asyncio.to_thread(self._store_or_die().replace_acl, job.file_id, acl_users(job))
+        async with self._write_lock:
+            await asyncio.to_thread(self._store_or_die().replace_acl, job.file_id, acl_users(job))
 
         index = self._index_or_die()
         body = await asyncio.to_thread(stored_body, index, index.schema, job.file_id)
@@ -576,7 +599,7 @@ class EmbeddingTrack:
             done.append(job.queue_id)
             return EMBED_NO_STORED_TEXT
 
-        spans = await asyncio.to_thread(chunker, body)
+        spans = await asyncio.to_thread(self._cut_alone, chunker, body)
         if not spans:
             done.append(job.queue_id)
             return EMBED_NO_STORED_TEXT
@@ -598,21 +621,37 @@ class EmbeddingTrack:
             done.append(job.queue_id)
             return EMBED_INCOMPLETE
 
-        await asyncio.to_thread(
-            vectors.replace_chunks,
-            job.file_id,
-            [
-                Chunk(
-                    ordinal=span.ordinal,
-                    char_start=span.char_start,
-                    char_end=span.char_end,
-                    embedding=to_int8(vector),
-                )
-                for span, vector in zip(spans, outcome.vectors, strict=True)
-            ],
-        )
+        chunks = [
+            Chunk(
+                ordinal=span.ordinal,
+                char_start=span.char_start,
+                char_end=span.char_end,
+                embedding=to_int8(vector),
+            )
+            for span, vector in zip(spans, outcome.vectors, strict=True)
+        ]
+        async with self._write_lock:
+            await asyncio.to_thread(vectors.replace_chunks, job.file_id, chunks)
         done.append(job.queue_id)
         return EMBED_WRITTEN
+
+    def _cut_alone(self, chunker: Chunker, body: str) -> list[ChunkSpan]:
+        """Run the chunker under its lock, in the worker thread the caller entered.
+
+        Tokenizer and splitter carry no promise of thread safety, and two rows
+        of one round may reach this line at the same moment (D-25-12).
+        """
+        with self._chunk_lock:
+            return chunker(body)
+
+    def _build_the_cutter_once(self) -> bool:
+        """Build the cutter under the chunker lock, so two rows never build it twice.
+
+        The second row to arrive waits for the first and then finds both
+        attributes set at the top of :meth:`_build_the_cutter`.
+        """
+        with self._chunk_lock:
+            return self._build_the_cutter()
 
     # -- the cutter ------------------------------------------------------
 
@@ -687,11 +726,11 @@ class EmbeddingTrack:
         """Build the tokenizer, the splitter and the engine, at the first row that needs them.
 
         The lazy half, and it runs once per process: the second call finds the
-        two attributes set and returns at the top. Sequential by construction
-        rather than by a lock of its own, because the rows are worked one after
-        the other under :attr:`lock`; :func:`findling.embed.engine.shared_model`
-        carries its own lock for the case that the read side asks at the same
-        moment.
+        two attributes set and returns at the top. The row path enters it
+        through :meth:`_build_the_cutter_once`, under the chunker lock, because
+        since phase 26 two rows of one round may ask at the same moment
+        (D-25-12); :func:`findling.embed.engine.shared_model` carries its own
+        lock for the case that the read side asks at the same moment.
 
         Nothing about the weights is loaded here. Asking ``shared_model`` for
         the engine reads no artifact, which is why it may be asked before it is
