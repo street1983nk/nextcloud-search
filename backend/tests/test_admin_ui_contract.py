@@ -581,6 +581,9 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
         "%1$s in %2$s": "two placeholders and the preposition between them, which German spells the same way",
         "PDF": "the proper name of a file format, the same abbreviation in every language of this tree",
         "Text": "the same word in German, and an invented difference would be a mistranslation",
+        # Since plan 26-05: the name of the middle profile, which docs/profiles.md
+        # spells Standard in German as well.
+        "Standard": "the name of a profile, the same word in German as in English",
     },
     # Spanish, read off the file on 25.09.2026 rather than guessed: the gate was
     # run once with an empty list and reported four findings, two keys over two
@@ -605,6 +608,8 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
         "Findling": "the name of the app, the same word in every language of this tree",
         "%1$s in %2$s": "two placeholders and the preposition between them, which Italian spells the same way",
         "PDF": "the proper name of a file format, the same abbreviation in every language of this tree",
+        # Since plan 26-05: Italian has taken the word over as it stands.
+        "Standard": "the name of a profile, the word Italian itself uses for it",
     },
     # Dutch, read off the file on 25.09.2026 rather than guessed: the gate was
     # run once with an empty list and reported eight findings, four keys over
@@ -659,6 +664,10 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
         # a finding at all, which is why this entry was never needed and is not a
         # wording that changed.
         "_%n minute_::_%n minutes_": "the same words in French in both forms, a difference would be a mistranslation",
+        # Since plan 26-05: two names of profiles that French writes exactly as
+        # English does.
+        "Standard": "the name of a profile, the same word in French",
+        "Performance": "the name of a profile, the same word in French",
     },
 }
 
@@ -2224,6 +2233,44 @@ def test_every_new_status_key_has_exactly_one_line_in_the_service() -> None:
     assert "private const PRECISIONS = ['int8', 'fp32'];" in view
 
 
+def test_the_guard_lines_are_built_out_of_closed_sets() -> None:
+    """Plan 26-05 (D-26-01, D-26-02, D-26-04): chosen, in force, cause, way back.
+
+    The seven fields come out of the object guard of the status answer and are
+    judged against closed sets in the service; the template builds every word
+    it shows out of its own maps and the catalogue (T-25-14 pattern). PHPUnit
+    runs only in CI, so this gate holds the source shape locally.
+    """
+    view = ADMIN_VIEW.read_text(encoding="utf-8")
+    template = TEMPLATE.read_text(encoding="utf-8")
+
+    assert "private const GUARD_PROFILES = ['economy', 'standard', 'performance'];" in view
+    assert "private const GUARD_CAUSES = ['memory_max_repeated', 'oom_kill', 'unclean_end'];" in view
+    assert "preg_match('/^[0-9a-f]{32}$/D', $value)" in view
+    for key, judge, field in (
+        ("guardChosen", "profileName", "chosen"),
+        ("guardEffective", "profileName", "effective"),
+        ("guardCause", "guardCause", "cause"),
+        ("guardToken", "hexToken", "token"),
+        ("slotsTarget", "guardCounter", "slotsTarget"),
+        ("slotsInForce", "guardCounter", "slotsInForce"),
+        ("slotsThrottled", "strictFlag", "throttled"),
+    ):
+        assert view.count(f"'{key}' => ") == 1, key
+        assert f"'{key}' => self::{judge}(self::guardField($answer, '{field}'))," in view, key
+    for element in ("findling-guard", "findling-guard-way-back", "findling-slots"):
+        assert f'id="{element}"<?php if (' in template, element
+    assert "<code><?php p($wayBackCommand); ?></code>" in template
+    for catalogue in L10N_CATALOGUES:
+        keys = catalogue_of(catalogue)
+        for key in (
+            "Profile: chosen %1$s, in force %2$s (%3$s)",
+            "To lift the reduction after checking the memory: %1$s",
+            "OCR slots: %1$s of %2$s, memory tight",
+        ):
+            assert key in keys, (catalogue.name, key)
+
+
 def test_the_two_translation_files_carry_the_same_keys() -> None:
     """IN-02, and the reason it is a gate rather than a single deletion.
 
@@ -2405,8 +2452,8 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     }
 
     assert len(set(map(frozenset, keys_of.values()))) == 1, f"the four catalogues disagree: {sorted(keys_of)}"
-    # two keys of plan 25-04 (D-25-13)
-    assert len(keys_of["de.json"]) == 207
+    # two keys of plan 25-04 (D-25-13), nine of plan 26-05 (D-26-01, D-26-04)
+    assert len(keys_of["de.json"]) == 216
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:
