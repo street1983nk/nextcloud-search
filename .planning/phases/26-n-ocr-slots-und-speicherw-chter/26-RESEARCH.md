@@ -490,29 +490,35 @@ except (EOFError, OSError):
 | A7 | `/proc/self/oom_score_adj` und `/proc/self/autogroup` im Container beschreibbar | Muster 10 | best effort, dann nur nice; Kill-Opfer wieder der Hauptprozess |
 | A8 | `asyncio.Condition`-Schranke genügt als größenveränderliche Semaphore | Muster 1 | Test deckt es ab |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **O1: Richtung der Sperrfrist-Formel (D-26-06)**
+Alle Owner-Fragen wurden am 28.09.2026 entschieden und stehen als Nachentscheide in 26-CONTEXT.md:
+O1 RESOLVED via D-26-13 (Zeilenbeschnitt), O2 RESOLVED via D-26-14 (32 nur Lane index),
+O3 RESOLVED via D-26-15 (max-Ereignis qualifiziert), O4 RESOLVED via D-26-16 (Unrein-Ende zaehlt).
+O5 und O6 sind Laufzeit-Entscheide: O5 loest Plan 26-13 am Messaufbau, O6 fragt Plan 26-14
+per checkpoint:decision (Push-Entscheid beim Owner).
+
+1. **O1: Richtung der Sperrfrist-Formel (D-26-06)** , RESOLVED via D-26-13
    - Was wir wissen: Das Lease setzt nur PHP durch; ohne neuen Parameter kann der Container keine eigene Frist setzen (Befund C).
    - Was unklar ist: ob der Owner "Sparsam bekommt eine lange Frist" wörtlich will (dann Lease-Parameter am Anspruch, gegen D-26-05, mit Pitfall 6) oder die Formel als Zeilenbeschnitt akzeptiert.
    - Empfehlung: Zeilenbeschnitt (Muster 4). Kurz beim Owner bestätigen lassen, bevor der Plan-Schnitt steht.
 
-2. **O2: KIND_BATCH[ocr] je Lane**
+2. **O2: KIND_BATCH[ocr] je Lane** , RESOLVED via D-26-14
    - Was wir wissen: fest 32 in allen Lanes ändert den Sparsam-Anspruch (Pitfall 7) und gibt 1.3-Containern 32 OCR-Zeilen.
    - Empfehlung: 32 im Lane `index`, 2 im Lane `all`. Kein neuer Parameter, der Lane existiert seit Phase 25. Serien-Rückfall (Lane `all`) nutzt dann höchstens 2 Slots; passt zur Lage "Speicher knapp". Owner-Bestätigung.
 
-3. **O3: Qualifizierung des max-Ereignisses**
+3. **O3: Qualifizierung des max-Ereignisses** , RESOLVED via D-26-15
    - Empfehlung: Befund A. Wortlaut von D-26-03 bleibt ("zwei max-Ereignisse im Fenster"), das Ereignis wird definiert. Owner zur Kenntnis.
 
-4. **O4: Unrein-Ende als OOM-Kill werten?**
+4. **O4: Unrein-Ende als OOM-Kill werten?** , RESOLVED via D-26-16
    - Was wir wissen: Ein OOM-Kill des Hauptprozesses ist nach dem Neustart nicht mehr beobachtbar.
    - Empfehlung: Ja, aber nur für ein Ende ohne SIGTERM während einer Mehr-Slot-Staffel (sichere Richtung, Admin bestätigt). Owner-Entscheid, weil es über "beobachteter OOM-Kill" hinausgeht.
 
-5. **O5: nc35-Harness für D-26-12**
+5. **O5: nc35-Harness für D-26-12** , Laufzeit-Entscheid in Plan 26-13
    - Was unklar ist: Aufbau des Harness (Nextcloud-Container getrennt vom ExApp-Container wie in `compose-harp.yaml`?).
    - Empfehlung: Probe mit zwei Messreihen (Findling-Suche über Unified Search, `status.php`), je mit und ohne nice (Abschalten per Testschalter nur im Messaufbau, nicht im Produkt).
 
-6. **O6: Push für CI-Belege**
+6. **O6: Push für CI-Belege** , checkpoint:decision in Plan 26-14
    - SC2 (Linux-CI) und SC3 (arm64-Runner, `measure.yml` zieht das veröffentlichte Abbild) brauchen einen Push; 150+ Commits liegen nur lokal. Owner-Entscheid wie bei den PHPUnit-Läufen der Phasen 24/25.
 
 ## Environment Availability
