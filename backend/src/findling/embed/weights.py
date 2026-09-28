@@ -33,6 +33,8 @@ Logs carry type names at most, never a path, a digest or a URL.
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import errno
 import hashlib
 import logging
 import os
@@ -252,9 +254,27 @@ async def _download(models_dir: Path, fetch: FetchAsset) -> str:
         if received != FP32_BYTES or digest.hexdigest() != FP32_SHA256:
             LOGGER.warning("fp32 weights: the download does not match the recorded digest")
             return WRONG_DIGEST
-        await asyncio.to_thread(_seal, sink)
+        try:
+            await asyncio.to_thread(_seal, sink)
+        except OSError as error:
+            # The free-space precheck of procure_fp32 runs before the bytes are
+            # written, so the volume can fill while they stream: the write lands
+            # in the page cache and the fsync is where ENOSPC surfaces. The
+            # contract of this module holds here as well, an outcome and never
+            # an exception (code review WR-03), and ENOSPC is the very failure
+            # class NO_ROOM exists for.
+            if error.errno == errno.ENOSPC:
+                LOGGER.warning("fp32 weights: the volume filled while the download was sealed")
+                return NO_ROOM
+            _log_unavailable(error)
+            return UNAVAILABLE
     finally:
-        sink.close()
+        # A close after a failed flush fails the same way the flush did, and on
+        # the happy path the bytes are already synced: nothing an OSError here
+        # could say changes the outcome, and the caller drops the ``.part`` on
+        # every way out (code review WR-03).
+        with contextlib.suppress(OSError):
+            sink.close()
 
     try:
         await asyncio.to_thread(os.replace, part, target)
@@ -271,8 +291,10 @@ async def procure_fp32(models_dir: Path, fetch: FetchAsset, *, min_free_bytes: i
     ``fetch`` is called once as ``fetch(FP32_ASSET_URL, write, cap=FP32_BYTES)``.
     Before that the free space of the volume is compared against the size of the
     asset plus ``min_free_bytes``, so a full disk is NO_ROOM without a request
-    (T-25-23). No outcome other than PROCURED leaves a file, and the ``.part``
-    is removed on every way out, a cancellation included.
+    (T-25-23); a volume that fills while the download streams is NO_ROOM at the
+    fsync in front of the rename (code review WR-03). No outcome other than
+    PROCURED leaves a file, and the ``.part`` is removed on every way out, a
+    cancellation included.
     """
     directory = fp32_weights_path(models_dir).parent
     try:

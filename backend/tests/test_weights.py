@@ -15,11 +15,13 @@ Every request here goes to a mock transport. No test touches the network.
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import os
 from collections.abc import Awaitable, Callable, Iterator
 from pathlib import Path
 from types import SimpleNamespace
+from typing import IO, Any, cast
 
 import httpx
 import pytest
@@ -340,6 +342,80 @@ async def test_a_short_download_is_refused_and_leaves_nothing(tmp_path: Path) ->
 
     assert outcome == weights.WRONG_DIGEST
     assert _leftovers(tmp_path) == []
+
+
+@pytest.mark.usefixtures("small_release")
+async def test_a_full_volume_at_the_fsync_is_no_room_and_leaves_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Code review WR-03: the free-space precheck runs before the bytes are
+    # written, so the realistic ENOSPC arrives at the fsync in front of the
+    # rename. The module contract holds there as well: an outcome out of
+    # PROCURE_OUTCOMES, never an exception, and no ``.part`` stays behind.
+    def full(sink: IO[bytes]) -> None:
+        del sink
+        raise OSError(errno.ENOSPC, "no space left on device")
+
+    monkeypatch.setattr(weights, "_seal", full)
+
+    outcome = await weights.procure_fp32(tmp_path, _Fetch(), min_free_bytes=0)
+
+    assert outcome == weights.NO_ROOM
+    assert _leftovers(tmp_path) == []
+
+
+@pytest.mark.usefixtures("small_release")
+async def test_any_other_oserror_at_the_fsync_is_unavailable_and_leaves_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def failing(sink: IO[bytes]) -> None:
+        del sink
+        raise OSError(errno.EIO, "input/output error")
+
+    monkeypatch.setattr(weights, "_seal", failing)
+
+    outcome = await weights.procure_fp32(tmp_path, _Fetch(), min_free_bytes=0)
+
+    assert outcome == weights.UNAVAILABLE
+    assert _leftovers(tmp_path) == []
+
+
+class _RaisingClose:
+    """A sink whose close throws after the bytes are already synced."""
+
+    def __init__(self, inner: IO[bytes]) -> None:
+        self._inner = inner
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+    def close(self) -> None:
+        self._inner.close()
+        raise OSError(errno.EIO, "close failed")
+
+
+@pytest.mark.usefixtures("small_release")
+async def test_a_failing_close_after_the_seal_still_installs_the_matching_download(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Code review WR-03, the second unmapped call: the close of the outer
+    # finally. After a successful fsync the bytes are durable, so a close that
+    # throws must neither escape procure_fp32 nor cost the installation.
+    original_open = Path.open
+
+    def opening(self: Path, mode: str = "r", *args: Any, **kwargs: Any) -> Any:
+        handle = original_open(self, mode, *args, **kwargs)
+        if self.name.endswith(weights.PART_SUFFIX):
+            return _RaisingClose(cast("IO[bytes]", handle))
+        return handle
+
+    monkeypatch.setattr(Path, "open", opening)
+
+    outcome = await weights.procure_fp32(tmp_path, _Fetch(), min_free_bytes=0)
+
+    assert outcome == weights.PROCURED
+    assert _leftovers(tmp_path) == ["model.onnx"]
+    assert weights.fp32_verified(tmp_path) is True
 
 
 @pytest.mark.usefixtures("small_release")
