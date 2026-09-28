@@ -675,8 +675,17 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # model_precision in the profile answer); plan 25-04 changed
 # AdminViewService.php, templates/admin.php and AdminViewServiceTest.php
 # (the model line of the admin page). No file went.
+# Measured again after the wave-1 merge of plans 26-01, 26-02, 26-03 and 26-05
+# (phase 26): eight of the 75 files changed their bytes and none came or went.
+# Plan 26-02 changed QueueService.php and QueueServiceTest.php (up to 32 OCR
+# rows in the index lane, KIND_BATCH_INDEX_LANE) and SettingsService.php,
+# ProfileController.php and ProfileControllerTest.php (the confirmation token
+# profile_confirmed in the profile answer); plan 26-05 changed
+# AdminViewService.php, AdminViewServiceTest.php and templates/admin.php (guard
+# stage, cause, way back and slot throttling on the admin page). The eight
+# catalogues of php/l10n moved as well, but the recipe globs **/*.php.
 PHP_FILES_TODAY = 75
-PHP_TREE_HASH_TODAY = "726756a8e646e4eb6d4d9089e3ac0476d7a5ff25b6e3f335b3f4faaeaab4453d"
+PHP_TREE_HASH_TODAY = "460e2d6b7a11903bb783b722693f113f0ace524d67bc8cae5a033539562e8e8e"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
@@ -1379,8 +1388,18 @@ PHP_TREE_HASH_TODAY = "726756a8e646e4eb6d4d9089e3ac0476d7a5ff25b6e3f335b3f4faaea
 # KILLED_EXIT_CODE; extract/ocr.py raises EngineKilled for a tesseract ended by
 # SIGKILL; extract/image.py only changed a comment. No file came and none went,
 # so PACKAGE_FILES_TODAY stays at 64. The PHP pair does not move.
-PACKAGE_FILES_TODAY = 64
-PACKAGE_TREE_HASH_TODAY = "bb514188c4ac9346870d826eb181132bb24f680ad7e76318b17f7126a3f26959"
+# Measured again after the wave-1 merge of plans 26-01, 26-02, 26-03 and 26-05,
+# with plan 26-04 on top: two files came, guard.py (plan 26-03, the neutral
+# guard state: slot throttle, qualified escalation, cap and token) and
+# extract/pool.py (plan 26-04, SlotGate and SlotPool with an executor of its
+# own). Plan 26-03 changed the bytes of config.py (OCR_ROWS_PER_SLOT,
+# OCR_CLAIM_BATCH_INDEX_LANE and the guard constants), memory_guard.py
+# (memory_events) and profile.py (the cap in effective()); plan 26-04 changed
+# index/writer.py (one reentrant lock around every writing method). No file
+# went, so PACKAGE_FILES_TODAY moves to 66. The PHP pair was measured again as
+# well, see there.
+PACKAGE_FILES_TODAY = 66
+PACKAGE_TREE_HASH_TODAY = "e70c39b705c8a5cf6f814c430c23df40fe793190f27b55d3af0a80d341bd9c22"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
