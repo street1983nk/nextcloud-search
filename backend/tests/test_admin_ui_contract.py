@@ -2174,11 +2174,19 @@ def test_every_new_status_key_has_exactly_one_line_in_the_service() -> None:
         "rebuildDone",
         "rebuildTotal",
         "rebuildBlockedBytes",
+        "precisionActive",
+        "reembedRunning",
     ):
         assert view.count(f"'{key}' => ") == 1, key
     assert "'rebuildRunning' => ($answer['rebuildRunning'] ?? false) === true," in view
     for key in ("rebuildDone", "rebuildTotal", "rebuildBlockedBytes"):
         assert f"'{key}' => $this->counter($answer, '{key}')," in view, key
+    # The two fields of plan 25-04 come out of the object model of the answer
+    # (contract of plan 25-12) and are judged against a closed set and a real
+    # boolean, never cast (T-25-13).
+    assert "'precisionActive' => self::precision(self::modelField($answer, 'precisionActive'))," in view
+    assert "'reembedRunning' => self::strictFlag(self::modelField($answer, 'reembedRunning'))," in view
+    assert "private const PRECISIONS = ['int8', 'fp32'];" in view
 
 
 def test_the_two_translation_files_carry_the_same_keys() -> None:
