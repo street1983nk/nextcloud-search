@@ -146,14 +146,15 @@ class Hardware:
 
     @property
     def threshold_memory_bytes(self) -> int | None:
-        """Memory for the suggestion thresholds: memory.max, else MemTotal.
+        """Memory for the suggestion thresholds: min(memory.max, MemTotal), else the known one.
 
         A nominal 6 GB box has to read as a 6 GB box, which MemAvailable on a
         busy all-in-one host would not (24-CONTEXT.md, research recommendation).
+        A limit above the physical memory is no memory the box has, so it can
+        only narrow MemTotal, never raise it.
         """
-        if self.memory_limit_bytes is not None:
-            return self.memory_limit_bytes
-        return self.memory_total_bytes
+        known = [value for value in (self.memory_limit_bytes, self.memory_total_bytes) if value is not None]
+        return min(known) if known else None
 
     @property
     def formula_memory_bytes(self) -> int | None:

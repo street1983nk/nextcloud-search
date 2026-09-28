@@ -1278,8 +1278,12 @@ PHP_TREE_HASH_TODAY = "e2b4bcabe107de605f2a53bd9cf11da4090174f7c40aa3b1b182c6631
 # cgroup v1 "no limit" sentinel on its own size (_V1_NO_LIMIT_FLOOR) instead of
 # only by comparison against a MemTotal that may be unreadable. No file came
 # and none went, so PACKAGE_FILES_TODAY stays at 59.
+# Moved on 2026-09-28 by the UAT fix of phase 24: again only hardware.py, whose
+# threshold_memory_bytes now takes min(memory.max, MemTotal), so a limit above
+# the physical memory no longer lifts a box over a profile threshold. No file
+# came and none went, so PACKAGE_FILES_TODAY stays at 59.
 PACKAGE_FILES_TODAY = 59
-PACKAGE_TREE_HASH_TODAY = "1c4289600d6aff750fb16170d52d13e37a7ed172e2b4f44a71cf14d9264dcb58"
+PACKAGE_TREE_HASH_TODAY = "bd265e341bbf87374101acc8415526e850e29e9feaf69f03da42d01f40d593f4"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

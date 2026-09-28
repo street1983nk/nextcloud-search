@@ -267,6 +267,19 @@ def test_formula_memory_falls_back_to_the_known_half() -> None:
     assert limit_only.threshold_memory_bytes == 2_000
 
 
+def test_a_limit_above_the_physical_memory_does_not_raise_the_threshold(tmp_path: Path) -> None:
+    # Found live on 2026-09-28 (24-HUMAN-UAT.md): docker run --memory=16g on an
+    # 8 GB machine read as a 16 GB box and passed the 12 GB performance
+    # threshold. A limit only ever narrows what the box has.
+    root = _v2_tree(tmp_path / "cgroup", "800000 100000", str(16 * 1024**3))
+    meminfo = _meminfo(tmp_path / "meminfo")
+
+    found = detect(cgroup_root=root, meminfo=meminfo, cpu_count=lambda: 12, machine=lambda: "x86_64")
+
+    assert found.memory_limit_bytes == 16 * 1024**3
+    assert found.threshold_memory_bytes == MEM_TOTAL_KB * KIB
+
+
 def test_the_snapshot_is_frozen(tmp_path: Path) -> None:
     found = detect(cgroup_root=tmp_path, meminfo=tmp_path / "missing", cpu_count=lambda: 1, machine=lambda: "")
 
