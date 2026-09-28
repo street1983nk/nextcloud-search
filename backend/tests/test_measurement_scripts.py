@@ -1398,8 +1398,15 @@ PHP_TREE_HASH_TODAY = "460e2d6b7a11903bb783b722693f113f0ace524d67bc8cae5a0335395
 # index/writer.py (one reentrant lock around every writing method). No file
 # went, so PACKAGE_FILES_TODAY moves to 66. The PHP pair was measured again as
 # well, see there.
+# Measured again after the wave-2 merge of plans 26-04, 26-07 and 26-08: plan
+# 26-07 changed the bytes of worker/embedding.py (embed_slots per round, the
+# chunker lock and the write lock around the sqlite writes, D-25-12) and of
+# config.py (the embed slot constants), plan 26-08 changed api/status.py (the
+# guard block of GET /status). No file came and none went, so
+# PACKAGE_FILES_TODAY stays at 66. The PHP pair does not move: no plan of this
+# wave touches a PHP file.
 PACKAGE_FILES_TODAY = 66
-PACKAGE_TREE_HASH_TODAY = "e70c39b705c8a5cf6f814c430c23df40fe793190f27b55d3af0a80d341bd9c22"
+PACKAGE_TREE_HASH_TODAY = "2ae8b3bc9176abb6e5523632d9100c89936f6b92828409df8afd44ab4b848e91"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
