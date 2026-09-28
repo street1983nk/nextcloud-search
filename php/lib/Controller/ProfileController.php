@@ -17,7 +17,9 @@ use Psr\Log\LoggerInterface;
  *
  * The container asks once per round and nothing pushes, the same backpressure
  * rule the queue follows. One route, reading only, and the answer carries the
- * profile name and the model precision and nothing else. Both values live in
+ * profile name, the model precision and, since phase 26, the confirmation
+ * token of the admin (D-26-04, SettingsService::profileConfirmed()) and
+ * nothing else. The first two values live in
  * appconfig of this app under keys of their own and are validated by
  * SettingsService::profile() and SettingsService::modelPrecision(), so the
  * container only ever sees names out of the two closed sets, or null for a
@@ -46,11 +48,14 @@ class ProfileController extends OCSController {
 	 * GET /ocs/v2.php/apps/findling/profile
 	 *
 	 * Answers with {"profile": "economy" | "standard" | "performance",
-	 * "precision": "int8" | "fp32" | null}. null is a stored precision outside
-	 * the set; the container keeps its last known precision on it rather than
-	 * reindexing for a typo. A 1.3 container reads only the profile field and
-	 * ignores the second one. A failure to read answers as a failure (500 with
-	 * an error field and neither a profile nor a precision name),
+	 * "precision": "int8" | "fp32" | null, "confirmed": "<32 hex>" | null}.
+	 * null is a stored precision outside the set; the container keeps its last
+	 * known precision on it rather than reindexing for a typo. confirmed is the
+	 * token the admin stored to lift a lowering of the memory guard (D-26-04),
+	 * null when none is stored or the stored one is not 32 lowercase hex. A 1.3
+	 * container reads only the profile field and ignores the other two. A
+	 * failure to read answers as a failure (500 with an error field and neither
+	 * a profile nor a precision name),
 	 * because the container's rule for a failed read is to keep the LAST KNOWN
 	 * profile (D-24-02). A valid-looking default here would downgrade a running
 	 * standard or performance box to economy for at least one polling round.
@@ -68,6 +73,7 @@ class ProfileController extends OCSController {
 			return new DataResponse([
 				'profile' => $this->settingsService->profile(),
 				'precision' => $this->settingsService->modelPrecision(),
+				'confirmed' => $this->settingsService->profileConfirmed(),
 			]);
 		} catch (\Throwable $e) {
 			// A static sentence; the exception travels in its own field, which

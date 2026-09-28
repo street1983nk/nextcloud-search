@@ -137,6 +137,21 @@ final class SettingsService {
 	public const PRECISION_DEFAULT = 'int8';
 
 	/**
+	 * The confirmation token of the admin (D-26-04), the way back after the
+	 * memory guard of the container lowered its profile.
+	 *
+	 * The token is not made up here. The container shows it on its status
+	 * route when the guard lowered a profile (D-26-01), 32 lowercase hex
+	 * characters. The admin confirms with
+	 * ``occ config:app:set findling profile_confirmed --value=<token>``, from
+	 * phase 27 on with a button of the admin page. The container lifts the
+	 * lowering as soon as the stored token equals its own; nothing raises the
+	 * profile again automatically. Read-only for the container: there is no
+	 * write path from the container into this key.
+	 */
+	public const KEY_PROFILE_CONFIRMED = 'profile_confirmed';
+
+	/**
 	 * The lower end of the size cap, one megabyte.
 	 *
 	 * Below it the setting would stop being a limit and start being an outage:
@@ -332,6 +347,38 @@ final class SettingsService {
 		);
 
 		if (!in_array($stored, self::PRECISIONS, true)) {
+			$this->reject();
+
+			return null;
+		}
+
+		return $stored;
+	}
+
+	/**
+	 * The confirmation token the admin stored, or null.
+	 *
+	 * An absent key is null without a warning: that is the ordinary state of
+	 * every instance whose guard never lowered anything. A stored value that is
+	 * not exactly 32 lowercase hex characters is counted by reject(), which
+	 * never logs the value, and answered with null as well, the same rule as
+	 * modelPrecision(): the only effect a token can have is lifting a lowering,
+	 * so a typo must fall on the side that keeps the lowering (T-26-05).
+	 */
+	public function profileConfirmed(): ?string {
+		$stored = $this->appConfig->getValueString(
+			Application::APP_ID,
+			self::KEY_PROFILE_CONFIRMED,
+			'',
+		);
+
+		if ($stored === '') {
+			return null;
+		}
+
+		// D: without it $ also matches before a trailing newline, and a token
+		// with a newline appended would pass.
+		if (preg_match('/^[0-9a-f]{32}$/D', $stored) !== 1) {
 			$this->reject();
 
 			return null;
