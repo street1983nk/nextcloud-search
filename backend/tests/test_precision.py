@@ -229,6 +229,36 @@ def test_int8_is_the_way_back() -> None:
     assert precision.decide(fp32_ready=True) == PrecisionDecision(target=Precision.INT8, procure=False)
 
 
+def test_the_way_back_records_a_withdrawal_until_it_is_handled() -> None:
+    """Code review WR-04: the removal of the file needs the way back as a fact.
+
+    The engine swap removes the weights only when fp32 was active, so the mark
+    step has to learn about a withdrawn choice whose file was downloaded but
+    never activated. Only an observed change from fp32 to int8 counts: the
+    first int8 is a default, and a fresh fp32 wish discards a recorded way
+    back, because the file is wanted again (D-25-06).
+    """
+    precision.note_chosen_precision("int8")
+    assert not precision.withdrawal_pending(), "the first int8 is a default, not a way back"
+    precision.note_chosen_precision("fp32")
+    assert not precision.withdrawal_pending()
+    precision.note_chosen_precision("int8")
+    assert precision.withdrawal_pending()
+    precision.note_withdrawal_handled()
+    assert not precision.withdrawal_pending()
+
+    precision.note_chosen_precision("fp32")
+    precision.note_chosen_precision("int8")
+    assert precision.withdrawal_pending()
+    precision.note_chosen_precision("fp32")
+    assert not precision.withdrawal_pending(), "a fresh wish keeps the file"
+
+    precision.note_chosen_precision("int8")
+    assert precision.withdrawal_pending()
+    precision.reset()
+    assert not precision.withdrawal_pending()
+
+
 @pytest.mark.usefixtures("standard")
 def test_none_or_unknown_change_nothing() -> None:
     """D-24-02 semantics: a missing or tampered value keeps what was read before."""

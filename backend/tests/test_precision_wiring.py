@@ -737,6 +737,86 @@ async def test_an_aborted_drift_chain_behind_the_swap_does_not_lose_the_switch(
     _assert_one_precision(store)
 
 
+# -- the way back for weights that were never active (code review WR-04) ------
+
+
+async def test_a_download_that_was_never_activated_is_removed_on_the_way_back_to_int8(
+    home: Path, store: Store, vectors: VectorStore, fetch: _Fetch, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Code review WR-04. The admin chooses fp32 under Standard, the download
+    # completes, but the profile is Economy before the next mark step: the
+    # activation is refused (D-25-10) and the verified file sits under models/.
+    # Withdrawing the choice with int8 runs no swap, because the holder was
+    # never fp32, so before the fix nothing ever removed the 470 MB from a
+    # volume whose free-space floor is 500 MB.
+    del home
+    track = await _running_on_int8(store, vectors)
+    precision.note_chosen_precision("fp32")
+    await _step(track)
+    await _procurement_ended(track)
+    assert fetch.calls == 1
+    target = weights_module.fp32_weights_path(settings().models_dir)
+    assert target.exists()
+
+    profile.note_chosen("economy")
+    await _step(track)
+    assert precision.snapshot().active is Precision.INT8
+    assert precision.snapshot().verdict == precision.VERDICT_NOT_IN_ECONOMY
+    assert target.exists(), "the refusal alone removes nothing (D-25-10)"
+
+    forgotten = _count_forget_all(monkeypatch, vectors)
+    precision.note_chosen_precision("int8")
+    await _step(track)
+
+    assert not target.exists(), "the way back removes a file that was never active (D-25-09)"
+    assert forgotten == [], "no drift: the stock was int8 the whole time"
+    _assert_one_precision(store)
+
+
+async def test_a_download_that_lands_after_the_way_back_is_removed_by_the_next_step(
+    home: Path, store: Store, vectors: VectorStore, fetch: _Fetch
+) -> None:
+    # Code review WR-04, the second path: the admin withdraws while the fetch
+    # still runs. The fetch is not cancelled and os.replace installs the file
+    # after the key already says int8. While the fetch runs nothing is pulled
+    # away from under it; the step after its end removes the file.
+    del home
+    track = await _running_on_int8(store, vectors)
+    precision.note_chosen_precision("fp32")
+    fetch.gate.clear()
+    await _step(track)
+    await _fetch_reached(fetch)
+    target = weights_module.fp32_weights_path(settings().models_dir)
+
+    precision.note_chosen_precision("int8")
+    await _step(track)
+
+    fetch.gate.set()
+    await _procurement_ended(track)
+    assert target.exists(), "the running fetch was not cancelled and installed the file"
+
+    await _step(track)
+
+    assert not target.exists()
+    _assert_one_precision(store)
+
+
+async def test_a_sideloaded_file_under_a_standing_int8_key_is_never_swept(
+    home: Path, store: Store, vectors: VectorStore
+) -> None:
+    # The counterpart of the sweep (D-25-06): int8 chosen from the start is a
+    # default and never a way back, so a file the admin placed for a coming
+    # fp32 choice survives any number of steps.
+    track = await _running_on_int8(store, vectors)
+    target = _place_the_file(home)
+
+    for _ in range(3):
+        await _step(track)
+
+    assert target.exists()
+    assert weights_module.fp32_verified(settings().models_dir) is True
+
+
 # -- the poller reads the key every round (D-25-02) ---------------------------
 
 

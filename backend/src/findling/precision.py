@@ -107,6 +107,8 @@ _ASKED: bool = False
 _PROCURING: bool = False
 # VERDICT_NONE, VERDICT_UNAVAILABLE or VERDICT_NOT_IN_ECONOMY.
 _FAILURE: str = VERDICT_NONE
+# The key went from fp32 back to int8 and the file may still lie on the volume.
+_WITHDRAWN: bool = False
 
 
 def _fp32_allowed() -> bool:
@@ -129,13 +131,23 @@ def note_chosen_precision(value: str | None) -> None:
     None and anything outside PRECISION_NAMES change nothing (D-24-02 semantics).
     A change from int8 to fp32 is a wish to fetch; the first read is never such
     a change (D-25-14). A new int8 clears the wish and a failure before it.
+
+    A change from fp32 to int8 is the way back (D-25-09), and it is recorded as
+    a fact of its own (code review WR-04): the engine swap removes the weights
+    only when fp32 was actually active, so a downloaded but never activated
+    file needs the mark step to learn about the withdrawal. A fresh fp32 wish
+    discards a recorded way back, because the file is wanted again (D-25-06).
     """
-    global _CHOSEN, _PENDING, _ASKED, _FAILURE
+    global _CHOSEN, _PENDING, _ASKED, _FAILURE, _WITHDRAWN
     if value is None or value not in PRECISION_NAMES:
         return
     chosen = Precision(value)
     if _CHOSEN is Precision.INT8 and chosen is Precision.FP32:
         _PENDING = True
+    if _CHOSEN is Precision.FP32 and chosen is Precision.INT8:
+        _WITHDRAWN = True
+    if chosen is Precision.FP32:
+        _WITHDRAWN = False
     if chosen is Precision.INT8:
         _PENDING = False
         _ASKED = False
@@ -167,6 +179,23 @@ def note_active(value: Precision) -> None:
     if value is Precision.FP32:
         _FAILURE = VERDICT_NONE
     _report()
+
+
+def withdrawal_pending() -> bool:
+    """True while an observed way back of the key has not removed the file yet.
+
+    Set by :func:`note_chosen_precision` on the change from fp32 to int8 and
+    taken back by the caller that removed the file (code review WR-04). Never
+    true for an int8 that is merely the default of this process, so a file the
+    admin placed for a coming fp32 choice is never read as withdrawn (D-25-06).
+    """
+    return _WITHDRAWN
+
+
+def note_withdrawal_handled() -> None:
+    """The file of the withdrawn choice is gone, or was never there."""
+    global _WITHDRAWN
+    _WITHDRAWN = False
 
 
 def begin_procurement() -> None:
@@ -253,7 +282,7 @@ def snapshot() -> PrecisionSnapshot:
 
 def reset() -> None:
     """Back to the resting state. For tests only; the container never forgets."""
-    global _CHOSEN, _ACTIVE, _SETTLED, _PENDING, _ASKED, _PROCURING, _FAILURE
+    global _CHOSEN, _ACTIVE, _SETTLED, _PENDING, _ASKED, _PROCURING, _FAILURE, _WITHDRAWN
     _CHOSEN = None
     _ACTIVE = None
     _SETTLED = False
@@ -261,4 +290,5 @@ def reset() -> None:
     _ASKED = False
     _PROCURING = False
     _FAILURE = VERDICT_NONE
+    _WITHDRAWN = False
     _report()

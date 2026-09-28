@@ -93,7 +93,16 @@ from findling.index.writer import disk_is_tight, stored_body
 from findling.nc import client as nc_client
 from findling.nc.client import AsyncNextcloudApp, fetch_release_asset
 from findling.nc.queue import KIND_EMBED, LANE_EMBED, CallResult, DocumentQueue, QueueJob
-from findling.precision import Precision, begin_procurement, decide, end_procurement, note_active, settle
+from findling.precision import (
+    Precision,
+    begin_procurement,
+    decide,
+    end_procurement,
+    note_active,
+    note_withdrawal_handled,
+    settle,
+    withdrawal_pending,
+)
 from findling.precision import snapshot as precision_snapshot
 from findling.profile import Profile
 from findling.store.repo import (
@@ -999,6 +1008,8 @@ class EmbeddingTrack:
         if switch is not None:
             return self._answer_the_vector_drift(store, vectors, wanted, switch=switch)
 
+        self._sweep_a_withdrawn_file(held)
+
         meta = store.read_meta()
         stored = meta.get(EMBEDDING_MARK, UNKNOWN_VERSION)
         if stored == UNKNOWN_VERSION:
@@ -1241,6 +1252,38 @@ class EmbeddingTrack:
                 # The swap stands either way; a file that stays is disk space,
                 # not a wrong answer, and the next way back removes it.
                 LOGGER.warning("the fp32 weights could not be removed, %s", type(error).__name__)
+
+    def _sweep_a_withdrawn_file(self, held: str) -> None:
+        """The way back for weights that were never active (code review WR-04).
+
+        :meth:`_swap_the_engine` removes the file only while it leaves fp32, so
+        a download that completed while the effective level was Economy (the
+        activation refused, D-25-10), or one that landed after the key already
+        went back to int8 (the running fetch is not cancelled and installs the
+        file), stayed on the volume for ever: 470 MB of dead weight on a box
+        whose free-space floor is 500 MB. The state machine records the way
+        back of the key, and this step acts on it exactly when acting is safe:
+        the key stands on int8, the holder runs int8 and no fetch is writing
+        the file right now. A sideloaded file under a standing fp32 wish is
+        never touched, because no way back was observed (D-25-06); what goes
+        here was withdrawn by the admin, the promise of docs/embeddings.md
+        section 11 ("int8 setzen genuegt").
+        """
+        state = precision_snapshot()
+        if not withdrawal_pending() or state.procuring or state.chosen is not Precision.INT8:
+            return
+        if held != Precision.INT8.value:
+            # The drift chain of this very step swaps and removes; the recorded
+            # way back is taken up again once the holder stands on int8.
+            return
+        note_withdrawal_handled()
+        try:
+            if remove_fp32_weights(settings().models_dir):
+                LOGGER.info("the fp32 weights of a withdrawn choice were removed")
+        except OSError as error:
+            # Like the removal at the swap: a file that stays is disk space,
+            # not a wrong answer, and the next way back removes it.
+            LOGGER.warning("the fp32 weights could not be removed, %s", type(error).__name__)
 
     # -- plumbing --------------------------------------------------------
 
