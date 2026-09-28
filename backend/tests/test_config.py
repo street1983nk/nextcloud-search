@@ -41,14 +41,21 @@ from findling.config import (
     EMBED_TOKEN_CAP_RANGE,
     EMBED_WEIGHTS_LOAD_BYTES,
     FP32_EXTRA_BYTES,
+    GUARD_MIN_GAP_SECONDS,
+    GUARD_RESERVE_BYTES,
+    GUARD_TICK_SECONDS,
+    GUARD_WINDOW_SECONDS,
     INDEX_WORKERS,
     MAX_TEXT_CHARS,
     MIB,
     NEXTCLOUD_CORE_LOAD,
     OCR_CLAIM_BATCH,
+    OCR_CLAIM_BATCH_INDEX_LANE,
     OCR_HARD_DEADLINE_MARGIN_SECONDS,
     OCR_JOB_SECONDS_MAX,
+    OCR_JOB_SECONDS_RANGE,
     OCR_LOCK_TIMEOUT_SECONDS,
+    OCR_ROWS_PER_SLOT,
     OCR_SLOT_COST_BYTES,
     PROFILE_PERFORMANCE_CORES_KEPT_FREE,
     PROFILE_PERFORMANCE_EMBED_SLOTS,
@@ -67,6 +74,7 @@ from findling.config import (
     SUPPORTED_LANGUAGES,
     WRITER_THREADS,
     explicit_int_from_environment,
+    ocr_rows_to_keep,
     settings,
 )
 
@@ -609,12 +617,55 @@ def test_a_full_embedding_claim_stays_far_under_its_lock_timeout() -> None:
 
 
 def test_a_full_ocr_claim_at_the_ceiling_stays_under_the_lock_timeout() -> None:
-    # The invariant behind WR-04, spelled out: a claim of OCR_CLAIM_BATCH jobs,
-    # each running to its hard deadline, must end before the lock expires and
-    # hands the rows out a second time.
-    worst_claim = OCR_CLAIM_BATCH * (OCR_JOB_SECONDS_MAX + OCR_HARD_DEADLINE_MARGIN_SECONDS)
+    # The invariant behind WR-04, spelled out per slot (D-26-13): the rows one
+    # slot keeps, each running to its hard deadline plus the download margin,
+    # must end before the lock expires and hands the rows out a second time.
+    # Derived over KIND_BATCH instead, 32 rows would give a ceiling of -64.
+    worst_slot = OCR_ROWS_PER_SLOT * (OCR_JOB_SECONDS_MAX + 2 * OCR_HARD_DEADLINE_MARGIN_SECONDS)
 
-    assert worst_claim < OCR_LOCK_TIMEOUT_SECONDS
+    assert worst_slot <= OCR_LOCK_TIMEOUT_SECONDS
+    assert OCR_JOB_SECONDS_MAX == 780
+    assert OCR_JOB_SECONDS_RANGE == (1, 780)
+
+
+def test_the_claim_batches_of_both_lanes_are_the_chosen_numbers() -> None:
+    # Lane all keeps the 1.3 wire (Sparsam, D-26-09); lane index claims 32 OCR
+    # rows so that sixteen slots have two each (D-26-05, D-26-14).
+    assert OCR_CLAIM_BATCH == 2
+    assert OCR_CLAIM_BATCH_INDEX_LANE == 32
+    assert OCR_CLAIM_BATCH_INDEX_LANE == PROFILE_PERFORMANCE_OCR_SLOTS_MAX * OCR_ROWS_PER_SLOT
+
+
+@pytest.mark.parametrize(
+    ("delivered", "ocr_slots", "file_cap_seconds", "kept"),
+    [
+        (32, 16, 720, 32),
+        (32, 1, 720, 2),
+        (32, 4, 720, 8),
+        (3, 4, 720, 3),
+        (32, 0, 720, 2),
+        (32, 4, 900, 8),
+        (32, 4, 1801, 4),
+        (32, 4, 0, 32),
+    ],
+)
+def test_the_rows_kept_follow_the_slots_and_the_file_cap(
+    delivered: int, ocr_slots: int, file_cap_seconds: int, kept: int
+) -> None:
+    # D-26-06 solved for the rows: every slot keeps as many rows as fit into one
+    # lease at the file cap, never fewer than one, never more than delivered.
+    assert ocr_rows_to_keep(delivered, ocr_slots, file_cap_seconds) == kept
+
+
+def test_the_guard_numbers_are_the_chosen_ones() -> None:
+    # D-26-15: an event only counts under real pressure (reserve of one OCR
+    # slot), two of them at least a minute apart inside ten minutes lower the
+    # level; the tick is the one of the embedding runner.
+    assert GUARD_RESERVE_BYTES == OCR_SLOT_COST_BYTES
+    assert GUARD_WINDOW_SECONDS == 600
+    assert GUARD_MIN_GAP_SECONDS == 60
+    assert GUARD_TICK_SECONDS == 15.0
+    assert GUARD_MIN_GAP_SECONDS < GUARD_WINDOW_SECONDS
 
 
 def test_an_ocr_cap_cannot_drift_at_runtime_either() -> None:
