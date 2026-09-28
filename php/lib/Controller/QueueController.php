@@ -100,21 +100,36 @@ class QueueController extends OCSController {
 	 *
 	 * An empty queue is an empty files container and not an error. The collector
 	 * treats it as "nothing to do" and backs off.
+	 *
+	 * lane is one of QueueService::LANES and defaults to all, which is the claim
+	 * of 1.3 (PAR-01). The answer carries the lane it applied as {"lane": ...},
+	 * and that echo is not decoration: the Nextcloud dispatcher binds declared
+	 * parameters only and drops unknown ones silently, so a companion of 1.3
+	 * answers a claim with lane=embed as if it had been asked for everything.
+	 * The container recognises such a companion by the missing echo, hands the
+	 * rows back and keeps its embedding worker parked instead of processing
+	 * index rows twice (K6).
+	 *
+	 * An unknown lane is a 400, before anything reaches the database.
 	 */
 	#[\OCP\AppFramework\Http\Attribute\ExAppRequired]
 	#[\OCP\AppFramework\Http\Attribute\NoCSRFRequired]
 	#[\OCP\AppFramework\Http\Attribute\ApiRoute(verb: 'GET', url: '/queues/documents')]
-	public function getDocuments(int $n = self::DEFAULT_BATCH_FILES, int $max_bytes = self::DEFAULT_BATCH_BYTES): DataResponse {
+	public function getDocuments(int $n = self::DEFAULT_BATCH_FILES, int $max_bytes = self::DEFAULT_BATCH_BYTES, string $lane = QueueService::LANE_ALL): DataResponse {
 		$foreign = $this->rejectForeignCaller();
 		if ($foreign !== null) {
 			return $foreign;
+		}
+
+		if (!in_array($lane, QueueService::LANES, true)) {
+			return $this->badLane();
 		}
 
 		$limit = max(1, min(self::MAX_BATCH_FILES, $n));
 		$budget = max(self::MIN_BATCH_BYTES, min(self::MAX_BATCH_BYTES, $max_bytes));
 
 		try {
-			$files = $this->queueService->claim($limit, $budget);
+			$files = $this->queueService->claim($limit, $budget, $lane);
 		} catch (\Throwable $e) {
 			// A static sentence plus the exception field, never the message of
 			// the exception itself (security audit L6). The rule of this project
@@ -129,7 +144,7 @@ class QueueController extends OCSController {
 			return new DataResponse(['error' => 'Queue is not available.'], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 
-		return new DataResponse(['files' => $files]);
+		return new DataResponse(['files' => $files, 'lane' => $lane]);
 	}
 
 	/**
@@ -543,6 +558,22 @@ class QueueController extends OCSController {
 
 		return new DataResponse(
 			['error' => 'Unknown job kind.'],
+			Http::STATUS_BAD_REQUEST,
+		);
+	}
+
+	/**
+	 * An unknown lane, refused before it reaches the database (T-25-08).
+	 *
+	 * The value is not logged, for the same reason as in badKind: it is
+	 * unvalidated input, and the log of this app carries counters and codes and
+	 * never something somebody else wrote (T-25-09).
+	 */
+	private function badLane(): DataResponse {
+		$this->logger->warning('Findling: rejected a claim with an unknown lane');
+
+		return new DataResponse(
+			['error' => 'Unknown lane.'],
 			Http::STATUS_BAD_REQUEST,
 		);
 	}
