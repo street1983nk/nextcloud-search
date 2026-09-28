@@ -35,7 +35,7 @@ from pathlib import Path
 
 from findling.index.open import DUTCH_MARK, LANGUAGES_MARK, TANTIVY_VERSION, expected_versions
 from findling.store.repo import open_store
-from findling.store.vectors import EMBEDDING_MODEL, embedding_mark
+from findling.store.vectors import EMBEDDING_MODEL, WEIGHTS_INT8, embedding_mark
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 DOCKERFILE = BACKEND_ROOT / "Dockerfile"
@@ -335,8 +335,8 @@ def test_the_vector_mark_of_an_int8_build_is_the_mark_of_v1_3() -> None:
     the poller answer a drift on every existing installation, which empties the
     vector stock and embeds it again, in the order of five hours per box.
     """
-    assert embedding_mark(EMBEDDING_MODEL, tokens=1024) == "multilingual-e5-small/int8/384/1024"
-    assert embedding_mark(EMBEDDING_MODEL, tokens=1024) == GOLD_VECTOR_MARK_V1_3
+    assert embedding_mark(EMBEDDING_MODEL, tokens=1024, weights=WEIGHTS_INT8) == "multilingual-e5-small/int8/384/1024"
+    assert embedding_mark(EMBEDDING_MODEL, tokens=1024, weights=WEIGHTS_INT8) == GOLD_VECTOR_MARK_V1_3
 
 
 def test_the_schema_mark_moved_by_exactly_one_step() -> None:

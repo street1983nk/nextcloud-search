@@ -342,8 +342,11 @@ def fp32_weights(tmp_path: Path) -> Iterator[Path]:
 
     The choice of weights is a module global like the holder, so every case
     that swaps leaves through a reset: a later case would otherwise be handed
-    the weights path of a temporary directory that no longer exists.
+    the weights path of a temporary directory that no longer exists. It enters
+    through one as well, so the holder a case before it left behind is not the
+    old model a swap here hands back.
     """
+    reset()
     home = tmp_path / "weights"
     home.mkdir(parents=True)
     path = home / "model_fp32.onnx"

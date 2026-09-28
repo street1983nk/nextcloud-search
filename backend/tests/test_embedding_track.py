@@ -24,7 +24,6 @@ replace is arithmetic, and what stays real is every decision this plan is about.
 
 from __future__ import annotations
 
-import functools
 import logging
 import sqlite3
 import time
@@ -36,8 +35,12 @@ from typing import IO, Any, cast
 import pytest
 from tantivy import Index
 
+from conftest import Corpus
+from findling.api import resources
 from findling.config import settings
 from findling.embed.chunker import ChunkSpan
+from findling.embed.engine import reset as engine_reset
+from findling.embed.engine import swap_engine
 from findling.embed.model import DIMENSIONS, EMBEDDING_UNAVAILABLE, LOAD_RETRY_SECONDS, EmbedOutcome
 from findling.extract.dispatch import Route
 from findling.extract.dispatch import extract as dispatch_extract
@@ -55,7 +58,15 @@ from findling.store.repo import (
     Store,
     open_store,
 )
-from findling.store.vectors import EMBEDDING_MODEL, WEIGHTS_FP32, Chunk, VectorStore, embedding_mark, open_vectors
+from findling.store.vectors import (
+    EMBEDDING_MODEL,
+    WEIGHTS_FP32,
+    WEIGHTS_INT8,
+    Chunk,
+    VectorStore,
+    embedding_mark,
+    open_vectors,
+)
 from findling.worker import poller as poller_module
 from findling.worker.poller import (
     EMBED_INCOMPLETE,
@@ -1007,7 +1018,7 @@ def _judged(store: Store, file_id: int, state: str = "indexed") -> None:
 
 def _wanted_mark() -> str:
     """The value this build computes, asked the way the poller asks for it."""
-    return embedding_mark(EMBEDDING_MODEL, tokens=settings().embed_token_cap)
+    return embedding_mark(EMBEDDING_MODEL, tokens=settings().embed_token_cap, weights=WEIGHTS_INT8)
 
 
 # A value of the same shape that this build did not compute. Another model, and
@@ -1070,6 +1081,52 @@ async def test_the_mark_is_written_once_every_indexed_document_carries_a_vector(
 
     assert store.read_meta()[EMBEDDING_MARK] == _wanted_mark()
     assert queue.requeues == []
+
+
+@pytest.fixture
+def swapped_to_fp32(tmp_path: Path) -> Iterator[None]:
+    """The holder points at fp32 weights; nothing is loaded and nothing is read.
+
+    Reset on both sides, because the choice of weights is a module global like
+    the holder, and a case after this one would otherwise mark an int8 stock
+    as fp32.
+    """
+    engine_reset()
+    swap_engine(tmp_path / "model_fp32.onnx", WEIGHTS_FP32)
+    yield
+    engine_reset()
+
+
+async def test_the_mark_follows_the_precision_of_the_held_model(
+    store: Store, writer: IndexBatchWriter, vectors: VectorStore, tmp_path: Path, swapped_to_fp32: None
+) -> None:
+    # IN-02 of the review of phase 24 (T-24-02): the poller writes the mark of
+    # the model this process holds and never a default, so an fp32 holder can
+    # never leave the int8 mark behind on its stock.
+    del swapped_to_fp32
+    _judged(store, 4711)
+    _fill(vectors, 4711)
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=_FakeQueue(), vectors=vectors)
+
+    await poller.run_once()
+
+    assert store.read_meta()[EMBEDDING_MARK].endswith(f"/{WEIGHTS_FP32}")
+
+
+def test_the_read_side_expects_the_mark_of_the_held_model(indexed_volume: Corpus, swapped_to_fp32: None) -> None:
+    # The other caller of the mark, and the same rule: the comparison of the
+    # read side expects the precision of the held model, also when the index
+    # marks behind it come out of the cache.
+    del indexed_volume, swapped_to_fp32
+    first = resources.expected_marks()
+    assert first is not None
+    assert first[EMBEDDING_MARK].endswith(f"/{WEIGHTS_FP32}")
+
+    engine_reset()
+    second = resources.expected_marks()
+
+    assert second is not None
+    assert second[EMBEDDING_MARK] == _wanted_mark(), "back on int8, the cached index marks carry no stale precision"
 
 
 async def test_a_container_without_documents_claims_nothing(
@@ -1274,10 +1331,10 @@ async def test_a_switch_from_fp32_to_int8_weights_re_embeds_the_stock(
 async def test_a_switch_from_int8_to_fp32_weights_re_embeds_the_stock(
     store: Store, writer: IndexBatchWriter, vectors: VectorStore, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # The other direction. poller.py stays as it is; only the mark it asks for
-    # is the one a build with fp32 weights would compute.
+    # The other direction. poller.py stays as it is; only the precision it asks
+    # the holder for is the one a process holding fp32 weights would answer.
     assert settings().embed_token_cap == 1024, "the literal above is the mark of the factory token cap"
-    monkeypatch.setattr(poller_module, "embedding_mark", functools.partial(embedding_mark, weights=WEIGHTS_FP32))
+    monkeypatch.setattr(poller_module, "engine_precision", lambda: WEIGHTS_FP32)
     store.write_meta(EMBEDDING_MARK, MARK_OF_V1_3)
     _judged(store, 4711)
     _judged(store, 4712)
