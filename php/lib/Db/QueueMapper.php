@@ -131,6 +131,13 @@ class QueueMapper extends QBMapper {
 	 * naming: max(LOCK_TIMEOUTS) does not move, so the conservative branch of
 	 * refreshExisting does not widen its dirty window for every other kind.
 	 *
+	 * Since the lanes of QueueService (PAR-01) the argument above is the one of
+	 * the lane all, which is still the claim of every container that does not
+	 * ask for a lane. A claim of the lane embed carries embed rows alone and
+	 * never waits behind an OCR batch, so it would get by with less; the same
+	 * value serves it conservatively, and one timeout per kind rather than per
+	 * lane keeps refreshExisting and the lock arithmetic unchanged.
+	 *
 	 * @var array<string, int>
 	 */
 	public const LOCK_TIMEOUTS = [

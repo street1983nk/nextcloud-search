@@ -65,6 +65,25 @@ class QueueService {
 	public const MAX_DELIVERIES = 3;
 
 	/**
+	 * The lanes a claim can be asked for (PAR-01).
+	 *
+	 * all is every kind in the order of QueueMapper::KINDS and is the claim of
+	 * 1.3, unchanged. index is every kind but embed, embed is embed alone. The
+	 * two partial lanes let the container run its embedding worker on a claim
+	 * of its own, so a long OCR pass no longer holds the vector track behind it
+	 * and the vector track no longer takes a slot of the indexing batch.
+	 *
+	 * A closed set, compared strictly by the controller before anything reaches
+	 * the database: a lane decides which kinds are asked for and nothing else.
+	 *
+	 * Has to stay identical to LANES in backend/src/findling/nc/queue.py.
+	 */
+	public const LANE_ALL = 'all';
+	public const LANE_INDEX = 'index';
+	public const LANE_EMBED = 'embed';
+	public const LANES = ['all', 'index', 'embed'];
+
+	/**
 	 * The kinds of row whose completion means "the text of this file is in the
 	 * index now", and therefore the only kinds that may take a verdict back.
 	 *
@@ -207,9 +226,15 @@ class QueueService {
 	 *
 	 * An empty answer for one kind ends that kind and nothing else.
 	 *
+	 * The lane narrows the loop and changes nothing else (PAR-01). index leaves
+	 * out embed, embed leaves out every other kind, all is the loop of 1.3. The
+	 * order of the kinds that remain, the per kind batch of KIND_BATCH and the
+	 * two ceilings of the caller are the same in every lane, so an index claim
+	 * is exactly the all claim of an instance without a vector backlog.
+	 *
 	 * @return array<int, array<string, mixed>> queue row id to source object
 	 */
-	public function claim(int $limit, int $maxBytes): array {
+	public function claim(int $limit, int $maxBytes, string $lane = self::LANE_ALL): array {
 		$sources = [];
 		$gone = 0;
 		$unreadable = 0;
@@ -241,6 +266,14 @@ class QueueService {
 		foreach (QueueMapper::KINDS as $kind) {
 			if ($rows <= 0) {
 				break;
+			}
+
+			if ($lane === self::LANE_INDEX && $kind === QueueMapper::KIND_EMBED) {
+				continue;
+			}
+
+			if ($lane === self::LANE_EMBED && $kind !== QueueMapper::KIND_EMBED) {
+				continue;
 			}
 
 			$batch = min(self::KIND_BATCH[$kind] ?? $limit, $rows);

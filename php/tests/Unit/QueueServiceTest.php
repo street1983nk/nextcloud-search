@@ -5,9 +5,18 @@ declare(strict_types=1);
 namespace OCA\Findling\Tests\Unit;
 
 use OCA\Findling\Db\QueueMapper;
+use OCA\Findling\Service\ExclusionService;
+use OCA\Findling\Service\FileStateService;
 use OCA\Findling\Service\QueueService;
+use OCA\Findling\Service\StorageService;
+use OCP\BackgroundJob\IJobList;
+use OCP\Files\Config\IUserMountCache;
+use OCP\Files\IRootFolder;
+use OCP\IAppConfig;
+use OCP\IDBConnection;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
 
 /**
  * The one piece of arithmetic of the acknowledgement that can be asked without a
@@ -173,5 +182,79 @@ final class QueueServiceTest extends TestCase {
 		);
 
 		self::assertSame([], $revocable);
+	}
+
+	// -- 5. the lanes of a claim (PAR-01) -------------------------------------
+
+	/**
+	 * The kinds a claim asks the mapper for, in the order it asks.
+	 *
+	 * The mapper answers every kind with an empty batch, so nothing is charged
+	 * against either ceiling and the loop visits every kind the lane allows.
+	 * That is exactly the question: which kinds the lane lets through, and in
+	 * which order.
+	 *
+	 * @return list<string>
+	 */
+	private function kindsAskedFor(?string $lane): array {
+		$asked = [];
+		$mapper = $this->createMock(QueueMapper::class);
+		$mapper->method('claimBatch')->willReturnCallback(
+			static function (int $limit, int $maxBytes, string $kind) use (&$asked): array {
+				$asked[] = $kind;
+				return [];
+			},
+		);
+
+		// ExclusionService is final and built for real over an empty app config,
+		// the same way QueueServiceReaderTest builds it.
+		$storageService = $this->createMock(StorageService::class);
+		$service = new QueueService(
+			$mapper,
+			$this->createMock(FileStateService::class),
+			new ExclusionService(
+				$this->createMock(IAppConfig::class),
+				$storageService,
+				$this->createMock(IJobList::class),
+				$this->createMock(LoggerInterface::class),
+			),
+			$storageService,
+			$this->createMock(IUserMountCache::class),
+			$this->createMock(IRootFolder::class),
+			$this->createMock(IDBConnection::class),
+			$this->createMock(LoggerInterface::class),
+		);
+
+		if ($lane === null) {
+			$service->claim(32, 67_108_864);
+		} else {
+			$service->claim(32, 67_108_864, $lane);
+		}
+
+		return $asked;
+	}
+
+	public function testTheEmbedLaneAsksForEmbedRowsOnly(): void {
+		self::assertSame([QueueMapper::KIND_EMBED], $this->kindsAskedFor(QueueService::LANE_EMBED));
+	}
+
+	public function testTheIndexLaneNeverAsksForEmbedRows(): void {
+		$expected = array_values(array_filter(
+			QueueMapper::KINDS,
+			static fn (string $kind): bool => $kind !== QueueMapper::KIND_EMBED,
+		));
+
+		self::assertSame($expected, $this->kindsAskedFor(QueueService::LANE_INDEX));
+	}
+
+	public function testTheAllLaneIsTheClaimOfOnePointThree(): void {
+		// Default all behaves like 1.3: every kind, in the order of KINDS, and
+		// the same with or without the third parameter (T-25-11).
+		self::assertSame(QueueMapper::KINDS, $this->kindsAskedFor(QueueService::LANE_ALL));
+		self::assertSame(QueueMapper::KINDS, $this->kindsAskedFor(null));
+	}
+
+	public function testTheLanesAreAClosedSetOfThree(): void {
+		self::assertSame(['all', 'index', 'embed'], QueueService::LANES);
 	}
 }
