@@ -74,7 +74,7 @@ findings:
   warning: 4
   info: 4
   total: 8
-status: issues_found
+status: fixed
 ---
 
 # Phase 25: Code Review Report
@@ -82,7 +82,7 @@ status: issues_found
 **Reviewed:** 2026-09-28
 **Depth:** standard
 **Files Reviewed:** 65
-**Status:** issues_found
+**Status:** fixed (all four warnings fixed on 2026-09-28: WR-01 in 00ecee3, WR-02 in 25ec895, WR-03 in 8ca5983, WR-04 in be2779c; the four Info items stay as noted)
 
 ## Summary
 
@@ -147,6 +147,8 @@ long-held verification lock.
 
 ### WR-01: `note_active` is lost when the drift chain aborts after the engine swap; a later Economy round then tears down an active fp32 and deletes the weights
 
+**FIXED in 00ecee3** (fix(25): WR-01 report the weights switch at the swap, not through the mark step return).
+
 **File:** `backend/src/findling/worker/embedding.py:906-910, 929-942, 1056-1074`
 **Issue:** `_answer_the_vector_drift` runs the chain as forget_all -> cursor ->
 mark -> `_swap_the_engine(switch, ...)` -> `_next_backlog_band(store, ...)`.
@@ -184,6 +186,8 @@ and drop the `switched` half of the tuple (or keep it and make
 
 ### WR-02: The embed runner leaves the lane mode on "parallel" on its failure paths, so the status lies and the poller keeps filtering to the index lane
 
+**FIXED in 25ec895** (fix(25): WR-02 hand the lane back to the loop when a runner round fails).
+
 **File:** `backend/src/findling/worker/embedding.py:1425-1440, 1410-1413`; reader at `backend/src/findling/worker/poller.py:764`
 **Issue:** `_round` publishes `lane.note_mode(MODE_PARALLEL, REASON_NONE)`
 before the claim. Two ways out of the round do not go through `_park`: a claim
@@ -212,6 +216,8 @@ and in `run()`'s except branch reset the mode the same way (or move the
 new reason word is added, it has to join `lane.REASONS` and the page contract.
 
 ### WR-03: `procure_fp32` can raise although its module promises "every failure is a value, never an exception"
+
+**FIXED in 8ca5983** (fix(25): WR-03 map the seal and the close of a download to an outcome, never an exception). The fsync maps ENOSPC to NO_ROOM and every other OSError to UNAVAILABLE; the close of the sink is suppressed on every way out; pinned by three tests in `test_weights.py`.
 
 **File:** `backend/src/findling/embed/weights.py:243-266, 288-291` (contract at lines 24-25 and 269)
 **Issue:** in `_download` only the `fetch(...)` call sits inside the
@@ -243,6 +249,8 @@ finally:
 throw at fsync pins the outcome.
 
 ### WR-04: A downloaded but never activated fp32 file has no removal path; choosing int8 only deletes the weights when fp32 was active
+
+**FIXED in be2779c** (fix(25): WR-04 remove a downloaded but never activated fp32 file on the way back to int8). The state machine records the way back of the key (`precision.withdrawal_pending`), and the mark step removes the file once the key stands on int8, the holder runs int8 and no fetch is writing it; a sideloaded file under a standing fp32 wish is never touched (D-25-06). Pinned in `test_precision.py` and by three cases in `test_precision_wiring.py`.
 
 **File:** `backend/src/findling/embed/weights.py:191-203`; only call site `backend/src/findling/worker/embedding.py:1217-1230`; refusal branch `backend/src/findling/precision.py:194-199`
 **Issue:** `remove_fp32_weights` is reachable through exactly one path:
