@@ -15,10 +15,10 @@
 
 ### Parallelitaet (PAR)
 
-- [ ] **PAR-01**: Die Einbettungsspur laeuft als eigener Nebenlaeufer (H1): eigener Anspruch mit Art-Filter (PHP-Route, KIND embed), beruehrt den Tantivy-Writer nicht, wirkt ab 2 Kernen
+- [x] **PAR-01**: Die Einbettungsspur laeuft als eigener Nebenlaeufer (H1): eigener Anspruch mit Art-Filter (PHP-Route, KIND embed), beruehrt den Tantivy-Writer nicht, wirkt ab 2 Kernen
 - [ ] **PAR-02**: N OCR-Slots (H2): Semaphore, N Sandbox-Kinder mit je eigener Pipe und eigenem Zaehler, Sperre um IndexBatchWriter.add(), KIND_BATCH[ocr] >= N; die Zusagen "mindestens einmal ausliefern, hoechstens einmal indexieren" halten unter Parallelitaet
 - [ ] **PAR-03**: Ein Speicherwaechter drosselt Slots bei knapper cgroup; wiederholtes memory.events max oder ein OOM-Kill senkt das Profil selbsttaetig um eine Stufe, sichtbar gemeldet
-- [ ] **PAR-04**: IDX-08 neu gefasst: in Sparsam woertlich (OCR und Einbettung nie gleichzeitig), in Standard/Leistung als RAM-Bedingung des Speicherwaechters
+- [x] **PAR-04**: IDX-08 neu gefasst: in Sparsam woertlich (OCR und Einbettung nie gleichzeitig), in Standard/Leistung als RAM-Bedingung des Speicherwaechters
 
 ### Hardware-Erkennung (HW)
 
@@ -31,7 +31,7 @@
 ### Modellwahl (MOD)
 
 - [x] **MOD-01**: Die Vektor-Marke traegt die Gewichtspraezision (embedding_version-Erweiterung in store/vectors.py): ein int8/fp32-Wechsel desselben Modells loest den automatischen Vektor-Reindex aus statt still alte und neue Vektoren zu mischen; wird VOR jedem Modellschalter gebaut
-- [ ] **MOD-02**: Admin waehlt e5-small int8 (Default) oder fp32 als Teil des Leistungsprofils; der fp32-Lieferweg (ins Abbild vs. Nachladen, Risiko K7) faellt am Owner-Tor; waehrend des Vektor-Reindex antwortet die Suche lexikalisch weiter und die Seite zeigt den Zustand
+- [x] **MOD-02**: Admin waehlt e5-small int8 (Default) oder fp32 als Teil des Leistungsprofils; der fp32-Lieferweg (ins Abbild vs. Nachladen, Risiko K7) faellt am Owner-Tor; waehrend des Vektor-Reindex antwortet die Suche lexikalisch weiter und die Seite zeigt den Zustand
 
 ### Admin-UI (UI)
 
@@ -68,9 +68,9 @@
 | PROF-03 | Phase 24 | Complete |
 | MOD-01 | Phase 24 | Complete |
 | HW-01 | Phase 24 | Complete |
-| PAR-01 | Phase 25 | Pending |
-| PAR-04 | Phase 25 | Pending |
-| MOD-02 | Phase 25 | Pending |
+| PAR-01 | Phase 25 | Complete |
+| PAR-04 | Phase 25 | Complete |
+| MOD-02 | Phase 25 | Complete |
 | PAR-02 | Phase 26 | Pending |
 | PAR-03 | Phase 26 | Pending |
 | PRUEF-01 | Phase 27 | Pending |
