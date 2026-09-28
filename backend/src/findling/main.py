@@ -61,6 +61,7 @@ from findling.store.repo import open_read_only, open_store
 from findling.worker.embedding import EmbedRunner
 from findling.worker.poller import POLLER_STOP_SECONDS, STAND_DOWN_SECONDS, Poller, _pause, default_poller
 from findling.worker.reconcile import RECONCILE_STOP_SECONDS, Reconcile, default_reconcile
+from findling.worker.watch import GuardWatch
 
 LOGGER = logging.getLogger("findling")
 
@@ -87,6 +88,15 @@ _EMBEDDING: EmbedRunner | None = None
 # by EMBED_CLAIM_BATCH rows, the budget of the poller covers it, and over it the
 # task is cancelled and the held rows go back per unlock all the same.
 EMBEDDING_STOP_SECONDS: Final = 30.0
+
+# The memory guard task (PAR-03), at module level like the tasks above so that a
+# test and a later handler can reach it. None outside the lifespan.
+_GUARD_WATCH: GuardWatch | None = None
+
+# How long the shutdown waits for the guard task. A tick is two file reads and
+# at most a few meta writes, so a few seconds cover it; over it the task is
+# cancelled, and the cap it holds is already on disk.
+GUARD_STOP_SECONDS: Final = 5.0
 
 # The fourth task and the stop event it runs under, at module level for the
 # reason the two above are: since review finding WR-02 of phase 21 the AppAPI
@@ -394,6 +404,23 @@ async def _guarded_embedding(runner: EmbedRunner, stop_event: asyncio.Event) -> 
     except Exception as error:
         kind_of_failure = type(error).__name__
         LOGGER.error("the embed runner ended in an unexpected %s; search and indexing continue", kind_of_failure)
+
+
+async def _guarded_watch(watch: GuardWatch, stop_event: asyncio.Event) -> None:
+    """Run the memory guard and let nothing out of it but a log line.
+
+    Built like :func:`_guarded_embedding`. ``GuardWatch.run`` survives a failing
+    tick; this is the layer for a failure that ends the loop. A guard that is
+    gone costs the second escalation step and never the search or the indexing;
+    the slot throttle of the poller keeps working without it.
+    """
+    try:
+        await watch.run(stop_event)
+    except asyncio.CancelledError:
+        raise
+    except Exception as error:
+        kind_of_failure = type(error).__name__
+        LOGGER.error("the memory guard ended in an unexpected %s; search and indexing continue", kind_of_failure)
 
 
 async def _release_when_idle(stop_event: asyncio.Event) -> None:
@@ -859,6 +886,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception as error:
         LOGGER.warning("hardware detection failed with %s, the profile stays economy", type(error).__name__)
 
+    # The memory guard (PAR-03, D-26-01, D-26-16). Its cap of the last run comes
+    # back here, after the hardware and before the poller exists, so the first
+    # pass already runs at the lowered level; a start that finds the pass mark
+    # set died inside a pass with more than one slot and lowers once more. On a
+    # volume of another instance the guard keeps to memory: that state.db is not
+    # ours to read or write. A failure costs the restore and never the start.
+    global _GUARD_WATCH
+    _GUARD_WATCH = GuardWatch(persist=not shared_volume.other)
+    try:
+        await _GUARD_WATCH.restore()
+    except Exception as error:
+        LOGGER.warning("the memory guard could not restore its state, %s", type(error).__name__)
+    stop_watch = asyncio.Event()
+    watching = asyncio.create_task(_guarded_watch(_GUARD_WATCH, stop_watch))
+
     # Exactly one indexing task, started silenced. It opens neither the index nor
     # the state database before it is armed, so a container that is deployed but
     # not yet enabled holds no tantivy lock and touches no volume.
@@ -988,6 +1030,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
+        # The very first act of the shutdown, ahead of every wait (Pitfall 9):
+        # docker sends SIGKILL after its stop budget, and the waits below may
+        # outlast it inside a pass with more than one slot. With the pass mark
+        # still set, that kill would read as an unclean end at the next start
+        # and lower the level after an ordinary update.
+        with contextlib.suppress(Exception):
+            await _GUARD_WATCH.note_shutdown_begins()
         stop_indexing.set()
         stop_embedding.set()
         stop_reconcile.set()
@@ -1042,6 +1091,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await _POLLER.unlock_held()
         await _POLLER.aclose()
         _POLLER = None
+
+        # The guard after the poller: it watches the passes to the last one.
+        stop_watch.set()
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(asyncio.shield(watching), timeout=GUARD_STOP_SECONDS)
+        if not watching.done():
+            watching.cancel()
+        await asyncio.gather(watching, return_exceptions=True)
+        await _GUARD_WATCH.aclose()
+        _GUARD_WATCH = None
 
         if repairing is not None:
             with contextlib.suppress(TimeoutError):
