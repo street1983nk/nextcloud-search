@@ -57,6 +57,7 @@ from findling.embed.engine import (
     ENGINE_STATES,
     ENGINE_UNLOADED,
     WARM_TEXT,
+    engine_precision,
     engine_state,
     note_cutter_failure,
     query_may_load,
@@ -65,6 +66,7 @@ from findling.embed.engine import (
     request_warm,
     reset,
     shared_model,
+    swap_engine,
     warm,
     warm_wanted,
 )
@@ -78,6 +80,7 @@ from findling.embed.model import (
     unload_count,
 )
 from findling.index.analyzer import build_count, cached_german_analyzer
+from findling.store.vectors import WEIGHTS_FP32, WEIGHTS_INT8
 from findling.worker import poller as poller_module
 
 if TYPE_CHECKING:
@@ -328,6 +331,116 @@ def test_the_second_track_and_the_read_side_wire_the_same_object(
 
 
 # ---------------------------------------------------------------------------
+# The swap of the holder (MOD-02, D-25-07): a second weights file, and nothing
+# is loaded by the swap itself
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def fp32_weights(tmp_path: Path) -> Iterator[Path]:
+    """A second weights file outside the model directory, as the fetch leaves it.
+
+    The choice of weights is a module global like the holder, so every case
+    that swaps leaves through a reset: a later case would otherwise be handed
+    the weights path of a temporary directory that no longer exists. It enters
+    through one as well, so the holder a case before it left behind is not the
+    old model a swap here hands back.
+    """
+    reset()
+    home = tmp_path / "weights"
+    home.mkdir(parents=True)
+    path = home / "model_fp32.onnx"
+    path.write_bytes(b"not a real graph")
+    yield path
+    reset()
+
+
+def test_the_precision_of_a_process_that_never_swapped_is_int8(model_home: Path) -> None:
+    assert model_home.is_dir()
+    assert engine_precision() == WEIGHTS_INT8
+
+    shared_model()
+
+    assert engine_precision() == WEIGHTS_INT8
+
+
+def test_a_swap_on_an_empty_holder_hands_nothing_back_and_loads_nothing(
+    model_home: Path, fp32_weights: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _pretend_a_model(model_home)
+    _stand_in(monkeypatch)
+    before = load_count()
+
+    assert swap_engine(fp32_weights, WEIGHTS_FP32) is None
+    assert load_count() == before
+
+    held = shared_model()
+
+    assert held.precision == WEIGHTS_FP32
+    assert held.weights_path == fp32_weights
+    assert held.loaded is False
+    assert engine_precision() == WEIGHTS_FP32
+
+
+def test_a_swap_hands_the_old_model_back_and_never_loads_the_new_one(
+    model_home: Path, fp32_weights: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # D-25-07, no blue and green: the swap itself holds one loaded model at
+    # most, the old one, and gives it to the caller to release once no search
+    # holds it. The new one arrives at its first text.
+    _pretend_a_model(model_home)
+    _stand_in(monkeypatch)
+    old = shared_model()
+    old.embed_passages(["ein Text"])
+    before = load_count()
+
+    handed_back = swap_engine(fp32_weights, WEIGHTS_FP32)
+
+    assert handed_back is old
+    assert load_count() == before, "the swap reads no artifact"
+    fresh = shared_model()
+    assert fresh is not old
+    assert fresh.loaded is False
+    assert fresh.precision == WEIGHTS_FP32
+
+
+def test_a_swap_back_to_none_returns_to_the_weights_of_the_image(
+    model_home: Path, fp32_weights: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _pretend_a_model(model_home)
+    _stand_in(monkeypatch)
+    swap_engine(fp32_weights, WEIGHTS_FP32)
+    fp32 = shared_model()
+
+    assert swap_engine(None, WEIGHTS_INT8) is fp32
+
+    back = shared_model()
+    assert back.weights_path == model_home / MODEL_FILE
+    assert back.precision == WEIGHTS_INT8
+    assert engine_precision() == WEIGHTS_INT8
+
+
+def test_a_reset_forgets_the_swap(model_home: Path, fp32_weights: Path) -> None:
+    assert model_home.is_dir()
+    swap_engine(fp32_weights, WEIGHTS_FP32)
+
+    reset()
+
+    assert engine_precision() == WEIGHTS_INT8
+    assert shared_model().weights_path == model_home / MODEL_FILE
+
+
+def test_a_swap_refuses_a_precision_nobody_can_mark(model_home: Path, fp32_weights: Path) -> None:
+    assert model_home.is_dir()
+    with pytest.raises(ValueError, match="precision"):
+        swap_engine(fp32_weights, "fp16")
+    with pytest.raises(ValueError, match="precision"):
+        swap_engine(None, WEIGHTS_FP32)
+
+    assert engine_precision() == WEIGHTS_INT8
+
+
+# ---------------------------------------------------------------------------
 # The two halves the audit of plan 06.1-17 found open: the load path and the
 # reach of the lock. Both belong to the shared engine, both were left over from
 # a distinction that plan 06.1-02 made for the run path only.
@@ -417,9 +530,9 @@ def test_a_directory_without_the_artifacts_is_never_looked_at_again(
     looks = {"count": 0}
     real_present = model_module._artifacts_present
 
-    def counted(directory: Path) -> bool:
+    def counted(directory: Path, weights_path: Path | None = None) -> bool:
         looks["count"] += 1
-        return real_present(directory)
+        return real_present(directory, weights_path)
 
     monkeypatch.setattr(model_module, "_artifacts_present", counted)
 
@@ -529,7 +642,7 @@ def _held_for(directory: Path) -> EmbeddingModel | None:
     very instance whose absence is the assertion.
     """
     held = engine_module._ENGINE
-    if held is not None and held[0] == directory:
+    if held is not None and held[0][0] == directory:
         return held[1]
     return None
 
@@ -723,9 +836,9 @@ def test_a_container_without_a_model_asks_the_file_system_once_and_not_once_per_
     asked = {"count": 0}
     real = engine_module.artifacts_present
 
-    def counting(directory: Path) -> bool:
+    def counting(directory: Path, weights_path: Path | None = None) -> bool:
         asked["count"] += 1
-        return real(directory)
+        return real(directory, weights_path)
 
     monkeypatch.setattr(engine_module, "artifacts_present", counting)
 
@@ -753,9 +866,9 @@ def test_a_container_with_a_model_keeps_asking_because_a_model_can_be_taken_away
     asked = {"count": 0}
     real = engine_module.artifacts_present
 
-    def counting(directory: Path) -> bool:
+    def counting(directory: Path, weights_path: Path | None = None) -> bool:
         asked["count"] += 1
-        return real(directory)
+        return real(directory, weights_path)
 
     monkeypatch.setattr(engine_module, "artifacts_present", counting)
 
@@ -779,9 +892,9 @@ def test_a_cutter_build_that_worked_forgets_the_remembered_absence(
     asked = {"count": 0}
     real = engine_module.artifacts_present
 
-    def counting(directory: Path) -> bool:
+    def counting(directory: Path, weights_path: Path | None = None) -> bool:
         asked["count"] += 1
-        return real(directory)
+        return real(directory, weights_path)
 
     monkeypatch.setattr(engine_module, "artifacts_present", counting)
 
@@ -992,7 +1105,8 @@ def test_release_if_idle_with_a_span_of_nought_never_reaches_the_release(
     engine = _an_idle_engine(model_home, monkeypatch, clock)
     calls: list[int] = []
 
-    def spy() -> bool:
+    def spy(*, idle_seconds: float | None = None) -> bool:
+        del idle_seconds
         calls.append(1)
         return True
 
@@ -1021,7 +1135,7 @@ def test_release_if_idle_keeps_the_engine_a_warm_run_swapped_in(
     real_last_use = stale.last_use
 
     def swapping_last_use() -> float | None:
-        engine_module._ENGINE = (model_home, fresh)
+        engine_module._ENGINE = ((model_home, model_home / MODEL_FILE), fresh)
         return real_last_use()
 
     monkeypatch.setattr(stale, "last_use", swapping_last_use)
@@ -1063,6 +1177,51 @@ def test_release_if_idle_keeps_an_engine_a_search_used_between_the_check_and_the
     assert release_if_idle(900) is False
     assert engine.loaded is True, "weights a search has just used stay where they are"
     assert unload_count() == before
+
+
+def test_a_use_between_the_second_reading_and_release_keeps_the_engine(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T10 of phase 25, the window WR-02 of phase 23 left open. The second
+    # reading of the clock under _LOCK says idle, and a search embeds on the
+    # very same instance right after it and before release() runs. Only the
+    # idle check inside release(), under the model's own lock, can see that
+    # use, and the weights have to stay.
+    clock = {"now": 1000.0}
+    engine = _an_idle_engine(model_home, monkeypatch, clock)
+    real_last_use = engine.last_use
+    readings: list[int] = []
+
+    def late_racing_last_use() -> float | None:
+        stamp = real_last_use()
+        readings.append(1)
+        if len(readings) == 2:
+            # The second reading answers the stale stamp, then a search lands.
+            engine.embed_query("bauantrag")
+        return stamp
+
+    monkeypatch.setattr(engine, "last_use", late_racing_last_use)
+    before = released_count()
+
+    assert release_if_idle(900) is False
+    assert len(readings) == 2, "both readings passed, so the refusal came from release() itself"
+    assert engine.loaded is True, "weights a search has just used stay where they are"
+    assert released_count() == before
+
+
+def test_release_if_idle_hands_its_span_to_the_model(model_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    clock = {"now": 1000.0}
+    engine = _an_idle_engine(model_home, monkeypatch, clock)
+    spans: list[float | None] = []
+
+    def spy(*, idle_seconds: float | None = None) -> bool:
+        spans.append(idle_seconds)
+        return False
+
+    monkeypatch.setattr(engine, "release", spy)
+
+    assert release_if_idle(900) is False
+    assert spans == [900]
 
 
 def test_release_if_idle_treats_a_holder_that_never_embedded_as_not_idle(

@@ -50,13 +50,16 @@ from findling.embed import model as model_module
 from findling.embed.model import (
     DIMENSIONS,
     EMBEDDING_UNAVAILABLE,
+    MODEL_FILE,
     PASSAGE_PREFIX,
     QUERY_PREFIX,
+    TOKENIZER_FILE,
     EmbeddingModel,
     load_count,
     to_int8,
     unload_count,
 )
+from findling.store.vectors import WEIGHTS_FP32, WEIGHTS_INT8
 
 SEMANTIK = Path(__file__).resolve().parents[2] / "testdata" / "semantik" / "de.jsonl"
 
@@ -174,6 +177,62 @@ def stand_in(monkeypatch: pytest.MonkeyPatch) -> StandIn:
 def _model(directory: Path, **kwargs: int) -> EmbeddingModel:
     settings = {"batch_size": 2, "sequence_len": 256, **kwargs}
     return EmbeddingModel(directory, batch_size=settings["batch_size"], sequence_len=settings["sequence_len"])
+
+
+# ---------------------------------------------------------------------------
+# The weights: a path and a precision beside the tokenizer directory (MOD-02)
+# ---------------------------------------------------------------------------
+
+
+def test_without_a_weights_path_the_model_reads_the_int8_of_the_image(model_dir: Path) -> None:
+    engine = _model(model_dir)
+
+    assert engine.weights_path == model_dir / MODEL_FILE
+    assert engine.precision == WEIGHTS_INT8
+
+
+def test_a_second_weights_file_is_read_from_its_own_path(
+    model_dir: Path, tmp_path_factory: pytest.TempPathFactory, stand_in: StandIn, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    weights = tmp_path_factory.mktemp("fp32") / "model_fp32.onnx"
+    weights.write_bytes(b"not a real graph either")
+    opened: list[Path] = []
+
+    def open_session(path: Path, *, threads: int) -> FakeSession:
+        assert threads >= 1
+        opened.append(path)
+        return stand_in.session
+
+    monkeypatch.setattr(model_module, "_open_session", open_session)
+    engine = EmbeddingModel(model_dir, weights_path=weights, precision=WEIGHTS_FP32, batch_size=2, sequence_len=256)
+
+    assert engine.precision == WEIGHTS_FP32
+    assert engine.weights_path == weights
+    assert engine.embed_passages(["ein Abschnitt"]).available
+    assert opened == [weights], "the session opens the chosen weights and never the int8 beside the tokenizer"
+
+
+def test_a_missing_second_weights_file_makes_the_model_absent(
+    model_dir: Path, tmp_path_factory: pytest.TempPathFactory, stand_in: StandIn
+) -> None:
+    # The tokenizer and the int8 of the image are there; the chosen weights are
+    # not. The two are asked apart, so the int8 beside the tokenizer cannot
+    # stand in for weights that were never fetched.
+    weights = tmp_path_factory.mktemp("fp32") / "model_fp32.onnx"
+    engine = EmbeddingModel(model_dir, weights_path=weights, precision=WEIGHTS_FP32, batch_size=2, sequence_len=256)
+
+    assert engine.embed_passages(["ein Abschnitt"]).available is False
+    assert engine.artifacts_absent is True
+
+
+def test_the_tokenizer_is_asked_in_its_own_directory(tmp_path_factory: pytest.TempPathFactory) -> None:
+    tokenizer_home = tmp_path_factory.mktemp("tokenizer")
+    weights = tmp_path_factory.mktemp("fp32") / "model_fp32.onnx"
+    weights.write_bytes(b"graph")
+
+    assert model_module.artifacts_present(tokenizer_home, weights) is False
+    (tokenizer_home / TOKENIZER_FILE).write_text("{}", encoding="utf-8")
+    assert model_module.artifacts_present(tokenizer_home, weights) is True
 
 
 # ---------------------------------------------------------------------------
@@ -296,9 +355,9 @@ def test_a_missing_model_is_looked_for_once_and_not_once_per_call(
     looks: list[Path] = []
     real = model_module._artifacts_present
 
-    def counting(directory: Path) -> bool:
+    def counting(directory: Path, weights_path: Path | None = None) -> bool:
         looks.append(directory)
-        return real(directory)
+        return real(directory, weights_path)
 
     monkeypatch.setattr(model_module, "_artifacts_present", counting)
     engine = _model(tmp_path)
@@ -715,6 +774,56 @@ def test_a_release_on_a_loaded_holder_lets_go_and_counts_it(
     assert engine.loaded is False
     assert unload_count() - before == 1
     assert quiet_pages == ["pages"]
+
+
+def test_release_refuses_when_used_since_the_last_reading(
+    model_dir: Path, stand_in: StandIn, clock: _TickingClock, quiet_pages: list[str]
+) -> None:
+    """The idle check under the model's own lock (phase 23 WR-02, closed in phase 25).
+
+    The caller read the clock once and decided the engine was idle. A batch
+    that ran after that reading has moved ``_last_use``, and the check inside
+    ``release()`` is the one that sees it: weights used a moment ago stay.
+    """
+    engine = _model(model_dir)
+    engine.embed_passages(["ein Abschnitt"])
+    before = unload_count()
+
+    assert engine.release(idle_seconds=900.0) is False
+    assert engine.loaded is True
+    assert unload_count() == before
+    assert quiet_pages == []
+
+
+def test_release_lets_go_once_the_idle_span_has_passed(
+    model_dir: Path, stand_in: StandIn, clock: _TickingClock, quiet_pages: list[str]
+) -> None:
+    """The ticking clock moves one second per reading, so half a second is long past."""
+    engine = _model(model_dir)
+    engine.embed_passages(["ein Abschnitt"])
+    before = unload_count()
+
+    assert engine.release(idle_seconds=0.5) is True
+    assert engine.loaded is False
+    assert unload_count() - before == 1
+
+
+def test_release_without_an_idle_span_ignores_the_clock(
+    model_dir: Path, stand_in: StandIn, clock: _TickingClock, quiet_pages: list[str]
+) -> None:
+    """No span is the old contract: only the engine and the batch in flight count."""
+    engine = _model(model_dir)
+    engine.embed_passages(["ein Abschnitt"])
+
+    assert engine.release() is True
+    assert engine.loaded is False
+
+
+def test_the_idle_span_is_keyword_only_and_optional() -> None:
+    parameter = inspect.signature(EmbeddingModel.release).parameters["idle_seconds"]
+
+    assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
+    assert parameter.default is None
 
 
 def test_a_release_on_a_holder_that_never_loaded_says_so(

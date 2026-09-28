@@ -60,14 +60,29 @@ import time
 from typing import TYPE_CHECKING, Final
 
 from findling.config import settings
-from findling.embed.model import LOAD_RETRY_SECONDS, EmbeddingModel, artifacts_present, unload_count
+from findling.embed.model import (
+    LOAD_RETRY_SECONDS,
+    MODEL_FILE,
+    EmbeddingModel,
+    artifacts_present,
+    unload_count,
+)
+from findling.store.vectors import WEIGHT_PRECISIONS, WEIGHTS_INT8
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-# The directory the wrapper was built for, and the wrapper. One entry, because
-# one process reads one model.
-_ENGINE: tuple[Path, EmbeddingModel] | None = None
+# The key the wrapper was built for, and the wrapper. One entry, because one
+# process reads one model. The key is the tokenizer directory and the weights
+# path since phase 25 (MOD-02): the same tokenizer can sit in front of the int8
+# of the image or in front of the fetched fp32, and those are two engines.
+_ENGINE: tuple[tuple[Path, Path], EmbeddingModel] | None = None
+
+# The active choice of weights: a path and its precision, or None for the int8
+# beside the tokenizer in the image. Written by :func:`swap_engine` alone and
+# cleared by :func:`reset`. Nothing on disk is looked at while it is None, so a
+# container that never asks for fp32 pays nothing for the possibility.
+_WEIGHTS: tuple[Path, str] | None = None
 
 # Re-entrant for the reason the read side lock is: the cost of proving that no
 # path below ever takes it twice is higher than the cost of the flag inside it.
@@ -89,8 +104,9 @@ _CUTTER_FAILED_AT: float | None = None
 # state in which nobody else answers that question. Only the "no" is
 # remembered. A "yes" stays a question, because a model that is taken out of a
 # running container has to become visible, and because the two stats it costs
-# are paid on the state that resolves itself.
-_ABSENT: Path | None = None
+# are paid on the state that resolves itself. Keyed like the holder, on the
+# tokenizer directory and the weights path.
+_ABSENT: tuple[Path, Path] | None = None
 
 # Whether a search has been refused a load since the last warm run, and
 # whether a warm run is in flight right now. Two plain module flags beside
@@ -157,15 +173,98 @@ def shared_model() -> EmbeddingModel:
 
     resolved = settings()
     with _LOCK:
-        if _ENGINE is not None and _ENGINE[0] == resolved.embed_model_dir:
+        key, precision = _chosen(resolved.embed_model_dir)
+        if _ENGINE is not None and _ENGINE[0] == key:
             return _ENGINE[1]
-        model = EmbeddingModel(
-            resolved.embed_model_dir,
-            batch_size=resolved.embed_batch_size,
-            sequence_len=resolved.embed_sequence_len,
-        )
-        _ENGINE = (resolved.embed_model_dir, model)
+        model = _build(key, precision)
+        _ENGINE = (key, model)
         return model
+
+
+def _chosen(tokenizer_dir: Path) -> tuple[tuple[Path, Path], str]:
+    """The holder key and the precision the active choice of weights names.
+
+    Called under :data:`_LOCK`. Without a choice the weights are the int8
+    beside the tokenizer, which is the key every release before phase 25 used
+    in all but its spelling.
+    """
+    if _WEIGHTS is None:
+        return (tokenizer_dir, tokenizer_dir / MODEL_FILE), WEIGHTS_INT8
+    weights_path, precision = _WEIGHTS
+    return (tokenizer_dir, weights_path), precision
+
+
+def _build(key: tuple[Path, Path], precision: str) -> EmbeddingModel:
+    """A new wrapper for that key. Constructing it reads nothing."""
+    resolved = settings()
+    tokenizer_dir, weights_path = key
+    return EmbeddingModel(
+        tokenizer_dir,
+        batch_size=resolved.embed_batch_size,
+        sequence_len=resolved.embed_sequence_len,
+        weights_path=weights_path,
+        precision=precision,
+    )
+
+
+def swap_engine(weights_path: Path | None, precision: str) -> EmbeddingModel | None:
+    """Point the holder at other weights, and hand the old model back.
+
+    Nothing is loaded by this call. The holder is replaced by a new wrapper
+    that has read nothing yet, and the old one is returned so that the caller
+    releases it once no search holds it any more (D-25-07: no blue and green,
+    so this call never leaves two loaded models behind it). None is answered
+    when the holder was empty, and when the holder already reads these very
+    weights: swapping a warm engine for a cold copy of itself would only pay
+    the load again.
+
+    ``weights_path`` None is the int8 beside the tokenizer in the image, and it
+    can only be named with that precision. A precision outside
+    :data:`~findling.store.vectors.WEIGHT_PRECISIONS` is refused before
+    anything changes, because an engine whose mark nobody can write is a drift
+    for ever. The message does not repeat the value.
+
+    Raises:
+        ValueError: the precision is unknown, or None was paired with anything
+            other than int8.
+
+    """
+    global _ENGINE, _WEIGHTS
+
+    if precision not in WEIGHT_PRECISIONS:
+        msg = "unknown weight precision"
+        raise ValueError(msg)
+    if weights_path is None and precision != WEIGHTS_INT8:
+        msg = "the weights of the image carry the int8 precision"
+        raise ValueError(msg)
+
+    resolved = settings()
+    with _LOCK:
+        _WEIGHTS = None if weights_path is None else (weights_path, precision)
+        key, chosen = _chosen(resolved.embed_model_dir)
+        old = _ENGINE[1] if _ENGINE is not None else None
+        if _ENGINE is not None and _ENGINE[0] == key:
+            return None
+        _ENGINE = (key, _build(key, chosen))
+        return old
+
+
+def engine_precision() -> str:
+    """The precision of the weights the holder of this process reads.
+
+    What the embedding mark has to name (IN-02 of the review of phase 24,
+    T-24-02): the precision of the model this process actually holds, never a
+    default and never the one that was asked for. Read off the holder when
+    there is one and off the active choice when there is none, which is the
+    choice the next :func:`shared_model` builds. int8 when nothing was ever
+    swapped and after :func:`reset`. Nothing is built, loaded or read here.
+    """
+    with _LOCK:
+        if _ENGINE is not None:
+            return _ENGINE[1].precision
+        if _WEIGHTS is not None:
+            return _WEIGHTS[1]
+        return WEIGHTS_INT8
 
 
 def note_cutter_failure(stamp: float | None) -> None:
@@ -235,10 +334,13 @@ def reset() -> None:
     counter behind :func:`released_count` is not zeroed either, for the same
     reason and by the same argument: the two are read as one difference.
     """
-    global _ENGINE
+    global _ENGINE, _WEIGHTS
 
     with _LOCK:
         _ENGINE = None
+        # The choice of weights goes with the holder: a process that starts
+        # over reads the int8 of the image until somebody swaps again.
+        _WEIGHTS = None
         # The notice of the second track goes with it, and the remembered
         # refusal about the artifacts with that: all three say something about
         # this process, and this is the call that says the process starts over.
@@ -256,15 +358,20 @@ def _artifacts_absent(model_dir: Path) -> bool:
     stays true until somebody deploys another image; asking again is a pair of
     stats per poll of an admin page, for ever, for an answer that cannot change.
     A directory with them may lose them, and that has to become visible.
+
+    Asked for the weights of the active choice, which in the resting state are
+    the int8 beside the tokenizer: no fp32 path is looked at unless one was
+    chosen.
     """
     global _ABSENT
 
     with _LOCK:
-        if model_dir == _ABSENT:
+        key, _precision = _chosen(model_dir)
+        if key == _ABSENT:
             return True
-        if artifacts_present(model_dir):
+        if artifacts_present(*key):
             return False
-        _ABSENT = model_dir
+        _ABSENT = key
         return True
 
 
@@ -273,10 +380,12 @@ def _held(model_dir: Path) -> EmbeddingModel | None:
 
     The holder is read under the same lock :func:`shared_model` writes it
     under, and the one difference to that function is the whole point of this
-    one: an empty holder is answered with None and not filled.
+    one: an empty holder is answered with None and not filled. Matched on the
+    tokenizer directory of the key alone, because whichever weights the holder
+    reads, it is the one engine of this process for that directory.
     """
     with _LOCK:
-        if _ENGINE is not None and _ENGINE[0] == model_dir:
+        if _ENGINE is not None and _ENGINE[0][0] == model_dir:
             return _ENGINE[1]
         return None
 
@@ -442,9 +551,9 @@ def release_if_idle(ttl_seconds: int) -> bool:
     Without the second reading the weights would be let go right after a use
     and the next search of the same user would answer lexically and pay a
     background reload. The reading is lock free and cheap, and it shrinks the
-    window from the length of the idle check to microseconds; the full close,
-    an idle guard under the model's own lock inside ``release()``, is a v1.4
-    backlog note in the deferred items of phase 23.
+    window from the length of the idle check to microseconds; the rest of the
+    window was closed in phase 25 by the idle check inside release(): the span
+    is handed over, and the model reads its own clock again under its own lock.
 
     **The release itself is outside the lock.**
     :meth:`~findling.embed.model.EmbeddingModel.release` takes its own lock,
@@ -498,7 +607,7 @@ def release_if_idle(ttl_seconds: int) -> bool:
         # identity check, so a search refused after the release sets it anew.
         _WARM_WANTED = False
 
-    return held.release()
+    return held.release(idle_seconds=ttl_seconds)
 
 
 def released_count() -> int:

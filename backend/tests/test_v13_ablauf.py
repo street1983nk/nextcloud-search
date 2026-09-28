@@ -826,7 +826,7 @@ def test_the_run_plan_e1_holds_the_constants_of_the_code_and_of_the_run_script()
     from findling.config import EMBED_TOKEN_CAP, INDEX_VERSION, SCHEMA_VERSION
     from findling.index.analyzer import ANALYZER_VERSION
     from findling.index.open import TANTIVY_VERSION
-    from findling.store.vectors import EMBEDDING_MODEL, embedding_mark
+    from findling.store.vectors import EMBEDDING_MODEL, WEIGHTS_INT8, embedding_mark
 
     section = plan_sections()["## 3. Die Erwartung, vorher aufgeschrieben"]
     e1 = section[section.index("- **E1,") : section.index("- **E2,")]
@@ -836,7 +836,7 @@ def test_the_run_plan_e1_holds_the_constants_of_the_code_and_of_the_run_script()
         f"store_schema_version={SCHEMA_VERSION}",
         f"schema_version={SCHEMA_VERSION}",
         f"tantivy_version={TANTIVY_VERSION}",
-        f"embedding_version={embedding_mark(EMBEDDING_MODEL, tokens=EMBED_TOKEN_CAP)}",
+        f"embedding_version={embedding_mark(EMBEDDING_MODEL, tokens=EMBED_TOKEN_CAP, weights=WEIGHTS_INT8)}",
         "languages=de,en",
     }
     text = RUN_SCRIPT.read_text(encoding="utf-8")

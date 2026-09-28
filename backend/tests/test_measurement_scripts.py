@@ -1282,8 +1282,15 @@ PHP_TREE_HASH_TODAY = "e2b4bcabe107de605f2a53bd9cf11da4090174f7c40aa3b1b182c6631
 # threshold_memory_bytes now takes min(memory.max, MemTotal), so a limit above
 # the physical memory no longer lifts a box over a profile threshold. No file
 # came and none went, so PACKAGE_FILES_TODAY stays at 59.
+# Moved on 2026-09-28 by plan 25-02 (engine side, MOD-02/PAR-01): embed/model.py
+# got the idle guard in release() and weights_path and precision beside the
+# tokenizer directory, embed/engine.py the holder keyed on (tokenizer_dir,
+# weights_path) with swap_engine and engine_precision, store/vectors.py lost the
+# default of weights in embedding_mark (IN-02), and worker/poller.py and
+# api/resources.py pass weights=engine_precision(). Five of the 59 files changed
+# their bytes. No file came and none went, so PACKAGE_FILES_TODAY stays at 59.
 PACKAGE_FILES_TODAY = 59
-PACKAGE_TREE_HASH_TODAY = "bd265e341bbf87374101acc8415526e850e29e9feaf69f03da42d01f40d593f4"
+PACKAGE_TREE_HASH_TODAY = "64f4e1e60dc8a9c722016c25f0c068ce517d5faf2178c133581a131062b841b9"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

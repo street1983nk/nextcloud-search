@@ -28,6 +28,7 @@ Four properties carry the rest:
 from __future__ import annotations
 
 import hashlib
+import inspect
 import sqlite3
 from collections.abc import Iterator
 from dataclasses import fields
@@ -386,26 +387,35 @@ def test_chunks_of_without_ids_asks_nothing(vectors: VectorStore) -> None:
 
 
 def test_the_embedding_mark_carries_model_quantisation_dimensions_and_cap() -> None:
-    mark = embedding_mark("multilingual-e5-small", tokens=1024)
+    mark = embedding_mark("multilingual-e5-small", tokens=1024, weights=WEIGHTS_INT8)
 
     assert mark == "multilingual-e5-small/int8/384/1024"
-    assert embedding_mark("multilingual-e5-small", tokens=512) != mark
+    assert embedding_mark("multilingual-e5-small", tokens=512, weights=WEIGHTS_INT8) != mark
 
 
-def test_int8_weights_are_the_default_and_leave_the_mark_as_it_was() -> None:
+def test_int8_weights_leave_the_mark_as_it_was() -> None:
     # int8 is spelled by absence, so an installation of 1.3.x reads no drift
-    # after an upgrade (MOD-01): the explicit call and the default are one value.
-    implicit = embedding_mark("multilingual-e5-small", tokens=1024)
+    # after an upgrade (MOD-01).
     explicit = embedding_mark("multilingual-e5-small", tokens=1024, weights=WEIGHTS_INT8)
 
-    assert explicit == implicit == "multilingual-e5-small/int8/384/1024"
+    assert explicit == "multilingual-e5-small/int8/384/1024"
+
+
+def test_the_weights_of_the_mark_have_no_default_and_are_keyword_only() -> None:
+    # IN-02 of the review of phase 24 (T-24-02): a caller that forgot the
+    # precision would write the int8 mark over an fp32 stock. Without a default
+    # that is a TypeError at the call and never a silent mixed stock.
+    parameter = inspect.signature(embedding_mark).parameters["weights"]
+
+    assert parameter.default is inspect.Parameter.empty
+    assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
 
 
 def test_fp32_weights_append_a_fifth_part_to_the_mark() -> None:
     mark = embedding_mark("multilingual-e5-small", tokens=1024, weights=WEIGHTS_FP32)
 
     assert mark == "multilingual-e5-small/int8/384/1024/fp32"
-    assert mark != embedding_mark("multilingual-e5-small", tokens=1024)
+    assert mark != embedding_mark("multilingual-e5-small", tokens=1024, weights=WEIGHTS_INT8)
 
 
 def test_an_unknown_weight_precision_is_refused_without_naming_it() -> None:
