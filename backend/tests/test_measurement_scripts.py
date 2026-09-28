@@ -1426,8 +1426,14 @@ PHP_TREE_HASH_TODAY = "460e2d6b7a11903bb783b722693f113f0ace524d67bc8cae5a0335395
 # PACKAGE_FILES_TODAY stays at 66. The PHP pair does not move: this plan
 # touches no PHP file. Plan 26-10 changes main.py and adds worker/watch.py, so
 # the figure is measured again after the merge of wave 4.
-PACKAGE_FILES_TODAY = 66
-PACKAGE_TREE_HASH_TODAY = "0bbc4cb328cbae76f0169885252fbcf1229a9e9b2cbae1302e16f33fee4c6952"
+# Measured again after the wave-4 merge of plans 26-09 and 26-10: plan 26-10
+# brought worker/watch.py (GuardWatch: tick, escalation, persistence of the cap
+# in state.db, the unclean end read from the multi slot marker) and changed the
+# bytes of main.py (the watch as a lifespan task before the poller). One file
+# came and none went, so PACKAGE_FILES_TODAY moves to 67. The PHP pair does not
+# move: no plan of this wave touches a PHP file.
+PACKAGE_FILES_TODAY = 67
+PACKAGE_TREE_HASH_TODAY = "bb0c23829f835c9ed67a281b97eabaa472079b15fa353ae1b005382d6806eed0"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
