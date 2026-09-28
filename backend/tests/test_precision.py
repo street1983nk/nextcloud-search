@@ -68,16 +68,19 @@ def economy() -> None:
 
 
 def test_the_verdicts_are_a_closed_set() -> None:
-    assert frozenset(
-        {
-            VERDICT_NONE,
-            VERDICT_DOWNLOADING,
-            VERDICT_UNAVAILABLE,
-            VERDICT_NOT_IN_ECONOMY,
-            VERDICT_TIGHT_BOX,
-            VERDICT_ACTIVE_IN_ECONOMY,
-        }
-    ) == VERDICTS
+    assert (
+        frozenset(
+            {
+                VERDICT_NONE,
+                VERDICT_DOWNLOADING,
+                VERDICT_UNAVAILABLE,
+                VERDICT_NOT_IN_ECONOMY,
+                VERDICT_TIGHT_BOX,
+                VERDICT_ACTIVE_IN_ECONOMY,
+            }
+        )
+        == VERDICTS
+    )
 
 
 def test_the_resting_state_decides_nothing() -> None:
