@@ -81,6 +81,7 @@ from findling.embed.model import (
 )
 from findling.index.analyzer import build_count, cached_german_analyzer
 from findling.store.vectors import WEIGHTS_FP32, WEIGHTS_INT8
+from findling.worker import embedding as embedding_module
 from findling.worker import poller as poller_module
 
 if TYPE_CHECKING:
@@ -318,16 +319,16 @@ def test_the_second_track_and_the_read_side_wire_the_same_object(
         def close(self) -> None:
             """Nothing was opened, so nothing has to be released."""
 
-    monkeypatch.setattr(poller_module, "open_vectors", lambda _path: _Stock())
-    monkeypatch.setattr(poller_module, "open_tokenizer", lambda _directory: object())
-    monkeypatch.setattr(poller_module, "make_splitter", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(embedding_module, "open_vectors", lambda _path: _Stock())
+    monkeypatch.setattr(embedding_module, "open_tokenizer", lambda _directory: object())
+    monkeypatch.setattr(embedding_module, "make_splitter", lambda *_args, **_kwargs: object())
 
     worker = poller_module.Poller()
-    worker._wire_the_second_track()
-    worker._build_the_cutter()
+    worker._track._wire_the_second_track()
+    worker._track._build_the_cutter()
 
-    assert worker._model is not None, "the track has to have been wired"
-    assert worker._model is resources.query_model()
+    assert worker._track._model is not None, "the track has to have been wired"
+    assert worker._track._model is resources.query_model()
 
 
 # ---------------------------------------------------------------------------

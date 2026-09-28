@@ -345,12 +345,15 @@ def drive_the_second_track() -> int:
     ``_chunker`` as None and report a track that stayed off, which is a
     measurement of this function and not of the container.
     """
+    # The track of a poller and not a track built here, so that the wiring
+    # under measurement is the one a pass drives (plan 25-07 moved it there).
     worker = poller_module.Poller()
-    worker._wire_the_second_track()
-    worker._build_the_cutter()
-    model = worker._model
-    chunker = worker._chunker
-    stock = worker._vectors
+    track = worker._track
+    track._wire_the_second_track()
+    track._build_the_cutter()
+    model = track._model
+    chunker = track._chunker
+    stock = track._vectors
     try:
         if model is None or chunker is None:
             LOGGER.warning("the second track stayed off, so the shared engine was never asked for a passage")

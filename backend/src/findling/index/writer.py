@@ -182,6 +182,21 @@ class IndexBatchWriter:
             raise
 
     @property
+    def index(self) -> Index:
+        """The index this writer writes into, for a reader in the same process.
+
+        Handing the object on costs no second lock: a searcher never asks for
+        one. The poller gives it to the embedding track when a caller injected
+        the writer, so that both read the same directory.
+        """
+        return self._index
+
+    @property
+    def directory(self) -> Path:
+        """The directory of the index, the one the free space floor is asked against."""
+        return self._directory
+
+    @property
     def pending(self) -> int:
         """Documents added or dropped since the last committed flush.
 
