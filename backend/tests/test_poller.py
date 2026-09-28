@@ -206,6 +206,9 @@ class _FakeQueue:
         # The precision out of the same answer (D-25-02). None by default, a
         # 1.3 companion without the field.
         self.precision_answer: str | None = None
+        # The guard's confirmation token out of the same answer (D-26-04).
+        # None by default, a companion before plan 26-02.
+        self.confirmed_answer: str | None = None
         # A companion older than 1.4.0: the read goes through the real
         # DocumentQueue.companion_choice over a session that answers 404, so the
         # test proves the error path the poller really meets and not a fake
@@ -222,7 +225,9 @@ class _FakeQueue:
         self.order.append("profile")
         if self.profile_route_missing:
             return await DocumentQueue(cast("AsyncNextcloudApp", _AppWithoutProfileRoute())).companion_choice()
-        return CompanionChoice(profile=self.profile_answer, precision=self.precision_answer)
+        return CompanionChoice(
+            profile=self.profile_answer, precision=self.precision_answer, confirmed=self.confirmed_answer
+        )
 
     async def claim(self, *, limit: int, max_bytes: int, lane: str | None = None) -> ClaimResult:
         del limit, max_bytes
@@ -2184,8 +2189,8 @@ class _WorkStock:
 
     async def companion_choice(self) -> CompanionChoice:
         # The stock simulation is about deliveries, never about the profile:
-        # no stored choice, Economy and int8 in force.
-        return CompanionChoice(profile=None, precision=None)
+        # no stored choice, Economy and int8 in force, no guard confirmation.
+        return CompanionChoice(profile=None, precision=None, confirmed=None)
 
     async def top_up(self) -> str:
         # The stock is the whole crawl in these tests: nothing is ever pending
