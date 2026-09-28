@@ -342,4 +342,118 @@ final class AdminViewServiceTest extends TestCase {
 	public function testAReEmbeddingFlagThatIsNotABooleanIsRefused(mixed $value): void {
 		self::assertNull(AdminViewService::strictFlag($value));
 	}
+
+	// -- the memory guard and the OCR slots (plan 26-05) ----------------------
+
+	/**
+	 * The seven guard fields exactly as backend() builds them.
+	 *
+	 * @param array<mixed> $answer
+	 * @return array<string,mixed>
+	 */
+	private static function guardFields(array $answer): array {
+		return [
+			'guardChosen' => AdminViewService::profileName(AdminViewService::guardField($answer, 'chosen')),
+			'guardEffective' => AdminViewService::profileName(AdminViewService::guardField($answer, 'effective')),
+			'guardCause' => AdminViewService::guardCause(AdminViewService::guardField($answer, 'cause')),
+			'guardToken' => AdminViewService::hexToken(AdminViewService::guardField($answer, 'token')),
+			'slotsTarget' => AdminViewService::guardCounter(AdminViewService::guardField($answer, 'slotsTarget')),
+			'slotsInForce' => AdminViewService::guardCounter(AdminViewService::guardField($answer, 'slotsInForce')),
+			'slotsThrottled' => AdminViewService::strictFlag(AdminViewService::guardField($answer, 'throttled')),
+		];
+	}
+
+	/**
+	 * Answers without a usable guard object, and every field is null for them.
+	 *
+	 * @return array<string,array{array<mixed>}>
+	 */
+	public static function everyAnswerWithoutAGuardObject(): array {
+		return [
+			'no answer at all' => [[]],
+			'an answer of a container older than 1.4' => [['indexed' => 3, 'engineState' => 'loaded']],
+			'a guard that is a string' => [['guard' => 'performance']],
+			'a guard that is a number' => [['guard' => 3]],
+		];
+	}
+
+	/** @param array<mixed> $answer */
+	#[DataProvider('everyAnswerWithoutAGuardObject')]
+	public function testAnAnswerWithoutAGuardObjectLeavesEveryGuardFieldNull(array $answer): void {
+		// D-26-01: a container older than 1.4 leaves the object out, and the
+		// guard lines on the page stay hidden.
+		foreach (self::guardFields($answer) as $field => $value) {
+			self::assertNull($value, $field);
+		}
+	}
+
+	public function testAValidGuardObjectIsPassedThrough(): void {
+		$token = str_repeat('0123456789abcdef', 2);
+		$answer = ['guard' => [
+			'chosen' => 'performance',
+			'effective' => 'standard',
+			'cap' => 'standard',
+			'cause' => 'oom_kill',
+			'since' => 1790000000,
+			'token' => $token,
+			'slotsTarget' => 4,
+			'slotsInForce' => 2,
+			'throttled' => true,
+		]];
+
+		self::assertSame([
+			'guardChosen' => 'performance',
+			'guardEffective' => 'standard',
+			'guardCause' => 'oom_kill',
+			'guardToken' => $token,
+			'slotsTarget' => 4,
+			'slotsInForce' => 2,
+			'slotsThrottled' => true,
+		], self::guardFields($answer));
+		self::assertSame('memory_max_repeated', AdminViewService::guardCause('memory_max_repeated'));
+		self::assertSame('unclean_end', AdminViewService::guardCause('unclean_end'));
+		self::assertSame('economy', AdminViewService::profileName('economy'));
+	}
+
+	public function testTheEmptyCauseMeansNoReduction(): void {
+		// The protocol reports "" while the guard lowered nothing.
+		self::assertNull(AdminViewService::guardCause(''));
+	}
+
+	/**
+	 * Values from outside the closed sets, and none of them is cut or cast.
+	 *
+	 * @return array<string,array{string,mixed}>
+	 */
+	public static function everyGuardValueOutsideItsSet(): array {
+		return [
+			'a cause with markup' => ['cause', 'evil<script>'],
+			'a cause in the wrong case' => ['cause', 'OOM_KILL'],
+			'a profile this page does not know' => ['chosen', 'turbo'],
+			'an effective profile with markup' => ['effective', '<b>standard</b>'],
+			'a token in upper case and too short' => ['token', 'ABC'],
+			'a token one digit too long' => ['token', str_repeat('a', 33)],
+			'a token with a newline' => ['token', str_repeat('a', 32) . "\n"],
+			'a slot target as a string' => ['slotsTarget', '4'],
+			'a negative slot count' => ['slotsInForce', -1],
+			'a throttle flag of one' => ['throttled', 1],
+		];
+	}
+
+	#[DataProvider('everyGuardValueOutsideItsSet')]
+	public function testAGuardValueOutsideItsSetIsRefused(string $key, mixed $value): void {
+		// T-26-15, T-26-16. These values become parts of lines an admin reads
+		// and of a command an admin copies.
+		$field = [
+			'cause' => 'guardCause',
+			'chosen' => 'guardChosen',
+			'effective' => 'guardEffective',
+			'token' => 'guardToken',
+			'slotsTarget' => 'slotsTarget',
+			'slotsInForce' => 'slotsInForce',
+			'throttled' => 'slotsThrottled',
+		][$key];
+
+		self::assertNull(self::guardFields(['guard' => [$key => $value]])[$field]);
+	}
 }
