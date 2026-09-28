@@ -1305,8 +1305,15 @@ PHP_TREE_HASH_TODAY = "726756a8e646e4eb6d4d9089e3ac0476d7a5ff25b6e3f335b3f4faaea
 # of profile, and worker/poller.py reads the choice through companion_choice.
 # One file came and none went, so PACKAGE_FILES_TODAY moves to 60. The PHP pair
 # above does not move: this plan touches no PHP file.
-PACKAGE_FILES_TODAY = 60
-PACKAGE_TREE_HASH_TODAY = "8614c00c20e751f4c77443f7d44c09aa6f2f9f02598372a73c376bded6246e6f"
+# Moved on 2026-09-28 by plan 25-07: worker/embedding.py came (the embedding
+# track as its own owner, PAR-01), worker/poller.py and index/writer.py changed
+# their bytes (the poller delegates rows, mark and cutter to the track; the
+# writer got stored_body, free_bytes and disk_is_tight as module functions and
+# its index and directory as properties), and tools/one_load.py reads the
+# wiring through the track of a poller. One file came and none went, so
+# PACKAGE_FILES_TODAY moves to 61. The PHP pair does not move.
+PACKAGE_FILES_TODAY = 61
+PACKAGE_TREE_HASH_TODAY = "ce67c2d2364caf3e2abb21ca9b8da9263b49ff485f428414b553a01a96e39a01"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
