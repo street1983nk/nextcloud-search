@@ -189,9 +189,9 @@ QUALIFIED_WRITING_CALLS: frozenset[tuple[str, str]] = frozenset(
     }
 )
 
-# The writes of the file travel path, measured against the package. Four, and
-# every one of them is the container's own scratch volume or a read the gate
-# cannot tell apart from a write:
+# The writes of the file travel path, measured against the package. Six, and
+# every one of them is the container's own scratch volume, the child's own
+# /proc entry or a read the gate cannot tell apart from a write:
 #
 #   extract/image.py: open        Image.open(path) on a picture. It reads, but
 #                                 the mode of an open() is not readable off this
@@ -199,7 +199,13 @@ QUALIFIED_WRITING_CALLS: frozenset[tuple[str, str]] = frozenset(
 #                                 one. It is listed rather than excused, because
 #                                 an exception for a name would excuse the next
 #                                 caller of the same name too.
-#   worker/poller.py: mkdir       creates the scratch directory under
+#   extract/sandbox.py: write_text  twice, in _lower_own_standing (plan 26-01):
+#                                 oom_score_adj and autogroup of the child's own
+#                                 /proc entry. No disk and no user content: the
+#                                 directory is /proc/self, both names are fixed
+#                                 default arguments, and the code chose them, never
+#                                 a queue row (D-26-11, D-26-16).
+#   worker/poller.py: mkdir      creates the scratch directory under
 #                                 APP_PERSISTENT_STORAGE, out of findling.config
 #                                 and never out of a queue row
 #   worker/poller.py: open        the scratch file a document is streamed into.
@@ -212,12 +218,14 @@ QUALIFIED_WRITING_CALLS: frozenset[tuple[str, str]] = frozenset(
 #                                 than unlinking a second time, which is why one
 #                                 entry covers both callers.
 #
-# This is a ratchet and not a tautology. A fifth entry means the container puts
+# This is a ratchet and not a tautology. A seventh entry means the container puts
 # something on a disk in a place nobody has looked at yet, and the three
 # questions that belong to it are which directory, what is in the name, and who
 # chose that name. Failing here is the moment those questions can still be asked.
 EXPECTED_TRAVEL_PATH_WRITES = (
     "extract/image.py: open",
+    "extract/sandbox.py: write_text",
+    "extract/sandbox.py: write_text",
     "worker/poller.py: mkdir",
     "worker/poller.py: open",
     "worker/poller.py: unlink",

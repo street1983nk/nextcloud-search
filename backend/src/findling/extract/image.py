@@ -129,7 +129,9 @@ def extract_image(path: str) -> ExtractionOutcome:
         except ocr.EngineFailed:
             # Includes the death by signal of an exhausted address space: the
             # grandchild asked for the memory, so no MemoryError ever arrives in
-            # this process (pitfall 10).
+            # this process (pitfall 10). EngineKilled, the SIGKILL from outside,
+            # is a sister of this class and passes through to the child loop,
+            # because it is no verdict on the picture (D-26-16).
             return ExtractionOutcome.failed(Reason.OCR_FAILED)
         except OSError:
             # A header that parsed and pixels that did not, which is what a

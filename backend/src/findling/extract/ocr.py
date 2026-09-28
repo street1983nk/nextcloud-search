@@ -48,7 +48,7 @@ from findling import config
 from findling.config import Settings
 from findling.extract import raster
 from findling.extract.dispatch import cap_text
-from findling.extract.errors import ExtractionOutcome, Reason
+from findling.extract.errors import KILLED_EXIT_CODE, EngineKilled, ExtractionOutcome, Reason
 
 # The binary, by name and not by path. Which directory it lives in is a property
 # of the image and of the distribution, and a hard coded path would make the
@@ -97,7 +97,11 @@ class PageTimeout(Exception):
 
 
 class EngineFailed(Exception):
-    """The engine ended with a non zero code or was killed by a signal."""
+    """The engine ended with a non zero code or was killed by a signal other than SIGKILL.
+
+    SIGKILL is :class:`findling.extract.errors.EngineKilled`, a sister and not a
+    subclass: the OOM killer sends it, and it says nothing about the page.
+    """
 
 
 class EngineMissing(Exception):
@@ -132,6 +136,8 @@ def extract_pdf_ocr(path: str) -> ExtractionOutcome:
         # Includes the death by signal that an exhausted address space produces:
         # the grandchild asked for the memory, so no MemoryError ever arrives in
         # this process and the recycling rule for it never fires (pitfall 10).
+        # EngineKilled is not caught here on purpose: it is no verdict and has
+        # to reach the loop of the child unchanged.
         return ExtractionOutcome.failed(Reason.OCR_FAILED)
     except pypdfium2.PdfiumError:
         return ExtractionOutcome.failed(Reason.CORRUPT)
@@ -206,6 +212,13 @@ def read_page(png: bytes, languages: str, seconds: int) -> str:
     except FileNotFoundError as absent:
         raise EngineMissing from absent
 
+    if finished.returncode == KILLED_EXIT_CODE:
+        # SIGKILL from outside, which under N slots is the OOM killer choosing a
+        # victim by size rather than by guilt. Not a verdict on this page: the
+        # child reports it and the poller runs the file again, alone (D-26-16).
+        # An engine that bursts its own address space dies of SIGABRT instead
+        # and stays below, as failed(ocr_failed).
+        raise EngineKilled
     if finished.returncode != 0:
         # Whatever ended page one ends page two as well, so this stops the job
         # instead of spending the remaining budget on the same wall.

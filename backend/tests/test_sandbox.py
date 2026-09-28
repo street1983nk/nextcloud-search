@@ -26,15 +26,16 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
 
 from findling import config
 from findling.extract import sandbox
-from findling.extract.errors import ExtractionOutcome, Reason, State
+from findling.extract.errors import ChildKilled, ExtractionOutcome, Reason, State
 
 SANDBOX_SOURCE = Path(__file__).resolve().parents[1] / "src" / "findling" / "extract" / "sandbox.py"
 
@@ -334,6 +335,131 @@ def test_an_unexpected_child_death_is_a_verdict_and_not_a_hang(worker: sandbox.E
 
     assert worker.pid is not None
     assert worker.pid != doomed_pid
+
+
+def _kill_from_outside(pid: int) -> None:
+    """SIGKILL one process the way the OOM killer does, and nothing on Windows."""
+    if sys.platform == "win32":
+        return
+    import signal
+
+    os.kill(pid, signal.SIGKILL)
+
+
+def _later(seconds: float, action: Callable[[], None]) -> threading.Thread:
+    """Run one action on a second thread after a pause, while the test waits on the worker."""
+
+    def delayed() -> None:
+        time.sleep(seconds)
+        action()
+
+    started = threading.Thread(target=delayed, daemon=True)
+    started.start()
+    return started
+
+
+@ONLY_POSIX
+def test_a_child_killed_from_outside_is_no_verdict(worker: sandbox.ExtractionWorker) -> None:
+    # D-26-16 and pitfall 1: under N slots the OOM killer takes the largest
+    # child, which is rarely the one with the troublesome file. A verdict here
+    # would lose an innocent file for good; the exception lets the poller run it
+    # again, alone.
+    worker.probe("sleep", 0.0)
+    doomed_pid = worker.pid
+    assert doomed_pid is not None
+
+    killer = _later(1.0, lambda: _kill_from_outside(doomed_pid))
+    with pytest.raises(ChildKilled) as raised:
+        worker.probe("sleep", 5.0)
+    killer.join()
+
+    assert raised.value.engine is False
+    assert worker.pid is None, "a killed child must not be counted as usable"
+
+    worker.probe("sleep", 0.0)
+
+    assert worker.pid is not None
+    assert worker.pid != doomed_pid
+
+
+def test_a_killed_engine_is_no_verdict_and_the_child_stays(worker: sandbox.ExtractionWorker) -> None:
+    # The same death one level down: the OOM killer took tesseract, the child
+    # survived and says so with its sentinel. No except clause between the
+    # engine and the child loop may turn it into failed(ocr_failed).
+    worker.probe("sleep", 0.0)
+    survivor = worker.pid
+
+    with pytest.raises(ChildKilled) as raised:
+        worker.probe("engine_killed", 0.0)
+
+    assert raised.value.engine is True
+    assert worker.pid == survivor, "only the engine died, the child keeps its slot"
+
+
+def test_the_own_deadline_kill_stays_a_timeout() -> None:
+    # The deadline path sends SIGKILL as well, and it is this module's own: it
+    # returns before the death is judged, so it can never look like the kernel.
+    impatient = sandbox.ExtractionWorker(max_files=200, timeout_seconds=3)
+    try:
+        outcome = impatient.probe("sleep", 30.0)
+
+        assert outcome == ExtractionOutcome.failed(Reason.TIMEOUT)
+    finally:
+        impatient.stop()
+
+
+def test_a_halt_from_another_thread_is_the_modules_own_kill(worker: sandbox.ExtractionWorker) -> None:
+    # The pool ends a slot this way while a job is still in it. The death is
+    # caused here, so it keeps the verdict it always had and is not ChildKilled.
+    worker.probe("sleep", 0.0)
+    halted_pid = worker.pid
+
+    started = time.monotonic()
+    halter = _later(1.0, worker.halt)
+    outcome = worker.probe("sleep", 30.0)
+    halter.join()
+
+    assert outcome == ExtractionOutcome.failed(Reason.CORRUPT)
+    assert time.monotonic() - started < 1.0 + sandbox._JOIN_GRACE_SECONDS + 5.0
+
+    worker.probe("sleep", 0.0)
+
+    assert worker.pid is not None
+    assert worker.pid != halted_pid
+
+
+def test_a_halt_without_a_child_does_nothing() -> None:
+    idle = sandbox.ExtractionWorker(max_files=200, timeout_seconds=60)
+
+    idle.halt()
+
+    assert idle.pid is None
+
+
+def test_the_facade_turns_a_killed_child_into_the_old_verdict(monkeypatch: pytest.MonkeyPatch) -> None:
+    # extract_guarded promises a verdict and nothing else, so the tools that use
+    # it stay as they were: the same deaths produce the same verdicts as before
+    # phase 26.
+    class _Killed:
+        def __init__(self, *, engine: bool) -> None:
+            self.engine = engine
+
+        def run(self, *_args: object, **_options: object) -> ExtractionOutcome:
+            raise ChildKilled(engine=self.engine)
+
+    monkeypatch.setattr(sandbox, "_WORKER", _Killed(engine=False))
+    child = sandbox.extract_guarded(NOWHERE, UNSUPPORTED, 1024)
+    monkeypatch.setattr(sandbox, "_WORKER", _Killed(engine=True))
+    engine = sandbox.extract_guarded(NOWHERE, UNSUPPORTED, 1024)
+
+    assert child == ExtractionOutcome.failed(Reason.CORRUPT)
+    assert engine == ExtractionOutcome.failed(Reason.OCR_FAILED)
+
+
+def test_a_killed_child_carries_no_reason_code() -> None:
+    # Reasons travel in the receipt and are checked against the PHP list, so a
+    # "killed" reason would be refused there (T-26-04).
+    assert not any("kill" in reason.value for reason in Reason)
 
 
 def test_a_forced_route_survives_the_boundary(worker: sandbox.ExtractionWorker, tmp_path: Path) -> None:
@@ -720,4 +846,6 @@ def test_every_kill_goes_through_the_group_kill() -> None:
     ]
 
     assert sum("process.kill()" in line for line in code) == 1
-    assert sum("_kill_child_tree(" in line for line in code) == 3, "the definition and both kill sites"
+    # Four since plan 26-01: halt() is the third kill site, the one the pool
+    # uses to end a slot from another thread.
+    assert sum("_kill_child_tree(" in line for line in code) == 4, "the definition and all three kill sites"
