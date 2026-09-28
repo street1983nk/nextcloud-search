@@ -25,11 +25,12 @@ import ast
 import shutil
 import warnings
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from tantivy import Document, Index, IndexWriter
+from tantivy import Document, Index, IndexWriter, Query
 
 from findling.config import settings
 from findling.index.bench import batch_full
@@ -690,3 +691,89 @@ def test_the_disk_floor_method_delegates_with_the_index_directory(
     assert batch_writer.disk_is_tight() is True
     assert batch_writer.free_bytes() == 1_024
     assert seen == [index_dir, index_dir]
+
+
+# Phase 26 (PAR-02): N OCR slots call the writer from their own threads. The
+# fixtures below hammer it from eight threads at once; without the lock the
+# counters lose increments and one file id can end up in the index twice.
+
+_THREADS = 8
+
+
+def _documents_with_id(index: Index, file_id: int) -> int:
+    index.reload()
+    query = Query.term_query(index.schema, FIELD_FILE_ID, file_id)
+    return len(index.searcher().search(query, 100).hits)
+
+
+def test_eight_threads_adding_distinct_ids_lose_no_document(index: Index, batch_writer: IndexBatchWriter) -> None:
+    per_thread = 25
+
+    def write(thread: int) -> None:
+        for offset in range(per_thread):
+            batch_writer.add(_record(thread * 1_000 + offset + 1))
+
+    with ThreadPoolExecutor(max_workers=_THREADS) as pool:
+        list(pool.map(write, range(_THREADS)))
+
+    assert batch_writer.pending == _THREADS * per_thread
+    result = batch_writer.flush()
+
+    assert result.documents == _THREADS * per_thread
+    assert batch_writer.pending == 0
+    assert batch_writer.pending_bytes == 0
+    for thread in range(_THREADS):
+        for offset in range(per_thread):
+            assert _documents_with_id(index, thread * 1_000 + offset + 1) == 1
+
+
+def test_eight_threads_writing_the_same_id_leave_exactly_one_document(
+    index: Index, batch_writer: IndexBatchWriter
+) -> None:
+    def write(_: int) -> None:
+        for _round in range(10):
+            batch_writer.add(_record(77))
+
+    with ThreadPoolExecutor(max_workers=_THREADS) as pool:
+        list(pool.map(write, range(_THREADS)))
+    batch_writer.flush()
+
+    assert _documents_with_id(index, 77) == 1
+    index.reload()
+    assert index.searcher().num_docs == 1
+
+
+def test_drops_and_adds_on_distinct_ids_run_side_by_side(index: Index, batch_writer: IndexBatchWriter) -> None:
+    for file_id in range(1, 41):
+        batch_writer.add(_record(file_id))
+    batch_writer.flush()
+
+    def work(thread: int) -> None:
+        for offset in range(10):
+            file_id = thread * 10 + offset + 1
+            if thread % 2:
+                batch_writer.drop_document(file_id)
+            else:
+                batch_writer.add(_record(1_000 + file_id))
+
+    with ThreadPoolExecutor(max_workers=_THREADS) as pool:
+        list(pool.map(work, range(_THREADS)))
+
+    assert batch_writer.pending == _THREADS * 10
+    batch_writer.flush()
+    index.reload()
+    # 40 written, threads 1, 3 dropped ids 11-20 and 31-40 (thread 5 and 7 drop
+    # unknown ids 51-60 and 71-80), threads 0, 2, 4, 6 added 40 new ones.
+    assert index.searcher().num_docs == 40 - 20 + 40
+
+
+def test_every_writing_method_holds_the_lock() -> None:
+    tree = ast.parse(WRITER_SOURCE.read_text(encoding="utf-8"))
+    batch = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "IndexBatchWriter")
+    methods = {node.name: node for node in batch.body if isinstance(node, ast.FunctionDef)}
+
+    for name in ("pending", "pending_bytes", "add", "drop_document", "flush", "collect_garbage", "close"):
+        body = [node for node in methods[name].body if not isinstance(node, ast.Expr)]
+        assert len(body) == 1, name
+        assert isinstance(body[0], ast.With), name
+        assert ast.unparse(body[0].items[0].context_expr) == "self._lock", name
