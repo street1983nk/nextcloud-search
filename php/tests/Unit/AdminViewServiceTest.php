@@ -259,4 +259,87 @@ final class AdminViewServiceTest extends TestCase {
 		// recommendation, and it comes from across the trust boundary.
 		self::assertNull(AdminViewService::engineState($value));
 	}
+
+	// -- the precision of the model and the re-embedding run (plan 25-04) -----
+
+	public function testAValidPrecisionAndARunningReEmbeddingArePassedThrough(): void {
+		// The contract of plan 25-12: an object "model" in the status answer,
+		// read here for exactly two of its fields.
+		$answer = ['model' => ['precisionActive' => 'fp32', 'reembedRunning' => true]];
+
+		self::assertSame('fp32', AdminViewService::precision(AdminViewService::modelField($answer, 'precisionActive')));
+		self::assertTrue(AdminViewService::strictFlag(AdminViewService::modelField($answer, 'reembedRunning')));
+		self::assertSame('int8', AdminViewService::precision('int8'));
+		self::assertFalse(AdminViewService::strictFlag(false));
+	}
+
+	/**
+	 * Answers without a usable model object, and every one of them is null.
+	 *
+	 * A container older than this app leaves the object out, and null is the
+	 * only value that keeps that apart from a container that reported int8 and
+	 * no running re-embedding (T-07-03). The line on the page stays hidden then.
+	 *
+	 * @return array<string,array{array<mixed>}>
+	 */
+	public static function everyAnswerWithoutAModelObject(): array {
+		return [
+			'no answer at all' => [[]],
+			'an answer of an older container' => [['indexed' => 3, 'engineState' => 'loaded']],
+			'a model that is a string' => [['model' => 'e5-small fp32']],
+			'a model that is a number' => [['model' => 3]],
+			'a model without the two fields' => [['model' => ['precisionChosen' => 'fp32']]],
+		];
+	}
+
+	/** @param array<mixed> $answer */
+	#[DataProvider('everyAnswerWithoutAModelObject')]
+	public function testAnAnswerWithoutAModelObjectGivesNullAndNeverAGuess(array $answer): void {
+		self::assertNull(AdminViewService::precision(AdminViewService::modelField($answer, 'precisionActive')));
+		self::assertNull(AdminViewService::strictFlag(AdminViewService::modelField($answer, 'reembedRunning')));
+	}
+
+	/**
+	 * Everything that is not one of the two precisions, and none of it is cast.
+	 *
+	 * @return array<string,array{mixed}>
+	 */
+	public static function everythingThatIsNotAPrecision(): array {
+		return [
+			'a precision this page does not know' => ['fp16'],
+			'the empty string' => [''],
+			'a number' => [3],
+			'a precision in the wrong case' => ['FP32'],
+			'markup' => ['<b>fp32</b>'],
+			'a boolean' => [true],
+			'a list' => [['fp32']],
+		];
+	}
+
+	#[DataProvider('everythingThatIsNotAPrecision')]
+	public function testAValueOutsideTheTwoPrecisionsIsRefused(mixed $value): void {
+		// T-25-13. The value becomes part of a line an admin reads, and it comes
+		// from across the trust boundary.
+		self::assertNull(AdminViewService::precision($value));
+	}
+
+	/**
+	 * Everything that is not a real boolean, and none of it is read as one.
+	 *
+	 * @return array<string,array{mixed}>
+	 */
+	public static function everythingThatIsNotAFlag(): array {
+		return [
+			'a word' => ['yes'],
+			'the string of true' => ['true'],
+			'a one' => [1],
+			'a nought' => [0],
+			'null' => [null],
+		];
+	}
+
+	#[DataProvider('everythingThatIsNotAFlag')]
+	public function testAReEmbeddingFlagThatIsNotABooleanIsRefused(mixed $value): void {
+		self::assertNull(AdminViewService::strictFlag($value));
+	}
 }

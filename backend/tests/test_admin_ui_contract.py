@@ -619,6 +619,10 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
         "%1$s in %2$s": "two placeholders and the preposition between them, which Dutch spells the same way",
         "PDF": "the proper name of a file format, the same abbreviation in every language of this tree",
         "Spreadsheets": "the word the Dutch Nextcloud interface itself uses for this file type chip",
+        # Since plan 25-04: Dutch writes the noun and the colon exactly as
+        # English does, and the placeholder is a model name that is not
+        # translated in any language of this tree.
+        "Model: %1$s": "model is the same word in Dutch, and an invented difference would be a mistranslation",
     },
     # European Portuguese, read off the file on 25.09.2026 rather than guessed:
     # the gate was run once with an empty list and reported four findings, two
@@ -2158,6 +2162,37 @@ def test_both_halves_of_the_page_carry_the_language_diagnosis() -> None:
         assert f"backend.{key}" in script, key
 
 
+def test_both_halves_of_the_page_carry_the_model_line() -> None:
+    """Plan 25-04 (D-25-08, D-25-13): precision and re-embedding progress.
+
+    One line in the block "Findable by meaning", rendered by the template and
+    rewritten by the script on every poll, so both halves carry the id, both
+    keys and the same two model names. The names are built on this side out of
+    the closed set of AdminViewService and never taken from the container as
+    text (T-25-14), and the line hides itself when no precision was reported,
+    which is what a container older than plan 25-12 looks like.
+    """
+    template = TEMPLATE.read_text(encoding="utf-8")
+    script = SCRIPT.read_text(encoding="utf-8")
+
+    assert "id=\"findling-semantic-model\"<?php if ($modelName === '') { ?> hidden<?php } ?>>" in template
+    assert "p($modelLine)" in template
+    assert "text('findling-semantic-model'," in script
+    assert "shown('findling-semantic-model', name !== '')" in script
+    for source in (template, script):
+        assert "'Model: %1$s'" in source
+        assert "'Model: %1$s, re-embedding %2$s (%3$s of %4$s)'" in source
+        assert "'e5-small int8'" in source
+        assert "'e5-small fp32'" in source
+    # The fingerprint of the poll carries both fields, or a run that starts
+    # while nothing else moves would never reach the page.
+    assert "(view.backend || {}).precisionActive, (view.backend || {}).reembedRunning," in script
+    for catalogue in L10N_CATALOGUES:
+        keys = catalogue_of(catalogue)
+        assert "Model: %1$s" in keys, catalogue.name
+        assert "Model: %1$s, re-embedding %2$s (%3$s of %4$s)" in keys, catalogue.name
+
+
 def test_every_new_status_key_has_exactly_one_line_in_the_service() -> None:
     """One key, one line, and the line is the whole translation of that key.
 
@@ -2174,11 +2209,19 @@ def test_every_new_status_key_has_exactly_one_line_in_the_service() -> None:
         "rebuildDone",
         "rebuildTotal",
         "rebuildBlockedBytes",
+        "precisionActive",
+        "reembedRunning",
     ):
         assert view.count(f"'{key}' => ") == 1, key
     assert "'rebuildRunning' => ($answer['rebuildRunning'] ?? false) === true," in view
     for key in ("rebuildDone", "rebuildTotal", "rebuildBlockedBytes"):
         assert f"'{key}' => $this->counter($answer, '{key}')," in view, key
+    # The two fields of plan 25-04 come out of the object model of the answer
+    # (contract of plan 25-12) and are judged against a closed set and a real
+    # boolean, never cast (T-25-13).
+    assert "'precisionActive' => self::precision(self::modelField($answer, 'precisionActive'))," in view
+    assert "'reembedRunning' => self::strictFlag(self::modelField($answer, 'reembedRunning'))," in view
+    assert "private const PRECISIONS = ['int8', 'fp32'];" in view
 
 
 def test_the_two_translation_files_carry_the_same_keys() -> None:
@@ -2328,6 +2371,16 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     commit, the five tables carry its row, and the wordings outside German and
     English stand under the same dated reservation. Whoever moves it next writes
     the next paragraph.
+
+    It stands at 207 since 28.09.2026, and the rise of two is plan 25-04 of
+    phase 25 (D-25-08, D-25-13): the model line of the block "Findable by
+    meaning", once with the model alone and once with the progress of a
+    re-embedding run. The model name inside it is built on this side out of the
+    two precisions and is not translated. Both keys went into all sixteen files
+    in one commit; the wordings outside German and English are machine
+    translations under the same dated reservation as the rest, and the tables
+    of the five language documents do not carry their rows yet. Whoever moves
+    it next writes the next paragraph.
     """
     for language, twin in ((L10N_JSON, L10N_DE_DE_JSON), (L10N_JS, L10N_DE_DE_JS)):
         assert twin.is_file(), f"{twin.name} is missing, so everybody on de_DE reads this app in English"
@@ -2352,7 +2405,8 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     }
 
     assert len(set(map(frozenset, keys_of.values()))) == 1, f"the four catalogues disagree: {sorted(keys_of)}"
-    assert len(keys_of["de.json"]) == 205
+    # two keys of plan 25-04 (D-25-13)
+    assert len(keys_of["de.json"]) == 207
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:

@@ -10,6 +10,8 @@
         "Provisional figure, %1$s of %2$s storages have been counted through.": "Vorläufige Zahl, %1$s von %2$s Speicherorten sind durchgezählt.",
         "Findable by meaning": "Auffindbar nach Bedeutung",
         "%1$s of %2$s indexable files can also be found by meaning": "%1$s von %2$s indexierbaren Dateien sind auch nach Bedeutung auffindbar",
+        "Model: %1$s": "Modell: %1$s",
+        "Model: %1$s, re-embedding %2$s (%3$s of %4$s)": "Modell: %1$s, Neueinbettung %2$s (%3$s von %4$s)",
         "The semantic share cannot be worked out right now. The backend does not answer, or it does not report this figure yet.": "Der semantische Anteil ist im Moment nicht berechenbar. Das Backend antwortet nicht, oder es meldet diese Zahl noch nicht.",
         "The model is in memory, the semantic search is answering.": "Das Modell liegt im Speicher, die semantische Suche antwortet.",
         "The model is read when it is first needed. That is the normal state.": "Das Modell wird beim ersten Bedarf geladen. Das ist der Normalfall.",

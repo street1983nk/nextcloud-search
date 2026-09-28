@@ -11,6 +11,8 @@ OC.L10N.register(
     "Provisional figure, %1$s of %2$s storages have been counted through.": "Valor provisório, foram contados %1$s de %2$s armazenamentos.",
     "Findable by meaning": "Encontrável pelo significado",
     "%1$s of %2$s indexable files can also be found by meaning": "%1$s de %2$s ficheiros indexáveis também podem ser encontrados pelo significado",
+    "Model: %1$s": "Modelo: %1$s",
+    "Model: %1$s, re-embedding %2$s (%3$s of %4$s)": "Modelo: %1$s, novo cálculo dos vetores %2$s (%3$s de %4$s)",
     "The semantic share cannot be worked out right now. The backend does not answer, or it does not report this figure yet.": "A proporção semântica não pode ser calculada neste momento. O serviço não responde, ou ainda não comunica este valor.",
     "The model is in memory, the semantic search is answering.": "O modelo está em memória, a pesquisa semântica está a responder.",
     "The model is read when it is first needed. That is the normal state.": "O modelo é carregado na primeira vez que é preciso. Esse é o estado normal.",

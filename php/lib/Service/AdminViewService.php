@@ -180,6 +180,15 @@ final class AdminViewService {
 	private const ENGINE_STATES = ['loaded', 'cold', 'disabled', 'missing', 'waiting_for_retry', 'unloaded'];
 
 	/**
+	 * The two precisions of the embedding model the container may report as
+	 * active, as a closed list (plan 25-04, contract of plan 25-12).
+	 *
+	 * The page builds the model name it shows out of one of these two words, so a
+	 * value from outside the list never reaches the page, not even shortened.
+	 */
+	private const PRECISIONS = ['int8', 'fp32'];
+
+	/**
 	 * What a reason code may look like before it is passed on. The taxonomy of
 	 * FileStateService::REASONS is lower case and underscores, and a code that
 	 * does not fit that shape has no row in the display table anyway. Filtering
@@ -1795,9 +1804,9 @@ final class AdminViewService {
 	}
 
 	/**
-	 * The twenty-five status fields of the container, rebuilt one by one.
+	 * The twenty-seven status fields of the container, rebuilt one by one.
 	 *
-	 * Called with null as well, and then it returns the same twenty-five keys as
+	 * Called with null as well, and then it returns the same twenty-seven keys as
 	 * zeros, false, null and empty strings. That is what keeps the caller free
 	 * of a second code path: a page that renders "container silent" out of the
 	 * same shape it renders a healthy container from cannot forget one of the
@@ -1821,6 +1830,16 @@ final class AdminViewService {
 	 * the page's point of view, so null would buy a distinction with no
 	 * consequence anywhere, at the price of six null checks in the template and
 	 * six in the script.
+	 *
+	 * The two fields of plan 25-04, ``precisionActive`` and ``reembedRunning``,
+	 * are exceptions of the first kind again, and for the first reason: both are
+	 * null when the container did not report them. They are read out of the
+	 * object ``model`` of the status answer, whose shape plan 25-12 fixes:
+	 * ``precisionChosen`` (string or null), ``precisionActive`` ("int8", "fp32"
+	 * or null), ``precisionVerdict`` (string) and ``reembedRunning`` (bool). This
+	 * page reads the second and the fourth of them and nothing else; the
+	 * verdicts are shown from phase 27 on. A container older than that contract
+	 * leaves the object out, and the line on the page stays hidden (T-07-03).
 	 *
 	 * @param array<mixed>|null $answer the decoded body, or null when there was none
 	 * @return array<string,mixed>
@@ -1864,6 +1883,12 @@ final class AdminViewService {
 			'rebuildDone' => $this->counter($answer, 'rebuildDone'),
 			'rebuildTotal' => $this->counter($answer, 'rebuildTotal'),
 			'rebuildBlockedBytes' => $this->counter($answer, 'rebuildBlockedBytes'),
+			// The precision of the model and whether the vectors are being
+			// computed again, both out of the object model (plan 25-04, D-25-13).
+			// Judged against a closed set and a real boolean, and null for a
+			// container that did not say.
+			'precisionActive' => self::precision(self::modelField($answer, 'precisionActive')),
+			'reembedRunning' => self::strictFlag(self::modelField($answer, 'reembedRunning')),
 			'note' => $this->text($answer, 'note'),
 		];
 	}
@@ -1928,6 +1953,44 @@ final class AdminViewService {
 	 */
 	public static function engineState(mixed $value): ?string {
 		return is_string($value) && in_array($value, self::ENGINE_STATES, true) ? $value : null;
+	}
+
+	/**
+	 * One field of the object ``model`` of the container answer, or null.
+	 *
+	 * Robust against an answer without that object and against one where it is
+	 * not an object at all, which is what a container older than plan 25-12 and
+	 * a garbled answer look like. The value itself is not judged here; that is
+	 * what precision() and strictFlag() below are for.
+	 *
+	 * @param array<mixed> $answer
+	 */
+	public static function modelField(array $answer, string $key): mixed {
+		$model = $answer['model'] ?? null;
+
+		return is_array($model) ? ($model[$key] ?? null) : null;
+	}
+
+	/**
+	 * The active precision of the model, one of two words, or null.
+	 *
+	 * The same judgement as engineState() above and for the same reason: the
+	 * word decides a line an admin reads, and it comes from across the trust
+	 * boundary, so it is refused rather than cast or shortened (T-25-13).
+	 */
+	public static function precision(mixed $value): ?string {
+		return is_string($value) && in_array($value, self::PRECISIONS, true) ? $value : null;
+	}
+
+	/**
+	 * A flag of the container answer, taken over only when it is a real boolean.
+	 *
+	 * Null for everything else, and deliberately not false: "the container did
+	 * not say" and "no re-embedding is running" are two findings, and a one or a
+	 * "yes" is neither of them (T-25-13).
+	 */
+	public static function strictFlag(mixed $value): ?bool {
+		return is_bool($value) ? $value : null;
 	}
 
 	/**
