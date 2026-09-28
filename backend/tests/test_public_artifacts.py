@@ -503,6 +503,11 @@ AUSNAHMEN: dict[tuple[str, str], str] = {
         "The model quality report quotes the address of the model file at the model host, "
         "whose revision part runs past forty characters."
     ),
+    ("measurements/2026-09-fp32-speicher/rohdaten/00-umgebung.txt", "base64-block-ab-40"): (
+        "The raw environment record of the fp32 memory measurement pins the public image digest "
+        "and the sha256 of the public model file, both of which run past forty hex characters "
+        "and neither of which is a secret."
+    ),
     # -- family 9, the pattern of the implementation
     ("install-check.md", "muster-der-umsetzung"): (
         "The installation guide names a kernel and a server version of four groups, which the form of an "
@@ -523,6 +528,14 @@ AUSNAHMEN: dict[tuple[str, str], str] = {
     ("measurements/2026-09-05-welle0-arm64/raw/amd64-machine.txt", "muster-der-umsetzung"): (
         "A raw machine record of the wave zero comparison, which holds the kernel version of the runner "
         "and is not edited afterwards."
+    ),
+    ("measurements/2026-09-fp32-speicher/README.md", "muster-der-umsetzung"): (
+        "The fp32 memory report names the WSL2 kernel version of four groups, which the form of an "
+        "address cannot be told apart from."
+    ),
+    ("measurements/2026-09-fp32-speicher/rohdaten/00-umgebung.txt", "muster-der-umsetzung"): (
+        "The raw environment record of the fp32 memory measurement holds the WSL2 kernel version of "
+        "four groups and is not edited afterwards."
     ),
     ("measurements/2026-09-nachmessung-m7g/README.md", "muster-der-umsetzung"): (
         "The remeasurement report names the public addresses of the box of 10.09.2026, which were handed out "

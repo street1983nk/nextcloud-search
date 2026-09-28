@@ -667,8 +667,16 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # read as a failure (500 with an error field, no profile name) instead of a
 # valid-looking economy, so the container keeps the last known profile
 # (D-24-02); ProfileControllerTest.php holds that path.
-PHP_FILES_TODAY = 74
-PHP_TREE_HASH_TODAY = "e2b4bcabe107de605f2a53bd9cf11da4090174f7c40aa3b1b182c66313fe7eba"
+# Moved on 2026-09-28 by wave 1 of phase 25: one file came,
+# php/tests/Unit/QueueControllerTest.php (plan 25-03, lane echo at the queue
+# route). Plan 25-03 changed the bytes of QueueController.php,
+# QueueService.php, QueueMapper.php, SettingsService.php,
+# ProfileController.php and ProfileControllerTest.php (claim lanes and
+# model_precision in the profile answer); plan 25-04 changed
+# AdminViewService.php, templates/admin.php and AdminViewServiceTest.php
+# (the model line of the admin page). No file went.
+PHP_FILES_TODAY = 75
+PHP_TREE_HASH_TODAY = "726756a8e646e4eb6d4d9089e3ac0476d7a5ff25b6e3f335b3f4faaeaab4453d"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
