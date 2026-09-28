@@ -1413,8 +1413,21 @@ PHP_TREE_HASH_TODAY = "460e2d6b7a11903bb783b722693f113f0ace524d67bc8cae5a0335395
 # confirmation token of the guard (CompanionChoice.confirmed); config.py only
 # changed a comment. No file came and none went, so PACKAGE_FILES_TODAY stays
 # at 66. The PHP pair does not move: this plan touches no PHP file.
+# Moved on 2026-09-29 by plan 26-09 (throttle, kill report and solo retry,
+# PAR-02, PAR-03), measured over its own worktree while plan 26-10 runs beside
+# it: exactly one of the 66 files changed its bytes, worker/poller.py. It reads
+# the headroom before the row trim of a pass of two slots or more and cuts the
+# slots with guard.throttled_slots, lifts a cap through guard.note_confirmation
+# after every profile read, writes multi_slot_pass and multi_slot_chosen before
+# the first task of a pass of several slots and empties the pass mark on every
+# way out, and answers a child killed from outside under several slots with a
+# report to the guard and a solo run behind the barrier instead of a verdict;
+# a second death alone is failed(out_of_memory). No file came and none went, so
+# PACKAGE_FILES_TODAY stays at 66. The PHP pair does not move: this plan
+# touches no PHP file. Plan 26-10 changes main.py and adds worker/watch.py, so
+# the figure is measured again after the merge of wave 4.
 PACKAGE_FILES_TODAY = 66
-PACKAGE_TREE_HASH_TODAY = "fbd506ebabab296c1b8c5e469566af4be88f76107c50e81635c1725404d3589a"
+PACKAGE_TREE_HASH_TODAY = "0bbc4cb328cbae76f0169885252fbcf1229a9e9b2cbae1302e16f33fee4c6952"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
