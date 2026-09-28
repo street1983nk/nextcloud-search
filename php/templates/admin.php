@@ -242,6 +242,21 @@ $hasEmbeddedFraction = $hasDenominator && $embeddedPercent !== null;
 // nothing indexed yet, nothing findable by meaning yet, and the one sentence
 // that says whether a model is even in this image was hidden.
 $hasEngineWord = $engineState !== '';
+// The model line of plan 25-04 (D-25-08, D-25-13): which precision the model
+// runs in and, while the vectors are computed again, how far that run has got.
+// The name is built on this side out of one of two words and never taken from
+// the container as text, so nothing it sends becomes the wording of this line
+// (T-25-14). A container older than the contract of plan 25-12 reports no
+// precision, AdminViewService hands that over as null, and the line stays
+// hidden. The progress reads the two counters the share line above reads, and
+// it needs the same denominator: without one the line names the model alone.
+$modelNames = ['int8' => 'e5-small int8', 'fp32' => 'e5-small fp32'];
+$precisionActive = is_string($backend['precisionActive'] ?? null) ? $backend['precisionActive'] : '';
+$modelName = $modelNames[$precisionActive] ?? '';
+$reembedRunning = ($backend['reembedRunning'] ?? null) === true;
+$modelLine = $reembedRunning && $hasEmbeddedFraction
+	? $l->t('Model: %1$s, re-embedding %2$s (%3$s of %4$s)', [$modelName, $count($embeddedPercent ?? 0) . "\u{00A0}%", $count($embedded), $count($indexable)])
+	: $l->t('Model: %1$s', [$modelName]);
 
 $tiles = [
 	['id' => 'findling-tile-indexed', 'label' => $l->t('Indexed'), 'value' => $indexed],
@@ -436,6 +451,7 @@ $banners = [
 		</p>
 		<progress id="findling-semantic-bar" max="100" value="<?php p((string)($embeddedPercent ?? 0)); ?>" aria-labelledby="findling-semantic-heading"<?php if (!$hasEmbeddedFraction) { ?> hidden<?php } ?>></progress>
 		<p class="settings-hint" id="findling-semantic-subline"<?php if (!$hasEmbeddedFraction) { ?> hidden<?php } ?>><?php p($l->t('%1$s of %2$s indexable files can also be found by meaning', [$count($embedded), $count($indexable)])); ?></p>
+		<p class="settings-hint" id="findling-semantic-model"<?php if ($modelName === '') { ?> hidden<?php } ?>><?php p($modelLine); ?></p>
 
 		<p class="settings-hint" id="findling-semantic-unknown"<?php if (!$hasDenominator || $hasEmbeddedFraction) { ?> hidden<?php } ?>><?php p($l->t('The semantic share cannot be worked out right now. The backend does not answer, or it does not report this figure yet.')); ?></p>
 

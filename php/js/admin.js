@@ -297,6 +297,9 @@
       // it changes on the poll where the first load succeeds or fails, and
       // during that pass nothing else in this line moves at all.
       (view.backend || {}).engineState,
+      // The model line of plan 25-04: the precision and whether the vectors
+      // are computed again. A run that starts or ends moves nothing else here.
+      (view.backend || {}).precisionActive, (view.backend || {}).reembedRunning,
       coverage.provisional, coverage.mountsFinished,
       coverage.mountsTotal, estimate.ocrMeasured, estimate.secondsLeft,
       estimate.bytesExpected, estimate.startupValues, estimate.spaceWarning,
@@ -364,6 +367,35 @@
     shown('findling-coverage-empty', !hasDenominator)
 
     semanticBlock(coverage, hasDenominator, (view.backend || {}).engineState)
+    modelLine(coverage, hasDenominator, view.backend || {})
+  }
+
+  /**
+   * The model line of plan 25-04 (D-25-08, D-25-13), word for word the one of
+   * the template.
+   *
+   * The name is built on this side out of one of two words and never taken
+   * from the container as text (T-25-14); a container older than the contract
+   * of plan 25-12 reports no precision, AdminViewService hands over null, and
+   * the line stays hidden. While the vectors are computed again the line adds
+   * the progress, read from the same two counters as the share line above and
+   * written in the same shape as its figure.
+   */
+  function modelLine (coverage, hasDenominator, backend) {
+    const names = { int8: 'e5-small int8', fp32: 'e5-small fp32' }
+    const precision = backend.precisionActive
+    const name = (precision === 'int8' || precision === 'fp32') ? names[precision] : ''
+    const percent = Number.isInteger(coverage.embeddedPercent) ? coverage.embeddedPercent : null
+    const running = backend.reembedRunning === true && hasDenominator && percent !== null
+
+    text('findling-semantic-model', running
+      ? t('findling', 'Model: %1$s, re-embedding %2$s (%3$s of %4$s)')
+        .replace('%1$s', name)
+        .replace('%2$s', numbers.format(percent) + '\u00a0%')
+        .replace('%3$s', numbers.format(whole(coverage.embedded)))
+        .replace('%4$s', numbers.format(whole(coverage.indexable)))
+      : t('findling', 'Model: %1$s').replace('%1$s', name))
+    shown('findling-semantic-model', name !== '')
   }
 
   /**
