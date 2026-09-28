@@ -662,8 +662,13 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # php/lib/Controller/ProfileController.php and its unit test (the profile
 # route of path B, D-24-01), and SettingsService.php changed its bytes
 # (KEY_PROFILE, PROFILES and profile()); no file went.
+# Moved on 2026-09-28 by the review fix WR-02: two of the 74 files changed
+# their bytes and none came or went. ProfileController.php answers a failed
+# read as a failure (500 with an error field, no profile name) instead of a
+# valid-looking economy, so the container keeps the last known profile
+# (D-24-02); ProfileControllerTest.php holds that path.
 PHP_FILES_TODAY = 74
-PHP_TREE_HASH_TODAY = "170f144a644cc86d73dc2c47881f814469fbb04f61639c5c626124a8508afa13"
+PHP_TREE_HASH_TODAY = "e2b4bcabe107de605f2a53bd9cf11da4090174f7c40aa3b1b182c66313fe7eba"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

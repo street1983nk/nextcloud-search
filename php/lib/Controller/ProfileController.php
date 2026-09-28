@@ -43,9 +43,10 @@ class ProfileController extends OCSController {
 	 * GET /ocs/v2.php/apps/findling/profile
 	 *
 	 * Answers with {"profile": "economy" | "standard" | "performance"}. A failure
-	 * to read answers with the default instead of an error, because the frugal
-	 * profile is the safe one on every box and an error would only make the
-	 * container fall back to the same value one step later.
+	 * to read answers as a failure (500 with an error field and no profile name),
+	 * because the container's rule for a failed read is to keep the LAST KNOWN
+	 * profile (D-24-02). A valid-looking default here would downgrade a running
+	 * standard or performance box to economy for at least one polling round.
 	 */
 	#[\OCP\AppFramework\Http\Attribute\ExAppRequired]
 	#[\OCP\AppFramework\Http\Attribute\NoCSRFRequired]
@@ -61,10 +62,12 @@ class ProfileController extends OCSController {
 		} catch (\Throwable $e) {
 			// A static sentence; the exception travels in its own field, which
 			// Nextcloud renders under the admin's log level. The stored value is
-			// never part of the log.
+			// never part of the log. The answer carries no profile name: the
+			// container turns the 500 into "not readable" and keeps the last
+			// known profile (D-24-02).
 			$this->logger->error('Findling: the profile could not be read', ['exception' => $e]);
 
-			return new DataResponse(['profile' => SettingsService::PROFILE_DEFAULT]);
+			return new DataResponse(['error' => 'profile unreadable'], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
 

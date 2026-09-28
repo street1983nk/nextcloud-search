@@ -20,9 +20,10 @@ use Psr\Log\LoggerInterface;
  *
  * Gate B in backend/tests holds the attributes and the position of
  * rejectForeignCaller; this suite holds the answers: the own backend gets a
- * name out of the closed set, a foreign ExApp gets a 403 without one, and a
+ * name out of the closed set, a foreign ExApp gets a 403 without one, a
  * value that arrived through occ and is not a profile turns into economy
- * without appearing in the log.
+ * without appearing in the log, and a read that throws answers 500 without a
+ * name, so the container keeps the last known profile (D-24-02).
  *
  * SettingsService is final, so it is not doubled. A real one is built on a
  * doubled IAppConfig, which is the seam the value arrives through anyway.
@@ -103,6 +104,29 @@ final class ProfileControllerTest extends TestCase {
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
 		self::assertSame(['profile' => 'economy'], $response->getData());
+	}
+
+	public function testAFailedReadAnswersAsAFailureWithoutAProfileName(): void {
+		// D-24-02: the container keeps the LAST KNOWN profile when a read
+		// fails. A 200 with a default here would look like a valid answer and
+		// downgrade a running standard or performance box, so the failure has
+		// to travel as a failure.
+		$this->appConfig->method('getValueString')->willThrowException(new \RuntimeException('storage gone'));
+
+		$this->logger->expects(self::once())->method('error')->with(
+			self::isString(),
+			self::arrayHasKey('exception'),
+		);
+
+		$response = $this->controller($this->backendAppId())->profile();
+
+		self::assertSame(Http::STATUS_INTERNAL_SERVER_ERROR, $response->getStatus());
+		$data = $response->getData();
+		self::assertIsArray($data);
+		self::assertArrayNotHasKey('profile', $data);
+		foreach (SettingsService::PROFILES as $name) {
+			self::assertStringNotContainsString($name, json_encode($data, JSON_THROW_ON_ERROR));
+		}
 	}
 
 	public function testAForeignExAppIsRefusedWithoutAProfileName(): void {
