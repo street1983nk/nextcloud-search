@@ -13,9 +13,16 @@ cache under pressure, so counting it as used would refuse a second slot on
 exactly the boxes that have room for one (25-RESEARCH.md, Pitfall 7). The
 project measures anon throughout, the store figure and the rss sampler alike.
 
-Known limit: only cgroup v2 carries memory.max and an anon line. On a v1 host
-the limit is not read and the answer is MemAvailable, the same fallback as a
-box without any limit.
+The second reader is memory.events, the event counters of the cgroup (low,
+high, max, oom, oom_kill). The guard of phase 26 compares two readings: a
+rising ``max`` under a tight anon headroom is pressure, a rising ``oom_kill``
+is a kill. The reader only hands the counters over; what counts as an event is
+decided in findling/guard.py.
+
+Known limit: only cgroup v2 carries memory.max, an anon line and
+memory.events. On a v1 host the limit is not read and the answer is
+MemAvailable, the same fallback as a box without any limit, and the event
+reader answers None.
 """
 
 from pathlib import Path
@@ -41,6 +48,24 @@ def anon_bytes(root: Path = CGROUP_ROOT) -> int | None:
             return None
         return value if value >= 0 else None
     return None
+
+
+def memory_events(root: Path = CGROUP_ROOT) -> dict[str, int] | None:
+    """The counters of memory.events, or None on cgroup v1, at the root or when unreadable.
+
+    Lines that are not "<name> <non negative integer>" are skipped; a file
+    without a single usable line is None, never an empty mapping.
+    """
+    try:
+        raw = (root / "memory.events").read_text(encoding="ascii")
+    except (OSError, ValueError):
+        return None
+    counters: dict[str, int] = {}
+    for line in raw.splitlines():
+        fields = line.split()
+        if len(fields) == _STAT_FIELDS and fields[1].isdigit():
+            counters[fields[0]] = int(fields[1])
+    return counters or None
 
 
 def headroom_bytes(*, cgroup_root: Path = CGROUP_ROOT, meminfo: Path = MEMINFO) -> int | None:

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from findling.memory_guard import admits, anon_bytes, headroom_bytes
+from findling.memory_guard import admits, anon_bytes, headroom_bytes, memory_events
 
 GIB = 1024**3
 KIB = 1024
@@ -26,8 +26,11 @@ def _tree(
     memory_max: str | None,
     anon: int | None = None,
     file_cache: int = 10 * GIB,
+    events: str | None = None,
 ) -> Path:
     root.mkdir(parents=True, exist_ok=True)
+    if events is not None:
+        (root / "memory.events").write_text(events, encoding="ascii")
     if memory_max is not None:
         (root / "memory.max").write_text(memory_max + "\n", encoding="ascii")
     if anon is not None:
@@ -110,3 +113,35 @@ def test_admission_needs_a_readable_headroom_of_at_least_the_need() -> None:
     assert admits(None, need=1) is False
     assert admits(10, need=10) is True
     assert admits(9, need=10) is False
+
+
+def test_the_counters_of_memory_events_are_read(tmp_path: Path) -> None:
+    root = _tree(tmp_path / "cg", memory_max="max", events="low 0\nhigh 0\nmax 7\noom 0\noom_kill 1\n")
+
+    assert memory_events(root) == {"low": 0, "high": 0, "max": 7, "oom": 0, "oom_kill": 1}
+
+
+def test_a_missing_memory_events_is_none(tmp_path: Path) -> None:
+    # cgroup v1, or the root cgroup: the file does not exist.
+    root = _tree(tmp_path / "cg", memory_max="max")
+
+    assert memory_events(root) is None
+    assert memory_events(tmp_path / "nowhere") is None
+
+
+def test_an_empty_or_broken_memory_events_is_none(tmp_path: Path) -> None:
+    empty = _tree(tmp_path / "empty", memory_max="max", events="")
+    broken = _tree(tmp_path / "broken", memory_max="max", events="max seven\noom -1\nnonsense\n")
+    binary = tmp_path / "binary"
+    binary.mkdir()
+    (binary / "memory.events").write_bytes(b"max \xff\xfe\n")
+
+    assert memory_events(empty) is None
+    assert memory_events(broken) is None
+    assert memory_events(binary) is None
+
+
+def test_a_broken_line_does_not_hide_the_good_ones(tmp_path: Path) -> None:
+    root = _tree(tmp_path / "cg", memory_max="max", events="max 3\ngarbage here now\noom_kill 2\n")
+
+    assert memory_events(root) == {"max": 3, "oom_kill": 2}

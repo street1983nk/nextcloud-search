@@ -27,7 +27,11 @@ on purpose: INDEX_WORKERS stays a constant, the profile is the only way to move
 them.
 
 Phase 24 computes and reports only. No value is wired into the poller, the
-writer or the sandbox yet. Note for phases 25 and 26: profile values such as
+writer or the sandbox yet. Phase 26 adds the cap of the memory guard
+(note_cap): after repeated memory pressure or an OOM kill findling.guard caps
+the effective level one below where it stood, as a third term of the minimum
+(D-26-01). The chosen profile is never touched; the cap is handed in as a
+Profile, this module never imports the guard (cycle). Note for phases 25 and 26: profile values such as
 ocr_max_pages do not reach the spawn child of extract/sandbox.py through
 settings(); the child reads its own environment, so the values have to be
 handed over at spawn time (24-RESEARCH.md, Pitfall 6).
@@ -157,10 +161,15 @@ def suggest(hardware: Hardware | None) -> Profile:
     return Profile.ECONOMY
 
 
-def effective(chosen: Profile | None, fitting: Profile) -> Profile:
-    """min(chosen, fitting); never read counts as economy, never switches up (D-24-07)."""
+def effective(chosen: Profile | None, fitting: Profile, cap: Profile | None = None) -> Profile:
+    """min(chosen, fitting, cap); never read counts as economy, never switches up (D-24-07).
+
+    ``cap`` is the cap of the memory guard (D-26-01), None when there is none.
+    """
     wanted = Profile.ECONOMY if chosen is None else chosen
-    return min(wanted, fitting, key=PROFILE_ORDER.index)
+    if cap is None:
+        return min(wanted, fitting, key=PROFILE_ORDER.index)
+    return min(wanted, fitting, cap, key=PROFILE_ORDER.index)
 
 
 def _memory_term(profile: Profile, hardware: Hardware | None, *, extra_bytes: int) -> int:
@@ -300,6 +309,8 @@ class ProfileSnapshot:
     chosen: Profile | None
     suggested: Profile
     effective: Profile
+    # The cap of the memory guard in force (D-26-01), None when there is none.
+    cap: Profile | None
     resolution: Resolution
     # The precision in force as findling.precision reports it, "int8" or "fp32".
     weights: str
@@ -309,7 +320,7 @@ class ProfileSnapshot:
 
     @property
     def downgraded(self) -> bool:
-        """True when a chosen profile does not fit the box and a smaller one runs."""
+        """True when a smaller level than the chosen one runs: the box or the guard cap."""
         return self.chosen is not None and self.effective != self.chosen
 
 
@@ -326,15 +337,18 @@ def _embed_lane_fits(level: Profile, hardware: Hardware | None, weights: str, sl
     return term >= max(1, slots)
 
 
-def _compute(hardware: Hardware | None, chosen: Profile | None, weights: str) -> ProfileSnapshot:
+def _compute(
+    hardware: Hardware | None, chosen: Profile | None, weights: str, cap: Profile | None = None
+) -> ProfileSnapshot:
     suggested = suggest(hardware)
-    level = effective(chosen, suggested)
+    level = effective(chosen, suggested, cap)
     resolution = resolve(level, hardware, weights=weights)
     return ProfileSnapshot(
         hardware=hardware,
         chosen=chosen,
         suggested=suggested,
         effective=level,
+        cap=cap,
         resolution=resolution,
         weights=weights,
         embed_lane_fits=_embed_lane_fits(level, hardware, weights, resolution.values.ocr_slots),
@@ -350,12 +364,13 @@ def _compute(hardware: Hardware | None, chosen: Profile | None, weights: str) ->
 # itself (24-RESEARCH.md, Pitfall 3). If the box grows, the chosen profile
 # applies again from the next start on (D-24-07).
 #
-# The snapshot is computed only in note_hardware, note_chosen and reset.
+# The snapshot is computed only in the note_* setters and reset.
 # resolve() reads the environment, which is fixed per process; computing it on
 # write means the status route never reads the environment on a poll.
 _HARDWARE: Hardware | None = None
 _CHOSEN: Profile | None = None
 _WEIGHTS: str = _INT8
+_CAP: Profile | None = None
 _SNAPSHOT: ProfileSnapshot = _compute(None, None, _INT8)
 
 
@@ -363,7 +378,21 @@ def note_hardware(hardware: Hardware) -> None:
     """Publish the reading of this start. Called once from the lifespan."""
     global _HARDWARE, _SNAPSHOT
     _HARDWARE = hardware
-    _SNAPSHOT = _compute(_HARDWARE, _CHOSEN, _WEIGHTS)
+    _SNAPSHOT = _compute(_HARDWARE, _CHOSEN, _WEIGHTS, _CAP)
+
+
+def note_cap(cap: Profile | None) -> None:
+    """Publish the cap of the memory guard, None when it was lifted (D-26-01).
+
+    Called by findling.guard on every change of its cap; this module never
+    imports that one (cycle). The chosen profile stays as it is, only the
+    effective level moves. The snapshot is only recomputed on a change.
+    """
+    global _CAP, _SNAPSHOT
+    if cap is _CAP:
+        return
+    _CAP = cap
+    _SNAPSHOT = _compute(_HARDWARE, _CHOSEN, _WEIGHTS, _CAP)
 
 
 def note_weights(value: str | None) -> None:
@@ -377,7 +406,7 @@ def note_weights(value: str | None) -> None:
     if value not in _WEIGHT_NAMES or value == _WEIGHTS:
         return
     _WEIGHTS = value
-    _SNAPSHOT = _compute(_HARDWARE, _CHOSEN, _WEIGHTS)
+    _SNAPSHOT = _compute(_HARDWARE, _CHOSEN, _WEIGHTS, _CAP)
 
 
 def note_chosen(value: str | None) -> None:
@@ -394,7 +423,7 @@ def note_chosen(value: str | None) -> None:
     if chosen is _CHOSEN:
         return
     _CHOSEN = chosen
-    _SNAPSHOT = _compute(_HARDWARE, _CHOSEN, _WEIGHTS)
+    _SNAPSHOT = _compute(_HARDWARE, _CHOSEN, _WEIGHTS, _CAP)
 
 
 def snapshot() -> ProfileSnapshot:
@@ -408,8 +437,9 @@ def snapshot() -> ProfileSnapshot:
 
 def reset() -> None:
     """Back to the resting state. For tests only; the container never forgets."""
-    global _HARDWARE, _CHOSEN, _WEIGHTS, _SNAPSHOT
+    global _HARDWARE, _CHOSEN, _WEIGHTS, _CAP, _SNAPSHOT
     _HARDWARE = None
     _CHOSEN = None
     _WEIGHTS = _INT8
+    _CAP = None
     _SNAPSHOT = _compute(None, None, _INT8)
