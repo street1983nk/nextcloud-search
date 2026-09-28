@@ -168,7 +168,41 @@ Plans:
   3. Der Durchsatzfaktor N Slots gegen Sparsam ist auf dem arm64-CI-Runner gemessen und dokumentiert (Rauschgrenze 1,05 aus Vorarbeit 2.5); Sparsam liest weiterhin mit genau einem Slot, der Pin-Test bleibt grün.
   4. Bei knapper cgroup drosselt der Speicherwächter die Slotzahl; wiederholtes memory.events max oder ein OOM-Kill senkt das Profil selbsttätig um eine Stufe, und Statusroute und Adminseite nennen Stufe und Ursache.
 
-**Plans**: TBD
+**Plans**: 14 plans in 6 Wellen
+
+Plans:
+**Wave 1**
+
+- [ ] 26-01-PLAN.md , Kind-Härtung nice 10 und oom_score_adj 1000, ChildKilled/EngineKilled, halt() (PAR-02, PAR-03, D-26-11, D-26-12, D-26-16), Welle 1
+- [ ] 26-02-PLAN.md , PHP: KIND_BATCH_INDEX_LANE ocr 32 nur im Lane index, profile_confirmed in der Profil-Route (PAR-02, PAR-03, D-26-04/05/13/14), Welle 1
+- [ ] 26-03-PLAN.md , Zeilen je Slot in config, memory_events, guard.py (Drossel, Eskalation, Kappe, Token), Kappe in profile.effective (PAR-02, PAR-03), Welle 1
+- [ ] 26-05-PLAN.md , PHP-Adminseite: Wächter-, Rückweg- und Drosselzeile, acht Kataloge (PAR-03, D-26-01/02/04), Welle 1
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 26-04-PLAN.md , Writer-Sperre, SlotPool und SlotGate mit eigenem Executor, Pins nach Welle 1 (PAR-02), Welle 2
+- [ ] 26-07-PLAN.md , embed_slots 2 in Leistung wirksam, Sperren um Chunker und Schreibaufrufe (PAR-02, D-25-12), Welle 2
+- [ ] 26-08-PLAN.md , Status: GuardReport im Vertrag der Adminseite, Vertragstest (PAR-03), Welle 2
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 26-06-PLAN.md , Poller-Staffel unter N Slots: Zeilenbeschnitt, Tasks, Barriere; confirmed und Paritätstests (PAR-02, PAR-03, D-26-05/06/07/13/14), Welle 3
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 26-09-PLAN.md , Drossel je Runde, Kill-Meldung, Solo-Wiederholung, Mehr-Slot-Merker, Token-Abgleich (PAR-02, PAR-03, D-26-02/16), Welle 4
+- [ ] 26-10-PLAN.md , Wächter-Task mit Persistenz in state.db, Unrein-Ende, Lifespan (PAR-03, D-26-01/03/04/15/16), Welle 4
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 26-11-PLAN.md , Kill-Test beider Fälle in Linux-CI mit N = 4 (PAR-02, PAR-03, D-26-08, SC2), Welle 5
+- [ ] 26-12-PLAN.md , Messleiter 1/2/4 (slot_ladder.py, measure.yml) und Doku der Phase (PAR-02, PAR-03, D-26-09, SC3), Welle 5
+- [ ] 26-13-PLAN.md , Live-Latenzprobe nice auf dem nc35-Harness mit Owner-Abnahme (PAR-02, D-26-12), Welle 5, Checkpoint
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 26-14-PLAN.md , Push-Entscheid, CI-Belege einsammeln (SC2, SC3, PHPUnit), Owner-Abnahme (PAR-02, PAR-03), Welle 6, Checkpoint
+
 **Research-Flag**: ja (OOM-Kette R1, Abbruch halber Staffeln, Sperrfristen bei KIND_BATCH[ocr] = 2N)
 
 ### Phase 27: Vorab-Prüfung und Settings-Oberfläche
