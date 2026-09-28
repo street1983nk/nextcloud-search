@@ -1,0 +1,12 @@
+label=fp32
+sequence_len=512
+embed_token_cap=1024
+batch=8
+threads=2
+onnxruntime=1.29.0
+rss_anon_before_kb=313120
+rss_anon_session_kb=833476
+rss_anon_first_batch_kb=833108
+rss_anon_after_all_kb=836484
+batch_seconds_median=2.7111
+passages_per_second=3.220
