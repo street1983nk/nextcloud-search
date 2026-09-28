@@ -11,6 +11,7 @@ use OCP\AppFramework\Http;
 use OCP\IAppConfig;
 use OCP\IRequest;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
@@ -24,6 +25,10 @@ use Psr\Log\LoggerInterface;
  * value that arrived through occ and is not a profile turns into economy
  * without appearing in the log, and a read that throws answers 500 without a
  * name, so the container keeps the last known profile (D-24-02).
+ *
+ * Since phase 25 the same answer carries the model precision (D-25-02), and
+ * a stored precision outside the set travels as null instead of the default
+ * (D-25-03), so the container keeps the last known one.
  *
  * SettingsService is final, so it is not doubled. A real one is built on a
  * doubled IAppConfig, which is the seam the value arrives through anyway.
@@ -52,12 +57,25 @@ final class ProfileControllerTest extends TestCase {
 		return $value;
 	}
 
-	/** Stage the stored profile; null means the key is absent. */
-	private function storedProfile(?string $value): void {
+	/**
+	 * Stage the stored values; null means the key is absent.
+	 *
+	 * One map over both keys, because the route reads both in one request and
+	 * a double that answered the profile for every key would hand the profile
+	 * name out as a precision.
+	 */
+	private function stored(?string $profile, ?string $precision = null): void {
 		// An absent key is what IAppConfig answers with the default it was
 		// handed, so the double returns exactly that.
+		$values = array_filter(
+			[
+				SettingsService::KEY_PROFILE => $profile,
+				SettingsService::KEY_MODEL_PRECISION => $precision,
+			],
+			static fn (?string $value): bool => $value !== null,
+		);
 		$this->appConfig->method('getValueString')->willReturnCallback(
-			static fn (string $app, string $key, string $default = ''): string => ($value !== null && $key === SettingsService::KEY_PROFILE) ? $value : $default,
+			static fn (string $app, string $key, string $default = ''): string => $values[$key] ?? $default,
 		);
 	}
 
@@ -73,25 +91,25 @@ final class ProfileControllerTest extends TestCase {
 	}
 
 	public function testTheBackendGetsTheStoredProfile(): void {
-		$this->storedProfile('standard');
+		$this->stored('standard');
 
 		$response = $this->controller($this->backendAppId())->profile();
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
-		self::assertSame(['profile' => 'standard'], $response->getData());
+		self::assertSame(['profile' => 'standard', 'precision' => 'int8'], $response->getData());
 	}
 
 	public function testAMissingKeyMeansEconomy(): void {
-		$this->storedProfile(null);
+		$this->stored(null);
 
 		$response = $this->controller($this->backendAppId())->profile();
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
-		self::assertSame(['profile' => 'economy'], $response->getData());
+		self::assertSame(['profile' => 'economy', 'precision' => 'int8'], $response->getData());
 	}
 
 	public function testAValueOutsideTheSetMeansEconomyAndIsNotLogged(): void {
-		$this->storedProfile('turbo');
+		$this->stored('turbo');
 
 		$this->logger->expects(self::once())->method('warning')->with(
 			self::isString(),
@@ -103,7 +121,7 @@ final class ProfileControllerTest extends TestCase {
 		$response = $this->controller($this->backendAppId())->profile();
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
-		self::assertSame(['profile' => 'economy'], $response->getData());
+		self::assertSame(['profile' => 'economy', 'precision' => 'int8'], $response->getData());
 	}
 
 	public function testAFailedReadAnswersAsAFailureWithoutAProfileName(): void {
@@ -124,13 +142,14 @@ final class ProfileControllerTest extends TestCase {
 		$data = $response->getData();
 		self::assertIsArray($data);
 		self::assertArrayNotHasKey('profile', $data);
-		foreach (SettingsService::PROFILES as $name) {
+		self::assertArrayNotHasKey('precision', $data);
+		foreach ([...SettingsService::PROFILES, ...SettingsService::PRECISIONS] as $name) {
 			self::assertStringNotContainsString($name, json_encode($data, JSON_THROW_ON_ERROR));
 		}
 	}
 
 	public function testAForeignExAppIsRefusedWithoutAProfileName(): void {
-		$this->storedProfile('performance');
+		$this->stored('performance', 'fp32');
 		$this->appConfig->expects(self::never())->method('getValueString');
 
 		$response = $this->controller('some_other_backend')->profile();
@@ -142,5 +161,52 @@ final class ProfileControllerTest extends TestCase {
 		foreach (SettingsService::PROFILES as $name) {
 			self::assertStringNotContainsString($name, json_encode($data, JSON_THROW_ON_ERROR));
 		}
+	}
+
+	// -- the precision key (MOD-02, D-25-02) ----------------------------------
+
+	public function testTheStoredPrecisionTravelsNextToTheProfile(): void {
+		$this->stored('standard', 'fp32');
+
+		$response = $this->controller($this->backendAppId())->profile();
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame(['profile' => 'standard', 'precision' => 'fp32'], $response->getData());
+	}
+
+	/** @return array<string, array{string}> */
+	public static function precisionsOutsideTheSet(): array {
+		return [
+			'wrong case' => ['FP32'],
+			'unknown precision' => ['fp16'],
+			'empty' => [''],
+		];
+	}
+
+	#[DataProvider('precisionsOutsideTheSet')]
+	public function testAPrecisionOutsideTheSetIsNullAndIsNotLogged(string $stored): void {
+		// null and not the default, the one deliberate difference to the profile
+		// (D-25-03): a typo in occ must not turn a fp32 box into int8, which
+		// would mean a reindex and the deletion of the fp32 model. The container
+		// keeps its last known precision on null.
+		$this->stored('standard', $stored);
+
+		$this->logger->expects(self::once())->method('warning')->with(
+			self::isString(),
+			self::callback(static function (array $context) use ($stored): bool {
+				return $stored === '' || !str_contains(json_encode($context, JSON_THROW_ON_ERROR), $stored);
+			}),
+		);
+
+		$response = $this->controller($this->backendAppId())->profile();
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame(['profile' => 'standard', 'precision' => null], $response->getData());
+	}
+
+	public function testThePrecisionsAreAClosedSetWithInt8AsDefault(): void {
+		self::assertSame(['int8', 'fp32'], SettingsService::PRECISIONS);
+		self::assertSame('int8', SettingsService::PRECISION_DEFAULT);
+		self::assertNotSame(SettingsService::KEY_PROFILE, SettingsService::KEY_MODEL_PRECISION);
 	}
 }
