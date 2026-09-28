@@ -424,6 +424,7 @@ def test_the_reviewed_exception_covers_exactly_the_named_modules() -> None:
     assert scan_source("store/repo.py", "database.parent.mkdir(parents=True, exist_ok=True)\n") == []
     assert scan_source("index/open.py", "path.mkdir(parents=True, exist_ok=True)\n") == []
     assert scan_source("worker/poller.py", "scratch.mkdir(parents=True, exist_ok=True)\n") == []
+    assert scan_source("embed/weights.py", "directory.mkdir(parents=True, exist_ok=True)\n") == []
 
 
 def test_the_reviewed_exception_does_not_leak_into_other_modules() -> None:

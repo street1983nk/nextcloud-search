@@ -15,11 +15,16 @@ Every request here goes to a mock transport. No test touches the network.
 
 from __future__ import annotations
 
+import hashlib
+import os
+from collections.abc import Awaitable, Callable, Iterator
 from pathlib import Path
+from types import SimpleNamespace
 
 import httpx
 import pytest
 
+from findling.embed import weights
 from findling.nc.client import ASSET_HOSTS, AssetRefused, fetch_release_asset
 
 START = "https://github.com/street1983nk/nextcloud-search/releases/download/tag/asset.onnx"
@@ -224,3 +229,226 @@ async def test_the_own_client_follows_no_redirect_and_ignores_the_nextcloud_cert
 
 def test_the_host_allowlist_names_exactly_the_two_github_hosts() -> None:
     assert frozenset({"github.com", "release-assets.githubusercontent.com"}) == ASSET_HOSTS
+
+
+# ---------------------------------------------------------------------------
+# The file side: findling.embed.weights
+# ---------------------------------------------------------------------------
+
+WEIGHTS = b"stand-in for the fp32 onnx file\n" * 40
+WEIGHTS_SHA256 = hashlib.sha256(WEIGHTS).hexdigest()
+
+
+@pytest.fixture
+def small_release(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Point the recorded digest and length at the small stand-in file."""
+    monkeypatch.setattr(weights, "FP32_SHA256", WEIGHTS_SHA256)
+    monkeypatch.setattr(weights, "FP32_BYTES", len(WEIGHTS))
+
+
+@pytest.fixture(autouse=True)
+def _fresh_cache() -> Iterator[None]:
+    weights.forget_verdicts()
+    yield
+    weights.forget_verdicts()
+
+
+class _Fetch:
+    """A fetch double: hands prepared bytes to ``write`` and counts its calls."""
+
+    def __init__(self, body: bytes = WEIGHTS, error: Exception | None = None) -> None:
+        self._body = body
+        self._error = error
+        self.calls = 0
+
+    async def __call__(self, url: str, write: Callable[[bytes], Awaitable[None]], *, cap: int) -> None:
+        del url, cap
+        self.calls += 1
+        half = len(self._body) // 2
+        await write(self._body[:half])
+        if self._error is not None:
+            raise self._error
+        await write(self._body[half:])
+
+
+def _leftovers(models_dir: Path) -> list[str]:
+    directory = models_dir / weights.FP32_DIR_NAME
+    return sorted(path.name for path in directory.iterdir()) if directory.exists() else []
+
+
+def _place(models_dir: Path, body: bytes = WEIGHTS) -> Path:
+    target = weights.fp32_weights_path(models_dir)
+    target.parent.mkdir(parents=True)
+    target.write_bytes(body)
+    return target
+
+
+def test_the_recorded_asset_is_the_release_of_plan_25_01() -> None:
+    assert weights.FP32_SHA256 == "ca456c06b3a9505ddfd9131408916dd79290368331e7d76bb621f1cba6bc8665"
+    assert weights.FP32_BYTES == 470_268_510
+    assert weights.FP32_ASSET_URL == (
+        "https://github.com/street1983nk/nextcloud-search/releases/download/"
+        "model-e5-small-fp32-614241f/multilingual-e5-small-fp32-614241f.onnx"
+    )
+    assert httpx.URL(weights.FP32_ASSET_URL).host in ASSET_HOSTS
+    assert frozenset({weights.PROCURED, weights.UNAVAILABLE, weights.WRONG_DIGEST, weights.NO_ROOM}) == (
+        weights.PROCURE_OUTCOMES
+    )
+
+
+@pytest.mark.usefixtures("small_release")
+async def test_procure_installs_a_matching_download_and_leaves_no_part(tmp_path: Path) -> None:
+    outcome = await weights.procure_fp32(tmp_path, _Fetch(), min_free_bytes=0)
+
+    assert outcome == weights.PROCURED
+    target = tmp_path / "multilingual-e5-small-fp32" / "model.onnx"
+    assert target.read_bytes() == WEIGHTS
+    assert _leftovers(tmp_path) == ["model.onnx"]
+    assert weights.fp32_verified(tmp_path) is True
+
+
+@pytest.mark.usefixtures("small_release")
+async def test_a_failing_fetch_is_unavailable_and_leaves_nothing(tmp_path: Path) -> None:
+    outcome = await weights.procure_fp32(tmp_path, _Fetch(error=OSError("connection reset")), min_free_bytes=0)
+
+    assert outcome == weights.UNAVAILABLE
+    assert _leftovers(tmp_path) == []
+
+
+@pytest.mark.usefixtures("small_release")
+async def test_a_refused_asset_is_unavailable_and_leaves_nothing(tmp_path: Path) -> None:
+    outcome = await weights.procure_fp32(tmp_path, _Fetch(error=AssetRefused("host")), min_free_bytes=0)
+
+    assert outcome == weights.UNAVAILABLE
+    assert _leftovers(tmp_path) == []
+
+
+@pytest.mark.usefixtures("small_release")
+async def test_a_wrong_digest_of_the_right_length_is_refused_and_leaves_nothing(tmp_path: Path) -> None:
+    forged = bytes(reversed(WEIGHTS))
+    assert len(forged) == len(WEIGHTS)
+
+    outcome = await weights.procure_fp32(tmp_path, _Fetch(forged), min_free_bytes=0)
+
+    assert outcome == weights.WRONG_DIGEST
+    assert _leftovers(tmp_path) == []
+
+
+@pytest.mark.usefixtures("small_release")
+async def test_a_short_download_is_refused_and_leaves_nothing(tmp_path: Path) -> None:
+    outcome = await weights.procure_fp32(tmp_path, _Fetch(WEIGHTS[:-1]), min_free_bytes=0)
+
+    assert outcome == weights.WRONG_DIGEST
+    assert _leftovers(tmp_path) == []
+
+
+@pytest.mark.usefixtures("small_release")
+async def test_too_little_room_is_no_room_and_nothing_is_fetched(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    reserve = 1000
+    free = len(WEIGHTS) + reserve - 1
+
+    def disk_usage(_path: object) -> SimpleNamespace:
+        return SimpleNamespace(total=free * 2, used=free, free=free)
+
+    monkeypatch.setattr(weights.shutil, "disk_usage", disk_usage)
+    fetch = _Fetch()
+
+    outcome = await weights.procure_fp32(tmp_path, fetch, min_free_bytes=reserve)
+
+    assert outcome == weights.NO_ROOM
+    assert fetch.calls == 0
+    assert not weights.fp32_weights_path(tmp_path).exists()
+
+
+@pytest.mark.usefixtures("small_release")
+async def test_procure_through_the_real_fetch_over_a_mock_transport(tmp_path: Path) -> None:
+    release = _Release({weights.FP32_ASSET_URL: _redirect(ASSET), ASSET: _ok(WEIGHTS)})
+
+    async with release.client() as client:
+
+        async def fetch(url: str, write: Callable[[bytes], Awaitable[None]], *, cap: int) -> None:
+            await fetch_release_asset(url, write, cap=cap, client=client)
+
+        outcome = await weights.procure_fp32(tmp_path, fetch, min_free_bytes=0)
+
+    assert outcome == weights.PROCURED
+    assert weights.fp32_weights_path(tmp_path).read_bytes() == WEIGHTS
+    assert [request.url.host for request in release.requests] == ["github.com", "release-assets.githubusercontent.com"]
+
+
+@pytest.mark.usefixtures("small_release")
+def test_a_sideloaded_file_is_verified_once_and_again_after_a_change(tmp_path: Path) -> None:
+    target = _place(tmp_path)
+    before = weights.hash_count()
+
+    assert weights.fp32_verified(tmp_path) is True
+    assert weights.hash_count() == before + 1
+
+    assert weights.fp32_verified(tmp_path) is True
+    assert weights.hash_count() == before + 1
+
+    status = target.stat()
+    os.utime(target, ns=(status.st_atime_ns, status.st_mtime_ns + 1_000_000_000))
+
+    assert weights.fp32_verified(tmp_path) is True
+    assert weights.hash_count() == before + 2
+
+
+@pytest.mark.usefixtures("small_release")
+def test_a_sideloaded_file_with_a_wrong_digest_is_not_verified(tmp_path: Path) -> None:
+    _place(tmp_path, bytes(reversed(WEIGHTS)))
+
+    assert weights.fp32_verified(tmp_path) is False
+
+
+@pytest.mark.usefixtures("small_release")
+def test_a_file_of_the_wrong_size_is_not_verified_and_not_hashed(tmp_path: Path) -> None:
+    _place(tmp_path, WEIGHTS + b"x")
+    before = weights.hash_count()
+
+    assert weights.fp32_verified(tmp_path) is False
+    assert weights.hash_count() == before
+
+
+@pytest.mark.usefixtures("small_release")
+def test_a_missing_file_costs_one_stat_and_no_hash(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    target = weights.fp32_weights_path(tmp_path)
+    original = Path.stat
+    stats: list[Path] = []
+
+    def counting_stat(self: Path, *, follow_symlinks: bool = True) -> os.stat_result:
+        if self == target:
+            stats.append(self)
+        return original(self, follow_symlinks=follow_symlinks)
+
+    monkeypatch.setattr(Path, "stat", counting_stat)
+    before = weights.hash_count()
+
+    assert weights.fp32_verified(tmp_path) is False
+    assert len(stats) == 1
+    assert weights.hash_count() == before
+
+
+@pytest.mark.usefixtures("small_release")
+def test_remove_drops_a_sideloaded_file(tmp_path: Path) -> None:
+    target = _place(tmp_path)
+    assert weights.fp32_verified(tmp_path) is True
+
+    assert weights.remove_fp32_weights(tmp_path) is True
+    assert not target.exists()
+    assert weights.fp32_verified(tmp_path) is False
+    assert weights.remove_fp32_weights(tmp_path) is False
+
+
+def test_clear_leftovers_removes_only_the_part_file(tmp_path: Path) -> None:
+    directory = tmp_path / weights.FP32_DIR_NAME
+    directory.mkdir()
+    (directory / "model.onnx.part").write_bytes(b"half")
+    (directory / "model.onnx").write_bytes(b"whole")
+    (directory / "notes.txt").write_text("keep", encoding="utf-8")
+
+    assert weights.clear_leftovers(tmp_path) == 1
+    assert sorted(path.name for path in directory.iterdir()) == ["model.onnx", "notes.txt"]
+    assert weights.clear_leftovers(tmp_path) == 0
