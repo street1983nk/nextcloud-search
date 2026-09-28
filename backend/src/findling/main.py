@@ -34,6 +34,7 @@ import logging
 import os
 import sqlite3
 from collections.abc import AsyncIterator, Callable, Mapping, Sequence
+from concurrent.futures import Future
 from contextlib import asynccontextmanager
 from functools import partial
 from typing import Any, Final
@@ -57,6 +58,7 @@ from findling.instance import claim_the_volume, volume_is_shared
 from findling.nc.client import AppAPIAuthMiddleware, AsyncNextcloudApp, run_app, set_handlers
 from findling.profile import note_hardware
 from findling.store.repo import open_read_only, open_store
+from findling.worker.embedding import EmbedRunner
 from findling.worker.poller import POLLER_STOP_SECONDS, STAND_DOWN_SECONDS, Poller, _pause, default_poller
 from findling.worker.reconcile import RECONCILE_STOP_SECONDS, Reconcile, default_reconcile
 
@@ -72,6 +74,19 @@ _POLLER: Poller | None = None
 # arm and silence it. It is None while the comparison is switched off, which is
 # the difference between a task that does nothing and no task at all.
 _RECONCILE: Reconcile | None = None
+
+# The embed runner beside the poller (PAR-01), at module level for the same
+# reason: the AppAPI handler arms and silences it, and the rebuild stands it down
+# together with the poller. It drives the very track the poller embeds inline
+# through, so one lock orders both drivers. It exists while the lifespan is up
+# and is None outside it. In Economy it parks every round before it opens
+# anything, so the container of today pays for it with one idle task (PAR-04).
+_EMBEDDING: EmbedRunner | None = None
+
+# How long the shutdown waits for the embed round in flight. A round is bounded
+# by EMBED_CLAIM_BATCH rows, the budget of the poller covers it, and over it the
+# task is cancelled and the held rows go back per unlock all the same.
+EMBEDDING_STOP_SECONDS: Final = 30.0
 
 # The fourth task and the stop event it runs under, at module level for the
 # reason the two above are: since review finding WR-02 of phase 21 the AppAPI
@@ -186,6 +201,11 @@ def active_reconcile() -> Reconcile | None:
     return _RECONCILE
 
 
+def active_embedding() -> EmbedRunner | None:
+    """The embed runner of this process, None while the lifespan is not running."""
+    return _EMBEDDING
+
+
 def _remember_the_enable() -> None:
     """Leave the mark that lets the next start of this container arm itself.
 
@@ -241,7 +261,8 @@ async def enabled_handler(enabled: bool, nc: AsyncNextcloudApp) -> str:
     container looks healthy in its own log while it drains the queue of an app the
     admin switched off. The reconcile is armed with the same call and for the same
     reason: a backend that is off but keeps reading the file list of the instance
-    is the same mistake with a different verb.
+    is the same mistake with a different verb. The embed runner follows the
+    poller in both directions, because it claims from the same work stock.
 
     The mark on the volume is written before the arming and removed after the
     silencing, and the order is the whole safety of it. A crash between the two
@@ -272,7 +293,7 @@ async def enabled_handler(enabled: bool, nc: AsyncNextcloudApp) -> str:
             "the enable is remembered but nothing is armed: this volume belongs to another Nextcloud instance, "
             "see docs/uninstall.md"
         )
-    for task in (active_poller(), active_reconcile()):
+    for task in (active_poller(), active_reconcile(), active_embedding()):
         if task is None:
             continue
         if not enabled:
@@ -357,6 +378,24 @@ async def _guarded_reconcile(reconcile: Reconcile, stop_event: asyncio.Event) ->
         LOGGER.error("the reconcile task ended in an unexpected %s; search and indexing continue", kind_of_failure)
 
 
+async def _guarded_embedding(runner: EmbedRunner, stop_event: asyncio.Event) -> None:
+    """Run the embed runner and let nothing out of it but a log line.
+
+    Built exactly like :func:`_guarded_reconcile`, and for the same ranking.
+    ``EmbedRunner.run`` already survives a failing round and hands its rows back
+    first; this is the layer above it, for a failure that ends the loop itself.
+    The indexing loop embeds inline whenever the runner is parked, so a runner
+    that is gone costs the parallelism of PAR-01 and never a row or the search.
+    """
+    try:
+        await runner.run(stop_event)
+    except asyncio.CancelledError:
+        raise
+    except Exception as error:
+        kind_of_failure = type(error).__name__
+        LOGGER.error("the embed runner ended in an unexpected %s; search and indexing continue", kind_of_failure)
+
+
 async def _release_when_idle(stop_event: asyncio.Event) -> None:
     """Let go of both memory holders once nothing has embedded for the span.
 
@@ -381,10 +420,21 @@ async def _release_when_idle(stop_event: asyncio.Event) -> None:
     **The cutter is let go only behind a release that really happened.** Both
     holders fall together (MEM-02) and the order of the two is not free:
     :func:`~findling.embed.engine.release_if_idle` carries the clock and the
-    identity check, :meth:`~findling.worker.poller.Poller.release_cutter`
-    carries no span of its own. A ``release_cutter`` without a release in front
-    of it would throw the cutter away after every quiet stretch, including the
-    ones in which the search side embedded a moment ago.
+    identity check,
+    :meth:`~findling.worker.embedding.EmbeddingTrack.release_cutter` carries no
+    span of its own. A ``release_cutter`` without a release in front of it would
+    throw the cutter away after every quiet stretch, including the ones in which
+    the search side embedded a moment ago.
+
+    **Two drivers, one owner** (plan 25-10, Pitfall 4). Since the embed runner
+    exists, a row can be in work on the track without the poller holding it, so
+    the question goes to the track, which counts rows whichever driver handed
+    them in, and the cutter is let go through the track as well. The rows the
+    two drivers hold between two embeddings count too, for the reason of
+    Pitfall 3 below: a pass that is between two rows of its claim needs the
+    cutter again in a moment. Behind all of it the idle guard of plan 25-02
+    asks once more under the model lock, so a row that starts between this
+    reading and the release still finds its weights.
 
     ``_pause`` is imported out of ``worker/poller.py`` although it is private,
     and that is the smaller of the two prices. A second copy of those three
@@ -406,15 +456,17 @@ async def _release_when_idle(stop_event: asyncio.Event) -> None:
                 await asyncio.to_thread(warm)
                 continue
             poller = active_poller()
-            if poller is not None and poller.busy:
+            track = poller.track if poller is not None else None
+            drivers = [driver for driver in (poller, active_embedding()) if driver is not None]
+            if track is not None and (track.busy or any(driver.busy for driver in drivers)):
                 # Pitfall 3. Letting go between two batches means paying for the
                 # weights again seconds later, the unload turns from a saving
                 # into a cost over a full pass, and nothing anywhere turns red.
                 continue
-            # No poller at all means no pass can be running, so the absence
+            # No poller at all means no track and no pass, so the absence
             # answers the same question the property does.
-            if await asyncio.to_thread(release_if_idle, ttl_seconds) and poller is not None:
-                await asyncio.to_thread(poller.release_cutter)
+            if await asyncio.to_thread(release_if_idle, ttl_seconds) and track is not None:
+                await asyncio.to_thread(track.release_cutter)
         except asyncio.CancelledError:
             # Ahead of the general branch, exactly like _guarded_reconcile: a
             # task that was cancelled must not read as an unexpected failure.
@@ -461,7 +513,21 @@ def _stand_the_poller_down(loop: asyncio.AbstractEventLoop) -> bool:
     A container without a poller is not a fault here. The task only exists
     inside the lifespan, and a rebuild that outlived it has nothing left to
     stand down, so the answer is True.
+
+    **The embed runner stands down first** (T-25-44). It drives the same track
+    and reads the text of a row through the index handle of that track, so an
+    embedding that went on during the swap would read out of the directory
+    being retired. It is silenced, its round in flight is waited for and its
+    rows go back; the poller behind it then closes the track, which is where
+    the handle on the old directory is given back. A runner that does not stand
+    down in time is the same answer as a poller that does not: nothing is
+    renamed, and :func:`_arm_the_poller` lets both go again.
     """
+    runner = active_embedding()
+    if runner is not None and not _wait_for_the_stand_down(
+        asyncio.run_coroutine_threadsafe(runner.stand_down(budget=STAND_DOWN_SECONDS), loop), "embed runner"
+    ):
+        return False
     poller = active_poller()
     if poller is None:
         return True
@@ -469,7 +535,16 @@ def _stand_the_poller_down(loop: asyncio.AbstractEventLoop) -> bool:
     # for the reason the band size of the rebuild is named at its call site:
     # this is the call that runs in a container, and how long a start waits for
     # a pass is a decision of whoever owns the start.
-    pending = asyncio.run_coroutine_threadsafe(poller.stand_down(budget=STAND_DOWN_SECONDS), loop)
+    return _wait_for_the_stand_down(
+        asyncio.run_coroutine_threadsafe(poller.stand_down(budget=STAND_DOWN_SECONDS), loop), "indexing task"
+    )
+
+
+def _wait_for_the_stand_down(pending: Future[bool], who: str) -> bool:
+    """Wait for one submitted stand down, and answer False for anything but True.
+
+    ``who`` is a fixed word of this module and never a value read from anywhere.
+    """
     try:
         return pending.result(timeout=STAND_DOWN_SECONDS + STAND_DOWN_GRACE_SECONDS)
     # Deliberately every exception, and the type name only, as everywhere in
@@ -477,7 +552,7 @@ def _stand_the_poller_down(loop: asyncio.AbstractEventLoop) -> bool:
     # the rebuild needs is the same one, namely that it may not rename anything.
     except Exception as error:
         pending.cancel()
-        LOGGER.error("the indexing task could not be stood down, an %s; no directory is swapped", type(error).__name__)
+        LOGGER.error("the %s could not be stood down, an %s; no directory is swapped", who, type(error).__name__)
         return False
 
 
@@ -490,10 +565,16 @@ def _arm_the_poller() -> None:
     afterwards would leave an installation with a backend that is off in
     Nextcloud and indexing in the container, which is the failure the mark exists
     against with the two sides swapped.
+
+    The embed runner is armed with it, on the same condition: it was stood down
+    with the poller, and a runner left silenced after a rebuild would put every
+    embed row back into the indexing loop for the life of the container.
     """
-    poller = active_poller()
-    if poller is not None and _was_enabled_before_this_start():
-        poller.arm()
+    if not _was_enabled_before_this_start():
+        return
+    for task in (active_poller(), active_embedding()):
+        if task is not None:
+            task.arm()
 
 
 def _rebuild_is_due() -> bool:
@@ -791,6 +872,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     _POLLER = default_poller(marks_stamped=resources.reset_read_side)
     indexing = asyncio.create_task(_POLLER.run(stop_indexing))
 
+    # The embed runner, over the track of that very poller (PAR-01). One track
+    # and one lock for both drivers, so a row is never embedded twice at once,
+    # and the poller knows the runner so that it can wait for it to park before
+    # it claims in Economy (IDX-08). Started silenced like the poller, and built
+    # without I/O: no client, no queue, no download and no precision question at
+    # the start (D-24-05). Where the level is Economy every round parks before
+    # it opens anything, which is the whole of what PAR-04 asks of this start.
+    global _EMBEDDING
+    stop_embedding = asyncio.Event()
+    _EMBEDDING = EmbedRunner(track=_POLLER.track)
+    _POLLER.attach_runner(_EMBEDDING)
+    embedding = asyncio.create_task(_guarded_embedding(_EMBEDDING, stop_embedding))
+
     # The second task, and only when the comparison is switched on. Not starting
     # it is different from starting one that returns at once: a task that exists
     # holds a state connection sooner or later, and an admin who switched the
@@ -858,7 +952,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "index into belongs to another instance"
         )
     elif was_enabled:
-        for task in (active_poller(), active_reconcile()):
+        for task in (active_poller(), active_reconcile(), active_embedding()):
             if task is not None:
                 task.arm()
         LOGGER.info("findling backend was enabled before this start, indexing continues without a switch")
@@ -895,6 +989,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         stop_indexing.set()
+        stop_embedding.set()
         stop_reconcile.set()
         stop_release.set()
         stop_rebuild.set()
@@ -917,6 +1012,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 await asyncio.gather(rebuilding, return_exceptions=True)
         _REBUILDING = None
         _STOP_REBUILD = None
+
+        # The embed runner goes before the poller, because the poller closes the
+        # track both of them drive: a round still embedding behind that close
+        # would read through a handle that is gone. Its rows go back per unlock
+        # like the poller's below (SC3), and an unlock that fails costs the lock
+        # timeout of those rows and never the rest of the shutdown (T-25-42).
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(asyncio.shield(embedding), timeout=EMBEDDING_STOP_SECONDS)
+        if not embedding.done():
+            embedding.cancel()
+            await asyncio.gather(embedding, return_exceptions=True)
+        with contextlib.suppress(Exception):
+            await _EMBEDDING.unlock_held()
+        await _EMBEDDING.aclose()
+        _EMBEDDING = None
 
         with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(asyncio.shield(indexing), timeout=POLLER_STOP_SECONDS)
