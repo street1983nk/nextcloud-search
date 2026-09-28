@@ -154,12 +154,14 @@ class QueueService {
 	 * download, and a hundred of them are still less work than one invoice.
 	 * content keeps the value the queue had before this phase.
 	 *
-	 * ocr is two, and that number is arithmetic. An OCR job may run up to 600 s
-	 * under the ceiling cascade of plan 03-05; a batch of 32 would be more than
-	 * five hours against a claim that expires after 1800 s, so the rows would
-	 * come back as free, count a retry each and end as failed(repeatedly_stuck)
-	 * while a worker is legitimately still working on them (phase research,
-	 * pitfall 11). Two of them stay under the timeout with room to spare.
+	 * ocr is two here, and that number is arithmetic. An OCR job may run up to
+	 * 600 s under the ceiling cascade of plan 03-05; a batch of 32 worked through
+	 * by one worker would be more than five hours against a claim that expires
+	 * after 1800 s, so the rows would come back as free, count a retry each and
+	 * end as failed(repeatedly_stuck) while a worker is legitimately still
+	 * working on them (phase research, pitfall 11). Two of them stay under the
+	 * timeout with room to spare. This is the value of the lanes all and embed;
+	 * the lane index has its own ceiling for ocr in KIND_BATCH_INDEX_LANE below.
 	 *
 	 * embed is eight, and what that number is NOT derived from is the memory
 	 * peak. The activation peak of the engine is set by the model batch, which
@@ -191,6 +193,32 @@ class QueueService {
 		QueueMapper::KIND_CONTENT => 32,
 		QueueMapper::KIND_OCR => 2,
 		QueueMapper::KIND_EMBED => 8,
+	];
+
+	/**
+	 * The ceilings of the lane index that differ from KIND_BATCH (D-26-05,
+	 * D-26-14).
+	 *
+	 * ocr is thirty two, which is two rows for each of at most sixteen OCR
+	 * slots of a container of 1.4 (two times the upper bound of 16 slots). The
+	 * container keeps two rows per slot it really runs and hands the rest back
+	 * through unlock at once, so no row waits out the lease behind a slot that
+	 * does not exist, and an unlocked row is refunded its retry. The lease of
+	 * 1800 s stays fixed (D-26-13): every slot works through two rows, which is
+	 * the arithmetic of the two above, per slot instead of per claim.
+	 *
+	 * Only in the lane index, and that restriction is the safety half of the
+	 * decision (D-26-14). In the lane all thirty two OCR rows would eat the one
+	 * shared budget of a claim that also carries the vector track, and a
+	 * container of 1.3, which only knows the lane all and runs one OCR worker,
+	 * would receive thirty two rows at once and lose most of them to the
+	 * lease. A container that asks for the lane index is by construction one
+	 * that splits its claims, and that is 1.4 or newer.
+	 *
+	 * @var array<string, int>
+	 */
+	private const KIND_BATCH_INDEX_LANE = [
+		QueueMapper::KIND_OCR => 32,
 	];
 
 	public function __construct(
@@ -228,9 +256,11 @@ class QueueService {
 	 *
 	 * The lane narrows the loop and changes nothing else (PAR-01). index leaves
 	 * out embed, embed leaves out every other kind, all is the loop of 1.3. The
-	 * order of the kinds that remain, the per kind batch of KIND_BATCH and the
-	 * two ceilings of the caller are the same in every lane, so an index claim
-	 * is exactly the all claim of an instance without a vector backlog.
+	 * order of the kinds that remain and the two ceilings of the caller are the
+	 * same in every lane. The per kind batch is KIND_BATCH in every lane with
+	 * one exception: in the lane index ocr takes the ceiling of
+	 * KIND_BATCH_INDEX_LANE (D-26-14), so an index claim is the all claim of an
+	 * instance without a vector backlog plus room for the OCR slots of 1.4.
 	 *
 	 * @return array<int, array<string, mixed>> queue row id to source object
 	 */
@@ -276,7 +306,12 @@ class QueueService {
 				continue;
 			}
 
-			$batch = min(self::KIND_BATCH[$kind] ?? $limit, $rows);
+			$ceiling = self::KIND_BATCH[$kind] ?? $limit;
+			if ($lane === self::LANE_INDEX && isset(self::KIND_BATCH_INDEX_LANE[$kind])) {
+				$ceiling = self::KIND_BATCH_INDEX_LANE[$kind];
+			}
+
+			$batch = min($ceiling, $rows);
 			foreach ($this->queueMapper->claimBatch($batch, $budget, $kind) as $row) {
 				// The two write-offs are decided before the row is charged
 				// against either ceiling, and that order is the fix rather than

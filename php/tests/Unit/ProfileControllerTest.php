@@ -64,13 +64,14 @@ final class ProfileControllerTest extends TestCase {
 	 * a double that answered the profile for every key would hand the profile
 	 * name out as a precision.
 	 */
-	private function stored(?string $profile, ?string $precision = null): void {
+	private function stored(?string $profile, ?string $precision = null, ?string $confirmed = null): void {
 		// An absent key is what IAppConfig answers with the default it was
 		// handed, so the double returns exactly that.
 		$values = array_filter(
 			[
 				SettingsService::KEY_PROFILE => $profile,
 				SettingsService::KEY_MODEL_PRECISION => $precision,
+				SettingsService::KEY_PROFILE_CONFIRMED => $confirmed,
 			],
 			static fn (?string $value): bool => $value !== null,
 		);
@@ -96,7 +97,7 @@ final class ProfileControllerTest extends TestCase {
 		$response = $this->controller($this->backendAppId())->profile();
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
-		self::assertSame(['profile' => 'standard', 'precision' => 'int8'], $response->getData());
+		self::assertSame(['profile' => 'standard', 'precision' => 'int8', 'confirmed' => null], $response->getData());
 	}
 
 	public function testAMissingKeyMeansEconomy(): void {
@@ -105,7 +106,7 @@ final class ProfileControllerTest extends TestCase {
 		$response = $this->controller($this->backendAppId())->profile();
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
-		self::assertSame(['profile' => 'economy', 'precision' => 'int8'], $response->getData());
+		self::assertSame(['profile' => 'economy', 'precision' => 'int8', 'confirmed' => null], $response->getData());
 	}
 
 	public function testAValueOutsideTheSetMeansEconomyAndIsNotLogged(): void {
@@ -121,7 +122,7 @@ final class ProfileControllerTest extends TestCase {
 		$response = $this->controller($this->backendAppId())->profile();
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
-		self::assertSame(['profile' => 'economy', 'precision' => 'int8'], $response->getData());
+		self::assertSame(['profile' => 'economy', 'precision' => 'int8', 'confirmed' => null], $response->getData());
 	}
 
 	public function testAFailedReadAnswersAsAFailureWithoutAProfileName(): void {
@@ -171,7 +172,7 @@ final class ProfileControllerTest extends TestCase {
 		$response = $this->controller($this->backendAppId())->profile();
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
-		self::assertSame(['profile' => 'standard', 'precision' => 'fp32'], $response->getData());
+		self::assertSame(['profile' => 'standard', 'precision' => 'fp32', 'confirmed' => null], $response->getData());
 	}
 
 	/** @return array<string, array{string}> */
@@ -201,7 +202,81 @@ final class ProfileControllerTest extends TestCase {
 		$response = $this->controller($this->backendAppId())->profile();
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
-		self::assertSame(['profile' => 'standard', 'precision' => null], $response->getData());
+		self::assertSame(['profile' => 'standard', 'precision' => null, 'confirmed' => null], $response->getData());
+	}
+
+	// -- the confirmation token (D-26-04) --------------------------------------
+
+	private const TOKEN = '0123456789abcdef0123456789abcdef';
+
+	public function testAStoredTokenTravelsAsConfirmed(): void {
+		$this->stored('standard', 'int8', self::TOKEN);
+		$this->logger->expects(self::never())->method('warning');
+
+		$response = $this->controller($this->backendAppId())->profile();
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame(
+			['profile' => 'standard', 'precision' => 'int8', 'confirmed' => self::TOKEN],
+			$response->getData(),
+		);
+	}
+
+	public function testNoStoredTokenIsNullWithoutAWarning(): void {
+		// The ordinary state of every instance whose guard never lowered
+		// anything, so it must not count as a rejection.
+		$this->stored('standard');
+		$this->logger->expects(self::never())->method('warning');
+
+		$response = $this->controller($this->backendAppId())->profile();
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		$data = $response->getData();
+		self::assertIsArray($data);
+		self::assertArrayHasKey('confirmed', $data);
+		self::assertNull($data['confirmed']);
+	}
+
+	/** @return array<string, array{string}> */
+	public static function tokensOutsideTheForm(): array {
+		return [
+			'not hex' => ['XYZ'],
+			'31 characters' => [substr(self::TOKEN, 0, 31)],
+			'33 characters' => [self::TOKEN . '0'],
+			'upper case' => [strtoupper(self::TOKEN)],
+			'trailing newline' => [self::TOKEN . "\n"],
+		];
+	}
+
+	#[DataProvider('tokensOutsideTheForm')]
+	public function testATokenOutsideTheFormIsNullAndIsNotLogged(string $stored): void {
+		// T-26-05: a token can only lift a lowering, so anything that is not
+		// exactly 32 lowercase hex falls on the side that keeps the lowering.
+		$this->stored('standard', 'int8', $stored);
+
+		$this->logger->expects(self::once())->method('warning')->with(
+			self::isString(),
+			self::callback(static function (array $context) use ($stored): bool {
+				return !str_contains(json_encode($context, JSON_THROW_ON_ERROR), trim($stored));
+			}),
+		);
+
+		$response = $this->controller($this->backendAppId())->profile();
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame(
+			['profile' => 'standard', 'precision' => 'int8', 'confirmed' => null],
+			$response->getData(),
+		);
+	}
+
+	public function testAFailedReadCarriesNoToken(): void {
+		$this->appConfig->method('getValueString')->willThrowException(new \RuntimeException('storage gone'));
+
+		$response = $this->controller($this->backendAppId())->profile();
+
+		self::assertSame(Http::STATUS_INTERNAL_SERVER_ERROR, $response->getStatus());
+		self::assertSame(['error' => 'profile unreadable'], $response->getData());
 	}
 
 	public function testThePrecisionsAreAClosedSetWithInt8AsDefault(): void {
