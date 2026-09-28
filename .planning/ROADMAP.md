@@ -180,9 +180,9 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 26-04-PLAN.md , Writer-Sperre, SlotPool und SlotGate mit eigenem Executor, Pins nach Welle 1 (PAR-02), Welle 2
-- [ ] 26-07-PLAN.md , embed_slots 2 in Leistung wirksam, Sperren um Chunker und Schreibaufrufe (PAR-02, D-25-12), Welle 2
-- [ ] 26-08-PLAN.md , Status: GuardReport im Vertrag der Adminseite, Vertragstest (PAR-03), Welle 2
+- [x] 26-04-PLAN.md , Writer-Sperre, SlotPool und SlotGate mit eigenem Executor, Pins nach Welle 1 (PAR-02), Welle 2
+- [x] 26-07-PLAN.md , embed_slots 2 in Leistung wirksam, Sperren um Chunker und Schreibaufrufe (PAR-02, D-25-12), Welle 2
+- [x] 26-08-PLAN.md , Status: GuardReport im Vertrag der Adminseite, Vertragstest (PAR-03), Welle 2
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -259,7 +259,7 @@ Plans:
 | 17-23 (Archiv) | v1.3 | 69/69 | Complete | 2026-09-27 |
 | 24. Owner-Tor, Profil-Gerüst und Marken-Reparatur | v1.4 | 6/6 | Complete    | 2026-09-28 |
 | 25. Einbettungsspur und Modellwahl | v1.4 | 12/12 | Complete    | 2026-09-28 |
-| 26. N OCR-Slots und Speicherwächter | v1.4 | 4/14 | In Progress|  |
+| 26. N OCR-Slots und Speicherwächter | v1.4 | 7/14 | In Progress|  |
 | 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 0/? | Not started | - |
 | 28. Abnahme-Anfahrt | v1.4 | 0/? | Not started | - |
 | 29. Härtung und Store-Einreichung 1.4.0 | v1.4 | 0/? | Not started | - |
