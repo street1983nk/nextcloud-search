@@ -128,10 +128,12 @@ class _Fetch:
         self.fails = fails
         self.gate = asyncio.Event()
         self.gate.set()
+        self.entered = asyncio.Event()
 
     async def __call__(self, url: str, write: Callable[[bytes], Awaitable[None]], *, cap: int) -> None:
         del url, cap
         self.calls += 1
+        self.entered.set()
         await self.gate.wait()
         if self.fails:
             raise OSError("no route to the release host")
@@ -259,6 +261,12 @@ async def _procurement_ended(track: EmbeddingTrack) -> None:
     await task
 
 
+async def _fetch_reached(fetch: _Fetch) -> None:
+    """Wait until the task beside the round has reached the fetch itself."""
+    async with asyncio.timeout(5):
+        await fetch.entered.wait()
+
+
 # -- the start state (D-25-14, Pitfall 6) -----------------------------------
 
 
@@ -368,7 +376,7 @@ async def test_a_change_to_fp32_starts_exactly_one_procurement_beside_the_round(
     fetch.gate.clear()
     await _step(track)
     # The round came back while the download waits at its gate.
-    await asyncio.sleep(0)
+    await _fetch_reached(fetch)
     assert fetch.calls == 1
     assert precision.snapshot().verdict == precision.VERDICT_DOWNLOADING
     await _step(track)
@@ -439,7 +447,7 @@ async def test_closing_the_track_cancels_a_running_procurement(
     precision.note_chosen_precision("fp32")
     fetch.gate.clear()
     await _step(track)
-    await asyncio.sleep(0)
+    await _fetch_reached(fetch)
     task = track._procurement
     assert task is not None
 
