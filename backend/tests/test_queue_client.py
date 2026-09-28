@@ -37,10 +37,13 @@ from findling.nc.client import AsyncNextcloudApp
 from findling.nc.queue import (
     KIND_EMBED,
     KINDS,
+    LANE_EMBED,
+    LANE_INDEX,
     MAX_ACK_LIST,
     TOPUP_IDLE,
     TOPUP_SUPPLIED,
     TOPUP_UNAVAILABLE,
+    CompanionChoice,
     DocumentQueue,
     QueueJob,
 )
@@ -330,6 +333,73 @@ async def test_an_empty_queue_is_no_work_and_no_error() -> None:
         assert result.unavailable is False
 
 
+async def test_a_claim_with_a_lane_sends_it_as_a_parameter() -> None:
+    session = _FakeSession({("GET", CLAIM_PATH): {"files": {}, "lane": "embed"}})
+
+    await _queue(session).claim(limit=8, max_bytes=16, lane=LANE_EMBED)
+
+    assert session.calls[0][2]["params"] == {"n": 8, "max_bytes": 16, "lane": "embed"}
+
+
+async def test_an_empty_answer_with_the_echo_still_honours_the_lane() -> None:
+    # Pitfall 1: the echo is judged before the early return of an empty batch.
+    session = _FakeSession({("GET", CLAIM_PATH): {"files": {}, "lane": "embed"}})
+
+    result = await _queue(session).claim(limit=8, max_bytes=16, lane=LANE_EMBED)
+
+    assert result.jobs == ()
+    assert result.lane_honored is True
+
+
+async def test_an_answer_without_an_echo_does_not_honour_the_lane() -> None:
+    # A 1.3 companion ignores the filter: its files may be of any kind (T-25-16).
+    session = _FakeSession({("GET", CLAIM_PATH): {"files": {"91": SOURCE}}})
+
+    result = await _queue(session).claim(limit=8, max_bytes=16, lane=LANE_INDEX)
+
+    assert [job.queue_id for job in result.jobs] == [91]
+    assert result.lane_honored is False
+
+
+async def test_an_echo_of_the_asked_lane_with_files_honours_it() -> None:
+    session = _FakeSession({("GET", CLAIM_PATH): {"files": {"91": SOURCE}, "lane": "index"}})
+
+    result = await _queue(session).claim(limit=8, max_bytes=16, lane=LANE_INDEX)
+
+    assert result.lane_honored is True
+    assert len(result.jobs) == 1
+
+
+@pytest.mark.parametrize(
+    ("echo", "honored"),
+    [("all", True), ("embed", False), ("index", False), ("turbo", False), (3, False), (None, False)],
+)
+async def test_a_claim_without_a_lane_asked_for_all(echo: object, honored: bool) -> None:
+    session = _FakeSession({("GET", CLAIM_PATH): {"files": {}, "lane": echo}})
+
+    result = await _queue(session).claim(limit=32, max_bytes=64)
+
+    assert result.lane_honored is honored
+    assert session.calls[0][2]["params"] == {"n": 32, "max_bytes": 64}
+
+
+async def test_an_echo_of_another_lane_does_not_honour_the_asked_one() -> None:
+    session = _FakeSession({("GET", CLAIM_PATH): {"files": {}, "lane": "all"}})
+
+    result = await _queue(session).claim(limit=8, max_bytes=16, lane=LANE_EMBED)
+
+    assert result.lane_honored is False
+
+
+async def test_an_unreachable_companion_honours_no_lane() -> None:
+    session = _FakeSession(error=OSError("nextcloud is not reachable"))
+
+    result = await _queue(session).claim(limit=8, max_bytes=16, lane=LANE_EMBED)
+
+    assert result.unavailable is True
+    assert result.lane_honored is False
+
+
 async def test_acknowledge_sends_all_three_lists_to_the_delete_endpoint() -> None:
     # The third list is always spelled out, empty or not: a body whose shape
     # depends on its content is a body the other side has to guess at, and OCS
@@ -432,31 +502,62 @@ async def test_top_up_survives_a_companion_without_the_route() -> None:
     assert await _queue(session).top_up() == TOPUP_UNAVAILABLE
 
 
-async def test_profile_returns_the_name_the_admin_stored() -> None:
-    # D-24-01: the companion keeps the choice, the container asks once per round.
+async def test_companion_choice_returns_profile_and_precision_the_admin_stored() -> None:
+    # D-24-01 and D-25-02: the companion keeps both choices, the container asks
+    # once per round and reads both out of the same answer.
+    session = _FakeSession({("GET", PROFILE_PATH): {"profile": "standard", "precision": "fp32"}})
+
+    assert await _queue(session).companion_choice() == CompanionChoice(profile="standard", precision="fp32")
+    assert len(session.calls) == 1
+    assert session.calls[0][:2] == ("GET", PROFILE_PATH)
+
+
+async def test_a_companion_without_the_precision_field_leaves_precision_none() -> None:
+    # The 1.3 field stand: the answer carries the profile only (K6).
     session = _FakeSession({("GET", PROFILE_PATH): {"profile": "standard"}})
 
-    assert await _queue(session).profile() == "standard"
-    assert session.calls[0][:2] == ("GET", PROFILE_PATH)
+    assert await _queue(session).companion_choice() == CompanionChoice(profile="standard", precision=None)
+
+
+async def test_a_null_precision_reads_as_none() -> None:
+    session = _FakeSession({("GET", PROFILE_PATH): {"profile": "economy", "precision": None}})
+
+    assert await _queue(session).companion_choice() == CompanionChoice(profile="economy", precision=None)
+
+
+async def test_each_value_is_judged_on_its_own() -> None:
+    # A broken profile does not cost the precision and the other way round.
+    session = _FakeSession({("GET", PROFILE_PATH): {"profile": "turbo", "precision": "int8"}})
+
+    assert await _queue(session).companion_choice() == CompanionChoice(profile=None, precision="int8")
 
 
 @pytest.mark.parametrize(
     "answer",
-    [{"profile": "turbo"}, {"profile": 3}, {"profile": None}, {}, [], "standard", None],
+    [
+        {"profile": "x", "precision": "fp16"},
+        {"profile": "turbo"},
+        {"profile": 3, "precision": 8},
+        {"profile": None},
+        {},
+        [],
+        "standard",
+        None,
+    ],
 )
-async def test_profile_discards_anything_outside_the_closed_set(answer: object) -> None:
-    # T-24-16: a value from outside this process picks nothing unless it is one
-    # of the three names; everything else reads like a failed call.
+async def test_companion_choice_discards_anything_outside_the_closed_sets(answer: object) -> None:
+    # T-24-16 and T-25-17: a value from outside this process picks nothing unless
+    # it is one of the names; everything else reads like a failed call.
     session = _FakeSession({("GET", PROFILE_PATH): answer})
 
-    assert await _queue(session).profile() is None
+    assert await _queue(session).companion_choice() == CompanionChoice(profile=None, precision=None)
 
 
 @pytest.mark.parametrize(
     "error",
     [OSError("404 no such route"), TimeoutError("gateway"), RuntimeError("anything")],
 )
-async def test_profile_survives_a_companion_without_the_route(
+async def test_companion_choice_survives_a_companion_without_the_route(
     error: Exception, caplog: pytest.LogCaptureFixture
 ) -> None:
     # D-24-02 and K6: a 1.3 companion answers 404 here. One debug line without
@@ -464,7 +565,7 @@ async def test_profile_survives_a_companion_without_the_route(
     session = _FakeSession(error=error)
 
     with caplog.at_level(logging.DEBUG, logger="findling.nc.queue"):
-        assert await _queue(session).profile() is None
+        assert await _queue(session).companion_choice() == CompanionChoice(profile=None, precision=None)
 
     records = [r for r in caplog.records if r.name == "findling.nc.queue"]
     assert len(records) == 1

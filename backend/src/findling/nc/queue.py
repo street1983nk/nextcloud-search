@@ -48,6 +48,7 @@ from findling.nc.client import (
     topup_documents,
     unlock_documents,
 )
+from findling.precision import PRECISION_NAMES
 from findling.profile import PROFILE_NAMES
 
 LOGGER = logging.getLogger("findling.nc.queue")
@@ -76,6 +77,18 @@ KIND_ACL: Final = "acl"
 KIND_OCR: Final = "ocr"
 KIND_EMBED: Final = "embed"
 KINDS: Final = frozenset({KIND_CONTENT, KIND_METADATA, KIND_DELETE, KIND_ACL, KIND_OCR, KIND_EMBED})
+
+# The lanes a claim may ask for (PAR-01), spelled as QueueService::LANES spells
+# them; a test reads the PHP list and compares it with this one.
+#
+# ``all`` is what a claim without a lane gets, and it is never sent: a claim of
+# the economy container stays the 1.3 request byte for byte (K6). A companion
+# that knows the filter echoes the lane it applied; one from before the filter
+# answers without an echo, and then the files are of every kind (Pitfall 1).
+LANE_ALL: Final = "all"
+LANE_INDEX: Final = "index"
+LANE_EMBED: Final = "embed"
+LANES: Final = frozenset({LANE_ALL, LANE_INDEX, LANE_EMBED})
 
 # The kinds that describe no node on the PHP side, and therefore arrive without
 # the fields a node would have supplied.
@@ -168,11 +181,29 @@ class ClaimResult:
     ``unavailable`` is not the same as an empty ``jobs``: an empty queue means
     there is nothing to do and the poller may sleep longer, while an unreachable
     Nextcloud means the poller knows nothing and must not touch the index.
+
+    ``lane_honored`` says the companion echoed the lane that was asked for, so
+    the jobs are of that lane only. False by default, the safe direction: an
+    answer without an echo comes from a companion that ignored the filter, and
+    its files may be of any kind (T-25-16).
     """
 
     jobs: tuple[QueueJob, ...] = ()
     discarded: int = 0
     unavailable: bool = False
+    lane_honored: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class CompanionChoice:
+    """Profile and precision as one answer of the profile route carries them.
+
+    Each value is None on its own when it is missing or outside its closed set
+    (D-25-02 with the D-24-02 semantics): the caller then keeps what it read last.
+    """
+
+    profile: str | None
+    precision: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -362,10 +393,15 @@ class DocumentQueue:
     def __init__(self, nc: AsyncNextcloudApp) -> None:
         self._nc = nc
 
-    async def claim(self, *, limit: int, max_bytes: int) -> ClaimResult:
-        """Take a batch, translate it, and count what could not be translated."""
+    async def claim(self, *, limit: int, max_bytes: int, lane: str | None = None) -> ClaimResult:
+        """Take a batch, translate it, and count what could not be translated.
+
+        ``lane`` goes out only when given (K6). The echo is judged before the
+        empty answer returns, because an empty batch of a companion that knows
+        the filter still says it knows it (Pitfall 1).
+        """
         try:
-            answer = await claim_documents(self._nc, limit=limit, max_bytes=max_bytes)
+            answer = await claim_documents(self._nc, limit=limit, max_bytes=max_bytes, lane=lane)
         except Exception:
             # Deliberately every exception. The Nextcloud library raises its own
             # type for an OCS verdict, the HTTP client underneath raises several
@@ -385,9 +421,13 @@ class DocumentQueue:
             return ClaimResult(unavailable=True)
 
         payload = _mapping(answer)
+        echoed = payload.get("lane") if payload is not None else None
+        # Only an echo out of the closed set that names the lane asked for counts;
+        # a claim without a lane asked for all (T-25-16).
+        honored = isinstance(echoed, str) and echoed in LANES and echoed == (lane or LANE_ALL)
         entries = _mapping(payload.get("files")) if payload is not None else None
         if not entries:
-            return ClaimResult()
+            return ClaimResult(lane_honored=honored)
 
         jobs: list[QueueJob] = []
         discarded = 0
@@ -402,7 +442,7 @@ class DocumentQueue:
             # A count and nothing else. The entry that was refused is exactly the
             # kind of value a file name arrives in (T-02-107).
             LOGGER.warning("discarded %d unusable queue entries", discarded)
-        return ClaimResult(jobs=tuple(jobs), discarded=discarded)
+        return ClaimResult(jobs=tuple(jobs), discarded=discarded, lane_honored=honored)
 
     async def acknowledge(
         self,
@@ -502,12 +542,14 @@ class DocumentQueue:
             return TOPUP_SUPPLIED
         return TOPUP_IDLE
 
-    async def profile(self) -> str | None:
-        """The profile name the admin stored, or None when there is none to read.
+    async def companion_choice(self) -> CompanionChoice:
+        """Profile and precision the admin stored, read out of one answer.
 
-        Only a name out of PROFILE_NAMES comes back (T-24-16); a value outside
-        the closed set is discarded exactly like a failed call, and the caller
-        then keeps whatever it read last (D-24-02).
+        Only a name out of PROFILE_NAMES and PRECISION_NAMES comes back
+        (T-24-16, T-25-17); each value outside its closed set, or missing, is
+        None on its own, exactly like a failed call, and the caller then keeps
+        whatever it read last (D-24-02, D-25-02). A 1.3 companion answers
+        without the precision field, which reads as None.
         """
         try:
             answer = await read_profile(self._nc)
@@ -515,13 +557,16 @@ class DocumentQueue:
             # Same policy as top_up: a companion older than 1.4.0 answers 404
             # here, and that costs one debug line per round, never the poller
             # (D-24-02). No value and no exception text in the line (T-24-19).
-            LOGGER.debug("could not read the profile")
-            return None
+            LOGGER.debug("could not read the profile route")
+            return CompanionChoice(profile=None, precision=None)
 
-        value = (_mapping(answer) or {}).get("profile")
-        if isinstance(value, str) and value in PROFILE_NAMES:
-            return value
-        return None
+        payload = _mapping(answer) or {}
+        profile = payload.get("profile")
+        precision = payload.get("precision")
+        return CompanionChoice(
+            profile=profile if isinstance(profile, str) and profile in PROFILE_NAMES else None,
+            precision=precision if isinstance(precision, str) and precision in PRECISION_NAMES else None,
+        )
 
     async def requeue(self, file_ids: Sequence[int], *, kind: str) -> CallResult:
         """Put files on another kind of job, the handover to the second track.

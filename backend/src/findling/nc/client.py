@@ -62,9 +62,11 @@ __all__ = [
     "mounts",
     "new_gateway_client",
     "queue_stats",
+    "read_profile",
     "requeue_documents",
     "run_app",
     "set_handlers",
+    "topup_documents",
     "unlock_documents",
 ]
 
@@ -324,7 +326,13 @@ async def fetch_file_stream(
 # OCS_WRITE_ALLOWLIST in the gate.
 
 
-async def claim_documents(nc: AsyncNextcloudApp, *, limit: int, max_bytes: int) -> object:
+async def claim_documents(
+    nc: AsyncNextcloudApp,
+    *,
+    limit: int,
+    max_bytes: int,
+    lane: str | None = None,
+) -> object:
     """Take a batch of queued files, at most ``limit`` of them and ``max_bytes`` big.
 
     Answers with a map of queue row id to source object. The row id is what has to
@@ -332,14 +340,22 @@ async def claim_documents(nc: AsyncNextcloudApp, *, limit: int, max_bytes: int) 
     of a file are a separate request through the content gateway, so this answer
     stays small even for a batch of large scans.
 
+    ``lane`` asks the companion for one kind of work only (PAR-01). A companion
+    that knows the filter echoes the lane it applied next to the files; judging
+    that echo is the job of :mod:`findling.nc.queue`.
+
     Returned untyped on purpose. Turning the answer into work is the job of
     :mod:`findling.nc.queue`, which validates every field; a convenient type
     annotation here would claim a guarantee this boundary cannot give.
     """
+    params: dict[str, object] = {"n": limit, "max_bytes": max_bytes}
+    # Omitted for all: an economy container speaks the 1.3 wire byte for byte (K6).
+    if lane is not None:
+        params["lane"] = lane
     return await nc._session.ocs(
         "GET",
         "/ocs/v2.php/apps/findling/queues/documents",
-        params={"n": limit, "max_bytes": max_bytes},
+        params=params,
     )
 
 
