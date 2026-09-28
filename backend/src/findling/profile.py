@@ -32,6 +32,10 @@ ocr_max_pages do not reach the spawn child of extract/sandbox.py through
 settings(); the child reads its own environment, so the values have to be
 handed over at spawn time (24-RESEARCH.md, Pitfall 6).
 
+Phase 25 adds the precision in force (note_weights): fp32 takes FP32_EXTRA_BYTES
+off the memory term of the formula (D-25-01), and the snapshot says whether a
+parallel embed lane fits beside the OCR slots (embed_lane_fits, PAR-04).
+
 The module is neutral: stdlib, findling.config and findling.hardware only, so
 that both the worker and the api may import it. It logs nothing, neither
 profile names nor environment values.
@@ -45,9 +49,11 @@ from types import MappingProxyType
 from typing import Final
 
 from findling.config import (
+    EMBED_ACTIVATION_BYTES,
     EMBED_BATCH_SIZE,
     EMBED_BATCH_SIZE_RANGE,
     EMBED_THREADS,
+    FP32_EXTRA_BYTES,
     INDEX_WORKERS,
     MAIN_PROCESS_BASELINE_BYTES,
     NEXTCLOUD_CORE_LOAD,
@@ -103,6 +109,13 @@ SOURCE_ENV: Final = "env"
 # Onnx threads of performance grow by one per four cores (D-24-03).
 _CORES_PER_ONNX_THREAD: Final = 4
 
+# The precision names as findling.precision spells them. Repeated here and not
+# imported, because precision.py reports to this module and an import back
+# would close a cycle; a test keeps both spellings equal.
+_INT8: Final = "int8"
+_FP32: Final = "fp32"
+_WEIGHT_NAMES: Final = frozenset({_INT8, _FP32})
+
 
 @dataclass(frozen=True, slots=True)
 class ProfileValues:
@@ -150,8 +163,38 @@ def effective(chosen: Profile | None, fitting: Profile) -> Profile:
     return min(wanted, fitting, key=PROFILE_ORDER.index)
 
 
-def ocr_slots(profile: Profile, hardware: Hardware | None) -> int:
-    """The OCR slots of a profile on a box, after the formula of D-24-03."""
+def _memory_term(profile: Profile, hardware: Hardware | None, *, extra_bytes: int) -> int:
+    """How many OCR slots the memory share holds after ``extra_bytes``, unclamped.
+
+    floor((share x M_free - reserve - baseline - extra) / cost) of D-24-03. Not
+    clamped to one: the lane admission needs to see a term of zero or below.
+    Economy has no memory share and an unknown memory holds no known room,
+    both answer 0.
+    """
+    memory = None if hardware is None else hardware.formula_memory_bytes
+    if profile is Profile.ECONOMY or memory is None:
+        return 0
+    if profile is Profile.STANDARD:
+        share = PROFILE_STANDARD_MEMORY_SHARE
+        reserve_share = PROFILE_STANDARD_RESERVE_SHARE
+    else:
+        share = PROFILE_PERFORMANCE_MEMORY_SHARE
+        reserve_share = PROFILE_PERFORMANCE_RESERVE_SHARE
+    budget = share * memory
+    reserve = reserve_share * budget
+    return math.floor((budget - reserve - MAIN_PROCESS_BASELINE_BYTES - extra_bytes) / OCR_SLOT_COST_BYTES)
+
+
+def _weights_bytes(weights: str) -> int:
+    """The extra memory of the weights in force: FP32_EXTRA_BYTES for fp32, else 0 (D-25-01)."""
+    return FP32_EXTRA_BYTES if weights == _FP32 else 0
+
+
+def ocr_slots(profile: Profile, hardware: Hardware | None, *, weights: str = _INT8) -> int:
+    """The OCR slots of a profile on a box, after the formula of D-24-03.
+
+    With fp32 in force the memory term loses FP32_EXTRA_BYTES (D-25-01).
+    """
     if profile is Profile.ECONOMY:
         return INDEX_WORKERS
     cores = None if hardware is None else hardware.cores
@@ -160,23 +203,17 @@ def ocr_slots(profile: Profile, hardware: Hardware | None) -> int:
         return 1
     if profile is Profile.STANDARD:
         core_term = math.floor(PROFILE_STANDARD_CORE_SHARE * cores - NEXTCLOUD_CORE_LOAD)
-        share = PROFILE_STANDARD_MEMORY_SHARE
-        reserve_share = PROFILE_STANDARD_RESERVE_SHARE
         cap = PROFILE_STANDARD_OCR_SLOTS_MAX
     else:
         # D-24-08: performance keeps whole cores free instead of subtracting the
         # Nextcloud load share; the admin chose the box for Findling.
         core_term = math.floor(cores - PROFILE_PERFORMANCE_CORES_KEPT_FREE)
-        share = PROFILE_PERFORMANCE_MEMORY_SHARE
-        reserve_share = PROFILE_PERFORMANCE_RESERVE_SHARE
         cap = PROFILE_PERFORMANCE_OCR_SLOTS_MAX
-    budget = share * memory
-    reserve = reserve_share * budget
-    memory_term = math.floor((budget - reserve - MAIN_PROCESS_BASELINE_BYTES) / OCR_SLOT_COST_BYTES)
+    memory_term = _memory_term(profile, hardware, extra_bytes=_weights_bytes(weights))
     return max(1, min(core_term, memory_term, cap))
 
 
-def _profile_values(profile: Profile, hardware: Hardware | None) -> ProfileValues:
+def _profile_values(profile: Profile, hardware: Hardware | None, weights: str) -> ProfileValues:
     if profile is Profile.ECONOMY:
         # Existing constants only, no new literal: this row is today's container.
         return ProfileValues(
@@ -191,7 +228,7 @@ def _profile_values(profile: Profile, hardware: Hardware | None) -> ProfileValue
             ocr_dpi=OCR_DPI,
             memory_reserve_share=None,
         )
-    slots = ocr_slots(profile, hardware)
+    slots = ocr_slots(profile, hardware, weights=weights)
     if profile is Profile.STANDARD:
         return ProfileValues(
             ocr_slots=slots,
@@ -237,9 +274,13 @@ _OVERRIDES: Final[tuple[tuple[str, str, int, tuple[int, int] | None], ...]] = (
 _FIELDS: Final = tuple(item.name for item in fields(ProfileValues))
 
 
-def resolve(profile: Profile, hardware: Hardware | None) -> Resolution:
-    """The value table of a profile on a box, with the admin overrides applied."""
-    base = _profile_values(profile, hardware)
+def resolve(profile: Profile, hardware: Hardware | None, *, weights: str = _INT8) -> Resolution:
+    """The value table of a profile on a box, with the admin overrides applied.
+
+    ``weights`` is the precision in force; only fp32 moves a number (the slots
+    of Standard and Performance, D-25-01). Economy stays value for value.
+    """
+    base = _profile_values(profile, hardware, weights)
     sources = dict.fromkeys(_FIELDS, SOURCE_PROFILE)
     overridden: dict[str, int] = {}
     for field, name, default, bounds in _OVERRIDES:
@@ -260,6 +301,11 @@ class ProfileSnapshot:
     suggested: Profile
     effective: Profile
     resolution: Resolution
+    # The precision in force as findling.precision reports it, "int8" or "fp32".
+    weights: str
+    # Whether a parallel embed lane fits in memory beside the OCR slots, the
+    # static part of the RAM condition of PAR-04. Plan 25-09 adds the live part.
+    embed_lane_fits: bool
 
     @property
     def downgraded(self) -> bool:
@@ -267,15 +313,31 @@ class ProfileSnapshot:
         return self.chosen is not None and self.effective != self.chosen
 
 
-def _compute(hardware: Hardware | None, chosen: Profile | None) -> ProfileSnapshot:
+def _embed_lane_fits(level: Profile, hardware: Hardware | None, weights: str, slots: int) -> bool:
+    """True when the memory term after the activations still holds every OCR slot.
+
+    Research pattern 4, static part: known hardware, Standard or Performance in
+    effect, and floor((budget - reserve - baseline - activations - fp32 extra) /
+    cost) at least the OCR slots of the effective values and at least one.
+    """
+    if hardware is None or level not in {Profile.STANDARD, Profile.PERFORMANCE}:
+        return False
+    term = _memory_term(level, hardware, extra_bytes=EMBED_ACTIVATION_BYTES + _weights_bytes(weights))
+    return term >= max(1, slots)
+
+
+def _compute(hardware: Hardware | None, chosen: Profile | None, weights: str) -> ProfileSnapshot:
     suggested = suggest(hardware)
     level = effective(chosen, suggested)
+    resolution = resolve(level, hardware, weights=weights)
     return ProfileSnapshot(
         hardware=hardware,
         chosen=chosen,
         suggested=suggested,
         effective=level,
-        resolution=resolve(level, hardware),
+        resolution=resolution,
+        weights=weights,
+        embed_lane_fits=_embed_lane_fits(level, hardware, weights, resolution.values.ocr_slots),
     )
 
 
@@ -293,14 +355,29 @@ def _compute(hardware: Hardware | None, chosen: Profile | None) -> ProfileSnapsh
 # write means the status route never reads the environment on a poll.
 _HARDWARE: Hardware | None = None
 _CHOSEN: Profile | None = None
-_SNAPSHOT: ProfileSnapshot = _compute(None, None)
+_WEIGHTS: str = _INT8
+_SNAPSHOT: ProfileSnapshot = _compute(None, None, _INT8)
 
 
 def note_hardware(hardware: Hardware) -> None:
     """Publish the reading of this start. Called once from the lifespan."""
     global _HARDWARE, _SNAPSHOT
     _HARDWARE = hardware
-    _SNAPSHOT = _compute(_HARDWARE, _CHOSEN)
+    _SNAPSHOT = _compute(_HARDWARE, _CHOSEN, _WEIGHTS)
+
+
+def note_weights(value: str | None) -> None:
+    """Publish the precision in force, as findling.precision reports it.
+
+    Only "int8" and "fp32" count; None and anything else change nothing. The
+    snapshot is only recomputed on a change. Called by findling.precision on
+    every change of its state; this module never imports that one (cycle).
+    """
+    global _WEIGHTS, _SNAPSHOT
+    if value not in _WEIGHT_NAMES or value == _WEIGHTS:
+        return
+    _WEIGHTS = value
+    _SNAPSHOT = _compute(_HARDWARE, _CHOSEN, _WEIGHTS)
 
 
 def note_chosen(value: str | None) -> None:
@@ -317,7 +394,7 @@ def note_chosen(value: str | None) -> None:
     if chosen is _CHOSEN:
         return
     _CHOSEN = chosen
-    _SNAPSHOT = _compute(_HARDWARE, _CHOSEN)
+    _SNAPSHOT = _compute(_HARDWARE, _CHOSEN, _WEIGHTS)
 
 
 def snapshot() -> ProfileSnapshot:
@@ -331,7 +408,8 @@ def snapshot() -> ProfileSnapshot:
 
 def reset() -> None:
     """Back to the resting state. For tests only; the container never forgets."""
-    global _HARDWARE, _CHOSEN, _SNAPSHOT
+    global _HARDWARE, _CHOSEN, _WEIGHTS, _SNAPSHOT
     _HARDWARE = None
     _CHOSEN = None
-    _SNAPSHOT = _compute(None, None)
+    _WEIGHTS = _INT8
+    _SNAPSHOT = _compute(None, None, _INT8)

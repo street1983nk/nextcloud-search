@@ -5,23 +5,30 @@ or the sandbox; these cases pin the arithmetic of PROF-01, the value-for-value
 promise of PROF-02 and the fallback of HW-01 before anything is wired.
 """
 
+import math
 from pathlib import Path
 
 import pytest
 
 from findling import profile
 from findling.config import (
+    EMBED_ACTIVATION_BYTES,
     EMBED_BATCH_SIZE,
     EMBED_THREADS,
+    FP32_EXTRA_BYTES,
     INDEX_WORKERS,
+    MAIN_PROCESS_BASELINE_BYTES,
+    MIB,
     OCR_CLAIM_BATCH,
     OCR_DPI,
     OCR_MAX_PAGES,
+    OCR_SLOT_COST_BYTES,
     WRITER_HEAP_BYTES,
     WRITER_THREADS,
 )
 from findling.embed import model as model_module
 from findling.hardware import Hardware
+from findling.precision import Precision
 from findling.profile import PROFILE_NAMES, Profile, effective, resolve, suggest
 
 GIB = 1024**3
@@ -384,8 +391,132 @@ def test_reading_does_not_recompute() -> None:
 def test_reset_restores_the_resting_state() -> None:
     profile.note_hardware(threshold_box(64e9, 16))
     profile.note_chosen("performance")
+    profile.note_weights("fp32")
     profile.reset()
     state = profile.snapshot()
     assert state.hardware is None
     assert state.chosen is None
     assert state.effective == Profile.ECONOMY
+    assert state.weights == "int8"
+
+
+# --- the fp32 term and the static admission of the embed lane (plan 25-08) ------
+
+
+def lane_box(available_mib: int) -> Hardware:
+    """A box that suggests Standard (16 GiB, four cores) but has ``available_mib`` free."""
+    return Hardware(
+        cpu_count=4,
+        cpu_quota=None,
+        cores=4,
+        memory_limit_bytes=None,
+        memory_available_bytes=available_mib * MIB,
+        memory_total_bytes=16 * GIB,
+        architecture="x86_64",
+        cgroup="none",
+    )
+
+
+def test_the_fp32_name_is_the_precision_name() -> None:
+    """profile.py may not import precision.py (cycle), so the spelling is pinned here."""
+    assert {profile._INT8, profile._FP32} == {p.value for p in Precision}
+    assert frozenset(p.value for p in Precision) == profile._WEIGHT_NAMES
+
+
+def test_the_fp32_term_shrinks_the_memory_term() -> None:
+    """D-25-01: fp32 in force takes FP32_EXTRA_BYTES off the memory of the formula."""
+    hardware = box(4, 16)
+    int8 = profile._memory_term(Profile.STANDARD, hardware, extra_bytes=0)
+    fp32 = profile._memory_term(Profile.STANDARD, hardware, extra_bytes=FP32_EXTRA_BYTES)
+    budget = 0.4 * 16 * GIB * 0.8 - MAIN_PROCESS_BASELINE_BYTES
+    assert int8 == math.floor(budget / OCR_SLOT_COST_BYTES) == 16
+    assert fp32 == math.floor((budget - FP32_EXTRA_BYTES) / OCR_SLOT_COST_BYTES) == 15
+
+
+def test_the_memory_term_is_not_clamped() -> None:
+    """Unlike the slots, the term may fall to zero and below: the lane check needs that."""
+    assert profile._memory_term(Profile.STANDARD, box(4, 1), extra_bytes=0) < 0
+    assert profile._memory_term(Profile.STANDARD, None, extra_bytes=0) == 0
+    assert profile._memory_term(Profile.ECONOMY, box(4, 16), extra_bytes=0) == 0
+
+
+def test_fp32_costs_slots_when_memory_binds() -> None:
+    hardware = box(16, 4)
+    assert resolve(Profile.PERFORMANCE, hardware).values.ocr_slots == 3
+    assert resolve(Profile.PERFORMANCE, hardware, weights="fp32").values.ocr_slots == 1
+
+
+def test_note_weights_moves_the_slot_formula() -> None:
+    profile.note_hardware(threshold_box(64e9, 16))
+    profile.note_chosen("performance")
+    int8_slots = profile.snapshot().resolution.values.ocr_slots
+    profile.note_weights("fp32")
+    state = profile.snapshot()
+    assert state.weights == "fp32"
+    assert state.resolution.values == resolve(Profile.PERFORMANCE, state.hardware, weights="fp32").values
+    assert state.resolution.values.ocr_slots <= int8_slots
+
+
+@pytest.mark.parametrize("weights", ["int8", "fp32"])
+def test_economy_ignores_the_weights(weights: str) -> None:
+    """The economy pin holds value for value whatever the precision (Sparsam-Pin)."""
+    assert resolve(Profile.ECONOMY, box(16, 64), weights=weights).values == resolve(Profile.ECONOMY, None).values
+
+
+def test_the_weights_rest_on_int8_and_ignore_garbage() -> None:
+    assert profile.snapshot().weights == "int8"
+    profile.note_weights(None)
+    assert profile.snapshot().weights == "int8"
+    profile.note_weights("fp16")
+    assert profile.snapshot().weights == "int8"
+    profile.note_weights("fp32")
+    profile.note_weights("fp16")
+    assert profile.snapshot().weights == "fp32"
+    profile.note_weights("int8")
+    assert profile.snapshot().weights == "int8"
+
+
+def test_the_embed_lane_fits_standard_on_a_roomy_box() -> None:
+    """PAR-04, static part: 16 GiB and four cores leave room for a parallel embedding."""
+    profile.note_hardware(box(4, 16, total=16 * GIB))
+    profile.note_chosen("standard")
+    assert profile.snapshot().effective == Profile.STANDARD
+    assert profile.snapshot().embed_lane_fits
+
+
+def test_the_embed_lane_does_not_fit_economy() -> None:
+    profile.note_hardware(box(4, 16, total=16 * GIB))
+    profile.note_chosen("economy")
+    assert not profile.snapshot().embed_lane_fits
+    profile.reset()
+    profile.note_hardware(threshold_box(4e9, 2))
+    profile.note_chosen("performance")
+    assert profile.snapshot().effective == Profile.ECONOMY
+    assert not profile.snapshot().embed_lane_fits
+
+
+def test_the_embed_lane_does_not_fit_without_hardware() -> None:
+    profile.note_chosen("standard")
+    assert not profile.snapshot().embed_lane_fits
+
+
+def test_the_activations_can_tip_the_lane_over() -> None:
+    """One OCR slot fits, but not the activations of the embedding beside it."""
+    hardware = lane_box(4680)
+    assert profile._memory_term(Profile.STANDARD, hardware, extra_bytes=0) == 1
+    assert profile._memory_term(Profile.STANDARD, hardware, extra_bytes=EMBED_ACTIVATION_BYTES) == 0
+    profile.note_hardware(hardware)
+    profile.note_chosen("standard")
+    state = profile.snapshot()
+    assert state.effective == Profile.STANDARD
+    assert state.resolution.values.ocr_slots == 1
+    assert not state.embed_lane_fits
+
+
+def test_fp32_can_tip_the_lane_over() -> None:
+    """With int8 the lane fits, with fp32 in force the same box has no room left."""
+    profile.note_hardware(lane_box(5000))
+    profile.note_chosen("standard")
+    assert profile.snapshot().embed_lane_fits
+    profile.note_weights("fp32")
+    assert not profile.snapshot().embed_lane_fits

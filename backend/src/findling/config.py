@@ -861,10 +861,37 @@ OCR_SLOT_COST_BYTES = 235 * MIB
 # (B2), 1257.5 MiB. Subtracted before the memory share is spread over slots.
 MAIN_PROCESS_BASELINE_BYTES = 1257 * MIB + MIB // 2
 
+# Extra resident memory of the fp32 weights over the int8 weights, measured in
+# plan 25-01 (docs/measurements/2026-09-fp32-speicher/README.md, section 5).
+# Subtracted from the memory term of the slot formula while fp32 is in force,
+# so that choosing fp32 costs OCR slots instead of room for the page (D-25-01).
+FP32_EXTRA_BYTES = 367 * MIB
+
+# Peak of the activations of one long embedding, +26.4 MB in docs/embeddings.md
+# (the table around line 595), rounded up to whole MiB.
+EMBED_ACTIVATION_BYTES = 27 * MIB
+
+# The jump of the int8 weights on the first embedding, +391.9 MB in the same
+# table, rounded up. Plan 25-09 needs it for the live part of the RAM check.
+EMBED_WEIGHTS_LOAD_BYTES = 392 * MIB
+
+# Tokenizer and splitter when first built, 544.3 MB on amd64 (the budget table
+# in CLAUDE.md, docs/measurements/2026-09-grundlast-fein/), rounded up.
+CUTTER_LOAD_BYTES = 545 * MIB
+
+# What a parallel embed lane has to leave free: one OCR page. The lane must
+# never be the reason an OCR slot that the formula granted has no room left,
+# so its reserve is exactly the cost of one such slot.
+EMBED_LANE_RESERVE_BYTES = OCR_SLOT_COST_BYTES
+
 # Standard: half the cores minus r, 40 percent of the memory, at most four OCR
 # slots. Worked example: Standard brings more than one OCR slot only from five
 # cores on, because four cores give floor(0.5 x 4 - 0.25) = 1. Conservative by
 # intent, the profile is the one a box gets without asking.
+#
+# The embed slots of both profiles are unchanged in phase 25 (D-25-12): exactly
+# one embed runner exists, embed_slots takes effect with the N-slot rework of
+# phase 26.
 PROFILE_STANDARD_CORE_SHARE = 0.5
 PROFILE_STANDARD_MEMORY_SHARE = 0.4
 PROFILE_STANDARD_OCR_SLOTS_MAX = 4
@@ -949,6 +976,9 @@ class Settings:
     # binary extension stays away from the database the search reads.
     vectors_db: Path
     dict_dir: Path
+    # The weights fetched or placed by the admin (fp32, D-25-06), beside the
+    # dictionaries: both are downloaded assets on the volume, not index state.
+    models_dir: Path
     tmp_dir: Path
     # The memory of the last enable, beside the databases rather than inside one
     # of them: it has to be readable before the process opens anything, and a
@@ -1401,6 +1431,7 @@ def settings() -> Settings:
         state_db=root / "state.db",
         vectors_db=root / "vectors.db",
         dict_dir=root / "dict",
+        models_dir=root / "models",
         tmp_dir=root / "tmp",
         armed_marker=root / ARMED_MARKER_NAME,
         instance_marker=root / INSTANCE_MARKER_NAME,

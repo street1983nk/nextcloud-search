@@ -31,6 +31,7 @@ import pytest
 from fastapi.testclient import TestClient
 from tantivy import Document, Index, Schema, SchemaBuilder
 
+from findling import precision as precision_module
 from findling import profile as profile_module
 from findling.config import settings
 from findling.embed import model as model_module
@@ -347,10 +348,16 @@ def forget_the_profile_state() -> Iterator[None]:
     noted a big box would otherwise decide which level another file reports.
     Cleared on both sides, so the order the suite happens to run in cannot be
     read off any answer.
+
+    The precision state of ``findling/precision.py`` is reset after the
+    profile, because the precision reports the weights in force to the
+    profile.
     """
     profile_module.reset()
+    precision_module.reset()
     yield
     profile_module.reset()
+    precision_module.reset()
 
 
 @pytest.fixture(autouse=True)
