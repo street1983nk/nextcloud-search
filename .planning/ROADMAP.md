@@ -62,7 +62,7 @@ Details im Archiv: .planning/milestones/v1.3-ROADMAP.md
 
 **Milestone-Ziel:** Findling passt seine Geschwindigkeit der Hardware an: Wer mehr als die 4-GB-Referenzbox hat, bekommt per Profil-Opt-in Parallelität (Einbettungsspur plus N OCR-Slots), das 4-GB-Versprechen bleibt der unveränderte Default. Abschluss: Store-Release 1.4.0.
 
-- [x] **Phase 24: Owner-Tor, Profil-Gerüst und Marken-Reparatur** - Grundsatzentscheide schriftlich, dann Profile als Anteils-Formel, Hardware-Erkennung mit Vorschlag, Sparsam gepinnt, Vektor-Marke kennt die Gewichtspräzision (completed 2026-09-27)
+- [x] **Phase 24: Owner-Tor, Profil-Gerüst und Marken-Reparatur** - Grundsatzentscheide schriftlich, dann Profile als Anteils-Formel, Hardware-Erkennung mit Vorschlag, Sparsam gepinnt, Vektor-Marke kennt die Gewichtspräzision (completed 2026-09-28)
 - [ ] **Phase 25: Einbettungsspur und Modellwahl** - Einbettung als eigener Nebenläufer (H1) mit PHP-Art-Filter, IDX-08 neu gefasst, int8/fp32 wählbar
 - [ ] **Phase 26: N OCR-Slots und Speicherwächter** - Mehrere OCR-Slots (H2) mit KIND_BATCH-Companion, Drosselung und selbsttätiger Profil-Rückstufung
 - [ ] **Phase 27: Vorab-Prüfung und Settings-Oberfläche** - Erste echte Settings-Fläche mit "Übernehmen und prüfen" (N-Slot-Probe, Verdikt), acht Sprachkataloge
@@ -191,7 +191,7 @@ Plans:
 | 7-11 (Archiv) | v1.1 | 37/37 | Complete | 2026-09-11 |
 | 12-16 (Archiv) | v1.2 | 63/63 | Complete | 2026-09-21 |
 | 17-23 (Archiv) | v1.3 | 69/69 | Complete | 2026-09-27 |
-| 24. Owner-Tor, Profil-Gerüst und Marken-Reparatur | v1.4 | 6/6 | Complete   | 2026-09-27 |
+| 24. Owner-Tor, Profil-Gerüst und Marken-Reparatur | v1.4 | 6/6 | Complete    | 2026-09-28 |
 | 25. Einbettungsspur und Modellwahl | v1.4 | 0/? | Not started | - |
 | 26. N OCR-Slots und Speicherwächter | v1.4 | 0/? | Not started | - |
 | 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 0/? | Not started | - |

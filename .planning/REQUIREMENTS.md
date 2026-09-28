@@ -9,9 +9,9 @@
 
 ### Leistungsprofile (PROF)
 
-- [ ] **PROF-01**: Admin waehlt eines von drei Profilen (Sparsam/Standard/Leistung); ein Profil ist eine Anteils-Formel an erkannten Kernen und Speicher mit Obergrenzen, keine feste Slotzahl (Slot-Regel aus Vorarbeit Abschnitt 3.1: `OCR-Slots = max(1, min(floor(Anteil_Kerne x C - r), floor((M_frei - Grundlinie - Reserve) / Kosten_je_Slot)))`)
-- [ ] **PROF-02**: Sparsam bleibt der Default und ist Wert fuer Wert gegen die heutigen Konstanten gepinnt (Test nach dem Muster test_config.py/INDEX_WORKERS); die Store-Messzahl wandert nicht
-- [ ] **PROF-03**: Der Weg des Profils in den Container ist per Owner-Tor entschieden (Wege A/B/C aus der Vorgaenger-Research 6.4); eine gesetzte Umgebungsvariable ueberstimmt das Profil (eine Wahrheit)
+- [x] **PROF-01**: Admin waehlt eines von drei Profilen (Sparsam/Standard/Leistung); ein Profil ist eine Anteils-Formel an erkannten Kernen und Speicher mit Obergrenzen, keine feste Slotzahl (Slot-Regel aus Vorarbeit Abschnitt 3.1: `OCR-Slots = max(1, min(floor(Anteil_Kerne x C - r), floor((M_frei - Grundlinie - Reserve) / Kosten_je_Slot)))`)
+- [x] **PROF-02**: Sparsam bleibt der Default und ist Wert fuer Wert gegen die heutigen Konstanten gepinnt (Test nach dem Muster test_config.py/INDEX_WORKERS); die Store-Messzahl wandert nicht
+- [x] **PROF-03**: Der Weg des Profils in den Container ist per Owner-Tor entschieden (Wege A/B/C aus der Vorgaenger-Research 6.4); eine gesetzte Umgebungsvariable ueberstimmt das Profil (eine Wahrheit)
 
 ### Parallelitaet (PAR)
 
@@ -22,7 +22,7 @@
 
 ### Hardware-Erkennung (HW)
 
-- [ ] **HW-01**: Der Container erkennt beim Start Kerne/Speicher/Architektur (cgroup-bewusst: process_cpu_count + cpu.max, memory.max sonst MemAvailable), meldet erkannt und vorgeschlagenes Profil ueber die Statusroute an die Adminseite und schaltet NICHTS um; bei Hardware-Schrumpfung faellt er selbsttaetig auf die groesste noch passende Stufe zurueck und sagt das auf der Seite
+- [x] **HW-01**: Der Container erkennt beim Start Kerne/Speicher/Architektur (cgroup-bewusst: process_cpu_count + cpu.max, memory.max sonst MemAvailable), meldet erkannt und vorgeschlagenes Profil ueber die Statusroute an die Adminseite und schaltet NICHTS um; bei Hardware-Schrumpfung faellt er selbsttaetig auf die groesste noch passende Stufe zurueck und sagt das auf der Seite
 
 ### Vorab-Pruefung (PRUEF)
 
@@ -30,7 +30,7 @@
 
 ### Modellwahl (MOD)
 
-- [ ] **MOD-01**: Die Vektor-Marke traegt die Gewichtspraezision (embedding_version-Erweiterung in store/vectors.py): ein int8/fp32-Wechsel desselben Modells loest den automatischen Vektor-Reindex aus statt still alte und neue Vektoren zu mischen; wird VOR jedem Modellschalter gebaut
+- [x] **MOD-01**: Die Vektor-Marke traegt die Gewichtspraezision (embedding_version-Erweiterung in store/vectors.py): ein int8/fp32-Wechsel desselben Modells loest den automatischen Vektor-Reindex aus statt still alte und neue Vektoren zu mischen; wird VOR jedem Modellschalter gebaut
 - [ ] **MOD-02**: Admin waehlt e5-small int8 (Default) oder fp32 als Teil des Leistungsprofils; der fp32-Lieferweg (ins Abbild vs. Nachladen, Risiko K7) faellt am Owner-Tor; waehrend des Vektor-Reindex antwortet die Suche lexikalisch weiter und die Seite zeigt den Zustand
 
 ### Admin-UI (UI)
@@ -63,11 +63,11 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PROF-01 | Phase 24 | Pending |
-| PROF-02 | Phase 24 | Pending |
-| PROF-03 | Phase 24 | Pending |
-| MOD-01 | Phase 24 | Pending |
-| HW-01 | Phase 24 | Pending |
+| PROF-01 | Phase 24 | Complete |
+| PROF-02 | Phase 24 | Complete |
+| PROF-03 | Phase 24 | Complete |
+| MOD-01 | Phase 24 | Complete |
+| HW-01 | Phase 24 | Complete |
 | PAR-01 | Phase 25 | Pending |
 | PAR-04 | Phase 25 | Pending |
 | MOD-02 | Phase 25 | Pending |

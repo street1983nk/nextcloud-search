@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
-status: executing
-stopped_at: Phase 24 context gathered
-last_updated: "2026-09-27T13:36:19.691Z"
-last_activity: 2026-09-27 -- Phase 24 execution started
+status: ready_to_plan
+stopped_at: Phase 24 complete (6/6), secure-phase 24 next, then discuss Phase 25
+last_updated: 2026-09-28T09:15:59.648Z
+last_activity: 2026-09-28 -- Phase 24 complete (review 0C/2W fixed, verification 5/5, live UAT passed)
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 6
-  completed_plans: 0
-  percent: 0
+  completed_plans: 6
+  percent: 17
 ---
 
 # Project State
@@ -21,23 +21,30 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 24 , Owner-Tor, Profil-Gerüst und Marken-Reparatur
+**Current focus:** Phase 25, Einbettungsspur und Modellwahl
 
 ## Current Position
 
-Phase: 24 (Owner-Tor, Profil-Gerüst und Marken-Reparatur) , EXECUTING
-Plan: 1 of 6
-Status: Executing Phase 24
-Last activity: 2026-09-27 -- Phase 24 execution started
+Phase: 25 (Einbettungsspur und Modellwahl), NOT STARTED
+Plan: Not started
+Status: Ready to plan (vorher secure-phase 24)
+Last activity: 2026-09-28 -- Phase 24 complete
 
-Progress: [..........] 0%
+Progress: [##........] 17% (1 von 6 Phasen)
 
 ## Naechster Schritt
 
-**/gsd:discuss-phase 24** bzw. **/gsd:plan-phase 24**. Phase 24 beginnt mit dem Owner-Tor:
-Weg des Profils in den Container (Wege A/B/C), Anteile je Profil im Owner-Wortlaut,
-fp32-Lieferweg (K7). Vor dem Tor kein Code, der diese Punkte beruehrt.
-Grundlage: .planning/research/BL-F04-vorarbeit-2026-09-25.md.
+1. **/gsd:secure-phase 24** (security_enforcement an, T-24-01..24 in den Plaenen).
+2. Danach **/gsd:discuss-phase 25** (Einbettungsspur H1 + MOD-02). Offene discuss-Frage laut
+   Research: fp32-Download-Quelle und Digest. Mitnahme-Kandidat: idle-Guard
+   EmbeddingModel.release(). Merker aus 24-REVIEW IN-02: der Poller verlaesst sich auf den
+   int8-Default von embedding_mark; Phase 25 muss weights aus dem tatsaechlich geladenen Modell
+   uebergeben.
+
+Phase-24-Abschluss (2026-09-28): Code-Review 0C/2W/6I, WR-01 (637c02b) und WR-02 (d0705e4)
+gefixt; Verifikation 5/5 Kriterien (human_needed); Live-UAT bestanden mit einem Befund
+(memory.max ueber MemTotal hob die Profilschwelle an), gefixt in b345fa3. Offen in
+24-HUMAN-UAT.md nur Test 1: PHPUnit (php.yml) nach dem naechsten Push, Push-Entscheid beim Owner.
 
 ## Accumulated Context
 
@@ -116,10 +123,11 @@ Aeltere Merker:
 
 ## Session Continuity
 
-Last session: 2026-09-27T12:42:44.222Z
-Stopped at: Phase 24 context gathered
-Resume file: .planning/phases/24-owner-tor-profil-ger-st-und-marken-reparatur/24-CONTEXT.md
+Last session: 2026-09-28
+Stopped at: Phase 24 complete, secure-phase 24 next
+Resume file: .planning/phases/24-owner-tor-profil-ger-st-und-marken-reparatur/24-VERIFICATION.md
 
 ## Operator Next Steps
 
-- Phase 24 starten mit /gsd:discuss-phase 24 (Owner-Tor zuerst)
+- /gsd:secure-phase 24, danach /gsd:discuss-phase 25
+- Push-Entscheid (alles lokal); nach dem Push php.yml pruefen (24-HUMAN-UAT Test 1)
