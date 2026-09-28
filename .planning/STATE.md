@@ -4,8 +4,8 @@ milestone: v1.4
 milestone_name: Leistungsprofile
 status: executing
 stopped_at: Phase 25 context gathered
-last_updated: "2026-09-28T10:38:07.470Z"
-last_activity: 2026-09-28 -- Phase 25 planning complete
+last_updated: "2026-09-28T11:04:56.984Z"
+last_activity: 2026-09-28 -- Phase 25 execution started
 progress:
   total_phases: 6
   completed_phases: 1
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 25, Einbettungsspur und Modellwahl
+**Current focus:** Phase 25 — einbettungsspur-und-modellwahl
 
 ## Current Position
 
-Phase: 25 (Einbettungsspur und Modellwahl), NOT STARTED
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-09-28 -- Phase 25 planning complete
+Phase: 25 (einbettungsspur-und-modellwahl) — EXECUTING
+Plan: 1 of 12
+Status: Executing Phase 25
+Last activity: 2026-09-28 -- Phase 25 execution started
 
 Progress: [##........] 17% (1 von 6 Phasen)
 
