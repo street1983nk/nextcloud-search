@@ -1334,8 +1334,14 @@ PHP_TREE_HASH_TODAY = "726756a8e646e4eb6d4d9089e3ac0476d7a5ff25b6e3f335b3f4faaea
 # so PACKAGE_FILES_TODAY stays at 64. The PHP pair does not move: this plan
 # touches no PHP file. Plan 25-11 changes worker files in parallel, so the pin
 # is measured again after the merge of wave 5.
+# Measured again after the merge of wave 5: plan 25-11 changed the bytes of
+# worker/embedding.py and worker/poller.py (the precision wiring: start state,
+# procurement on admin action, engine swap at the lane boundary, the way back
+# deletes the fp32 file, the poller reads the precision each round). No file
+# came and none went, so PACKAGE_FILES_TODAY stays at 64. The PHP pair does
+# not move: no plan of this wave touches a PHP file.
 PACKAGE_FILES_TODAY = 64
-PACKAGE_TREE_HASH_TODAY = "8a07deed90851d23ab86167b9fea8207b468d4b00620104c73bd964efc3b4df1"
+PACKAGE_TREE_HASH_TODAY = "412a789e172ee78b04b6131649de7f817136cf73c2d40568d6e1c48e14a6c5d6"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
