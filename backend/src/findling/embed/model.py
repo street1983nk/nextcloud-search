@@ -59,6 +59,8 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
+from findling.store.vectors import WEIGHTS_INT8
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
@@ -271,8 +273,11 @@ def open_tokenizer(model_dir: Path) -> Tokenizer:
     return Loader.from_file(str(model_dir / TOKENIZER_FILE))
 
 
-def artifacts_present(model_dir: Path) -> bool:
+def artifacts_present(model_dir: Path, weights_path: Path | None = None) -> bool:
     """The same question from outside this module, and the only way to ask it.
+
+    ``weights_path`` names weights that live apart from the tokenizer, the fp32
+    of phase 25; None is the int8 beside the tokenizer in the image.
 
     Two stats and nothing else, which is what makes it usable where the answer
     has to be cheap. The embedding track of the poller asks it before it
@@ -285,18 +290,23 @@ def artifacts_present(model_dir: Path) -> bool:
     A delegation rather than a rename, so that the two suites which count this
     question through :func:`_artifacts_present` keep counting the same calls.
     """
-    return _artifacts_present(model_dir)
+    return _artifacts_present(model_dir, weights_path)
 
 
-def _artifacts_present(model_dir: Path) -> bool:
-    """True when both files a load needs are in the directory.
+def _artifacts_present(model_dir: Path, weights_path: Path | None = None) -> bool:
+    """True when both files a load needs are where they are expected.
 
     Its own function because it is the seam the permanent half of the failure
     distinction hangs on: a directory without them is a property of the
     installation and is looked at once, and a test can count that from here
     rather than from the log, which only says how often it was mentioned.
+
+    The tokenizer is asked in ``model_dir`` and the weights at ``weights_path``,
+    apart, since phase 25: the int8 beside the tokenizer must not stand in for
+    fp32 weights that were never fetched.
     """
-    return (model_dir / MODEL_FILE).is_file() and (model_dir / TOKENIZER_FILE).is_file()
+    weights = weights_path if weights_path is not None else model_dir / MODEL_FILE
+    return weights.is_file() and (model_dir / TOKENIZER_FILE).is_file()
 
 
 def _open_encoder(model_dir: Path, *, sequence_len: int) -> Tokenizer:
@@ -328,8 +338,11 @@ def _open_session(model_path: Path, *, threads: int) -> Any:
     system, so the activation peak of the second track would stay resident for
     the rest of the container's life. On the 4 GB box this product targets, that
     peak sits beside the OCR peak of 300 to 600 MB, and IDX-08 keeps the two
-    apart in time and not in space. A slightly slower allocation is the price,
-    and it is paid once per batch rather than once per token.
+    apart in time and not in space. Since PAR-04 of phase 25 that holds for the
+    Sparsam profile alone: in Standard and Leistung the embedding track runs in
+    parallel with the OCR, and the arena staying off matters all the more. A
+    slightly slower allocation is the price, and it is paid once per batch
+    rather than once per token.
     """
     import onnxruntime
 
@@ -379,8 +392,23 @@ class EmbeddingModel:
     nothing having changed (06.1-RESEARCH.md, pitfall 2).
     """
 
-    def __init__(self, model_dir: Path, *, batch_size: int, sequence_len: int) -> None:
+    def __init__(
+        self,
+        model_dir: Path,
+        *,
+        batch_size: int,
+        sequence_len: int,
+        weights_path: Path | None = None,
+        precision: str = WEIGHTS_INT8,
+    ) -> None:
+        # The tokenizer directory and the weights, apart since phase 25 (MOD-02).
+        # Without an answer both are what they were before: the int8 of the
+        # image beside the tokenizer, byte for byte. The precision is named here
+        # and not derived from the file, because the embedding mark has to say
+        # which weights this holder reads and a file name is no such statement.
         self._model_dir = model_dir
+        self._weights_path = weights_path if weights_path is not None else model_dir / MODEL_FILE
+        self._precision = precision
         self._batch_size = batch_size
         self._sequence_len = sequence_len
         self._engine: _Engine | None = None
@@ -439,6 +467,16 @@ class EmbeddingModel:
     def loaded(self) -> bool:
         """True once the weights are in memory. False before the first use."""
         return self._engine is not None
+
+    @property
+    def weights_path(self) -> Path:
+        """Where this holder reads its weights from, whether or not it has yet."""
+        return self._weights_path
+
+    @property
+    def precision(self) -> str:
+        """The precision of the weights this holder reads, for the embedding mark."""
+        return self._precision
 
     @property
     def artifacts_absent(self) -> bool:
@@ -600,8 +638,8 @@ class EmbeddingModel:
         if self.load_cooling_down:
             return None
 
-        model_path = self._model_dir / MODEL_FILE
-        if not _artifacts_present(self._model_dir):
+        model_path = self._weights_path
+        if not _artifacts_present(self._model_dir, self._weights_path):
             # Not an exception and not a path in the log: this is the ordinary
             # state of a container built without the model stage, and the answer
             # to it is a lexical search, not a stack trace.
