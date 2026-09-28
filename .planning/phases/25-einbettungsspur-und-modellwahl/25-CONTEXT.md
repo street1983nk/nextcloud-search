@@ -34,13 +34,21 @@ Vorentscheide aus Phase 24, die hier tragen und NICHT neu verhandelt werden: D-2
 ### Rueckweg fp32 zu int8
 - **D-25-09 (Owner, 28.09.2026):** Wechselt der Admin zurueck auf int8, wird die fp32-Datei geloescht (Platte frei), auch eine selbst abgelegte (Owner hat die Variante "nur heruntergeladene loeschen" ausdruecklich nicht gewaehlt). Ein erneuter Wechsel auf fp32 laedt neu bzw. braucht eine neu abgelegte Datei. Der Rueckwechsel loest wie jeder Praezisionswechsel den Vektor-Reindex aus.
 
+### Nachentscheide aus der Phase-Research (28.09.2026)
+- **D-25-10 (Owner, 28.09.2026):** Ist fp32 aktiv und stellt der Admin das Profil auf Sparsam, bleibt fp32 aktiv, bis der Praezisionsschluessel auf int8 steht. Nur der Praezisionsschluessel loest einen Wechsel aus, ein Profilwechsel nie. Die Statusroute meldet den Zustand (sinngemaess "fp32 aktiv, in Sparsam nicht vorgesehen, bitte auf int8 stellen"). D-25-01 gilt damit fuer die WAHL (Download/Wechsel auf fp32 nur in Standard/Leistung), nicht als Zwangsrueckweg.
+- **D-25-11 (Owner, 28.09.2026):** Ist in Standard/Leistung die RAM-Bedingung fuer die parallele Einbettung nicht erfuellt, laeuft die Einbettung seriell wie in Sparsam weiter (in derselben Schleife nach der OCR), statt Zeilen warten zu lassen. SC2 "sonst wartet sie" ist damit als "wartet auf die OCR, nicht parallel" gelesen.
+- **D-25-12 (Owner, 28.09.2026):** In Phase 25 laeuft in Standard UND Leistung genau EIN Einbettungs-Laeufer neben der OCR. Die Konstante embed_slots = 2 fuer Leistung bleibt stehen, wird aber erst mit dem N-Slot-Umbau in Phase 26 wirksam (Sperren um die geteilte Engine gehoeren dorthin).
+- **D-25-13 (Owner, 28.09.2026):** Die Adminseite zeigt in Phase 25 eine Zeile auf der BESTEHENDEN Statusflaeche (Praezision plus Fortschritt, D-25-08), mit neuen Texten in allen acht Sprachkatalogen im Gleichstand (Katalog-Gate haelt). Keine neue Settings-Flaeche (Phase 27).
+- **D-25-14 (Research-Empfehlung uebernommen):** "Erneute Admin-Aktion" fuer einen neuen fp32-Versuch (D-25-04) = ein im laufenden Prozess beobachteter Wechsel des Praezisionsschluessels von int8 auf fp32. Der Startzustand der Praezision kommt aus Marke plus verifizierter Datei, nie aus einem Lesefehler (ein Gateway-Aussetzer beim Start darf keinen fp32-Bestand loeschen).
+- **D-25-15 (Research-Empfehlung uebernommen):** Proxy-Netze: HTTPS_PROXY ist ueber AppAPI nicht setzbar; die Antwort fuer solche Boxen ist der Offline-Weg (D-25-06), dokumentiert.
+
 ### Claude's Discretion
 - Abbruchsemantik zweier Nebenlaeufer, Kill/Neustart mitten in beiden Spuren ohne Zeilenverlust und ohne Doppeleinbettung, gleichzeitige state.db-Zugriffe ohne Fehlerverdikte (Research-Flag der Roadmap).
 - Form des Art-Filters am PHP-Anspruch (KIND embed) und der Companion-Aenderung; die Aenderung erscheint erst mit Release 1.4.0 (K6), der Container muss mit einem Companion ohne Art-Filter weiterlaufen.
 - Form der RAM-Bedingung fuer den Start der Einbettungsspur in Standard/Leistung (gegen formula_memory_bytes bzw. die cgroup-Grenze) und das Warteverhalten.
 - Mitnahme des idle-Guards fuer EmbeddingModel.release() aus dem Phase-23-Backlog: mit zwei Nebenlaeufern auf der geteilten Engine akut; der Plan-Schnitt entscheidet die Aufnahme.
 - Asset-Name, Upload-Weg des fp32-Assets und Ablagepfad im persistenten Verzeichnis; Umgang mit einem Praezisionswechsel, waehrend noch ein Reindex laeuft.
-- Genaue Texte der Verdikte und Statusfelder (Code Englisch, Seitentexte in den Sprachkatalogen erst mit Phase 27).
+- Genaue Texte der Verdikte und Statusfelder (Code Englisch; die eine Statuszeile aus D-25-13 in allen acht Katalogen, alle weiteren Seitentexte erst mit Phase 27).
 
 </decisions>
 
