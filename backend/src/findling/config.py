@@ -465,19 +465,50 @@ OCR_DPI = 300
 # both out of the PHP sources and goes red the day one of them moves, the same
 # construction that holds the two mimetype allowlists together.
 OCR_LOCK_TIMEOUT_SECONDS = 1800
+# Mirror of KIND_BATCH[ocr] for lane all: the Sparsam claim, the 1.3 wire.
 OCR_CLAIM_BATCH = 2
 
+# Mirror of QueueService::KIND_BATCH_INDEX_LANE[ocr], the OCR rows one claim of
+# lane index may hold (D-26-05, D-26-14): sixteen slots times two rows each.
+# The parity test against the PHP source follows with plan 26-06.
+OCR_CLAIM_BATCH_INDEX_LANE = 32
+
+# Rows one slot finishes inside one lease at the ceiling of the job budget
+# (D-26-13): the file cap there is 780 + 2 x 60 = 900 s, floor(1800 / 900) = 2,
+# and at the default of 600 + 2 x 60 = 720 s it is floor(1800 / 720) = 2 too.
+OCR_ROWS_PER_SLOT = 2
+
 # The ceiling of the admin settable job budget, derived rather than chosen
-# (review finding WR-04). One claim may hold OCR_CLAIM_BATCH rows, so each row
-# owns OCR_LOCK_TIMEOUT_SECONDS / OCR_CLAIM_BATCH = 900 s of the claim. The
-# parent's hard deadline is job plus the margin, and the download of the bytes
-# runs inside the same claim, so a second margin is budgeted for it:
-# 900 - 60 - 60 = 780. The old ceiling of 1800 declared a value valid at which
-# a single job's hard deadline (1860 s) already outlived the lock: the rows
-# reappeared as free, collected retries and ended as failed(repeatedly_stuck)
-# while the engine was legitimately working, which is word for word the failure
-# the bounded range exists to prevent (T-03-503).
-OCR_JOB_SECONDS_MAX = OCR_LOCK_TIMEOUT_SECONDS // OCR_CLAIM_BATCH - 2 * OCR_HARD_DEADLINE_MARGIN_SECONDS
+# (review finding WR-04). Each slot works through OCR_ROWS_PER_SLOT rows in
+# sequence, so each row owns OCR_LOCK_TIMEOUT_SECONDS / OCR_ROWS_PER_SLOT = 900 s
+# of the lease. The parent's hard deadline is job plus the margin, and the
+# download of the bytes runs inside the same claim, so a second margin is
+# budgeted for it: 900 - 60 - 60 = 780. The old ceiling of 1800 declared a value
+# valid at which a single job's hard deadline (1860 s) already outlived the
+# lock: the rows reappeared as free, collected retries and ended as
+# failed(repeatedly_stuck) while the engine was legitimately working, which is
+# word for word the failure the bounded range exists to prevent (T-03-503).
+#
+# Until phase 26 the divisor was the claim batch. With 32 OCR rows in lane index
+# that derivation gives 1800 // 32 - 120 = -64 and tears the range below apart
+# (26-RESEARCH.md, Befund C); rows beyond what the slots finish are handed back
+# at once instead, see ocr_rows_to_keep.
+OCR_JOB_SECONDS_MAX = OCR_LOCK_TIMEOUT_SECONDS // OCR_ROWS_PER_SLOT - 2 * OCR_HARD_DEADLINE_MARGIN_SECONDS
+
+
+def ocr_rows_to_keep(delivered: int, ocr_slots: int, file_cap_seconds: int) -> int:
+    """How many of ``delivered`` OCR rows a pass may keep; the rest go back at once.
+
+    D-26-06 solved for the rows: every slot works its rows one after the other,
+    each up to ``file_cap_seconds`` (hard deadline plus download margin), and
+    all of them have to end inside one lease. So a slot keeps
+    OCR_LOCK_TIMEOUT_SECONDS // file_cap_seconds rows, never fewer than one,
+    and the pass keeps that per slot, never more than was delivered. A slot
+    count below one counts as one: slot 1 always runs (D-25-11).
+    """
+    per_slot = max(1, OCR_LOCK_TIMEOUT_SECONDS // max(1, file_cap_seconds))
+    return min(delivered, max(1, ocr_slots) * per_slot)
+
 
 # Ranges an admin supplied number has to fall into. These are not taste: the
 # rasterised page grows with the square of the dpi, so A4 at 1200 dpi is 137
@@ -883,6 +914,30 @@ CUTTER_LOAD_BYTES = 545 * MIB
 # never be the reason an OCR slot that the formula granted has no room left,
 # so its reserve is exactly the cost of one such slot.
 EMBED_LANE_RESERVE_BYTES = OCR_SLOT_COST_BYTES
+
+# The memory guard of phase 26 (D-26-02, D-26-03, D-26-15). Built in, no
+# environment variable: like INDEX_WORKERS these are architecture, and a guard
+# an admin can switch off by typo is no guard.
+#
+# The reserve a further slot has to leave free, and the headroom under which a
+# rising memory.events max counts as pressure at all: one OCR page, the same
+# reasoning as the embed lane reserve above. memory.events max is counted
+# before the reclaim and rises with the page cache of the mmap index; the
+# project's own box showed 2796 max events without any damage
+# (embed/engine.py), so an event without a tight anon headroom is noise.
+GUARD_RESERVE_BYTES = OCR_SLOT_COST_BYTES
+
+# Two qualified events inside this window lower the level by one. A single
+# large scan produces a burst within seconds; two separate bursts within ten
+# minutes are recurring pressure (26-RESEARCH.md, Befund A).
+GUARD_WINDOW_SECONDS = 600
+
+# The minimum distance between two counted events, so that one burst spread
+# over a few ticks is never read as two.
+GUARD_MIN_GAP_SECONDS = 60
+
+# The tick of the guard task, the same cadence as the embedding runner.
+GUARD_TICK_SECONDS = 15.0
 
 # Standard: half the cores minus r, 40 percent of the memory, at most four OCR
 # slots. Worked example: Standard brings more than one OCR slot only from five
