@@ -115,9 +115,7 @@ def test_credentials_never_reach_the_output(
     monkeypatch.setattr(probe, "_timed_request", fake_request)
     monkeypatch.setattr(probe.time, "sleep", lambda _seconds: None)
 
-    probe.main(
-        ["--base-url", "http://localhost:8080", "--target", "search", "--requests", "2", "--term", MARKED_TERM]
-    )
+    probe.main(["--base-url", "http://localhost:8080", "--target", "search", "--requests", "2", "--term", MARKED_TERM])
     captured = capsys.readouterr()
     everything = captured.out + captured.err
     assert MARKED_PASSWORD not in everything
