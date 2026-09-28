@@ -41,6 +41,7 @@ vector file that is not a database is the same answer for the same reason
 """
 
 from collections.abc import Callable, Iterator
+from dataclasses import fields
 from pathlib import Path
 from typing import Any, cast
 
@@ -49,10 +50,12 @@ from fastapi.testclient import TestClient
 from tantivy import Document, Index
 
 from conftest import APP_VERSION, CONSTITUENTS, Corpus
+from findling import lane, precision
 from findling.api import resources
 from findling.api.resources import ReadSide
-from findling.api.status import NO_VECTORS_YET, STATE_UNREADABLE, VECTORS_UNREADABLE, report
+from findling.api.status import NO_VECTORS_YET, PROFILE_VALUE_KEYS, STATE_UNREADABLE, VECTORS_UNREADABLE, report
 from findling.config import MAX_FILE_BYTES, settings
+from findling.embed import weights
 from findling.embed.engine import ENGINE_COLD, ENGINE_DISABLED, ENGINE_MISSING, ENGINE_STATES
 from findling.embed.model import load_count
 from findling.hardware import Hardware
@@ -62,9 +65,9 @@ from findling.index.rebuild import RebuildProgress
 from findling.index.schema import BODY_FIELD, FIELD_FILE_ID, FIELD_STORAGE_ID
 from findling.index.wordlist import DIGEST_SUFFIX, ENCODING, artifact_path, wordlist_hash
 from findling.main import APP
-from findling.profile import note_chosen, note_hardware
+from findling.profile import ProfileValues, note_chosen, note_hardware
 from findling.query.rewrite import LEGACY_PLAN
-from findling.store.repo import FileMeta, open_store
+from findling.store.repo import EMBEDDING_BACKLOG_MARK, FileMeta, open_store
 from findling.store.vectors import EMBEDDING_DIMENSIONS, Chunk, open_vectors
 
 pytestmark = pytest.mark.usefixtures("appapi_environment")
@@ -114,6 +117,11 @@ FIELDS = {
     # One key on this level and a nested object below it, because the profile
     # is one statement with parts and not ten loose numbers next to the counters.
     "profile",
+    # The two of plan 25-12 (MOD-02, PAR-01): the precision of the model with
+    # the redelivery of the stock, and where the embedding runs. Both nested,
+    # for the reason the profile is: one statement with parts each.
+    "model",
+    "lane",
     "note",
 }
 
@@ -1325,3 +1333,146 @@ def test_an_admin_variable_equal_to_its_default_leaves_the_profile_value(
 
     assert profile["values"]["ocrMaxPages"] == 100
     assert profile["sources"]["ocrMaxPages"] == "profile"
+
+
+def test_the_wire_keys_of_the_profile_cover_every_value() -> None:
+    # IN-03: a field of ProfileValues without a wire key would never reach the
+    # page, and a key without a field would raise in _profile_report().
+    assert set(PROFILE_VALUE_KEYS) == {field.name for field in fields(ProfileValues)}
+
+
+# The blocks of plan 25-12 run in both branches for the reason the profile does:
+# set in _volume() and not carried over in _of(), a process value vanishes on
+# every installation that has indexed anything (Pitfall 2).
+
+
+def _answer(client: TestClient, sign: Sign, request: pytest.FixtureRequest, branch: str) -> dict[str, Any]:
+    request.getfixturevalue(branch)
+    answer = _status(client, sign("admin"))
+    assert set(answer) == FIELDS
+    return answer
+
+
+@pytest.mark.parametrize("branch", BRANCHES)
+def test_a_container_that_knows_nothing_reports_int8_and_the_inline_lane(
+    client: TestClient, sign: Sign, request: pytest.FixtureRequest, branch: str
+) -> None:
+    answer = _answer(client, sign, request, branch)
+
+    assert answer["model"] == {
+        "precisionChosen": None,
+        "precisionActive": "int8",
+        "precisionVerdict": "",
+        "reembedRunning": False,
+    }
+    # The resting state of findling.lane: inline, parked for economy, because
+    # the effective level before the first profile read is economy (D-24-02).
+    assert answer["lane"] == {"mode": "inline", "reason": "economy"}
+
+
+@pytest.mark.parametrize("branch", BRANCHES)
+def test_fp32_chosen_on_a_box_that_shrank_to_economy_is_reported_as_tight(
+    client: TestClient, sign: Sign, request: pytest.FixtureRequest, branch: str
+) -> None:
+    # D-25-03: an active fp32 stays on a box that shrank, and the page says so.
+    note_hardware(_box(2, 4_000_000_000, 4_000_000_000))
+    note_chosen("standard")
+    precision.note_chosen_precision("fp32")
+    precision.settle(precision.Precision.FP32)
+
+    model = _answer(client, sign, request, branch)["model"]
+
+    assert model["precisionChosen"] == "fp32"
+    assert model["precisionActive"] == "fp32"
+    assert model["precisionVerdict"] == precision.VERDICT_TIGHT_BOX == "fp32_on_a_tight_box"
+
+
+@pytest.mark.parametrize("branch", BRANCHES)
+def test_fp32_active_under_a_chosen_economy_is_reported(
+    client: TestClient, sign: Sign, request: pytest.FixtureRequest, branch: str
+) -> None:
+    # D-25-10: a profile switch never changes the precision, it is reported.
+    note_hardware(_box(8, 16_000_000_000, 16 * GIB))
+    note_chosen("economy")
+    precision.note_chosen_precision("fp32")
+    precision.settle(precision.Precision.FP32)
+
+    model = _answer(client, sign, request, branch)["model"]
+
+    assert model["precisionActive"] == "fp32"
+    assert model["precisionVerdict"] == "fp32_active_in_economy"
+
+
+@pytest.mark.parametrize("branch", BRANCHES)
+def test_a_failed_download_is_reported_as_unavailable(
+    client: TestClient, sign: Sign, request: pytest.FixtureRequest, branch: str
+) -> None:
+    # D-25-04: one attempt per change of the key, a failure stays until int8.
+    note_hardware(_box(8, 16_000_000_000, 16 * GIB))
+    note_chosen("standard")
+    precision.note_chosen_precision("int8")
+    precision.settle(precision.Precision.INT8)
+    precision.note_chosen_precision("fp32")
+    assert precision.decide(fp32_ready=False).procure
+    precision.begin_procurement()
+    precision.end_procurement(succeeded=False)
+
+    model = _answer(client, sign, request, branch)["model"]
+
+    assert model["precisionChosen"] == "fp32"
+    assert model["precisionActive"] == "int8"
+    assert model["precisionVerdict"] == "fp32_unavailable"
+    assert model["precisionVerdict"] in precision.VERDICTS
+
+
+@pytest.mark.parametrize(("cursor", "running"), [(None, False), ("", False), ("0", True), ("41", True)])
+def test_the_redelivery_runs_while_its_cursor_is_set(
+    client: TestClient, sign: Sign, indexed_volume: Corpus, cursor: str | None, running: bool
+) -> None:
+    # D-25-08: the sweep clears the cursor when it is through, so a set cursor
+    # is a running redelivery and an empty or missing one is none.
+    if cursor is not None:
+        store = open_store(settings().state_db)
+        try:
+            store.write_meta(EMBEDDING_BACKLOG_MARK, cursor)
+        finally:
+            store.close()
+
+    answer = _status(client, sign("admin"))
+
+    assert answer["model"]["reembedRunning"] is running
+    assert answer["embedded"] <= answer["indexed"] == indexed_volume.documents
+
+
+@pytest.mark.parametrize("branch", BRANCHES)
+def test_the_lane_reports_its_mode_and_why_it_parks(
+    client: TestClient, sign: Sign, request: pytest.FixtureRequest, branch: str
+) -> None:
+    request.getfixturevalue(branch)
+    lane.note_mode(lane.MODE_PARALLEL, lane.REASON_NONE)
+    assert _status(client, sign("admin"))["lane"] == {"mode": "parallel", "reason": ""}
+
+    lane.note_mode(lane.MODE_INLINE, lane.REASON_MEMORY)
+    assert _status(client, sign("admin"))["lane"] == {"mode": "inline", "reason": "waiting_for_memory"}
+
+
+def test_asking_for_the_status_hashes_no_weights_file(client: TestClient, sign: Sign, indexed_volume: Corpus) -> None:
+    # T-25-53: a poll of the admin page reads no file of hundreds of megabytes.
+    # An fp32 file on the volume is exactly the one a careless reader would
+    # verify on the way.
+    target = weights.fp32_weights_path(settings().models_dir)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(b"not the weights")
+    note_chosen("standard")
+    precision.note_chosen_precision("fp32")
+    before = weights.hash_count()
+
+    answer = _status(client, sign("admin"))
+
+    assert weights.hash_count() == before
+    assert answer["model"]["precisionActive"] == "int8"
+    assert answer["indexed"] == indexed_volume.documents
+    assert target.read_bytes() == b"not the weights"
+    source = STATUS_SOURCE.read_text(encoding="utf-8")
+    assert "findling.embed.weights" not in source
+    assert "hashlib" not in source
