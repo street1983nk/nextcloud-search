@@ -581,7 +581,8 @@ async def test_a_sideloaded_file_is_taken_up_in_the_recorded_order_without_a_req
     precision.note_chosen_precision("fp32")
     await _step(track, queue)
 
-    assert events == _chain(WEIGHTS_FP32)
+    # The chain, and after it the cursor moving past the band it handed back.
+    assert events == [*_chain(WEIGHTS_FP32), f"{EMBEDDING_BACKLOG_MARK}=4712"]
     assert fetch.calls == 0, "a verified sideload needs no request (D-25-06)"
     assert precision.snapshot().active is Precision.FP32
     assert engine_precision() == WEIGHTS_FP32
@@ -641,7 +642,7 @@ async def test_the_way_back_to_int8_runs_the_same_chain_and_removes_the_file(
     precision.note_chosen_precision("int8")
     await _step(track)
 
-    assert events == _chain(WEIGHTS_INT8)
+    assert events == [*_chain(WEIGHTS_INT8), f"{EMBEDDING_BACKLOG_MARK}=4712"]
     assert not target.exists(), "the file goes, a sideloaded one as well (D-25-09)"
     assert precision.snapshot().active is Precision.INT8
     assert precision.snapshot().verdict == precision.VERDICT_NONE

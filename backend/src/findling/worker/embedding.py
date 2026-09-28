@@ -84,6 +84,7 @@ from findling.embed.weights import (
     fp32_verified,
     fp32_weights_path,
     procure_fp32,
+    remove_fp32_weights,
 )
 from findling.index.open import open_index
 from findling.index.wordlist import build_artifact
@@ -92,7 +93,7 @@ from findling.index.writer import disk_is_tight, stored_body
 from findling.nc import client as nc_client
 from findling.nc.client import AsyncNextcloudApp, fetch_release_asset
 from findling.nc.queue import KIND_EMBED, LANE_EMBED, CallResult, DocumentQueue, QueueJob
-from findling.precision import Precision, begin_procurement, decide, end_procurement, settle
+from findling.precision import Precision, begin_procurement, decide, end_procurement, note_active, settle
 from findling.precision import snapshot as precision_snapshot
 from findling.profile import Profile
 from findling.store.repo import (
@@ -901,8 +902,12 @@ class EmbeddingTrack:
         if not self.ready:
             return
         await self._prepare_the_precision()
-        await self._decide_the_precision()
-        band = await asyncio.to_thread(self._vector_mark_step)
+        target = await self._decide_the_precision()
+        band, switched = await asyncio.to_thread(self._vector_mark_step, target)
+        if switched is not None:
+            # The last link of the chain: the state learns which weights the
+            # holder runs once the stock, the mark and the holder agree.
+            note_active(switched)
         if not band:
             return
         # The third step of the drift chain, and the last by construction: the
@@ -921,21 +926,33 @@ class EmbeddingTrack:
         if (await hand_over(queue, band, kind=KIND_EMBED)).ok:
             await asyncio.to_thread(self._store_or_die().write_meta, EMBEDDING_BACKLOG_MARK, str(band[-1]))
 
-    def _vector_mark_step(self) -> list[int]:
-        """One step of the mark, returning the documents to hand back, if any.
+    def _vector_mark_step(self, target: Precision | None = None) -> tuple[list[int], Precision | None]:
+        """One step of the mark: the documents to hand back, and the weights switched to.
 
         A failure is swallowed for the reason ``Poller._stamp_if_rebuilt``
         swallows one: this is bookkeeping about the stock and not the stock, and
-        a locked database must not end a pass whose documents are durable.
+        a locked database must not end a pass whose documents are durable. A
+        chain that broke off half way is repeatable: the next step finds the
+        holder still apart from the target and runs it again from the top.
         """
         try:
-            return self._step_of_the_vector_mark()
+            return self._step_of_the_vector_mark(target)
         except Exception as error:
             LOGGER.warning("could not keep the embedding mark in step, %s", type(error).__name__)
-            return []
+            return [], None
 
-    def _step_of_the_vector_mark(self) -> list[int]:
-        """The three cases of the mark, in the order they exclude each other.
+    def _step_of_the_vector_mark(self, target: Precision | None) -> tuple[list[int], Precision | None]:
+        """The cases of the mark, in the order they exclude each other.
+
+        *A change of the weights.* The state machine asks for weights other
+        than the ones the holder reads. That is a drift by definition, whatever
+        the stored mark says, and the chain runs with the swap of the engine as
+        its fourth link (D-25-07). It runs the same way when the stock is still
+        being written after an earlier change: the cursor starts at
+        :data:`BACKLOG_START` again, which is simple and correct, because the
+        chain empties the stock anyway (discretion of plan 25-11). Asking this
+        before the unknown mark matters: claiming a stock of int8 vectors under
+        an fp32 mark would be the mixed stock of T-24-02.
 
         *Never written.* The mark is ``unknown``, which says nobody named the
         model of this stock rather than that another model wrote it. The stock
@@ -965,21 +982,26 @@ class EmbeddingTrack:
         store = self._store_or_die()
         vectors = self._vectors
         if vectors is None:  # pragma: no cover - _embed_ready answered otherwise
-            return []
+            return [], None
 
-        # The precision of the model this process actually holds, never a
-        # default (T-24-02); plan 25-11 derives the track side from the
-        # precision decision once a swap can happen.
-        wanted = embedding_mark(EMBEDDING_MODEL, tokens=settings().embed_token_cap, weights=engine_precision())
+        # The precision of the model this process holds, or the one the state
+        # machine switches to in this very step; never a default (T-24-02).
+        held = engine_precision()
+        switch = target if target is not None and target.value != held else None
+        weights = held if switch is None else switch.value
+        wanted = embedding_mark(EMBEDDING_MODEL, tokens=settings().embed_token_cap, weights=weights)
+
+        if switch is not None:
+            return self._answer_the_vector_drift(store, vectors, wanted, switch=switch), switch
+
         meta = store.read_meta()
         stored = meta.get(EMBEDDING_MARK, UNKNOWN_VERSION)
-
         if stored == UNKNOWN_VERSION:
             self._claim_a_whole_stock(store, vectors, wanted)
-            return []
+            return [], None
         if stored != wanted:
-            return self._answer_the_vector_drift(store, vectors, wanted)
-        return self._next_backlog_band(store, meta.get(EMBEDDING_BACKLOG_MARK, ""))
+            return self._answer_the_vector_drift(store, vectors, wanted), None
+        return self._next_backlog_band(store, meta.get(EMBEDDING_BACKLOG_MARK, "")), None
 
     def _claim_a_whole_stock(self, store: Store, vectors: VectorStore, wanted: str) -> None:
         """Write the mark once every indexed document carries a vector.
@@ -1002,8 +1024,19 @@ class EmbeddingTrack:
         store.write_meta(EMBEDDING_MARK, wanted)
         LOGGER.info("every indexed document carries a vector, the embedding mark is current")
 
-    def _answer_the_vector_drift(self, store: Store, vectors: VectorStore, wanted: str) -> list[int]:
-        """Empty the stock, then mark it, then ask for the documents back.
+    def _answer_the_vector_drift(
+        self, store: Store, vectors: VectorStore, wanted: str, *, switch: Precision | None = None
+    ) -> list[int]:
+        """Empty the stock, then mark it, then swap the engine, then ask for the documents back.
+
+        ``switch`` is the change of the weights (D-25-07), and its place in the
+        chain is between the mark and the first band: forget_all, cursor, mark,
+        swap, release of the old engine. No blue and green and no second stock:
+        from the swap on every search embeds its line with the new weights and
+        finds exactly the documents that were written again, while the lexical
+        half answers in full. All of it runs under the track lock and in a
+        step without a row in work, which is what keeps a row of the old
+        precision out of the emptied stock (Pitfall 5).
 
         The order is the mitigation of T-06.1-39 and it is not interchangeable.
         Marking first would leave a stock of the old model under the mark of the
@@ -1029,9 +1062,15 @@ class EmbeddingTrack:
         # rest of the instance would stay unwritten with nothing saying so.
         store.write_meta(EMBEDDING_BACKLOG_MARK, BACKLOG_START)
         store.write_meta(EMBEDDING_MARK, wanted)
-        LOGGER.warning(
-            "the vector stock was written by another build, it was emptied and is being written again",
-        )
+        if switch is not None:
+            # After the mark: an abort between the two leaves a mark that the
+            # holder does not match yet, and the next step runs the chain again.
+            self._swap_the_engine(switch, settings().models_dir)
+            LOGGER.warning("the precision of the embedding changed, the vector stock is being written again")
+        else:
+            LOGGER.warning(
+                "the vector stock was written by another build, it was emptied and is being written again",
+            )
         return self._next_backlog_band(store, BACKLOG_START)
 
     def _next_backlog_band(self, store: Store, cursor: str) -> list[int]:
@@ -1087,23 +1126,26 @@ class EmbeddingTrack:
         if self._start_settled:
             return
         try:
-            start = await asyncio.to_thread(self._start_state)
+            on_fp32 = await asyncio.to_thread(self._start_on_fp32)
         except Exception as error:
             # Bookkeeping, like the mark step: the next step asks again, and
             # nothing is settled from a read that did not happen.
             LOGGER.warning("could not read the start state of the precision, %s", type(error).__name__)
             return
         self._start_settled = True
-        settle(start)
+        if on_fp32:
+            settle(Precision.FP32)
+        else:
+            settle(Precision.INT8)
 
-    def _start_state(self) -> Precision:
-        """fp32 when the stored mark names it and the file is verified, else int8."""
+    def _start_on_fp32(self) -> bool:
+        """True, with the holder on fp32, when the stored mark names fp32 and the file is verified."""
         stored = self._store_or_die().read_meta().get(EMBEDDING_MARK, UNKNOWN_VERSION)
         models_dir = settings().models_dir
         if not stored.endswith(f"/{WEIGHTS_FP32}") or not fp32_verified(models_dir):
-            return Precision.INT8
+            return False
         self._swap_the_engine(Precision.FP32, models_dir)
-        return Precision.FP32
+        return True
 
     async def _decide_the_precision(self) -> Precision | None:
         """Ask the state machine which weights to run, and start a fetch it asks for.
@@ -1166,14 +1208,26 @@ class EmbeddingTrack:
         runs a batch on it, within :data:`ENGINE_RELEASE_ATTEMPTS`. The passage
         engine of this track follows the holder, so the next row embeds with
         the new weights and not with the object that was just let go of.
+
+        **The way back removes the file** (D-25-09): from fp32 to int8, after
+        the old engine was let go of, the fp32 weights under the models
+        directory are deleted, a file the admin placed by hand as well. Only
+        that path, and only on this change (T-25-50).
         """
+        leaving_fp32 = engine_precision() == WEIGHTS_FP32 and target is Precision.INT8
         weights_path = fp32_weights_path(models_dir) if target is Precision.FP32 else None
         old = swap_engine(weights_path, target.value)
-        if old is None:
-            return
-        if self._model is old:
-            self._model = shared_model()
-        _let_go_of(old)
+        if old is not None:
+            if self._model is old:
+                self._model = shared_model()
+            _let_go_of(old)
+        if leaving_fp32:
+            try:
+                remove_fp32_weights(models_dir)
+            except OSError as error:
+                # The swap stands either way; a file that stays is disk space,
+                # not a wrong answer, and the next way back removes it.
+                LOGGER.warning("the fp32 weights could not be removed, %s", type(error).__name__)
 
     # -- plumbing --------------------------------------------------------
 
