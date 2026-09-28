@@ -40,7 +40,7 @@ from typing import Final
 from tantivy import Index
 
 from findling.config import SCHEMA_VERSION, settings
-from findling.embed.engine import shared_model
+from findling.embed.engine import engine_precision, shared_model
 from findling.embed.model import EmbeddingModel
 from findling.index.open import LANGUAGES_MARK, SCHEMA_MARK, expected_versions, open_index, open_reader
 from findling.index.schema import BODY_FIELD, FIELD_NAME, FIELD_TITLE
@@ -225,6 +225,33 @@ def expected_marks() -> dict[str, str] | None:
     and a digest carried over from the previous volume would report a drift that
     does not exist.
     """
+    index_marks = _index_marks()
+    if index_marks is None:
+        return None
+    marks = dict(index_marks)
+    # The one mark that does not come from the index side. It is added here
+    # and not in expected_versions() on purpose: that function feeds
+    # start_rebuild_on_drift, which answers a difference by raising the index
+    # generation, and a vector stock that no longer matches the model must
+    # not be able to trigger a rebuild of the full text index (D-21).
+    #
+    # Written on every call and never cached with the index marks: the weights
+    # are the precision of the model this process actually holds, never a
+    # default (T-24-02), and that can change under a running process once a
+    # swap happens; plan 25-11 derives the poller side from the precision
+    # decision once a swap can happen.
+    marks[EMBEDDING_MARK] = embedding_mark(
+        EMBEDDING_MODEL, tokens=settings().embed_token_cap, weights=engine_precision()
+    )
+    return marks
+
+
+def _index_marks() -> dict[str, str] | None:
+    """The marks of the full text index alone, cached per dictionary directory.
+
+    The half of :func:`expected_marks` that reads word lists and is worth a
+    cache. The embedding mark is added by the caller on every call.
+    """
     global _MARKS
     dictionary = settings().dict_dir
     with _LOCK:
@@ -257,12 +284,6 @@ def expected_marks() -> dict[str, str] | None:
             LOGGER.warning("the dutch constituent list is unavailable, version marks cannot be compared")
             return None
         marks = expected_versions(german, ",".join(languages), dutch_mark=dutch)
-        # The one mark that does not come from the index side. It is added here
-        # and not in expected_versions() on purpose: that function feeds
-        # start_rebuild_on_drift, which answers a difference by raising the index
-        # generation, and a vector stock that no longer matches the model must
-        # not be able to trigger a rebuild of the full text index (D-21).
-        marks[EMBEDDING_MARK] = embedding_mark(EMBEDDING_MODEL, tokens=settings().embed_token_cap)
         _MARKS = (dictionary, marks)
         return dict(marks)
 

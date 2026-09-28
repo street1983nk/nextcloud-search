@@ -268,7 +268,7 @@ _DISTANCE_EXPRESSION: Final = "vec_distance_l2(v.embedding, vec_int8(?))"
 EMBEDDING_MODEL: Final = "multilingual-e5-small"
 
 
-def embedding_mark(model: str, *, tokens: int, weights: str = WEIGHTS_INT8) -> str:
+def embedding_mark(model: str, *, tokens: int, weights: str) -> str:
     """The value of the ``embedding_version`` mark for one build.
 
     Five things decide whether a stored vector still means what this container
@@ -291,7 +291,9 @@ def embedding_mark(model: str, *, tokens: int, weights: str = WEIGHTS_INT8) -> s
     From phase 25 on, ``weights`` has to be the precision of the model that was
     ACTUALLY loaded and not the one that was asked for. A verdict of "fp32 is not
     available, int8 stays active" must write the int8 mark, or the stock would
-    claim vectors it does not hold.
+    claim vectors it does not hold. That is why ``weights`` has no default, on
+    purpose (IN-02 of the review of phase 24): a caller that forgot it would
+    otherwise write the int8 mark over an fp32 stock without anything failing.
 
     The mark says nothing about the tantivy index and must not: the vector half
     can be rebuilt on its own, which is the whole reason it lives in a file of

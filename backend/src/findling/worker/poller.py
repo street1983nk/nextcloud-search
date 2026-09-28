@@ -66,7 +66,7 @@ from tantivy import Index
 
 from findling.config import settings
 from findling.embed.chunker import ChunkSpan, chunk_spans, make_splitter
-from findling.embed.engine import note_cutter_failure, shared_model
+from findling.embed.engine import engine_precision, note_cutter_failure, shared_model
 from findling.embed.model import (
     EMBEDDING_UNAVAILABLE,
     LOAD_RETRY_SECONDS,
@@ -2108,7 +2108,10 @@ class Poller:
         if vectors is None:  # pragma: no cover - _embed_ready answered otherwise
             return []
 
-        wanted = embedding_mark(EMBEDDING_MODEL, tokens=settings().embed_token_cap)
+        # The precision of the model this process actually holds, never a
+        # default (T-24-02); plan 25-11 derives the poller side from the
+        # precision decision once a swap can happen.
+        wanted = embedding_mark(EMBEDDING_MODEL, tokens=settings().embed_token_cap, weights=engine_precision())
         meta = store.read_meta()
         stored = meta.get(EMBEDDING_MARK, UNKNOWN_VERSION)
 
