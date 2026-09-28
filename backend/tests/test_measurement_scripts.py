@@ -1312,8 +1312,16 @@ PHP_TREE_HASH_TODAY = "726756a8e646e4eb6d4d9089e3ac0476d7a5ff25b6e3f335b3f4faaea
 # its index and directory as properties), and tools/one_load.py reads the
 # wiring through the track of a poller. One file came and none went, so
 # PACKAGE_FILES_TODAY moves to 61. The PHP pair does not move.
-PACKAGE_FILES_TODAY = 61
-PACKAGE_TREE_HASH_TODAY = "ce67c2d2364caf3e2abb21ca9b8da9263b49ff485f428414b553a01a96e39a01"
+# Moved on 2026-09-28 by the merge of wave 3 of phase 25: plan 25-06 brought
+# embed/weights.py (the file side of the fp32 procurement) and memory_guard.py
+# (the neutral memory reader) and taught nc/client.py fetch_release_asset;
+# plan 25-08 changed the bytes of config.py (FP32_EXTRA_BYTES and the RAM
+# constants), precision.py (the six-verdict automaton) and profile.py (the
+# fp32 deduction of the slot formula, note_weights and embed_lane_fits).
+# Two files came and none went, so PACKAGE_FILES_TODAY moves to 63. The PHP
+# pair does not move: no plan of this wave touches a PHP file.
+PACKAGE_FILES_TODAY = 63
+PACKAGE_TREE_HASH_TODAY = "9bbdd2cf47aa6e72317a1b820610dad69b76f129dfaf5d4ee7d511b994436237"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
