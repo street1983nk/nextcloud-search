@@ -235,3 +235,13 @@ RETREAT_AFTER_ROUNDS`, re-reading on the first answered claim.
 _Reviewed: 2026-09-28_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
+
+## Fix-Stand (2026-09-28)
+
+| Befund | Status | Commit | Beleg |
+|--------|--------|--------|-------|
+| WR-01 | behoben | 637c02b | Groessenboden 1 << 60 verwirft den v1-Sentinel auch ohne MemTotal; RED/GREEN-Test in test_hardware.py |
+| WR-02 | behoben | d0705e4 | Lesefehler antwortet 500 mit error-Feld ohne Profilnamen; DocumentQueue.profile() macht daraus None, letztes bekanntes Profil bleibt (D-24-02); PHPUnit-Fall ergaenzt (laeuft nur in CI) |
+| IN-01..06 | offen, dokumentiert | n/a | kein Fix-Auftrag fuer Info-Befunde |
+
+Nach-Merge-Gate auf d0705e4: 3494 passed / 15 skipped, ruff + format + vulture + pyright (latest) gruen.
