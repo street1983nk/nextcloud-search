@@ -1359,8 +1359,20 @@ PHP_TREE_HASH_TODAY = "726756a8e646e4eb6d4d9089e3ac0476d7a5ff25b6e3f335b3f4faaea
 # that did not go through _park: a claim the queue did not answer, and the
 # unexpected exception run() catches. No file came and none went, so
 # PACKAGE_FILES_TODAY stays at 64. The PHP pair does not move.
+# Moved on 2026-09-28 by the review fixes WR-03 and WR-04 of phase 25: three of
+# the 64 files changed their bytes. embed/weights.py maps the fsync in front of
+# the rename and the close of the sink to an outcome instead of letting an
+# OSError escape the "never an exception" contract (ENOSPC is NO_ROOM, the
+# rest UNAVAILABLE); precision.py records the way back of the key from fp32 to
+# int8 as a fact of its own; worker/embedding.py sweeps a downloaded but never
+# activated fp32 file at the mark step once that way back is observed and no
+# fetch runs. No file came and none went, so PACKAGE_FILES_TODAY stays at 64.
+# The PHP pair does not move. The figure below is the first re-measurement
+# since the two entries above: the fix run was interrupted between WR-02 and
+# its measurement, so this one hash carries the bytes of all four review fixes
+# WR-01 to WR-04 at once.
 PACKAGE_FILES_TODAY = 64
-PACKAGE_TREE_HASH_TODAY = "77eb0852ada3b4f3b1169bff698a181509b03553bb95d114eb33cafda1c6633d"
+PACKAGE_TREE_HASH_TODAY = "9fd937888e89bf02adeb51abdc5c38a333fc69461368493cfe6a7d2a0c89e62e"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
