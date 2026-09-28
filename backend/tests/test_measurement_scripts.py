@@ -1297,8 +1297,16 @@ PHP_TREE_HASH_TODAY = "726756a8e646e4eb6d4d9089e3ac0476d7a5ff25b6e3f335b3f4faaea
 # default of weights in embedding_mark (IN-02), and worker/poller.py and
 # api/resources.py pass weights=engine_precision(). Five of the 59 files changed
 # their bytes. No file came and none went, so PACKAGE_FILES_TODAY stays at 59.
-PACKAGE_FILES_TODAY = 59
-PACKAGE_TREE_HASH_TODAY = "64f4e1e60dc8a9c722016c25f0c068ce517d5faf2178c133581a131062b841b9"
+# Moved on 2026-09-28 by plan 25-05 (lane wire and one read of profile and
+# precision, PAR-01/MOD-02), and the count moves with the hash: precision.py
+# arrived, the neutral closed set of precision names. nc/client.py got the lane
+# parameter of claim_documents and read_profile and topup_documents in __all__,
+# nc/queue.py the lanes, ClaimResult.lane_honored and companion_choice in place
+# of profile, and worker/poller.py reads the choice through companion_choice.
+# One file came and none went, so PACKAGE_FILES_TODAY moves to 60. The PHP pair
+# above does not move: this plan touches no PHP file.
+PACKAGE_FILES_TODAY = 60
+PACKAGE_TREE_HASH_TODAY = "8614c00c20e751f4c77443f7d44c09aa6f2f9f02598372a73c376bded6246e6f"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

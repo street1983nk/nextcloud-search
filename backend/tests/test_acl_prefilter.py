@@ -31,7 +31,7 @@ from conftest import CONSTITUENTS
 from findling.index.open import open_index
 from findling.index.writer import IndexBatchWriter
 from findling.nc.client import AsyncNextcloudApp
-from findling.nc.queue import CallResult, ClaimResult, QueueJob, QueueStats
+from findling.nc.queue import CallResult, ClaimResult, CompanionChoice, QueueJob, QueueStats
 from findling.store import repo
 from findling.store.repo import Store, open_store
 from findling.worker.poller import ROUND_WORKED, Poller
@@ -194,16 +194,19 @@ class _OneBatchQueue:
         self._batches = [tuple(jobs)]
         self.acknowledged: list[list[int]] = []
         self.profile_answer: str | None = None
+        self.precision_answer: str | None = None
         self.profile_asks = 0
+        self.lanes: list[str | None] = []
 
-    async def profile(self) -> str | None:
-        # Needed although this fake has no top_up: the poller asks for the
-        # profile before every claim (D-24-01).
+    async def companion_choice(self) -> CompanionChoice:
+        # Needed although this fake has no top_up: the poller asks for profile
+        # and precision before every claim (D-24-01, D-25-02).
         self.profile_asks += 1
-        return self.profile_answer
+        return CompanionChoice(profile=self.profile_answer, precision=self.precision_answer)
 
-    async def claim(self, *, limit: int, max_bytes: int) -> ClaimResult:
+    async def claim(self, *, limit: int, max_bytes: int, lane: str | None = None) -> ClaimResult:
         del limit, max_bytes
+        self.lanes.append(lane)
         return ClaimResult(jobs=self._batches.pop(0)) if self._batches else ClaimResult()
 
     async def acknowledge(self, done: Any, failed: Any, skipped: Any = None) -> CallResult:
