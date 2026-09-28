@@ -14,7 +14,10 @@ are the arithmetic stand-ins of test_embedding_track.py.
 from __future__ import annotations
 
 import asyncio
+import os
 import sqlite3
+import subprocess
+import sys
 import threading
 import time
 from collections.abc import Iterator, Sequence
@@ -866,3 +869,95 @@ async def test_t4_economy_in_the_middle_of_a_runner_round_ends_the_overlap(
     first_embed_end = recorder.of("embed")[0][1]
     assert all(start >= first_embed_end for start, _ in recorder.of("ocr"))
     assert len(recorder.of("embed")) == 3
+
+
+# -- real CPU on two cores (T3) -----------------------------------------------
+
+# CPU seconds the child of the OCR stand-in burns, and the embedding stand-in
+# in its thread. The embedding burns longer, so the child runs inside it.
+OCR_BURN_SECONDS = 1.0
+EMBED_BURN_SECONDS = 1.5
+
+# The child: a CPU loop in a process of its own, the shape of a tesseract run.
+CHILD_LOOP = "import time\nstart = time.process_time()\nwhile time.process_time() - start < {burn}:\n    pass\n"
+
+
+@dataclass(slots=True)
+class _BurningModel:
+    """The engine, replaced by a CPU loop in the worker thread that runs it."""
+
+    recorder: _Recorder
+    cpu: dict[str, float]
+    started: threading.Event = field(default_factory=threading.Event)
+
+    def embed_passages(self, texts: Sequence[str]) -> EmbedOutcome:
+        begin = time.monotonic()
+        self.started.set()
+        spent = time.thread_time()
+        while time.thread_time() - spent < EMBED_BURN_SECONDS:
+            pass
+        self.cpu["embed"] = time.thread_time() - spent
+        self.recorder.note("embed", begin, time.monotonic())
+        return EmbedOutcome.ready([[0.001] * DIMENSIONS for _ in texts])
+
+
+@dataclass(slots=True)
+class _BurningOcr:
+    """The OCR route, replaced by a child process that burns CPU."""
+
+    recorder: _Recorder
+    cpu: dict[str, float]
+    wait_for: threading.Event
+
+    def __call__(
+        self, path: str, mime: str, size: int, *, route: Any = None, timeout_seconds: float | None = None
+    ) -> ExtractionOutcome:
+        del path, mime, size, route, timeout_seconds
+        self.wait_for.wait(timeout=5)
+        begin = time.monotonic()
+        before = os.times()
+        subprocess.run(  # noqa: S603 - an argument list, never a shell
+            [sys.executable, "-c", CHILD_LOOP.format(burn=OCR_BURN_SECONDS)], check=True, timeout=30
+        )
+        after = os.times()
+        self.cpu["ocr"] = (after.children_user - before.children_user) + (
+            after.children_system - before.children_system
+        )
+        self.recorder.note("ocr", begin, time.monotonic())
+        return ExtractionOutcome.indexed("Gescannter Bescheid ueber die Kuendigungsfrist")
+
+
+@pytest.mark.skipif(
+    sys.platform != "linux" or (os.process_cpu_count() or 1) < 2,
+    reason="needs linux with two cores, runs in the gates job",
+)
+async def test_t3_real_cpu_work_of_both_lanes_overlaps(
+    store: Store, writer: IndexBatchWriter, vectors: VectorStore, tmp_path: Path
+) -> None:
+    # SC1: in Standard on two or more cores the OCR of the loop and the
+    # embedding of the runner really run at the same time. The proof is the
+    # CPU: both together spent more CPU seconds than the wall time of the window
+    # that holds them, which two serial halves never can.
+    _standard()
+    lane.note_echo(True)
+    recorder = _Recorder()
+    cpu: dict[str, float] = {}
+    model = _BurningModel(recorder, cpu)
+    ocr = _BurningOcr(recorder, cpu, wait_for=model.started)
+    _index_bodies(writer, 11)
+    queue = _LaneQueue()
+    poller, runner = _pair(store, writer, vectors, tmp_path, queue, cast("Any", model), cast("Any", ocr))
+    assert await runner.run_once() == ROUND_EMPTY
+    queue.add(_scan(1, 21), _job(2, 11))
+    queue.profile_answer = "standard"
+
+    async with asyncio.timeout(30):
+        await asyncio.gather(poller.run_once(), runner.run_once())
+
+    assert recorder.overlaps()
+    starts = [start for _, start, _ in recorder.intervals]
+    ends = [end for _, _, end in recorder.intervals]
+    window = max(ends) - min(starts)
+    assert cpu["ocr"] >= OCR_BURN_SECONDS * 0.9
+    assert cpu["embed"] >= EMBED_BURN_SECONDS * 0.9
+    assert cpu["ocr"] + cpu["embed"] > window

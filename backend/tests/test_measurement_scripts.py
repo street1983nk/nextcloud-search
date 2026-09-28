@@ -1320,8 +1320,15 @@ PHP_TREE_HASH_TODAY = "726756a8e646e4eb6d4d9089e3ac0476d7a5ff25b6e3f335b3f4faaea
 # fp32 deduction of the slot formula, note_weights and embed_lane_fits).
 # Two files came and none went, so PACKAGE_FILES_TODAY moves to 63. The PHP
 # pair does not move: no plan of this wave touches a PHP file.
-PACKAGE_FILES_TODAY = 63
-PACKAGE_TREE_HASH_TODAY = "9bbdd2cf47aa6e72317a1b820610dad69b76f129dfaf5d4ee7d511b994436237"
+# Measured again after the wave-3 merge of plans 25-06, 25-07 and 25-08, with
+# plan 25-09 on top: lane.py came (the neutral lane state, modes inline and
+# parallel and the closed park reasons), worker/embedding.py got the embed
+# runner (PAR-01, PAR-04) and worker/poller.py the lane decision of a pass, the
+# park wait, the store abort and the handover out of the held rows. One file
+# came and none went, so PACKAGE_FILES_TODAY moves to 64. The PHP pair does not
+# move: this plan touches no PHP file.
+PACKAGE_FILES_TODAY = 64
+PACKAGE_TREE_HASH_TODAY = "a2a15da9cae4cfc5733702b8cd57591bb9e575228f9f0c2f1aaaae742e42fea8"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
