@@ -3956,21 +3956,23 @@ async def test_a_gateway_that_fails_in_a_task_gives_every_row_back_behind_the_ba
     assert poller.busy is False
 
 
-@pytest.mark.parametrize("slots", [1, 2])
 @pytest.mark.parametrize(("engine", "reason"), [(False, "corrupt"), (True, "ocr_failed")])
-async def test_a_killed_child_keeps_its_verdict_of_before_phase_26_for_now(
-    store: Store, writer: IndexBatchWriter, tmp_path: Path, slots: int, engine: bool, reason: str
+async def test_a_killed_child_in_economy_keeps_its_verdict_of_before_phase_26(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, engine: bool, reason: str
 ) -> None:
-    # The mapping until plan 26-09 brings the solo retry.
+    # One slot is Sparsam unchanged: the old verdict, no solo run and no
+    # report to the guard (D-26-16 applies to several slots only).
     jobs = (_ocr_row(0), _ocr_row(1))
     queue = _FakeQueue(ClaimResult(jobs=jobs))
     extract = _SlotExtractor(seconds=0.01, error=ChildKilled(engine=engine))
-    poller = _slot_poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, extract=extract, ocr_slots=slots)
+    poller = _slot_poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, extract=extract, ocr_slots=1)
 
     result = await poller.run_once()
 
     assert result.state == ROUND_WORKED
     assert queue.acknowledged == [([], {300: reason, 301: reason})]
+    assert extract.finished == 2
+    assert guard.take_child_kills() == 0
 
 
 async def test_an_embed_row_of_lane_all_waits_until_the_scans_are_through(
@@ -4269,3 +4271,143 @@ async def test_a_serial_pass_never_writes_the_mark(store: Store, writer: IndexBa
     meta = store.read_meta()
     assert guard.META_MULTI_SLOT_PASS not in meta
     assert guard.META_MULTI_SLOT_CHOSEN not in meta
+
+
+# -- a killed child under several slots (plan 26-09, D-26-16) -----------------
+
+
+@dataclass(slots=True)
+class _KillingExtractor:
+    """Kills the child of chosen rows a given number of times, then reads them.
+
+    Keyed by the scratch file name, job-<queue id>.part, because that is the
+    one thing of the row the extraction sees. It writes down, per call, the
+    limit of the gate and how many extractions were running, so a test can
+    see that the solo run really ran alone.
+    """
+
+    kills: dict[int, int]
+    engine: bool = False
+    seconds: float = 0.05
+    poller: Poller | None = None
+    running: int = 0
+    most: int = 0
+    calls: list[tuple[int, int, int]] = field(default_factory=list)
+    lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def __call__(
+        self,
+        path: str,
+        mime: str,
+        size: int,
+        *,
+        route: Route | None = None,
+        timeout_seconds: float | None = None,
+    ) -> ExtractionOutcome:
+        del mime, size, route, timeout_seconds
+        queue_id = int(Path(path).name.removeprefix("job-").removesuffix(".part"))
+        with self.lock:
+            self.running += 1
+            self.most = max(self.most, self.running)
+            limit = self.poller._gate.limit if self.poller is not None else 0
+            self.calls.append((queue_id, limit, self.running))
+            doomed = self.kills.get(queue_id, 0) > 0
+            if doomed:
+                self.kills[queue_id] -= 1
+        try:
+            time.sleep(self.seconds)
+            if doomed:
+                raise ChildKilled(engine=self.engine)
+            return ExtractionOutcome.indexed(BODY)
+        finally:
+            with self.lock:
+                self.running -= 1
+
+    def calls_for(self, queue_id: int) -> list[tuple[int, int, int]]:
+        return [call for call in self.calls if call[0] == queue_id]
+
+
+def _killing_poller(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, queue: _FakeQueue, extract: _KillingExtractor, slots: int
+) -> Poller:
+    poller = _slot_poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, extract=extract, ocr_slots=slots)
+    extract.poller = poller
+    return poller
+
+
+@pytest.mark.parametrize("engine", [False, True])
+async def test_a_scan_killed_beside_others_runs_again_alone_and_is_indexed(
+    store: Store, writer: IndexBatchWriter, index: Index, tmp_path: Path, engine: bool
+) -> None:
+    # D-26-16, T-26-30: no verdict for the first kill, one report to the guard,
+    # the file read again behind the barrier and indexed once.
+    jobs = tuple(_ocr_row(offset) for offset in range(4))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    extract = _KillingExtractor(kills={301: 1}, engine=engine)
+    poller = _killing_poller(store, writer, tmp_path, queue, extract, slots=4)
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert result.indexed == 4
+    assert result.failed == 0
+    assert sorted(_stored_ids(index)) == [7000, 7001, 7002, 7003]
+    assert guard.take_child_kills() == 1
+    assert len(extract.calls_for(301)) == 2
+    assert queue.acknowledged == [([300, 302, 303, 301], {})]
+    row = store.file_row(7001)
+    assert row is not None
+    assert row["state"] == "indexed"
+
+
+async def test_a_scan_that_dies_alone_as_well_ends_as_out_of_memory(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # D-26-08 case 2: dead alone means the cause. One report only, the solo run
+    # does not report, and there is no third run (T-26-29).
+    jobs = tuple(_ocr_row(offset) for offset in range(4))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    extract = _KillingExtractor(kills={301: 5})
+    poller = _killing_poller(store, writer, tmp_path, queue, extract, slots=4)
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert result.indexed == 3
+    assert queue.acknowledged == [([300, 302, 303], {301: "out_of_memory"})]
+    assert guard.take_child_kills() == 1
+    assert len(extract.calls_for(301)) == 2
+
+
+async def test_a_content_row_killed_beside_the_scans_runs_again_alone(
+    store: Store, writer: IndexBatchWriter, index: Index, tmp_path: Path
+) -> None:
+    jobs = (_ocr_row(0), _ocr_row(1), _job(401, 8001, mime="text/plain"))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    extract = _KillingExtractor(kills={401: 1})
+    poller = _killing_poller(store, writer, tmp_path, queue, extract, slots=2)
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert result.failed == 0
+    assert 8001 in _stored_ids(index)
+    assert guard.take_child_kills() == 1
+    assert len(extract.calls_for(401)) == 2
+    assert queue.acknowledged[0][1] == {}
+
+
+async def test_the_solo_run_holds_the_gate_at_one(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:
+    jobs = tuple(_ocr_row(offset) for offset in range(4))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    extract = _KillingExtractor(kills={300: 1, 302: 1})
+    poller = _killing_poller(store, writer, tmp_path, queue, extract, slots=4)
+
+    await poller.run_once()
+
+    assert extract.most >= 2, "the first round ran beside each other"
+    solo = [extract.calls_for(300)[1], extract.calls_for(302)[1]]
+    assert [call[1] for call in solo] == [1, 1], "gate limit one during the solo runs"
+    assert [call[2] for call in solo] == [1, 1], "one extraction at a time"
+    assert [call[0] for call in extract.calls[-2:]] == [300, 302], "claim order"
+    assert guard.take_child_kills() == 2

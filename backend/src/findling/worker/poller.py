@@ -7,7 +7,12 @@ code. One pass over a batch does, in this order:
    hand the document to the writer. From phase 26 on step 1 reads the OCR rows
    concurrently, up to one per slot, and everything else stays serial; the
    OCR tasks end at a barrier, and only behind it are their verdicts sorted,
-   in the loop thread and in claim order;
+   in the loop thread and in claim order. The slots of a pass follow the free
+   memory (the throttle of D-26-02). A child killed from outside under several
+   slots gets no verdict: its row runs once more alone behind the barrier, and
+   only a second death alone makes it failed(out_of_memory) (D-26-16). While
+   such a pass runs, state.db carries the mark multi_slot_pass, so a start
+   after a crash inside it can tell;
 2. **commit** the writer, which is the moment the index becomes durable;
 3. write the verdicts and the permissions into the state database;
 3b. hand the rows that are not finished on to a trailing track, OCR or embedding;
@@ -63,6 +68,7 @@ import sqlite3
 import time
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, replace
+from enum import Enum
 from pathlib import Path
 from typing import IO, Any, Final, cast
 
@@ -287,6 +293,33 @@ class _ScanResult:
     job: QueueJob
     outcome: ExtractionOutcome
     content_hash: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _Killed:
+    """A row whose child was killed from outside during a pass of several slots.
+
+    No verdict: under several slots the kill says nothing about this file yet,
+    since any of the children beside it may have taken the memory (D-26-16).
+    The row runs once more alone behind the barrier.
+    """
+
+    job: QueueJob
+
+
+class _OnKill(Enum):
+    """What an extraction does with a child that was killed from outside.
+
+    ``VERDICT`` is the serial pass, Economy above all: the verdict of before
+    phase 26, failed(ocr_failed) for a killed engine and failed(corrupt) for a
+    killed child, and no report. ``RAISE`` is the pass of several slots, which
+    catches the kill itself. ``OUT_OF_MEMORY`` is the solo run behind the
+    barrier: a file that dies alone was the cause (D-26-16, D-26-08 case 2).
+    """
+
+    VERDICT = "verdict"
+    RAISE = "raise"
+    OUT_OF_MEMORY = "out_of_memory"
 
 
 class _HashingSink:
@@ -1137,9 +1170,19 @@ class Poller:
         **A cancellation** cancels every task and travels on; the caller's
         unlock_held gives the rows back. The child of a cancelled task runs to
         its end in its thread, which the pool's close takes care of at shutdown.
+
+        **A child killed from outside costs no file** (D-26-16). Under several
+        slots nobody knows yet whose memory the kernel took, so the kill of an
+        OCR task or of a content row is reported to the guard, where it counts
+        as an OOM kill, and the row gets no verdict. Behind the barrier the
+        gate goes down to one, and every killed row runs once more alone, in
+        claim order; a file that dies alone as well ends as
+        failed(out_of_memory), and there is no third run. The solo runs come
+        before the embed rows, so OCR and embedding still never overlap.
         """
-        tasks: list[asyncio.Task[_ScanResult]] = []
+        tasks: list[asyncio.Task[_ScanResult | _Killed]] = []
         deferred: list[QueueJob] = []
+        killed: list[QueueJob] = []
         stop: BaseException | None = None
         unchanged = 0
         try:
@@ -1151,7 +1194,12 @@ class Poller:
                     deferred.append(job)
                     continue
                 try:
-                    unchanged += await self._handle(job, done, failed, verdicts, handover, embedding, embedded)
+                    unchanged += await self._handle(
+                        job, done, failed, verdicts, handover, embedding, embedded, on_kill=_OnKill.RAISE
+                    )
+                except ChildKilled:
+                    guard.report_child_kill()
+                    killed.append(job)
                 except (_GatewayDown, _DiskTight) as error:
                     stop = error
                     break
@@ -1172,7 +1220,19 @@ class Poller:
             raise errors[0]
 
         for result in results:
+            if isinstance(result, _Killed):
+                killed.append(result.job)
+                continue
             self._judge_scan(cast("_ScanResult", result), done, failed, verdicts, embedding)
+        if killed:
+            # Alone from here on: one child at a time, so a second kill can
+            # only be the file's own (D-26-16, D-26-08 case 2).
+            await self._gate.set_limit(1)
+            position = {job.queue_id: index for index, job in enumerate(jobs)}
+            for job in sorted(killed, key=lambda row: position[row.queue_id]):
+                unchanged += await self._handle(
+                    job, done, failed, verdicts, handover, embedding, embedded, on_kill=_OnKill.OUT_OF_MEMORY
+                )
         for job in deferred:
             unchanged += await self._handle(job, done, failed, verdicts, handover, embedding, embedded)
         return unchanged
@@ -1202,10 +1262,18 @@ class Poller:
         except sqlite3.Error as error:
             LOGGER.warning("could not clear the mark of the multi slot pass, %s", type(error).__name__)
 
-    async def _scan_in_a_slot(self, job: QueueJob) -> _ScanResult:
-        """One OCR row as a task: wait for a slot, then read the scan on it."""
+    async def _scan_in_a_slot(self, job: QueueJob) -> _ScanResult | _Killed:
+        """One OCR row as a task: wait for a slot, then read the scan on it.
+
+        A child killed from outside is reported to the guard here, from the
+        loop thread, and the row comes back without a verdict for the solo run.
+        """
         async with self._gate.slot():
-            return await self._scan(job)
+            try:
+                return await self._scan(job, on_kill=_OnKill.RAISE)
+            except ChildKilled:
+                guard.report_child_kill()
+                return _Killed(job)
 
     # -- one file --------------------------------------------------------
 
@@ -1218,8 +1286,14 @@ class Poller:
         handover: list[int],
         embedding: list[int],
         embedded: list[int],
+        *,
+        on_kill: _OnKill = _OnKill.VERDICT,
     ) -> int:
-        """Take one job as far as the writer. Returns 1 when it needed no work."""
+        """Take one job as far as the writer. Returns 1 when it needed no work.
+
+        ``on_kill`` reaches the one extraction of a content row, see
+        :class:`_OnKill`; every other branch starts no child.
+        """
         # The kind=delete branch, and it stands before everything because a
         # deletion is the one job that must not touch the file. Every line below
         # would either ask the gateway for bytes that are gone or read the empty
@@ -1264,7 +1338,7 @@ class Poller:
         # file earn that verdict: a PDF whose text layer was measured and found
         # missing, and a picture, which has no text layer to measure at all.
         if job.kind == KIND_OCR:
-            await self._read_the_scan(job, done, failed, verdicts, embedding)
+            await self._read_the_scan(job, done, failed, verdicts, embedding, on_kill=on_kill)
             return 0
 
         # The third track, and the only branch in this method that touches no
@@ -1383,7 +1457,7 @@ class Poller:
                 # a content row beside running OCR tasks never makes one child
                 # more than the pass has slots.
                 async with self._gate.slot():
-                    outcome = await self._extract_on_the_pool(str(read.path), job.mime, read.size)
+                    outcome = await self._extract_on_the_pool(str(read.path), job.mime, read.size, on_kill=on_kill)
         finally:
             # The scratch file holds user content. Leaving one behind is a
             # disclosure, and leaving one behind per job fills the volume.
@@ -1407,6 +1481,8 @@ class Poller:
         failed: dict[int, str],
         verdicts: list[_Verdict],
         embedding: list[int],
+        *,
+        on_kill: _OnKill = _OnKill.VERDICT,
     ) -> None:
         """The same file once more, this time as pixels rather than as text.
 
@@ -1434,10 +1510,10 @@ class Poller:
         concurrent pass runs the same two with a barrier between them.
         """
         async with self._gate.slot():
-            result = await self._scan(job)
+            result = await self._scan(job, on_kill=on_kill)
         self._judge_scan(result, done, failed, verdicts, embedding)
 
-    async def _scan(self, job: QueueJob) -> _ScanResult:
+    async def _scan(self, job: QueueJob, *, on_kill: _OnKill = _OnKill.VERDICT) -> _ScanResult:
         """Fetch one scan, read it on a child of the pool, hand the text to the writer.
 
         Safe to run in a task beside other scans: the fetch has its own scratch
@@ -1466,6 +1542,7 @@ class Poller:
                 # window in which the child hands over the pages it already read
                 # (D-08, T-03-902).
                 timeout_seconds=self._ocr_hard_deadline,
+                on_kill=on_kill,
             )
         finally:
             # Same rule as on the content path: the scratch file holds user
@@ -1485,13 +1562,15 @@ class Poller:
         *,
         route: Route | None = None,
         timeout_seconds: float | None = None,
+        on_kill: _OnKill = _OnKill.VERDICT,
     ) -> ExtractionOutcome:
         """Run the extraction in the executor of the pool, never in the default one.
 
-        A child killed from outside is mapped onto the verdict it got before
-        phase 26 for now, failed(ocr_failed) for a killed engine and
-        failed(corrupt) for a killed child, the mapping extract_guarded makes;
-        plan 26-09 replaces this with a solo retry under several slots.
+        A child killed from outside is answered as ``on_kill`` says (see
+        :class:`_OnKill`): the verdict of before phase 26 in the serial pass,
+        raised on to the pass of several slots, failed(out_of_memory) in the
+        solo run. The solo run reports nothing, the kill that sent it there
+        was reported already, and it never runs a third time.
         """
         kwargs: dict[str, Any] = {}
         if route is not None:
@@ -1501,6 +1580,11 @@ class Poller:
         try:
             return await self._pool.call(self._extract, path, mime, size, **kwargs)
         except ChildKilled as killed:
+            if on_kill is _OnKill.RAISE:
+                raise
+            if on_kill is _OnKill.OUT_OF_MEMORY:
+                # Died alone, so this file is the cause (D-26-16).
+                return ExtractionOutcome.failed(Reason.OUT_OF_MEMORY)
             return ExtractionOutcome.failed(Reason.OCR_FAILED if killed.engine else Reason.CORRUPT)
 
     def _judge_scan(
