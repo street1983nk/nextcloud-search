@@ -48,7 +48,15 @@ from findling.extract.errors import ExtractionOutcome, Reason
 from findling.index.open import expected_versions, open_index
 from findling.index.writer import IndexBatchWriter, IndexRecord
 from findling.nc.client import AsyncNextcloudApp
-from findling.nc.queue import KIND_EMBED, TOPUP_IDLE, CallResult, ClaimResult, QueueJob, QueueStats
+from findling.nc.queue import (
+    KIND_EMBED,
+    TOPUP_IDLE,
+    CallResult,
+    ClaimResult,
+    CompanionChoice,
+    QueueJob,
+    QueueStats,
+)
 from findling.store.repo import (
     EMBEDDING_BACKLOG_MARK,
     EMBEDDING_MARK,
@@ -150,16 +158,19 @@ class _FakeQueue:
         self.requeues: list[tuple[list[int], str]] = []
         self.requeue_fails = False
         self.profile_answer: str | None = None
+        self.precision_answer: str | None = None
         self.profile_asks = 0
+        self.lanes: list[str | None] = []
 
-    async def profile(self) -> str | None:
+    async def companion_choice(self) -> CompanionChoice:
         # The second track does not read the profile yet: no stored choice,
-        # Economy in force, exactly the state before phase 24.
+        # Economy and int8 in force, exactly the state before phase 24.
         self.profile_asks += 1
-        return self.profile_answer
+        return CompanionChoice(profile=self.profile_answer, precision=self.precision_answer)
 
-    async def claim(self, *, limit: int, max_bytes: int) -> ClaimResult:
+    async def claim(self, *, limit: int, max_bytes: int, lane: str | None = None) -> ClaimResult:
         del limit, max_bytes
+        self.lanes.append(lane)
         self.claims += 1
         return self._batches.pop(0) if self._batches else ClaimResult()
 

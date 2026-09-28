@@ -61,6 +61,7 @@ from findling.nc.queue import (
     TOPUP_UNAVAILABLE,
     CallResult,
     ClaimResult,
+    CompanionChoice,
     DocumentQueue,
     QueueJob,
     QueueStats,
@@ -195,24 +196,30 @@ class _FakeQueue:
         # a companion without a stored choice: Economy stays in force, the
         # state every existing test means (D-24-02).
         self.profile_answer: str | None = None
+        # The precision out of the same answer (D-25-02). None by default, a
+        # 1.3 companion without the field.
+        self.precision_answer: str | None = None
         # A companion older than 1.4.0: the read goes through the real
-        # DocumentQueue.profile over a session that answers 404, so the test
-        # proves the error path the poller really meets and not a fake raising
-        # where production code never raises.
+        # DocumentQueue.companion_choice over a session that answers 404, so the
+        # test proves the error path the poller really meets and not a fake
+        # raising where production code never raises.
         self.profile_route_missing = False
         self.profile_asks = 0
         # The order of the calls that matter for D-24-01: profile before claim.
         self.order: list[str] = []
+        # The lane of every claim, None for a claim that asked for none (T13).
+        self.lanes: list[str | None] = []
 
-    async def profile(self) -> str | None:
+    async def companion_choice(self) -> CompanionChoice:
         self.profile_asks += 1
         self.order.append("profile")
         if self.profile_route_missing:
-            return await DocumentQueue(cast("AsyncNextcloudApp", _AppWithoutProfileRoute())).profile()
-        return self.profile_answer
+            return await DocumentQueue(cast("AsyncNextcloudApp", _AppWithoutProfileRoute())).companion_choice()
+        return CompanionChoice(profile=self.profile_answer, precision=self.precision_answer)
 
-    async def claim(self, *, limit: int, max_bytes: int) -> ClaimResult:
+    async def claim(self, *, limit: int, max_bytes: int, lane: str | None = None) -> ClaimResult:
         del limit, max_bytes
+        self.lanes.append(lane)
         self.claims += 1
         self.order.append("claim")
         return self._batches.pop(0) if self._batches else ClaimResult()
@@ -1775,6 +1782,7 @@ async def test_the_profile_is_read_once_per_round_before_the_claim(
     # on the size of the claim depends on the profile.
     queue = _FakeQueue(ClaimResult(jobs=(_job(),)))
     queue.profile_answer = "standard"
+    queue.precision_answer = "fp32"
     poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: BODY_BYTES})
 
     await poller.run_once()
@@ -1783,6 +1791,20 @@ async def test_the_profile_is_read_once_per_round_before_the_claim(
     assert queue.profile_asks == 2
     assert queue.order == ["profile", "claim", "profile", "claim"]
     assert snapshot().chosen is Profile.STANDARD
+
+
+async def test_the_poller_claims_without_a_lane(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:
+    # T13 and K6: the economy poller speaks the 1.3 wire, a claim without a lane,
+    # also when the companion answers a profile and a precision.
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)))
+    queue.profile_answer = "standard"
+    queue.precision_answer = "fp32"
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: BODY_BYTES})
+
+    await poller.run_once()
+    await poller.run_once()
+
+    assert queue.lanes == [None, None]
 
 
 async def test_a_companion_without_the_profile_route_leaves_economy_in_force(
@@ -2002,18 +2024,18 @@ class _WorkStock:
         self.written_off: list[int] = []
         self.claims = 0
 
-    async def profile(self) -> str | None:
+    async def companion_choice(self) -> CompanionChoice:
         # The stock simulation is about deliveries, never about the profile:
-        # no stored choice, Economy in force.
-        return None
+        # no stored choice, Economy and int8 in force.
+        return CompanionChoice(profile=None, precision=None)
 
     async def top_up(self) -> str:
         # The stock is the whole crawl in these tests: nothing is ever pending
         # behind it.
         return TOPUP_IDLE
 
-    async def claim(self, *, limit: int, max_bytes: int) -> ClaimResult:
-        del max_bytes
+    async def claim(self, *, limit: int, max_bytes: int, lane: str | None = None) -> ClaimResult:
+        del max_bytes, lane
         self.claims += 1
         handed: list[QueueJob] = []
         for row in list(self._rows.values()):

@@ -747,8 +747,10 @@ class Poller:
         # and Economy before the first one (D-24-02). A change therefore takes
         # effect after anything from seconds to about 25 minutes: an idle round
         # waits up to POLL_COOLDOWN_MAX_SECONDS, an OCR round takes up to about
-        # 2 x 780 s. Nothing below reads the value yet.
-        note_chosen(await queue.profile())
+        # 2 x 780 s. Nothing below reads the value yet. One answer carries
+        # profile and precision (D-25-02); the precision is taken up by plan 25-11.
+        choice = await queue.companion_choice()
+        note_chosen(choice.profile)
 
         claim = await queue.claim(limit=self._batch_files, max_bytes=self._batch_max_bytes)
         if claim.unavailable:
