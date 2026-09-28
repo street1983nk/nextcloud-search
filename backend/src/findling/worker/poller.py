@@ -100,6 +100,7 @@ from findling.nc.queue import (
     DocumentQueue,
     QueueJob,
 )
+from findling.precision import note_chosen_precision
 from findling.profile import Profile, note_chosen
 from findling.profile import snapshot as profile_snapshot
 from findling.store.repo import FileMeta, Store, open_store
@@ -675,7 +676,8 @@ class Poller:
         if gateway is not None:
             await gateway.aclose()
         # Only what the track opened itself; whatever was handed in stays open.
-        self._track.close()
+        # A running fetch of the fp32 weights is cancelled and waited for.
+        await self._track.aclose()
         if not self._owns_resources:
             return
         writer, self._writer = self._writer, None
@@ -740,10 +742,13 @@ class Poller:
         # and Economy before the first one (D-24-02). A change therefore takes
         # effect after anything from seconds to about 25 minutes: an idle round
         # waits up to POLL_COOLDOWN_MAX_SECONDS, an OCR round takes up to about
-        # 2 x 780 s. Nothing below reads the value yet. One answer carries
-        # profile and precision (D-25-02); the precision is taken up by plan 25-11.
+        # 2 x 780 s. Nothing below reads the value yet.
         choice = await queue.companion_choice()
         note_chosen(choice.profile)
+        # The precision key is read on the same answer (D-25-02); None changes
+        # nothing (D-24-02). What follows from it, a fetch or a swap of the
+        # weights, is decided by the embedding track at its mark step.
+        note_chosen_precision(choice.precision)
 
         # Where the embedding runs this pass (PAR-01, PAR-04). In Economy the
         # embed runner must have parked before this pass claims anything, so
