@@ -56,6 +56,7 @@ import asyncio
 import contextlib
 import hashlib
 import logging
+import sqlite3
 import time
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, replace
@@ -64,6 +65,7 @@ from typing import IO, Any, Final, cast
 
 from tantivy import Index
 
+from findling import lane
 from findling.config import settings
 from findling.extract.dispatch import Route, extension_of, judge
 from findling.extract.errors import ExtractionOutcome, Reason, State
@@ -93,19 +95,23 @@ from findling.nc.queue import (
     KIND_EMBED,
     KIND_METADATA,
     KIND_OCR,
+    LANE_INDEX,
     TOPUP_SUPPLIED,
     DocumentQueue,
     QueueJob,
 )
-from findling.profile import note_chosen
+from findling.profile import Profile, note_chosen
+from findling.profile import snapshot as profile_snapshot
 from findling.store.repo import FileMeta, Store, open_store
 from findling.store.vectors import VectorStore, open_vectors
 from findling.worker.embedding import (
     EMBED_INCOMPLETE,
     EMBED_NO_STORED_TEXT,
     EMBED_WRITTEN,
+    RUNNER_PARK_WAIT_SECONDS,
     Chunker,
     EmbeddingTrack,
+    EmbedRunner,
     PassageEmbedder,
     _DiskTight,
     acl_users,
@@ -121,6 +127,13 @@ ROUND_EMPTY: Final = "empty"
 ROUND_QUEUE_UNAVAILABLE: Final = "queue_unavailable"
 ROUND_GATEWAY_UNAVAILABLE: Final = "gateway_unavailable"
 ROUND_PAUSED_LOW_DISK: Final = "paused_low_disk"
+# A SQLite error inside a pass: the rows go back unjudged and the pass pauses,
+# the answer the two pauses above give (Pitfall 3 of phase 25).
+ROUND_PAUSED_STORE_ERROR: Final = "paused_store_error"
+# The level turned Economy and the embed runner did not park within
+# RUNNER_PARK_WAIT_SECONDS. The pass claims nothing rather than run OCR beside
+# an embedding (IDX-08); the next pass asks again.
+ROUND_WAITING_FOR_RUNNER: Final = "waiting_for_runner"
 
 # How one job of the second track ended, the names of the embedding track since
 # plan 25-07 (worker/embedding.py). They are imported here because this module
@@ -436,6 +449,10 @@ class Poller:
             index=None if writer is None else writer.index,
             index_dir=None if writer is None else writer.directory,
         )
+        # The embed runner beside this loop, attached by the lifespan (plan
+        # 25-10). None is today's container: the loop embeds inline and never
+        # waits for anybody.
+        self._runner: EmbedRunner | None = None
         self._owns_vectors = vectors is None
         self._embed_enabled = resolved.embed_enabled
         self._ocr_enabled = resolved.ocr_enabled
@@ -524,6 +541,22 @@ class Poller:
     def cooldown(self) -> float:
         """Seconds the loop waits before the next pass."""
         return self._cooldown
+
+    @property
+    def track(self) -> EmbeddingTrack:
+        """The embedding track of this poller, which the embed runner drives as well.
+
+        Public for the lifespan (plan 25-10), which builds the runner over the
+        very track this loop embeds inline through, so that one lock orders both.
+        """
+        return self._track
+
+    def attach_runner(self, runner: EmbedRunner | None) -> None:
+        """Know the embed runner, so a pass can wait for it to park (IDX-08).
+
+        Without a runner this loop behaves as it always has.
+        """
+        self._runner = runner
 
     def arm(self) -> None:
         """Let the task collect work again.
@@ -712,10 +745,27 @@ class Poller:
         choice = await queue.companion_choice()
         note_chosen(choice.profile)
 
-        claim = await queue.claim(limit=self._batch_files, max_bytes=self._batch_max_bytes)
+        # Where the embedding runs this pass (PAR-01, PAR-04). In Economy the
+        # embed runner must have parked before this pass claims anything, so
+        # that OCR and embedding never run beside each other from the switch on
+        # (IDX-08 word for word). Only a parallel runner moves the claim onto
+        # the index lane; otherwise the claim asks for no lane at all and is the
+        # 1.3 request byte for byte (T13), and the embed rows it brings are
+        # embedded inline below, under the lock of the track.
+        economy = profile_snapshot().effective is Profile.ECONOMY
+        if economy and not await self._runner_parked():
+            self._back_off()
+            return RoundResult(ROUND_WAITING_FOR_RUNNER)
+        wanted = LANE_INDEX if not economy and lane.snapshot().mode == lane.MODE_PARALLEL else None
+
+        claim = await queue.claim(limit=self._batch_files, max_bytes=self._batch_max_bytes, lane=wanted)
         if claim.unavailable:
             self._retreat()
             return RoundResult(ROUND_QUEUE_UNAVAILABLE)
+        # Whether the companion echoed what was asked; a claim without a lane
+        # asked for "all". This is how the runner learns that it may ask for a
+        # lane at all (Pitfall 1).
+        lane.note_echo(claim.lane_honored)
         # The queue answered, so a retreat is over, and this stands before the
         # check below because an empty answer is an answer: it says the companion
         # half is there and has nothing to do.
@@ -764,6 +814,42 @@ class Poller:
             return RoundResult(ROUND_EMPTY)
 
         self._held = {job.queue_id for job in claim.jobs}
+        try:
+            return await self._work(queue, claim.jobs)
+        except sqlite3.Error as error:
+            # The _abort semantics for a store that refused a write, "database is
+            # locked" above all now that two tracks write (Pitfall 3). Before this
+            # branch the error ended in the catch-all of run(), the held rows ran
+            # into the lock timeout, every one of them spent a delivery, and after
+            # three such passes a healthy file ended as failed(repeatedly_stuck).
+            # Now they go back unjudged and the pass pauses; the type name is the
+            # whole line.
+            LOGGER.warning(
+                "indexing pass hit a store error, %s, %d rows handed back", type(error).__name__, len(claim.jobs)
+            )
+            return await self._abort(queue, len(claim.jobs), state=ROUND_PAUSED_STORE_ERROR)
+
+    async def _runner_parked(self) -> bool:
+        """True once the embed runner is parked, or when there is none.
+
+        Waits at most RUNNER_PARK_WAIT_SECONDS. The runner parks after the row
+        in work, so a False is a runner that is stuck, and the pass then claims
+        nothing rather than read a scan beside an embedding.
+        """
+        runner = self._runner
+        if runner is None or runner.parked.is_set():
+            return True
+        try:
+            await asyncio.wait_for(runner.parked.wait(), timeout=RUNNER_PARK_WAIT_SECONDS)
+        except TimeoutError:
+            LOGGER.warning(
+                "the embed runner did not park within %d s, this pass claims nothing", RUNNER_PARK_WAIT_SECONDS
+            )
+            return False
+        return True
+
+    async def _work(self, queue: DocumentQueue, jobs: Sequence[QueueJob]) -> RoundResult:
+        """Steps 1 to 4 over the rows of one claim, in the order the module docstring states."""
         done: list[int] = []
         failed: dict[int, str] = {}
         verdicts: list[_Verdict] = []
@@ -783,20 +869,20 @@ class Poller:
         # 1. Per file: judge, read the bytes into scratch, extract, hand over to
         #    the writer. An abort anywhere in here costs nothing: the rows are
         #    still locked in Nextcloud and run in again after the lock timeout.
-        for job in claim.jobs:
+        for job in jobs:
             try:
                 counted = await self._handle(job, done, failed, verdicts, handover, embedding, embedded)
             except _GatewayDown:
                 # The gateway says nothing about the file, so no verdict may be
                 # written for any of them. Give the whole batch back and wait.
-                return await self._abort(queue, len(claim.jobs))
+                return await self._abort(queue, len(jobs))
             except _DiskTight:
                 # The same answer the flush below gives to the same condition,
                 # only from inside the loop: nothing of this pass is written,
                 # the rows go back unjudged and the pause is the operating state
                 # the status page names. Half a vector stock is the alternative.
-                LOGGER.warning("index paused, free space below the floor, %d rows handed back", len(claim.jobs))
-                return await self._abort(queue, len(claim.jobs), state=ROUND_PAUSED_LOW_DISK)
+                LOGGER.warning("index paused, free space below the floor, %d rows handed back", len(jobs))
+                return await self._abort(queue, len(jobs), state=ROUND_PAUSED_LOW_DISK)
             unchanged += counted
 
         # 2. The commit. From here the index is durable, and this is the earliest
@@ -805,8 +891,8 @@ class Poller:
         if flush.state == FLUSH_PAUSED_LOW_DISK:
             # A worker that keeps going on a full volume turns a space problem
             # into a data loss.
-            LOGGER.warning("index paused, free space below the floor, %d rows handed back", len(claim.jobs))
-            return await self._abort(queue, len(claim.jobs), state=ROUND_PAUSED_LOW_DISK)
+            LOGGER.warning("index paused, free space below the floor, %d rows handed back", len(jobs))
+            return await self._abort(queue, len(jobs), state=ROUND_PAUSED_LOW_DISK)
 
         # 3. The verdicts and the permissions, per file replace_acl then record().
         #    An abort in between leaves the file unjudged, so the redelivery
@@ -826,8 +912,19 @@ class Poller:
         #     first, because a scan has to be read before there is a text of it
         #     to embed; the two lists are disjoint for the same reason, since a
         #     verdict is either skipped(no_text_layer) or indexed.
-        requeued = (await hand_over(queue, handover, kind=KIND_OCR)).count
-        requeued += (await hand_over(queue, embedding, kind=KIND_EMBED)).count
+        #
+        #     A row whose requeue succeeded belongs to the next track from that
+        #     moment on and leaves _held (Pattern 5.3 of phase 25): requeueAs
+        #     frees its lock on the other side, the embed runner may already
+        #     hold it, and an unlock_held in the window before the
+        #     acknowledgement must not hand back a row somebody else is working.
+        queue_ids = {job.file_id: job.queue_id for job in jobs}
+        requeued = 0
+        for file_ids, kind in ((handover, KIND_OCR), (embedding, KIND_EMBED)):
+            moved = await hand_over(queue, file_ids, kind=kind)
+            requeued += moved.count
+            if moved.ok:
+                self._held.difference_update(queue_ids[file_id] for file_id in file_ids if file_id in queue_ids)
 
         # 4. The acknowledgement, the last step by construction. Everything it
         #    reports is already durable, so losing it costs one repetition and
@@ -843,7 +940,7 @@ class Poller:
         LOGGER.info(
             "pass finished, claimed=%d indexed=%d skipped=%d failed=%d unchanged=%d "
             "requeued=%d embedded=%d committed=%d",
-            len(claim.jobs),
+            len(jobs),
             indexed,
             skipped,
             len(failed),
@@ -854,7 +951,7 @@ class Poller:
         )
         return RoundResult(
             ROUND_WORKED,
-            claimed=len(claim.jobs),
+            claimed=len(jobs),
             indexed=indexed,
             skipped=skipped,
             failed=len(failed),
@@ -1780,7 +1877,9 @@ __all__ = [
     "ROUND_EMPTY",
     "ROUND_GATEWAY_UNAVAILABLE",
     "ROUND_PAUSED_LOW_DISK",
+    "ROUND_PAUSED_STORE_ERROR",
     "ROUND_QUEUE_UNAVAILABLE",
+    "ROUND_WAITING_FOR_RUNNER",
     "ROUND_WORKED",
     "Poller",
     "RoundResult",

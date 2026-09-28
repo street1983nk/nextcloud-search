@@ -25,9 +25,12 @@ searcher and nothing else: :func:`findling.index.writer.stored_body` over an
 index handle this track opened itself, which never asked for a writer.
 
 **One lock, one row at a time.** :attr:`EmbeddingTrack.lock` is held while a
-row is embedded and while the mark step runs. With a single driver, which is
-the state of this plan, it changes nothing about the order of anything; it is
-the seam a second driver takes.
+row is embedded and while the mark step runs. Since plan 25-09 there are two
+drivers: the indexing loop, which embeds inline in Economy, and
+:class:`EmbedRunner`, which claims the embed lane on its own in Standard and
+Performance. The lock is what keeps them from using the track at the same time
+(cutter, engine, mark step); the parking of the runner is what keeps OCR and
+embedding apart in Economy (IDX-08).
 
 Like the rest of ``worker/``, this module imports nothing from ``api/``, and
 its log lines carry counters and type names, never a path, a title or a text.
@@ -36,17 +39,28 @@ its log lines carry counters and type names, never a path, a title or a text.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
+import sqlite3
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from pathlib import Path
-from typing import Final, Protocol
+from typing import Any, Final, Protocol
 
 from tantivy import Index
 
-from findling.config import settings
+from findling import lane, memory_guard, profile
+from findling.config import (
+    CUTTER_LOAD_BYTES,
+    EMBED_ACTIVATION_BYTES,
+    EMBED_CLAIM_BATCH,
+    EMBED_LANE_RESERVE_BYTES,
+    EMBED_WEIGHTS_LOAD_BYTES,
+    FP32_EXTRA_BYTES,
+    settings,
+)
 from findling.embed.chunker import ChunkSpan, chunk_spans, make_splitter
-from findling.embed.engine import engine_precision, note_cutter_failure, shared_model
+from findling.embed.engine import ENGINE_LOADED, engine_precision, engine_state, note_cutter_failure, shared_model
 from findling.embed.model import (
     EMBEDDING_UNAVAILABLE,
     LOAD_RETRY_SECONDS,
@@ -59,7 +73,10 @@ from findling.index.open import open_index
 from findling.index.wordlist import build_artifact
 from findling.index.wordlist_nl import dutch_digest_for
 from findling.index.writer import disk_is_tight, stored_body
-from findling.nc.queue import KIND_EMBED, CallResult, DocumentQueue, QueueJob
+from findling.nc import client as nc_client
+from findling.nc.client import AsyncNextcloudApp
+from findling.nc.queue import KIND_EMBED, LANE_EMBED, CallResult, DocumentQueue, QueueJob
+from findling.profile import Profile
 from findling.store.repo import (
     ACL_ANY_USER,
     EMBEDDING_BACKLOG_MARK,
@@ -68,7 +85,14 @@ from findling.store.repo import (
     Store,
     open_store,
 )
-from findling.store.vectors import EMBEDDING_MODEL, Chunk, VectorStore, embedding_mark, open_vectors
+from findling.store.vectors import (
+    EMBEDDING_MODEL,
+    WEIGHTS_FP32,
+    Chunk,
+    VectorStore,
+    embedding_mark,
+    open_vectors,
+)
 
 LOGGER = logging.getLogger("findling.worker.embedding")
 
@@ -105,6 +129,33 @@ VECTOR_BACKLOG_BAND: Final = 500
 # different states of the same meta row: "0" is a sweep that has not handed
 # anything back yet, "" is no sweep at all.
 BACKLOG_START: Final = "0"
+
+# What one round of the embed runner came to. Strings for the reason the poller
+# gives: they travel to the status page, where readable names beat a type.
+LANE_PARKED: Final = "parked"
+ROUND_EMPTY: Final = "empty"
+ROUND_WORKED: Final = "worked"
+ROUND_PAUSED: Final = "paused"
+ROUND_GATEWAY_UNAVAILABLE: Final = "gateway_unavailable"
+
+# How long the runner waits between two rounds that found nothing to do, and
+# after a round it parked in. The same fifteen seconds an idle pass of the
+# indexing loop is spaced at, and after a memory refusal it is also the least
+# time until the headroom is read again, so that a box at the edge does not
+# flap between the two modes on every round.
+EMBED_RUNNER_TICK_SECONDS: Final = 15.0
+
+# The cap of the runner's backoff after a queue that did not answer or a round
+# that had to hand its rows back. The retreat cap of the indexing loop, for the
+# same reason: an unanswered queue is a question about the installation.
+EMBED_RUNNER_BACKOFF_MAX_SECONDS: Final = 300.0
+
+# How long the indexing loop waits, in front of its claim, for the runner to
+# park after the effective level became Economy. One runner round is roughly
+# 18 s at EMBED_CLAIM_BATCH rows on the target box (the derivation beside the
+# constant in findling/config.py, held by tests/test_config.py), and the runner
+# stops after the row in work anyway; sixty seconds cover that three times over.
+RUNNER_PARK_WAIT_SECONDS: Final = 60
 
 # The two halves of the second track, as types. Both are replaceable for the
 # same reason: the real ones need a 17 MB tokenizer and 118 MB of weights on the
@@ -326,6 +377,16 @@ class EmbeddingTrack:
     def ready(self) -> bool:
         """True when rows may be handed to this track: switched on and runnable."""
         return self._embed_enabled and self._embed_ready
+
+    @property
+    def cutter_built(self) -> bool:
+        """True when tokenizer, splitter and engine wrapper are in memory already.
+
+        Asked by the embed runner before it admits a round: a cutter still to be
+        built costs CUTTER_LOAD_BYTES on top of the round itself. Reading has no
+        side effect.
+        """
+        return self._chunker is not None and self._model is not None
 
     # -- one row ---------------------------------------------------------
 
@@ -949,13 +1010,359 @@ class EmbeddingTrack:
         return self._index
 
 
+# Everything the runner talks to, as a type; the defaults are the production
+# wiring and a test replaces them one by one.
+ClientFactory = Callable[[], AsyncNextcloudApp]
+QueueFactory = Callable[[AsyncNextcloudApp], DocumentQueue]
+Headroom = Callable[[], "int | None"]
+EngineState = Callable[[], str]
+Clock = Callable[[], float]
+
+# The levels a runner round may run under. Economy is today's container and
+# embeds inside the indexing loop, never beside it (IDX-08, PROF-02).
+_PARALLEL_LEVELS: Final = frozenset({Profile.STANDARD, Profile.PERFORMANCE})
+
+# How finely stand_down notices that the round in flight is over. A resolution,
+# not a budget, the same figure the poller uses.
+_STAND_DOWN_TICK_SECONDS: Final = 0.05
+
+# How long stand_down waits for the round in flight. A round is bounded by
+# EMBED_CLAIM_BATCH rows, roughly 18 s on the target box; the answer to an
+# overrun is False and nothing released, the rule of Poller.stand_down.
+RUNNER_STAND_DOWN_SECONDS: Final = 120.0
+
+
+class EmbedRunner:
+    """The embed lane beside the indexing loop, in Standard and Performance (PAR-01).
+
+    Built after :class:`findling.worker.reconcile.Reconcile`: nothing is opened
+    in the constructor, a client and a queue of its own are built in the first
+    round whose gate is open, and ``arm``/``silence``/``run`` are the lifecycle
+    the lifespan drives (plan 25-10 wires it).
+
+    **The gate, per round and in this order.** The effective level is Standard
+    or Performance; the companion of this process has echoed a lane; the
+    memory condition of PAR-04 holds, statically out of the profile snapshot
+    and live out of the cgroup (anon against the limit, D-25-11), with the load
+    costs of a cutter or weights that are not in memory yet. A closed gate
+    parks the runner with a reason, and the indexing loop embeds the embed rows
+    inline as it always has. After a memory refusal the headroom is read again
+    only after a full tick, so a box at the edge does not flap.
+
+    **One runner, one row at a time** (D-25-12). The rows of a claim are
+    embedded one after the other under the track lock; Performance gets no
+    second embedding beside the first.
+
+    **Every way out without an acknowledgement unlocks.** A SQLite error or the
+    disk floor hands every held row back and pauses; an exception the round did
+    not expect is caught by :meth:`run`, which unlocks first. Nothing here ever
+    writes a failure verdict, so no healthy file can end as
+    failed(repeatedly_stuck) through this runner (SC3, DI-05-23).
+
+    **Economy in the middle of a round.** The level is asked again before every
+    row; when it turned Economy the round ends after the row in work, the rows
+    not reached go back per unlock, and :attr:`parked` is set, which is what the
+    indexing loop waits for in front of its claim.
+
+    It never touches the tantivy writer: the track reads the text through a
+    handle of its own.
+    """
+
+    def __init__(
+        self,
+        *,
+        track: EmbeddingTrack,
+        client_factory: ClientFactory = nc_client.create_app_client,
+        queue_factory: QueueFactory = DocumentQueue,
+        tick: float = EMBED_RUNNER_TICK_SECONDS,
+        headroom: Headroom = memory_guard.headroom_bytes,
+        engine: EngineState = engine_state,
+        clock: Clock = time.monotonic,
+    ) -> None:
+        self._track = track
+        self._client_factory = client_factory
+        self._queue_factory = queue_factory
+        self._tick = tick
+        self._headroom = headroom
+        self._engine = engine
+        self._clock = clock
+        # The byte cap of the claim, the one the indexing loop sends. An embed
+        # row downloads nothing, so it is a formality on this lane, and the same
+        # number keeps the two claims one agreement with the companion.
+        self._max_bytes = settings().batch_max_bytes
+
+        self._client: AsyncNextcloudApp | None = None
+        self._queue: DocumentQueue | None = None
+        self._held: set[int] = set()
+        self._cooldown = 0.0
+        self._memory_refused_at: float | None = None
+        self._in_flight = False
+        self._armed = asyncio.Event()
+        # Set whenever no round is running. The indexing loop waits on it after
+        # the level turned Economy, before it claims without a lane.
+        self.parked = asyncio.Event()
+        self.parked.set()
+
+    # -- lifecycle -------------------------------------------------------
+
+    @property
+    def busy(self) -> bool:
+        """True while this runner holds rows of the work stock. No side effect."""
+        return bool(self._held)
+
+    @property
+    def cooldown(self) -> float:
+        """The extra pause of the backoff, on top of the tick."""
+        return self._cooldown
+
+    def arm(self) -> None:
+        """Let the runner run rounds again."""
+        self._armed.set()
+
+    def silence(self) -> None:
+        """Stop running rounds without ending the task."""
+        self._armed.clear()
+
+    async def stand_down(self, *, budget: float = RUNNER_STAND_DOWN_SECONDS) -> bool:
+        """Silence, wait for the round in flight, and hand the held rows back.
+
+        The pattern of :meth:`findling.worker.poller.Poller.stand_down`: False
+        means the round outlasted ``budget`` and nothing was released.
+        """
+        self._armed.clear()
+        deadline = time.monotonic() + budget
+        while self._in_flight:
+            if time.monotonic() >= deadline:
+                LOGGER.warning("the embed round in flight did not end within %.0f s", budget)
+                return False
+            await asyncio.sleep(_STAND_DOWN_TICK_SECONDS)
+        await self.unlock_held()
+        return True
+
+    async def unlock_held(self) -> int:
+        """Hand back the rows this runner holds and has not acknowledged."""
+        queue, held = self._queue, sorted(self._held)
+        if queue is None or not held:
+            return 0
+        result = await queue.unlock(held)
+        self._held.clear()
+        return result.count
+
+    async def aclose(self) -> None:
+        """Let go of the client and the queue. The track belongs to the poller."""
+        self._queue = None
+        self._client = None
+
+    # -- the loop --------------------------------------------------------
+
+    async def run(self, stop_event: asyncio.Event) -> None:
+        """Round after round until the stop event, silent while not armed.
+
+        Every exception of a round is caught here and ends neither this task
+        nor the indexing loop. The held rows go back first, and the line
+        carries the type name and nothing else (T-25-41).
+        """
+        while not stop_event.is_set():
+            if not self._armed.is_set():
+                await _first_of(self._armed.wait(), stop_event.wait())
+                continue
+            state = ROUND_PAUSED
+            try:
+                self._in_flight = True
+                try:
+                    state = await self.run_once()
+                finally:
+                    self._in_flight = False
+            # Deliberately every exception, the rule of the poller and the
+            # reconcile: a broken round must not take the search along.
+            except Exception as error:
+                await self.unlock_held()
+                LOGGER.error("embed round ended in an unexpected %s", type(error).__name__)
+                self._back_off()
+            wait = 0.0 if state == ROUND_WORKED else self._tick
+            await _pause(wait + self._cooldown, stop_event)
+
+    async def run_once(self) -> str:
+        """One round: the gate, then one claim of the embed lane under the track lock."""
+        self.parked.clear()
+        try:
+            return await self._round()
+        finally:
+            self.parked.set()
+
+    async def _round(self) -> str:
+        reason = await self._gate()
+        if reason:
+            return self._park(reason)
+        lane.note_mode(lane.MODE_PARALLEL, lane.REASON_NONE)
+        queue = self._open()
+
+        async with self._track.lock:
+            # Asked again behind the lock: the indexing loop may have held it
+            # for an inline row while the level changed.
+            if not _level_allows_parallel():
+                return self._park(lane.REASON_ECONOMY)
+            claim = await queue.claim(limit=EMBED_CLAIM_BATCH, max_bytes=self._max_bytes, lane=LANE_EMBED)
+            if claim.unavailable:
+                self._back_off()
+                return ROUND_GATEWAY_UNAVAILABLE
+            self._held = {job.queue_id for job in claim.jobs}
+            if not claim.lane_honored:
+                # A companion from before the filter answered this request, so
+                # its rows may be of any kind. All of them go back unjudged, and
+                # the runner stays parked for the life of the process (Pitfall 1).
+                await self.unlock_held()
+                lane.note_refused()
+                LOGGER.warning("the companion ignored the embed lane, the embedding stays in the indexing loop")
+                return self._park(lane.REASON_OLD_COMPANION)
+            if not claim.jobs:
+                # The idle moment of this lane, and the mark step belongs to it
+                # for the reason it belongs to the idle pass of the poller.
+                await self._track.keep_the_vector_stock_in_step(queue)
+                self._reset_cooldown()
+                return ROUND_EMPTY
+            return await self._work(queue, claim.jobs)
+
+    async def _work(self, queue: DocumentQueue, jobs: Sequence[QueueJob]) -> str:
+        """Embed the rows of one claim one after the other, and account for each."""
+        done: list[int] = []
+        stopped = False
+        try:
+            for job in jobs:
+                if not _level_allows_parallel():
+                    # Economy arrived in the middle of the claim: the row in work
+                    # is finished, the rest goes back below (IDX-08, T-25-37).
+                    stopped = True
+                    break
+                if job.kind != KIND_EMBED:
+                    # A row of another lane in an echoed answer is not this
+                    # runner's to judge; it goes back with the rest.
+                    continue
+                await self._track.embed_row(job, done)
+        except (sqlite3.Error, _DiskTight) as error:
+            # The _abort semantics of the poller: every held row back, a pause,
+            # and no verdict at all (Pitfall 3).
+            LOGGER.warning(
+                "the embed round handed %d rows back after %s and pauses", len(self._held), type(error).__name__
+            )
+            await self.unlock_held()
+            self._back_off()
+            return ROUND_PAUSED
+
+        rest = sorted(self._held.difference(done))
+        if done:
+            await queue.acknowledge(done, {})
+        if rest:
+            await queue.unlock(rest)
+        self._held.clear()
+        self._reset_cooldown()
+        if stopped:
+            return self._park(lane.REASON_ECONOMY)
+        return ROUND_WORKED
+
+    # -- the gate --------------------------------------------------------
+
+    async def _gate(self) -> str:
+        """The empty reason when a round may claim, otherwise why the runner parks."""
+        snapshot = profile.snapshot()
+        if snapshot.effective not in _PARALLEL_LEVELS:
+            return lane.REASON_ECONOMY
+        if not lane.snapshot().supported:
+            return lane.REASON_OLD_COMPANION
+        if not snapshot.embed_lane_fits:
+            return lane.REASON_MEMORY
+        refused = self._memory_refused_at
+        if refused is not None and self._clock() - refused < self._tick:
+            return lane.REASON_MEMORY
+        if not await asyncio.to_thread(self._admits, snapshot.weights):
+            self._memory_refused_at = self._clock()
+            return lane.REASON_MEMORY
+        self._memory_refused_at = None
+        return lane.REASON_NONE
+
+    def _admits(self, weights: str) -> bool:
+        """The live half of the memory condition, in a worker thread (D-25-11)."""
+        return memory_guard.admits(self._headroom(), need=self._need(weights))
+
+    def _need(self, weights: str) -> int:
+        """What one round may take: activations, one OCR page of reserve, load costs."""
+        need = EMBED_ACTIVATION_BYTES + EMBED_LANE_RESERVE_BYTES
+        if not self._track.cutter_built:
+            need += CUTTER_LOAD_BYTES
+        if self._engine() != ENGINE_LOADED:
+            need += EMBED_WEIGHTS_LOAD_BYTES
+            if weights == WEIGHTS_FP32:
+                need += FP32_EXTRA_BYTES
+        return need
+
+    # -- plumbing --------------------------------------------------------
+
+    def _park(self, reason: str) -> str:
+        lane.note_mode(lane.MODE_INLINE, reason)
+        return LANE_PARKED
+
+    def _open(self) -> DocumentQueue:
+        """The client and the queue of this runner, built once, in the first open round."""
+        if self._queue is None:
+            self._client = self._client_factory()
+            self._queue = self._queue_factory(self._client)
+        return self._queue
+
+    def _back_off(self) -> None:
+        """Grow the extra pause: one tick, doubling up to the cap."""
+        self._cooldown = min(self._cooldown * 2, EMBED_RUNNER_BACKOFF_MAX_SECONDS) if self._cooldown else self._tick
+
+    def _reset_cooldown(self) -> None:
+        self._cooldown = 0.0
+
+
+def _level_allows_parallel() -> bool:
+    """True while the effective level lets the embed lane run beside the indexing loop."""
+    return profile.snapshot().effective in _PARALLEL_LEVELS
+
+
+# The two helpers below are copies of the ones in worker/poller.py and
+# worker/reconcile.py, for the reason reconcile.py gives: they are private
+# there, and poller.py imports this module, so an import back would be a cycle.
+
+
+async def _first_of(*waits: Awaitable[Any]) -> None:
+    """Wait until the first of these finishes, then let the others go."""
+    tasks = [asyncio.ensure_future(wait) for wait in waits]
+    try:
+        await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+
+async def _pause(seconds: float, stop_event: asyncio.Event) -> None:
+    """Wait out the pause, or return at once when the stop event arrives."""
+    if seconds <= 0:
+        await asyncio.sleep(0)
+        return
+    with contextlib.suppress(TimeoutError):
+        await asyncio.wait_for(stop_event.wait(), timeout=seconds)
+
+
 __all__ = [
     "BACKLOG_START",
     "EMBED_INCOMPLETE",
     "EMBED_NO_STORED_TEXT",
+    "EMBED_RUNNER_BACKOFF_MAX_SECONDS",
+    "EMBED_RUNNER_TICK_SECONDS",
     "EMBED_WRITTEN",
+    "LANE_PARKED",
+    "ROUND_EMPTY",
+    "ROUND_GATEWAY_UNAVAILABLE",
+    "ROUND_PAUSED",
+    "ROUND_WORKED",
+    "RUNNER_PARK_WAIT_SECONDS",
+    "RUNNER_STAND_DOWN_SECONDS",
     "VECTOR_BACKLOG_BAND",
     "Chunker",
+    "EmbedRunner",
     "EmbeddingTrack",
     "PassageEmbedder",
     "acl_users",
