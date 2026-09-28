@@ -9,8 +9,9 @@ intfloat/multilingual-e5-small at revision 614241f). There is no fallback to
 Hugging Face and no other source (D-25-05).
 
 This module is the file side only. It imports neither of the two network
-libraries gate A reserves for the client module (invariant 1): the bytes arrive through a ``fetch`` callable the caller injects,
-in the running app ``findling.nc.client.fetch_release_asset``. Nothing here runs
+libraries gate A reserves for the client module (invariant 1): the bytes arrive
+through a ``fetch`` callable the caller injects, in the running app
+``findling.nc.client.fetch_release_asset``. Nothing here runs
 on start or in the background; every function is a building block that plan
 25-11 calls on an admin action and nowhere else.
 
