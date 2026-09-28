@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
-status: ready_to_plan
-stopped_at: Phase 24 complete (6/6), secure-phase 24 next, then discuss Phase 25
-last_updated: 2026-09-28T09:15:59.648Z
-last_activity: 2026-09-28 -- Phase 24 complete (review 0C/2W fixed, verification 5/5, live UAT passed)
+status: planning
+stopped_at: Phase 25 context gathered
+last_updated: "2026-09-28T09:34:00.096Z"
+last_activity: 2026-09-28 -- Phase 25 context gathered
 progress:
   total_phases: 6
   completed_phases: 1
@@ -27,19 +27,23 @@ See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 
 Phase: 25 (Einbettungsspur und Modellwahl), NOT STARTED
 Plan: Not started
-Status: Ready to plan (vorher secure-phase 24)
-Last activity: 2026-09-28 -- Phase 24 complete
+Status: Ready to plan (Context steht, 25-CONTEXT.md D-25-01..09)
+Last activity: 2026-09-28 -- Phase 24 secured (24/24), Phase 25 context gathered
 
 Progress: [##........] 17% (1 von 6 Phasen)
 
 ## Naechster Schritt
 
-1. **/gsd:secure-phase 24** (security_enforcement an, T-24-01..24 in den Plaenen).
-2. Danach **/gsd:discuss-phase 25** (Einbettungsspur H1 + MOD-02). Offene discuss-Frage laut
-   Research: fp32-Download-Quelle und Digest. Mitnahme-Kandidat: idle-Guard
-   EmbeddingModel.release(). Merker aus 24-REVIEW IN-02: der Poller verlaesst sich auf den
-   int8-Default von embedding_mark; Phase 25 muss weights aus dem tatsaechlich geladenen Modell
-   uebergeben.
+**/gsd:plan-phase 25** (mit Research: Research-Flag der Roadmap, Abbruchsemantik zweier
+Nebenlaeufer, state.db-Kollisionen, Art-Filter am PHP-Anspruch). Owner-Entscheide D-25-01..09
+in 25-CONTEXT.md: fp32 nur Standard/Leistung, eigener occ-Schluessel, Praezision wechselt nie
+automatisch, Quelle eigenes GitHub-Release mit sha256, Offline-Ablage, Semantik waechst im
+Reindex mit, Rueckweg loescht die fp32-Datei. Mitnahme-Kandidat: idle-Guard
+EmbeddingModel.release(). Merker IN-02: embedding_mark-Aufrufe (poller.py:2111,
+api/resources.py:265) muessen die tatsaechlich geladene Praezision uebergeben.
+
+Phase 24 secure (2026-09-28): SECURED 24/24 (22 mitigate, 2 accept AR-24-01/02), 29a6cd6.
+AR-24-02 (Schreibweg nur occ) verliert mit der Schreibroute in Phase 27 seine Begruendung.
 
 Phase-24-Abschluss (2026-09-28): Code-Review 0C/2W/6I, WR-01 (637c02b) und WR-02 (d0705e4)
 gefixt; Verifikation 5/5 Kriterien (human_needed); Live-UAT bestanden mit einem Befund
@@ -123,11 +127,11 @@ Aeltere Merker:
 
 ## Session Continuity
 
-Last session: 2026-09-28
-Stopped at: Phase 24 complete, secure-phase 24 next
-Resume file: .planning/phases/24-owner-tor-profil-ger-st-und-marken-reparatur/24-VERIFICATION.md
+Last session: 2026-09-28T09:34:00.080Z
+Stopped at: Phase 25 context gathered
+Resume file: .planning/phases/25-einbettungsspur-und-modellwahl/25-CONTEXT.md
 
 ## Operator Next Steps
 
-- /gsd:secure-phase 24, danach /gsd:discuss-phase 25
+- /gsd:plan-phase 25
 - Push-Entscheid (alles lokal); nach dem Push php.yml pruefen (24-HUMAN-UAT Test 1)
