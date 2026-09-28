@@ -51,6 +51,9 @@ from findling.index.writer import (
     IndexBatchWriter,
     IndexLockedError,
     IndexRecord,
+    disk_is_tight,
+    free_bytes,
+    stored_body,
 )
 
 WRITER_SOURCE = Path(__file__).resolve().parents[1] / "src" / "findling" / "index" / "writer.py"
@@ -604,15 +607,86 @@ def test_stored_body_builds_its_term_through_the_schema() -> None:
     # The same I64 against U64 mismatch as the upsert, with a quieter failure:
     # a term built from the field name matches nothing, stored_body answers None
     # for every file, and every rename falls back to a download nobody asked for.
+    #
+    # Since plan 25-07 the body lives in the module function, which the method
+    # and the embedding track both call; the term is built from the schema the
+    # caller passes in, the one read off the index itself.
     tree = ast.parse(WRITER_SOURCE.read_text(encoding="utf-8"))
-    method = next(node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == "stored_body")
+    function = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "stored_body")
     terms = [
         node
-        for node in ast.walk(method)
+        for node in ast.walk(function)
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "term_query"
     ]
 
     assert len(terms) == 1
     first = terms[0].args[0]
-    assert isinstance(first, ast.Attribute)
-    assert first.attr == "_schema"
+    assert isinstance(first, ast.Name)
+    assert first.id == "schema"
+    assert [arg.arg for arg in function.args.args][:2] == ["index", "schema"]
+
+
+def test_the_free_stored_body_never_touches_a_writer() -> None:
+    # PAR-01: the embedding track reads the text through this function and must
+    # never reach the tantivy writer, whose lock belongs to the indexing track.
+    tree = ast.parse(WRITER_SOURCE.read_text(encoding="utf-8"))
+    function = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "stored_body")
+    names = {node.attr for node in ast.walk(function) if isinstance(node, ast.Attribute)}
+    names |= {node.id for node in ast.walk(function) if isinstance(node, ast.Name)}
+
+    assert not {name for name in names if "writer" in name.lower()}
+
+
+def test_the_free_stored_body_reads_what_the_method_reads(index: Index, batch_writer: IndexBatchWriter) -> None:
+    batch_writer.add(_record(42, body=GERMAN_BODY))
+    batch_writer.flush()
+
+    assert stored_body(index, index.schema, 42) == batch_writer.stored_body(42) == GERMAN_BODY
+    assert stored_body(index, index.schema, 4711) is None
+
+
+def test_the_free_stored_body_reads_through_a_handle_that_never_opened_a_writer(index: Index, index_dir: Path) -> None:
+    # The handle of the embedding track: opened on the same directory, never
+    # asked for a writer. It must see what the indexing track committed.
+    writer = IndexBatchWriter(index, directory=index_dir)
+    try:
+        writer.add(_record(42))
+        writer.flush()
+        reader = open_index(index_dir, CONSTITUENTS)
+        assert stored_body(reader, reader.schema, 42) == GERMAN_BODY
+        assert stored_body(reader, reader.schema, 4711) is None
+    finally:
+        writer.close()
+
+
+def test_the_free_disk_floor_answers_against_the_given_directory(
+    index_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: list[object] = []
+
+    def low(path: object) -> SimpleNamespace:
+        seen.append(path)
+        return _low_disk(path)
+
+    monkeypatch.setattr(shutil, "disk_usage", low)
+
+    assert free_bytes(index_dir) == 1_024
+    assert disk_is_tight(index_dir, 1_025) is True
+    assert disk_is_tight(index_dir, 1_024) is False
+    assert seen == [index_dir, index_dir, index_dir]
+
+
+def test_the_disk_floor_method_delegates_with_the_index_directory(
+    batch_writer: IndexBatchWriter, index_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: list[object] = []
+
+    def low(path: object) -> SimpleNamespace:
+        seen.append(path)
+        return _low_disk(path)
+
+    monkeypatch.setattr(shutil, "disk_usage", low)
+
+    assert batch_writer.disk_is_tight() is True
+    assert batch_writer.free_bytes() == 1_024
+    assert seen == [index_dir, index_dir]

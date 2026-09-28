@@ -60,7 +60,7 @@ from findling.embed.engine import shared_model
 from findling.embed.model import DIMENSIONS, EmbeddingModel
 from findling.index import wordlist as wordlist_module
 from findling.tools import one_load
-from findling.worker import poller as poller_module
+from findling.worker import embedding as embedding_module
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -145,9 +145,9 @@ def prepared(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     monkeypatch.setattr(model_module, "_open_session", lambda _path, *, threads: _FakeSession())
     # The track opens the real tokenizer and builds the real splitter, and both
     # of them read the artifact this suite does not have.
-    monkeypatch.setattr(poller_module, "open_tokenizer", lambda _directory: object())
-    monkeypatch.setattr(poller_module, "make_splitter", lambda *_args, **_kwargs: object())
-    monkeypatch.setattr(poller_module, "chunk_spans", _one_span)
+    monkeypatch.setattr(embedding_module, "open_tokenizer", lambda _directory: object())
+    monkeypatch.setattr(embedding_module, "make_splitter", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(embedding_module, "chunk_spans", _one_span)
     # The warm request is a module global of the holder and outlives a case. A
     # marker left standing by the case before would warm the engine here even
     # when the search under test never asked, and the case that proves the

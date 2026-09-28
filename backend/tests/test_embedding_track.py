@@ -75,6 +75,7 @@ from findling.store.vectors import (
     embedding_mark,
     open_vectors,
 )
+from findling.worker import embedding as embedding_module
 from findling.worker import poller as poller_module
 from findling.worker.poller import (
     EMBED_INCOMPLETE,
@@ -87,6 +88,7 @@ from findling.worker.poller import (
 )
 
 POLLER_SOURCE = Path(__file__).resolve().parents[1] / "src" / "findling" / "worker" / "poller.py"
+EMBEDDING_SOURCE = Path(__file__).resolve().parents[1] / "src" / "findling" / "worker" / "embedding.py"
 PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "src" / "findling"
 
 CONSTITUENTS = (
@@ -697,10 +699,10 @@ async def test_every_ending_of_an_embed_job_has_a_name_of_its_own(
         store=store, writer=writer, tmp_path=tmp_path, queue=queue, vectors=vectors, model=_FakeModel(unavailable=True)
     )
 
-    assert await written._embed_the_body(_job(kind="embed"), done) == EMBED_WRITTEN
-    assert await no_text._embed_the_body(_job(kind="embed", file_id=9999), done) == EMBED_NO_STORED_TEXT
-    assert await short._embed_the_body(_job(kind="embed"), done) == EMBED_INCOMPLETE
-    assert await missing._embed_the_body(_job(kind="embed"), done) == EMBEDDING_UNAVAILABLE
+    assert await written._track.embed_row(_job(kind="embed"), done) == EMBED_WRITTEN
+    assert await no_text._track.embed_row(_job(kind="embed", file_id=9999), done) == EMBED_NO_STORED_TEXT
+    assert await short._track.embed_row(_job(kind="embed"), done) == EMBED_INCOMPLETE
+    assert await missing._track.embed_row(_job(kind="embed"), done) == EMBEDDING_UNAVAILABLE
     # Every one of them acknowledges its row. None of them may leave it behind.
     assert done == [91, 91, 91, 91]
 
@@ -727,7 +729,7 @@ async def test_a_tight_disk_writes_no_vectors_and_hands_the_rows_back(
     # the vectors would be written first and the flush would refuse afterwards,
     # which is exactly the half written stock this case exists to prevent.
     _index_the_body(writer)
-    monkeypatch.setattr(writer, "disk_is_tight", lambda: True)
+    monkeypatch.setattr(embedding_module, "disk_is_tight", lambda _directory, _floor: True)
     queue = _FakeQueue(ClaimResult(jobs=(_job(kind="embed"),)))
     poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, vectors=vectors)
 
@@ -813,14 +815,117 @@ def test_the_second_track_does_not_fetch_a_file_in_the_source() -> None:
     branch as a whole: whatever it is given, ``_embed_the_body`` may not grow a
     call to the gateway, and the two names below are the only ways to make one.
     """
-    source = POLLER_SOURCE.read_text(encoding="utf-8")
-    start = source.index("async def _embed_the_body")
+    source = EMBEDDING_SOURCE.read_text(encoding="utf-8")
+    start = source.index("async def _embed(")
     after = min(source.index(f"\n    {opener}def ", start) for opener in ("", "async "))
     body = source[start:after]
 
     assert "_fetch_file" not in body
     assert "_stream_into" not in body
     assert "stored_body" in body
+
+
+# -- the track as its own owner (plan 25-07, PAR-01) ------------------------
+
+
+def test_the_embedding_track_never_reaches_the_tantivy_writer_in_the_source() -> None:
+    # PAR-01: the track reads through a handle of its own. A call to the writer
+    # of the poller, or a writer of its own, would put it on the lock the
+    # indexing track holds.
+    source = EMBEDDING_SOURCE.read_text(encoding="utf-8")
+
+    assert "_writer_or_die" not in source
+    assert ".writer(" not in source
+    assert "stored_body, index," in source
+    assert "from findling.api" not in source
+    assert "import findling.api" not in source
+
+
+async def test_a_row_is_embedded_while_the_poller_holds_no_writer(
+    store: Store, writer: IndexBatchWriter, vectors: VectorStore, tmp_path: Path
+) -> None:
+    # Before plan 25-07 this raised in _writer_or_die: the text was read through
+    # the writer. Now it comes out of the read handle of the track, so a poller
+    # that gave its writer back still has a track that can embed.
+    _index_the_body(writer)
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=_FakeQueue(), vectors=vectors)
+    poller._open()
+    poller._writer = None
+    done: list[int] = []
+
+    assert await poller._track.embed_row(_job(kind="embed"), done) == EMBED_WRITTEN
+    assert done == [91]
+    assert vectors.chunks_of([4711]) != {}
+
+
+@dataclass(slots=True)
+class _WatchingModel:
+    """A model that looks at the poller while it is asked for vectors."""
+
+    poller: Poller | None = None
+    seen: list[tuple[bool, bool, bool]] = field(default_factory=list)
+
+    def embed_passages(self, texts: Sequence[str]) -> EmbedOutcome:
+        assert self.poller is not None
+        self.seen.append((self.poller.busy, self.poller.release_cutter(), self.poller._track.lock.locked()))
+        return EmbedOutcome.ready([[0.001] * DIMENSIONS for _ in texts])
+
+
+async def test_the_poller_is_busy_while_the_track_works_a_row(
+    store: Store, writer: IndexBatchWriter, vectors: VectorStore, tmp_path: Path
+) -> None:
+    # Driven straight at the track, so no row is held by a pass: the busy
+    # answer comes from the track alone, and the release asks the same.
+    _index_the_body(writer)
+    model = _WatchingModel()
+    poller = Poller(store=store, writer=writer, tmp_dir=tmp_path / "tmp", vectors=vectors, chunker=_cut, model=model)
+    model.poller = poller
+
+    assert poller.busy is False
+    assert await poller._track.embed_row(_job(kind="embed"), []) == EMBED_WRITTEN
+
+    assert model.seen == [(True, False, False)], "busy, no release, and no lock taken by a direct call"
+    assert poller.busy is False, "the count of rows in work is back at nothing"
+
+
+async def test_a_pass_embeds_under_the_lock_of_the_track(
+    store: Store, writer: IndexBatchWriter, vectors: VectorStore, tmp_path: Path
+) -> None:
+    _index_the_body(writer)
+    model = _WatchingModel()
+    queue = _FakeQueue(ClaimResult(jobs=(_job(kind="embed"),)))
+    poller = Poller(
+        store=store,
+        writer=writer,
+        tmp_dir=tmp_path / "tmp",
+        client_factory=lambda: cast("AsyncNextcloudApp", object()),
+        gateway_factory=lambda: cast("Any", _FakeGatewayClient()),
+        queue_factory=lambda nc: cast("Any", queue),
+        vectors=vectors,
+        chunker=_cut,
+        model=model,
+    )
+    model.poller = poller
+
+    result = await poller.run_once()
+
+    assert result.embedded == 1
+    assert model.seen == [(True, False, True)]
+    assert poller._track.lock.locked() is False
+
+
+def test_the_poller_hands_the_cutter_release_to_the_track(monkeypatch: pytest.MonkeyPatch) -> None:
+    worker = Poller()
+    asked: list[bool] = []
+
+    def release() -> bool:
+        asked.append(True)
+        return True
+
+    monkeypatch.setattr(worker._track, "release_cutter", release)
+
+    assert worker.release_cutter() is True
+    assert asked == [True]
 
 
 # -- the delete path --------------------------------------------------------
@@ -1345,7 +1450,7 @@ async def test_a_switch_from_int8_to_fp32_weights_re_embeds_the_stock(
     # The other direction. poller.py stays as it is; only the precision it asks
     # the holder for is the one a process holding fp32 weights would answer.
     assert settings().embed_token_cap == 1024, "the literal above is the mark of the factory token cap"
-    monkeypatch.setattr(poller_module, "engine_precision", lambda: WEIGHTS_FP32)
+    monkeypatch.setattr(embedding_module, "engine_precision", lambda: WEIGHTS_FP32)
     store.write_meta(EMBEDDING_MARK, MARK_OF_V1_3)
     _judged(store, 4711)
     _judged(store, 4712)
@@ -1370,7 +1475,7 @@ async def test_the_redelivery_carries_on_in_the_next_process(
     # the middle of a model change does not leave the rest of the stock unwritten
     # with nothing anywhere saying so. One document per band here, so that the
     # sweep needs three passes for two documents and the third one ends it.
-    monkeypatch.setattr("findling.worker.poller.VECTOR_BACKLOG_BAND", 1)
+    monkeypatch.setattr("findling.worker.embedding.VECTOR_BACKLOG_BAND", 1)
     store.write_meta(EMBEDDING_MARK, ANOTHER_MARK)
     _judged(store, 4711)
     _judged(store, 4712)
@@ -1404,7 +1509,7 @@ async def test_a_failed_hand_back_leaves_the_cursor_where_it_was(
     # one instead. Up to five hundred documents lost their vectors after a model
     # change while the mark said the stock was current, and the failure that
     # produces it is the ordinary one: a locked database on the Nextcloud side.
-    monkeypatch.setattr("findling.worker.poller.VECTOR_BACKLOG_BAND", 1)
+    monkeypatch.setattr("findling.worker.embedding.VECTOR_BACKLOG_BAND", 1)
     store.write_meta(EMBEDDING_MARK, ANOTHER_MARK)
     _judged(store, 4711)
     _judged(store, 4712)
@@ -1539,10 +1644,10 @@ def lazy_track(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[_Bui
         built.engine += 1
         return _FakeModel()
 
-    monkeypatch.setattr(poller_module, "open_tokenizer", tokenizer)
-    monkeypatch.setattr(poller_module, "make_splitter", splitter)
-    monkeypatch.setattr(poller_module, "shared_model", engine)
-    monkeypatch.setattr(poller_module, "chunk_spans", _cut_spans)
+    monkeypatch.setattr(embedding_module, "open_tokenizer", tokenizer)
+    monkeypatch.setattr(embedding_module, "make_splitter", splitter)
+    monkeypatch.setattr(embedding_module, "shared_model", engine)
+    monkeypatch.setattr(embedding_module, "chunk_spans", _cut_spans)
 
     yield built
     settings.cache_clear()
@@ -1552,15 +1657,15 @@ def test_a_first_pass_without_an_embedding_row_builds_no_tokenizer_and_no_splitt
     # The whole point of the split. A container that has the model but no row to
     # embed pays neither of the two posts the measurement named.
     worker = Poller()
-    worker._wire_the_second_track()
+    worker._track._wire_the_second_track()
     try:
         assert lazy_track.tokenizer == 0, "the tokenizer is 265,8 MB and no row asked for it yet"
         assert lazy_track.splitter == 0, "the splitter is another 273,5 MB and no row asked for it yet"
-        assert worker._chunker is None
-        assert worker._model is None
+        assert worker._track._chunker is None
+        assert worker._track._model is None
     finally:
-        if worker._vectors is not None:
-            worker._vectors.close()
+        if worker._track._vectors is not None:
+            worker._track._vectors.close()
 
 
 def test_the_vector_stock_is_open_although_the_cutter_is_not_built(lazy_track: _Built) -> None:
@@ -1571,12 +1676,12 @@ def test_the_vector_stock_is_open_although_the_cutter_is_not_built(lazy_track: _
     # path pointing at None, and nothing would fail until a deleted file kept
     # answering semantic queries.
     worker = Poller()
-    worker._wire_the_second_track()
+    worker._track._wire_the_second_track()
     try:
-        assert worker._vectors is not None, "the vector stock stays eager for the delete path of D-21"
+        assert worker._track._vectors is not None, "the vector stock stays eager for the delete path of D-21"
     finally:
-        if worker._vectors is not None:
-            worker._vectors.close()
+        if worker._track._vectors is not None:
+            worker._track._vectors.close()
     assert lazy_track.tokenizer == 0
 
 
@@ -1616,7 +1721,7 @@ async def test_the_first_embedding_row_builds_the_cutter_and_is_worked(
     _index_the_body(writer)
     queue = _FakeQueue(ClaimResult(jobs=(_job(kind="embed"),)))
     poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
-    poller._wire_the_second_track()
+    poller._track._wire_the_second_track()
     try:
         assert lazy_track.tokenizer == 0
 
@@ -1627,12 +1732,12 @@ async def test_the_first_embedding_row_builds_the_cutter_and_is_worked(
         assert lazy_track.tokenizer == 1
         assert lazy_track.splitter == 1
         assert lazy_track.engine == 1
-        stock = poller._vectors
+        stock = poller._track._vectors
         assert stock is not None
         assert stock.chunks_of([4711]) != {}
     finally:
-        if poller._vectors is not None:
-            poller._vectors.close()
+        if poller._track._vectors is not None:
+            poller._track._vectors.close()
 
 
 async def test_only_the_row_that_finds_no_cutter_goes_into_a_thread_for_it(
@@ -1645,15 +1750,15 @@ async def test_only_the_row_that_finds_no_cutter_goes_into_a_thread_for_it(
     _index_the_body(writer)
     queue = _FakeQueue(ClaimResult(jobs=(_job(kind="embed"),)), ClaimResult(jobs=(_job(kind="embed"),)))
     poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
-    poller._wire_the_second_track()
+    poller._track._wire_the_second_track()
     builds = {"count": 0}
-    really = poller._build_the_cutter
+    really = poller._track._build_the_cutter
 
     def counted() -> bool:
         builds["count"] += 1
         return really()
 
-    monkeypatch.setattr(poller, "_build_the_cutter", counted)
+    monkeypatch.setattr(poller._track, "_build_the_cutter", counted)
     try:
         assert (await poller.run_once()).embedded == 1
         assert builds["count"] == 1, "the first row builds"
@@ -1663,8 +1768,8 @@ async def test_only_the_row_that_finds_no_cutter_goes_into_a_thread_for_it(
         assert builds["count"] == 1, "the second row finds it built and never leaves the loop"
         assert lazy_track.tokenizer == 1
     finally:
-        if poller._vectors is not None:
-            poller._vectors.close()
+        if poller._track._vectors is not None:
+            poller._track._vectors.close()
 
 
 async def test_a_row_inside_the_cooldown_does_not_go_into_a_thread_either(
@@ -1677,16 +1782,16 @@ async def test_a_row_inside_the_cooldown_does_not_go_into_a_thread_either(
     _index_the_body(writer)
     queue = _FakeQueue(ClaimResult(jobs=(_job(kind="embed"),)))
     poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
-    poller._wire_the_second_track()
+    poller._track._wire_the_second_track()
     builds = {"count": 0}
-    really = poller._build_the_cutter
+    really = poller._track._build_the_cutter
 
     def counted() -> bool:
         builds["count"] += 1
         return really()
 
-    monkeypatch.setattr(poller, "_build_the_cutter", counted)
-    poller._cutter_failed_at = time.monotonic()
+    monkeypatch.setattr(poller._track, "_build_the_cutter", counted)
+    poller._track._cutter_failed_at = time.monotonic()
     try:
         result = await poller.run_once()
 
@@ -1696,8 +1801,8 @@ async def test_a_row_inside_the_cooldown_does_not_go_into_a_thread_either(
         assert queue.acknowledged == [([91], {})], "the row leaves the queue, it is never kept back"
         assert lazy_track.tokenizer == 0
     finally:
-        if poller._vectors is not None:
-            poller._vectors.close()
+        if poller._track._vectors is not None:
+            poller._track._vectors.close()
 
 
 def test_a_container_that_can_build_the_cutter_promises_the_track_before_it_is_built(
@@ -1708,13 +1813,13 @@ def test_a_container_that_can_build_the_cutter_promises_the_track_before_it_is_b
     # false here would stop the handover for good on a container that never
     # embedded anything, and the track would never start.
     worker = Poller()
-    worker._wire_the_second_track()
+    worker._track._wire_the_second_track()
     try:
-        assert worker._embed_ready is True
+        assert worker._track._embed_ready is True
         assert lazy_track.tokenizer == 0
     finally:
-        if worker._vectors is not None:
-            worker._vectors.close()
+        if worker._track._vectors is not None:
+            worker._track._vectors.close()
 
 
 def test_a_container_without_the_artifacts_promises_nothing_and_keeps_the_stock(
@@ -1737,15 +1842,15 @@ def test_a_container_without_the_artifacts_promises_nothing_and_keeps_the_stock(
     settings.cache_clear()
 
     worker = Poller()
-    worker._wire_the_second_track()
+    worker._track._wire_the_second_track()
     try:
-        assert worker._embed_ready is False, "no artifacts, so no row may be handed over"
-        assert worker._vectors is not None, "the stock stays open for the delete path of D-21"
-        assert worker._cutter_absent is True, "and the no about the cutter is the permanent one"
+        assert worker._track._embed_ready is False, "no artifacts, so no row may be handed over"
+        assert worker._track._vectors is not None, "the stock stays open for the delete path of D-21"
+        assert worker._track._cutter_absent is True, "and the no about the cutter is the permanent one"
         assert lazy_track.tokenizer == 0
     finally:
-        if worker._vectors is not None:
-            worker._vectors.close()
+        if worker._track._vectors is not None:
+            worker._track._vectors.close()
 
 
 def test_a_container_without_the_artifacts_still_takes_the_vectors_off_a_tombstone(
@@ -1795,23 +1900,23 @@ async def test_a_build_that_fails_at_the_first_row_acknowledges_it_and_stops_the
     _index_the_body(writer)
     queue = _FakeQueue(ClaimResult(jobs=(_job(kind="embed"),)))
     poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
-    poller._wire_the_second_track()
-    monkeypatch.setattr(poller_module, "open_tokenizer", gone)
+    poller._track._wire_the_second_track()
+    monkeypatch.setattr(embedding_module, "open_tokenizer", gone)
     try:
         result = await poller.run_once()
 
         assert result.state == ROUND_WORKED
         assert result.embedded == 0
         assert queue.acknowledged == [([91], {})]
-        assert poller._embed_ready is False, "a second row must not be handed over inside the cooldown"
+        assert poller._track._embed_ready is False, "a second row must not be handed over inside the cooldown"
         # And the no is a moment and not a property: the stamp is what the
         # cooldown is measured against, and the artifacts were never the
         # problem here.
-        assert poller._cutter_failed_at is not None
-        assert poller._cutter_absent is False
+        assert poller._track._cutter_failed_at is not None
+        assert poller._track._cutter_absent is False
     finally:
-        if poller._vectors is not None:
-            poller._vectors.close()
+        if poller._track._vectors is not None:
+            poller._track._vectors.close()
 
 
 def test_a_build_that_threw_is_tried_again_after_the_cooldown(
@@ -1827,30 +1932,30 @@ def test_a_build_that_threw_is_tried_again_after_the_cooldown(
         raise MemoryError
 
     worker = Poller()
-    worker._wire_the_second_track()
+    worker._track._wire_the_second_track()
     try:
-        monkeypatch.setattr(poller_module, "open_tokenizer", out_of_air)
+        monkeypatch.setattr(embedding_module, "open_tokenizer", out_of_air)
 
-        assert worker._build_the_cutter() is False
-        assert worker._embed_ready is False, "no row is handed over while the build is cooling down"
+        assert worker._track._build_the_cutter() is False
+        assert worker._track._embed_ready is False, "no row is handed over while the build is cooling down"
         assert lazy_track.tokenizer == 0, "the build threw before it counted"
 
         # The clock and nothing else. Moving the stamp back past the cooldown is
         # the same statement as waiting it out, and it is the one this suite can
         # make without sleeping for five minutes.
-        stamp = worker._cutter_failed_at
+        stamp = worker._track._cutter_failed_at
         assert stamp is not None
-        worker._cutter_failed_at = stamp - LOAD_RETRY_SECONDS - 1.0
+        worker._track._cutter_failed_at = stamp - LOAD_RETRY_SECONDS - 1.0
 
-        assert worker._embed_ready is True, "after the cooldown the track promises again"
+        assert worker._track._embed_ready is True, "after the cooldown the track promises again"
 
-        monkeypatch.setattr(poller_module, "open_tokenizer", lambda _directory: object())
+        monkeypatch.setattr(embedding_module, "open_tokenizer", lambda _directory: object())
 
-        assert worker._build_the_cutter() is True
-        assert worker._cutter_failed_at is None, "a build that worked forgets the moment that did not"
+        assert worker._track._build_the_cutter() is True
+        assert worker._track._cutter_failed_at is None, "a build that worked forgets the moment that did not"
     finally:
-        if worker._vectors is not None:
-            worker._vectors.close()
+        if worker._track._vectors is not None:
+            worker._track._vectors.close()
 
 
 def test_an_engine_that_throws_leaves_no_half_built_cutter_behind(
@@ -1866,17 +1971,17 @@ def test_an_engine_that_throws_leaves_no_half_built_cutter_behind(
         raise RuntimeError("the holder said no")
 
     worker = Poller()
-    worker._wire_the_second_track()
+    worker._track._wire_the_second_track()
     try:
-        monkeypatch.setattr(poller_module, "shared_model", no_engine)
+        monkeypatch.setattr(embedding_module, "shared_model", no_engine)
 
-        assert worker._build_the_cutter() is False
-        assert worker._chunker is None, "no half built cutter, the three parts travel together"
-        assert worker._model is None
-        assert worker._cutter_failed_at is not None, "and it is the cooldown, not the permanent no"
+        assert worker._track._build_the_cutter() is False
+        assert worker._track._chunker is None, "no half built cutter, the three parts travel together"
+        assert worker._track._model is None
+        assert worker._track._cutter_failed_at is not None, "and it is the cooldown, not the permanent no"
     finally:
-        if worker._vectors is not None:
-            worker._vectors.close()
+        if worker._track._vectors is not None:
+            worker._track._vectors.close()
 
 
 def test_the_two_tokenizer_instances_are_not_merged() -> None:
@@ -1888,7 +1993,7 @@ def test_the_two_tokenizer_instances_are_not_merged() -> None:
     D-01. The measurement of plan 07-03 put a number on the second instance
     (216,6 MB) and that number changes nothing here.
     """
-    source = POLLER_SOURCE.read_text(encoding="utf-8")
+    source = EMBEDDING_SOURCE.read_text(encoding="utf-8")
     model_source = (PACKAGE_ROOT / "embed" / "model.py").read_text(encoding="utf-8")
 
     assert "open_tokenizer(" in source, "the track builds its own instance, without truncation"

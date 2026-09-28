@@ -3388,9 +3388,9 @@ def _with_a_built_cutter() -> Poller:
     this suite must not pay to ask whether a field is None.
     """
     worker = Poller()
-    worker._cutter_absent = False
-    worker._chunker = cast("Any", lambda _text: [])
-    worker._model = cast("Any", object())
+    worker._track._cutter_absent = False
+    worker._track._chunker = cast("Any", lambda _text: [])
+    worker._track._model = cast("Any", object())
     return worker
 
 
@@ -3398,8 +3398,8 @@ def test_a_poller_with_a_built_cutter_lets_go_of_both_halves() -> None:
     worker = _with_a_built_cutter()
 
     assert worker.release_cutter() is True
-    assert worker._chunker is None
-    assert worker._model is None
+    assert worker._track._chunker is None
+    assert worker._track._model is None
 
 
 def test_a_poller_without_a_built_cutter_has_nothing_to_release() -> None:
@@ -3409,8 +3409,8 @@ def test_a_poller_without_a_built_cutter_has_nothing_to_release() -> None:
     worker = Poller()
 
     assert worker.release_cutter() is False
-    assert worker._chunker is None
-    assert worker._model is None
+    assert worker._track._chunker is None
+    assert worker._track._model is None
 
 
 def test_a_cutter_release_while_the_pass_holds_rows_does_nothing() -> None:
@@ -3426,28 +3426,28 @@ def test_a_cutter_release_while_the_pass_holds_rows_does_nothing() -> None:
 
     assert worker.busy is True
     assert worker.release_cutter() is False
-    assert worker._chunker is not None, "the pair stays while the pass is at work"
-    assert worker._model is not None
+    assert worker._track._chunker is not None, "the pair stays while the pass is at work"
+    assert worker._track._model is not None
 
 
 def test_the_first_cutter_build_after_a_release_puts_the_pair_back(monkeypatch: pytest.MonkeyPatch) -> None:
     # The rebuild needs no new code: the top of _build_the_cutter returns when
     # both fields are set and builds otherwise, and poller.py:1130 already calls
     # it conditionally for every row that needs a cutter.
-    monkeypatch.setattr("findling.worker.poller.open_tokenizer", lambda _directory: object())
-    monkeypatch.setattr("findling.worker.poller.make_splitter", lambda *args, **kwargs: object())
-    monkeypatch.setattr("findling.worker.poller.shared_model", lambda: cast("Any", object()))
+    monkeypatch.setattr("findling.worker.embedding.open_tokenizer", lambda _directory: object())
+    monkeypatch.setattr("findling.worker.embedding.make_splitter", lambda *args, **kwargs: object())
+    monkeypatch.setattr("findling.worker.embedding.shared_model", lambda: cast("Any", object()))
     worker = Poller()
-    worker._cutter_absent = False
+    worker._track._cutter_absent = False
 
-    assert worker._build_the_cutter() is True
+    assert worker._track._build_the_cutter() is True
     assert worker.release_cutter() is True
-    assert worker._chunker is None
-    assert worker._model is None
+    assert worker._track._chunker is None
+    assert worker._track._model is None
 
-    assert worker._build_the_cutter() is True
-    assert worker._chunker is not None, "the next row that needs a cutter gets one"
-    assert worker._model is not None
+    assert worker._track._build_the_cutter() is True
+    assert worker._track._chunker is not None, "the next row that needs a cutter gets one"
+    assert worker._track._model is not None
 
 
 def test_a_release_leaves_the_permanent_no_about_the_cutter_alone() -> None:
@@ -3459,18 +3459,18 @@ def test_a_release_leaves_the_permanent_no_about_the_cutter_alone() -> None:
     is thrown away by an unrelated operation.
     """
     absent = Poller()
-    absent._chunker = cast("Any", lambda _text: [])
-    absent._model = cast("Any", object())
+    absent._track._chunker = cast("Any", lambda _text: [])
+    absent._track._model = cast("Any", object())
 
-    assert absent._cutter_absent is True
+    assert absent._track._cutter_absent is True
 
     assert absent.release_cutter() is True
-    assert absent._cutter_absent is True, "the installation did not change because memory was handed back"
+    assert absent._track._cutter_absent is True, "the installation did not change because memory was handed back"
 
     present = _with_a_built_cutter()
 
     assert present.release_cutter() is True
-    assert present._cutter_absent is False, "and the other answer survives just as unchanged"
+    assert present._track._cutter_absent is False, "and the other answer survives just as unchanged"
 
 
 def test_a_cutter_release_does_not_cut_a_running_cooldown_short() -> None:
@@ -3483,11 +3483,11 @@ def test_a_cutter_release_does_not_cut_a_running_cooldown_short() -> None:
     """
     worker = _with_a_built_cutter()
     stamp = time.monotonic()
-    worker._cutter_failed_at = stamp
+    worker._track._cutter_failed_at = stamp
 
     assert worker.release_cutter() is True
-    assert worker._cutter_failed_at == stamp, "the moment that failed is not this operation's business"
-    assert worker._cutter_cooling_down is True, "and the waiting time keeps running"
+    assert worker._track._cutter_failed_at == stamp, "the moment that failed is not this operation's business"
+    assert worker._track._cutter_cooling_down is True, "and the waiting time keeps running"
 
 
 def test_the_release_never_leaves_half_a_cutter_behind() -> None:
@@ -3499,7 +3499,10 @@ def test_the_release_never_leaves_half_a_cutter_behind() -> None:
     attribute it assigns: the pair and nothing else, which is the same statement
     as the two marker tests above make one behaviour at a time.
     """
-    tree = ast.parse(POLLER_SOURCE.read_text(encoding="utf-8"))
+    # The pair lives in the embedding track since plan 25-07, and the poller
+    # only delegates to it; so the track's source is the one that is read.
+    source = (POLLER_SOURCE.parent / "embedding.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
     bodies = [node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == "release_cutter"]
 
     assert len(bodies) == 1, "one release and not two spellings of it"
@@ -3526,12 +3529,12 @@ def test_after_a_cutter_release_no_half_pair_promises_the_track() -> None:
     would raise anywhere.
     """
     worker = Poller()
-    worker._vectors = cast("Any", object())
-    worker._chunker = cast("Any", lambda _text: [])
-    worker._model = cast("Any", object())
+    worker._track._vectors = cast("Any", object())
+    worker._track._chunker = cast("Any", lambda _text: [])
+    worker._track._model = cast("Any", object())
 
-    assert worker._cutter_absent is True, "no artifacts, so a built pair is the only yes left"
-    assert worker._embed_ready is True
+    assert worker._track._cutter_absent is True, "no artifacts, so a built pair is the only yes left"
+    assert worker._track._embed_ready is True
 
     assert worker.release_cutter() is True
-    assert worker._embed_ready is False, "the pair is gone whole, so nothing promises the track"
+    assert worker._track._embed_ready is False, "the pair is gone whole, so nothing promises the track"
