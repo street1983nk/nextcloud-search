@@ -125,7 +125,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 25-01-PLAN.md , fp32-Laufzeitspeicher messen, Owner lädt das fp32-Asset als unveränderliches Release hoch (MOD-02), Welle 1, Checkpoint
+- [x] 25-01-PLAN.md , fp32-Laufzeitspeicher messen, Owner lädt das fp32-Asset als unveränderliches Release hoch (MOD-02), Welle 1, Checkpoint
 - [x] 25-02-PLAN.md , Idle-Guard in release(), Gewichtspfad und ladefreier Engine-Tausch, IN-02 Marke ohne Default (MOD-02, PAR-01), Welle 1
 - [x] 25-03-PLAN.md , PHP: Spur-Filter lane mit Echo, Präzisionsschlüssel model_precision in der Profilantwort (PAR-01, MOD-02), Welle 1
 - [x] 25-04-PLAN.md , PHP: Statuszeile Präzision plus Neueinbettung, acht Kataloge (MOD-02, D-25-13), Welle 1
@@ -224,7 +224,7 @@ Plans:
 | 12-16 (Archiv) | v1.2 | 63/63 | Complete | 2026-09-21 |
 | 17-23 (Archiv) | v1.3 | 69/69 | Complete | 2026-09-27 |
 | 24. Owner-Tor, Profil-Gerüst und Marken-Reparatur | v1.4 | 6/6 | Complete    | 2026-09-28 |
-| 25. Einbettungsspur und Modellwahl | v1.4 | 3/12 | In Progress|  |
+| 25. Einbettungsspur und Modellwahl | v1.4 | 4/12 | In Progress|  |
 | 26. N OCR-Slots und Speicherwächter | v1.4 | 0/? | Not started | - |
 | 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 0/? | Not started | - |
 | 28. Abnahme-Anfahrt | v1.4 | 0/? | Not started | - |
