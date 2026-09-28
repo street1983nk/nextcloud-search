@@ -24,8 +24,10 @@ replace is arithmetic, and what stays real is every decision this plan is about.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import sqlite3
+import threading
 import time
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
@@ -912,6 +914,218 @@ async def test_a_pass_embeds_under_the_lock_of_the_track(
     assert result.embedded == 1
     assert model.seen == [(True, False, True)]
     assert poller._track.lock.locked() is False
+
+
+# -- two rows of one track at once (plan 26-07, D-25-12) ---------------------
+#
+# Performance embeds up to embed_slots rows of a round side by side. The two
+# share the cutter, the engine and the two connections of the track, and what
+# is proven here is that sharing them collides nowhere: the chunker runs one
+# call at a time, the writes of the track run one at a time, and the idle
+# guards of cutter and engine do not let go while either row is in work.
+
+
+class _Peak:
+    """How many calls are inside a section at once, and the most there ever were."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self.now = 0
+        self.peak = 0
+
+    def enter(self) -> None:
+        with self._lock:
+            self.now += 1
+            self.peak = max(self.peak, self.now)
+
+    def leave(self) -> None:
+        with self._lock:
+            self.now -= 1
+
+
+@dataclass(slots=True)
+class _SlowModel:
+    """Arithmetic vectors after a short pause in the worker thread, so two rows overlap."""
+
+    pause: float = 0.02
+
+    def embed_passages(self, texts: Sequence[str]) -> EmbedOutcome:
+        time.sleep(self.pause)
+        return EmbedOutcome.ready([[(index + 1) / 1000] * DIMENSIONS for index in range(len(texts))])
+
+
+def _track(
+    store: Store,
+    vectors: VectorStore,
+    writer: IndexBatchWriter,
+    *,
+    chunker: Callable[[str], list[ChunkSpan]] = _cut,
+    model: Any = None,
+) -> embedding_module.EmbeddingTrack:
+    return embedding_module.EmbeddingTrack(
+        vectors=vectors,
+        chunker=chunker,
+        model=_SlowModel() if model is None else model,
+        store=store,
+        index=writer.index,
+        index_dir=writer.directory,
+    )
+
+
+async def test_two_rows_at_once_leave_one_chunk_set_each_in_real_databases(
+    store: Store, writer: IndexBatchWriter, vectors: VectorStore
+) -> None:
+    # T-26-23: replace_acl and replace_chunks each open BEGIN IMMEDIATE on one
+    # connection of the track. Two worker threads on the same connection would
+    # nest the second transaction into the first ("cannot start a transaction
+    # within a transaction"); the write lock of the track keeps them apart.
+    _index_the_body(writer, 4711)
+    _index_the_body(writer, 4712)
+    track = _track(store, vectors, writer)
+    done: list[int] = []
+
+    endings = await asyncio.gather(
+        track.embed_row(_job(91, 4711, kind="embed"), done),
+        track.embed_row(_job(92, 4712, kind="embed"), done),
+    )
+
+    assert endings == [EMBED_WRITTEN, EMBED_WRITTEN]
+    assert sorted(done) == [91, 92]
+    chunks = len(_cut(BODY))
+    assert len(vectors.chunks_of([4711])[4711]) == chunks
+    assert len(vectors.chunks_of([4712])[4712]) == chunks
+    assert vectors.vector_count() == vectors.chunk_count() == 2 * chunks
+    assert store.prefilter_visible("alice", [4711, 4712]) == {4711, 4712}
+
+
+async def test_two_rows_at_once_never_run_the_chunker_twice_at_the_same_time(
+    store: Store, writer: IndexBatchWriter, vectors: VectorStore
+) -> None:
+    # Neither the tokenizer (huggingface/tokenizers#1726) nor the splitter
+    # promises thread safety, so the chunker runs under a lock of its own.
+    _index_the_body(writer, 4711)
+    _index_the_body(writer, 4712)
+    inside = _Peak()
+
+    def chunker(text: str) -> list[ChunkSpan]:
+        inside.enter()
+        try:
+            time.sleep(0.05)
+            return _cut(text)
+        finally:
+            inside.leave()
+
+    track = _track(store, vectors, writer, chunker=chunker)
+
+    await asyncio.gather(
+        track.embed_row(_job(91, 4711, kind="embed"), []),
+        track.embed_row(_job(92, 4712, kind="embed"), []),
+    )
+
+    assert inside.peak == 1
+
+
+async def test_two_rows_at_once_never_write_through_the_track_at_the_same_time(
+    store: Store, writer: IndexBatchWriter, vectors: VectorStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # One counter over both writes of the track: the acl rows in the state
+    # database and the chunks in the vector stock.
+    _index_the_body(writer, 4711)
+    _index_the_body(writer, 4712)
+    inside = _Peak()
+    real_acl, real_chunks = store.replace_acl, vectors.replace_chunks
+
+    def replace_acl(*args: Any, **kwargs: Any) -> Any:
+        inside.enter()
+        try:
+            time.sleep(0.05)
+            return real_acl(*args, **kwargs)
+        finally:
+            inside.leave()
+
+    def replace_chunks(*args: Any, **kwargs: Any) -> Any:
+        inside.enter()
+        try:
+            time.sleep(0.05)
+            return real_chunks(*args, **kwargs)
+        finally:
+            inside.leave()
+
+    monkeypatch.setattr(store, "replace_acl", replace_acl)
+    monkeypatch.setattr(vectors, "replace_chunks", replace_chunks)
+    track = _track(store, vectors, writer, model=_SlowModel(pause=0.0))
+
+    await asyncio.gather(
+        track.embed_row(_job(91, 4711, kind="embed"), []),
+        track.embed_row(_job(92, 4712, kind="embed"), []),
+    )
+
+    assert inside.peak == 1
+    assert vectors.chunks_of([4711]) != {}
+    assert vectors.chunks_of([4712]) != {}
+
+
+async def test_the_idle_guards_let_go_only_after_both_rows_are_done(
+    store: Store, writer: IndexBatchWriter, vectors: VectorStore, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T-26-25, and the check this plan was asked to make: the idle guard of
+    # plan 25-02 (the in-flight counter of the engine, and the count of rows in
+    # work of the track) already covers two Run() calls at once. A real engine
+    # wrapper with the graph replaced by a gate the test opens row by row.
+    from findling.embed import model as model_module
+
+    engine = model_module.EmbeddingModel(tmp_path / "model", batch_size=8, sequence_len=512)
+    engine._engine = cast("Any", object())
+    entered = _Peak()
+    gate = threading.Semaphore(0)
+
+    def encode(_engine: Any, texts: list[str]) -> list[str]:
+        return texts
+
+    def run(_engine: Any, encodings: list[str]) -> list[list[float]]:
+        entered.enter()
+        gate.acquire()
+        return [[0.001] * DIMENSIONS for _ in encodings]
+
+    monkeypatch.setattr(model_module, "_encode_batch", encode)
+    monkeypatch.setattr(model_module, "_run_encoded", run)
+    _index_the_body(writer, 4711)
+    _index_the_body(writer, 4712)
+    track = _track(store, vectors, writer, model=engine)
+    done: list[int] = []
+
+    rows = asyncio.gather(
+        track.embed_row(_job(91, 4711, kind="embed"), done),
+        track.embed_row(_job(92, 4712, kind="embed"), done),
+    )
+
+    async def until(condition: Callable[[], bool]) -> None:
+        # Bounded, so a row that failed on the way cannot hang the suite.
+        for _ in range(500):
+            if condition() or rows.done():
+                return
+            await asyncio.sleep(0.01)
+
+    try:
+        await until(lambda: entered.now >= 2)
+        assert entered.now == 2, "both rows are inside the graph at once"
+        assert track.release_cutter() is False
+        assert engine.release() is False
+
+        gate.release()
+        await until(lambda: len(done) >= 1)
+        assert len(done) == 1
+        assert track.busy
+        assert track.release_cutter() is False, "one row is still in work"
+        assert engine.release() is False, "one batch is still in flight"
+    finally:
+        gate.release()
+        gate.release()
+        endings = await rows
+
+    assert endings == [EMBED_WRITTEN, EMBED_WRITTEN]
+    assert engine.release() is True
+    assert track.release_cutter() is True
 
 
 def test_the_poller_hands_the_cutter_release_to_the_track(monkeypatch: pytest.MonkeyPatch) -> None:
