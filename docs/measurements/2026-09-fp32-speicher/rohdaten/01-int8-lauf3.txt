@@ -1,0 +1,12 @@
+label=int8
+sequence_len=512
+embed_token_cap=1024
+batch=8
+threads=2
+onnxruntime=1.29.0
+rss_anon_before_kb=313096
+rss_anon_session_kb=445712
+rss_anon_first_batch_kb=461288
+rss_anon_after_all_kb=464820
+batch_seconds_median=1.6031
+passages_per_second=5.095
