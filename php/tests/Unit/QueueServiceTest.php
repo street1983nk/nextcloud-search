@@ -197,11 +197,24 @@ final class QueueServiceTest extends TestCase {
 	 * @return list<string>
 	 */
 	private function kindsAskedFor(?string $lane): array {
+		return array_keys($this->limitsAskedFor($lane, 32));
+	}
+
+	/**
+	 * The row limit a claim hands the mapper for every kind, in the order it
+	 * asks (D-26-14).
+	 *
+	 * Same empty mapper as above, so the claim ceiling $limit is never spent
+	 * and every kind sees min(its own ceiling, $limit).
+	 *
+	 * @return array<string, int> kind to the limit asked for
+	 */
+	private function limitsAskedFor(?string $lane, int $limit): array {
 		$asked = [];
 		$mapper = $this->createMock(QueueMapper::class);
 		$mapper->method('claimBatch')->willReturnCallback(
 			static function (int $limit, int $maxBytes, string $kind) use (&$asked): array {
-				$asked[] = $kind;
+				$asked[$kind] = $limit;
 				return [];
 			},
 		);
@@ -226,9 +239,9 @@ final class QueueServiceTest extends TestCase {
 		);
 
 		if ($lane === null) {
-			$service->claim(32, 67_108_864);
+			$service->claim($limit, 67_108_864);
 		} else {
-			$service->claim(32, 67_108_864, $lane);
+			$service->claim($limit, 67_108_864, $lane);
 		}
 
 		return $asked;
@@ -256,5 +269,47 @@ final class QueueServiceTest extends TestCase {
 
 	public function testTheLanesAreAClosedSetOfThree(): void {
 		self::assertSame(['all', 'index', 'embed'], QueueService::LANES);
+	}
+
+	// -- 6. the OCR ceiling per lane (D-26-05, D-26-14) -----------------------
+
+	public function testTheIndexLaneAsksForUpToThirtyTwoOcrRows(): void {
+		// Two rows for each of at most sixteen OCR slots of a 1.4 container.
+		$asked = $this->limitsAskedFor(QueueService::LANE_INDEX, 64);
+
+		self::assertSame(32, $asked[QueueMapper::KIND_OCR]);
+	}
+
+	public function testTheAllLaneStillAsksForTwoOcrRows(): void {
+		// A 1.3 container only knows the lane all and runs one OCR worker; it
+		// must never receive thirty two OCR rows at once (T-26-06).
+		self::assertSame(2, $this->limitsAskedFor(QueueService::LANE_ALL, 64)[QueueMapper::KIND_OCR]);
+		self::assertSame(2, $this->limitsAskedFor(null, 64)[QueueMapper::KIND_OCR]);
+	}
+
+	public function testTheEmbedLaneIsUntouched(): void {
+		self::assertSame(
+			[QueueMapper::KIND_EMBED => 8],
+			$this->limitsAskedFor(QueueService::LANE_EMBED, 64),
+		);
+	}
+
+	public function testTheOtherKindsKeepTheirCeilingInTheIndexLane(): void {
+		// A claim ceiling above every per kind value, so each kind shows its own.
+		self::assertSame(
+			[
+				QueueMapper::KIND_ACL => 128,
+				QueueMapper::KIND_DELETE => 128,
+				QueueMapper::KIND_METADATA => 64,
+				QueueMapper::KIND_CONTENT => 32,
+				QueueMapper::KIND_OCR => 32,
+			],
+			$this->limitsAskedFor(QueueService::LANE_INDEX, 256),
+		);
+	}
+
+	public function testTheOcrCeilingOfTheIndexLaneStillYieldsToTheClaimCeiling(): void {
+		// min(..., $rows) stays: a small claim is not inflated to thirty two.
+		self::assertSame(16, $this->limitsAskedFor(QueueService::LANE_INDEX, 16)[QueueMapper::KIND_OCR]);
 	}
 }
