@@ -188,6 +188,23 @@ def test_cgroup_v1_without_limits(tmp_path: Path) -> None:
     assert found.cores == 6.0
 
 
+def test_cgroup_v1_no_limit_sentinel_without_meminfo_is_no_limit(tmp_path: Path) -> None:
+    # The v1 "no limit" sentinel must be discarded even when /proc/meminfo is
+    # unreadable and the MemTotal comparison cannot run. Otherwise the sentinel
+    # becomes a ~9.2 EB "limit" and the suggestion jumps to performance on a
+    # box the detection knows nothing about, against the fail-safe direction
+    # of D-24-06.
+    (tmp_path / "memory").mkdir()
+    (tmp_path / "memory" / "memory.limit_in_bytes").write_text("9223372036854771712\n", encoding="ascii")
+
+    found = detect(cgroup_root=tmp_path, meminfo=tmp_path / "missing", cpu_count=lambda: 6, machine=lambda: "x86_64")
+
+    assert found.cgroup == "v1"
+    assert found.memory_limit_bytes is None
+    assert found.threshold_memory_bytes is None
+    assert found.formula_memory_bytes is None
+
+
 def test_cgroup_v1_with_limits(tmp_path: Path) -> None:
     (tmp_path / "cpu").mkdir()
     (tmp_path / "memory").mkdir()

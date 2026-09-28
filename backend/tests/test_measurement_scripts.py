@@ -1268,8 +1268,13 @@ PHP_TREE_HASH_TODAY = "170f144a644cc86d73dc2c47881f814469fbb04f61639c5c626124a85
 # both branches carried their own reading, the merged tree holds the poller
 # wire and the reporting side together, so the hash below is the reading over
 # the merged tree. PACKAGE_FILES_TODAY stays at 59.
+# Moved on 2026-09-28 by the review fix WR-01: exactly one of the 59 files
+# changed its bytes, hardware.py, whose _memory_limit_v1 now discards the
+# cgroup v1 "no limit" sentinel on its own size (_V1_NO_LIMIT_FLOOR) instead of
+# only by comparison against a MemTotal that may be unreadable. No file came
+# and none went, so PACKAGE_FILES_TODAY stays at 59.
 PACKAGE_FILES_TODAY = 59
-PACKAGE_TREE_HASH_TODAY = "3428e4e9896af889a8c31c09f8ddf7e5c2920b4893fbf605304214b479a126dd"
+PACKAGE_TREE_HASH_TODAY = "1c4289600d6aff750fb16170d52d13e37a7ed172e2b4f44a71cf14d9264dcb58"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

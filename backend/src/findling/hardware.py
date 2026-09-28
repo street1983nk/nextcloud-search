@@ -33,6 +33,13 @@ MEMINFO: Final = Path("/proc/meminfo")
 
 _KIB: Final = 1024
 
+# The cgroup v1 spelling of "no limit" is a huge page aligned number (for
+# example 9223372036854771712, PAGE_COUNTER_MAX). Anything at or above this
+# floor is that sentinel, not a limit an admin could plausibly have set, and
+# must become None even when MemTotal is unreadable and the comparison against
+# it cannot run (fail-safe direction of D-24-06).
+_V1_NO_LIMIT_FLOOR: Final = 1 << 60
+
 
 def _read(path: Path) -> str | None:
     """The stripped content of a small kernel file, or None if it cannot be read."""
@@ -105,10 +112,12 @@ def _cpu_quota_v1(root: Path) -> float | None:
 def _memory_limit_v1(root: Path, total: int | None) -> int | None:
     """The cgroup v1 memory limit; a value at or above MemTotal means none.
 
-    v1 reports "no limit" as a huge page aligned number rather than "max".
+    v1 reports "no limit" as a huge page aligned number rather than "max". That
+    sentinel is filtered on its own size first, so it never survives as a limit
+    when /proc/meminfo is unreadable and the MemTotal comparison cannot run.
     """
     limit = _positive_int(_read(root / "memory" / "memory.limit_in_bytes"))
-    if limit is None:
+    if limit is None or limit >= _V1_NO_LIMIT_FLOOR:
         return None
     if total is not None and limit >= total:
         return None
