@@ -173,10 +173,10 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 26-01-PLAN.md , Kind-Härtung nice 10 und oom_score_adj 1000, ChildKilled/EngineKilled, halt() (PAR-02, PAR-03, D-26-11, D-26-12, D-26-16), Welle 1
-- [ ] 26-02-PLAN.md , PHP: KIND_BATCH_INDEX_LANE ocr 32 nur im Lane index, profile_confirmed in der Profil-Route (PAR-02, PAR-03, D-26-04/05/13/14), Welle 1
-- [ ] 26-03-PLAN.md , Zeilen je Slot in config, memory_events, guard.py (Drossel, Eskalation, Kappe, Token), Kappe in profile.effective (PAR-02, PAR-03), Welle 1
-- [ ] 26-05-PLAN.md , PHP-Adminseite: Wächter-, Rückweg- und Drosselzeile, acht Kataloge (PAR-03, D-26-01/02/04), Welle 1
+- [x] 26-01-PLAN.md , Kind-Härtung nice 10 und oom_score_adj 1000, ChildKilled/EngineKilled, halt() (PAR-02, PAR-03, D-26-11, D-26-12, D-26-16), Welle 1
+- [x] 26-02-PLAN.md , PHP: KIND_BATCH_INDEX_LANE ocr 32 nur im Lane index, profile_confirmed in der Profil-Route (PAR-02, PAR-03, D-26-04/05/13/14), Welle 1
+- [x] 26-03-PLAN.md , Zeilen je Slot in config, memory_events, guard.py (Drossel, Eskalation, Kappe, Token), Kappe in profile.effective (PAR-02, PAR-03), Welle 1
+- [x] 26-05-PLAN.md , PHP-Adminseite: Wächter-, Rückweg- und Drosselzeile, acht Kataloge (PAR-03, D-26-01/02/04), Welle 1
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -259,7 +259,7 @@ Plans:
 | 17-23 (Archiv) | v1.3 | 69/69 | Complete | 2026-09-27 |
 | 24. Owner-Tor, Profil-Gerüst und Marken-Reparatur | v1.4 | 6/6 | Complete    | 2026-09-28 |
 | 25. Einbettungsspur und Modellwahl | v1.4 | 12/12 | Complete    | 2026-09-28 |
-| 26. N OCR-Slots und Speicherwächter | v1.4 | 0/? | Not started | - |
+| 26. N OCR-Slots und Speicherwächter | v1.4 | 4/14 | In Progress|  |
 | 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 0/? | Not started | - |
 | 28. Abnahme-Anfahrt | v1.4 | 0/? | Not started | - |
 | 29. Härtung und Store-Einreichung 1.4.0 | v1.4 | 0/? | Not started | - |
