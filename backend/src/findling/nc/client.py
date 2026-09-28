@@ -28,13 +28,20 @@ exceptions rather than as a general permission to write.
 The two calls of the reconcile added in plan 03-11 sit below them and read: the
 mount list and one page of the file list. They need no exception and get none,
 because the gate judges writing methods and a GET is not one.
+
+Since plan 25-06 the module also holds the one request that does not go to the
+Nextcloud at all: :func:`fetch_release_asset`, one GET to a fixed URL of the
+project's own GitHub release, for the optional fp32 weights. It carries no
+credential, runs only when an admin asks for it (D-25-05) and never on start or
+in the background, and like every GET it needs no entry in the write allowlist
+of the gate.
 """
 
 import asyncio
 import os
 from base64 import b64encode
-from collections.abc import Mapping, Sequence
-from typing import IO
+from collections.abc import Awaitable, Callable, Mapping, Sequence
+from typing import IO, Final
 
 import httpx
 from nc_py_api import AsyncNextcloudApp, NextcloudException
@@ -43,10 +50,12 @@ from nc_py_api.ex_app import AppAPIAuthMiddleware, anc_app, run_app, set_handler
 from findling.config import settings
 
 __all__ = [
+    "ASSET_HOSTS",
     "CHUNK_SIZE",
     "GATEWAY_PATH",
     "NC_PY_API_VERIFIED_VERSION",
     "AppAPIAuthMiddleware",
+    "AssetRefused",
     "AsyncNextcloudApp",
     "GatewayClient",
     "NextcloudException",
@@ -57,6 +66,7 @@ __all__ = [
     "create_app_client",
     "current_user_id",
     "fetch_file_stream",
+    "fetch_release_asset",
     "files_slice",
     "gateway_url",
     "mounts",
@@ -296,6 +306,119 @@ async def fetch_file_stream(
 
     async with new_gateway_client() as owned_client:
         return await _stream_file(owned_client, header_user, file_id, user_id, fp)
+
+
+# ---------------------------------------------------------------------------
+# The release asset: the optional fp32 weights from the project's own release.
+# ---------------------------------------------------------------------------
+#
+# The only request of the container that does not go to the Nextcloud. GitHub
+# answers a release download with a redirect to its asset host, so the two hosts
+# below are the whole list and nothing else is ever contacted, neither by the
+# first request nor by a hop (T-25-21).
+
+ASSET_HOSTS: Final = frozenset({"github.com", "release-assets.githubusercontent.com"})
+
+# GitHub needs one hop today. Three leave room for a change on their side and
+# still end a loop long before it costs anything.
+ASSET_MAX_REDIRECTS: Final = 3
+
+_REDIRECT_STATUS: Final = frozenset({301, 302, 303, 307, 308})
+
+_FIRST_SUCCESS_STATUS: Final = 200
+_FIRST_REDIRECT_STATUS: Final = 300
+
+
+class AssetRefused(Exception):
+    """The release asset could not be fetched within the rules.
+
+    A foreign host, a plain http hop, too many redirects, an error status or more
+    bytes than the cap. The message names the rule that was broken and at most a
+    status code, never a URL.
+    """
+
+
+def _asset_target(url: str | httpx.URL) -> httpx.URL:
+    """Parse one hop and refuse it unless it is https on one of the two hosts."""
+    target = httpx.URL(url)
+    if target.scheme != "https" or target.host not in ASSET_HOSTS:
+        raise AssetRefused("release asset: host or scheme outside the allowlist")
+    return target
+
+
+def _asset_client() -> httpx.AsyncClient:
+    """A client for the release asset, sharing nothing with the gateway client.
+
+    No headers, so no AppAPI credential can travel along (T-25-22). No
+    ``verify=_certificate_setting()`` either: NPA_NC_CERT names the CA of the
+    Nextcloud, not the one of GitHub, and the default trust store is the right
+    one here. ``trust_env`` stays on, so a proxy the admin set in the environment
+    of the container applies, even though AppAPI itself cannot set one
+    (D-25-15). Redirects are followed by hand in :func:`_stream_asset`, one
+    allowlist check per hop, which the built in follower cannot do.
+    """
+    return httpx.AsyncClient(follow_redirects=False, timeout=_timeout())
+
+
+async def _stream_asset(
+    client: httpx.AsyncClient,
+    url: str,
+    write: Callable[[bytes], Awaitable[None]],
+    cap: int,
+) -> None:
+    """Follow the redirects of one release download and hand the body to ``write``."""
+    target = _asset_target(url)
+    for _hop in range(ASSET_MAX_REDIRECTS + 1):
+        # A cookie a hop sets must not reach the next one. The jar belongs to the
+        # client, so it is emptied before every request rather than trusted.
+        client.cookies.clear()
+        async with client.stream("GET", target) as response:
+            status = response.status_code
+            location = response.headers.get("location")
+            if status in _REDIRECT_STATUS and location:
+                # Checked before the next request exists, so a hop to a foreign
+                # host is refused without a single byte going there.
+                target = _asset_target(response.url.join(location))
+                continue
+            if not _FIRST_SUCCESS_STATUS <= status < _FIRST_REDIRECT_STATUS:
+                raise AssetRefused(f"release asset answered status {status}")
+            received = 0
+            async for chunk in response.aiter_bytes(CHUNK_SIZE):
+                received += len(chunk)
+                if received > cap:
+                    raise AssetRefused("release asset exceeded the byte cap")
+                await write(chunk)
+            return
+    raise AssetRefused("release asset took too many redirects")
+
+
+async def fetch_release_asset(
+    url: str,
+    write: Callable[[bytes], Awaitable[None]],
+    *,
+    cap: int,
+    client: httpx.AsyncClient | None = None,
+) -> None:
+    """Stream one release asset into ``write``, refusing anything outside the rules.
+
+    One GET per hop, only on https to :data:`ASSET_HOSTS`, at most
+    :data:`ASSET_MAX_REDIRECTS` hops, at most ``cap`` bytes. Every broken rule
+    raises :class:`AssetRefused`; transport errors of httpx pass through as they
+    are. The caller owns the verdict on the bytes (length and digest), this
+    function only guarantees where they came from and how many there were.
+
+    Only an admin action reaches this (D-25-05). Nothing in the container calls
+    it on start or in the background.
+
+    ``client`` exists for tests with a mock transport. Without it the function
+    builds its own client from :func:`_asset_client` and closes it again.
+    """
+    if client is not None:
+        await _stream_asset(client, url, write, cap)
+        return
+
+    async with _asset_client() as owned_client:
+        await _stream_asset(owned_client, url, write, cap)
 
 
 # ---------------------------------------------------------------------------

@@ -110,6 +110,14 @@ FORBIDDEN_IDENTIFIERS = frozenset(
 # so the only directory the call can reach is one in the container's own volume.
 # The path itself comes from findling.config, never from a queue entry, so no
 # value out of Nextcloud reaches this call.
+#
+# embed/weights.py, since plan 25-06, creates the directory of the optional fp32
+# weights in the container's own persistent volume, the place a release download
+# is streamed to before it is renamed into place. Same reasoning once more:
+# invariant 1 keeps nc_py_api and httpx out of that module (the bytes arrive
+# through a fetch callable the caller injects), and the models directory comes
+# from findling.config, never from a queue entry, so the only directory the call
+# can reach is a local one.
 INVARIANT_2_EXCEPTIONS: frozenset[tuple[str, str]] = frozenset(
     {
         ("index/wordlist.py", "mkdir"),
@@ -117,6 +125,7 @@ INVARIANT_2_EXCEPTIONS: frozenset[tuple[str, str]] = frozenset(
         ("store/repo.py", "mkdir"),
         ("index/open.py", "mkdir"),
         ("worker/poller.py", "mkdir"),
+        ("embed/weights.py", "mkdir"),
     }
 )
 
@@ -424,6 +433,7 @@ def test_the_reviewed_exception_covers_exactly_the_named_modules() -> None:
     assert scan_source("store/repo.py", "database.parent.mkdir(parents=True, exist_ok=True)\n") == []
     assert scan_source("index/open.py", "path.mkdir(parents=True, exist_ok=True)\n") == []
     assert scan_source("worker/poller.py", "scratch.mkdir(parents=True, exist_ok=True)\n") == []
+    assert scan_source("embed/weights.py", "directory.mkdir(parents=True, exist_ok=True)\n") == []
 
 
 def test_the_reviewed_exception_does_not_leak_into_other_modules() -> None:
