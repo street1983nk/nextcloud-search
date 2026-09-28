@@ -34,6 +34,7 @@ import logging
 import os
 import sqlite3
 from collections.abc import AsyncIterator, Callable, Mapping, Sequence
+from concurrent.futures import Future
 from contextlib import asynccontextmanager
 from functools import partial
 from typing import Any, Final
@@ -419,10 +420,21 @@ async def _release_when_idle(stop_event: asyncio.Event) -> None:
     **The cutter is let go only behind a release that really happened.** Both
     holders fall together (MEM-02) and the order of the two is not free:
     :func:`~findling.embed.engine.release_if_idle` carries the clock and the
-    identity check, :meth:`~findling.worker.poller.Poller.release_cutter`
-    carries no span of its own. A ``release_cutter`` without a release in front
-    of it would throw the cutter away after every quiet stretch, including the
-    ones in which the search side embedded a moment ago.
+    identity check,
+    :meth:`~findling.worker.embedding.EmbeddingTrack.release_cutter` carries no
+    span of its own. A ``release_cutter`` without a release in front of it would
+    throw the cutter away after every quiet stretch, including the ones in which
+    the search side embedded a moment ago.
+
+    **Two drivers, one owner** (plan 25-10, Pitfall 4). Since the embed runner
+    exists, a row can be in work on the track without the poller holding it, so
+    the question goes to the track, which counts rows whichever driver handed
+    them in, and the cutter is let go through the track as well. The rows the
+    two drivers hold between two embeddings count too, for the reason of
+    Pitfall 3 below: a pass that is between two rows of its claim needs the
+    cutter again in a moment. Behind all of it the idle guard of plan 25-02
+    asks once more under the model lock, so a row that starts between this
+    reading and the release still finds its weights.
 
     ``_pause`` is imported out of ``worker/poller.py`` although it is private,
     and that is the smaller of the two prices. A second copy of those three
@@ -444,15 +456,17 @@ async def _release_when_idle(stop_event: asyncio.Event) -> None:
                 await asyncio.to_thread(warm)
                 continue
             poller = active_poller()
-            if poller is not None and poller.busy:
+            track = poller.track if poller is not None else None
+            drivers = [driver for driver in (poller, active_embedding()) if driver is not None]
+            if track is not None and (track.busy or any(driver.busy for driver in drivers)):
                 # Pitfall 3. Letting go between two batches means paying for the
                 # weights again seconds later, the unload turns from a saving
                 # into a cost over a full pass, and nothing anywhere turns red.
                 continue
-            # No poller at all means no pass can be running, so the absence
+            # No poller at all means no track and no pass, so the absence
             # answers the same question the property does.
-            if await asyncio.to_thread(release_if_idle, ttl_seconds) and poller is not None:
-                await asyncio.to_thread(poller.release_cutter)
+            if await asyncio.to_thread(release_if_idle, ttl_seconds) and track is not None:
+                await asyncio.to_thread(track.release_cutter)
         except asyncio.CancelledError:
             # Ahead of the general branch, exactly like _guarded_reconcile: a
             # task that was cancelled must not read as an unexpected failure.
@@ -499,7 +513,21 @@ def _stand_the_poller_down(loop: asyncio.AbstractEventLoop) -> bool:
     A container without a poller is not a fault here. The task only exists
     inside the lifespan, and a rebuild that outlived it has nothing left to
     stand down, so the answer is True.
+
+    **The embed runner stands down first** (T-25-44). It drives the same track
+    and reads the text of a row through the index handle of that track, so an
+    embedding that went on during the swap would read out of the directory
+    being retired. It is silenced, its round in flight is waited for and its
+    rows go back; the poller behind it then closes the track, which is where
+    the handle on the old directory is given back. A runner that does not stand
+    down in time is the same answer as a poller that does not: nothing is
+    renamed, and :func:`_arm_the_poller` lets both go again.
     """
+    runner = active_embedding()
+    if runner is not None and not _wait_for_the_stand_down(
+        asyncio.run_coroutine_threadsafe(runner.stand_down(budget=STAND_DOWN_SECONDS), loop), "embed runner"
+    ):
+        return False
     poller = active_poller()
     if poller is None:
         return True
@@ -507,7 +535,16 @@ def _stand_the_poller_down(loop: asyncio.AbstractEventLoop) -> bool:
     # for the reason the band size of the rebuild is named at its call site:
     # this is the call that runs in a container, and how long a start waits for
     # a pass is a decision of whoever owns the start.
-    pending = asyncio.run_coroutine_threadsafe(poller.stand_down(budget=STAND_DOWN_SECONDS), loop)
+    return _wait_for_the_stand_down(
+        asyncio.run_coroutine_threadsafe(poller.stand_down(budget=STAND_DOWN_SECONDS), loop), "indexing task"
+    )
+
+
+def _wait_for_the_stand_down(pending: Future[bool], who: str) -> bool:
+    """Wait for one submitted stand down, and answer False for anything but True.
+
+    ``who`` is a fixed word of this module and never a value read from anywhere.
+    """
     try:
         return pending.result(timeout=STAND_DOWN_SECONDS + STAND_DOWN_GRACE_SECONDS)
     # Deliberately every exception, and the type name only, as everywhere in
@@ -515,7 +552,7 @@ def _stand_the_poller_down(loop: asyncio.AbstractEventLoop) -> bool:
     # the rebuild needs is the same one, namely that it may not rename anything.
     except Exception as error:
         pending.cancel()
-        LOGGER.error("the indexing task could not be stood down, an %s; no directory is swapped", type(error).__name__)
+        LOGGER.error("the %s could not be stood down, an %s; no directory is swapped", who, type(error).__name__)
         return False
 
 
@@ -528,10 +565,16 @@ def _arm_the_poller() -> None:
     afterwards would leave an installation with a backend that is off in
     Nextcloud and indexing in the container, which is the failure the mark exists
     against with the two sides swapped.
+
+    The embed runner is armed with it, on the same condition: it was stood down
+    with the poller, and a runner left silenced after a rebuild would put every
+    embed row back into the indexing loop for the life of the container.
     """
-    poller = active_poller()
-    if poller is not None and _was_enabled_before_this_start():
-        poller.arm()
+    if not _was_enabled_before_this_start():
+        return
+    for task in (active_poller(), active_embedding()):
+        if task is not None:
+            task.arm()
 
 
 def _rebuild_is_due() -> bool:

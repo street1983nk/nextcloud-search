@@ -140,28 +140,59 @@ class _EngineSpy:
         return self
 
 
+class _FakeTrack:
+    """The embedding track as the release task sees it: a row in work, and the cutter door."""
+
+    def __init__(self, *, busy: bool, journal: list[str]) -> None:
+        self.busy = busy
+        self.journal = journal
+        self.cutter_releases = 0
+
+    def release_cutter(self) -> bool:
+        self.journal.append("release_cutter")
+        self.cutter_releases += 1
+        return True
+
+
 class _FakePoller:
-    """A poller that answers the one question the release task asks it.
+    """A poller that answers the questions the release task asks it.
+
+    ``busy`` stands for the rows the pass holds; ``track_busy`` for a row in
+    work on the track, whichever driver handed it in. Since plan 25-10 the
+    cutter is let go through the track, so the count lives there.
 
     ``armed`` is carried here and never read by the task under test. It exists
     so that the silenced case can say in an assertion what it is about instead
     of only in its name.
     """
 
-    def __init__(self, *, busy: bool = False, armed: bool = True, journal: list[str] | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        busy: bool = False,
+        track_busy: bool = False,
+        armed: bool = True,
+        journal: list[str] | None = None,
+    ) -> None:
         self._busy = busy
         self.armed = armed
         self.journal = journal if journal is not None else []
-        self.cutter_releases = 0
+        self.track = _FakeTrack(busy=track_busy, journal=self.journal)
 
     @property
     def busy(self) -> bool:
         return self._busy
 
-    def release_cutter(self) -> bool:
-        self.journal.append("release_cutter")
-        self.cutter_releases += 1
-        return True
+    @property
+    def cutter_releases(self) -> int:
+        return self.track.cutter_releases
+
+
+class _FakeHoldingRunner:
+    """An embed runner as the release task sees it: whether it holds rows."""
+
+    def __init__(self, *, busy: bool) -> None:
+        self.busy = busy
 
 
 def _ticks(monkeypatch: pytest.MonkeyPatch, count: int) -> list[float]:
@@ -1398,6 +1429,111 @@ def test_a_runner_that_raises_is_a_log_line_and_not_a_dead_container(
     assert "RuntimeError" in said[0]
     assert "/a/path" not in said[0]
     assert runner.journal == ["unlock_held", "aclose"]
+
+
+# ---------------------------------------------------------------------------
+# The release task and the rebuild with two drivers on one track (plan 25-10,
+# Pitfall 4 and T-25-43/T-25-44).
+# ---------------------------------------------------------------------------
+
+
+async def test_a_row_in_work_on_the_track_keeps_both_holders(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The row the runner embeds is not held by the poller, and it counts all the same."""
+    spy = _EngineSpy(releases=True).install(monkeypatch)
+    poller = _FakePoller(busy=False, track_busy=True, journal=spy.order)
+    monkeypatch.setattr("findling.main._POLLER", poller)
+    monkeypatch.setattr("findling.main._EMBEDDING", _FakeHoldingRunner(busy=False))
+    _ticks(monkeypatch, 1)
+
+    await _run_the_task()
+
+    assert spy.ttls == []
+    assert poller.cutter_releases == 0
+
+
+async def test_rows_held_by_the_runner_keep_both_holders(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Between two rows of its claim the runner needs the cutter again in a moment."""
+    spy = _EngineSpy(releases=True).install(monkeypatch)
+    poller = _FakePoller(busy=False, track_busy=False, journal=spy.order)
+    monkeypatch.setattr("findling.main._POLLER", poller)
+    monkeypatch.setattr("findling.main._EMBEDDING", _FakeHoldingRunner(busy=True))
+    _ticks(monkeypatch, 1)
+
+    await _run_the_task()
+
+    assert spy.ttls == []
+    assert poller.cutter_releases == 0
+
+
+async def test_an_idle_track_behind_a_release_lets_the_cutter_go_through_the_track(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    spy = _EngineSpy(releases=True).install(monkeypatch)
+    poller = _FakePoller(busy=False, track_busy=False, journal=spy.order)
+    monkeypatch.setattr("findling.main._POLLER", poller)
+    monkeypatch.setattr("findling.main._EMBEDDING", _FakeHoldingRunner(busy=False))
+    _ticks(monkeypatch, 1)
+
+    await _run_the_task()
+
+    assert poller.track.cutter_releases == 1
+    assert spy.order == ["warm_wanted", "release_if_idle", "release_cutter"]
+
+
+async def test_the_rebuild_stands_the_runner_down_with_the_poller_and_arms_both_again(
+    indexed_volume: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    del indexed_volume
+    poller = default_poller()
+    runner = EmbedRunner(track=poller.track)
+    monkeypatch.setattr("findling.main._POLLER", poller)
+    monkeypatch.setattr("findling.main._EMBEDDING", runner)
+    settings().armed_marker.write_text("", encoding="utf-8")
+    poller.arm()
+    runner.arm()
+
+    assert await asyncio.to_thread(_stand_the_poller_down, asyncio.get_running_loop()) is True
+    assert runner._armed.is_set() is False, "the runner was stood down"
+    assert poller.armed is False, "and the poller behind it"
+
+    _arm_the_poller()
+
+    assert runner._armed.is_set() is True
+    assert poller.armed is True
+
+
+async def test_a_runner_that_will_not_stand_down_leaves_the_poller_and_the_directories_alone(
+    indexed_volume: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Runner before poller: an embedding still in flight is the same no as a pass in flight."""
+    del indexed_volume
+    poller = default_poller()
+    runner = EmbedRunner(track=poller.track)
+    monkeypatch.setattr("findling.main._POLLER", poller)
+    monkeypatch.setattr("findling.main._EMBEDDING", runner)
+    poller.arm()
+    runner.arm()
+    runner._in_flight = True
+    monkeypatch.setattr("findling.main.STAND_DOWN_SECONDS", 0.0)
+
+    assert await asyncio.to_thread(_stand_the_poller_down, asyncio.get_running_loop()) is False
+    assert poller.armed is True, "the poller was never asked"
+
+
+async def test_the_runner_is_not_armed_again_when_the_app_was_switched_off_meanwhile(
+    indexed_volume: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    del indexed_volume
+    poller = default_poller()
+    runner = EmbedRunner(track=poller.track)
+    monkeypatch.setattr("findling.main._POLLER", poller)
+    monkeypatch.setattr("findling.main._EMBEDDING", runner)
+    runner.arm()
+
+    assert await asyncio.to_thread(_stand_the_poller_down, asyncio.get_running_loop()) is True
+    _arm_the_poller()
+
+    assert runner._armed.is_set() is False
 
 
 def test_the_start_downloads_nothing_and_asks_no_precision() -> None:

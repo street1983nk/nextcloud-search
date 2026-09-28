@@ -1327,8 +1327,15 @@ PHP_TREE_HASH_TODAY = "726756a8e646e4eb6d4d9089e3ac0476d7a5ff25b6e3f335b3f4faaea
 # park wait, the store abort and the handover out of the held rows. One file
 # came and none went, so PACKAGE_FILES_TODAY moves to 64. The PHP pair does not
 # move: this plan touches no PHP file.
+# Measured again for plan 25-10 of wave 5 over its own tree: main.py got the
+# embed runner as a lifespan task (start over the track of the poller, arming,
+# stand down before the poller at the rebuild, unlock and close at the
+# shutdown) and the release task asks the track. No file came and none went,
+# so PACKAGE_FILES_TODAY stays at 64. The PHP pair does not move: this plan
+# touches no PHP file. Plan 25-11 changes worker files in parallel, so the pin
+# is measured again after the merge of wave 5.
 PACKAGE_FILES_TODAY = 64
-PACKAGE_TREE_HASH_TODAY = "a2a15da9cae4cfc5733702b8cd57591bb9e575228f9f0c2f1aaaae742e42fea8"
+PACKAGE_TREE_HASH_TODAY = "8a07deed90851d23ab86167b9fea8207b468d4b00620104c73bd964efc3b4df1"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
