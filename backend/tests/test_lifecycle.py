@@ -33,6 +33,7 @@ from findling.main import (
     unusable_startup_variables,
 )
 from findling.nc.client import AppAPIAuthMiddleware, AsyncNextcloudApp
+from findling.worker.embedding import EmbeddingTrack
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "src" / "findling"
 
@@ -271,7 +272,18 @@ def test_the_search_answers_while_a_reconcile_round_is_running(
 
 
 class _FakePoller(_FakeReconcile):
-    """A poller that records the arming and hands nothing back."""
+    """A poller that records the arming and hands nothing back.
+
+    The track and the attach are what the lifespan asks of a poller since plan
+    25-10, when it builds the embed runner; the real track opens nothing.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.track = EmbeddingTrack()
+
+    def attach_runner(self, runner: object) -> None:
+        del runner
 
     async def unlock_held(self) -> int:
         return 0

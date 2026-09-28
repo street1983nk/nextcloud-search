@@ -30,6 +30,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from conftest import Corpus, write_wordlist
+from findling import lane
 from findling.api import resources
 from findling.config import settings
 from findling.hardware import Hardware
@@ -47,11 +48,13 @@ from findling.main import (
     _release_when_idle,
     _run_the_rebuild,
     _stand_the_poller_down,
+    active_embedding,
     enabled_handler,
     lifespan,
 )
 from findling.profile import snapshot
 from findling.store.repo import Store, open_store
+from findling.worker.embedding import EmbeddingTrack, EmbedRunner
 from findling.worker.poller import Poller, default_poller
 
 if TYPE_CHECKING:
@@ -499,11 +502,21 @@ MAIN_SOURCE = Path(__file__).resolve().parents[1] / "src" / "findling" / "main.p
 
 
 class _FakeIndexingTask:
-    """A poller or a reconcile, as far as the lifespan is concerned."""
+    """A poller or a reconcile, as far as the lifespan is concerned.
+
+    ``track`` and ``attach_runner`` are what the lifespan asks of a poller since
+    plan 25-10: the embed runner is built over the track and made known to the
+    poller. The track is the real one, whose constructor opens nothing.
+    """
 
     def __init__(self) -> None:
         self.armed = False
         self.closed = False
+        self.track = EmbeddingTrack()
+        self.runners: list[object] = []
+
+    def attach_runner(self, runner: object) -> None:
+        self.runners.append(runner)
 
     def arm(self) -> None:
         self.armed = True
@@ -1176,3 +1189,220 @@ def test_the_hardware_is_read_off_the_loop_and_before_the_tasks() -> None:
     source = inspect.getsource(lifespan)
     assert source.count("to_thread(detect)") == 1
     assert source.index("to_thread(detect)") < source.index("stop_indexing = asyncio.Event()")
+
+
+# ---------------------------------------------------------------------------
+# The embed runner beside the poller (plan 25-10, PAR-01 and PAR-04). Started
+# with the poller, armed and silenced with it, taken apart before it with its
+# rows handed back, and in Economy never more than an idle task.
+# ---------------------------------------------------------------------------
+
+
+class _FakeRunner:
+    """An embed runner as far as the lifespan is concerned, counting what it is asked."""
+
+    def __init__(
+        self,
+        *,
+        unlock_fails: bool = False,
+        run_raises: BaseException | None = None,
+        ignores_the_stop: bool = False,
+    ) -> None:
+        self.armed = False
+        self.runs = 0
+        self.unlocks = 0
+        self.closes = 0
+        self.tracks: list[object] = []
+        self.journal: list[str] = []
+        self._unlock_fails = unlock_fails
+        self._run_raises = run_raises
+        self._ignores_the_stop = ignores_the_stop
+
+    def build(self, *, track: object) -> "_FakeRunner":
+        """Stands in for the EmbedRunner class the lifespan calls."""
+        self.tracks.append(track)
+        return self
+
+    def arm(self) -> None:
+        self.armed = True
+
+    def silence(self) -> None:
+        self.armed = False
+
+    async def run(self, stop_event: asyncio.Event) -> None:
+        self.runs += 1
+        if self._run_raises is not None:
+            raise self._run_raises
+        if self._ignores_the_stop:
+            await asyncio.Event().wait()
+        await stop_event.wait()
+
+    async def unlock_held(self) -> int:
+        self.unlocks += 1
+        self.journal.append("unlock_held")
+        if self._unlock_fails:
+            raise RuntimeError("the queue did not answer")
+        return 0
+
+    async def aclose(self) -> None:
+        self.closes += 1
+        self.journal.append("aclose")
+
+
+def _install_a_runner(monkeypatch: pytest.MonkeyPatch, runner: _FakeRunner) -> _FakeIndexingTask:
+    """A fake poller and reconcile, and the recording runner in place of the class."""
+    poller = _FakeIndexingTask()
+    monkeypatch.setattr("findling.main.default_poller", lambda **_: poller)
+    monkeypatch.setattr("findling.main.default_reconcile", lambda: _FakeIndexingTask())
+    monkeypatch.setattr("findling.main.EmbedRunner", runner.build)
+    return poller
+
+
+@pytest.mark.usefixtures("volume")
+def test_the_runner_starts_with_the_lifespan_over_the_track_of_the_poller(monkeypatch: pytest.MonkeyPatch) -> None:
+    runner = _FakeRunner()
+    poller = _install_a_runner(monkeypatch, runner)
+
+    with TestClient(APP) as client:
+        assert client.portal is not None
+        client.portal.call(asyncio.sleep, 0)
+        assert active_embedding() is runner
+        assert runner.runs == 1, "the runner runs as a task of its own"
+        assert runner.tracks == [poller.track], "over the very track of the poller"
+        assert poller.runners == [runner], "and the poller knows it"
+        assert runner.armed is False, "started silenced, like the poller"
+
+    assert active_embedding() is None
+
+
+def test_the_enable_arms_and_the_disable_silences_the_runner_with_the_poller(
+    volume: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    del volume
+    runner = _FakeRunner()
+    poller = _install_a_runner(monkeypatch, runner)
+
+    with TestClient(APP) as client:
+        assert client.portal is not None
+        assert _enable_on_the_loop_of_the_lifespan(client) == ""
+        assert (poller.armed, runner.armed) == (True, True)
+        client.portal.call(enabled_handler, False, cast("AsyncNextcloudApp", None))
+        assert (poller.armed, runner.armed) == (False, False)
+
+
+@pytest.mark.usefixtures("volume")
+def test_the_start_arms_the_runner_where_the_mark_is(monkeypatch: pytest.MonkeyPatch) -> None:
+    runner = _FakeRunner()
+    poller = _install_a_runner(monkeypatch, runner)
+    settings().armed_marker.write_text("", encoding="utf-8")
+
+    with TestClient(APP):
+        assert (poller.armed, runner.armed) == (True, True)
+
+
+@pytest.mark.usefixtures("volume")
+def test_in_economy_the_runner_opens_no_client_over_many_rounds(monkeypatch: pytest.MonkeyPatch) -> None:
+    """PAR-04: the box pays nothing for the runner while the level is Economy.
+
+    The real runner, armed through the mark, with a tick short enough for a
+    handful of rounds and a client factory that counts. No level was chosen, so
+    the effective level is Economy, and every round parks at the gate before it
+    builds anything.
+    """
+    clients: list[int] = []
+    rounds: list[int] = []
+
+    def counting_client() -> "AsyncNextcloudApp":
+        clients.append(1)
+        raise AssertionError("no client in Economy")
+
+    class _CountingRunner(EmbedRunner):
+        async def run_once(self) -> str:
+            rounds.append(1)
+            return await super().run_once()
+
+    poller = _FakeIndexingTask()
+    monkeypatch.setattr("findling.main.default_poller", lambda **_: poller)
+    monkeypatch.setattr("findling.main.default_reconcile", lambda: _FakeIndexingTask())
+    monkeypatch.setattr(
+        "findling.main.EmbedRunner", partial(_CountingRunner, client_factory=counting_client, tick=0.001)
+    )
+    settings().armed_marker.write_text("", encoding="utf-8")
+
+    with TestClient(APP) as client:
+        assert client.portal is not None
+        deadline = time.monotonic() + 5.0
+        while len(rounds) < 3 and time.monotonic() < deadline:
+            client.portal.call(asyncio.sleep, 0.01)
+
+    assert snapshot().effective == "economy"
+    assert len(rounds) >= 3
+    assert clients == []
+    assert lane.snapshot().mode == lane.MODE_INLINE
+    assert lane.snapshot().reason == lane.REASON_ECONOMY
+
+
+@pytest.mark.usefixtures("volume")
+def test_the_shutdown_hands_the_rows_of_the_runner_back_and_closes_it_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    runner = _FakeRunner()
+    _install_a_runner(monkeypatch, runner)
+
+    with TestClient(APP):
+        pass
+
+    assert runner.journal == ["unlock_held", "aclose"]
+    assert active_embedding() is None
+
+
+@pytest.mark.usefixtures("volume")
+def test_an_unlock_that_fails_does_not_stop_the_shutdown(monkeypatch: pytest.MonkeyPatch) -> None:
+    runner = _FakeRunner(unlock_fails=True)
+    poller = _install_a_runner(monkeypatch, runner)
+
+    with TestClient(APP):
+        pass
+
+    assert runner.journal == ["unlock_held", "aclose"]
+    assert poller.closed is True, "the poller is taken apart behind it all the same"
+    assert active_embedding() is None
+
+
+@pytest.mark.usefixtures("volume")
+def test_a_runner_over_its_budget_is_cancelled_and_still_hands_its_rows_back(monkeypatch: pytest.MonkeyPatch) -> None:
+    runner = _FakeRunner(ignores_the_stop=True)
+    _install_a_runner(monkeypatch, runner)
+    monkeypatch.setattr("findling.main.EMBEDDING_STOP_SECONDS", 0.01)
+
+    started = time.monotonic()
+    with TestClient(APP):
+        pass
+
+    assert time.monotonic() - started < 10.0
+    assert runner.journal == ["unlock_held", "aclose"]
+
+
+@pytest.mark.usefixtures("volume")
+def test_a_runner_that_raises_is_a_log_line_and_not_a_dead_container(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    runner = _FakeRunner(run_raises=RuntimeError("/a/path/the/log/must/never/carry"))
+    _install_a_runner(monkeypatch, runner)
+
+    with caplog.at_level(logging.ERROR, logger="findling"), TestClient(APP) as client:
+        assert client.portal is not None
+        client.portal.call(asyncio.sleep, 0)
+        assert client.get("/heartbeat").status_code == 200
+
+    said = [record.getMessage() for record in caplog.records if "embed runner ended" in record.getMessage()]
+    assert said
+    assert "RuntimeError" in said[0]
+    assert "/a/path" not in said[0]
+    assert runner.journal == ["unlock_held", "aclose"]
+
+
+def test_the_start_downloads_nothing_and_asks_no_precision() -> None:
+    """D-24-05: the start loads nothing, whatever the level (T-25-45)."""
+    source = MAIN_SOURCE.read_text(encoding="utf-8")
+
+    assert "fetch_release_asset" not in source
+    assert "procure_fp32" not in source

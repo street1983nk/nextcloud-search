@@ -47,6 +47,7 @@ from findling import instance
 from findling.api import status
 from findling.config import INSTANCE_MARKER_NAME, settings
 from findling.main import APP
+from findling.worker.embedding import EmbeddingTrack
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "src" / "findling"
 
@@ -66,6 +67,12 @@ class _FakePoller:
     def __init__(self) -> None:
         self.armed = False
         self.closed = False
+        # What the lifespan builds the embed runner over since plan 25-10; the
+        # real track opens nothing in its constructor.
+        self.track = EmbeddingTrack()
+
+    def attach_runner(self, runner: object) -> None:
+        del runner
 
     def arm(self) -> None:
         self.armed = True
