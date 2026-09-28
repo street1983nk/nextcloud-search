@@ -33,6 +33,7 @@ import asyncio
 import hashlib
 import re
 import shutil
+import sqlite3
 import threading
 import time
 from collections.abc import Callable, Iterator
@@ -45,10 +46,12 @@ from fastapi.testclient import TestClient
 from tantivy import Index
 
 from conftest import write_wordlist, write_wordlist_nl
+from findling import lane
 from findling.config import SCHEMA_VERSION, settings
 from findling.extract.dispatch import Route
 from findling.extract.dispatch import extract as dispatch_extract
 from findling.extract.errors import ExtractionOutcome, Reason
+from findling.hardware import Hardware
 from findling.index.open import DUTCH_MARK, LANGUAGES_MARK, REBUILD_MARK, SCHEMA_MARK, expected_versions, open_index
 from findling.index.schema import FIELD_BODY_DE, FIELD_FILE_ID, FIELD_NAME
 from findling.index.wordlist_nl import dutch_mark
@@ -56,6 +59,7 @@ from findling.index.writer import IndexBatchWriter
 from findling.main import APP, active_poller, enabled_handler
 from findling.nc.client import AsyncNextcloudApp, NextcloudException
 from findling.nc.queue import (
+    LANE_INDEX,
     TOPUP_IDLE,
     TOPUP_SUPPLIED,
     TOPUP_UNAVAILABLE,
@@ -66,15 +70,18 @@ from findling.nc.queue import (
     QueueJob,
     QueueStats,
 )
-from findling.profile import Profile, snapshot
+from findling.profile import Profile, note_hardware, snapshot
 from findling.store.repo import FileMeta, Store, open_store
+from findling.worker import poller as poller_module
 from findling.worker.poller import (
     RETREAT_AFTER_ROUNDS,
     RETREAT_MAX_SECONDS,
     ROUND_EMPTY,
     ROUND_GATEWAY_UNAVAILABLE,
     ROUND_PAUSED_LOW_DISK,
+    ROUND_PAUSED_STORE_ERROR,
     ROUND_QUEUE_UNAVAILABLE,
+    ROUND_WAITING_FOR_RUNNER,
     ROUND_WORKED,
     STAND_DOWN_TICK_SECONDS,
     Poller,
@@ -1805,6 +1812,157 @@ async def test_the_poller_claims_without_a_lane(store: Store, writer: IndexBatch
     await poller.run_once()
 
     assert queue.lanes == [None, None]
+
+
+def _standard_box() -> None:
+    """Four cores and 16 GiB, the smallest box Standard is suggested on (Pitfall 11)."""
+    note_hardware(
+        Hardware(
+            cpu_count=4,
+            cpu_quota=None,
+            cores=4,
+            memory_limit_bytes=None,
+            memory_available_bytes=16 * 1024**3,
+            memory_total_bytes=16 * 1024**3,
+            architecture="x86_64",
+            cgroup="none",
+        )
+    )
+
+
+@dataclass(slots=True)
+class _StubRunner:
+    """Only the part of the embed runner the poller reads: the parked event."""
+
+    parked: asyncio.Event = field(default_factory=asyncio.Event)
+
+
+async def test_a_parallel_runner_moves_the_claim_onto_the_index_lane(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # PAR-01: with the runner in parallel mode the loop asks for the index lane;
+    # in Economy it asks for no lane, whatever the lane state says.
+    _standard_box()
+    queue = _FakeQueue()
+    queue.profile_answer = "standard"
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+    lane.note_mode(lane.MODE_PARALLEL, lane.REASON_NONE)
+
+    await poller.run_once()
+    queue.profile_answer = "economy"
+    await poller.run_once()
+
+    assert queue.lanes == [LANE_INDEX, None]
+
+
+async def test_the_echo_of_every_claim_reaches_the_lane_state(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    queue = _FakeQueue(ClaimResult(lane_honored=True), ClaimResult())
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    await poller.run_once()
+    assert lane.snapshot().supported is True
+    await poller.run_once()
+    assert lane.snapshot().supported is False
+
+
+async def test_economy_waits_for_the_runner_to_park_before_it_claims(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # T4, the loop side: no claim, and therefore no OCR, while the runner is in
+    # the middle of a round.
+    queue = _FakeQueue()
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+    runner = _StubRunner()
+    poller.attach_runner(cast("Any", runner))
+
+    task = asyncio.ensure_future(poller.run_once())
+    await asyncio.sleep(0.05)
+    assert queue.claims == 0
+    runner.parked.set()
+    result = await asyncio.wait_for(task, timeout=5)
+
+    assert result.state == ROUND_EMPTY
+    assert queue.lanes == [None]
+
+
+async def test_a_runner_that_does_not_park_costs_the_pass_its_claim(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(poller_module, "RUNNER_PARK_WAIT_SECONDS", 0.05)
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+    poller.attach_runner(cast("Any", _StubRunner()))
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WAITING_FOR_RUNNER
+    assert queue.claims == 0
+    assert poller.cooldown > 0
+
+
+async def test_without_a_runner_the_poller_never_waits(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:
+    queue = _FakeQueue()
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+    poller.attach_runner(None)
+
+    assert (await poller.run_once()).state == ROUND_EMPTY
+    assert poller.track is poller._track
+
+
+async def test_a_store_error_in_the_indexing_lane_hands_the_rows_back_without_a_verdict(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Pitfall 3: "database is locked" used to end in the catch-all of run(), the
+    # rows ran into the lock timeout and spent a delivery each. Now it is the
+    # _abort of the disk pause: unlock, backoff, no acknowledgement at all.
+    queue = _FakeQueue(ClaimResult(jobs=(_job(91, 4711), _job(92, 4712))))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    def locked(*args: Any, **kwargs: Any) -> None:
+        del args, kwargs
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(store, "record", locked)
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_PAUSED_STORE_ERROR
+    assert queue.unlocked == [[91, 92]]
+    assert queue.acknowledged == []
+    assert not poller.busy
+    assert poller.cooldown > 0
+
+
+@pytest.mark.parametrize("requeue_fails", [False, True])
+async def test_a_row_handed_to_another_track_leaves_the_held_rows(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, requeue_fails: bool
+) -> None:
+    # Pattern 5.3: after a successful requeue the row belongs to the next track,
+    # so an unlock_held between the requeue and the acknowledgement must not
+    # hand it back. A failed requeue leaves the row held, as before.
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)))
+    queue.requeue_fails = requeue_fails
+    poller = _poller(
+        store=store,
+        writer=writer,
+        tmp_path=tmp_path,
+        queue=queue,
+        extract=_Extractor(outcome=ExtractionOutcome.skipped(Reason.NO_TEXT_LAYER)),
+    )
+    acknowledge = queue.acknowledge
+
+    async def unlock_first(done: Any, failed: Any, skipped: Any = None) -> CallResult:
+        await poller.unlock_held()
+        return await acknowledge(done, failed, skipped)
+
+    monkeypatch.setattr(queue, "acknowledge", unlock_first)
+
+    await poller.run_once()
+
+    assert queue.requeues == [([4711], "ocr")]
+    assert queue.unlocked == ([[91]] if requeue_fails else [])
 
 
 async def test_a_companion_without_the_profile_route_leaves_economy_in_force(

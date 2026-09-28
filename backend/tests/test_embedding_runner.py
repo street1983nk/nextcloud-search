@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import asyncio
 import sqlite3
+import threading
+import time
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -35,6 +37,7 @@ from findling.config import (
 from findling.embed.chunker import ChunkSpan
 from findling.embed.engine import ENGINE_LOADED
 from findling.embed.model import DIMENSIONS, EmbedOutcome
+from findling.extract.errors import ExtractionOutcome
 from findling.hardware import Hardware
 from findling.index.open import open_index
 from findling.index.writer import IndexBatchWriter, IndexRecord
@@ -62,6 +65,7 @@ from findling.worker.embedding import (
     EmbeddingTrack,
     EmbedRunner,
 )
+from findling.worker.poller import Poller
 
 CONSTITUENTS = (
     (Path(__file__).resolve().parent / "fixtures" / "constituents_de.txt").read_text(encoding="utf-8").split()
@@ -658,3 +662,207 @@ async def test_stand_down_waits_for_the_round_and_hands_the_rows_back(track: Emb
     assert await runner.stand_down(budget=1.0)
     assert await runner.unlock_held() == 0
     await runner.aclose()
+
+
+# -- the indexing loop and the runner together (T1, T2, T4) ------------------
+
+
+class _Recorder:
+    """Start and end of every OCR run and every embedding, on one clock."""
+
+    def __init__(self) -> None:
+        self.intervals: list[tuple[str, float, float]] = []
+        self._lock = threading.Lock()
+
+    def note(self, kind: str, start: float, end: float) -> None:
+        with self._lock:
+            self.intervals.append((kind, start, end))
+
+    def of(self, kind: str) -> list[tuple[float, float]]:
+        return [(start, end) for name, start, end in self.intervals if name == kind]
+
+    def overlaps(self) -> bool:
+        return any(
+            ocr_start < embed_end and embed_start < ocr_end
+            for ocr_start, ocr_end in self.of("ocr")
+            for embed_start, embed_end in self.of("embed")
+        )
+
+
+@dataclass(slots=True)
+class _RecordingModel:
+    """A model that writes down when it ran, and may wait or signal on the way."""
+
+    recorder: _Recorder
+    seconds: float = 0.05
+    started: threading.Event = field(default_factory=threading.Event)
+    hold_first: threading.Event | None = None
+    calls: int = 0
+
+    def embed_passages(self, texts: Sequence[str]) -> EmbedOutcome:
+        begin = time.monotonic()
+        self.calls += 1
+        self.started.set()
+        if self.hold_first is not None and self.calls == 1:
+            self.hold_first.wait(timeout=5)
+        time.sleep(self.seconds)
+        self.recorder.note("embed", begin, time.monotonic())
+        return EmbedOutcome.ready([[0.001] * DIMENSIONS for _ in texts])
+
+
+@dataclass(slots=True)
+class _RecordingOcr:
+    """The guarded extractor on the OCR route, replaced by a timed stand-in."""
+
+    recorder: _Recorder
+    seconds: float = 0.05
+    wait_for: threading.Event | None = None
+    saw_the_embedding: list[bool] = field(default_factory=list)
+
+    def __call__(
+        self, path: str, mime: str, size: int, *, route: Any = None, timeout_seconds: float | None = None
+    ) -> ExtractionOutcome:
+        del path, mime, size, route, timeout_seconds
+        begin = time.monotonic()
+        if self.wait_for is not None:
+            self.saw_the_embedding.append(self.wait_for.wait(timeout=5))
+        time.sleep(self.seconds)
+        self.recorder.note("ocr", begin, time.monotonic())
+        return ExtractionOutcome.indexed("Gescannter Bescheid ueber die Kuendigungsfrist")
+
+
+class _FakeGatewayClient:
+    async def aclose(self) -> None:
+        return None
+
+
+async def _fetch(nc: Any, file_id: int, user_id: str, fp: Any, *, client: Any = None) -> int:
+    del nc, file_id, user_id, client
+    fp.write(b"%PDF-1.4 pixels only")
+    return 20
+
+
+def _scan(queue_id: int, file_id: int) -> QueueJob:
+    return _job(queue_id, file_id, kind=KIND_OCR, mime="application/pdf")
+
+
+def _pair(
+    store: Store,
+    writer: IndexBatchWriter,
+    vectors: VectorStore,
+    tmp_path: Path,
+    queue: _LaneQueue,
+    model: _RecordingModel,
+    ocr: _RecordingOcr,
+) -> tuple[Poller, EmbedRunner]:
+    """A real poller and a real runner over one track, attached as plan 25-10 will."""
+    poller = Poller(
+        store=store,
+        writer=writer,
+        tmp_dir=tmp_path / "tmp",
+        client_factory=lambda: cast("AsyncNextcloudApp", object()),
+        gateway_factory=lambda: cast("Any", _FakeGatewayClient()),
+        queue_factory=lambda nc: cast("Any", queue),
+        fetch=_fetch,
+        extract=ocr,
+        vectors=vectors,
+        chunker=_cut,
+        model=model,
+    )
+    runner = _runner(poller.track, queue)
+    poller.attach_runner(runner)
+    return poller, runner
+
+
+async def test_t1_economy_never_runs_ocr_beside_an_embedding(
+    store: Store, writer: IndexBatchWriter, vectors: VectorStore, tmp_path: Path
+) -> None:
+    # T1, IDX-08 word for word: a mixed claim of scans and embed rows in
+    # Economy, the runner task running along the whole time. It parks, the loop
+    # embeds inline after the OCR, and no interval of one overlaps the other.
+    recorder = _Recorder()
+    _index_bodies(writer, 11, 12)
+    queue = _LaneQueue(_scan(1, 21), _job(2, 11), _scan(3, 22), _job(4, 12))
+    poller, runner = _pair(store, writer, vectors, tmp_path, queue, _RecordingModel(recorder), _RecordingOcr(recorder))
+    stop = asyncio.Event()
+    runner.arm()
+    loop = asyncio.ensure_future(runner.run(stop))
+
+    result = await poller.run_once()
+    stop.set()
+    await asyncio.wait_for(loop, timeout=5)
+
+    assert result.state == "worked"
+    assert len(recorder.of("ocr")) == 2
+    assert len(recorder.of("embed")) == 2
+    assert not recorder.overlaps()
+    assert queue.lanes == [None]
+    assert lane.snapshot().mode == lane.MODE_INLINE
+
+
+async def test_t2_standard_runs_ocr_and_embedding_side_by_side(
+    store: Store, writer: IndexBatchWriter, vectors: VectorStore, tmp_path: Path
+) -> None:
+    # T2, PAR-01: the OCR of the loop blocks until the runner's embedding has
+    # started, five seconds being the failure. The overlap is the proof.
+    _standard()
+    lane.note_echo(True)
+    recorder = _Recorder()
+    model = _RecordingModel(recorder, seconds=0.2)
+    ocr = _RecordingOcr(recorder, wait_for=model.started)
+    _index_bodies(writer, 11)
+    queue = _LaneQueue()
+    poller, runner = _pair(store, writer, vectors, tmp_path, queue, model, ocr)
+    assert await runner.run_once() == ROUND_EMPTY
+    assert lane.snapshot().mode == lane.MODE_PARALLEL
+    queue.add(_scan(1, 21), _job(2, 11))
+    queue.profile_answer = "standard"
+
+    worked, ran = await asyncio.wait_for(asyncio.gather(poller.run_once(), runner.run_once()), timeout=15)
+
+    assert ocr.saw_the_embedding == [True]
+    assert recorder.overlaps()
+    assert worked.state == "worked"
+    assert ran == ROUND_WORKED
+    # Which of the two claims goes out first is the scheduler's business.
+    assert sorted(str(asked) for asked in queue.lanes[1:]) == [LANE_EMBED, LANE_INDEX]
+    assert ([2], {}) in queue.acknowledged
+
+
+async def test_t4_economy_in_the_middle_of_a_runner_round_ends_the_overlap(
+    store: Store, writer: IndexBatchWriter, vectors: VectorStore, tmp_path: Path
+) -> None:
+    # T4: the runner is embedding its first row when the loop reads Economy.
+    # The loop waits for the park before it claims; the runner stops after the
+    # row in work and hands the rest back; from the switch on nothing overlaps.
+    _standard()
+    lane.note_echo(True)
+    recorder = _Recorder()
+    go = threading.Event()
+    model = _RecordingModel(recorder, hold_first=go)
+    ocr = _RecordingOcr(recorder)
+    _index_bodies(writer, 11, 12, 13)
+    queue = _LaneQueue()
+    poller, runner = _pair(store, writer, vectors, tmp_path, queue, model, ocr)
+    assert await runner.run_once() == ROUND_EMPTY
+    queue.add(_scan(1, 21), _job(2, 11), _job(3, 12), _job(4, 13))
+
+    round_task = asyncio.ensure_future(runner.run_once())
+    assert await asyncio.to_thread(model.started.wait, 5)
+    queue.profile_answer = "economy"
+    pass_task = asyncio.ensure_future(poller.run_once())
+    await asyncio.sleep(0.1)
+    assert queue.lanes == [LANE_EMBED, LANE_EMBED]
+    go.set()
+
+    ran, worked = await asyncio.wait_for(asyncio.gather(round_task, pass_task), timeout=15)
+
+    assert ran == LANE_PARKED
+    assert worked.state == "worked"
+    assert queue.unlocked == [[3, 4]]
+    assert queue.lanes == [LANE_EMBED, LANE_EMBED, None]
+    assert ([2], {}) in queue.acknowledged
+    assert not recorder.overlaps()
+    first_embed_end = recorder.of("embed")[0][1]
+    assert all(start >= first_embed_end for start, _ in recorder.of("ocr"))
+    assert len(recorder.of("embed")) == 3
