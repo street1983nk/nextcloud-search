@@ -717,6 +717,56 @@ def test_a_release_on_a_loaded_holder_lets_go_and_counts_it(
     assert quiet_pages == ["pages"]
 
 
+def test_release_refuses_when_used_since_the_last_reading(
+    model_dir: Path, stand_in: StandIn, clock: _TickingClock, quiet_pages: list[str]
+) -> None:
+    """The idle check under the model's own lock (phase 23 WR-02, closed in phase 25).
+
+    The caller read the clock once and decided the engine was idle. A batch
+    that ran after that reading has moved ``_last_use``, and the check inside
+    ``release()`` is the one that sees it: weights used a moment ago stay.
+    """
+    engine = _model(model_dir)
+    engine.embed_passages(["ein Abschnitt"])
+    before = unload_count()
+
+    assert engine.release(idle_seconds=900.0) is False
+    assert engine.loaded is True
+    assert unload_count() == before
+    assert quiet_pages == []
+
+
+def test_release_lets_go_once_the_idle_span_has_passed(
+    model_dir: Path, stand_in: StandIn, clock: _TickingClock, quiet_pages: list[str]
+) -> None:
+    """The ticking clock moves one second per reading, so half a second is long past."""
+    engine = _model(model_dir)
+    engine.embed_passages(["ein Abschnitt"])
+    before = unload_count()
+
+    assert engine.release(idle_seconds=0.5) is True
+    assert engine.loaded is False
+    assert unload_count() - before == 1
+
+
+def test_release_without_an_idle_span_ignores_the_clock(
+    model_dir: Path, stand_in: StandIn, clock: _TickingClock, quiet_pages: list[str]
+) -> None:
+    """No span is the old contract: only the engine and the batch in flight count."""
+    engine = _model(model_dir)
+    engine.embed_passages(["ein Abschnitt"])
+
+    assert engine.release() is True
+    assert engine.loaded is False
+
+
+def test_the_idle_span_is_keyword_only_and_optional() -> None:
+    parameter = inspect.signature(EmbeddingModel.release).parameters["idle_seconds"]
+
+    assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
+    assert parameter.default is None
+
+
 def test_a_release_on_a_holder_that_never_loaded_says_so(
     model_dir: Path, stand_in: StandIn, quiet_pages: list[str]
 ) -> None:

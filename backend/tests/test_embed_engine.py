@@ -992,7 +992,8 @@ def test_release_if_idle_with_a_span_of_nought_never_reaches_the_release(
     engine = _an_idle_engine(model_home, monkeypatch, clock)
     calls: list[int] = []
 
-    def spy() -> bool:
+    def spy(*, idle_seconds: float | None = None) -> bool:
+        del idle_seconds
         calls.append(1)
         return True
 
@@ -1063,6 +1064,51 @@ def test_release_if_idle_keeps_an_engine_a_search_used_between_the_check_and_the
     assert release_if_idle(900) is False
     assert engine.loaded is True, "weights a search has just used stay where they are"
     assert unload_count() == before
+
+
+def test_a_use_between_the_second_reading_and_release_keeps_the_engine(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T10 of phase 25, the window WR-02 of phase 23 left open. The second
+    # reading of the clock under _LOCK says idle, and a search embeds on the
+    # very same instance right after it and before release() runs. Only the
+    # idle check inside release(), under the model's own lock, can see that
+    # use, and the weights have to stay.
+    clock = {"now": 1000.0}
+    engine = _an_idle_engine(model_home, monkeypatch, clock)
+    real_last_use = engine.last_use
+    readings: list[int] = []
+
+    def late_racing_last_use() -> float | None:
+        stamp = real_last_use()
+        readings.append(1)
+        if len(readings) == 2:
+            # The second reading answers the stale stamp, then a search lands.
+            engine.embed_query("bauantrag")
+        return stamp
+
+    monkeypatch.setattr(engine, "last_use", late_racing_last_use)
+    before = released_count()
+
+    assert release_if_idle(900) is False
+    assert len(readings) == 2, "both readings passed, so the refusal came from release() itself"
+    assert engine.loaded is True, "weights a search has just used stay where they are"
+    assert released_count() == before
+
+
+def test_release_if_idle_hands_its_span_to_the_model(model_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    clock = {"now": 1000.0}
+    engine = _an_idle_engine(model_home, monkeypatch, clock)
+    spans: list[float | None] = []
+
+    def spy(*, idle_seconds: float | None = None) -> bool:
+        spans.append(idle_seconds)
+        return False
+
+    monkeypatch.setattr(engine, "release", spy)
+
+    assert release_if_idle(900) is False
+    assert spans == [900]
 
 
 def test_release_if_idle_treats_a_holder_that_never_embedded_as_not_idle(
