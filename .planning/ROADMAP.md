@@ -136,9 +136,9 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 25-06-PLAN.md , fp32-Beschaffung (fetch_release_asset, embed/weights.py) und memory_guard (MOD-02, PAR-04), Welle 3
-- [ ] 25-07-PLAN.md , Refactor: EmbeddingTrack mit eigenen Verbindungen und Lese-Handle, verhaltensgleich (PAR-01), Welle 3
-- [ ] 25-08-PLAN.md , Präzisions-Automat, fp32-Term in der Slotformel, Konstanten der RAM-Bedingung (MOD-02, PAR-04), Welle 3
+- [x] 25-06-PLAN.md , fp32-Beschaffung (fetch_release_asset, embed/weights.py) und memory_guard (MOD-02, PAR-04), Welle 3
+- [x] 25-07-PLAN.md , Refactor: EmbeddingTrack mit eigenen Verbindungen und Lese-Handle, verhaltensgleich (PAR-01), Welle 3
+- [x] 25-08-PLAN.md , Präzisions-Automat, fp32-Term in der Slotformel, Konstanten der RAM-Bedingung (MOD-02, PAR-04), Welle 3
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -224,7 +224,7 @@ Plans:
 | 12-16 (Archiv) | v1.2 | 63/63 | Complete | 2026-09-21 |
 | 17-23 (Archiv) | v1.3 | 69/69 | Complete | 2026-09-27 |
 | 24. Owner-Tor, Profil-Gerüst und Marken-Reparatur | v1.4 | 6/6 | Complete    | 2026-09-28 |
-| 25. Einbettungsspur und Modellwahl | v1.4 | 5/12 | In Progress|  |
+| 25. Einbettungsspur und Modellwahl | v1.4 | 8/12 | In Progress|  |
 | 26. N OCR-Slots und Speicherwächter | v1.4 | 0/? | Not started | - |
 | 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 0/? | Not started | - |
 | 28. Abnahme-Anfahrt | v1.4 | 0/? | Not started | - |
