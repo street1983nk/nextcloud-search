@@ -197,6 +197,25 @@ einen Dateinamen, wie jede andere Notiz dieser Antwort auch. Ein Wort, das nicht
 in der Menge steht, wird auf der PHP-Seite verworfen und nicht umgewandelt; die
 Seite zeigt dann die siebte Zeile.
 
+## Die Modellzeile: Präzision und Neueinbettung
+
+Im Block "auffindbar nach Bedeutung" steht seit 1.4 eine weitere Zeile
+(D-25-08, D-25-13), zum Beispiel:
+
+> Modell: e5-small fp32, Neueinbettung 42 % (12.300 von 29.100)
+
+- Der Modellname kommt aus `model.precisionActive` der Statusantwort, einem von
+  zwei Wörtern (`int8`, `fp32`). Andere Werte verwirft die PHP-Seite.
+- Der Teil "Neueinbettung" steht nur, solange `model.reembedRunning` wahr ist
+  und ein Nenner existiert. Der Fortschritt ist `embedded` gegen `indexed`, also
+  dieselben zwei Zahlen wie oben, keine dritte Rechnung.
+- Meldet der Container die Felder nicht, weil er älter ist, bleibt die Zeile
+  verborgen.
+
+Die Verdikte der Präzision (`precisionVerdict`, zum Beispiel
+`fp32_unavailable`) meldet der Container bereits; als Satz zeigt die Seite sie
+erst mit Phase 27. Bis dahin stehen sie in `docs/embeddings.md`, Abschnitt 11.
+
 ## Was nicht im Nenner steht, und warum
 
 Nicht im Nenner stehen: Ordner, Dateien eines nicht unterstützten Typs, Dateien

@@ -114,12 +114,46 @@ Folge: Wer unter Leistung ausdrücklich 30 Seiten je PDF will, erreicht das nur
 Die Statusroute `GET /status` meldet im Block `profile` je Wert die Quelle:
 `profile` oder `env`.
 
+## Einbettungsspur (Phase 25, PAR-01, PAR-04)
+
+In Standard und Leistung läuft die Einbettung als eigener Nebenläufer neben der
+OCR, statt zeitlich getrennt in derselben Schleife wie unter Sparsam (IDX-08).
+
+- **Schwelle:** Technisch läuft die Spur ab 2 Kernen. Wirksam wird sie erst
+  dort, wo Standard vorgeschlagen und gewählt werden kann, also ab 3 Kernen und
+  6 GB (D-24-06, D-24-07). Auf einer kleineren Box bleibt die wirksame Stufe
+  Sparsam, und die Einbettung läuft seriell wie bisher.
+- **Speicherbedingung (D-25-11):** Vor jeder Runde prüft der Läufer zweimal:
+  statisch, ob die Slot-Formel nach Abzug der Einbettung noch jeden OCR-Slot
+  trägt, und live, ob `anon` gegen `memory.max` noch Platz für eine Runde lässt.
+  Bei Nein parkt der Läufer mit `waiting_for_memory`, und die Einbettung läuft
+  seriell in der Indexschleife weiter. Es geht nichts verloren.
+- **Genau ein Läufer (D-25-12):** Auch Leistung mit `embed_slots` 2 fährt in
+  Phase 25 einen Läufer. Der zweite wirkt erst ab Phase 26.
+- **Präzision:** fp32 ist nur in Standard und Leistung wählbar (D-25-01). Ein
+  Profilwechsel ändert die Präzision nie; ein aktives fp32 unter Sparsam wird als
+  `fp32_active_in_economy` gemeldet (D-25-10, D-25-03). Details in
+  [`docs/embeddings.md`](embeddings.md), Abschnitt 11.
+- **Companion 1.4.0 nötig (K6):** Die Spur braucht den Warteschlangen-Filter
+  des Companions 1.4.0. Mit einem Companion 1.3 läuft alles seriell, gemeldet
+  als `companion_without_lane`.
+
+`GET /status` meldet den Zustand im Block `lane`: `mode` ist `inline` oder
+`parallel`, `reason` sagt, warum die Spur parkt (`economy`,
+`companion_without_lane`, `waiting_for_memory`, leer bei `parallel`).
+
+Nach einem Start in Standard oder nach einem Rebuild kann eine erste Runde des
+Läufers laufen, bevor die Indexschleife die Spur geöffnet hat. Das steht als
+`RuntimeError` im Log; die Zeilen gehen an die Warteschlange zurück, und
+nichts geht verloren.
+
 ## Was Phase 24 bewusst nicht tut
 
 - Keine Slots in Betrieb: die Werte werden berechnet und gemeldet, die
   Nebenläufigkeit kommt mit den Phasen 25 und 26.
 - Keine Einstellungsseite und keine Probe: Phase 27.
-- Kein fp32-Nachladeweg: Phase 25.
+- Kein fp32-Nachladeweg: Phase 25, beschrieben in `docs/embeddings.md`,
+  Abschnitt 11.
 
 Merker für die Phasen 25 und 26:
 

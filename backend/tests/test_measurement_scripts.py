@@ -1340,8 +1340,15 @@ PHP_TREE_HASH_TODAY = "726756a8e646e4eb6d4d9089e3ac0476d7a5ff25b6e3f335b3f4faaea
 # deletes the fp32 file, the poller reads the precision each round). No file
 # came and none went, so PACKAGE_FILES_TODAY stays at 64. The PHP pair does
 # not move: no plan of this wave touches a PHP file.
+# Measured again after the wave-5 merge of plans 25-10 and 25-11, over the full
+# tree of phase 25 with plan 25-12 on top: api/status.py got the model and lane
+# blocks of GET /status (ModelReport, LaneReport, set in _volume() and carried
+# over in _of(), reembedRunning from the redelivery cursor). No file came and
+# none went, so PACKAGE_FILES_TODAY stays at 64. The PHP pair was measured
+# again as well and does not move: 75 files, the same hash, no plan of this
+# wave touches a PHP file.
 PACKAGE_FILES_TODAY = 64
-PACKAGE_TREE_HASH_TODAY = "412a789e172ee78b04b6131649de7f817136cf73c2d40568d6e1c48e14a6c5d6"
+PACKAGE_TREE_HASH_TODAY = "48f2486cdb8d1033593a93f4c94e4cb232f36ebed0e5736b54a684870ba6b12a"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

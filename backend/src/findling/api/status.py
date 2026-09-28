@@ -82,14 +82,15 @@ from typing import Final
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
+from findling import lane, precision
 from findling.api import resources
 from findling.config import settings
-from findling.embed.engine import engine_state
+from findling.embed.engine import engine_precision, engine_state
 from findling.index.open import LANGUAGES_MARK
 from findling.index.rebuild import rebuild_blocked_bytes, rebuild_progress
 from findling.instance import volume_is_shared
 from findling.profile import snapshot
-from findling.store.repo import Store, index_bytes, open_read_only
+from findling.store.repo import EMBEDDING_BACKLOG_MARK, Store, index_bytes, open_read_only
 from findling.store.vectors import VectorStoreError, open_vectors
 
 LOGGER = logging.getLogger("findling.api.status")
@@ -164,6 +165,36 @@ class ProfileReport(BaseModel):
     hardware: HardwareReport = Field(default_factory=HardwareReport)
     values: dict[str, int | float | None] = Field(default_factory=dict)
     sources: dict[str, str] = Field(default_factory=dict)
+
+
+class ModelReport(BaseModel):
+    """The precision of the embedding model and whether the stock is written again.
+
+    ``precisionChosen`` and ``precisionActive`` are two fields on purpose
+    (D-25-03), like chosen and effective of the profile: fp32 chosen and int8
+    running is a download, a refusal or a failure, and the verdict says which.
+    ``precisionVerdict`` is one word out of the closed set
+    ``findling.precision.VERDICTS``, the empty string when there is nothing to
+    say. ``reembedRunning`` is true while the redelivery cursor of the vector
+    stock is set; the progress of the sweep is ``embedded`` against ``indexed``
+    and no figure of its own (D-25-08).
+    """
+
+    precisionChosen: str | None = None
+    precisionActive: str | None = None
+    precisionVerdict: str = ""
+    reembedRunning: bool = False
+
+
+class LaneReport(BaseModel):
+    """Where the embedding runs, out of ``findling.lane``: inline or parallel, and why.
+
+    ``mode`` is one word out of ``lane.MODES`` and ``reason`` one out of
+    ``lane.REASONS``; the empty reason belongs to the parallel mode (PAR-01).
+    """
+
+    mode: str = "inline"
+    reason: str = ""
 
 
 class StatusResponse(BaseModel):
@@ -283,6 +314,14 @@ class StatusResponse(BaseModel):
     # of it. Reported only: phase 24 switches nothing, and the page shows the
     # block from phase 27 on.
     profile: ProfileReport = Field(default_factory=ProfileReport)
+    # The precision of the model and the redelivery of the stock (plan 25-12,
+    # MOD-02). A process value like engineState, with one part out of the state
+    # database: whether the cursor of the redelivery is set, which _of() reads
+    # out of the meta table.
+    model: ModelReport = Field(default_factory=ModelReport)
+    # Where the embedding runs (plan 25-12, PAR-01). A process value like
+    # engineState, so the state database knows nothing of it.
+    lane: LaneReport = Field(default_factory=LaneReport)
     note: str = ""
 
 
@@ -320,6 +359,30 @@ def _profile_report() -> ProfileReport:
         values={key: getattr(resolution.values, field) for field, key in PROFILE_VALUE_KEYS.items()},
         sources={key: resolution.sources[field] for field, key in PROFILE_VALUE_KEYS.items()},
     )
+
+
+def _model_report() -> ModelReport:
+    """The precision state of this process as the wire spells it.
+
+    Reads ``findling.precision.snapshot()`` and, before the start state is
+    settled, the precision of the holder. Nothing is measured, loaded or written
+    here: no digest and no look at the fp32 file, because a poll of the admin
+    page must not become a second reading of a file of hundreds of megabytes
+    (T-07-04, T-25-53). ``reembedRunning`` stays false in this branch: the
+    cursor lives in the state database and :func:`_of` reads it.
+    """
+    state = precision.snapshot()
+    return ModelReport(
+        precisionChosen=None if state.chosen is None else state.chosen.value,
+        precisionActive=engine_precision() if state.active is None else state.active.value,
+        precisionVerdict=state.verdict,
+    )
+
+
+def _lane_report() -> LaneReport:
+    """The lane state of this process, out of ``findling.lane.snapshot()`` and nothing else."""
+    state = lane.snapshot()
+    return LaneReport(mode=state.mode, reason=state.reason)
 
 
 def _number(mark: str | None) -> int:
@@ -410,6 +473,8 @@ def _volume() -> StatusResponse:
         rebuildTotal=progress.documents_total,
         rebuildBlockedBytes=rebuild_blocked_bytes(),
         profile=_profile_report(),
+        model=_model_report(),
+        lane=_lane_report(),
         lowDisk=resources.low_disk(),
         diskFreeBytes=free,
         diskTotalBytes=total,
@@ -529,6 +594,13 @@ def _of(store: Store, volume: StatusResponse) -> StatusResponse:
         # here, it would vanish on every installation that has indexed anything
         # (24-RESEARCH.md, Pitfall 2).
         profile=volume.profile,
+        # Carried over like the profile, and for the same Pitfall 2: both are
+        # values of this process, and left out here they would fall back to
+        # their defaults on every installation that has indexed anything. The
+        # one part the state database owns is set on the way: a redelivery runs
+        # while its cursor is set, and the sweep clears it when it is through.
+        model=volume.model.model_copy(update={"reembedRunning": bool(marks.get(EMBEDDING_BACKLOG_MARK, ""))}),
+        lane=volume.lane,
         note=volume.note,
         lowDisk=volume.lowDisk,
         diskFreeBytes=volume.diskFreeBytes,
