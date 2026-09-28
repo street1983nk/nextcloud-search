@@ -67,7 +67,7 @@ def _performance_box() -> None:
 
 
 def test_the_causes_are_a_closed_set_without_the_empty_word() -> None:
-    assert CAUSES == frozenset({CAUSE_MEMORY_MAX_REPEATED, CAUSE_OOM_KILL, CAUSE_UNCLEAN_END})
+    assert frozenset({CAUSE_MEMORY_MAX_REPEATED, CAUSE_OOM_KILL, CAUSE_UNCLEAN_END}) == CAUSES
     assert CAUSE_NONE not in CAUSES
     assert CAUSE_MEMORY_MAX_REPEATED == "memory_max_repeated"
     assert CAUSE_OOM_KILL == "oom_kill"
@@ -78,9 +78,9 @@ def test_the_meta_keys_are_the_agreed_spelling() -> None:
     assert guard.META_CAP == "guard_cap"
     assert guard.META_CAUSE == "guard_cause"
     assert guard.META_SINCE == "guard_since"
-    assert guard.META_TOKEN == "guard_token"
+    assert guard.META_TOKEN == "guard_token"  # noqa: S105 - a meta key name
     assert guard.META_CHOSEN == "guard_chosen"
-    assert guard.META_MULTI_SLOT_PASS == "multi_slot_pass"
+    assert guard.META_MULTI_SLOT_PASS == "multi_slot_pass"  # noqa: S105 - a meta key name
     assert guard.META_MULTI_SLOT_CHOSEN == "multi_slot_chosen"
 
 
@@ -274,6 +274,8 @@ def test_a_wrong_token_with_the_same_profile_changes_nothing() -> None:
 
     assert not guard.note_confirmation("0" * 32, "performance")
     assert not guard.note_confirmation(None, "performance")
+    # A tampered appconfig value outside ASCII must not raise either.
+    assert not guard.note_confirmation("ä" * 32, "performance")
     assert guard.snapshot() == before
 
 
