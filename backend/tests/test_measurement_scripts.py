@@ -1347,8 +1347,14 @@ PHP_TREE_HASH_TODAY = "726756a8e646e4eb6d4d9089e3ac0476d7a5ff25b6e3f335b3f4faaea
 # none went, so PACKAGE_FILES_TODAY stays at 64. The PHP pair was measured
 # again as well and does not move: 75 files, the same hash, no plan of this
 # wave touches a PHP file.
+# Moved on 2026-09-28 by the review fix WR-01 of phase 25: exactly one of the
+# 64 files changed its bytes, worker/embedding.py, whose drift chain now
+# reports a switch of the weights with note_active directly behind the engine
+# swap instead of through the return value of the mark step, so an abort in
+# the band read behind the swap can no longer lose it. No file came and none
+# went, so PACKAGE_FILES_TODAY stays at 64. The PHP pair does not move.
 PACKAGE_FILES_TODAY = 64
-PACKAGE_TREE_HASH_TODAY = "48f2486cdb8d1033593a93f4c94e4cb232f36ebed0e5736b54a684870ba6b12a"
+PACKAGE_TREE_HASH_TODAY = "328206f811ad2fa78f9a45d63429375b28724b4b89ff3621e80f4c1f1ab2f6e1"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

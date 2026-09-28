@@ -903,11 +903,7 @@ class EmbeddingTrack:
             return
         await self._prepare_the_precision()
         target = await self._decide_the_precision()
-        band, switched = await asyncio.to_thread(self._vector_mark_step, target)
-        if switched is not None:
-            # The last link of the chain: the state learns which weights the
-            # holder runs once the stock, the mark and the holder agree.
-            note_active(switched)
+        band = await asyncio.to_thread(self._vector_mark_step, target)
         if not band:
             return
         # The third step of the drift chain, and the last by construction: the
@@ -926,22 +922,31 @@ class EmbeddingTrack:
         if (await hand_over(queue, band, kind=KIND_EMBED)).ok:
             await asyncio.to_thread(self._store_or_die().write_meta, EMBEDDING_BACKLOG_MARK, str(band[-1]))
 
-    def _vector_mark_step(self, target: Precision | None = None) -> tuple[list[int], Precision | None]:
-        """One step of the mark: the documents to hand back, and the weights switched to.
+    def _vector_mark_step(self, target: Precision | None = None) -> list[int]:
+        """One step of the mark: the documents to hand back.
 
         A failure is swallowed for the reason ``Poller._stamp_if_rebuilt``
         swallows one: this is bookkeeping about the stock and not the stock, and
         a locked database must not end a pass whose documents are durable. A
         chain that broke off half way is repeatable: the next step finds the
         holder still apart from the target and runs it again from the top.
+
+        A switch of the weights is deliberately NOT part of this answer (code
+        review WR-01): it used to travel in the return value, so an abort
+        between the swap and the band read swallowed it, and the state kept
+        saying int8 for a holder that ran fp32. From that moment nothing could
+        repair it inside this process, and a later Economy step tore down an
+        active fp32 against D-25-03 and D-25-10. The state now learns the
+        switch where it happens, directly behind the swap in
+        :meth:`_answer_the_vector_drift`.
         """
         try:
             return self._step_of_the_vector_mark(target)
         except Exception as error:
             LOGGER.warning("could not keep the embedding mark in step, %s", type(error).__name__)
-            return [], None
+            return []
 
-    def _step_of_the_vector_mark(self, target: Precision | None) -> tuple[list[int], Precision | None]:
+    def _step_of_the_vector_mark(self, target: Precision | None) -> list[int]:
         """The cases of the mark, in the order they exclude each other.
 
         *A change of the weights.* The state machine asks for weights other
@@ -982,7 +987,7 @@ class EmbeddingTrack:
         store = self._store_or_die()
         vectors = self._vectors
         if vectors is None:  # pragma: no cover - _embed_ready answered otherwise
-            return [], None
+            return []
 
         # The precision of the model this process holds, or the one the state
         # machine switches to in this very step; never a default (T-24-02).
@@ -992,16 +997,16 @@ class EmbeddingTrack:
         wanted = embedding_mark(EMBEDDING_MODEL, tokens=settings().embed_token_cap, weights=weights)
 
         if switch is not None:
-            return self._answer_the_vector_drift(store, vectors, wanted, switch=switch), switch
+            return self._answer_the_vector_drift(store, vectors, wanted, switch=switch)
 
         meta = store.read_meta()
         stored = meta.get(EMBEDDING_MARK, UNKNOWN_VERSION)
         if stored == UNKNOWN_VERSION:
             self._claim_a_whole_stock(store, vectors, wanted)
-            return [], None
+            return []
         if stored != wanted:
-            return self._answer_the_vector_drift(store, vectors, wanted), None
-        return self._next_backlog_band(store, meta.get(EMBEDDING_BACKLOG_MARK, "")), None
+            return self._answer_the_vector_drift(store, vectors, wanted)
+        return self._next_backlog_band(store, meta.get(EMBEDDING_BACKLOG_MARK, ""))
 
     def _claim_a_whole_stock(self, store: Store, vectors: VectorStore, wanted: str) -> None:
         """Write the mark once every indexed document carries a vector.
@@ -1066,6 +1071,14 @@ class EmbeddingTrack:
             # After the mark: an abort between the two leaves a mark that the
             # holder does not match yet, and the next step runs the chain again.
             self._swap_the_engine(switch, settings().models_dir)
+            # Directly behind the swap and never through the return value (code
+            # review WR-01): the band read below is a query on a database a
+            # second writer is using, and an abort there is swallowed by
+            # _vector_mark_step. A switch reported through the caller was lost
+            # with it, the state kept int8 for a holder on fp32, and a later
+            # Economy step tore down an active fp32 (D-25-03, D-25-10). At this
+            # line the stock, the mark and the holder already agree.
+            note_active(switch)
             LOGGER.warning("the precision of the embedding changed, the vector stock is being written again")
         else:
             LOGGER.warning(

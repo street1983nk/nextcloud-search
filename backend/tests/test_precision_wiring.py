@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import sqlite3
 from collections.abc import Awaitable, Callable, Iterator, Sequence
 from pathlib import Path
 from typing import IO, Any, cast
@@ -685,6 +686,54 @@ async def test_a_second_change_during_a_running_reindex_starts_the_sweep_again(
 
     assert events[: len(_chain(WEIGHTS_INT8))] == _chain(WEIGHTS_INT8)
     assert queue.requeues == [([4711, 4712], KIND_EMBED)], "the band starts at the first document again"
+    _assert_one_precision(store)
+
+
+async def test_an_aborted_drift_chain_behind_the_swap_does_not_lose_the_switch(
+    home: Path, store: Store, vectors: VectorStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Code review WR-01. The band read behind the swap throws (a locked state
+    # database, exactly the two-writer case this phase introduces). The swap
+    # already happened, so the state has to say fp32 although the chain broke
+    # off: before the fix the switch travelled in the swallowed return value,
+    # the state kept saying int8 for a holder that ran fp32, and a later
+    # Economy step tore down an active fp32 (against D-25-03 and D-25-10).
+    track = await _running_on_int8(store, vectors)
+    _place_the_file(home)
+    real_band = store.indexed_file_ids
+    broken = [True]
+
+    def indexed_file_ids(*, after: int, limit: int) -> list[int]:
+        if broken[0]:
+            raise sqlite3.OperationalError("database is locked")
+        return real_band(after=after, limit=limit)
+
+    monkeypatch.setattr(store, "indexed_file_ids", indexed_file_ids)
+    queue = _FakeQueue()
+
+    precision.note_chosen_precision("fp32")
+    await _step(track, queue)
+
+    assert engine_precision() == WEIGHTS_FP32
+    assert precision.snapshot().active is Precision.FP32, "the holder and the state agree despite the abort"
+    assert queue.requeues == [], "the broken band read handed nothing back"
+
+    # The teardown of the finding: Economy after the aborted chain must keep
+    # the active fp32 and its file (D-25-03, D-25-10).
+    profile.note_chosen("economy")
+    forgotten = _count_forget_all(monkeypatch, vectors)
+    await _step(track, queue)
+    assert forgotten == []
+    assert precision.snapshot().active is Precision.FP32
+    assert weights_module.fp32_weights_path(settings().models_dir).exists()
+
+    # And once the database answers again, the sweep carries on from the top
+    # without a second chain.
+    profile.note_chosen("standard")
+    broken[0] = False
+    await _step(track, queue)
+    assert forgotten == []
+    assert queue.requeues == [([4711, 4712], KIND_EMBED)]
     _assert_one_precision(store)
 
 
