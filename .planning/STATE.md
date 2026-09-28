@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
-status: executing
-stopped_at: Phase 25 context gathered
-last_updated: "2026-09-28T11:04:56.984Z"
-last_activity: 2026-09-28 -- Phase 25 execution started
+status: ready_to_plan
+stopped_at: Phase 25 complete (12/12) — ready to discuss Phase 26
+last_updated: 2026-09-28T16:31:07.789Z
+last_activity: 2026-09-28 -- Phase 25 complete (12/12), verification passed, review warnings fixed
 progress:
   total_phases: 6
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 18
-  completed_plans: 6
-  percent: 17
+  completed_plans: 18
+  percent: 33
 ---
 
 # Project State
@@ -21,25 +21,32 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 25 — einbettungsspur-und-modellwahl
+**Current focus:** Phase 26 — n ocr slots und speicherwächter
 
 ## Current Position
 
-Phase: 25 (einbettungsspur-und-modellwahl) — EXECUTING
-Plan: 1 of 12
-Status: Executing Phase 25
-Last activity: 2026-09-28 -- Phase 25 execution started
+Phase: 26
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-09-28
 
-Progress: [##........] 17% (1 von 6 Phasen)
+Progress: [###.......] 33% (2 von 6 Phasen)
 
 ## Naechster Schritt
 
-**/gsd:execute-phase 25**: 12 Plaene in 6 Wellen (Checker PASSED, 0 Blocker, 4 Warnungen,
-davon 2 behoben, 2 nur Dateizahl-Hinweise zu 25-02/25-04). Owner-Checkpoint in 25-01 Task 3:
-fp32-Asset per gh release create hochladen (Tag model-e5-small-fp32-614241f, vorher Release
-immutability einschalten). Pin-Regel: je Welle aendert genau ein Plan test_measurement_scripts.py.
-PHPUnit (25-03/25-04) und Ueberlappungstest T3 laufen erst in CI nach einem Push (Owner).
-Entscheide D-25-01..15 in 25-CONTEXT.md, Research 25-RESEARCH.md, Muster 25-PATTERNS.md.
+**/gsd:discuss-phase 26** (n-ocr-slots-und-speicherwaechter): Owner-Punkte vorbereitet:
+AWS-Messbox statt Hetzner (Guthaben 104,29 USD bis 04.09.2027, Konto infranodedev),
+Mess-Matrix 4/8/16/32 Kerne x86 + 16K-ARM (m7g, Baseline-vergleichbar), vCPU-Quota
+eu-central-1 = 32 (nacheinander fahren oder Erhoehung auf 48), Korpus-Snapshot
+snap-03f1d1d9ad9262704 bleibt als Messkorpus; NACH Messabschluss ALLES abbauen
+inkl. Snapshot (Owner 28.09., null laufende Kosten). os.nice A12 fest fuer Phase 26
+(Issue #19). PHPUnit (25-03/25-04) und Ueberlappungstest T3 laufen erst in CI nach
+einem Push (Owner).
+
+Phase-25-Abschluss (2026-09-28): 12/12 Plaene, Code-Review 0C/4W/4I, alle 4 Warnings
+gefixt (00ecee3, 25ec895, 8ca5983, be2779c); Verifikation passed 4/4; Suite 3711 gruen.
+fp32-Release model-e5-small-fp32-614241f live und immutable (Upload durch Orchestrator
+im Owner-Auftrag, Gegenprobe committet). Entscheide D-25-01..15 in 25-CONTEXT.md.
 
 Phase 24 secure (2026-09-28): SECURED 24/24 (22 mitigate, 2 accept AR-24-01/02), 29a6cd6.
 AR-24-02 (Schreibweg nur occ) verliert mit der Schreibroute in Phase 27 seine Begruendung.
