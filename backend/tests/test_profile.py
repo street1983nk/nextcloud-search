@@ -267,6 +267,41 @@ def test_effective_never_switches_up() -> None:
     assert effective(Profile.ECONOMY, Profile.PERFORMANCE) == Profile.ECONOMY
 
 
+def test_the_guard_cap_lowers_the_effective_level_only() -> None:
+    # D-26-01: the cap of the memory guard is a third term of the minimum.
+    assert effective(Profile.PERFORMANCE, Profile.PERFORMANCE, cap=Profile.STANDARD) == Profile.STANDARD
+    assert effective(Profile.PERFORMANCE, Profile.PERFORMANCE, cap=Profile.ECONOMY) == Profile.ECONOMY
+    assert effective(Profile.STANDARD, Profile.PERFORMANCE, cap=Profile.PERFORMANCE) == Profile.STANDARD
+    assert effective(Profile.PERFORMANCE, Profile.PERFORMANCE, cap=None) == Profile.PERFORMANCE
+    assert effective(None, Profile.PERFORMANCE, cap=Profile.STANDARD) == Profile.ECONOMY
+
+
+def test_a_noted_cap_moves_the_snapshot_and_keeps_the_chosen_profile() -> None:
+    profile.note_hardware(threshold_box(64e9, 16))
+    profile.note_chosen("performance")
+    profile.note_cap(Profile.STANDARD)
+    state = profile.snapshot()
+    assert state.chosen == Profile.PERFORMANCE
+    assert state.suggested == Profile.PERFORMANCE
+    assert state.cap == Profile.STANDARD
+    assert state.effective == Profile.STANDARD
+    assert state.resolution.profile == Profile.STANDARD
+
+    first = profile.snapshot()
+    profile.note_cap(Profile.STANDARD)
+    assert profile.snapshot() is first
+
+    profile.note_cap(None)
+    assert profile.snapshot().cap is None
+    assert profile.snapshot().effective == Profile.PERFORMANCE
+
+
+def test_reset_forgets_the_cap() -> None:
+    profile.note_cap(Profile.ECONOMY)
+    profile.reset()
+    assert profile.snapshot().cap is None
+
+
 # --- the admin override (PROF-03) -----------------------------------------------
 
 
