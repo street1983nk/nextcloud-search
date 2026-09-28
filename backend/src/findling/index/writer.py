@@ -52,6 +52,7 @@ from __future__ import annotations
 
 import logging
 import shutil
+import threading
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -138,6 +139,10 @@ class IndexBatchWriter:
     refuses anything below 15000000 byte per thread outright, and one thread is
     architecture rather than tuning (IDX-08), because on a 4 GB box the writer
     peak must never meet the OCR peak.
+
+    Thread safe: every method that writes or reads the counters holds one
+    reentrant lock, so that N OCR slots may call :meth:`add` from their own
+    threads and the deletion and insert of one file id stay a single unit.
     """
 
     def __init__(
@@ -171,6 +176,12 @@ class IndexBatchWriter:
         self._languages: tuple[str, ...] = tuple(resolved.languages if languages is None else languages)
         self._pending = 0
         self._pending_bytes = 0
+        # One lock around the writer and both counters. tantivy-py releases the
+        # GIL inside add_document, the IndexWriter is a mutably borrowed Rust
+        # object, and the counters above are plain integers: under N OCR slots
+        # several threads call add at once (phase 26, research pattern 3).
+        # Reentrant, so that a locked method may call another locked one.
+        self._lock = threading.RLock()
         heap = resolved.writer_heap_bytes if heap_bytes is None else heap_bytes
         try:
             self._writer: IndexWriter | None = index.writer(heap_size=heap, num_threads=1)
@@ -205,7 +216,8 @@ class IndexBatchWriter:
         counted additions would answer ``nothing_pending`` and leave the deletion
         sitting in the writer until some unrelated file happened to be indexed.
         """
-        return self._pending
+        with self._lock:
+            return self._pending
 
     @property
     def pending_bytes(self) -> int:
@@ -238,7 +250,8 @@ class IndexBatchWriter:
         of the file cap: for every document this app accepts the file cap is
         reached first, before this change as after it.
         """
-        return self._pending_bytes
+        with self._lock:
+            return self._pending_bytes
 
     def add(self, record: IndexRecord) -> None:
         """Write one file into the pending batch, replacing an earlier version.
@@ -263,63 +276,64 @@ class IndexBatchWriter:
         accepts. The path is not normalised either: its analyzer produces no
         token at all, so there is nothing there to compare.
         """
-        writer = self._require_open()
-        # Through the schema, so the term carries the type of the field. The
-        # deletion by term name takes the value as it comes and builds an I64
-        # term, which never matches the U64 key and deletes nothing at all; see
-        # the module docstring for the measurement. Deletes apply to documents
-        # with a lower opstamp only, so the insert right below survives this.
-        writer.delete_documents_by_query(Query.term_query(self._schema, FIELD_FILE_ID, record.file_id))
+        with self._lock:
+            writer = self._require_open()
+            # Through the schema, so the term carries the type of the field. The
+            # deletion by term name takes the value as it comes and builds an I64
+            # term, which never matches the U64 key and deletes nothing at all; see
+            # the module docstring for the measurement. Deletes apply to documents
+            # with a lower opstamp only, so the insert right below survives this.
+            writer.delete_documents_by_query(Query.term_query(self._schema, FIELD_FILE_ID, record.file_id))
 
-        name = normalize(record.name)
-        title = normalize(record.title)
-        body = normalize(record.body)
+            name = normalize(record.name)
+            title = normalize(record.title)
+            body = normalize(record.body)
 
-        document = Document()
-        document.add_unsigned(FIELD_FILE_ID, record.file_id)
-        document.add_unsigned(FIELD_STORAGE_ID, record.storage_id)
-        document.add_text(FIELD_NAME, name)
-        document.add_text(FIELD_TITLE, title)
-        document.add_text(FIELD_PATH, record.path)
-        document.add_text(FIELD_EXT, record.ext)
-        # Two properties live on this one line, and the next reader will take
-        # them for one. "Stored" and "analysed by the German chain" are both
-        # true of body_de and they do not follow each other:
-        #
-        #   stored is why it is written here whatever the language set says. It
-        #   is the only stored copy of the text in the whole system, the snippet
-        #   generator cuts out of it, and an instance running on Spanish alone
-        #   that stopped writing it would answer every search without a preview.
-        #
-        #   analysed by the German chain is what the language set decides. With
-        #   de out of the set the field still carries the text and still gets
-        #   tokenised, but no query is routed at it, and the loop below adds the
-        #   fields that are searched.
-        #
-        # So the write is unconditional and the loop skips de, because writing a
-        # field twice would double its postings for nothing.
-        document.add_text(FIELD_BODY_DE, body)
-        for language in self._languages:
-            field = BODY_FIELD[language]
-            if field == FIELD_BODY_DE:
-                continue
-            # From the mapping and never composed from the code: measured, a
-            # field name the schema does not know is dropped by add_document
-            # without a word, and a whole language would go missing in silence.
-            document.add_text(field, body)
-        document.add_integer(FIELD_MTIME, record.mtime)
-        writer.add_document(document)
+            document = Document()
+            document.add_unsigned(FIELD_FILE_ID, record.file_id)
+            document.add_unsigned(FIELD_STORAGE_ID, record.storage_id)
+            document.add_text(FIELD_NAME, name)
+            document.add_text(FIELD_TITLE, title)
+            document.add_text(FIELD_PATH, record.path)
+            document.add_text(FIELD_EXT, record.ext)
+            # Two properties live on this one line, and the next reader will take
+            # them for one. "Stored" and "analysed by the German chain" are both
+            # true of body_de and they do not follow each other:
+            #
+            #   stored is why it is written here whatever the language set says. It
+            #   is the only stored copy of the text in the whole system, the snippet
+            #   generator cuts out of it, and an instance running on Spanish alone
+            #   that stopped writing it would answer every search without a preview.
+            #
+            #   analysed by the German chain is what the language set decides. With
+            #   de out of the set the field still carries the text and still gets
+            #   tokenised, but no query is routed at it, and the loop below adds the
+            #   fields that are searched.
+            #
+            # So the write is unconditional and the loop skips de, because writing a
+            # field twice would double its postings for nothing.
+            document.add_text(FIELD_BODY_DE, body)
+            for language in self._languages:
+                field = BODY_FIELD[language]
+                if field == FIELD_BODY_DE:
+                    continue
+                # From the mapping and never composed from the code: measured, a
+                # field name the schema does not know is dropped by add_document
+                # without a word, and a whole language would go missing in silence.
+                document.add_text(field, body)
+            document.add_integer(FIELD_MTIME, record.mtime)
+            writer.add_document(document)
 
-        self._pending += 1
-        # str.isascii() is a stored flag on the object and not a scan, so an
-        # ascii document gets its exact length for free; everything else gets the
-        # four byte per code point ceiling of UTF-8. The reasoning behind the
-        # bound, its direction and why it does not move the flush point stands at
-        # the pending_bytes property. Counted on the normalised text, because
-        # that is the string the writer holds: composition can shorten a document
-        # by one code point per umlaut, and a bound must not describe a value
-        # that was never written.
-        self._pending_bytes += len(body) if body.isascii() else _MAX_UTF8_BYTES * len(body)
+            self._pending += 1
+            # str.isascii() is a stored flag on the object and not a scan, so an
+            # ascii document gets its exact length for free; everything else gets the
+            # four byte per code point ceiling of UTF-8. The reasoning behind the
+            # bound, its direction and why it does not move the flush point stands at
+            # the pending_bytes property. Counted on the normalised text, because
+            # that is the string the writer holds: composition can shorten a document
+            # by one code point per umlaut, and a bound must not describe a value
+            # that was never written.
+            self._pending_bytes += len(body) if body.isascii() else _MAX_UTF8_BYTES * len(body)
 
     def drop_document(self, file_id: int) -> None:
         """Take one file out of the index and out of the vector stock.
@@ -349,21 +363,22 @@ class IndexBatchWriter:
         the redelivery: a pass that dies between them is repeated, and both
         calls are idempotent by construction.
         """
-        self._require_open().delete_documents_by_query(Query.term_query(self._schema, FIELD_FILE_ID, file_id))
-        # No byte cap contribution: a deletion carries no text, and counting it
-        # towards _pending_bytes would flush batches early for no memory reason.
-        self._pending += 1
-        if self._vectors is None:
-            return
-        try:
-            self._vectors.drop_vectors(file_id)
-        except Exception as error:
-            # The type name and never the message: a sqlite error carries the
-            # statement, and the statement carries a file id. Swallowed on
-            # purpose, because a vector database that has gone away must not
-            # take the deletion of the document with it; what stays behind is a
-            # stock the rebuild path empties.
-            LOGGER.warning("could not drop the vectors of a removed document, %s", type(error).__name__)
+        with self._lock:
+            self._require_open().delete_documents_by_query(Query.term_query(self._schema, FIELD_FILE_ID, file_id))
+            # No byte cap contribution: a deletion carries no text, and counting it
+            # towards _pending_bytes would flush batches early for no memory reason.
+            self._pending += 1
+            if self._vectors is None:
+                return
+            try:
+                self._vectors.drop_vectors(file_id)
+            except Exception as error:
+                # The type name and never the message: a sqlite error carries the
+                # statement, and the statement carries a file id. Swallowed on
+                # purpose, because a vector database that has gone away must not
+                # take the deletion of the document with it; what stays behind is a
+                # stock the rebuild path empties.
+                LOGGER.warning("could not drop the vectors of a removed document, %s", type(error).__name__)
 
     def stored_body(self, file_id: int) -> str | None:
         """The stored text of one indexed document, or None when there is none.
@@ -403,23 +418,24 @@ class IndexBatchWriter:
         The search keeps answering throughout: reading needs no writer, and the
         segments committed so far are untouched.
         """
-        writer = self._require_open()
-        free = self.free_bytes()
-        if free < self._min_free_bytes:
-            LOGGER.warning(
-                "index commit paused, free space is below the configured floor of %d byte",
-                self._min_free_bytes,
-            )
-            return FlushResult(FLUSH_PAUSED_LOW_DISK, self._pending, free)
-        if self._pending == 0:
-            return FlushResult(FLUSH_NOTHING_PENDING, 0, free)
+        with self._lock:
+            writer = self._require_open()
+            free = self.free_bytes()
+            if free < self._min_free_bytes:
+                LOGGER.warning(
+                    "index commit paused, free space is below the configured floor of %d byte",
+                    self._min_free_bytes,
+                )
+                return FlushResult(FLUSH_PAUSED_LOW_DISK, self._pending, free)
+            if self._pending == 0:
+                return FlushResult(FLUSH_NOTHING_PENDING, 0, free)
 
-        writer.commit()
-        committed = self._pending
-        self._pending = 0
-        self._pending_bytes = 0
-        LOGGER.info("committed %d documents", committed)
-        return FlushResult(FLUSH_COMMITTED, committed, free)
+            writer.commit()
+            committed = self._pending
+            self._pending = 0
+            self._pending_bytes = 0
+            LOGGER.info("committed %d documents", committed)
+            return FlushResult(FLUSH_COMMITTED, committed, free)
 
     def collect_garbage(self) -> None:
         """Remove segment files no commit refers to any more.
@@ -427,7 +443,8 @@ class IndexBatchWriter:
         Housekeeping after a crash, never recovery: the index already opens on
         the last commit by itself, and nothing here brings a document back.
         """
-        self._require_open().garbage_collect_files()
+        with self._lock:
+            self._require_open().garbage_collect_files()
 
     def close(self) -> None:
         """Wait for the merging threads and release the lock. Idempotent.
@@ -436,11 +453,12 @@ class IndexBatchWriter:
         batch is the crash granularity, and a half batch that quietly committed
         itself on shutdown would make the acknowledgement to the queue lie.
         """
-        writer = self._writer
-        if writer is None:
-            return
-        self._writer = None
-        writer.wait_merging_threads()
+        with self._lock:
+            writer = self._writer
+            if writer is None:
+                return
+            self._writer = None
+            writer.wait_merging_threads()
 
     def _require_open(self) -> IndexWriter:
         if self._writer is None:
