@@ -442,9 +442,9 @@ def release_if_idle(ttl_seconds: int) -> bool:
     Without the second reading the weights would be let go right after a use
     and the next search of the same user would answer lexically and pay a
     background reload. The reading is lock free and cheap, and it shrinks the
-    window from the length of the idle check to microseconds; the full close,
-    an idle guard under the model's own lock inside ``release()``, is a v1.4
-    backlog note in the deferred items of phase 23.
+    window from the length of the idle check to microseconds; the rest of the
+    window was closed in phase 25 by the idle check inside release(): the span
+    is handed over, and the model reads its own clock again under its own lock.
 
     **The release itself is outside the lock.**
     :meth:`~findling.embed.model.EmbeddingModel.release` takes its own lock,
@@ -498,7 +498,7 @@ def release_if_idle(ttl_seconds: int) -> bool:
         # identity check, so a search refused after the release sets it anew.
         _WARM_WANTED = False
 
-    return held.release()
+    return held.release(idle_seconds=ttl_seconds)
 
 
 def released_count() -> int:

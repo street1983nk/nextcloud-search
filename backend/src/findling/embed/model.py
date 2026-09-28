@@ -631,13 +631,19 @@ class EmbeddingModel:
         self._engine = _Engine(encoder=encoder, session=session, accepted=accepted, outputs=outputs)
         return self._engine
 
-    def release(self) -> bool:
+    def release(self, *, idle_seconds: float | None = None) -> bool:
         """Let go of weights and tokenizer, and say whether there was anything to let go of.
 
         False means nothing was done: either this holder never loaded, or a
         batch is running right now. The caller of plan 14-07 runs on a tick and
         will meet the first of those far more often than the release itself, so
         neither of them may cost a heap walk.
+
+        ``idle_seconds`` is the third reason for False, and the one the caller
+        cannot check on its own. The caller reads the idle clock before it gets
+        here, and a batch that finished after that reading is invisible to it;
+        under this lock it is not. None keeps the old contract, in which only the
+        engine and the batch in flight count.
 
         **Three remembered facts stay, and none of them is what a release is
         about** (14-RESEARCH.md, pitfall 8). A model directory without the two
@@ -668,6 +674,14 @@ class EmbeddingModel:
                 # in. The next tick tries again, and one skipped release is
                 # cheaper than a release in the middle of a pass (T-14-15).
                 return False
+            if idle_seconds is not None:
+                stamp = self._last_use
+                if stamp is not None and time.monotonic() - stamp < idle_seconds:
+                    # Used since the caller's last reading. This is the check
+                    # that WR-02 of phase 23 left to a later phase: a batch that
+                    # started and finished between that reading and this lock
+                    # moved the clock, and weights used a moment ago stay.
+                    return False
             self._engine = None
             _UNLOAD_COUNT += 1
 
