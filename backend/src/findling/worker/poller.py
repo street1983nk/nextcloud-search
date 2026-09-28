@@ -68,7 +68,7 @@ from typing import IO, Any, Final, cast
 
 from tantivy import Index
 
-from findling import lane
+from findling import guard, lane, memory_guard
 from findling.config import (
     OCR_HARD_DEADLINE_MARGIN_SECONDS,
     PROFILE_PERFORMANCE_OCR_SLOTS_MAX,
@@ -198,6 +198,9 @@ FetchFile = Callable[..., Awaitable[int | None]]
 # and be wrong, since the keyword names are the part a replacement has to match.
 ExtractFile = Callable[..., ExtractionOutcome]
 GatewayFactory = Callable[[], GatewayClient]
+# The anon headroom of the container in bytes, None when nothing is readable.
+# Injectable like the one of the embed runner, so a test decides the room.
+Headroom = Callable[[], int | None]
 QueueFactory = Callable[[AsyncNextcloudApp], DocumentQueue]
 
 # The factory behind this alias is reached through the module (nc_client.…)
@@ -438,6 +441,7 @@ class Poller:
         extract: ExtractFile | None = None,
         pool: SlotPool | None = None,
         ocr_slots: int | None = None,
+        headroom: Headroom = memory_guard.headroom_bytes,
         vectors: VectorStore | None = None,
         chunker: Chunker | None = None,
         model: PassageEmbedder | None = None,
@@ -481,6 +485,9 @@ class Poller:
         # have to pin it; None reads it from the profile (Pitfall 10: no
         # environment variable, the INDEX_WORKERS taboo holds).
         self._ocr_slots = ocr_slots
+        # Where the throttle reads the free memory before a pass of two slots
+        # or more (D-26-02); a pass of one slot never asks.
+        self._headroom = headroom
         # The vector stock of the delete path: the writer takes the vectors of a
         # dropped document with it and a tombstone takes them off its file
         # (D-21), whether or not the embedding track ever runs.
@@ -802,6 +809,10 @@ class Poller:
         # nothing (D-24-02). What follows from it, a fetch or a swap of the
         # weights, is decided by the embedding track at its mark step.
         note_chosen_precision(choice.precision)
+        # The way back of the guard (D-26-04): the confirmation token of the
+        # same answer, or another chosen profile, lifts a cap. Nothing else
+        # ever raises the level again, least of all the guard itself.
+        guard.note_confirmation(choice.confirmed, choice.profile)
 
         # Where the embedding runs this pass (PAR-01, PAR-04). In Economy the
         # embed runner must have parked before this pass claims anything, so
@@ -907,10 +918,25 @@ class Poller:
         (D-26-07): an old companion that hands out two rows gets two slots at
         most, whatever the profile allows. With no OCR row at all the pass has
         one slot, and content extractions run one at a time as they always did.
+
+        **The throttle comes first** (D-26-02). A target of two slots or more
+        is cut to what the anon headroom holds: slot 1 always runs, every
+        further slot needs OCR_SLOT_COST_BYTES on top of the reserve, and an
+        unreadable headroom means one slot. It is read here, before the rows
+        are trimmed, so the rows kept follow the slots allowed. No child is
+        killed for the throttle; it acts on the next acquisition, which is the
+        next pass. A target of one never reads the headroom at all, so Economy
+        stays the pass it always was.
         """
         ocr_rows = [job for job in claimed if job.kind == KIND_OCR]
         target = self._ocr_slots if self._ocr_slots is not None else profile_snapshot().resolution.values.ocr_slots
-        keep = ocr_rows_to_keep(len(ocr_rows), target, int(self._ocr_hard_deadline) + OCR_HARD_DEADLINE_MARGIN_SECONDS)
+        if target >= 2:
+            headroom = await asyncio.to_thread(self._headroom)
+            allowed = guard.throttled_slots(target, headroom)
+        else:
+            allowed = target
+        guard.note_slots(target, allowed)
+        keep = ocr_rows_to_keep(len(ocr_rows), allowed, int(self._ocr_hard_deadline) + OCR_HARD_DEADLINE_MARGIN_SECONDS)
         excess = ocr_rows[keep:]
         jobs = tuple(claimed)
         if excess:
@@ -920,7 +946,7 @@ class Poller:
                 self._held.difference_update(gone)
                 jobs = tuple(job for job in claimed if job.queue_id not in gone)
                 ocr_rows = ocr_rows[:keep]
-        return jobs, max(1, min(target, len(ocr_rows)))
+        return jobs, max(1, min(allowed, len(ocr_rows)))
 
     async def _runner_parked(self) -> bool:
         """True once the embed runner is parked, or when there is none.
@@ -973,7 +999,18 @@ class Poller:
         await self._gate.set_limit(slots)
         try:
             if slots >= 2:
-                unchanged = await self._read_in_slots(jobs, done, failed, verdicts, handover, embedding, embedded)
+                # The mark of a pass under several slots (D-26-16), durable
+                # before the first task starts: the connection commits every
+                # statement on its own. A container that dies inside such a
+                # pass, a SIGKILL of the main process above all, leaves the
+                # mark behind, and the next start reads it as unclean_end
+                # (D-26-01). A write that fails is a store error of the pass,
+                # before anything was extracted.
+                await self._mark_the_multi_slot_pass()
+                try:
+                    unchanged = await self._read_in_slots(jobs, done, failed, verdicts, handover, embedding, embedded)
+                finally:
+                    await self._clear_the_multi_slot_pass()
             else:
                 for job in jobs:
                     unchanged += await self._handle(job, done, failed, verdicts, handover, embedding, embedded)
@@ -1043,7 +1080,7 @@ class Poller:
         skipped = sum(1 for verdict in verdicts if verdict.outcome.state is State.SKIPPED)
         LOGGER.info(
             "pass finished, claimed=%d indexed=%d skipped=%d failed=%d unchanged=%d "
-            "requeued=%d embedded=%d committed=%d slots=%d",
+            "requeued=%d embedded=%d committed=%d slots=%d throttled=%d",
             len(jobs),
             indexed,
             skipped,
@@ -1053,6 +1090,7 @@ class Poller:
             len(embedded),
             flush.documents,
             slots,
+            int(guard.snapshot().throttled),
         )
         return RoundResult(
             ROUND_WORKED,
@@ -1138,6 +1176,31 @@ class Poller:
         for job in deferred:
             unchanged += await self._handle(job, done, failed, verdicts, handover, embedding, embedded)
         return unchanged
+
+    async def _mark_the_multi_slot_pass(self) -> None:
+        """Write the effective level and the chosen profile into state.db (D-26-16).
+
+        Two statements on the poller's own connection, which runs in autocommit,
+        so each is durable when its call returns. The guard task reads both on
+        the next start: a pass mark still set there is a pass that never ended.
+        """
+        levels = profile_snapshot()
+        chosen = "" if levels.chosen is None else levels.chosen.value
+        store = self._store_or_die()
+        await asyncio.to_thread(store.write_meta, guard.META_MULTI_SLOT_PASS, levels.effective.value)
+        await asyncio.to_thread(store.write_meta, guard.META_MULTI_SLOT_CHOSEN, chosen)
+
+    async def _clear_the_multi_slot_pass(self) -> None:
+        """Empty the pass mark again, on every way out of the pass.
+
+        A write that fails here must not hide the exception the pass may be
+        leaving with, so it is said and swallowed. The mark that stays behind
+        costs one lowering at the next start, which is the safe direction.
+        """
+        try:
+            await asyncio.to_thread(self._store_or_die().write_meta, guard.META_MULTI_SLOT_PASS, "")
+        except sqlite3.Error as error:
+            LOGGER.warning("could not clear the mark of the multi slot pass, %s", type(error).__name__)
 
     async def _scan_in_a_slot(self, job: QueueJob) -> _ScanResult:
         """One OCR row as a task: wait for a slot, then read the scan on it."""

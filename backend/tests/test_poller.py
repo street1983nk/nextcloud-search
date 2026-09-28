@@ -46,8 +46,8 @@ from fastapi.testclient import TestClient
 from tantivy import Index
 
 from conftest import write_wordlist, write_wordlist_nl
-from findling import lane
-from findling.config import SCHEMA_VERSION, settings
+from findling import guard, lane
+from findling.config import OCR_SLOT_COST_BYTES, SCHEMA_VERSION, settings
 from findling.extract.dispatch import Route
 from findling.extract.dispatch import extract as dispatch_extract
 from findling.extract.errors import ChildKilled, ExtractionOutcome, Reason
@@ -3734,6 +3734,9 @@ class _SlotExtractor:
     threads: list[str] = field(default_factory=list)
     unlocked_at_call: list[int] = field(default_factory=list)
     held_at_call: list[set[int]] = field(default_factory=list)
+    # Called once per extraction, in the thread of the pool: what a test wants
+    # to see from inside a running pass, the mark in state.db above all.
+    probe: Callable[[], None] | None = None
     lock: threading.Lock = field(default_factory=threading.Lock)
 
     def __call__(
@@ -3755,6 +3758,8 @@ class _SlotExtractor:
                 self.unlocked_at_call.append(len(self.queue.unlocked))
             if self.poller is not None:
                 self.held_at_call.append(set(self.poller._held))
+        if self.probe is not None:
+            self.probe()
         try:
             if self.release is not None:
                 self.release.wait(timeout=10)
@@ -3767,6 +3772,11 @@ class _SlotExtractor:
             with self.lock:
                 self.running -= 1
                 self.finished += 1
+
+
+# Headroom far above what any slot count of these tests needs, so the throttle
+# of plan 26-09 lets every slot run unless a test says otherwise.
+_ROOM_FOR_EVERY_SLOT = 1 << 40
 
 
 def _ocr_row(offset: int) -> QueueJob:
@@ -3789,6 +3799,7 @@ def _slot_poller(
     extract: Any,
     ocr_slots: int | None,
     bodies: dict[int, bytes | BaseException | None] | None = None,
+    headroom: Callable[[], int | None] = lambda: _ROOM_FOR_EVERY_SLOT,
 ) -> Poller:
     return Poller(
         store=store,
@@ -3800,6 +3811,7 @@ def _slot_poller(
         fetch=_gateway(bodies or {}),
         extract=extract,
         ocr_slots=ocr_slots,
+        headroom=headroom,
     )
 
 
@@ -4034,7 +4046,7 @@ async def test_the_pass_line_carries_the_slots_and_nothing_about_a_file(
 
     finished = [line for line in _poller_lines(caplog) if line.startswith("pass finished")]
     assert len(finished) == 1
-    assert finished[0].endswith("slots=2")
+    assert finished[0].endswith("slots=2 throttled=0")
     for line in _poller_lines(caplog):
         assert "Scan" not in line
         assert ".pdf" not in line
@@ -4055,3 +4067,205 @@ async def test_a_poller_closes_the_pool_it_built_and_leaves_a_handed_in_one_open
         assert await handed_in.call(len, "abc") == 3
     finally:
         handed_in.close()
+
+
+# -- the throttle, the way back and the pass mark (plan 26-09, PAR-03) --------
+
+
+class _CountingHeadroom:
+    """A headroom that answers a fixed value and counts how often it was asked."""
+
+    def __init__(self, value: int | None) -> None:
+        self.value = value
+        self.calls = 0
+
+    def __call__(self) -> int | None:
+        self.calls += 1
+        return self.value
+
+
+async def test_a_short_headroom_throttles_four_slots_to_three_and_keeps_six_rows(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # D-26-02: slot 1 always, slot k needs (k - 1) x 235 MiB plus the reserve of
+    # 235 MiB. Three times 235 MiB therefore carries three slots, and the rows
+    # kept follow the slots allowed: two per slot, six of eight.
+    jobs = tuple(_ocr_row(offset) for offset in range(8))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    extract = _SlotExtractor(seconds=0.15)
+    poller = _slot_poller(
+        store=store,
+        writer=writer,
+        tmp_path=tmp_path,
+        queue=queue,
+        extract=extract,
+        ocr_slots=4,
+        headroom=lambda: 3 * OCR_SLOT_COST_BYTES,
+    )
+
+    with caplog.at_level("INFO", logger="findling.worker.poller"):
+        result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert extract.most == 3
+    assert extract.finished == 6
+    assert queue.unlocked == [[306, 307]]
+    state = guard.snapshot()
+    assert (state.slots_target, state.slots_in_force, state.throttled) == (4, 3, True)
+    finished = [line for line in _poller_lines(caplog) if line.startswith("pass finished")]
+    assert finished[0].endswith("slots=3 throttled=1")
+
+
+async def test_an_unreadable_headroom_means_one_slot_and_two_rows(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    jobs = tuple(_ocr_row(offset) for offset in range(8))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    extract = _SlotExtractor(seconds=0.02)
+    poller = _slot_poller(
+        store=store, writer=writer, tmp_path=tmp_path, queue=queue, extract=extract, ocr_slots=4, headroom=lambda: None
+    )
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert extract.most == 1
+    assert extract.finished == 2
+    assert queue.unlocked == [[302, 303, 304, 305, 306, 307]]
+    assert guard.snapshot().slots_in_force == 1
+
+
+async def test_economy_never_asks_for_the_headroom(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:
+    jobs = (_ocr_row(0), _ocr_row(1))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    extract = _SlotExtractor(seconds=0.01)
+    headroom = _CountingHeadroom(None)
+    poller = _slot_poller(
+        store=store, writer=writer, tmp_path=tmp_path, queue=queue, extract=extract, ocr_slots=None, headroom=headroom
+    )
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert headroom.calls == 0
+    assert extract.most == 1
+    assert queue.unlocked == []
+    assert queue.acknowledged == [([300, 301], {})]
+    state = guard.snapshot()
+    assert (state.slots_target, state.slots_in_force, state.throttled) == (1, 1, False)
+
+
+def _capped_at_standard() -> None:
+    """A cap as the guard sets it: chosen Standard, lowered once to Economy."""
+    assert guard.lower(guard.CAUSE_OOM_KILL, now=1.0, chosen=Profile.STANDARD, effective=Profile.STANDARD)
+
+
+async def test_the_confirmed_token_lifts_the_cap(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:
+    # D-26-04: the admin confirms the token the guard handed out.
+    _capped_at_standard()
+    queue = _FakeQueue()
+    queue.profile_answer = "standard"
+    queue.confirmed_answer = guard.snapshot().token
+    poller = _slot_poller(
+        store=store, writer=writer, tmp_path=tmp_path, queue=queue, extract=_SlotExtractor(), ocr_slots=1
+    )
+
+    await poller.run_once()
+
+    assert guard.snapshot().cap is None
+
+
+async def test_a_foreign_token_leaves_the_cap_in_force(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:
+    _capped_at_standard()
+    queue = _FakeQueue()
+    queue.profile_answer = "standard"
+    queue.confirmed_answer = "0" * 32
+    poller = _slot_poller(
+        store=store, writer=writer, tmp_path=tmp_path, queue=queue, extract=_SlotExtractor(), ocr_slots=1
+    )
+
+    await poller.run_once()
+
+    assert guard.snapshot().cap is Profile.ECONOMY
+
+
+async def test_another_chosen_profile_lifts_the_cap(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:
+    _capped_at_standard()
+    queue = _FakeQueue()
+    queue.profile_answer = "performance"
+    poller = _slot_poller(
+        store=store, writer=writer, tmp_path=tmp_path, queue=queue, extract=_SlotExtractor(), ocr_slots=1
+    )
+
+    await poller.run_once()
+
+    assert guard.snapshot().cap is None
+
+
+def _meta_over_a_second_connection(path: Path) -> dict[str, str]:
+    """The meta table as another process would see it, on a connection of its own."""
+    connection = sqlite3.connect(path)
+    try:
+        return {str(key): str(value) for key, value in connection.execute("SELECT key, value FROM meta")}
+    finally:
+        connection.close()
+
+
+async def test_a_multi_slot_pass_leaves_a_durable_mark_while_it_runs_and_clears_it_behind(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # D-26-16, T-26-32: the mark is visible to a second connection from inside
+    # the first extraction, so it was committed before any task started.
+    _standard_box()
+    queue = _FakeQueue(ClaimResult(jobs=(_ocr_row(0), _ocr_row(1))))
+    queue.profile_answer = "standard"
+    seen: list[dict[str, str]] = []
+    database = tmp_path / "state.db"
+    extract = _SlotExtractor(seconds=0.02, probe=lambda: seen.append(_meta_over_a_second_connection(database)))
+    poller = _slot_poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, extract=extract, ocr_slots=2)
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert extract.most == 2
+    effective = snapshot().effective.value
+    assert len(seen) == 2
+    for meta in seen:
+        assert meta[guard.META_MULTI_SLOT_PASS] == effective
+        assert meta[guard.META_MULTI_SLOT_CHOSEN] == "standard"
+    assert _meta_over_a_second_connection(database)[guard.META_MULTI_SLOT_PASS] == ""
+
+
+async def test_a_multi_slot_pass_that_aborts_clears_its_mark_as_well(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    jobs = (_ocr_row(0), _ocr_row(1))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    poller = _slot_poller(
+        store=store,
+        writer=writer,
+        tmp_path=tmp_path,
+        queue=queue,
+        extract=_SlotExtractor(seconds=0.01),
+        ocr_slots=2,
+        bodies={7001: OSError("gateway down")},
+    )
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_GATEWAY_UNAVAILABLE
+    assert store.read_meta()[guard.META_MULTI_SLOT_PASS] == ""
+
+
+async def test_a_serial_pass_never_writes_the_mark(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:
+    jobs = (_ocr_row(0), _ocr_row(1))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    poller = _slot_poller(
+        store=store, writer=writer, tmp_path=tmp_path, queue=queue, extract=_SlotExtractor(seconds=0.01), ocr_slots=1
+    )
+
+    await poller.run_once()
+
+    meta = store.read_meta()
+    assert guard.META_MULTI_SLOT_PASS not in meta
+    assert guard.META_MULTI_SLOT_CHOSEN not in meta
