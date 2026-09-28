@@ -31,6 +31,7 @@ import pytest
 from fastapi.testclient import TestClient
 from tantivy import Document, Index, Schema, SchemaBuilder
 
+from findling import lane as lane_module
 from findling import precision as precision_module
 from findling import profile as profile_module
 from findling.config import settings
@@ -351,13 +352,16 @@ def forget_the_profile_state() -> Iterator[None]:
 
     The precision state of ``findling/precision.py`` is reset after the
     profile, because the precision reports the weights in force to the
-    profile.
+    profile. The lane state of ``findling/lane.py`` goes with them: a case
+    that saw an echo or parked a runner must not decide the lane of the next.
     """
     profile_module.reset()
     precision_module.reset()
+    lane_module.reset()
     yield
     profile_module.reset()
     precision_module.reset()
+    lane_module.reset()
 
 
 @pytest.fixture(autouse=True)
