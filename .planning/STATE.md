@@ -21,11 +21,11 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 24 — Owner-Tor, Profil-Gerüst und Marken-Reparatur
+**Current focus:** Phase 24 , Owner-Tor, Profil-Gerüst und Marken-Reparatur
 
 ## Current Position
 
-Phase: 24 (Owner-Tor, Profil-Gerüst und Marken-Reparatur) — EXECUTING
+Phase: 24 (Owner-Tor, Profil-Gerüst und Marken-Reparatur) , EXECUTING
 Plan: 1 of 6
 Status: Executing Phase 24
 Last activity: 2026-09-27 -- Phase 24 execution started
@@ -79,6 +79,12 @@ Fuer v1.4 unmittelbar tragend:
 ### Offene Blocker
 
 - Keine harten Blocker. Kill-Kriterium siehe oben.
+
+### Pending Todos
+
+- 1 pending: Issue #18 Fix-Kandidaten einplanen (JPG-Verdikt, HEIF, Download-Groessenpruefung)
+  -- wartet auf budachst-Antwort (issuecomment-5865917799), Slot-Entscheid beim Owner
+  (.planning/todos/pending/2026-09-28-issue-18-jpg-verdikt-heif-download-fixes.md)
 
 ## Deferred Items
 
