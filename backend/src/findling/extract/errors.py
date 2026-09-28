@@ -25,10 +25,53 @@ test rather than as a wave of files marked corrupt.
 
 from __future__ import annotations
 
+import signal
+import sys
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Final
+
+# The exit code a process ended by SIGKILL leaves behind, for a child of the
+# multiprocessing module and for a subprocess alike. Windows has no SIGKILL in its
+# signal module, so the tests that run there compare against the POSIX value.
+if sys.platform == "win32":
+    KILLED_EXIT_CODE: Final = -9
+else:
+    KILLED_EXIT_CODE: Final = -signal.SIGKILL
+
+
+class ChildKilled(Exception):
+    """The extraction child, or only its engine, was killed from outside. Not a verdict.
+
+    The one death a file is innocent of. Under N slots the kernel's OOM killer
+    picks whichever child is largest at that moment, which is rarely the one
+    with the troublesome file, and a failed(corrupt) or failed(ocr_failed) for a
+    file that merely stood next to it would lose that file for good (D-26-16).
+    The poller runs the file again, alone; only a second death makes it the
+    cause.
+
+    Deliberately no reason code. Reasons travel in the receipt and are checked
+    against the list of the PHP half, so a "killed" reason would be refused
+    there, and it would describe the neighbourhood rather than the file.
+
+    ``engine`` is True when only the tesseract grandchild was killed and the
+    child itself survived, False when the child is gone.
+    """
+
+    def __init__(self, *, engine: bool) -> None:
+        super().__init__("engine killed" if engine else "child killed")
+        self.engine = engine
+
+
+class EngineKilled(Exception):
+    """The OCR engine was ended by SIGKILL, which says nothing about the page it read.
+
+    A sister of ``ocr.EngineFailed`` and on purpose not a subclass: every handler
+    that turns an engine failure into failed(ocr_failed) must let this one pass,
+    and a subclass would be caught by exactly those handlers. The child answers
+    it with a sentinel and the parent raises :class:`ChildKilled`.
+    """
 
 
 class State(StrEnum):

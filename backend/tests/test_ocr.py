@@ -47,7 +47,7 @@ from PIL import Image
 from findling.config import settings
 from findling.extract import dispatch, image, ocr, raster
 from findling.extract.dispatch import Route
-from findling.extract.errors import Reason, State
+from findling.extract.errors import KILLED_EXIT_CODE, EngineKilled, Reason, State
 
 CORPUS = Path(__file__).resolve().parents[2] / "testdata" / "corpus"
 
@@ -352,6 +352,51 @@ def test_a_non_zero_exit_code_ends_as_failed_ocr_failed(monkeypatch: pytest.Monk
     assert outcome.reason is Reason.OCR_FAILED
     # And it stops. Whatever killed page one kills page two as well.
     assert len(engine.calls) == 1
+
+
+def test_an_engine_killed_by_sigkill_is_engine_killed_and_not_engine_failed(monkeypatch: pytest.MonkeyPatch) -> None:
+    # D-26-16: under N slots the OOM killer takes whichever tesseract is largest,
+    # and that says nothing about the page it was reading.
+    _install_engine(monkeypatch, lambda number: _Finished(returncode=KILLED_EXIT_CODE))
+
+    with pytest.raises(EngineKilled):
+        ocr.read_page(b"png", "deu", 30)
+
+
+def test_a_non_zero_exit_code_is_still_engine_failed(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_engine(monkeypatch, lambda number: _Finished(returncode=1))
+
+    with pytest.raises(ocr.EngineFailed):
+        ocr.read_page(b"png", "deu", 30)
+
+
+def test_engine_killed_is_a_sister_and_not_a_kind_of_engine_failed() -> None:
+    # A subclass would be caught by every handler that maps EngineFailed to
+    # failed(ocr_failed), which is exactly the verdict this exception avoids.
+    assert not issubclass(EngineKilled, ocr.EngineFailed)
+
+
+def test_a_killed_engine_leaves_the_scan_branch_without_a_verdict(monkeypatch: pytest.MonkeyPatch) -> None:
+    # No handler of the scan branch may turn the kill into failed(ocr_failed):
+    # it has to reach the child loop, which answers with its sentinel.
+    _install_engine(monkeypatch, lambda number: _Finished(returncode=KILLED_EXIT_CODE))
+
+    with pytest.raises(EngineKilled):
+        ocr.extract_pdf_ocr(SCAN)
+
+
+def test_a_killed_engine_leaves_the_picture_branch_without_a_verdict(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_engine(monkeypatch, lambda number: _Finished(returncode=KILLED_EXIT_CODE))
+
+    with pytest.raises(EngineKilled):
+        image.extract_image(SLIP)
+
+
+def test_a_killed_engine_leaves_the_dispatcher_without_a_verdict(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_engine(monkeypatch, lambda number: _Finished(returncode=KILLED_EXIT_CODE))
+
+    with pytest.raises(EngineKilled):
+        dispatch.extract(SCAN, "application/pdf", Path(SCAN).stat().st_size, Route.OCR)
 
 
 def test_a_missing_engine_ends_as_failed_ocr_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:

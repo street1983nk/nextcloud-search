@@ -20,9 +20,20 @@ interpreter start plus imports on a Raspberry class ARM board is realistically
 half a second to two seconds. At 100.000 files that is 14 to 55 hours of pure
 process start time, which is the difference between an initial index that takes
 hours and one that takes days. So the child stays alive across jobs and is
-replaced on schedule instead. IDX-08 is untouched: exactly one extraction runs at
-a time, it simply lives in another address space, and that address space is used
-more than once.
+replaced on schedule instead. Each worker runs exactly one extraction at a time,
+in another address space that is used more than once. Since phase 26 that is a
+statement about one worker and no longer about the container: Economy and the
+tools keep the single worker of :func:`extract_guarded`, while the slot pool of
+plan 26-04 holds N of them, each with its own child.
+
+**A child killed from outside is not a verdict.** Under N slots the OOM killer
+takes whichever child is largest, and that child is rarely the one with the
+troublesome file. Every child therefore volunteers as the victim
+(``oom_score_adj`` 1000) and runs below the main process (nice 10), and a death
+by SIGKILL that this module did not send itself reaches the caller as
+:class:`~findling.extract.errors.ChildKilled` instead of failed(corrupt). The
+deadline kill and :meth:`ExtractionWorker.halt` are this module's own and keep
+their verdicts.
 
 **The four recycling rules** appear as comments at the code that implements them.
 The one that is easy to overlook is the count: with a shared address space,
@@ -40,15 +51,17 @@ import away from being false.
 
 from __future__ import annotations
 
+import contextlib
 import multiprocessing as mp
 import os
 import sys
 import time
 from multiprocessing.context import SpawnProcess
+from pathlib import Path
 from typing import Any, Final
 
 from findling import config
-from findling.extract.errors import ExtractionOutcome, Reason
+from findling.extract.errors import KILLED_EXIT_CODE, ChildKilled, EngineKilled, ExtractionOutcome, Reason
 
 if sys.platform == "win32":  # the two platforms name the same thing differently
     from multiprocessing.connection import PipeConnection as PipeEnd
@@ -65,6 +78,22 @@ _JOB_EXTRACT: Final = "extract"
 _JOB_MODULES: Final = "modules"
 _JOB_PROBE: Final = "probe"
 _JOB_STOP: Final = "stop"
+_JOB_PRIORITY: Final = "priority"
+
+# The answer of a child whose engine was killed from outside. A tuple and not an
+# ExtractionOutcome, because it is no verdict: the parent turns it into
+# ChildKilled(engine=True) and the file is run again (D-26-16).
+_ANSWER_KILLED: Final = "engine_killed"
+
+# The nice level every extraction child runs at, in every profile (D-26-11).
+#
+# Only the children and never the main process: the main process answers the
+# Unified Search and the status page, and those have to stay quick while N
+# children read scans next to them. Economy with its single slot is no
+# exception, because a lone OCR child on a small box is exactly the load that
+# makes the search wait (issue #19). tesseract is started by the child and
+# inherits the level, so the engine is covered without a word in ocr.py.
+SANDBOX_NICE: Final = 10
 
 # How long a kill is given to take effect before the parent stops waiting. The
 # kernel does not negotiate, so this is a formality; it exists so that a wedged
@@ -108,11 +137,11 @@ def _kill_child_tree(process: SpawnProcess) -> None:
 
 
 def _run_probe(kind: str, amount: float) -> ExtractionOutcome:
-    """Drive the guard into one of its four failure situations, on request.
+    """Drive the guard into one of its failure situations, on request.
 
     This exists because the guard cannot be tested with a document. A file that
     hangs for two minutes or allocates half a gigabyte is not in the reference
-    corpus, and writing one would test the file rather than the guard. The four
+    corpus, and writing one would test the file rather than the guard. The
     kinds are reached only through an explicit probe job, never from the
     extraction path, and they never touch user data.
     """
@@ -146,9 +175,64 @@ def _run_probe(kind: str, amount: float) -> ExtractionOutcome:
     elif kind == "die":
         # No unwinding, no answer on the pipe: the parent sees the boundary break.
         os._exit(70)
+    elif kind == "engine_killed":
+        # What read_page raises when the OOM killer took tesseract. Raised
+        # directly, because a real engine killed on cue would test the kernel.
+        raise EngineKilled
     else:
         raise ValueError(f"unknown probe kind {kind!r}")
     return ExtractionOutcome.indexed(kind)
+
+
+def _lower_own_standing(
+    oom_score_adj_path: Path = Path("/proc/self/oom_score_adj"),
+    autogroup_path: Path = Path("/proc/self/autogroup"),
+) -> None:
+    """Make this child the first thing the OOM killer takes, and the last thing the scheduler serves.
+
+    The kernel picks its OOM victim by badness, and badness follows resident
+    memory. The main process holds the model, the tokenizer and the index
+    readers and is roughly five times the size of a child, so without this line
+    a tight container loses the process that owns every slot rather than one
+    child that can simply be started again (D-26-16). Raising the own score
+    needs no privilege; only lowering it does.
+
+    The autogroup is the second half of the nice level. After ``setsid`` the
+    child forms an autogroup of its own, and where no CPU cgroup controller
+    sorts the tasks, nice only ranks threads inside that group; the group
+    itself gets the same nice here. Inside a container with a CPU controller
+    the kernel ignores the value, which costs nothing.
+
+    Both writes are best effort, each on its own: a read only /proc or a rate
+    limited autogroup changes nothing about how the child extracts, it only
+    means the kernel keeps its default opinion.
+    """
+    with contextlib.suppress(OSError):
+        oom_score_adj_path.write_text("1000", encoding="ascii")
+    with contextlib.suppress(OSError):
+        autogroup_path.write_text(str(SANDBOX_NICE), encoding="ascii")
+
+
+def _own_standing() -> tuple[int, int]:
+    """The nice level and the OOM score adjustment of this process, as the child sees them.
+
+    ``os.nice(0)`` reads the level without changing it. An unreadable score
+    comes back as -1, which no child of this module ever sets, so a test cannot
+    mistake a missing file for a hardened child. Windows has neither, and says
+    so with the same two neutral values.
+    """
+    if sys.platform == "win32":
+        return (0, -1)
+    try:
+        score = int(Path("/proc/self/oom_score_adj").read_text(encoding="ascii").strip())
+    except (OSError, ValueError):
+        score = -1
+    return (os.nice(0), score)
+
+
+def _is_engine_killed(answer: object) -> bool:
+    """Whether the child answered with the sentinel for a killed engine rather than a verdict."""
+    return isinstance(answer, tuple) and answer == (_ANSWER_KILLED,)
 
 
 def _shed_secrets() -> None:
@@ -229,6 +313,13 @@ def _child_main(pipe: PipeEnd, address_space_bytes: int) -> None:
         # grandchild that survives the kill would hold the worker slot forever
         # (security audit L3).
         os.setsid()
+        # Straight after the new session and before anything else is loaded:
+        # the level is inherited by every process this child starts, tesseract
+        # included, and the OOM score has to be in place before the parsers
+        # below can allocate the memory that would make the kernel look for a
+        # victim (D-26-11, D-26-16). The main process never lowers itself.
+        os.nice(SANDBOX_NICE)
+        _lower_own_standing()
     _shed_secrets()
     _limit_address_space(address_space_bytes)
     # Before the import below and not after it: the cap is in place now, and the
@@ -259,6 +350,8 @@ def _child_main(pipe: PipeEnd, address_space_bytes: int) -> None:
             return
         if kind == _JOB_MODULES:
             answer: object = tuple(sorted(name for name in sys.modules if name.startswith("findling")))
+        elif kind == _JOB_PRIORITY:
+            answer = _own_standing()
         else:
             try:
                 answer = _run_probe(job[1], job[2]) if kind == _JOB_PROBE else _extraction_of(job)
@@ -276,6 +369,11 @@ def _child_main(pipe: PipeEnd, address_space_bytes: int) -> None:
                 # dev terminal reaches the parent too, which ends the worker
                 # anyway, so nothing is swallowed that mattered.
                 answer = ExtractionOutcome.failed(Reason.OUT_OF_MEMORY)
+            except EngineKilled:
+                # Before the blanket handler below, which would read it as a
+                # corrupt file. The child itself is fine; only its engine was
+                # killed, and that is no verdict on the file (D-26-16).
+                answer = (_ANSWER_KILLED,)
             except Exception as error:
                 answer = ExtractionOutcome.from_exception(error)
         try:
@@ -297,6 +395,9 @@ class ExtractionWorker:
         self._process: SpawnProcess | None = None
         self._pipe: PipeEnd | None = None
         self._files_handled = 0
+        # Set by halt() before its kill, so that the death it causes is read as
+        # this module's own and not as the OOM killer's (D-26-16).
+        self._halted = False
 
     @property
     def pid(self) -> int | None:
@@ -330,6 +431,14 @@ class ExtractionWorker:
         track belongs to the kind of the job, not to the mimetype of the file.
         """
         outcome = self._ask((_JOB_EXTRACT, path, mime, size, route), timeout_seconds)
+        if _is_engine_killed(outcome):
+            # The child answered, so it handled the file and stays; only its
+            # engine is gone. Counted like any handled file, because the count
+            # bounds the leaks of this address space whatever the verdict was.
+            self._files_handled += 1
+            if self._files_handled >= self._max_files:
+                self._recycle()
+            raise ChildKilled(engine=True)
         if not isinstance(outcome, ExtractionOutcome):
             outcome = ExtractionOutcome.failed(Reason.CORRUPT)
         if self._process is not None:
@@ -346,6 +455,8 @@ class ExtractionWorker:
     def probe(self, kind: str, amount: float, *, timeout_seconds: float | None = None) -> ExtractionOutcome:
         """Run a diagnostic job. See :func:`_run_probe` for why this is here."""
         outcome = self._ask((_JOB_PROBE, kind, amount), timeout_seconds)
+        if _is_engine_killed(outcome):
+            raise ChildKilled(engine=True)
         if not isinstance(outcome, ExtractionOutcome):
             outcome = ExtractionOutcome.failed(Reason.CORRUPT)
         return self._recycle_if_needed(outcome)
@@ -354,6 +465,20 @@ class ExtractionWorker:
         """Every module of this package the child holds, for the import hygiene test."""
         answer = self._ask((_JOB_MODULES,))
         return answer if isinstance(answer, tuple) else ()
+
+    def priority(self) -> tuple[int, int]:
+        """The nice level and the OOM score adjustment the child runs with, for the hardening test.
+
+        Asked of the running child rather than read from the parent, because
+        the child lowers itself and the parent is exactly the process that must
+        not. Anything that is not a pair of integers is the neutral (0, -1).
+        """
+        answer = self._ask((_JOB_PRIORITY,))
+        if isinstance(answer, tuple) and len(answer) == 2:
+            nice, score = answer
+            if isinstance(nice, int) and isinstance(score, int):
+                return (nice, score)
+        return (0, -1)
 
     def stop(self) -> None:
         """End the child politely, then make sure it is gone either way."""
@@ -364,6 +489,31 @@ class ExtractionWorker:
             except (BrokenPipeError, OSError):
                 pass
         self._recycle()
+
+    def halt(self) -> None:
+        """Kill the running child from another thread, as this module's own kill.
+
+        For the one caller that has to end a slot while a job is still in it:
+        the pool when the container shuts down, and the pool's barrier when a
+        sibling was killed. The waiting :meth:`_ask` sees the pipe break and
+        answers failed(corrupt) as it always did for a death it caused itself,
+        never ChildKilled, because the flag is set before the kill is sent.
+        The next job starts a fresh child and clears the flag again.
+
+        The child is read once into a local. The waiting thread may recycle and
+        close it in the same moment, and a closed process object answers every
+        question with ValueError, which here only means there is nothing left
+        to kill.
+        """
+        self._halted = True
+        process = self._process
+        if process is None:
+            return
+        try:
+            if process.is_alive():
+                _kill_child_tree(process)
+        except ValueError:
+            pass
 
     def _ask(self, job: tuple[object, ...], timeout_seconds: float | None = None) -> object:
         """Send one job, wait for the answer with a deadline, judge what comes back.
@@ -384,7 +534,7 @@ class ExtractionWorker:
             pipe.send(job)
         except (BrokenPipeError, OSError):
             # Recycling rule 4: an unexpected child death leaves an unknown state.
-            self._recycle()
+            self._bury(process)
             return ExtractionOutcome.failed(Reason.CORRUPT)
 
         if not pipe.poll(deadline):
@@ -408,8 +558,26 @@ class ExtractionWorker:
         except (EOFError, OSError):
             # Recycling rule 4 again, from the other side: the child died between
             # accepting the job and answering it.
-            self._recycle()
+            self._bury(process)
             return ExtractionOutcome.failed(Reason.CORRUPT)
+
+    def _bury(self, process: SpawnProcess) -> None:
+        """Replace a child that died on its own, and raise ChildKilled if something else killed it.
+
+        The exit code is read after a join and before the recycle, because the
+        recycle closes the process object and takes the code with it. SIGKILL is
+        the one death this module can tell apart from a file that beat the
+        parser: nothing in the child sends it to itself, the deadline path has
+        returned before this point, and a halt sets its flag first. What is
+        left is the kernel, and the kernel picks by size, not by guilt
+        (D-26-16). Every other end, the exit code 70 of the die probe or a
+        segfault, stays failed(corrupt) as before.
+        """
+        process.join(_JOIN_GRACE_SECONDS)
+        killed = process.exitcode == KILLED_EXIT_CODE and not self._halted
+        self._recycle()
+        if killed:
+            raise ChildKilled(engine=False)
 
     def _recycle_if_needed(self, outcome: ExtractionOutcome) -> ExtractionOutcome:
         if outcome.reason is Reason.OUT_OF_MEMORY:
@@ -441,6 +609,7 @@ class ExtractionWorker:
         self._process = process
         self._pipe = parent_end
         self._files_handled = 0
+        self._halted = False
 
     def _recycle(self) -> None:
         """Leave no child and no pipe behind, whatever state either of them is in."""
@@ -469,12 +638,16 @@ def extract_guarded(
 ) -> ExtractionOutcome:
     """Extract one file without ever letting it take the container with it.
 
-    The facade the indexing worker calls. One worker per process, because IDX-08
-    allows exactly one extraction at a time and a second worker would quietly
-    double both the memory peak and the number of children to supervise. That
-    stays true with the OCR track: a second facade for OCR would double the
-    memory peak of the container for a branch that runs one file at a time
-    anyway (T-03-904).
+    The facade for Economy and for the tools: one worker, one extraction at a
+    time, as IDX-08 had it for the whole container before phase 26. The OCR
+    slots of the other profiles are the pool of plan 26-04, which holds N
+    workers and talks to them directly, because it has to see ChildKilled.
+
+    This facade does not. It keeps its promise to answer with a verdict only,
+    so a :class:`~findling.extract.errors.ChildKilled` becomes the verdict the
+    same death produced before phase 26: failed(ocr_failed) when only the
+    engine was killed, failed(corrupt) when the child went. With a single child
+    there is no neighbour a solo run could leave out, so nothing is lost by it.
 
     ``route`` and ``timeout_seconds`` are what an OCR job brings along and a text
     job leaves alone. Both are passed through rather than resolved here, because
@@ -483,4 +656,7 @@ def extract_guarded(
     global _WORKER
     if _WORKER is None:
         _WORKER = ExtractionWorker()
-    return _WORKER.run(path, mime, size, route=route, timeout_seconds=timeout_seconds)
+    try:
+        return _WORKER.run(path, mime, size, route=route, timeout_seconds=timeout_seconds)
+    except ChildKilled as killed:
+        return ExtractionOutcome.failed(Reason.OCR_FAILED if killed.engine else Reason.CORRUPT)

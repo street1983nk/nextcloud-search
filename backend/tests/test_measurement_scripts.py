@@ -1371,8 +1371,16 @@ PHP_TREE_HASH_TODAY = "726756a8e646e4eb6d4d9089e3ac0476d7a5ff25b6e3f335b3f4faaea
 # since the two entries above: the fix run was interrupted between WR-02 and
 # its measurement, so this one hash carries the bytes of all four review fixes
 # WR-01 to WR-04 at once.
+# Moved on 2026-09-28 by plan 26-01 (child hardening, PAR-02/PAR-03): four of
+# the 64 files changed their bytes. extract/sandbox.py lowers every child to
+# nice 10 and oom_score_adj 1000 straight after setsid, answers the priority
+# job, reads a SIGKILL from outside as ChildKilled instead of failed(corrupt)
+# and got halt(); extract/errors.py got ChildKilled, EngineKilled and
+# KILLED_EXIT_CODE; extract/ocr.py raises EngineKilled for a tesseract ended by
+# SIGKILL; extract/image.py only changed a comment. No file came and none went,
+# so PACKAGE_FILES_TODAY stays at 64. The PHP pair does not move.
 PACKAGE_FILES_TODAY = 64
-PACKAGE_TREE_HASH_TODAY = "9fd937888e89bf02adeb51abdc5c38a333fc69461368493cfe6a7d2a0c89e62e"
+PACKAGE_TREE_HASH_TODAY = "bb514188c4ac9346870d826eb181132bb24f680ad7e76318b17f7126a3f26959"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
