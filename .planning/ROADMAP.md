@@ -120,7 +120,39 @@ Plans:
   3. Ein Neustart oder Kill mitten in beiden Spuren verliert keine Warteschlangenzeile und bettet nichts doppelt ein; gleichzeitige Zugriffe auf state.db führen nicht zu Fehlerverdikten.
   4. Der Admin wählt im Profil int8 (Default) oder fp32; nach dem Wechsel läuft der Vektor-Reindex, die Suche antwortet lexikalisch weiter und die Adminseite zeigt den Zustand; fp32 kommt über den am Tor entschiedenen Lieferweg, und eine Box ohne fp32-Wunsch zahlt dafür keinen Laufzeitspeicher.
 
-**Plans**: TBD
+**Plans**: 12 plans in 6 Wellen
+
+Plans:
+**Wave 1**
+
+- [ ] 25-01-PLAN.md , fp32-Laufzeitspeicher messen, Owner lädt das fp32-Asset als unveränderliches Release hoch (MOD-02), Welle 1, Checkpoint
+- [ ] 25-02-PLAN.md , Idle-Guard in release(), Gewichtspfad und ladefreier Engine-Tausch, IN-02 Marke ohne Default (MOD-02, PAR-01), Welle 1
+- [ ] 25-03-PLAN.md , PHP: Spur-Filter lane mit Echo, Präzisionsschlüssel model_precision in der Profilantwort (PAR-01, MOD-02), Welle 1
+- [ ] 25-04-PLAN.md , PHP: Statuszeile Präzision plus Neueinbettung, acht Kataloge (MOD-02, D-25-13), Welle 1
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 25-05-PLAN.md , Container-Draht: claim(lane), Echo, companion_choice, Präzisionsnamen, Gleichstand PHP/Python, Fakes (PAR-01, MOD-02), Welle 2
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 25-06-PLAN.md , fp32-Beschaffung (fetch_release_asset, embed/weights.py) und memory_guard (MOD-02, PAR-04), Welle 3
+- [ ] 25-07-PLAN.md , Refactor: EmbeddingTrack mit eigenen Verbindungen und Lese-Handle, verhaltensgleich (PAR-01), Welle 3
+- [ ] 25-08-PLAN.md , Präzisions-Automat, fp32-Term in der Slotformel, Konstanten der RAM-Bedingung (MOD-02, PAR-04), Welle 3
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 25-09-PLAN.md , EmbedRunner, Spurentscheid, IDX-08 in Sparsam, RAM-Bedingung, Abbruchsemantik, Tests T1 bis T8 (PAR-01, PAR-04), Welle 4
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 25-10-PLAN.md , Lifespan: zweiter Task, Abbau mit Zeilenrückgabe, Rebuild, Freigabe über den Track (PAR-01, PAR-04), Welle 5
+- [ ] 25-11-PLAN.md , Präzision verdrahtet: Startzustand, Beschaffung, Engine-Tausch, Rückweg mit Löschen (MOD-02), Welle 5
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 25-12-PLAN.md , Status model/lane, IN-03, Doku inklusive Offline-Weg, letzte Pin-Messung (MOD-02, PAR-01, PAR-04), Welle 6
+
 **Research-Flag**: ja (Abbruchsemantik zweier Nebenläufer, state.db-Kollisionen, Art-Filter am PHP-Anspruch)
 **Mitnahme-Kandidat (kein REQ)**: idle-Guard für EmbeddingModel.release() aus dem Phase-23-Backlog; mit einem zweiten Nebenläufer auf der geteilten Engine wird er hier akut, der Plan-Schnitt prüft die Aufnahme.
 

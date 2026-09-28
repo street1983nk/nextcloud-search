@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
-status: planning
+status: executing
 stopped_at: Phase 25 context gathered
-last_updated: "2026-09-28T09:34:00.096Z"
-last_activity: 2026-09-28 -- Phase 25 context gathered
+last_updated: "2026-09-28T10:38:07.470Z"
+last_activity: 2026-09-28 -- Phase 25 planning complete
 progress:
   total_phases: 6
   completed_phases: 1
-  total_plans: 6
+  total_plans: 18
   completed_plans: 6
   percent: 17
 ---
@@ -27,20 +27,19 @@ See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 
 Phase: 25 (Einbettungsspur und Modellwahl), NOT STARTED
 Plan: Not started
-Status: Ready to plan (Context steht, 25-CONTEXT.md D-25-01..09)
-Last activity: 2026-09-28 -- Phase 24 secured (24/24), Phase 25 context gathered
+Status: Ready to execute
+Last activity: 2026-09-28 -- Phase 25 planning complete
 
 Progress: [##........] 17% (1 von 6 Phasen)
 
 ## Naechster Schritt
 
-**/gsd:plan-phase 25** (mit Research: Research-Flag der Roadmap, Abbruchsemantik zweier
-Nebenlaeufer, state.db-Kollisionen, Art-Filter am PHP-Anspruch). Owner-Entscheide D-25-01..09
-in 25-CONTEXT.md: fp32 nur Standard/Leistung, eigener occ-Schluessel, Praezision wechselt nie
-automatisch, Quelle eigenes GitHub-Release mit sha256, Offline-Ablage, Semantik waechst im
-Reindex mit, Rueckweg loescht die fp32-Datei. Mitnahme-Kandidat: idle-Guard
-EmbeddingModel.release(). Merker IN-02: embedding_mark-Aufrufe (poller.py:2111,
-api/resources.py:265) muessen die tatsaechlich geladene Praezision uebergeben.
+**/gsd:execute-phase 25**: 12 Plaene in 6 Wellen (Checker PASSED, 0 Blocker, 4 Warnungen,
+davon 2 behoben, 2 nur Dateizahl-Hinweise zu 25-02/25-04). Owner-Checkpoint in 25-01 Task 3:
+fp32-Asset per gh release create hochladen (Tag model-e5-small-fp32-614241f, vorher Release
+immutability einschalten). Pin-Regel: je Welle aendert genau ein Plan test_measurement_scripts.py.
+PHPUnit (25-03/25-04) und Ueberlappungstest T3 laufen erst in CI nach einem Push (Owner).
+Entscheide D-25-01..15 in 25-CONTEXT.md, Research 25-RESEARCH.md, Muster 25-PATTERNS.md.
 
 Phase 24 secure (2026-09-28): SECURED 24/24 (22 mitigate, 2 accept AR-24-01/02), 29a6cd6.
 AR-24-02 (Schreibweg nur occ) verliert mit der Schreibroute in Phase 27 seine Begruendung.
@@ -133,5 +132,5 @@ Resume file: .planning/phases/25-einbettungsspur-und-modellwahl/25-CONTEXT.md
 
 ## Operator Next Steps
 
-- /gsd:plan-phase 25
+- /gsd:execute-phase 25 (25-01 wartet auf den Owner-Upload)
 - Push-Entscheid (alles lokal); nach dem Push php.yml pruefen (24-HUMAN-UAT Test 1)

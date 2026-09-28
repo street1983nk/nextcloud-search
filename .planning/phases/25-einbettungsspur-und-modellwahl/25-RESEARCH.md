@@ -564,22 +564,22 @@ Wenn der Planer weniger Pläne will: 25-01 und 25-02 zusammen, 25-07 und 25-08 z
 | A6 | GitHub leitet Release-Downloads dauerhaft auf `release-assets.githubusercontent.com` um (heute verifiziert, Host kann wechseln) | Pattern 8c | Host-Allowlist blockiert; Verdikt D-25-04, Offline-Weg bleibt |
 | A7 | Ein geöffnetes oder gemapptes ONNX-Modell darf auf Linux gelöscht werden, ohne die laufende Session zu stören | Pattern 8e | Löschen erst nach Freigabe der alten Engine, was der Plan ohnehin vorsieht |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Adminseite: Text schon in Phase 25?**
+1. **Adminseite: Text schon in Phase 25?** RESOLVED: D-25-13 (Owner 28.09.2026).
    - What we know: SC4 und D-25-08 verlangen, dass die Adminseite Präzision und Fortschritt zeigt; die Discretion sagt "Seitentexte in den Sprachkatalogen erst mit Phase 27". Die Seite zeigt heute bereits den Anteil "auffindbar nach Bedeutung" (`AdminViewService.php:1379-1400`), der während des Reindex fällt und steigt.
    - What's unclear: ob eine sichtbare Zeile "Modell fp32, Neueinbettung 42 %" mit neuen Katalogtexten (16 Dateien, Katalog-Gates) in Phase 25 gehört.
    - Recommendation: Phase 25 liefert Statusfelder und die PHP-Durchreichung; die bestehende Anteilszahl trägt den Fortschritt sichtbar. Die Zeile mit dem Modellnamen kommt mit Phase 27. Vor dem Plan dem Owner kurz bestätigen lassen, weil SC4 wörtlich "Adminseite zeigt" sagt.
-2. **RAM-Bedingung nicht erfüllt: seriell weiter oder Zeilen warten?**
+2. **RAM-Bedingung nicht erfüllt: seriell weiter oder Zeilen warten?** RESOLVED: D-25-11 (Owner 28.09.2026).
    - Recommendation: seriell weiter (Runner parkt, Hauptschleife bettet inline), weil sonst eine knappe Box nie semantisch gefüllt wird. Entspricht "die Einbettungsspur wartet"; Owner-Bestätigung sinnvoll.
-3. **`embed_slots = 2` in Leistung schon jetzt ehren?**
+3. **`embed_slots = 2` in Leistung schon jetzt ehren?** RESOLVED: D-25-12 (Owner 28.09.2026).
    - Recommendation: ja, mit Semaphore und zwei Track-internen Sperren (Chunker, Vektor-Schreiben); sonst meldet der Status einen Wert, den der Betrieb nicht hält. Alternative: Runner fest 1 und `PROFILE_PERFORMANCE_EMBED_SLOTS` auf 1 (kein Owner-Wert laut D-24-03).
-4. **Was ist die "erneute Admin-Aktion" für einen neuen fp32-Versuch?**
+4. **Was ist die "erneute Admin-Aktion" für einen neuen fp32-Versuch?** RESOLVED: D-25-14 (Owner 28.09.2026).
    - What we know: Mit occ gibt es nur einen Schlüssel; derselbe Wert zweimal ist nicht unterscheidbar.
    - Recommendation: Übergang int8 → fp32, in diesem Prozess beobachtet (einmal `int8`, dann wieder `fp32` setzen). Erstes Lesen nach dem Start lädt nie. Im Verdikt und in der Doku genau so benennen; ab Phase 27 kann ein Knopf ein Anforderungszeichen schreiben.
-5. **Proxy-Netze:** `HTTPS_PROXY` ist über AppAPI nicht setzbar, weil nicht in `info.xml` deklariert. Deklarieren (neue Store-sichtbare Variable, Gleichstandstest `test_info_xml_defaults.py`) oder Offline-Weg als Antwort?
+5. **Proxy-Netze:** RESOLVED: D-25-15 (Owner 28.09.2026). `HTTPS_PROXY` ist über AppAPI nicht setzbar, weil nicht in `info.xml` deklariert. Deklarieren (neue Store-sichtbare Variable, Gleichstandstest `test_info_xml_defaults.py`) oder Offline-Weg als Antwort?
    - Recommendation: Offline-Weg (D-25-06) ist die Antwort für abgeschottete Netze; keine neue Variable in Phase 25, Frage für Phase 29 (Härtung) notieren.
-6. **fp32 aktiv und Admin wählt Profil economy:** D-25-01 ("in Sparsam nie wählbar") gegen D-25-03 ("wechselt nie automatisch").
+6. **fp32 aktiv und Admin wählt Profil economy:** RESOLVED: D-25-10 (Owner 28.09.2026). D-25-01 ("in Sparsam nie wählbar") gegen D-25-03 ("wechselt nie automatisch").
    - Recommendation: ein neuer fp32-Wunsch unter economy wird nicht beschafft; ein bereits aktives fp32 bleibt, bis der Präzisionsschlüssel auf int8 steht (kein impliziter Reindex über den Profilschlüssel). Owner-Bestätigung, weil es zwei Owner-Entscheide gegeneinander auslegt.
 
 ## Environment Availability
