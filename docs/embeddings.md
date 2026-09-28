@@ -526,6 +526,14 @@ sagen nichts darüber, ob die Datei indexiert wurde. Wäre es umgekehrt, hätte 
 fehlendes Modell die Datei aus dem Index gemeldet, und der Volltext wäre am
 Ausfall der Semantik gestorben. Das ist genau, was Erfolgskriterium 3 verbietet.
 
+**Nachtrag 1.4: nebeneinander unter Bedingungen (PAR-04).** Die Überschrift gilt
+weiter für Sparsam und für jede Box, auf der die Speicherbedingung nicht hält:
+dort laufen OCR und Einbettung wie bisher zeitlich getrennt in derselben
+Schleife (IDX-08). In Standard und Leistung darf ein eigener Einbettungsläufer
+neben der OCR laufen, genau einer, und nur solange der Speicher für ihn reicht.
+Die Bedingungen und die Schwelle stehen in
+[`docs/profiles.md`](profiles.md), Abschnitt "Einbettungsspur".
+
 **Was die zweite Spur an Zeit kostet, gemessen.** Der gedeckelte Bestand des
 Messkorpus sind 50.068 Dokumente mal 1.024 Token, also 51.269.632 Token. Gegen
 die auf nativer aarch64-Hardware gemessenen Durchsätze:
@@ -708,7 +716,8 @@ Bestandsinstallationen betten beim Aufstieg deshalb nichts neu ein. fp32 hängt
 andere und löst die Kette oben aus, in beide Richtungen. Die gespeicherten Vektoren
 sind in beiden Fällen int8, nur die Marke kann die beiden Bestände
 auseinanderhalten. Der fp32-Nachladeweg selbst (Nachladen bei Opt-in mit
-Digest-Prüfung, D-24-05) kommt mit Phase 25; der Start lädt weiterhin nichts.
+Digest-Prüfung, D-24-05) steht seit Phase 25 in Abschnitt 11; der Start lädt
+weiterhin nichts.
 
 ## 9. Die Skalen: der Deckel des Vektorscans ist keine Störung
 
@@ -874,3 +883,103 @@ bleibt:
    verteilt einzeln gesucht wird, ist fast jede Suche die erste nach einer
    Pause. Sie bekommt dann Volltexttreffer, und das wird als "die Suche ist
    schlechter geworden" erlebt und nicht als Sparbetrieb.
+
+## 11. Präzision int8 und fp32
+
+Ab 1.4 kann ein Admin statt der ins Abbild gebackenen int8-Gewichte das
+fp32-Original von multilingual-e5-small einsetzen. Ohne diesen Wunsch ändert
+sich nichts: kein Download, kein zusätzlicher Speicher, keine Neueinbettung.
+
+**Wählen.** Die Präzision ist ein eigener Schlüssel, getrennt vom Profil
+(D-25-02). Bis zur Einstellungsseite (Phase 27) per occ:
+
+```
+occ config:app:set findling model_precision --value=fp32
+occ config:app:set findling model_precision --value=int8
+```
+
+- Default ist `int8`. Unbekannte Werte ändern nichts.
+- fp32 ist nur in den Profilen Standard und Leistung wählbar (D-25-01). Unter
+  Sparsam wird der Wunsch verbraucht und mit `fp32_not_in_economy` gemeldet; ein
+  späterer Profilwechsel lädt dann nichts nach.
+- Ein Profilwechsel ändert die Präzision nie (D-25-10). Ein aktives fp32 bleibt
+  auch unter Sparsam oder auf einer geschrumpften Box aktiv und wird gemeldet.
+- Die Wirkung tritt mit der nächsten Runde des Containers ein, wie beim Profil.
+
+**Quelle.** Der Container lädt genau eine Datei, aus dem Release des Projekts
+auf GitHub, ohne Rückfall auf Hugging Face (D-25-05):
+
+- URL: `https://github.com/street1983nk/nextcloud-search/releases/download/model-e5-small-fp32-614241f/multilingual-e5-small-fp32-614241f.onnx`
+- sha256: `ca456c06b3a9505ddfd9131408916dd79290368331e7d76bb621f1cba6bc8665`
+- Größe: 470.268.510 Byte
+
+Eine Firewall muss dafür zwei Hosts freigeben: `github.com` und
+`release-assets.githubusercontent.com`, denn GitHub leitet den Download auf den
+zweiten Host um. Die Datei wird als `model.onnx.part` geschrieben, beim Lesen
+gezählt und gehasht und erst nach passender Größe und passendem Digest
+umbenannt. Eine falsche oder abgebrochene Datei wird nie aktiv.
+
+**Ablagepfad.** `${APP_PERSISTENT_STORAGE}/models/multilingual-e5-small-fp32/model.onnx`,
+im ExApp-Container also
+`/nc_app_findling_backend_data/models/multilingual-e5-small-fp32/model.onnx`.
+
+**Offline-Weg für abgeschottete Netze (D-25-06).** Die Datei kann von Hand in den
+Container gelegt werden. Der Container prüft sie gegen denselben sha256, bevor
+sie zählt, und fragt dafür kein Netz an:
+
+```bash
+# auf einem Rechner mit Netz: laden und prüfen
+sha256sum multilingual-e5-small-fp32-614241f.onnx
+# ca456c06b3a9505ddfd9131408916dd79290368331e7d76bb621f1cba6bc8665
+
+# auf dem Docker-Host: ablegen und dem Container-Nutzer geben
+docker exec nc_app_findling_backend mkdir -p /nc_app_findling_backend_data/models/multilingual-e5-small-fp32
+docker cp multilingual-e5-small-fp32-614241f.onnx \
+    nc_app_findling_backend:/nc_app_findling_backend_data/models/multilingual-e5-small-fp32/model.onnx
+docker exec -u 0 nc_app_findling_backend chown -R 1000:1000 /nc_app_findling_backend_data/models/multilingual-e5-small-fp32
+
+# danach fp32 wählen
+occ config:app:set findling model_precision --value=fp32
+```
+
+Der Containername ist der, den AppAPI aus der App-Id baut; `docker ps` zeigt ihn.
+Liegt die geprüfte Datei schon da, wenn fp32 gewählt wird, gibt es keinen
+Downloadversuch. Eine Datei mit falschem Digest zählt nicht: der Container
+verhält sich, als läge keine da, und meldet nach dem gescheiterten Versuch
+dasselbe Verdikt `fp32_unavailable`.
+
+**Proxy-Netze (D-25-15).** Ein `HTTPS_PROXY` lässt sich über AppAPI nicht für den
+Container setzen. Wer nur über einen Proxy ins Netz kommt, nimmt den Offline-Weg
+oben.
+
+**Neuer Versuch nach "fp32 nicht verfügbar" (D-25-04, D-25-14).** Der Container
+versucht je Wechsel des Schlüssels genau einmal. Nach einem Fehlschlag versucht
+er es nicht von selbst wieder, auch nicht nach einem Neustart. Ein neuer
+Versuch heißt: erst `int8` setzen, eine Runde abwarten, dann wieder `fp32`.
+
+**Rückweg (D-25-09).** `int8` setzen genügt. Nach dem Wechsel löscht der
+Container die fp32-Datei, auch eine von Hand abgelegte, und bettet mit int8 neu
+ein.
+
+**Während der Neueinbettung (D-25-07).** Jeder Wechsel der Präzision leert den
+Vektorbestand und bettet alle indexierten Dokumente neu ein (Abschnitt 8). Die
+lexikalische Suche antwortet in dieser Zeit vollständig, die semantische Hälfte
+wächst mit dem Fortschritt. Es gibt nie zwei Modelle gleichzeitig im Speicher.
+
+**Was die Statusroute meldet.** `GET /status` trägt den Block `model` mit
+`precisionChosen`, `precisionActive`, `precisionVerdict` und `reembedRunning`.
+`reembedRunning` ist wahr, solange der Zeiger der Neueinbettung in der
+`meta`-Tabelle steht; der Fortschritt ist `embedded` gegen `indexed`. Die
+Verdikte sind eine geschlossene Menge:
+
+| Verdikt | Bedeutung |
+|---|---|
+| leer | nichts zu melden |
+| `downloading` | die fp32-Datei wird gerade geladen, int8 bleibt bis dahin aktiv |
+| `fp32_unavailable` | Download oder Prüfung gescheitert, int8 bleibt aktiv |
+| `fp32_not_in_economy` | fp32 unter Sparsam gewählt, int8 bleibt aktiv |
+| `fp32_on_a_tight_box` | fp32 aktiv, die Box ist auf Sparsam geschrumpft |
+| `fp32_active_in_economy` | fp32 aktiv, das gewählte Profil ist Sparsam |
+
+Die Antwort nennt keinen Pfad, keinen Digest und keine URL, und sie liest die
+fp32-Datei nicht: eine offene Adminseite löst keine Prüfung von 470 MB aus.
