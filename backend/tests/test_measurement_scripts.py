@@ -1353,8 +1353,14 @@ PHP_TREE_HASH_TODAY = "726756a8e646e4eb6d4d9089e3ac0476d7a5ff25b6e3f335b3f4faaea
 # swap instead of through the return value of the mark step, so an abort in
 # the band read behind the swap can no longer lose it. No file came and none
 # went, so PACKAGE_FILES_TODAY stays at 64. The PHP pair does not move.
+# Moved on 2026-09-28 by the review fix WR-02 of phase 25: two of the 64 files
+# changed their bytes. lane.py got the fifth park reason runner_failed, and
+# worker/embedding.py hands the lane back to the loop on the two round exits
+# that did not go through _park: a claim the queue did not answer, and the
+# unexpected exception run() catches. No file came and none went, so
+# PACKAGE_FILES_TODAY stays at 64. The PHP pair does not move.
 PACKAGE_FILES_TODAY = 64
-PACKAGE_TREE_HASH_TODAY = "328206f811ad2fa78f9a45d63429375b28724b4b89ff3621e80f4c1f1ab2f6e1"
+PACKAGE_TREE_HASH_TODAY = "77eb0852ada3b4f3b1169bff698a181509b03553bb95d114eb33cafda1c6633d"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

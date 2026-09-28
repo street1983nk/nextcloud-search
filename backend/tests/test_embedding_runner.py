@@ -63,6 +63,7 @@ from findling.worker import embedding as embedding_module
 from findling.worker.embedding import (
     LANE_PARKED,
     ROUND_EMPTY,
+    ROUND_GATEWAY_UNAVAILABLE,
     ROUND_PAUSED,
     ROUND_WORKED,
     EmbeddingTrack,
@@ -658,6 +659,64 @@ async def test_the_loop_hands_the_rows_back_before_it_logs_an_unexpected_failure
     assert queue.acknowledged == []
     assert "unexpected ValueError" in caplog.text
     assert TITLE not in caplog.text
+
+
+async def test_a_queue_that_does_not_answer_leaves_the_lane_inline(track: EmbeddingTrack) -> None:
+    # Code review WR-02, first path: the mode is published before the claim, so
+    # this way out used to keep saying parallel for the whole backoff while no
+    # runner claims the embed lane and the poller keeps filtering to the index
+    # lane; embed rows were claimed by nobody for up to 300 s per cycle.
+    _standard()
+    lane.note_echo(True)
+    queue = _LaneQueue(_job(1, 11))
+    queue.unavailable = True
+    runner = _runner(track, queue, tick=15.0)
+
+    assert await runner.run_once() == ROUND_GATEWAY_UNAVAILABLE
+
+    assert lane.snapshot().mode == lane.MODE_INLINE
+    assert lane.snapshot().reason == lane.REASON_RUNNER_FAILED
+    assert runner.cooldown == 15.0
+    assert runner.parked.is_set()
+
+    # The next answered round republishes the lane; nothing is sticky here.
+    queue.unavailable = False
+    assert await runner.run_once() == ROUND_WORKED
+    assert lane.snapshot().mode == lane.MODE_PARALLEL
+    assert lane.snapshot().reason == lane.REASON_NONE
+
+
+async def test_an_unexpected_failure_of_a_round_leaves_the_lane_inline(
+    track: EmbeddingTrack, writer: IndexBatchWriter, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Code review WR-02, second path: run() catches the exception of a round
+    # that broke between its note_mode and its park, and the mode has to go
+    # back with the rows, or the status lies for the whole backoff.
+    _standard()
+    lane.note_echo(True)
+    _index_bodies(writer, 11)
+    queue = _LaneQueue(_job(1, 11))
+    runner = _runner(track, queue, tick=0.01)
+    stop = asyncio.Event()
+
+    async def embed_row(job: QueueJob, done: list[int]) -> str:
+        del job, done
+        raise ValueError(TITLE)
+
+    async def unlock(ids: Any) -> CallResult:
+        queue.unlocked.append(list(ids))
+        stop.set()
+        return CallResult(ok=True, count=len(ids))
+
+    monkeypatch.setattr(track, "embed_row", embed_row)
+    monkeypatch.setattr(queue, "unlock", unlock)
+    runner.arm()
+
+    await asyncio.wait_for(runner.run(stop), timeout=5)
+
+    assert queue.unlocked == [[1]]
+    assert lane.snapshot().mode == lane.MODE_INLINE
+    assert lane.snapshot().reason == lane.REASON_RUNNER_FAILED
 
 
 async def test_stand_down_waits_for_the_round_and_hands_the_rows_back(track: EmbeddingTrack) -> None:

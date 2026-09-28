@@ -140,7 +140,10 @@ OCR, statt zeitlich getrennt in derselben Schleife wie unter Sparsam (IDX-08).
 
 `GET /status` meldet den Zustand im Block `lane`: `mode` ist `inline` oder
 `parallel`, `reason` sagt, warum die Spur parkt (`economy`,
-`companion_without_lane`, `waiting_for_memory`, leer bei `parallel`).
+`companion_without_lane`, `waiting_for_memory`, `runner_failed` nach einer
+gescheiterten Runde des Läufers, also einer Warteschlange ohne Antwort oder
+einem unerwarteten Fehler, bis zur nächsten beantworteten Runde; leer bei
+`parallel`).
 
 Nach einem Start in Standard oder nach einem Rebuild kann eine erste Runde des
 Läufers laufen, bevor die Indexschleife die Spur geöffnet hat. Das steht als

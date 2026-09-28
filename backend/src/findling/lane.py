@@ -8,8 +8,10 @@ the indexing loop asks for the index lane only.
 
 Why the runner parks is a closed set as well, so that the status page (plan
 25-12) can say it without inventing words: the effective level is economy, the
-companion never echoed the lane filter, or the memory condition of PAR-04 is not
-met. The empty reason belongs to the parallel mode.
+companion never echoed the lane filter, the memory condition of PAR-04 is not
+met, or the last round of the runner failed (a queue that did not answer, or an
+unexpected exception) and the lane goes back to the loop for the backoff (code
+review WR-02 of phase 25). The empty reason belongs to the parallel mode.
 
 ``supported`` says the companion of this process echoed a lane. A refusal, an
 answer without the echo to the runner's own lane request, is sticky for the
@@ -32,7 +34,8 @@ REASON_NONE: Final = ""
 REASON_ECONOMY: Final = "economy"
 REASON_OLD_COMPANION: Final = "companion_without_lane"
 REASON_MEMORY: Final = "waiting_for_memory"
-REASONS: Final = frozenset({REASON_NONE, REASON_ECONOMY, REASON_OLD_COMPANION, REASON_MEMORY})
+REASON_RUNNER_FAILED: Final = "runner_failed"
+REASONS: Final = frozenset({REASON_NONE, REASON_ECONOMY, REASON_OLD_COMPANION, REASON_MEMORY, REASON_RUNNER_FAILED})
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,6 +111,7 @@ __all__ = [
     "REASON_MEMORY",
     "REASON_NONE",
     "REASON_OLD_COMPANION",
+    "REASON_RUNNER_FAILED",
     "LaneSnapshot",
     "note_echo",
     "note_mode",

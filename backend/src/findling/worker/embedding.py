@@ -1421,6 +1421,11 @@ class EmbedRunner:
             # Deliberately every exception, the rule of the poller and the
             # reconcile: a broken round must not take the search along.
             except Exception as error:
+                # The mode first, because it cannot fail: a round that broke
+                # between its note_mode and its park leaves "parallel" behind,
+                # and the poller would filter to the index lane for the whole
+                # backoff while no runner claims (code review WR-02).
+                lane.note_mode(lane.MODE_INLINE, lane.REASON_RUNNER_FAILED)
                 await self.unlock_held()
                 LOGGER.error("embed round ended in an unexpected %s", type(error).__name__)
                 self._back_off()
@@ -1449,7 +1454,14 @@ class EmbedRunner:
                 return self._park(lane.REASON_ECONOMY)
             claim = await queue.claim(limit=EMBED_CLAIM_BATCH, max_bytes=self._max_bytes, lane=LANE_EMBED)
             if claim.unavailable:
+                # The mode goes back with the round (code review WR-02): it was
+                # published above, before the claim, so this way out used to
+                # keep saying parallel for the whole backoff, up to 300 s per
+                # cycle, while nothing claims the embed lane and the poller
+                # keeps filtering to the index lane. No rows are held here, so
+                # only the mode returns; the next answered round republishes it.
                 self._back_off()
+                lane.note_mode(lane.MODE_INLINE, lane.REASON_RUNNER_FAILED)
                 return ROUND_GATEWAY_UNAVAILABLE
             self._held = {job.queue_id for job in claim.jobs}
             if not claim.lane_honored:
