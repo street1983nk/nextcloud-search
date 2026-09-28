@@ -557,32 +557,118 @@ async def test_an_empty_answer_runs_the_mark_step_under_the_track_lock(
     assert seen == [True]
 
 
-async def test_performance_embeds_one_row_at_a_time(track: EmbeddingTrack, monkeypatch: pytest.MonkeyPatch) -> None:
-    # D-25-12: one runner in Standard and in Performance, never two rows at once,
-    # even with two rounds started together; the profile value of two slots
-    # stays unwired.
+def _counting_rows(track: EmbeddingTrack, monkeypatch: pytest.MonkeyPatch, pause: float) -> list[int]:
+    """Replace embed_row by one that sleeps; answer [rows in work now, the peak]."""
+    counts = [0, 0]
+
+    async def embed_row(job: QueueJob, done: list[int]) -> str:
+        counts[0] += 1
+        counts[1] = max(counts[1], counts[0])
+        try:
+            await asyncio.sleep(pause)
+        finally:
+            counts[0] -= 1
+        done.append(job.queue_id)
+        return embedding_module.EMBED_WRITTEN
+
+    monkeypatch.setattr(track, "embed_row", embed_row)
+    return counts
+
+
+async def test_performance_embeds_up_to_two_rows_at_a_time(
+    track: EmbeddingTrack, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # D-25-12, wired since phase 26: embed_slots rows of one round side by
+    # side, and never more, even with two rounds started together (the track
+    # lock keeps the rounds apart).
     _performance()
     lane.note_echo(True)
     assert profile.snapshot().effective is profile.Profile.PERFORMANCE
     assert profile.snapshot().resolution.values.embed_slots == 2
     queue = _LaneQueue(*(_job(index, 100 + index) for index in range(1, 7)))
     runner = _runner(track, queue)
-    in_work = [0]
-    peak = [0]
+    counts = _counting_rows(track, monkeypatch, 0.2)
+
+    await asyncio.gather(runner.run_once(), runner.run_once())
+
+    assert counts[1] == 2
+    assert sorted(queue_id for batch, _ in queue.acknowledged for queue_id in batch) == [1, 2, 3, 4, 5, 6]
+    assert queue.unlocked == []
+    assert not runner.busy
+
+
+async def test_standard_embeds_one_row_at_a_time(track: EmbeddingTrack, monkeypatch: pytest.MonkeyPatch) -> None:
+    _standard()
+    lane.note_echo(True)
+    assert profile.snapshot().resolution.values.embed_slots == 1
+    queue = _LaneQueue(*(_job(index, 100 + index) for index in range(1, 5)))
+    runner = _runner(track, queue)
+    counts = _counting_rows(track, monkeypatch, 0.02)
+
+    assert await runner.run_once() == ROUND_WORKED
+
+    assert counts[1] == 1
+    assert queue.acknowledged == [([1, 2, 3, 4], {})]
+
+
+async def test_economy_in_the_middle_of_a_performance_round_starts_no_new_row(
+    track: EmbeddingTrack, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # IDX-08 with two slots: the rows in work end, no further row starts, and
+    # the rest goes back per unlock.
+    _performance()
+    lane.note_echo(True)
+    queue = _LaneQueue(*(_job(index, 100 + index) for index in range(1, 7)))
+    runner = _runner(track, queue)
+    started: list[int] = []
 
     async def embed_row(job: QueueJob, done: list[int]) -> str:
-        in_work[0] += 1
-        peak[0] = max(peak[0], in_work[0])
-        await asyncio.sleep(0.01)
-        in_work[0] -= 1
+        started.append(job.queue_id)
+        if job.queue_id == 1:
+            await asyncio.sleep(0.01)
+            profile.note_chosen("economy")
+        else:
+            await asyncio.sleep(0.05)
         done.append(job.queue_id)
         return embedding_module.EMBED_WRITTEN
 
     monkeypatch.setattr(track, "embed_row", embed_row)
 
-    await asyncio.gather(runner.run_once(), runner.run_once())
-    assert peak[0] == 1
-    assert sorted(queue_id for batch, _ in queue.acknowledged for queue_id in batch) == [1, 2, 3, 4, 5, 6]
+    assert await runner.run_once() == LANE_PARKED
+    assert started == [1, 2]
+    assert queue.acknowledged == [([1, 2], {})]
+    assert queue.unlocked == [[3, 4, 5, 6]]
+    assert lane.snapshot().reason == lane.REASON_ECONOMY
+    assert not runner.busy
+
+
+async def test_a_store_error_in_one_of_two_rows_hands_every_row_back_without_a_verdict(
+    track: EmbeddingTrack, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T-26-24: the abort semantics of phase 25 behind the barrier. The other
+    # row in work ends, nothing further starts, and every held row goes back.
+    _performance()
+    lane.note_echo(True)
+    queue = _LaneQueue(*(_job(index, 100 + index) for index in range(1, 5)))
+    runner = _runner(track, queue, tick=15.0)
+    started: list[int] = []
+
+    async def embed_row(job: QueueJob, done: list[int]) -> str:
+        started.append(job.queue_id)
+        if job.queue_id == 2:
+            raise sqlite3.OperationalError("database is locked")
+        await asyncio.sleep(0.05)
+        done.append(job.queue_id)
+        return embedding_module.EMBED_WRITTEN
+
+    monkeypatch.setattr(track, "embed_row", embed_row)
+
+    assert await runner.run_once() == ROUND_PAUSED
+    assert started == [1, 2]
+    assert queue.unlocked == [[1, 2, 3, 4]]
+    assert queue.acknowledged == []
+    assert runner.cooldown == 15.0
+    assert not runner.busy
 
 
 async def test_an_abort_in_the_middle_of_a_round_loses_no_row_and_doubles_no_chunk(
