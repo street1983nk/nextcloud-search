@@ -419,7 +419,8 @@ def lane_box(available_mib: int) -> Hardware:
 
 def test_the_fp32_name_is_the_precision_name() -> None:
     """profile.py may not import precision.py (cycle), so the spelling is pinned here."""
-    assert profile._FP32 == Precision.FP32.value
+    assert {profile._INT8, profile._FP32} == {p.value for p in Precision}
+    assert frozenset(p.value for p in Precision) == profile._WEIGHT_NAMES
 
 
 def test_the_fp32_term_shrinks_the_memory_term() -> None:
