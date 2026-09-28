@@ -353,60 +353,27 @@ class IndexBatchWriter:
     def stored_body(self, file_id: int) -> str | None:
         """The stored text of one indexed document, or None when there is none.
 
-        This method is the reason a rename costs no download. ``body_de`` is the
-        only stored copy of the extracted text in the whole system, the same copy
-        the snippet generator already cuts from, so a file that was renamed can be
-        written again from what the index holds: no gateway call, no scratch file,
-        no extraction, no OCR. The alternative would fetch bytes that did not
-        change in order to produce a text that did not change either.
-
-        None is an answer and not a failure. A file that was never indexed, or one
-        that ended as skipped, has no stored text, and the caller turns the
-        metadata job into a content job for it.
-
-        The term goes through the schema, exactly as the upsert in :meth:`add`
-        does, and for the same measured reason: a term built from the field name
-        takes the Python integer as it comes and becomes an I64 term, which the
-        U64 column of ``file_id`` never holds. That mismatch raises nothing here
-        either. It would simply answer None for every file in the index, and every
-        rename would fall back to the expensive route without a single counter
-        noticing. See the module docstring for the measurement.
+        Delegates to the module function :func:`stored_body`, which holds the
+        reasoning; the embedding track calls that function directly over a read
+        handle of its own and never reaches this writer (PAR-01).
         """
-        # The reload is what makes the text of the current batch visible: the
-        # searcher pool of tantivy stands on the segments of the last reload, and
-        # a metadata job that arrives in the same pass as the indexing of its own
-        # file would otherwise read None from a searcher one commit too old.
-        self._index.reload()
-        searcher = self._index.searcher()
-        hits = searcher.search(Query.term_query(self._schema, FIELD_FILE_ID, file_id), limit=1).hits
-        if not hits:
-            return None
-        _score, address = hits[0]
-        values = searcher.doc(address).to_dict().get(FIELD_BODY_DE, [])
-        return str(values[0]) if values else None
+        return stored_body(self._index, self._schema, file_id)
 
     def free_bytes(self) -> int:
         """Free space on the volume this index is written to.
 
-        Public because it is not only this class that writes to that volume. The
-        vector stock of plan 06-07 lives beside the index in the same directory
-        and is written inside the per file loop, long before this class gets to
-        commit anything, so the second track has to be able to ask the same
-        question against the same directory. Two calls to ``shutil.disk_usage``
-        with two paths would be two answers about one volume, and the one that
-        was measured is the one at :meth:`flush`.
+        Delegates to the module function :func:`free_bytes` with the index
+        directory, the one directory every caller of that function passes.
         """
-        return shutil.disk_usage(self._directory).free
+        return free_bytes(self._directory)
 
     def disk_is_tight(self) -> bool:
         """True while the volume sits below the configured free space floor.
 
-        The predicate behind the pause, named so that a caller outside this
-        class can respect the same floor without repeating the comparison. A
-        second copy of it is exactly how one writer would pause while another
-        kept writing on the same full disk.
+        Delegates to the module function :func:`disk_is_tight` with the index
+        directory and the floor of this writer.
         """
-        return self.free_bytes() < self._min_free_bytes
+        return disk_is_tight(self._directory, self._min_free_bytes)
 
     def flush(self) -> FlushResult:
         """Commit the pending batch, unless the volume is running out of space.
@@ -422,22 +389,22 @@ class IndexBatchWriter:
         segments committed so far are untouched.
         """
         writer = self._require_open()
-        free_bytes = self.free_bytes()
-        if free_bytes < self._min_free_bytes:
+        free = self.free_bytes()
+        if free < self._min_free_bytes:
             LOGGER.warning(
                 "index commit paused, free space is below the configured floor of %d byte",
                 self._min_free_bytes,
             )
-            return FlushResult(FLUSH_PAUSED_LOW_DISK, self._pending, free_bytes)
+            return FlushResult(FLUSH_PAUSED_LOW_DISK, self._pending, free)
         if self._pending == 0:
-            return FlushResult(FLUSH_NOTHING_PENDING, 0, free_bytes)
+            return FlushResult(FLUSH_NOTHING_PENDING, 0, free)
 
         writer.commit()
         committed = self._pending
         self._pending = 0
         self._pending_bytes = 0
         LOGGER.info("committed %d documents", committed)
-        return FlushResult(FLUSH_COMMITTED, committed, free_bytes)
+        return FlushResult(FLUSH_COMMITTED, committed, free)
 
     def collect_garbage(self) -> None:
         """Remove segment files no commit refers to any more.
@@ -464,3 +431,70 @@ class IndexBatchWriter:
         if self._writer is None:
             raise RuntimeError("this IndexBatchWriter is closed")
         return self._writer
+
+
+def stored_body(index: Index, schema: Schema, file_id: int) -> str | None:
+    """The stored text of one indexed document, or None when there is none.
+
+    This function is the reason a rename costs no download. ``body_de`` is the
+    only stored copy of the extracted text in the whole system, the same copy
+    the snippet generator already cuts from, so a file that was renamed can be
+    written again from what the index holds: no gateway call, no scratch file,
+    no extraction, no OCR. The alternative would fetch bytes that did not
+    change in order to produce a text that did not change either.
+
+    A module function since plan 25-07, because it needs a searcher and nothing
+    else. The embedding track reads through an index handle of its own that
+    never asked for a writer, so reading the text does not touch the lock of
+    the indexing track (PAR-01).
+
+    None is an answer and not a failure. A file that was never indexed, or one
+    that ended as skipped, has no stored text, and the caller turns the
+    metadata job into a content job for it.
+
+    The term goes through the schema, exactly as the upsert in
+    :meth:`IndexBatchWriter.add` does, and for the same measured reason: a term
+    built from the field name takes the Python integer as it comes and becomes
+    an I64 term, which the U64 column of ``file_id`` never holds. That mismatch
+    raises nothing here either. It would simply answer None for every file in
+    the index, and every rename would fall back to the expensive route without
+    a single counter noticing. See the module docstring for the measurement.
+    """
+    # The reload is what makes the text of the current batch visible: the
+    # searcher pool of tantivy stands on the segments of the last reload, and
+    # a metadata job that arrives in the same pass as the indexing of its own
+    # file would otherwise read None from a searcher one commit too old.
+    index.reload()
+    searcher = index.searcher()
+    hits = searcher.search(Query.term_query(schema, FIELD_FILE_ID, file_id), limit=1).hits
+    if not hits:
+        return None
+    _score, address = hits[0]
+    values = searcher.doc(address).to_dict().get(FIELD_BODY_DE, [])
+    return str(values[0]) if values else None
+
+
+def free_bytes(directory: Path) -> int:
+    """Free space on the volume the index at ``directory`` is written to.
+
+    Public because it is not only the writer that writes to that volume. The
+    vector stock of plan 06-07 lives beside the index in the same directory
+    and is written inside the per file loop, long before the writer gets to
+    commit anything, so the second track has to be able to ask the same
+    question against the same directory. Two calls to ``shutil.disk_usage``
+    with two paths would be two answers about one volume, and the one that
+    was measured is the one at :meth:`IndexBatchWriter.flush`; which is why
+    every caller passes the same index directory (T-06-36).
+    """
+    return shutil.disk_usage(directory).free
+
+
+def disk_is_tight(directory: Path, min_free_bytes: int) -> bool:
+    """True while the volume of ``directory`` sits below the free space floor.
+
+    The predicate behind the pause, named so that a caller outside the writer
+    can respect the same floor without repeating the comparison. A second copy
+    of it is exactly how one writer would pause while another kept writing on
+    the same full disk. It never touches an IndexWriter.
+    """
+    return free_bytes(directory) < min_free_bytes

@@ -645,9 +645,7 @@ def test_the_free_stored_body_reads_what_the_method_reads(index: Index, batch_wr
     assert stored_body(index, index.schema, 4711) is None
 
 
-def test_the_free_stored_body_reads_through_a_handle_that_never_opened_a_writer(
-    index: Index, index_dir: Path
-) -> None:
+def test_the_free_stored_body_reads_through_a_handle_that_never_opened_a_writer(index: Index, index_dir: Path) -> None:
     # The handle of the embedding track: opened on the same directory, never
     # asked for a writer. It must see what the indexing track committed.
     writer = IndexBatchWriter(index, directory=index_dir)
