@@ -59,6 +59,8 @@ import re
 from collections.abc import Callable, Mapping
 from pathlib import Path
 
+from findling import guard
+from findling.api.status import GuardReport
 from findling.embed.engine import ENGINE_STATES
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -2269,6 +2271,70 @@ def test_the_guard_lines_are_built_out_of_closed_sets() -> None:
             "OCR slots: %1$s of %2$s, memory tight",
         ):
             assert key in keys, (catalogue.name, key)
+
+
+# Plan 26-08: the service reads the object guard of the status answer key by
+# key through guardField, and the container spells those keys in GuardReport.
+# Two spellings of one contract, held together here (T-26-28).
+GUARD_FIELD_READ = re.compile(r"guardField\(\$answer, '([A-Za-z]+)'\)")
+GUARD_CAUSES_CONSTANT = re.compile(r"private const GUARD_CAUSES = \[([^\]]*)\];")
+
+
+def guard_fields_read_by(source: str) -> set[str]:
+    """Every key the service reads out of the object guard."""
+    return set(GUARD_FIELD_READ.findall(source))
+
+
+def scan_guard_fields(name: str, source: str) -> list[str]:
+    """Findings for every guard key the service reads that the container never sends."""
+    sent = set(GuardReport.model_fields)
+    return [
+        f"{name}: guardField reads '{key}', which GuardReport does not carry"
+        for key in sorted(guard_fields_read_by(source) - sent)
+    ]
+
+
+def guard_causes_of(source: str) -> set[str]:
+    """The closed set of causes the service accepts, out of its constant."""
+    match = GUARD_CAUSES_CONSTANT.search(source)
+    assert match is not None, "AdminViewService.php lost its GUARD_CAUSES constant"
+    return set(re.findall(r"'([a-z_]+)'", match.group(1)))
+
+
+def test_every_guard_field_the_service_reads_is_sent_by_the_container() -> None:
+    view = ADMIN_VIEW.read_text(encoding="utf-8")
+
+    read = guard_fields_read_by(view)
+
+    # The seven keys of plan 26-05; a regex that matched nothing would pass
+    # every comparison below and prove nothing.
+    assert read == {"chosen", "effective", "cause", "token", "slotsTarget", "slotsInForce", "throttled"}
+    assert scan_guard_fields(ADMIN_VIEW.name, view) == []
+
+
+def test_the_causes_of_the_service_are_the_causes_of_the_guard() -> None:
+    view = ADMIN_VIEW.read_text(encoding="utf-8")
+
+    assert guard_causes_of(view) == set(guard.CAUSES)
+
+
+def test_a_guard_field_the_container_does_not_send_is_a_finding(tmp_path: Path) -> None:
+    # Red probe: a copy of the service that reads a key GuardReport never
+    # carries has to fail the scan, or the scan above guards nothing.
+    copy = tmp_path / ADMIN_VIEW.name
+    view = ADMIN_VIEW.read_text(encoding="utf-8")
+    copy.write_text(
+        view.replace(
+            "self::guardField($answer, 'slotsInForce')",
+            "self::guardField($answer, 'slotsNow')",
+            1,
+        ),
+        encoding="utf-8",
+    )
+
+    findings = scan_guard_fields(copy.name, copy.read_text(encoding="utf-8"))
+
+    assert findings == [f"{copy.name}: guardField reads 'slotsNow', which GuardReport does not carry"]
 
 
 def test_the_two_translation_files_carry_the_same_keys() -> None:

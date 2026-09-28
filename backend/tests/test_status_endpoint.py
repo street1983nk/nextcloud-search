@@ -40,6 +40,7 @@ vector file that is not a database is the same answer for the same reason
 (WR-01).
 """
 
+import re
 from collections.abc import Callable, Iterator
 from dataclasses import fields
 from pathlib import Path
@@ -50,7 +51,7 @@ from fastapi.testclient import TestClient
 from tantivy import Document, Index
 
 from conftest import APP_VERSION, CONSTITUENTS, Corpus
-from findling import lane, precision
+from findling import guard, lane, memory_guard, precision
 from findling.api import resources
 from findling.api.resources import ReadSide
 from findling.api.status import NO_VECTORS_YET, PROFILE_VALUE_KEYS, STATE_UNREADABLE, VECTORS_UNREADABLE, report
@@ -65,7 +66,7 @@ from findling.index.rebuild import RebuildProgress
 from findling.index.schema import BODY_FIELD, FIELD_FILE_ID, FIELD_STORAGE_ID
 from findling.index.wordlist import DIGEST_SUFFIX, ENCODING, artifact_path, wordlist_hash
 from findling.main import APP
-from findling.profile import ProfileValues, note_chosen, note_hardware
+from findling.profile import Profile, ProfileValues, note_chosen, note_hardware
 from findling.query.rewrite import LEGACY_PLAN
 from findling.store.repo import EMBEDDING_BACKLOG_MARK, FileMeta, open_store
 from findling.store.vectors import EMBEDDING_DIMENSIONS, Chunk, open_vectors
@@ -122,6 +123,7 @@ FIELDS = {
     # for the reason the profile is: one statement with parts each.
     "model",
     "lane",
+    "guard",
     "note",
 }
 
@@ -1454,6 +1456,95 @@ def test_the_lane_reports_its_mode_and_why_it_parks(
 
     lane.note_mode(lane.MODE_INLINE, lane.REASON_MEMORY)
     assert _status(client, sign("admin"))["lane"] == {"mode": "inline", "reason": "waiting_for_memory"}
+
+
+# The guard block of plan 26-08 runs in both branches for the same Pitfall 2,
+# and its wire shape is the contract the admin page of plan 26-05 reads.
+GUARD_AT_REST = {
+    "chosen": None,
+    "effective": "economy",
+    "cap": None,
+    "cause": "",
+    "since": None,
+    "token": "",
+    "slotsTarget": 1,
+    "slotsInForce": 1,
+    "throttled": False,
+}
+
+
+@pytest.mark.parametrize("branch", BRANCHES)
+def test_a_container_without_a_lowering_reports_the_guard_at_rest(
+    client: TestClient, sign: Sign, request: pytest.FixtureRequest, branch: str
+) -> None:
+    assert _answer(client, sign, request, branch)["guard"] == GUARD_AT_REST
+
+
+@pytest.mark.parametrize("branch", BRANCHES)
+def test_a_lowering_reports_chosen_against_effective_and_its_cause(
+    client: TestClient, sign: Sign, request: pytest.FixtureRequest, branch: str
+) -> None:
+    # D-26-01, SC4: the chosen profile stays, the level in force goes one down,
+    # and the page learns why and which token lifts it (D-26-04).
+    note_hardware(_box(16, 64_000_000_000, 64 * GIB))
+    note_chosen("performance")
+    assert guard.lower(
+        guard.CAUSE_MEMORY_MAX_REPEATED,
+        now=1_700_000_000.5,
+        chosen=Profile.PERFORMANCE,
+        effective=Profile.PERFORMANCE,
+    )
+
+    report_of_guard = _answer(client, sign, request, branch)["guard"]
+
+    assert report_of_guard["chosen"] == "performance"
+    assert report_of_guard["effective"] == "standard"
+    assert report_of_guard["cap"] == "standard"
+    assert report_of_guard["cause"] == "memory_max_repeated"
+    assert report_of_guard["since"] == 1_700_000_000
+    assert isinstance(report_of_guard["since"], int)
+    assert re.fullmatch(r"[0-9a-f]{32}", report_of_guard["token"])
+    assert report_of_guard["token"] == guard.snapshot().token
+
+
+@pytest.mark.parametrize("branch", BRANCHES)
+def test_the_guard_reports_the_throttled_slots(
+    client: TestClient, sign: Sign, request: pytest.FixtureRequest, branch: str
+) -> None:
+    # D-26-02: the throttle cut four slots of the profile to two.
+    guard.note_slots(4, 2)
+
+    report_of_guard = _answer(client, sign, request, branch)["guard"]
+
+    assert report_of_guard["slotsTarget"] == 4
+    assert report_of_guard["slotsInForce"] == 2
+    assert report_of_guard["throttled"] is True
+    assert report_of_guard["cause"] == ""
+
+
+@pytest.mark.parametrize("branch", BRANCHES)
+def test_asking_for_the_guard_reads_no_kernel_counter(
+    client: TestClient,
+    sign: Sign,
+    request: pytest.FixtureRequest,
+    branch: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # T-26-27: a poll of the admin page is no second reading of the cgroup. The
+    # route reads the snapshots and nothing else.
+    def refuse(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("the status route read a kernel counter")
+
+    for name in ("memory_events", "headroom_bytes", "anon_bytes"):
+        monkeypatch.setattr(memory_guard, name, refuse)
+    guard.note_slots(2, 1)
+
+    report_of_guard = _answer(client, sign, request, branch)["guard"]
+
+    assert report_of_guard["throttled"] is True
+    source = STATUS_SOURCE.read_text(encoding="utf-8")
+    assert "memory_guard" not in source
+    assert source.count("guard.snapshot()") == 1
 
 
 def test_asking_for_the_status_hashes_no_weights_file(client: TestClient, sign: Sign, indexed_volume: Corpus) -> None:
