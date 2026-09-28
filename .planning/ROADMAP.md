@@ -190,8 +190,8 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 26-09-PLAN.md , Drossel je Runde, Kill-Meldung, Solo-Wiederholung, Mehr-Slot-Merker, Token-Abgleich (PAR-02, PAR-03, D-26-02/16), Welle 4
-- [ ] 26-10-PLAN.md , Wächter-Task mit Persistenz in state.db, Unrein-Ende, Lifespan (PAR-03, D-26-01/03/04/15/16), Welle 4
+- [x] 26-09-PLAN.md , Drossel je Runde, Kill-Meldung, Solo-Wiederholung, Mehr-Slot-Merker, Token-Abgleich (PAR-02, PAR-03, D-26-02/16), Welle 4
+- [x] 26-10-PLAN.md , Wächter-Task mit Persistenz in state.db, Unrein-Ende, Lifespan (PAR-03, D-26-01/03/04/15/16), Welle 4
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -259,7 +259,7 @@ Plans:
 | 17-23 (Archiv) | v1.3 | 69/69 | Complete | 2026-09-27 |
 | 24. Owner-Tor, Profil-Gerüst und Marken-Reparatur | v1.4 | 6/6 | Complete    | 2026-09-28 |
 | 25. Einbettungsspur und Modellwahl | v1.4 | 12/12 | Complete    | 2026-09-28 |
-| 26. N OCR-Slots und Speicherwächter | v1.4 | 8/14 | In Progress|  |
+| 26. N OCR-Slots und Speicherwächter | v1.4 | 10/14 | In Progress|  |
 | 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 0/? | Not started | - |
 | 28. Abnahme-Anfahrt | v1.4 | 0/? | Not started | - |
 | 29. Härtung und Store-Einreichung 1.4.0 | v1.4 | 0/? | Not started | - |
