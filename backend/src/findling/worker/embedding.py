@@ -1376,9 +1376,11 @@ class EmbedRunner:
     inline as it always has. After a memory refusal the headroom is read again
     only after a full tick, so a box at the edge does not flap.
 
-    **One runner, one row at a time** (D-25-12). The rows of a claim are
-    embedded one after the other under the track lock; Performance gets no
-    second embedding beside the first.
+    **One runner, up to embed_slots rows at a time** (Performance 2, Standard
+    1; D-25-12, wired since phase 26). The rows of a claim run as tasks behind
+    a semaphore of embed_slots, all inside the track lock, so the inline rows
+    of the indexing loop and the mark step stay out. Chunker and writes of the
+    track carry locks of their own; the engine is shared unlocked.
 
     **Every way out without an acknowledgement unlocks.** A SQLite error or the
     disk floor hands every held row back and pauses; an exception the round did
@@ -1387,9 +1389,9 @@ class EmbedRunner:
     failed(repeatedly_stuck) through this runner (SC3, DI-05-23).
 
     **Economy in the middle of a round.** The level is asked again before every
-    row; when it turned Economy the round ends after the row in work, the rows
-    not reached go back per unlock, and :attr:`parked` is set, which is what the
-    indexing loop waits for in front of its claim.
+    row; when it turned Economy no further row starts, the rows in work end,
+    the rows not reached go back per unlock, and :attr:`parked` is set, which is
+    what the indexing loop waits for in front of its claim.
 
     It never touches the tantivy writer: the track reads the text through a
     handle of its own.
@@ -1563,30 +1565,60 @@ class EmbedRunner:
             return await self._work(queue, claim.jobs)
 
     async def _work(self, queue: DocumentQueue, jobs: Sequence[QueueJob]) -> str:
-        """Embed the rows of one claim one after the other, and account for each."""
+        """Embed the rows of one claim, up to embed_slots at a time, and account for each.
+
+        One task per embed row, all of them inside the track lock the caller
+        holds, and a semaphore of embed_slots in front of the row: Performance
+        runs two rows side by side, Standard one (D-25-12). A row asks the
+        level again once it has its slot and does not start when Economy
+        arrived or a row before it failed; the rows in work end, and the rest
+        goes back per unlock below the barrier (IDX-08, T-25-37).
+        """
         done: list[int] = []
-        stopped = False
-        try:
-            for job in jobs:
+        slots = asyncio.Semaphore(max(1, profile.snapshot().resolution.values.embed_slots))
+        # [Economy arrived, a row failed]. A list, so the tasks can set them.
+        halted = [False, False]
+
+        async def one(job: QueueJob) -> None:
+            async with slots:
+                if halted[1]:
+                    return
                 if not _level_allows_parallel():
-                    # Economy arrived in the middle of the claim: the row in work
-                    # is finished, the rest goes back below (IDX-08, T-25-37).
-                    stopped = True
-                    break
-                if job.kind != KIND_EMBED:
-                    # A row of another lane in an echoed answer is not this
-                    # runner's to judge; it goes back with the rest.
-                    continue
-                await self._track.embed_row(job, done)
-        except (sqlite3.Error, _DiskTight) as error:
+                    halted[0] = True
+                    return
+                try:
+                    await self._track.embed_row(job, done)
+                except BaseException:
+                    halted[1] = True
+                    raise
+
+        # A row of another lane in an echoed answer is not this runner's to
+        # judge; it gets no task and goes back with the rest.
+        tasks = [asyncio.ensure_future(one(job)) for job in jobs if job.kind == KIND_EMBED]
+        try:
+            outcomes = await asyncio.gather(*tasks, return_exceptions=True)
+        except asyncio.CancelledError:
+            # The round was cancelled: no row may keep running behind it. The
+            # held rows stay held, and the caller hands them back.
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            raise
+        failures = [outcome for outcome in outcomes if isinstance(outcome, BaseException)]
+        aborting = next((error for error in failures if isinstance(error, (sqlite3.Error, _DiskTight))), None)
+        if aborting is not None:
             # The _abort semantics of the poller: every held row back, a pause,
             # and no verdict at all (Pitfall 3).
             LOGGER.warning(
-                "the embed round handed %d rows back after %s and pauses", len(self._held), type(error).__name__
+                "the embed round handed %d rows back after %s and pauses", len(self._held), type(aborting).__name__
             )
             await self.unlock_held()
             self._back_off()
             return ROUND_PAUSED
+        if failures:
+            # Anything else is unexpected, and run() hands the rows back.
+            raise failures[0]
+        stopped = halted[0]
 
         rest = sorted(self._held.difference(done))
         if done:

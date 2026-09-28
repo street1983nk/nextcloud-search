@@ -944,9 +944,11 @@ GUARD_TICK_SECONDS = 15.0
 # cores on, because four cores give floor(0.5 x 4 - 0.25) = 1. Conservative by
 # intent, the profile is the one a box gets without asking.
 #
-# The embed slots of both profiles are unchanged in phase 25 (D-25-12): exactly
-# one embed runner exists, embed_slots takes effect with the N-slot rework of
-# phase 26.
+# The embed slots (D-25-12) are in effect since phase 26: the one embed runner
+# embeds up to embed_slots rows of a round side by side, Standard one and
+# Performance two, behind locks around the chunker and the writes of the track
+# (worker/embedding.py, EmbedRunner._work). Economy keeps embedding inline in
+# the indexing loop, one row after the other (IDX-08).
 PROFILE_STANDARD_CORE_SHARE = 0.5
 PROFILE_STANDARD_MEMORY_SHARE = 0.4
 PROFILE_STANDARD_OCR_SLOTS_MAX = 4
