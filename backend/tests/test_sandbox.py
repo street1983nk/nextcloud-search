@@ -394,6 +394,88 @@ def test_the_child_hardens_itself_before_the_parsers_load() -> None:
     assert body.index("os.setsid()") < body.index("_shed_secrets()")
 
 
+def test_the_child_lowers_itself_before_anything_else_happens() -> None:
+    # D-26-11 and D-26-16: the level has to be set before tesseract can be
+    # started, and the OOM score before the parsers can allocate. Straight after
+    # the new session is the earliest point at which both are the child's alone.
+    body = SANDBOX_SOURCE.read_text(encoding="utf-8").split("def _child_main", 1)[1]
+
+    assert body.index("os.setsid()") < body.index("os.nice(SANDBOX_NICE)")
+    assert body.index("os.nice(SANDBOX_NICE)") < body.index("_lower_own_standing()")
+    assert body.index("_lower_own_standing()") < body.index("_shed_secrets()")
+    assert body.index("_shed_secrets()") < body.index("from findling.extract.dispatch import ")
+
+
+def test_the_main_process_never_lowers_itself() -> None:
+    # Only the children step back (D-26-11). A nice call anywhere else in the
+    # package would slow the search the level is there to protect.
+    package = SANDBOX_SOURCE.parents[1]
+    elsewhere = [
+        path.relative_to(package).as_posix()
+        for path in package.rglob("*.py")
+        if path != SANDBOX_SOURCE and "os.nice(" in path.read_text(encoding="utf-8")
+    ]
+
+    assert elsewhere == []
+
+
+def test_lowering_the_own_standing_swallows_an_unwritable_proc(tmp_path: Path) -> None:
+    # A read only /proc must not cost the child its extraction: the hardening is
+    # best effort, the kernel simply keeps its default opinion.
+    nowhere = tmp_path / "no-such-directory"
+
+    sandbox._lower_own_standing(nowhere / "oom_score_adj", nowhere / "autogroup")
+
+    assert not nowhere.exists()
+
+
+def test_lowering_the_own_standing_writes_both_values(tmp_path: Path) -> None:
+    score, group = tmp_path / "oom_score_adj", tmp_path / "autogroup"
+
+    sandbox._lower_own_standing(score, group)
+
+    assert score.read_text(encoding="ascii") == "1000"
+    assert group.read_text(encoding="ascii") == str(sandbox.SANDBOX_NICE)
+
+
+def _nice_of(pid: int) -> int:
+    """The nice level of another process, zero on Windows where the notion is absent."""
+    if sys.platform == "win32":
+        return 0
+    return os.getpriority(os.PRIO_PROCESS, pid)
+
+
+def _expected_child_nice() -> int:
+    """The level a child of this test process ends up at: its own plus ten, capped at 19."""
+    if sys.platform == "win32":
+        return 0
+    return min(19, os.nice(0) + sandbox.SANDBOX_NICE)
+
+
+def test_the_child_reports_its_own_standing(worker: sandbox.ExtractionWorker) -> None:
+    # Asked of the running child, because the child lowers itself and the
+    # parent is the one process that must not.
+    nice, score = worker.priority()
+
+    if sys.platform == "win32":
+        assert (nice, score) == (0, -1)
+    else:
+        assert nice == _expected_child_nice()
+        assert score == 1000
+
+
+@ONLY_POSIX
+def test_a_grandchild_inherits_the_level_of_the_child(worker: sandbox.ExtractionWorker) -> None:
+    # tesseract is started by the child and has to run at the child's level,
+    # otherwise N engines would compete with the search at full weight.
+    answer = worker.probe("grandchild", 30.0)
+    grandchild = int(answer.text)
+    try:
+        assert _nice_of(grandchild) == _expected_child_nice()
+    finally:
+        worker.stop()
+
+
 def test_the_native_thread_pools_are_pinned_to_one_thread(monkeypatch: pytest.MonkeyPatch) -> None:
     # The fix of the bug the owner sight check of plan 06.1-19 found: every DOCX,
     # XLSX and PPTX came back as failed(corrupt) on a twelve core host, because

@@ -40,11 +40,13 @@ import away from being false.
 
 from __future__ import annotations
 
+import contextlib
 import multiprocessing as mp
 import os
 import sys
 import time
 from multiprocessing.context import SpawnProcess
+from pathlib import Path
 from typing import Any, Final
 
 from findling import config
@@ -65,6 +67,17 @@ _JOB_EXTRACT: Final = "extract"
 _JOB_MODULES: Final = "modules"
 _JOB_PROBE: Final = "probe"
 _JOB_STOP: Final = "stop"
+_JOB_PRIORITY: Final = "priority"
+
+# The nice level every extraction child runs at, in every profile (D-26-11).
+#
+# Only the children and never the main process: the main process answers the
+# Unified Search and the status page, and those have to stay quick while N
+# children read scans next to them. Economy with its single slot is no
+# exception, because a lone OCR child on a small box is exactly the load that
+# makes the search wait (issue #19). tesseract is started by the child and
+# inherits the level, so the engine is covered without a word in ocr.py.
+SANDBOX_NICE: Final = 10
 
 # How long a kill is given to take effect before the parent stops waiting. The
 # kernel does not negotiate, so this is a formality; it exists so that a wedged
@@ -151,6 +164,52 @@ def _run_probe(kind: str, amount: float) -> ExtractionOutcome:
     return ExtractionOutcome.indexed(kind)
 
 
+def _lower_own_standing(
+    oom_score_adj_path: Path = Path("/proc/self/oom_score_adj"),
+    autogroup_path: Path = Path("/proc/self/autogroup"),
+) -> None:
+    """Make this child the first thing the OOM killer takes, and the last thing the scheduler serves.
+
+    The kernel picks its OOM victim by badness, and badness follows resident
+    memory. The main process holds the model, the tokenizer and the index
+    readers and is roughly five times the size of a child, so without this line
+    a tight container loses the process that owns every slot rather than one
+    child that can simply be started again (D-26-16). Raising the own score
+    needs no privilege; only lowering it does.
+
+    The autogroup is the second half of the nice level. After ``setsid`` the
+    child forms an autogroup of its own, and where no CPU cgroup controller
+    sorts the tasks, nice only ranks threads inside that group; the group
+    itself gets the same nice here. Inside a container with a CPU controller
+    the kernel ignores the value, which costs nothing.
+
+    Both writes are best effort, each on its own: a read only /proc or a rate
+    limited autogroup changes nothing about how the child extracts, it only
+    means the kernel keeps its default opinion.
+    """
+    with contextlib.suppress(OSError):
+        oom_score_adj_path.write_text("1000", encoding="ascii")
+    with contextlib.suppress(OSError):
+        autogroup_path.write_text(str(SANDBOX_NICE), encoding="ascii")
+
+
+def _own_standing() -> tuple[int, int]:
+    """The nice level and the OOM score adjustment of this process, as the child sees them.
+
+    ``os.nice(0)`` reads the level without changing it. An unreadable score
+    comes back as -1, which no child of this module ever sets, so a test cannot
+    mistake a missing file for a hardened child. Windows has neither, and says
+    so with the same two neutral values.
+    """
+    if sys.platform == "win32":
+        return (0, -1)
+    try:
+        score = int(Path("/proc/self/oom_score_adj").read_text(encoding="ascii").strip())
+    except (OSError, ValueError):
+        score = -1
+    return (os.nice(0), score)
+
+
 def _shed_secrets() -> None:
     """Drop everything from the environment a compromised child could spend.
 
@@ -229,6 +288,13 @@ def _child_main(pipe: PipeEnd, address_space_bytes: int) -> None:
         # grandchild that survives the kill would hold the worker slot forever
         # (security audit L3).
         os.setsid()
+        # Straight after the new session and before anything else is loaded:
+        # the level is inherited by every process this child starts, tesseract
+        # included, and the OOM score has to be in place before the parsers
+        # below can allocate the memory that would make the kernel look for a
+        # victim (D-26-11, D-26-16). The main process never lowers itself.
+        os.nice(SANDBOX_NICE)
+        _lower_own_standing()
     _shed_secrets()
     _limit_address_space(address_space_bytes)
     # Before the import below and not after it: the cap is in place now, and the
@@ -259,6 +325,8 @@ def _child_main(pipe: PipeEnd, address_space_bytes: int) -> None:
             return
         if kind == _JOB_MODULES:
             answer: object = tuple(sorted(name for name in sys.modules if name.startswith("findling")))
+        elif kind == _JOB_PRIORITY:
+            answer = _own_standing()
         else:
             try:
                 answer = _run_probe(job[1], job[2]) if kind == _JOB_PROBE else _extraction_of(job)
@@ -354,6 +422,20 @@ class ExtractionWorker:
         """Every module of this package the child holds, for the import hygiene test."""
         answer = self._ask((_JOB_MODULES,))
         return answer if isinstance(answer, tuple) else ()
+
+    def priority(self) -> tuple[int, int]:
+        """The nice level and the OOM score adjustment the child runs with, for the hardening test.
+
+        Asked of the running child rather than read from the parent, because
+        the child lowers itself and the parent is exactly the process that must
+        not. Anything that is not a pair of integers is the neutral (0, -1).
+        """
+        answer = self._ask((_JOB_PRIORITY,))
+        if isinstance(answer, tuple) and len(answer) == 2:
+            nice, score = answer
+            if isinstance(nice, int) and isinstance(score, int):
+                return (nice, score)
+        return (0, -1)
 
     def stop(self) -> None:
         """End the child politely, then make sure it is gone either way."""
