@@ -223,10 +223,10 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 27-01-PLAN.md , UI-SPEC-Delta D-27-20 und SC1-Wortlaut "Bei Sparsam bleiben" mit Owner-Bestätigung (UI-01, PRUEF-01, D-27-11/20), Welle 1, Checkpoint
-- [ ] 27-02-PLAN.md , probe.py: Codes, Snapshot, Rechnung mit Vorab-Toren, Haltesignal, Deckel, Scanseite mit Digest-Pin (PRUEF-01, D-27-06/07/08), Welle 1
-- [ ] 27-03-PLAN.md , IN-01 atomarer Wächter-Snapshot, IN-02 Submit unter Sperre, shed_idle, Escalation.rebase (PRUEF-01, D-27-19), Welle 1
-- [ ] 27-04-PLAN.md , PHP: SettingsService (profileStored, needsProbe, saveProfile, Probe-Ablage), ExAppService adminSend/adminState (PRUEF-01, UI-01, D-27-09), Welle 1
+- [x] 27-01-PLAN.md , UI-SPEC-Delta D-27-20 und SC1-Wortlaut "Bei Sparsam bleiben" mit Owner-Bestätigung (UI-01, PRUEF-01, D-27-11/20), Welle 1, Checkpoint
+- [x] 27-02-PLAN.md , probe.py: Codes, Snapshot, Rechnung mit Vorab-Toren, Haltesignal, Deckel, Scanseite mit Digest-Pin (PRUEF-01, D-27-06/07/08), Welle 1
+- [x] 27-03-PLAN.md , IN-01 atomarer Wächter-Snapshot, IN-02 Submit unter Sperre, shed_idle, Escalation.rebase (PRUEF-01, D-27-19), Welle 1
+- [x] 27-04-PLAN.md , PHP: SettingsService (profileStored, needsProbe, saveProfile, Probe-Ablage), ExAppService adminSend/adminState (PRUEF-01, UI-01, D-27-09), Welle 1
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -298,7 +298,7 @@ Plans:
 | 24. Owner-Tor, Profil-Gerüst und Marken-Reparatur | v1.4 | 6/6 | Complete    | 2026-09-28 |
 | 25. Einbettungsspur und Modellwahl | v1.4 | 12/12 | Complete    | 2026-09-28 |
 | 26. N OCR-Slots und Speicherwächter | v1.4 | 14/14 | Complete    | 2026-09-29 |
-| 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 0/16 | Planned | - |
+| 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 4/16 | In Progress|  |
 | 28. Abnahme-Anfahrt | v1.4 | 0/? | Not started | - |
 | 29. Härtung und Store-Einreichung 1.4.0 | v1.4 | 0/? | Not started | - |
 
