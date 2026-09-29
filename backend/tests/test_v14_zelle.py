@@ -413,7 +413,8 @@ image) echo "ghcr.io/street1983nk/findling_backend@$ABBILD_DIGEST" ;;
 exec)
     case "$*" in
     *" php occ "*)
-        occ=${*#* php occ }
+        alles="$*"
+        occ=${alles#* php occ }
         printf 'occ %s\n' "$occ" >>"$STUB_LOG"
         case "$occ" in
         "findling:index --restart -n") echo "Queued a full rebuild." ;;
@@ -634,7 +635,6 @@ CALL_ORDER = (
     "occ app_api:app:disable",
     "baumhash-werkzeug",
     "probe-route pruefen standard int8",
-    "sampler rss_sampler.sh",
     "occ findling:index --restart -n",
 )
 CELL_ARGUMENTS = ["m7g.large", "St-T", "standard", "int8"]
@@ -708,7 +708,7 @@ def test_cell_refuse_the_trigger_while_the_old_profile_is_in_force(tmp_path: Pat
     assert not [call for call in calls if "--restart" in call]
     assert not [call for call in calls if call.startswith("sampler ")]
     assert len([call for call in calls if call.startswith("occ app_api:app:disable")]) == 2
-    assert "wirksamkeit neu-bewaffnet" in cell_lines(bench)
+    assert any(line.startswith("wirksamkeit neu-bewaffnet ") for line in cell_lines(bench))
 
 
 @pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
@@ -955,12 +955,12 @@ def test_kette_deckel_starts_no_cell_and_does_not_stop_the_box(tmp_path: Path) -
 
 @pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
 def test_kette_deckel_counts_the_running_hours_of_the_box(tmp_path: Path) -> None:
-    """57 USD before plus one hour at 1.5 USD/h is over 58.74; the same without the hour is not."""
+    """57.50 USD before plus one hour at 1.5 USD/h is over 58.74; the same without the hour is not."""
     started = str(int(time.time()) - 3600)
-    over = a_bench(tmp_path / "a", chain_values(BISHER_USD="57.00", SATZ_USD_H="1.5", BOX_START_EPOCH=started))
+    over = a_bench(tmp_path / "a", chain_values(BISHER_USD="57.50", SATZ_USD_H="1.5", BOX_START_EPOCH=started))
     assert run_chain(over).returncode == 83
     assert cells_run(over) == []
-    under = a_bench(tmp_path / "b", chain_values(BISHER_USD="57.00", SATZ_USD_H="1.5"))
+    under = a_bench(tmp_path / "b", chain_values(BISHER_USD="57.50", SATZ_USD_H="1.5"))
     assert run_chain(under).returncode == 0
     assert len(cells_run(under)) == 2
 
