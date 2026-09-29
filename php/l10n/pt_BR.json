@@ -4,6 +4,7 @@
         "File contents": "Conteúdo dos arquivos",
         "Search coverage": "Cobertura da pesquisa",
         "%1$s of %2$s indexable files are searchable": "%1$s de %2$s arquivos indexáveis podem ser encontrados pela pesquisa",
+        "%s files are searchable. Files were added since the last count, so the share is shown again once they have been counted.": "%s arquivos podem ser encontrados pela pesquisa. Arquivos foram adicionados desde a última contagem; a porcentagem volta a aparecer assim que forem contados.",
         "The share cannot be worked out right now because the backend does not answer. %s files of this instance are indexable.": "A proporção não pode ser calculada no momento porque o serviço não responde. %s arquivos desta instância são indexáveis.",
         "Deliberately left out: %s": "Deixados de fora de propósito: %s",
         "Those files are too large, of a type Findling does not read, or excluded by a rule. They are not in the denominator above, so the coverage figure can reach a hundred per cent.": "Esses arquivos são grandes demais, de um tipo que o Findling não lê, ou excluídos por uma regra. Eles não entram no denominador acima, de modo que a cobertura pode chegar a cem por cento.",

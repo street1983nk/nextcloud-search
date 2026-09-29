@@ -304,7 +304,7 @@
       view.runState, view.backendReachable, view.indexedDisplay, view.skipped,
       view.failed, view.excluded, view.scheduled, view.running, view.lastJobRun,
       coverage.indexed, coverage.indexable, coverage.deliberatelyLeftOut,
-      coverage.percent,
+      coverage.percent, coverage.recounting,
       // The second track belongs in this line or the page stops moving during
       // the one pass it exists to show: while the embedding runs, the full text
       // half stands still, so every other value in here is unchanged from poll
@@ -348,6 +348,11 @@
     const percent = Number.isInteger(coverage.percent) ? coverage.percent : null
     const hasDenominator = indexable > 0
     const hasFraction = hasDenominator && percent !== null
+    // More searchable than indexable: the recount of the denominator has not
+    // caught up yet (quick task 260929-kii). Neither a share nor a fraction
+    // with a numerator above its denominator, and not the sentence about a
+    // silent backend either, but a sentence of its own.
+    const recounting = hasDenominator && coverage.recounting === true
 
     // The separator between the figure and the sign is U+00A0, and it is
     // spelled as an escape rather than as the character itself (IN-03). The
@@ -362,6 +367,8 @@
     text('findling-coverage-subline', t('findling', '%1$s of %2$s indexable files are searchable')
       .replace('%1$s', numbers.format(searchable))
       .replace('%2$s', numbers.format(indexable)))
+    text('findling-coverage-recounting', t('findling', '%s files are searchable. Files were added since the last count, so the share is shown again once they have been counted.')
+      .replace('%s', numbers.format(searchable)))
     text('findling-coverage-unknown', t('findling', 'The share cannot be worked out right now because the backend does not answer. %s files of this instance are indexable.')
       .replace('%s', numbers.format(indexable)))
     text('findling-coverage-leftout-count', t('findling', 'Deliberately left out: %s')
@@ -378,7 +385,8 @@
     shown('findling-coverage-figure', hasFraction)
     shown('findling-coverage-bar', hasFraction)
     shown('findling-coverage-subline', hasFraction)
-    shown('findling-coverage-unknown', hasDenominator && !hasFraction)
+    shown('findling-coverage-recounting', recounting)
+    shown('findling-coverage-unknown', hasDenominator && !hasFraction && coverage.recounting !== true)
     shown('findling-coverage-leftout', hasDenominator)
     shown('findling-coverage-provisional', hasDenominator && coverage.provisional === true)
     shown('findling-coverage-empty', !hasDenominator)
@@ -470,8 +478,10 @@
     // The denominator belongs in this rule as well, exactly as it does in the
     // first block: a block that appeared for the engine line alone must not
     // claim that a share could not be worked out. There is nothing to work out
-    // yet, and the empty block below says so in its own words.
-    shown('findling-semantic-unknown', hasDenominator && !hasFraction)
+    // yet, and the empty block below says so in its own words. While the
+    // recount has not caught up, the sentence of the first block says why no
+    // share is shown, and "cannot be worked out" would be the wrong reason.
+    shown('findling-semantic-unknown', hasDenominator && !hasFraction && coverage.recounting !== true)
   }
 
   /**
