@@ -17,9 +17,13 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import shutil
+import sqlite3
 import subprocess
 import sys
 import threading
+import time
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -28,12 +32,17 @@ from urllib.parse import parse_qs
 
 import pytest
 
-from test_measurement_scripts import MEASUREMENTS_DIR
+from test_measurement_scripts import MEASUREMENTS_DIR, a_boxless_run
 
 # Built here from MEASUREMENTS_DIR rather than imported, so this module does not
 # lean on a name another plan introduced.
 RUN_DIR = MEASUREMENTS_DIR / "2026-10-abnahme-anfahrt" / "skripte"
 PROBE_ROUTE = RUN_DIR / "11-probe-route.py"
+CELL = RUN_DIR / "10-zelle.sh"
+CHAIN = RUN_DIR / "00-kette.sh"
+NOUGHT = RUN_DIR / "93b-nullstand.sh"
+A_DIGEST = "sha256:" + "0" * 64
+NO_SHELL = shutil.which("sh") is None
 
 PASSWORD = "richtig-und-geheim"  # noqa: S105 - the password of the stub, nothing real
 LOGIN_TOKEN = "zeichen-der-anmeldeseite"  # noqa: S105 - a token of the stub
@@ -373,3 +382,660 @@ def test_probe_route_is_standard_library_only() -> None:
     text = PROBE_ROUTE.read_text(encoding="utf-8")
     assert "import requests" not in text
     assert "admin/profile/check" in text
+
+
+# ---------------------------------------------------------------------------
+# 10-zelle.sh and 00-kette.sh against stand ins on the PATH.
+#
+# sudo runs its command, setsid and nohup pass it on, sync does nothing, docker
+# logs every call and answers the handful of questions a cell asks, the occ
+# calls inside docker exec are logged on a line of their own, python3 answers
+# for 11-probe-route.py and 96d-statusbeobachter.py and runs the real
+# interpreter for everything else (01-teilkorpus.py zaehltor, the reading of a
+# state.db), and shutdown logs and plans. None of them reaches a network.
+
+STUB_SUDO = '#!/bin/sh\n[ "${1:-}" = -E ] && shift\nexec "$@"\n'
+STUB_HANDOVER = '#!/bin/sh\nexec "$@"\n'
+STUB_NOTHING = "#!/bin/sh\nexit 0\n"
+STUB_DOCKER = r"""#!/bin/sh
+printf 'docker %s\n' "$*" >>"$STUB_LOG"
+case "$1" in
+ps)
+    i=0
+    while [ "$i" -lt "${STUB_NEXTCLOUDS:-1}" ]; do
+        echo "ghcr.io/nextcloud-releases/aio-nextcloud:latest"
+        i=$((i + 1))
+    done
+    echo "ghcr.io/street1983nk/findling_backend:dev"
+    ;;
+inspect) echo "stubkennung" ;;
+image) echo "ghcr.io/street1983nk/findling_backend@$ABBILD_DIGEST" ;;
+exec)
+    case "$*" in
+    *" php occ "*)
+        occ=${*#* php occ }
+        printf 'occ %s\n' "$occ" >>"$STUB_LOG"
+        case "$occ" in
+        "findling:index --restart -n") echo "Queued a full rebuild." ;;
+        "findling:index --restart"*) echo "Nothing was changed." ;;
+        findling:index)
+            printf 'Work stock\n  scheduled            0\n  handed to the worker 0\n\n'
+            printf 'End states as Nextcloud recorded them\n  indexed              0\n'
+            printf '  skipped              %s\n  failed               %s\n' "${STUB_SKIPPED:-0}" "${STUB_FAILED:-0}"
+            ;;
+        "config:app:set findling profile --value="*) printf '%s' "${occ#*--value=}" >"$STUB_STATE/profil" ;;
+        app_api:app:register*) [ "${STUB_REGISTER:-0}" = 0 ] || exit 1 ;;
+        *) echo "ok" ;;
+        esac
+        ;;
+    *40b-baumhash.py*) echo "baumhash: ${STUB_HASH:-abc}" ;;
+    esac
+    ;;
+esac
+exit 0
+"""
+STUB_PYTHON = r"""#!/bin/sh
+case "$(basename "${1:-}")" in
+11-probe-route.py)
+    printf 'probe-route %s\n' "$2 ${3:-} ${4:-}" >>"$STUB_LOG"
+    case "$2" in
+    abwaerts)
+        printf economy >"$STUB_STATE/profil"
+        echo "abwaerts code=saved saved=true HTTP200"
+        ;;
+    pruefen)
+        echo "t=2s state=done step=cleanup bytes=0/0 verdict=${STUB_VERDIKT:-fits}"
+        case "${STUB_VERDIKT:-fits}" in
+        fits)
+            printf '%s' "$3" >"$STUB_STATE/profil"
+            echo "verdikt fits erzwungen nein"
+            exit 0
+            ;;
+        narrow)
+            echo "verdikt narrow ursache memory numbers {}"
+            exit 30
+            ;;
+        nofit)
+            echo "verdikt nofit ursache reserve numbers {}"
+            exit 31
+            ;;
+        *) exit 33 ;;
+        esac
+        ;;
+    uebersicht)
+        p=$(cat "$STUB_STATE/profil" 2>/dev/null || echo economy)
+        [ "${STUB_WIRKT:-ja}" = ja ] || p=economy
+        printf 'uebersicht HTTP200 effective=%s guardEffective=%s' "$p" "${STUB_GUARD:-$p}"
+        printf ' guardCause=keine slotsInForce=2'
+        printf ' throttled=false backendReachable=%s scheduled=0 running=0' "${STUB_REACHABLE:-true}"
+        printf ' indexed=%s embedded=%s storedPrecision=int8 profileSaved=%s\n' \
+            "${STUB_INDEXED:-10}" "${STUB_EMBEDDED:-10}" "$p"
+        ;;
+    esac
+    exit 0
+    ;;
+96d-statusbeobachter.py)
+    printf 'statusbeobachter\n' >>"$STUB_LOG"
+    exit 0
+    ;;
+esac
+exec "$REAL_PYTHON" "$@"
+"""
+STUB_SHUTDOWN = r"""#!/bin/sh
+printf 'shutdown %s\n' "$*" >>"$STUB_LOG"
+case "${2:-}" in
++*)
+    minuten=${2#+}
+    printf 'USEC=%s\nMODE=poweroff\n' "$((($(date +%s) + minuten * 60) * 1000000))" >"$GEPLANT_DATEI"
+    ;;
+esac
+exit 0
+"""
+STUB_SAMPLER = r"""#!/bin/sh
+printf 'sampler %s\n' "$(basename "$0")" >>"$STUB_LOG"
+exit 0
+"""
+STUB_TREE_HASH = r"""#!/bin/sh
+{
+    echo "baumhash: ${STUB_HASH:-abc}"
+    echo "baumhash: ${STUB_HASH:-abc}"
+    echo "baumhash: php"
+    echo "abbild-baumhash: ${STUB_HASH:-abc}"
+    echo "baumhash-gleich ja"
+} >"$OUT/40b-baumhash.txt"
+printf 'baumhash-werkzeug\n' >>"$STUB_LOG"
+"""
+STUB_CELL = r"""#!/bin/sh
+printf 'zelle %s korpus %s\n' "$*" "${ZELLE_KORPUS:-}" >>"$STUB_LOG"
+exit "${STUB_ZELLE_RC:-0}"
+"""
+
+
+def _write(path: Path, text: str) -> Path:
+    path.write_text(text, encoding="utf-8", newline="\n")
+    path.chmod(0o755)
+    return path
+
+
+@dataclass
+class Bench:
+    out: Path
+    log: Path
+    environment: dict[str, str | None]
+
+    def calls(self) -> list[str]:
+        return self.log.read_text(encoding="utf-8").splitlines() if self.log.is_file() else []
+
+
+def a_bench(tmp_path: Path, values: dict[str, str]) -> Bench:
+    """Stand ins, a value file and an environment for one boxless run."""
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for name, text in (
+        ("sudo", STUB_SUDO),
+        ("setsid", STUB_HANDOVER),
+        ("nohup", STUB_HANDOVER),
+        ("sync", STUB_NOTHING),
+        ("docker", STUB_DOCKER),
+        ("python3", STUB_PYTHON),
+        ("shutdown", STUB_SHUTDOWN),
+    ):
+        _write(bin_dir / name, text)
+    tools = tmp_path / "werkzeuge"
+    tools.mkdir()
+    _write(tools / "40b-baumhash.sh", STUB_TREE_HASH)
+    _write(tools / "40b-baumhash.py", "#!/usr/bin/env python3\n")
+    samplers = tmp_path / "sampler"
+    samplers.mkdir()
+    for name in ("rss_sampler.sh", "proc_anon_sampler.sh", "cpu_sampler.sh"):
+        _write(samplers / name, STUB_SAMPLER)
+    state = tmp_path / "zustand"
+    state.mkdir()
+    (tmp_path / "volumen").mkdir()
+    secret = tmp_path / "pw"
+    secret.write_text("geheim\n", encoding="utf-8")
+    file = tmp_path / "werte.env"
+    lines = {"ABBILD_DIGEST": A_DIGEST, "GRENZE_2G": "nein", "PWFILE": secret.as_posix(), **values}
+    file.write_text("".join(f"{key}={value}\n" for key, value in lines.items() if value), encoding="utf-8")
+    log = tmp_path / "aufrufe.txt"
+    environment: dict[str, str | None] = {
+        "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+        "LAUFWERTE": file.as_posix(),
+        "STUB_LOG": log.as_posix(),
+        "STUB_STATE": state.as_posix(),
+        "REAL_PYTHON": Path(sys.executable).as_posix(),
+        "WERKZEUGE": tools.as_posix(),
+        "RSS_SAMPLER": (samplers / "rss_sampler.sh").as_posix(),
+        "ANON_SAMPLER": (samplers / "proc_anon_sampler.sh").as_posix(),
+        "CPU_SAMPLER": (samplers / "cpu_sampler.sh").as_posix(),
+        "VOLUME": (tmp_path / "volumen").as_posix(),
+        "DROP_CACHES": (tmp_path / "drop_caches").as_posix(),
+        "CGROUP_ROOT": (tmp_path / "cgroup").as_posix(),
+        "GEPLANT_DATEI": (tmp_path / "scheduled").as_posix(),
+        "BEWAFFNUNG_TAKT": "0",
+        "WIRK_TAKT": "0",
+        "ENDE_TAKT": "0",
+        "KORPUS_FRIST": "0",
+        "RUHE": "0",
+        "HERZ_TAKT": "1",
+        "ZELLE_SKRIPT": _write(tmp_path / "zelle-stub.sh", STUB_CELL).as_posix(),
+        "PYTHONUTF8": "1",
+    }
+    return Bench(out=tmp_path / "rohdaten", log=log, environment=environment)
+
+
+def run_cell(
+    bench: Bench, arguments: list[str], extra: dict[str, str | None] | None = None
+) -> subprocess.CompletedProcess[str]:
+    return a_boxless_run(CELL, bench.out, arguments, umgebung={**bench.environment, **(extra or {})})
+
+
+def cell_lines(bench: Bench, box: str = "m7g.large", cell: str = "St-T") -> list[str]:
+    raw = bench.out / box / cell / "10-zelle.txt"
+    return raw.read_text(encoding="utf-8").splitlines() if raw.is_file() else []
+
+
+def steps_of(lines: list[str]) -> list[str]:
+    return [line.split()[1] for line in lines if line.startswith("schritt ")]
+
+
+def code_of(text: str) -> str:
+    return "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+
+
+def first_index(calls: list[str], pattern: str) -> int:
+    return next(index for index, call in enumerate(calls) if pattern in call)
+
+
+ORDER = [
+    "abwaerts",
+    "zaehlung-eine-nextcloud",
+    "nullstand",
+    "registrierung",
+    "bewaffnung",
+    "grenze",
+    "baumhash",
+    "93b-nullstand",
+    "drop-caches",
+    "probe",
+    "wirksamkeit",
+    "sampler",
+    "trigger",
+    "ende",
+    "nachlauf",
+    "abholen",
+]
+CALL_ORDER = (
+    "probe-route abwaerts",
+    "docker ps",
+    "--rm-data",
+    "occ app_api:app:register",
+    "occ app_api:app:disable",
+    "baumhash-werkzeug",
+    "probe-route pruefen standard int8",
+    "sampler rss_sampler.sh",
+    "occ findling:index --restart -n",
+)
+CELL_ARGUMENTS = ["m7g.large", "St-T", "standard", "int8"]
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_cell_order_runs_every_step_in_the_order_of_pattern_1(tmp_path: Path) -> None:
+    bench = a_bench(tmp_path, {})
+    answer = run_cell(bench, CELL_ARGUMENTS)
+    assert answer.returncode == 0, answer
+    lines = cell_lines(bench)
+    assert steps_of(lines) == ORDER, lines
+    assert lines[-1] == "10-ZELLE-FERTIG St-T"
+    calls = bench.calls()
+    positions = [first_index(calls, pattern) for pattern in CALL_ORDER]
+    assert positions == sorted(positions), list(zip(CALL_ORDER, positions, strict=True))
+    assert "erzwungen nein" in lines
+    assert "caches-geleert ja" in lines
+    assert (tmp_path / "drop_caches").read_text(encoding="utf-8").strip() == "3"
+    assert "waechter-absenkung nein" in lines
+    assert any(line.startswith("guard effective=standard ") for line in lines), lines
+    assert not [call for call in calls if call.startswith("occ config:app:set")]
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_cell_refuse_two_nextclouds_before_any_rm_data(tmp_path: Path) -> None:
+    bench = a_bench(tmp_path, {})
+    answer = run_cell(bench, CELL_ARGUMENTS, {"STUB_NEXTCLOUDS": "2"})
+    assert answer.returncode == 61, answer
+    assert not [call for call in bench.calls() if "--rm-data" in call]
+    assert "nextcloud-instanzen 2" in cell_lines(bench)
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+@pytest.mark.parametrize("digest", ["", "latest", "sha256:" + "0" * 63, "sha256:" + "g" * 64])
+def test_cell_refuse_a_digest_without_its_shape_before_the_nought_state(tmp_path: Path, digest: str) -> None:
+    bench = a_bench(tmp_path, {"ABBILD_DIGEST": digest})
+    answer = run_cell(bench, CELL_ARGUMENTS)
+    assert answer.returncode == 2, answer
+    assert "ABBILD_DIGEST" in answer.stderr
+    assert bench.calls() == []
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        [],
+        ["m7g.large"],
+        ["m7g.large", "St-T", "turbo", "int8"],
+        ["m7g.large", "St-T", "economy", "fp32"],
+        ["m7g.large", "St/T", "standard", "int8"],
+        ["m7g.large", "St-T", "standard", "fp16"],
+    ],
+)
+def test_cell_refuse_an_unknown_call(tmp_path: Path, arguments: list[str]) -> None:
+    bench = a_bench(tmp_path, {})
+    answer = run_cell(bench, arguments)
+    assert answer.returncode == 2, answer
+    assert "Benutzung:" in answer.stderr
+    assert bench.calls() == []
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_cell_refuse_the_trigger_while_the_old_profile_is_in_force(tmp_path: Path) -> None:
+    """No trigger after the frist, with one arming more in between (pitfall 1)."""
+    bench = a_bench(tmp_path, {})
+    answer = run_cell(bench, CELL_ARGUMENTS, {"STUB_WIRKT": "nein", "WIRK_FRIST": "2", "WIRK_TAKT": "0.2"})
+    assert answer.returncode == 69, answer
+    calls = bench.calls()
+    assert not [call for call in calls if "--restart" in call]
+    assert not [call for call in calls if call.startswith("sampler ")]
+    assert len([call for call in calls if call.startswith("occ app_api:app:disable")]) == 2
+    assert "wirksamkeit neu-bewaffnet" in cell_lines(bench)
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_cell_refuse_a_container_that_is_not_armed(tmp_path: Path) -> None:
+    bench = a_bench(tmp_path, {})
+    answer = run_cell(bench, CELL_ARGUMENTS, {"STUB_REACHABLE": "false", "BEWAFFNUNG_FRIST": "1"})
+    assert answer.returncode == 65, answer
+    assert not [call for call in bench.calls() if "probe-route pruefen" in call]
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_cell_sparsam_runs_no_probe(tmp_path: Path) -> None:
+    bench = a_bench(tmp_path, {})
+    answer = run_cell(bench, ["m7g.large", "S-T", "economy", "int8"])
+    assert answer.returncode == 0, answer
+    assert "probe keine abwaertsweg" in cell_lines(bench, cell="S-T")
+    assert not [call for call in bench.calls() if "probe-route pruefen" in call]
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+@pytest.mark.parametrize(
+    ("verdict", "precision", "reason"),
+    [("narrow", "int8", "narrow/memory"), ("nofit", "fp32", "nofit/reserve")],
+)
+def test_cell_forced_over_occ_after_narrow_or_nofit(tmp_path: Path, verdict: str, precision: str, reason: str) -> None:
+    """D-28-05: occ skips the probe, and the cell carries the mark."""
+    bench = a_bench(tmp_path, {})
+    answer = run_cell(bench, ["m7g.large", "L-T", "performance", precision], {"STUB_VERDIKT": verdict})
+    assert answer.returncode == 0, answer
+    assert f"erzwungen ja grund {reason}" in cell_lines(bench, cell="L-T")
+    calls = bench.calls()
+    assert "occ config:app:set findling profile --value=performance" in calls
+    fp32 = "occ config:app:set findling model_precision --value=fp32"
+    assert (fp32 in calls) == (precision == "fp32")
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_cell_ends_with_its_own_code_when_the_probe_fails_otherwise(tmp_path: Path) -> None:
+    bench = a_bench(tmp_path, {})
+    answer = run_cell(bench, CELL_ARGUMENTS, {"STUB_VERDIKT": "besetzt"})
+    assert answer.returncode == 68, answer
+    assert not [call for call in bench.calls() if "--restart" in call]
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_cell_trigger_carries_the_n(tmp_path: Path) -> None:
+    """Without -n the command asks back, gets no answer and changes nothing."""
+    code = code_of(CELL.read_text(encoding="utf-8"))
+    assert code.count("findling:index --restart -n") >= 1
+    assert re.findall(r"findling:index --restart(?! -n)", code) == []
+    bench = a_bench(tmp_path, {})
+    answer = run_cell(bench, CELL_ARGUMENTS)
+    assert answer.returncode == 0, answer
+    assert "occ findling:index --restart -n" in bench.calls()
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_cell_teilkorpus_demands_the_count_gate(tmp_path: Path) -> None:
+    bench = a_bench(tmp_path, {})
+    good: dict[str, str | None] = {
+        "ZELLE_KORPUS": "teil",
+        "STUB_INDEXED": "4990",
+        "STUB_EMBEDDED": "4990",
+        "STUB_SKIPPED": "6",
+        "STUB_FAILED": "4",
+    }
+    answer = run_cell(bench, CELL_ARGUMENTS, good)
+    assert answer.returncode == 0, answer
+    assert "zaehltor bestanden 5000" in cell_lines(bench)
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_cell_teilkorpus_ends_the_cell_on_a_missed_count(tmp_path: Path) -> None:
+    bench = a_bench(tmp_path, {})
+    answer = run_cell(bench, CELL_ARGUMENTS, {"ZELLE_KORPUS": "teil"})
+    assert answer.returncode == 71, answer
+    lines = cell_lines(bench)
+    assert "zaehltor verfehlt 10 statt 5000" in lines
+    assert "ende" not in steps_of(lines)
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_cell_marks_a_guard_that_lowered_during_the_cell(tmp_path: Path) -> None:
+    """Pitfall 8: marked, not thrown away."""
+    bench = a_bench(tmp_path, {})
+    answer = run_cell(bench, CELL_ARGUMENTS, {"STUB_GUARD": "economy"})
+    assert answer.returncode == 0, answer
+    assert "waechter-absenkung ja" in cell_lines(bench)
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_cell_sets_the_2g_limit_only_on_request_and_reads_it_back(tmp_path: Path) -> None:
+    bench = a_bench(tmp_path, {"GRENZE_2G": "ja"})
+    scope = tmp_path / "cgroup" / "system.slice" / "docker-stubkennung.scope"
+    scope.mkdir(parents=True)
+    (scope / "memory.max").write_text("2147483648\n", encoding="utf-8")
+    (scope / "memory.swap.max").write_text("0\n", encoding="utf-8")
+    answer = run_cell(bench, ["m7g.large", "S-voll", "economy", "int8"])
+    assert answer.returncode == 0, answer
+    assert "grenze-gesetzt ja" in cell_lines(bench, cell="S-voll")
+    assert "docker update --memory=2g --memory-swap=2g nc_app_findling_backend" in bench.calls()
+    (scope / "memory.max").write_text("max\n", encoding="utf-8")
+    again = run_cell(bench, ["m7g.large", "S-voll-2", "economy", "int8"])
+    assert again.returncode == 64, again
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_cell_without_limit_sets_none(tmp_path: Path) -> None:
+    bench = a_bench(tmp_path, {})
+    answer = run_cell(bench, ["c7a.xlarge", "St-T", "standard", "int8"])
+    assert answer.returncode == 0, answer
+    assert "grenze keine" in cell_lines(bench, box="c7a.xlarge")
+    assert not [call for call in bench.calls() if "docker update" in call]
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_cell_refuses_a_raw_directory_that_is_not_empty(tmp_path: Path) -> None:
+    bench = a_bench(tmp_path, {})
+    (bench.out / "m7g.large" / "St-T").mkdir(parents=True)
+    (bench.out / "m7g.large" / "St-T" / "alt.txt").write_text("x", encoding="utf-8")
+    answer = run_cell(bench, CELL_ARGUMENTS)
+    assert answer.returncode == 59, answer
+    assert bench.calls() == []
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_cell_nought_reading_refuses_a_volume_with_indexed_files(tmp_path: Path) -> None:
+    """93b reads the four sources without queueing anything, and a filled store ends the cell."""
+    bench = a_bench(tmp_path, {})
+    connection = sqlite3.connect(tmp_path / "volumen" / "state.db")
+    connection.execute("create table files (id integer, state text, deleted_at integer)")
+    connection.execute("create table meta (key text, value text)")
+    connection.execute("insert into files values (1, 'indexed', null)")
+    connection.commit()
+    connection.close()
+    answer = run_cell(bench, CELL_ARGUMENTS)
+    assert answer.returncode == 67, answer
+    assert not [call for call in bench.calls() if "--restart" in call]
+    raw = (bench.out / "m7g.large" / "St-T" / "93b-nullstand.txt").read_text(encoding="utf-8")
+    assert "volumen-leer nein" in raw
+
+
+def test_cell_nought_reading_queues_nothing() -> None:
+    text = NOUGHT.read_text(encoding="utf-8")
+    assert "--restart" not in code_of(text)
+    assert "93-nullstand.sh" in text
+
+
+def test_cell_calls_the_tools_instead_of_rebuilding_them() -> None:
+    text = CELL.read_text(encoding="utf-8")
+    for tool in (
+        "40b-baumhash.sh",
+        "96d-statusbeobachter.py",
+        "rss_sampler.sh",
+        "proc_anon_sampler.sh",
+        "cpu_sampler.sh",
+        "11-probe-route.py",
+        "93b-nullstand.sh",
+        "93-nullstand.sh",
+        "01-teilkorpus.py",
+    ):
+        assert tool in text, tool
+    code = code_of(text)
+    assert '"$RSS_SAMPLER" "$CONTAINER" 2 ' in code
+    assert '"$ANON_SAMPLER" "$CONTAINER" 1 ' in code
+    assert "shutdown" not in code
+
+
+# ---------------------------------------------------------------------------
+# 00-kette.sh
+
+
+def run_chain(bench: Bench, extra: dict[str, str | None] | None = None) -> subprocess.CompletedProcess[str]:
+    return a_boxless_run(CHAIN, bench.out, ["m7g.large"], umgebung={**bench.environment, **(extra or {})})
+
+
+def chain_values(**overrides: str) -> dict[str, str]:
+    values = {
+        "DECKEL_USD": "58.74",
+        "BISHER_USD": "0",
+        "SATZ_USD_H": "0.0978",
+        "BOX_START_EPOCH": str(int(time.time())),
+        "ZELLEN": "S-T:economy:int8:teil St-T:standard:int8:teil",
+        "VORPRUEFUNG": "stop-ja",
+    }
+    values.update(overrides)
+    return values
+
+
+def shutdowns(bench: Bench) -> list[str]:
+    return [call for call in bench.calls() if call.startswith("shutdown ")]
+
+
+def cells_run(bench: Bench) -> list[str]:
+    return [call for call in bench.calls() if call.startswith("zelle ")]
+
+
+def chain_lines(bench: Bench) -> list[str]:
+    raw = bench.out / "m7g.large" / "00-kette.txt"
+    return raw.read_text(encoding="utf-8").splitlines() if raw.is_file() else []
+
+
+def minutes_of(call: str) -> int:
+    found = re.fullmatch(r"shutdown -h \+(\d+)", call)
+    assert found is not None, call
+    return int(found.group(1))
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_kette_timer_is_set_at_cap_times_1_20_and_the_end_stops_the_box(tmp_path: Path) -> None:
+    bench = a_bench(tmp_path, chain_values())
+    answer = run_chain(bench)
+    assert answer.returncode == 0, answer
+    calls = shutdowns(bench)
+    assert len(calls) == 2, calls
+    # (1.20 x 58.74 - 0) / 0.0978 x 60 = 43243.4 minutes, give or take the seconds of the run.
+    assert 43240 <= minutes_of(calls[0]) <= 43244, calls
+    assert calls[-1] == "shutdown -h +2"
+    assert cells_run(bench) == [
+        "zelle m7g.large S-T economy int8 korpus teil",
+        "zelle m7g.large St-T standard int8 korpus teil",
+    ]
+    assert any(line.startswith("kette-ende ") for line in chain_lines(bench)), chain_lines(bench)
+    assert (bench.out / "m7g.large" / "00-herzschlag.txt").is_file()
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_kette_deckel_starts_no_cell_and_does_not_stop_the_box(tmp_path: Path) -> None:
+    """D-28-02: a mark, no new cell, and no shutdown beyond the safety timer of the start."""
+    bench = a_bench(tmp_path, chain_values(BISHER_USD="58.80"))
+    answer = run_chain(bench)
+    assert answer.returncode == 83, answer
+    assert cells_run(bench) == []
+    calls = shutdowns(bench)
+    assert len(calls) == 1, calls
+    # (70.488 - 58.80) / 0.0978 x 60 = 7170.5 minutes
+    assert 7168 <= minutes_of(calls[0]) <= 7171, calls
+    lines = chain_lines(bench)
+    mark = [line for line in lines if line.startswith("deckel-erreicht ")]
+    assert mark, lines
+    assert re.fullmatch(r"deckel-erreicht \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ bisher 58\.80\d*", mark[0]), mark
+    assert (bench.out / "m7g.large" / "00-DECKEL-ERREICHT").is_file()
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_kette_deckel_counts_the_running_hours_of_the_box(tmp_path: Path) -> None:
+    """57 USD before plus one hour at 1.5 USD/h is over 58.74; the same without the hour is not."""
+    started = str(int(time.time()) - 3600)
+    over = a_bench(tmp_path / "a", chain_values(BISHER_USD="57.00", SATZ_USD_H="1.5", BOX_START_EPOCH=started))
+    assert run_chain(over).returncode == 83
+    assert cells_run(over) == []
+    under = a_bench(tmp_path / "b", chain_values(BISHER_USD="57.00", SATZ_USD_H="1.5"))
+    assert run_chain(under).returncode == 0
+    assert len(cells_run(under)) == 2
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_kette_without_the_vorpruefung_mark_does_not_start(tmp_path: Path) -> None:
+    bench = a_bench(tmp_path, chain_values(VORPRUEFUNG=""))
+    answer = run_chain(bench)
+    assert answer.returncode == 80, answer
+    assert shutdowns(bench) == []
+    assert cells_run(bench) == []
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_kette_without_a_readable_timer_does_not_start(tmp_path: Path) -> None:
+    bench = a_bench(tmp_path, chain_values())
+    answer = run_chain(bench, {"GEPLANT_DATEI": (tmp_path / "nirgends" / "scheduled").as_posix()})
+    assert answer.returncode == 81, answer
+    assert cells_run(bench) == []
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_kette_at_the_safety_stop_stops_the_box_at_once(tmp_path: Path) -> None:
+    bench = a_bench(tmp_path, chain_values(BISHER_USD="71"))
+    answer = run_chain(bench)
+    assert answer.returncode == 82, answer
+    assert shutdowns(bench) == ["shutdown -h now"]
+    assert cells_run(bench) == []
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_kette_a_failed_cell_ends_the_chain_and_pulls_the_timer_forward(tmp_path: Path) -> None:
+    bench = a_bench(tmp_path, chain_values())
+    answer = run_chain(bench, {"STUB_ZELLE_RC": "69"})
+    assert answer.returncode == 84, answer
+    assert len(cells_run(bench)) == 1
+    calls = shutdowns(bench)
+    assert calls[-1] == "shutdown -h +60", calls
+    assert "shutdown -h +2" not in calls
+    assert any(line.startswith("kette-abbruch zelle S-T rueckgabe 69") for line in chain_lines(bench))
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+@pytest.mark.parametrize(
+    "broken",
+    [
+        {"DECKEL_USD": ""},
+        {"DECKEL_USD": "viel"},
+        {"SATZ_USD_H": "0"},
+        {"BISHER_USD": "-1"},
+        {"BOX_START_EPOCH": str(int(time.time()) + 3600)},
+        {"ZELLEN": ""},
+        {"ZELLEN": "St-T:standard:int8"},
+        {"ZELLEN": "St-T:turbo:int8:teil"},
+        {"ZELLEN": "St-T:standard:int8:halb"},
+        {"ABBILD_DIGEST": "latest"},
+    ],
+)
+def test_kette_refuses_incomplete_values(tmp_path: Path, broken: dict[str, str]) -> None:
+    bench = a_bench(tmp_path, chain_values(**broken))
+    answer = run_chain(bench)
+    assert answer.returncode == 2, answer
+    assert bench.calls() == []
+
+
+def test_kette_shuts_down_only_in_the_timer_the_safety_stop_the_abort_and_the_end() -> None:
+    code = code_of(CHAIN.read_text(encoding="utf-8"))
+    shutdown_lines = sorted(line.strip() for line in code.splitlines() if "shutdown -h" in line)
+    assert shutdown_lines == sorted(
+        [
+            'sudo shutdown -h +"$minuten" >/dev/null 2>&1 || true',
+            "sudo shutdown -h now >/dev/null 2>&1 || true",
+            'sudo shutdown -h +"$ABBRUCH_FRIST" >/dev/null 2>&1 || true',
+            "sudo shutdown -h +2 >/dev/null 2>&1 || true",
+        ]
+    ), shutdown_lines
+    start = code.index("deckel_erreicht() {")
+    assert "shutdown" not in code[start : code.index("\n}\n", start)]
