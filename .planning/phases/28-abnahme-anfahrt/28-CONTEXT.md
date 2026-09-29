@@ -33,6 +33,14 @@ Vorentscheide, die hier tragen und NICHT neu verhandelt werden: D-26-10 (Messbox
 ### Rückfluss in Formel und Probe (SC4)
 - **D-28-08 (Owner, 29.09.2026):** Die gemessenen Slot-Kosten ersetzen die Schätzwerte in Formel und Probe (insbesondere OCR_SLOT_COST_BYTES = 235 MiB in backend/src/findling/config.py und die davon abgeleiteten Reserven); das ist eine Code-Änderung IN Phase 28 mit Tests. Toleranz: Eine Messung bis +10 Prozent über der Rechnung gilt als von der Rechnung getragen. Liegt eine Stufe darüber oder widerspricht ein Probe-Verdikt der Messung, entscheidet der Owner je Fall, ob die Formel nachgezogen oder die Stufe im Release nicht angeboten wird; der Entscheid wird dokumentiert (SC4).
 
+### Nachentscheide nach der Research (Owner, 29.09.2026, alle = Empfehlung)
+- **D-28-09:** Teilkorpus Variante A: 5.000 Dateien nach der festen Regel aus 28-RESEARCH.md (1.800 einseitige Scans, alle 100 Mehrseiten-Scans, 100 Bilder, 3.000 Textdateien; 40 Prozent OCR, 2.691 Seiten). Deckel-Größenordnung laut Research rund 59 USD (Rechenblatt + 30 Prozent), die endgültige Zahl gibt der Owner vor dem Boxstart frei (D-28-01).
+- **D-28-10:** Toleranz für "Sparsam weicht nicht von der Store-Messzahl ab": plus/minus 2 Prozent um 730,2 MB. Innerhalb bleibt der Store-Text; außerhalb entscheidet der Owner über die Store-Zahl.
+- **D-28-11:** Zusätzliche Anker-Zelle Sparsam mit Teilkorpus auf m7g.large (rund 0,53 USD): verbindet Volllauf und Teilkorpus auf derselben Box.
+- **D-28-12:** Keine harte Speichergrenze auf den Matrix-Boxen, sie messen den vollen Box-RAM. Nur die Referenzbox m7g.large bleibt auf mem=4G wie die Store-Messung.
+- **D-28-13:** Boxen sofort nach der letzten Zelle abbauen; der Korpus-Snapshot wird erst nach den SC4-Entscheiden des Owners gelöscht (falls eine Nachmessung nötig wird), dann mit Nachweis (D-26-10: null laufende Kosten am Ende).
+- **D-28-14:** Ergänzt D-28-02: Beim Deckel Stopp und Rückfrage; zusätzlich STOPPT (nicht löscht) ein Sicherheitstimer die Instanz bei Deckel plus 20 Prozent, falls der Owner nicht antwortet. Nichts geht verloren.
+
 ### Claude's Discretion
 - Genaue Auswahl des Teilkorpus (OCR-Anteil, Dokumentarten), solange fest, reproduzierbar und für alle Zellen gleich.
 - Reihenfolge der Zellen (seriell, Quota 32), solange die Referenzbox und die Rechenblatt-Freigabe zuerst kommen.
