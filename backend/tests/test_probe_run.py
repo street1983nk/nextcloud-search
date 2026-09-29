@@ -11,6 +11,8 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import os
+import shutil
+import sys
 import threading
 import time
 from collections.abc import Awaitable, Callable, Iterator
@@ -19,10 +21,18 @@ from pathlib import Path
 import pytest
 
 from findling import guard, probe, profile
+from findling.config import (
+    FP32_EXTRA_BYTES,
+    GUARD_RESERVE_BYTES,
+    MODEL_PROBE_CHILD_BYTES,
+    OCR_SLOT_COST_BYTES,
+)
 from findling.embed import model_probe, weights
 from findling.extract.errors import ChildKilled, ExtractionOutcome, Reason
+from findling.extract.sandbox import ExtractionWorker
 from findling.hardware import Hardware
 from findling.nc.queue import CompanionChoice
+from findling.profile import Profile
 from findling.store.repo import open_store
 from findling.worker.probe_run import ProbeRun
 
@@ -729,3 +739,258 @@ async def test_without_persistence_nothing_is_written(tmp_path: Path) -> None:
     rig = Rig(tmp_path, persist=False)
     await rig.check()
     assert probe.META_PROBE_STATE not in rig.meta()
+
+
+# -- task 2: model children, samples, calculation, the N run, the cap --------
+
+
+async def test_an_unreadable_headroom_starts_no_child(tmp_path: Path, small_weights: bytes) -> None:
+    del small_weights
+    rig = Rig(tmp_path)
+    rig.headroom.base = None
+    snap = await rig.check("standard", "fp32")
+    assert (snap.verdict, snap.cause) == (probe.VERDICT_NOFIT, probe.CAUSE_MEMORY_UNKNOWN)
+    assert rig.workers.made == []
+    assert rig.measures.calls == []
+
+
+async def test_too_little_headroom_for_the_first_slot_starts_no_child(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    rig.headroom.base = OCR_SLOT_COST_BYTES + GUARD_RESERVE_BYTES - 1
+    snap = await rig.check()
+    assert (snap.verdict, snap.cause) == (probe.VERDICT_NOFIT, probe.CAUSE_MEMORY_SHORT)
+    assert rig.workers.made == []
+
+
+async def test_too_little_headroom_for_the_model_child_starts_none(tmp_path: Path, small_weights: bytes) -> None:
+    rig = Rig(tmp_path)
+    _placed(rig, small_weights)
+    rig.headroom.base = MODEL_PROBE_CHILD_BYTES + GUARD_RESERVE_BYTES - 1
+    snap = await rig.check("standard", "fp32")
+    assert (snap.verdict, snap.cause) == (probe.VERDICT_NOFIT, probe.CAUSE_MODEL_MEMORY)
+    assert rig.measures.calls == []
+    assert rig.workers.made == []
+
+
+class JudgeSpy:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, int]] = []
+        self._judge = probe.judge
+
+    def __call__(self, **kwargs: int) -> probe.Verdict:
+        self.calls.append(kwargs)
+        return self._judge(**kwargs)
+
+
+@pytest.fixture
+def judge(monkeypatch: pytest.MonkeyPatch) -> JudgeSpy:
+    spy = JudgeSpy()
+    monkeypatch.setattr(probe, "judge", spy)
+    return spy
+
+
+async def test_the_model_children_run_int8_then_fp32_and_feed_the_calculation(
+    tmp_path: Path, small_weights: bytes, judge: JudgeSpy
+) -> None:
+    rig = Rig(tmp_path)
+    _placed(rig, small_weights)
+    rig.measures.answers["fp32"] = ModelMeasure(model_probe.MEASURE_OK, 300 * MIB, 1_000 * MIB, 1500)
+    snap = await rig.check("standard", "fp32")
+    assert rig.measures.calls == ["int8", "fp32"]
+    assert judge.calls[0]["model_extra"] == max((700 - 150) * MIB, FP32_EXTRA_BYTES)
+    assert snap.numbers["rateInt8"] == 4000
+    assert snap.numbers["rateFp32"] == 1500
+
+
+async def test_a_small_fp32_delta_counts_as_the_constant(tmp_path: Path, small_weights: bytes, judge: JudgeSpy) -> None:
+    rig = Rig(tmp_path)
+    _placed(rig, small_weights)
+    rig.measures.answers["fp32"] = ModelMeasure(model_probe.MEASURE_OK, 300 * MIB, 500 * MIB, 1500)
+    await rig.check("standard", "fp32")
+    assert judge.calls[0]["model_extra"] == FP32_EXTRA_BYTES
+
+
+@pytest.mark.parametrize(
+    ("outcome", "cause"),
+    [
+        (model_probe.MEASURE_TIMEOUT, "timeout"),
+        (model_probe.MEASURE_KILLED, "slot_killed"),
+        (model_probe.MEASURE_NO_MEMORY, probe.CAUSE_MODEL_MEMORY),
+        (model_probe.MEASURE_FAILED, "probe_failed"),
+    ],
+)
+async def test_the_end_of_a_model_child_maps_onto_a_cause(
+    tmp_path: Path, small_weights: bytes, outcome: str, cause: str
+) -> None:
+    rig = Rig(tmp_path)
+    _placed(rig, small_weights)
+    rig.measures.answers["int8"] = ModelMeasure(outcome, 0, 0, 0)
+    snap = await rig.check("standard", "fp32")
+    assert (snap.verdict, snap.cause) == (probe.VERDICT_NOFIT, cause)
+    assert rig.measures.calls == ["int8"]
+    assert rig.workers.made == []
+
+
+async def test_the_one_child_reads_the_verified_scan_page(tmp_path: Path, judge: JudgeSpy) -> None:
+    rig = Rig(tmp_path)
+    rig.workers.costs = lambda index: 400 * MIB if index == 0 else 300 * MIB
+    await rig.check("standard", "int8")
+    path, mime, size, route, timeout = rig.workers.calls[0]
+    assert Path(path).name == probe.PROBE_SCAN_NAME
+    assert (mime, size, route) == ("application/pdf", probe.PROBE_SCAN_BYTES, "ocr")
+    assert timeout is not None
+    assert 0 < timeout <= 120
+    # The slot cost is the headroom before the child less the lowest sample.
+    assert judge.calls[0]["slot_cost"] == 400 * MIB
+    assert judge.calls[0]["headroom"] == BIG
+
+
+async def test_a_scan_page_with_another_digest_is_probe_failed(tmp_path: Path) -> None:
+    forged = tmp_path / "forged.pdf"
+    forged.write_bytes(b"%PDF-1.4 not the shipped page")
+    rig = Rig(tmp_path, scan=lambda: forged)
+    snap = await rig.check()
+    assert (snap.verdict, snap.cause) == (probe.VERDICT_NOFIT, "probe_failed")
+    assert rig.workers.calls == []
+
+
+async def test_a_narrow_calculation_ends_without_the_n_run(
+    tmp_path: Path, steps: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rig = Rig(tmp_path)
+    monkeypatch.setattr(
+        probe,
+        "judge",
+        lambda **_kwargs: probe.Verdict(probe.VERDICT_NARROW, probe.CAUSE_RESERVE_THIN, {"reserve": 1, "required": 2}),
+    )
+    snap = await rig.check()
+    assert "ocr_n" not in steps
+    assert snap.verdict == probe.VERDICT_NARROW
+    assert len(rig.workers.made) == 1
+
+
+async def test_a_short_calculation_is_memory_short_without_the_n_run(tmp_path: Path, steps: list[str]) -> None:
+    rig = Rig(tmp_path)
+    # One slot fits, four do not.
+    rig.headroom.base = 2 * (OCR_SLOT_COST_BYTES + GUARD_RESERVE_BYTES)
+    rig.workers.costs = lambda _index: OCR_SLOT_COST_BYTES
+    snap = await rig.check("standard", "int8")
+    assert (snap.verdict, snap.cause) == (probe.VERDICT_NOFIT, probe.CAUSE_MEMORY_SHORT)
+    assert snap.numbers["slots"] == 4
+    assert "ocr_n" not in steps
+
+
+async def test_one_slot_skips_the_n_run(tmp_path: Path, steps: list[str]) -> None:
+    rig = Rig(tmp_path)
+    snap = await rig.check("economy", "int8")
+    assert steps == ["pause", "ocr_one", "calc", "cleanup"]
+    assert snap.verdict == probe.VERDICT_FITS
+    assert len(rig.workers.made) == 1
+
+
+async def test_the_n_run_starts_n_fresh_children_in_parallel(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    rig.workers.seconds = 0.2
+    started = time.monotonic()
+    snap = await rig.check("standard", "int8")
+    slots = profile.resolve(Profile.STANDARD, _big_box()).values.ocr_slots
+    assert len(rig.workers.made) == 1 + slots
+    assert all(worker.stopped == 1 for worker in rig.workers.made)
+    assert time.monotonic() - started < 0.2 * (1 + slots)
+    assert snap.verdict == probe.VERDICT_FITS
+    assert snap.numbers["slots"] == slots
+
+
+@pytest.mark.parametrize(
+    "result",
+    [ChildKilled(engine=False), ChildKilled(engine=True), ExtractionOutcome.failed(Reason.OUT_OF_MEMORY)],
+)
+async def test_a_killed_child_in_the_n_run_is_slot_killed(
+    tmp_path: Path, result: ExtractionOutcome | BaseException
+) -> None:
+    rig = Rig(tmp_path)
+    rig.workers.results = lambda index: result if index == 2 else ExtractionOutcome.indexed("text")
+    snap = await rig.check("standard", "int8")
+    assert (snap.verdict, snap.cause) == (probe.VERDICT_NOFIT, "slot_killed")
+    assert guard.take_child_kills() == 0
+
+
+async def test_a_deep_dip_in_the_n_run_is_narrow(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    rig.headroom.base = 4 * GIB
+    # The one child costs little, the parallel ones far more than it said.
+    rig.workers.costs = lambda index: 300 * MIB if index == 0 else 900 * MIB
+    snap = await rig.check("standard", "int8")
+    assert (snap.verdict, snap.cause) == (probe.VERDICT_NARROW, probe.CAUSE_RESERVE_THIN)
+    assert snap.numbers["required"] == GUARD_RESERVE_BYTES
+
+
+async def test_a_child_over_the_measure_cap_is_timeout_and_every_child_stops(tmp_path: Path) -> None:
+    rig = Rig(tmp_path, measure_seconds=0.3)
+    rig.workers.hang = True
+    snap = await rig.check()
+    assert (snap.verdict, snap.cause) == (probe.VERDICT_NOFIT, "timeout")
+    assert snap.numbers["seconds"] == 1
+    assert rig.workers.halts >= 1
+    assert all(worker.stopped == 1 for worker in rig.workers.made)
+    assert rig.released()
+
+
+async def test_a_child_the_sandbox_timed_out_is_timeout(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    rig.workers.results = lambda _index: ExtractionOutcome.failed(Reason.TIMEOUT)
+    snap = await rig.check()
+    assert (snap.verdict, snap.cause) == (probe.VERDICT_NOFIT, "timeout")
+
+
+async def test_the_slots_come_from_the_resolution_and_the_children_inherit_the_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, judge: JudgeSpy
+) -> None:
+    without = profile.resolve(Profile.STANDARD, _big_box()).values.ocr_slots
+    monkeypatch.setenv("FINDLING_OCR_DPI", "200")
+    rig = Rig(tmp_path)
+    await rig.check("standard", "int8")
+    assert judge.calls[0]["slots"] == without
+    assert rig.workers.env == ["200"] * (1 + without)
+    assert os.environ["FINDLING_OCR_DPI"] == "200"
+
+
+async def test_the_pending_costs_count_the_growth_of_the_writer_heap(tmp_path: Path, judge: JudgeSpy) -> None:
+    rig = Rig(tmp_path, embed_slots=lambda: 1, engine_loaded=lambda: False, cutter_built=lambda: False)
+    await rig.check("performance", "int8")
+    values = profile.resolve(Profile.PERFORMANCE, _big_box()).values
+    in_force = profile.snapshot().resolution.values
+    expected = probe.pending_load_bytes(
+        cutter_built=False,
+        engine_loaded=False,
+        fp32=False,
+        embed_slots=values.embed_slots - 1,
+        writer_heap_delta=values.writer_heap_bytes - in_force.writer_heap_bytes,
+    )
+    assert judge.calls[0]["pending"] == expected
+    assert judge.calls[0]["model_extra"] == 0
+
+
+ONLY_LINUX_WITH_TESSERACT = pytest.mark.skipif(
+    sys.platform != "linux" or shutil.which("tesseract") is None,
+    reason="a real OCR child needs Linux and tesseract, as in the container",
+)
+
+
+@ONLY_LINUX_WITH_TESSERACT
+async def test_a_real_child_reads_the_scan_page(tmp_path: Path) -> None:
+    outcomes: list[ExtractionOutcome] = []
+
+    class Recording(ExtractionWorker):
+        def run(
+            self, path: str, mime: str, size: int, *, route: str | None = None, timeout_seconds: float | None = None
+        ) -> ExtractionOutcome:
+            outcome = super().run(path, mime, size, route=route, timeout_seconds=timeout_seconds)
+            outcomes.append(outcome)
+            return outcome
+
+    rig = Rig(tmp_path, worker_factory=Recording)
+    snap = await rig.check("economy", "int8")
+    assert snap.verdict == probe.VERDICT_FITS
+    assert len(outcomes) == 1
+    assert outcomes[0].text.strip()
