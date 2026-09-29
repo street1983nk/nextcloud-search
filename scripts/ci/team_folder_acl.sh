@@ -295,6 +295,11 @@ while :; do
 			if [ "${verdict[${key}]}" = "pending" ]; then
 				log "::error::${key} file ${file_of[${key}]}: no verdict and no hit within ${DEADLINE} seconds"
 				log "${answer_of[${key}]:-}"
+				log "the search of ${MEMBERS[1]} for ${marker_of[${key}]} answered:"
+				curl -sS -G -u "${MEMBERS[1]}:${PASS}" -w '\nHTTP %{http_code}\n' \
+					-H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+					--data-urlencode "term=${marker_of[${key}]}" --data-urlencode 'limit=100' \
+					"${NC_URL}/ocs/v2.php/search/providers/findling/search" || true
 				verdict[${key}]=failed
 			fi
 		done
