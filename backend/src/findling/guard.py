@@ -33,7 +33,7 @@ import re
 import secrets
 import threading
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Final
 
 from findling import profile
@@ -154,17 +154,42 @@ class Escalation:
             return CAUSE_MEMORY_MAX_REPEATED
         return CAUSE_NONE
 
+    def rebase(self, events: dict[str, int] | None) -> None:
+        """Take ``events`` as the new base and count nothing (D-27-15).
+
+        While the latency probe runs, the guard suspends its lowering: the
+        probe drives memory on purpose, and its rise must not count as
+        pressure. The guard task then only moves the base on each tick, so
+        that the first tick after the probe compares against the last
+        reading and not against the one before the probe. Counted events and
+        their window stay as they are.
+        """
+        self._base = events
+
+
+@dataclass(frozen=True, slots=True)
+class _State:
+    """Everything a snapshot shows, swapped as one reference (26-REVIEW IN-01).
+
+    Every writer runs on the event loop, but the status page reads through a
+    worker thread. One immutable object bound to one module name means a
+    reader sees either the old state or the new one, never a new cap with an
+    old token.
+    """
+
+    cap: Profile | None = None
+    cause: str = CAUSE_NONE
+    since: float | None = None
+    token: str = ""
+    chosen: Profile | None = None
+    slots_target: int = 1
+    slots_in_force: int = 1
+    revision: int = 0
+
 
 # The state of this process, at module level after the build of lane.py. Before
 # anything is restored there is no cap, and the container runs one slot.
-_CAP: Profile | None = None
-_CAUSE: str = CAUSE_NONE
-_SINCE: float | None = None
-_TOKEN: str = ""
-_CHOSEN: Profile | None = None
-_SLOTS_TARGET: int = 1
-_SLOTS_IN_FORCE: int = 1
-_REVISION: int = 0
+_STATE: _State = _State()
 
 # Child kills are reported from the pool threads and taken by the guard task.
 _KILLS_LOCK = threading.Lock()
@@ -172,13 +197,11 @@ _KILLS: int = 0
 
 
 def _set_cap(cap: Profile | None, cause: str, since: float | None, token: str, chosen: Profile | None) -> None:
-    global _CAP, _CAUSE, _SINCE, _TOKEN, _CHOSEN, _REVISION
-    _CAP = cap
-    _CAUSE = cause
-    _SINCE = since
-    _TOKEN = token
-    _CHOSEN = chosen
-    _REVISION += 1
+    global _STATE
+    current = _STATE
+    _STATE = replace(
+        current, cap=cap, cause=cause, since=since, token=token, chosen=chosen, revision=current.revision + 1
+    )
     profile.note_cap(cap)
 
 
@@ -192,7 +215,8 @@ def lower(cause: str, *, now: float, chosen: Profile | None, effective: Profile)
     """
     if cause not in CAUSES:
         raise ValueError("unknown guard cause")
-    level = effective if _CAP is None else min(effective, _CAP, key=PROFILE_ORDER.index)
+    cap = _STATE.cap
+    level = effective if cap is None else min(effective, cap, key=PROFILE_ORDER.index)
     position = PROFILE_ORDER.index(level)
     if position == 0:
         return False
@@ -240,11 +264,12 @@ def note_confirmation(confirmed: str | None, chosen: str | None) -> bool:
     does a wrong token with the same profile. There is no way up besides this
     one (D-26-04).
     """
-    if _CAP is None or chosen is None or chosen not in PROFILE_NAMES:
+    state = _STATE
+    if state.cap is None or chosen is None or chosen not in PROFILE_NAMES:
         return False
     # Only a well formed value is compared: compare_digest refuses non ASCII text.
-    token_matches = confirmed is not None and _is_token(confirmed) and secrets.compare_digest(confirmed, _TOKEN)
-    if not token_matches and Profile(chosen) is _CHOSEN:
+    token_matches = confirmed is not None and _is_token(confirmed) and secrets.compare_digest(confirmed, state.token)
+    if not token_matches and Profile(chosen) is state.chosen:
         return False
     _set_cap(None, CAUSE_NONE, None, "", None)
     return True
@@ -252,9 +277,8 @@ def note_confirmation(confirmed: str | None, chosen: str | None) -> bool:
 
 def note_slots(target: int, in_force: int) -> None:
     """Publish the slots of the profile and the slots the throttle let run."""
-    global _SLOTS_TARGET, _SLOTS_IN_FORCE
-    _SLOTS_TARGET = target
-    _SLOTS_IN_FORCE = in_force
+    global _STATE
+    _STATE = replace(_STATE, slots_target=target, slots_in_force=in_force)
 
 
 def report_child_kill() -> None:
@@ -274,31 +298,29 @@ def take_child_kills() -> int:
 
 
 def snapshot() -> GuardSnapshot:
-    """The guard state of this process right now. Reading changes nothing."""
+    """The guard state of this process right now. Reading changes nothing.
+
+    The module state is read once, so the fields always belong together, also
+    from a worker thread (26-REVIEW IN-01).
+    """
+    state = _STATE
     return GuardSnapshot(
-        cap=_CAP,
-        cause=_CAUSE,
-        since=_SINCE,
-        token=_TOKEN,
-        chosen=_CHOSEN,
-        slots_target=_SLOTS_TARGET,
-        slots_in_force=_SLOTS_IN_FORCE,
-        throttled=_SLOTS_IN_FORCE < _SLOTS_TARGET,
-        revision=_REVISION,
+        cap=state.cap,
+        cause=state.cause,
+        since=state.since,
+        token=state.token,
+        chosen=state.chosen,
+        slots_target=state.slots_target,
+        slots_in_force=state.slots_in_force,
+        throttled=state.slots_in_force < state.slots_target,
+        revision=state.revision,
     )
 
 
 def reset() -> None:
     """Back to the resting state. For tests only; the container never forgets."""
-    global _CAP, _CAUSE, _SINCE, _TOKEN, _CHOSEN, _SLOTS_TARGET, _SLOTS_IN_FORCE, _REVISION, _KILLS
-    _CAP = None
-    _CAUSE = CAUSE_NONE
-    _SINCE = None
-    _TOKEN = ""
-    _CHOSEN = None
-    _SLOTS_TARGET = 1
-    _SLOTS_IN_FORCE = 1
-    _REVISION = 0
+    global _STATE, _KILLS
+    _STATE = _State()
     with _KILLS_LOCK:
         _KILLS = 0
     profile.note_cap(None)

@@ -15,6 +15,8 @@ import subprocess
 import sys
 import threading
 import time
+from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
 
 import pytest
 
@@ -257,6 +259,113 @@ async def test_a_closed_pool_refuses_further_calls() -> None:
         pool.call(time.sleep, 0)
     with pytest.raises(RuntimeError):
         pool.run(NOWHERE, UNSUPPORTED, 1)
+
+
+class _ShutDownExecutor(ThreadPoolExecutor):
+    """An executor that close() shut down between the check and the submission."""
+
+    def submit[T](self, fn: Callable[..., T], /, *args: object, **kwargs: object) -> Future[T]:
+        del fn, args, kwargs
+        raise RuntimeError("cannot schedule new futures after shutdown")
+
+
+async def test_a_call_racing_close_gets_the_pools_own_refusal() -> None:
+    # 26-REVIEW IN-02: the executor's words must not reach the poller.
+    pool = SlotPool(1, worker_factory=_Factory())
+    shut = _ShutDownExecutor(max_workers=1)
+    # The double stands for the race window.
+    pool._executor = shut
+    try:
+        with pytest.raises(RuntimeError, match=r"^this SlotPool is closed$"):
+            pool.call(time.sleep, 0)
+    finally:
+        shut.shutdown()
+        pool.close()
+
+
+class _RecordingWorker(_FakeWorker):
+    """A fake worker that records its stop and whether the pool lock was held then."""
+
+    def __init__(self, pool_lock: list[threading.Lock], *, release: threading.Event | None = None) -> None:
+        super().__init__(release=release)
+        self._pool_lock = pool_lock
+        self.stopped = False
+        self.lock_held_at_stop: bool | None = None
+
+    def stop(self) -> None:
+        self.stopped = True
+        self.lock_held_at_stop = self._pool_lock[0].locked()
+
+
+class _BreakingWorker(_FakeWorker):
+    def stop(self) -> None:
+        raise OSError("the pipe is gone")
+
+
+def test_shed_idle_stops_only_the_free_children() -> None:
+    release = threading.Event()
+    lock_box: list[threading.Lock] = []
+    built: list[_RecordingWorker] = []
+
+    def factory() -> ExtractionWorker:
+        # The first worker blocks until released, the second returns at once.
+        worker = _RecordingWorker(lock_box, release=release if not built else None)
+        built.append(worker)
+        return worker
+
+    pool = SlotPool(2, worker_factory=factory)
+    # The test checks that stop runs outside the pool lock.
+    lock_box.append(pool._lock)
+    busy_job = threading.Thread(target=pool.run, args=(NOWHERE, UNSUPPORTED, 1))
+    busy_job.start()
+    for _ in range(100):
+        if built and built[0].entered.is_set():
+            break
+        time.sleep(0.02)
+    pool.run(NOWHERE, UNSUPPORTED, 1)
+    busy, idle = built
+
+    assert pool.shed_idle() == 1
+    assert idle.stopped
+    assert idle.lock_held_at_stop is False, "a child is stopped outside the pool lock"
+    assert not busy.stopped, "a running child is never shed"
+
+    release.set()
+    busy_job.join(5)
+    pool.run(NOWHERE, UNSUPPORTED, 1)
+    assert len(built) == 2, "the busy worker came back to the free list and served again"
+    assert busy.jobs == 2
+    assert pool.shed_idle() == 1
+    assert busy.stopped
+    pool.close()
+
+
+def test_shed_idle_lets_the_pool_build_again() -> None:
+    factory = _Factory()
+    pool = SlotPool(1, worker_factory=factory)
+    pool.run(NOWHERE, UNSUPPORTED, 1)
+
+    assert pool.shed_idle() == 1
+    assert pool.shed_idle() == 0
+    pool.run(NOWHERE, UNSUPPORTED, 1)
+    assert len(factory.built) == 2, "a fresh worker after the shed, within the size bound"
+    pool.close()
+
+
+def test_shed_idle_survives_a_child_that_will_not_stop() -> None:
+    pool = SlotPool(2, worker_factory=_BreakingWorker)
+    pool.run(NOWHERE, UNSUPPORTED, 1)
+
+    assert pool.shed_idle() == 1
+    pool.close()
+
+
+def test_shed_idle_on_a_closed_pool_is_a_no_op() -> None:
+    pool = SlotPool(1, worker_factory=_Factory())
+    pool.run(NOWHERE, UNSUPPORTED, 1)
+    pool.close()
+
+    assert pool.shed_idle() == 0
 
 
 def test_importing_the_pool_does_not_load_the_dispatcher() -> None:

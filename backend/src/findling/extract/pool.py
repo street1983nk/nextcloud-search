@@ -37,6 +37,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import functools
+import logging
 import threading
 from collections import deque
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -48,6 +49,11 @@ from findling.extract.sandbox import ExtractionWorker
 
 # Slot 1 always runs: a limit below one would stop the indexing for good.
 _MIN_LIMIT: Final = 1
+
+# The one refusal a closed pool gives, whichever path finds it closed.
+_CLOSED: Final = "this SlotPool is closed"
+
+LOGGER = logging.getLogger("findling.extract.pool")
 
 
 class SlotGate:
@@ -160,13 +166,22 @@ class SlotPool:
         Never the ``to_thread`` helper of asyncio: that is the default executor the search
         shares. Refused with RuntimeError once the pool is closed.
         """
+        loop = asyncio.get_running_loop()
+        job = functools.partial(fn, *args, **kwargs)
+        # The submission happens under the lock, so close() cannot shut the
+        # executor down between the check and the hand over (26-REVIEW IN-02).
+        # Only the future is created here; the wait happens outside.
         with self._lock:
             if self._closed:
-                raise RuntimeError("this SlotPool is closed")
+                raise RuntimeError(_CLOSED)
             if self._executor is None:
                 self._executor = ThreadPoolExecutor(max_workers=self._size, thread_name_prefix="findling-slot")
-            executor = self._executor
-        return asyncio.get_running_loop().run_in_executor(executor, functools.partial(fn, *args, **kwargs))
+            try:
+                return loop.run_in_executor(self._executor, job)
+            except RuntimeError as error:
+                # An executor that refuses anyway says so in its own words; the
+                # caller should read the pool's.
+                raise RuntimeError(_CLOSED) from error
 
     def pids(self) -> tuple[int, ...]:
         """The process ids of the children that exist right now, free or busy."""
@@ -201,11 +216,37 @@ class SlotPool:
         if executor is not None:
             executor.shutdown(wait=False, cancel_futures=True)
 
+    def shed_idle(self) -> int:
+        """Stop every free child and return how many; a busy one is never touched.
+
+        The latency probe measures its base H0 without resting children
+        (27-RESEARCH Pitfall 5): a child kept warm from the last pass would
+        count as used memory and bend the base. The pool builds new workers on
+        the next demand, as after the start. A no-op on a closed pool. The
+        children are stopped outside the lock, so a slow stop never holds up
+        a caller.
+        """
+        with self._lock:
+            if self._closed:
+                return 0
+            idle = list(self._free)
+            self._free.clear()
+            self._built -= len(idle)
+            # Room to build again: wake a caller that waited on the size bound.
+            self._available.notify_all()
+        for worker in idle:
+            try:
+                worker.stop()
+            # One stubborn child must not keep the others running.
+            except Exception as error:
+                LOGGER.warning("an idle extraction child did not stop cleanly, an %s", type(error).__name__)
+        return len(idle)
+
     def _take(self) -> ExtractionWorker:
         with self._available:
             self._available.wait_for(lambda: self._closed or bool(self._free) or self._built < self._size)
             if self._closed:
-                raise RuntimeError("this SlotPool is closed")
+                raise RuntimeError(_CLOSED)
             if self._free:
                 worker = self._free.popleft()
             else:

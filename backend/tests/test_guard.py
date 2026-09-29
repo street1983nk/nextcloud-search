@@ -16,7 +16,10 @@ and the persistence in state.db follow in later plans. What this suite pins:
 
 from __future__ import annotations
 
+import ast
+import inspect
 import re
+import sys
 import threading
 
 import pytest
@@ -384,6 +387,103 @@ def test_the_resting_state() -> None:
     assert state.slots_in_force == 1
     assert not state.throttled
     assert state.revision == 0
+
+
+def test_a_reader_thread_never_sees_a_torn_state() -> None:
+    # 26-REVIEW IN-01: the status page reads through a worker thread while the
+    # loop writes. Every combination a reader sees must be one a writer set.
+    _performance_box()
+    written: set[tuple[Profile | None, str, str, Profile | None]] = set()
+
+    def fields(state: guard.GuardSnapshot) -> tuple[Profile | None, str, str, Profile | None]:
+        return (state.cap, state.cause, state.token, state.chosen)
+
+    written.add(fields(guard.snapshot()))
+    seen: list[tuple[Profile | None, str, str, Profile | None]] = []
+    stop = threading.Event()
+
+    def read() -> None:
+        while not stop.is_set():
+            seen.append(fields(guard.snapshot()))
+
+    old_interval = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)
+    reader = threading.Thread(target=read)
+    reader.start()
+    try:
+        for tick in range(300):
+            guard.lower(CAUSE_OOM_KILL, now=float(tick), chosen=Profile.PERFORMANCE, effective=Profile.PERFORMANCE)
+            written.add(fields(guard.snapshot()))
+            guard.note_confirmation(guard.snapshot().token, "performance")
+            written.add(fields(guard.snapshot()))
+    finally:
+        stop.set()
+        reader.join(5)
+        sys.setswitchinterval(old_interval)
+
+    assert seen
+    torn = [state for state in seen if state not in written]
+    assert torn == []
+
+
+def _globals_of(function: ast.FunctionDef) -> set[str]:
+    return {name for node in ast.walk(function) if isinstance(node, ast.Global) for name in node.names}
+
+
+def test_every_setter_swaps_the_state_in_one_assignment() -> None:
+    # 26-REVIEW IN-01, structural: no setter may write the fields one by one.
+    tree = ast.parse(inspect.getsource(guard))
+    functions = {node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)}
+
+    for name in ("_set_cap", "note_slots"):
+        function = functions[name]
+        assert _globals_of(function) == {"_STATE"}, name
+        stores = [
+            node
+            for node in ast.walk(function)
+            if isinstance(node, ast.Name) and node.id == "_STATE" and isinstance(node.ctx, ast.Store)
+        ]
+        assert len(stores) == 1, name
+    assert _globals_of(functions["reset"]) == {"_STATE", "_KILLS"}
+    for name, function in functions.items():
+        assert _globals_of(function) <= {"_STATE", "_KILLS"}, name
+
+
+def test_rebase_moves_the_base_and_counts_nothing() -> None:
+    # D-27-15: during the probe the guard only moves the base.
+    escalation = Escalation()
+    escalation.observe(0.0, _events(), TIGHT, 0)
+
+    escalation.rebase(_events(max_count=40, oom_kill=2))
+
+    assert escalation.observe(90.0, _events(max_count=40, oom_kill=2), TIGHT, 0) == CAUSE_NONE
+
+
+def test_after_rebase_a_rise_counts_from_the_new_base() -> None:
+    escalation = Escalation()
+    escalation.observe(-15.0, _events(), TIGHT, 0)
+    escalation.rebase(_events(max_count=100))
+
+    assert escalation.observe(0.0, _events(max_count=101), TIGHT, 0) == CAUSE_NONE
+    assert escalation.observe(90.0, _events(max_count=102), TIGHT, 0) == CAUSE_MEMORY_MAX_REPEATED
+
+
+def test_rebase_keeps_the_counted_events() -> None:
+    escalation = Escalation()
+    escalation.observe(-15.0, _events(), TIGHT, 0)
+    assert escalation.observe(0.0, _events(max_count=1), TIGHT, 0) == CAUSE_NONE
+
+    escalation.rebase(_events(max_count=50))
+
+    assert escalation.observe(90.0, _events(max_count=51), TIGHT, 0) == CAUSE_MEMORY_MAX_REPEATED
+
+
+def test_rebase_before_the_first_tick_sets_the_base() -> None:
+    escalation = Escalation()
+    escalation.rebase(_events(oom_kill=3))
+
+    assert escalation.observe(15.0, _events(oom_kill=3), ROOMY, 0) == CAUSE_NONE
+    assert escalation.observe(30.0, _events(oom_kill=4), ROOMY, 0) == CAUSE_OOM_KILL
 
 
 def test_reset_forgets_the_cap_and_the_kills() -> None:
