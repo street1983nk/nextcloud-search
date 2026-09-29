@@ -1,0 +1,19 @@
+date 2026-09-29
+host_cpu 13th Gen Intel(R) Core(TM) i5-1335U (x86_64), Windows 11 Pro with Docker Desktop
+docker_server 29.5.2
+docker_os Docker Desktop
+kernel 6.6.87.2-microsoft-standard-WSL2
+ncpu_vm 12
+mem_vm_bytes 8163373056
+cgroup_version 2
+cgroup_driver cgroupfs
+nextcloud 34.0.3 (nextcloud:34.0.3-apache, scripts/dev/compose-harp.yaml, HaRP pinned by digest in that file)
+exapp_container nc_app_findling_backend, created by the HaRP deploy daemon
+exapp_cpu_cap docker update --cpus 1 after registration (cpu.max 100000 100000), both variants
+exapp_memory_limit none
+nextcloud_container_cpu_cap none
+profile Sparsam (nothing set, fresh registration), one OCR slot in both variants
+corpus build_load_corpus.py --seed d-26-12-latenz --files 1000, checksum f62f99cd726483264b84bcd4f15cf5fc43b3ad73ec42704762ae2a77cfd50961
+corpus_uploaded 200 scan PDFs without text layer (219 pages) plus 20 text PDFs, one test account
+probe scripts/ops/latency_probe.py --requests 200 --interval 0.5 --timeout 5 --term Bescheid, from the Windows host against http://localhost:8096
+ocr_check tesseract sampled in the ExApp container 10 times, 1 s apart, before and after every series (lines ocr_before/ocr_after)

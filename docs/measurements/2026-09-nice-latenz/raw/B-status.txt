@@ -1,0 +1,7 @@
+variant B target status
+image localhost:5055/findling_backend:latB
+started 2026-09-29T04:16:06Z
+ocr_before samples 10 tesseract_seen_by_nice {'10': 6}
+target status requests 200 p50_ms 28.5 p95_ms 40.0 max_ms 69.8 errors 0
+ended 2026-09-29T04:18:02Z
+ocr_after samples 10 tesseract_seen_by_nice {'10': 9}

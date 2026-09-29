@@ -1,0 +1,12 @@
+A commit c6868c21 (docs(26): record planning completion, last commit before the first code commit of phase 26; backend/src identical to be2779c2, the last code commit of phase 25)
+A image localhost:5055/findling_backend:latA
+A digest sha256:648f4763b4c6d3b35bc35379358453401dc26b4b615b4396f59b24066f73286d
+A extraction child nice 0 (observed on tesseract in every sample)
+
+B commit 46572f4d (docs(phase-26): update tracking after wave 4; contains dbf8af19 feat(26-01) nice 10 and oom_score_adj 1000 in every sandbox child)
+B image localhost:5055/findling_backend:latB
+B digest sha256:74ff1e9ba57988949541780b90ef1c9c62428349084af3a84399fdc8ae8f7428
+B extraction child nice 10 (observed on tesseract in every sample)
+
+build docker build --build-context scripts=<tree>/scripts <tree>/backend, trees exported with git archive
+companion php/ of the working tree (1.3.0, state 46572f4d) in both variants; in the Sparsam lane "all" the OCR claim stays at 2 rows in both
