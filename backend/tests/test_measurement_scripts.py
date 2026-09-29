@@ -696,8 +696,13 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # 27-08 changed AdminViewService.php and AdminViewServiceTest.php (the token
 # stays on the server, the fields of the profile surface). No file went, so
 # PHP_FILES_TODAY moves to 80.
+# Measured again after the wave-3 merge of phase 27: plan 27-10 changed the
+# bytes of templates/admin.php (the block of the profile surface, the occ line
+# gone), and the fix of 76e3e345 changed AdminViewService.php and
+# AdminViewServiceTest.php (precisionVerdict for state Z13). No file came and
+# none went, so PHP_FILES_TODAY stays at 80.
 PHP_FILES_TODAY = 80
-PHP_TREE_HASH_TODAY = "3f382baec48f642e9548305039b65cd92f1261768601fa395fa6bd2ab44cac20"
+PHP_TREE_HASH_TODAY = "4bc45c73f3ca02194fb8976f8c1f2951b3b6b52ef1e7e1fc015bce55df7749f8"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
@@ -1474,8 +1479,11 @@ PHP_TREE_HASH_TODAY = "3f382baec48f642e9548305039b65cd92f1261768601fa395fa6bd2ab
 # 27-05 changed the bytes of worker/poller.py and worker/embedding.py (the hold
 # for the probe) and worker/watch.py (the guard pause during the probe). One
 # file came and none went, so PACKAGE_FILES_TODAY moves to 69.
-PACKAGE_FILES_TODAY = 69
-PACKAGE_TREE_HASH_TODAY = "65158389171632a4b6196d01a43bf7a63a1c3aa528d48528a6181065307b2329"
+# Measured again after the wave-3 merge of phase 27: plan 27-09 brought
+# worker/probe_run.py (the orchestrator of the pre-check). One file came and
+# none went, so PACKAGE_FILES_TODAY moves to 70.
+PACKAGE_FILES_TODAY = 70
+PACKAGE_TREE_HASH_TODAY = "06877af1d5d2a3a6d153f8fd987c4958392d8f6d2c32ae47b6cac0f4bc63e3f4"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
