@@ -122,6 +122,36 @@ gearbeitet wird. Mit 30 Seiten bleibt ein Batch verlässlich unter der Sperrfris
 Wer die 100 zurückhaben will, muss zuerst `LOCK_TIMEOUT` je Job-Art anheben und
 die Batchgröße für `ocr` auf 1 bis 2 senken. Beides, nicht eines von beiden.
 
+## Lease-Rechnung ab Phase 26: Zeilen je Slot
+
+Mit mehreren OCR-Slots rechnet der Container die Sperrfrist nicht mehr über die
+Batchgröße, sondern über die Zeilen, die ein Slot in einer Lease schafft
+(D-26-13).
+
+- **Lease fest:** `LOCK_TIMEOUTS[ocr]` bleibt 1800 s (PHP und
+  `OCR_LOCK_TIMEOUT_SECONDS`). Die Claim-Route bekommt keinen Lease-Parameter.
+- **Dateideckel:** harte Deadline plus Download-Marge, also Job-Budget
+  plus 2 x 60 s. Beim Standard 600 + 120 = 720 s, am Rand des einstellbaren
+  Bereichs 780 + 120 = 900 s.
+- **2 Zeilen je Slot:** floor(1800 / 900) = 2 und floor(1800 / 720) = 2
+  (`OCR_ROWS_PER_SLOT`). Jeder Slot arbeitet seine Zeilen nacheinander ab, und
+  alle enden innerhalb einer Lease.
+- **Überschuss per unlock:** Der Poller behält je wirksamem Slot 2 OCR-Zeilen
+  des Anspruchs und gibt den Rest sofort per `unlock` zurück, bevor ein Kind
+  startet. Die Auslieferung wird erstattet: die Zeile verliert weder ein
+  `retries` noch wartet sie auf die Sperrfrist.
+- **Slots nie mehr als Zeilen (D-26-07):** Liefert ein alter Companion nur zwei
+  Zeilen, laufen höchstens zwei Slots.
+- **Batchgrößen (D-26-05, D-26-14):** `KIND_BATCH[ocr]` ist 32 nur im Lane
+  `index` (Standard und Leistung, 16 Slots x 2 Zeilen). Im Lane `all` (Sparsam
+  und Companion 1.3) bleibt es bei 2.
+- **Obergrenze des Job-Budgets:** `OCR_JOB_SECONDS_MAX` = 1800 / 2 - 2 x 60
+  = 780 s. Die alte Ableitung über die Batchgröße ergäbe bei 32 Zeilen einen
+  negativen Wert.
+
+Beispiel Leistung mit 4 wirksamen Slots: der Anspruch liefert bis zu 32
+OCR-Zeilen, der Poller behält 8 und gibt 24 sofort zurück.
+
 ## Messprotokoll
 
 **Datum:** 2026-09-01

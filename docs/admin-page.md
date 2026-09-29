@@ -216,6 +216,30 @@ Die Verdikte der Präzision (`precisionVerdict`, zum Beispiel
 `fp32_unavailable`) meldet der Container bereits; als Satz zeigt die Seite sie
 erst mit Phase 27. Bis dahin stehen sie in `docs/embeddings.md`, Abschnitt 11.
 
+## Die Wächterzeilen: Absenkung, Rückweg, Drosselung
+
+Seit Phase 26 zeigt die Seite bis zu drei Zeilen des Speicherwächters
+(D-26-01, D-26-02, D-26-04). Quelle ist der Block `guard` der Statusantwort;
+Details zum Wächter in [`docs/profiles.md`](profiles.md), Abschnitt
+"Speicherwächter (Phase 26)".
+
+- **Wächter:** `Profil: gewählt Leistung, wirksam Standard (Speicher knapp,
+  zweimal memory.events max)`. Steht nur, wenn der Wächter abgesenkt hat. Die
+  Ursache ist eines von drei Wörtern (`memory_max_repeated`, `oom_kill`,
+  `unclean_end`), die Seite übersetzt es in einen festen Katalogsatz.
+- **Rückweg:** `Zum Aufheben der Absenkung nach Prüfung des Speichers:` gefolgt
+  von `occ config:app:set findling profile_confirmed --value=<token>`. Steht nur
+  bei einer Absenkung mit gültigem 32-Hex-Token. Ein Knopf dafür kommt mit
+  Phase 27.
+- **Drosselung:** `OCR-Slots: 2 von 4, Speicher knapp`. Steht nur, solange die
+  Drossel der laufenden Runde weniger Slots erlaubt als das Profil vorsieht
+  (`throttled`).
+
+Die PHP-Seite prüft jedes Feld gegen eine geschlossene Menge: Profilnamen,
+Ursachen, Token-Form, Zähler als nicht negative Ganzzahl. Kein Wort des
+Containers wird Teil eines Satzes. Ein Container vor 1.4 sendet keinen Block
+`guard`, dann bleiben alle drei Zeilen verborgen.
+
 ## Was nicht im Nenner steht, und warum
 
 Nicht im Nenner stehen: Ordner, Dateien eines nicht unterstützten Typs, Dateien
