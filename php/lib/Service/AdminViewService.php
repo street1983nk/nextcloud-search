@@ -1719,10 +1719,12 @@ final class AdminViewService {
 		);
 
 		// The container answered, there is a denominator, and it holds fewer
-		// files than are already searchable: the recount of ScanRecountJob has
-		// not caught up with files that arrived since the last one. Both shares
-		// are null in this case (coverageShare), and the page says why in a
-		// sentence of its own instead of "backend does not answer".
+		// files than are already searchable. Files that arrived since the last
+		// recount are one cause; a mass delete the container has not purged yet
+		// and a new exclusion before its cleanup are others (review WR-02 of
+		// phase 27), so the sentence of the page names none of them. Both
+		// shares are null in this case (coverageShare), and the page says why in
+		// a sentence of its own instead of "backend does not answer".
 		$recounting = $backendReachable && $indexable > 0 && $indexed > $indexable;
 
 		return [

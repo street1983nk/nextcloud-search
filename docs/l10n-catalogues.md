@@ -391,6 +391,17 @@ worden, und seitdem hält `test_every_language_table_carries_every_key_with_the_
 in `backend/tests/test_admin_ui_contract.py` jede Tabelle gegen `de.json` und gegen die Kataloge
 ihrer Spalten, in beide Richtungen und Zelle für Zelle.
 
+**Umgestellt am 29.09.2026, Review der Phase 27 (WR-02):** weiterhin **288** Schlüssel. Der
+Satz der kii-Zeile hat einen neuen Schlüssel, weil sein alter Wortlaut ("Seit der letzten
+Zählung sind Dateien dazugekommen") einen Grund nannte, der nicht der einzige ist: mehr
+durchsuchbare als indexierbare Dateien folgen auch aus einer Massenlöschung, die der Container
+noch nicht nachgezogen hat, und aus einer neuen Ausschlussregel vor ihrer Bereinigung. Der neue
+Schlüssel lautet `%s files are searchable. The count of indexable files is being updated, and
+the share is shown again afterwards.`, deutsch "%s Dateien sind durchsuchbar. Die Zahl der
+indexierbaren Dateien wird gerade neu ermittelt, danach erscheint der Anteil wieder." Alle 16
+Dateien und die fünf Sprachtabellen sind im selben Commit umgestellt; die Wortlaute außerhalb
+von Deutsch und Englisch sind maschinell übersetzt und vom Owner noch nicht gelesen.
+
 ---
 
 ## Stand nach Phase 20

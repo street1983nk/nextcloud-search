@@ -2036,13 +2036,26 @@ def test_a_numerator_above_its_denominator_shows_the_recount_sentence_in_both_ha
     recounting; the page shows neither a figure nor a fraction, not the sentence
     about a silent backend, but the recount sentence. Held in both halves,
     because the script rewrites the block on every poll.
+
+    The sentence is neutral since review WR-02 of phase 27: a numerator above
+    its denominator also follows a mass delete the container has not purged yet
+    or a new exclusion before its cleanup, and "Files were added" was wrong in
+    both. The old wording is gone from both halves and from every catalogue.
     """
     template = TEMPLATE.read_text(encoding="utf-8")
     script = SCRIPT.read_text(encoding="utf-8")
     sentence = (
+        "%s files are searchable. The count of indexable files is being updated, "
+        "and the share is shown again afterwards."
+    )
+    before = (
         "%s files are searchable. Files were added since the last count, "
         "so the share is shown again once they have been counted."
     )
+    assert before not in template
+    assert before not in script
+    assert before not in catalogue_of(L10N_JSON)
+    assert sentence in catalogue_of(L10N_JSON)
 
     assert "$recounting = ($coverage['recounting'] ?? false) === true;" in template
     assert 'id="findling-coverage-recounting"<?php if (!$hasDenominator || !$recounting) { ?> hidden' in template
@@ -3684,3 +3697,20 @@ def test_the_excluded_tile_names_the_rule_it_counts() -> None:
     template = TEMPLATE.read_text(encoding="utf-8")
     assert "'id' => 'findling-tile-excluded', 'label' => $l->t('Excluded by a rule')" in template
     assert catalogue_of(L10N_JSON)["Excluded by a rule"] == "Durch Regel ausgeschlossen"
+
+
+def test_the_refused_by_type_term_counts_only_files_that_are_still_there() -> None:
+    """Review WR-02 of phase 27: both terms of the denominator from the same moment.
+
+    filesSeen, overCap and excluded are measured again by every recount and
+    shrink with a delete; the refused-by-type rows of findling_file_state are
+    never deleted with their file. countByReason therefore joins the file cache
+    and leaves out the two trash paths the crawl never walks. Checked live on
+    the harness as well (27-REVIEW-FIX.md): a row of a file gone from the file
+    cache and one of a file in the trash bin counted 3 before and 1 after.
+    """
+    php = FILE_STATE.read_text(encoding="utf-8")
+    method = php[php.index("public function countByReason(") : php.index("private function reject(")]
+    assert "->innerJoin('s', 'filecache', 'fc', $qb->expr()->eq('fc.fileid', 's.file_id'))" in method
+    assert "'files_trashbin/%'" in method
+    assert "'__groupfolders/trash/%'" in method

@@ -421,7 +421,7 @@ $banners = [
 	</p>
 	<progress id="findling-coverage-bar" max="100" value="<?php p((string)($percent ?? 0)); ?>" aria-labelledby="findling-coverage-heading"<?php if (!$hasFraction) { ?> hidden<?php } ?>></progress>
 	<p class="settings-hint" id="findling-coverage-subline"<?php if (!$hasFraction) { ?> hidden<?php } ?>><?php p($l->t('%1$s of %2$s indexable files are searchable', [$count($searchable), $count($indexable)])); ?></p>
-	<p class="settings-hint" id="findling-coverage-recounting"<?php if (!$hasDenominator || !$recounting) { ?> hidden<?php } ?>><?php p($l->t('%s files are searchable. Files were added since the last count, so the share is shown again once they have been counted.', [$count($searchable)])); ?></p>
+	<p class="settings-hint" id="findling-coverage-recounting"<?php if (!$hasDenominator || !$recounting) { ?> hidden<?php } ?>><?php p($l->t('%s files are searchable. The count of indexable files is being updated, and the share is shown again afterwards.', [$count($searchable)])); ?></p>
 
 	<p class="settings-hint" id="findling-coverage-unknown"<?php if (!$hasDenominator || $hasFraction || $recounting) { ?> hidden<?php } ?>><?php p($l->t('The share cannot be worked out right now because the backend does not answer. %s files of this instance are indexable.', [$count($indexable)])); ?></p>
 

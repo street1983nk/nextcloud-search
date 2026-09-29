@@ -4,7 +4,7 @@
         "File contents": "Inhoud van bestanden",
         "Search coverage": "Dekking van de zoekfunctie",
         "%1$s of %2$s indexable files are searchable": "%1$s van %2$s indexeerbare bestanden zijn doorzoekbaar",
-        "%s files are searchable. Files were added since the last count, so the share is shown again once they have been counted.": "%s bestanden zijn doorzoekbaar. Sinds de laatste telling zijn er bestanden bijgekomen; het aandeel verschijnt weer zodra ze zijn meegeteld.",
+        "%s files are searchable. The count of indexable files is being updated, and the share is shown again afterwards.": "%s bestanden zijn doorzoekbaar. Het aantal indexeerbare bestanden wordt bijgewerkt; daarna verschijnt het aandeel weer.",
         "The share cannot be worked out right now because the backend does not answer. %s files of this instance are indexable.": "Het aandeel is op dit moment niet te berekenen, omdat de dienst niet antwoordt. %s bestanden van deze instantie zijn indexeerbaar.",
         "Deliberately left out: %s": "Bewust weggelaten: %s",
         "Those files are too large, of a type Findling does not read, or excluded by a rule. They are not in the denominator above, so the coverage figure can reach a hundred per cent.": "Deze bestanden zijn te groot, van een type dat Findling niet leest, of door een regel uitgesloten. Ze staan niet in de noemer hierboven, zodat de dekking honderd procent kan bereiken.",

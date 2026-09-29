@@ -367,7 +367,7 @@
     text('findling-coverage-subline', t('findling', '%1$s of %2$s indexable files are searchable')
       .replace('%1$s', numbers.format(searchable))
       .replace('%2$s', numbers.format(indexable)))
-    text('findling-coverage-recounting', t('findling', '%s files are searchable. Files were added since the last count, so the share is shown again once they have been counted.')
+    text('findling-coverage-recounting', t('findling', '%s files are searchable. The count of indexable files is being updated, and the share is shown again afterwards.')
       .replace('%s', numbers.format(searchable)))
     text('findling-coverage-unknown', t('findling', 'The share cannot be worked out right now because the backend does not answer. %s files of this instance are indexable.')
       .replace('%s', numbers.format(indexable)))

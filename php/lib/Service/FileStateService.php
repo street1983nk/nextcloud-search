@@ -596,6 +596,15 @@ class FileStateService {
 	 * as deliberately left out, never into its denominator. The reason travels
 	 * in as an argument rather than being fixed here, because a second caller
 	 * with a second reason would otherwise copy this query.
+	 *
+	 * Only rows of files that are still in the file cache and not in a trash
+	 * bin count (review WR-02 of phase 27). The other terms of the coverage
+	 * denominator are measured again by every recount and shrink when files
+	 * are deleted, while no code path deletes a row of this table for a
+	 * deleted file. Without the join a deleted refused file kept lowering a
+	 * denominator that no longer held it, and the share could stay hidden for
+	 * good. The trash paths are the two the walk of the crawl never enters: the
+	 * trash bin of a home storage and the trash of the Team Folders.
 	 */
 	public function countByReason(string $state, string $reason): int {
 		if (!in_array($state, self::STATES, true) || !in_array($reason, self::REASONS, true)) {
@@ -605,9 +614,12 @@ class FileStateService {
 
 		$qb = $this->db->getQueryBuilder();
 		$qb->selectAlias($qb->func()->count('*'), 'total')
-			->from(self::TABLE_NAME)
-			->where($qb->expr()->eq('state', $qb->createNamedParameter($state, IQueryBuilder::PARAM_STR)))
-			->andWhere($qb->expr()->eq('reason', $qb->createNamedParameter($reason, IQueryBuilder::PARAM_STR)));
+			->from(self::TABLE_NAME, 's')
+			->innerJoin('s', 'filecache', 'fc', $qb->expr()->eq('fc.fileid', 's.file_id'))
+			->where($qb->expr()->eq('s.state', $qb->createNamedParameter($state, IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->eq('s.reason', $qb->createNamedParameter($reason, IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->notLike('fc.path', $qb->createNamedParameter('files_trashbin/%', IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->notLike('fc.path', $qb->createNamedParameter('__groupfolders/trash/%', IQueryBuilder::PARAM_STR)));
 
 		$result = $qb->executeQuery();
 		$row = $result->fetch();

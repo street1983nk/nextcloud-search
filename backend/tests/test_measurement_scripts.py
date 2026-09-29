@@ -720,9 +720,11 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # their two unit tests. No file came and none went, so PHP_FILES_TODAY stays
 # at 82.
 # WR-03 changed the bytes of templates/admin.php (the tile "Excluded by a
-# rule"). PHP_FILES_TODAY stays at 82.
+# rule"). WR-02 changed FileStateService.php (countByReason joins the file
+# cache), AdminViewService.php (a comment) and templates/admin.php (the
+# neutral recount sentence). PHP_FILES_TODAY stays at 82.
 PHP_FILES_TODAY = 82
-PHP_TREE_HASH_TODAY = "3d9008be4ddebeb7e730f60807c2001278c61d1832e0901c995f69dc03787edf"
+PHP_TREE_HASH_TODAY = "2a31c2eef6e7a2df84371cb0002e26567b45e81bf2b6294510dcae17a274770f"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

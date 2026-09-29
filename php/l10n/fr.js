@@ -5,7 +5,7 @@ OC.L10N.register(
     "File contents": "Contenu des fichiers",
     "Search coverage": "Couverture de la recherche",
     "%1$s of %2$s indexable files are searchable": "%1$s des %2$s fichiers indexables peuvent être trouvés par la recherche",
-    "%s files are searchable. Files were added since the last count, so the share is shown again once they have been counted.": "%s fichiers peuvent être trouvés par la recherche. Des fichiers ont été ajoutés depuis le dernier comptage, la part s'affichera de nouveau dès qu'ils auront été comptés.",
+    "%s files are searchable. The count of indexable files is being updated, and the share is shown again afterwards.": "%s fichiers peuvent être trouvés par la recherche. Le nombre de fichiers indexables est en cours de mise à jour, la part s'affichera de nouveau ensuite.",
     "The share cannot be worked out right now because the backend does not answer. %s files of this instance are indexable.": "La part ne peut pas être calculée pour le moment, car le service ne répond pas. %s fichiers de cette instance sont indexables.",
     "Deliberately left out: %s": "Volontairement laissés de côté : %s",
     "Those files are too large, of a type Findling does not read, or excluded by a rule. They are not in the denominator above, so the coverage figure can reach a hundred per cent.": "Ces fichiers sont trop volumineux, d'un type que Findling ne lit pas, ou exclus par une règle. Ils ne figurent pas au dénominateur ci-dessus, afin que la couverture puisse atteindre cent pour cent.",
