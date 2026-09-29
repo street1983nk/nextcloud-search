@@ -116,6 +116,7 @@ Fuer v1.4 unmittelbar tragend:
 | # | Description | Date | Commit | Status | Directory |
 |---|-------------|------|--------|--------|-----------|
 | 260929-kii | Deckungsgrad-Nenner waechst mit neuen Dateien (ScanRecountJob, Nachzaehlung absolut, Satz statt Prozent bei Zaehler > Nenner) | 2026-09-29 | bbb4f406 | Verified | [260929-kii-deckungsgrad-nenner-waechst-mit-neuen-da](./quick/260929-kii-deckungsgrad-nenner-waechst-mit-neuen-da/) |
+| 260929-s7p | Issue #14: Team-Folder-Dateien mit ACL als Mitglied lesen (ReaderContext), Datei-ID in der Fehlerliste, CI-Job team-folder-acl; Auslieferung als 1.3.1 | 2026-09-29 | 0556d06d | Needs Review (PHPUnit + CI-Job nach Push) | [260929-s7p-issue14-acl-reader-context](./quick/260929-s7p-issue14-acl-reader-context/) |
 
 ### Pending Todos
 
