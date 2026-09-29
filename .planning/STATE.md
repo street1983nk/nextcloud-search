@@ -4,8 +4,8 @@ milestone: v1.4
 milestone_name: Leistungsprofile
 status: executing
 stopped_at: Phase 27 UI-SPEC approved
-last_updated: "2026-09-29T08:37:21.371Z"
-last_activity: 2026-09-29 -- Phase 27 planning complete
+last_updated: "2026-09-29T08:41:16.346Z"
+last_activity: 2026-09-29 -- Phase 27 execution started
 progress:
   total_phases: 6
   completed_phases: 3
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 27 — vorab prüfung und settings oberfläche
+**Current focus:** Phase 27 — Vorab-Prüfung und Settings-Oberfläche
 
 ## Current Position
 
-Phase: 27
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-09-29 -- Phase 27 planning complete
+Phase: 27 (Vorab-Prüfung und Settings-Oberfläche) — EXECUTING
+Plan: 1 of 16
+Status: Executing Phase 27
+Last activity: 2026-09-29 -- Phase 27 execution started
 
 Progress: [#####.....] 50% (3 von 6 Phasen)
 
