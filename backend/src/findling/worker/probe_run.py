@@ -603,7 +603,7 @@ class ProbeRun:
             if verdict.verdict != probe.VERDICT_FITS or slots == 1:
                 return probe.Verdict(verdict.verdict, verdict.cause, MappingProxyType({**verdict.numbers, **rates}))
 
-            probe.note_step("ocr_n")
+            probe.note_step("ocr_n", slots=slots)
             minimum = await self._ocr(scan_path, len(data), slots, deadline)
         run = probe.judge_run(min_headroom=minimum, pending=pending + model_extra)
         return probe.Verdict(run.verdict, run.cause, MappingProxyType({**run.numbers, "slots": slots, **rates}))

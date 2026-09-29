@@ -262,6 +262,12 @@ def test_a_run_from_begin_to_finish() -> None:
     probe.note_step("download", 10, 20)
     step = probe.snapshot()
     assert (step.step, step.bytes_done, step.bytes_total) == ("download", 10, 20)
+    assert dict(step.numbers) == {}
+    probe.note_step("ocr_n", slots=4)
+    # The figure of ocr_n travels in numbers, for the progress line.
+    assert dict(probe.snapshot().numbers) == {"slots": 4}
+    with pytest.raises(ValueError, match="slot"):
+        probe.note_step("ocr_n", slots=-1)
     probe.finish(
         "narrow", "reserve_thin", {"reserve": 1, "required": 2}, fp32_fetched=True, fp32_deleted=True, now=130.0
     )

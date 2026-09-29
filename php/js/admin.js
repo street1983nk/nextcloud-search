@@ -1748,9 +1748,12 @@
     let name = ''
     if (step === 'download') {
       name = total > 0 ? fill(names.download, [size(done), size(total)]) : ''
-    } else if (step !== '' && step !== 'ocr_n') {
-      // ocr_n names the number of slots, and the state route does not carry
-      // it: without the figure the line says only that the check runs.
+    } else if (step === 'ocr_n') {
+      // ocr_n names the number of slots, carried in numbers.slots; without the
+      // figure the line says only that the check runs.
+      const slots = whole((answer.numbers || {}).slots)
+      name = slots > 0 ? fill(names.ocr_n, [String(slots)]) : ''
+    } else if (step !== '') {
       name = names[step]
     }
 

@@ -323,15 +323,23 @@ def begin(probe_id: str, profile: str, precision: str, now: float) -> None:
         )
 
 
-def note_step(step: str, bytes_done: int = 0, bytes_total: int = 0) -> None:
-    """The check entered a step; the byte counts belong to the download."""
+def note_step(step: str, bytes_done: int = 0, bytes_total: int = 0, *, slots: int = 0) -> None:
+    """The check entered a step; the byte counts belong to the download.
+
+    ``slots`` is the figure of ocr_n, carried in ``numbers`` so that the
+    progress line can name it ("OCR with 4 slots"); nought leaves the numbers
+    as they are.
+    """
     global _SNAPSHOT
     if step not in _STEP_SET:
         raise ValueError("unknown probe step")
     if bytes_done < 0 or bytes_total < 0:
         raise ValueError("negative probe byte count")
+    if slots < 0:
+        raise ValueError("negative probe slot count")
     with _STATE_LOCK:
         current = _SNAPSHOT
+        numbers = _numbers({**current.numbers, "slots": slots}) if slots else current.numbers
         _SNAPSHOT = ProbeSnapshot(
             id=current.id,
             state=current.state,
@@ -340,7 +348,7 @@ def note_step(step: str, bytes_done: int = 0, bytes_total: int = 0) -> None:
             bytes_total=bytes_total,
             verdict=current.verdict,
             cause=current.cause,
-            numbers=current.numbers,
+            numbers=numbers,
             target_profile=current.target_profile,
             target_precision=current.target_precision,
             fp32_fetched=current.fp32_fetched,

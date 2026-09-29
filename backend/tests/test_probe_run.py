@@ -300,10 +300,10 @@ def steps(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     seen: list[str] = []
     original = probe.note_step
 
-    def note(step: str, bytes_done: int = 0, bytes_total: int = 0) -> None:
+    def note(step: str, bytes_done: int = 0, bytes_total: int = 0, *, slots: int = 0) -> None:
         if not seen or seen[-1] != step:
             seen.append(step)
-        original(step, bytes_done, bytes_total)
+        original(step, bytes_done, bytes_total, slots=slots)
 
     monkeypatch.setattr(probe, "note_step", note)
     return seen
@@ -440,10 +440,10 @@ async def test_the_fp32_download_counts_its_bytes(
     progress: list[tuple[int, int]] = []
     original = probe.note_step
 
-    def note(step: str, bytes_done: int = 0, bytes_total: int = 0) -> None:
+    def note(step: str, bytes_done: int = 0, bytes_total: int = 0, *, slots: int = 0) -> None:
         if step == "download":
             progress.append((bytes_done, bytes_total))
-        original(step, bytes_done, bytes_total)
+        original(step, bytes_done, bytes_total, slots=slots)
 
     monkeypatch.setattr(probe, "note_step", note)
     snap = await rig.check("standard", "fp32")
