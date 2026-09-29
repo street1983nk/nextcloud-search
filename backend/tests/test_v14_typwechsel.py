@@ -49,6 +49,8 @@ needs_sh = pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell
 STUB_AWS = """#!/bin/sh
 printf '%s\\n' "$*" >>"$STUB/aufrufe"
 case "$*" in
+*get-service-quota*) printf '256.0\\n'; exit 0 ;;
+*describe-instance-type-offerings*) printf 'eu-central-1c\\teu-central-1a\\n'; exit 0 ;;
 *describe-instance-attribute*) printf '%s\\n' "$STUB_SHUTDOWN"; exit 0 ;;
 *modify-instance-attribute*)
     [ "${STUB_KLEBT:-}" = 1 ] && exit 0
@@ -61,8 +63,6 @@ case "$*" in
     if [ -n "${STUB_ZUSTAND:-}" ]; then printf '%s\\n' "$STUB_ZUSTAND"; else cat "$STUB/zustand"; fi
     exit 0 ;;
 *PublicIpAddress*) printf '%s\\n' "$STUB_ADRESSE"; exit 0 ;;
-*get-service-quota*) printf '256.0\\n'; exit 0 ;;
-*describe-instance-type-offerings*) printf 'eu-central-1c\\teu-central-1a\\n'; exit 0 ;;
 esac
 exit 1
 """
