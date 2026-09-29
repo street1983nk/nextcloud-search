@@ -297,6 +297,22 @@ final class AdminViewServiceTest extends TestCase {
 	public function testAnAnswerWithoutAModelObjectGivesNullAndNeverAGuess(array $answer): void {
 		self::assertNull(AdminViewService::precision(AdminViewService::modelField($answer, 'precisionActive')));
 		self::assertNull(AdminViewService::strictFlag(AdminViewService::modelField($answer, 'reembedRunning')));
+		self::assertNull(AdminViewService::precisionVerdict(AdminViewService::modelField($answer, 'precisionVerdict')));
+	}
+
+	// -- the verdict of the precision (phase 27, state Z13) -----------------
+
+	public function testEveryKnownPrecisionVerdictIsPassedThrough(): void {
+		foreach (['downloading', 'fp32_unavailable', 'fp32_not_in_economy', 'fp32_on_a_tight_box', 'fp32_active_in_economy'] as $verdict) {
+			$answer = ['model' => ['precisionVerdict' => $verdict]];
+			self::assertSame($verdict, AdminViewService::precisionVerdict(AdminViewService::modelField($answer, 'precisionVerdict')));
+		}
+	}
+
+	public function testTheEmptyAndEveryUnknownPrecisionVerdictGiveNull(): void {
+		foreach (['', 'FP32_UNAVAILABLE', 'fp32', '<b>x</b>', 3, true, null, ['fp32_unavailable']] as $value) {
+			self::assertNull(AdminViewService::precisionVerdict($value));
+		}
 	}
 
 	/**

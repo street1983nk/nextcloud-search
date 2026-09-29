@@ -59,7 +59,7 @@ import re
 from collections.abc import Callable, Mapping
 from pathlib import Path
 
-from findling import guard, probe
+from findling import guard, precision, probe
 from findling.api.status import PROFILE_VALUE_KEYS, GuardReport
 from findling.config import PROFILE_PERFORMANCE_OCR_SLOTS_MAX, PROFILE_STANDARD_OCR_SLOTS_MAX
 from findling.embed.engine import ENGINE_STATES
@@ -2235,6 +2235,19 @@ def test_every_new_status_key_has_exactly_one_line_in_the_service() -> None:
     assert "'precisionActive' => self::precision(self::modelField($answer, 'precisionActive'))," in view
     assert "'reembedRunning' => self::strictFlag(self::modelField($answer, 'reembedRunning'))," in view
     assert "private const PRECISIONS = ['int8', 'fp32'];" in view
+    # Phase 27, state Z13: the verdict of the precision out of the same object,
+    # judged against the closed set of findling.precision without its empty word.
+    assert view.count("'precisionVerdict' => ") == 1
+    assert "'precisionVerdict' => self::precisionVerdict(self::modelField($answer, 'precisionVerdict'))," in view
+
+
+def test_the_precision_verdicts_of_the_page_equal_those_of_the_container() -> None:
+    """The closed list in PHP is findling.precision.VERDICTS without the empty word."""
+    view = ADMIN_VIEW.read_text(encoding="utf-8")
+    block = view.split("private const PRECISION_VERDICTS = [", 1)[1].split("];", 1)[0]
+    listed = set(re.findall(r"'([a-z0-9_]+)'", block))
+
+    assert listed == set(precision.VERDICTS) - {precision.VERDICT_NONE}
 
 
 def test_the_guard_lines_are_built_out_of_closed_sets() -> None:

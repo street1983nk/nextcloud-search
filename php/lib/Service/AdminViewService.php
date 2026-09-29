@@ -190,6 +190,23 @@ final class AdminViewService {
 	private const PRECISIONS = ['int8', 'fp32'];
 
 	/**
+	 * The verdicts of the precision the container may report, as a closed list
+	 * (``findling.precision.VERDICTS`` without the empty word, which means that
+	 * there is nothing to say).
+	 *
+	 * The line #findling-profile-precision picks its sentence by this word, so a
+	 * value from outside the list hides the line instead of reaching the page
+	 * (T-26-16 pattern, state Z13 of 27-UI-SPEC).
+	 */
+	private const PRECISION_VERDICTS = [
+		'downloading',
+		'fp32_unavailable',
+		'fp32_not_in_economy',
+		'fp32_on_a_tight_box',
+		'fp32_active_in_economy',
+	];
+
+	/**
 	 * The three profile names the memory guard of the container may report as
 	 * chosen or in force, as a closed list (plan 26-05, D-26-01).
 	 *
@@ -2126,8 +2143,9 @@ final class AdminViewService {
 	 * object ``model`` of the status answer, whose shape plan 25-12 fixes:
 	 * ``precisionChosen`` (string or null), ``precisionActive`` ("int8", "fp32"
 	 * or null), ``precisionVerdict`` (string) and ``reembedRunning`` (bool). This
-	 * page reads the second and the fourth of them and nothing else; the
-	 * verdicts are shown from phase 27 on. A container older than that contract
+	 * page reads the second and the fourth of them, and since phase 27 the third
+	 * as well, as ``precisionVerdict`` (one of five words or null, the line of
+	 * state Z13). A container older than that contract
 	 * leaves the object out, and the line on the page stays hidden (T-07-03).
 	 *
 	 * The seven fields of plan 26-05 are exceptions of that same kind. They are
@@ -2191,6 +2209,9 @@ final class AdminViewService {
 			// container that did not say.
 			'precisionActive' => self::precision(self::modelField($answer, 'precisionActive')),
 			'reembedRunning' => self::strictFlag(self::modelField($answer, 'reembedRunning')),
+			// The verdict of the precision (phase 27, state Z13 of 27-UI-SPEC):
+			// one of five words or null, never container text on the page.
+			'precisionVerdict' => self::precisionVerdict(self::modelField($answer, 'precisionVerdict')),
 			// The memory guard of plan 26-05 (D-26-01): the profile the admin
 			// chose and the one in force, both words out of a closed set, so no
 			// container text becomes a phrase of the page (T-25-14 pattern).
@@ -2303,6 +2324,16 @@ final class AdminViewService {
 	 */
 	public static function precision(mixed $value): ?string {
 		return is_string($value) && in_array($value, self::PRECISIONS, true) ? $value : null;
+	}
+
+	/**
+	 * The verdict of the precision, one of five words, or null.
+	 *
+	 * Null for the empty word of the protocol as well, which means that there is
+	 * nothing to say, and for everything outside the list (T-26-16 pattern).
+	 */
+	public static function precisionVerdict(mixed $value): ?string {
+		return is_string($value) && in_array($value, self::PRECISION_VERDICTS, true) ? $value : null;
 	}
 
 	/**
