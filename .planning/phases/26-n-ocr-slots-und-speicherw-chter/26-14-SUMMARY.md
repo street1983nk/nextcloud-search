@@ -27,13 +27,14 @@ decisions:
 metrics:
   duration: "ca. 35 min (Push 04:42Z bis 05:17Z)"
   completed: 2026-09-29
-  tasks: "2 von 3 (Task 3 Owner-Abnahme offen)"
+  tasks: 3
   files: 10
+status: complete
 ---
 
 # Phase 26 Plan 14: Push, CI-Belege und Messleiter Summary
 
-Push nach Owner-Entscheid, alle sechs Push-Läufe grün (Kill-Test SC2 in Linux-CI, PHPUnit 386 Tests), arm64-Leiter über den echten Poller mit Faktor 2,000 und 1,979 je Stufe gegen 1,05 (gesamt 3,958) gemessen und abgelegt; Owner-Abnahme (Task 3) steht aus.
+Push nach Owner-Entscheid, alle sechs Push-Läufe grün (Kill-Test SC2 in Linux-CI, PHPUnit 386 Tests), arm64-Leiter über den echten Poller mit Faktor 2,000 und 1,979 je Stufe gegen 1,05 (gesamt 3,958) gemessen und abgelegt; Phase vom Owner am 29.09.2026 abgenommen.
 
 ## Tasks
 
@@ -41,7 +42,7 @@ Push nach Owner-Entscheid, alle sechs Push-Läufe grün (Kill-Test SC2 in Linux-
 | ---- | ---- | ------ | ------- |
 | 1 | Push-Entscheid | (kein Commit, Push `cce78abd..d91305df`) | keine |
 | 2 | CI-Belege einsammeln, Messleiter ablegen | c364c8c8 | docs/measurements/2026-09-slot-leiter-ci/**, docs/performance.md |
-| 3 | Owner-Abnahme | offen (Checkpoint) | |
+| 3 | Owner-Abnahme | "approved" (29.09.2026), im SUMMARY-Commit | 26-14-SUMMARY.md |
 
 ## Task 1: Push-Entscheid
 
@@ -101,7 +102,9 @@ Lokale Gates nach Task 2: `uv run pytest -q` 3893 passed, 22 skipped (Pin-Tests 
 
 ## Task 3: Owner-Abnahme
 
-Offen. Checkpoint an den Orchestrator zurückgegeben; das Signal des Owners wird hier wörtlich nachgetragen.
+- Signal wörtlich: **"approved"**, Owner-Abnahme der Phase 26 erteilt mit der Option **"Abnehmen (Empfohlen)"**, 29.09.2026, per AskUserQuestion, über den Koordinator übermittelt.
+- Ohne den optionalen Live-Blick (Punkt 5, `/status` im nc35-Harness); SC4 bleibt damit durch Tests belegt.
+- Keine Befunde des Owners. Der Plan sieht die Abnahme nur im SUMMARY vor, keine weitere Beweisdatei.
 
 ## Deviations from Plan
 
