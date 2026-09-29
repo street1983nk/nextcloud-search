@@ -1,0 +1,518 @@
+lokale vorprobe arm64 -> amd64, plan 28-04 (task 1), research pitfall 5, annahmen a5 und a6
+erhoben 2026-09-29T22:08:20Z auf der entwicklungsmaschine, docker desktop mit qemu-emulation
+werkzeug: docker 29.5.2, abbildspeicher [[driver-type io.containerd.snapshotter.v1]]
+
+keine aws-ressource, nichts kostet geld. nur offizielle docker-hub-abbilder
+(postgres:18.6, busybox:1.37, alpine:3). die cluster-anmeldung laeuft ohne passwort
+(trust, kein veroeffentlichter port). container mit speichergrenze, nacheinander.
+
+-- 0 emulation --
+schritt 0.1 2026-09-29T22:08:20Z
+kommando: docker run --rm --platform linux/arm64 --memory 128m alpine:3 uname -m
+  aarch64
+rc 0
+
+schritt 0.2 2026-09-29T22:08:22Z
+kommando: docker run --rm --platform linux/amd64 --memory 128m alpine:3 uname -m
+  x86_64
+rc 0
+
+-- a postgresql: cluster unter arm64 anlegen --
+schritt a.1 2026-09-29T22:08:22Z
+kommando: docker pull --platform linux/arm64 postgres:18.6
+  18.6: Pulling from library/postgres
+  Digest: sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+  Status: Downloaded newer image for postgres:18.6
+  docker.io/library/postgres:18.6
+rc 0
+
+schritt a.2 2026-09-29T22:08:51Z
+kommando: docker volume create vp28-pgdata
+  vp28-pgdata
+rc 0
+
+schritt a.3 2026-09-29T22:08:52Z
+kommando: docker run -d --name vp28-pg-arm --platform linux/arm64 --memory 768m -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB=vp -v vp28-pgdata:/var/lib/postgresql postgres:18.6
+  25a507ca8d444a64b19bd1b25d7b02b09473d73928c4d0f33efc7798c5c4f2e4
+rc 0
+
+bereit-arm64 2026-09-29T22:09:08Z
+
+schritt a.4 2026-09-29T22:09:08Z
+kommando: docker exec vp28-pg-arm uname -m
+  aarch64
+rc 0
+
+schritt a.5 2026-09-29T22:09:08Z
+kommando: psql_arm select version()
+  PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit
+rc 0
+
+schritt a.6 2026-09-29T22:09:09Z
+kommando: psql_arm select current_setting('server_encoding'), datcollate, datlocprovider from pg_database where datname = 'vp'
+  UTF8|en_US.utf8|c
+rc 0
+
+schritt a.7 2026-09-29T22:09:10Z
+kommando: psql_arm create extension pg_trgm; create table probe (id int primary key, t text not null, v varchar(200) not null); insert into probe select i, 'Größe Übung Straße ' || chr(160 + (i % 1800)) || ' ' || chr(1024 + (i % 200)) || ' é€ ' || lpad(i::text, 6, '0') || case when i % 7 = 0 then ' öß' else '' end, 'Maß-' || chr(192 + (i % 60)) || '-' || md5(i::text) from generate_series(1, 5000) i; create index probe_t on probe (t); create index probe_v on probe (v); create index probe_t_trgm on probe using gin (t gin_trgm_ops); analyze probe
+  CREATE EXTENSION
+  CREATE TABLE
+  INSERT 0 5000
+  CREATE INDEX
+  CREATE INDEX
+  CREATE INDEX
+  ANALYZE
+rc 0
+
+schritt a.8 2026-09-29T22:09:13Z
+kommando: psql_arm select t, v from probe where id in (7, 1234, 4999) order by id
+  Größe Übung Straße § Ї é€ 000007 öß|Maß-Ç-8f14e45fceea167a5a36dedd4bea2543
+  Größe Übung Straße ղ Т é€ 001234|Maß-â-81dc9bdb52d04dc20036dbd8313ed055
+  Größe Übung Straße ؗ Ӈ é€ 004999|Maß-Ó-54fe976ba170c19ebae453679b362263
+rc 0
+
+schritt a.9 2026-09-29T22:09:13Z
+kommando: psql_arm select count(*), md5(string_agg(id::text||'|'||t||'|'||v, ',' order by id)) from probe
+  5000|944a214d42c3bd6b6f8defdf0c45aed7
+rc 0
+
+schritt a.10 2026-09-29T22:09:14Z
+kommando: psql_arm set enable_seqscan=off; set enable_bitmapscan=on; select count(*) from probe where v >= 'Maß-Ç' and v < 'Maß-Ó'
+  SET
+  SET
+  1882
+rc 0
+
+schritt a.11 2026-09-29T22:09:15Z
+kommando: psql_arm set enable_seqscan=off; select count(*) from probe where t like '%€ 0012%'
+  SET
+  100
+rc 0
+
+schritt a.12 2026-09-29T22:09:16Z
+kommando: docker exec -u postgres vp28-pg-arm pg_controldata /var/lib/postgresql/18/docker
+  pg_control version number:            1800
+  Catalog version number:               202506291
+  Database system identifier:           7691082714480762993
+  Database cluster state:               in production
+  pg_control last modified:             Tue 29 Sep 2026 10:09:07 PM UTC
+  Latest checkpoint location:           0/1BA1B58
+  Latest checkpoint's REDO location:    0/1BA1B58
+  Latest checkpoint's REDO WAL file:    000000010000000000000001
+  Latest checkpoint's TimeLineID:       1
+  Latest checkpoint's PrevTimeLineID:   1
+  Latest checkpoint's full_page_writes: on
+  Latest checkpoint's NextXID:          0:754
+  Latest checkpoint's NextOID:          16385
+  Latest checkpoint's NextMultiXactId:  1
+  Latest checkpoint's NextMultiOffset:  0
+  Latest checkpoint's oldestXID:        745
+  Latest checkpoint's oldestXID's DB:   1
+  Latest checkpoint's oldestActiveXID:  0
+  Latest checkpoint's oldestMultiXid:   1
+  Latest checkpoint's oldestMulti's DB: 1
+  Latest checkpoint's oldestCommitTsXid:0
+  Latest checkpoint's newestCommitTsXid:0
+  Time of latest checkpoint:            Tue 29 Sep 2026 10:09:06 PM UTC
+  Fake LSN counter for unlogged rels:   0/3E8
+  Minimum recovery ending location:     0/0
+  Min recovery ending loc's timeline:   0
+  Backup start location:                0/0
+  Backup end location:                  0/0
+  End-of-backup record required:        no
+  wal_level setting:                    replica
+  wal_log_hints setting:                off
+  max_connections setting:              100
+  max_worker_processes setting:         8
+  max_wal_senders setting:              10
+  max_prepared_xacts setting:           0
+  max_locks_per_xact setting:           64
+  track_commit_timestamp setting:       off
+  Maximum data alignment:               8
+  Database block size:                  8192
+  Blocks per segment of large relation: 131072
+  WAL block size:                       8192
+  Bytes per WAL segment:                16777216
+  Maximum length of identifiers:        64
+  Maximum columns in an index:          32
+  Maximum size of a TOAST chunk:        1996
+  Size of a large-object chunk:         2048
+  Date/time type storage:               64-bit integers
+  Float8 argument passing:              by value
+  Data page checksum version:           1
+  Default char data signedness:         signed
+  Mock authentication nonce:            <nonce>
+rc 0
+
+schritt a.13 2026-09-29T22:09:16Z
+kommando: docker stop -t 60 vp28-pg-arm
+  vp28-pg-arm
+rc 0
+
+schritt a.14 2026-09-29T22:09:17Z
+kommando: docker logs --tail 5 vp28-pg-arm
+  2026-09-29 22:09:16.868 UTC [1] LOG:  background worker "logical replication launcher" (PID 200) exited with exit code 1
+  2026-09-29 22:09:16.873 UTC [191] LOG:  shutting down
+  2026-09-29 22:09:16.877 UTC [191] LOG:  checkpoint starting: shutdown immediate
+  2026-09-29 22:09:17.044 UTC [191] LOG:  checkpoint complete: wrote 284 buffers (1.7%), wrote 3 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=0.057 s, sync=0.091 s, total=0.170 s; sync files=84, longest=0.013 s, average=0.002 s; distance=2764 kB, estimate=2764 kB; lsn=0/1E54CE8, redo lsn=0/1E54CE8
+  2026-09-29 22:09:17.104 UTC [1] LOG:  database system is shut down
+rc 0
+
+schritt a.15 2026-09-29T22:09:17Z
+kommando: docker rm vp28-pg-arm
+  vp28-pg-arm
+rc 0
+
+-- a postgresql: dasselbe volume unter amd64 --
+schritt a.16 2026-09-29T22:09:17Z
+kommando: docker pull --platform linux/amd64 postgres:18.6
+  18.6: Pulling from library/postgres
+  Digest: sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+  Status: Image is up to date for postgres:18.6
+  docker.io/library/postgres:18.6
+rc 0
+
+schritt a.17 2026-09-29T22:09:44Z
+kommando: docker run -d --name vp28-pg-amd --platform linux/amd64 --memory 768m -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB=vp -v vp28-pgdata:/var/lib/postgresql postgres:18.6
+  271e821f15af87eee3179386facd85e530b3ab971b7f6c2e2193106cc1a71ed2
+rc 0
+
+bereit-amd64 2026-09-29T22:09:49Z
+
+schritt a.18 2026-09-29T22:09:49Z
+kommando: docker exec vp28-pg-amd uname -m
+  x86_64
+rc 0
+
+schritt a.19 2026-09-29T22:09:50Z
+kommando: docker logs vp28-pg-amd
+  
+  PostgreSQL Database directory appears to contain a database; Skipping initialization
+  
+  2026-09-29 22:09:49.441 UTC [1] LOG:  starting PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit
+  2026-09-29 22:09:49.442 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+  2026-09-29 22:09:49.442 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+  2026-09-29 22:09:49.452 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+  2026-09-29 22:09:49.466 UTC [32] LOG:  database system was shut down at 2026-09-29 22:09:17 UTC
+  2026-09-29 22:09:49.518 UTC [1] LOG:  database system is ready to accept connections
+rc 0
+
+schritt a.20 2026-09-29T22:09:50Z
+kommando: docker exec -u postgres vp28-pg-amd pg_controldata /var/lib/postgresql/18/docker
+  pg_control version number:            1800
+  Catalog version number:               202506291
+  Database system identifier:           7691082714480762993
+  Database cluster state:               in production
+  pg_control last modified:             Tue 29 Sep 2026 10:09:49 PM UTC
+  Latest checkpoint location:           0/1E54CE8
+  Latest checkpoint's REDO location:    0/1E54CE8
+  Latest checkpoint's REDO WAL file:    000000010000000000000001
+  Latest checkpoint's TimeLineID:       1
+  Latest checkpoint's PrevTimeLineID:   1
+  Latest checkpoint's full_page_writes: on
+  Latest checkpoint's NextXID:          0:755
+  Latest checkpoint's NextOID:          16480
+  Latest checkpoint's NextMultiXactId:  1
+  Latest checkpoint's NextMultiOffset:  0
+  Latest checkpoint's oldestXID:        745
+  Latest checkpoint's oldestXID's DB:   1
+  Latest checkpoint's oldestActiveXID:  0
+  Latest checkpoint's oldestMultiXid:   1
+  Latest checkpoint's oldestMulti's DB: 1
+  Latest checkpoint's oldestCommitTsXid:0
+  Latest checkpoint's newestCommitTsXid:0
+  Time of latest checkpoint:            Tue 29 Sep 2026 10:09:16 PM UTC
+  Fake LSN counter for unlogged rels:   0/3E8
+  Minimum recovery ending location:     0/0
+  Min recovery ending loc's timeline:   0
+  Backup start location:                0/0
+  Backup end location:                  0/0
+  End-of-backup record required:        no
+  wal_level setting:                    replica
+  wal_log_hints setting:                off
+  max_connections setting:              100
+  max_worker_processes setting:         8
+  max_wal_senders setting:              10
+  max_prepared_xacts setting:           0
+  max_locks_per_xact setting:           64
+  track_commit_timestamp setting:       off
+  Maximum data alignment:               8
+  Database block size:                  8192
+  Blocks per segment of large relation: 131072
+  WAL block size:                       8192
+  Bytes per WAL segment:                16777216
+  Maximum length of identifiers:        64
+  Maximum columns in an index:          32
+  Maximum size of a TOAST chunk:        1996
+  Size of a large-object chunk:         2048
+  Date/time type storage:               64-bit integers
+  Float8 argument passing:              by value
+  Data page checksum version:           1
+  Default char data signedness:         signed
+  Mock authentication nonce:            <nonce>
+rc 0
+
+schritt a.21 2026-09-29T22:09:50Z
+kommando: psql_amd select version()
+  PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit
+rc 0
+
+vor reindex: arm64-indizes unter amd64 pruefen
+schritt a.22 2026-09-29T22:09:50Z
+kommando: psql_amd create extension amcheck
+  CREATE EXTENSION
+rc 0
+
+schritt a.23 2026-09-29T22:09:51Z
+kommando: psql_amd select count(*) as geprueft from (select bt_index_check(c.oid, true) from pg_index i join pg_class c on c.oid = i.indexrelid join pg_am a on a.oid = c.relam where a.amname = 'btree' and c.relpersistence <> 't') s
+  167
+rc 0
+
+schritt a.24 2026-09-29T22:09:51Z
+kommando: psql_amd select gin_index_check('probe_t_trgm'::regclass)
+  
+rc 0
+
+schritt a.25 2026-09-29T22:09:51Z
+kommando: psql_amd set enable_seqscan=off; set enable_bitmapscan=on; select count(*) from probe where v >= 'Maß-Ç' and v < 'Maß-Ó'
+  SET
+  SET
+  1882
+rc 0
+
+schritt a.26 2026-09-29T22:09:52Z
+kommando: psql_amd set enable_indexscan=off; set enable_bitmapscan=off; select count(*) from probe where v >= 'Maß-Ç' and v < 'Maß-Ó'
+  SET
+  SET
+  1882
+rc 0
+
+schritt a.27 2026-09-29T22:09:52Z
+kommando: psql_amd set enable_seqscan=off; select count(*) from probe where t like '%€ 0012%'
+  SET
+  100
+rc 0
+
+schritt a.28 2026-09-29T22:09:52Z
+kommando: psql_amd set enable_indexscan=off; set enable_bitmapscan=off; select count(*) from probe where t like '%€ 0012%'
+  SET
+  SET
+  100
+rc 0
+
+schritt a.29 2026-09-29T22:09:52Z
+kommando: psql_amd select count(*), md5(string_agg(id::text||'|'||t||'|'||v, ',' order by id)) from probe
+  5000|944a214d42c3bd6b6f8defdf0c45aed7
+rc 0
+
+schritt a.30 2026-09-29T22:09:53Z
+kommando: docker exec -u postgres vp28-pg-amd psql -X -v ON_ERROR_STOP=1 -d vp -c REINDEX DATABASE vp
+  REINDEX
+rc 0
+
+schritt a.31 2026-09-29T22:09:53Z
+kommando: psql_amd select count(*) as geprueft from (select bt_index_check(c.oid, true) from pg_index i join pg_class c on c.oid = i.indexrelid join pg_am a on a.oid = c.relam where a.amname = 'btree' and c.relpersistence <> 't') s
+  167
+rc 0
+
+schritt a.32 2026-09-29T22:09:53Z
+kommando: psql_amd select gin_index_check('probe_t_trgm'::regclass)
+  
+rc 0
+
+schritt a.33 2026-09-29T22:09:54Z
+kommando: psql_amd set enable_seqscan=off; set enable_bitmapscan=on; select count(*) from probe where v >= 'Maß-Ç' and v < 'Maß-Ó'
+  SET
+  SET
+  1882
+rc 0
+
+schritt a.34 2026-09-29T22:09:54Z
+kommando: psql_amd set enable_seqscan=off; select count(*) from probe where t like '%€ 0012%'
+  SET
+  100
+rc 0
+
+schritt a.35 2026-09-29T22:09:54Z
+kommando: psql_amd select count(*), md5(string_agg(id::text||'|'||t||'|'||v, ',' order by id)) from probe
+  5000|944a214d42c3bd6b6f8defdf0c45aed7
+rc 0
+
+schritt a.36 2026-09-29T22:09:55Z
+kommando: psql_amd select t, v from probe where id in (7, 1234, 4999) order by id
+  Größe Übung Straße § Ї é€ 000007 öß|Maß-Ç-8f14e45fceea167a5a36dedd4bea2543
+  Größe Übung Straße ղ Т é€ 001234|Maß-â-81dc9bdb52d04dc20036dbd8313ed055
+  Größe Übung Straße ؗ Ӈ é€ 004999|Maß-Ó-54fe976ba170c19ebae453679b362263
+rc 0
+
+schritt a.37 2026-09-29T22:09:55Z
+kommando: psql_amd insert into probe values (5001, 'Nach dem Umzug äöü', 'x86'); select count(*) from probe
+  INSERT 0 1
+  5001
+rc 0
+
+schritt a.38 2026-09-29T22:09:55Z
+kommando: docker stop -t 60 vp28-pg-amd
+  vp28-pg-amd
+rc 0
+
+schritt a.39 2026-09-29T22:09:56Z
+kommando: docker rm vp28-pg-amd
+  vp28-pg-amd
+rc 0
+
+-- b abbildspeicher: erst arm64, dann amd64 desselben tags --
+schritt b.1 2026-09-29T22:09:56Z
+kommando: docker pull --platform linux/arm64 busybox:1.37
+  1.37: Pulling from library/busybox
+  Digest: sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e
+  Status: Downloaded newer image for busybox:1.37
+  docker.io/library/busybox:1.37
+rc 0
+
+schritt b.2 2026-09-29T22:10:00Z
+kommando: docker run --rm --platform linux/arm64 --memory 64m busybox:1.37 uname -m
+  aarch64
+rc 0
+
+schritt b.3 2026-09-29T22:10:01Z
+kommando: docker image inspect --platform linux/arm64 --format {{.Architecture}} {{.Os}} busybox:1.37
+  arm64 linux
+rc 0
+
+schritt b.4 2026-09-29T22:10:01Z
+kommando: docker pull --platform linux/amd64 busybox:1.37
+  1.37: Pulling from library/busybox
+  Digest: sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e
+  Status: Image is up to date for busybox:1.37
+  docker.io/library/busybox:1.37
+rc 0
+
+schritt b.5 2026-09-29T22:10:04Z
+kommando: docker run --rm --platform linux/amd64 --memory 64m busybox:1.37 uname -m
+  x86_64
+rc 0
+
+schritt b.6 2026-09-29T22:10:05Z
+kommando: docker image inspect --platform linux/amd64 --format {{.Architecture}} {{.Os}} busybox:1.37
+  amd64 linux
+rc 0
+
+schritt b.7 2026-09-29T22:10:06Z
+kommando: docker image inspect --platform linux/arm64 --format {{.Architecture}} {{.Os}} busybox:1.37
+  arm64 linux
+rc 0
+
+schritt b.8 2026-09-29T22:10:06Z
+kommando: docker run --rm --memory 64m busybox:1.37 uname -m
+  x86_64
+rc 0
+
+-- c aufraeumen --
+schritt c.1 2026-09-29T22:10:17Z
+kommando: docker volume rm vp28-pgdata
+  vp28-pgdata
+rc 0
+
+schritt c.2 2026-09-29T22:10:17Z
+kommando: docker image rm postgres:18.6
+  Untagged: postgres:18.6
+  Deleted: sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+rc 0
+
+schritt c.3 2026-09-29T22:10:18Z
+kommando: docker image rm busybox:1.37
+  Untagged: busybox:1.37
+  Deleted: sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e
+rc 0
+
+schritt c.4 2026-09-29T22:10:18Z
+kommando: docker image rm --platform linux/arm64 alpine:3
+  Error response from daemon: Content will be removed from all images referencing this variant. Use --force to force delete.
+rc 1
+
+schritt c.5 2026-09-29T22:10:19Z
+kommando: docker image inspect --format {{.Architecture}} {{.Os}} alpine:3
+  amd64 linux
+rc 0
+
+schritt c.6 2026-09-29T22:10:19Z
+kommando: docker ps -a --filter name=vp28 --format {{.Names}}
+  
+rc 0
+
+schritt c.7 2026-09-29T22:10:19Z
+kommando: docker volume ls --filter name=vp28 --format {{.Name}}
+  
+rc 0
+
+schritt c.8 2026-09-29T22:10:20Z
+kommando: docker image ls --format {{.Repository}}:{{.Tag}} --filter reference=postgres:18.6
+  
+rc 0
+
+schritt c.9 2026-09-29T22:10:20Z
+kommando: docker image ls --format {{.Repository}}:{{.Tag}} --filter reference=busybox:1.37
+  
+rc 0
+
+schritt c.10 2026-09-29T22:10:20Z
+kommando: docker run --rm --platform linux/amd64 --memory 64m alpine:3 uname -m
+  x86_64
+rc 0
+
+-- d befund --
+postgresql (annahme a6):
+  - ein unter linux/arm64 mit postgres:18.6 angelegter cluster (utf8, en_US.utf8,
+    libc-provider, pruefsummen an) startet unter linux/amd64 ohne warnung im log
+    ("database system was shut down", "ready to accept connections"), a.19
+  - pg_controldata unter beiden architekturen gleich: maximum data alignment 8,
+    block size 8192, default char data signedness signed (a.12, a.20). die
+    signedness im steuerblock ist also schon passend zu x86_64; pg_trgm-gin
+    wertet sie aus, deshalb war ein trigramm-index teil der probe
+  - vor dem reindex: bt_index_check mit heapallindexed ueber alle 167 b-baum-
+    indizes der datenbank rc 0, gin_index_check des trigramm-index rc 0, index-
+    und tabellenscan liefern dieselben zahlen (1882 bereichstreffer auf varchar
+    mit zeichen ueber 127, 100 trigramm-treffer mit dem euro-zeichen)
+  - REINDEX DATABASE rc 0 (a.30), danach dieselben pruefungen rc 0 und dieselben
+    zahlen, zeilenzahl 5000 und md5 ueber alle zeilen 944a214d42c3bd6b6f8defdf0c45aed7
+    vorher und nachher gleich, stichprobe mit umlauten zeichengleich, ein
+    schreibzugriff nach dem umzug klappt (a.37)
+abbildspeicher (annahme a5):
+  - der tag busybox:1.37 erst mit linux/arm64 gezogen und gestartet (aarch64),
+    dann mit linux/amd64 nachgezogen und gestartet (x86_64); danach fuehrt der
+    speicher beide varianten unter einem tag (b.6, b.7), ein aufruf ohne
+    --platform nimmt die hausarchitektur (b.8)
+aufraeumen:
+  - container vp28-pg-arm und vp28-pg-amd entfernt (a.15, a.39), volume
+    vp28-pgdata entfernt (c.1), abbilder postgres:18.6 und busybox:1.37 entfernt
+    (c.2, c.3); docker ps -a, docker volume ls und docker image ls zeigen keine
+    reste (c.6 bis c.9). bestehende harness-container nicht angefasst
+  - rest: die arm64-variante von alpine:3 aus der emulationsprobe 0.1 bleibt im
+    speicher, weil ein anderes lokales abbild dieselbe variante teilt (c.4, ohne
+    --force belassen); alpine:3 selbst bleibt amd64 (c.5, c.10). kein container,
+    kein volume
+  - ein erster lauf um 22:06Z mit zwei fehlern im probe-skript (bereitschaft zu
+    frueh gemeldet, abfragen ohne trennschaerfe) wurde samt volume und abbild
+    verworfen; diese datei ist der zweite, vollstaendige lauf
+
+vorprobe-ergebnis postgres ja abbilder ja
+
+grenzen der aussage:
+  - emulation ist nicht die box: arm64 lief unter qemu auf einem x86-rechner,
+    beide seiten nutzen dieselbe debian-glibc des abbilds postgres:18.6. auf der
+    box kommt das datenverzeichnis aus dem aio-abbild (postgresql 18.6 der aio,
+    eigene glibc und kollation); weicht die glibc-fassung zwischen arm64- und
+    amd64-abbild ab, kann die sortierung trotzdem abweichen. deshalb bleibt das
+    machbarkeitstor auf c7a.xlarge (start, occ status, REINDEX DATABASE,
+    files:scan einer stichprobe) pflicht
+  - die probe hatte 5000 zeilen und eine datenbank, die nextcloud-datenbank der
+    box ist groesser und hat mehr erweiterungen; toast, lange texte und
+    erweiterungen ausserhalb von pg_trgm und amcheck sind nicht geprueft
+  - der containerd-store der aio mit mastercontainer, eigenem netz und den
+    von der aio verwalteten volumes ist nicht nachgestellt; geprueft ist nur,
+    dass ein containerd-store (docker desktop, snapshotter
+    io.containerd.snapshotter.v1) einem arm64-befuellten tag die amd64-variante
+    nachzieht und startet
+  - die zeichen-signedness war auf arm64 schon "signed"; ob die aio-box
+    denselben wert fuehrt, zeigt erst pg_controldata auf der box
