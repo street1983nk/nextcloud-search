@@ -430,8 +430,10 @@ jobs:
     # Three slot counts of three timed rounds of an eight page scan, plus one
     # warm up each, the single mode, three bench runs and the B7 probe. On four
     # arm cores that is well inside half an hour; forty minutes is a bound and
-    # not the default 360.
-    timeout-minutes: 40
+    # not the default 360. Phase 26 adds the slot ladder: 48 pages per round,
+    # three rounds and a warm up on each of 1, 2 and 4 slots, which is the
+    # other half of the budget below (D-26-09).
+    timeout-minutes: 75
     steps:
       # The same three pins as the job above (test_workflow_pins.py, rule 5).
       - name: Check out the repository
@@ -529,6 +531,38 @@ jobs:
             echo "bytes=$(stat -c %s "${RUNNER_TEMP}/scan/scan-8.pdf")"
             echo "sha256=$(sha256sum "${RUNNER_TEMP}/scan/scan-8.pdf" | cut -d' ' -f1)"
           } | tee "${OUT}/scan.txt"
+
+      # The corpus of the slot ladder of phase 26 (D-26-09): sixteen one page
+      # and four eight page scans out of the same generator, seed
+      # "phase-26-ladder", so every run reads the same pixels. Never a user
+      # file. Size and sha256 of every scan go into the raw data.
+      - name: A2, the ladder corpus
+        env:
+          TARGET: ${{ steps.image.outputs.target }}
+        run: |
+          mkdir -p "${RUNNER_TEMP}/ladder"
+          docker run --rm --network none --user "$(id -u):$(id -g)" \
+            -e PYTHONDONTWRITEBYTECODE=1 \
+            -v "${GITHUB_WORKSPACE}/scripts/dev:/repo/scripts/dev:ro" \
+            -v "${GITHUB_WORKSPACE}/testdata/fonts:/repo/testdata/fonts:ro" \
+            -v "${RUNNER_TEMP}/ladder:/scan" \
+            --entrypoint /app/.venv/bin/python "${TARGET}" \
+            -c '
+          import sys
+          sys.path.insert(0, "/repo/scripts/dev")
+          import build_load_corpus as corpus
+          shapes = [(f"scan-1p-{i:02d}", 1) for i in range(1, 17)] + [(f"scan-8p-{i}", 8) for i in range(1, 5)]
+          for name, pages in shapes:
+              with open(f"/scan/{name}.pdf", "wb") as target:
+                  target.write(corpus._scan_pdf(corpus.Rng("phase-26-ladder", name), pages))
+          '
+          {
+            echo "seed=phase-26-ladder"
+            echo "scans=$(ls "${RUNNER_TEMP}/ladder" | wc -l)"
+            for scan in "${RUNNER_TEMP}"/ladder/*.pdf; do
+              echo "$(basename "${scan}") bytes=$(stat -c %s "${scan}") sha256=$(sha256sum "${scan}" | cut -d' ' -f1)"
+            done
+          } | tee "${OUT}/ladder-corpus.txt"
 
       # W3 for N = 1, 2 and 4, and the cpu set grows with N: one slot on one
       # core, two on two, four on four. That is the curve D-03 asks about, a
@@ -628,6 +662,92 @@ jobs:
             echo "n1=${one:-missing} n4=${four:-missing} rounds_with_lost_slots=${lost}"
             exit 1
           fi
+
+      # The slot ladder of phase 26 (D-26-09, SC3): the product itself, the
+      # real Poller.run_once over the corpus of A2, with 1, 2 and 4 slots on
+      # a cpu set of the same width, three timed rounds each. The W4 curve
+      # above is its ceiling; the serial parts of a pass keep it below.
+      # Sparsam reads on with one slot whatever this says. It runs even when
+      # a step above failed, because it is what phase 26 asks this job for.
+      - name: G, slot ladder over the real poller
+        if: ${{ !cancelled() }}
+        env:
+          TARGET: ${{ steps.image.outputs.target }}
+        run: |
+          for combination in "1 0" "2 0,1" "4 0-3"; do
+            set -- ${combination}
+            echo "::group::ladder slots $1 on cpu set $2"
+            docker run --rm --network none --cpuset-cpus "$2" \
+              -v "${GITHUB_WORKSPACE}/scripts/ops:/ops:ro" \
+              -v "${RUNNER_TEMP}/ladder:/scan/ladder:ro" \
+              --entrypoint /app/.venv/bin/python "${TARGET}" \
+              /ops/slot_ladder.py --slots "$1" --rounds 3 --scan-dir /scan/ladder \
+              | tee "${OUT}/ladder-slots-$1.txt"
+            echo "::endgroup::"
+          done
+
+      # The factor of every step of the ladder, defined before the first run:
+      #
+      #   step 1->2 = pages_per_second_median of ladder-slots-2.txt over the
+      #               one of ladder-slots-1.txt, step 2->4 = ladder-slots-4.txt
+      #               over ladder-slots-2.txt.
+      #
+      # A step above the noise limit of 1.05 (rule 2.5 of the BL-F04 ground
+      # work) is "Zugewinn", anything else "im Rauschen". A missing or non
+      # numeric median, "unbestimmt" out of the tool, a median of zero below
+      # a step or any round with a failed scan leaves the ladder undetermined,
+      # and then the step writes "ladder unbestimmt" and fails rather than
+      # hand over a quotient of a broken run.
+      - name: H, ladder factor against 1.05
+        if: ${{ !cancelled() }}
+        run: |
+          noise=1.05
+          median() {
+            awk '$1 == "pages_per_second_median" { print $2 }' "$1" 2>/dev/null || true
+          }
+          one=$(median "${OUT}/ladder-slots-1.txt")
+          two=$(median "${OUT}/ladder-slots-2.txt")
+          four=$(median "${OUT}/ladder-slots-4.txt")
+          lost=$(cat "${OUT}"/ladder-slots-*.txt 2>/dev/null | awk '
+            $1 == "round" { for (i = 1; i < NF; i++) if ($i == "failed" && $(i + 1) != "0") n++ }
+            END { print n + 0 }')
+          valid=yes
+          for value in "${one}" "${two}" "${four}"; do
+            case "${value}" in
+              '' | *[!0-9.]*) valid=no ;;
+            esac
+          done
+          if [ "${valid}" = yes ] && [ "${lost}" = 0 ] \
+              && awk -v one="${one}" -v two="${two}" 'BEGIN { exit !(one > 0 && two > 0) }'; then
+            awk -v one="${one}" -v two="${two}" -v four="${four}" -v noise="${noise}" 'BEGIN {
+              low = two / one; high = four / two
+              printf "noise_limit %.2f\n", noise
+              printf "step 1->2 factor %.3f %s\n", low, (low > noise ? "Zugewinn" : "im Rauschen")
+              printf "step 2->4 factor %.3f %s\n", high, (high > noise ? "Zugewinn" : "im Rauschen")
+              printf "total 1->4 factor %.3f\n", four / one
+            }' | tee "${OUT}/ladder-factor.txt"
+          else
+            echo "ladder unbestimmt" | tee "${OUT}/ladder-factor.txt"
+            echo "s1=${one:-missing} s2=${two:-missing} s4=${four:-missing} rounds_with_failed_scans=${lost}"
+            exit 1
+          fi
+
+      # The side figure of pattern 9 (A5): the int8 engine of the image embeds
+      # the same 64 synthetic passages with one row at a time and with two at
+      # once, the question behind embed_slots 2 in Performance. No acceptance
+      # criterion rides on it, so this step never fails the job.
+      - name: I, embedding side figure
+        if: ${{ !cancelled() }}
+        env:
+          TARGET: ${{ steps.image.outputs.target }}
+        run: |
+          docker run --rm --network none --cpuset-cpus 0-3 \
+            -v "${GITHUB_WORKSPACE}/scripts/ops:/ops:ro" \
+            -v "${RUNNER_TEMP}/ladder:/scan/ladder:ro" \
+            --entrypoint /app/.venv/bin/python "${TARGET}" \
+            /ops/slot_ladder.py --mode embed --slots 2 --rounds 3 --scan-dir /scan/ladder \
+            > "${OUT}/ladder-embed.txt" || echo "the embedding side figure ended with $?"
+          cat "${OUT}/ladder-embed.txt" || true
 
       - name: Hand the raw output over
         if: ${{ !cancelled() }}

@@ -150,6 +150,51 @@ Läufers laufen, bevor die Indexschleife die Spur geöffnet hat. Das steht als
 `RuntimeError` im Log; die Zeilen gehen an die Warteschlange zurück, und
 nichts geht verloren.
 
+## Speicherwächter (Phase 26)
+
+Ab Phase 26 laufen in Standard und Leistung mehrere OCR-Slots nebeneinander
+(PAR-02). Der Wächter sorgt dafür, dass das auf einer knappen Box nicht zum
+Speichertod wird (PAR-03).
+
+- **Drossel je Runde (D-26-02):** Vor jeder Staffel mit zwei oder mehr Slots
+  liest der Poller den anon-Headroom. Slot 1 läuft immer; jeder weitere Slot
+  braucht 235 MiB zusätzlich zur Reserve von 235 MiB. Ist der Headroom nicht
+  lesbar, läuft ein Slot. Kein Kind wird dafür beendet, die Drossel wirkt ab der
+  nächsten Runde. Sparsam fragt den Headroom nie.
+- **Auslöser einer Absenkung (D-26-03, D-26-15, D-26-16):**
+  - zwei qualifizierte max-Ereignisse aus `memory.events` in 600 s, mindestens
+    60 s auseinander; qualifiziert heißt: `max` steigt UND der anon-Headroom
+    liegt unter 235 MiB (ein Anstieg allein ist Cache-Rückgewinnung);
+  - ein steigender Zähler `oom_kill`;
+  - ein von außen beendetes Kind während einer Mehr-Slot-Staffel;
+  - ein Unrein-Ende: der Container endete mitten in einer Mehr-Slot-Staffel
+    (Merker `multi_slot_pass` in der `state.db`).
+- **Nur die wirksame Stufe sinkt (D-26-01):** je Auslöser eine Stufe, Leistung
+  auf Standard, Standard auf Sparsam, nie unter Sparsam. Das gewählte Profil
+  bleibt unverändert. Die Absenkung steht als eigener Merker in der `state.db`
+  und übersteht einen Neustart nach einem OOM-Kill.
+- **Kein Dateiverlust durch einen Kind-Kill (D-26-16):** Ein extern beendetes
+  Kind erzeugt kein Verdikt. Die Datei läuft nach der Staffel allein erneut;
+  erst ein zweiter Tod allein ergibt `failed(out_of_memory)`.
+- **Rückweg nur durch den Admin (D-26-04):** kein automatisches Anheben. Die
+  Absenkung endet, wenn der Admin das Token bestätigt:
+  `occ config:app:set findling profile_confirmed --value=<token>`, oder ein
+  anderes Profil wählt. Das Token nennen die Statusseite und `GET /status`
+  (Block `guard`). Ab Phase 27 geht das per Knopf in der Einstellungsseite.
+- **Kinder zuerst (D-26-11, D-26-16):** Jedes Sandbox-Kind läuft mit nice 10
+  und `oom_score_adj` 1000, in allen Profilen; tesseract erbt beides. Der
+  OOM-Killer trifft damit zuerst ein Kind, nicht den Hauptprozess mit Suche und
+  API.
+- **Einbettung:** Leistung bettet mit `embed_slots` 2 zwei Zeilen gleichzeitig
+  ein (D-25-12), weiter in einem Läufer.
+- **Statusroute:** `GET /status`, Block `guard`: `chosen`, `effective`, `cap`,
+  `cause` (`memory_max_repeated`, `oom_kill`, `unclean_end`), `since`, `token`,
+  `slotsTarget`, `slotsInForce`, `throttled`.
+- **Messung:** Die Slot-Leiter 1/2/4 läuft nur in CI auf dem arm64-Runner
+  (`measure.yml`, Job `slots`, Werkzeug `scripts/ops/slot_ladder.py`), jede
+  Stufe gegen die Rauschgrenze 1,05 (D-26-09). Die AWS-Matrix 4/8/16/32 Kerne
+  misst erst Phase 28 am fertigen Produkt (D-26-10).
+
 ## Was Phase 24 bewusst nicht tut
 
 - Keine Slots in Betrieb: die Werte werden berechnet und gemeldet, die
