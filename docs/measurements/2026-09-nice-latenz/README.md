@@ -37,3 +37,10 @@ Rohdaten: `raw/A-search.txt`, `raw/B-search.txt`, `raw/A-status.txt`, `raw/B-sta
 - In B kamen die Skelettdateien des Testkontos dazu (nach der ersten Anmeldung angelegt); die OCR-Last war in beiden Reihen durchgehend vorhanden.
 
 Zahlbeleg für die Issue-#19-Antwort; die Antwort wird erst nach Owner-Freigabe gepostet.
+
+## Abnahme
+
+- 28./29.09.2026, Owner-Entscheid "Abnehmen (Empfohlen)" (per AskUserQuestion, über den Koordinator übermittelt).
+- Abgenommene Lesart, wörtlich: "Befund ist ehrlich und brauchbar; nice beseitigt genau die Haenger aus Issue #19 (max-Werte, Zeitdeckel-Fehler), auch wenn p50/p95 gleich bleiben. Die #19-Antwort kann spaeter darauf aufbauen, ein Entwurf erst auf gesonderten Auftrag."
+- Anmerkung zur Datenlage: Die Hänger-Aussage stützt sich auf je einen Ausreißer in A (Suche 5000 ms mit Zeitdeckel-Fehler, status.php 1645,9 ms), denen in B keine gegenüberstehen. Wer die Aussage nach außen trägt, sollte das als Hinweis aus einem Lauf nennen, nicht als statistischen Beleg.
+- Kein Entwurf angelegt, nichts auf Issue #19 gepostet.

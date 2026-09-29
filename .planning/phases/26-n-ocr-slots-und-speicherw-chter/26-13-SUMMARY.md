@@ -3,7 +3,7 @@ phase: 26-n-ocr-slots-und-speicherw-chter
 plan: 13
 subsystem: ops-measurement
 tags: [nice, latency, issue-19, D-26-12]
-status: checkpoint-pending
+status: complete
 requires: ["26-01 (nice 10 im Kind)", "26-09", "26-10"]
 provides: ["scripts/ops/latency_probe.py", "docs/measurements/2026-09-nice-latenz/"]
 affects: ["Issue-#19-Antwort (nur nach Owner-Freigabe)"]
@@ -28,10 +28,10 @@ decisions:
   - "Registry auf 127.0.0.1:5055 statt 5000 (5000 belegt durch nc-mcp-exapp-registry)"
 metrics:
   completed: 2026-09-29
-  tasks: "2/3 (Task 3 = Owner-Checkpoint)"
+  tasks: "3/3"
 ---
 
-# Phase 26 Plan 13: Live-Latenzprobe nice 10 Summary (Stand am Checkpoint)
+# Phase 26 Plan 13: Live-Latenzprobe nice 10 Summary
 
 Inhaltsfreie Latenzprobe mit getrennten Reihen für die Findling-Suche und status.php; A/B-Messung (Abbild c6868c21 nice 0 gegen 46572f4d nice 10) unter laufender OCR in Sparsam: kein belegbarer Unterschied bei p50/p95, weder für die Suche noch für status.php.
 
@@ -42,7 +42,7 @@ Inhaltsfreie Latenzprobe mit getrennten Reihen für die Findling-Suche und statu
 | 1 (RED) | Tests für latency_probe | fb124643 | backend/tests/test_latency_probe.py |
 | 1 (GREEN) | latency_probe.py | 5f754064 | scripts/ops/latency_probe.py, backend/tests/test_latency_probe.py |
 | 2 | Live-Probe A/B, Rohdaten, README | b3daaa33 | docs/measurements/2026-09-nice-latenz/ |
-| 3 | Owner-Abnahme | offen | Checkpoint |
+| 3 | Owner-Abnahme | siehe Abschlusscommit | docs/measurements/2026-09-nice-latenz/README.md (Abschnitt Abnahme) |
 
 ## Ergebnis
 
@@ -63,11 +63,15 @@ Die Planerwartung "Suche B niedriger" trat für p50/p95 nicht ein; nur der Ausre
 - **Companion in beiden Varianten = php/ vom Stand 46572f4d:** Im Sparsam-Lane "all" bleibt der OCR-Anspruch in beiden bei 2 Zeilen, der Unterschied ist damit nice.
 - Harness nach der Messung abgebaut (Container, Volumes, Netz, Registry, Vorproxy); die Abbilder latA/latB bleiben lokal für eine Wiederholung. Hilfsskripte liegen ungetrackt unter .dev/latency/.
 
-## Offen (Checkpoint)
+## Checkpoint-Ausgang (Task 3)
 
-Owner-Abnahme der Probe. Owner-Signal: noch keins. Auf Issue #19 wurde nichts gepostet.
+- Owner-Signal, wörtlich (28./29.09.2026, per AskUserQuestion, vom Koordinator übermittelt): "Abnehmen (Empfohlen)".
+- Abgenommene Lesart, wörtlich: "Befund ist ehrlich und brauchbar; nice beseitigt genau die Haenger aus Issue #19 (max-Werte, Zeitdeckel-Fehler), auch wenn p50/p95 gleich bleiben. Die #19-Antwort kann spaeter darauf aufbauen, ein Entwurf erst auf gesonderten Auftrag."
+- Im README unter "Abnahme" eingetragen, mit dem Hinweis, dass die Hänger-Aussage auf je einem Ausreißer aus einem Lauf beruht.
+- Kein Antwortentwurf angelegt (Owner: erst auf gesonderten Auftrag), nichts auf Issue #19 gepostet, nichts gepusht.
+- D-26-12 Teil 2 ist damit gemessen und abgenommen.
 
 ## Self-Check: PASSED
 
 - Dateien vorhanden: scripts/ops/latency_probe.py, backend/tests/test_latency_probe.py, README und 6 Rohdateien
-- Commits vorhanden: fb124643, 5f754064, b3daaa33
+- Commits vorhanden: fb124643, 5f754064, b3daaa33, 8e65b37d (Zwischenstand), Abschlusscommit mit Abnahme
