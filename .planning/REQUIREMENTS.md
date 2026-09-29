@@ -16,8 +16,8 @@
 ### Parallelitaet (PAR)
 
 - [x] **PAR-01**: Die Einbettungsspur laeuft als eigener Nebenlaeufer (H1): eigener Anspruch mit Art-Filter (PHP-Route, KIND embed), beruehrt den Tantivy-Writer nicht, wirkt ab 2 Kernen
-- [ ] **PAR-02**: N OCR-Slots (H2): Semaphore, N Sandbox-Kinder mit je eigener Pipe und eigenem Zaehler, Sperre um IndexBatchWriter.add(), KIND_BATCH[ocr] >= N; die Zusagen "mindestens einmal ausliefern, hoechstens einmal indexieren" halten unter Parallelitaet
-- [ ] **PAR-03**: Ein Speicherwaechter drosselt Slots bei knapper cgroup; wiederholtes memory.events max oder ein OOM-Kill senkt das Profil selbsttaetig um eine Stufe, sichtbar gemeldet
+- [x] **PAR-02**: N OCR-Slots (H2): Semaphore, N Sandbox-Kinder mit je eigener Pipe und eigenem Zaehler, Sperre um IndexBatchWriter.add(), KIND_BATCH[ocr] >= N; die Zusagen "mindestens einmal ausliefern, hoechstens einmal indexieren" halten unter Parallelitaet
+- [x] **PAR-03**: Ein Speicherwaechter drosselt Slots bei knapper cgroup; wiederholtes memory.events max oder ein OOM-Kill senkt das Profil selbsttaetig um eine Stufe, sichtbar gemeldet
 - [x] **PAR-04**: IDX-08 neu gefasst: in Sparsam woertlich (OCR und Einbettung nie gleichzeitig), in Standard/Leistung als RAM-Bedingung des Speicherwaechters
 
 ### Hardware-Erkennung (HW)
@@ -71,8 +71,8 @@
 | PAR-01 | Phase 25 | Complete |
 | PAR-04 | Phase 25 | Complete |
 | MOD-02 | Phase 25 | Complete |
-| PAR-02 | Phase 26 | Pending |
-| PAR-03 | Phase 26 | Pending |
+| PAR-02 | Phase 26 | Complete |
+| PAR-03 | Phase 26 | Complete |
 | PRUEF-01 | Phase 27 | Pending |
 | UI-01 | Phase 27 | Pending |
 | MESS-10 | Phase 28 | Pending |
