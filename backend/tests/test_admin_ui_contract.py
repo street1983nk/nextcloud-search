@@ -3667,3 +3667,20 @@ def test_every_language_table_carries_every_key_with_the_catalogue_wording() -> 
         for key, cells in rows.items():
             expected = [" / ".join(forms_of(german[key]))] + [" / ".join(forms_of(t[key])) for t in targets]
             assert cells == expected, (document.name, key)
+
+
+def test_the_excluded_tile_names_the_rule_it_counts() -> None:
+    """Review WR-03 of phase 27: the tile counts files excluded by a folder rule only.
+
+    Next to "Deliberately left out", which also counts the files that are too
+    large or of a type Findling does not read, a bare "Excluded" read as a
+    contradiction ("Bewusst ausgelassen: 1" next to "Ausgeschlossen: 0"). The
+    owner chose the rename of the tile on 29.09.2026; the chips of the error
+    list and of the lookup keep "Excluded", because there the reason code
+    excluded already stands for the rule. The key existed already, as the name
+    of the reason group excluded in the error list (AdminViewService), with the
+    very wording the owner chose in all eight languages, so no catalogue moved.
+    """
+    template = TEMPLATE.read_text(encoding="utf-8")
+    assert "'id' => 'findling-tile-excluded', 'label' => $l->t('Excluded by a rule')" in template
+    assert catalogue_of(L10N_JSON)["Excluded by a rule"] == "Durch Regel ausgeschlossen"

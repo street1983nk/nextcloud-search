@@ -296,7 +296,7 @@ $tiles = [
 	['id' => 'findling-tile-failed', 'label' => $l->t('Failed'), 'value' => $whole($_['failed'] ?? 0)],
 	// Out of the scan counters since this plan, so that the tile and the
 	// denominator of the figure above agree on what excluded means.
-	['id' => 'findling-tile-excluded', 'label' => $l->t('Excluded'), 'value' => $whole($_['excluded'] ?? 0)],
+	['id' => 'findling-tile-excluded', 'label' => $l->t('Excluded by a rule'), 'value' => $whole($_['excluded'] ?? 0)],
 ];
 
 // Icon path data: Material Design Icons by Pictogrammers, Apache-2.0, pinned by
