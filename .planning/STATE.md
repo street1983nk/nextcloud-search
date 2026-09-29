@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 27 — Vorab-Prüfung und Settings-Oberfläche
+**Current focus:** Phase 27 , Vorab-Prüfung und Settings-Oberfläche
 
 ## Current Position
 
-Phase: 27 (Vorab-Prüfung und Settings-Oberfläche) — EXECUTING
+Phase: 27 (Vorab-Prüfung und Settings-Oberfläche) , EXECUTING
 Plan: 1 of 16
 Status: Executing Phase 27
-Last activity: 2026-09-29 -- Phase 27 execution started
+Last activity: 2026-09-29 - Completed quick task 260929-kii: Deckungsgrad-Nenner waechst mit neuen Dateien
 
 Progress: [#####.....] 50% (3 von 6 Phasen)
 
@@ -102,6 +102,12 @@ Fuer v1.4 unmittelbar tragend:
 ### Offene Blocker
 
 - Keine harten Blocker. Kill-Kriterium siehe oben.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Status | Directory |
+|---|-------------|------|--------|--------|-----------|
+| 260929-kii | Deckungsgrad-Nenner waechst mit neuen Dateien (ScanRecountJob, Nachzaehlung absolut, Satz statt Prozent bei Zaehler > Nenner) | 2026-09-29 | bbb4f406 | Verified | [260929-kii-deckungsgrad-nenner-waechst-mit-neuen-da](./quick/260929-kii-deckungsgrad-nenner-waechst-mit-neuen-da/) |
 
 ### Pending Todos
 
