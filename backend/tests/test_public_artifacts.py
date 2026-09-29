@@ -533,6 +533,10 @@ AUSNAHMEN: dict[tuple[str, str], str] = {
         "The fp32 memory report names the WSL2 kernel version of four groups, which the form of an "
         "address cannot be told apart from."
     ),
+    ("measurements/2026-09-nice-latenz/raw/machine.txt", "muster-der-umsetzung"): (
+        "A raw machine record of the nice latency probe of phase 26, which holds the WSL2 kernel "
+        "version of four groups and is not edited afterwards."
+    ),
     ("measurements/2026-09-fp32-speicher/rohdaten/00-umgebung.txt", "muster-der-umsetzung"): (
         "The raw environment record of the fp32 memory measurement holds the WSL2 kernel version of "
         "four groups and is not edited afterwards."
