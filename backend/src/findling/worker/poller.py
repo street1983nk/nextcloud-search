@@ -579,6 +579,16 @@ class Poller:
         # line per repetition would be exactly the log the idle flag avoids.
         self._starved_announced = False
         self._armed = asyncio.Event()
+        # Set while no pre-check holds the indexing (D-27-05). A signal of its
+        # own and not a second use of ``_armed``: arm and silence belong to the
+        # enabled handler and the lifespan, and a check that cleared the armed
+        # flag and set it again afterwards would switch on a backend the admin
+        # disabled in the meantime (27-RESEARCH.md, pattern 3). The hold only
+        # keeps the next pass from starting; the pass in flight ends as usual,
+        # with its acknowledgement, and neither the held rows nor the writer
+        # are touched. Set at birth, so a restart never starts held.
+        self._probe_release = asyncio.Event()
+        self._probe_release.set()
         # Whether :meth:`run` is inside a pass right now. It is deliberately not
         # the same question as :attr:`busy`, and the difference is what makes
         # :meth:`stand_down` terminate: ``busy`` reads the held rows, and a pass
@@ -675,6 +685,23 @@ class Poller:
     def pass_in_flight(self) -> bool:
         """True while :meth:`run` is inside a pass, whatever that pass is doing."""
         return self._in_flight
+
+    def hold_for_probe(self) -> None:
+        """Start no further pass until :meth:`release_probe_hold` (D-27-05).
+
+        The pass in flight is not interrupted: it works its claim to the end and
+        acknowledges it. Whoever holds waits on :attr:`pass_in_flight` for that.
+        """
+        self._probe_release.clear()
+
+    def release_probe_hold(self) -> None:
+        """Let the passes go on. Arms nothing: a silenced poller stays silent."""
+        self._probe_release.set()
+
+    @property
+    def probe_held(self) -> bool:
+        """True while a pre-check holds this poller."""
+        return not self._probe_release.is_set()
 
     async def stand_down(self, *, budget: float = STAND_DOWN_SECONDS) -> bool:
         """Silence, wait for the pass in flight, and give the index handle back.
@@ -796,6 +823,11 @@ class Poller:
         while not stop_event.is_set():
             if not self._armed.is_set():
                 await _first_of(self._armed.wait(), stop_event.wait())
+                continue
+            if not self._probe_release.is_set():
+                # A pre-check holds the indexing; the armed flag is asked again
+                # afterwards, so a silence during the hold stays in force.
+                await _first_of(self._probe_release.wait(), stop_event.wait())
                 continue
             try:
                 # Raised and lowered around the call and nowhere else, so that

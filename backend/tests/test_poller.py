@@ -2606,6 +2606,104 @@ async def test_the_loop_stops_on_the_stop_event_without_running_while_silenced(
     assert queue.claims == 0
 
 
+async def _until(condition: Callable[[], bool], *, seconds: float = 5.0) -> None:
+    """Wait until ``condition`` holds, failing after ``seconds``."""
+    for _ in range(int(seconds / 0.01)):
+        if condition():
+            return
+        await asyncio.sleep(0.01)
+    assert condition()
+
+
+async def test_a_probe_hold_lets_the_pass_in_flight_end_with_its_acknowledgement(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # D-27-05: the hold starts no new pass, but the pass already running works
+    # its claim to the end and acknowledges it. No unlock, no writer close.
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)), ClaimResult(jobs=(_job(92, 4712),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+    real = poller.run_once
+    started = asyncio.Event()
+    gate = asyncio.Event()
+    calls: list[int] = []
+
+    async def gated() -> Any:
+        calls.append(1)
+        if len(calls) == 1:
+            started.set()
+            await gate.wait()
+        return await real()
+
+    monkeypatch.setattr(poller, "run_once", gated)
+    poller.arm()
+    stop = asyncio.Event()
+    task = asyncio.create_task(poller.run(stop))
+    try:
+        await asyncio.wait_for(started.wait(), timeout=5)
+        poller.hold_for_probe()
+        assert poller.probe_held
+        gate.set()
+        await _until(lambda: not poller.pass_in_flight and bool(queue.acknowledged))
+        await asyncio.sleep(0.05)
+
+        assert queue.acknowledged == [([91], {})]
+        assert queue.unlocked == []
+        assert len(calls) == 1
+        assert poller.armed
+
+        poller.release_probe_hold()
+        assert not poller.probe_held
+        await _until(lambda: len(queue.acknowledged) == 2)
+        assert queue.acknowledged[1] == ([92], {})
+    finally:
+        stop.set()
+        await asyncio.wait_for(task, timeout=5)
+
+
+async def test_a_stop_during_a_probe_hold_ends_the_loop(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+    poller.arm()
+    poller.hold_for_probe()
+    stop = asyncio.Event()
+
+    task = asyncio.create_task(poller.run(stop))
+    await asyncio.sleep(0.05)
+    assert queue.claims == 0
+
+    stop.set()
+    await asyncio.wait_for(task, timeout=2)
+    assert queue.claims == 0
+
+
+async def test_a_probe_hold_neither_arms_nor_silences(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:
+    # T-27-12: the enable and disable of AppAPI stay in force across a hold.
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+    assert not poller.probe_held
+
+    poller.hold_for_probe()
+    poller.release_probe_hold()
+    assert not poller.armed
+
+    poller.arm()
+    poller.hold_for_probe()
+    assert poller.armed
+    stop = asyncio.Event()
+    task = asyncio.create_task(poller.run(stop))
+    try:
+        await asyncio.sleep(0.05)
+        poller.silence()
+        poller.release_probe_hold()
+        await asyncio.sleep(0.05)
+
+        assert not poller.armed
+        assert queue.claims == 0
+    finally:
+        stop.set()
+        await asyncio.wait_for(task, timeout=2)
+
+
 @pytest.mark.usefixtures("volume")
 def test_the_enabled_handler_arms_and_silences_the_poller() -> None:
     # Its own volume, because the handler now leaves the arming mark of DI-05-36
