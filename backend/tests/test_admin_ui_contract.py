@@ -3118,6 +3118,13 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     files are searchable than the last count found indexable, instead of a
     share or a fraction with a numerator above its denominator. All sixteen
     files moved in one commit, and the five language documents carry its row.
+
+    It stands at 289 since the same day, and the move is review WR-10 of
+    phase 27: one key in, the sentence of digest_mismatch for a file the admin
+    placed, which stays on the volume and must not be called deleted. The
+    review WR-02 before it renamed the recount sentence and moved no count.
+    All sixteen files moved in one commit, and the five language documents
+    carry its row, held by the language table gate since review WR-11.
     Whoever moves it next writes the next paragraph.
     """
     for language, twin in ((L10N_JSON, L10N_DE_DE_JSON), (L10N_JS, L10N_DE_DE_JS)):
@@ -3145,8 +3152,9 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     assert len(set(map(frozenset, keys_of.values()))) == 1, f"the four catalogues disagree: {sorted(keys_of)}"
     # two keys of plan 25-04 (D-25-13), nine of plan 26-05 (D-26-01, D-26-04),
     # 72 in and one out with plan 27-13 (UI-01, D-27-12), one of quick task
-    # 260929-kii (the recount sentence)
-    assert len(keys_of["de.json"]) == 288
+    # 260929-kii (the recount sentence), one of review WR-10 of phase 27 (the
+    # placed file with another checksum)
+    assert len(keys_of["de.json"]) == 289
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:
@@ -3732,3 +3740,25 @@ def test_a_success_report_takes_back_skips_except_the_ocr_memo() -> None:
     assert "$qb->expr()->eq('state', $qb->createNamedParameter('failed', IQueryBuilder::PARAM_STR))" in method
     assert "$qb->expr()->eq('state', $qb->createNamedParameter('skipped', IQueryBuilder::PARAM_STR))" in method
     assert "$qb->expr()->neq('reason', $qb->createNamedParameter('no_text_layer', IQueryBuilder::PARAM_STR))" in method
+
+
+PLACED_MISMATCH = "The model file placed on the volume does not match its checksum. Replace or remove it."
+
+
+def test_a_placed_file_with_another_checksum_is_not_called_deleted() -> None:
+    """Review WR-10 of phase 27: digest_mismatch has two sentences, chosen by fp32Deleted.
+
+    A file the admin placed with the wrong digest stays on the volume (D-27-17),
+    and the one sentence of the cause said it was deleted. Both halves now pick
+    the placed sentence unless the record says the file was deleted.
+    """
+    template = TEMPLATE.read_text(encoding="utf-8")
+    script = SCRIPT.read_text(encoding="utf-8")
+    assert (
+        "$checkCauseText = $checkCause === 'digest_mismatch' && ($check['fp32Deleted'] ?? false) !== true" in template
+    )
+    assert f"$l->t('{PLACED_MISMATCH}')" in template
+    assert "<?php p($checkCauseText); ?>" in template
+    assert "cause === 'digest_mismatch' && result.fp32Deleted !== true" in script
+    assert f"t('findling', '{PLACED_MISMATCH}')" in script
+    assert str(catalogue_of(L10N_JSON)[PLACED_MISMATCH]).startswith("Die auf dem Volume abgelegte Modelldatei")

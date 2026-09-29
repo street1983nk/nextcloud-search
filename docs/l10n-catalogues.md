@@ -402,6 +402,16 @@ indexierbaren Dateien wird gerade neu ermittelt, danach erscheint der Anteil wie
 Dateien und die fünf Sprachtabellen sind im selben Commit umgestellt; die Wortlaute außerhalb
 von Deutsch und Englisch sind maschinell übersetzt und vom Owner noch nicht gelesen.
 
+**Nachgezählt am 29.09.2026, Review der Phase 27 (WR-10):** **289** Schlüssel, davon weiterhin
+**5** Pluralschlüssel. Der neue ist der zweite Satz der Ursache `digest_mismatch`, für eine
+Modelldatei, die der Admin selbst auf das Volume gelegt hat und die deshalb liegen bleibt
+(D-27-17): `The model file placed on the volume does not match its checksum. Replace or remove
+it.`, deutsch "Die auf dem Volume abgelegte Modelldatei passt nicht zu ihrer Prüfsumme. Die Datei
+ersetzen oder entfernen." Der bisherige Satz "... und wurde gelöscht" bleibt für die Datei, die
+die Prüfung selbst geladen und wieder entfernt hat. Alle 16 Dateien und die fünf Sprachtabellen
+tragen den Schlüssel; die Wortlaute außerhalb von Deutsch und Englisch sind maschinell übersetzt
+und vom Owner noch nicht gelesen.
+
 ---
 
 ## Stand nach Phase 20

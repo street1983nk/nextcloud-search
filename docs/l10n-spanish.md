@@ -396,6 +396,7 @@ aus Plan 20-03. Diese Tabelle kann also nicht an einem Wortlaut zerbrechen.
 | `The model could not be downloaded. Check that github.com and release-assets.githubusercontent.com are reachable.` | Das Modell ließ sich nicht herunterladen. Prüfen, ob github.com und release-assets.githubusercontent.com erreichbar sind. | No se pudo descargar el modelo. Compruebe que github.com y release-assets.githubusercontent.com son accesibles. |
 | `The download took longer than %s.` | Der Download dauerte länger als %s. | La descarga tardó más de %s. |
 | `The model file does not match its checksum and was deleted.` | Die Modelldatei passt nicht zu ihrer Prüfsumme und wurde gelöscht. | El archivo del modelo no coincide con su suma de comprobación y se borró. |
+| `The model file placed on the volume does not match its checksum. Replace or remove it.` | Die auf dem Volume abgelegte Modelldatei passt nicht zu ihrer Prüfsumme. Die Datei ersetzen oder entfernen. | El archivo del modelo colocado en el volumen no coincide con su suma de comprobación. Sustituya o borre el archivo. |
 | `Not enough disk space for the fp32 model.` | Zu wenig Platz auf dem Datenträger für das fp32-Modell. | Espacio en disco insuficiente para el modelo fp32. |
 | `The available memory could not be read.` | Der verfügbare Speicher ließ sich nicht lesen. | No se pudo leer la memoria disponible. |
 | `The check was interrupted by a restart of the backend.` | Die Prüfung wurde durch einen Neustart des Backends unterbrochen. | La comprobación se interrumpió por un reinicio del servicio. |

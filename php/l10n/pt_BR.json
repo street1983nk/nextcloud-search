@@ -270,6 +270,7 @@
         "The model could not be downloaded. Check that github.com and release-assets.githubusercontent.com are reachable.": "Não foi possível baixar o modelo. Verifique se github.com e release-assets.githubusercontent.com estão acessíveis.",
         "The download took longer than %s.": "O download levou mais de %s.",
         "The model file does not match its checksum and was deleted.": "O arquivo do modelo não corresponde à sua soma de verificação e foi excluído.",
+        "The model file placed on the volume does not match its checksum. Replace or remove it.": "O arquivo do modelo colocado no volume não corresponde à sua soma de verificação. Substitua ou exclua o arquivo.",
         "Not enough disk space for the fp32 model.": "Espaço em disco insuficiente para o modelo fp32.",
         "The available memory could not be read.": "Não foi possível ler a memória disponível.",
         "The check was interrupted by a restart of the backend.": "A verificação foi interrompida por uma reinicialização do serviço.",

@@ -1084,6 +1084,12 @@ foreach ($probeCauseNeeds[$checkCause] ?? [] as $needed) {
 		$checkCauseShown = false;
 	}
 }
+// Review WR-10 of phase 27: a placed file with another checksum stays on the
+// volume (D-27-17), so the sentence that says "deleted" is only for a file
+// the check fetched and removed again.
+$checkCauseText = $checkCause === 'digest_mismatch' && ($check['fp32Deleted'] ?? false) !== true
+	? $l->t('The model file placed on the volume does not match its checksum. Replace or remove it.')
+	: ($probeCauseNames[$checkCause] ?? '');
 $checkSaved = $checkShown && $checkVerdict === 'fits' && $checkCommitted;
 $keptName = $profileNames[$profileEffective !== '' ? $profileEffective : $profileSaved];
 $checkedLine = $l->t('Checked: %1$s with %2$s, %3$s', [$profileNames[$checkProfile] ?? '', $modelNames[$checkPrecision] ?? '', $checkAt]);
@@ -1216,7 +1222,7 @@ foreach (is_array($_['profileEnv'] ?? null) ? $_['profileEnv'] : [] as $envEntry
 			<span id="findling-profile-verdict-word"><?php p($verdictNames[$checkVerdict] ?? ''); ?></span>
 		</p>
 		<p class="settings-hint" id="findling-profile-verdict-checked"<?php if (!$checkShown || $checkAt === '') { ?> hidden<?php } ?>><?php p($checkedLine); ?></p>
-		<p id="findling-profile-verdict-cause"<?php if (!$checkCauseShown) { ?> hidden<?php } ?>><?php p($probeCauseNames[$checkCause] ?? ''); ?></p>
+		<p id="findling-profile-verdict-cause"<?php if (!$checkCauseShown) { ?> hidden<?php } ?>><?php p($checkCauseText); ?></p>
 		<p id="findling-profile-verdict-saved"<?php if (!$checkSaved) { ?> hidden<?php } ?>><?php p($savedLine); ?></p>
 		<p id="findling-profile-verdict-kept"<?php if (!$checkShown || $checkSaved) { ?> hidden<?php } ?>><?php p($keptLine); ?></p>
 		<p class="settings-hint" id="findling-profile-verdict-deleted"<?php if (!$checkDeletedShown) { ?> hidden<?php } ?>><?php p($l->t('The downloaded model file was deleted again.')); ?></p>

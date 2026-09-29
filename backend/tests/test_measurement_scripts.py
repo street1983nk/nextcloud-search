@@ -730,8 +730,10 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # ProbeServiceTest.php. PHP_FILES_TODAY stays at 82. WR-07 changed
 # ProbeService.php (a running probe of the same target is adopted when the
 # start answer was lost) and ProbeServiceTest.php. PHP_FILES_TODAY stays at 82.
+# WR-10 changed templates/admin.php (the sentence of digest_mismatch for a
+# placed file). PHP_FILES_TODAY stays at 82.
 PHP_FILES_TODAY = 82
-PHP_TREE_HASH_TODAY = "f068dce30e9ec2566d073e690f505d7b07bbe1e6f05d4cafed13c7b2125457a1"
+PHP_TREE_HASH_TODAY = "1614fa804bccfaf6baf05a3e587fcd57176837af943e2f4714be2648cfae292b"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

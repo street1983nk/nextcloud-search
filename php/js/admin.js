@@ -1854,7 +1854,12 @@
       const value = wholeOrNull(figures[need[0]])
       return value === null ? null : need[1](value)
     })
-    const causeLine = cause !== '' && values.indexOf(null) === -1 ? fill(causes[cause], values) : ''
+    // Review WR-10 of phase 27: a placed file with another checksum stays on
+    // the volume, so "deleted" is only said of a file the check removed.
+    const causeText = cause === 'digest_mismatch' && result.fp32Deleted !== true
+      ? t('findling', 'The model file placed on the volume does not match its checksum. Replace or remove it.')
+      : causes[cause]
+    const causeLine = cause !== '' && values.indexOf(null) === -1 ? fill(causeText, values) : ''
     text('findling-profile-verdict-cause', causeLine)
 
     const kept = names[profile.effective || profile.saved]

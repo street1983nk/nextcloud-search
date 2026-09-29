@@ -271,6 +271,7 @@ OC.L10N.register(
     "The model could not be downloaded. Check that github.com and release-assets.githubusercontent.com are reachable.": "Das Modell ließ sich nicht herunterladen. Prüfen, ob github.com und release-assets.githubusercontent.com erreichbar sind.",
     "The download took longer than %s.": "Der Download dauerte länger als %s.",
     "The model file does not match its checksum and was deleted.": "Die Modelldatei passt nicht zu ihrer Prüfsumme und wurde gelöscht.",
+    "The model file placed on the volume does not match its checksum. Replace or remove it.": "Die auf dem Volume abgelegte Modelldatei passt nicht zu ihrer Prüfsumme. Die Datei ersetzen oder entfernen.",
     "Not enough disk space for the fp32 model.": "Zu wenig Platz auf dem Datenträger für das fp32-Modell.",
     "The available memory could not be read.": "Der verfügbare Speicher ließ sich nicht lesen.",
     "The check was interrupted by a restart of the backend.": "Die Prüfung wurde durch einen Neustart des Backends unterbrochen.",

@@ -397,6 +397,7 @@ deutschen Übersetzung.
 | `The model could not be downloaded. Check that github.com and release-assets.githubusercontent.com are reachable.` | Das Modell ließ sich nicht herunterladen. Prüfen, ob github.com und release-assets.githubusercontent.com erreichbar sind. | Le modèle n'a pas pu être téléchargé. Vérifier que github.com et release-assets.githubusercontent.com sont joignables. |
 | `The download took longer than %s.` | Der Download dauerte länger als %s. | Le téléchargement a duré plus de %s. |
 | `The model file does not match its checksum and was deleted.` | Die Modelldatei passt nicht zu ihrer Prüfsumme und wurde gelöscht. | Le fichier du modèle ne correspond pas à sa somme de contrôle et a été supprimé. |
+| `The model file placed on the volume does not match its checksum. Replace or remove it.` | Die auf dem Volume abgelegte Modelldatei passt nicht zu ihrer Prüfsumme. Die Datei ersetzen oder entfernen. | Le fichier du modèle déposé sur le volume ne correspond pas à sa somme de contrôle. Remplacer ou supprimer le fichier. |
 | `Not enough disk space for the fp32 model.` | Zu wenig Platz auf dem Datenträger für das fp32-Modell. | Espace disque insuffisant pour le modèle fp32. |
 | `The available memory could not be read.` | Der verfügbare Speicher ließ sich nicht lesen. | La mémoire disponible n'a pas pu être lue. |
 | `The check was interrupted by a restart of the backend.` | Die Prüfung wurde durch einen Neustart des Backends unterbrochen. | La vérification a été interrompue par un redémarrage du service. |
