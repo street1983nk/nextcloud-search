@@ -812,7 +812,9 @@ async def test_the_sweep_follows_a_fits_that_kept_a_fetched_file(tmp_path: Path,
     await _wait_for(lambda: calls[0] >= 1)
     assert target.exists(), "removed inside the grace of the take-over"
     await _wait_for(lambda: not target.exists())
-    assert rig.meta()[probe.META_PROBE_FP32_FETCHED] == ""
+    # The sweep removes the file first and clears the mark after it, so the
+    # mark can trail the file by one write.
+    await _wait_for(lambda: rig.meta()[probe.META_PROBE_FP32_FETCHED] == "")
     assert probe.snapshot().fp32_deleted
     await rig.run.close()
 
