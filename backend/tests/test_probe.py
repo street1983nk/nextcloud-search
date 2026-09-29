@@ -80,40 +80,50 @@ def test_steps_are_the_eight_steps_in_order() -> None:
 
 
 def test_causes_are_exactly_the_thirteen_codes() -> None:
-    assert CAUSES_NARROW == frozenset({"reserve_thin"})
-    assert CAUSES_NOFIT == frozenset({
-        "memory_short",
-        "model_memory",
-        "memory_unknown",
-        "slot_killed",
-        "timeout",
-        "pause_timeout",
-        "download_failed",
-        "download_slow",
-        "digest_mismatch",
-        "disk_short",
-        "interrupted",
-        "probe_failed",
-    })
+    assert frozenset({"reserve_thin"}) == CAUSES_NARROW
+    assert (
+        frozenset(
+            {
+                "memory_short",
+                "model_memory",
+                "memory_unknown",
+                "slot_killed",
+                "timeout",
+                "pause_timeout",
+                "download_failed",
+                "download_slow",
+                "digest_mismatch",
+                "disk_short",
+                "interrupted",
+                "probe_failed",
+            }
+        )
+        == CAUSES_NOFIT
+    )
     assert CAUSES == CAUSES_NARROW | CAUSES_NOFIT
     assert len(CAUSES) == 13
 
 
 def test_verdicts_states_start_codes_and_number_keys() -> None:
-    assert VERDICTS == frozenset({"fits", "narrow", "nofit"})
-    assert STATES == frozenset({"idle", "running", "done"})
+    assert frozenset({"fits", "narrow", "nofit"}) == VERDICTS
+    assert frozenset({"idle", "running", "done"}) == STATES
     assert probe.START_BUSY == "busy"
     assert probe.START_REBUILDING == "rebuilding"
-    assert NUMBER_KEYS == frozenset({
-        "slots",
-        "need",
-        "available",
-        "reserve",
-        "required",
-        "seconds",
-        "rateInt8",
-        "rateFp32",
-    })
+    assert (
+        frozenset(
+            {
+                "slots",
+                "need",
+                "available",
+                "reserve",
+                "required",
+                "seconds",
+                "rateInt8",
+                "rateFp32",
+            }
+        )
+        == NUMBER_KEYS
+    )
 
 
 def test_meta_keys() -> None:
@@ -250,7 +260,9 @@ def test_a_run_from_begin_to_finish() -> None:
     probe.note_step("download", 10, 20)
     step = probe.snapshot()
     assert (step.step, step.bytes_done, step.bytes_total) == ("download", 10, 20)
-    probe.finish("narrow", "reserve_thin", {"reserve": 1, "required": 2}, fp32_fetched=True, fp32_deleted=True, now=130.0)
+    probe.finish(
+        "narrow", "reserve_thin", {"reserve": 1, "required": 2}, fp32_fetched=True, fp32_deleted=True, now=130.0
+    )
     done = probe.snapshot()
     assert done.state == "done"
     assert done.verdict == "narrow"
