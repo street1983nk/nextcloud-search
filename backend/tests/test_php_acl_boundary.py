@@ -37,6 +37,15 @@ somebody deletes, and they would be right to. Every count below therefore runs
 over the code of a source with comments and string literals removed, and the
 self tests prove the stripper does what it says.
 
+**Acting as a member is a boundary of its own (second round of issue #14).**
+groupfolders builds a member's mount as "in share" when the active user of a
+request is somebody else, and a +read -share rule then hides every node, so
+the lookups made on behalf of a member run with that member as the active user
+of the request. Changing the active user is a security boundary: it must
+happen in exactly one place and always be undone. The switch ratchet below pins
+``setVolatileActiveUser`` to ``Service/ReaderContext.php``, exactly two calls
+(the switch and the restore), and requires a ``finally`` in that file.
+
 **What this gate does not prove.** It says nothing about whether the one recheck
 decides correctly. That is the job of ``php/tests/Unit/SearchServiceTest.php``,
 of the ``search-parity`` job in ``.github/workflows/integration.yml`` and of the
@@ -76,6 +85,12 @@ BOUNDARY = "Service/SearchService.php"
 RESOLUTION_REGISTER = {
     BOUNDARY: 1,
 }
+
+# The call that changes the active user of a request, and the one file that
+# may make it: twice, the switch and the restore in finally.
+SWITCH = "setVolatileActiveUser"
+SWITCH_OWNER = "Service/ReaderContext.php"
+SWITCH_CALLS = 2
 
 # Block comments, line comments and both kinds of string literal, in the order
 # they have to be removed. The hash sign is deliberately NOT a comment
@@ -156,6 +171,30 @@ def readability_findings(sources: list[tuple[str, str]]) -> list[str]:
     ]
 
 
+def switch_findings(sources: list[tuple[str, str]]) -> list[str]:
+    """Every place that changes the active user beyond the one that may, one line each.
+
+    The owner has to call it exactly twice and restore in a ``finally``; a
+    switch without a guaranteed restore would leak the member's identity into
+    the rest of the request.
+    """
+    findings = []
+    for name, source in sources:
+        count = calls(source, SWITCH)
+        if name == SWITCH_OWNER:
+            if count != SWITCH_CALLS:
+                findings.append(f"{name} calls {SWITCH} {count} time(s), expected {SWITCH_CALLS}")
+            if re.search(r"\bfinally\b", code_of(source)) is None:
+                findings.append(f"{name} has no finally block to restore the previous user")
+        elif count:
+            findings.append(f"{name} calls {SWITCH} {count} time(s); only {SWITCH_OWNER} may")
+
+    if SWITCH_OWNER not in {name for name, _ in sources}:
+        findings.append(f"{SWITCH_OWNER} is missing")
+
+    return findings
+
+
 # -- the real tree ---------------------------------------------------------
 
 
@@ -185,6 +224,10 @@ def test_the_readability_question_is_asked_at_exactly_one_place() -> None:
 
 def test_every_file_that_resolves_a_file_id_is_a_registered_one() -> None:
     assert resolution_findings(php_sources()) == []
+
+
+def test_only_the_reader_context_changes_the_active_user() -> None:
+    assert switch_findings(php_sources()) == []
 
 
 # -- self tests: the gate has to report what it judges ----------------------
@@ -273,3 +316,43 @@ def test_a_declaration_of_the_question_is_not_a_call_of_it() -> None:
     declaration = "<?php\nfinal class Node {\n\tpublic function isReadable(): bool {\n\t\treturn true;\n\t}\n}\n"
 
     assert calls(declaration, READABILITY) == 0
+
+
+_SECOND_SWITCH = """<?php
+
+final class SneakyService {
+	public function run(IUser $user): void {
+		$this->userSession->setVolatileActiveUser($user);
+	}
+}
+"""
+
+_OWNER_WITHOUT_FINALLY = r"""<?php
+
+final class ReaderContext {
+	public function actAs(string $uid, \Closure $work): mixed {
+		$this->userSession->setVolatileActiveUser($member);
+		$result = $work();
+		$this->userSession->setVolatileActiveUser($previous);
+
+		return $result;
+	}
+}
+"""
+
+
+def test_a_second_file_that_switches_the_user_is_reported() -> None:
+    grown = [*php_sources(), ("Service/SneakyService.php", _SECOND_SWITCH)]
+
+    findings = switch_findings(grown)
+
+    assert len(findings) == 1
+    assert "Service/SneakyService.php" in findings[0]
+
+
+def test_an_owner_without_a_finally_is_reported() -> None:
+    # The restore has to survive a throwing lookup; two calls in a row do not.
+    others = [(name, source) for name, source in php_sources() if name != SWITCH_OWNER]
+    findings = switch_findings([*others, (SWITCH_OWNER, _OWNER_WITHOUT_FINALLY)])
+
+    assert findings == [f"{SWITCH_OWNER} has no finally block to restore the previous user"]

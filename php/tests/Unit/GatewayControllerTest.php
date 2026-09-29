@@ -6,6 +6,7 @@ namespace OCA\Findling\Tests\Unit;
 
 use OCA\Findling\AppInfo\Application;
 use OCA\Findling\Controller\GatewayController;
+use OCA\Findling\Service\ReaderContext;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\Http\StreamResponse;
@@ -13,6 +14,9 @@ use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\IRequest;
+use OCP\IUser;
+use OCP\IUserManager;
+use OCP\IUserSession;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -45,12 +49,32 @@ use Psr\Log\LoggerInterface;
 final class GatewayControllerTest extends TestCase {
 	private IRootFolder&MockObject $rootFolder;
 	private LoggerInterface&MockObject $logger;
+	private IUserSession&MockObject $session;
+	private IUserManager&MockObject $userManager;
+	private ?IUser $active = null;
 
 	protected function setUp(): void {
 		parent::setUp();
 
 		$this->rootFolder = $this->createMock(IRootFolder::class);
 		$this->logger = $this->createMock(LoggerInterface::class);
+
+		// Stateful, so the cases can observe who is active at each step.
+		$this->session = $this->createMock(IUserSession::class);
+		$this->session->method('getUser')->willReturnCallback(fn (): ?IUser => $this->active);
+		$this->session->method('setVolatileActiveUser')->willReturnCallback(function (?IUser $user): void {
+			$this->active = $user;
+		});
+		$this->userManager = $this->createMock(IUserManager::class);
+		$this->userManager->method('get')->willReturnCallback(function (string $uid): ?IUser {
+			if ($uid === 'ghost') {
+				return null;
+			}
+			$user = $this->createMock(IUser::class);
+			$user->method('getUID')->willReturn($uid);
+
+			return $user;
+		});
 	}
 
 	/**
@@ -78,7 +102,12 @@ final class GatewayControllerTest extends TestCase {
 			static fn (string $name): string => $name === 'EX-APP-ID' ? $callerAppId : '',
 		);
 
-		return new GatewayController($request, $this->rootFolder, $this->logger);
+		return new GatewayController(
+			$request,
+			$this->rootFolder,
+			$this->logger,
+			new ReaderContext($this->session, $this->userManager),
+		);
 	}
 
 	public function testACallFromTheBackendUnderItsOwnAppIdDeliversTheFileContents(): void {
@@ -184,5 +213,55 @@ final class GatewayControllerTest extends TestCase {
 			);
 
 		$this->controller('some_other_backend')->getFileContents(11, 'alice');
+	}
+
+	public function testTheFolderAndTheLookupRunAsTheUserAndTheOpenAfterTheRestore(): void {
+		// The second round of #14. groupfolders builds a member's mount as "in
+		// share" when somebody else is active, so the folder and the lookup run
+		// with alice active. The open runs after the restore, so read hooks see
+		// the identity of the request and not alice.
+		$stream = fopen('php://memory', 'rb+');
+		self::assertIsResource($stream);
+		$steps = [];
+
+		$file = $this->createMock(File::class);
+		$file->method('isReadable')->willReturn(true);
+		$file->method('fopen')->willReturnCallback(function () use ($stream, &$steps) {
+			$steps[] = ['fopen', $this->active?->getUID()];
+
+			return $stream;
+		});
+		$userFolder = $this->createMock(Folder::class);
+		$userFolder->method('getFirstNodeById')->willReturnCallback(function () use ($file, &$steps): File {
+			$steps[] = ['lookup', $this->active?->getUID()];
+
+			return $file;
+		});
+		$this->rootFolder->method('getUserFolder')->willReturnCallback(function () use ($userFolder, &$steps): Folder {
+			$steps[] = ['folder', $this->active?->getUID()];
+
+			return $userFolder;
+		});
+
+		$response = $this->controller($this->backendAppId())->getFileContents(11, 'alice');
+
+		self::assertInstanceOf(StreamResponse::class, $response);
+		self::assertSame([['folder', 'alice'], ['lookup', 'alice'], ['fopen', null]], $steps);
+		self::assertNull($this->active);
+
+		fclose($stream);
+	}
+
+	public function testAnUnknownUserStillGetsTheNotFoundBodyAndIsNotSwitchedTo(): void {
+		// No switch for a name the user manager does not know, so the answer is
+		// the unchanged NoUserException path: the same 404 body as "no such file".
+		$this->session->expects(self::never())->method('setVolatileActiveUser');
+		$this->rootFolder->method('getUserFolder')->willThrowException(new \OC\User\NoUserException('ghost'));
+
+		$unknown = $this->controller($this->backendAppId())->getFileContents(11, 'ghost');
+
+		self::assertInstanceOf(DataResponse::class, $unknown);
+		self::assertSame(Http::STATUS_NOT_FOUND, $unknown->getStatus());
+		self::assertSame(['error' => 'Node is not a file or could not be found.'], $unknown->getData());
 	}
 }

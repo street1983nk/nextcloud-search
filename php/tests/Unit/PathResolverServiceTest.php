@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\Findling\Tests\Unit;
 
 use OCA\Findling\Service\PathResolverService;
+use OCA\Findling\Service\ReaderContext;
 use OCP\DB\IResult;
 use OCP\DB\QueryBuilder\ICompositeExpression;
 use OCP\DB\QueryBuilder\IExpressionBuilder;
@@ -18,6 +19,8 @@ use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
 use OCP\IDBConnection;
 use OCP\IUser;
+use OCP\IUserManager;
+use OCP\IUserSession;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -61,6 +64,9 @@ final class PathResolverServiceTest extends TestCase {
 
 	/** The limits the queries were given, in order. @var list<?int> */
 	private array $limits = [];
+
+	/** The active user of the doubled session. */
+	private ?IUser $active = null;
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -126,7 +132,30 @@ final class PathResolverServiceTest extends TestCase {
 			$this->rootFolder,
 			$this->db,
 			$this->createMock(LoggerInterface::class),
+			$this->readerContext(),
 		);
+	}
+
+	/**
+	 * A ReaderContext over a stateful session: getUser() answers what
+	 * setVolatileActiveUser() stored last, so a case can observe who was
+	 * active when a folder was set up. Every uid is a known user.
+	 */
+	private function readerContext(): ReaderContext {
+		$session = $this->createMock(IUserSession::class);
+		$session->method('getUser')->willReturnCallback(fn (): ?IUser => $this->active);
+		$session->method('setVolatileActiveUser')->willReturnCallback(function (?IUser $user): void {
+			$this->active = $user;
+		});
+		$userManager = $this->createMock(IUserManager::class);
+		$userManager->method('get')->willReturnCallback(function (string $uid): IUser {
+			$user = $this->createMock(IUser::class);
+			$user->method('getUID')->willReturn($uid);
+
+			return $user;
+		});
+
+		return new ReaderContext($session, $userManager);
 	}
 
 	/** @return array<string, mixed> */
@@ -293,6 +322,73 @@ final class PathResolverServiceTest extends TestCase {
 		$this->folders(['anna' => null, 'bernd' => $this->file(true)]);
 
 		self::assertSame(self::FILE_ID, $this->resolver()->resolveReference('admins-hh/Vertrag.pdf'));
+	}
+
+	/**
+	 * Home folders that record who was active when they were set up and when
+	 * the path was looked up in them.
+	 *
+	 * @param array<string, ?File> $nodes
+	 * @param list<array{0:string, 1:string, 2:?string}> $seen
+	 */
+	private function recordingFolders(array $nodes, array &$seen): void {
+		$folders = [];
+		foreach ($nodes as $uid => $node) {
+			$folder = $this->createMock(Folder::class);
+			$folder->method('get')->willReturnCallback(function () use ($uid, $node, &$seen): File {
+				$seen[] = ['get', $uid, $this->active?->getUID()];
+				if ($node === null) {
+					throw new NotFoundException();
+				}
+
+				return $node;
+			});
+			$folders[$uid] = $folder;
+		}
+
+		$this->rootFolder->method('getUserFolder')->willReturnCallback(
+			function (string $uid) use ($folders, &$seen): Folder {
+				$seen[] = ['folder', $uid, $this->active?->getUID()];
+
+				return $folders[$uid];
+			},
+		);
+	}
+
+	public function testEveryMemberTriedForAPathWithoutOwnerIsTheActiveUserAndTheAdminIsRestored(): void {
+		// The second face of #14: in the admin's request groupfolders builds a
+		// member's mount as "in share" and a -share rule hides the file. Each
+		// member is set up and asked with that member active.
+		$admin = $this->createMock(IUser::class);
+		$admin->method('getUID')->willReturn('admin');
+		$this->active = $admin;
+		$this->mounts([
+			self::row('anna', '/anna/files/admins-hh/', 9),
+			self::row('bernd', '/bernd/files/admins-hh/', 9),
+		]);
+		$seen = [];
+		$this->recordingFolders(['anna' => null, 'bernd' => $this->file(true)], $seen);
+
+		self::assertSame(self::FILE_ID, $this->resolver()->resolveReference('admins-hh/Vertrag.pdf'));
+		self::assertSame([
+			['folder', 'anna', 'anna'],
+			['get', 'anna', 'anna'],
+			['folder', 'bernd', 'bernd'],
+			['get', 'bernd', 'bernd'],
+		], $seen);
+		self::assertSame($admin, $this->active);
+	}
+
+	public function testANamedReferenceIsResolvedWithTheNamedUserActiveAndTheAdminIsRestored(): void {
+		$admin = $this->createMock(IUser::class);
+		$admin->method('getUID')->willReturn('admin');
+		$this->active = $admin;
+		$seen = [];
+		$this->recordingFolders(['anna' => $this->file(true)], $seen);
+
+		self::assertSame(self::FILE_ID, $this->resolver()->resolveReference('anna/files/Vertraege/Miete.pdf'));
+		self::assertSame([['folder', 'anna', 'anna'], ['get', 'anna', 'anna']], $seen);
+		self::assertSame($admin, $this->active);
 	}
 
 	public function testANamedUserWhoDoesNotReachTheFileFallsBackToTheMounts(): void {
