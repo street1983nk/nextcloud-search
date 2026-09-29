@@ -14,8 +14,8 @@ caller ever waits for the verdict (D-27-04):
 2. **download** or **digest**, only for fp32 as the target while int8 is in
    force: a file the admin placed is checked with fp32_verified, otherwise
    procure_fp32 fetches it under PROBE_DOWNLOAD_SECONDS with a byte count
-   (D-27-02, D-27-06). begin_procurement is not called: this fetch is the
-   check's own, not the one of the embedding track.
+   (D-27-02, D-27-06). The procurement state of the embedding track stays
+   untouched: this fetch is the check's own, not the one of the track.
 3. **model**, **ocr_one**, **calc**, **ocr_n** under one cap of
    PROBE_MEASURE_SECONDS: the model children int8 and fp32 behind their gate,
    one fresh OCR child on the shipped scan page with headroom samples in a
@@ -426,11 +426,6 @@ class ProbeRun:
 
     # -- the run -----------------------------------------------------------
 
-    def _lift_the_hold(self) -> None:
-        self._poller.release_probe_hold()
-        self._runner.release_probe_hold()
-        probe.release()
-
     async def _run(self, target: Profile, precision: str) -> None:
         try:
             try:
@@ -446,7 +441,10 @@ class ProbeRun:
                 verdict = probe.Verdict(probe.VERDICT_NOFIT, "probe_failed", MappingProxyType({}))
             await self._finish(verdict)
         finally:
-            self._lift_the_hold()
+            # Every way out lifts the hold: verdict, exception, cancellation.
+            self._poller.release_probe_hold()
+            self._runner.release_probe_hold()
+            probe.release()
 
     async def _finish(self, verdict: probe.Verdict) -> None:
         probe.note_step("cleanup")
