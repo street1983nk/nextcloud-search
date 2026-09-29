@@ -92,6 +92,26 @@ final class CrawlAdvanceServiceTest extends TestCase {
 		self::assertSame(['ran' => true, 'pending' => true], $service->advance());
 	}
 
+	public function testARecountAtTheHeadIsNoWorkTheContainerWaitsFor(): void {
+		// Quick task 260929-kii: a recount chain queues nothing, so the top-up
+		// neither runs it nor reports it as pending.
+		$job = $this->createMock(IJob::class);
+		$job->method('getArgument')->willReturn(array_merge(self::CANONICAL, [
+			'mode' => StorageCrawlJob::MODE_RECOUNT,
+			'files_seen' => 10,
+		]));
+		$job->expects($this->never())->method('setArgument');
+		$job->expects($this->never())->method('start');
+
+		$jobList = $this->createMock(IJobList::class);
+		$jobList->method('getJobsIterator')->willReturn([$job]);
+		$jobList->expects($this->never())->method('remove');
+
+		$service = new CrawlAdvanceService($jobList, $this->createMock(LoggerInterface::class));
+
+		self::assertSame(['ran' => false, 'pending' => false], $service->advance());
+	}
+
 	public function testTheBudgetIsClampedBetweenTheFloorAndTheCeiling(): void {
 		// The clamp lives in the job, but the service is what hands the budget
 		// over, so the agreement between the two is asserted where both ends

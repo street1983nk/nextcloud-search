@@ -5,6 +5,7 @@ OC.L10N.register(
     "File contents": "Dateiinhalte",
     "Search coverage": "Deckungsgrad der Suche",
     "%1$s of %2$s indexable files are searchable": "%1$s von %2$s indexierbaren Dateien sind durchsuchbar",
+    "%s files are searchable. Files were added since the last count, so the share is shown again once they have been counted.": "%s Dateien sind durchsuchbar. Seit der letzten Zählung sind Dateien dazugekommen, der Anteil erscheint wieder, sobald sie mitgezählt sind.",
     "The share cannot be worked out right now because the backend does not answer. %s files of this instance are indexable.": "Der Anteil ist im Moment nicht berechenbar, weil das Backend nicht antwortet. %s Dateien dieser Instanz sind indexierbar.",
     "Deliberately left out: %s": "Bewusst ausgelassen: %s",
     "Those files are too large, of a type Findling does not read, or excluded by a rule. They are not in the denominator above, so the coverage figure can reach a hundred per cent.": "Diese Dateien sind zu groß, von einem Typ, den Findling nicht liest, oder durch eine Regel ausgeschlossen. Sie stehen nicht im Nenner darüber, damit der Deckungsgrad 100 Prozent erreichen kann.",

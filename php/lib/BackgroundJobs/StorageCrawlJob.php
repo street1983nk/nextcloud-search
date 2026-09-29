@@ -14,6 +14,7 @@ use OCA\Findling\Service\StorageService;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\BackgroundJob\IJobList;
 use OCP\BackgroundJob\QueuedJob;
+use OCP\Files\Cache\ICacheEntry;
 use OCP\IAppConfig;
 use OCP\IDBConnection;
 use OCP\Lock\ILockingProvider;
@@ -40,6 +41,16 @@ use Psr\Log\LoggerInterface;
  * findling_scan_stats and become the denominator of the coverage figure. A scan
  * job of its own would be a second walk over the same file list, and the two
  * walks would disagree the moment one of them was interrupted.
+ *
+ * Since quick task 260929-kii the same job has a counting mode (mode recount),
+ * started by ScanRecountJob after the crawl is through. It is the same work
+ * without the work stock: the same query (StorageService::getFilesInMount),
+ * the same single decision (exclusion before cap, see verdict()) and the same
+ * counting of a sighting (countSighting()), only that nothing is queued and no
+ * verdict is recorded, and the sums replace the row of the mount at the end
+ * instead of being added to it. So it is still one query and one rule, and
+ * "the only one there will ever be" still holds: the recount is not a second
+ * scan, it is this scan run again.
  */
 class StorageCrawlJob extends QueuedJob {
 	/**
@@ -126,6 +137,28 @@ class StorageCrawlJob extends QueuedJob {
 	 */
 	private const TX_BAND = 250;
 
+	/**
+	 * The value of the argument key 'mode' that makes a chain a recount of the
+	 * denominator instead of a crawl. Any other value, and a missing key, is a
+	 * crawl, so every argument written before this mode existed keeps its
+	 * meaning.
+	 */
+	public const MODE_RECOUNT = 'recount';
+
+	/**
+	 * The six counter columns of findling_scan_stats, and the keys under which
+	 * a recount chain carries its running sums from one slice to the next (the
+	 * way the crawl carries its cursor).
+	 *
+	 * @var list<string>
+	 */
+	private const COUNTER_KEYS = ['files_seen', 'bytes_seen', 'ocr_candidates', 'pdf_seen', 'over_cap', 'excluded'];
+
+	/** The three outcomes of the single decision about one entry. */
+	private const VERDICT_EXCLUDED = 'excluded';
+	private const VERDICT_OVER_CAP = 'over_cap';
+	private const VERDICT_INDEXABLE = 'indexable';
+
 	public function __construct(
 		ITimeFactory $time,
 		private IJobList $jobList,
@@ -160,6 +193,8 @@ class StorageCrawlJob extends QueuedJob {
 		$rootId = (int)($argument['root_id'] ?? 0);
 		$overriddenRoot = (int)($argument['overridden_root'] ?? 0);
 		$lastFileId = (int)($argument['last_file_id'] ?? 0);
+		$recount = is_array($argument) && ($argument['mode'] ?? null) === self::MODE_RECOUNT;
+		$sums = $recount ? self::sumsFrom($argument) : [];
 
 		if ($storageId <= 0 || $overriddenRoot <= 0) {
 			// A malformed argument would otherwise reschedule itself forever
@@ -176,17 +211,20 @@ class StorageCrawlJob extends QueuedJob {
 			// twice, and the chain survives: being a QueuedJob this row was
 			// removed before run(), so returning without the reschedule below
 			// would end the crawl of this mount for good.
-			$this->jobList->scheduleAfter(self::class, $this->time->getTime() + self::INTERVAL, [
-				'storage_id' => $storageId,
-				'root_id' => $rootId,
-				'overridden_root' => $overriddenRoot,
-				'last_file_id' => $lastFileId,
-			]);
+			$this->jobList->scheduleAfter(
+				self::class,
+				$this->time->getTime() + self::INTERVAL,
+				self::successorArgument($storageId, $rootId, $overriddenRoot, $lastFileId, $recount, $sums),
+			);
 			return;
 		}
 
 		try {
-			$this->crawlSlice(self::budgetSeconds($argument), $storageId, $rootId, $overriddenRoot, $lastFileId);
+			if ($recount) {
+				$this->recountSlice(self::budgetSeconds($argument), $storageId, $rootId, $overriddenRoot, $lastFileId, $sums);
+			} else {
+				$this->crawlSlice(self::budgetSeconds($argument), $storageId, $rootId, $overriddenRoot, $lastFileId);
+			}
 		} finally {
 			$this->lockingProvider->releaseLock(self::LOCK_NAME, ILockingProvider::LOCK_EXCLUSIVE);
 		}
@@ -231,12 +269,7 @@ class StorageCrawlJob extends QueuedJob {
 		// omission that has no row in findling_file_state, which is why the
 		// counter is the whole record of it: without this number an excluded
 		// file would be a file that quietly stopped being findable.
-		$bandFiles = 0;
-		$bandBytes = 0;
-		$bandOcr = 0;
-		$bandPdf = 0;
-		$bandOverCap = 0;
-		$bandExcluded = 0;
+		$bandCounts = self::zeroSums();
 
 		// The writes of a slice run in transaction bands rather than one commit
 		// per file, see TX_BAND. Nothing in the band throws for "already
@@ -261,36 +294,14 @@ class StorageCrawlJob extends QueuedJob {
 				$lastFileId = max($lastFileId, $entry->getId());
 				$seen++;
 
-				$size = $entry->getSize();
+				// The single decision (exclusion before cap) and the counting of
+				// the sighting are two methods the counting mode of this job
+				// calls as well, so the crawl and the recount cannot come to
+				// different answers about the same file.
+				$verdict = $this->verdict($entry, $mountRoot, $cap);
+				$this->countSighting($entry, $verdict, $bandCounts);
 
-				$bandFiles++;
-				// The interface allows a float for a size beyond the integer
-				// range, and a document of that size does not exist behind a cap
-				// of fifty megabytes; the cast is the same one
-				// StorageService::getFileSlice makes for the same reason.
-				$bandBytes += max(0, (int)$size);
-				$mimeType = $entry->getMimeType();
-				if (in_array($mimeType, self::OCR_CERTAIN_MIMETYPES, true)) {
-					$bandOcr++;
-				} elseif ($mimeType === 'application/pdf') {
-					$bandPdf++;
-				}
-
-				// The exclusion test comes BEFORE the size check, because a file
-				// an admin told this app to leave alone is left alone whatever
-				// its size is, and skipped(too_large) on a file inside an
-				// excluded folder would be a reason nobody can act on.
-				//
-				// Both the path and the comparison come from ExclusionService,
-				// which is the only place either of them exists. The event
-				// listener asks the same two methods with a root of its own, and
-				// the two land in the same space by construction: that is
-				// pitfall 4, and it is the difference between an exclusion that
-				// holds and one that the next save undoes without anybody
-				// noticing.
-				if ($this->exclusionService->isExcluded(
-					$this->exclusionService->mountRelativePath($entry->getPath(), $mountRoot),
-				)) {
+				if ($verdict === self::VERDICT_EXCLUDED) {
 					// Counted and not recorded. The scan counter takes the
 					// sighting so that the Excluded tile of the page has a
 					// number and the coverage denominator loses one, and no row
@@ -299,16 +310,14 @@ class StorageCrawlJob extends QueuedJob {
 					// hundred thousand writes for an answer that follows from
 					// one comparison, and the diagnosis works the reason out
 					// live instead (stage two of the precedence rule).
-					$bandExcluded++;
 					$skipped++;
-				} elseif ($size > $cap) {
+				} elseif ($verdict === self::VERDICT_OVER_CAP) {
+					// Counted as well as recorded: over_cap is one of the two
+					// deliberate omissions that come out of the denominator,
+					// which is what lets the coverage figure reach a hundred per
+					// cent at all.
 					$this->fileStateService->record($entry->getId(), 'skipped', 'too_large');
 					$skipped++;
-					// The same decision as the line above, counted as well as
-					// recorded: over_cap is one of the two deliberate omissions
-					// that come out of the denominator, which is what lets the
-					// coverage figure reach a hundred per cent at all.
-					$bandOverCap++;
 				} else {
 					// Idempotent by the unique index on file_id: a file that ten
 					// users see is one row, and a second crawl of the same mount
@@ -322,13 +331,8 @@ class StorageCrawlJob extends QueuedJob {
 					// per file would be exactly the doubling of write cost that
 					// the band exists to avoid, and the update belongs inside
 					// the band it counts, so it goes before the commit.
-					$this->scanStats->add($storageId, $bandFiles, $bandBytes, $bandOcr, $bandPdf, $bandOverCap, $bandExcluded, $lastFileId);
-					$bandFiles = 0;
-					$bandBytes = 0;
-					$bandOcr = 0;
-					$bandPdf = 0;
-					$bandOverCap = 0;
-					$bandExcluded = 0;
+					$this->addBand($storageId, $bandCounts, $lastFileId);
+					$bandCounts = self::zeroSums();
 
 					$this->db->commit();
 					$this->db->beginTransaction();
@@ -344,7 +348,7 @@ class StorageCrawlJob extends QueuedJob {
 			// condition on purpose: with zero deltas this is one update that
 			// changes nothing but the timestamp, and a condition here would be a
 			// second place deciding what a band is.
-			$this->scanStats->add($storageId, $bandFiles, $bandBytes, $bandOcr, $bandPdf, $bandOverCap, $bandExcluded, $lastFileId);
+			$this->addBand($storageId, $bandCounts, $lastFileId);
 
 			$this->db->commit();
 		} catch (\Throwable $e) {
@@ -379,11 +383,205 @@ class StorageCrawlJob extends QueuedJob {
 			'cursor' => $lastFileId,
 		]);
 
-		$this->jobList->scheduleAfter(self::class, $this->time->getTime() + self::INTERVAL, [
+		$this->jobList->scheduleAfter(
+			self::class,
+			$this->time->getTime() + self::INTERVAL,
+			self::successorArgument($storageId, $rootId, $overriddenRoot, $lastFileId, false, []),
+		);
+	}
+
+	/**
+	 * One slice of a recount chain, under the lock the caller holds.
+	 *
+	 * The same walk as crawlSlice() without a single write per file: nothing is
+	 * queued, no verdict is recorded, no transaction is opened. The six sums
+	 * travel in the job argument from slice to slice, and the slice that finds
+	 * nothing behind the cursor hands them to ScanStatsService::replaceStorage
+	 * in one statement.
+	 *
+	 * The deadline is checked between pages only and not per entry. Without
+	 * writes a page of BATCH_SIZE entries is quick, and a cursor that always
+	 * stands at the end of a page keeps every page whole.
+	 *
+	 * LAST_JOB_RUN is not written. That value is the motion sensor of the
+	 * indexing (stalledFor on the page reads it), and a count is not motion of
+	 * the index: a recount on a stuck crawl would otherwise make a stalled
+	 * instance look alive once a day.
+	 *
+	 * @param array<string, int> $sums
+	 */
+	private function recountSlice(int $budgetSeconds, int $storageId, int $rootId, int $overriddenRoot, int $lastFileId, array $sums): void {
+		$row = $this->scanStats->forStorage($storageId);
+		if ($row !== null && $row['finished'] === false) {
+			// A real crawl is counting this mount right now (a restart, or the
+			// first crawl of a mount that got its row a moment ago). Its row is
+			// the truth that is being built, and this chain ends without a
+			// successor; ScanRecountJob starts the next round once the crawl is
+			// through.
+			$this->logger->debug('Findling: skipped the recount of a mount that is being crawled', [
+				'storage_id' => $storageId,
+			]);
+			return;
+		}
+
+		$cap = $this->settingsService->maxFileBytes();
+		$mountRoot = $this->storageService->mountRootPath($storageId, $overriddenRoot);
+		$deadline = $this->time->getTime() + $budgetSeconds;
+
+		while (true) {
+			$page = 0;
+			foreach ($this->storageService->getFilesInMount($storageId, $overriddenRoot, $lastFileId, self::BATCH_SIZE) as $entry) {
+				$lastFileId = max($lastFileId, $entry->getId());
+				$page++;
+				$this->countSighting($entry, $this->verdict($entry, $mountRoot, $cap), $sums);
+			}
+
+			if ($page === 0) {
+				// The end of the mount: one complete measurement, assigned.
+				$this->scanStats->replaceStorage($storageId, $sums, $lastFileId);
+				$this->logger->info('Findling: recounted a mount', [
+					'storage_id' => $storageId,
+					'files_seen' => $sums['files_seen'] ?? 0,
+				]);
+				return;
+			}
+
+			if ($this->time->getTime() >= $deadline) {
+				break;
+			}
+		}
+
+		$this->jobList->scheduleAfter(
+			self::class,
+			$this->time->getTime() + self::INTERVAL,
+			self::successorArgument($storageId, $rootId, $overriddenRoot, $lastFileId, true, $sums),
+		);
+	}
+
+	/**
+	 * The single decision about one entry, the one place it is made.
+	 *
+	 * The exclusion test comes BEFORE the size check, because a file an admin
+	 * told this app to leave alone is left alone whatever its size is, and
+	 * skipped(too_large) on a file inside an excluded folder would be a reason
+	 * nobody can act on.
+	 *
+	 * Both the path and the comparison come from ExclusionService, which is the
+	 * only place either of them exists. The event listener asks the same two
+	 * methods with a root of its own, and the two land in the same space by
+	 * construction: that is pitfall 4, and it is the difference between an
+	 * exclusion that holds and one that the next save undoes without anybody
+	 * noticing. The crawl and its counting mode both ask this method, so the
+	 * denominator of a recount follows exactly the rule the crawl follows.
+	 */
+	private function verdict(ICacheEntry $entry, string $mountRoot, int $cap): string {
+		if ($this->exclusionService->isExcluded(
+			$this->exclusionService->mountRelativePath($entry->getPath(), $mountRoot),
+		)) {
+			return self::VERDICT_EXCLUDED;
+		}
+
+		return $entry->getSize() > $cap ? self::VERDICT_OVER_CAP : self::VERDICT_INDEXABLE;
+	}
+
+	/**
+	 * Count one sighting into the six sums, the same way in both modes.
+	 *
+	 * @param array<string, int> $counts
+	 */
+	private function countSighting(ICacheEntry $entry, string $verdict, array &$counts): void {
+		$counts['files_seen'] = ($counts['files_seen'] ?? 0) + 1;
+		// The interface allows a float for a size beyond the integer range, and
+		// a document of that size does not exist behind a cap of fifty
+		// megabytes; the cast is the same one StorageService::getFileSlice makes
+		// for the same reason.
+		$counts['bytes_seen'] = ($counts['bytes_seen'] ?? 0) + max(0, (int)$entry->getSize());
+		$mimeType = $entry->getMimeType();
+		if (in_array($mimeType, self::OCR_CERTAIN_MIMETYPES, true)) {
+			$counts['ocr_candidates'] = ($counts['ocr_candidates'] ?? 0) + 1;
+		} elseif ($mimeType === 'application/pdf') {
+			$counts['pdf_seen'] = ($counts['pdf_seen'] ?? 0) + 1;
+		}
+
+		if ($verdict === self::VERDICT_EXCLUDED) {
+			$counts['excluded'] = ($counts['excluded'] ?? 0) + 1;
+		} elseif ($verdict === self::VERDICT_OVER_CAP) {
+			$counts['over_cap'] = ($counts['over_cap'] ?? 0) + 1;
+		}
+	}
+
+	/**
+	 * Hand one band of the crawl to ScanStatsService::add.
+	 *
+	 * @param array<string, int> $counts
+	 */
+	private function addBand(int $storageId, array $counts, int $cursor): void {
+		$this->scanStats->add(
+			$storageId,
+			$counts['files_seen'] ?? 0,
+			$counts['bytes_seen'] ?? 0,
+			$counts['ocr_candidates'] ?? 0,
+			$counts['pdf_seen'] ?? 0,
+			$counts['over_cap'] ?? 0,
+			$counts['excluded'] ?? 0,
+			$cursor,
+		);
+	}
+
+	/**
+	 * Six zeros under the six counter keys.
+	 *
+	 * @return array<string, int>
+	 */
+	private static function zeroSums(): array {
+		return array_fill_keys(self::COUNTER_KEYS, 0);
+	}
+
+	/**
+	 * The running sums a recount chain carries, read back from its argument.
+	 *
+	 * Every value is cast and clamped at zero: oc_jobs is writable by a
+	 * database admin only, and whatever such a value says, the next recount
+	 * replaces it with a measurement (T-kii-03).
+	 *
+	 * @param array<mixed> $argument
+	 * @return array<string, int>
+	 */
+	private static function sumsFrom(array $argument): array {
+		$sums = [];
+		foreach (self::COUNTER_KEYS as $key) {
+			$sums[$key] = max(0, (int)($argument[$key] ?? 0));
+		}
+		return $sums;
+	}
+
+	/**
+	 * The argument of the next slice of the same chain.
+	 *
+	 * A crawl gets exactly the four canonical keys: a budget_seconds of the
+	 * top-up route must not travel into the cron chain, where it would shorten
+	 * every following slice for no caller at all. A recount carries its mode and
+	 * its six sums on top, because without them the successor would be a crawl
+	 * or would start counting from zero in the middle of the mount.
+	 *
+	 * @param array<string, int> $sums
+	 * @return array<string, int|string>
+	 */
+	private static function successorArgument(int $storageId, int $rootId, int $overriddenRoot, int $lastFileId, bool $recount, array $sums): array {
+		$argument = [
 			'storage_id' => $storageId,
 			'root_id' => $rootId,
 			'overridden_root' => $overriddenRoot,
 			'last_file_id' => $lastFileId,
-		]);
+		];
+		if (!$recount) {
+			return $argument;
+		}
+
+		$argument['mode'] = self::MODE_RECOUNT;
+		foreach (self::COUNTER_KEYS as $key) {
+			$argument[$key] = max(0, (int)($sums[$key] ?? 0));
+		}
+		return $argument;
 	}
 }

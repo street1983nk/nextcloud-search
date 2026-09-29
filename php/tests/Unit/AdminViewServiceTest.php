@@ -158,7 +158,7 @@ final class AdminViewServiceTest extends TestCase {
 	}
 
 	/**
-	 * Three ways of having no honest figure, and all three answer null.
+	 * Four ways of having no honest figure, and all four answer null.
 	 *
 	 * The second row carries two readings of this plan and they are one argument
 	 * here on purpose: a container that is silent and a container that does not
@@ -173,6 +173,11 @@ final class AdminViewServiceTest extends TestCase {
 		return [
 			'no denominator, because nothing has been counted yet' => [0, 0, true],
 			'no numerator, because the container is silent or did not report it' => [0, 200, false],
+			// Quick task 260929-kii: more indexed than the denominator holds is
+			// the window until the next recount, and it is no share at all, least
+			// of all a hundred per cent.
+			'more counted than indexable, because the recount has not caught up' => [300, 200, true],
+			'one more counted than indexable' => [201, 200, true],
 		];
 	}
 
@@ -186,11 +191,15 @@ final class AdminViewServiceTest extends TestCase {
 	}
 
 	public function testAFigureIsNeverNegativeAndNeverAboveAHundred(): void {
-		// Neither input can legitimately occur, and both would be visible as a
-		// defect of the page rather than of whatever produced them. A progress
+		// A negative input cannot legitimately occur, and it would be visible as
+		// a defect of the page rather than of whatever produced it. A progress
 		// bar with a negative value renders as an empty bar and says nothing.
+		// The other end, a counter above the denominator, is null since quick
+		// task 260929-kii and sits in the provider above; a hundred is reached
+		// exactly when the two are equal.
 		self::assertSame(0, AdminViewService::coverageShare(-5, 200, true));
-		self::assertSame(100, AdminViewService::coverageShare(300, 200, true));
+		self::assertSame(100, AdminViewService::coverageShare(200, 200, true));
+		self::assertSame(99, AdminViewService::coverageShare(199, 200, true));
 	}
 
 	// -- the state of the engine: six words, and null for everything else -----

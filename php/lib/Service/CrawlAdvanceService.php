@@ -63,6 +63,19 @@ class CrawlAdvanceService {
 		foreach ($this->jobList->getJobsIterator(StorageCrawlJob::class, 1, 0) as $job) {
 			$argument = $job->getArgument();
 
+			if (is_array($argument) && ($argument['mode'] ?? null) === StorageCrawlJob::MODE_RECOUNT) {
+				// A recount of the denominator (quick task 260929-kii), not a
+				// crawl. It queues nothing, so a hungry container has nothing to
+				// wait for from it: running it here would spend the OCS budget of
+				// the caller on counting, and "pending" would keep the container
+				// polling for work that never arrives. Crawl rows and recount
+				// rows never exist side by side (ScanRecountJob plans only when
+				// no StorageCrawlJob row exists, and occ findling:index --restart
+				// removes every StorageCrawlJob row), so a recount at the head
+				// means the crawl is through.
+				return ['ran' => false, 'pending' => false];
+			}
+
 			// Removed under the canonical argument BEFORE the run, mirroring
 			// what QueuedJob::start would have done: the start() below removes
 			// under the modified argument, which matches no row, and a row

@@ -216,7 +216,17 @@ class FileEventListener implements IEventListener {
 	 */
 	private function expandMovedFolder(Node $source, Folder $target): void {
 		$storageId = (int)$target->getMountPoint()->getNumericStorageId();
-		if ($storageId <= 0 || (int)$source->getMountPoint()->getNumericStorageId() === $storageId) {
+		if ($storageId <= 0) {
+			return;
+		}
+
+		if ((int)$source->getMountPoint()->getNumericStorageId() === $storageId) {
+			// Nothing to plan for the index, see above, but the denominator may
+			// still have moved: a folder that wanders into an exclusion or out of
+			// one inside the same mount changes excluded by its whole subtree.
+			if ($this->storageService->isIndexedStorage($storageId)) {
+				$this->settingsService->markScanStale();
+			}
 			return;
 		}
 
@@ -308,6 +318,11 @@ class FileEventListener implements IEventListener {
 			return;
 		}
 
+		// A folder deleted, restored or moved across a mount boundary changes
+		// the denominator by its whole subtree. Marked and not counted, for the
+		// reason in the docblock of ScanRecountJob.
+		$this->settingsService->markScanStale();
+
 		$this->expand($storageId, $rootId, $ancestorId, $kind);
 	}
 
@@ -392,6 +407,14 @@ class FileEventListener implements IEventListener {
 		if (!$this->storageService->isIndexedStorage($storageId)) {
 			return;
 		}
+
+		// The denominator of the coverage figure is behind from here on: a file
+		// of an indexed mount was created, written, copied, renamed, deleted or
+		// restored, and whether the exclusion or the cap below lets it through
+		// changes excluded or over_cap. Marked and not counted, because the
+		// events carry no reliable delta (see the docblock of ScanRecountJob);
+		// the next recount measures what changed.
+		$this->settingsService->markScanStale();
 
 		// 4. A rule of today, through the one helper the crawl uses, on the one
 		// path space (ADM-04, D-06). This is the question pitfall 4 is about:

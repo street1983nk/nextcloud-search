@@ -240,11 +240,19 @@ Support entreprise et modules payants : demande de devis à admin@infranode.dev]
 		<nextcloud min-version="33" max-version="35"/>
 	</dependencies>
 	<!--
-		The two blocks below sit in the order the store schema prescribes, which
+		The three blocks below sit in the order the store schema prescribes, which
 		is: dependencies, background jobs, the repair block, two factor
 		providers, commands. Each of them is written on one line on purpose. The
 		schema pattern for a PHP class name allows no surrounding whitespace, so
 		an indented class name on its own line fails the validation.
+
+		The background job keeps the denominator of the coverage figure in step
+		with the files of the instance: every 15 minutes it asks whether a recount
+		is due and, if so, starts the crawl in its counting mode once per mount
+		(quick task 260929-kii). It is the one job Nextcloud has to know about in
+		advance, because every other job of this app is planned by code at the
+		moment it is needed; an existing installation registers it with the
+		update, since Nextcloud reads this block on install and on update.
 
 		The install step is what makes the first index start without an admin
 		doing anything, which is the whole zero config promise of this app. The
@@ -268,6 +276,7 @@ Support entreprise et modules payants : demande de devis à admin@infranode.dev]
 		page already carries one destructive confirmation with the cleanup of
 		the exclusion rules.
 	-->
+	<background-jobs><job>OCA\Findling\BackgroundJobs\ScanRecountJob</job></background-jobs>
 	<repair-steps><install><step>OCA\Findling\Repair\AppInstallStep</step></install><uninstall><step>OCA\Findling\Repair\AppUninstallStep</step></uninstall></repair-steps>
 	<commands><command>OCA\Findling\Command\IndexCommand</command><command>OCA\Findling\Command\DiagnoseCommand</command><command>OCA\Findling\Command\PurgeCommand</command></commands>
 	<!--

@@ -6,6 +6,7 @@ namespace OCA\Findling\Tests\Unit;
 
 use OCA\Findling\AppInfo\Application;
 use OCA\Findling\Service\SettingsService;
+use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\IAppConfig;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -28,7 +29,11 @@ final class SettingsServiceTest extends TestCase {
 	private IAppConfig&MockObject $appConfig;
 	private LoggerInterface&MockObject $logger;
 
-	/** @var array<string, string|array<mixed>> the stored keys of the app */
+	private const NOW = 1790000000;
+
+	private ITimeFactory&MockObject $time;
+
+	/** @var array<string, int|string|array<mixed>> the stored keys of the app */
 	private array $values = [];
 
 	protected function setUp(): void {
@@ -37,6 +42,23 @@ final class SettingsServiceTest extends TestCase {
 		$this->values = [];
 		$this->appConfig = $this->createMock(IAppConfig::class);
 		$this->logger = $this->createMock(LoggerInterface::class);
+		$this->time = $this->createMock(ITimeFactory::class);
+		$this->time->method('getTime')->willReturn(self::NOW);
+
+		$this->appConfig->method('getValueInt')->willReturnCallback(
+			function (string $app, string $key, int $default = 0): int {
+				$value = $this->values[$key] ?? $default;
+
+				return is_int($value) ? $value : $default;
+			},
+		);
+		$this->appConfig->method('setValueInt')->willReturnCallback(
+			function (string $app, string $key, int $value): bool {
+				$this->values[$key] = $value;
+
+				return true;
+			},
+		);
 
 		$this->appConfig->method('hasKey')->willReturnCallback(
 			fn (string $app, string $key): bool => $app === Application::APP_ID && array_key_exists($key, $this->values),
@@ -77,7 +99,7 @@ final class SettingsServiceTest extends TestCase {
 	}
 
 	private function settings(): SettingsService {
-		return new SettingsService($this->appConfig, $this->logger);
+		return new SettingsService($this->appConfig, $this->logger, $this->time);
 	}
 
 	private function stored(?string $profile, ?string $precision = null): void {
@@ -208,7 +230,7 @@ final class SettingsServiceTest extends TestCase {
 			}),
 		);
 
-		self::assertFalse((new SettingsService($appConfig, $this->logger))->saveProfile('standard', 'int8'));
+		self::assertFalse((new SettingsService($appConfig, $this->logger, $this->time))->saveProfile('standard', 'int8'));
 	}
 
 	// -- saveConfirmation ------------------------------------------------------
@@ -269,5 +291,73 @@ final class SettingsServiceTest extends TestCase {
 		$settings->forgetPending();
 		self::assertNull($settings->profileCheckPending());
 		self::assertArrayNotHasKey(SettingsService::KEY_PROFILE_CHECK_PENDING, $this->values);
+	}
+
+	// -- the recount mark (quick task 260929-kii) -------------------------------
+
+	public function testMarkScanStaleWritesTheFirstTimeOnly(): void {
+		$settings = $this->settings();
+
+		$settings->markScanStale();
+		self::assertSame(self::NOW, $this->values[SettingsService::KEY_SCAN_STALE_SINCE]);
+
+		// A second event keeps the first mark: one write per round, not per
+		// upload.
+		$this->values[SettingsService::KEY_SCAN_STALE_SINCE] = 42;
+		$settings->markScanStale();
+		self::assertSame(42, $this->values[SettingsService::KEY_SCAN_STALE_SINCE]);
+	}
+
+	public function testMarkScanStaleDoesNotWriteAnExistingMark(): void {
+		$appConfig = $this->createMock(IAppConfig::class);
+		$appConfig->method('getValueInt')->willReturn(42);
+		$appConfig->expects(self::never())->method('setValueInt');
+
+		(new SettingsService($appConfig, $this->logger, $this->time))->markScanStale();
+	}
+
+	public function testANeverRunRecountIsDue(): void {
+		self::assertTrue($this->settings()->scanRecountDue(self::NOW));
+	}
+
+	public function testARecentRecountIsNotDueWithoutAMark(): void {
+		$this->values[SettingsService::KEY_SCAN_RECOUNTED_AT] = self::NOW - 3600;
+
+		self::assertFalse($this->settings()->scanRecountDue(self::NOW));
+	}
+
+	public function testAMarkMakesTheRecountDue(): void {
+		$this->values[SettingsService::KEY_SCAN_RECOUNTED_AT] = self::NOW - 60;
+		$this->values[SettingsService::KEY_SCAN_STALE_SINCE] = self::NOW - 30;
+
+		self::assertTrue($this->settings()->scanRecountDue(self::NOW));
+	}
+
+	public function testADayOldRecountIsDueWithoutAMark(): void {
+		$this->values[SettingsService::KEY_SCAN_RECOUNTED_AT] = self::NOW - SettingsService::RECOUNT_FLOOR_SECONDS;
+
+		self::assertTrue($this->settings()->scanRecountDue(self::NOW));
+	}
+
+	public function testBeginRecountClearsTheMarkAndRemembersTheTime(): void {
+		$this->values[SettingsService::KEY_SCAN_STALE_SINCE] = self::NOW - 30;
+
+		$settings = $this->settings();
+		$settings->beginRecount(self::NOW);
+
+		self::assertSame(0, $this->values[SettingsService::KEY_SCAN_STALE_SINCE]);
+		self::assertSame(self::NOW, $this->values[SettingsService::KEY_SCAN_RECOUNTED_AT]);
+		self::assertFalse($settings->scanRecountDue(self::NOW + 60));
+	}
+
+	public function testSavingTheRulesMarksTheScanStale(): void {
+		$errors = $this->settings()->save([
+			SettingsService::FIELD_MAX_FILE_BYTES => SettingsService::MIN_CAP_BYTES,
+			'indexTeamFolders' => true,
+			'indexExternalStorage' => false,
+		]);
+
+		self::assertSame([], $errors);
+		self::assertSame(self::NOW, $this->values[SettingsService::KEY_SCAN_STALE_SINCE]);
 	}
 }

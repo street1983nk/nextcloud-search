@@ -1671,10 +1671,15 @@ final class AdminViewService {
 	 * @param array<string,int> $scan
 	 * @param array<string,mixed> $backend
 	 * @param int $indexable the denominator, worked out once in overview()
+	 * ``recounting`` is true when the container answered, a denominator exists
+	 * and more documents are indexed than the denominator holds. That is the
+	 * window until the next recount of ScanRecountJob (quick task 260929-kii),
+	 * and both percentages are null in it.
+	 *
 	 * @param int $refusedByType skipped(mime_not_allowed), counted once in overview()
 	 * @return array{
 	 *     indexed:int, indexable:int, deliberatelyLeftOut:int, percent:int|null,
-	 *     embedded:int, embeddedPercent:int|null,
+	 *     embedded:int, embeddedPercent:int|null, recounting:bool,
 	 *     provisional:bool, mountsTotal:int, mountsFinished:int
 	 * }
 	 */
@@ -1713,6 +1718,13 @@ final class AdminViewService {
 			$backendReachable && $embeddedKnown,
 		);
 
+		// The container answered, there is a denominator, and it holds fewer
+		// files than are already searchable: the recount of ScanRecountJob has
+		// not caught up with files that arrived since the last one. Both shares
+		// are null in this case (coverageShare), and the page says why in a
+		// sentence of its own instead of "backend does not answer".
+		$recounting = $backendReachable && $indexable > 0 && $indexed > $indexable;
+
 		return [
 			'indexed' => $indexed,
 			'indexable' => $indexable,
@@ -1720,6 +1732,7 @@ final class AdminViewService {
 			'percent' => $percent,
 			'embedded' => $embeddedKnown ? $embedded : 0,
 			'embeddedPercent' => $embeddedPercent,
+			'recounting' => $recounting,
 			// A scan that has not walked every mount to its end has counted a
 			// lower bound, and the page has to say so and name both figures. An
 			// estimate that quietly corrects itself upwards looks like a defect.
@@ -1750,7 +1763,10 @@ final class AdminViewService {
 	 * there is nothing to divide by, and with the figure unavailable there is no
 	 * numerator either: nought per cent would be read as "nothing is findable"
 	 * where the truth is "nobody could ask" (T-04-23). The template renders a
-	 * sentence for that case and never a number.
+	 * sentence for that case and never a number. The third null case is a
+	 * counter above the denominator: more was counted than was measured as
+	 * indexable, which is the window until the next recount, and no share
+	 * exists for it either.
 	 *
 	 * Static and public for the reason progressStamp() above is: it is the
 	 * arithmetic and nothing else, and the alternative is a unit test that
@@ -1763,6 +1779,15 @@ final class AdminViewService {
 		}
 
 		$counted = max(0, $counted);
+
+		// More counted than measured as indexable is no share at all, and never
+		// a hundred per cent: it is the window until the next recount of
+		// ScanRecountJob catches up with files that arrived after the last one
+		// (quick task 260929-kii). "607 of 587" reads like a defect, and a
+		// hundred per cent would claim a completeness nobody measured.
+		if ($counted > $indexable) {
+			return null;
+		}
 
 		return $indexable - $counted > 0
 			? min(99, max(0, (int)floor($counted * 100 / $indexable)))

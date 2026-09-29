@@ -2017,9 +2017,48 @@ def test_the_engine_line_is_not_hidden_behind_a_denominator_that_does_not_exist_
     assert "shown('findling-semantic', hasDenominator || hasEngineWord)" in script
     # And the share line inside keeps the denominator of its own, in both
     # halves: a block that appears for the engine line alone must not claim
-    # that a figure could not be worked out.
-    assert 'id="findling-semantic-unknown"<?php if (!$hasDenominator || $hasEmbeddedFraction)' in template
-    assert "shown('findling-semantic-unknown', hasDenominator && !hasFraction)" in script
+    # that a figure could not be worked out. Since quick task 260929-kii the
+    # line also stays hidden while the recount has not caught up, because the
+    # recount sentence of the first block says why no share is shown.
+    assert (
+        'id="findling-semantic-unknown"<?php if (!$hasDenominator || $hasEmbeddedFraction || $recounting)' in template
+    )
+    assert (
+        "shown('findling-semantic-unknown', hasDenominator && !hasFraction && coverage.recounting !== true)" in script
+    )
+
+
+def test_a_numerator_above_its_denominator_shows_the_recount_sentence_in_both_halves() -> None:
+    """Quick task 260929-kii: "607 of 587 indexable files are searchable".
+
+    More indexed than the last count found indexable is the window until the
+    next recount. AdminViewService answers null for both shares then and says
+    recounting; the page shows neither a figure nor a fraction, not the sentence
+    about a silent backend, but the recount sentence. Held in both halves,
+    because the script rewrites the block on every poll.
+    """
+    template = TEMPLATE.read_text(encoding="utf-8")
+    script = SCRIPT.read_text(encoding="utf-8")
+    sentence = (
+        "%s files are searchable. Files were added since the last count, "
+        "so the share is shown again once they have been counted."
+    )
+
+    assert "$recounting = ($coverage['recounting'] ?? false) === true;" in template
+    assert 'id="findling-coverage-recounting"<?php if (!$hasDenominator || !$recounting) { ?> hidden' in template
+    assert (
+        'id="findling-coverage-unknown"<?php if (!$hasDenominator || $hasFraction || $recounting) { ?> hidden'
+        in template
+    )
+    assert sentence in template
+
+    assert "const recounting = hasDenominator && coverage.recounting === true" in script
+    assert "shown('findling-coverage-recounting', recounting)" in script
+    assert (
+        "shown('findling-coverage-unknown', hasDenominator && !hasFraction && coverage.recounting !== true)" in script
+    )
+    assert sentence in script
+    assert "coverage.percent, coverage.recounting," in script
 
 
 def test_both_halves_of_the_page_map_the_same_state_to_the_same_sentence() -> None:
@@ -3060,6 +3099,12 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     UI-SPEC the owner approved on 29.09.2026, the six other languages are
     machine translations under the same dated reservation as the rest, and
     the tables of the five language documents do not carry the rows yet.
+
+    It stands at 288 since the same day, and the move is quick task
+    260929-kii: one key in, the sentence the coverage block shows while more
+    files are searchable than the last count found indexable, instead of a
+    share or a fraction with a numerator above its denominator. All sixteen
+    files moved in one commit, and the five language documents carry its row.
     Whoever moves it next writes the next paragraph.
     """
     for language, twin in ((L10N_JSON, L10N_DE_DE_JSON), (L10N_JS, L10N_DE_DE_JS)):
@@ -3086,8 +3131,9 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
 
     assert len(set(map(frozenset, keys_of.values()))) == 1, f"the four catalogues disagree: {sorted(keys_of)}"
     # two keys of plan 25-04 (D-25-13), nine of plan 26-05 (D-26-01, D-26-04),
-    # 72 in and one out with plan 27-13 (UI-01, D-27-12)
-    assert len(keys_of["de.json"]) == 287
+    # 72 in and one out with plan 27-13 (UI-01, D-27-12), one of quick task
+    # 260929-kii (the recount sentence)
+    assert len(keys_of["de.json"]) == 288
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:

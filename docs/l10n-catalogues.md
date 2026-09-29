@@ -370,6 +370,13 @@ der vor dem Pfad genannte Nutzer die Datei nicht öffnen darf: gefunden über ei
 des Team Folders oder erreicht ohne Leserecht. Er steht in allen 16 Dateien, die Tabellen der
 fünf Sprachdokumente führen die Zeile.
 
+**Nachgezählt am 29.09.2026, Quick-Task 260929-kii:** **288** Schlüssel, davon weiterhin **5**
+Pluralschlüssel. Der neue ist der Satz, den der Block "Deckungsgrad der Suche" zeigt, solange mehr
+Dateien durchsuchbar sind, als die letzte Zählung indexierbar fand: statt einer Prozentzahl und
+eines Bruchs mit Zähler größer Nenner sagt er, dass seit der letzten Zählung Dateien
+dazugekommen sind und der Anteil wieder erscheint, sobald sie mitgezählt sind. Er steht in allen
+16 Dateien, die Tabellen der fünf Sprachdokumente führen die Zeile.
+
 ---
 
 ## Stand nach Phase 20

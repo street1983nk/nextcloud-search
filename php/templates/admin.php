@@ -82,6 +82,11 @@ $engineSentences = [
 $engineState = is_string($backend['engineState'] ?? null) ? $backend['engineState'] : '';
 $engineSentence = $engineSentences[$engineState] ?? $l->t('This container does not report the state of the model yet.');
 $provisional = ($coverage['provisional'] ?? false) === true;
+// More searchable than indexable: the recount of the denominator has not caught
+// up with files that arrived since the last one (quick task 260929-kii). The
+// page shows neither a share nor a fraction with a numerator above its
+// denominator then, and not the sentence about a silent backend either.
+$recounting = ($coverage['recounting'] ?? false) === true;
 $mountsTotal = $whole($coverage['mountsTotal'] ?? 0);
 $mountsFinished = $whole($coverage['mountsFinished'] ?? 0);
 
@@ -416,8 +421,9 @@ $banners = [
 	</p>
 	<progress id="findling-coverage-bar" max="100" value="<?php p((string)($percent ?? 0)); ?>" aria-labelledby="findling-coverage-heading"<?php if (!$hasFraction) { ?> hidden<?php } ?>></progress>
 	<p class="settings-hint" id="findling-coverage-subline"<?php if (!$hasFraction) { ?> hidden<?php } ?>><?php p($l->t('%1$s of %2$s indexable files are searchable', [$count($searchable), $count($indexable)])); ?></p>
+	<p class="settings-hint" id="findling-coverage-recounting"<?php if (!$hasDenominator || !$recounting) { ?> hidden<?php } ?>><?php p($l->t('%s files are searchable. Files were added since the last count, so the share is shown again once they have been counted.', [$count($searchable)])); ?></p>
 
-	<p class="settings-hint" id="findling-coverage-unknown"<?php if (!$hasDenominator || $hasFraction) { ?> hidden<?php } ?>><?php p($l->t('The share cannot be worked out right now because the backend does not answer. %s files of this instance are indexable.', [$count($indexable)])); ?></p>
+	<p class="settings-hint" id="findling-coverage-unknown"<?php if (!$hasDenominator || $hasFraction || $recounting) { ?> hidden<?php } ?>><?php p($l->t('The share cannot be worked out right now because the backend does not answer. %s files of this instance are indexable.', [$count($indexable)])); ?></p>
 
 	<p class="settings-hint" id="findling-coverage-leftout"<?php if (!$hasDenominator) { ?> hidden<?php } ?>>
 		<span id="findling-coverage-leftout-count"><?php p($l->t('Deliberately left out: %s', [$count($leftOut)])); ?></span>
@@ -480,7 +486,7 @@ $banners = [
 		<p class="settings-hint" id="findling-semantic-subline"<?php if (!$hasEmbeddedFraction) { ?> hidden<?php } ?>><?php p($l->t('%1$s of %2$s indexable files can also be found by meaning', [$count($embedded), $count($indexable)])); ?></p>
 		<p class="settings-hint" id="findling-semantic-model"<?php if ($modelName === '') { ?> hidden<?php } ?>><?php p($modelLine); ?></p>
 
-		<p class="settings-hint" id="findling-semantic-unknown"<?php if (!$hasDenominator || $hasEmbeddedFraction) { ?> hidden<?php } ?>><?php p($l->t('The semantic share cannot be worked out right now. The backend does not answer, or it does not report this figure yet.')); ?></p>
+		<p class="settings-hint" id="findling-semantic-unknown"<?php if (!$hasDenominator || $hasEmbeddedFraction || $recounting) { ?> hidden<?php } ?>><?php p($l->t('The semantic share cannot be worked out right now. The backend does not answer, or it does not report this figure yet.')); ?></p>
 
 		<?php
 		/*
