@@ -230,10 +230,10 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 27-05-PLAN.md , Indexierungs-Pause in Poller und EmbedRunner, Wächter-Aussetzung während der Probe (PRUEF-01, D-27-05/15), Welle 2
-- [ ] 27-06-PLAN.md , fp32-Modellprobe im gehärteten Spawn-Kind (PRUEF-01, D-27-02), Welle 2
-- [ ] 27-07-PLAN.md , ProbeService mit Commit-Bindung, ProfileSettingsController mit drei Admin-Routen, Gate B (PRUEF-01, UI-01, D-27-04/08/10/12), Welle 2
-- [ ] 27-08-PLAN.md , AdminViewService: Token raus, guardConfirmable, Profil-, Probe-, Env- und Reindex-Felder (UI-01, D-27-12/14/18), Welle 2
+- [x] 27-05-PLAN.md , Indexierungs-Pause in Poller und EmbedRunner, Wächter-Aussetzung während der Probe (PRUEF-01, D-27-05/15), Welle 2
+- [x] 27-06-PLAN.md , fp32-Modellprobe im gehärteten Spawn-Kind (PRUEF-01, D-27-02), Welle 2
+- [x] 27-07-PLAN.md , ProbeService mit Commit-Bindung, ProfileSettingsController mit drei Admin-Routen, Gate B (PRUEF-01, UI-01, D-27-04/08/10/12), Welle 2
+- [x] 27-08-PLAN.md , AdminViewService: Token raus, guardConfirmable, Profil-, Probe-, Env- und Reindex-Felder (UI-01, D-27-12/14/18), Welle 2
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -298,7 +298,7 @@ Plans:
 | 24. Owner-Tor, Profil-Gerüst und Marken-Reparatur | v1.4 | 6/6 | Complete    | 2026-09-28 |
 | 25. Einbettungsspur und Modellwahl | v1.4 | 12/12 | Complete    | 2026-09-28 |
 | 26. N OCR-Slots und Speicherwächter | v1.4 | 14/14 | Complete    | 2026-09-29 |
-| 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 4/16 | In Progress|  |
+| 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 8/16 | In Progress|  |
 | 28. Abnahme-Anfahrt | v1.4 | 0/? | Not started | - |
 | 29. Härtung und Store-Einreichung 1.4.0 | v1.4 | 0/? | Not started | - |
 
