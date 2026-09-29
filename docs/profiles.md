@@ -88,19 +88,29 @@ Beispiele:
 - Ein Fehler der Erkennung stoppt den Start nie; das Profil bleibt dann Sparsam.
   Im Log steht nur der Ausnahmetyp, keine Hardwarewerte und keine Pfade.
 
-## Profil setzen in 1.4-Vorabständen
+## Profil setzen
 
-Bis die Einstellungsseite kommt (Phase 27), wird das Profil per occ gesetzt:
+Empfohlen ist die Adminseite, Block Leistungsprofil (Phase 27, D-27-13). Sie
+prüft jede Änderung nach oben vorab auf dieser Box und speichert nur bei
+"passt". Ablauf und Verdikte: [`docs/admin-page.md`](admin-page.md), Abschnitt
+"Das Leistungsprofil".
+
+Zweiter Weg für Automatisierung und kopflose Boxen ist occ:
 
 ```
 occ config:app:set findling profile --value=standard
 ```
 
+- occ überspringt die Probe. Dann sichert nur der Speicherwächter ab (Abschnitt
+  "Speicherwächter (Phase 26)"): er senkt erst nach Speicherdruck ab.
 - Gültige Werte: `economy`, `standard`, `performance`. Unbekanntes wirkt als
   `economy`.
 - Die Wirkung tritt nach Sekunden bis rund 25 Minuten ein, je nachdem, wann der
   Container das nächste Mal fragt.
 - Ein Companion 1.3.x ohne die Profil-Route bedeutet Sparsam.
+- Die Genauigkeit hat einen eigenen Schlüssel (`model_precision`), mit
+  derselben Regel: occ ohne Probe. Siehe [`docs/embeddings.md`](embeddings.md),
+  Abschnitt 11.
 
 ## Eine Wahrheit: Umgebungsvariable überstimmt
 
@@ -113,6 +123,12 @@ Folge: Wer unter Leistung ausdrücklich 30 Seiten je PDF will, erreicht das nur
 
 Die Statusroute `GET /status` meldet im Block `profile` je Wert die Quelle:
 `profile` oder `env`.
+
+- Umgebungsvariablen überstimmen nur Einzelwerte: `FINDLING_OCR_DPI`,
+  `FINDLING_OCR_MAX_PAGES`, `FINDLING_EMBED_BATCH_SIZE`,
+  `FINDLING_WRITER_HEAP_BYTES`. Nie das Profil und nie die Slots (D-27-14).
+- Die Adminseite nennt überstimmte Werte samt Variable. Das Auswahlfeld bleibt
+  frei, und die Probe rechnet mit genau diesen Werten.
 
 ## Einbettungsspur (Phase 25, PAR-01, PAR-04)
 
@@ -177,10 +193,12 @@ Speichertod wird (PAR-03).
   Kind erzeugt kein Verdikt. Die Datei läuft nach der Staffel allein erneut;
   erst ein zweiter Tod allein ergibt `failed(out_of_memory)`.
 - **Rückweg nur durch den Admin (D-26-04):** kein automatisches Anheben. Die
-  Absenkung endet, wenn der Admin das Token bestätigt:
-  `occ config:app:set findling profile_confirmed --value=<token>`, oder ein
-  anderes Profil wählt. Das Token nennen die Statusseite und `GET /status`
-  (Block `guard`). Ab Phase 27 geht das per Knopf in der Einstellungsseite.
+  Absenkung endet, wenn der Admin das Token bestätigt oder ein anderes Profil
+  wählt. Empfohlen: Knopf "Erneut prüfen" auf der Adminseite; bei "passt" hängt
+  PHP das Token serverseitig an (D-27-12), die Seite zeigt es nicht mehr.
+  Zweiter Weg ohne Probe:
+  `occ config:app:set findling profile_confirmed --value=<token>`, Token aus
+  `GET /status` (Block `guard`).
 - **Kinder zuerst (D-26-11, D-26-16):** Jedes Sandbox-Kind läuft mit nice 10
   und `oom_score_adj` 1000, in allen Profilen; tesseract erbt beides. Der
   OOM-Killer trifft damit zuerst ein Kind, nicht den Hauptprozess mit Suche und

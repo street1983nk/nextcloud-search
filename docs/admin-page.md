@@ -213,32 +213,34 @@ Im Block "auffindbar nach Bedeutung" steht seit 1.4 eine weitere Zeile
   verborgen.
 
 Die Verdikte der Präzision (`precisionVerdict`, zum Beispiel
-`fp32_unavailable`) meldet der Container bereits; als Satz zeigt die Seite sie
-erst mit Phase 27. Bis dahin stehen sie in `docs/embeddings.md`, Abschnitt 11.
+`fp32_unavailable`) zeigt die Seite seit Phase 27 als Satz im Block
+Leistungsprofil (siehe unten). Die Tabelle aller Verdikte steht in
+`docs/embeddings.md`, Abschnitt 11.
 
-## Die Wächterzeilen: Absenkung, Rückweg, Drosselung
+## Die Wächterzeilen: Absenkung und Drosselung
 
-Seit Phase 26 zeigt die Seite bis zu drei Zeilen des Speicherwächters
-(D-26-01, D-26-02, D-26-04). Quelle ist der Block `guard` der Statusantwort;
-Details zum Wächter in [`docs/profiles.md`](profiles.md), Abschnitt
-"Speicherwächter (Phase 26)".
+Seit Phase 26 zeigt die Seite im Block Deckungsgrad bis zu zwei Zeilen des
+Speicherwächters (D-26-01, D-26-02). Quelle ist der Block `guard` der
+Statusantwort; Details zum Wächter in [`docs/profiles.md`](profiles.md),
+Abschnitt "Speicherwächter (Phase 26)".
 
 - **Wächter:** `Profil: gewählt Leistung, wirksam Standard (Speicher knapp,
   zweimal memory.events max)`. Steht nur, wenn der Wächter abgesenkt hat. Die
   Ursache ist eines von drei Wörtern (`memory_max_repeated`, `oom_kill`,
   `unclean_end`), die Seite übersetzt es in einen festen Katalogsatz.
-- **Rückweg:** `Zum Aufheben der Absenkung nach Prüfung des Speichers:` gefolgt
-  von `occ config:app:set findling profile_confirmed --value=<token>`. Steht nur
-  bei einer Absenkung mit gültigem 32-Hex-Token. Ein Knopf dafür kommt mit
-  Phase 27.
 - **Drosselung:** `OCR-Slots: 2 von 4, Speicher knapp`. Steht nur, solange die
   Drossel der laufenden Runde weniger Slots erlaubt als das Profil vorsieht
   (`throttled`).
+- **Rückweg:** seit Phase 27 der Knopf "Erneut prüfen" im Block
+  Leistungsprofil (D-27-12). Die frühere occ-Zeile mit Token ist entfallen.
+- **Bestätigung:** Der Token erscheint nicht mehr auf der Seite, weder im Markup noch im
+  Initial State. Die Seite bekommt nur das Flag `guardConfirmable`; PHP hängt
+  den Token serverseitig an, wenn die Probe "passt" meldet.
 
 Die PHP-Seite prüft jedes Feld gegen eine geschlossene Menge: Profilnamen,
 Ursachen, Token-Form, Zähler als nicht negative Ganzzahl. Kein Wort des
 Containers wird Teil eines Satzes. Ein Container vor 1.4 sendet keinen Block
-`guard`, dann bleiben alle drei Zeilen verborgen.
+`guard`, dann bleiben beide Zeilen verborgen.
 
 ## Was nicht im Nenner steht, und warum
 
@@ -290,8 +292,8 @@ Fünf Quellen, und die Aufteilung ist eine Entscheidung und kein Zufall:
 Die Statusroute `GET /status` des Containers trägt seit 1.4 zusätzlich den
 Block `profile`: gewähltes, vorgeschlagenes und wirksames Profil, die beim Start
 erkannte Hardware, die berechneten Werte und je Wert die Quelle (`profile` oder
-`env`). Die Seite zeigt ihn ab Phase 27; bis dahin ist er nur in der Antwort der
-Route sichtbar. Regeln und Formel stehen in `docs/profiles.md`.
+`env`). Die Seite zeigt ihn seit Phase 27 im Block Leistungsprofil. Regeln und
+Formel stehen in `docs/profiles.md`.
 
 ## Warum eine Differenz ein Signal ist und kein Fehler
 
@@ -402,6 +404,109 @@ Textwert von 3 600 Dokumenten je Stunde ist eine Annahme, die nie gemessen wurde
 amd64-Laptopkern, siehe `docs/ocr.md`; die Zielhardware ist eine ARM-Box, und
 deren Messlauf steht in Phase 5 aus. Die Beschriftung ist deshalb kein Beiwerk:
 eine Dauer ohne sie wäre eine Zahl, die wie eine Messung aussieht.
+
+## Das Leistungsprofil
+
+Seit Phase 27 steht direkt vor "Rules and limits" der Block "Leistungsprofil"
+(PRUEF-01, UI-01). Er ist der empfohlene Weg, Profil und Genauigkeit zu setzen.
+Profile, Formel und Wächter: [`docs/profiles.md`](profiles.md). Präzision:
+[`docs/embeddings.md`](embeddings.md), Abschnitt 11.
+
+**Auskunft**
+
+- Erkannt: Kerne und Speicher aus dem Block `profile` der Statusantwort. Ein
+  Container ohne diesen Block zeigt "Dieses Backend meldet seine Hardware noch
+  nicht."
+- Vorschlag für diese Box (D-24-06) und Wirksam: die Stufe, die gerade gilt.
+- Schrumpfung (D-24-07): "Gewählt ..., wirksam ..." als Hinweiszeile, wenn die
+  Box weniger Hardware hat, als das gewählte Profil braucht.
+- Wächter (D-26-01): Warnbanner mit beiden Stufen, Ursache und Knopf "Erneut
+  prüfen". Der Knopf prüft das gewählte Profil samt gespeicherter Präzision;
+  "passt" gilt als Bestätigung und hebt die Absenkung auf. Der Token bleibt auf
+  dem Server (D-27-12).
+- Präzisionsverdikt: genau ein Satz je Code aus `precisionVerdict`.
+- Überstimmte Werte (D-27-14): je Wert mit Quelle `env` eine Zeile mit Wert und
+  Variablenname. Reine Anzeige, kein Feld.
+
+**Formular**
+
+- Ein Auswahlfeld mit drei Profilen: Sparsam, Standard, Leistung. Der Vorschlag
+  trägt "(Vorschlag)".
+- Erstaufruf ohne gespeichertes Profil: das Feld steht auf dem Vorschlag, aber
+  ohne Klick wird nichts gespeichert. Wirksam bleibt Sparsam.
+- Häkchen "Genaueres Suchmodell (fp32)": nur bei Standard und Leistung sichtbar
+  (D-27-01). Beim Wechsel auf Sparsam wird es verborgen; die Präzision ändert
+  sich dadurch nicht (D-25-10).
+- Reindex-Hinweis (D-27-03), sobald die Zielpräzision von der aktiven abweicht:
+  mit Dauer nur, wenn eine Probe dieser Box eine Einbettungsrate gemessen hat,
+  beschriftet als Schätzung; sonst nur die Dokumentzahl (D-27-18).
+- Ohne JavaScript: alle Auskünfte und die letzte Verdikt-Karte stehen da, die
+  Knöpfe wirken nicht, ein Satz sagt das.
+
+**Übernehmen und prüfen**
+
+- Jede Änderung nach oben läuft durch die Probe, ebenso Leistung zu Standard
+  (D-27-09) und fp32 neu gesetzt.
+- Schritte: Indexstaffel abwarten, Modell herunterladen, Modelldatei prüfen,
+  Modell laden, OCR mit einem Slot, Speicher rechnen, OCR mit N Slots,
+  aufräumen. Download und Modellschritte nur bei Ziel fp32.
+- Die Indexierung pausiert während der Probe und läuft danach weiter. Die
+  Suche antwortet weiter.
+- Deckel: 1800 s für das Ende der laufenden Staffel (`pause_timeout`), 600 s für
+  Download samt Digest (`download_slow`), 120 s für die Messung (`timeout`).
+- Eine Probe gleichzeitig. Ein zweiter Start meldet "Eine Prüfung läuft
+  bereits" und zeigt deren Fortschritt. Während einer Neueinbettung ist keine
+  Probe möglich (`rebuilding`).
+- Während der Probe sind Feld, Häkchen und alle Knöpfe gesperrt; der Stand wird
+  alle 2 s abgefragt, auch aus einem zweiten Tab.
+
+**Verdikte**
+
+- Passt: gespeichert. Das Profil gilt ab der nächsten Indexrunde.
+- Passt knapp: Speicherreserve unter 235 MiB. Nichts gespeichert.
+- Passt nicht: mit genau einer Ursache aus einer geschlossenen Menge (etwa
+  `memory_short`, `model_memory`, `slot_killed`, `download_failed`). Nichts
+  gespeichert.
+- Gespeichert wird nur bei "passt", gebunden an die Id und das Ziel dieser
+  Probe. Kein "Trotzdem übernehmen" (D-27-08).
+- Knapp oder nicht: die Karte bietet die nächstniedrigere Stufe an, "Standard
+  prüfen" oder "Bei Sparsam bleiben".
+- fp32 bei knapp oder nicht: eine von der Probe geladene Datei wird wieder
+  gelöscht. Eine vom Admin abgelegte Datei bleibt liegen (D-27-17).
+- Das letzte Ergebnis bleibt nach Neuladen sichtbar, mit Datum, bis eine neue
+  Probe startet (D-27-10).
+
+**Abwärtswege ohne Probe (D-27-09)**
+
+- Ziel Sparsam: Knopf "Übernehmen", speichert sofort.
+- Nur fp32 zu int8 bei gleichem Profil: "Übernehmen", speichert sofort. Der
+  Container löscht danach die fp32-Datei und bettet mit int8 neu ein (D-25-09).
+- "Bei Sparsam bleiben": speichert Sparsam, auch wenn Sparsam schon gilt. Der
+  Vorschlag wird danach nicht mehr vorbelegt.
+- Diese Wege schreiben nur appconfig und gehen auch bei stummem Backend.
+
+**Grenzen**
+
+- Umgebungsvariablen überstimmen nur Einzelwerte (`FINDLING_OCR_DPI`,
+  `FINDLING_OCR_MAX_PAGES`, `FINDLING_EMBED_BATCH_SIZE`,
+  `FINDLING_WRITER_HEAP_BYTES`), nie Profil oder Slots (D-27-14). Die Probe
+  rechnet mit genau diesen Werten.
+- Das Modell-Kind der fp32-Probe braucht transient mehr Speicher als der
+  Betrieb (rund 820 MiB gegen rund 367 MiB Mehrbedarf im Betrieb). Boxen knapp
+  an der Grenze bestehen die fp32-Probe deshalb nicht, obwohl die Formel fp32
+  zuließe. Das ist gewollt konservativ.
+- Die Reindex-Dauer ist eine Schätzung und erscheint erst mit einer Messrate
+  dieser Box (D-27-18).
+- occ bleibt als zweiter Schreibweg und überspringt die Probe (D-27-13), siehe
+  `docs/profiles.md`.
+
+**Zugriff**
+
+- Drei Routen: `POST /apps/findling/admin/profile/check` (Probe starten),
+  `GET /apps/findling/admin/profile/check` (Stand), `POST
+  /apps/findling/admin/profile` (Speichern ohne Probe).
+- Nur für Admins, mit Anfrage-Token der Sitzung, wie alle Routen der Seite.
+  Ein Nicht-Admin bekommt 403; die Integration prüft das live.
 
 ## Die vier Schalter
 
@@ -644,6 +749,8 @@ Fünf-Minuten-Systemcrons.
 **Keinen Erweitert-Bereich mit zwanzig Optionen.** Die Zielgruppe sind
 Selbsthoster und kleine Organisationen, und die Optionsflut ist einer der Gründe,
 an denen das Vorgängerprojekt gescheitert ist. Es bleibt bei vier Schaltern.
+Der Block Leistungsprofil wahrt ADM-04: ein Auswahlfeld plus ein davon
+abhängiges Häkchen, kein Aufklappen, keine Einzelwerte zum Einstellen.
 Alles andere ist eine Umgebungsvariable des Containers, dokumentiert dort, wo sie
 gemessen wurde, und keine Zeile auf dieser Seite.
 
