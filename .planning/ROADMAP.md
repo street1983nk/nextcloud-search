@@ -212,7 +212,7 @@ Plans:
 **Requirements**: PRUEF-01, UI-01
 **Success Criteria** (was WAHR sein muss):
 
-  1. Die Adminseite zeigt ein Auswahlfeld mit genau den drei Profilen und eine Hinweisfläche mit erkannten Kernen/Speicher, vorgeschlagenem Profil und den Knöpfen "Übernehmen und prüfen" und "Beim sicheren Standard bleiben"; ohne Klick bleibt Sparsam, einen Erweitert-Bereich gibt es nicht (ADM-04).
+  1. Die Adminseite zeigt ein Auswahlfeld mit genau den drei Profilen und eine Hinweisfläche mit erkannten Kernen/Speicher, vorgeschlagenem Profil und den Knöpfen "Übernehmen und prüfen" und "Bei Sparsam bleiben"; ohne Klick bleibt Sparsam, einen Erweitert-Bereich gibt es nicht (ADM-04).
   2. "Übernehmen und prüfen" fährt eine echte Probe (N-Slot-Probe am OCR-Pfad mit mitgelieferter synthetischer Scanseite, RAM-Rechnung mit gemessenen Slot-Kosten, bei fp32-Wunsch Modell-Probe) und zeigt "passt", "passt knapp" oder "passt nicht" mit benannter Ursache; gespeichert wird nur bei "passt".
   3. Die Probe wird vor dem Start gegen die Speichergrenze gerechnet und kann selbst kein OOM auslösen; es läuft höchstens eine Probe gleichzeitig, mit Zeitdeckel, und ein Nicht-Admin erreicht Probe- und Profilroute nicht (access_level ADMIN, Test).
   4. Alle neuen Texte stehen in allen acht Sprachkatalogen (16 Dateien) im Gleichstand, die Katalog-Gates sind grün.
