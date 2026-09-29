@@ -65,7 +65,7 @@ Details im Archiv: .planning/milestones/v1.3-ROADMAP.md
 - [x] **Phase 24: Owner-Tor, Profil-Gerüst und Marken-Reparatur** - Grundsatzentscheide schriftlich, dann Profile als Anteils-Formel, Hardware-Erkennung mit Vorschlag, Sparsam gepinnt, Vektor-Marke kennt die Gewichtspräzision (completed 2026-09-28)
 - [x] **Phase 25: Einbettungsspur und Modellwahl** - Einbettung als eigener Nebenläufer (H1) mit PHP-Art-Filter, IDX-08 neu gefasst, int8/fp32 wählbar (completed 2026-09-28)
 - [x] **Phase 26: N OCR-Slots und Speicherwächter** - Mehrere OCR-Slots (H2) mit KIND_BATCH-Companion, Drosselung und selbsttätiger Profil-Rückstufung (completed 2026-09-29)
-- [ ] **Phase 27: Vorab-Prüfung und Settings-Oberfläche** - Erste echte Settings-Fläche mit "Übernehmen und prüfen" (N-Slot-Probe, Verdikt), acht Sprachkataloge
+- [x] **Phase 27: Vorab-Prüfung und Settings-Oberfläche** - Erste echte Settings-Fläche mit "Übernehmen und prüfen" (N-Slot-Probe, Verdikt), acht Sprachkataloge (completed 2026-09-29)
 - [ ] **Phase 28: Abnahme-Anfahrt** - RAM-Messung je Profilstufe am gebauten Produkt auf echter Hardware, Deckel vorab freigegeben
 - [ ] **Phase 29: Härtung und Store-Einreichung 1.4.0** - Launch-Härtung der Parallelpfade, Audits, signiertes App-Paar im Store
 
@@ -256,7 +256,7 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 27-16-PLAN.md , Push-Entscheid, CI-Belege, Owner-Abnahme der Phase (PRUEF-01, UI-01), Welle 7, Checkpoint
+- [x] 27-16-PLAN.md , Push-Entscheid, CI-Belege, Owner-Abnahme der Phase (PRUEF-01, UI-01), Welle 7, Checkpoint
 
 ### Phase 28: Abnahme-Anfahrt
 
@@ -298,7 +298,7 @@ Plans:
 | 24. Owner-Tor, Profil-Gerüst und Marken-Reparatur | v1.4 | 6/6 | Complete    | 2026-09-28 |
 | 25. Einbettungsspur und Modellwahl | v1.4 | 12/12 | Complete    | 2026-09-28 |
 | 26. N OCR-Slots und Speicherwächter | v1.4 | 14/14 | Complete    | 2026-09-29 |
-| 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 15/16 | In Progress|  |
+| 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 16/16 | Complete   | 2026-09-29 |
 | 28. Abnahme-Anfahrt | v1.4 | 0/? | Not started | - |
 | 29. Härtung und Store-Einreichung 1.4.0 | v1.4 | 0/? | Not started | - |
 
