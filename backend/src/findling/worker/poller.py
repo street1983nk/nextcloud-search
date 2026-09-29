@@ -813,6 +813,15 @@ class Poller:
                 # whatever a library put into its message, and the extraction
                 # path is full of libraries that put a file name there.
                 LOGGER.error("indexing pass ended in an unexpected %s", type(error).__name__)
+                # The held rows go back before the next claim replaces _held
+                # (review WR-01). Left held, they paid the full lock timeout
+                # AND kept their counted delivery, because the other half
+                # refunds a delivery only at an unlock; three such passes
+                # wrote healthy files off as failed(repeatedly_stuck). The
+                # unlock is best effort: a queue that cannot take them back
+                # costs the lock timeout, as it always did.
+                with contextlib.suppress(Exception):
+                    await self.unlock_held()
                 self._back_off()
             await _pause(self._cooldown, stop_event)
 

@@ -2535,6 +2535,42 @@ async def test_shutdown_releases_the_held_ids(
     assert queue.unlocked == [[91, 92]]
 
 
+async def test_an_unexpected_error_in_a_pass_hands_the_held_rows_back(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Review WR-01: the catch-all of run() logged and backed off, but never gave
+    # the held rows back; the next claim then replaced _held and the rows paid
+    # the full lock timeout WITHOUT their delivery being refunded (the other
+    # half refunds only at an unlock). Three such passes wrote healthy files off
+    # as failed(repeatedly_stuck). The unlock in the catch-all is what this test
+    # pins: the rows go back before the loop claims again, so no delivery is
+    # spent and no verdict is written for them.
+    queue = _FakeQueue(ClaimResult(jobs=(_job(), _job(92, 4712))))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    def dying_record(*args: Any, **kwargs: Any) -> None:
+        del args, kwargs
+        raise OSError("stopped in the middle")
+
+    monkeypatch.setattr(store, "record", dying_record)
+    poller.arm()
+    stop = asyncio.Event()
+    task = asyncio.create_task(poller.run(stop))
+    try:
+        for _ in range(200):
+            if queue.unlocked:
+                break
+            await asyncio.sleep(0.01)
+    finally:
+        stop.set()
+        await asyncio.wait_for(task, timeout=5)
+
+    assert queue.unlocked == [[91, 92]], "the catch-all has to hand the held rows back"
+    assert not poller.busy
+    assert queue.acknowledged == [], "no verdict for a row the pass could not judge"
+    assert poller.cooldown > 0
+
+
 async def test_the_scratch_file_is_gone_after_every_job(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:
     # The scratch files hold user content. Leaving one behind after a crash is a
     # disclosure, and leaving one behind on every job fills the volume.
