@@ -201,6 +201,8 @@ deutschen Übersetzung.
 | `_and %n more_::_and %n more_` | und %n weitere / und %n weitere | et %n autre / et %n autres |
 | `File no longer exists (ID %s)` | Datei existiert nicht mehr (ID %s) | Le fichier n'existe plus (ID %s) |
 | `%s (in the trash bin)` | %s (im Papierkorb) | %s (dans la corbeille) |
+| `%1$s (ID %2$s)` | %1$s (ID %2$s) | %1$s (ID %2$s) |
+| `%1$s (in the trash bin, ID %2$s)` | %1$s (im Papierkorb, ID %2$s) | %1$s (dans la corbeille, ID %2$s) |
 | `Indexed, text truncated` | Indexiert, Text gekürzt | Indexé, texte tronqué |
 | `Unknown reason (%s)` | Unbekannter Grund (%s) | Motif inconnu (%s) |
 | `This app does not know this code. It may come from a newer version of the backend.` | Diese App kennt diesen Code nicht. Er kann von einer neueren Fassung des Backends kommen. | Cette application ne connaît pas ce code. Il peut provenir d'une version plus récente du service. |
@@ -436,6 +438,8 @@ Ergebnis des Zählens, und jeder Eintrag trägt seinen Grund bei sich.
 - `Documents`: Im Französischen dasselbe Wort wie im Englischen. Eine erfundene Abweichung wäre eine falsche Übersetzung.
 - `Images`: Im Französischen dasselbe Wort wie im Englischen. Eine erfundene Abweichung wäre eine falsche Übersetzung.
 - `_%n minute_::_%n minutes_`: `%n minute` / `%n minutes` ist im Französischen in beiden Formen dasselbe wie im Englischen. Eine erfundene Abweichung wäre eine falsche Übersetzung.
+- `%1$s (ID %2$s)` (seit Quick-Task 260929-s7p, Issue #14): zwei Platzhalter und die
+  Abkürzung ID, die in jeder Sprache dieses Baums gleich geschrieben wird.
 
 **Befund zu `Findling`, weil diese Datei bisher das Gegenteil behauptet hat.** Der
 Abschnitt "Warum die Tabelle der Ergebnisseite 24 Zeilen hat" unten sagt, `Findling` sei

@@ -200,6 +200,8 @@ aus Plan 20-03. Diese Tabelle kann also nicht an einem Wortlaut zerbrechen.
 | `_and %n more_::_and %n more_` | und %n weitere / und %n weitere | y %n más / y %n más / y %n más |
 | `File no longer exists (ID %s)` | Datei existiert nicht mehr (ID %s) | El archivo ya no existe (ID %s) |
 | `%s (in the trash bin)` | %s (im Papierkorb) | %s (en la papelera) |
+| `%1$s (ID %2$s)` | %1$s (ID %2$s) | %1$s (ID %2$s) |
+| `%1$s (in the trash bin, ID %2$s)` | %1$s (im Papierkorb, ID %2$s) | %1$s (en la papelera, ID %2$s) |
 | `Indexed, text truncated` | Indexiert, Text gekürzt | Indexado, texto recortado |
 | `Unknown reason (%s)` | Unbekannter Grund (%s) | Motivo desconocido (%s) |
 | `This app does not know this code. It may come from a newer version of the backend.` | Diese App kennt diesen Code nicht. Er kann von einer neueren Fassung des Backends kommen. | Esta aplicación no conoce este código. Puede venir de una versión más reciente del servicio. |
@@ -430,6 +432,8 @@ keine Grenze, sondern das Ergebnis des Zählens, und jeder Eintrag trägt seinen
 - `Findling`: Eigenname der App, in jeder Sprache dasselbe Wort. Er steht als Schlüssel in
   `de.json` und muss deshalb in `es.json` stehen, hat aber keinen eigenen Wortlaut.
 - `PDF`: Eigenname eines Dateiformats, in jeder Sprache dieselbe Abkürzung.
+- `%1$s (ID %2$s)` (seit Quick-Task 260929-s7p, Issue #14): zwei Platzhalter und die
+  Abkürzung ID, die in jeder Sprache dieses Baums gleich geschrieben wird.
 
 Die Liste ist nicht geraten worden. Das Gate lief einmal mit leerem Mapping für `es` und
 meldete vier Funde, zwei Schlüssel über zwei Dateien; beide sind hier benannt, und für keinen

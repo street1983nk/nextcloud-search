@@ -757,25 +757,25 @@ $chip = static function (string $state, string $reason) use ($l, $skippedIcon, $
 											// that disappeared would take its count with
 											// it, and "the file is gone" is itself the
 											// answer to why it was never indexed.
-											$uid = is_string($example['uid'] ?? null) ? $example['uid'] : '';
+											// Every line carries its file id, so an admin
+											// can copy it into occ findling:diagnose or a
+											// report without clicking first.
 											$shown = !$resolved
 												? $l->t('File no longer exists (ID %s)', [(string)$fileId])
-												: ($trashed ? $l->t('%s (in the trash bin)', [$path]) : $path);
-											// The lookup takes a path in the shape the
-											// placeholder teaches, uid/files/rest, and
-											// PathResolverService builds exactly that as
-											// the reference (issue #14, review). A file
-											// outside the files folder has no such path,
-											// and neither has a trashed or vanished one:
-											// those rows carry only the id, which the
-											// lookup resolves either way.
-											$reference = is_string($example['reference'] ?? null) ? $example['reference'] : '';
-											$lookupPath = ($resolved && !$trashed && $uid !== '' && str_starts_with($reference, $uid . '/files/'))
-												? $reference
-												: '';
+												: ($trashed
+													? $l->t('%1$s (in the trash bin, ID %2$s)', [$path, (string)$fileId])
+													: $l->t('%1$s (ID %2$s)', [$path, (string)$fileId]));
+											// The click diagnoses by id and never by
+											// path. A path lookup runs through a member's
+											// folder and was the second face of issue #14
+											// (a Team Folder ACL hid the file from the
+											// member in the admin's request); the id
+											// lookup, PathResolverService::inspect over
+											// IFileAccess, does not depend on anybody's
+											// mount.
 											?>
 											<li>
-												<button type="button" class="findling-errors__example findling-path" data-findling-path="<?php p($lookupPath); ?>" data-findling-file-id="<?php p((string)$fileId); ?>"><?php p($shown); ?></button>
+												<button type="button" class="findling-errors__example findling-path" data-findling-file-id="<?php p((string)$fileId); ?>"><?php p($shown); ?></button>
 											</li>
 										<?php } ?>
 									</ul>

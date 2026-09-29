@@ -867,13 +867,14 @@
       })
     }
 
-    const examples = document.querySelectorAll('#findling-errors button[data-findling-path]')
+    const examples = document.querySelectorAll('#findling-errors button[data-findling-file-id]')
     Array.prototype.forEach.call(examples, function (button) {
       button.addEventListener('click', function () {
-        // The path where there is one and the file id where there is none: a row
-        // whose file id no longer resolves carries the number and nothing else,
-        // and that number is exactly what the lookup can still answer about.
-        const reference = button.dataset.findlingPath || button.dataset.findlingFileId || ''
+        // Always the file id (issue #14). A path lookup runs through a member's
+        // folder, and a Team Folder ACL can hide the file from that member in the
+        // admin's request; the id lookup does not depend on anybody's mount and
+        // answers for a vanished or trashed file as well.
+        const reference = button.dataset.findlingFileId || ''
         const block = document.getElementById('findling-diagnosis')
         if (block !== null) {
           block.scrollIntoView({ behavior: 'smooth', block: 'start' })

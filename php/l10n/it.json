@@ -74,6 +74,8 @@
         "_and %n more_::_and %n more_": ["e %n altro", "e %n altri", "e %n altri"],
         "File no longer exists (ID %s)": "Il file non esiste più (ID %s)",
         "%s (in the trash bin)": "%s (nel cestino)",
+        "%1$s (ID %2$s)": "%1$s (ID %2$s)",
+        "%1$s (in the trash bin, ID %2$s)": "%1$s (nel cestino, ID %2$s)",
         "Indexed, text truncated": "Indicizzato, testo troncato",
         "Unknown reason (%s)": "Motivo sconosciuto (%s)",
         "This app does not know this code. It may come from a newer version of the backend.": "Questa applicazione non conosce questo codice. Può provenire da una versione più recente del servizio.",

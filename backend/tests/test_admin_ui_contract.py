@@ -588,6 +588,9 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
         # Since plan 26-05: the name of the middle profile, which docs/profiles.md
         # spells Standard in German as well.
         "Standard": "the name of a profile, the same word in German as in English",
+        # Since quick task 260929-s7p (issue #14): the error list shows the id
+        # of every file, and ID is the same abbreviation in every language.
+        "%1$s (ID %2$s)": "two placeholders and the abbreviation ID, the same in every language of this tree",
     },
     # Spanish, read off the file on 25.09.2026 rather than guessed: the gate was
     # run once with an empty list and reported four findings, two keys over two
@@ -597,6 +600,9 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
     "es": {
         "Findling": "the name of the app, the same word in every language of this tree",
         "PDF": "the proper name of a file format, the same abbreviation in every language of this tree",
+        # Since quick task 260929-s7p (issue #14): the error list shows the id
+        # of every file, and ID is the same abbreviation in every language.
+        "%1$s (ID %2$s)": "two placeholders and the abbreviation ID, the same in every language of this tree",
     },
     # Italian, read off the file on 25.09.2026 rather than guessed: the gate was
     # run once with an empty list and reported six findings, three keys over two
@@ -614,6 +620,9 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
         "PDF": "the proper name of a file format, the same abbreviation in every language of this tree",
         # Since plan 26-05: Italian has taken the word over as it stands.
         "Standard": "the name of a profile, the word Italian itself uses for it",
+        # Since quick task 260929-s7p (issue #14): the error list shows the id
+        # of every file, and ID is the same abbreviation in every language.
+        "%1$s (ID %2$s)": "two placeholders and the abbreviation ID, the same in every language of this tree",
     },
     # Dutch, read off the file on 25.09.2026 rather than guessed: the gate was
     # run once with an empty list and reported eight findings, four keys over
@@ -632,6 +641,9 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
         # English does, and the placeholder is a model name that is not
         # translated in any language of this tree.
         "Model: %1$s": "model is the same word in Dutch, and an invented difference would be a mistranslation",
+        # Since quick task 260929-s7p (issue #14): the error list shows the id
+        # of every file, and ID is the same abbreviation in every language.
+        "%1$s (ID %2$s)": "two placeholders and the abbreviation ID, the same in every language of this tree",
     },
     # European Portuguese, read off the file on 25.09.2026 rather than guessed:
     # the gate was run once with an empty list and reported four findings, two
@@ -645,6 +657,9 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
     "pt_PT": {
         "Findling": "the name of the app, the same word in every language of this tree",
         "PDF": "the proper name of a file format, the same abbreviation in every language of this tree",
+        # Since quick task 260929-s7p (issue #14): the error list shows the id
+        # of every file, and ID is the same abbreviation in every language.
+        "%1$s (ID %2$s)": "two placeholders and the abbreviation ID, the same in every language of this tree",
     },
     # Brazilian Portuguese, read off the file on 25.09.2026 rather than guessed
     # and rather than copied from the pt_PT entry above: the gate was run once
@@ -656,6 +671,9 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
     "pt_BR": {
         "Findling": "the name of the app, the same word in every language of this tree",
         "PDF": "the proper name of a file format, the same abbreviation in every language of this tree",
+        # Since quick task 260929-s7p (issue #14): the error list shows the id
+        # of every file, and ID is the same abbreviation in every language.
+        "%1$s (ID %2$s)": "two placeholders and the abbreviation ID, the same in every language of this tree",
     },
     "fr": {
         "Findling": "the name of the app, the same word in all three languages",
@@ -672,6 +690,9 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
         # English does.
         "Standard": "the name of a profile, the same word in French",
         "Performance": "the name of a profile, the same word in French",
+        # Since quick task 260929-s7p (issue #14): the error list shows the id
+        # of every file, and ID is the same abbreviation in every language.
+        "%1$s (ID %2$s)": "two placeholders and the abbreviation ID, the same in every language of this tree",
     },
 }
 
@@ -3153,8 +3174,9 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     # two keys of plan 25-04 (D-25-13), nine of plan 26-05 (D-26-01, D-26-04),
     # 72 in and one out with plan 27-13 (UI-01, D-27-12), one of quick task
     # 260929-kii (the recount sentence), one of review WR-10 of phase 27 (the
-    # placed file with another checksum)
-    assert len(keys_of["de.json"]) == 289
+    # placed file with another checksum), two of quick task 260929-s7p (the
+    # file id on every line of the error list, issue #14)
+    assert len(keys_of["de.json"]) == 291
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:

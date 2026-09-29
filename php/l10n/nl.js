@@ -75,6 +75,8 @@ OC.L10N.register(
     "_and %n more_::_and %n more_": ["en nog %n", "en nog %n"],
     "File no longer exists (ID %s)": "Bestand bestaat niet meer (ID %s)",
     "%s (in the trash bin)": "%s (in de prullenbak)",
+    "%1$s (ID %2$s)": "%1$s (ID %2$s)",
+    "%1$s (in the trash bin, ID %2$s)": "%1$s (in de prullenbak, ID %2$s)",
     "Indexed, text truncated": "Geïndexeerd, tekst ingekort",
     "Unknown reason (%s)": "Onbekende reden (%s)",
     "This app does not know this code. It may come from a newer version of the backend.": "Deze app kent deze code niet. Hij kan van een nieuwere versie van de dienst komen.",
