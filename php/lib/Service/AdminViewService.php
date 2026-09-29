@@ -707,6 +707,13 @@ final class AdminViewService {
 			// Whether an admin ever stored a profile: "nothing chosen yet" and
 			// "economy chosen" are two different lines (Z1, Z2).
 			'profileStored' => $this->settingsService->profileStored(),
+			// The profile this app stored, read out of appconfig and not out of
+			// the container: the container reads the key once a round, so its
+			// "chosen" lags behind a save, and the select and the downward rule
+			// must start from what was saved (found live in plan 27-15).
+			'profileSaved' => $this->settingsService->profile(),
+			// What the container read last; only the comparison chosen against
+			// in force (Z14) uses it.
 			'profileChosen' => self::profileName(self::profileField($answered, 'chosen')),
 			'profileSuggested' => self::profileName(self::profileField($answered, 'suggested')),
 			'profileEffective' => self::profileName(self::profileField($answered, 'effective')),

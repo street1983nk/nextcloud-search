@@ -1966,8 +1966,13 @@
     const backend = view.backend || {}
 
     profile.stored = view.profileStored === true
+    // The saved profile out of appconfig (profileSaved), never the container's
+    // chosen, which lags one round behind a save.
+    const saved = profileCode(view.profileSaved)
+    profile.saved = profile.stored && saved !== '' ? saved : 'economy'
+    // What the container read last; only the shrink line compares it with the
+    // profile in force (Z14), the same as the template.
     const chosen = profileCode(view.profileChosen)
-    profile.saved = profile.stored && chosen !== '' ? chosen : 'economy'
     profile.suggested = profileCode(view.profileSuggested)
     profile.effective = profileCode(view.profileEffective)
     profile.precision = view.storedPrecision === 'fp32' ? 'fp32' : 'int8'

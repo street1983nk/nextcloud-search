@@ -2370,6 +2370,7 @@ ADMIN_SETTINGS = REPO_ROOT / "php" / "lib" / "Settings" / "Admin.php"
 PROFILE_SURFACE_KEYS = (
     "guardConfirmable",
     "profileStored",
+    "profileSaved",
     "profileChosen",
     "profileSuggested",
     "profileEffective",
@@ -2543,7 +2544,19 @@ def test_the_profile_block_has_one_select_with_three_profiles() -> None:
         "$profileForm = $profileStored ? $profileSaved : ($profileSuggested !== '' ? $profileSuggested : 'economy');"
         in template
     )
-    assert "$profileSaved = $profileStored && $profileChosen !== '' ? $profileChosen : 'economy';" in template
+    # The saved profile comes out of appconfig, never out of the container's
+    # chosen, which lags one round behind a save (found live in plan 27-15).
+    assert "$profileSavedKey = $profileKey($_['profileSaved'] ?? null);" in template
+    assert "$profileSaved = $profileStored && $profileSavedKey !== '' ? $profileSavedKey : 'economy';" in template
+    assert "$profileSaved = $profileStored && $profileChosen" not in template
+    script = SCRIPT.read_text(encoding="utf-8")
+    assert "const saved = profileCode(view.profileSaved)" in script
+    assert "profile.saved = profile.stored && saved !== '' ? saved : 'economy'" in script
+    # The shrink line keeps comparing the container's chosen with the profile
+    # in force, so the script defines it next to the saved one.
+    assert "const chosen = profileCode(view.profileChosen)" in script
+    view = ADMIN_VIEW.read_text(encoding="utf-8")
+    assert "'profileSaved' => $this->settingsService->profile()," in view
 
 
 def test_the_profile_block_has_no_advanced_area() -> None:

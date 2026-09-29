@@ -942,8 +942,10 @@ $profileSuggested = $profileKey($_['profileSuggested'] ?? null);
 $profileEffective = $profileKey($_['profileEffective'] ?? null);
 // What is saved and what the select shows. Without a stored profile Economy is
 // in force and the select is preset with the suggestion, which is saved only on
-// a click (Z1, Z2, SC1).
-$profileSaved = $profileStored && $profileChosen !== '' ? $profileChosen : 'economy';
+// a click (Z1, Z2, SC1). The saved profile comes out of appconfig (profileSaved)
+// and not out of the container's chosen, which lags one round behind a save.
+$profileSavedKey = $profileKey($_['profileSaved'] ?? null);
+$profileSaved = $profileStored && $profileSavedKey !== '' ? $profileSavedKey : 'economy';
 $profileForm = $profileStored ? $profileSaved : ($profileSuggested !== '' ? $profileSuggested : 'economy');
 // The three options are written out one by one below, so that the one select
 // with exactly three profiles is visible in the markup (SC1, ADM-04); the
