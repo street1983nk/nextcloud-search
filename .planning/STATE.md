@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
-status: planning
+status: executing
 stopped_at: Phase 28 context gathered
-last_updated: "2026-09-29T16:54:16.632Z"
-last_activity: 2026-09-29 - Phase 27 complete
+last_updated: "2026-09-29T21:10:32.953Z"
+last_activity: 2026-09-29
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 48
-  completed_plans: 48
+  total_plans: 62
+  completed_plans: 49
   percent: 67
 ---
 
@@ -21,21 +21,21 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 28 , Abnahme-Anfahrt
+**Current focus:** Phase 28, Abnahme-Anfahrt
 
 ## Current Position
 
-Phase: 28 (Abnahme-Anfahrt)
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-09-29 - Phase 27 complete
+Phase: 28 (Abnahme-Anfahrt), in Ausführung
+Plan: 2 of 14
+Status: Ready to execute
+Last activity: 2026-09-29
 
-Progress: [#######...] 67% (4 von 6 Phasen)
+Progress: [████████░░] 79%
 
 ## Naechster Schritt
 
-**/gsd:secure-phase 27** (T-27-01..50; AR-24-02 und AR-26-02 verfallen mit der Schreibroute),
-danach **/gsd:discuss-phase 28** (abnahme-anfahrt).
+**execute-phase 28 weiter mit 28-02** (28-01 fertig: Teilkorpus, Rechenblatt, Slotkosten,
+00-ablauf.md; b8e8c785, nur lokal).
 
 Phase-27-Abschluss (2026-09-29): 16/16 Plaene in 7 Wellen; Owner-Abnahmen 27-01, 27-15
 (gemeinsam per Playwright) und Phase ("ok abgenommen"); Push-Entscheid "push-now" =
@@ -92,6 +92,12 @@ Fuer v1.4 unmittelbar tragend:
 - Roadmap v1.4 (27.09.): Reihenfolge 24 -> 29 streng seriell als Sicherheitsbedingung
   (MOD-01 vor jedem Modellschalter, H1 vor H2, N-Slot-Probe nach H2, Abnahme-Anfahrt vor
   Release). Rueckfall bei K1: Phase 26 schrumpft auf Befund, Entscheid datiert vor H2-Bau.
+
+- 28-01 (29.09.): Teilkorpus-Bereiche und Seitenziehung als Kopie im Box-Skript (kein Pillow,
+  kein sys.path), per Test gegen build_load_corpus gepinnt. Rechnung_anon zaehlt Gewichte,
+  Schneider und eine Aktivierung nicht doppelt (in MAIN_PROCESS_BASELINE_BYTES aus B2),
+  Spurreserve abgezogen. Deckel-Vorschlag 58,74 USD, mit Anker-Zelle 59,43 USD (Saetze
+  29.09.), Freigabe durch den Owner offen (SC1, Checkpoint C1).
 
 ### Termine und Owner-Checkpoints
 
@@ -154,9 +160,9 @@ Aeltere Merker:
 
 ## Session Continuity
 
-Last session: 2026-09-29T16:54:16.614Z
+Last session: 2026-09-29T21:10:20.025Z
 Stopped at: Phase 28 context gathered
-Resume file: .planning/phases/28-abnahme-anfahrt/28-CONTEXT.md
+Resume file: None
 
 ## Operator Next Steps
 
