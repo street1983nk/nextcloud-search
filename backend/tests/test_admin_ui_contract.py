@@ -2794,6 +2794,83 @@ def test_the_script_sends_only_profile_and_precision() -> None:
         assert all(word not in body.lower() for _, body in posts), word
 
 
+# Plan 27-13 (SC4, UI-01): the part of the template and of the script that is
+# the block "Performance profile", cut at markers that stand once in each file.
+# The template part starts at the comment above the variables of the block,
+# because most of its sentences live in the maps there and not in the markup.
+PROFILE_TEMPLATE_START = " * The performance profile of phase 27"
+PROFILE_TEMPLATE_END = '<div id="findling-rules" class="section">'
+PROFILE_SCRIPT_START = ' * Block "Performance profile" (plan 27-12'
+PROFILE_SCRIPT_END = "  function render (view) {"
+TEMPLATE_SENTENCE = re.compile(r"\$l->t\(\s*'((?:[^'\\]|\\.)*)'")
+SCRIPT_SENTENCE = re.compile(r"\bt\(\s*'findling'\s*,\s*'((?:[^'\\]|\\.)*)'")
+TEMPLATE_PLURAL = re.compile(r"\$l->n\(")
+SCRIPT_PLURAL = re.compile(r"\bn\(\s*'findling'")
+
+
+def profile_block_sentences() -> set[str]:
+    """Every catalogue key the template and the script of the profile block ask for."""
+    template = cut_between(TEMPLATE.read_text(encoding="utf-8"), PROFILE_TEMPLATE_START, PROFILE_TEMPLATE_END)
+    script = cut_between(SCRIPT.read_text(encoding="utf-8"), PROFILE_SCRIPT_START, PROFILE_SCRIPT_END)
+    # A plural call would need its composite key; the block has none, and one
+    # that arrives is a red line here rather than a sentence this gate skips.
+    assert TEMPLATE_PLURAL.search(template) is None
+    assert SCRIPT_PLURAL.search(script) is None
+    return {
+        match.replace("\\'", "'")
+        for pattern, part in ((TEMPLATE_SENTENCE, template), (SCRIPT_SENTENCE, script))
+        for match in pattern.findall(part)
+    }
+
+
+def scan_missing_sentences(sentences: set[str], catalogues: dict[str, frozenset[str]]) -> list[str]:
+    """Findings for every sentence a catalogue does not carry."""
+    return [
+        f"{name}: lacks {sentence!r}"
+        for name, keys in sorted(catalogues.items())
+        for sentence in sorted(sentences - keys)
+    ]
+
+
+def test_every_sentence_of_the_profile_block_is_in_every_catalogue() -> None:
+    """SC4 of phase 27: every text of the block in all eight languages, sixteen files.
+
+    The key set gate holds the sixteen files equal to de.json and says nothing
+    about whether de.json carries what the page asks for; a sentence written
+    into the template and forgotten in all sixteen files passes it and ships
+    English on every page. This gate reads the sentences off the block itself,
+    template and script, and asks for each of them in each file.
+    """
+    sentences = profile_block_sentences()
+
+    # The anti vacuity clause: the cut found the block and its sentences, the
+    # bare progress line, the step only the script names and the six codes of
+    # D-27-20 among them.
+    for sentence in (
+        "Apply and check",
+        "Stay on Economy",
+        "More accurate search model (fp32)",
+        "Check running.",
+        "OCR with %s slots",
+        "downloading the model, %1$s of %2$s",
+        "Not enough disk space for the fp32 model.",
+        "The available memory could not be read.",
+        "The check was interrupted by a restart of the backend.",
+        "The running indexing batch did not end within %s.",
+        "The check stopped with an error.",
+        "The index is being rebuilt right now. The check is possible afterwards.",
+    ):
+        assert sentence in sentences, sentence
+    assert len(sentences) >= 72, len(sentences)
+
+    findings = scan_missing_sentences(sentences, {path.name: frozenset(catalogue_of(path)) for path in L10N_CATALOGUES})
+
+    assert findings == []
+    # And the scan can go red: a catalogue that lost one sentence of the block
+    # is exactly one finding.
+    assert len(scan_missing_sentences({"Apply", "Profile"}, {"a.json": frozenset({"Profile"})})) == 1
+
+
 def test_the_two_translation_files_carry_the_same_keys() -> None:
     """IN-02, and the reason it is a gate rather than a single deletion.
 
@@ -2814,6 +2891,10 @@ def test_the_two_translation_files_carry_the_same_keys() -> None:
     # absence is asserted by name, so that a revert is a red test and not a
     # silent return.
     assert "Indexing, about %s left" not in keys
+    # D-27-12: the occ way back of the guard is gone from the page, and so is its
+    # sentence, from every one of the sixteen files and asserted by name.
+    for path in L10N_CATALOGUES:
+        assert "To lift the reduction after checking the memory: %1$s" not in catalogue_of(path), path.name
 
 
 def test_the_german_catalogue_covers_both_german_language_codes() -> None:
@@ -2951,6 +3032,22 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     translations under the same dated reservation as the rest, and the tables
     of the five language documents do not carry their rows yet. Whoever moves
     it next writes the next paragraph.
+
+    It stands at 287 since 29.09.2026, and the move is plan 27-13 of phase 27:
+    72 keys in, one key out. The 72 are the block "Performance profile" of
+    27-UI-SPEC.md (UI-01, SC4), every sentence the template and the script of
+    that block ask the catalogue for: the facts, the select with its three
+    descriptions, the fp32 tick, the reindex line, the env lines, the buttons,
+    the eight probe steps with the bare "Check running.", the verdict card, the
+    thirteen causes (the five of D-27-20 among them), the start errors with
+    the code rebuilding and the five precision verdicts. The one out is "To
+    lift the reduction after checking the memory: %1$s", the occ way back of
+    the guard, which D-27-12 replaced with the button "Check again". All
+    sixteen files moved in one commit; the German wordings are the ones of the
+    UI-SPEC the owner approved on 29.09.2026, the six other languages are
+    machine translations under the same dated reservation as the rest, and
+    the tables of the five language documents do not carry the rows yet.
+    Whoever moves it next writes the next paragraph.
     """
     for language, twin in ((L10N_JSON, L10N_DE_DE_JSON), (L10N_JS, L10N_DE_DE_JS)):
         assert twin.is_file(), f"{twin.name} is missing, so everybody on de_DE reads this app in English"
@@ -2975,8 +3072,9 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     }
 
     assert len(set(map(frozenset, keys_of.values()))) == 1, f"the four catalogues disagree: {sorted(keys_of)}"
-    # two keys of plan 25-04 (D-25-13), nine of plan 26-05 (D-26-01, D-26-04)
-    assert len(keys_of["de.json"]) == 216
+    # two keys of plan 25-04 (D-25-13), nine of plan 26-05 (D-26-01, D-26-04),
+    # 72 in and one out with plan 27-13 (UI-01, D-27-12)
+    assert len(keys_of["de.json"]) == 287
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:
