@@ -47,12 +47,42 @@ Probe auf dem lokalen HaRP-Harness, mit HEAD-Abbild und HEAD-Companion.
   `--rm-data`, danach Memory 0, gleiches Abbild, Datenvolume erhalten, Profil
   economy erhalten
 
+## Owner-Abnahme 29.09.
+
+- Signal: "approved"; gemeinsam per Playwright auf der Adminseite des Harness
+  (`/settings/admin/findling`)
+- Block "Leistungsprofil" steht vor "Regeln und Grenzen", genau drei Profile
+- fp32-Häkchen nur bei Standard und Leistung, mit Größenangabe 448,5 MB
+- Knöpfe "Übernehmen und prüfen" und "Bei Sparsam bleiben", kein
+  Erweitert-Bereich; "Übernehmen und prüfen" gesperrt ohne Änderung
+- Standard/int8 live: Fortschrittszeile "Prüfung läuft: OCR mit einem Slot",
+  Hinweis auf pausierte Indexierung, Verdikt Passt, gespeichert (occ profile
+  standard), aria-live-Ansage und Fokus auf der Verdikt-Karte, Karte bleibt
+  nach Neuladen
+- Abwärtsweg auf Sparsam: Knopf heißt "Übernehmen", speichert ohne Probe (occ
+  profile economy)
+- Befund, behoben in 9d6a11c3: das Auswahlfeld wurde aus `profile.chosen` des
+  Containers vorbelegt (hängt eine Runde nach) statt aus dem gespeicherten
+  Wert; neu `profileSaved` aus appconfig in AdminViewService, Template und
+  admin.js; live bestätigt (economy gespeichert, Container noch standard,
+  Auswahl zeigt Sparsam, keine Konsolenfehler)
+- Harness-Hinweis ohne Produktfehler: opcache `revalidate_freq` 60 s und der
+  `?v=`-Cache von admin.js verzögerten die Sichtbarkeit; im Release wechselt
+  die Version
+- Einzige Konsolenfehler kamen von Nextcloud user_status (404), nicht von
+  Findling
+- Nicht live gefahren: fp32 (siehe Lücken)
+- Getrennter Befund, nicht Teil von 27-15, eigener Quick-Fix folgt:
+  Deckungsgrad zeigte "607 von 587", weil der Nenner `files_seen` nur beim
+  einmaligen Crawl entsteht und nach Ereignis-Indexierung nicht mitwächst
+  (Altfehler v1.0)
+
 ## Lücken
 
 - fp32-Durchlauf nicht gefahren: er lädt 470268510 Bytes aus dem Release und
   stößt bei fits eine Neuberechnung aller Vektoren an; auf der Adminseite als
   standard/fp32 auswählbar, wenn der Owner ihn sehen will
-- Die Fläche selbst (Texte, Fokus, Fortschrittszeile) ist hier nur über die
-  Routen belegt; die Sichtprüfung ist die Owner-Abnahme
+- Die Fläche selbst (Texte, Fokus, Fortschrittszeile) ist in den Rohdaten nur
+  über die Routen belegt; die Sichtprüfung steht unter "Owner-Abnahme 29.09."
 - Beobachtung ohne Befund: standard hat auf dieser Box 1 Slot; das folgt aus
   der Formel mit MemAvailable rund 4,8 GiB (0,4 x 0,8 x M minus Grundlast)
