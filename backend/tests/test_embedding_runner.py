@@ -20,7 +20,7 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
@@ -810,6 +810,100 @@ async def test_stand_down_waits_for_the_round_and_hands_the_rows_back(track: Emb
     assert await runner.stand_down(budget=1.0)
     assert await runner.unlock_held() == 0
     await runner.aclose()
+
+
+async def _until(condition: Callable[[], bool], *, seconds: float = 5.0) -> None:
+    """Wait until ``condition`` holds, failing after ``seconds``."""
+    for _ in range(int(seconds / 0.01)):
+        if condition():
+            return
+        await asyncio.sleep(0.01)
+    assert condition()
+
+
+async def test_a_probe_hold_lets_the_round_end_parks_and_goes_on_after_release(
+    track: EmbeddingTrack, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # D-27-05: no new round while held; the round in flight ends and parked is
+    # set, which is what the pre-check waits for.
+    runner = _runner(track, _LaneQueue(), tick=0.0)
+    real = runner.run_once
+    started = asyncio.Event()
+    gate = asyncio.Event()
+    calls: list[int] = []
+
+    async def gated() -> str:
+        calls.append(1)
+        if len(calls) == 1:
+            started.set()
+            await gate.wait()
+        return await real()
+
+    monkeypatch.setattr(runner, "run_once", gated)
+    runner.arm()
+    stop = asyncio.Event()
+    task = asyncio.ensure_future(runner.run(stop))
+    try:
+        await asyncio.wait_for(started.wait(), timeout=5)
+        runner.hold_for_probe()
+        gate.set()
+        await _until(runner.parked.is_set)
+        await asyncio.sleep(0.05)
+        assert len(calls) == 1
+        assert runner.parked.is_set()
+
+        runner.release_probe_hold()
+        await _until(lambda: len(calls) >= 2)
+    finally:
+        stop.set()
+        await asyncio.wait_for(task, timeout=5)
+
+
+async def test_a_probe_hold_of_the_runner_arms_nothing_and_stops_cleanly(track: EmbeddingTrack) -> None:
+    queue = _LaneQueue()
+    runner = _runner(track, queue)
+    runner.arm()
+    runner.hold_for_probe()
+    stop = asyncio.Event()
+    task = asyncio.ensure_future(runner.run(stop))
+    await asyncio.sleep(0.05)
+    runner.silence()
+    runner.release_probe_hold()
+    await asyncio.sleep(0.05)
+
+    assert queue.lanes == []
+    assert runner.parked.is_set()
+    stop.set()
+    await asyncio.wait_for(task, timeout=2)
+
+
+@pytest.mark.parametrize(
+    ("engine", "built", "weights"),
+    [(ENGINE_LOADED, True, "int8"), ("cold", True, "int8"), ("cold", True, "fp32"), (ENGINE_LOADED, False, "fp32")],
+)
+def test_the_need_through_the_neutral_calculation_equals_the_old_sum(
+    store: Store, vectors: VectorStore, writer: IndexBatchWriter, engine: str, built: bool, weights: str
+) -> None:
+    # One spelling for one calculation (D-27-07): bit for bit the sum _need
+    # spelled out before it went through probe.pending_load_bytes.
+    track = EmbeddingTrack(
+        vectors=vectors,
+        chunker=_cut if built else None,
+        model=_FakeModel() if built else None,
+        store=store,
+        index=writer.index,
+        index_dir=writer.directory,
+    )
+    old = EMBED_ACTIVATION_BYTES + EMBED_LANE_RESERVE_BYTES
+    if not built:
+        old += CUTTER_LOAD_BYTES
+    if engine != ENGINE_LOADED:
+        old += EMBED_WEIGHTS_LOAD_BYTES
+        if weights == "fp32":
+            old += FP32_EXTRA_BYTES
+    runner = _runner(track, _LaneQueue(), engine=engine)
+
+    assert runner._need(weights) == old
 
 
 # -- the indexing loop and the runner together (T1, T2, T4) ------------------

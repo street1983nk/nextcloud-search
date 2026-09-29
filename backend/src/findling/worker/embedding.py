@@ -50,14 +50,9 @@ from typing import Any, Final, Protocol
 
 from tantivy import Index
 
-from findling import lane, memory_guard, profile
+from findling import lane, memory_guard, probe, profile
 from findling.config import (
-    CUTTER_LOAD_BYTES,
-    EMBED_ACTIVATION_BYTES,
     EMBED_CLAIM_BATCH,
-    EMBED_LANE_RESERVE_BYTES,
-    EMBED_WEIGHTS_LOAD_BYTES,
-    FP32_EXTRA_BYTES,
     settings,
 )
 from findling.embed.chunker import ChunkSpan, chunk_spans, make_splitter
@@ -1427,6 +1422,12 @@ class EmbedRunner:
         self._memory_refused_at: float | None = None
         self._in_flight = False
         self._armed = asyncio.Event()
+        # Set while no pre-check holds the runner (D-27-05), apart from the
+        # armed flag for the reason Poller gives: arm and silence belong to the
+        # enabled handler and the lifespan. Set at birth, so a restart never
+        # starts held.
+        self._probe_release = asyncio.Event()
+        self._probe_release.set()
         # Set whenever no round is running. The indexing loop waits on it after
         # the level turned Economy, before it claims without a lane.
         self.parked = asyncio.Event()
@@ -1451,6 +1452,17 @@ class EmbedRunner:
     def silence(self) -> None:
         """Stop running rounds without ending the task."""
         self._armed.clear()
+
+    def hold_for_probe(self) -> None:
+        """Start no further round until :meth:`release_probe_hold` (D-27-05).
+
+        The round in flight ends as usual; :attr:`parked` is set once it has.
+        """
+        self._probe_release.clear()
+
+    def release_probe_hold(self) -> None:
+        """Let the rounds go on. Arms nothing: a silenced runner stays silent."""
+        self._probe_release.set()
 
     async def stand_down(self, *, budget: float = RUNNER_STAND_DOWN_SECONDS) -> bool:
         """Silence, wait for the round in flight, and hand the held rows back.
@@ -1494,6 +1506,10 @@ class EmbedRunner:
         while not stop_event.is_set():
             if not self._armed.is_set():
                 await _first_of(self._armed.wait(), stop_event.wait())
+                continue
+            if not self._probe_release.is_set():
+                # A pre-check holds the lane; no round runs, so parked is set.
+                await _first_of(self._probe_release.wait(), stop_event.wait())
                 continue
             state = ROUND_PAUSED
             try:
@@ -1656,15 +1672,19 @@ class EmbedRunner:
         return memory_guard.admits(self._headroom(), need=self._need(weights))
 
     def _need(self, weights: str) -> int:
-        """What one round may take: activations, one OCR page of reserve, load costs."""
-        need = EMBED_ACTIVATION_BYTES + EMBED_LANE_RESERVE_BYTES
-        if not self._track.cutter_built:
-            need += CUTTER_LOAD_BYTES
-        if self._engine() != ENGINE_LOADED:
-            need += EMBED_WEIGHTS_LOAD_BYTES
-            if weights == WEIGHTS_FP32:
-                need += FP32_EXTRA_BYTES
-        return need
+        """What one round may take: activations, one OCR page of reserve, load costs.
+
+        One spelling for one calculation: the pre-check counts the same load
+        costs through the same function (D-27-07). No parallel embed slots and
+        no writer growth here, so the sum is the one this method always had.
+        """
+        return probe.pending_load_bytes(
+            cutter_built=self._track.cutter_built,
+            engine_loaded=self._engine() == ENGINE_LOADED,
+            fp32=weights == WEIGHTS_FP32,
+            embed_slots=0,
+            writer_heap_delta=0,
+        )
 
     # -- plumbing --------------------------------------------------------
 
