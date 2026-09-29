@@ -1432,8 +1432,19 @@ PHP_TREE_HASH_TODAY = "460e2d6b7a11903bb783b722693f113f0ace524d67bc8cae5a0335395
 # bytes of main.py (the watch as a lifespan task before the poller). One file
 # came and none went, so PACKAGE_FILES_TODAY moves to 67. The PHP pair does not
 # move: no plan of this wave touches a PHP file.
+# Moved on 2026-09-29 by the review fixes of phase 26: three of the 67 files
+# changed their bytes. extract/sandbox.py resets the halt flag before the child
+# start and rechecks it once the handle is visible, so a halt inside the start
+# window ends in a recycle instead of being erased or read as the kernel's kill
+# (CR-01); worker/poller.py hands the held rows back in the catch-all of run()
+# before the next claim replaces them (WR-01) and writes the multi slot marker
+# CHOSEN first, PASS last, emptying both on every way out (WR-02);
+# worker/watch.py clears both marker keys in note_shutdown_begins and in
+# restore, which also sweeps a choice that lost its mark. No file came and none
+# went, so PACKAGE_FILES_TODAY stays at 67. The PHP pair does not move: the
+# review fixes touch no PHP file.
 PACKAGE_FILES_TODAY = 67
-PACKAGE_TREE_HASH_TODAY = "bb0c23829f835c9ed67a281b97eabaa472079b15fa353ae1b005382d6806eed0"
+PACKAGE_TREE_HASH_TODAY = "04b56cddc978aeaf90285b89c0acb1fb9bcb4a100bf94197396c8229686cc4d6"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
