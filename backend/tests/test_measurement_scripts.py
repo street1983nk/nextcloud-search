@@ -670,8 +670,12 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # FileStateService.php (revokeFailures takes back skips but the OCR memo),
 # QueueService.php and Version001300Date20260927000000.php (comments and log
 # lines) changed their bytes. PHP_FILES_TODAY stays at 74.
-PHP_FILES_TODAY = 74
-PHP_TREE_HASH_TODAY = "352901146ade72e04af954af4ca7a4c3fca4079f66a6174745638964885da268"
+# Measured again on release/1.3 for the unreadable repair of 1.3.1: two files
+# came, php/lib/Migration/Version001301Date20260929000000.php and its unit
+# test (every skipped(unreadable) verdict requeued once on update, issue #14).
+# No file changed its bytes or went, so PHP_FILES_TODAY moves to 76.
+PHP_FILES_TODAY = 76
+PHP_TREE_HASH_TODAY = "4ea075b2dda9053f4a8b26ddbdd9fdc872a523c4eff202593cae61851d53620a"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
