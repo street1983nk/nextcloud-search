@@ -82,7 +82,7 @@ from typing import Final
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from findling import guard, lane, precision
+from findling import guard, lane, precision, probe
 from findling.api import resources
 from findling.config import settings
 from findling.embed.engine import engine_precision, engine_state
@@ -177,13 +177,16 @@ class ModelReport(BaseModel):
     ``findling.precision.VERDICTS``, the empty string when there is nothing to
     say. ``reembedRunning`` is true while the redelivery cursor of the vector
     stock is set; the progress of the sweep is ``embedded`` against ``indexed``
-    and no figure of its own (D-25-08).
+    and no figure of its own (D-25-08). ``chunks`` is the row count of the
+    vector stock, nought without one: the page estimates how long a switch of
+    the precision embeds again from it (D-27-03).
     """
 
     precisionChosen: str | None = None
     precisionActive: str | None = None
     precisionVerdict: str = ""
     reembedRunning: bool = False
+    chunks: int = 0
 
 
 class LaneReport(BaseModel):
@@ -197,6 +200,23 @@ class LaneReport(BaseModel):
     reason: str = ""
 
 
+class ProbeReport(BaseModel):
+    """Whether this container can run the pre-check, and whether one runs now.
+
+    ``supported`` is true on every container that carries this field, so the
+    page knows without a click that the check can be started (Z15); an older
+    container answers without the block. ``running`` says a check runs, in
+    another tab as well (Z6), and ``step`` is one word out of
+    ``findling.probe.STEPS``, the empty string without a running check. Read out
+    of ``findling.probe.snapshot()``; the route measures nothing for this
+    block (T-07-04).
+    """
+
+    supported: bool = True
+    running: bool = False
+    step: str = ""
+
+
 class GuardReport(BaseModel):
     """The memory guard of this process: the level it lowered to, why, and the way back.
 
@@ -208,8 +228,10 @@ class GuardReport(BaseModel):
     guard lowered to and None without a lowering. ``cause`` is one word out of
     the closed set ``findling.guard.CAUSES``, the empty string without a
     lowering; ``since`` the epoch second of the lowering. ``token`` exists for
-    one purpose only: the admin confirms it through occ to lift the lowering
-    (D-26-04), and it is the empty string without one. The three slot fields
+    one purpose only: it lifts the lowering once the admin presses the button
+    "Erneut prüfen" and the pre-check fits (D-26-04, D-27-12). It stays here,
+    the PHP side reads it server side and no page shows it; it is the empty
+    string without a lowering. The three slot fields
     say what the throttle let run against what the profile asked for (D-26-02).
     The route measures nothing for this block (T-26-27).
     """
@@ -354,6 +376,10 @@ class StatusResponse(BaseModel):
     # so the state database knows nothing of it; the guard task keeps its own
     # copy there and restores it at start.
     guard: GuardReport = Field(default_factory=GuardReport)
+    # The pre-check (plan 27-11, PRUEF-01). A process value like engineState,
+    # so the state database knows nothing of it; the check keeps its own copy
+    # there and restores it at start.
+    probe: ProbeReport = Field(default_factory=ProbeReport)
     note: str = ""
 
 
@@ -415,6 +441,13 @@ def _lane_report() -> LaneReport:
     """The lane state of this process, out of ``findling.lane.snapshot()`` and nothing else."""
     state = lane.snapshot()
     return LaneReport(mode=state.mode, reason=state.reason)
+
+
+def _probe_report() -> ProbeReport:
+    """The pre-check of this process, out of ``findling.probe.snapshot()`` and nothing else."""
+    state = probe.snapshot()
+    running = state.state == probe.STATE_RUNNING
+    return ProbeReport(running=running, step=state.step if running else "")
 
 
 def _guard_report() -> GuardReport:
@@ -531,6 +564,7 @@ def _volume() -> StatusResponse:
         model=_model_report(),
         lane=_lane_report(),
         guard=_guard_report(),
+        probe=_probe_report(),
         lowDisk=resources.low_disk(),
         diskFreeBytes=free,
         diskTotalBytes=total,
@@ -539,8 +573,8 @@ def _volume() -> StatusResponse:
     )
 
 
-def _embedded() -> tuple[int, str]:
-    """How many documents carry a vector, and the note that belongs to that figure.
+def _embedded() -> tuple[int, int, str]:
+    """How many documents and chunks carry a vector, and the note that belongs to them.
 
     Its own function because it needs its own try, and the shape of that try is
     the one :func:`report` uses one file over: ``sqlite3.Error`` next to
@@ -563,19 +597,19 @@ def _embedded() -> tuple[int, str]:
     """
     resolved = settings()
     if not resolved.vectors_db.is_file():
-        return (0, NO_VECTORS_YET)
+        return (0, 0, NO_VECTORS_YET)
 
     try:
         vectors = open_vectors(resolved.vectors_db, read_only=True)
     except (OSError, sqlite3.Error, VectorStoreError) as error:
         LOGGER.warning("the vector database could not be opened, an %s", type(error).__name__)
-        return (0, VECTORS_UNREADABLE)
+        return (0, 0, VECTORS_UNREADABLE)
 
     try:
-        return (vectors.document_count(), "")
+        return (vectors.document_count(), vectors.chunk_count(), "")
     except sqlite3.Error as error:
         LOGGER.warning("the vector database could not be read, an %s", type(error).__name__)
-        return (0, VECTORS_UNREADABLE)
+        return (0, 0, VECTORS_UNREADABLE)
     finally:
         # Opened per call rather than kept, for the reason the state database is:
         # this route is asked rarely, by one admin page, and a connection of its
@@ -659,6 +693,8 @@ def _of(store: Store, volume: StatusResponse) -> StatusResponse:
         lane=volume.lane,
         # Carried over like the lane, for the same Pitfall 2.
         guard=volume.guard,
+        # Carried over like the guard, for the same Pitfall 2.
+        probe=volume.probe,
         note=volume.note,
         lowDisk=volume.lowDisk,
         diskFreeBytes=volume.diskFreeBytes,
@@ -702,8 +738,14 @@ def _counted() -> StatusResponse:
     # it there are no counters at all, while a missing vector stock costs
     # exactly one of them. Every branch below therefore overwrites this note and
     # none of them appends to it.
-    embedded, vector_note = _embedded()
-    volume = volume.model_copy(update={"embedded": embedded, "note": vector_note})
+    embedded, chunks, vector_note = _embedded()
+    volume = volume.model_copy(
+        update={
+            "embedded": embedded,
+            "note": vector_note,
+            "model": volume.model.model_copy(update={"chunks": chunks}),
+        }
+    )
 
     if not resolved.state_db.is_file():
         return volume.model_copy(update={"note": NO_STATE_YET})

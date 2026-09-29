@@ -78,6 +78,7 @@ from findling.config import (
 from findling.embed import model_probe, weights
 from findling.extract.errors import ChildKilled, ExtractionOutcome, Reason, State
 from findling.extract.sandbox import ExtractionWorker
+from findling.nc.client import fetch_release_asset
 from findling.profile import Profile
 from findling.store.repo import Store, open_store
 
@@ -291,11 +292,13 @@ class ProbeRun:
         runner: RunnerLike,
         pool: PoolLike,
         models_dir: Path,
-        fetch: weights.FetchAsset,
         rebuild_may_start: Callable[[], bool],
         engine_loaded: Callable[[], bool],
         cutter_built: Callable[[], bool],
         embed_slots: Callable[[], int],
+        # The fetch of the release asset by default; it runs only inside a
+        # check an admin started, never at the start of the container (D-24-05).
+        fetch: weights.FetchAsset = fetch_release_asset,
         state_path: Path | None = None,
         persist: bool = True,
         headroom: Callable[[], int | None] = memory_guard.headroom_bytes,

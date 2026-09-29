@@ -649,6 +649,16 @@ class Poller:
         """
         return self._track
 
+    @property
+    def pool(self) -> SlotPool:
+        """The slot pool of this poller.
+
+        Public for the lifespan (plan 27-11), which hands it to the pre-check:
+        the check gives the idle children back before it measures, so their
+        import costs do not hide in its headroom (27-RESEARCH.md Pitfall 5).
+        """
+        return self._pool
+
     def attach_runner(self, runner: EmbedRunner | None) -> None:
         """Know the embed runner, so a pass can wait for it to park (IDX-08).
 

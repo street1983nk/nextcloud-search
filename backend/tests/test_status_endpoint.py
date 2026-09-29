@@ -51,7 +51,7 @@ from fastapi.testclient import TestClient
 from tantivy import Document, Index
 
 from conftest import APP_VERSION, CONSTITUENTS, Corpus
-from findling import guard, lane, memory_guard, precision
+from findling import guard, lane, memory_guard, precision, probe
 from findling.api import resources
 from findling.api.resources import ReadSide
 from findling.api.status import NO_VECTORS_YET, PROFILE_VALUE_KEYS, STATE_UNREADABLE, VECTORS_UNREADABLE, report
@@ -124,6 +124,9 @@ FIELDS = {
     "model",
     "lane",
     "guard",
+    # The pre-check of plan 27-11 (PRUEF-01): whether this container can run
+    # it, and whether one runs right now, in another tab as well.
+    "probe",
     "note",
 }
 
@@ -266,6 +269,9 @@ def test_the_second_track_is_counted_separately_and_stays_inside_indexed(
     assert answer["indexed"] == indexed_volume.documents
     assert answer["embedded"] <= answer["indexed"]
     assert answer["note"] == ""
+    # The rows of the stock, for the estimate of a re-embedding (D-27-03):
+    # seven chunks over five documents, a count over rows and not over files.
+    assert answer["model"]["chunks"] == 7
 
 
 def test_a_container_whose_second_track_has_not_started_reports_nought_embedded(
@@ -1366,6 +1372,7 @@ def test_a_container_that_knows_nothing_reports_int8_and_the_inline_lane(
         "precisionActive": "int8",
         "precisionVerdict": "",
         "reembedRunning": False,
+        "chunks": 0,
     }
     # The resting state of findling.lane: inline, parked for economy, because
     # the effective level before the first profile read is economy (D-24-02).
@@ -1567,3 +1574,64 @@ def test_asking_for_the_status_hashes_no_weights_file(client: TestClient, sign: 
     source = STATUS_SOURCE.read_text(encoding="utf-8")
     assert "findling.embed.weights" not in source
     assert "hashlib" not in source
+
+
+# The block of plan 27-11 (PRUEF-01): the page knows without a click whether
+# this container can run the pre-check (Z15) and whether one runs (Z6).
+
+PROBE_AT_REST = {"supported": True, "running": False, "step": ""}
+
+
+@pytest.mark.parametrize("branch", BRANCHES)
+def test_a_container_without_a_check_reports_the_probe_at_rest(
+    client: TestClient, sign: Sign, request: pytest.FixtureRequest, branch: str
+) -> None:
+    assert _answer(client, sign, request, branch)["probe"] == PROBE_AT_REST
+
+
+@pytest.mark.parametrize("branch", BRANCHES)
+def test_a_running_check_is_reported_with_its_step(
+    client: TestClient, sign: Sign, request: pytest.FixtureRequest, branch: str
+) -> None:
+    probe.begin("0123456789abcdef", "standard", "int8", 1_800_000_000.0)
+    probe.note_step("ocr_one")
+
+    assert _answer(client, sign, request, branch)["probe"] == {"supported": True, "running": True, "step": "ocr_one"}
+
+
+@pytest.mark.parametrize("branch", BRANCHES)
+def test_a_finished_check_is_no_longer_reported_as_running(
+    client: TestClient, sign: Sign, request: pytest.FixtureRequest, branch: str
+) -> None:
+    probe.begin("0123456789abcdef", "standard", "int8", 1_800_000_000.0)
+    probe.note_step("calc")
+    probe.finish("fits", "", {"slots": 2}, fp32_fetched=False, fp32_deleted=False, now=1_800_000_010.0)
+
+    assert _answer(client, sign, request, branch)["probe"] == PROBE_AT_REST
+
+
+def test_asking_for_the_probe_block_reads_the_snapshot_and_nothing_else() -> None:
+    # T-07-04: a poll of the admin page is no measurement. The block reads the
+    # snapshot once; no headroom, no child, no orchestrator.
+    source = STATUS_SOURCE.read_text(encoding="utf-8")
+
+    assert source.count("= probe.snapshot()") == 1
+    assert "probe_run" not in source
+    assert "headroom" not in source
+
+
+def test_the_guard_docstring_names_the_button_and_not_occ() -> None:
+    # D-27-12: the token is lifted through the check of the page now.
+    source = STATUS_SOURCE.read_text(encoding="utf-8")
+    block = source[source.index("class GuardReport") : source.index("class StatusResponse")]
+
+    assert "Erneut prüfen" in block
+    assert "occ" not in block
+
+
+def test_a_container_without_a_vector_stock_reports_nought_chunks(
+    client: TestClient, sign: Sign, indexed_volume: Corpus
+) -> None:
+    (indexed_volume.root / "vectors.db").unlink()
+
+    assert _status(client, sign("admin"))["model"]["chunks"] == 0

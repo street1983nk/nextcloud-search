@@ -33,7 +33,7 @@ import contextlib
 import logging
 import os
 import sqlite3
-from collections.abc import AsyncIterator, Callable, Mapping, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from concurrent.futures import Future
 from contextlib import asynccontextmanager
 from functools import partial
@@ -46,20 +46,30 @@ from fastapi.responses import JSONResponse
 
 from findling.api import resources
 from findling.api.diagnose import ROUTER as DIAGNOSE_ROUTER
+from findling.api.probe import ROUTER as PROBE_ROUTER
 from findling.api.rates import ROUTER as RATES_ROUTER
 from findling.api.search import ROUTER as SEARCH_ROUTER
 from findling.api.snippets import ROUTER as SNIPPETS_ROUTER
 from findling.api.status import ROUTER as STATUS_ROUTER
 from findling.config import TESSERACT_NAME, settings
-from findling.embed.engine import release_if_idle, warm, warm_wanted
+from findling.embed.engine import ENGINE_LOADED, engine_state, release_if_idle, warm, warm_wanted
 from findling.hardware import detect
 from findling.index.rebuild import MARKS_A_REBUILD_ANSWERS, rebuild_the_index, recover_the_index_directories
 from findling.instance import claim_the_volume, volume_is_shared
-from findling.nc.client import AppAPIAuthMiddleware, AsyncNextcloudApp, run_app, set_handlers
+from findling.nc.client import (
+    AppAPIAuthMiddleware,
+    AsyncNextcloudApp,
+    create_app_client,
+    run_app,
+    set_handlers,
+)
+from findling.nc.queue import CompanionChoice, DocumentQueue
 from findling.profile import note_hardware
+from findling.profile import snapshot as profile_snapshot
 from findling.store.repo import open_read_only, open_store
 from findling.worker.embedding import EmbedRunner
 from findling.worker.poller import POLLER_STOP_SECONDS, STAND_DOWN_SECONDS, Poller, _pause, default_poller
+from findling.worker.probe_run import ProbeRun
 from findling.worker.reconcile import RECONCILE_STOP_SECONDS, Reconcile, default_reconcile
 from findling.worker.watch import GuardWatch
 
@@ -105,6 +115,17 @@ GUARD_STOP_SECONDS: Final = 5.0
 # None has no lifespan to hang a task on and starts nothing.
 _REBUILDING: asyncio.Task[None] | None = None
 _STOP_REBUILD: asyncio.Event | None = None
+
+# The pre-check of a profile change (PRUEF-01), at module level like the tasks
+# above so that its route reaches it. It exists while the lifespan is up and
+# holds a poller, and it is None outside it: POST /probe answers 503 then.
+_PROBE_RUN: ProbeRun | None = None
+
+# How long the shutdown waits for the sweep of the check after close() told it
+# to end. It is between two reads of the companion or inside one, and a read
+# is one short request; over it the task is cancelled, and the mark it would
+# have cleared stays for the next start.
+PROBE_STOP_SECONDS: Final = 5.0
 
 # How finely the container notices that the idle span has run out. It is the
 # resolution of the idle clock and not the span itself: the smallest span an
@@ -214,6 +235,11 @@ def active_reconcile() -> Reconcile | None:
 def active_embedding() -> EmbedRunner | None:
     """The embed runner of this process, None while the lifespan is not running."""
     return _EMBEDDING
+
+
+def active_probe_run() -> ProbeRun | None:
+    """The pre-check of this process, None while the lifespan is not running."""
+    return _PROBE_RUN
 
 
 def _remember_the_enable() -> None:
@@ -421,6 +447,75 @@ async def _guarded_watch(watch: GuardWatch, stop_event: asyncio.Event) -> None:
     except Exception as error:
         kind_of_failure = type(error).__name__
         LOGGER.error("the memory guard ended in an unexpected %s; search and indexing continue", kind_of_failure)
+
+
+def _engine_is_loaded() -> bool:
+    return engine_state() == ENGINE_LOADED
+
+
+def _embed_slots_in_force() -> int:
+    """The parallel embed slots the level in force runs; the check counts only a growth."""
+    return profile_snapshot().resolution.values.embed_slots
+
+
+def build_the_probe(poller: Poller | None, runner: EmbedRunner | None, *, persist: bool) -> ProbeRun | None:
+    """The pre-check over the poller and the runner of this lifespan, or None.
+
+    None without a poller or a runner: a check holds both, and without them
+    there is nothing to hold, so POST /probe answers 503. Built without I/O
+    like the tasks beside it: nothing opens before a check starts. A failure
+    costs the check and never the start, with the type name only.
+    """
+    if poller is None or runner is None:
+        return None
+    try:
+        return ProbeRun(
+            poller=poller,
+            runner=runner,
+            pool=poller.pool,
+            models_dir=settings().models_dir,
+            rebuild_may_start=_a_rebuild_may_start,
+            engine_loaded=_engine_is_loaded,
+            cutter_built=lambda: poller.track.cutter_built,
+            embed_slots=_embed_slots_in_force,
+            persist=persist,
+        )
+    except Exception as error:
+        LOGGER.error("the pre-check could not be built, an %s; everything else starts", type(error).__name__)
+        return None
+
+
+def companion_reader() -> Callable[[], Awaitable[CompanionChoice | None]]:
+    """The read of the companion the sweep of the check waits for (Pitfall 7).
+
+    Its own client, built on the first read and not before: the sweep reads
+    only when a check left an fp32 file behind, so an ordinary start builds
+    nothing (D-24-05). A read that fails answers None inside
+    ``companion_choice``, and the sweep tries again.
+    """
+    queue: DocumentQueue | None = None
+
+    async def read() -> CompanionChoice | None:
+        nonlocal queue
+        if queue is None:
+            queue = DocumentQueue(create_app_client())
+        return await queue.companion_choice()
+
+    return read
+
+
+async def _guarded_recover(run: ProbeRun) -> None:
+    """Run the sweep of the check and let nothing out of it but a log line.
+
+    Built like :func:`_guarded_watch`. A sweep that is gone leaves an fp32 file
+    on the volume until the next start, and costs nothing else.
+    """
+    try:
+        await run.recover(companion_reader())
+    except asyncio.CancelledError:
+        raise
+    except Exception as error:
+        LOGGER.error("the sweep of the pre-check ended in an unexpected %s", type(error).__name__)
 
 
 async def _release_when_idle(stop_event: asyncio.Event) -> None:
@@ -927,6 +1022,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     _POLLER.attach_runner(_EMBEDDING)
     embedding = asyncio.create_task(_guarded_embedding(_EMBEDDING, stop_embedding))
 
+    # The pre-check (PRUEF-01), over the poller and the runner it holds. Its
+    # last result comes back here, and a check a restart cut off reads nofit
+    # interrupted; the sweep of an fp32 file it fetched waits for the first
+    # read of the companion and runs as a task of its own (D-27-17, Pitfall 7).
+    # On a volume of another instance the check keeps to memory, like the
+    # guard. A failure costs the restore and never the start.
+    global _PROBE_RUN
+    _PROBE_RUN = build_the_probe(_POLLER, _EMBEDDING, persist=not shared_volume.other)
+    recovering: asyncio.Task[None] | None = None
+    if _PROBE_RUN is not None:
+        try:
+            await _PROBE_RUN.restore()
+        except Exception as error:
+            LOGGER.warning("the pre-check could not restore its state, %s", type(error).__name__)
+        recovering = asyncio.create_task(_guarded_recover(_PROBE_RUN))
+
     # The second task, and only when the comparison is switched on. Not starting
     # it is different from starting one that returns at once: a task that exists
     # holds a state connection sooner or later, and an admin who switched the
@@ -1037,6 +1148,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # and lower the level after an ordinary update.
         with contextlib.suppress(Exception):
             await _GUARD_WATCH.note_shutdown_begins()
+        # The pre-check next, before the poller and the runner are stopped: its
+        # finally lifts the hold on both, so they come down from a state they
+        # know and the next start runs unheld (T-27-38). close() ends the sweep
+        # as well; the task is awaited behind it.
+        probe_run = _PROBE_RUN
+        if probe_run is not None:
+            with contextlib.suppress(Exception):
+                await probe_run.close()
+        if recovering is not None:
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(asyncio.shield(recovering), timeout=PROBE_STOP_SECONDS)
+            if not recovering.done():
+                recovering.cancel()
+            await asyncio.gather(recovering, return_exceptions=True)
+        _PROBE_RUN = None
         stop_indexing.set()
         stop_embedding.set()
         stop_reconcile.set()
@@ -1137,6 +1263,7 @@ APP.include_router(SNIPPETS_ROUTER)
 APP.include_router(STATUS_ROUTER)
 APP.include_router(RATES_ROUTER)
 APP.include_router(DIAGNOSE_ROUTER)
+APP.include_router(PROBE_ROUTER)
 
 
 def smuggles_identity(errors: Sequence[Mapping[str, Any]]) -> bool:
