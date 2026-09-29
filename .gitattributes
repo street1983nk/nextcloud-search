@@ -43,6 +43,11 @@ docs/measurements/**/skripte/*.py text eol=lf
 # because these PDFs contain no NUL byte and would be treated as text.
 testdata/corpus/** -text
 
+# The scan page of the pre-check is a byte exact copy of a corpus file, shipped
+# in the package. Its sha256 and size are pinned in findling/probe.py, so the
+# same reason as above applies: no checkout may rewrite a byte of it.
+backend/src/findling/extract/probe_scan.pdf -text
+
 # The ground truth of the OCR quality measurement. The generator writes it with a
 # plain newline and compares it byte for byte on the next run, so a checkout that
 # turned those newlines into carriage return pairs would make build_corpus.py

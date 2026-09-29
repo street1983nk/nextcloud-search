@@ -1443,8 +1443,17 @@ PHP_TREE_HASH_TODAY = "460e2d6b7a11903bb783b722693f113f0ace524d67bc8cae5a0335395
 # restore, which also sweeps a choice that lost its mark. No file came and none
 # went, so PACKAGE_FILES_TODAY stays at 67. The PHP pair does not move: the
 # review fixes touch no PHP file.
-PACKAGE_FILES_TODAY = 67
-PACKAGE_TREE_HASH_TODAY = "04b56cddc978aeaf90285b89c0acb1fb9bcb4a100bf94197396c8229686cc4d6"
+# Moved on 2026-09-29 by plan 27-02 (the neutral core of the pre-check,
+# PRUEF-01), measured over its own worktree while the other plans of wave 1 of
+# phase 27 run beside it: probe.py came, with the closed code sets, the
+# calculation, the gates, the hold flag and the pins of the shipped scan page,
+# and config.py changed its bytes for the probe ceilings and
+# MODEL_PROBE_CHILD_BYTES. The scan page extract/probe_scan.pdf is no .py file
+# and does not count. One file came and none went, so PACKAGE_FILES_TODAY moves
+# to 68. The PHP pair does not move: this plan touches no PHP file. The figure
+# is measured again after the merge of the wave.
+PACKAGE_FILES_TODAY = 68
+PACKAGE_TREE_HASH_TODAY = "c304a722bea3cd4441fedb469f4fb379f9924814f9d0d68868cbd198cee537ea"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

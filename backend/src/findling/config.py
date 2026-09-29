@@ -927,6 +927,34 @@ EMBED_LANE_RESERVE_BYTES = OCR_SLOT_COST_BYTES
 # (embed/engine.py), so an event without a tight anon headroom is noise.
 GUARD_RESERVE_BYTES = OCR_SLOT_COST_BYTES
 
+# The pre-check of a profile change (PRUEF-01, phase 27). Built in, no
+# environment variable, like the guard above: the ceilings belong to the check.
+#
+# The ceiling of the measuring part: model, ocr_one, calc and ocr_n together.
+# One OCR page costs 2 to 3 s (docs/performance.md), a child start with its
+# imports 0.5 to 2 s on ARM, the scan page has three pages, and the two model
+# children take 5 to 15 s each; the worst case adds up to about 70 s
+# (27-RESEARCH.md, pattern 1). 120 s leaves room for a slow box.
+PROBE_MEASURE_SECONDS = 120
+
+# The ceiling of the fp32 download including its digest (D-27-06), separate
+# from the measuring ceiling above because a slow line is no memory verdict.
+PROBE_DOWNLOAD_SECONDS = 600
+
+# How long the check waits for the running indexing batch to end (D-27-16).
+# The same bound as the OCR lease: a batch ends inside its lease by
+# construction, so a longer wait would only wait for a batch that is gone.
+PROBE_PAUSE_SECONDS = OCR_LOCK_TIMEOUT_SECONDS
+
+# What the model child of the check holds at its peak: RssAnon of the fp32
+# child after the first batch, 835980 KiB, interpreter, onnxruntime and
+# tokenizer included (docs/measurements/2026-09-fp32-speicher/README.md,
+# sections 3 and 4). The child starts only with this much plus the reserve free.
+MODEL_PROBE_CHILD_BYTES = 835_980 * 1024
+
+# The sampling interval of the headroom while a probe child runs.
+PROBE_SAMPLE_SECONDS = 0.2
+
 # Two qualified events inside this window lower the level by one. A single
 # large scan produces a burst within seconds; two separate bursts within ten
 # minutes are recurring pressure (26-RESEARCH.md, Befund A).
