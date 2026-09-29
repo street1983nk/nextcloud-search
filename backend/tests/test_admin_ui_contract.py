@@ -2412,6 +2412,8 @@ def test_the_token_never_reaches_the_browser() -> None:
     assert "$backend['guardConfirmable']" in template
     for word in ("'token'", "profile_confirmed", "occ config:app:set"):
         assert word not in template, word
+    # Plan 27-12: "Check again" sends the profile and nothing that confirms.
+    assert "profile_confirmed" not in SCRIPT.read_text(encoding="utf-8")
 
 
 def test_every_profile_key_of_the_overview_has_one_line() -> None:
@@ -2632,6 +2634,164 @@ def test_the_slot_caps_of_the_descriptions_are_the_caps_of_the_profiles() -> Non
         f"$slotCaps = ['standard' => {PROFILE_STANDARD_OCR_SLOTS_MAX}, "
         f"'performance' => {PROFILE_PERFORMANCE_OCR_SLOTS_MAX}];" in template
     )
+
+
+# Plan 27-12: the script of the block. The maps of the two halves, read the
+# way the engine sentence gate reads its pair.
+SETTINGS_SERVICE = REPO_ROOT / "php" / "lib" / "Service" / "SettingsService.php"
+# The two steps whose figures only the probe route knows: the template leaves
+# them out and says "Check running." until the first probe poll.
+STEPS_ONLY_THE_SCRIPT_NAMES = frozenset({"download", "ocr_n"})
+
+
+def template_map(source: str, name: str) -> dict[str, str]:
+    """The code to catalogue key mapping of one ``$name = [...]`` of the template."""
+    block = re.search(rf"\${name} = \[(.*?)\];", source, re.DOTALL)
+    assert block is not None, f"admin.php lost its map ${name}"
+    return dict(re.findall(r"'([a-z0-9_]+)' => \$l->t\('([^']+)'", block.group(1)))
+
+
+def script_map(source: str, name: str) -> dict[str, str]:
+    """The same mapping as ``function name () { return {...} }`` of the script."""
+    block = re.search(rf"function {name} \(\) \{{\n    return \{{(.*?)\n    \}}\n  \}}", source, re.DOTALL)
+    assert block is not None, f"admin.js lost its map {name}"
+    return dict(re.findall(r"(\w+): t\('findling', '([^']+)'\)", block.group(1)))
+
+
+def test_the_script_and_the_template_name_every_probe_code_alike() -> None:
+    """T-27-39: a code of the probe reads the same in the first paint and after a poll.
+
+    Every step, verdict and cause of probe.py has one catalogue key, and the
+    template map and the script map carry the same one. A half with another
+    wording would change the sentence two seconds after the page opened, with
+    nothing having happened on the box. The figures each cause needs are held
+    equal as well, so neither half shows a sentence the other would hide.
+    """
+    template = TEMPLATE.read_text(encoding="utf-8")
+    script = SCRIPT.read_text(encoding="utf-8")
+
+    steps_template = template_map(template, "stepNames")
+    steps_script = script_map(script, "stepNames")
+    assert set(steps_script) == set(probe.STEPS)
+    assert set(probe.STEPS) - set(steps_template) == STEPS_ONLY_THE_SCRIPT_NAMES
+    assert {code: steps_script[code] for code in steps_template} == steps_template
+
+    for name, codes in (("verdictNames", probe.VERDICTS), ("probeCauseNames", probe.CAUSES)):
+        in_template = template_map(template, name)
+        in_script = script_map(script, name)
+        assert in_template != {}, name
+        assert in_template == in_script, name
+        assert set(in_script) == set(codes), name
+
+    precision_template = template_map(template, "precisionSentences")
+    assert precision_template != {}
+    assert precision_template == script_map(script, "precisionSentences")
+
+    needs_block = re.search(r"\$probeCauseNeeds = \[(.*?)\];", template, re.DOTALL)
+    assert needs_block is not None
+    needs_template = {
+        code: re.findall(r"'([a-zA-Z0-9]+)'", keys)
+        for code, keys in re.findall(r"'([a-z_]+)' => \[([^\]]*)\]", needs_block.group(1))
+    }
+    script_block = re.search(r"const PROBE_CAUSE_NEEDS = \{(.*?)\n  \}", script, re.DOTALL)
+    assert script_block is not None
+    needs_script = {
+        code: re.findall(r"\['([a-zA-Z0-9]+)'", keys)
+        for code, keys in re.findall(r"(?m)^\s+(\w+): \[(.*)\],?$", script_block.group(1))
+    }
+    assert needs_template != {}
+    assert needs_template == needs_script
+    for keys in needs_script.values():
+        assert set(keys) <= set(probe.NUMBER_KEYS), keys
+
+
+def test_the_probe_poll_is_two_seconds() -> None:
+    """D-27-16: 2000 ms while a probe runs, never slower than the active status poll."""
+    script = SCRIPT.read_text(encoding="utf-8")
+    probe_poll = re.search(r"const POLL_PROBE_MS = (\d+)\n", script)
+    active_poll = re.search(r"const POLL_ACTIVE_MS = (\d+)\n", script)
+
+    assert probe_poll is not None
+    assert active_poll is not None
+    assert int(probe_poll.group(1)) == 2000
+    assert int(probe_poll.group(1)) <= int(active_poll.group(1))
+    # Its own abort controller, so neither poll cancels the other.
+    assert "let probeRequest = null" in script
+    assert "probeRequest = new AbortController()" in script
+
+
+def _comparisons(body: str, names: Mapping[str, str]) -> set[str]:
+    """The comparisons of the one negated conjunction of a needsProbe body, renamed."""
+    match = re.search(r"return !\((.*)\)", body)
+    assert match is not None, body
+    found: set[str] = set()
+    for part in match.group(1).split(" && "):
+        left, right = (side.strip() for side in part.split(" === "))
+        found.add(f"{names.get(left, left)} === {names.get(right, right)}")
+    return found
+
+
+def test_the_script_decides_the_probe_like_the_service() -> None:
+    """D-27-09, T-27-40: the label of the button follows the rule of the server.
+
+    No probe when the target is economy, or when the target is the stored
+    profile and the only change is fp32 to int8. The script only picks the
+    label; the server decides again. Both bodies are read and their
+    comparisons put side by side under common names.
+    """
+    script = SCRIPT.read_text(encoding="utf-8")
+    service = SETTINGS_SERVICE.read_text(encoding="utf-8")
+    script_body = re.search(
+        r"function needsProbe \(target, precision, stored, storedPrecision\) \{(.*?)\n  \}", script, re.DOTALL
+    )
+    service_body = re.search(
+        r"public function needsProbe\(string \$profile, string \$precision\): bool \{(.*?)\n\t\}", service, re.DOTALL
+    )
+    default = re.search(r"public const PROFILE_DEFAULT = '([a-z]+)';", service)
+
+    assert script_body is not None
+    assert service_body is not None
+    assert default is not None
+    assert default.group(1) == "economy"
+    for body in (script_body.group(1), service_body.group(1)):
+        assert "'fp32'" in body
+        assert "'int8'" in body
+        assert "return false;" in body or "return false\n" in body
+    assert "if (target === 'economy') {" in script_body.group(1)
+    assert "if ($profile === self::PROFILE_DEFAULT) {" in service_body.group(1)
+
+    script_names = {
+        "target": "TARGET",
+        "stored": "STORED",
+        "storedPrecision": "STORED_PRECISION",
+        "precision": "PRECISION",
+    }
+    service_names = {
+        "$profile": "TARGET",
+        "$this->profile()": "STORED",
+        "$storedPrecision": "STORED_PRECISION",
+        "$precision": "PRECISION",
+    }
+    assert _comparisons(script_body.group(1), script_names) == _comparisons(service_body.group(1), service_names)
+
+
+def test_the_script_sends_only_profile_and_precision() -> None:
+    """T-27-41, 27-UI-SPEC "Sicherheits- und Datenregeln": two values and no token.
+
+    The POST of the probe start and the POST of the way down carry exactly
+    profile and precision, and the GET of the probe state carries nothing.
+    """
+    script = SCRIPT.read_text(encoding="utf-8")
+    posts = re.findall(r"send\((ROUTE_PROFILE(?:_CHECK)?), \{ ([^}]*) \}\)", script)
+
+    assert {route for route, _ in posts} == {"ROUTE_PROFILE", "ROUTE_PROFILE_CHECK"}
+    for route, body in posts:
+        assert re.findall(r"(\w+):", body) == ["profile", "precision"], route
+    assert script.count("send(ROUTE_PROFILE") == len(posts)
+    reads = re.findall(r"ask\(ROUTE_PROFILE(?:_CHECK)?, ([^,]+),", script)
+    assert reads == ["null"]
+    for word in ("token", "confirm"):
+        assert all(word not in body.lower() for _, body in posts), word
 
 
 def test_the_two_translation_files_carry_the_same_keys() -> None:

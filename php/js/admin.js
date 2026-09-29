@@ -53,6 +53,20 @@
   const ROUTE_DIAGNOSE = 'admin/diagnose'
   const ROUTE_RULES = 'admin/rules'
   const ROUTE_RULES_PREVIEW = 'admin/rules/preview'
+  // The two addresses of the block "Performance profile" (plan 27-07): the
+  // probe, started by a POST and read by a GET, and the way down without one.
+  const ROUTE_PROFILE = 'admin/profile'
+  const ROUTE_PROFILE_CHECK = 'admin/profile/check'
+
+  // How often the state of a running probe is asked, and never slower than the
+  // active cadence of the status poll: the admin who pressed the button is
+  // watching the progress line (D-27-06, D-27-16).
+  const POLL_PROBE_MS = 2000
+
+  // Polls in a row that report no running probe and no new result before the
+  // page stops waiting for one. A start the container accepted is running on
+  // the next poll, so three quiet answers mean it ended before the first poll.
+  const PROBE_QUIET_LIMIT = 3
 
   // Megabytes in the field, bytes in appconfig. The same divisor the template
   // divides by, named on both sides so that the two cannot drift.
@@ -69,6 +83,9 @@
   // polling nor gets aborted by it: the two calls answer different questions and
   // one of them was asked by a person who is waiting for it.
   let lookupRequest = null
+  // And the probe poll has a third, for the same reason: it neither aborts the
+  // status poll nor gets aborted by it.
+  let probeRequest = null
   // The prefixes as they are stored, which is what makes a prefix NEW. Taken
   // from the server rendered list once, before anything can be edited, and
   // replaced out of the answer of a save. Reading it off the list at comparison
@@ -1311,6 +1328,799 @@
     )
   }
 
+  /*
+   * Block "Performance profile" (plan 27-12, UI-01, PRUEF-01).
+   *
+   * Every state of the block lies in the template (plan 27-10); this part
+   * flips the hidden attribute and the disabled flag and writes text nodes,
+   * nothing else. Every word comes out of a map below keyed by a code of a
+   * closed set, the same catalogue sentence the template map of the same name
+   * holds, and a code outside a map leaves its line hidden (T-27-39). The
+   * browser decides only the label of the primary button: whether a change
+   * needs the probe is decided again by the server, which refuses a way down
+   * that is none (T-27-40). The two writing calls carry the profile and the
+   * precision and nothing else; the confirmation of the guard is added on the
+   * server and never seen here (T-27-41, D-27-12).
+   */
+
+  // What the form compares against, out of the overview of the bootstrap and
+  // of every status poll.
+  const profile = {
+    stored: false,
+    saved: 'economy',
+    suggested: '',
+    effective: '',
+    precision: 'int8',
+    reachable: false,
+    supported: false,
+    rebuilding: false,
+    documents: 0,
+    secondsInt8: null,
+    secondsFp32: null,
+    // Whether the admin changed the form since it was last set from the stored
+    // state. An untouched form follows the stored state of the poll, a touched
+    // one is left alone.
+    touched: false,
+    // The probe the page is watching, if any.
+    probing: false,
+    sawRunning: false,
+    quietPolls: 0,
+    resultBefore: '',
+    lastStep: '',
+    lastQuarter: -1,
+    timer: null,
+    // The sentence of a start that did not happen, until the form changes.
+    startError: ''
+  }
+
+  const PROFILES = ['economy', 'standard', 'performance']
+  const VERDICT_ICONS = ['fits', 'narrow', 'nofit']
+  const MODEL_NAMES = { int8: 'e5-small int8', fp32: 'e5-small fp32' }
+
+  /** The three profile names, the catalogue words the template uses. */
+  function profileNames () {
+    return {
+      economy: t('findling', 'Economy'),
+      standard: t('findling', 'Standard'),
+      performance: t('findling', 'Performance')
+    }
+  }
+
+  /**
+   * The steps of a running probe (probe.STEPS), word for word the map
+   * $stepNames of the template. The template leaves out download and ocr_n,
+   * because their figures exist only in the answer of the probe route; this
+   * side has that answer and names all eight.
+   */
+  function stepNames () {
+    return {
+      pause: t('findling', 'waiting for the indexing batch'),
+      download: t('findling', 'downloading the model, %1$s of %2$s'),
+      digest: t('findling', 'verifying the model file'),
+      model: t('findling', 'loading the model'),
+      ocr_one: t('findling', 'OCR with one slot'),
+      calc: t('findling', 'calculating memory'),
+      ocr_n: t('findling', 'OCR with %s slots'),
+      cleanup: t('findling', 'cleaning up')
+    }
+  }
+
+  /** The three verdicts, the map $verdictNames of the template. */
+  function verdictNames () {
+    return {
+      fits: t('findling', 'Fits'),
+      narrow: t('findling', 'Fits narrowly'),
+      nofit: t('findling', 'Does not fit')
+    }
+  }
+
+  /** The causes of a verdict (probe.CAUSES), the map $probeCauseNames of the template. */
+  function probeCauseNames () {
+    return {
+      reserve_thin: t('findling', 'Memory reserve too thin: %1$s left, %2$s needed.'),
+      memory_short: t('findling', 'Not enough memory: %1$s OCR slots need about %2$s, %3$s are available.'),
+      model_memory: t('findling', 'Not enough memory for the fp32 model: it needs about %1$s, %2$s are available.'),
+      slot_killed: t('findling', 'A test slot was ended for lack of memory.'),
+      timeout: t('findling', 'The measurement took longer than %s.'),
+      download_failed: t('findling', 'The model could not be downloaded. Check that github.com and release-assets.githubusercontent.com are reachable.'),
+      download_slow: t('findling', 'The download took longer than %s.'),
+      digest_mismatch: t('findling', 'The model file does not match its checksum and was deleted.'),
+      disk_short: t('findling', 'Not enough disk space for the fp32 model.'),
+      memory_unknown: t('findling', 'The available memory could not be read.'),
+      interrupted: t('findling', 'The check was interrupted by a restart of the backend.'),
+      pause_timeout: t('findling', 'The running indexing batch did not end within %s.'),
+      probe_failed: t('findling', 'The check stopped with an error.')
+    }
+  }
+
+  /**
+   * The figures each cause sentence needs, in placeholder order, with the
+   * formatter of each, the map $probeCauseNeeds of the template. A sentence
+   * with a hole in it is never shown.
+   */
+  const PROBE_CAUSE_NEEDS = {
+    reserve_thin: [['reserve', size], ['required', size]],
+    memory_short: [['slots', count], ['need', size], ['available', size]],
+    model_memory: [['need', size], ['available', size]],
+    timeout: [['seconds', span]],
+    download_slow: [['seconds', span]],
+    pause_timeout: [['seconds', span]]
+  }
+
+  /** Why a start did not happen, by the code of the start route. */
+  function startErrors () {
+    return {
+      busy: t('findling', 'A check is already running. Its result appears here.'),
+      unreachable: t('findling', 'The check needs the backend, and it does not answer right now. Nothing was saved.'),
+      unsupported: t('findling', 'This backend version cannot run the check. Bring both halves of Findling to the same version.'),
+      rebuilding: t('findling', 'The index is being rebuilt right now. The check is possible afterwards.')
+    }
+  }
+
+  /** The precision verdict of the model line, the map $precisionSentences of the template. */
+  function precisionSentences () {
+    return {
+      fp32_unavailable: t('findling', 'The fp32 model is not available. The search uses int8.'),
+      fp32_on_a_tight_box: t('findling', 'fp32 is set, but this box has too little memory for it. The search uses int8.'),
+      fp32_not_in_economy: t('findling', 'fp32 is only available in Standard and Performance. The search uses int8.'),
+      fp32_active_in_economy: t('findling', 'fp32 stays active under Economy. To go back to int8, choose Standard or Performance and clear the tick.'),
+      downloading: t('findling', 'The fp32 model is being downloaded.')
+    }
+  }
+
+  /** Why the guard lowered the profile, the map $causeNames of the template. */
+  function guardCauseNames () {
+    return {
+      memory_max_repeated: t('findling', 'memory tight, memory.events max twice'),
+      oom_kill: t('findling', 'a slot was killed for lack of memory'),
+      unclean_end: t('findling', 'the container ended during a multi slot pass')
+    }
+  }
+
+  function count (value) {
+    return numbers.format(value)
+  }
+
+  /**
+   * The placeholders of a catalogue sentence, filled in one pass.
+   *
+   * One regular expression with a function replacement, so neither a dollar
+   * pattern nor the literal text of another placeholder inside a value can be
+   * expanded: every value is inserted once and never scanned again.
+   */
+  function fill (sentence, values) {
+    let next = 0
+    return sentence.replace(/%(?:(\d)\$)?s/g, function (match, position) {
+      const value = position ? values[Number(position) - 1] : values[next++]
+      return value === undefined ? match : String(value)
+    })
+  }
+
+  function profileCode (value) {
+    return typeof value === 'string' && PROFILES.indexOf(value) !== -1 ? value : ''
+  }
+
+  function wholeOrNull (value) {
+    return Number.isInteger(value) && value >= 0 ? value : null
+  }
+
+  /**
+   * Whether this change goes through the probe (D-27-09), the rule of
+   * SettingsService::needsProbe to the letter. No probe exactly when the target
+   * is economy, or when the target is the stored profile and the one change is
+   * fp32 to int8. Performance to standard runs through the probe. The server
+   * decides again; this only picks the label of the button.
+   */
+  function needsProbe (target, precision, stored, storedPrecision) {
+    if (target === 'economy') {
+      return false
+    }
+    return !(target === stored && storedPrecision === 'fp32' && precision === 'int8')
+  }
+
+  function element (id) {
+    return document.getElementById(id)
+  }
+
+  function disable (id, off) {
+    const control = element(id)
+    if (control !== null) {
+      control.disabled = off
+    }
+  }
+
+  function focus (id) {
+    const target = element(id)
+    if (target !== null) {
+      target.focus()
+    }
+  }
+
+  /** One sentence into the one live region of the block. */
+  function announce (sentence) {
+    text('findling-profile-announce', sentence)
+  }
+
+  /** The profile the select shows, or economy for a select that is not there. */
+  function formProfile () {
+    const select = element('findling-profile-select')
+    return select === null ? 'economy' : (profileCode(select.value) || 'economy')
+  }
+
+  /**
+   * The precision the form leads to. Under economy the tick is hidden and the
+   * stored precision stays (D-25-10), so the form cannot ask for a change of
+   * precision there.
+   */
+  function formPrecision () {
+    if (formProfile() === 'economy') {
+      return profile.precision
+    }
+    return checked('findling-profile-fp32') ? 'fp32' : 'int8'
+  }
+
+  function formChanged () {
+    return formProfile() !== profile.saved || formPrecision() !== profile.precision
+  }
+
+  /** Whether a probe cannot start right now, and the sentence that says why. */
+  function probeBlockedText () {
+    const errors = startErrors()
+    if (!profile.reachable) {
+      return errors.unreachable
+    }
+    if (!profile.supported) {
+      return errors.unsupported
+    }
+    if (profile.rebuilding) {
+      return errors.rebuilding
+    }
+    return ''
+  }
+
+  /** Put the form back on the stored state, or on the suggestion before a first choice (Z1, Z2). */
+  function resetForm () {
+    const select = element('findling-profile-select')
+    const box = element('findling-profile-fp32')
+    if (select !== null) {
+      select.value = profile.stored ? profile.saved : (profile.suggested || 'economy')
+    }
+    if (box !== null) {
+      box.checked = profile.precision === 'fp32'
+    }
+    profile.touched = false
+  }
+
+  /**
+   * The form after every change, every poll and every answer: visibility of
+   * the tick, the description, the reindex line, the label and the disabled
+   * flag of the buttons (Z1 to Z5, Z14 to Z16a).
+   */
+  function refreshForm () {
+    const target = formProfile()
+    const precision = formPrecision()
+    const changed = formChanged()
+    const probe = needsProbe(target, precision, profile.saved, profile.precision)
+    const blocked = probeBlockedText()
+
+    PROFILES.forEach(function (name) {
+      shown('findling-profile-describe-' + name, name === target)
+    })
+    const select = element('findling-profile-select')
+    if (select !== null) {
+      select.setAttribute('aria-describedby', 'findling-profile-describe-' + target + ' findling-profile-nochange')
+    }
+    shown('findling-profile-fp32-row', target !== 'economy')
+    shown('findling-profile-fp32-help', target !== 'economy')
+
+    // D-27-03, D-27-18: the moment the precision moves, without a dialog; the
+    // duration only out of a rate this box measured.
+    const seconds = precision === 'fp32' ? profile.secondsFp32 : profile.secondsInt8
+    text('findling-profile-reindex-long', fill(
+      t('findling', 'Re-embedding of %1$s documents, estimated about %2$s. Full text search stays fully available.'),
+      [count(profile.documents), span(seconds === null ? 0 : seconds)]))
+    text('findling-profile-reindex-short', fill(
+      t('findling', 'Re-embedding of %s documents. Full text search stays fully available.'),
+      [count(profile.documents)]))
+    shown('findling-profile-reindex-long', seconds !== null)
+    shown('findling-profile-reindex-short', seconds === null)
+    shown('findling-profile-reindex', precision !== profile.precision)
+
+    const apply = element('findling-profile-apply')
+    if (apply !== null) {
+      const label = (!changed || probe) ? apply.dataset.labelCheck : apply.dataset.labelApply
+      if (typeof label === 'string' && label !== '') {
+        apply.textContent = label
+      }
+      apply.disabled = profile.probing || !changed || (probe && blocked !== '')
+    }
+    shown('findling-profile-nochange', !changed)
+    shown('findling-profile-stay', profile.saved === 'economy' && profile.suggested !== '' && profile.suggested !== 'economy')
+
+    disable('findling-profile-select', profile.probing)
+    disable('findling-profile-fp32', profile.probing)
+    disable('findling-profile-stay', profile.probing)
+    disable('findling-profile-offer-stay', profile.probing)
+    // Unreachable, too old or rebuilding locks the probe buttons only; the
+    // ways without a probe stay open, because they only write appconfig.
+    disable('findling-profile-recheck', profile.probing || blocked !== '')
+    disable('findling-profile-offer-check', profile.probing || blocked !== '')
+
+    // During a probe only the sentence of its own start stands (Z16); the
+    // reasons a probe cannot start say nothing about the one that runs.
+    const error = profile.probing ? profile.startError : (profile.startError !== '' ? profile.startError : blocked)
+    text('findling-profile-error', error)
+    shown('findling-profile-error', error !== '')
+  }
+
+  /** The inline answer of a save without a probe, never a toast. */
+  function profileFeedback (success, message) {
+    const box = element('findling-profile-feedback')
+    if (box === null) {
+      return
+    }
+    box.className = 'findling-rules__feedback findling-rules__feedback--' + (success ? 'success' : 'error')
+    box.textContent = message
+    box.hidden = false
+    announce(message)
+  }
+
+  /**
+   * Store a way down without a probe (Z5, D-27-09), or economy on "Stay on
+   * Economy" even when economy is in force (D-27-11). The focus stays where
+   * it is, the live region carries the answer.
+   */
+  async function saveProfile (target, precision, trigger) {
+    shown('findling-profile-feedback', false)
+    profile.startError = ''
+    disable(trigger, true)
+
+    let saved = false
+    try {
+      const answer = await send(ROUTE_PROFILE, { profile: target, precision: precision })
+      saved = answer.ok && answer.body !== null && answer.body.saved === true
+    } catch (error) {
+      saved = false
+    }
+
+    if (saved) {
+      profile.stored = true
+      profile.saved = target
+      profile.precision = precision
+      resetForm()
+      profileFeedback(true, fill(t('findling', 'Saved. %s applies from the next indexing round.'), [profileNames()[target]]))
+      schedule(0)
+    } else {
+      // Z17: the form keeps the choice, the button is usable again.
+      profileFeedback(false, t('findling', 'The profile was not saved. Nothing changed.'))
+    }
+    disable(trigger, false)
+    refreshForm()
+  }
+
+  /** A comparable identity of a stored result, so a new one can be told from the last. */
+  function resultKey (result) {
+    if (result === null || typeof result !== 'object') {
+      return ''
+    }
+    return [result.at, result.profile, result.precision, result.verdict].join('|')
+  }
+
+  /**
+   * Z6: every control disabled, the card hidden, the progress line up. From a
+   * click the focus goes to the progress line, because the button that had it
+   * is disabled now; from a page that opened during a probe it stays put.
+   */
+  function enterProbe (fromClick, resultBefore) {
+    profile.probing = true
+    profile.sawRunning = false
+    profile.quietPolls = 0
+    profile.resultBefore = resultBefore
+    profile.lastStep = ''
+    profile.lastQuarter = -1
+    shown('findling-profile-feedback', false)
+    shown('findling-profile-verdict', false)
+    shown('findling-profile-progress', true)
+    shown('findling-profile-progress-hint', true)
+    refreshForm()
+    if (fromClick) {
+      text('findling-profile-progress-text', t('findling', 'Check running.'))
+      focus('findling-profile-progress')
+      announce(t('findling', 'Check running.'))
+    }
+    scheduleProbe(POLL_PROBE_MS)
+  }
+
+  function scheduleProbe (delay) {
+    window.clearTimeout(profile.timer)
+    profile.timer = window.setTimeout(probePoll, delay)
+  }
+
+  /**
+   * The progress line of one answer. The step is announced when it changes,
+   * the download at most every quarter; the line itself is not a live region.
+   */
+  function progress (answer) {
+    const names = stepNames()
+    const step = typeof answer.step === 'string' && Object.prototype.hasOwnProperty.call(names, answer.step) ? answer.step : ''
+    const done = whole(answer.bytesDone)
+    const total = whole(answer.bytesTotal)
+    let name = ''
+    if (step === 'download') {
+      name = total > 0 ? fill(names.download, [size(done), size(total)]) : ''
+    } else if (step !== '' && step !== 'ocr_n') {
+      // ocr_n names the number of slots, and the state route does not carry
+      // it: without the figure the line says only that the check runs.
+      name = names[step]
+    }
+
+    const line = name === '' ? t('findling', 'Check running.') : fill(t('findling', 'Check running: %s'), [name])
+    text('findling-profile-progress-text', line)
+
+    const quarter = step === 'download' && total > 0 ? Math.min(4, Math.floor((done * 4) / total)) : -1
+    if (step !== profile.lastStep || quarter > profile.lastQuarter) {
+      announce(line)
+    }
+    profile.lastStep = step
+    profile.lastQuarter = step === 'download' ? Math.max(profile.lastQuarter, quarter) : -1
+  }
+
+  async function probePoll () {
+    if (probeRequest !== null) {
+      probeRequest.abort()
+    }
+    probeRequest = new AbortController()
+
+    let answer = null
+    try {
+      answer = await ask(ROUTE_PROFILE_CHECK, null, probeRequest.signal)
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        return
+      }
+      answer = null
+    } finally {
+      probeRequest = null
+    }
+
+    if (answer === null || answer.code !== 'ok') {
+      const errors = startErrors()
+      leaveProbe(null, answer !== null && answer.code === 'unsupported' ? errors.unsupported : errors.unreachable)
+      return
+    }
+
+    if (answer.state === 'running') {
+      profile.sawRunning = true
+      progress(answer)
+      scheduleProbe(POLL_PROBE_MS)
+      return
+    }
+
+    const result = answer.result !== null && typeof answer.result === 'object' ? answer.result : null
+    profile.quietPolls++
+    if (profile.sawRunning || resultKey(result) !== profile.resultBefore || profile.quietPolls >= PROBE_QUIET_LIMIT) {
+      leaveProbe(result, '')
+      return
+    }
+    scheduleProbe(POLL_PROBE_MS)
+  }
+
+  /**
+   * The verdict card of one result (Z7 to Z9), out of the same maps as the
+   * template. The chip class is one of three fixed words, the rest are text
+   * nodes and hidden attributes.
+   */
+  function verdictCard (result) {
+    const names = profileNames()
+    const verdicts = verdictNames()
+    const verdict = typeof result.verdict === 'string' && Object.prototype.hasOwnProperty.call(verdicts, result.verdict) ? result.verdict : ''
+    const target = profileCode(result.profile)
+    const precision = result.precision === 'fp32' || result.precision === 'int8' ? result.precision : ''
+    if (verdict === '' || target === '' || precision === '') {
+      return ''
+    }
+
+    const fits = verdict === 'fits'
+    const saved = fits && result.committed === true
+    const atText = typeof result.atText === 'string' ? result.atText : ''
+
+    const chip = element('findling-profile-verdict-chip')
+    if (chip !== null) {
+      chip.className = 'findling-chip findling-chip--' + verdict
+    }
+    VERDICT_ICONS.forEach(function (code) {
+      shown('findling-profile-verdict-icon-' + code, code === verdict)
+    })
+    text('findling-profile-verdict-word', verdicts[verdict])
+    text('findling-profile-verdict-checked', fill(t('findling', 'Checked: %1$s with %2$s, %3$s'), [names[target], MODEL_NAMES[precision], atText]))
+
+    const causes = probeCauseNames()
+    const cause = !fits && typeof result.cause === 'string' && Object.prototype.hasOwnProperty.call(causes, result.cause) ? result.cause : ''
+    const figures = result.numbers !== null && typeof result.numbers === 'object' ? result.numbers : {}
+    const values = (PROBE_CAUSE_NEEDS[cause] || []).map(function (need) {
+      const value = wholeOrNull(figures[need[0]])
+      return value === null ? null : need[1](value)
+    })
+    const causeLine = cause !== '' && values.indexOf(null) === -1 ? fill(causes[cause], values) : ''
+    text('findling-profile-verdict-cause', causeLine)
+
+    const kept = names[profile.effective || profile.saved]
+    const savedLine = fill(t('findling', 'Saved. %s applies from the next indexing round.'), [names[target]])
+    const keptLine = fill(t('findling', 'Nothing was saved. %s stays in force.'), [kept])
+    text('findling-profile-verdict-saved', savedLine)
+    text('findling-profile-verdict-kept', keptLine)
+
+    shown('findling-profile-verdict-empty', false)
+    shown('findling-profile-verdict-chip', true)
+    shown('findling-profile-verdict-checked', atText !== '')
+    shown('findling-profile-verdict-cause', causeLine !== '')
+    shown('findling-profile-verdict-saved', saved)
+    shown('findling-profile-verdict-kept', !saved)
+    // D-27-17: only when the probe downloaded the fp32 file itself.
+    shown('findling-profile-verdict-deleted', !fits && result.fp32Deleted === true)
+    // D-27-08: the next lower step, never "apply anyway".
+    shown('findling-profile-offer-check', !fits && target === 'performance')
+    shown('findling-profile-offer-stay', !fits && target === 'standard')
+
+    if (saved) {
+      profile.stored = true
+      profile.saved = target
+      profile.precision = precision
+    }
+
+    // One sentence for the live region: verdict, cause and consequence.
+    return verdicts[verdict] + ': ' + [causeLine, saved ? savedLine : keptLine].filter(function (part) {
+      return part !== ''
+    }).join(' ')
+  }
+
+  /**
+   * The end of a probe: the card with the verdict or the error line, the form
+   * back on the stored state, the controls usable again, and a status poll
+   * straight away so that "In force" follows.
+   */
+  function leaveProbe (result, error) {
+    window.clearTimeout(profile.timer)
+    profile.probing = false
+    shown('findling-profile-progress', false)
+    shown('findling-profile-progress-hint', false)
+
+    const sentence = result === null ? '' : verdictCard(result)
+    if (sentence !== '') {
+      currentResult = result
+    }
+    profile.startError = error
+    resetForm()
+    refreshForm()
+    shown('findling-profile-verdict', true)
+
+    if (error !== '') {
+      announce(error)
+    } else if (sentence !== '') {
+      announce(sentence)
+    }
+
+    const offer = ['findling-profile-offer-check', 'findling-profile-offer-stay'].filter(function (id) {
+      const button = element(id)
+      return button !== null && !button.hidden
+    })
+    if (sentence !== '' && result.verdict !== 'fits' && offer.length > 0) {
+      focus(offer[0])
+    } else {
+      focus('findling-profile-verdict')
+    }
+    schedule(0)
+  }
+
+  /**
+   * Start a probe for this target. "started" and "busy" both lead into Z6,
+   * the second with its sentence (Z16); every other answer leaves the form as
+   * it is and the focus goes back to the button that asked.
+   */
+  async function startProbe (target, precision, trigger) {
+    profile.startError = ''
+    shown('findling-profile-feedback', false)
+    disable(trigger, true)
+
+    const before = resultKey(currentResult)
+    let code = ''
+    try {
+      const answer = await send(ROUTE_PROFILE_CHECK, { profile: target, precision: precision })
+      code = answer.body !== null && typeof answer.body.code === 'string' ? answer.body.code : ''
+    } catch (error) {
+      code = 'unreachable'
+    }
+
+    const errors = startErrors()
+    if (code === 'started' || code === 'busy') {
+      profile.startError = code === 'busy' ? errors.busy : ''
+      enterProbe(true, before)
+      if (code === 'busy') {
+        announce(errors.busy)
+      }
+      return
+    }
+
+    profile.startError = Object.prototype.hasOwnProperty.call(errors, code) ? errors[code] : ''
+    refreshForm()
+    if (profile.startError !== '') {
+      announce(profile.startError)
+    }
+    focus(trigger)
+  }
+
+  // The stored result of the page as it was rendered, for telling the result
+  // of a new probe from the last one.
+  let currentResult = null
+
+  /**
+   * The facts of the block out of one overview: hardware, suggestion, in
+   * force, shrink, guard and precision verdict, each a code turned into a
+   * catalogue sentence on this side (Z10, Z11, Z13, Z14, Z15).
+   */
+  function profileView (view) {
+    const names = profileNames()
+    const backend = view.backend || {}
+
+    profile.stored = view.profileStored === true
+    const chosen = profileCode(view.profileChosen)
+    profile.saved = profile.stored && chosen !== '' ? chosen : 'economy'
+    profile.suggested = profileCode(view.profileSuggested)
+    profile.effective = profileCode(view.profileEffective)
+    profile.precision = view.storedPrecision === 'fp32' ? 'fp32' : 'int8'
+    profile.reachable = view.backendReachable === true
+    profile.supported = view.probeSupported === true
+    profile.rebuilding = backend.rebuildRunning === true
+    profile.documents = whole(view.reindexDocuments)
+    profile.secondsInt8 = wholeOrNull(view.reindexSecondsInt8)
+    profile.secondsFp32 = wholeOrNull(view.reindexSecondsFp32)
+    if (view.profileCheck !== undefined) {
+      currentResult = view.profileCheck
+    }
+
+    const cores = wholeOrNull(view.hardwareCores)
+    const memory = wholeOrNull(view.hardwareMemory)
+    const known = cores !== null && memory !== null
+    if (known) {
+      text('findling-profile-hardware', fill(t('findling', 'Detected: cores %1$s, memory %2$s'), [count(cores), size(memory)]))
+    }
+    shown('findling-profile-hardware', known)
+    shown('findling-profile-hardware-unknown', !known)
+
+    if (profile.suggested !== '') {
+      text('findling-profile-suggested', fill(t('findling', 'Suggested for this box: %s'), [names[profile.suggested]]))
+    }
+    shown('findling-profile-suggested', profile.suggested !== '')
+    if (profile.effective !== '') {
+      text('findling-profile-in-force', fill(t('findling', 'In force: %s'), [names[profile.effective]]))
+    }
+    shown('findling-profile-in-force', profile.effective !== '')
+
+    const causes = guardCauseNames()
+    const guardCause = typeof backend.guardCause === 'string' && Object.prototype.hasOwnProperty.call(causes, backend.guardCause) ? backend.guardCause : ''
+    const guardChosen = profileCode(backend.guardChosen)
+    const guardEffective = profileCode(backend.guardEffective)
+    const guardShown = backend.guardConfirmable === true && guardCause !== '' && guardChosen !== '' && guardEffective !== ''
+    if (guardShown) {
+      text('findling-profile-guard-text', fill(
+        t('findling', 'The memory guard lowered the profile: chosen %1$s, in force %2$s (%3$s).'),
+        [names[guardChosen], names[guardEffective], causes[guardCause]]))
+    }
+    shown('findling-profile-guard', guardShown)
+
+    const shrunk = guardCause === '' && chosen !== '' && profile.effective !== '' && chosen !== profile.effective
+    if (shrunk) {
+      text('findling-profile-shrunk', fill(
+        t('findling', 'Chosen %1$s, in force %2$s: this box has less hardware than the chosen profile needs.'),
+        [names[chosen], names[profile.effective]]))
+    }
+    shown('findling-profile-shrunk', shrunk)
+
+    const sentences = precisionSentences()
+    const verdict = typeof backend.precisionVerdict === 'string' && Object.prototype.hasOwnProperty.call(sentences, backend.precisionVerdict)
+      ? backend.precisionVerdict
+      : ''
+    text('findling-profile-precision', verdict === '' ? '' : sentences[verdict])
+    shown('findling-profile-precision', verdict !== '')
+
+    if (!profile.touched && !profile.probing) {
+      resetForm()
+    }
+    refreshForm()
+
+    // A probe started in another tab, or before the page was opened (Z6).
+    if (view.probeRunning === true && !profile.probing) {
+      enterProbe(false, resultKey(currentResult))
+    }
+  }
+
+  /**
+   * The block, wired once. The sentence about JavaScript goes at the one
+   * moment that proves it wrong.
+   */
+  function setupProfile (bootstrap) {
+    shown('findling-profile-nojs', false)
+    if (element('findling-profile') === null) {
+      return
+    }
+
+    const select = element('findling-profile-select')
+    const box = element('findling-profile-fp32')
+    const edited = function () {
+      profile.touched = true
+      profile.startError = ''
+      shown('findling-profile-feedback', false)
+      refreshForm()
+    }
+    if (select !== null) {
+      select.addEventListener('change', edited)
+    }
+    if (box !== null) {
+      box.addEventListener('change', edited)
+    }
+
+    const apply = element('findling-profile-apply')
+    if (apply !== null) {
+      apply.addEventListener('click', function () {
+        const target = formProfile()
+        const precision = formPrecision()
+        if (needsProbe(target, precision, profile.saved, profile.precision)) {
+          startProbe(target, precision, 'findling-profile-apply')
+        } else {
+          saveProfile(target, precision, 'findling-profile-apply')
+        }
+      })
+    }
+
+    // "Stay on Economy", in the form and in the card: economy with the stored
+    // precision, saved at once and without a probe (D-27-11).
+    const stay = function (trigger) {
+      return function () {
+        if (select !== null) {
+          select.value = 'economy'
+        }
+        if (box !== null) {
+          box.checked = false
+        }
+        saveProfile('economy', profile.precision, trigger)
+      }
+    }
+    const stayButton = element('findling-profile-stay')
+    if (stayButton !== null) {
+      stayButton.addEventListener('click', stay('findling-profile-stay'))
+    }
+    const offerStay = element('findling-profile-offer-stay')
+    if (offerStay !== null) {
+      offerStay.addEventListener('click', stay('findling-profile-offer-stay'))
+    }
+
+    // "Check again" of the guard banner: the chosen profile with the stored
+    // precision. Only the two values travel (D-27-12).
+    const recheck = element('findling-profile-recheck')
+    if (recheck !== null) {
+      recheck.addEventListener('click', function () {
+        startProbe(profile.saved, profile.precision, 'findling-profile-recheck')
+      })
+    }
+
+    // "Check Standard" of the card after a verdict on Performance.
+    const offerCheck = element('findling-profile-offer-check')
+    if (offerCheck !== null) {
+      offerCheck.addEventListener('click', function () {
+        // With the precision the card was about, the next lower step of the
+        // same question.
+        const last = currentResult !== null && typeof currentResult === 'object' ? currentResult.precision : ''
+        startProbe('standard', last === 'fp32' || last === 'int8' ? last : profile.precision, 'findling-profile-offer-check')
+      })
+    }
+
+    if (bootstrap !== null) {
+      profileView(bootstrap)
+    } else {
+      refreshForm()
+    }
+  }
+
   function render (view) {
     text('findling-tile-indexed', numbers.format(whole(view.indexedDisplay)))
     text('findling-tile-skipped', numbers.format(whole(view.skipped)))
@@ -1379,6 +2189,10 @@
         .replace('%1$s', languagesActive)
         .replace('%2$s', languagesFilled))
     shown('findling-languages', languagesActive !== '' || languagesFilled !== '')
+
+    // The facts of the profile block. The form itself is left alone once the
+    // admin touched it, for the reason the rules below are not rendered.
+    profileView(view)
 
     // view.rules is deliberately not rendered. Block five is a form somebody may
     // be halfway through filling in, and a poll every five seconds that wrote
@@ -1456,6 +2270,8 @@
   setupRules()
 
   const bootstrap = initialState('bootstrap')
+  // With the bootstrap, so that a page opened during a probe is in Z6 at once.
+  setupProfile(bootstrap)
   if (bootstrap !== null) {
     // Not rendered again, only remembered: the template has already put these
     // very numbers on the page. Remembering them means the first poll can tell
