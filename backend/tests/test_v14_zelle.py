@@ -35,9 +35,9 @@ from test_measurement_scripts import MEASUREMENTS_DIR
 RUN_DIR = MEASUREMENTS_DIR / "2026-10-abnahme-anfahrt" / "skripte"
 PROBE_ROUTE = RUN_DIR / "11-probe-route.py"
 
-PASSWORD = "richtig-und-geheim"
-LOGIN_TOKEN = "zeichen-der-anmeldeseite"
-SESSION_TOKEN = "zeichen-der-sitzung"
+PASSWORD = "richtig-und-geheim"  # noqa: S105 - the password of the stub, nothing real
+LOGIN_TOKEN = "zeichen-der-anmeldeseite"  # noqa: S105 - a token of the stub
+SESSION_TOKEN = "zeichen-der-sitzung"  # noqa: S105 - a token of the stub
 
 
 # ---------------------------------------------------------------------------
@@ -157,7 +157,9 @@ def _handler_for(scenario: Scenario) -> type[BaseHTTPRequestHandler]:
                     and bool(self.headers.get("Origin"))
                 )
                 if good:
-                    self._send(303, "", "text/html", Location="/apps/dashboard/", Set_Cookie="sitzung=angemeldet; Path=/")
+                    self._send(
+                        303, "", "text/html", Location="/apps/dashboard/", Set_Cookie="sitzung=angemeldet; Path=/"
+                    )
                 else:
                     self._send(303, "", "text/html", Location="/login?direct=1")
             elif path == "/apps/findling/admin/profile/check":
@@ -209,7 +211,7 @@ def run_probe(
     tmp_path: Path,
     arguments: list[str],
     *,
-    password_in: str = "file",
+    login_via: str = "file",
     extra: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """11-probe-route.py as a program, against the stub, with its own temp root."""
@@ -231,11 +233,11 @@ def run_probe(
             "PYTHONUTF8": "1",
         }
     )
-    if password_in == "file":
+    if login_via == "file":
         secret = tmp_path / "pw"
         secret.write_text(PASSWORD + "\n", encoding="utf-8")
         environment["FINDLING_ADMIN_PWFILE"] = str(secret)
-    elif password_in == "env":
+    elif login_via == "env":
         environment["FINDLING_ADMIN_PASSWORD"] = PASSWORD
     environment.update(extra or {})
     return subprocess.run(  # noqa: S603 - an argument list, never a shell
@@ -276,7 +278,7 @@ def test_probe_route_narrow_and_nofit_end_with_their_own_code_and_the_cause(
     stub.scenario.verdict = verdict
     stub.scenario.cause = "memory"
     stub.scenario.numbers = {"slots": 1, "reserve": 100, "required": 246415360}
-    answer = run_probe(stub, tmp_path, ["pruefen", "performance", "fp32"], password_in="env")
+    answer = run_probe(stub, tmp_path, ["pruefen", "performance", "fp32"], login_via="env")
     assert answer.returncode == code, answer
     last = answer.stdout.splitlines()[-1]
     assert last.startswith(f"verdikt {verdict} ursache memory numbers ")
@@ -338,13 +340,13 @@ def test_probe_route_refuses_a_password_as_an_argument(stub: Stub, tmp_path: Pat
 
 
 def test_probe_route_without_a_password_does_not_log_in(stub: Stub, tmp_path: Path) -> None:
-    answer = run_probe(stub, tmp_path, ["abwaerts"], password_in="none")
+    answer = run_probe(stub, tmp_path, ["abwaerts"], login_via="none")
     assert answer.returncode == 2, answer
     assert stub.scenario.origins_seen == []
 
 
 def test_probe_route_with_a_wrong_password_ends_with_the_login_code(stub: Stub, tmp_path: Path) -> None:
-    answer = run_probe(stub, tmp_path, ["abwaerts"], password_in="none", extra={"FINDLING_ADMIN_PASSWORD": "falsch"})
+    answer = run_probe(stub, tmp_path, ["abwaerts"], login_via="none", extra={"FINDLING_ADMIN_PASSWORD": "falsch"})
     assert answer.returncode == 34, answer
     assert stub.scenario.saved == []
 
