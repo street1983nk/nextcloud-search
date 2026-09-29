@@ -1,0 +1,7 @@
+variant A target search
+image localhost:5055/findling_backend:latA
+started 2026-09-29T04:04:02Z
+ocr_before samples 10 tesseract_seen_by_nice {'0': 7}
+target search requests 200 p50_ms 286.9 p95_ms 547.1 max_ms 5000.0 errors 1
+ended 2026-09-29T04:07:16Z
+ocr_after samples 10 tesseract_seen_by_nice {'0': 9}
