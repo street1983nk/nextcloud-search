@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
 status: executing
-stopped_at: Phase 28 context gathered
-last_updated: "2026-09-29T21:10:32.953Z"
+stopped_at: Completed 28-02-PLAN.md
+last_updated: "2026-09-29T21:46:32.868Z"
 last_activity: 2026-09-29
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 62
-  completed_plans: 49
+  completed_plans: 50
   percent: 67
 ---
 
@@ -26,16 +26,17 @@ See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 ## Current Position
 
 Phase: 28 (Abnahme-Anfahrt), in Ausführung
-Plan: 2 of 14
+Plan: 3 of 14
 Status: Ready to execute
 Last activity: 2026-09-29
 
-Progress: [████████░░] 79%
+Progress: [████████░░] 81%
 
 ## Naechster Schritt
 
-**execute-phase 28 weiter mit 28-02** (28-01 fertig: Teilkorpus, Rechenblatt, Slotkosten,
-00-ablauf.md; b8e8c785, nur lokal).
+**execute-phase 28 weiter mit 28-03** (28-01 fertig: Teilkorpus, Rechenblatt, Slotkosten,
+00-ablauf.md; b8e8c785. 28-02 fertig: 11-probe-route.py, 10-zelle.sh, 93b-nullstand.sh,
+00-kette.sh, 59 boxlose Tests; 1976584a. Alles nur lokal).
 
 Phase-27-Abschluss (2026-09-29): 16/16 Plaene in 7 Wellen; Owner-Abnahmen 27-01, 27-15
 (gemeinsam per Playwright) und Phase ("ok abgenommen"); Push-Entscheid "push-now" =
@@ -99,6 +100,13 @@ Fuer v1.4 unmittelbar tragend:
   Spurreserve abgezogen. Deckel-Vorschlag 58,74 USD, mit Anker-Zelle 59,43 USD (Saetze
   29.09.), Freigabe durch den Owner offen (SC1, Checkpoint C1).
 
+- 28-02 (29.09.): Zelle nutzt 93b-nullstand.sh (vier Quellen ohne Neuaufbau) statt
+  93-nullstand.sh, weil 93 den Vorrat vor Probe und Wirksamkeit fuellte (Pitfall 2).
+  Ende der Zelle zusaetzlich indexed > 0. Kette: Deckel vor jeder Zelle ohne shutdown
+  (83, Box laeuft weiter), Timer bei Deckel x 1,20 bleibt stehen, fehlgeschlagene Zelle
+  beendet die Kette (84) und zieht den Timer auf 60 min vor; Marke VORPRUEFUNG=stop-ja
+  als Laufwert von Hand nach 00-typwechsel.sh vorpruefung.
+
 ### Termine und Owner-Checkpoints
 
 - **Issue #14 (budachst):** Antwort mit Zitat gepostet (issuecomment-5853918446), Issue bleibt
@@ -160,8 +168,8 @@ Aeltere Merker:
 
 ## Session Continuity
 
-Last session: 2026-09-29T21:10:20.025Z
-Stopped at: Phase 28 context gathered
+Last session: 2026-09-29T21:46:25.838Z
+Stopped at: Completed 28-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

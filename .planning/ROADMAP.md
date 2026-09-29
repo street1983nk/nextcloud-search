@@ -276,7 +276,7 @@ Plans:
 **Wave 1**
 
 - [x] 28-01-PLAN.md , Teilkorpus-Regel, Rechenblatt, Slot-Kosten-Auswertung, Ablauf mit Erwartungen je Zelle (MESS-10), Welle 1
-- [ ] 28-02-PLAN.md , Zelle, Probe über die Produktroute, Kette mit Deckel-Prüfung und Sicherheitstimer (MESS-10), Welle 1
+- [x] 28-02-PLAN.md , Zelle, Probe über die Produktroute, Kette mit Deckel-Prüfung und Sicherheitstimer (MESS-10), Welle 1
 - [ ] 28-03-PLAN.md , aws_box.sh Satztabelle je Typ und SG-Schonung, Typwechsel mit Zieltyp (MESS-10), Welle 1
 - [ ] 28-04-PLAN.md , Runbook x86/USD-Deckel/Abbau bis null Snapshots, lokale x86-Vorprobe (MESS-10), Welle 1
 
@@ -326,7 +326,7 @@ Plans:
 | 25. Einbettungsspur und Modellwahl | v1.4 | 12/12 | Complete    | 2026-09-28 |
 | 26. N OCR-Slots und Speicherwächter | v1.4 | 14/14 | Complete    | 2026-09-29 |
 | 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 16/16 | Complete    | 2026-09-29 |
-| 28. Abnahme-Anfahrt | v1.4 | 1/14 | In Progress|  |
+| 28. Abnahme-Anfahrt | v1.4 | 2/14 | In Progress|  |
 | 29. Härtung und Store-Einreichung 1.4.0 | v1.4 | 0/? | Not started | - |
 
 ## Nach v1.3 (Wiedervorlage)
