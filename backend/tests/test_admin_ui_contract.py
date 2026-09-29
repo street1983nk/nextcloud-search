@@ -61,6 +61,7 @@ from pathlib import Path
 
 from findling import guard, probe
 from findling.api.status import PROFILE_VALUE_KEYS, GuardReport
+from findling.config import PROFILE_PERFORMANCE_OCR_SLOTS_MAX, PROFILE_STANDARD_OCR_SLOTS_MAX
 from findling.embed.engine import ENGINE_STATES
 from findling.embed.weights import FP32_BYTES
 
@@ -2264,14 +2265,23 @@ def test_the_guard_lines_are_built_out_of_closed_sets() -> None:
         ending = " !== null," if key == "guardConfirmable" else ","
         assert view.count(f"'{key}' => ") == 1, key
         assert f"'{key}' => self::{judge}(self::guardField($answer, '{field}')){ending}" in view, key
-    for element in ("findling-guard", "findling-guard-way-back", "findling-slots"):
+    for element in ("findling-guard", "findling-slots"):
         assert f'id="{element}"<?php if (' in template, element
-    assert "<code><?php p($wayBackCommand); ?></code>" in template
+    # D-27-12: the occ way back is gone with its element, its variables and its
+    # sentence; the way back is the button "Check again" of the profile block.
+    for gone in (
+        "findling-guard-way-back",
+        "$wayBackCommand",
+        "$wayBackParts",
+        "$wayBackMarker",
+        "profile_confirmed",
+        "To lift the reduction after checking the memory: %1$s",
+    ):
+        assert gone not in template, gone
     for catalogue in L10N_CATALOGUES:
         keys = catalogue_of(catalogue)
         for key in (
             "Profile: chosen %1$s, in force %2$s (%3$s)",
-            "To lift the reduction after checking the memory: %1$s",
             "OCR slots: %1$s of %2$s, memory tight",
         ):
             assert key in keys, (catalogue.name, key)
@@ -2380,9 +2390,15 @@ def test_the_token_never_reaches_the_browser() -> None:
     probe confirms the way back itself, neither the overview nor the initial
     state nor the script may carry it; the page gets guardConfirmable instead.
     """
-    for source in (ADMIN_VIEW, ADMIN_SETTINGS, SCRIPT):
+    for source in (ADMIN_VIEW, ADMIN_SETTINGS, SCRIPT, TEMPLATE):
         assert "guardToken" not in source.read_text(encoding="utf-8"), source.name
     assert "'guardConfirmable' => self::hexToken(" in ADMIN_VIEW.read_text(encoding="utf-8")
+    # Plan 27-10: the template reads the flag and nothing that looks like the
+    # token, and no command that would carry it survives in the markup.
+    template = TEMPLATE.read_text(encoding="utf-8")
+    assert "$backend['guardConfirmable']" in template
+    for word in ("'token'", "profile_confirmed", "occ config:app:set"):
+        assert word not in template, word
 
 
 def test_every_profile_key_of_the_overview_has_one_line() -> None:
@@ -2440,6 +2456,169 @@ def test_the_view_knows_the_probe_steps() -> None:
     # The empty cause of "fits" is judged apart, like the empty guard cause.
     assert set(php_list_constant(view, "PROBE_CAUSES")) == set(probe.CAUSES)
     assert set(php_list_constant(view, "PROBE_NUMBERS")) == set(probe.NUMBER_KEYS)
+
+
+# Plan 27-10: the block "Performance profile" of the template (UI-01, SC1). The
+# ids of 27-UI-SPEC "Aufbau", which the script of plan 27-12 reads.
+PROFILE_BLOCK_IDS = (
+    "findling-profile",
+    "findling-profile-hardware",
+    "findling-profile-suggested",
+    "findling-profile-in-force",
+    "findling-profile-shrunk",
+    "findling-profile-guard",
+    "findling-profile-precision",
+    "findling-profile-select",
+    "findling-profile-describe-economy",
+    "findling-profile-describe-standard",
+    "findling-profile-describe-performance",
+    "findling-profile-fp32",
+    "findling-profile-fp32-help",
+    "findling-profile-reindex",
+    "findling-profile-env",
+    "findling-profile-apply",
+    "findling-profile-stay",
+    "findling-profile-nochange",
+    "findling-profile-progress",
+    "findling-profile-progress-hint",
+    "findling-profile-error",
+    "findling-profile-verdict",
+    "findling-profile-feedback",
+    "findling-profile-nojs",
+    "findling-profile-announce",
+)
+PROFILE_ENV_VARIABLES = (
+    "FINDLING_OCR_DPI",
+    "FINDLING_OCR_MAX_PAGES",
+    "FINDLING_EMBED_BATCH_SIZE",
+    "FINDLING_WRITER_HEAP_BYTES",
+)
+
+
+def cut_between(source: str, start: str, end: str) -> str:
+    """The text from ``start`` up to ``end``, both of which must be there once."""
+    assert source.count(start) == 1, start
+    assert source.count(end) == 1, end
+    begin = source.index(start)
+    stop = source.index(end)
+    assert begin < stop, (start, end)
+    return source[begin:stop]
+
+
+def profile_block_of(template: str) -> str:
+    """The markup of the block, from its own id up to the rules block below it."""
+    return cut_between(template, 'id="findling-profile"', 'id="findling-rules"')
+
+
+def test_the_profile_block_has_one_select_with_three_profiles() -> None:
+    """SC1, UI-01: one select, exactly three options, economy, standard, performance.
+
+    The block stands directly above the rules block, which cut_between holds
+    by demanding the order of the two ids.
+    """
+    block = profile_block_of(TEMPLATE.read_text(encoding="utf-8"))
+
+    assert block.count("<select") == 1
+    assert re.findall(r'<option value="([a-z]+)"', block) == ["economy", "standard", "performance"]
+    assert block.count("<option") == 3
+    # Without a stored profile the select is preset with the suggestion and
+    # nothing is saved without a click (Z2).
+    template = TEMPLATE.read_text(encoding="utf-8")
+    assert (
+        "$profileForm = $profileStored ? $profileSaved : ($profileSuggested !== '' ? $profileSuggested : 'economy');"
+        in template
+    )
+    assert "$profileSaved = $profileStored && $profileChosen !== '' ? $profileChosen : 'economy';" in template
+
+
+def test_the_profile_block_has_no_advanced_area() -> None:
+    """ADM-04, D-27-11, T-27-33: one select and one checkbox and nothing to unfold."""
+    block = profile_block_of(TEMPLATE.read_text(encoding="utf-8"))
+
+    for element in ("<details", "<summary", "<textarea", "aria-expanded"):
+        assert element not in block, element
+    for word in ("Advanced", "advanced", "Erweitert", "erweitert"):
+        assert word not in block, word
+    inputs = re.findall(r"<input\b[^>]*>", block, re.DOTALL)
+    assert len(inputs) == 1, inputs
+    assert 'type="checkbox"' in inputs[0]
+    assert 'id="findling-profile-fp32"' in inputs[0]
+
+
+def test_the_profile_block_carries_every_id_of_the_contract() -> None:
+    """27-UI-SPEC "Aufbau": every id once, so the script finds exactly one element."""
+    template = TEMPLATE.read_text(encoding="utf-8")
+
+    for element in PROFILE_BLOCK_IDS:
+        assert template.count(f'id="{element}"') == 1, element
+    # The fp32 tick and its help line are hidden under Economy (D-27-01).
+    assert "id=\"findling-profile-fp32-row\"<?php if ($profileForm === 'economy') { ?> hidden" in template
+    assert "id=\"findling-profile-fp32-help\"<?php if ($profileForm === 'economy') { ?> hidden" in template
+    # Both forms of the reindex line lie in the markup (D-27-03, D-27-18).
+    for form in ("findling-profile-reindex-long", "findling-profile-reindex-short"):
+        assert f'id="{form}"' in template, form
+
+
+def test_the_second_button_says_stay_on_economy() -> None:
+    """D-27-11: the way down is "Stay on Economy", never the safe Standard."""
+    template = TEMPLATE.read_text(encoding="utf-8")
+    block = profile_block_of(template)
+
+    assert "<?php p($l->t('Stay on Economy')); ?>" in block
+    for source in (TEMPLATE, SCRIPT):
+        assert "Stay on the safe Standard" not in source.read_text(encoding="utf-8"), source.name
+    # The one primary button of the block is the apply button (accent reserve).
+    assert block.count('class="primary"') == 1
+    assert 'class="primary" id="findling-profile-apply"' in block
+
+
+def test_the_verdict_card_has_all_three_icons_and_no_live_region() -> None:
+    """D-27-04, D-27-10: the card is rendered server side, the region speaks once.
+
+    All three verdict icons lie in the card, two of them hidden, and the card
+    itself carries no aria-live: the one live region of the block is the
+    announce span, so nothing is read out twice.
+    """
+    template = TEMPLATE.read_text(encoding="utf-8")
+    block = profile_block_of(template)
+    card = cut_between(block, 'id="findling-profile-verdict"', 'id="findling-profile-feedback"')
+
+    assert card.count("<svg") == 1, "the three icons come out of one loop over $verdictIcons"
+    assert "<?php foreach ($verdictIcons as $verdictCode => $verdictIcon) { ?>" in card
+    assert re.search(r"\$verdictIcons = \['fits' => [^,]+, 'narrow' => [^,]+, 'nofit' => [^\]]+\];", template)
+    assert "aria-live" not in card
+    assert block.count("aria-live") == 1
+    assert (
+        '<span class="hidden-visually" id="findling-profile-announce" role="status" aria-live="polite"></span>' in block
+    )
+    # The verdict survives a reload because it is read out of profileCheck.
+    assert "$check = is_array($_['profileCheck'] ?? null) ? $_['profileCheck'] : [];" in template
+
+
+def test_the_env_lines_name_only_fixed_variables() -> None:
+    """D-27-14, T-27-31: the variable next to a value comes out of the template.
+
+    The four names stand in a map of the template keyed by the field the view
+    judged; the variable string of the overview entry is never printed, and no
+    word of the container answer reaches the markup.
+    """
+    template = TEMPLATE.read_text(encoding="utf-8")
+
+    for variable in PROFILE_ENV_VARIABLES:
+        assert f"=> '{variable}'," in template, variable
+    assert "<code><?php p($envVariable); ?></code>" in template
+    assert "['variable']" not in template
+    assert "$answer" not in template
+
+
+def test_the_slot_caps_of_the_descriptions_are_the_caps_of_the_profiles() -> None:
+    """The descriptions name the upper bound of OCR slots out of config.py."""
+    template = TEMPLATE.read_text(encoding="utf-8")
+
+    assert (
+        f"$slotCaps = ['standard' => {PROFILE_STANDARD_OCR_SLOTS_MAX}, "
+        f"'performance' => {PROFILE_PERFORMANCE_OCR_SLOTS_MAX}];" in template
+    )
 
 
 def test_the_two_translation_files_carry_the_same_keys() -> None:
