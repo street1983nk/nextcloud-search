@@ -10,7 +10,7 @@ created: 2026-09-29
 # Phase 27: UI Design Contract (Vorab-Prüfung und Settings-Oberfläche)
 
 > Visueller und Interaktionsvertrag für den neuen Block "Leistungsprofil" der bestehenden Adminseite. Erstellt von gsd-ui-researcher, geprüft von gsd-ui-checker.
-> Grundlage: 27-CONTEXT.md (D-27-01..14, gelockt), Vorentscheide D-24/D-25/D-26, Bestandsvertrag 04-UI-SPEC.md, Bestand `php/templates/admin.php`, `php/css/admin.css`, `php/js/admin.js`.
+> Grundlage: 27-CONTEXT.md (D-27-01..20, gelockt), Vorentscheide D-24/D-25/D-26, Bestandsvertrag 04-UI-SPEC.md, Bestand `php/templates/admin.php`, `php/css/admin.css`, `php/js/admin.js`.
 > Diese Phase erweitert die Seite. Sie erfindet kein Token, keine Schriftgröße und keine Farbe neu.
 
 ---
@@ -307,6 +307,11 @@ Schrittcodes als geschlossene Menge (Endliste legt die Research fest; jeder neue
 | `download_failed` | nicht | `The model could not be downloaded. Check that github.com and release-assets.githubusercontent.com are reachable.` | `Das Modell ließ sich nicht herunterladen. Prüfen, ob github.com und release-assets.githubusercontent.com erreichbar sind.` |
 | `download_slow` | nicht | `The download took longer than %s.` | `Der Download dauerte länger als %s.` |
 | `digest_mismatch` | nicht | `The model file does not match its checksum and was deleted.` | `Die Modelldatei passt nicht zu ihrer Prüfsumme und wurde gelöscht.` |
+| `disk_short` | nicht | `Not enough disk space for the fp32 model.` | `Zu wenig Platz auf dem Datenträger für das fp32-Modell.` |
+| `memory_unknown` | nicht | `The available memory could not be read.` | `Der verfügbare Speicher ließ sich nicht lesen.` |
+| `interrupted` | nicht | `The check was interrupted by a restart of the backend.` | `Die Prüfung wurde durch einen Neustart des Backends unterbrochen.` |
+| `pause_timeout` | nicht | `The running indexing batch did not end within %s.` | `Die laufende Indexstaffel endete nicht innerhalb von %s.` |
+| `probe_failed` | nicht | `The check stopped with an error.` | `Die Prüfung brach mit einem Fehler ab.` |
 
 Zahlen: Slotzahl via `$count`, Bytes via `$size`, Deckel via `$span`. Fehlt dem Container ein Zahlwert, zeigt die Seite keinen Satz mit Loch: dann gilt die Kurzform des Chips plus `Nothing was saved. %s stays in force.`.
 
@@ -317,6 +322,7 @@ Zahlen: Slotzahl via `$count`, Bytes via `$size`, Deckel via `$span`. Fehlt dem 
 | `The check needs the backend, and it does not answer right now. Nothing was saved.` | `Die Prüfung braucht das Backend, und es antwortet gerade nicht. Nichts gespeichert.` | Z14 |
 | `This backend version cannot run the check. Bring both halves of Findling to the same version.` | `Diese Backend-Version kann die Prüfung nicht fahren. Beide Hälften von Findling auf dieselbe Version bringen.` | Z15 |
 | `A check is already running. Its result appears here.` | `Eine Prüfung läuft bereits. Ihr Ergebnis erscheint hier.` | Z16 |
+| `The index is being rebuilt right now. The check is possible afterwards.` | `Der Index wird gerade neu aufgebaut. Die Prüfung ist danach möglich.` | Z16a, Startcode `rebuilding`: Probe-Knöpfe gesperrt, Z5-Wege bleiben |
 | `Saved. %s applies from the next indexing round.` | (wie oben) | Z5 Erfolg |
 | `The profile was not saved. Nothing changed.` | `Das Profil wurde nicht gespeichert. Es hat sich nichts geändert.` | Z17 |
 | `The memory guard lowered the profile: chosen %1$s, in force %2$s (%3$s).` | `Der Speicherwächter hat das Profil abgesenkt: gewählt %1$s, wirksam %2$s (%3$s).` | Z10, %3$s = Bestands-Ursachensätze `memory_max_repeated`/`oom_kill`/`unclean_end` |
@@ -346,6 +352,20 @@ Tonregel: kurze Sätze, keine Erzählabsätze (Owner-Regel Kurze Produkttexte), 
 - `docs/admin-page.md`: neuer Abschnitt "Das Leistungsprofil" mit Zuständen und Abwärtswegen; Abschnitt "Die Wächterzeilen" ohne occ-Rückweg, mit Verweis auf "Erneut prüfen"; "Keinen Erweitert-Bereich" um den Satz ergänzen, dass Auswahlfeld plus Häkchen ADM-04 wahren.
 - `docs/profiles.md` / `docs/embeddings.md` §11: occ als Weg ohne Probe (D-27-13), "Bis zur Einstellungsseite (Phase 27) per occ" umformulieren.
 - ROADMAP SC1: "Beim sicheren Standard bleiben" zu "Bei Sparsam bleiben" (D-27-11).
+
+---
+
+## Delta 29.09.2026 (D-27-15 bis D-27-20)
+
+- Endwerte (D-27-06, D-27-16): Poll des Probe-Stands 2000 ms; Messdeckel 120 s; Download inkl. Digest 600 s; Pause 1800 s mit Schritt `pause` und Ursache `pause_timeout`.
+- Sicherheitsabstand für `narrow` = `GUARD_RESERVE_BYTES` (235 MiB), keine neue Konstante (D-27-08).
+- Ursachen neu (D-27-20): `disk_short`, `memory_unknown`, `interrupted`, `pause_timeout`, `probe_failed`, je ein Satz in der Ursachentabelle.
+- Startcode neu (D-27-20): `rebuilding`, Satz in der Tabelle "Startfehler", Zustand Z16a.
+- `The downloaded model file was deleted again.` erscheint nur, wenn die Probe die fp32-Datei selbst geladen hat; sonst sagt die Karte nicht "wieder gelöscht" (D-27-17).
+- Reindex-Zeile ohne gemessene Rate dieser Box: nur Kurzform mit Dokumentzahl (D-27-18).
+- Der Token erscheint nie im Browser; die Seite bekommt nur das Flag `guardConfirmable` (D-27-12).
+- Zahlen im Verdikt, geschlossene Schlüsselmenge: `slots`, `need`, `available`, `reserve`, `required`, `seconds`, `rateInt8`, `rateFp32`.
+- Platzhalterbelegung je Ursache: `reserve_thin`: reserve, required; `memory_short`: slots, need, available; `model_memory`: need, available; `timeout`, `download_slow`, `pause_timeout`: seconds. Alle übrigen Ursachen ohne Platzhalter.
 
 ---
 
