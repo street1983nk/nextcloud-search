@@ -126,6 +126,7 @@ Keine verwaisten Requirements: REQUIREMENTS.md ordnet Phase 27 nur PRUEF-01 und 
    **Test:** Die Commits 918f340d..9e370e66 mit Owner-Wort pushen, Lauf "PHP and store metadata gates" abwarten.
    **Expected:** grün inklusive der neuen Fälle (WR-01 ScanRecountJob/CrawlAdvance, WR-06 inForce, WR-07 adopt), dazu Python gates auf Linux mit den neuen Kindtests.
    **Why human:** lokal kein PHPUnit möglich; Push nur mit Owner-Freigabe.
+   **Erledigt (2026-09-29):** Owner-Wort "ja", Push bis c87a0239; alle sechs Workflows grün: PHP and store metadata gates 36596834116, Python gates 36596834155, Integration 36596834631, Resilience 36596834180, Multi-arch image 36596834250, HaRP deploy 36596834148.
 
 2. **fp32-Zweig live**
    **Test:** standard + fp32 auf dem HaRP-Harness prüfen lassen.
