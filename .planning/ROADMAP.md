@@ -242,8 +242,8 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 27-11-PLAN.md , Container: Router /probe und /probe/state (ADMIN), Statusblock probe, model.chunks, Lifespan (PRUEF-01), Welle 4
-- [ ] 27-12-PLAN.md , admin.js: Probe-Start, Poll 2000 ms, Verdikt, Abwärtswege, Maps, Fokus (UI-01, PRUEF-01, D-27-01/03/08/09), Welle 4
+- [x] 27-11-PLAN.md , Container: Router /probe und /probe/state (ADMIN), Statusblock probe, model.chunks, Lifespan (PRUEF-01), Welle 4
+- [x] 27-12-PLAN.md , admin.js: Probe-Start, Poll 2000 ms, Verdikt, Abwärtswege, Maps, Fokus (UI-01, PRUEF-01, D-27-01/03/08/09), Welle 4
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -298,7 +298,7 @@ Plans:
 | 24. Owner-Tor, Profil-Gerüst und Marken-Reparatur | v1.4 | 6/6 | Complete    | 2026-09-28 |
 | 25. Einbettungsspur und Modellwahl | v1.4 | 12/12 | Complete    | 2026-09-28 |
 | 26. N OCR-Slots und Speicherwächter | v1.4 | 14/14 | Complete    | 2026-09-29 |
-| 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 10/16 | In Progress|  |
+| 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 12/16 | In Progress|  |
 | 28. Abnahme-Anfahrt | v1.4 | 0/? | Not started | - |
 | 29. Härtung und Store-Einreichung 1.4.0 | v1.4 | 0/? | Not started | - |
 
