@@ -3604,3 +3604,66 @@ def test_the_stall_verdict_asks_both_halves_and_reads_the_counter_before_it_writ
     assert re.search(r"\$movedAt = max\(\s*\$lastJobRun,", overview) is not None
     assert re.search(r"\$stalledFor = \$movedAt === 0 \? 0 : max\(0, \$now - \$movedAt\)", overview) is not None
     assert overview.index("lastIndexedCount()") < overview.index("rememberIndexedCount(")
+
+
+# The five language documents whose tables the catalogues were cast from, each
+# with the catalogues of its value columns in column order. The DE column is
+# always de.json. Review WR-05/WR-11 of phase 27: nothing tied these tables to
+# the catalogues, so 72 keys of phase 27 and 10 older ones went a whole phase
+# without a row while every catalogue gate stayed green, and the owner could no
+# longer read the wording of a language in one pass.
+LANGUAGE_TABLES = (
+    (REPO_ROOT / "docs" / "l10n-french.md", (L10N_FR_JSON,)),
+    (REPO_ROOT / "docs" / "l10n-spanish.md", (L10N_ES_JSON,)),
+    (REPO_ROOT / "docs" / "l10n-italian.md", (L10N_IT_JSON,)),
+    (REPO_ROOT / "docs" / "l10n-dutch.md", (L10N_NL_JSON,)),
+    (REPO_ROOT / "docs" / "l10n-portuguese.md", (L10N_PT_PT_JSON, L10N_PT_BR_JSON)),
+)
+
+# The one key a table may leave out: the name of the app, which every document
+# names under its exceptions for gate G2 instead of giving it a row.
+LANGUAGE_TABLE_EXCEPTIONS = frozenset({"Findling"})
+
+TABLE_ROW = re.compile(r"^\| `(?P<key>.*?)` \| (?P<values>.*) \|$")
+
+
+def language_table(document: Path) -> dict[str, list[str]]:
+    """The rows of the table under "| Schluessel |": key to the value cells."""
+    rows: dict[str, list[str]] = {}
+    inside = False
+    for line in document.read_text(encoding="utf-8").splitlines():
+        if line.startswith("| Schluessel |"):
+            inside = True
+            continue
+        if not inside or line.startswith("|---"):
+            continue
+        if not line.startswith("|"):
+            break
+        row = TABLE_ROW.match(line)
+        assert row is not None, (document.name, line)
+        assert row["key"] not in rows, (document.name, row["key"])
+        rows[row["key"]] = row["values"].split(" | ")
+    return rows
+
+
+def test_every_language_table_carries_every_key_with_the_catalogue_wording() -> None:
+    """Each table has one row per key of de.json, and its cells are the catalogues.
+
+    The key set is held both ways: no key without a row (the gap of phase 27)
+    and no row for a key the catalogues no longer carry. The cells are held too,
+    plural forms joined with " / " the way the tables write them, because a table
+    that differs from the shipped catalogue is a table the owner reads and
+    approves while the page says something else.
+    """
+    german = catalogue_of(L10N_JSON)
+    for document, catalogues in LANGUAGE_TABLES:
+        rows = language_table(document)
+        assert rows != {}, document.name
+        missing = [key for key in german if key not in rows and key not in LANGUAGE_TABLE_EXCEPTIONS]
+        stale = [key for key in rows if key not in german]
+        assert missing == [], (document.name, len(missing), missing[:5])
+        assert stale == [], (document.name, stale)
+        targets = [catalogue_of(path) for path in catalogues]
+        for key, cells in rows.items():
+            expected = [" / ".join(forms_of(german[key]))] + [" / ".join(forms_of(t[key])) for t in targets]
+            assert cells == expected, (document.name, key)
