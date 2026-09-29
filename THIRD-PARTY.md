@@ -287,8 +287,8 @@ the distributed material and not further down.
 | Source repository | `github.com/Templarian/MaterialDesign-SVG` |
 | Pinned commit | `9e04201d4557e729822fb57f62a316c3dea1d4a8` (tag `v7.4.47`), read on 2026-09-02 |
 | Licence | **Apache-2.0** (`LICENSE` of the repository), compatible with the AGPL-3.0 of Findling |
-| What is used | the `d` attribute of twelve icons and nothing else: `magnify`, `alert-circle-outline`, `clock-outline`, `minus-circle-outline`, `content-cut`, `folder-off-outline`, `check-circle-outline`, `information-outline`, `close`, `chevron-left`, `chevron-right` and `file-search-outline` |
-| Where it lands | `php/img/app-dark.svg` and `php/img/app.svg` carry `magnify`, the first as the section icon of the settings, the second as the icon of the app menu; the two files are byte identical copies of one glyph, because the icon lookup of the server asks for the dark name in a dark theme and for the plain one everywhere else. `php/templates/admin.php` carries eight: `alert-circle-outline` in the banners of the coverage block and the failed chip, `clock-outline` in the chip of the waiting queue and the queued chip of the lookup, `minus-circle-outline` for skipped, `content-cut` for a truncated document, `folder-off-outline` for an excluded file, `check-circle-outline` for an indexed one, `information-outline` in the hint banners and the unknown chip, and `close` on the button that removes one folder exclusion. `php/templates/search.php` carries seven, three of them new here: `chevron-left` and `chevron-right` on the two pagination buttons, `file-search-outline` in the empty state without a hit, and `magnify`, `alert-circle-outline` and `information-outline` a second time, in the search button and the empty state without a term, in the error block and in the hint line, and `close` a second time as well, on every active chip of the filter row, where it is the visible half of "click this to remove the filter" |
+| What is used | the `d` attribute of thirteen icons and nothing else: `magnify`, `alert-circle-outline`, `clock-outline`, `minus-circle-outline`, `content-cut`, `folder-off-outline`, `check-circle-outline`, `information-outline`, `close`, `close-circle-outline`, `chevron-left`, `chevron-right` and `file-search-outline` |
+| Where it lands | `php/img/app-dark.svg` and `php/img/app.svg` carry `magnify`, the first as the section icon of the settings, the second as the icon of the app menu; the two files are byte identical copies of one glyph, because the icon lookup of the server asks for the dark name in a dark theme and for the plain one everywhere else. `php/templates/admin.php` carries nine: `alert-circle-outline` in the banners of the coverage block, the failed chip and the chip "Fits narrowly" of the performance profile, `close-circle-outline` in the chip "Does not fit" of the same card, `clock-outline` in the chip of the waiting queue and the queued chip of the lookup, `minus-circle-outline` for skipped, `content-cut` for a truncated document, `folder-off-outline` for an excluded file, `check-circle-outline` for an indexed one, `information-outline` in the hint banners and the unknown chip, and `close` on the button that removes one folder exclusion. `php/templates/search.php` carries seven, three of them new here: `chevron-left` and `chevron-right` on the two pagination buttons, `file-search-outline` in the empty state without a hit, and `magnify`, `alert-circle-outline` and `information-outline` a second time, in the search button and the empty state without a term, in the error block and in the hint line, and `close` a second time as well, on every active chip of the filter row, where it is the visible half of "click this to remove the filter" |
 
 The commit is pinned instead of `master` because a path is data, and data that
 is quoted has to be quotable. Every string in this repository is byte identical
@@ -368,17 +368,17 @@ grep -A 20 '^dependencies' backend/pyproject.toml
 mdi=9e04201d4557e729822fb57f62a316c3dea1d4a8
 for icon in magnify alert-circle-outline clock-outline minus-circle-outline \
             content-cut folder-off-outline check-circle-outline \
-            information-outline close chevron-left chevron-right \
-            file-search-outline; do
+            information-outline close close-circle-outline \
+            chevron-left chevron-right file-search-outline; do
     curl -sf "https://raw.githubusercontent.com/Templarian/MaterialDesign-SVG/${mdi}/svg/${icon}.svg" \
         | grep -oE '"M[0-9][^"]*' | tr -d '"'
 done | sort -u
 
-# and the same twelve as this repository ships them, in both spellings
+# and the same thirteen as this repository ships them, in both spellings
 grep -ohE "[\"']M[0-9][^\"']*" php/img/app.svg php/img/app-dark.svg \
     php/templates/admin.php php/templates/search.php | tr -d "\"'" | sort -u
 ```
 
 Both halves print one path per line and nothing else, so the two outputs are
-compared with `diff` rather than by eye. Twelve lines on each side, and the same
-twelve.
+compared with `diff` rather than by eye. Thirteen lines on each side, and the same
+thirteen.

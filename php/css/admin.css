@@ -19,6 +19,7 @@
 #findling-estimate,
 #findling-errors,
 #findling-diagnosis,
+#findling-profile,
 #findling-rules {
 	/* The same width as the h2 of a settings block in the core, so that text
 	   and heading end on the same line. */
@@ -33,6 +34,7 @@
 #findling-estimate [hidden],
 #findling-errors [hidden],
 #findling-diagnosis [hidden],
+#findling-profile [hidden],
 #findling-rules [hidden] {
 	display: none !important;
 }
@@ -74,6 +76,17 @@
 .findling-banner--warning {
 	background-color: var(--color-warning);
 	color: var(--color-warning-text);
+}
+
+/* The hint pair of the theme, for the reindex line of the profile block: a
+   consequence to know about before a click, neither a warning nor a fault. */
+.findling-banner--info {
+	background-color: var(--color-info);
+	color: var(--color-info-text);
+}
+
+.findling-banner--info .findling-banner__icon {
+	color: var(--color-element-info);
 }
 
 .findling-banner__icon {
@@ -150,32 +163,40 @@
    theme ships, because the pair is what carries the checked contrast, and the
    icon colour is the element variant of the same meaning. Every chip also
    carries an icon and a word, so colour is never the only carrier. */
+/* The three verdicts of the profile probe share the pairs: narrow is a
+   warning, nofit a fault, fits a success. */
 .findling-chip--skipped,
-.findling-chip--truncated {
+.findling-chip--truncated,
+.findling-chip--narrow {
 	background-color: var(--color-warning);
 	color: var(--color-warning-text);
 }
 
 .findling-chip--skipped svg,
-.findling-chip--truncated svg {
+.findling-chip--truncated svg,
+.findling-chip--narrow svg {
 	color: var(--color-element-warning);
 }
 
-.findling-chip--failed {
+.findling-chip--failed,
+.findling-chip--nofit {
 	background-color: var(--color-error);
 	color: var(--color-error-text);
 }
 
-.findling-chip--failed svg {
+.findling-chip--failed svg,
+.findling-chip--nofit svg {
 	color: var(--color-element-error);
 }
 
-.findling-chip--indexed {
+.findling-chip--indexed,
+.findling-chip--fits {
 	background-color: var(--color-success);
 	color: var(--color-success-text);
 }
 
-.findling-chip--indexed svg {
+.findling-chip--indexed svg,
+.findling-chip--fits svg {
 	color: var(--color-element-success);
 }
 
@@ -530,4 +551,59 @@
 .findling-rules__feedback--error {
 	background-color: var(--color-error);
 	color: var(--color-error-text);
+}
+
+/* -- the performance profile ----------------------------------------------- */
+
+/* The three lines of what is true about this box stand apart from the form
+   below them by six grid units, the one large distance of this block. */
+.findling-profile__facts {
+	margin-block-end: calc(var(--default-grid-baseline) * 6);
+}
+
+/* Wide enough for "Standard (suggested)" in every language of the catalogue,
+   and as tall as the clickable area of the theme. */
+#findling-profile-select {
+	min-height: var(--default-clickable-area);
+	min-width: calc(var(--default-grid-baseline) * 60);
+}
+
+.findling-profile__actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: calc(var(--default-grid-baseline) * 2);
+	margin-block: calc(var(--default-grid-baseline) * 4);
+}
+
+.findling-profile__actions button {
+	min-height: var(--default-clickable-area);
+}
+
+/* The guard banner carries a button: it stands at the end of the sentence and
+   falls under it when the line wraps. */
+#findling-profile-guard {
+	flex-wrap: wrap;
+}
+
+#findling-profile-guard button {
+	margin-inline-start: auto;
+	min-height: var(--default-clickable-area);
+}
+
+/* The overruled values, one line each, with the variable in the monospace of
+   the core and no size of its own. */
+.findling-profile__env {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--default-grid-baseline) * 2);
+	margin-block: calc(var(--default-grid-baseline) * 2);
+	padding-inline-start: 0;
+	list-style: none;
+	font-size: 13px;
+	color: var(--color-text-maxcontrast);
+}
+
+.findling-profile__env code {
+	overflow-wrap: anywhere;
 }

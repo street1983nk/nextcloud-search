@@ -265,9 +265,9 @@ $modelLine = $reembedRunning && $hasEmbeddedFraction
 // the answer against, and the catalogue gives the wording; nothing the
 // container sends becomes a phrase of this page (T-25-14 pattern, T-26-16).
 // A container older than 1.4 sends no object guard, every field is null then,
-// and all three lines stay hidden. The way back is an occ command with the
-// confirmation token and deliberately not a button: the settings interface is
-// phase 27.
+// and both lines stay hidden. The way back is no longer an occ line with the
+// confirmation token (D-27-12): it is the button "Check again" in the block
+// "Performance profile" further down, and the token never reaches the browser.
 $profileNames = ['economy' => $l->t('Economy'), 'standard' => $l->t('Standard'), 'performance' => $l->t('Performance')];
 $causeNames = [
 	'memory_max_repeated' => $l->t('memory tight, memory.events max twice'),
@@ -280,15 +280,6 @@ $guardChosenName = $profileNames[is_string($backend['guardChosen'] ?? null) ? $b
 $guardEffectiveName = $profileNames[is_string($backend['guardEffective'] ?? null) ? $backend['guardEffective'] : ''] ?? '';
 $guardShown = $guardCauseName !== '' && $guardChosenName !== '' && $guardEffectiveName !== '';
 $guardLine = $l->t('Profile: chosen %1$s, in force %2$s (%3$s)', [$guardChosenName, $guardEffectiveName, $guardCauseName]);
-$guardToken = is_string($backend['guardToken'] ?? null) ? $backend['guardToken'] : '';
-$wayBackShown = $guardCauseName !== '' && $guardToken !== '';
-// The command sits inside a code element of its own, so the sentence is
-// translated with a marker in place of the command and cut at that marker.
-// The translator keeps the word order of the language, and the command is
-// never part of a translated string.
-$wayBackMarker = "\u{E000}";
-$wayBackCommand = 'occ config:app:set findling profile_confirmed --value=' . $guardToken;
-$wayBackParts = explode($wayBackMarker, $l->t('To lift the reduction after checking the memory: %1$s', [$wayBackMarker]), 2) + ['', ''];
 $slotsInForce = is_int($backend['slotsInForce'] ?? null) ? $backend['slotsInForce'] : 0;
 $slotsTarget = is_int($backend['slotsTarget'] ?? null) ? $backend['slotsTarget'] : 0;
 $slotsShown = ($backend['slotsThrottled'] ?? null) === true;
@@ -524,12 +515,11 @@ $banners = [
 	 * The memory guard of plan 26-05, directly under the run state because a
 	 * lowered profile and throttled slots are why a run goes slower than the
 	 * profile promised. Each line carries the hidden attribute when it does not
-	 * apply, like every other block of this page, and all three are hidden for
-	 * a container that did not send the object guard.
+	 * apply, like every other block of this page, and both are hidden for a
+	 * container that did not send the object guard.
 	 */
 	?>
 	<p class="settings-hint" id="findling-guard"<?php if (!$guardShown) { ?> hidden<?php } ?>><?php p($guardLine); ?></p>
-	<p class="settings-hint" id="findling-guard-way-back"<?php if (!$wayBackShown) { ?> hidden<?php } ?>><?php p($wayBackParts[0]); ?><code><?php p($wayBackCommand); ?></code><?php p($wayBackParts[1]); ?></p>
 	<p class="settings-hint" id="findling-slots"<?php if (!$slotsShown) { ?> hidden<?php } ?>><?php p($slotsLine); ?></p>
 
 	<p class="findling-chips">
@@ -925,7 +915,307 @@ $ceilingMb = max(1, intdiv($ceilingBytes, $megabyte));
 // icon-only control on this page and therefore the one that has to carry its
 // label in an aria-label with the path in it.
 $closeIcon = 'M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z';
+
+/*
+ * The performance profile of phase 27 (UI-01, D-27-01 to D-27-20), directly
+ * above the rules: the two writing blocks of this page stand together, the
+ * four above them only report.
+ *
+ * One select with three profiles and one checkbox that depends on it, and
+ * nothing else to set (ADM-04, D-27-11): the values an admin variable of the
+ * container overrules are shown, never offered as a field (D-27-14).
+ *
+ * Every state of the block lies in the markup and the ones that do not apply
+ * carry the hidden attribute, like everywhere else on this page. The script of
+ * plan 27-12 flips attributes, the disabled flag and text nodes; it builds no
+ * markup (Gate C). Every word below comes out of a map of this template on
+ * the catalogue, keyed by a code the service judged against a closed set, and
+ * a code outside a map leaves its line hidden rather than filled with a word
+ * of the container (T-27-31). The confirmation token of the guard is not on
+ * this page at all: the view hands over whether there is one to confirm, and
+ * the button "Check again" sends nothing but the profile (D-27-12).
+ */
+$profileKey = static fn (mixed $value): string => is_string($value) && isset($profileNames[$value]) ? $value : '';
+$profileStored = ($_['profileStored'] ?? false) === true;
+$profileChosen = $profileKey($_['profileChosen'] ?? null);
+$profileSuggested = $profileKey($_['profileSuggested'] ?? null);
+$profileEffective = $profileKey($_['profileEffective'] ?? null);
+// What is saved and what the select shows. Without a stored profile Economy is
+// in force and the select is preset with the suggestion, which is saved only on
+// a click (Z1, Z2, SC1).
+$profileSaved = $profileStored && $profileChosen !== '' ? $profileChosen : 'economy';
+$profileForm = $profileStored ? $profileSaved : ($profileSuggested !== '' ? $profileSuggested : 'economy');
+$precisionStored = ($_['storedPrecision'] ?? null) === 'fp32' ? 'fp32' : 'int8';
+$probeSupported = ($_['probeSupported'] ?? false) === true;
+$probeRunning = ($_['probeRunning'] ?? false) === true;
+$probeStep = is_string($_['probeStep'] ?? null) ? $_['probeStep'] : '';
+$hardwareCores = is_int($_['hardwareCores'] ?? null) && $_['hardwareCores'] >= 0 ? $_['hardwareCores'] : null;
+$hardwareMemory = is_int($_['hardwareMemory'] ?? null) && $_['hardwareMemory'] >= 0 ? $_['hardwareMemory'] : null;
+$hardwareKnown = $hardwareCores !== null && $hardwareMemory !== null;
+$fp32Bytes = $whole($_['fp32DownloadBytes'] ?? 0);
+
+// The upper bound of OCR slots of the two larger profiles, the values of
+// PROFILE_STANDARD_OCR_SLOTS_MAX and PROFILE_PERFORMANCE_OCR_SLOTS_MAX in
+// backend/src/findling/config.py, held equal by a test.
+$slotCaps = ['standard' => 4, 'performance' => 16];
+$profileDescriptions = [
+	'economy' => $l->t('One OCR slot, as before.'),
+	'standard' => $l->t('At most half of this box, up to %s OCR slots.', [$count($slotCaps['standard'])]),
+	'performance' => $l->t('Everything but one core, up to %s OCR slots.', [$count($slotCaps['performance'])]),
+];
+
+// The reindex line of D-27-03 and D-27-18 for the precision a click on the
+// checkbox leads to. The duration only exists out of a rate a probe of this box
+// measured, so without one the short form with the document count stands alone.
+$reindexDocuments = $whole($_['reindexDocuments'] ?? 0);
+$reindexSecondsRaw = $precisionStored === 'fp32' ? ($_['reindexSecondsInt8'] ?? null) : ($_['reindexSecondsFp32'] ?? null);
+$reindexSeconds = is_int($reindexSecondsRaw) && $reindexSecondsRaw >= 0 ? $reindexSecondsRaw : null;
+
+// Why a probe cannot start right now, one sentence each (Z14, Z15, Z16a). The
+// ways without a probe stay open in all three, because they only write
+// appconfig (D-24-01).
+$probeErrorText = match (true) {
+	!$reachable => $l->t('The check needs the backend, and it does not answer right now. Nothing was saved.'),
+	!$probeSupported => $l->t('This backend version cannot run the check. Bring both halves of Findling to the same version.'),
+	$rebuildRunning => $l->t('The index is being rebuilt right now. The check is possible afterwards.'),
+	default => '',
+};
+$probeBlocked = $probeErrorText !== '' || $probeRunning;
+$profileChanged = $profileForm !== $profileSaved;
+$applyDisabled = !$profileChanged || $probeBlocked;
+$stayShown = $profileSaved === 'economy' && $profileSuggested !== '' && $profileSuggested !== 'economy';
+
+// The guard banner of Z10: the guard lowered the profile and holds a
+// confirmation the probe can give. Built out of the same three names as the
+// guard line of block one.
+$profileGuardShown = ($backend['guardConfirmable'] ?? false) === true && $guardShown;
+$profileGuardLine = $l->t('The memory guard lowered the profile: chosen %1$s, in force %2$s (%3$s).', [$guardChosenName, $guardEffectiveName, $guardCauseName]);
+// Z11 (D-24-07): chosen and in force differ without a guard cause, so the box
+// has less hardware than the chosen profile needs.
+$profileShrunk = $guardCauseName === '' && $profileChosen !== '' && $profileEffective !== '' && $profileChosen !== $profileEffective;
+
+// Z13, one line for the precision verdict of the model.
+$precisionSentences = [
+	'fp32_unavailable' => $l->t('The fp32 model is not available. The search uses int8.'),
+	'fp32_on_a_tight_box' => $l->t('fp32 is set, but this box has too little memory for it. The search uses int8.'),
+	'fp32_not_in_economy' => $l->t('fp32 is only available in Standard and Performance. The search uses int8.'),
+	'fp32_active_in_economy' => $l->t('fp32 stays active under Economy. To go back to int8, choose Standard or Performance and clear the tick.'),
+	'downloading' => $l->t('The fp32 model is being downloaded.'),
+];
+$precisionVerdict = is_string($backend['precisionVerdict'] ?? null) ? $backend['precisionVerdict'] : '';
+$precisionSentence = $precisionSentences[$precisionVerdict] ?? '';
+
+// The steps of a running probe (probe.STEPS). Two of the eight name figures
+// only the probe route knows, the bytes of the download and the slots of the
+// second OCR pass, so they are not in this map: the page opened during one of
+// them says "Check running." until the first poll of the script, two seconds
+// later, writes the step with its figures (the sentences of the script).
+$stepNames = [
+	'pause' => $l->t('waiting for the indexing batch'),
+	'digest' => $l->t('verifying the model file'),
+	'model' => $l->t('loading the model'),
+	'ocr_one' => $l->t('OCR with one slot'),
+	'calc' => $l->t('calculating memory'),
+	'cleanup' => $l->t('cleaning up'),
+];
+$progressLine = isset($stepNames[$probeStep])
+	? $l->t('Check running: %s', [$stepNames[$probeStep]])
+	: $l->t('Check running.');
+
+// The last verdict, rendered out of the stored result so that it survives a
+// reload (D-27-04, D-27-10). The view judged every field against its closed
+// set; this side names them.
+$closeCircleIcon = 'M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2C6.47,2 2,6.47 2,12C2,17.53 6.47,22 12,22C17.53,22 22,17.53 22,12C22,6.47 17.53,2 12,2M14.59,8L12,10.59L9.41,8L8,9.41L10.59,12L8,14.59L9.41,16L12,13.41L14.59,16L16,14.59L13.41,12L16,9.41L14.59,8Z';
+$verdictNames = ['fits' => $l->t('Fits'), 'narrow' => $l->t('Fits narrowly'), 'nofit' => $l->t('Does not fit')];
+$verdictIcons = ['fits' => $diagnosisIcons['indexed'], 'narrow' => $alertIcon, 'nofit' => $closeCircleIcon];
+$check = is_array($_['profileCheck'] ?? null) ? $_['profileCheck'] : [];
+$checkVerdict = is_string($check['verdict'] ?? null) && isset($verdictNames[$check['verdict']]) ? $check['verdict'] : '';
+$checkProfile = $profileKey($check['profile'] ?? null);
+$checkPrecision = is_string($check['precision'] ?? null) && isset($modelNames[$check['precision']]) ? $check['precision'] : '';
+$checkShown = $checkVerdict !== '' && $checkProfile !== '' && $checkPrecision !== '';
+$checkAt = is_string($check['atText'] ?? null) ? $check['atText'] : '';
+$checkCommitted = ($check['committed'] ?? false) === true;
+$checkNumbers = is_array($check['numbers'] ?? null) ? $check['numbers'] : [];
+$checkNumber = static fn (string $key, Closure $format): string => is_int($checkNumbers[$key] ?? null) && $checkNumbers[$key] >= 0 ? $format($checkNumbers[$key]) : '';
+$probeCauseNames = [
+	'reserve_thin' => $l->t('Memory reserve too thin: %1$s left, %2$s needed.', [$checkNumber('reserve', $size), $checkNumber('required', $size)]),
+	'memory_short' => $l->t('Not enough memory: %1$s OCR slots need about %2$s, %3$s are available.', [$checkNumber('slots', $count), $checkNumber('need', $size), $checkNumber('available', $size)]),
+	'model_memory' => $l->t('Not enough memory for the fp32 model: it needs about %1$s, %2$s are available.', [$checkNumber('need', $size), $checkNumber('available', $size)]),
+	'slot_killed' => $l->t('A test slot was ended for lack of memory.'),
+	'timeout' => $l->t('The measurement took longer than %s.', [$checkNumber('seconds', $span)]),
+	'download_failed' => $l->t('The model could not be downloaded. Check that github.com and release-assets.githubusercontent.com are reachable.'),
+	'download_slow' => $l->t('The download took longer than %s.', [$checkNumber('seconds', $span)]),
+	'digest_mismatch' => $l->t('The model file does not match its checksum and was deleted.'),
+	'disk_short' => $l->t('Not enough disk space for the fp32 model.'),
+	'memory_unknown' => $l->t('The available memory could not be read.'),
+	'interrupted' => $l->t('The check was interrupted by a restart of the backend.'),
+	'pause_timeout' => $l->t('The running indexing batch did not end within %s.', [$checkNumber('seconds', $span)]),
+	'probe_failed' => $l->t('The check stopped with an error.'),
+];
+// The numbers each sentence needs. A sentence with a hole in it is never
+// shown: without its figures the cause line stays hidden and the chip plus the
+// consequence carry the verdict alone.
+$probeCauseNeeds = [
+	'reserve_thin' => ['reserve', 'required'],
+	'memory_short' => ['slots', 'need', 'available'],
+	'model_memory' => ['need', 'available'],
+	'timeout' => ['seconds'],
+	'download_slow' => ['seconds'],
+	'pause_timeout' => ['seconds'],
+];
+$checkCause = is_string($check['cause'] ?? null) && isset($probeCauseNames[$check['cause']]) ? $check['cause'] : '';
+$checkCauseShown = $checkShown && $checkVerdict !== 'fits' && $checkCause !== '';
+foreach ($probeCauseNeeds[$checkCause] ?? [] as $needed) {
+	if (!is_int($checkNumbers[$needed] ?? null)) {
+		$checkCauseShown = false;
+	}
+}
+$checkSaved = $checkShown && $checkVerdict === 'fits' && $checkCommitted;
+$keptName = $profileNames[$profileEffective !== '' ? $profileEffective : $profileSaved];
+$checkedLine = $l->t('Checked: %1$s with %2$s, %3$s', [$profileNames[$checkProfile] ?? '', $modelNames[$checkPrecision] ?? '', $checkAt]);
+$savedLine = $l->t('Saved. %s applies from the next indexing round.', [$profileNames[$checkProfile] ?? '']);
+$keptLine = $l->t('Nothing was saved. %s stays in force.', [$keptName]);
+// D-27-17: only when the probe downloaded the fp32 file itself.
+$checkDeletedShown = $checkShown && $checkVerdict !== 'fits' && ($check['fp32Deleted'] ?? false) === true;
+// D-27-08: the next lower step, offered in the card and never "apply anyway".
+$offerCheckShown = $checkShown && $checkVerdict !== 'fits' && $checkProfile === 'performance';
+$offerStayShown = $checkShown && $checkVerdict !== 'fits' && $checkProfile === 'standard';
+
+// The values an admin variable overrules (D-27-14). The name of the variable
+// comes out of this map, keyed by a field the view judged, and it sits in a
+// code element of its own: the sentence is translated with a marker in its
+// place and cut at that marker, so the translator keeps the word order and the
+// name is never part of a translated string.
+$envMarker = "\u{E000}";
+$envVariables = [
+	'dpi' => 'FINDLING_OCR_DPI',
+	'max_pages' => 'FINDLING_OCR_MAX_PAGES',
+	'batch' => 'FINDLING_EMBED_BATCH_SIZE',
+	'writer_heap' => 'FINDLING_WRITER_HEAP_BYTES',
+];
+$envLines = [
+	'dpi' => static fn (int $value): string => $l->t('OCR resolution %1$s dpi, set by %2$s', [$count($value), $envMarker]),
+	'max_pages' => static fn (int $value): string => $l->t('OCR limit %1$s pages per file, set by %2$s', [$count($value), $envMarker]),
+	'batch' => static fn (int $value): string => $l->t('Embedding batch size %1$s, set by %2$s', [$count($value), $envMarker]),
+	'writer_heap' => static fn (int $value): string => $l->t('Index writer memory %1$s, set by %2$s', [$size($value), $envMarker]),
+];
+$envValues = [];
+foreach (is_array($_['profileEnv'] ?? null) ? $_['profileEnv'] : [] as $envEntry) {
+	$envField = is_array($envEntry) && is_string($envEntry['field'] ?? null) ? $envEntry['field'] : '';
+	$envValue = is_array($envEntry) && is_int($envEntry['value'] ?? null) && $envEntry['value'] >= 0 ? $envEntry['value'] : null;
+	if (isset($envVariables[$envField]) && $envValue !== null) {
+		$envValues[$envField] = $envValue;
+	}
+}
 ?>
+<div id="findling-profile" class="section">
+	<h2><?php p($l->t('Performance profile')); ?></h2>
+	<p class="settings-hint"><?php p($l->t('How much of this box Findling may use. Without a change Findling stays on Economy.')); ?></p>
+
+	<div class="findling-profile__facts">
+		<p id="findling-profile-hardware"<?php if (!$hardwareKnown) { ?> hidden<?php } ?>><?php p($l->t('Detected: cores %1$s, memory %2$s', [$count($hardwareCores ?? 0), $size($hardwareMemory ?? 0)])); ?></p>
+		<p id="findling-profile-hardware-unknown"<?php if ($hardwareKnown) { ?> hidden<?php } ?>><?php p($l->t('This backend does not report its hardware yet.')); ?></p>
+		<p id="findling-profile-suggested"<?php if ($profileSuggested === '') { ?> hidden<?php } ?>><?php p($l->t('Suggested for this box: %s', [$profileNames[$profileSuggested] ?? ''])); ?></p>
+		<p id="findling-profile-in-force"<?php if ($profileEffective === '') { ?> hidden<?php } ?>><?php p($l->t('In force: %s', [$profileNames[$profileEffective] ?? ''])); ?></p>
+		<p class="settings-hint" id="findling-profile-shrunk"<?php if (!$profileShrunk) { ?> hidden<?php } ?>><?php p($l->t('Chosen %1$s, in force %2$s: this box has less hardware than the chosen profile needs.', [$profileNames[$profileChosen] ?? '', $profileNames[$profileEffective] ?? ''])); ?></p>
+		<p class="findling-banner findling-banner--warning" id="findling-profile-guard"<?php if (!$profileGuardShown) { ?> hidden<?php } ?>>
+			<svg class="findling-banner__icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($alertIcon); ?>"/></svg>
+			<span class="findling-banner__text" id="findling-profile-guard-text"><?php p($profileGuardLine); ?></span>
+			<button type="button" id="findling-profile-recheck"<?php if ($probeBlocked) { ?> disabled<?php } ?>><?php p($l->t('Check again')); ?></button>
+		</p>
+		<p class="settings-hint" id="findling-profile-precision"<?php if ($precisionSentence === '') { ?> hidden<?php } ?>><?php p($precisionSentence); ?></p>
+	</div>
+
+	<label class="findling-rules__label" for="findling-profile-select"><?php p($l->t('Profile')); ?></label>
+	<select id="findling-profile-select" name="profile" aria-describedby="findling-profile-describe-<?php p($profileForm); ?> findling-profile-nochange"<?php if ($probeRunning) { ?> disabled<?php } ?>>
+		<?php foreach ($profileNames as $profileValue => $profileName) { ?>
+			<option value="<?php p($profileValue); ?>"<?php if ($profileValue === $profileForm) { ?> selected<?php } ?>><?php p($profileValue === $profileSuggested ? $l->t('%s (suggested)', [$profileName]) : $profileName); ?></option>
+		<?php } ?>
+	</select>
+	<?php foreach ($profileDescriptions as $profileValue => $profileDescription) { ?>
+		<p class="settings-hint" id="findling-profile-describe-<?php p($profileValue); ?>"<?php if ($profileValue !== $profileForm) { ?> hidden<?php } ?>><?php p($profileDescription); ?></p>
+	<?php } ?>
+
+	<div class="findling-rules__toggle" id="findling-profile-fp32-row"<?php if ($profileForm === 'economy') { ?> hidden<?php } ?>>
+		<input type="checkbox" class="checkbox" id="findling-profile-fp32" name="precision" value="fp32"
+			aria-describedby="findling-profile-fp32-help findling-profile-reindex"<?php if ($precisionStored === 'fp32') { ?> checked<?php } ?><?php if ($probeRunning) { ?> disabled<?php } ?>>
+		<label for="findling-profile-fp32"><?php p($l->t('More accurate search model (fp32)')); ?></label>
+	</div>
+	<p class="settings-hint" id="findling-profile-fp32-help"<?php if ($profileForm === 'economy') { ?> hidden<?php } ?>><?php p($l->t('Downloaded once during the check, about %s from the Findling release on GitHub. Needs more memory than int8.', [$size($fp32Bytes)])); ?></p>
+
+	<?php
+	/*
+	 * The reindex line in both of its forms (D-27-03, D-27-18). Hidden while
+	 * the form holds the stored precision, which is always the case when the
+	 * page is rendered; the script shows it the moment the tick changes.
+	 */
+	?>
+	<p class="findling-banner findling-banner--info" id="findling-profile-reindex" hidden>
+		<svg class="findling-banner__icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($infoIcon); ?>"/></svg>
+		<span class="findling-banner__text" id="findling-profile-reindex-long"<?php if ($reindexSeconds === null) { ?> hidden<?php } ?>><?php p($l->t('Re-embedding of %1$s documents, estimated about %2$s. Full text search stays fully available.', [$count($reindexDocuments), $span($reindexSeconds ?? 0)])); ?></span>
+		<span class="findling-banner__text" id="findling-profile-reindex-short"<?php if ($reindexSeconds !== null) { ?> hidden<?php } ?>><?php p($l->t('Re-embedding of %s documents. Full text search stays fully available.', [$count($reindexDocuments)])); ?></span>
+	</p>
+
+	<div id="findling-profile-env"<?php if ($envValues === []) { ?> hidden<?php } ?>>
+		<p class="settings-hint"><?php p($l->t('The check calculates with these values from environment variables:')); ?></p>
+		<ul class="findling-profile__env">
+			<?php foreach ($envVariables as $envField => $envVariable) {
+				$envParts = explode($envMarker, $envLines[$envField]($envValues[$envField] ?? 0), 2) + ['', ''];
+				?>
+				<li id="findling-profile-env-<?php p($envField); ?>"<?php if (!isset($envValues[$envField])) { ?> hidden<?php } ?>><?php p($envParts[0]); ?><code><?php p($envVariable); ?></code><?php p($envParts[1]); ?></li>
+			<?php } ?>
+		</ul>
+	</div>
+
+	<div class="findling-profile__actions">
+		<button type="button" class="primary" id="findling-profile-apply"
+			data-label-check="<?php p($l->t('Apply and check')); ?>" data-label-apply="<?php p($l->t('Apply')); ?>"
+			aria-describedby="findling-profile-error"<?php if ($applyDisabled) { ?> disabled<?php } ?>><?php p($l->t('Apply and check')); ?></button>
+		<button type="button" id="findling-profile-stay"<?php if (!$stayShown) { ?> hidden<?php } ?><?php if ($probeRunning) { ?> disabled<?php } ?>><?php p($l->t('Stay on Economy')); ?></button>
+	</div>
+	<p class="settings-hint" id="findling-profile-nochange"<?php if ($profileChanged) { ?> hidden<?php } ?>><?php p($l->t('Choose a different profile or model to check it.')); ?></p>
+
+	<p class="settings-hint findling-progress-hint" id="findling-profile-progress" tabindex="-1"<?php if (!$probeRunning) { ?> hidden<?php } ?>>
+		<span class="icon-loading-small"></span>
+		<span id="findling-profile-progress-text"><?php p($progressLine); ?></span>
+	</p>
+	<p class="settings-hint" id="findling-profile-progress-hint"<?php if (!$probeRunning) { ?> hidden<?php } ?>><?php p($l->t('Indexing pauses during the check and continues afterwards.')); ?></p>
+	<p class="findling-rules__error" id="findling-profile-error"<?php if ($probeErrorText === '') { ?> hidden<?php } ?>><?php p($probeErrorText); ?></p>
+
+	<?php
+	/*
+	 * The last verdict. All three icons are in the markup at once and two of
+	 * them are hidden, the pattern of the lookup card, so the script never
+	 * composes an icon. No aria-live here: the one live region of the block is
+	 * the announce span at its end, and a second one would speak twice.
+	 */
+	?>
+	<div class="findling-card" id="findling-profile-verdict" tabindex="-1"<?php if ($probeRunning) { ?> hidden<?php } ?>>
+		<div id="findling-profile-verdict-empty"<?php if ($checkShown) { ?> hidden<?php } ?>>
+			<h3 class="findling-subheading"><?php p($l->t('No check yet.')); ?></h3>
+			<p class="settings-hint"><?php p($l->t('Choose a profile and check it on this box. Until then Economy stays in force.')); ?></p>
+		</div>
+		<p class="findling-chip findling-chip--<?php p($checkVerdict !== '' ? $checkVerdict : 'fits'); ?>" id="findling-profile-verdict-chip"<?php if (!$checkShown) { ?> hidden<?php } ?>>
+			<?php foreach ($verdictIcons as $verdictCode => $verdictIcon) { ?>
+				<svg id="findling-profile-verdict-icon-<?php p($verdictCode); ?>" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"<?php if ($verdictCode !== $checkVerdict) { ?> hidden<?php } ?>><path fill="currentColor" d="<?php p($verdictIcon); ?>"/></svg>
+			<?php } ?>
+			<span id="findling-profile-verdict-word"><?php p($verdictNames[$checkVerdict] ?? ''); ?></span>
+		</p>
+		<p class="settings-hint" id="findling-profile-verdict-checked"<?php if (!$checkShown || $checkAt === '') { ?> hidden<?php } ?>><?php p($checkedLine); ?></p>
+		<p id="findling-profile-verdict-cause"<?php if (!$checkCauseShown) { ?> hidden<?php } ?>><?php p($probeCauseNames[$checkCause] ?? ''); ?></p>
+		<p id="findling-profile-verdict-saved"<?php if (!$checkSaved) { ?> hidden<?php } ?>><?php p($savedLine); ?></p>
+		<p id="findling-profile-verdict-kept"<?php if (!$checkShown || $checkSaved) { ?> hidden<?php } ?>><?php p($keptLine); ?></p>
+		<p class="settings-hint" id="findling-profile-verdict-deleted"<?php if (!$checkDeletedShown) { ?> hidden<?php } ?>><?php p($l->t('The downloaded model file was deleted again.')); ?></p>
+		<div class="findling-profile__actions">
+			<button type="button" id="findling-profile-offer-check"<?php if (!$offerCheckShown) { ?> hidden<?php } ?><?php if ($probeBlocked) { ?> disabled<?php } ?>><?php p($l->t('Check %s', [$profileNames['standard']])); ?></button>
+			<button type="button" id="findling-profile-offer-stay"<?php if (!$offerStayShown) { ?> hidden<?php } ?>><?php p($l->t('Stay on Economy')); ?></button>
+		</div>
+	</div>
+
+	<p class="findling-rules__feedback" id="findling-profile-feedback" hidden></p>
+	<p class="settings-hint" id="findling-profile-nojs"><?php p($l->t('Changing the profile needs JavaScript. Everything above stays complete without it.')); ?></p>
+	<span class="hidden-visually" id="findling-profile-announce" role="status" aria-live="polite"></span>
+</div>
 <div id="findling-rules" class="section">
 	<h2><?php p($l->t('Rules and limits')); ?></h2>
 
