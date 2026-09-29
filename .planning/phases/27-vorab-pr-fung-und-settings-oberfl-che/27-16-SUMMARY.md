@@ -25,7 +25,7 @@ requirements: [PRUEF-01, UI-01]
 
 # Phase 27 Plan 16: Push-Entscheid, CI-Belege und Phasenabnahme Summary
 
-Owner-Signal "push-now", 106 Commits nach main, alle Workflows auf dem Phasenstand grün, nachdem die Routen-Ratsche der HaRP-Strecke um die zwei ADMIN-Proberouten erweitert wurde; SC1 bis SC4 belegt, die Owner-Abnahme der Phase (Task 3) steht aus.
+Owner-Signal "push-now", 106 Commits nach main, alle Workflows auf dem Phasenstand grün, nachdem die Routen-Ratsche der HaRP-Strecke um die zwei ADMIN-Proberouten erweitert wurde; SC1 bis SC4 belegt, Owner hat die Phase am 2026-09-29 abgenommen.
 
 ## Tasks
 
@@ -33,7 +33,7 @@ Owner-Signal "push-now", 106 Commits nach main, alle Workflows auf dem Phasensta
 |------|------|--------|-------|
 | 1 | Push-Entscheid | Push d91305df..a8e3d7ea, zweiter Push 2b9de323 | erledigt, Signal unten |
 | 2 | CI-Belege einsammeln | 2b9de323 (Ratschen-Fix), dieser Commit (SUMMARY) | erledigt |
-| 3 | Owner-Abnahme der Phase 27 | offen | wartet auf Owner-Signal |
+| 3 | Owner-Abnahme der Phase 27 | erledigt | Owner-Signal "ok abgenommen" |
 
 ## Push-Signal (Task 1)
 
@@ -131,13 +131,13 @@ Jede Entscheidung ist mindestens einem Plan zugeordnet; keine Lücke.
 
 ## Owner-Abnahme (Task 3)
 
-Status: **offen, wartet auf den Owner.** Nichts als abgenommen markiert.
+Status: **abgenommen** (2026-09-29). Keine Issue- oder Store-Entwürfe gewünscht.
 
 Vorzulegen: SC1 bis SC4 (Tabelle oben), Entscheidungs-Tabelle D-27-01 bis D-27-20, Live-Beleg `docs/measurements/2026-09-probe-live/README.md`, CI-Stand (alle grün, HaRP nach Fix 2b9de323).
 
 Resume-Signal: "approved", "approved, Entwürfe bitte" oder beschreibe Befunde. Bei "Entwürfe bitte" legt der Executor Issue- oder Store-Entwürfe nur als Datei unter `C:/Users/Student/Desktop/` ab, postet und ändert nichts.
 
-Owner-Signal: (steht aus)
+Owner-Signal: "ok abgenommen"
 
 ## Deviations from Plan
 
@@ -153,7 +153,6 @@ Owner-Signal: (steht aus)
 ## Lücken
 
 - fp32 nicht live gefahren (aus 27-15 übernommen), nur automatisiert belegt
-- Task 3 Owner-Abnahme offen
 
 ## Self-Check: PASSED
 
