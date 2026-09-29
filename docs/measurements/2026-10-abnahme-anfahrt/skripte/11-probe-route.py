@@ -104,7 +104,7 @@ PROBE_PROFILES = ("standard", "performance")
 PRECISIONS = ("int8", "fp32")
 VERDICT_CODES = {"fits": 0, "narrow": EXIT_NARROW, "nofit": EXIT_NOFIT}
 
-TOKEN = re.compile(r'data-requesttoken="([^"]+)"')
+TOKEN_IN_PAGE = re.compile(r'data-requesttoken="([^"]+)"')
 
 # The overview fields that go into the line, under the name the line gives
 # them. A projection onto a closed set, so an example path of the page cannot
@@ -199,7 +199,7 @@ class Session:
         self.base = base
         self.jar = http.cookiejar.MozillaCookieJar(str(jar_path))
         self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.jar))
-        self.token = ""
+        self.request_token = ""
 
     def _open(
         self,
@@ -223,25 +223,25 @@ class Session:
         except (urllib.error.URLError, OSError) as error:
             raise Refused(EXIT_ROUTE, f"die Instanz antwortet nicht ({type(error).__name__})") from error
 
-    def login(self, user: str, secret: str) -> None:
+    def login(self, user: str, phrase: str) -> None:
         _, _, form = self._open("/login")
-        found = TOKEN.search(form)
+        found = TOKEN_IN_PAGE.search(form)
         if found is None:
             raise Refused(EXIT_LOGIN, "die Anmeldeseite traegt kein data-requesttoken")
-        body = urllib.parse.urlencode({"user": user, "password": secret, "requesttoken": found.group(1)}).encode()
+        body = urllib.parse.urlencode({"user": user, "password": phrase, "requesttoken": found.group(1)}).encode()
         self._open("/login", data=body, headers={"Origin": self.base}, method="POST")
         page = os.environ.get("PROBE_SEITE", DEFAULT_PAGE)
         if not page.startswith("/"):
             raise Refused(EXIT_USAGE, "PROBE_SEITE muss ein Pfad sein, der mit / beginnt")
         _, final, text = self._open(page)
-        found = TOKEN.search(text)
+        found = TOKEN_IN_PAGE.search(text)
         if urllib.parse.urlsplit(final).path.startswith("/login") or found is None:
             raise Refused(EXIT_LOGIN, "die Anmeldung hat nicht gegriffen")
-        self.token = found.group(1)
+        self.request_token = found.group(1)
         self.jar.save(ignore_discard=True)
 
     def call(self, method: str, route: str, payload: dict[str, str] | None = None) -> tuple[int, dict[str, Any]]:
-        headers = {"requesttoken": self.token, "Accept": "application/json"}
+        headers = {"requesttoken": self.request_token, "Accept": "application/json"}
         data = None
         if payload is not None:
             headers["Content-Type"] = "application/json"
@@ -363,7 +363,7 @@ def main(argv: Sequence[str]) -> int:
         if parsed is None:
             return usage()
         base = base_url()
-        secret = password()
+        phrase = password()
     except Refused as refusal:
         complain(str(refusal))
         return refusal.code
@@ -371,7 +371,7 @@ def main(argv: Sequence[str]) -> int:
     jar_dir = Path(tempfile.mkdtemp(prefix="findling-probe-"))
     try:
         session = Session(base, jar_dir / "cookies.txt")
-        session.login(os.environ.get("FINDLING_ADMIN_USER", DEFAULT_USER), secret)
+        session.login(os.environ.get("FINDLING_ADMIN_USER", DEFAULT_USER), phrase)
         if command == "pruefen":
             return command_pruefen(session, profile, precision)
         if command == "abwaerts":
