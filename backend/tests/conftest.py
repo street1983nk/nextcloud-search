@@ -34,6 +34,7 @@ from tantivy import Document, Index, Schema, SchemaBuilder
 from findling import guard as guard_module
 from findling import lane as lane_module
 from findling import precision as precision_module
+from findling import probe as probe_module
 from findling import profile as profile_module
 from findling.config import settings
 from findling.embed import model as model_module
@@ -356,17 +357,21 @@ def forget_the_profile_state() -> Iterator[None]:
     profile. The lane state of ``findling/lane.py`` goes with them: a case
     that saw an echo or parked a runner must not decide the lane of the next.
     The guard state of ``findling/guard.py`` as well: a cap, a token or a
-    counted child kill of one case must not lower the level of the next.
+    counted child kill of one case must not lower the level of the next. And
+    the probe state of ``findling/probe.py``: a check a lifespan restored as
+    interrupted, or a hold left set, must not reach the status of the next.
     """
     profile_module.reset()
     precision_module.reset()
     lane_module.reset()
     guard_module.reset()
+    probe_module.reset()
     yield
     profile_module.reset()
     precision_module.reset()
     lane_module.reset()
     guard_module.reset()
+    probe_module.reset()
 
 
 @pytest.fixture(autouse=True)

@@ -6,15 +6,20 @@ and the two ADMIN routes of the manifest. A fake check stands in for ProbeRun,
 installed through the dependency the route reads, so no lifespan is needed.
 """
 
+import asyncio
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
-from findling import probe
+from findling import main, probe
 from findling.api.probe import probe_run
+from findling.config import settings
 from findling.main import APP
+from findling.nc.queue import CompanionChoice
+from findling.store.repo import open_store
+from findling.worker.probe_run import ProbeRun
 
 pytestmark = pytest.mark.usefixtures("appapi_environment")
 
@@ -262,3 +267,143 @@ def test_each_probe_route_is_declared_once() -> None:
     assert manifest.count("<url>^/probe/state$</url>") == 1
     assert "Five routes" not in manifest
     assert "these five" not in manifest
+
+
+# -- the lifespan --------------------------------------------------------
+
+
+class LifespanRun:
+    """A check the lifespan builds, recording what the lifespan does with it."""
+
+    def __init__(self) -> None:
+        self.events: list[str] = []
+        self.read_choice: object = None
+        self.closed_with_tasks_up: bool | None = None
+        self._closed = asyncio.Event()
+
+    async def start(self, profile_name: str, precision: str) -> tuple[str, str]:
+        self.events.append(f"start {profile_name} {precision}")
+        return ("started", PROBE_ID)
+
+    async def restore(self) -> None:
+        self.events.append("restore")
+
+    async def recover(self, read_choice: object) -> None:
+        self.events.append("recover")
+        self.read_choice = read_choice
+        await self._closed.wait()
+        self.events.append("recover ended")
+
+    async def close(self) -> None:
+        self.events.append("close")
+        # Poller and runner are still there: the check is closed before them.
+        self.closed_with_tasks_up = main.active_poller() is not None and main.active_embedding() is not None
+        self._closed.set()
+
+
+@pytest.mark.usefixtures("volume")
+def test_the_lifespan_builds_the_check_and_takes_it_down(client: TestClient, sign: Sign) -> None:
+    with TestClient(APP) as running:
+        run = main.active_probe_run()
+        assert isinstance(run, ProbeRun)
+        assert running.get("/heartbeat").status_code == 200
+
+    assert main.active_probe_run() is None
+    # Outside the lifespan the door is closed again.
+    code, _ = _start(client, sign, {"profile": "standard", "precision": "int8"})
+    assert code == 503
+
+
+@pytest.mark.usefixtures("volume")
+def test_the_lifespan_restores_recovers_and_closes_before_the_poller(
+    sign: Sign, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake = LifespanRun()
+    built: list[bool] = []
+
+    def build(poller: object, runner: object, *, persist: bool) -> LifespanRun:
+        assert poller is not None
+        assert runner is not None
+        built.append(persist)
+        return fake
+
+    monkeypatch.setattr(main, "build_the_probe", build)
+
+    with TestClient(APP) as running:
+        response = running.post("/probe", json={"profile": "performance", "precision": "fp32"}, headers=sign("admin"))
+        assert response.status_code == 202
+
+    assert built == [True]
+    assert fake.events[:2] == ["restore", "recover"]
+    assert "start performance fp32" in fake.events
+    assert fake.events.index("close") < fake.events.index("recover ended")
+    assert fake.closed_with_tasks_up is True
+    assert callable(fake.read_choice)
+    assert main.active_probe_run() is None
+
+
+@pytest.mark.usefixtures("volume")
+def test_a_check_that_cannot_be_built_costs_the_check_and_not_the_start(
+    sign: Sign, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # K6: the container runs without ever a check.
+    def refuse(**_kwargs: object) -> None:
+        raise RuntimeError("no check today")
+
+    monkeypatch.setattr(main, "ProbeRun", refuse)
+
+    with TestClient(APP) as running:
+        assert main.active_probe_run() is None
+        assert running.get("/heartbeat").status_code == 200
+        response = running.post("/probe", json={"profile": "standard", "precision": "int8"}, headers=sign("admin"))
+        assert response.status_code == 503
+
+
+def test_without_a_poller_there_is_no_check() -> None:
+    assert main.build_the_probe(None, None, persist=True) is None
+
+
+@pytest.mark.usefixtures("volume")
+def test_a_check_the_restart_cut_off_reads_nofit_interrupted(client: TestClient, sign: Sign) -> None:
+    store = open_store(settings().state_db)
+    try:
+        store.write_meta(probe.META_PROBE_STATE, probe.STATE_RUNNING)
+        store.write_meta(probe.META_PROBE_ID, PROBE_ID)
+    finally:
+        store.close()
+
+    with TestClient(APP) as running:
+        answer = running.get("/probe/state", headers=sign("admin")).json()
+        status = running.get("/status", headers=sign("admin")).json()
+
+    assert (answer["id"], answer["state"], answer["verdict"], answer["cause"]) == (
+        PROBE_ID,
+        "done",
+        "nofit",
+        "interrupted",
+    )
+    assert status["probe"] == {"supported": True, "running": False, "step": ""}
+    # The next start runs unheld.
+    assert probe.held() is False
+
+
+@pytest.mark.usefixtures("volume")
+async def test_the_companion_reader_builds_its_client_on_the_first_read(monkeypatch: pytest.MonkeyPatch) -> None:
+    built: list[object] = []
+    choice = CompanionChoice(profile="standard", precision="int8", confirmed=None)
+
+    class Queue:
+        def __init__(self, nc: object) -> None:
+            built.append(nc)
+
+        async def companion_choice(self) -> CompanionChoice:
+            return choice
+
+    monkeypatch.setattr(main, "DocumentQueue", Queue)
+    monkeypatch.setattr(main, "create_app_client", lambda: "client")
+
+    read = main.companion_reader()
+    assert built == []
+    assert await read() is choice
+    assert await read() is choice
+    assert built == ["client"]
