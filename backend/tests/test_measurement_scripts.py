@@ -725,9 +725,11 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # neutral recount sentence). WR-04 changed FileStateService.php
 # (revokeFailures takes back skips but the OCR memo), QueueService.php and
 # Version001300Date20260927000000.php (comments and log lines).
-# PHP_FILES_TODAY stays at 82.
+# PHP_FILES_TODAY stays at 82. WR-06 changed ProbeService.php (the stored
+# profile at the start of a probe, no commit over a later save) and
+# ProbeServiceTest.php. PHP_FILES_TODAY stays at 82.
 PHP_FILES_TODAY = 82
-PHP_TREE_HASH_TODAY = "5c3887d807c655d22c4d1351e97dfd23c7b292e5e7863efd398734444b25a95c"
+PHP_TREE_HASH_TODAY = "a22fff98b5395c3bfb5b46c9454b2fd7d864f736f22fe50d68658b28bd58f567"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

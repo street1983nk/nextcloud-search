@@ -171,6 +171,7 @@ final class ProbeServiceTest extends TestCase {
 			'precision' => 'int8',
 			'uid' => 'admin',
 			'startedAt' => self::NOW,
+			'inForce' => ['profile' => 'economy', 'precision' => 'int8', 'stored' => false],
 		], $this->values[SettingsService::KEY_PROFILE_CHECK_PENDING]);
 	}
 
@@ -253,6 +254,70 @@ final class ProbeServiceTest extends TestCase {
 		$service->state('admin');
 		$service->settle('admin');
 		self::assertSame([], $this->writes);
+	}
+
+	public function testAFitsIsSavedWhenNothingChangedSinceTheStart(): void {
+		$this->values[SettingsService::KEY_PROFILE] = 'economy';
+		$this->pending();
+		$this->values[SettingsService::KEY_PROFILE_CHECK_PENDING]['inForce'] = [
+			'profile' => 'economy',
+			'precision' => 'int8',
+			'stored' => true,
+		];
+		$this->stateAnswer(ExAppService::ADMIN_OK, $this->done());
+		$this->exApp->method('adminGet')->willReturn(null);
+
+		$this->service()->state('admin');
+
+		self::assertSame('standard', $this->values[SettingsService::KEY_PROFILE]);
+		self::assertTrue($this->values[SettingsService::KEY_PROFILE_CHECK]['committed']);
+	}
+
+	/** @return array<string, array{array<string, string>}> */
+	public static function savesDuringTheProbe(): array {
+		return [
+			// Review WR-06 of phase 27: economy stored explicitly while the
+			// default was in force, through occ or another tab.
+			'economy stored over the default' => [[SettingsService::KEY_PROFILE => 'economy']],
+			// fp32 taken back to int8 on the stored profile, the other way down.
+			'precision lowered' => [[SettingsService::KEY_PROFILE => 'standard', SettingsService::KEY_MODEL_PRECISION => 'int8']],
+		];
+	}
+
+	/** @param array<string, string> $saved */
+	#[DataProvider('savesDuringTheProbe')]
+	public function testAFitsDoesNotOverwriteASaveMadeWhileItRan(array $saved): void {
+		$this->pending('performance', 'int8');
+		$this->values[SettingsService::KEY_PROFILE_CHECK_PENDING]['inForce'] = isset($saved[SettingsService::KEY_MODEL_PRECISION])
+			? ['profile' => 'standard', 'precision' => 'fp32', 'stored' => true]
+			: ['profile' => 'economy', 'precision' => 'int8', 'stored' => false];
+		foreach ($saved as $key => $value) {
+			$this->values[$key] = $value;
+		}
+		$this->stateAnswer(ExAppService::ADMIN_OK, $this->done(['targetProfile' => 'performance']));
+		$this->exApp->expects(self::never())->method('adminGet');
+
+		$answer = $this->service()->state('admin');
+
+		self::assertSame($saved[SettingsService::KEY_PROFILE], $this->values[SettingsService::KEY_PROFILE]);
+		self::assertSame($saved[SettingsService::KEY_MODEL_PRECISION] ?? null, $this->values[SettingsService::KEY_MODEL_PRECISION] ?? null);
+		$check = $this->values[SettingsService::KEY_PROFILE_CHECK];
+		self::assertSame('fits', $check['verdict']);
+		self::assertFalse($check['committed']);
+		self::assertArrayNotHasKey(SettingsService::KEY_PROFILE_CHECK_PENDING, $this->values);
+		self::assertIsArray($answer['result']);
+		self::assertFalse($answer['result']['committed']);
+	}
+
+	public function testAnUnreadableInForceNeverCommits(): void {
+		$this->pending();
+		$this->values[SettingsService::KEY_PROFILE_CHECK_PENDING]['inForce'] = 'economy';
+		$this->stateAnswer(ExAppService::ADMIN_OK, $this->done());
+
+		$this->service()->state('admin');
+
+		self::assertArrayNotHasKey(SettingsService::KEY_PROFILE, $this->values);
+		self::assertFalse($this->values[SettingsService::KEY_PROFILE_CHECK]['committed']);
 	}
 
 	public function testTheSameIdOnRecordIsNotTakenOverTwice(): void {

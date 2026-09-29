@@ -119,6 +119,10 @@ final class ProbeService {
 					'precision' => $precision,
 					'uid' => $uid,
 					'startedAt' => $this->timeFactory->getTime(),
+					// What was in force when the probe started, so that a
+					// save during the probe is not overwritten by its "fits"
+					// (review WR-06 of phase 27).
+					'inForce' => $this->inForce(),
 				]);
 
 				return ['started' => true, 'code' => self::START_STARTED];
@@ -230,6 +234,12 @@ final class ProbeService {
 	 * Saves only when the container reports the probe done, with the id this
 	 * side remembered (compared with hash_equals) and with exactly the target
 	 * this side asked for, and only on "fits". Every verdict is remembered.
+	 *
+	 * A "fits" is remembered but not committed when the stored profile or
+	 * precision changed after the start (review WR-06 of phase 27): an admin
+	 * who stored economy through occ, another tab or the write route while the
+	 * probe ran took the safe way down (D-27-09), and a probe nobody waits for
+	 * any more must not raise the profile again.
 	 * A running probe that never reports back within PENDING_STALE_SECONDS is
 	 * recorded as interrupted.
 	 *
@@ -255,7 +265,7 @@ final class ProbeService {
 
 			$verdict = $snapshot['verdict'];
 			$committed = false;
-			if ($verdict === self::VERDICT_FITS) {
+			if ($verdict === self::VERDICT_FITS && $this->unchangedSince($pending)) {
 				$committed = $this->settingsService->saveProfile($pending['profile'], $pending['precision']);
 				if ($committed) {
 					$this->confirm($pending['profile'], $uid);
@@ -322,8 +332,41 @@ final class ProbeService {
 	}
 
 	/**
+	 * The stored profile, precision and whether a profile was ever stored,
+	 * the three facts a save during the probe would change.
+	 *
+	 * @return array{profile: string, precision: string, stored: bool}
+	 */
+	private function inForce(): array {
+		return [
+			'profile' => $this->settingsService->profile(),
+			'precision' => $this->settingsService->modelPrecision() ?? '',
+			'stored' => $this->settingsService->profileStored(),
+		];
+	}
+
+	/**
+	 * Whether nothing was stored since the probe started. A record from before
+	 * this check carries no inForce and keeps the take-over it always had.
+	 *
+	 * @param array{id: string, profile: string, precision: string, startedAt: int, inForce: ?array{profile: string, precision: string, stored: bool}} $pending
+	 */
+	private function unchangedSince(array $pending): bool {
+		if ($pending['inForce'] === null) {
+			return true;
+		}
+		if ($pending['inForce'] === $this->inForce()) {
+			return true;
+		}
+
+		$this->logger->info('Findling: a probe fitted, but the profile was changed while it ran; nothing was saved');
+
+		return false;
+	}
+
+	/**
 	 * @param array<string, mixed> $snapshot
-	 * @param array{id: string, profile: string, precision: string, startedAt: int} $pending
+	 * @param array{id: string, profile: string, precision: string, startedAt: int, inForce: ?array{profile: string, precision: string, stored: bool}} $pending
 	 */
 	private function matches(array $snapshot, array $pending): bool {
 		return $snapshot['state'] === self::STATE_DONE
@@ -338,7 +381,7 @@ final class ProbeService {
 	 * The running probe record, judged; a record that does not hold is
 	 * forgotten, because it can never match an answer.
 	 *
-	 * @return array{id: string, profile: string, precision: string, startedAt: int}|null
+	 * @return array{id: string, profile: string, precision: string, startedAt: int, inForce: ?array{profile: string, precision: string, stored: bool}}|null
 	 */
 	private function pending(): ?array {
 		$pending = $this->settingsService->profileCheckPending();
@@ -357,7 +400,36 @@ final class ProbeService {
 			return null;
 		}
 
-		return ['id' => $id, 'profile' => $profile, 'precision' => $precision, 'startedAt' => $startedAt];
+		return [
+			'id' => $id,
+			'profile' => $profile,
+			'precision' => $precision,
+			'startedAt' => $startedAt,
+			'inForce' => self::inForceOf($pending['inForce'] ?? null),
+		];
+	}
+
+	/**
+	 * The inForce part of a pending record, judged; null when it is absent or
+	 * unreadable. An unreadable one can never equal a fresh reading, so it is
+	 * judged into a value that never matches rather than into null, which would
+	 * take the old path and commit.
+	 *
+	 * @return array{profile: string, precision: string, stored: bool}|null
+	 */
+	private static function inForceOf(mixed $value): ?array {
+		if ($value === null) {
+			return null;
+		}
+		if (!is_array($value)) {
+			return ['profile' => '', 'precision' => '', 'stored' => false];
+		}
+
+		return [
+			'profile' => self::member($value['profile'] ?? null, SettingsService::PROFILES),
+			'precision' => is_string($value['precision'] ?? null) ? self::member($value['precision'], SettingsService::PRECISIONS) : '',
+			'stored' => ($value['stored'] ?? null) === true,
+		];
 	}
 
 	/**
