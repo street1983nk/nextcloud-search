@@ -143,7 +143,7 @@ Support entreprise et modules payants : demande de devis à admin@infranode.dev]
 		test_lockstep_versions.py asks the same question on every ordinary run,
 		which is the cheap half of the same guard.
 	-->
-	<version>1.3.0</version>
+	<version>1.3.1</version>
 	<!--
 		The SPDX spelling and not the short one. info.xsd accepts both, but it
 		lists agpl, mit, mpl and apache under the heading Deprecated, and the
