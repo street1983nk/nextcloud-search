@@ -28,7 +28,9 @@ caller ever waits for the verdict (D-27-04):
 
 A child the kernel kills is nofit slot_killed. The check never writes the pass
 mark of the guard and never lowers the chosen profile (D-27-15); the guard
-suspends its lowering while probe.held() (findling/worker/watch.py).
+suspends its lowering while probe.measuring(), from the model step on and not
+during the pause, when the regular pass still runs (findling/worker/watch.py,
+review WR-09 of phase 27).
 
 **Restart.** State and result live in the meta table of state.db. A start that
 finds the state running says nofit interrupted (restore). An fp32 file the check
@@ -602,6 +604,9 @@ class ProbeRun:
         return headroom
 
     async def _measure(self, target: Profile, precision: str, *, switch_to_fp32: bool) -> probe.Verdict:
+        # From here on the check starts children of its own, and only from
+        # here the guard suspends its lowering (review WR-09 of phase 27).
+        probe.measure()
         deadline = self._clock() + self._measure_seconds
         try:
             async with asyncio.timeout(self._measure_seconds):

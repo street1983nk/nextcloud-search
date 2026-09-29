@@ -37,9 +37,12 @@ pass, and an update must never read as an unclean end.
 cap, and the next tick writes the empty values. The guard never raises by
 itself, and in economy it only shows, it never lowers.
 
-**The pre-check (D-27-15).** While findling.probe.held() and one tick after
-it, a tick only moves the base of the escalation and drops the child kills: the
-check drives memory on purpose, and its load is no pressure on the profile.
+**The pre-check (D-27-15).** While findling.probe.measuring() and one tick
+after it, a tick only moves the base of the escalation and drops the child
+kills: the check drives memory on purpose, and its load is no pressure on the
+profile. Not while it merely holds the indexing (review WR-09 of phase 27): its
+pause waits up to PROBE_PAUSE_SECONDS for the regular pass, which still runs
+with its slots, and a kill in that pass is real pressure.
 
 House rules of the runner (findling/worker/embedding.py): nothing is opened in
 the constructor, every reader and clock is injectable, every exception of a tick
@@ -208,7 +211,7 @@ class GuardWatch:
         """One tick: read, escalate, lower above economy, persist a change. Returns the cause."""
         events = await asyncio.to_thread(self._events)
         headroom = await asyncio.to_thread(self._headroom)
-        held = probe.held()
+        held = probe.measuring()
         if held or self._probe_trailing:
             # D-27-15, 27-RESEARCH.md Pitfall 3: the pre-check drives memory on
             # purpose, and a probe child the kernel kills must not lower the

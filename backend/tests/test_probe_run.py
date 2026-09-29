@@ -379,6 +379,8 @@ async def test_the_pause_holds_both_and_waits_for_the_pass_in_flight(tmp_path: P
     assert rig.poller.holds == 1
     assert rig.runner.holds == 1
     assert probe.held()
+    # The guard keeps watching the pass the pause waits for (review WR-09).
+    assert not probe.measuring()
     assert rig.pool.sheds >= 1
     assert rig.workers.made == []
     rig.poller.pass_in_flight = False
@@ -390,6 +392,16 @@ async def test_the_pause_holds_both_and_waits_for_the_pass_in_flight(tmp_path: P
     assert rig.pool.sheds >= 2
     assert probe.snapshot().verdict == probe.VERDICT_FITS
     assert rig.released()
+    assert not probe.measuring()
+
+
+async def test_the_guard_is_suspended_while_the_children_of_the_check_run(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    seen: list[bool] = []
+    rig.workers.results = lambda _index: (seen.append(probe.measuring()), ExtractionOutcome.indexed("text"))[1]
+    await rig.check("economy", "int8")
+    assert seen == [True]
+    assert not probe.measuring()
 
 
 async def test_a_pass_that_outlasts_the_pause_cap_is_pause_timeout(tmp_path: Path) -> None:

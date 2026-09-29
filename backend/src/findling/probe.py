@@ -276,6 +276,7 @@ _SNAPSHOT: ProbeSnapshot = _IDLE
 
 _HOLD_LOCK = threading.Lock()
 _HELD: bool = False
+_MEASURING: bool = False
 
 
 def _check_numbers(numbers: Mapping[str, int]) -> Mapping[str, int]:
@@ -500,9 +501,10 @@ def hold() -> None:
 
 def release() -> None:
     """Let the indexing go on. Always called in the finally of the check."""
-    global _HELD
+    global _HELD, _MEASURING
     with _HOLD_LOCK:
         _HELD = False
+        _MEASURING = False
 
 
 def held() -> bool:
@@ -511,13 +513,33 @@ def held() -> bool:
         return _HELD
 
 
+def measure() -> None:
+    """The check starts its own children: model, ocr_one, ocr_n (review WR-09 of phase 27).
+
+    Only this part drives memory on purpose. The pause before it still runs the
+    regular pass with its slots, and a kill of that pass is real pressure the
+    guard has to see, so the guard suspends its lowering on this flag and not
+    on the hold. Set only while the hold is set; release clears both.
+    """
+    global _MEASURING
+    with _HOLD_LOCK:
+        _MEASURING = _HELD
+
+
+def measuring() -> bool:
+    """Whether the children of a check are running or may run right now."""
+    with _HOLD_LOCK:
+        return _MEASURING
+
+
 def reset() -> None:
     """Back to the resting state. For tests only."""
-    global _SNAPSHOT, _HELD
+    global _SNAPSHOT, _HELD, _MEASURING
     with _STATE_LOCK:
         _SNAPSHOT = _IDLE
     with _HOLD_LOCK:
         _HELD = False
+        _MEASURING = False
 
 
 __all__ = [
@@ -560,6 +582,8 @@ __all__ = [
     "hold",
     "judge",
     "judge_run",
+    "measure",
+    "measuring",
     "model_child_admitted",
     "note_step",
     "pending_load_bytes",

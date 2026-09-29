@@ -250,10 +250,34 @@ async def test_a_rising_oom_kill_lowers_at_once(state_db: Path) -> None:
 
 @pytest.fixture
 def probe_hold() -> Iterator[None]:
-    """A pre-check holds the indexing for the test; released and reset after it."""
+    """A pre-check runs its own children for the test; released and reset after it."""
     probe.hold()
+    probe.measure()
     yield
     probe.reset()
+
+
+async def test_a_kill_in_the_pass_the_pause_waits_for_still_lowers(state_db: Path) -> None:
+    """Review WR-09 of phase 27: the hold alone does not suspend the guard.
+
+    The pause of a check waits up to PROBE_PAUSE_SECONDS for the regular pass,
+    which still runs with its slots; a kill in that pass is real pressure.
+    """
+    probe.hold()
+    try:
+        assert not probe.measuring()
+        _at_level("performance")
+        readings = _Readings({"max": 0, "oom_kill": 0}, 4000 * MIB)
+        watch = _watch(state_db, readings, _Clock())
+        try:
+            await watch.run_once()
+            readings.events = {"max": 0, "oom_kill": 1}
+            assert await watch.run_once() == guard.CAUSE_OOM_KILL
+        finally:
+            await watch.aclose()
+        assert guard.snapshot().cap is Profile.STANDARD
+    finally:
+        probe.reset()
 
 
 @pytest.mark.usefixtures("probe_hold")
