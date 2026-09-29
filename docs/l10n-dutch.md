@@ -268,6 +268,8 @@ aus Plan 20-03. Diese Tabelle kann also nicht an einem Wortlaut zerbrechen.
 | `_and %n more_::_and %n more_` | und %n weitere / und %n weitere | en nog %n / en nog %n |
 | `File no longer exists (ID %s)` | Datei existiert nicht mehr (ID %s) | Bestand bestaat niet meer (ID %s) |
 | `%s (in the trash bin)` | %s (im Papierkorb) | %s (in de prullenbak) |
+| `%1$s (ID %2$s)` | %1$s (ID %2$s) | %1$s (ID %2$s) |
+| `%1$s (in the trash bin, ID %2$s)` | %1$s (im Papierkorb, ID %2$s) | %1$s (in de prullenbak, ID %2$s) |
 | `Indexed, text truncated` | Indexiert, Text gekürzt | Geïndexeerd, tekst ingekort |
 | `Unknown reason (%s)` | Unbekannter Grund (%s) | Onbekende reden (%s) |
 | `This app does not know this code. It may come from a newer version of the backend.` | Diese App kennt diesen Code nicht. Er kann von einer neueren Fassung des Backends kommen. | Deze app kent deze code niet. Hij kan van een nieuwere versie van de dienst komen. |
@@ -432,6 +434,8 @@ keine Grenze, sondern das Ergebnis des Zählens, und jeder Eintrag trägt seinen
   Dateityp-Filter selbst führt. `Rekenbladen` gibt es und wäre eine Erfindung an dieser Stelle:
   der Filter soll heißen, wie die Anwendung daneben heißt. Dieser Eintrag ist der Grund, warum
   die niederländische Liste eine Stelle länger ist als die italienische.
+- `%1$s (ID %2$s)` (seit Quick-Task 260929-s7p, Issue #14): zwei Platzhalter und die
+  Abkürzung ID, die in jeder Sprache dieses Baums gleich geschrieben wird.
 
 Die Liste ist nicht geraten worden. Drei Läufe, in dieser Reihenfolge:
 

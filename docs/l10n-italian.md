@@ -227,6 +227,8 @@ aus Plan 20-03. Diese Tabelle kann also nicht an einem Wortlaut zerbrechen.
 | `_and %n more_::_and %n more_` | und %n weitere / und %n weitere | e %n altro / e %n altri / e %n altri |
 | `File no longer exists (ID %s)` | Datei existiert nicht mehr (ID %s) | Il file non esiste più (ID %s) |
 | `%s (in the trash bin)` | %s (im Papierkorb) | %s (nel cestino) |
+| `%1$s (ID %2$s)` | %1$s (ID %2$s) | %1$s (ID %2$s) |
+| `%1$s (in the trash bin, ID %2$s)` | %1$s (im Papierkorb, ID %2$s) | %1$s (nel cestino, ID %2$s) |
 | `Indexed, text truncated` | Indexiert, Text gekürzt | Indicizzato, testo troncato |
 | `Unknown reason (%s)` | Unbekannter Grund (%s) | Motivo sconosciuto (%s) |
 | `This app does not know this code. It may come from a newer version of the backend.` | Diese App kennt diesen Code nicht. Er kann von einer neueren Fassung des Backends kommen. | Questa applicazione non conosce questo codice. Può provenire da una versione più recente del servizio. |
@@ -386,6 +388,8 @@ keine Grenze, sondern das Ergebnis des Zählens, und jeder Eintrag trägt seinen
   und aus demselben Grund. Der verwandte Schlüssel `%1$s in %2$s, modified on %3$s` steht
   **nicht** hier, weil sein zweiter Teil italienisch ist (`modificato il %3$s`).
 - `PDF`: Eigenname eines Dateiformats, in jeder Sprache dieselbe Abkürzung.
+- `%1$s (ID %2$s)` (seit Quick-Task 260929-s7p, Issue #14): zwei Platzhalter und die
+  Abkürzung ID, die in jeder Sprache dieses Baums gleich geschrieben wird.
 
 Die Liste ist nicht geraten worden. Drei Läufe, in dieser Reihenfolge:
 
