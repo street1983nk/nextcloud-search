@@ -739,8 +739,13 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # tests QueueServiceTest.php, QueueServiceReaderTest.php,
 # GatewayControllerTest.php and PathResolverServiceTest.php changed their
 # bytes. No file went, so PHP_FILES_TODAY moves to 84.
-PHP_FILES_TODAY = 84
-PHP_TREE_HASH_TODAY = "5f8f41ef2b29f921ccba5d4f7337c69c1586c2db894c0e8dab6a6c8c9337556c"
+# Measured again on 2026-09-29 for the unreadable repair that ships with 1.3.1
+# on release/1.3 and is carried here unchanged, so that 1.3.0 straight to the
+# next minor runs it too: two files came,
+# php/lib/Migration/Version001301Date20260929000000.php and its unit test. No
+# file changed its bytes or went, so PHP_FILES_TODAY moves to 86.
+PHP_FILES_TODAY = 86
+PHP_TREE_HASH_TODAY = "1202f78c9518f6a50f90f834f49817ff8dc595395cb4b05172d01046835b20d5"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
