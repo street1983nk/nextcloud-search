@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
-status: ready_to_plan
-stopped_at: Phase 27 complete (16/16), ready for secure-phase 27, then discuss Phase 28
-last_updated: 2026-09-29T16:37:22.764Z
-last_activity: 2026-09-29 -- Phase 27 complete
+status: planning
+stopped_at: Phase 28 context gathered
+last_updated: "2026-09-29T16:54:16.632Z"
+last_activity: 2026-09-29 - Phase 27 complete
 progress:
   total_phases: 6
   completed_phases: 4
@@ -153,9 +153,9 @@ Aeltere Merker:
 
 ## Session Continuity
 
-Last session: 2026-09-29T07:37:34.360Z
-Stopped at: Phase 27 UI-SPEC approved
-Resume file: .planning/phases/27-vorab-pr-fung-und-settings-oberfl-che/27-UI-SPEC.md
+Last session: 2026-09-29T16:54:16.614Z
+Stopped at: Phase 28 context gathered
+Resume file: .planning/phases/28-abnahme-anfahrt/28-CONTEXT.md
 
 ## Operator Next Steps
 
