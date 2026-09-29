@@ -66,7 +66,7 @@ findings:
   warning: 2
   info: 4
   total: 7
-status: issues_found
+status: resolved
 ---
 
 # Phase 26: Code Review Report
@@ -205,3 +205,8 @@ und in `_clear_the_multi_slot_pass` (sowie `GuardWatch.note_shutdown_begins`/`re
 _Reviewed: 2026-09-29T05:33:20Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
+
+
+## Fix-Vermerk (29.09.2026, Orchestrator)
+
+CR-01 gefixt in 91fefe8f (halt-Rennfenster: Flag vor process.start(), Recheck nach der Zuweisung, Recycle statt nacktem Kill mit Begruendung), WR-01 gefixt in 777f3a59 (unlock_held im Catch-all von run()), WR-02 gefixt in 15eb03d5 (CHOSEN zuerst, PASS als Commit-Punkt, gemeinsames Leeren auch in watch.py). Baumhash-Pin nachgezogen in 7768444c. Alle Fixes mit RED-Beleg und Tests; Suite 3898 passed, Gates gruen. IN-01..04 bleiben dokumentiert offen.
