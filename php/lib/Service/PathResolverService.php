@@ -99,6 +99,7 @@ final class PathResolverService {
 		private IRootFolder $rootFolder,
 		private IDBConnection $db,
 		private LoggerInterface $logger,
+		private ReaderContext $readerContext,
 	) {
 	}
 
@@ -345,29 +346,37 @@ final class PathResolverService {
 	 * @return array{fileId:int, readable:bool}|null
 	 */
 	private function fileIdForUser(string $uid, string $relative): ?array {
-		try {
-			// Every failure caught on purpose. getUserFolder() signals a missing
-			// user with a class from the private namespace of the server and a
-			// missing home directory with a different one again, NoUserException
-			// being the first of the two, and both mean the same thing here. The
-			// answer is word for word the answer of "no such file", so that this
-			// field cannot be used to find out which users exist.
-			$node = $this->rootFolder->getUserFolder($uid)->get($relative);
-		} catch (\Throwable $e) {
-			$this->logger->debug('Findling: a lookup reference resolved to nothing', ['exception' => $e]);
+		// The folder, the lookup and the readability question all run with the
+		// named user as the active user of the request, see ReaderContext: in
+		// the admin's request groupfolders builds the member's mount as "in
+		// share", and a +read -share ACL then hides the file (second face of
+		// issue #14, the lookup answered "no file" for a file that is there).
+		return $this->readerContext->actAs($uid, function () use ($uid, $relative): ?array {
+			try {
+				// Every failure caught on purpose. getUserFolder() signals a
+				// missing user with a class from the private namespace of the
+				// server and a missing home directory with a different one again,
+				// NoUserException being the first of the two, and both mean the
+				// same thing here. The answer is word for word the answer of "no
+				// such file", so that this field cannot be used to find out which
+				// users exist.
+				$node = $this->rootFolder->getUserFolder($uid)->get($relative);
+			} catch (\Throwable $e) {
+				$this->logger->debug('Findling: a lookup reference resolved to nothing', ['exception' => $e]);
 
-			return null;
-		}
+				return null;
+			}
 
-		$fileId = $node->getId();
-		if ($fileId <= 0) {
-			return null;
-		}
+			$fileId = $node->getId();
+			if ($fileId <= 0) {
+				return null;
+			}
 
-		// A folder is no file to read and gets no sentence about reading.
-		$readable = !$node instanceof File || SearchService::readableNode($node) !== null;
+			// A folder is no file to read and gets no sentence about reading.
+			$readable = !$node instanceof File || SearchService::readableNode($node) !== null;
 
-		return ['fileId' => $fileId, 'readable' => $readable];
+			return ['fileId' => $fileId, 'readable' => $readable];
+		});
 	}
 
 	/**
@@ -449,22 +458,31 @@ final class PathResolverService {
 		}
 
 		foreach (array_slice($readers, 0, self::MAX_PATH_READERS) as $uid) {
-			try {
-				$node = $this->rootFolder->getUserFolder($uid)->get($candidate);
-			} catch (\Throwable $e) {
-				// Hidden from this member by the folder rules, or a member who
-				// is gone since the row was written: the next one is asked.
-				$this->logger->debug('Findling: a member did not reach a path without owner', ['exception' => $e]);
-				continue;
-			}
+			// Each member is asked as the active user of the request, for the
+			// reason fileIdForUser() gives: otherwise the member's mount is built
+			// as "in share" and a -share rule hides the file from all of them.
+			$fileId = $this->readerContext->actAs($uid, function () use ($uid, $candidate): ?int {
+				try {
+					$node = $this->rootFolder->getUserFolder($uid)->get($candidate);
+				} catch (\Throwable $e) {
+					// Hidden from this member by the folder rules, or a member
+					// who is gone since the row was written: the next one is
+					// asked.
+					$this->logger->debug('Findling: a member did not reach a path without owner', ['exception' => $e]);
 
-			// The node in hand is asked directly. Resolving it a second time by
-			// id only to ask the readability question cost a second lookup per
-			// member tried (review finding); the question itself stays in
-			// SearchService, the one place that asks it.
-			$file = SearchService::readableNode($node);
-			if ($file !== null && $file->getId() > 0) {
-				return $file->getId();
+					return null;
+				}
+
+				// The node in hand is asked directly. Resolving it a second time
+				// by id only to ask the readability question cost a second lookup
+				// per member tried (review finding); the question itself stays in
+				// SearchService, the one place that asks it.
+				$file = SearchService::readableNode($node);
+
+				return $file !== null && $file->getId() > 0 ? $file->getId() : null;
+			});
+			if ($fileId !== null) {
+				return $fileId;
 			}
 		}
 

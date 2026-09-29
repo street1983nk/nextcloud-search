@@ -8,12 +8,15 @@ use OCA\Findling\Db\QueueMapper;
 use OCA\Findling\Service\ExclusionService;
 use OCA\Findling\Service\FileStateService;
 use OCA\Findling\Service\QueueService;
+use OCA\Findling\Service\ReaderContext;
 use OCA\Findling\Service\StorageService;
 use OCP\BackgroundJob\IJobList;
 use OCP\Files\Config\IUserMountCache;
 use OCP\Files\IRootFolder;
 use OCP\IAppConfig;
 use OCP\IDBConnection;
+use OCP\IUserManager;
+use OCP\IUserSession;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
@@ -236,6 +239,7 @@ final class QueueServiceTest extends TestCase {
 			$this->createMock(IRootFolder::class),
 			$this->createMock(IDBConnection::class),
 			$this->createMock(LoggerInterface::class),
+			new ReaderContext($this->createMock(IUserSession::class), $this->createMock(IUserManager::class)),
 		);
 
 		if ($lane === null) {

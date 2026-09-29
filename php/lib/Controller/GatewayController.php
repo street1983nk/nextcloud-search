@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace OCA\Findling\Controller;
 
 use OCA\Findling\AppInfo\Application;
+use OCA\Findling\Service\ReaderContext;
 use OCA\Findling\Service\SearchService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\Http\StreamResponse;
 use OCP\AppFramework\OCSController;
+use OCP\Files\File;
 use OCP\Files\IRootFolder;
 use OCP\IRequest;
 use Psr\Log\LoggerInterface;
@@ -27,6 +29,7 @@ class GatewayController extends OCSController {
 		IRequest $request,
 		private IRootFolder $rootFolder,
 		private LoggerInterface $logger,
+		private ReaderContext $readerContext,
 	) {
 		parent::__construct(Application::APP_ID, $request);
 	}
@@ -71,7 +74,16 @@ class GatewayController extends OCSController {
 			// travel in the name of somebody who may not open them. The queue
 			// already names a reader who may, so this refusal is the backstop for
 			// a permission that changed between the claim and the fetch.
-			$file = SearchService::readableFile($this->rootFolder->getUserFolder($userId), $fileId);
+			//
+			// The folder and the lookup run with the named user as the active
+			// user of the request (second round of #14, see ReaderContext):
+			// groupfolders builds the mount of a member as "in share" when the
+			// active user is somebody else, here nobody, and a +read -share ACL
+			// then hides the file from the very member the queue chose.
+			$file = $this->readerContext->actAs(
+				$userId,
+				fn (): ?File => SearchService::readableFile($this->rootFolder->getUserFolder($userId), $fileId),
+			);
 			// Not visible to this user, not readable for them and not existing at
 			// all deliberately give the same answer, so the gateway cannot be used
 			// to probe for files the user is not allowed to see.
@@ -81,6 +93,12 @@ class GatewayController extends OCSController {
 
 			// The 'r' is the entire read only guarantee at this spot. It must
 			// never become 'r+', 'w', 'a' or 'x'.
+			//
+			// Deliberately after the switch above has been undone. The mount is
+			// already built with the member's view, so the open does not need the
+			// switch, and read hooks (admin_audit, activity) must not attribute a
+			// read of Findling to the member: they see the same identity as
+			// before the fix.
 			$stream = $file->fopen('r');
 			if (!$stream) {
 				return new DataResponse(['error' => 'File could not be opened for reading.'], Http::STATUS_UNPROCESSABLE_ENTITY);

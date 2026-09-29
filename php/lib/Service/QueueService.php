@@ -230,6 +230,7 @@ class QueueService {
 		private IRootFolder $rootFolder,
 		private IDBConnection $db,
 		private LoggerInterface $logger,
+		private ReaderContext $readerContext,
 	) {
 	}
 
@@ -925,7 +926,10 @@ class QueueService {
 	 * a deletion. Everything a non empty list can end in is a sentence about
 	 * permissions and not about existence: a member the ACL wrapper hands a
 	 * node without the read bit, a member the wrapper hides the node from
-	 * entirely (the lookup then answers nothing, exactly as for a missing
+	 * entirely (a -share rule did that to every member until the lookup ran
+	 * as the member, since groupfolders treats a request whose active user is
+	 * somebody else as a share and then asks for READ plus SHARE; the lookup
+	 * then answers nothing, exactly as for a missing
 	 * file, so the two cannot be told apart from here, and that is why this
 	 * method does not try), a member whose home folder cannot be set up, and a
 	 * list longer than the names that were asked. Calling any of them gone
@@ -948,14 +952,23 @@ class QueueService {
 	 */
 	private function readerOf(int $fileId, array $userIds, array &$folders): array|string {
 		foreach (array_slice($userIds, 0, self::MAX_READER_TRIES) as $userId) {
-			$userFolder = $this->userFolder($userId, $folders);
-			if ($userFolder === null) {
-				continue;
-			}
+			// The folder and the lookup both run with the member as the active
+			// user of the request, see ReaderContext for why: groupfolders builds
+			// the mount of a member as "in share" otherwise, and a +read -share
+			// ACL then hides every node. A folder from the per claim cache is only
+			// ever used here, inside the switch of its own member.
+			$found = $this->readerContext->actAs($userId, function () use ($userId, $fileId, &$folders): ?array {
+				$userFolder = $this->userFolder($userId, $folders);
+				if ($userFolder === null) {
+					return null;
+				}
 
-			$file = SearchService::readableFile($userFolder, $fileId);
-			if ($file !== null) {
-				return [$userId, $userFolder, $file];
+				$file = SearchService::readableFile($userFolder, $fileId);
+
+				return $file === null ? null : [$userFolder, $file];
+			});
+			if ($found !== null) {
+				return [$userId, $found[0], $found[1]];
 			}
 		}
 

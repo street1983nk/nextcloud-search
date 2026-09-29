@@ -9,6 +9,7 @@ use OCA\Findling\Db\QueueMapper;
 use OCA\Findling\Service\ExclusionService;
 use OCA\Findling\Service\FileStateService;
 use OCA\Findling\Service\QueueService;
+use OCA\Findling\Service\ReaderContext;
 use OCA\Findling\Service\StorageService;
 use OCP\BackgroundJob\IJobList;
 use OCP\Files\Config\ICachedMountFileInfo;
@@ -19,6 +20,8 @@ use OCP\Files\IRootFolder;
 use OCP\IAppConfig;
 use OCP\IDBConnection;
 use OCP\IUser;
+use OCP\IUserManager;
+use OCP\IUserSession;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -49,9 +52,20 @@ final class QueueServiceReaderTest extends TestCase {
 	private FileStateService&MockObject $fileStateService;
 	private IUserMountCache&MockObject $mountCache;
 	private IRootFolder&MockObject $rootFolder;
+	private IUserSession&MockObject $session;
+	private ?IUser $active = null;
 
 	protected function setUp(): void {
 		parent::setUp();
+
+		// A stateful session: getUser() answers what setVolatileActiveUser()
+		// stored last, so the ordering cases below observe who is active at the
+		// moment a folder is set up and a node is looked up.
+		$this->session = $this->createMock(IUserSession::class);
+		$this->session->method('getUser')->willReturnCallback(fn (): ?IUser => $this->active);
+		$this->session->method('setVolatileActiveUser')->willReturnCallback(function (?IUser $user): void {
+			$this->active = $user;
+		});
 
 		$this->queueMapper = $this->createMock(QueueMapper::class);
 		$this->fileStateService = $this->createMock(FileStateService::class);
@@ -92,7 +106,24 @@ final class QueueServiceReaderTest extends TestCase {
 			$this->rootFolder,
 			$this->createMock(IDBConnection::class),
 			$this->createMock(LoggerInterface::class),
+			$this->readerContext(),
 		);
+	}
+
+	private function readerContext(): ReaderContext {
+		$userManager = $this->createMock(IUserManager::class);
+		$userManager->method('get')->willReturnCallback(function (string $uid): IUser {
+			$user = $this->createMock(IUser::class);
+			$user->method('getUID')->willReturn($uid);
+
+			return $user;
+		});
+
+		return new ReaderContext($this->session, $userManager);
+	}
+
+	private function activeUid(): ?string {
+		return $this->active?->getUID();
 	}
 
 	/**
@@ -273,5 +304,105 @@ final class QueueServiceReaderTest extends TestCase {
 			->with(self::FILE_ID, 'skipped', 'gone');
 
 		self::assertSame([], $this->service()->claim(32, 1_000_000));
+	}
+
+	public function testEveryMemberIsTheActiveUserWhileTheirFolderIsSetUpAndTheNodeIsLookedUp(): void {
+		// The second round of #14. groupfolders decides "in share" from the
+		// active user when the mount is built, so the folder setup and the
+		// lookup of every member tried must happen with that member active, and
+		// the one who was active before is active again after the claim.
+		$before = $this->createMock(IUser::class);
+		$before->method('getUID')->willReturn('admin');
+		$this->active = $before;
+		$this->mountsFor(['anna', 'bernd', 'carla']);
+
+		$setUpAs = [];
+		$lookedUpAs = [];
+		$nodes = ['anna' => null, 'bernd' => $this->file(false), 'carla' => $this->file(true)];
+		$folders = [];
+		foreach ($nodes as $userId => $node) {
+			$folder = $this->createMock(Folder::class);
+			$folder->method('getFirstNodeById')->willReturnCallback(function () use ($userId, $node, &$lookedUpAs): ?File {
+				$lookedUpAs[] = [$userId, $this->activeUid()];
+
+				return $node;
+			});
+			$folder->method('getRelativePath')->willReturn('/admins-hh/Vertrag.pdf');
+			$folders[$userId] = $folder;
+		}
+		$this->rootFolder->method('getUserFolder')->willReturnCallback(
+			function (string $userId) use ($folders, &$setUpAs): Folder {
+				$setUpAs[] = [$userId, $this->activeUid()];
+
+				return $folders[$userId];
+			},
+		);
+
+		$sources = $this->service()->claim(32, 1_000_000);
+
+		self::assertSame('carla', $sources[self::ROW_ID]['fetchAs'] ?? null);
+		self::assertSame([['anna', 'anna'], ['bernd', 'bernd'], ['carla', 'carla']], $setUpAs);
+		self::assertSame([['anna', 'anna'], ['bernd', 'bernd'], ['carla', 'carla']], $lookedUpAs);
+		self::assertSame($before, $this->active);
+	}
+
+	public function testASecondFileOfTheSameMemberIsLookedUpAsThatMemberFromTheFolderCache(): void {
+		// Two rows, one reader. The folder is set up once and served from the
+		// per claim cache for the second row, and the lookup of that second row
+		// still runs with the member active.
+		$second = new QueueFile();
+		$second->setId(self::ROW_ID + 1);
+		$second->setFileId(self::FILE_ID + 1);
+		$second->setStorageId(3);
+		$second->setRootId(5);
+		$second->setSize(100);
+		$second->setRetries(1);
+		$second->setKind(QueueMapper::KIND_CONTENT);
+		$first = new QueueFile();
+		$first->setId(self::ROW_ID);
+		$first->setFileId(self::FILE_ID);
+		$first->setStorageId(3);
+		$first->setRootId(5);
+		$first->setSize(100);
+		$first->setRetries(1);
+		$first->setKind(QueueMapper::KIND_CONTENT);
+		$this->queueMapper = $this->createMock(QueueMapper::class);
+		$this->queueMapper->method('claimBatch')->willReturnCallback(
+			static fn (int $limit, int $maxBytes, string $kind): array => $kind === QueueMapper::KIND_CONTENT ? [$first, $second] : [],
+		);
+
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('anna');
+		$mount = $this->createMock(ICachedMountFileInfo::class);
+		$mount->method('getUser')->willReturn($user);
+		$this->mountCache->method('getMountsForFileId')->willReturn([$mount]);
+
+		$lookedUpAs = [];
+		$file = $this->file(true);
+		$folder = $this->createMock(Folder::class);
+		$folder->method('getFirstNodeById')->willReturnCallback(function (int $fileId) use ($file, &$lookedUpAs): File {
+			$lookedUpAs[] = [$fileId, $this->activeUid()];
+
+			return $file;
+		});
+		$folder->method('getRelativePath')->willReturn('/admins-hh/Vertrag.pdf');
+		$this->rootFolder->expects(self::once())->method('getUserFolder')->with('anna')->willReturn($folder);
+
+		$sources = $this->service()->claim(32, 1_000_000);
+
+		self::assertCount(2, $sources);
+		self::assertSame([[self::FILE_ID, 'anna'], [self::FILE_ID + 1, 'anna']], $lookedUpAs);
+		self::assertNull($this->active);
+	}
+
+	public function testAFolderSetupThatThrowsStillRestoresThePreviousUser(): void {
+		$before = $this->createMock(IUser::class);
+		$before->method('getUID')->willReturn('admin');
+		$this->active = $before;
+		$this->mountsFor(['anna']);
+		$this->rootFolder->method('getUserFolder')->willThrowException(new \RuntimeException('no home'));
+
+		self::assertSame([], $this->service()->claim(32, 1_000_000));
+		self::assertSame($before, $this->active);
 	}
 }
