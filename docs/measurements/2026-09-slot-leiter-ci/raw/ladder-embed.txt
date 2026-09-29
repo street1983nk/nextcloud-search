@@ -1,0 +1,5 @@
+arch aarch64
+cpus_visible 4
+passages 64
+embed_slots 1 passages_per_second 60.341
+embed_slots 2 passages_per_second 90.396

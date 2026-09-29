@@ -4853,6 +4853,14 @@ Speicher je onnx-Kombination 542 bis 877 MB. Rohdaten in
 `docs/measurements/2026-09-v13-messung/rohdaten-nachanfahrt/`, Bericht
 Abschnitt 6.15.
 
+### Nachtrag vom 29.09.2026: die Slot-Leiter über den echten Poller
+
+Auf dem arm64-Runner (4 Kerne) bringt der echte Poller mit 1, 2 und 4
+OCR-Slots 0,286, 0,572 und 1,132 Seiten/s, also Faktor 2,000 und 1,979 je
+Stufe (beide über der Rauschgrenze 1,05) und 3,958 gesamt, praktisch die
+W4-Obergrenze von 3,955. Details und Rohdaten in
+`docs/measurements/2026-09-slot-leiter-ci/`.
+
 ## Reproduzieren
 
 ```sh

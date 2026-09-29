@@ -1,0 +1,4 @@
+noise_limit 1.05
+step 1->2 factor 2.000 Zugewinn
+step 2->4 factor 1.979 Zugewinn
+total 1->4 factor 3.958

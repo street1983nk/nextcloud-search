@@ -1,0 +1,9 @@
+arch aarch64
+cpus_visible 4
+slots 4
+scans 20
+round 1 slots 4 pages 48 seconds 42.271 pages_per_second 1.136 failed 0
+round 2 slots 4 pages 48 seconds 42.473 pages_per_second 1.130 failed 0
+round 3 slots 4 pages 48 seconds 42.403 pages_per_second 1.132 failed 0
+byte_capped_claims 0
+pages_per_second_median 1.132
