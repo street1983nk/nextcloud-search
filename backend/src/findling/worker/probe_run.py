@@ -628,7 +628,15 @@ class ProbeRun:
                 # thread is waited for, so no model child outlives the check.
                 await _settle([future])
             if result.outcome != model_probe.MEASURE_OK:
-                raise _nofit(_MODEL_CAUSES.get(result.outcome, "probe_failed"))
+                cause = _MODEL_CAUSES.get(result.outcome, "probe_failed")
+                # The figures the sentence of the cause needs; without them the
+                # page hides the sentence and the verdict has no named cause.
+                numbers: dict[str, int] = {}
+                if cause == "timeout":
+                    numbers = {"seconds": _seconds(self._measure_seconds)}
+                elif cause == probe.CAUSE_MODEL_MEMORY:
+                    numbers = {"need": MODEL_PROBE_CHILD_BYTES + GUARD_RESERVE_BYTES, "available": current or 0}
+                raise _nofit(cause, numbers)
             measured[name] = result
             rates[key] = result.rate_milli
             current = await asyncio.to_thread(self._headroom)

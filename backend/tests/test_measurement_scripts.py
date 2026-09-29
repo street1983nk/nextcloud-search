@@ -1501,8 +1501,11 @@ PHP_TREE_HASH_TODAY = "b06c30e2dc90a3a93ba9c671c9e3980089e8c36d078b514c35bcddae8
 # worker/poller.py (Poller.pool); the fix of 753f500d changed probe.py and
 # worker/probe_run.py (the slot count of ocr_n). One file came and none went,
 # so PACKAGE_FILES_TODAY moves to 71.
+# Measured again by the review fixes of phase 27: CR-01 changed the bytes of
+# worker/probe_run.py (the figures of model_memory and timeout from the model
+# child). No file came and none went, so PACKAGE_FILES_TODAY stays at 71.
 PACKAGE_FILES_TODAY = 71
-PACKAGE_TREE_HASH_TODAY = "d866a3b33dfc77805541e3d3c38b06265a6bbe9fdd4340bb15a1e1bdc927bb8d"
+PACKAGE_TREE_HASH_TODAY = "f2e7e4e2dfdf23c97a75b8d165467cc91cda33756df248bad7f41c03903dc79b"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

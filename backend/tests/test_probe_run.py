@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import os
+import re
 import shutil
 import sys
 import threading
@@ -829,6 +830,99 @@ async def test_the_end_of_a_model_child_maps_onto_a_cause(
     assert (snap.verdict, snap.cause) == (probe.VERDICT_NOFIT, cause)
     assert rig.measures.calls == ["int8"]
     assert rig.workers.made == []
+
+
+TEMPLATE = Path(__file__).resolve().parents[2] / "php" / "templates" / "admin.php"
+
+
+def _cause_needs() -> dict[str, list[str]]:
+    """The figures each cause sentence needs, read out of $probeCauseNeeds of the template."""
+    block = re.search(r"\$probeCauseNeeds = \[(.*?)\];", TEMPLATE.read_text(encoding="utf-8"), re.DOTALL)
+    assert block is not None
+    return {
+        code: re.findall(r"'([a-zA-Z0-9]+)'", keys)
+        for code, keys in re.findall(r"'([a-z_]+)' => \[([^\]]*)\]", block.group(1))
+    }
+
+
+def _assert_the_cause_can_be_said(snap: probe.ProbeSnapshot) -> None:
+    """A verdict whose cause sentence would have a hole is a verdict without a named cause."""
+    assert snap.cause != ""
+    missing = [key for key in _cause_needs().get(snap.cause, []) if key not in snap.numbers]
+    assert missing == [], (snap.cause, missing)
+
+
+@pytest.mark.parametrize("child", ["int8", "fp32"])
+@pytest.mark.parametrize(
+    "outcome",
+    [
+        model_probe.MEASURE_TIMEOUT,
+        model_probe.MEASURE_KILLED,
+        model_probe.MEASURE_NO_MEMORY,
+        model_probe.MEASURE_FAILED,
+    ],
+)
+async def test_the_end_of_a_model_child_carries_the_figures_of_its_sentence(
+    tmp_path: Path, small_weights: bytes, child: str, outcome: str
+) -> None:
+    rig = Rig(tmp_path)
+    _placed(rig, small_weights)
+    rig.measures.answers[child] = ModelMeasure(outcome, 0, 0, 0)
+    snap = await rig.check("standard", "fp32")
+    assert snap.verdict == probe.VERDICT_NOFIT
+    _assert_the_cause_can_be_said(snap)
+
+
+async def test_every_nofit_path_of_the_orchestrator_carries_the_figures_of_its_sentence(
+    tmp_path: Path, small_weights: bytes
+) -> None:
+    """The paths outside the model child, one rig each, held against the same map."""
+
+    def unreadable(rig: Rig) -> None:
+        rig.headroom.base = None
+
+    def short_for_the_first_slot(rig: Rig) -> None:
+        rig.headroom.base = OCR_SLOT_COST_BYTES + GUARD_RESERVE_BYTES - 1
+
+    def short_for_the_model_child(rig: Rig) -> None:
+        _placed(rig, small_weights)
+        rig.headroom.base = MODEL_PROBE_CHILD_BYTES + GUARD_RESERVE_BYTES - 1
+
+    def hanging_child(rig: Rig) -> None:
+        rig.workers.hang = True
+
+    def timed_out_child(rig: Rig) -> None:
+        rig.workers.results = lambda _index: ExtractionOutcome.failed(Reason.TIMEOUT)
+
+    def killed_child(rig: Rig) -> None:
+        rig.workers.results = lambda _index: ChildKilled(engine=False)
+
+    def foreign_placed_file(rig: Rig) -> None:
+        _placed(rig, b"not the recorded weights")
+
+    def nothing(rig: Rig) -> None:
+        del rig
+
+    scenarios: list[tuple[str, Callable[[Rig], None], str, dict[str, object]]] = [
+        ("memory_unknown", unreadable, "int8", {}),
+        ("first_slot", short_for_the_first_slot, "int8", {}),
+        ("model_gate", short_for_the_model_child, "fp32", {}),
+        ("ocr_timeout", hanging_child, "int8", {"measure_seconds": 0.3}),
+        ("ocr_sandbox_timeout", timed_out_child, "int8", {}),
+        ("ocr_killed", killed_child, "int8", {}),
+        ("digest", foreign_placed_file, "fp32", {}),
+        ("download_slow", nothing, "fp32", {"download_seconds": 0.2, "fetch": Fetch(hang=True)}),
+    ]
+    for name, prepare, precision, overrides in scenarios:
+        probe.reset()
+        weights.forget_verdicts()
+        where = tmp_path / name
+        where.mkdir()
+        rig = Rig(where, **overrides)
+        prepare(rig)
+        snap = await rig.check("standard", precision)
+        assert snap.verdict == probe.VERDICT_NOFIT, name
+        _assert_the_cause_can_be_said(snap)
 
 
 async def test_the_one_child_reads_the_verified_scan_page(tmp_path: Path, judge: JudgeSpy) -> None:
