@@ -64,7 +64,7 @@ Details im Archiv: .planning/milestones/v1.3-ROADMAP.md
 
 - [x] **Phase 24: Owner-Tor, Profil-Gerüst und Marken-Reparatur** - Grundsatzentscheide schriftlich, dann Profile als Anteils-Formel, Hardware-Erkennung mit Vorschlag, Sparsam gepinnt, Vektor-Marke kennt die Gewichtspräzision (completed 2026-09-28)
 - [x] **Phase 25: Einbettungsspur und Modellwahl** - Einbettung als eigener Nebenläufer (H1) mit PHP-Art-Filter, IDX-08 neu gefasst, int8/fp32 wählbar (completed 2026-09-28)
-- [ ] **Phase 26: N OCR-Slots und Speicherwächter** - Mehrere OCR-Slots (H2) mit KIND_BATCH-Companion, Drosselung und selbsttätiger Profil-Rückstufung
+- [x] **Phase 26: N OCR-Slots und Speicherwächter** - Mehrere OCR-Slots (H2) mit KIND_BATCH-Companion, Drosselung und selbsttätiger Profil-Rückstufung (completed 2026-09-29)
 - [ ] **Phase 27: Vorab-Prüfung und Settings-Oberfläche** - Erste echte Settings-Fläche mit "Übernehmen und prüfen" (N-Slot-Probe, Verdikt), acht Sprachkataloge
 - [ ] **Phase 28: Abnahme-Anfahrt** - RAM-Messung je Profilstufe am gebauten Produkt auf echter Hardware, Deckel vorab freigegeben
 - [ ] **Phase 29: Härtung und Store-Einreichung 1.4.0** - Launch-Härtung der Parallelpfade, Audits, signiertes App-Paar im Store
@@ -201,7 +201,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 26-14-PLAN.md , Push-Entscheid, CI-Belege einsammeln (SC2, SC3, PHPUnit), Owner-Abnahme (PAR-02, PAR-03), Welle 6, Checkpoint
+- [x] 26-14-PLAN.md , Push-Entscheid, CI-Belege einsammeln (SC2, SC3, PHPUnit), Owner-Abnahme (PAR-02, PAR-03), Welle 6, Checkpoint
 
 **Research-Flag**: ja (OOM-Kette R1, Abbruch halber Staffeln, Sperrfristen bei KIND_BATCH[ocr] = 2N)
 
@@ -259,7 +259,7 @@ Plans:
 | 17-23 (Archiv) | v1.3 | 69/69 | Complete | 2026-09-27 |
 | 24. Owner-Tor, Profil-Gerüst und Marken-Reparatur | v1.4 | 6/6 | Complete    | 2026-09-28 |
 | 25. Einbettungsspur und Modellwahl | v1.4 | 12/12 | Complete    | 2026-09-28 |
-| 26. N OCR-Slots und Speicherwächter | v1.4 | 13/14 | In Progress|  |
+| 26. N OCR-Slots und Speicherwächter | v1.4 | 14/14 | Complete   | 2026-09-29 |
 | 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 0/? | Not started | - |
 | 28. Abnahme-Anfahrt | v1.4 | 0/? | Not started | - |
 | 29. Härtung und Store-Einreichung 1.4.0 | v1.4 | 0/? | Not started | - |
