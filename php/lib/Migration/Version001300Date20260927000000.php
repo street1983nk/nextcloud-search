@@ -31,9 +31,9 @@ use OCP\Migration\SimpleMigrationStep;
  * file that is readable gets indexed, a file that really is gone is judged gone
  * again.
  *
- * The delete is not optional. revokeFailures takes back failed verdicts only,
- * because a skip is a decision and not an error, and this side of the app never
- * writes indexed. A file that is indexed after the requeue would therefore
+ * The delete is not optional. revokeFailures took back failed verdicts only
+ * when this migration was written (review WR-04 of phase 27 widened it to
+ * skips later), and this side of the app never writes indexed. A file that is indexed after the requeue would therefore
  * carry skipped(gone) for good, and the status page would count a findable file
  * as one that went. Requeue and delete happen in one transaction per band,
  * because half of it is the worst outcome in either direction: a requeued file

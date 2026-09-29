@@ -722,9 +722,12 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # WR-03 changed the bytes of templates/admin.php (the tile "Excluded by a
 # rule"). WR-02 changed FileStateService.php (countByReason joins the file
 # cache), AdminViewService.php (a comment) and templates/admin.php (the
-# neutral recount sentence). PHP_FILES_TODAY stays at 82.
+# neutral recount sentence). WR-04 changed FileStateService.php
+# (revokeFailures takes back skips but the OCR memo), QueueService.php and
+# Version001300Date20260927000000.php (comments and log lines).
+# PHP_FILES_TODAY stays at 82.
 PHP_FILES_TODAY = 82
-PHP_TREE_HASH_TODAY = "2a31c2eef6e7a2df84371cb0002e26567b45e81bf2b6294510dcae17a274770f"
+PHP_TREE_HASH_TODAY = "5c3887d807c655d22c4d1351e97dfd23c7b292e5e7863efd398734444b25a95c"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

@@ -41,7 +41,8 @@ use Psr\Log\LoggerInterface;
  * There is one movement in the other direction, and it is the only deletion of
  * this table: the same acknowledgement takes a failed verdict BACK when the
  * container reports the very same file as processed (revokeFailures below,
- * DI-06.1-34). Without it a row that once said failed had no writer at all that
+ * DI-06.1-34), and since review WR-04 of phase 27 a skipped one too, except
+ * the OCR memo skipped(no_text_layer). Without it a row that once said failed had no writer at all that
  * could contradict it, because this side never writes `indexed`.
  *
  * The state and the reason are checked against a closed list here. The
@@ -279,7 +280,8 @@ class FileStateService {
 	}
 
 	/**
-	 * Take back the failed verdicts of these files, because they are indexed now.
+	 * Take back the failed and skipped verdicts of these files, because they are
+	 * indexed now; skipped(no_text_layer) stays as the memo of the OCR handover.
 	 *
 	 * The one writer of this class that deletes, and the reason it exists is a
 	 * contradiction the owner saw on a fresh instance (DI-06.1-34, finding 9 of
@@ -302,11 +304,14 @@ class FileStateService {
 	 * reader that finds no row answers "not judged here" and asks the container,
 	 * which is the honest answer for a file that was just indexed by it.
 	 *
-	 * Only `failed` is taken back and never `skipped`. A skip is a decision and
-	 * not an error: it is not counted as a failure on the status page, it carries
-	 * no remedy that contradicts a findable file, and one of the skip reasons,
-	 * no_text_layer, is the handover to the OCR track, where the row is the memo
-	 * that the handover happened. Widening this to skips would delete that memo.
+	 * Since review WR-04 of phase 27 a skip is taken back as well, with one
+	 * exception. A skip is a decision, but a decision the success report has
+	 * outlived: a file that was skipped(unreadable) or skipped(too_large) and is
+	 * indexed after a permission fix or a raised cap kept its row, stayed in the
+	 * Skipped tile and in the error list, and got a remedy in the lookup that
+	 * contradicted a findable file (issue #14). The exception is no_text_layer,
+	 * the handover to the OCR track, where the row is the memo that the handover
+	 * happened; that one stays.
 	 *
 	 * The band exists for the dialects and not for the size of the answer, the
 	 * same reason verdictsFor bands its lookup: every database has a ceiling on
@@ -325,7 +330,13 @@ class FileStateService {
 		foreach (array_chunk($wanted, self::MAX_LOOKUP) as $band) {
 			$qb = $this->db->getQueryBuilder();
 			$qb->delete(self::TABLE_NAME)
-				->where($qb->expr()->eq('state', $qb->createNamedParameter('failed', IQueryBuilder::PARAM_STR)))
+				->where($qb->expr()->orX(
+					$qb->expr()->eq('state', $qb->createNamedParameter('failed', IQueryBuilder::PARAM_STR)),
+					$qb->expr()->andX(
+						$qb->expr()->eq('state', $qb->createNamedParameter('skipped', IQueryBuilder::PARAM_STR)),
+						$qb->expr()->neq('reason', $qb->createNamedParameter('no_text_layer', IQueryBuilder::PARAM_STR)),
+					),
+				))
 				->andWhere($qb->expr()->in('file_id', $qb->createNamedParameter($band, IQueryBuilder::PARAM_INT_ARRAY)));
 			$revoked += $qb->executeStatement();
 		}

@@ -3714,3 +3714,21 @@ def test_the_refused_by_type_term_counts_only_files_that_are_still_there() -> No
     assert "->innerJoin('s', 'filecache', 'fc', $qb->expr()->eq('fc.fileid', 's.file_id'))" in method
     assert "'files_trashbin/%'" in method
     assert "'__groupfolders/trash/%'" in method
+
+
+def test_a_success_report_takes_back_skips_except_the_ocr_memo() -> None:
+    """Review WR-04 of phase 27 (issue #14): revokeFailures takes back skips as well.
+
+    A file skipped as unreadable or too large that is indexed later kept its
+    row, stayed in the Skipped tile and the error list and got a remedy that
+    contradicted a findable file. The delete now covers failed and every
+    skipped reason but no_text_layer, the memo of the OCR handover. Checked live
+    on the harness as well (27-REVIEW-FIX.md): failed(corrupt),
+    skipped(too_large), skipped(unreadable) and skipped(no_text_layer) revoked 1
+    before and 3 after, with skipped(no_text_layer) left.
+    """
+    php = FILE_STATE.read_text(encoding="utf-8")
+    method = php[php.index("public function revokeFailures(") : php.index("public function counts(")]
+    assert "$qb->expr()->eq('state', $qb->createNamedParameter('failed', IQueryBuilder::PARAM_STR))" in method
+    assert "$qb->expr()->eq('state', $qb->createNamedParameter('skipped', IQueryBuilder::PARAM_STR))" in method
+    assert "$qb->expr()->neq('reason', $qb->createNamedParameter('no_text_layer', IQueryBuilder::PARAM_STR))" in method
