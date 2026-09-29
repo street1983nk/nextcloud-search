@@ -6,11 +6,12 @@ the cgroup of the machine the suite runs on, and no case waits for the tick.
 
 import asyncio
 import logging
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 
-from findling import guard, profile
+from findling import guard, probe, profile
 from findling.hardware import Hardware
 from findling.profile import Profile
 from findling.store.repo import open_store
@@ -245,6 +246,73 @@ async def test_a_rising_oom_kill_lowers_at_once(state_db: Path) -> None:
 
     assert guard.snapshot().cap is Profile.STANDARD
     assert _meta(state_db)[guard.META_CAUSE] == guard.CAUSE_OOM_KILL
+
+
+@pytest.fixture
+def probe_hold() -> Iterator[None]:
+    """A pre-check holds the indexing for the test; released and reset after it."""
+    probe.hold()
+    yield
+    probe.reset()
+
+
+@pytest.mark.usefixtures("probe_hold")
+async def test_a_kill_during_the_pre_check_lowers_nothing_and_is_dropped(state_db: Path) -> None:
+    # D-27-15, Pitfall 3: a killed probe child must not lower the chosen profile.
+    _at_level("performance")
+    readings = _Readings({"max": 0, "oom_kill": 0}, 4000 * MIB)
+    watch = _watch(state_db, readings, _Clock())
+    try:
+        await watch.run_once()
+        readings.events = {"max": 0, "oom_kill": 1}
+        guard.report_child_kill()
+        assert await watch.run_once() == guard.CAUSE_NONE
+    finally:
+        await watch.aclose()
+
+    assert guard.snapshot().cap is None
+    assert guard.take_child_kills() == 0
+
+
+@pytest.mark.usefixtures("probe_hold")
+async def test_the_first_tick_after_the_pre_check_is_suspended_as_well(state_db: Path) -> None:
+    # The kernel reports an event late, so one tick after the release still
+    # only moves the base.
+    _at_level("performance")
+    readings = _Readings({"max": 0, "oom_kill": 0}, 4000 * MIB)
+    watch = _watch(state_db, readings, _Clock())
+    try:
+        await watch.run_once()
+        probe.release()
+        readings.events = {"max": 0, "oom_kill": 1}
+        guard.report_child_kill()
+        assert await watch.run_once() == guard.CAUSE_NONE
+        assert guard.snapshot().cap is None
+        assert guard.take_child_kills() == 0
+
+        # From the second tick after the release an event counts again.
+        readings.events = {"max": 0, "oom_kill": 2}
+        assert await watch.run_once() == guard.CAUSE_OOM_KILL
+    finally:
+        await watch.aclose()
+
+    assert guard.snapshot().cap is Profile.STANDARD
+
+
+@pytest.mark.usefixtures("probe_hold")
+async def test_a_child_kill_counts_again_from_the_second_tick_after_the_pre_check(state_db: Path) -> None:
+    _at_level("performance")
+    watch = _watch(state_db, _Readings(None, None), _Clock())
+    try:
+        await watch.run_once()
+        probe.release()
+        await watch.run_once()
+        guard.report_child_kill()
+        assert await watch.run_once() == guard.CAUSE_OOM_KILL
+    finally:
+        await watch.aclose()
+
+    assert guard.snapshot().cap is Profile.STANDARD
 
 
 async def test_a_reported_child_kill_lowers_even_on_cgroup_v1(state_db: Path) -> None:

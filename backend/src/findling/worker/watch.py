@@ -37,6 +37,10 @@ pass, and an update must never read as an unclean end.
 cap, and the next tick writes the empty values. The guard never raises by
 itself, and in economy it only shows, it never lowers.
 
+**The pre-check (D-27-15).** While findling.probe.held() and one tick after
+it, a tick only moves the base of the escalation and drops the child kills: the
+check drives memory on purpose, and its load is no pressure on the profile.
+
 House rules of the runner (findling/worker/embedding.py): nothing is opened in
 the constructor, every reader and clock is injectable, every exception of a tick
 is caught and logged with its type name only. State.db is reached through a
@@ -53,7 +57,7 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
-from findling import guard, memory_guard, profile
+from findling import guard, memory_guard, probe, profile
 from findling.config import GUARD_TICK_SECONDS, settings
 from findling.profile import PROFILE_NAMES, Profile
 from findling.store.repo import Store, open_store
@@ -124,6 +128,9 @@ class GuardWatch:
         self._store_lock = threading.Lock()
         # The guard revision state.db holds, so a tick writes only on a change.
         self._persisted_revision = guard.snapshot().revision
+        # Whether the last tick ran while a pre-check held the indexing; the
+        # first tick after it is suspended as well (D-27-15).
+        self._probe_trailing = False
 
     # -- state.db --------------------------------------------------------
 
@@ -201,6 +208,20 @@ class GuardWatch:
         """One tick: read, escalate, lower above economy, persist a change. Returns the cause."""
         events = await asyncio.to_thread(self._events)
         headroom = await asyncio.to_thread(self._headroom)
+        held = probe.held()
+        if held or self._probe_trailing:
+            # D-27-15, 27-RESEARCH.md Pitfall 3: the pre-check drives memory on
+            # purpose, and a probe child the kernel kills must not lower the
+            # profile the admin is choosing; the check reports that kill itself
+            # as slot_killed. So the base moves on and the kills are dropped,
+            # during the hold and one tick after it, because the kernel reports
+            # an event late. The slot throttle lives in the poller and stays.
+            self._escalation.rebase(events)
+            guard.take_child_kills()
+            self._probe_trailing = held
+            LOGGER.debug("memory guard suspended its lowering for the pre-check")
+            await self._persist_if_changed()
+            return guard.CAUSE_NONE
         cause = self._escalation.observe(self._clock(), events, headroom, guard.take_child_kills())
         if cause:
             state = profile.snapshot()
