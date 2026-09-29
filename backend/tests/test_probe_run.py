@@ -1,0 +1,731 @@
+"""The pre-check task of plan 27-09: steps, gates, caps, kill, cleanup, restart.
+
+Every case runs against fakes for the poller, the runner, the pool, the fetch,
+the headroom and the children, and against a state.db in tmp_path; no case
+reads the memory of the machine the suite runs on. One case at the bottom runs
+a real extraction child on the shipped scan page, on Linux with tesseract only.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import os
+import threading
+import time
+from collections.abc import Awaitable, Callable, Iterator
+from pathlib import Path
+
+import pytest
+
+from findling import guard, probe, profile
+from findling.embed import model_probe, weights
+from findling.extract.errors import ChildKilled, ExtractionOutcome, Reason
+from findling.hardware import Hardware
+from findling.nc.queue import CompanionChoice
+from findling.store.repo import open_store
+from findling.worker.probe_run import ProbeRun
+
+MIB = 1024 * 1024
+GIB = 1024 * MIB
+BIG = 32 * GIB
+PAYLOAD = b"fp32 weights of the test, not a model " * 64
+
+ModelMeasure = model_probe.ModelMeasure
+
+
+def _big_box() -> Hardware:
+    return Hardware(
+        cpu_count=None,
+        cpu_quota=None,
+        cores=16,
+        memory_limit_bytes=None,
+        memory_available_bytes=int(64e9),
+        memory_total_bytes=int(64e9),
+        architecture="aarch64",
+        cgroup="none",
+    )
+
+
+@pytest.fixture(autouse=True)
+def _clean_probe_state() -> Iterator[None]:
+    probe.reset()
+    weights.forget_verdicts()
+    yield
+    probe.reset()
+    weights.forget_verdicts()
+
+
+@pytest.fixture
+def small_weights(monkeypatch: pytest.MonkeyPatch) -> bytes:
+    """The recorded fp32 identity shrunk to a payload of a few kilobytes."""
+    monkeypatch.setattr(weights, "FP32_BYTES", len(PAYLOAD))
+    monkeypatch.setattr(weights, "FP32_SHA256", hashlib.sha256(PAYLOAD).hexdigest())
+    return PAYLOAD
+
+
+# -- fakes -----------------------------------------------------------------
+
+
+class FakePoller:
+    def __init__(self) -> None:
+        self.pass_in_flight = False
+        self.holds = 0
+        self.releases = 0
+
+    def hold_for_probe(self) -> None:
+        self.holds += 1
+
+    def release_probe_hold(self) -> None:
+        self.releases += 1
+
+
+class FakeRunner:
+    def __init__(self) -> None:
+        self.parked = asyncio.Event()
+        self.parked.set()
+        self.holds = 0
+        self.releases = 0
+
+    def hold_for_probe(self) -> None:
+        self.holds += 1
+
+    def release_probe_hold(self) -> None:
+        self.releases += 1
+
+
+class FakePool:
+    def __init__(self) -> None:
+        self.sheds = 0
+
+    def shed_idle(self) -> int:
+        self.sheds += 1
+        return 0
+
+
+class FakeHeadroom:
+    """A headroom the fake children lower while they run."""
+
+    def __init__(self, base: int | None = BIG) -> None:
+        self.base = base
+        self._load = 0
+        self._lock = threading.Lock()
+
+    def __call__(self) -> int | None:
+        if self.base is None:
+            return None
+        with self._lock:
+            return self.base - self._load
+
+    def add(self, amount: int) -> None:
+        with self._lock:
+            self._load += amount
+
+
+class FakeWorker:
+    def __init__(self, factory: Workers, index: int) -> None:
+        self._factory = factory
+        self.index = index
+        self.halted = threading.Event()
+        self.stopped = 0
+
+    def run(
+        self, path: str, mime: str, size: int, *, route: str | None = None, timeout_seconds: float | None = None
+    ) -> ExtractionOutcome:
+        factory = self._factory
+        factory.calls.append((path, mime, size, route, timeout_seconds))
+        factory.env.append(os.environ.get("FINDLING_OCR_DPI"))
+        cost = factory.cost(self.index)
+        factory.headroom.add(cost)
+        try:
+            if factory.hang:
+                self.halted.wait(5.0)
+                return ExtractionOutcome.failed(Reason.CORRUPT)
+            time.sleep(factory.seconds)
+            result = factory.result(self.index)
+        finally:
+            factory.headroom.add(-cost)
+        if isinstance(result, BaseException):
+            raise result
+        return result
+
+    def halt(self) -> None:
+        self._factory.halts += 1
+        self.halted.set()
+
+    def stop(self) -> None:
+        self.stopped += 1
+
+
+class Workers:
+    """The worker factory: counts the children and says what each one does."""
+
+    def __init__(self, headroom: FakeHeadroom) -> None:
+        self.headroom = headroom
+        self.made: list[FakeWorker] = []
+        self.calls: list[tuple[str, str, int, str | None, float | None]] = []
+        self.env: list[str | None] = []
+        self.halts = 0
+        self.hang = False
+        self.seconds = 0.05
+        self.costs: Callable[[int], int] = lambda _index: 300 * MIB
+        self.results: Callable[[int], ExtractionOutcome | BaseException] = lambda _index: ExtractionOutcome.indexed(
+            "text"
+        )
+
+    def __call__(self) -> FakeWorker:
+        worker = FakeWorker(self, len(self.made))
+        self.made.append(worker)
+        return worker
+
+    def cost(self, index: int) -> int:
+        return self.costs(index)
+
+    def result(self, index: int) -> ExtractionOutcome | BaseException:
+        return self.results(index)
+
+
+class Measures:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+        self.answers: dict[str, ModelMeasure] = {
+            "int8": ModelMeasure(model_probe.MEASURE_OK, 300 * MIB, 450 * MIB, 4000),
+            "fp32": ModelMeasure(model_probe.MEASURE_OK, 300 * MIB, 950 * MIB, 1500),
+        }
+
+    def __call__(self, precision: model_probe.Precision, models_dir: Path, *, timeout_seconds: float) -> ModelMeasure:
+        del models_dir, timeout_seconds
+        self.calls.append(precision)
+        return self.answers[precision]
+
+
+class Fetch:
+    """A fake fetch_release_asset: hands the payload over in chunks."""
+
+    def __init__(self, payload: bytes = PAYLOAD, *, hang: bool = False, error: bool = False) -> None:
+        self.payload = payload
+        self.hang = hang
+        self.error = error
+        self.calls = 0
+
+    async def __call__(self, url: str, write: Callable[[bytes], Awaitable[None]], *, cap: int) -> None:
+        del url, cap
+        self.calls += 1
+        if self.error:
+            raise RuntimeError("unreachable")
+        await write(self.payload[:100])
+        if self.hang:
+            await asyncio.sleep(3600)
+        for start in range(100, len(self.payload), 500):
+            await write(self.payload[start : start + 500])
+
+
+class Rig:
+    """One ProbeRun with its fakes."""
+
+    def __init__(self, tmp_path: Path, **overrides: object) -> None:
+        self.state = tmp_path / "state.db"
+        open_store(self.state).close()
+        self.models = tmp_path / "models"
+        self.models.mkdir()
+        self.poller = FakePoller()
+        self.runner = FakeRunner()
+        self.pool = FakePool()
+        self.headroom = FakeHeadroom()
+        self.workers = Workers(self.headroom)
+        self.measures = Measures()
+        self.fetch = Fetch()
+        self.rebuild_may_start = True
+        kwargs: dict[str, object] = {
+            "poller": self.poller,
+            "runner": self.runner,
+            "pool": self.pool,
+            "models_dir": self.models,
+            "fetch": self.fetch,
+            "rebuild_may_start": lambda: self.rebuild_may_start,
+            "engine_loaded": lambda: True,
+            "cutter_built": lambda: True,
+            "embed_slots": lambda: 0,
+            "state_path": self.state,
+            "headroom": self.headroom,
+            "worker_factory": self.workers,
+            "model_measure": self.measures,
+            "hardware": _big_box,
+            "sample_seconds": 0.005,
+            "min_free_bytes": 0,
+        }
+        kwargs.update(overrides)
+        self.run = ProbeRun(**kwargs)  # type: ignore[arg-type]
+
+    def meta(self) -> dict[str, str]:
+        store = open_store(self.state)
+        try:
+            return store.read_meta()
+        finally:
+            store.close()
+
+    def write_meta(self, values: dict[str, str]) -> None:
+        store = open_store(self.state)
+        try:
+            for key, value in values.items():
+                store.write_meta(key, value)
+        finally:
+            store.close()
+
+    async def check(self, target: str = "standard", precision: str = "int8") -> probe.ProbeSnapshot:
+        answer, probe_id = await self.run.start(target, precision)
+        assert answer == "started"
+        assert self.run.task is not None
+        await asyncio.wait_for(self.run.task, timeout=20)
+        snap = probe.snapshot()
+        assert snap.id == probe_id
+        return snap
+
+    def released(self) -> bool:
+        return self.poller.releases >= 1 and self.runner.releases >= 1 and not probe.held()
+
+
+@pytest.fixture
+def steps(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    seen: list[str] = []
+    original = probe.note_step
+
+    def note(step: str, bytes_done: int = 0, bytes_total: int = 0) -> None:
+        if not seen or seen[-1] != step:
+            seen.append(step)
+        original(step, bytes_done, bytes_total)
+
+    monkeypatch.setattr(probe, "note_step", note)
+    return seen
+
+
+def _placed(rig: Rig, payload: bytes) -> Path:
+    target = weights.fp32_weights_path(rig.models)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(payload)
+    return target
+
+
+async def _wait_for(condition: Callable[[], bool], seconds: float = 5.0) -> None:
+    deadline = time.monotonic() + seconds
+    while not condition():
+        assert time.monotonic() < deadline, "condition not reached"
+        await asyncio.sleep(0.01)
+
+
+# -- task 1: start, pause, download, cleanup, persistence, restart ------------
+
+
+async def test_a_second_start_while_running_is_busy(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    rig.poller.pass_in_flight = True
+    first, probe_id = await rig.run.start("standard", "int8")
+    task = rig.run.task
+    second = await rig.run.start("performance", "int8")
+    assert first == "started"
+    assert second == ("busy", probe_id)
+    assert rig.run.task is task
+    rig.poller.pass_in_flight = False
+    assert task is not None
+    await asyncio.wait_for(task, timeout=20)
+    assert probe.snapshot().verdict == probe.VERDICT_FITS
+
+
+async def test_a_start_during_a_rebuild_is_refused(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    rig.rebuild_may_start = False
+    assert await rig.run.start("standard", "int8") == ("rebuilding", "")
+    assert rig.run.task is None
+    assert probe.snapshot().state == probe.STATE_IDLE
+
+
+async def test_the_id_is_sixteen_hex_digits(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    snap = await rig.check()
+    assert len(snap.id) == 16
+    int(snap.id, 16)
+
+
+async def test_the_steps_of_an_int8_check_run_in_order(tmp_path: Path, steps: list[str]) -> None:
+    rig = Rig(tmp_path)
+    snap = await rig.check("standard", "int8")
+    assert steps == ["pause", "ocr_one", "calc", "ocr_n", "cleanup"]
+    assert snap.verdict == probe.VERDICT_FITS
+    assert snap.cause == ""
+    assert rig.measures.calls == []
+    assert rig.fetch.calls == 0
+
+
+async def test_the_pause_holds_both_and_waits_for_the_pass_in_flight(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    rig.poller.pass_in_flight = True
+    rig.runner.parked.clear()
+    await rig.run.start("standard", "int8")
+    await _wait_for(lambda: probe.snapshot().step == "pause")
+    await asyncio.sleep(0.1)
+    assert rig.poller.holds == 1
+    assert rig.runner.holds == 1
+    assert probe.held()
+    assert rig.pool.sheds >= 1
+    assert rig.workers.made == []
+    rig.poller.pass_in_flight = False
+    await asyncio.sleep(0.1)
+    assert rig.workers.made == []  # the runner is still in its round
+    rig.runner.parked.set()
+    assert rig.run.task is not None
+    await asyncio.wait_for(rig.run.task, timeout=20)
+    assert rig.pool.sheds >= 2
+    assert probe.snapshot().verdict == probe.VERDICT_FITS
+    assert rig.released()
+
+
+async def test_a_pass_that_outlasts_the_pause_cap_is_pause_timeout(tmp_path: Path) -> None:
+    rig = Rig(tmp_path, pause_seconds=0.1)
+    rig.poller.pass_in_flight = True
+    snap = await rig.check()
+    assert (snap.verdict, snap.cause) == (probe.VERDICT_NOFIT, "pause_timeout")
+    assert snap.numbers["seconds"] == 1
+    assert rig.workers.made == []
+    assert rig.released()
+
+
+async def test_an_exception_in_the_measurement_is_probe_failed_and_lifts_the_hold(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    rig.workers.results = lambda _index: RuntimeError("boom")
+    snap = await rig.check()
+    assert (snap.verdict, snap.cause) == (probe.VERDICT_NOFIT, "probe_failed")
+    assert rig.released()
+
+
+async def test_a_broken_calculation_is_probe_failed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    rig = Rig(tmp_path)
+
+    def broken(**_kwargs: int) -> probe.Verdict:
+        raise ArithmeticError
+
+    monkeypatch.setattr(probe, "judge", broken)
+    snap = await rig.check()
+    assert (snap.verdict, snap.cause) == (probe.VERDICT_NOFIT, "probe_failed")
+    assert rig.released()
+
+
+async def test_a_cancellation_lifts_the_hold(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    rig.poller.pass_in_flight = True
+    await rig.run.start("standard", "int8")
+    await _wait_for(probe.held)
+    await rig.run.close()
+    assert rig.run.task is not None
+    assert rig.run.task.cancelled()
+    assert rig.released()
+    # No verdict: the next start reads it as interrupted.
+    assert probe.snapshot().state == probe.STATE_RUNNING
+    assert rig.meta()[probe.META_PROBE_STATE] == probe.STATE_RUNNING
+
+
+async def test_the_fp32_download_counts_its_bytes(
+    tmp_path: Path, small_weights: bytes, steps: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rig = Rig(tmp_path)
+    progress: list[tuple[int, int]] = []
+    original = probe.note_step
+
+    def note(step: str, bytes_done: int = 0, bytes_total: int = 0) -> None:
+        if step == "download":
+            progress.append((bytes_done, bytes_total))
+        original(step, bytes_done, bytes_total)
+
+    monkeypatch.setattr(probe, "note_step", note)
+    snap = await rig.check("standard", "fp32")
+    assert steps == ["pause", "download", "model", "ocr_one", "calc", "ocr_n", "cleanup"]
+    assert progress[0] == (0, len(small_weights))
+    assert progress[-1] == (len(small_weights), len(small_weights))
+    assert [done for done, _ in progress] == sorted(done for done, _ in progress)
+    assert snap.verdict == probe.VERDICT_FITS
+    assert snap.fp32_fetched is True
+    assert snap.fp32_deleted is False
+    assert weights.fp32_weights_path(rig.models).read_bytes() == small_weights
+    assert rig.meta()[probe.META_PROBE_FP32_FETCHED] == "1"
+
+
+async def test_a_hanging_download_is_download_slow_without_a_part(tmp_path: Path, small_weights: bytes) -> None:
+    del small_weights
+    rig = Rig(tmp_path, download_seconds=0.2)
+    rig.run._fetch = Fetch(hang=True)
+    snap = await rig.check("standard", "fp32")
+    assert (snap.verdict, snap.cause) == (probe.VERDICT_NOFIT, "download_slow")
+    target = weights.fp32_weights_path(rig.models)
+    assert not target.exists()
+    assert not target.with_name(target.name + weights.PART_SUFFIX).exists()
+    assert rig.released()
+
+
+@pytest.mark.parametrize(
+    ("fetch", "min_free", "cause"),
+    [
+        (Fetch(b"not the recorded weights" * 100), 0, "digest_mismatch"),
+        (Fetch(error=True), 0, "download_failed"),
+        (Fetch(), 1 << 62, "disk_short"),
+    ],
+)
+async def test_the_procure_outcomes_map_onto_the_causes(
+    tmp_path: Path, small_weights: bytes, fetch: Fetch, min_free: int, cause: str
+) -> None:
+    del small_weights
+    rig = Rig(tmp_path, fetch=fetch, min_free_bytes=min_free)
+    snap = await rig.check("standard", "fp32")
+    assert (snap.verdict, snap.cause) == (probe.VERDICT_NOFIT, cause)
+    assert not weights.fp32_weights_path(rig.models).exists()
+    assert rig.measures.calls == []
+
+
+async def test_a_placed_file_is_checked_by_digest_and_stays_on_nofit(
+    tmp_path: Path, small_weights: bytes, steps: list[str]
+) -> None:
+    rig = Rig(tmp_path)
+    target = _placed(rig, small_weights)
+    rig.measures.answers["fp32"] = ModelMeasure(model_probe.MEASURE_KILLED, 0, 0, 0)
+    snap = await rig.check("standard", "fp32")
+    assert steps[:3] == ["pause", "digest", "model"]
+    assert "download" not in steps
+    assert rig.fetch.calls == 0
+    assert (snap.verdict, snap.cause) == (probe.VERDICT_NOFIT, "slot_killed")
+    assert snap.fp32_fetched is False
+    assert snap.fp32_deleted is False
+    assert target.exists()
+
+
+async def test_a_placed_file_with_another_digest_is_digest_mismatch_and_stays(
+    tmp_path: Path, small_weights: bytes
+) -> None:
+    rig = Rig(tmp_path)
+    target = _placed(rig, bytes(len(small_weights)))
+    snap = await rig.check("standard", "fp32")
+    assert (snap.verdict, snap.cause) == (probe.VERDICT_NOFIT, "digest_mismatch")
+    assert target.exists()
+    assert rig.fetch.calls == 0
+
+
+async def test_a_fetched_file_goes_again_on_nofit(tmp_path: Path, small_weights: bytes) -> None:
+    del small_weights
+    rig = Rig(tmp_path)
+    rig.workers.results = lambda _index: ChildKilled(engine=False)
+    snap = await rig.check("standard", "fp32")
+    assert (snap.verdict, snap.cause) == (probe.VERDICT_NOFIT, "slot_killed")
+    assert snap.fp32_fetched is True
+    assert snap.fp32_deleted is True
+    assert not weights.fp32_weights_path(rig.models).exists()
+    assert rig.meta()[probe.META_PROBE_FP32_FETCHED] == ""
+
+
+async def test_a_fetched_file_goes_again_on_narrow(
+    tmp_path: Path, small_weights: bytes, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    del small_weights
+    rig = Rig(tmp_path)
+    narrow = probe.Verdict(probe.VERDICT_NARROW, probe.CAUSE_RESERVE_THIN, {"reserve": 1, "required": 2})
+    monkeypatch.setattr(probe, "judge", lambda **_kwargs: narrow)
+    snap = await rig.check("standard", "fp32")
+    assert snap.verdict == probe.VERDICT_NARROW
+    assert snap.fp32_deleted is True
+    assert not weights.fp32_weights_path(rig.models).exists()
+
+
+async def test_fp32_in_force_needs_neither_download_nor_model(tmp_path: Path, steps: list[str]) -> None:
+    profile.note_weights("fp32")
+    rig = Rig(tmp_path)
+    snap = await rig.check("standard", "fp32")
+    assert steps == ["pause", "ocr_one", "calc", "ocr_n", "cleanup"]
+    assert snap.verdict == probe.VERDICT_FITS
+    assert rig.measures.calls == []
+
+
+async def test_the_meta_carries_running_and_then_the_result(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    rig.poller.pass_in_flight = True
+    _, probe_id = await rig.run.start("standard", "int8")
+    meta = rig.meta()
+    assert meta[probe.META_PROBE_STATE] == probe.STATE_RUNNING
+    assert meta[probe.META_PROBE_ID] == probe_id
+    assert meta[probe.META_PROBE_FP32_FETCHED] == ""
+    rig.poller.pass_in_flight = False
+    assert rig.run.task is not None
+    await asyncio.wait_for(rig.run.task, timeout=20)
+    meta = rig.meta()
+    assert meta[probe.META_PROBE_STATE] == probe.STATE_DONE
+    stored = probe.decode(meta[probe.META_PROBE_RESULT])
+    assert stored is not None
+    assert (stored.id, stored.verdict, stored.target_profile) == (probe_id, probe.VERDICT_FITS, "standard")
+
+
+async def test_the_fetched_mark_is_written_before_the_download(tmp_path: Path, small_weights: bytes) -> None:
+    del small_weights
+    rig = Rig(tmp_path)
+    seen: list[str] = []
+
+    class Peek(Fetch):
+        async def __call__(self, url: str, write: Callable[[bytes], Awaitable[None]], *, cap: int) -> None:
+            seen.append(rig.meta()[probe.META_PROBE_FP32_FETCHED])
+            await super().__call__(url, write, cap=cap)
+
+    rig.run._fetch = Peek()
+    await rig.check("standard", "fp32")
+    assert seen == ["1"]
+
+
+async def test_a_restart_in_the_middle_reads_as_interrupted(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    rig.poller.pass_in_flight = True
+    _, probe_id = await rig.run.start("performance", "int8")
+    # The container dies: the task is gone, the meta says running.
+    assert rig.run.task is not None
+    rig.run.task.cancel()
+    await asyncio.gather(rig.run.task, return_exceptions=True)
+    probe.reset()
+    restarted = ProbeRun(
+        poller=FakePoller(),
+        runner=FakeRunner(),
+        pool=FakePool(),
+        models_dir=rig.models,
+        fetch=Fetch(),
+        rebuild_may_start=lambda: True,
+        engine_loaded=lambda: True,
+        cutter_built=lambda: True,
+        embed_slots=lambda: 0,
+        state_path=rig.state,
+    )
+    await restarted.restore()
+    snap = probe.snapshot()
+    assert (snap.id, snap.state) == (probe_id, probe.STATE_DONE)
+    assert (snap.verdict, snap.cause) == (probe.VERDICT_NOFIT, "interrupted")
+    assert snap.target_profile == "performance"
+    meta = rig.meta()
+    assert meta[probe.META_PROBE_STATE] == probe.STATE_DONE
+    stored = probe.decode(meta[probe.META_PROBE_RESULT])
+    assert stored is not None
+    assert stored.cause == "interrupted"
+
+
+async def test_a_restart_after_a_finished_check_brings_its_result_back(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    done = await rig.check()
+    probe.reset()
+    await rig.run.restore()
+    assert probe.snapshot() == done
+
+
+async def test_restore_without_a_state_db_does_nothing(tmp_path: Path) -> None:
+    run = ProbeRun(
+        poller=FakePoller(),
+        runner=FakeRunner(),
+        pool=FakePool(),
+        models_dir=tmp_path,
+        fetch=Fetch(),
+        rebuild_may_start=lambda: True,
+        engine_loaded=lambda: True,
+        cutter_built=lambda: True,
+        embed_slots=lambda: 0,
+        state_path=tmp_path / "missing.db",
+    )
+    await run.restore()
+    assert probe.snapshot().state == probe.STATE_IDLE
+    assert not (tmp_path / "missing.db").exists()
+
+
+def _choices(*answers: CompanionChoice | None) -> tuple[Callable[[], Awaitable[CompanionChoice | None]], list[int]]:
+    calls = [0]
+
+    async def read() -> CompanionChoice | None:
+        index = min(calls[0], len(answers) - 1)
+        calls[0] += 1
+        return answers[index]
+
+    return read, calls
+
+
+def _fetched_mark(rig: Rig, payload: bytes) -> Path:
+    target = _placed(rig, payload)
+    rig.write_meta(
+        {
+            probe.META_PROBE_STATE: probe.STATE_DONE,
+            probe.META_PROBE_ID: "0123456789abcdef",
+            probe.META_PROBE_FP32_FETCHED: "1",
+        }
+    )
+    return target
+
+
+async def test_recover_removes_the_fetched_file_when_the_key_says_int8(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    target = _fetched_mark(rig, PAYLOAD)
+    read, calls = _choices(CompanionChoice(profile="standard", precision="int8"))
+    await asyncio.wait_for(rig.run.recover(read, retry=0.01), timeout=5)
+    assert calls[0] == 1
+    assert not target.exists()
+    assert rig.meta()[probe.META_PROBE_FP32_FETCHED] == ""
+
+
+async def test_recover_keeps_the_file_when_the_key_says_fp32(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    target = _fetched_mark(rig, PAYLOAD)
+    read, _ = _choices(CompanionChoice(profile="standard", precision="fp32"))
+    await asyncio.wait_for(rig.run.recover(read, retry=0.01), timeout=5)
+    assert target.exists()
+    assert rig.meta()[probe.META_PROBE_FP32_FETCHED] == ""
+
+
+async def test_recover_waits_for_a_read_and_deletes_nothing_before(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    target = _fetched_mark(rig, PAYLOAD)
+    read, calls = _choices(None)
+    task = asyncio.create_task(rig.run.recover(read, retry=0.01))
+    await _wait_for(lambda: calls[0] >= 3)
+    assert target.exists()
+    await rig.run.close()
+    await asyncio.wait_for(task, timeout=5)
+    assert target.exists()
+    assert rig.meta()[probe.META_PROBE_FP32_FETCHED] == "1"
+
+
+async def test_recover_retries_after_a_failed_read(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    target = _fetched_mark(rig, PAYLOAD)
+    calls = [0]
+
+    async def read() -> CompanionChoice | None:
+        calls[0] += 1
+        if calls[0] == 1:
+            raise ConnectionError
+        return CompanionChoice(profile=None, precision="int8")
+
+    await asyncio.wait_for(rig.run.recover(read, retry=0.01), timeout=5)
+    assert calls[0] == 2
+    assert not target.exists()
+
+
+async def test_recover_without_the_mark_reads_nothing(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    target = _placed(rig, PAYLOAD)
+    read, calls = _choices(CompanionChoice(profile=None, precision="int8"))
+    await rig.run.recover(read, retry=0.01)
+    assert calls[0] == 0
+    assert target.exists()
+
+
+async def test_the_check_never_writes_the_pass_mark(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    profile.note_hardware(_big_box())
+    profile.note_chosen("economy")
+    before = profile.snapshot()
+    await rig.check("performance", "int8")
+    meta = rig.meta()
+    assert meta.get(guard.META_MULTI_SLOT_PASS, "") == ""
+    assert meta.get(guard.META_MULTI_SLOT_CHOSEN, "") == ""
+    assert profile.snapshot() == before
+    assert guard.snapshot().cap is None
+
+
+async def test_without_persistence_nothing_is_written(tmp_path: Path) -> None:
+    rig = Rig(tmp_path, persist=False)
+    await rig.check()
+    assert probe.META_PROBE_STATE not in rig.meta()
