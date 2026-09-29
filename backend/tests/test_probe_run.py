@@ -920,6 +920,10 @@ async def test_a_deep_dip_in_the_n_run_is_narrow(tmp_path: Path) -> None:
     rig.headroom.base = 4 * GIB
     # The one child costs little, the parallel ones far more than it said.
     rig.workers.costs = lambda index: 300 * MIB if index == 0 else 900 * MIB
+    # The dip only shows while the parallel children overlap; 50 ms each let a
+    # loaded runner start them one after the other and miss it (seen once in a
+    # full run), so they hold their cost long enough to overlap for certain.
+    rig.workers.seconds = 0.5
     snap = await rig.check("standard", "int8")
     assert (snap.verdict, snap.cause) == (probe.VERDICT_NARROW, probe.CAUSE_RESERVE_THIN)
     assert snap.numbers["required"] == GUARD_RESERVE_BYTES
