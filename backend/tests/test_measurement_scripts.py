@@ -1482,8 +1482,14 @@ PHP_TREE_HASH_TODAY = "4bc45c73f3ca02194fb8976f8c1f2951b3b6b52ef1e7e1fc015bce55d
 # Measured again after the wave-3 merge of phase 27: plan 27-09 brought
 # worker/probe_run.py (the orchestrator of the pre-check). One file came and
 # none went, so PACKAGE_FILES_TODAY moves to 70.
-PACKAGE_FILES_TODAY = 70
-PACKAGE_TREE_HASH_TODAY = "06877af1d5d2a3a6d153f8fd987c4958392d8f6d2c32ae47b6cac0f4bc63e3f4"
+# Measured again after the wave-4 merge of phase 27: plan 27-11 brought
+# api/probe.py (POST /probe and GET /probe/state) and changed api/status.py
+# (the block probe, model.chunks), main.py (the probe in the lifespan) and
+# worker/poller.py (Poller.pool); the fix of 753f500d changed probe.py and
+# worker/probe_run.py (the slot count of ocr_n). One file came and none went,
+# so PACKAGE_FILES_TODAY moves to 71.
+PACKAGE_FILES_TODAY = 71
+PACKAGE_TREE_HASH_TODAY = "d866a3b33dfc77805541e3d3c38b06265a6bbe9fdd4340bb15a1e1bdc927bb8d"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
