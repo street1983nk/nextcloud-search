@@ -252,7 +252,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 27-15-PLAN.md , Live-Lauf auf dem nc35-Harness mit Owner-Abnahme der Fläche (PRUEF-01, UI-01), Welle 6, Checkpoint
+- [x] 27-15-PLAN.md , Live-Lauf auf dem nc35-Harness mit Owner-Abnahme der Fläche (PRUEF-01, UI-01), Welle 6, Checkpoint
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
@@ -298,7 +298,7 @@ Plans:
 | 24. Owner-Tor, Profil-Gerüst und Marken-Reparatur | v1.4 | 6/6 | Complete    | 2026-09-28 |
 | 25. Einbettungsspur und Modellwahl | v1.4 | 12/12 | Complete    | 2026-09-28 |
 | 26. N OCR-Slots und Speicherwächter | v1.4 | 14/14 | Complete    | 2026-09-29 |
-| 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 14/16 | In Progress|  |
+| 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 15/16 | In Progress|  |
 | 28. Abnahme-Anfahrt | v1.4 | 0/? | Not started | - |
 | 29. Härtung und Store-Einreichung 1.4.0 | v1.4 | 0/? | Not started | - |
 
