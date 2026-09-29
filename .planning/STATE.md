@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
 status: executing
-stopped_at: Completed 28-02-PLAN.md
-last_updated: "2026-09-29T21:46:32.868Z"
+stopped_at: Completed 28-03-PLAN.md
+last_updated: "2026-09-29T22:02:54.776Z"
 last_activity: 2026-09-29
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 62
-  completed_plans: 50
+  completed_plans: 51
   percent: 67
 ---
 
@@ -26,17 +26,18 @@ See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 ## Current Position
 
 Phase: 28 (Abnahme-Anfahrt), in Ausführung
-Plan: 3 of 14
+Plan: 4 of 14
 Status: Ready to execute
 Last activity: 2026-09-29
 
-Progress: [████████░░] 81%
+Progress: [████████░░] 82%
 
 ## Naechster Schritt
 
-**execute-phase 28 weiter mit 28-03** (28-01 fertig: Teilkorpus, Rechenblatt, Slotkosten,
+**execute-phase 28 weiter mit 28-04** (28-01 fertig: Teilkorpus, Rechenblatt, Slotkosten,
 00-ablauf.md; b8e8c785. 28-02 fertig: 11-probe-route.py, 10-zelle.sh, 93b-nullstand.sh,
-00-kette.sh, 59 boxlose Tests; 1976584a. Alles nur lokal).
+00-kette.sh, 59 boxlose Tests; 1976584a. 28-03 fertig: aws_box.sh Satztabelle/Architektur/
+SG-Schonung, 00-typwechsel.sh mit Zieltyp; b1191dc5. Alles nur lokal).
 
 Phase-27-Abschluss (2026-09-29): 16/16 Plaene in 7 Wellen; Owner-Abnahmen 27-01, 27-15
 (gemeinsam per Playwright) und Phase ("ok abgenommen"); Push-Entscheid "push-now" =
@@ -107,6 +108,13 @@ Fuer v1.4 unmittelbar tragend:
   beendet die Kette (84) und zieht den Timer auf 60 min vor; Marke VORPRUEFUNG=stop-ja
   als Laufwert von Hand nach 00-typwechsel.sh vorpruefung.
 
+- 28-03 (30.09.): aws_box.sh rechnet mit dem Satz des Typs aus describe-instances (Tabelle
+  der sechs Typen, Preiskarte 29.09.); Typ ohne Satz: stop parkt trotzdem, schreibt keine
+  Kostenzahl, endet 1. destroy schont bei geteilter Security Group auch das Schluesselpaar
+  und nimmt die andere Instanz samt Volumes aus dem Tag-Sweep. 00-typwechsel.sh: nur
+  innerhalb einer Familie (54), ohne Kapazitaet Typ zurueck und Box gestoppt (55), kein
+  Rueckfall. Zone in aws_box.sh bleibt fest eu-central-1c (A7 offen fuer 28-05).
+
 ### Termine und Owner-Checkpoints
 
 - **Issue #14 (budachst):** Antwort mit Zitat gepostet (issuecomment-5853918446), Issue bleibt
@@ -168,8 +176,8 @@ Aeltere Merker:
 
 ## Session Continuity
 
-Last session: 2026-09-29T21:46:25.838Z
-Stopped at: Completed 28-02-PLAN.md
+Last session: 2026-09-29T22:02:50.640Z
+Stopped at: Completed 28-03-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
