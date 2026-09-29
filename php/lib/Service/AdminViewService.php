@@ -9,6 +9,7 @@ use OCA\Findling\BackgroundJobs\SchedulerJob;
 use OCA\Findling\Text\PlainText;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\IAppConfig;
+use OCP\IDateTimeFormatter;
 use OCP\IL10N;
 use OCP\IUserSession;
 
@@ -205,6 +206,66 @@ final class AdminViewService {
 	 * list on purpose: it becomes null, and the line on the page stays hidden.
 	 */
 	private const GUARD_CAUSES = ['memory_max_repeated', 'oom_kill', 'unclean_end'];
+
+	/**
+	 * The steps of the probe of phase 27, in the order it runs through them.
+	 *
+	 * The spelling of backend/src/findling/probe.py STEPS, held equal by a test
+	 * of backend/tests/test_admin_ui_contract.py. The page names the step it
+	 * shows out of its own map, so a word from outside this list is refused and
+	 * the progress line says nothing rather than something (T-27-24).
+	 */
+	private const PROBE_STEPS = ['pause', 'download', 'digest', 'model', 'ocr_one', 'calc', 'ocr_n', 'cleanup'];
+
+	/** The three verdicts of a probe, probe.VERDICTS (D-27-04). */
+	private const PROBE_VERDICTS = ['fits', 'narrow', 'nofit'];
+
+	/**
+	 * The causes of a verdict, probe.CAUSES. The empty string is the cause of a
+	 * "fits" and is judged apart, the same rule as GUARD_CAUSES above.
+	 */
+	private const PROBE_CAUSES = ['reserve_thin', 'memory_short', 'model_memory', 'memory_unknown', 'slot_killed', 'timeout', 'pause_timeout', 'download_failed', 'download_slow', 'digest_mismatch', 'disk_short', 'interrupted', 'probe_failed'];
+
+	/** The keys of the numbers of a verdict, probe.NUMBER_KEYS. */
+	private const PROBE_NUMBERS = ['slots', 'need', 'available', 'reserve', 'required', 'seconds', 'rateInt8', 'rateFp32'];
+
+	/**
+	 * The four values an admin variable of the container can overrule, and the
+	 * variable that does it (D-27-14).
+	 *
+	 * The name the page shows next to an overruled value comes out of this map
+	 * and never out of the answer of the container: the container only says
+	 * that a value came from the environment, and which variable that is was
+	 * decided in backend/src/findling/profile.py _OVERRIDES, spelled here once
+	 * more. A field outside the map produces no line at all.
+	 */
+	private const ENV_VARIABLES = [
+		'dpi' => 'FINDLING_OCR_DPI',
+		'max_pages' => 'FINDLING_OCR_MAX_PAGES',
+		'batch' => 'FINDLING_EMBED_BATCH_SIZE',
+		'writer_heap' => 'FINDLING_WRITER_HEAP_BYTES',
+	];
+
+	/**
+	 * The key under which the object profile of the status answer carries each
+	 * of the four values and their source (findling.api.status
+	 * PROFILE_VALUE_KEYS), in the same order as ENV_VARIABLES.
+	 */
+	private const ENV_WIRE_KEYS = [
+		'dpi' => 'ocrDpi',
+		'max_pages' => 'ocrMaxPages',
+		'batch' => 'embedBatchSize',
+		'writer_heap' => 'writerHeapBytes',
+	];
+
+	/**
+	 * The size of the fp32 model file of the release, in bytes.
+	 *
+	 * Equal to backend/src/findling/embed/weights.py FP32_BYTES, held equal by
+	 * a test. The help line of the fp32 checkbox names this size, and it is
+	 * known before the container downloaded anything (D-27-01).
+	 */
+	public const FP32_DOWNLOAD_BYTES = 470268510;
 
 	/**
 	 * What a reason code may look like before it is passed on. The taxonomy of
@@ -461,6 +522,7 @@ final class AdminViewService {
 		private IUserSession $userSession,
 		private ITimeFactory $timeFactory,
 		private IL10N $l10n,
+		private IDateTimeFormatter $dateTimeFormatter,
 	) {
 	}
 
@@ -478,7 +540,14 @@ final class AdminViewService {
 	 *     stalledFor:int, runState:string, backendReachable:bool,
 	 *     backend:array<string,mixed>, lockstep:array<string,string>,
 	 *     coverage:array<string,mixed>, estimate:array<string,mixed>,
-	 *     errors:array<string,mixed>, rules:array<string,mixed>
+	 *     errors:array<string,mixed>, rules:array<string,mixed>,
+	 *     profileStored:bool, profileChosen:?string, profileSuggested:?string,
+	 *     profileEffective:?string, hardwareCores:?int, hardwareMemory:?int,
+	 *     storedPrecision:string, probeSupported:bool, probeRunning:bool,
+	 *     probeStep:string, profileCheck:?array<string,mixed>,
+	 *     profileEnv:list<array{field:string, value:int, variable:string}>,
+	 *     reindexDocuments:int, reindexSecondsInt8:?int, reindexSecondsFp32:?int,
+	 *     fp32DownloadBytes:int
 	 * }
 	 */
 	public function overview(): array {
@@ -565,6 +634,16 @@ final class AdminViewService {
 		// count below is zero on a healthy instance and stays in the answer as
 		// the honest zero of this side rather than being hidden.
 		$indexed = (int)($states['indexed'] ?? 0);
+		$indexedDisplay = $backendReachable ? (int)$backend['indexed'] : $this->settingsService->lastIndexedCount();
+
+		// The profile surface of phase 27 (UI-01). The container half is judged
+		// field by field out of the objects profile, probe and model; the
+		// Nextcloud half is appconfig through SettingsService, the same reading
+		// for the template and for the initial state. The stored verdict is
+		// judged again here, because appconfig is writable through occ.
+		$answered = $answer ?? [];
+		$check = $this->profileCheckView($this->settingsService->profileCheck());
+		$chunks = self::nonNegativeInt(self::modelField($answered, 'chunks')) ?? 0;
 
 		return [
 			'indexed' => $indexed,
@@ -584,7 +663,7 @@ final class AdminViewService {
 			// record is the remembered count above, never the state table: that
 			// side holds no indexed rows by construction, and reading it here
 			// made the tile jump to zero the moment the container went silent.
-			'indexedDisplay' => $backendReachable ? (int)$backend['indexed'] : $this->settingsService->lastIndexedCount(),
+			'indexedDisplay' => $indexedDisplay,
 			'scheduled' => $scheduled,
 			'running' => $running,
 			'lastJobRun' => $lastJobRun,
@@ -608,7 +687,199 @@ final class AdminViewService {
 			'estimate' => $this->estimate($scan, $backend, $backendReachable, $indexable, $scheduled + $running),
 			'errors' => $this->errors(),
 			'rules' => $this->rules(),
+			// Whether an admin ever stored a profile: "nothing chosen yet" and
+			// "economy chosen" are two different lines (Z1, Z2).
+			'profileStored' => $this->settingsService->profileStored(),
+			'profileChosen' => self::profileName(self::profileField($answered, 'chosen')),
+			'profileSuggested' => self::profileName(self::profileField($answered, 'suggested')),
+			'profileEffective' => self::profileName(self::profileField($answered, 'effective')),
+			'hardwareCores' => self::hardwareCores($answered),
+			'hardwareMemory' => self::hardwareMemory($answered),
+			// An unreadable stored precision counts as int8, the same rule as
+			// SettingsService::needsProbe, so the page never offers a way that
+			// the write route refuses.
+			'storedPrecision' => $this->settingsService->modelPrecision() ?? 'int8',
+			// A container without the object probe cannot run the check (Z15).
+			'probeSupported' => self::probeField($answered, 'supported') === true,
+			'probeRunning' => self::probeField($answered, 'running') === true,
+			'probeStep' => self::stepCode(self::probeField($answered, 'step')),
+			'profileCheck' => $check,
+			'profileEnv' => self::profileEnv($answered),
+			// D-27-03, D-27-18: the document count always, the duration only out
+			// of a rate a probe of this box measured, never out of a constant.
+			'reindexDocuments' => $indexedDisplay,
+			'reindexSecondsInt8' => self::reindexSeconds($chunks, self::checkRate($check, 'rateInt8')),
+			'reindexSecondsFp32' => self::reindexSeconds($chunks, self::checkRate($check, 'rateFp32')),
+			'fp32DownloadBytes' => self::FP32_DOWNLOAD_BYTES,
 		];
+	}
+
+	/**
+	 * The stored verdict of the last probe, judged field by field, or null.
+	 *
+	 * appconfig is writable through occ, so the stored array is untrusted input
+	 * like the container answer (T-27-25): profile, precision and verdict have
+	 * to be words of their sets or the whole verdict is dropped, a cause outside
+	 * its set becomes the empty string, numbers outside their key set or of
+	 * another type are left out, and the two flags are true only as real
+	 * booleans. ``atText`` is formatted on this side, in the language of the
+	 * admin; ``at`` stays the epoch second.
+	 *
+	 * @param array<mixed>|null $stored
+	 * @return array<string,mixed>|null
+	 */
+	private function profileCheckView(?array $stored): ?array {
+		$check = self::judgedCheck($stored);
+		if ($check === null) {
+			return null;
+		}
+
+		$check['atText'] = $check['at'] > 0 ? $this->dateTimeFormatter->formatDateTime($check['at']) : '';
+
+		return $check;
+	}
+
+	/**
+	 * The judgement of profileCheckView() without the date formatting, static
+	 * and public for the reason coverageShare() is: it is the judgement and
+	 * nothing else.
+	 *
+	 * @param array<mixed>|null $stored
+	 * @return array{profile:string, precision:string, verdict:string, cause:string, numbers:array<string,int>, at:int, committed:bool, fp32Deleted:bool}|null
+	 */
+	public static function judgedCheck(?array $stored): ?array {
+		if ($stored === null) {
+			return null;
+		}
+
+		$profile = self::profileName($stored['profile'] ?? null);
+		$precision = self::precision($stored['precision'] ?? null);
+		$verdict = $stored['verdict'] ?? null;
+		if ($profile === null || $precision === null || !is_string($verdict) || !in_array($verdict, self::PROBE_VERDICTS, true)) {
+			return null;
+		}
+
+		$cause = $stored['cause'] ?? null;
+		$numbers = [];
+		$rawNumbers = $stored['numbers'] ?? null;
+		if (is_array($rawNumbers)) {
+			foreach (self::PROBE_NUMBERS as $key) {
+				$value = self::nonNegativeInt($rawNumbers[$key] ?? null);
+				if ($value !== null) {
+					$numbers[$key] = $value;
+				}
+			}
+		}
+
+		return [
+			'profile' => $profile,
+			'precision' => $precision,
+			'verdict' => $verdict,
+			'cause' => is_string($cause) && in_array($cause, self::PROBE_CAUSES, true) ? $cause : '',
+			'numbers' => $numbers,
+			'at' => self::nonNegativeInt($stored['at'] ?? null) ?? 0,
+			'committed' => ($stored['committed'] ?? null) === true,
+			'fp32Deleted' => ($stored['fp32Deleted'] ?? null) === true,
+		];
+	}
+
+	/**
+	 * One measured rate of a judged verdict, or null when the probe did not
+	 * measure it.
+	 *
+	 * @param array<string,mixed>|null $check
+	 */
+	public static function checkRate(?array $check, string $key): ?int {
+		if ($check === null || !is_array($check['numbers'] ?? null)) {
+			return null;
+		}
+
+		return self::nonNegativeInt($check['numbers'][$key] ?? null);
+	}
+
+	/**
+	 * How long a rebuild of the vector track takes, in whole seconds, or null.
+	 *
+	 * ``$rateMilli`` is the rate a probe of this box measured, in thousandths of
+	 * a chunk per second (probe.py numbers rateInt8, rateFp32). Without such a
+	 * rate there is no honest figure, and the page shows the short form of the
+	 * reindex line instead of a guess (D-27-03, D-27-18). Rounded up, so a
+	 * rebuild is never announced as shorter than it takes.
+	 */
+	public static function reindexSeconds(int $chunks, ?int $rateMilli): ?int {
+		if ($rateMilli === null || $rateMilli <= 0 || $chunks < 0) {
+			return null;
+		}
+
+		return intdiv($chunks * 1000 + $rateMilli - 1, $rateMilli);
+	}
+
+	/**
+	 * The values an admin variable of the container overrules, one entry each
+	 * (D-27-14).
+	 *
+	 * Only the four fields of ENV_VARIABLES, only with the source "env" and only
+	 * with a non negative integer value; the variable name comes out of the map
+	 * and never out of the answer.
+	 *
+	 * @param array<mixed> $answer
+	 * @return list<array{field:string, value:int, variable:string}>
+	 */
+	public static function profileEnv(array $answer): array {
+		$values = self::profileField($answer, 'values');
+		$sources = self::profileField($answer, 'sources');
+		if (!is_array($values) || !is_array($sources)) {
+			return [];
+		}
+
+		$lines = [];
+		foreach (self::ENV_VARIABLES as $field => $variable) {
+			$wire = self::ENV_WIRE_KEYS[$field];
+			$value = self::nonNegativeInt($values[$wire] ?? null);
+			if (($sources[$wire] ?? null) === 'env' && $value !== null) {
+				$lines[] = ['field' => $field, 'value' => $value, 'variable' => $variable];
+			}
+		}
+
+		return $lines;
+	}
+
+	/**
+	 * The whole cores the container detected, or null.
+	 *
+	 * @param array<mixed> $answer
+	 */
+	public static function hardwareCores(array $answer): ?int {
+		$hardware = self::profileField($answer, 'hardware');
+
+		return is_array($hardware) ? self::nonNegativeInt($hardware['coresWhole'] ?? null) : null;
+	}
+
+	/**
+	 * The memory of the box in bytes, or null.
+	 *
+	 * The smaller of the container limit and the physical memory, the figure the
+	 * suggestion of the container is made from (findling.hardware
+	 * threshold_memory_bytes), so the line "Detected" and the suggestion next to
+	 * it speak about the same box.
+	 *
+	 * @param array<mixed> $answer
+	 */
+	public static function hardwareMemory(array $answer): ?int {
+		$hardware = self::profileField($answer, 'hardware');
+		if (!is_array($hardware)) {
+			return null;
+		}
+
+		$known = array_values(array_filter(
+			[
+				self::nonNegativeInt($hardware['memoryLimitBytes'] ?? null),
+				self::nonNegativeInt($hardware['memoryTotalBytes'] ?? null),
+			],
+			static fn (?int $value): bool => $value !== null,
+		));
+
+		return $known === [] ? null : min($known);
 	}
 
 	/**
@@ -1928,10 +2199,13 @@ final class AdminViewService {
 			// Why the guard lowered the profile, one of three words, or null
 			// when it did not lower anything (D-26-01).
 			'guardCause' => self::guardCause(self::guardField($answer, 'cause')),
-			// The confirmation token of the way back, shown inside an occ
-			// command and nowhere else; only 32 lower case hex digits pass
-			// (D-26-04, no button in this phase).
-			'guardToken' => self::hexToken(self::guardField($answer, 'token')),
+			// Whether the guard holds a confirmation token of the way back, and
+			// nothing more (D-27-12): the token itself never leaves the server.
+			// ProbeService reads it out of a fresh status answer on its own when
+			// a probe for the chosen profile ends with "fits", and stores it as
+			// the confirmation; the page only needs to know that there is one to
+			// confirm. Only 32 lower case hex digits count as a token.
+			'guardConfirmable' => self::hexToken(self::guardField($answer, 'token')) !== null,
 			// The OCR slots the profile asks for and the ones in force, and
 			// whether the guard throttles them (D-26-02). Counters are non
 			// negative integers or null, the flag is a real boolean or null.
@@ -2082,10 +2356,11 @@ final class AdminViewService {
 	/**
 	 * The confirmation token of the way back, 32 lower case hex digits, or null.
 	 *
-	 * The token ends up inside an occ command an admin copies, so anything that
-	 * does not have exactly that shape is refused and never trimmed (T-26-15,
-	 * T-26-16). The modifier D keeps the dollar from accepting a trailing
-	 * newline, which would otherwise end the copied command early.
+	 * Since D-27-12 the token no longer reaches the page: backend() turns it
+	 * into guardConfirmable, and ProbeService stores it as the confirmation.
+	 * Anything that does not have exactly that shape is refused and never
+	 * trimmed (T-26-15, T-26-16). The modifier D keeps the dollar from accepting
+	 * a trailing newline.
 	 */
 	public static function hexToken(mixed $value): ?string {
 		return is_string($value) && preg_match('/^[0-9a-f]{32}$/D', $value) === 1 ? $value : null;
@@ -2099,6 +2374,52 @@ final class AdminViewService {
 	 * not cast (T-26-15).
 	 */
 	public static function guardCounter(mixed $value): ?int {
+		return is_int($value) && $value >= 0 ? $value : null;
+	}
+
+	/**
+	 * One field of the object ``profile`` of the container answer, or null.
+	 *
+	 * The robustness of modelField() and guardField(): a container without the
+	 * object and one that sends something else than an object both give null,
+	 * and the page says "This backend does not report its hardware yet" (Z15).
+	 *
+	 * @param array<mixed> $answer
+	 */
+	public static function profileField(array $answer, string $key): mixed {
+		$profile = $answer['profile'] ?? null;
+
+		return is_array($profile) ? ($profile[$key] ?? null) : null;
+	}
+
+	/**
+	 * One field of the object ``probe`` of the container answer, or null.
+	 *
+	 * A container older than phase 27 leaves the object out; probeSupported is
+	 * false then and the probe buttons stay disabled (Z15).
+	 *
+	 * @param array<mixed> $answer
+	 */
+	public static function probeField(array $answer, string $key): mixed {
+		$probe = $answer['probe'] ?? null;
+
+		return is_array($probe) ? ($probe[$key] ?? null) : null;
+	}
+
+	/**
+	 * A step of the probe, one of PROBE_STEPS, or the empty string.
+	 *
+	 * The empty string and not null, because it is the idle value of the
+	 * protocol as well; the page shows a step only for a word of the list.
+	 */
+	public static function stepCode(mixed $value): string {
+		return is_string($value) && in_array($value, self::PROBE_STEPS, true) ? $value : '';
+	}
+
+	/**
+	 * A non negative integer, or null for everything else, never cast.
+	 */
+	public static function nonNegativeInt(mixed $value): ?int {
 		return is_int($value) && $value >= 0 ? $value : null;
 	}
 

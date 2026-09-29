@@ -59,9 +59,10 @@ import re
 from collections.abc import Callable, Mapping
 from pathlib import Path
 
-from findling import guard
-from findling.api.status import GuardReport
+from findling import guard, probe
+from findling.api.status import PROFILE_VALUE_KEYS, GuardReport
 from findling.embed.engine import ENGINE_STATES
+from findling.embed.weights import FP32_BYTES
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -2253,13 +2254,16 @@ def test_the_guard_lines_are_built_out_of_closed_sets() -> None:
         ("guardChosen", "profileName", "chosen"),
         ("guardEffective", "profileName", "effective"),
         ("guardCause", "guardCause", "cause"),
-        ("guardToken", "hexToken", "token"),
+        ("guardConfirmable", "hexToken", "token"),
         ("slotsTarget", "guardCounter", "slotsTarget"),
         ("slotsInForce", "guardCounter", "slotsInForce"),
         ("slotsThrottled", "strictFlag", "throttled"),
     ):
+        # D-27-12: the token is judged as before, but only whether it holds
+        # reaches the page, as a real boolean.
+        ending = " !== null," if key == "guardConfirmable" else ","
         assert view.count(f"'{key}' => ") == 1, key
-        assert f"'{key}' => self::{judge}(self::guardField($answer, '{field}'))," in view, key
+        assert f"'{key}' => self::{judge}(self::guardField($answer, '{field}')){ending}" in view, key
     for element in ("findling-guard", "findling-guard-way-back", "findling-slots"):
         assert f'id="{element}"<?php if (' in template, element
     assert "<code><?php p($wayBackCommand); ?></code>" in template
@@ -2335,6 +2339,107 @@ def test_a_guard_field_the_container_does_not_send_is_a_finding(tmp_path: Path) 
     findings = scan_guard_fields(copy.name, copy.read_text(encoding="utf-8"))
 
     assert findings == [f"{copy.name}: guardField reads 'slotsNow', which GuardReport does not carry"]
+
+
+# Plan 27-08: the data side of the profile surface (UI-01). The template of
+# plan 27-10 and the script of plan 27-12 read exactly these overview keys.
+ADMIN_SETTINGS = REPO_ROOT / "php" / "lib" / "Settings" / "Admin.php"
+PROFILE_SURFACE_KEYS = (
+    "guardConfirmable",
+    "profileStored",
+    "profileChosen",
+    "profileSuggested",
+    "profileEffective",
+    "hardwareCores",
+    "hardwareMemory",
+    "storedPrecision",
+    "probeSupported",
+    "probeRunning",
+    "probeStep",
+    "profileCheck",
+    "profileEnv",
+    "reindexDocuments",
+    "reindexSecondsInt8",
+    "reindexSecondsFp32",
+    "fp32DownloadBytes",
+)
+FP32_DOWNLOAD_CONSTANT = re.compile(r"public const FP32_DOWNLOAD_BYTES = (\d+);")
+
+
+def php_list_constant(source: str, name: str) -> list[str]:
+    """The words of a one line ``private const NAME = [...]`` of the service."""
+    match = re.search(rf"private const {name} = \[([^\]]*)\];", source)
+    assert match is not None, f"AdminViewService.php lost its {name} constant"
+    return re.findall(r"'([A-Za-z0-9_]+)'", match.group(1))
+
+
+def test_the_token_never_reaches_the_browser() -> None:
+    """D-27-12, T-27-23: the confirmation token stays on the server.
+
+    Until phase 26 the page showed the token inside an occ command. Since the
+    probe confirms the way back itself, neither the overview nor the initial
+    state nor the script may carry it; the page gets guardConfirmable instead.
+    """
+    for source in (ADMIN_VIEW, ADMIN_SETTINGS, SCRIPT):
+        assert "guardToken" not in source.read_text(encoding="utf-8"), source.name
+    assert "'guardConfirmable' => self::hexToken(" in ADMIN_VIEW.read_text(encoding="utf-8")
+
+
+def test_every_profile_key_of_the_overview_has_one_line() -> None:
+    """UI-01: every key the surface reads is built in exactly one place.
+
+    Two lines for one key would be two answers to one question, and the
+    template and the script would each pick one. PHPUnit runs only in CI, so
+    this gate holds the shape locally.
+    """
+    view = ADMIN_VIEW.read_text(encoding="utf-8")
+
+    for key in PROFILE_SURFACE_KEYS:
+        assert view.count(f"'{key}' => ") == 1, key
+
+
+def test_the_env_variables_are_the_variables_of_the_profile() -> None:
+    """D-27-14: the names next to an overruled value come out of a PHP map.
+
+    The map has to name the four variables findling.profile reads, or the page
+    would tell an admin to change a variable the container ignores.
+    """
+    view = ADMIN_VIEW.read_text(encoding="utf-8")
+
+    for variable in (
+        "FINDLING_OCR_DPI",
+        "FINDLING_OCR_MAX_PAGES",
+        "FINDLING_EMBED_BATCH_SIZE",
+        "FINDLING_WRITER_HEAP_BYTES",
+    ):
+        assert f"=> '{variable}'," in view, variable
+    # The wire keys the map reads are keys the status route really sends.
+    for wire in ("ocrDpi", "ocrMaxPages", "embedBatchSize", "writerHeapBytes"):
+        assert wire in PROFILE_VALUE_KEYS.values(), wire
+        assert f"=> '{wire}'," in view, wire
+
+
+def test_the_fp32_download_size_is_the_release_size() -> None:
+    """D-27-01: the help line of the checkbox names the size of the release file."""
+    match = FP32_DOWNLOAD_CONSTANT.search(ADMIN_VIEW.read_text(encoding="utf-8"))
+
+    assert match is not None, "AdminViewService.php lost FP32_DOWNLOAD_BYTES"
+    assert int(match.group(1)) == FP32_BYTES
+
+
+def test_the_view_knows_the_probe_steps() -> None:
+    """T-27-24: the view judges the step, verdict, cause and number keys of probe.py.
+
+    The order of the steps counts as well: it is the order the progress line
+    runs through.
+    """
+    view = ADMIN_VIEW.read_text(encoding="utf-8")
+
+    assert tuple(php_list_constant(view, "PROBE_STEPS")) == probe.STEPS
+    assert set(php_list_constant(view, "PROBE_VERDICTS")) == set(probe.VERDICTS)
+    # The empty cause of "fits" is judged apart, like the empty guard cause.
+    assert set(php_list_constant(view, "PROBE_CAUSES")) == set(probe.CAUSES)
+    assert set(php_list_constant(view, "PROBE_NUMBERS")) == set(probe.NUMBER_KEYS)
 
 
 def test_the_two_translation_files_carry_the_same_keys() -> None:

@@ -356,7 +356,7 @@ final class AdminViewServiceTest extends TestCase {
 			'guardChosen' => AdminViewService::profileName(AdminViewService::guardField($answer, 'chosen')),
 			'guardEffective' => AdminViewService::profileName(AdminViewService::guardField($answer, 'effective')),
 			'guardCause' => AdminViewService::guardCause(AdminViewService::guardField($answer, 'cause')),
-			'guardToken' => AdminViewService::hexToken(AdminViewService::guardField($answer, 'token')),
+			'guardConfirmable' => AdminViewService::hexToken(AdminViewService::guardField($answer, 'token')) !== null,
 			'slotsTarget' => AdminViewService::guardCounter(AdminViewService::guardField($answer, 'slotsTarget')),
 			'slotsInForce' => AdminViewService::guardCounter(AdminViewService::guardField($answer, 'slotsInForce')),
 			'slotsThrottled' => AdminViewService::strictFlag(AdminViewService::guardField($answer, 'throttled')),
@@ -383,6 +383,11 @@ final class AdminViewServiceTest extends TestCase {
 		// D-26-01: a container older than 1.4 leaves the object out, and the
 		// guard lines on the page stay hidden.
 		foreach (self::guardFields($answer) as $field => $value) {
+			if ($field === 'guardConfirmable') {
+				// D-27-12: a flag, never null, and false without a token.
+				self::assertFalse($value, $field);
+				continue;
+			}
 			self::assertNull($value, $field);
 		}
 	}
@@ -405,7 +410,7 @@ final class AdminViewServiceTest extends TestCase {
 			'guardChosen' => 'performance',
 			'guardEffective' => 'standard',
 			'guardCause' => 'oom_kill',
-			'guardToken' => $token,
+			'guardConfirmable' => true,
 			'slotsTarget' => 4,
 			'slotsInForce' => 2,
 			'slotsThrottled' => true,
@@ -448,12 +453,192 @@ final class AdminViewServiceTest extends TestCase {
 			'cause' => 'guardCause',
 			'chosen' => 'guardChosen',
 			'effective' => 'guardEffective',
-			'token' => 'guardToken',
+			'token' => 'guardConfirmable',
 			'slotsTarget' => 'slotsTarget',
 			'slotsInForce' => 'slotsInForce',
 			'throttled' => 'slotsThrottled',
 		][$key];
 
-		self::assertNull(self::guardFields(['guard' => [$key => $value]])[$field]);
+		$judged = self::guardFields(['guard' => [$key => $value]])[$field];
+		if ($field === 'guardConfirmable') {
+			self::assertFalse($judged);
+			return;
+		}
+		self::assertNull($judged);
+	}
+
+	// -- the profile surface of phase 27 (plan 27-08, UI-01) -------------------
+
+	/**
+	 * A status answer of a phase 27 container, with every object the surface
+	 * reads.
+	 *
+	 * @return array<string,mixed>
+	 */
+	private static function profileAnswer(): array {
+		return [
+			'profile' => [
+				'chosen' => 'performance',
+				'suggested' => 'standard',
+				'effective' => 'standard',
+				'hardware' => [
+					'cores' => 7.5,
+					'coresWhole' => 7,
+					'memoryLimitBytes' => 8_000_000_000,
+					'memoryTotalBytes' => 16_000_000_000,
+				],
+				'values' => [
+					'ocrDpi' => 200,
+					'ocrMaxPages' => 50,
+					'embedBatchSize' => 16,
+					'writerHeapBytes' => 64_000_000,
+					'ocrSlots' => 3,
+				],
+				'sources' => [
+					'ocrDpi' => 'env',
+					'ocrMaxPages' => 'profile',
+					'embedBatchSize' => 'env',
+					'writerHeapBytes' => 'env',
+					'ocrSlots' => 'env',
+				],
+			],
+			'probe' => ['supported' => true, 'running' => true, 'step' => 'ocr_one'],
+			'model' => ['chunks' => 12_345],
+		];
+	}
+
+	public function testTheProfileFieldsComeOnlyOutOfTheClosedSet(): void {
+		$answer = self::profileAnswer();
+
+		self::assertSame('performance', AdminViewService::profileName(AdminViewService::profileField($answer, 'chosen')));
+		self::assertSame('standard', AdminViewService::profileName(AdminViewService::profileField($answer, 'suggested')));
+		self::assertNull(AdminViewService::profileName(AdminViewService::profileField(['profile' => ['chosen' => 'turbo']], 'chosen')));
+		self::assertNull(AdminViewService::profileField(['profile' => 'economy'], 'chosen'));
+		self::assertNull(AdminViewService::profileField([], 'effective'));
+	}
+
+	public function testTheHardwareIsTakenOverOnlyAsNonNegativeIntegers(): void {
+		$answer = self::profileAnswer();
+
+		self::assertSame(7, AdminViewService::hardwareCores($answer));
+		// The smaller of limit and physical memory, as the suggestion reads it.
+		self::assertSame(8_000_000_000, AdminViewService::hardwareMemory($answer));
+		self::assertNull(AdminViewService::hardwareCores(['profile' => ['hardware' => ['coresWhole' => '8']]]));
+		self::assertNull(AdminViewService::hardwareCores(['profile' => ['hardware' => ['coresWhole' => -1]]]));
+		self::assertNull(AdminViewService::hardwareMemory(['profile' => ['hardware' => ['memoryTotalBytes' => 1.5]]]));
+		self::assertSame(4096, AdminViewService::hardwareMemory(['profile' => ['hardware' => ['memoryTotalBytes' => 4096]]]));
+		self::assertNull(AdminViewService::hardwareMemory([]));
+	}
+
+	public function testEveryValueOfAnAdminVariableGetsOneLineWithTheNameOfTheMap(): void {
+		// D-27-14: the variable name comes out of the PHP map, never out of the
+		// answer; ocrSlots has source env but is not one of the four fields.
+		self::assertSame([
+			['field' => 'dpi', 'value' => 200, 'variable' => 'FINDLING_OCR_DPI'],
+			['field' => 'batch', 'value' => 16, 'variable' => 'FINDLING_EMBED_BATCH_SIZE'],
+			['field' => 'writer_heap', 'value' => 64_000_000, 'variable' => 'FINDLING_WRITER_HEAP_BYTES'],
+		], AdminViewService::profileEnv(self::profileAnswer()));
+	}
+
+	public function testAForeignSourceOrAForeignValueProducesNoLine(): void {
+		$answer = ['profile' => [
+			'values' => ['ocrDpi' => '200', 'ocrMaxPages' => 50, 'embedBatchSize' => 8, 'foreign' => 1],
+			'sources' => ['ocrDpi' => 'env', 'ocrMaxPages' => 'ENV', 'embedBatchSize' => '<b>env</b>', 'foreign' => 'env'],
+		]];
+
+		self::assertSame([], AdminViewService::profileEnv($answer));
+		self::assertSame([], AdminViewService::profileEnv([]));
+		self::assertSame([], AdminViewService::profileEnv(['profile' => ['values' => 'x', 'sources' => []]]));
+	}
+
+	public function testAMissingProbeObjectMeansNoProbeSupport(): void {
+		// Z15: a container older than phase 27.
+		self::assertFalse(AdminViewService::probeField([], 'supported') === true);
+		self::assertFalse(AdminViewService::probeField(['probe' => 'yes'], 'supported') === true);
+		self::assertFalse(AdminViewService::probeField(['probe' => ['supported' => 1]], 'supported') === true);
+		self::assertTrue(AdminViewService::probeField(self::profileAnswer(), 'supported') === true);
+		self::assertTrue(AdminViewService::probeField(self::profileAnswer(), 'running') === true);
+	}
+
+	public function testTheStepComesOnlyOutOfTheStepSet(): void {
+		foreach (['pause', 'download', 'digest', 'model', 'ocr_one', 'calc', 'ocr_n', 'cleanup'] as $step) {
+			self::assertSame($step, AdminViewService::stepCode($step));
+		}
+		self::assertSame('', AdminViewService::stepCode('warp'));
+		self::assertSame('', AdminViewService::stepCode('OCR_ONE'));
+		self::assertSame('', AdminViewService::stepCode(3));
+		self::assertSame('', AdminViewService::stepCode(null));
+	}
+
+	/**
+	 * A stored verdict as the probe flow writes it.
+	 *
+	 * @return array<string,mixed>
+	 */
+	private static function storedCheck(): array {
+		return [
+			'id' => '0123456789abcdef',
+			'profile' => 'standard',
+			'precision' => 'fp32',
+			'verdict' => 'fits',
+			'cause' => '',
+			'numbers' => ['slots' => 2, 'need' => 900, 'rateInt8' => 40_000, 'rateFp32' => 12_500],
+			'at' => 1_800_000_000,
+			'committed' => true,
+			'fp32Deleted' => false,
+		];
+	}
+
+	public function testTheReindexDurationComesOnlyOutOfAMeasuredRate(): void {
+		$check = AdminViewService::judgedCheck(self::storedCheck());
+
+		// ceil(12345 / 12.5) = 988 and ceil(12345 / 40) = 309.
+		self::assertSame(988, AdminViewService::reindexSeconds(12_345, AdminViewService::checkRate($check, 'rateFp32')));
+		self::assertSame(309, AdminViewService::reindexSeconds(12_345, AdminViewService::checkRate($check, 'rateInt8')));
+		self::assertSame(0, AdminViewService::reindexSeconds(0, 5));
+		self::assertNull(AdminViewService::reindexSeconds(12_345, null));
+		self::assertNull(AdminViewService::reindexSeconds(12_345, 0));
+		self::assertNull(AdminViewService::checkRate(null, 'rateFp32'));
+
+		$withoutRate = self::storedCheck();
+		unset($withoutRate['numbers']['rateFp32']);
+		self::assertNull(AdminViewService::checkRate(AdminViewService::judgedCheck($withoutRate), 'rateFp32'));
+	}
+
+	public function testAStoredVerdictIsJudgedAgainstItsSets(): void {
+		self::assertSame([
+			'profile' => 'standard',
+			'precision' => 'fp32',
+			'verdict' => 'fits',
+			'cause' => '',
+			'numbers' => ['slots' => 2, 'need' => 900, 'rateInt8' => 40_000, 'rateFp32' => 12_500],
+			'at' => 1_800_000_000,
+			'committed' => true,
+			'fp32Deleted' => false,
+		], AdminViewService::judgedCheck(self::storedCheck()));
+
+		self::assertNull(AdminViewService::judgedCheck(null));
+		foreach (['profile' => 'turbo', 'precision' => 'fp16', 'verdict' => 'maybe'] as $key => $value) {
+			$stored = self::storedCheck();
+			$stored[$key] = $value;
+			self::assertNull(AdminViewService::judgedCheck($stored), $key);
+		}
+
+		// T-27-25: an occ-written cause, number or flag of another shape.
+		$tampered = self::storedCheck();
+		$tampered['cause'] = '<script>';
+		$tampered['numbers'] = ['slots' => '2', 'need' => -1, 'evil' => 3, 'seconds' => 60];
+		$tampered['committed'] = 1;
+		$tampered['at'] = 'yesterday';
+		$judged = AdminViewService::judgedCheck($tampered);
+		self::assertNotNull($judged);
+		self::assertSame('', $judged['cause']);
+		self::assertSame(['seconds' => 60], $judged['numbers']);
+		self::assertFalse($judged['committed']);
+		self::assertSame(0, $judged['at']);
+	}
+
+	public function testTheFp32DownloadSizeIsTheReleaseSize(): void {
+		self::assertSame(470268510, AdminViewService::FP32_DOWNLOAD_BYTES);
 	}
 }
