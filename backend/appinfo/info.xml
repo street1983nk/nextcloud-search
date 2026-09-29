@@ -258,7 +258,7 @@ Support entreprise et modules payants : demande de devis à admin@infranode.dev]
 		</docker-install>
 		<routes>
 			<!--
-				Five routes, and that is the whole reachable surface of this
+				Seven routes, and that is the whole reachable surface of this
 				container. /enabled, /heartbeat and /init need no entry: AppAPI
 				addresses those directly instead of going through the proxy, so
 				declaring them would only widen it for nothing. No route is
@@ -272,7 +272,7 @@ Support entreprise et modules payants : demande de devis à admin@infranode.dev]
 				Every url below is anchored, ^/<name>$ and not <name>. That is not
 				decoration: HaRP matches with re.match against a target path that
 				begins with a slash, so an unanchored name matches nothing at all.
-				The reasoning is at the top of this file; do not shorten these five
+				The reasoning is at the top of this file; do not shorten these seven
 				back into plain names.
 			-->
 			<route>
@@ -341,6 +341,36 @@ Support entreprise et modules payants : demande de devis à admin@infranode.dev]
 			-->
 			<route>
 				<url>^/diagnose$</url>
+				<verb>GET</verb>
+				<access_level>ADMIN</access_level>
+				<headers_to_exclude>[]</headers_to_exclude>
+				<bruteforce_protection>[401]</bruteforce_protection>
+			</route>
+			<!--
+				The start of the pre-check of a profile change, added in phase
+				27 for PRUEF-01. The body is a profile and a precision out of
+				two closed sets, and the answer is an id or a refusal code, at
+				once: the check itself runs in the background for minutes. Only
+				one check runs at a time, and none while the index directory is
+				rebuilt. ADMIN like the diagnosis above, and for the same reason:
+				which profile a box can carry is an operator's business.
+			-->
+			<route>
+				<url>^/probe$</url>
+				<verb>POST</verb>
+				<access_level>ADMIN</access_level>
+				<headers_to_exclude>[]</headers_to_exclude>
+				<bruteforce_protection>[401]</bruteforce_protection>
+			</route>
+			<!--
+				The state of the running or the last pre-check: step, verdict,
+				cause and the numbers the sentence of the cause needs, every
+				word out of a closed set, never a path and never a text. It
+				measures nothing, so a page may poll it. ADMIN like the start
+				above.
+			-->
+			<route>
+				<url>^/probe/state$</url>
 				<verb>GET</verb>
 				<access_level>ADMIN</access_level>
 				<headers_to_exclude>[]</headers_to_exclude>

@@ -46,6 +46,7 @@ from fastapi.responses import JSONResponse
 
 from findling.api import resources
 from findling.api.diagnose import ROUTER as DIAGNOSE_ROUTER
+from findling.api.probe import ROUTER as PROBE_ROUTER
 from findling.api.rates import ROUTER as RATES_ROUTER
 from findling.api.search import ROUTER as SEARCH_ROUTER
 from findling.api.snippets import ROUTER as SNIPPETS_ROUTER
@@ -60,6 +61,7 @@ from findling.profile import note_hardware
 from findling.store.repo import open_read_only, open_store
 from findling.worker.embedding import EmbedRunner
 from findling.worker.poller import POLLER_STOP_SECONDS, STAND_DOWN_SECONDS, Poller, _pause, default_poller
+from findling.worker.probe_run import ProbeRun
 from findling.worker.reconcile import RECONCILE_STOP_SECONDS, Reconcile, default_reconcile
 from findling.worker.watch import GuardWatch
 
@@ -105,6 +107,11 @@ GUARD_STOP_SECONDS: Final = 5.0
 # None has no lifespan to hang a task on and starts nothing.
 _REBUILDING: asyncio.Task[None] | None = None
 _STOP_REBUILD: asyncio.Event | None = None
+
+# The pre-check of a profile change (PRUEF-01), at module level like the tasks
+# above so that its route reaches it. It exists while the lifespan is up and
+# holds a poller, and it is None outside it: POST /probe answers 503 then.
+_PROBE_RUN: ProbeRun | None = None
 
 # How finely the container notices that the idle span has run out. It is the
 # resolution of the idle clock and not the span itself: the smallest span an
@@ -214,6 +221,11 @@ def active_reconcile() -> Reconcile | None:
 def active_embedding() -> EmbedRunner | None:
     """The embed runner of this process, None while the lifespan is not running."""
     return _EMBEDDING
+
+
+def active_probe_run() -> ProbeRun | None:
+    """The pre-check of this process, None while the lifespan is not running."""
+    return _PROBE_RUN
 
 
 def _remember_the_enable() -> None:
@@ -1137,6 +1149,7 @@ APP.include_router(SNIPPETS_ROUTER)
 APP.include_router(STATUS_ROUTER)
 APP.include_router(RATES_ROUTER)
 APP.include_router(DIAGNOSE_ROUTER)
+APP.include_router(PROBE_ROUTER)
 
 
 def smuggles_identity(errors: Sequence[Mapping[str, Any]]) -> bool:

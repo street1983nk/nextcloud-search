@@ -65,12 +65,12 @@ FORBIDDEN_IN_A_ROUTE_PATH = ("semantic", "vector")
 # route declaration.
 HTTP_VERBS = frozenset({"get", "post", "put", "patch", "delete", "head", "options"})
 
-# Every route of the container, as of phase 6. The list is the anti-vacuity
-# clause of the route scan below: a parser that stopped recognising decorators
-# would find zero forbidden paths over zero routes and look perfectly healthy.
-# Every plan that adds a route adds it here too, otherwise the clause stops
-# being a ratchet.
-KNOWN_ROUTES = ("/diagnose", "/rates", "/search", "/snippets", "/status")
+# Every route of the container, as of phase 27 (plan 27-11 adds the two of the
+# pre-check). The list is the anti-vacuity clause of the route scan below: a
+# parser that stopped recognising decorators would find zero forbidden paths
+# over zero routes and look perfectly healthy. Every plan that adds a route
+# adds it here too, otherwise the clause stops being a ratchet.
+KNOWN_ROUTES = ("/diagnose", "/probe", "/probe/state", "/rates", "/search", "/snippets", "/status")
 
 
 # -- the hygienic readers --------------------------------------------------
