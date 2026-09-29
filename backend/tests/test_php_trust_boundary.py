@@ -310,10 +310,14 @@ def test_the_gate_sees_every_route_the_sources_declare() -> None:
     # itself: the moment the controller is on disk the ratchet stands at 13, and
     # a page route that is lost or silently unclassified is a red test from then
     # on.
+    #
+    # Plan 27-07 adds three admin routes (probe start, probe state and the
+    # downward write of the profile), all on ProfileSettingsController, so
+    # the bound stands three higher from here on.
     if PAGE_CONTROLLER.is_file():
-        assert len(routes) >= 13
+        assert len(routes) >= 16  # plan 27-07 adds three admin routes
     else:
-        assert len(routes) >= 12
+        assert len(routes) >= 15  # plan 27-07 adds three admin routes
 
 
 def test_every_controller_of_the_app_carries_at_least_one_route() -> None:
