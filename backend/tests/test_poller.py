@@ -4271,7 +4271,48 @@ async def test_a_multi_slot_pass_leaves_a_durable_mark_while_it_runs_and_clears_
     for meta in seen:
         assert meta[guard.META_MULTI_SLOT_PASS] == effective
         assert meta[guard.META_MULTI_SLOT_CHOSEN] == "standard"
-    assert _meta_over_a_second_connection(database)[guard.META_MULTI_SLOT_PASS] == ""
+    final = _meta_over_a_second_connection(database)
+    assert final[guard.META_MULTI_SLOT_PASS] == ""
+    assert final[guard.META_MULTI_SLOT_CHOSEN] == "", "the choice leaves with the pass mark (review WR-02)"
+
+
+async def test_the_pass_mark_is_written_last_and_cleared_first(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Review WR-02: the two mark writes are separate autocommit statements, so
+    # the ORDER is the crash safety. CHOSEN first and PASS last makes the pass
+    # mark the commit point: a death between the two writes leaves a choice
+    # without a mark, which restore never reads. The old order left a fresh
+    # PASS beside the CHOSEN of an earlier staffel; after the restart the guard
+    # lowered with that stale choice, and the first profile read lifted the cap
+    # without a token and without the admin, against D-26-04. On the way out
+    # PASS goes first and CHOSEN with it, so nothing stale waits for the next
+    # staffel.
+    _standard_box()
+    queue = _FakeQueue(ClaimResult(jobs=(_ocr_row(0), _ocr_row(1))))
+    queue.profile_answer = "standard"
+    calls: list[tuple[str, str]] = []
+    original = store.write_meta
+
+    def recording(key: str, value: str) -> None:
+        calls.append((key, value))
+        original(key, value)
+
+    monkeypatch.setattr(store, "write_meta", recording)
+    poller = _slot_poller(
+        store=store, writer=writer, tmp_path=tmp_path, queue=queue, extract=_SlotExtractor(seconds=0.01), ocr_slots=2
+    )
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    marks = [(key, value) for key, value in calls if key in (guard.META_MULTI_SLOT_PASS, guard.META_MULTI_SLOT_CHOSEN)]
+    assert marks == [
+        (guard.META_MULTI_SLOT_CHOSEN, "standard"),
+        (guard.META_MULTI_SLOT_PASS, snapshot().effective.value),
+        (guard.META_MULTI_SLOT_PASS, ""),
+        (guard.META_MULTI_SLOT_CHOSEN, ""),
+    ]
 
 
 async def test_a_multi_slot_pass_that_aborts_clears_its_mark_as_well(
@@ -4292,7 +4333,9 @@ async def test_a_multi_slot_pass_that_aborts_clears_its_mark_as_well(
     result = await poller.run_once()
 
     assert result.state == ROUND_GATEWAY_UNAVAILABLE
-    assert store.read_meta()[guard.META_MULTI_SLOT_PASS] == ""
+    meta = store.read_meta()
+    assert meta[guard.META_MULTI_SLOT_PASS] == ""
+    assert meta[guard.META_MULTI_SLOT_CHOSEN] == ""
 
 
 async def test_a_serial_pass_never_writes_the_mark(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:

@@ -187,8 +187,14 @@ class GuardWatch:
             chosen = _level(meta.get(guard.META_MULTI_SLOT_CHOSEN))
             if guard.lower(guard.CAUSE_UNCLEAN_END, now=self._wall_clock(), chosen=chosen, effective=stored):
                 self._log_lowered()
-        if meta.get(guard.META_MULTI_SLOT_PASS, ""):
-            await asyncio.to_thread(self._write_meta, {guard.META_MULTI_SLOT_PASS: ""})
+        if meta.get(guard.META_MULTI_SLOT_PASS, "") or meta.get(guard.META_MULTI_SLOT_CHOSEN, ""):
+            # Both keys, PASS first (the dict keeps its order): a choice that
+            # lost its pass mark to a crash between the two writes is swept
+            # here, so it can never sit beside the mark of a later staffel run
+            # under another profile (review WR-02, D-26-04).
+            await asyncio.to_thread(
+                self._write_meta, {guard.META_MULTI_SLOT_PASS: "", guard.META_MULTI_SLOT_CHOSEN: ""}
+            )
         await self._persist_if_changed()
 
     async def run_once(self) -> str:
@@ -221,9 +227,16 @@ class GuardWatch:
                 await asyncio.wait_for(stop_event.wait(), timeout=self._tick)
 
     async def note_shutdown_begins(self) -> None:
-        """Clear the pass mark: an ordered shutdown is never an unclean end (Pitfall 9)."""
+        """Clear the pass mark: an ordered shutdown is never an unclean end (Pitfall 9).
+
+        Both keys go, PASS first, the same order the poller clears with: a
+        death between the two deletes leaves a choice without a mark, never
+        the reverse (review WR-02).
+        """
         try:
-            await asyncio.to_thread(self._write_meta, {guard.META_MULTI_SLOT_PASS: ""})
+            await asyncio.to_thread(
+                self._write_meta, {guard.META_MULTI_SLOT_PASS: "", guard.META_MULTI_SLOT_CHOSEN: ""}
+            )
         except Exception as error:
             LOGGER.warning("the pass mark of the memory guard could not be cleared, %s", type(error).__name__)
 

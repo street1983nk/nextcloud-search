@@ -1252,22 +1252,35 @@ class Poller:
         Two statements on the poller's own connection, which runs in autocommit,
         so each is durable when its call returns. The guard task reads both on
         the next start: a pass mark still set there is a pass that never ended.
+
+        CHOSEN first, PASS last: the pass mark is the commit point, so a death
+        between the two writes never pairs a fresh mark with a stale choice
+        (review WR-02). The old order left the CHOSEN of an earlier staffel
+        beside a fresh PASS; the restore then lowered with that stale choice,
+        and the first profile read after the restart lifted the cap without a
+        token and without the admin, against D-26-04.
         """
         levels = profile_snapshot()
         chosen = "" if levels.chosen is None else levels.chosen.value
         store = self._store_or_die()
-        await asyncio.to_thread(store.write_meta, guard.META_MULTI_SLOT_PASS, levels.effective.value)
         await asyncio.to_thread(store.write_meta, guard.META_MULTI_SLOT_CHOSEN, chosen)
+        await asyncio.to_thread(store.write_meta, guard.META_MULTI_SLOT_PASS, levels.effective.value)
 
     async def _clear_the_multi_slot_pass(self) -> None:
         """Empty the pass mark again, on every way out of the pass.
+
+        Both keys go, PASS first: the commit point falls before the choice, so
+        a death between the two deletes leaves a choice without a mark, which
+        the restore never reads, and never the reverse (review WR-02).
 
         A write that fails here must not hide the exception the pass may be
         leaving with, so it is said and swallowed. The mark that stays behind
         costs one lowering at the next start, which is the safe direction.
         """
         try:
-            await asyncio.to_thread(self._store_or_die().write_meta, guard.META_MULTI_SLOT_PASS, "")
+            store = self._store_or_die()
+            await asyncio.to_thread(store.write_meta, guard.META_MULTI_SLOT_PASS, "")
+            await asyncio.to_thread(store.write_meta, guard.META_MULTI_SLOT_CHOSEN, "")
         except sqlite3.Error as error:
             LOGGER.warning("could not clear the mark of the multi slot pass, %s", type(error).__name__)
 

@@ -168,6 +168,7 @@ async def test_restore_answers_an_unclean_end_with_a_lowering(state_db: Path) ->
     assert meta[guard.META_CHOSEN] == "performance"
     assert len(meta[guard.META_TOKEN]) == 32
     assert meta[guard.META_MULTI_SLOT_PASS] == ""
+    assert meta[guard.META_MULTI_SLOT_CHOSEN] == "", "the stale choice leaves with the mark (review WR-02)"
 
 
 @pytest.mark.parametrize("mark", ["economy", ""])
@@ -182,6 +183,26 @@ async def test_restore_ignores_a_pass_mark_at_economy_or_empty(state_db: Path, m
 
     assert guard.snapshot().cap is None
     assert _meta(state_db).get(guard.META_CAP, "") == ""
+
+
+async def test_restore_sweeps_a_choice_that_lost_its_pass_mark(state_db: Path) -> None:
+    # Review WR-02, the crash the new write order leaves behind: CHOSEN is
+    # written first and the container dies before the PASS write. That state
+    # must lower nothing, and the leftover choice is swept so it can never sit
+    # beside the mark of a LATER staffel run under another profile, which is
+    # the pairing that lifted a cap without the admin (D-26-04).
+    _at_level("performance")
+    _write(state_db, {guard.META_MULTI_SLOT_PASS: "", guard.META_MULTI_SLOT_CHOSEN: "standard"})
+    watch = _watch(state_db, _Readings(None, None), _Clock())
+    try:
+        await watch.restore()
+    finally:
+        await watch.aclose()
+
+    assert guard.snapshot().cap is None
+    meta = _meta(state_db)
+    assert meta[guard.META_MULTI_SLOT_PASS] == ""
+    assert meta[guard.META_MULTI_SLOT_CHOSEN] == ""
 
 
 # -- the tick --------------------------------------------------------------
@@ -274,14 +295,16 @@ async def test_a_confirmed_cap_is_cleared_in_state_db(state_db: Path) -> None:
 
 
 async def test_note_shutdown_begins_clears_the_pass_mark(state_db: Path) -> None:
-    _write(state_db, {guard.META_MULTI_SLOT_PASS: "performance"})
+    _write(state_db, {guard.META_MULTI_SLOT_PASS: "performance", guard.META_MULTI_SLOT_CHOSEN: "performance"})
     watch = _watch(state_db, _Readings(None, None), _Clock())
     try:
         await watch.note_shutdown_begins()
     finally:
         await watch.aclose()
 
-    assert _meta(state_db)[guard.META_MULTI_SLOT_PASS] == ""
+    meta = _meta(state_db)
+    assert meta[guard.META_MULTI_SLOT_PASS] == ""
+    assert meta[guard.META_MULTI_SLOT_CHOSEN] == "", "both keys go together (review WR-02)"
 
 
 async def test_a_reader_that_throws_does_not_end_the_task(state_db: Path, caplog: pytest.LogCaptureFixture) -> None:
