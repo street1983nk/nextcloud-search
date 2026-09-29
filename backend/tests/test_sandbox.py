@@ -436,6 +436,52 @@ def test_a_halt_without_a_child_does_nothing() -> None:
     assert idle.pid is None
 
 
+@pytest.mark.parametrize("moment", ["before the start", "after the start"])
+def test_a_halt_into_the_start_window_kills_the_new_child_and_keeps_the_verdict(
+    moment: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # CR-01 of the phase 26 review: halt() runs from another thread and may land
+    # inside _start_child, between the reset of the flag and the moment the new
+    # handle is visible. Before the fix that either erased the halt (the fresh
+    # child worked the job to its end while the pool was closing) or read the
+    # module's own kill as the kernel's and raised ChildKilled, which counts a
+    # false OOM at the guard. Both promises are asserted here: no child survives
+    # the halt, and the verdict is failed(corrupt), never ChildKilled. The two
+    # moments are the two halves of the window, both deterministic: before the
+    # start there is no process to kill yet, after it the handle is not yet
+    # assigned, so in both the recheck behind the assignment must finish the kill.
+    worker = sandbox.ExtractionWorker(max_files=200, timeout_seconds=60)
+    process_class = sandbox.SPAWN_CONTEXT.Process
+    original_start = process_class.start
+    halted_once: list[bool] = []
+
+    def halt_once() -> None:
+        if not halted_once:
+            halted_once.append(True)
+            worker.halt()
+
+    def halting_start(process_self: sandbox.SpawnProcess) -> None:
+        if moment == "before the start":
+            halt_once()
+        original_start(process_self)
+        if moment == "after the start":
+            halt_once()
+
+    monkeypatch.setattr(process_class, "start", halting_start)
+    try:
+        outcome = worker.run(NOWHERE, UNSUPPORTED, 1024)
+
+        assert outcome == ExtractionOutcome.failed(Reason.CORRUPT), "the module's own kill, never ChildKilled"
+        assert worker.pid is None, "the halted child must not survive the start window"
+
+        # The next job starts a fresh child (no halt this time) and works as if
+        # nothing had happened: the flag of the halt does not stick either.
+        assert worker.run(NOWHERE, UNSUPPORTED, 1024) == ExtractionOutcome.skipped(Reason.MIME_NOT_ALLOWED)
+        assert worker.pid is not None
+    finally:
+        worker.stop()
+
+
 def test_the_facade_turns_a_killed_child_into_the_old_verdict(monkeypatch: pytest.MonkeyPatch) -> None:
     # extract_guarded promises a verdict and nothing else, so the tools that use
     # it stay as they were: the same deaths produce the same verdicts as before
@@ -847,5 +893,7 @@ def test_every_kill_goes_through_the_group_kill() -> None:
 
     assert sum("process.kill()" in line for line in code) == 1
     # Four since plan 26-01: halt() is the third kill site, the one the pool
-    # uses to end a slot from another thread.
+    # uses to end a slot from another thread. The recheck of the review fix
+    # CR-01 in _start_child adds no fifth site on purpose: it goes through
+    # _recycle(), whose kill is already counted here, so the count stays.
     assert sum("_kill_child_tree(" in line for line in code) == 4, "the definition and all three kill sites"

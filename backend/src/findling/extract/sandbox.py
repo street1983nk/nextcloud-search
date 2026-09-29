@@ -527,7 +527,10 @@ class ExtractionWorker:
         deadline = self._timeout_seconds if timeout_seconds is None else float(timeout_seconds)
         self._start_child()
         process, pipe = self._process, self._pipe
-        if process is None or pipe is None:  # pragma: no cover - _start_child sets both
+        if process is None or pipe is None:
+            # A halt() landed inside the start window and _start_child already
+            # finished the kill (review CR-01). The death is the module's own,
+            # so the verdict is the one halt() always produced.
             return ExtractionOutcome.failed(Reason.CORRUPT)
 
         try:
@@ -595,6 +598,12 @@ class ExtractionWorker:
         if self._process is not None and self._process.is_alive():
             return
         self._recycle()
+        # The flag falls BEFORE the start, so a halt that arrives from here on
+        # is never erased; it is re-read after the handle is visible. Reset
+        # after the start, it swallowed a halt that landed inside the start:
+        # the fresh child worked its job to the end while the pool was closing,
+        # or its kill was read as the kernel's in _bury (review CR-01).
+        self._halted = False
         parent_end, child_end = SPAWN_CONTEXT.Pipe(duplex=True)
         process = SPAWN_CONTEXT.Process(
             target=_child_main,
@@ -609,7 +618,15 @@ class ExtractionWorker:
         self._process = process
         self._pipe = parent_end
         self._files_handled = 0
-        self._halted = False
+        # A halt that ran between the reset above and this line saw either no
+        # process or the new one; either way the flag is set now and the kill
+        # is finished here, as the module's own (never ChildKilled). The
+        # recycle rather than a bare kill, because it is deterministic: _ask
+        # finds no child and answers failed(corrupt) at once, instead of
+        # waiting on a pipe whose end-of-file a child killed inside its
+        # bootstrap does not deliver on every platform.
+        if self._halted and process.is_alive():
+            self._recycle()
 
     def _recycle(self) -> None:
         """Leave no child and no pipe behind, whatever state either of them is in."""
