@@ -74,6 +74,10 @@ SUCCESSOR_RUN_DIR = MEASUREMENTS_DIR / "2026-09-nachfolgefassungen" / "skripte"
 # 26.09.2026: the trip ran, and every tool of it is pinned in
 # test_v13_gefahren.py (DRIVEN_V13_FASSUNGEN).
 V13_RUN_DIR = MEASUREMENTS_DIR / "2026-09-v13-messung" / "skripte"
+# The run directory of the acceptance trip of phase 28. The folder name is
+# fixed by plan 28-01 even if the first box starts in September, because the
+# tests of the plans 28-01 to 28-03 hang on it.
+V14_RUN_DIR = MEASUREMENTS_DIR / "2026-10-abnahme-anfahrt" / "skripte"
 TREE_HASH = RUN_DIR / "40b-baumhash.py"
 TREE_HASH_PROOF = RUN_DIR / "40b-baumhash.sh"
 OPS_GATE = Path(__file__).resolve().parent / "test_ops_scripts.py"
@@ -100,7 +104,12 @@ OPS_GATE = Path(__file__).resolve().parent / "test_ops_scripts.py"
 # Five since plan 22-02. The run directory of the v1.3 trip is written from
 # scratch under these rules, and its image switch and its environment rebuild
 # are copied onto the same box as the rest, so all three promises reach it.
-NARROW_SCOPE_DIRS = (RUN_DIR, FIX_RUN_DIR, V12_RUN_DIR, SUCCESSOR_RUN_DIR, V13_RUN_DIR)
+#
+# Six since plan 28-01. The run directory of the acceptance trip of phase 28 is
+# written from scratch under these rules too: its subset tool reads the corpus
+# of the box and its later cell tools log in with a password, so the promises
+# on shebang, carriage return, dash, machine path and password reach it.
+NARROW_SCOPE_DIRS = (RUN_DIR, FIX_RUN_DIR, V12_RUN_DIR, SUCCESSOR_RUN_DIR, V13_RUN_DIR, V14_RUN_DIR)
 
 # The driven fassung of the language cases and its successor. The first one is
 # evidence and must not move, the second one is the fix of DI-10-02.
@@ -2333,7 +2342,7 @@ def test_the_password_gate_fires_on_a_staged_sample() -> None:
 # would have left that line standing next to a script that never produced it.
 
 
-def test_the_narrow_scope_covers_the_five_run_directories_written_under_these_rules() -> None:
+def test_the_narrow_scope_covers_the_six_run_directories_written_under_these_rules() -> None:
     """Widening the narrow scope is a decision, so it is pinned here.
 
     The semantic run of 05.09. stays outside on purpose (45-suchlast.py reaches
@@ -2345,10 +2354,12 @@ def test_the_narrow_scope_covers_the_five_run_directories_written_under_these_ru
     directory of the successor fassungen joined in plan 16-03, and both of its
     files are named here for that same reason. The run directory of the v1.3
     trip joined in plan 22-02, and its two box tools of that plan are named
-    here for the same reason again.
+    here for the same reason again. The run directory of the acceptance trip
+    of phase 28 joined in plan 28-01, named by its subset tool.
     """
-    assert NARROW_SCOPE_DIRS == (RUN_DIR, FIX_RUN_DIR, V12_RUN_DIR, SUCCESSOR_RUN_DIR, V13_RUN_DIR)
+    assert NARROW_SCOPE_DIRS == (RUN_DIR, FIX_RUN_DIR, V12_RUN_DIR, SUCCESSOR_RUN_DIR, V13_RUN_DIR, V14_RUN_DIR)
     found = scripts_of_this_run()
+    assert V14_RUN_DIR / "01-teilkorpus.py" in found
     assert SUCCESSOR_LANGUAGE_CASES in found
     assert DRIVEN_LANGUAGE_CASES in found
     assert STOCK_PROBE in found
