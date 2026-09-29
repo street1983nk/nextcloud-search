@@ -844,6 +844,360 @@ def test_the_aws_tool_waits_with_the_waiters_and_not_with_a_loop() -> None:
     assert not loops, loops
 
 
+# The aws tool as a program, since 28-03: the x86 matrix of phase 28 runs six
+# instance types on two boxes, and what has to hold there (the rate of the type
+# that really runs, the architecture of the recipe, the shared security group of
+# the first teardown) is behaviour and not text. The runs below go against a
+# stub of the aws command line and never reach an account.
+
+# Two values that stand for the credentials. They are no credentials of any
+# account; the runs prove that neither reaches an output.
+AWS_ACCESS_STAND_IN = "zugang-attrappe-2803"
+AWS_SIGNING_STAND_IN = "geheim-attrappe-2803"
+AWS_OWN_INSTANCE = "i-attrappe-eigen"
+AWS_OTHER_INSTANCE = "i-attrappe-andere"
+AWS_OWN_VOLUME = "vol-attrappe-eigen"
+AWS_OTHER_VOLUME = "vol-attrappe-andere"
+AWS_GROUP = "sg-attrappe"
+
+# The six types of D-28-03 and D-28-04 with the rates of the public price card,
+# EU (Frankfurt), Linux On Demand, read on 2026-09-29.
+AWS_RATE_TABLE = {
+    "m7g.large": "0.0978",
+    "m7g.4xlarge": "0.7821",
+    "c7a.xlarge": "0.23426",
+    "c7a.2xlarge": "0.46852",
+    "c7a.4xlarge": "0.93704",
+    "c7a.8xlarge": "1.87408",
+}
+
+# The aws command line, played by a shell script. It logs every call and
+# answers out of files in $STUB, chosen by the shape of the call.
+AWS_STUB = """#!/bin/sh
+printf '%s\\n' "$*" >>"$STUB/calls"
+case "$*" in
+*"ec2 wait"*) exit 0 ;;
+*describe-instance-types*) cat "$STUB/types.json"; exit 0 ;;
+*"describe-instances --instance-ids i-attrappe-andere"*) cat "$STUB/other.json"; exit 0 ;;
+*"describe-instances --instance-ids"*) cat "$STUB/instance.json"; exit 0 ;;
+*"describe-instances --filters"*) cat "$STUB/sharing.json"; exit 0 ;;
+*"describe-volumes --filters"*) cat "$STUB/volumes.json"; exit 0 ;;
+*"describe-volumes --volume-ids"*)
+    echo 'An error occurred (InvalidVolume.NotFound)' >&2; exit 254 ;;
+*describe-security-groups*)
+    if grep -q delete-security-group "$STUB/calls"; then
+        echo 'An error occurred (InvalidGroup.NotFound)' >&2; exit 254
+    fi
+    echo '{"SecurityGroups": [{"GroupId": "sg-attrappe"}]}'; exit 0 ;;
+*describe-key-pairs*)
+    if grep -q delete-key-pair "$STUB/calls"; then
+        echo 'An error occurred (InvalidKeyPair.NotFound)' >&2; exit 254
+    fi
+    echo '{"KeyPairs": [{"KeyName": "findling-loadtest"}]}'; exit 0 ;;
+*"Values=findling-corpus-keep"*) cat "$STUB/keep.json"; exit 0 ;;
+*describe-tags*) cat "$STUB/tags.json"; exit 0 ;;
+*stop-instances* | *terminate-instances* | *delete-volume* | *delete-security-group* | *delete-key-pair*)
+    echo '{}'; exit 0 ;;
+esac
+echo "stub: no answer for $*" >&2
+exit 1
+"""
+
+
+def _aws_instance(instance_id: str, instance_type: str, state: str, hours_ago: float) -> dict[str, object]:
+    import datetime  # noqa: PLC0415 - only these runs need it
+
+    launched = datetime.datetime.now(tz=datetime.UTC) - datetime.timedelta(hours=hours_ago)
+    return {
+        "Reservations": [
+            {
+                "Instances": [
+                    {
+                        "InstanceId": instance_id,
+                        "InstanceType": instance_type,
+                        "State": {"Name": state},
+                        "LaunchTime": launched.isoformat(),
+                        "Placement": {"AvailabilityZone": "eu-central-1c"},
+                        "PublicIpAddress": "10.0.0.1",
+                    }
+                ]
+            }
+        ]
+    }
+
+
+def _tags(*resources: tuple[str, str]) -> dict[str, object]:
+    return {"Tags": [{"ResourceType": kind, "ResourceId": resource} for kind, resource in resources]}
+
+
+def an_aws_box_run(
+    tmp_path: Path,
+    arguments: list[str],
+    *,
+    instance_type: str = "m7g.large",
+    state: str = "running",
+    sharing: list[str] | None = None,
+    umgebung: Mapping[str, str] | None = None,
+    state_dir: Path | None = None,
+) -> tuple[subprocess.CompletedProcess[str], Path, list[str]]:
+    """aws_box.sh against the stub, and the state file and the calls it left behind."""
+    shell = shutil.which("sh")
+    assert shell is not None
+    stub = tmp_path / "stub"
+    stub.mkdir(parents=True, exist_ok=True)
+    (stub / "calls").write_text("", encoding="utf-8", newline="\n")
+    answers: dict[str, object] = {
+        "instance.json": _aws_instance(AWS_OWN_INSTANCE, instance_type, state, 2.0),
+        "other.json": _aws_instance(AWS_OTHER_INSTANCE, "c7a.xlarge", "stopped", 1.0),
+        "volumes.json": {"Volumes": [{"VolumeId": AWS_OWN_VOLUME, "Size": 60, "VolumeType": "gp3"}]},
+        "sharing.json": {
+            "Reservations": [
+                {"Instances": [{"InstanceId": instance, "State": {"Name": "stopped"}}]} for instance in (sharing or [])
+            ]
+        },
+        "types.json": {
+            "InstanceTypes": [
+                {
+                    "InstanceType": instance_type,
+                    "MemoryInfo": {"SizeInMiB": 8192},
+                    "VCpuInfo": {"DefaultVCpus": 2},
+                    "ProcessorInfo": {"SupportedArchitectures": ["arm64"]},
+                    "NetworkInfo": {"NetworkPerformance": "Up to 12.5 Gigabit"},
+                }
+            ]
+        },
+        "keep.json": _tags(("snapshot", "snap-attrappe")),
+        "tags.json": _tags(
+            ("instance", AWS_OWN_INSTANCE),
+            ("volume", AWS_OWN_VOLUME),
+            ("security-group", AWS_GROUP),
+            *(("instance", instance) for instance in (sharing or [])),
+            *((("volume", AWS_OTHER_VOLUME),) if sharing else ()),
+        ),
+    }
+    for name, payload in answers.items():
+        (stub / name).write_text(json.dumps(payload), encoding="utf-8", newline="\n")
+    aws = tmp_path / "aws"
+    aws.write_text(AWS_STUB, encoding="utf-8", newline="\n")
+    aws.chmod(0o755)
+    # The python3 of the development machine may be a store stub; the tool gets
+    # the interpreter of this test run under that name instead.
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    python3 = bin_dir / "python3"
+    python3.write_text(f'#!/bin/sh\nexec "{Path(sys.executable).as_posix()}" "$@"\n', encoding="utf-8", newline="\n")
+    python3.chmod(0o755)
+    box_dir = state_dir or tmp_path / "zustand"
+    box_dir.mkdir(parents=True, exist_ok=True)
+    state_file = box_dir / "box.env"
+    if not state_file.exists():
+        state_file.write_text(
+            f"BOX_INSTANCE_ID={AWS_OWN_INSTANCE}\nVOLUME_ID={AWS_OWN_VOLUME}\nBOX_SECURITY_GROUP={AWS_GROUP}\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+    environment = {
+        **os.environ,
+        "PATH": f"{bin_dir.as_posix()}{os.pathsep}{os.environ.get('PATH', '')}",
+        "AWS_ACCESS_KEY_ID": AWS_ACCESS_STAND_IN,
+        "AWS_SECRET_ACCESS_KEY": AWS_SIGNING_STAND_IN,
+        "AWS_CLI": aws.as_posix(),
+        "FINDLING_LOADTEST_DIR": box_dir.as_posix(),
+        "STUB": stub.as_posix(),
+        **(umgebung or {}),
+    }
+    if "FINDLING_BOX_TYPE" not in (umgebung or {}):
+        environment.pop("FINDLING_BOX_TYPE", None)
+    answer = subprocess.run(  # noqa: S603 - an argument list, never a shell
+        [shell, AWS_BOX.as_posix(), *arguments],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=120,
+        env=environment,
+    )
+    calls = (stub / "calls").read_text(encoding="utf-8").splitlines()
+    return answer, state_file, calls
+
+
+needs_sh = pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+
+
+def test_the_aws_tool_carries_a_rate_for_each_of_the_six_types_instead_of_one_pin() -> None:
+    """Pitfall 6 of phase 28: one pinned m7g.large rate understates a c7a.8xlarge nineteen times."""
+    text = AWS_BOX.read_text(encoding="utf-8")
+    for instance_type, rate in AWS_RATE_TABLE.items():
+        assert f"{instance_type}={rate}" in text, instance_type
+    assert "PRICE_INSTANCE_HOURLY" not in text
+    assert "b0.p.awsstatic.com" in text
+
+
+@needs_sh
+@pytest.mark.parametrize("instance_type", sorted(AWS_RATE_TABLE))
+def test_the_aws_status_charges_the_rate_of_the_type_that_really_runs(tmp_path: Path, instance_type: str) -> None:
+    answer, _, calls = an_aws_box_run(tmp_path, ["status"], instance_type=instance_type)
+    assert answer.returncode == 0, answer
+    rate_line = next(line for line in answer.stdout.splitlines() if line.startswith("rate "))
+    assert f"{float(AWS_RATE_TABLE[instance_type]):.6f}" in rate_line, rate_line
+    assert instance_type in rate_line, rate_line
+    assert any("describe-instances --instance-ids" in call for call in calls)
+
+
+@needs_sh
+def test_the_aws_stop_charges_the_c7a_8xlarge_with_its_own_rate(tmp_path: Path) -> None:
+    """Two hours on the c7a.8xlarge: 1.87408 per hour in the cost line, not 0.0978."""
+    answer, state_file, calls = an_aws_box_run(tmp_path, ["stop"], instance_type="c7a.8xlarge")
+    assert answer.returncode == 0, answer
+    assert "1.87408" in answer.stdout
+    assert "c7a.8xlarge" in answer.stdout
+    state = state_file.read_text(encoding="utf-8")
+    assert "BOX_LAST_UPTIME_TYPE=c7a.8xlarge" in state
+    assert "BOX_LAST_UPTIME_RATE_USD_H=1.87408" in state
+    cost = float(next(line for line in state.splitlines() if line.startswith("BOX_LAST_UPTIME_COST_USD=")).split("=")[1])
+    # 2 h x (1.87408 + 60 GB x 0.0952 / 730 + 0.005), read with slack for the
+    # seconds between the stub and the arithmetic.
+    expected = 2.0 * (1.87408 + 60 * 0.0952 / 730 + 0.005)
+    assert abs(cost - expected) < 0.01, (cost, expected)
+    assert calls.index(next(c for c in calls if "describe-instances" in c)) < calls.index(
+        next(c for c in calls if "stop-instances" in c)
+    )
+
+
+@needs_sh
+@pytest.mark.parametrize("subcommand", ["status", "stop"])
+def test_the_aws_tool_ends_red_for_a_type_without_a_rate_and_prints_no_cost(tmp_path: Path, subcommand: str) -> None:
+    """No rate known means no number, and a non zero end, rather than a wrong figure."""
+    answer, state_file, _ = an_aws_box_run(tmp_path, [subcommand], instance_type="t3.micro")
+    assert answer.returncode != 0, answer
+    assert "no rate is known for instance type t3.micro" in answer.stderr
+    assert "spent" not in answer.stdout
+    assert "cost" not in answer.stdout.replace("no cost figure", "")
+    assert "BOX_LAST_UPTIME_COST_USD" not in state_file.read_text(encoding="utf-8")
+
+
+@needs_sh
+def test_the_aws_stop_parks_a_box_without_a_rate_all_the_same(tmp_path: Path) -> None:
+    """Parking never depends on the arithmetic: the box is stopped, only the figure is missing."""
+    answer, state_file, calls = an_aws_box_run(tmp_path, ["stop"], instance_type="t3.micro")
+    assert answer.returncode == 1, answer
+    assert any("stop-instances" in call for call in calls), calls
+    assert "BOX_STOPPED_ISO=" in state_file.read_text(encoding="utf-8")
+
+
+@needs_sh
+def test_the_aws_prices_prints_the_table_of_all_six_types_and_its_source(tmp_path: Path) -> None:
+    answer, _, _ = an_aws_box_run(tmp_path, ["prices"])
+    assert answer.returncode == 0, answer
+    for instance_type, rate in AWS_RATE_TABLE.items():
+        assert any(instance_type in line and rate in line for line in answer.stdout.splitlines()), instance_type
+    assert "b0.p.awsstatic.com" in answer.stdout
+
+
+@needs_sh
+@pytest.mark.parametrize(
+    ("box_type", "architecture", "pattern"),
+    [
+        (None, "arm64", "ubuntu-noble-24.04-arm64-server-*"),
+        ("m7g.4xlarge", "arm64", "ubuntu-noble-24.04-arm64-server-*"),
+        ("c7a.xlarge", "x86_64", "ubuntu-noble-24.04-amd64-server-*"),
+        ("c7a.8xlarge", "x86_64", "ubuntu-noble-24.04-amd64-server-*"),
+    ],
+    ids=["default", "m7g.4xlarge", "c7a.xlarge", "c7a.8xlarge"],
+)
+def test_the_aws_create_recipe_names_the_image_pattern_and_the_type_of_the_architecture(
+    tmp_path: Path, box_type: str | None, architecture: str, pattern: str
+) -> None:
+    umgebung = {"FINDLING_BOX_TYPE": box_type} if box_type else None
+    answer, _, calls = an_aws_box_run(tmp_path, ["create"], umgebung=umgebung)
+    # create documents and refuses, as before.
+    assert answer.returncode == 1, answer
+    assert "this command will not make one" in answer.stdout
+    assert calls == []
+    wanted = box_type or "m7g.large"
+    assert f"--instance-type {wanted}" in answer.stdout
+    assert f"architecture {architecture}" in answer.stdout
+    assert pattern in answer.stdout
+    assert "--owners 099720109477" in answer.stdout
+    assert "--instance-initiated-shutdown-behavior stop" in answer.stdout
+    if architecture == "x86_64":
+        # No invented image: the pinned arm64 image never appears for x86.
+        assert "ami-0e79e661e73ddfac9" not in answer.stdout
+        assert "FINDLING_BOX_IMAGE" in answer.stdout
+        assert "mem=4G" not in answer.stdout
+
+
+@needs_sh
+def test_the_aws_create_refuses_a_family_it_knows_no_architecture_for(tmp_path: Path) -> None:
+    answer, _, _ = an_aws_box_run(tmp_path, ["create"], umgebung={"FINDLING_BOX_TYPE": "t3.micro"})
+    assert answer.returncode == 2, answer
+    assert "no architecture is known for t3.micro" in answer.stderr
+
+
+@needs_sh
+def test_two_state_directories_keep_their_boxes_apart(tmp_path: Path) -> None:
+    """arm and x86 each in its own FINDLING_LOADTEST_DIR: a stop writes into its own file only."""
+    arm_dir = tmp_path / "arm"
+    x86_dir = tmp_path / "x86"
+    arm, arm_file, _ = an_aws_box_run(tmp_path / "a", ["stop"], instance_type="m7g.4xlarge", state_dir=arm_dir)
+    x86, x86_file, _ = an_aws_box_run(tmp_path / "b", ["stop"], instance_type="c7a.2xlarge", state_dir=x86_dir)
+    assert arm.returncode == 0, arm
+    assert x86.returncode == 0, x86
+    arm_state = arm_file.read_text(encoding="utf-8")
+    x86_state = x86_file.read_text(encoding="utf-8")
+    assert "BOX_LAST_UPTIME_RATE_USD_H=0.7821" in arm_state
+    assert "c7a" not in arm_state
+    assert "BOX_LAST_UPTIME_RATE_USD_H=0.46852" in x86_state
+    assert "m7g" not in x86_state
+
+
+def _a_backup(tmp_path: Path) -> dict[str, str]:
+    backup = tmp_path / "box.env.sicherung"
+    backup.write_text("BOX_INSTANCE_ID=gesichert\n", encoding="utf-8", newline="\n")
+    return {"FINDLING_STATE_BACKUP": backup.as_posix()}
+
+
+@needs_sh
+def test_the_aws_destroy_keeps_the_security_group_while_another_instance_uses_it(tmp_path: Path) -> None:
+    """The first of two teardowns (D-28-13): the second box keeps its group, its volume and the key."""
+    answer, state_file, calls = an_aws_box_run(
+        tmp_path, ["destroy"], state="terminated", sharing=[AWS_OTHER_INSTANCE], umgebung=_a_backup(tmp_path)
+    )
+    assert answer.returncode == 0, answer
+    assert "security group kept, still used by another instance" in answer.stdout
+    assert not [call for call in calls if "delete-security-group" in call], calls
+    assert not [call for call in calls if "delete-key-pair" in call], calls
+    # The other box and its disk are not leftovers of this one.
+    assert AWS_OTHER_INSTANCE in answer.stdout
+    assert "something still carries the tag" not in answer.stderr
+    # The own instance and volume are gone, and the state file of this box goes with them.
+    assert any("terminate-instances" in call and AWS_OWN_INSTANCE in call for call in calls)
+    assert any("delete-volume" in call and AWS_OWN_VOLUME in call for call in calls)
+    assert not state_file.exists()
+
+
+@needs_sh
+def test_the_aws_destroy_deletes_the_security_group_when_nothing_else_uses_it(tmp_path: Path) -> None:
+    answer, state_file, calls = an_aws_box_run(tmp_path, ["destroy"], state="terminated", umgebung=_a_backup(tmp_path))
+    assert answer.returncode == 0, answer
+    assert any("delete-security-group" in call for call in calls), calls
+    assert any("delete-key-pair" in call for call in calls), calls
+    assert f"security group {AWS_GROUP} is gone, verified against the api" in answer.stdout
+    assert "security group kept" not in answer.stdout
+    assert not state_file.exists()
+
+
+@needs_sh
+@pytest.mark.parametrize("subcommand", ["status", "stop", "prices", "create"])
+def test_the_aws_tool_never_prints_a_credential_in_a_run(tmp_path: Path, subcommand: str) -> None:
+    answer, state_file, calls = an_aws_box_run(tmp_path, [subcommand], instance_type="c7a.4xlarge")
+    for sentinel in (AWS_ACCESS_STAND_IN, AWS_SIGNING_STAND_IN):
+        assert sentinel not in answer.stdout
+        assert sentinel not in answer.stderr
+        assert sentinel not in state_file.read_text(encoding="utf-8")
+        assert not [call for call in calls if sentinel in call]
+
+
 def test_the_box_tool_verifies_the_deletion_and_keeps_the_state_out_of_the_repo() -> None:
     text = HETZNER_BOX.read_text(encoding="utf-8")
     assert "is gone, verified against the API" in text
