@@ -945,6 +945,12 @@ $profileEffective = $profileKey($_['profileEffective'] ?? null);
 // a click (Z1, Z2, SC1).
 $profileSaved = $profileStored && $profileChosen !== '' ? $profileChosen : 'economy';
 $profileForm = $profileStored ? $profileSaved : ($profileSuggested !== '' ? $profileSuggested : 'economy');
+// The three options are written out one by one below, so that the one select
+// with exactly three profiles is visible in the markup (SC1, ADM-04); the
+// suggested one carries the word of the catalogue.
+$profileOption = static fn (string $value): string => $value === $profileSuggested
+	? $l->t('%s (suggested)', [$profileNames[$value]])
+	: $profileNames[$value];
 $precisionStored = ($_['storedPrecision'] ?? null) === 'fp32' ? 'fp32' : 'int8';
 $probeSupported = ($_['probeSupported'] ?? false) === true;
 $probeRunning = ($_['probeRunning'] ?? false) === true;
@@ -1128,13 +1134,13 @@ foreach (is_array($_['profileEnv'] ?? null) ? $_['profileEnv'] : [] as $envEntry
 
 	<label class="findling-rules__label" for="findling-profile-select"><?php p($l->t('Profile')); ?></label>
 	<select id="findling-profile-select" name="profile" aria-describedby="findling-profile-describe-<?php p($profileForm); ?> findling-profile-nochange"<?php if ($probeRunning) { ?> disabled<?php } ?>>
-		<?php foreach ($profileNames as $profileValue => $profileName) { ?>
-			<option value="<?php p($profileValue); ?>"<?php if ($profileValue === $profileForm) { ?> selected<?php } ?>><?php p($profileValue === $profileSuggested ? $l->t('%s (suggested)', [$profileName]) : $profileName); ?></option>
-		<?php } ?>
+		<option value="economy"<?php if ($profileForm === 'economy') { ?> selected<?php } ?>><?php p($profileOption('economy')); ?></option>
+		<option value="standard"<?php if ($profileForm === 'standard') { ?> selected<?php } ?>><?php p($profileOption('standard')); ?></option>
+		<option value="performance"<?php if ($profileForm === 'performance') { ?> selected<?php } ?>><?php p($profileOption('performance')); ?></option>
 	</select>
-	<?php foreach ($profileDescriptions as $profileValue => $profileDescription) { ?>
-		<p class="settings-hint" id="findling-profile-describe-<?php p($profileValue); ?>"<?php if ($profileValue !== $profileForm) { ?> hidden<?php } ?>><?php p($profileDescription); ?></p>
-	<?php } ?>
+	<p class="settings-hint" id="findling-profile-describe-economy"<?php if ($profileForm !== 'economy') { ?> hidden<?php } ?>><?php p($profileDescriptions['economy']); ?></p>
+	<p class="settings-hint" id="findling-profile-describe-standard"<?php if ($profileForm !== 'standard') { ?> hidden<?php } ?>><?php p($profileDescriptions['standard']); ?></p>
+	<p class="settings-hint" id="findling-profile-describe-performance"<?php if ($profileForm !== 'performance') { ?> hidden<?php } ?>><?php p($profileDescriptions['performance']); ?></p>
 
 	<div class="findling-rules__toggle" id="findling-profile-fp32-row"<?php if ($profileForm === 'economy') { ?> hidden<?php } ?>>
 		<input type="checkbox" class="checkbox" id="findling-profile-fp32" name="precision" value="fp32"
@@ -1186,7 +1192,7 @@ foreach (is_array($_['profileEnv'] ?? null) ? $_['profileEnv'] : [] as $envEntry
 	/*
 	 * The last verdict. All three icons are in the markup at once and two of
 	 * them are hidden, the pattern of the lookup card, so the script never
-	 * composes an icon. No aria-live here: the one live region of the block is
+	 * composes an icon. No live attribute here: the one live region of the block is
 	 * the announce span at its end, and a second one would speak twice.
 	 */
 	?>
