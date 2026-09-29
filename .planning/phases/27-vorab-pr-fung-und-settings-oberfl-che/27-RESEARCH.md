@@ -415,19 +415,21 @@ public function startCheck(string $profile = '', string $precision = ''): DataRe
 | A4 | Scanseite 13-ratsvorlage-scan.pdf ist als Slot-Last repräsentativ genug | Pattern 2 | leichte Seite unterschätzt; Konstante als Untergrenze fängt das |
 | A5 | ExApp-Route mit genau einem `<verb>` je Eintrag ist die sichere Form | Pattern 6 | keine, getrennte URLs funktionieren in jedem Fall |
 
-## Open Questions (Owner-Fragen mit Empfehlung)
+## Open Questions (Owner-Fragen mit Empfehlung) (RESOLVED)
 
-1. **Wächter während der Probe stumm schalten?** Ein vom Kernel getötetes Probe-Kind senkt sonst das gewählte Profil ab (Pitfall 3).
+Alle sechs am 29.09.2026 vom Owner entschieden, siehe 27-CONTEXT.md D-27-15 bis D-27-20.
+
+1. **Wächter während der Probe stumm schalten?** (RESOLVED: D-27-15) Ein vom Kernel getötetes Probe-Kind senkt sonst das gewählte Profil ab (Pitfall 3).
    - Empfehlung: Ja. Eskalation während der Probe und einen Tick danach nur neu basieren; die Indexierung ist pausiert, also gibt es keine Betriebslast, gegen die der Wächter schützen müsste. Die Probe meldet den Kill selbst als `slot_killed`.
-2. **Pause-Deckel 1800 s akzeptabel?** Eine laufende OCR-Staffel kann im schlimmsten Fall bis zur Lease dauern.
+2. **Pause-Deckel 1800 s akzeptabel?** (RESOLVED: D-27-16) Eine laufende OCR-Staffel kann im schlimmsten Fall bis zur Lease dauern.
    - Empfehlung: Ja, mit sichtbarem Schritt "Indexstaffel abwarten". Alternative wäre, die Staffel für die Probe abzubrechen; das widerspricht D-27-05 ("endet sauber").
-3. **Vom Admin abgelegte fp32-Datei bei knapp/nicht löschen?** D-27-02 sagt "Datei gelöscht", D-25-06 schützt eine abgelegte Datei.
+3. **Vom Admin abgelegte fp32-Datei bei knapp/nicht löschen?** (RESOLVED: D-27-17) D-27-02 sagt "Datei gelöscht", D-25-06 schützt eine abgelegte Datei.
    - Empfehlung: Nur eine von der Probe selbst geholte Datei löschen; eine abgelegte bleibt (sonst muss der Admin sie auf einer Offline-Box erneut hineinkopieren). Die Karte sagt dann nicht "wieder gelöscht".
-4. **Reindex-Dauer ohne vorherige Probe?**
+4. **Reindex-Dauer ohne vorherige Probe?** (RESOLVED: D-27-18)
    - Empfehlung: Kurzform ohne Dauer, bis eine Probe auf dieser Box eine Rate gemessen hat. Eine Betriebsrate aus der Einbettungsspur wäre möglich, kostet aber eine neue Messstelle im heißen Pfad.
-5. **IN-01 und IN-02 aus 26-REVIEW in Phase 27 mitfixen?**
+5. **IN-01 und IN-02 aus 26-REVIEW in Phase 27 mitfixen?** (RESOLVED: D-27-19)
    - Empfehlung: Ja, beide liegen im Pfad der Probe (Token-Snapshot, Pool im Shutdown).
-6. **Fünf neue Ursachensätze plus `rebuilding` in die UI-SPEC aufnehmen?**
+6. **Fünf neue Ursachensätze plus `rebuilding` in die UI-SPEC aufnehmen?** (RESOLVED: D-27-20)
    - Empfehlung: Ja, als UI-SPEC-Delta vor dem Plan-Schnitt; ohne sie zeigt die Seite in diesen Fällen nur Chip plus "Nichts gespeichert".
 
 ## Environment Availability

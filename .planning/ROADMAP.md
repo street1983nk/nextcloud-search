@@ -64,7 +64,7 @@ Details im Archiv: .planning/milestones/v1.3-ROADMAP.md
 
 - [x] **Phase 24: Owner-Tor, Profil-Gerüst und Marken-Reparatur** - Grundsatzentscheide schriftlich, dann Profile als Anteils-Formel, Hardware-Erkennung mit Vorschlag, Sparsam gepinnt, Vektor-Marke kennt die Gewichtspräzision (completed 2026-09-28)
 - [x] **Phase 25: Einbettungsspur und Modellwahl** - Einbettung als eigener Nebenläufer (H1) mit PHP-Art-Filter, IDX-08 neu gefasst, int8/fp32 wählbar (completed 2026-09-28)
-- [x] **Phase 26: N OCR-Slots und Speicherwächter** - Mehrere OCR-Slots (H2) mit KIND_BATCH-Companion, Drosselung und selbsttätiger Profil-Rückstufung (completed 2026-09-29)
+- [x] **Phase 26: N OCR-Slots und Speicherwächter** - Mehrere OCR-Slots (H2) mit KIND_BATCH-Companion, Drosselung und selbsttätiger Profil-Rückstufung (completed 2026-09-29)
 - [ ] **Phase 27: Vorab-Prüfung und Settings-Oberfläche** - Erste echte Settings-Fläche mit "Übernehmen und prüfen" (N-Slot-Probe, Verdikt), acht Sprachkataloge
 - [ ] **Phase 28: Abnahme-Anfahrt** - RAM-Messung je Profilstufe am gebauten Produkt auf echter Hardware, Deckel vorab freigegeben
 - [ ] **Phase 29: Härtung und Store-Einreichung 1.4.0** - Launch-Härtung der Parallelpfade, Audits, signiertes App-Paar im Store
@@ -217,8 +217,46 @@ Plans:
   3. Die Probe wird vor dem Start gegen die Speichergrenze gerechnet und kann selbst kein OOM auslösen; es läuft höchstens eine Probe gleichzeitig, mit Zeitdeckel, und ein Nicht-Admin erreicht Probe- und Profilroute nicht (access_level ADMIN, Test).
   4. Alle neuen Texte stehen in allen acht Sprachkatalogen (16 Dateien) im Gleichstand, die Katalog-Gates sind grün.
 
-**Plans**: TBD
+**Plans**: 16 plans in 7 Wellen
 **UI hint**: yes (ui-phase-Gate: UI-SPEC vor dem Plan-Schnitt, Projektkonvention)
+
+Plans:
+**Wave 1**
+
+- [ ] 27-01-PLAN.md , UI-SPEC-Delta D-27-20 und SC1-Wortlaut "Bei Sparsam bleiben" mit Owner-Bestätigung (UI-01, PRUEF-01, D-27-11/20), Welle 1, Checkpoint
+- [ ] 27-02-PLAN.md , probe.py: Codes, Snapshot, Rechnung mit Vorab-Toren, Haltesignal, Deckel, Scanseite mit Digest-Pin (PRUEF-01, D-27-06/07/08), Welle 1
+- [ ] 27-03-PLAN.md , IN-01 atomarer Wächter-Snapshot, IN-02 Submit unter Sperre, shed_idle, Escalation.rebase (PRUEF-01, D-27-19), Welle 1
+- [ ] 27-04-PLAN.md , PHP: SettingsService (profileStored, needsProbe, saveProfile, Probe-Ablage), ExAppService adminSend/adminState (PRUEF-01, UI-01, D-27-09), Welle 1
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 27-05-PLAN.md , Indexierungs-Pause in Poller und EmbedRunner, Wächter-Aussetzung während der Probe (PRUEF-01, D-27-05/15), Welle 2
+- [ ] 27-06-PLAN.md , fp32-Modellprobe im gehärteten Spawn-Kind (PRUEF-01, D-27-02), Welle 2
+- [ ] 27-07-PLAN.md , ProbeService mit Commit-Bindung, ProfileSettingsController mit drei Admin-Routen, Gate B (PRUEF-01, UI-01, D-27-04/08/10/12), Welle 2
+- [ ] 27-08-PLAN.md , AdminViewService: Token raus, guardConfirmable, Profil-, Probe-, Env- und Reindex-Felder (UI-01, D-27-12/14/18), Welle 2
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 27-09-PLAN.md , Probe-Orchestrator probe_run: Einzelflug, Pause, Download, Messteil, Aufräumen, Neustart (PRUEF-01, D-27-02/04/06/07/14/16/17), Welle 3
+- [ ] 27-10-PLAN.md , Template und CSS: Block Leistungsprofil, occ-Zeile raus, SC1/ADM-04-Gates (UI-01, D-27-01/03/11/12), Welle 3
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 27-11-PLAN.md , Container: Router /probe und /probe/state (ADMIN), Statusblock probe, model.chunks, Lifespan (PRUEF-01), Welle 4
+- [ ] 27-12-PLAN.md , admin.js: Probe-Start, Poll 2000 ms, Verdikt, Abwärtswege, Maps, Fokus (UI-01, PRUEF-01, D-27-01/03/08/09), Welle 4
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 27-13-PLAN.md , Acht Kataloge (16 Dateien) im Gleichstand, Vollständigkeits-Gate (UI-01, SC4, D-27-20), Welle 5
+- [ ] 27-14-PLAN.md , Doku (occ ohne Probe, D-27-13) und Live-Nicht-Admin-Schritt in integration.yml (SC3), Welle 5
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 27-15-PLAN.md , Live-Lauf auf dem nc35-Harness mit Owner-Abnahme der Fläche (PRUEF-01, UI-01), Welle 6, Checkpoint
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 27-16-PLAN.md , Push-Entscheid, CI-Belege, Owner-Abnahme der Phase (PRUEF-01, UI-01), Welle 7, Checkpoint
 
 ### Phase 28: Abnahme-Anfahrt
 
@@ -260,7 +298,7 @@ Plans:
 | 24. Owner-Tor, Profil-Gerüst und Marken-Reparatur | v1.4 | 6/6 | Complete    | 2026-09-28 |
 | 25. Einbettungsspur und Modellwahl | v1.4 | 12/12 | Complete    | 2026-09-28 |
 | 26. N OCR-Slots und Speicherwächter | v1.4 | 14/14 | Complete    | 2026-09-29 |
-| 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 0/? | Not started | - |
+| 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 0/16 | Planned | - |
 | 28. Abnahme-Anfahrt | v1.4 | 0/? | Not started | - |
 | 29. Härtung und Store-Einreichung 1.4.0 | v1.4 | 0/? | Not started | - |
 
