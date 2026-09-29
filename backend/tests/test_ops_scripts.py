@@ -32,6 +32,7 @@ at another.
 from __future__ import annotations
 
 import ast
+import datetime
 import importlib.util
 import json
 import os
@@ -905,8 +906,6 @@ exit 1
 
 
 def _aws_instance(instance_id: str, instance_type: str, state: str, hours_ago: float) -> dict[str, object]:
-    import datetime  # noqa: PLC0415 - only these runs need it
-
     launched = datetime.datetime.now(tz=datetime.UTC) - datetime.timedelta(hours=hours_ago)
     return {
         "Reservations": [
@@ -1054,7 +1053,8 @@ def test_the_aws_stop_charges_the_c7a_8xlarge_with_its_own_rate(tmp_path: Path) 
     state = state_file.read_text(encoding="utf-8")
     assert "BOX_LAST_UPTIME_TYPE=c7a.8xlarge" in state
     assert "BOX_LAST_UPTIME_RATE_USD_H=1.87408" in state
-    cost = float(next(line for line in state.splitlines() if line.startswith("BOX_LAST_UPTIME_COST_USD=")).split("=")[1])
+    cost_line = next(line for line in state.splitlines() if line.startswith("BOX_LAST_UPTIME_COST_USD="))
+    cost = float(cost_line.split("=")[1])
     # 2 h x (1.87408 + 60 GB x 0.0952 / 730 + 0.005), read with slack for the
     # seconds between the stub and the arithmetic.
     expected = 2.0 * (1.87408 + 60 * 0.0952 / 730 + 0.005)

@@ -36,7 +36,13 @@
 #     snapshot  the corpus of the run, out of the volume and into a snapshot that
 #               outlives the box, verified by a read back and not by a waiter
 #     destroy   volume, instance and security group, with a check that all
-#               three are gone and a sweep by tag
+#               three are gone and a sweep by tag; the group and the key pair
+#               stay while another instance of the run still uses the group
+#
+# Since 28-03 the tool serves two boxes, the arm one and a c7a box of the x86
+# matrix of phase 28: the rate comes out of a table by the type the api reports,
+# the architecture follows from the family, and each box keeps its own state
+# directory through FINDLING_LOADTEST_DIR.
 #
 # stop and start were missing until 2026-09-07, and the box lived exactly between
 # them: parked after the run of 06-11, woken by hand for the one of 06.1-18. A
@@ -88,10 +94,19 @@ REGION='eu-central-1'
 # in its own availability zone, and it cannot be moved afterwards. The box lives
 # in eu-central-1c, so the volume has to be created there.
 ZONE='eu-central-1c'
-INSTANCE_TYPE='m7g.large'
+# The type create documents and prices reads, since 28-03 a run value: the x86
+# matrix of phase 28 runs a second box of the family c7a next to the arm one, and
+# each box has its own state directory (FINDLING_LOADTEST_DIR, for example
+# .../arm and .../x86). status and stop do NOT read this value: they read the
+# type of the instance out of describe-instances, because a type switch by
+# modify-instance-attribute leaves every setting on this machine behind.
+INSTANCE_TYPE="${FINDLING_BOX_TYPE:-m7g.large}"
 INSTANCE_NAME='findling-loadtest'
 # The image the box actually booted from, kept here because create documents
 # what happened rather than guessing what would happen: Ubuntu 24.04 arm64.
+# There is no pinned x86 image on purpose. An image id that was not read is an
+# invented one, so for c7a the recipe of create names the free reading that
+# finds it, and the value travels as FINDLING_BOX_IMAGE into the state file.
 INSTANCE_IMAGE='ami-0e79e661e73ddfac9'
 SSH_KEY_NAME='findling-loadtest'
 SECURITY_GROUP_NAME='findling-loadtest'
@@ -159,7 +174,23 @@ STATE_FILE="$STATE_DIR/box.env"
 # well over a gigabyte: a tool that downloads that when somebody types "prices"
 # is a trap. The command that reproduces them stands in cmd_prices, and the
 # filtered rows are in docs/measurements/ next to the run.
-PRICE_INSTANCE_HOURLY='0.0978'
+#
+# Since 28-03 the instance rate is a table and not one pin. Until then stop and
+# status charged every hour with the m7g.large rate, and on a c7a.8xlarge that
+# is nineteen times too little (Pitfall 9 of v1.3, Pitfall 6 of phase 28): the
+# figure the cost ceiling of D-28-02 is checked against. The six types are the
+# ones of D-28-03 and D-28-04, net USD per On Demand Linux instance hour in
+# eu-central-1, read on 2026-09-29 from the public price card of this provider,
+# the one that needs neither credentials nor a gigabyte download (manifest
+# 2026-09-25T17:45:21Z):
+#
+#     https://b0.p.awsstatic.com/pricing/2.0/meteredUnitMaps/ec2/USD/current/ec2-ondemand-without-sec-sel/EU%20(Frankfurt)/Linux/index.json
+#
+# The m7g.large figure is the same 0.0978 the bulk list gave on 2026-09-04. A
+# type that is not in the table has no rate here, and status and stop end red
+# for it rather than print a number that belongs to another machine.
+INSTANCE_RATES='m7g.large=0.0978 m7g.4xlarge=0.7821 c7a.xlarge=0.23426 c7a.2xlarge=0.46852 c7a.4xlarge=0.93704 c7a.8xlarge=1.87408'
+PRICE_CARD_URL='https://b0.p.awsstatic.com/pricing/2.0/meteredUnitMaps/ec2/USD/current/ec2-ondemand-without-sec-sel/EU%20(Frankfurt)/Linux/index.json'
 PRICE_GP3_GB_MONTH='0.0952'
 PRICE_IPV4_HOURLY='0.0050'
 PRICE_CURRENCY='USD'
@@ -181,6 +212,39 @@ usage() {
     echo "  destroy  delete volume, instance and security group, then verify" >&2
     printf 'the credentials are read from the environment: %s and %s\n' \
         'AWS_ACCESS_KEY_ID' 'AWS_SECRET_ACCESS_KEY' >&2
+}
+
+# The rate of one type out of the table, or nothing and a non zero end.
+instance_rate() {
+    for pair in $INSTANCE_RATES; do
+        if [ "${pair%%=*}" = "$1" ]; then
+            echo "${pair#*=}"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# The architecture follows from the family. It decides the image, and it is
+# why a type switch never crosses a family: the image of an instance is fixed at
+# its creation, so arm to x86 is a second instance and not a modify.
+box_architecture() {
+    case "$1" in
+    m7g.*) echo 'arm64' ;;
+    c7a.*) echo 'x86_64' ;;
+    *) return 1 ;;
+    esac
+}
+
+# The type of the instance as the api reports it, out of a describe-instances
+# answer on stdin. A type switch changes it, so no copy on this machine counts.
+reported_type() {
+    json '
+import json
+import sys
+
+print(json.load(sys.stdin)["Reservations"][0]["Instances"][0]["InstanceType"])
+'
 }
 
 require_credentials() {
@@ -265,18 +329,30 @@ print('cores     %s vCPU, %s, %s GHz sustained' % (
     instance_type['ProcessorInfo'].get('SupportedArchitectures', ['?'])[0],
     instance_type['ProcessorInfo'].get('SustainedClockSpeedInGhz', '?'),
 ))
-print('memory    %s MiB on the type, capped to 4096 MiB by the kernel' % memory_mib)
+# Only the m7g.large of the store claim is capped; every other type of the
+# matrix is measured on the memory it carries.
+if instance_type['InstanceType'] == 'm7g.large':
+    print('memory    %s MiB on the type, capped to 4096 MiB by the kernel' % memory_mib)
+else:
+    print('memory    %s MiB on the type, no cap on this type' % memory_mib)
 print('network   %s' % instance_type['NetworkInfo']['NetworkPerformance'])
 "
     echo "disk      ${ROOT_DISK_GB} GB gp3 root, ${VOLUME_SIZE_GB} GB gp3 data volume"
-    echo "rate      $PRICE_INSTANCE_HOURLY $PRICE_CURRENCY per hour for the box, net"
+    for pair in $INSTANCE_RATES; do
+        echo "rate      ${pair#*=} $PRICE_CURRENCY per hour for a ${pair%%=*}, net"
+    done
     echo "rate      $PRICE_GP3_GB_MONTH $PRICE_CURRENCY per GB and month for gp3, net"
     echo "rate      $PRICE_IPV4_HOURLY $PRICE_CURRENCY per hour for the public address, net"
-    echo "aws_box: the two rates are pinned in this script, with their source"
+    echo "aws_box: the rates are pinned in this script, with their source"
+    echo "aws_box: status and stop charge the rate of the type describe-instances"
+    echo "reports, and end red for a type that is not in this table"
     echo "aws_box: this account cannot read the price api (pricing:GetProducts is"
-    echo "not in its policy), so they come from the public bulk price list:"
+    echo "not in its policy), so the instance rates come from the public price card"
+    echo "of EU (Frankfurt), Linux On Demand, read on 2026-09-29:"
+    echo "  $PRICE_CARD_URL"
+    echo "aws_box: storage and the address come from the public bulk price list:"
     echo "  curl -sS https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonEC2/current/eu-central-1/index.csv"
-    echo "  | grep -E 'm7g[.]large|VolumeUsage[.]gp3' | grep OnDemand"
+    echo "  | grep -E 'VolumeUsage[.]gp3' | grep OnDemand"
     echo "aws_box: a gp3 volume carries 3000 IOPS and 125 MB/s at no extra charge,"
     echo "and this run stays inside both, so nothing is added for them"
 }
@@ -289,11 +365,38 @@ cmd_create() {
     #
     # What it does instead is name the calls that produced the machine, so that
     # the run is reproducible from this repository and not from a shell history
-    # on a laptop. Everything below was really executed, in this order.
+    # on a laptop. Everything below was really executed, in this order, for the
+    # arm box; since 28-03 the same recipe names the second box of the x86
+    # matrix, when FINDLING_BOX_TYPE names a c7a type.
+    if ! architecture=$(box_architecture "$INSTANCE_TYPE"); then
+        echo "aws_box: no architecture is known for $INSTANCE_TYPE; this tool knows" >&2
+        echo "the families m7g (arm64) and c7a (x86_64)" >&2
+        exit 2
+    fi
+    if [ "$architecture" = 'arm64' ]; then
+        image_arch='arm64'
+        machine='aarch64'
+        image="${FINDLING_BOX_IMAGE:-$INSTANCE_IMAGE}"
+    else
+        image_arch='amd64'
+        machine='x86_64'
+        image="${FINDLING_BOX_IMAGE:-<the image id the reading in step 0 returns>}"
+    fi
     cat <<'RECIPE'
 aws_box: the box of this run exists already and this command will not make one.
 It records how it came about. To repeat the run on a fresh machine, read this,
 check it against the current api, and run it by hand:
+RECIPE
+    echo ""
+    echo "  # type $INSTANCE_TYPE, architecture $architecture (FINDLING_BOX_TYPE, default m7g.large)"
+    echo ""
+    echo "  # 0. the image, read for free and never invented: Canonical, Ubuntu 24.04 $image_arch."
+    echo "  #    Canonical deregisters old images, so this is read again before a run,"
+    echo "  #    and the id goes into the state file as FINDLING_BOX_IMAGE"
+    echo "  aws ec2 describe-images --owners 099720109477 \\"
+    echo "      --filters \"Name=name,Values=ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-$image_arch-server-*\" \\"
+    echo "      --query 'sort_by(Images,&CreationDate)[-1].[ImageId,Name]'"
+    cat <<'RECIPE'
 
   # 1. a security group with ssh from one address and nothing else open to it
   aws ec2 create-security-group --group-name findling-loadtest \
@@ -304,19 +407,26 @@ check it against the current api, and run it by hand:
       'IpProtocol=tcp,FromPort=80,ToPort=80,IpRanges=[{CidrIp=0.0.0.0/0}]' \
       'IpProtocol=tcp,FromPort=443,ToPort=443,IpRanges=[{CidrIp=0.0.0.0/0}]'
 
-  # 2. a key pair whose private half never leaves the machine that made it
+  # 2. a key pair whose private half never leaves the machine that made it.
+  #    Security group and key pair are shared by the arm and the x86 box, so
+  #    the second box skips steps 1 and 2
   aws ec2 create-key-pair --key-name findling-loadtest \
       --query KeyMaterial --output text > ~/.ssh/findling-loadtest
 
-  # 3. the instance: arm64 image, 40 GB gp3 root, one subnet in eu-central-1c
-  aws ec2 run-instances --image-id ami-0e79e661e73ddfac9 \
-      --instance-type m7g.large --key-name findling-loadtest \
-      --security-group-ids <sg> --subnet-id <subnet in eu-central-1c> \
-      --block-device-mappings \
-      'DeviceName=/dev/sda1,Ebs={VolumeSize=40,VolumeType=gp3,DeleteOnTermination=true}' \
-      --tag-specifications \
-      'ResourceType=instance,Tags=[{Key=Name,Value=findling-loadtest},{Key=purpose,Value=findling-phase5}]'
-
+RECIPE
+    echo "  # 3. the instance: $image_arch image, 40 GB gp3 root, one subnet in eu-central-1c,"
+    echo "  #    and a shutdown from inside the box that stops and never terminates"
+    echo "  aws ec2 run-instances --image-id $image \\"
+    echo "      --instance-type $INSTANCE_TYPE --key-name findling-loadtest \\"
+    echo "      --instance-initiated-shutdown-behavior stop \\"
+    echo "      --security-group-ids <sg> --subnet-id <subnet in eu-central-1c> \\"
+    echo "      --block-device-mappings \\"
+    echo "      'DeviceName=/dev/sda1,Ebs={VolumeSize=40,VolumeType=gp3,DeleteOnTermination=true}' \\"
+    echo "      --tag-specifications \\"
+    echo "      'ResourceType=instance,Tags=[{Key=Name,Value=findling-loadtest},{Key=purpose,Value=findling-phase5}]'"
+    echo ""
+    if [ "$INSTANCE_TYPE" = 'm7g.large' ]; then
+        cat <<'RECIPE'
   # 4. the memory cap, on the box, as a drop-in that extends the cmdline
   #    instead of replacing it, then reboot and read the three numbers back
   echo 'GRUB_CMDLINE_LINUX_DEFAULT="$GRUB_CMDLINE_LINUX_DEFAULT mem=4G"' \
@@ -325,12 +435,23 @@ check it against the current api, and run it by hand:
   free -h   # 3.9Gi
   nproc     # 2
   uname -m  # aarch64
+RECIPE
+    else
+        echo "  # 4. no memory cap on this type: the matrix measures the memory the type"
+        echo "  #    carries. Read the numbers back all the same"
+        echo "  free -h"
+        echo "  nproc"
+        echo "  uname -m  # $machine"
+    fi
+    cat <<'RECIPE'
 
   # 5. the data volume, which this script does do:
   aws_box.sh volume
 
 The state of the box lives in $HOME/.findling-loadtest/box.env, written by hand
-for the parts above and by this script for the volume.
+for the parts above and by this script for the volume. With two boxes each one
+has its own directory, named by FINDLING_LOADTEST_DIR (for example .../arm and
+.../x86), and every call of this script names the one it means.
 RECIPE
     exit 1
 }
@@ -610,6 +731,14 @@ for tag in tags:
     fi
 
     instance=$(ec2 describe-instances --instance-ids "$BOX_INSTANCE_ID")
+    # The rate of the type the api reports, and none when the table has none:
+    # a figure out of the rate of another machine looks exactly like a right one.
+    running_type=$(printf '%s' "$instance" | reported_type)
+    if ! instance_hourly=$(instance_rate "$running_type"); then
+        echo "aws_box: no rate is known for instance type $running_type, so this" >&2
+        echo "prints no cost figure; add the type with its source to INSTANCE_RATES" >&2
+        exit 1
+    fi
     volumes=$(ec2 describe-volumes --filters "Name=attachment.instance-id,Values=$BOX_INSTANCE_ID")
     now=$(date -u +%s)
     printf '[%s,%s]' "$instance" "$volumes" | json "
@@ -658,13 +787,13 @@ else:
     print('running   a stopped instance keeps its LaunchTime. The closing figures of')
     print('running   the last uptime were written into box.env by aws_box.sh stop')
 
-instance_hourly = float('$PRICE_INSTANCE_HOURLY')
+instance_hourly = float('$instance_hourly')
 storage_hourly = float('$PRICE_GP3_GB_MONTH') * gigabytes / $HOURS_PER_MONTH
 # Counted when the box really has an address, and not otherwise. Leaving it out
 # understated the Hetzner half of this report by eight percent once.
 ipv4_hourly = float('$PRICE_IPV4_HOURLY') if instance.get('PublicIpAddress') else 0.0
-print('rate      %.6f %s per hour for the box, %.6f for %s GB of storage, %.6f for the address' % (
-    instance_hourly, '$PRICE_CURRENCY', storage_hourly, gigabytes, ipv4_hourly))
+print('rate      %.6f %s per hour for the %s, %.6f for %s GB of storage, %.6f for the address' % (
+    instance_hourly, '$PRICE_CURRENCY', instance['InstanceType'], storage_hourly, gigabytes, ipv4_hourly))
 if running:
     print('spent     %.2f %s so far, net, from the pinned public rates' % (
         hours * (instance_hourly + storage_hourly + ipv4_hourly), '$PRICE_CURRENCY'))
@@ -691,6 +820,15 @@ cmd_stop() {
     # arithmetic that reads afterwards reports the wrong number and keeps
     # reporting it, because the state file is what the next report quotes.
     instance=$(ec2 describe-instances --instance-ids "$BOX_INSTANCE_ID")
+    # The rate of the type that ran, read out of the same answer. A type without
+    # a rate in the table still gets parked, because parking never waits for an
+    # arithmetic, but it gets no cost figure and the subcommand ends red.
+    running_type=$(printf '%s' "$instance" | reported_type)
+    rate_known=1
+    if ! instance_hourly=$(instance_rate "$running_type"); then
+        rate_known=0
+        instance_hourly=''
+    fi
     volumes=$(ec2 describe-volumes --filters "Name=attachment.instance-id,Values=$BOX_INSTANCE_ID")
     now=$(date -u +%s)
     parked_iso=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -709,14 +847,14 @@ if isinstance(launched, str):
 hours = ($now - launched.timestamp()) / 3600.0
 gigabytes = sum(volume['Size'] for volume in volumes)
 
-instance_hourly = float('$PRICE_INSTANCE_HOURLY')
 storage_hourly = float('$PRICE_GP3_GB_MONTH') * gigabytes / $HOURS_PER_MONTH
 # Same rule as in status: the address is only charged while the box has one.
 ipv4_hourly = float('$PRICE_IPV4_HOURLY') if instance.get('PublicIpAddress') else 0.0
-print('%s %.2f %.4f %.4f %s' % (
+rate = '$instance_hourly'
+print('%s %.2f %s %.4f %s' % (
     instance['State']['Name'],
     hours,
-    hours * (instance_hourly + storage_hourly + ipv4_hourly),
+    '%.4f' % (hours * (float(rate) + storage_hourly + ipv4_hourly)) if rate else 'none',
     storage_hourly * 24.0,
     gigabytes,
 ))
@@ -731,7 +869,26 @@ print('%s %.2f %.4f %.4f %s' % (
     ec2 stop-instances --instance-ids "$BOX_INSTANCE_ID" >/dev/null
     "$AWS_BIN" --region "$REGION" ec2 wait instance-stopped --instance-ids "$BOX_INSTANCE_ID"
     echo "aws_box: instance $BOX_INSTANCE_ID is stopped, verified by the waiter"
-    echo "aws_box: this uptime ran $uptime_hours hours and cost $uptime_cost $PRICE_CURRENCY net"
+
+    if [ "$rate_known" -ne 1 ]; then
+        (
+            umask 077
+            {
+                echo "# stopped by aws_box.sh stop at $parked_iso, type $running_type has no rate in the table"
+                echo "BOX_STOPPED_ISO=$parked_iso"
+                echo "BOX_LAST_UPTIME_HOURS=$uptime_hours"
+                echo "BOX_LAST_UPTIME_TYPE=$running_type"
+            } >>"$STATE_FILE"
+        )
+        echo "aws_box: this uptime ran $uptime_hours hours on a $running_type"
+        echo "aws_box: no rate is known for instance type $running_type, so no cost" >&2
+        echo "figure is written; add the type with its source to INSTANCE_RATES and" >&2
+        echo "charge the hours in $STATE_FILE by hand" >&2
+        exit 1
+    fi
+
+    echo "aws_box: this uptime ran $uptime_hours hours on a $running_type at $instance_hourly $PRICE_CURRENCY per hour"
+    echo "aws_box: and cost $uptime_cost $PRICE_CURRENCY net, with disks and address"
     echo "aws_box: parked it keeps only its $gigabytes GB of disks, about"
     echo "$parked_per_day $PRICE_CURRENCY per day, and it keeps corpus, index and images"
 
@@ -741,6 +898,8 @@ print('%s %.2f %.4f %.4f %s' % (
             echo "# stopped by aws_box.sh stop at $parked_iso, uptime and cost from the pinned rates"
             echo "BOX_STOPPED_ISO=$parked_iso"
             echo "BOX_LAST_UPTIME_HOURS=$uptime_hours"
+            echo "BOX_LAST_UPTIME_TYPE=$running_type"
+            echo "BOX_LAST_UPTIME_RATE_USD_H=$instance_hourly"
             echo "BOX_LAST_UPTIME_COST_USD=$uptime_cost"
             echo "BOX_PARKED_COST_USD_PER_DAY=$parked_per_day"
         } >>"$STATE_FILE"
@@ -1082,7 +1241,43 @@ cmd_destroy() {
         esac
     fi
 
+    # The arm and the x86 box of phase 28 share one security group and one key
+    # pair (D-28-13), so the first of two teardowns must not take them. Asked
+    # of the api and not of a state file: every instance that is not terminated
+    # and still carries the group, other than the one just terminated. An
+    # answer this cannot read ends the subcommand here, with the group standing,
+    # which is the direction an error has to fall in. What the other instance
+    # still uses, its disks included, is not a leftover of this box either, so
+    # the sweep below leaves it out and names it.
+    others=''
+    shared=''
     if [ -n "$group_id" ]; then
+        others=$(ec2 describe-instances --filters "Name=instance.group-id,Values=$group_id" \
+            "Name=instance-state-name,Values=pending,running,stopping,stopped" | json "
+import json
+import sys
+
+reservations = json.load(sys.stdin)['Reservations']
+print(' '.join(
+    instance['InstanceId']
+    for reservation in reservations
+    for instance in reservation['Instances']
+    if instance['InstanceId'] != '$instance_id'
+))
+")
+    fi
+    if [ -n "$others" ]; then
+        other_list=$(printf '%s' "$others" | tr ' ' ',')
+        other_volumes=$(ec2 describe-volumes --filters "Name=attachment.instance-id,Values=$other_list" | json "
+import json
+import sys
+
+print(' '.join(volume['VolumeId'] for volume in json.load(sys.stdin)['Volumes']))
+")
+        shared="$others $other_volumes $group_id"
+        echo "aws_box: security group kept, still used by another instance: $others"
+        echo "aws_box: the key pair stays with it; the teardown of that box takes both"
+    elif [ -n "$group_id" ]; then
         echo "aws_box: deleting security group $group_id"
         response=$(ec2_soft delete-security-group --group-id "$group_id")
         case "$response" in
@@ -1103,13 +1298,15 @@ cmd_destroy() {
     # pair behind, so the teardown of that plan had to delete it by hand and read
     # it back against the api afterwards, where the account answered
     # InvalidKeyPair.NotFound for it. That hand grip is what this block replaces.
-    echo "aws_box: deleting key pair $SSH_KEY_NAME"
-    response=$(ec2_soft delete-key-pair --key-name "$SSH_KEY_NAME")
-    case "$response" in
-    *error*)
-        echo "aws_box: the key pair was not deleted yet: $response" >&2
-        ;;
-    esac
+    if [ -z "$others" ]; then
+        echo "aws_box: deleting key pair $SSH_KEY_NAME"
+        response=$(ec2_soft delete-key-pair --key-name "$SSH_KEY_NAME")
+        case "$response" in
+        *error*)
+            echo "aws_box: the key pair was not deleted yet: $response" >&2
+            ;;
+        esac
+    fi
 
     failed=0
     instance_state=$(instance_gone "$instance_id")
@@ -1132,10 +1329,14 @@ cmd_destroy() {
     fi
 
     group_state='gone'
-    if [ -n "$group_id" ]; then
+    if [ -n "$others" ]; then
+        group_state='kept'
+    elif [ -n "$group_id" ]; then
         group_state=$(resource_gone "$(ec2_soft describe-security-groups --group-ids "$group_id")")
     fi
-    if [ "$group_state" = 'gone' ]; then
+    if [ "$group_state" = 'kept' ]; then
+        echo "aws_box: security group $group_id stays for $others, on purpose"
+    elif [ "$group_state" = 'gone' ]; then
         echo "aws_box: security group ${group_id:-none} is gone, verified against the api"
     else
         echo "aws_box: security group $group_id is still there" >&2
@@ -1149,8 +1350,14 @@ cmd_destroy() {
     # already absent answers InvalidKeyPair.NotFound and therefore ends in the
     # same line and not in a failure, which is the no-op reading the volume and
     # the security group get one block up.
-    key_state=$(resource_gone "$(ec2_soft describe-key-pairs --key-names "$SSH_KEY_NAME")")
-    if [ "$key_state" = 'gone' ]; then
+    if [ -n "$others" ]; then
+        key_state='kept'
+    else
+        key_state=$(resource_gone "$(ec2_soft describe-key-pairs --key-names "$SSH_KEY_NAME")")
+    fi
+    if [ "$key_state" = 'kept' ]; then
+        echo "aws_box: key pair $SSH_KEY_NAME stays for $others, on purpose"
+    elif [ "$key_state" = 'gone' ]; then
         echo "aws_box: key pair $SSH_KEY_NAME is gone, verified against the api"
     else
         echo "aws_box: key pair $SSH_KEY_NAME is still there" >&2
@@ -1192,12 +1399,19 @@ import sys
 
 tags = json.load(sys.stdin)['Tags']
 keepers = '$keepers'.split()
+shared = '$shared'.split()
 left = [
     tag for tag in tags
-    if tag['ResourceId'] != '$instance_id' and tag['ResourceId'] not in keepers
+    if tag['ResourceId'] != '$instance_id'
+    and tag['ResourceId'] not in keepers
+    and tag['ResourceId'] not in shared
 ]
 print(' '.join('%s:%s' % (tag['ResourceType'], tag['ResourceId']) for tag in left))
 ")
+    if [ -n "$shared" ]; then
+        echo "aws_box: still in use by the other box, and not a leftover of this one:"
+        echo "  $shared"
+    fi
     # A tag hit is a lead and not a verdict. describe-tags answers out of an
     # index that lags behind, so the tags of a resource deleted moments ago keep
     # coming back for a while, exactly as the tags of the terminated instance
@@ -1241,7 +1455,12 @@ print(' '.join('%s:%s' % (tag['ResourceType'], tag['ResourceId']) for tag in lef
     fi
 
     rm -f "$STATE_FILE"
-    echo "aws_box: every resource of this run is gone and $STATE_FILE is removed"
+    if [ -n "$others" ]; then
+        echo "aws_box: every resource of this box is gone and $STATE_FILE is removed;"
+        echo "security group and key pair go with the teardown of $others"
+    else
+        echo "aws_box: every resource of this run is gone and $STATE_FILE is removed"
+    fi
 }
 
 COMMAND="${1:-}"
