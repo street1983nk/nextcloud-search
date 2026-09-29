@@ -6,9 +6,12 @@ namespace OCA\Findling\Settings;
 
 use OCA\Findling\AppInfo\Application;
 use OCA\Findling\Service\AdminViewService;
+use OCA\Findling\Service\ProbeService;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Services\IInitialState;
+use OCP\IUserSession;
 use OCP\Settings\ISettings;
+use Psr\Log\LoggerInterface;
 
 /**
  * The form of the section, which is the whole admin page of this app.
@@ -32,10 +35,22 @@ final class Admin implements ISettings {
 	public function __construct(
 		private IInitialState $initialState,
 		private AdminViewService $view,
+		private ProbeService $probeService,
+		private IUserSession $userSession,
+		private LoggerInterface $logger,
 	) {
 	}
 
 	public function getForm(): TemplateResponse {
+		// A probe that finished while no tab was open is taken over before the
+		// page renders, so a closed tab never loses a "fits" (D-27-04). The
+		// take-over is idempotent, and a failure in it must not break the page.
+		try {
+			$this->probeService->settle($this->userSession->getUser()?->getUID() ?? '');
+		} catch (\Throwable $e) {
+			$this->logger->warning('Findling: could not take a probe result over', ['exception' => $e]);
+		}
+
 		// One aggregation, two consumers. Asking the service twice would let
 		// the rendered page and the script disagree about the same moment.
 		$overview = $this->view->overview();
