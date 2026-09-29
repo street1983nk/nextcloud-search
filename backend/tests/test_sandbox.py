@@ -580,12 +580,15 @@ def test_the_child_lowers_itself_before_anything_else_happens() -> None:
 
 def test_the_main_process_never_lowers_itself() -> None:
     # Only the children step back (D-26-11). A nice call anywhere else in the
-    # package would slow the search the level is there to protect.
+    # package would slow the search the level is there to protect. The model
+    # child of the check (plan 27-06) is a child too and hardens itself the
+    # same way, so it is the one other module named here.
     package = SANDBOX_SOURCE.parents[1]
+    children = {SANDBOX_SOURCE, package / "embed" / "model_probe.py"}
     elsewhere = [
         path.relative_to(package).as_posix()
         for path in package.rglob("*.py")
-        if path != SANDBOX_SOURCE and "os.nice(" in path.read_text(encoding="utf-8")
+        if path not in children and "os.nice(" in path.read_text(encoding="utf-8")
     ]
 
     assert elsewhere == []

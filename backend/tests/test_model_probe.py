@@ -57,7 +57,7 @@ def _shipped_model() -> Path | None:
 
 
 def test_the_outcomes_are_a_closed_set_of_five() -> None:
-    assert model_probe.MEASURE_OUTCOMES == frozenset({"ok", "timeout", "killed", "failed", "no_memory"})
+    assert sorted(model_probe.MEASURE_OUTCOMES) == ["failed", "killed", "no_memory", "ok", "timeout"]
 
 
 def test_a_measure_names_its_delta() -> None:
@@ -224,9 +224,10 @@ def test_missing_weights_read_as_failed_and_load_nothing_in_the_parent(tmp_path:
 
 
 def test_the_child_leaves_the_parent_environment_alone(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("APP_SECRET", "stays-in-the-parent")
+    marker = "stays-in-the-parent"
+    monkeypatch.setenv("APP_SECRET", marker)
     model_probe._measure("int8", tmp_path, timeout_seconds=60.0, embed_model_dir=tmp_path, rehearsal="fail")
-    assert os.environ["APP_SECRET"] == "stays-in-the-parent"
+    assert os.environ["APP_SECRET"] == marker
 
 
 @ONLY_POSIX
@@ -251,7 +252,8 @@ def test_a_kill_from_outside_reads_as_killed(tmp_path: Path) -> None:
     # Give the child the moment to reach its rehearsal, then do what the OOM
     # killer does: SIGKILL on the one process, not on the group.
     time.sleep(2.0)
-    os.kill(started[0], signal.SIGKILL)
+    if sys.platform != "win32":  # the skip mark says so already; this line tells the checker
+        os.kill(started[0], signal.SIGKILL)
     runner.join(30)
     assert results == [ModelMeasure(MEASURE_KILLED, 0, 0, 0)]
 
