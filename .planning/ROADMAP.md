@@ -237,8 +237,8 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 27-09-PLAN.md , Probe-Orchestrator probe_run: Einzelflug, Pause, Download, Messteil, Aufräumen, Neustart (PRUEF-01, D-27-02/04/06/07/14/16/17), Welle 3
-- [ ] 27-10-PLAN.md , Template und CSS: Block Leistungsprofil, occ-Zeile raus, SC1/ADM-04-Gates (UI-01, D-27-01/03/11/12), Welle 3
+- [x] 27-09-PLAN.md , Probe-Orchestrator probe_run: Einzelflug, Pause, Download, Messteil, Aufräumen, Neustart (PRUEF-01, D-27-02/04/06/07/14/16/17), Welle 3
+- [x] 27-10-PLAN.md , Template und CSS: Block Leistungsprofil, occ-Zeile raus, SC1/ADM-04-Gates (UI-01, D-27-01/03/11/12), Welle 3
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -298,7 +298,7 @@ Plans:
 | 24. Owner-Tor, Profil-Gerüst und Marken-Reparatur | v1.4 | 6/6 | Complete    | 2026-09-28 |
 | 25. Einbettungsspur und Modellwahl | v1.4 | 12/12 | Complete    | 2026-09-28 |
 | 26. N OCR-Slots und Speicherwächter | v1.4 | 14/14 | Complete    | 2026-09-29 |
-| 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 8/16 | In Progress|  |
+| 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 10/16 | In Progress|  |
 | 28. Abnahme-Anfahrt | v1.4 | 0/? | Not started | - |
 | 29. Härtung und Store-Einreichung 1.4.0 | v1.4 | 0/? | Not started | - |
 
