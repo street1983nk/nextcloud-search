@@ -370,9 +370,11 @@ class QueueService {
 	 * the success report, so it is read as one here. Which rows may say that is
 	 * the whole subtlety, and it lives in revocableFileIds below.
 	 *
-	 * A skipped verdict is still never taken back, and that is deliberate rather
-	 * than pending: a skip is a decision and not an error, and skipped
-	 * (no_text_layer) is the memo that a file was handed to the OCR track.
+	 * Since review WR-04 of phase 27 a skipped verdict is taken back as well: a
+	 * file skipped as unreadable or too large that is indexed later must leave
+	 * the Skipped tile and the error list. The one exception is skipped
+	 * (no_text_layer), the memo that a file was handed to the OCR track,
+	 * which FileStateService::revokeFailures keeps.
 	 *
 	 * @param int[] $queueIds rows that are done
 	 * @param array<int, string> $failures queue row id to reason code
@@ -461,7 +463,7 @@ class QueueService {
 			// as failures are in the index now. On an instance where nothing was
 			// ever repaired it never appears at all.
 			$this->logger->info(
-				'Findling: took back failed verdicts of files the container has now processed',
+				'Findling: took back verdicts of files the container has now processed',
 				['count' => $revoked],
 			);
 		}
@@ -593,7 +595,7 @@ class QueueService {
 			$revoked = $this->fileStateService->revokeFailures($fileIds);
 			if ($revoked > 0) {
 				$this->logger->info(
-					'Findling: took back failed verdicts of files the container handed to the embedding track',
+					'Findling: took back verdicts of files the container handed to the embedding track',
 					['count' => $revoked],
 				);
 			}

@@ -666,8 +666,12 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # QueueServiceReaderTest.php, GatewayControllerTest.php and
 # PathResolverServiceTest.php changed their bytes. No file went, so
 # PHP_FILES_TODAY moves to 74.
+# Measured again on release/1.3 by the port of review WR-04 of phase 27:
+# FileStateService.php (revokeFailures takes back skips but the OCR memo),
+# QueueService.php and Version001300Date20260927000000.php (comments and log
+# lines) changed their bytes. PHP_FILES_TODAY stays at 74.
 PHP_FILES_TODAY = 74
-PHP_TREE_HASH_TODAY = "fe85c51ad3450e88974b5532d26f63f0b5703ebe47de3b6af49719e41cc7da86"
+PHP_TREE_HASH_TODAY = "352901146ade72e04af954af4ca7a4c3fca4079f66a6174745638964885da268"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
