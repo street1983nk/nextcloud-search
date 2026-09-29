@@ -195,9 +195,9 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 26-11-PLAN.md , Kill-Test beider Fälle in Linux-CI mit N = 4 (PAR-02, PAR-03, D-26-08, SC2), Welle 5
-- [ ] 26-12-PLAN.md , Messleiter 1/2/4 (slot_ladder.py, measure.yml) und Doku der Phase (PAR-02, PAR-03, D-26-09, SC3), Welle 5
-- [ ] 26-13-PLAN.md , Live-Latenzprobe nice auf dem nc35-Harness mit Owner-Abnahme (PAR-02, D-26-12), Welle 5, Checkpoint
+- [x] 26-11-PLAN.md , Kill-Test beider Fälle in Linux-CI mit N = 4 (PAR-02, PAR-03, D-26-08, SC2), Welle 5
+- [x] 26-12-PLAN.md , Messleiter 1/2/4 (slot_ladder.py, measure.yml) und Doku der Phase (PAR-02, PAR-03, D-26-09, SC3), Welle 5
+- [x] 26-13-PLAN.md , Live-Latenzprobe nice auf dem nc35-Harness mit Owner-Abnahme (PAR-02, D-26-12), Welle 5, Checkpoint
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
@@ -259,7 +259,7 @@ Plans:
 | 17-23 (Archiv) | v1.3 | 69/69 | Complete | 2026-09-27 |
 | 24. Owner-Tor, Profil-Gerüst und Marken-Reparatur | v1.4 | 6/6 | Complete    | 2026-09-28 |
 | 25. Einbettungsspur und Modellwahl | v1.4 | 12/12 | Complete    | 2026-09-28 |
-| 26. N OCR-Slots und Speicherwächter | v1.4 | 10/14 | In Progress|  |
+| 26. N OCR-Slots und Speicherwächter | v1.4 | 13/14 | In Progress|  |
 | 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 0/? | Not started | - |
 | 28. Abnahme-Anfahrt | v1.4 | 0/? | Not started | - |
 | 29. Härtung und Store-Einreichung 1.4.0 | v1.4 | 0/? | Not started | - |
