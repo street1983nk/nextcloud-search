@@ -167,6 +167,22 @@ folder_ids+=("${acl_id}")
 plain_id=$(make_folder "${PLAIN_FOLDER}")
 folder_ids+=("${plain_id}")
 
+# Every account sets up its file system once, over WebDAV, before anything is
+# uploaded or crawled. The access list a claim hands the container comes from
+# the mount cache (QueueService::usersFor, getMountsForFileId), and a member
+# gets a row there only when its file system is set up for the first time.
+# Without this step only member 1, who uploads, stands in the list, the
+# prefilter of the container never offers the file to member 2, and the search
+# stays empty although the file is indexed (first CI runs of this job, 36620727811
+# and 36622828171). The harness was green because there the claim followed the
+# first search of member 2, which had registered the mount by then. The
+# index-search-e2e job does the same with occ files:scan after its share.
+for user in "${MEMBERS[@]}" "${OUTSIDER}"; do
+	dav "${user}" -X PROPFIND -H 'Depth: 1' -o /dev/null \
+		"${NC_URL}/remote.php/dav/files/${user}/"
+done
+log "file systems set up for ${MEMBERS[*]} and ${OUTSIDER}"
+
 # The subfolder first, while the root still grants +create.
 for folder in "${ACL_FOLDER}" "${PLAIN_FOLDER}"; do
 	dav "${MEMBERS[0]}" -X MKCOL -o /dev/null \
