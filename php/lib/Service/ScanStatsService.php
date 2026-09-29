@@ -16,10 +16,19 @@ use Psr\Log\LoggerInterface;
  * from the container (indexed documents), the denominator from here: how many
  * files of this instance could be indexed at all. Both halves have to mean the
  * same set of files, which is why the counters are written by the crawl while
- * it walks the mount and never by a second pass over the file list. The crawl
- * sees every indexable file with its size and its mimetype before any
+ * it walks the mount and never by a second pass with rules of its own. The
+ * crawl sees every indexable file with its size and its mimetype before any
  * extraction happens, so it is the metadata scan; a scan job of its own would
  * be a second walk over the same file list, and the two would disagree.
+ *
+ * The table has two writers since quick task 260929-kii, and both are the same
+ * job. The crawl fills a row once; after that, ScanRecountJob starts the crawl
+ * in its counting mode (StorageCrawlJob, mode recount), which walks the same
+ * query with the same single decision, queues nothing, and at the end replaces
+ * the row of the mount with what it counted (replaceStorage). Without it the
+ * denominator stayed at the value of the first crawl for the life of the
+ * instance, while the event listener kept indexing new files into the
+ * numerator.
  *
  * Nothing in here holds a path, a file name or a mimetype. The table carries
  * numbers and a storage id, and the log lines of this class carry the same,
@@ -37,7 +46,9 @@ use Psr\Log\LoggerInterface;
  * need a per entry comparison inside the loop, which is a decision per file for
  * a counter that is written once per transaction band, and it would silently do
  * nothing at all after a cap change that makes previously skipped files
- * countable again.
+ * countable again. The recount follows the same idea from the other end: it
+ * never adds to a row, it assigns one complete measurement to it, so no number
+ * of recounts can double anything.
  */
 final class ScanStatsService {
 	public const TABLE_NAME = 'findling_scan_stats';
@@ -248,6 +259,70 @@ final class ScanStatsService {
 				return;
 			}
 		}
+	}
+
+	/**
+	 * The counters of a mount that was counted through again, as absolute values.
+	 *
+	 * Called once at the end of a recount chain of StorageCrawlJob (mode
+	 * recount), never during it. The recount is the same job with the same query
+	 * and the same single decision as the crawl, it only carries its sums in the
+	 * job argument instead of adding them band by band, and this method assigns
+	 * them. Assignment and not addition is what makes a recount unable to count
+	 * twice: however often it runs, the row afterwards holds one complete
+	 * measurement of the mount and nothing on top of it.
+	 *
+	 * The update only touches a row with a finished_at. A row without one belongs
+	 * to a real crawl that is walking this mount right now, and that crawl adds
+	 * band by band on top of the zeros beginStorage gave it; overwriting it here
+	 * would throw away the bands it has already added and double the ones still
+	 * to come. When the update hits nothing, forStorage() tells the two cases
+	 * apart: a row exists (a crawl owns it, or the values were identical in the
+	 * same second), so nothing happens; no row exists (a mount the one-off
+	 * SchedulerJob never saw, a new user for instance), so the measurement goes
+	 * in as a finished row of its own.
+	 *
+	 * @param array<string, int> $counters the six counter columns as keys; a
+	 *                                     missing key is zero, a negative value
+	 *                                     is clamped to zero
+	 */
+	public function replaceStorage(int $storageId, array $counters, int $cursorFileId): void {
+		if ($storageId <= 0) {
+			$this->reject();
+			return;
+		}
+
+		$values = [];
+		foreach (array_keys(self::COUNTERS) as $column) {
+			$values[$column] = max(0, (int)($counters[$column] ?? 0));
+		}
+		$cursor = max(0, $cursorFileId);
+		$now = $this->timeFactory->getDateTime('now', new \DateTimeZone('UTC'));
+
+		$update = $this->db->getQueryBuilder();
+		$update->update(self::TABLE_NAME);
+		foreach ($values as $column => $value) {
+			$update->set($column, $update->createNamedParameter($value, IQueryBuilder::PARAM_INT));
+		}
+		$update->set('cursor_file_id', $update->createNamedParameter($cursor, IQueryBuilder::PARAM_INT))
+			->set('finished_at', $update->createNamedParameter($now, IQueryBuilder::PARAM_DATE))
+			->set('updated_at', $update->createNamedParameter($now, IQueryBuilder::PARAM_DATE))
+			->where($update->expr()->eq('storage_id', $update->createNamedParameter($storageId, IQueryBuilder::PARAM_INT)))
+			->andWhere($update->expr()->isNotNull('finished_at'));
+		if ($update->executeStatement() >= 1) {
+			return;
+		}
+
+		if ($this->forStorage($storageId) !== null) {
+			return;
+		}
+
+		$this->db->insertIgnoreConflict(self::TABLE_NAME, array_merge($values, [
+			'storage_id' => $storageId,
+			'cursor_file_id' => $cursor,
+			'finished_at' => $now->format('Y-m-d H:i:s'),
+			'updated_at' => $now->format('Y-m-d H:i:s'),
+		]));
 	}
 
 	/**

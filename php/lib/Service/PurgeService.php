@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\Findling\Service;
 
 use OCA\Findling\AppInfo\Application;
+use OCA\Findling\BackgroundJobs\ScanRecountJob;
 use OCA\Findling\BackgroundJobs\SchedulerJob;
 use OCA\Findling\BackgroundJobs\StorageCrawlJob;
 use OCA\Findling\BackgroundJobs\SubtreeExpandJob;
@@ -23,7 +24,7 @@ use OCP\Migration\IOutput;
  * be a second truth about what uninstalling means, and the two would drift
  * apart on the day somebody adds a fourth table to only one of them.
  *
- * What it owns: three tables, all app config values of this app, and three
+ * What it owns: three tables, all app config values of this app, and four
  * background jobs. What it does not touch: the index volume of the container
  * (that belongs to AppAPI and goes with --rm-data), the pulled image, and the
  * files of the users. The read only invariant of this project has its own gate
@@ -51,16 +52,18 @@ use OCP\Migration\IOutput;
  */
 class PurgeService {
 	/**
-	 * The three background jobs of this app.
+	 * The four background jobs of this app.
 	 *
-	 * SubtreeExpandJob is in this list although IndexCommand::restart() does
-	 * not know it. A restart only has to clear what carries a cursor, an
-	 * uninstall has to leave nothing behind that Nextcloud would try to load.
+	 * SubtreeExpandJob and ScanRecountJob are in this list although
+	 * IndexCommand::restart() does not know them. A restart only has to clear
+	 * what carries a cursor, an uninstall has to leave nothing behind that
+	 * Nextcloud would try to load.
 	 */
 	private const JOBS = [
 		SchedulerJob::class,
 		StorageCrawlJob::class,
 		SubtreeExpandJob::class,
+		ScanRecountJob::class,
 	];
 
 	/**

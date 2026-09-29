@@ -108,7 +108,7 @@ final class ProbeServiceTest extends TestCase {
 	private function service(): ProbeService {
 		return new ProbeService(
 			$this->exApp,
-			new SettingsService($this->appConfig, $this->logger),
+			new SettingsService($this->appConfig, $this->logger, $this->createMock(ITimeFactory::class)),
 			$this->formatter,
 			$this->time,
 			$this->logger,

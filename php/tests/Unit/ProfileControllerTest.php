@@ -8,6 +8,7 @@ use OCA\Findling\AppInfo\Application;
 use OCA\Findling\Controller\ProfileController;
 use OCA\Findling\Service\SettingsService;
 use OCP\AppFramework\Http;
+use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\IAppConfig;
 use OCP\IRequest;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -86,7 +87,7 @@ final class ProfileControllerTest extends TestCase {
 			static fn (string $name): string => $name === 'EX-APP-ID' ? $callerAppId : '',
 		);
 
-		$settings = new SettingsService($this->appConfig, $this->logger);
+		$settings = new SettingsService($this->appConfig, $this->logger, $this->createMock(ITimeFactory::class));
 
 		return new ProfileController($request, $settings, $this->logger);
 	}

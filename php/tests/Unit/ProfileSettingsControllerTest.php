@@ -104,7 +104,7 @@ final class ProfileSettingsControllerTest extends TestCase {
 	}
 
 	private function controller(): ProfileSettingsController {
-		$settings = new SettingsService($this->appConfig, $this->logger);
+		$settings = new SettingsService($this->appConfig, $this->logger, $this->createMock(ITimeFactory::class));
 		$time = $this->createMock(ITimeFactory::class);
 		$time->method('getTime')->willReturn(1_800_000_000);
 

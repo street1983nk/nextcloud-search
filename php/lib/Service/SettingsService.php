@@ -6,6 +6,7 @@ namespace OCA\Findling\Service;
 
 use OCA\Findling\AppInfo\Application;
 use OCA\Findling\BackgroundJobs\StorageCrawlJob;
+use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\IAppConfig;
 use Psr\Log\LoggerInterface;
 
@@ -179,6 +180,35 @@ final class SettingsService {
 	public const KEY_PROFILE_CHECK_PENDING = 'profile_check_pending';
 
 	/**
+	 * Since when the files of this instance changed without the denominator of
+	 * the coverage figure having been counted again, as a unix time; zero means
+	 * nothing changed since the last recount (quick task 260929-kii).
+	 *
+	 * Written by the event listener and by save(), read and cleared by
+	 * ScanRecountJob. A mark and not a counter on purpose: the listener cannot
+	 * tell reliably what an event does to the denominator (the docblock of
+	 * ScanRecountJob lists why), so it only says "something changed" and the
+	 * recount measures what.
+	 */
+	public const KEY_SCAN_STALE_SINCE = 'scan_stale_since';
+
+	/**
+	 * When ScanRecountJob last started a recount, as a unix time; zero before
+	 * the first one.
+	 */
+	public const KEY_SCAN_RECOUNTED_AT = 'scan_recounted_at';
+
+	/**
+	 * The longest a quiet instance goes without a recount, one day.
+	 *
+	 * A change that no event announced (occ files:scan, a file written straight
+	 * into the data directory, an external storage changing on its own side)
+	 * still reaches the denominator within this time, and on a quiet instance a
+	 * recount costs one metadata walk per mount and day.
+	 */
+	public const RECOUNT_FLOOR_SECONDS = 86400;
+
+	/**
 	 * The lower end of the size cap, one megabyte.
 	 *
 	 * Below it the setting would stop being a limit and start being an outage:
@@ -206,7 +236,51 @@ final class SettingsService {
 	public function __construct(
 		private IAppConfig $appConfig,
 		private LoggerInterface $logger,
+		private ITimeFactory $timeFactory,
 	) {
+	}
+
+	/**
+	 * Mark the denominator as behind the files of the instance.
+	 *
+	 * Called by the event listener for every file operation on an indexed mount
+	 * and by save(). Writes only on the change from zero to a time: the read is
+	 * a cached appconfig lookup, so a busy instance pays one write per recount
+	 * round and not one per upload.
+	 */
+	public function markScanStale(): void {
+		if ($this->appConfig->getValueInt(Application::APP_ID, self::KEY_SCAN_STALE_SINCE, 0) !== 0) {
+			return;
+		}
+
+		$this->appConfig->setValueInt(Application::APP_ID, self::KEY_SCAN_STALE_SINCE, max(1, $this->timeFactory->getTime()));
+	}
+
+	/**
+	 * Whether a recount is due: something changed since the last one, or the
+	 * last one is a day old (or there never was one).
+	 */
+	public function scanRecountDue(int $now): bool {
+		if ($this->appConfig->getValueInt(Application::APP_ID, self::KEY_SCAN_STALE_SINCE, 0) !== 0) {
+			return true;
+		}
+
+		$last = $this->appConfig->getValueInt(Application::APP_ID, self::KEY_SCAN_RECOUNTED_AT, 0);
+
+		return $now - $last >= self::RECOUNT_FLOOR_SECONDS;
+	}
+
+	/**
+	 * A recount starts now: the mark goes back to zero and the time is
+	 * remembered.
+	 *
+	 * Called by ScanRecountJob BEFORE it plans the chains, so that an event
+	 * arriving while the recount walks marks the instance again and triggers
+	 * the next round instead of being swallowed by this one.
+	 */
+	public function beginRecount(int $now): void {
+		$this->appConfig->setValueInt(Application::APP_ID, self::KEY_SCAN_STALE_SINCE, 0);
+		$this->appConfig->setValueInt(Application::APP_ID, self::KEY_SCAN_RECOUNTED_AT, $now);
 	}
 
 	/**
@@ -630,6 +704,11 @@ final class SettingsService {
 			self::KEY_INDEX_EXTERNAL_STORAGE,
 			($input['indexExternalStorage'] ?? false) === true,
 		);
+
+		// The cap and both switches decide what the denominator holds (and the
+		// exclusions saved next to this call as well), so the next recount has
+		// to measure again instead of waiting a day.
+		$this->markScanStale();
 
 		return [];
 	}
