@@ -194,6 +194,29 @@ unten (Nachtrag in Abschnitt 7), und in diesen Minuten stand die Box gestoppt.
 Wer den nächsten Deckel rechnet, nimmt diese Ist-Werte als Untergrenze je
 Posten und schlägt die Wartezeit gesondert auf, wie schon nach der v1.2.
 
+**Nachtrag vom 30.09.2026: die Posten der Abnahme-Anfahrt (Phase 28).** Die
+Anfahrt misst 21 Zellen auf sechs Typen (`docs/measurements/2026-10-abnahme-anfahrt/skripte/00-ablauf.md`,
+Abschnitt 2). Die Planwerte nehmen die Ist-Werte darüber als Untergrenze; vier
+Posten sind neu und nirgends gemessen, sie tragen die Marke **NEU**. Die
+Lauf-Planwerte der Zellen rechnen auch auf x86 mit der ARM-Rate, weil ein
+Planwert keine Verbesserung vorwegnimmt (siehe oben).
+
+| Posten | Planwert | Untergrenze (Ist) | Quelle |
+|---|---:|---:|---|
+| Handaufbau ARM, Blöcke 1 bis 13 | 1 h 00 min | 0 h 12 min (v1.3), 0 h 40 min (v1.2) | diese Tabelle oben |
+| **NEU: Volume-Initialisierung** mit fio über das ganze Gerät, je Volume (Block 7b) | 0 h 45 min | nie gemessen | AWS-Doku zum Lazy Loading; 55,4 GB geschriebene Blöcke |
+| Abbildwechsel auf den Phase-27-Stand (PHP-Hälfte, `occ upgrade`, Registrierung, Baumhash) | 0 h 45 min | 0 h 00 min 30 s (92d, v1.3), 0 h 32 min (v1.2) | Block 13b und Nachtrag dort |
+| Cron-Gate vorher | 0 h 15 min | Minuten | `97-cron-vorpruefung.sh` |
+| **NEU: Zellen-Overhead je Zelle** (Nullstand mit `--rm-data`, Bewaffnung, 360-s-Frist, Probe, Warten auf das wirksame Profil, Nachlauf) | 0 h 45 min | 0 h 06 min 19 s (92c, v1.3), Probe 6 s (27-15) | v1.3-Rohdaten |
+| Sparsam voll 52k auf m7g.large, beide Spuren bis zum letzten Vektor | 21 h 15 min | 19 h 20 min (v1.2, Untergrenze) | 19,33 h x 52.137 / 47.441 |
+| 94c, Rückkehr zur Grundlast nach dem Vollauf (Store-Zahl C1) | 0 h 15 min | 0 h 07 min 17 s (v1.3) | v1.3 |
+| **NEU: Teilkorpus einrichten** (Hardlinks, `files:scan`, Ausschlüsse, Zähltor, `01-teilkorpus.py`) | 0 h 20 min | nie gemessen | |
+| **NEU: x86-Aufbau** samt amd64-Abbildern, PostgreSQL-Tor und Bewaffnung (Block 14) | 2 h 00 min | nie gemessen | |
+| Typwechsel (stop, modify, start, A-Record, Bewaffnung) | 0 h 15 min bis 0 h 30 min | 0 h 17 min 49 s (B4, v1.3) | `00-typwechsel.sh` |
+
+Die Summe dieser Posten je Box und der Deckel daraus stehen in 2.5; die
+Lauf-Planwerte je Zelle stehen in `00-ablauf.md`, Abschnitt 2.
+
 ### 2.2 Posten, die guenstiger werden
 
 | Posten | Wirkung |
@@ -233,6 +256,33 @@ erklärt.
 Die Snapshotkosten laufen weiter, ob eine Anfahrt stattfindet oder nicht. Sie
 gehören daher **nicht** in den Stundendeckel einer Anfahrt, sondern in die
 Monatsrechnung; sie stehen hier, damit niemand sie für den Deckel hält.
+
+**Nachtrag vom 30.09.2026: die Sätze der sechs Typen der Abnahme-Anfahrt
+(Phase 28).** Gelesen am 29.09.2026 aus der öffentlichen On-Demand-Preiskarte,
+die auch die Preisseite speist (EU (Frankfurt), Linux, gzip, Publikationsdatum
+im Manifest 2026-09-25T17:45:21Z). Kein Kontoaufruf, die Preis-API des Kontos
+bleibt gesperrt.
+
+| Typ | vCPU | RAM | Instanz USD je Stunde | Box gesamt USD je Stunde (plus 100 GB gp3 0,013041 und IPv4 0,005) |
+|---|---:|---:|---:|---:|
+| m7g.large | 2 | 8 GiB (`mem=4G`) | 0,0978 | **0,115841** |
+| m7g.4xlarge | 16 | 64 GiB | 0,7821 | **0,800141** |
+| c7a.xlarge | 4 | 8 GiB | 0,23426 | **0,252301** |
+| c7a.2xlarge | 8 | 16 GiB | 0,46852 | **0,486561** |
+| c7a.4xlarge | 16 | 32 GiB | 0,93704 | **0,955081** |
+| c7a.8xlarge | 32 | 64 GiB | 1,87408 | **1,892121** |
+| geparkte Box (nur 100 GB gp3) | | | | 0,013041 |
+
+**`aws_box.sh` wendet diese Sätze seit Plan 28-03 je Typ an.** `stop` und
+`status` lesen den Typ aus derselben `describe-instances`-Antwort, schlagen den
+Satz in der Tabelle `INSTANCE_RATES` nach und nennen Typ und Satz in der
+Ausgabe; `stop` schreibt dazu `BOX_LAST_UPTIME_TYPE` und
+`BOX_LAST_UPTIME_RATE_USD_H` in `box.env`. Ein Typ ohne Satz wird trotzdem
+geparkt, bekommt aber keine Kostenzahl (Rückgabewert 1). `prices` druckt alle
+sechs Sätze. Am Anfahrtstag werden sie ein zweites Mal gelesen, mit
+`docs/measurements/2026-10-abnahme-anfahrt/skripte/00-typwechsel.sh preis <typ>...`
+(öffentliche Karte, keine Zugangsdaten); weicht ein Satz ab, wird der Deckel
+vor der ersten Kommandozeile neu gerechnet (2.5).
 
 ### 2.4 Die Deckel-Geschichte, in drei Zeilen
 
@@ -287,6 +337,42 @@ Differenz von vier Stunden ist keiner: sie ist die Summe dreier Posten, die die
 Anfahrt ohnehin fährt und die im alten Rechenblatt schlicht fehlten. Wer die
 Zahl prüft, liest die drei Zeilen mit der Marke **NEU** in 2.1 und rechnet die
 Summe nach.
+
+**Nachtrag vom 30.09.2026: der Rechenweg der Abnahme-Anfahrt (Phase 28) rechnet
+in USD je Box-Satz.** Der Rechenweg oben bleibt für Anfahrten mit einem einzigen
+Typ stehen. Die Abnahme-Anfahrt fährt sechs Typen, deren Sätze bis Faktor 16
+auseinanderliegen; eine Stundenzahl mal einem Satz ist dort keine Rechnung.
+Bindend ist deshalb USD, die Stunden sind nur Anzeige (D-28-01: Posten aus 2.1
+plus 30 Prozent Reserve):
+
+```
+Deckel (USD) = ( Summe je Box ( Stunden der Box x Satz der Box ) + Parkposten ) x 1,30
+Deckel (h)   = Summe der Boxstunden x 1,30   (nur Anzeige)
+```
+
+Das Werkzeug ist `docs/measurements/2026-10-abnahme-anfahrt/skripte/02-rechenblatt.py deckel`;
+es trägt die Posten als Daten, nimmt geänderte Sätze mit `--satz TYP=USD` oder
+`--satzdatei` und endet mit 3, wenn ein Satz fehlt, statt mit null zu rechnen.
+Mit den Sätzen aus 2.3 (Variante A, D-28-09):
+
+| Box | Posten | Stunden | USD |
+|---|---|---:|---:|
+| m7g.large | Aufbau 1:00, Init 0:45, Wechsel 0:45, Cron 0:15, S-voll 22:15, Teilkorpus 0:20, St-T 4:05, L-T 4:05 | 33,50 | 3,881 |
+| m7g.4xlarge | Typwechsel 0:30, S-T 4:35, St-T 1:45, L-T 1:30 | 8,33 | 6,668 |
+| c7a.xlarge | x86-Aufbau 2:00, Init 0:45, Wechsel 0:45, Teilkorpus 0:20, Cron 0:15, S-T 4:35, St-T 4:05, L-T 2:00, St-fp32 4:15 | 19,00 | 4,794 |
+| c7a.2xlarge | Typwechsel 0:15, S-T 4:35, St-T 2:00, L-T 1:30 | 8,33 | 4,055 |
+| c7a.4xlarge | Typwechsel 0:15, S-T 4:35, St-T 1:45, L-T 1:30, St-fp32 2:15 | 10,33 | 9,869 |
+| c7a.8xlarge | Typwechsel 0:15, S-T 4:35, St-T 1:45, L-T 1:30 | 8,08 | 15,295 |
+| geparkte ARM-Platten während der x86-Hälfte, Abbau | 45,75 h x 0,013041 plus 1 h Abbau | | 0,623 |
+| **Summe** | | **87,58 h** | **45,18 USD** |
+| **Deckel = Summe x 1,30** | | **113,86 h** | **58,74 USD** |
+| mit Anker-Zelle S-T auf m7g.large (D-28-11, 4 h 35 min) | | 119,82 h | **59,43 USD** |
+
+Die Sitzungszeit zwischen den Blöcken steckt in keinem Posten (9.4); sie wird
+durch die unbeaufsichtigte Kette je Box vermieden (7.3), nicht durch Reserve.
+Die Snapshotkosten gehören wie bisher nicht in den Deckel (2.3). Freigegeben
+wird die Zahl vom Owner vor dem ersten Boxstart (SC1), mit der Zeile aus
+Abschnitt 3, Zeile 9.
 
 ### 2.6 Wohin die Schlusszahlen VOR dem Abbau geschrieben werden
 
@@ -584,6 +670,22 @@ und am Ende der Anfahrt noch einmal aus `90-bestand.txt` bestätigt. Keine
 Abweichung. Der Drop-in hat die bestehende Kernzeile erweitert und nicht
 ersetzt, wie der Absatz darüber es verlangt.
 
+**Nachtrag vom 30.09.2026, Abnahme-Anfahrt (Phase 28): dieser Block gilt nur
+auf der Referenzbox m7g.large** (D-28-03). Die Matrix-Boxen m7g.4xlarge und
+c7a.xlarge bis c7a.8xlarge laufen ohne Grenze und messen den vollen Box-RAM
+(D-28-12). Vor dem Typwechsel von m7g.large auf m7g.4xlarge wird der Drop-in
+entfernt, sonst sieht die große Maschine nur 4 GB (v1.3-Muster):
+
+```sh
+ssh <box> 'sudo rm /etc/default/grub.d/99-mem4g.cfg && sudo update-grub'
+# nach dem Start auf m7g.4xlarge:
+ssh <box> 'free -h; nproc; grep -c "mem=4G" /proc/cmdline'
+```
+
+`Erwartete Ausgabe` nach dem Wechsel: `free -h` rund 61Gi, `nproc` 16, die
+Zählung `0`. Auf der x86-Box (Block 14) entsteht der Drop-in gar nicht erst;
+`aws_box.sh create` druckt ihn nur für m7g.large.
+
 ### Block 6: Volume aus dem Snapshot
 
 ```sh
@@ -654,6 +756,37 @@ sondern `containerd corpus docker drillkorpus lost+found ncdata`. Die erwartete
 Ausgabe des Runbooks war unvollständig. Das ist keine Kleinigkeit:
 **`containerd` ist der Grund, warum Block 8 drei Schritte braucht und nicht
 einen**, siehe dort.
+
+### Block 7b: Volume-Initialisierung
+
+*Neu für die Abnahme-Anfahrt (Phase 28), noch nie gefahren.* Ein Volume aus
+einem Snapshot holt seine Blöcke beim ersten Lesen aus S3 (Lazy Loading). Die
+erste Zelle einer frischen Box wäre dann langsamer als jede spätere, und der
+Unterschied sähe aus wie ein Befund über das Profil. Deshalb wird jedes Volume
+aus dem Snapshot einmal ganz gelesen, **vor der ersten Zelle** und mit
+Zeitstempeln: V-A auf der ARM-Box, V-X auf der x86-Box (Block 14).
+
+```sh
+# das Geraet ueber die GROESSE finden (64424509440 Byte), nie ueber den Namen
+ssh <box> "lsblk -b -d -n -o NAME,SIZE | awk '\$2 == 64424509440 {print \$1}'"
+ssh <box> 'sudo apt-get install -y fio'
+ssh <box> 'date -u +%Y-%m-%dT%H:%M:%SZ; sudo fio --filename=/dev/<geraet> --rw=read \
+    --bs=1M --iodepth=32 --ioengine=libaio --direct=1 --readonly \
+    --name=volume-initialize; echo "rc $?"; date -u +%Y-%m-%dT%H:%M:%SZ'
+# Rueckfall ohne fio:
+ssh <box> 'sudo dd if=/dev/<geraet> of=/dev/null bs=1M status=progress'
+```
+
+`<geraet>` ist der Name aus der ersten Zeile, zum Beispiel `nvme1n1`. Die Regel
+aus Block 7 gilt hier doppelt: auf Nitro-Instanzen ist die Reihenfolge der
+Namen die Reihenfolge des Anhängens, und ein `fio` auf das falsche Gerät liest
+die Systemplatte und initialisiert nichts. Findet die erste Zeile nicht genau
+ein Gerät, wird nicht gelesen. `--readonly` verhindert, dass ein Tippfehler
+schreibt; gelesen wird auch am eingehängten Datenträger gefahrlos.
+
+`Erwartete Ausgabe`: genau ein Gerätename, danach die Lesezusammenfassung von
+`fio` mit `READ: bw=...` und `rc 0`, zwei UTC-Zeilen. Die Dauer geht als
+Ist-Wert in 2.1 (Planwert 0 h 45 min). Marke: `in Phase 28 erstmals vollzogen`.
 
 ### Block 8: Docker-data-root, BEVOR der Daemon startet
 
@@ -870,6 +1003,21 @@ der Sitzung (`ERWARTETER_SWAP`, Vorgabe 0; Commit d6fb185, boxlose Tests
 nachgezogen). Dieselbe Richtigstellung gilt für Abschnitt 6, Zeile "Instanztyp
 und harte Containergrenze", und für Block 13b, Schritt 3.
 
+**Nachtrag vom 30.09.2026, Abnahme-Anfahrt (Phase 28): die Grenze 2g nur auf
+m7g.large, auf den Matrix-Boxen keine Grenze** (D-28-03, D-28-12). Die Zelle
+setzt sie selbst: `10-zelle.sh` setzt die Grenze nur mit dem Laufwert
+`GRENZE_2G=ja` und liest sie aus der cgroup zurück; auf m7g.4xlarge und allen
+c7a-Typen steht `GRENZE_2G=nein`. Eine einmal gesetzte Grenze entfernt `docker update
+--memory 0` nicht (27-15); jede Registrierung beim Nullstand baut den Container
+ohne Grenze neu. Auf einer Matrix-Box lautet die Rückleseprobe deshalb:
+
+```sh
+ssh <box> 'docker exec nc_app_findling_backend cat /sys/fs/cgroup/memory.max'
+```
+
+`Erwartete Ausgabe` auf einer Matrix-Box: `max`. Jede Zahl dort heißt, dass
+die Zelle eine begrenzte Maschine misst und nicht die Box.
+
 ### Block 13: Nur EINE Nextcloud auf dem Docker-Dienst
 
 ```sh
@@ -1058,6 +1206,156 @@ zweimal mit 0. **Der Sollwert des Bestandstors ist 52.137 indexiert, 44
 Snapshots: der Snapshot vom 11.09.2026 trägt die 39 Sprachfall-Dateien vom
 10.09.2026 samt Indexstand mit. Die erste Fahrt der v1.3 ist genau daran mit
 41 gescheitert. Block 13b bleibt für einen Volllauf von leer stehen, wie er ist.
+
+### Block 14: x86-Box (c7a)
+
+*Neu für die Abnahme-Anfahrt (Phase 28), noch nie gefahren.* Die x86-Matrix
+(D-28-04: c7a.xlarge, c7a.2xlarge, c7a.4xlarge, c7a.8xlarge) läuft auf einer
+**zweiten Instanz**. Ein Typwechsel von m7g auf c7a ist nicht möglich, weil die
+Architektur am Abbild hängt; `00-typwechsel.sh wechsel` verweigert ihn mit 54,
+bevor irgendetwas außer einem `describe` die Box berührt. Innerhalb von c7a
+wächst die Box per Typwechsel von 4 auf 32 Kerne.
+
+**Was gleich bleibt:** Security Group und Schlüsselpaar aus Block 1 und 2 (eine
+VPC, beide Instanzen), die SSH-Regel 22 nur auf `<eigene-adresse>/32`, nach
+einem Adresswechsel nachgezogen von `aws_box.sh start`; die Blöcke 7, 7b, 8, 9,
+10, 11 und 13; der Abbildwechsel per Digest mit Baumhash-Beweis; das Cron-Gate;
+die Geheimnisregel. **Was entfällt:** Block 5 und Block 12, die x86-Box läuft
+ohne Speichergrenze (D-28-12).
+
+**Schritt 0, kostenlos und vor der Instanz.** Das amd64-Abbild, die Zonen und
+die Quota werden gelesen, nicht erinnert:
+
+```sh
+aws ec2 describe-images --region eu-central-1 --owners 099720109477 \
+    --filters "Name=name,Values=ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*" \
+    --query 'sort_by(Images,&CreationDate)[-1].[ImageId,Name]' --output text
+docs/measurements/2026-10-abnahme-anfahrt/skripte/00-typwechsel.sh quota \
+    c7a.xlarge c7a.2xlarge c7a.4xlarge c7a.8xlarge
+```
+
+Das arm64-Abbild aus Block 3 wird mit demselben Aufruf (Muster `arm64`) noch
+einmal gelesen, weil Canonical alte Abbilder zurückzieht. **Prüfpunkt für die
+Anfahrt: die Zone.** `aws_box.sh` legt Box und Volume fest in `eu-central-1c`
+an, und das c7a-Angebot dort ist ungeprüft (Annahme A7 der Recherche). Nennt
+`quota` für einen der vier c7a-Typen `eu-central-1c` nicht, beginnt die
+x86-Hälfte nicht: dann braucht es eine kleine Werkzeugänderung oder V-X von
+Hand in einer Zone mit Angebot, und darüber entscheidet der Owner vor der
+ersten kostenpflichtigen Ressource. Die Quota `L-1216C47A` zählt m7g und c7a
+gemeinsam: c7a.8xlarge (32 vCPU) läuft nur bei gestoppter ARM-Box.
+
+**Schritt 1, zwei Zustandsverzeichnisse.** Jede Instanz hat ihre eigene
+`box.env`. Jede Shell, die `aws_box.sh` oder `00-typwechsel.sh` ruft, setzt
+vorher genau eines:
+
+```sh
+export FINDLING_LOADTEST_DIR="$HOME/.findling-loadtest/arm"   # m7g.large, m7g.4xlarge
+export FINDLING_LOADTEST_DIR="$HOME/.findling-loadtest/x86"   # c7a.*
+```
+
+Ein Aufruf im falschen Verzeichnis stoppt, startet oder rechnet die andere Box.
+
+**Schritt 2, die Instanz.** Das Rezept druckt `aws_box.sh create` mit Typ und
+Abbild aus Schritt 0:
+
+```sh
+FINDLING_BOX_TYPE=c7a.xlarge FINDLING_BOX_IMAGE=<ami-amd64 aus Schritt 0> \
+    scripts/ops/aws_box.sh create
+aws ec2 run-instances --region eu-central-1 \
+    --image-id <ami-amd64 aus Schritt 0> \
+    --instance-type c7a.xlarge \
+    --instance-initiated-shutdown-behavior stop \
+    --key-name findling-loadtest \
+    --security-group-ids <sg> \
+    --subnet-id <subnetz> \
+    --block-device-mappings \
+    'DeviceName=/dev/sda1,Ebs={VolumeSize=40,VolumeType=gp3,DeleteOnTermination=true}' \
+    --tag-specifications \
+    'ResourceType=instance,Tags=[{Key=Name,Value=findling-loadtest},{Key=purpose,Value=findling-phase5}]'
+```
+
+`--instance-initiated-shutdown-behavior stop` ist Pflicht: der Sicherheitstimer
+der Kette ist ein `shutdown -h` aus der Box heraus, und der ist nur bei `stop`
+ein Stopp (7.3). `box.env` im x86-Verzeichnis entsteht wie in Block 4.
+
+**Schritt 3, Volume V-X aus demselben Snapshot.** Im x86-Verzeichnis:
+
+```sh
+scripts/ops/aws_box.sh restore
+```
+
+Das zweite Volume kommt aus `snap-03f1d1d9ad9262704`, wird wie V-A umgetaggt
+und zurückgelesen und hängt nur an der x86-Box. V-A trägt nach der ARM-Hälfte
+arm64-Inhalte und bleibt der ARM-Box. Danach die Blöcke 7, 7b (V-X wird
+eigens initialisiert), 8, 9 und 10 mit der x86-Adresse und einem neuen
+known_hosts-Eintrag.
+
+**Schritt 4, amd64-Abbilder.** Der containerd-Store im Snapshot kennt nur
+arm64-Schichten; ein Container daraus endet auf x86 mit "exec format error"
+oder fehlendem Inhalt. Jedes Abbild wird für amd64 nachgezogen, die Volumes
+bleiben:
+
+```sh
+ssh <box> 'docker image ls --format "{{.Repository}}:{{.Tag}}"'
+ssh <box> 'docker pull --platform linux/amd64 <abbild>:<tag>'   # je Zeile der Liste
+```
+
+Das Findling-Abbild kommt per Digest aus ghcr (Multi-arch-Index), nicht aus der
+lokalen Registry `localhost:5000`, die nur arm64 führt. Startet ein
+AIO-Container danach nicht, wird er über den Mastercontainer neu erzeugt.
+
+**Schritt 5, das Machbarkeitstor, mit Zeitdeckel 1 h 30 min** ab der ersten
+SSH-Anmeldung auf der x86-Box. Das PostgreSQL-Datenverzeichnis der AIO
+(PostgreSQL 18.6) ist auf arm64 entstanden; ein Start auf x86_64 ist offiziell
+nicht zugesichert.
+
+```sh
+ssh <box> 'docker logs --tail 50 nextcloud-aio-database 2>&1 | grep -E "FATAL|PANIC|ready to accept"'
+ssh <box> "docker exec nextcloud-aio-database sh -c 'pg_controldata \"\$PGDATA\"' | grep -E 'signedness|alignment|state'"
+ssh <box> "docker exec nextcloud-aio-database sh -c 'echo \"\$POSTGRES_DB \$POSTGRES_USER\"'"
+ssh <box> 'sudo docker exec --user www-data nextcloud-aio-nextcloud php occ status'
+ssh <box> 'docker exec nextcloud-aio-database psql -U <db-nutzer> -d <datenbank> -c "REINDEX DATABASE <datenbank>"'
+ssh <box> 'docker exec nextcloud-aio-database psql -U <db-nutzer> -d <datenbank> -c "CREATE EXTENSION IF NOT EXISTS amcheck"'
+ssh <box> 'sudo docker exec --user www-data nextcloud-aio-nextcloud \
+    php occ files:scan --path=<nutzer>/files/<ordner>'
+```
+
+`<datenbank>` und `<db-nutzer>` kommen aus der dritten Zeile, ohne dass das
+Passwort der Datenbank gedruckt wird. Nach der Erweiterung prüft
+`bt_index_check` jeden B-Baum-Index wie in der Vorprobe (Abfrage dort, Schritt
+a.23). Das Tor ist grün, wenn die Datenbank ohne `FATAL` und `PANIC` startet,
+`occ status` `installed: true` und `maintenance: false` meldet, `REINDEX` und
+`bt_index_check` mit 0 enden und `files:scan` über einen Stichprobenordner mit
+0 endet, ohne dass sich die Zahl der indexierten Dateien ändert.
+
+**Ist das Tor nicht grün, wenn der Zeitdeckel fällt**, wird die x86-Box mit
+`aws_box.sh stop` geparkt, und der Owner entscheidet (Checkpoint C2) zwischen
+zwei Rückfällen: Dump und Restore (`pg_dump` auf der ARM-Box vor dem Umzug,
+Einspielen auf der x86-Box) oder Harness B. Kein Rückfall wird ohne dieses Wort
+gefahren.
+
+**Die lokale Vorprobe** (Plan 28-04, kostenlos unter Docker Desktop mit
+qemu): `docs/measurements/2026-10-abnahme-anfahrt/rohdaten/00-vorprobe-x86.txt`.
+Ergebnis `vorprobe-ergebnis postgres ja abbilder ja`: ein unter arm64
+angelegter Cluster von `postgres:18.6` startete unter amd64, `bt_index_check`
+über 167 Indizes und `gin_index_check` endeten vor und nach `REINDEX DATABASE`
+mit 0, die Prüfsumme über alle Zeilen blieb gleich, die Zeichen-Signedness im
+Steuerblock stand schon auf `signed`; ein containerd-Store zog zu einem
+arm64-befüllten Tag die amd64-Variante nach und startete sie. **Die Vorprobe
+ersetzt das Tor nicht**: Emulation ist nicht die Box, das AIO-Abbild bringt
+eine eigene glibc und Kollation mit, und Mastercontainer, Netz und Volumes der
+AIO sind dort nicht nachgestellt.
+
+**Schritt 6, danach wie auf ARM.** Block 11 (Bewaffnung, Beleg
+`backendReachable true`), Block 13, der Abbildwechsel nach dem Nachtrag bei
+Block 13b, dann die Kette nach 7.3. Die Typwechsel innerhalb der Familie fährt
+`00-typwechsel.sh wechsel c7a.2xlarge`, danach `c7a.4xlarge` und
+`c7a.8xlarge`, je mit A-Record, known_hosts und Bewaffnung nach dem Start.
+
+`Erwartete Ausgabe` des ganzen Blocks: `Placement.AvailabilityZone
+eu-central-1c`, `InstanceType c7a.xlarge`, `uname -m` `x86_64`, `nproc` 4,
+`memory.max` des Backends `max`, das Tor grün mit Zeitstempeln in
+`rohdaten/c7a.xlarge/`. Marke: `in Phase 28 erstmals vollzogen`.
 
 ---
 
@@ -1734,6 +2032,42 @@ Trefferzahl durchlaufen wird. **Für die nächste Anfahrt gilt trotzdem: ein
 Begriff mit garantierten Treffern**, sonst hängt ein Bezugswert an einer
 Begründung statt an einer Zahl.
 
+### 7.3 Matrix-Anfahrt Phase 28
+
+*Neu für die Abnahme-Anfahrt, noch nie gefahren.* Die Anfahrt misst 21 Zellen
+auf sechs Typen, unbeaufsichtigt, eine Kette je Box. Die Zellen, ihre
+Reihenfolge und ihre Erwartungen stehen vor der Messung in
+`docs/measurements/2026-10-abnahme-anfahrt/skripte/00-ablauf.md`; die Werkzeuge
+liegen im selben Verzeichnis. Die Boxen laufen seriell (Quota 32, D-26-10):
+m7g.large, m7g.4xlarge, dann die x86-Box aus Block 14 von c7a.xlarge bis
+c7a.8xlarge.
+
+| Nr | Schritt | Werkzeug | Rohdatei | Abbruchpfad |
+|---|---|---|---|---|
+| 1 | Deckel rechnen und freigeben lassen, vor der ersten Ressource (SC1) | `02-rechenblatt.py deckel` | Zeile `Anfahrt freigegeben: <Datum>, Deckel <h> h / <USD> USD` im Bericht | **3** ein Satz fehlt; ohne datierte Freigabe startet keine Box |
+| 2 | Vorprüfung des harten Stopps, vor jeder Kette und nach jedem Typwechsel, auf der Entwicklungsmaschine | `00-typwechsel.sh vorpruefung` | `rohdaten/00-typwechsel.txt`, Zeile `vorpruefung-stop-ja <UTC>` | **52** das Shutdown-Verhalten heißt nicht `stop`; dann keine Kette |
+| 3 | Laufwerte schreiben: `DECKEL_USD`, `BISHER_USD`, `SATZ_USD_H`, `BOX_START_EPOCH`, `ZELLEN`, `ABBILD_DIGEST`, `GRENZE_2G`, `VORPRUEFUNG=stop-ja` | `02-rechenblatt.py stand` für `BISHER_USD`, der Satz aus 2.3 | Laufwertedatei auf der Box (`$HOME/work/v14-lauf.env`, Rechte 600), nicht im Repositorium | **3** ein Satz fehlt, **5** der Deckel ist schon erreicht, **6** der Sicherheitsstopp ist schon erreicht |
+| 4 | Kette je Box starten, abgesetzt | `00-kette.sh <box>` | `rohdaten/<box>/00-herzschlag.txt`, `rohdaten/<box>-kette.log` | **2** Laufwerte unvollständig, **80** Marke `VORPRUEFUNG=stop-ja` fehlt, **81** Timer nicht zurückzulesen, **82** Deckel x 1,20 beim Start erreicht, **83** Deckel erreicht, **84** eine Zelle endete mit Fehler |
+| 5 | Eine Zelle vom Nullstand bis zu den Rohdaten, von der Kette gerufen | `10-zelle.sh <box> <zelle> <profil> <praezision>` mit `11-probe-route.py`, `93b-nullstand.sh` und beim Teilkorpus `01-teilkorpus.py zaehltor` | `rohdaten/<box>/<zelle>/` | **59** bis **72**, katalogisiert im Kopf von `10-zelle.sh`; die Probe selbst endet mit **30** narrow, **31** nofit, **32** Frist |
+| 6 | Deckelregel D-28-02 vor jeder Zelle | `00-kette.sh`, gegengerechnet mit `02-rechenblatt.py stand` | Marke `deckel-erreicht <UTC> bisher <USD>` und Datei `00-DECKEL-ERREICHT` | **83**: die laufende Zelle wird zu Ende gemessen, keine neue startet, die Box bleibt stehen bis zum Owner-Wort (Checkpoint C3). Kein `shutdown`, kein Abbau |
+| 7 | Sicherheitstimer D-28-14 beim Start der Kette | `00-kette.sh`: `sudo shutdown -h +<min>` mit min = (1,20 x `DECKEL_USD` minus bisher) / `SATZ_USD_H` x 60, zurückgelesen aus der systemd-Datei | Kopf von `rohdaten/<box>-kette.log` | **80**, **81**, **82**. Der Timer stoppt die Instanz, er beendet sie nie; das gilt nur mit `vorpruefung-stop-ja` aus Schritt 2 |
+| 8 | Deckel-Prüfung zwischen den Boxen und nach jedem Typwechsel, auf der Entwicklungsmaschine | `02-rechenblatt.py stand <stempeldatei> --deckel <USD>` | Zeilen `bisher`, `rest`, `minuten bis deckel`, `minuten bis sicherheitsstopp` in der Kostenrohdatei | **5** Deckel erreicht, **6** Sicherheitsstopp erreicht. Nie aus `BOX_LAST_UPTIME_COST_USD` allein |
+| 9 | Typwechsel innerhalb der Familie | `00-typwechsel.sh wechsel <zieltyp>`, danach Block 11 | `rohdaten/00-typwechsel.txt` | **53** Typ oder Zustand falsch zurückgelesen, **54** Architekturwechsel verweigert, **55** keine Kapazität, die Box bleibt gestoppt auf dem alten Typ |
+| 10 | Rechnung gegen Messung je Zelle, nach der Kette, auf der Entwicklungsmaschine | `12-slotkosten.py rechnung` und `slots`, bei fp32 `fp32` | Bericht der Anfahrt | kein Abbruch: über dem 1,10-fachen oder mit Probe-Widerspruch ist ein SC4-Fall für den Owner (Checkpoint C5) |
+
+**Der Deckel hält die Box nicht an, der Sicherheitstimer schon.** Beim Deckel
+startet nur keine neue Zelle (D-28-02); die weiterlaufenden Kosten sind in Kauf
+genommen, damit nichts verloren geht. Antwortet der Owner nicht, stoppt der
+Timer die Instanz bei Deckel x 1,20 (D-28-14). Das v1.3-Muster "Timer ist der
+Deckel" aus dem Nachtrag oben gilt für diese Anfahrt ausdrücklich nicht. Nach
+der letzten Zelle einer Kette fährt die Box mit `shutdown -h +2` herunter: zwei
+Minuten für das Abholen.
+
+**Kostenstempel von Hand, je Typ.** Nach jedem Start, Typwechsel und Stopp
+schreibt der Operator eine Zeile `TYP START ENDE` in die Stempeldatei auf der
+Entwicklungsmaschine (UTC, `laeuft` für die laufende Box, `geparkt` für die
+geparkten Platten). Nur Typen und Zeiten, keine Kennungen.
+
 ---
 
 ## 8. Abbau-Checkliste
@@ -1772,6 +2106,23 @@ Danach folgt der Abbau ab Schritt 2, am 26.09.2026 **ohne** Ende-Snapshot
 den Korpus gehören. Die Kostenrohdatei wurde vor dem `destroy` committet und
 gepusht, der Verbleib danach angehängt. Übrig blieb allein der
 Korpus-Snapshot.
+
+**Nachtrag vom 30.09.2026: der Abbau der Abnahme-Anfahrt (Phase 28) endet mit
+null Snapshots.** Zwei Instanzen mit je einem Volume, eine gemeinsame Security
+Group, ein gemeinsames Schlüsselpaar, und am Ende fällt auch der
+Korpus-Snapshot (D-26-10: null laufende Kosten; D-28-13). Die Reihenfolge:
+
+1. Schritt 1 und 2 je Box, die Kostenrohdatei mit den Schlusszahlen gegen den
+   Deckel committet **vor** dem ersten `destroy` (2.6).
+2. Kein Ende-Snapshot (Schritt 3 ohne `snapshot`, Schritt 4 entfällt, der
+   Grund steht in der Rohdatei), wie am 26.09.2026.
+3. Schritt 5 und 6 je Box, jede mit ihrem eigenen Zustandsverzeichnis
+   (Block 14, Schritt 1): der **erste** Abbau lässt Security Group und
+   Schlüsselpaar stehen, der **zweite** nimmt beide (Nachtrag bei Schritt 6).
+   Instanzen und Volumes gehen sofort nach der letzten Zelle.
+4. Schritt 6b, der Korpus-Snapshot, erst **nach den SC4-Entscheiden** des
+   Owners und nur mit seiner Bestätigung.
+5. Schritt 7, 8 und 9 mit den Erwartungen der Nachträge dort: nichts bleibt.
 
 ### Schritt 1: Endmessungen und Gegenproben, VOR jedem zerstoerenden Schritt
 
@@ -1973,6 +2324,54 @@ mehr gibt.** Der Record `loadtest.infranode.dev` ist nach dem Abbau über die
 API des Zonenverwalters entfernt worden. Das gehört als eigene Zeile hierher,
 weil Block 10 ihn setzt und keine Zeile ihn wieder abräumt.
 
+**Nachtrag vom 30.09.2026, zwei Boxen: die Security Group erst beim zweiten
+Abbau.** Beide Instanzen der Abnahme-Anfahrt tragen dieselbe Gruppe und
+dasselbe Schlüsselpaar. Seit Plan 28-03 fragt `destroy` vor dem Löschen der
+Gruppe, welche nicht beendete Instanz sie noch trägt:
+
+```sh
+export FINDLING_LOADTEST_DIR="$HOME/.findling-loadtest/<arm oder x86>"
+export FINDLING_STATE_BACKUP="$FINDLING_LOADTEST_DIR/box.env.vor-abbau"
+scripts/ops/aws_box.sh destroy
+```
+
+`Erwartete Ausgabe` beim **ersten** Abbau: Instanz und Volume dieser Box
+"is gone, verified against the api", dazu `security group kept, still used by
+another instance`; das Schlüsselpaar bleibt ebenfalls, die andere Instanz und
+ihre Volumes laufen als `shared` am Tag-Sweep vorbei, `box.env` dieser Box ist
+entfernt. Beim **zweiten** Abbau: Instanz, Volume, Security Group
+(`InvalidGroup.NotFound`) und Schlüsselpaar (`InvalidKeyPair.NotFound`)
+zurückgelesen weg. Danach den A-Record entfernen. Marke:
+`in Phase 28 erstmals vollzogen`.
+
+### Schritt 6b: Korpus-Snapshot loeschen, nach den SC4-Entscheiden
+
+*Neu für die Abnahme-Anfahrt (Phase 28), noch nie gefahren.* Der
+Korpus-Snapshot war bisher der eine Posten, der bewusst stehen blieb (Schritt
+9). Mit D-26-10 und D-28-13 fällt er am Ende der Phase: null laufende Kosten.
+**Er fällt nicht mit den Boxen**, sondern erst nach den SC4-Entscheiden des
+Owners (Checkpoint C5): muss eine Stufe nachgemessen werden, braucht sie den
+Snapshot, und bis dahin kostet er rund 0,10 USD je Tag. Die Löschung ist
+unumkehrbar; sie fällt deshalb erst nach der ausdrücklichen Bestätigung
+"Snapshot löschen" des Owners (Checkpoint C6), auch wenn D-26-10 sie schon
+beschlossen hat.
+
+Vorbedingungen, alle gelesen und nicht erinnert: beide Boxen sind abgebaut
+(Schritt 6), kein Volume aus dem Snapshot besteht mehr, und keine eigene AMI
+verweist auf ihn (Schritt 8, erster Durchgang).
+
+```sh
+aws ec2 delete-snapshot --region eu-central-1 --snapshot-id snap-03f1d1d9ad9262704
+aws ec2 describe-snapshots --region eu-central-1 --snapshot-ids snap-03f1d1d9ad9262704
+```
+
+`Erwartete Ausgabe`: der erste Aufruf endet ohne Ausgabe mit 0; der zweite
+antwortet mit dem Fehler `InvalidSnapshot.NotFound`. Nur diese Antwort gilt als
+Beweis. Ein `describe-snapshots --owner-ids self`, das nichts listet, ist keine
+Rücklesung, weil das Verzeichnis nachläuft (Schritt 7). Die Antwort geht mit
+UTC-Zeitstempel in die Abbau-Rohdatei, die Kennung darin als
+`<korpus-snapshot>`. Marke: `in Phase 28 erstmals vollzogen`.
+
 ### Schritt 7: Tag-Sweep ueber die Regionen, ueber BEIDE Tagwerte
 
 ```sh
@@ -2003,6 +2402,27 @@ Instanz, deren Tags noch bis zu einer Stunde nachhängen. Die zweite liefert gen
 einen Treffer, den Korpus-Snapshot, und dieser Treffer ist zugleich der Beweis,
 dass er den Abbau überlebt hat.
 
+**Nachtrag vom 30.09.2026, Abnahme-Anfahrt (Phase 28): der Sweep läuft über
+alle 17 freigeschalteten Regionen und über beide Tagwerte, einmal nach Schritt
+6 und einmal nach Schritt 6b.**
+
+```sh
+for r in $(aws ec2 describe-regions --query 'Regions[].RegionName' --output text); do
+    for t in findling-phase5 findling-corpus-keep; do
+        echo "$r $t $(aws ec2 describe-tags --region "$r" \
+            --filters "Name=tag:purpose,Values=$t" \
+            --query 'length(Tags)' --output text)"
+    done
+done
+```
+
+Gezählt wird, nicht gelistet: die Zeilen tragen Region, Tagwert und eine Zahl,
+keine Kennung, und dürfen so in die Rohdatei. `Erwartete Ausgabe` nach Schritt
+6: überall 0 außer `eu-central-1 findling-corpus-keep 1` (der Snapshot) und
+höchstens den nachhängenden Tags der gerade terminierten Instanzen. Nach
+Schritt 6b: **34 Zeilen mit 0.** Ein Treffer wird wie oben nach seiner Art
+zurückgelesen, bevor er als Überbleibsel zählt.
+
 ### Schritt 8: Kostenueberblick nach dem Abbau
 
 ```sh
@@ -2023,6 +2443,31 @@ Deckel, mit der Differenz in einer eigenen Zeile.
 keine Elastic IP, keine eigene AMI, **genau ein Snapshot**. Das Schlüsselpaar und
 die Default-Gruppe der VPC bleiben bestehen und kosten nichts. Belegt am
 11.09.2026 über 17 Regionen.
+
+**Nachtrag vom 30.09.2026, Abnahme-Anfahrt (Phase 28): die Erwartung heißt nach
+Schritt 6b "0 Snapshots" statt "genau einer".** Erhoben über alle 17 Regionen,
+wieder als Zählung:
+
+```sh
+for r in $(aws ec2 describe-regions --query 'Regions[].RegionName' --output text); do
+    echo "$r" \
+      "instanzen $(aws ec2 describe-instances --region "$r" \
+          --filters 'Name=instance-state-name,Values=pending,running,stopping,stopped' \
+          --query 'length(Reservations[].Instances[])' --output text)" \
+      "volumes $(aws ec2 describe-volumes --region "$r" --query 'length(Volumes)' --output text)" \
+      "snapshots $(aws ec2 describe-snapshots --region "$r" --owner-ids self --query 'length(Snapshots)' --output text)" \
+      "amis $(aws ec2 describe-images --region "$r" --owners self --query 'length(Images)' --output text)" \
+      "adressen $(aws ec2 describe-addresses --region "$r" --query 'length(Addresses)' --output text)" \
+      "schluessel $(aws ec2 describe-key-pairs --region "$r" --query 'length(KeyPairs)' --output text)"
+done
+```
+
+`Erwartete Ausgabe`: 17 Zeilen, in jeder alle sechs Zahlen 0. **Kein Snapshot,
+kein Schlüsselpaar** (der zweite Abbau nimmt es jetzt mit), keine Instanz, kein
+Volume, keine Adresse, keine eigene AMI. Die Default-Gruppe der VPC bleibt und
+kostet nichts. Daneben die Schlussrechnung: verbrauchte USD aus den
+Kostenstempeln (`02-rechenblatt.py stand`) gegen den freigegebenen Deckel, mit
+der Differenz in einer eigenen Zeile.
 
 ### Schritt 9: Was bewusst stehen bleibt
 
@@ -2051,6 +2496,18 @@ gelernt und beides von Hand abgeräumt: das **Schlüsselpaar** (siehe Schritt 6)
 und der **A-Record** auf eine Maschine, die es nicht mehr gibt. Das
 Schlüsselpaar kostet nichts, der Record auch nicht; beide kosten die nächste
 Anfahrt Zeit, wenn sie stehen bleiben.
+
+**Nachtrag vom 30.09.2026: nach der Abnahme-Anfahrt (Phase 28) bleibt nichts
+stehen.** Die Wiedervorlage aus dem Nachtrag vom 21.09. ist entschieden: der
+Owner hat mit D-26-10 null laufende Kosten am Ende beschlossen, und D-28-13
+legt den Zeitpunkt fest, nach den SC4-Entscheiden (Schritt 6b). Die Absätze
+darüber bleiben als Geschichte stehen; für diese Anfahrt gilt: kein Snapshot,
+kein Schlüsselpaar, kein A-Record, keine Zustandsdatei. Unter
+`${FINDLING_LOADTEST_DIR:-$HOME/.findling-loadtest}/` bleiben nur die
+Sicherungen `box.env.vor-abbau` beider Boxen und die Sicherung der
+Systemplatte, außerhalb des Arbeitsbaums. Eine spätere Anfahrt baut den Korpus
+von null wieder auf (Abschnitt 1, Verweis auf die drei Messberichte) und
+rechnet diesen Posten in ihren Deckel.
 
 ---
 
