@@ -926,4 +926,186 @@ final class ExAppServiceTest extends TestCase {
 		// line for every single call.
 		self::assertSame([], $this->infoLinesOfACallTaking(0));
 	}
+
+	// -- adminSend and adminState, the distinguishable admin transport (27-04) --
+
+	private const ADMIN_PATH = '/profile/check';
+
+	/**
+	 * A logger that keeps every line it was handed, so a test can assert what
+	 * none of them contains.
+	 *
+	 * @param list<string> $lines
+	 */
+	private function recordingLogger(array &$lines): LoggerInterface&MockObject {
+		$logger = $this->createMock(LoggerInterface::class);
+		$record = static function (string $message, array $context = []) use (&$lines): void {
+			$lines[] = $message . ' ' . json_encode($context, JSON_THROW_ON_ERROR);
+		};
+		foreach (['warning', 'info', 'error', 'debug', 'notice'] as $level) {
+			$logger->method($level)->willReturnCallback($record);
+		}
+
+		return $logger;
+	}
+
+	/** @return array<string, array{mixed}> */
+	public static function transportFailures(): array {
+		return [
+			'pre-flight refused' => [null],
+			'AppAPI error array' => [['error' => 'cURL error 7 for http://harp/exapps/findling_backend/profile/check']],
+		];
+	}
+
+	#[DataProvider('transportFailures')]
+	public function testATransportFailureIsUnreachable(mixed $transport): void {
+		$service = $this->service();
+		$service->method('proxyRequest')->willReturn($transport);
+
+		self::assertSame(['kind' => 'unreachable', 'body' => null], $service->adminSend(self::ADMIN_PATH, 'alice', ['profile' => 'standard']));
+		self::assertSame(['kind' => 'unreachable', 'body' => null], $service->adminState(self::ADMIN_PATH, 'alice'));
+	}
+
+	public function testA404IsMissing(): void {
+		$service = $this->service();
+		$service->method('proxyRequest')->willReturn($this->answer('{"detail":"Not Found"}', 404));
+
+		self::assertSame(['kind' => 'missing', 'body' => null], $service->adminState(self::ADMIN_PATH, 'alice'));
+	}
+
+	public function testA409IsBusyWithItsCheckedBody(): void {
+		$service = $this->service();
+		$service->method('proxyRequest')->willReturn($this->answer('{"state":"running","step":"download"}', 409));
+
+		self::assertSame(
+			['kind' => 'busy', 'body' => ['state' => 'running', 'step' => 'download']],
+			$service->adminSend(self::ADMIN_PATH, 'alice', ['profile' => 'standard']),
+		);
+	}
+
+	public function testA409WithAnUnreadableBodyIsStillBusyWithoutABody(): void {
+		$service = $this->service();
+		$service->method('proxyRequest')->willReturn($this->answer('busy', 409));
+
+		self::assertSame(['kind' => 'busy', 'body' => null], $service->adminSend(self::ADMIN_PATH, 'alice', []));
+	}
+
+	/** @return array<string, array{int}> */
+	public static function otherErrorStatuses(): array {
+		return [
+			'400' => [400],
+			'403' => [403],
+			'422' => [422],
+			'500' => [500],
+			'503' => [503],
+		];
+	}
+
+	#[DataProvider('otherErrorStatuses')]
+	public function testAnyOtherErrorStatusIsRefused(int $status): void {
+		$service = $this->service();
+		$service->method('proxyRequest')->willReturn($this->answer('{"detail":"no"}', $status));
+
+		self::assertSame(['kind' => 'refused', 'body' => null], $service->adminSend(self::ADMIN_PATH, 'alice', []));
+	}
+
+	public function testABodyAboveTheCeilingIsRefusedBeforeItIsParsed(): void {
+		$bytes = $this->constantInt('MAX_BODY_BYTES');
+		$service = $this->service();
+		$service->method('proxyRequest')->willReturn(
+			$this->answer('{"pad":"' . str_repeat('a', $bytes) . '"}'),
+		);
+
+		self::assertSame(['kind' => 'refused', 'body' => null], $service->adminState(self::ADMIN_PATH, 'alice'));
+	}
+
+	/** @return array<string, array{string}> */
+	public static function bodiesThatAreNoObject(): array {
+		return [
+			'not JSON' => ['<html>proxy error</html>'],
+			'broken JSON' => ['{"state":'],
+			'a list' => ['[1,2,3]'],
+			'a string' => ['"ok"'],
+			'empty' => [''],
+		];
+	}
+
+	#[DataProvider('bodiesThatAreNoObject')]
+	public function testABodyThatIsNoJsonObjectIsRefused(string $body): void {
+		$service = $this->service();
+		$service->method('proxyRequest')->willReturn($this->answer($body));
+
+		self::assertSame(['kind' => 'refused', 'body' => null], $service->adminState(self::ADMIN_PATH, 'alice'));
+	}
+
+	/** @return array<string, array{int}> */
+	public static function successStatuses(): array {
+		return ['200' => [200], '202' => [202]];
+	}
+
+	#[DataProvider('successStatuses')]
+	public function testASuccessWithAJsonObjectIsOk(int $status): void {
+		$service = $this->service();
+		$service->method('proxyRequest')->willReturn($this->answer('{"state":"started"}', $status));
+
+		self::assertSame(
+			['kind' => 'ok', 'body' => ['state' => 'started']],
+			$service->adminSend(self::ADMIN_PATH, 'alice', ['profile' => 'standard']),
+		);
+	}
+
+	public function testAdminSendPostsTheBodyWithTheAdminTimeout(): void {
+		$body = ['profile' => 'performance', 'precision' => 'fp32'];
+		$service = $this->service();
+		$service->expects(self::once())->method('proxyRequest')->with(
+			self::ADMIN_PATH,
+			'alice',
+			'POST',
+			$body,
+			$this->constantFloat('ADMIN_REQUEST_TIMEOUT_SECONDS'),
+		)->willReturn($this->answer('{}', 202));
+
+		$service->adminSend(self::ADMIN_PATH, 'alice', $body);
+	}
+
+	public function testAdminStateGetsWithoutParametersAndTheAdminTimeout(): void {
+		$service = $this->service();
+		$service->expects(self::once())->method('proxyRequest')->with(
+			self::ADMIN_PATH,
+			'alice',
+			'GET',
+			[],
+			$this->constantFloat('ADMIN_REQUEST_TIMEOUT_SECONDS'),
+		)->willReturn($this->answer('{}'));
+
+		$service->adminState(self::ADMIN_PATH, 'alice');
+	}
+
+	/** @return array<string, array{mixed}> */
+	public static function everyLoggedOutcome(): array {
+		return [
+			'unreachable' => [['error' => 'cURL error 7 for http://harp/exapps/findling_backend/profile/check?user=alice']],
+			'missing' => ['404'],
+			'refused status' => ['500'],
+			'refused body' => ['200'],
+		];
+	}
+
+	#[DataProvider('everyLoggedOutcome')]
+	public function testNoLogLineCarriesThePathTheBodyOrTheUser(mixed $outcome): void {
+		$lines = [];
+		$service = $this->service($this->recordingLogger($lines));
+		$service->method('proxyRequest')->willReturn(
+			is_string($outcome) ? $this->answer('not json', (int)$outcome) : $outcome,
+		);
+
+		$service->adminSend(self::ADMIN_PATH, 'alice', ['profile' => 'performance', 'precision' => 'fp32']);
+
+		self::assertNotSame([], $lines, 'a failure leaves a line');
+		$written = implode("\n", $lines);
+		self::assertStringNotContainsString('profile', $written);
+		self::assertStringNotContainsString('performance', $written);
+		self::assertStringNotContainsString('fp32', $written);
+		self::assertStringNotContainsString('alice', $written);
+	}
 }

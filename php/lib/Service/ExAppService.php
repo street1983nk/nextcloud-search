@@ -644,6 +644,137 @@ class ExAppService {
 	}
 
 	/**
+	 * The kinds of answer adminSend() and adminState() tell apart.
+	 *
+	 * adminGet() folds every failure into one null, which is right for a page
+	 * that only says "not reachable". The probe of phase 27 needs more: a
+	 * container that is not there (Z14), one of an older version that does not
+	 * know the route (Z15) and one that is busy with a probe already (Z16) are
+	 * three different lines on the page. Everything else at 400 and above, and
+	 * every body that is not a bounded JSON object, is refused.
+	 */
+	public const ADMIN_OK = 'ok';
+	public const ADMIN_UNREACHABLE = 'unreachable';
+	public const ADMIN_MISSING = 'missing';
+	public const ADMIN_BUSY = 'busy';
+	public const ADMIN_REFUSED = 'refused';
+
+	/**
+	 * A writing POST against the container, for the admin page and nothing
+	 * else, with the body as JSON.
+	 *
+	 * The same four failure cases as adminGet(), in the same order, but with a
+	 * kind instead of a null, see ADMIN_OK and its siblings. proxyRequest()
+	 * stays the one way out.
+	 *
+	 * @param array<string,mixed> $body sent as the JSON body of the POST
+	 * @return array{kind: string, body: ?array<mixed>}
+	 */
+	public function adminSend(string $path, string $userId, array $body): array {
+		return $this->adminOutcome(
+			$this->proxyRequest($path, $userId, 'POST', $body, self::ADMIN_REQUEST_TIMEOUT_SECONDS),
+		);
+	}
+
+	/**
+	 * A reading GET without parameters, with the same distinguishable answer
+	 * as adminSend().
+	 *
+	 * @return array{kind: string, body: ?array<mixed>}
+	 */
+	public function adminState(string $path, string $userId): array {
+		return $this->adminOutcome(
+			$this->proxyRequest($path, $userId, 'GET', [], self::ADMIN_REQUEST_TIMEOUT_SECONDS),
+		);
+	}
+
+	/**
+	 * The evaluation adminSend() and adminState() share.
+	 *
+	 * Every log line is a static sentence with at most a number next to it:
+	 * no path, no body value, no user id, and not the error string AppAPI
+	 * hands back either, because that one carries the URL of the call
+	 * (T-27-10).
+	 *
+	 * @param array<mixed>|IResponse|null $response
+	 * @return array{kind: string, body: ?array<mixed>}
+	 */
+	private function adminOutcome(array|IResponse|null $response): array {
+		// Case 1: the pre-flight refused, or AppAPI turned a transport failure
+		// into an array.
+		if ($response === null || is_array($response)) {
+			$this->logger->warning('Findling: backend unreachable for an admin call');
+
+			return ['kind' => self::ADMIN_UNREACHABLE, 'body' => null];
+		}
+
+		$status = $response->getStatusCode();
+
+		// Case 2: AppAPI hard sets http_errors to false, so 4xx and 5xx arrive
+		// as an ordinary response object. 404 is a container without the route,
+		// 409 one that is busy, and only the busy answer is worth parsing: it
+		// says what the container is busy with.
+		if ($status === 404) {
+			$this->logger->warning('Findling: backend does not know an admin route', ['status' => $status]);
+
+			return ['kind' => self::ADMIN_MISSING, 'body' => null];
+		}
+
+		if ($status === 409) {
+			return ['kind' => self::ADMIN_BUSY, 'body' => $this->boundedObject($response)];
+		}
+
+		if ($status >= 400) {
+			$this->logger->warning('Findling: backend refused an admin call', ['status' => $status]);
+
+			return ['kind' => self::ADMIN_REFUSED, 'body' => null];
+		}
+
+		// Cases 3 and 4: a 2xx promises neither a body that fits nor one that
+		// parses into an object.
+		$decoded = $this->boundedObject($response);
+		if ($decoded === null) {
+			return ['kind' => self::ADMIN_REFUSED, 'body' => null];
+		}
+
+		return ['kind' => self::ADMIN_OK, 'body' => $decoded];
+	}
+
+	/**
+	 * The body as a JSON object, or null when it is not a bounded string or
+	 * not an object. A JSON list is refused as well: every admin answer of the
+	 * container is an object, and a list in its place is a defect.
+	 *
+	 * @return array<mixed>|null
+	 */
+	private function boundedObject(IResponse $response): ?array {
+		$responseBody = $response->getBody();
+		if (!is_string($responseBody) || strlen($responseBody) > self::MAX_BODY_BYTES) {
+			$this->logger->warning('Findling: backend answer for an admin call is not a bounded string body', [
+				'bytes' => is_string($responseBody) ? strlen($responseBody) : -1,
+			]);
+
+			return null;
+		}
+
+		if (!str_starts_with(ltrim($responseBody), '{')) {
+			$this->logger->warning('Findling: backend answer for an admin call is not a JSON object');
+
+			return null;
+		}
+
+		try {
+			$decoded = json_decode($responseBody, true, 512, JSON_THROW_ON_ERROR);
+		} catch (\JsonException) {
+			$this->logger->warning('Findling: backend answer for an admin call is not a JSON object');
+
+			return null;
+		}
+
+		return is_array($decoded) ? $decoded : null;
+	}
+
+	/**
 	 * The one outbound request of this app, in one method for all three callers.
 	 *
 	 * Everything that leaves this process towards the container goes through

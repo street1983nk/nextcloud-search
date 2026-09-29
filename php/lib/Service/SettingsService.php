@@ -84,10 +84,11 @@ final class SettingsService {
 	 * The performance profile the container runs with (D-24-01, path B).
 	 *
 	 * Public because ProfileController hands it to the container and the admin
-	 * page of phase 27 will write it: one place names the key, so a second
-	 * spelling cannot create a key nobody reads. In phase 24 the only way to
-	 * write it is ``occ config:app:set findling profile --value=standard``; the
-	 * container pulls the value once per round, nothing pushes it.
+	 * page writes it: one place names the key, so a second spelling cannot
+	 * create a key nobody reads. The admin page writes it through saveProfile()
+	 * after the probe; ``occ config:app:set findling profile --value=standard``
+	 * stays the documented second way in, and that one skips the probe
+	 * (D-27-13). The container pulls the value once per round, nothing pushes it.
 	 */
 	public const KEY_PROFILE = 'profile';
 
@@ -115,8 +116,9 @@ final class SettingsService {
 	 * change of it means a reindex of the vector track. Coupling the two would
 	 * turn a harmless profile change into exactly that. Handed to the container
 	 * through the profile route, in the same answer and the same round
-	 * (D-24-01). Until the admin page of phase 27 the only way to write it is
-	 * ``occ config:app:set findling model_precision --value=fp32``.
+	 * (D-24-01). The admin page writes it through saveProfile() after the
+	 * probe; ``occ config:app:set findling model_precision --value=fp32`` stays
+	 * the documented second way in, and that one skips the probe (D-27-13).
 	 */
 	public const KEY_MODEL_PRECISION = 'model_precision';
 
@@ -142,14 +144,39 @@ final class SettingsService {
 	 *
 	 * The token is not made up here. The container shows it on its status
 	 * route when the guard lowered a profile (D-26-01), 32 lowercase hex
-	 * characters. The admin confirms with
-	 * ``occ config:app:set findling profile_confirmed --value=<token>``, from
-	 * phase 27 on with a button of the admin page. The container lifts the
-	 * lowering as soon as the stored token equals its own; nothing raises the
-	 * profile again automatically. Read-only for the container: there is no
-	 * write path from the container into this key.
+	 * characters. The admin confirms with the "check again" button of the admin
+	 * page, which stores the token through saveConfirmation() once the probe
+	 * said it fits (D-27-12); ``occ config:app:set findling profile_confirmed
+	 * --value=<token>`` stays the second way in without a probe (D-27-13). The
+	 * container lifts the lowering as soon as the stored token equals its own;
+	 * nothing raises the profile again automatically. Read-only for the
+	 * container: there is no write path from the container into this key.
 	 */
 	public const KEY_PROFILE_CONFIRMED = 'profile_confirmed';
+
+	/**
+	 * The result of the last probe (D-27-04, D-27-10), an array of its own.
+	 *
+	 * Written by the probe flow of the admin page when a probe ended, read by
+	 * the admin view to render the last verdict card. In appconfig and not in
+	 * the state.db of the container, because the page renders on the PHP side
+	 * and has to show the verdict while the container is silent, and because a
+	 * verdict does not expire: it holds for the moment of saving, and later
+	 * hardware changes are the business of the effective level and the guard.
+	 * Nothing in the container reads it.
+	 */
+	public const KEY_PROFILE_CHECK = 'profile_check';
+
+	/**
+	 * The probe that is running right now, or absent.
+	 *
+	 * Written when the admin page started a probe, deleted when its verdict was
+	 * taken over into KEY_PROFILE_CHECK. Read by the page so that a second tab,
+	 * or a reload in the middle of a probe, joins the running one instead of
+	 * starting another. appconfig for the same reason as above: the page has to
+	 * know about it without asking the container first.
+	 */
+	public const KEY_PROFILE_CHECK_PENDING = 'profile_check_pending';
 
 	/**
 	 * The lower end of the size cap, one megabyte.
@@ -388,6 +415,165 @@ final class SettingsService {
 	}
 
 	/**
+	 * Whether an admin ever stored a profile, as opposed to running on the
+	 * default.
+	 *
+	 * profile() cannot tell the two apart, and must not: both answer economy
+	 * (SC1, without a click the box stays frugal). The page can, and has to,
+	 * because "nothing chosen yet" and "economy chosen" are different lines on
+	 * it. hasKey() and not a sentinel default, so no string can be mistaken for
+	 * the absence of one.
+	 */
+	public function profileStored(): bool {
+		return $this->appConfig->hasKey(Application::APP_ID, self::KEY_PROFILE);
+	}
+
+	/**
+	 * Whether a change to this profile and precision has to go through the
+	 * probe first (D-27-09), decided here and never in the browser.
+	 *
+	 * No probe exactly when the target is economy, or when the target profile
+	 * is the stored one and the one change is fp32 to int8: less load cannot
+	 * fail to fit, and that is also the way back after a "does not fit".
+	 * Everything else needs the probe, performance to standard included, which
+	 * is not a safe way down. A stored precision that is unreadable counts as
+	 * int8, so an unreadable fp32 never opens a way without a probe. A value
+	 * outside the closed sets always needs the probe, and the writer refuses it
+	 * anyway.
+	 */
+	public function needsProbe(string $profile, string $precision): bool {
+		if (!$this->validPair($profile, $precision)) {
+			return true;
+		}
+
+		if ($profile === self::PROFILE_DEFAULT) {
+			return false;
+		}
+
+		$storedPrecision = $this->modelPrecision() ?? self::PRECISION_DEFAULT;
+
+		return !($profile === $this->profile() && $storedPrecision === 'fp32' && $precision === 'int8');
+	}
+
+	/**
+	 * The downward way of D-27-09: a valid target that needs no probe. The
+	 * write route stores without a probe only when this is true (T-27-09).
+	 */
+	public function isDownward(string $profile, string $precision): bool {
+		return $this->validPair($profile, $precision) && !$this->needsProbe($profile, $precision);
+	}
+
+	/**
+	 * Store profile and precision together, or neither (D-24-01, path B).
+	 *
+	 * Validates again rather than trusting the controller, the same rule as
+	 * save(): strict against the closed sets, so a value of another type or
+	 * another case never reaches appconfig (T-27-08). fp32 next to economy is
+	 * accepted only as the state that is already stored, because switching to
+	 * economy keeps the precision (D-25-10), while setting fp32 on an economy
+	 * box is a change the page does not offer (D-27-01).
+	 *
+	 * The profile is written first. If the second write fails, what is left is
+	 * the new profile with the old precision, and that is never heavier than the
+	 * pair the probe checked. The log line is static and carries the exception
+	 * only, no value.
+	 */
+	public function saveProfile(string $profile, string $precision): bool {
+		if (!$this->validPair($profile, $precision)) {
+			$this->reject();
+
+			return false;
+		}
+
+		if ($profile === self::PROFILE_DEFAULT && $precision === 'fp32' && $this->modelPrecision() !== 'fp32') {
+			$this->reject();
+
+			return false;
+		}
+
+		try {
+			$this->appConfig->setValueString(Application::APP_ID, self::KEY_PROFILE, $profile);
+			$this->appConfig->setValueString(Application::APP_ID, self::KEY_MODEL_PRECISION, $precision);
+		} catch (\Throwable $e) {
+			$this->logger->error('Findling: could not store the profile', ['exception' => $e]);
+
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * Store the confirmation token of the container (D-26-04, D-27-12).
+	 *
+	 * Only exactly 32 lowercase hex characters, the same form profileConfirmed()
+	 * reads, with the same D anchor: without it a token with a trailing newline
+	 * would pass here and be refused on the way out.
+	 */
+	public function saveConfirmation(string $token): bool {
+		if (preg_match('/^[0-9a-f]{32}$/D', $token) !== 1) {
+			$this->reject();
+
+			return false;
+		}
+
+		try {
+			$this->appConfig->setValueString(Application::APP_ID, self::KEY_PROFILE_CONFIRMED, $token);
+		} catch (\Throwable $e) {
+			$this->logger->error('Findling: could not store the confirmation', ['exception' => $e]);
+
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * The result of the last probe, or null when there never was one.
+	 *
+	 * A read that fails is null as well, which renders as "no probe yet" and
+	 * never as a verdict nobody reached.
+	 *
+	 * @return array<mixed>|null
+	 */
+	public function profileCheck(): ?array {
+		return $this->storedArray(self::KEY_PROFILE_CHECK);
+	}
+
+	/**
+	 * Remember the result of a probe. It stays until the next probe replaces
+	 * it; a verdict does not expire (D-27-10).
+	 *
+	 * @param array<mixed> $check
+	 */
+	public function rememberProfileCheck(array $check): void {
+		$this->appConfig->setValueArray(Application::APP_ID, self::KEY_PROFILE_CHECK, $check);
+	}
+
+	/**
+	 * The probe that is running, or null.
+	 *
+	 * @return array<mixed>|null
+	 */
+	public function profileCheckPending(): ?array {
+		return $this->storedArray(self::KEY_PROFILE_CHECK_PENDING);
+	}
+
+	/**
+	 * Remember the probe that was just started.
+	 *
+	 * @param array<mixed> $pending
+	 */
+	public function rememberPending(array $pending): void {
+		$this->appConfig->setValueArray(Application::APP_ID, self::KEY_PROFILE_CHECK_PENDING, $pending);
+	}
+
+	/** Forget the running probe once its verdict was taken over. */
+	public function forgetPending(): void {
+		$this->appConfig->deleteKey(Application::APP_ID, self::KEY_PROFILE_CHECK_PENDING);
+	}
+
+	/**
 	 * Judge an input without writing anything.
 	 *
 	 * Separate from save() because the write route has to be able to refuse the
@@ -456,6 +642,30 @@ final class SettingsService {
 	 */
 	private function clamped(int $bytes): int {
 		return max(self::MIN_CAP_BYTES, min($this->containerCap(), $bytes));
+	}
+
+	/** Both names out of their closed sets, compared strictly. */
+	private function validPair(string $profile, string $precision): bool {
+		return in_array($profile, self::PROFILES, true) && in_array($precision, self::PRECISIONS, true);
+	}
+
+	/**
+	 * One stored array, null when absent, empty or unreadable. The log line of
+	 * a failed read is static: what the key holds is a probe record, and none of
+	 * it belongs into the log.
+	 *
+	 * @return array<mixed>|null
+	 */
+	private function storedArray(string $key): ?array {
+		try {
+			$stored = $this->appConfig->getValueArray(Application::APP_ID, $key, []);
+		} catch (\Throwable $e) {
+			$this->logger->warning('Findling: could not read the probe record', ['exception' => $e]);
+
+			return null;
+		}
+
+		return $stored === [] ? null : $stored;
 	}
 
 	/**
