@@ -554,7 +554,7 @@ RULE = {"scan_single": 1800, "scan_multi": 100, "text_pdf": 1500, "ooxml": 900,
 | A10 | Zellen-Overhead 45 min inkl. bis zu 25 min Wirkungsverzug | Rechenblatt | bei 20 Zellen schnell mehrere Stunden Differenz |
 | A11 | Fester Seitenstrom je Datei macht "die ersten N" zur unverzerrten Stichprobe | Teilkorpus | Endungsmix leicht schief; unkritisch |
 
-## Open Questions
+## Open Questions (RESOLVED: Owner-Entscheide D-28-09 bis D-28-14 in 28-CONTEXT.md, 29.09.2026)
 
 1. **Toleranz "Sparsam weicht nicht von der Store-Messzahl ab" (SC2)**
    - What we know: 731,9 (v1.2), 730,2 und 729,3 MB (v1.3) auf derselben Box.

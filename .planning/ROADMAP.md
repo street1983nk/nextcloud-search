@@ -270,7 +270,34 @@ Plans:
   3. Die Runbook-Disziplin ist eingehalten und belegt: Cron-Intervall-Gate, Digest-Wechsel, Abbau nach Runbook.
   4. Die gemessenen Slot-Kosten fließen in Formel und Probe zurück; eine Stufe, deren Messung die Rechnung nicht trägt, wird korrigiert oder im Release nicht angeboten (Owner-Entscheid dokumentiert).
 
-**Plans**: TBD
+**Plans**: 14 plans in 9 Wellen
+
+Plans:
+**Wave 1**
+
+- [ ] 28-01-PLAN.md , Teilkorpus-Regel, Rechenblatt, Slot-Kosten-Auswertung, Ablauf mit Erwartungen je Zelle (MESS-10), Welle 1
+- [ ] 28-02-PLAN.md , Zelle, Probe über die Produktroute, Kette mit Deckel-Prüfung und Sicherheitstimer (MESS-10), Welle 1
+- [ ] 28-03-PLAN.md , aws_box.sh Satztabelle je Typ und SG-Schonung, Typwechsel mit Zieltyp (MESS-10), Welle 1
+- [ ] 28-04-PLAN.md , Runbook x86/USD-Deckel/Abbau bis null Snapshots, lokale x86-Vorprobe (MESS-10), Welle 1
+
+**Wave 2**
+
+- [ ] 28-05-PLAN.md , Owner-Tor C1: Vorbedingungen, Rechenblatt mit Tagessätzen, datierte Deckel-Freigabe (SC1), Welle 2
+
+**Wave 3 bis 6 (bezahlte Anfahrt, seriell)**
+
+- [ ] 28-06-PLAN.md , Referenzbox m7g.large: Aufbau, Digest, Cron-Gate, Sparsam voll, Store-Messgröße, Zwischenstand, Welle 3
+- [ ] 28-07-PLAN.md , Teilkorpus, drei Zellen m7g.large, drei Zellen m7g.4xlarge, Welle 4
+- [ ] 28-08-PLAN.md , Owner-Tor x86, Aufbau und Machbarkeitstor c7a.xlarge, vier Zellen inkl. fp32, Welle 5
+- [ ] 28-09-PLAN.md , c7a.2xlarge, c7a.4xlarge (fp32), c7a.8xlarge, Schlusszahlen, Welle 6
+
+**Wave 7 bis 9**
+
+- [ ] 28-10-PLAN.md , Boxabbau mit Owner-Bestätigung und Nachweis, Welle 7
+- [ ] 28-11-PLAN.md , Auswertung, Bericht, Owner-Entscheide SC4/Store-Zahl, Kapitel docs/performance.md (SC2), Welle 7
+- [ ] 28-12-PLAN.md , SC4: OCR_SLOT_COST_BYTES gemessen, Tests neu gerechnet, Baumhash-Pin, Texte, Welle 8
+- [ ] 28-13-PLAN.md , Snapshot-Löschung mit Owner-Bestätigung, null Kosten belegt, Welle 8
+- [ ] 28-14-PLAN.md , Push-Entscheid, CI-Belege, Owner-Abnahme, Welle 9
 **Research-Flag**: nein (Runbook und Werkzeuge W1 bis W4 aus Phase 22 liegen vor)
 
 ### Phase 29: Härtung und Store-Einreichung 1.4.0
