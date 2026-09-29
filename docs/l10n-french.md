@@ -138,6 +138,16 @@ deutschen Übersetzung.
 | `%s files are searchable. Files were added since the last count, so the share is shown again once they have been counted.` | %s Dateien sind durchsuchbar. Seit der letzten Zählung sind Dateien dazugekommen, der Anteil erscheint wieder, sobald sie mitgezählt sind. | %s fichiers peuvent être trouvés par la recherche. Des fichiers ont été ajoutés depuis le dernier comptage, la part s'affichera de nouveau dès qu'ils auront été comptés. |
 | `Findable by meaning` | Auffindbar nach Bedeutung | Trouvable par le sens |
 | `%1$s of %2$s indexable files can also be found by meaning` | %1$s von %2$s indexierbaren Dateien sind auch nach Bedeutung auffindbar | %1$s des %2$s fichiers indexables peuvent aussi être trouvés par le sens |
+| `Model: %1$s` | Modell: %1$s | Modèle : %1$s |
+| `Model: %1$s, re-embedding %2$s (%3$s of %4$s)` | Modell: %1$s, Neueinbettung %2$s (%3$s von %4$s) | Modèle : %1$s, recalcul des vecteurs %2$s (%3$s sur %4$s) |
+| `Economy` | Sparsam | Économe |
+| `Standard` | Standard | Standard |
+| `Performance` | Leistung | Performance |
+| `memory tight, memory.events max twice` | Speicher knapp, zweimal memory.events max | mémoire limitée, memory.events max deux fois |
+| `a slot was killed for lack of memory` | ein Slot wurde wegen Speichermangels beendet | un slot a été arrêté faute de mémoire |
+| `the container ended during a multi slot pass` | der Container endete während einer Mehr-Slot-Staffel | le conteneur s'est arrêté pendant une passe à plusieurs slots |
+| `Profile: chosen %1$s, in force %2$s (%3$s)` | Profil: gewählt %1$s, wirksam %2$s (%3$s) | Profil : choisi %1$s, en vigueur %2$s (%3$s) |
+| `OCR slots: %1$s of %2$s, memory tight` | OCR-Slots: %1$s von %2$s, Speicher knapp | Slots OCR : %1$s sur %2$s, mémoire limitée |
 | `The semantic share cannot be worked out right now. The backend does not answer, or it does not report this figure yet.` | Der semantische Anteil ist im Moment nicht berechenbar. Das Backend antwortet nicht, oder es meldet diese Zahl noch nicht. | La part sémantique ne peut pas être calculée pour le moment. Le service ne répond pas, ou il ne communique pas encore ce chiffre. |
 | `The model is in memory, the semantic search is answering.` | Das Modell liegt im Speicher, die semantische Suche antwortet. | Le modèle est en mémoire, la recherche sémantique répond. |
 | `The model is read when it is first needed. That is the normal state.` | Das Modell wird beim ersten Bedarf geladen. Das ist der Normalfall. | Le modèle est chargé au premier besoin. C'est le cas normal. |
@@ -333,6 +343,81 @@ deutschen Übersetzung.
 | `No results with the active filters` | Keine Treffer mit den aktiven Filtern | Aucun résultat avec les filtres actifs |
 | `Remove a filter or widen the time range.` | Entfernen Sie einen Filter oder erweitern Sie den Zeitraum. | Retirez un filtre ou élargissez la période. |
 | `Reset filters` | Filter zurücksetzen | Réinitialiser les filtres |
+| `Performance profile` | Leistungsprofil | Profil de performance |
+| `How much of this box Findling may use. Without a change Findling stays on Economy.` | Wie viel dieser Box Findling nutzen darf. Ohne Änderung bleibt Findling bei Sparsam. | Quelle part de cette machine Findling peut utiliser. Sans changement, Findling reste sur Économe. |
+| `Detected: cores %1$s, memory %2$s` | Erkannt: Kerne %1$s, Speicher %2$s | Détecté : cœurs %1$s, mémoire %2$s |
+| `This backend does not report its hardware yet.` | Dieses Backend meldet seine Hardware noch nicht. | Ce service n'indique pas encore son matériel. |
+| `Suggested for this box: %s` | Vorschlag für diese Box: %s | Suggéré pour cette machine : %s |
+| `In force: %s` | Wirksam: %s | En vigueur : %s |
+| `Chosen %1$s, in force %2$s: this box has less hardware than the chosen profile needs.` | Gewählt %1$s, wirksam %2$s: Diese Box hat weniger Hardware, als das gewählte Profil braucht. | Choisi %1$s, en vigueur %2$s : cette machine a moins de matériel que le profil choisi n'en demande. |
+| `Profile` | Profil | Profil |
+| `%s (suggested)` | %s (Vorschlag) | %s (suggéré) |
+| `One OCR slot, as before.` | Ein OCR-Slot, wie bisher. | Un slot OCR, comme avant. |
+| `At most half of this box, up to %s OCR slots.` | Höchstens die Hälfte dieser Box, bis zu %s OCR-Slots. | Au plus la moitié de cette machine, jusqu'à %s slots OCR. |
+| `Everything but one core, up to %s OCR slots.` | Alles bis auf einen Kern, bis zu %s OCR-Slots. | Tout sauf un cœur, jusqu'à %s slots OCR. |
+| `More accurate search model (fp32)` | Genaueres Suchmodell (fp32) | Modèle de recherche plus précis (fp32) |
+| `Downloaded once during the check, about %s from the Findling release on GitHub. Needs more memory than int8.` | Wird bei der Prüfung einmal geladen, etwa %s aus dem Findling-Release auf GitHub. Braucht mehr Speicher als int8. | Téléchargé une fois pendant la vérification, environ %s depuis la version de Findling sur GitHub. Demande plus de mémoire que int8. |
+| `Re-embedding of %1$s documents, estimated about %2$s. Full text search stays fully available.` | Neueinbettung von %1$s Dokumenten, geschätzt etwa %2$s. Die Volltextsuche bleibt voll verfügbar. | Recalcul des vecteurs de %1$s documents, environ %2$s estimé. La recherche en texte intégral reste entièrement disponible. |
+| `Re-embedding of %s documents. Full text search stays fully available.` | Neueinbettung von %s Dokumenten. Die Volltextsuche bleibt voll verfügbar. | Recalcul des vecteurs de %s documents. La recherche en texte intégral reste entièrement disponible. |
+| `Choose a different profile or model to check it.` | Ein anderes Profil oder Modell wählen, um es zu prüfen. | Choisir un autre profil ou modèle pour le vérifier. |
+| `Changing the profile needs JavaScript. Everything above stays complete without it.` | Das Profil zu ändern braucht JavaScript. Alles darüber bleibt ohne es vollständig. | Changer de profil nécessite JavaScript. Tout ce qui précède reste complet sans lui. |
+| `The check calculates with these values from environment variables:` | Die Prüfung rechnet mit diesen Werten aus Umgebungsvariablen: | La vérification calcule avec ces valeurs issues de variables d'environnement : |
+| `OCR resolution %1$s dpi, set by %2$s` | OCR-Auflösung %1$s dpi, gesetzt durch %2$s | Résolution OCR %1$s dpi, définie par %2$s |
+| `OCR limit %1$s pages per file, set by %2$s` | OCR-Deckel %1$s Seiten je Datei, gesetzt durch %2$s | Limite OCR %1$s pages par fichier, définie par %2$s |
+| `Embedding batch size %1$s, set by %2$s` | Einbettungs-Stapelgröße %1$s, gesetzt durch %2$s | Taille des lots de vectorisation %1$s, définie par %2$s |
+| `Index writer memory %1$s, set by %2$s` | Speicher des Indexschreibers %1$s, gesetzt durch %2$s | Mémoire de l'écriture de l'index %1$s, définie par %2$s |
+| `Apply and check` | Übernehmen und prüfen | Appliquer et vérifier |
+| `Apply` | Übernehmen | Appliquer |
+| `Stay on Economy` | Bei Sparsam bleiben | Rester sur Économe |
+| `Check again` | Erneut prüfen | Vérifier à nouveau |
+| `Check %s` | %s prüfen | Vérifier %s |
+| `Check running: %s` | Prüfung läuft: %s | Vérification en cours : %s |
+| `Check running.` | Prüfung läuft. | Vérification en cours. |
+| `waiting for the indexing batch` | Indexstaffel abwarten | attente du lot d'indexation |
+| `downloading the model, %1$s of %2$s` | Modell herunterladen, %1$s von %2$s | téléchargement du modèle, %1$s sur %2$s |
+| `verifying the model file` | Modelldatei prüfen | vérification du fichier du modèle |
+| `loading the model` | Modell laden | chargement du modèle |
+| `OCR with one slot` | OCR mit einem Slot | OCR avec un slot |
+| `calculating memory` | Speicher rechnen | calcul de la mémoire |
+| `OCR with %s slots` | OCR mit %s Slots | OCR avec %s slots |
+| `cleaning up` | aufräumen | nettoyage |
+| `Indexing pauses during the check and continues afterwards.` | Die Indexierung pausiert während der Prüfung und läuft danach weiter. | L'indexation se met en pause pendant la vérification et reprend ensuite. |
+| `Fits` | Passt | Convient |
+| `Fits narrowly` | Passt knapp | Convient de justesse |
+| `Does not fit` | Passt nicht | Ne convient pas |
+| `Checked: %1$s with %2$s, %3$s` | Geprüft: %1$s mit %2$s, %3$s | Vérifié : %1$s avec %2$s, %3$s |
+| `Saved. %s applies from the next indexing round.` | Gespeichert. %s gilt ab der nächsten Indexrunde. | Enregistré. %s s'applique à partir du prochain passage d'indexation. |
+| `Nothing was saved. %s stays in force.` | Nichts gespeichert. %s bleibt wirksam. | Rien n'a été enregistré. %s reste en vigueur. |
+| `The downloaded model file was deleted again.` | Die geladene Modelldatei wurde wieder gelöscht. | Le fichier du modèle téléchargé a été supprimé à nouveau. |
+| `Memory reserve too thin: %1$s left, %2$s needed.` | Speicherreserve zu knapp: %1$s übrig, %2$s nötig. | Réserve de mémoire trop faible : %1$s restants, %2$s nécessaires. |
+| `Not enough memory: %1$s OCR slots need about %2$s, %3$s are available.` | Zu wenig Speicher: %1$s OCR-Slots brauchen etwa %2$s, verfügbar sind %3$s. | Mémoire insuffisante : %1$s slots OCR demandent environ %2$s, %3$s sont disponibles. |
+| `Not enough memory for the fp32 model: it needs about %1$s, %2$s are available.` | Zu wenig Speicher für das fp32-Modell: Es braucht etwa %1$s, verfügbar sind %2$s. | Mémoire insuffisante pour le modèle fp32 : il demande environ %1$s, %2$s sont disponibles. |
+| `A test slot was ended for lack of memory.` | Ein Prüf-Slot wurde wegen Speichermangel beendet. | Un slot de test a été arrêté faute de mémoire. |
+| `The measurement took longer than %s.` | Die Messung dauerte länger als %s. | La mesure a duré plus de %s. |
+| `The model could not be downloaded. Check that github.com and release-assets.githubusercontent.com are reachable.` | Das Modell ließ sich nicht herunterladen. Prüfen, ob github.com und release-assets.githubusercontent.com erreichbar sind. | Le modèle n'a pas pu être téléchargé. Vérifier que github.com et release-assets.githubusercontent.com sont joignables. |
+| `The download took longer than %s.` | Der Download dauerte länger als %s. | Le téléchargement a duré plus de %s. |
+| `The model file does not match its checksum and was deleted.` | Die Modelldatei passt nicht zu ihrer Prüfsumme und wurde gelöscht. | Le fichier du modèle ne correspond pas à sa somme de contrôle et a été supprimé. |
+| `Not enough disk space for the fp32 model.` | Zu wenig Platz auf dem Datenträger für das fp32-Modell. | Espace disque insuffisant pour le modèle fp32. |
+| `The available memory could not be read.` | Der verfügbare Speicher ließ sich nicht lesen. | La mémoire disponible n'a pas pu être lue. |
+| `The check was interrupted by a restart of the backend.` | Die Prüfung wurde durch einen Neustart des Backends unterbrochen. | La vérification a été interrompue par un redémarrage du service. |
+| `The running indexing batch did not end within %s.` | Die laufende Indexstaffel endete nicht innerhalb von %s. | Le lot d'indexation en cours ne s'est pas terminé en %s. |
+| `The check stopped with an error.` | Die Prüfung brach mit einem Fehler ab. | La vérification s'est arrêtée sur une erreur. |
+| `The check needs the backend, and it does not answer right now. Nothing was saved.` | Die Prüfung braucht das Backend, und es antwortet gerade nicht. Nichts gespeichert. | La vérification a besoin du service, et il ne répond pas pour le moment. Rien n'a été enregistré. |
+| `This backend version cannot run the check. Bring both halves of Findling to the same version.` | Diese Backend-Version kann die Prüfung nicht fahren. Beide Hälften von Findling auf dieselbe Version bringen. | Cette version du service ne peut pas effectuer la vérification. Mettre les deux moitiés de Findling à la même version. |
+| `A check is already running. Its result appears here.` | Eine Prüfung läuft bereits. Ihr Ergebnis erscheint hier. | Une vérification est déjà en cours. Son résultat apparaît ici. |
+| `The index is being rebuilt right now. The check is possible afterwards.` | Der Index wird gerade neu aufgebaut. Die Prüfung ist danach möglich. | L'index est en cours de reconstruction. La vérification sera possible ensuite. |
+| `The profile was not saved. Nothing changed.` | Das Profil wurde nicht gespeichert. Es hat sich nichts geändert. | Le profil n'a pas été enregistré. Rien n'a changé. |
+| `The memory guard lowered the profile: chosen %1$s, in force %2$s (%3$s).` | Der Speicherwächter hat das Profil abgesenkt: gewählt %1$s, wirksam %2$s (%3$s). | Le garde-mémoire a abaissé le profil : choisi %1$s, en vigueur %2$s (%3$s). |
+| `The fp32 model is not available. The search uses int8.` | Das fp32-Modell ist nicht verfügbar. Die Suche nutzt int8. | Le modèle fp32 n'est pas disponible. La recherche utilise int8. |
+| `fp32 is set, but this box has too little memory for it. The search uses int8.` | fp32 ist gesetzt, aber diese Box hat zu wenig Speicher dafür. Die Suche nutzt int8. | fp32 est activé, mais cette machine a trop peu de mémoire pour lui. La recherche utilise int8. |
+| `fp32 is only available in Standard and Performance. The search uses int8.` | fp32 gibt es nur in Standard und Leistung. Die Suche nutzt int8. | fp32 n'est disponible qu'en Standard et Performance. La recherche utilise int8. |
+| `fp32 stays active under Economy. To go back to int8, choose Standard or Performance and clear the tick.` | fp32 bleibt unter Sparsam aktiv. Zurück zu int8: Standard oder Leistung wählen und das Häkchen entfernen. | fp32 reste actif sous Économe. Pour revenir à int8, choisir Standard ou Performance et décocher la case. |
+| `The fp32 model is being downloaded.` | Das fp32-Modell wird heruntergeladen. | Le modèle fp32 est en cours de téléchargement. |
+| `No check yet.` | Noch keine Prüfung. | Pas encore de vérification. |
+| `Choose a profile and check it on this box. Until then Economy stays in force.` | Ein Profil wählen und auf dieser Box prüfen. Bis dahin bleibt Sparsam wirksam. | Choisir un profil et le vérifier sur cette machine. D'ici là, Économe reste en vigueur. |
+| `File contents` | Dateiinhalte | Contenu des fichiers |
+
+**Nachtrag 29.09.2026 (Review der Phase 27, WR-05).** 83 Zeilen sind ergänzt: die 72 Schlüssel der Phase 27 (Plan 27-13, Oberfläche des Leistungsprofils) und 10 ältere aus den Plänen 25-04 und 26-05, die beim Abschluss der Phase 26 schon fehlten. Im französischen Dokument fehlte außerdem die Zeile `File contents`, die der Nachtrag vom 19.09.2026 unten nennt; sie steht jetzt in der Tabelle. Die ergänzten Zeilen sind nicht abgetippt, sondern mechanisch aus `php/l10n/de.json` und den Katalogen der Spalten dieser Tabelle übernommen, stehen hinter dem Schlüssel, der ihnen in `de.json` vorausgeht, und tragen genau den Wortlaut, den die App ausliefert. Seitdem hält `test_every_language_table_carries_every_key_with_the_catalogue_wording` in `backend/tests/test_admin_ui_contract.py` diese Tabelle gegen die Kataloge, in beide Richtungen und Zelle für Zelle. Die Zählungen weiter oben und unten sind der Stand ihres Datums; die maßgebliche Zählung steht in `docs/l10n-catalogues.md`.
 
 ## Ausnahmen für das Vollständigkeitsgate G2
 

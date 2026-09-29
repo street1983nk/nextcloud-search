@@ -370,12 +370,26 @@ der vor dem Pfad genannte Nutzer die Datei nicht öffnen darf: gefunden über ei
 des Team Folders oder erreicht ohne Leserecht. Er steht in allen 16 Dateien, die Tabellen der
 fünf Sprachdokumente führen die Zeile.
 
-**Nachgezählt am 29.09.2026, Quick-Task 260929-kii:** **288** Schlüssel, davon weiterhin **5**
-Pluralschlüssel. Der neue ist der Satz, den der Block "Deckungsgrad der Suche" zeigt, solange mehr
-Dateien durchsuchbar sind, als die letzte Zählung indexierbar fand: statt einer Prozentzahl und
-eines Bruchs mit Zähler größer Nenner sagt er, dass seit der letzten Zählung Dateien
-dazugekommen sind und der Anteil wieder erscheint, sobald sie mitgezählt sind. Er steht in allen
-16 Dateien, die Tabellen der fünf Sprachdokumente führen die Zeile.
+**Nachgezählt am 29.09.2026, Quick-Task 260929-kii, berichtigt im Review der Phase 27
+(WR-05):** **288** Schlüssel, davon weiterhin **5** Pluralschlüssel. Die erste Fassung dieses
+Absatzes erklärte die 288 mit einem einzigen neuen Satz; das stimmte nicht. Mit `json.load`
+über `php/l10n/de.json` gezählt, Schritt für Schritt:
+
+| Stand | Schlüssel | Änderung |
+|---|---:|---|
+| 26.09.2026, Issue #14 (oben) | 205 | |
+| Plan 25-04 | 207 | +2: die Modellzeile mit Präzision und Neueinbettung |
+| Plan 26-05, Beginn der Phase 27 (`3e2239a1`) | 216 | +9: drei Profilnamen, drei Ursachen des Wächters, Profilzeile, Hinweis zum Aufheben der Absenkung, OCR-Slot-Zeile |
+| Plan 27-13 | 287 | +72, -1: die Oberfläche des Leistungsprofils (Profilwahl, Vorabprüfung mit Schritten, Urteilen und Ursachen, fp32-Wahl, Umgebungsvariablen); entfallen ist `To lift the reduction after checking the memory: %1$s` |
+| Quick-Task 260929-kii | 288 | +1: der Satz des Blocks "Deckungsgrad der Suche", solange die Zählung hinterherhinkt |
+
+216 + 73 - 1 = 288. Alle Schlüssel stehen in allen 16 Dateien. Die Tabellen der fünf
+Sprachdokumente führten bis zum Review nur die kii-Zeile: 72 Schlüssel der Phase 27 und 10
+ältere (die 2 aus Plan 25-04 und 8 aus Plan 26-05) fehlten dort, im französischen Dokument
+zusätzlich `File contents`. Sie sind am 29.09.2026 mechanisch aus den Katalogen ergänzt
+worden, und seitdem hält `test_every_language_table_carries_every_key_with_the_catalogue_wording`
+in `backend/tests/test_admin_ui_contract.py` jede Tabelle gegen `de.json` und gegen die Kataloge
+ihrer Spalten, in beide Richtungen und Zelle für Zelle.
 
 ---
 
