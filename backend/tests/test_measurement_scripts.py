@@ -732,8 +732,15 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # start answer was lost) and ProbeServiceTest.php. PHP_FILES_TODAY stays at 82.
 # WR-10 changed templates/admin.php (the sentence of digest_mismatch for a
 # placed file). PHP_FILES_TODAY stays at 82.
-PHP_FILES_TODAY = 82
-PHP_TREE_HASH_TODAY = "1614fa804bccfaf6baf05a3e587fcd57176837af943e2f4714be2648cfae292b"
+# Measured again by quick task 260929-s7p (issue #14, reading a Team Folder
+# file as the member): ReaderContext.php and ReaderContextTest.php are new, and
+# QueueService.php, PathResolverService.php, GatewayController.php,
+# templates/admin.php (the file id on every line of the error list) and the
+# tests QueueServiceTest.php, QueueServiceReaderTest.php,
+# GatewayControllerTest.php and PathResolverServiceTest.php changed their
+# bytes. No file went, so PHP_FILES_TODAY moves to 84.
+PHP_FILES_TODAY = 84
+PHP_TREE_HASH_TODAY = "5f8f41ef2b29f921ccba5d4f7337c69c1586c2db894c0e8dab6a6c8c9337556c"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

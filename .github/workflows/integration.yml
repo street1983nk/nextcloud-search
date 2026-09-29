@@ -4327,3 +4327,88 @@ jobs:
           if [ -f "${{ runner.temp }}/exapp.pid" ]; then
             kill "$(cat "${{ runner.temp }}/exapp.pid")" 2>/dev/null || true
           fi
+
+  # Issue #14, second round: a Team Folder file whose advanced permissions grant
+  # the members +read and -share. groupfolders builds a member's mount with
+  # in_share=true whenever the request is not a CLI run and the active user is
+  # somebody else, and in_share raises the ACL minimum to READ plus SHARE, so
+  # the ExApp claim, the content gateway and the admin path lookup were refused
+  # for every member.
+  #
+  # Why HTTP and not occ: occ runs with OC::$CLI=true, where groupfolders never
+  # sets in_share, so an occ based test stays green with the bug. The script
+  # drives the upload over WebDAV, lets the ExApp claim it over HTTP, and asks
+  # the unified search and the admin diagnosis over HTTP as well. It is the
+  # same script that runs against the local HaRP harness.
+  team-folder-acl:
+    name: team-folder-acl
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        server-version: ['stable34']
+        php-version: ['8.2']
+
+    env:
+      EXAPP_SECRET: '12345'
+      EXAPP_PORT: '10035'
+
+    steps:
+      # Same order and the same reason as in the jobs above: the server
+      # checkout empties the workspace root, and the second checkout is what
+      # brings the composite action into the workspace.
+      - name: Check out nextcloud/server
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: nextcloud/server
+          ref: ${{ matrix.server-version }}
+          submodules: recursive
+
+      - name: Check out findling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: findling-src
+
+      - name: Set up the test Nextcloud with both halves and register the ExApp
+        uses: ./findling-src/.github/actions/setup-test-nc
+        with:
+          server-version: ${{ matrix.server-version }}
+          php-version: ${{ matrix.php-version }}
+          exapp-secret: ${{ env.EXAPP_SECRET }}
+          exapp-port: ${{ env.EXAPP_PORT }}
+          install-groupfolders: 'true'
+
+      # A skeleton would give every new account a handful of files the crawl
+      # has to judge before the two files of the scenario.
+      - name: Empty skeleton
+        run: ./occ config:system:set skeletondirectory --value=''
+
+      - name: The team folder ACL scenario over HTTP
+        env:
+          NC_URL: 'http://localhost:8080'
+          OCC: './occ'
+          # The test only administrator of setup-test-nc.
+          ADMIN_USER: 'admin'
+          ADMIN_PASS: 'password'
+          TAG: 'ci'
+          DEADLINE: '300'
+          CRAWL: '1'
+        run: bash findling-src/scripts/ci/team_folder_acl.sh
+
+      - name: Everything the failure had to say
+        if: failure()
+        run: |
+          ./occ findling:index || true
+          ./occ groupfolders:list || true
+          echo "--- exapp ---"
+          tail -n 200 "${{ runner.temp }}/exapp.log" || echo "no exapp log written"
+          echo "--- nextcloud ---"
+          tail -n 200 data/nextcloud.log || echo "no data/nextcloud.log written"
+
+      - name: Stop the ExApp
+        if: always()
+        run: |
+          if [ -f "${{ runner.temp }}/exapp.pid" ]; then
+            kill "$(cat "${{ runner.temp }}/exapp.pid")" 2>/dev/null || true
+          fi
