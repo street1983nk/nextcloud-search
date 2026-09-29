@@ -891,13 +891,30 @@ fp32-Original von multilingual-e5-small einsetzen. Ohne diesen Wunsch ändert
 sich nichts: kein Download, kein zusätzlicher Speicher, keine Neueinbettung.
 
 **Wählen.** Die Präzision ist ein eigener Schlüssel, getrennt vom Profil
-(D-25-02). Bis zur Einstellungsseite (Phase 27) per occ:
+(D-25-02). Empfohlen ist das Häkchen "Genaueres Suchmodell (fp32)" im Block
+Leistungsprofil der Adminseite (Phase 27, `docs/admin-page.md`):
+
+- Der fp32-Download läuft dort in der Probe, mit Digest-Prüfung und Deckel
+  600 s. Gespeichert wird `model_precision=fp32` nur bei "passt".
+- Bei "passt knapp" oder "passt nicht" löscht die Probe eine Datei, die sie
+  selbst geladen hat. Eine vom Admin abgelegte Datei (Offline-Weg unten) bleibt
+  liegen (D-27-17).
+- Preis des Modell-Kinds: die Probe lädt fp32 in einem eigenen Kind, das
+  transient rund 820 MiB braucht, mehr als der Mehrbedarf im Betrieb (rund
+  367 MiB). Boxen knapp an der Grenze bestehen die fp32-Probe nicht, obwohl
+  der Betrieb fp32 tragen könnte (`model_memory`).
+- Die Reindex-Dauer ist eine Schätzung aus der in der Probe gemessenen Rate.
+  Ohne Messrate dieser Box nennt die Seite nur die Dokumentzahl (D-27-18).
+
+Zweiter Weg für Automatisierung und kopflose Boxen ist occ (D-27-13):
 
 ```
 occ config:app:set findling model_precision --value=fp32
 occ config:app:set findling model_precision --value=int8
 ```
 
+- occ überspringt die Probe. Dann sichert nur der Speicherwächter ab
+  (`docs/profiles.md`).
 - Default ist `int8`. Unbekannte Werte ändern nichts.
 - fp32 ist nur in den Profilen Standard und Leistung wählbar (D-25-01). Unter
   Sparsam wird der Wunsch verbraucht und mit `fp32_not_in_economy` gemeldet; ein
@@ -957,9 +974,10 @@ versucht je Wechsel des Schlüssels genau einmal. Nach einem Fehlschlag versucht
 er es nicht von selbst wieder, auch nicht nach einem Neustart. Ein neuer
 Versuch heißt: erst `int8` setzen, eine Runde abwarten, dann wieder `fp32`.
 
-**Rückweg (D-25-09).** `int8` setzen genügt. Nach dem Wechsel löscht der
-Container die fp32-Datei, auch eine von Hand abgelegte, und bettet mit int8 neu
-ein.
+**Rückweg (D-25-09).** `int8` setzen genügt, auf der Adminseite durch
+Entfernen des Häkchens und "Übernehmen", ohne Probe. Nach dem Wechsel löscht
+der Container die fp32-Datei, auch eine von Hand abgelegte, und bettet mit int8
+neu ein.
 
 **Während der Neueinbettung (D-25-07).** Jeder Wechsel der Präzision leert den
 Vektorbestand und bettet alle indexierten Dokumente neu ein (Abschnitt 8). Die

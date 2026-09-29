@@ -256,6 +256,51 @@ jobs:
           jq -e '.ocs.data[] | select(.id == "findling") | .filters | has("term")' filters.json
           jq -e '.ocs.data[] | select(.id == "findling") | .filters | has("title-only")' filters.json
 
+      # SC3 of phase 27, the live part: the probe starts a measurement that
+      # pauses the indexing and may download 470 MB, and the profile route
+      # writes appconfig, so neither may be reachable for a user who is not an
+      # admin. The routes carry no NoAdminRequired, and this step is what shows
+      # that the absence holds on a real server and not only in the attribute
+      # test. The OCS-APIRequest header takes the CSRF check out of the way, so
+      # a refusal here can only be the admin check and never a missing token.
+      #
+      # The assertions in order of what they rule out. First: none of the three
+      # calls answers 200 for testuser; a refusal is 403, 401 or a redirect to
+      # the login. Second: the stored profile is the same before and after, so
+      # nothing was written even if a refusal came late. Third, the counter
+      # probe: the same GET as the admin answers 200, which proves the route
+      # exists and the refusal above is not a 404 of a missing route.
+      - name: A user who is not an admin reaches neither the probe nor the profile route
+        run: |
+          before=$(./occ config:app:get findling profile || true)
+          expect_refused() {
+            case "$1" in
+              401|403|302|303) ;;
+              *) echo "the $2 call as testuser answered ${1}, expected a refusal"; exit 1 ;;
+            esac
+          }
+          code=$(curl -s -o /dev/null -w '%{http_code}' -u "testuser:${TESTUSER_PASS}" \
+            -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+            -X POST -d 'profile=standard&precision=int8' \
+            'http://localhost:8080/index.php/apps/findling/admin/profile/check')
+          expect_refused "${code}" 'POST admin/profile/check'
+          code=$(curl -s -o /dev/null -w '%{http_code}' -u "testuser:${TESTUSER_PASS}" \
+            -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+            -X POST -d 'profile=economy&precision=int8' \
+            'http://localhost:8080/index.php/apps/findling/admin/profile')
+          expect_refused "${code}" 'POST admin/profile'
+          code=$(curl -s -o /dev/null -w '%{http_code}' -u "testuser:${TESTUSER_PASS}" \
+            -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+            'http://localhost:8080/index.php/apps/findling/admin/profile/check')
+          expect_refused "${code}" 'GET admin/profile/check'
+          after=$(./occ config:app:get findling profile || true)
+          test "${before}" = "${after}"
+          code=$(curl -s -o /dev/null -w '%{http_code}' -u admin:password \
+            -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+            'http://localhost:8080/index.php/apps/findling/admin/profile/check')
+          echo "the GET admin/profile/check as the admin answered ${code}"
+          test "${code}" = "200"
+
       # T2, the timeout path, and the reason it is a step rather than a note: the
       # unified search waits for every provider, so a slow backend does not cost
       # its own result group, it costs the whole search. ExAppService passes one
