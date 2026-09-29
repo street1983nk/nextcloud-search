@@ -684,8 +684,14 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # AdminViewService.php, AdminViewServiceTest.php and templates/admin.php (guard
 # stage, cause, way back and slot throttling on the admin page). The eight
 # catalogues of php/l10n moved as well, but the recipe globs **/*.php.
-PHP_FILES_TODAY = 75
-PHP_TREE_HASH_TODAY = "460e2d6b7a11903bb783b722693f113f0ace524d67bc8cae5a033539562e8e8e"
+# Measured again after the wave-1 merge of phase 27: one file came,
+# php/tests/Unit/SettingsServiceTest.php (plan 27-04), and plan 27-04 changed
+# the bytes of SettingsService.php (profile state, the downward rule, the
+# writers and the probe record) and of ExAppService.php and ExAppServiceTest.php
+# (adminSend and adminState with distinguishable kinds). No file went, so
+# PHP_FILES_TODAY moves to 76.
+PHP_FILES_TODAY = 76
+PHP_TREE_HASH_TODAY = "e32083cc0dce4f53a816d910ab8eadb936944bcaeadf2bbeba49523d56bb384b"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
@@ -1452,8 +1458,13 @@ PHP_TREE_HASH_TODAY = "460e2d6b7a11903bb783b722693f113f0ace524d67bc8cae5a0335395
 # and does not count. One file came and none went, so PACKAGE_FILES_TODAY moves
 # to 68. The PHP pair does not move: this plan touches no PHP file. The figure
 # is measured again after the merge of the wave.
+# Measured again after the wave-1 merge of phase 27: plan 27-03 changed the
+# bytes of guard.py (the state as one immutable reference, IN-01, plus
+# Escalation.rebase) and extract/pool.py (submission under the lock, IN-02,
+# plus SlotPool.shed_idle). No file came and none went, so PACKAGE_FILES_TODAY
+# stays at 68.
 PACKAGE_FILES_TODAY = 68
-PACKAGE_TREE_HASH_TODAY = "c304a722bea3cd4441fedb469f4fb379f9924814f9d0d68868cbd198cee537ea"
+PACKAGE_TREE_HASH_TODAY = "e19b81f08ea9fa03d4ae502e1b632cb16f70276973f8faf0bed0a3d029d867c8"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
