@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
 status: executing
-stopped_at: Completed 28-03-PLAN.md
-last_updated: "2026-09-29T22:02:54.776Z"
+stopped_at: Completed 28-04-PLAN.md
+last_updated: "2026-09-29T22:17:09.857Z"
 last_activity: 2026-09-29
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 62
-  completed_plans: 51
+  completed_plans: 52
   percent: 67
 ---
 
@@ -26,18 +26,19 @@ See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 ## Current Position
 
 Phase: 28 (Abnahme-Anfahrt), in Ausführung
-Plan: 4 of 14
+Plan: 5 of 14
 Status: Ready to execute
 Last activity: 2026-09-29
 
-Progress: [████████░░] 82%
+Progress: [████████░░] 84%
 
 ## Naechster Schritt
 
-**execute-phase 28 weiter mit 28-04** (28-01 fertig: Teilkorpus, Rechenblatt, Slotkosten,
+**execute-phase 28 weiter mit 28-05** (28-01 fertig: Teilkorpus, Rechenblatt, Slotkosten,
 00-ablauf.md; b8e8c785. 28-02 fertig: 11-probe-route.py, 10-zelle.sh, 93b-nullstand.sh,
 00-kette.sh, 59 boxlose Tests; 1976584a. 28-03 fertig: aws_box.sh Satztabelle/Architektur/
-SG-Schonung, 00-typwechsel.sh mit Zieltyp; b1191dc5. Alles nur lokal).
+SG-Schonung, 00-typwechsel.sh mit Zieltyp; b1191dc5. 28-04 fertig: Runbook x86/USD-Deckel/
+Abbau bis 0 Snapshots, Vorprobe "postgres ja abbilder ja"; 9d08f30f. Alles nur lokal).
 
 Phase-27-Abschluss (2026-09-29): 16/16 Plaene in 7 Wellen; Owner-Abnahmen 27-01, 27-15
 (gemeinsam per Playwright) und Phase ("ok abgenommen"); Push-Entscheid "push-now" =
@@ -115,6 +116,13 @@ Fuer v1.4 unmittelbar tragend:
   innerhalb einer Familie (54), ohne Kapazitaet Typ zurueck und Box gestoppt (55), kein
   Rueckfall. Zone in aws_box.sh bleibt fest eu-central-1c (A7 offen fuer 28-05).
 
+- 28-04 (30.09.): lokale Vorprobe arm64 nach amd64 (qemu, containerd-Store): postgres:18.6
+  startet mit arm64-Datenverzeichnis, amcheck und REINDEX sauber, Signedness signed;
+  amd64-Variante wird zu arm64-Tag nachgezogen. Ergebnis "postgres ja abbilder ja", Tor auf
+  der Box bleibt Pflicht (AIO-glibc nicht geprueft). Runbook: Deckel in USD je Box-Satz,
+  Block 7b fio, Block 14 x86-Box mit Tor 1 h 30, 7.3 Kette, Abbau bis 0 Snapshots
+  (Snapshot erst nach SC4 und Owner-Wort C6). Zone 1c fuer c7a = Pruefpunkt Block 14 Schritt 0.
+
 ### Termine und Owner-Checkpoints
 
 - **Issue #14 (budachst):** Antwort mit Zitat gepostet (issuecomment-5853918446), Issue bleibt
@@ -176,8 +184,8 @@ Aeltere Merker:
 
 ## Session Continuity
 
-Last session: 2026-09-29T22:02:50.640Z
-Stopped at: Completed 28-03-PLAN.md
+Last session: 2026-09-29T22:17:05.771Z
+Stopped at: Completed 28-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
