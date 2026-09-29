@@ -690,8 +690,14 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # writers and the probe record) and of ExAppService.php and ExAppServiceTest.php
 # (adminSend and adminState with distinguishable kinds). No file went, so
 # PHP_FILES_TODAY moves to 76.
-PHP_FILES_TODAY = 76
-PHP_TREE_HASH_TODAY = "e32083cc0dce4f53a816d910ab8eadb936944bcaeadf2bbeba49523d56bb384b"
+# Measured again after the wave-2 merge of phase 27: four files came, plan
+# 27-07 brought ProfileSettingsController.php, ProbeService.php and their two
+# unit tests and changed Settings/Admin.php (the settle before the page); plan
+# 27-08 changed AdminViewService.php and AdminViewServiceTest.php (the token
+# stays on the server, the fields of the profile surface). No file went, so
+# PHP_FILES_TODAY moves to 80.
+PHP_FILES_TODAY = 80
+PHP_TREE_HASH_TODAY = "3f382baec48f642e9548305039b65cd92f1261768601fa395fa6bd2ab44cac20"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
@@ -1463,8 +1469,13 @@ PHP_TREE_HASH_TODAY = "e32083cc0dce4f53a816d910ab8eadb936944bcaeadf2bbeba49523d5
 # Escalation.rebase) and extract/pool.py (submission under the lock, IN-02,
 # plus SlotPool.shed_idle). No file came and none went, so PACKAGE_FILES_TODAY
 # stays at 68.
-PACKAGE_FILES_TODAY = 68
-PACKAGE_TREE_HASH_TODAY = "e19b81f08ea9fa03d4ae502e1b632cb16f70276973f8faf0bed0a3d029d867c8"
+# Measured again after the wave-2 merge of phase 27: plan 27-06 brought
+# embed/model_probe.py (the model probe in its own hardened spawn child), plan
+# 27-05 changed the bytes of worker/poller.py and worker/embedding.py (the hold
+# for the probe) and worker/watch.py (the guard pause during the probe). One
+# file came and none went, so PACKAGE_FILES_TODAY moves to 69.
+PACKAGE_FILES_TODAY = 69
+PACKAGE_TREE_HASH_TODAY = "65158389171632a4b6196d01a43bf7a63a1c3aa528d48528a6181065307b2329"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
