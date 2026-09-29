@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
-status: executing
-stopped_at: Phase 26 context gathered
-last_updated: "2026-09-28T20:40:09.249Z"
-last_activity: 2026-09-28 -- Phase 26 execution started
+status: ready_to_plan
+stopped_at: Phase 26 complete (14/14) — ready to discuss Phase 27
+last_updated: 2026-09-29T06:03:55.540Z
+last_activity: 2026-09-29 -- Phase 26 complete (14/14), verification passed 4/4, review CR/WR fixed
 progress:
   total_phases: 6
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 32
-  completed_plans: 18
-  percent: 33
+  completed_plans: 32
+  percent: 50
 ---
 
 # Project State
@@ -21,27 +21,33 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 26 — N OCR-Slots und Speicherwächter
+**Current focus:** Phase 27 — vorab prüfung und settings oberfläche
 
 ## Current Position
 
-Phase: 26 (N OCR-Slots und Speicherwächter) — EXECUTING
-Plan: 1 of 14
-Status: Executing Phase 26
-Last activity: 2026-09-28 -- Phase 26 execution started
+Phase: 27
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-09-29
 
-Progress: [###.......] 33% (2 von 6 Phasen)
+Progress: [#####.....] 50% (3 von 6 Phasen)
 
 ## Naechster Schritt
 
-**/gsd:discuss-phase 26** (n-ocr-slots-und-speicherwaechter): Owner-Punkte vorbereitet:
-AWS-Messbox statt Hetzner (Guthaben 104,29 USD bis 04.09.2027, Konto infranodedev),
-Mess-Matrix 4/8/16/32 Kerne x86 + 16K-ARM (m7g, Baseline-vergleichbar), vCPU-Quota
-eu-central-1 = 32 (nacheinander fahren oder Erhoehung auf 48), Korpus-Snapshot
-snap-03f1d1d9ad9262704 bleibt als Messkorpus; NACH Messabschluss ALLES abbauen
-inkl. Snapshot (Owner 28.09., null laufende Kosten). os.nice A12 fest fuer Phase 26
-(Issue #19). PHPUnit (25-03/25-04) und Ueberlappungstest T3 laufen erst in CI nach
-einem Push (Owner).
+**/gsd:secure-phase 26**, danach **/gsd:discuss-phase 27** (vorab-pruefung-und-settings-oberflaeche,
+ui-phase-Gate: UI-SPEC VOR dem Plan-Schnitt, Projektkonvention; Merker: AR-24-02
+"Schreibweg nur occ" verliert mit der Schreibroute in Phase 27 seine Begruendung).
+
+Phase-26-Abschluss (2026-09-29): 14/14 Plaene in 6 Wellen, Verifikation passed 4/4;
+Push-Entscheid Owner "Ja" = 229 Commits gepusht (cce78abd..d91305df), CI komplett gruen:
+SC2-Kill-Test (Lauf 36522819711), PHPUnit 386 Tests (36522819728, erledigt auch
+24-HUMAN-UAT Test 1 und die 25-03/25-04-Posten), arm64-Messleiter (36523219615,
+Faktoren 2,000/1,979 gegen 1,05, Gesamt 3,958 = W4-Obergrenze, kein K1-Rueckfall).
+Code-Review 1C/2W/4I: CR-01 halt-Rennfenster (91fefe8f), WR-01 unlock_held im
+Catch-all (777f3a59), WR-02 Merker-Reihenfolge (15eb03d5) alle GEFIXT mit RED-Beleg;
+IN-01..04 dokumentiert offen. Owner-Abnahmen: Latenzprobe D-26-12 (nice kappt
+Ausreisser, p50/p95 unveraendert, Zahlbeleg-Grundlage fuer Issue #19) und Phase 26
+gesamt. Entscheide D-26-01..16 in 26-CONTEXT.md. Commits nach dem Push wieder NUR LOKAL.
 
 Phase-25-Abschluss (2026-09-28): 12/12 Plaene, Code-Review 0C/4W/4I, alle 4 Warnings
 gefixt (00ecee3, 25ec895, 8ca5983, be2779c); Verifikation passed 4/4; Suite 3711 gruen.
