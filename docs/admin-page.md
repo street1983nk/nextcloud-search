@@ -52,7 +52,9 @@ indexierbar = filesSeen - overCap - excluded
 
 aus der Tabelle `findling_scan_stats`, die der Crawl selbst füllt. Alle drei
 Zahlen kommen also aus derselben Arbeit wie der Zähler und nie aus einer zweiten
-Abfrage. Die Bedingungen in der Reihenfolge, in der sie greifen:
+Abfrage. Das gilt auch für die Nachzählung (siehe unten): sie ist derselbe Crawl
+im Zählmodus, mit derselben Abfrage und derselben Einzelentscheidung, und keine
+zweite Regel. Die Bedingungen in der Reihenfolge, in der sie greifen:
 
 1. Die Datei liegt auf einem Mount, den die App überhaupt läuft. User-Homes
    immer, Team Folders und External Storage je nach ihrem Schalter.
@@ -80,6 +82,69 @@ Solange der Scan nicht jeden Mount durchlaufen hat, ist der Nenner eine untere
 Schranke, und die Seite sagt das: "Vorläufige Zahl, X von Y Speicherorten sind
 durchgezählt." Eine Zahl, die sich still nach oben korrigiert, sieht wie ein
 Defekt aus.
+
+### Wie der Nenner aktuell bleibt
+
+Der Crawl zählt jeden Mount einmal. Dateien, die danach entstehen, indexiert
+der Event-Listener sofort, und bis Version 1.3 wuchs damit nur der Zähler: der
+Nenner blieb für die Lebenszeit der Instanz auf dem Stand des ersten Crawls
+stehen. Auf dem Harness stand am 29.09.2026 "607 von 587 indexierbaren Dateien
+sind durchsuchbar" bei 100 Prozent.
+
+Seit Quick-Task 260929-kii zählt `ScanRecountJob` den Nenner nach. Der Job läuft
+alle 15 Minuten und prüft, ob eine Nachzählung fällig ist: nach Dateiereignissen
+auf einem indexierten Mount oder nach gespeicherten Regeln (Cap, Schalter,
+Ausschlüsse), und sonst spätestens nach 24 Stunden. Fällig heißt: er startet je
+Mount eine Kette von `StorageCrawlJob` im Zählmodus. Diese Kette blättert
+dieselbe Abfrage wie der Crawl, entscheidet jede Datei mit derselben Regel
+(Ausschluss vor Cap), stellt nichts in die Warteschlange und schreibt kein
+Urteil. Am Ende ersetzt sie die Zahlen des Mounts in einer Anweisung, statt sie
+zu addieren; eine Nachzählung kann deshalb nichts doppelt zählen, egal wie oft
+sie läuft. Gelöschte, verschobene, zu große und ausgeschlossene Dateien fallen so
+richtig heraus, neue kommen hinzu, und ein neuer Mount (etwa ein neuer Nutzer)
+bekommt seine Zeile.
+
+Die Nachzählung läuft nie neben einem Crawl: solange irgendeine
+`StorageCrawlJob`-Zeile existiert, plant der Job nichts, und eine Zeile ohne
+`finished_at` (ein Crawl zählt diesen Mount gerade) wird nie überschrieben. Die
+Kosten sind ein Metadaten-Durchlauf je Mount ohne einen Schreibzugriff je
+Datei, auf einer ruhigen Instanz höchstens einmal am Tag.
+
+Warum der Listener nicht einfach mitzählt: jede Ereignisart hätte ihre eigene
+Abweichung (Anlegen und Schreiben derselben neuen Datei, kopierte Ordner,
+Umbenennen in einen Ausschluss hinein oder heraus, Überschreiben über den Cap,
+Löschen und Wiederherstellen ganzer Teilbäume, `occ files:scan` ganz ohne
+Ereignis), und jede Abweichung bliebe für immer stehen. Der Listener markiert
+die Instanz deshalb nur als geändert, und die Nachzählung misst.
+
+Bestehende Installationen registrieren den Job mit dem Update auf 1.4.0, weil
+Nextcloud den Block `<background-jobs>` der `info.xml` bei Installation und
+Update liest.
+
+Eine Grenze bleibt bewusst: Zeilen von Mounts, die aus der Mount-Liste
+verschwinden (ein gelöschter Nutzer, ein abgeschalteter Schalter), bleiben
+stehen. Der Container behält die Dokumente eines solchen Mounts nach heutigem
+Stand, weil sein Abgleich nur gelistete Mounts läuft; Zähler und Nenner bleiben
+so zueinander stimmig. Löschte die Nachzählung die Zeile, stünde der Zähler auf
+Dauer über dem Nenner.
+
+### Wenn der Zähler über dem Nenner steht
+
+Zwischen einer Änderung und der nächsten Nachzählung liegt ein Zeitfenster
+(höchstens 15 Minuten plus die Laufzeit). Darin kann `indexed` größer sein als
+die indexierbare Menge. Die Seite zeigt dann keine Prozentzahl, keinen Balken
+und keinen Bruch, sondern den Satz:
+
+> %s Dateien sind durchsuchbar. Seit der letzten Zählung sind Dateien
+> dazugekommen, der Anteil erscheint wieder, sobald sie mitgezählt sind.
+
+Der Grund: eine Zahl über 100 Prozent oder ein Bruch "607 von 587" sieht wie
+ein Defekt aus, und 100 Prozent behaupteten eine Vollständigkeit, die niemand
+gemessen hat. Auch der Satz "das Backend antwortet nicht" wäre falsch, denn das
+Backend antwortet. Die Regel "bei 99 stehen, solange eine Datei fehlt" bleibt
+und gilt jetzt auch umgekehrt: nie 100, solange mehr gezählt als gemessen ist.
+Die zweite Zahl (auffindbar nach Bedeutung) folgt derselben Regel, weil beide
+durch dieselbe Rechnung laufen.
 
 ## Die zweite Zahl: auffindbar nach Bedeutung
 

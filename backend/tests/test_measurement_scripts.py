@@ -701,8 +701,21 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # gone), and the fix of 76e3e345 changed AdminViewService.php and
 # AdminViewServiceTest.php (precisionVerdict for state Z13). No file came and
 # none went, so PHP_FILES_TODAY stays at 80.
-PHP_FILES_TODAY = 80
-PHP_TREE_HASH_TODAY = "4bc45c73f3ca02194fb8976f8c1f2951b3b6b52ef1e7e1fc015bce55df7749f8"
+# Measured again on 2026-09-29 by quick task 260929-kii: the pin had been red
+# since 9d6a11c3 of plan 27-15, which changed the bytes of AdminViewService.php
+# and templates/admin.php (the profile select preset from the saved profile).
+# Two files came, lib/BackgroundJobs/ScanRecountJob.php and
+# tests/Unit/ScanRecountJobTest.php (the recount of the coverage denominator),
+# and the task changed the bytes of StorageCrawlJob.php (the counting mode),
+# ScanStatsService.php (replaceStorage), SettingsService.php (the recount
+# mark), FileEventListener.php, CrawlAdvanceService.php, PurgeService.php,
+# AdminViewService.php and templates/admin.php (the recount sentence), and of
+# the unit tests StorageCrawlJobTest.php, CrawlAdvanceServiceTest.php,
+# SettingsServiceTest.php, AdminViewServiceTest.php, ProbeServiceTest.php,
+# ProfileControllerTest.php and ProfileSettingsControllerTest.php. No file
+# went, so PHP_FILES_TODAY moves to 82.
+PHP_FILES_TODAY = 82
+PHP_TREE_HASH_TODAY = "b06c30e2dc90a3a93ba9c671c9e3980089e8c36d078b514c35bcddae8691fcc1"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
