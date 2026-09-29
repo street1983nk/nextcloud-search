@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
-status: executing
-stopped_at: Phase 27 UI-SPEC approved
-last_updated: "2026-09-29T08:41:16.346Z"
-last_activity: 2026-09-29 -- Phase 27 execution started
+status: ready_to_plan
+stopped_at: Phase 27 complete (16/16), ready for secure-phase 27, then discuss Phase 28
+last_updated: 2026-09-29T16:37:22.764Z
+last_activity: 2026-09-29 -- Phase 27 complete
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 48
-  completed_plans: 32
-  percent: 50
+  completed_plans: 48
+  percent: 67
 ---
 
 # Project State
@@ -21,22 +21,30 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 27 , Vorab-Prüfung und Settings-Oberfläche
+**Current focus:** Phase 28 , Abnahme-Anfahrt
 
 ## Current Position
 
-Phase: 27 (Vorab-Prüfung und Settings-Oberfläche) , EXECUTING
-Plan: 1 of 16
-Status: Executing Phase 27
-Last activity: 2026-09-29 - Completed quick task 260929-kii: Deckungsgrad-Nenner waechst mit neuen Dateien
+Phase: 28 (Abnahme-Anfahrt)
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-09-29 - Phase 27 complete
 
-Progress: [#####.....] 50% (3 von 6 Phasen)
+Progress: [#######...] 67% (4 von 6 Phasen)
 
 ## Naechster Schritt
 
-**/gsd:secure-phase 26**, danach **/gsd:discuss-phase 27** (vorab-pruefung-und-settings-oberflaeche,
-ui-phase-Gate: UI-SPEC VOR dem Plan-Schnitt, Projektkonvention; Merker: AR-24-02
-"Schreibweg nur occ" verliert mit der Schreibroute in Phase 27 seine Begruendung).
+**/gsd:secure-phase 27** (T-27-01..50; AR-24-02 und AR-26-02 verfallen mit der Schreibroute),
+danach **/gsd:discuss-phase 28** (abnahme-anfahrt).
+
+Phase-27-Abschluss (2026-09-29): 16/16 Plaene in 7 Wellen; Owner-Abnahmen 27-01, 27-15
+(gemeinsam per Playwright) und Phase ("ok abgenommen"); Push-Entscheid "push-now" =
+106 Commits (d91305df..a8e3d7ea), HaRP-Routen-Ratsche um /probe und /probe/state
+erweitert (2b9de323); Code-Review 1C/11W/7I, 12/12 gefixt (918f340d..d25c85e8);
+Verifikation human_needed 4/4; zweiter Push bis c87a0239, alle sechs Workflows gruen
+(PHPUnit 36596834116). Offen: fp32-Zweig nur automatisiert belegt; MT-Uebersetzungen
+WR-02/WR-10 beim Release-Text lesen; WR-04-Rest (no_text_layer in "Uebersprungen")
+nach Phase 29 verschoben. Quick 260929-kii (Deckungsgrad-Nenner) mitgereist.
 
 Phase-26-Abschluss (2026-09-29): 14/14 Plaene in 6 Wellen, Verifikation passed 4/4;
 Push-Entscheid Owner "Ja" = 229 Commits gepusht (cce78abd..d91305df), CI komplett gruen:

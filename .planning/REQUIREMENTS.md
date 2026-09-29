@@ -26,7 +26,7 @@
 
 ### Vorab-Pruefung (PRUEF)
 
-- [ ] **PRUEF-01**: "Uebernehmen und pruefen" faehrt vor dem Speichern eine echte Probe (N-Slot-Probe am OCR-Pfad, RAM-Rechnung mit gemessenen Slot-Kosten, bei fp32-Wunsch Modell-Probe) und liefert ein Verdikt (passt / passt knapp / passt nicht, mit benannter Ursache); erst bei "passt" wird das Profil gespeichert. Die Probe wird vorher gegen die Grenze gerechnet (sonst ist die Probe selbst das OOM), es laeuft eine Probe gleichzeitig, mit Zeitdeckel, Route nur access_level ADMIN
+- [x] **PRUEF-01**: "Uebernehmen und pruefen" faehrt vor dem Speichern eine echte Probe (N-Slot-Probe am OCR-Pfad, RAM-Rechnung mit gemessenen Slot-Kosten, bei fp32-Wunsch Modell-Probe) und liefert ein Verdikt (passt / passt knapp / passt nicht, mit benannter Ursache); erst bei "passt" wird das Profil gespeichert. Die Probe wird vorher gegen die Grenze gerechnet (sonst ist die Probe selbst das OOM), es laeuft eine Probe gleichzeitig, mit Zeitdeckel, Route nur access_level ADMIN
 
 ### Modellwahl (MOD)
 
@@ -35,7 +35,7 @@
 
 ### Admin-UI (UI)
 
-- [ ] **UI-01**: Erste echte Settings-Flaeche: Profilauswahl (geschlossene Menge) plus Hinweisflaeche fuer Erkennung/Vorschlag/Verdikt, ADM-04 gewahrt (ein Auswahlfeld plus Hinweis, kein Erweitert-Bereich), Texte in allen acht Sprachkatalogen im Gleichstand (16 Dateien)
+- [x] **UI-01**: Erste echte Settings-Flaeche: Profilauswahl (geschlossene Menge) plus Hinweisflaeche fuer Erkennung/Vorschlag/Verdikt, ADM-04 gewahrt (ein Auswahlfeld plus Hinweis, kein Erweitert-Bereich), Texte in allen acht Sprachkatalogen im Gleichstand (16 Dateien)
 
 ### Messung und Release (MESS/REL, Fortsetzung ab MESS-10/REL-04)
 
@@ -73,8 +73,8 @@
 | MOD-02 | Phase 25 | Complete |
 | PAR-02 | Phase 26 | Complete |
 | PAR-03 | Phase 26 | Complete |
-| PRUEF-01 | Phase 27 | Pending |
-| UI-01 | Phase 27 | Pending |
+| PRUEF-01 | Phase 27 | Complete |
+| UI-01 | Phase 27 | Complete |
 | MESS-10 | Phase 28 | Pending |
 | REL-04 | Phase 29 | Pending |
 
