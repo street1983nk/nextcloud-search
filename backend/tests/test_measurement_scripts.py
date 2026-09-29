@@ -1521,9 +1521,12 @@ PHP_TREE_HASH_TODAY = "f068dce30e9ec2566d073e690f505d7b07bbe1e6f05d4cafed13c7b21
 # worker/probe_run.py (the figures of model_memory and timeout from the model
 # child). No file came and none went, so PACKAGE_FILES_TODAY stays at 71.
 # WR-07 changed worker/probe_run.py (the start answers before the state
-# write). PACKAGE_FILES_TODAY stays at 71.
+# write). PACKAGE_FILES_TODAY stays at 71. WR-08 changed worker/probe_run.py
+# (the ownership mark of a fetched fp32 file, the sweep after every check,
+# the grace of the take-over) and config.py (PROBE_TAKEOVER_SECONDS and its
+# poll). PACKAGE_FILES_TODAY stays at 71.
 PACKAGE_FILES_TODAY = 71
-PACKAGE_TREE_HASH_TODAY = "3d59cc9eb12e4ce0f440175a0548e98eab28cd813e127ea3b75c5ff798f34f5f"
+PACKAGE_TREE_HASH_TODAY = "f9416e853ea1253c1b87961534dd3d4b5d3e8af7e9bf612306037718d24c0a6b"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

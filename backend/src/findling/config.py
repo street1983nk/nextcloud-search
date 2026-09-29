@@ -955,6 +955,16 @@ MODEL_PROBE_CHILD_BYTES = 835_980 * 1024
 # The sampling interval of the headroom while a probe child runs.
 PROBE_SAMPLE_SECONDS = 0.2
 
+# How long a "fits" that kept a fetched fp32 file waits for PHP to take it over
+# before the sweep may remove the file (review WR-08 of phase 27). The same
+# figure as PENDING_STALE_SECONDS of php/lib/Service/ProbeService.php: after
+# that PHP records the probe as interrupted and never stores its fp32.
+PROBE_TAKEOVER_SECONDS = 3000
+
+# How often the sweep reads the companion while such a "fits" is inside its
+# grace; the take-over usually lands within seconds, and nothing is urgent.
+PROBE_TAKEOVER_POLL_SECONDS = 60.0
+
 # Two qualified events inside this window lower the level by one. A single
 # large scan produces a burst within seconds; two separate bursts within ten
 # minutes are recurring pressure (26-RESEARCH.md, Befund A).

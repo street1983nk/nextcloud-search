@@ -17,6 +17,7 @@ import sys
 import threading
 import time
 from collections.abc import Awaitable, Callable, Iterator
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -27,6 +28,7 @@ from findling.config import (
     GUARD_RESERVE_BYTES,
     MODEL_PROBE_CHILD_BYTES,
     OCR_SLOT_COST_BYTES,
+    PROBE_TAKEOVER_SECONDS,
 )
 from findling.embed import model_probe, weights
 from findling.extract.errors import ChildKilled, ExtractionOutcome, Reason
@@ -586,7 +588,8 @@ async def test_the_meta_carries_running_and_then_the_result(tmp_path: Path) -> N
     meta = rig.meta()
     assert meta[probe.META_PROBE_STATE] == probe.STATE_RUNNING
     assert meta[probe.META_PROBE_ID] == probe_id
-    assert meta[probe.META_PROBE_FP32_FETCHED] == ""
+    # No start clears the ownership mark of a fetched file (review WR-08).
+    assert meta.get(probe.META_PROBE_FP32_FETCHED, "") == ""
     rig.poller.pass_in_flight = False
     assert rig.run.task is not None
     await asyncio.wait_for(rig.run.task, timeout=20)
@@ -741,6 +744,121 @@ async def test_recover_retries_after_a_failed_read(tmp_path: Path) -> None:
     await asyncio.wait_for(rig.run.recover(read, retry=0.01), timeout=5)
     assert calls[0] == 2
     assert not target.exists()
+
+
+async def test_a_later_start_keeps_the_mark_and_a_nofit_removes_the_kept_file(
+    tmp_path: Path, small_weights: bytes
+) -> None:
+    """Review WR-08 (b): the mark of a fetched file outlives the check that set it.
+
+    A later start used to clear probe_fp32_fetched, so the next fp32 check found
+    the file, took the digest path, called it placed by the admin and never
+    removed it on nofit, against D-27-17.
+    """
+    rig = Rig(tmp_path)
+    target = _fetched_mark(rig, small_weights)
+    snap = await rig.check("standard", "int8")
+    assert snap.verdict == probe.VERDICT_FITS
+    assert rig.meta()[probe.META_PROBE_FP32_FETCHED] == "1"
+
+    rig.measures.answers["fp32"] = ModelMeasure(model_probe.MEASURE_KILLED, 0, 0, 0)
+    snap = await rig.check("standard", "fp32")
+    assert snap.verdict == probe.VERDICT_NOFIT
+    assert rig.fetch.calls == 0
+    assert not target.exists()
+    assert snap.fp32_deleted
+    assert rig.meta()[probe.META_PROBE_FP32_FETCHED] == ""
+
+
+async def test_a_placed_file_without_the_mark_still_stays_on_nofit(tmp_path: Path, small_weights: bytes) -> None:
+    rig = Rig(tmp_path)
+    target = _placed(rig, small_weights)
+    rig.measures.answers["fp32"] = ModelMeasure(model_probe.MEASURE_KILLED, 0, 0, 0)
+    snap = await rig.check("standard", "fp32")
+    assert snap.verdict == probe.VERDICT_NOFIT
+    assert target.exists()
+    assert not snap.fp32_deleted
+
+
+async def test_the_sweep_follows_a_fits_that_kept_a_fetched_file(tmp_path: Path, small_weights: bytes) -> None:
+    """Review WR-08 (a): a kept file is swept after the check, not only at the next start.
+
+    Once the grace for the take-over is over and the key still says int8, the
+    file goes; before that it stays for PHP to store fp32.
+    """
+    del small_weights
+    rig = Rig(tmp_path, takeover_seconds=0.3, takeover_poll=0.02)
+    read, calls = _choices(CompanionChoice(profile="standard", precision="int8"))
+    # The lifespan read the companion once, with nothing to sweep.
+    await rig.run.recover(read, retry=0.01)
+    assert calls[0] == 0
+
+    snap = await rig.check("standard", "fp32")
+    assert snap.verdict == probe.VERDICT_FITS
+    target = weights.fp32_weights_path(rig.models)
+    assert target.exists()
+    await _wait_for(lambda: calls[0] >= 1)
+    assert target.exists(), "removed inside the grace of the take-over"
+    await _wait_for(lambda: not target.exists())
+    assert rig.meta()[probe.META_PROBE_FP32_FETCHED] == ""
+    assert probe.snapshot().fp32_deleted
+    await rig.run.close()
+
+
+async def test_the_sweep_clears_the_mark_when_php_stored_fp32(tmp_path: Path, small_weights: bytes) -> None:
+    del small_weights
+    rig = Rig(tmp_path, takeover_seconds=60, takeover_poll=0.02)
+    answers = [CompanionChoice(profile="standard", precision="int8")]
+    calls = [0]
+
+    async def read() -> CompanionChoice | None:
+        calls[0] += 1
+        return answers[-1]
+
+    await rig.run.recover(read, retry=0.01)
+    await rig.check("standard", "fp32")
+    await _wait_for(lambda: calls[0] >= 1)
+    answers.append(CompanionChoice(profile="standard", precision="fp32"))
+    await _wait_for(lambda: rig.meta()[probe.META_PROBE_FP32_FETCHED] == "")
+    assert weights.fp32_weights_path(rig.models).exists()
+    await rig.run.close()
+
+
+async def test_recover_after_a_restart_keeps_a_fits_php_may_still_take_over(tmp_path: Path) -> None:
+    """Review WR-08 (c): a restart between "fits" and the take-over deletes nothing."""
+    rig = Rig(tmp_path, takeover_seconds=3000)
+    target = _fetched_mark(rig, PAYLOAD)
+    fits = replace(
+        probe.snapshot(),
+        id="0123456789abcdef",
+        state=probe.STATE_DONE,
+        verdict=probe.VERDICT_FITS,
+        target_profile="standard",
+        target_precision="fp32",
+        fp32_fetched=True,
+        started_at=time.time() - 60,
+        finished_at=time.time() - 30,
+    )
+    rig.write_meta({probe.META_PROBE_RESULT: probe.encode(fits)})
+    probe.reset()
+    await rig.run.restore()
+    read, calls = _choices(CompanionChoice(profile="standard", precision="int8"))
+    task = asyncio.create_task(rig.run.recover(read, retry=0.01))
+    await _wait_for(lambda: calls[0] >= 1)
+    await asyncio.sleep(0.05)
+    assert target.exists()
+    await rig.run.close()
+    await asyncio.wait_for(task, timeout=5)
+    assert target.exists()
+    assert rig.meta()[probe.META_PROBE_FP32_FETCHED] == "1"
+
+
+def test_the_grace_of_the_take_over_is_the_stale_bound_of_php() -> None:
+    """PROBE_TAKEOVER_SECONDS and PENDING_STALE_SECONDS of ProbeService.php are one figure."""
+    php = (TEMPLATE.parents[1] / "lib" / "Service" / "ProbeService.php").read_text(encoding="utf-8")
+    bound = re.search(r"private const PENDING_STALE_SECONDS = (\d+);", php)
+    assert bound is not None
+    assert int(bound.group(1)) == PROBE_TAKEOVER_SECONDS
 
 
 async def test_recover_without_the_mark_reads_nothing(tmp_path: Path) -> None:

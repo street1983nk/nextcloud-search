@@ -35,6 +35,15 @@ finds the state running says nofit interrupted (restore). An fp32 file the check
 fetched is deleted only after the first successful read of the companion, and
 only when the key then says int8 (recover, 27-RESEARCH.md Pitfall 7).
 
+**Ownership of a fetched file (review WR-08 of phase 27).** The mark
+probe_fp32_fetched says that the fp32 file on the volume was fetched by a check
+and not placed by the admin, whichever check fetched it. No start clears it; it
+goes only with the file or when the key reads fp32. A later check that finds the
+file under the mark treats it as its own, so a nofit then removes it as well.
+The sweep runs after every check that kept such a file and not only at the
+start of the container, and it leaves a "fits" alone while PHP may still take
+it over (PROBE_TAKEOVER_SECONDS).
+
 House rules of the guard task (findling/worker/watch.py): nothing is opened in
 the constructor, every reader and clock is injectable, every exception is
 caught and logged with its type name only. State.db is reached through a
@@ -73,6 +82,8 @@ from findling.config import (
     PROBE_MEASURE_SECONDS,
     PROBE_PAUSE_SECONDS,
     PROBE_SAMPLE_SECONDS,
+    PROBE_TAKEOVER_POLL_SECONDS,
+    PROBE_TAKEOVER_SECONDS,
     settings,
 )
 from findling.embed import model_probe, weights
@@ -313,6 +324,8 @@ class ProbeRun:
         measure_seconds: float = PROBE_MEASURE_SECONDS,
         sample_seconds: float = PROBE_SAMPLE_SECONDS,
         min_free_bytes: int | None = None,
+        takeover_seconds: float = PROBE_TAKEOVER_SECONDS,
+        takeover_poll: float = PROBE_TAKEOVER_POLL_SECONDS,
     ) -> None:
         self._poller = poller
         self._runner = runner
@@ -343,9 +356,15 @@ class ProbeRun:
         self._closed = asyncio.Event()
         self._store: Store | None = None
         self._store_lock = threading.Lock()
-        # Whether the running check fetched the fp32 file itself.
+        # Whether the fp32 file of the running check was fetched by a check.
         self._fetched = False
         self.task: asyncio.Task[None] | None = None
+        # The reader of the companion the sweep needs, known once recover ran.
+        self._read_choice: Callable[[], Awaitable[CompanionChoice | None]] | None = None
+        self._sweeper: asyncio.Task[None] | None = None
+        self._recover_lock = asyncio.Lock()
+        self._takeover_seconds = takeover_seconds
+        self._takeover_poll = takeover_poll
 
     # -- state.db --------------------------------------------------------
 
@@ -415,10 +434,10 @@ class ProbeRun:
     async def close(self) -> None:
         """Cancel a running check; its finally lifts the hold. Idempotent."""
         self._closed.set()
-        task = self.task
-        if task is not None and not task.done():
-            task.cancel()
-            await asyncio.gather(task, return_exceptions=True)
+        for task in (self.task, self._sweeper):
+            if task is not None and not task.done():
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
         with self._store_lock:
             store, self._store = self._store, None
         if store is not None:
@@ -433,7 +452,7 @@ class ProbeRun:
                 {
                     probe.META_PROBE_STATE: probe.STATE_RUNNING,
                     probe.META_PROBE_ID: snap.id,
-                    probe.META_PROBE_FP32_FETCHED: "",
+                    # The ownership mark of a fetched file is left as it is.
                     probe.META_PROBE_RESULT: probe.encode(snap),
                 }
             )
@@ -473,16 +492,34 @@ class ProbeRun:
             fp32_deleted=deleted,
             now=self._wall_clock(),
         )
-        await self._write_meta(
-            {
-                probe.META_PROBE_STATE: probe.STATE_DONE,
-                # A fetched file that stays is swept by recover after a restart
-                # when the key then says int8.
-                probe.META_PROBE_FP32_FETCHED: "1" if self._fetched and not deleted else "",
-                probe.META_PROBE_RESULT: probe.encode(probe.snapshot()),
-            }
-        )
+        values = {probe.META_PROBE_STATE: probe.STATE_DONE, probe.META_PROBE_RESULT: probe.encode(probe.snapshot())}
+        if self._fetched:
+            # Only a check that handled a fetched file touches the mark; one
+            # that never looked at the file must not lose it.
+            values[probe.META_PROBE_FP32_FETCHED] = "" if deleted else "1"
+        await self._write_meta(values)
         LOGGER.info("the pre-check ended: verdict=%s cause=%s", verdict.verdict, verdict.cause or "none")
+        if self._fetched and not deleted:
+            self._start_sweeper()
+
+    def _start_sweeper(self) -> None:
+        """Sweep a kept fetched file after this check, not only at the next start."""
+        read_choice = self._read_choice
+        if read_choice is None or self._closed.is_set():
+            return
+        if self._sweeper is not None and not self._sweeper.done():
+            return
+        self._sweeper = asyncio.create_task(self._guarded_sweep(read_choice))
+
+    async def _guarded_sweep(self, read_choice: Callable[[], Awaitable[CompanionChoice | None]]) -> None:
+        try:
+            await self.recover(read_choice, retry=self._takeover_poll)
+        except asyncio.CancelledError:
+            raise
+        # Like _guarded_recover of main.py: a sweep that is gone costs a file
+        # on the volume until the next start, never the task of the check.
+        except Exception as error:
+            LOGGER.error("the sweep of the pre-check ended in an unexpected %s", type(error).__name__)
 
     async def _steps(self, target: Profile, precision: str) -> probe.Verdict:
         await self._pause()
@@ -513,8 +550,12 @@ class ProbeRun:
         target = weights.fp32_weights_path(self._models_dir)
         if await asyncio.to_thread(target.exists):
             probe.note_step("digest")
+            # A file an earlier check fetched and left is still a fetched file,
+            # and a nofit of this check removes it (review WR-08 of phase 27).
+            self._fetched = (await self._read_meta()).get(probe.META_PROBE_FP32_FETCHED, "") == "1"
             if not await asyncio.to_thread(weights.fp32_verified, self._models_dir):
-                # A placed file that is not the recorded one; it is the admin's and stays.
+                # Not the recorded file: a placed one is the admin's and stays,
+                # a fetched one goes in the cleanup.
                 raise _nofit("digest_mismatch")
             return
         total = weights.FP32_BYTES
@@ -733,24 +774,44 @@ class ProbeRun:
         Deleted only when the key says int8; kept when it says fp32; nothing is
         decided without a successful read, which is tried again every ``retry``
         seconds until one comes or :meth:`close` is called.
+
+        The mark belongs to the file and not to a check id, so a later check
+        does not end the sweep; it only waits while a check runs. A "fits" for
+        fp32 that kept the file is left alone while it is younger than
+        PROBE_TAKEOVER_SECONDS, because PHP may still store fp32 for it
+        (review WR-08 of phase 27). ``read_choice`` is remembered, so the sweep
+        after a later check uses the same reader.
         """
-        meta = await self._read_meta()
-        if meta.get(probe.META_PROBE_FP32_FETCHED, "") != "1":
-            return
-        owner = meta.get(probe.META_PROBE_ID, "")
-        while not self._closed.is_set():
-            if not self._running():
-                if (await self._read_meta()).get(probe.META_PROBE_ID, "") != owner:
-                    return  # a later check owns the mark now
-                precision = await self._read_precision(read_choice)
-                if precision == _INT8:
-                    await self._sweep(owner)
+        self._read_choice = read_choice
+        if self._recover_lock.locked():
+            return  # a sweep is already on it
+        async with self._recover_lock:
+            while not self._closed.is_set():
+                if (await self._read_meta()).get(probe.META_PROBE_FP32_FETCHED, "") != "1":
                     return
-                if precision == _FP32:
-                    await self._write_meta({probe.META_PROBE_FP32_FETCHED: ""})
-                    return
-            with contextlib.suppress(TimeoutError):
-                await asyncio.wait_for(self._closed.wait(), timeout=retry)
+                wait = retry
+                if not self._running():
+                    precision = await self._read_precision(read_choice)
+                    if precision == _FP32:
+                        await self._write_meta({probe.META_PROBE_FP32_FETCHED: ""})
+                        return
+                    if self._takeover_open():
+                        # Nothing is urgent while PHP may still take it over.
+                        wait = max(retry, self._takeover_poll)
+                    elif precision == _INT8:
+                        await self._sweep()
+                        return
+                with contextlib.suppress(TimeoutError):
+                    await asyncio.wait_for(self._closed.wait(), timeout=wait)
+
+    def _takeover_open(self) -> bool:
+        """Whether the last check is a "fits" for fp32 that PHP may still take over."""
+        snap = probe.snapshot()
+        if snap.state != probe.STATE_DONE or snap.verdict != probe.VERDICT_FITS or snap.target_precision != _FP32:
+            return False
+        if snap.finished_at is None:
+            return False
+        return self._wall_clock() - snap.finished_at < self._takeover_seconds
 
     @staticmethod
     async def _read_precision(read_choice: Callable[[], Awaitable[CompanionChoice | None]]) -> str | None:
@@ -761,7 +822,7 @@ class ProbeRun:
             return None
         return None if choice is None else choice.precision
 
-    async def _sweep(self, owner: str) -> None:
+    async def _sweep(self) -> None:
         try:
             await asyncio.to_thread(weights.remove_fp32_weights, self._models_dir)
         except OSError as error:
@@ -769,7 +830,7 @@ class ProbeRun:
             return
         values = {probe.META_PROBE_FP32_FETCHED: ""}
         snap = probe.snapshot()
-        if snap.id == owner and snap.fp32_fetched:
+        if snap.fp32_fetched and not snap.fp32_deleted:
             swept = replace(snap, fp32_deleted=True)
             probe.restore(swept)
             values[probe.META_PROBE_RESULT] = probe.encode(swept)
