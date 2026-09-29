@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
-status: ready_to_plan
-stopped_at: Phase 26 complete (14/14) — ready to discuss Phase 27
-last_updated: 2026-09-29T06:03:55.540Z
-last_activity: 2026-09-29 -- Phase 26 complete (14/14), verification passed 4/4, review CR/WR fixed
+status: planning
+stopped_at: Phase 27 context gathered
+last_updated: "2026-09-29T07:28:28.464Z"
+last_activity: 2026-09-29
 progress:
   total_phases: 6
   completed_phases: 3
@@ -139,9 +139,9 @@ Aeltere Merker:
 
 ## Session Continuity
 
-Last session: 2026-09-28T19:02:23.474Z
-Stopped at: Phase 26 context gathered
-Resume file: .planning/phases/26-n-ocr-slots-und-speicherw-chter/26-CONTEXT.md
+Last session: 2026-09-29T07:28:28.450Z
+Stopped at: Phase 27 context gathered
+Resume file: .planning/phases/27-vorab-pr-fung-und-settings-oberfl-che/27-CONTEXT.md
 
 ## Operator Next Steps
 
