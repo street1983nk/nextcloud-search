@@ -33,6 +33,8 @@ import re
 import threading
 from collections.abc import Mapping
 from dataclasses import dataclass
+from importlib import resources
+from importlib.resources.abc import Traversable
 from types import MappingProxyType
 from typing import Final, NamedTuple
 
@@ -101,6 +103,16 @@ META_PROBE_STATE = "probe_state"
 META_PROBE_ID = "probe_id"
 META_PROBE_FP32_FETCHED = "probe_fp32_fetched"
 META_PROBE_RESULT = "probe_result"
+
+# The scan page the check runs through OCR, shipped in the package next to the
+# extractors. A byte exact copy of testdata/corpus/13-ratsvorlage-scan.pdf, a
+# synthetic council paper without any user data. One page of this kind is
+# representative enough (27-RESEARCH.md A4): a lighter page measures below
+# OCR_SLOT_COST_BYTES, and judge counts the constant then. The orchestrator
+# checks the digest before use; a test pins digest and size.
+PROBE_SCAN_NAME: Final = "probe_scan.pdf"
+PROBE_SCAN_SHA256: Final = "320bb1aa17c9192d822ea6b6c570f7d125e113181e05ad62fe1afd728a0a81f3"
+PROBE_SCAN_BYTES: Final = 79_506
 
 # 8 random bytes, 16 hex digits: never a path, never a text.
 _ID_PATTERN: Final = re.compile(r"[0-9a-f]{16}")
@@ -244,6 +256,11 @@ def pending_load_bytes(
 def first_slot_admitted(headroom: int | None) -> bool:
     """The first OCR child of the check starts only with its cost plus the reserve free."""
     return headroom is not None and headroom >= OCR_SLOT_COST_BYTES + GUARD_RESERVE_BYTES
+
+
+def probe_scan_path() -> Traversable:
+    """The shipped scan page. The path is never logged and never handed out."""
+    return resources.files("findling.extract") / PROBE_SCAN_NAME
 
 
 def model_child_admitted(headroom: int | None) -> bool:
@@ -510,6 +527,9 @@ __all__ = [
     "META_PROBE_STATE",
     "NUMBER_KEYS",
     "PRECISIONS",
+    "PROBE_SCAN_BYTES",
+    "PROBE_SCAN_NAME",
+    "PROBE_SCAN_SHA256",
     "START_BUSY",
     "START_REBUILDING",
     "STATES",
@@ -535,6 +555,7 @@ __all__ = [
     "model_child_admitted",
     "note_step",
     "pending_load_bytes",
+    "probe_scan_path",
     "release",
     "reset",
     "restore",

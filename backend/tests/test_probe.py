@@ -18,8 +18,10 @@ this suite pins:
 
 from __future__ import annotations
 
+import hashlib
 import itertools
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -376,3 +378,20 @@ def test_the_ceilings() -> None:
     assert PROBE_MEASURE_SECONDS == 120
     assert PROBE_DOWNLOAD_SECONDS == 600
     assert PROBE_PAUSE_SECONDS == OCR_LOCK_TIMEOUT_SECONDS == 1800
+
+
+# -- the shipped scan page ------------------------------------------------
+
+
+def test_the_scan_page_ships_in_the_package() -> None:
+    page = probe.probe_scan_path()
+    assert page.name == probe.PROBE_SCAN_NAME
+    assert page.is_file()
+
+
+def test_the_scan_page_matches_its_pins() -> None:
+    data = probe.probe_scan_path().read_bytes()
+    assert re.fullmatch(r"[0-9a-f]{64}", probe.PROBE_SCAN_SHA256)
+    assert len(data) == probe.PROBE_SCAN_BYTES
+    assert hashlib.sha256(data).hexdigest() == probe.PROBE_SCAN_SHA256
+    assert data.startswith(b"%PDF-")
