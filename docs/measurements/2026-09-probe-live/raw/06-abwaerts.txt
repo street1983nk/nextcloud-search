@@ -1,0 +1,6 @@
+occ profile before: standard
+POST admin/profile performance/int8 (upward, no probe): {"saved":false,"code":"probe_required"} HTTP400
+occ profile after upward attempt: standard
+POST admin/profile economy/int8: {"saved":true,"code":"saved"} HTTP200
+occ profile after: economy
+overview after: HTTP200 profileStored=True chosen=economy effective=economy precision=int8

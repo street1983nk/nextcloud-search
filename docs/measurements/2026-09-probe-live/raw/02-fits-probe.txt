@@ -1,0 +1,14 @@
+label=02-fits target=standard/int8
+occ profile before: (unset)
+memory limit: 0
+overview before: HTTP200 runState=running scheduled=88 running=0 indexed=0 embedded=0 probeRunning=False probeStep= profileStored=False effective=economy slotsInForce=1
+POST admin/profile/check: {"started":true,"code":"started"} HTTP200
+t=2s state: HTTP200 state=running step=ocr_one bytes=0/0 verdict=None cause=None numbers=null profile=None precision=None
+t=2s overview: HTTP200 runState=running scheduled=88 running=0 indexed=0 embedded=0 probeRunning=True probeStep=ocr_one profileStored=False effective=economy slotsInForce=1
+t=4s state: HTTP200 state=running step=ocr_one bytes=0/0 verdict=None cause=None numbers=null profile=None precision=None
+t=4s overview: HTTP200 runState=running scheduled=88 running=0 indexed=0 embedded=0 probeRunning=True probeStep=ocr_one profileStored=False effective=economy slotsInForce=1
+t=6s state: HTTP200 state=done step=cleanup bytes=0/0 verdict=fits cause= numbers={"slots": 1, "need": 1609969536, "available": 4995248128} profile=standard precision=int8
+t=6s overview: HTTP200 runState=running scheduled=88 running=0 indexed=0 embedded=0 probeRunning=False probeStep= profileStored=True effective=economy slotsInForce=1
+overview after: HTTP200 runState=running scheduled=88 running=0 indexed=0 embedded=0 probeRunning=False probeStep= profileStored=True effective=economy slotsInForce=1
+occ profile after: standard
+occ model_precision after: int8

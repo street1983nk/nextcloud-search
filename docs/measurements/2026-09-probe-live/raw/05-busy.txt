@@ -1,0 +1,8 @@
+memory limit: 3093299200
+occ profile before: standard
+first POST admin/profile/check performance/int8: {"started":true,"code":"started"} HTTP200
+second POST admin/profile/check performance/int8: {"started":false,"code":"busy"} HTTP200
+second POST admin/profile/check standard/fp32: {"started":false,"code":"busy"} HTTP200
+GET admin/profile/check: {"code":"ok","state":"running","step":"pause","bytesDone":0,"bytesTotal":0,"result":{"id":"<id>","profile":"
+after end: HTTP200 done narrow reserve_thin performance
+occ profile after: standard

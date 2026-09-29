@@ -1,0 +1,18 @@
+GET admin/overview HTTP200
+profileStored=false
+profileChosen="economy"
+profileSuggested="standard"
+profileEffective="economy"
+storedPrecision="int8"
+probeSupported=true
+probeRunning=false
+probeStep=""
+profileCheck=null
+profileEnv=[]
+hardwareCores=12
+hardwareMemory=8163373056
+fp32DownloadBytes=470268510
+backend.guardEffective=economy
+backend.slotsInForce=1
+GET admin/profile/check {"code":"ok","state":"idle","step":"","bytesDone":0,"bytesTotal":0,"result":null} HTTP200
+occ config:app:get findling profile: (unset, exit 1)

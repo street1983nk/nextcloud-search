@@ -1,0 +1,6 @@
+host: Windows 11 Pro 10.0.26200, Docker Desktop 29.5.2 (WSL2, kernel line 6.6 microsoft-standard)
+docker vm: cpus=12 mem=8163373056
+harness: scripts/dev/compose-harp.yaml, nextcloud:34.0.3-apache (OC 34.0.3), HaRP pinned by digest, front proxy nginx:1.27-alpine, registry 127.0.0.1:5055
+companion: php/ from HEAD 2e3d2dc9, findling 1.3.0 (lockstep match 1.3.0/1.3.0)
+data: testdata/corpus (39 files) plus build_load_corpus.py --seed probe27-dry --dry-run-files (500 files, 244606462 bytes, checksum 304cbce0e48e0331b6e432f677e95b2d3a1fd3a42c010a9dff3c69cc4e5a0c14), synthetic only
+memory limit of nc_app_findling_backend: start 0 (none); 02 none; 03 2600m; 04 and 05 2950m (3093299200 bytes); reset: container recreated by unregister/register without --rm-data, afterwards Memory=0 MemorySwap=0

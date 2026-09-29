@@ -1,0 +1,18 @@
+label=04-perf-2950m target=performance/int8
+occ profile before: standard
+memory limit: 3093299200
+overview before: HTTP200 runState=running scheduled=313 running=10 indexed=465 embedded=246 probeRunning=False probeStep= profileStored=True effective=standard slotsInForce=1
+POST admin/profile/check: {"started":true,"code":"started"} HTTP200
+t=2s state: HTTP200 state=running step=pause bytes=0/0 verdict=nofit cause=memory_short numbers={"slots": 5, "need": 1663115264, "available": 1419055104} profile=performance precision=int8
+t=2s overview: HTTP200 runState=running scheduled=313 running=10 indexed=465 embedded=249 probeRunning=True probeStep=pause profileStored=True effective=standard slotsInForce=1
+t=4s state: HTTP200 state=running step=pause bytes=0/0 verdict=nofit cause=memory_short numbers={"slots": 5, "need": 1663115264, "available": 1419055104} profile=performance precision=int8
+t=4s overview: HTTP200 runState=running scheduled=313 running=2 indexed=465 embedded=251 probeRunning=True probeStep=pause profileStored=True effective=standard slotsInForce=1
+t=6s state: HTTP200 state=running step=pause bytes=0/0 verdict=nofit cause=memory_short numbers={"slots": 5, "need": 1663115264, "available": 1419055104} profile=performance precision=int8
+t=6s overview: HTTP200 runState=running scheduled=313 running=2 indexed=467 embedded=251 probeRunning=True probeStep=pause profileStored=True effective=standard slotsInForce=1
+t=8s state: HTTP200 state=running step=ocr_one bytes=0/0 verdict=nofit cause=memory_short numbers={"slots": 5, "need": 1663115264, "available": 1419055104} profile=performance precision=int8
+t=8s overview: HTTP200 runState=running scheduled=315 running=0 indexed=467 embedded=251 probeRunning=True probeStep=ocr_one profileStored=True effective=standard slotsInForce=1
+t=10s state: HTTP200 state=done step=cleanup bytes=0/0 verdict=narrow cause=reserve_thin numbers={"reserve": 120123392, "required": 246415360} profile=performance precision=int8
+t=10s overview: HTTP200 runState=running scheduled=305 running=10 indexed=467 embedded=256 probeRunning=False probeStep= profileStored=True effective=standard slotsInForce=1
+overview after: HTTP200 runState=running scheduled=289 running=10 indexed=467 embedded=267 probeRunning=False probeStep= profileStored=True effective=standard slotsInForce=1
+occ profile after: standard
+occ model_precision after: int8

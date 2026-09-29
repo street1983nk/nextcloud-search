@@ -1,0 +1,16 @@
+label=03-perf-2600m target=performance/int8
+occ profile before: standard
+memory limit: 2726297600
+overview before: HTTP200 runState=running scheduled=351 running=40 indexed=402 embedded=192 probeRunning=False probeStep= profileStored=True effective=standard slotsInForce=1
+POST admin/profile/check: {"started":true,"code":"started"} HTTP200
+t=2s state: HTTP200 state=running step=pause bytes=0/0 verdict=fits cause= numbers={"slots": 1, "need": 1609969536, "available": 4995248128} profile=standard precision=int8
+t=2s overview: HTTP200 runState=running scheduled=351 running=40 indexed=402 embedded=194 probeRunning=True probeStep=pause profileStored=True effective=standard slotsInForce=1
+t=4s state: HTTP200 state=running step=ocr_one bytes=0/0 verdict=fits cause= numbers={"slots": 1, "need": 1609969536, "available": 4995248128} profile=standard precision=int8
+t=4s overview: HTTP200 runState=running scheduled=383 running=0 indexed=426 embedded=195 probeRunning=True probeStep=ocr_one profileStored=True effective=standard slotsInForce=1
+t=6s state: HTTP200 state=running step=ocr_one bytes=0/0 verdict=fits cause= numbers={"slots": 1, "need": 1609969536, "available": 4995248128} profile=standard precision=int8
+t=6s overview: HTTP200 runState=running scheduled=343 running=40 indexed=426 embedded=195 probeRunning=False probeStep= profileStored=True effective=standard slotsInForce=1
+t=8s state: HTTP200 state=done step=cleanup bytes=0/0 verdict=nofit cause=memory_short numbers={"slots": 5, "need": 1663115264, "available": 1419055104} profile=performance precision=int8
+t=8s overview: HTTP200 runState=running scheduled=343 running=40 indexed=426 embedded=202 probeRunning=False probeStep= profileStored=True effective=standard slotsInForce=1
+overview after: HTTP200 runState=running scheduled=327 running=40 indexed=426 embedded=213 probeRunning=False probeStep= profileStored=True effective=standard slotsInForce=1
+occ profile after: standard
+occ model_precision after: int8

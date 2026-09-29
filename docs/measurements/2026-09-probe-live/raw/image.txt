@@ -1,0 +1,6 @@
+image: localhost:5055/findling_backend:probe27
+built from: HEAD 2e3d2dc9 (docker build --build-context scripts=./scripts ./backend)
+id: sha256:99379cf72a355716f7e9492b8eabe13f301f4388c06b77abce25184dc4127f83
+repo digest: localhost:5055/findling_backend@sha256:99379cf72a355716f7e9492b8eabe13f301f4388c06b77abce25184dc4127f83
+arch: amd64, created 2026-09-29T10:52:57Z
+container image after reset: sha256:99379cf72a355716f7e9492b8eabe13f301f4388c06b77abce25184dc4127f83

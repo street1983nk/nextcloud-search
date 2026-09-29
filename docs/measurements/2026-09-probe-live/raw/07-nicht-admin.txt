@@ -1,0 +1,9 @@
+user: testuser (no admin group), session login with requesttoken
+occ profile before: economy
+POST admin/profile/check standard/int8: {"message":"Logged in account must be an admin"} HTTP403
+POST admin/profile performance/int8: {"message":"Logged in account must be an admin"} HTTP403
+POST admin/profile economy/int8: {"message":"Logged in account must be an admin"} HTTP403
+GET admin/profile/check: {"message":"Logged in account must be an admin"} HTTP403
+GET admin/overview: {"message":"Logged in account must be an admin"} HTTP403
+occ profile after: economy
+check as admin, GET admin/profile/check: HTTP200
