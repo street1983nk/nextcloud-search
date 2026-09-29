@@ -112,6 +112,49 @@ final class CrawlAdvanceServiceTest extends TestCase {
 		self::assertSame(['ran' => false, 'pending' => false], $service->advance());
 	}
 
+	public function testACrawlRowBehindARecountRowStillRuns(): void {
+		// Review WR-01 of phase 27: a recount row at the head used to end the
+		// search with "nothing pending" while a crawl row waited behind it.
+		$recount = $this->createMock(IJob::class);
+		$recount->method('getArgument')->willReturn(array_merge(self::CANONICAL, [
+			'mode' => StorageCrawlJob::MODE_RECOUNT,
+		]));
+		$recount->expects($this->never())->method('start');
+
+		$crawl = $this->createMock(IJob::class);
+		$crawl->method('getArgument')->willReturn(self::CANONICAL);
+		$crawl->expects($this->once())->method('start');
+		$successor = $this->createMock(IJob::class);
+		$successor->method('getArgument')->willReturn(self::CANONICAL);
+
+		$jobList = $this->createMock(IJobList::class);
+		$jobList->method('getJobsIterator')->willReturnOnConsecutiveCalls(
+			[$recount, $crawl],
+			[$recount, $successor],
+		);
+		$jobList->expects($this->once())->method('remove')->with($crawl, self::CANONICAL);
+
+		$service = new CrawlAdvanceService($jobList, $this->createMock(LoggerInterface::class));
+
+		self::assertSame(['ran' => true, 'pending' => true], $service->advance());
+	}
+
+	public function testOnlyRecountRowsLeftIsNotPending(): void {
+		$crawl = $this->createMock(IJob::class);
+		$crawl->method('getArgument')->willReturn(self::CANONICAL);
+		$recount = $this->createMock(IJob::class);
+		$recount->method('getArgument')->willReturn(array_merge(self::CANONICAL, [
+			'mode' => StorageCrawlJob::MODE_RECOUNT,
+		]));
+
+		$jobList = $this->createMock(IJobList::class);
+		$jobList->method('getJobsIterator')->willReturnOnConsecutiveCalls([$crawl], [$recount]);
+
+		$service = new CrawlAdvanceService($jobList, $this->createMock(LoggerInterface::class));
+
+		self::assertSame(['ran' => true, 'pending' => false], $service->advance());
+	}
+
 	public function testTheBudgetIsClampedBetweenTheFloorAndTheCeiling(): void {
 		// The clamp lives in the job, but the service is what hands the budget
 		// over, so the agreement between the two is asserted where both ends

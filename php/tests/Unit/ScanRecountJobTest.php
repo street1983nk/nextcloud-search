@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\Findling\Tests\Unit;
 
 use OCA\Findling\BackgroundJobs\ScanRecountJob;
+use OCA\Findling\BackgroundJobs\SchedulerJob;
 use OCA\Findling\BackgroundJobs\StorageCrawlJob;
 use OCA\Findling\Service\SettingsService;
 use OCA\Findling\Service\StorageService;
@@ -102,6 +103,26 @@ final class ScanRecountJobTest extends TestCase {
 		$this->runJob($this->job($jobList, $storageService));
 
 		// The mark survives for the round after the crawl.
+		self::assertSame(self::NOW - 60, $this->values[SettingsService::KEY_SCAN_STALE_SINCE]);
+	}
+
+	public function testNothingIsPlannedWhileTheSchedulerIsStillPending(): void {
+		// Review WR-01 of phase 27: on a fresh install and after occ
+		// findling:index --restart the scheduler row comes before any crawl
+		// row, and a recount planned then would run beside the crawl.
+		$this->values[SettingsService::KEY_SCAN_STALE_SINCE] = self::NOW - 60;
+
+		$jobList = $this->createMock(IJobList::class);
+		$jobList->method('getJobsIterator')->willReturnCallback(
+			fn (string $class): array => $class === SchedulerJob::class ? [$this->createMock(IJob::class)] : [],
+		);
+		$jobList->expects($this->never())->method('add');
+
+		$storageService = $this->createMock(StorageService::class);
+		$storageService->expects($this->never())->method('getMounts');
+
+		$this->runJob($this->job($jobList, $storageService));
+
 		self::assertSame(self::NOW - 60, $this->values[SettingsService::KEY_SCAN_STALE_SINCE]);
 	}
 

@@ -47,8 +47,9 @@ use Psr\Log\LoggerInterface;
  * Why it never runs next to a crawl. A crawl row of a mount without a
  * finished_at is the truth being built, and a recount that replaced it would
  * throw away the bands already added. So nothing is planned while any
- * StorageCrawlJob row exists, crawl or recount, and replaceStorage refuses to
- * touch a row without a finished_at as a second line.
+ * StorageCrawlJob row exists, crawl or recount, or while a SchedulerJob row
+ * is still waiting to plan the crawl, and replaceStorage refuses to touch a
+ * row without a finished_at as a second line.
  *
  * What it deliberately does not do: delete the rows of mounts that left the
  * mount list (a deleted user, a switch turned off). The container keeps the
@@ -80,6 +81,14 @@ class ScanRecountJob extends TimedJob {
 		// not get a second chain beside it, which would count the same mount
 		// twice in parallel and waste the walk.
 		foreach ($this->jobList->getJobsIterator(StorageCrawlJob::class, 1, 0) as $job) {
+			return;
+		}
+		// A pending SchedulerJob is a crawl about to be planned. On a fresh
+		// install this job is registered before the repair step queues the
+		// scheduler, and occ findling:index --restart queues it again; a
+		// recount planned in that window would put recount rows beside the
+		// crawl rows the scheduler adds next.
+		foreach ($this->jobList->getJobsIterator(SchedulerJob::class, 1, 0) as $job) {
 			return;
 		}
 

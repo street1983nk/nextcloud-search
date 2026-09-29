@@ -714,8 +714,13 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # SettingsServiceTest.php, AdminViewServiceTest.php, ProbeServiceTest.php,
 # ProfileControllerTest.php and ProfileSettingsControllerTest.php. No file
 # went, so PHP_FILES_TODAY moves to 82.
+# Measured again by the review fixes of phase 27: WR-01 changed the bytes of
+# ScanRecountJob.php (no recount while the scheduler is pending) and
+# CrawlAdvanceService.php (a recount row no longer hides a crawl row), and of
+# their two unit tests. No file came and none went, so PHP_FILES_TODAY stays
+# at 82.
 PHP_FILES_TODAY = 82
-PHP_TREE_HASH_TODAY = "b06c30e2dc90a3a93ba9c671c9e3980089e8c36d078b514c35bcddae8691fcc1"
+PHP_TREE_HASH_TODAY = "f3a85cabbe5a6bea9892d9c5fd51719c3ef4fe0192270738502406cda4d09530"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

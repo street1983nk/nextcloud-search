@@ -60,20 +60,21 @@ class CrawlAdvanceService {
 	public function advance(): array {
 		$ran = false;
 
-		foreach ($this->jobList->getJobsIterator(StorageCrawlJob::class, 1, 0) as $job) {
+		// Every row, not only the first: a recount row at the head must not
+		// hide a crawl row behind it.
+		foreach ($this->jobList->getJobsIterator(StorageCrawlJob::class, null, 0) as $job) {
 			$argument = $job->getArgument();
 
-			if (is_array($argument) && ($argument['mode'] ?? null) === StorageCrawlJob::MODE_RECOUNT) {
+			if (self::isRecount($argument)) {
 				// A recount of the denominator (quick task 260929-kii), not a
 				// crawl. It queues nothing, so a hungry container has nothing to
 				// wait for from it: running it here would spend the OCS budget of
 				// the caller on counting, and "pending" would keep the container
-				// polling for work that never arrives. Crawl rows and recount
-				// rows never exist side by side (ScanRecountJob plans only when
-				// no StorageCrawlJob row exists, and occ findling:index --restart
-				// removes every StorageCrawlJob row), so a recount at the head
-				// means the crawl is through.
-				return ['ran' => false, 'pending' => false];
+				// polling for work that never arrives. ScanRecountJob plans only
+				// when neither a StorageCrawlJob nor a SchedulerJob row exists,
+				// so the two should never meet; should they anyway, the recount
+				// row is passed over and a crawl row behind it still runs.
+				continue;
 			}
 
 			// Removed under the canonical argument BEFORE the run, mirroring
@@ -91,11 +92,17 @@ class CrawlAdvanceService {
 			// unchanged, so the chain survives every path out of this call.
 			$job->start($this->jobList);
 			$ran = true;
+			// Exactly one slice per request.
+			break;
 		}
 
+		// Only crawl rows are work the container can wait for.
 		$pending = false;
-		foreach ($this->jobList->getJobsIterator(StorageCrawlJob::class, 1, 0) as $job) {
-			$pending = true;
+		foreach ($this->jobList->getJobsIterator(StorageCrawlJob::class, null, 0) as $job) {
+			if (!self::isRecount($job->getArgument())) {
+				$pending = true;
+				break;
+			}
 		}
 
 		if ($ran) {
@@ -103,5 +110,9 @@ class CrawlAdvanceService {
 		}
 
 		return ['ran' => $ran, 'pending' => $pending];
+	}
+
+	private static function isRecount(mixed $argument): bool {
+		return is_array($argument) && ($argument['mode'] ?? null) === StorageCrawlJob::MODE_RECOUNT;
 	}
 }
