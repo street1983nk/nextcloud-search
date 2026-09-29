@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
 status: planning
-stopped_at: Phase 27 context gathered
-last_updated: "2026-09-29T07:28:28.464Z"
+stopped_at: Phase 27 UI-SPEC approved
+last_updated: "2026-09-29T07:37:34.379Z"
 last_activity: 2026-09-29
 progress:
   total_phases: 6
@@ -139,9 +139,9 @@ Aeltere Merker:
 
 ## Session Continuity
 
-Last session: 2026-09-29T07:28:28.450Z
-Stopped at: Phase 27 context gathered
-Resume file: .planning/phases/27-vorab-pr-fung-und-settings-oberfl-che/27-CONTEXT.md
+Last session: 2026-09-29T07:37:34.360Z
+Stopped at: Phase 27 UI-SPEC approved
+Resume file: .planning/phases/27-vorab-pr-fung-und-settings-oberfl-che/27-UI-SPEC.md
 
 ## Operator Next Steps
 
