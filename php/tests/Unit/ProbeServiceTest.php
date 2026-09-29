@@ -203,6 +203,41 @@ final class ProbeServiceTest extends TestCase {
 		self::assertSame([], $this->writes);
 	}
 
+	/** @return array<string, array{string}> */
+	public static function lostStartAnswers(): array {
+		return [
+			'cut off by the timeout' => [ExAppService::ADMIN_UNREACHABLE],
+			'the next click' => [ExAppService::ADMIN_BUSY],
+		];
+	}
+
+	#[DataProvider('lostStartAnswers')]
+	public function testARunningProbeOfTheSameTargetIsAdoptedWithoutARecord(string $kind): void {
+		// Review WR-07 of phase 27: the container started the probe, the answer
+		// did not arrive in time, and this side has no pending record.
+		$this->exApp->method('adminSend')->willReturn(['kind' => $kind, 'body' => $kind === ExAppService::ADMIN_BUSY ? ['state' => 'busy', 'id' => self::ID] : null]);
+		$this->stateAnswer(ExAppService::ADMIN_OK, $this->done(['state' => 'running', 'verdict' => '', 'step' => 'pause']));
+
+		$answer = $this->service()->start('standard', 'int8', 'admin');
+
+		self::assertSame(['started' => true, 'code' => 'started'], $answer);
+		$pending = $this->values[SettingsService::KEY_PROFILE_CHECK_PENDING];
+		self::assertSame(self::ID, $pending['id']);
+		self::assertSame('standard', $pending['profile']);
+		self::assertSame('int8', $pending['precision']);
+		self::assertSame(self::NOW, $pending['startedAt']);
+	}
+
+	public function testARunningProbeOfAnotherTargetStaysBusy(): void {
+		$this->exApp->method('adminSend')->willReturn(['kind' => ExAppService::ADMIN_BUSY, 'body' => ['state' => 'busy', 'id' => self::ID]]);
+		$this->stateAnswer(ExAppService::ADMIN_OK, $this->done(['state' => 'running', 'verdict' => '', 'targetProfile' => 'performance']));
+
+		$answer = $this->service()->start('standard', 'int8', 'admin');
+
+		self::assertSame(['started' => false, 'code' => 'busy'], $answer);
+		self::assertSame([], $this->writes);
+	}
+
 	/** @return array<string, array{string, string}> */
 	public static function invalidTargets(): array {
 		return [

@@ -129,18 +129,68 @@ final class ProbeService {
 
 			case ExAppService::ADMIN_BUSY:
 				$state = $outcome['body']['state'] ?? null;
+				if ($state === self::START_REBUILDING) {
+					return ['started' => false, 'code' => self::START_REBUILDING];
+				}
 
-				return [
-					'started' => false,
-					'code' => $state === self::START_REBUILDING ? self::START_REBUILDING : self::START_BUSY,
-				];
+				return $this->adopt($profile, $precision, $uid)
+					? ['started' => true, 'code' => self::START_STARTED]
+					: ['started' => false, 'code' => self::START_BUSY];
 
 			case ExAppService::ADMIN_MISSING:
 				return ['started' => false, 'code' => self::START_UNSUPPORTED];
 
+			case ExAppService::ADMIN_UNREACHABLE:
+				return $this->adopt($profile, $precision, $uid)
+					? ['started' => true, 'code' => self::START_STARTED]
+					: ['started' => false, 'code' => self::START_UNREACHABLE];
+
 			default:
 				return ['started' => false, 'code' => self::START_UNREACHABLE];
 		}
+	}
+
+	/**
+	 * Take over a probe the container runs but this side has no record of
+	 * (review WR-07 of phase 27).
+	 *
+	 * A start the two second admin timeout cut off reads as unreachable here
+	 * while the container started the probe anyway, and the next click reads
+	 * busy. Without a record its verdict would never be taken over and never
+	 * shown. So when no record exists, the state route is asked once, and a
+	 * running probe with exactly the requested target and a well formed id is
+	 * adopted as the pending one. A probe of another target is somebody else's
+	 * and stays busy; the verdict of that one is not this click's to take.
+	 */
+	private function adopt(string $profile, string $precision, string $uid): bool {
+		if ($this->settingsService->profileCheckPending() !== null) {
+			return false;
+		}
+
+		$outcome = $this->exAppService->adminState('/probe/state', $uid);
+		if ($outcome['kind'] !== ExAppService::ADMIN_OK || !is_array($outcome['body'])) {
+			return false;
+		}
+
+		$snapshot = $this->snapshot($outcome['body']);
+		if ($snapshot['state'] !== 'running'
+			|| $snapshot['id'] === ''
+			|| $snapshot['targetProfile'] !== $profile
+			|| $snapshot['targetPrecision'] !== $precision) {
+			return false;
+		}
+
+		$this->settingsService->rememberPending([
+			'id' => $snapshot['id'],
+			'profile' => $profile,
+			'precision' => $precision,
+			'uid' => $uid,
+			'startedAt' => $this->timeFactory->getTime(),
+			'inForce' => $this->inForce(),
+		]);
+		$this->logger->info('Findling: took over a probe whose start answer was lost');
+
+		return true;
 	}
 
 	/**

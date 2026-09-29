@@ -551,10 +551,38 @@ async def test_fp32_in_force_needs_neither_download_nor_model(tmp_path: Path, st
     assert rig.measures.calls == []
 
 
+async def test_the_start_answers_before_the_state_is_written(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Review WR-07 of phase 27: a slow state.db write never delays the 202.
+
+    PHP cuts the start off after two seconds; a start that waited for a write
+    behind the SQLite writer of the poller answered too late, PHP recorded
+    nothing, and the probe ran without anybody taking its verdict over.
+    """
+    rig = Rig(tmp_path)
+    gate = threading.Event()
+    original = ProbeRun._write_meta_sync
+
+    def slow(self: ProbeRun, values: dict[str, str]) -> None:
+        gate.wait(10)
+        original(self, values)
+
+    monkeypatch.setattr(ProbeRun, "_write_meta_sync", slow)
+    started = time.monotonic()
+    answer, probe_id = await asyncio.wait_for(rig.run.start("standard", "int8"), timeout=5)
+    assert answer == "started"
+    assert time.monotonic() - started < 1.0
+    gate.set()
+    assert rig.run.task is not None
+    await asyncio.wait_for(rig.run.task, timeout=20)
+    assert rig.meta()[probe.META_PROBE_ID] == probe_id
+
+
 async def test_the_meta_carries_running_and_then_the_result(tmp_path: Path) -> None:
     rig = Rig(tmp_path)
     rig.poller.pass_in_flight = True
     _, probe_id = await rig.run.start("standard", "int8")
+    # The task writes the running state before its first step.
+    await _wait_for(lambda: rig.meta().get(probe.META_PROBE_STATE) == probe.STATE_RUNNING)
     meta = rig.meta()
     assert meta[probe.META_PROBE_STATE] == probe.STATE_RUNNING
     assert meta[probe.META_PROBE_ID] == probe_id
@@ -588,6 +616,7 @@ async def test_a_restart_in_the_middle_reads_as_interrupted(tmp_path: Path) -> N
     rig = Rig(tmp_path)
     rig.poller.pass_in_flight = True
     _, probe_id = await rig.run.start("performance", "int8")
+    await _wait_for(lambda: rig.meta().get(probe.META_PROBE_STATE) == probe.STATE_RUNNING)
     # The container dies: the task is gone, the meta says running.
     assert rig.run.task is not None
     rig.run.task.cancel()

@@ -403,14 +403,11 @@ class ProbeRun:
             probe_id = secrets.token_hex(8)
             probe.begin(probe_id, profile_name, precision, self._wall_clock())
             self._fetched = False
-            await self._write_meta(
-                {
-                    probe.META_PROBE_STATE: probe.STATE_RUNNING,
-                    probe.META_PROBE_ID: probe_id,
-                    probe.META_PROBE_FP32_FETCHED: "",
-                    probe.META_PROBE_RESULT: probe.encode(probe.snapshot()),
-                }
-            )
+            # The running state is written by the task and not awaited here
+            # (review WR-07 of phase 27): the write goes through a worker thread
+            # while the poller may hold the SQLite writer, and PHP cuts the start
+            # off after two seconds. A 202 that arrives late is a probe PHP never
+            # takes over; the task writes the state before its first step.
             LOGGER.info("a pre-check started")
             self.task = asyncio.create_task(self._run(Profile(profile_name), precision))
             return (START_STARTED, probe_id)
@@ -431,6 +428,15 @@ class ProbeRun:
 
     async def _run(self, target: Profile, precision: str) -> None:
         try:
+            snap = probe.snapshot()
+            await self._write_meta(
+                {
+                    probe.META_PROBE_STATE: probe.STATE_RUNNING,
+                    probe.META_PROBE_ID: snap.id,
+                    probe.META_PROBE_FP32_FETCHED: "",
+                    probe.META_PROBE_RESULT: probe.encode(snap),
+                }
+            )
             try:
                 verdict = await self._steps(target, precision)
             except _Ended as ended:

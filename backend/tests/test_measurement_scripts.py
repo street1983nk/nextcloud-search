@@ -727,9 +727,11 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # Version001300Date20260927000000.php (comments and log lines).
 # PHP_FILES_TODAY stays at 82. WR-06 changed ProbeService.php (the stored
 # profile at the start of a probe, no commit over a later save) and
-# ProbeServiceTest.php. PHP_FILES_TODAY stays at 82.
+# ProbeServiceTest.php. PHP_FILES_TODAY stays at 82. WR-07 changed
+# ProbeService.php (a running probe of the same target is adopted when the
+# start answer was lost) and ProbeServiceTest.php. PHP_FILES_TODAY stays at 82.
 PHP_FILES_TODAY = 82
-PHP_TREE_HASH_TODAY = "a22fff98b5395c3bfb5b46c9454b2fd7d864f736f22fe50d68658b28bd58f567"
+PHP_TREE_HASH_TODAY = "f068dce30e9ec2566d073e690f505d7b07bbe1e6f05d4cafed13c7b2125457a1"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
@@ -1518,8 +1520,10 @@ PHP_TREE_HASH_TODAY = "a22fff98b5395c3bfb5b46c9454b2fd7d864f736f22fe50d68658b28b
 # Measured again by the review fixes of phase 27: CR-01 changed the bytes of
 # worker/probe_run.py (the figures of model_memory and timeout from the model
 # child). No file came and none went, so PACKAGE_FILES_TODAY stays at 71.
+# WR-07 changed worker/probe_run.py (the start answers before the state
+# write). PACKAGE_FILES_TODAY stays at 71.
 PACKAGE_FILES_TODAY = 71
-PACKAGE_TREE_HASH_TODAY = "f2e7e4e2dfdf23c97a75b8d165467cc91cda33756df248bad7f41c03903dc79b"
+PACKAGE_TREE_HASH_TODAY = "3d59cc9eb12e4ce0f440175a0548e98eab28cd813e127ea3b75c5ff798f34f5f"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
