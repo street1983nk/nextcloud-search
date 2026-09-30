@@ -86,12 +86,18 @@ exit 2
 STUB_CURL = """#!/bin/sh
 printf 'curl %s\\n' "$*" >>"$STUB/aufrufe"
 [ -f "$STUB/karte" ] || exit 22
+ziel=''
 while [ "$#" -gt 0 ]; do
     case "$1" in
-    -o) shift; cat "$STUB/karte" >"$1" ;;
+    -o) shift; ziel=$1 ;;
     esac
     shift
 done
+if [ -n "$ziel" ]; then
+    cat "$STUB/karte" >"$ziel"
+else
+    cat "$STUB/karte"
+fi
 exit 0
 """
 
@@ -183,6 +189,16 @@ def test_the_type_switch_turns_the_windows_path_rewriting_off() -> None:
     code = code_of(TYPE_SWITCH.read_text(encoding="utf-8"))
     assert "MSYS_NO_PATHCONV=1" in code
     assert "MSYS2_ARG_CONV_EXCL='*'" in code
+
+
+def test_the_price_survives_the_windows_argument_and_path_handling() -> None:
+    """Both failures of 30.09.2026: no path for curl, no backslash for python."""
+    code = code_of(TYPE_SWITCH.read_text(encoding="utf-8"))
+    fetch = next(line for line in code.splitlines() if "curl -sS" in line)
+    assert " -o " not in fetch
+    assert '>"$karte"' in fetch
+    program = code.split('"$PYTHON" -c \'', 1)[1].split("'", 1)[0]
+    assert "\\" not in program
 
 
 def test_the_type_switch_is_executable_in_the_index() -> None:

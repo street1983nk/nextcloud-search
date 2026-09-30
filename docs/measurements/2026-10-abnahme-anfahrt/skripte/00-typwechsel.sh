@@ -352,7 +352,11 @@ preis() {
     karte=$(mktemp)
     trap 'rm -f "$karte"' EXIT
     zeile "preis-gelesen $(jetzt)"
-    if ! curl -sS --fail --max-time 120 -o "$karte" "$PREIS_KARTE"; then
+    # Die Karte geht ueber stdout in die Datei und nicht ueber -o: ein curl
+    # fuer Windows bekaeme den Pfad aus mktemp wegen MSYS_NO_PATHCONV
+    # unuebersetzt und schriebe nach C:\tmp (am 30.09.2026 so geschehen, die
+    # Datei hier blieb leer).
+    if ! curl -sS --fail --max-time 120 "$PREIS_KARTE" >"$karte"; then
         zeile "preis-karte unlesbar"
         echo "00-typwechsel: die oeffentliche Preiskarte war nicht abrufbar" >&2
         exit 1
@@ -362,13 +366,16 @@ preis() {
     # Feld "Instance Type" den Typ nennt; genau ein Satz gilt, mehrere oder
     # keiner heissen unlesbar. Die Karte geht ueber stdin hinein und nicht als
     # Pfad: ein Python fuer Windows liest den Pfad aus mktemp von MSYS nicht.
+    # Das Programm traegt keinen Rueckstrich: beim Aufruf eines Windows-Python
+    # wurde aus der Folge x1f mit Rueckstrich im Argument ein Steuerzeichen,
+    # und das Programm endete am 30.09.2026 mit SyntaxError.
     ergebnis=$("$PYTHON" -c '
 import gzip
 import json
 import sys
 
 raw = sys.stdin.buffer.read()
-if raw[:2] == b"\x1f\x8b":
+if raw[:2] == bytes((31, 139)):
     raw = gzip.decompress(raw)
 try:
     card = json.loads(raw)
@@ -394,7 +401,7 @@ def walk(node):
 
 walk(card)
 manifest = card.get("manifest", {}) if isinstance(card, dict) else {}
-print("quelle %s" % manifest.get("publicationDate", "unbekannt"))
+print("quelle %s" % (manifest.get("publicationDate") or manifest.get("hawkFilePublicationDate") or "unbekannt"))
 for kind in sys.argv[1:]:
     found = rates.get(kind, set())
     print("%s %s" % (kind, found.pop() if len(found) == 1 else "unlesbar"))
