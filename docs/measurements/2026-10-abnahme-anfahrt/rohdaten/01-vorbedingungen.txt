@@ -1,0 +1,125 @@
+kostenlose vorbedingungen der abnahme-anfahrt, plan 28-05 (task 1)
+gelesen 2026-09-30 zwischen 16:10 und 16:25 UTC auf der entwicklungsmaschine,
+region eu-central-1
+werkzeuge: aws cli v2 2.36.39, gh, docker buildx (nur imagetools, kein daemon),
+docs/measurements/2026-10-abnahme-anfahrt/skripte/00-typwechsel.sh
+
+nur lesende und kostenlose aufrufe: get-caller-identity, describe-snapshots,
+describe-images, describe-key-pairs, describe-instances, describe-volumes,
+describe-instance-type-offerings, service-quotas get-service-quota,
+pricing get-products, dazu die öffentliche preiskarte und die registry.
+kein create, kein run, kein start, keine zuweisung.
+
+geheimnisregel dieser datei, verbindlich: sie liegt im öffentlichen
+repositorium. keine kontokennung, keine ip-adresse, keine instanz-, volume-,
+snapshot- oder abbildkennung. die ausgaben mit kennungen gingen nur aufs
+terminal; hier stehen ja/nein-zeilen, namen und digests.
+
+-- 1 zugangsdaten und konto --
+anmeldung: sitzung des profils infranodedev über aws login. die beiden
+variablen AWS_ACCESS_KEY_ID und AWS_SECRET_ACCESS_KEY waren vorher nicht
+gesetzt; für 00-typwechsel.sh wurden sie aus der sitzung in die umgebung der
+shell gelesen (aws configure export-credentials, ausgabe nicht gedruckt).
+zugangsdaten-gesetzt ja
+geprüft gegen die erwartete kennung aus 26-CONTEXT.md D-26-10, nicht Cherif83:
+konto-ist-erwartet ja
+
+-- 2 der korpus-snapshot --
+describe-snapshots auf den korpus-snapshot aus D-26-10:
+  State completed, Progress 100%, VolumeSize 60
+  Tags Name=findling-corpus-2026-09, purpose=findling-corpus-keep
+korpus-snapshot vorhanden ja
+
+-- 3 die abbilder --
+arm64, das in aws_box.sh gepinnte abbild:
+  ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-arm64-server-20260904
+  State available, Architecture arm64, DeprecationTime 2028-09-04
+abbild-arm64-gepinnt registriert ja
+neuestes arm64 nach dem muster aus 28-03 (nur zur kenntnis, gepinnt bleibt):
+  ubuntu-noble-24.04-arm64-server-20260923
+amd64 nach dem muster aus 28-03 (owner canonical, state available, neuestes):
+  ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-20260923
+  Architecture x86_64
+abbild-amd64 gefunden ja
+die kennung des amd64-abbilds geht am anfahrtstag aus derselben lesung als
+FINDLING_BOX_IMAGE in die zustandsdatei, nicht in diese datei.
+
+-- 4 vcpu-quota und zonenangebot --
+kommando: 00-typwechsel.sh quota
+quota-vcpu-standard 32.0
+angebot m7g.large eu-central-1a eu-central-1b eu-central-1c
+angebot m7g.4xlarge eu-central-1a eu-central-1b eu-central-1c
+angebot c7a.xlarge eu-central-1a eu-central-1b eu-central-1c
+angebot c7a.2xlarge eu-central-1a eu-central-1b eu-central-1c
+angebot c7a.4xlarge eu-central-1a eu-central-1b eu-central-1c
+angebot c7a.8xlarge eu-central-1a eu-central-1b eu-central-1c
+c7a-angebot in eu-central-1c ja
+annahme a7 gilt, die feste zone eu-central-1c von aws_box.sh reicht für alle
+sechs typen. 32 vcpu heißt seriell, wie geplant (c7a.8xlarge allein 32).
+ein angebot ist keine kapazitätszusage; scheitert ein start an der kapazität,
+greift der pfad 55 von 00-typwechsel.sh.
+
+-- 5 das schlüsselpaar --
+describe-key-pairs findling-loadtest:
+  InvalidKeyPair.NotFound
+schluesselpaar-in-aws vorhanden nein
+lokal unter ~/.ssh: privater teil findling-loadtest und findling-loadtest.pub
+vom 26.09.2026, dazu beiseite gelegte alt-dateien.
+schluesselpaar-lokal vorhanden ja
+pub-passt-zum-privaten ja (ssh-keygen -y gegen die .pub verglichen)
+folge: block 2 legt das paar in der bezahlten zeit an (create-key-pair) oder
+importiert den vorhandenen öffentlichen teil (import-key-pair). kein
+InvalidKeyPair.Duplicate wie am 20.09.; die alte-.pub-falle aus zeile 11 ist
+bei create-key-pair wieder zu beachten: die heutige .pub gehört zum heutigen
+privaten teil, ein neues paar braucht eine neu abgeleitete .pub.
+
+-- 6 die eigene öffentliche adresse für die sg-regel --
+gelesen über checkip.amazonaws.com, nicht gedruckt, nicht gespeichert.
+eigene-adresse gelesen ja
+sie kann bis zur anfahrt wechseln (runbook 3, zeile 15); aws_box.sh start
+zieht die regel nach.
+
+-- 7 das gemessene abbild --
+ghcr.io/street1983nk/findling_backend zum commit
+c87a0239ca676a7dc6ac3f1b95f104800487a1a5
+ci-lauf docker.yml 36596834250, main push, completed success,
+2026-09-29T16:19:12Z
+digest-index sha256:6a0c13be68de5ddd7c7ff404ab3a3caf15b646a5386c9e902ae3843ac572d80f
+digest-arm64 sha256:d086027baa25a6999923afe4218807a795561c69f7dfc9f9ac1e47cd3757a56d
+digest-amd64 sha256:56ad310444c44cd3bb5dcb01167a4f20dbee94e84d3646baa0cd39b475fcad3f
+abbild-digest gelesen ja
+
+nur zur kenntnis, der kopf von origin/main am 30.09.2026:
+commit 3f0e0a833c777c7fbdf30cf41a67a0e8b9e671e0
+ci-lauf docker.yml 36738661950, main push, completed success,
+2026-09-30T15:41:30Z
+digest-index sha256:f49a90f74df3807b84f8e014d1d1e41e751e9e7d14f64c869d854df2881b11bc
+gemessen wird weiter c87a0239 (00-ablauf.md abschnitt 9), nicht dieser kopf.
+
+-- 8 arbeitsbaum gegen das gemessene abbild --
+git diff origin/main..HEAD -- backend/src php: leer, HEAD ist origin/main.
+die prüfung sagt damit heute nichts über das abbild, denn c87a0239 liegt
+nicht mehr am kopf. deshalb zusätzlich gegen den gemessenen commit:
+  git diff c87a0239..HEAD -- backend/src: leer
+  git diff c87a0239..HEAD -- php: 30 dateien (hotfixes 1.3.1 und 1.3.2,
+  ReaderContext, PathResolverService, QueueService, migration 001301)
+  git diff c87a0239..HEAD -- backend ohne tests: appinfo/info.xml,
+  pyproject.toml, uv.lock (numpy 2.5.2 auf 2.5.3, semantic-text-splitter
+  0.32.0 auf 0.33.0, ruff)
+c87a0239 ist vorfahr von HEAD ja
+arbeitsbaum-weicht-vom-gemessenen-abbild ab ja, nicht im quelltext des
+backends, aber in den abhängigkeiten des backend-abbilds und in der
+php-companion-app. der baumhash-beweis im laufenden container gilt dem abbild
+zu c87a0239, nicht dem arbeitsbaum.
+
+-- 9 nichts läuft --
+describe-instances tag purpose=findling-phase5, zustände pending, running,
+stopping, stopped: 0
+describe-volumes tag purpose=findling-phase5: 0
+instanz-der-anfahrt vorhanden nein
+
+-- bilanz --
+erfüllt: konto, snapshot, abbilder arm64 und amd64, quota und zonenangebot,
+schlüsselpaar lokal, eigene adresse, digest, nichts läuft.
+offen, benannt: schlüsselpaar in aws fehlt (block 2 legt es an).
+hinweis: arbeitsbaum und gemessenes abbild gehen auseinander (abschnitt 8).

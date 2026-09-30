@@ -1,0 +1,120 @@
+rechenblatt und deckel der abnahme-anfahrt, plan 28-05 (task 1)
+gerechnet 2026-09-30 auf der entwicklungsmaschine, vor jeder
+kostenpflichtigen ressource (D-28-01, SC1)
+werkzeuge: skripte/00-typwechsel.sh preis, aws pricing get-products,
+skripte/02-rechenblatt.py deckel
+
+-- 1 die sätze, am 30.09.2026 neu gelesen --
+instanzsätze, kommando:
+  00-typwechsel.sh preis m7g.large m7g.4xlarge c7a.xlarge c7a.2xlarge c7a.4xlarge c7a.8xlarge
+preis-gelesen 2026-09-30T16:17:39Z
+preis-quelle 2026-09-25T17:45:21Z (hawkFilePublicationDate der karte)
+preis m7g.large 0.0978000000
+preis m7g.4xlarge 0.7821000000
+preis c7a.xlarge 0.2342600000
+preis c7a.2xlarge 0.4685200000
+preis c7a.4xlarge 0.9370400000
+preis c7a.8xlarge 1.8740800000
+
+speicher und adresse, kommando: aws pricing get-products (region us-east-1,
+kostenlos), gelesen 2026-09-30:
+  gp3 EUC1-EBS:VolumeUsage.gp3 0.0952 USD je GB und monat, gültig ab 2026-09-01
+  ipv4 EUC1-PublicIPv4:InUseAddress 0.005 USD je stunde, gültig ab 2026-09-01
+  100 GB gp3 je stunde: 100 x 0,0952 / 730 = 0,013041 USD
+
+box gesamt je stunde (instanz + 0,013041 + 0,005), gegen den stand 29.09.:
+
+  typ           heute 30.09.   research 29.09.   abweichung
+  m7g.large     0.115841       0.115841          keine
+  m7g.4xlarge   0.800141       0.800141          keine
+  c7a.xlarge    0.252301       0.252301          keine
+  c7a.2xlarge   0.486561       0.486561          keine
+  c7a.4xlarge   0.955081       0.955081          keine
+  c7a.8xlarge   1.892121       1.892121          keine
+  geparkt       0.013041       0.013041          keine
+
+kein satz weicht ab. gerechnet wurde trotzdem mit einer satzdatei der heutigen
+lesung (--satzdatei), nicht mit den im skript gepinnten sätzen.
+
+nebenbefund: die preis-api des kontos antwortet heute (runbook 3, nachtrag
+26.09., nannte sie gesperrt; das war ein anderes konto).
+
+-- 2 die ausgabe von 02-rechenblatt.py deckel --
+posten m7g.large 60 min Aufbau Bloecke 1 bis 13
+posten m7g.large 45 min Volume-Initialisierung
+posten m7g.large 45 min Abbildwechsel auf den Phase-27-Stand
+posten m7g.large 15 min Cron-Gate
+posten m7g.large 1335 min S-voll 52k mit Zellen-Overhead
+posten m7g.large 20 min Teilkorpus einrichten
+posten m7g.large 245 min St-T
+posten m7g.large 245 min L-T
+box m7g.large 33.50 h 3.88 USD satz 0.115841
+posten m7g.4xlarge 30 min Typwechsel
+posten m7g.4xlarge 275 min S-T
+posten m7g.4xlarge 105 min St-T
+posten m7g.4xlarge 90 min L-T
+box m7g.4xlarge 8.33 h 6.67 USD satz 0.800141
+posten c7a.xlarge 120 min x86-Aufbau mit Machbarkeitstor
+posten c7a.xlarge 45 min Volume-Initialisierung
+posten c7a.xlarge 45 min Abbildwechsel
+posten c7a.xlarge 20 min Teilkorpus einrichten
+posten c7a.xlarge 15 min Cron-Gate
+posten c7a.xlarge 275 min S-T
+posten c7a.xlarge 245 min St-T
+posten c7a.xlarge 120 min L-T
+posten c7a.xlarge 255 min St-fp32-T
+box c7a.xlarge 19.00 h 4.79 USD satz 0.252301
+posten c7a.2xlarge 15 min Typwechsel
+posten c7a.2xlarge 275 min S-T
+posten c7a.2xlarge 120 min St-T
+posten c7a.2xlarge 90 min L-T
+box c7a.2xlarge 8.33 h 4.05 USD satz 0.486561
+posten c7a.4xlarge 15 min Typwechsel
+posten c7a.4xlarge 275 min S-T
+posten c7a.4xlarge 105 min St-T
+posten c7a.4xlarge 90 min L-T
+posten c7a.4xlarge 135 min St-fp32-T
+box c7a.4xlarge 10.33 h 9.87 USD satz 0.955081
+posten c7a.8xlarge 15 min Typwechsel
+posten c7a.8xlarge 275 min S-T
+posten c7a.8xlarge 105 min St-T
+posten c7a.8xlarge 90 min L-T
+box c7a.8xlarge 8.08 h 15.29 USD satz 1.892121
+posten geparkt 2745 min ARM-Platte geparkt waehrend der x86-Haelfte
+posten geparkt 120 min Abbau, zwei Platten je eine Stunde
+box geparkt 47.75 h 0.62 USD satz 0.013041
+anker m7g.large 4.58 h 0.53 USD
+summe 87.58 h 45.18 USD
+deckel 113.86 h 58.74 USD
+mit anker summe 92.17 h 45.71 USD
+mit anker deckel 119.82 h 59.43 USD
+bindend ist USD, die Stunden sind nur Anzeige
+
+-- 3 zusammengefasst --
+                    ohne anker            mit anker (D-28-11)
+  summe             87,58 h / 45,18 USD   92,17 h / 45,71 USD
+  deckel x 1,30     113,86 h / 58,74 USD  119,82 h / 59,43 USD
+  sicherheitstimer  70,49 USD             71,32 USD
+  (deckel x 1,20, D-28-14: bei diesem betrag stoppt der timer die instanz,
+  er beendet sie nie)
+
+vorschlag zur freigabe: variante A mit anker, deckel 119,82 h / 59,43 USD,
+sicherheitstimer bei 71,32 USD. bindend ist USD.
+
+-- 4 guthaben-abgleich --
+guthaben laut D-26-10: 104,29 USD, gültig bis 04.09.2027 (heute nicht neu
+gelesen: die abfrage über cost explorer kostet je aufruf, und dieser plan
+liest nur kostenlos; der stand steht in der abrechnungskonsole des owners).
+  deckel mit anker     59,43 USD unter 104,29 USD ja, rest 44,86 USD
+  sicherheitstimer     71,32 USD unter 104,29 USD ja, rest 32,97 USD
+nicht im deckel: der snapshot läuft dauerhaft weiter (rund 2,79 bis 2,99 USD
+je monat, runbook 2.3), bis er nach den SC4-entscheiden gelöscht wird.
+
+-- 5 die freigabe --
+die freigabezeile bleibt hier leer und trägt nur ihren platzhalter:
+
+  <Anfahrt freigegeben: Datum, Deckel h / USD>
+
+gefüllt wird sie in task 3 dieses plans nach dem wort des owners und
+nirgends sonst. eine freigabe, die sich der ausführende selbst erteilt, ist
+keine. ohne diese zeile startet keine box.
