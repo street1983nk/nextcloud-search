@@ -26,3 +26,7 @@ Sobald budachst antwortet, Fix-Kandidaten je nach bestaetigter Hypothese formal 
 - Download-Groessenpruefung: Bytes gegen Sollgroesse pruefen
 
 Phasen-Slot-Kandidat: Phase 29 (Haertung+Release) oder eigener Einschub nach Antwort. Entscheid ueber den Slot liegt beim Owner.
+
+## Update 2026-09-30
+
+budachst 28.09.: die Dateien sind TIFF hinter .jpg (Team-Ordner __groupfolders/8, Agenturmaterial). Image.open erkennt am Inhalt, also scheitert das DEKODIEREN der TIFF-Variante (CMYK/16 Bit/Ebenen/Kompression) -> OSError -> Pauschal-corrupt (extract/image.py:112/137). Antwort gepostet (issuecomment-5915833064): Bitte um `file`-Zeile, optional Beispieldatei. Fix-Kandidat: eigenes Verdikt "unsupported image variant" + TIFF-Varianten lesen. Hypothesen 1/2 (truncated, HEIC) fuer diesen Fall vom Tisch.
