@@ -283,3 +283,34 @@ die referenzbox steht nach runbook auf dem abbild zu c87a0239 (digest und
 baumhash belegt), das cron-intervall ist gemessen, der harte stopp ist als stop
 belegt. die kette wurde um 17:44:44Z gestartet (task 2), siehe
 m7g.large-kette.log und m7g.large/00-kette.txt.
+
+-- nachtrag 30.09.2026: kettenlauf 1 abgebrochen, werkzeugfix mit owner-wort --
+kettenlauf 1, start 2026-09-30T17:44:44Z: die zelle S-voll kam bis zur
+wirksamkeitsprüfung und wartete dort. 11-probe-route.py las slotsInForce an der
+obersten ebene der admin-übersicht, das feld steht aber im block backend
+(auf der box slotsInForce 1). nach 1801 s:
+  wirksamkeit nein effective economy nach-s 1801
+  zelle-abbruch rueckgabe 69, 2026-09-30T18:15:00Z
+  kette-abbruch zelle S-voll rueckgabe 69, timer-vorgezogen auf-minuten 60
+kein trigger, keine messung. die rohdaten des laufs liegen auf der box
+umbenannt als rohdaten/m7g.large-lauf1-abbruch69/ und
+rohdaten/m7g.large-lauf1-abbruch69-kette.log, nicht gelöscht.
+werkzeugfix mit owner-wort (runbook 7.1, 00-ablauf.md abschnitt 10):
+  werkzeug skripte/11-probe-route.py
+  warum   guard-felder aus dem block backend lesen (slotsInForce, guardEffective,
+          guardCause, slotsThrottled), sonst besteht die wirksamkeitsprüfung nie
+  commit  774dd247 (lokal, nicht gepusht); per scp auf die box kopiert,
+          sha256 b89f79b74adc7008... auf beiden seiten gleich; der klon auf der
+          box trägt damit eine lokale änderung in genau dieser datei
+  vorab auf der box gegengelesen: effective economy, guardEffective economy,
+  slotsInForce 1
+kettenlauf 2, die box lief durch (kein stopp, kein start, kein neuer
+kostenstempel), IMAGE_TAG=c87a0239ca676a7dc6ac3f1b95f104800487a1a5:
+  kette-start m7g.large 2026-09-30T18:15:31Z bisher 0.1580 deckel 59.43
+  timer-gesetzt minuten 36856 abschaltung 2026-10-26T08:31:31Z (zurückgelesen,
+  ersetzt den vorgezogenen timer von lauf 1)
+  bewaffnung backendReachable true, speichergrenze-ist 2147483648/0,
+  baumhash-beweis ja, abbild im container der sha-tag zu c87a0239 mit
+  sha256:6a0c13be...d80f
+  wirksamkeit ja effective economy slotsInForce 1 nach-s 2
+  trigger ja 2026-09-30T18:16:03Z
