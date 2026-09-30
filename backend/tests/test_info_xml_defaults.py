@@ -115,3 +115,26 @@ def test_the_extraction_address_space_is_declared() -> None:
     # private manifest. Measured 2026-09-29 on a 29 user instance: 45 JPEGs of
     # 1.3 to 11.2 MB burst the 512 MB child; 1 GiB takes them.
     assert "FINDLING_EXTRACT_ADDRESS_SPACE_BYTES" in _declared()
+
+
+# The declared routes are the surface a browser session or an app password can
+# reach through /exapps/. The companion never needs a declaration: HaRP skips
+# the route table for AppAPI signed requests ("We skip routes checking for
+# AppAPI signed requests", haproxy_agent.py), and so did ExAppProxyController
+# before it. A content route on that list is therefore reachable by every
+# logged in user, past the permission recheck that only the PHP side performs.
+CONTENT_ROUTES = ("/search", "/snippets")
+
+
+def _declared_route_urls() -> list[str]:
+    info = ElementTree.fromstring(BACKEND_INFO.read_text(encoding="utf-8"))  # noqa: S314
+    return [route.findtext("url") or "" for route in info.iter("route")]
+
+
+@pytest.mark.parametrize("path", CONTENT_ROUTES)
+def test_a_content_route_is_not_on_the_browser_reachable_surface(path: str) -> None:
+    import re
+
+    assert not any(re.match(url, path) for url in _declared_route_urls()), (
+        f"{path} is declared in info.xml and so reachable by any logged in user through /exapps/"
+    )
