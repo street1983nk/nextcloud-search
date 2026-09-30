@@ -160,7 +160,7 @@ Prérequis :
 - CPU : 2 cœurs suffisent, amd64 et arm64
 
 Support entreprise et modules payants : demande de devis à admin@infranode.dev]]></description>
-	<version>1.3.0</version>
+	<version>1.3.2</version>
 	<!--
 		The SPDX spelling and not the short one. info.xsd accepts both, but it
 		lists agpl, mit, mpl and apache under the heading Deprecated, and the
@@ -254,7 +254,7 @@ Support entreprise et modules payants : demande de devis à admin@infranode.dev]
 				so this exact tag has to exist in the registry before a release
 				is published, not after.
 			-->
-			<image-tag>1.3.0</image-tag>
+			<image-tag>1.3.2</image-tag>
 		</docker-install>
 		<routes>
 			<!--
@@ -536,7 +536,7 @@ Support entreprise et modules payants : demande de devis à admin@infranode.dev]
 			<variable>
 				<name>FINDLING_EXTRACT_ADDRESS_SPACE_BYTES</name>
 				<display-name>Memory a single document may take while it is read</display-name>
-				<description>A whole number of bytes. It caps the address space of the process that reads one document, so a broken or hostile file cannot take the machine down with it. The default of 536870912 (512 MB) reads every office document and every scanned page at 300 dpi. Large photos, roughly above 10 megapixels, need more and otherwise end as failed with the reason out_of_memory; 1073741824 (1 GiB) reads them. Only one document is read at a time, so the number is the peak and not a multiple.</description>
+				<description>A whole number of bytes. It caps the address space of the process that reads one document, so a broken or hostile file cannot take the machine down with it. The default of 536870912 (512 MB) reads every office document and every scanned page at 300 dpi. Very large photos, around 40 megapixels and up, need more and otherwise end as failed with the reason out_of_memory; 1073741824 (1 GiB) reads them. Only one document is read at a time, so the number is the peak and not a multiple.</description>
 				<default>536870912</default>
 			</variable>
 		</environment-variables>
