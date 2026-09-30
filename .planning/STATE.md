@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
 status: executing
-stopped_at: Completed 28-04-PLAN.md
-last_updated: "2026-09-29T22:17:09.857Z"
-last_activity: 2026-09-29
+stopped_at: Completed 28-05-PLAN.md
+last_updated: "2026-09-30T16:50:25.660Z"
+last_activity: 2026-09-30
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 62
-  completed_plans: 52
+  completed_plans: 53
   percent: 67
 ---
 
@@ -26,15 +26,15 @@ See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 ## Current Position
 
 Phase: 28 (Abnahme-Anfahrt), in Ausführung
-Plan: 5 of 14
+Plan: 6 of 14
 Status: Ready to execute
-Last activity: 2026-09-29
+Last activity: 2026-09-30
 
-Progress: [████████░░] 84%
+Progress: [█████████░] 85%
 
 ## Naechster Schritt
 
-**execute-phase 28 weiter mit 28-05** (28-01 fertig: Teilkorpus, Rechenblatt, Slotkosten,
+**execute-phase 28 weiter mit 28-06** (28-05 fertig: Owner-Freigabe 30.09.2026, Deckel 119,82 h / 59,43 USD mit Anker, Timer 71,32 USD, Guthaben 104,11 USD; cb49fa70. 28-01 fertig: Teilkorpus, Rechenblatt, Slotkosten,
 00-ablauf.md; b8e8c785. 28-02 fertig: 11-probe-route.py, 10-zelle.sh, 93b-nullstand.sh,
 00-kette.sh, 59 boxlose Tests; 1976584a. 28-03 fertig: aws_box.sh Satztabelle/Architektur/
 SG-Schonung, 00-typwechsel.sh mit Zieltyp; b1191dc5. 28-04 fertig: Runbook x86/USD-Deckel/
@@ -184,7 +184,7 @@ Aeltere Merker:
 
 ## Session Continuity
 
-Last session: 2026-09-29T22:17:05.771Z
+Last session: 2026-09-30T16:50:17.528Z
 Stopped at: Completed 28-04-PLAN.md
 Resume file: None
 

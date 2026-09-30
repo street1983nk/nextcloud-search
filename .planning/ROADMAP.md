@@ -282,7 +282,7 @@ Plans:
 
 **Wave 2**
 
-- [ ] 28-05-PLAN.md , Owner-Tor C1: Vorbedingungen, Rechenblatt mit Tagessätzen, datierte Deckel-Freigabe (SC1), Welle 2
+- [x] 28-05-PLAN.md , Owner-Tor C1: Vorbedingungen, Rechenblatt mit Tagessätzen, datierte Deckel-Freigabe (SC1), Welle 2
 
 **Wave 3 bis 6 (bezahlte Anfahrt, seriell)**
 
@@ -326,7 +326,7 @@ Plans:
 | 25. Einbettungsspur und Modellwahl | v1.4 | 12/12 | Complete    | 2026-09-28 |
 | 26. N OCR-Slots und Speicherwächter | v1.4 | 14/14 | Complete    | 2026-09-29 |
 | 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 16/16 | Complete    | 2026-09-29 |
-| 28. Abnahme-Anfahrt | v1.4 | 4/14 | In Progress|  |
+| 28. Abnahme-Anfahrt | v1.4 | 5/14 | In Progress|  |
 | 29. Härtung und Store-Einreichung 1.4.0 | v1.4 | 0/? | Not started | - |
 
 ## Nach v1.3 (Wiedervorlage)
