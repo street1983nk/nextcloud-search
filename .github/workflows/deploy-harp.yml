@@ -2503,7 +2503,7 @@ jobs:
           # not from the query, because group_concat has no defined order and a
           # comparison that depends on one would be flaky rather than strict.
           #
-          # A sixth route turns this step red, and that is the point: widening
+          # A fourth route turns this step red, and that is the point: widening
           # the reachable surface of the container is a decision, and it has to
           # be made here as well as in backend/appinfo/info.xml.
           routes_now=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
@@ -2526,11 +2526,17 @@ jobs:
           #      this step was built for: AppAPI reads the routes out of the file
           #      the registration is handed, and a dropped or rewritten row shows
           #      here.
-          #   2. does the archive declare exactly the five reviewed routes? That
-          #      is the ratchet. A sixth route or a widened access level is a
+          #   2. does the archive declare exactly the three reviewed routes? That
+          #      is the ratchet. A fourth route or a widened access level is a
           #      decision and has to be made here as well as in
           #      backend/appinfo/info.xml. A derived expectation on its own would
           #      accept a widened surface without a word.
+          #
+          # The content routes /search and /snippets left the list in 1.3.2,
+          # five down to three: their only caller is the companion over the
+          # signed path, which never reads this table, and declared with USER
+          # they were open to every logged in user (routes comment in
+          # backend/appinfo/info.xml).
           #
           # The access level crosses from a name in the XML to a number in the
           # table, PUBLIC 0, USER 1, ADMIN 2, see
@@ -2549,9 +2555,9 @@ jobs:
           ' "${ARCHIVE_INFO_XML}" | sort | tr '\n' ' ' | sed -e 's/ *$//')
           echo "the archive declares: ${routes_declared}"
 
-          routes_want='^/diagnose$:GET:2 ^/rates$:GET:2 ^/search$:POST:1 ^/snippets$:POST:1 ^/status$:GET:2'
+          routes_want='^/diagnose$:GET:2 ^/rates$:GET:2 ^/status$:GET:2'
           if [ "${routes_declared}" != "${routes_want}" ]; then
-            echo "the archive declares '${routes_declared}' instead of the five reviewed routes '${routes_want}'"
+            echo "the archive declares '${routes_declared}' instead of the three reviewed routes '${routes_want}'"
             echo "widening or renaming the reachable surface of the container is a decision, and it has to be made here too"
             exit 1
           fi
@@ -2559,7 +2565,7 @@ jobs:
             echo "the archive registration produced '${routes_now}' while the archive declares '${routes_declared}', so the routes of the installed app are not the ones the archive declares"
             exit 1
           fi
-          echo "the five routes of the archive arrived with their verbs and access levels, and Store install 5 measured zero rows for the same file without the block"
+          echo "the three routes of the archive arrived with their verbs and access levels, and Store install 5 measured zero rows for the same file without the block"
 
           # The same canary call the developer path makes, and the same three
           # assertions: exactly one entry, the title, and a subline that carries
