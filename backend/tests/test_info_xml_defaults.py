@@ -50,6 +50,7 @@ EXPECTED: dict[str, str] = {
     "FINDLING_RECONCILE_QUIET_MAX": str(config.RECONCILE_QUIET_MAX),
     "FINDLING_RECONCILE_SLICE": str(config.RECONCILE_SLICE),
     "FINDLING_EMBED_IDLE_RELEASE_SECONDS": str(config.EMBED_IDLE_RELEASE_SECONDS),
+    "FINDLING_EXTRACT_ADDRESS_SPACE_BYTES": str(config.EXTRACT_ADDRESS_SPACE_BYTES),
 }
 
 # The variables a profile can raise, with the default and range their reader
@@ -103,3 +104,14 @@ def test_a_declared_default_never_counts_as_an_override(monkeypatch: pytest.Monk
     monkeypatch.setenv(name, _declared()[name])
 
     assert explicit_int_from_environment(name, default, bounds) is None
+
+
+def test_the_extraction_address_space_is_declared() -> None:
+    # AppAPI hands an ExApp only the variables its info.xml declares
+    # (ExAppEnvVarsHelper::normalizeAndValidate); an undeclared --env is
+    # dropped without a word. The sandbox limit was readable from the
+    # environment since phase 2 but never declared, so an admin whose large
+    # photos end as failed(out_of_memory) had no way to raise it short of a
+    # private manifest. Measured 2026-09-29 on a 29 user instance: 45 JPEGs of
+    # 1.3 to 11.2 MB burst the 512 MB child; 1 GiB takes them.
+    assert "FINDLING_EXTRACT_ADDRESS_SPACE_BYTES" in _declared()

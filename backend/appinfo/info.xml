@@ -523,6 +523,22 @@ Support entreprise et modules payants : demande de devis à admin@infranode.dev]
 				<description>A whole number of seconds, and 0 is the default and means the model is never released. Any other value has to lie between 60 and 86400; anything outside that range falls back to the default. When the model has been idle for this long, the container gives up the tokenizer, the splitter and the inference session, and the memory they hold goes back to the machine. Whatever the value, the first search after a start or a release answers from the full text side while the model is loaded in the background, so nobody waits for it, and the semantic side joins from the next search on. A quarter of an hour, so 900, is a reasonable value to start with.</description>
 				<default>0</default>
 			</variable>
+			<!--
+				The address space of the extraction child, the one process where
+				untrusted bytes meet C libraries. RLIMIT_AS bounds a runaway
+				document; what it also bounds is the largest photo OCR can raster.
+				Measured 2026-09-29: JPEGs of 1.3 to 11.2 MB end as
+				failed(out_of_memory) under the 512 MB default and are read under
+				1 GiB. Declared so that an admin can raise it: AppAPI hands the
+				container only the variables listed here, an undeclared value is
+				dropped without a word.
+			-->
+			<variable>
+				<name>FINDLING_EXTRACT_ADDRESS_SPACE_BYTES</name>
+				<display-name>Memory a single document may take while it is read</display-name>
+				<description>A whole number of bytes. It caps the address space of the process that reads one document, so a broken or hostile file cannot take the machine down with it. The default of 536870912 (512 MB) reads every office document and every scanned page at 300 dpi. Large photos, roughly above 10 megapixels, need more and otherwise end as failed with the reason out_of_memory; 1073741824 (1 GiB) reads them. Only one document is read at a time, so the number is the peak and not a multiple.</description>
+				<default>536870912</default>
+			</variable>
 		</environment-variables>
 	</external-app>
 </info>
