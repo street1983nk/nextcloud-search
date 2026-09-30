@@ -1,0 +1,285 @@
+der aufbau der referenzbox m7g.large, blöcke 1 bis 13 und 13b (92d) des
+runbooks, plan 28-06 (task 1)
+gefahren 2026-09-30, region eu-central-1, zone eu-central-1c
+voraussetzung: "Anfahrt freigegeben: 2026-09-30, Deckel 119,82 h / 59,43 USD"
+steht in 02-rechenblatt-freigabe.txt (28-05).
+
+geheimnisregel dieser datei: keine ip-adresse, keine instanz-, volume-,
+snapshot-, abbild- oder kontokennung, kein passwortinhalt, keine uuid des
+datenträgers. wo ein wert gebraucht wird, steht ein platzhalter. jeder block
+trägt seine utc-stempel.
+
+block-1-start 2026-09-30T16:53:23Z
+block-1-ende 2026-09-30T16:53:26Z
+-- block 1: security group --
+create-security-group findling-loadtest im default-vpc (<sg>), mit den tags
+Name=findling-loadtest purpose=findling-phase5. authorize-security-group-ingress:
+Return True, vier regeln: tcp 22 <eigene-adresse>/32 (beschreibung owner),
+tcp 80, tcp 443 und udp 443 auf <ganzes-netz>. die eigene adresse kam aus dem
+adressdienst und wurde vor der verwendung als ipv4 geprüft.
+urteil: wie erwartet.
+
+block-2-start 2026-09-30T16:53:26Z
+block-2-ende 2026-09-30T16:53:27Z
+-- block 2: schlüsselpaar --
+abweichung zum runbook-rezept, auf anweisung: kein create-key-pair, sondern
+import-key-pair des vorhandenen öffentlichen teils ~/.ssh/findling-loadtest.pub
+(26.09.2026, passt nach ssh-keygen -y zum privaten teil, 01-vorbedingungen.txt
+abschnitt 5). KeyName findling-loadtest, tag purpose=findling-phase5. der private
+teil ist 2048 bit rsa und hat die maschine nicht verlassen; eine kopie liegt mit
+rechten 600 im zustandsverzeichnis der arm-box, wo die abholwerkzeuge ihn
+erwarten.
+urteil: erfüllt, kein InvalidKeyPair.Duplicate, keine alte .pub im weg.
+
+block-3-start 2026-09-30T16:53:37Z
+block-3-ende 2026-09-30T16:53:56Z
+-- block 3: instanz --
+run-instances mit dem gepinnten arm64-abbild aus runbook block 3
+(ubuntu-noble-24.04-arm64-server-20260904, noch registriert, 01 abschnitt 3),
+m7g.large, default-subnetz in eu-central-1c, 40 gb gp3 root mit
+DeleteOnTermination=true, --instance-initiated-shutdown-behavior stop, tags
+Name=findling-loadtest purpose=findling-phase5 an instanz und systemplatte.
+antwort: InstanceType m7g.large, Placement eu-central-1c, Architecture arm64,
+wait instance-running rc 0.
+LaunchTime 2026-09-30T16:53:40Z: beginn der bezahlten zeit, BOX_START_EPOCH.
+urteil: wie erwartet.
+
+block-4-start 2026-09-30T16:54:05Z
+block-4-ende 2026-09-30T16:54:07Z
+-- block 4: box.env --
+BOX_INSTANCE_ID und BOX_SECURITY_GROUP von hand in das zustandsverzeichnis der
+arm-box (FINDLING_LOADTEST_DIR=<zustandsverzeichnis>/arm), umask 077. rückleseprobe
+aws_box.sh status: <instanzkennung> m7g.large running in eu-central-1c,
+<adresse-der-box>, 40 G gp3, running 0.0 hours since 2026-09-30T16:53:40+00:00,
+satz 0.097800 USD je stunde für m7g.large.
+urteil: wie erwartet, kein "no state file".
+
+vorpruefung-start 2026-09-30T16:54:07Z
+vorpruefung-ende 2026-09-30T16:54:08Z
+-- vorprüfung des harten stopps (runbook 7.3 schritt 2) --
+00-typwechsel.sh vorpruefung, rückgabe 0, rohdatei 00-typwechsel.txt:
+  shutdown-verhalten stop
+  shutdown-ist-stopp ja
+  vorpruefung-stop-ja 2026-09-30T16:54:08Z
+urteil: ein shutdown -h aus der box ist ein stopp. marke VORPRUEFUNG=stop-ja.
+
+-- hostschlüssel der box, vor der ersten ssh-sitzung --
+ssh-keyscan gegen die adresse, fingerabdrücke gegen get-console-output
+(cloud-init, BEGIN SSH HOST KEY FINGERPRINTS): ed25519, ecdsa und rsa gleich.
+known_hosts ins zustandsverzeichnis. erste sitzung: aarch64, 2 kerne, 7.6Gi
+vor mem=4G.
+hostschluessel-gleich ja
+
+block-5-start 2026-09-30T16:54:44Z
+block-5-ende 2026-09-30T16:55:02Z
+-- block 5: harte speichergrenze mem=4G --
+drop-in /etc/default/grub.d/99-mem4g.cfg erweitert die bestehende zeile,
+update-grub, neustart. rückleseprobe nach dem neustart:
+  free -h       3.8Gi (MemTotal 3989436 kB)
+  nproc         2
+  uname -m      aarch64
+  /proc/cmdline mem=4G enthalten (zählung 1)
+  kernel        7.0.0-1012-aws
+mem4g-ruecklesung ja
+abweichung, klein: free -h rundet heute auf 3.8Gi statt 3.9Gi wie in den
+früheren läufen. die grenze greift (mem=4G in der kernzeile, MemTotal unter
+4 GiB); der unterschied liegt im vom kern reservierten teil, nicht in der
+grenze. vermerkt, weil die abbruchzeile des runbooks 3.9Gi nennt.
+
+block-6-start 2026-09-30T16:54:45Z
+block-6-ende 2026-09-30T16:54:53Z
+-- block 6: volume aus dem snapshot (V-A) --
+aws_box.sh restore ohne argument, rückgabe 0, bis auf platzhalter wörtlich:
+  no snapshot was handed in, using <korpus-snapshot>
+  State completed, Progress 100%, VolumeSize 60, Encrypted False
+  Description findling corpus and index, v1.1 comparison run 2026-09-10, 52111 documents
+  creating a 60 GB gp3 volume in eu-central-1c from <korpus-snapshot>
+  tags of <volume> after the retagging: Name=findling-corpus purpose=findling-phase5
+  waiting for volume <volume> to become available
+  attaching <volume> to <instanzkennung> as /dev/sdf
+  this subcommand ends at the attach
+urteil: wie erwartet. lief parallel zum neustart von block 5.
+
+block-7-start 2026-09-30T16:55:02Z
+block-7-ende 2026-09-30T16:55:14Z
+-- block 7: datenträger mounten --
+lsblk -b: genau ein datenträger mit 64424509440 byte (nvme1n1) neben der
+42949672960-byte-systemplatte. ext4, uuid aus blkid (steht hier nicht),
+fstab-zeile UUID=<uuid> /mnt/findling ext4 defaults,nofail 0 2, mount -a.
+rückleseprobe: df -h 59G gesamt, 35G belegt, 62%;
+ls: containerd corpus docker drillkorpus lost+found ncdata.
+urteil: wie erwartet.
+
+block-7b-start 2026-09-30T16:55:26Z
+block-7b-ende 2026-09-30T17:28:56Z
+-- block 7b: volume-initialisierung, in phase 28 erstmals vollzogen --
+gerät über die größe gefunden (genau eines, nvme1n1), fio 3.36 installiert:
+  2026-09-30T16:55:50Z
+  fio --filename=/dev/nvme1n1 --rw=read --bs=1M --iodepth=32 --ioengine=libaio
+      --direct=1 --readonly --name=volume-initialize
+  READ: bw=30.9MiB/s (32.4MB/s), io=60.0GiB (64.4GB), run=1985495msec
+  rc 0
+  2026-09-30T17:28:56Z
+fio-dauer 33 min 06 s (planwert runbook 2.1: 0 h 45 min)
+urteil: erfüllt. fio lief abgesetzt auf der box, während blöcke 10, 8 und 9
+daneben liefen; die erste zelle startet erst danach.
+befund: solange fio las, lag der io-druck bei rund 93 prozent (/proc/pressure/io),
+und ein occ status im nextcloud-container hing rund 12 minuten im zustand D. die
+nextcloud war erst nach dem ende von fio erreichbar. für die x86-box (block 14):
+fio vor dem ersten start des docker-dienstes fahren oder die wartezeit einplanen.
+
+block-10-start 2026-09-30T16:56:07Z
+block-10-ende 2026-09-30T17:29:50Z
+-- block 10: a-record, vor dem ersten daemon-start (lehre der v1.3) --
+namensaufloesung-ist=a-record
+gesetzt über den vorhandenen dns-zugang des betreiber-werkzeugkastens wie am
+20.09. und 26.09.: api des zonenverwalters, success True, typ A, ttl 120, nicht
+proxied. vorher stand für den namen kein eintrag in der zone.
+rückleseprobe von der entwicklungsmaschine: ein öffentlicher resolver löste nach
+rund einer minute auf genau die instanzadresse auf (ein anderer meldete in der
+ersten minute noch NXDOMAIN). auf der box löste der name beim ersten start der
+container auf; kein /etc/hosts-pin.
+https://loadtest.infranode.dev/status.php 200 (17:29:25Z, nach dem ende von
+fio): installed true, maintenance false, needsDbUpgrade false, version 33.0.8 (vierte stelle 2).
+anmeldeprobe von der box aus, webdav propfind depth 0 mit den passwortdateien:
+zuerst admin 401, lasttest 401 (wie am 26.09.: die passwörter aus der lokalen
+kontendatei gehören zu einem späteren stand als der snapshot vom 11.09.). vollzug
+occ user:resetpassword --password-from-env für beide konten, wert nur über
+stdin in den container: "Successfully reset password" je konto. danach admin
+207, lasttest 207.
+urteil: erfüllt, weg 1 von 3.
+
+block-8-start 2026-09-30T16:56:40Z
+block-8-ende 2026-09-30T17:06:47Z
+-- block 8: docker-data-root und containerd-wurzel, BEVOR der daemon startet --
+in einem zug wie in der v1.3: /etc/docker/daemon.json mit data-root
+/mnt/findling/docker und /etc/containerd/config.toml mit version = 2 und root =
+"/mnt/findling/containerd" VOR der installation, dann apt-get install docker.io
+jq mit --force-confold (docker 29.1.3, jq-1.7), dann neustart der dienste,
+ubuntu in die gruppe docker.
+abweichung: der erste neustart von containerd endete mit einer
+zeitüberschreitung (systemd), der von docker mit einem fehler; beide dienste
+kamen ohne eingriff über die wiederholung von systemd hoch. ursache nach lage:
+fio las gleichzeitig mit voller last vom selben datenträger. nichts geändert.
+rückleseprobe: Docker Root Dir /mnt/findling/docker, Storage Driver overlayfs,
+driver-type io.containerd.snapshotter.v1, containerd und docker active, 16
+abbilder mit namen, alle neun container der messbox starten von selbst
+(findling-registry, nc_app_findling_backend, nextcloud-aio-apache, -database,
+-harp, -mastercontainer, -nextcloud, -notify-push, -redis);
+curl localhost:5000/v2/_catalog {"repositories":["findling_backend"]}.
+urteil: erfüllt.
+
+block-9-start 2026-09-30T17:06:47Z
+block-9-ende 2026-09-30T17:07:05Z
+-- block 9: systemplatte zurückspielen --
+sha256 der sicherung lokal und auf der box
+fad3e7ce6c7f73cc85a108ce6511941326435934e87cce0c6df5f2d0a6a3584a, 435 einträge
+(gleich 01-vorbedingungen der v1.2). tar xzf nach /home/ubuntu, kopie in /tmp
+gelöscht. nach dem auspacken: 385 dateien, 13M.
+passwortdateien ~/work/.pw (700) mit admin und lasttest (600, je 28 byte, ohne
+zeilenumbruch) aus der lokalen kontendatei, per ssh-stdin geschrieben, kein wert
+in einem argument.
+urteil: wie erwartet.
+
+-- klon auf der box --
+git clone des öffentlichen repositoriums nach /home/ubuntu/work/nextcloud-search,
+checkout 3f0e0a833c777c7fbdf30cf41a67a0e8b9e671e0 (kopf von origin/main am
+30.09.; er trägt die werkzeuge der pläne 28-01 bis 28-04, c87a0239 trägt sie
+nicht), git config core.fileMode false, chmod +x in den skriptverzeichnissen
+der v1.2, v1.3, nachfolgefassungen, abnahme-anfahrt und scripts/ops.
+git status --porcelain: 0 zeilen.
+zur abweichung arbeitsbaum gegen abbild siehe 01-vorbedingungen.txt abschnitt 8:
+backend/src ist zwischen c87a0239 und dem klon gleich, php (1.3.1, 1.3.2),
+backend/appinfo/info.xml und uv.lock nicht.
+
+block-11-start 2026-09-30T17:29:50Z
+block-11-ende 2026-09-30T17:31:20Z
+-- block 11: bewaffnung nach DI-05-36 (noch auf dem abbild des snapshots) --
+occ app_api:app:disable findling_backend: successfully disabled.
+occ app_api:app:enable findling_backend: successfully enabled.
+gezählter pollerdurchgang (docker logs --since 3m, grep -c poll): 3, zeile
+  "indexing is armed and the work stock is empty, the next file is picked up as it arrives"
+admin-übersicht über 11-probe-route.py uebersicht: backendReachable=true.
+urteil: erfüllt.
+
+block-12-start 2026-09-30T17:31:20Z
+block-12-ende 2026-09-30T17:31:21Z
+-- block 12: harte speichergrenze des containers --
+docker update --memory=2g --memory-swap=2g, aus der cgroup:
+  memory.max       2147483648
+  memory.swap.max  0
+containergrenze 2g ja (2147483648/0, richtiggestellte erwartung aus block 12)
+
+block-13-start 2026-09-30T17:31:21Z
+block-13-ende 2026-09-30T17:31:21Z
+-- block 13: genau eine nextcloud --
+docker ps zählt nextcloud-aio-nextcloud: 1
+docker volume ls | grep findling: nc_app_findling_backend_data
+genau eine Nextcloud ja
+
+-- block 13b: abbildwechsel per 92d-wechsel.sh (ohne --rm-data) --
+ABBILD_DIGEST sha256:6a0c13be68de5ddd7c7ff404ab3a3caf15b646a5386c9e902ae3843ac572d80f
+(index-digest zu c87a0239, docker.yml-lauf 36596834250, 01 abschnitt 7),
+OUT auf dieses rohdatenverzeichnis.
+
+lauf 1, 17:31:43Z bis 17:32:46Z, IMAGE_TAG dev (vorgabe), rückgabe 0:
+  abbild-digest-gleich ja, baumhash-gleich ja, occ-upgrade-rueckgabewert 0,
+  registrierung-gelungen ja, grenze-gesetzt ja, bestandstor-bestanden ja,
+  abbild-im-container-gleich ja
+  ABER abbild-im-container-ist sha256:f49a90f7...11bc
+rohdateien: 92d-wechsel-lauf1-tag-dev.txt, 40b-baumhash-lauf1-tag-dev.txt,
+92d-info-box-lauf1-tag-dev.xml.
+befund, und er ist wesentlich: f49a90f7 ist der index-digest des abbilds zum
+kopf 3f0e0a83, nicht zu c87a0239. 92d legt das per digest gezogene abbild
+lokal auf den tag dev, aber AppAPI zieht beim registrieren ghcr.io/...:dev
+frisch aus der registry, und dev zeigt seit dem 30.09. auf 3f0e0a83. der
+container lief also auf einem anderen abbild (numpy 2.5.3, semantic-text-splitter
+0.33.0, info.xml 1.3.2). die prüfung abbild-im-container-gleich vergleicht seit
+ff8e054 den baumhash über backend/src/findling, und der ist in beiden abbildern
+gleich (556148...31dd); sie konnte den unterschied nicht sehen.
+
+lauf 2, 17:42:47Z bis 17:42:59Z, IMAGE_TAG=c87a0239ca676a7dc6ac3f1b95f104800487a1a5
+(der unveränderliche sha-tag, den docker.yml zu jedem lauf setzt), rückgabe 0:
+  abbild-digest-ist sha256:6a0c13be68de5ddd7c7ff404ab3a3caf15b646a5386c9e902ae3843ac572d80f
+  abbild-digest-gleich ja
+  baumhash 556148291147baefe2e8c49a7745d497ed9560115420589569fa07afda5d31dd
+  baumhash-gleich ja (abbild, arbeitsbaum und laufender container)
+  occ-upgrade-rueckgabewert 0, registrierung-gelungen ja
+  speichergrenze-ist 2147483648/0, grenze-gesetzt ja, entladeschalter-ist 0
+  abbild-im-container-ist sha256:6a0c13be68de5ddd7c7ff404ab3a3caf15b646a5386c9e902ae3843ac572d80f
+  baumhash-im-laufenden-container 556148291147baefe2e8c49a7745d497ed9560115420589569fa07afda5d31dd
+  bestandstor indexiert 52137 uebersprungen 44 fehlgeschlagen 6, bestanden ja
+gegenprobe unabhängig vom baumhash: docker inspect des containers nennt
+Config.Image ...:c87a0239ca676a7dc6ac3f1b95f104800487a1a5 und Image
+sha256:6a0c13be...d80f; numpy im container 2.5.2 (stand c87a0239).
+baumhash-gleich mit dem stand c87a0239 ja, abbild im container ja
+rohdateien: 92d-wechsel.txt, 40b-baumhash.txt, 92d-info-box.xml.
+folge für die kette: IMAGE_TAG=c87a0239ca676a7dc6ac3f1b95f104800487a1a5 steht in
+der umgebung von 00-kette.sh und damit von 10-zelle.sh, das bei jedem nullstand
+genauso registriert. keine werkzeugänderung, nur ein vorhandener laufwert.
+
+-- bewaffnung nach dem abbildwechsel --
+disable/enable, admin-übersicht: effective economy, profileSaved economy,
+backendReachable true (17:44:02Z).
+backendReachable true
+
+cron-gate-start 2026-09-30T17:44:01Z
+cron-gate-ende 2026-09-30T17:44:02Z
+-- cron-gate, 97-cron-vorpruefung.sh vorher (runbook 6.1), rückgabe 0 --
+cron-modus-ist cron
+cron-intervall-quelle aio-cron-container
+cron-intervall-ist 300
+cron-soll-ruecklesung 300
+cron-intervall 300 s, soll 300 s, toleranz 270 bis 330 s: erfüllt
+rohdatei 97-cron-vorpruefung-vorher.txt.
+
+-- kostenstempel --
+90-kosten.txt: m7g.large 2026-09-30T16:53:40Z laeuft
+02-rechenblatt.py stand vor der kette (17:44Z): bisher 0.10 USD, deckel 59.43,
+sicherheitsstopp 71.32, minuten bis deckel 30730, bis sicherheitsstopp 36887.
+
+-- zwischenstand nach task 1 --
+die referenzbox steht nach runbook auf dem abbild zu c87a0239 (digest und
+baumhash belegt), das cron-intervall ist gemessen, der harte stopp ist als stop
+belegt. die kette wurde um 17:44:44Z gestartet (task 2), siehe
+m7g.large-kette.log und m7g.large/00-kette.txt.

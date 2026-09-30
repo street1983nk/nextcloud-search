@@ -1,0 +1,6 @@
+# kostenstempel der abnahme-anfahrt (runbook 7.3), eine zeile TYP START ENDE,
+# UTC, ENDE "laeuft" fuer die laufende box, "geparkt" fuer geparkte platten.
+# nur typen und zeiten, keine kennungen. gelesen von 02-rechenblatt.py stand.
+# deckel der freigabe vom 2026-09-30: 59.43 USD, sicherheitsstopp 71.32 USD.
+# m7g.large start 2026-09-30T16:53:40Z (LaunchTime aus describe-instances)
+m7g.large 2026-09-30T16:53:40Z laeuft

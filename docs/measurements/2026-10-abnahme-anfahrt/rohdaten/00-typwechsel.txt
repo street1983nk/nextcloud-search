@@ -1,0 +1,5 @@
+typwechsel-vorpruefung 2026-09-30T16:54:07Z
+shutdown-verhalten stop
+shutdown-ist-stopp ja
+vorpruefung-stop-ja 2026-09-30T16:54:08Z
+TYPWECHSEL-VORPRUEFUNG-FERTIG
