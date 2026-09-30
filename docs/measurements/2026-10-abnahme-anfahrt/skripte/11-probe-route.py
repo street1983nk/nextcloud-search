@@ -123,9 +123,12 @@ OVERVIEW_FIELDS = (
     ("storedPrecision", "storedPrecision"),
     ("profileSaved", "profileSaved"),
 )
-# indexed and embedded are counted by the backend container; the overview
-# carries them in its backend block, and the top level only as a fallback.
-BACKEND_FIELDS = frozenset({"indexed", "embedded"})
+# indexed and embedded are counted by the backend container, and the guard
+# fields come out of its status answer (AdminViewService::backend); the overview
+# carries all six in its backend block, and the top level only as a fallback.
+# On 30.09.2026 the box showed slotsInForce=1 in the backend block while this
+# tool read the top level and printed keine, so the gate of 10-zelle.sh waited.
+BACKEND_FIELDS = frozenset({"indexed", "embedded", "guardEffective", "guardCause", "slotsInForce", "slotsThrottled"})
 WORD = re.compile(r"^[A-Za-z0-9_.-]{1,40}$")
 
 

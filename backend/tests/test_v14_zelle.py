@@ -138,14 +138,19 @@ def _handler_for(scenario: Scenario) -> type[BaseHTTPRequestHandler]:
                     return
                 answer = {
                     "profileEffective": "standard",
-                    "guardEffective": "standard",
-                    "guardCause": None,
-                    "slotsInForce": 2,
-                    "slotsThrottled": False,
                     "backendReachable": True,
                     "scheduled": 0,
                     "running": 0,
-                    "backend": {"indexed": 5000, "embedded": 5000},
+                    # The shape of AdminViewService::backend: the guard fields
+                    # live in the backend block, not on the top level.
+                    "backend": {
+                        "indexed": 5000,
+                        "embedded": 5000,
+                        "guardEffective": "standard",
+                        "guardCause": None,
+                        "slotsInForce": 2,
+                        "slotsThrottled": False,
+                    },
                     "storedPrecision": "int8",
                     "profileSaved": "standard",
                     "examplePath": "/lasttest/files/geheim.pdf",
