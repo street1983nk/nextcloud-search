@@ -50,6 +50,7 @@ EXPECTED: dict[str, str] = {
     "FINDLING_RECONCILE_QUIET_MAX": str(config.RECONCILE_QUIET_MAX),
     "FINDLING_RECONCILE_SLICE": str(config.RECONCILE_SLICE),
     "FINDLING_EMBED_IDLE_RELEASE_SECONDS": str(config.EMBED_IDLE_RELEASE_SECONDS),
+    "FINDLING_EXTRACT_ADDRESS_SPACE_BYTES": str(config.EXTRACT_ADDRESS_SPACE_BYTES),
 }
 
 # The variables a profile can raise, with the default and range their reader
@@ -103,3 +104,37 @@ def test_a_declared_default_never_counts_as_an_override(monkeypatch: pytest.Monk
     monkeypatch.setenv(name, _declared()[name])
 
     assert explicit_int_from_environment(name, default, bounds) is None
+
+
+def test_the_extraction_address_space_is_declared() -> None:
+    # AppAPI hands an ExApp only the variables its info.xml declares
+    # (ExAppEnvVarsHelper::normalizeAndValidate); an undeclared --env is
+    # dropped without a word. The sandbox limit was readable from the
+    # environment since phase 2 but never declared, so an admin whose large
+    # photos end as failed(out_of_memory) had no way to raise it short of a
+    # private manifest. Measured 2026-09-29 on a 29 user instance: 45 JPEGs of
+    # 1.3 to 11.2 MB burst the 512 MB child; 1 GiB takes them.
+    assert "FINDLING_EXTRACT_ADDRESS_SPACE_BYTES" in _declared()
+
+
+# The declared routes are the surface a browser session or an app password can
+# reach through /exapps/. The companion never needs a declaration: HaRP skips
+# the route table for AppAPI signed requests ("We skip routes checking for
+# AppAPI signed requests", haproxy_agent.py), and so did ExAppProxyController
+# before it. A content route on that list is therefore reachable by every
+# logged in user, past the permission recheck that only the PHP side performs.
+CONTENT_ROUTES = ("/search", "/snippets")
+
+
+def _declared_route_urls() -> list[str]:
+    info = ElementTree.fromstring(BACKEND_INFO.read_text(encoding="utf-8"))  # noqa: S314
+    return [route.findtext("url") or "" for route in info.iter("route")]
+
+
+@pytest.mark.parametrize("path", CONTENT_ROUTES)
+def test_a_content_route_is_not_on_the_browser_reachable_surface(path: str) -> None:
+    import re
+
+    assert not any(re.match(url, path) for url in _declared_route_urls()), (
+        f"{path} is declared in info.xml and so reachable by any logged in user through /exapps/"
+    )

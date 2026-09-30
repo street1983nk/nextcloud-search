@@ -460,9 +460,11 @@ runs:
     # race into a verdict. access_level is numeric on the JSON path (1 is USER),
     # symbolic only in info.xml.
     #
-    # The route list is exactly the productive one from backend/appinfo/info.xml:
-    # three entries, POST on search and snippets at USER level, GET on status at
-    # ADMIN level. It used to be url ".*" with all four writing verbs, which
+    # The route list follows backend/appinfo/info.xml: GET on status at ADMIN
+    # level. The content routes search and snippets are declared nowhere any
+    # more; the companion reaches them over the signed path, which never reads
+    # the route table, and declared with USER they were open to every logged in
+    # user (routes comment in info.xml). It used to be url ".*" with all four writing verbs, which
     # registered an instance no user will ever have and left the route
     # restriction itself untested. If a later phase adds a route to info.xml and
     # forgets it here, the integration job is what says so.
@@ -488,5 +490,5 @@ runs:
         EXAPP_VERSION: ${{ steps.app-version.outputs.version }}
       run: |
         timeout 120 ./occ app_api:app:register findling_backend manual_install --json-info \
-          "{\"id\":\"findling_backend\",\"name\":\"Findling Backend\",\"daemon_config_name\":\"manual_install\",\"version\":\"${EXAPP_VERSION}\",\"secret\":\"${EXAPP_SECRET}\",\"port\":${EXAPP_PORT},\"scopes\":[],\"system\":0,\"routes\":[{\"url\":\"search\",\"verb\":\"POST\",\"access_level\":1,\"headers_to_exclude\":[]},{\"url\":\"snippets\",\"verb\":\"POST\",\"access_level\":1,\"headers_to_exclude\":[]},{\"url\":\"status\",\"verb\":\"GET\",\"access_level\":2,\"headers_to_exclude\":[]}]}" \
+          "{\"id\":\"findling_backend\",\"name\":\"Findling Backend\",\"daemon_config_name\":\"manual_install\",\"version\":\"${EXAPP_VERSION}\",\"secret\":\"${EXAPP_SECRET}\",\"port\":${EXAPP_PORT},\"scopes\":[],\"system\":0,\"routes\":[{\"url\":\"status\",\"verb\":\"GET\",\"access_level\":2,\"headers_to_exclude\":[]}]}" \
           --force-scopes --wait-finish
