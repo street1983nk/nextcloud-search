@@ -2008,10 +2008,11 @@ inspect)
     n=$(cat "$state/inspect" 2>/dev/null || echo 0)
     n=$((n + 1))
     echo "$n" >"$state/inspect"
-    if [ -n "${FAKE_GONE_AFTER:-}" ] && [ "$(cat "$state/exec" 2>/dev/null || echo 0)" -ge "$FAKE_GONE_AFTER" ]; then
+    done_execs=$(cat "$state/exec" 2>/dev/null || echo 0)
+    if [ -n "${FAKE_GONE_AFTER:-}" ] && [ "$done_execs" -ge "$FAKE_GONE_AFTER" ]; then
         exit 1
     fi
-    if [ -n "${FAKE_REPLACED_AFTER:-}" ] && [ "$(cat "$state/exec" 2>/dev/null || echo 0)" -ge "$FAKE_REPLACED_AFTER" ]; then
+    if [ -n "${FAKE_REPLACED_AFTER:-}" ] && [ "$done_execs" -ge "$FAKE_REPLACED_AFTER" ]; then
         echo "neuekennung"
         exit 0
     fi
