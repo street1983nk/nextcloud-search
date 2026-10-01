@@ -30,11 +30,27 @@
 # Stop it with Ctrl-C or with a TERM signal; the closing line is written on the
 # way out. It refuses to work rather than write zeroes: a sample that finds no
 # process at all is not a sample.
+#
+# A failed sample does not end the series by itself. On 2026-10-01 at 06:07:48Z
+# one docker exec that failed without a message ended anon.csv of the full cell
+# S-voll with "container gone", while the container ran on for seven and a half
+# hours next to a cgroup near its limit. Since then a failure is written to
+# stderr with its exit code, the container is asked again, and the series ends
+# only for one of three reasons:
+#
+#   container gone         docker no longer knows the name
+#   container replaced     the name now stands for another id, so the pids of
+#                          the series would mean other processes
+#   container unreadable   FINDLING_ANON_MAX_FAILURES failures in a row
+#                          (default 30) while the container still stands
+#
+# The closing line counts the failed samples as failed=<n>.
 
 set -eu
 
 PREFIX='findling-anon'
 DEFAULT_INTERVAL=5
+MAX_FAILURES="${FINDLING_ANON_MAX_FAILURES:-30}"
 
 NAME="${1:-}"
 INTERVAL="${2:-$DEFAULT_INTERVAL}"
@@ -58,6 +74,12 @@ if [ "$INTERVAL" -lt 1 ]; then
     echo "proc_anon_sampler: the interval has to be at least one second, got '$INTERVAL'" >&2
     exit 2
 fi
+case "$MAX_FAILURES" in
+    '' | *[!0-9]* | 0)
+        echo "proc_anon_sampler: FINDLING_ANON_MAX_FAILURES has to be a whole number above 0, got '$MAX_FAILURES'" >&2
+        exit 2
+        ;;
+esac
 
 for tool in docker awk date sleep sort; do
     if ! command -v "$tool" >/dev/null 2>&1; then
@@ -89,7 +111,7 @@ emit() {
 READER='grep -H -E "^(Name|RssAnon|VmHWM):" /proc/[0-9]*/status 2>/dev/null || true'
 
 sample() {
-    raw=$(docker exec "$CONTAINER_ID" sh -c "$READER") || return 1
+    raw=$(docker exec "$CONTAINER_ID" sh -c "$READER") || return "$?"
     printf '%s\n' "$raw" | awk -F: '
         NF >= 3 {
             split($1, parts, "/")
@@ -107,13 +129,15 @@ sample() {
 
 LINES=0
 SAMPLES=0
+FAILED=0
+IN_A_ROW=0
 MAXES=''
 
 finish() {
     trap - INT TERM
     reason="$1"
     tops=$(printf '%s\n' "$MAXES" | awk -F, 'NF == 2 { printf "%s%s=%s", (seen++ ? " " : ""), $1, $2 }')
-    emit "summary samples=$SAMPLES rows=$LINES max_rssanon_kb=[$tops] reason=$reason"
+    emit "summary samples=$SAMPLES rows=$LINES failed=$FAILED max_rssanon_kb=[$tops] reason=$reason"
     if [ "$LINES" -eq 0 ]; then
         echo "proc_anon_sampler: not one sample was written, so there is nothing to report" >&2
         exit 1
@@ -126,14 +150,40 @@ trap 'finish signal' INT TERM
 echo "proc_anon_sampler: container=$NAME interval=${INTERVAL}s" >&2
 emit "epoch,pid,name,rssanon_kb,vmhwm_kb"
 
-while :; do
-    stamp=$(date +%s)
-    if ! rows=$(sample); then
+# One failed sample: written down, the container asked again, and the series
+# goes on unless the container is gone, replaced, or has failed too often in a
+# row. An empty answer counts as a failure too: under memory pressure the grep
+# inside can be killed while the shell around it still exits 0.
+failed_sample() {
+    FAILED=$((FAILED + 1))
+    IN_A_ROW=$((IN_A_ROW + 1))
+    echo "proc_anon_sampler: sample failed at $1, $2, failure $IN_A_ROW in a row of at most $MAX_FAILURES" >&2
+    if ! now_id=$(docker inspect -f '{{.Id}}' "$NAME" 2>/dev/null); then
         finish 'container gone'
     fi
-    if [ -z "$rows" ]; then
-        finish 'no process readable'
+    if [ "$now_id" != "$CONTAINER_ID" ]; then
+        finish 'container replaced'
     fi
+    if [ "$IN_A_ROW" -ge "$MAX_FAILURES" ]; then
+        finish 'container unreadable'
+    fi
+}
+
+while :; do
+    stamp=$(date +%s)
+    status=0
+    rows=$(sample) || status=$?
+    if [ "$status" -ne 0 ]; then
+        failed_sample "$stamp" "exit $status"
+        sleep "$INTERVAL"
+        continue
+    fi
+    if [ -z "$rows" ]; then
+        failed_sample "$stamp" "no process readable"
+        sleep "$INTERVAL"
+        continue
+    fi
+    IN_A_ROW=0
     SAMPLES=$((SAMPLES + 1))
     # Line by line and not word by word: a process name may carry a space.
     while IFS= read -r row; do
