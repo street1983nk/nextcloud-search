@@ -106,3 +106,10 @@ Wörtlich (über den Koordinator, 01.10.2026): "weiter" mit 28-07.
 - **Fix:** Sampler schreibt jeden Fehlschlag mit Rückgabewert nach stderr, fragt den Container erneut und endet nur bei `container gone`, `container replaced` oder `container unreadable` (FINDLING_ANON_MAX_FAILURES in Folge, Vorgabe 30); Abschlusszeile zählt `failed=`. Commits a06dff96 (RED), 30a9c757 (GREEN), 79e927ff (Stil).
 - **OOM-Schlusszeile:** `10-zelle.sh` schreibt vor dem Sampler-Stopp `oom oomkilled .. restartcount .. containerstart .. memory-events oom .. oom_kill ..`. Commit 7adfed5b, Positivkontrolle schlägt gegen das alte Skript fehl.
 - **Vor 28-07:** die Box trägt noch den alten Stand der Skripte; die lokalen Commits müssen vor der nächsten Zelle auf den Box-Klon (nicht gepusht).
+
+## Nachtrag 01.10.2026, 18:05Z: Kernel-Journal des S-voll-Boots (Frage OOM um 06:07Z)
+
+- **Kein OOM.** `journalctl --list-boots`: S-voll ist Boot -2 (16:54:56Z bis 13:54:59Z, Kernel 7.0.0-1012-aws). `journalctl -k -b <Boot -2>` mit `grep -iE 'oom|killed process|out of memory'`: 0 Treffer im Fenster 06:00 bis 06:15Z (143 Kernzeilen gelesen), 0 Treffer im ganzen Boot.
+- **Tatsächliche Ursache der anon.csv-Lücke: unattended-upgrades.** 06:06:59 `Starting apt-daily-upgrade.service`, 06:07:40 Upgrade libc6 2.39-0ubuntu8.8 auf 8.9, 06:07:41 `systemd[1]: Reexecuting.`, 06:07:49.556 `Stopped containerd.service`, 06:07:50.460 dockerd `Error running exec ... dial unix:///run/containerd/containerd.sock: timeout`, 06:07:50.661 `Started containerd.service`. Die Shims liefen weiter, die Container also auch; genau dieser eine fehlgeschlagene `docker exec` beendete den Sampler. Die frühere Vermutung "Speicherdruck an der Grenze" ist damit widerlegt.
+- **Nebenbefund:** derselbe Lauf installierte 06:07:55 bis 06:08:31 linux-image-7.0.0-1013-aws. 94c und alle Zellen ab 28-07 laufen auf 7.0.0-1013-aws, S-voll lief auf 7.0.0-1012-aws. Vermerkt, nicht bewertet.
+- Belegzeilen: `rohdaten/m7g.large/S-voll/10-auswertung.txt`, Abschnitt "nachtrag 2026-10-01T18:05Z".

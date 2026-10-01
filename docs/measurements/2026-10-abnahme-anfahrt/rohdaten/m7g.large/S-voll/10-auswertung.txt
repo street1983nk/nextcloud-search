@@ -20,3 +20,28 @@ anon.csv (proc_anon_sampler) endete 2026-10-01T06:07:48Z mit reason=container go
 der container weiterlief (rss.csv derselben cgroup laeuft bis zum ende, keine neustartspur);
 die prozessreihe deckt 11.9 von 19.6 h.
 ocr-seiten-je-sekunde: aus diesen rohdaten nicht direkt ablesbar, nicht berechnet.
+-- nachtrag 2026-10-01T18:05Z: kernel-journal des s-voll-boots, frage oom um 06:07Z --
+gelesen nach dem start fuer 28-07, journalctl --list-boots: der s-voll-lauf ist boot -2
+(erste zeile 2026-09-30 16:54:56 UTC, letzte 2026-10-01 13:54:59 UTC), kernel 7.0.0-1012-aws.
+journalctl -k -b <boot -2> grep -iE 'oom|killed process|out of memory':
+  fenster 06:00 bis 06:15Z: 0 treffer (143 kernzeilen im fenster gelesen)
+  ganzer boot: 0 treffer
+urteil: um 06:07Z gab es KEINEN oom-kill und keine "memory cgroup out of memory"-zeile;
+im ganzen s-voll-boot steht keine.
+was um 06:07Z tatsaechlich geschah (systemjournal desselben boots, hostname weggelassen):
+  06:06:59.058 systemd[1]: Starting apt-daily-upgrade.service - Daily apt upgrade and clean activities...
+  06:07:40     unattended-upgrade: Upgrade libc6:arm64 (2.39-0ubuntu8.8, 2.39-0ubuntu8.9) (apt history.log)
+  06:07:41.046 systemd[1]: Reexecuting.
+  06:07:49.555 systemd[1]: Stopping containerd.service - containerd container runtime...
+  06:07:49.556 systemd[1]: Stopped containerd.service - containerd container runtime.
+  06:07:50.460 dockerd: level=error msg="Error running exec <id> in container: Unavailable:
+               connection error: desc = \"transport: Error while dialing: dial
+               unix:///run/containerd/containerd.sock: timeout\""
+  06:07:50.661 systemd[1]: Started containerd.service - containerd container runtime.
+die containerd-shims liefen weiter ("remains running after unit stopped"), die container
+also auch; nur docker exec scheiterte in dieser sekunde. das ist der fehlgeschlagene exec,
+an dem proc_anon_sampler.sh mit reason=container gone endete (letzte zeile 06:07:48Z).
+ursache der luecke damit belegt: unattended-upgrades, nicht speicherdruck und nicht oom.
+weitere folge: 06:07:55 bis 06:08:31 installierte derselbe lauf linux-image-7.0.0-1013-aws;
+seit dem neustart fuer 94c (boot -1) und fuer 28-07 laeuft die box auf 7.0.0-1013-aws,
+s-voll lief auf 7.0.0-1012-aws. vermerkt, nicht bewertet.
