@@ -286,7 +286,7 @@ Plans:
 
 **Wave 3 bis 6 (bezahlte Anfahrt, seriell)**
 
-- [ ] 28-06-PLAN.md , Referenzbox m7g.large: Aufbau, Digest, Cron-Gate, Sparsam voll, Store-Messgröße, Zwischenstand, Welle 3
+- [x] 28-06-PLAN.md , Referenzbox m7g.large: Aufbau, Digest, Cron-Gate, Sparsam voll, Store-Messgröße, Zwischenstand, Welle 3
 - [ ] 28-07-PLAN.md , Teilkorpus, drei Zellen m7g.large, drei Zellen m7g.4xlarge, Welle 4
 - [ ] 28-08-PLAN.md , Owner-Tor x86, Aufbau und Machbarkeitstor c7a.xlarge, vier Zellen inkl. fp32, Welle 5
 - [ ] 28-09-PLAN.md , c7a.2xlarge, c7a.4xlarge (fp32), c7a.8xlarge, Schlusszahlen, Welle 6
@@ -326,7 +326,7 @@ Plans:
 | 25. Einbettungsspur und Modellwahl | v1.4 | 12/12 | Complete    | 2026-09-28 |
 | 26. N OCR-Slots und Speicherwächter | v1.4 | 14/14 | Complete    | 2026-09-29 |
 | 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 16/16 | Complete    | 2026-09-29 |
-| 28. Abnahme-Anfahrt | v1.4 | 5/14 | In Progress|  |
+| 28. Abnahme-Anfahrt | v1.4 | 6/14 | In Progress|  |
 | 29. Härtung und Store-Einreichung 1.4.0 | v1.4 | 0/? | Not started | - |
 
 ## Nach v1.3 (Wiedervorlage)
