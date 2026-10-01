@@ -1,0 +1,4 @@
+{"at": "2026-10-01T18:08:52Z", "indexed": 0, "indexedPercent": null, "embedded": null, "embeddedPercent": null, "scheduled": 549, "running": 0, "runState": "running", "backendReachable": true, "backend": {"indexed": 0, "embedded": 0}}
+{"at": "2026-10-01T18:10:53Z", "indexed": 0, "indexedPercent": null, "embedded": null, "embeddedPercent": null, "scheduled": 0, "running": 0, "runState": "idle", "backendReachable": true, "backend": {"indexed": 0, "embedded": 0}}
+{"at": "2026-10-01T18:12:53Z", "indexed": 0, "indexedPercent": null, "embedded": null, "embeddedPercent": null, "scheduled": 0, "running": 0, "runState": "idle", "backendReachable": true, "backend": {"indexed": 0, "embedded": 0}}
+{"at": "2026-10-01T18:14:53Z", "indexed": 0, "indexedPercent": null, "embedded": null, "embeddedPercent": null, "scheduled": 0, "running": 0, "runState": "idle", "backendReachable": true, "backend": {"indexed": 0, "embedded": 0}}

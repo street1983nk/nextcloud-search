@@ -1,0 +1,119 @@
+# teilkorpus auf der arm-platte (m7g.large), plan 28-07 task 1, nach der vollzelle (pitfall 7)
+# nur ordner- und dateinamen der obersten ebene, keine pfade der maschine, keine kennungen.
+box m7g.large, start 3 2026-10-01T18:02:42Z, box-klon per git bundle auf 328eb051 gebracht (HEAD box gleich HEAD lokal, beleg in 28-07-SUMMARY)
+
+-- vorab: apt-timer abgeschaltet (abweichung, siehe 28-07-SUMMARY) --
+apt-daily.timer und apt-daily-upgrade.timer: systemctl disable --now, zurueckgelesen disabled/inactive.
+grund: unattended-upgrades startete am 2026-10-01T06:07:49Z containerd neu (s-voll, 10-auswertung.txt);
+der naechste lauf stand auf 2026-10-02T06:06Z, mitten in den zellen.
+
+-- inventar aller homes, oberste ebene (occ user:list: admin, driftfall, lasttest, sprachfall) --
+d = ordner mit anzahl dateien darunter, f = datei
+admin
+  d Documents 4
+  f Nextcloud Manual.pdf
+  f Nextcloud intro.mp4
+  f Nextcloud.png
+  d Photos 9
+  f Readme.md
+  f Reasons to use Nextcloud.pdf
+  d Templates 45
+  f Templates credits.md
+  d mess07-bodensatz 0
+driftfall
+  d Notes 0
+  d Shared 0
+lasttest
+  d Documents 4
+  f Nextcloud Manual.pdf
+  f Nextcloud intro.mp4
+  f Nextcloud.png
+  d Photos 9
+  f Readme.md
+  f Reasons to use Nextcloud.pdf
+  d Templates 45
+  f Templates credits.md
+  d drill 1500
+  d loadtest 50000
+  d neustart 30
+  d ocrdrei 120
+  d workersA 200
+  d workersB 200
+sprachfall
+  d corpus 39
+
+-- hardlinks, 01-teilkorpus.py hardlinks loadtest -> teilkorpus, als www-data --
+hardlinks-start 2026-10-01T18:06:38Z
+hardlinks angelegt 5000, rueckgabe 0
+gegenprobe: find teilkorpus -type f 5000, davon mit linkzahl 2: 5000, eigentuemer www-data:www-data
+
+-- occ files:scan --path=lasttest/files/teilkorpus --
+files-scan 2026-10-01T18:06:39Z bis 18:06:44Z
+Folders 1, Files 5000, New 0, Updated 5001, Removed 0, Errors 0
+occ info:file lasttest/files/teilkorpus: children 5000, size 1.9 GB
+
+-- ordner-ausschluesse, vor dem nullstand gesetzt (appconfig findling exclusions, typ array) --
+gesetzt per occ config:app:set findling exclusions --type=array (nicht ueber save(), also keine aufraeumjobs)
+vergleich im produkt: pfad == praefix oder pfad beginnt mit praefix/, relativ zur mount-wurzel, in jedem home
+19 praefixe (hoechstens 64): alle uebrigen eintraege der obersten ebene jedes homes, ordner UND dateien
+  Documents
+  Photos
+  Templates
+  mess07-bodensatz
+  Nextcloud Manual.pdf
+  Nextcloud intro.mp4
+  Nextcloud.png
+  Readme.md
+  Reasons to use Nextcloud.pdf
+  Templates credits.md
+  Notes
+  Shared
+  drill
+  loadtest
+  neustart
+  ocrdrei
+  workersA
+  workersB
+  corpus
+zurueckgelesen: config:app:get findling exclusions --details, type array, dieselben 19 eintraege.
+nicht ausgeschlossen bleibt nur lasttest/teilkorpus.
+
+-- liste, 01-teilkorpus.py liste auf der box --
+liste-start 2026-10-01T18:07:16Z, liste-ende 18:07:31Z, rueckgabe 0
+kopfzeile name,bytes,sha256, 5000 dateizeilen, schlusszeile
+listen-pruefsumme f6b3dd70971035374d502dfd27ac0dc8dd372f033c9fc4e12aa462e887c09979
+gegenprobe 1: dieselbe liste ueber den hardlink-ordner teilkorpus gerechnet, gleiche pruefsumme
+gegenprobe 2: auf der entwicklungsmaschine sha256 ueber die 5000 zeilen mit zeilenumbruch verbunden
+(printf statt python), gleiche pruefsumme
+abgelegt als ../teilkorpus-liste.txt
+
+-- kettenlauf 1 der teilkorpus-zellen: abbruch 71 am zaehltor --
+laufwerte: ZELLEN S-T-anker:economy:int8:teil St-T:standard:int8:teil L-T:performance:int8:teil,
+GRENZE_2G ja, BISHER_USD 2.5125, SATZ_USD_H 0.115841, IMAGE_TAG der sha-tag zu c87a0239.
+kette-start 2026-10-01T18:08:31Z bisher 2.5237, timer-gesetzt minuten 35631
+zelle S-T-anker: abwaerts, eine nextcloud, nullstand, registrierung, bewaffnung (backendReachable true),
+grenze 2147483648/0, baumhash-beweis ja, 93b, drop-caches, probe keine abwaertsweg,
+wirksamkeit ja effective economy slotsInForce 1, sampler, trigger ja 18:08:53Z
+nach KORPUS_FRIST 360 s:
+  zaehlung vorrat 0 uebersprungen 35 fehlgeschlagen 6 indexiert 0 summe 41
+  zaehltor verfehlt 41 statt 5000
+  zelle-abbruch rueckgabe 71 2026-10-01T18:14:55Z, kette-abbruch, timer-vorgezogen auf-minuten 60
+keine messung. rohdaten unter m7g.large/S-T-anker-abbruch71/ und m7g.large-teil-abbruch71-kette.log
+(auf der box genauso umbenannt, nicht geloescht).
+ursache, belegt an der box:
+  StorageCrawlJob geht den storage in scheiben von 2000 dateien durch (BATCH_SIZE 2000,
+  MAX_SECONDS 30), in der reihenfolge der fileid, und besucht auch die ausgeschlossenen dateien
+  (zaehler excluded).
+  das home lasttest ist storage 3 (files-ordner fileid 133); loadtest liegt bei fileid 134 ff.,
+  teilkorpus bei 52426 ff., also ganz am ende.
+  background-job:list: storage 3 last_file_id 2134 um 18:15:40Z, 4134 um 18:16:37Z
+  (eine scheibe in hoechstens 57 s, nicht nur im cron-takt von 300 s: der container stoesst
+  bei leerem vorrat selbst eine scheibe an, CrawlAdvanceService, budget 20 s); die uebrigen
+  homes waren schon durch.
+  bis zur ersten teilkorpus-datei sind es rund 26 scheiben: bei einer scheibe je minute rund
+  26 min, im cron-takt rund 2,2 h nach dem trigger. das zaehltor nach 360 s kann in dieser
+  anordnung nie 5000 sehen.
+zweiter befund: uebersprungen 44 vor dem trigger, 35 beim zaehltor, fehlgeschlagen 6: alte
+endzustaende ausserhalb des teilkorpus stehen nach --restart noch in den zaehlern, die das
+zaehltor summiert.
+box per aws_box.sh stop gestoppt 2026-10-01T18:17:16Z, geparkt; weiter entscheidet der owner.
