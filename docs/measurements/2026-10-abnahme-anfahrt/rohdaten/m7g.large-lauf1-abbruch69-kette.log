@@ -1,0 +1,6 @@
+kette-start m7g.large 2026-09-30T17:44:46Z bisher 0.0987 deckel 59.43 satz 0.115841
+timer-gesetzt minuten 36887 abschaltung 2026-10-26T08:31:46Z
+zelle-start S-voll economy/int8 korpus voll 2026-09-30T17:44:46Z bisher 0.0987
+zelle-ende S-voll rueckgabe 69 2026-09-30T18:15:00Z
+kette-abbruch zelle S-voll rueckgabe 69 2026-09-30T18:15:00Z
+timer-vorgezogen 2026-09-30T18:15:00Z auf-minuten 60

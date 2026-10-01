@@ -1,0 +1,22 @@
+# auswertung S-voll (m7g.large, economy/int8, grenze 2g), aus den rohdaten dieses verzeichnisses
+-- laufzeit --
+zelle-start 2026-09-30T18:16:03Z (erste statuszeile, indexed 0)
+indexed-voll 2026-10-01T12:59:28Z indexed 52137 embedded 44053, volltextspur 18.72 h
+embedded-gleich-indexed 2026-10-01T13:50:46Z (zweimal vorrat 0), beide spuren 19.58 h
+dateien-je-stunde volltext 2785 (52137 / 18.72 h)
+-- speicher (rss.csv, cgroup, 2 s, 35115 lesungen ueber 19.61 h) --
+anon-spitze-cgroup 1875.8 MB (1788.9 MiB) gegen grenze 2048 MiB
+memory.peak 2147663872, die grenze wurde beruehrt (seitencache inklusive)
+anon-spitze-prozess python 1608836 kB rssanon (anon.csv, nur bis 06:07:48Z, siehe unten)
+grundlast nach ruhe 120 s: anon 1624530944
+-- oom --
+oom-neustartspur keine: memory.peak ueber den lauf nie zurueckgesetzt, anon ohne einbruch,
+statusreihe stetig steigend (06:06:11Z embedded 26561, 06:08:12Z 26617), backendReachable
+durchgehend true, hauptprozess pid 8 in anon.csv vom ersten bis zum letzten eintrag.
+oom-schlusszeile: fehlt, 10-zelle.sh schreibt keine und liest memory.events nicht;
+nach dem stopp der box nicht mehr lesbar (cgroup weg). als luecke vermerkt.
+-- luecken --
+anon.csv (proc_anon_sampler) endete 2026-10-01T06:07:48Z mit reason=container gone, obwohl
+der container weiterlief (rss.csv derselben cgroup laeuft bis zum ende, keine neustartspur);
+die prozessreihe deckt 11.9 von 19.6 h.
+ocr-seiten-je-sekunde: aus diesen rohdaten nicht direkt ablesbar, nicht berechnet.

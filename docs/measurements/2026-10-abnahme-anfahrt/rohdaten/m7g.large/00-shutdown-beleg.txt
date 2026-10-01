@@ -1,0 +1,28 @@
+# beleg des herunterfahrens nach S-voll, gelesen nach dem neustart 2026-10-01T14:51Z
+# quellen: 00-kette.txt, S-voll/10-zelle.txt, journalctl -b -1, last -x auf der box; <box> statt hostname
+-- 00-kette.txt --
+kette-start m7g.large 2026-09-30T18:15:31Z bisher 0.1580 deckel 59.43 satz 0.115841
+timer-gesetzt minuten 36856 abschaltung 2026-10-26T08:31:31Z
+zelle-start S-voll economy/int8 korpus voll 2026-09-30T18:15:31Z bisher 0.1580
+zelle-ende S-voll rueckgabe 0 2026-10-01T13:52:48Z
+kette-ende 2026-10-01T13:52:48Z bisher 2.4310
+-- S-voll/10-zelle.txt --
+wirksamkeit ja effective economy slotsInForce 1 nach-s 2
+ende vorrat 0 embedded gleich indexed zweimal 2026-10-01T13:50:46Z
+abholbereit ja dateien 13
+10-ZELLE-FERTIG S-voll
+-- 00-DECKEL-ERREICHT --
+nicht vorhanden; keine zeile kette-abbruch
+-- journalctl -b -1 --
+Oct 01 13:52:48 <box> sudo[2932357]:   ubuntu als root (sudo), kommando /usr/sbin/shutdown -h +2, arbeitsverzeichnis skriptordner der anfahrt
+Oct 01 13:52:48 <box> systemd-logind[580]: The system will power off at Thu 2026-10-01 13:54:48 UTC!
+Oct 01 13:54:59 <box> systemd[1]: Reached target poweroff.target - System Power Off.
+-- last -x --
+shutdown system down  7.0.0-1012-aws   Thu Oct  1 13:54 - 14:48  (00:53)
+-- urteil --
+ausloeser: 00-kette.sh zeile 297, regel 3 "das kettenende": nach der letzten zelle
+sudo shutdown -h +2. der sicherheitstimer (abschaltung 2026-10-26T08:31:31Z) war
+es nicht, der deckel nicht, ein abbruch nicht. der laufwert STOPP_AM_ENDE=nein
+wird von 00-kette.sh nicht gelesen; das kettenende stoppt unbedingt.
+unschaedlich: zelle vollstaendig (ende-zeile, rueckgabe 0, nachlauf und abholbereit
+vor dem shutdown), ein stopp ist kein abbau, volume und container blieben erhalten.

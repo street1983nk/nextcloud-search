@@ -3,4 +3,13 @@
 # nur typen und zeiten, keine kennungen. gelesen von 02-rechenblatt.py stand.
 # deckel der freigabe vom 2026-09-30: 59.43 USD, sicherheitsstopp 71.32 USD.
 # m7g.large start 2026-09-30T16:53:40Z (LaunchTime aus describe-instances)
-m7g.large 2026-09-30T16:53:40Z laeuft
+# stopp 1: kettenende, sudo shutdown -h +2 aus 00-kette.sh, journal poweroff 13:54:59Z
+m7g.large 2026-09-30T16:53:40Z 2026-10-01T13:54:59Z
+geparkt 2026-10-01T13:54:59Z 2026-10-01T14:49:04Z
+# start 2 fuer 94c (aws_box.sh start), stopp 2 per aws_box.sh stop (BOX_STOPPED_ISO)
+m7g.large 2026-10-01T14:49:04Z 2026-10-01T15:02:43Z
+geparkt 2026-10-01T15:02:43Z laeuft
+# m7g.large stop 2026-10-01T13:54:59Z laufzeit 21.0219 h x 0.115841 = 2.4352 USD (S-voll)
+# geparkt 0.9014 h x 0.013041 = 0.0118 USD
+# m7g.large stop 2026-10-01T15:02:43Z laufzeit 0.2275 h x 0.115841 = 0.0264 USD (94c)
+# bisher 2.47 USD gegen deckel 59.43 USD (02-rechenblatt.py stand --jetzt 2026-10-01T15:02:43Z, rest 56.96); box geparkt

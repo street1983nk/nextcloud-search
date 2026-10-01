@@ -1,0 +1,18 @@
+# bewertung der store-messgroesse C1 gegen 730,2 MB (D-28-10, 00-ablauf.md abschnitt 3)
+# quelle: 94c-bodensatz-zyklen.txt dieses verzeichnisses, rueckgabe 0, ruhezeit 120 s, zwei zyklen
+-- vor 94c, nach dem maschinenstart 2026-10-01T14:49:04Z (runbook block 10 bis 12) --
+a-record loadtest auf die neue instanzadresse gesetzt 2026-10-01T14:53:46Z, ttl 120, nicht proxied
+bewaffnung disable/enable 2026-10-01T14:54:19Z, speichergrenze-ist 2147483648/0
+backendReachable true, effective economy, profileSaved economy, indexed 52137 embedded 52137 (14:54:25Z)
+92e frist 120 rueckgabe 0 (14:54:44Z), 94c rueckgabe 0 (15:01:58Z), 92e frist 0 rueckgabe 0 (15:01:59Z)
+-- marken --
+marke-a 110.7 MB
+marke-c1 743.9 MB
+marke-c2 759.5 MB
+zyklus2-minus-c1 15.6
+-- urteil --
+c1-mb 743.9
+band 715.6 bis 744.8 MB (730.2 plus/minus 2 prozent)
+differenz-zu-730.2 +13.7 MB (+1.88 prozent)
+sparsam-store-toleranz innerhalb
+hinweis: c1 liegt 0.9 MB unter der oberen bandgrenze; fruehere messungen derselben box 731.9 (v1.2), 730.2 und 729.3 MB (v1.3)
