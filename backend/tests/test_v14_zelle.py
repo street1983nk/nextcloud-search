@@ -427,10 +427,24 @@ exec)
         occ=${alles#* php occ }
         printf 'occ %s\n' "$occ" >>"$STUB_LOG"
         case "$occ" in
-        "findling:index --restart -n") echo "Queued a full rebuild." ;;
+        "findling:index --restart -n")
+            : >"$STUB_STATE/getriggert"
+            echo "Queued a full rebuild."
+            ;;
         "findling:index --restart"*) echo "Nothing was changed." ;;
         findling:index)
-            printf 'Work stock\n  scheduled            0\n  handed to the worker 0\n\n'
+            s=0
+            h=0
+            if [ -e "$STUB_STATE/getriggert" ]; then
+                lesungen=$(cat "$STUB_STATE/lesungen" 2>/dev/null || echo 0)
+                lesungen=$((lesungen + 1))
+                printf '%s' "$lesungen" >"$STUB_STATE/lesungen"
+                if [ "$lesungen" -le 1 ]; then
+                    s=${STUB_SCHEDULED:-0}
+                    h=${STUB_HANDED:-0}
+                fi
+            fi
+            printf 'Work stock\n  scheduled            %s\n  handed to the worker %s\n\n' "$s" "$h"
             printf 'End states as Nextcloud recorded them\n  indexed              0\n'
             printf '  skipped              %s\n  failed               %s\n' "${STUB_SKIPPED:-0}" "${STUB_FAILED:-0}"
             ;;
@@ -476,11 +490,20 @@ case "$(basename "${1:-}")" in
     uebersicht)
         p=$(cat "$STUB_STATE/profil" 2>/dev/null || echo economy)
         [ "${STUB_WIRKT:-ja}" = ja ] || p=economy
+        e=${STUB_EMBEDDED:-10}
+        if [ "${STUB_EMBEDDED_WACKELN:-nein}" = ja ]; then
+            w=$(cat "$STUB_STATE/wackeln" 2>/dev/null || echo 0)
+            w=$((w + 1))
+            printf '%s' "$w" >"$STUB_STATE/wackeln"
+            e=$((e + w % 2))
+        elif [ "$(cat "$STUB_STATE/lesungen" 2>/dev/null || echo 0)" -gt 1 ]; then
+            e=${STUB_INDEXED:-10}
+        fi
         printf 'uebersicht HTTP200 effective=%s guardEffective=%s' "$p" "${STUB_GUARD:-$p}"
         printf ' guardCause=keine slotsInForce=2'
         printf ' throttled=false backendReachable=%s scheduled=0 running=0' "${STUB_REACHABLE:-true}"
         printf ' indexed=%s embedded=%s storedPrecision=int8 profileSaved=%s\n' \
-            "${STUB_INDEXED:-10}" "${STUB_EMBEDDED:-10}" "$p"
+            "${STUB_INDEXED:-10}" "$e" "$p"
         ;;
     esac
     exit 0
@@ -798,6 +821,59 @@ def test_cell_teilkorpus_ends_the_cell_on_a_missed_count(tmp_path: Path) -> None
     lines = cell_lines(bench)
     assert "zaehltor verfehlt 10 statt 5000" in lines
     assert "ende" not in steps_of(lines)
+
+
+# The counters of the real abort 71 on m7g.large: the stock still held 3528
+# files (scheduled 3518, handed 10), 41 were terminal (skipped 35, failed 6),
+# 3368 were indexed but only 1431 embedded. The stock drains in step with
+# embedded, so indexed double counts what is still in the stock: the old
+# formula summed 6937 instead of 5000.
+ABORT_71_COUNTERS: dict[str, str | None] = {
+    "ZELLE_KORPUS": "teil",
+    "STUB_SCHEDULED": "3518",
+    "STUB_HANDED": "10",
+    "STUB_SKIPPED": "35",
+    "STUB_FAILED": "6",
+    "STUB_INDEXED": "3368",
+    "STUB_EMBEDDED": "1431",
+}
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_cell_teilkorpus_counts_embedded_not_indexed(tmp_path: Path) -> None:
+    """The gate must pass the real abort 71 counters: 3528 + 41 + 1431 = 5000."""
+    bench = a_bench(tmp_path, {})
+    answer = run_cell(bench, CELL_ARGUMENTS, dict(ABORT_71_COUNTERS))
+    assert answer.returncode == 0, answer
+    lines = cell_lines(bench)
+    assert "zaehltor bestanden 5000" in lines, lines
+    counting = next(line for line in lines if line.startswith("zaehlung "))
+    assert "eingebettet 1431" in counting, counting
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_cell_teilkorpus_still_fails_on_a_real_shortfall(tmp_path: Path) -> None:
+    """A real shortfall (31 files short of 5000) still ends the cell with 71."""
+    bench = a_bench(tmp_path, {})
+    counters = dict(ABORT_71_COUNTERS)
+    counters["STUB_EMBEDDED"] = "1400"
+    answer = run_cell(bench, CELL_ARGUMENTS, counters)
+    assert answer.returncode == 71, answer
+    lines = cell_lines(bench)
+    assert "zaehltor verfehlt 4969 statt 5000" in lines, lines
+    assert "ende" not in steps_of(lines)
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_cell_teilkorpus_aborts_on_an_unstable_embedded_reading(tmp_path: Path) -> None:
+    """When embedded wobbles between readings, the gate never passes a guess."""
+    bench = a_bench(tmp_path, {})
+    counters = dict(ABORT_71_COUNTERS)
+    counters["STUB_EMBEDDED_WACKELN"] = "ja"
+    answer = run_cell(bench, CELL_ARGUMENTS, counters)
+    assert answer.returncode == 71, answer
+    lines = cell_lines(bench)
+    assert any(line.startswith("zaehlung-instabil") for line in lines), lines
 
 
 @pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
