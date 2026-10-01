@@ -34,3 +34,5 @@ budachst 28.09.: die Dateien sind TIFF hinter .jpg (Team-Ordner __groupfolders/8
 ## Update 2026-10-01
 
 budachst: file-Zeile = TIFF big-endian, 8 Bit Graustufen, unkomprimiert, 963x1300. Pillow liest das, image.py kodiert ohnehin nach PNG -> These "TIFF-Variante" FALSCH, oeffentlich korrigiert. Verdacht jetzt: abgeschnittener Download (Hypothese 4) oder Altbefund 1.2.x. Diagnose-Ausgabe erbeten. Issue #15: Datei 1441501 unter 1.3 erneut repeatedly_stuck (zuletzt geprueft 30.09.) -> echter Fall, Groesse/Seiten/Diagnose erbeten.
+
+Update 01.10. mittag: budachst-Diagnose galt der .tif in Sixt_Print (id 2893197, queued, nie geprueft) = falsche Datei. Markiert ist die .jpg in Sixt_Heide (Ende fb e4), Format UNBEKANNT ("it's tiff" war Schluss aus Nachbardatei). Erbeten: file, head -c 16 | xxd, diagnose der .jpg. Hypothesen 1 (truncated JPEG) und 4 (Download) wieder offen.
