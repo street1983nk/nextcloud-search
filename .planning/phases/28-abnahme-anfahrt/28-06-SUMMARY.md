@@ -98,3 +98,11 @@ Wörtlich (über den Koordinator, 01.10.2026): "weiter" mit 28-07.
 ## Self-Check: PASSED
 
 - 94c-bewertung.txt, 00-shutdown-beleg.txt, 10-auswertung.txt, 90-kosten.txt vorhanden; Commits 8a473c45, 774dd247, 56862f5d, aad6763d im Log; Gate test_public_artifacts.py 55 passed.
+
+## Nachtrag: Vorbereitung 28-07 (Lücke anon.csv, OOM-Schlusszeile)
+
+- **Ursache, belegt bis zur Skriptstelle:** `scripts/ops/proc_anon_sampler.sh:92` (`docker exec ... || return 1`) zusammen mit `:131-132` (`if ! rows=$(sample); then finish 'container gone'`): ein einziger fehlgeschlagener `docker exec` beendete die Reihe mit `container gone`, ohne den Container erneut zu fragen. Der Container lief weiter (rss.csv derselben cgroup bis 13:52Z, memory.peak nie zurückgesetzt).
+- **Art des Fehlschlags, Indizien:** `anon.log` enthält nach der Kopfzeile keine Meldung, also kein Fehler des Docker-Daemons (der schriebe "Error response from daemon" bzw. "OCI runtime exec failed"); die innere Shell endet wegen `|| true` nur bei Tod durch Signal ungleich 0. Um 06:07:40 bis 06:07:47Z fiel der Dateicache der cgroup von 223 auf 82 MB bei memory.current rund 2,03 GB von 2,147 GB: Speicherdruck an der Grenze. Das Kernel-Journal des S-voll-Boots (oom-kill-Zeile) ist nicht gelesen, weil die AWS-Sitzung bei der Kurzstart-Absicht abgelaufen war; Box blieb gestoppt.
+- **Fix:** Sampler schreibt jeden Fehlschlag mit Rückgabewert nach stderr, fragt den Container erneut und endet nur bei `container gone`, `container replaced` oder `container unreadable` (FINDLING_ANON_MAX_FAILURES in Folge, Vorgabe 30); Abschlusszeile zählt `failed=`. Commits a06dff96 (RED), 30a9c757 (GREEN), 79e927ff (Stil).
+- **OOM-Schlusszeile:** `10-zelle.sh` schreibt vor dem Sampler-Stopp `oom oomkilled .. restartcount .. containerstart .. memory-events oom .. oom_kill ..`. Commit 7adfed5b, Positivkontrolle schlägt gegen das alte Skript fehl.
+- **Vor 28-07:** die Box trägt noch den alten Stand der Skripte; die lokalen Commits müssen vor der nächsten Zelle auf den Box-Klon (nicht gepusht).
