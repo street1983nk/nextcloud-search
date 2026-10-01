@@ -15,7 +15,13 @@ geparkt 2026-10-01T15:02:43Z 2026-10-01T18:02:42Z
 # bisher 2.47 USD gegen deckel 59.43 USD (02-rechenblatt.py stand --jetzt 2026-10-01T15:02:43Z, rest 56.96); box geparkt
 # 28-07 start 3 (aws_box.sh start, running since aus der ausgabe), teilkorpus und S-T-anker/St-T/L-T
 m7g.large 2026-10-01T18:02:42Z 2026-10-01T18:17:16Z
-geparkt 2026-10-01T18:17:16Z laeuft
+geparkt 2026-10-01T18:17:16Z 2026-10-01T19:29:45Z
 # m7g.large stop 2026-10-01T18:17:16Z (aws_box.sh stop, BOX_STOPPED_ISO) laufzeit 0.2428 h x 0.115841 = 0.0281 USD
 # grund: kette 28-07 brach an zelle S-T-anker mit 71 ab (zaehltor 41 statt 5000), checkpoint an den owner
 # bisher 2.54 USD gegen deckel 59.43 USD (02-rechenblatt.py stand --jetzt 2026-10-01T18:17:16Z, rest 56.89); box geparkt
+# 28-07 start 4 nach owner-entscheid option 1 (KORPUS_FRIST=3600), teilkorpus-kette neu
+m7g.large 2026-10-01T19:29:45Z 2026-10-01T20:34:50Z
+geparkt 2026-10-01T20:34:50Z laeuft
+# m7g.large stop 2026-10-01T20:34:50Z (aws_box.sh stop, BOX_STOPPED_ISO) laufzeit 1.0847 h x 0.115841 = 0.1257 USD
+# grund: kette 28-07 (KORPUS_FRIST=3600) brach an zelle S-T-anker erneut mit 71 ab (zaehltor 6937 statt 5000), checkpoint an den owner
+# bisher 2.68 USD gegen deckel 59.43 USD (02-rechenblatt.py stand --jetzt 2026-10-01T20:34:50Z, rest 56.75); box geparkt

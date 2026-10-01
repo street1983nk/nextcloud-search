@@ -1,0 +1,25 @@
+abweichung 28-07 zelle S-T-anker zweiter versuch (von hand, nicht von 10-zelle.sh)
+owner-entscheid 2026-10-01 option 1: KORPUS_FRIST=3600 statt 360 (erster versuch: zaehltor 41, crawl ~26 min)
+auswertungsbeginn durchsatz: ab der ersten teilkorpus-datei im vorrat, nicht ab dem trigger (crawl erreicht das teilkorpus zuletzt)
+kette-start 2026-10-01T19:32:33Z trigger 2026-10-01T19:32:54Z zaehltor 2026-10-01T20:32:56Z
+ergebnis: zaehltor verfehlt 6937 statt 5000, rueckgabe 71, kette abgebrochen, keine messung gewertet
+zaehlung vorrat 3528 uebersprungen 35 fehlgeschlagen 6 indexiert 3368
+
+befund (lesart, nicht bewiesen): die summe zaehlt halbe dateien doppelt
+  der vorrat von occ findling:index enthaelt index- und einbettungsauftraege
+  index offen   = 5000 - 41 - 3368 = 1591
+  einbettung offen = 3368 - embedded (~1430 um 20:32:56, 1400 um 20:31:00) = ~1938
+  1591 + 1938 = ~3529, gelesen 3528
+  ohne doppelzaehlung: (3528 - ~1938) + 41 + 3368 = ~4999 bis 5000
+  folgerung: die dateimenge stimmt sehr wahrscheinlich, die formel im zaehltor (10-zelle.sh schritt 13)
+  traegt erst bei frist 360 (vorrat 0, nichts indexiert), nicht nach einer stunde laufender indexierung
+
+verlauf aus 96d-status.jsonl (scheduled, backend indexed/embedded)
+  19:42:54 549   0/0      erste auftraege im vorrat
+  19:46:55 3869  807/0
+  19:50:55 4968  2430/0
+  19:54:56 4886  3026/109
+  20:31:00 3590  3350/1400  (ab 19:55 rund 8 dateien/min index, 34/min einbettung)
+speicher bis zum abbruch (grenze 2 GiB): cgroup anon max 1503 MiB, peak 1725 MiB, prozess vmhwm max 1327 MiB (python)
+nachlese 99-nachlese-zaehltor.txt, box danach per aws_box.sh stop um 2026-10-01T20:34:50Z gestoppt
+apt-timer auf der box abgeschaltet (abweichung aus dem vorlauf, unveraendert)

@@ -8,3 +8,8 @@ shutdown-verhalten stop
 shutdown-ist-stopp ja
 vorpruefung-stop-ja 2026-10-01T18:05:32Z
 TYPWECHSEL-VORPRUEFUNG-FERTIG
+typwechsel-vorpruefung 2026-10-01T19:30:12Z
+shutdown-verhalten stop
+shutdown-ist-stopp ja
+vorpruefung-stop-ja 2026-10-01T19:30:13Z
+TYPWECHSEL-VORPRUEFUNG-FERTIG

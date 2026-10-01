@@ -1,0 +1,13 @@
+nachlese 2026-10-01T20:34:02Z nach abbruch 71, nicht von 10-zelle.sh, von hand
+Work stock
+  scheduled            3478
+  handed to the worker 10
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              35
+  failed               6
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-10-01 19:55:07 (38 minutes ago)
