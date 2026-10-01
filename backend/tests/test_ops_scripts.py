@@ -1993,3 +1993,106 @@ def test_the_slot_probe_reports_numbers_and_never_the_text() -> None:
     # The truncated slot is a lost slot: its pages are not counted.
     assert lines[5].endswith("failed_slots 1")
     assert lines[6] == "pages_per_second_median 1.600"
+
+
+# W2 again, behaviour: a docker exec that fails for a moment must not end the
+# series. On 2026-10-01 at 06:07:48Z one failed exec ended anon.csv of the full
+# cell S-voll with "container gone" while the container ran on for seven and a
+# half hours (rss.csv of the same cgroup, no restart trace). The staged docker
+# below answers inspect with an id and lets exec fail with 137 and no message,
+# the shape of that failure, before it answers again.
+FAKE_DOCKER_FLAKY = r"""#!/bin/sh
+state="$FAKE_STATE"
+case "$1" in
+inspect)
+    n=$(cat "$state/inspect" 2>/dev/null || echo 0)
+    n=$((n + 1))
+    echo "$n" >"$state/inspect"
+    if [ -n "${FAKE_GONE_AFTER:-}" ] && [ "$(cat "$state/exec" 2>/dev/null || echo 0)" -ge "$FAKE_GONE_AFTER" ]; then
+        exit 1
+    fi
+    if [ -n "${FAKE_REPLACED_AFTER:-}" ] && [ "$(cat "$state/exec" 2>/dev/null || echo 0)" -ge "$FAKE_REPLACED_AFTER" ]; then
+        echo "neuekennung"
+        exit 0
+    fi
+    echo "altekennung"
+    ;;
+exec)
+    n=$(cat "$state/exec" 2>/dev/null || echo 0)
+    n=$((n + 1))
+    echo "$n" >"$state/exec"
+    for bad in ${FAKE_FAIL_ON:-}; do
+        [ "$n" = "$bad" ] && exit 137
+    done
+    if [ -n "${FAKE_GONE_AFTER:-}" ] && [ "$n" -ge "$FAKE_GONE_AFTER" ]; then
+        exit 137
+    fi
+    if [ -n "${FAKE_FAIL_FROM:-}" ] && [ "$n" -ge "$FAKE_FAIL_FROM" ]; then
+        exit 137
+    fi
+    printf '/proc/8/status:Name:\tpython\n/proc/8/status:VmHWM:\t  2000 kB\n/proc/8/status:RssAnon:\t  1000 kB\n'
+    ;;
+esac
+exit 0
+"""
+
+
+def _run_flaky_anon_sampler(tmp_path: Path, **fake: str) -> tuple[subprocess.CompletedProcess[str], str]:
+    shell = shutil.which("sh")
+    if shell is None:
+        pytest.skip("no POSIX sh on this machine, the text gates above still hold")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake_docker = bin_dir / "docker"
+    fake_docker.write_text(FAKE_DOCKER_FLAKY, encoding="utf-8", newline="\n")
+    fake_docker.chmod(0o755)
+    state = tmp_path / "state"
+    state.mkdir()
+    output = tmp_path / "anon.csv"
+    environment = {
+        **os.environ,
+        "PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}",
+        "FAKE_STATE": state.as_posix(),
+        **fake,
+    }
+    finished = subprocess.run(  # noqa: S603 - fixed argument list, no shell string
+        [shell, PROC_ANON_SAMPLER.as_posix(), "staged", "1", output.as_posix()],
+        capture_output=True,
+        text=True,
+        env=environment,
+        timeout=60,
+        check=False,
+    )
+    return finished, output.read_text(encoding="utf-8") if output.exists() else ""
+
+
+def test_the_anon_sampler_survives_a_short_exec_failure_and_ends_when_the_container_is_gone(
+    tmp_path: Path,
+) -> None:
+    finished, written = _run_flaky_anon_sampler(tmp_path, FAKE_FAIL_ON="2 3", FAKE_GONE_AFTER="6")
+    assert finished.returncode == 0, finished.stderr
+    summary = written.strip().splitlines()[-1]
+    # exec 1, 4 and 5 answered: three samples, the two failures in between did not end the series
+    assert "samples=3 " in summary, summary
+    assert "failed=" in summary, summary
+    assert "reason=container gone" in summary, summary
+    assert "exit 137" in finished.stderr
+
+
+def test_the_anon_sampler_ends_after_too_many_failures_in_a_row_while_the_container_stays(
+    tmp_path: Path,
+) -> None:
+    finished, written = _run_flaky_anon_sampler(tmp_path, FAKE_FAIL_FROM="3", FINDLING_ANON_MAX_FAILURES="3")
+    assert finished.returncode == 0, finished.stderr
+    summary = written.strip().splitlines()[-1]
+    assert "samples=2 " in summary, summary
+    assert "failed=3" in summary, summary
+    assert "reason=container unreadable" in summary, summary
+
+
+def test_the_anon_sampler_ends_when_the_container_was_replaced(tmp_path: Path) -> None:
+    finished, written = _run_flaky_anon_sampler(tmp_path, FAKE_FAIL_FROM="3", FAKE_REPLACED_AFTER="3")
+    assert finished.returncode == 0, finished.stderr
+    summary = written.strip().splitlines()[-1]
+    assert "samples=2 " in summary, summary
+    assert "reason=container replaced" in summary, summary
