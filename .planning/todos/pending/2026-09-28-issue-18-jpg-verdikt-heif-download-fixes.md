@@ -30,3 +30,7 @@ Phasen-Slot-Kandidat: Phase 29 (Haertung+Release) oder eigener Einschub nach Ant
 ## Update 2026-09-30
 
 budachst 28.09.: die Dateien sind TIFF hinter .jpg (Team-Ordner __groupfolders/8, Agenturmaterial). Image.open erkennt am Inhalt, also scheitert das DEKODIEREN der TIFF-Variante (CMYK/16 Bit/Ebenen/Kompression) -> OSError -> Pauschal-corrupt (extract/image.py:112/137). Antwort gepostet (issuecomment-5915833064): Bitte um `file`-Zeile, optional Beispieldatei. Fix-Kandidat: eigenes Verdikt "unsupported image variant" + TIFF-Varianten lesen. Hypothesen 1/2 (truncated, HEIC) fuer diesen Fall vom Tisch.
+
+## Update 2026-10-01
+
+budachst: file-Zeile = TIFF big-endian, 8 Bit Graustufen, unkomprimiert, 963x1300. Pillow liest das, image.py kodiert ohnehin nach PNG -> These "TIFF-Variante" FALSCH, oeffentlich korrigiert. Verdacht jetzt: abgeschnittener Download (Hypothese 4) oder Altbefund 1.2.x. Diagnose-Ausgabe erbeten. Issue #15: Datei 1441501 unter 1.3 erneut repeatedly_stuck (zuletzt geprueft 30.09.) -> echter Fall, Groesse/Seiten/Diagnose erbeten.
