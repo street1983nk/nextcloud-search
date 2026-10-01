@@ -413,7 +413,12 @@ ps)
     done
     echo "ghcr.io/street1983nk/findling_backend:dev"
     ;;
-inspect) echo "stubkennung" ;;
+inspect)
+    case "$*" in
+    *OOMKilled*) echo "${STUB_OOM:-false 0 2026-10-01T00:00:00Z}" ;;
+    *) echo "stubkennung" ;;
+    esac
+    ;;
 image) echo "ghcr.io/street1983nk/findling_backend@$ABBILD_DIGEST" ;;
 exec)
     case "$*" in
@@ -1044,3 +1049,35 @@ def test_kette_shuts_down_only_in_the_timer_the_safety_stop_the_abort_and_the_en
     ), shutdown_lines
     start = code.index("deckel_erreicht() {")
     assert "shutdown" not in code[start : code.index("\n}\n", start)]
+
+
+# The OOM closing line (since 01.10.2026): the gap of S-voll had no line that
+# said whether the container fell. Positive control: a staged OOM kill with one
+# restart and two kills in memory.events has to show up word for word.
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_cell_writes_the_oom_closing_line_from_inspect_and_memory_events(tmp_path: Path) -> None:
+    bench = a_bench(tmp_path, {})
+    scope = tmp_path / "cgroup" / "system.slice" / "docker-stubkennung.scope"
+    scope.mkdir(parents=True)
+    events = ("low 0", "high 0", "max 7", "oom 3", "oom_kill 2")
+    (scope / "memory.events").write_text("".join(f"{line}\n" for line in events), encoding="utf-8")
+    bench.environment["STUB_OOM"] = "true 1 2026-10-01T06:07:48Z"
+    answer = run_cell(bench, CELL_ARGUMENTS)
+    assert answer.returncode == 0, answer
+    lines = cell_lines(bench)
+    expected = "oom oomkilled true restartcount 1 containerstart 2026-10-01T06:07:48Z memory-events oom 3 oom_kill 2"
+    assert expected in lines, lines
+    assert lines.index(expected) < lines.index("10-ZELLE-FERTIG St-T")
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_cell_oom_closing_line_says_unlesbar_without_a_cgroup(tmp_path: Path) -> None:
+    bench = a_bench(tmp_path, {})
+    answer = run_cell(bench, CELL_ARGUMENTS)
+    assert answer.returncode == 0, answer
+    lines = cell_lines(bench)
+    expected = (
+        "oom oomkilled false restartcount 0 containerstart 2026-10-01T00:00:00Z "
+        "memory-events oom unlesbar oom_kill unlesbar"
+    )
+    assert expected in lines, lines

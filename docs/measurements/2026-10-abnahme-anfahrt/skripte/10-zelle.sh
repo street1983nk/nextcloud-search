@@ -46,7 +46,10 @@
 #                            hintereinander
 #   nachlauf                 Ruhezeit 120 s, Grundlast, guard-Block, Marke
 #                            waechter-absenkung (Pitfall 8: markiert, nicht
-#                            verworfen)
+#                            verworfen), OOM-Schlusszeile: OOMKilled und
+#                            RestartCount aus docker inspect, StartedAt, oom und
+#                            oom_kill aus memory.events der cgroup (seit
+#                            01.10.2026, nach dem stopp nicht mehr lesbar)
 #   abholen                  Rohdaten liegen unter rohdaten/<box>/<zelle>/
 #
 # Die Laufwerte stehen in LAUFWERTE (Vorgabe $HOME/work/v14-lauf.env, Rechte
@@ -575,6 +578,18 @@ zeile "grundlast anon ${anon:-unlesbar} nach-ruhe-s $RUHE"
 stand=$(uebersicht)
 zeile "guard effective=$(feld guardEffective "$stand") cause=$(feld guardCause "$stand") throttled=$(feld throttled "$stand") slotsInForce=$(feld slotsInForce "$stand")"
 zeile "waechter-absenkung $absenkung"
+# Die OOM-Schlusszeile, solange Container und cgroup stehen: nach dem Stopp der
+# Box sind beide weg. OOMKilled und RestartCount sagen, ob der Hauptprozess
+# fiel; oom_kill aus memory.events zaehlt auch einen getoeteten Kindprozess
+# (OCR, ein docker exec eines Abtasters), der keinen Neustart ausloest.
+oom_zustand=$(sudo docker inspect -f '{{.State.OOMKilled}} {{.RestartCount}} {{.State.StartedAt}}' "$CONTAINER" 2>/dev/null || printf 'unlesbar unlesbar unlesbar')
+oom_ereignisse=$(cgroup_wert memory.events)
+oom_zahl=$(echo "$oom_ereignisse" | awk '$1 == "oom" {print $2; exit}')
+oom_kills=$(echo "$oom_ereignisse" | awk '$1 == "oom_kill" {print $2; exit}')
+oom_getoetet=$(echo "$oom_zustand" | awk '{print $1}')
+oom_neustarts=$(echo "$oom_zustand" | awk '{print $2}')
+oom_start=$(echo "$oom_zustand" | awk '{print $3}')
+zeile "oom oomkilled ${oom_getoetet:-unlesbar} restartcount ${oom_neustarts:-unlesbar} containerstart ${oom_start:-unlesbar} memory-events oom ${oom_zahl:-unlesbar} oom_kill ${oom_kills:-unlesbar}"
 sampler_stoppen
 
 # --- 16. Abholen ------------------------------------------------------------------
