@@ -145,6 +145,7 @@ Fuer v1.4 unmittelbar tragend:
 
 | # | Description | Date | Commit | Status | Directory |
 |---|-------------|------|--------|--------|-----------|
+| 261001-vl0 | 28-07 Zaehltor: Formel zaehlt eingebettet statt indexiert (Vorrat enthaelt offene Einbettungsauftraege), Leserace per Doppellesung stabilisiert, Beleg-Test 6937 -> 5000 + Positivkontrolle + Race-Test | 2026-10-01 | 6d114659 | Done (64 Tests gruen auf main) | [261001-vl0-findling-28-07-zaehltor-fix-formel-auf-e](./quick/261001-vl0-findling-28-07-zaehltor-fix-formel-auf-e/) |
 | 260929-kii | Deckungsgrad-Nenner waechst mit neuen Dateien (ScanRecountJob, Nachzaehlung absolut, Satz statt Prozent bei Zaehler > Nenner) | 2026-09-29 | bbb4f406 | Verified | [260929-kii-deckungsgrad-nenner-waechst-mit-neuen-da](./quick/260929-kii-deckungsgrad-nenner-waechst-mit-neuen-da/) |
 | 260929-s7p | Issue #14: Team-Folder-Dateien mit ACL als Mitglied lesen (ReaderContext), Datei-ID in der Fehlerliste, CI-Job team-folder-acl; Auslieferung als 1.3.1 | 2026-09-29 | 0556d06d | Needs Review (PHPUnit + CI-Job nach Push) | [260929-s7p-issue14-acl-reader-context](./quick/260929-s7p-issue14-acl-reader-context/) |
 
