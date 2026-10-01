@@ -519,18 +519,38 @@ bestand_lesen() {
 
 if [ "$ZELLE_KORPUS" = teil ]; then
     # Das Zaehltor nach dem Crawl (T-28-03): was der Vorrat kennt, plus die
-    # Endzustaende, plus was das Backend schon indexiert hat.
+    # Endzustaende, plus was das Backend schon EINGEBETTET hat. indexiert
+    # zaehlt nicht mit: der Vorrat sinkt im Takt von embedded, eine Index-
+    # Fertigstellung ist vorratsneutral, indexiert steckt also einmal im
+    # Vorrat und einmal in indexed (Beleg Abbruch 71: summe 6937 statt 5000).
+    # Gegen das Leserace (bestand und uebersicht liegen Sekunden auseinander)
+    # wird embedded vor und nach bestand_lesen gelesen und nur bei Gleichheit
+    # gewertet, hoechstens 6 Versuche.
     sleep "$KORPUS_FRIST"
-    bestand_lesen
+    eingebettet=unlesbar
+    stand=''
+    versuch=0
+    while [ "$versuch" -lt 6 ]; do
+        versuch=$((versuch + 1))
+        vorher=$(feld embedded "$(uebersicht)")
+        bestand_lesen
+        stand=$(uebersicht)
+        nachher=$(feld embedded "$stand")
+        if ist_zahl "$vorher" && [ "$vorher" = "$nachher" ]; then
+            eingebettet=$nachher
+            break
+        fi
+    done
+    [ "$eingebettet" != unlesbar ] || zeile "zaehlung-instabil nach-versuchen $versuch"
     vorrat=$(vorrat_von "$WORK/bestand.txt")
     uebersprungen=$(awk '$1 == "skipped" {print $2; exit}' "$WORK/bestand.txt")
     fehlgeschlagen=$(awk '$1 == "failed" {print $2; exit}' "$WORK/bestand.txt")
-    indexiert=$(feld indexed "$(uebersicht)")
+    indexiert=$(feld indexed "$stand")
     summe=unlesbar
-    if ist_zahl "$vorrat" && ist_zahl "$uebersprungen" && ist_zahl "$fehlgeschlagen" && ist_zahl "$indexiert"; then
-        summe=$((vorrat + uebersprungen + fehlgeschlagen + indexiert))
+    if ist_zahl "$vorrat" && ist_zahl "$uebersprungen" && ist_zahl "$fehlgeschlagen" && ist_zahl "$eingebettet"; then
+        summe=$((vorrat + uebersprungen + fehlgeschlagen + eingebettet))
     fi
-    zeile "zaehlung vorrat $vorrat uebersprungen ${uebersprungen:-unlesbar} fehlgeschlagen ${fehlgeschlagen:-unlesbar} indexiert ${indexiert:-unlesbar} summe $summe"
+    zeile "zaehlung vorrat $vorrat uebersprungen ${uebersprungen:-unlesbar} fehlgeschlagen ${fehlgeschlagen:-unlesbar} eingebettet ${eingebettet:-unlesbar} indexiert ${indexiert:-unlesbar} summe $summe"
     zaehltor_status=0
     python3 "$TEILKORPUS" zaehltor "$summe" >"$WORK/zaehltor.txt" 2>&1 || zaehltor_status=$?
     ablegen "$WORK/zaehltor.txt"
