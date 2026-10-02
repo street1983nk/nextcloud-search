@@ -422,6 +422,18 @@ inspect)
 image) echo "ghcr.io/street1983nk/findling_backend@$ABBILD_DIGEST" ;;
 exec)
     case "$*" in
+    *nextcloud-aio-database*)
+        # The database side of the count gate: the mark before the trigger,
+        # and the fresh skipped/failed rows of the running cell. A state
+        # whose variable is unset or 0 prints no row, like group by.
+        case "$*" in
+        *"max(updated_at)"*) printf '%s\n' "${STUB_ZAEHLMARKE:-2026-10-01 00:00:00}" ;;
+        *"group by s.state"*)
+            [ "${STUB_FRISCH_SKIPPED:-0}" = 0 ] || printf 'skipped|%s\n' "$STUB_FRISCH_SKIPPED"
+            [ "${STUB_FRISCH_FAILED:-0}" = 0 ] || printf 'failed|%s\n' "$STUB_FRISCH_FAILED"
+            ;;
+        esac
+        ;;
     *" php occ "*)
         alles="$*"
         occ=${alles#* php occ }
@@ -815,22 +827,86 @@ def test_cell_trigger_carries_the_n(tmp_path: Path) -> None:
     bench = a_bench(tmp_path, {})
     answer = run_cell(bench, CELL_ARGUMENTS)
     assert answer.returncode == 0, answer
-    assert "occ findling:index --restart -n" in bench.calls()
+    calls = bench.calls()
+    assert "occ findling:index --restart -n" in calls
+    # A full corpus cell (ZELLE_KORPUS=voll, the default) never touches the
+    # database: no psql call, neither for the mark nor for the fresh count.
+    assert not [call for call in calls if "psql" in call], calls
 
 
 @pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
 def test_cell_teilkorpus_demands_the_count_gate(tmp_path: Path) -> None:
+    """Fresh end states of the cell count; the global occ counters are noise."""
     bench = a_bench(tmp_path, {})
     good: dict[str, str | None] = {
         "ZELLE_KORPUS": "teil",
         "STUB_INDEXED": "4990",
         "STUB_EMBEDDED": "4990",
-        "STUB_SKIPPED": "6",
-        "STUB_FAILED": "4",
+        "STUB_FRISCH_SKIPPED": "6",
+        "STUB_FRISCH_FAILED": "4",
+        # The global occ end states stay set as a disturbance: they must not
+        # flow into the sum, or the gate would see 5041 again.
+        "STUB_SKIPPED": "35",
+        "STUB_FAILED": "6",
     }
     answer = run_cell(bench, CELL_ARGUMENTS, good)
     assert answer.returncode == 0, answer
     assert "zaehltor bestanden 5000" in cell_lines(bench)
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_cell_teilkorpus_passes_with_the_counters_of_run_5(tmp_path: Path) -> None:
+    """The proof of run 5 (04-teilkorpus-arm.txt): 5041 becomes 5000.
+
+    Run 5 held the stock at 3535 (scheduled 3525, handed 10) and embedded
+    1465: exactly the 5000 files of the partial corpus. The 41 foreign old
+    end states in oc_findling_file_state (skipped 35, failed 6, written
+    before the mark and outside files/teilkorpus) made the old global sum
+    5041 and aborted the cell with 71. The fresh count must drop them.
+    """
+    bench = a_bench(tmp_path, {})
+    counters: dict[str, str | None] = {
+        "ZELLE_KORPUS": "teil",
+        "STUB_SCHEDULED": "3525",
+        "STUB_HANDED": "10",
+        "STUB_EMBEDDED": "1465",
+        "STUB_INDEXED": "1465",
+        "STUB_SKIPPED": "35",
+        "STUB_FAILED": "6",
+    }
+    answer = run_cell(bench, CELL_ARGUMENTS, counters)
+    assert answer.returncode == 0, answer
+    lines = cell_lines(bench)
+    assert "zaehltor bestanden 5000" in lines, lines
+    counting = next(line for line in lines if line.startswith("zaehlung "))
+    assert "summe 5000" in counting, counting
+    assert "summe 5041" not in counting, counting
+    assert any(line.startswith("zaehlmarke ") for line in lines), lines
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_cell_teilkorpus_old_states_mask_no_real_shortfall(tmp_path: Path) -> None:
+    """The calibration trap of run 2: a real shortfall of 41 stays abort 71.
+
+    With embedded only 1424 the sum is 4959; the 41 global old end states
+    (skipped 35, failed 6) would fill the gap exactly, as they did when the
+    gate was calibrated on run 2. They must not.
+    """
+    bench = a_bench(tmp_path, {})
+    counters: dict[str, str | None] = {
+        "ZELLE_KORPUS": "teil",
+        "STUB_SCHEDULED": "3525",
+        "STUB_HANDED": "10",
+        "STUB_EMBEDDED": "1424",
+        "STUB_INDEXED": "1424",
+        "STUB_SKIPPED": "35",
+        "STUB_FAILED": "6",
+    }
+    answer = run_cell(bench, CELL_ARGUMENTS, counters)
+    assert answer.returncode == 71, answer
+    lines = cell_lines(bench)
+    assert "zaehltor verfehlt 4959 statt 5000" in lines, lines
+    assert "ende" not in steps_of(lines)
 
 
 @pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
@@ -846,14 +922,18 @@ def test_cell_teilkorpus_ends_the_cell_on_a_missed_count(tmp_path: Path) -> None
 # The counters of the real abort 71 on m7g.large: the stock still held 3528
 # files (scheduled 3518, handed 10), 41 were terminal (skipped 35, failed 6),
 # 3368 were indexed but only 1431 embedded. The stock drains in step with
-# embedded, so indexed double counts what is still in the stock: the old
-# formula summed 6937 instead of 5000.
+# embedded, so indexed double counts what is still in the stock: the first
+# broken formula summed 6937 instead of 5000. The calibration on run 2 then
+# summed the GLOBAL occ end states, which run 5 proved to be old states of
+# files outside the partial corpus (point 4 of the follow-up): here the 41
+# are fresh states of the running cell, read time and path sharp from
+# oc_findling_file_state, so they count.
 ABORT_71_COUNTERS: dict[str, str | None] = {
     "ZELLE_KORPUS": "teil",
     "STUB_SCHEDULED": "3518",
     "STUB_HANDED": "10",
-    "STUB_SKIPPED": "35",
-    "STUB_FAILED": "6",
+    "STUB_FRISCH_SKIPPED": "35",
+    "STUB_FRISCH_FAILED": "6",
     "STUB_INDEXED": "3368",
     "STUB_EMBEDDED": "1431",
 }
