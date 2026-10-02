@@ -666,6 +666,7 @@ ORDER = [
     "zaehlung-eine-nextcloud",
     "nullstand",
     "registrierung",
+    "vorrat-tor",
     "bewaffnung",
     "grenze",
     "baumhash",

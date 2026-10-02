@@ -21,6 +21,10 @@
 #                            unmittelbar vor dem --rm-data (Block 13, 07.09.)
 #   nullstand                unregister --rm-data
 #   registrierung            Abbild per Digest, Registrierung ueber AppAPI
+#   vorrat-tor               der Arbeitsvorrat der PHP-Haelfte, gelesen VOR der
+#                            Bewaffnung: hier kann nur Altbestand eines
+#                            frueheren Laufs stehen, ein Vorrat ungleich 0 ist
+#                            Abbruch 73 (BLOCKER-28-07, Lauf 4)
 #   bewaffnung               disable/enable, Beleg backendReachable true in der
 #                            Admin-Uebersicht (Block 11)
 #   grenze                   nur mit GRENZE_2G=ja (m7g.large, Block 12, 2g/0)
@@ -28,10 +32,9 @@
 #                            Container
 #   93b-nullstand            die vier Quellen des Nullstands, gelesen ohne den
 #                            Neuaufbau anzustossen (Ableitung von
-#                            93-nullstand.sh, siehe dort); urteilt seit
-#                            BLOCKER-28-07 auch ueber Quelle 4: ein
-#                            Arbeitsvorrat ungleich 0 ist 93b-rc 13 und
-#                            Abbruch 73, vor allem Teuren
+#                            93-nullstand.sh, siehe dort); Quelle 4 wird nur
+#                            noch protokolliert, das Vorrats-Urteil faellt am
+#                            vorrat-tor
 #   drop-caches              sync und drop_caches, damit keine Zelle vom
 #                            Seitencache der vorigen erbt
 #   probe                    11-probe-route.py ueber die Produktroute; economy
@@ -90,8 +93,8 @@
 #   70  der Trigger hat nichts angestossen
 #   71  Teilkorpus: das Zaehltor 5000 ist verfehlt
 #   72  das Ende (Vorrat 0, embedded == indexed) kam nicht in der Frist
-#   73  der Arbeitsvorrat der PHP-Haelfte ist nicht leer (93b-rc 13);
-#       --rm-data raeumt die NC-Queue nicht
+#   73  der Arbeitsvorrat traegt Altbestand eines frueheren Laufs (vorrat-tor,
+#       vor der Bewaffnung); --rm-data raeumt die NC-Queue nicht
 #
 # ASCII, weil die Box ihr Gebietsschema nicht garantiert.
 set -eu
@@ -370,6 +373,24 @@ occ app_api:app:register "$APP_ID" "$DAEMON" --info-xml /tmp/10-info-box.xml --w
 zeile "registrierung-rueckgabewert $register_status"
 [ "$register_status" -eq 0 ] || abbruch 63 "die Registrierung ist gescheitert"
 
+# --- 4b. Das Vorrats-Tor, VOR der Bewaffnung (BLOCKER-28-07) ------------------
+# Die Position traegt, weil vor der Bewaffnung kein Container nachschieben
+# kann: ein Vorrat ungleich 0 ist hier zwingend Altbestand eines frueheren
+# Laufs (Lauf 3: 3420 Altauftraege). Lauf-4-Beleg fuer die Verschiebung: der
+# frisch bewaffnete Container zieht sich den Crawl binnen 6-16 s selbst ueber
+# die Top-up-Route (POST /queues/documents/topup -> CrawlAdvanceService,
+# first_index_scheduled=1 ueberlebt --rm-data); am 93b-Schritt sah das Tor
+# deshalb frische fileids (54347 ff.) statt Altbestand und war unpassierbar.
+# bestand_lesen() ist erst nach dem Trigger definiert, hier wird inline
+# gelesen.
+schritt vorrat-tor
+occ findling:index >"$WORK/vorrat-tor.txt" 2>&1 || true
+altvorrat=$(vorrat_von "$WORK/vorrat-tor.txt")
+zeile "vorrat-tor altvorrat $altvorrat"
+if [ "$altvorrat" != 0 ]; then
+    abbruch 73 "der Arbeitsvorrat traegt $altvorrat Altauftraege eines frueheren Laufs, --rm-data raeumt die NC-Queue nicht"
+fi
+
 # --- 5. Bewaffnung, Beleg backendReachable true (Block 11) --------------------
 schritt bewaffnung
 bewaffnen
@@ -432,13 +453,11 @@ schritt 93b-nullstand
 nullstand_status=0
 OUT="$ZOUT" sh "$NULLSTAND" >>"$OCCLOG" 2>&1 || nullstand_status=$?
 zeile "93b-nullstand-rueckgabewert $nullstand_status"
-# Der Abbruch 73 liegt konstruktionsbedingt VOR drop-caches, Probe,
-# Wirksamkeit, Samplern und Trigger: nichts Teures ist gestartet.
-case "$nullstand_status" in
-0) ;;
-13) abbruch 73 "der Arbeitsvorrat der PHP-Haelfte ist nicht leer, --rm-data raeumt die NC-Queue nicht" ;;
-*) abbruch 67 "der Nullstand ist nicht leer oder nicht lesbar" ;;
-esac
+# Quelle 4 wird hier nur protokolliert: frische Befuellung am 93b-Schritt ist
+# unschaedlich, der Trigger (findling:index --restart) raeumt sie seit 93i
+# selbst. Das Altbestand-Urteil (Abbruch 73) faellt am vorrat-tor VOR der
+# Bewaffnung.
+[ "$nullstand_status" -eq 0 ] || abbruch 67 "der Nullstand ist nicht leer oder nicht lesbar"
 
 # --- 9. Seitencache leeren ------------------------------------------------------
 schritt drop-caches

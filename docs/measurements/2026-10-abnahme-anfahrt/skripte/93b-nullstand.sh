@@ -22,19 +22,20 @@
 # Das Urteil. Leer ist das Volumen, wenn es keine state.db gibt oder die
 # state.db keine einzige Datei fuehrt; der Container legt eine leere state.db
 # bei seinem ersten Durchgang an, und die ist ein Nullstand. Fuehrt sie Dateien,
-# hat --rm-data nicht gegriffen, und die Zelle endet. Seit BLOCKER-28-07 wird
-# auch Quelle 4 beurteilt: --rm-data raeumt das Volumen des Containers, aber
-# nicht die Queue der PHP-Haelfte (findling_queue). Ein Arbeitsvorrat ungleich 0
-# ist Altbestand eines frueheren Laufs, der Crawl schiebt sich nur bei leerem
-# Vorrat selbst an (Befund f09504ae, Lauf 3: 3420 Altauftraege), also endet die
-# Zelle. Die Volumen-Urteile (12, 11) haben Vorrang vor dem Vorrats-Urteil.
+# hat --rm-data nicht gegriffen, und die Zelle endet. Quelle 4 (der
+# Arbeitsvorrat der PHP-Haelfte) wird weiter gelesen und als "arbeitsvorrat N"
+# protokolliert, aber hier nicht mehr beurteilt: Lauf 4 zeigte, dass der frisch
+# bewaffnete Container den Vorrat binnen 6-16 s selbst ueber die Top-up-Route
+# fuellt (POST /queues/documents/topup -> CrawlAdvanceService), ein Urteil an
+# dieser Position straefte also unschaedliche Frischbefuellung. Das
+# Altbestand-Urteil faellt 10-zelle.sh am Schritt vorrat-tor VOR der
+# Bewaffnung.
 #
 # Rueckgabewerte:
 #
-#   0   volumen-leer ja und arbeitsvorrat 0
+#   0   volumen-leer ja
 #   11  volumen-leer nein: die state.db fuehrt Dateien
 #   12  die state.db ist da und nicht lesbar
-#   13  der Arbeitsvorrat der PHP-Haelfte ist nicht leer
 #
 # ASCII, weil die Box ihr Gebietsschema nicht garantiert.
 set -eu
@@ -86,10 +87,6 @@ vorrat_von() {
     cat "$WORK/status.txt"
     vorrat=$(vorrat_von "$WORK/status.txt")
     printf 'arbeitsvorrat %s\n' "$vorrat"
-    if [ "$vorrat" != 0 ]; then
-        printf 'arbeitsvorrat nicht leer %s\n' "$vorrat"
-        : >"$WORK/vorrat-voll"
-    fi
 
     echo "=== Quelle 3: Marken und Dateien je Zustand, nur mit state.db ==="
     if sudo test -f "$VOLUME/state.db"; then
@@ -144,11 +141,5 @@ fi
 if [ -f "$WORK/nicht-leer" ]; then
     echo "93b-nullstand: die state.db fuehrt Dateien, --rm-data hat nicht gegriffen" >&2
     exit 11
-fi
-# Nach den Volumen-Urteilen, damit deren Vorrang bleibt: ein volles Volumen
-# bleibt rc 11, auch wenn der Vorrat ebenfalls voll ist.
-if [ -f "$WORK/vorrat-voll" ]; then
-    echo "93b-nullstand: der Arbeitsvorrat der PHP-Haelfte ist nicht leer" >&2
-    exit 13
 fi
 echo "93B-NULLSTAND-FERTIG"
