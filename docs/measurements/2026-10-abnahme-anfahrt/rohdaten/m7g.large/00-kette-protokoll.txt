@@ -778,3 +778,49 @@ zaehlung vorrat 986 uebersprungen 35 fehlgeschlagen 6 eingebettet 624 indexiert 
 zaehltor verfehlt 1651 statt 5000
 zelle-abbruch rueckgabe 71 grund das Zaehltor 5000 ist verfehlt (1651) 2026-10-01T22:22:32Z
 10-zelle: das Zaehltor 5000 ist verfehlt (1651)
+zelle-start S-T-anker box m7g.large ziel economy/int8 korpus teil 2026-10-02T05:13:00Z
+abbild-digest sha256:6a0c13be68de5ddd7c7ff404ab3a3caf15b646a5386c9e902ae3843ac572d80f
+schritt abwaerts 2026-10-02T05:13:00Z
+abwaerts code=saved saved=true HTTP200
+schritt zaehlung-eine-nextcloud 2026-10-02T05:13:03Z
+nextcloud-instanzen 1
+schritt nullstand 2026-10-02T05:13:03Z
+unregister-rm-data ja
+schritt registrierung 2026-10-02T05:13:04Z
+registrierung-rueckgabewert 0
+schritt bewaffnung 2026-10-02T05:13:10Z
+bewaffnung backendReachable true nach-s 2
+schritt grenze 2026-10-02T05:13:15Z
+speichergrenze-ist 2147483648/0
+grenze-gesetzt ja
+schritt baumhash 2026-10-02T05:13:15Z
+40b-baumhash-rueckgabewert 0
+baumhash-im-laufenden-container 556148291147baefe2e8c49a7745d497ed9560115420589569fa07afda5d31dd
+baumhash-beweis ja
+schritt 93b-nullstand 2026-10-02T05:13:16Z
+93b-nullstand-rueckgabewert 13
+zelle-abbruch rueckgabe 73 grund der Arbeitsvorrat der PHP-Haelfte ist nicht leer, --rm-data raeumt die NC-Queue nicht 2026-10-02T05:13:17Z
+10-zelle: der Arbeitsvorrat der PHP-Haelfte ist nicht leer, --rm-data raeumt die NC-Queue nicht
+zelle-start S-T-anker box m7g.large ziel economy/int8 korpus teil 2026-10-02T05:18:51Z
+abbild-digest sha256:6a0c13be68de5ddd7c7ff404ab3a3caf15b646a5386c9e902ae3843ac572d80f
+schritt abwaerts 2026-10-02T05:18:51Z
+abwaerts code=saved saved=true HTTP200
+schritt zaehlung-eine-nextcloud 2026-10-02T05:18:53Z
+nextcloud-instanzen 1
+schritt nullstand 2026-10-02T05:18:53Z
+unregister-rm-data ja
+schritt registrierung 2026-10-02T05:19:04Z
+registrierung-rueckgabewert 0
+schritt bewaffnung 2026-10-02T05:19:10Z
+bewaffnung backendReachable true nach-s 2
+schritt grenze 2026-10-02T05:19:25Z
+speichergrenze-ist 2147483648/0
+grenze-gesetzt ja
+schritt baumhash 2026-10-02T05:19:25Z
+40b-baumhash-rueckgabewert 0
+baumhash-im-laufenden-container 556148291147baefe2e8c49a7745d497ed9560115420589569fa07afda5d31dd
+baumhash-beweis ja
+schritt 93b-nullstand 2026-10-02T05:19:26Z
+93b-nullstand-rueckgabewert 13
+zelle-abbruch rueckgabe 73 grund der Arbeitsvorrat der PHP-Haelfte ist nicht leer, --rm-data raeumt die NC-Queue nicht 2026-10-02T05:19:27Z
+10-zelle: der Arbeitsvorrat der PHP-Haelfte ist nicht leer, --rm-data raeumt die NC-Queue nicht

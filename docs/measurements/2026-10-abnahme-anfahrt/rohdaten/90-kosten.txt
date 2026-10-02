@@ -36,6 +36,16 @@ geparkt 2026-10-01T23:22:32Z 2026-10-02T00:10:13Z
 # geparkt 23:22:32Z bis 00:10:13Z = 0.7947 h x 0.013041 = 0.0104 USD
 # 28-07 start 6 nur zum abholen der abbruch-rohdaten (aws_box.sh start/stop)
 m7g.large 2026-10-02T00:10:13Z 2026-10-02T00:13:07Z
-geparkt 2026-10-02T00:13:07Z laeuft
+geparkt 2026-10-02T00:13:07Z 2026-10-02T05:01:29Z
 # m7g.large stop 2026-10-02T00:13:07Z (aws_box.sh stop, BOX_STOPPED_ISO) laufzeit 0.0483 h x 0.115841 = 0.0056 USD
 # bisher 2.95 USD gegen deckel 59.43 USD (02-rechenblatt.py stand --jetzt 2026-10-02T00:13:07Z); box geparkt
+# 28-07 start 7 (aws_box.sh start, running since aus der ausgabe), lauf 4 nach blocker-fix 261002-93i (a+b):
+#   php-haelfte und harness-tor auf die box, alt-vorrat raeumen, teilkorpus-kette neu ab S-T-anker
+m7g.large 2026-10-02T05:01:29Z 2026-10-02T05:25:31Z
+geparkt 2026-10-02T05:25:31Z laeuft
+# m7g.large stop 2026-10-02T05:25:31Z (aws_box.sh stop, BOX_STOPPED_ISO) laufzeit 0.4006 h x 0.115841 = 0.0464 USD
+# grund: kette 28-07 lauf 4 brach an zelle S-T-anker zweimal mit 73 ab (neues 93b-vorrats-tor,
+#   fix a+b wirken: "Cleared 334/3901 stale jobs", abbruch vor samplern/trigger); die wiederbefuellung
+#   kommt in sekunden ueber die top-up-route des frisch bewaffneten containers (belegt in 04-teilkorpus-arm.txt,
+#   lauf 4), kein timing moeglich; blocker an den owner, genau ein wiederholungsversuch gefahren wie angewiesen
+# bisher 3.06 USD gegen deckel 59.43 USD (02-rechenblatt.py stand --jetzt 2026-10-02T05:25:31Z); box geparkt

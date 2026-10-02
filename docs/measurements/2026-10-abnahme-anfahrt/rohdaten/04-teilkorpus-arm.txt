@@ -155,3 +155,68 @@ folgerung (owner-entscheid noetig, runbook 7.1 werkzeugaenderung nur mit owner-w
   bricht sonst frueh ab, c) zaehltor wartet auf crawl-ende (last_file_id-wrap) statt fester frist.
 box per aws_box.sh stop gestoppt 2026-10-02T00:13:07Z (start 6 nur zum abholen), geparkt;
 weiter entscheidet der owner.
+
+-- kettenlauf 4 der teilkorpus-zellen (start 7, 2026-10-02T05:01:29Z): zwei abbrueche 73 am
+-- neuen vorrats-tor, box gestoppt, blocker an den owner --
+werkzeugaenderung mit owner-wort (runbook 7.1, owner-entscheid a+b vom 02.10., "lege los"):
+  93b-nullstand.sh urteilt ueber quelle 4 (vorrat != 0 ergibt rc 13), 10-zelle.sh bricht dann
+  mit 73 vor drop-caches/probe/samplern/trigger ab; produkt-fix occ findling:index --restart
+  raeumt die findling_queue (QueueMapper/QueueService::clear()). commits 616e5f17, 09e641ef,
+  edc55cc8, 599a74d2, 4a618240 (quick 261002-93i).
+vorab: box-klon per git bundle von 57edc641 auf a236802f gebracht; alle 17 beim checkout
+  kollidierenden dateien (lauf-3-rohdaten) vorher per sha256 als identisch mit dem committeten
+  stand belegt, nichts verloren. vorpruefung-stop-ja 2026-10-02T05:05:38Z.
+schritt 1, php -l im nextcloud-container (php 8.3.33), 05:03:
+  QueueMapper.php, QueueService.php, IndexCommand.php: je "No syntax errors detected".
+schritt 2, companion-app im container aktualisiert (92d-muster: custom_apps/findling ersetzt,
+  chown 33:33, occ upgrade "No upgrade required" rc 0); laufender code traegt clear():
+  grep "public function clear" QueueMapper 1, QueueService 1; "queueService->clear" in
+  IndexCommand 1; "Cleared .* stale jobs" in IndexCommand 1.
+schritt 3, alt-vorrat geraeumt, LIVE-BEWEIS VON FIX A (05:04:07Z):
+  vorher: scheduled 334, handed 0 (nicht ~982: die box lief nach der letzten lauf-3-lesung
+  22:22:30Z bis zum timer-stopp 23:22Z weiter und arbeitete den vorrat von 982 auf 334 ab).
+  occ findling:index --restart -n: "Cleared 334 stale jobs of the earlier run."
+  nachher: scheduled 0, handed 0.
+schritt 4, wiederbefuellung beobachtet (drei lesungen):
+  05:05:49Z vorrat 0, SchedulerJob eingereiht (lastRun none)
+  05:08:57Z vorrat 0, crawl storage 3 last_file_id 4134 (takt ~05:07)
+  05:12:20Z vorrat 0, crawl storage 3 last_file_id 24134 (teilkorpus ab 52426)
+  entscheid: sofort starten, das 93b-tor der zelle liegt ~16 s nach kettenstart, der crawl
+  stand 28k fileids vor dem teilkorpus.
+kettenstart 1 (lauf 4a) 2026-10-02T05:13:00Z bisher 3.0315, timer 35368 min:
+  zelle S-T-anker: abwaerts, eine nextcloud, nullstand, registrierung, bewaffnung 05:13:10Z,
+  grenze 2147483648/0, baumhash-beweis ja, 93b-rueckgabewert 13: arbeitsvorrat 549.
+  zelle-abbruch 73 um 05:13:17Z, VOR drop-caches/probe/samplern/trigger (fix b wirkt).
+  rohdaten unter m7g.large/S-T-anker-abbruch73/ und m7g.large-teil-abbruch73-kette.log.
+zweiter timing-versuch (lauf 4b), unmittelbar nach dem takt 05:17:09:
+  05:18:50Z occ findling:index --restart -n: "Cleared 3901 stale jobs of the earlier run."
+  (zweiter live-beweis; der takt 05:17 hatte den teilkorpus wieder eingeplant), danach
+  vorrat 0/0, kettenstart 05:18:51Z bisher 3.0428.
+  zelle S-T-anker: bewaffnung 05:19:10Z, 93b um 05:19:26Z rueckgabewert 13: arbeitsvorrat 581.
+  zelle-abbruch 73 um 05:19:27Z. rohdaten unter m7g.large/S-T-anker-abbruch73-v2/ und
+  m7g.large-teil-abbruch73-v2-kette.log.
+ursache, belegt an der box (NICHT der cron-takt):
+  1. im fenster 05:18:51Z (vorrat 0/0) bis 93b 05:19:26Z (vorrat 581) lief KEIN findling-
+     background-job: die zeile "Last background job of this app" im 93b stand unveraendert
+     auf 05:17:09; der naechste takt waere ~05:22 gewesen.
+  2. die 581 auftraege waren teilkorpus-dateien (fileids 54347 ff., direkt in oc_findling_queue
+     nachgelesen, kind content/ocr/embed), ausschluesse unveraendert 19 eintraege.
+  3. mechanik: first_index_scheduled steht auf 1 (der vor-ketten---restart armiert; --rm-data
+     laesst appconfig stehen). der frisch bewaffnete container findet den vorrat leer und zieht
+     sich den crawl selbst ueber die top-up-route (POST /queues/documents/topup ->
+     CrawlAdvanceService, budget 20 s je scheibe, DI-10-04): die ausgeschlossene region
+     (52k fileids) ist in sekunden durchlaufen, der teilkorpus wird eingeplant, BEVOR 93b
+     liest (bewaffnung -> 93b nur ~6-16 s).
+  4. in lauf 1 passierte das nicht, weil der crawl nach der vollzelle AM ENDE des storage
+     stand (nichts einzuplanen); heute setzt jeder --restart die position auf 0 zurueck.
+  folgerung: gegen die sekunden-schnelle top-up-route des produkts gewinnt kein timing des
+  kettenstarts; das 93b-vorrats-tor liegt NACH der bewaffnung und sieht darum immer die
+  (laut design unschaedliche, vom trigger selbst geraeumte) frische wiederbefuellung.
+  moegliche wege (werkzeugaenderung nur mit owner-wort, runbook 7.1):
+  a) 93b-vorrats-lesung in 10-zelle.sh VOR die bewaffnung ziehen (nach der registrierung
+     kann kein container nachschieben; altbestand bliebe sichtbar, frische befuellung
+     unmoeglich), b) tor nur auf altbestand urteilen lassen (lesung vor der zelle statt in
+     der zelle), c) vor dem kettenstart zusaetzlich SchedulerJob-zeile und
+     first_index_scheduled entfernen (eingriff in produktzustand statt werkzeug).
+beide abbrueche waren billig (je ~30 s, keine sampler, kein trigger, keine messung).
+box per aws_box.sh stop gestoppt 2026-10-02T05:25:31Z, geparkt; weiter entscheidet der owner.
