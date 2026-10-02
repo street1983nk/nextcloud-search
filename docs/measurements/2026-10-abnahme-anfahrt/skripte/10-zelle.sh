@@ -45,9 +45,13 @@
 #                            bewaffnet; ohne Wirkung KEIN Trigger (Pitfall 1)
 #   sampler                  rss_sampler.sh 2 s, proc_anon_sampler.sh 1 s,
 #                            cpu_sampler.sh, 96d-statusbeobachter.py 120 s
-#   trigger                  occ findling:index --restart -n (ohne -n fragt occ
+#   trigger                  beim Teilkorpus zuerst die zaehlmarke aus der
+#                            Datenbank (max(updated_at) der file_state-Tabelle,
+#                            unmittelbar vor dem Trigger), dann
+#                            occ findling:index --restart -n (ohne -n fragt occ
 #                            zurueck und aendert nichts); beim Teilkorpus danach
-#                            das Zaehltor 5000 (01-teilkorpus.py zaehltor)
+#                            das Zaehltor 5000 (01-teilkorpus.py zaehltor) mit
+#                            teilkorpus- und zellscharfer Frischzaehlung
 #   ende                     Vorrat 0 und embedded == indexed in zwei Lesungen
 #                            hintereinander
 #   nachlauf                 Ruhezeit 120 s, Grundlast, guard-Block, Marke
@@ -91,7 +95,8 @@
 #       nicht erzwingen
 #   69  effective ist nach der Frist nicht das Ziel; kein Trigger
 #   70  der Trigger hat nichts angestossen
-#   71  Teilkorpus: das Zaehltor 5000 ist verfehlt
+#   71  Teilkorpus: das Zaehltor 5000 ist verfehlt, oder die zaehlmarke ist
+#       nicht lesbar (ohne Marke ist das Tor nicht pruefbar)
 #   72  das Ende (Vorrat 0, embedded == indexed) kam nicht in der Frist
 #   73  der Arbeitsvorrat traegt Altbestand eines frueheren Laufs (vorrat-tor,
 #       vor der Bewaffnung); --rm-data raeumt die NC-Queue nicht
@@ -116,6 +121,8 @@ LAUFWERTE="${LAUFWERTE:-$HOME/work/v14-lauf.env}"
 
 CONTAINER="${CONTAINER:-nc_app_findling_backend}"
 NEXTCLOUD="${NEXTCLOUD:-nextcloud-aio-nextcloud}"
+DB_CONTAINER="${DB_CONTAINER:-nextcloud-aio-database}"
+DB_PREFIX="${DB_PREFIX:-oc_}"
 DAEMON="${DAEMON:-harp_aio}"
 APP_ID="${APP_ID:-findling_backend}"
 ABBILD_REPO="${ABBILD_REPO:-ghcr.io/street1983nk/findling_backend}"
@@ -283,6 +290,15 @@ abbruch() {
 
 occ() {
     sudo docker exec --user www-data "$NEXTCLOUD" php occ "$@"
+}
+
+db_lesen() {
+    # Eine SQL-Zeile gegen die Nextcloud-Datenbank, psql -At im DB-Container.
+    # Benutzer und Datenbank kommen aus der Umgebung des Containers, kein
+    # Passwort auf einer Kommandozeile (T-28-10). Ein Fehler liefert unlesbar.
+    sudo docker exec "$DB_CONTAINER" sh -c \
+        'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At -c "$1"' psql "$1" \
+        2>/dev/null || printf 'unlesbar\n'
 }
 
 route() {
@@ -535,6 +551,19 @@ zeile "sampler rss 2 anon 1 cpu $CPU_TAKT status $STATUS_TAKT gestartet $(utc)"
 
 # --- 13. Der Trigger, mit -n ----------------------------------------------------
 schritt trigger
+# Die Zaehlmarke des Zaehltors, gelesen unmittelbar VOR dem Trigger (nur
+# Teilkorpus): max(updated_at) ueber die file_state-Tabelle. Alles, was die
+# Zelle selbst schreibt, liegt strikt danach; Altzustaende liegen davor.
+# Das Format-Tor haelt die Marke aus der SQL-Einsetzung heraus: nur Ziffern,
+# Bindestrich, Doppelpunkt, Punkt und Leerzeichen. Ohne lesbare Marke ist
+# das Zaehltor nicht pruefbar, die Zelle darf nicht messen (Abbruch 71).
+if [ "$ZELLE_KORPUS" = teil ]; then
+    marke=$(db_lesen "select coalesce(max(updated_at), timestamp '1970-01-01 00:00:00') from ${DB_PREFIX}findling_file_state")
+    case "$marke" in
+    '' | *[!0-9.:\ -]*) abbruch 71 "zaehlmarke unlesbar" ;;
+    esac
+    zeile "zaehlmarke $marke"
+fi
 trigger_status=0
 occ findling:index --restart -n >"$WORK/trigger.txt" 2>&1 || trigger_status=$?
 ablegen "$WORK/trigger.txt"
@@ -549,21 +578,35 @@ bestand_lesen() {
 
 if [ "$ZELLE_KORPUS" = teil ]; then
     # Das Zaehltor nach dem Crawl (T-28-03): was der Vorrat kennt, plus die
-    # Endzustaende, plus was das Backend schon EINGEBETTET hat. indexiert
-    # zaehlt nicht mit: der Vorrat sinkt im Takt von embedded, eine Index-
-    # Fertigstellung ist vorratsneutral, indexiert steckt also einmal im
-    # Vorrat und einmal in indexed (Beleg Abbruch 71: summe 6937 statt 5000).
+    # FRISCHEN Endzustaende der Zelle, plus was das Backend schon EINGEBETTET
+    # hat. indexiert zaehlt nicht mit: der Vorrat sinkt im Takt von embedded,
+    # eine Index-Fertigstellung ist vorratsneutral, indexiert steckt also
+    # einmal im Vorrat und einmal in indexed (Beleg Abbruch 71: summe 6937
+    # statt 5000). Die Endzustaende kommen NICHT aus den globalen occ-Zaehlern:
+    # oc_findling_file_state ueberlebt --rm-data UND --restart, Lauf 5 zaehlte
+    # darum 5041 = 5000 Teilkorpus-Dateien + 41 fremde Altzustaende und brach
+    # faelschlich ab. Gezaehlt werden nur Zeilen mit updated_at nach der
+    # Zaehlmarke des Triggers UND Pfad files/teilkorpus/% (Join oc_filecache):
+    # zeit- und pfadscharf statt global.
     # Gegen das Leserace (bestand und uebersicht liegen Sekunden auseinander)
     # wird embedded vor und nach bestand_lesen gelesen und nur bei Gleichheit
     # gewertet, hoechstens 6 Versuche.
     sleep "$KORPUS_FRIST"
     eingebettet=unlesbar
     stand=''
+    frisch=unlesbar
     versuch=0
     while [ "$versuch" -lt 6 ]; do
         versuch=$((versuch + 1))
         vorher=$(feld embedded "$(uebersicht)")
         bestand_lesen
+        frisch=$(db_lesen "select s.state, count(*)
+  from ${DB_PREFIX}findling_file_state s
+  join ${DB_PREFIX}filecache f on f.fileid = s.file_id
+ where s.state in ('skipped','failed')
+   and s.updated_at > timestamp '$marke'
+   and f.path like 'files/teilkorpus/%'
+ group by s.state")
         stand=$(uebersicht)
         nachher=$(feld embedded "$stand")
         if ist_zahl "$vorher" && [ "$vorher" = "$nachher" ]; then
@@ -573,14 +616,29 @@ if [ "$ZELLE_KORPUS" = teil ]; then
     done
     [ "$eingebettet" != unlesbar ] || zeile "zaehlung-instabil nach-versuchen $versuch"
     vorrat=$(vorrat_von "$WORK/bestand.txt")
-    uebersprungen=$(awk '$1 == "skipped" {print $2; exit}' "$WORK/bestand.txt")
-    fehlgeschlagen=$(awk '$1 == "failed" {print $2; exit}' "$WORK/bestand.txt")
+    # Fehlende Staaten fehlen in der group-by-Ausgabe als Zeile: auf 0
+    # vorbelegen. Ein unlesbarer DB-Stand bleibt unlesbar, das Zaehltor
+    # scheitert dann ueber die ist_zahl-Pruefung.
+    uebersprungen=0
+    fehlgeschlagen=0
+    case "$frisch" in
+    *unlesbar*)
+        uebersprungen=unlesbar
+        fehlgeschlagen=unlesbar
+        ;;
+    *)
+        wert=$(printf '%s\n' "$frisch" | awk -F'|' '$1 == "skipped" {print $2; exit}')
+        [ -z "$wert" ] || uebersprungen=$wert
+        wert=$(printf '%s\n' "$frisch" | awk -F'|' '$1 == "failed" {print $2; exit}')
+        [ -z "$wert" ] || fehlgeschlagen=$wert
+        ;;
+    esac
     indexiert=$(feld indexed "$stand")
     summe=unlesbar
     if ist_zahl "$vorrat" && ist_zahl "$uebersprungen" && ist_zahl "$fehlgeschlagen" && ist_zahl "$eingebettet"; then
         summe=$((vorrat + uebersprungen + fehlgeschlagen + eingebettet))
     fi
-    zeile "zaehlung vorrat $vorrat uebersprungen ${uebersprungen:-unlesbar} fehlgeschlagen ${fehlgeschlagen:-unlesbar} eingebettet ${eingebettet:-unlesbar} indexiert ${indexiert:-unlesbar} summe $summe"
+    zeile "zaehlung vorrat $vorrat uebersprungen-frisch ${uebersprungen:-unlesbar} fehlgeschlagen-frisch ${fehlgeschlagen:-unlesbar} eingebettet ${eingebettet:-unlesbar} indexiert ${indexiert:-unlesbar} summe $summe"
     zaehltor_status=0
     python3 "$TEILKORPUS" zaehltor "$summe" >"$WORK/zaehltor.txt" 2>&1 || zaehltor_status=$?
     ablegen "$WORK/zaehltor.txt"
