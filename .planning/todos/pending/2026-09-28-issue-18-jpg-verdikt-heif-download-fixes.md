@@ -36,3 +36,12 @@ budachst 28.09.: die Dateien sind TIFF hinter .jpg (Team-Ordner __groupfolders/8
 budachst: file-Zeile = TIFF big-endian, 8 Bit Graustufen, unkomprimiert, 963x1300. Pillow liest das, image.py kodiert ohnehin nach PNG -> These "TIFF-Variante" FALSCH, oeffentlich korrigiert. Verdacht jetzt: abgeschnittener Download (Hypothese 4) oder Altbefund 1.2.x. Diagnose-Ausgabe erbeten. Issue #15: Datei 1441501 unter 1.3 erneut repeatedly_stuck (zuletzt geprueft 30.09.) -> echter Fall, Groesse/Seiten/Diagnose erbeten.
 
 Update 01.10. mittag: budachst-Diagnose galt der .tif in Sixt_Print (id 2893197, queued, nie geprueft) = falsche Datei. Markiert ist die .jpg in Sixt_Heide (Ende fb e4), Format UNBEKANNT ("it's tiff" war Schluss aus Nachbardatei). Erbeten: file, head -c 16 | xxd, diagnose der .jpg. Hypothesen 1 (truncated JPEG) und 4 (Download) wieder offen.
+
+## Nachtrag 02.10.2026 (Analyse der State-DB-Zahlen von budachst, issuecomment-5946767935)
+
+- corrupt ist der Auffangkorb fuer jede unbekannte Reader-Exception (errors.py from_exception); kein Fehlerdetail gespeichert (T-02-56). Kandidaten fuer Phase 29:
+  1. Eigenes Verdikt unsupported_format (o. ae.) statt corrupt, Admin-Text ehrlich ("fuer diese Version nicht lesbar" statt "beschaedigt").
+  2. Verschluesselte Office-Dateien (CFB-Magic d0cf11e0) wie PDFs als skipped(encrypted) statt corrupt; erkennt auch legacy .doc/.xls unter moderner Endung.
+  3. Exception-KLASSE (ohne Pfad/Message, T-02-56-konform) mit ins Verdikt/Log, damit Diagnosen wie #18 nicht blind sind.
+  4. Pillow-Grenzfaelle der Druckvorstufe (Old-Style-JPEG-TIFF u. ae.): unsupported-Verdikt oder libtiff-Fallback pruefen.
+- Datenlage: Top-5-Hashes = 1203/4596 corrupt (deterministisch, inhaltsgebunden); Bilder <1 MB 12,3 % Ausfall vs 1-5 MB 1,6 % (gegen Speicherdeckel); Golfpreis-TIFF faellt auf 1.3.2 reproduzierbar. Warten auf budachsts Hash-Cluster-Abfrage + Repro-Exceptions.
