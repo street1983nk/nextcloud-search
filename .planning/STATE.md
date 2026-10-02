@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
-status: blocked
-stopped_at: 28-07 Task 1 blockiert am Zaehltor (Lauf 3, Abbruch 71), Owner-Entscheid noetig
-last_updated: "2026-10-02T00:30:00.000Z"
+status: executing
+stopped_at: ""
+last_updated: "2026-10-02T04:55:00.000Z"
 last_activity: 2026-10-02
 progress:
   total_phases: 6
@@ -27,15 +27,18 @@ See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 
 Phase: 28 (Abnahme-Anfahrt), in Ausführung
 Plan: 7 of 14
-Status: Blocked (28-07 Task 1, Zaehltor, Owner-Entscheid noetig)
+Status: Executing (28-07 Task 1, Kette neu ab S-T-anker nach Blocker-Fix 261002-93i)
 Last activity: 2026-10-02
 
 Progress: [█████████░] 87%
 
 ## Naechster Schritt
 
-**Owner-Entscheid zum 28-07-Blocker (Zaehltor, drei Wege a/b/c, siehe Offene Blocker),
-danach execute-phase 28 weiter mit 28-07 Task 1 (Kette neu ab Zelle S-T-anker).**
+**28-07 Task 1 weiterfahren: Kette neu ab Zelle S-T-anker.** Owner-Entscheid 02.10.
+("lege los" auf Empfehlung a+b) umgesetzt in Quick 261002-93i: --restart raeumt den
+Arbeitsvorrat (Produkt-Fix, QueueMapper/QueueService::clear()), 93b urteilt ueber den
+Vorrat (rc 13), 10-zelle bricht mit 73 vor Samplern/Trigger ab. PHP-Syntax auf der Box
+per php -l pruefen (lokal kein php), PHPUnit laeuft mit dem naechsten Push in CI.
 Stand 28-07: Teilkorpus eingerichtet und committet (4d30864c), drei Kettenlaeufe an der
 Zelle S-T-anker mit 71 abgebrochen (41 / 6937 / 1651), Befunde committet (zuletzt f09504ae);
 Box-Klon auf 57edc641, Box gestoppt und geparkt bei 2,95 USD.
@@ -146,20 +149,15 @@ Fuer v1.4 unmittelbar tragend:
 
 ### Offene Blocker
 
-- **28-07 Task 1, Zaehltor-Abbruch 71 in Lauf 3 (2026-10-02):** 1651 statt 5000 nach
-  KORPUS_FRIST 3600 s. Die Zaehlformel (6d114659) zaehlte korrekt; Ursache ist der
-  Nullstand, der den Nextcloud-seitigen Vorrat nicht raeumt: 3420 Altauftraege aus
-  Lauf 2 hielten den Vorrat nie leer, der Crawl ohne Selbstvorschub blieb bei
-  last_file_id 50134 vor dem Teilkorpus (52426 ff.). Befund committet (f09504ae,
-  04-teilkorpus-arm.txt Lauf 3). Owner-Entscheid noetig (Runbook 7.1, Werkzeug-
-  aenderung nur mit Owner-Wort): a) Nullstand raeumt die Queue mit, b) 10-zelle.sh
-  prueft Vorrat 0 vor dem Trigger, c) Zaehltor wartet auf Crawl-Ende statt fester
-  Frist. Box gestoppt und geparkt bei 2,95 USD gegen Deckel 59,43 USD.
+- Keine. (28-07-Zaehltor-Blocker GELOEST 02.10.: Owner-Entscheid a+b "lege los",
+  umgesetzt in Quick 261002-93i, Feldbeweis steht mit dem naechsten Kettenlauf aus.
+  Historie des Befunds: f09504ae, 04-teilkorpus-arm.txt Lauf 3.)
 
 ### Quick Tasks Completed
 
 | # | Description | Date | Commit | Status | Directory |
 |---|-------------|------|--------|--------|-----------|
+| 261002-93i | 28-07 Blocker-Fix a+b: occ findling:index --restart raeumt den Arbeitsvorrat (QueueMapper/QueueService::clear(), Produkt-Fix fuer den Notfallhebel) + 93b-Nullstand urteilt ueber den Vorrat (rc 13) + 10-zelle Abbruch 73 vor Samplern/Trigger | 2026-10-02 | 599a74d2 | Done (65+477 Tests gruen; php -l/PHPUnit = CI-Vorbehalt) | [261002-93i-findling-restart-raeumt-arbeitsvorrat-nu](./quick/261002-93i-findling-restart-raeumt-arbeitsvorrat-nu/) |
 | 261001-vl0 | 28-07 Zaehltor: Formel zaehlt eingebettet statt indexiert (Vorrat enthaelt offene Einbettungsauftraege), Leserace per Doppellesung stabilisiert, Beleg-Test 6937 -> 5000 + Positivkontrolle + Race-Test | 2026-10-01 | 6d114659 | Done (64 Tests gruen auf main) | [261001-vl0-findling-28-07-zaehltor-fix-formel-auf-e](./quick/261001-vl0-findling-28-07-zaehltor-fix-formel-auf-e/) |
 | 260929-kii | Deckungsgrad-Nenner waechst mit neuen Dateien (ScanRecountJob, Nachzaehlung absolut, Satz statt Prozent bei Zaehler > Nenner) | 2026-09-29 | bbb4f406 | Verified | [260929-kii-deckungsgrad-nenner-waechst-mit-neuen-da](./quick/260929-kii-deckungsgrad-nenner-waechst-mit-neuen-da/) |
 | 260929-s7p | Issue #14: Team-Folder-Dateien mit ACL als Mitglied lesen (ReaderContext), Datei-ID in der Fehlerliste, CI-Job team-folder-acl; Auslieferung als 1.3.1 | 2026-09-29 | 0556d06d | Needs Review (PHPUnit + CI-Job nach Push) | [260929-s7p-issue14-acl-reader-context](./quick/260929-s7p-issue14-acl-reader-context/) |
