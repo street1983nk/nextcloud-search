@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
-status: executing
-stopped_at: Completed 28-04-PLAN.md
-last_updated: "2026-10-01T17:25:51.653Z"
-last_activity: 2026-10-01
+status: blocked
+stopped_at: 28-07 Task 1 blockiert am Zaehltor (Lauf 3, Abbruch 71), Owner-Entscheid noetig
+last_updated: "2026-10-02T00:30:00.000Z"
+last_activity: 2026-10-02
 progress:
   total_phases: 6
   completed_phases: 4
@@ -27,14 +27,21 @@ See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 
 Phase: 28 (Abnahme-Anfahrt), in Ausführung
 Plan: 7 of 14
-Status: Ready to execute
-Last activity: 2026-10-01
+Status: Blocked (28-07 Task 1, Zaehltor, Owner-Entscheid noetig)
+Last activity: 2026-10-02
 
 Progress: [█████████░] 87%
 
 ## Naechster Schritt
 
-**execute-phase 28 weiter mit 28-06** (28-05 fertig: Owner-Freigabe 30.09.2026, Deckel 119,82 h / 59,43 USD mit Anker, Timer 71,32 USD, Guthaben 104,11 USD; cb49fa70. 28-01 fertig: Teilkorpus, Rechenblatt, Slotkosten,
+**Owner-Entscheid zum 28-07-Blocker (Zaehltor, drei Wege a/b/c, siehe Offene Blocker),
+danach execute-phase 28 weiter mit 28-07 Task 1 (Kette neu ab Zelle S-T-anker).**
+Stand 28-07: Teilkorpus eingerichtet und committet (4d30864c), drei Kettenlaeufe an der
+Zelle S-T-anker mit 71 abgebrochen (41 / 6937 / 1651), Befunde committet (zuletzt f09504ae);
+Box-Klon auf 57edc641, Box gestoppt und geparkt bei 2,95 USD.
+
+(28-06 fertig: S-voll 19,58 h, C1 743,9 MB innerhalb, Box geparkt; Owner-Signal "weiter".
+28-05 fertig: Owner-Freigabe 30.09.2026, Deckel 119,82 h / 59,43 USD mit Anker, Timer 71,32 USD, Guthaben 104,11 USD; cb49fa70. 28-01 fertig: Teilkorpus, Rechenblatt, Slotkosten,
 00-ablauf.md; b8e8c785. 28-02 fertig: 11-probe-route.py, 10-zelle.sh, 93b-nullstand.sh,
 00-kette.sh, 59 boxlose Tests; 1976584a. 28-03 fertig: aws_box.sh Satztabelle/Architektur/
 SG-Schonung, 00-typwechsel.sh mit Zieltyp; b1191dc5. 28-04 fertig: Runbook x86/USD-Deckel/
@@ -139,7 +146,15 @@ Fuer v1.4 unmittelbar tragend:
 
 ### Offene Blocker
 
-- Keine harten Blocker. Kill-Kriterium siehe oben.
+- **28-07 Task 1, Zaehltor-Abbruch 71 in Lauf 3 (2026-10-02):** 1651 statt 5000 nach
+  KORPUS_FRIST 3600 s. Die Zaehlformel (6d114659) zaehlte korrekt; Ursache ist der
+  Nullstand, der den Nextcloud-seitigen Vorrat nicht raeumt: 3420 Altauftraege aus
+  Lauf 2 hielten den Vorrat nie leer, der Crawl ohne Selbstvorschub blieb bei
+  last_file_id 50134 vor dem Teilkorpus (52426 ff.). Befund committet (f09504ae,
+  04-teilkorpus-arm.txt Lauf 3). Owner-Entscheid noetig (Runbook 7.1, Werkzeug-
+  aenderung nur mit Owner-Wort): a) Nullstand raeumt die Queue mit, b) 10-zelle.sh
+  prueft Vorrat 0 vor dem Trigger, c) Zaehltor wartet auf Crawl-Ende statt fester
+  Frist. Box gestoppt und geparkt bei 2,95 USD gegen Deckel 59,43 USD.
 
 ### Quick Tasks Completed
 
@@ -185,7 +200,7 @@ Aeltere Merker:
 
 ## Session Continuity
 
-Last session: 2026-10-01T17:25:51.636Z
+Last session: 2026-10-02T00:17:08.528Z
 Stopped at: Completed 28-04-PLAN.md
 Resume file: None
 
