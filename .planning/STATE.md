@@ -4,7 +4,7 @@ milestone: v1.4
 milestone_name: Leistungsprofile
 status: executing
 stopped_at: ""
-last_updated: "2026-10-02T04:55:00.000Z"
+last_updated: "2026-10-02T05:30:00.000Z"
 last_activity: 2026-10-02
 progress:
   total_phases: 6
@@ -27,21 +27,31 @@ See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 
 Phase: 28 (Abnahme-Anfahrt), in Ausführung
 Plan: 7 of 14
-Status: Executing (28-07 Task 1, Kette neu ab S-T-anker nach Blocker-Fix 261002-93i)
+Status: Blocked (28-07 Task 1, Lauf 4 zweimal Abbruch 73 am neuen Vorrats-Tor, Owner-Entscheid zur Tor-Position noetig)
 Last activity: 2026-10-02
 
 Progress: [█████████░] 87%
 
 ## Naechster Schritt
 
-**28-07 Task 1 weiterfahren: Kette neu ab Zelle S-T-anker.** Owner-Entscheid 02.10.
-("lege los" auf Empfehlung a+b) umgesetzt in Quick 261002-93i: --restart raeumt den
-Arbeitsvorrat (Produkt-Fix, QueueMapper/QueueService::clear()), 93b urteilt ueber den
-Vorrat (rc 13), 10-zelle bricht mit 73 vor Samplern/Trigger ab. PHP-Syntax auf der Box
-per php -l pruefen (lokal kein php), PHPUnit laeuft mit dem naechsten Push in CI.
-Stand 28-07: Teilkorpus eingerichtet und committet (4d30864c), drei Kettenlaeufe an der
-Zelle S-T-anker mit 71 abgebrochen (41 / 6937 / 1651), Befunde committet (zuletzt f09504ae);
-Box-Klon auf 57edc641, Box gestoppt und geparkt bei 2,95 USD.
+**28-07 Task 1: Owner-Entscheid zur Position des 93b-Vorrats-Tors, dann Kette neu.**
+Lauf 4 (02.10., Start 7): Fix a+b aus Quick 261002-93i wirken LIVE ("Cleared 334/3901
+stale jobs of the earlier run.", zwei billige Abbrueche 73 vor Samplern/Trigger, je ~30 s).
+ABER: das Tor ist an seiner Position unpassierbar. Ursache belegt (ad7d1a8d,
+04-teilkorpus-arm.txt Lauf 4): first_index_scheduled=1 ueberlebt --rm-data; der frisch
+bewaffnete Container zieht sich den Crawl in Sekunden selbst ueber die Top-up-Route
+(POST /queues/documents/topup -> CrawlAdvanceService, DI-10-04), die ausgeschlossene
+Region (52k fileids) ist vor der 93b-Lesung durchlaufen (Bewaffnung -> 93b nur 6-16 s);
+kein Findling-Background-Job lief im Fenster, der Cron-Takt war es NICHT. Kein Timing
+des Kettenstarts kann gewinnen. Optionen fuer den Owner (Werkzeugaenderung nur mit
+Owner-Wort, Runbook 7.1): a) 93b-Vorrats-Lesung in 10-zelle.sh VOR die Bewaffnung ziehen
+(empfohlen: nach der Registrierung kann kein Container nachschieben, Altbestand bliebe
+sichtbar, frische Befuellung unmoeglich; die Wiederbefuellung zwischen Tor und Trigger
+ist laut Design unschaedlich, der Trigger raeumt selbst), b) Tor auf Altbestand vor der
+Zelle urteilen lassen, c) vor dem Kettenstart SchedulerJob-Zeile und first_index_scheduled
+entfernen (Eingriff in Produktzustand). Stand: Box-Klon auf a236802f, Companion-App im
+NC-Container auf dem Fix-Stand (php -l sauber, clear() im laufenden Code belegt),
+Box gestoppt und geparkt 05:25:31Z bei 3,06 USD (Deckel 59,43).
 
 (28-06 fertig: S-voll 19,58 h, C1 743,9 MB innerhalb, Box geparkt; Owner-Signal "weiter".
 28-05 fertig: Owner-Freigabe 30.09.2026, Deckel 119,82 h / 59,43 USD mit Anker, Timer 71,32 USD, Guthaben 104,11 USD; cb49fa70. 28-01 fertig: Teilkorpus, Rechenblatt, Slotkosten,
@@ -149,9 +159,17 @@ Fuer v1.4 unmittelbar tragend:
 
 ### Offene Blocker
 
-- Keine. (28-07-Zaehltor-Blocker GELOEST 02.10.: Owner-Entscheid a+b "lege los",
-  umgesetzt in Quick 261002-93i, Feldbeweis steht mit dem naechsten Kettenlauf aus.
-  Historie des Befunds: f09504ae, 04-teilkorpus-arm.txt Lauf 3.)
+- **28-07 Vorrats-Tor-Position (02.10., Lauf 4):** Das neue 93b-Tor (rc 13 / Zelle 73)
+  liegt NACH der Bewaffnung und sieht darum immer die frische Wiederbefuellung durch die
+  Top-up-Route des eigenen Containers (Sekunden, kein Cron-Takt; Beleg ad7d1a8d,
+  04-teilkorpus-arm.txt Lauf 4). Zwei Timing-Versuche gefahren (wie angewiesen genau
+  einer wiederholt), beide 73. Fix a+b selbst LIVE bewiesen (Cleared 334/3901, Abbrueche
+  billig vor Samplern/Trigger). Owner-Entscheid noetig: Tor-Lesung vor die Bewaffnung
+  (Empfehlung a), Altbestand-Urteil vor der Zelle (b) oder Produktzustand-Eingriff (c).
+  Box geparkt, 3,06 USD von 59,43.
+
+(28-07-Zaehltor-Blocker GELOEST 02.10.: Owner-Entscheid a+b "lege los", umgesetzt in
+Quick 261002-93i, Feldbeweis erbracht in Lauf 4. Historie: f09504ae, Lauf 3.)
 
 ### Quick Tasks Completed
 
@@ -198,8 +216,8 @@ Aeltere Merker:
 
 ## Session Continuity
 
-Last session: 2026-10-02T00:17:08.528Z
-Stopped at: Completed 28-04-PLAN.md
+Last session: 2026-10-02T05:30:00.000Z
+Stopped at: 28-07 Task 1, Checkpoint nach Lauf 4 (zweimal 73, Blocker Vorrats-Tor-Position)
 Resume file: None
 
 ## Operator Next Steps
