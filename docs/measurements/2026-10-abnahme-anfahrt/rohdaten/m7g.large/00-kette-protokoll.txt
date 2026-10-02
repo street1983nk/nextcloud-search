@@ -728,3 +728,53 @@ zaehlung vorrat 3528 uebersprungen 35 fehlgeschlagen 6 indexiert 3368 summe 6937
 zaehltor verfehlt 6937 statt 5000
 zelle-abbruch rueckgabe 71 grund das Zaehltor 5000 ist verfehlt (6937) 2026-10-01T20:32:56Z
 10-zelle: das Zaehltor 5000 ist verfehlt (6937)
+zelle-start S-T-anker box m7g.large ziel economy/int8 korpus teil 2026-10-01T21:21:48Z
+abbild-digest sha256:6a0c13be68de5ddd7c7ff404ab3a3caf15b646a5386c9e902ae3843ac572d80f
+schritt abwaerts 2026-10-01T21:21:48Z
+abwaerts code=saved saved=true HTTP200
+schritt zaehlung-eine-nextcloud 2026-10-01T21:21:51Z
+nextcloud-instanzen 1
+schritt nullstand 2026-10-01T21:21:51Z
+unregister-rm-data ja
+schritt registrierung 2026-10-01T21:21:57Z
+registrierung-rueckgabewert 0
+schritt bewaffnung 2026-10-01T21:22:02Z
+bewaffnung backendReachable true nach-s 2
+schritt grenze 2026-10-01T21:22:16Z
+speichergrenze-ist 2147483648/0
+grenze-gesetzt ja
+schritt baumhash 2026-10-01T21:22:16Z
+40b-baumhash-rueckgabewert 0
+baumhash-im-laufenden-container 556148291147baefe2e8c49a7745d497ed9560115420589569fa07afda5d31dd
+baumhash-beweis ja
+schritt 93b-nullstand 2026-10-01T21:22:17Z
+93b-nullstand-rueckgabewert 0
+schritt drop-caches 2026-10-01T21:22:18Z
+caches-geleert ja
+schritt probe 2026-10-01T21:22:18Z
+probe keine abwaertsweg
+schritt wirksamkeit 2026-10-01T21:22:18Z
+uebersicht HTTP200 effective=economy guardEffective=economy guardCause=keine slotsInForce=1 throttled=false backendReachable=true scheduled=3420 running=20 indexed=0 embedded=0 storedPrecision=int8 profileSaved=economy
+wirksamkeit ja effective economy slotsInForce 1 nach-s 2
+schritt sampler 2026-10-01T21:22:20Z
+sampler rss 2 anon 1 cpu 5 status 120 gestartet 2026-10-01T21:22:20Z
+schritt trigger 2026-10-01T21:22:20Z
+The crawl was queued. It starts with the next run of the background jobs.
+
+Work stock
+  scheduled            3420
+  handed to the worker 20
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              35
+  failed               6
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-10-01 19:55:07 (87 minutes ago)
+trigger ja 2026-10-01T21:22:23Z
+zaehlung vorrat 986 uebersprungen 35 fehlgeschlagen 6 eingebettet 624 indexiert 626 summe 1651
+zaehltor verfehlt 1651 statt 5000
+zelle-abbruch rueckgabe 71 grund das Zaehltor 5000 ist verfehlt (1651) 2026-10-01T22:22:32Z
+10-zelle: das Zaehltor 5000 ist verfehlt (1651)

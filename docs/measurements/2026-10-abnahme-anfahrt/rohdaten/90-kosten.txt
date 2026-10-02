@@ -21,7 +21,21 @@ geparkt 2026-10-01T18:17:16Z 2026-10-01T19:29:45Z
 # bisher 2.54 USD gegen deckel 59.43 USD (02-rechenblatt.py stand --jetzt 2026-10-01T18:17:16Z, rest 56.89); box geparkt
 # 28-07 start 4 nach owner-entscheid option 1 (KORPUS_FRIST=3600), teilkorpus-kette neu
 m7g.large 2026-10-01T19:29:45Z 2026-10-01T20:34:50Z
-geparkt 2026-10-01T20:34:50Z laeuft
+geparkt 2026-10-01T20:34:50Z 2026-10-01T21:18:44Z
 # m7g.large stop 2026-10-01T20:34:50Z (aws_box.sh stop, BOX_STOPPED_ISO) laufzeit 1.0847 h x 0.115841 = 0.1257 USD
 # grund: kette 28-07 (KORPUS_FRIST=3600) brach an zelle S-T-anker erneut mit 71 ab (zaehltor 6937 statt 5000), checkpoint an den owner
 # bisher 2.68 USD gegen deckel 59.43 USD (02-rechenblatt.py stand --jetzt 2026-10-01T20:34:50Z, rest 56.75); box geparkt
+# 28-07 start 5 nach zaehlformel-fix (6d114659: summe zaehlt eingebettet statt indexiert), teilkorpus-kette lauf 3
+m7g.large 2026-10-01T21:18:44Z 2026-10-01T23:22:32Z
+geparkt 2026-10-01T23:22:32Z 2026-10-02T00:10:13Z
+# stopp: sicherheitstimer vorgezogen (shutdown -h +60 ab kette-abbruch 22:22:32Z); minutenbeleg last -x shutdown 23:22
+# grund: kette 28-07 lauf 3 brach an zelle S-T-anker erneut mit 71 ab (zaehltor 1651 statt 5000);
+#   zaehlformel korrekt, aber 3420 altauftraege aus lauf 2 ueberlebten den nullstand, vorrat nie leer,
+#   crawl ohne selbstvorschub blieb bei last_file_id 50134 vor dem teilkorpus (52426 ff.); blocker an den owner
+# m7g.large lauf 2026-10-01T21:18:44Z bis 23:22:32Z = 2.0633 h x 0.115841 = 0.2390 USD
+# geparkt 23:22:32Z bis 00:10:13Z = 0.7947 h x 0.013041 = 0.0104 USD
+# 28-07 start 6 nur zum abholen der abbruch-rohdaten (aws_box.sh start/stop)
+m7g.large 2026-10-02T00:10:13Z 2026-10-02T00:13:07Z
+geparkt 2026-10-02T00:13:07Z laeuft
+# m7g.large stop 2026-10-02T00:13:07Z (aws_box.sh stop, BOX_STOPPED_ISO) laufzeit 0.0483 h x 0.115841 = 0.0056 USD
+# bisher 2.95 USD gegen deckel 59.43 USD (02-rechenblatt.py stand --jetzt 2026-10-02T00:13:07Z); box geparkt

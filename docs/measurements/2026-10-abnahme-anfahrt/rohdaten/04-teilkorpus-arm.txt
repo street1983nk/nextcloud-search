@@ -117,3 +117,41 @@ zweiter befund: uebersprungen 44 vor dem trigger, 35 beim zaehltor, fehlgeschlag
 endzustaende ausserhalb des teilkorpus stehen nach --restart noch in den zaehlern, die das
 zaehltor summiert.
 box per aws_box.sh stop gestoppt 2026-10-01T18:17:16Z, geparkt; weiter entscheidet der owner.
+
+-- kettenlauf 3 der teilkorpus-zellen (start 5, 2026-10-01T21:18:44Z): abbruch 71 am zaehltor --
+vorab: box-klon per git bundle von 328eb051 auf 57edc641 gebracht (zaehlformel-fix 6d114659 drauf,
+grep eingebettet in 10-zelle.sh: 9 treffer); alle beim checkout kollidierenden dateien vorher per
+sha256 als identisch mit dem committeten stand belegt, nichts verloren. vorpruefung-stop-ja 21:19:58Z.
+laufwerte wie lauf 2, dazu KORPUS_FRIST=3600 (owner-entscheid option 1), BISHER_USD 2.6916.
+kette-start 2026-10-01T21:21:48Z bisher 2.6975, timer-gesetzt minuten 35541
+zelle S-T-anker: alle tore bis trigger bestanden (baumhash-beweis ja, wirksamkeit ja economy
+slotsInForce 1), trigger ja 21:22:23Z
+nach KORPUS_FRIST 3600 s:
+  zaehlung vorrat 986 uebersprungen 35 fehlgeschlagen 6 eingebettet 624 indexiert 626 summe 1651
+  zaehltor verfehlt 1651 statt 5000
+  zelle-abbruch rueckgabe 71 2026-10-01T22:22:32Z, kette-abbruch, timer-vorgezogen 60 min,
+  box fuhr 23:22Z selbst herunter (last -x shutdown).
+keine messung. rohdaten unter m7g.large/S-T-anker-abbruch71-lauf3/ und
+m7g.large-teil-abbruch71-lauf3-kette.log (auf der box genauso umbenannt, nicht geloescht).
+ursache, belegt an den rohdaten (DIESMAL NICHT die zaehlformel; sie zaehlte korrekt):
+  1. schon VOR dem trigger stand der vorrat auf 3420 (uebersicht der wirksamkeit und work stock
+     des triggers): altauftraege des abgebrochenen laufs 2 (dort vorrat 3528 beim abbruch).
+     der nullstand (--rm-data plus 93b) raeumt den nextcloud-seitigen vorrat nicht.
+  2. 96d-status.jsonl (31 lesungen, 21:22:22Z bis 22:22:30Z): vorrat sinkt monoton 3420 -> 982,
+     NULL lesungen mit vorratszuwachs: der crawl hat in der ganzen frist keine einzige neue
+     datei eingeplant.
+  3. nachlese (99-nachlese-zaehltor.txt): StorageCrawlJob storage 3 last_file_id 50134, also
+     VOR der ersten teilkorpus-datei (52426 ff., beleg lauf 1).
+  4. mechanik wie in lauf 1 dokumentiert: selbstvorschub des crawls (CrawlAdvanceService) nur
+     bei leerem vorrat. mit 3420 altauftraegen war der vorrat nie leer; der crawl lief nur im
+     cron-takt und kam in 3600 s nicht bis zum teilkorpus.
+  vergleich lauf 2: dort nur 549 altauftraege (aus dem kurzen lauf 1), vorrat schnell leer,
+  selbstvorschub trug den crawl in unter einer stunde durch alle 52k dateien; mit der
+  korrigierten formel haette das tor dort exakt 5000 gesehen (3528+35+6+1431).
+folgerung (owner-entscheid noetig, runbook 7.1 werkzeugaenderung nur mit owner-wort):
+  das zaehltor setzt voraus, dass der crawl innerhalb der frist durch den ganzen storage kommt;
+  das gilt nur bei leerem vorrat am start. moegliche wege: a) nullstand raeumt den
+  nextcloud-seitigen vorrat (oc-queue) mit, b) 10-zelle.sh prueft vor dem trigger vorrat 0 und
+  bricht sonst frueh ab, c) zaehltor wartet auf crawl-ende (last_file_id-wrap) statt fester frist.
+box per aws_box.sh stop gestoppt 2026-10-02T00:13:07Z (start 6 nur zum abholen), geparkt;
+weiter entscheidet der owner.

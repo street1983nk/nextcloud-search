@@ -15,3 +15,9 @@ zelle-start S-T-anker economy/int8 korpus teil 2026-10-01T19:32:34Z bisher 2.561
 zelle-ende S-T-anker rueckgabe 71 2026-10-01T20:32:56Z
 kette-abbruch zelle S-T-anker rueckgabe 71 2026-10-01T20:32:56Z
 timer-vorgezogen 2026-10-01T20:32:56Z auf-minuten 60
+kette-start m7g.large 2026-10-01T21:21:48Z bisher 2.6975 deckel 59.43 satz 0.115841
+timer-gesetzt minuten 35541 abschaltung 2026-10-26T13:42:48Z
+zelle-start S-T-anker economy/int8 korpus teil 2026-10-01T21:21:48Z bisher 2.6975
+zelle-ende S-T-anker rueckgabe 71 2026-10-01T22:22:32Z
+kette-abbruch zelle S-T-anker rueckgabe 71 2026-10-01T22:22:32Z
+timer-vorgezogen 2026-10-01T22:22:32Z auf-minuten 60

@@ -1,0 +1,17 @@
+nachlese 2026-10-02T00:12:41Z nach abbruch 71 lauf 3, von hand (box war 23:22Z bis 00:10Z gestoppt, timer-vorgezogen)
+occ findling:index:
+Work stock
+  scheduled            334
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              35
+  failed               6
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-10-02 00:10:35 (2 minutes ago)
+
+background-job StorageCrawlJob storage 3:
+| 135819903179927552 | OCA\Findling\BackgroundJobs\StorageCrawlJob                       | 1970-01-01T00:00:00+00:00 | {"storage_id":3,"root_id":132,"overridden_root":133,"last_file_id":50134} |
