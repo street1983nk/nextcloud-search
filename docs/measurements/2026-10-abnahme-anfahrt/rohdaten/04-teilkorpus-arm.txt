@@ -220,3 +220,61 @@ ursache, belegt an der box (NICHT der cron-takt):
      first_index_scheduled entfernen (eingriff in produktzustand statt werkzeug).
 beide abbrueche waren billig (je ~30 s, keine sampler, kein trigger, keine messung).
 box per aws_box.sh stop gestoppt 2026-10-02T05:25:31Z, geparkt; weiter entscheidet der owner.
+
+-- kettenlauf 5 der teilkorpus-zellen (start 8, 2026-10-02T05:53:32Z): vorrat-tor BESTANDEN,
+-- abbruch 71 am zaehltor (5041 statt 5000), box gestoppt, blocker an den owner --
+werkzeugaenderung mit owner-wort (runbook 7.1, quick 261002-af9 "lege los" im rahmen des
+  owner-entscheids a+b): 10-zelle.sh traegt den schritt vorrat-tor VOR der bewaffnung
+  (abbruch 73 beziffert altbestand), 93b urteilt wieder nur 0/11/12. commits e5bd515e, c04e7431.
+vorab: box-klon per git bundle von a236802f auf fcbb1273 gebracht; alle 22 beim checkout
+  kollidierenden dateien vorher per sha256 geprueft: 12 identisch mit dem ziel-commit
+  (lauf-4-rohdaten, lokal committet), 7 unveraendert auf dem alt-stand, 3 kettendateien auf
+  den HEAD-stand zurueckgesetzt und per ff-merge auf den ziel-stand gebracht, nichts verloren.
+  belege auf der box: grep "schritt vorrat-tor" 10-zelle.sh = 1, "abbruch 73" (ohne
+  kommentare) = 1, "exit 13" in 93b-nullstand.sh (ohne kommentare) = 0.
+a-record auf die neue instanzadresse gesetzt (zonen-api, ttl 120, nicht proxied); hostschluessel
+  der box per ssh-keyscan gegen den alten stand verglichen: alle drei fingerabdruecke identisch.
+vorpruefung-stop-ja 2026-10-02T05:56:35Z.
+vorab-raeumung 05:57:37Z: occ findling:index --restart -n; der vorrat war schon 0/0 (nichts zu
+  raeumen, keine Cleared-zeile; der crawl wurde neu armiert, "The crawl was queued").
+kettenstart 2026-10-02T05:58:50Z bisher 3.0719, timer-gesetzt minuten 35347.
+zelle S-T-anker: abwaerts, eine nextcloud, nullstand, registrierung 05:58:54Z,
+  vorrat-tor 05:59:00Z altvorrat 0 BESTANDEN (erster feldbeweis der tor-verschiebung af9:
+  zwischen registrierung und bewaffnung kann kein container nachschieben),
+  bewaffnung 05:59:00Z, grenze 2147483648/0, baumhash-beweis ja, 93b, drop-caches,
+  probe keine abwaertsweg, wirksamkeit ja effective economy slotsInForce 1 nach-s 3,
+  sampler, trigger ja 05:59:11Z.
+nach KORPUS_FRIST 3600 s:
+  zaehlung vorrat 3535 uebersprungen 35 fehlgeschlagen 6 eingebettet 1465 summe 5041
+  zaehltor verfehlt 5041 statt 5000
+  zelle-abbruch rueckgabe 71 2026-10-02T06:59:16Z, kette-abbruch, timer-vorgezogen 60 min.
+keine messung. rohdaten unter m7g.large/S-T-anker-abbruch71-lauf5/ und
+m7g.large-teil-abbruch71-lauf5-kette.log (auf der box genauso umbenannt, nicht geloescht).
+ursache, belegt an der datenbank der box (07:05Z, dateiidentitaet gegen oc_filecache):
+  1. der teilkorpus selbst ist VOLLSTAENDIG und exakt: vorrat 3535 + eingebettet 1465 = 5000.
+     der crawl, das vorrat-tor und die zaehlformel arbeiten korrekt.
+  2. die 41 zuviel sind saemtlich alt-endzustaende AUSSERHALB des teilkorpus in der tabelle
+     oc_findling_file_state (35 skipped + 6 failed): 20x too_large (loadtest 49982-50000 csv,
+     drill 01500), 9x beispieldateien der homes (Photos/*.jpg empty_text, Nextcloud.png),
+     12x sprachfall corpus/* (corrupt, encrypted, empty_file, image_not_ocrable, riesenformat,
+     zip-bombe); updated_at 2026-09-30/2026-10-01, also S-voll- und frueher-laeufe.
+     KEIN eintrag unter files/teilkorpus (count 0).
+  3. oc_findling_file_state gehoert der php-haelfte und ueberlebt --rm-data (python-haelfte)
+     UND occ findling:index --restart (raeumt seit 93i nur oc_findling_queue); das zaehltor
+     summiert diese zaehler mit (uebersprungen/fehlgeschlagen aus occ findling:index).
+  4. die formel aus 261001-vl0 war an lauf 2 kalibriert, wo zufaellig 41 teilkorpus-dateien
+     noch im crawl fehlten (3528+1431=4959) und die 41 altzustaende die luecke exakt fuellten;
+     mit vollstaendig eingeplantem teilkorpus (5000) zaehlt sie den altbestand obendrauf.
+folgerung (owner-entscheid noetig, runbook 7.1 werkzeugaenderung nur mit owner-wort):
+  das zaehltor liest globale zaehler, der teilkorpus-lauf braucht eine teilkorpus-scharfe
+  zaehlung oder einen geraeumten endzustand. moegliche wege:
+  a) zaehltor zaehlt nur zustaende von dateien unter files/teilkorpus (pfadfilter in
+     01-teilkorpus.py zaehltor bzw. der formel; werkzeugaenderung, kein produkteingriff),
+  b) produkt-fix: occ findling:index --restart raeumt auch oc_findling_file_state
+     (verlaengerung von 93i; aendert den notfallhebel des produkts),
+  c) vor dem kettenstart oc_findling_file_state von hand leeren (eingriff in produktzustand).
+abbruch war billig bis mittel (die zelle lief die volle KORPUS_FRIST 3600 s samt samplern,
+  der container indexierte bereits; ~1,27 h boxzeit gesamt).
+box von innen gestoppt (sudo shutdown -h +1, geplant 07:09:39Z, ssh ab 07:10Z unerreichbar);
+aws_box.sh stop war nicht moeglich: die aws-sitzung ist abgelaufen (owner loggt ein),
+BOX_STOPPED_ISO und aws-bestaetigung stehen aus. weiter entscheidet der owner.

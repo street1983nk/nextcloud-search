@@ -42,7 +42,21 @@ geparkt 2026-10-02T00:13:07Z 2026-10-02T05:01:29Z
 # 28-07 start 7 (aws_box.sh start, running since aus der ausgabe), lauf 4 nach blocker-fix 261002-93i (a+b):
 #   php-haelfte und harness-tor auf die box, alt-vorrat raeumen, teilkorpus-kette neu ab S-T-anker
 m7g.large 2026-10-02T05:01:29Z 2026-10-02T05:25:31Z
-geparkt 2026-10-02T05:25:31Z laeuft
+geparkt 2026-10-02T05:25:31Z 2026-10-02T05:53:32Z
+# 28-07 start 8 (aws_box.sh start, running since aus der ausgabe), kettenlauf 5 nach tor-verschiebung 261002-af9:
+#   box-klon per bundle auf fcbb1273, vorrat-tor vor der bewaffnung, teilkorpus-kette neu ab S-T-anker
+m7g.large 2026-10-02T05:53:32Z 2026-10-02T07:09:39Z
+geparkt 2026-10-02T07:09:39Z laeuft
+# m7g.large stopp: sudo shutdown -h +1 von innen (geplant 07:09:39Z, ssh ab 07:10Z unerreichbar);
+#   aws_box.sh stop war nicht moeglich, die aws-sitzung ist abgelaufen (owner loggt ein);
+#   shutdown-verhalten=stop belegt (vorpruefung-stop-ja 2026-10-02T05:56:35Z), BOX_STOPPED_ISO
+#   und aws-bestaetigung stehen aus. laufzeit 1.2686 h x 0.115841 = 0.1470 USD
+# grund: kette 28-07 lauf 5 brach an zelle S-T-anker mit 71 ab (zaehltor 5041 statt 5000);
+#   vorrat-tor BESTANDEN (altvorrat 0, fix 261002-af9 wirkt), teilkorpus vollstaendig eingeplant
+#   (vorrat 3535 + eingebettet 1465 = exakt 5000), die 41 zuviel sind alt-endzustaende AUSSERHALB
+#   des teilkorpus in oc_findling_file_state (35 skipped + 6 failed, dateiidentitaet belegt in
+#   04-teilkorpus-arm.txt lauf 5); --rm-data und --restart raeumen diese tabelle nicht; blocker an den owner
+# bisher 3.21 USD gegen deckel 59.43 USD; box geparkt (stopp von innen)
 # m7g.large stop 2026-10-02T05:25:31Z (aws_box.sh stop, BOX_STOPPED_ISO) laufzeit 0.4006 h x 0.115841 = 0.0464 USD
 # grund: kette 28-07 lauf 4 brach an zelle S-T-anker zweimal mit 73 ab (neues 93b-vorrats-tor,
 #   fix a+b wirken: "Cleared 334/3901 stale jobs", abbruch vor samplern/trigger); die wiederbefuellung
