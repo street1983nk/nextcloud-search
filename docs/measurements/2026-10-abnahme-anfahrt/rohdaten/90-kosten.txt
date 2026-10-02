@@ -50,7 +50,16 @@ geparkt 2026-10-02T07:09:39Z 2026-10-02T07:52:06Z
 # 28-07 start 9 (aws_box.sh start, running since aus der ausgabe), kettenlauf 6 nach zaehlquellen-fix 261002-cvf:
 #   box-klon per bundle auf b3970547 (code bis a2b0fcf9, zaehlmarke vor dem trigger, frischzaehlung psql),
 #   teilkorpus-kette neu ab S-T-anker; bisher 3.22 USD gegen deckel 59.43 USD (stand vor dem start)
-m7g.large 2026-10-02T07:52:06Z laeuft
+m7g.large 2026-10-02T07:52:06Z 2026-10-02T13:17:11Z
+geparkt 2026-10-02T13:17:11Z 2026-10-02T14:54:47Z
+# m7g.large stopp lauf 6: von innen, vorgezogener sicherheitstimer der kette (kette-abbruch
+#   12:17:11Z, timer-vorgezogen auf-minuten 60, last: shutdown 13:17); aws_box.sh stop lief nicht
+#   (executor am api-limit beendet). zelle S-T-anker GEMESSEN (rueckgabe 0, 07:56:24Z bis 11:46:29Z,
+#   zaehltor bestanden 5000); zelle St-T abbruch 69 (wirksam economy statt standard nach 1817 s,
+#   befund in 04-teilkorpus-arm.txt lauf 6)
+# 28-07 start 10 (aws_box.sh start) nur zum auslesen von kettenlog und rohdaten, kein lauf:
+m7g.large 2026-10-02T14:54:47Z 2026-10-02T15:00:39Z
+geparkt 2026-10-02T15:00:39Z laeuft
 # m7g.large stopp: sudo shutdown -h +1 von innen (geplant 07:09:39Z, ssh ab 07:10Z unerreichbar);
 #   aws_box.sh stop war nicht moeglich, die aws-sitzung ist abgelaufen (owner loggt ein);
 #   shutdown-verhalten=stop belegt (vorpruefung-stop-ja 2026-10-02T05:56:35Z), BOX_STOPPED_ISO

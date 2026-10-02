@@ -310,3 +310,27 @@ nach KORPUS_FRIST 3600 s:
   ZAEHLTOR BESTANDEN 5000 (08:56:55Z). zweiter feldbeweis cvf: die frischzaehlung sieht
   die 41 alt-endzustaende nicht mehr (uebersprungen-frisch 0, fehlgeschlagen-frisch 0),
   der teilkorpus zaehlt exakt 5000. die zelle misst weiter bis zum letzten vektor.
+zelle S-T-anker GEMESSEN: zelle-ende rueckgabe 0 2026-10-02T11:46:29Z (dauer 3:50, planwert 3:50).
+  rohdaten lokal geholt nach rohdaten/m7g.large/S-T-anker/ (rss/anon/cpu, 96d-statusreihe, zellprotokoll).
+zelle St-T (standard/int8): ABBRUCH 69 2026-10-02T12:17:11Z, kette-abbruch, timer-vorgezogen 60 min,
+  box von innen gestoppt 13:17:11Z (last: shutdown 13:17). alle tore davor bestanden (vorrat-tor
+  altvorrat 0, grenze 2147483648/0, baumhash ja, 93b 0). probe 11:46:47Z: verdict fits
+  (available 2029940736, need 1609969536, slots 1), erzwungen nein; das profil wurde gespeichert
+  (occ config:app:get findling profile = standard, nachgelesen 14:58Z auf der ausgelesenen box).
+  wirksamkeit: effective blieb economy, neu-bewaffnet 12:02:21Z, nach 1817 s abbruch 69, kein trigger.
+  backend-log 11:46 bis 12:18Z: durchgehend paesse claimed=32 committed=32 slots=1 throttled=0,
+  keine meldung des waechters (grep guard/profile/memory/reserve ohne treffer ausser den paessen).
+ursache, im code belegt (nicht am lebenden objekt gemessen, weil die zelle die waechterfelder in
+  diesem zweig nicht protokolliert): findling/profile.py effective() = min(gewaehlt, vorschlag, deckel);
+  vorschlag = suggest(hardware) verlangt fuer standard >= 6 GB UND >= 3 kerne
+  (config.py SUGGEST_STANDARD_MEMORY_BYTES 6e9, SUGGEST_STANDARD_CORES 3). die referenzbox hat 2 kerne
+  und 2 GB containergrenze: vorschlag economy, wirksam damit economy, gleich was die probe misst.
+  die probe (phase 27) misst dagegen die echte passung und sagt hier fits. das ist ein produktseitiger
+  widerspruch zwischen probe und wirksamkeit (D-24-07: "groesste noch passende stufe").
+folge fuer den ablauf: 00-ablauf.md erwartet fuer St-T und L-T auf m7g.large "nofit oder narrow, dann
+  erzwungen"; der erzwingen-weg setzt per occ nur denselben wahlwert und wuerde vom produkt ebenso auf
+  economy gedeckelt, die zellen 3 und 4 sind mit dem heutigen produkt auf dieser box NICHT messbar.
+  OWNER-ENTSCHEID noetig (produktsemantik D-24-07 und umgang mit den zellen 3/4), box geparkt.
+start 10 nur zum auslesen 14:54:47Z bis 15:00:39Z (0,0118 USD); st-t-verzeichnis auf box und lokal
+  umbenannt nach St-T-abbruch69-lauf6, kettenlog nach m7g.large-teil-lauf6-abbruch69-kette.log.
+  stand 3,88 USD gegen deckel 59,43 USD (02-rechenblatt.py stand --jetzt 2026-10-02T15:05:00Z).

@@ -1,0 +1,145 @@
+zelle-start S-T-anker box m7g.large ziel economy/int8 korpus teil 2026-10-02T07:56:24Z
+abbild-digest sha256:6a0c13be68de5ddd7c7ff404ab3a3caf15b646a5386c9e902ae3843ac572d80f
+schritt abwaerts 2026-10-02T07:56:24Z
+abwaerts code=saved saved=true HTTP200
+schritt zaehlung-eine-nextcloud 2026-10-02T07:56:27Z
+nextcloud-instanzen 1
+schritt nullstand 2026-10-02T07:56:27Z
+unregister-rm-data ja
+schritt registrierung 2026-10-02T07:56:28Z
+registrierung-rueckgabewert 0
+schritt vorrat-tor 2026-10-02T07:56:33Z
+vorrat-tor altvorrat 0
+schritt bewaffnung 2026-10-02T07:56:33Z
+bewaffnung backendReachable true nach-s 2
+schritt grenze 2026-10-02T07:56:38Z
+speichergrenze-ist 2147483648/0
+grenze-gesetzt ja
+schritt baumhash 2026-10-02T07:56:38Z
+40b-baumhash-rueckgabewert 0
+baumhash-im-laufenden-container 556148291147baefe2e8c49a7745d497ed9560115420589569fa07afda5d31dd
+baumhash-beweis ja
+schritt 93b-nullstand 2026-10-02T07:56:39Z
+93b-nullstand-rueckgabewert 0
+schritt drop-caches 2026-10-02T07:56:40Z
+caches-geleert ja
+schritt probe 2026-10-02T07:56:40Z
+probe keine abwaertsweg
+schritt wirksamkeit 2026-10-02T07:56:40Z
+uebersicht HTTP200 effective=economy guardEffective=economy guardCause=keine slotsInForce=1 throttled=false backendReachable=true scheduled=549 running=0 indexed=0 embedded=0 storedPrecision=int8 profileSaved=economy
+wirksamkeit ja effective economy slotsInForce 1 nach-s 2
+schritt sampler 2026-10-02T07:56:42Z
+sampler rss 2 anon 1 cpu 5 status 120 gestartet 2026-10-02T07:56:42Z
+schritt trigger 2026-10-02T07:56:42Z
+zaehlmarke 2026-10-01 11:39:47
+Cleared 549 stale jobs of the earlier run.
+The crawl was queued. It starts with the next run of the background jobs.
+
+Work stock
+  scheduled            0
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              35
+  failed               6
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-10-02 06:23:53 (92 minutes ago)
+trigger ja 2026-10-02T07:56:44Z
+zaehlung vorrat 3439 uebersprungen-frisch 0 fehlgeschlagen-frisch 0 eingebettet 1561 indexiert 3392 summe 5000
+zaehltor bestanden 5000
+schritt ende 2026-10-02T08:56:55Z
+lesung t=2s vorrat 3439 indexed 3392 embedded 1561 guard economy throttled false
+lesung t=124s vorrat 3383 indexed 3406 embedded 1617 guard economy throttled false
+lesung t=248s vorrat 3327 indexed 3422 embedded 1681 guard economy throttled false
+lesung t=370s vorrat 3263 indexed 3436 embedded 1737 guard economy throttled false
+lesung t=493s vorrat 3207 indexed 3452 embedded 1801 guard economy throttled false
+lesung t=616s vorrat 3111 indexed 3474 embedded 1889 guard economy throttled false
+lesung t=738s vorrat 3031 indexed 3494 embedded 1969 guard economy throttled false
+lesung t=861s vorrat 2959 indexed 3514 embedded 2049 guard economy throttled false
+lesung t=984s vorrat 2887 indexed 3530 embedded 2113 guard economy throttled false
+lesung t=1106s vorrat 2815 indexed 3548 embedded 2185 guard economy throttled false
+lesung t=1229s vorrat 2735 indexed 3568 embedded 2265 guard economy throttled false
+lesung t=1352s vorrat 2647 indexed 3590 embedded 2357 guard economy throttled false
+lesung t=1475s vorrat 2559 indexed 3612 embedded 2441 guard economy throttled false
+lesung t=1597s vorrat 2495 indexed 3628 embedded 2505 guard economy throttled false
+lesung t=1720s vorrat 2447 indexed 3640 embedded 2553 guard economy throttled false
+lesung t=1842s vorrat 2399 indexed 3652 embedded 2601 guard economy throttled false
+lesung t=1964s vorrat 2327 indexed 3670 embedded 2673 guard economy throttled false
+lesung t=2087s vorrat 2255 indexed 3688 embedded 2745 guard economy throttled false
+lesung t=2210s vorrat 2207 indexed 3700 embedded 2793 guard economy throttled false
+lesung t=2332s vorrat 2143 indexed 3716 embedded 2857 guard economy throttled false
+lesung t=2454s vorrat 2055 indexed 3738 embedded 2945 guard economy throttled false
+lesung t=2577s vorrat 1975 indexed 3758 embedded 3025 guard economy throttled false
+lesung t=2699s vorrat 1903 indexed 3776 embedded 3097 guard economy throttled false
+lesung t=2822s vorrat 1823 indexed 3796 embedded 3178 guard economy throttled false
+lesung t=2945s vorrat 1735 indexed 3820 embedded 3273 guard economy throttled false
+lesung t=3067s vorrat 1639 indexed 3842 embedded 3361 guard economy throttled false
+lesung t=3190s vorrat 1591 indexed 3854 embedded 3409 guard economy throttled false
+lesung t=3312s vorrat 1503 indexed 3876 embedded 3497 guard economy throttled false
+lesung t=3435s vorrat 1439 indexed 3892 embedded 3561 guard economy throttled false
+lesung t=3558s vorrat 1359 indexed 3914 embedded 3649 guard economy throttled false
+lesung t=3680s vorrat 1295 indexed 3928 embedded 3705 guard economy throttled false
+lesung t=3803s vorrat 1207 indexed 3950 embedded 3793 guard economy throttled false
+lesung t=3925s vorrat 1151 indexed 3964 embedded 3849 guard economy throttled false
+lesung t=4048s vorrat 1103 indexed 3976 embedded 3897 guard economy throttled false
+lesung t=4171s vorrat 1015 indexed 3998 embedded 3987 guard economy throttled false
+lesung t=4293s vorrat 986 indexed 4016 embedded 4014 guard economy throttled false
+lesung t=4416s vorrat 958 indexed 4044 embedded 4042 guard economy throttled false
+lesung t=4538s vorrat 932 indexed 4070 embedded 4068 guard economy throttled false
+lesung t=4660s vorrat 908 indexed 4094 embedded 4092 guard economy throttled false
+lesung t=4783s vorrat 882 indexed 4122 embedded 4120 guard economy throttled false
+lesung t=4906s vorrat 854 indexed 4148 embedded 4146 guard economy throttled false
+lesung t=5028s vorrat 846 indexed 4156 embedded 4154 guard economy throttled false
+lesung t=5151s vorrat 828 indexed 4176 embedded 4174 guard economy throttled false
+lesung t=5274s vorrat 800 indexed 4204 embedded 4202 guard economy throttled false
+lesung t=5396s vorrat 774 indexed 4228 embedded 4226 guard economy throttled false
+lesung t=5518s vorrat 756 indexed 4246 embedded 4244 guard economy throttled false
+lesung t=5641s vorrat 732 indexed 4272 embedded 4270 guard economy throttled false
+lesung t=5764s vorrat 710 indexed 4294 embedded 4292 guard economy throttled false
+lesung t=5886s vorrat 682 indexed 4320 embedded 4318 guard economy throttled false
+lesung t=6009s vorrat 664 indexed 4338 embedded 4336 guard economy throttled false
+lesung t=6131s vorrat 642 indexed 4360 embedded 4358 guard economy throttled false
+lesung t=6254s vorrat 632 indexed 4370 embedded 4368 guard economy throttled false
+lesung t=6376s vorrat 618 indexed 4384 embedded 4382 guard economy throttled false
+lesung t=6499s vorrat 598 indexed 4404 embedded 4403 guard economy throttled false
+lesung t=6621s vorrat 580 indexed 4422 embedded 4420 guard economy throttled false
+lesung t=6744s vorrat 558 indexed 4444 embedded 4442 guard economy throttled false
+lesung t=6867s vorrat 542 indexed 4460 embedded 4458 guard economy throttled false
+lesung t=6989s vorrat 518 indexed 4484 embedded 4482 guard economy throttled false
+lesung t=7112s vorrat 504 indexed 4500 embedded 4498 guard economy throttled false
+lesung t=7235s vorrat 486 indexed 4518 embedded 4516 guard economy throttled false
+lesung t=7357s vorrat 460 indexed 4542 embedded 4540 guard economy throttled false
+lesung t=7480s vorrat 434 indexed 4568 embedded 4566 guard economy throttled false
+lesung t=7602s vorrat 406 indexed 4596 embedded 4594 guard economy throttled false
+lesung t=7725s vorrat 384 indexed 4618 embedded 4616 guard economy throttled false
+lesung t=7847s vorrat 356 indexed 4646 embedded 4644 guard economy throttled false
+lesung t=7969s vorrat 332 indexed 4670 embedded 4668 guard economy throttled false
+lesung t=8092s vorrat 304 indexed 4700 embedded 4698 guard economy throttled false
+lesung t=8215s vorrat 286 indexed 4718 embedded 4716 guard economy throttled false
+lesung t=8338s vorrat 256 indexed 4746 embedded 4744 guard economy throttled false
+lesung t=8460s vorrat 238 indexed 4764 embedded 4762 guard economy throttled false
+lesung t=8583s vorrat 216 indexed 4786 embedded 4785 guard economy throttled false
+lesung t=8706s vorrat 188 indexed 4816 embedded 4814 guard economy throttled false
+lesung t=8828s vorrat 170 indexed 4832 embedded 4830 guard economy throttled false
+lesung t=8950s vorrat 144 indexed 4858 embedded 4856 guard economy throttled false
+lesung t=9073s vorrat 120 indexed 4882 embedded 4880 guard economy throttled false
+lesung t=9195s vorrat 110 indexed 4892 embedded 4890 guard economy throttled false
+lesung t=9318s vorrat 94 indexed 4908 embedded 4906 guard economy throttled false
+lesung t=9440s vorrat 76 indexed 4926 embedded 4924 guard economy throttled false
+lesung t=9562s vorrat 50 indexed 4952 embedded 4950 guard economy throttled false
+lesung t=9685s vorrat 40 indexed 4964 embedded 4962 guard economy throttled false
+lesung t=9808s vorrat 22 indexed 4980 embedded 4978 guard economy throttled false
+lesung t=9930s vorrat 0 indexed 5000 embedded 5000 guard economy throttled false
+lesung t=10052s vorrat 0 indexed 5000 embedded 5000 guard economy throttled false
+ende vorrat 0 embedded gleich indexed zweimal 2026-10-02T11:44:27Z
+schritt nachlauf 2026-10-02T11:44:27Z
+grundlast anon 1369636864 nach-ruhe-s 120
+guard effective=economy cause=keine throttled=false slotsInForce=1
+waechter-absenkung nein
+oom oomkilled false restartcount 0 containerstart 2026-10-02T07:56:35.028782155Z memory-events oom 0 oom_kill 0
+schritt abholen 2026-10-02T11:46:29Z
+abholbereit ja dateien 13
+10-ZELLE-FERTIG S-T-anker

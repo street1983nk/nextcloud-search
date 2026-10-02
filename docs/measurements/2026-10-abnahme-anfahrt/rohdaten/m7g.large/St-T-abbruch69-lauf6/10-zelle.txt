@@ -1,0 +1,32 @@
+zelle-start St-T box m7g.large ziel standard/int8 korpus teil 2026-10-02T11:46:29Z
+abbild-digest sha256:6a0c13be68de5ddd7c7ff404ab3a3caf15b646a5386c9e902ae3843ac572d80f
+schritt abwaerts 2026-10-02T11:46:29Z
+abwaerts code=saved saved=true HTTP200
+schritt zaehlung-eine-nextcloud 2026-10-02T11:46:31Z
+nextcloud-instanzen 1
+schritt nullstand 2026-10-02T11:46:31Z
+unregister-rm-data ja
+schritt registrierung 2026-10-02T11:46:33Z
+registrierung-rueckgabewert 0
+schritt vorrat-tor 2026-10-02T11:46:38Z
+vorrat-tor altvorrat 0
+schritt bewaffnung 2026-10-02T11:46:38Z
+bewaffnung backendReachable true nach-s 2
+schritt grenze 2026-10-02T11:46:43Z
+speichergrenze-ist 2147483648/0
+grenze-gesetzt ja
+schritt baumhash 2026-10-02T11:46:43Z
+40b-baumhash-rueckgabewert 0
+baumhash-im-laufenden-container 556148291147baefe2e8c49a7745d497ed9560115420589569fa07afda5d31dd
+baumhash-beweis ja
+schritt 93b-nullstand 2026-10-02T11:46:44Z
+93b-nullstand-rueckgabewert 0
+schritt drop-caches 2026-10-02T11:46:45Z
+caches-geleert ja
+schritt probe 2026-10-02T11:46:45Z
+probe-rueckgabewert 0
+erzwungen nein
+schritt wirksamkeit 2026-10-02T11:46:54Z
+wirksamkeit neu-bewaffnet 2026-10-02T12:02:21Z
+wirksamkeit nein effective economy nach-s 1817
+zelle-abbruch rueckgabe 69 grund effective ist nach 1817 s nicht standard, kein Trigger 2026-10-02T12:17:11Z
