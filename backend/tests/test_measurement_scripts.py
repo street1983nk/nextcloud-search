@@ -753,8 +753,13 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # next minor runs it too: two files came,
 # php/lib/Migration/Version001301Date20260929000000.php and its unit test. No
 # file changed its bytes or went, so PHP_FILES_TODAY moves to 86.
-PHP_FILES_TODAY = 86
-PHP_TREE_HASH_TODAY = "1202f78c9518f6a50f90f834f49817ff8dc595395cb4b05172d01046835b20d5"
+# Measured again by quick task 261002-93i (BLOCKER-28-07, --restart clears the
+# work stock): IndexCommandTest.php is new, and QueueMapper.php (clear()),
+# QueueService.php (clear()) and IndexCommand.php (the clearing between the
+# removals and the new SchedulerJob) changed their bytes. No file went, so
+# PHP_FILES_TODAY moves to 87.
+PHP_FILES_TODAY = 87
+PHP_TREE_HASH_TODAY = "3a6ae17eefca342f8028a7c8f62188b5e06748e626b72050cf7275823781c6e2"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
