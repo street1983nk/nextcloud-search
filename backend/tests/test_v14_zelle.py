@@ -443,11 +443,18 @@ exec)
                     s=${STUB_SCHEDULED:-0}
                     h=${STUB_HANDED:-0}
                 fi
+            elif [ -n "${STUB_NACHSCHUB:-}" ] && [ -e "$STUB_STATE/bewaffnet" ]; then
+                # Fresh top-up of the armed container itself, before the
+                # trigger: the 6-16 s self-crawl of run 4 over the top-up
+                # route. Harmless since 93i (the trigger clears it), so the
+                # cell must run through.
+                s=$STUB_NACHSCHUB
             elif [ -n "${STUB_ALTVORRAT:-}" ]; then
-                # Only BEFORE the trigger mark: the old stock of an earlier run
-                # that 93b must judge over. After the trigger the reading
-                # counter above owns the counters (the count gate tests lean
-                # on STUB_SCHEDULED/STUB_HANDED), so the two must not collide.
+                # Old stock of an earlier run lies BEFORE the arming, fresh
+                # top-up only after it: the early gate ends the cell before
+                # any enable, so the two switches cannot collide. After the
+                # trigger the reading counter above owns the counters (the
+                # count gate tests lean on STUB_SCHEDULED/STUB_HANDED).
                 s=$STUB_ALTVORRAT
             fi
             printf 'Work stock\n  scheduled            %s\n  handed to the worker %s\n\n' "$s" "$h"
@@ -456,6 +463,12 @@ exec)
             ;;
         "config:app:set findling profile --value="*) printf '%s' "${occ#*--value=}" >"$STUB_STATE/profil" ;;
         app_api:app:register*) [ "${STUB_REGISTER:-0}" = 0 ] || exit 1 ;;
+        app_api:app:enable*)
+            # The arming mark: STUB_NACHSCHUB answers only after the first
+            # enable contact (disable stays in the default branch).
+            : >"$STUB_STATE/bewaffnet"
+            echo "ok"
+            ;;
         *) echo "ok" ;;
         esac
         ;;
@@ -945,26 +958,52 @@ def test_cell_nought_reading_refuses_a_volume_with_indexed_files(tmp_path: Path)
 
 @pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
 def test_cell_nought_reading_refuses_a_filled_work_stock(tmp_path: Path) -> None:
-    """Source 4 of 93b (BLOCKER-28-07): --rm-data does not clear the NC queue.
+    """The stock gate (BLOCKER-28-07): --rm-data does not clear the NC queue.
 
-    A stock of an earlier run ends the cell with its own code 73, cheaply and
-    early: before drop-caches, the probe, the samplers and the trigger. The
-    gate is deliberately independent of the product fix (restart clears the
-    queue), so a defect in one cannot hide behind the other.
+    The gate sits BEFORE the arming, because only there the position carries:
+    run 4 showed the freshly armed container pulls the crawl itself within
+    6-16 s over the top-up route (POST /queues/documents/topup ->
+    CrawlAdvanceService, first_index_scheduled=1 survives --rm-data), so a
+    gate at the 93b step sees fresh, harmless stock (549 and 581 in run 4)
+    and is impassable. Before the arming no container can push anything in,
+    so a stock there is old orders of an earlier run (run 3: 3420) and ends
+    the cell with 73, before anything expensive: no arming, no tree hash, no
+    93b reading, no samplers, no trigger.
     """
     bench = a_bench(tmp_path, {})
     answer = run_cell(bench, CELL_ARGUMENTS, {"STUB_ALTVORRAT": "3420"})
     assert answer.returncode == 73, answer
-    raw = (bench.out / "m7g.large" / "St-T" / "93b-nullstand.txt").read_text(encoding="utf-8")
-    assert "arbeitsvorrat nicht leer 3420" in raw
     lines = cell_lines(bench)
-    assert "93b-nullstand-rueckgabewert 13" in lines
     steps = steps_of(lines)
-    assert steps[-1] == "93b-nullstand", steps
-    assert "sampler" not in steps
+    assert steps[-1] == "vorrat-tor", steps
+    assert "bewaffnung" not in steps
+    assert "vorrat-tor altvorrat 3420" in lines
+    assert not (bench.out / "m7g.large" / "St-T" / "93b-nullstand.txt").exists()
     calls = bench.calls()
+    assert not [call for call in calls if "app_api:app:disable" in call]
+    assert not [call for call in calls if "app_api:app:enable" in call]
+    assert "baumhash-werkzeug" not in calls
     assert not [call for call in calls if "--restart" in call]
     assert not [call for call in calls if call.startswith("sampler ")]
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_cell_tolerates_fresh_topup_after_the_arming(tmp_path: Path) -> None:
+    """Fresh stock AFTER the arming is the container's own top-up, no defect.
+
+    Since 93i the trigger (findling:index --restart) clears fresh stock
+    itself, so the gate must not punish it: the 93b reading only records
+    source 4 as one line "arbeitsvorrat N", and the cell runs through to the
+    end with 0.
+    """
+    bench = a_bench(tmp_path, {})
+    answer = run_cell(bench, CELL_ARGUMENTS, {"STUB_NACHSCHUB": "581"})
+    assert answer.returncode == 0, answer
+    raw = (bench.out / "m7g.large" / "St-T" / "93b-nullstand.txt").read_text(encoding="utf-8")
+    assert "arbeitsvorrat 581" in raw
+    lines = cell_lines(bench)
+    assert "ende" in steps_of(lines)
+    assert not [line for line in lines if line.startswith("zelle-abbruch")]
 
 
 def test_cell_nought_reading_queues_nothing() -> None:
