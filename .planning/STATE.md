@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 
 Phase: 28 (Abnahme-Anfahrt), in Ausführung
 Plan: 7 of 14
-Status: Blocked (28-07 Task 1, Lauf 4 zweimal Abbruch 73 am neuen Vorrats-Tor, Owner-Entscheid zur Tor-Position noetig)
+Status: Executing (28-07 Task 1, Kettenlauf 5 nach Tor-Verschiebung 261002-af9)
 Last activity: 2026-10-02
 
 Progress: [█████████░] 87%
@@ -159,14 +159,10 @@ Fuer v1.4 unmittelbar tragend:
 
 ### Offene Blocker
 
-- **28-07 Vorrats-Tor-Position (02.10., Lauf 4):** Das neue 93b-Tor (rc 13 / Zelle 73)
-  liegt NACH der Bewaffnung und sieht darum immer die frische Wiederbefuellung durch die
-  Top-up-Route des eigenen Containers (Sekunden, kein Cron-Takt; Beleg ad7d1a8d,
-  04-teilkorpus-arm.txt Lauf 4). Zwei Timing-Versuche gefahren (wie angewiesen genau
-  einer wiederholt), beide 73. Fix a+b selbst LIVE bewiesen (Cleared 334/3901, Abbrueche
-  billig vor Samplern/Trigger). Owner-Entscheid noetig: Tor-Lesung vor die Bewaffnung
-  (Empfehlung a), Altbestand-Urteil vor der Zelle (b) oder Produktzustand-Eingriff (c).
-  Box geparkt, 3,06 USD von 59,43.
+- Keine. (28-07 Vorrats-Tor-Position GELOEST 02.10.: Empfehlung a innerhalb des
+  Owner-Entscheids a+b umgesetzt in Quick 261002-af9, Schritt vorrat-tor vor der
+  Bewaffnung, 93b-rc-13 zurueckgebaut; Feldbeweis steht mit Kettenlauf 5 aus.
+  Befund-Historie: ad7d1a8d, 04-teilkorpus-arm.txt Lauf 4.)
 
 (28-07-Zaehltor-Blocker GELOEST 02.10.: Owner-Entscheid a+b "lege los", umgesetzt in
 Quick 261002-93i, Feldbeweis erbracht in Lauf 4. Historie: f09504ae, Lauf 3.)
@@ -175,6 +171,7 @@ Quick 261002-93i, Feldbeweis erbracht in Lauf 4. Historie: f09504ae, Lauf 3.)
 
 | # | Description | Date | Commit | Status | Directory |
 |---|-------------|------|--------|--------|-----------|
+| 261002-af9 | 28-07 Vorrats-Tor vor die Bewaffnung gezogen (Schritt vorrat-tor, Abbruch 73 beziffert Altbestand; 93b-rc-13 zurueckgebaut; Nachschub nach Bewaffnung bricht nicht mehr ab) | 2026-10-02 | c04e7431 | Done (543 Tests gruen) | [261002-af9-vorrats-tor-vor-die-bewaffnung-ziehen](./quick/261002-af9-vorrats-tor-vor-die-bewaffnung-ziehen/) |
 | 261002-93i | 28-07 Blocker-Fix a+b: occ findling:index --restart raeumt den Arbeitsvorrat (QueueMapper/QueueService::clear(), Produkt-Fix fuer den Notfallhebel) + 93b-Nullstand urteilt ueber den Vorrat (rc 13) + 10-zelle Abbruch 73 vor Samplern/Trigger | 2026-10-02 | 599a74d2 | Done (65+477 Tests gruen; php -l/PHPUnit = CI-Vorbehalt) | [261002-93i-findling-restart-raeumt-arbeitsvorrat-nu](./quick/261002-93i-findling-restart-raeumt-arbeitsvorrat-nu/) |
 | 261001-vl0 | 28-07 Zaehltor: Formel zaehlt eingebettet statt indexiert (Vorrat enthaelt offene Einbettungsauftraege), Leserace per Doppellesung stabilisiert, Beleg-Test 6937 -> 5000 + Positivkontrolle + Race-Test | 2026-10-01 | 6d114659 | Done (64 Tests gruen auf main) | [261001-vl0-findling-28-07-zaehltor-fix-formel-auf-e](./quick/261001-vl0-findling-28-07-zaehltor-fix-formel-auf-e/) |
 | 260929-kii | Deckungsgrad-Nenner waechst mit neuen Dateien (ScanRecountJob, Nachzaehlung absolut, Satz statt Prozent bei Zaehler > Nenner) | 2026-09-29 | bbb4f406 | Verified | [260929-kii-deckungsgrad-nenner-waechst-mit-neuen-da](./quick/260929-kii-deckungsgrad-nenner-waechst-mit-neuen-da/) |
