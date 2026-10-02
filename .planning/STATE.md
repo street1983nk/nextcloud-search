@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
-status: executing
-stopped_at: ""
+status: blocked
+stopped_at: "28-07 Task 1: S-T-anker gemessen, St-T Abbruch 69 (wirksam durch statischen Vorschlag gedeckelt), Owner-Entscheid D-24-07"
 last_updated: "2026-10-02T07:20:00.000Z"
 last_activity: 2026-10-02
 progress:
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 
 Phase: 28 (Abnahme-Anfahrt), in Ausführung
 Plan: 7 of 14
-Status: Executing (28-07 Task 1, Kettenlauf 6 nach Zaehlquellen-Fix 261002-cvf)
+Status: Blocked (28-07: S-T-anker GEMESSEN; St-T Abbruch 69, Probe fits vs. statischer Vorschlag economy, Owner-Entscheid noetig)
 Last activity: 2026-10-02
 
 Progress: [█████████░] 87%
@@ -163,16 +163,14 @@ Fuer v1.4 unmittelbar tragend:
 
 ### Offene Blocker
 
-- Keine. (Zaehltor-Altbestand GELOEST 02.10.: Owner-GO auf Empfehlung a, Quick
-  261002-cvf zaehlt zeit- und pfadscharf; Feldbeweis steht mit Lauf 6 aus. AWS-Login
-  GELOEST 02.10. per Playwright, box.env traegt den Lauf-5-Stopp nachgetragen.)
-
-(28-07 Vorrats-Tor-Position GELOEST 02.10.: Quick 261002-af9, Schritt vorrat-tor vor der
-Bewaffnung; FELDBEWEIS ERBRACHT in Lauf 5: altvorrat 0, Tor bestanden.
-Befund-Historie: ad7d1a8d, 04-teilkorpus-arm.txt Lauf 4.)
-
-(28-07-Zaehltor-Blocker GELOEST 02.10.: Owner-Entscheid a+b "lege los", umgesetzt in
-Quick 261002-93i, Feldbeweis erbracht in Lauf 4. Historie: f09504ae, Lauf 3.)
+- **28-07 Zelle St-T, Abbruch 69 (Lauf 6, 02.10.):** Probe sagt fits (2,03 GB verfuegbar,
+  1,61 GB noetig), Profil standard gespeichert, wirksam blieb economy: profile.effective()
+  deckelt auf suggest(), und suggest verlangt fuer Standard >= 6 GB UND >= 3 Kerne (Referenzbox:
+  2 Kerne, 2 GB Grenze). Produktwiderspruch Probe vs. Wirksamkeit, auf der Admin-Seite sichtbar
+  ("Fits" und zugleich "less hardware than the chosen profile needs"). Der geplante
+  Erzwingen-Weg der Zellen 3/4 wird ebenso gedeckelt. Owner-Entscheid: Semantik D-24-07
+  (Probe vor Schwelle oder Schwelle in die Probe) und Umgang mit den Zellen St-T/L-T auf
+  m7g.large. Beleg 06545083, 04-teilkorpus-arm.txt Lauf 6. Box geparkt, 3,88 von 59,43 USD.
 
 ### Quick Tasks Completed
 
