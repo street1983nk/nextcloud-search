@@ -443,6 +443,12 @@ exec)
                     s=${STUB_SCHEDULED:-0}
                     h=${STUB_HANDED:-0}
                 fi
+            elif [ -n "${STUB_ALTVORRAT:-}" ]; then
+                # Only BEFORE the trigger mark: the old stock of an earlier run
+                # that 93b must judge over. After the trigger the reading
+                # counter above owns the counters (the count gate tests lean
+                # on STUB_SCHEDULED/STUB_HANDED), so the two must not collide.
+                s=$STUB_ALTVORRAT
             fi
             printf 'Work stock\n  scheduled            %s\n  handed to the worker %s\n\n' "$s" "$h"
             printf 'End states as Nextcloud recorded them\n  indexed              0\n'
@@ -935,6 +941,30 @@ def test_cell_nought_reading_refuses_a_volume_with_indexed_files(tmp_path: Path)
     assert not [call for call in bench.calls() if "--restart" in call]
     raw = (bench.out / "m7g.large" / "St-T" / "93b-nullstand.txt").read_text(encoding="utf-8")
     assert "volumen-leer nein" in raw
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_cell_nought_reading_refuses_a_filled_work_stock(tmp_path: Path) -> None:
+    """Source 4 of 93b (BLOCKER-28-07): --rm-data does not clear the NC queue.
+
+    A stock of an earlier run ends the cell with its own code 73, cheaply and
+    early: before drop-caches, the probe, the samplers and the trigger. The
+    gate is deliberately independent of the product fix (restart clears the
+    queue), so a defect in one cannot hide behind the other.
+    """
+    bench = a_bench(tmp_path, {})
+    answer = run_cell(bench, CELL_ARGUMENTS, {"STUB_ALTVORRAT": "3420"})
+    assert answer.returncode == 73, answer
+    raw = (bench.out / "m7g.large" / "St-T" / "93b-nullstand.txt").read_text(encoding="utf-8")
+    assert "arbeitsvorrat nicht leer 3420" in raw
+    lines = cell_lines(bench)
+    assert "93b-nullstand-rueckgabewert 13" in lines
+    steps = steps_of(lines)
+    assert steps[-1] == "93b-nullstand", steps
+    assert "sampler" not in steps
+    calls = bench.calls()
+    assert not [call for call in calls if "--restart" in call]
+    assert not [call for call in calls if call.startswith("sampler ")]
 
 
 def test_cell_nought_reading_queues_nothing() -> None:
