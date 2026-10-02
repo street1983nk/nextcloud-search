@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
-status: executing
-stopped_at: ""
-last_updated: "2026-10-02T05:30:00.000Z"
+status: blocked
+stopped_at: "28-07 Task 1, Kettenlauf 5 Abbruch 71 am Zaehltor (Altbestand in oc_findling_file_state)"
+last_updated: "2026-10-02T07:20:00.000Z"
 last_activity: 2026-10-02
 progress:
   total_phases: 6
@@ -27,31 +27,35 @@ See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 
 Phase: 28 (Abnahme-Anfahrt), in Ausführung
 Plan: 7 of 14
-Status: Executing (28-07 Task 1, Kettenlauf 5 nach Tor-Verschiebung 261002-af9)
+Status: Blocked (28-07 Task 1, Kettenlauf 5 Abbruch 71, Owner-Entscheid Zählquelle des Zähltors)
 Last activity: 2026-10-02
 
 Progress: [█████████░] 87%
 
 ## Naechster Schritt
 
-**28-07 Task 1: Owner-Entscheid zur Position des 93b-Vorrats-Tors, dann Kette neu.**
-Lauf 4 (02.10., Start 7): Fix a+b aus Quick 261002-93i wirken LIVE ("Cleared 334/3901
-stale jobs of the earlier run.", zwei billige Abbrueche 73 vor Samplern/Trigger, je ~30 s).
-ABER: das Tor ist an seiner Position unpassierbar. Ursache belegt (ad7d1a8d,
-04-teilkorpus-arm.txt Lauf 4): first_index_scheduled=1 ueberlebt --rm-data; der frisch
-bewaffnete Container zieht sich den Crawl in Sekunden selbst ueber die Top-up-Route
-(POST /queues/documents/topup -> CrawlAdvanceService, DI-10-04), die ausgeschlossene
-Region (52k fileids) ist vor der 93b-Lesung durchlaufen (Bewaffnung -> 93b nur 6-16 s);
-kein Findling-Background-Job lief im Fenster, der Cron-Takt war es NICHT. Kein Timing
-des Kettenstarts kann gewinnen. Optionen fuer den Owner (Werkzeugaenderung nur mit
-Owner-Wort, Runbook 7.1): a) 93b-Vorrats-Lesung in 10-zelle.sh VOR die Bewaffnung ziehen
-(empfohlen: nach der Registrierung kann kein Container nachschieben, Altbestand bliebe
-sichtbar, frische Befuellung unmoeglich; die Wiederbefuellung zwischen Tor und Trigger
-ist laut Design unschaedlich, der Trigger raeumt selbst), b) Tor auf Altbestand vor der
-Zelle urteilen lassen, c) vor dem Kettenstart SchedulerJob-Zeile und first_index_scheduled
-entfernen (Eingriff in Produktzustand). Stand: Box-Klon auf a236802f, Companion-App im
-NC-Container auf dem Fix-Stand (php -l sauber, clear() im laufenden Code belegt),
-Box gestoppt und geparkt 05:25:31Z bei 3,06 USD (Deckel 59,43).
+**28-07 Task 1: Owner-Entscheid zur Zählquelle des Zähltors, dann Kette neu.**
+Lauf 5 (02.10., Start 8, Kette 05:58:50Z): die Tor-Verschiebung 261002-af9 wirkt im Feld,
+vorrat-tor altvorrat 0 BESTANDEN (05:59:00Z, zwischen Registrierung und Bewaffnung kann
+kein Container nachschieben). Alle Tore bis zum Trigger grün (Grenze 2g/0, Baumhash ja,
+Wirksamkeit economy slotsInForce 1). ABER: Zähltor nach 3600 s verfehlt mit 5041 statt
+5000, Abbruch 71 um 06:59:16Z. Ursache belegt (243aabf9, 04-teilkorpus-arm.txt Lauf 5,
+Dateiidentität gegen oc_filecache): der Teilkorpus selbst ist EXAKT vollständig
+(vorrat 3535 + eingebettet 1465 = 5000); die 41 zuviel sind sämtlich Alt-Endzustände
+AUSSERHALB des Teilkorpus in oc_findling_file_state (35 skipped + 6 failed: 20x too_large
+loadtest/drill-CSVs, 9x Beispieldateien der Homes, 12x sprachfall corpus/*; updated_at
+30.09./01.10., kein Eintrag unter files/teilkorpus). Diese Tabelle gehört der PHP-Hälfte
+und überlebt --rm-data UND --restart (93i räumt nur oc_findling_queue); das Zähltor
+summiert die globalen Zähler übersprungen/fehlgeschlagen mit. Die Formel aus 261001-vl0
+war an Lauf 2 kalibriert, wo die 41 eine Crawl-Lücke zufällig exakt füllten. Optionen
+für den Owner (Werkzeugänderung nur mit Owner-Wort, Runbook 7.1): a) Zähltor zählt nur
+Zustände von Dateien unter files/teilkorpus (Pfadfilter im Werkzeug, kein Produkteingriff,
+empfohlen), b) Produkt-Fix: --restart räumt auch oc_findling_file_state (Verlängerung
+von 93i, ändert den Notfallhebel), c) oc_findling_file_state vor dem Kettenstart von
+Hand leeren (Eingriff in Produktzustand). Stand: Box-Klon auf fcbb1273, Box von innen
+gestoppt (shutdown 07:09:39Z, Stopp-Verhalten belegt) bei 3,21 USD (Deckel 59,43).
+ACHTUNG: aws_box.sh stop steht aus, die AWS-Sitzung ist abgelaufen (Owner loggt ein);
+BOX_STOPPED_ISO fehlt in box.env, Stoppzeit 07:09:39Z steht in 90-kosten.txt.
 
 (28-06 fertig: S-voll 19,58 h, C1 743,9 MB innerhalb, Box geparkt; Owner-Signal "weiter".
 28-05 fertig: Owner-Freigabe 30.09.2026, Deckel 119,82 h / 59,43 USD mit Anker, Timer 71,32 USD, Guthaben 104,11 USD; cb49fa70. 28-01 fertig: Teilkorpus, Rechenblatt, Slotkosten,
@@ -159,10 +163,17 @@ Fuer v1.4 unmittelbar tragend:
 
 ### Offene Blocker
 
-- Keine. (28-07 Vorrats-Tor-Position GELOEST 02.10.: Empfehlung a innerhalb des
-  Owner-Entscheids a+b umgesetzt in Quick 261002-af9, Schritt vorrat-tor vor der
-  Bewaffnung, 93b-rc-13 zurueckgebaut; Feldbeweis steht mit Kettenlauf 5 aus.
-  Befund-Historie: ad7d1a8d, 04-teilkorpus-arm.txt Lauf 4.)
+- **28-07 Zaehltor-Altbestand (Lauf 5, 02.10.):** oc_findling_file_state traegt 41
+  Alt-Endzustaende ausserhalb des Teilkorpus, die weder --rm-data noch --restart raeumen;
+  das Zaehltor summiert sie mit (5041 statt 5000). Owner-Entscheid zu Weg a/b/c noetig
+  (siehe Naechster Schritt). Beleg: 243aabf9, 04-teilkorpus-arm.txt Lauf 5.
+- **AWS-Sitzung abgelaufen:** aws_box.sh stop konnte nicht laufen, Box wurde von innen
+  gestoppt (07:09:39Z); nach dem Owner-Login aws_box.sh status/stop nachziehen, damit
+  box.env den Stopp traegt.
+
+(28-07 Vorrats-Tor-Position GELOEST 02.10.: Quick 261002-af9, Schritt vorrat-tor vor der
+Bewaffnung; FELDBEWEIS ERBRACHT in Lauf 5: altvorrat 0, Tor bestanden.
+Befund-Historie: ad7d1a8d, 04-teilkorpus-arm.txt Lauf 4.)
 
 (28-07-Zaehltor-Blocker GELOEST 02.10.: Owner-Entscheid a+b "lege los", umgesetzt in
 Quick 261002-93i, Feldbeweis erbracht in Lauf 4. Historie: f09504ae, Lauf 3.)
@@ -213,8 +224,8 @@ Aeltere Merker:
 
 ## Session Continuity
 
-Last session: 2026-10-02T05:30:00.000Z
-Stopped at: 28-07 Task 1, Checkpoint nach Lauf 4 (zweimal 73, Blocker Vorrats-Tor-Position)
+Last session: 2026-10-02T07:20:00.000Z
+Stopped at: 28-07 Task 1, Checkpoint nach Lauf 5 (Abbruch 71, Blocker Zaehltor-Altbestand; vorrat-tor bestanden)
 Resume file: None
 
 ## Operator Next Steps
