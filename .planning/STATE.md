@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
-status: blocked
-stopped_at: "28-07 Task 1, Kettenlauf 5 Abbruch 71 am Zaehltor (Altbestand in oc_findling_file_state)"
+status: executing
+stopped_at: ""
 last_updated: "2026-10-02T07:20:00.000Z"
 last_activity: 2026-10-02
 progress:
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 
 Phase: 28 (Abnahme-Anfahrt), in Ausführung
 Plan: 7 of 14
-Status: Blocked (28-07 Task 1, Kettenlauf 5 Abbruch 71, Owner-Entscheid Zählquelle des Zähltors)
+Status: Executing (28-07 Task 1, Kettenlauf 6 nach Zaehlquellen-Fix 261002-cvf)
 Last activity: 2026-10-02
 
 Progress: [█████████░] 87%
@@ -163,13 +163,9 @@ Fuer v1.4 unmittelbar tragend:
 
 ### Offene Blocker
 
-- **28-07 Zaehltor-Altbestand (Lauf 5, 02.10.):** oc_findling_file_state traegt 41
-  Alt-Endzustaende ausserhalb des Teilkorpus, die weder --rm-data noch --restart raeumen;
-  das Zaehltor summiert sie mit (5041 statt 5000). Owner-Entscheid zu Weg a/b/c noetig
-  (siehe Naechster Schritt). Beleg: 243aabf9, 04-teilkorpus-arm.txt Lauf 5.
-- **AWS-Sitzung abgelaufen:** aws_box.sh stop konnte nicht laufen, Box wurde von innen
-  gestoppt (07:09:39Z); nach dem Owner-Login aws_box.sh status/stop nachziehen, damit
-  box.env den Stopp traegt.
+- Keine. (Zaehltor-Altbestand GELOEST 02.10.: Owner-GO auf Empfehlung a, Quick
+  261002-cvf zaehlt zeit- und pfadscharf; Feldbeweis steht mit Lauf 6 aus. AWS-Login
+  GELOEST 02.10. per Playwright, box.env traegt den Lauf-5-Stopp nachgetragen.)
 
 (28-07 Vorrats-Tor-Position GELOEST 02.10.: Quick 261002-af9, Schritt vorrat-tor vor der
 Bewaffnung; FELDBEWEIS ERBRACHT in Lauf 5: altvorrat 0, Tor bestanden.
@@ -182,6 +178,7 @@ Quick 261002-93i, Feldbeweis erbracht in Lauf 4. Historie: f09504ae, Lauf 3.)
 
 | # | Description | Date | Commit | Status | Directory |
 |---|-------------|------|--------|--------|-----------|
+| 261002-cvf | 28-07 Zaehltor zaehlt zeit- und pfadscharf (Zaehlmarke vor dem Trigger, nur frische files/teilkorpus-Zustaende via psql; Beleg 5041 -> 5000, Kalibrierfalle 4959 -> 71) | 2026-10-02 | a2b0fcf9 | Done (545 Tests gruen) | [261002-cvf-zaehltor-teilkorpus-scharfe-zaehlquelle](./quick/261002-cvf-zaehltor-teilkorpus-scharfe-zaehlquelle/) |
 | 261002-af9 | 28-07 Vorrats-Tor vor die Bewaffnung gezogen (Schritt vorrat-tor, Abbruch 73 beziffert Altbestand; 93b-rc-13 zurueckgebaut; Nachschub nach Bewaffnung bricht nicht mehr ab) | 2026-10-02 | c04e7431 | Done (543 Tests gruen) | [261002-af9-vorrats-tor-vor-die-bewaffnung-ziehen](./quick/261002-af9-vorrats-tor-vor-die-bewaffnung-ziehen/) |
 | 261002-93i | 28-07 Blocker-Fix a+b: occ findling:index --restart raeumt den Arbeitsvorrat (QueueMapper/QueueService::clear(), Produkt-Fix fuer den Notfallhebel) + 93b-Nullstand urteilt ueber den Vorrat (rc 13) + 10-zelle Abbruch 73 vor Samplern/Trigger | 2026-10-02 | 599a74d2 | Done (65+477 Tests gruen; php -l/PHPUnit = CI-Vorbehalt) | [261002-93i-findling-restart-raeumt-arbeitsvorrat-nu](./quick/261002-93i-findling-restart-raeumt-arbeitsvorrat-nu/) |
 | 261001-vl0 | 28-07 Zaehltor: Formel zaehlt eingebettet statt indexiert (Vorrat enthaelt offene Einbettungsauftraege), Leserace per Doppellesung stabilisiert, Beleg-Test 6937 -> 5000 + Positivkontrolle + Race-Test | 2026-10-01 | 6d114659 | Done (64 Tests gruen auf main) | [261001-vl0-findling-28-07-zaehltor-fix-formel-auf-e](./quick/261001-vl0-findling-28-07-zaehltor-fix-formel-auf-e/) |
