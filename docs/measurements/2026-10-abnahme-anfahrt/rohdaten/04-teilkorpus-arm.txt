@@ -278,3 +278,35 @@ abbruch war billig bis mittel (die zelle lief die volle KORPUS_FRIST 3600 s samt
 box von innen gestoppt (sudo shutdown -h +1, geplant 07:09:39Z, ssh ab 07:10Z unerreichbar);
 aws_box.sh stop war nicht moeglich: die aws-sitzung ist abgelaufen (owner loggt ein),
 BOX_STOPPED_ISO und aws-bestaetigung stehen aus. weiter entscheidet der owner.
+
+-- kettenlauf 6 der teilkorpus-zellen (start 9, 2026-10-02T07:52:06Z): nach zaehlquellen-fix 261002-cvf --
+werkzeugaenderung mit owner-wort (runbook 7.1, owner-GO auf empfehlung a vom 02.10., quick 261002-cvf):
+  das zaehltor der teilkorpus-zellen liest uebersprungen/fehlgeschlagen zeit- und pfadscharf aus der
+  datenbank (zaehlmarke = max updated_at der file_state-tabelle VOR dem trigger, danach nur zustaende
+  mit updated_at > marke und pfad files/teilkorpus/%, psql im datenbank-container); die globalen
+  occ-zaehler (35 skipped + 6 failed altbestand, beleg lauf 5) zaehlen nicht mehr mit.
+  commits 9a12ad54 (RED), a2b0fcf9 (GREEN), 545 tests gruen.
+vorab: box-klon per git bundle von fcbb1273 auf b3970547 gebracht; alle 16 beim checkout
+  kollidierenden dateien (lauf-5-rohdaten und 3 kettendateien) vorher per sha256 als identisch
+  mit dem committeten ziel-stand belegt, nichts verloren. beleg auf der box:
+  grep -c zaehlmarke 10-zelle.sh = 4.
+a-record auf die neue instanzadresse gesetzt (zonen-api, ttl 120, nicht proxied); hostschluessel
+  der box per ssh-keyscan gegen den lauf-5-stand verglichen: alle drei fingerabdruecke identisch.
+vorpruefung-stop-ja 2026-10-02T07:54:35Z.
+vorab-raeumung 2026-10-02T07:54:50Z: occ findling:index --restart -n:
+  "Cleared 3215 stale jobs of the earlier run." (altbestand aus lauf 5: beim abbruch 71 stand der
+  vorrat auf 3535, die box arbeitete bis zum stopp 07:09:39Z weiter); danach scheduled 0, handed 0.
+  endzustaende unveraendert skipped 35, failed 6 (bleiben stehen; das neue tor zaehlt sie nicht mit).
+kettenstart 2026-10-02T07:56:24Z bisher 3.2283, timer-gesetzt minuten 35266.
+zelle S-T-anker: abwaerts, eine nextcloud, nullstand, registrierung,
+  vorrat-tor 07:56:33Z altvorrat 0 BESTANDEN, bewaffnung 07:56:33Z (backendReachable true nach 2 s),
+  grenze 2147483648/0, baumhash-beweis ja, 93b rueckgabewert 0, drop-caches,
+  probe keine abwaertsweg, wirksamkeit ja effective economy slotsInForce 1 nach-s 2,
+  sampler, zaehlmarke 2026-10-01 11:39:47 (erster feldbeweis cvf: marke vor dem trigger gelesen),
+  trigger ja 07:56:44Z. zaehltor-entscheid nach KORPUS_FRIST 3600 s (~08:56:44Z).
+nach KORPUS_FRIST 3600 s:
+  zaehlung vorrat 3439 uebersprungen-frisch 0 fehlgeschlagen-frisch 0 eingebettet 1561
+  indexiert 3392 summe 5000
+  ZAEHLTOR BESTANDEN 5000 (08:56:55Z). zweiter feldbeweis cvf: die frischzaehlung sieht
+  die 41 alt-endzustaende nicht mehr (uebersprungen-frisch 0, fehlgeschlagen-frisch 0),
+  der teilkorpus zaehlt exakt 5000. die zelle misst weiter bis zum letzten vektor.
