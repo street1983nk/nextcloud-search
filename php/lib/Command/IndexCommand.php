@@ -69,7 +69,10 @@ class IndexCommand extends Command {
 				return Command::SUCCESS;
 			}
 
-			$this->restart();
+			$cleared = $this->restart();
+			if ($cleared > 0) {
+				$output->writeln(sprintf('<info>Cleared %d stale jobs of the earlier run.</info>', $cleared));
+			}
 			$output->writeln('<info>The crawl was queued. It starts with the next run of the background jobs.</info>');
 			$output->writeln('');
 		}
@@ -101,15 +104,31 @@ class IndexCommand extends Command {
 	 * of them has been judged. Stamping deliberately sits at the END of the
 	 * rebuild and not in the seed of the state database, because seeding is a
 	 * first operation that must never overwrite a mark that is there.
+	 *
+	 * The work stock goes with the jobs since BLOCKER-28-07 (owner decision of
+	 * 02.10., finding f09504ae of run 3): the restart used to leave the queue
+	 * standing, 3420 orders of the earlier run sat in front of the fresh crawl,
+	 * and the crawl starved in the cron interval because CrawlAdvanceService
+	 * only pushes it forward while the stock is empty. The clearing sits after
+	 * both removals, so no old crawl job refills the stock behind it, and before
+	 * the new SchedulerJob, so the new crawl starts against an empty table. Why
+	 * the delete is safe against open claims and dirty rows is written at
+	 * QueueMapper::clear.
+	 *
+	 * @return int the stale rows the stock still held
 	 */
-	private function restart(): void {
+	private function restart(): int {
 		$this->appConfig->deleteKey(Application::APP_ID, AppInstallStep::FIRST_INDEX_SCHEDULED);
 
 		$this->jobList->remove(StorageCrawlJob::class);
 		$this->jobList->remove(SchedulerJob::class);
 
+		$cleared = $this->queueService->clear();
+
 		$this->jobList->add(SchedulerJob::class);
 		$this->appConfig->setValueBool(Application::APP_ID, AppInstallStep::FIRST_INDEX_SCHEDULED, true);
+
+		return $cleared;
 	}
 
 	/**

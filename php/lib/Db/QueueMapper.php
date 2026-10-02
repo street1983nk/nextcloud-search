@@ -742,6 +742,42 @@ class QueueMapper extends QBMapper {
 	}
 
 	/**
+	 * Empty the work stock, scheduled and running rows alike. The one caller is
+	 * the restart of IndexCommand, through QueueService::clear().
+	 *
+	 * Both halves of the stock go, and leaving the running half standing would
+	 * be the mistake: the restart reads every file of the instance again, so a
+	 * row a worker still holds is the old work by definition, and whatever that
+	 * worker produces for it is about to be redone. The finding this repairs is
+	 * run 3 of the acceptance trip (f09504ae): --restart left 3420 orders of the
+	 * earlier run standing, the crawl only pushes itself forward while the stock
+	 * is empty (CrawlAdvanceService), and the fresh crawl starved in the cron
+	 * interval behind work nobody wanted any more.
+	 *
+	 * A worker that holds claims on cleared rows breaks nothing. The
+	 * acknowledgement translates its queue ids through findByIds, a row that is
+	 * gone resolves to file id 0 and is passed over (QueueService::acknowledge),
+	 * and unlock() hits zero rows with its IN lists. The container runs into
+	 * emptiness and carries on, which is exactly what a restart asks of it.
+	 *
+	 * Dirty rows fall with the rest, and that is a decision and not an accident:
+	 * the mark means "the bytes of this claim are stale, read the file again",
+	 * and reading every file again is what the crawl queued after this delete is
+	 * going to do anyway. No update is lost.
+	 *
+	 * One statement without a WHERE clause, so there is no parameter band and no
+	 * bound list to chunk: the table is the condition.
+	 *
+	 * @return int the rows the stock held
+	 */
+	public function clear(): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->delete(self::TABLE_NAME);
+
+		return $qb->executeStatement();
+	}
+
+	/**
 	 * Give rows back without processing them, and give their delivery back with
 	 * them. This is the graceful restart: a container that is asked to stop
 	 * returns what it holds instead of letting LOCK_TIMEOUT run out.

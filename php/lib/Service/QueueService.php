@@ -673,6 +673,30 @@ class QueueService {
 	}
 
 	/**
+	 * Empty the work stock, for the one caller that may: IndexCommand::restart().
+	 *
+	 * The restart queues a crawl that reads every file of the instance again, so
+	 * every row the stock still holds is work of an earlier run (BLOCKER-28-07,
+	 * finding f09504ae: 3420 leftovers starved the fresh crawl, because
+	 * CrawlAdvanceService only pushes the crawl forward while the stock is
+	 * empty). The reasoning about open claims and dirty rows lives at
+	 * QueueMapper::clear, where the delete is.
+	 *
+	 * Not to be confused with PurgeService, which is the uninstall path and
+	 * drops whole tables: the restart clears rows and keeps the schema, the
+	 * state table and the exclusions of the instance.
+	 */
+	public function clear(): int {
+		$cleared = $this->queueMapper->clear();
+
+		if ($cleared > 0) {
+			$this->logger->info('Findling: cleared the work stock for a restart', ['count' => $cleared]);
+		}
+
+		return $cleared;
+	}
+
+	/**
 	 * What the work stock holds for one file, for the per file diagnosis.
 	 *
 	 * A pass through to the mapper, because the lock arithmetic belongs to the
