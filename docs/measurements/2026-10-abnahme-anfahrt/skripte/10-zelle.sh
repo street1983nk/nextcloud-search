@@ -28,7 +28,10 @@
 #                            Container
 #   93b-nullstand            die vier Quellen des Nullstands, gelesen ohne den
 #                            Neuaufbau anzustossen (Ableitung von
-#                            93-nullstand.sh, siehe dort)
+#                            93-nullstand.sh, siehe dort); urteilt seit
+#                            BLOCKER-28-07 auch ueber Quelle 4: ein
+#                            Arbeitsvorrat ungleich 0 ist 93b-rc 13 und
+#                            Abbruch 73, vor allem Teuren
 #   drop-caches              sync und drop_caches, damit keine Zelle vom
 #                            Seitencache der vorigen erbt
 #   probe                    11-probe-route.py ueber die Produktroute; economy
@@ -87,6 +90,8 @@
 #   70  der Trigger hat nichts angestossen
 #   71  Teilkorpus: das Zaehltor 5000 ist verfehlt
 #   72  das Ende (Vorrat 0, embedded == indexed) kam nicht in der Frist
+#   73  der Arbeitsvorrat der PHP-Haelfte ist nicht leer (93b-rc 13);
+#       --rm-data raeumt die NC-Queue nicht
 #
 # ASCII, weil die Box ihr Gebietsschema nicht garantiert.
 set -eu
@@ -427,7 +432,13 @@ schritt 93b-nullstand
 nullstand_status=0
 OUT="$ZOUT" sh "$NULLSTAND" >>"$OCCLOG" 2>&1 || nullstand_status=$?
 zeile "93b-nullstand-rueckgabewert $nullstand_status"
-[ "$nullstand_status" -eq 0 ] || abbruch 67 "der Nullstand ist nicht leer oder nicht lesbar"
+# Der Abbruch 73 liegt konstruktionsbedingt VOR drop-caches, Probe,
+# Wirksamkeit, Samplern und Trigger: nichts Teures ist gestartet.
+case "$nullstand_status" in
+0) ;;
+13) abbruch 73 "der Arbeitsvorrat der PHP-Haelfte ist nicht leer, --rm-data raeumt die NC-Queue nicht" ;;
+*) abbruch 67 "der Nullstand ist nicht leer oder nicht lesbar" ;;
+esac
 
 # --- 9. Seitencache leeren ------------------------------------------------------
 schritt drop-caches
