@@ -589,8 +589,9 @@ def test_rechnung_without_a_cell_prints_every_measured_cell(slot_costs: ModuleTy
     answer = run(SLOT_COSTS, "rechnung")
     assert answer.returncode == 0, answer.stderr
     rows = [line for line in answer.stdout.splitlines() if line.startswith("zelle ")]
-    assert len(rows) == 21
-    assert len(slot_costs.CELLS) == 21
+    # 21 until 03.10.2026; cells 3, 4 and 10 struck by the owner (D-24-07).
+    assert len(rows) == 18
+    assert len(slot_costs.CELLS) == 18
 
 
 def test_the_docstring_of_the_slot_tool_names_what_the_baseline_holds() -> None:

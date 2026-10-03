@@ -508,11 +508,11 @@ case "$(basename "${1:-}")" in
             exit 0
             ;;
         narrow)
-            echo "verdikt narrow ursache memory numbers {}"
+            echo "verdikt narrow ursache ${STUB_URSACHE:-memory} numbers {}"
             exit 30
             ;;
         nofit)
-            echo "verdikt nofit ursache reserve numbers {}"
+            echo "verdikt nofit ursache ${STUB_URSACHE:-reserve} numbers {}"
             exit 31
             ;;
         *) exit 33 ;;
@@ -808,6 +808,24 @@ def test_cell_forced_over_occ_after_narrow_or_nofit(tmp_path: Path, verdict: str
     assert "occ config:app:set findling profile --value=performance" in calls
     fp32 = "occ config:app:set findling model_precision --value=fp32"
     assert (fp32 in calls) == (precision == "fp32")
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_cell_aborts_74_without_forcing_when_the_probe_says_hardware_short(tmp_path: Path) -> None:
+    """D-24-07: below the suggestion thresholds effective never reaches the target.
+
+    Forcing over occ would only hang at the gate of abort 69, so the cell ends
+    with its own code and nothing is forced (owner decision 03.10.2026).
+    """
+    bench = a_bench(tmp_path, {})
+    answer = run_cell(bench, CELL_ARGUMENTS, {"STUB_VERDIKT": "nofit", "STUB_URSACHE": "hardware_short"})
+    assert answer.returncode == 74, answer
+    lines = cell_lines(bench)
+    assert [line for line in lines if line.startswith("zelle-abbruch rueckgabe 74 ")], lines
+    assert not [line for line in lines if line.startswith("erzwungen ja")]
+    calls = bench.calls()
+    assert not [call for call in calls if "config:app:set findling profile" in call]
+    assert not [call for call in calls if "--restart" in call]
 
 
 @pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")

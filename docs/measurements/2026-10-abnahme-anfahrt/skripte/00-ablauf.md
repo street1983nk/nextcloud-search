@@ -76,15 +76,12 @@ davon. **Plan** ist der Lauf-Planwert des Rechenblatts ohne Zellen-Overhead.
 | | m7g.large | 94c, Rückkehr zur Grundlast | Sparsam | int8 | | keine Probe | Store-Zahl, Abschnitt 3 | | 0:15 |
 | | m7g.large | Teilkorpus einrichten, Zähltor | | | | | | | 0:20 |
 | 2 | m7g.large | Anker S-T (D-28-11) | Sparsam | int8 | 1 | keine Probe | 1.492,5 | 1.641,8 | 3:50 |
-| 3 | m7g.large | St-T | Standard | int8 | 1 | nofit oder narrow, dann erzwungen | 1.593,9 | 1.753,3 | 3:20 |
-| 4 | m7g.large | L-T | Leistung | int8 | 1 | nofit oder narrow, dann erzwungen | 1.743,0 | 1.917,3 | 3:20 |
 | 5 | m7g.4xlarge | S-T | Sparsam | int8 | 1 | keine Probe | 1.492,5 | 1.641,8 | 3:50 |
 | 6 | m7g.4xlarge | St-T | Standard | int8 | 4 | fits | 2.298,9 | 2.528,8 | 1:00 |
 | 7 | m7g.4xlarge | L-T | Leistung | int8 | 15 | fits | 5.033,0 | 5.536,3 | 0:45 |
 | | c7a.xlarge | Tor: amd64-Abbilder, PostgreSQL-Start, REINDEX | | | | | | | 2:00 |
 | 8 | c7a.xlarge | S-T | Sparsam | int8 | 1 | keine Probe | 1.492,5 | 1.641,8 | 3:50 |
 | 9 | c7a.xlarge | St-T | Standard | int8 | 1 | fits | 1.593,9 | 1.753,3 | 3:20 |
-| 10 | c7a.xlarge | L-T | Leistung | int8 | 3 | fits | 2.213,0 | 2.434,3 | 1:15 |
 | 11 | c7a.xlarge | St-fp32-T | Standard | fp32 | 1 | fits | 1.960,9 | 2.157,0 | 3:30 |
 | 12 | c7a.2xlarge | S-T | Sparsam | int8 | 1 | keine Probe | 1.492,5 | 1.641,8 | 3:50 |
 | 13 | c7a.2xlarge | St-T | Standard | int8 | 3 | fits | 2.063,9 | 2.270,3 | 1:15 |
@@ -97,21 +94,12 @@ davon. **Plan** ist der Lauf-Planwert des Rechenblatts ohne Zellen-Overhead.
 | 20 | c7a.8xlarge | St-T | Standard | int8 | 4 | fits | 2.298,9 | 2.528,8 | 1:00 |
 | 21 | c7a.8xlarge | L-T | Leistung | int8 | 16 | fits | 5.268,0 | 5.794,8 | 0:45 |
 
-Das sind 21 Messzellen: 4 auf m7g.large (S-voll, Anker, St-T, L-T), 3 auf
-m7g.4xlarge, 4 auf c7a.xlarge, 3 auf c7a.2xlarge, 4 auf c7a.4xlarge und 3 auf
-c7a.8xlarge, dazu das Machbarkeitstor auf c7a.xlarge und 94c nach der Vollzelle.
+Das sind 18 Messzellen: 2 auf m7g.large (S-voll, Anker), 3 auf m7g.4xlarge, 3
+auf c7a.xlarge, 3 auf c7a.2xlarge, 4 auf c7a.4xlarge und 3 auf c7a.8xlarge, dazu
+das Machbarkeitstor auf c7a.xlarge und 94c nach der Vollzelle. Die Nummern
+bleiben stabil, die Lücken sind gewollt.
 
-**Warum die Probe auf m7g.large nicht passen sollte.** Die Referenzbox läuft mit
-harter Grenze 2g (Block 12). Nach dem Nullstand sind Schneider und Gewichte
-nicht geladen, also zählt die Probe sie als Ladekosten
-(`probe.pending_load_bytes`): 27 plus 235 MiB Reserve der Einbettungsspur, 545
-MiB Schneider, 392 MiB Gewichte, dazu die Aktivierungen der parallelen Spuren
-und das Wachstum des Schreiberheaps, und obendrauf ein Slot mit 235 MiB. Das
-sind für Standard rund 1.535 MiB gegen einen Spielraum von rund 1.350 MiB
-(2.048 MiB minus rund 700 MiB Leerlauf). Erwartet ist also `nofit`, bei
-günstigerem Leerlauf `narrow`; gemessen wird trotzdem, per occ erzwungen und in
-Rohdatei und Bericht als `erzwungen ja grund <verdikt>/<ursache>` markiert
-(D-28-05).
+Zellen 3, 4 und 10 (St-T und L-T auf m7g.large, L-T auf c7a.xlarge) gestrichen, Owner-Entscheid 03.10.2026: das Produkt lässt dort das Ziel nie wirksam werden, weil die Box unter den Vorschlags-Schwellen liegt (D-24-06, D-24-07), die Probe sagt nofit `hardware_short`; Leistung auf c7a messen die Zellen 14, 17 und 21.
 
 **Die Rechnung je Zelle** (`12-slotkosten.py`, Kopf der Datei):
 

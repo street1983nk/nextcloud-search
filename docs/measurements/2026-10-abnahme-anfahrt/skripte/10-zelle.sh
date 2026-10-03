@@ -39,7 +39,8 @@
 #                            Seitencache der vorigen erbt
 #   probe                    11-probe-route.py ueber die Produktroute; economy
 #                            ist ein Abwaertsweg und braucht keine; narrow oder
-#                            nofit: occ erzwingt, Zeile "erzwungen ja" (D-28-05)
+#                            nofit: occ erzwingt, Zeile "erzwungen ja" (D-28-05);
+#                            hardware_short: Abbruch 74 statt Erzwingen (D-24-07)
 #   wirksamkeit              die Admin-Uebersicht meldet effective == Ziel und
 #                            slotsInForce; zur Haelfte der Frist einmal neu
 #                            bewaffnet; ohne Wirkung KEIN Trigger (Pitfall 1)
@@ -100,6 +101,8 @@
 #   72  das Ende (Vorrat 0, embedded == indexed) kam nicht in der Frist
 #   73  der Arbeitsvorrat traegt Altbestand eines frueheren Laufs (vorrat-tor,
 #       vor der Bewaffnung); --rm-data raeumt die NC-Queue nicht
+#   74  die Probe meldet hardware_short: die Box liegt unter den
+#       Vorschlags-Schwellen, ein Erzwingen bliebe am Wirksamkeitstor 69 haengen
 #
 # ASCII, weil die Box ihr Gebietsschema nicht garantiert.
 set -eu
@@ -495,6 +498,9 @@ else
         letzte=$(grep '^verdikt ' "$ZOUT/11-probe.txt" | tail -n 1 || true)
         verdikt=$(printf '%s\n' "$letzte" | awk '{print $2}')
         ursache=$(printf '%s\n' "$letzte" | awk '{print $4}')
+        if [ "$ursache" = hardware_short ]; then
+            abbruch 74 "die Probe meldet hardware_short, effective bliebe unter $PROFIL (D-24-07), Zelle ohne Nutzerbezug"
+        fi
         occ config:app:set findling profile --value="$PROFIL" >>"$OCCLOG" 2>&1 ||
             abbruch 68 "occ konnte das Profil nicht erzwingen"
         if [ "$PRAEZISION" = fp32 ]; then

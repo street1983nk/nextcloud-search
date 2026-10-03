@@ -102,18 +102,18 @@ PRECISIONS = ("int8", "fp32")
 # The measured cells of the trip in the order of 00-ablauf.md: box, cell,
 # profile, precision, the slots the formula grants (findling.profile.ocr_slots
 # with MemAvailable = MemTotal minus 1 GiB, 28-RESEARCH.md), the verdict the
-# probe is expected to give, and the run plan value of the research.
+# probe is expected to give, and the run plan value of the research. Cells 3
+# and 4 (St-T, L-T on m7g.large) and cell 10 (L-T on c7a.xlarge) struck by the
+# owner on 03.10.2026 (D-24-07): below the suggestion thresholds the probe
+# says nofit hardware_short and effective never reaches the target.
 CELLS: tuple[tuple[str, str, str, str, int, str, str], ...] = (
     ("m7g.large", "S-voll", "economy", "int8", 1, "keine", "21:15"),
     ("m7g.large", "Anker-S-T", "economy", "int8", 1, "keine", "3:50"),
-    ("m7g.large", "St-T", "standard", "int8", 1, "nofit-oder-narrow", "3:20"),
-    ("m7g.large", "L-T", "performance", "int8", 1, "nofit-oder-narrow", "3:20"),
     ("m7g.4xlarge", "S-T", "economy", "int8", 1, "keine", "3:50"),
     ("m7g.4xlarge", "St-T", "standard", "int8", 4, "fits", "1:00"),
     ("m7g.4xlarge", "L-T", "performance", "int8", 15, "fits", "0:45"),
     ("c7a.xlarge", "S-T", "economy", "int8", 1, "keine", "3:50"),
     ("c7a.xlarge", "St-T", "standard", "int8", 1, "fits", "3:20"),
-    ("c7a.xlarge", "L-T", "performance", "int8", 3, "fits", "1:15"),
     ("c7a.xlarge", "St-fp32-T", "standard", "fp32", 1, "fits", "3:30"),
     ("c7a.2xlarge", "S-T", "economy", "int8", 1, "keine", "3:50"),
     ("c7a.2xlarge", "St-T", "standard", "int8", 3, "fits", "1:15"),
