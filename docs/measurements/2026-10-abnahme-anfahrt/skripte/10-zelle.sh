@@ -52,7 +52,8 @@
 #                            occ findling:index --restart -n (ohne -n fragt occ
 #                            zurueck und aendert nichts); beim Teilkorpus danach
 #                            das Zaehltor 5000 (01-teilkorpus.py zaehltor) mit
-#                            teilkorpus- und zellscharfer Frischzaehlung
+#                            teilkorpus- und zellscharfer Frischzaehlung und
+#                            teilkorpus-scharfem Vorrat (oc_findling_queue)
 #   ende                     Vorrat 0 und embedded == indexed in zwei Lesungen
 #                            hintereinander
 #   nachlauf                 Ruhezeit 120 s, Grundlast, guard-Block, Marke
@@ -594,18 +595,30 @@ if [ "$ZELLE_KORPUS" = teil ]; then
     # faelschlich ab. Gezaehlt werden nur Zeilen mit updated_at nach der
     # Zaehlmarke des Triggers UND Pfad files/teilkorpus/% (Join oc_filecache):
     # zeit- und pfadscharf statt global.
+    # Der Vorrat ebenso, pfadscharf aus oc_findling_queue: scheduled + handed
+    # aus occ ist die Summe aller Zeilen ueber QueueMapper::KINDS, die Query
+    # zaehlt dieselben Zeilen, nur auf files/teilkorpus/% beschraenkt. Lauf 7
+    # (L-T, 05-typwechsel-arm.txt) belegt den Bedarf: global 549 Dateien unter
+    # Ordner-Ausschluessen, Teilkorpus 0, eingebettet 5000, summe 5549, Abbruch
+    # 71. Der globale Vorrat wird nur noch protokolliert.
     # Gegen das Leserace (bestand und uebersicht liegen Sekunden auseinander)
     # wird embedded vor und nach bestand_lesen gelesen und nur bei Gleichheit
-    # gewertet, hoechstens 6 Versuche.
+    # gewertet, hoechstens 6 Versuche. Vorrat und Frischzaehlung liegen im
+    # selben Fenster.
     sleep "$KORPUS_FRIST"
     eingebettet=unlesbar
     stand=''
     frisch=unlesbar
+    vorrat=unlesbar
     versuch=0
     while [ "$versuch" -lt 6 ]; do
         versuch=$((versuch + 1))
         vorher=$(feld embedded "$(uebersicht)")
         bestand_lesen
+        vorrat=$(db_lesen "select count(*)
+  from ${DB_PREFIX}findling_queue q
+  join ${DB_PREFIX}filecache f on f.fileid = q.file_id
+ where f.path like 'files/teilkorpus/%'")
         frisch=$(db_lesen "select s.state, count(*)
   from ${DB_PREFIX}findling_file_state s
   join ${DB_PREFIX}filecache f on f.fileid = s.file_id
@@ -621,7 +634,7 @@ if [ "$ZELLE_KORPUS" = teil ]; then
         fi
     done
     [ "$eingebettet" != unlesbar ] || zeile "zaehlung-instabil nach-versuchen $versuch"
-    vorrat=$(vorrat_von "$WORK/bestand.txt")
+    vorrat_global=$(vorrat_von "$WORK/bestand.txt")
     # Fehlende Staaten fehlen in der group-by-Ausgabe als Zeile: auf 0
     # vorbelegen. Ein unlesbarer DB-Stand bleibt unlesbar, das Zaehltor
     # scheitert dann ueber die ist_zahl-Pruefung.
@@ -644,7 +657,7 @@ if [ "$ZELLE_KORPUS" = teil ]; then
     if ist_zahl "$vorrat" && ist_zahl "$uebersprungen" && ist_zahl "$fehlgeschlagen" && ist_zahl "$eingebettet"; then
         summe=$((vorrat + uebersprungen + fehlgeschlagen + eingebettet))
     fi
-    zeile "zaehlung vorrat $vorrat uebersprungen-frisch ${uebersprungen:-unlesbar} fehlgeschlagen-frisch ${fehlgeschlagen:-unlesbar} eingebettet ${eingebettet:-unlesbar} indexiert ${indexiert:-unlesbar} summe $summe"
+    zeile "zaehlung vorrat-teilkorpus ${vorrat:-unlesbar} vorrat-global ${vorrat_global:-unlesbar} uebersprungen-frisch ${uebersprungen:-unlesbar} fehlgeschlagen-frisch ${fehlgeschlagen:-unlesbar} eingebettet ${eingebettet:-unlesbar} indexiert ${indexiert:-unlesbar} summe $summe"
     zaehltor_status=0
     python3 "$TEILKORPUS" zaehltor "$summe" >"$WORK/zaehltor.txt" 2>&1 || zaehltor_status=$?
     ablegen "$WORK/zaehltor.txt"

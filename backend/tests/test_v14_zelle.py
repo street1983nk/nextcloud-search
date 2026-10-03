@@ -428,6 +428,25 @@ exec)
         # whose variable is unset or 0 prints no row, like group by.
         case "$*" in
         *"max(updated_at)"*) printf '%s\n' "${STUB_ZAEHLMARKE:-2026-10-01 00:00:00}" ;;
+        *"findling_queue"*)
+            # The work stock of the partial corpus, path sharp (28-07 run 7).
+            # STUB_VORRAT_TEIL=fehler is a failed psql (db_lesen: unlesbar);
+            # without the variable the stock of the current occ reading, so
+            # the older count gate tests keep their numbers: the first reading
+            # after the trigger is the count gate reading.
+            case "${STUB_VORRAT_TEIL:-}" in
+            fehler) exit 1 ;;
+            '')
+                lesungen=$(cat "$STUB_STATE/lesungen" 2>/dev/null || echo 0)
+                if [ "$lesungen" -le 1 ]; then
+                    echo $((${STUB_SCHEDULED:-0} + ${STUB_HANDED:-0}))
+                else
+                    echo 0
+                fi
+                ;;
+            *) printf '%s\n' "$STUB_VORRAT_TEIL" ;;
+            esac
+            ;;
         *"group by s.state"*)
             [ "${STUB_FRISCH_SKIPPED:-0}" = 0 ] || printf 'skipped|%s\n' "$STUB_FRISCH_SKIPPED"
             [ "${STUB_FRISCH_FAILED:-0}" = 0 ] || printf 'failed|%s\n' "$STUB_FRISCH_FAILED"
@@ -992,6 +1011,70 @@ def test_cell_teilkorpus_aborts_on_an_unstable_embedded_reading(tmp_path: Path) 
     assert answer.returncode == 71, answer
     lines = cell_lines(bench)
     assert any(line.startswith("zaehlung-instabil") for line in lines), lines
+
+
+# The counters of run 7 L-T on m7g.4xlarge (rohdaten/05-typwechsel-arm.txt):
+# the partial corpus was fully embedded, 5000 of 5000, and nothing of it was
+# left in the stock. The global stock still held 549 files, all of them under
+# folders an exclusion rule keeps out (loadtest 500, Templates/Photos/samples
+# 49, none under files/teilkorpus), requeued by the reconcile tick that landed
+# ~17 s before the gate read. The old gate summed 549 + 5000 = 5549 and aborted
+# the cell with 71 twice. The stock is now read path sharp from
+# oc_findling_queue, the same line as the fresh end states (quick 261002-cvf).
+RUN_7_COUNTERS: dict[str, str | None] = {
+    "ZELLE_KORPUS": "teil",
+    "STUB_SCHEDULED": "549",
+    "STUB_VORRAT_TEIL": "0",
+    "STUB_EMBEDDED": "5000",
+    "STUB_INDEXED": "5000",
+}
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_cell_teilkorpus_passes_with_the_counters_of_run_7(tmp_path: Path) -> None:
+    """The proof of run 7 L-T (05-typwechsel-arm.txt): 5549 becomes 5000."""
+    bench = a_bench(tmp_path, {})
+    answer = run_cell(bench, CELL_ARGUMENTS, dict(RUN_7_COUNTERS))
+    assert answer.returncode == 0, answer
+    lines = cell_lines(bench)
+    assert "zaehltor bestanden 5000" in lines, lines
+    counting = next(line for line in lines if line.startswith("zaehlung "))
+    assert "summe 5000" in counting, counting
+    assert "summe 5549" not in counting, counting
+    assert "vorrat-teilkorpus 0" in counting, counting
+    assert "vorrat-global 549" in counting, counting
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_cell_teilkorpus_global_stock_fills_no_real_shortfall(tmp_path: Path) -> None:
+    """The positive control: 549 foreign files must not fill a gap of 49."""
+    bench = a_bench(tmp_path, {})
+    counters = dict(RUN_7_COUNTERS)
+    counters["STUB_EMBEDDED"] = "4951"
+    counters["STUB_INDEXED"] = "4951"
+    answer = run_cell(bench, CELL_ARGUMENTS, counters)
+    assert answer.returncode == 71, answer
+    lines = cell_lines(bench)
+    assert "zaehltor verfehlt 4951 statt 5000" in lines, lines
+    assert "ende" not in steps_of(lines)
+
+
+@pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
+def test_cell_teilkorpus_aborts_on_an_unreadable_partial_stock(tmp_path: Path) -> None:
+    """A stock the database does not answer is no zero: abort 71."""
+    bench = a_bench(tmp_path, {})
+    counters: dict[str, str | None] = {
+        "ZELLE_KORPUS": "teil",
+        "STUB_VORRAT_TEIL": "fehler",
+        "STUB_EMBEDDED": "5000",
+        "STUB_INDEXED": "5000",
+    }
+    answer = run_cell(bench, CELL_ARGUMENTS, counters)
+    assert answer.returncode == 71, answer
+    lines = cell_lines(bench)
+    counting = next(line for line in lines if line.startswith("zaehlung "))
+    assert "summe unlesbar" in counting, counting
+    assert "ende" not in steps_of(lines)
 
 
 @pytest.mark.skipif(NO_SHELL, reason="no POSIX shell on this machine")
