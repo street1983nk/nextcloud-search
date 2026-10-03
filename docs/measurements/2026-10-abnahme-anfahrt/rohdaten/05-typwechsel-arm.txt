@@ -34,3 +34,7 @@ laufwerte: BISHER_USD 4.15 (02-rechenblatt.py stand --jetzt 11:14:46Z), SATZ_USD
 kettenstart 2026-10-03T11:18:24Z bisher 4.1985, timer-gesetzt minuten 5032 (abschaltung 2026-10-06T23:10:24Z)
 memory.max je zelle, aus der cgroup des laufenden containers gelesen (D-28-12, keine grenze):
   S-T memory.max max memory.swap.max max (11:19Z)
+zelle S-T GEMESSEN: rueckgabe 0, trigger 11:18:44Z, zaehltor bestanden 5000 (vorrat 3319 + eingebettet 1681,
+  frisch uebersprungen 0 fehlgeschlagen 0), ende 14:55:36Z, zelle-ende 14:57:38Z (3:39, planwert 3:50);
+  anon-max 1499,6 MiB (rechnung 1492,5, grenze 1641,8), guard economy ohne absenkung, oom 0.
+  St-T memory.max max memory.swap.max max (14:58Z)
