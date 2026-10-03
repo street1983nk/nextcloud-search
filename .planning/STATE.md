@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
 status: executing
-stopped_at: "28-07 Task 2 Lauf 7: S-T + St-T auf m7g.4xlarge gemessen, L-T zweimal Abbruch 71 (Reconcile-Schub ausgeschlossener Dateien), Owner-Entscheid"
-last_updated: "2026-10-03T19:00:00.000Z"
-last_activity: 2026-10-03
+stopped_at: "Quick 261003-wxg umgesetzt (Owner-Entscheid a+b): Reconcile beachtet Ausschluesse, Zaehltor-Vorrat teilkorpus-scharf; naechst Push + CI-Abbild + Lauf 8 L-T"
+last_updated: "2026-10-04T00:30:00.000Z"
+last_activity: 2026-10-04
 progress:
   total_phases: 6
   completed_phases: 4
@@ -27,13 +27,25 @@ See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 
 Phase: 28 (Abnahme-Anfahrt), in Ausführung
 Plan: 7 of 14
-Status: Blocked (28-07 Lauf 7: S-T/St-T auf m7g.4xlarge gemessen, L-T Abbruch 71 zweimal; Owner-Entscheid)
-Last activity: 2026-10-03
+Status: Executing (28-07: Blocker L-T gelöst durch Quick 261003-wxg, Owner a+b; Push + Lauf 8 offen)
+Last activity: 2026-10-04
 
 Progress: [█████████░] 87%
 
 ## Naechster Schritt
 
+**28-07 Task 2: Blocker L-T GELÖST durch Quick 261003-wxg (Owner-Entscheid a + b, 03.10.).**
+a) Produkt-Fix: die PHP-Hälfte markiert im File-Slice jede Datei, die eine Ausschlussregel von
+heute trifft, live als skipped(excluded) (ExclusionService::isExcluded auf mountRelativePath, nie
+gespeichert); der Container plant eine solche Datei nicht ein, solange er sie nicht kennt, und
+speichert nichts (Regelaufhebung wirkt in der nächsten Runde; CR-01 bleibt). b) Zähltor zählt
+den Vorrat pfadscharf aus oc_findling_queue (Lauf-7-Zahlen 5549 -> 5000). Commits 6dd65fc3,
+63762caa, 12c659dd, NUR LOKAL. NÄCHSTER SCHRITT: Push (alle lokalen Commits) + CI (php -l,
+PHPUnit ReconcileControllerTest, neues Container-Abbild) abwarten, dann Lauf 8 = Zelle L-T auf
+m7g.4xlarge mit NEUEM Abbild UND neuer Companion-App aus php/ in custom_apps/findling der Box
+(beide Hälften nötig, sonst bleibt der Schub); danach x86-Hälfte c7a (Block 14).
+
+Vorgeschichte Lauf 7 (03.10.):
 **28-07 Task 2 BLOCKED: Owner-Entscheid zur Zelle L-T auf m7g.4xlarge (Lauf 7, 03.10.).**
 Lauf 7 (Start 11, Typwechsel auf m7g.4xlarge, Abbild d33bfcae von f73566c1, Companion ersetzt):
 Zelle 5 S-T GEMESSEN (rc 0, Zaehltor 5000, 3:39 h, anon-max 1499,6 MiB gegen 1641,8),
@@ -183,9 +195,12 @@ Fuer v1.4 unmittelbar tragend:
 
 ### Offene Blocker
 
-- **28-07 Lauf 7, Zelle L-T m7g.4xlarge, Abbruch 71 zweimal (03.10.):** Reconcile plant die 549
+- **GELÖST 04.10. (Quick 261003-wxg, Owner-Entscheid a + b): Reconcile beachtet die Ausschlüsse,
+  Zähltor-Vorrat teilkorpus-scharf.** Lauf 8 braucht neues Abbild + neue Companion-App.
+  Ursprünglicher Befund:
+- ~~**28-07 Lauf 7, Zelle L-T m7g.4xlarge, Abbruch 71 zweimal (03.10.):**~~ Reconcile plant die 549
   ausgeschlossenen Dateien in jeder ruhigen Runde neu ein, Zaehltor liest den Vorrat global.
-  Owner-Entscheid a/b/c siehe Naechster Schritt. Box geparkt, 10,24 von 59,43 USD.
+  Box geparkt, 10,24 von 59,43 USD.
 
 - **GELOEST 03.10. (Quick 261003-d3y): Owner-Entscheid P2 + Zellen 3/4/10 gestrichen.**
   Probe prüft die Vorschlags-Schwellen (nofit hardware_short), Zellenwerkzeug Abbruch 74.
@@ -203,6 +218,7 @@ Fuer v1.4 unmittelbar tragend:
 
 | # | Description | Date | Commit | Status | Directory |
 |---|-------------|------|--------|--------|-----------|
+| 261003-wxg | 28-07 Owner-Entscheid a+b: PHP markiert ausgeschlossene Dateien im File-Slice live als skipped(excluded) (isExcluded/mountRelativePath, nie gespeichert), Reconcile lässt unbekannte markierte Dateien liegen (Lauf 7: 549 alle ~300 s); Zähltor-Vorrat pfadscharf aus oc_findling_queue (5549 -> 5000) | 2026-10-04 | 12c659dd | Done (Python-Suite grün; php -l/PHPUnit = CI-Vorbehalt; Lauf 8 braucht neues Abbild + neue Companion-App) | [261003-wxg-reconcile-beachtet-ausschluesse-zaehltor](./quick/261003-wxg-reconcile-beachtet-ausschluesse-zaehltor/) |
 | 261003-d3y | 28-07 D-24-07 P2: Probe prüft vor der Messung die Vorschlags-Schwellen über profile.suggest (nofit hardware_short, keine Pause/Download/Kinder), Ursache in PHP/JS/16 Katalogen; Zellen 3/4/10 gestrichen (18 Zellen), 10-zelle Abbruch 74 | 2026-10-03 | 3d1c6d72 | Done (4408 Tests grün, 2 lokale CRLF-Artefakte 11-probe-route.py; php -l = CI-Vorbehalt) | [261003-d3y-d-24-07-nachschaerfung-p2-probe-prueft-v](./quick/261003-d3y-d-24-07-nachschaerfung-p2-probe-prueft-v/) |
 | 261002-cvf | 28-07 Zaehltor zaehlt zeit- und pfadscharf (Zaehlmarke vor dem Trigger, nur frische files/teilkorpus-Zustaende via psql; Beleg 5041 -> 5000, Kalibrierfalle 4959 -> 71) | 2026-10-02 | a2b0fcf9 | Done (545 Tests gruen) | [261002-cvf-zaehltor-teilkorpus-scharfe-zaehlquelle](./quick/261002-cvf-zaehltor-teilkorpus-scharfe-zaehlquelle/) |
 | 261002-af9 | 28-07 Vorrats-Tor vor die Bewaffnung gezogen (Schritt vorrat-tor, Abbruch 73 beziffert Altbestand; 93b-rc-13 zurueckgebaut; Nachschub nach Bewaffnung bricht nicht mehr ab) | 2026-10-02 | c04e7431 | Done (543 Tests gruen) | [261002-af9-vorrats-tor-vor-die-bewaffnung-ziehen](./quick/261002-af9-vorrats-tor-vor-die-bewaffnung-ziehen/) |
@@ -247,8 +263,8 @@ Aeltere Merker:
 
 ## Session Continuity
 
-Last session: 2026-10-03T19:00:00.000Z
-Stopped at: 28-07 Lauf 7: S-T + St-T gemessen, L-T blocked (Reconcile-Schub ausgeschlossener Dateien), Box geparkt
+Last session: 2026-10-04T00:30:00.000Z
+Stopped at: Quick 261003-wxg umgesetzt (3 lokale Commits); nächst Push + CI-Abbild + Lauf 8 L-T (neues Abbild + neue Companion-App), Box geparkt
 Resume file: None
 
 ## Operator Next Steps
