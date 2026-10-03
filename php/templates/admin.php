@@ -1062,6 +1062,7 @@ $probeCauseNames = [
 	'digest_mismatch' => $l->t('The model file does not match its checksum and was deleted.'),
 	'disk_short' => $l->t('Not enough disk space for the fp32 model.'),
 	'memory_unknown' => $l->t('The available memory could not be read.'),
+	'hardware_short' => $l->t('This box has fewer cores or less memory than the profile needs: Standard needs 3 cores and 6 GB, Performance 6 cores and 12 GB.'),
 	'interrupted' => $l->t('The check was interrupted by a restart of the backend.'),
 	'pause_timeout' => $l->t('The running indexing batch did not end within %s.', [$checkNumber('seconds', $span)]),
 	'probe_failed' => $l->t('The check stopped with an error.'),

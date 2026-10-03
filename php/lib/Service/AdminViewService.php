@@ -241,7 +241,7 @@ final class AdminViewService {
 	 * The causes of a verdict, probe.CAUSES. The empty string is the cause of a
 	 * "fits" and is judged apart, the same rule as GUARD_CAUSES above.
 	 */
-	private const PROBE_CAUSES = ['reserve_thin', 'memory_short', 'model_memory', 'memory_unknown', 'slot_killed', 'timeout', 'pause_timeout', 'download_failed', 'download_slow', 'digest_mismatch', 'disk_short', 'interrupted', 'probe_failed'];
+	private const PROBE_CAUSES = ['reserve_thin', 'memory_short', 'model_memory', 'memory_unknown', 'hardware_short', 'slot_killed', 'timeout', 'pause_timeout', 'download_failed', 'download_slow', 'digest_mismatch', 'disk_short', 'interrupted', 'probe_failed'];
 
 	/** The keys of the numbers of a verdict, probe.NUMBER_KEYS. */
 	private const PROBE_NUMBERS = ['slots', 'need', 'available', 'reserve', 'required', 'seconds', 'rateInt8', 'rateFp32'];

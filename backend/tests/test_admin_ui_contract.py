@@ -61,7 +61,14 @@ from pathlib import Path
 
 from findling import guard, precision, probe
 from findling.api.status import PROFILE_VALUE_KEYS, GuardReport
-from findling.config import PROFILE_PERFORMANCE_OCR_SLOTS_MAX, PROFILE_STANDARD_OCR_SLOTS_MAX
+from findling.config import (
+    PROFILE_PERFORMANCE_OCR_SLOTS_MAX,
+    PROFILE_STANDARD_OCR_SLOTS_MAX,
+    SUGGEST_PERFORMANCE_CORES,
+    SUGGEST_PERFORMANCE_MEMORY_BYTES,
+    SUGGEST_STANDARD_CORES,
+    SUGGEST_STANDARD_MEMORY_BYTES,
+)
 from findling.embed.engine import ENGINE_STATES
 from findling.embed.weights import FP32_BYTES
 
@@ -2744,6 +2751,21 @@ def script_map(source: str, name: str) -> dict[str, str]:
     return dict(re.findall(r"(\w+): t\('findling', '([^']+)'\)", block.group(1)))
 
 
+def test_the_hardware_short_sentence_carries_the_thresholds_of_the_config() -> None:
+    """The sentence of hardware_short names the suggestion thresholds (D-24-06, D-24-07).
+
+    The figures are read from findling.config, so a change of a threshold fails
+    here instead of leaving the sentence of the admin page quietly out of date.
+    """
+    sentence = (
+        "This box has fewer cores or less memory than the profile needs: "
+        f"Standard needs {SUGGEST_STANDARD_CORES} cores and {SUGGEST_STANDARD_MEMORY_BYTES // 10**9} GB, "
+        f"Performance {SUGGEST_PERFORMANCE_CORES} cores and {SUGGEST_PERFORMANCE_MEMORY_BYTES // 10**9} GB."
+    )
+    assert template_map(TEMPLATE.read_text(encoding="utf-8"), "probeCauseNames")["hardware_short"] == sentence
+    assert script_map(SCRIPT.read_text(encoding="utf-8"), "probeCauseNames")["hardware_short"] == sentence
+
+
 def test_the_script_and_the_template_name_every_probe_code_alike() -> None:
     """T-27-39: a code of the probe reads the same in the first paint and after a poll.
 
@@ -3175,8 +3197,9 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     # 72 in and one out with plan 27-13 (UI-01, D-27-12), one of quick task
     # 260929-kii (the recount sentence), one of review WR-10 of phase 27 (the
     # placed file with another checksum), two of quick task 260929-s7p (the
-    # file id on every line of the error list, issue #14)
-    assert len(keys_of["de.json"]) == 291
+    # file id on every line of the error list, issue #14), one of quick task
+    # 261003-d3y (the threshold cause hardware_short, D-24-07)
+    assert len(keys_of["de.json"]) == 292
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:

@@ -532,6 +532,9 @@ Profile, Formel und Wächter: [`docs/profiles.md`](profiles.md). Präzision:
 - Passt nicht: mit genau einer Ursache aus einer geschlossenen Menge (etwa
   `memory_short`, `model_memory`, `slot_killed`, `download_failed`). Nichts
   gespeichert.
+- Vor jeder Messung prüft die Probe die Vorschlags-Schwellen (D-24-06); liegt
+  die Box für das Ziel darunter, endet sie ohne Messung mit `hardware_short`
+  (Owner-Entscheid 03.10.2026, D-24-07).
 - Gespeichert wird nur bei "passt", gebunden an die Id und das Ziel dieser
   Probe. Kein "Trotzdem übernehmen" (D-27-08).
 - Knapp oder nicht: die Karte bietet die nächstniedrigere Stufe an, "Standard

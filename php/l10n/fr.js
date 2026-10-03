@@ -276,6 +276,7 @@ OC.L10N.register(
     "The model file placed on the volume does not match its checksum. Replace or remove it.": "Le fichier du modèle déposé sur le volume ne correspond pas à sa somme de contrôle. Remplacer ou supprimer le fichier.",
     "Not enough disk space for the fp32 model.": "Espace disque insuffisant pour le modèle fp32.",
     "The available memory could not be read.": "La mémoire disponible n'a pas pu être lue.",
+    "This box has fewer cores or less memory than the profile needs: Standard needs 3 cores and 6 GB, Performance 6 cores and 12 GB.": "Cette machine a moins de cœurs ou de mémoire que le profil n'en demande : Standard demande 3 cœurs et 6 Go, Performance 6 cœurs et 12 Go.",
     "The check was interrupted by a restart of the backend.": "La vérification a été interrompue par un redémarrage du service.",
     "The running indexing batch did not end within %s.": "Le lot d'indexation en cours ne s'est pas terminé en %s.",
     "The check stopped with an error.": "La vérification s'est arrêtée sur une erreur.",

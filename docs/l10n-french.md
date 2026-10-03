@@ -402,6 +402,7 @@ deutschen Übersetzung.
 | `The model file placed on the volume does not match its checksum. Replace or remove it.` | Die auf dem Volume abgelegte Modelldatei passt nicht zu ihrer Prüfsumme. Die Datei ersetzen oder entfernen. | Le fichier du modèle déposé sur le volume ne correspond pas à sa somme de contrôle. Remplacer ou supprimer le fichier. |
 | `Not enough disk space for the fp32 model.` | Zu wenig Platz auf dem Datenträger für das fp32-Modell. | Espace disque insuffisant pour le modèle fp32. |
 | `The available memory could not be read.` | Der verfügbare Speicher ließ sich nicht lesen. | La mémoire disponible n'a pas pu être lue. |
+| `This box has fewer cores or less memory than the profile needs: Standard needs 3 cores and 6 GB, Performance 6 cores and 12 GB.` | Diese Box hat weniger Kerne oder Speicher, als das Profil braucht: Standard braucht 3 Kerne und 6 GB, Leistung 6 Kerne und 12 GB. | Cette machine a moins de cœurs ou de mémoire que le profil n'en demande : Standard demande 3 cœurs et 6 Go, Performance 6 cœurs et 12 Go. |
 | `The check was interrupted by a restart of the backend.` | Die Prüfung wurde durch einen Neustart des Backends unterbrochen. | La vérification a été interrompue par un redémarrage du service. |
 | `The running indexing batch did not end within %s.` | Die laufende Indexstaffel endete nicht innerhalb von %s. | Le lot d'indexation en cours ne s'est pas terminé en %s. |
 | `The check stopped with an error.` | Die Prüfung brach mit einem Fehler ab. | La vérification s'est arrêtée sur une erreur. |

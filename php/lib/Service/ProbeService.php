@@ -39,7 +39,7 @@ final class ProbeService {
 	private const PROBE_STATES = ['idle', 'running', 'done'];
 	private const PROBE_STEPS = ['pause', 'download', 'digest', 'model', 'ocr_one', 'calc', 'ocr_n', 'cleanup'];
 	private const PROBE_VERDICTS = ['fits', 'narrow', 'nofit'];
-	private const PROBE_CAUSES = ['reserve_thin', 'memory_short', 'model_memory', 'memory_unknown', 'slot_killed', 'timeout', 'pause_timeout', 'download_failed', 'download_slow', 'digest_mismatch', 'disk_short', 'interrupted', 'probe_failed'];
+	private const PROBE_CAUSES = ['reserve_thin', 'memory_short', 'model_memory', 'memory_unknown', 'hardware_short', 'slot_killed', 'timeout', 'pause_timeout', 'download_failed', 'download_slow', 'digest_mismatch', 'disk_short', 'interrupted', 'probe_failed'];
 	private const PROBE_NUMBERS = ['slots', 'need', 'available', 'reserve', 'required', 'seconds', 'rateInt8', 'rateFp32'];
 
 	/**
