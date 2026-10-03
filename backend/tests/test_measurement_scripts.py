@@ -1563,8 +1563,12 @@ PHP_TREE_HASH_TODAY = "8ee9286c72852cab04fc40bc2704e0232c4b9cb2c28c06907d091a699
 # and the cause hardware_short) and worker/probe_run.py (the threshold gate
 # before the pause) changed their bytes. No file came and none went, so
 # PACKAGE_FILES_TODAY stays at 71.
+# Measured again by quick task 261003-wxg (owner decision of 03.10.2026, part
+# a): worker/reconcile.py (the excluded branch of _compare and the two codes
+# EXCLUDED_STATE/EXCLUDED_REASON) changed its bytes. No file came and none
+# went, so PACKAGE_FILES_TODAY stays at 71.
 PACKAGE_FILES_TODAY = 71
-PACKAGE_TREE_HASH_TODAY = "1a0598a6e1592c6307d9775e708a6bcc2fdd0c624802df2f2c54c82fdd226191"
+PACKAGE_TREE_HASH_TODAY = "a6ad7397deebc8fe18cec08a2518bdcbb8261d711d134b40a96e2d4de98a6673"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

@@ -103,6 +103,22 @@ GIVEN_UP_REASON: Final = "repeatedly_stuck"
 HANDOVER_STATE: Final = "skipped"
 HANDOVER_REASON: Final = "no_text_layer"
 
+# The mark of the PHP half for a file an admin rule of today keeps out of the
+# index, spelled out for the same reason as the codes above: this module
+# recognises it and never produces it, and tests/test_extract_errors.py holds
+# the vocabulary of the wire against drift.
+#
+# The rule itself belongs to the PHP half and only there (D-06): this container
+# carries no prefix list and compares no path, it reads two codes off the page.
+# The mark is live, worked out for the version the page carries, and it is never
+# written into the files table here. A stored skipped(excluded) against the etag
+# would outlive a lifted rule through the branch ``stored == row.etag`` in
+# _compare, and the file would stay out of the index for good. Without a stored
+# row the mark simply disappears with the rule, and the next round reads the file
+# as ordinary unknown work.
+EXCLUDED_STATE: Final = "skipped"
+EXCLUDED_REASON: Final = "excluded"
+
 # How long the shutdown waits for a round to end before it stops waiting. Same
 # budget as the poller, and for the same reason: a slice is bounded work.
 RECONCILE_STOP_SECONDS: Final = 30.0
@@ -444,6 +460,18 @@ class Reconcile:
         delivers the file through the queue, the poller writes a real verdict, and
         from then on this comparison reads that one.
 
+        **A file an admin rule of today excludes is not work either**, as long as
+        this container knows nothing about it (owner decision of 03.10.2026, run 7
+        of the 28-07 chain). The page carries every file of the mount, excluded
+        or not, and such a file used to be requeued, answered with a delete order
+        by describe() on the claim, tombstoned by the poller and found unknown
+        again by the next quiet round; that batch broke the quiet mark, the round
+        stayed unfinished and came back every tick. The PHP half now marks the row
+        live as skipped(excluded) and this branch leaves it alone without storing
+        anything, so a lifted rule makes the file work in the very next round. A
+        file known here under another etag stays stale work, and describe() keeps
+        turning it into the delete order that takes it out of the index.
+
         **The one exception to that last sentence, and it is the second half of
         DI-05-23.** A file that carries skipped(no_text_layer) here and
         failed(repeatedly_stuck) over there is not a file both halves are done
@@ -470,6 +498,9 @@ class Reconcile:
                 stale.append(row.file_id)
                 continue
             if stored == row.etag:
+                continue
+            if stored is None and row.state == EXCLUDED_STATE and row.reason == EXCLUDED_REASON:
+                # Nothing is written here, on purpose: see the constant.
                 continue
             if stored is None and written_off:
                 store.give_up(
@@ -698,6 +729,8 @@ async def _pause(seconds: float, stop_event: asyncio.Event) -> None:
 
 
 __all__ = [
+    "EXCLUDED_REASON",
+    "EXCLUDED_STATE",
     "GIVEN_UP_REASON",
     "GIVEN_UP_STATE",
     "RECONCILE_STOP_SECONDS",

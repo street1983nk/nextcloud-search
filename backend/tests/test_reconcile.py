@@ -32,11 +32,15 @@ from typing import Any, cast
 import pytest
 
 from findling.config import settings
+from findling.extract import errors
 from findling.nc.client import AsyncNextcloudApp
 from findling.nc.files import FileRow, Mount, MountResult, SliceResult
 from findling.nc.queue import KIND_CONTENT, KIND_DELETE, CallResult, QueueStats
+from findling.store import repo
 from findling.store.repo import FileMeta, Store, open_store
 from findling.worker.reconcile import (
+    EXCLUDED_REASON,
+    EXCLUDED_STATE,
     GIVEN_UP_REASON,
     GIVEN_UP_STATE,
     REQUEUE_BAND,
@@ -118,6 +122,15 @@ def a_given_up_row(file_id: int, *, etag: str) -> FileRow:
     per row would make the repair more expensive than the work it saves.
     """
     return a_row(file_id, etag=etag, state=GIVEN_UP_STATE, reason=GIVEN_UP_REASON)
+
+
+def a_excluded_row(file_id: int, *, etag: str) -> FileRow:
+    """A page row the PHP half marked as excluded by an admin rule of today.
+
+    The mark is live: the PHP half works it out from the rules on every page and
+    never stores it, so a row only carries it while a rule still matches.
+    """
+    return a_row(file_id, etag=etag, state=EXCLUDED_STATE, reason=EXCLUDED_REASON)
 
 
 class _FakeQueue:
@@ -281,6 +294,119 @@ async def test_a_new_etag_lifts_the_final_verdict_and_requeues_the_file(store: S
     assert result.stale == 1
     assert result.given_up == 0
     assert queue.kinds_of(KIND_CONTENT) == [10]
+
+
+# -- files an admin rule of today excludes (owner decision 03.10.2026 a) -------
+#
+# Run 7 of the 28-07 chain found 549 files under excluded folders handed to the
+# content track every ~300 s. The page carried them like any other file, the
+# container knew no etag for them, describe() answered the claim with a delete
+# order, the poller set a tombstone, and the next quiet round found them unknown
+# again. The batch of the round itself broke the quiet mark, the round stayed
+# unfinished and was due again at once. The PHP half now marks such a row live as
+# skipped(excluded), and these tests hold what the container does with the mark.
+
+
+async def test_an_excluded_unknown_file_is_not_requeued_by_two_cycles(store: Store) -> None:
+    """The run 7 shape, over two cycles like the give-up rule above.
+
+    The second cycle is the one that would go red again if the mark were only
+    honoured once, and the missing row in the store is what keeps a lifted rule
+    from being outlived by a stored verdict.
+    """
+    queue = _FakeQueue()
+
+    first = await _reconcile(
+        store,
+        _FakeFiles(SliceResult(files=(a_excluded_row(10, etag="aaa"), a_row(11, etag="bbb")), final=True)),
+        queue,
+    ).run_once()
+
+    assert first.state == ROUND_WALKED
+    assert queue.kinds_of(KIND_CONTENT) == [11]
+    assert (first.stale, first.given_up) == (1, 0)
+    assert store.file_row(10) is None
+
+    await _reconcile(
+        store,
+        _FakeFiles(SliceResult(files=(a_excluded_row(10, etag="aaa"),), final=True)),
+        queue,
+        now=NOW + 25 * HOUR,
+    ).run_once()
+
+    assert 10 not in queue.kinds_of(KIND_CONTENT)
+
+
+async def test_an_excluded_file_behind_a_tombstone_is_not_requeued(store: Store) -> None:
+    # The exact state run 7 left behind: the delete order of describe() made the
+    # poller set a tombstone, and known_etags does not answer for tombstones.
+    store.record(10, a_file(10, etag="aaa"), "indexed", content_hash="a")
+    store.tombstone(10)
+    files = _FakeFiles(SliceResult(files=(a_excluded_row(10, etag="aaa"),), final=True))
+    queue = _FakeQueue()
+
+    result = await _reconcile(store, files, queue).run_once()
+
+    assert queue.requeues == []
+    assert result.stale == 0
+
+
+async def test_a_lifted_rule_makes_the_file_work_again_in_the_next_round(store: Store) -> None:
+    """The reason the mark is never stored in this container.
+
+    A stored skipped(excluded) against the etag would meet the next page with the
+    same etag in the first branch of the comparison and count as done, and the
+    file would stay out of the index for good after the admin lifted the rule.
+    """
+    queue = _FakeQueue()
+
+    await _reconcile(
+        store, _FakeFiles(SliceResult(files=(a_excluded_row(10, etag="aaa"),), final=True)), queue
+    ).run_once()
+    assert queue.kinds_of(KIND_CONTENT) == []
+
+    lifted = _FakeFiles(SliceResult(files=(a_row(10, etag="aaa"),), final=True))
+    result = await _reconcile(store, lifted, queue, now=NOW + 25 * HOUR).run_once()
+
+    assert queue.kinds_of(KIND_CONTENT) == [10]
+    assert result.stale == 1
+
+
+async def test_a_known_excluded_file_with_a_new_etag_stays_content_work(store: Store) -> None:
+    # CR-01 stays intact: a file this container holds under another version is
+    # content work, and describe() turns the claim into the delete order that
+    # takes the document out of the index. The mark must not suppress that.
+    store.record(10, a_file(10, etag="aaa"), "indexed", content_hash="a")
+    files = _FakeFiles(SliceResult(files=(a_excluded_row(10, etag="bbb"),), final=True))
+    queue = _FakeQueue()
+
+    result = await _reconcile(store, files, queue).run_once()
+
+    assert queue.kinds_of(KIND_CONTENT) == [10]
+    assert result.stale == 1
+
+
+async def test_a_round_of_only_excluded_files_closes_the_mount(store: Store) -> None:
+    # No batch of its own, so nothing breaks the quiet mark: the round walks
+    # through, the mount is closed and the next tick is not due any more.
+    rows = (a_excluded_row(10, etag="aaa"), a_excluded_row(11, etag="bbb"))
+    queue = _FakeQueue()
+
+    first = await _reconcile(store, _FakeFiles(SliceResult(files=rows, final=True)), queue).run_once()
+    second = await _reconcile(store, _FakeFiles(SliceResult(files=rows, final=True)), queue).run_once()
+
+    assert first.state == ROUND_WALKED
+    assert (first.stale, first.given_up) == (0, 0)
+    assert queue.requeues == []
+    assert second.state == ROUND_NOT_DUE
+
+
+def test_the_excluded_codes_are_the_ones_of_the_closed_list() -> None:
+    # Same stance as GIVEN_UP_*: spelled out in the module, held against the
+    # vocabulary of the wire here.
+    assert (EXCLUDED_STATE, EXCLUDED_REASON) == ("skipped", "excluded")
+    assert EXCLUDED_REASON in repo.STATE_REASONS[EXCLUDED_STATE]
+    assert errors.Reason(EXCLUDED_REASON) in errors.STATE_REASONS[errors.State(EXCLUDED_STATE)]
 
 
 # -- the stranded handover (DI-05-23) -----------------------------------------
