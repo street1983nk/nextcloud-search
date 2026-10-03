@@ -59,7 +59,7 @@ geparkt 2026-10-02T13:17:11Z 2026-10-02T14:54:47Z
 #   befund in 04-teilkorpus-arm.txt lauf 6)
 # 28-07 start 10 (aws_box.sh start) nur zum auslesen von kettenlog und rohdaten, kein lauf:
 m7g.large 2026-10-02T14:54:47Z 2026-10-02T15:00:39Z
-geparkt 2026-10-02T15:00:39Z laeuft
+geparkt 2026-10-02T15:00:39Z 2026-10-03T11:09:57Z
 # m7g.large stopp: sudo shutdown -h +1 von innen (geplant 07:09:39Z, ssh ab 07:10Z unerreichbar);
 #   aws_box.sh stop war nicht moeglich, die aws-sitzung ist abgelaufen (owner loggt ein);
 #   shutdown-verhalten=stop belegt (vorpruefung-stop-ja 2026-10-02T05:56:35Z), BOX_STOPPED_ISO
@@ -76,3 +76,9 @@ geparkt 2026-10-02T15:00:39Z laeuft
 #   kommt in sekunden ueber die top-up-route des frisch bewaffneten containers (belegt in 04-teilkorpus-arm.txt,
 #   lauf 4), kein timing moeglich; blocker an den owner, genau ein wiederholungsversuch gefahren wie angewiesen
 # bisher 3.06 USD gegen deckel 59.43 USD (02-rechenblatt.py stand --jetzt 2026-10-02T05:25:31Z); box geparkt
+# 28-07 start 11 (aws_box.sh start, running since aus der ausgabe), kettenlauf 7 nach owner-entscheid
+#   D-24-07 (quick 261003-d3y, zellen 3/4/10 gestrichen): box-klon per git fetch auf f73566c1,
+#   companion-app ersetzt, mem=4G-drop-in entfernt, dann typwechsel auf m7g.4xlarge (00-typwechsel.sh)
+m7g.large 2026-10-03T11:09:57Z 2026-10-03T11:14:27Z
+geparkt 2026-10-03T11:14:27Z 2026-10-03T11:14:46Z
+m7g.4xlarge 2026-10-03T11:14:46Z laeuft

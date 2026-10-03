@@ -33,3 +33,21 @@ shutdown-verhalten stop
 shutdown-ist-stopp ja
 vorpruefung-stop-ja 2026-10-02T07:54:35Z
 TYPWECHSEL-VORPRUEFUNG-FERTIG
+typwechsel-start 2026-10-03T11:13:50Z
+instanz <instanzkennung>
+typ-vorher m7g.large
+shutdown-verhalten stop
+shutdown-ist-stopp ja
+vorpruefung-stop-ja 2026-10-03T11:13:53Z
+typ-gefordert m7g.4xlarge
+typ-ist m7g.4xlarge
+zustand-ist running
+typwechsel m7g.large -> m7g.4xlarge gestoppt 2026-10-03T11:14:27Z laeuft 2026-10-03T11:14:49Z
+typwechsel-epoche gestoppt 1791026067 laeuft 1791026089
+adresse-neu <adresse-der-box>
+TYPWECHSEL-FERTIG
+typwechsel-vorpruefung 2026-10-03T11:15:44Z
+shutdown-verhalten stop
+shutdown-ist-stopp ja
+vorpruefung-stop-ja 2026-10-03T11:15:45Z
+TYPWECHSEL-VORPRUEFUNG-FERTIG
