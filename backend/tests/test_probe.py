@@ -27,7 +27,7 @@ from pathlib import Path
 
 import pytest
 
-from findling import probe
+from findling import probe, profile
 from findling.config import (
     CUTTER_LOAD_BYTES,
     EMBED_ACTIVATION_BYTES,
@@ -42,6 +42,7 @@ from findling.config import (
     PROBE_MEASURE_SECONDS,
     PROBE_PAUSE_SECONDS,
 )
+from findling.hardware import Hardware
 from findling.probe import (
     CAUSES,
     CAUSES_NARROW,
@@ -60,6 +61,7 @@ from findling.probe import (
     model_child_admitted,
     pending_load_bytes,
 )
+from findling.profile import PROFILE_ORDER, Profile
 
 MIB = 1024 * 1024
 PROBE_ID = "0123456789abcdef"
@@ -81,7 +83,7 @@ def test_steps_are_the_eight_steps_in_order() -> None:
     assert STEPS == ("pause", "download", "digest", "model", "ocr_one", "calc", "ocr_n", "cleanup")
 
 
-def test_causes_are_exactly_the_thirteen_codes() -> None:
+def test_causes_are_exactly_the_fourteen_codes() -> None:
     assert frozenset({"reserve_thin"}) == CAUSES_NARROW
     assert (
         frozenset(
@@ -89,6 +91,7 @@ def test_causes_are_exactly_the_thirteen_codes() -> None:
                 "memory_short",
                 "model_memory",
                 "memory_unknown",
+                "hardware_short",
                 "slot_killed",
                 "timeout",
                 "pause_timeout",
@@ -103,7 +106,7 @@ def test_causes_are_exactly_the_thirteen_codes() -> None:
         == CAUSES_NOFIT
     )
     assert CAUSES == CAUSES_NARROW | CAUSES_NOFIT
-    assert len(CAUSES) == 13
+    assert len(CAUSES) == 14
 
 
 def test_verdicts_states_start_codes_and_number_keys() -> None:
@@ -384,6 +387,101 @@ def test_the_ceilings() -> None:
     assert PROBE_MEASURE_SECONDS == 120
     assert PROBE_DOWNLOAD_SECONDS == 600
     assert PROBE_PAUSE_SECONDS == OCR_LOCK_TIMEOUT_SECONDS == 1800
+
+
+# -- the threshold gate (D-24-06, D-24-07) -----------------------------------
+
+GIB = 1024 * MIB
+
+
+def _box(cores: float | None, memory: int | None) -> Hardware:
+    return Hardware(
+        cpu_count=None,
+        cpu_quota=None,
+        cores=cores,
+        memory_limit_bytes=memory,
+        memory_available_bytes=memory,
+        memory_total_bytes=memory,
+        architecture="aarch64",
+        cgroup="v2",
+    )
+
+
+# The reference box of run 6 (02.10.2026): m7g.large with the 2 GiB limit.
+REFERENCE_BOX = _box(2, 2 * GIB)
+BIG_BOX = _box(16, int(64e9))
+HARDWARE_SHORT = (VERDICT_NOFIT, "hardware_short", {})
+
+
+def _said(verdict: probe.Verdict | None) -> tuple[str, str, dict[str, int]] | None:
+    return None if verdict is None else (verdict.verdict, verdict.cause, dict(verdict.numbers))
+
+
+@pytest.mark.parametrize("target", ["standard", "performance"])
+def test_the_reference_box_is_short_of_hardware_for_a_measured_target(target: str) -> None:
+    assert _said(probe.judge_hardware(target, REFERENCE_BOX)) == HARDWARE_SHORT
+
+
+def test_economy_is_never_checked() -> None:
+    assert probe.judge_hardware("economy", REFERENCE_BOX) is None
+    assert probe.judge_hardware("economy", None) is None
+
+
+@pytest.mark.parametrize("target", ["standard", "performance"])
+def test_a_big_box_passes_the_gate(target: str) -> None:
+    assert probe.judge_hardware(target, BIG_BOX) is None
+
+
+def test_the_edges_follow_suggest() -> None:
+    edge = _box(3, 6_000_000_000)
+    assert probe.judge_hardware("standard", edge) is None
+    assert _said(probe.judge_hardware("performance", edge)) == HARDWARE_SHORT
+    # c7a.xlarge: 4 cores, 8 GiB.
+    c7a_xlarge = _box(4, 8 * GIB)
+    assert probe.judge_hardware("standard", c7a_xlarge) is None
+    assert _said(probe.judge_hardware("performance", c7a_xlarge)) == HARDWARE_SHORT
+    assert _said(probe.judge_hardware("standard", _box(2, 6_000_000_000))) == HARDWARE_SHORT
+    assert _said(probe.judge_hardware("standard", _box(3, 6_000_000_000 - 1))) == HARDWARE_SHORT
+
+
+def test_unreadable_memory_is_memory_unknown_and_unknown_cores_are_short() -> None:
+    unknown = (VERDICT_NOFIT, "memory_unknown", {})
+    assert _said(probe.judge_hardware("standard", None)) == unknown
+    assert _said(probe.judge_hardware("performance", _box(16, None))) == unknown
+    assert _said(probe.judge_hardware("standard", _box(None, int(64e9)))) == HARDWARE_SHORT
+
+
+@pytest.mark.parametrize(
+    "box",
+    [
+        REFERENCE_BOX,
+        BIG_BOX,
+        _box(3, 6_000_000_000),
+        _box(4, 8 * GIB),
+        _box(6, 12_000_000_000),
+        _box(6, 12_000_000_000 - 1),
+        _box(5.5, 64 * GIB),
+        _box(1, 64 * GIB),
+        _box(None, 64 * GIB),
+    ],
+)
+@pytest.mark.parametrize("target", list(Profile))
+def test_the_gate_runs_in_step_with_suggest(target: Profile, box: Hardware) -> None:
+    # No thresholds of its own: the gate passes exactly what suggest offers.
+    passes = PROFILE_ORDER.index(target) <= PROFILE_ORDER.index(profile.suggest(box))
+    assert (probe.judge_hardware(target, box) is None) == passes
+
+
+def test_hardware_short_is_a_nofit_cause_only() -> None:
+    probe.begin(PROBE_ID, "standard", "int8", 1.0)
+    with pytest.raises(ValueError, match="cause"):
+        probe.finish("narrow", "hardware_short", {}, fp32_fetched=False, fp32_deleted=False, now=2.0)
+    with pytest.raises(ValueError, match="cause"):
+        probe.finish("fits", "hardware_short", {}, fp32_fetched=False, fp32_deleted=False, now=2.0)
+    probe.finish("nofit", "hardware_short", {}, fp32_fetched=False, fp32_deleted=False, now=2.0)
+    snap = probe.snapshot()
+    assert (snap.verdict, snap.cause) == (VERDICT_NOFIT, "hardware_short")
+    assert probe.decode(probe.encode(snap)) == snap
 
 
 # -- the shipped scan page ------------------------------------------------

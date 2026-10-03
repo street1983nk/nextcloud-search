@@ -18,13 +18,18 @@ measures on its own box whether it holds. This module is the part without I/O:
   with its peak plus the reserve, and an unreadable headroom is never admitted.
 * The hold flag (D-27-05). Its own flag, apart from the silence and arm of the
   poller, which belong to the enabled handler and the lifespan.
+* The threshold gate (D-24-06, D-24-07). Before it measures anything, the check
+  holds the target against the suggestion thresholds through profile.suggest;
+  a box below them ends nofit hardware_short without a measurement, because
+  profile.effective would cap the target at the suggestion anyway.
 
 The state of this process is one reference to a frozen snapshot that every
 setter swaps as a whole, so a reader in another thread never sees a torn mix
 (lesson IN-01 of the phase 26 review).
 
 The module is neutral like findling/guard.py: standard library,
-findling.config and findling.profile only. It logs nothing.
+findling.config and findling.profile only (findling.hardware as a type only).
+It logs nothing.
 """
 
 import json
@@ -36,7 +41,7 @@ from dataclasses import dataclass
 from importlib import resources
 from importlib.resources.abc import Traversable
 from types import MappingProxyType
-from typing import Final, NamedTuple
+from typing import TYPE_CHECKING, Final, NamedTuple
 
 from findling.config import (
     CUTTER_LOAD_BYTES,
@@ -48,7 +53,10 @@ from findling.config import (
     MODEL_PROBE_CHILD_BYTES,
     OCR_SLOT_COST_BYTES,
 )
-from findling.profile import PROFILE_NAMES
+from findling.profile import PROFILE_NAMES, PROFILE_ORDER, Profile, suggest
+
+if TYPE_CHECKING:
+    from findling.hardware import Hardware
 
 STEPS: Final = ("pause", "download", "digest", "model", "ocr_one", "calc", "ocr_n", "cleanup")
 _STEP_SET: Final = frozenset(STEPS)
@@ -63,12 +71,14 @@ CAUSE_RESERVE_THIN: Final = "reserve_thin"
 CAUSE_MEMORY_SHORT: Final = "memory_short"
 CAUSE_MODEL_MEMORY: Final = "model_memory"
 CAUSE_MEMORY_UNKNOWN: Final = "memory_unknown"
+CAUSE_HARDWARE_SHORT: Final = "hardware_short"
 CAUSES_NARROW: Final = frozenset({CAUSE_RESERVE_THIN})
 CAUSES_NOFIT: Final = frozenset(
     {
         CAUSE_MEMORY_SHORT,
         CAUSE_MODEL_MEMORY,
         CAUSE_MEMORY_UNKNOWN,
+        CAUSE_HARDWARE_SHORT,
         "slot_killed",
         "timeout",
         "pause_timeout",
@@ -225,6 +235,26 @@ def judge_run(*, min_headroom: int, pending: int) -> Verdict:
     if reserve < GUARD_RESERVE_BYTES:
         return Verdict(VERDICT_NARROW, CAUSE_RESERVE_THIN, _thin(reserve))
     return Verdict(VERDICT_FITS, CAUSE_NONE, _numbers({"reserve": reserve}))
+
+
+def judge_hardware(target: str, hardware: "Hardware | None") -> Verdict | None:
+    """The threshold gate before any measurement, None when the check may measure.
+
+    Holds the target against the suggestion thresholds of D-24-06 through
+    profile.suggest, so that a check never says fits for a target that
+    profile.effective caps at the suggestion right after saving (D-24-07,
+    owner decision 03.10.2026). Economy is never checked. An unreadable memory
+    is memory_unknown; a box below the thresholds of the target, unknown cores
+    included, is hardware_short. No thresholds of its own: only suggest.
+    """
+    wanted = Profile(target)
+    if wanted is Profile.ECONOMY:
+        return None
+    if hardware is None or hardware.threshold_memory_bytes is None:
+        return Verdict(VERDICT_NOFIT, CAUSE_MEMORY_UNKNOWN, _numbers({}))
+    if PROFILE_ORDER.index(wanted) <= PROFILE_ORDER.index(suggest(hardware)):
+        return None
+    return Verdict(VERDICT_NOFIT, CAUSE_HARDWARE_SHORT, _numbers({}))
 
 
 def _thin(reserve: int) -> Mapping[str, int]:
@@ -546,6 +576,7 @@ __all__ = [
     "CAUSES",
     "CAUSES_NARROW",
     "CAUSES_NOFIT",
+    "CAUSE_HARDWARE_SHORT",
     "CAUSE_MEMORY_SHORT",
     "CAUSE_MEMORY_UNKNOWN",
     "CAUSE_MODEL_MEMORY",
@@ -581,6 +612,7 @@ __all__ = [
     "held",
     "hold",
     "judge",
+    "judge_hardware",
     "judge_run",
     "measure",
     "measuring",

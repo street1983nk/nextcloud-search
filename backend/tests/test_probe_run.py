@@ -60,6 +60,20 @@ def _big_box() -> Hardware:
     )
 
 
+def _reference_box() -> Hardware:
+    """m7g.large with the 2 GiB limit of run 6: below the standard thresholds (D-24-06)."""
+    return Hardware(
+        cpu_count=2,
+        cpu_quota=None,
+        cores=2,
+        memory_limit_bytes=2 * GIB,
+        memory_available_bytes=2 * GIB,
+        memory_total_bytes=8 * GIB,
+        architecture="aarch64",
+        cgroup="v2",
+    )
+
+
 @pytest.fixture(autouse=True)
 def _clean_probe_state() -> Iterator[None]:
     probe.reset()
@@ -402,6 +416,36 @@ async def test_the_guard_is_suspended_while_the_children_of_the_check_run(tmp_pa
     await rig.check("economy", "int8")
     assert seen == [True]
     assert not probe.measuring()
+
+
+# -- the threshold gate before the pause (D-24-07, owner decision 03.10.2026) --
+
+
+@pytest.mark.parametrize("target", ["standard", "performance"])
+async def test_a_box_below_the_thresholds_ends_hardware_short_without_measuring(
+    tmp_path: Path, steps: list[str], target: str
+) -> None:
+    rig = Rig(tmp_path, hardware=_reference_box)
+    snap = await rig.check(target, "int8")
+    assert (snap.verdict, snap.cause) == (probe.VERDICT_NOFIT, "hardware_short")
+    assert dict(snap.numbers) == {}
+    # No pause, no download, no model and no OCR child: only the end.
+    assert steps == ["cleanup"]
+    assert rig.poller.holds == 0
+    assert rig.runner.holds == 0
+    assert rig.pool.sheds == 0
+    assert rig.workers.made == []
+    assert rig.measures.calls == []
+    assert rig.fetch.calls == 0
+    assert rig.released()
+    assert rig.meta()[probe.META_PROBE_STATE] == probe.STATE_DONE
+
+
+async def test_a_box_below_the_thresholds_still_measures_economy(tmp_path: Path, steps: list[str]) -> None:
+    rig = Rig(tmp_path, hardware=_reference_box)
+    await rig.check("economy", "int8")
+    assert steps[0] == "pause"
+    assert probe.snapshot().cause != "hardware_short"
 
 
 async def test_a_pass_that_outlasts_the_pause_cap_is_pause_timeout(tmp_path: Path) -> None:

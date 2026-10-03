@@ -5,6 +5,11 @@ module is the I/O around it. A check runs as one background task in the fixed
 order of probe.STEPS and reports every step through probe.note_step, so no
 caller ever waits for the verdict (D-27-04):
 
+0. **threshold** is no step of its own: before the pause, probe.judge_hardware
+   holds the target against the suggestion thresholds (D-24-06). A box below
+   them ends nofit hardware_short right away, with cleanup as the only step and
+   without pause, download, model or OCR child (D-24-07, owner decision
+   03.10.2026); profile.effective would cap the target there anyway.
 1. **pause** holds the poller and the embed runner with their own hold signal
    (never silence or arm, those belong to the enabled handler and the
    lifespan), sets probe.hold, gives the idle children of the pool back and
@@ -524,6 +529,9 @@ class ProbeRun:
             LOGGER.error("the sweep of the pre-check ended in an unexpected %s", type(error).__name__)
 
     async def _steps(self, target: Profile, precision: str) -> probe.Verdict:
+        early = probe.judge_hardware(target, self._hardware())
+        if early is not None:
+            return early
         await self._pause()
         switch_to_fp32 = precision == _FP32 and profile.snapshot().weights != _FP32
         if switch_to_fp32:
