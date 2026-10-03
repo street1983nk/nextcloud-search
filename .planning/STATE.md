@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
 status: executing
-stopped_at: "28-07 Task 1: Blocker D-24-07 geloest (Quick 261003-d3y), naechster Executor-Lauf 7 der Kette"
-last_updated: "2026-10-03T08:05:00.000Z"
+stopped_at: "28-07 Task 2 Lauf 7: S-T + St-T auf m7g.4xlarge gemessen, L-T zweimal Abbruch 71 (Reconcile-Schub ausgeschlossener Dateien), Owner-Entscheid"
+last_updated: "2026-10-03T19:00:00.000Z"
 last_activity: 2026-10-03
 progress:
   total_phases: 6
@@ -27,20 +27,32 @@ See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 
 Phase: 28 (Abnahme-Anfahrt), in Ausführung
 Plan: 7 of 14
-Status: Executing (28-07: Blocker D-24-07 geloest per Quick 261003-d3y; naechster Lauf 7 der Kette)
+Status: Blocked (28-07 Lauf 7: S-T/St-T auf m7g.4xlarge gemessen, L-T Abbruch 71 zweimal; Owner-Entscheid)
 Last activity: 2026-10-03
 
 Progress: [█████████░] 87%
 
 ## Naechster Schritt
 
-**28-07 Task 1: Executor-Lauf 7 der Kette (AWS-Login durch den Owner nötig).**
-Owner-Entscheid 03.10. zu D-24-07 umgesetzt (Quick 261003-d3y, 52390ff7..3d1c6d72, NUR LOKAL):
-die Probe prüft vor jeder Messung die Vorschlags-Schwellen (profile.suggest) und sagt
-darunter nofit hardware_short ohne Messung; Zellen 3, 4 (m7g.large St-T/L-T) und 10
-(c7a.xlarge L-T) gestrichen, Matrix 18 Zellen; 10-zelle.sh bricht bei hardware_short mit
-74 ab. Für Lauf 7: LAUFWERTE ZELLEN ohne die gestrichenen Zellen setzen; das Abbild muss
-den Probe-Fix tragen (neuer Digest), sonst misst die Box den alten Stand.
+**28-07 Task 2 BLOCKED: Owner-Entscheid zur Zelle L-T auf m7g.4xlarge (Lauf 7, 03.10.).**
+Lauf 7 (Start 11, Typwechsel auf m7g.4xlarge, Abbild d33bfcae von f73566c1, Companion ersetzt):
+Zelle 5 S-T GEMESSEN (rc 0, Zaehltor 5000, 3:39 h, anon-max 1499,6 MiB gegen 1641,8),
+Zelle 6 St-T GEMESSEN (rc 0, Probe fits Reserve 62,1 GB Slots 4, wirksam standard/4, Zaehltor 5000,
+anon-max 2358,2 MiB gegen 2528,8). Zelle 7 L-T: Probe fits (Slots 15), wirksam performance/15, aber
+ZWEIMAL Abbruch 71 mit 5549 (vorrat 549 + eingebettet 5000), der Teilkorpus war jeweils fertig.
+Beleg (05-typwechsel-arm.txt): die 549 sind Dateien unter den Ordner-Ausschluessen (loadtest 500,
+Templates/Photos/Beispiele 49, fileids 3 bis 2634), die der Reconcile in jeder ruhigen Runde neu
+einplant (kein etag gespeichert, _compare haelt sie fuer stale), beim Containerstart und dann alle
+~300 s. Die Lesung bei Trigger + 3600 s faellt strukturell ~17 s nach den 12. Takt; ist der
+Teilkorpus vorher fertig (nur L-T auf 16 Kernen), sieht sie den Schub. Wiederholung (die eine
+erlaubte) brach wie vorhergesagt identisch ab. PRODUKTBEFUND mit Nutzerrelevanz: bei Ausschluessen
+im Leerlauf alle 5 min ein Schub ausgeschlossener Dateien, dauerhaft. Optionen fuer den Owner:
+a) Produkt-Fix: Reconcile beachtet die Ausschluesse oder der Worker merkt sich das excluded-Verdikt
+samt etag (empfohlen, Owner-Regel "Produkt-Fix vor Harness-Patch"; neues Abbild noetig, dann L-T neu),
+b) Werkzeug: Zaehltor zaehlt auch den Vorrat teilkorpus-scharf (wie cvf fuer skipped/failed),
+c) KORPUS_FRIST fuer L-T so waehlen, dass die Lesung zwischen zwei Takten liegt (nur Laufwert).
+Box geparkt (aws_box.sh stop 18:51:09Z), 10,24 von 59,43 USD. Danach: L-T, dann x86-Haelfte c7a
+(Block 14, Machbarkeitstor). Alle Commits NUR LOKAL (91b4eb94..754f83b6).
 
 Vorgeschichte (Lauf 5, 02.10.):
 Lauf 5 (02.10., Start 8, Kette 05:58:50Z): die Tor-Verschiebung 261002-af9 wirkt im Feld,
@@ -171,6 +183,10 @@ Fuer v1.4 unmittelbar tragend:
 
 ### Offene Blocker
 
+- **28-07 Lauf 7, Zelle L-T m7g.4xlarge, Abbruch 71 zweimal (03.10.):** Reconcile plant die 549
+  ausgeschlossenen Dateien in jeder ruhigen Runde neu ein, Zaehltor liest den Vorrat global.
+  Owner-Entscheid a/b/c siehe Naechster Schritt. Box geparkt, 10,24 von 59,43 USD.
+
 - **GELOEST 03.10. (Quick 261003-d3y): Owner-Entscheid P2 + Zellen 3/4/10 gestrichen.**
   Probe prüft die Vorschlags-Schwellen (nofit hardware_short), Zellenwerkzeug Abbruch 74.
   Ursprünglicher Befund:
@@ -231,8 +247,8 @@ Aeltere Merker:
 
 ## Session Continuity
 
-Last session: 2026-10-03T08:05:00.000Z
-Stopped at: Quick 261003-d3y fertig (D-24-07 P2 umgesetzt); 28-07 Lauf 7 wartet auf AWS-Login des Owners
+Last session: 2026-10-03T19:00:00.000Z
+Stopped at: 28-07 Lauf 7: S-T + St-T gemessen, L-T blocked (Reconcile-Schub ausgeschlossener Dateien), Box geparkt
 Resume file: None
 
 ## Operator Next Steps
