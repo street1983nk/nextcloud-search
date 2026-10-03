@@ -758,8 +758,12 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # QueueService.php (clear()) and IndexCommand.php (the clearing between the
 # removals and the new SchedulerJob) changed their bytes. No file went, so
 # PHP_FILES_TODAY moves to 87.
+# Measured again by quick task 261003-d3y (D-24-07, the threshold cause
+# hardware_short): AdminViewService.php and ProbeService.php (PROBE_CAUSES) and
+# templates/admin.php (the sentence of hardware_short) changed their bytes. No
+# file came and none went, so PHP_FILES_TODAY stays at 87.
 PHP_FILES_TODAY = 87
-PHP_TREE_HASH_TODAY = "3a6ae17eefca342f8028a7c8f62188b5e06748e626b72050cf7275823781c6e2"
+PHP_TREE_HASH_TODAY = "8ee9286c72852cab04fc40bc2704e0232c4b9cb2c28c06907d091a699f4909f4"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
@@ -1555,8 +1559,12 @@ PHP_TREE_HASH_TODAY = "3a6ae17eefca342f8028a7c8f62188b5e06748e626b72050cf7275823
 # poll). PACKAGE_FILES_TODAY stays at 71. WR-09 changed probe.py (the flag
 # measuring), worker/probe_run.py and worker/watch.py (the guard suspends only
 # while the children of the check run). PACKAGE_FILES_TODAY stays at 71.
+# Measured again by quick task 261003-d3y (D-24-07): probe.py (judge_hardware
+# and the cause hardware_short) and worker/probe_run.py (the threshold gate
+# before the pause) changed their bytes. No file came and none went, so
+# PACKAGE_FILES_TODAY stays at 71.
 PACKAGE_FILES_TODAY = 71
-PACKAGE_TREE_HASH_TODAY = "556148291147baefe2e8c49a7745d497ed9560115420589569fa07afda5d31dd"
+PACKAGE_TREE_HASH_TODAY = "1a0598a6e1592c6307d9775e708a6bcc2fdd0c624802df2f2c54c82fdd226191"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
