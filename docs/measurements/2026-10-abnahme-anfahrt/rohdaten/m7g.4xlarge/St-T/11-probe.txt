@@ -1,0 +1,8 @@
+probe-start 2026-10-03T14:57:54Z ziel standard/int8 frist-s 900
+POST check: code=started started=true HTTP200
+t=2s state=running step=ocr_one bytes=0/0 verdict=fits cause=unlesbar numbers={"available": 2029940736, "need": 1609969536, "slots": 1}
+t=4s state=running step=ocr_one bytes=0/0 verdict=fits cause=unlesbar numbers={"available": 2029940736, "need": 1609969536, "slots": 1}
+t=6s state=running step=ocr_n bytes=0/0 verdict=fits cause=unlesbar numbers={"available": 2029940736, "need": 1609969536, "slots": 1}
+t=8s state=running step=ocr_n bytes=0/0 verdict=fits cause=unlesbar numbers={"available": 2029940736, "need": 1609969536, "slots": 1}
+t=10s state=done step=cleanup bytes=0/0 verdict=fits cause=unlesbar numbers={"reserve": 62082822272, "slots": 4}
+verdikt fits erzwungen nein

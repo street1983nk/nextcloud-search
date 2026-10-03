@@ -38,3 +38,11 @@ zelle S-T GEMESSEN: rueckgabe 0, trigger 11:18:44Z, zaehltor bestanden 5000 (vor
   frisch uebersprungen 0 fehlgeschlagen 0), ende 14:55:36Z, zelle-ende 14:57:38Z (3:39, planwert 3:50);
   anon-max 1499,6 MiB (rechnung 1492,5, grenze 1641,8), guard economy ohne absenkung, oom 0.
   St-T memory.max max memory.swap.max max (14:58Z)
+zelle St-T GEMESSEN: rueckgabe 0; probe 14:57:52Z verdikt fits (reserve 62082822272, slots 4), erzwungen nein;
+  wirksamkeit ja effective standard slotsInForce 4 nach-s 1; trigger 14:58:08Z; zaehltor bestanden 5000
+  (vorrat 856 + eingebettet 4144, frisch 0/0); ende 16:34:53Z, zelle-ende 16:36:54Z (1:39, planwert 1:00);
+  anon-max 2358,2 MiB (rechnung 2298,9, grenze 2528,8), guard standard ohne absenkung, oom 0.
+  befund am rand: 11-probe.txt zeigt waehrend state=running die zahlen der lauf-6-probe der m7g.large
+  (available 2029940736, need 1609969536, slots 1), erst state=done traegt die zahlen dieser box.
+zelle L-T: probe verdikt fits (reserve 60327039104, slots 15), erzwungen nein, wirksamkeit ja effective
+  performance slotsInForce 15 nach-s 2, trigger 16:37:27Z; L-T memory.max max memory.swap.max max (16:39Z)

@@ -1,0 +1,80 @@
+zelle-start St-T box m7g.4xlarge ziel standard/int8 korpus teil 2026-10-03T14:57:38Z
+abbild-digest sha256:d33bfcaea1ff933bb6fdcd387c70a665f5e04ce3ca5288c3932831882a9bdb0a
+schritt abwaerts 2026-10-03T14:57:38Z
+abwaerts code=saved saved=true HTTP200
+schritt zaehlung-eine-nextcloud 2026-10-03T14:57:40Z
+nextcloud-instanzen 1
+schritt nullstand 2026-10-03T14:57:40Z
+unregister-rm-data ja
+schritt registrierung 2026-10-03T14:57:41Z
+registrierung-rueckgabewert 0
+schritt vorrat-tor 2026-10-03T14:57:46Z
+vorrat-tor altvorrat 0
+schritt bewaffnung 2026-10-03T14:57:46Z
+bewaffnung backendReachable true nach-s 2
+schritt grenze 2026-10-03T14:57:51Z
+grenze keine
+schritt baumhash 2026-10-03T14:57:51Z
+40b-baumhash-rueckgabewert 0
+baumhash-im-laufenden-container 1a0598a6e1592c6307d9775e708a6bcc2fdd0c624802df2f2c54c82fdd226191
+baumhash-beweis ja
+schritt 93b-nullstand 2026-10-03T14:57:51Z
+93b-nullstand-rueckgabewert 0
+schritt drop-caches 2026-10-03T14:57:52Z
+caches-geleert ja
+schritt probe 2026-10-03T14:57:52Z
+probe-rueckgabewert 0
+erzwungen nein
+schritt wirksamkeit 2026-10-03T14:58:05Z
+uebersicht HTTP200 effective=standard guardEffective=standard guardCause=keine slotsInForce=4 throttled=false backendReachable=true scheduled=229 running=0 indexed=0 embedded=0 storedPrecision=int8 profileSaved=standard
+wirksamkeit ja effective standard slotsInForce 4 nach-s 1
+schritt sampler 2026-10-03T14:58:06Z
+sampler rss 2 anon 1 cpu 5 status 120 gestartet 2026-10-03T14:58:06Z
+schritt trigger 2026-10-03T14:58:06Z
+zaehlmarke 2026-10-01 11:39:47
+The crawl was queued. It starts with the next run of the background jobs.
+
+Work stock
+  scheduled            0
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              32
+  failed               6
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-10-03 11:40:06 (198 minutes ago)
+trigger ja 2026-10-03T14:58:08Z
+zaehlung vorrat 856 uebersprungen-frisch 0 fehlgeschlagen-frisch 0 eingebettet 4144 indexiert 4152 summe 5000
+zaehltor bestanden 5000
+schritt ende 2026-10-03T15:58:12Z
+lesung t=3s vorrat 856 indexed 4152 embedded 4144 guard standard throttled false
+lesung t=125s vorrat 800 indexed 4216 embedded 4208 guard standard throttled false
+lesung t=247s vorrat 752 indexed 4272 embedded 4248 guard standard throttled false
+lesung t=369s vorrat 672 indexed 4336 embedded 4328 guard standard throttled false
+lesung t=491s vorrat 640 indexed 4368 embedded 4360 guard standard throttled false
+lesung t=613s vorrat 624 indexed 4384 embedded 4376 guard standard throttled false
+lesung t=735s vorrat 584 indexed 4416 embedded 4416 guard standard throttled false
+lesung t=857s vorrat 552 indexed 4448 embedded 4448 guard standard throttled false
+lesung t=979s vorrat 488 indexed 4512 embedded 4512 guard standard throttled false
+lesung t=1102s vorrat 432 indexed 4576 embedded 4568 guard standard throttled false
+lesung t=1224s vorrat 344 indexed 4656 embedded 4656 guard standard throttled false
+lesung t=1346s vorrat 264 indexed 4744 embedded 4736 guard standard throttled false
+lesung t=1468s vorrat 192 indexed 4816 embedded 4808 guard standard throttled false
+lesung t=1590s vorrat 128 indexed 4872 embedded 4872 guard standard throttled false
+lesung t=1712s vorrat 104 indexed 4896 embedded 4896 guard standard throttled false
+lesung t=1834s vorrat 56 indexed 4952 embedded 4944 guard standard throttled false
+lesung t=1956s vorrat 32 indexed 4968 embedded 4968 guard standard throttled false
+lesung t=2079s vorrat 0 indexed 5000 embedded 5000 guard standard throttled false
+lesung t=2201s vorrat 0 indexed 5000 embedded 5000 guard standard throttled false
+ende vorrat 0 embedded gleich indexed zweimal 2026-10-03T16:34:53Z
+schritt nachlauf 2026-10-03T16:34:53Z
+grundlast anon 1804840960 nach-ruhe-s 120
+guard effective=standard cause=keine throttled=false slotsInForce=4
+waechter-absenkung nein
+oom oomkilled false restartcount 0 containerstart 2026-10-03T14:57:47.909158889Z memory-events oom 0 oom_kill 0
+schritt abholen 2026-10-03T16:36:54Z
+abholbereit ja dateien 14
+10-ZELLE-FERTIG St-T
