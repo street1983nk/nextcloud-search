@@ -849,6 +849,18 @@ def test_the_slice_route_hands_the_verdict_over_with_the_page() -> None:
     assert re.search(r"private function withVerdicts\(array \$files\): array", source) is not None
 
 
+def test_the_slice_route_marks_excluded_rows_with_the_codes_of_the_closed_list() -> None:
+    # The channel the excluded branch of _compare stands on (owner decision of
+    # 03.10.2026, part a). The codes are the two this module recognises, and the
+    # findling_file_state verdict keeps travelling beside them.
+    source = _php_source(PHP_RECONCILE_CONTROLLER)
+
+    assert re.search(r"=\s*'skipped';", source) is not None
+    assert re.search(r"=\s*'excluded';", source) is not None
+    assert "withVerdicts" in source
+    assert "isExcluded" in source
+
+
 def test_the_reconcile_opens_no_second_index_writer() -> None:
     # There is exactly one index writer in the process and it belongs to the
     # poller; a second one is a tantivy lock conflict that would stop the

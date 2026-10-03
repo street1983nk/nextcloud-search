@@ -762,8 +762,13 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # hardware_short): AdminViewService.php and ProbeService.php (PROBE_CAUSES) and
 # templates/admin.php (the sentence of hardware_short) changed their bytes. No
 # file came and none went, so PHP_FILES_TODAY stays at 87.
-PHP_FILES_TODAY = 87
-PHP_TREE_HASH_TODAY = "8ee9286c72852cab04fc40bc2704e0232c4b9cb2c28c06907d091a699f4909f4"
+# Measured again by quick task 261003-wxg (owner decision of 03.10.2026, part
+# a, the excluded mark of the file slice): ReconcileControllerTest.php is new,
+# and ReconcileController.php (the mark) and StorageService.php (the optional
+# predicate of getFileSlice) changed their bytes. No file went, so
+# PHP_FILES_TODAY moves to 88.
+PHP_FILES_TODAY = 88
+PHP_TREE_HASH_TODAY = "2023c844e4ec9f85f38dace44992c2a797dd273ccfa47de36885aa4de25555f4"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

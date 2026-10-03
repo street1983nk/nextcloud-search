@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\Findling\Controller;
 
 use OCA\Findling\AppInfo\Application;
+use OCA\Findling\Service\ExclusionService;
 use OCA\Findling\Service\FileStateService;
 use OCA\Findling\Service\StorageService;
 use OCP\AppFramework\Http;
@@ -38,7 +39,10 @@ use Psr\Log\LoggerInterface;
  * since plan 05-03, the end state this side holds for the file as two codes out
  * of the closed list both sides share. No path, no title, no user name, in the
  * answer as much as in the log (T-03-1102): counters, the storage id and the
- * cursor are enough to follow a reconcile.
+ * cursor are enough to follow a reconcile. Since the owner decision of
+ * 03.10.2026 a row that an exclusion rule of today matches carries
+ * skipped(excluded) in those two codes, worked out live on every page and never
+ * stored, so that the container leaves it alone instead of requeueing it.
  *
  * Every method carries the attribute trio fully qualified, in the spelling of
  * QueueController rather than the mixed one of GatewayController, because a grep
@@ -65,10 +69,25 @@ class ReconcileController extends OCSController {
 	 */
 	private const MAX_SLICE = 2000;
 
+	/**
+	 * The mark of a row an exclusion rule of today matches, two codes out of the
+	 * closed list FileStateService::REASONS (owner decision of 03.10.2026, part a).
+	 *
+	 * Live and never written into findling_file_state. The container skips a row
+	 * with this mark as long as it knows nothing about the file, and it stores
+	 * nothing for it either; a stored verdict on either side would outlive a
+	 * lifted rule, and the file would stay out of the index for good. Worked out
+	 * on every page, the mark disappears with the rule, and the next round reads
+	 * the file as ordinary work.
+	 */
+	private const EXCLUDED_STATE = 'skipped';
+	private const EXCLUDED_REASON = 'excluded';
+
 	public function __construct(
 		IRequest $request,
 		private StorageService $storageService,
 		private FileStateService $fileStateService,
+		private ExclusionService $exclusionService,
 		private LoggerInterface $logger,
 	) {
 		parent::__construct(Application::APP_ID, $request);
@@ -125,7 +144,10 @@ class ReconcileController extends OCSController {
 	 * state and reason are the end state findling_file_state holds for the file,
 	 * two empty strings for a file it has never heard of. They are what stops the
 	 * comparison from requeueing a file this side gave up on; the reasoning sits
-	 * at withVerdicts below.
+	 * at withVerdicts below. A file an exclusion rule of today matches carries
+	 * skipped(excluded) instead, worked out live through ExclusionService on the
+	 * one path space and never stored; the row stays on the page, because a
+	 * filtered page would read as final below.
 	 *
 	 * The final mark is the reason this route exists in this shape. The deletion
 	 * rule of the reconcile reads "known locally in the range (after, last id of
@@ -164,7 +186,7 @@ class ReconcileController extends OCSController {
 		$cursor = max(0, $after);
 
 		try {
-			$files = $this->storageService->getFileSlice($storage, $root, $cursor, $size);
+			$files = $this->storageService->getFileSlice($storage, $root, $cursor, $size, $this->exclusionPredicate($storage, $root));
 			$files = $this->withVerdicts($files);
 		} catch (\Throwable $e) {
 			// Same rule as in mounts(): no library message in the log.
@@ -205,6 +227,13 @@ class ReconcileController extends OCSController {
 	 * release ignores them, so neither side has to know which release the other
 	 * one is.
 	 *
+	 * A row the exclusion predicate flagged carries skipped(excluded) instead,
+	 * and that mark outranks whatever findling_file_state holds for the file: the
+	 * rule of today is what decides whether the container may fetch it at all.
+	 * The flag itself is taken off the row before the answer, so the wire stays
+	 * at its seven fields and a container of an older release sees nothing new
+	 * but two codes it already ignores.
+	 *
 	 * @param list<array<string, mixed>> $files
 	 * @return list<array<string, mixed>>
 	 */
@@ -219,11 +248,39 @@ class ReconcileController extends OCSController {
 
 		$rows = [];
 		foreach ($files as $row) {
-			$verdict = $verdicts[(int)($row['fileId'] ?? 0)] ?? ['state' => '', 'reason' => ''];
+			$excluded = ($row['excluded'] ?? false) === true;
+			unset($row['excluded']);
+			$verdict = $excluded
+				? ['state' => self::EXCLUDED_STATE, 'reason' => self::EXCLUDED_REASON]
+				: ($verdicts[(int)($row['fileId'] ?? 0)] ?? ['state' => '', 'reason' => '']);
 			$rows[] = $row + $verdict;
 		}
 
 		return $rows;
+	}
+
+	/**
+	 * The rule of today as a question about one internal path, or null.
+	 *
+	 * Null while no prefix is in force, so an instance without exclusions pays
+	 * nothing for this, the same stance as the event listener and describe().
+	 * Otherwise the root of the mount is resolved once per page and every row
+	 * is asked through the one helper on the one path space, exactly the shape of
+	 * the crawl (StorageCrawlJob), so that the slice, the crawl, the listener and
+	 * describe() cannot disagree about a file. Nothing of the path reaches the
+	 * log or the answer (T-03-1102).
+	 *
+	 * @return (\Closure(string): bool)|null
+	 */
+	private function exclusionPredicate(int $storage, int $root): ?\Closure {
+		if ($this->exclusionService->prefixes() === []) {
+			return null;
+		}
+
+		$mountRoot = $this->storageService->mountRootPath($storage, $root);
+		$exclusions = $this->exclusionService;
+
+		return static fn (string $path): bool => $exclusions->isExcluded($exclusions->mountRelativePath($path, $mountRoot));
 	}
 
 	/**

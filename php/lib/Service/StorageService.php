@@ -400,12 +400,24 @@ class StorageService {
 	 * prefix leaves behind is done deliberately and in bands instead, through
 	 * SubtreeExpandJob with kind delete (plan 04-09, research pattern 9).
 	 *
-	 * @return list<array{fileId: int, etag: string, size: int, mtime: int, mime: string}>
+	 * What the reconcile does need is to know which rows a rule of today keeps
+	 * out, and that is what the optional predicate is for (owner decision of
+	 * 03.10.2026, part a, after run 7 of the 28-07 chain). Given one, every row
+	 * carries an ``excluded`` flag next to the five fields: the row is marked and
+	 * never dropped, for the reason in the paragraph above. The predicate gets the
+	 * internal path of the cache entry and answers with the rule; it is handed in
+	 * rather than asked for because ExclusionService depends on this class, and
+	 * injecting it here would be a cycle. The path never leaves this method, and
+	 * no prefix is compared here: the caller builds the predicate out of
+	 * ExclusionService::isExcluded on the one path space.
+	 *
+	 * @param (\Closure(string): bool)|null $isExcludedPath
+	 * @return list<array{fileId: int, etag: string, size: int, mtime: int, mime: string, excluded?: bool}>
 	 */
-	public function getFileSlice(int $storageId, int $overriddenRoot, int $lastFileId, int $batchSize): array {
+	public function getFileSlice(int $storageId, int $overriddenRoot, int $lastFileId, int $batchSize, ?\Closure $isExcludedPath = null): array {
 		$rows = [];
 		foreach ($this->getFilesInMount($storageId, $overriddenRoot, $lastFileId, $batchSize) as $entry) {
-			$rows[] = [
+			$row = [
 				'fileId' => $entry->getId(),
 				'etag' => $entry->getEtag(),
 				// int on every ordinary file; the interface allows a float for
@@ -415,6 +427,10 @@ class StorageService {
 				'mtime' => $entry->getMTime(),
 				'mime' => $entry->getMimeType(),
 			];
+			if ($isExcludedPath !== null) {
+				$row['excluded'] = (bool)$isExcludedPath($entry->getPath());
+			}
+			$rows[] = $row;
 		}
 
 		return $rows;

@@ -89,6 +89,16 @@ QUEUE_SERVICE = PHP_ROOT / "Service" / "QueueService.php"
 # and the comparison on the way out. Read here since phase 5, for finding IN-07.
 EXCLUSION_SERVICE = PHP_ROOT / "Service" / "ExclusionService.php"
 
+# The fourth call site, added for the owner decision of 03.10.2026 (part a) after
+# run 7 of the 28-07 chain. The file slice of the reconcile carries every file of
+# the mount, excluded or not, because a filtered page would read as final and
+# fire the deletion rule. Without a mark the container read every excluded file
+# it did not know as unindexed, requeued it, describe() answered with a delete
+# order, and the next quiet round found it unknown again: 549 files every ~300 s.
+# So the slice marks such a row live as skipped(excluded), and it has to work the
+# rule out through the same helper and the same path space as the other three.
+RECONCILE_CONTROLLER = PHP_ROOT / "Controller" / "ReconcileController.php"
+
 # The one helper both call paths go through, and the one method that builds the
 # path they hand it.
 HELPER_CALL = "isExcluded"
@@ -290,7 +300,9 @@ def test_the_four_files_of_the_exclusion_exist() -> None:
     # The anti vacuity clause. Every scanner above returns an empty list for a
     # file it cannot read, so a gate that lost its files would look perfect.
     missing = [
-        path.name for path in (CRAWL, LISTENER, STORAGE_SERVICE, QUEUE_SERVICE, EXCLUSION_SERVICE) if not path.is_file()
+        path.name
+        for path in (CRAWL, LISTENER, STORAGE_SERVICE, QUEUE_SERVICE, EXCLUSION_SERVICE, RECONCILE_CONTROLLER)
+        if not path.is_file()
     ]
 
     assert missing == []
@@ -352,6 +364,30 @@ def test_the_reconcile_requeue_path_consults_the_helper() -> None:
         "re-indexes an excluded subtree within one interval and undoes the clearing"
     )
     assert any(PATH_SPACE_CALL in line for _, line in code), QUEUE_SERVICE.name
+
+
+def test_the_reconcile_slice_marks_excluded_rows_through_the_helper() -> None:
+    # Owner decision of 03.10.2026, part a. The slice is the fourth place the
+    # rules of today are applied, and the mark it hands the container has to come
+    # out of the one helper on the one path space: a prefix compared here would be
+    # a second answer to "is this file excluded", and the container would leave
+    # alone what describe() still hands out, or the other way round.
+    code = statements(RECONCILE_CONTROLLER.read_text(encoding="utf-8"))
+
+    violations = [
+        f"{RECONCILE_CONTROLLER.name}:{number}: compares a path with {comparison} instead of asking "
+        f"ExclusionService::{HELPER_CALL}, which is a second path space"
+        for number, line in code
+        for comparison in PREFIX_COMPARISONS
+        if comparison in line
+    ]
+
+    assert violations == []
+    assert any(HELPER_CALL in line for _, line in code), (
+        f"{RECONCILE_CONTROLLER.name}: never calls ExclusionService::{HELPER_CALL}, so the "
+        "reconcile requeues every excluded file it does not know on every quiet round"
+    )
+    assert any(PATH_SPACE_CALL in line for _, line in code), RECONCILE_CONTROLLER.name
 
 
 def test_an_excluded_row_is_handed_out_as_a_delete_order() -> None:
