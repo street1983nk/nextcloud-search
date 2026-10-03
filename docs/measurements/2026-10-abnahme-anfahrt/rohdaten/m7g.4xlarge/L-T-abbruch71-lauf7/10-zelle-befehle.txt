@@ -1,0 +1,75 @@
+ExApp findling_backend successfully disabled.
+ExApp findling_backend successfully removed
+ExApp findling_backend successfully unregistered.
+ghcr.io/street1983nk/findling_backend@sha256:d33bfcaea1ff933bb6fdcd387c70a665f5e04ce3ca5288c3932831882a9bdb0a: Pulling from street1983nk/findling_backend
+Digest: sha256:d33bfcaea1ff933bb6fdcd387c70a665f5e04ce3ca5288c3932831882a9bdb0a
+Status: Image is up to date for ghcr.io/street1983nk/findling_backend@sha256:d33bfcaea1ff933bb6fdcd387c70a665f5e04ce3ca5288c3932831882a9bdb0a
+ghcr.io/street1983nk/findling_backend@sha256:d33bfcaea1ff933bb6fdcd387c70a665f5e04ce3ca5288c3932831882a9bdb0a
+ExApp findling_backend deployed successfully.
+ExApp findling_backend successfully registered.
+ExApp findling_backend successfully disabled.
+ExApp findling_backend successfully enabled.
+1 of 3: the package inside the image
+2 of 3: the package in the working tree
+3 of 3: the php half in the working tree
+baumhash-start 2026-10-03T16:37:08Z
+abbild: ghcr.io/street1983nk/findling_backend@sha256:d33bfcaea1ff933bb6fdcd387c70a665f5e04ce3ca5288c3932831882a9bdb0a
+digest=ghcr.io/street1983nk/findling_backend@sha256:d33bfcaea1ff933bb6fdcd387c70a665f5e04ce3ca5288c3932831882a9bdb0a arch=arm64 created=2026-10-03T08:09:22.700862324Z
+repo: /home/ubuntu/work/nextcloud-search
+=== The tree hash of the package INSIDE the image ===
+dateien: 71
+baumhash: 1a0598a6e1592c6307d9775e708a6bcc2fdd0c624802df2f2c54c82fdd226191
+=== The tree hash of the package in the working tree ===
+dateien: 71
+baumhash: 1a0598a6e1592c6307d9775e708a6bcc2fdd0c624802df2f2c54c82fdd226191
+=== The tree hash of the php half in the working tree ===
+dateien: 87
+baumhash: 8ee9286c72852cab04fc40bc2704e0232c4b9cb2c28c06907d091a699f4909f4
+=== The verdict ===
+abbild-baumhash: 1a0598a6e1592c6307d9775e708a6bcc2fdd0c624802df2f2c54c82fdd226191
+arbeitsbaum-baumhash: 1a0598a6e1592c6307d9775e708a6bcc2fdd0c624802df2f2c54c82fdd226191
+baumhash-gleich ja
+baumhash-ende 2026-10-03T16:37:08Z
+40B-BAUMHASH-FERTIG
+nullstand-start 2026-10-03T16:37:08Z
+volumen: <volumen des backends>
+container nc_app_findling_backend
+=== Quelle 1: der Inhalt des Volumens ===
+/home/ubuntu/work/nextcloud-search/docs/measurements/2026-10-abnahme-anfahrt/skripte/93b-nullstand.sh: 74: cannot open /mnt/findling/docker/volumes/nc_app_findling_backend_data/_data/state.db: Permission denied
+state.db vorhanden, groesse in byte: 
+/home/ubuntu/work/nextcloud-search/docs/measurements/2026-10-abnahme-anfahrt/skripte/93b-nullstand.sh: 74: cannot open /mnt/findling/docker/volumes/nc_app_findling_backend_data/_data/vectors.db: Permission denied
+vectors.db vorhanden, groesse in byte: 
+tantivy-verzeichnis vorhanden, dateien: 4
+=== Quelle 2 und 4: Endzustaende und Arbeitsvorrat, ueber occ ===
+Work stock
+  scheduled            549
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              32
+  failed               6
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-10-03 15:20:06 (77 minutes ago)
+arbeitsvorrat 549
+=== Quelle 3: Marken und Dateien je Zustand, nur mit state.db ===
+  analyzer_version = 1
+  created_at = 1791045422
+  embedding_version = unknown
+  index_version = 1
+  instance_id = b10e94df435d4525a153ec653b67a38c
+  languages = de,en
+  multi_slot_chosen = 
+  multi_slot_pass = 
+  schema_version = 2
+  store_schema_version = 2
+  tantivy_version = tantivy v0.26.2, index_format v7
+  wordlist_hash = b1f64012ca7f5b6e57de2cb1bafa2521cb6606f3ccef5d6fd17396edc808dde0
+  wordlist_hash_nl = off
+  dateien je zustand: []
+dateien-im-speicher 0
+volumen-leer ja
+nullstand-ende 2026-10-03T16:37:08Z
+93B-NULLSTAND-FERTIG

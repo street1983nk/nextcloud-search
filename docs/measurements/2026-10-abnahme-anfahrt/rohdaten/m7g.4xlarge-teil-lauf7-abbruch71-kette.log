@@ -1,0 +1,10 @@
+kette-start m7g.4xlarge 2026-10-03T11:18:24Z bisher 4.1985 deckel 59.43 satz 0.800141
+timer-gesetzt minuten 5032 abschaltung 2026-10-06T23:10:24Z
+zelle-start S-T economy/int8 korpus teil 2026-10-03T11:18:24Z bisher 4.1985
+zelle-ende S-T rueckgabe 0 2026-10-03T14:57:38Z
+zelle-start St-T standard/int8 korpus teil 2026-10-03T14:57:38Z bisher 7.1221
+zelle-ende St-T rueckgabe 0 2026-10-03T16:36:54Z
+zelle-start L-T performance/int8 korpus teil 2026-10-03T16:36:54Z bisher 8.4459
+zelle-ende L-T rueckgabe 71 2026-10-03T17:37:31Z
+kette-abbruch zelle L-T rueckgabe 71 2026-10-03T17:37:31Z
+timer-vorgezogen 2026-10-03T17:37:31Z auf-minuten 60

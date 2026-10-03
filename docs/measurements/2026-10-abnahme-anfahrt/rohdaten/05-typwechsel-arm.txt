@@ -46,3 +46,29 @@ zelle St-T GEMESSEN: rueckgabe 0; probe 14:57:52Z verdikt fits (reserve 62082822
   (available 2029940736, need 1609969536, slots 1), erst state=done traegt die zahlen dieser box.
 zelle L-T: probe verdikt fits (reserve 60327039104, slots 15), erzwungen nein, wirksamkeit ja effective
   performance slotsInForce 15 nach-s 2, trigger 16:37:27Z; L-T memory.max max memory.swap.max max (16:39Z)
+zelle L-T: ABBRUCH 71 2026-10-03T17:37:31Z (zaehltor verfehlt 5549 statt 5000), kette-abbruch, timer-vorgezogen 60 min.
+  zaehlung vorrat 549 uebersprungen-frisch 0 fehlgeschlagen-frisch 0 eingebettet 5000 indexiert 5000 summe 5549.
+  der teilkorpus war zu diesem zeitpunkt VOLLSTAENDIG eingebettet (5000/5000); die 549 sind kein teilkorpus.
+  beleg an der datenbank der box, schub abgefangen 17:42:19Z (oc_findling_queue join oc_filecache):
+    549 zeilen kind content, is_update 0; ordner loadtest 500 (home lasttest), Templates 31, Photos 9,
+    Documents 4, einzelne beispieldateien 5 (home admin 49); fileids 3 bis 2634; KEIN files/teilkorpus.
+    das sind dateien unter den ordner-ausschluessen, die der selbstvorschub bei leerem vorrat einplant
+    ("the work stock ran dry while the crawl is unfinished, asked for the next slice myself") und die der
+    container ohne indexierung abarbeitet (paesse claimed=32 indexed=0 committed=32 slots=1); um 17:38:03Z
+    stand der vorrat wieder auf 0.
+  derselbe schub erscheint im takt des reconcile, containerrelativ: 16:37:08Z, 16:42:10Z, 16:47:12Z (vor dem
+    crawl in den teilkorpus) und wieder 17:37:14Z, 17:42:19Z (nach dessen ende), abstand ~300,5 s.
+  ursache des abbruchs (werkzeug, nicht produkt): das zaehltor liest den vorrat global (occ findling:index
+    scheduled + handed), waehrend uebersprungen/fehlgeschlagen seit 261002-cvf teilkorpus-scharf sind. die
+    lesung bei trigger + 3600 s faellt strukturell ~17 s nach den 12. reconcile-takt (trigger ~20 s nach dem
+    containerstart, reconcile 4 s danach, dann alle ~300,5 s); ist der teilkorpus vorher fertig, sieht die
+    lesung den schub der ausgeschlossenen dateien. auf m7g.large und bei S-T/St-T hier war der teilkorpus
+    bei 3600 s nie fertig (vorrat legitim), darum trat das erst bei L-T auf.
+  rohdaten unter m7g.4xlarge/L-T-abbruch71-lauf7/ und m7g.4xlarge-teil-lauf7-abbruch71-kette.log.
+wiederholung L-T (die eine erlaubte, belegtes timing-problem): ZELLEN=L-T:performance:int8:teil, sonst
+  laufwerte unveraendert; vorab-raeumung 17:48:43Z occ findling:index --restart -n (vorrat 0/0);
+  kettenstart 2026-10-03T17:49:17Z bisher 9.4111, timer-gesetzt minuten 4642.
+  probe verdikt fits (reserve 60169486464, slots 15), erzwungen nein; wirksamkeit ja effective performance
+  slotsInForce 15 nach-s 1; trigger 17:49:51Z; memory.max max memory.swap.max max.
+  containerstart 17:49:28Z, erster reconcile 17:49:32Z: der 12. takt liegt bei ~18:49:38Z, die lesung bei
+  ~18:49:55Z; die wiederholung besteht nur, wenn der teilkorpus dann noch nicht fertig ist.
