@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
-status: blocked
-stopped_at: "28-07 Task 1: S-T-anker gemessen, St-T Abbruch 69 (wirksam durch statischen Vorschlag gedeckelt), Owner-Entscheid D-24-07"
-last_updated: "2026-10-02T07:20:00.000Z"
-last_activity: 2026-10-02
+status: executing
+stopped_at: "28-07 Task 1: Blocker D-24-07 geloest (Quick 261003-d3y), naechster Executor-Lauf 7 der Kette"
+last_updated: "2026-10-03T08:05:00.000Z"
+last_activity: 2026-10-03
 progress:
   total_phases: 6
   completed_phases: 4
@@ -27,14 +27,22 @@ See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 
 Phase: 28 (Abnahme-Anfahrt), in Ausführung
 Plan: 7 of 14
-Status: Blocked (28-07: S-T-anker GEMESSEN; St-T Abbruch 69, Probe fits vs. statischer Vorschlag economy, Owner-Entscheid noetig)
-Last activity: 2026-10-02
+Status: Executing (28-07: Blocker D-24-07 geloest per Quick 261003-d3y; naechster Lauf 7 der Kette)
+Last activity: 2026-10-03
 
 Progress: [█████████░] 87%
 
 ## Naechster Schritt
 
-**28-07 Task 1: Owner-Entscheid zur Zählquelle des Zähltors, dann Kette neu.**
+**28-07 Task 1: Executor-Lauf 7 der Kette (AWS-Login durch den Owner nötig).**
+Owner-Entscheid 03.10. zu D-24-07 umgesetzt (Quick 261003-d3y, 52390ff7..3d1c6d72, NUR LOKAL):
+die Probe prüft vor jeder Messung die Vorschlags-Schwellen (profile.suggest) und sagt
+darunter nofit hardware_short ohne Messung; Zellen 3, 4 (m7g.large St-T/L-T) und 10
+(c7a.xlarge L-T) gestrichen, Matrix 18 Zellen; 10-zelle.sh bricht bei hardware_short mit
+74 ab. Für Lauf 7: LAUFWERTE ZELLEN ohne die gestrichenen Zellen setzen; das Abbild muss
+den Probe-Fix tragen (neuer Digest), sonst misst die Box den alten Stand.
+
+Vorgeschichte (Lauf 5, 02.10.):
 Lauf 5 (02.10., Start 8, Kette 05:58:50Z): die Tor-Verschiebung 261002-af9 wirkt im Feld,
 vorrat-tor altvorrat 0 BESTANDEN (05:59:00Z, zwischen Registrierung und Bewaffnung kann
 kein Container nachschieben). Alle Tore bis zum Trigger grün (Grenze 2g/0, Baumhash ja,
@@ -163,7 +171,10 @@ Fuer v1.4 unmittelbar tragend:
 
 ### Offene Blocker
 
-- **28-07 Zelle St-T, Abbruch 69 (Lauf 6, 02.10.):** Probe sagt fits (2,03 GB verfuegbar,
+- **GELOEST 03.10. (Quick 261003-d3y): Owner-Entscheid P2 + Zellen 3/4/10 gestrichen.**
+  Probe prüft die Vorschlags-Schwellen (nofit hardware_short), Zellenwerkzeug Abbruch 74.
+  Ursprünglicher Befund:
+- ~~**28-07 Zelle St-T, Abbruch 69 (Lauf 6, 02.10.):**~~ Probe sagt fits (2,03 GB verfuegbar,
   1,61 GB noetig), Profil standard gespeichert, wirksam blieb economy: profile.effective()
   deckelt auf suggest(), und suggest verlangt fuer Standard >= 6 GB UND >= 3 Kerne (Referenzbox:
   2 Kerne, 2 GB Grenze). Produktwiderspruch Probe vs. Wirksamkeit, auf der Admin-Seite sichtbar
@@ -176,6 +187,7 @@ Fuer v1.4 unmittelbar tragend:
 
 | # | Description | Date | Commit | Status | Directory |
 |---|-------------|------|--------|--------|-----------|
+| 261003-d3y | 28-07 D-24-07 P2: Probe prüft vor der Messung die Vorschlags-Schwellen über profile.suggest (nofit hardware_short, keine Pause/Download/Kinder), Ursache in PHP/JS/16 Katalogen; Zellen 3/4/10 gestrichen (18 Zellen), 10-zelle Abbruch 74 | 2026-10-03 | 3d1c6d72 | Done (4408 Tests grün, 2 lokale CRLF-Artefakte 11-probe-route.py; php -l = CI-Vorbehalt) | [261003-d3y-d-24-07-nachschaerfung-p2-probe-prueft-v](./quick/261003-d3y-d-24-07-nachschaerfung-p2-probe-prueft-v/) |
 | 261002-cvf | 28-07 Zaehltor zaehlt zeit- und pfadscharf (Zaehlmarke vor dem Trigger, nur frische files/teilkorpus-Zustaende via psql; Beleg 5041 -> 5000, Kalibrierfalle 4959 -> 71) | 2026-10-02 | a2b0fcf9 | Done (545 Tests gruen) | [261002-cvf-zaehltor-teilkorpus-scharfe-zaehlquelle](./quick/261002-cvf-zaehltor-teilkorpus-scharfe-zaehlquelle/) |
 | 261002-af9 | 28-07 Vorrats-Tor vor die Bewaffnung gezogen (Schritt vorrat-tor, Abbruch 73 beziffert Altbestand; 93b-rc-13 zurueckgebaut; Nachschub nach Bewaffnung bricht nicht mehr ab) | 2026-10-02 | c04e7431 | Done (543 Tests gruen) | [261002-af9-vorrats-tor-vor-die-bewaffnung-ziehen](./quick/261002-af9-vorrats-tor-vor-die-bewaffnung-ziehen/) |
 | 261002-93i | 28-07 Blocker-Fix a+b: occ findling:index --restart raeumt den Arbeitsvorrat (QueueMapper/QueueService::clear(), Produkt-Fix fuer den Notfallhebel) + 93b-Nullstand urteilt ueber den Vorrat (rc 13) + 10-zelle Abbruch 73 vor Samplern/Trigger | 2026-10-02 | 599a74d2 | Done (65+477 Tests gruen; php -l/PHPUnit = CI-Vorbehalt) | [261002-93i-findling-restart-raeumt-arbeitsvorrat-nu](./quick/261002-93i-findling-restart-raeumt-arbeitsvorrat-nu/) |
@@ -219,8 +231,8 @@ Aeltere Merker:
 
 ## Session Continuity
 
-Last session: 2026-10-02T07:20:00.000Z
-Stopped at: 28-07 Task 1, Checkpoint nach Lauf 5 (Abbruch 71, Blocker Zaehltor-Altbestand; vorrat-tor bestanden)
+Last session: 2026-10-03T08:05:00.000Z
+Stopped at: Quick 261003-d3y fertig (D-24-07 P2 umgesetzt); 28-07 Lauf 7 wartet auf AWS-Login des Owners
 Resume file: None
 
 ## Operator Next Steps
