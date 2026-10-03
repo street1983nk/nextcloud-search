@@ -1,0 +1,52 @@
+zelle-start L-T box m7g.4xlarge ziel performance/int8 korpus teil 2026-10-03T17:49:17Z
+abbild-digest sha256:d33bfcaea1ff933bb6fdcd387c70a665f5e04ce3ca5288c3932831882a9bdb0a
+schritt abwaerts 2026-10-03T17:49:17Z
+abwaerts code=saved saved=true HTTP200
+schritt zaehlung-eine-nextcloud 2026-10-03T17:49:18Z
+nextcloud-instanzen 1
+schritt nullstand 2026-10-03T17:49:18Z
+unregister-rm-data ja
+schritt registrierung 2026-10-03T17:49:21Z
+registrierung-rueckgabewert 0
+schritt vorrat-tor 2026-10-03T17:49:27Z
+vorrat-tor altvorrat 0
+schritt bewaffnung 2026-10-03T17:49:27Z
+bewaffnung backendReachable true nach-s 1
+schritt grenze 2026-10-03T17:49:31Z
+grenze keine
+schritt baumhash 2026-10-03T17:49:31Z
+40b-baumhash-rueckgabewert 0
+baumhash-im-laufenden-container 1a0598a6e1592c6307d9775e708a6bcc2fdd0c624802df2f2c54c82fdd226191
+baumhash-beweis ja
+schritt 93b-nullstand 2026-10-03T17:49:32Z
+93b-nullstand-rueckgabewert 0
+schritt drop-caches 2026-10-03T17:49:33Z
+caches-geleert ja
+schritt probe 2026-10-03T17:49:33Z
+probe-rueckgabewert 0
+erzwungen nein
+schritt wirksamkeit 2026-10-03T17:49:48Z
+uebersicht HTTP200 effective=performance guardEffective=performance guardCause=keine slotsInForce=15 throttled=false backendReachable=true scheduled=69 running=0 indexed=0 embedded=0 storedPrecision=int8 profileSaved=performance
+wirksamkeit ja effective performance slotsInForce 15 nach-s 1
+schritt sampler 2026-10-03T17:49:49Z
+sampler rss 2 anon 1 cpu 5 status 120 gestartet 2026-10-03T17:49:49Z
+schritt trigger 2026-10-03T17:49:49Z
+zaehlmarke 2026-10-01 11:39:47
+The crawl was queued. It starts with the next run of the background jobs.
+
+Work stock
+  scheduled            0
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              32
+  failed               6
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-10-03 17:00:06 (49 minutes ago)
+trigger ja 2026-10-03T17:49:51Z
+zaehlung vorrat 549 uebersprungen-frisch 0 fehlgeschlagen-frisch 0 eingebettet 5000 indexiert 5000 summe 5549
+zaehltor verfehlt 5549 statt 5000
+zelle-abbruch rueckgabe 71 grund das Zaehltor 5000 ist verfehlt (5549) 2026-10-03T18:49:55Z

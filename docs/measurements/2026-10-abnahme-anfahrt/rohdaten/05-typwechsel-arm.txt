@@ -72,3 +72,21 @@ wiederholung L-T (die eine erlaubte, belegtes timing-problem): ZELLEN=L-T:perfor
   slotsInForce 15 nach-s 1; trigger 17:49:51Z; memory.max max memory.swap.max max.
   containerstart 17:49:28Z, erster reconcile 17:49:32Z: der 12. takt liegt bei ~18:49:38Z, die lesung bei
   ~18:49:55Z; die wiederholung besteht nur, wenn der teilkorpus dann noch nicht fertig ist.
+wiederholung L-T: ABBRUCH 71 2026-10-03T18:49:55Z, identisch zum ersten versuch (wie vorhergesagt):
+  zaehlung vorrat 549 uebersprungen-frisch 0 fehlgeschlagen-frisch 0 eingebettet 5000 indexiert 5000 summe 5549.
+  statusreihe 18:47:57Z: runState idle, scheduled 0, backend indexed 5000 embedded 5000 (teilkorpus fertig);
+  reconcile-takt 18:44:36Z und 18:49:38.86Z ("reconcile stands down, 549 rows are scheduled",
+  "reconcile round queue_busy, mounts=4 slices=2 seen=549 stale=549"), lesung 17 s danach.
+  rohdaten unter m7g.4xlarge/L-T-abbruch71-lauf7-wdh/ und m7g.4xlarge-teil-lauf7-wdh-abbruch71-kette.log.
+  anon-max beider L-T-versuche (rechnung 5033,0, grenze 5536,3): 5420,0 und 5474,3 MiB; probe beide male fits.
+produktbefund (owner-entscheid, kein eingriff in den produktcode):
+  der reconcile des containers (findling/worker/reconcile.py, _compare) haelt jede datei, fuer die er kein
+  gespeichertes etag hat, fuer stale und reicht sie als content-arbeit weiter. dateien unter den ordner-
+  ausschluessen bekommen nie ein etag, also landen dieselben 549 (fileids 3 bis 2634, home lasttest/loadtest und
+  home admin) in jeder ruhigen runde wieder im vorrat: beim containerstart (statusreihe S-T 11:18:43Z und
+  m7g.large S-T-anker 2026-10-02T07:56:44Z je scheduled 549) und danach alle ~300 s, sobald der vorrat unter
+  der ruhemarke 100 liegt. der worker arbeitet sie ohne indexierung ab, die runde steht wegen des eigenen
+  schubs sofort wieder still. fuer nutzer mit ausschluessen heisst das: im leerlauf alle 5 minuten ein schub
+  ausgeschlossener dateien (vorrat springt 0 -> 549 -> 0, http-abrufe, schreiberkommits), dauerhaft.
+  mechanik aus code und log gelesen, nicht im einzelschritt nachgestellt.
+box per aws_box.sh stop gestoppt 2026-10-03T18:51:09Z (vorher sudo shutdown -c), geparkt.

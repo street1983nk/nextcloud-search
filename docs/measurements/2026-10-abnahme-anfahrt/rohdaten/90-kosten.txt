@@ -81,4 +81,9 @@ geparkt 2026-10-02T15:00:39Z 2026-10-03T11:09:57Z
 #   companion-app ersetzt, mem=4G-drop-in entfernt, dann typwechsel auf m7g.4xlarge (00-typwechsel.sh)
 m7g.large 2026-10-03T11:09:57Z 2026-10-03T11:14:27Z
 geparkt 2026-10-03T11:14:27Z 2026-10-03T11:14:46Z
-m7g.4xlarge 2026-10-03T11:14:46Z laeuft
+m7g.4xlarge 2026-10-03T11:14:46Z 2026-10-03T18:51:09Z
+geparkt 2026-10-03T18:51:09Z laeuft
+# m7g.4xlarge stop 2026-10-03T18:51:09Z (aws_box.sh stop, BOX_STOPPED_ISO) laufzeit 7.6064 h x 0.800141 = 6.0862 USD
+# kettenlauf 7: zellen S-T (rueckgabe 0) und St-T (rueckgabe 0) GEMESSEN; L-T zweimal abbruch 71 (5549 statt 5000,
+#   teilkorpus jeweils fertig 5000/5000, vorrat 549 = ausgeschlossene dateien im reconcile-takt); blocker an den owner
+# bisher 10.24 USD gegen deckel 59.43 USD (02-rechenblatt.py stand --jetzt 2026-10-03T18:51:09Z, rest 49.19); box geparkt
