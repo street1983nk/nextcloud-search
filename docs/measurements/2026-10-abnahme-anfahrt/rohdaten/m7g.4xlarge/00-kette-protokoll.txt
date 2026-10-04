@@ -323,3 +323,56 @@ zaehlung vorrat 549 uebersprungen-frisch 0 fehlgeschlagen-frisch 0 eingebettet 5
 zaehltor verfehlt 5549 statt 5000
 zelle-abbruch rueckgabe 71 grund das Zaehltor 5000 ist verfehlt (5549) 2026-10-03T18:49:55Z
 10-zelle: das Zaehltor 5000 ist verfehlt (5549)
+zelle-start L-T box m7g.4xlarge ziel performance/int8 korpus teil 2026-10-03T22:49:16Z
+abbild-digest sha256:5242e47f6eb90de5984e7cd0b594df95addfbbbfb8e9d72f7b8375f9b7370aa9
+schritt abwaerts 2026-10-03T22:49:16Z
+abwaerts code=saved saved=true HTTP200
+schritt zaehlung-eine-nextcloud 2026-10-03T22:49:19Z
+nextcloud-instanzen 1
+schritt nullstand 2026-10-03T22:49:19Z
+unregister-rm-data ja
+schritt registrierung 2026-10-03T22:49:20Z
+registrierung-rueckgabewert 0
+schritt vorrat-tor 2026-10-03T22:49:24Z
+vorrat-tor altvorrat 0
+schritt bewaffnung 2026-10-03T22:49:25Z
+bewaffnung backendReachable true nach-s 2
+schritt grenze 2026-10-03T22:49:29Z
+grenze keine
+schritt baumhash 2026-10-03T22:49:29Z
+40b-baumhash-rueckgabewert 0
+baumhash-im-laufenden-container a6ad7397deebc8fe18cec08a2518bdcbb8261d711d134b40a96e2d4de98a6673
+baumhash-beweis ja
+schritt 93b-nullstand 2026-10-03T22:49:30Z
+93b-nullstand-rueckgabewert 0
+schritt drop-caches 2026-10-03T22:49:30Z
+caches-geleert ja
+schritt probe 2026-10-03T22:49:31Z
+probe-rueckgabewert 0
+erzwungen nein
+schritt wirksamkeit 2026-10-03T22:49:45Z
+uebersicht HTTP200 effective=performance guardEffective=performance guardCause=keine slotsInForce=1 throttled=false backendReachable=true scheduled=0 running=0 indexed=0 embedded=0 storedPrecision=int8 profileSaved=performance
+wirksamkeit ja effective performance slotsInForce 1 nach-s 34
+schritt sampler 2026-10-03T22:50:19Z
+sampler rss 2 anon 1 cpu 5 status 120 gestartet 2026-10-03T22:50:19Z
+schritt trigger 2026-10-03T22:50:19Z
+zaehlmarke 2026-10-01 11:39:47
+The crawl was queued. It starts with the next run of the background jobs.
+
+Work stock
+  scheduled            0
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              32
+  failed               6
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-10-03 18:10:06 (280 minutes ago)
+trigger ja 2026-10-03T22:50:20Z
+zaehlung vorrat-teilkorpus 427 vorrat-global 427 uebersprungen-frisch 0 fehlgeschlagen-frisch 0 eingebettet 5000 indexiert 5000 summe 5427
+zaehltor verfehlt 5427 statt 5000
+zelle-abbruch rueckgabe 71 grund das Zaehltor 5000 ist verfehlt (5427) 2026-10-03T23:50:25Z
+10-zelle: das Zaehltor 5000 ist verfehlt (5427)

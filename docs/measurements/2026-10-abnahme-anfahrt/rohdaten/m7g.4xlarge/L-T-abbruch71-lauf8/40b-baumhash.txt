@@ -1,0 +1,18 @@
+baumhash-start 2026-10-03T22:49:30Z
+abbild: ghcr.io/street1983nk/findling_backend@sha256:5242e47f6eb90de5984e7cd0b594df95addfbbbfb8e9d72f7b8375f9b7370aa9
+digest=ghcr.io/street1983nk/findling_backend@sha256:5242e47f6eb90de5984e7cd0b594df95addfbbbfb8e9d72f7b8375f9b7370aa9 arch=arm64 created=2026-10-03T22:27:06.795810259Z
+repo: /home/ubuntu/work/nextcloud-search
+=== The tree hash of the package INSIDE the image ===
+dateien: 71
+baumhash: a6ad7397deebc8fe18cec08a2518bdcbb8261d711d134b40a96e2d4de98a6673
+=== The tree hash of the package in the working tree ===
+dateien: 71
+baumhash: a6ad7397deebc8fe18cec08a2518bdcbb8261d711d134b40a96e2d4de98a6673
+=== The tree hash of the php half in the working tree ===
+dateien: 88
+baumhash: 2023c844e4ec9f85f38dace44992c2a797dd273ccfa47de36885aa4de25555f4
+=== The verdict ===
+abbild-baumhash: a6ad7397deebc8fe18cec08a2518bdcbb8261d711d134b40a96e2d4de98a6673
+arbeitsbaum-baumhash: a6ad7397deebc8fe18cec08a2518bdcbb8261d711d134b40a96e2d4de98a6673
+baumhash-gleich ja
+baumhash-ende 2026-10-03T22:49:30Z

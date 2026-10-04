@@ -1,0 +1,190 @@
+# auszug container-log nc_app_findling_backend lauf 8 (reconcile, selbstvorschub, durchgaenge ab 23:44Z), gelesen 2026-10-03T23:57:19Z
+2026-10-03T22:51:14.454892628Z INFO:findling.worker.poller:the work stock ran dry while the crawl is unfinished, asked for the next slice myself
+2026-10-03T22:51:25.341047320Z INFO:findling.worker.reconcile:reconcile stands down, 401 rows are scheduled and the quiet mark is 100
+2026-10-03T22:51:25.341165928Z INFO:findling.worker.reconcile:reconcile round queue_busy, mounts=4 slices=106 seen=52549 stale=401 missing=0 given_up=0
+2026-10-03T22:53:31.827747179Z INFO:findling.worker.poller:the work stock ran dry while the crawl is unfinished, asked for the next slice myself
+2026-10-03T22:56:27.325886506Z INFO:findling.worker.reconcile:reconcile stands down, 500 rows are scheduled and the quiet mark is 100
+2026-10-03T22:56:27.325993921Z INFO:findling.worker.reconcile:reconcile round queue_busy, mounts=4 slices=2 seen=549 stale=500 missing=0 given_up=0
+2026-10-03T23:01:29.324521519Z INFO:findling.worker.reconcile:reconcile stands down, 563 rows are scheduled and the quiet mark is 100
+2026-10-03T23:01:29.324631367Z INFO:findling.worker.reconcile:reconcile round queue_busy, mounts=4 slices=2 seen=549 stale=500 missing=0 given_up=0
+2026-10-03T23:06:31.553981142Z INFO:findling.worker.reconcile:reconcile stands down, 510 rows are scheduled and the quiet mark is 100
+2026-10-03T23:06:31.554273581Z INFO:findling.worker.reconcile:reconcile round queue_busy, mounts=4 slices=2 seen=549 stale=500 missing=0 given_up=0
+2026-10-03T23:11:33.545670992Z INFO:findling.worker.reconcile:reconcile stands down, 538 rows are scheduled and the quiet mark is 100
+2026-10-03T23:11:33.545769232Z INFO:findling.worker.reconcile:reconcile round queue_busy, mounts=4 slices=2 seen=549 stale=500 missing=0 given_up=0
+2026-10-03T23:16:35.540877615Z INFO:findling.worker.reconcile:reconcile stands down, 500 rows are scheduled and the quiet mark is 100
+2026-10-03T23:16:35.540991969Z INFO:findling.worker.reconcile:reconcile round queue_busy, mounts=4 slices=2 seen=549 stale=500 missing=0 given_up=0
+2026-10-03T23:21:37.481107238Z INFO:findling.worker.reconcile:reconcile stands down, 500 rows are scheduled and the quiet mark is 100
+2026-10-03T23:21:37.481224144Z INFO:findling.worker.reconcile:reconcile round queue_busy, mounts=4 slices=2 seen=549 stale=500 missing=0 given_up=0
+2026-10-03T23:25:59.867615436Z INFO:findling.worker.poller:the work stock ran dry while the crawl is unfinished, asked for the next slice myself
+2026-10-03T23:26:39.374414721Z INFO:findling.worker.reconcile:reconcile stands down, 500 rows are scheduled and the quiet mark is 100
+2026-10-03T23:26:39.374554764Z INFO:findling.worker.reconcile:reconcile round queue_busy, mounts=4 slices=2 seen=549 stale=500 missing=0 given_up=0
+2026-10-03T23:31:41.248012178Z INFO:findling.worker.reconcile:reconcile stands down, 578 rows are scheduled and the quiet mark is 100
+2026-10-03T23:31:41.248113858Z INFO:findling.worker.reconcile:reconcile round queue_busy, mounts=4 slices=2 seen=549 stale=500 missing=0 given_up=0
+2026-10-03T23:36:24.476744470Z INFO:findling.worker.poller:the work stock ran dry while the crawl is unfinished, asked for the next slice myself
+2026-10-03T23:36:42.972889528Z INFO:findling.worker.reconcile:reconcile stands down, 500 rows are scheduled and the quiet mark is 100
+2026-10-03T23:36:42.973017686Z INFO:findling.worker.reconcile:reconcile round queue_busy, mounts=4 slices=2 seen=549 stale=500 missing=0 given_up=0
+2026-10-03T23:41:43.351943823Z INFO:findling.worker.reconcile:reconcile stands down, 122 rows are scheduled and the quiet mark is 100
+2026-10-03T23:41:43.351978489Z INFO:findling.worker.reconcile:reconcile round queue_busy, mounts=4 slices=2 seen=148 stale=99 missing=0 given_up=0
+2026-10-03T23:44:19.606610248Z INFO:findling.worker.poller:the work stock ran dry while the crawl is unfinished, asked for the next slice myself
+2026-10-03T23:46:43.400237989Z INFO:findling.worker.reconcile:reconcile stands down, 2749 rows are scheduled and the quiet mark is 100
+2026-10-03T23:49:28.041336820Z INFO:findling.worker.poller:the work stock ran dry while the crawl is unfinished, asked for the next slice myself
+# durchgaenge 23:44:00Z bis 23:56:00Z
+2026-10-03T23:44:15.407737702Z INFO:findling.worker.poller:pass finished, claimed=30 indexed=30 skipped=0 failed=0 unchanged=0 requeued=30 embedded=0 committed=30 slots=15 throttled=0
+2026-10-03T23:44:19.480756364Z INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=2 embedded=0 committed=2 slots=2 throttled=0
+2026-10-03T23:45:37.433048836Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:45:39.310467475Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:45:41.178613408Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:45:43.051822898Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:45:44.920958008Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:45:46.804372967Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:45:48.698230330Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:45:50.605959029Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:45:52.535449373Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:45:54.441767137Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:45:56.325645856Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:45:58.246939004Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:00.135358000Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:02.038960345Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:04.023409354Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:05.970964225Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:07.867549372Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:09.779730132Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:11.660155558Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:13.635970478Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:15.495696517Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:17.404713908Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:19.343281499Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:21.196783921Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:23.075976897Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:25.021130554Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:26.915826282Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:28.815019627Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:30.682766589Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:32.628800121Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:34.574406523Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:36.513550190Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:38.409043072Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:40.400157007Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:42.262822714Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:44.118129937Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:45.994533027Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:47.855373138Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:49.761504836Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:51.652732749Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:53.600714260Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:55.480513563Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:57.368622789Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:46:59.239751236Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:47:01.143637027Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:47:03.064772149Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:47:04.936153271Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:47:06.926859910Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:47:08.955498444Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:47:10.801171973Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:47:12.634090015Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:47:14.517003828Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:47:16.423880768Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:47:18.386253518Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:47:20.319112435Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:47:22.196061478Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:47:24.038321614Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:47:25.922236822Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:47:27.862758119Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:47:29.730916456Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:47:31.583126339Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:47:33.507993875Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:47:35.380687961Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:47:37.253822373Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:47:39.120104816Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:47:40.994498279Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:47:42.963612398Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:47:44.899421293Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:47:46.784405809Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:47:48.650154353Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:47:50.575693190Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:47:52.435964627Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:47:54.282921019Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:47:56.158533086Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:47:58.163780985Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:00.038172664Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:02.042485423Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:04.009991222Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:05.906050855Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:07.762979915Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:09.619645666Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:11.488517731Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:13.362137823Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:15.248550631Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:17.142804649Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:19.052640769Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:20.895243529Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:22.749676239Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:24.623849266Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:26.543911020Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:28.608836703Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:30.478248507Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:32.378820157Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:34.259791006Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:36.180712018Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:38.133127651Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:40.102166252Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:42.021473384Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:43.934927323Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:45.875177428Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:47.797652932Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:49.693293562Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:51.598064465Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:53.508630152Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:55.350238740Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:57.324637939Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:48:59.185416955Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:49:01.213285993Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:49:03.251753587Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:49:05.207666572Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:49:07.063856307Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:49:08.975305042Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:49:10.844683521Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:49:12.832651285Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:49:14.669798480Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:49:16.521642098Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:49:18.403005271Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:49:20.336179470Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:49:22.193040503Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:49:24.095027026Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:49:25.959502189Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:49:27.670431102Z INFO:findling.worker.poller:pass finished, claimed=29 indexed=0 skipped=0 failed=0 unchanged=29 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:49:44.956574497Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:49:46.877226085Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:49:48.782402413Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:49:50.673110521Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:49:52.617991020Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:49:54.470590992Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:49:56.345537095Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:49:58.206778927Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:50:00.074792846Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:50:01.942269079Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:50:03.876373004Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:50:05.709656684Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:50:07.640867407Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:50:09.530177723Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:50:11.385752546Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:50:13.268869092Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:50:15.235920593Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:50:17.139313371Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:50:18.999002294Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:50:20.878663346Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:50:22.840790118Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:50:24.780547476Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:50:26.659255976Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:50:28.540563526Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:50:30.451581938Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:50:32.413313398Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:50:34.368734703Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:50:36.231490589Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:50:38.210496630Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:50:40.102331558Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:50:42.089080587Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:50:44.050485919Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:50:45.914624400Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:50:47.766460512Z INFO:findling.worker.poller:pass finished, claimed=32 indexed=0 skipped=0 failed=0 unchanged=32 requeued=0 embedded=0 committed=0 slots=1 throttled=0
+2026-10-03T23:50:48.496575162Z INFO:findling.worker.poller:pass finished, claimed=11 indexed=0 skipped=0 failed=0 unchanged=11 requeued=0 embedded=0 committed=0 slots=1 throttled=0

@@ -90,3 +90,68 @@ produktbefund (owner-entscheid, kein eingriff in den produktcode):
   ausgeschlossener dateien (vorrat springt 0 -> 549 -> 0, http-abrufe, schreiberkommits), dauerhaft.
   mechanik aus code und log gelesen, nicht im einzelschritt nachgestellt.
 box per aws_box.sh stop gestoppt 2026-10-03T18:51:09Z (vorher sudo shutdown -c), geparkt.
+# kettenlauf 8 (28-07 start 12), zelle L-T auf m7g.4xlarge nach quick 261003-wxg (owner a+b)
+start-m7g.4xlarge 2026-10-03T22:45:15Z (aws_box.sh start, running since aus der ausgabe; kein typwechsel)
+a-record auf die neue instanzadresse gesetzt (zonen-api, ttl 120, nicht proxied); der alte eintrag
+  der lauf-7-adresse stand noch in der zone und ist gelöscht, rücklesung genau ein a-eintrag;
+  hostschlüssel ssh-keyscan gegen lauf 7: 3 von 3 fingerabdrücken identisch
+rücklesung: free -h total 61Gi, nproc 16, uname -m aarch64, grep -c mem=4G /proc/cmdline 0
+box-klon git fetch origin main, reset auf bbd23578bf98225d82014c5baffd3ee49f733191
+  (vorher f73566c1; abweichende dateien waren die lauf-7-rohdaten, lokal blob-gleich committet,
+  m7g.4xlarge-kette.log blob-gleich zu m7g.4xlarge-teil-lauf7-wdh-abbruch71-kette.log;
+  arbeitsbaum vorher als tgz gesichert)
+abbild vorgezogen: ghcr.io/street1983nk/findling_backend@sha256:5242e47f6eb90de5984e7cd0b594df95addfbbbfb8e9d72f7b8375f9b7370aa9
+  (multi-arch-index von lauf 37158445173 auf bbd23578, arm64-teil erstellt 2026-10-03T22:27:06Z);
+  im abbild findling/worker/reconcile.py mit EXCLUDED_* (grep -c 5); baumhash in der zelle a6ad7397, gleich ja
+companion-app im nextcloud-container ersetzt 22:47Z (custom_apps/findling aus php/ ohne tests,
+  php -l aller lib-dateien ohne fehler, chown 33:33, occ upgrade "No upgrade required." rc 0);
+  isExcluded in ReconcileController 1, isExcludedPath in StorageService 4
+vorpruefung-stop-ja 2026-10-03T22:48:23Z
+vorab-räumung 22:49:15Z occ findling:index --restart -n; vorrat scheduled 0, handed 0
+laufwerte: BISHER_USD 10.29 (02-rechenblatt.py stand --jetzt 22:45:15Z), SATZ_USD_H 0.800141,
+  ZELLEN L-T:performance:int8:teil, ABBILD_DIGEST sha256:5242e47f..., GRENZE_2G nein, KORPUS_FRIST 3600 (umgebung)
+kettenstart 2026-10-03T22:49:16Z bisher 10.3436, timer-gesetzt minuten 4572
+zelle L-T: vorrat-tor altvorrat 0; baumhash-beweis ja; probe verdikt fits (reserve 60379828352, slots 15),
+  erzwungen nein; wirksamkeit ja effective performance slotsInForce 1 nach-s 34 (leerlauf ohne vorrat;
+  in lauf 7 lag zu diesem zeitpunkt der 549er-schub im vorrat, daher dort 15); unter last durchgänge
+  mit slots=15 (container-log 23:44:15Z); trigger 22:50:20Z.
+messstörung: eine diagnoseabfrage des executors (like über oc_filecache) lief 23:23:55Z bis 23:26:02Z
+  als ein postgres-backend, per pg_cancel_backend abgebrochen; nicht ursächlich für den abbruch.
+zelle L-T: ABBRUCH 71 2026-10-03T23:50:25Z (zaehltor verfehlt 5427 statt 5000), kette-abbruch, timer-vorgezogen 60 min.
+  zaehlung vorrat-teilkorpus 427 vorrat-global 427 uebersprungen-frisch 0 fehlgeschlagen-frisch 0
+  eingebettet 5000 indexiert 5000 summe 5427.
+  reconcile-fix im feld: vorrat-global = vorrat-teilkorpus, also KEINE ausgeschlossene datei im vorrat
+  (lauf 7 an derselben stelle: 549). die erste reconcile-runde 22:51:25Z sah mounts=4 slices=106
+  seen=52549 und nannte nur stale=401, die 549 dateien unter den ordner-ausschlüssen sind darin nicht
+  als arbeit gezählt; findling:diagnose 135 (loadtest/34089-widerspruch.xlsx, home lasttest):
+  skipped/excluded "Excluded by a rule". vorbehalt: nach dem ende des teilkorpus gab es vor der lesung
+  keine ruhige runde (23:46:43Z stand down, 2749 rows scheduled), der ruhige takt ist also nicht
+  belegt, nur die zählung in der busy-runde und der vorrat an der lesung.
+  ursache des abbruchs (neu, nicht der reconcile): der teilkorpus war 23:44:19Z fertig (indexed 5000,
+  embedded 5000 um 23:46:26Z). im selben moment meldete der container "the work stock ran dry while
+  the crawl is unfinished, asked for the next slice myself", und danach kam der GESAMTE teilkorpus
+  ein zweites mal in den vorrat: statusreihe scheduled 3037 (23:46:26Z), 989 (23:48:27Z), 427 an der
+  lesung (23:50:2xZ, pfadscharf files/teilkorpus/%); container-durchgänge 23:44:00Z bis 23:56:00Z
+  summiert claimed 5032, unchanged 5000, indexed 32. ab 23:50Z kein weiterer selbstvorschub, vorrat
+  23:54:52Z 0. es ist ein zweiter durchgang des crawls über bereits indexierte dateien, angestoßen
+  vom selbstvorschub, und er fällt bei L-T in das lesefenster bei trigger + 3600 s.
+  unterschied zu lauf 7: dort lag der crawl dem worker voraus (scheduled 1586 um 17:03Z), der
+  selbstvorschub kam erst spät; hier lief der vorrat ab 22:51Z wiederholt leer (statusreihe scheduled
+  0 bis 438, selbstvorschub 22:51:14Z, 22:53:31Z, 23:25:59Z, 23:36:24Z, 23:44:19Z, 23:49:28Z), der
+  worker mit 15 slots war schneller als der crawl. warum der crawl nach dem letzten teilkorpus-stück
+  als "unfinished" gilt und von vorn liefert, ist aus code und log NICHT geklärt (php-seite
+  StorageCrawlJob, nicht gelesen); kein umgebungsproblem, darum keine wiederholung.
+  rand: reconcile-runden 22:56Z bis 23:36Z je "slices=2 seen=549 stale=500" bei busy-vorrat; welche
+  dateien die 500 sind, ist nicht belegt (seitengröße 500 der ersten seite, ungeklärt).
+  anon-max (summe rssanon_kb je zeitpunkt über alle prozesse der serie, ganze serie bis zum stopp der
+  sampler): 5630,3 MiB um 23:40:10Z, also unter last vor dem zweiten durchgang; rechnung 5033,0,
+  grenze 5536,3. dieselbe methode liefert für lauf 7 5451,9 und 5510,0 MiB (protokolliert waren
+  5420,0 und 5474,3, die methode jener zahlen ist hier nicht nachgestellt). die zelle ist nicht
+  gemessen, die zahl ist nur ein hinweis für den owner (über dem 1,10-fachen wäre SC4/C5).
+  hauptprozess-max 2353,7 MiB, slot-anon je slot 226,4 MiB (12-slotkosten.py slots --slots 15).
+  rohdaten unter m7g.4xlarge/L-T-abbruch71-lauf8/ (mit container-auszug.txt) und
+  m7g.4xlarge-teil-lauf8-abbruch71-kette.log.
+stopp: aws_box.sh stop scheiterte 23:57Z an der abgelaufenen aws-sitzung ("Your session has
+  expired"); darauf sudo shutdown -c und sudo shutdown -h +1 von innen (geplant 23:58:45Z,
+  shutdown-verhalten stop belegt 22:48:23Z); ssh ab 23:59:40Z unerreichbar (connection timed out,
+  dreimal). aws-bestätigung und BOX_STOPPED_ISO per aws_box.sh stehen aus (owner loggt ein).
