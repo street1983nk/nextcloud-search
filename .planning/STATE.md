@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
-status: paused
-stopped_at: "28-07 Lauf 9: Zelle L-T auf m7g.4xlarge GEMESSEN (rc 0, Zähltor 5000, anon-max 5481,8 MiB getragen), ARM-Hälfte komplett; Box geparkt, x86 nach Owner-Wort"
-last_updated: "2026-10-04T06:30:00.000Z"
+status: executing
+stopped_at: "28-07 x86-Hälfte: c7a.xlarge aufgebaut, Machbarkeitstor bestanden (45 min), Zelle 8 S-T gemessen, Kette läuft (St-T, St-fp32-T)"
+last_updated: "2026-10-04T10:05:00.000Z"
 last_activity: 2026-10-04
 progress:
   total_phases: 6
@@ -27,13 +27,30 @@ See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 
 Phase: 28 (Abnahme-Anfahrt), in Ausführung
 Plan: 7 of 14
-Status: Pausiert (28-07 ARM-Hälfte komplett nach Lauf 9; x86-Hälfte/Machbarkeitstor nach Owner-Wort)
+Status: In Ausführung (28-07 x86-Hälfte auf c7a.xlarge, Kette läuft)
 Last activity: 2026-10-04
 
 Progress: [█████████░] 87%
 
 ## Naechster Schritt
 
+**28-07 x86-Hälfte (Owner-Wort 04.10.), Zwischenstand 10:05Z.**
+x86-Box c7a.xlarge (eigenes Zustandsverzeichnis .../x86, LaunchTime 06:24:49Z), V-X aus dem Snapshot,
+fio 29:13, Docker/containerd-Wurzel, Klon 18602c48. MACHBARKEITSTOR BESTANDEN 06:26:46Z bis 07:12:02Z:
+amd64-Varianten per Index-Digest des Snapshot-Standes gezogen (nicht :latest), AIO-Container einzeln mit
+identischer Konfiguration neu erzeugt (Engine-API, platform linux/amd64), PostgreSQL 18.6 startet auf
+x86_64 ohne FATAL/PANIC, amcheck 656 B-Bäume vor und nach REINDEX rc 0, occ status installed, files:scan
+Stichprobe ohne Änderung. Companion 1.3.2 aus php/, Teilkorpus (Listen-Prüfsumme gleich ARM), 19
+Ausschlüsse, Cron 300 s. Rohdaten 06-aufbau-x86.txt (Commit 147a6ed8).
+Kette c7a.xlarge ab 07:15:46Z (S-T, St-T, St-fp32-T; Zelle 10 gestrichen), Abbild 5ed5742c (amd64-Variante
+15b38874), IMAGE_TAG = sha-Tag 18602c48, Baumhash ee918ce4 gleich ARM.
+Zelle 8 S-T GEMESSEN: rc 0, Zähltor 5000, Ende 09:55:59Z (2:39:38 ab Trigger), anon-max 1520,2 MiB gegen
+Rechnung 1492,5 / Grenze 1641,8: getragen; Slot-anon je Slot 295,8 MiB (B2 235). Commit cd737a12.
+Zelle 9 St-T läuft (Probe fits, Slots 1, wirksam standard/1).
+AWS-Sitzung (aws login 04:29Z) läuft gegen ~16:30Z ab; der Typwechsel auf c7a.2xlarge braucht dann ein
+neues Owner-Login. Box stoppt am Kettenende selbst (shutdown -h +2).
+
+Vorgeschichte Lauf 9 (04.10.):
 **28-07 Task 2: Lauf 9 (04.10. 04:32Z bis 06:15Z), Zelle 7 L-T auf m7g.4xlarge GEMESSEN. ARM-Hälfte KOMPLETT.**
 Vorbereitung: Lauf-8-Stopp per aws_box.sh status bestätigt (InstanceInitiatedShutdown), Box-Klon auf
 18602c48, Abbild 5ed5742c (Multi-Arch-Lauf 37176289187 zu 18602c48, Fix im Abbild belegt), Companion-App
@@ -56,7 +73,7 @@ OCR-verarbeitet. Nutzerrelevanz: bis 30 min verzögerte Vollständigkeit am Ende
 Stapel, kein Datenverlust. Ursache der Ausnahme unbelegt (queue.py requeue loggt ohne exc_info).
 Stopp: Kette setzte am Ende shutdown -h +2 (poweroff 06:12:23Z) vor dem Abholen; kurzer Abholstart
 06:13:05Z, aws_box.sh stop 06:15:06Z, BOX_STOPPED_ISO gesetzt, Box geparkt. A-Record zeigt verwaist auf
-3.74.228.12. Kosten 12,69 von 59,43 USD (Lauf 9: 1,6672 h + 0,0336 h).
+<adresse-der-box> des Abholstarts. Kosten 12,69 von 59,43 USD (Lauf 9: 1,6672 h + 0,0336 h).
 Rohdaten: 05-typwechsel-arm.txt (Lauf 9), m7g.4xlarge/L-T/ mit container-auszug.txt, m7g.4xlarge-kette.log.
 NÄCHSTER SCHRITT (nach Owner-Wort): x86-Hälfte c7a, Machbarkeitstor (amd64-Abbilder, PostgreSQL-Start,
 REINDEX), dann Zellen 8 bis 21; offen für den Owner: Befund Embed-Übergabe-Timeout (/gsd-debug?).
@@ -91,7 +108,7 @@ Grenze 5536,3 (Methode Summe rssanon je Zeitpunkt, ganze Serie; dieselbe Methode
 5451,9/5510,0 statt protokollierter 5420,0/5474,3). Wäre bei einer gemessenen Zelle SC4/C5.
 Box: von innen gestoppt (shutdown -h +1, 23:58:45Z), weil aws_box.sh stop an der ABGELAUFENEN
 AWS-Sitzung scheiterte; AWS-Bestätigung (aws_box.sh status) steht aus, Owner loggt ein.
-A-Record zeigt auf 3.73.66.23 (verwaist). Kosten 11,27 von 59,43 USD (Lauf 8: 1,225 h = 0,98 USD).
+A-Record zeigt auf <adresse-der-box> von Lauf 8 (verwaist). Kosten 11,27 von 59,43 USD (Lauf 8: 1,225 h = 0,98 USD).
 Rohdaten: 05-typwechsel-arm.txt (Lauf 8), m7g.4xlarge/L-T-abbruch71-lauf8/ mit container-auszug.txt.
 Danach (nach Owner-Wort): L-T erneut, dann x86-Hälfte c7a (Block 14, Machbarkeitstor).
 
