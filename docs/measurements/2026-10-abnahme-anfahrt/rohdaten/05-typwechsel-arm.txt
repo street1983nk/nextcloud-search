@@ -159,7 +159,7 @@ stopp: aws_box.sh stop scheiterte 23:57Z an der abgelaufenen aws-sitzung ("Your 
 lauf-8-stopp per aws_box.sh status bestätigt 2026-10-04 ~04:31Z: stopped, Client.InstanceInitiatedShutdown;
   BOX_STOPPED_ISO 2026-10-03T23:58:45Z stand schon in box.env, bestätigungszeile angehängt
 start-m7g.4xlarge 2026-10-04T04:32:21Z (aws_box.sh start, running since aus der ausgabe; kein typwechsel)
-a-record von 3.73.66.23 auf die neue instanzadresse umgesetzt (zonen-api, ttl 120, nicht proxied),
+a-record von <adresse-der-box> (lauf 8) auf die neue instanzadresse umgesetzt (zonen-api, ttl 120, nicht proxied),
   rücklesung genau ein a-eintrag; hostschlüssel ssh-keyscan: 3 von 3 identisch zu lauf 8
 rücklesung: free -h total 61Gi, nproc 16, uname -m aarch64, grep -c mem=4G /proc/cmdline 0
 box-klon git fetch origin main, reset auf 18602c48f4cd6cfea6ee66dd61fb4e487b489342
@@ -226,5 +226,5 @@ befund für den owner (produkt, nicht angefasst): bei schnellem worker kann die 
 stopp: die kette setzte am kettenende 06:10:12Z wie vorgesehen sudo shutdown -h +2; das abholen fiel in die
   nologin-sperre, poweroff 06:12:23Z (journalctl -b -1), waiter stopped 06:12:40Z. kurzer abholstart
   06:13:05Z (aws_box.sh start, hostschlüssel 3 von 3 identisch, a-record NICHT umgesetzt, zeigt auf
-  3.74.228.12), rohdaten per tar geholt, aws_box.sh stop 06:15:06Z (BOX_STOPPED_ISO), geparkt.
+  <adresse-der-box> des abholstarts), rohdaten per tar geholt, aws_box.sh stop 06:15:06Z (BOX_STOPPED_ISO), geparkt.
   rohdaten unter m7g.4xlarge/L-T/ (mit container-auszug.txt) und m7g.4xlarge-kette.log.

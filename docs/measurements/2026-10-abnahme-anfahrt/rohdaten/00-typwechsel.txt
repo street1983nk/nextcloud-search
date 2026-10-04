@@ -61,3 +61,19 @@ shutdown-verhalten stop
 shutdown-ist-stopp ja
 vorpruefung-stop-ja 2026-10-04T04:35:41Z
 TYPWECHSEL-VORPRUEFUNG-FERTIG
+quota-vcpu-standard 32.0
+angebot c7a.xlarge eu-central-1a eu-central-1b eu-central-1c
+angebot c7a.2xlarge eu-central-1a eu-central-1b eu-central-1c
+angebot c7a.4xlarge eu-central-1a eu-central-1b eu-central-1c
+angebot c7a.8xlarge eu-central-1a eu-central-1b eu-central-1c
+TYPWECHSEL-QUOTA-FERTIG
+typwechsel-vorpruefung 2026-10-04T06:25:00Z
+shutdown-verhalten stop
+shutdown-ist-stopp ja
+vorpruefung-stop-ja 2026-10-04T06:25:01Z
+TYPWECHSEL-VORPRUEFUNG-FERTIG
+typwechsel-vorpruefung 2026-10-04T07:15:43Z
+shutdown-verhalten stop
+shutdown-ist-stopp ja
+vorpruefung-stop-ja 2026-10-04T07:15:44Z
+TYPWECHSEL-VORPRUEFUNG-FERTIG

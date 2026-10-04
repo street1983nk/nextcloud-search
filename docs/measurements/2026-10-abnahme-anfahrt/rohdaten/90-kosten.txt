@@ -115,3 +115,5 @@ geparkt 2026-10-04T06:15:06Z laeuft
 #   laufzeit 0.0336 h x 0.800141 = 0.0269 USD
 # kettenlauf 9: zelle L-T GEMESSEN (rueckgabe 0, zaehltor 5000); arm-haelfte damit komplett
 # bisher 12.69 USD gegen deckel 59.43 USD (02-rechenblatt.py stand --jetzt 2026-10-04T06:15:06Z, rest 46.74); box geparkt
+# 28-07 x86-haelfte (owner-wort 04.10.): zweite instanz c7a.xlarge (runbook block 14), LaunchTime aus run-instances
+c7a.xlarge 2026-10-04T06:24:49Z laeuft

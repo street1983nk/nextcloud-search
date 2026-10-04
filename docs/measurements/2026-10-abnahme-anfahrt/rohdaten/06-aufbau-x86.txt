@@ -1,0 +1,280 @@
+der aufbau der x86-box c7a.xlarge, runbook block 14 (schritte 0 bis 6) mit den
+blöcken 7, 7b, 8, 9, 10, 11 und 13, dazu das machbarkeitstor
+gefahren 2026-10-04, region eu-central-1, zone eu-central-1c
+weg: x86-tor (owner-wort für die x86-hälfte vom 04.10.2026, vom orchestrator
+übermittelt: "eigener x86-boxaufbau (c7a), machbarkeitstor auf c7a.xlarge
+zuerst, dann die zellen der matrix"; zelle 10 per owner-entscheid vom
+03.10.2026 gestrichen).
+code-stand der box: 18602c48f4cd6cfea6ee66dd61fb4e487b489342 (gepusht, alle
+sechs workflows grün), gleicher stand wie lauf 9 der arm-hälfte.
+
+geheimnisregel dieser datei: keine ip-adresse, keine instanz-, volume-,
+snapshot- oder kontokennung, kein passwortinhalt, keine uuid des
+datenträgers. wo ein wert gebraucht wird, steht ein platzhalter. die
+abbild-digests sind öffentliche inhaltsadressen und stehen ausgeschrieben.
+
+-- schritt 0: kostenlos und vor der instanz (06:23Z) --
+describe-images canonical amd64: ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-20260923
+00-typwechsel.sh quota c7a.xlarge c7a.2xlarge c7a.4xlarge c7a.8xlarge:
+  quota-vcpu-standard 32.0
+  angebot c7a.xlarge   eu-central-1a eu-central-1b eu-central-1c
+  angebot c7a.2xlarge  eu-central-1a eu-central-1b eu-central-1c
+  angebot c7a.4xlarge  eu-central-1a eu-central-1b eu-central-1c
+  angebot c7a.8xlarge  eu-central-1a eu-central-1b eu-central-1c
+prüfpunkt zone (annahme a7): eu-central-1c bietet alle vier c7a-typen, keine
+werkzeugänderung nötig. arm-box per aws_box.sh status (arm-verzeichnis):
+m7g.4xlarge stopped, also quota frei (c7a.8xlarge braucht die ganzen 32).
+deckel vorher: 02-rechenblatt.py stand: bisher 12.69 USD, deckel 59.43, rest 46.74.
+
+block-3-start 2026-10-04T06:24:46Z
+-- schritt 2 / block 3: instanz --
+run-instances mit dem amd64-abbild aus schritt 0, c7a.xlarge, gemeinsame
+security group und gemeinsames schlüsselpaar der arm-box, default-subnetz in
+eu-central-1c, 40 gb gp3 root mit DeleteOnTermination=true,
+--instance-initiated-shutdown-behavior stop, tags purpose=findling-phase5 an
+instanz und systemplatte (Name findling-loadtest-x86).
+antwort: InstanceType c7a.xlarge, Placement eu-central-1c, Architecture x86_64.
+LaunchTime 2026-10-04T06:24:49Z: beginn der bezahlten zeit der x86-box,
+BOX_START_EPOCH 1791095089. wait instance-running rc 0.
+urteil: wie erwartet.
+
+-- schritt 1 / block 4: zustandsverzeichnis x86 --
+eigenes zustandsverzeichnis (FINDLING_LOADTEST_DIR=<zustandsverzeichnis>/x86),
+box.env von hand mit BOX_INSTANCE_ID, BOX_SECURITY_GROUP und
+FINDLING_BOX_IMAGE, umask 077; schlüssel als kopie mit rechten 600.
+rückleseprobe aws_box.sh status: c7a.xlarge running in eu-central-1c, 40 G gp3,
+satz 0.234260 USD je stunde für die c7a.xlarge (tabelle in aws_box.sh).
+
+vorpruefung-start 2026-10-04T06:25:00Z
+-- vorprüfung des harten stopps (runbook 7.3 schritt 2) --
+00-typwechsel.sh vorpruefung im x86-verzeichnis, rückgabe 0:
+  shutdown-verhalten stop
+  shutdown-ist-stopp ja
+  vorpruefung-stop-ja 2026-10-04T06:25:01Z
+
+block-6-start rund 2026-10-04T06:25:05Z (dauer 10 s gemessen)
+block-6-ende rund 2026-10-04T06:25:15Z
+-- schritt 3 / block 6: volume V-X aus dem snapshot --
+aws_box.sh restore ohne argument im x86-verzeichnis, rückgabe 0, bis auf
+platzhalter wörtlich:
+  no snapshot was handed in, using <korpus-snapshot>
+  State completed, Progress 100%, VolumeSize 60, Encrypted False
+  Description findling corpus and index, v1.1 comparison run 2026-09-10, 52111 documents
+  creating a 60 GB gp3 volume in eu-central-1c from <korpus-snapshot>
+  tags of <volume> after the retagging: Name=findling-corpus purpose=findling-phase5
+  waiting for volume <volume> to become available
+  attaching <volume> to <instanzkennung> as /dev/sdf
+  this subcommand ends at the attach
+V-A bleibt an der arm-box (in-use, vom filter status=available nicht erfasst).
+urteil: wie erwartet.
+
+-- adresse, ssh-regel, hostschlüssel --
+aws_box.sh start (die instanz lief schon, start-instances ist dann ohne
+wirkung): BOX_IP ins zustandsverzeichnis, ssh-regel <eigene-adresse>/32
+bestätigt. ssh-keyscan gegen die adresse, fingerabdrücke gegen
+get-console-output (BEGIN SSH HOST KEY FINGERPRINTS): ed25519, ecdsa und rsa
+gleich. known_hosts ins x86-verzeichnis.
+hostschluessel-gleich ja
+
+block-10-start rund 2026-10-04T06:26Z
+-- block 10: a-record, vor dem ersten daemon-start --
+namensaufloesung-ist=a-record
+über den dns-zugang des betreiber-werkzeugkastens (api des zonenverwalters):
+der vorhandene eintrag (zeigte verwaist auf die adresse des abholstarts der
+arm-box) auf die x86-adresse umgesetzt, success True, typ A, ttl 120, nicht
+proxied, rücklesung inhalt gleich der instanzadresse.
+später, nach dem start der container: https://loadtest.infranode.dev/status.php
+200 (07:12Z), installed true, maintenance false, needsDbUpgrade false, version 33.0.8 (vierte stelle 2).
+
+-- erste ssh-sitzung 2026-10-04T06:26:46Z: beginn des zeitdeckels des tors (1 h 30) --
+uname -m x86_64, nproc 4, free -h 7.6Gi, lsblk: nvme0n1 42949672960 und
+nvme1n1 64424509440.
+
+block-7-start 2026-10-04T06:27:01Z
+block-7-ende 2026-10-04T06:27:14Z
+-- block 7: datenträger mounten --
+genau ein datenträger mit 64424509440 byte (nvme1n1), ext4, uuid aus blkid
+(steht hier nicht), fstab-zeile UUID=<uuid> /mnt/findling ext4 defaults,nofail 0 2,
+mount -a. rückleseprobe: df -h 59G gesamt, 35G belegt, 62%;
+ls: containerd corpus docker drillkorpus lost+found ncdata.
+urteil: wie erwartet, gleich V-A.
+
+block-7b-start 2026-10-04T06:27:21Z
+block-7b-ende 2026-10-04T06:56:34Z
+-- block 7b: volume-initialisierung V-X --
+gerät über die größe gefunden (genau eines, nvme1n1), fio 3.36:
+  2026-10-04T06:27:21Z
+  fio --filename=/dev/nvme1n1 --rw=read --bs=1M --iodepth=32 --ioengine=libaio
+      --direct=1 --readonly --name=volume-initialize
+  READ: bw=35.1MiB/s (36.8MB/s), io=60.0GiB (64.4GB), run=1752133msec
+  rc 0
+  2026-10-04T06:56:34Z
+fio-dauer 29 min 13 s (planwert runbook 2.1: 0 h 45 min; V-A: 33 min 06 s)
+lehre der arm-box umgesetzt: fio lief VOR dem ersten start des docker-dienstes.
+docker.io wurde während fio installiert, sein autostart per policy-rc.d
+(exit 101) unterdrückt; die datei wurde vor dem start wieder entfernt.
+
+-- vorab: apt-timer abgeschaltet (wie auf der arm-box, 04-teilkorpus-arm.txt) --
+apt-daily.timer und apt-daily-upgrade.timer: systemctl disable --now 06:27:43Z,
+zurückgelesen disabled/disabled.
+
+block-8-start 2026-10-04T06:27:43Z
+block-8-ende 2026-10-04T06:57:00Z
+-- block 8: docker-data-root und containerd-wurzel, BEVOR der daemon startet --
+/etc/docker/daemon.json mit data-root /mnt/findling/docker und
+/etc/containerd/config.toml mit version = 2 und root = "/mnt/findling/containerd"
+VOR der installation, apt-get install docker.io jq mit --force-confold
+(docker 29.1.3, jq-1.7), dienste inactive bis nach fio, dann enable --now
+containerd, docker.socket und docker (06:56:56Z), ubuntu in die gruppe docker.
+rückleseprobe: Docker Root Dir /mnt/findling/docker, Storage Driver overlayfs,
+driver-type io.containerd.snapshotter.v1, 16 abbilder mit namen (wie V-A).
+die container der messbox starteten von selbst und endeten sofort:
+  [FATAL tini (7)] exec /start.sh failed: Exec format error
+erwartet (runbook block 14 schritt 4): der containerd-store kennt nur
+arm64-schichten. weder die zeichen-signedness noch die datenbank war zu
+diesem zeitpunkt berührt (kein postgresql-prozess ist angelaufen).
+
+block-9-start rund 2026-10-04T06:28Z
+block-9-ende rund 2026-10-04T06:29Z
+-- block 9: systemplatte zurückspielen --
+sha256 der sicherung fad3e7ce6c7f73cc..., 435 einträge (gleich arm-box). tar
+xzf nach /home/ubuntu, kopie in /tmp gelöscht. nach dem auspacken: 385
+dateien, 13M. passwortdateien ~/work/.pw (700) mit admin und lasttest (600,
+je 28 byte) aus der lokalen kontendatei, per ssh-stdin geschrieben.
+urteil: wie erwartet.
+
+-- klon auf der box --
+git clone des öffentlichen repositoriums nach /home/ubuntu/work/nextcloud-search,
+checkout 18602c48f4cd6cfea6ee66dd61fb4e487b489342, git config core.fileMode
+false, chmod +x in den skriptverzeichnissen der v1.2, v1.3, nachfolgefassungen,
+abnahme-anfahrt und scripts/ops. git status --porcelain: 0 zeilen.
+
+tor-start 2026-10-04T06:26:46Z (erste ssh-sitzung), zeitdeckel bis 07:56:46Z
+-- schritt 4: amd64-abbilder, per index-digest des snapshot-standes --
+abweichung zum runbook-rezept, bewusst: nicht "docker pull --platform
+linux/amd64 <abbild>:<tag>", sondern je abbild der INDEX-DIGEST, auf dem der
+tag im snapshot steht (Id und RepoDigests der lokalen abbilder). ein zug über
+:latest hätte die heutigen aio-stände geholt (andere nextcloud, andere
+postgresql-fassung) und damit eine andere maschine als die arm-hälfte.
+gezogen 06:57:39Z bis 06:59:14Z, alle rc 0:
+  nextcloud/all-in-one@sha256:8ef360995740aecc18a471f51da76d4609d964adcbda2e7baefb1e7d1048d3b4
+  ghcr.io/nextcloud-releases/aio-apache@sha256:d0fece673d2341243957112d35929e8c8fff3dfb7b952272d1941e899b858bdd
+  ghcr.io/nextcloud-releases/aio-nextcloud@sha256:8ab1de1ca1e5c499055c495137b416697fc9d32fd41a8cc301517c5ab8aca499
+  ghcr.io/nextcloud-releases/aio-redis@sha256:664431f94510d07813cb2e5397ea0eb7754e7a78d3ef01eec40c5eea153f4e39
+  ghcr.io/nextcloud-releases/aio-postgresql@sha256:a0c7abc1543546a34c1756c78afd8602933e1b14841d542eab758b3fda5914d9
+  ghcr.io/nextcloud-releases/aio-harp@sha256:d6d43f35088a3b185673f0b06ec1ce10a9469efb755b60510a47fe8a019a48a2
+  ghcr.io/nextcloud-releases/aio-notify-push@sha256:f990f8529d8f58a4d9dc76e25bdb2ed9baab5834b7438c42f739114ab4bf578d
+  ghcr.io/nextcloud-releases/aio-domaincheck@sha256:34eb385af1da17df02959a96983f137055727e6dd2f8acc30aec8b75095cd5ff
+befund: ein vorhandener container startet auch NACH dem zug weiter die
+arm64-schichten (Exec format error, 06:59:21Z); der container hält sein
+dateisystem aus der arm64-variante. "über den mastercontainer neu erzeugen"
+(runbook) hätte die aio-abbilder auf :latest gezogen. stattdessen jeder
+aio-container EINZELN mit identischer konfiguration neu erzeugt: hilfsskript
+über die engine-api (GET /containers/<name>/json, Config, HostConfig und die
+netz-endpunkte mit aliasen unverändert, POST /containers/create mit
+platform=linux/amd64 auf denselben abbildverweis), der alte container
+umbenannt und nach bestandenem tor gelöscht (07:12:40Z). die named volumes
+(daten, datenbank, konfiguration) sind dieselben; keine konfiguration geändert.
+reihenfolge: database 07:00:20Z, dann redis, nextcloud, notify-push, apache,
+harp, mastercontainer 07:01:20Z. alle neu erzeugten: uname -m x86_64, image-id
+gleich dem snapshot-index-digest, netz nextcloud-aio.
+nicht neu erzeugt: findling-registry (registry:2, die lokale registry führt nur
+arm64 und wird nicht gebraucht, das findling-abbild kommt per digest aus ghcr)
+und nc_app_findling_backend (baut die erste zelle per unregister --rm-data und
+registrierung neu).
+
+-- schritt 5: das machbarkeitstor --
+postgresql (07:00:21Z):
+  starting PostgreSQL 18.6 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+  database system was shut down at 2026-09-10 23:49:14 UTC
+  database system is ready to accept connections
+  zeilen mit FATAL oder PANIC im log: 0
+  (eine zeile "chmod: /var/run/postgresql: Operation not permitted" aus dem
+  startskript des abbilds, vor dem serverstart, ohne folge)
+pg_controldata: pg_control version 1800, cluster state in production,
+  maximum data alignment 8, database block size 8192, default char data
+  signedness signed (wie in der vorprobe vorhergesagt)
+datenbank und nutzer aus der umgebung des containers gelesen (ohne passwort).
+amcheck (07:01:08Z bis 07:01:12Z):
+  CREATE EXTENSION IF NOT EXISTS amcheck  rc 0
+  bt_index_check(oid, true) über alle gültigen b-baum-indizes: 656 geprüft, rc 0
+  gin_index_check über alle gin-indizes: 0 vorhanden, rc 0
+  REINDEX DATABASE  rc 0 (1 s)
+  danach bt_index_check: 656 geprüft, rc 0; gin: 0, rc 0
+  oc_filecache 52351 zeilen, oc_findling_file_state 50 zeilen (stand snapshot)
+occ status (07:11:52Z): installed true, version 33.0.8 (vierte stelle 2), versionstring 33.0.8,
+  maintenance false, needsDbUpgrade false; uname -m im container x86_64.
+  verzögerung: der nextcloud-container wartete 10 min auf den apache, weil die
+  übrigen container erst nach ihm gestartet wurden; kein fehler.
+occ files:scan --path=lasttest/files/neustart (07:12:02Z): Folders 1, Files 30,
+  New 0, Updated 0, Removed 0, Errors 0, rc 0. oc_filecache vor 52351, nach 52351.
+anmeldeprobe webdav propfind depth 0: admin 401, lasttest 401 (wie auf der
+  arm-box am 30.09.: passwörter der kontendatei gehören zu einem späteren stand
+  als der snapshot); occ user:resetpassword --password-from-env für beide konten,
+  wert nur über stdin in den container; danach admin 207, lasttest 207.
+alle neun container healthy (07:12:40Z), die arm64-altcontainer gelöscht.
+tor-ergebnis bestanden dauer 45 min (06:26:46Z bis 07:12:02Z, zeitdeckel 90 min)
+
+-- companion-app (php/ des standes 18602c48) --
+im nextcloud-container stand die app des snapshots, findling 1.0.3. gesichert
+als tgz im container, ersetzt durch php/ ohne tests (07:13:03Z), sha1-baum
+gleich php/ (baum-gleich ja), php -l aller lib-dateien 0 fehler, chown 33:33,
+occ upgrade rc 0 ("Update successful", integritätsprüfung durchlaufen), app:list
+findling 1.3.2; QueueController mit crawling (2 treffer).
+
+-- teilkorpus auf V-X (auf der x86-platte gleich beim aufbau, 00-ablauf.md 1) --
+inventar der homes, oberste ebene (occ user:list: admin, driftfall, lasttest, sprachfall):
+  admin: Documents, Nextcloud Manual.pdf, Nextcloud intro.mp4, Nextcloud.png,
+         Photos, Readme.md, Reasons to use Nextcloud.pdf, Templates, Templates credits.md
+  driftfall: Notes, Shared
+  lasttest: wie admin, dazu drill, loadtest, neustart, ocrdrei, teilkorpus (neu),
+            workersA, workersB
+  sprachfall: corpus
+  (gegen V-A fehlt admin/mess07-bodensatz, den legte erst 94c auf der arm-box an)
+hardlinks 07:13:48Z, 01-teilkorpus.py hardlinks loadtest -> teilkorpus als
+  www-data: angelegt 5000, rc 0; find 5000, linkzahl 2: 5000, eigentümer www-data:www-data
+occ files:scan --path=lasttest/files/teilkorpus 07:13:48Z bis 07:13:51Z:
+  Folders 1, Files 5000, New 0, Updated 5001, Removed 0, Errors 0 (gleich arm)
+ordner-ausschlüsse per occ config:app:set findling exclusions --type=array,
+  dieselben 19 präfixe wie auf der arm-box (04-teilkorpus-arm.txt), zurückgelesen
+  type array, dieselben 19 einträge; mess07-bodensatz bleibt der gleichheit
+  wegen in der liste, ohne treffer. nicht ausgeschlossen bleibt nur lasttest/teilkorpus.
+liste 07:14:18Z bis 07:14:35Z, 01-teilkorpus.py liste über loadtest UND über
+  teilkorpus, je rc 0:
+  listen-pruefsumme f6b3dd70971035374d502dfd27ac0dc8dd372f033c9fc4e12aa462e887c09979 (beide)
+  sha256 der ganzen datei 74a1eca2...147b, byte-gleich mit ../teilkorpus-liste.txt
+listen-pruefsumme-gleich ja
+
+cron-gate-start rund 2026-10-04T07:15Z
+-- cron-gate, 97-cron-vorpruefung.sh vorher (runbook 6.1), rückgabe 0 --
+cron-modus-ist cron
+cron-intervall-quelle aio-cron-container
+cron-intervall-ist 300
+cron-intervall 300 s, soll 300 s: erfüllt
+rohdatei c7a.xlarge/97-cron-vorpruefung-vorher.txt.
+
+-- block 13 und 13b, im ersten zellenlauf --
+die zelle S-T (c7a.xlarge/S-T/10-zelle.txt) fährt beides selbst:
+  nextcloud-instanzen 1 (unmittelbar vor dem --rm-data), unregister-rm-data ja,
+  registrierung-rueckgabewert 0, vorrat-tor altvorrat 0, bewaffnung
+  backendReachable true, grenze keine, 40b-baumhash-rueckgabewert 0,
+  baumhash-im-laufenden-container ee918ce4bc7c19273f89fc174b1a3a10a91417e8a1bfc273e10c849a059a0e0a
+  (gleich lauf 9 auf arm), baumhash-beweis ja.
+abbild: ABBILD_DIGEST sha256:5ed5742cbaddf14a378664e19cf2be6f500c3ac9b60d1a0bfc86e388f43ebc27
+  (multi-arch-index zu 18602c48, derselbe wie lauf 9), auf x86 aufgelöst zur
+  amd64-variante sha256:15b38874f39775750d8be309ba3ad80b71c22ccb7a19c79a13747192d5a57884;
+  IMAGE_TAG=18602c48f4cd6cfea6ee66dd61fb4e487b489342 (der unveränderliche sha-tag,
+  zeigt auf denselben index; lehre lauf 1 der arm-box, statt dev).
+  im container: uname -m x86_64, Config.Image ...:18602c48..., Image sha256:5ed5742c...
+memory.max der zelle: keine grenze (GRENZE_2G nein, D-28-12).
+
+-- laufwerte und kettenstart --
+vorpruefung-stop-ja 2026-10-04T07:15:44Z
+vorab-räumung 07:15:45Z occ findling:index --restart -n; vorrat scheduled 0, handed 0
+laufwerte: DECKEL_USD 59.43, BISHER_USD 12.69 (02-rechenblatt.py stand --jetzt
+  06:24:49Z), SATZ_USD_H 0.252301, BOX_START_EPOCH 1791095089,
+  ZELLEN S-T:economy:int8:teil St-T:standard:int8:teil St-fp32-T:standard:fp32:teil
+  (zelle 10 L-T gestrichen), ABBILD_DIGEST wie oben, GRENZE_2G nein,
+  VORPRUEFUNG stop-ja; umgebung IMAGE_TAG wie oben, KORPUS_FRIST 3600.
+kette-start c7a.xlarge 2026-10-04T07:15:46Z bisher 12.9042 deckel 59.43 satz 0.252301
+timer-gesetzt minuten 13890 (sicherheitsstopp, zurückgelesen)
