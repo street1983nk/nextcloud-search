@@ -1,0 +1,106 @@
+zelle-start St-fp32-T box c7a.xlarge ziel standard/fp32 korpus teil 2026-10-04T12:30:28Z
+abbild-digest sha256:5ed5742cbaddf14a378664e19cf2be6f500c3ac9b60d1a0bfc86e388f43ebc27
+schritt abwaerts 2026-10-04T12:30:28Z
+abwaerts code=saved saved=true HTTP200
+schritt zaehlung-eine-nextcloud 2026-10-04T12:30:29Z
+nextcloud-instanzen 1
+schritt nullstand 2026-10-04T12:30:29Z
+unregister-rm-data ja
+schritt registrierung 2026-10-04T12:30:30Z
+registrierung-rueckgabewert 0
+schritt vorrat-tor 2026-10-04T12:30:35Z
+vorrat-tor altvorrat 0
+schritt bewaffnung 2026-10-04T12:30:35Z
+bewaffnung backendReachable true nach-s 1
+schritt grenze 2026-10-04T12:30:39Z
+grenze keine
+schritt baumhash 2026-10-04T12:30:39Z
+40b-baumhash-rueckgabewert 0
+baumhash-im-laufenden-container ee918ce4bc7c19273f89fc174b1a3a10a91417e8a1bfc273e10c849a059a0e0a
+baumhash-beweis ja
+schritt 93b-nullstand 2026-10-04T12:30:40Z
+93b-nullstand-rueckgabewert 0
+schritt drop-caches 2026-10-04T12:30:40Z
+caches-geleert ja
+schritt probe 2026-10-04T12:30:41Z
+probe-rueckgabewert 0
+erzwungen nein
+schritt wirksamkeit 2026-10-04T12:31:17Z
+uebersicht HTTP200 effective=standard guardEffective=standard guardCause=keine slotsInForce=1 throttled=false backendReachable=true scheduled=0 running=0 indexed=0 embedded=0 storedPrecision=fp32 profileSaved=standard
+wirksamkeit ja effective standard slotsInForce 1 nach-s 33
+schritt sampler 2026-10-04T12:31:50Z
+sampler rss 2 anon 1 cpu 5 status 120 gestartet 2026-10-04T12:31:50Z
+schritt trigger 2026-10-04T12:31:50Z
+zaehlmarke 2026-09-10 23:44:03
+The crawl was queued. It starts with the next run of the background jobs.
+
+Work stock
+  scheduled            0
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              44
+  failed               6
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-10-04 10:21:56 (129 minutes ago)
+trigger ja 2026-10-04T12:31:52Z
+zaehlung vorrat-teilkorpus 1344 vorrat-global 1344 uebersprungen-frisch 0 fehlgeschlagen-frisch 0 eingebettet 3656 indexiert 3658 summe 5000
+zaehltor bestanden 5000
+schritt ende 2026-10-04T13:31:56Z
+lesung t=2s vorrat 1344 indexed 3658 embedded 3656 guard standard throttled false
+lesung t=123s vorrat 1310 indexed 3694 embedded 3690 guard standard throttled false
+lesung t=245s vorrat 1290 indexed 3714 embedded 3710 guard standard throttled false
+lesung t=367s vorrat 1250 indexed 3754 embedded 3750 guard standard throttled false
+lesung t=489s vorrat 1214 indexed 3788 embedded 3786 guard standard throttled false
+lesung t=611s vorrat 1178 indexed 3828 embedded 3822 guard standard throttled false
+lesung t=733s vorrat 1146 indexed 3856 embedded 3854 guard standard throttled false
+lesung t=855s vorrat 1114 indexed 3890 embedded 3886 guard standard throttled false
+lesung t=977s vorrat 1084 indexed 3918 embedded 3916 guard standard throttled false
+lesung t=1099s vorrat 1044 indexed 3960 embedded 3956 guard standard throttled false
+lesung t=1221s vorrat 1026 indexed 3976 embedded 3974 guard standard throttled false
+lesung t=1342s vorrat 992 indexed 4008 embedded 4008 guard standard throttled false
+lesung t=1464s vorrat 952 indexed 4050 embedded 4048 guard standard throttled false
+lesung t=1586s vorrat 916 indexed 4088 embedded 4084 guard standard throttled false
+lesung t=1708s vorrat 882 indexed 4124 embedded 4118 guard standard throttled false
+lesung t=1830s vorrat 844 indexed 4156 embedded 4156 guard standard throttled false
+lesung t=1952s vorrat 826 indexed 4176 embedded 4174 guard standard throttled false
+lesung t=2074s vorrat 786 indexed 4216 embedded 4214 guard standard throttled false
+lesung t=2196s vorrat 756 indexed 4244 embedded 4244 guard standard throttled false
+lesung t=2318s vorrat 724 indexed 4276 embedded 4276 guard standard throttled false
+lesung t=2440s vorrat 690 indexed 4316 embedded 4314 guard standard throttled false
+lesung t=2562s vorrat 662 indexed 4342 embedded 4338 guard standard throttled false
+lesung t=2684s vorrat 632 indexed 4368 embedded 4368 guard standard throttled false
+lesung t=2806s vorrat 616 indexed 4384 embedded 4384 guard standard throttled false
+lesung t=2927s vorrat 578 indexed 4422 embedded 4422 guard standard throttled false
+lesung t=3049s vorrat 556 indexed 4444 embedded 4444 guard standard throttled false
+lesung t=3171s vorrat 532 indexed 4472 embedded 4468 guard standard throttled false
+lesung t=3293s vorrat 502 indexed 4500 embedded 4498 guard standard throttled false
+lesung t=3415s vorrat 476 indexed 4528 embedded 4524 guard standard throttled false
+lesung t=3537s vorrat 438 indexed 4568 embedded 4568 guard standard throttled false
+lesung t=3659s vorrat 394 indexed 4606 embedded 4606 guard standard throttled false
+lesung t=3781s vorrat 360 indexed 4644 embedded 4640 guard standard throttled false
+lesung t=3903s vorrat 320 indexed 4680 embedded 4680 guard standard throttled false
+lesung t=4025s vorrat 286 indexed 4714 embedded 4714 guard standard throttled false
+lesung t=4147s vorrat 254 indexed 4750 embedded 4748 guard standard throttled false
+lesung t=4269s vorrat 220 indexed 4780 embedded 4780 guard standard throttled false
+lesung t=4390s vorrat 184 indexed 4822 embedded 4816 guard standard throttled false
+lesung t=4512s vorrat 154 indexed 4848 embedded 4846 guard standard throttled false
+lesung t=4634s vorrat 118 indexed 4884 embedded 4882 guard standard throttled false
+lesung t=4756s vorrat 102 indexed 4898 embedded 4898 guard standard throttled false
+lesung t=4878s vorrat 74 indexed 4928 embedded 4926 guard standard throttled false
+lesung t=5000s vorrat 48 indexed 4952 embedded 4952 guard standard throttled false
+lesung t=5122s vorrat 24 indexed 4978 embedded 4976 guard standard throttled false
+lesung t=5244s vorrat 0 indexed 5000 embedded 5000 guard standard throttled false
+lesung t=5366s vorrat 0 indexed 5000 embedded 5000 guard standard throttled false
+ende vorrat 0 embedded gleich indexed zweimal 2026-10-04T15:01:22Z
+schritt nachlauf 2026-10-04T15:01:22Z
+grundlast anon 2017234944 nach-ruhe-s 120
+guard effective=standard cause=keine throttled=false slotsInForce=1
+waechter-absenkung nein
+oom oomkilled false restartcount 0 containerstart 2026-10-04T12:30:36.671759353Z memory-events oom 0 oom_kill 0
+schritt abholen 2026-10-04T15:03:23Z
+abholbereit ja dateien 14
+10-ZELLE-FERTIG St-fp32-T

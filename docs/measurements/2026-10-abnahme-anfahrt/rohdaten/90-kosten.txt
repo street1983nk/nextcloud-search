@@ -116,4 +116,9 @@ geparkt 2026-10-04T06:15:06Z laeuft
 # kettenlauf 9: zelle L-T GEMESSEN (rueckgabe 0, zaehltor 5000); arm-haelfte damit komplett
 # bisher 12.69 USD gegen deckel 59.43 USD (02-rechenblatt.py stand --jetzt 2026-10-04T06:15:06Z, rest 46.74); box geparkt
 # 28-07 x86-haelfte (owner-wort 04.10.): zweite instanz c7a.xlarge (runbook block 14), LaunchTime aus run-instances
-c7a.xlarge 2026-10-04T06:24:49Z laeuft
+c7a.xlarge 2026-10-04T06:24:49Z 2026-10-04T15:04:23Z
+# c7a.xlarge stop 2026-10-04T15:04:23Z (00-typwechsel.sh wechsel, aws_box.sh stop) laufzeit 8.6594 h x 0.252301 = 2.1848 USD
+#   machbarkeitstor bestanden (45 min), zellen S-T, St-T, St-fp32-T GEMESSEN (rueckgabe 0), kette-ende 15:03:23Z
+# typwechsel c7a.xlarge -> c7a.2xlarge (00-typwechsel.sh, gestoppt 15:04:23Z laeuft 15:04:45Z)
+geparkt 2026-10-04T15:04:23Z 2026-10-04T15:04:45Z
+c7a.2xlarge 2026-10-04T15:04:45Z laeuft

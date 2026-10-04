@@ -1,0 +1,73 @@
+# die zellen der x86-hälfte (c7a), kettenläufe und typwechsel, plan 28-07 x86-hälfte
+# geheimnisregel: keine adresse, keine instanz- oder volumekennung; platzhalter wie in 06-aufbau-x86.txt.
+# aufbau und machbarkeitstor: 06-aufbau-x86.txt. auswertung je zelle auf der entwicklungsmaschine:
+# anon-max nach der methode des zellenwerkzeugs (rss_sampler.sh, summary max_anon der container-cgroup),
+# urteil per 12-slotkosten.py rechnung --gemessen-bytes, slotkosten per 12-slotkosten.py slots (anon.csv).
+# containerlog: ab zelle St-T folgt auf der box ein lesender mitschnitt jedem neuen container
+# (docker logs -f -t, ~/work/clog/); der log von S-T ging mit dem nullstand von St-T verloren.
+
+## kettenlauf c7a.xlarge (start der x86-box, LaunchTime 2026-10-04T06:24:49Z)
+laufwerte: BISHER_USD 12.69, SATZ_USD_H 0.252301, ZELLEN S-T:economy:int8:teil St-T:standard:int8:teil
+  St-fp32-T:standard:fp32:teil (zelle 10 L-T gestrichen, owner 03.10.), ABBILD_DIGEST sha256:5ed5742c...,
+  GRENZE_2G nein; umgebung IMAGE_TAG=18602c48f4cd6cfea6ee66dd61fb4e487b489342, KORPUS_FRIST 3600
+kette-start c7a.xlarge 2026-10-04T07:15:46Z bisher 12.9042, timer-gesetzt minuten 13890
+kette-ende 2026-10-04T15:03:23Z bisher 14.8706, alle drei zellen rueckgabe 0
+
+zelle 8 S-T (economy/int8, 1 slot): GEMESSEN, rueckgabe 0
+  probe keine (abwärtsweg); wirksamkeit ja effective economy slotsInForce 1 nach-s 2; trigger 07:16:21Z
+  zaehltor bestanden 5000: vorrat-teilkorpus 2488 = vorrat-global 2488, eingebettet 2512, indexiert 3628,
+    frisch übersprungen 0, fehlgeschlagen 0
+  ende vorrat 0, embedded = indexed zweimal 09:55:59Z (trigger bis ende 2:39:38, planwert 3:50)
+  guard economy ohne absenkung, throttled false; oom 0 oom_kill 0, oomkilled false, restartcount 0
+  anon-max 1594019840 B = 1520,2 MiB, rechnung 1492,5, grenze 1641,8: urteil GETRAGEN; memory.peak 1942589440 B
+  slots --slots 1: slot-anon je slot 295,8 MiB (b2 235,0), slot-paar vmhwm 433,8 MiB, rssanon 381,6 MiB,
+    hauptprozess-max 1288,5 MiB; grundlast nach 120 s ruhe 1368629248 B
+
+zelle 9 St-T (standard/int8): GEMESSEN, rueckgabe 0
+  probe verdikt fits (available 6539534336, need 1609969536, slots 1), erzwungen nein
+  wirksamkeit ja effective standard slotsInForce 1 nach-s 33; trigger 09:58:57Z
+  zaehltor bestanden 5000: vorrat-teilkorpus 1348 = vorrat-global 1348, eingebettet 3652, indexiert 3652
+  ende 12:28:26Z (trigger bis ende 2:29:29, planwert 3:20)
+  guard standard ohne absenkung, slotsInForce 1; oom 0 oom_kill 0, oomkilled false, restartcount 0
+  anon-max 1761132544 B = 1679,5 MiB, rechnung 1593,9, grenze 1753,3: urteil GETRAGEN; memory.peak 2098454528 B
+  slots --slots 1: slot-anon je slot 297,6 MiB, slot-paar vmhwm 432,4 MiB, hauptprozess-max 1396,9 MiB
+  gegenprobe der probe: fits, kein wächtereingriff, kein oom, peak 2,1 GB auf 7,6 GiB: stimmt
+  crawl-fix (container-auszug.txt): fünf runden "reconcile stands down, the crawl is unfinished"
+    (09:58:57Z bis 10:18:58Z), danach nur "stands down, N rows are scheduled", keine stale-lieferung;
+    erste ruhige runde 12:20:18Z "walked ... seen=36187 stale=0"; unchanged 0 über alle durchgänge;
+    selbstvorschub "ran dry while the crawl is unfinished" einmal (10:01:57Z); kein lock-timeout.
+
+zelle 11 St-fp32-T (standard/fp32): GEMESSEN, rueckgabe 0
+  probe (nach dem nullstand, 10-zelle reihenfolge): download der fp32-datei live aus dem eigenen release
+    (model-e5-small-fp32-614241f), bytes 47185920/470268510 bei t=2s bis 470268510/470268510 bei t=18s,
+    dann step model und ocr_one; verdikt fits (available 6367031296, need 1994796928, rateFp32 3125,
+    rateInt8 4115, slots 1), erzwungen nein. digest-prüfung: das produkt vergleicht länge und sha256
+    (embed/weights.py, sonst WARNING "the download does not match the recorded digest" und
+    WRONG_DIGEST); die warnung steht nicht im log, die probe ging in step model, und die übersicht
+    meldet storedPrecision=fp32.
+  wirksamkeit ja effective standard slotsInForce 1 nach-s 33; trigger 12:31:52Z
+  zaehltor bestanden 5000: vorrat-teilkorpus 1344 = vorrat-global 1344, eingebettet 3656, indexiert 3658
+  ende 15:01:22Z (trigger bis ende 2:29:30, planwert 3:30)
+  guard standard ohne absenkung; oom 0 oom_kill 0, oomkilled false, restartcount 0
+  anon-max 2278068224 B = 2172,5 MiB, rechnung 1960,9, grenze 2157,0: urteil NICHT GETRAGEN
+    (15,5 MiB über der grenze, 10,8 prozent über der rechnung); memory.peak 3123617792 B
+  12-slotkosten.py fp32 (St-T gegen St-fp32-T derselben box): hauptprozess int8 1430464 kB, fp32
+    1952360 kB, mehrbedarf 509,7 MiB gegen FP32_EXTRA_BYTES 367 MiB: urteil nicht getragen
+  slots --slots 1: slot-anon je slot 297,9 MiB, slot-paar vmhwm 435,4 MiB, hauptprozess-max 1906,6 MiB
+  gegenprobe der probe: fits, kein wächtereingriff, kein oom, peak 3,1 GB auf 7,6 GiB: die probe stimmt;
+    der widerspruch liegt bei der rechnung, nicht beim verdikt. SC4-fall für den owner (checkpoint C5).
+  lock-timeout einmal: 12:59:23Z "could not move 2 files to the embed track, they run into the lock
+    timeout" (bekannter gutartiger rest, befund 2026-10-04-issue-18-zusagen-und-lock-timeout.md);
+    zähltor und ende nicht berührt.
+  rückkehr auf int8 nach der kette (99-rueckkehr-int8.txt): ein lesender helfer auf der box ersetzte
+    am kettenende das shutdown -h +2 durch einen sicherheitsstopp +60 (abholen und typwechsel von
+    aussen) und fuhr den abwärtsweg: abwaerts code=saved saved=true HTTP200, danach übersicht
+    storedPrecision=int8 profileSaved=economy (15:03:27Z bis 15:03:30Z).
+
+stopp und typwechsel c7a.xlarge -> c7a.2xlarge (00-typwechsel.sh wechsel, rückgabe 0):
+  gestoppt 2026-10-04T15:04:23Z, läuft 2026-10-04T15:04:45Z, typ-ist c7a.2xlarge, zustand running
+  uptime c7a.xlarge 8,6594 h (aws_box.sh stop: 2.1835 USD netto nach tabellensatz)
+  hostschlüssel per ssh-keyscan 3 von 3 gleich dem aufbau; a-record auf die neue adresse (success)
+  rücklesung: nproc 8, free 15Gi, uname -m x86_64; alle aio-container healthy (restart-politik der
+  neu erzeugten container trägt); findling-registry (arm64, nicht gebraucht) lief nach dem start im
+  neustart-kreis (exec format error) und steht jetzt mit --restart=no gestoppt.
