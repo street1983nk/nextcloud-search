@@ -155,3 +155,76 @@ stopp: aws_box.sh stop scheiterte 23:57Z an der abgelaufenen aws-sitzung ("Your 
   expired"); darauf sudo shutdown -c und sudo shutdown -h +1 von innen (geplant 23:58:45Z,
   shutdown-verhalten stop belegt 22:48:23Z); ssh ab 23:59:40Z unerreichbar (connection timed out,
   dreimal). aws-bestätigung und BOX_STOPPED_ISO per aws_box.sh stehen aus (owner loggt ein).
+# kettenlauf 9 (28-07 start 13), zelle L-T auf m7g.4xlarge nach debug crawl-unfinished-zweitlauf
+lauf-8-stopp per aws_box.sh status bestätigt 2026-10-04 ~04:31Z: stopped, Client.InstanceInitiatedShutdown;
+  BOX_STOPPED_ISO 2026-10-03T23:58:45Z stand schon in box.env, bestätigungszeile angehängt
+start-m7g.4xlarge 2026-10-04T04:32:21Z (aws_box.sh start, running since aus der ausgabe; kein typwechsel)
+a-record von 3.73.66.23 auf die neue instanzadresse umgesetzt (zonen-api, ttl 120, nicht proxied),
+  rücklesung genau ein a-eintrag; hostschlüssel ssh-keyscan: 3 von 3 identisch zu lauf 8
+rücklesung: free -h total 61Gi, nproc 16, uname -m aarch64, grep -c mem=4G /proc/cmdline 0
+box-klon git fetch origin main, reset auf 18602c48f4cd6cfea6ee66dd61fb4e487b489342
+  (vorher bbd23578; abweichende dateien waren die lauf-8-rohdaten, blob-gleich zu den lokal committeten
+  m7g.4xlarge/00-*.txt, L-T-abbruch71-lauf8/ und m7g.4xlarge-teil-lauf8-abbruch71-kette.log;
+  arbeitsbaum vorher als tgz gesichert)
+abbild vorgezogen: ghcr.io/street1983nk/findling_backend@sha256:5ed5742cbaddf14a378664e19cf2be6f500c3ac9b60d1a0bfc86e388f43ebc27
+  (multi-arch-index von lauf 37176289187 auf 18602c48, arm64, erstellt 2026-10-04T04:12:30Z); im abbild
+  reconcile.py "reconcile stands down, the crawl is unfinished" (zeile 622, gleich dem repo), queue.py
+  stats mit crawling; baumhash in der zelle ee918ce4..., beweis ja
+companion-app im nextcloud-container ersetzt 04:35Z (custom_apps/findling aus php/ ohne tests, vorher als tgz
+  im container gesichert, sha1-baum gleich php/, php -l aller lib-dateien 0 fehler, chown 33:33, occ upgrade
+  "No upgrade required." rc 0); crawling in QueueController 2
+vorpruefung-stop-ja 2026-10-04T04:35:41Z
+vorab-räumung 04:36Z occ findling:index --restart -n; vorrat scheduled 0, handed 0
+laufwerte: BISHER_USD 11.33 (02-rechenblatt.py stand --jetzt 04:32:21Z), SATZ_USD_H 0.800141,
+  ZELLEN L-T:performance:int8:teil, ABBILD_DIGEST sha256:5ed5742c..., GRENZE_2G nein, KORPUS_FRIST 3600 (umgebung)
+kettenstart 2026-10-04T04:36:31Z bisher 11.3856, timer-gesetzt minuten 4493
+zelle L-T: vorrat-tor altvorrat 0; grenze keine (memory.max max); baumhash-beweis ja; probe verdikt fits
+  (reserve 60407271552, slots 15), erzwungen nein; wirksamkeit ja effective performance slotsInForce 1 nach-s 34
+  (leerlauf ohne vorrat, wie lauf 8); unter last durchgänge mit slots=15 (69 zeilen im container-auszug),
+  wächter am ende slotsInForce 15; trigger 04:37:34Z.
+zelle L-T GEMESSEN: rueckgabe 0. zaehltor bestanden 5000 um 05:37:3xZ (trigger + 3600 s):
+  zaehlung vorrat-teilkorpus 30 vorrat-global 30 uebersprungen-frisch 0 fehlgeschlagen-frisch 0
+  eingebettet 4970 indexiert 5000 summe 5000. ende vorrat 0, embedded = indexed zweimal 06:08:11Z
+  (trigger bis ende 1:30:37, planwert 0:45; davon ~30 min warten auf den lock-ablauf, siehe unten);
+  zelle-ende und kette-ende 06:10:12Z; guard performance ohne absenkung, throttled false;
+  oom 0 oom_kill 0, oomkilled false, restartcount 0.
+  anon-max nach der methode des zellenwerkzeugs (rss_sampler.sh, summary max_anon der container-cgroup;
+  dieselbe methode trifft lauf 7 exakt: 5420,0 und 5474,3): 5748092928 B = 5481,8 MiB, rechnung 5033,0,
+  grenze 5536,3; 12-slotkosten.py rechnung --gemessen-bytes: urteil getragen. memory.peak 6159839232 B.
+  zum vergleich lauf 8 nach derselben methode: 5591,4 MiB (die dort notierten 5630,3 waren die summe
+  rssanon je zeitpunkt aus anon.csv, eine andere methode).
+  12-slotkosten.py slots --slots 15 (anon.csv): slot-anon je slot 220,1 MiB (vergleich b2 235,0),
+  slot-paar vmhwm 441,7 MiB, rssanon 362,3 MiB, hauptprozess-max 2319,0 MiB.
+  gegenprobe der probe: fits, kein wächtereingriff, kein oom, peak 6,2 GB auf 61 GiB, also stimmt.
+crawl-fix im feld (debug crawl-unfinished-zweitlauf), aus dem container-log (L-T/container-auszug.txt):
+  (a) während des crawls nur "reconcile stands down, the crawl is unfinished": 04:36:41Z, 04:41:41Z,
+      04:46:41Z, 04:51:41Z, 04:56:41Z; danach busy-runden "stands down, N rows are scheduled" (05:01:41Z
+      1556 bis 05:31:42Z 116); KEINE stale-lieferung während des laufs. die erste ruhige runde 05:38:48Z
+      "reconcile round walked, mounts=4 slices=118 seen=57187 stale=0 missing=0 given_up=0" (damit ist auch
+      der vorbehalt aus lauf 8 geschlossen: im ruhigen takt kommt keine ausgeschlossene datei zurück).
+      erfüllt.
+  (b) zaehltor exakt 5000: erfüllt. vorrat-teilkorpus 0: NICHT erfüllt, 30 (= vorrat-global 30). die 30
+      sind teilkorpus-dateien (fileids 57215 bis 57278, kind ocr, retries 1, claim 05:32:32Z), indexiert,
+      aber noch nicht eingebettet; KEIN zweiter crawl-durchgang (keine datei doppelt, unchanged 0).
+      ursache: die übergabe auf die embed-spur scheiterte 05:34:19Z ("could not hand 30 files to another
+      track", "could not move 30 files to the embed track, they run into the lock timeout", genau 60 s
+      nach dem commit 05:33:19Z); dieselbe meldung schon 05:02:56Z für 30 andere dateien (fileids 53441 bis
+      53496), die nach dem ocr-lock-ablauf (1800 s, QueueMapper::LOCK_TIMEOUTS) 05:31:41Z bis 05:32:32Z neu
+      liefen und sauber übergeben wurden. die 30 der lesung kamen nach dem lock-ablauf (ab 06:02:32Z) um 06:03:42Z wieder und waren 06:08:11Z
+      eingebettet. kein dateifester fehler (zwei verschiedene stapel). die ursache der ausnahme loggt der
+      container nicht (queue.py requeue, except Exception ohne exc_info); nextcloud.log ohne eintrag seit
+      04:36Z.
+  (c) keine unchanged-zweitwelle: über alle 225 durchgänge (04:46:36Z bis 06:04:28Z) unchanged 0,
+      selbstvorschub "ran dry while the crawl is unfinished" nur einmal 04:38:27Z (vor dem crawl-vorrat),
+      danach nie. summen claimed 7060, indexed 5060 (5000 + 2 x 30 nach lock-ablauf), skipped 2000,
+      requeued 7000, failed 0. erfüllt.
+befund für den owner (produkt, nicht angefasst): bei schnellem worker kann die übergabe ocr -> embed in
+  ein 60-s-timeout laufen; die dateien hängen dann bis zum ocr-lock-ablauf (30 min) und werden einmal neu
+  ocr-verarbeitet. für nutzer: bis zu 30 min verzögerte vollständigkeit am ende einer indexierung und
+  doppelte ocr-arbeit für den stapel; kein datenverlust (survivable by construction). zweimal in dieser
+  zelle (05:02:56Z, 05:34:19Z), ursache der ausnahme unbelegt.
+stopp: die kette setzte am kettenende 06:10:12Z wie vorgesehen sudo shutdown -h +2; das abholen fiel in die
+  nologin-sperre, poweroff 06:12:23Z (journalctl -b -1), waiter stopped 06:12:40Z. kurzer abholstart
+  06:13:05Z (aws_box.sh start, hostschlüssel 3 von 3 identisch, a-record NICHT umgesetzt, zeigt auf
+  3.74.228.12), rohdaten per tar geholt, aws_box.sh stop 06:15:06Z (BOX_STOPPED_ISO), geparkt.
+  rohdaten unter m7g.4xlarge/L-T/ (mit container-auszug.txt) und m7g.4xlarge-kette.log.

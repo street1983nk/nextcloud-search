@@ -91,7 +91,7 @@ geparkt 2026-10-03T18:51:09Z 2026-10-03T22:45:15Z
 #   (reconcile beachtet ausschluesse, zaehltor-vorrat teilkorpus-scharf): box-klon per git fetch auf bbd23578,
 #   abbild 5242e47f (multi-arch zu bbd23578) vorgezogen, companion-app ersetzt, nur zelle L-T
 m7g.4xlarge 2026-10-03T22:45:15Z 2026-10-03T23:58:45Z
-geparkt 2026-10-03T23:58:45Z laeuft
+geparkt 2026-10-03T23:58:45Z 2026-10-04T04:32:21Z
 # m7g.4xlarge stopp lauf 8: von innen (sudo shutdown -h +1, geplant 23:58:45Z, ssh ab 23:59:40Z unerreichbar);
 #   aws_box.sh stop war nicht möglich, die aws-sitzung ist abgelaufen (owner loggt ein); shutdown-verhalten
 #   stop belegt (vorpruefung-stop-ja 2026-10-03T22:48:23Z), aws-bestätigung steht aus.
@@ -100,3 +100,18 @@ geparkt 2026-10-03T23:58:45Z laeuft
 #   kein ausgeschlossener schub mehr; die 427 sind ein zweiter crawl-durchgang über den fertigen teilkorpus
 #   nach dem selbstvorschub); blocker an den owner
 # bisher 11.27 USD gegen deckel 59.43 USD (02-rechenblatt.py stand --jetzt 2026-10-03T23:58:45Z, rest 48.16); box geparkt
+# lauf-8-stopp per aws_box.sh status bestaetigt 2026-10-04T04:31Z (stopped, Client.InstanceInitiatedShutdown)
+# 28-07 start 13 (aws_box.sh start, running since aus der ausgabe), kettenlauf 9 nach debug crawl-unfinished-zweitlauf
+#   (reconcile steht still, solange der crawl laeuft): box-klon per git fetch auf 18602c48, abbild 5ed5742c
+#   (multi-arch zu 18602c48) vorgezogen, companion-app ersetzt, nur zelle L-T
+m7g.4xlarge 2026-10-04T04:32:21Z 2026-10-04T06:12:23Z
+geparkt 2026-10-04T06:12:23Z 2026-10-04T06:13:05Z
+# abholstart (aws_box.sh start, running since aus der ausgabe): die kette endete mit shutdown -h +2, bevor die
+#   rohdaten geholt waren; kurzer start nur zum abholen, dann aws_box.sh stop
+m7g.4xlarge 2026-10-04T06:13:05Z 2026-10-04T06:15:06Z
+geparkt 2026-10-04T06:15:06Z laeuft
+# m7g.4xlarge stop 2026-10-04T06:12:23Z (kettenende 06:10:12Z, sudo shutdown -h +2 aus 00-kette.sh, poweroff aus journalctl -b -1)
+#   laufzeit 1.6672 h x 0.800141 = 1.3340 USD; abholen 06:13:05Z bis 06:15:06Z (aws_box.sh stop, BOX_STOPPED_ISO)
+#   laufzeit 0.0336 h x 0.800141 = 0.0269 USD
+# kettenlauf 9: zelle L-T GEMESSEN (rueckgabe 0, zaehltor 5000); arm-haelfte damit komplett
+# bisher 12.69 USD gegen deckel 59.43 USD (02-rechenblatt.py stand --jetzt 2026-10-04T06:15:06Z, rest 46.74); box geparkt

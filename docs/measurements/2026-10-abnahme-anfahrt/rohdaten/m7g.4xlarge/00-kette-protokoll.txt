@@ -376,3 +376,80 @@ zaehlung vorrat-teilkorpus 427 vorrat-global 427 uebersprungen-frisch 0 fehlgesc
 zaehltor verfehlt 5427 statt 5000
 zelle-abbruch rueckgabe 71 grund das Zaehltor 5000 ist verfehlt (5427) 2026-10-03T23:50:25Z
 10-zelle: das Zaehltor 5000 ist verfehlt (5427)
+zelle-start L-T box m7g.4xlarge ziel performance/int8 korpus teil 2026-10-04T04:36:31Z
+abbild-digest sha256:5ed5742cbaddf14a378664e19cf2be6f500c3ac9b60d1a0bfc86e388f43ebc27
+schritt abwaerts 2026-10-04T04:36:31Z
+abwaerts code=saved saved=true HTTP200
+schritt zaehlung-eine-nextcloud 2026-10-04T04:36:33Z
+nextcloud-instanzen 1
+schritt nullstand 2026-10-04T04:36:33Z
+unregister-rm-data ja
+schritt registrierung 2026-10-04T04:36:34Z
+registrierung-rueckgabewert 0
+schritt vorrat-tor 2026-10-04T04:36:38Z
+vorrat-tor altvorrat 0
+schritt bewaffnung 2026-10-04T04:36:38Z
+bewaffnung backendReachable true nach-s 2
+schritt grenze 2026-10-04T04:36:43Z
+grenze keine
+schritt baumhash 2026-10-04T04:36:43Z
+40b-baumhash-rueckgabewert 0
+baumhash-im-laufenden-container ee918ce4bc7c19273f89fc174b1a3a10a91417e8a1bfc273e10c849a059a0e0a
+baumhash-beweis ja
+schritt 93b-nullstand 2026-10-04T04:36:43Z
+93b-nullstand-rueckgabewert 0
+schritt drop-caches 2026-10-04T04:36:44Z
+caches-geleert ja
+schritt probe 2026-10-04T04:36:44Z
+probe-rueckgabewert 0
+erzwungen nein
+schritt wirksamkeit 2026-10-04T04:36:58Z
+uebersicht HTTP200 effective=performance guardEffective=performance guardCause=keine slotsInForce=1 throttled=false backendReachable=true scheduled=0 running=0 indexed=0 embedded=0 storedPrecision=int8 profileSaved=performance
+wirksamkeit ja effective performance slotsInForce 1 nach-s 34
+schritt sampler 2026-10-04T04:37:32Z
+sampler rss 2 anon 1 cpu 5 status 120 gestartet 2026-10-04T04:37:32Z
+schritt trigger 2026-10-04T04:37:32Z
+zaehlmarke 2026-10-01 11:39:47
+The crawl was queued. It starts with the next run of the background jobs.
+
+Work stock
+  scheduled            0
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              32
+  failed               6
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-10-03 23:50:36 (286 minutes ago)
+trigger ja 2026-10-04T04:37:34Z
+zaehlung vorrat-teilkorpus 30 vorrat-global 30 uebersprungen-frisch 0 fehlgeschlagen-frisch 0 eingebettet 4970 indexiert 5000 summe 5000
+zaehltor bestanden 5000
+schritt ende 2026-10-04T05:37:37Z
+lesung t=2s vorrat 30 indexed 5000 embedded 4970 guard performance throttled false
+lesung t=125s vorrat 30 indexed 5000 embedded 4970 guard performance throttled false
+lesung t=247s vorrat 30 indexed 5000 embedded 4970 guard performance throttled false
+lesung t=369s vorrat 30 indexed 5000 embedded 4970 guard performance throttled false
+lesung t=491s vorrat 30 indexed 5000 embedded 4970 guard performance throttled false
+lesung t=613s vorrat 30 indexed 5000 embedded 4970 guard performance throttled false
+lesung t=735s vorrat 30 indexed 5000 embedded 4970 guard performance throttled false
+lesung t=857s vorrat 30 indexed 5000 embedded 4970 guard performance throttled false
+lesung t=979s vorrat 30 indexed 5000 embedded 4970 guard performance throttled false
+lesung t=1101s vorrat 30 indexed 5000 embedded 4970 guard performance throttled false
+lesung t=1223s vorrat 30 indexed 5000 embedded 4970 guard performance throttled false
+lesung t=1345s vorrat 30 indexed 5000 embedded 4970 guard performance throttled false
+lesung t=1468s vorrat 30 indexed 5000 embedded 4970 guard performance throttled false
+lesung t=1590s vorrat 30 indexed 5000 embedded 4970 guard performance throttled false
+lesung t=1712s vorrat 0 indexed 5000 embedded 5000 guard performance throttled false
+lesung t=1834s vorrat 0 indexed 5000 embedded 5000 guard performance throttled false
+ende vorrat 0 embedded gleich indexed zweimal 2026-10-04T06:08:11Z
+schritt nachlauf 2026-10-04T06:08:11Z
+grundlast anon 3241660416 nach-ruhe-s 120
+guard effective=performance cause=keine throttled=false slotsInForce=15
+waechter-absenkung nein
+oom oomkilled false restartcount 0 containerstart 2026-10-04T04:36:39.851499521Z memory-events oom 0 oom_kill 0
+schritt abholen 2026-10-04T06:10:12Z
+abholbereit ja dateien 14
+10-ZELLE-FERTIG L-T
