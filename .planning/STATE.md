@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
-status: executing
-stopped_at: "Quick 261003-wxg umgesetzt (Owner-Entscheid a+b): Reconcile beachtet Ausschluesse, Zaehltor-Vorrat teilkorpus-scharf; naechst Push + CI-Abbild + Lauf 8 L-T"
-last_updated: "2026-10-04T00:30:00.000Z"
+status: blocked
+stopped_at: "28-07 Lauf 8: L-T Abbruch 71 (5427), Reconcile-Fix im Feld belegt, neuer Befund zweiter Crawl-Durchgang nach Selbstvorschub; Box geparkt, Owner-Entscheid"
+last_updated: "2026-10-04T00:20:00.000Z"
 last_activity: 2026-10-04
 progress:
   total_phases: 6
@@ -27,13 +27,47 @@ See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 
 Phase: 28 (Abnahme-Anfahrt), in Ausführung
 Plan: 7 of 14
-Status: Executing (28-07: Blocker L-T gelöst durch Quick 261003-wxg, Owner a+b; Push + Lauf 8 offen)
+Status: Blocked (28-07 Lauf 8: L-T Abbruch 71 mit 5427, Ursache zweiter Crawl-Durchgang; Owner-Entscheid)
 Last activity: 2026-10-04
 
 Progress: [█████████░] 87%
 
 ## Naechster Schritt
 
+**28-07 Task 2 BLOCKED: Lauf 8 (04.10. UTC 03.10. 22:45 bis 23:59), Zelle L-T auf m7g.4xlarge, Abbruch 71.**
+Vorbereitung vollständig: Box-Klon auf bbd23578, Abbild 5242e47f (Multi-Arch zu bbd23578,
+Baumhash a6ad7397 gleich), Companion-App aus php/ ersetzt, --restart, Kette 22:49:16Z. Probe fits
+(Slots 15), wirksam performance, unter Last slots=15. Zähltor bei Trigger + 3600 s: vorrat-teilkorpus
+427, vorrat-global 427, eingebettet 5000, Summe 5427, Abbruch 71 um 23:50:25Z.
+RECONCILE-FIX IM FELD BELEGT: vorrat-global = vorrat-teilkorpus (Lauf 7 an derselben Stelle 549
+ausgeschlossene Dateien), erste Reconcile-Runde seen=52549 stale=401 ohne die 549, findling:diagnose
+einer loadtest-Datei = skipped/excluded. Vorbehalt: nach Teilkorpus-Ende keine ruhige Runde vor der
+Lesung, der ruhige 300-s-Takt selbst ist nicht beobachtet.
+NEUER BEFUND (Ursache des Abbruchs): Teilkorpus fertig 23:44:19Z (5000/5000), im selben Moment
+Selbstvorschub ("work stock ran dry while the crawl is unfinished") und danach der GESAMTE
+Teilkorpus ein zweites Mal im Vorrat (scheduled 3037 um 23:46:26Z; Durchgänge 23:44 bis 23:56:
+claimed 5032, unchanged 5000). Ab 23:50Z kein weiterer Selbstvorschub, Vorrat 23:54Z 0. In Lauf 7
+lag der Crawl dem Worker voraus, hier lief der Vorrat ab 22:51Z wiederholt leer (Worker mit 15
+Slots schneller als der Crawl). Warum der Crawl nach dem letzten Stück als unfertig gilt und den
+Teilkorpus erneut liefert, ist NICHT geklärt (CrawlAdvanceService/StorageCrawlJob nicht gelesen;
+--restart räumt SchedulerJob und StorageCrawlJob sauber, NC-Cron lief nicht: letzter Background-Job
+18:10). Nutzerrelevanz vermutlich: nach der Erstindexierung ein zweiter Komplettdurchgang über alle
+Dateien (je Datei billig "unchanged", aber HTTP-Abrufe und Vorratsschub in Größe des Bestands).
+Kein Umgebungsproblem, daher keine Wiederholung (Auftrag Punkt 6).
+Optionen für den Owner: a) /gsd-debug zum zweiten Crawl-Durchgang (Produktbefund, empfohlen nach
+Regel "Produkt-Fix vor Harness-Patch"), danach Lauf 9; b) Werkzeug: Zähltor zählt nur Vorrat, der
+noch nicht eingebettet ist (Teilkorpus-Dateien ohne Endzustand), oder liest erst nach Vorrat 0;
+c) KORPUS_FRIST für L-T kürzer/länger (nur Laufwert, fragil).
+Hinweis anon-max (Zelle nicht gemessen): 5630,3 MiB um 23:40:10Z unter Last, Rechnung 5033,0,
+Grenze 5536,3 (Methode Summe rssanon je Zeitpunkt, ganze Serie; dieselbe Methode gibt für Lauf 7
+5451,9/5510,0 statt protokollierter 5420,0/5474,3). Wäre bei einer gemessenen Zelle SC4/C5.
+Box: von innen gestoppt (shutdown -h +1, 23:58:45Z), weil aws_box.sh stop an der ABGELAUFENEN
+AWS-Sitzung scheiterte; AWS-Bestätigung (aws_box.sh status) steht aus, Owner loggt ein.
+A-Record zeigt auf 3.73.66.23 (verwaist). Kosten 11,27 von 59,43 USD (Lauf 8: 1,225 h = 0,98 USD).
+Rohdaten: 05-typwechsel-arm.txt (Lauf 8), m7g.4xlarge/L-T-abbruch71-lauf8/ mit container-auszug.txt.
+Danach (nach Owner-Wort): L-T erneut, dann x86-Hälfte c7a (Block 14, Machbarkeitstor).
+
+Vorgeschichte Quick 261003-wxg (04.10.):
 **28-07 Task 2: Blocker L-T GELÖST durch Quick 261003-wxg (Owner-Entscheid a + b, 03.10.).**
 a) Produkt-Fix: die PHP-Hälfte markiert im File-Slice jede Datei, die eine Ausschlussregel von
 heute trifft, live als skipped(excluded) (ExclusionService::isExcluded auf mountRelativePath, nie
@@ -195,6 +229,8 @@ Fuer v1.4 unmittelbar tragend:
 
 ### Offene Blocker
 
+- **OFFEN 04.10. (Lauf 8): zweiter Crawl-Durchgang über den fertigen Teilkorpus nach dem Selbstvorschub,
+  L-T Abbruch 71 mit 5427 (vorrat-teilkorpus 427); Owner-Entscheid a/b/c, siehe Naechster Schritt.**
 - **GELÖST 04.10. (Quick 261003-wxg, Owner-Entscheid a + b): Reconcile beachtet die Ausschlüsse,
   Zähltor-Vorrat teilkorpus-scharf.** Lauf 8 braucht neues Abbild + neue Companion-App.
   Ursprünglicher Befund:
