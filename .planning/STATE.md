@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
 status: executing
-stopped_at: "28-07 x86-Hälfte: c7a.xlarge aufgebaut, Machbarkeitstor bestanden (45 min), Zelle 8 S-T gemessen, Kette läuft (St-T, St-fp32-T)"
-last_updated: "2026-10-04T10:05:00.000Z"
+stopped_at: "28-07 x86-Hälfte: c7a.xlarge komplett (S-T, St-T getragen; St-fp32-T nicht getragen, SC4), Typwechsel c7a.2xlarge, Kette läuft"
+last_updated: "2026-10-04T15:20:00.000Z"
 last_activity: 2026-10-04
 progress:
   total_phases: 6
@@ -46,7 +46,13 @@ Kette c7a.xlarge ab 07:15:46Z (S-T, St-T, St-fp32-T; Zelle 10 gestrichen), Abbil
 15b38874), IMAGE_TAG = sha-Tag 18602c48, Baumhash ee918ce4 gleich ARM.
 Zelle 8 S-T GEMESSEN: rc 0, Zähltor 5000, Ende 09:55:59Z (2:39:38 ab Trigger), anon-max 1520,2 MiB gegen
 Rechnung 1492,5 / Grenze 1641,8: getragen; Slot-anon je Slot 295,8 MiB (B2 235). Commit cd737a12.
-Zelle 9 St-T läuft (Probe fits, Slots 1, wirksam standard/1).
+Zelle 9 St-T GEMESSEN: rc 0, Probe fits (Slots 1), Zähltor 5000, Ende 12:28:26Z, anon-max 1679,5 MiB gegen
+Rechnung 1593,9 / Grenze 1753,3: getragen. Commit 65ac107a.
+Zelle 11 St-fp32-T GEMESSEN: rc 0, fp32 live aus dem Release (470268510/470268510, Digest im Produkt),
+Probe fits, Zähltor 5000, Ende 15:01:22Z, anon-max 2172,5 MiB gegen Rechnung 1960,9 / Grenze 2157,0:
+NICHT GETRAGEN (SC4/C5 für den Owner); fp32-Mehrbedarf 509,7 MiB gegen 367. Slot-anon auf x86 je Slot
+~296 MiB (B2 235, ARM L-T 220). Rückkehr auf int8 belegt. Commit 5e536753, Protokoll 07-typwechsel-x86.txt.
+Typwechsel c7a.xlarge -> c7a.2xlarge 15:04:23Z/15:04:45Z, Kette c7a.2xlarge ab 15:07:57Z (S-T, St-T, L-T).
 AWS-Sitzung (aws login 04:29Z) läuft gegen ~16:30Z ab; der Typwechsel auf c7a.2xlarge braucht dann ein
 neues Owner-Login. Box stoppt am Kettenende selbst (shutdown -h +2).
 
