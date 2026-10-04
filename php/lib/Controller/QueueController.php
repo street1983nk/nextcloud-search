@@ -334,6 +334,12 @@ class QueueController extends OCSController {
 	 * Three numbers: waiting, held right now, and how many files ended as
 	 * failed. The third one comes out of the state table, not out of the queue,
 	 * which is why it survives a container that is switched off.
+	 *
+	 * Plus one flag, crawling, from CrawlAdvanceService::crawling(): whether
+	 * the crawl of the file cache is still under way. The reconcile of the
+	 * container stands down while it is true, because an empty queue during a
+	 * crawl is not a quiet instance (run 8 of the 28-07 chain). A container from
+	 * before the flag ignores it.
 	 */
 	#[\OCP\AppFramework\Http\Attribute\ExAppRequired]
 	#[\OCP\AppFramework\Http\Attribute\NoCSRFRequired]
@@ -345,7 +351,10 @@ class QueueController extends OCSController {
 		}
 
 		try {
-			return new DataResponse($this->queueService->stats());
+			return new DataResponse(array_merge(
+				$this->queueService->stats(),
+				['crawling' => $this->crawlAdvanceService->crawling()],
+			));
 		} catch (\Throwable $e) {
 			// Same rule as above: no library message in the log.
 			$this->logger->error('Findling: could not count the queue', ['exception' => $e]);

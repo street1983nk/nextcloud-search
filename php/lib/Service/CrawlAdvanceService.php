@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace OCA\Findling\Service;
 
+use OCA\Findling\BackgroundJobs\SchedulerJob;
 use OCA\Findling\BackgroundJobs\StorageCrawlJob;
 use OCP\BackgroundJob\IJobList;
+use OCP\Lock\ILockingProvider;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -49,7 +51,39 @@ class CrawlAdvanceService {
 	public function __construct(
 		private IJobList $jobList,
 		private LoggerInterface $logger,
+		private ILockingProvider $lockingProvider,
 	) {
+	}
+
+	/**
+	 * Whether the crawl of the file cache is still under way.
+	 *
+	 * Read by the reconcile of the container through the queue stats (run 8 of
+	 * the 28-07 chain, abort 71 at 5427 of 5000): fifteen slots drained the work
+	 * stock faster than the cron paced crawl filled it, the reconcile read the
+	 * empty queue as a quiet instance, walked ahead and requeued every file the
+	 * crawl had not reached yet, and the crawl queued all 5000 of them a second
+	 * time. An empty queue during a crawl is not a quiet instance.
+	 *
+	 * Three answers count as unfinished. A SchedulerJob row: a restart or a
+	 * fresh install plans the crawl, and until it ran the whole crawl is ahead.
+	 * A crawl row of StorageCrawlJob: the chain of a mount waits for its next
+	 * slice. A held slice lock: a QueuedJob removes its row before it runs and
+	 * the successor is only planned at the end of the slice, so for those
+	 * seconds the last chain of the instance has no row at all. A recount row
+	 * alone is no crawl; it queues nothing and only starts once the crawl is
+	 * through.
+	 */
+	public function crawling(): bool {
+		foreach ($this->jobList->getJobsIterator(SchedulerJob::class, 1, 0) as $job) {
+			return true;
+		}
+		foreach ($this->jobList->getJobsIterator(StorageCrawlJob::class, null, 0) as $job) {
+			if (!self::isRecount($job->getArgument())) {
+				return true;
+			}
+		}
+		return $this->lockingProvider->isLocked(StorageCrawlJob::LOCK_NAME, ILockingProvider::LOCK_EXCLUSIVE);
 	}
 
 	/**

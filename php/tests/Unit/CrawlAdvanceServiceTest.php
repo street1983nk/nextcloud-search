@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace OCA\Findling\Tests\Unit;
 
+use OCA\Findling\BackgroundJobs\SchedulerJob;
 use OCA\Findling\BackgroundJobs\StorageCrawlJob;
 use OCA\Findling\Service\CrawlAdvanceService;
 use OCP\BackgroundJob\IJob;
 use OCP\BackgroundJob\IJobList;
+use OCP\Lock\ILockingProvider;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
@@ -39,7 +41,7 @@ final class CrawlAdvanceServiceTest extends TestCase {
 		$jobList->method('getJobsIterator')->willReturn([]);
 		$jobList->expects($this->never())->method('remove');
 
-		$service = new CrawlAdvanceService($jobList, $this->createMock(LoggerInterface::class));
+		$service = $this->service($jobList);
 
 		self::assertSame(['ran' => false, 'pending' => false], $service->advance());
 	}
@@ -73,7 +75,7 @@ final class CrawlAdvanceServiceTest extends TestCase {
 				$sequence[] = 'started';
 			});
 
-		$service = new CrawlAdvanceService($jobList, $this->createMock(LoggerInterface::class));
+		$service = $this->service($jobList);
 
 		self::assertSame(['ran' => true, 'pending' => false], $service->advance());
 		self::assertSame(['removed', 'argument', 'started'], $sequence);
@@ -87,7 +89,7 @@ final class CrawlAdvanceServiceTest extends TestCase {
 		$jobList = $this->createMock(IJobList::class);
 		$jobList->method('getJobsIterator')->willReturnOnConsecutiveCalls([$job], [$successor]);
 
-		$service = new CrawlAdvanceService($jobList, $this->createMock(LoggerInterface::class));
+		$service = $this->service($jobList);
 
 		self::assertSame(['ran' => true, 'pending' => true], $service->advance());
 	}
@@ -107,7 +109,7 @@ final class CrawlAdvanceServiceTest extends TestCase {
 		$jobList->method('getJobsIterator')->willReturn([$job]);
 		$jobList->expects($this->never())->method('remove');
 
-		$service = new CrawlAdvanceService($jobList, $this->createMock(LoggerInterface::class));
+		$service = $this->service($jobList);
 
 		self::assertSame(['ran' => false, 'pending' => false], $service->advance());
 	}
@@ -134,7 +136,7 @@ final class CrawlAdvanceServiceTest extends TestCase {
 		);
 		$jobList->expects($this->once())->method('remove')->with($crawl, self::CANONICAL);
 
-		$service = new CrawlAdvanceService($jobList, $this->createMock(LoggerInterface::class));
+		$service = $this->service($jobList);
 
 		self::assertSame(['ran' => true, 'pending' => true], $service->advance());
 	}
@@ -150,9 +152,80 @@ final class CrawlAdvanceServiceTest extends TestCase {
 		$jobList = $this->createMock(IJobList::class);
 		$jobList->method('getJobsIterator')->willReturnOnConsecutiveCalls([$crawl], [$recount]);
 
-		$service = new CrawlAdvanceService($jobList, $this->createMock(LoggerInterface::class));
+		$service = $this->service($jobList);
 
 		self::assertSame(['ran' => true, 'pending' => false], $service->advance());
+	}
+
+	/**
+	 * The jobs of the instance by class, the way IJobList answers a filtered
+	 * iterator.
+	 *
+	 * @param array<class-string, list<IJob>> $rows
+	 */
+	private function jobListWith(array $rows): IJobList {
+		$jobList = $this->createMock(IJobList::class);
+		$jobList->method('getJobsIterator')->willReturnCallback(
+			static fn ($job): array => is_string($job) ? ($rows[$job] ?? []) : [],
+		);
+		return $jobList;
+	}
+
+	private function service(IJobList $jobList, bool $sliceLocked = false): CrawlAdvanceService {
+		$locks = $this->createMock(ILockingProvider::class);
+		$locks->method('isLocked')->willReturnCallback(
+			static fn (string $path, int $type): bool => $sliceLocked
+				&& $path === StorageCrawlJob::LOCK_NAME
+				&& $type === ILockingProvider::LOCK_EXCLUSIVE,
+		);
+		return new CrawlAdvanceService($jobList, $this->createMock(LoggerInterface::class), $locks);
+	}
+
+	/*
+	 * Whether the crawl is unfinished, for the reconcile of the container
+	 * (run 8 of the 28-07 chain, abort 71 at 5427 of 5000). Fifteen slots drained
+	 * the work stock faster than the cron paced crawl filled it, the reconcile
+	 * read the empty queue as a quiet instance, walked ahead and requeued every
+	 * file the crawl had not reached yet, and the crawl queued all 5000 of them a
+	 * second time. An empty queue during a crawl is not a quiet instance, and
+	 * this is the one answer that says so.
+	 */
+
+	public function testNothingPlannedAndNoSliceRunningIsNoCrawl(): void {
+		self::assertFalse($this->service($this->jobListWith([]))->crawling());
+	}
+
+	public function testACrawlRowIsAnUnfinishedCrawl(): void {
+		$crawl = $this->createMock(IJob::class);
+		$crawl->method('getArgument')->willReturn(self::CANONICAL);
+
+		self::assertTrue($this->service($this->jobListWith([StorageCrawlJob::class => [$crawl]]))->crawling());
+	}
+
+	public function testAWaitingSchedulerIsAnUnfinishedCrawl(): void {
+		// occ findling:index --restart and a fresh install queue the scheduler
+		// first; until it ran there is no crawl row, and the crawl is all ahead.
+		$scheduler = $this->createMock(IJob::class);
+
+		self::assertTrue($this->service($this->jobListWith([SchedulerJob::class => [$scheduler]]))->crawling());
+	}
+
+	public function testARunningSliceIsAnUnfinishedCrawl(): void {
+		// A QueuedJob removes its row before it runs, and the successor is only
+		// planned at the end of the slice: for those seconds the last chain of
+		// the instance has no row at all. The slice lock is held exactly then.
+		self::assertTrue($this->service($this->jobListWith([]), sliceLocked: true)->crawling());
+	}
+
+	public function testARecountRowAloneIsNoCrawl(): void {
+		// Quick task 260929-kii: a recount queues nothing and only starts once
+		// the crawl is through, so the reconcile has nothing to wait for.
+		$recount = $this->createMock(IJob::class);
+		$recount->method('getArgument')->willReturn(array_merge(self::CANONICAL, [
+			'mode' => StorageCrawlJob::MODE_RECOUNT,
+		]));
+
+		self::assertFalse($this->service($this->jobListWith([StorageCrawlJob::class => [$recount]]))->crawling());
 	}
 
 	public function testTheBudgetIsClampedBetweenTheFloorAndTheCeiling(): void {

@@ -767,8 +767,13 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # and ReconcileController.php (the mark) and StorageService.php (the optional
 # predicate of getFileSlice) changed their bytes. No file went, so
 # PHP_FILES_TODAY moves to 88.
+# Measured again by debug session crawl-unfinished-zweitlauf (run 8 of 28-07,
+# the reconcile walked ahead of an unfinished crawl): CrawlAdvanceService.php
+# (crawling() and the locking provider), QueueController.php (the crawling flag
+# of documentStats) and their two unit tests changed their bytes. No file came
+# and none went, so PHP_FILES_TODAY stays at 88.
 PHP_FILES_TODAY = 88
-PHP_TREE_HASH_TODAY = "2023c844e4ec9f85f38dace44992c2a797dd273ccfa47de36885aa4de25555f4"
+PHP_TREE_HASH_TODAY = "bbcc449daff788f6f85d44bd1b71b485c857009bc6eedca7d6c87cc1fc95098a"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

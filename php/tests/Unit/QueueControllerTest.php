@@ -53,7 +53,7 @@ final class QueueControllerTest extends TestCase {
 		return $value;
 	}
 
-	private function controller(string $callerAppId): QueueController {
+	private function controller(string $callerAppId, ?CrawlAdvanceService $crawlAdvance = null): QueueController {
 		$request = $this->createMock(IRequest::class);
 		$request->method('getHeader')->willReturnCallback(
 			static fn (string $name): string => $name === 'EX-APP-ID' ? $callerAppId : '',
@@ -62,9 +62,37 @@ final class QueueControllerTest extends TestCase {
 		return new QueueController(
 			$request,
 			$this->queueService,
-			$this->createMock(CrawlAdvanceService::class),
+			$crawlAdvance ?? $this->createMock(CrawlAdvanceService::class),
 			$this->logger,
 		);
+	}
+
+	/**
+	 * Run 8 of the 28-07 chain: the reconcile of the container read an empty
+	 * queue as a quiet instance while the crawl was still running, walked ahead
+	 * and requeued the whole partial corpus, which the crawl then queued a second
+	 * time. The counters therefore carry whether the crawl is unfinished, and the
+	 * three counters themselves stay what they were.
+	 */
+	public function testTheStatsCarryWhetherTheCrawlIsUnfinished(): void {
+		$this->queueService->method('stats')->willReturn(['scheduled' => 0, 'running' => 0, 'failed' => 2]);
+		$crawlAdvance = $this->createMock(CrawlAdvanceService::class);
+		$crawlAdvance->expects(self::once())->method('crawling')->willReturn(true);
+
+		$response = $this->controller($this->backendAppId(), $crawlAdvance)->documentStats();
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame(['scheduled' => 0, 'running' => 0, 'failed' => 2, 'crawling' => true], $response->getData());
+	}
+
+	public function testAForeignExAppGetsNoStats(): void {
+		$crawlAdvance = $this->createMock(CrawlAdvanceService::class);
+		$crawlAdvance->expects(self::never())->method('crawling');
+		$this->queueService->expects(self::never())->method('stats');
+
+		$response = $this->controller('some_other_app', $crawlAdvance)->documentStats();
+
+		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
 	}
 
 	public function testAClaimWithoutALaneIsEchoedAsAll(): void {
