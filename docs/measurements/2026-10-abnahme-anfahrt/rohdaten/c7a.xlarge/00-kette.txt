@@ -3,3 +3,5 @@ timer-gesetzt minuten 13890 abschaltung 2026-10-13T22:45:46Z
 zelle-start S-T economy/int8 korpus teil 2026-10-04T07:15:46Z bisher 12.9042
 zelle-ende S-T rueckgabe 0 2026-10-04T09:58:01Z
 zelle-start St-T standard/int8 korpus teil 2026-10-04T09:58:01Z bisher 13.5865
+zelle-ende St-T rueckgabe 0 2026-10-04T12:30:28Z
+zelle-start St-fp32-T standard/fp32 korpus teil 2026-10-04T12:30:28Z bisher 14.2276
