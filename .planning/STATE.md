@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
-status: blocked
-stopped_at: "28-07 Lauf 8: L-T Abbruch 71 (5427), Reconcile-Fix im Feld belegt, neuer Befund zweiter Crawl-Durchgang nach Selbstvorschub; Box geparkt, Owner-Entscheid"
-last_updated: "2026-10-04T00:20:00.000Z"
+status: paused
+stopped_at: "28-07 Lauf 9: Zelle L-T auf m7g.4xlarge GEMESSEN (rc 0, Zähltor 5000, anon-max 5481,8 MiB getragen), ARM-Hälfte komplett; Box geparkt, x86 nach Owner-Wort"
+last_updated: "2026-10-04T06:30:00.000Z"
 last_activity: 2026-10-04
 progress:
   total_phases: 6
@@ -27,13 +27,41 @@ See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 
 Phase: 28 (Abnahme-Anfahrt), in Ausführung
 Plan: 7 of 14
-Status: Blocked (28-07 Lauf 8: L-T Abbruch 71 mit 5427, Ursache zweiter Crawl-Durchgang; Owner-Entscheid)
+Status: Pausiert (28-07 ARM-Hälfte komplett nach Lauf 9; x86-Hälfte/Machbarkeitstor nach Owner-Wort)
 Last activity: 2026-10-04
 
 Progress: [█████████░] 87%
 
 ## Naechster Schritt
 
+**28-07 Task 2: Lauf 9 (04.10. 04:32Z bis 06:15Z), Zelle 7 L-T auf m7g.4xlarge GEMESSEN. ARM-Hälfte KOMPLETT.**
+Vorbereitung: Lauf-8-Stopp per aws_box.sh status bestätigt (InstanceInitiatedShutdown), Box-Klon auf
+18602c48, Abbild 5ed5742c (Multi-Arch-Lauf 37176289187 zu 18602c48, Fix im Abbild belegt), Companion-App
+aus php/ ersetzt (Baum gleich), A-Record umgesetzt, --restart (Vorrat 0/0), Kette 04:36:31Z.
+Ergebnis: rc 0. Probe fits (Reserve 60,4 GB, Slots 15), erzwungen nein, wirksam performance, unter Last
+slots=15, Wächter ohne Absenkung, OOM 0. Zähltor bestanden 5000 (vorrat-teilkorpus 30 = vorrat-global 30,
+eingebettet 4970). Ende 06:08:11Z (Trigger bis Ende 1:30:37, Planwert 0:45).
+anon-max (Methode des Zellenwerkzeugs: rss_sampler max_anon, trifft Lauf 7 exakt): 5481,8 MiB, Rechnung
+5033,0, Grenze 5536,3, Urteil GETRAGEN (12-slotkosten.py). Lauf 8 nach derselben Methode 5591,4 (die
+5630,3 waren eine andere Methode). Slot-anon je Slot 220,1 MiB (B2 235), Hauptprozess-max 2319,0 MiB.
+CRAWL-FIX IM FELD BEWIESEN: (a) während des Crawls nur "stands down, the crawl is unfinished" (5 Runden
+04:36 bis 04:56Z), danach busy-Runden, KEINE stale-Lieferung; erste ruhige Runde 05:38:48Z seen=57187
+stale=0 (schließt auch den Lauf-8-Vorbehalt zum ruhigen Takt). (b) Zähltor exakt 5000 ja,
+vorrat-teilkorpus 0 NEIN (30, siehe Befund). (c) keine unchanged-Zweitwelle: unchanged 0 über alle
+225 Durchgänge, Selbstvorschub nur einmal vor dem Crawl-Vorrat.
+NEUER PRODUKTBEFUND (nicht angefasst, Owner): Übergabe ocr -> embed lief zweimal in ein 60-s-Timeout
+("could not move 30 files to the embed track, they run into the lock timeout", 05:02:56Z und 05:34:19Z,
+je andere 30 Dateien); die Dateien hängen bis zum OCR-Lock-Ablauf (1800 s) und werden einmal neu
+OCR-verarbeitet. Nutzerrelevanz: bis 30 min verzögerte Vollständigkeit am Ende, doppelte OCR für den
+Stapel, kein Datenverlust. Ursache der Ausnahme unbelegt (queue.py requeue loggt ohne exc_info).
+Stopp: Kette setzte am Ende shutdown -h +2 (poweroff 06:12:23Z) vor dem Abholen; kurzer Abholstart
+06:13:05Z, aws_box.sh stop 06:15:06Z, BOX_STOPPED_ISO gesetzt, Box geparkt. A-Record zeigt verwaist auf
+3.74.228.12. Kosten 12,69 von 59,43 USD (Lauf 9: 1,6672 h + 0,0336 h).
+Rohdaten: 05-typwechsel-arm.txt (Lauf 9), m7g.4xlarge/L-T/ mit container-auszug.txt, m7g.4xlarge-kette.log.
+NÄCHSTER SCHRITT (nach Owner-Wort): x86-Hälfte c7a, Machbarkeitstor (amd64-Abbilder, PostgreSQL-Start,
+REINDEX), dann Zellen 8 bis 21; offen für den Owner: Befund Embed-Übergabe-Timeout (/gsd-debug?).
+
+Vorgeschichte Lauf 8 (04.10.):
 **28-07 Task 2 BLOCKED: Lauf 8 (04.10. UTC 03.10. 22:45 bis 23:59), Zelle L-T auf m7g.4xlarge, Abbruch 71.**
 Vorbereitung vollständig: Box-Klon auf bbd23578, Abbild 5242e47f (Multi-Arch zu bbd23578,
 Baumhash a6ad7397 gleich), Companion-App aus php/ ersetzt, --restart, Kette 22:49:16Z. Probe fits
