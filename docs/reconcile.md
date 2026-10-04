@@ -222,6 +222,17 @@ Dazu zwei Sonderfälle, die beide nötig sind:
   Stunde. Sonst verlöre eine Box, die nur tagsüber eingeschaltet ist, die
   Garantie ganz.
 
+Ruhig heißt dabei zweierlei: weniger wartende Zeilen als
+`FINDLING_RECONCILE_QUIET_MAX` und kein unfertiger Crawl. Den Crawl-Zustand
+meldet die Companion-App in der Zähler-Antwort als `crawling` (geplanter
+`SchedulerJob`, wartende Crawl-Zeile oder gehaltene Scheiben-Sperre). Eine leere
+Warteschlange während der Erstindexierung ist keine ruhige Instanz: ein Worker,
+der schneller abarbeitet als der Cron-getaktete Crawl liefert, hätte den Abgleich
+sonst vorauslaufen lassen, und jede noch nicht gecrawlte Datei wäre zweimal
+eingeplant worden (Lauf 8 der Abnahme-Anfahrt, 5000 Durchgänge mit Ergebnis
+"unchanged"). Das Protokoll sagt dann
+`reconcile stands down, the crawl is unfinished`.
+
 ### Warum das Wartungsfenster von Nextcloud nicht reicht
 
 Es liegt nahe, den Abgleich als zeitunkritischen Nextcloud-Job zu markieren und

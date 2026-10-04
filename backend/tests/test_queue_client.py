@@ -635,6 +635,29 @@ async def test_stats_returns_the_counters_of_the_queue() -> None:
     assert session.calls[0][:2] == ("GET", STATS_PATH)
 
 
+async def test_stats_carries_whether_the_crawl_is_unfinished() -> None:
+    # Run 8 of the 28-07 chain: the reconcile walked ahead of an unfinished
+    # crawl and requeued every file the crawl had not reached yet, and the crawl
+    # then queued all of them a second time. The companion now says whether a
+    # crawl is still under way, and this is the only place the container reads it.
+    session = _FakeSession({("GET", STATS_PATH): {"scheduled": 0, "running": 0, "failed": 0, "crawling": True}})
+
+    counters = await _queue(session).stats()
+
+    assert counters.crawling is True
+
+
+@pytest.mark.parametrize("answer", [{"scheduled": 0}, {"scheduled": 0, "crawling": "yes"}, {"crawling": 1}, []])
+async def test_a_stats_answer_without_a_true_crawling_flag_reads_as_no_crawl(answer: object) -> None:
+    # A companion before this field never sends it, and only a JSON true is a
+    # yes: anything else keeps the behaviour of the release before.
+    session = _FakeSession({("GET", STATS_PATH): answer})
+
+    counters = await _queue(session).stats()
+
+    assert counters.crawling is False
+
+
 async def test_a_transport_error_is_a_defined_result_and_not_an_exception() -> None:
     # The poller runs as the single indexing task of the process. An exception
     # escaping here would end it while the search keeps answering, which is the

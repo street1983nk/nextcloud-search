@@ -136,16 +136,17 @@ def a_excluded_row(file_id: int, *, etag: str) -> FileRow:
 class _FakeQueue:
     """The two queue calls the reconcile makes, answered from a script."""
 
-    def __init__(self, *, scheduled: int = 0, ok: bool = True) -> None:
+    def __init__(self, *, scheduled: int = 0, ok: bool = True, crawling: bool = False) -> None:
         self.scheduled = scheduled
         self.ok = ok
+        self.crawling = crawling
         self.stats_calls = 0
         self.requeues: list[tuple[list[int], str]] = []
         self.requeue_fails = False
 
     async def stats(self) -> QueueStats:
         self.stats_calls += 1
-        return QueueStats(scheduled=self.scheduled, ok=self.ok)
+        return QueueStats(scheduled=self.scheduled, ok=self.ok, crawling=self.crawling)
 
     async def requeue(self, file_ids: Any, *, kind: str) -> CallResult:
         ids = list(file_ids)
@@ -651,6 +652,42 @@ async def test_reconcile_does_nothing_while_the_queue_is_busy(store: Store) -> N
     assert result.state == ROUND_QUEUE_BUSY
     assert files.asked == []
     assert queue.requeues == []
+
+
+async def test_reconcile_does_nothing_while_the_crawl_is_unfinished(store: Store) -> None:
+    # Run 8 of the 28-07 chain (L-T on m7g.4xlarge, abort 71 at 5427 of 5000).
+    # Fifteen slots drained the work stock faster than the cron paced crawl
+    # filled it, so the queue counter kept falling below the quiet mark while
+    # the first index was still running. The reconcile walked ahead, read every
+    # file the crawl had not reached as unknown and requeued it (401 + 9 x 500 +
+    # 99 = the whole partial corpus), and the crawl queued the same 5000 files a
+    # second time when it got there: 5000 passes ending as "unchanged". An
+    # empty queue during a crawl is not a quiet instance.
+    files = _FakeFiles(SliceResult(files=(a_row(10, etag="aaa"),), final=True))
+    queue = _FakeQueue(scheduled=0, crawling=True)
+
+    result = await _reconcile(store, files, queue).run_once()
+
+    assert result.state == ROUND_QUEUE_BUSY
+    assert files.asked == []
+    assert queue.requeues == []
+
+
+async def test_a_crawl_that_starts_mid_round_stops_the_round_at_the_next_slice(store: Store) -> None:
+    # occ findling:index --restart while a round walks: the gate before every
+    # slice is the same gate, so the round ends at the slice boundary.
+    files = _FakeFiles(SliceResult(files=(a_row(10, etag="aaa"),)), SliceResult(final=True))
+
+    class _CrawlAfterTheFirstSlice(_FakeQueue):
+        async def stats(self) -> QueueStats:
+            self.stats_calls += 1
+            return QueueStats(scheduled=0, crawling=self.stats_calls >= 3)
+
+    queue = _CrawlAfterTheFirstSlice()
+    result = await _reconcile(store, files, queue).run_once()
+
+    assert result.state == ROUND_QUEUE_BUSY
+    assert len(files.asked) == 1
 
 
 async def test_a_queue_that_cannot_be_counted_stops_the_round(store: Store) -> None:

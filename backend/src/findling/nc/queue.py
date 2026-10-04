@@ -227,12 +227,19 @@ class CallResult:
 
 @dataclass(frozen=True, slots=True)
 class QueueStats:
-    """Waiting, held right now, and how many files ended as failed."""
+    """Waiting, held right now, how many files ended as failed, and the crawl.
+
+    ``crawling`` says that the companion still walks the file cache: a crawl
+    row or a waiting scheduler is planned, or a slice runs right now. Only a
+    JSON ``true`` counts, so a companion from before the field reads as "no
+    crawl" and the reconcile keeps the behaviour of the release before.
+    """
 
     scheduled: int = 0
     running: int = 0
     failed: int = 0
     ok: bool = True
+    crawling: bool = False
 
 
 def _mapping(value: object) -> Mapping[str, Any] | None:
@@ -612,7 +619,7 @@ class DocumentQueue:
         return CallResult(ok=True, count=_whole_number(payload.get("requeued")) or 0)
 
     async def stats(self) -> QueueStats:
-        """The three counters of the work stock, for the status display."""
+        """The three counters of the work stock and whether the crawl is unfinished."""
         try:
             answer = await queue_stats(self._nc)
         except Exception:
@@ -624,4 +631,5 @@ class DocumentQueue:
             scheduled=_whole_number(payload.get("scheduled")) or 0,
             running=_whole_number(payload.get("running")) or 0,
             failed=_whole_number(payload.get("failed")) or 0,
+            crawling=payload.get("crawling") is True,
         )

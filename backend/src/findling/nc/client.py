@@ -551,7 +551,12 @@ async def requeue_documents(nc: AsyncNextcloudApp, *, file_ids: Sequence[int], k
 
 
 async def queue_stats(nc: AsyncNextcloudApp) -> object:
-    """Waiting, held right now, and how many files ended as failed."""
+    """Waiting, held right now, how many files ended as failed, and the crawl.
+
+    The answer also carries ``crawling``: whether the companion still walks the
+    file cache. A companion from before that field leaves it out, and the queue
+    layer reads a missing flag as "no crawl".
+    """
     return await nc._session.ocs(
         "GET",
         "/ocs/v2.php/apps/findling/queues/documents/stats",

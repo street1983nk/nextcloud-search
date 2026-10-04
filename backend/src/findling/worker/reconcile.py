@@ -606,11 +606,21 @@ class Reconcile:
 
         An unreadable counter is not a quiet queue. Walking anyway would be the
         worst possible reading of "we do not know".
+
+        Neither is an unfinished crawl, however empty the queue is. A worker
+        faster than the cron paced crawl drains the stock below the quiet mark
+        while the first index still runs, and a walk then reads every file the
+        crawl has not reached as unknown and requeues it, only for the crawl to
+        queue the same files again when it gets there (run 8 of 28-07: the
+        whole partial corpus twice, 5000 passes ending as "unchanged").
         """
         stats = await queue.stats()
         if not stats.ok:
             self._back_off()
             return ROUND_QUEUE_UNAVAILABLE
+        if stats.crawling:
+            LOGGER.info("reconcile stands down, the crawl is unfinished")
+            return ROUND_QUEUE_BUSY
         if stats.scheduled >= self._quiet_max:
             LOGGER.info(
                 "reconcile stands down, %d rows are scheduled and the quiet mark is %d",

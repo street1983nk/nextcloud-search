@@ -1577,8 +1577,12 @@ PHP_TREE_HASH_TODAY = "bbcc449daff788f6f85d44bd1b71b485c857009bc6eedca7d6c87cc1f
 # a): worker/reconcile.py (the excluded branch of _compare and the two codes
 # EXCLUDED_STATE/EXCLUDED_REASON) changed its bytes. No file came and none
 # went, so PACKAGE_FILES_TODAY stays at 71.
+# Measured again by debug session crawl-unfinished-zweitlauf (run 8 of 28-07):
+# nc/queue.py (QueueStats.crawling), nc/client.py (the docstring of
+# queue_stats) and worker/reconcile.py (the crawl branch of _quiet) changed
+# their bytes. No file came and none went, so PACKAGE_FILES_TODAY stays at 71.
 PACKAGE_FILES_TODAY = 71
-PACKAGE_TREE_HASH_TODAY = "a6ad7397deebc8fe18cec08a2518bdcbb8261d711d134b40a96e2d4de98a6673"
+PACKAGE_TREE_HASH_TODAY = "ee918ce4bc7c19273f89fc174b1a3a10a91417e8a1bfc273e10c849a059a0e0a"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
