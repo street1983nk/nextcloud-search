@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
-status: executing
-stopped_at: "28-07 x86-Hälfte: c7a.xlarge komplett (S-T, St-T getragen; St-fp32-T nicht getragen, SC4), Typwechsel c7a.2xlarge, Kette läuft"
-last_updated: "2026-10-04T15:20:00.000Z"
+status: blocked
+stopped_at: "28-07 x86-Hälfte BLOCKED (Auth-Gate): c7a.xlarge und c7a.2xlarge gemessen (6 Zellen rc 0), AWS-Sitzung abgelaufen, Box von innen gestoppt; weiter nach Owner-Login mit Typwechsel c7a.4xlarge"
+last_updated: "2026-10-04T20:35:00.000Z"
 last_activity: 2026-10-04
 progress:
   total_phases: 6
@@ -27,34 +27,40 @@ See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 
 Phase: 28 (Abnahme-Anfahrt), in Ausführung
 Plan: 7 of 14
-Status: In Ausführung (28-07 x86-Hälfte auf c7a.xlarge, Kette läuft)
+Status: Blocked (28-07 x86-Hälfte: AWS-Login nötig für den Typwechsel auf c7a.4xlarge)
 Last activity: 2026-10-04
 
 Progress: [█████████░] 87%
 
 ## Naechster Schritt
 
-**28-07 x86-Hälfte (Owner-Wort 04.10.), Zwischenstand 10:05Z.**
-x86-Box c7a.xlarge (eigenes Zustandsverzeichnis .../x86, LaunchTime 06:24:49Z), V-X aus dem Snapshot,
-fio 29:13, Docker/containerd-Wurzel, Klon 18602c48. MACHBARKEITSTOR BESTANDEN 06:26:46Z bis 07:12:02Z:
-amd64-Varianten per Index-Digest des Snapshot-Standes gezogen (nicht :latest), AIO-Container einzeln mit
-identischer Konfiguration neu erzeugt (Engine-API, platform linux/amd64), PostgreSQL 18.6 startet auf
-x86_64 ohne FATAL/PANIC, amcheck 656 B-Bäume vor und nach REINDEX rc 0, occ status installed, files:scan
-Stichprobe ohne Änderung. Companion 1.3.2 aus php/, Teilkorpus (Listen-Prüfsumme gleich ARM), 19
-Ausschlüsse, Cron 300 s. Rohdaten 06-aufbau-x86.txt (Commit 147a6ed8).
-Kette c7a.xlarge ab 07:15:46Z (S-T, St-T, St-fp32-T; Zelle 10 gestrichen), Abbild 5ed5742c (amd64-Variante
-15b38874), IMAGE_TAG = sha-Tag 18602c48, Baumhash ee918ce4 gleich ARM.
-Zelle 8 S-T GEMESSEN: rc 0, Zähltor 5000, Ende 09:55:59Z (2:39:38 ab Trigger), anon-max 1520,2 MiB gegen
-Rechnung 1492,5 / Grenze 1641,8: getragen; Slot-anon je Slot 295,8 MiB (B2 235). Commit cd737a12.
-Zelle 9 St-T GEMESSEN: rc 0, Probe fits (Slots 1), Zähltor 5000, Ende 12:28:26Z, anon-max 1679,5 MiB gegen
-Rechnung 1593,9 / Grenze 1753,3: getragen. Commit 65ac107a.
-Zelle 11 St-fp32-T GEMESSEN: rc 0, fp32 live aus dem Release (470268510/470268510, Digest im Produkt),
-Probe fits, Zähltor 5000, Ende 15:01:22Z, anon-max 2172,5 MiB gegen Rechnung 1960,9 / Grenze 2157,0:
-NICHT GETRAGEN (SC4/C5 für den Owner); fp32-Mehrbedarf 509,7 MiB gegen 367. Slot-anon auf x86 je Slot
-~296 MiB (B2 235, ARM L-T 220). Rückkehr auf int8 belegt. Commit 5e536753, Protokoll 07-typwechsel-x86.txt.
-Typwechsel c7a.xlarge -> c7a.2xlarge 15:04:23Z/15:04:45Z, Kette c7a.2xlarge ab 15:07:57Z (S-T, St-T, L-T).
-AWS-Sitzung (aws login 04:29Z) läuft gegen ~16:30Z ab; der Typwechsel auf c7a.2xlarge braucht dann ein
-neues Owner-Login. Box stoppt am Kettenende selbst (shutdown -h +2).
+**28-07 x86-Hälfte BLOCKED (Auth-Gate, kein Messfehler): AWS-Sitzung abgelaufen (~16:30Z).**
+OWNER: aws login (Rezept NEXT.md UPDATE 52), danach weiter mit:
+  export FINDLING_LOADTEST_DIR=$HOME/.findling-loadtest/x86; aws_box.sh status (Stopp von innen
+  20:23:38Z bestätigen); 00-typwechsel.sh wechsel c7a.4xlarge; known_hosts (Hostschlüssel gleich) +
+  A-Record; auf der Box Laufwerte (BISHER_USD aus stand, SATZ_USD_H 0.955081, BOX_START_EPOCH,
+  ZELLEN S-T St-T L-T St-fp32-T), ~/work/clog/mit.sh starten, für die fp32-Zelle ~/work/nach-kette.sh
+  c7a.4xlarge St-fp32-T (Rückkehr int8), vorpruefung, --restart, Kette mit IMAGE_TAG=18602c48... und
+  KORPUS_FRIST=3600; danach c7a.8xlarge (S-T St-T L-T).
+Box c7a.2xlarge gestoppt (von innen, shutdown-Verhalten stop belegt), BOX_STOPPED_ISO von Hand in box.env.
+ARM-Box weiter geparkt. A-Record zeigt verwaist auf die letzte x86-Adresse. Kosten 17,64 von 59,43 USD.
+
+Ergebnisse x86 (Protokoll 07-typwechsel-x86.txt, Aufbau 06-aufbau-x86.txt):
+- Machbarkeitstor c7a.xlarge BESTANDEN in 45 min (Abbilder per Snapshot-Index-Digest, Container einzeln
+  neu erzeugt, PostgreSQL 18.6 auf x86_64, amcheck 656 B-Bäume vor/nach REINDEX rc 0, occ status, files:scan).
+- c7a.xlarge: 8 S-T 1520,2/1641,8 getragen; 9 St-T (fits, 1 Slot) 1679,5/1753,3 getragen;
+  11 St-fp32-T (fits, Download live, Digest im Produkt) 2172,5/2157,0 NICHT GETRAGEN, fp32-Mehrbedarf
+  509,7 MiB gegen 367 -> SC4/C5 für den Owner. Rückkehr int8 belegt.
+- c7a.2xlarge: 12 S-T 1535,3/1641,8 getragen; 13 St-T (fits, 3 Slots) 2181,9/2270,3 getragen;
+  14 L-T (fits, 7 Slots) 3374,0/3468,3 getragen.
+- Alle Zähltore 5000, alle Proben stimmen mit der Messung (kein Wächtereingriff, kein OOM).
+- Crawl-Fix im Feld auf x86 bestätigt: nur "crawl is unfinished" während des Crawls, keine stale-Lieferung,
+  ruhige Runde stale=0, unchanged 0. Lock-Timeout einmal (fp32, 2 Dateien), gutartig.
+- Beobachtung: Slot-anon je Slot bei 1 Slot ~296 MiB (x86), bei 3 Slots 235,4, bei 7 Slots 212,5.
+Deviation: 05-typwechsel-arm.txt und STATE.md trugen zwei Box-Adressen aus Lauf 8/9 (Gate rot),
+durch den Legende-Platzhalter ersetzt (Commit 147a6ed8); die alten Werte stehen noch in der lokalen Historie.
+
+Vorgeschichte x86-Hälfte Zwischenstand (04.10. 10:05Z bis 15:20Z): siehe Commits 1e1cb157, 4a45f184.
 
 Vorgeschichte Lauf 9 (04.10.):
 **28-07 Task 2: Lauf 9 (04.10. 04:32Z bis 06:15Z), Zelle 7 L-T auf m7g.4xlarge GEMESSEN. ARM-Hälfte KOMPLETT.**
