@@ -71,3 +71,58 @@ stopp und typwechsel c7a.xlarge -> c7a.2xlarge (00-typwechsel.sh wechsel, rückg
   rücklesung: nproc 8, free 15Gi, uname -m x86_64; alle aio-container healthy (restart-politik der
   neu erzeugten container trägt); findling-registry (arm64, nicht gebraucht) lief nach dem start im
   neustart-kreis (exec format error) und steht jetzt mit --restart=no gestoppt.
+
+## kettenlauf c7a.2xlarge (typwechsel, läuft ab 2026-10-04T15:04:45Z)
+vorpruefung-stop-ja 2026-10-04T15:07:56Z; vorab-räumung 15:07:57Z occ findling:index --restart -n, vorrat 0/0
+laufwerte: BISHER_USD 14.99 (02-rechenblatt.py stand --jetzt 15:04:45Z), SATZ_USD_H 0.486561,
+  BOX_START_EPOCH 1791126285, ZELLEN S-T:economy:int8:teil St-T:standard:int8:teil L-T:performance:int8:teil;
+  abbild, IMAGE_TAG, KORPUS_FRIST, GRENZE_2G wie oben
+kette-start c7a.2xlarge 2026-10-04T15:07:57Z bisher 15.0159, timer-gesetzt minuten 6942
+kette-ende 2026-10-04T20:22:28Z bisher 17.5665, alle drei zellen rueckgabe 0
+werkzeug-befund am rand (kein produkt, kein zellenwerkzeug): der lesende log-mitschnitt hing an der
+  container-kennung und verlor den container, als die bewaffnung ihn mit derselben kennung neu startete;
+  der containerlog von S-T auf c7a.2xlarge ist damit nicht gesichert. ab St-T folgt der mitschnitt der
+  kennung UND der startzeit und schreibt die ganze historie des containers (docker logs -t).
+
+zelle 12 S-T (economy/int8, 1 slot): GEMESSEN, rueckgabe 0
+  probe keine (abwärtsweg); wirksamkeit ja effective economy slotsInForce 1 nach-s 2; trigger 15:08:15Z
+  zaehltor bestanden 5000: vorrat-teilkorpus 2679 = vorrat-global 2679, eingebettet 2321, indexiert 3582
+  ende 17:49:54Z (trigger bis ende 2:41:39, planwert 3:50)
+  guard economy ohne absenkung; oom 0 oom_kill 0, oomkilled false, restartcount 0
+  anon-max 1609912320 B = 1535,3 MiB, rechnung 1492,5, grenze 1641,8: urteil GETRAGEN; memory.peak 1957539840 B
+  slots --slots 1: slot-anon je slot 297,3 MiB, slot-paar vmhwm 435,0 MiB, hauptprozess-max 1303,4 MiB
+
+zelle 13 St-T (standard/int8): GEMESSEN, rueckgabe 0
+  probe verdikt fits (reserve 12865298560, slots 3), erzwungen nein
+  wirksamkeit ja effective standard slotsInForce 1 nach-s 33 (leerlauf ohne vorrat); unter last
+    durchgänge mit slots=3 (334 zeilen im container-auszug), wächter am ende slotsInForce 3; trigger 17:52:53Z
+  zaehltor bestanden 5000: vorrat-teilkorpus 581 = vorrat-global 581, eingebettet 4419, indexiert 4419
+  ende 19:13:18Z (trigger bis ende 1:20:25, planwert 1:15)
+  guard standard ohne absenkung; oom 0 oom_kill 0, oomkilled false, restartcount 0
+  anon-max 2287886336 B = 2181,9 MiB, rechnung 2063,9, grenze 2270,3: urteil GETRAGEN; memory.peak 2650034176 B
+  slots --slots 3: slot-anon je slot 235,4 MiB (b2 235,0), slot-paar vmhwm 404,6 MiB, hauptprozess-max 1506,0 MiB
+  gegenprobe der probe: fits, kein wächtereingriff, kein oom, peak 2,7 GB auf 15 GiB: stimmt
+  crawl-fix: sechs runden "stands down, the crawl is unfinished", keine stale-lieferung, erste ruhige
+    runde 19:09:12Z "walked ... seen=35187 stale=0"; unchanged 0; selbstvorschub einmal (17:55:52Z);
+    kein lock-timeout.
+
+zelle 14 L-T (performance/int8): GEMESSEN, rueckgabe 0
+  probe verdikt fits (reserve 12130132096, slots 7), erzwungen nein
+  wirksamkeit ja effective performance slotsInForce 1 nach-s 33 (leerlauf); unter last slots=7
+    (143 zeilen), wächter am ende slotsInForce 7; trigger 19:16:17Z
+  zaehltor bestanden 5000: vorrat-teilkorpus 37 = vorrat-global 37, eingebettet 4963, indexiert 4963
+  ende 20:20:26Z (trigger bis ende 1:04:09, planwert 0:45)
+  guard performance ohne absenkung, throttled false; oom 0 oom_kill 0, oomkilled false, restartcount 0
+  anon-max 3537911808 B = 3374,0 MiB, rechnung 3153,0, grenze 3468,3: urteil GETRAGEN; memory.peak 3975258112 B
+  slots --slots 7: slot-anon je slot 212,5 MiB, slot-paar vmhwm 437,6 MiB, hauptprozess-max 1960,6 MiB
+  gegenprobe der probe: fits, kein wächtereingriff, kein oom, peak 4,0 GB auf 15 GiB: stimmt
+  crawl-fix: sechs runden "crawl is unfinished", keine stale-lieferung, erste ruhige runde 20:17:36Z
+    "walked ... seen=35687 stale=0"; unchanged 0; selbstvorschub einmal (19:21:15Z); kein lock-timeout.
+
+stopp c7a.2xlarge: die aws-sitzung (aws login 04:29Z) lief um ~16:30Z ab ("Your session has expired").
+  damit das abholen ohne aws-start ging, ersetzte ein helfer auf der box am kettenende das
+  shutdown -h +2 durch +15 (00-nach-kette.txt, 20:22:30Z); rohdaten und containerlog geholt, dann
+  von innen ausgeschaltet (systemd-run poweroff, 20:23:38Z), ssh ab 20:24Z unerreichbar.
+  shutdown-verhalten stop belegt (vorpruefung-stop-ja 15:07:56Z). aws-bestätigung (aws_box.sh status)
+  steht aus. laufzeit 5,3147 h x 0.486561 = 2.5859 USD. bisher 17.64 von 59.43 USD.
+  weiter (nach owner-login): 00-typwechsel.sh wechsel c7a.4xlarge, zellen 15 bis 18, dann c7a.8xlarge.

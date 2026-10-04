@@ -1,0 +1,247 @@
+zelle-start S-T box c7a.2xlarge ziel economy/int8 korpus teil 2026-10-04T15:07:57Z
+abbild-digest sha256:5ed5742cbaddf14a378664e19cf2be6f500c3ac9b60d1a0bfc86e388f43ebc27
+schritt abwaerts 2026-10-04T15:07:57Z
+abwaerts code=saved saved=true HTTP200
+schritt zaehlung-eine-nextcloud 2026-10-04T15:08:00Z
+nextcloud-instanzen 1
+schritt nullstand 2026-10-04T15:08:00Z
+unregister-rm-data ja
+schritt registrierung 2026-10-04T15:08:01Z
+registrierung-rueckgabewert 0
+schritt vorrat-tor 2026-10-04T15:08:05Z
+vorrat-tor altvorrat 0
+schritt bewaffnung 2026-10-04T15:08:06Z
+bewaffnung backendReachable true nach-s 2
+schritt grenze 2026-10-04T15:08:10Z
+grenze keine
+schritt baumhash 2026-10-04T15:08:10Z
+40b-baumhash-rueckgabewert 0
+baumhash-im-laufenden-container ee918ce4bc7c19273f89fc174b1a3a10a91417e8a1bfc273e10c849a059a0e0a
+baumhash-beweis ja
+schritt 93b-nullstand 2026-10-04T15:08:10Z
+93b-nullstand-rueckgabewert 0
+schritt drop-caches 2026-10-04T15:08:11Z
+caches-geleert ja
+schritt probe 2026-10-04T15:08:11Z
+probe keine abwaertsweg
+schritt wirksamkeit 2026-10-04T15:08:11Z
+uebersicht HTTP200 effective=economy guardEffective=economy guardCause=keine slotsInForce=1 throttled=false backendReachable=true scheduled=0 running=0 indexed=0 embedded=0 storedPrecision=int8 profileSaved=economy
+wirksamkeit ja effective economy slotsInForce 1 nach-s 2
+schritt sampler 2026-10-04T15:08:13Z
+sampler rss 2 anon 1 cpu 5 status 120 gestartet 2026-10-04T15:08:13Z
+schritt trigger 2026-10-04T15:08:13Z
+zaehlmarke 2026-09-10 23:44:03
+The crawl was queued. It starts with the next run of the background jobs.
+
+Work stock
+  scheduled            0
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              44
+  failed               6
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-10-04 12:51:57 (136 minutes ago)
+trigger ja 2026-10-04T15:08:15Z
+zaehlung vorrat-teilkorpus 2679 vorrat-global 2679 uebersprungen-frisch 0 fehlgeschlagen-frisch 0 eingebettet 2321 indexiert 3582 summe 5000
+zaehltor bestanden 5000
+schritt ende 2026-10-04T16:08:19Z
+lesung t=2s vorrat 2679 indexed 3584 embedded 2329 guard economy throttled false
+lesung t=124s vorrat 2543 indexed 3616 embedded 2457 guard economy throttled false
+lesung t=246s vorrat 2455 indexed 3638 embedded 2545 guard economy throttled false
+lesung t=368s vorrat 2399 indexed 3652 embedded 2601 guard economy throttled false
+lesung t=489s vorrat 2279 indexed 3682 embedded 2721 guard economy throttled false
+lesung t=611s vorrat 2199 indexed 3702 embedded 2801 guard economy throttled false
+lesung t=733s vorrat 2095 indexed 3728 embedded 2911 guard economy throttled false
+lesung t=855s vorrat 1967 indexed 3760 embedded 3033 guard economy throttled false
+lesung t=977s vorrat 1847 indexed 3790 embedded 3153 guard economy throttled false
+lesung t=1099s vorrat 1719 indexed 3822 embedded 3281 guard economy throttled false
+lesung t=1221s vorrat 1591 indexed 3854 embedded 3409 guard economy throttled false
+lesung t=1343s vorrat 1495 indexed 3878 embedded 3505 guard economy throttled false
+lesung t=1464s vorrat 1391 indexed 3904 embedded 3609 guard economy throttled false
+lesung t=1586s vorrat 1287 indexed 3930 embedded 3713 guard economy throttled false
+lesung t=1708s vorrat 1151 indexed 3964 embedded 3849 guard economy throttled false
+lesung t=1830s vorrat 1095 indexed 3978 embedded 3905 guard economy throttled false
+lesung t=1952s vorrat 994 indexed 4008 embedded 4006 guard economy throttled false
+lesung t=2074s vorrat 958 indexed 4044 embedded 4042 guard economy throttled false
+lesung t=2196s vorrat 922 indexed 4082 embedded 4080 guard economy throttled false
+lesung t=2318s vorrat 886 indexed 4118 embedded 4116 guard economy throttled false
+lesung t=2439s vorrat 850 indexed 4152 embedded 4150 guard economy throttled false
+lesung t=2561s vorrat 836 indexed 4166 embedded 4164 guard economy throttled false
+lesung t=2683s vorrat 796 indexed 4208 embedded 4206 guard economy throttled false
+lesung t=2805s vorrat 768 indexed 4234 embedded 4232 guard economy throttled false
+lesung t=2927s vorrat 732 indexed 4270 embedded 4268 guard economy throttled false
+lesung t=3049s vorrat 698 indexed 4304 embedded 4302 guard economy throttled false
+lesung t=3171s vorrat 664 indexed 4338 embedded 4336 guard economy throttled false
+lesung t=3292s vorrat 642 indexed 4360 embedded 4358 guard economy throttled false
+lesung t=3414s vorrat 618 indexed 4384 embedded 4382 guard economy throttled false
+lesung t=3536s vorrat 594 indexed 4408 embedded 4406 guard economy throttled false
+lesung t=3658s vorrat 566 indexed 4438 embedded 4436 guard economy throttled false
+lesung t=3780s vorrat 544 indexed 4458 embedded 4456 guard economy throttled false
+lesung t=3902s vorrat 516 indexed 4486 embedded 4484 guard economy throttled false
+lesung t=4024s vorrat 486 indexed 4516 embedded 4514 guard economy throttled false
+lesung t=4145s vorrat 454 indexed 4548 embedded 4546 guard economy throttled false
+lesung t=4267s vorrat 416 indexed 4586 embedded 4584 guard economy throttled false
+lesung t=4389s vorrat 382 indexed 4620 embedded 4618 guard economy throttled false
+lesung t=4511s vorrat 342 indexed 4662 embedded 4660 guard economy throttled false
+lesung t=4633s vorrat 306 indexed 4698 embedded 4696 guard economy throttled false
+lesung t=4755s vorrat 276 indexed 4728 embedded 4726 guard economy throttled false
+lesung t=4877s vorrat 244 indexed 4758 embedded 4756 guard economy throttled false
+lesung t=4999s vorrat 210 indexed 4792 embedded 4791 guard economy throttled false
+lesung t=5120s vorrat 180 indexed 4822 embedded 4820 guard economy throttled false
+lesung t=5242s vorrat 144 indexed 4860 embedded 4858 guard economy throttled false
+lesung t=5364s vorrat 116 indexed 4886 embedded 4884 guard economy throttled false
+lesung t=5486s vorrat 96 indexed 4906 embedded 4904 guard economy throttled false
+lesung t=5608s vorrat 66 indexed 4936 embedded 4934 guard economy throttled false
+lesung t=5730s vorrat 46 indexed 4956 embedded 4954 guard economy throttled false
+lesung t=5852s vorrat 16 indexed 4986 embedded 4984 guard economy throttled false
+lesung t=5974s vorrat 0 indexed 5000 embedded 5000 guard economy throttled false
+lesung t=6095s vorrat 0 indexed 5000 embedded 5000 guard economy throttled false
+ende vorrat 0 embedded gleich indexed zweimal 2026-10-04T17:49:54Z
+schritt nachlauf 2026-10-04T17:49:54Z
+grundlast anon 1368100864 nach-ruhe-s 120
+guard effective=economy cause=keine throttled=false slotsInForce=1
+waechter-absenkung nein
+oom oomkilled false restartcount 0 containerstart 2026-10-04T15:08:07.341450503Z memory-events oom 0 oom_kill 0
+schritt abholen 2026-10-04T17:51:56Z
+abholbereit ja dateien 13
+10-ZELLE-FERTIG S-T
+zelle-start St-T box c7a.2xlarge ziel standard/int8 korpus teil 2026-10-04T17:51:56Z
+abbild-digest sha256:5ed5742cbaddf14a378664e19cf2be6f500c3ac9b60d1a0bfc86e388f43ebc27
+schritt abwaerts 2026-10-04T17:51:56Z
+abwaerts code=saved saved=true HTTP200
+schritt zaehlung-eine-nextcloud 2026-10-04T17:51:57Z
+nextcloud-instanzen 1
+schritt nullstand 2026-10-04T17:51:57Z
+unregister-rm-data ja
+schritt registrierung 2026-10-04T17:51:59Z
+registrierung-rueckgabewert 0
+schritt vorrat-tor 2026-10-04T17:52:03Z
+vorrat-tor altvorrat 0
+schritt bewaffnung 2026-10-04T17:52:03Z
+bewaffnung backendReachable true nach-s 2
+schritt grenze 2026-10-04T17:52:08Z
+grenze keine
+schritt baumhash 2026-10-04T17:52:08Z
+40b-baumhash-rueckgabewert 0
+baumhash-im-laufenden-container ee918ce4bc7c19273f89fc174b1a3a10a91417e8a1bfc273e10c849a059a0e0a
+baumhash-beweis ja
+schritt 93b-nullstand 2026-10-04T17:52:08Z
+93b-nullstand-rueckgabewert 0
+schritt drop-caches 2026-10-04T17:52:09Z
+caches-geleert ja
+schritt probe 2026-10-04T17:52:09Z
+probe-rueckgabewert 0
+erzwungen nein
+schritt wirksamkeit 2026-10-04T17:52:19Z
+uebersicht HTTP200 effective=standard guardEffective=standard guardCause=keine slotsInForce=1 throttled=false backendReachable=true scheduled=0 running=0 indexed=0 embedded=0 storedPrecision=int8 profileSaved=standard
+wirksamkeit ja effective standard slotsInForce 1 nach-s 33
+schritt sampler 2026-10-04T17:52:52Z
+sampler rss 2 anon 1 cpu 5 status 120 gestartet 2026-10-04T17:52:52Z
+schritt trigger 2026-10-04T17:52:52Z
+zaehlmarke 2026-09-10 23:44:03
+The crawl was queued. It starts with the next run of the background jobs.
+
+Work stock
+  scheduled            0
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              44
+  failed               6
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-10-04 15:30:03 (142 minutes ago)
+trigger ja 2026-10-04T17:52:53Z
+zaehlung vorrat-teilkorpus 581 vorrat-global 581 uebersprungen-frisch 0 fehlgeschlagen-frisch 0 eingebettet 4419 indexiert 4419 summe 5000
+zaehltor bestanden 5000
+schritt ende 2026-10-04T18:52:57Z
+lesung t=2s vorrat 581 indexed 4419 embedded 4419 guard standard throttled false
+lesung t=124s vorrat 539 indexed 4467 embedded 4461 guard standard throttled false
+lesung t=246s vorrat 473 indexed 4533 embedded 4527 guard standard throttled false
+lesung t=368s vorrat 371 indexed 4635 embedded 4629 guard standard throttled false
+lesung t=489s vorrat 287 indexed 4725 embedded 4713 guard standard throttled false
+lesung t=611s vorrat 215 indexed 4803 embedded 4785 guard standard throttled false
+lesung t=733s vorrat 125 indexed 4875 embedded 4875 guard standard throttled false
+lesung t=855s vorrat 107 indexed 4905 embedded 4897 guard standard throttled false
+lesung t=977s vorrat 53 indexed 4947 embedded 4947 guard standard throttled false
+lesung t=1099s vorrat 0 indexed 5000 embedded 5000 guard standard throttled false
+lesung t=1221s vorrat 0 indexed 5000 embedded 5000 guard standard throttled false
+ende vorrat 0 embedded gleich indexed zweimal 2026-10-04T19:13:18Z
+schritt nachlauf 2026-10-04T19:13:18Z
+grundlast anon 1750855680 nach-ruhe-s 120
+guard effective=standard cause=keine throttled=false slotsInForce=3
+waechter-absenkung nein
+oom oomkilled false restartcount 0 containerstart 2026-10-04T17:52:05.070493976Z memory-events oom 0 oom_kill 0
+schritt abholen 2026-10-04T19:15:19Z
+abholbereit ja dateien 14
+10-ZELLE-FERTIG St-T
+zelle-start L-T box c7a.2xlarge ziel performance/int8 korpus teil 2026-10-04T19:15:19Z
+abbild-digest sha256:5ed5742cbaddf14a378664e19cf2be6f500c3ac9b60d1a0bfc86e388f43ebc27
+schritt abwaerts 2026-10-04T19:15:19Z
+abwaerts code=saved saved=true HTTP200
+schritt zaehlung-eine-nextcloud 2026-10-04T19:15:21Z
+nextcloud-instanzen 1
+schritt nullstand 2026-10-04T19:15:21Z
+unregister-rm-data ja
+schritt registrierung 2026-10-04T19:15:22Z
+registrierung-rueckgabewert 0
+schritt vorrat-tor 2026-10-04T19:15:27Z
+vorrat-tor altvorrat 0
+schritt bewaffnung 2026-10-04T19:15:27Z
+bewaffnung backendReachable true nach-s 1
+schritt grenze 2026-10-04T19:15:31Z
+grenze keine
+schritt baumhash 2026-10-04T19:15:31Z
+40b-baumhash-rueckgabewert 0
+baumhash-im-laufenden-container ee918ce4bc7c19273f89fc174b1a3a10a91417e8a1bfc273e10c849a059a0e0a
+baumhash-beweis ja
+schritt 93b-nullstand 2026-10-04T19:15:32Z
+93b-nullstand-rueckgabewert 0
+schritt drop-caches 2026-10-04T19:15:32Z
+caches-geleert ja
+schritt probe 2026-10-04T19:15:32Z
+probe-rueckgabewert 0
+erzwungen nein
+schritt wirksamkeit 2026-10-04T19:15:42Z
+uebersicht HTTP200 effective=performance guardEffective=performance guardCause=keine slotsInForce=1 throttled=false backendReachable=true scheduled=0 running=0 indexed=0 embedded=0 storedPrecision=int8 profileSaved=performance
+wirksamkeit ja effective performance slotsInForce 1 nach-s 33
+schritt sampler 2026-10-04T19:16:15Z
+sampler rss 2 anon 1 cpu 5 status 120 gestartet 2026-10-04T19:16:15Z
+schritt trigger 2026-10-04T19:16:15Z
+zaehlmarke 2026-09-10 23:44:03
+The crawl was queued. It starts with the next run of the background jobs.
+
+Work stock
+  scheduled            0
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              44
+  failed               6
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-10-04 18:15:03 (61 minutes ago)
+trigger ja 2026-10-04T19:16:17Z
+zaehlung vorrat-teilkorpus 37 vorrat-global 37 uebersprungen-frisch 0 fehlgeschlagen-frisch 0 eingebettet 4963 indexiert 4963 summe 5000
+zaehltor bestanden 5000
+schritt ende 2026-10-04T20:16:20Z
+lesung t=2s vorrat 37 indexed 4963 embedded 4963 guard performance throttled false
+lesung t=124s vorrat 0 indexed 5000 embedded 5000 guard performance throttled false
+lesung t=246s vorrat 0 indexed 5000 embedded 5000 guard performance throttled false
+ende vorrat 0 embedded gleich indexed zweimal 2026-10-04T20:20:26Z
+schritt nachlauf 2026-10-04T20:20:26Z
+grundlast anon 2420002816 nach-ruhe-s 120
+guard effective=performance cause=keine throttled=false slotsInForce=7
+waechter-absenkung nein
+oom oomkilled false restartcount 0 containerstart 2026-10-04T19:15:28.517985955Z memory-events oom 0 oom_kill 0
+schritt abholen 2026-10-04T20:22:28Z
+abholbereit ja dateien 14
+10-ZELLE-FERTIG L-T

@@ -1,0 +1,9 @@
+kette-start c7a.2xlarge 2026-10-04T15:07:57Z bisher 15.0159 deckel 59.43 satz 0.486561
+timer-gesetzt minuten 6942 abschaltung 2026-10-09T10:49:57Z
+zelle-start S-T economy/int8 korpus teil 2026-10-04T15:07:57Z bisher 15.0159
+zelle-ende S-T rueckgabe 0 2026-10-04T17:51:56Z
+zelle-start St-T standard/int8 korpus teil 2026-10-04T17:51:56Z bisher 16.3457
+zelle-ende St-T rueckgabe 0 2026-10-04T19:15:19Z
+zelle-start L-T performance/int8 korpus teil 2026-10-04T19:15:19Z bisher 17.0219
+zelle-ende L-T rueckgabe 0 2026-10-04T20:22:28Z
+kette-ende 2026-10-04T20:22:28Z bisher 17.5665
