@@ -5,3 +5,5 @@ zelle-ende S-T rueckgabe 0 2026-10-05T07:10:06Z
 zelle-start St-T standard/int8 korpus teil 2026-10-05T07:10:06Z bisher 20.5478
 zelle-ende St-T rueckgabe 0 2026-10-05T08:27:23Z
 zelle-start L-T performance/int8 korpus teil 2026-10-05T08:27:23Z bisher 21.7780
+zelle-ende L-T rueckgabe 0 2026-10-05T09:32:00Z
+zelle-start St-fp32-T standard/fp32 korpus teil 2026-10-05T09:32:01Z bisher 22.8069

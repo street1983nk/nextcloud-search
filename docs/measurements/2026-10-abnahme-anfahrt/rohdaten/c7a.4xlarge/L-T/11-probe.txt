@@ -1,0 +1,8 @@
+probe-start 2026-10-05T08:27:38Z ziel performance/int8 frist-s 900
+POST check: code=started started=true HTTP200
+t=2s state=running step=ocr_one bytes=0/0 verdict=fits cause=unlesbar numbers={"reserve": 28802195584, "slots": 4}
+t=4s state=running step=ocr_one bytes=0/0 verdict=fits cause=unlesbar numbers={"reserve": 28802195584, "slots": 4}
+t=6s state=running step=ocr_n bytes=0/0 verdict=fits cause=unlesbar numbers={"reserve": 28802195584, "slots": 4}
+t=8s state=running step=ocr_n bytes=0/0 verdict=fits cause=unlesbar numbers={"reserve": 28802195584, "slots": 4}
+t=10s state=done step=cleanup bytes=0/0 verdict=fits cause=unlesbar numbers={"reserve": 27221377152, "slots": 15}
+verdikt fits erzwungen nein

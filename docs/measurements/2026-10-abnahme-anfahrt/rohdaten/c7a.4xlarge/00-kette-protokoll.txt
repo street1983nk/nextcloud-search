@@ -228,3 +228,42 @@ End states as Nextcloud recorded them
 
 Last background job of this app: 2026-10-05 07:35:55 (51 minutes ago)
 trigger ja 2026-10-05T08:27:52Z
+zaehlung vorrat-teilkorpus 0 vorrat-global 0 uebersprungen-frisch 0 fehlgeschlagen-frisch 0 eingebettet 5000 indexiert 5000 summe 5000
+zaehltor bestanden 5000
+schritt ende 2026-10-05T09:27:55Z
+lesung t=2s vorrat 0 indexed 5000 embedded 5000 guard performance throttled false
+lesung t=124s vorrat 0 indexed 5000 embedded 5000 guard performance throttled false
+ende vorrat 0 embedded gleich indexed zweimal 2026-10-05T09:29:59Z
+schritt nachlauf 2026-10-05T09:29:59Z
+grundlast anon 3411795968 nach-ruhe-s 120
+guard effective=performance cause=keine throttled=false slotsInForce=15
+waechter-absenkung nein
+oom oomkilled false restartcount 0 containerstart 2026-10-05T08:27:32.313091118Z memory-events oom 0 oom_kill 0
+schritt abholen 2026-10-05T09:32:00Z
+abholbereit ja dateien 14
+10-ZELLE-FERTIG L-T
+zelle-start St-fp32-T box c7a.4xlarge ziel standard/fp32 korpus teil 2026-10-05T09:32:01Z
+abbild-digest sha256:5ed5742cbaddf14a378664e19cf2be6f500c3ac9b60d1a0bfc86e388f43ebc27
+schritt abwaerts 2026-10-05T09:32:01Z
+abwaerts code=saved saved=true HTTP200
+schritt zaehlung-eine-nextcloud 2026-10-05T09:32:02Z
+nextcloud-instanzen 1
+schritt nullstand 2026-10-05T09:32:02Z
+unregister-rm-data ja
+schritt registrierung 2026-10-05T09:32:05Z
+registrierung-rueckgabewert 0
+schritt vorrat-tor 2026-10-05T09:32:09Z
+vorrat-tor altvorrat 0
+schritt bewaffnung 2026-10-05T09:32:09Z
+bewaffnung backendReachable true nach-s 2
+schritt grenze 2026-10-05T09:32:14Z
+grenze keine
+schritt baumhash 2026-10-05T09:32:14Z
+40b-baumhash-rueckgabewert 0
+baumhash-im-laufenden-container ee918ce4bc7c19273f89fc174b1a3a10a91417e8a1bfc273e10c849a059a0e0a
+baumhash-beweis ja
+schritt 93b-nullstand 2026-10-05T09:32:14Z
+93b-nullstand-rueckgabewert 0
+schritt drop-caches 2026-10-05T09:32:15Z
+caches-geleert ja
+schritt probe 2026-10-05T09:32:15Z

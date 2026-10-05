@@ -172,3 +172,22 @@ zelle 16 St-T (standard/int8): GEMESSEN, rueckgabe 0
     der widerspruch liegt bei der rechnung.
   crawl-fix: sechs runden "crawl is unfinished" (07:11:03Z bis 07:31:03Z), keine stale-lieferung;
     unchanged 0; selbstvorschub einmal (07:16:01Z); kein lock-timeout.
+
+zelle 17 L-T (performance/int8): GEMESSEN, rueckgabe 0
+  probe verdikt fits (reserve 27221377152, slots 15), erzwungen nein
+  wirksamkeit ja effective performance slotsInForce 1 nach-s 2 (leerlauf); unter last slots=15
+    (67 zeilen), wächter am ende slotsInForce 15; trigger 08:27:52Z
+  zaehltor bestanden 5000: vorrat-teilkorpus 0 = vorrat-global 0, eingebettet 5000, indexiert 5000
+  ende 09:29:59Z (trigger bis ende 1:02:07, planwert 0:45)
+  guard performance ohne absenkung, throttled false; oom 0 oom_kill 0, oomkilled false, restartcount 0
+  anon-max 5896880128 B = 5623,7 MiB, rechnung 5033,0, grenze 5536,3: urteil NICHT GETRAGEN
+    (87,4 MiB über der grenze, 11,7 prozent über der rechnung); memory.peak 6298324992 B
+  slots --slots 15: slot-anon je slot 223,4 MiB (b2 235,0), slot-paar vmhwm 443,1 MiB,
+    hauptprozess-max 2410,8 MiB; grundlast nach 120 s ruhe 3411795968 B
+  einordnung: dieselbe zelle auf m7g.4xlarge (zelle 7, 15 slots) 5481,8 MiB getragen, hauptprozess-max
+    2319,0; auf x86 liegt der hauptprozess höher, die slots darunter. int8-zelle, rückgabe 0, SC4-fall
+    für den owner (checkpoint C5) neben den zellen 11 und 16.
+  gegenprobe der probe: fits, kein wächtereingriff, kein oom, peak 6,0 GB auf 30 GiB: das verdikt stimmt.
+  crawl-fix: sechs runden "crawl is unfinished" (08:27:52Z bis 08:47:52Z), keine stale-lieferung, erste
+    ruhige runde 09:14:39Z "walked ... seen=48687 stale=0"; unchanged 0; selbstvorschub einmal
+    (08:31:19Z); kein lock-timeout.
