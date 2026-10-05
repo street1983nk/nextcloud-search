@@ -278,3 +278,32 @@ zelle 20 St-T (standard/int8): GEMESSEN, rueckgabe 0
   crawl-fix: sechs runden "crawl is unfinished" (13:44:41Z bis 14:04:42Z), keine stale-lieferung, erste
     ruhige runde 14:55:59Z "walked ... seen=35187 stale=0"; unchanged 0; selbstvorschub einmal
     (13:47:39Z); kein lock-timeout.
+
+zelle 21 L-T (performance/int8): GEMESSEN, rueckgabe 0
+  probe verdikt fits (reserve 59498233984, slots 16), erzwungen nein
+  wirksamkeit ja effective performance slotsInForce 1 nach-s 2 (leerlauf); unter last slots=16
+    (63 zeilen), wächter am ende slotsInForce 16; trigger 14:59:35Z
+  zaehltor bestanden 5000: vorrat-teilkorpus 0 = vorrat-global 0, eingebettet 5000, indexiert 5000
+  ende 16:01:43Z (trigger bis ende 1:02:08, planwert 0:45)
+  guard performance ohne absenkung, throttled false; oom 0 oom_kill 0, oomkilled false, restartcount 0
+  anon-max 6084653056 B = 5802,8 MiB, rechnung 5268,0, grenze 5794,8: urteil NICHT GETRAGEN
+    (8,0 MiB über der grenze, 10,2 prozent über der rechnung); memory.peak 6533595136 B
+  slots --slots 16: slot-anon je slot 214,7 MiB (b2 235,0), slot-paar vmhwm 437,2 MiB,
+    hauptprozess-max 2530,2 MiB; grundlast nach 120 s ruhe 4084371456 B
+  gegenprobe der probe: fits, kein wächtereingriff, kein oom, peak 6,1 GB auf 61 GiB: das verdikt stimmt.
+  crawl-fix: sechs runden "crawl is unfinished" (14:59:36Z bis 15:19:36Z), keine stale-lieferung, erste
+    ruhige runde 15:46:23Z "walked ... seen=48687 stale=0"; unchanged 0; selbstvorschub einmal
+    (15:03:02Z); kein lock-timeout.
+
+kette-ende c7a.8xlarge 2026-10-05T16:03:44Z bisher 34.0001, alle drei zellen rueckgabe 0
+stopp c7a.8xlarge: nach-kette-15.sh setzte +15 (16:03:49Z), rohdaten geholt, dann aws_box.sh stop
+  (BOX_STOPPED_ISO 16:04:26Z; aws: stopped, User initiated 16:04:27 GMT). laufzeit 5,2178 h x 1.892121
+  = 9.8727 USD. bisher 34.09 von 59.43 USD. box geparkt (typ c7a.8xlarge), abbau-entscheid beim owner.
+  a-record zeigt verwaist auf die letzte adresse.
+
+zusammenfassung x86-hälfte (zellen 8 bis 21 ohne 10): alle zwölf zellen rueckgabe 0, alle zähltore 5000,
+  alle proben fits und von der messung bestätigt (kein wächtereingriff, kein oom). urteile gegen die
+  rechnung: getragen 8, 9, 12, 13, 14, 15, 18, 19; NICHT GETRAGEN 11 (St-fp32-T c7a.xlarge), 16 (St-T
+  c7a.4xlarge), 17 (L-T c7a.4xlarge), 20 (St-T c7a.8xlarge), 21 (L-T c7a.8xlarge). muster: ab 4 slots auf
+  x86 liegt der hauptprozess höher (St-T 4 slots 1640 bis 1756 MiB, L-T 2411 bis 2530 MiB), die slotkosten
+  liegen unter b2 (212 bis 232 MiB bei mehreren slots, ~295 MiB bei 1 slot). SC4/C5 beim owner.

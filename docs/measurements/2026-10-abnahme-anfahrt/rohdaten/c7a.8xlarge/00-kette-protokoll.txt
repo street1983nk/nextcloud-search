@@ -228,3 +228,17 @@ End states as Nextcloud recorded them
 
 Last background job of this app: 2026-10-05 14:06:42 (52 minutes ago)
 trigger ja 2026-10-05T14:59:35Z
+zaehlung vorrat-teilkorpus 0 vorrat-global 0 uebersprungen-frisch 0 fehlgeschlagen-frisch 0 eingebettet 5000 indexiert 5000 summe 5000
+zaehltor bestanden 5000
+schritt ende 2026-10-05T15:59:39Z
+lesung t=2s vorrat 0 indexed 5000 embedded 5000 guard performance throttled false
+lesung t=124s vorrat 0 indexed 5000 embedded 5000 guard performance throttled false
+ende vorrat 0 embedded gleich indexed zweimal 2026-10-05T16:01:43Z
+schritt nachlauf 2026-10-05T16:01:43Z
+grundlast anon 4084371456 nach-ruhe-s 120
+guard effective=performance cause=keine throttled=false slotsInForce=16
+waechter-absenkung nein
+oom oomkilled false restartcount 0 containerstart 2026-10-05T14:59:15.866707206Z memory-events oom 0 oom_kill 0
+schritt abholen 2026-10-05T16:03:44Z
+abholbereit ja dateien 14
+10-ZELLE-FERTIG L-T

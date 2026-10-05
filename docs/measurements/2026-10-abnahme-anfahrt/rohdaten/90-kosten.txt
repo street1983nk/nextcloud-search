@@ -137,4 +137,9 @@ c7a.4xlarge 2026-10-05T04:20:37Z 2026-10-05T10:51:02Z
 #   zellen S-T, St-T, L-T, St-fp32-T GEMESSEN (rueckgabe 0), kette-ende 10:47:39Z
 # typwechsel c7a.4xlarge -> c7a.8xlarge (00-typwechsel.sh, gestoppt 10:51:02Z laeuft 10:51:23Z)
 geparkt 2026-10-05T10:51:02Z 2026-10-05T10:51:23Z
-c7a.8xlarge 2026-10-05T10:51:23Z laeuft
+c7a.8xlarge 2026-10-05T10:51:23Z 2026-10-05T16:04:27Z
+geparkt 2026-10-05T16:04:27Z laeuft
+# c7a.8xlarge stop 2026-10-05T16:04:27Z (aws_box.sh stop, BOX_STOPPED_ISO, aws: User initiated 16:04:27 GMT)
+#   laufzeit 5.2178 h x 1.892121 = 9.8727 USD; erster kettenstart abbruch 60 (dns, 10:53:51Z), eine wiederholung
+# kettenlauf c7a.8xlarge: zellen S-T, St-T, L-T GEMESSEN (rueckgabe 0), kette-ende 16:03:44Z; x86-haelfte komplett
+# bisher 34.09 USD gegen deckel 59.43 USD (02-rechenblatt.py stand --jetzt 2026-10-05T16:04:27Z, rest 25.34); beide boxen geparkt
