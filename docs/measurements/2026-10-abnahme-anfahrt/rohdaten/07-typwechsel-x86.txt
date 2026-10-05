@@ -248,3 +248,15 @@ erster start 10:52:51Z: ABBRUCH 60 der zelle S-T im schritt abwaerts (10:52:51Z 
   eingriff: sudo shutdown -c (10:55Z), rohdaten beiseite (c7a.8xlarge-abbruch60-dns/,
   c7a.8xlarge-abbruch60-dns-kette.log), --restart vorrat 0/0, helfer neu, EINE wiederholung.
 zweiter start 10:55:35Z bisher 24.2824, timer-gesetzt minuten 1491; S-T wirksamkeit ja, trigger 10:55:53Z.
+
+zelle 19 S-T (economy/int8, 1 slot): GEMESSEN, rueckgabe 0 (wiederholung nach dem dns-abbruch)
+  probe keine (abwärtsweg); wirksamkeit ja effective economy slotsInForce 1 nach-s 2; trigger 10:55:53Z
+  zaehltor bestanden 5000: vorrat-teilkorpus 2727 = vorrat-global 2727, eingebettet 2273, indexiert 3570
+  ende 13:41:41Z (trigger bis ende 2:45:48, planwert 3:50)
+  guard economy ohne absenkung, throttled false; oom 0 oom_kill 0, oomkilled false, restartcount 0
+  anon-max 1608798208 B = 1534,3 MiB, rechnung 1492,5, grenze 1641,8: urteil GETRAGEN; memory.peak 1960517632 B
+  slots --slots 1: slot-anon je slot 294,6 MiB, slot-paar vmhwm 431,8 MiB, hauptprozess-max 1300,6 MiB;
+    grundlast nach 120 s ruhe 1380712448 B
+  crawl-fix: sechs runden "crawl is unfinished" (10:55:46Z bis 11:15:47Z), keine stale-lieferung, erste
+    ruhige runde 13:37:53Z "walked ... seen=57187 stale=0"; unchanged 0; selbstvorschub einmal
+    (10:57:32Z); kein lock-timeout.

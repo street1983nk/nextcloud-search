@@ -1,0 +1,1 @@
+cpu_sampler: container=nc_app_findling_backend cgroup=/sys/fs/cgroup/system.slice/docker-9e1fb9f5eeccc372699e2caf6f60a9ca35cac612e633fc3dab3d60b49a8b6af8.scope interval=5s
