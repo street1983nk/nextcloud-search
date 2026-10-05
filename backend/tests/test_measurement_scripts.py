@@ -1593,8 +1593,13 @@ PHP_TREE_HASH_TODAY = "bbcc449daff788f6f85d44bd1b71b485c857009bc6eedca7d6c87cc1f
 # PACKAGE_FILES_TODAY stays at 71. The PHP pair does not move: php/ is unchanged.
 # Measured again over the merged tree of the debug session and plan 28-12, one
 # reading over the union as the ratchet demands; both parents are named above.
+# Measured again by quick 261005-vit (the full index term, owner decision of
+# 2026-10-05, "6 KiB, ohne Messung"): config.py (MAIN_PROCESS_PER_FILE_BYTES
+# with its comment) and profile.py (main_process_bytes, index_files in
+# _memory_term and ocr_slots) changed their bytes. No file came and none went,
+# so PACKAGE_FILES_TODAY stays at 71. The PHP pair does not move: php/ is unchanged.
 PACKAGE_FILES_TODAY = 71
-PACKAGE_TREE_HASH_TODAY = "f597f00eb7f2f49b0b00a67507d9558a30e797f2d65ae8e3125bc6e22530fad5"
+PACKAGE_TREE_HASH_TODAY = "fc0576e70b50d33d0beeeff9f517a8f8e52f9ee5af82fb97403b2647ac6ad1c7"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

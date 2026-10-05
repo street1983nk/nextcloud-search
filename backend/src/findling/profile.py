@@ -40,6 +40,13 @@ Phase 25 adds the precision in force (note_weights): fp32 takes FP32_EXTRA_BYTES
 off the memory term of the formula (D-25-01), and the snapshot says whether a
 parallel embed lane fits beside the OCR slots (embed_lane_fits, PAR-04).
 
+Quick 261005-vit adds the full index term (owner decision of 2026-10-05): the
+main process grows by MAIN_PROCESS_PER_FILE_BYTES per indexed file
+(main_process_bytes), and the memory term can take it off (index_files). No
+caller hands a file count in yet, so every slot count stays as it was; Economy
+has no memory term at all, and the probe and the guard read the free memory
+live, where the growth is already contained.
+
 The module is neutral: stdlib, findling.config and findling.hardware only, so
 that both the worker and the api may import it. It logs nothing, neither
 profile names nor environment values.
@@ -60,6 +67,7 @@ from findling.config import (
     FP32_EXTRA_BYTES,
     INDEX_WORKERS,
     MAIN_PROCESS_BASELINE_BYTES,
+    MAIN_PROCESS_PER_FILE_BYTES,
     NEXTCLOUD_CORE_LOAD,
     OCR_DPI,
     OCR_DPI_RANGE,
@@ -172,13 +180,23 @@ def effective(chosen: Profile | None, fitting: Profile, cap: Profile | None = No
     return min(wanted, fitting, cap, key=PROFILE_ORDER.index)
 
 
-def _memory_term(profile: Profile, hardware: Hardware | None, *, extra_bytes: int) -> int:
+def main_process_bytes(index_files: int, *, weights: str = _INT8) -> int:
+    """The main process of the calculation: baseline, full index term, fp32 extra.
+
+    MAIN_PROCESS_BASELINE_BYTES plus index_files x MAIN_PROCESS_PER_FILE_BYTES
+    (quick 261005-vit), plus FP32_EXTRA_BYTES while fp32 is in force (D-25-01).
+    The OCR slots come on top, slots x OCR_SLOT_COST_BYTES.
+    """
+    return MAIN_PROCESS_BASELINE_BYTES + max(0, index_files) * MAIN_PROCESS_PER_FILE_BYTES + _weights_bytes(weights)
+
+
+def _memory_term(profile: Profile, hardware: Hardware | None, *, extra_bytes: int, index_files: int = 0) -> int:
     """How many OCR slots the memory share holds after ``extra_bytes``, unclamped.
 
-    floor((share x M_free - reserve - baseline - extra) / cost) of D-24-03. Not
-    clamped to one: the lane admission needs to see a term of zero or below.
-    Economy has no memory share and an unknown memory holds no known room,
-    both answer 0.
+    floor((share x M_free - reserve - baseline - files x per file - extra) / cost)
+    of D-24-03 with the full index term of quick 261005-vit. Not clamped to one:
+    the lane admission needs to see a term of zero or below. Economy has no
+    memory share and an unknown memory holds no known room, both answer 0.
     """
     memory = None if hardware is None else hardware.formula_memory_bytes
     if profile is Profile.ECONOMY or memory is None:
@@ -191,7 +209,8 @@ def _memory_term(profile: Profile, hardware: Hardware | None, *, extra_bytes: in
         reserve_share = PROFILE_PERFORMANCE_RESERVE_SHARE
     budget = share * memory
     reserve = reserve_share * budget
-    return math.floor((budget - reserve - MAIN_PROCESS_BASELINE_BYTES - extra_bytes) / OCR_SLOT_COST_BYTES)
+    main_process = main_process_bytes(index_files)
+    return math.floor((budget - reserve - main_process - extra_bytes) / OCR_SLOT_COST_BYTES)
 
 
 def _weights_bytes(weights: str) -> int:
@@ -199,10 +218,11 @@ def _weights_bytes(weights: str) -> int:
     return FP32_EXTRA_BYTES if weights == _FP32 else 0
 
 
-def ocr_slots(profile: Profile, hardware: Hardware | None, *, weights: str = _INT8) -> int:
+def ocr_slots(profile: Profile, hardware: Hardware | None, *, weights: str = _INT8, index_files: int = 0) -> int:
     """The OCR slots of a profile on a box, after the formula of D-24-03.
 
-    With fp32 in force the memory term loses FP32_EXTRA_BYTES (D-25-01).
+    With fp32 in force the memory term loses FP32_EXTRA_BYTES (D-25-01), with
+    ``index_files`` the full index term (quick 261005-vit). Economy ignores both.
     """
     if profile is Profile.ECONOMY:
         return INDEX_WORKERS
@@ -218,7 +238,7 @@ def ocr_slots(profile: Profile, hardware: Hardware | None, *, weights: str = _IN
         # Nextcloud load share; the admin chose the box for Findling.
         core_term = math.floor(cores - PROFILE_PERFORMANCE_CORES_KEPT_FREE)
         cap = PROFILE_PERFORMANCE_OCR_SLOTS_MAX
-    memory_term = _memory_term(profile, hardware, extra_bytes=_weights_bytes(weights))
+    memory_term = _memory_term(profile, hardware, extra_bytes=_weights_bytes(weights), index_files=index_files)
     return max(1, min(core_term, memory_term, cap))
 
 
