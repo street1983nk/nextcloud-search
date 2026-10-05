@@ -463,9 +463,11 @@ def test_the_fp32_term_shrinks_the_memory_term() -> None:
     hardware = box(4, 16)
     int8 = profile._memory_term(Profile.STANDARD, hardware, extra_bytes=0)
     fp32 = profile._memory_term(Profile.STANDARD, hardware, extra_bytes=FP32_EXTRA_BYTES)
+    # budget = 0.32 x 16384 MiB - 1257.5 MiB = 3985.38 MiB; / 250 MiB = 15.9,
+    # and (3985.38 - 367) / 250 = 14.5 with fp32.
     budget = 0.4 * 16 * GIB * 0.8 - MAIN_PROCESS_BASELINE_BYTES
-    assert int8 == math.floor(budget / OCR_SLOT_COST_BYTES) == 16
-    assert fp32 == math.floor((budget - FP32_EXTRA_BYTES) / OCR_SLOT_COST_BYTES) == 15
+    assert int8 == math.floor(budget / OCR_SLOT_COST_BYTES) == 15
+    assert fp32 == math.floor((budget - FP32_EXTRA_BYTES) / OCR_SLOT_COST_BYTES) == 14
 
 
 def test_the_memory_term_is_not_clamped() -> None:
@@ -537,7 +539,9 @@ def test_the_embed_lane_does_not_fit_without_hardware() -> None:
 
 def test_the_activations_can_tip_the_lane_over() -> None:
     """One OCR slot fits, but not the activations of the embedding beside it."""
-    hardware = lane_box(4680)
+    # 0.32 x 4730 MiB - 1257.5 MiB = 256.1 MiB: one slot of 250 MiB; minus the
+    # 27 MiB of activations 229.1 MiB, no slot. The window is 4711 to 4795 MiB.
+    hardware = lane_box(4730)
     assert profile._memory_term(Profile.STANDARD, hardware, extra_bytes=0) == 1
     assert profile._memory_term(Profile.STANDARD, hardware, extra_bytes=EMBED_ACTIVATION_BYTES) == 0
     profile.note_hardware(hardware)

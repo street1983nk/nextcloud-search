@@ -1585,8 +1585,16 @@ PHP_TREE_HASH_TODAY = "bbcc449daff788f6f85d44bd1b71b485c857009bc6eedca7d6c87cc1f
 # (VECTOR_BACKLOG_BAND under the list ceiling of the controller) and nc/queue.py
 # (type, status and duration in the requeue warning) changed their bytes. No
 # file came and none went, so PACKAGE_FILES_TODAY stays at 71.
+# Measured again by plan 28-12: config.py OCR_SLOT_COST_BYTES from the phase 28
+# trip, 250 MiB instead of 235 MiB by owner decision of 2026-10-05
+# (docs/measurements/2026-10-abnahme-anfahrt/, section 14), with its comment.
+# The cells of the trip ran on the trees ee918ce4..., 1a0598a6... and
+# 556148291147..., all before this change. No file came and none went, so
+# PACKAGE_FILES_TODAY stays at 71. The PHP pair does not move: php/ is unchanged.
+# Measured again over the merged tree of the debug session and plan 28-12, one
+# reading over the union as the ratchet demands; both parents are named above.
 PACKAGE_FILES_TODAY = 71
-PACKAGE_TREE_HASH_TODAY = "d2cd5deef692752e89b86250e2cefc1107e0a09ea29ea7653f1f16cc961babc3"
+PACKAGE_TREE_HASH_TODAY = "f597f00eb7f2f49b0b00a67507d9558a30e797f2d65ae8e3125bc6e22530fad5"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

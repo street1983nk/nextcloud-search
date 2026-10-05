@@ -65,7 +65,8 @@ OCR-Slots = max(1, min(Kernterm,
 - Kernterm Standard: `floor(0,5 x C - r)` mit r = 0,25 (Anteil eines Kerns, den
   Nextcloud selbst beim Indexieren belegt).
 - Kernterm Leistung: `floor(C - 1)` (D-24-08).
-- Kosten je Slot: 235 MiB. Grundlinie des Hauptprozesses mit geladenem Modell:
+- Kosten je Slot: 250 MiB (Abnahme-Anfahrt, Owner-Entscheid vom 05.10.2026,
+  `docs/measurements/2026-10-abnahme-anfahrt/`). Grundlinie des Hauptprozesses mit geladenem Modell:
   1.257,5 MiB. Reserve: 20 % des Speicheranteils bei Standard, 15 % bei
   Leistung. Die Messwerte stammen aus `docs/performance.md`.
 
@@ -174,13 +175,13 @@ Speichertod wird (PAR-03).
 
 - **Drossel je Runde (D-26-02):** Vor jeder Staffel mit zwei oder mehr Slots
   liest der Poller den anon-Headroom. Slot 1 läuft immer; jeder weitere Slot
-  braucht 235 MiB zusätzlich zur Reserve von 235 MiB. Ist der Headroom nicht
+  braucht 250 MiB zusätzlich zur Reserve von 250 MiB. Ist der Headroom nicht
   lesbar, läuft ein Slot. Kein Kind wird dafür beendet, die Drossel wirkt ab der
   nächsten Runde. Sparsam fragt den Headroom nie.
 - **Auslöser einer Absenkung (D-26-03, D-26-15, D-26-16):**
   - zwei qualifizierte max-Ereignisse aus `memory.events` in 600 s, mindestens
     60 s auseinander; qualifiziert heißt: `max` steigt UND der anon-Headroom
-    liegt unter 235 MiB (ein Anstieg allein ist Cache-Rückgewinnung);
+    liegt unter 250 MiB (ein Anstieg allein ist Cache-Rückgewinnung);
   - ein steigender Zähler `oom_kill`;
   - ein von außen beendetes Kind während einer Mehr-Slot-Staffel;
   - ein Unrein-Ende: der Container endete mitten in einer Mehr-Slot-Staffel

@@ -4223,8 +4223,8 @@ class _CountingHeadroom:
 async def test_a_short_headroom_throttles_four_slots_to_three_and_keeps_six_rows(
     store: Store, writer: IndexBatchWriter, tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    # D-26-02: slot 1 always, slot k needs (k - 1) x 235 MiB plus the reserve of
-    # 235 MiB. Three times 235 MiB therefore carries three slots, and the rows
+    # D-26-02: slot 1 always, slot k needs (k - 1) x 250 MiB plus the reserve of
+    # 250 MiB. Three times 250 MiB therefore carries three slots, and the rows
     # kept follow the slots allowed: two per slot, six of eight.
     jobs = tuple(_ocr_row(offset) for offset in range(8))
     queue = _FakeQueue(ClaimResult(jobs=jobs))

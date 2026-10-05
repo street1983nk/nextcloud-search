@@ -883,10 +883,17 @@ MIB = 1024 * 1024
 # indexes (measured B1). Subtracted from the core budget of Standard.
 NEXTCLOUD_CORE_LOAD = 0.25
 
-# Resident cost of one OCR slot, tesseract plus the rendered page (B2/B3). The
-# measurement covered the page band of the test corpus; a page far outside that
-# band (K2) can cost more, which the memory share and the reserve absorb.
-OCR_SLOT_COST_BYTES = 235 * MIB
+# Resident cost of one OCR slot, tesseract plus the rendered page. B2/B3 gave
+# 235 MiB (an RssAnon pair, child 136.4 plus tesseract 98.8). The phase 28 trip
+# (docs/measurements/2026-10-abnahme-anfahrt/, sections 8, 10 and 14, measured
+# 2026-10-01 to 2026-10-05 on 18 cells, ARM and x86) found the anon peak of five
+# x86 cells more than 10 percent above the formula; the main process grows with
+# the slot count by up to about 15 MiB per slot beyond what the formula holds.
+# The owner chose 250 MiB on 2026-10-05: the smallest slot value under which the
+# formula carries all 17 partial corpus cells (anon over formula at most 1.10),
+# equal to that 15 MiB per slot. A page far outside the measured band (K2) can
+# cost more, which the memory share and the reserve absorb.
+OCR_SLOT_COST_BYTES = 250 * MIB
 
 # Resident anonymous memory of the main process with the model weights loaded
 # (B2), 1257.5 MiB. Subtracted before the memory share is spread over slots.
