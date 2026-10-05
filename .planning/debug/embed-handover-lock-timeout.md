@@ -152,3 +152,13 @@ files_changed:
   - backend/src/findling/nc/queue.py
   - backend/tests/test_embedding_track.py
   - backend/tests/test_queue_client.py
+
+
+## Owner-Entscheid Fall 1 (05.10.2026)
+
+Signal per Auswahlfrage, woertlich: "A: Nur Diagnose". Es wird nichts gebaut; die neue
+Diagnosezeile (Ausnahmetyp, HTTP-Status, Dauer) wird beim naechsten Vorfall ausgewertet.
+Zeigt sie einen Transport-Timeout, wird Option B (Sofort-Retry) nachgeruestet, sonst wird
+die Ursache serverseitig gesucht. Belege fuer die naechste Anfahrt stehen oben unter Offen.
+Fall 2 ist mit a0ac5aee behoben (Band 200, Kopplungstest an MAX_LIST_LENGTH); der
+Feldbeleg eines echten Laufs steht aus und reist mit der naechsten Anfahrt.
