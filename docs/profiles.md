@@ -69,6 +69,12 @@ OCR-Slots = max(1, min(Kernterm,
   `docs/measurements/2026-10-abnahme-anfahrt/`). Grundlinie des Hauptprozesses mit geladenem Modell:
   1.257,5 MiB. Reserve: 20 % des Speicheranteils bei Standard, 15 % bei
   Leistung. Die Messwerte stammen aus `docs/performance.md`.
+- Vollindex-Term: Der Hauptprozess wächst um 6 KiB je indexierter Datei
+  (Owner-Entscheid vom 05.10.2026, aus S-T und S-voll in
+  `docs/measurements/2026-10-abnahme-anfahrt/`), bei 50.000 Dateien rund
+  300 MiB über der Grundlinie. Die Speicherrechnung zählt den Posten mit; die
+  Slotzahlen ändern sich dadurch heute nicht (Sparsam hat keinen Speicherterm,
+  Probe und Wächter messen den freien Speicher live).
 
 Beispiele:
 
