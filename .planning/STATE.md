@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
 status: executing
-stopped_at: "28-07 x86-Hälfte KOMPLETT: alle Messzellen der Matrix gemessen (c7a.4xlarge 15-18, c7a.8xlarge 19-21, rc 0, Zähltore 5000); 5 x86-Zellen über der Grenze (SC4/C5); Box gestoppt und geparkt; weiter 28-08ff Auswertung/Bericht"
-last_updated: "2026-10-05T16:15:00.000Z"
+stopped_at: "28-11 KOMPLETT: Owner-Entscheide SC4/C5 dokumentiert (wert=250 MiB, alle Faelle Formel nachziehen, S-voll Vollindex-Term via 28-12, kein Store-Fall); 28-07/08/09 per Close-out abgeschlossen; weiter 28-10 Abbau (Owner-Go liegt vor, wartet auf AWS-Login) + 28-12"
+last_updated: "2026-10-05T17:45:00.000Z"
 last_activity: 2026-10-05
 progress:
   total_phases: 6
@@ -26,14 +26,30 @@ See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 ## Current Position
 
 Phase: 28 (Abnahme-Anfahrt), in Ausführung
-Plan: 7 of 14
-Status: In Ausführung (28-07 Messungen komplett, nächster Schritt 28-08ff Auswertung/Bericht + Owner-Entscheid SC4/C5)
+Plan: 11 of 14
+Status: In Ausführung (28-11 komplett, Owner-Entscheide SC4/C5 dokumentiert; offen 28-10 Abbau, 28-12 Rückfluss, 28-13 Snapshot, 28-14 Abschluss)
 Last activity: 2026-10-05
 
 Progress: [█████████░] 87%
 
 ## Naechster Schritt
 
+**28-11 KOMPLETT (05.10. abends): Auswertung, Bericht und Owner-Entscheide stehen.**
+Owner-Signal 05.10.2026: "je-fall: 11=nachziehen, 16=nachziehen, 17=nachziehen, 20=nachziehen,
+21=nachziehen, S-voll=nachziehen (Vollindex-Term, Umfang legt 28-12 vor), wert=250 MiB, store=kein Fall".
+Die Pläne 28-07/08/09 sind per rückwirkendem Close-out abgeschlossen (SUMMARYs b0756181..bde88f84).
+Bericht: docs/measurements/2026-10-abnahme-anfahrt/README.md (Abschnitt 14 Owner-Entscheide),
+auswertung.txt, neues Kapitel "Abnahme-Anfahrt v1.4 (Phase 28)" in docs/performance.md.
+Kein Probe-Widerspruch, kein Store-Zahl-Fall (C1 = 743,9 MB im Band), RESIDENT_FIGURE unverändert.
+
+NÄCHSTER SCHRITT: 28-10 Abbau beider Boxen (Owner-Go "Ja, beide abbauen" liegt vor; wartet nur auf
+frischen AWS-Login; vorher Schlusszahlen-Tabelle nach Runbook 2.6 in 90-kosten.txt nachtragen),
+parallel/danach 28-12 Rückfluss (OCR_SLOT_COST_BYTES 235 -> 250 MiB = 262.144.000 Byte,
+FP32_EXTRA_BYTES bleibt 367 MiB, Vollindex-Term-Vorlage für S-voll, Rechenbeispiele, Baumhash-Pin),
+dann 28-13 Snapshot-Löschung (Owner-Checkpoint), 28-14 Abschluss mit Push-Entscheid C7
+(Box-IPs in der lokalen Historie!). Debug-Session Embed-Lock-Timeout läuft separat (boxlos).
+
+Vorheriger Stand (28-07 Messungen, Ergebnisse aller Zellen):
 **28-07 MESSUNGEN KOMPLETT (05.10.): alle Messzellen der Matrix gemessen, x86-Hälfte fertig.**
 NÄCHSTER SCHRITT: 28-08ff Auswertung/Bericht. OWNER-ENTSCHEID SC4/C5 (Checkpoint C5) offen für fünf
 x86-Zellen über der Grenze 1,10 x Rechnung, dazu der vertagte fp32-Entscheid mit BEIDEN Datenpunkten.
