@@ -901,6 +901,14 @@ neu, und ein alter Pin hat den Poller schon einmal 300 Sekunden ins Backoff
 laufen lassen. Rückfall 2 kommt ohne jede Datei aus und ist der Weg, wenn der
 Namensdienst noch nicht durchgereicht ist.
 
+**Nachtrag vom 05.10.2026: nach einem A-Record-Wechsel rund 3 Minuten bis zum
+Kettenstart warten.** Beim c7a.8xlarge-Start am 05.10.2026 brach der erste
+Kettenstart mit Abbruch 60 ab (Abwärtsweg lief in einen URLError), weil der
+Record erst rund eine Minute vor dem Start umgesetzt worden war und die Box
+trotz TTL 120 noch die alte Adresse auflöste. Nach kurzer Wartezeit lief genau
+eine Wiederholung mit rc 0 durch. Die 3 Minuten sind billiger als eine
+abgebrochene Kette.
+
 **Nachtrag: `dig` liegt auf der Entwicklungsmaschine nicht vor.** Die erste Zeile
 dieses Blocks läuft dort ins Leere, und zwar mit "command not found" statt mit
 einer leeren Antwort, was zwei sehr verschiedene Dinge sind. Die Rückfälle sind
