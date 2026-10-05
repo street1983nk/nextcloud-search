@@ -122,10 +122,14 @@ c7a.xlarge 2026-10-04T06:24:49Z 2026-10-04T15:04:23Z
 # typwechsel c7a.xlarge -> c7a.2xlarge (00-typwechsel.sh, gestoppt 15:04:23Z laeuft 15:04:45Z)
 geparkt 2026-10-04T15:04:23Z 2026-10-04T15:04:45Z
 c7a.2xlarge 2026-10-04T15:04:45Z 2026-10-04T20:23:38Z
-geparkt 2026-10-04T20:23:38Z laeuft
+geparkt 2026-10-04T20:23:38Z 2026-10-05T04:20:37Z
 # c7a.2xlarge stopp von innen (systemd-run poweroff, geplant 20:23:35Z + 3 s, ssh ab 20:24Z unerreichbar):
 #   aws_box.sh stop war nicht moeglich, die aws-sitzung (aws login 04:29Z) ist um ~16:30Z abgelaufen
 #   (owner loggt ein); shutdown-verhalten stop belegt (vorpruefung-stop-ja 2026-10-04T15:07:56Z),
 #   aws-bestaetigung und BOX_STOPPED_ISO per aws_box.sh stehen aus.
 #   laufzeit 5.3147 h x 0.486561 = 2.5859 USD
 # kettenlauf c7a.2xlarge: zellen S-T, St-T, L-T GEMESSEN (rueckgabe 0), kette-ende 20:22:28Z
+# c7a.2xlarge-stopp per aws_box.sh status bestaetigt 2026-10-05T04:19Z (stopped, Client.InstanceInitiatedShutdown)
+# typwechsel c7a.2xlarge -> c7a.4xlarge (00-typwechsel.sh wechsel nach owner-login, box war schon gestoppt,
+#   aws_box stop darin ein leerlauf; laeuft 2026-10-05T04:20:37Z)
+c7a.4xlarge 2026-10-05T04:20:37Z laeuft

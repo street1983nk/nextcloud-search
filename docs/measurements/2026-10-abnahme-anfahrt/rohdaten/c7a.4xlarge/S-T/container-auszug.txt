@@ -1,0 +1,33 @@
+2026-10-05T04:24:17.095517762Z INFO:findling.worker.reconcile:reconcile stands down, the crawl is unfinished
+2026-10-05T04:26:02.473708301Z INFO:findling.worker.poller:the work stock ran dry while the crawl is unfinished, asked for the next slice myself
+2026-10-05T04:29:17.139363312Z INFO:findling.worker.reconcile:reconcile stands down, the crawl is unfinished
+2026-10-05T04:34:17.180912865Z INFO:findling.worker.reconcile:reconcile stands down, the crawl is unfinished
+2026-10-05T04:39:17.223434732Z INFO:findling.worker.reconcile:reconcile stands down, the crawl is unfinished
+2026-10-05T04:44:17.266224027Z INFO:findling.worker.reconcile:reconcile stands down, the crawl is unfinished
+2026-10-05T04:49:17.308543811Z INFO:findling.worker.reconcile:reconcile stands down, 4413 rows are scheduled and the quiet mark is 100
+2026-10-05T04:54:17.352996324Z INFO:findling.worker.reconcile:reconcile stands down, 4181 rows are scheduled and the quiet mark is 100
+2026-10-05T04:59:17.398651105Z INFO:findling.worker.reconcile:reconcile stands down, 3965 rows are scheduled and the quiet mark is 100
+2026-10-05T05:04:17.443567964Z INFO:findling.worker.reconcile:reconcile stands down, 3701 rows are scheduled and the quiet mark is 100
+2026-10-05T05:09:17.492847764Z INFO:findling.worker.reconcile:reconcile stands down, 3453 rows are scheduled and the quiet mark is 100
+2026-10-05T05:14:17.535333379Z INFO:findling.worker.reconcile:reconcile stands down, 3229 rows are scheduled and the quiet mark is 100
+2026-10-05T05:19:17.580540935Z INFO:findling.worker.reconcile:reconcile stands down, 2973 rows are scheduled and the quiet mark is 100
+2026-10-05T05:24:17.624345564Z INFO:findling.worker.reconcile:reconcile stands down, 2701 rows are scheduled and the quiet mark is 100
+2026-10-05T05:29:17.671510334Z INFO:findling.worker.reconcile:reconcile stands down, 2445 rows are scheduled and the quiet mark is 100
+2026-10-05T05:34:17.713369153Z INFO:findling.worker.reconcile:reconcile stands down, 2231 rows are scheduled and the quiet mark is 100
+2026-10-05T05:39:17.754930279Z INFO:findling.worker.reconcile:reconcile stands down, 1981 rows are scheduled and the quiet mark is 100
+2026-10-05T05:44:17.797966122Z INFO:findling.worker.reconcile:reconcile stands down, 1701 rows are scheduled and the quiet mark is 100
+2026-10-05T05:49:17.843891914Z INFO:findling.worker.reconcile:reconcile stands down, 1453 rows are scheduled and the quiet mark is 100
+2026-10-05T05:54:17.888250962Z INFO:findling.worker.reconcile:reconcile stands down, 1181 rows are scheduled and the quiet mark is 100
+2026-10-05T05:59:17.943023667Z INFO:findling.worker.reconcile:reconcile stands down, 990 rows are scheduled and the quiet mark is 100
+2026-10-05T06:04:17.985955618Z INFO:findling.worker.reconcile:reconcile stands down, 902 rows are scheduled and the quiet mark is 100
+2026-10-05T06:09:18.028808112Z INFO:findling.worker.reconcile:reconcile stands down, 834 rows are scheduled and the quiet mark is 100
+2026-10-05T06:14:18.072028270Z INFO:findling.worker.reconcile:reconcile stands down, 750 rows are scheduled and the quiet mark is 100
+2026-10-05T06:19:18.115991201Z INFO:findling.worker.reconcile:reconcile stands down, 664 rows are scheduled and the quiet mark is 100
+2026-10-05T06:24:18.165266193Z INFO:findling.worker.reconcile:reconcile stands down, 614 rows are scheduled and the quiet mark is 100
+2026-10-05T06:29:18.207877991Z INFO:findling.worker.reconcile:reconcile stands down, 548 rows are scheduled and the quiet mark is 100
+2026-10-05T06:34:18.256208780Z INFO:findling.worker.reconcile:reconcile stands down, 482 rows are scheduled and the quiet mark is 100
+2026-10-05T06:39:18.298727997Z INFO:findling.worker.reconcile:reconcile stands down, 392 rows are scheduled and the quiet mark is 100
+2026-10-05T06:44:18.342407578Z INFO:findling.worker.reconcile:reconcile stands down, 304 rows are scheduled and the quiet mark is 100
+2026-10-05T06:49:18.397517133Z INFO:findling.worker.reconcile:reconcile stands down, 226 rows are scheduled and the quiet mark is 100
+2026-10-05T06:54:18.456438115Z INFO:findling.worker.reconcile:reconcile stands down, 150 rows are scheduled and the quiet mark is 100
+2026-10-05T07:01:23.235886597Z INFO:findling.worker.reconcile:reconcile round walked, mounts=4 slices=118 seen=57187 stale=0 missing=0 given_up=0

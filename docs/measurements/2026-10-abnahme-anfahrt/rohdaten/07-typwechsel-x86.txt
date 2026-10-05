@@ -126,3 +126,29 @@ stopp c7a.2xlarge: die aws-sitzung (aws login 04:29Z) lief um ~16:30Z ab ("Your 
   shutdown-verhalten stop belegt (vorpruefung-stop-ja 15:07:56Z). aws-bestätigung (aws_box.sh status)
   steht aus. laufzeit 5,3147 h x 0.486561 = 2.5859 USD. bisher 17.64 von 59.43 USD.
   weiter (nach owner-login): 00-typwechsel.sh wechsel c7a.4xlarge, zellen 15 bis 18, dann c7a.8xlarge.
+
+## kettenlauf c7a.4xlarge (typwechsel nach owner-login, läuft ab 2026-10-05T04:20:37Z)
+stopp c7a.2xlarge per aws_box.sh status bestätigt 2026-10-05T04:19Z: stopped, Client.InstanceInitiatedShutdown.
+typwechsel c7a.2xlarge -> c7a.4xlarge (00-typwechsel.sh wechsel, rückgabe 0; aws_box stop darin ein leerlauf
+  auf der gestoppten box, sein box.env-eintrag ist dort als leerlauf vermerkt): läuft 04:20:37Z, typ-ist c7a.4xlarge.
+  hostschlüssel per ssh-keyscan 3 von 3 gleich; a-record auf die neue adresse (success, rücklesung gleich);
+  rücklesung nproc 16, free 30Gi, uname -m x86_64; alle aio-container healthy.
+vorpruefung-stop-ja 2026-10-05T04:23:22Z; vorab-räumung 04:23:56Z occ findling:index --restart -n, vorrat 0/0
+laufwerte: BISHER_USD 17.85 (02-rechenblatt.py stand --jetzt 04:20:37Z, mit den geparkten nachtstunden),
+  SATZ_USD_H 0.955081, BOX_START_EPOCH 1791174037, ZELLEN S-T:economy:int8:teil St-T:standard:int8:teil
+  L-T:performance:int8:teil St-fp32-T:standard:fp32:teil; abbild, IMAGE_TAG, KORPUS_FRIST, GRENZE_2G wie oben.
+  helfer: ~/work/clog/mit.sh (mitschnitt nach kennung und startzeit), ~/work/nach-kette.sh c7a.4xlarge St-fp32-T
+  (sicherheitsstopp +60 statt +2, rückkehr int8).
+kette-start c7a.4xlarge 2026-10-05T04:24:05Z bisher 17.9052, timer-gesetzt minuten 3355
+
+zelle 15 S-T (economy/int8, 1 slot): GEMESSEN, rueckgabe 0
+  probe keine (abwärtsweg); wirksamkeit ja effective economy slotsInForce 1 nach-s 3; trigger 04:24:23Z
+  zaehltor bestanden 5000: vorrat-teilkorpus 2703 = vorrat-global 2703, eingebettet 2297, indexiert 3576
+  ende 07:08:04Z (trigger bis ende 2:43:41, planwert 3:50)
+  guard economy ohne absenkung, throttled false; oom 0 oom_kill 0, oomkilled false, restartcount 0
+  anon-max 1609302016 B = 1534,7 MiB, rechnung 1492,5, grenze 1641,8: urteil GETRAGEN; memory.peak 1960652800 B
+  slots --slots 1: slot-anon je slot 295,3 MiB, slot-paar vmhwm 431,2 MiB, hauptprozess-max 1302,3 MiB;
+    grundlast nach 120 s ruhe 1382612992 B
+  crawl-fix (container-auszug.txt, mitschnitt diesmal vollständig): sechs runden "crawl is unfinished"
+    (04:24:17Z bis 04:44:17Z), keine stale-lieferung, erste ruhige runde 07:01:23Z "walked ... seen=57187
+    stale=0"; unchanged 0; selbstvorschub einmal (04:26:02Z); kein lock-timeout.

@@ -95,3 +95,31 @@ shutdown-verhalten stop
 shutdown-ist-stopp ja
 vorpruefung-stop-ja 2026-10-04T15:07:56Z
 TYPWECHSEL-VORPRUEFUNG-FERTIG
+preis-gelesen 2026-10-05T04:19:55Z
+preis-quelle 2026-09-25T17:45:21Z
+preis c7a.4xlarge 0.9370400000
+preis c7a.8xlarge 1.8740800000
+TYPWECHSEL-PREIS-FERTIG
+quota-vcpu-standard 32.0
+angebot c7a.4xlarge eu-central-1a eu-central-1b eu-central-1c
+angebot c7a.8xlarge eu-central-1a eu-central-1b eu-central-1c
+TYPWECHSEL-QUOTA-FERTIG
+# c7a.2xlarge war von innen gestoppt (aws_box.sh status 04:19Z stopped, InstanceInitiatedShutdown); aws_box stop im wechsel ist dort ein leerlauf
+typwechsel-start 2026-10-05T04:20:08Z
+instanz <instanzkennung>
+typ-vorher c7a.2xlarge
+shutdown-verhalten stop
+shutdown-ist-stopp ja
+vorpruefung-stop-ja 2026-10-05T04:20:10Z
+typ-gefordert c7a.4xlarge
+typ-ist c7a.4xlarge
+zustand-ist running
+typwechsel c7a.2xlarge -> c7a.4xlarge gestoppt 2026-10-05T04:20:14Z laeuft 2026-10-05T04:20:37Z
+typwechsel-epoche gestoppt 1791174014 laeuft 1791174037
+adresse-neu <adresse-der-box>
+TYPWECHSEL-FERTIG
+typwechsel-vorpruefung 2026-10-05T04:23:21Z
+shutdown-verhalten stop
+shutdown-ist-stopp ja
+vorpruefung-stop-ja 2026-10-05T04:23:22Z
+TYPWECHSEL-VORPRUEFUNG-FERTIG
