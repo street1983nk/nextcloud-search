@@ -109,7 +109,7 @@ geparkt 2026-10-04T06:12:23Z 2026-10-04T06:13:05Z
 # abholstart (aws_box.sh start, running since aus der ausgabe): die kette endete mit shutdown -h +2, bevor die
 #   rohdaten geholt waren; kurzer start nur zum abholen, dann aws_box.sh stop
 m7g.4xlarge 2026-10-04T06:13:05Z 2026-10-04T06:15:06Z
-geparkt 2026-10-04T06:15:06Z laeuft
+geparkt 2026-10-04T06:15:06Z 2026-10-05T17:40:42Z
 # m7g.4xlarge stop 2026-10-04T06:12:23Z (kettenende 06:10:12Z, sudo shutdown -h +2 aus 00-kette.sh, poweroff aus journalctl -b -1)
 #   laufzeit 1.6672 h x 0.800141 = 1.3340 USD; abholen 06:13:05Z bis 06:15:06Z (aws_box.sh stop, BOX_STOPPED_ISO)
 #   laufzeit 0.0336 h x 0.800141 = 0.0269 USD
@@ -138,7 +138,7 @@ c7a.4xlarge 2026-10-05T04:20:37Z 2026-10-05T10:51:02Z
 # typwechsel c7a.4xlarge -> c7a.8xlarge (00-typwechsel.sh, gestoppt 10:51:02Z laeuft 10:51:23Z)
 geparkt 2026-10-05T10:51:02Z 2026-10-05T10:51:23Z
 c7a.8xlarge 2026-10-05T10:51:23Z 2026-10-05T16:04:27Z
-geparkt 2026-10-05T16:04:27Z laeuft
+geparkt 2026-10-05T16:04:27Z 2026-10-05T17:39:20Z
 # c7a.8xlarge stop 2026-10-05T16:04:27Z (aws_box.sh stop, BOX_STOPPED_ISO, aws: User initiated 16:04:27 GMT)
 #   laufzeit 5.2178 h x 1.892121 = 9.8727 USD; erster kettenstart abbruch 60 (dns, 10:53:51Z), eine wiederholung
 # kettenlauf c7a.8xlarge: zellen S-T, St-T, L-T GEMESSEN (rueckgabe 0), kette-ende 16:03:44Z; x86-haelfte komplett
@@ -181,3 +181,14 @@ geparkt 2026-10-05T16:04:27Z laeuft
 #     den hier gerechneten; massgeblich ist diese tabelle.
 #   bis zum abbau laufen nur noch die beiden geparkten platten, 0.026082 USD/h zusammen;
 #     der schlussstand mit dem abbauzeitpunkt wird nach dem abbau unten angehaengt.
+#
+# -- verbleib nach dem abbau (plan 28-10, angehaengt nach dem commit der schlusszahlen) --
+# die beiden parkstempel oben sind mit dem ende des jeweiligen destroy geschlossen:
+#   x86 destroy 2026-10-05T17:38:46Z bis 17:39:20Z, arm destroy 17:40:00Z bis 17:40:42Z
+#   (protokoll 08-abbau-boxen.txt). danach laeuft keine box und keine platte mehr.
+#   geparkt gesamt 87.8461 h x 0.013041 = 1.1456 USD (vorher 84.6606 h / 1.1041 USD, +0.0415 USD)
+# schlussstand: 34.13 USD netto gegen deckel 59.43 USD, rest 25.30 USD, satz jetzt 0 USD/h
+#   (02-rechenblatt.py stand --deckel 59.43 --jetzt 2026-10-05T17:40:42Z; summe je typ 34.1319 USD)
+# deckel gehalten: JA. sicherheitstimer (deckel x 1.20) ausgeloest: NEIN.
+# es bleibt allein der korpus-snapshot (rund 0,10 USD je tag, ausserhalb des deckels, monatsrechnung),
+#   loeschung erst nach den SC4-entscheiden in plan 28-13 (runbook 8 schritt 6b).

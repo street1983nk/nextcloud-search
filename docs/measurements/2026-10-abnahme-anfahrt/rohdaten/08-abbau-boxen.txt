@@ -223,3 +223,190 @@ sind reine instanzsaetze. massgeblich sind die stempel in 90-kosten.txt.
   # Lauf 9, erster Abschnitt: start 2026-10-04T04:32:21Z, kettenende 06:10:12Z mit sudo shutdown -h +2 aus 00-kette.sh,
   #   poweroff 2026-10-04T06:12:23Z (journalctl -b -1), waiter stopped 06:12:40Z; 1.6672 h x 0.800141 (zahlen in 90-kosten.txt).
   #   zweiter abschnitt 06:13:05Z bis 06:15:06Z nur zum abholen der rohdaten (oben, aws_box.sh stop).
+
+-- ende der abschnitte 0 bis 3, committet als d4835808 vor dem ersten destroy --
+
+-- 4 schritt 6, erster abbau: x86 (sg und schluesselpaar bleiben) --
+zustandsverzeichnis vor dem aufruf geprueft: ~/.findling-loadtest/x86, status zeigte dort c7a.8xlarge.
+FINDLING_LOADTEST_DIR=~/.findling-loadtest/x86, FINDLING_STATE_BACKUP=~/.findling-loadtest/x86/box.env.vor-abbau
+aws_box.sh destroy, 2026-10-05T17:38:46Z bis 17:39:20Z
+  aws_box: the history of this box is backed up in /c/Users/Student/.findling-loadtest/x86/box.env.vor-abbau
+  aws_box: the data volume goes after the instance, not before
+  aws_box: terminating instance <instanzkennung>
+  aws_box: deleting volume <volumekennung>
+  aws_box: security group kept, still used by another instance: <instanzkennung>
+  aws_box: the key pair stays with it; the teardown of that box takes both
+  aws_box: instance <instanzkennung> is gone, verified against the api
+  aws_box: volume <volumekennung> is gone, verified against the api
+  aws_box: security group <sicherheitsgruppe> stays for <instanzkennung>, on purpose
+  aws_box: key pair findling-loadtest stays for <instanzkennung>, on purpose
+  aws_box: expected to outlive this box, tagged purpose=findling-corpus-keep:
+    korpus-snapshot vorhanden ja
+  aws_box: still in use by the other box, and not a leftover of this one:
+    <instanzkennung> <volumekennung> <volumekennung> <sicherheitsgruppe>
+  aws_box: volume <volumekennung> carries purpose=findling-phase5, the resource itself is gone
+  aws_box: volume <volumekennung> carries purpose=findling-phase5, the resource itself is gone
+  aws_box: something still carries the tag purpose=findling-phase5 and still exists:
+   key-pair <schluesselpaar findling-loadtest>
+  aws_box: something is left over. Find it by tag: purpose=findling-phase5
+  aws_box: the state file stays, so a second destroy can use it
+  rueckgabe 1
+die sg-reihenfolge ist damit belegt: beim ersten abbau "security group kept, still used by
+another instance", die arm-instanz traegt sie noch.
+
+BEFUND zur rueckgabe 1, geprueft und nicht vermutet: alle zerstoerenden teilschritte sind
+gelungen und zurueckgelesen (instanz weg, datenvolume weg). die rueckgabe 1 kommt allein aus
+dem tag-sweep am ende: er meldet das schluesselpaar als ueberbleibsel, obwohl destroy es zwei
+zeilen vorher absichtlich stehen gelassen hat. ursache im werkzeug: die liste der noch
+geteilten ressourcen (aws_box.sh, cmd_destroy, shared="$others $other_volumes $group_id")
+fuehrt instanz, volumes und security group der anderen box, aber nicht das schluesselpaar.
+gegenprobe 2026-10-05T17:39Z, unabhaengig per describe:
+  describe-key-pairs: findling-loadtest, purpose=findling-phase5 (das gemeinsame paar, gewollt)
+  describe-instances tag findling-phase5: m7g.4xlarge stopped, c7a.8xlarge terminated
+  describe-volumes: nur noch 60 G und 40 G der arm-box, beide in-use/attached
+also ein fehlalarm des sweeps, kein gescheiterter abbauschritt. der abbau ging deshalb mit der
+arm-box weiter. die zustandsdatei der x86-box blieb stehen; sie war byte-gleich mit der
+sicherung (cmp) und wurde nach dem zweiten abbau von hand entfernt, 2026-10-05T17:47:55Z.
+werkzeugfix offen: das schluesselpaar gehoert in die shared-liste (deferred, ausserhalb dieses plans).
+
+-- 5 schritt 6, zweiter abbau: arm (sg und schluesselpaar fallen mit) --
+zustandsverzeichnis vor dem aufruf geprueft: ~/.findling-loadtest/arm, status zeigte dort m7g.4xlarge.
+FINDLING_LOADTEST_DIR=~/.findling-loadtest/arm, FINDLING_STATE_BACKUP=~/.findling-loadtest/arm/box.env.vor-abbau
+aws_box.sh destroy, 2026-10-05T17:40:00Z bis 17:40:42Z
+  aws_box: the history of this box is backed up in /c/Users/Student/.findling-loadtest/arm/box.env.vor-abbau
+  aws_box: the data volume goes after the instance, not before
+  aws_box: terminating instance <instanzkennung>
+  aws_box: deleting volume <volumekennung>
+  aws_box: deleting security group <sicherheitsgruppe>
+  aws_box: deleting key pair findling-loadtest
+  aws_box: instance <instanzkennung> is gone, verified against the api
+  aws_box: volume <volumekennung> is gone, verified against the api
+  aws_box: security group <sicherheitsgruppe> is gone, verified against the api
+  aws_box: key pair findling-loadtest is gone, verified against the api
+  aws_box: expected to outlive this box, tagged purpose=findling-corpus-keep:
+    korpus-snapshot vorhanden ja
+  aws_box: volume <volumekennung> carries purpose=findling-phase5, the resource itself is gone   (4 zeilen)
+  aws_box: instance <instanzkennung> carries purpose=findling-phase5, the resource itself is gone
+  aws_box: nothing that carries purpose=findling-phase5 exists any more
+  aws_box: the tags of what was deleted fall off the api on their own
+  aws_box: every resource of this run is gone and /c/Users/Student/.findling-loadtest/arm/box.env is removed
+  rueckgabe 0
+
+-- 6 ruecklesung je ressource, unabhaengig vom werkzeug --
+2026-10-05T17:40:46Z describe-key-pairs --key-names findling-loadtest:
+  An error occurred (InvalidKeyPair.NotFound) when calling the DescribeKeyPairs operation:
+  The key pair 'findling-loadtest' does not exist
+2026-10-05T17:41:20Z, kennungen aus den beiden box.env.vor-abbau:
+  x86 instanz      terminated
+  x86 datenvolume  InvalidVolume.NotFound
+  arm instanz      terminated
+  arm datenvolume  InvalidVolume.NotFound
+  security group   InvalidGroup.NotFound
+  schluesselpaar   InvalidKeyPair.NotFound
+  korpus-snapshot vorhanden ja (completed, 100%, 60 GB, purpose=findling-corpus-keep)
+die beiden 40-G-systemplatten fielen mit der instanz (DeleteOnTermination true, abschnitt 1);
+sie erscheinen in schritt 8 nicht mehr (volumes 0 in eu-central-1).
+die security groups von eu-central-1 nach dem abbau: nur noch "default".
+acceptance-abfrage 2026-10-05T17:40:53Z:
+  aws ec2 describe-instances --filters Name=tag:purpose,Values=findling-phase5
+      Name=instance-state-name,Values=pending,running,stopping,stopped
+  -> 0 instanzen (ohne zustandsfilter: m7g.4xlarge terminated, c7a.8xlarge terminated)
+
+-- 7 a-record beim zonenverwalter entfernt --
+weg wie beim setzen (runbook block 10, abweichung): dns-zugang des betreiber-werkzeugkastens,
+zonen-api des verwalters; zugang und zone stehen nirgends in diesem repositorium.
+2026-10-05T17:47:12Z vorher:     loadtest.infranode.dev records 1, typ A, ttl 120, nicht proxied
+2026-10-05T17:47:17Z delete A-record loadtest.infranode.dev success=True
+2026-10-05T17:47:17Z ruecklesung: loadtest.infranode.dev records 0
+2026-10-05T17:47:23Z nslookup ueber einen oeffentlichen resolver: noch die alte antwort (ttl 120 im cache)
+2026-10-05T17:48:00Z nslookup ueber zwei oeffentliche resolver: beide "Non-existent domain"
+rueckfall /etc/hosts: auf der entwicklungsmaschine kein eintrag fuer loadtest (hosts-datei 0 treffer),
+nichts zu loeschen; die eintraege auf den boxen sind mit den boxen gefallen.
+
+-- 8 schritt 7: tag-sweep, 17 regionen x 2 tagwerte, gezaehlt --
+2026-10-05T17:41:30Z bis 17:42:26Z
+  17:41:30Z ap-northeast-1 findling-phase5 0
+  17:41:32Z ap-northeast-1 findling-corpus-keep 0
+  17:41:34Z ap-northeast-2 findling-phase5 0
+  17:41:36Z ap-northeast-2 findling-corpus-keep 0
+  17:41:38Z ap-northeast-3 findling-phase5 0
+  17:41:40Z ap-northeast-3 findling-corpus-keep 0
+  17:41:42Z ap-south-1 findling-phase5 0
+  17:41:43Z ap-south-1 findling-corpus-keep 0
+  17:41:45Z ap-southeast-1 findling-phase5 0
+  17:41:47Z ap-southeast-1 findling-corpus-keep 0
+  17:41:49Z ap-southeast-2 findling-phase5 0
+  17:41:51Z ap-southeast-2 findling-corpus-keep 0
+  17:41:53Z ca-central-1 findling-phase5 0
+  17:41:55Z ca-central-1 findling-corpus-keep 0
+  17:41:56Z eu-central-1 findling-phase5 6
+  17:41:58Z eu-central-1 findling-corpus-keep 1
+  17:41:59Z eu-north-1 findling-phase5 0
+  17:42:00Z eu-north-1 findling-corpus-keep 0
+  17:42:01Z eu-west-1 findling-phase5 0
+  17:42:03Z eu-west-1 findling-corpus-keep 0
+  17:42:04Z eu-west-2 findling-phase5 0
+  17:42:06Z eu-west-2 findling-corpus-keep 0
+  17:42:07Z eu-west-3 findling-phase5 0
+  17:42:08Z eu-west-3 findling-corpus-keep 0
+  17:42:10Z sa-east-1 findling-phase5 0
+  17:42:12Z sa-east-1 findling-corpus-keep 0
+  17:42:14Z us-east-1 findling-phase5 0
+  17:42:16Z us-east-1 findling-corpus-keep 0
+  17:42:17Z us-east-2 findling-phase5 0
+  17:42:19Z us-east-2 findling-corpus-keep 0
+  17:42:20Z us-west-1 findling-phase5 0
+  17:42:22Z us-west-1 findling-corpus-keep 0
+  17:42:24Z us-west-2 findling-phase5 0
+  17:42:26Z us-west-2 findling-corpus-keep 0
+ergebnis: 33 zeilen 0, dazu eu-central-1 findling-corpus-keep 1 (der korpus-snapshot, wie erwartet)
+und eu-central-1 findling-phase5 6. die 6 sind nachhaengende tags, jeder treffer nach seiner art
+zurueckgelesen (runbook 8 schritt 7: ein tag-treffer ist ein hinweis, kein urteil):
+  2026-10-05T17:45:38Z arten der treffer: 2 instance, 4 volume
+  17:46:00Z instance terminated
+  17:46:01Z instance terminated
+  17:46:03Z volume InvalidVolume.NotFound
+  17:46:04Z volume InvalidVolume.NotFound
+  17:46:05Z volume InvalidVolume.NotFound
+  17:46:06Z volume InvalidVolume.NotFound
+also 2 terminierte instanzen und ihre 4 platten (je systemplatte und datenvolume); nichts davon
+antwortet noch als ressource. kein ueberbleibsel.
+
+-- 9 schritt 8: bestand je region, gezaehlt --
+2026-10-05T17:42:28Z bis 17:45:16Z
+  17:42:28Z ap-northeast-1 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+  17:42:42Z ap-northeast-2 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+  17:42:54Z ap-northeast-3 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+  17:43:05Z ap-south-1 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+  17:43:13Z ap-southeast-1 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+  17:43:25Z ap-southeast-2 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+  17:43:37Z ca-central-1 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+  17:43:46Z eu-central-1 instanzen 0 volumes 0 snapshots 1 amis 0 adressen 0 schluessel 0
+  17:43:56Z eu-north-1 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+  17:44:05Z eu-west-1 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+  17:44:17Z eu-west-2 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+  17:44:23Z eu-west-3 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+  17:44:32Z sa-east-1 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+  17:44:45Z us-east-1 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+  17:44:58Z us-east-2 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+  17:45:07Z us-west-1 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+  17:45:16Z us-west-2 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+ergebnis ueber 17 regionen: 0 instanzen, 0 volumes, 0 adressen, 0 schluesselpaare, 0 eigene amis,
+genau 1 snapshot (eu-central-1, der korpus-snapshot). sweep 0/0/0/0 erfuellt.
+korpus-snapshot vorhanden ja.
+
+-- 10 schlussrechnung --
+verbraucht 34.13 USD netto gegen deckel 59.43 USD, rest 25.30 USD, deckel gehalten JA,
+sicherheitstimer (deckel x 1.20) nicht ausgeloest. tabelle je typ und herleitung in 90-kosten.txt
+(abschnitte "schlusszahlen vor dem abbau" und "verbleib nach dem abbau").
+
+-- 11 schritt 9: was bewusst stehen bleibt --
+  korpus-snapshot        bleibt bis nach den SC4-entscheiden (runbook 8 schritt 6b, plan 28-13),
+                         rund 0,10 USD je tag, ausserhalb des deckels der anfahrt
+  default-gruppe der vpc bleibt, kostet nichts
+  lokal, ausserhalb des arbeitsbaums:
+    ~/.findling-loadtest/x86/box.env.vor-abbau und ~/.findling-loadtest/arm/box.env.vor-abbau
+    (die sicherungen aus abschnitt 3), dazu je die private haelfte des schluesselpaars und
+    die known_hosts-staende; die oeffentliche haelfte ist im konto geloescht.
+  keine zustandsdatei box.env mehr in beiden verzeichnissen, kein schluesselpaar im konto,
+  kein a-record, keine instanz, kein volume, keine adresse.
