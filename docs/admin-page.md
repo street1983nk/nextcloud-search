@@ -528,7 +528,7 @@ Profile, Formel und Wächter: [`docs/profiles.md`](profiles.md). Präzision:
 **Verdikte**
 
 - Passt: gespeichert. Das Profil gilt ab der nächsten Indexrunde.
-- Passt knapp: Speicherreserve unter 235 MiB. Nichts gespeichert.
+- Passt knapp: Speicherreserve unter 250 MiB. Nichts gespeichert.
 - Passt nicht: mit genau einer Ursache aus einer geschlossenen Menge (etwa
   `memory_short`, `model_memory`, `slot_killed`, `download_failed`). Nichts
   gespeichert.
