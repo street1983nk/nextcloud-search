@@ -127,3 +127,8 @@ summe der phase: 34.13 + 0.51 = 34.64 USD gegen deckel 59.43 USD, rest 24.79 USD
 kein snapshot, keine instanz, kein volume, keine adresse, kein schluesselpaar, keine eigene ami.
 der messkorpus ist aus build_load_corpus.py deterministisch neu erzeugbar, braucht dafuer aber
 einen neuen korpusaufbau auf einer box.
+
+-- nachlesung durch den orchestrator --
+2026-10-05T19:52:04Z eu-central-1 findling-corpus-keep 0, eu-central-1 findling-phase5 0
+  gleiche abfrageform wie schritt 7 (Name=value). der nachlaufende tag des geloeschten
+  snapshots ist verschwunden, die eine offene zeile des sweeps steht damit auf 0.
