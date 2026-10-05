@@ -160,3 +160,71 @@ End states as Nextcloud recorded them
 
 Last background job of this app: 2026-10-05 11:16:41 (148 minutes ago)
 trigger ja 2026-10-05T13:44:41Z
+zaehlung vorrat-teilkorpus 317 vorrat-global 317 uebersprungen-frisch 0 fehlgeschlagen-frisch 0 eingebettet 4683 indexiert 4691 summe 5000
+zaehltor bestanden 5000
+schritt ende 2026-10-05T14:44:51Z
+lesung t=2s vorrat 317 indexed 4691 embedded 4683 guard standard throttled false
+lesung t=124s vorrat 221 indexed 4779 embedded 4779 guard standard throttled false
+lesung t=246s vorrat 141 indexed 4867 embedded 4867 guard standard throttled false
+lesung t=368s vorrat 85 indexed 4915 embedded 4915 guard standard throttled false
+lesung t=490s vorrat 53 indexed 4963 embedded 4962 guard standard throttled false
+lesung t=612s vorrat 0 indexed 5000 embedded 5000 guard standard throttled false
+lesung t=734s vorrat 0 indexed 5000 embedded 5000 guard standard throttled false
+ende vorrat 0 embedded gleich indexed zweimal 2026-10-05T14:57:05Z
+schritt nachlauf 2026-10-05T14:57:05Z
+grundlast anon 1955733504 nach-ruhe-s 120
+guard effective=standard cause=keine throttled=false slotsInForce=4
+waechter-absenkung nein
+oom oomkilled false restartcount 0 containerstart 2026-10-05T13:43:51.957481141Z memory-events oom 0 oom_kill 0
+schritt abholen 2026-10-05T14:59:06Z
+abholbereit ja dateien 14
+10-ZELLE-FERTIG St-T
+zelle-start L-T box c7a.8xlarge ziel performance/int8 korpus teil 2026-10-05T14:59:06Z
+abbild-digest sha256:5ed5742cbaddf14a378664e19cf2be6f500c3ac9b60d1a0bfc86e388f43ebc27
+schritt abwaerts 2026-10-05T14:59:06Z
+abwaerts code=saved saved=true HTTP200
+schritt zaehlung-eine-nextcloud 2026-10-05T14:59:08Z
+nextcloud-instanzen 1
+schritt nullstand 2026-10-05T14:59:08Z
+unregister-rm-data ja
+schritt registrierung 2026-10-05T14:59:09Z
+registrierung-rueckgabewert 0
+schritt vorrat-tor 2026-10-05T14:59:14Z
+vorrat-tor altvorrat 0
+schritt bewaffnung 2026-10-05T14:59:14Z
+bewaffnung backendReachable true nach-s 1
+schritt grenze 2026-10-05T14:59:18Z
+grenze keine
+schritt baumhash 2026-10-05T14:59:18Z
+40b-baumhash-rueckgabewert 0
+baumhash-im-laufenden-container ee918ce4bc7c19273f89fc174b1a3a10a91417e8a1bfc273e10c849a059a0e0a
+baumhash-beweis ja
+schritt 93b-nullstand 2026-10-05T14:59:19Z
+93b-nullstand-rueckgabewert 0
+schritt drop-caches 2026-10-05T14:59:20Z
+caches-geleert ja
+schritt probe 2026-10-05T14:59:20Z
+probe-rueckgabewert 0
+erzwungen nein
+schritt wirksamkeit 2026-10-05T14:59:32Z
+uebersicht HTTP200 effective=performance guardEffective=performance guardCause=keine slotsInForce=1 throttled=false backendReachable=true scheduled=0 running=0 indexed=0 embedded=0 storedPrecision=int8 profileSaved=performance
+wirksamkeit ja effective performance slotsInForce 1 nach-s 2
+schritt sampler 2026-10-05T14:59:34Z
+sampler rss 2 anon 1 cpu 5 status 120 gestartet 2026-10-05T14:59:34Z
+schritt trigger 2026-10-05T14:59:34Z
+zaehlmarke 2026-09-10 23:44:03
+The crawl was queued. It starts with the next run of the background jobs.
+
+Work stock
+  scheduled            0
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              44
+  failed               6
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-10-05 14:06:42 (52 minutes ago)
+trigger ja 2026-10-05T14:59:35Z

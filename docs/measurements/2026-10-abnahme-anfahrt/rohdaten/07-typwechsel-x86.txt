@@ -260,3 +260,21 @@ zelle 19 S-T (economy/int8, 1 slot): GEMESSEN, rueckgabe 0 (wiederholung nach de
   crawl-fix: sechs runden "crawl is unfinished" (10:55:46Z bis 11:15:47Z), keine stale-lieferung, erste
     ruhige runde 13:37:53Z "walked ... seen=57187 stale=0"; unchanged 0; selbstvorschub einmal
     (10:57:32Z); kein lock-timeout.
+
+zelle 20 St-T (standard/int8): GEMESSEN, rueckgabe 0
+  probe verdikt fits (reserve 61289922688, slots 4), erzwungen nein
+  wirksamkeit ja effective standard slotsInForce 1 nach-s 33 (leerlauf); unter last slots=4 (250 zeilen),
+    wächter am ende slotsInForce 4; trigger 13:44:41Z
+  zaehltor bestanden 5000: vorrat-teilkorpus 317 = vorrat-global 317, eingebettet 4683, indexiert 4691
+  ende 14:57:05Z (trigger bis ende 1:12:24, planwert 1:00)
+  guard standard ohne absenkung, throttled false; oom 0 oom_kill 0, oomkilled false, restartcount 0
+  anon-max 2684612608 B = 2560,2 MiB, rechnung 2298,9, grenze 2528,8: urteil NICHT GETRAGEN
+    (31,4 MiB über der grenze, 11,4 prozent über der rechnung); memory.peak 3043905536 B
+  slots --slots 4: slot-anon je slot 232,2 MiB (b2 235,0), slot-paar vmhwm 437,5 MiB,
+    hauptprozess-max 1640,1 MiB; grundlast nach 120 s ruhe 1955733504 B
+  einordnung: wie zelle 16 (c7a.4xlarge, 2591,6): bei 4 slots auf x86 liegt St-T über der grenze, der
+    überhang sitzt im hauptprozess; dieselbe zelle auf m7g.4xlarge (zelle 6) war mit 2358,2 getragen. SC4-fall.
+  gegenprobe der probe: fits, kein wächtereingriff, kein oom, peak 2,9 GB auf 61 GiB: das verdikt stimmt.
+  crawl-fix: sechs runden "crawl is unfinished" (13:44:41Z bis 14:04:42Z), keine stale-lieferung, erste
+    ruhige runde 14:55:59Z "walked ... seen=35187 stale=0"; unchanged 0; selbstvorschub einmal
+    (13:47:39Z); kein lock-timeout.
