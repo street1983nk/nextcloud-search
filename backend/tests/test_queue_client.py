@@ -957,3 +957,50 @@ def test_the_receiving_half_validates_a_requeue_against_that_same_list() -> None
     """
     source = QUEUE_CONTROLLER.read_text(encoding="utf-8")
     assert re.search(r"in_array\(\$kind, QueueMapper::KINDS, true\)", source) is not None
+
+
+class _RefusedRequest(Exception):
+    """Stands in for NextcloudException: a status code and a message with a path."""
+
+    def __init__(self, status_code: int) -> None:
+        super().__init__(f"[{status_code}] request: POST {REQUEUE_PATH} /secret/file.pdf")
+        self.status_code = status_code
+
+
+async def test_a_failed_requeue_names_the_exception_type_the_status_and_the_duration(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # The field run of 4 October 2026 (m7g.4xlarge, cell L-T) logged "could not
+    # hand 30 files to another track" twice, 60 s after the commit each time, and
+    # nothing that said why. Type, status code and duration tell a refusal of the
+    # controller (immediate, 400), a server error (500) and a timeout of the
+    # transport (no status, tens of seconds) apart; the exception text stays out
+    # of the line, because it carries the request and may carry a path.
+    session = _FakeSession(error=_RefusedRequest(400))
+    caplog.set_level(logging.WARNING, logger="findling.nc.queue")
+
+    result = await _queue(session).requeue([4711, 4712], kind="embed")
+
+    assert result.ok is False
+    lines = [record.getMessage() for record in caplog.records if record.name == "findling.nc.queue"]
+    assert len(lines) == 1
+    assert "could not hand 2 files to another track" in lines[0]
+    assert "_RefusedRequest" in lines[0]
+    assert "status=400" in lines[0]
+    assert re.search(r"after \d+\.\d s", lines[0]) is not None
+    assert "secret" not in lines[0]
+    assert REQUEUE_PATH not in lines[0]
+
+
+async def test_a_requeue_error_without_a_status_says_none(caplog: pytest.LogCaptureFixture) -> None:
+    # A transport failure, a timeout or a refused connection, carries no HTTP
+    # status at all, and the line has to say so rather than invent one.
+    session = _FakeSession(error=TimeoutError())
+    caplog.set_level(logging.WARNING, logger="findling.nc.queue")
+
+    await _queue(session).requeue([4711], kind="embed")
+
+    lines = [record.getMessage() for record in caplog.records if record.name == "findling.nc.queue"]
+    assert len(lines) == 1
+    assert "TimeoutError" in lines[0]
+    assert "status=none" in lines[0]

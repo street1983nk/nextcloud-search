@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
@@ -405,6 +406,20 @@ TOPUP_IDLE: Final = "idle"
 TOPUP_UNAVAILABLE: Final = "unavailable"
 
 
+def _status_of(error: BaseException) -> str:
+    """The HTTP status an exception of the client library carries, or "none".
+
+    Read as an attribute and not by naming the class, because this module may
+    import neither the Nextcloud library's exception nor the HTTP client's
+    (see the catch in DocumentQueue.claim). Only a whole number counts, so an
+    attribute of another shape cannot smuggle a value into the log line.
+    """
+    status = getattr(error, "status_code", None)
+    if isinstance(status, int) and not isinstance(status, bool):
+        return str(status)
+    return "none"
+
+
 class DocumentQueue:
     """The six queue calls, bound to one client for the whole run."""
 
@@ -605,14 +620,29 @@ class DocumentQueue:
         if not file_ids:
             return CallResult(ok=True)
 
+        started = time.monotonic()
         try:
             answer = await requeue_documents(self._nc, file_ids=list(file_ids), kind=kind)
-        except Exception:
+        except Exception as error:
             # Survivable by construction as well: the rows were not acknowledged,
             # so they come back after the lock timeout, and the second pass finds
             # the same missing text layer and hands them over again. It costs one
             # repeated text layer check and never a document.
-            LOGGER.warning("could not hand %d files to another track", len(file_ids))
+            #
+            # Type, status and duration, and never the exception text: the text
+            # of a Nextcloud error carries the request and may carry a path
+            # (T-24-19). The three tell the known causes apart, a refusal of the
+            # controller (400 within milliseconds), an error on the other side
+            # (500) and a transport that gave up (no status, tens of seconds);
+            # the line without them left two failures of the field run of
+            # 4 October 2026 unexplained.
+            LOGGER.warning(
+                "could not hand %d files to another track, %s status=%s after %.1f s",
+                len(file_ids),
+                type(error).__name__,
+                _status_of(error),
+                time.monotonic() - started,
+            )
             return CallResult(ok=False)
 
         payload = _mapping(answer) or {}

@@ -1581,8 +1581,12 @@ PHP_TREE_HASH_TODAY = "bbcc449daff788f6f85d44bd1b71b485c857009bc6eedca7d6c87cc1f
 # nc/queue.py (QueueStats.crawling), nc/client.py (the docstring of
 # queue_stats) and worker/reconcile.py (the crawl branch of _quiet) changed
 # their bytes. No file came and none went, so PACKAGE_FILES_TODAY stays at 71.
+# Measured again by debug session embed-handover-lock-timeout: worker/embedding.py
+# (VECTOR_BACKLOG_BAND under the list ceiling of the controller) and nc/queue.py
+# (type, status and duration in the requeue warning) changed their bytes. No
+# file came and none went, so PACKAGE_FILES_TODAY stays at 71.
 PACKAGE_FILES_TODAY = 71
-PACKAGE_TREE_HASH_TODAY = "ee918ce4bc7c19273f89fc174b1a3a10a91417e8a1bfc273e10c849a059a0e0a"
+PACKAGE_TREE_HASH_TODAY = "d2cd5deef692752e89b86250e2cefc1107e0a09ea29ea7653f1f16cc961babc3"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

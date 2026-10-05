@@ -137,16 +137,22 @@ EMBED_INCOMPLETE: Final = "embedding_incomplete"
 # How many documents one idle pass hands back to the embedding track while the
 # vector stock is being written again after a model change.
 #
-# Five hundred, and the number is a trade between two request sizes. The
-# redelivery is one POST carrying file ids, so the whole instance in one call
-# would mean fifty thousand ids in one body on the box this app targets, and the
-# companion half writes them in bands of a thousand anyway. Below about a
-# hundred the sweep would need an idle pass per band and a model change would
-# take a day of cooldowns rather than an hour of work.
+# Two hundred, and the ceiling is not ours. The redelivery is one POST carrying
+# file ids, and QueueController::MAX_LIST_LENGTH (256 since plan 03-14) refuses
+# a longer list outright with HTTP 400 in intList. The band used to be five
+# hundred: every band of a stock above 256 documents was refused, the cursor
+# stayed where it was, and the stock that forget_all had just emptied was never
+# written again (field run of 5 October 2026, c7a.4xlarge, cell St-fp32-T,
+# 10:48:05Z). 200 leaves headroom under the ceiling, the number REQUEUE_BAND in
+# findling/worker/reconcile.py settled on for the same refusal (CR-01), and a
+# parity test in tests/test_embedding_track.py reads the PHP constant and holds
+# the two together. Below about a hundred the sweep would need an idle pass per
+# band and a model change would take a day of cooldowns rather than an hour of
+# work; 5000 documents are 25 bands.
 #
 # It costs nothing on an instance that never drifted: the sweep only runs while
 # the cursor beside the mark says a redelivery is unfinished.
-VECTOR_BACKLOG_BAND: Final = 500
+VECTOR_BACKLOG_BAND: Final = 200
 
 # Where a redelivery starts, as the cursor spells it. A named value because it
 # is written in one place and read in another, and because "0" and "" are two

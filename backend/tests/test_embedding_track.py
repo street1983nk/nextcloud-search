@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import sqlite3
 import threading
 import time
@@ -92,6 +93,7 @@ from findling.worker.poller import (
 POLLER_SOURCE = Path(__file__).resolve().parents[1] / "src" / "findling" / "worker" / "poller.py"
 EMBEDDING_SOURCE = Path(__file__).resolve().parents[1] / "src" / "findling" / "worker" / "embedding.py"
 PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "src" / "findling"
+PHP_QUEUE_CONTROLLER = Path(__file__).resolve().parents[2] / "php" / "lib" / "Controller" / "QueueController.php"
 
 CONSTITUENTS = (
     (Path(__file__).resolve().parent / "fixtures" / "constituents_de.txt").read_text(encoding="utf-8").split()
@@ -161,6 +163,9 @@ class _FakeQueue:
         self.unlocked: list[list[int]] = []
         self.requeues: list[tuple[list[int], str]] = []
         self.requeue_fails = False
+        # The list ceiling of the controller, when a test wants the fake to
+        # refuse an over-long list the way intList does (HTTP 400, every id).
+        self.list_ceiling: int | None = None
         self.profile_answer: str | None = None
         self.precision_answer: str | None = None
         self.profile_asks = 0
@@ -196,6 +201,8 @@ class _FakeQueue:
     async def requeue(self, file_ids: Any, *, kind: str) -> CallResult:
         self.requeues.append((list(file_ids), kind))
         if self.requeue_fails:
+            return CallResult(ok=False)
+        if self.list_ceiling is not None and len(list(file_ids)) > self.list_ceiling:
             return CallResult(ok=False)
         return CallResult(ok=True, count=len(list(file_ids)))
 
@@ -1742,6 +1749,54 @@ async def test_a_failed_hand_back_leaves_the_cursor_where_it_was(
 
     assert queue.requeues == [([4711], KIND_EMBED), ([4711], KIND_EMBED)], "the same band, not the next one"
     assert store.read_meta()[EMBEDDING_BACKLOG_MARK] == "4711"
+
+
+def _php_max_list_length() -> int:
+    """The MAX_LIST_LENGTH constant of the PHP controller, read out of its source.
+
+    Read as text because a PHP constant cannot be imported, the shape of the
+    parity gate in tests/test_reconcile.py: writing the number into this file a
+    second time would be the very drift the gate exists to catch.
+    """
+    source = PHP_QUEUE_CONTROLLER.read_text(encoding="utf-8")
+    found = re.search(r"const MAX_LIST_LENGTH = (\d+);", source)
+    assert found is not None, "QueueController::MAX_LIST_LENGTH is gone or renamed"
+    return int(found.group(1))
+
+
+def test_a_band_of_the_redelivery_fits_under_the_list_ceiling_of_the_controller() -> None:
+    # The parity gate of the redelivery, the twin of the one REQUEUE_BAND has.
+    # intList refuses a longer list outright with HTTP 400, and the field run of
+    # 5 October 2026 (c7a.4xlarge, St-fp32-T, 10:48:05Z) handed 500 ids to a
+    # ceiling of 256 within 24 ms of emptying the stock.
+    assert _php_max_list_length() >= embedding_module.VECTOR_BACKLOG_BAND
+
+
+async def test_a_precision_change_on_a_stock_above_the_list_ceiling_writes_every_document_again(
+    store: Store, writer: IndexBatchWriter, vectors: VectorStore, tmp_path: Path
+) -> None:
+    # The reproduction of the field finding. More indexed documents than the
+    # controller takes in one list, and a queue that refuses an over-long list
+    # the way intList does. With a band above the ceiling every idle pass handed
+    # the same first band back, was refused, kept the cursor at "0", and the
+    # stock that forget_all had just emptied was never written again.
+    ceiling = _php_max_list_length()
+    documents = list(range(1, ceiling + 45))
+    store.write_meta(EMBEDDING_MARK, ANOTHER_MARK)
+    for file_id in documents:
+        _judged(store, file_id)
+    queue = _FakeQueue()
+    queue.list_ceiling = ceiling
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, vectors=vectors)
+
+    for _ in range(5):
+        await poller.run_once()
+
+    handed = sorted(
+        file_id for ids, kind in queue.requeues if kind == KIND_EMBED and len(ids) <= ceiling for file_id in ids
+    )
+    assert handed == documents, "every indexed document has to be handed back to the embedding track"
+    assert store.read_meta()[EMBEDDING_BACKLOG_MARK] == "", "the sweep has to end"
 
 
 async def test_a_container_without_the_second_track_writes_no_mark(
