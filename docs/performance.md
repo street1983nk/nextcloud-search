@@ -4861,6 +4861,130 @@ Stufe (beide über der Rauschgrenze 1,05) und 3,958 gesamt, praktisch die
 W4-Obergrenze von 3,955. Details und Rohdaten in
 `docs/measurements/2026-09-slot-leiter-ci/`.
 
+## Abnahme-Anfahrt v1.4 (Phase 28)
+
+Auch dieses Kapitel ersetzt keine ältere Zahl. Es trägt den Messbeleg von
+MESS-10: RAM-Spitze und Erstindex-Durchsatz je Profil auf der Referenzbox und auf
+Mehrkern-Boxen beider Architekturen, dazu die gemessenen Kosten je OCR-Slot, die
+Gegenprobe der Probe und die Store-Marke C1.
+
+**Die Maschinen:** Referenzbox ARM m7g.large (2 Kerne, `mem=4G`, harte
+Containergrenze 2g), dazu ARM m7g.4xlarge (16 Kerne) und x86 c7a.xlarge,
+c7a.2xlarge, c7a.4xlarge und c7a.8xlarge (4, 8, 16 und 32 Kerne), jeweils per
+Typwechsel derselben Instanz. Gemessen ist das feste Teilkorpus aus 5.000
+Dateien (2.000 OCR-Dateien, 2.691 OCR-Seiten), dazu die Vollzelle S-voll über
+52.137 Dateien auf der Referenzbox. Gemessen wurden 18 Zellen statt 21: Standard
+und Leistung auf m7g.large und Leistung auf c7a.xlarge hat der Owner am
+03.10.2026 gestrichen, weil das Produkt diese Stufen dort nie wirksam werden
+lässt.
+
+**Die Quelle jeder Zahl** ist
+[`docs/measurements/2026-10-abnahme-anfahrt/`](measurements/2026-10-abnahme-anfahrt/README.md);
+der Bericht nennt zu jeder Zahl ihre Rohdatei, `auswertung.txt` trägt die
+maschinelle Auswertung aller Zellen, `skripte/00-ablauf.md` die vor der Messung
+festgeschriebenen Rechnungen. Das Abbild wanderte während der Anfahrt über drei
+Stände (c87a0239, f73566c1, 18602c48), jeder per Digest gezogen und per Baumhash
+im Container belegt; keine der Änderungen berührt Extraktion, OCR, Einbettung
+oder Speicherposten (Bericht Abschnitt 2). Kosten: 34,09 USD gegen den Deckel
+59,43 USD.
+
+### RAM-Spitze und Durchsatz je Box und Profil
+
+Die RAM-Spitze ist das anon-Maximum der Container-cgroup (Abtastung 2 s), nicht
+`memory.peak`, der den Seitencache des mmap-Index mitzählt. Dateien je Stunde
+gelten über den ganzen Lauf vom Trigger bis zum letzten Vektor, OCR-Seiten je
+Sekunde über das OCR-Fenster. Getragen heißt: anon höchstens das 1,10-fache der
+Rechnung (D-28-08).
+
+| Box | Profil | Slots | anon MiB | Rechnung MiB | getragen | Dateien/h | OCR-Seiten/s |
+|---|---|---:|---:|---:|---|---:|---:|
+| m7g.large | Sparsam (Anker) | 1 | 1.512,0 | 1.492,5 | ja (+1,3 %) | 1.325 | 0,214 |
+| m7g.4xlarge | Sparsam | 1 | 1.499,6 | 1.492,5 | ja (+0,5 %) | 1.399 | 0,226 |
+| m7g.4xlarge | Standard | 4 | 2.358,2 | 2.298,9 | ja (+2,6 %) | 3.185 | 0,599 |
+| m7g.4xlarge | Leistung | 15 | 5.481,8 | 5.033,0 | ja (+8,9 %) | 3.403 | 0,617 |
+| c7a.xlarge | Sparsam | 1 | 1.520,2 | 1.492,5 | ja (+1,9 %) | 1.920 | 0,309 |
+| c7a.xlarge | Standard | 1 | 1.679,5 | 1.593,9 | ja (+5,4 %) | 2.024 | 0,344 |
+| c7a.2xlarge | Sparsam | 1 | 1.535,3 | 1.492,5 | ja (+2,9 %) | 1.872 | 0,315 |
+| c7a.2xlarge | Standard | 3 | 2.181,9 | 2.063,9 | ja (+5,7 %) | 3.840 | 0,723 |
+| c7a.2xlarge | Leistung | 7 | 3.374,0 | 3.153,0 | ja (+7,0 %) | 4.831 | 1,052 |
+| c7a.4xlarge | Sparsam | 1 | 1.534,8 | 1.492,5 | ja (+2,8 %) | 1.849 | 0,304 |
+| c7a.4xlarge | Standard | 4 | 2.591,6 | 2.298,9 | **nein (+12,7 %)** | 4.159 | 0,836 |
+| c7a.4xlarge | Leistung | 15 | 5.623,7 | 5.033,0 | **nein (+11,7 %)** | 6.241 | 1,508 |
+| c7a.8xlarge | Sparsam | 1 | 1.534,3 | 1.492,5 | ja (+2,8 %) | 1.849 | 0,303 |
+| c7a.8xlarge | Standard | 4 | 2.560,2 | 2.298,9 | **nein (+11,4 %)** | 4.280 | 0,838 |
+| c7a.8xlarge | Leistung | 16 | 5.802,8 | 5.268,0 | **nein (+10,2 %)** | 6.512 | 1,565 |
+
+In keiner Zelle senkte der Wächter ab, keine wurde gedrosselt, jede endet ohne
+OOM und ohne Neustart. In acht der schnellen Zellen liegt der Leerlaufanteil über
+10 Prozent; jede leere Lesung fällt in den Anlauf von 10 bis 14 Minuten bis zur
+ersten indexierten Datei (Cron-Intervall 300 s). Diese Zellen sind im Anlauf
+zulaufgebunden, ihr Durchsatz ist eine Untergrenze ihrer Rechenleistung. Die
+mittlere Kernlast der Box außerhalb des Containers lag in allen Zellen zwischen
+0,129 und 0,248, also unter oder an `NEXTCLOUD_CORE_LOAD` 0,25.
+
+### fp32: zwei Datenpunkte
+
+| Box | Slots | anon MiB | Rechnung MiB | getragen | fp32-Mehrbedarf im Hauptprozess | gegen 367 MiB |
+|---|---:|---:|---:|---|---:|---|
+| c7a.xlarge | 1 | 2.172,5 | 1.960,9 | **nein (+10,8 %)** | 509,7 MiB | darüber |
+| c7a.4xlarge | 4 | 2.844,6 | 2.665,9 | ja (+6,7 %) | 223,2 MiB | darunter |
+
+Der Mehrbedarf ist die Differenz zweier Hauptprozess-Maxima (fp32-Zelle minus
+Standardzelle derselben Box), die beide mit der Slotzahl driften. Die beiden
+Punkte schließen sich nicht aus, sie trennen den fp32-Posten nur nicht vom
+Slotposten im Hauptprozess. Durchsatz: 2.024 und 4.279 Dateien je Stunde, also
+gleichauf mit int8. Beide Zellen luden die fp32-Datei aus dem eigenen Release
+und kehrten danach über den Abwärtsweg auf int8 zurück.
+
+### Sparsam-voll und die Store-Marke C1
+
+Die Vollzelle lief auf der Referenzbox 19,53 h unbeaufsichtigt durch
+(Volltextspur 18,72 h, rund 2.670 Dateien je Stunde über beide Spuren), mit
+einer anon-Spitze von 1.788,9 MiB unter der Containergrenze von 2.048 MiB und
+ohne OOM. Gegen ihre Rechnung von 1.492,5 MiB sind das +19,9 Prozent, die Stufe
+ist damit **nicht getragen**: Der Hauptprozess lag 313,6 MiB über der
+Grundlinie, und die Rechnung kennt keinen Posten für die Indexgröße.
+
+Nach der Vollzelle maß der Bodensatz in zwei Zyklen **C1 = 743,9 MB** gegen die
+Store-Zahl 730,2 MB: +1,88 Prozent, **innerhalb** des Toleranzbands von plus
+oder minus 2 Prozent (715,6 bis 744,8 MB, D-28-10). Die Store-Zahl bleibt.
+
+### Kosten je OCR-Slot gegen 235 MiB
+
+| Maß | Bereich über alle Zellen |
+|---|---|
+| RssAnon-Paar Kind plus tesseract (das Maß von B2) | 356,2 bis 390,7 MiB |
+| VmHWM-Paar Kind plus tesseract | 404,6 bis 447,2 MiB |
+| anon-Summe je Zeitpunkt durch Slots, bei 1 Slot | 290,5 bis 300,1 MiB |
+| dasselbe bei mehreren Slots | 212,5 bis 235,4 MiB |
+
+Die Paarmaße setzen zwei Maxima aus verschiedenen Zeitpunkten zusammen und
+liegen weit über dem, was mehrere Slots gleichzeitig belegen. Was neben dem
+Hauptprozess im Container liegt, bleibt in 16 von 18 Zellen bei 202 bis
+234 MiB je Slot und damit unter den 235 MiB der Rechnung. Der Fehler der
+Rechnung sitzt im Hauptprozess: Er wächst mit der Slotzahl, auf x86 stärker als
+auf ARM (bei 4 Slots +70 bis +99 MiB je Slot gegen +34,5 MiB), und ein Zuschlag
+von 15 MiB je Slot trägt alle fünf x86-Fälle. Das ist rechnerisch dasselbe wie
+ein Slotwert von 250 MiB.
+
+**Gegenprobe der Probe:** Elf Zellen hatten eine Probe, alle elf mit `fits` und
+`erzwungen nein`, und alle elf bestätigt die Messung (kein Wächtereingriff, kein
+OOM, Reserve am Tiefpunkt nach dem Ersatzmaß mindestens 4.586 MiB). Es gibt
+keinen Probe-Widerspruch.
+
+### Die Owner-Entscheide vom 05.10.2026
+
+Signal wörtlich: "je-fall: 11=nachziehen, 16=nachziehen, 17=nachziehen,
+20=nachziehen, 21=nachziehen, S-voll=nachziehen (Vollindex-Term, Umfang legt
+28-12 vor), wert=250 MiB, store=kein Fall".
+
+| Entscheid | Inhalt | Umsetzung |
+|---|---|---|
+| `OCR_SLOT_COST_BYTES` | 250 MiB = 262.144.000 Byte statt 235 MiB; trägt alle 17 Teilkorpus-Zellen, Slotzahlen bleiben gleich; `FP32_EXTRA_BYTES` bleibt 367 MiB | 28-12 |
+| Zellen 11, 16, 17, 20, 21 | Formel nachziehen, keine Stufe gestrichen | 28-12, über den neuen Slotwert |
+| S-voll | Formel nachziehen: Vollindex-Term für den Hauptprozess (Zuschlag 133,8 MiB bei 52.137 Dateien) | 28-12 legt den Umfang vor dem Bau vor |
+| Store-Zahl | kein Fall, 730,2 MB bleibt | keine |
+
 ## Reproduzieren
 
 ```sh

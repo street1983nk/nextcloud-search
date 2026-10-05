@@ -385,3 +385,33 @@ der Freigabe lag bei 45,71 USD.
 
 ## 14. Owner-Entscheide
 
+Entschieden am **05.10.2026** per Auswahlfrage in der Session, auf Grundlage der
+Abschnitte 8 bis 11. Das Signal, wörtlich:
+
+> je-fall: 11=nachziehen, 16=nachziehen, 17=nachziehen, 20=nachziehen, 21=nachziehen, S-voll=nachziehen (Vollindex-Term, Umfang legt 28-12 vor), wert=250 MiB, store=kein Fall
+
+Was das im Einzelnen heißt:
+
+1. **`OCR_SLOT_COST_BYTES` wird 250 MiB = 262.144.000 Byte** (alt 235 MiB =
+   246.415.360 Byte). Der Owner wählte weder den Kandidaten nach der Planregel
+   (448 MiB, VmHWM-Paar) noch das B2-Maß (391 MiB), sondern den kleinsten
+   Slotwert, der alle 17 Teilkorpus-Zellen trägt (Abschnitt 8). Er entspricht
+   rechnerisch dem Hauptprozess-Zuschlag von 15 MiB je Slot aus Abschnitt 10 und
+   trägt auch die fp32-Zelle 11 (anon durch Rechnung 1,100). Die Slotzahl der
+   Formel bleibt auf allen Messboxen und auf einer Box mit 8 Kernen und 8 GiB
+   gleich. `EMBED_LANE_RESERVE_BYTES` und `GUARD_RESERVE_BYTES` folgen dem Wert.
+   `FP32_EXTRA_BYTES` bleibt bei 367 MiB.
+2. **Die fünf x86-Fälle (Zellen 11, 16, 17, 20, 21): Formel nachziehen.** Keine
+   Stufe wird im Release gestrichen. Die Umsetzung ist der neue Slotwert aus
+   Punkt 1, Codeänderung in 28-12.
+3. **S-voll (Fall 1, +19,9 %): Formel nachziehen.** 28-12 legt einen
+   Vollindex-Term vor: Der Hauptprozess wächst mit der Indexgröße, die S-voll
+   braucht 133,8 MiB Zuschlag (Abschnitt 10). Der Umfang dieser Produktänderung
+   wird dem Owner vor dem Bau vorgelegt.
+4. **Store-Zahl (C4): kein Fall.** C1 = 743,9 MB liegt im Band 715,6 bis
+   744,8 MB (Abschnitt 7); die Store-Zahl 730,2 MB und `RESIDENT_FIGURE` "730.2"
+   in `backend/tests/test_store_metadata.py` bleiben unverändert.
+
+Damit hat jeder SC4-Fall aus Abschnitt 11 einen Entscheid. Probe-Widersprüche
+gab es keine (Abschnitt 6).
+
