@@ -1,0 +1,225 @@
+abbau beider boxen der abnahme-anfahrt, plan 28-10 (D-28-13, SC3)
+erhoben 2026-10-05, jede zahl aus der api gelesen, alle zeiten UTC
+werkzeug: scripts/ops/aws_box.sh destroy, je box im eigenen zustandsverzeichnis
+runbook: docs/runbook-messbox.md abschnitt 8, schritte 1 bis 9 mit den nachtraegen vom 30.09.
+
+owner-signal (checkpoint 28-10 task 1, 2026-10-05, per auswahlfrage): "Ja, beide abbauen"
+(option "abbau"). der korpus-snapshot bleibt bis nach den SC4-entscheiden (schritt 6b, plan 28-13).
+
+kennungen und adressen stehen hier nur als platzhalter (gate test_public_artifacts.py);
+der korpus-snapshot erscheint nur als "korpus-snapshot vorhanden ja/nein".
+
+die reihenfolge dieser datei ist die reihenfolge der handlungen: erst erheben, dann sichern,
+dann committen, dann zerstoeren, danach nachsehen. abschnitte 0 bis 3 sind committet,
+BEVOR der erste destroy lief.
+
+-- 0 schritt 1: endmessungen --
+entfaellt als eigener schritt: alle 21 zellen der matrix sind abgeholt und committet
+(28-07, 28-08, 28-09), beide boxen gestoppt. keine zahl haengt mehr an einer laufenden maschine.
+
+-- 1 der zustand vor dem abbau --
+aws_box.sh status, 2026-10-05T17:3xZ, zustandsverzeichnis ~/.findling-loadtest/x86
+  instance  <instanzkennung> c7a.8xlarge stopped in eu-central-1c
+  address   none
+  volume    <volumekennung> 40 G gp3 3000 IOPS 125 MB/s   (systemplatte, DeleteOnTermination true)
+  volume    <volumekennung> 60 G gp3 3000 IOPS 125 MB/s   (datenvolume aus dem korpus-snapshot, DeleteOnTermination false)
+  running   no, this instance is stopped
+  rueckgabe 0
+aws_box.sh status, 2026-10-05T17:3xZ, zustandsverzeichnis ~/.findling-loadtest/arm
+  instance  <instanzkennung> m7g.4xlarge stopped in eu-central-1c
+  address   none
+  volume    <volumekennung> 40 G gp3 3000 IOPS 125 MB/s   (systemplatte, DeleteOnTermination true)
+  volume    <volumekennung> 60 G gp3 3000 IOPS 125 MB/s   (datenvolume aus dem korpus-snapshot, DeleteOnTermination false)
+  running   no, this instance is stopped
+  rueckgabe 0
+DeleteOnTermination gelesen aus describe-instances (BlockDeviceMappings), tag purpose=findling-phase5:
+  beide /dev/sda1 true, beide /dev/sdf false. die systemplatten fallen also mit der instanz,
+  die datenvolumes nimmt destroy ausdruecklich (VOLUME_ID aus box.env).
+beide instanzen tragen dieselbe security group und dasselbe schluesselpaar (findling-loadtest).
+
+-- 2 schritt 3 und 4: kein ende-snapshot --
+schritt 3 ohne `snapshot`, schritt 4 entfaellt. grund: die datenvolumes tragen den korpus
+plus die messzustaende der anfahrt; der korpus selbst liegt schon im bleibenden
+korpus-snapshot, und die messzustaende gehoeren nicht in einen korpus (wie am 26.09.2026).
+
+-- 3 schritt 2 und 5: sicherung beider box.env, pfade benannt --
+2026-10-05T17:35:39Z
+  cp ~/.findling-loadtest/x86/box.env ~/.findling-loadtest/x86/box.env.vor-abbau
+  cp ~/.findling-loadtest/arm/box.env ~/.findling-loadtest/arm/box.env.vor-abbau
+  cmp gegen das original: beide gleich
+  x86  C:/Users/Student/.findling-loadtest/x86/box.env.vor-abbau  2613 byte
+       sha256 4634eff2e0c68483aff0600306e68f9fb57c1873729429aa6a44e179f9021437
+  arm  C:/Users/Student/.findling-loadtest/arm/box.env.vor-abbau  6651 byte
+       sha256 d135e8ef65153463ff364ec45c941d9335c797ca9c2c2604c8e9dc85e3249d11
+  FINDLING_STATE_BACKUP zeigt beim destroy je box auf genau diese datei.
+die sicherungen liegen ausserhalb des arbeitsbaums, weil box.env kennungen und adressen traegt.
+
+die schlusszahlen gegen den deckel (runbook 2.6) stehen in 90-kosten.txt, abschnitt
+"schlusszahlen vor dem abbau", im selben commit wie diese abschnitte 0 bis 3:
+  verbraucht 34.09 USD netto gegen deckel 59.43 USD, differenz 25.34 USD darunter,
+  sicherheitstimer (deckel x 1.20) nicht ausgeloest.
+
+kosten- und laufzeitzeilen der beiden box.env, ohne jede zeile, die eine kennung oder
+adresse traegt (verschaerfung aus runbook 8 schritt 2). die box.env ist nicht die
+kostenquelle dieser anfahrt: mehrere stopps von innen fehlen darin, und die saetze darin
+sind reine instanzsaetze. massgeblich sind die stempel in 90-kosten.txt.
+  == x86
+  # volume restored from a snapshot by aws_box.sh restore
+  VOLUME_SIZE_GB=60
+  VOLUME_TYPE=gp3
+  VOLUME_CREATED_ISO=2026-10-04T06:25:21Z
+  # started by aws_box.sh start at 2026-10-04T06:25:35Z, new address and ssh rule set by it
+  BOX_STARTED_ISO=2026-10-04T06:25:35Z
+  # stopped by aws_box.sh stop at 2026-10-04T15:04:05Z, uptime and cost from the pinned rates
+  BOX_STOPPED_ISO=2026-10-04T15:04:05Z
+  BOX_LAST_UPTIME_HOURS=8.65
+  BOX_LAST_UPTIME_TYPE=c7a.xlarge
+  BOX_LAST_UPTIME_RATE_USD_H=0.23426
+  BOX_LAST_UPTIME_COST_USD=2.1835
+  BOX_PARKED_COST_USD_PER_DAY=0.3130
+  # started by aws_box.sh start at 2026-10-04T15:04:42Z, new address and ssh rule set by it
+  BOX_STARTED_ISO=2026-10-04T15:04:42Z
+  # von innen gestoppt (systemd-run poweroff 2026-10-04T20:23:38Z), aws-sitzung abgelaufen, aws-bestaetigung steht aus
+  BOX_STOPPED_ISO=2026-10-04T20:23:38Z
+  # stopped by aws_box.sh stop at 2026-10-05T04:20:12Z, uptime and cost from the pinned rates
+  BOX_STOPPED_ISO=2026-10-05T04:20:12Z
+  BOX_LAST_UPTIME_HOURS=13.26
+  BOX_LAST_UPTIME_TYPE=c7a.2xlarge
+  BOX_LAST_UPTIME_RATE_USD_H=0.46852
+  BOX_LAST_UPTIME_COST_USD=6.3867
+  BOX_PARKED_COST_USD_PER_DAY=0.3130
+  # started by aws_box.sh start at 2026-10-05T04:20:33Z, new address and ssh rule set by it
+  BOX_STARTED_ISO=2026-10-05T04:20:33Z
+  # korrektur 2026-10-05T04:21Z: der stop-eintrag darueber (13.26 h, 6.3867 USD) ist ein leerlauf des typwechsel-werkzeugs
+  #   auf der schon von innen gestoppten box; echter stopp 2026-10-04T20:23:38Z (InstanceInitiatedShutdown), laufzeit 5.3147 h
+  # stopped by aws_box.sh stop at 2026-10-05T10:50:29Z, uptime and cost from the pinned rates
+  BOX_STOPPED_ISO=2026-10-05T10:50:29Z
+  BOX_LAST_UPTIME_HOURS=6.50
+  BOX_LAST_UPTIME_TYPE=c7a.4xlarge
+  BOX_LAST_UPTIME_RATE_USD_H=0.93704
+  BOX_LAST_UPTIME_COST_USD=6.2112
+  BOX_PARKED_COST_USD_PER_DAY=0.3130
+  # started by aws_box.sh start at 2026-10-05T10:51:20Z, new address and ssh rule set by it
+  BOX_STARTED_ISO=2026-10-05T10:51:20Z
+  # stopped by aws_box.sh stop at 2026-10-05T16:04:26Z, uptime and cost from the pinned rates
+  BOX_STOPPED_ISO=2026-10-05T16:04:26Z
+  BOX_LAST_UPTIME_HOURS=5.22
+  BOX_LAST_UPTIME_TYPE=c7a.8xlarge
+  BOX_LAST_UPTIME_RATE_USD_H=1.87408
+  BOX_LAST_UPTIME_COST_USD=9.8821
+  BOX_PARKED_COST_USD_PER_DAY=0.3130
+  == arm
+  # volume restored from a snapshot by aws_box.sh restore
+  VOLUME_SIZE_GB=60
+  VOLUME_TYPE=gp3
+  VOLUME_CREATED_ISO=2026-09-30T16:54:53Z
+  # started by aws_box.sh start at 2026-10-01T14:49:04Z, new address and ssh rule set by it
+  BOX_STARTED_ISO=2026-10-01T14:49:04Z
+  # stopped by aws_box.sh stop at 2026-10-01T15:02:43Z, uptime and cost from the pinned rates
+  BOX_STOPPED_ISO=2026-10-01T15:02:43Z
+  BOX_LAST_UPTIME_HOURS=0.23
+  BOX_LAST_UPTIME_TYPE=m7g.large
+  BOX_LAST_UPTIME_RATE_USD_H=0.0978
+  BOX_LAST_UPTIME_COST_USD=0.0269
+  BOX_PARKED_COST_USD_PER_DAY=0.3130
+  # started by aws_box.sh start at 2026-10-01T18:02:42Z, new address and ssh rule set by it
+  BOX_STARTED_ISO=2026-10-01T18:02:42Z
+  # stopped by aws_box.sh stop at 2026-10-01T18:17:16Z, uptime and cost from the pinned rates
+  BOX_STOPPED_ISO=2026-10-01T18:17:16Z
+  BOX_LAST_UPTIME_HOURS=0.25
+  BOX_LAST_UPTIME_TYPE=m7g.large
+  BOX_LAST_UPTIME_RATE_USD_H=0.0978
+  BOX_LAST_UPTIME_COST_USD=0.0286
+  BOX_PARKED_COST_USD_PER_DAY=0.3130
+  # started by aws_box.sh start at 2026-10-01T19:29:45Z, new address and ssh rule set by it
+  BOX_STARTED_ISO=2026-10-01T19:29:45Z
+  # stopped by aws_box.sh stop at 2026-10-01T20:34:50Z, uptime and cost from the pinned rates
+  BOX_STOPPED_ISO=2026-10-01T20:34:50Z
+  BOX_LAST_UPTIME_HOURS=1.09
+  BOX_LAST_UPTIME_TYPE=m7g.large
+  BOX_LAST_UPTIME_RATE_USD_H=0.0978
+  BOX_LAST_UPTIME_COST_USD=0.1262
+  BOX_PARKED_COST_USD_PER_DAY=0.3130
+  # started by aws_box.sh start at 2026-10-01T21:18:44Z, new address and ssh rule set by it
+  BOX_STARTED_ISO=2026-10-01T21:18:44Z
+  # started by aws_box.sh start at 2026-10-02T00:10:13Z, new address and ssh rule set by it
+  BOX_STARTED_ISO=2026-10-02T00:10:13Z
+  # stopped by aws_box.sh stop at 2026-10-02T00:13:07Z, uptime and cost from the pinned rates
+  BOX_STOPPED_ISO=2026-10-02T00:13:07Z
+  BOX_LAST_UPTIME_HOURS=0.05
+  BOX_LAST_UPTIME_TYPE=m7g.large
+  BOX_LAST_UPTIME_RATE_USD_H=0.0978
+  BOX_LAST_UPTIME_COST_USD=0.0061
+  BOX_PARKED_COST_USD_PER_DAY=0.3130
+  # started by aws_box.sh start at 2026-10-02T05:01:29Z, new address and ssh rule set by it
+  BOX_STARTED_ISO=2026-10-02T05:01:29Z
+  # stopped by aws_box.sh stop at 2026-10-02T05:25:31Z, uptime and cost from the pinned rates
+  BOX_STOPPED_ISO=2026-10-02T05:25:31Z
+  BOX_LAST_UPTIME_HOURS=0.41
+  BOX_LAST_UPTIME_TYPE=m7g.large
+  BOX_LAST_UPTIME_RATE_USD_H=0.0978
+  BOX_LAST_UPTIME_COST_USD=0.0469
+  BOX_PARKED_COST_USD_PER_DAY=0.3130
+  # started by aws_box.sh start at 2026-10-02T05:53:32Z, new address and ssh rule set by it
+  BOX_STARTED_ISO=2026-10-02T05:53:32Z
+  # Lauf 5 endete mit instance-initiated shutdown (sudo shutdown -h +1), aws_box.sh stop
+  # konnte wegen abgelaufener AWS-Sitzung nicht laufen; Zahlen aus 90-kosten.txt nachgetragen.
+  BOX_STOPPED_ISO=2026-10-02T07:09:39Z
+  BOX_LAST_UPTIME_HOURS=1.2686
+  BOX_LAST_UPTIME_TYPE=m7g.large
+  BOX_LAST_UPTIME_RATE_USD_H=0.115841
+  BOX_LAST_UPTIME_COST_USD=0.1470
+  # started by aws_box.sh start at 2026-10-02T07:52:06Z, new address and ssh rule set by it
+  BOX_STARTED_ISO=2026-10-02T07:52:06Z
+  # started by aws_box.sh start at 2026-10-02T14:54:47Z, new address and ssh rule set by it
+  BOX_STARTED_ISO=2026-10-02T14:54:47Z
+  # stopped by aws_box.sh stop at 2026-10-02T15:00:39Z, uptime and cost from the pinned rates
+  BOX_STOPPED_ISO=2026-10-02T15:00:39Z
+  BOX_LAST_UPTIME_HOURS=0.10
+  BOX_LAST_UPTIME_TYPE=m7g.large
+  BOX_LAST_UPTIME_RATE_USD_H=0.0978
+  BOX_LAST_UPTIME_COST_USD=0.0118
+  BOX_PARKED_COST_USD_PER_DAY=0.3130
+  # started by aws_box.sh start at 2026-10-03T11:09:57Z, new address and ssh rule set by it
+  BOX_STARTED_ISO=2026-10-03T11:09:57Z
+  # stopped by aws_box.sh stop at 2026-10-03T11:13:55Z, uptime and cost from the pinned rates
+  BOX_STOPPED_ISO=2026-10-03T11:13:55Z
+  BOX_LAST_UPTIME_HOURS=0.07
+  BOX_LAST_UPTIME_TYPE=m7g.large
+  BOX_LAST_UPTIME_RATE_USD_H=0.0978
+  BOX_LAST_UPTIME_COST_USD=0.0082
+  BOX_PARKED_COST_USD_PER_DAY=0.3130
+  # started by aws_box.sh start at 2026-10-03T11:14:46Z, new address and ssh rule set by it
+  BOX_STARTED_ISO=2026-10-03T11:14:46Z
+  # stopped by aws_box.sh stop at 2026-10-03T18:51:09Z, uptime and cost from the pinned rates
+  BOX_STOPPED_ISO=2026-10-03T18:51:09Z
+  BOX_LAST_UPTIME_HOURS=7.61
+  BOX_LAST_UPTIME_TYPE=m7g.4xlarge
+  BOX_LAST_UPTIME_RATE_USD_H=0.7821
+  BOX_LAST_UPTIME_COST_USD=6.0897
+  BOX_PARKED_COST_USD_PER_DAY=0.3130
+  # started by aws_box.sh start at 2026-10-03T22:45:15Z, new address and ssh rule set by it
+  BOX_STARTED_ISO=2026-10-03T22:45:15Z
+  # started by aws_box.sh start at 2026-10-03T22:45:15Z, new address and ssh rule set by it (see above, appended by the tool)
+  # Lauf 8 endete mit instance-initiated shutdown (sudo shutdown -h +1), aws_box.sh stop
+  # konnte wegen abgelaufener AWS-Sitzung nicht laufen; Zahlen aus 90-kosten.txt nachgetragen.
+  BOX_STOPPED_ISO=2026-10-03T23:58:45Z
+  BOX_LAST_UPTIME_HOURS=1.2250
+  BOX_LAST_UPTIME_TYPE=m7g.4xlarge
+  BOX_LAST_UPTIME_RATE_USD_H=0.800141
+  BOX_LAST_UPTIME_COST_USD=0.9802
+  # lauf-8-stopp per aws_box.sh status bestaetigt 2026-10-04 (stopped, Client.InstanceInitiatedShutdown); BOX_STOPPED_ISO oben gilt
+  # started by aws_box.sh start at 2026-10-04T04:32:21Z, new address and ssh rule set by it
+  BOX_STARTED_ISO=2026-10-04T04:32:21Z
+  # started by aws_box.sh start at 2026-10-04T06:13:05Z, new address and ssh rule set by it
+  BOX_STARTED_ISO=2026-10-04T06:13:05Z
+  # stopped by aws_box.sh stop at 2026-10-04T06:15:06Z, uptime and cost from the pinned rates
+  BOX_STOPPED_ISO=2026-10-04T06:15:06Z
+  BOX_LAST_UPTIME_HOURS=0.04
+  BOX_LAST_UPTIME_TYPE=m7g.4xlarge
+  BOX_LAST_UPTIME_RATE_USD_H=0.7821
+  BOX_LAST_UPTIME_COST_USD=0.0307
+  BOX_PARKED_COST_USD_PER_DAY=0.3130
+  # Lauf 9, erster Abschnitt: start 2026-10-04T04:32:21Z, kettenende 06:10:12Z mit sudo shutdown -h +2 aus 00-kette.sh,
+  #   poweroff 2026-10-04T06:12:23Z (journalctl -b -1), waiter stopped 06:12:40Z; 1.6672 h x 0.800141 (zahlen in 90-kosten.txt).
+  #   zweiter abschnitt 06:13:05Z bis 06:15:06Z nur zum abholen der rohdaten (oben, aws_box.sh stop).

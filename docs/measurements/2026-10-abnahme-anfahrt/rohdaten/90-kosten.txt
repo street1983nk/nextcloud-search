@@ -143,3 +143,41 @@ geparkt 2026-10-05T16:04:27Z laeuft
 #   laufzeit 5.2178 h x 1.892121 = 9.8727 USD; erster kettenstart abbruch 60 (dns, 10:53:51Z), eine wiederholung
 # kettenlauf c7a.8xlarge: zellen S-T, St-T, L-T GEMESSEN (rueckgabe 0), kette-ende 16:03:44Z; x86-haelfte komplett
 # bisher 34.09 USD gegen deckel 59.43 USD (02-rechenblatt.py stand --jetzt 2026-10-05T16:04:27Z, rest 25.34); beide boxen geparkt
+#
+# -- schlusszahlen vor dem abbau (runbook 2.6, plan 28-10), erhoben 2026-10-05T17:35Z --
+# quelle: die stempelzeilen dieser datei mal den saetzen vom 29.09. aus 02-rechenblatt.py,
+#   summiert je typ, stand = letzter stopp 2026-10-05T16:04:27Z. gegenprobe mit
+#   02-rechenblatt.py stand --deckel 59.43 --jetzt 2026-10-05T16:04:27Z: bisher 34.09, rest 25.34.
+#
+#   typ           laufzeit h   satz USD/h   summe USD
+#   m7g.large       31.9486     0.115841      3.7010
+#   m7g.4xlarge     10.5322     0.800141      8.4273
+#   c7a.xlarge       8.6594     0.252301      2.1848
+#   c7a.2xlarge      5.3147     0.486561      2.5859
+#   c7a.4xlarge      6.5069     0.955081      6.2147
+#   c7a.8xlarge      5.2178     1.892121      9.8727
+#   geparkt         84.6606     0.013041      1.1041   (plattenstunden, beide boxen zusammen)
+#   ------------------------------------------------------
+#   arm (m7g)       42.4808                  12.1283
+#   x86 (c7a)       25.6988                  20.8581
+#   boxstunden      68.1796
+#   gesamt                                   34.0903 USD
+#
+#   freigegebener deckel:   59.43 USD (freigabe 2026-09-30), sicherheitsstopp 71.32 USD (deckel x 1.20)
+#   verbraucht:             34.09 USD netto
+#   differenz zum deckel:   25.34 USD unter dem deckel (57,4 prozent des deckels verbraucht)
+#   deckel gehalten:        JA
+#   sicherheitstimer (D-28-14, stopp bei deckel x 1.20) ausgeloest: NEIN, 71.32 USD nie erreicht.
+#     davon zu trennen: der vorgezogene kettentimer (shutdown -h +60 nach kettenabbruch, 00-kette.sh)
+#     hat zweimal planmaessig gestoppt (lauf 3 23:22:32Z am 01.10., lauf 6 13:17:11Z am 02.10.);
+#     das ist der abbruchpfad der kette, kein deckel-ausloeser.
+#     der box.env-eintrag "13.26 h, 6.3867 USD" (x86, 2026-10-05T04:20:12Z) ist ein leerlauf-vermerk
+#     des typwechsel-werkzeugs auf der schon gestoppten box, kein timer-ausloeser und keine laufzeit;
+#     gerechnet ist der echte stopp 2026-10-04T20:23:38Z mit 5.3147 h.
+#   satzhinweis: aws_box.sh status nennt fuer c7a.xlarge 0.234260 USD/h, das ist der reine
+#     instanzsatz. gerechnet ist konservativ mit dem boxsatz 0.252301 = 0.234260 instanz
+#     + 0.013041 fuer 100 GB gp3 + 0.005 ipv4 (genauso fuer alle typen, z. b. m7g.4xlarge
+#     0.7821 + 0.013041 + 0.005 = 0.800141). die box.env-kosten liegen deshalb leicht unter
+#     den hier gerechneten; massgeblich ist diese tabelle.
+#   bis zum abbau laufen nur noch die beiden geparkten platten, 0.026082 USD/h zusammen;
+#     der schlussstand mit dem abbauzeitpunkt wird nach dem abbau unten angehaengt.
