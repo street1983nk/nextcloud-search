@@ -1288,7 +1288,9 @@ def test_the_profile_numbers_do_not_touch_the_static_settings() -> None:
 
 def test_the_profile_constants_carry_the_decided_numbers() -> None:
     assert NEXTCLOUD_CORE_LOAD == 0.25
-    assert OCR_SLOT_COST_BYTES == 235 * 1024 * 1024
+    # Plan 28-12, owner decision of 2026-10-05 (docs/measurements/2026-10-abnahme-anfahrt/,
+    # README section 14): 250 MiB, the smallest slot value that carries all 17 cells.
+    assert OCR_SLOT_COST_BYTES == 250 * 1024 * 1024 == 262_144_000
     assert PROFILE_STANDARD_CORE_SHARE == 0.5
     assert PROFILE_STANDARD_MEMORY_SHARE == 0.4
     assert PROFILE_STANDARD_OCR_SLOTS_MAX == 4
