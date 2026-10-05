@@ -123,3 +123,21 @@ shutdown-verhalten stop
 shutdown-ist-stopp ja
 vorpruefung-stop-ja 2026-10-05T04:23:22Z
 TYPWECHSEL-VORPRUEFUNG-FERTIG
+typwechsel-start 2026-10-05T10:50:25Z
+instanz <instanzkennung>
+typ-vorher c7a.4xlarge
+shutdown-verhalten stop
+shutdown-ist-stopp ja
+vorpruefung-stop-ja 2026-10-05T10:50:27Z
+typ-gefordert c7a.8xlarge
+typ-ist c7a.8xlarge
+zustand-ist running
+typwechsel c7a.4xlarge -> c7a.8xlarge gestoppt 2026-10-05T10:51:02Z laeuft 2026-10-05T10:51:23Z
+typwechsel-epoche gestoppt 1791197462 laeuft 1791197483
+adresse-neu <adresse-der-box>
+TYPWECHSEL-FERTIG
+typwechsel-vorpruefung 2026-10-05T10:52:27Z
+shutdown-verhalten stop
+shutdown-ist-stopp ja
+vorpruefung-stop-ja 2026-10-05T10:52:28Z
+TYPWECHSEL-VORPRUEFUNG-FERTIG

@@ -225,3 +225,26 @@ zelle 18 St-fp32-T (standard/fp32, 4 slots): GEMESSEN, rueckgabe 0
     (1800 s). ob und wann der vektorbestand vollständig neu geschrieben ist, ist nicht beobachtet (die
     box ging zum typwechsel). der lock-timeout der fp32-zelle auf c7a.xlarge (2 dateien, 12:59Z) lag
     mitten im lauf und ist ein anderer fall.
+
+stopp und typwechsel c7a.4xlarge -> c7a.8xlarge (00-typwechsel.sh wechsel, rückgabe 0):
+  kette-ende c7a.4xlarge 10:47:39Z bisher 24.0108, alle vier zellen rueckgabe 0; rohdaten geholt;
+  gestoppt 2026-10-05T10:51:02Z, läuft 2026-10-05T10:51:23Z, typ-ist c7a.8xlarge, zustand running
+  uptime c7a.4xlarge 6,5069 h x 0.955081 = 6.2145 USD
+  hostschlüssel 3 von 3 gleich; a-record auf die neue adresse (success, rücklesung gleich, ttl 120,
+  gesetzt rund 10:51:45Z); rücklesung nproc 32, free 61Gi, uname -m x86_64; alle aio-container healthy.
+
+## kettenlauf c7a.8xlarge (typwechsel, läuft ab 2026-10-05T10:51:23Z)
+vorpruefung-stop-ja 2026-10-05T10:52:28Z; vorab-räumung 10:52:42Z --restart, vorrat 0/0
+laufwerte: BISHER_USD 24.15 (02-rechenblatt.py stand --jetzt 10:51:23Z), SATZ_USD_H 1.892121,
+  BOX_START_EPOCH 1791197483, ZELLEN S-T:economy:int8:teil St-T:standard:int8:teil L-T:performance:int8:teil;
+  abbild, IMAGE_TAG, KORPUS_FRIST, GRENZE_2G wie oben; helfer mit.sh und nach-kette-15.sh (stopp +15).
+erster start 10:52:51Z: ABBRUCH 60 der zelle S-T im schritt abwaerts (10:52:51Z bis 10:53:51Z):
+  "11-probe-route: die Instanz antwortet nicht (URLError)", 10-zelle grund "der Abwaertsweg auf
+  economy/int8 hat nicht gespeichert (35)"; kette 84, timer auf +60 vorgezogen, der helfer setzte +15.
+  ursache umgebung (dns): der a-record war rund 1 min vor dem kettenstart umgesetzt (ttl 120), die alte
+  adresse der c7a.4xlarge war mit dem stopp freigegeben; um 10:55:14Z löste die box den namen auf ihre
+  eigene adresse auf und status.php antwortete 200. auf c7a.4xlarge lagen 3,5 min zwischen a-record und
+  kettenstart. der abbruch berührte nur den abwärtsweg, vor nullstand und registrierung.
+  eingriff: sudo shutdown -c (10:55Z), rohdaten beiseite (c7a.8xlarge-abbruch60-dns/,
+  c7a.8xlarge-abbruch60-dns-kette.log), --restart vorrat 0/0, helfer neu, EINE wiederholung.
+zweiter start 10:55:35Z bisher 24.2824, timer-gesetzt minuten 1491; S-T wirksamkeit ja, trigger 10:55:53Z.

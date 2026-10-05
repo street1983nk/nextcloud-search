@@ -132,4 +132,9 @@ geparkt 2026-10-04T20:23:38Z 2026-10-05T04:20:37Z
 # c7a.2xlarge-stopp per aws_box.sh status bestaetigt 2026-10-05T04:19Z (stopped, Client.InstanceInitiatedShutdown)
 # typwechsel c7a.2xlarge -> c7a.4xlarge (00-typwechsel.sh wechsel nach owner-login, box war schon gestoppt,
 #   aws_box stop darin ein leerlauf; laeuft 2026-10-05T04:20:37Z)
-c7a.4xlarge 2026-10-05T04:20:37Z laeuft
+c7a.4xlarge 2026-10-05T04:20:37Z 2026-10-05T10:51:02Z
+# c7a.4xlarge stop 2026-10-05T10:51:02Z (00-typwechsel.sh wechsel, aws_box.sh stop) laufzeit 6.5068 h x 0.955081 = 6.2145 USD
+#   zellen S-T, St-T, L-T, St-fp32-T GEMESSEN (rueckgabe 0), kette-ende 10:47:39Z
+# typwechsel c7a.4xlarge -> c7a.8xlarge (00-typwechsel.sh, gestoppt 10:51:02Z laeuft 10:51:23Z)
+geparkt 2026-10-05T10:51:02Z 2026-10-05T10:51:23Z
+c7a.8xlarge 2026-10-05T10:51:23Z laeuft
