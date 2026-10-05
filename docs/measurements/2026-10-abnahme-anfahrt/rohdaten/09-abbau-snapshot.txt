@@ -1,0 +1,129 @@
+abbau des korpus-snapshots der abnahme-anfahrt, plan 28-13 (D-26-10, D-28-13, SC3)
+erhoben 2026-10-05, jede zahl aus der api gelesen, alle zeiten UTC
+runbook: docs/runbook-messbox.md abschnitt 8, schritt 6b, 7 und 8 (nachtraege vom 30.09.)
+
+owner-signal (checkpoint 28-13 task 1, C6, 2026-10-05, per auswahlfrage): "Loeschen"
+(option "snapshot-loeschen"). die SC4-entscheide aus 28-11 brauchen keine nachmessung;
+den vollindex-term waehlte der owner als "6 KiB ohne Messung" (umsetzung in 28-12).
+
+kennungen stehen hier nur als platzhalter (gate test_public_artifacts.py); der snapshot
+erscheint als <korpus-snapshot>, das konto nur als "konto erwartet ja/nein".
+
+-- 0 vorbedingungen, gelesen und nicht erinnert --
+beide boxen abgebaut: 08-abbau-boxen.txt, abschnitte 6 und 9 (17 regionen 0/0/0/0,
+genau 1 snapshot in eu-central-1).
+2026-10-05T19:10:29Z aws sts get-caller-identity gegen das erwartete konto
+  konto erwartet ja
+2026-10-05T19:10:34Z describe-snapshots --owner-ids self, eu-central-1:
+  genau 1 eigener snapshot: <korpus-snapshot> completed 100% 60 GB,
+  angelegt 2026-09-11T07:47:07Z, purpose=findling-corpus-keep
+  das ist der korpus-snapshot aus runbook 8 schritt 9, kein anderer snapshot im konto.
+  describe-volumes --filters snapshot-id=<korpus-snapshot>: 0 volumes aus dem snapshot
+  describe-images --owners self: 0 eigene amis, also keine ami, die auf ihn verweist
+
+-- 1 schritt 6b: loeschung --
+2026-10-05T19:10:41Z aws ec2 delete-snapshot --region eu-central-1 --snapshot-id <korpus-snapshot>
+  keine ausgabe, rueckgabe 0, ende 19:10:43Z
+
+-- 2 schritt 6b: ruecklesung --
+2026-10-05T19:10:43Z aws ec2 describe-snapshots --region eu-central-1 --snapshot-ids <korpus-snapshot>
+  An error occurred (InvalidSnapshot.NotFound) when calling the DescribeSnapshots operation:
+  The snapshot '<korpus-snapshot>' does not exist.
+  rueckgabe 254
+2026-10-05T19:10:51Z zweite ruecklesung, sequenziell nach dem loeschende:
+  An error occurred (InvalidSnapshot.NotFound) when calling the DescribeSnapshots operation:
+  The snapshot '<korpus-snapshot>' does not exist.
+
+-- 3 schritt 7: tag-sweep, 17 regionen x 2 tagwerte, gezaehlt --
+2026-10-05T19:11:15Z bis 19:12:00Z (describe-regions: 17 regionen)
+  19:11:17Z ap-south-1 findling-phase5 0
+  19:11:18Z ap-south-1 findling-corpus-keep 0
+  19:11:19Z eu-north-1 findling-phase5 0
+  19:11:20Z eu-north-1 findling-corpus-keep 0
+  19:11:21Z eu-west-3 findling-phase5 0
+  19:11:22Z eu-west-3 findling-corpus-keep 0
+  19:11:22Z eu-west-2 findling-phase5 0
+  19:11:23Z eu-west-2 findling-corpus-keep 0
+  19:11:24Z eu-west-1 findling-phase5 0
+  19:11:25Z eu-west-1 findling-corpus-keep 0
+  19:11:27Z ap-northeast-3 findling-phase5 0
+  19:11:28Z ap-northeast-3 findling-corpus-keep 0
+  19:11:30Z ap-northeast-2 findling-phase5 0
+  19:11:32Z ap-northeast-2 findling-corpus-keep 0
+  19:11:34Z ap-northeast-1 findling-phase5 0
+  19:11:35Z ap-northeast-1 findling-corpus-keep 0
+  19:11:37Z ca-central-1 findling-phase5 0
+  19:11:38Z ca-central-1 findling-corpus-keep 0
+  19:11:39Z sa-east-1 findling-phase5 0
+  19:11:41Z sa-east-1 findling-corpus-keep 0
+  19:11:42Z ap-southeast-1 findling-phase5 0
+  19:11:44Z ap-southeast-1 findling-corpus-keep 0
+  19:11:46Z ap-southeast-2 findling-phase5 0
+  19:11:47Z ap-southeast-2 findling-corpus-keep 0
+  19:11:48Z eu-central-1 findling-phase5 0
+  19:11:49Z eu-central-1 findling-corpus-keep 1
+  19:11:50Z us-east-1 findling-phase5 0
+  19:11:52Z us-east-1 findling-corpus-keep 0
+  19:11:53Z us-east-2 findling-phase5 0
+  19:11:54Z us-east-2 findling-corpus-keep 0
+  19:11:56Z us-west-1 findling-phase5 0
+  19:11:57Z us-west-1 findling-corpus-keep 0
+  19:11:58Z us-west-2 findling-phase5 0
+  19:12:00Z us-west-2 findling-corpus-keep 0
+ergebnis: 33 zeilen 0, dazu eu-central-1 findling-corpus-keep 1. der eine treffer nach seiner
+art zurueckgelesen (runbook 8 schritt 7: ein tag-treffer ist ein hinweis, kein urteil):
+  2026-10-05T19:14:31Z art des treffers: snapshot, und zwar die kennung des geloeschten
+    <korpus-snapshot> (abgleich ja), also das nachhaengende tag der gerade geloeschten ressource
+  2026-10-05T19:14:38Z describe-snapshots --snapshot-ids <korpus-snapshot>: InvalidSnapshot.NotFound
+  2026-10-05T19:14:38Z describe-snapshots --owner-ids self, eu-central-1: 0
+also kein ueberbleibsel; der treffer antwortet nicht mehr als ressource. nachlesung des
+tag-verzeichnisses siehe abschnitt 5.
+
+-- 4 schritt 8: bestand je region, gezaehlt --
+2026-10-05T19:12:00Z bis 19:14:23Z
+  19:12:07Z ap-south-1 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+  19:12:13Z eu-north-1 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+  19:12:20Z eu-west-3 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+  19:12:26Z eu-west-2 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+  19:12:32Z eu-west-1 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+  19:12:42Z ap-northeast-3 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+  19:12:55Z ap-northeast-2 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+  19:13:05Z ap-northeast-1 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+  19:13:14Z ca-central-1 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+  19:13:23Z sa-east-1 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+  19:13:33Z ap-southeast-1 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+  19:13:45Z ap-southeast-2 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+  19:13:52Z eu-central-1 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+  19:14:00Z us-east-1 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+  19:14:07Z us-east-2 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+  19:14:15Z us-west-1 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+  19:14:23Z us-west-2 instanzen 0 volumes 0 snapshots 0 amis 0 adressen 0 schluessel 0
+ergebnis ueber 17 regionen, ungefiltert (snapshots und amis mit --owner-ids/--owners self):
+0 instanzen, 0 volumes, 0 adressen, 0 schluesselpaare, 0 eigene amis, 0 snapshots.
+erwartung nach schritt 6b ("0 snapshots") erfuellt. null laufende aws-kosten (D-26-10).
+
+-- 5 nachlesung des tag-verzeichnisses --
+2026-10-05T19:15:44Z eu-central-1 findling-corpus-keep 1, eu-central-1 findling-phase5 0
+das tag-verzeichnis laeuft der loeschung nach (runbook 8 schritt 7: nachhaengende tags bis zu
+einer stunde, belegt am 11.09.2026 und in 08-abbau-boxen.txt abschnitt 8 mit 6 treffern).
+massgeblich ist die ruecklesung je ressource: InvalidSnapshot.NotFound (abschnitte 2 und 3)
+und 0 eigene snapshots in allen 17 regionen (abschnitt 4). der tag-sweep zaehlt damit
+34 zeilen ohne lebende ressource; 33 davon sind schon numerisch 0.
+
+-- 6 schlusskosten --
+boxen: 34.13 USD netto (90-kosten.txt, "verbleib nach dem abbau", stand 2026-10-05T17:40:42Z),
+  davon geparkte platten 1.1456 USD; deckel 59.43 USD, sicherheitsstopp 71.32 USD nie erreicht.
+korpus-snapshot, satz 0.10 USD je tag (runbook 8 schritt 6b), ende 2026-10-05T19:10:41Z:
+  seit der freigabe der anfahrt (erster start 2026-09-30T16:53:40Z)  5.0952 d  0.51 USD
+  davon als einziger posten nach dem boxen-abbau (ab 17:40:42Z)      0.0625 d  0.01 USD
+  standzeit gesamt seit dem anlegen (2026-09-11T07:47:07Z)          24.4747 d  2.45 USD
+    (monatsrechnung seit v1.2, ausserhalb jedes anfahrtsdeckels, runbook 8 schritt 9)
+summe der phase: 34.13 + 0.51 = 34.64 USD gegen deckel 59.43 USD, rest 24.79 USD,
+  deckel gehalten JA (58,3 prozent verbraucht). laufender satz ab 19:10:41Z: 0 USD/h.
+
+-- 7 was bewusst stehen bleibt --
+  default-gruppe der vpc, kostet nichts
+  lokal, ausserhalb des arbeitsbaums: die beiden box.env.vor-abbau (08-abbau-boxen.txt abschnitt 3)
+kein snapshot, keine instanz, kein volume, keine adresse, kein schluesselpaar, keine eigene ami.
+der messkorpus ist aus build_load_corpus.py deterministisch neu erzeugbar, braucht dafuer aber
+einen neuen korpusaufbau auf einer box.

@@ -415,3 +415,33 @@ Was das im Einzelnen heißt:
 Damit hat jeder SC4-Fall aus Abschnitt 11 einen Entscheid. Probe-Widersprüche
 gab es keine (Abschnitt 6).
 
+## 15. Abbau und Schlusskosten
+
+Beide Boxen sind am 05.10.2026 abgebaut (`rohdaten/08-abbau-boxen.txt`, Plan
+28-10). Der Korpus-Snapshot fiel danach am selben Tag um 19:10:41Z
+(`rohdaten/09-abbau-snapshot.txt`, Plan 28-13), nach dem Owner-Signal
+"Loeschen" (Checkpoint C6): Die SC4-Entscheide aus Abschnitt 14 brauchen keine
+Nachmessung.
+
+- **Löschnachweis:** `describe-snapshots` antwortet mit
+  `InvalidSnapshot.NotFound`, zweimal zurückgelesen.
+- **Bestand über 17 Regionen:** 0 Instanzen, 0 Volumes, 0 Adressen,
+  0 Schlüsselpaare, 0 eigene AMIs, 0 Snapshots. Null laufende AWS-Kosten
+  (D-26-10).
+- **Tag-Sweep:** 33 von 34 Zeilen 0; der eine Treffer ist das nachhängende Tag
+  des gelöschten Snapshots selbst, als Ressource `InvalidSnapshot.NotFound`.
+
+| Posten | Grundlage | USD |
+|---|---|---:|
+| Boxen samt geparkter Platten | `90-kosten.txt`, Stand 17:40:42Z | 34,13 |
+| Korpus-Snapshot seit der Freigabe | 5,10 Tage (30.09. 16:53:40Z bis 05.10. 19:10:41Z) mal 0,10 USD | 0,51 |
+| **Summe der Phase** | | **34,64** |
+| Deckel der Freigabe vom 30.09.2026 | | 59,43 |
+| **Rest unter dem Deckel** | 58,3 % verbraucht | **24,79** |
+
+Der Deckel ist gehalten, der Sicherheitsstopp bei 71,32 USD wurde nie erreicht.
+Der Snapshot lief als Monatsposten außerhalb des Deckels; seine gesamte
+Standzeit seit dem Anlegen am 11.09.2026 beträgt 24,47 Tage, rund 2,45 USD. Seit
+19:10:41Z liegt der laufende Satz bei 0 USD je Stunde. Eine künftige Messung
+braucht einen neuen Korpusaufbau aus `build_load_corpus.py`.
+
