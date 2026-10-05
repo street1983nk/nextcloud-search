@@ -1,0 +1,418 @@
+# auswertung der abnahme-anfahrt phase 28 (28-11 task 1), alle 18 gemessenen zellen
+# erzeugt 2026-10-05 auf der entwicklungsmaschine aus rohdaten/<box>/<zelle>/, keine boxzeit
+# werkzeug: skripte/12-slotkosten.py (slots, rechnung --gemessen-bytes, fp32), aufgerufen
+#   im backend-kontext (cd backend && uv run python ...), rohausgaben unten im abschnitt 'werkzeug'
+# zellen 3, 4, 10 gestrichen (owner 03.10.2026, quick 261003-d3y): 18 statt 21 zellen
+#
+# felder je zeile:
+#   anon        anon-maximum der container-cgroup aus rss.csv (2 s), MiB; die zahl der zelle
+#   peak        memory.peak-maximum aus rss.csv, MiB, nur daneben (seitencache des mmap-index inklusive)
+#   rechnung    Rechnung_anon aus 12-slotkosten.py rechnung mit slotsInForce der zelle, MiB
+#   abw         anon gegen rechnung in prozent; getragen ja, wenn anon <= 1,10 x rechnung (D-28-08)
+#   slots       slotsInForce aus der guard-zeile am ende der zelle (10-zelle.txt, nachlauf)
+#   paar-hwm    VmHWM-paar sandbox-kind plus tesseract (12-slotkosten.py slots, a), MiB
+#   paar-anon   RssAnon-paar derselben form, MiB (das mass von B2: 136,4 plus 98,8 = 235)
+#   je-slot     anon-summe kinder plus tesseract je zeitpunkt durch slots, maximum (b), MiB
+#   haupt       hauptprozess-maximum RssAnon (c), MiB, gegen MAIN_PROCESS_BASELINE_BYTES 1257,5
+#   r           mittel (box belegt minus container) in kernen ueber das ocr-fenster, cpu.csv, gegen 0,25
+#   ocr-fenster erste bis letzte tesseract-zeile in anon.csv (1 s)
+#   seiten/s    2.691 ocr-seiten des teilkorpus durch das ocr-fenster
+#   dateien/h   endzahl backend.indexed durch (t1 minus trigger); t1 = erste statuslesung (120 s)
+#               mit indexed und embedded gleich der endzahl; laufzeit-volltext bis indexed gleich endzahl
+#   leerlauf    statuslesungen zwischen trigger und t1 mit scheduled 0 und running 0, anteil;
+#               nach-anlauf = davon nach der ersten lesung mit indexed > 0; anlauf in minuten
+#   waechter    absenkung ja/nein aus 10-zelle.txt, guard effective/cause/throttled am ende
+#   oom         memory-events oom 0 oom_kill 0, oomkilled false, restartcount 0
+#   reserve     ersatzmass fuer die reserve am tiefpunkt: box-ram (free -h nach dem typwechsel) minus 1 GiB
+#               (MemAvailable-annahme der formel) minus anon; m7g.large: grenze 2g minus anon.
+#               ein freier box-speicher am tiefpunkt ist nicht gesampelt, siehe README abschnitt 6
+#   gegenprobe  fits stimmt bei: keine absenkung, kein oom, throttled false, reserve >= 235 MiB
+
+== zellen ==
+zelle  1 m7g.large S-voll economy/int8 slots 1 anon 1788.9 peak 2048.2 rechnung 1492.5 grenze 1641.8 abw +19.9% getragen nein | paar-hwm 434.7 paar-anon 356.8 je-slot 290.5 haupt 1571.1 | r 0.210 ocr-fenster n/a seiten/s n/a dateien/h 2670 laufzeit-volltext 18.72h beide 19.53h leerlauf 0% nach-anlauf 0 anlauf 2min | waechter-absenkung nein guard economy/keine oom keine-schlusszeile(journal: 0) probe keine erzwungen - reserve 259 gegenprobe entfaellt
+zelle  2 m7g.large Anker-S-T economy/int8 slots 1 anon 1512.0 peak 1729.2 rechnung 1492.5 grenze 1641.8 abw +1.3% getragen ja | paar-hwm 435.7 paar-anon 356.6 je-slot 299.2 haupt 1291.6 | r 0.133 ocr-fenster 3.49h seiten/s 0.214 dateien/h 1325 laufzeit-volltext 3.77h beide 3.77h leerlauf 4% nach-anlauf 0 anlauf 10min | waechter-absenkung nein guard economy/keine oom 0 probe keine erzwungen - reserve 536 gegenprobe entfaellt
+zelle  5 m7g.4xlarge S-T economy/int8 slots 1 anon 1499.6 peak 1852.7 rechnung 1492.5 grenze 1641.8 abw +0.5% getragen ja | paar-hwm 436.8 paar-anon 356.9 je-slot 300.1 haupt 1281.0 | r 0.129 ocr-fenster 3.31h seiten/s 0.226 dateien/h 1399 laufzeit-volltext 3.57h beide 3.57h leerlauf 4% nach-anlauf 0 anlauf 10min | waechter-absenkung nein guard economy/keine oom 0 probe keine erzwungen - reserve 59940 gegenprobe entfaellt
+zelle  6 m7g.4xlarge St-T standard/int8 slots 4 anon 2358.2 peak 2720.7 rechnung 2298.9 grenze 2528.8 abw +2.6% getragen ja | paar-hwm 447.2 paar-anon 356.5 je-slot 224.0 haupt 1497.0 | r 0.146 ocr-fenster 1.25h seiten/s 0.599 dateien/h 3185 laufzeit-volltext 1.57h beide 1.57h leerlauf 13% nach-anlauf 0 anlauf 12min | waechter-absenkung nein guard standard/keine oom 0 probe fits erzwungen nein reserve 59082 gegenprobe stimmt
+zelle  7 m7g.4xlarge L-T performance/int8 slots 15 anon 5481.8 peak 5874.5 rechnung 5033.0 grenze 5536.3 abw +8.9% getragen ja | paar-hwm 441.7 paar-anon 362.3 je-slot 220.1 haupt 2319.0 | r 0.160 ocr-fenster 1.21h seiten/s 0.617 dateien/h 3403 laufzeit-volltext 1.00h beide 1.47h leerlauf 9% nach-anlauf 0 anlauf 10min | waechter-absenkung nein guard performance/keine oom 0 probe fits erzwungen nein reserve 55958 gegenprobe stimmt
+zelle  8 c7a.xlarge S-T economy/int8 slots 1 anon 1520.2 peak 1852.6 rechnung 1492.5 grenze 1641.8 abw +1.9% getragen ja | paar-hwm 433.8 paar-anon 381.6 je-slot 295.8 haupt 1288.5 | r 0.147 ocr-fenster 2.42h seiten/s 0.309 dateien/h 1920 laufzeit-volltext 2.60h beide 2.60h leerlauf 5% nach-anlauf 0 anlauf 10min | waechter-absenkung nein guard economy/keine oom 0 probe keine erzwungen - reserve 5238 gegenprobe entfaellt
+zelle  9 c7a.xlarge St-T standard/int8 slots 1 anon 1679.5 peak 2001.2 rechnung 1593.9 grenze 1753.3 abw +5.4% getragen ja | paar-hwm 432.4 paar-anon 356.2 je-slot 297.6 haupt 1396.9 | r 0.160 ocr-fenster 2.17h seiten/s 0.344 dateien/h 2024 laufzeit-volltext 2.47h beide 2.47h leerlauf 7% nach-anlauf 0 anlauf 12min | waechter-absenkung nein guard standard/keine oom 0 probe fits erzwungen nein reserve 5079 gegenprobe stimmt
+zelle 11 c7a.xlarge St-fp32-T standard/fp32 slots 1 anon 2172.5 peak 2978.9 rechnung 1960.9 grenze 2157.0 abw +10.8% getragen nein | paar-hwm 435.4 paar-anon 356.7 je-slot 297.9 haupt 1906.6 | r 0.161 ocr-fenster 2.20h seiten/s 0.339 dateien/h 2024 laufzeit-volltext 2.47h beide 2.47h leerlauf 7% nach-anlauf 0 anlauf 10min | waechter-absenkung nein guard standard/keine oom 0 probe fits erzwungen nein reserve 4586 gegenprobe stimmt
+zelle 12 c7a.2xlarge S-T economy/int8 slots 1 anon 1535.3 peak 1866.9 rechnung 1492.5 grenze 1641.8 abw +2.9% getragen ja | paar-hwm 435.0 paar-anon 358.4 je-slot 297.3 haupt 1303.4 | r 0.143 ocr-fenster 2.37h seiten/s 0.315 dateien/h 1872 laufzeit-volltext 2.67h beide 2.67h leerlauf 6% nach-anlauf 0 anlauf 12min | waechter-absenkung nein guard economy/keine oom 0 probe keine erzwungen - reserve 12801 gegenprobe entfaellt
+zelle 13 c7a.2xlarge St-T standard/int8 slots 3 anon 2181.9 peak 2527.3 rechnung 2063.9 grenze 2270.3 abw +5.7% getragen ja | paar-hwm 404.6 paar-anon 356.4 je-slot 235.4 haupt 1506.0 | r 0.188 ocr-fenster 1.03h seiten/s 0.723 dateien/h 3840 laufzeit-volltext 1.30h beide 1.30h leerlauf 15% nach-anlauf 0 anlauf 12min | waechter-absenkung nein guard standard/keine oom 0 probe fits erzwungen nein reserve 12154 gegenprobe stimmt
+zelle 14 c7a.2xlarge L-T performance/int8 slots 7 anon 3374.0 peak 3791.1 rechnung 3153.0 grenze 3468.3 abw +7.0% getragen ja | paar-hwm 437.6 paar-anon 357.2 je-slot 212.5 haupt 1960.6 | r 0.205 ocr-fenster 0.71h seiten/s 1.052 dateien/h 4831 laufzeit-volltext 1.03h beide 1.03h leerlauf 23% nach-anlauf 0 anlauf 14min | waechter-absenkung nein guard performance/keine oom 0 probe fits erzwungen nein reserve 10962 gegenprobe stimmt
+zelle 15 c7a.4xlarge S-T economy/int8 slots 1 anon 1534.8 peak 1869.8 rechnung 1492.5 grenze 1641.8 abw +2.8% getragen ja | paar-hwm 431.2 paar-anon 356.4 je-slot 295.3 haupt 1302.3 | r 0.148 ocr-fenster 2.46h seiten/s 0.304 dateien/h 1849 laufzeit-volltext 2.70h beide 2.70h leerlauf 6% nach-anlauf 0 anlauf 10min | waechter-absenkung nein guard economy/keine oom 0 probe keine erzwungen - reserve 28161 gegenprobe entfaellt
+zelle 16 c7a.4xlarge St-T standard/int8 slots 4 anon 2591.6 peak 2990.2 rechnung 2298.9 grenze 2528.8 abw +12.7% getragen nein | paar-hwm 437.6 paar-anon 384.2 je-slot 228.2 haupt 1755.6 | r 0.195 ocr-fenster 0.89h seiten/s 0.836 dateien/h 4159 laufzeit-volltext 1.20h beide 1.20h leerlauf 19% nach-anlauf 0 anlauf 14min | waechter-absenkung nein guard standard/keine oom 0 probe fits erzwungen nein reserve 27104 gegenprobe stimmt
+zelle 17 c7a.4xlarge L-T performance/int8 slots 15 anon 5623.7 peak 6006.6 rechnung 5033.0 grenze 5536.3 abw +11.7% getragen nein | paar-hwm 443.1 paar-anon 390.7 je-slot 223.4 haupt 2410.8 | r 0.238 ocr-fenster 0.50h seiten/s 1.508 dateien/h 6241 laufzeit-volltext 0.77h beide 0.80h leerlauf 22% nach-anlauf 0 anlauf 12min | waechter-absenkung nein guard performance/keine oom 0 probe fits erzwungen nein reserve 24072 gegenprobe stimmt
+zelle 18 c7a.4xlarge St-fp32-T standard/fp32 slots 4 anon 2844.6 peak 3660.6 rechnung 2665.9 grenze 2932.5 abw +6.7% getragen ja | paar-hwm 437.0 paar-anon 356.3 je-slot 228.4 haupt 1978.9 | r 0.196 ocr-fenster 0.90h seiten/s 0.835 dateien/h 4279 laufzeit-volltext 1.17h beide 1.17h leerlauf 17% nach-anlauf 0 anlauf 12min | waechter-absenkung nein guard standard/keine oom 0 probe fits erzwungen nein reserve 26851 gegenprobe stimmt
+zelle 19 c7a.8xlarge S-T economy/int8 slots 1 anon 1534.3 peak 1869.7 rechnung 1492.5 grenze 1641.8 abw +2.8% getragen ja | paar-hwm 431.8 paar-anon 357.0 je-slot 294.6 haupt 1300.6 | r 0.159 ocr-fenster 2.47h seiten/s 0.303 dateien/h 1849 laufzeit-volltext 2.70h beide 2.70h leerlauf 6% nach-anlauf 0 anlauf 10min | waechter-absenkung nein guard economy/keine oom 0 probe keine erzwungen - reserve 59906 gegenprobe entfaellt
+zelle 20 c7a.8xlarge St-T standard/int8 slots 4 anon 2560.2 peak 2902.9 rechnung 2298.9 grenze 2528.8 abw +11.4% getragen nein | paar-hwm 437.5 paar-anon 356.4 je-slot 232.2 haupt 1640.1 | r 0.204 ocr-fenster 0.89h seiten/s 0.838 dateien/h 4280 laufzeit-volltext 1.17h beide 1.17h leerlauf 15% nach-anlauf 0 anlauf 12min | waechter-absenkung nein guard standard/keine oom 0 probe fits erzwungen nein reserve 58880 gegenprobe stimmt
+zelle 21 c7a.8xlarge L-T performance/int8 slots 16 anon 5802.8 peak 6230.9 rechnung 5268.0 grenze 5794.8 abw +10.2% getragen nein | paar-hwm 437.2 paar-anon 385.0 je-slot 214.7 haupt 2530.2 | r 0.248 ocr-fenster 0.48h seiten/s 1.565 dateien/h 6512 laufzeit-volltext 0.77h beide 0.77h leerlauf 26% nach-anlauf 0 anlauf 12min | waechter-absenkung nein guard performance/keine oom 0 probe fits erzwungen nein reserve 55637 gegenprobe stimmt
+
+== besonderheiten je zelle ==
+zelle  1 S-voll: vollkorpus 52.137 dateien, grenze 2g; anon.csv endet 06:07:48Z (unattended-upgrades, 10-auswertung.txt),
+         paar, je-slot und haupt decken nur 11,9 von 19,6 h; seiten/s nicht berechnet (seitenzahl des vollkorpus
+         nicht in den rohdaten); oom-schlusszeile fehlt, kernel-journal des boots: 0 oom-treffer
+zelle  1 S-voll: anon 1788,9 MiB ueber der grenze 1641,8 MiB, ERSTMALS HIER BEWERTET (28-06 nannte kein urteil)
+alle zellen: leerlauf nur im anlauf (crawl startet mit dem naechsten hintergrundjob), nach-anlauf 0 lesungen
+
+== fp32-mehrbedarf (12-slotkosten.py fp32, hauptprozess St-fp32-T minus St-T derselben box) ==
+c7a.xlarge  slots 1: int8 1396,9 fp32 1906,6 mehrbedarf 509,7 MiB gegen 367 MiB, nicht getragen (zelle 11)
+c7a.4xlarge slots 4: int8 1755,6 fp32 1978,9 mehrbedarf 223,2 MiB gegen 367 MiB, getragen (zelle 18)
+hinweis: differenz zweier hauptprozess-maxima; das int8-gegenstueck auf c7a.4xlarge liegt selbst 396,7 MiB
+         ueber dem hauptprozess-anteil der rechnung (zelle 16), der mehrbedarf schrumpft entsprechend
+
+== kandidat OCR_SLOT_COST_BYTES (alt 235 MiB = 246415360 bytes) ==
+vmhwm-paar (plan-regel 28-11): max 447.2 MiB in zelle 6 m7g.4xlarge St-T, aufgerundet 448 MiB = 469762048 bytes
+rssanon-paar (mass von B2): max 390.7 MiB in zelle 17 c7a.4xlarge L-T, aufgerundet 391 MiB = 409993216 bytes
+anon je slot: max 300.1 MiB in zelle 5 m7g.4xlarge S-T, aufgerundet 301 MiB = 315621376 bytes
+anon je slot nur zellen mit mehr als einem slot: 212.5 bis 235.4 MiB
+kleinster slotwert, der alle 17 teilkorpus-zellen traegt: 249.3 MiB, aufgerundet 250 MiB = 262144000 bytes
+kleinster slotwert, der alle 18 zellen traegt (inklusive S-voll): 368.8 MiB, aufgerundet 369 MiB
+anon/rechnung je zelle mit dem kandidaten (stern = ueber 1,10):
+  235 MiB: 1:1.199* 2:1.013 5:1.005 6:1.026 7:1.089 8:1.019 9:1.054 11:1.108* 12:1.029 13:1.057 14:1.070 15:1.028 16:1.127* 17:1.117* 18:1.067 19:1.028 20:1.114* 21:1.102*
+  250 MiB: 1:1.187* 2:1.003 5:0.995 6:1.000 7:1.043 8:1.008 9:1.044 11:1.100 12:1.018 13:1.035 14:1.036 15:1.018 16:1.099 17:1.070 18:1.044 19:1.018 20:1.085 21:1.054
+  301 MiB: 1:1.148* 2:0.970 5:0.962 6:0.920 7:0.910 8:0.975 9:1.012 11:1.072 12:0.985 13:0.965 14:0.933 15:0.985 16:1.011 17:0.934 18:0.971 19:0.984 20:0.999 21:0.918
+  391 MiB: 1:1.085 2:0.917 5:0.910 6:0.807 7:0.744 8:0.922 9:0.960 11:1.026 12:0.931 13:0.862 14:0.795 15:0.931 16:0.887 17:0.763 18:0.865 19:0.931 20:0.876 21:0.747
+  448 MiB: 1:1.049 2:0.887 5:0.879 6:0.748 7:0.666 8:0.891 9:0.930 11:0.999 12:0.900 13:0.807 14:0.727 15:0.900 16:0.823 17:0.683 18:0.809 19:0.900 20:0.813 21:0.669
+slots der formel (ocr_slots, MemAvailable = box-ram minus 1 GiB) mit dem kandidaten:
+  235 MiB: m7g.4xlarge St 4 St-fp32 4 L 15; c7a.xlarge St 1 St-fp32 1 L 3; c7a.2xlarge St 3 St-fp32 3 L 7; c7a.4xlarge St 4 St-fp32 4 L 15; c7a.8xlarge St 4 St-fp32 4 L 16; beispiel 8 kerne 8 GiB St 3 St-fp32 2 L 7; beispiel 4 kerne 16 GiB St 1 St-fp32 1 L 3
+  250 MiB: m7g.4xlarge St 4 St-fp32 4 L 15; c7a.xlarge St 1 St-fp32 1 L 3; c7a.2xlarge St 3 St-fp32 3 L 7; c7a.4xlarge St 4 St-fp32 4 L 15; c7a.8xlarge St 4 St-fp32 4 L 16; beispiel 8 kerne 8 GiB St 3 St-fp32 2 L 7; beispiel 4 kerne 16 GiB St 1 St-fp32 1 L 3
+  301 MiB: m7g.4xlarge St 4 St-fp32 4 L 15; c7a.xlarge St 1 St-fp32 1 L 3; c7a.2xlarge St 3 St-fp32 3 L 7; c7a.4xlarge St 4 St-fp32 4 L 15; c7a.8xlarge St 4 St-fp32 4 L 16; beispiel 8 kerne 8 GiB St 3 St-fp32 2 L 7; beispiel 4 kerne 16 GiB St 1 St-fp32 1 L 3
+  391 MiB: m7g.4xlarge St 4 St-fp32 4 L 15; c7a.xlarge St 1 St-fp32 1 L 3; c7a.2xlarge St 3 St-fp32 3 L 7; c7a.4xlarge St 4 St-fp32 4 L 15; c7a.8xlarge St 4 St-fp32 4 L 16; beispiel 8 kerne 8 GiB St 2 St-fp32 1 L 6; beispiel 4 kerne 16 GiB St 1 St-fp32 1 L 3
+  448 MiB: m7g.4xlarge St 4 St-fp32 4 L 15; c7a.xlarge St 1 St-fp32 1 L 3; c7a.2xlarge St 3 St-fp32 3 L 7; c7a.4xlarge St 4 St-fp32 4 L 15; c7a.8xlarge St 4 St-fp32 4 L 16; beispiel 8 kerne 8 GiB St 2 St-fp32 1 L 5; beispiel 4 kerne 16 GiB St 1 St-fp32 1 L 3
+
+== hauptprozess gegen den hauptprozess-anteil der rechnung (rechnung minus slots x 235) ==
+zelle  1 m7g.large S-voll slots 1: haupt 1571.1 anteil 1257.5 mehr +313.6 (+313.6 je slot); anon minus haupt 217.8 = 217.8 je slot
+zelle  2 m7g.large Anker-S-T slots 1: haupt 1291.6 anteil 1257.5 mehr +34.1 (+34.1 je slot); anon minus haupt 220.4 = 220.4 je slot
+zelle  5 m7g.4xlarge S-T slots 1: haupt 1281.0 anteil 1257.5 mehr +23.5 (+23.5 je slot); anon minus haupt 218.6 = 218.6 je slot
+zelle  6 m7g.4xlarge St-T slots 4: haupt 1497.0 anteil 1358.9 mehr +138.1 (+34.5 je slot); anon minus haupt 861.2 = 215.3 je slot
+zelle  7 m7g.4xlarge L-T slots 15: haupt 2319.0 anteil 1508.0 mehr +811.0 (+54.1 je slot); anon minus haupt 3162.8 = 210.9 je slot
+zelle  8 c7a.xlarge S-T slots 1: haupt 1288.5 anteil 1257.5 mehr +31.0 (+31.0 je slot); anon minus haupt 231.7 = 231.7 je slot
+zelle  9 c7a.xlarge St-T slots 1: haupt 1396.9 anteil 1358.9 mehr +38.0 (+38.0 je slot); anon minus haupt 282.6 = 282.6 je slot
+zelle 11 c7a.xlarge St-fp32-T slots 1: haupt 1906.6 anteil 1725.9 mehr +180.7 (+180.7 je slot); anon minus haupt 265.9 = 265.9 je slot
+zelle 12 c7a.2xlarge S-T slots 1: haupt 1303.4 anteil 1257.5 mehr +45.9 (+45.9 je slot); anon minus haupt 231.9 = 231.9 je slot
+zelle 13 c7a.2xlarge St-T slots 3: haupt 1506.0 anteil 1358.9 mehr +147.1 (+49.0 je slot); anon minus haupt 675.9 = 225.3 je slot
+zelle 14 c7a.2xlarge L-T slots 7: haupt 1960.6 anteil 1508.0 mehr +452.6 (+64.7 je slot); anon minus haupt 1413.4 = 201.9 je slot
+zelle 15 c7a.4xlarge S-T slots 1: haupt 1302.3 anteil 1257.5 mehr +44.8 (+44.8 je slot); anon minus haupt 232.5 = 232.5 je slot
+zelle 16 c7a.4xlarge St-T slots 4: haupt 1755.6 anteil 1358.9 mehr +396.7 (+99.2 je slot); anon minus haupt 836.0 = 209.0 je slot
+zelle 17 c7a.4xlarge L-T slots 15: haupt 2410.8 anteil 1508.0 mehr +902.8 (+60.2 je slot); anon minus haupt 3212.9 = 214.2 je slot
+zelle 18 c7a.4xlarge St-fp32-T slots 4: haupt 1978.9 anteil 1725.9 mehr +253.0 (+63.3 je slot); anon minus haupt 865.7 = 216.4 je slot
+zelle 19 c7a.8xlarge S-T slots 1: haupt 1300.6 anteil 1257.5 mehr +43.1 (+43.1 je slot); anon minus haupt 233.7 = 233.7 je slot
+zelle 20 c7a.8xlarge St-T slots 4: haupt 1640.1 anteil 1358.9 mehr +281.2 (+70.3 je slot); anon minus haupt 920.1 = 230.0 je slot
+zelle 21 c7a.8xlarge L-T slots 16: haupt 2530.2 anteil 1508.0 mehr +1022.2 (+63.9 je slot); anon minus haupt 3272.6 = 204.5 je slot
+
+== sc4-faelle (D-28-08: ueber +10 prozent oder probe-widerspruch) ==
+sc4 zelle 1 m7g.large S-voll: anon 1788.9 gegen rechnung 1492.5 (grenze 1641.8), +19.9%, nicht getragen
+sc4 zelle 11 c7a.xlarge St-fp32-T: anon 2172.5 gegen rechnung 1960.9 (grenze 2157.0), +10.8%, nicht getragen
+sc4 zelle 16 c7a.4xlarge St-T: anon 2591.6 gegen rechnung 2298.9 (grenze 2528.8), +12.7%, nicht getragen
+sc4 zelle 17 c7a.4xlarge L-T: anon 5623.7 gegen rechnung 5033.0 (grenze 5536.3), +11.7%, nicht getragen
+sc4 zelle 20 c7a.8xlarge St-T: anon 2560.2 gegen rechnung 2298.9 (grenze 2528.8), +11.4%, nicht getragen
+sc4 zelle 21 c7a.8xlarge L-T: anon 5802.8 gegen rechnung 5268.0 (grenze 5794.8), +10.2%, nicht getragen
+sc4 probe-widersprueche: keine (11 von 11 proben fits und von der messung bestaetigt)
+
+== C1 (D-28-10) ==
+c1 743,9 MB gegen 730,2 MB, band 715,6 bis 744,8 MB, +1,88 %, innerhalb (rohdaten/m7g.large/94c/94c-bewertung.txt)
+
+== werkzeug: rohausgaben von 12-slotkosten.py ==
+## zelle 1 m7g.large S-voll: 12-slotkosten.py slots anon.csv --slots 1
+slot-paar-vmhwm-kb 445128
+slot-paar-vmhwm-mib 434.7
+slot-paar-rssanon-kb 365348
+slot-paar-rssanon-mib 356.8
+slot-anon-je-slot-kb 297480 slots 1
+slot-anon-je-slot-mib 290.5
+hauptprozess-max-kb 1608836
+hauptprozess-max-mib 1571.1
+vergleich-b2-mib 235.0
+## zelle 1 m7g.large S-voll: 12-slotkosten.py rechnung --profil economy --slots 1 --praezision int8 --gemessen-bytes 1875808256
+rechnung-bytes 1564999680
+rechnung-mib 1492.5
+grenze-bytes 1721499648
+gemessen-bytes 1875808256
+urteil nicht getragen
+## zelle 2 m7g.large Anker-S-T: 12-slotkosten.py slots anon.csv --slots 1
+slot-paar-vmhwm-kb 446164
+slot-paar-vmhwm-mib 435.7
+slot-paar-rssanon-kb 365156
+slot-paar-rssanon-mib 356.6
+slot-anon-je-slot-kb 306416 slots 1
+slot-anon-je-slot-mib 299.2
+hauptprozess-max-kb 1322568
+hauptprozess-max-mib 1291.6
+vergleich-b2-mib 235.0
+## zelle 2 m7g.large Anker-S-T: 12-slotkosten.py rechnung --profil economy --slots 1 --praezision int8 --gemessen-bytes 1585405952
+rechnung-bytes 1564999680
+rechnung-mib 1492.5
+grenze-bytes 1721499648
+gemessen-bytes 1585405952
+urteil getragen
+## zelle 5 m7g.4xlarge S-T: 12-slotkosten.py slots anon.csv --slots 1
+slot-paar-vmhwm-kb 447300
+slot-paar-vmhwm-mib 436.8
+slot-paar-rssanon-kb 365452
+slot-paar-rssanon-mib 356.9
+slot-anon-je-slot-kb 307264 slots 1
+slot-anon-je-slot-mib 300.1
+hauptprozess-max-kb 1311760
+hauptprozess-max-mib 1281.0
+vergleich-b2-mib 235.0
+## zelle 5 m7g.4xlarge S-T: 12-slotkosten.py rechnung --profil economy --slots 1 --praezision int8 --gemessen-bytes 1572462592
+rechnung-bytes 1564999680
+rechnung-mib 1492.5
+grenze-bytes 1721499648
+gemessen-bytes 1572462592
+urteil getragen
+## zelle 6 m7g.4xlarge St-T: 12-slotkosten.py slots anon.csv --slots 4
+slot-paar-vmhwm-kb 457908
+slot-paar-vmhwm-mib 447.2
+slot-paar-rssanon-kb 365008
+slot-paar-rssanon-mib 356.5
+slot-anon-je-slot-kb 229413 slots 4
+slot-anon-je-slot-mib 224.0
+hauptprozess-max-kb 1532932
+hauptprozess-max-mib 1497.0
+vergleich-b2-mib 235.0
+## zelle 6 m7g.4xlarge St-T: 12-slotkosten.py rechnung --profil standard --slots 4 --praezision int8 --gemessen-bytes 2472706048
+rechnung-bytes 2410557312
+rechnung-mib 2298.9
+grenze-bytes 2651613043
+gemessen-bytes 2472706048
+urteil getragen
+## zelle 7 m7g.4xlarge L-T: 12-slotkosten.py slots anon.csv --slots 15
+slot-paar-vmhwm-kb 452308
+slot-paar-vmhwm-mib 441.7
+slot-paar-rssanon-kb 371000
+slot-paar-rssanon-mib 362.3
+slot-anon-je-slot-kb 225399 slots 15
+slot-anon-je-slot-mib 220.1
+hauptprozess-max-kb 2374664
+hauptprozess-max-mib 2319.0
+vergleich-b2-mib 235.0
+## zelle 7 m7g.4xlarge L-T: 12-slotkosten.py rechnung --profil performance --slots 15 --praezision int8 --gemessen-bytes 5748092928
+rechnung-bytes 5277437824
+rechnung-mib 5033.0
+grenze-bytes 5805181606
+gemessen-bytes 5748092928
+urteil getragen
+## zelle 8 c7a.xlarge S-T: 12-slotkosten.py slots anon.csv --slots 1
+slot-paar-vmhwm-kb 444188
+slot-paar-vmhwm-mib 433.8
+slot-paar-rssanon-kb 390716
+slot-paar-rssanon-mib 381.6
+slot-anon-je-slot-kb 302916 slots 1
+slot-anon-je-slot-mib 295.8
+hauptprozess-max-kb 1319380
+hauptprozess-max-mib 1288.5
+vergleich-b2-mib 235.0
+## zelle 8 c7a.xlarge S-T: 12-slotkosten.py rechnung --profil economy --slots 1 --praezision int8 --gemessen-bytes 1594019840
+rechnung-bytes 1564999680
+rechnung-mib 1492.5
+grenze-bytes 1721499648
+gemessen-bytes 1594019840
+urteil getragen
+## zelle 9 c7a.xlarge St-T: 12-slotkosten.py slots anon.csv --slots 1
+slot-paar-vmhwm-kb 442804
+slot-paar-vmhwm-mib 432.4
+slot-paar-rssanon-kb 364792
+slot-paar-rssanon-mib 356.2
+slot-anon-je-slot-kb 304780 slots 1
+slot-anon-je-slot-mib 297.6
+hauptprozess-max-kb 1430464
+hauptprozess-max-mib 1396.9
+vergleich-b2-mib 235.0
+## zelle 9 c7a.xlarge St-T: 12-slotkosten.py rechnung --profil standard --slots 1 --praezision int8 --gemessen-bytes 1761132544
+rechnung-bytes 1671311232
+rechnung-mib 1593.9
+grenze-bytes 1838442355
+gemessen-bytes 1761132544
+urteil getragen
+## zelle 11 c7a.xlarge St-fp32-T: 12-slotkosten.py slots anon.csv --slots 1
+slot-paar-vmhwm-kb 445848
+slot-paar-vmhwm-mib 435.4
+slot-paar-rssanon-kb 365284
+slot-paar-rssanon-mib 356.7
+slot-anon-je-slot-kb 305032 slots 1
+slot-anon-je-slot-mib 297.9
+hauptprozess-max-kb 1952360
+hauptprozess-max-mib 1906.6
+vergleich-b2-mib 235.0
+## zelle 11 c7a.xlarge St-fp32-T: 12-slotkosten.py rechnung --profil standard --slots 1 --praezision fp32 --gemessen-bytes 2278068224
+rechnung-bytes 2056138624
+rechnung-mib 1960.9
+grenze-bytes 2261752486
+gemessen-bytes 2278068224
+urteil nicht getragen
+## zelle 12 c7a.2xlarge S-T: 12-slotkosten.py slots anon.csv --slots 1
+slot-paar-vmhwm-kb 445440
+slot-paar-vmhwm-mib 435.0
+slot-paar-rssanon-kb 367032
+slot-paar-rssanon-mib 358.4
+slot-anon-je-slot-kb 304452 slots 1
+slot-anon-je-slot-mib 297.3
+hauptprozess-max-kb 1334712
+hauptprozess-max-mib 1303.4
+vergleich-b2-mib 235.0
+## zelle 12 c7a.2xlarge S-T: 12-slotkosten.py rechnung --profil economy --slots 1 --praezision int8 --gemessen-bytes 1609912320
+rechnung-bytes 1564999680
+rechnung-mib 1492.5
+grenze-bytes 1721499648
+gemessen-bytes 1609912320
+urteil getragen
+## zelle 13 c7a.2xlarge St-T: 12-slotkosten.py slots anon.csv --slots 3
+slot-paar-vmhwm-kb 414268
+slot-paar-vmhwm-mib 404.6
+slot-paar-rssanon-kb 364908
+slot-paar-rssanon-mib 356.4
+slot-anon-je-slot-kb 241042 slots 3
+slot-anon-je-slot-mib 235.4
+hauptprozess-max-kb 1542124
+hauptprozess-max-mib 1506.0
+vergleich-b2-mib 235.0
+## zelle 13 c7a.2xlarge St-T: 12-slotkosten.py rechnung --profil standard --slots 3 --praezision int8 --gemessen-bytes 2287886336
+rechnung-bytes 2164141952
+rechnung-mib 2063.9
+grenze-bytes 2380556147
+gemessen-bytes 2287886336
+urteil getragen
+## zelle 14 c7a.2xlarge L-T: 12-slotkosten.py slots anon.csv --slots 7
+slot-paar-vmhwm-kb 448104
+slot-paar-vmhwm-mib 437.6
+slot-paar-rssanon-kb 365776
+slot-paar-rssanon-mib 357.2
+slot-anon-je-slot-kb 217582 slots 7
+slot-anon-je-slot-mib 212.5
+hauptprozess-max-kb 2007660
+hauptprozess-max-mib 1960.6
+vergleich-b2-mib 235.0
+## zelle 14 c7a.2xlarge L-T: 12-slotkosten.py rechnung --profil performance --slots 7 --praezision int8 --gemessen-bytes 3537911808
+rechnung-bytes 3306114944
+rechnung-mib 3153.0
+grenze-bytes 3636726438
+gemessen-bytes 3537911808
+urteil getragen
+## zelle 15 c7a.4xlarge S-T: 12-slotkosten.py slots anon.csv --slots 1
+slot-paar-vmhwm-kb 441500
+slot-paar-vmhwm-mib 431.2
+slot-paar-rssanon-kb 364992
+slot-paar-rssanon-mib 356.4
+slot-anon-je-slot-kb 302372 slots 1
+slot-anon-je-slot-mib 295.3
+hauptprozess-max-kb 1333588
+hauptprozess-max-mib 1302.3
+vergleich-b2-mib 235.0
+## zelle 15 c7a.4xlarge S-T: 12-slotkosten.py rechnung --profil economy --slots 1 --praezision int8 --gemessen-bytes 1609302016
+rechnung-bytes 1564999680
+rechnung-mib 1492.5
+grenze-bytes 1721499648
+gemessen-bytes 1609302016
+urteil getragen
+## zelle 16 c7a.4xlarge St-T: 12-slotkosten.py slots anon.csv --slots 4
+slot-paar-vmhwm-kb 448152
+slot-paar-vmhwm-mib 437.6
+slot-paar-rssanon-kb 393380
+slot-paar-rssanon-mib 384.2
+slot-anon-je-slot-kb 233656 slots 4
+slot-anon-je-slot-mib 228.2
+hauptprozess-max-kb 1797784
+hauptprozess-max-mib 1755.6
+vergleich-b2-mib 235.0
+## zelle 16 c7a.4xlarge St-T: 12-slotkosten.py rechnung --profil standard --slots 4 --praezision int8 --gemessen-bytes 2717507584
+rechnung-bytes 2410557312
+rechnung-mib 2298.9
+grenze-bytes 2651613043
+gemessen-bytes 2717507584
+urteil nicht getragen
+## zelle 17 c7a.4xlarge L-T: 12-slotkosten.py slots anon.csv --slots 15
+slot-paar-vmhwm-kb 453700
+slot-paar-vmhwm-mib 443.1
+slot-paar-rssanon-kb 400084
+slot-paar-rssanon-mib 390.7
+slot-anon-je-slot-kb 228742 slots 15
+slot-anon-je-slot-mib 223.4
+hauptprozess-max-kb 2468664
+hauptprozess-max-mib 2410.8
+vergleich-b2-mib 235.0
+## zelle 17 c7a.4xlarge L-T: 12-slotkosten.py rechnung --profil performance --slots 15 --praezision int8 --gemessen-bytes 5896880128
+rechnung-bytes 5277437824
+rechnung-mib 5033.0
+grenze-bytes 5805181606
+gemessen-bytes 5896880128
+urteil nicht getragen
+## zelle 18 c7a.4xlarge St-fp32-T: 12-slotkosten.py slots anon.csv --slots 4
+slot-paar-vmhwm-kb 447508
+slot-paar-vmhwm-mib 437.0
+slot-paar-rssanon-kb 364804
+slot-paar-rssanon-mib 356.3
+slot-anon-je-slot-kb 233842 slots 4
+slot-anon-je-slot-mib 228.4
+hauptprozess-max-kb 2026348
+hauptprozess-max-mib 1978.9
+vergleich-b2-mib 235.0
+## zelle 18 c7a.4xlarge St-fp32-T: 12-slotkosten.py rechnung --profil standard --slots 4 --praezision fp32 --gemessen-bytes 2982780928
+rechnung-bytes 2795384704
+rechnung-mib 2665.9
+grenze-bytes 3074923174
+gemessen-bytes 2982780928
+urteil getragen
+## zelle 19 c7a.8xlarge S-T: 12-slotkosten.py slots anon.csv --slots 1
+slot-paar-vmhwm-kb 442140
+slot-paar-vmhwm-mib 431.8
+slot-paar-rssanon-kb 365588
+slot-paar-rssanon-mib 357.0
+slot-anon-je-slot-kb 301716 slots 1
+slot-anon-je-slot-mib 294.6
+hauptprozess-max-kb 1331856
+hauptprozess-max-mib 1300.6
+vergleich-b2-mib 235.0
+## zelle 19 c7a.8xlarge S-T: 12-slotkosten.py rechnung --profil economy --slots 1 --praezision int8 --gemessen-bytes 1608798208
+rechnung-bytes 1564999680
+rechnung-mib 1492.5
+grenze-bytes 1721499648
+gemessen-bytes 1608798208
+urteil getragen
+## zelle 20 c7a.8xlarge St-T: 12-slotkosten.py slots anon.csv --slots 4
+slot-paar-vmhwm-kb 448016
+slot-paar-vmhwm-mib 437.5
+slot-paar-rssanon-kb 364948
+slot-paar-rssanon-mib 356.4
+slot-anon-je-slot-kb 237769 slots 4
+slot-anon-je-slot-mib 232.2
+hauptprozess-max-kb 1679484
+hauptprozess-max-mib 1640.1
+vergleich-b2-mib 235.0
+## zelle 20 c7a.8xlarge St-T: 12-slotkosten.py rechnung --profil standard --slots 4 --praezision int8 --gemessen-bytes 2684612608
+rechnung-bytes 2410557312
+rechnung-mib 2298.9
+grenze-bytes 2651613043
+gemessen-bytes 2684612608
+urteil nicht getragen
+## zelle 21 c7a.8xlarge L-T: 12-slotkosten.py slots anon.csv --slots 16
+slot-paar-vmhwm-kb 447652
+slot-paar-vmhwm-mib 437.2
+slot-paar-rssanon-kb 394252
+slot-paar-rssanon-mib 385.0
+slot-anon-je-slot-kb 219826 slots 16
+slot-anon-je-slot-mib 214.7
+hauptprozess-max-kb 2590916
+hauptprozess-max-mib 2530.2
+vergleich-b2-mib 235.0
+## zelle 21 c7a.8xlarge L-T: 12-slotkosten.py rechnung --profil performance --slots 16 --praezision int8 --gemessen-bytes 6084653056
+rechnung-bytes 5523853184
+rechnung-mib 5268.0
+grenze-bytes 6076238502
+gemessen-bytes 6084653056
+urteil nicht getragen
+## fp32 c7a.xlarge: 12-slotkosten.py fp32 St-T/anon.csv St-fp32-T/anon.csv
+hauptprozess-int8-kb 1430464
+hauptprozess-fp32-kb 1952360
+fp32-mehrbedarf-kb 521896
+fp32-mehrbedarf-mib 509.7
+fp32-rechnung-kb 375808
+urteil nicht getragen
+## fp32 c7a.4xlarge: 12-slotkosten.py fp32 St-T/anon.csv St-fp32-T/anon.csv
+hauptprozess-int8-kb 1797784
+hauptprozess-fp32-kb 2026348
+fp32-mehrbedarf-kb 228564
+fp32-mehrbedarf-mib 223.2
+fp32-rechnung-kb 375808
+urteil getragen
