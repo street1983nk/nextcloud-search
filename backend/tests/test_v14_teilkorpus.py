@@ -544,12 +544,14 @@ def test_fp32_reports_the_extra_of_the_main_process(tmp_path: Path) -> None:
 
 def test_the_calculation_counts_the_items_of_the_product_once(slot_costs: ModuleType) -> None:
     """Baseline, slots, parallel activations, writer growth, fp32; written out by hand."""
+    # The slot item follows OCR_SLOT_COST_BYTES of the product, 250 MiB since plan 28-12
+    # (235 MiB while the phase 28 cells ran).
     baseline = 1257 * MIB + MIB // 2
-    assert slot_costs.calculation("economy", 1, "int8") == baseline + 235 * MIB
-    assert slot_costs.calculation("standard", 4, "int8") == baseline + 4 * 235 * MIB + 27 * MIB + 78_000_000
-    assert slot_costs.calculation("performance", 15, "int8") == (baseline + 15 * 235 * MIB + 2 * 27 * MIB + 206_000_000)
+    assert slot_costs.calculation("economy", 1, "int8") == baseline + 250 * MIB
+    assert slot_costs.calculation("standard", 4, "int8") == baseline + 4 * 250 * MIB + 27 * MIB + 78_000_000
+    assert slot_costs.calculation("performance", 15, "int8") == (baseline + 15 * 250 * MIB + 2 * 27 * MIB + 206_000_000)
     assert slot_costs.calculation("standard", 4, "fp32") == (
-        baseline + 4 * 235 * MIB + 27 * MIB + 78_000_000 + 367 * MIB
+        baseline + 4 * 250 * MIB + 27 * MIB + 78_000_000 + 367 * MIB
     )
 
 

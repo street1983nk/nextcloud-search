@@ -1581,8 +1581,14 @@ PHP_TREE_HASH_TODAY = "bbcc449daff788f6f85d44bd1b71b485c857009bc6eedca7d6c87cc1f
 # nc/queue.py (QueueStats.crawling), nc/client.py (the docstring of
 # queue_stats) and worker/reconcile.py (the crawl branch of _quiet) changed
 # their bytes. No file came and none went, so PACKAGE_FILES_TODAY stays at 71.
+# Measured again by plan 28-12: config.py OCR_SLOT_COST_BYTES from the phase 28
+# trip, 250 MiB instead of 235 MiB by owner decision of 2026-10-05
+# (docs/measurements/2026-10-abnahme-anfahrt/, section 14), with its comment.
+# The cells of the trip ran on the trees ee918ce4..., 1a0598a6... and
+# 556148291147..., all before this change. No file came and none went, so
+# PACKAGE_FILES_TODAY stays at 71. The PHP pair does not move: php/ is unchanged.
 PACKAGE_FILES_TODAY = 71
-PACKAGE_TREE_HASH_TODAY = "ee918ce4bc7c19273f89fc174b1a3a10a91417e8a1bfc273e10c849a059a0e0a"
+PACKAGE_TREE_HASH_TODAY = "27db8b4140529babd63912eeba93e63a9a63e36b0b2043274b37c2a953a4ad3f"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
