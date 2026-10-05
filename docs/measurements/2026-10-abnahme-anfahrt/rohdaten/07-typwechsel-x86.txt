@@ -301,7 +301,7 @@ stopp c7a.8xlarge: nach-kette-15.sh setzte +15 (16:03:49Z), rohdaten geholt, dan
   = 9.8727 USD. bisher 34.09 von 59.43 USD. box geparkt (typ c7a.8xlarge), abbau-entscheid beim owner.
   a-record zeigt verwaist auf die letzte adresse.
 
-zusammenfassung x86-hälfte (zellen 8 bis 21 ohne 10): alle zwölf zellen rueckgabe 0, alle zähltore 5000,
+zusammenfassung x86-hälfte (zellen 8 bis 21 ohne 10): alle dreizehn zellen rueckgabe 0, alle zähltore 5000,
   alle proben fits und von der messung bestätigt (kein wächtereingriff, kein oom). urteile gegen die
   rechnung: getragen 8, 9, 12, 13, 14, 15, 18, 19; NICHT GETRAGEN 11 (St-fp32-T c7a.xlarge), 16 (St-T
   c7a.4xlarge), 17 (L-T c7a.4xlarge), 20 (St-T c7a.8xlarge), 21 (L-T c7a.8xlarge). muster: ab 4 slots auf

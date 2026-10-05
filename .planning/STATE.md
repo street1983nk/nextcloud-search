@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
-status: blocked
-stopped_at: "28-07 x86-Hälfte BLOCKED (Auth-Gate): c7a.xlarge und c7a.2xlarge gemessen (6 Zellen rc 0), AWS-Sitzung abgelaufen, Box von innen gestoppt; weiter nach Owner-Login mit Typwechsel c7a.4xlarge"
-last_updated: "2026-10-04T20:35:00.000Z"
-last_activity: 2026-10-04
+status: executing
+stopped_at: "28-07 x86-Hälfte KOMPLETT: alle Messzellen der Matrix gemessen (c7a.4xlarge 15-18, c7a.8xlarge 19-21, rc 0, Zähltore 5000); 5 x86-Zellen über der Grenze (SC4/C5); Box gestoppt und geparkt; weiter 28-08ff Auswertung/Bericht"
+last_updated: "2026-10-05T16:15:00.000Z"
+last_activity: 2026-10-05
 progress:
   total_phases: 6
   completed_phases: 4
@@ -27,12 +27,44 @@ See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 
 Phase: 28 (Abnahme-Anfahrt), in Ausführung
 Plan: 7 of 14
-Status: Blocked (28-07 x86-Hälfte: AWS-Login nötig für den Typwechsel auf c7a.4xlarge)
-Last activity: 2026-10-04
+Status: In Ausführung (28-07 Messungen komplett, nächster Schritt 28-08ff Auswertung/Bericht + Owner-Entscheid SC4/C5)
+Last activity: 2026-10-05
 
 Progress: [█████████░] 87%
 
 ## Naechster Schritt
+
+**28-07 MESSUNGEN KOMPLETT (05.10.): alle Messzellen der Matrix gemessen, x86-Hälfte fertig.**
+NÄCHSTER SCHRITT: 28-08ff Auswertung/Bericht. OWNER-ENTSCHEID SC4/C5 (Checkpoint C5) offen für fünf
+x86-Zellen über der Grenze 1,10 x Rechnung, dazu der vertagte fp32-Entscheid mit BEIDEN Datenpunkten.
+Box c7a.8xlarge per aws_box.sh stop geparkt (16:04:27Z bestätigt), ARM-Box geparkt, Abbau-Entscheid
+beim Owner. A-Record zeigt verwaist auf die letzte x86-Adresse. Kosten 34,09 von 59,43 USD (Rest 25,34).
+Protokoll: 07-typwechsel-x86.txt (Abschnitte c7a.4xlarge, c7a.8xlarge, Zusammenfassung), 90-kosten.txt.
+
+Ergebnisse 05.10. (anon-max / Grenze MiB, Methode des Zellenwerkzeugs):
+- c7a.4xlarge: 15 S-T 1534,7/1641,8 getragen; 16 St-T (fits, 4 Slots) 2591,6/2528,8 NICHT getragen;
+  17 L-T (fits, 15 Slots) 5623,7/5536,3 NICHT getragen; 18 St-fp32-T (fits, 4 Slots, Download live)
+  2844,6/2932,5 getragen. Rückkehr int8 belegt.
+- c7a.8xlarge: 19 S-T 1534,3/1641,8 getragen; 20 St-T (fits, 4 Slots) 2560,2/2528,8 NICHT getragen;
+  21 L-T (fits, 16 Slots) 5802,8/5794,8 NICHT getragen.
+- Alle Zähltore 5000, alle Proben fits und von der Messung bestätigt (kein Wächtereingriff, kein OOM).
+- Muster: ab 4 Slots auf x86 liegt der HAUPTPROZESS über der Rechnung (St-T 1640 bis 1756 MiB, L-T 2411
+  bis 2530 MiB; ARM m7g.4xlarge St-T 2358,2 und L-T 5481,8 getragen); Slotkosten 212 bis 232 MiB unter B2.
+- fp32-Datenpunkte: c7a.xlarge (1 Slot) Mehrbedarf 509,7 MiB, Zelle 11 nicht getragen; c7a.4xlarge
+  (4 Slots) Mehrbedarf 223,2 MiB, Zelle 18 getragen (gegen FP32_EXTRA_BYTES 367 MiB). Der Mehrbedarf
+  ist eine Differenz zweier Hauptprozess-Maxima und hängt am int8-Gegenstück.
+- Crawl-Fix in allen 7 Zellen bestätigt: 6 Runden "crawl is unfinished", keine stale-Lieferung,
+  ruhige Runde stale=0, unchanged 0, Selbstvorschub je einmal.
+- NEUER PRODUKTBEFUND (nicht angefasst): nach der Rückkehr fp32 -> int8 (10:48:05Z) "the precision of
+  the embedding changed, the vector stock is being written again", sofort "could not move 500 files to
+  the embed track, they run into the lock timeout" (container-rueckkehr-int8.txt). Gleiches Muster wie
+  der Embed-Übergabe-Befund aus Lauf 9 (30 Dateien), hier ein voller 500er-Stapel beim
+  Präzisionswechsel; Vollständigkeit des Neuschreibens nicht beobachtet. Kandidat /gsd-debug.
+- Umgebung: erster Kettenstart c7a.8xlarge Abbruch 60 (abwaerts URLError), A-Record ~1 min vor dem
+  Start umgesetzt (TTL 120), alte Adresse freigegeben; nach 10:55Z Auflösung korrekt, EINE Wiederholung
+  rc 0. Merker fürs Runbook: nach A-Record-Wechsel ~3 min bis Kettenstart warten.
+
+Vorgeschichte x86-Hälfte bis 04.10. (zuvor BLOCKED auf AWS-Login, am 05.10. 04:19Z Stopp bestätigt):
 
 **28-07 x86-Hälfte BLOCKED (Auth-Gate, kein Messfehler): AWS-Sitzung abgelaufen (~16:30Z).**
 OWNER: aws login (Rezept NEXT.md UPDATE 52), danach weiter mit:
