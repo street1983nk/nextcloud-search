@@ -46,6 +46,7 @@ from findling.config import (
     GUARD_TICK_SECONDS,
     GUARD_WINDOW_SECONDS,
     INDEX_WORKERS,
+    MAIN_PROCESS_PER_FILE_BYTES,
     MAX_TEXT_CHARS,
     MIB,
     NEXTCLOUD_CORE_LOAD,
@@ -1291,6 +1292,10 @@ def test_the_profile_constants_carry_the_decided_numbers() -> None:
     # Plan 28-12, owner decision of 2026-10-05 (docs/measurements/2026-10-abnahme-anfahrt/,
     # README section 14): 250 MiB, the smallest slot value that carries all 17 cells.
     assert OCR_SLOT_COST_BYTES == 250 * 1024 * 1024 == 262_144_000
+    # Quick 261005-vit, owner decision of 2026-10-05 ("6 KiB, ohne Messung"): the main
+    # process grows by about 6 KiB per indexed file between S-T (5,000 files) and S-voll
+    # (52,137 files) in docs/measurements/2026-10-abnahme-anfahrt/.
+    assert MAIN_PROCESS_PER_FILE_BYTES == 6 * 1024 == 6144
     assert PROFILE_STANDARD_CORE_SHARE == 0.5
     assert PROFILE_STANDARD_MEMORY_SHARE == 0.4
     assert PROFILE_STANDARD_OCR_SLOTS_MAX == 4

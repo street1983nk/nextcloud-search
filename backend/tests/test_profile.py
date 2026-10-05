@@ -18,6 +18,7 @@ from findling.config import (
     FP32_EXTRA_BYTES,
     INDEX_WORKERS,
     MAIN_PROCESS_BASELINE_BYTES,
+    MAIN_PROCESS_PER_FILE_BYTES,
     MIB,
     OCR_CLAIM_BATCH,
     OCR_DPI,
@@ -468,6 +469,64 @@ def test_the_fp32_term_shrinks_the_memory_term() -> None:
     budget = 0.4 * 16 * GIB * 0.8 - MAIN_PROCESS_BASELINE_BYTES
     assert int8 == math.floor(budget / OCR_SLOT_COST_BYTES) == 15
     assert fp32 == math.floor((budget - FP32_EXTRA_BYTES) / OCR_SLOT_COST_BYTES) == 14
+
+
+# Quick 261005-vit, the full index term (owner decision of 2026-10-05, "6 KiB, ohne
+# Messung"). S-voll of docs/measurements/2026-10-abnahme-anfahrt/: m7g.large, Sparsam,
+# one slot, 52,137 files, anon peak 1788.9 MiB. S-T, same box and level, 5,000 files.
+S_VOLL_FILES = 52_137
+S_T_FILES = 5_000
+S_VOLL_ANON_PEAK_BYTES = 17_889 * MIB // 10
+
+
+def carried(measured: int, calculation: int) -> bool:
+    """The measure of D-28-08: anon at most 1.10 x the calculation."""
+    return measured * 10 <= calculation * 11
+
+
+def test_the_main_process_grows_by_the_full_index_term() -> None:
+    assert profile.main_process_bytes(0) == MAIN_PROCESS_BASELINE_BYTES
+    assert profile.main_process_bytes(S_T_FILES) == MAIN_PROCESS_BASELINE_BYTES + 5_000 * 6144
+    assert profile.main_process_bytes(S_VOLL_FILES, weights="fp32") == (
+        MAIN_PROCESS_BASELINE_BYTES + S_VOLL_FILES * MAIN_PROCESS_PER_FILE_BYTES + FP32_EXTRA_BYTES
+    )
+
+
+def test_the_full_index_term_carries_the_s_voll_cell() -> None:
+    """S-voll is carried with the term and was not without it.
+
+    Without: 1257.5 + 250 = 1507.5 MiB, limit 1658.3 MiB, under the 1788.9 MiB.
+    With: 52,137 x 6 KiB = 305.5 MiB more, 1813.0 MiB, limit 1994.3 MiB; the
+    anon peak lies at 0.987 of the calculation.
+    """
+    without = MAIN_PROCESS_BASELINE_BYTES + OCR_SLOT_COST_BYTES
+    with_term = profile.main_process_bytes(S_VOLL_FILES) + OCR_SLOT_COST_BYTES
+    assert not carried(S_VOLL_ANON_PEAK_BYTES, without)
+    assert carried(S_VOLL_ANON_PEAK_BYTES, with_term)
+    assert with_term >= S_VOLL_ANON_PEAK_BYTES
+
+
+def test_the_full_index_term_shrinks_the_memory_term() -> None:
+    """16 GiB Standard: 3985.38 MiB before slots; 5,000 files take 29.3 MiB, 52,137 take 305.5 MiB."""
+    hardware = box(4, 16)
+    budget = 0.4 * 16 * GIB * 0.8 - MAIN_PROCESS_BASELINE_BYTES
+    terms = [
+        profile._memory_term(Profile.STANDARD, hardware, extra_bytes=0, index_files=files)
+        for files in (0, S_T_FILES, S_VOLL_FILES)
+    ]
+    assert terms == [15, 15, 14]
+    assert terms[2] == math.floor((budget - S_VOLL_FILES * MAIN_PROCESS_PER_FILE_BYTES) / OCR_SLOT_COST_BYTES)
+    assert profile._memory_term(Profile.STANDARD, hardware, extra_bytes=0) == terms[0]
+
+
+def test_the_full_index_term_leaves_the_slot_counts_of_today() -> None:
+    """Without a file count the slots stay as they were; Sparsam has no memory term at all."""
+    for level in profile.PROFILE_ORDER:
+        for hardware in (box(4, 16), box(16, 4), box(16, 64), None):
+            assert profile.ocr_slots(level, hardware) == profile.ocr_slots(level, hardware, index_files=0)
+    assert profile.ocr_slots(Profile.ECONOMY, box(2, 4), index_files=S_VOLL_FILES) == INDEX_WORKERS == 1
+    assert profile.ocr_slots(Profile.ECONOMY, box(2, 4), index_files=10 * S_VOLL_FILES) == INDEX_WORKERS
+    assert profile.ocr_slots(Profile.STANDARD, box(16, 16), index_files=S_VOLL_FILES) == 4
 
 
 def test_the_memory_term_is_not_clamped() -> None:
