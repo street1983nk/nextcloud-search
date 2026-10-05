@@ -899,6 +899,16 @@ OCR_SLOT_COST_BYTES = 250 * MIB
 # (B2), 1257.5 MiB. Subtracted before the memory share is spread over slots.
 MAIN_PROCESS_BASELINE_BYTES = 1257 * MIB + MIB // 2
 
+# Growth of the main process per indexed file, the full index term. The phase 28
+# trip (docs/measurements/2026-10-abnahme-anfahrt/, sections 4, 7, 10 and 11)
+# has two points on the same box and level (m7g.large, Sparsam, one slot): S-T
+# with 5,000 files and S-voll with 52,137 files. Between them the main process
+# grew by 279.5 MiB, about 6 KiB per further file; S-voll lay 118.8 MiB above
+# what baseline plus one slot carry. The owner chose 6 KiB without a further
+# measurement on 2026-10-05 ("6 KiB, ohne Messung"): the measured growth, not
+# the 2.4 KiB that would only just carry S-voll, because the index grows on.
+MAIN_PROCESS_PER_FILE_BYTES = 6 * 1024
+
 # Extra resident memory of the fp32 weights over the int8 weights, measured in
 # plan 25-01 (docs/measurements/2026-09-fp32-speicher/README.md, section 5).
 # Subtracted from the memory term of the slot formula while fp32 is in force,
