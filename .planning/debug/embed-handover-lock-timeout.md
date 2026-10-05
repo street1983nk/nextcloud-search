@@ -1,5 +1,5 @@
 ---
-status: checkpoint
+status: resolved
 trigger: "OCR-zu-Embed-Uebergabe laeuft in Lock-Timeouts: 'could not move N files to the embed track, they run into the lock timeout' (Lauf 9 m7g.4xlarge L-T zweimal 30 Dateien, exakt 60 s nach dem Commit; 05.10. c7a.4xlarge St-fp32-T voller 500er-Stapel direkt nach 'the precision of the embedding changed, the vector stock is being written again')"
 created: 2026-10-05
 updated: 2026-10-05
