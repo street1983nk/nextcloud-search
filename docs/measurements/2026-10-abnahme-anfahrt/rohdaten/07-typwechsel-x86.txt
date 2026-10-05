@@ -191,3 +191,37 @@ zelle 17 L-T (performance/int8): GEMESSEN, rueckgabe 0
   crawl-fix: sechs runden "crawl is unfinished" (08:27:52Z bis 08:47:52Z), keine stale-lieferung, erste
     ruhige runde 09:14:39Z "walked ... seen=48687 stale=0"; unchanged 0; selbstvorschub einmal
     (08:31:19Z); kein lock-timeout.
+
+zelle 18 St-fp32-T (standard/fp32, 4 slots): GEMESSEN, rueckgabe 0
+  probe (nach dem nullstand): download der fp32-datei live, bytes 85983232/470268510 bei t=2s bis
+    470268510/470268510 bei t=10s; verdikt fits (reserve 28193230976, rateFp32 2835, rateInt8 3654,
+    slots 4), erzwungen nein; keine digest-warnung im log.
+  wirksamkeit ja effective standard slotsInForce 1 nach-s 33 (leerlauf); unter last slots=4 (250 zeilen),
+    wächter am ende slotsInForce 4; trigger 09:33:20Z
+  zaehltor bestanden 5000: vorrat-teilkorpus 325 = vorrat-global 325, eingebettet 4675, indexiert 4691
+  ende 10:45:37Z (trigger bis ende 1:12:17, planwert 1:30)
+  guard standard ohne absenkung, throttled false; oom 0 oom_kill 0, oomkilled false, restartcount 0
+  anon-max 2982780928 B = 2844,6 MiB, rechnung 2665,9, grenze 2932,5: urteil GETRAGEN
+    (87,9 MiB unter der grenze, 6,7 prozent über der rechnung); memory.peak 3838455808 B
+  12-slotkosten.py fp32 (St-T gegen St-fp32-T derselben box): hauptprozess int8 1797784 kB, fp32
+    2026348 kB, mehrbedarf 223,2 MiB gegen FP32_EXTRA_BYTES 367 MiB: urteil getragen
+  slots --slots 4: slot-anon je slot 228,4 MiB, slot-paar vmhwm 437,0 MiB, hauptprozess-max 1978,9 MiB;
+    grundlast nach 120 s ruhe 2280919040 B
+  fp32-datenpunkte für den vertagten SC4/C5-entscheid: c7a.xlarge (1 slot) mehrbedarf 509,7 MiB, zelle
+    nicht getragen (2172,5 gegen 2157,0); c7a.4xlarge (4 slots) mehrbedarf 223,2 MiB, zelle getragen
+    (2844,6 gegen 2932,5). der mehrbedarf ist ein unterschied der hauptprozess-maxima zweier zellen und
+    hängt an deren int8-gegenstück (hier 1755,6 MiB, selbst über der rechnung).
+  gegenprobe der probe: fits, kein wächtereingriff, kein oom, peak 3,7 GB auf 30 GiB: stimmt
+  crawl-fix: sechs runden "crawl is unfinished" (09:33:20Z bis 09:53:20Z), keine stale-lieferung, erste
+    ruhige runde 10:44:18Z "walked ... seen=26187 stale=0"; unchanged 0; selbstvorschub einmal (09:36:15Z).
+  rückkehr auf int8 (99-rueckkehr-int8.txt, nach-kette.sh): sicherheitsstopp +60, abwaerts code=saved
+    HTTP200, übersicht storedPrecision=int8 profileSaved=economy (10:47:41Z bis 10:47:44Z).
+  PRODUKTBEFUND (nicht angefasst, owner): 21 s nach der rückkehr (10:48:05Z) "the precision of the
+    embedding changed, the vector stock is being written again", sofort danach "could not hand 500 files
+    to another track" und "could not move 500 files to the embed track, they run into the lock timeout"
+    (container-rueckkehr-int8.txt). gleiches muster wie der embed-übergabe-befund aus lauf 9 (dort 30
+    dateien), hier ein voller stapel von 500 beim präzisionswechsel. nutzerrelevanz vermutlich: nach
+    einem wechsel der präzision wartet das neuschreiben der vektoren stapelweise bis zum lock-ablauf
+    (1800 s). ob und wann der vektorbestand vollständig neu geschrieben ist, ist nicht beobachtet (die
+    box ging zum typwechsel). der lock-timeout der fp32-zelle auf c7a.xlarge (2 dateien, 12:59Z) lag
+    mitten im lauf und ist ein anderer fall.

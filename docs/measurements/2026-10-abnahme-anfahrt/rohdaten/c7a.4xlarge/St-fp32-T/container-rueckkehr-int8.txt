@@ -1,0 +1,3 @@
+2026-10-05T10:48:05.144793894Z WARNING:findling.worker.embedding:the precision of the embedding changed, the vector stock is being written again
+2026-10-05T10:48:05.168664379Z WARNING:findling.nc.queue:could not hand 500 files to another track
+2026-10-05T10:48:05.168688109Z WARNING:findling.worker.embedding:could not move 500 files to the embed track, they run into the lock timeout

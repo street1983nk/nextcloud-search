@@ -1,0 +1,6 @@
+rueckkehr-start 2026-10-05T10:47:41Z nach kette-ende 2026-10-05T10:47:39Z bisher 24.0108
+kettenstopp +2 ersetzt durch sicherheitsstopp +60 (abholen und typwechsel von aussen)
+abwaerts code=saved saved=true HTTP200
+abwaerts-rueckgabewert 0
+uebersicht HTTP200 effective=standard guardEffective=standard guardCause=keine slotsInForce=4 throttled=false backendReachable=true scheduled=0 running=0 indexed=5000 embedded=5000 storedPrecision=int8 profileSaved=economy
+rueckkehr-ende 2026-10-05T10:47:44Z
