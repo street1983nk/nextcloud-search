@@ -51,6 +51,7 @@ EXPECTED: dict[str, str] = {
     "FINDLING_RECONCILE_SLICE": str(config.RECONCILE_SLICE),
     "FINDLING_EMBED_IDLE_RELEASE_SECONDS": str(config.EMBED_IDLE_RELEASE_SECONDS),
     "FINDLING_EXTRACT_ADDRESS_SPACE_BYTES": str(config.EXTRACT_ADDRESS_SPACE_BYTES),
+    "FINDLING_MAX_CELLS": str(config.MAX_CELLS),
 }
 
 # The variables a profile can raise, with the default and range their reader
@@ -92,9 +93,9 @@ def test_every_declared_default_equals_the_constant_in_config() -> None:
 def test_every_declared_variable_is_in_the_map() -> None:
     declared = _declared()
 
-    # Anti vacuity: sixteen variables are declared today; a parser that found
+    # Anti vacuity: seventeen variables are declared today; a parser that found
     # none would pass every comparison above.
-    assert len(declared) >= 16
+    assert len(declared) >= 17
     assert set(declared) == set(EXPECTED) | READER_WITNESSED
 
 

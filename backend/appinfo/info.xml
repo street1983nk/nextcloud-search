@@ -536,8 +536,25 @@ Support entreprise et modules payants : demande de devis à admin@infranode.dev]
 			<variable>
 				<name>FINDLING_EXTRACT_ADDRESS_SPACE_BYTES</name>
 				<display-name>Memory a single document may take while it is read</display-name>
-				<description>A whole number of bytes. It caps the address space of the process that reads one document, so a broken or hostile file cannot take the machine down with it. The default of 536870912 (512 MB) reads every office document and every scanned page at 300 dpi. Very large photos, around 40 megapixels and up, need more and otherwise end as failed with the reason out_of_memory; 1073741824 (1 GiB) reads them. Only one document is read at a time, so the number is the peak and not a multiple.</description>
+				<description>A whole number of bytes. It caps the address space of the process that reads one document, so a broken or hostile file cannot take the machine down with it. The default of 536870912 (512 MB) reads every office document and every scanned page at 300 dpi. Very large photos, around 40 megapixels and up, need more and otherwise end as failed with the reason out_of_memory; 1073741824 (1 GiB) reads them. The cap holds for each reading process on its own; where the profile reads several documents side by side, each of them may take this much.</description>
 				<default>536870912</default>
+			</variable>
+			<!--
+				The cell cap of the spreadsheet reader (#21). The value was readable
+				from the environment since phase 2 but never declared, and AppAPI
+				hands the container only the variables listed here, so an admin had
+				no way to raise it. The default has to stay equal to
+				config.MAX_CELLS: AppAPI sets a declared default as a real
+				environment variable, and a value that differs from the constant
+				would overrule every box (test_info_xml_defaults.py keeps the two
+				equal). The wording of the description is provisional until the
+				owner accepts the text draft of plan 29-02.
+			-->
+			<variable>
+				<name>FINDLING_MAX_CELLS</name>
+				<display-name>Cells a single spreadsheet may have</display-name>
+				<description>A whole number of cells per spreadsheet file. The default of 200000 reads ordinary workbooks and keeps a single export with a million rows from taking the machine down. A larger file is skipped with the reason too_many_cells rather than indexed in part. Anything that is not a positive whole number falls back to the default.</description>
+				<default>200000</default>
 			</variable>
 		</environment-variables>
 	</external-app>
