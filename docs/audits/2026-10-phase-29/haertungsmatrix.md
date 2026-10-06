@@ -29,6 +29,25 @@ Lokaler Lauf (Windows, `PYTHONUTF8=1 uv run pytest -q -rs <datei>::<name>`), 06.
 
 Die Lückenspalte stützt sich auf die Research-Tabelle "Launch-Härtung: Abdeckung Erfolgskriterium 1" (29-RESEARCH.md) und wurde beim Lesen der Tests bestätigt. Zeile 6 hatte in der Research zusätzlich `FINDLING_MAX_CELLS` in `EXPECTED` als Kandidat; das ist eine Produktänderung an info.xml (D-29-03) und gehört zum zugehörigen Fix-Plan, nicht hierher.
 
+## Lückentests (Task 2)
+
+Alle sechs in `backend/tests/test_launch_hardening.py`, aufgebaut auf den Stand-ins von `test_poller.py` (`_KillingExtractor`, `_slot_poller`, `_FakeQueue`) und `test_embedding_track.py` (`_FakeModel`, `_cut`, `_watched`, `_FakeQueue`). Ein Neustart ist wie in diesen Dateien ein zweiter Poller auf demselben Volume, mit dem Modulzustand (Profil, Präzision, Spur, Guard) im Ruhezustand. Lauf 06.10.2026 lokal (Windows): 6 passed.
+
+| Zeile | Testname | Was er zusichert | Ergebnis 06.10. |
+|---|---|---|---|
+| 1 | `test_two_children_killed_in_one_pass_are_retried_alone_and_only_the_guilty_one_is_out_of_memory` | Vier Slots, Scan 300 stirbt auch allein, Scan 302 nur einmal: beide laufen allein nach, nur 300 endet als `out_of_memory`, kein dritter Lauf, zwei Kill-Meldungen, 7001 bis 7003 genau einmal im Index und `indexed`. | passed |
+| 2 | `test_an_ocr_slot_and_the_embed_track_killed_in_one_run_leave_every_verdict_and_every_vector_after_the_restart` | Ein OCR-Kind getötet, danach stirbt die Embed-Spur beim dritten Dokument (BaseException, kein Handler kann sie zum Verdikt machen): Teilbestand an Vektoren, nichts zurückgegeben. Nach Neustart und Wiederauslieferung per Lease: alle vier Verdikte `indexed`, jedes Dokument einmal im Index, jedes trägt Vektoren, keine doppelten Chunks. | passed |
+| 3 | `test_a_restart_on_a_smaller_box_lowers_the_effective_level_and_the_slots_and_loses_no_document` | Große Box (16 Kerne, 64 GiB) mit Leistung: Slotziel 15. Neustart auf 8 Kernen und 8 GB: Statusbericht nennt gewählt `performance`, wirksam `standard`, `downgraded`, Slotziel 3; alle acht Dokumente beider Boxen genau einmal im Index. | passed |
+| 4 | `test_a_profile_change_during_the_redelivery_lets_the_cursor_run_to_the_end_without_losing_a_band` | Band-Wiederauslieferung mit Bandbreite 1 über drei Dokumente, Profil Sparsam, Standard, Sparsam zwischen den Bändern: jedes Band genau einmal, Cursor endet leer, Marke aktuell. | passed |
+| 5 | `test_a_second_precision_change_before_the_first_rewrite_ends_leaves_a_consistent_stock_under_the_right_mark` | int8 zu fp32, nach dem ersten Band zurück zu int8: die Drift-Kette läuft ein zweites Mal vollständig, die zwischenzeitlichen fp32-Vektoren gehen mit, Marke endet auf int8 (1.3-Schreibweise), danach jedes Dokument einmal angefordert, Sweep endet. | passed |
+| 6 | `test_a_set_variable_beats_the_chosen_profile_in_the_snapshot_and_survives_a_profile_change` | `FINDLING_OCR_MAX_PAGES` und `FINDLING_OCR_DPI` gesetzt, Profil Leistung, Sparsam, Standard nacheinander gewählt: im Statusbericht gewinnen beide Variablen jedes Mal mit Quelle `env`, alle anderen Werte bleiben `profile`, Slotzahl folgt dem Profil. | passed |
+
+Positivkontrolle: Zeile 2 belegt im Test selbst, dass der Tod mitten in der Spur lag (0 < Dokumente mit Vektoren < 4, keine Rückgabe per unlock); Zeile 3 belegt, dass das Slotziel wirklich fällt (15 auf 3). Ein erster Entwurf von Zeile 5 war rot, weil die Filterfunktion `_drift_chain` auch die Sweep-Bänder nach der zweiten Kette zählt; das war ein Testfehler, kein Produktbefund, und ist im Test korrigiert.
+
 ## Befunde für 29-13
 
-Audit in 29-13, Fix in 29-14 (29-14-PLAN: "Alle Befunde H-29-NN aus der Härtungsmatrix sind behoben, ihre xfail-Marken entfernt"). Werden mit Task 2 ergänzt.
+Audit in 29-13, Fix in 29-14 (29-14-PLAN: "Alle Befunde H-29-NN aus der Härtungsmatrix sind behoben, ihre xfail-Marken entfernt").
+
+Keine. Alle sechs Lückentests laufen grün, kein Test trägt eine xfail-Marke, es gibt keinen Befund H-29-NN aus diesem Plan.
+
+Offen bleibt nur der Nachweis der beiden Linux-Fälle aus `test_slots_kill.py` je Einzelfall: die CI läuft mit `-q` ohne `-rs`. 29-13 kann ihn mit einem CI-Lauf belegen, der `-rs` oder `-v` für diese Datei setzt.
