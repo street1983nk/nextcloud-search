@@ -772,8 +772,13 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # (crawling() and the locking provider), QueueController.php (the crawling flag
 # of documentStats) and their two unit tests changed their bytes. No file came
 # and none went, so PHP_FILES_TODAY stays at 88.
+# Measured again by plan 29-01 (three skipped codes and the verdicts signal,
+# K6): plan 29-01 changed FileStateService.php (REASONS and STATE_REASONS),
+# AdminViewService.php (REASON_TEXT), ProfileController.php (the field verdicts
+# and VERDICTS_GENERATION) and ProfileControllerTest.php. No file came and none
+# went, so PHP_FILES_TODAY stays at 88.
 PHP_FILES_TODAY = 88
-PHP_TREE_HASH_TODAY = "bbcc449daff788f6f85d44bd1b71b485c857009bc6eedca7d6c87cc1fc95098a"
+PHP_TREE_HASH_TODAY = "a2986165eb84fe751a5a5a9af05f84628caafcaf688ccb2dbb6e5f69590cf747"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
@@ -1598,8 +1603,13 @@ PHP_TREE_HASH_TODAY = "bbcc449daff788f6f85d44bd1b71b485c857009bc6eedca7d6c87cc1f
 # with its comment) and profile.py (main_process_bytes, index_files in
 # _memory_term and ocr_slots) changed their bytes. No file came and none went,
 # so PACKAGE_FILES_TODAY stays at 71. The PHP pair does not move: php/ is unchanged.
+# Measured again by plan 29-01: plan 29-01 changed extract/errors.py and
+# store/repo.py (the skipped codes system_file, legacy_format and
+# unsupported_variant) and nc/queue.py (CompanionChoice.verdicts and the
+# fallback per list in acknowledge, K6). No file came and none went, so
+# PACKAGE_FILES_TODAY stays at 71. The PHP pair moved in the same plan.
 PACKAGE_FILES_TODAY = 71
-PACKAGE_TREE_HASH_TODAY = "fc0576e70b50d33d0beeeff9f517a8f8e52f9ee5af82fb97403b2647ac6ad1c7"
+PACKAGE_TREE_HASH_TODAY = "1ff0c5ca9abbda809c1106d53d493de5d9d3a2a8c8289c88ebefe33f43599433"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

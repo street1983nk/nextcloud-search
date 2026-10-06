@@ -35,6 +35,8 @@ import pytest
 
 from findling.nc.client import AsyncNextcloudApp
 from findling.nc.queue import (
+    _FAILED_FALLBACK,
+    _SKIPPED_FALLBACK,
     KIND_EMBED,
     KINDS,
     LANE_EMBED,
@@ -43,10 +45,13 @@ from findling.nc.queue import (
     TOPUP_IDLE,
     TOPUP_SUPPLIED,
     TOPUP_UNAVAILABLE,
+    VERDICTS_GENERATION,
     CompanionChoice,
     DocumentQueue,
     QueueJob,
+    _wire_reason,
 )
+from findling.store import repo
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "src" / "findling"
 CLIENT_SOURCE = PACKAGE_ROOT / "nc" / "client.py"
@@ -1004,3 +1009,178 @@ async def test_a_requeue_error_without_a_status_says_none(caplog: pytest.LogCapt
     assert len(lines) == 1
     assert "TimeoutError" in lines[0]
     assert "status=none" in lines[0]
+
+
+# -- the verdict capability signal and the fallback on the wire (K6, plan 29-01) --
+
+PHP_FILE_STATE_SERVICE = PACKAGE_ROOT.parents[2] / "php" / "lib" / "Service" / "FileStateService.php"
+NEW_CODES = ("system_file", "legacy_format", "unsupported_variant")
+
+
+def _php_state_reasons() -> dict[str, set[str]]:
+    """STATE_REASONS of FileStateService.php, the table record() judges a pair by."""
+    source = PHP_FILE_STATE_SERVICE.read_text(encoding="utf-8")
+    block = re.search(r"const STATE_REASONS = \[(.*?)\];", source, re.DOTALL)
+    assert block is not None, "the STATE_REASONS constant is no longer where this test looks for it"
+    mapping = {
+        state: set(re.findall(r"'([a-z_]+)'", inner))
+        for state, inner in re.findall(r"'(indexed|skipped|failed)'\s*=>\s*\[(.*?)\]", block.group(1), re.DOTALL)
+    }
+    assert set(mapping) == {"indexed", "skipped", "failed"}
+    return mapping
+
+
+async def test_a_companion_announcing_the_generation_reads_as_verdicts_2() -> None:
+    session = _FakeSession({("GET", PROFILE_PATH): {"profile": "standard", "precision": "int8", "verdicts": 2}})
+
+    choice = await _queue(session).companion_choice()
+
+    assert choice.verdicts == VERDICTS_GENERATION == 2
+
+
+@pytest.mark.parametrize("value", [None, True, False, 1, 3, "2", 2.0, [2], {"v": 2}])
+async def test_any_other_verdicts_value_reads_as_none(value: object) -> None:
+    # T-29-02: a closed set like profile and precision. True is an int in
+    # Python and 2.0 compares equal to 2, neither of them is the signal.
+    session = _FakeSession({("GET", PROFILE_PATH): {"profile": "standard", "verdicts": value}})
+
+    assert (await _queue(session).companion_choice()).verdicts is None
+
+
+async def test_a_companion_without_the_verdicts_field_reads_as_none() -> None:
+    # The 1.3.2 companion: the field does not exist.
+    session = _FakeSession({("GET", PROFILE_PATH): {"profile": "standard", "precision": "int8"}})
+
+    assert (await _queue(session).companion_choice()).verdicts is None
+
+
+async def test_a_failed_profile_call_leaves_verdicts_none() -> None:
+    session = _FakeSession(error=OSError("404"))
+
+    assert (await _queue(session).companion_choice()).verdicts is None
+
+
+def _ack_body(session: _FakeSession) -> dict[str, Any]:
+    acks = [kwargs for method, path, kwargs in session.calls if (method, path) == ("DELETE", ACK_PATH)]
+    assert len(acks) == 1
+    return cast("dict[str, Any]", acks[0]["json"])
+
+
+_SKIPS = {11: "system_file", 12: "legacy_format", 13: "unsupported_variant", 14: "too_large"}
+_FAILS = {21: "system_file", 22: "legacy_format", 23: "unsupported_variant", 24: "timeout"}
+
+
+@pytest.mark.parametrize("answer", [{"profile": "standard"}, {"profile": "standard", "verdicts": 1}, None])
+async def test_without_the_signal_no_new_code_leaves_the_container(answer: dict[str, Any] | None) -> None:
+    # T-29-01: a 1.3.2 companion refuses a whole list with one unknown code.
+    # None stands for "companion_choice was never called".
+    answers: dict[tuple[str, str], Any] = {("DELETE", ACK_PATH): {"acknowledged": 1}}
+    if answer is not None:
+        answers[("GET", PROFILE_PATH)] = answer
+    session = _FakeSession(answers)
+    queue = _queue(session)
+    if answer is not None:
+        await queue.companion_choice()
+
+    await queue.acknowledge([1], _FAILS, _SKIPS)
+
+    body = _ack_body(session)
+    assert body["skipped"] == [
+        {"fileId": 11, "reason": "mime_not_allowed"},
+        {"fileId": 12, "reason": "mime_not_allowed"},
+        {"fileId": 13, "reason": "image_not_ocrable"},
+        {"fileId": 14, "reason": "too_large"},
+    ]
+    assert body["failed"] == [
+        {"queueId": 21, "reason": "corrupt"},
+        {"queueId": 22, "reason": "corrupt"},
+        {"queueId": 23, "reason": "corrupt"},
+        {"queueId": 24, "reason": "timeout"},
+    ]
+    serialized = repr(body)
+    for code in NEW_CODES:
+        assert code not in serialized
+
+
+class _FlakyProfileSession(_FakeSession):
+    """Announces the signal on the first profile read and fails on the second."""
+
+    def __init__(self) -> None:
+        super().__init__({("GET", PROFILE_PATH): {"profile": "standard", "verdicts": 2}})
+        self.profile_reads = 0
+
+    async def ocs(self, method: str, path: str, **kwargs: Any) -> Any:
+        if (method, path) == ("GET", PROFILE_PATH):
+            self.profile_reads += 1
+            if self.profile_reads > 1:
+                self.calls.append((method, path, kwargs))
+                raise OSError("gateway gone")
+        return await super().ocs(method, path, **kwargs)
+
+
+async def test_a_failed_read_after_the_signal_falls_back_again() -> None:
+    # The signal is the answer of the round, not a memory of an earlier one.
+    session = _FlakyProfileSession()
+    queue = _queue(session)
+    assert (await queue.companion_choice()).verdicts == VERDICTS_GENERATION
+    assert (await queue.companion_choice()).verdicts is None
+
+    await queue.acknowledge([], {}, {11: "system_file"})
+
+    assert _ack_body(session)["skipped"] == [{"fileId": 11, "reason": "mime_not_allowed"}]
+
+
+async def test_with_the_signal_the_codes_travel_unchanged() -> None:
+    session = _FakeSession(
+        {
+            ("GET", PROFILE_PATH): {"profile": "standard", "verdicts": 2},
+            ("DELETE", ACK_PATH): {"acknowledged": 1},
+        }
+    )
+    queue = _queue(session)
+    await queue.companion_choice()
+
+    await queue.acknowledge([1], _FAILS, _SKIPS)
+
+    body = _ack_body(session)
+    assert body["skipped"] == [{"fileId": file_id, "reason": reason} for file_id, reason in _SKIPS.items()]
+    assert body["failed"] == [{"queueId": queue_id, "reason": reason} for queue_id, reason in _FAILS.items()]
+
+
+def test_every_skipped_fallback_is_a_skipped_pair_the_companion_stores() -> None:
+    # FileStateService::record drops a pair that is not in STATE_REASONS, and
+    # the file then has no verdict in the PHP mirror at all. A skipped fallback
+    # onto corrupt would be exactly that pair.
+    php = _php_state_reasons()
+
+    assert set(_SKIPPED_FALLBACK) == set(NEW_CODES)
+    for code, target in _SKIPPED_FALLBACK.items():
+        assert target in php["skipped"], (code, target)
+        assert target in repo.STATE_REASONS["skipped"], (code, target)
+        assert target not in NEW_CODES
+    assert "corrupt" not in _SKIPPED_FALLBACK.values()
+
+
+def test_every_failed_fallback_is_a_failed_pair_the_companion_stores() -> None:
+    php = _php_state_reasons()
+
+    assert set(_FAILED_FALLBACK) == set(NEW_CODES)
+    for code, target in _FAILED_FALLBACK.items():
+        assert target in php["failed"], (code, target)
+        assert target in repo.STATE_REASONS["failed"], (code, target)
+        assert target not in NEW_CODES
+
+
+def test_the_new_codes_are_skipped_only_in_the_companion() -> None:
+    # The failed table is defensive because the failed list never carries them.
+    php = _php_state_reasons()
+    for code in NEW_CODES:
+        assert code in php["skipped"]
+        assert code not in php["failed"]
+
+
+@pytest.mark.parametrize("verdicts", [None, 1, 2])
+def test_every_other_code_travels_unchanged(verdicts: int | None) -> None:
+    for code in ("too_large", "excluded", "unreadable", "gone", "corrupt", "timeout"):
+        assert _wire_reason(code, verdicts, fallback=_SKIPPED_FALLBACK) == code
+        assert _wire_reason(code, verdicts, fallback=_FAILED_FALLBACK) == code

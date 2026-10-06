@@ -212,6 +212,30 @@ def test_the_three_ocr_reasons_belong_to_the_state_the_ocr_branch_uses(reason: R
     assert reason.value in repo.STATE_REASONS[state.value]
 
 
+@pytest.mark.parametrize("code", ["system_file", "legacy_format", "unsupported_variant"])
+def test_the_three_verdicts_of_plan_29_01_are_decisions_and_never_failures(code: str) -> None:
+    """system_file, legacy_format and unsupported_variant are skipped, in every copy.
+
+    A sidecar, an old format under a new name and an image variant the decoder
+    cannot map are statements about the file, not a parser that lost. They must
+    not count as errors on the page, and they are not ``excluded`` either: that
+    one is the live sign of an admin rule and is never stored.
+    """
+    reason = Reason(code)
+
+    assert reason in STATE_REASONS[State.SKIPPED]
+    assert reason not in STATE_REASONS[State.FAILED]
+    assert code in repo.STATE_REASONS["skipped"]
+    assert code not in repo.STATE_REASONS["failed"]
+    assert code in _php_reasons()
+    assert code in _php_state_reasons()["skipped"]
+    assert code not in _php_state_reasons()["failed"]
+
+    assert ExtractionOutcome.skipped(reason).reason is reason
+    with pytest.raises(ValueError, match="does not belong"):
+        ExtractionOutcome.failed(reason)
+
+
 def test_an_ocr_failure_cannot_be_dressed_up_as_a_decision() -> None:
     # skipped(ocr_failed) would move a broken engine out of the error count on the
     # status page and into the "we decided against it" column, which is the one

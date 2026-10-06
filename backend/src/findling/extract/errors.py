@@ -109,6 +109,9 @@ class Reason(StrEnum):
     IMAGE_NOT_OCRABLE = "image_not_ocrable"  # a picture too small or too flat to carry text
     EXCLUDED = "excluded"  # an admin rule keeps this file out of the index, the file itself is untouched
     UNREADABLE = "unreadable"  # written by the PHP half: no user asked may read it, a Team Folder ACL (#14)
+    SYSTEM_FILE = "system_file"  # macOS AppleDouble (._) or Office lock stub (~$), no document content (#18, #22)
+    LEGACY_FORMAT = "legacy_format"  # an old OLE container under an OOXML extension
+    UNSUPPORTED_VARIANT = "unsupported_variant"  # an image variant the decoder cannot map
 
     # failed, the things we wanted to do and could not
     EMPTY_FILE = "empty_file"
@@ -139,6 +142,9 @@ STATE_REASONS: Final[Mapping[State, frozenset[Reason | None]]] = {
             Reason.IMAGE_NOT_OCRABLE,
             Reason.EXCLUDED,  # an admin rule, not a property of the file
             Reason.UNREADABLE,  # a permission setting, not a deletion (#14)
+            Reason.SYSTEM_FILE,  # a sidecar of the operating system or of Office, not a document
+            Reason.LEGACY_FORMAT,  # a format this image does not read, under a name it would
+            Reason.UNSUPPORTED_VARIANT,  # an honest verdict on a picture, not a broken file
         }
     ),
     State.FAILED: frozenset(

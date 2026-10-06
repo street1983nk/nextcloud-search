@@ -226,6 +226,12 @@ deutschen Übersetzung.
 | `None.` | Keine. | Aucune. |
 | `Excluded by a rule` | Durch Regel ausgeschlossen | Exclu par une règle |
 | `Remove the matching entry under "Excluded folders".` | Den passenden Eintrag unter "Ausgeschlossene Ordner" entfernen. | Supprimer l'entrée correspondante sous "Dossiers exclus". |
+| `System or helper file` | System- oder Hilfsdatei | Fichier système ou auxiliaire |
+| `None. macOS metadata files (._) and Office lock files (~$) carry no document content.` | Keine. macOS-Metadateien (._) und Office-Sperrdateien (~$) enthalten keinen Dokumentinhalt. | Aucune. Les fichiers de métadonnées macOS (._) et les fichiers de verrouillage Office (~$) ne contiennent aucun contenu de document. |
+| `Old Office format under a new name` | Altes Office-Format unter neuem Namen | Ancien format Office sous un nouveau nom |
+| `Save the file again in the current Office format (.docx, .xlsx, .pptx).` | Datei im aktuellen Office-Format (.docx, .xlsx, .pptx) neu speichern. | Enregistrer à nouveau le fichier au format Office actuel (.docx, .xlsx, .pptx). |
+| `Image variant that cannot be read` | Bildvariante, die nicht gelesen werden kann | Variante d'image illisible |
+| `None. The image uses an encoding the image library does not support.` | Keine. Das Bild nutzt eine Kodierung, die die Bildbibliothek nicht unterstützt. | Aucune. L'image utilise un encodage que la bibliothèque d'images ne prend pas en charge. |
 | `Not readable for the users asked` | Für die gefragten Nutzer nicht lesbar | Illisible pour les utilisateurs consultés |
 | `The file is still there. Check the advanced permissions of the Team Folder: Findling reads a file only as a user who may open it and asks the first 20 of its users in alphabetical order.` | Die Datei ist noch vorhanden. Die erweiterten Berechtigungen des Team Folders prüfen: Findling liest eine Datei nur als Nutzer, der sie öffnen darf, und fragt die ersten 20 ihrer Nutzer in alphabetischer Reihenfolge. | Le fichier existe toujours. Vérifier les autorisations avancées du Team Folder : Findling ne lit un fichier qu'au nom d'un utilisateur autorisé à l'ouvrir et consulte les 20 premiers de ses utilisateurs par ordre alphabétique. |
 | `The user named in front of the path may not open this file. The diagnosis is about the file itself.` | Der vor dem Pfad genannte Nutzer darf diese Datei nicht öffnen. Die Diagnose gilt der Datei selbst. | L'utilisateur indiqué devant le chemin n'est pas autorisé à ouvrir ce fichier. Le diagnostic porte sur le fichier lui-même. |

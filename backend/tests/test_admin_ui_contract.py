@@ -3198,8 +3198,9 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     # 260929-kii (the recount sentence), one of review WR-10 of phase 27 (the
     # placed file with another checksum), two of quick task 260929-s7p (the
     # file id on every line of the error list, issue #14), one of quick task
-    # 261003-d3y (the threshold cause hardware_short, D-24-07)
-    assert len(keys_of["de.json"]) == 292
+    # 261003-d3y (the threshold cause hardware_short, D-24-07), six of plan
+    # 29-01 (label and remedy of system_file, legacy_format, unsupported_variant)
+    assert len(keys_of["de.json"]) == 298
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:

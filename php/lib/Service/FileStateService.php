@@ -113,6 +113,9 @@ class FileStateService {
 		'image_not_ocrable',
 		'excluded',
 		'unreadable',
+		'system_file',
+		'legacy_format',
+		'unsupported_variant',
 		// failed
 		'empty_file',
 		'corrupt',
@@ -161,6 +164,9 @@ class FileStateService {
 			'image_not_ocrable',
 			'excluded',
 			'unreadable',
+			'system_file',
+			'legacy_format',
+			'unsupported_variant',
 		],
 		'failed' => [
 			'empty_file',

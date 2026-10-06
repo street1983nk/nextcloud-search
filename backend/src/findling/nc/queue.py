@@ -121,6 +121,64 @@ _KINDS_WITHOUT_A_NODE: Final = frozenset({KIND_DELETE, KIND_ACL})
 # numbers moves without the other.
 MAX_ACK_LIST: Final = 256
 
+# The generation of the verdict vocabulary a companion announces in the field
+# ``verdicts`` of its profile answer (K6), ProfileController::VERDICTS_GENERATION
+# on the other side. 2 means it stores system_file, legacy_format and
+# unsupported_variant under skipped. A companion that does not announce it,
+# a 1.3.2 for instance, refuses the WHOLE failure or skip list with a 400 as soon
+# as one code in it is unknown (QueueController), so those three codes leave this
+# container only towards a companion that announced exactly this value.
+VERDICTS_GENERATION: Final = 2
+
+# What the three codes become on the wire towards a companion without the signal,
+# one table per list. FileStateService::record judges the PAIR of state and code
+# and drops a pair that is not in its STATE_REASONS, and a dropped pair leaves
+# the file without any verdict in the PHP mirror. So every target here is a code
+# the old companion stores under the state of the list it travels in; a test
+# reads the PHP constant and holds both tables against it.
+#
+# skipped: a sidecar or an old format under a new name is not a document type
+# this app reads, which is mime_not_allowed (unreadable would be a statement
+# about permissions, and corrupt is not a skipped code at all); an image variant
+# the decoder cannot map is an image that is not read, image_not_ocrable.
+_SKIPPED_FALLBACK: Final[Mapping[str, str]] = {
+    "system_file": "mime_not_allowed",
+    "legacy_format": "mime_not_allowed",
+    "unsupported_variant": "image_not_ocrable",
+}
+
+# failed: purely defensive. ExtractionOutcome.failed refuses the three codes, so
+# the failure list never carries them; should a defect put one there, corrupt is
+# the failed code the old companion knows.
+_FAILED_FALLBACK: Final[Mapping[str, str]] = {
+    "system_file": "corrupt",
+    "legacy_format": "corrupt",
+    "unsupported_variant": "corrupt",
+}
+
+
+def _wire_reason(reason: str, verdicts: int | None, *, fallback: Mapping[str, str]) -> str:
+    """The code as it may travel to the companion at hand.
+
+    Unchanged towards a companion that announced VERDICTS_GENERATION; otherwise
+    mapped through ``fallback``, the table of the list the code travels in.
+    Every code outside the table travels unchanged in both cases.
+    """
+    if verdicts == VERDICTS_GENERATION:
+        return reason
+    return fallback.get(reason, reason)
+
+
+def _verdicts(value: object) -> int | None:
+    """The announced verdict generation, only ever exactly VERDICTS_GENERATION.
+
+    A closed set like profile and precision (T-29-02): a bool is not a number
+    here, a string is not one either, and any other value is None.
+    """
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value if value == VERDICTS_GENERATION else None
+
 
 @dataclass(frozen=True, slots=True)
 class QueueJob:
@@ -211,11 +269,15 @@ class CompanionChoice:
     ``confirmed`` is the way back of the memory guard (D-26-04): the token the
     admin confirmed with occ, 32 lower case hex digits, or None. A 1.3 or early
     1.4 companion does not know the field at all, which reads as None.
+
+    ``verdicts`` is the capability signal of K6: VERDICTS_GENERATION when the
+    companion stores the three skipped codes of release 1.4.0, None otherwise.
     """
 
     profile: str | None
     precision: str | None
     confirmed: str | None = None
+    verdicts: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -425,6 +487,11 @@ class DocumentQueue:
 
     def __init__(self, nc: AsyncNextcloudApp) -> None:
         self._nc = nc
+        # The verdict generation the companion announced in the last profile
+        # read, None until one announced it. The poller reads the profile on
+        # this same instance once per round, before the claim, so acknowledge
+        # sees the answer of its own round (K6).
+        self._companion_verdicts: int | None = None
 
     async def claim(self, *, limit: int, max_bytes: int, lane: str | None = None) -> ClaimResult:
         """Take a batch, translate it, and count what could not be translated.
@@ -498,12 +565,26 @@ class DocumentQueue:
         Three empty lists never leave the process. That request can only answer
         zero, and on an idle instance the poller would otherwise pay a round trip
         for every single empty poll.
+
+        The codes pass _wire_reason first (K6). The container keeps the real
+        code in its own state store; only the wire to a companion that did not
+        announce VERDICTS_GENERATION falls back, per list onto a code that
+        companion stores under that state. The re-check of D-29-10 (plan 29-09)
+        starts only once the signal is there and then corrects the PHP mirror
+        from the real codes in state.db.
         """
-        skips = dict(skipped or {})
+        verdicts = self._companion_verdicts
+        skips = {
+            file_id: _wire_reason(reason, verdicts, fallback=_SKIPPED_FALLBACK)
+            for file_id, reason in (skipped or {}).items()
+        }
         if not done and not failed and not skips:
             return CallResult(ok=True)
 
-        failures = [{"queueId": queue_id, "reason": reason} for queue_id, reason in failed.items()]
+        failures = [
+            {"queueId": queue_id, "reason": _wire_reason(reason, verdicts, fallback=_FAILED_FALLBACK)}
+            for queue_id, reason in failed.items()
+        ]
         decisions = _capped_skips(skips)
         try:
             answer = await ack_documents(self._nc, files=list(done), failed=failures, skipped=decisions)
@@ -587,6 +668,11 @@ class DocumentQueue:
         The confirmation token of the memory guard (D-26-04) only comes back as
         exactly 32 lower case hex digits (T-26-21); anything else, including a
         missing field of a companion that predates it, is None.
+
+        ``verdicts`` is kept on this instance as well, because acknowledge reads
+        it there: only exactly VERDICTS_GENERATION counts, and a failed read
+        resets it to None, which is the side that sends only codes every
+        companion knows (K6, T-29-01).
         """
         try:
             answer = await read_profile(self._nc)
@@ -595,16 +681,20 @@ class DocumentQueue:
             # here, and that costs one debug line per round, never the poller
             # (D-24-02). No value and no exception text in the line (T-24-19).
             LOGGER.debug("could not read the profile route")
-            return CompanionChoice(profile=None, precision=None, confirmed=None)
+            self._companion_verdicts = None
+            return CompanionChoice(profile=None, precision=None, confirmed=None, verdicts=None)
 
         payload = _mapping(answer) or {}
         profile = payload.get("profile")
         precision = payload.get("precision")
         confirmed = payload.get("confirmed")
+        verdicts = _verdicts(payload.get("verdicts"))
+        self._companion_verdicts = verdicts
         return CompanionChoice(
             profile=profile if isinstance(profile, str) and profile in PROFILE_NAMES else None,
             precision=precision if isinstance(precision, str) and precision in PRECISION_NAMES else None,
             confirmed=confirmed if isinstance(confirmed, str) and _TOKEN_PATTERN.fullmatch(confirmed) else None,
+            verdicts=verdicts,
         )
 
     async def requeue(self, file_ids: Sequence[int], *, kind: str) -> CallResult:
