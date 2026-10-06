@@ -69,7 +69,7 @@ import time
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, replace
 from enum import Enum
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import IO, Any, Final, cast
 
 from tantivy import Index
@@ -1425,6 +1425,18 @@ class Poller:
                 embedded.append(job.file_id)
             return 0
 
+        # A sidecar of the operating system or of Office: macOS AppleDouble
+        # (._name) and Office lock stubs (~$name). Neither carries document
+        # content, and before this branch they ended as corrupt by the thousand
+        # (D-29-02, D-29-05, #18, #22). Decided before the first byte and with no
+        # setting to switch it off. The verdict is skipped(system_file) and never
+        # excluded, which is a live answer of the PHP side and is never stored.
+        # A Mac bundle such as .key is not a special case here (deferred).
+        if _is_sidecar(PurePosixPath(job.path).name or job.title):
+            await self._drop_a_sidecar(job)
+            self._collect(job, ExtractionOutcome.skipped(Reason.SYSTEM_FILE), done, failed, verdicts)
+            return 0
+
         route = judge(job.mime, job.size)
         if isinstance(route, ExtractionOutcome):
             # Decided before the first byte. Reading fifty megabytes to learn what
@@ -1778,6 +1790,23 @@ class Poller:
         await asyncio.to_thread(store.forget_acl, job.file_id)
         await asyncio.to_thread(store.tombstone, job.file_id)
         done.append(job.queue_id)
+
+    async def _drop_a_sidecar(self, job: QueueJob) -> None:
+        """Take a sidecar out of the index, the vector stock and the prefilter.
+
+        A skipped verdict by itself removes nothing: record() writes the state
+        row, and the document an earlier version indexed would keep answering
+        searches with the garbage of an AppleDouble file. So the sidecar leaves
+        the way a deleted file leaves (see :meth:`_forget`), without the
+        tombstone, because the file still exists and its verdict is the truth
+        about it.
+
+        Both writes are idempotent and a sidecar that was never indexed costs a
+        deletion by term that finds nothing. The commit happens in the shared
+        step 2, so an abort before it hands the row back and both run again.
+        """
+        await asyncio.to_thread(self._writer_or_die().drop_document, job.file_id)
+        await asyncio.to_thread(self._store_or_die().forget_acl, job.file_id)
 
     async def _replace_access(self, job: QueueJob, done: list[int]) -> None:
         """Write the permissions of one file again, and touch nothing else.
@@ -2279,6 +2308,19 @@ def _record_of(job: QueueJob, outcome: ExtractionOutcome) -> IndexRecord:
         body=outcome.text,
         mtime=job.mtime,
     )
+
+
+def _is_sidecar(name: str) -> bool:
+    """True for the base name of a macOS AppleDouble file or an Office lock stub.
+
+    The base name and nothing else, checked here in Python and never with a SQL
+    LIKE (T-29-17): a pattern over the path would catch every hidden file and
+    every folder that happens to start with the marker. A name only counts when
+    it starts with ``._`` or ``~$``; ``.hidden``, ``a._b`` and ``_x`` are
+    documents. A module function, so that the recheck of the old stock asks the
+    same question.
+    """
+    return name.startswith(("._", "~$"))
 
 
 def _discard(scratch: Path) -> None:
