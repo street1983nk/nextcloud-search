@@ -66,7 +66,7 @@ Details im Archiv: .planning/milestones/v1.3-ROADMAP.md
 - [x] **Phase 25: Einbettungsspur und Modellwahl** - Einbettung als eigener Nebenläufer (H1) mit PHP-Art-Filter, IDX-08 neu gefasst, int8/fp32 wählbar (completed 2026-09-28)
 - [x] **Phase 26: N OCR-Slots und Speicherwächter** - Mehrere OCR-Slots (H2) mit KIND_BATCH-Companion, Drosselung und selbsttätiger Profil-Rückstufung (completed 2026-09-29)
 - [x] **Phase 27: Vorab-Prüfung und Settings-Oberfläche** - Erste echte Settings-Fläche mit "Übernehmen und prüfen" (N-Slot-Probe, Verdikt), acht Sprachkataloge (completed 2026-09-29)
-- [ ] **Phase 28: Abnahme-Anfahrt** - RAM-Messung je Profilstufe am gebauten Produkt auf echter Hardware, Deckel vorab freigegeben
+- [x] **Phase 28: Abnahme-Anfahrt** - RAM-Messung je Profilstufe am gebauten Produkt auf echter Hardware, Deckel vorab freigegeben (completed 2026-10-06, Owner-Abnahme "approved")
 - [ ] **Phase 29: Härtung und Store-Einreichung 1.4.0** - Launch-Härtung der Parallelpfade, Audits, signiertes App-Paar im Store
 
 **Ausführungsreihenfolge und Sicherheitsbedingung:** 24 -> 25 -> 26 -> 27 -> 28 -> 29, streng seriell, und zwar aus Sicherheitsgründen, nicht aus Aufwandsgründen. Die Marken-Reparatur (MOD-01) steht in Phase 24 VOR jedem Modellschalter (Phase 25), sonst mischen sich int8- und fp32-Vektoren still (K8). H1 (Phase 25) kommt vor H2 (Phase 26), weil er den Tantivy-Writer nicht berührt und auf jeder Box ab 2 Kernen wirkt. Die N-Slot-Probe der Vorab-Prüfung (Phase 27) setzt N Slots voraus (Phase 26). Die Abnahme-Anfahrt (Phase 28) misst das gebaute Produkt, bevor ein Release die Stufen anbietet (Owner-Auflage 24.09.). PHP-Kopplung (K6): Art-Filter am Anspruch reist mit Phase 25, KIND_BATCH/LOCK_TIMEOUTS mit Phase 26, beide Companion-Änderungen erscheinen erst mit dem gemeinsamen Release 1.4.0. Nach jeder Phase Security-, Bug- und Performance-Audit (Owner-Regel 15.08.), Befunde vor Phasenabschluss fixen.
@@ -287,17 +287,17 @@ Plans:
 **Wave 3 bis 6 (bezahlte Anfahrt, seriell)**
 
 - [x] 28-06-PLAN.md , Referenzbox m7g.large: Aufbau, Digest, Cron-Gate, Sparsam voll, Store-Messgröße, Zwischenstand, Welle 3
-- [ ] 28-07-PLAN.md , Teilkorpus, drei Zellen m7g.large, drei Zellen m7g.4xlarge, Welle 4
-- [ ] 28-08-PLAN.md , Owner-Tor x86, Aufbau und Machbarkeitstor c7a.xlarge, vier Zellen inkl. fp32, Welle 5
-- [ ] 28-09-PLAN.md , c7a.2xlarge, c7a.4xlarge (fp32), c7a.8xlarge, Schlusszahlen, Welle 6
+- [x] 28-07-PLAN.md , Teilkorpus, drei Zellen m7g.large, drei Zellen m7g.4xlarge, Welle 4
+- [x] 28-08-PLAN.md , Owner-Tor x86, Aufbau und Machbarkeitstor c7a.xlarge, vier Zellen inkl. fp32, Welle 5
+- [x] 28-09-PLAN.md , c7a.2xlarge, c7a.4xlarge (fp32), c7a.8xlarge, Schlusszahlen, Welle 6
 
 **Wave 7 bis 9**
 
-- [ ] 28-10-PLAN.md , Boxabbau mit Owner-Bestätigung und Nachweis, Welle 7
-- [ ] 28-11-PLAN.md , Auswertung, Bericht, Owner-Entscheide SC4/Store-Zahl, Kapitel docs/performance.md (SC2), Welle 7
-- [ ] 28-12-PLAN.md , SC4: OCR_SLOT_COST_BYTES gemessen, Tests neu gerechnet, Baumhash-Pin, Texte, Welle 8
-- [ ] 28-13-PLAN.md , Snapshot-Löschung mit Owner-Bestätigung, null Kosten belegt, Welle 8
-- [ ] 28-14-PLAN.md , Push-Entscheid, CI-Belege, Owner-Abnahme, Welle 9
+- [x] 28-10-PLAN.md , Boxabbau mit Owner-Bestätigung und Nachweis, Welle 7
+- [x] 28-11-PLAN.md , Auswertung, Bericht, Owner-Entscheide SC4/Store-Zahl, Kapitel docs/performance.md (SC2), Welle 7
+- [x] 28-12-PLAN.md , SC4: OCR_SLOT_COST_BYTES gemessen, Tests neu gerechnet, Baumhash-Pin, Texte, Welle 8
+- [x] 28-13-PLAN.md , Snapshot-Löschung mit Owner-Bestätigung, null Kosten belegt, Welle 8
+- [x] 28-14-PLAN.md , Push-Entscheid, CI-Belege, Owner-Abnahme, Welle 9
 **Research-Flag**: nein (Runbook und Werkzeuge W1 bis W4 aus Phase 22 liegen vor)
 
 ### Phase 29: Härtung und Store-Einreichung 1.4.0
