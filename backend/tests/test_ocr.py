@@ -43,7 +43,7 @@ from pathlib import Path
 
 import pypdfium2
 import pytest
-from PIL import Image, TiffImagePlugin
+from PIL import Image, ImageOps, JpegImagePlugin, TiffImagePlugin
 
 from findling.config import settings
 from findling.extract import dispatch, image, ocr, raster
@@ -1267,6 +1267,175 @@ def test_the_shim_changes_no_entry_pillow_ships() -> None:
 
     for key, value in pristine.items():
         assert TiffImagePlugin.OPEN_INFO[key] == value
+
+
+def _photo(tmp_path: Path, name: str, size: tuple[int, int], mode: str = "RGB", orientation: int = 6) -> str:
+    """A uniform JPEG of a given size with an EXIF orientation, the shape of a phone photo."""
+    exif = Image.Exif()
+    exif[0x0112] = orientation
+    path = tmp_path / name
+    colour = (_GREY,) * Image.getmodebands(mode)
+    with Image.new(mode, size, color=colour) as picture:
+        picture.save(path, format="JPEG", exif=exif.tobytes(), quality=50)
+    return str(path)
+
+
+# The camera class of #18: 45 megapixels, under the pixel cap, over the edge.
+_CAMERA = (8192, 5464)
+
+
+def test_the_draft_target_keeps_the_aspect_ratio() -> None:
+    # (3500, 3500) would give min(8192 // 3500, 5464 // 3500) = 1, so libjpeg
+    # would not reduce at all. The target the picture really ends at gives 2.
+    assert image._draft_target(*_CAMERA) == (3500, 2334)
+    assert image._draft_target(*reversed(_CAMERA)) == (2334, 3500)
+
+
+@pytest.mark.parametrize("mode", ["RGB", "CMYK"])
+def test_a_large_jpeg_is_decoded_reduced_before_it_is_loaded(tmp_path: Path, mode: str) -> None:
+    path = _photo(tmp_path, "kamera.jpg", _CAMERA, mode)
+
+    with Image.open(path) as picture:
+        image._decode_smaller(picture)
+
+        # Still only the header: the tiles are not decoded yet.
+        assert picture.tile
+        assert picture.size == (4096, 2732)
+        # libjpeg can hand out grey from colour, but CMYK stays CMYK.
+        assert picture.mode == ("L" if mode == "RGB" else "CMYK")
+
+
+@pytest.mark.parametrize("mode", ["RGB", "CMYK"])
+def test_a_large_rotated_jpeg_reaches_the_engine_upright_and_scaled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    engine = _install_engine(monkeypatch, _page("Kamerafoto"))
+
+    outcome = image.extract_image(_photo(tmp_path, "kamera.jpg", _CAMERA, mode))
+
+    assert outcome.state is State.INDEXED
+    with _handed_over(engine) as handed:
+        assert handed.size == (2334, 3500)
+        assert handed.mode == "L"
+
+
+def test_a_small_jpeg_is_not_drafted(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Under the target edge there is nothing to reduce, and the picture reaches
+    # the engine exactly as before plan 29-07.
+    calls: list[object] = []
+    original = JpegImagePlugin.JpegImageFile.draft
+
+    def spy(
+        picture: JpegImagePlugin.JpegImageFile, mode: str | None, size: tuple[int, int] | None
+    ) -> tuple[str, tuple[int, int, float, float]] | None:
+        calls.append(size)
+        return original(picture, mode, size)
+
+    monkeypatch.setattr(JpegImagePlugin.JpegImageFile, "draft", spy)
+    engine = _install_engine(monkeypatch, _page("Zahlungsavis"))
+
+    image.extract_image(SLIP)
+
+    assert calls == []
+    with _handed_over(engine) as handed:
+        assert handed.size == (1000, 260)
+
+
+def test_every_frame_of_a_rotated_multi_frame_tiff_is_upright(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Pitfall 10: the rotation now works on the open picture in place, so the
+    # next frame has to arrive fresh after the seek, with its own orientation
+    # and its own size. The reference is the copy the branch made before plan
+    # 29-07, frame by frame; the two frames differ in size and pattern, so a
+    # leftover of the first one in the second call would show.
+    engine = _install_engine(monkeypatch, _page("Faxseite"))
+    path = tmp_path / "fax.tif"
+    first = Image.new("L", (1000, 700), color=255)
+    second = Image.new("L", (900, 700), color=255)
+    try:
+        first.paste(0, (0, 0, 500, 700))
+        second.paste(0, (0, 0, 900, 200))
+        first.save(path, format="TIFF", save_all=True, append_images=[second], tiffinfo={0x0112: 6})
+    finally:
+        first.close()
+        second.close()
+
+    references: list[bytes] = []
+    sizes: list[tuple[int, int]] = []
+    with Image.open(path) as written:
+        assert getattr(written, "n_frames", 1) == 2
+        for number in range(2):
+            written.seek(number)
+            assert written.getexif().get(0x0112) == 6
+            with ImageOps.exif_transpose(written) as copy, copy.convert("L") as grey:
+                references.append(grey.tobytes())
+                sizes.append(grey.size)
+
+    outcome = image.extract_image(str(path))
+
+    assert outcome.state is State.INDEXED
+    assert sizes[0] != sizes[1]
+    for number in range(2):
+        with _handed_over(engine, number) as handed:
+            assert handed.size == sizes[number]
+            assert handed.tobytes() == references[number]
+
+
+def test_a_picture_over_the_free_address_space_is_out_of_memory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A small artificial cap stands in for RLIMIT_AS minus VmSize, which only a
+    # Linux child has. Over it, the verdict says memory and not broken (D-29-07).
+    engine = _install_engine(monkeypatch, _page("nie erreicht"))
+    monkeypatch.setattr(image, "_address_space_room", lambda: 1_000_000)
+
+    outcome = image.extract_image(_photo(tmp_path, "kamera.jpg", _CAMERA))
+
+    assert outcome.state is State.FAILED
+    assert outcome.reason is Reason.OUT_OF_MEMORY
+    assert outcome.detail == "findling.extract.image.HeaderEstimate"
+    assert engine.calls == []
+
+
+def test_the_estimate_counts_the_picture_after_the_draft(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    # 4096 by 2732 in one channel, twice: just under 22.4 million bytes. A room
+    # of 23 million is enough, which it would not be for the undrafted colour
+    # picture of 8192 by 5464 in four bytes a pixel.
+    engine = _install_engine(monkeypatch, _page("Kamerafoto"))
+    monkeypatch.setattr(image, "_address_space_room", lambda: 23_000_000)
+
+    outcome = image.extract_image(_photo(tmp_path, "kamera.jpg", _CAMERA))
+
+    assert outcome.state is State.INDEXED
+    assert len(engine.calls) == 1
+
+
+def test_without_a_readable_cap_there_is_no_estimate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    engine = _install_engine(monkeypatch, _page("Grauwert"))
+    monkeypatch.setattr(image, "_address_space_room", lambda: None)
+
+    outcome = image.extract_image(_drawn(tmp_path, "seite.png", (2000, 1500)))
+
+    assert outcome.state is State.INDEXED
+    assert len(engine.calls) == 1
+
+
+def test_the_used_address_space_is_read_from_vmsize(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    status = tmp_path / "status"
+    status.write_text("Name:\tpython\nVmPeak:\t  9999 kB\nVmSize:\t  2048 kB\n")
+    monkeypatch.setattr(image, "_PROC_STATUS", status)
+
+    assert image._address_space_used() == 2048 * 1024
+
+
+def test_without_a_status_file_the_used_address_space_is_unknown(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(image, "_PROC_STATUS", tmp_path / "missing")
+
+    assert image._address_space_used() is None
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="the absence of RLIMIT_AS is a Windows property")
+def test_on_windows_there_is_no_room_to_estimate_against() -> None:
+    assert image._address_space_room() is None
 
 
 def test_the_shim_maps_grey_with_an_extra_channel_to_la() -> None:
