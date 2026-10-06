@@ -30,13 +30,15 @@ in a child that may only ever see pictures, which is the honest price of having
 exactly one place where this project talks to tesseract.
 
 Like every module of this package, this one never writes: the file is opened for
-reading, every rotation and every scaling happens on a copy in memory, and the
-original is not touched even on the error path (IDX-07, T-03-805).
+reading, every rotation, every scaling and every patched TIFF tag happens in
+memory, and the original is not touched even on the error path (IDX-07,
+T-03-805).
 """
 
 from __future__ import annotations
 
 import struct
+import sys
 import time
 from io import BytesIO
 from pathlib import Path
@@ -148,6 +150,22 @@ _MAX_EDGE_PIXELS: Final = 3500
 # is repeated rather than imported for the same reason the other two are.
 _MIN_OCR_CHARS: Final = 20
 
+# The header estimate of D-29-07 (#18): the decoded picture is counted twice,
+# once as loaded and once as the working copy the scaling and the conversion to
+# grey make next to it. Assumption A5 of the phase research: the factor comes
+# from the measured peaks on an 8192 by 5464 picture (131 MiB for CMYK, 48 MiB
+# for RGB after the draft), and RLIMIT_AS counts address space rather than the
+# working set measured there, so it is a floor and is checked in the field at the
+# next visit (D-29-11), not claimed as exact.
+_WORKING_COPIES: Final = 2
+
+# What the estimate writes as detail, a fixed name and never a number from the
+# file (T-29-24). It reads like the class names plan 29-06 stores, on purpose.
+_HEADER_ESTIMATE: Final = "findling.extract.image.HeaderEstimate"
+
+# Where Linux states the address space of this process (the VmSize line).
+_PROC_STATUS: Final = Path("/proc/self/status")
+
 # The picture travels through a pipe and is read once. Compressing it hard would
 # spend CPU on bytes that live for milliseconds, exactly as in raster.py.
 _PNG_COMPRESS_LEVEL: Final = 1
@@ -191,7 +209,16 @@ def extract_image(path: str) -> ExtractionOutcome:
 
 
 def _read(picture: Image.Image, resolved: Settings) -> ExtractionOutcome:
-    """Read an opened picture and turn every exception this branch knows into a verdict."""
+    """Read an opened picture and turn every exception this branch knows into a verdict.
+
+    The draft comes first because it decides the size the decoder allocates,
+    and the estimate second because it has to judge that size and not the one
+    the header declared (D-29-07).
+    """
+    _decode_smaller(picture)
+    refused = _over_address_space(picture)
+    if refused is not None:
+        return refused
     try:
         return _read_frames(picture, resolved)
     except ocr.EngineMissing:
@@ -210,6 +237,107 @@ def _read(picture: Image.Image, resolved: Settings) -> ExtractionOutcome:
         # A header that parsed and pixels that did not, which is what a
         # truncated JPEG looks like from here.
         return ExtractionOutcome.failed(Reason.CORRUPT, detail=_class_of(error))
+
+
+def _draft_target(width: int, height: int) -> tuple[int, int]:
+    """The size a picture ends at on the way to the engine, aspect ratio kept.
+
+    This and not (3500, 3500) is what the draft is asked for: libjpeg picks the
+    largest of the scales 1/8, 1/4, 1/2 and 1 that still reaches the requested
+    size on both edges, so a square target answers min(8192 // 3500, 5464 //
+    3500) = 1 for a 45 megapixel camera and nothing is reduced.
+    """
+    factor = _MAX_EDGE_PIXELS / max(width, height)
+    return max(1, round(width * factor)), max(1, round(height * factor))
+
+
+def _decode_smaller(picture: Image.Image) -> None:
+    """Ask the decoder for a reduced picture before a single row is decoded.
+
+    Only a JPEG answers, through the DCT scaling of libjpeg; every other format
+    ignores the request. Measured on an 8192 by 5464 picture with orientation 6
+    (D-29-07, #18): together with the rotation in place this lowers the peak
+    from 467 to 131 MiB for CMYK and from 466 to 48 MiB for RGB. Asking for
+    grey lets libjpeg hand out one channel of a colour picture; CMYK stays CMYK
+    and is reduced all the same. A picture of many frames is left alone, the
+    draft holds for the whole file and a fax archive is not a camera (pitfall
+    10). Neither is a picture that is already small enough.
+    """
+    if getattr(picture, "n_frames", 1) != 1:
+        return
+    width, height = picture.size
+    if max(width, height) <= _MAX_EDGE_PIXELS:
+        return
+    picture.draft("L", _draft_target(width, height))
+
+
+def _pixel_bytes(mode: str) -> int:
+    """What one pixel of a mode costs in Pillow's memory, not on disk.
+
+    Pillow keeps every picture of more than one band in four bytes a pixel,
+    RGB included, so the count of bands times their width would undercount
+    by a quarter; a single band costs its own width.
+    """
+    if Image.getmodebands(mode) > 1:
+        return 4
+    if mode in ("I", "F"):
+        return 4
+    if mode.startswith("I;16"):
+        return 2
+    return 1
+
+
+def _address_space_used() -> int | None:
+    """The address space of this process in bytes, from VmSize, or None where unreadable."""
+    try:
+        status = _PROC_STATUS.read_text(encoding="ascii", errors="replace")
+    except OSError:
+        return None
+    for line in status.splitlines():
+        if line.startswith("VmSize:"):
+            fields = line.split()
+            if len(fields) >= 2 and fields[1].isdigit():
+                return int(fields[1]) * 1024
+            return None
+    return None
+
+
+def _address_space_room() -> int | None:
+    """What is left of RLIMIT_AS in this process, or None where there is nothing to read.
+
+    RLIMIT_AS is POSIX and the extraction child sets it on Linux (sandbox.py);
+    on Windows, where the tests also run, there is neither the limit nor
+    /proc/self/status, and no estimate is made.
+    """
+    if sys.platform == "win32":
+        return None
+    import resource
+
+    soft, _hard = resource.getrlimit(resource.RLIMIT_AS)
+    if soft == resource.RLIM_INFINITY:
+        return None
+    used = _address_space_used()
+    if used is None:
+        return None
+    return soft - used
+
+
+def _over_address_space(picture: Image.Image) -> ExtractionOutcome | None:
+    """The fourth question asked of the header: does the decoded picture fit at all.
+
+    Without it a picture too large for the address space dies in the decoder,
+    and that death reads as a broken file (#18). With it the verdict says what
+    happened. The size is the one after the draft, so a camera picture that the
+    draft brings down is judged at its reduced size.
+    """
+    room = _address_space_room()
+    if room is None:
+        return None
+    width, height = picture.size
+    needed = width * height * _pixel_bytes(picture.mode) * _WORKING_COPIES
+    if needed > room:
+        return ExtractionOutcome.failed(Reason.OUT_OF_MEMORY, detail=_HEADER_ESTIMATE)
+    return None
 
 
 def _class_of(error: BaseException) -> str:
@@ -280,7 +408,9 @@ def _read_normalised(path: str, resolved: Settings) -> ExtractionOutcome:
     stream = BytesIO(bytes(buffer))
     del buffer
     try:
-        opened = Image.open(stream)
+        # The mode spelled out, so the write ratchet of test_extract_edge_paths
+        # can read this open as the read of a buffer it is.
+        opened = Image.open(stream, mode="r")
     except OSError:
         return ExtractionOutcome.skipped(Reason.UNSUPPORTED_VARIANT)
     with opened as picture:
@@ -417,28 +547,25 @@ def _encode_frame(picture: Image.Image) -> bytes:
     Then the downscale, then the single channel. Greyscale for the reason
     raster.py gives: tesseract binarises internally either way, so three further
     channels are paid for and thrown away.
-    """
-    transposed = ImageOps.exif_transpose(picture)
-    # Pillow answers None only when it was asked to work in place, which this
-    # call does not do. The branch is here because the signature allows it, and
-    # the frame the loop is standing on is the honest fallback.
-    frame = picture if transposed is None else transposed
 
+    The rotation works in place since plan 29-07 (D-29-07). Without in_place,
+    Pillow loads the picture and returns a full copy even when nothing is to be
+    turned, and that copy next to the loaded picture was the peak that killed a
+    camera picture of #18 before the scaling could help. In place changes the
+    pixels of the open picture in memory and nothing on disk; for a file of many
+    frames the next seek decodes its frame afresh with its own orientation, so a
+    turn of one frame never leaks into the next (pitfall 10).
+    """
+    ImageOps.exif_transpose(picture, in_place=True)
+    # thumbnail keeps the aspect ratio and never scales up, so a picture that is
+    # already small is left exactly as it is. It works in memory as well.
+    picture.thumbnail((_MAX_EDGE_PIXELS, _MAX_EDGE_PIXELS))
+    grey = picture.convert("L")
     try:
-        # thumbnail keeps the aspect ratio and never scales up, so a picture that
-        # is already small is left exactly as it is. It works on the transposed
-        # image in memory; nothing of this reaches the file on disk.
-        frame.thumbnail((_MAX_EDGE_PIXELS, _MAX_EDGE_PIXELS))
-        grey = frame.convert("L")
-        try:
-            sink = BytesIO()
-            grey.save(sink, format="PNG", compress_level=_PNG_COMPRESS_LEVEL)
-        finally:
-            grey.close()
+        sink = BytesIO()
+        grey.save(sink, format="PNG", compress_level=_PNG_COMPRESS_LEVEL)
     finally:
-        if frame is not picture:
-            # The open file of the caller stays open, the working image does not.
-            frame.close()
+        grey.close()
     return sink.getvalue()
 
 

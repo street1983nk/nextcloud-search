@@ -1626,8 +1626,13 @@ PHP_TREE_HASH_TODAY = "3f72f80dcbefe041968eb1161d377c2c8e85f3d4c2a5d7e27815631e9
 # file_errors) and does not count, the recipe reads **/*.py. No file came and
 # none went, so PACKAGE_FILES_TODAY stays at 71. The PHP pair moved in the same
 # plan.
+# Measured again by plan 29-07: plan 29-07 changed image.py (extract/image.py:
+# the TIFF shim over OPEN_INFO, the SampleFormat 0 patch in memory, the honest
+# verdict for an unmappable TIFF variant, the JPEG draft, the rotation in place
+# and the header estimate against RLIMIT_AS). No file came and none went, so
+# PACKAGE_FILES_TODAY stays at 71. The PHP pair does not move: php/ is unchanged.
 PACKAGE_FILES_TODAY = 71
-PACKAGE_TREE_HASH_TODAY = "59653dff3fddfe10321bcc11b6be98648c561481bfc1d4c421cdbc23d6d8a4ed"
+PACKAGE_TREE_HASH_TODAY = "42f2fd36817063952c3611e3ffead8dbaa530b4c36489f1a3e2e76b6d3014e7a"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

@@ -1427,7 +1427,7 @@ def test_the_used_address_space_is_read_from_vmsize(tmp_path: Path, monkeypatch:
     assert image._address_space_used() == 2048 * 1024
 
 
-def test_without_a_status_file_the_used_address_space_is_unknown(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_without_a_status_file_the_address_space_is_unknown(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(image, "_PROC_STATUS", tmp_path / "missing")
 
     assert image._address_space_used() is None
