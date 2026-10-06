@@ -716,7 +716,9 @@
 
   /**
    * The result card of one lookup, in the order the design contract fixes:
-   * state chip, resolved path, reason label, remedy, file id, last checked.
+   * state chip, resolved path, reason label, remedy, error class, file id,
+   * last checked. The error class is only there for a failed file whose state
+   * card and container agree (plan 29-06); everywhere else its row stays hidden.
    *
    * Every element is in the template already and every icon of the inventory
    * with it, so this shows one and hides the others and writes text nodes. A new
@@ -745,6 +747,7 @@
       : path
     const label = typeof view.label === 'string' ? view.label : ''
     const remedy = typeof view.remedy === 'string' ? view.remedy : ''
+    const errorClass = typeof view.errorClass === 'string' ? view.errorClass : ''
     const note = typeof view.note === 'string' ? view.note : ''
 
     const box = document.getElementById('findling-diagnosis-chip')
@@ -765,6 +768,7 @@
       : reference)
     text('findling-diagnosis-label', label)
     text('findling-diagnosis-remedy', remedy)
+    text('findling-diagnosis-errorclass', t('findling', 'Error class: %s').replace('%s', function () { return errorClass }))
     text('findling-diagnosis-note', note)
     text('findling-diagnosis-id', t('findling', 'File ID: %s').replace('%s', String(fileId)))
     text('findling-diagnosis-checked', t('findling', 'Last checked %s').replace('%s', ago(elapsed(checkedAt))))
@@ -772,6 +776,7 @@
     shown('findling-diagnosis-path', found && path !== '')
     shown('findling-diagnosis-label', label !== '')
     shown('findling-diagnosis-remedy', remedy !== '')
+    shown('findling-diagnosis-errorclass', errorClass !== '')
     shown('findling-diagnosis-note', note !== '')
     shown('findling-diagnosis-id', fileId > 0)
     shown('findling-diagnosis-checked', checkedAt > 0)

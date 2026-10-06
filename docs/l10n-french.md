@@ -246,7 +246,7 @@ deutschen Übersetzung.
 | `Timed out while reading` | Zeitüberschreitung beim Lesen | Délai dépassé pendant la lecture |
 | `The next run tries again.` | Wird beim nächsten Lauf erneut versucht. | Une nouvelle tentative aura lieu au prochain passage. |
 | `Not enough memory while reading` | Zu wenig Speicher beim Lesen | Mémoire insuffisante pendant la lecture |
-| `The next run tries again. If it happens again, lower the size cap.` | Wird beim nächsten Lauf erneut versucht. Bei Wiederholung den Größen-Cap senken. | Une nouvelle tentative aura lieu au prochain passage. Si cela se reproduit, abaisser la limite de taille. |
+| `The next run tries again. If it happens again, give each document more memory: deploy Findling Backend with a larger FINDLING_EXTRACT_ADDRESS_SPACE_BYTES, for example 1073741824 (1 GiB).` | Wird beim nächsten Lauf erneut versucht. Bei Wiederholung jedem Dokument mehr Speicher geben: Findling Backend mit einem größeren FINDLING_EXTRACT_ADDRESS_SPACE_BYTES bereitstellen, zum Beispiel 1073741824 (1 GiB). | Une nouvelle tentative aura lieu au prochain passage. Si cela se reproduit, donner plus de mémoire à chaque document : déployer Findling Backend avec une valeur plus grande de FINDLING_EXTRACT_ADDRESS_SPACE_BYTES, par exemple 1073741824 (1 Gio). |
 | `File was not retrievable` | Datei war nicht abrufbar | Fichier non récupérable |
 | `Stuck repeatedly` | Mehrfach hängen geblieben | Bloqué à plusieurs reprises |
 | `Findling does not try this file again. Use the lookup to check whether it opens outside of Nextcloud.` | Findling versucht diese Datei nicht mehr. Über die Diagnose prüfen, ob sie sich außerhalb von Nextcloud öffnen lässt. | Findling ne réessaie plus ce fichier. Utiliser la vérification d'un fichier pour voir s'il s'ouvre en dehors de Nextcloud. |
@@ -262,6 +262,7 @@ deutschen Übersetzung.
 | `Not seen yet` | Noch nicht gesehen | Pas encore vu |
 | `State unknown right now` | Zustand im Moment unbekannt | État inconnu pour le moment |
 | `File ID: %s` | Datei-ID: %s | ID du fichier : %s |
+| `Error class: %s` | Fehlerklasse: %s | Classe d'erreur : %s |
 | `Last checked %s` | Zuletzt geprüft: %s | Dernière vérification : %s |
 | `The lookup did not work. Nothing about this file has changed.` | Die Prüfung hat nicht funktioniert. An dieser Datei hat sich nichts geändert. | La vérification n'a pas fonctionné. Rien n'a changé pour ce fichier. |
 | `The state of this file is unknown right now because the backend does not answer.` | Der Zustand dieser Datei ist im Moment unbekannt, weil das Backend nicht antwortet. | L'état de ce fichier est inconnu pour le moment, car le service ne répond pas. |

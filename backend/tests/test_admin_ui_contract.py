@@ -3199,8 +3199,10 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     # placed file with another checksum), two of quick task 260929-s7p (the
     # file id on every line of the error list, issue #14), one of quick task
     # 261003-d3y (the threshold cause hardware_short, D-24-07), six of plan
-    # 29-01 (label and remedy of system_file, legacy_format, unsupported_variant)
-    assert len(keys_of["de.json"]) == 298
+    # 29-01 (label and remedy of system_file, legacy_format, unsupported_variant),
+    # one of plan 29-12 (the error class line of the lookup card; the remedy of
+    # out_of_memory changed its key and so moved nothing)
+    assert len(keys_of["de.json"]) == 299
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:

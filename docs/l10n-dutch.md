@@ -324,7 +324,7 @@ aus Plan 20-03. Diese Tabelle kann also nicht an einem Wortlaut zerbrechen.
 | `Timed out while reading` | Zeitüberschreitung beim Lesen | Tijdslimiet overschreden bij het lezen |
 | `The next run tries again.` | Wird beim nächsten Lauf erneut versucht. | De volgende doorloop probeert het opnieuw. |
 | `Not enough memory while reading` | Zu wenig Speicher beim Lesen | Te weinig geheugen bij het lezen |
-| `The next run tries again. If it happens again, lower the size cap.` | Wird beim nächsten Lauf erneut versucht. Bei Wiederholung den Größen-Cap senken. | De volgende doorloop probeert het opnieuw. Gebeurt het nog eens, verlaag dan de bovengrens voor de grootte. |
+| `The next run tries again. If it happens again, give each document more memory: deploy Findling Backend with a larger FINDLING_EXTRACT_ADDRESS_SPACE_BYTES, for example 1073741824 (1 GiB).` | Wird beim nächsten Lauf erneut versucht. Bei Wiederholung jedem Dokument mehr Speicher geben: Findling Backend mit einem größeren FINDLING_EXTRACT_ADDRESS_SPACE_BYTES bereitstellen, zum Beispiel 1073741824 (1 GiB). | De volgende doorloop probeert het opnieuw. Gebeurt het nog eens, geef dan elk document meer geheugen: rol Findling Backend uit met een grotere FINDLING_EXTRACT_ADDRESS_SPACE_BYTES, bijvoorbeeld 1073741824 (1 GiB). |
 | `File was not retrievable` | Datei war nicht abrufbar | Bestand was niet op te halen |
 | `Stuck repeatedly` | Mehrfach hängen geblieben | Meermaals blijven hangen |
 | `Findling does not try this file again. Use the lookup to check whether it opens outside of Nextcloud.` | Findling versucht diese Datei nicht mehr. Über die Diagnose prüfen, ob sie sich außerhalb von Nextcloud öffnen lässt. | Findling probeert dit bestand niet opnieuw. Via de controle nagaan of het buiten Nextcloud opengaat. |
@@ -340,6 +340,7 @@ aus Plan 20-03. Diese Tabelle kann also nicht an einem Wortlaut zerbrechen.
 | `Not seen yet` | Noch nicht gesehen | Nog niet gezien |
 | `State unknown right now` | Zustand im Moment unbekannt | Toestand op dit moment onbekend |
 | `File ID: %s` | Datei-ID: %s | Bestands-ID: %s |
+| `Error class: %s` | Fehlerklasse: %s | Foutklasse: %s |
 | `Last checked %s` | Zuletzt geprüft: %s | Laatst gecontroleerd: %s |
 | `The lookup did not work. Nothing about this file has changed.` | Die Prüfung hat nicht funktioniert. An dieser Datei hat sich nichts geändert. | De controle heeft niet gewerkt. Aan dit bestand is niets veranderd. |
 | `The state of this file is unknown right now because the backend does not answer.` | Der Zustand dieser Datei ist im Moment unbekannt, weil das Backend nicht antwortet. | De toestand van dit bestand is op dit moment onbekend, omdat de dienst niet antwoordt. |
