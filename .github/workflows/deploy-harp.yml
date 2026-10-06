@@ -82,12 +82,28 @@ env:
   # variable rather than as a literal inside a URL, so that a later release is
   # one line here and not a search through a step.
   #
-  # v1.2.0 and not something newer, because on 2026-09-24 it IS the newest
-  # release of this repository: the tag list ends at v1.2.0, and 1.3.0 lives in
-  # this tree alone since phase 18. So these are the bytes every existing
-  # installation really holds, and the jump this proof drives is the one a user
-  # of v1.2.0 will really perform. A tag invented for the test would prove an
-  # upgrade nobody performs.
+  # v1.3.2 since 2026-10-06 (plan 29-11, D-29-01), because it IS the newest
+  # release of this repository and the version in the store: plan 23 published
+  # v1.3.0, and the bugfix releases v1.3.1 and v1.3.2 followed on 2026-09-29
+  # and 2026-09-30. 1.4.0 lives in this tree alone since phase 29. So these are
+  # the bytes every existing installation really holds, and the jump this
+  # proof drives is the one a user of 1.3.2 will really perform. A tag
+  # invented for the test would prove an upgrade nobody performs. Checked on
+  # 2026-10-06 before the move: gh release view v1.3.2 --json assets lists
+  # findling.tar.gz, findling.tar.gz.sig, findling_backend.tar.gz and
+  # findling_backend.tar.gz.sig, and ghcr.io/street1983nk/findling_backend:1.3.2
+  # answers anonymously as an index with linux/amd64 and linux/arm64.
+  #
+  # What the move cost, named rather than left to a red run: the gone seed of
+  # plan 23-06 was repaired by Version001300Date20260927000000, which an
+  # upgrade from 1.3.2 no longer runs. "Store upgrade 2b" therefore sows two
+  # real files that 1.3.2 judges as failed(corrupt), and "Store upgrade 5"
+  # demands the recheck of D-29-10 for them; the counters of assurance 3 are
+  # derived anew for that seed and asserted exactly.
+  #
+  # The earlier reason, kept on record: v1.2.0 from 2026-09-24, because on that
+  # day the tag list ended at v1.2.0 and 1.3.0 lived in this tree alone since
+  # phase 18.
   #
   # Why the tag moved on 2026-09-24, and it is the sharpest statement of phase
   # 18 rather than housekeeping (plan 18-12, success criterion 1). The milestone
@@ -105,12 +121,12 @@ env:
   # it was v1.0.3: on 2026-09-11 the tag list ended at 1.0.3, both info.xml said
   # 1.0.3, and "Store install 1 from the release" had loaded those assets in run
   # 34526436580. Plan 11-11 published v1.1.0, plan 16-09 followed the tag there,
-  # and the release of phase 16 published v1.2.0, which is what this line
-  # follows now. The lesson the three moves share: this value is an instruction
+  # and the release of phase 16 published v1.2.0, which this line followed
+  # until 2026-10-06. The lesson the four moves share: this value is an instruction
   # about the newest published release, so it goes stale with every release and
   # the assurances hanging off it have to be read again each time, never
   # softened.
-  UPGRADE_FROM_TAG: v1.2.0
+  UPGRADE_FROM_TAG: v1.3.2
 
 jobs:
   deploy-harp:
@@ -264,16 +280,20 @@ jobs:
       LOCAL_REGISTRY: 'localhost:5000'
       LOCAL_IMAGE_TAG: 'citest'
 
-      # The one word the gone verdict of "Store upgrade 2b" is sown on (D-10),
-      # and a constant here rather than a literal in two steps, because the
-      # step that sows it and the assurance that demands its repair have to
-      # ask for the same word. Invented on purpose: no file of the reference
-      # corpus, of the fill corpus or of the Spanish document carries it, and
-      # it is not a compound of any word they carry, so exactly one file of
-      # the account can ever answer it. "Store upgrade 2b" asks for it before
-      # anything is sown and demands nought, which is that claim measured
-      # rather than assumed.
-      SEED_TERM: 'quorvintax'
+      # The one word the seed picture of "Store upgrade 2b" carries (plan
+      # 29-11, D-29-10), and a constant here rather than a literal in two
+      # steps, because the step that sows it and the assurance that demands
+      # its recheck have to ask for the same word. Invented on purpose: no file
+      # of the reference corpus, of the fill corpus or of the Spanish document
+      # carries it, and it is not a compound of any word they carry, so exactly
+      # one file of the account can ever answer it. "Store upgrade 2b" asks for
+      # it before anything is sown and demands nought, which is that claim
+      # measured rather than assumed. scripts/ci/make_upgrade_seed_tiff.py
+      # draws the same word into the picture, and
+      # backend/tests/test_upgrade_seed_steps.py holds the two equal. Until
+      # plan 29-11 the constant was called SEED_TERM and carried the gone
+      # verdict of plan 23-06; the word stayed.
+      SEED_WORD: 'quorvintax'
 
       # The dispatch input, resolved once here so that every step below asks
       # one name instead of reaching into the inputs context four times. On a
@@ -3068,12 +3088,14 @@ jobs:
           # The container half, out of the info.xml of the released archive and
           # out of nothing else: registry, image and image-tag are what a user
           # of the previous version really runs.
-          # ghcr.io/street1983nk/findling_backend:1.2.0 is the image the release
-          # of phase 16 pushed, as an index with linux/amd64 and linux/arm64, and
-          # a missing tag would end this step rather than fall back to anything.
-          # The two predecessors were checked the same way and are named so that
-          # the habit is visible rather than only its result: :1.1.0 against the
-          # manifest list on 2026-09-21, :1.0.3 on 2026-09-10. Whoever moves
+          # ghcr.io/street1983nk/findling_backend:1.3.2 is the image the bugfix
+          # release of 2026-09-30 pushed, as an index with linux/amd64 and
+          # linux/arm64 (checked anonymously against ghcr.io on 2026-10-06, plan
+          # 29-11), and a missing tag would end this step rather than fall back
+          # to anything. The predecessors were checked the same way and are
+          # named so that the habit is visible rather than only its result:
+          # :1.2.0 on 2026-09-24, :1.1.0 against the manifest list on
+          # 2026-09-21, :1.0.3 on 2026-09-10. Whoever moves
           # UPGRADE_FROM_TAG again does this check again, because a tag without
           # an image turns the registration below into a red step with a
           # confusing message.
@@ -3301,45 +3323,47 @@ jobs:
           echo "the three terms of the reference corpus still bring back exactly one file each, with the fill corpus in the index"
 
       # =====================================================================
-      # The seed of D-10, and why it has to exist at all (plan 23-06).
+      # The seed of the recheck, and why it has to exist at all (plan 29-11).
       #
-      # Version001300Date20260927000000 hands every skipped(gone) verdict back
-      # to the content track once and deletes the verdict, which is the repair
-      # of issue #14. PHPUnit proves the migration against mocks (plan 23-05).
-      # This is the second half D-10 asks for: the same migration, on a real
-      # instance, inside a real occ upgrade. And on the reference corpus it
-      # would be a no-op, because nothing in it is a file in a Team Folder read
-      # by the wrong user, so no gone verdict ever arises (RESEARCH A3).
-      # Assurance 3 of "Store upgrade 5" would then hold and prove nothing
-      # about the repair. So the verdict is sown here, in the shape issue #14
-      # left it behind: a readable file of the ordinary user, never indexed,
-      # not in the queue, with skipped(gone) in findling_file_state.
+      # 1.4.0 judges two classes of issues #18 and #22 differently from 1.3.2.
+      # An AppleDouble sidecar (a name that starts with ._, the resource fork
+      # macOS leaves next to a copied file) is skipped(system_file) before its
+      # first byte is read (plan 29-05), and a grey TIFF with one extra channel
+      # declared as unspecified is read through the shim of plan 29-07. 1.3.2
+      # books both as failed(corrupt). The recheck of D-29-10 (plan 29-09) is
+      # the promise that an installation which already holds such files gets
+      # the new verdicts after the update, without a manual cleanup and without
+      # a reindex. On the reference corpus that promise would be almost
+      # untested, because nothing in it is a sidecar or a picture of that class.
+      # So the two files are sown here, as real files of the ordinary user, and
+      # the RELEASED container judges them: that is the state of every 1.3.2
+      # installation that holds such a file.
       #
-      # The file is a new one and not a file the index already holds, and that
-      # is the stronger of the two variants: a file the container never saw
-      # can only become findable through the requeue of the migration, so a
-      # hit after the upgrade is the repair and nothing else. The race that
-      # could spoil it is the container claiming the file between the scan and
-      # the verdict, and there is only one party that could do that: the
-      # container, through its own poller. It is paused for exactly that
-      # window. files:scan fires no node event (the listener of this app
-      # listens to NodeCreatedEvent and its kin, which only the file view
-      # dispatches), and once the verdict is written the reconcile of the
-      # container sees an end state and leaves the file alone, which is
-      # precisely how issue #14 made its verdicts permanent.
+      # Real files judged by the old container, and no verdict written by SQL,
+      # which is what the gone seed of plan 23-06 did in this place until v1.3.2
+      # became the start of this proof. That seed was repaired by the migration
+      # Version001300Date20260927000000, which an upgrade from 1.3.2 no longer
+      # runs, so its assurances would have turned red for a reason that says
+      # nothing about this release. They are replaced by the ones of this seed,
+      # and none of them is loosened.
       #
-      # The migration runs only in the branch "the instance performed the app
-      # update" of "Store upgrade 4", which needs the tree to carry a newer
-      # version than UPGRADE_FROM_TAG. In the equal version branch the verdict
-      # stays, and assurance 3b turns red, which is the right answer: an
-      # upgrade that did not run the repair did not repair anything.
+      # The picture is committed (.github/fixtures/upgrade-seed-grey-extra.tif,
+      # written by scripts/ci/make_upgrade_seed_tiff.py, which
+      # backend/tests/test_upgrade_seed_fixture.py runs again and compares byte
+      # for byte) and carries SEED_WORD. The sidecar carries the AppleDouble
+      # header and no word at all.
+      #
+      # The old container gets the two files through findling:index --restart
+      # and the cron loop of "Store upgrade 2". files:scan fires no node event,
+      # and a crawl that is ordered is a crawl that happens; every file the
+      # index already holds comes back through the fast path unchanged.
       # =====================================================================
-      - name: Store upgrade 2b, a gone verdict the way issue #14 wrote it (D-10)
+      - name: Store upgrade 2b, two files 1.3.2 judges wrongly, judged by 1.3.2 (D-29-10)
         if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
         run: |
-          container="${UPGRADE_OLD_CONTAINER}"
-          seed_dir=data/testuser/files/gone-seed
-          seed_name=upgrade-gone-seed.txt
+          seed_dir=data/testuser/files/fix-seed
+          tiff_name=upgrade-seed-grey-extra.tif
+          sidecar_name=._seed-notes.docx
           q() {
             sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" "$1"
           }
@@ -3352,7 +3376,7 @@ jobs:
               -u "testuser:${TESTUSER_PASS}" \
               -H 'OCS-APIRequest: true' \
               -H 'Accept: application/json' \
-              "http://localhost:8080/ocs/v2.php/search/providers/findling/search?term=${SEED_TERM}")
+              "http://localhost:8080/ocs/v2.php/search/providers/findling/search?term=${SEED_WORD}")
             count=$(jq -r '.ocs.data.entries | length' "${body}" 2> /dev/null || true)
             case "${code}:${count}" in
               200:[0-9]*) printf '%s\n' "${count}" ;;
@@ -3364,66 +3388,156 @@ jobs:
             esac
           }
 
+          # The questions to the volume of the container, written once and
+          # sourced again by "Store upgrade 3c" and "Store upgrade 5". Read
+          # only, so the reader never creates a journal next to a database the
+          # container writes, and without a word of the file names: the answers
+          # are states, reasons, marks and counts.
+          cat > "${RUNNER_TEMP}/seed-probe.py" <<'PY'
+          import hashlib
+          import os
+          import sqlite3
+          import sys
+
+          ROOT = os.environ["APP_PERSISTENT_STORAGE"]
+
+
+          def connect(name):
+              return sqlite3.connect(f"file:{ROOT}/{name}?mode=ro", uri=True, timeout=30)
+
+
+          question, subject = sys.argv[1], sys.argv[2]
+          if question == "verdict":
+              row = connect("state.db").execute(
+                  "SELECT state, IFNULL(reason, '') FROM files WHERE file_id = ? AND deleted_at IS NULL",
+                  (int(subject),),
+              ).fetchone()
+              print("none" if row is None else f"{row[0]}/{row[1]}")
+          elif question == "meta":
+              row = connect("state.db").execute("SELECT value FROM meta WHERE key = ?", (subject,)).fetchone()
+              print("absent" if row is None else row[0])
+          elif question == "chunks":
+              row = connect("vectors.db").execute("SELECT COUNT(*) FROM chunks WHERE file_id = ?", (int(subject),)).fetchone()
+              print(row[0])
+          elif question == "stock":
+              rows = connect("vectors.db").execute(
+                  "SELECT chunk_id, file_id, ordinal, char_start, char_end FROM chunks WHERE file_id != ? ORDER BY chunk_id",
+                  (int(subject),),
+              ).fetchall()
+              digest = hashlib.sha256(repr(rows).encode()).hexdigest()
+              print(f"{digest}:{len({row[1] for row in rows})}:{len(rows)}")
+          else:
+              sys.exit(f"unknown question {question}")
+          PY
+          cat > "${RUNNER_TEMP}/seed-probe.sh" <<'SH'
+          # The container is looked up on every call, because the upgrade
+          # replaces it, exactly as findling_container() of upgrade-probe.sh does.
+          seed_probe() {
+            probe_container=$(docker ps --filter 'name=findling_backend' --format '{{.Names}}' | head -n 1)
+            if [ -z "${probe_container}" ]; then
+              echo "no running findling_backend container to ask" >&2
+              return 1
+            fi
+            docker exec -i "${probe_container}" python - "$@" < "${RUNNER_TEMP}/seed-probe.py"
+          }
+          SH
+          . "${RUNNER_TEMP}/seed-probe.sh"
+
           # Before anything is sown: the word finds nothing on this
           # installation, so a hit after the upgrade cannot be one that was
           # there all along.
           hits=$(seed_hits) || exit 1
           if [ "${hits}" != "0" ]; then
-            echo "::error::the seed word already brings back ${hits} file(s) before anything was sown, so it is not the invented word SEED_TERM claims it is"
+            echo "::error::the seed word already brings back ${hits} file(s) before anything was sown, so it is not the invented word SEED_WORD claims it is"
             exit 1
           fi
 
-          # The window the container must not see. The trap unpauses on every
-          # way out of this step, because a paused container left behind would
-          # turn every later step into a red run about something else.
-          docker pause "${container}" > /dev/null
-          trap 'docker unpause "${container}" > /dev/null 2>&1 || true' EXIT
           mkdir -p "${seed_dir}"
-          # The words follow the rule of the fill corpus in "Store upgrade 2":
-          # none of them carries Belehrung, Auszug, Erinnerung, alemanes,
-          # florpel or findling-canary, so the assurances that count those
-          # terms keep counting exactly what they counted before.
-          {
-            echo "Die Notiz ${SEED_TERM} beschreibt einen Stapel Holzkisten im Keller."
-            echo "Sie liegt im Ordner des Nutzers und ist fuer ihn lesbar."
-          } > "${seed_dir}/${seed_name}"
-          "${RUNNER_TEMP}/nc-occ.sh" files:scan --path="/testuser/files/gone-seed"
+          cp "findling-src/.github/fixtures/${tiff_name}" "${seed_dir}/${tiff_name}"
+          # The AppleDouble header: the magic 00 05 16 07, the version
+          # 00 02 00 00, sixteen filler bytes and an entry count of nought, the
+          # 26 bytes macOS writes in front of a resource fork. It is no ZIP, so
+          # the Word reader of 1.3.2 fails on it, which is the verdict of #22.
+          printf '\000\005\026\007\000\002\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000' \
+            > "${seed_dir}/${sidecar_name}"
+          magic=$(od -An -tx1 -N4 "${seed_dir}/${sidecar_name}" | tr -d ' \n')
+          size=$(wc -c < "${seed_dir}/${sidecar_name}")
+          if [ "${magic}" != "00051607" ] || [ "${size}" != "26" ]; then
+            echo "::error::the sidecar starts with ${magic} and holds ${size} bytes instead of the 26 byte AppleDouble header"
+            exit 1
+          fi
+          "${RUNNER_TEMP}/nc-occ.sh" files:scan --path="/testuser/files/fix-seed"
 
           storage=$(q "SELECT numeric_id FROM oc_storages WHERE id = 'home::testuser';")
-          file_id=$(q "SELECT fileid FROM oc_filecache WHERE storage = '${storage}' AND path = 'files/gone-seed/${seed_name}';")
-          case "${storage}:${file_id}" in
-            [0-9]*:[0-9]*) ;;
+          tiff_id=$(q "SELECT fileid FROM oc_filecache WHERE storage = '${storage}' AND path = 'files/fix-seed/${tiff_name}';")
+          sidecar_id=$(q "SELECT fileid FROM oc_filecache WHERE storage = '${storage}' AND path = 'files/fix-seed/${sidecar_name}';")
+          case "${storage}:${tiff_id}:${sidecar_id}" in
+            [0-9]*:[0-9]*:[0-9]*) ;;
             *)
-              echo "::error::the scan left no file id for the seed (storage '${storage}', file id '${file_id}')"
+              echo "::error::the scan left no file id for a seed (storage '${storage}', picture '${tiff_id}', sidecar '${sidecar_id}')"
               exit 1
               ;;
           esac
-          # Exactly what issue #14 left behind: no queue row, a gone verdict.
-          q "DELETE FROM oc_findling_queue WHERE file_id = ${file_id};"
-          q "INSERT INTO oc_findling_file_state (file_id, state, reason, updated_at) VALUES (${file_id}, 'skipped', 'gone', datetime('now'));"
-          docker unpause "${container}" > /dev/null
-          trap - EXIT
 
-          # Fail closed, all three, before anything goes on.
-          verdicts=$(q "SELECT COUNT(*) FROM oc_findling_file_state WHERE file_id = ${file_id} AND state = 'skipped' AND reason = 'gone';")
-          if [ "${verdicts}" != "1" ]; then
-            echo "::error::the seed carries ${verdicts} skipped(gone) verdict(s) instead of one"
+          "${RUNNER_TEMP}/nc-occ.sh" findling:index --restart --no-interaction
+          open_rows() {
+            "${RUNNER_TEMP}/nc-occ.sh" findling:index | awk '
+              $1 == "scheduled" { scheduled = $2 }
+              /^  handed to the worker/ { running = $NF }
+              END { print (scheduled + 0) + (running + 0) }'
+          }
+          deadline=$(( $(date +%s) + UPGRADE_DRAIN_BUDGET_SECONDS ))
+          rounds=0
+          judged=""
+          while [ "$(date +%s)" -lt "${deadline}" ]; do
+            rounds=$(( rounds + 1 ))
+            timeout 300 php -f cron.php > "${RUNNER_TEMP}/seed-cron-${rounds}.log" 2>&1 || true
+            open=$(open_rows)
+            tiff=$(seed_probe verdict "${tiff_id}" || echo unreadable)
+            sidecar=$(seed_probe verdict "${sidecar_id}" || echo unreadable)
+            echo "round ${rounds}: open=${open} picture=${tiff} sidecar=${sidecar}, $(( deadline - $(date +%s) ))s of the budget left"
+            case "${open}:${tiff}:${sidecar}" in
+              0:none:*|0:*:none|0:unreadable:*|0:*:unreadable|[!0]*) ;;
+              *) judged="yes"; break ;;
+            esac
+            sleep 5
+          done
+          if [ -z "${judged}" ]; then
+            echo "::error::the ${UPGRADE_FROM_TAG} container did not judge both seed files within UPGRADE_DRAIN_BUDGET_SECONDS=${UPGRADE_DRAIN_BUDGET_SECONDS}"
+            "${RUNNER_TEMP}/nc-occ.sh" findling:index || true
+            docker logs "${UPGRADE_OLD_CONTAINER}" 2>&1 | tail -n 60 || true
             exit 1
           fi
-          queued=$(q "SELECT COUNT(*) FROM oc_findling_queue WHERE file_id = ${file_id};")
-          if [ "${queued}" != "0" ]; then
-            echo "::error::the seed has ${queued} queue row(s), so the container could index it without any migration"
-            exit 1
-          fi
+
+          # Fail closed, both files and both halves: failed(corrupt) in the
+          # state database of the container and in findling_file_state of
+          # Nextcloud. The second half is what the counters of "Store upgrade
+          # 5" are derived from, so it is measured here and not assumed.
+          fail=0
+          for seed in "picture:${tiff_id}" "sidecar:${sidecar_id}"; do
+            label="${seed%%:*}"
+            id="${seed#*:}"
+            verdict=$(seed_probe verdict "${id}")
+            recorded=$(q "SELECT state || '/' || IFNULL(reason, '') FROM oc_findling_file_state WHERE file_id = ${id};")
+            if [ "${verdict}" != "failed/corrupt" ] || [ "${recorded}" != "failed/corrupt" ]; then
+              echo "::error::the ${label} is '${verdict}' in state.db and '${recorded}' in findling_file_state, and ${UPGRADE_FROM_TAG} has to book it as failed/corrupt in both, or the recheck would prove nothing"
+              fail=1
+            else
+              echo "the ${label} is failed/corrupt in state.db and in findling_file_state"
+            fi
+          done
           hits=$(seed_hits) || exit 1
           if [ "${hits}" != "0" ]; then
-            echo "::error::the seed word brings back ${hits} file(s) right after sowing, so the container indexed the seed before the upgrade and the repair would prove nothing"
+            echo "::error::the seed word brings back ${hits} file(s) on the ${UPGRADE_FROM_TAG} installation, so the picture was read before the upgrade and the recheck would prove nothing"
+            fail=1
+          fi
+          if [ "${fail}" -ne 0 ]; then
             exit 1
           fi
-          echo "sown: one readable file, never indexed, no queue row, skipped(gone) in findling_file_state"
+          echo "sown: a picture and a sidecar, both failed(corrupt) under ${UPGRADE_FROM_TAG}, and the seed word finds nothing"
           {
-            echo "UPGRADE_SEED_FILE_ID=${file_id}"
-            echo "UPGRADE_SEED_NAME=${seed_name}"
+            echo "UPGRADE_SEED_TIFF_ID=${tiff_id}"
+            echo "UPGRADE_SEED_SIDECAR_ID=${sidecar_id}"
           } >> "${GITHUB_ENV}"
 
       - name: Store upgrade 3, the state of the released installation, before anything moves
@@ -4304,7 +4418,7 @@ jobs:
               $1 == "scheduled" { scheduled = $2 }
               /^  handed to the worker/ { running = $NF }
               END { print (scheduled + 0) + (running + 0) }')
-            seed=$(term_hits "${SEED_TERM}" 2> /dev/null || echo "unreadable")
+            seed=$(term_hits "${SEED_WORD}" 2> /dev/null || echo "unreadable")
             if [ "${open}" = "0" ] && [ "${seed}" = "1" ]; then
               settled="yes"
               break
@@ -4427,7 +4541,7 @@ jobs:
           else
             echo "the sown file carries no skipped(gone) verdict any more"
           fi
-          if ! seed=$(term_hits "${SEED_TERM}"); then
+          if ! seed=$(term_hits "${SEED_WORD}"); then
             echo "::error::the search for the seed word did not answer readably after the upgrade"
             fail=1
           elif [ "${seed}" != "1" ] \
@@ -4552,7 +4666,7 @@ jobs:
             echo "- companion \`${UPGRADE_OLD_COMPANION}\` out of the release assets, upgraded to \`${UPGRADE_NEW_COMPANION}\` of this commit"
             echo "- the container was unregistered without the data removing flag and registered again on the volume \`${UPGRADE_VOLUME}\`"
             echo "- unchanged: the hits for Belehrung, Auszug and Erinnerung, four of the five index marks and the index format half of the fifth, the document counts apart from the one repaired seed, the work stock"
-            echo "- the gone verdict sown before the upgrade (D-10) is gone after it, and \`${SEED_TERM}\` finds the file it had hidden"
+            echo "- the gone verdict sown before the upgrade (D-10) is gone after it, and \`${SEED_WORD}\` finds the file it had hidden"
             echo "- no reindex banner, no \`start_rebuild_on_drift\` line in the container log"
             echo "- the languages mark was missing from the report before and is present and empty after, which is the mark arriving without a rebuild having stamped it"
             echo "- the Spanish question \`alemanes\` still answers with nought hits, because the field list of a question hangs on the stored schema mark and not on the code"
