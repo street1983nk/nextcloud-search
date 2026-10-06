@@ -19,9 +19,10 @@ findling.profile, which the autouse fixture of conftest.py resets on both sides.
 A restart is what those files call it too: a second poller on the same volume,
 with the module state of the process put back to rest.
 
-Nothing here changes product code. A case that shows a product fault is marked
-xfail(strict=True) with a finding id H-29-NN, and the finding stands with its
-reproduction in the matrix, for plan 29-14 to fix.
+Nothing here changes product code. None of the six cases showed a product
+fault (no finding H-29-NN), and plan 29-14 ran the matrix again before the
+owner acceptance: every case is an ordinary test without an expected failure
+marker, and a new fault found here is fixed in the product, not marked.
 """
 
 from __future__ import annotations
