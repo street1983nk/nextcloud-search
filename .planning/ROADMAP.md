@@ -329,7 +329,7 @@ Plans:
 - [x] 29-05-PLAN.md , Sidecar-Skip ._*/~$* vor judge (D-29-02/05) und Download-Größenprüfung ShortRead (D-29-04)
 - [x] 29-06-PLAN.md , Fehlerdetail je Datei: detail, Tabelle file_errors, errorClass in Diagnose (D-29-09)
 - [x] 29-07-PLAN.md , TIFF-Shim und Variantenurteil (D-29-06), JPEG draft + Header-Schätzung (D-29-07)
-- [ ] 29-08-PLAN.md , OLE/CFB-Sniff unter OOXML-Endung (D-29-08)
+- [x] 29-08-PLAN.md , OLE/CFB-Sniff unter OOXML-Endung (D-29-08)
 - [ ] 29-09-PLAN.md , Altbestands-Nachprüfung nach dem Upgrade, Bänder + Meta-Marke, an Companion-Signal gekoppelt (D-29-10)
 - [ ] 29-10-PLAN.md , Vollindex-Term zur Laufzeit und im Slotkosten-Skript (D-29-12)
 
@@ -355,7 +355,7 @@ Plans:
 | 26. N OCR-Slots und Speicherwächter | v1.4 | 14/14 | Complete    | 2026-09-29 |
 | 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 16/16 | Complete    | 2026-09-29 |
 | 28. Abnahme-Anfahrt | v1.4 | 14/14 | Complete    | 2026-10-06 |
-| 29. Härtung und Store-Einreichung 1.4.0 | v1.4 | 6/16 | In Progress|  |
+| 29. Härtung und Store-Einreichung 1.4.0 | v1.4 | 7/16 | In Progress|  |
 
 ## Nach v1.3 (Wiedervorlage)
 
