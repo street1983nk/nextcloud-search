@@ -33,6 +33,7 @@ import logging
 import shutil
 import struct
 import subprocess
+import sys
 import unicodedata
 import zlib
 from collections.abc import Callable, Iterator
@@ -42,7 +43,7 @@ from pathlib import Path
 
 import pypdfium2
 import pytest
-from PIL import Image
+from PIL import Image, TiffImagePlugin
 
 from findling.config import settings
 from findling.extract import dispatch, image, ocr, raster
@@ -969,3 +970,307 @@ def test_the_picture_caps_are_named_constants_and_the_bomb_guard_is_set() -> Non
     assert image._MAX_EDGE_PIXELS == 3500
     assert image._MIN_OCR_CHARS == 20
     assert Image.MAX_IMAGE_PIXELS == image._MAX_PIXELS
+
+
+# ---------------------------------------------------------------------------
+# The TIFF variants of #18 (plan 29-07, D-29-06). Every file below is built in
+# the test from a Pillow TIFF and a byte patch of one tag, so no binary lands in
+# the repository and the exact variant is readable in the helper that makes it.
+# ---------------------------------------------------------------------------
+
+# TIFF field types and their byte width, for the two helpers that walk an IFD.
+_TIFF_TYPE_BYTES = {1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 6: 1, 7: 1, 8: 2, 9: 4, 10: 8, 11: 4, 12: 8}
+
+# The struct codes of the types whose values change with the byte order.
+_TIFF_TYPE_CODES = {3: "H", 4: "I", 5: "II", 8: "h", 9: "i", 10: "ii", 11: "f", 12: "d"}
+
+# The grey value every variant is drawn with, and therefore the one the engine
+# has to be handed back.
+_GREY = 200
+
+# Over the minimum edge, under the aspect ratio cap: a plausible document.
+_VARIANT_SIZE = (800, 600)
+
+_TAG_EXTRA_SAMPLES = 338
+_TAG_SAMPLE_FORMAT = 339
+
+
+def _ifd_entries(data: bytes) -> Iterator[tuple[int, int, int, int]]:
+    """Every SHORT entry of every IFD as (entry offset, tag, count, value offset)."""
+    order = "<" if data[:2] == b"II" else ">"
+    (ifd,) = struct.unpack_from(order + "I", data, 4)
+    while ifd:
+        (count,) = struct.unpack_from(order + "H", data, ifd)
+        for number in range(count):
+            entry = ifd + 2 + 12 * number
+            tag, kind, values = struct.unpack_from(order + "HHI", data, entry)
+            if kind != 3:
+                continue
+            at = entry + 8 if 2 * values <= 4 else struct.unpack_from(order + "I", data, entry + 8)[0]
+            yield entry, tag, values, at
+        (ifd,) = struct.unpack_from(order + "I", data, ifd + 2 + 12 * count)
+
+
+def _retagged(data: bytes, tag: int, value: int) -> bytes:
+    """The same TIFF with every value of one SHORT tag set to ``value``, in every IFD."""
+    order = "<" if data[:2] == b"II" else ">"
+    patched = bytearray(data)
+    hits = 0
+    for _entry, found, values, at in _ifd_entries(data):
+        if found != tag:
+            continue
+        for number in range(values):
+            struct.pack_into(order + "H", patched, at + 2 * number, value)
+        hits += 1
+    assert hits, f"tag {tag} is not in the file"
+    return bytes(patched)
+
+
+def _big_endian(data: bytes) -> bytes:
+    """A little endian TIFF rewritten as big endian, structure only.
+
+    Pillow writes II on this platform whatever it is asked, and the file of #18
+    was MM. Every sample of the variants here is eight bits wide, and LZW and
+    Deflate streams are byte streams, so the pixel data stays as it is; only the
+    header, the IFDs and the values they point to change their order.
+    """
+    assert data[:4] == b"II*\x00"
+    turned = bytearray(data)
+    turned[:4] = b"MM\x00*"
+    (ifd,) = struct.unpack_from("<I", data, 4)
+    struct.pack_into(">I", turned, 4, ifd)
+    while ifd:
+        (count,) = struct.unpack_from("<H", data, ifd)
+        struct.pack_into(">H", turned, ifd, count)
+        for number in range(count):
+            entry = ifd + 2 + 12 * number
+            tag, kind, values = struct.unpack_from("<HHI", data, entry)
+            struct.pack_into(">HHI", turned, entry, tag, kind, values)
+            if _TIFF_TYPE_BYTES[kind] * values <= 4:
+                at = entry + 8
+            else:
+                (at,) = struct.unpack_from("<I", data, entry + 8)
+                struct.pack_into(">I", turned, entry + 8, at)
+            code = _TIFF_TYPE_CODES.get(kind)
+            if code is None:
+                continue
+            width = struct.calcsize("<" + code)
+            for value in range(values):
+                where = at + width * value
+                struct.pack_into(">" + code, turned, where, *struct.unpack_from("<" + code, data, where))
+        following = ifd + 2 + 12 * count
+        (ifd,) = struct.unpack_from("<I", data, following)
+        struct.pack_into(">I", turned, following, ifd)
+    return bytes(turned)
+
+
+def _tiff(mode: str, compression: str = "raw", *, sample_format: bool = False) -> bytes:
+    """A plain TIFF of the variant size, with an explicit SampleFormat tag on request."""
+    bands = Image.getmodebands(mode)
+    colour: int | tuple[int, ...] = _GREY if bands == 1 else (_GREY,) * bands
+    if mode == "LA":
+        colour = (_GREY, 255)
+    options: dict[str, object] = {"compression": compression}
+    if sample_format:
+        info = TiffImagePlugin.ImageFileDirectory_v2()
+        info[_TAG_SAMPLE_FORMAT] = (1,) * bands
+        info.tagtype[_TAG_SAMPLE_FORMAT] = 3
+        options["tiffinfo"] = info
+    sink = BytesIO()
+    with Image.new(mode, _VARIANT_SIZE, color=colour) as picture:
+        picture.save(sink, format="TIFF", **options)
+    return sink.getvalue()
+
+
+def _in_order(data: bytes, order: str) -> bytes:
+    return _big_endian(data) if order == "MM" else data
+
+
+def _written(tmp_path: Path, name: str, data: bytes) -> str:
+    path = tmp_path / name
+    path.write_bytes(data)
+    return str(path)
+
+
+_COMPRESSIONS = ("raw", "tiff_lzw", "tiff_adobe_deflate")
+_COMPRESSED = ("tiff_lzw", "tiff_adobe_deflate")
+_ORDERS = ("II", "MM")
+
+
+@pytest.mark.parametrize("order", _ORDERS)
+@pytest.mark.parametrize("compression", _COMPRESSIONS)
+@pytest.mark.parametrize("extra", [0, 1])
+def test_a_grey_tiff_with_an_extra_channel_is_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, extra: int, compression: str, order: str
+) -> None:
+    # The file of #18: grey plus one extra channel declared as unspecified (0)
+    # or associated alpha (1). Pillow 12.3.0 only maps the unassociated alpha of
+    # value 2, so without the shim this is UnidentifiedImageError and was booked
+    # as a broken file.
+    engine = _install_engine(monkeypatch, _page("Grauwert"))
+    data = _in_order(_retagged(_tiff("LA", compression), _TAG_EXTRA_SAMPLES, extra), order)
+
+    outcome = image.extract_image(_written(tmp_path, "grau.tif", data))
+
+    assert outcome.state is State.INDEXED
+    with _handed_over(engine) as handed:
+        assert handed.mode == "L"
+        assert handed.getpixel((5, 5)) == _GREY
+
+
+@pytest.mark.parametrize("order", _ORDERS)
+@pytest.mark.parametrize("mode", ["L", "RGB"])
+def test_an_uncompressed_tiff_with_sample_format_zero_is_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str, order: str
+) -> None:
+    # SampleFormat 0 is not in the specification, and 1 is its default. Read as
+    # the default, the pixels are exactly the ones drawn.
+    engine = _install_engine(monkeypatch, _page("Grauwert"))
+    data = _in_order(_retagged(_tiff(mode, sample_format=True), _TAG_SAMPLE_FORMAT, 0), order)
+
+    outcome = image.extract_image(_written(tmp_path, "sf0.tif", data))
+
+    assert outcome.state is State.INDEXED
+    with _handed_over(engine) as handed:
+        assert handed.getpixel((5, 5)) == _GREY
+
+
+@pytest.mark.parametrize("order", _ORDERS)
+@pytest.mark.parametrize("compression", _COMPRESSED)
+def test_sf0_compressed_probe(compression: str, order: str) -> None:
+    # The probe of D-29-06(b), kept as a test so that its answer stays checked:
+    # can a compressed SampleFormat 0 file be read when the tag says 1 before
+    # libtiff sees it? Libtiff rejects the value 0 itself ("Bad value 0 for
+    # SampleFormat"), and it reads the tags from the bytes, not from Pillow.
+    # The shim is in place here, because the module is imported: without it the
+    # open alone would already fail.
+    data = _in_order(_retagged(_tiff("L", compression, sample_format=True), _TAG_SAMPLE_FORMAT, 0), order)
+
+    # Way (i): set the tag in the opened picture and load. Libtiff never sees
+    # the change, so the load dies at the decoder. If this ever starts to work,
+    # the buffer copy of way (ii) can be retired.
+    with Image.open(BytesIO(data)) as picture:
+        picture.tag_v2[_TAG_SAMPLE_FORMAT] = (1,)
+        picture.tag[_TAG_SAMPLE_FORMAT] = (1,)
+        with pytest.raises(OSError, match="decoder error -2"):
+            picture.load()
+
+    # Way (ii): patch the value in a buffer and open the buffer. Correct pixels.
+    with Image.open(BytesIO(_retagged(data, _TAG_SAMPLE_FORMAT, 1))) as picture:
+        picture.load()
+        assert picture.getpixel((5, 5)) == _GREY
+
+
+@pytest.mark.parametrize("order", _ORDERS)
+@pytest.mark.parametrize("compression", _COMPRESSED)
+def test_a_compressed_tiff_with_sample_format_zero_is_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, compression: str, order: str
+) -> None:
+    # Way (ii) of the probe, as the product does it.
+    engine = _install_engine(monkeypatch, _page("Grauwert"))
+    data = _in_order(_retagged(_tiff("L", compression, sample_format=True), _TAG_SAMPLE_FORMAT, 0), order)
+    path = _written(tmp_path, "sf0.tif", data)
+
+    outcome = image.extract_image(path)
+
+    assert outcome.state is State.INDEXED
+    with _handed_over(engine) as handed:
+        assert handed.getpixel((5, 5)) == _GREY
+    # The buffer was patched, the file was not (IDX-07).
+    assert Path(path).read_bytes() == data
+
+
+def test_a_compressed_sample_format_zero_tiff_over_the_buffer_cap_is_an_honest_verdict(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The patched copy lives in memory next to the decoded picture (T-29-23b).
+    # Over the cap there is no copy, and no decoder error either: the verdict.
+    engine = _install_engine(monkeypatch, _page("nie erreicht"))
+    monkeypatch.setattr(image, "_SF0_PATCH_MAX_BYTES", 16)
+    data = _retagged(_tiff("L", "tiff_lzw", sample_format=True), _TAG_SAMPLE_FORMAT, 0)
+
+    outcome = image.extract_image(_written(tmp_path, "sf0.tif", data))
+
+    assert outcome.state is State.SKIPPED
+    assert outcome.reason is Reason.UNSUPPORTED_VARIANT
+    assert engine.calls == []
+
+
+def test_a_sample_format_patch_never_reaches_outside_the_buffer() -> None:
+    # A value offset that points past the end of the file is a broken file, and
+    # the patch answers it with None instead of writing anywhere (T-29-23b).
+    # RGB, so the three values do not fit into the entry and it holds an offset.
+    data = bytearray(_retagged(_tiff("RGB", sample_format=True), _TAG_SAMPLE_FORMAT, 0))
+    entry = next(entry for entry, tag, _values, _at in _ifd_entries(bytes(data)) if tag == _TAG_SAMPLE_FORMAT)
+    struct.pack_into("<I", data, entry + 8, len(data) + 100)
+
+    assert image._normalise_sample_format(bytearray(data)) is False
+
+
+@pytest.mark.parametrize("mode", ["I;16", "RGB"])
+def test_a_float_tiff_is_an_unsupported_variant_and_not_corrupt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    # SampleFormat 3 is floating point. Read as integers its bits are noise, so
+    # it is never normalised (T-29-23); the half float grey of #18 and an eight
+    # bit float RGB both get the honest verdict.
+    engine = _install_engine(monkeypatch, _page("nie erreicht"))
+    data = _retagged(_tiff(mode, sample_format=True), _TAG_SAMPLE_FORMAT, 3)
+
+    outcome = image.extract_image(_written(tmp_path, "float.tif", data))
+
+    assert outcome.state is State.SKIPPED
+    assert outcome.reason is Reason.UNSUPPORTED_VARIANT
+    assert engine.calls == []
+
+
+def test_a_tiff_with_a_broken_ifd_is_corrupt_with_the_class(tmp_path: Path) -> None:
+    # The TIFF magic and then garbage: a broken file, not a variant.
+    outcome = image.extract_image(_written(tmp_path, "kaputt.tif", b"II*\x00" + b"\xff" * 64))
+
+    assert outcome.state is State.FAILED
+    assert outcome.reason is Reason.CORRUPT
+    assert outcome.detail == "PIL.UnidentifiedImageError"
+
+
+def test_garbage_without_any_magic_is_corrupt(tmp_path: Path) -> None:
+    outcome = image.extract_image(_written(tmp_path, "muell.tif", b"nothing a decoder knows" * 8))
+
+    assert outcome.state is State.FAILED
+    assert outcome.reason is Reason.CORRUPT
+
+
+def _pristine_open_info() -> dict[tuple[object, ...], tuple[str, str]]:
+    """OPEN_INFO as Pillow ships it, read in a fresh interpreter that never saw the shim."""
+    answer = subprocess.run(  # noqa: S603 - an argument list, never a shell
+        [sys.executable, "-c", "from PIL import TiffImagePlugin as T; print(repr(sorted(T.OPEN_INFO.items())))"],
+        capture_output=True,
+        check=True,
+        text=True,
+        timeout=60,
+    )
+    return dict(ast.literal_eval(answer.stdout))
+
+
+def test_the_shim_adds_only_keys_pillow_does_not_ship() -> None:
+    pristine = _pristine_open_info()
+
+    assert image._SHIM_KEYS
+    for key in image._SHIM_KEYS:
+        assert key not in pristine, f"Pillow ships this key now, check and retire the shim: {key!r}"
+        assert key in TiffImagePlugin.OPEN_INFO
+
+
+def test_the_shim_changes_no_entry_pillow_ships() -> None:
+    pristine = _pristine_open_info()
+
+    for key, value in pristine.items():
+        assert TiffImagePlugin.OPEN_INFO[key] == value
+
+
+def test_the_shim_maps_grey_with_an_extra_channel_to_la() -> None:
+    # LA and not L;16B, which fails on the libtiff path, and not La, which does
+    # not convert to L (pitfall 2 of the phase research).
+    for order in (TiffImagePlugin.II, TiffImagePlugin.MM):
+        for extra in (0, 1):
+            assert TiffImagePlugin.OPEN_INFO[(order, 1, (1,), 1, (8, 8), (extra,))] == ("LA", "LA")
