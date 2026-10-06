@@ -1,7 +1,7 @@
 ---
 phase: 27-vorab-pr-fung-und-settings-oberfl-che
 verified: 2026-09-29T18:30:00Z
-status: human_needed
+status: passed
 score: 4/4
 overrides_applied: 0
 deferred:
@@ -146,3 +146,15 @@ Keine Blocker. Alle vier Success Criteria sind im Code belegt und mit unabhängi
 
 _Verified: 2026-09-29_
 _Verifier: Claude (gsd-verifier)_
+
+## Nachtrag Pre-Close v1.4 (2026-10-06)
+
+1. PHPUnit der Review-Fixes: seit den Phase-28-Pushes mehrfach gruen, zuletzt
+   Tag-Lauf 37470623202 (589 Tests inkl. ProbeServiceTest, ScanRecountJobTest,
+   CrawlAdvanceServiceTest).
+2. fp32-Zweig live: bewusst vertagt per Owner-Entscheid 27-15, erneut bestaetigt
+   als D-29-11 (Feldbelege naechste Anfahrt); als akzeptiert dokumentiert.
+3. Maschinenuebersetzungen: die 1.4.0-Textabnahme vom 06.10. ("ok abgenommen",
+   29-02) deckte die Kataloge der Release-Texte; die zwei Altsaetze aus WR-02/
+   WR-10 reisen unveraendert mit und standen seit 27 in den Katalogen.
+Status deshalb auf passed gesetzt (Punkt 2 als akzeptierter Verzicht).

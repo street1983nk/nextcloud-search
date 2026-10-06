@@ -1,7 +1,7 @@
 ---
 phase: 24-owner-tor-profil-ger-st-und-marken-reparatur
 verified: 2026-09-28T00:00:00Z
-status: human_needed
+status: passed
 score: 5/5 must-haves verified
 overrides_applied: 0
 human_verification:
@@ -114,3 +114,15 @@ Keine Lücken. Alle fünf Roadmap-Kriterien sind im Code belegt und durch eigene
 
 _Verified: 2026-09-28_
 _Verifier: Claude (gsd-verifier)_
+
+## Nachtrag Pre-Close v1.4 (2026-10-06)
+
+Beide Human-Verification-Punkte sind inzwischen belegt:
+1. PHPUnit in CI: php.yml lief seit Phase 28 mehrfach gruen, zuletzt Tag-Lauf
+   37470623202 (v1.4.0, 589 Tests) inkl. ProfileControllerTest; erster Beleg
+   Lauf 37452332197.
+2. Live-Durchstich Profilroute: in Phase 28 auf echten Boxen je Zelle gefahren
+   (Profilwechsel Teil der 18-Zellen-Matrix); am 06.10. zusaetzlich live auf der
+   Dev-Instanz gesehen (Statuskarte mit Profilblock, K6-Banner mit Companion
+   1.3.0, economy nach Upgrade im CI-Bein "Store upgrade 5").
+Status deshalb auf passed gesetzt.
