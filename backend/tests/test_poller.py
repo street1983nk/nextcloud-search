@@ -1686,6 +1686,39 @@ async def test_a_file_that_cannot_be_processed_is_acknowledged_with_its_reason(
     assert queue.acknowledged == [([], {91: "corrupt"})]
 
 
+async def test_the_class_of_the_reader_error_is_stored_and_stays_off_the_wire(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # D-29-09 (issue #18): the verdict is still failed(corrupt), and next to it
+    # the state database keeps the class of the exception that produced it. The
+    # acknowledgement carries the reason code and nothing else.
+    broken = b"PK not really a package at all"
+    job = _job(mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", size=len(broken))
+    queue = _FakeQueue(ClaimResult(jobs=(job,)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: broken})
+
+    await poller.run_once()
+
+    error_class = store.error_class(4711)
+    assert error_class is not None
+    assert re.fullmatch(r"[A-Za-z0-9_.]{1,200}", error_class)
+    assert "." in error_class
+    assert queue.acknowledged == [([], {91: "corrupt"})]
+
+
+async def test_a_verdict_without_an_exception_stores_no_error_class(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    job = _job()
+    queue = _FakeQueue(ClaimResult(jobs=(job,)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    result = await poller.run_once()
+
+    assert result.indexed == 1
+    assert store.error_class(4711) is None
+
+
 async def test_the_acl_of_a_job_is_written_declaratively(
     store: Store, writer: IndexBatchWriter, tmp_path: Path
 ) -> None:

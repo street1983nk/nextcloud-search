@@ -1263,3 +1263,130 @@ def test_the_connection_may_cross_a_worker_thread(store: Store) -> None:
 
     assert len(written) == 1
     assert written[0] is not None
+
+
+# -- the error class of plan 29-06 (D-29-09, issue #18) ------------------------
+
+
+def _error_rows(store: Store) -> int:
+    return int(store._conn.execute("SELECT COUNT(*) FROM file_errors").fetchone()[0])
+
+
+def test_record_with_an_error_class_stores_it_next_to_the_verdict(store: Store) -> None:
+    store.record(7, a_file(7), "failed", "corrupt", error_class="zipfile.BadZipFile")
+
+    assert store.error_class(7) == "zipfile.BadZipFile"
+    assert _error_rows(store) == 1
+
+
+def test_a_later_verdict_without_an_error_class_removes_the_old_one(store: Store) -> None:
+    store.record(7, a_file(7), "failed", "corrupt", error_class="zipfile.BadZipFile")
+    store.record(7, a_file(7), "indexed", content_hash="abc", text_chars=10)
+
+    assert store.error_class(7) is None
+    assert _error_rows(store) == 0
+
+
+def test_a_later_error_class_replaces_the_earlier_one(store: Store) -> None:
+    store.record(7, a_file(7), "failed", "corrupt", error_class="zipfile.BadZipFile")
+    store.record(7, a_file(7), "failed", "corrupt", error_class="PIL.UnidentifiedImageError")
+
+    assert store.error_class(7) == "PIL.UnidentifiedImageError"
+    assert _error_rows(store) == 1
+
+
+def test_a_file_without_a_verdict_has_no_error_class(store: Store) -> None:
+    assert store.error_class(99) is None
+
+
+@pytest.mark.parametrize(
+    "error_class",
+    [
+        "/geheim/pfad/Vertrag.pdf",
+        "zipfile.BadZipFile: File is not a zip file",
+        "test_module.<locals>.Trouble",
+        "a" * 201,
+        "",
+    ],
+)
+def test_an_error_class_outside_the_allowed_shape_is_stored_as_nothing(store: Store, error_class: str) -> None:
+    # T-29-18 and T-29-19: the verdict is written, the detail is dropped, and a
+    # name that could carry a path or a message never reaches the table.
+    store.record(7, a_file(7), "failed", "corrupt", error_class=error_class)
+
+    assert store.file_row(7) is not None
+    assert store.error_class(7) is None
+    assert _error_rows(store) == 0
+
+
+def test_the_longest_allowed_error_class_is_kept(store: Store) -> None:
+    name = "a" * 200
+    store.record(7, a_file(7), "failed", "corrupt", error_class=name)
+
+    assert store.error_class(7) == name
+
+
+def test_a_rejected_verdict_writes_no_error_class(store: Store) -> None:
+    with pytest.raises(ValueError, match="does not belong"):
+        store.record(7, a_file(7), "skipped", "corrupt", error_class="zipfile.BadZipFile")
+
+    assert _error_rows(store) == 0
+
+
+def test_a_tombstone_keeps_the_error_class_like_it_keeps_the_verdict(store: Store) -> None:
+    # Decided and pinned: a tombstone leaves the verdict readable, so the class
+    # next to it stays as well. It names a reader and never the file, so the row
+    # that outlives the file carries nothing of it, and the next verdict for the
+    # same id replaces or removes it.
+    store.record(7, a_file(7), "failed", "corrupt", error_class="zipfile.BadZipFile")
+    store.tombstone(7)
+
+    assert store.error_class(7) == "zipfile.BadZipFile"
+
+    store.record(7, a_file(7), "indexed", content_hash="abc", text_chars=10)
+    assert store.error_class(7) is None
+
+
+def test_a_give_up_verdict_removes_the_error_class(store: Store) -> None:
+    store.record(7, a_file(7), "failed", "corrupt", error_class="zipfile.BadZipFile")
+    _give_up(store, 7, etag="aaa")
+
+    assert store.error_class(7) is None
+
+
+def test_a_reset_for_reindex_forgets_the_error_classes_of_the_forgotten_verdicts(store: Store) -> None:
+    store.record(7, a_file(7), "failed", "corrupt", error_class="zipfile.BadZipFile")
+
+    store.reset_for_reindex(store.index_version + 1)
+
+    assert store.file_row(7) is None
+    assert _error_rows(store) == 0
+
+
+def test_an_existing_database_without_the_table_gets_it_on_the_next_open(tmp_path: Path) -> None:
+    path = tmp_path / "state.db"
+    older = open_store(path)
+    older.record(7, a_file(7), "failed", "corrupt")
+    older._conn.execute("DROP TABLE file_errors")
+    meta_before = older.read_meta()
+    version_before = older.index_version
+    older.close()
+
+    # The read path of the diagnosis meets such a database before the poller
+    # reopened it, and answers with nothing rather than with an error.
+    reader = open_read_only(path)
+    try:
+        assert reader.error_class(7) is None
+    finally:
+        reader.close()
+
+    reopened = open_store(path)
+    try:
+        assert reopened.read_meta() == meta_before
+        assert reopened.index_version == version_before
+        assert reopened.read_meta()[STORE_SCHEMA_MARK] == SCHEMA_VERSION
+        assert reopened.file_row(7) is not None
+        reopened.record(7, a_file(7), "failed", "corrupt", error_class="zipfile.BadZipFile")
+        assert reopened.error_class(7) == "zipfile.BadZipFile"
+    finally:
+        reopened.close()

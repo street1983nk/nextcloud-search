@@ -12,12 +12,14 @@ as a verdict, and a call that reached a library would raise instead.
 
 from __future__ import annotations
 
+import pickle
 import re
 import zipfile
 from pathlib import Path
 
 import pytest
 from docx.opc.exceptions import PackageNotFoundError
+from PIL import UnidentifiedImageError
 
 # lxml ships no type information for its C extension, so pyright cannot see the
 # submodule. Importing the real class is the point of this test file: the mapping
@@ -360,3 +362,56 @@ def test_an_extraction_that_yields_nothing_is_skipped(nothing: str) -> None:
 )
 def test_extension_of_reports_the_lowercase_suffix(name: str, expected: str) -> None:
     assert extension_of(name) == expected
+
+
+# -- the error class of plan 29-06 (D-29-09, issue #18) ------------------------
+#
+# failed(corrupt) is the verdict and stays one of a closed list. What it hid in
+# #18 was which reader gave up, and the class of the exception is the one fact
+# that names it without carrying a byte of the file: never the message, which
+# quotes what the reader read, and never a path (T-02-56).
+
+
+def test_a_mapped_exception_carries_its_class_as_the_detail() -> None:
+    outcome = ExtractionOutcome.from_exception(zipfile.BadZipFile("File is not a zip file"))
+
+    assert outcome.reason is Reason.CORRUPT
+    assert outcome.detail == "zipfile.BadZipFile"
+
+
+def test_the_fallback_to_corrupt_carries_the_class_as_well() -> None:
+    outcome = ExtractionOutcome.from_exception(RuntimeError("something nobody predicted"))
+
+    assert outcome.reason is Reason.CORRUPT
+    assert outcome.detail == "builtins.RuntimeError"
+
+
+def test_the_detail_never_carries_the_message_or_a_path() -> None:
+    class ReaderTrouble(Exception):
+        pass
+
+    outcome = ExtractionOutcome.from_exception(ReaderTrouble("/geheim/pfad/Vertrag.pdf: bad header"))
+
+    assert outcome.detail is not None
+    assert "/geheim/pfad" not in outcome.detail
+    assert "Vertrag" not in outcome.detail
+    assert "bad header" not in outcome.detail
+
+
+def test_the_detail_is_the_raised_class_and_not_the_class_the_table_matched() -> None:
+    outcome = ExtractionOutcome.from_exception(UnidentifiedImageError("cannot identify image file"))
+
+    assert outcome.detail == "PIL.UnidentifiedImageError"
+
+
+def test_a_verdict_built_without_an_exception_carries_no_detail() -> None:
+    assert ExtractionOutcome.failed(Reason.CORRUPT).detail is None
+    assert ExtractionOutcome.skipped(Reason.EMPTY_TEXT).detail is None
+    assert ExtractionOutcome.indexed("text").detail is None
+
+
+def test_the_detail_survives_the_pipe_from_the_child_to_the_parent() -> None:
+    # The sandbox sends the outcome over a multiprocessing pipe, which pickles it.
+    outcome = ExtractionOutcome.from_exception(zipfile.BadZipFile("File is not a zip file"))
+
+    assert pickle.loads(pickle.dumps(outcome)) == outcome  # noqa: S301
