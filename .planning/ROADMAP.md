@@ -67,7 +67,7 @@ Details im Archiv: .planning/milestones/v1.3-ROADMAP.md
 - [x] **Phase 26: N OCR-Slots und Speicherwächter** - Mehrere OCR-Slots (H2) mit KIND_BATCH-Companion, Drosselung und selbsttätiger Profil-Rückstufung (completed 2026-09-29)
 - [x] **Phase 27: Vorab-Prüfung und Settings-Oberfläche** - Erste echte Settings-Fläche mit "Übernehmen und prüfen" (N-Slot-Probe, Verdikt), acht Sprachkataloge (completed 2026-09-29)
 - [x] **Phase 28: Abnahme-Anfahrt** - RAM-Messung je Profilstufe am gebauten Produkt auf echter Hardware, Deckel vorab freigegeben (completed 2026-10-06, Owner-Abnahme "approved")
-- [ ] **Phase 29: Härtung und Store-Einreichung 1.4.0** - Launch-Härtung der Parallelpfade, Audits, signiertes App-Paar im Store
+- [x] **Phase 29: Härtung und Store-Einreichung 1.4.0** - Launch-Härtung der Parallelpfade, Audits, signiertes App-Paar im Store (completed 2026-10-06)
 
 **Ausführungsreihenfolge und Sicherheitsbedingung:** 24 -> 25 -> 26 -> 27 -> 28 -> 29, streng seriell, und zwar aus Sicherheitsgründen, nicht aus Aufwandsgründen. Die Marken-Reparatur (MOD-01) steht in Phase 24 VOR jedem Modellschalter (Phase 25), sonst mischen sich int8- und fp32-Vektoren still (K8). H1 (Phase 25) kommt vor H2 (Phase 26), weil er den Tantivy-Writer nicht berührt und auf jeder Box ab 2 Kernen wirkt. Die N-Slot-Probe der Vorab-Prüfung (Phase 27) setzt N Slots voraus (Phase 26). Die Abnahme-Anfahrt (Phase 28) misst das gebaute Produkt, bevor ein Release die Stufen anbietet (Owner-Auflage 24.09.). PHP-Kopplung (K6): Art-Filter am Anspruch reist mit Phase 25, KIND_BATCH/LOCK_TIMEOUTS mit Phase 26, beide Companion-Änderungen erscheinen erst mit dem gemeinsamen Release 1.4.0. Nach jeder Phase Security-, Bug- und Performance-Audit (Owner-Regel 15.08.), Befunde vor Phasenabschluss fixen.
 
@@ -340,7 +340,7 @@ Plans:
 - [x] 29-13-PLAN.md , Push mit Owner-Wort, CI-Beweis Fremdinstallation + Upgrade (Owner-Checkpoint)
 - [x] 29-14-PLAN.md , Phasenaudit, Befundfixe, Owner-Abnahme der Launch-Härtung (Owner-Checkpoint)
 - [x] 29-15-PLAN.md , Tag v1.4.0 mit Owner-Wort, Release-Belegkette (Owner-Checkpoint)
-- [ ] 29-16-PLAN.md , Einreichung 2x HTTP 201, Issue-Antworten, Pillow-Issue, Zustandspflege (Owner-Checkpoints)
+- [x] 29-16-PLAN.md , Einreichung 2x HTTP 201, Issue-Antworten, Pillow-Issue, Zustandspflege (Owner-Checkpoints)
 
 ## Progress
 
@@ -355,7 +355,7 @@ Plans:
 | 26. N OCR-Slots und Speicherwächter | v1.4 | 14/14 | Complete    | 2026-09-29 |
 | 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 16/16 | Complete    | 2026-09-29 |
 | 28. Abnahme-Anfahrt | v1.4 | 14/14 | Complete    | 2026-10-06 |
-| 29. Härtung und Store-Einreichung 1.4.0 | v1.4 | 15/16 | In Progress|  |
+| 29. Härtung und Store-Einreichung 1.4.0 | v1.4 | 16/16 | Complete   | 2026-10-06 |
 
 ## Nach v1.3 (Wiedervorlage)
 
