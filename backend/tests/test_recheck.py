@@ -13,16 +13,16 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterator, Sequence
-from dataclasses import replace
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 
 import pytest
 
 from findling.nc.queue import KIND_CONTENT, CallResult, DocumentQueue
 from findling.store.repo import EMBEDDING_BACKLOG_MARK, RECHECK_MARK, FileMeta, Store, open_store
-from findling.worker.reconcile import REQUEUE_BAND
+from findling.worker import recheck as recheck_module
 from findling.worker.recheck import recheck_step, select_candidates
+from findling.worker.reconcile import REQUEUE_BAND
 
 
 class _Queue:
@@ -194,7 +194,7 @@ async def test_deleted_rows_and_documents_stay_where_they_are(store: Store) -> N
 async def test_the_index_generation_and_the_vector_marks_stay_untouched(store: Store) -> None:
     for file_id in range(1, 6):
         _failed(store, file_id)
-    store.record(6, replace(_meta("a/._x.docx")), "indexed", content_hash="abc", text_chars=3)
+    store.record(6, _meta("a/._x.docx"), "indexed", content_hash="abc", text_chars=3)
     before = store.read_meta()
     versions_before = store.verdicts_older_than(10**9)
 
@@ -224,6 +224,4 @@ async def test_the_log_carries_numbers_and_no_path(store: Store, caplog: pytest.
 def test_the_band_is_the_one_of_the_reconcile() -> None:
     # Imported, not copied: the PHP controller refuses a list over 256 whole
     # (T-29-29), and the parity test of the reconcile holds REQUEUE_BAND to it.
-    from findling.worker import recheck  # noqa: PLC0415
-
-    assert cast("Any", recheck).REQUEUE_BAND is REQUEUE_BAND
+    assert recheck_module.REQUEUE_BAND is REQUEUE_BAND

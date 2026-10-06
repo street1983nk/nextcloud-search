@@ -82,7 +82,7 @@ from findling.config import (
     settings,
 )
 from findling.extract.dispatch import Route, extension_of, judge
-from findling.extract.errors import ChildKilled, ExtractionOutcome, Reason, State
+from findling.extract.errors import ChildKilled, ExtractionOutcome, Reason, State, is_sidecar_name
 from findling.extract.pool import SlotGate, SlotPool
 from findling.index.open import (
     expected_versions,
@@ -1441,7 +1441,7 @@ class Poller:
         # setting to switch it off. The verdict is skipped(system_file) and never
         # excluded, which is a live answer of the PHP side and is never stored.
         # A Mac bundle such as .key is not a special case here (deferred).
-        if _is_sidecar(PurePosixPath(job.path).name or job.title):
+        if is_sidecar_name(PurePosixPath(job.path).name or job.title):
             await self._drop_a_sidecar(job)
             self._collect(job, ExtractionOutcome.skipped(Reason.SYSTEM_FILE), done, failed, verdicts)
             return 0
@@ -2359,19 +2359,6 @@ def _record_of(job: QueueJob, outcome: ExtractionOutcome) -> IndexRecord:
         body=outcome.text,
         mtime=job.mtime,
     )
-
-
-def _is_sidecar(name: str) -> bool:
-    """True for the base name of a macOS AppleDouble file or an Office lock stub.
-
-    The base name and nothing else, checked here in Python and never with a SQL
-    LIKE (T-29-17): a pattern over the path would catch every hidden file and
-    every folder that happens to start with the marker. A name only counts when
-    it starts with ``._`` or ``~$``; ``.hidden``, ``a._b`` and ``_x`` are
-    documents. A module function, so that the recheck of the old stock asks the
-    same question.
-    """
-    return name.startswith(("._", "~$"))
 
 
 def _discard(scratch: Path) -> None:
