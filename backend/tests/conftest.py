@@ -521,7 +521,7 @@ def cfb_entry(name: str, object_type: int = CFB_STREAM, *, name_length: int | No
     return entry
 
 
-def build_cfb(  # noqa: PLR0913 - every keyword is one header field a hostile file can lie about
+def build_cfb(
     stream_names: Sequence[str],
     *,
     sector_shift: int = 9,
@@ -551,7 +551,7 @@ def build_cfb(  # noqa: PLR0913 - every keyword is one header field a hostile fi
         table[number] = following
     table.extend([CFB_FREE] * (sector // 4 - len(table)))
 
-    major = 3 if sector_shift == 9 else 4  # noqa: PLR2004 - 9 is the 512 byte shift of version 3
+    major = 3 if sector_shift == 9 else 4
     header = (
         CFB_SIGNATURE
         + bytes(16)
@@ -559,7 +559,7 @@ def build_cfb(  # noqa: PLR0913 - every keyword is one header field a hostile fi
         + bytes(6)
         + struct.pack(
             "<9I",
-            0 if major == 3 else len(directory),  # noqa: PLR2004 - version 3 must declare zero here
+            0 if major == 3 else len(directory),
             fat_sector_count,
             first_directory,
             0,

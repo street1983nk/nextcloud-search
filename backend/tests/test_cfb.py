@@ -149,6 +149,7 @@ def test_a_truncated_compound_file_ends_in_none(tmp_path: Path, sector_shift: in
     names = [f"Stream{number}" for number in range(40)] + ["EncryptionInfo"]
     whole = build_cfb(names, sector_shift=sector_shift)
 
+    assert ole_verdict(_file(tmp_path, whole, "whole.part")) == ExtractionOutcome.skipped(Reason.ENCRYPTED)
     assert ole_verdict(_file(tmp_path, whole[: len(whole) - 100])) is None
 
 
@@ -197,7 +198,7 @@ def test_only_the_directory_is_read_and_never_the_whole_file(tmp_path: Path, mon
     payload = build_cfb(["WordDocument"]) + bytes(8 * 1024 * 1024)
     path = _file(tmp_path, payload)
     requested: list[int] = []
-    real_read = cfb._read_at  # noqa: SLF001 - counting the reads is the point
+    real_read = cfb._read_at
 
     def counting(handle: cfb.BinaryIO, offset: int, length: int, size: int) -> bytes:
         requested.append(length)
