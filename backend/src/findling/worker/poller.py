@@ -82,7 +82,7 @@ from findling.config import (
     settings,
 )
 from findling.extract.dispatch import Route, extension_of, judge
-from findling.extract.errors import ChildKilled, ExtractionOutcome, Reason, State
+from findling.extract.errors import ChildKilled, ExtractionOutcome, Reason, State, is_sidecar_name
 from findling.extract.pool import SlotGate, SlotPool
 from findling.index.open import (
     expected_versions,
@@ -112,6 +112,7 @@ from findling.nc.queue import (
     KIND_OCR,
     LANE_INDEX,
     TOPUP_SUPPLIED,
+    VERDICTS_GENERATION,
     DocumentQueue,
     QueueJob,
 )
@@ -133,6 +134,7 @@ from findling.worker.embedding import (
     acl_users,
     hand_over,
 )
+from findling.worker.recheck import recheck_step
 
 LOGGER = logging.getLogger("findling.worker.poller")
 
@@ -497,6 +499,10 @@ class Poller:
         # this poller writes, and the worker package does not import the API
         # package to find that out (audit finding H-19-01).
         self._marks_stamped = marks_stamped
+        # Whether the re-check of the old stock is over (D-29-10). Process
+        # memory only, as a shortcut: the truth is RECHECK_MARK in state.db,
+        # and a new process reads it once and learns the same.
+        self._recheck_done = False
         self._writer = writer
         self._owns_resources = store is None and writer is None
         self._tmp_dir = resolved.tmp_dir if tmp_dir is None else tmp_dir
@@ -898,6 +904,22 @@ class Poller:
         # same answer, or another chosen profile, lifts a cap. Nothing else
         # ever raises the level again, least of all the guard itself.
         guard.note_confirmation(choice.confirmed, choice.profile)
+
+        # The re-check of the old stock after the upgrade (D-29-10): the files
+        # of the classes 1.4.0 fixes go back to the queue once, without a full
+        # reindex. Only on the signal of K6, because only the 1.4.0 companion
+        # stores the new codes; before it, the re-check would only write the
+        # old codes again. The run is one time (RECHECK_MARK says "done"
+        # afterwards, and the flag spares later rounds even the meta read), and
+        # it stands before the claim so the rows it hands back can be claimed
+        # in the same round. Its length is bounded: about 43 requeue calls on
+        # the stock of the reporting instance. A failure is a log line with the
+        # class name and nothing else; the next round tries again at the cursor.
+        if not self._recheck_done and choice.verdicts == VERDICTS_GENERATION:
+            try:
+                self._recheck_done = await recheck_step(self._store_or_die(), queue)
+            except Exception as error:
+                LOGGER.warning("the re-check of the fix classes stopped, %s", type(error).__name__)
 
         # Where the embedding runs this pass (PAR-01, PAR-04). In Economy the
         # embed runner must have parked before this pass claims anything, so
@@ -1441,7 +1463,7 @@ class Poller:
         # setting to switch it off. The verdict is skipped(system_file) and never
         # excluded, which is a live answer of the PHP side and is never stored.
         # A Mac bundle such as .key is not a special case here (deferred).
-        if _is_sidecar(PurePosixPath(job.path).name or job.title):
+        if is_sidecar_name(PurePosixPath(job.path).name or job.title):
             await self._drop_a_sidecar(job)
             self._collect(job, ExtractionOutcome.skipped(Reason.SYSTEM_FILE), done, failed, verdicts)
             return 0
@@ -2359,19 +2381,6 @@ def _record_of(job: QueueJob, outcome: ExtractionOutcome) -> IndexRecord:
         body=outcome.text,
         mtime=job.mtime,
     )
-
-
-def _is_sidecar(name: str) -> bool:
-    """True for the base name of a macOS AppleDouble file or an Office lock stub.
-
-    The base name and nothing else, checked here in Python and never with a SQL
-    LIKE (T-29-17): a pattern over the path would catch every hidden file and
-    every folder that happens to start with the marker. A name only counts when
-    it starts with ``._`` or ``~$``; ``.hidden``, ``a._b`` and ``_x`` are
-    documents. A module function, so that the recheck of the old stock asks the
-    same question.
-    """
-    return name.startswith(("._", "~$"))
 
 
 def _discard(scratch: Path) -> None:

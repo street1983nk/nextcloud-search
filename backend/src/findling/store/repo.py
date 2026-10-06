@@ -156,6 +156,19 @@ LEGACY_SCHEMA_STEPS: Final = frozenset({("1", "2")})
 # the rest of the stock unwritten with nothing anywhere saying so.
 EMBEDDING_BACKLOG_MARK: Final = "embedding_backlog_at"
 
+# Where the one time re-check of the old stock after the upgrade to 1.4.0 has
+# got to (D-29-10, worker/recheck.py). An empty or missing value means it has
+# not started, digits are the cursor (the last file id whose band reached the
+# queue), and "done" means it is over and never comes back.
+#
+# A meta key of its own for the reason EMBEDDING_BACKLOG_MARK is one: it is the
+# position of a sweep and not a version. Raising the index generation instead
+# would have forgotten every verdict and re-read the whole instance, days of
+# work on a weak box, to fix a few classes of files; this mark touches nothing
+# but itself. Written down rather than kept in the process, because a container
+# restarts in the middle of the work and the rest of the sweep must resume.
+RECHECK_MARK: Final = "recheck_1_4_0"
+
 # The marks that say nothing about the tantivy index.
 #
 # :meth:`Store.version_mismatch` reports every divergence it finds, including
@@ -390,6 +403,19 @@ SELECT COUNT(*) FROM files WHERE state = 'indexed' AND deleted_at IS NULL
 _INDEXED_FILE_IDS_SQL: Final = """
 SELECT file_id FROM files
  WHERE state = 'indexed' AND deleted_at IS NULL AND file_id > ?
+ ORDER BY file_id
+ LIMIT ?
+"""
+
+# The raw reader of the re-check (D-29-10). Every living row above the cursor,
+# whatever its verdict, because the choice is made in worker/recheck.py: the
+# sidecar rule asks for the base name of the path, which is a question for
+# Python and never one for a LIKE over the whole path (T-29-17), and this module
+# imports nothing from findling.extract. Tombstones stay out: a deleted file has
+# nothing left to re-check.
+_RECHECK_SCAN_SQL: Final = """
+SELECT file_id, state, reason, path FROM files
+ WHERE deleted_at IS NULL AND file_id > ?
  ORDER BY file_id
  LIMIT ?
 """
@@ -1147,6 +1173,22 @@ class Store:
         """
         rows = self._conn.execute(_INDEXED_FILE_IDS_SQL, (after, limit))
         return [int(row[0]) for row in rows]
+
+    def recheck_scan(self, *, after: int, limit: int) -> tuple[list[tuple[int, str, str | None, str]], int | None]:
+        """One block of living rows above ``after`` for the re-check, and its last id.
+
+        Raw rows of file id, state, reason and path, ascending; the selection
+        lives in worker/recheck.py (the reasoning stands at
+        :data:`_RECHECK_SCAN_SQL`). The second value is the last file id read,
+        or None when nothing is left above the cursor, which ends the sweep. It
+        is returned separately from the rows because the caller keeps only a
+        few of them and still has to move its cursor past the whole block.
+        """
+        rows = [
+            (int(file_id), str(state), None if reason is None else str(reason), str(path))
+            for file_id, state, reason, path in self._conn.execute(_RECHECK_SCAN_SQL, (after, limit))
+        ]
+        return rows, (rows[-1][0] if rows else None)
 
     def reset_for_reindex(self, index_version: int) -> int:
         """Forget every verdict older than this generation, return how many.

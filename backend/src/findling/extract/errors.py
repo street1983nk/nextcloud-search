@@ -277,3 +277,20 @@ class ExtractionOutcome:
             if reason is not None:
                 return cls.failed(reason, detail=detail)
         return cls.failed(Reason.CORRUPT, detail=detail)
+
+
+def is_sidecar_name(name: str) -> bool:
+    """True for the base name of a macOS AppleDouble file or an Office lock stub.
+
+    The base name and nothing else, checked in Python and never with a SQL LIKE
+    (T-29-17): a pattern over the path would catch every hidden file and every
+    folder that happens to start with the marker. A name only counts when it
+    starts with ``._`` or ``~$``; ``.hidden``, ``a._b`` and ``_x`` are documents
+    (D-29-05).
+
+    It lives here, in the stdlib only module of the verdicts, so that there is
+    exactly one copy of the rule: the poller skips a sidecar by it before the
+    first byte, and the re-check of the old stock after the upgrade (D-29-10,
+    worker/recheck.py) selects the rows to hand back by the same question.
+    """
+    return name.startswith(("._", "~$"))

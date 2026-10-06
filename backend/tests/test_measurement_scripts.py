@@ -1636,8 +1636,13 @@ PHP_TREE_HASH_TODAY = "3f72f80dcbefe041968eb1161d377c2c8e85f3d4c2a5d7e27815631e9
 # OLE sniff, D-29-08; extract/dispatch.py: the sniff at the top of
 # _run_ooxml_route). One file came and none went, so PACKAGE_FILES_TODAY moves
 # to 72. The PHP pair does not move: php/ is unchanged.
-PACKAGE_FILES_TODAY = 72
-PACKAGE_TREE_HASH_TODAY = "266b49eaa4fb184599d5943a7a7ad6c9d198cdf3097338a274da3a9981357a1d"
+# Measured again by plan 29-09: plan 29-09 added worker/recheck.py and changed
+# extract/errors.py (is_sidecar_name moved from poller.py), store/repo.py
+# (RECHECK_MARK and recheck_scan) and worker/poller.py (the re-check behind the
+# companion signal, D-29-10). One file came, none went, so PACKAGE_FILES_TODAY
+# goes from 72 to 73. The PHP pair does not move: php/ is unchanged.
+PACKAGE_FILES_TODAY = 73
+PACKAGE_TREE_HASH_TODAY = "0289455f79e19fa30c51cf36855b1aa1e0546050fe7e2e05615418b3391252b7"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
