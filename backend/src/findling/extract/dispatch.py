@@ -246,7 +246,21 @@ def _run_route(route: Route, path: str, mime: str) -> ExtractionOutcome:
 
 
 def _run_ooxml_route(route: Route, path: str) -> ExtractionOutcome:
-    """The three ZIP packages of the Office world."""
+    """The three ZIP packages of the Office world, after the OLE sniff.
+
+    A password protected Office document and an old binary one renamed to the
+    new extension are compound files and not ZIP packages; they get their name
+    here, before any ZIP reader can call them corrupt (D-29-08, issue #18). Only
+    these three routes ask, because only their extensions are worn by such files.
+    The sidecar skip does not belong here: this function never sees the path in
+    Nextcloud, only the scratch file, and that check stands in the poller.
+    """
+    from findling.extract import cfb
+
+    verdict = cfb.ole_verdict(path)
+    if verdict is not None:
+        return verdict
+
     from findling.extract import office
 
     match route:
