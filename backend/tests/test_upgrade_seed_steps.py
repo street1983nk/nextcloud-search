@@ -203,12 +203,22 @@ def test_the_snapshot_step_did_not_grow() -> None:
     assert len(_run(SNAPSHOT_STEP)) <= SNAPSHOT_RUN_MAX
 
 
-def test_the_snapshot_expects_an_empty_languages_mark() -> None:
-    # The report of 1.3.2 carries the key empty; null was the 1.2.0 reading
-    # and would be red on a healthy installation.
+def test_the_snapshot_expects_the_stamped_languages_mark() -> None:
+    # 1.3.2 stamps a fresh directory with its language set (deploy-harp run
+    # 37452332294 read de,en); null was the 1.2.0 reading and empty the wrong
+    # guess of plan 29-11, both red on a healthy installation.
     run = _run(SNAPSHOT_STEP)
-    assert "'.marks.languages == \"\"'" in run
+    assert "'.marks.languages == \"de,en\"'" in run
+    assert "'.marks.languages == \"\"'" not in run
     assert "'.marks.languages == null'" not in run
+
+
+def test_the_assurances_demand_the_languages_mark_unchanged() -> None:
+    # The set the upgrade registers is de,en, so the mark has to read the same
+    # on both sides; any other value after the upgrade is a restamp.
+    run = _run(ASSURANCE_STEP)
+    assert 'if [ "${was}" != "de,en" ] || [ "${now}" != "${was}" ]; then' in run
+    assert 'if [ -n "${was}" ] || [ -n "${now}" ]; then' not in run
 
 
 def test_the_record_step_reads_the_before_state_of_the_seed() -> None:

@@ -3605,7 +3605,8 @@ jobs:
           # no render, and the report of 1.2.0 answers without the key rather
           # than with an empty value, which is the difference a jq comparison can
           # see. That held from v1.2.0; from v1.3.2 both reports carry the key
-          # empty, and the counter sample is the recheck mark of plan 29-11.
+          # as de,en, stamped when the fresh directory was created (run
+          # 37452332294), and the counter sample is the recheck mark of 29-11.
           # After the rebuild of "Store upgrade 6" the languages mark names the
           # set that rebuild was run for.
           index_report() {
@@ -3958,20 +3959,16 @@ jobs:
             jq '{terms: .terms, spanish: .spanish}' "${RUNNER_TEMP}/upgrade-before.json"
             exit 1
           fi
-          # The second condition, rewritten on 2026-10-06 (plan 29-11). Until
-          # then it demanded the languages mark be absent (null), because the
-          # report of 1.2.0 had no such key. The report of 1.3.2 has it, empty
-          # while no rebuild has stamped one, so null would now be red on a
-          # healthy installation. Empty is the demand, and it is the half of
-          # assurance 6 that stays: nothing on this leg rebuilds, so the mark
-          # has to be empty before and after. The counter sample of assurance 6
-          # moved to the recheck mark, recorded by "Store upgrade 3c".
-          if ! jq -e '.marks.languages == ""' "${RUNNER_TEMP}/upgrade-before.json" > /dev/null; then
-            echo "::error::the ${UPGRADE_FROM_TAG} installation reports the languages mark '$(jq -r '.marks.languages' "${RUNNER_TEMP}/upgrade-before.json")' instead of an empty one, so a rebuild already stamped it"
+          # The second condition. Plan 29-11 demanded an empty mark; run
+          # 37452332294 (plan 29-13) read de,en: 1.3.2 stamps a fresh directory
+          # (stamp_a_new_directory, M-19-05). de,en is the demand, the set
+          # "Store upgrade 4" registers, so the upgrade orders no rebuild.
+          if ! jq -e '.marks.languages == "de,en"' "${RUNNER_TEMP}/upgrade-before.json" > /dev/null; then
+            echo "::error::the ${UPGRADE_FROM_TAG} installation reports the languages mark '$(jq -r '.marks.languages' "${RUNNER_TEMP}/upgrade-before.json")' instead of de,en, the set its fresh directory was stamped with"
             jq '.marks' "${RUNNER_TEMP}/upgrade-before.json"
             exit 1
           fi
-          echo "three terms, one file each; the Spanish question with no hit at all; an empty languages mark; the state is on record in upgrade-before.json"
+          echo "three terms, one file each; the Spanish question with no hit at all; the languages mark de,en; the state is on record in upgrade-before.json"
 
       - name: Store upgrade 3b, the always enabled apps this checkout does not carry
         if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
@@ -4274,9 +4271,9 @@ jobs:
           # that file carries <default>de,en,es,it,nl,pt</default>, AppAPI hands
           # the environment of the info.xml to the container at registration
           # time, and the volume being upgraded here holds an index of v1.3.2
-          # that carries no stamped languages mark (the key is empty; v1.2.0
-          # had no key at all). Six languages against an unstamped mark is a
-          # real difference, findling.store.repo
+          # whose languages mark reads de,en (stamped with the fresh directory,
+          # "Store upgrade 3" demands it; v1.2.0 had no key at all). Six
+          # languages against that mark is a real difference, findling.store.repo
           # ._languages_are_legacy reads it as one because the set is not inside
           # de,en, the generation is raised, the reindex banner goes up and
           # assurances 2, 4 and 5 of the step below go red. That is measured and
@@ -4693,13 +4690,16 @@ jobs:
           # before. An upgrade that changed nothing would leave it absent.
           #
           # The languages mark, which carried this assurance from 2026-09-24
-          # until v1.3.2 became the start, stays as the unchanged half. The
-          # report of 1.3.2 already has the key, empty because only a finished
-          # rebuild stamps it (findling.index.rebuild.stamp_after_swap, threat
-          # T-18-05-01), so it is empty on both sides of this leg. A VALUE
-          # after the upgrade would be the failure: a language set stamped
-          # without a rebuild. The mark arriving WITH a value is the subject of
-          # "Store upgrade 6" below, where a rebuild really runs.
+          # until v1.3.2 became the start, stays as the unchanged half. Plan
+          # 29-11 expected it empty on both sides; run 37452332294 (plan 29-13)
+          # read de,en before the upgrade, because 1.3.2 stamps a fresh
+          # directory (findling.index.open.stamp_a_new_directory, M-19-05) and
+          # not only a finished rebuild (stamp_after_swap, T-18-05-01). So the
+          # demand is de,en before and the same de,en after: nothing on this
+          # leg rebuilds, and a DIFFERENT value after the upgrade would be the
+          # failure, a language set stamped without a rebuild. The mark arriving
+          # with a new value is the subject of "Store upgrade 6" below, where a
+          # rebuild really runs.
           recheck=$(seed_probe meta recheck_1_4_0 || echo "unreadable")
           if [ "${recheck}" != "done" ]; then
             echo "::error::the recheck mark reads '${recheck}' after the upgrade instead of done, so the recheck of D-29-10 did not run to its end"
@@ -4709,12 +4709,12 @@ jobs:
           fi
           was=$(jq -r '.marks.languages' "${before}")
           now=$(jq -r '.marks.languages' "${after}")
-          if [ -n "${was}" ] || [ -n "${now}" ]; then
-            echo "::error::the report named the languages mark as '${was}' before the upgrade and as '${now}' after it, and it has to be empty on both sides, because nothing on this leg rebuilds and only a finished rebuild writes it"
+          if [ "${was}" != "de,en" ] || [ "${now}" != "${was}" ]; then
+            echo "::error::the report named the languages mark as '${was}' before the upgrade and as '${now}' after it, and it has to read de,en on both sides, because nothing on this leg rebuilds and the fresh directory of 1.3.2 was stamped de,en"
             jq -r '.marks' "${before}" "${after}"
             fail=1
           else
-            echo "the languages mark is empty before and after the upgrade, nothing was stamped"
+            echo "the languages mark reads de,en before and after the upgrade, nothing was restamped"
           fi
 
           echo "--- 7, the Spanish question still finds nothing, because the field list hangs on the mark ---"
