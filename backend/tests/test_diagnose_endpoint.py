@@ -68,6 +68,7 @@ FIELDS = {
     "indexVersion",
     "embedded",
     "chunks",
+    "errorClass",
     "note",
 }
 
@@ -658,6 +659,69 @@ def test_a_row_of_a_newer_container_is_answered_without_the_extra_column(
     assert set(answer) == FIELDS
     for value in _strings(answer):
         assert PRIVATE_TITLE not in value
+
+
+def test_a_failed_file_carries_the_class_of_its_reader_error(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    # D-29-09 (issue #18): the verdict stays failed(corrupt), and the class
+    # next to it names the reader that gave up. A class name and nothing of the
+    # row: no path, no title (T-02-56).
+    store = open_store(indexed_volume.root / "state.db")
+    meta = FileMeta(
+        storage_id=1,
+        root_id=1,
+        path=PRIVATE_PATH,
+        title=PRIVATE_TITLE,
+        mime="application/pdf",
+        size=4096,
+        mtime=1_700_000_000,
+    )
+    store.record(PRIVATE_FILE_ID, meta, "failed", "corrupt", error_class="zipfile.BadZipFile")
+    store.close()
+
+    answer = _diagnose(client, sign("admin"), PRIVATE_FILE_ID)
+
+    assert set(answer) == FIELDS
+    assert answer["reason"] == "corrupt"
+    assert answer["errorClass"] == "zipfile.BadZipFile"
+    for value in _strings(answer):
+        assert "Mueller" not in value
+
+
+def test_a_file_without_an_error_class_answers_with_the_empty_string(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    # Empty and never null: origin is the only field of this model that may be
+    # absent, and the route drops None values.
+    _write_named_row(indexed_volume.root / "state.db", "skipped", "too_large")
+
+    assert _diagnose(client, sign("admin"), PRIVATE_FILE_ID)["errorClass"] == ""
+    assert _diagnose(client, sign("admin"), 999_999)["errorClass"] == ""
+
+
+def test_a_state_database_from_before_the_error_table_still_answers(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    # A volume of 1.3.x that the read path meets before the poller reopened it.
+    database = indexed_volume.root / "state.db"
+    connection = sqlite3.connect(database)
+    try:
+        connection.execute("DROP TABLE IF EXISTS file_errors")
+        connection.commit()
+    finally:
+        connection.close()
+
+    answer = _diagnose(client, sign("admin"), 1)
+
+    assert answer["state"] == "indexed"
+    assert answer["errorClass"] == ""
 
 
 # ---------------------------------------------------------------------------
