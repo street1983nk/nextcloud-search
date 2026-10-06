@@ -788,8 +788,13 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # php/tests/Unit/Version001400Date20261006000000Test.php. No file changed its
 # bytes or went (the version bump lives in appinfo/info.xml, which the recipe
 # does not read), so PHP_FILES_TODAY moves to 90.
+# Measured again by plan 29-12: plan 29-12 took the approved texts over and
+# changed AdminViewService.php (the remedy of out_of_memory in REASON_TEXT) and
+# templates/admin.php (the error class row of the lookup card). No file came
+# and none went, so PHP_FILES_TODAY stays at 90. The package pair does not
+# move: backend/src/findling is unchanged.
 PHP_FILES_TODAY = 90
-PHP_TREE_HASH_TODAY = "f22c3b8861d853c4eb23502259d84a4f03361fc6fdc49cd58a9332c841e4a5b5"
+PHP_TREE_HASH_TODAY = "49ed9359a24e10f39ff18a071146b62889db6e584a21a1d28b772e7254a72031"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

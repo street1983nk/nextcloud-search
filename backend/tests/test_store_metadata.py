@@ -414,6 +414,29 @@ CONNECTOR_SENTENCES = {
     ),
 }
 
+# The share sentence of D-24-04: what the performance profiles of 1.4.0 do to a
+# box that nobody touches, and how much they may take on one that somebody does.
+# Owner wording, not reworded: the German sentence is quoted character for
+# character from 24-CONTEXT.md, the English and French ones are the versions the
+# owner accepted with the text draft of plan 29-02 on 06.10.2026
+# (docs/store-listing.md, section "Entwurf 1.4.0 (Phase 29)", part 1). It stands
+# once in each of the six descriptions and once in each README.
+SHARE_SENTENCE_DE = (
+    "Ohne Zutun läuft Findling unverändert sparsam wie bisher. Wer mehr Hardware hat, gibt per Profil "
+    "höchstens die Hälfte der Box frei (Profil Standard) oder alles bis auf einen Kern (Profil Leistung)."
+)
+SHARE_SENTENCE_EN = (
+    "Without any change on your side, Findling keeps running as economically as before. Anyone with more "
+    "hardware can use a profile to free at most half of the box (Standard profile) or everything but one "
+    "core (Performance profile)."
+)
+SHARE_SENTENCE_FR = (
+    "Sans aucune intervention, Findling continue de fonctionner aussi sobrement qu'avant. Avec plus de "
+    "matériel, un profil libère au plus la moitié de la machine (profil Standard) ou tout sauf un cœur "
+    "(profil Performance)."
+)
+SHARE_SENTENCES = {DEFAULT_LANGUAGE: SHARE_SENTENCE_EN, "de": SHARE_SENTENCE_DE, "fr": SHARE_SENTENCE_FR}
+
 # The known limitations of the language work (HART-05, owner decision D-06 of
 # phase 23): a block of its own in every one of the six descriptions, under a
 # heading per language, with exactly four points. The French heading keeps the
@@ -922,6 +945,32 @@ def scan_connector_sentence(name: str, source: str) -> list[str]:
             violations.append(
                 f"{name}: the description for {_named(language)} carries the cross reference to the MCP "
                 f"Connector {found} times, and the rule of docs/store-listing.md is exactly one (HART-02)"
+            )
+
+    return violations
+
+
+def scan_share_sentence(name: str, source: str) -> list[str]:
+    """The share sentence of D-24-04, counted in every description: exactly once.
+
+    A reworded sentence counts as missing, which is the point: the wording is
+    the owner's, and a gate that accepted a paraphrase would let it drift.
+    """
+    try:
+        info = ElementTree.fromstring(strip_xml_comments(source))  # noqa: S314
+    except ElementTree.ParseError as broken:
+        return [f"{name}: is not well formed XML ({broken})"]
+
+    violations: list[str] = []
+    for element in info.findall("description"):
+        language = element.get("lang", DEFAULT_LANGUAGE)
+        if language not in SHARE_SENTENCES:
+            continue
+        found = collapse(element.text or "").count(SHARE_SENTENCES[language])
+        if found != 1:
+            violations.append(
+                f"{name}: the description for {_named(language)} carries the share sentence of D-24-04 "
+                f"{found} times, and it belongs there exactly once in the owner's wording"
             )
 
     return violations
