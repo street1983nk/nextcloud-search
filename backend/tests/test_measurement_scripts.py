@@ -782,8 +782,14 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # (errorClass in the diagnosis and the static errorClass judgement) and
 # AdminViewServiceTest.php. No file came and none went, so PHP_FILES_TODAY
 # stays at 88.
-PHP_FILES_TODAY = 88
-PHP_TREE_HASH_TODAY = "3f72f80dcbefe041968eb1161d377c2c8e85f3d4c2a5d7e27815631e9c8cd588"
+# Measured again by plan 29-11 (the minor step to 1.4.0, K6): plan 29-11 added
+# Version001400Date20261006000000 and its test,
+# php/lib/Migration/Version001400Date20261006000000.php and
+# php/tests/Unit/Version001400Date20261006000000Test.php. No file changed its
+# bytes or went (the version bump lives in appinfo/info.xml, which the recipe
+# does not read), so PHP_FILES_TODAY moves to 90.
+PHP_FILES_TODAY = 90
+PHP_TREE_HASH_TODAY = "f22c3b8861d853c4eb23502259d84a4f03361fc6fdc49cd58a9332c841e4a5b5"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

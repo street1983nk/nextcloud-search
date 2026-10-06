@@ -43,6 +43,11 @@ docs/measurements/**/skripte/*.py text eol=lf
 # because these PDFs contain no NUL byte and would be treated as text.
 testdata/corpus/** -text
 
+# The fixtures of the CI workflows are byte exact as well: the seed picture of
+# the upgrade proof (plan 29-11) is compared byte for byte with what its
+# generator writes, so no checkout may rewrite a byte in it.
+.github/fixtures/** -text
+
 # The scan page of the pre-check is a byte exact copy of a corpus file, shipped
 # in the package. Its sha256 and size are pinned in findling/probe.py, so the
 # same reason as above applies: no checkout may rewrite a byte of it.
