@@ -240,3 +240,28 @@ Vorlage mit Audit-Stand 0 CRIT / 0 HIGH, der Playwright-Tabelle, den
 deferred-items und der Push-Frage zu den Audit-Commits). Damit sind die
 Haertung abgenommen, die deferred-items bestaetigt und der beschriebene Push
 samt Abschluss-Doku dieses Plans freigegeben.
+
+## Die Belegkette der Abgabe v1.4.0
+
+Geschrieben am 06.10.2026 in Plan 29-15, nach dem Tag-Push. Jede Zeile trägt
+eine Zahl, eine Laufnummer oder einen Wortlaut; keine ist geschätzt oder aus
+einem früheren Release übernommen. Die Zeilen 6 und folgende (Einreichung,
+HTTP-Codes, Gegenprobe der App-Seiten) schreibt Plan 29-16.
+
+Owner-Wort zum Tag, wörtlich: Frage "Gibst du das Wort fuer Tag v1.4.0 auf
+99326ae2?" (nach komplettem CI-Grün auf 99326ae2), Antwort "go" (06.10.2026).
+
+| Nr. | Was | Beleg |
+|---|---|---|
+| 1 | **Tag** | `v1.4.0`, annotiert ("Findling 1.4.0", Tagger street1983nk, Tag-Objekt `0959338252e653b3a64c23e3cfeb031490778c39`), auf `99326ae2667ddc243456f7787f1010efd500e357`, gelesen mit `git rev-list -n 1 v1.4.0` und gegen `git ls-remote origin 'refs/tags/v1.4.0^{}'` gegengeprüft. Nur das Tag wurde gepusht, `main` nicht |
+| 2 | **Release** | Lauf **37470623070** ("Release archives for the app store"), success, genau vier Anhänge. Im Protokoll: `appinfo/signature.json was written and is not empty`, zweimal `the release signature is 684 base64 characters` und zweimal `Verified OK` aus der Gegenprobe der Signatur gegen das Zertifikat |
+| 3 | **Anhänge** | `findling.tar.gz` **529.651 B**, `findling.tar.gz.sig` **684 B**, `findling_backend.tar.gz` **33.663 B**, `findling_backend.tar.gz.sig` **684 B**. Alle unter der Store-Grenze von 20.971.520 B; die größere Hälfte liegt bei 2,5 Prozent davon (v1.3.2: 371.641 B und 32.427 B). Unabhängig nachgeprüft: Anhänge per `gh release download` geholt, beide Zertifikate frisch aus `nextcloud/app-certificate-requests` (`subject=CN=findling`, `subject=CN=findling_backend`), `openssl dgst -sha512 -verify` lieferte lokal `findling: Verified OK` und `findling_backend: Verified OK`; in den Archiven `<version>1.4.0</version>` beidseitig und `<image-tag>1.4.0</image-tag>` |
+| 4 | **Container-Abbild** | `docker manifest inspect ghcr.io/street1983nk/findling_backend:1.4.0` mit leerem `DOCKER_CONFIG`, also ohne Login: `application/vnd.oci.image.index.v1+json` mit `linux/amd64` und `linux/arm64`, dazu die zwei Herkunftsbelege als `unknown/unknown`. Abgefragt **vor** der Einreichung |
+| 5 | **Release-Notiz** | `gh release edit v1.4.0 --notes-file` mit der abgenommenen englischen Faktenliste aus `docs/store-listing.md`, "Entwurf 1.4.0" Teil 6, als Kopf vor den generierten Notizen. Einzige Abweichung ist der dort vorab vereinbarte Zusatz "and on the admin page" in der Zeile zur Fehlerklasse, weil 29-12 die Zeile "Error class" auf der Verwaltungskarte gebaut hat. Beleg `gh release view v1.4.0 --json body --jq .body \| head -5`: "Findling 1.4.0. Both apps need to be on 1.4.0." gefolgt von den Zeilen zu Performance profiles, Search model und Reading and OCR processes; der Dank an budachst und #18 stehen im Text |
+
+### Die sieben Tag-Läufe, alle success
+
+Release **37470623070**, PHP and store metadata gates **37470623202**,
+Multi-arch image **37470623060**, HaRP deploy **37470623144**, Python gates
+**37470623033**, Integration **37470623360**, Resilience **37470623071**. Kein
+Lauf wurde wiederholt, der Tag ist nicht gewandert.
