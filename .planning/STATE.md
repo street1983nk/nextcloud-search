@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
-status: phase_complete
-stopped_at: "PHASE 28 ABGENOMMEN + SECURED 71/71 (06.10.): T-28-69 geschlossen per nachtraeglicher Owner-Bestaetigung (woertlich 'ok weiter' auf die Doppel-Frage Push 3 + #24-Merge, dokumentiert in 28-14-SUMMARY Abschnitt Nachtraegliche Owner-Bestaetigung); Push der lokalen Commits freigegeben; NAECHSTES: Phase 29 planen"
-last_updated: "2026-10-06T00:00:00.000Z"
-last_activity: 2026-10-06
+status: executing
+stopped_at: Quick 261003-wxg umgesetzt (3 lokale Commits); nächst Push + CI-Abbild + Lauf 8 L-T (neues Abbild + neue Companion-App), Box geparkt
+last_updated: "2026-10-06T05:43:27.187Z"
+last_activity: 2026-10-06 -- Phase 29 planning complete
 progress:
   total_phases: 6
   completed_phases: 5
-  total_plans: 62
+  total_plans: 78
   completed_plans: 62
-  percent: 86
+  percent: 79
 ---
 
 # Project State
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 
 Phase: 28 (Abnahme-Anfahrt), in Ausführung
 Plan: 14 of 14
-Status: Phase 28 KOMPLETT und vom Owner abgenommen (06.10.); offen: Audits der Phase, dann Phase 29
-Last activity: 2026-10-05
+Status: Ready to execute
+Last activity: 2026-10-06 -- Phase 29 planning complete
 
 Progress: [█████████░] 87%
 
@@ -58,24 +58,31 @@ beim Owner. A-Record zeigt verwaist auf die letzte x86-Adresse. Kosten 34,09 von
 Protokoll: 07-typwechsel-x86.txt (Abschnitte c7a.4xlarge, c7a.8xlarge, Zusammenfassung), 90-kosten.txt.
 
 Ergebnisse 05.10. (anon-max / Grenze MiB, Methode des Zellenwerkzeugs):
+
 - c7a.4xlarge: 15 S-T 1534,7/1641,8 getragen; 16 St-T (fits, 4 Slots) 2591,6/2528,8 NICHT getragen;
   17 L-T (fits, 15 Slots) 5623,7/5536,3 NICHT getragen; 18 St-fp32-T (fits, 4 Slots, Download live)
   2844,6/2932,5 getragen. Rückkehr int8 belegt.
+
 - c7a.8xlarge: 19 S-T 1534,3/1641,8 getragen; 20 St-T (fits, 4 Slots) 2560,2/2528,8 NICHT getragen;
   21 L-T (fits, 16 Slots) 5802,8/5794,8 NICHT getragen.
+
 - Alle Zähltore 5000, alle Proben fits und von der Messung bestätigt (kein Wächtereingriff, kein OOM).
 - Muster: ab 4 Slots auf x86 liegt der HAUPTPROZESS über der Rechnung (St-T 1640 bis 1756 MiB, L-T 2411
   bis 2530 MiB; ARM m7g.4xlarge St-T 2358,2 und L-T 5481,8 getragen); Slotkosten 212 bis 232 MiB unter B2.
+
 - fp32-Datenpunkte: c7a.xlarge (1 Slot) Mehrbedarf 509,7 MiB, Zelle 11 nicht getragen; c7a.4xlarge
   (4 Slots) Mehrbedarf 223,2 MiB, Zelle 18 getragen (gegen FP32_EXTRA_BYTES 367 MiB). Der Mehrbedarf
   ist eine Differenz zweier Hauptprozess-Maxima und hängt am int8-Gegenstück.
+
 - Crawl-Fix in allen 7 Zellen bestätigt: 6 Runden "crawl is unfinished", keine stale-Lieferung,
   ruhige Runde stale=0, unchanged 0, Selbstvorschub je einmal.
+
 - NEUER PRODUKTBEFUND (nicht angefasst): nach der Rückkehr fp32 -> int8 (10:48:05Z) "the precision of
   the embedding changed, the vector stock is being written again", sofort "could not move 500 files to
   the embed track, they run into the lock timeout" (container-rueckkehr-int8.txt). Gleiches Muster wie
   der Embed-Übergabe-Befund aus Lauf 9 (30 Dateien), hier ein voller 500er-Stapel beim
   Präzisionswechsel; Vollständigkeit des Neuschreibens nicht beobachtet. Kandidat /gsd-debug.
+
 - Umgebung: erster Kettenstart c7a.8xlarge Abbruch 60 (abwaerts URLError), A-Record ~1 min vor dem
   Start umgesetzt (TTL 120), alte Adresse freigegeben; nach 10:55Z Auflösung korrekt, EINE Wiederholung
   rc 0. Merker fürs Runbook: nach A-Record-Wechsel ~3 min bis Kettenstart warten.
@@ -94,17 +101,23 @@ Box c7a.2xlarge gestoppt (von innen, shutdown-Verhalten stop belegt), BOX_STOPPE
 ARM-Box weiter geparkt. A-Record zeigt verwaist auf die letzte x86-Adresse. Kosten 17,64 von 59,43 USD.
 
 Ergebnisse x86 (Protokoll 07-typwechsel-x86.txt, Aufbau 06-aufbau-x86.txt):
+
 - Machbarkeitstor c7a.xlarge BESTANDEN in 45 min (Abbilder per Snapshot-Index-Digest, Container einzeln
   neu erzeugt, PostgreSQL 18.6 auf x86_64, amcheck 656 B-Bäume vor/nach REINDEX rc 0, occ status, files:scan).
+
 - c7a.xlarge: 8 S-T 1520,2/1641,8 getragen; 9 St-T (fits, 1 Slot) 1679,5/1753,3 getragen;
   11 St-fp32-T (fits, Download live, Digest im Produkt) 2172,5/2157,0 NICHT GETRAGEN, fp32-Mehrbedarf
   509,7 MiB gegen 367 -> SC4/C5 für den Owner. Rückkehr int8 belegt.
+
 - c7a.2xlarge: 12 S-T 1535,3/1641,8 getragen; 13 St-T (fits, 3 Slots) 2181,9/2270,3 getragen;
   14 L-T (fits, 7 Slots) 3374,0/3468,3 getragen.
+
 - Alle Zähltore 5000, alle Proben stimmen mit der Messung (kein Wächtereingriff, kein OOM).
 - Crawl-Fix im Feld auf x86 bestätigt: nur "crawl is unfinished" während des Crawls, keine stale-Lieferung,
   ruhige Runde stale=0, unchanged 0. Lock-Timeout einmal (fp32, 2 Dateien), gutartig.
+
 - Beobachtung: Slot-anon je Slot bei 1 Slot ~296 MiB (x86), bei 3 Slots 235,4, bei 7 Slots 212,5.
+
 Deviation: 05-typwechsel-arm.txt und STATE.md trugen zwei Box-Adressen aus Lauf 8/9 (Gate rot),
 durch den Legende-Platzhalter ersetzt (Commit 147a6ed8); die alten Werte stehen noch in der lokalen Historie.
 
@@ -336,9 +349,11 @@ Fuer v1.4 unmittelbar tragend:
 
 - **OFFEN 04.10. (Lauf 8): zweiter Crawl-Durchgang über den fertigen Teilkorpus nach dem Selbstvorschub,
   L-T Abbruch 71 mit 5427 (vorrat-teilkorpus 427); Owner-Entscheid a/b/c, siehe Naechster Schritt.**
+
 - **GELÖST 04.10. (Quick 261003-wxg, Owner-Entscheid a + b): Reconcile beachtet die Ausschlüsse,
   Zähltor-Vorrat teilkorpus-scharf.** Lauf 8 braucht neues Abbild + neue Companion-App.
   Ursprünglicher Befund:
+
 - ~~**28-07 Lauf 7, Zelle L-T m7g.4xlarge, Abbruch 71 zweimal (03.10.):**~~ Reconcile plant die 549
   ausgeschlossenen Dateien in jeder ruhigen Runde neu ein, Zaehltor liest den Vorrat global.
   Box geparkt, 10,24 von 59,43 USD.
@@ -346,6 +361,7 @@ Fuer v1.4 unmittelbar tragend:
 - **GELOEST 03.10. (Quick 261003-d3y): Owner-Entscheid P2 + Zellen 3/4/10 gestrichen.**
   Probe prüft die Vorschlags-Schwellen (nofit hardware_short), Zellenwerkzeug Abbruch 74.
   Ursprünglicher Befund:
+
 - ~~**28-07 Zelle St-T, Abbruch 69 (Lauf 6, 02.10.):**~~ Probe sagt fits (2,03 GB verfuegbar,
   1,61 GB noetig), Profil standard gespeichert, wirksam blieb economy: profile.effective()
   deckelt auf suggest(), und suggest verlangt fuer Standard >= 6 GB UND >= 3 Kerne (Referenzbox:

@@ -412,26 +412,33 @@ def _is_unsupported_tiff_variant(path: str) -> bool:
 | A6 | Upstream-Pillow nimmt einen `LX`-Rohmodus an | State of the Art | Nur Außenwirkung, Shim bleibt |
 | A7 | 60 s im Fall 1 = Connect plus Read bei `NPA_TIMEOUT` 30 | Pattern 9 | Nur Analyse, kein Bau |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Verdikt-Art für `legacy_format` und `unsupported_variant`: skipped oder failed?**
+Alle fünf Fragen sind mit der jeweiligen Empfehlung entschieden. Die Empfehlungen gelten als Owner-Vorgabe (CONTEXT-Ergänzung 06.10., Owner-Entscheide per Auswahlfrage); die Pläne setzen sie um, der Owner ratifiziert sie in Plan 29-02 Teil 9 nur noch, eine Abweichung dort wäre eine neue Owner-Entscheidung mit Nacharbeit.
+
+1. **(RESOLVED) Verdikt-Art für `legacy_format` und `unsupported_variant`: skipped oder failed?**
    - What we know: `errors.py:3-9`: skipped = "entschieden, nicht zu indexieren", failed = "wollten und konnten nicht"; Präzedenz `encrypted` und `mime_not_allowed` sind skipped; öffentlich zugesagt ist nur "honest verdict" bzw. "named password-protected or legacy format".
    - What's unclear: ob der Owner diese Klassen im Fehlerzähler der Statusseite sehen will.
    - Recommendation: skipped (keine Admin-Aktion möglich, wie `mime_not_allowed`); dem Owner im Textentwurf-Checkpoint mit vorlegen, dort entstehen ohnehin die Labels.
+   - Resolution: skipped, auch für `system_file`. Umgesetzt in 29-01 (Reasons unter State.SKIPPED), genutzt in 29-05/29-07/29-08; 29-02 Teil 9 ratifiziert.
 
-2. **D-29-14 Starlette: Filter oder `httpx2`?**
+2. **(RESOLVED) D-29-14 Starlette: Filter oder `httpx2`?**
    - What we know: Warnung ist testseitig (`src` nutzt keinen TestClient), `httpx2` ist [SUS] und neu.
    - Recommendation: gezielter Filter mit Kommentar und Verweis auf den Starlette-Quelltext; Owner kurz bestätigen lassen, dass "beheben" so gemeint ist.
+   - Resolution: gezielter filterwarnings-Eintrag, kein `httpx2` ([SUS], neue Abhängigkeit). Umgesetzt in 29-03; 29-02 Teil 9 ratifiziert.
 
-3. **Englische und französische Fassung des D-24-04-Satzes**
+3. **(RESOLVED) Englische und französische Fassung des D-24-04-Satzes**
    - What we know: D-24-04 ist deutsch und wörtlich gesperrt; Store-Texte gibt es in en/de/fr (`php/appinfo/info.xml:36/64/92`).
    - Recommendation: Übersetzungen im Textentwurf vorlegen und wörtlich abnehmen lassen; MT-Übersetzungen WR-02/WR-10 aus Phase 27 bei derselben Lektüre mitlesen (STATE.md Zeile 244).
+   - Resolution: wie empfohlen; Vorschlag in 29-02 Teil 1, wörtliche Abnahme im Checkpoint 29-02, Übernahme in 29-12.
 
-4. **Gehört `ocr_failed` in die Nachprüfung?**
+4. **(RESOLVED) Gehört `ocr_failed` in die Nachprüfung?**
    - Recommendation: nein (Pattern 7), im Audit begründen.
+   - Resolution: nein. 29-09 schließt `ocr_failed` aus der Auswahl aus (Test), 29-14 begründet es im Audit; 29-02 Teil 9 ratifiziert.
 
-5. **Pillow-Upstream: Issue oder PR, und wann?**
+5. **(RESOLVED) Pillow-Upstream: Issue oder PR, und wann?**
    - Recommendation: Issue nach dem Release mit selbst erzeugter Repro-Datei, Owner-Freigabe des Texts.
+   - Resolution: Issue zuerst, nach dem Release, Text in 29-02 Teil 8 abgenommen, Posten in 29-16 nach erneuter Owner-Freigabe; PR erst nach Rückmeldung.
 
 ## Environment Availability
 
