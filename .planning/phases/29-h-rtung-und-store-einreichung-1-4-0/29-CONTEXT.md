@@ -1,7 +1,7 @@
 # Phase 29: Härtung und Store-Einreichung 1.4.0 - Context
 
-**Gathered:** 2026-10-01
-**Status:** Ready for planning (startet erst nach Abschluss von Phase 28)
+**Gathered:** 2026-10-01 (ergänzt 2026-10-06 nach Phase-28-Abschluss, Owner-Entscheide per Auswahlfrage)
+**Status:** Ready for planning
 
 <domain>
 ## Phase Boundary
@@ -26,12 +26,29 @@ Findling 1.4.0 als signiertes App-Paar im Store: Launch-Härtung der Parallelpfa
 - **D-29-03 (#21):** `FINDLING_MAX_CELLS` (Default 200.000) wird in `backend/appinfo/info.xml` als Deploy-Option deklariert, mit Beschreibung wie `FINDLING_EXTRACT_ADDRESS_SPACE_BYTES`. Keine Anzeige der Limits in der Admin-Seite in 1.4.0.
 - **D-29-04 (#18):** Download-Größenprüfung: die heruntergeladenen Bytes werden gegen die Sollgröße geprüft; ein abgeschnittener Download wird als vorübergehender Fehler erneut versucht und nicht als "beschädigt" verbucht.
 
+### Öffentliche #18-Zusagen (Owner 06.10., alle sechs im Umfang; Quelle: .planning/todos/pending/2026-10-04-issue-18-zusagen-und-lock-timeout.md Abschnitt A, Kommentare 5970113095/5971965802/5974358682)
+- **D-29-05:** Sidecar-Skip: `._*` (deckt D-29-02) UND `~$*` (Office-Lockstubs) überspringen mit ehrlichem Verdikt.
+- **D-29-06:** TIFF-Decode-Shim, zwei Achsen (Dateien werden INDEXIERBAR): (a) fehlende OPEN_INFO-Einträge Grau+Extrakanal mit ExtraSamples 0/1; (b) SampleFormat-Normalisierung NUR für echtes SampleFormat 0 auf Spec-Default 1. Float16 (SampleFormat 3) wird NICHT normalisiert, bekommt ein ehrliches Urteil. Dazu Upstream-PR an Pillow vorschlagen.
+- **D-29-07:** Große JPEGs per Pillow-draft-Mode bei reduzierter Skalierung dekodieren (OCR skaliert ohnehin auf 3500 px) + Header-Vorabschätzung Breite x Höhe x Kanäle gegen den Adressraum-Deckel, ehrliches Urteil statt "beschädigt".
+- **D-29-08:** OLE-Sniff: Kopf d0cf11e0 unter OOXML-Endung ergibt ein ehrliches Verdikt; legacy (.xls-Streams "Workbook"/"Book") von passwortgeschützt ("EncryptionInfo"/"EncryptedPackage") unterscheiden.
+- **D-29-09:** Fehlerdetail je Datei speichern (echte Reader-Exception-Klasse statt pauschal corrupt, T-02-56-konform ohne Pfad/Message-Inhalte).
+- **D-29-10:** NACHPRÜFUNG der Altbestände nach dem Upgrade: Verdikte kleben an der etag; die Fix-Klassen (D-29-05..08 plus Download-Größenprüfung D-29-04) müssen aktiv neu geprüft werden. Öffentlich zugesagt ("re-checked after the upgrade, no manual cleanup").
+
+### Weitere Owner-Entscheide 06.10. (per Auswahlfrage)
+- **D-29-11:** Box-gebundene Belege (Fall-1-Belege mit nextcloud.log/NPA_TIMEOUT/HaRP, fp32-Rückkehr-Vollständigkeitsbeleg mit Statusreihe bis embedded=indexed und leerer EMBEDDING_BACKLOG_MARK, Fall-2-Feldlauf, 250-MiB-Feldlauf an Zelle 11) werden VERSCHOBEN auf die nächste ohnehin nötige Anfahrt. Phase 29 bleibt boxlos. Die Fall-1-Diagnosezeile (Entscheid A aus dem Debug embed-handover) wird trotzdem in 29 eingebaut, nur der Feldbeleg wartet.
+- **D-29-12:** note_index_files-Verdrahtung: Der Vollindex-Term (MAIN_PROCESS_PER_FILE_BYTES, 6 KiB/Datei, Quick 261005-vit) wird in 1.4.0 in die Laufzeit-Slotrechnung verdrahtet; die 12-slotkosten-Rechnung bekommt den Term ebenfalls.
+- **D-29-13:** Lauf-9-Lock-Timeout (OCR-zu-Embed-Übergabe, Todo-Abschnitt B): mindestens Ausnahme-Details im requeue-Log (queue.py); Debug-Vertiefung boxlos soweit möglich.
+- **D-29-14:** Kleine Härtungs-Hygiene im Umfang: aws_box.sh-Schlüsselpaar-Rest-Liste-Fix, StarletteDeprecationWarning beheben.
+
 ### Claude's Discretion
-- Genaue Reason/Verdikt-Zuordnung für `._*` (bestehende Reason bevorzugt, sonst neue mit PHP-Parität und Übersetzungen), Ort der Prüfung (Crawl/Queue vs. Container), Retry-Mechanik der Größenprüfung im bestehenden Lease-/Attempts-Modell.
+- Genaue Reason/Verdikt-Zuordnung für `._*` und `~$*` (bestehende Reason bevorzugt, sonst neue mit PHP-Parität und Übersetzungen), Ort der Prüfung (Crawl/Queue vs. Container), Retry-Mechanik der Größenprüfung im bestehenden Lease-/Attempts-Modell.
+- Mechanik der Altbestands-Nachprüfung (D-29-10): wie die Fix-Klassen identifiziert und neu eingereiht werden (Verdikt-basiert, ohne Vollreindex), Migrations-/Upgrade-Haken.
+- Umsetzung der Vollindex-Term-Verdrahtung (D-29-12) im bestehenden Slotkosten-Modell (config.py/probe.py).
 
 ### Folded Todos
-- `.planning/todos/pending/2026-10-01-issue-21-22-budachst.md` (#21 nur Deklaration, #22 nur `._*`)
-- `.planning/todos/pending/2026-09-28-issue-18-jpg-verdikt-heif-download-fixes.md` (nur Download-Größenprüfung)
+- `.planning/todos/pending/2026-10-01-issue-21-22-budachst.md` (#21 nur Deklaration, #22 `._*`; `~$*` kommt über D-29-05 dazu)
+- `.planning/todos/pending/2026-09-28-issue-18-jpg-verdikt-heif-download-fixes.md` (Download-Größenprüfung + die Phase-29-Kandidaten aus dem Nachtrag 02.10., gedeckt durch D-29-08/09)
+- `.planning/todos/pending/2026-10-04-issue-18-zusagen-und-lock-timeout.md` (Abschnitt A komplett = D-29-05..10, Abschnitt B = D-29-13)
 
 </decisions>
 
@@ -72,6 +89,8 @@ Findling 1.4.0 als signiertes App-Paar im Store: Launch-Härtung der Parallelpfa
 - #21 Limits in der Admin-Seite anzeigen.
 - #22 Ausschlussmuster als Einstellung, Sonderbehandlung von Mac-Bundles.
 - HEIF/HEIC-Opener (Hypothese aus #18, nicht belegt).
+- Box-gebundene Belege (D-29-11): Fall-1-Feldbelege, fp32-Rückkehr-Vollständigkeitsbeleg, Fall-2-Feldlauf, 250-MiB-Feldlauf; nächste Anfahrt.
+- Float-TIFF-Decode (SampleFormat 3): nur evaluieren, NICHT zugesagt (Korrektur 05.10.).
 
 </deferred>
 
