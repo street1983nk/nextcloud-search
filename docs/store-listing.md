@@ -1307,3 +1307,655 @@ kann: **1,7 MB weniger sind keine Verbesserung**, sondern zwei Abbilder in
 derselben Messgröße, und die Nachanfahrt vom selben Tag hat für C1 729,3 MB
 gelesen. Die Zahl wechselt, weil der Store-Text das Abbild beschreiben soll,
 das er begleitet, und 731,9 MB bleibt für das v1.2-Abbild richtig.
+
+---
+
+## Entwurf 1.4.0 (Phase 29)
+
+Plan 29-02, dem Owner vorgelegt am 06.10.2026. Dieser Abschnitt sammelt alle
+Außentexte von 1.4.0 an einer Stelle, damit der Owner einmal liest: die sechs
+Store-Beschreibungen, die README-Zeilen, die Labels der neuen Urteile, zwei
+Variablentexte, die Release-Notiz, fünf Issue-Antworten und das
+Pillow-Upstream-Issue. Nichts davon ist übernommen, gepostet oder
+veröffentlicht. Die Übernahme in beide `info.xml`, die READMEs, die Kataloge
+und `backend/appinfo/info.xml` ist Plan 29-12 und folgt erst der Abnahme; die
+Release-Notiz geht mit dem Tag in Plan 29-15 hinaus; die Antworten und das
+Pillow-Issue postet Plan 29-16, erst nach dem Release und nach einer erneuten
+Freigabe des Owners.
+
+Bis zur Übernahme tragen beide `info.xml`, die READMEs und die sechs Texte oben
+in dieser Datei weiter die Fassung 1.3.2. Ein Unterschied zwischen diesem
+Abschnitt und einer `info.xml` ist in diesem Fenster der erwartete
+Zwischenstand und keine Drift.
+
+Gesperrt und hier nur umgesetzt: D-24-04 (der Anteils-Satz, deutsch wörtlich),
+die Owner-Regel vom 07.09.2026 (Faktenliste, eine Messzahl), der Owner-Entscheid
+aus 28-11 ("store=kein Fall": die eine Messzahl bleibt 730,2 MB, `RESIDENT_FIGURE`
+bleibt "730.2") und D-29-11 (keine Box-Feldbelege versprechen).
+
+## Teil 1: die Anteils-Aussage (D-24-04)
+
+Deutsch, wörtlich aus `24-CONTEXT.md` (D-24-04), zeichengleich und nicht
+umformuliert:
+
+> Ohne Zutun läuft Findling unverändert sparsam wie bisher. Wer mehr Hardware hat, gibt per Profil höchstens die Hälfte der Box frei (Profil Standard) oder alles bis auf einen Kern (Profil Leistung).
+
+Vorschlag Englisch, zur wörtlichen Abnahme (offene Frage (a) in Teil 9). Die
+Profilnamen folgen dem englischen Katalog (Economy, Standard, Performance), und
+"box" folgt der englischen Verwaltungsseite ("How much of this box Findling may
+use"):
+
+> Without any change on your side, Findling keeps running as economically as before. Anyone with more hardware can use a profile to free at most half of the box (Standard profile) or everything but one core (Performance profile).
+
+Vorschlag Französisch, zur wörtlichen Abnahme. Die Profilnamen folgen dem
+französischen Katalog (Économe, Standard, Performance), und "machine" folgt
+der französischen Verwaltungsseite ("cette machine"):
+
+> Sans aucune intervention, Findling continue de fonctionner aussi sobrement qu'avant. Avec plus de matériel, un profil libère au plus la moitié de la machine (profil Standard) ou tout sauf un cœur (profil Performance).
+
+## Teil 2: die sechs Texte 1.4.0 im Wortlaut
+
+Geändert wird gegenüber 1.3.2 an genau drei Stellen je Text, alles andere
+bleibt Wort für Wort:
+
+1. Zwei neue Spiegelstriche im ersten Block (findling: Profile und Suchmodell;
+   findling_backend: ein Spiegelstrich, wo beides gewählt wird). Sie stehen vor
+   der Datenschutz-Zeile, damit die Sprachzeile wie seit 1.3.0 die letzte Zeile
+   unmittelbar vor "Known limitations" bleibt.
+2. Der Satz aus Teil 1 als eigener Absatz direkt nach dem Block
+   "Requirements" und vor der Enterprise-Zeile, weil er von der Hardware
+   handelt.
+3. Sonst nichts: die RAM-Zeile mit der einen Messzahl 730.2 MB / 730,2 MB /
+   730,2 Mo bleibt unverändert, ebenso die Grenzliste, der Connector-Satz und
+   die Dateitypen.
+
+Die neuen Zeilen tragen keine Zahl; "int8" und "fp32" sind Modellnamen und
+keine Messwerte.
+
+Länge gegen 1.3.2, gezählt in Zeichen je Text (Selbstprüfung unten): findling
+EN 1.509 auf 1.949, DE 1.645 auf 2.040, FR 1.780 auf 2.225; findling_backend
+EN 1.398 auf 1.715, DE 1.499 auf 1.781, FR 1.628 auf 1.971. Jeder Text wächst
+um ein Fünftel bis gut ein Viertel, und mehr als die Hälfte davon ist der
+gesperrte Satz aus Teil 1.
+
+### App 1: `findling`, `<description>` (Englisch, ohne `lang`-Attribut)
+
+What Findling does:
+- Full text search in the normal Nextcloud search bar
+- OCR for scanned PDFs and images: nine languages available, German, English and French are the default
+- Semantic search: finds documents through paraphrases
+- Every result is permission-checked by Nextcloud
+- No configuration: the first index run starts on its own
+- Performance profiles: Economy by default, Standard and Performance after a pre-check of the hardware
+- Search model: int8 built in, the more accurate fp32 can be downloaded once under Standard and Performance
+- Privacy: everything runs locally, no telemetry, nothing leaves your server
+- Search languages: German and English by default, Spanish, Italian, Dutch and Portuguese available
+
+Known limitations:
+- Spanish: año and ano are treated as the same word
+- Portuguese: spellings before and after the spelling reform are not unified
+- Compound words are split for German and Dutch only
+- French has no full text analysis chain for document text
+
+Together with the [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector), Findling forms the retrieval layer for your own RAG: AI assistants search your document contents with exactly the rights of the asking user, and no content leaves your server.
+
+Supported file types:
+- PDF (scanned too), DOCX, PPTX, XLSX, ODT, ODS, ODP
+- HTML, RTF, TXT, Markdown, CSV
+- Images through OCR: JPEG, PNG, TIFF, WebP
+
+Requirements:
+- Nextcloud 33 to 35, apps: AppAPI, Findling Backend (External Apps), Findling
+- RAM: 4 GB is enough, 730.2 MB resident after an index run, under a hard 2 GB limit (measured)
+- CPU: 2 cores are enough, amd64 and arm64
+
+Without any change on your side, Findling keeps running as economically as before. Anyone with more hardware can use a profile to free at most half of the box (Standard profile) or everything but one core (Performance profile).
+
+Enterprise support and paid add-ons: request a quote at admin@infranode.dev
+
+### App 1: `findling`, `<description lang="de">`
+
+Was Findling kann:
+- Volltextsuche über die normale Nextcloud-Suchleiste
+- Texterkennung für gescannte PDFs und Bilder: neun Sprachen verfügbar, voreingestellt sind Deutsch, Englisch und Französisch
+- Semantische Suche: findet Dokumente auch über Umschreibungen
+- Jeder Treffer wird von Nextcloud rechtegeprüft
+- Keine Konfiguration: der erste Indexlauf startet von selbst
+- Leistungsprofile: Sparsam voreingestellt, Standard und Leistung nach einer Vorab-Prüfung der Hardware
+- Suchmodell: int8 eingebaut, das genauere fp32 unter Standard und Leistung einmalig ladbar
+- Datenschutz: alles läuft lokal, keine Telemetrie, nichts verlässt den Server
+- Suchsprachen: Deutsch und Englisch voreingestellt, Spanisch, Italienisch, Niederländisch und Portugiesisch verfügbar
+
+Bekannte Grenzen:
+- Spanisch: año und ano gelten als dasselbe Wort
+- Portugiesisch: Schreibweisen vor und nach der Rechtschreibreform werden nicht vereinheitlicht
+- Zusammengesetzte Wörter werden nur für Deutsch und Niederländisch zerlegt
+- Französisch hat keine eigene Analysekette für den Dokumenttext
+
+Zusammen mit dem [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) ergibt Findling die Retrieval-Schicht für Ihr eigenes RAG: KI-Assistenten durchsuchen Ihre Dokumentinhalte mit genau den Rechten des fragenden Nutzers, und kein Inhalt verlässt Ihren Server.
+
+Unterstützte Dateitypen:
+- PDF (auch gescannt), DOCX, PPTX, XLSX, ODT, ODS, ODP
+- HTML, RTF, TXT, Markdown, CSV
+- Bilder per Texterkennung: JPEG, PNG, TIFF, WebP
+
+Anforderungen:
+- Nextcloud 33 bis 35, Apps: AppAPI, Findling Backend (External Apps), Findling
+- RAM: 4 GB genügen, 730,2 MB resident nach einem Indexlauf, unter einer harten 2-GB-Grenze (gemessen)
+- CPU: 2 Kerne genügen, amd64 und arm64
+
+Ohne Zutun läuft Findling unverändert sparsam wie bisher. Wer mehr Hardware hat, gibt per Profil höchstens die Hälfte der Box frei (Profil Standard) oder alles bis auf einen Kern (Profil Leistung).
+
+Enterprise-Support und bezahlte Add-ons: Angebot anfordern unter admin@infranode.dev
+
+### App 1: `findling`, `<description lang="fr">`
+
+Ce que Findling sait faire :
+- Recherche plein texte dans la barre de recherche normale de Nextcloud
+- Reconnaissance optique pour les PDF numérisés et les images : neuf langues disponibles, allemand, anglais et français par défaut
+- Recherche sémantique : trouve les documents par des périphrases
+- Chaque résultat est vérifié par Nextcloud selon vos droits
+- Aucune configuration : la première indexation démarre d'elle-même
+- Profils de performance : Économe par défaut, Standard et Performance après une vérification préalable du matériel
+- Modèle de recherche : int8 intégré, le fp32 plus précis se télécharge une fois sous Standard et Performance
+- Confidentialité : tout fonctionne localement, aucune télémétrie, rien ne quitte votre serveur
+- Langues de recherche : allemand et anglais par défaut, espagnol, italien, néerlandais et portugais disponibles
+
+Limites connues :
+- Espagnol : año et ano sont traités comme le même mot
+- Portugais : les graphies d'avant et d'après la réforme orthographique ne sont pas unifiées
+- Les mots composés ne sont découpés que pour l'allemand et le néerlandais
+- Le français n'a pas de chaîne d'analyse plein texte pour le contenu des documents
+
+Avec le [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector), Findling forme la couche de récupération de votre propre RAG : les assistants IA cherchent dans le contenu de vos documents avec exactement les droits de l'utilisateur qui demande, et aucun contenu ne quitte votre serveur.
+
+Types de fichiers pris en charge :
+- PDF (numérisés aussi), DOCX, PPTX, XLSX, ODT, ODS, ODP
+- HTML, RTF, TXT, Markdown, CSV
+- Images par reconnaissance optique : JPEG, PNG, TIFF, WebP
+
+Prérequis :
+- Nextcloud 33 à 35, applications : AppAPI, Findling Backend (External Apps), Findling
+- RAM : 4 Go suffisent, 730,2 Mo résidents après une indexation, sous une limite stricte de 2 Go (mesuré)
+- CPU : 2 cœurs suffisent, amd64 et arm64
+
+Sans aucune intervention, Findling continue de fonctionner aussi sobrement qu'avant. Avec plus de matériel, un profil libère au plus la moitié de la machine (profil Standard) ou tout sauf un cœur (profil Performance).
+
+Support entreprise et modules payants : demande de devis à admin@infranode.dev
+
+### App 2: `findling_backend`, `<description>` (Englisch, ohne `lang`-Attribut)
+
+What Findling Backend is:
+- The External App behind the Findling search app: text extraction, OCR and the search index
+- Runs entirely inside your own instance and does nothing without the Findling app
+- Never modifies your files
+- Performance profile and search model are chosen on the admin page of the Findling app
+- Privacy: everything runs locally, no telemetry, nothing leaves your server
+- Search languages: German and English by default, Spanish, Italian, Dutch and Portuguese available
+
+Known limitations:
+- Spanish: año and ano are treated as the same word
+- Portuguese: spellings before and after the spelling reform are not unified
+- Compound words are split for German and Dutch only
+- French has no full text analysis chain for document text
+
+Together with the [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector), Findling forms the retrieval layer for your own RAG: AI assistants search your document contents with exactly the rights of the asking user, and no content leaves your server.
+
+Supported file types:
+- PDF (scanned too), DOCX, PPTX, XLSX, ODT, ODS, ODP
+- HTML, RTF, TXT, Markdown, CSV
+- Images through OCR: JPEG, PNG, TIFF, WebP
+
+Requirements:
+- Nextcloud 33 to 35, apps: AppAPI, Findling Backend (External Apps), Findling
+- RAM: 4 GB is enough, 730.2 MB resident after an index run, under a hard 2 GB limit (measured)
+- CPU: 2 cores are enough, amd64 and arm64
+
+Without any change on your side, Findling keeps running as economically as before. Anyone with more hardware can use a profile to free at most half of the box (Standard profile) or everything but one core (Performance profile).
+
+Enterprise support and paid add-ons: request a quote at admin@infranode.dev
+
+### App 2: `findling_backend`, `<description lang="de">`
+
+Was Findling Backend ist:
+- Die External App hinter der Such-App Findling: Textauszug, Texterkennung und der Suchindex
+- Läuft komplett in Ihrer eigenen Instanz und tut ohne die App Findling nichts
+- Verändert nie Ihre Dateien
+- Leistungsprofil und Suchmodell werden in der Verwaltung der App Findling gewählt
+- Datenschutz: alles läuft lokal, keine Telemetrie, nichts verlässt den Server
+- Suchsprachen: Deutsch und Englisch voreingestellt, Spanisch, Italienisch, Niederländisch und Portugiesisch verfügbar
+
+Bekannte Grenzen:
+- Spanisch: año und ano gelten als dasselbe Wort
+- Portugiesisch: Schreibweisen vor und nach der Rechtschreibreform werden nicht vereinheitlicht
+- Zusammengesetzte Wörter werden nur für Deutsch und Niederländisch zerlegt
+- Französisch hat keine eigene Analysekette für den Dokumenttext
+
+Zusammen mit dem [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) ergibt Findling die Retrieval-Schicht für Ihr eigenes RAG: KI-Assistenten durchsuchen Ihre Dokumentinhalte mit genau den Rechten des fragenden Nutzers, und kein Inhalt verlässt Ihren Server.
+
+Unterstützte Dateitypen:
+- PDF (auch gescannt), DOCX, PPTX, XLSX, ODT, ODS, ODP
+- HTML, RTF, TXT, Markdown, CSV
+- Bilder per Texterkennung: JPEG, PNG, TIFF, WebP
+
+Anforderungen:
+- Nextcloud 33 bis 35, Apps: AppAPI, Findling Backend (External Apps), Findling
+- RAM: 4 GB genügen, 730,2 MB resident nach einem Indexlauf, unter einer harten 2-GB-Grenze (gemessen)
+- CPU: 2 Kerne genügen, amd64 und arm64
+
+Ohne Zutun läuft Findling unverändert sparsam wie bisher. Wer mehr Hardware hat, gibt per Profil höchstens die Hälfte der Box frei (Profil Standard) oder alles bis auf einen Kern (Profil Leistung).
+
+Enterprise-Support und bezahlte Add-ons: Angebot anfordern unter admin@infranode.dev
+
+### App 2: `findling_backend`, `<description lang="fr">`
+
+Ce qu'est Findling Backend :
+- L'External App derrière l'application de recherche Findling : extraction de texte, reconnaissance optique et index
+- Fonctionne entièrement dans votre propre instance et ne fait rien sans l'application Findling
+- Ne modifie jamais vos fichiers
+- Le profil de performance et le modèle de recherche se choisissent dans la page d'administration de l'application Findling
+- Confidentialité : tout fonctionne localement, aucune télémétrie, rien ne quitte votre serveur
+- Langues de recherche : allemand et anglais par défaut, espagnol, italien, néerlandais et portugais disponibles
+
+Limites connues :
+- Espagnol : año et ano sont traités comme le même mot
+- Portugais : les graphies d'avant et d'après la réforme orthographique ne sont pas unifiées
+- Les mots composés ne sont découpés que pour l'allemand et le néerlandais
+- Le français n'a pas de chaîne d'analyse plein texte pour le contenu des documents
+
+Avec le [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector), Findling forme la couche de récupération de votre propre RAG : les assistants IA cherchent dans le contenu de vos documents avec exactement les droits de l'utilisateur qui demande, et aucun contenu ne quitte votre serveur.
+
+Types de fichiers pris en charge :
+- PDF (numérisés aussi), DOCX, PPTX, XLSX, ODT, ODS, ODP
+- HTML, RTF, TXT, Markdown, CSV
+- Images par reconnaissance optique : JPEG, PNG, TIFF, WebP
+
+Prérequis :
+- Nextcloud 33 à 35, applications : AppAPI, Findling Backend (External Apps), Findling
+- RAM : 4 Go suffisent, 730,2 Mo résidents après une indexation, sous une limite stricte de 2 Go (mesuré)
+- CPU : 2 cœurs suffisent, amd64 et arm64
+
+Sans aucune intervention, Findling continue de fonctionner aussi sobrement qu'avant. Avec plus de matériel, un profil libère au plus la moitié de la machine (profil Standard) ou tout sauf un cœur (profil Performance).
+
+Support entreprise et modules payants : demande de devis à admin@infranode.dev
+
+## Teil 3: die README-Zeilen, die sich ändern
+
+Nur zwei Stellen je README: zwei neue Spiegelstriche am Ende von "Was Findling
+kann" (und ihren Gegenstücken) und ein neuer Spiegelstrich am Ende von
+"Anforderungen" mit dem Satz aus Teil 1. Der Messsatz (52.111 Dokumente,
+1.764 MB Spitze) und die Zeile mit 730,2 MB bleiben unverändert. Die Zeilen
+sind hier ungebrochen; der Umbruch auf die Zeilenlänge der READMEs ist
+Satzarbeit in Plan 29-12.
+
+`README.md`, neu am Ende von "Was Findling kann":
+
+> - Leistungsprofile: Sparsam voreingestellt, Standard und Leistung nach einer Vorab-Prüfung der Hardware
+> - Suchmodell: int8 eingebaut, das genauere fp32 unter Standard und Leistung einmalig ladbar
+
+`README.md`, neu am Ende von "Anforderungen":
+
+> - Ohne Zutun läuft Findling unverändert sparsam wie bisher. Wer mehr Hardware hat, gibt per Profil höchstens die Hälfte der Box frei (Profil Standard) oder alles bis auf einen Kern (Profil Leistung).
+
+`README.en.md`, neu am Ende von "What Findling does":
+
+> - Performance profiles: Economy by default, Standard and Performance after a pre-check of the hardware
+> - Search model: int8 built in, the more accurate fp32 can be downloaded once under Standard and Performance
+
+`README.en.md`, neu am Ende von "Requirements":
+
+> - Without any change on your side, Findling keeps running as economically as before. Anyone with more hardware can use a profile to free at most half of the box (Standard profile) or everything but one core (Performance profile).
+
+`README.fr.md`, neu am Ende von "Ce que Findling sait faire":
+
+> - Profils de performance : Économe par défaut, Standard et Performance après une vérification préalable du matériel
+> - Modèle de recherche : int8 intégré, le fp32 plus précis se télécharge une fois sous Standard et Performance
+
+`README.fr.md`, neu am Ende von "Prérequis":
+
+> - Sans aucune intervention, Findling continue de fonctionner aussi sobrement qu'avant. Avec plus de matériel, un profil libère au plus la moitié de la machine (profil Standard) ou tout sauf un cœur (profil Performance).
+
+## Teil 4: Labels und Abhilfen der neuen Urteile
+
+Die drei neuen Codes sind seit Plan 29-01 gebaut, alle drei unter `skipped`
+(siehe Teil 9 (b)). Der Wortlaut unten ist der vorläufige aus 29-01, so wie er
+heute in `AdminViewService::REASON_TEXT` und den Katalogen steht; der Entwurf
+schlägt ihn unverändert zur Abnahme vor. Die Abnahme gilt für Englisch und
+Deutsch; die übrigen sechs Kataloge (fr, es, it, nl, pt_BR, pt_PT) folgen dem
+englischen Text wie bisher.
+
+| Code | Label EN | Label DE | Abhilfe EN | Abhilfe DE |
+|---|---|---|---|---|
+| `system_file` | System or helper file | System- oder Hilfsdatei | None. macOS metadata files (._) and Office lock files (~$) carry no document content. | Keine. macOS-Metadateien (._) und Office-Sperrdateien (~$) enthalten keinen Dokumentinhalt. |
+| `legacy_format` | Old Office format under a new name | Altes Office-Format unter neuem Namen | Save the file again in the current Office format (.docx, .xlsx, .pptx). | Datei im aktuellen Office-Format (.docx, .xlsx, .pptx) neu speichern. |
+| `unsupported_variant` | Image variant that cannot be read | Bildvariante, die nicht gelesen werden kann | None. The image uses an encoding the image library does not support. | Keine. Das Bild nutzt eine Kodierung, die die Bildbibliothek nicht unterstützt. |
+
+Passwortgeschützte Office-Dateien unter OOXML-Endung (Plan 29-08) bekommen das
+bestehende Urteil `encrypted` mit dem bestehenden Label "Password protected"
+und brauchen keinen neuen Text.
+
+**Die neu gefasste Abhilfe von `out_of_memory`.** Heute steht dort "The next
+run tries again. If it happens again, lower the size cap." Der Größen-Cap
+("Largest file to read") hilft bei Bildern nicht: ein kleines JPEG mit vielen
+Megapixeln braucht mehr Speicher als ein großes PDF (Research Pitfall 7). Die
+Stellschraube ist der Adressraum je Dokument. Der erste Satz bleibt
+unverändert, nur der zweite wechselt:
+
+> Alt, Englisch: The next run tries again. If it happens again, lower the size cap.
+>
+> Neu, Englisch: The next run tries again. If it happens again, give each document more memory: deploy Findling Backend with a larger FINDLING_EXTRACT_ADDRESS_SPACE_BYTES, for example 1073741824 (1 GiB).
+>
+> Alt, Deutsch: Wird beim nächsten Lauf erneut versucht. Bei Wiederholung den Größen-Cap senken.
+>
+> Neu, Deutsch: Wird beim nächsten Lauf erneut versucht. Bei Wiederholung jedem Dokument mehr Speicher geben: Findling Backend mit einem größeren FINDLING_EXTRACT_ADDRESS_SPACE_BYTES bereitstellen, zum Beispiel 1073741824 (1 GiB).
+
+Hinweis für die Abnahme, nicht geprüft und deshalb nicht umgeschrieben: Ob der
+erste Satz "The next run tries again" für `out_of_memory` stimmt, hat dieser
+Plan nicht nachgelesen. In #18 steht öffentlich, dass ein Urteil an der
+Dateiversion klebt; die Nachprüfung aus 29-09 holt `out_of_memory` einmal nach
+dem Upgrade zurück. Wenn der Satz falsch ist, gehört die Korrektur in 29-12 und
+braucht ein Wort des Owners.
+
+**Vorschlag aus 29-06, offen geblieben: die Fehlerklasse auf der
+Verwaltungskarte.** Die Diagnose-Antwort trägt seit 29-06 das Feld
+`errorClass` (nur bei `failed`), sichtbar heute nur in `occ findling:diagnose`.
+Eine sichtbare Zeile auf der Karte braucht ein neues Label in 16 Katalogen.
+Vorschlag, falls der Owner es in 1.4.0 will (Umsetzung dann in 29-12):
+
+> Englisch: Error class
+>
+> Deutsch: Fehlerklasse
+>
+> Französisch: Classe d'erreur
+
+Ohne Wort des Owners bleibt die Karte, wie sie ist, und die Fehlerklasse steht
+nur in `occ findling:diagnose`.
+
+## Teil 5: zwei Variablentexte in `backend/appinfo/info.xml`
+
+Englisch, weil die Datei dort englisch ist. `<display-name>` und `<default>`
+bleiben bei beiden unverändert.
+
+**`FINDLING_MAX_CELLS` (D-29-03, #21).** Seit 29-03 deklariert, mit vorläufigem
+Text. Vorgeschlagen ist der vorläufige Text plus ein Satz, der in #21 sonst als
+Frage zurückkäme: ein neuer Wert holt eine schon übersprungene Tabelle nicht
+von selbst zurück.
+
+> Vorläufig (29-03): A whole number of cells per spreadsheet file. The default of 200000 reads ordinary workbooks and keeps a single export with a million rows from taking the machine down. A larger file is skipped with the reason too_many_cells rather than indexed in part. Anything that is not a positive whole number falls back to the default.
+>
+> Neu (Entwurf 1.4.0): A whole number of cells per spreadsheet file. The default of 200000 reads ordinary workbooks and keeps a single export with a million rows from taking the machine down. A larger file is skipped with the reason too_many_cells rather than indexed in part. Anything that is not a positive whole number falls back to the default. A new value applies to the files read from then on; a spreadsheet already skipped is read again when it changes.
+
+**`FINDLING_EXTRACT_ADDRESS_SPACE_BYTES` (Research Pitfall 7).** Der Satz "Only
+one document is read at a time, so the number is the peak and not a multiple"
+aus 1.3.2 ist ab 1.4.0 falsch und ist seit 29-03 vorläufig ersetzt. Der Entwurf
+fasst den Schluss genauer und nimmt eine zweite Änderung von 1.4.0 auf: große
+JPEGs werden seit 29-07 verkleinert dekodiert und erreichen den Deckel kaum
+noch.
+
+> Alt (1.3.2): A whole number of bytes. It caps the address space of the process that reads one document, so a broken or hostile file cannot take the machine down with it. The default of 536870912 (512 MB) reads every office document and every scanned page at 300 dpi. Very large photos, around 40 megapixels and up, need more and otherwise end as failed with the reason out_of_memory; 1073741824 (1 GiB) reads them. Only one document is read at a time, so the number is the peak and not a multiple.
+>
+> Neu (Entwurf 1.4.0): A whole number of bytes. It caps the address space of the process that reads one document, so a broken or hostile file cannot take the machine down with it. The default of 536870912 (512 MB) reads every office document and every scanned page at 300 dpi. Very large PNG and TIFF images, around 40 megapixels and up, need more and otherwise end as failed with the reason out_of_memory; 1073741824 (1 GiB) reads them. Large JPEGs are decoded at reduced scale and rarely reach the cap. The cap holds for each reading process on its own: under Economy one document is read at a time, under Standard and Performance several are read side by side, and each of them may take this much.
+
+Hinweis für die Abnahme: Die Schwelle "around 40 megapixels" ist die gemessene
+Zahl aus 1.3.2 und stammt aus der Zeit vor dem verkleinerten JPEG-Weg; für
+PNG und TIFF ist sie nicht neu gemessen. Der Entwurf schränkt sie deshalb auf
+PNG und TIFF ein und sagt für JPEG nur "rarely", ohne Zahl.
+
+## Teil 6: die Release-Notiz v1.4.0 (englisch, Faktenliste)
+
+Owner-Regel vom 02.10.2026: GitHub-Releases mit englischer Beschreibung als
+Faktenliste. Sie geht mit dem Tag in Plan 29-15 hinaus.
+
+> Findling 1.4.0. Both apps need to be on 1.4.0.
+>
+> - Performance profiles: Economy (the default, unchanged behaviour), Standard and Performance. A pre-check of the hardware runs before a profile takes effect; under Standard and Performance, OCR can run in several slots, as many as the box carries.
+> - Search model: int8 stays built in; the more accurate fp32 can be chosen under Standard and Performance and is then downloaded once, with a digest check.
+> - Reading and OCR processes run at lowered priority and are the first candidates for the kernel's out-of-memory killer; a reading process killed from outside is retried instead of recorded as damaged (#15, #18, #19).
+> - macOS AppleDouble files (`._*`) and Office lock files (`~$*`) are skipped as "System or helper file" and leave the index (#18, #22).
+> - A download that arrives shorter than the file is retried instead of recorded as damaged (#18).
+> - Greyscale TIFFs with an extra channel marked ExtraSamples 0 or 1 are read (#18).
+> - TIFFs with SampleFormat 0 are read: uncompressed ones directly, compressed ones (LZW, Deflate) up to 32 MiB through a corrected copy in memory; larger ones get "Image variant that cannot be read" (#18).
+> - Floating point TIFFs (SampleFormat 3, including Float16) get "Image variant that cannot be read" instead of "File damaged" (#18).
+> - Large JPEGs are decoded at reduced scale; a header estimate turns the remaining memory cap hits into out_of_memory instead of corrupt (#18).
+> - Office files with a .docx, .xlsx or .pptx name that are OLE containers are named "Password protected" or "Old Office format under a new name" (#18).
+> - The exception class of the reader is stored for each failed file and shown by `occ findling:diagnose` (#18).
+> - After the upgrade, files with verdicts of the fixed classes are re-checked once, with no manual cleanup (#18, #22).
+> - `FINDLING_MAX_CELLS` is declared as a deploy option (#21).
+> - The slot calculation accounts for the size of the index.
+>
+> Thanks to budachst for the reports and for the patient diagnosis work behind most of this release (#15, #18, #19, #21, #22).
+
+Die Zeile zur Fehlerklasse nennt nur `occ findling:diagnose`; kommt die Zeile
+auf der Verwaltungskarte (Teil 4) dazu, ergänzt 29-15 "and on the admin page".
+
+## Teil 7: die Antworten in den Issues #15, #18, #19, #21, #22
+
+Englisch, Ich-Form, kurz. **Nur Entwurf:** gepostet wird in Plan 29-16, nach
+dem Release und erst nach einer erneuten Freigabe des Owners. Kein Issue wird
+dabei geschlossen; wo eine Antwort das Schließen anbietet, entscheidet
+budachst. Vor dem Entwurf wurde jeder Verlauf ganz gelesen (06.10.2026);
+nichts, was budachst schon beantwortet hat, wird erneut gefragt, das Setup
+(NC 33.0.8, groupfolders, Gruppen mit "/") ebenfalls nicht.
+
+Zwei Korrekturen an früheren eigenen Kommentaren stehen ausdrücklich in den
+Entwürfen, weil der gebaute Stand von ihnen abweicht:
+
+- In #18 stand zweimal "profiles size the ceiling". Gebaut ist das nicht: die
+  Profile bestimmen die Zahl der Slots, der Adressraum je Dokument bleibt
+  `FINDLING_EXTRACT_ADDRESS_SPACE_BYTES` (`config.py`, kein Bezug in
+  `profile.py`).
+- In #18 stand für Gleitkomma-TIFFs "real error stored". Gebaut ist die
+  Fehlerklasse nur für `failed`-Urteile (29-06); `unsupported_variant` ist
+  `skipped` (29-01) und trägt keine Klasse. In #22 stand "excluded by a rule";
+  gebaut ist "System or helper file" (29-05, Begründung dort: `excluded` ist
+  ein Live-Zeichen der PHP-Seite und wird nie gespeichert).
+
+### #15 (Scanning skips files/folders with funny chars/emojies)
+
+> Findling 1.4.0 is in the store. For this issue it changes two things: a reading process that is killed or restarted from outside is retried instead of counting as a failed attempt, and the reading processes run at lowered priority.
+>
+> I have to be honest about the limit, though: we never found out why file 1441501 got stuck on your instance (no restart, no kernel kill, no crash in the logs), so I cannot promise that 1.4.0 fixes that file. "Stuck repeatedly" is also not part of the automatic re-check after the upgrade. The quickest test is to rename or re-upload that one PDF once after updating both apps. If it ends as "stuck repeatedly" again, the output of `occ findling:diagnose 1441501` would help me. If it gets indexed, I would close this issue, if that is fine with you.
+
+### #18 (Files marked as corrupted, when they're not)
+
+> Findling 1.4.0 is in the store, with the fixes from this thread:
+>
+> - `._*` sidecars and `~$*` lock files are skipped as "System or helper file" and leave the index. (In #22 I called this "excluded by a rule"; it got its own label instead, because "excluded" stays reserved for the folders you exclude yourself.)
+> - Greyscale TIFFs with an extra channel marked ExtraSamples 0 or 1, your Golfpreis class, are now read.
+> - TIFFs with SampleFormat 0 are read from 1.4.0 on: uncompressed ones directly, compressed ones (LZW, Deflate) through a corrected copy in memory; that copy is only made up to a file size of 32 MiB, and a larger compressed SampleFormat-0 TIFF gets the verdict `unsupported_variant` instead of `corrupt`. Floating point TIFFs (SampleFormat 3, including Float16) are not decoded and get `unsupported_variant` as well. Your disguised PNG is in that last group.
+> - Large JPEGs are decoded at reduced scale, and a header estimate turns the remaining memory cap hits into `out_of_memory` instead of `corrupt`.
+> - Office files under .docx/.xlsx/.pptx names that are OLE containers are named "Password protected" or "Old Office format under a new name".
+> - A download that arrives shorter than the file is retried instead of recorded as damaged.
+> - For every `failed` file, `occ findling:diagnose` now shows the exception class of the reader.
+> - Already recorded verdicts of the fixed classes (`corrupt`, `out_of_memory` and every sidecar) are re-checked once after the upgrade, with no manual cleanup. The re-check starts when both apps are on 1.4.0 and runs in batches alongside the normal index work, so on your instance it will take a while.
+>
+> Two corrections to what I wrote earlier. First, the profiles do not size the memory ceiling per document: they decide how many documents are read side by side, and the ceiling stays `FINDLING_EXTRACT_ADDRESS_SPACE_BYTES`. For your large print images, raising it (for example to 1073741824) is still the lever for PNG and TIFF images. Second, for the floating point TIFFs no error class is stored: they get the verdict `unsupported_variant`, which is a "skipped" state, and the class is only kept for "failed" ones.
+>
+> Not in 1.4.0: decoding floating point TIFFs (still only something I will evaluate), a separate "truncated" verdict, and a HEIF/HEIC path for misnamed files. I have not run 1.4.0 against a corpus like yours, so if you post a fresh "failed by reason" snapshot once the re-check has run through, I will read it against this list. I will also open an issue at Pillow for the missing greyscale entries and link it here.
+
+### #19 (Findling admin UI can't connect to backend while scanning)
+
+> Findling 1.4.0 is in the store. The OCR and reading processes now run at lowered priority, so the status call and Nextcloud itself get the CPU first while OCR is busy; that competition for the CPU is what delayed the answers you saw. On your 8 vCPU host the admin page now also offers the Standard and Performance profiles, which run several OCR jobs side by side after a pre-check of the box; Economy stays the default. If the "cannot connect" message still shows up during OCR after the upgrade, let me know which profile is active.
+
+### #21 (Make more config options available in admin UI)
+
+> Findling 1.4.0 declares `FINDLING_MAX_CELLS` as a deploy option (default 200000 cells per spreadsheet), so it can now be set when Findling Backend is deployed, the same way as `FINDLING_EXTRACT_ADDRESS_SPACE_BYTES`. One thing to know: a new value applies to files read from then on; spreadsheets already skipped with "too many cells" are read again when they change. Showing these limits on the admin page is not in 1.4.0; I keep this issue open for that part.
+
+### #22 (More options for excluding files/folders from scanning)
+
+> Findling 1.4.0 skips macOS AppleDouble files (`._*`) automatically, and Office lock files (`~$*`) as well, with no setting. One correction to my earlier comment: they get the verdict "System or helper file", not "Excluded by a rule", because that label stays reserved for the folders you exclude yourself. Files of this kind that are already in the error list are re-checked once after the upgrade and leave it on their own. Bundles (.key and the like) are not handled specially in 1.4.0; my question above, which files from inside a bundle show up and with which reason, is still open whenever you get to it.
+
+## Teil 8: das Pillow-Upstream-Issue (englisch)
+
+Issue zuerst, ein PR erst nach Rückmeldung (Research, State of the Art). Die
+Repro-Datei wird im Skript selbst erzeugt; keine Datei, kein Pfad und kein Name
+aus #18. Das Skript ist am 06.10.2026 lokal gegen Pillow 12.3.0 gelaufen und
+lieferte genau die unten zitierte Ausgabe (Speicheradressen gekürzt).
+Gepostet wird in Plan 29-16 nach erneuter Freigabe.
+
+Nicht im Issue, bewusst: die TIFF-Orientierung aus `deferred-items.md`
+(Tag 274 = 6). Sie ist lokal beobachtet, aber nicht als Pillow-Fehler
+nachgewiesen; ob sie ein eigenes Issue wird, entscheidet der Owner nach einer
+Prüfung.
+
+Titel:
+
+> TIFF: greyscale with one extra sample fails to open when ExtraSamples is 0 (unspecified) or 1 (associated alpha)
+
+Text:
+
+> **What did you do?**
+>
+> Opened a contiguous 8-bit greyscale TIFF with two samples per pixel (PhotometricInterpretation 1, SamplesPerPixel 2, BitsPerSample (8, 8)) whose ExtraSamples tag is 0 (unspecified data) or 1 (associated alpha). Files of this shape come out of older scan and print tools.
+>
+> **What did you expect to happen?**
+>
+> The file opens, as it does with ExtraSamples 2 (mode `LA`). With 1 a premultiplied mode such as `La` would fit; with 0 the extra channel could be dropped or kept without alpha meaning.
+>
+> **What actually happened?**
+>
+> `PIL.UnidentifiedImageError: cannot identify image file`, raw and LZW alike.
+>
+> **What are your OS, Python and Pillow versions?**
+>
+> - OS: Windows 11 (the same failure was seen on Linux in a Debian trixie container)
+> - Python: 3.13
+> - Pillow: 12.3.0
+>
+> ```python
+> import io
+> import struct
+>
+> import PIL
+> from PIL import Image
+>
+>
+> def grey_with_extra_sample(extra_samples: int, compression: str | None) -> bytes:
+>     """A 2-sample greyscale TIFF whose ExtraSamples tag (338) is set to the given value."""
+>     buffer = io.BytesIO()
+>     Image.new("LA", (64, 48), (128, 255)).save(buffer, "TIFF", compression=compression)
+>     data = bytearray(buffer.getvalue())
+>     order = {b"II": "<", b"MM": ">"}[bytes(data[:2])]
+>     (ifd,) = struct.unpack(order + "I", data[4:8])
+>     (count,) = struct.unpack(order + "H", data[ifd : ifd + 2])
+>     for index in range(count):
+>         entry = ifd + 2 + 12 * index
+>         tag, kind, _ = struct.unpack(order + "HHI", data[entry : entry + 8])
+>         if tag == 338:
+>             assert kind == 3  # SHORT, stored inline
+>             data[entry + 8 : entry + 10] = struct.pack(order + "H", extra_samples)
+>             return bytes(data)
+>     raise AssertionError("no ExtraSamples tag written")
+>
+>
+> print("Pillow", PIL.__version__)
+> for compression in (None, "tiff_lzw"):
+>     for extra in (0, 1, 2):
+>         try:
+>             with Image.open(io.BytesIO(grey_with_extra_sample(extra, compression))) as image:
+>                 image.load()
+>                 result = f"ok, mode {image.mode}"
+>         except Exception as error:
+>             result = f"{type(error).__name__}: {error}"
+>         print(f"compression={compression or 'raw'} ExtraSamples={extra}: {result}")
+> ```
+>
+> Output:
+>
+> ```
+> Pillow 12.3.0
+> compression=raw ExtraSamples=0: UnidentifiedImageError: cannot identify image file <_io.BytesIO object at 0x...>
+> compression=raw ExtraSamples=1: UnidentifiedImageError: cannot identify image file <_io.BytesIO object at 0x...>
+> compression=raw ExtraSamples=2: ok, mode LA
+> compression=tiff_lzw ExtraSamples=0: UnidentifiedImageError: cannot identify image file <_io.BytesIO object at 0x...>
+> compression=tiff_lzw ExtraSamples=1: UnidentifiedImageError: cannot identify image file <_io.BytesIO object at 0x...>
+> compression=tiff_lzw ExtraSamples=2: ok, mode LA
+> ```
+>
+> `OPEN_INFO` in `TiffImagePlugin.py` has `(II|MM, 1, (1,), 1, (8, 8), (2,)) -> ("LA", "LA")` but no entry for ExtraSamples 0 or 1 with the same layout. #9514 already ignores unspecified extra samples for PlanarConfiguration 2; this is the contiguous case. Mapping 0 to `LA` would be wrong, since unspecified data is not alpha, so I would suggest a raw mode `LX` for mode `L`, analogous to the existing `PX` for palette images (unpack the grey byte, skip the extra one). For 1, `La` seems the natural target.
+>
+> Would a PR along these lines be welcome? I am happy to prepare one with test images if the direction is right.
+
+Zum letzten Absatz: Die Aussage zu `PX` und zum fehlenden Eintrag ist in der
+Research gegen Pillow main geprüft (`TiffImagePlugin.py`, `Unpack.c`); dass
+`La` für ExtraSamples 1 der richtige Zielmodus ist, ist ein Vorschlag und nicht
+gemessen. Der Satz zum Debian-Container gibt den Feldbefund aus #18 wieder,
+ohne Datei oder Instanz zu nennen; wenn der Owner ihn nicht will, fällt er
+ersatzlos weg.
+
+## Teil 9: die Owner-Abnahme in einer Liste
+
+**Offen, zur Entscheidung:**
+
+- **(a) Die englische und die französische Fassung des D-24-04-Satzes**
+  (Research Open Question 3). Vorschlag in Teil 1, wörtlich abzunehmen oder zu
+  ändern. Der deutsche Satz steht fest und wird nicht berührt. Übernahme in
+  29-12 in beide `info.xml` und die READMEs.
+
+**Zur Ratifizierung, bereits gebaut** nach den Empfehlungen, die als
+Owner-Vorgabe gelten (29-RESEARCH.md, Open Questions RESOLVED; CONTEXT-Ergänzung
+vom 06.10.2026). Hier wird nicht neu entschieden, sondern bestätigt, was schon
+im Code steht; eine Ablehnung ist möglich und hat jeweils die genannte Folge.
+
+- **(b) `system_file`, `legacy_format` und `unsupported_variant` sind
+  `skipped`, nicht `failed`.** Umgesetzt in Plan 29-01 (Codes unter
+  `State.SKIPPED` in allen fünf Kopien und 16 Katalogen), genutzt von 29-05,
+  29-07 und 29-08. Folge für den Admin: diese Dateien erscheinen nicht im
+  Fehlerzähler, sondern bei den übersprungenen. Folge einer Ablehnung: ein
+  neuer Fix-Plan vor 29-12, der die Codes nach `failed` verlegt, samt
+  K6-Rückfall, Paritätstests und Katalogen.
+- **(c) Die Starlette-Warnung wird per gezieltem `filterwarnings`-Eintrag
+  beseitigt, nicht mit `httpx2`.** Umgesetzt in Plan 29-03 (pyproject-Filter
+  plus Erstimport in conftest, `httpx2` nicht im Lock). Grund: `httpx2` ist neu
+  und von slopcheck als [SUS] eingestuft, und neue Abhängigkeiten nur mit
+  Grund. Folge einer Ablehnung: ein neuer Fix-Plan vor 29-12, der `httpx2` als
+  Dev-Abhängigkeit nach einer Paketprüfung durch den Owner aufnimmt.
+- **(d) `ocr_failed` bleibt außerhalb der Nachprüfung nach dem Upgrade.**
+  Umgesetzt in Plan 29-09 (Auswahl ohne `ocr_failed`, per Test gesichert);
+  Begründung im Audit 29-14: der verkleinerte JPEG-Weg ändert das Bild der
+  Engine nicht, die bekommt ohnehin höchstens 3500 px. Folge einer Ablehnung:
+  ein neuer Fix-Plan vor 29-12, der `ocr_failed` in `_RECHECK_FAILED` aufnimmt.
+- **(e) Die Grenze von D-29-06(b), wie in Teil 7 benannt** (Ergebnis des
+  Prüf-Schritts aus 29-07): TIFFs mit SampleFormat 0 werden ab 1.4.0 gelesen,
+  unkomprimiert direkt und komprimiert (LZW, Deflate) über eine korrigierte
+  Kopie im Arbeitsspeicher; diese Kopie wird nur bis 32 MiB Dateigröße
+  angelegt, ein größeres komprimiertes SampleFormat-0-TIFF bekommt das Urteil
+  `unsupported_variant` statt `corrupt`. Gleitkomma-TIFFs (SampleFormat 3,
+  auch Float16) werden nicht dekodiert und bekommen ebenfalls
+  `unsupported_variant`. Umgesetzt in Plan 29-07 (`_normalise_sample_format`,
+  `_SF0_PATCH_MAX_BYTES`). Folge einer Ablehnung: ein neuer Fix-Plan vor 29-12,
+  der entweder die 32-MiB-Grenze verschiebt (Speicherpreis: kurzzeitig zwei
+  Kopien) oder komprimiertes SampleFormat 0 ganz auf `unsupported_variant`
+  stellt; der Satz in Teil 6, Teil 7 und hier wechselt dann mit.
+
+**Außerdem im Entwurf, zur Kenntnis bei der Lektüre** (keine eigene Frage,
+aber jede Zeile ist eine Owner-Entscheidung, wenn er sie ändern will): die zwei
+neuen Spiegelstriche je Text und ihr Platz (Teil 2), die Abhilfe von
+`out_of_memory` samt dem ungeprüften ersten Satz (Teil 4), der Vorschlag
+"Error class" für die Verwaltungskarte (Teil 4), die Einschränkung der
+40-Megapixel-Schwelle auf PNG und TIFF (Teil 5), die zwei Korrekturen an
+früheren #18-Kommentaren und die eine an #22 (Teil 7), der Debian-Satz im
+Pillow-Issue (Teil 8).
+
+### Selbstprüfung gegen die Gates (06.10.2026)
+
+Die sechs Beschreibungen aus Teil 2 wurden in eine `info.xml`-Hülle je App
+gesetzt und mit `scan_one_measured_figure` und `scan_resident_figure_of_an_info`
+aus `backend/tests/test_store_metadata.py` geprüft; der ganze Abschnitt
+"Entwurf 1.4.0" wurde auf U+2013 und U+2014 und auf das Emoji-Muster des Gates
+geprüft.
+
+Ergebnis: Beide Hüllen ohne Befund; jede der sechs Beschreibungen trägt genau
+eine Messzahl (EN 730.2 MB, DE 730,2 MB, FR 730,2 Mo). Der D-24-04-Satz steht
+in beiden deutschen Texten zeichengleich mit `24-CONTEXT.md`. Der Abschnitt
+enthält kein U+2013, kein U+2014 und kein Emoji. Teil 8 nennt weder budachst
+noch einen Datei-, Pfad- oder Containernamen aus #18. "SampleFormat" steht in
+Teil 7 und in Teil 9. `backend/tests/test_store_metadata.py` läuft über die
+ganze Datei grün (76 passed); der erste Lauf hatte das gesperrte Wort der
+Vokabelregel in der #18-Antwort gefunden, es ist ersetzt.
+
+## Die Abnahme 1.4.0
+
+Textabnahme 1.4.0: ausstehend. Hier steht nach dem Checkpoint das Wort des
+Owners im Wortlaut, die Antwort auf (a) und die Ratifizierung (oder Ablehnung
+mit Folge-Plan) von (b) bis (e).
