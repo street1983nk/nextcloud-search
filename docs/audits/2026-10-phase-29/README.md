@@ -220,3 +220,23 @@ Die Matrix aus 29-04 ist am 06.10.2026 erneut gefahren, Ergebnis in `haertungsma
 ### SIGKILL-Namensbeleg
 
 `.github/workflows/python.yml` hat einen eigenen Schritt "The SIGKILL cases by name (test_slots_kill.py)" mit `pytest -v -rs`, und der Gesamtlauf läuft mit `-rs`. Der nächste vom Owner freigegebene Push zeigt die beiden Fälle `test_a_killed_main_process_mid_pass_loses_no_row_and_indexes_once` und `test_a_killed_child_mid_pass_is_retried_alone_and_indexed_once` namentlich mit Ergebnis; die Laufnummer kommt nach diesem Push hierher.
+
+## Owner-Abnahme der Haertung (06.10.2026)
+
+Die gemeinsame Playwright-Runde lief am 06.10.2026 auf der Dev-Instanz (App und
+Backend beide 1.4.0, Backend als Host-Prozess aus den Quellen). Alle fuenf
+Pruefpunkte sind mit echten Testdateien belegt: die Zeile "System- oder
+Hilfsdatei" (zwei hochgeladene Begleitdateien, Abhilfetext und Beispielpfade,
+deutsch und englisch), "Old Office format under a new name" (CFB-Datei mit
+Workbook-Stream unter .xlsx-Namen), "Image variant that cannot be read"
+(SampleFormat-3-TIFF), die Zeile "Error class" auf der Diagnosekarte
+(zipfile.BadZipFile an einer kaputten .xlsx) und dieselbe Zeile in
+occ findling:diagnose (mit Wert und leer). Der Versionswaechter (K6) wurde
+vorher live gesehen: mit Backend 1.3.0 zeigte die Karte den Banner und die
+Suche blieb bewusst leer, nach dem Angleich verschwand er.
+
+Owner-Signal woertlich: "abgenommen du kannst weiter" (06.10.2026, auf die
+Vorlage mit Audit-Stand 0 CRIT / 0 HIGH, der Playwright-Tabelle, den
+deferred-items und der Push-Frage zu den Audit-Commits). Damit sind die
+Haertung abgenommen, die deferred-items bestaetigt und der beschriebene Push
+samt Abschluss-Doku dieses Plans freigegeben.
