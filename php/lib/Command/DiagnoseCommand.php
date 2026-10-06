@@ -132,13 +132,16 @@ class DiagnoseCommand extends Command {
 	 * @param array{
 	 *     found:bool, fileId:int, path:string, reference:string, uid:string, trashed:bool,
 	 *     shares:int, state:string, reason:string, label:string, remedy:string,
-	 *     checkedAt:int, backendReachable:bool, note:string
+	 *     errorClass:string, checkedAt:int, backendReachable:bool, note:string
 	 * } $answer
 	 */
 	private function report(OutputInterface $output, array $answer): void {
 		$output->writeln('Verdict');
 		$this->line($output, 'state', $answer['state']);
 		$this->line($output, 'reason code', $answer['reason']);
+		// The class of the reader error behind a failed verdict (D-29-09), a
+		// dash where none was recorded or the container is older.
+		$this->line($output, 'error class', $answer['errorClass'] ?? '');
 		$this->line($output, 'label', $answer['label']);
 		$this->line($output, 'remedy', $answer['remedy']);
 		$output->writeln('');

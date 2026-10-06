@@ -30,6 +30,13 @@ already named, admin side, and not once per hit. The key is absent when no
 search line was given, and never null: a null would read as "this container
 looked and found nothing", which is a different sentence from "nobody asked".
 
+``errorClass`` (plan 29-06, D-29-09) is the class of the exception behind a
+failed verdict, as module.qualname, and the empty string where none was
+recorded. It names the reader that gave up and never the file: the state
+database stores the class and not the message, because a message quotes what
+the reader read (T-02-56). It is a datum of this route only and never travels
+in the acknowledgement of the queue.
+
 ``deletedAt`` is handed over as the number it is and is translated into no label
 at all. A tombstone means "removed from the index" mechanically and something
 else semantically: the clearing after an exclusion writes one for a file that
@@ -102,6 +109,9 @@ class DiagnoseResponse(BaseModel):
     # nought are the truth about such a container and not a missing value.
     embedded: bool = False
     chunks: int = 0
+    # The class of the reader error behind a failure (D-29-09). Empty and not
+    # None: only origin may be absent from this answer.
+    errorClass: str = ""
     # The one field of this model that is allowed to be absent, and the route
     # below is declared with exclude_none so that it really is. Null is not used
     # as a value anywhere on this model, so nothing else can disappear with it.
@@ -288,6 +298,7 @@ def _report(
 
     try:
         row = store.file_row(file_id)
+        error_class = store.error_class(file_id) if row is not None else None
     except sqlite3.Error as error:
         LOGGER.warning("the state database could not be read, an %s", type(error).__name__)
         return answer.model_copy(update={"note": NOT_JUDGED})
@@ -317,6 +328,7 @@ def _report(
         indexVersion=int(row["index_version"] or 0),
         embedded=answer.embedded,
         chunks=answer.chunks,
+        errorClass=error_class or "",
         origin=answer.origin,
     )
 
