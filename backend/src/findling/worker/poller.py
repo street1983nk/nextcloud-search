@@ -112,6 +112,7 @@ from findling.nc.queue import (
     KIND_OCR,
     LANE_INDEX,
     TOPUP_SUPPLIED,
+    VERDICTS_GENERATION,
     DocumentQueue,
     QueueJob,
 )
@@ -133,6 +134,7 @@ from findling.worker.embedding import (
     acl_users,
     hand_over,
 )
+from findling.worker.recheck import recheck_step
 
 LOGGER = logging.getLogger("findling.worker.poller")
 
@@ -497,6 +499,10 @@ class Poller:
         # this poller writes, and the worker package does not import the API
         # package to find that out (audit finding H-19-01).
         self._marks_stamped = marks_stamped
+        # Whether the re-check of the old stock is over (D-29-10). Process
+        # memory only, as a shortcut: the truth is RECHECK_MARK in state.db,
+        # and a new process reads it once and learns the same.
+        self._recheck_done = False
         self._writer = writer
         self._owns_resources = store is None and writer is None
         self._tmp_dir = resolved.tmp_dir if tmp_dir is None else tmp_dir
@@ -898,6 +904,22 @@ class Poller:
         # same answer, or another chosen profile, lifts a cap. Nothing else
         # ever raises the level again, least of all the guard itself.
         guard.note_confirmation(choice.confirmed, choice.profile)
+
+        # The re-check of the old stock after the upgrade (D-29-10): the files
+        # of the classes 1.4.0 fixes go back to the queue once, without a full
+        # reindex. Only on the signal of K6, because only the 1.4.0 companion
+        # stores the new codes; before it, the re-check would only write the
+        # old codes again. The run is one time (RECHECK_MARK says "done"
+        # afterwards, and the flag spares later rounds even the meta read), and
+        # it stands before the claim so the rows it hands back can be claimed
+        # in the same round. Its length is bounded: about 43 requeue calls on
+        # the stock of the reporting instance. A failure is a log line with the
+        # class name and nothing else; the next round tries again at the cursor.
+        if not self._recheck_done and choice.verdicts == VERDICTS_GENERATION:
+            try:
+                self._recheck_done = await recheck_step(self._store_or_die(), queue)
+            except Exception as error:
+                LOGGER.warning("the re-check of the fix classes stopped, %s", type(error).__name__)
 
         # Where the embedding runs this pass (PAR-01, PAR-04). In Economy the
         # embed runner must have parked before this pass claims anything, so
