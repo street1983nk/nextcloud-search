@@ -4588,3 +4588,112 @@ async def test_the_solo_run_holds_the_gate_at_one(store: Store, writer: IndexBat
     assert [call[2] for call in solo] == [1, 1], "one extraction at a time"
     assert [call[0] for call in extract.calls[-2:]] == [300, 302], "claim order"
     assert guard.take_child_kills() == 2
+
+
+# -- sidecars: macOS AppleDouble and Office lock stubs (D-29-02, D-29-05) ------
+
+
+@pytest.mark.parametrize(
+    ("title", "path"),
+    [
+        ("._IMG_1.jpg", "/u/files/Fotos/._IMG_1.jpg"),
+        ("~$Bericht.docx", "/u/files/Berichte/~$Bericht.docx"),
+        # No path at all: the title is the fallback for the base name.
+        ("._x.pdf", ""),
+    ],
+)
+async def test_a_sidecar_is_skipped_as_system_file_before_a_single_byte(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, title: str, path: str
+) -> None:
+    # #18 and #22: on the reporting instance 4,486 of 6,685 corrupt verdicts
+    # were sidecars. They carry no document content, so the verdict is taken
+    # before the download and it is honest about what the file is.
+    job = _job(mime="application/pdf", title=title, path=path)
+    queue = _FakeQueue(ClaimResult(jobs=(job,)))
+    fetched: list[int] = []
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, fetched=fetched)
+
+    result = await poller.run_once()
+
+    assert fetched == []
+    assert result.skipped == 1
+    row = store.file_row(4711)
+    assert row is not None
+    assert (row["state"], row["reason"]) == ("skipped", "system_file")
+    assert queue.skips == [{4711: "system_file"}]
+    assert queue.acknowledged == [([91], {})]
+
+
+@pytest.mark.parametrize(
+    ("title", "path"),
+    [
+        (".hidden.txt", "Notizen/.hidden.txt"),
+        ("a._b.txt", "Notizen/a._b.txt"),
+        ("x~$y.txt", "Notizen/x~$y.txt"),
+        ("_x.txt", "Notizen/_x.txt"),
+        # A folder that looks like a sidecar does not make its files sidecars.
+        ("notes.txt", "._Ordner/notes.txt"),
+    ],
+)
+async def test_a_name_that_only_resembles_a_sidecar_is_indexed(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, index: Index, title: str, path: str
+) -> None:
+    # T-29-17: the base name has to START with the marker. A hidden file, a
+    # marker in the middle of a name and a leading underscore are documents.
+    job = _job(title=title, path=path)
+    queue = _FakeQueue(ClaimResult(jobs=(job,)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    result = await poller.run_once()
+
+    assert result.indexed == 1
+    assert _stored_ids(index) == [4711]
+
+
+async def test_an_indexed_sidecar_leaves_the_index_with_its_new_verdict(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, index: Index
+) -> None:
+    # Before 1.4.0 a ._notes.txt with readable bytes was indexed and answered
+    # searches with garbage. The new verdict has to take it out again, from the
+    # index and from the prefilter, or the sidecar keeps being found.
+    first = _job(title="notes.txt", path="Notizen/notes.txt")
+    second = _job(92, title="._notes.txt", path="Notizen/._notes.txt")
+    queue = _FakeQueue(ClaimResult(jobs=(first,)), ClaimResult(jobs=(second,)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    await poller.run_once()
+    assert _stored_ids(index) == [4711]
+    assert store.acl_rows() == 2
+
+    await poller.run_once()
+
+    assert _stored_ids(index) == []
+    assert store.acl_rows() == 0
+    row = store.file_row(4711)
+    assert row is not None
+    assert (row["state"], row["reason"]) == ("skipped", "system_file")
+
+
+async def test_a_delete_job_of_a_sidecar_keeps_its_own_branch(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The kind branches stand before the skip and stay as they were: a delete
+    # of a sidecar is still a deletion and never a system_file verdict.
+    job = _job(title="._x.pdf", path="._x.pdf", kind="delete")
+    queue = _FakeQueue(ClaimResult(jobs=(job,)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    await poller.run_once()
+
+    assert queue.skips == [{}]
+    assert queue.acknowledged == [([91], {})]
+
+
+def test_the_sidecar_check_reads_the_base_name_only() -> None:
+    assert poller_module._is_sidecar("._IMG_1.jpg")
+    assert poller_module._is_sidecar("~$Bericht.docx")
+    assert not poller_module._is_sidecar(".hidden.txt")
+    assert not poller_module._is_sidecar("a._b.txt")
+    assert not poller_module._is_sidecar("x~$y.docx")
+    assert not poller_module._is_sidecar("_x.txt")
+    assert not poller_module._is_sidecar("")
