@@ -591,7 +591,7 @@ def test_the_aws_destroy_reads_every_tag_hit_back_before_it_calls_it_a_leftover(
     assert "for hit in $remaining; do" in body
     assert "the resource itself is gone" in body
     # Read back by type, and an unknown type is not read back into innocence.
-    for kind in ("instance)", "volume)", "security-group)"):
+    for kind in ("instance)", "volume)", "security-group)", "key-pair)"):
         assert kind in body, kind
     assert "*) hit_state='there' ;;" in body
     # The strict end is still there: something that answers is still a leftover.
@@ -615,15 +615,18 @@ def test_the_aws_destroy_takes_the_key_pair_with_it_and_reads_it_back() -> None:
     body = text.split("cmd_destroy() {", 1)[1]
     # A failure is an answer here, the same as for the two other deletions, so
     # that a pair which is already gone does not end the teardown.
+    read_back = 'resource_gone "$(ec2_soft describe-key-pairs --key-names'
     assert "ec2_soft delete-key-pair" in body
-    assert 'resource_gone "$(ec2_soft describe-key-pairs' in body
-    # After instance and volume, and the read back after the deletion.
+    assert read_back in body
+    # After instance and volume, and the read back after the deletion. The read
+    # back is named in full: since phase 29 the shared branch asks
+    # describe-key-pairs for the id of the pair before anything is deleted.
     assert body.index("terminate-instances") < body.index("delete-key-pair")
     assert body.index("delete-volume") < body.index("delete-key-pair")
-    assert body.index("delete-key-pair") < body.index("describe-key-pairs")
+    assert body.index("delete-key-pair") < body.index(read_back)
     # A read back whose result goes nowhere is not a proof either.
     assert "key pair $SSH_KEY_NAME is gone, verified against the api" in body
-    assert body.index("describe-key-pairs") < body.index('rm -f "$STATE_FILE"')
+    assert body.index(read_back) < body.index('rm -f "$STATE_FILE"')
     # The finding stands in the file, so the next reader of this block knows
     # which hand grip it replaces.
     assert "L-07" in text
@@ -860,6 +863,9 @@ AWS_OTHER_INSTANCE = "i-attrappe-andere"
 AWS_OWN_VOLUME = "vol-attrappe-eigen"
 AWS_OTHER_VOLUME = "vol-attrappe-andere"
 AWS_GROUP = "sg-attrappe"
+# describe-tags names a key pair by its id and not by its name (research
+# pitfall 9 of phase 29); the stub answers describe-key-pairs with this id.
+AWS_KEY_PAIR = "key-0123456789abcdef0"
 
 # The six types of D-28-03 and D-28-04 with the rates of the public price card,
 # EU (Frankfurt), Linux On Demand, read on 2026-09-29.
@@ -894,7 +900,7 @@ case "$*" in
     if grep -q delete-key-pair "$STUB/calls"; then
         echo 'An error occurred (InvalidKeyPair.NotFound)' >&2; exit 254
     fi
-    echo '{"KeyPairs": [{"KeyName": "findling-loadtest"}]}'; exit 0 ;;
+    echo '{"KeyPairs": [{"KeyName": "findling-loadtest", "KeyPairId": "key-0123456789abcdef0"}]}'; exit 0 ;;
 *"Values=findling-corpus-keep"*) cat "$STUB/keep.json"; exit 0 ;;
 *describe-tags*) cat "$STUB/tags.json"; exit 0 ;;
 *stop-instances* | *terminate-instances* | *delete-volume* | *delete-security-group* | *delete-key-pair*)
@@ -970,6 +976,7 @@ def an_aws_box_run(
             ("instance", AWS_OWN_INSTANCE),
             ("volume", AWS_OWN_VOLUME),
             ("security-group", AWS_GROUP),
+            ("key-pair", AWS_KEY_PAIR),
             *(("instance", instance) for instance in (sharing or [])),
             *((("volume", AWS_OTHER_VOLUME),) if sharing else ()),
         ),
@@ -1174,6 +1181,33 @@ def test_the_aws_destroy_keeps_the_security_group_while_another_instance_uses_it
     assert any("terminate-instances" in call and AWS_OWN_INSTANCE in call for call in calls)
     assert any("delete-volume" in call and AWS_OWN_VOLUME in call for call in calls)
     assert not state_file.exists()
+
+
+@needs_sh
+def test_the_aws_destroy_counts_the_kept_key_pair_by_its_id_and_not_as_a_leftover(tmp_path: Path) -> None:
+    """Research pitfall 9 of phase 29: the sweep compares ResourceId, and for a key pair that is key-...
+
+    The name findling-loadtest never matches a tag hit, so before the fix the
+    kept pair of the first of two teardowns ended as a leftover and the run red.
+    """
+    answer, _, calls = an_aws_box_run(
+        tmp_path, ["destroy"], state="terminated", sharing=[AWS_OTHER_INSTANCE], umgebung=_a_backup(tmp_path)
+    )
+    assert answer.returncode == 0, answer
+    assert any("describe-key-pairs --key-names findling-loadtest" in call for call in calls), calls
+    # Named among what the other box still uses, and nowhere among the leftovers.
+    shared_line = answer.stdout.split("still in use by the other box", 1)[1].splitlines()[1]
+    assert AWS_KEY_PAIR in shared_line, answer.stdout
+    assert "something still carries the tag" not in answer.stderr
+    assert AWS_KEY_PAIR not in answer.stderr
+    assert not [call for call in calls if "delete-key-pair" in call], calls
+
+
+def test_the_aws_destroy_reads_the_key_pair_id_into_the_shared_list() -> None:
+    text = AWS_BOX.read_text(encoding="utf-8")
+    body = text.split("cmd_destroy() {", 1)[1]
+    assert "KeyPairId" in body
+    assert 'shared="$others $other_volumes $group_id $key_pair_id"' in body
 
 
 @needs_sh

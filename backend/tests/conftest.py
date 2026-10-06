@@ -20,6 +20,7 @@ the unauthorized case.
 
 import importlib.util
 import sys
+import warnings
 from base64 import b64encode
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
@@ -28,7 +29,7 @@ from types import ModuleType
 from typing import Final
 
 import pytest
-from fastapi.testclient import TestClient
+from starlette.exceptions import StarletteDeprecationWarning
 from tantivy import Document, Index, Schema, SchemaBuilder
 
 from findling import guard as guard_module
@@ -59,6 +60,22 @@ from findling.index.wordlist_nl import artifact_path_nl
 from findling.main import APP
 from findling.store.repo import FileMeta, open_store
 from findling.store.vectors import open_vectors
+
+# Starlette 1.6 warns once, at the first import of starlette.testclient, that it
+# wants httpx2 instead of httpx. The filterwarnings entry in pyproject.toml
+# silences it for an ordinary run, but a command line -W error::UserWarning
+# outranks the ini file and turns it back into an error at collection. The
+# first import happens here, before any test module, with exactly this one
+# warning ignored; every later import finds the module cached and warns no
+# more. No new dependency: httpx2 is not pulled in for a test helper. Both go
+# once the TestClient imports without the warning.
+with warnings.catch_warnings():
+    warnings.filterwarnings(
+        "ignore",
+        message="Using .httpx. with .starlette.testclient. is deprecated",
+        category=StarletteDeprecationWarning,
+    )
+    from fastapi.testclient import TestClient
 
 APP_ID = "findling_backend"
 APP_VERSION = "0.1.0"
