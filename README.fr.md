@@ -50,6 +50,10 @@ reconnaissance optique.
 - Sans aucune intervention, Findling continue de fonctionner aussi sobrement
   qu'avant. Avec plus de matériel, un profil libère au plus la moitié de la
   machine (profil Standard) ou tout sauf un cœur (profil Performance).
+- Les deux profils supplémentaires activent plusieurs emplacements OCR et une
+  voie d'intégration parallèle, ce qui raccourcit l'indexation. Le changement se
+  fait en un clic dans les paramètres d'administration sous Findling ; une
+  suggestion adaptée à la machine est affichée à côté.
 
 ## Installation
 

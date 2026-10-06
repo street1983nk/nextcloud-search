@@ -45,6 +45,9 @@ CSV, and images (JPEG, PNG, TIFF, WebP) through OCR.
 - Without any change on your side, Findling keeps running as economically as
   before. Anyone with more hardware can use a profile to free at most half of
   the box (Standard profile) or everything but one core (Performance profile).
+- The two additional profiles enable several OCR slots and a parallel embedding
+  lane, which shortens indexing. Switch with one click in the admin settings
+  under Findling; a suggestion matching your box is shown next to it.
 
 ## Installation
 
