@@ -1,10 +1,10 @@
 ---
 phase: 28
 slug: abnahme-anfahrt
-status: open
+status: verified
 threats_total: 71
-threats_closed: 70
-threats_open: 1
+threats_closed: 71
+threats_open: 0
 asvs_level: standard
 block_on: open_threats
 register_authored_at_plan_time: true
@@ -113,7 +113,7 @@ created: 2026-10-06
 | T-28-66 | Denial of Wallet | Restkosten | mitigate | Sweep 17 Regionen, beide Tagwerte, alles 0 | closed | R/09-abbau-snapshot.txt:37-103 (sechs Zahlen 0 über 17 Regionen, ungefiltert), :131-134 (Nachlesung, Commit 4d468329) |
 | T-28-67 | Info Disclosure | unverschlüsselter Snapshot | mitigate | Inhalt synthetisch, Löschung mit Nachweis | closed | R/09-abbau-snapshot.txt:29-34 (`InvalidSnapshot.NotFound` zweimal); Korpus synthetisch (T-05-18) |
 | T-28-68 | Info Disclosure | Kennungen in Rohdatei | mitigate | Platzhalter, Gate | closed | R/09-abbau-snapshot.txt:10 (`<korpus-snapshot>`, Konto nur ja/nein); Gate grün |
-| T-28-69 | Info Disclosure | ungewollter Push | mitigate | Push nur nach checkpoint:decision, weitere Pushes nur mit erneutem Owner-Wort | **open** | Belegt: C7 wörtlich "Pushen wie es ist" (28-14-SUMMARY.md:40-46) für die Schübe 18602c48..ab634401 und ab634401..42e07168. **Nicht belegt:** (1) dritter Push aae091bd..1a115cd9 (reflog `origin/main@{0}: update by push`, Commits 4d468329, 5eb99faa, 688617bc, 1a115cd9); 28-14-SUMMARY.md:52 kündigt ihn "nach Owner-Wort" an, ein Owner-Wort dafür steht in keinem Artefakt. (2) Squash-Merge von Dependabot-PR #24 (aae091bd) auf GitHub, vom Wortlaut "Pushen wie es ist" nicht erkennbar gedeckt |
+| T-28-69 | Info Disclosure | ungewollter Push | mitigate | Push nur nach checkpoint:decision, weitere Pushes nur mit erneutem Owner-Wort | closed | Belegt: C7 wörtlich "Pushen wie es ist" (28-14-SUMMARY.md:40-46) für die Schübe 18602c48..ab634401 und ab634401..42e07168. Dritter Push aae091bd..1a115cd9 und Squash-Merge von Dependabot-PR #24: NACHTRÄGLICH bestätigt am 06.10.2026, Owner wörtlich "ok weiter" auf die ausdrückliche Frage nach (a) Push 3 und (b) #24-Merge; Frage und Antwort datiert dokumentiert in 28-14-SUMMARY.md, Abschnitt "Nachtraegliche Owner-Bestaetigung (06.10.2026)" (Commit bf58b29f). Genau die im Sign-Off genannte Schließbedingung |
 | T-28-70 | Info Disclosure | Kennungen in gepushten Rohdaten | mitigate | Gate vor jedem Commit, lokal grün vor dem Push | closed | Gate am HEAD grün (55 Tests in test_public_artifacts.py, Teil der 640); 28-14-SUMMARY lokale Gates grün vor Push. Gate war bei e66ef86a und 21721984 rot (zwei Box-Adressen, R/05-typwechsel-arm.txt) und in .planning/STATE.md (f432c5c7, außerhalb des Gate-Bereichs) stand eine Adresse; alle drei Commits sind gepusht. Bewusst akzeptiert: AR-28-04 |
 | T-28-71 | Repudiation | offene Belege als erledigt gemeldet | mitigate | offene Belege als human_needed, Abnahme-Checkpoint | closed | 28-14-SUMMARY.md SC4 "human_needed für Feldbeleg und Laufzeit", SC3 Restpunkte; Owner-Abnahme wörtlich "approved" 06.10.2026 mit Liste der offenen Punkte (28-14-SUMMARY.md, Abschnitt Owner-Abnahme) |
 
@@ -153,6 +153,7 @@ Keine. Die Threat-Flags-Abschnitte in 28-01, 28-02, 28-03, 28-04 und 28-10-SUMMA
 | Audit Date | Threats Total | Closed | Open | Run By |
 |------------|---------------|--------|------|--------|
 | 2026-10-06 | 71 | 70 | 1 | Claude (gsd-security-auditor) |
+| 2026-10-06 (2. Lauf) | 71 | 71 | 0 | Claude (Orchestrator, nur T-28-69 nachgeprüft) |
 
 ---
 
@@ -160,7 +161,7 @@ Keine. Die Threat-Flags-Abschnitte in 28-01, 28-02, 28-03, 28-04 und 28-10-SUMMA
 
 - [x] All threats have a disposition (mitigate / accept / transfer)
 - [x] Accepted risks documented in Accepted Risks Log
-- [ ] `threats_open: 0` confirmed (offen: T-28-69)
-- [ ] `status: verified` set in frontmatter
+- [x] `threats_open: 0` confirmed
+- [x] `status: verified` set in frontmatter
 
-**Approval:** offen. T-28-69 schließt, sobald das Owner-Wort für den dritten Push (aae091bd..1a115cd9) und für den Dependabot-Merge #24 wörtlich und datiert in 28-14-SUMMARY.md steht, oder der Owner beides nachträglich bestätigt und das dort vermerkt ist; danach /gsd:secure-phase 28 erneut.
+**Approval:** SECURED 06.10.2026. T-28-69 geschlossen über die im ersten Lauf genannte Schließbedingung: der Owner hat Push 3 (aae091bd..1a115cd9) und den Dependabot-Merge #24 nachträglich bestätigt (wörtlich "ok weiter" auf die ausdrückliche Doppel-Frage), vermerkt und datiert in 28-14-SUMMARY.md Abschnitt "Nachtraegliche Owner-Bestaetigung (06.10.2026)".
