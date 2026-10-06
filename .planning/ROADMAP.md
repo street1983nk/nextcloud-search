@@ -326,7 +326,7 @@ Plans:
 | 25. Einbettungsspur und Modellwahl | v1.4 | 12/12 | Complete    | 2026-09-28 |
 | 26. N OCR-Slots und Speicherwächter | v1.4 | 14/14 | Complete    | 2026-09-29 |
 | 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 16/16 | Complete    | 2026-09-29 |
-| 28. Abnahme-Anfahrt | v1.4 | 6/14 | In Progress|  |
+| 28. Abnahme-Anfahrt | v1.4 | 14/14 | Complete    | 2026-10-06 |
 | 29. Härtung und Store-Einreichung 1.4.0 | v1.4 | 0/? | Not started | - |
 
 ## Nach v1.3 (Wiedervorlage)
