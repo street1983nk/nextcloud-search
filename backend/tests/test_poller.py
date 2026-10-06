@@ -285,8 +285,9 @@ def _gateway(bodies: dict[int, bytes | BaseException | None], fetched: list[int]
         fp: IO[bytes],
         *,
         client: Any = None,
+        expected: int = 0,
     ) -> int | None:
-        del nc, user_id, client
+        del nc, user_id, client, expected
         if fetched is not None:
             fetched.append(file_id)
         body = bodies.get(file_id, BODY_BYTES)

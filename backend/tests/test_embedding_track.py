@@ -230,8 +230,9 @@ def _gateway(fetched: list[int], body: bytes = BODY_BYTES) -> Callable[..., Any]
         fp: IO[bytes],
         *,
         client: Any = None,
+        expected: int = 0,
     ) -> int | None:
-        del nc, user_id, client
+        del nc, user_id, client, expected
         fetched.append(file_id)
         fp.write(body)
         return len(body)

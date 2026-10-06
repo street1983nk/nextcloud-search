@@ -893,8 +893,10 @@ class _FakeGatewayClient:
         return None
 
 
-async def _no_fetch(nc: AsyncNextcloudApp, file_id: int, user_id: str, fp: IO[bytes], *, client: Any = None) -> None:
-    del nc, file_id, user_id, fp, client
+async def _no_fetch(
+    nc: AsyncNextcloudApp, file_id: int, user_id: str, fp: IO[bytes], *, client: Any = None, expected: int = 0
+) -> None:
+    del nc, file_id, user_id, fp, client, expected
 
 
 def _no_extract(path: str, mime: str, size: int, **_: Any) -> ExtractionOutcome:

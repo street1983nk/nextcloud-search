@@ -978,8 +978,8 @@ class _FakeGatewayClient:
         return None
 
 
-async def _fetch(nc: Any, file_id: int, user_id: str, fp: Any, *, client: Any = None) -> int:
-    del nc, file_id, user_id, client
+async def _fetch(nc: Any, file_id: int, user_id: str, fp: Any, *, client: Any = None, expected: int = 0) -> int:
+    del nc, file_id, user_id, client, expected
     fp.write(b"%PDF-1.4 pixels only")
     return 20
 

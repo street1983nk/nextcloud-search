@@ -100,6 +100,7 @@ from findling.nc.client import (
     AsyncNextcloudApp,
     FileTooLargeError,
     GatewayClient,
+    ShortRead,
     fetch_file_stream,
     new_gateway_client,
 )
@@ -1231,7 +1232,7 @@ class Poller:
         failed(out_of_memory), and there is no third run. The solo runs come
         before the embed rows, so OCR and embedding still never overlap.
         """
-        tasks: list[asyncio.Task[_ScanResult | _Killed]] = []
+        tasks: list[asyncio.Task[_ScanResult | _Killed | None]] = []
         deferred: list[QueueJob] = []
         killed: list[QueueJob] = []
         stop: BaseException | None = None
@@ -1271,6 +1272,9 @@ class Poller:
             raise errors[0]
 
         for result in results:
+            if result is None:
+                # Stayed short twice, handed back unjudged in the task.
+                continue
             if isinstance(result, _Killed):
                 killed.append(result.job)
                 continue
@@ -1326,11 +1330,13 @@ class Poller:
         except sqlite3.Error as error:
             LOGGER.warning("could not clear the mark of the multi slot pass, %s", type(error).__name__)
 
-    async def _scan_in_a_slot(self, job: QueueJob) -> _ScanResult | _Killed:
+    async def _scan_in_a_slot(self, job: QueueJob) -> _ScanResult | _Killed | None:
         """One OCR row as a task: wait for a slot, then read the scan on it.
 
         A child killed from outside is reported to the guard here, from the
         loop thread, and the row comes back without a verdict for the solo run.
+        None is a download that stayed short twice: no verdict and no solo run,
+        the row goes back the way the content branch hands it back (D-29-04).
         """
         async with self._gate.slot():
             try:
@@ -1338,6 +1344,9 @@ class Poller:
             except ChildKilled:
                 guard.report_child_kill()
                 return _Killed(job)
+            except ShortRead:
+                LOGGER.warning("download of one file stayed short twice, handing the row back unjudged")
+                return None
 
     # -- one file --------------------------------------------------------
 
@@ -1453,6 +1462,15 @@ class Poller:
             # scratch volume (security audit M5). A verdict, not an error: the
             # row leaves the queue with a reason a status page can show.
             self._collect(job, ExtractionOutcome.skipped(Reason.TOO_LARGE), done, failed, verdicts)
+            return 0
+        except ShortRead:
+            # Short twice in a row. No verdict, since nothing is known about
+            # the file, and never corrupt (D-29-04). Not unlocked either: an
+            # unlock gives the delivery back, and a file that is always cut
+            # would circle forever (T-29-15). The row runs into the lock
+            # timeout, the next hand-out counts, and the give-up rule of the
+            # queue ends it as repeatedly_stuck if it never arrives whole.
+            LOGGER.warning("download of one file stayed short twice, handing the row back unjudged")
             return 0
         if read is None:
             # 404 is what the gateway answers for "does not exist" and for "not
@@ -1586,7 +1604,12 @@ class Poller:
         concurrent pass runs the same two with a barrier between them.
         """
         async with self._gate.slot():
-            result = await self._scan(job, on_kill=on_kill)
+            try:
+                result = await self._scan(job, on_kill=on_kill)
+            except ShortRead:
+                # The rule of the content branch: no verdict, no unlock.
+                LOGGER.warning("download of one file stayed short twice, handing the row back unjudged")
+                return
         self._judge_scan(result, done, failed, verdicts, embedding)
 
     async def _scan(self, job: QueueJob, *, on_kill: _OnKill = _OnKill.VERDICT) -> _ScanResult:
@@ -1902,13 +1925,34 @@ class Poller:
         Returns None when the gateway refuses the file, and raises
         :class:`_GatewayDown` for everything else: a permission verdict and an
         unreachable server must never be mistaken for one another.
+
+        **A short answer is fetched once more, at once** (D-29-04). The gateway
+        that cut one download usually delivers the next one whole, and a second
+        try in the same pass costs one download where the lock timeout would
+        cost the row its place in the queue. A second short answer raises
+        :class:`ShortRead` on to the caller, which hands the row back without a
+        verdict. There is no third try and no counter of its own here: the
+        delivery count of the queue is the counter (T-29-15).
         """
+        try:
+            return await self._fetch_once(job)
+        except ShortRead:
+            LOGGER.info("download of one file came back short, fetching it once more")
+        return await self._fetch_once(job)
+
+    async def _fetch_once(self, job: QueueJob) -> _Read | None:
+        """One download into scratch, see :meth:`_fetch_file`."""
         scratch = self._tmp_dir / f"job-{job.queue_id}{SCRATCH_SUFFIX}"
         try:
             written, sink = await self._stream_into(scratch, job)
         except FileTooLargeError:
             # A verdict about this one file, never a gateway problem: the
             # caller records it as skipped(too_large) and the pass goes on.
+            _discard(scratch)
+            raise
+        except ShortRead:
+            # A passing fault of this one download and never a gateway
+            # problem either: the cut bytes go, and the pass goes on.
             _discard(scratch)
             raise
         except Exception as error:
@@ -1937,6 +1981,9 @@ class Poller:
                 job.fetch_as,
                 cast("IO[bytes]", sink),
                 client=self._gateway,
+                # The size the queue named, checked against what arrived
+                # (D-29-04). A row without a size carries 0 and is not checked.
+                expected=job.size,
             )
         finally:
             await asyncio.to_thread(handle.close)
