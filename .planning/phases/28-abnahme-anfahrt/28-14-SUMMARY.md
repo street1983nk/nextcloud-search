@@ -3,7 +3,7 @@ phase: 28-abnahme-anfahrt
 plan: 14
 subsystem: phasenabschluss
 tags: [abnahme-anfahrt, push, ci, owner-abnahme, mess-10]
-status: "checkpoint: Owner-Abnahme offen"
+status: "complete"
 requires:
   - phase: 28-12
     provides: OCR_SLOT_COST_BYTES 250 MiB (SC4)
@@ -31,7 +31,7 @@ requirements: [MESS-10]
 
 # Phase 28 Plan 14: Push, CI-Belege und Owner-Abnahme Summary
 
-**Status: checkpoint: Owner-Abnahme offen.** Push nach Owner-Wort in zwei Schüben, alle ausgelösten Workflows auf dem Endstand aae091bd grün (drei davon erst nach Rerun wegen eines GitHub-Runner-Ausfalls), lokale Gates grün, SC1 bis SC4 und D-28-01 bis D-28-14 mit Belegen zugeordnet; die Abnahme (Task 3) liegt beim Owner.
+**Status: complete.** Push nach Owner-Wort in zwei Schüben, alle ausgelösten Workflows auf dem Endstand aae091bd grün (drei davon erst nach Rerun wegen eines GitHub-Runner-Ausfalls), lokale Gates grün, SC1 bis SC4 und D-28-01 bis D-28-14 mit Belegen zugeordnet; die Abnahme (Task 3) liegt beim Owner.
 
 ## Task 1: Push-Entscheid (C7)
 
@@ -147,3 +147,13 @@ Abnahme-Signal "approved" oder Befunde. Bis dahin ist die Phase nicht abgeschlos
 - Lauf-IDs und Attempts per `gh run list` und `actions/runs/<id>/attempts/<n>` gelesen, alle fünf Endstände auf aae091bd `success`
 - Belegdateien vorhanden: `M/rohdaten/02-rechenblatt-freigabe.txt`, `90-kosten.txt`, `03-aufbau-arm.txt`, `06-aufbau-x86.txt`, `08-abbau-boxen.txt`, `09-abbau-snapshot.txt`, `docs/performance.md` Z. 4864, `config.py` Z. 896/910/933/945
 - Commits vorhanden: cb49fa70, 66bf7a44, 2f26d9fb, 655cd037, e3d28dfd, a0ac5aee, ab634401, 42e07168, aae091bd, 4d468329
+
+
+## Owner-Abnahme (Task 3)
+
+Signal vom 06.10.2026 kurz nach Mitternacht per Auswahlfrage, woertlich: "approved".
+Die Vorlage nannte die fuenf Pruefpunkte, die Abweichungen (18 statt 21 Zellen, drei
+Abbild-Staende, Cron-Gate je Instanz) und die ehrlich offenen Punkte (250 MiB ohne
+Feldlauf, Vollindex-Term ohne Laufzeit-Verdrahtung, Fall-2-Fix nur per Test belegt,
+aws_box.sh-Schluesselpaar-Liste, StarletteDeprecationWarning); alle offenen Punkte
+sind als Phase-29-Kandidaten notiert. Phase 28 ist damit abgenommen.
