@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
-status: executing
-stopped_at: Quick 261003-wxg umgesetzt (3 lokale Commits); nächst Push + CI-Abbild + Lauf 8 L-T (neues Abbild + neue Companion-App), Box geparkt
-last_updated: "2026-10-06T05:45:30.284Z"
+status: milestone_complete
+stopped_at: Milestone complete (Phase 29 was final phase)
+last_updated: 2026-10-06T14:03:20.723Z
 last_activity: 2026-10-06 -- Phase 29 execution started
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 78
-  completed_plans: 62
-  percent: 79
+  completed_plans: 78
+  percent: 83
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 29 — Härtung und Store-Einreichung 1.4.0
+**Current focus:** Milestone complete
 
 ## Current Position
 
-Phase: 29 (Härtung und Store-Einreichung 1.4.0) — EXECUTING
-Plan: 1 of 16
-Status: Executing Phase 29
-Last activity: 2026-10-06 -- Phase 29 execution started
+Phase: 29
+Plan: Not started
+Status: Milestone complete
+Last activity: 2026-10-06
 
 Progress: [█████████░] 87%
 
