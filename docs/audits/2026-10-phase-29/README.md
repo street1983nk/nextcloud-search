@@ -77,7 +77,40 @@ Belege aus dem Bein stable34/amd64 (Job 112243285452), Schritte 3 bis 5 jetzt gr
 - Ursache, belegt: Zusicherung 1 verlangte einen Schritt nach oben. Das galt beim Start v1.2.0 (Index-`SCHEMA_VERSION` 1). v1.3.2 und der Kopf tragen beide 2 (`git grep SCHEMA_VERSION v1.3.2 HEAD -- backend/src`), ein reiner Sprachsprung hat keine Schemadrift zu beantworten. Die übrigen neun Zusicherungen hielten, die Sprachmarke ging korrekt auf `de,en,es`.
 - Fix `7361b771`: Zusicherung 1 verlangt 2 vorher und 2 nachher; ein Test bindet die 2 an `findling.config.SCHEMA_VERSION`, damit eine künftige Schemaerhöhung das Gate rot macht. Dass der Neuaufbau gestempelt hat, belegt Zusicherung 2, denn nur `stamp_after_swap` schreibt den neuen Satz in ein bestehendes Verzeichnis.
 
+### Push 3: 7130c4f0..7b8b4271
+
+Freigabe des Owners, wörtlich: Auf die Frage "Darf ich die 2 Commits 7130c4f0..7b8b4271 (7361b771 Fix Store upgrade 6, 7b8b4271 Auditbericht) auf origin/main pushen?" antwortete der Owner "ok". Mit diesem Wort hat der Owner die geänderte Zusicherung aus C-29-03 gesehen und mitgetragen.
+
+Kopf: `7b8b4271ec73ae4160dd68afdc2dcc130d40b6bc`, gepusht 12:00Z. **Alle ausgelösten Workflows grün, jeweils im ersten Attempt.**
+
+| Workflow | Lauf | Attempt | Ergebnis |
+|---|---|---|---|
+| Python gates | 37460204981 | 1 | success, 4723 passed, 14 skipped |
+| Multi-arch image | 37460204900 | 1 | success, amd64 und arm64 |
+| Integration | 37460204996 | 1 | success |
+| Resilience | 37460204909 | 1 | success |
+| HaRP deploy | 37460204929 | 1 | success, alle vier Beine (stable33, stable34 amd64 und arm64, stable35) |
+| PHP and store metadata gates | nicht ausgelöst | | Pfadfilter: seit 390360c3 hat sich kein Pfad des Filters geändert (nur `deploy-harp.yml`, ein Backend-Test und diese Doku); der PHP-Beleg bleibt Lauf 37452332197 auf 390360c3, `OK (589 tests, 2106 assertions)` |
+
+Belege aus dem Upgrade-Bein stable34/amd64 (Job 112257592326), wörtlich:
+
+- Store install 7: `content hit after 3 cron rounds, with nothing configured`; `none, which is what zero config means`.
+- Store upgrade 2b: `sown: a picture and a sidecar, both failed(corrupt) under v1.3.2, and the seed word finds nothing`.
+- Store upgrade 3: `three terms, one file each; the Spanish question with no hit at all; the languages mark de,en; the state is on record in upgrade-before.json`.
+- Store upgrade 4: `the instance performed the app update: 1.3.2 to 1.4.0`.
+- Store upgrade 5:
+  - `unchanged  .marks.indexVersion = 1`
+  - `the sidecar is skipped/system_file in state.db and in findling_file_state`
+  - `the seed word finds exactly the file id 141, the picture 1.3.2 had booked as corrupt`
+  - `the recheck mark was absent before the upgrade and reads done after it`
+  - `the languages mark reads de,en before and after the upgrade, nothing was restamped`
+  - `unchanged  embedding mark = multilingual-e5-small/int8/384/1024`
+  - `the profile in force after the upgrade is economy`
+  - `all eight assurances hold`
+- Store upgrade 6: `the schema mark reads 2 before and after the rebuild, the schema of the running code`; `the question alemanes went from 0 to 1 hits across the rebuild, which is the Spanish chain and the field plan working together`; `all ten assurances hold`.
+
+Damit sind die Fremdinstallation (Store install 0 bis 7) und die Upgrade-Strecke 1.3.2 auf 1.4.0 (Store upgrade 0 bis 6) mit der neuen Saat auf demselben Kopf Ende zu Ende grün.
+
 ### Offen
 
-- Push 3 (Fixe zu C-29-02 und C-29-03) braucht ein eigenes Owner-Wort (T-28-69).
 - Einzelnachweis der beiden Linux-SIGKILL-Fälle aus `test_slots_kill.py` (Merker aus 29-04): python.yml läuft mit `-q` ohne `-rs`. Der Lauf 37452332061 belegt die Suite insgesamt (4721 passed, 14 skipped), nicht die beiden Fälle namentlich. Lokal ist kein Linux verfügbar (Docker-Engine und WSL-Distribution laufen nicht). Plan 29-13 sieht keine Workflow-Änderung dafür vor; der Nachweis (`-rs` für diese Datei) geht an Plan 29-14.
