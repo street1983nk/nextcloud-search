@@ -777,8 +777,13 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # AdminViewService.php (REASON_TEXT), ProfileController.php (the field verdicts
 # and VERDICTS_GENERATION) and ProfileControllerTest.php. No file came and none
 # went, so PHP_FILES_TODAY stays at 88.
+# Measured again by plan 29-06 (the class of the reader error, D-29-09): plan
+# 29-06 changed DiagnoseCommand.php (the line error class), AdminViewService.php
+# (errorClass in the diagnosis and the static errorClass judgement) and
+# AdminViewServiceTest.php. No file came and none went, so PHP_FILES_TODAY
+# stays at 88.
 PHP_FILES_TODAY = 88
-PHP_TREE_HASH_TODAY = "a2986165eb84fe751a5a5a9af05f84628caafcaf688ccb2dbb6e5f69590cf747"
+PHP_TREE_HASH_TODAY = "3f72f80dcbefe041968eb1161d377c2c8e85f3d4c2a5d7e27815631e9c8cd588"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
@@ -1613,8 +1618,16 @@ PHP_TREE_HASH_TODAY = "a2986165eb84fe751a5a5a9af05f84628caafcaf688ccb2dbb6e5f695
 # _stream_file) and worker/poller.py (the sidecar skip before judge and the
 # short read branch). No file came and none went, so PACKAGE_FILES_TODAY stays
 # at 71. The PHP pair does not move: php/ is unchanged.
+# Measured again by plan 29-06 (the class of the reader error, D-29-09): plan
+# 29-06 changed extract/errors.py (ExtractionOutcome.detail), store/repo.py
+# (record(error_class=...), error_class() and the clearing in give_up and
+# reset_for_reindex), worker/poller.py (error_class handed to record) and
+# api/diagnose.py (errorClass). store/schema.sql changed as well (the table
+# file_errors) and does not count, the recipe reads **/*.py. No file came and
+# none went, so PACKAGE_FILES_TODAY stays at 71. The PHP pair moved in the same
+# plan.
 PACKAGE_FILES_TODAY = 71
-PACKAGE_TREE_HASH_TODAY = "0e149a742c0cc1b5cf24bd0c9edf6c73d05a5166f089f26282289ed0c316cc27"
+PACKAGE_TREE_HASH_TODAY = "59653dff3fddfe10321bcc11b6be98648c561481bfc1d4c421cdbc23d6d8a4ed"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

@@ -666,4 +666,42 @@ final class AdminViewServiceTest extends TestCase {
 	public function testTheFp32DownloadSizeIsTheReleaseSize(): void {
 		self::assertSame(470268510, AdminViewService::FP32_DOWNLOAD_BYTES);
 	}
+
+	// -- the class of the reader error of one file (plan 29-06, D-29-09) ------
+
+	public function testTheErrorClassOfTheContainerIsPassedThrough(): void {
+		self::assertSame('zipfile.BadZipFile', AdminViewService::errorClass(['errorClass' => 'zipfile.BadZipFile']));
+		self::assertSame('PIL.UnidentifiedImageError', AdminViewService::errorClass(['errorClass' => 'PIL.UnidentifiedImageError']));
+	}
+
+	public function testAContainerWithoutTheFieldGivesTheEmptyString(): void {
+		// An older container leaves the key out, and a silent one answers with
+		// nothing at all. Both read as "no class recorded" and never as an error.
+		self::assertSame('', AdminViewService::errorClass([]));
+		self::assertSame('', AdminViewService::errorClass(null));
+	}
+
+	/**
+	 * Everything that is not the shape of a class name, and none of it is cast.
+	 *
+	 * @return array<string,array{mixed}>
+	 */
+	public static function everythingThatIsNotAnErrorClass(): array {
+		return [
+			'a path' => ['/geheim/pfad/Vertrag.pdf'],
+			'a message' => ['zipfile.BadZipFile: File is not a zip file'],
+			'markup' => ['<b>zipfile.BadZipFile</b>'],
+			'too long' => [str_repeat('a', 201)],
+			'a number' => [3],
+			'a boolean' => [true],
+			'a list' => [['zipfile.BadZipFile']],
+		];
+	}
+
+	#[DataProvider('everythingThatIsNotAnErrorClass')]
+	public function testAValueOutsideTheShapeOfAClassNameIsRefused(mixed $value): void {
+		// T-29-18: the value comes from across the trust boundary and is printed
+		// on the admin card and in a terminal.
+		self::assertSame('', AdminViewService::errorClass(['errorClass' => $value]));
+	}
 }

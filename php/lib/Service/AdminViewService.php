@@ -295,6 +295,16 @@ final class AdminViewService {
 	private const REASON_PATTERN = '/^[a-z][a-z_]{0,39}$/';
 
 	/**
+	 * What the class of a reader error may look like before it is passed on
+	 * (plan 29-06, D-29-09): module.qualname of a Python class, so letters,
+	 * digits, underscores and dots, and short. The same shape the container
+	 * stores, checked a second time because the value crosses the boundary and
+	 * is printed on the card and in a terminal (T-29-18). A path, a message or
+	 * markup never fits it.
+	 */
+	private const ERROR_CLASS_PATTERN = '/^[A-Za-z0-9_.]{1,200}$/';
+
+	/**
 	 * The free space the container insists on keeping, in bytes.
 	 *
 	 * The value of MIN_FREE_BYTES in backend/src/findling/config.py. Below it the
@@ -1029,7 +1039,7 @@ final class AdminViewService {
 	 * @return array{
 	 *     found:bool, fileId:int, path:string, reference:string, uid:string, trashed:bool,
 	 *     shares:int, state:string, reason:string, label:string, remedy:string,
-	 *     checkedAt:int, backendReachable:bool, note:string
+	 *     errorClass:string, checkedAt:int, backendReachable:bool, note:string
 	 * }
 	 */
 	public function diagnose(string $input, string $userId): array {
@@ -1065,6 +1075,14 @@ final class AdminViewService {
 			?? $this->stageFiveVerdictOfTheContainer($container, $reachable)
 			?? $this->stageSixNotSeenYet($container);
 
+		// The class of the reader error belongs to a failed verdict of the
+		// container and to nothing else (D-29-09). Shown only when the card
+		// says failed and the container said so too, so that a class of an
+		// earlier attempt never stands next to a verdict it did not cause.
+		if (($verdict['state'] ?? '') === 'failed' && $container['state'] === 'failed') {
+			$verdict['errorClass'] = $container['errorClass'];
+		}
+
 		if ($resolved['namedUserMayNotRead'] ?? false) {
 			// The admin typed a user in front of the path who may not open the
 			// file, and the card answers about the file anyway, found through
@@ -1081,7 +1099,7 @@ final class AdminViewService {
 	}
 
 	/**
-	 * The fourteen keys of a diagnosis, never sparse and never partial.
+	 * The fifteen keys of a diagnosis, never sparse and never partial.
 	 *
 	 * Same rule as overview(): a caller that has to ask whether a key exists ends
 	 * up writing one default in the template and a different one in the script,
@@ -1095,7 +1113,7 @@ final class AdminViewService {
 	 * @return array{
 	 *     found:bool, fileId:int, path:string, reference:string, uid:string, trashed:bool,
 	 *     shares:int, state:string, reason:string, label:string, remedy:string,
-	 *     checkedAt:int, backendReachable:bool, note:string
+	 *     errorClass:string, checkedAt:int, backendReachable:bool, note:string
 	 * }
 	 */
 	private function diagnosis(int $fileId, ?array $facts, bool $reachable, array $verdict): array {
@@ -1121,6 +1139,7 @@ final class AdminViewService {
 			'reason' => is_string($verdict['reason'] ?? null) ? $verdict['reason'] : '',
 			'label' => is_string($verdict['label'] ?? null) ? $verdict['label'] : '',
 			'remedy' => is_string($verdict['remedy'] ?? null) ? $verdict['remedy'] : '',
+			'errorClass' => self::errorClass($verdict),
 			'checkedAt' => is_int($verdict['checkedAt'] ?? null) ? max(0, $verdict['checkedAt']) : 0,
 			'backendReachable' => $reachable,
 			'note' => is_string($verdict['note'] ?? null) ? $verdict['note'] : '',
@@ -1474,8 +1493,29 @@ final class AdminViewService {
 			'indexedAt' => $this->counter($answer, 'indexedAt'),
 			'attempts' => $this->counter($answer, 'attempts'),
 			'deletedAt' => $this->counter($answer, 'deletedAt'),
+			'errorClass' => self::errorClass($answer),
 			'note' => $this->text($answer, 'note'),
 		];
+	}
+
+	/**
+	 * The class of the reader error in an answer, or the empty string.
+	 *
+	 * Empty where the key is missing, which is what a container older than
+	 * plan 29-06 and a silent one look like, and empty for every value that is
+	 * not the shape of a class name. Refused and never cut or cast, for the
+	 * reason engineState() gives: a shortened class name is a class nobody
+	 * raised (T-29-18).
+	 *
+	 * Static and public for the reason coverageShare() is: it is the judgement
+	 * and nothing else.
+	 *
+	 * @param array<mixed>|null $answer
+	 */
+	public static function errorClass(?array $answer): string {
+		$value = $answer['errorClass'] ?? null;
+
+		return is_string($value) && preg_match(self::ERROR_CLASS_PATTERN, $value) === 1 ? $value : '';
 	}
 
 	/**
