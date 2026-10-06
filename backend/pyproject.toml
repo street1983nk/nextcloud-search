@@ -130,4 +130,13 @@ asyncio_default_fixture_loop_scope = "function"
 # A synchronous enabled_handler still works with nc-py-api 0.30.x but only emits a
 # DeprecationWarning, and it breaks hard in 0.31.0. Turning that warning into an
 # error is the only way the mistake surfaces before the release that removes it.
-filterwarnings = ["error::DeprecationWarning"]
+#
+# The second entry silences exactly one warning, and only in the tests: Starlette
+# 1.6 warns at import of starlette.testclient that it wants httpx2 instead of
+# httpx. Only the tests import the TestClient (src never does), and httpx2 is a
+# new package we do not pull in for a test helper. The entry goes once the
+# TestClient imports without the warning.
+filterwarnings = [
+    "error::DeprecationWarning",
+    "ignore:Using .httpx. with .starlette.testclient. is deprecated:starlette.exceptions.StarletteDeprecationWarning",
+]

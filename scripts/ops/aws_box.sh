@@ -1274,7 +1274,24 @@ import sys
 
 print(' '.join(volume['VolumeId'] for volume in json.load(sys.stdin)['Volumes']))
 ")
-        shared="$others $other_volumes $group_id"
+        # The key pair stays as well, and the sweep below compares ResourceId.
+        # For a key pair that is its id (key-...), not the name in SSH_KEY_NAME:
+        # describe-tags names the resource by "The ID of the resource" with
+        # resource-type key-pair, and describe-key-pairs reports that id as
+        # KeyPairId (AWS CLI reference, ec2 describe-tags and describe-key-pairs).
+        # So the id is read here; a pair that is already gone answers an error
+        # rather than a list and leaves the id empty, which is no reason to stop.
+        key_pair_id=$(ec2_soft describe-key-pairs --key-names "$SSH_KEY_NAME" | json "
+import json
+import sys
+
+try:
+    pairs = json.load(sys.stdin)['KeyPairs']
+except (ValueError, KeyError, TypeError):
+    pairs = []
+print(pairs[0].get('KeyPairId', '') if pairs else '')
+")
+        shared="$others $other_volumes $group_id $key_pair_id"
         echo "aws_box: security group kept, still used by another instance: $others"
         echo "aws_box: the key pair stays with it; the teardown of that box takes both"
     elif [ -n "$group_id" ]; then
@@ -1429,6 +1446,7 @@ print(' '.join('%s:%s' % (tag['ResourceType'], tag['ResourceId']) for tag in lef
         instance) hit_state=$(instance_gone "$resource") ;;
         volume) hit_state=$(resource_gone "$(ec2_soft describe-volumes --volume-ids "$resource")") ;;
         security-group) hit_state=$(resource_gone "$(ec2_soft describe-security-groups --group-ids "$resource")") ;;
+        key-pair) hit_state=$(resource_gone "$(ec2_soft describe-key-pairs --key-pair-ids "$resource")") ;;
         # Anything else, a snapshot or an image under the tag of this run among
         # them, is a leftover by default and is not read back into innocence.
         *) hit_state='there' ;;
