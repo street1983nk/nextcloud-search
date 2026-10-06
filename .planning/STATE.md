@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Leistungsprofile
 status: phase_complete
-stopped_at: "PHASE 28 KOMPLETT UND ABGENOMMEN (06.10. Owner approved): 14/14 Plaene, 18 Zellen, Abbau bis 0 USD/h (34,64/59,43 USD), CI gruen, alles gepusht; naechstes: secure/audit Phase 28, dann Phase 29 planen (Kandidatenliste in NEXT.md)"
+stopped_at: "PHASE 28 ABGENOMMEN + SECURITY-AUDIT GELAUFEN: 70/71 geschlossen (AR-28-01..05), NUR T-28-69 OFFEN = woertliches Owner-Wort fuer Push 3 + #24-Merge nachtragen (reiner Nachweis, Vorlage in 28-14-SUMMARY), Commit c2091395 NUR LOKAL (bewusst kein Push); danach secure-phase 28 erneut, dann Phase 29 planen"
 last_updated: "2026-10-05T22:30:00.000Z"
 last_activity: 2026-10-05
 progress:
