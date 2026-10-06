@@ -484,6 +484,18 @@ final class AdminViewService {
 			'Not readable for the users asked',
 			'The file is still there. Check the advanced permissions of the Team Folder: Findling reads a file only as a user who may open it and asks the first 20 of its users in alphabetical order.',
 		],
+		'system_file' => [
+			'System or helper file',
+			'None. macOS metadata files (._) and Office lock files (~$) carry no document content.',
+		],
+		'legacy_format' => [
+			'Old Office format under a new name',
+			'Save the file again in the current Office format (.docx, .xlsx, .pptx).',
+		],
+		'unsupported_variant' => [
+			'Image variant that cannot be read',
+			'None. The image uses an encoding the image library does not support.',
+		],
 		'empty_file' => [
 			'File is empty',
 			'None. The file has 0 bytes.',
