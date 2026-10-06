@@ -1523,6 +1523,60 @@ def test_a_second_connector_sentence_is_reported_because_the_rule_says_exactly_o
     assert "2 times" in violations[0]
 
 
+def test_the_share_sentence_stands_once_in_all_three_languages_of_both_halves() -> None:
+    # D-24-04, plan 29-12. The German sentence is the owner's wording and the
+    # English and French ones are the versions he accepted on 06.10.2026; none
+    # of the three is reworded here or anywhere else.
+    violations = [
+        message
+        for path in (PHP_INFO, BACKEND_INFO)
+        for message in scan_share_sentence(
+            f"{path.parent.parent.name}/appinfo/info.xml", path.read_text(encoding="utf-8")
+        )
+    ]
+
+    assert violations == []
+
+
+def test_the_german_companion_description_carries_the_owner_sentence_character_for_character() -> None:
+    # The success criterion of plan 29-12 in its narrowest form: the companion's
+    # German store text, without collapsing any whitespace, holds SHARE_SENTENCE_DE.
+    descriptions, broken = _descriptions("php/appinfo/info.xml", PHP_INFO.read_text(encoding="utf-8"))
+
+    assert broken == []
+    assert SHARE_SENTENCE_DE in dict(descriptions)["de"]
+
+
+def test_the_share_sentence_stands_in_the_readme_of_its_language() -> None:
+    # The same three wordings as the last point of the requirements in the
+    # three READMEs; the READMEs wrap their lines, so whitespace is collapsed.
+    for readme, language in ((README, DEFAULT_LANGUAGE), (README_DE, "de"), (README_FR, "fr")):
+        assert collapse(readme.read_text(encoding="utf-8")).count(SHARE_SENTENCES[language]) == 1, readme.name
+
+
+def test_a_reworded_share_sentence_is_reported_by_language() -> None:
+    reworded = PHP_INFO.read_text(encoding="utf-8").replace(
+        SHARE_SENTENCE_DE, SHARE_SENTENCE_DE.replace("höchstens", "maximal"), 1
+    )
+
+    violations = scan_share_sentence("php/appinfo/info.xml", reworded)
+
+    assert len(violations) == 1
+    assert "lang=de" in violations[0]
+    assert "0 times" in violations[0]
+
+
+def test_a_second_share_sentence_is_reported() -> None:
+    sentence = SHARE_SENTENCES["fr"]
+    doubled = BACKEND_INFO.read_text(encoding="utf-8").replace(sentence, f"{sentence} {sentence}", 1)
+
+    violations = scan_share_sentence("backend/appinfo/info.xml", doubled)
+
+    assert len(violations) == 1
+    assert "lang=fr" in violations[0]
+    assert "2 times" in violations[0]
+
+
 def test_the_two_new_scans_report_a_broken_document_instead_of_raising() -> None:
     # The shape every scanner of this file keeps: a document that is not well
     # formed is a finding and not a stack trace, so that one broken edit does
