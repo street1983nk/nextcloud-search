@@ -1641,8 +1641,15 @@ PHP_TREE_HASH_TODAY = "3f72f80dcbefe041968eb1161d377c2c8e85f3d4c2a5d7e27815631e9
 # (RECHECK_MARK and recheck_scan) and worker/poller.py (the re-check behind the
 # companion signal, D-29-10). One file came, none went, so PACKAGE_FILES_TODAY
 # goes from 72 to 73. The PHP pair does not move: php/ is unchanged.
+# Measured again by plan 29-10 (the full index term at run time, D-29-12): plan
+# 29-10 changed profile.py and poller.py (profile.py: note_index_files, the
+# index_files of the snapshot and resolve; worker/poller.py: the count of the
+# stock at the start and after a pass with verdicts) and worker/probe_run.py
+# (the pre-check resolves with the stock in force). No file came and none
+# went, so PACKAGE_FILES_TODAY stays at 73. The PHP pair does not move: php/ is
+# unchanged.
 PACKAGE_FILES_TODAY = 73
-PACKAGE_TREE_HASH_TODAY = "0289455f79e19fa30c51cf36855b1aa1e0546050fe7e2e05615418b3391252b7"
+PACKAGE_TREE_HASH_TODAY = "38dab3268b8df758298a567b4af762a151102c4952b9608c4e6507c271fe61c9"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
