@@ -2918,10 +2918,11 @@ jobs:
       # The upgrade proof of plan 11-07, and success criterion 2 of phase 11:
       # an installation that really came out of the release assets of
       # UPGRADE_FROM_TAG is brought to the state of this commit, and the index
-      # it built survives that untouched. Since plan 18-12 that tag is v1.2.0,
-      # and since plan 23-06 the jump is 1.2.0 to 1.3.0 (plan 16-09 had v1.1.0
-      # and 1.1.0 to 1.2.0); the value and the reason for it stand at the top
-      # of this file and nowhere else.
+      # it built survives that untouched. Since plan 29-11 that tag is v1.3.2
+      # and the jump is 1.3.2 to 1.4.0 (D-29-01; plan 18-12 had v1.2.0 and plan
+      # 23-06 the jump 1.2.0 to 1.3.0, plan 16-09 v1.1.0 and 1.1.0 to 1.2.0);
+      # the value and the reason for it stand at the top of this file and
+      # nowhere else.
       #
       # Why the block stands at the end of the job and not between the store
       # install path and the six promises above it: those promises need the
@@ -3603,9 +3604,10 @@ jobs:
           # through the very helper the probe already has, it costs no page and
           # no render, and the report of 1.2.0 answers without the key rather
           # than with an empty value, which is the difference a jq comparison can
-          # see. Read as: absent before the upgrade, present after it, and after
-          # the rebuild of "Store upgrade 6" it names the set that rebuild was
-          # run for.
+          # see. That held from v1.2.0; from v1.3.2 both reports carry the key
+          # empty, and the counter sample is the recheck mark of plan 29-11.
+          # After the rebuild of "Store upgrade 6" the languages mark names the
+          # set that rebuild was run for.
           index_report() {
             container=$(findling_container)
             if [ -z "${container}" ]; then
@@ -3956,36 +3958,20 @@ jobs:
             jq '{terms: .terms, spanish: .spanish}' "${RUNNER_TEMP}/upgrade-before.json"
             exit 1
           fi
-          # The second condition, and what it asks changed twice, on 2026-09-21
-          # and again on 2026-09-24. Overhauled wording, kept on record: until
-          # the first date it demanded that .navigation.findling be absent, which
-          # was the counterpart of assurance 6 while that assurance measured the
-          # navigation entry; until the second it demanded that the two date
-          # bounds of plan 13-06 be absent, which was its counterpart while
-          # assurance 6 measured those. v1.1.0 carries the entry and v1.2.0
-          # carries the bounds, so both conditions would now be red on a healthy
-          # installation.
-          #
-          # In its place the absence of the field assurance 6 measures today: the
-          # languages mark, which 1.2.0 never wrote. The two belong together and
-          # always will, whatever the field is: without this condition assurance
-          # 6 could be green because the value was already there before the
-          # upgrade, which is the one shape a before and after proof cannot
-          # survive. Absent is null here and not the empty string, because the
-          # report of the released half has no such key at all and jq answers
-          # null for a key that is not there.
-          #
-          # .navigation and .searchFilters stay in the snapshot. Neither is
-          # asserted any more, but they are the app menu and the declared filters
-          # of the instance on record, and a reader of a red run should not have
-          # to guess them.
-          if ! jq -e '.marks.languages == null' "${RUNNER_TEMP}/upgrade-before.json" > /dev/null; then
-            echo "::error::the ${UPGRADE_FROM_TAG} installation already reports a languages mark"
-            echo "Its presence after the upgrade would then be no change at all."
+          # The second condition, rewritten on 2026-10-06 (plan 29-11). Until
+          # then it demanded the languages mark be absent (null), because the
+          # report of 1.2.0 had no such key. The report of 1.3.2 has it, empty
+          # while no rebuild has stamped one, so null would now be red on a
+          # healthy installation. Empty is the demand, and it is the half of
+          # assurance 6 that stays: nothing on this leg rebuilds, so the mark
+          # has to be empty before and after. The counter sample of assurance 6
+          # moved to the recheck mark, recorded by "Store upgrade 3c".
+          if ! jq -e '.marks.languages == ""' "${RUNNER_TEMP}/upgrade-before.json" > /dev/null; then
+            echo "::error::the ${UPGRADE_FROM_TAG} installation reports the languages mark '$(jq -r '.marks.languages' "${RUNNER_TEMP}/upgrade-before.json")' instead of an empty one, so a rebuild already stamped it"
             jq '.marks' "${RUNNER_TEMP}/upgrade-before.json"
             exit 1
           fi
-          echo "three terms, one file each; the Spanish question with no hit at all; no languages mark in the report; the state is on record in upgrade-before.json"
+          echo "three terms, one file each; the Spanish question with no hit at all; an empty languages mark; the state is on record in upgrade-before.json"
 
       - name: Store upgrade 3b, the always enabled apps this checkout does not carry
         if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
@@ -4091,6 +4077,69 @@ jobs:
           fi
           echo "the companion is still enabled; shipped.json now lists only apps this checkout carries"
 
+      # The half of the before state that the snapshot of "Store upgrade 3"
+      # does not carry, and a step of its own because that run block stays at
+      # the size it had (plan 29-11): the recheck mark, the embedding mark and
+      # the vector stock, read on the released installation. "Store upgrade 5"
+      # holds the state after the upgrade against exactly these values.
+      - name: Store upgrade 3c, the recheck mark and the vector stock before anything moves
+        if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
+        run: |
+          . "${RUNNER_TEMP}/seed-probe.sh"
+          # The embedding mark is written by an idle pass of the poller once
+          # every indexed document carries a vector (_claim_a_whole_stock of
+          # 1.3.2), so it may trail the drain by a few rounds. Waited for with
+          # the budget of the drain and without cron.php, because the poller is
+          # the only writer.
+          deadline=$(( $(date +%s) + UPGRADE_DRAIN_BUDGET_SECONDS ))
+          while :; do
+            embedding=$(seed_probe meta embedding_version) || exit 1
+            case "${embedding}" in
+              absent|''|unknown) ;;
+              *) break ;;
+            esac
+            if [ "$(date +%s)" -ge "${deadline}" ]; then
+              break
+            fi
+            sleep 5
+          done
+          recheck=$(seed_probe meta recheck_1_4_0) || exit 1
+          stock=$(seed_probe stock "${UPGRADE_SEED_TIFF_ID}") || exit 1
+          tiff_chunks=$(seed_probe chunks "${UPGRADE_SEED_TIFF_ID}") || exit 1
+          sidecar_chunks=$(seed_probe chunks "${UPGRADE_SEED_SIDECAR_ID}") || exit 1
+          echo "recheck mark '${recheck}', embedding mark '${embedding}', vector stock ${stock}, seed chunks ${tiff_chunks} and ${sidecar_chunks}"
+
+          # The counter sample of assurance 6: 1.3.2 has no recheck and never
+          # writes the mark, so "done" after the upgrade is the new code at
+          # work and nothing that was there before.
+          if [ "${recheck}" != "absent" ]; then
+            echo "::error::the ${UPGRADE_FROM_TAG} installation already carries the recheck mark '${recheck}', so its value after the upgrade would prove nothing"
+            exit 1
+          fi
+          # An embedding mark and a vector stock to compare, or "no new
+          # embedding" would compare two absences.
+          case "${embedding}" in
+            absent|''|unknown)
+              echo "::error::the ${UPGRADE_FROM_TAG} installation carries no embedding mark ('${embedding}'), so its constancy would prove nothing"
+              exit 1
+              ;;
+          esac
+          case "${stock}" in
+            *:0:0)
+              echo "::error::the vector stock of the ${UPGRADE_FROM_TAG} installation is empty, so 'nothing was embedded again' would compare two absences"
+              exit 1
+              ;;
+          esac
+          # Both seed files are failed, so neither may carry a chunk.
+          if [ "${tiff_chunks}" != "0" ] || [ "${sidecar_chunks}" != "0" ]; then
+            echo "::error::the seed files carry ${tiff_chunks} and ${sidecar_chunks} chunk(s) on the ${UPGRADE_FROM_TAG} installation, and a failed file carries none"
+            exit 1
+          fi
+          {
+            echo "UPGRADE_EMBEDDING_MARK=${embedding}"
+            echo "UPGRADE_VECTOR_STOCK=${stock}"
+          } >> "${GITHUB_ENV}"
+
       - name: Store upgrade 4, the upgrade itself, in two halves
         if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
         run: |
@@ -4143,15 +4192,19 @@ jobs:
 
           # The two cases, both named, and both branches stay. They were
           # written in plan 11-07 for a version step that had not happened yet;
-          # since plan 23-06 the tree carries 1.3.0 against the 1.2.0 of
+          # since plan 29-11 the tree carries 1.4.0 against the 1.3.2 of
           # UPGRADE_FROM_TAG, so it is the FIRST branch that runs, and it is the
           # one that matters: it demands that the instance really performed the
           # app update. A silent "nothing happened" with a newer version on disk
           # would be a store update that leaves a user on the old migrations,
-          # and the migrations of the minor jump (Version001300Date..., among
-          # them the gone repair of plan 23-05 that "Store upgrade 2b" seeds
-          # for) are exactly what would then never run. Until plan 23-06 the
-          # same sentence named 1.2.0 against 1.1.0 and plan 16-07.
+          # and the migration of the minor jump (Version001400Date20261006000000,
+          # which drops the recorded container version) is exactly what would
+          # then never run; so would the signal of the new verdicts the recheck
+          # of "Store upgrade 5" waits for. That is the ERROR_UP_TO_DATE trap of
+          # plan 11-11, and it is a red run here and never a pass: exit code 3
+          # with a newer companion on disk lands in the error of this branch.
+          # Until plan 29-11 the same sentence named 1.3.0 against 1.2.0 and
+          # plan 23-06, before that 1.2.0 against 1.1.0 and plan 16-07.
           #
           # The second branch is the equal version case. It ran while both sides
           # carried the same number, which was the state before plan 11-11 and
@@ -4170,7 +4223,7 @@ jobs:
             echo "the instance performed the app update: ${installed_before} to ${installed_after}"
           else
             echo "::notice::the companion of this commit carries ${new_companion}, the same version ${UPGRADE_FROM_TAG} published, so this run measures the file exchange without a version step"
-            echo "With the bump of plan 23-06 the tree carries 1.3.0 against the 1.2.0 of the tag, so the branch above is the one that is expected to run."
+            echo "With the bump of plan 29-11 the tree carries 1.4.0 against the 1.3.2 of the tag, so the branch above is the one that is expected to run."
             if [ "${installed_after}" != "${installed_before}" ]; then
               echo "::error::installed_version moved from ${installed_before} to ${installed_after} although both sides carry the same version"
               exit 1
@@ -4203,9 +4256,10 @@ jobs:
 
           # The new image, and it is the one this run built out of this commit.
           # Why not the reference the archive of this commit names: since plan
-          # 23-06 backend/appinfo/info.xml says image-tag 1.3.0, and that tag is
-          # not in the registry yet, because the release of phase 23 comes
-          # after this proof (the same held for 1.2.0 between plan 16-07 and
+          # 29-11 backend/appinfo/info.xml says image-tag 1.4.0, and that tag is
+          # not in the registry yet, because the release of phase 29 comes
+          # after this proof (the same held for 1.3.0 between plan 23-06 and
+          # the release of phase 23, and for 1.2.0 between plan 16-07 and
           # the release plan 16-14). Before
           # that bump the file said 1.0.3, which was the image the old half was
           # already running, so registering it again would have left the
@@ -4219,9 +4273,10 @@ jobs:
           # What it may NOT bring along is its language set. Since plan 19-07
           # that file carries <default>de,en,es,it,nl,pt</default>, AppAPI hands
           # the environment of the info.xml to the container at registration
-          # time, and the volume being upgraded here holds an index of v1.2.0
-          # that carries no languages mark at all. Six languages against an
-          # absent mark is a real difference, findling.store.repo
+          # time, and the volume being upgraded here holds an index of v1.3.2
+          # that carries no stamped languages mark (the key is empty; v1.2.0
+          # had no key at all). Six languages against an unstamped mark is a
+          # real difference, findling.store.repo
           # ._languages_are_legacy reads it as one because the set is not inside
           # de,en, the generation is raised, the reindex banner goes up and
           # assurances 2, 4 and 5 of the step below go red. That is measured and
@@ -4343,11 +4398,13 @@ jobs:
       # Five assurances about something that did NOT move and one about
       # something that did, and the comment keeps them apart because the two
       # kinds fail for opposite reasons. The five are the promise of D-04: an
-      # upgrade from 1.0.x, 1.1.x or 1.2.x leaves the index alone, and a user
+      # upgrade from 1.0.x up to 1.3.x leaves the index alone, and a user
       # pays nothing for an update they did not ask for. The sixth is the new
       # code arriving on an existing installation, which is the counter sample:
       # an upgrade that changed nothing at all would pass five assertions and
-      # mean that the new files never took effect.
+      # mean that the new files never took effect. Since plan 29-11 there are
+      # eight: 3b is the recheck of the seed, 8 says the recheck cost no new
+      # embedding of the existing stock, and the sixth reads the recheck mark.
       #
       # The five are sharper since the tag moved to v1.2.0 on 2026-09-24, and
       # that is the whole reason the tag moved rather than the block being
@@ -4382,34 +4439,65 @@ jobs:
       # question that follows belongs to the owner and not to a test edit.
       #
       # The seed of "Store upgrade 2b" and what it does to assurance 3, since
-      # plan 23-06 (D-10). The migration of 1.3.0 hands the one sown gone
-      # verdict back to the content track and deletes it, and the container
-      # indexes the file through its poller. That moves exactly three counters
-      # and each by exactly one: Nextcloud records one skipped file less, and
-      # the container holds one document and one indexed file more. Those three
-      # are therefore compared against "before, moved by one" and not against
-      # "before"; every other counter of block 3 stays under unchanged, word
-      # for word, because the seed touches none of them. The work stock above
-      # all: scheduled and running still have to be what they were, which is
-      # why the snapshot below waits until the requeued row is worked off
-      # before it is taken, with a deadline in the shape of the drain of
-      # "Store upgrade 2" (and UPGRADE_DRAIN_BUDGET_SECONDS, because one text
-      # file is a small part of that pass and no second number is invented).
-      # The wait asks the poller alone and runs no cron.php, so no background
-      # job gets a chance to queue work the unchanged lines would then catch.
+      # plan 29-11 (D-29-10). Before the upgrade both seed files stand as
+      # failed(corrupt), in the state database of the container and in
+      # findling_file_state of Nextcloud, and "Store upgrade 2b" asserted both.
+      # After it the recheck of 1.4.0 hands every failed(corrupt) file back to
+      # the content track once, and the poller judges them again: the sidecar
+      # becomes skipped(system_file) before its first byte, the picture is read
+      # through the shim and indexed. Derived counter by counter, each against
+      # the snapshot of "Store upgrade 3":
       #
-      # Assurance 3b states the repair itself, and it is the half the counters
-      # cannot carry on their own: the sown file id has no skipped(gone)
-      # verdict any more, and the seed word finds exactly that file. The
-      # migration runs only in the branch "the instance performed the app
-      # update" of "Store upgrade 4"; in the equal version branch 3 and 3b are
-      # red, and that is correct, because no repair ran.
-      - name: Store upgrade 5, the seven assurances after the upgrade
+      #   container.docs       +1  the picture enters the index, the sidecar never does
+      #   container.indexed    +1  the picture
+      #   container.skipped    +1  the sidecar, skipped(system_file)
+      #   container.failed     -2  neither seed is failed any more
+      #   nextcloud.skipped    +1  the sidecar, recorded with its new reason
+      #   nextcloud.failed     -2  the picture's verdict is revoked, the sidecar's replaced
+      #   nextcloud.scheduled   0  the requeued rows are worked off before the snapshot
+      #   nextcloud.running     0  likewise
+      #   rebuildState          0  nothing on this leg rebuilds
+      #
+      # The failed(corrupt) files of the reference corpus are handed back as
+      # well, and they move nothing: 1.4.0 judges them failed(corrupt) again. If
+      # one of them came back with another verdict, the lines above would turn
+      # red and name the counter, which is a finding about this release and
+      # never a reason to widen a line. Every value is compared exactly, none
+      # with "at least".
+      #
+      # The snapshot waits until the recheck is done and its rows are worked
+      # off: the recheck mark reads done, both seed files carry their new
+      # verdict, the picture carries its vectors and the work stock is empty.
+      # The deadline is UPGRADE_DRAIN_BUDGET_SECONDS, because a handful of
+      # files is a small part of the drain of "Store upgrade 2" and no second
+      # number is invented. The wait asks the poller alone and runs no
+      # cron.php, so no background job gets a chance to queue work the
+      # unchanged lines would then catch.
+      #
+      # Assurance 3b states the recheck itself, the half the counters cannot
+      # carry on their own: the sidecar is skipped(system_file) on both sides,
+      # the picture is indexed and has no verdict left in Nextcloud, and the
+      # seed word finds exactly the file id of the picture. Assurance 8 states
+      # what the recheck must not cost: no vector of a file embedded before the
+      # upgrade is written again, the embedding mark stays, and the profile in
+      # force is economy (D-29-01). The recheck starts only once the companion
+      # of this commit announces the new verdicts, which needs the branch "the
+      # instance performed the app update" of "Store upgrade 4"; in the equal
+      # version branch 3, 3b, 6 and 8 are red, and that is correct, because no
+      # recheck ran.
+      - name: Store upgrade 5, the eight assurances after the upgrade
         if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
+        env:
+          # As in "Store upgrade 6": the two matrix values arrive as plain
+          # environment variables, so the run text stays expression free and
+          # the 21000 character cap of a run with an expression never applies.
+          MATRIX_SERVER_VERSION: ${{ matrix.server-version }}
+          MATRIX_RUNNER: ${{ matrix.runner }}
         run: |
           . "${RUNNER_TEMP}/upgrade-probe.sh"
+          . "${RUNNER_TEMP}/seed-probe.sh"
 
-          # The requeued seed worked off before the snapshot (D-10), see the
+          # The recheck worked off before the snapshot (D-29-10), see the
           # comment above this step.
           deadline=$(( $(date +%s) + UPGRADE_DRAIN_BUDGET_SECONDS ))
           settled=""
@@ -4418,16 +4506,21 @@ jobs:
               $1 == "scheduled" { scheduled = $2 }
               /^  handed to the worker/ { running = $NF }
               END { print (scheduled + 0) + (running + 0) }')
-            seed=$(term_hits "${SEED_WORD}" 2> /dev/null || echo "unreadable")
-            if [ "${open}" = "0" ] && [ "${seed}" = "1" ]; then
-              settled="yes"
-              break
-            fi
-            echo "open=${open} seed hits=${seed}, $(( deadline - $(date +%s) ))s left"
+            recheck=$(seed_probe meta recheck_1_4_0 2> /dev/null || echo "unreadable")
+            tiff=$(seed_probe verdict "${UPGRADE_SEED_TIFF_ID}" 2> /dev/null || echo "unreadable")
+            sidecar=$(seed_probe verdict "${UPGRADE_SEED_SIDECAR_ID}" 2> /dev/null || echo "unreadable")
+            vectors=$(seed_probe chunks "${UPGRADE_SEED_TIFF_ID}" 2> /dev/null || echo "unreadable")
+            case "${open}:${recheck}:${tiff}:${sidecar}:${vectors}" in
+              0:done:indexed/:skipped/system_file:[1-9]*)
+                settled="yes"
+                break
+                ;;
+            esac
+            echo "open=${open} recheck=${recheck} picture=${tiff} sidecar=${sidecar} picture chunks=${vectors}, $(( deadline - $(date +%s) ))s left"
             sleep 5
           done
           if [ -z "${settled}" ]; then
-            echo "::warning::the requeued seed was not worked off within UPGRADE_DRAIN_BUDGET_SECONDS, the assurances below name what is missing"
+            echo "::warning::the recheck was not worked off within UPGRADE_DRAIN_BUDGET_SECONDS, the assurances below name what is missing"
           fi
 
           snapshot "${RUNNER_TEMP}/upgrade-after.json" after
@@ -4439,7 +4532,7 @@ jobs:
           fail=0
           # One comparison, one sentence saying what it means, and every one of
           # them runs: a step that stopped at the first difference would hide
-          # which of the six the upgrade broke.
+          # which of the eight the upgrade broke.
           unchanged() {
             path="$1"
             meaning="$2"
@@ -4500,8 +4593,9 @@ jobs:
             echo "moved on purpose  .marks.tantivyVersion ${was} to ${now}, same index format half (E-17-7 option a)"
           fi
 
-          # Exactly before plus step, for the three counters the seed of
-          # "Store upgrade 2b" moves (D-10); both values have to be numbers.
+          # Exactly before plus step, for the six counters the recheck of the
+          # seed moves (D-29-10); both values have to be numbers, and the step
+          # is the derived one of the comment above this step.
           moved_by_seed() {
             path="$1"
             step="$2"
@@ -4513,44 +4607,53 @@ jobs:
               *) echo "::error::${path} is not a number on both sides (${was}, ${now})"; fail=1; return ;;
             esac
             if [ "$(( was + step ))" != "${now}" ]; then
-              echo "::error::${meaning}: ${path} was ${was} before the upgrade and is ${now} after it, and the one sown gone verdict allows exactly ${step}"
+              echo "::error::${meaning}: ${path} was ${was} before the upgrade and is ${now} after it, and the recheck of the two seed files allows exactly ${step}"
               fail=1
             else
-              echo "moved by ${step}  ${path} ${was} to ${now}   (the seed of D-10)"
+              echo "moved by ${step}  ${path} ${was} to ${now}   (the recheck of D-29-10)"
             fi
           }
 
-          echo "--- 3, the same document counts, apart from the one repaired seed ---"
-          moved_by_seed '.container.docs' 1 "the number of documents in the index moved by something other than the one repaired seed"
-          moved_by_seed '.container.indexed' 1 "the container counts indexed files that moved by something other than the one repaired seed"
-          unchanged '.container.skipped' "the container counts a different number of skipped files after the upgrade"
-          unchanged '.container.failed' "the container counts a different number of failed files after the upgrade"
-          moved_by_seed '.nextcloud.skipped' -1 "Nextcloud's skipped files moved by something other than the one sown gone verdict the migration had to delete"
-          unchanged '.nextcloud.failed' "Nextcloud recorded a different number of failed files after the upgrade"
+          echo "--- 3, the document counts, moved by exactly what the recheck of the seed allows ---"
+          moved_by_seed '.container.docs' 1 "the number of documents in the index moved by something other than the one rechecked picture"
+          moved_by_seed '.container.indexed' 1 "the container counts indexed files that moved by something other than the one rechecked picture"
+          moved_by_seed '.container.skipped' 1 "the container counts skipped files that moved by something other than the one rechecked sidecar"
+          moved_by_seed '.container.failed' -2 "the container counts failed files that moved by something other than the two rechecked seed files"
+          moved_by_seed '.nextcloud.skipped' 1 "Nextcloud's skipped files moved by something other than the one rechecked sidecar"
+          moved_by_seed '.nextcloud.failed' -2 "Nextcloud's failed files moved by something other than the two rechecked seed files"
           unchanged '.nextcloud.scheduled' "the work stock is not empty after the upgrade, so something requeued work nobody asked for"
           unchanged '.nextcloud.running' "a worker holds queue rows after the upgrade, so something requeued work nobody asked for"
           unchanged '.container.rebuildState' "a rebuild directory appeared or went away across the upgrade, and no step of this block rebuilds anything"
 
-          echo "--- 3b, the seeded gone verdict is repaired (D-10) ---"
-          verdicts=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
-            "SELECT COUNT(*) FROM oc_findling_file_state WHERE file_id = ${UPGRADE_SEED_FILE_ID} AND state = 'skipped' AND reason = 'gone';")
-          if [ "${verdicts}" != "0" ]; then
-            echo "::error::the sown file still carries ${verdicts} skipped(gone) verdict(s) after the upgrade, so the migration of 1.3.0 did not repair it"
-            grep -n 'gone' "${RUNNER_TEMP}/upgrade-occ.txt" || true
+          echo "--- 3b, the recheck judged the two seed files again (D-29-10) ---"
+          sidecar=$(seed_probe verdict "${UPGRADE_SEED_SIDECAR_ID}" || echo "unreadable")
+          sidecar_recorded=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
+            "SELECT state || '/' || IFNULL(reason, '') FROM oc_findling_file_state WHERE file_id = ${UPGRADE_SEED_SIDECAR_ID};")
+          if [ "${sidecar}" != "skipped/system_file" ] || [ "${sidecar_recorded}" != "skipped/system_file" ]; then
+            echo "::error::the sidecar is '${sidecar}' in state.db and '${sidecar_recorded}' in findling_file_state after the upgrade, and the recheck has to leave skipped/system_file in both"
             fail=1
           else
-            echo "the sown file carries no skipped(gone) verdict any more"
+            echo "the sidecar is skipped/system_file in state.db and in findling_file_state"
+          fi
+          tiff=$(seed_probe verdict "${UPGRADE_SEED_TIFF_ID}" || echo "unreadable")
+          tiff_recorded=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
+            "SELECT COUNT(*) FROM oc_findling_file_state WHERE file_id = ${UPGRADE_SEED_TIFF_ID};")
+          if [ "${tiff}" != "indexed/" ] || [ "${tiff_recorded}" != "0" ]; then
+            echo "::error::the picture is '${tiff}' in state.db with ${tiff_recorded} verdict(s) left in findling_file_state after the upgrade, and the recheck has to leave it indexed with none"
+            fail=1
+          else
+            echo "the picture is indexed in state.db and carries no verdict in findling_file_state"
           fi
           if ! seed=$(term_hits "${SEED_WORD}"); then
             echo "::error::the search for the seed word did not answer readably after the upgrade"
             fail=1
           elif [ "${seed}" != "1" ] \
-               || ! jq -e --arg name "${UPGRADE_SEED_NAME}" '.ocs.data.entries[0].title == $name' "${RUNNER_TEMP}/upgrade-term.json" > /dev/null; then
-            echo "::error::the seed word brings back ${seed} file(s) after the upgrade instead of the one repaired file ${UPGRADE_SEED_NAME}"
-            jq -r '.ocs.data.entries[]?.title' "${RUNNER_TEMP}/upgrade-term.json" || true
+               || ! jq -e --arg id "${UPGRADE_SEED_TIFF_ID}" '.ocs.data.entries[0].attributes.fileId == $id' "${RUNNER_TEMP}/upgrade-term.json" > /dev/null; then
+            echo "::error::the seed word brings back ${seed} file(s) after the upgrade instead of exactly the rechecked picture ${UPGRADE_SEED_TIFF_ID}"
+            jq -r '.ocs.data.entries[]? | "\(.attributes.fileId) \(.title)"' "${RUNNER_TEMP}/upgrade-term.json" || true
             fail=1
           else
-            echo "the seed word finds ${UPGRADE_SEED_NAME}, the file the verdict of issue #14 had hidden"
+            echo "the seed word finds exactly the file id ${UPGRADE_SEED_TIFF_ID}, the picture 1.3.2 had booked as corrupt"
           fi
 
           echo "--- 4, no reindex banner ---"
@@ -4581,47 +4684,37 @@ jobs:
             fi
           fi
 
-          echo "--- 6, the languages mark of the report, and this one HAS to have changed ---"
-          # Two halves in one assertion and not two assertions, because the
-          # second half is what makes the first one worth making. Absent before
-          # the upgrade is the counter sample: a report that already carried the
-          # key would make this green without anything having been exchanged.
-          # And EMPTY after it, exactly, which is the half this step demanded
-          # wrongly until 2026-09-24.
+          echo "--- 6, the recheck mark, and this one HAS to have changed ---"
+          # The counter sample of this block since plan 29-11: the new code
+          # arriving on an existing installation. 1.3.2 has no recheck and never
+          # writes the mark, and "Store upgrade 3c" asserted it absent on the
+          # released installation; done after the upgrade is therefore the
+          # recheck of D-29-10 having run to its end, and nothing that was there
+          # before. An upgrade that changed nothing would leave it absent.
           #
-          # What the two spellings mean, because the difference between them is
-          # the whole measurement. jq -r prints "null" for a key the report does
-          # not have and the empty string for a key it has without a value.
-          # 1.2.0 has no sixth entry in
-          # findling.tools.index_status._VERSION_KEYS at all, so its report
-          # answers null. 1.3.0 has the entry and fills it out of the meta
-          # table, where the mark is not: the seed is forbidden to write it
-          # (threat T-18-05-01, plan 18-05) and the only writer there is is the
-          # stamp behind a finished rebuild
-          # (findling.index.rebuild.stamp_after_swap). So on a leg that sets no
-          # FINDLING_LANGUAGES and rebuilds nothing, the key exists and is
-          # empty, and that is the visible difference between the two releases
-          # this assurance was given to measure.
-          #
-          # A VALUE here would therefore be the failure and not the success: it
-          # would mean a language set was stamped without a rebuild, which is
-          # precisely what the five assertions above have just denied happened,
-          # or that the seed wrote the wish of the container down as a fact
-          # about the index, which is the trap the mark exists to avoid. The
-          # step asked for de,en until 2026-09-24 and got "" in deploy-harp run
-          # 35989391950; the demand was wrong, the answer was right. The mark
-          # arriving WITH a value is the subject of "Store upgrade 6" below,
-          # where a rebuild really runs, and it is asserted there.
-          was=$(jq -r '.marks.languages' "${before}")
-          now=$(jq -r '.marks.languages' "${after}")
-          if [ "${was}" != "null" ] || [ -n "${now}" ]; then
-            echo "::error::the report named the languages mark as '${was}' before the upgrade and as '${now}' after it, and the sixth mark of plan 18-05 has to be missing from the report of ${UPGRADE_FROM_TAG} and present but empty in the one of this commit, because nothing on this leg rebuilds and only a finished rebuild writes it"
-            jq -r '.marks' "${before}" "${after}"
-            jq -r '.searchFilters.declared' "${before}" "${after}"
-            jq -r '.navigation.ids' "${before}" "${after}"
+          # The languages mark, which carried this assurance from 2026-09-24
+          # until v1.3.2 became the start, stays as the unchanged half. The
+          # report of 1.3.2 already has the key, empty because only a finished
+          # rebuild stamps it (findling.index.rebuild.stamp_after_swap, threat
+          # T-18-05-01), so it is empty on both sides of this leg. A VALUE
+          # after the upgrade would be the failure: a language set stamped
+          # without a rebuild. The mark arriving WITH a value is the subject of
+          # "Store upgrade 6" below, where a rebuild really runs.
+          recheck=$(seed_probe meta recheck_1_4_0 || echo "unreadable")
+          if [ "${recheck}" != "done" ]; then
+            echo "::error::the recheck mark reads '${recheck}' after the upgrade instead of done, so the recheck of D-29-10 did not run to its end"
             fail=1
           else
-            echo "the report had no languages mark before the upgrade and carries it empty after, so the mark arrived without anything having been stamped"
+            echo "the recheck mark was absent before the upgrade and reads done after it"
+          fi
+          was=$(jq -r '.marks.languages' "${before}")
+          now=$(jq -r '.marks.languages' "${after}")
+          if [ -n "${was}" ] || [ -n "${now}" ]; then
+            echo "::error::the report named the languages mark as '${was}' before the upgrade and as '${now}' after it, and it has to be empty on both sides, because nothing on this leg rebuilds and only a finished rebuild writes it"
+            jq -r '.marks' "${before}" "${after}"
+            fail=1
+          else
+            echo "the languages mark is empty before and after the upgrade, nothing was stamped"
           fi
 
           echo "--- 7, the Spanish question still finds nothing, because the field list hangs on the mark ---"
@@ -4644,12 +4737,53 @@ jobs:
           #
           # fail=1 and not exit 1, for the reason this step gives at the top:
           # the step ends with exit 1 once anything failed, and stopping at the
-          # first difference would hide which of the seven the upgrade broke.
+          # first difference would hide which of the eight the upgrade broke.
           if ! jq -e '.spanish == 0' "${after}" > /dev/null; then
             echo "::error::the question alemanes brings back $(jq -r '.spanish' "${after}") document(s) after the upgrade and before any rebuild, and it has to bring back none: the field list of a question hangs on the stored schema mark and not on the code, so an index built for de,en must not answer a Spanish question"
             fail=1
           else
             echo "the Spanish question answers $(jq -r '.spanish' "${after}") hits after the upgrade, unchanged against the ${UPGRADE_FROM_TAG} installation, which is the window between upgrade and rebuild measured instead of assumed"
+          fi
+
+          echo "--- 8, nothing was embedded again, and the profile in force is economy (D-29-01) ---"
+          # The recheck must not cost what it was built to avoid. The embedding
+          # mark of "Store upgrade 3c" has to be the mark after the upgrade, or
+          # the container answered a vector drift by emptying the stock. The
+          # vector stock without the picture has to be the same rows, chunk id
+          # for chunk id, or a file embedded before the upgrade was embedded
+          # again. The picture itself carries vectors now, once, as the one new
+          # document of this leg. A chunk id can only be reused when the rows
+          # with the highest ids are written again in the same shape, which the
+          # unchanged count of files and rows next to the digest leaves as the
+          # one blind spot of this reading, named rather than hidden.
+          embedding=$(seed_probe meta embedding_version || echo "unreadable")
+          if [ "${embedding}" != "${UPGRADE_EMBEDDING_MARK}" ]; then
+            echo "::error::the embedding mark went from '${UPGRADE_EMBEDDING_MARK}' to '${embedding}' across the upgrade, so the vector stock was declared stale"
+            fail=1
+          else
+            echo "unchanged  embedding mark = ${embedding}"
+          fi
+          stock=$(seed_probe stock "${UPGRADE_SEED_TIFF_ID}" || echo "unreadable")
+          if [ "${stock}" != "${UPGRADE_VECTOR_STOCK}" ]; then
+            echo "::error::the vector stock without the picture went from ${UPGRADE_VECTOR_STOCK} to ${stock} (digest:files:rows), so a file embedded before the upgrade was embedded again"
+            fail=1
+          else
+            echo "unchanged  vector stock without the picture = ${stock}"
+          fi
+          vectors=$(seed_probe chunks "${UPGRADE_SEED_TIFF_ID}" || echo "unreadable")
+          case "${vectors}" in
+            [1-9]*) echo "the picture carries ${vectors} chunk(s), embedded once as a new document" ;;
+            *)
+              echo "::error::the picture carries '${vectors}' chunks after the upgrade, so the semantic half never saw the rechecked file"
+              fail=1
+              ;;
+          esac
+          profile=$(jq -r '.profileEffective' "${RUNNER_TEMP}/upgrade-overview.json" 2> /dev/null || echo "unreadable")
+          if [ "${profile}" != "economy" ]; then
+            echo "::error::the profile in force after the upgrade is '${profile}', and an existing installation that chose nothing has to land in economy (D-29-01)"
+            fail=1
+          else
+            echo "the profile in force after the upgrade is economy"
           fi
 
           if [ "${fail}" -ne 0 ]; then
@@ -4658,17 +4792,19 @@ jobs:
             exit 1
           fi
 
-          echo "all seven assurances hold"
+          echo "all eight assurances hold"
           {
             echo ""
-            echo "### Upgrade from \`${UPGRADE_FROM_TAG}\` on ${{ matrix.server-version }} (${{ matrix.runner }})"
+            echo "### Upgrade from \`${UPGRADE_FROM_TAG}\` on ${MATRIX_SERVER_VERSION} (${MATRIX_RUNNER})"
             echo ""
             echo "- companion \`${UPGRADE_OLD_COMPANION}\` out of the release assets, upgraded to \`${UPGRADE_NEW_COMPANION}\` of this commit"
             echo "- the container was unregistered without the data removing flag and registered again on the volume \`${UPGRADE_VOLUME}\`"
-            echo "- unchanged: the hits for Belehrung, Auszug and Erinnerung, four of the five index marks and the index format half of the fifth, the document counts apart from the one repaired seed, the work stock"
-            echo "- the gone verdict sown before the upgrade (D-10) is gone after it, and \`${SEED_WORD}\` finds the file it had hidden"
+            echo "- unchanged: the hits for Belehrung, Auszug and Erinnerung, four of the five index marks (index_version among them) and the index format half of the fifth, the work stock"
+            echo "- the document counts moved by exactly what the recheck of the two seed files allows, every counter exact"
+            echo "- the recheck of D-29-10 ran to done: the AppleDouble sidecar is skipped(system_file), the grey TIFF with an extra channel is indexed, and \`${SEED_WORD}\` finds exactly its file id"
             echo "- no reindex banner, no \`start_rebuild_on_drift\` line in the container log"
-            echo "- the languages mark was missing from the report before and is present and empty after, which is the mark arriving without a rebuild having stamped it"
+            echo "- nothing embedded again: embedding mark and vector stock unchanged apart from the one new picture; the profile in force is economy"
+            echo "- the languages mark is empty before and after, nothing was stamped without a rebuild"
             echo "- the Spanish question \`alemanes\` still answers with nought hits, because the field list of a question hangs on the stored schema mark and not on the code"
             echo ""
             echo "The reindex branch of D-05 is deliberately not driven here; its absence is what this run asserts."
@@ -4678,10 +4814,10 @@ jobs:
       # The other half of the upgrade proof, and it stands BESIDE the block
       # above rather than inside it (plan 18-12, success criterion 5).
       #
-      # What the block above proves is that an upgrade 1.2.0 to 1.3.0 under the
+      # What the block above proves is that an upgrade 1.3.2 to 1.4.0 under the
       # factory setting moves nothing. That is the promise of D-04 and it is
       # worth exactly as much as the counter case is: a version that cannot
-      # rebuild at all would pass every one of those six assurances. So this
+      # rebuild at all would pass every one of those eight assurances. So this
       # step drives the case the block above denies, on the very installation
       # the block above left behind, and asserts ten things about it.
       #
@@ -4693,7 +4829,7 @@ jobs:
       # restart and no second registration.
       #
       # Why the rebuild is ordered by a restart and not by a registration. The
-      # instance is already at 1.3.0 here, the volume already holds the index of
+      # instance is already at 1.4.0 here, the volume already holds the index of
       # the reference corpus, and the one thing missing is a language set the
       # index was not built with. AppAPI hands its environment to the container
       # at registration time, so the set is changed where it really lives, in

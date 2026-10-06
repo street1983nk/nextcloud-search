@@ -153,3 +153,157 @@ def test_the_gone_seed_is_gone() -> None:
 def test_the_seed_step_parses_in_bash(tmp_path: Path) -> None:
     answer = _bash_parses(_run(SEED_STEP), tmp_path)
     assert answer.returncode == 0, answer.stderr
+
+
+# --- The assurances that read the seed (task 3 of plan 29-11) ---------------
+
+SNAPSHOT_STEP = "Store upgrade 3,"
+SHIPPED_STEP = "Store upgrade 3b,"
+RECORD_STEP = "Store upgrade 3c,"
+UPGRADE_STEP = "Store upgrade 4,"
+ASSURANCE_STEP = "Store upgrade 5,"
+
+# The length of the run block of "Store upgrade 3" before plan 29-11 touched it,
+# measured with yaml on the tree of b013af40. STATE.md carries the deferred item
+# that this block must not grow; the growth of this plan went into "Store
+# upgrade 3c" instead, and this bound keeps it there.
+SNAPSHOT_RUN_MAX = 20726
+
+# The derivation of the comment above "Store upgrade 5": every counter of the
+# snapshot that the recheck of the two seed files moves, with its exact step.
+# Every other counter of the snapshot is compared with unchanged().
+DERIVED_STEPS = {
+    ".container.docs": 1,
+    ".container.indexed": 1,
+    ".container.skipped": 1,
+    ".container.failed": -2,
+    ".nextcloud.skipped": 1,
+    ".nextcloud.failed": -2,
+}
+UNCHANGED_COUNTERS = (".nextcloud.scheduled", ".nextcloud.running", ".container.rebuildState")
+
+_MOVED = re.compile(r"^\s*moved_by_seed '([^']+)' (-?\d+) ", re.MULTILINE)
+_UNCHANGED = re.compile(r"^\s*unchanged '([^']+)' ", re.MULTILINE)
+
+
+def test_the_new_steps_stand_exactly_once() -> None:
+    for prefix in (SNAPSHOT_STEP, SHIPPED_STEP, RECORD_STEP, UPGRADE_STEP, ASSURANCE_STEP):
+        assert len(_named(prefix)) == 1, prefix
+
+
+def test_no_step_of_the_before_state_carries_a_gone_assurance() -> None:
+    for prefix in (SNAPSHOT_STEP, SHIPPED_STEP, RECORD_STEP, ASSURANCE_STEP):
+        run = _run(prefix)
+        assert "'gone'" not in run, prefix
+        assert "skipped(gone)" not in run, prefix
+        assert "UPGRADE_SEED_FILE_ID" not in run, prefix
+
+
+def test_the_snapshot_step_did_not_grow() -> None:
+    assert len(_run(SNAPSHOT_STEP)) <= SNAPSHOT_RUN_MAX
+
+
+def test_the_snapshot_expects_an_empty_languages_mark() -> None:
+    # The report of 1.3.2 carries the key empty; null was the 1.2.0 reading
+    # and would be red on a healthy installation.
+    run = _run(SNAPSHOT_STEP)
+    assert "'.marks.languages == \"\"'" in run
+    assert "'.marks.languages == null'" not in run
+
+
+def test_the_record_step_reads_the_before_state_of_the_seed() -> None:
+    run = _run(RECORD_STEP)
+    assert '. "${RUNNER_TEMP}/seed-probe.sh"' in run
+    assert "seed_probe meta recheck_1_4_0" in run
+    assert 'if [ "${recheck}" != "absent" ]; then' in run
+    assert "seed_probe meta embedding_version" in run
+    assert 'seed_probe stock "${UPGRADE_SEED_TIFF_ID}"' in run
+    assert 'echo "UPGRADE_EMBEDDING_MARK=${embedding}"' in run
+    assert 'echo "UPGRADE_VECTOR_STOCK=${stock}"' in run
+
+
+def test_the_mark_names_are_the_ones_of_the_store() -> None:
+    # A rename in repo.py has to turn this gate red instead of leaving the
+    # workflow asking for a key nobody writes.
+    from findling.store.repo import EMBEDDING_MARK, RECHECK_MARK
+
+    for prefix in (RECORD_STEP, ASSURANCE_STEP):
+        run = _run(prefix)
+        assert f"seed_probe meta {RECHECK_MARK}" in run, prefix
+        assert f"seed_probe meta {EMBEDDING_MARK}" in run, prefix
+
+
+def test_the_upgrade_step_keeps_the_app_update_branch_fail_closed() -> None:
+    # The ERROR_UP_TO_DATE trap of plan 11-11: exit code 3 with a newer
+    # companion on disk has to land in an error, never in a pass.
+    run = _run(UPGRADE_STEP)
+    assert re.search(
+        r'if \[ "\$\{new_companion\}" != "\$\{installed_before\}" \]; then\s+'
+        r'if \[ "\$\{installed_after\}" != "\$\{new_companion\}" \]; then\s+'
+        r'echo "::error::[^"]*did not perform the app update"\s+exit 1',
+        run,
+    )
+    assert 'echo "the instance performed the app update: ' in run
+
+
+def test_every_counter_is_moved_by_exactly_the_derived_step() -> None:
+    run = _run(ASSURANCE_STEP)
+    moved = {path: int(step) for path, step in _MOVED.findall(run)}
+    assert moved == DERIVED_STEPS
+    unchanged = set(_UNCHANGED.findall(run))
+    for counter in UNCHANGED_COUNTERS:
+        assert counter in unchanged, counter
+    # No counter is moved and held unchanged at the same time.
+    assert not unchanged & set(DERIVED_STEPS)
+
+
+def test_no_counter_is_compared_with_at_least() -> None:
+    run = _run(ASSURANCE_STEP)
+    assert " -ge " not in run
+    assert ">=" not in run
+    assert '[ "$(( was + step ))" != "${now}" ]' in run
+
+
+def test_the_assurance_step_waits_for_the_recheck_without_cron() -> None:
+    run = _run(ASSURANCE_STEP)
+    assert "UPGRADE_DRAIN_BUDGET_SECONDS" in run
+    assert "cron.php" not in run
+    assert "0:done:indexed/:skipped/system_file:[1-9]*)" in run
+
+
+def test_the_assurance_step_states_the_recheck_of_both_seed_files() -> None:
+    run = _run(ASSURANCE_STEP)
+    assert 'seed_probe verdict "${UPGRADE_SEED_SIDECAR_ID}"' in run
+    assert '"${sidecar}" != "skipped/system_file"' in run
+    assert '"${sidecar_recorded}" != "skipped/system_file"' in run
+    assert 'seed_probe verdict "${UPGRADE_SEED_TIFF_ID}"' in run
+    assert '"${tiff}" != "indexed/"' in run
+    assert '"${tiff_recorded}" != "0"' in run
+    assert 'term_hits "${SEED_WORD}"' in run
+    assert ".ocs.data.entries[0].attributes.fileId == $id" in run
+    assert 'if [ "${recheck}" != "done" ]; then' in run
+
+
+def test_the_assurance_step_states_that_nothing_was_embedded_again() -> None:
+    run = _run(ASSURANCE_STEP)
+    assert 'if [ "${embedding}" != "${UPGRADE_EMBEDDING_MARK}" ]; then' in run
+    assert 'if [ "${stock}" != "${UPGRADE_VECTOR_STOCK}" ]; then' in run
+    assert "for mark in schemaVersion indexVersion analyzerVersion wordlistHash; do" in run
+    assert "'.profileEffective'" in run
+    assert 'if [ "${profile}" != "economy" ]; then' in run
+
+
+def test_the_assurance_step_carries_no_expression() -> None:
+    # A run with a ${{ }} expression is capped at 21000 characters by GitHub,
+    # and this block grew in plan 29-11; the matrix values arrive as env.
+    assert "${{" not in _run(ASSURANCE_STEP)
+
+
+def test_the_old_version_pair_is_gone_from_the_texts() -> None:
+    assert "1.3.0 against the 1.2.0" not in WORKFLOW.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("prefix", [SNAPSHOT_STEP, RECORD_STEP, UPGRADE_STEP, ASSURANCE_STEP])
+def test_the_changed_steps_parse_in_bash(prefix: str, tmp_path: Path) -> None:
+    answer = _bash_parses(_run(prefix), tmp_path)
+    assert answer.returncode == 0, answer.stderr
