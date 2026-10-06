@@ -1862,6 +1862,58 @@ async def test_the_poller_claims_without_a_lane(store: Store, writer: IndexBatch
     assert queue.lanes == [None, None]
 
 
+async def test_the_poller_tells_the_profile_its_stock_at_the_start_and_after_a_pass_with_verdicts(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # D-29-12: the full index term reaches the slot formula. Once at the start,
+    # before the profile is read, then after every pass that wrote verdicts;
+    # an idle pass counts nothing.
+    counts = iter([52_137, 53_500])
+    asked: list[str] = []
+
+    def indexed_alive() -> int:
+        asked.append("count")
+        return next(counts)
+
+    monkeypatch.setattr(store, "indexed_alive", indexed_alive)
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: BODY_BYTES})
+
+    original = queue.companion_choice
+    seen_at_the_profile_read: list[int] = []
+
+    async def choice() -> Any:
+        seen_at_the_profile_read.append(snapshot().index_files)
+        return await original()
+
+    monkeypatch.setattr(queue, "companion_choice", choice)
+    await poller.run_once()
+
+    assert seen_at_the_profile_read == [52_000], "the start count stands before the profile read"
+    assert asked == ["count", "count"]
+    assert snapshot().index_files == 53_000
+
+    # The script ran out: an empty claim, no verdicts, no count.
+    await poller.run_once()
+    assert asked == ["count", "count"]
+
+
+async def test_a_failed_count_keeps_the_stock_in_force(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def locked() -> int:
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(store, "indexed_alive", locked)
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: BODY_BYTES})
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert snapshot().index_files == 0
+
+
 def _standard_box() -> None:
     """Four cores and 16 GiB, the smallest box Standard is suggested on (Pitfall 11)."""
     note_hardware(
@@ -4064,6 +4116,28 @@ async def test_rows_beyond_two_per_slot_go_back_before_the_first_extraction(
     assert result.claimed == 4
     assert extract.finished == 4
     assert queue.acknowledged == [([300, 301, 302, 303], {})]
+
+
+async def test_a_pinned_slot_count_wins_over_the_full_index_term(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # D-29-12: slots have no environment variable (INDEX_WORKERS taboo); the
+    # one override is the pin of the kill harness and the measuring ladder.
+    # The formula grants one slot here, a stock of a million files keeps it
+    # there, and the pinned count of two stays two whatever the stock.
+    monkeypatch.setattr(store, "indexed_alive", lambda: 1_000_000)
+    _standard_box()
+    jobs = tuple(_ocr_row(offset) for offset in range(4))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    queue.profile_answer = "standard"
+    extract = _SlotExtractor(seconds=0.1)
+    poller = _slot_poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, extract=extract, ocr_slots=2)
+
+    await poller.run_once()
+
+    assert snapshot().index_files == 1_000_000
+    assert snapshot().resolution.values.ocr_slots == 1
+    assert extract.most == 2
 
 
 async def test_the_slots_never_outnumber_the_scans_the_claim_delivered(

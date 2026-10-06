@@ -618,3 +618,109 @@ def test_fp32_can_tip_the_lane_over() -> None:
     assert profile.snapshot().embed_lane_fits
     profile.note_weights("fp32")
     assert not profile.snapshot().embed_lane_fits
+
+
+# --- the full index term at run time (plan 29-10, D-29-12) ----------------------
+
+
+def tight_standard_box() -> Hardware:
+    """16 cores, 8 GiB free: the core term (7) and the cap (4) leave the memory term to bind."""
+    return box(16, 8, total=16 * GIB)
+
+
+def expected_standard_slots(hardware: Hardware, files: int) -> int:
+    """The formula of D-24-03 spelled out with main_process_bytes, not a guessed literal."""
+    memory = hardware.formula_memory_bytes
+    cores = hardware.cores
+    assert memory is not None
+    assert cores is not None
+    budget = 0.4 * memory * 0.8
+    memory_term = math.floor((budget - profile.main_process_bytes(files)) / OCR_SLOT_COST_BYTES)
+    return max(1, min(math.floor(0.5 * cores - 0.25), memory_term, 4))
+
+
+def test_note_index_files_rounds_down_to_whole_thousands() -> None:
+    profile.note_index_files(52_137)
+    assert profile.snapshot().index_files == 52_000
+    before = profile.snapshot()
+    profile.note_index_files(52_800)
+    assert profile.snapshot() is before, "the same thousand recomputes nothing"
+    profile.note_index_files(53_000)
+    assert profile.snapshot().index_files == 53_000
+    assert profile.snapshot() is not before
+
+
+def test_note_index_files_ignores_none_and_negative_counts() -> None:
+    profile.note_index_files(12_345)
+    before = profile.snapshot()
+    profile.note_index_files(None)
+    profile.note_index_files(-1)
+    assert profile.snapshot() is before
+    assert profile.snapshot().index_files == 12_000
+
+
+def test_a_small_stock_below_a_thousand_counts_as_none() -> None:
+    before = profile.snapshot()
+    profile.note_index_files(999)
+    assert profile.snapshot() is before
+    assert profile.snapshot().index_files == 0
+
+
+def test_standard_loses_slots_on_a_tight_box_as_the_stock_grows() -> None:
+    """200,000 files are 1171.9 MiB of main process: 1363.9 MiB of room fall to 192.1 MiB."""
+    hardware = tight_standard_box()
+    profile.note_hardware(hardware)
+    profile.note_chosen("standard")
+    empty = profile.snapshot().resolution.values.ocr_slots
+    profile.note_index_files(200_000)
+    full = profile.snapshot().resolution.values.ocr_slots
+    assert empty == expected_standard_slots(hardware, 0) == 4
+    assert full == expected_standard_slots(hardware, 200_000) == 1
+    assert empty - full == 3
+    assert profile.snapshot().resolution.values == resolve(Profile.STANDARD, hardware, index_files=200_000).values
+
+
+@pytest.mark.parametrize(
+    "hardware",
+    [None, box(None, None), box(1, 1), box(4, 8), box(64, 512)],
+)
+def test_economy_ignores_the_stock_value_for_value(hardware: Hardware | None) -> None:
+    """The Sparsam pin holds with any stock: Economy has no memory term."""
+    with_stock = resolve(Profile.ECONOMY, hardware, index_files=10_000_000)
+    assert with_stock.values == resolve(Profile.ECONOMY, hardware).values
+    assert with_stock.values.ocr_slots == INDEX_WORKERS == 1
+
+
+def test_economy_snapshot_stays_put_with_a_stock() -> None:
+    profile.note_hardware(box(16, 64))
+    profile.note_chosen("economy")
+    before = profile.snapshot().resolution.values
+    profile.note_index_files(500_000)
+    assert profile.snapshot().resolution.values == before
+    assert profile.snapshot().index_files == 500_000
+
+
+def test_an_override_still_wins_with_a_stock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The admin variables overrule the profile whatever the term; slots keep no variable."""
+    monkeypatch.setenv("FINDLING_OCR_MAX_PAGES", "12")
+    monkeypatch.setenv("FINDLING_INDEX_WORKERS", "8")
+    resolution = resolve(Profile.STANDARD, tight_standard_box(), index_files=200_000)
+    assert resolution.values.ocr_max_pages == 12
+    assert resolution.sources["ocr_max_pages"] == "env"
+    assert resolution.values.ocr_slots == expected_standard_slots(tight_standard_box(), 200_000)
+    assert resolution.sources["ocr_slots"] == "profile"
+
+
+def test_the_embed_lane_check_counts_the_stock() -> None:
+    """The lane admission sees the same main process the slots were computed with."""
+    profile.note_hardware(lane_box(5000))
+    profile.note_chosen("standard")
+    assert profile.snapshot().embed_lane_fits
+    profile.note_index_files(50_000)
+    assert not profile.snapshot().embed_lane_fits
+
+
+def test_reset_forgets_the_stock() -> None:
+    profile.note_index_files(52_137)
+    profile.reset()
+    assert profile.snapshot().index_files == 0

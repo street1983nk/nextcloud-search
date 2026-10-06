@@ -23,9 +23,12 @@ Subcommands:
     fp32 SERIE_INT8 SERIE_FP32
         (d) the extra of the main process with fp32 over int8 on the same box
     rechnung [--profil P --slots N --praezision int8|fp32 [--gemessen-bytes B]]
+             [--dateien N]
         without a cell: the calculation of every measured cell of 00-ablauf.md;
         with one: its calculation, the limit of 1.10 and, with a measured
-        value, the verdict "getragen" or "nicht getragen"
+        value, the verdict "getragen" or "nicht getragen". --dateien adds the
+        full index term of N indexed files (D-29-12, default 0, which leaves
+        every output as it was)
 
 The cell metadata file carries "slotsInForce N" (and may carry profil,
 praezision, embed_slots), one "key value" or "key=value" per line, as read off
@@ -59,8 +62,14 @@ and probe_run._measured, so that no item counts twice:
     tesseract, B2). With fp32, FP32_EXTRA_BYTES (367 MiB) comes on top; the
     weights are loaded while a cell indexes, so pending_load_bytes would not
     count it (fp32 only counts there while the engine is unloaded).
+  * The full index term (quick 261005-vit, wired by plan 29-10, D-29-12): the
+    main process grows by MAIN_PROCESS_PER_FILE_BYTES (6 KiB) per indexed
+    file, the same term profile.main_process_bytes counts at run time. It
+    only comes in with --dateien; the phase 28 cells were written down
+    without it, so their calculation stays the one of the trip.
 
     Rechnung_anon = MAIN_PROCESS_BASELINE_BYTES
+                  + dateien x MAIN_PROCESS_PER_FILE_BYTES (--dateien, default 0)
                   + slotsInForce x OCR_SLOT_COST_BYTES
                   + embed_slots x EMBED_ACTIVATION_BYTES
                   + writer heap of the profile minus that of Sparsam
@@ -71,7 +80,8 @@ Exit codes:
 
   0 done
   2 usage: unknown subcommand, a slot count that is no count above zero, an
-    unknown profile or precision, or a metadata file without slotsInForce
+    unknown profile or precision, a file count that is no whole number of
+    zero or more, or a metadata file without slotsInForce
   3 a series without a single row of a process
 """
 
@@ -253,8 +263,19 @@ def command_fp32(arguments: argparse.Namespace) -> int:
     return 0
 
 
-def calculation(profile: str, slots: int, precision: str) -> int:
-    """Rechnung_anon of one cell in bytes, with the items of the product (see the head)."""
+def file_count(text: str | None) -> int | None:
+    """A whole number of zero or more in ASCII digits, else None."""
+    if text is None or not text.isascii() or not text.isdigit():
+        return None
+    return int(text)
+
+
+def calculation(profile: str, slots: int, precision: str, *, files: int = 0) -> int:
+    """Rechnung_anon of one cell in bytes, with the items of the product (see the head).
+
+    ``files`` is the full index term (D-29-12): files x MAIN_PROCESS_PER_FILE_BYTES
+    on the main process. 0 leaves the calculation of the phase 28 cells as it was.
+    """
     from findling import config, probe  # development machine only, never on the box
 
     heap = {
@@ -277,7 +298,8 @@ def calculation(profile: str, slots: int, precision: str) -> int:
     # The activation of the inline lane is in the baseline, the lane reserve is free room.
     loads -= config.EMBED_ACTIVATION_BYTES + config.EMBED_LANE_RESERVE_BYTES
     fp32 = config.FP32_EXTRA_BYTES if precision == "fp32" else 0
-    return config.MAIN_PROCESS_BASELINE_BYTES + slots * config.OCR_SLOT_COST_BYTES + loads + fp32
+    full_index = files * config.MAIN_PROCESS_PER_FILE_BYTES
+    return config.MAIN_PROCESS_BASELINE_BYTES + full_index + slots * config.OCR_SLOT_COST_BYTES + loads + fp32
 
 
 def limit_of(calculation_bytes: int) -> int:
@@ -291,9 +313,13 @@ def verdict(measured: int, calculation_bytes: int) -> str:
 
 
 def command_rechnung(arguments: argparse.Namespace) -> int:
+    files = file_count(arguments.dateien)
+    if files is None:
+        print("12-slotkosten: --dateien wants a whole number of zero or more", file=sys.stderr)
+        return EXIT_USAGE
     if arguments.profil is None and arguments.slots is None and arguments.praezision is None:
         for box, cell, profile, precision, slots, probe_expected, plan in CELLS:
-            value = calculation(profile, slots, precision)
+            value = calculation(profile, slots, precision, files=files)
             print(
                 f"zelle {box} {cell} {profile} {precision} slots {slots} "
                 f"rechnung-mib {value / MIB:.1f} grenze-mib {limit_of(value) / MIB:.1f} "
@@ -304,7 +330,10 @@ def command_rechnung(arguments: argparse.Namespace) -> int:
     if arguments.profil not in PROFILES or arguments.praezision not in PRECISIONS or slots is None:
         print("12-slotkosten: rechnung wants --profil, --slots and --praezision together", file=sys.stderr)
         return EXIT_USAGE
-    value = calculation(arguments.profil, slots, arguments.praezision)
+    value = calculation(arguments.profil, slots, arguments.praezision, files=files)
+    if files:
+        # Only with a stock, so that the output without --dateien stays byte for byte.
+        print(f"dateien {files}")
     print(f"rechnung-bytes {value}")
     print(f"rechnung-mib {value / MIB:.1f}")
     print(f"grenze-bytes {limit_of(value)}")
@@ -334,6 +363,7 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     rechnung.add_argument("--slots")
     rechnung.add_argument("--praezision")
     rechnung.add_argument("--gemessen-bytes", dest="gemessen_bytes")
+    rechnung.add_argument("--dateien", default="0")
     return parser.parse_args(argv)
 
 

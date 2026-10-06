@@ -1258,6 +1258,19 @@ async def test_the_slots_come_from_the_resolution_and_the_children_inherit_the_e
     assert os.environ["FINDLING_OCR_DPI"] == "200"
 
 
+async def test_the_pre_check_judges_the_slots_of_the_stock_in_force(tmp_path: Path, judge: JudgeSpy) -> None:
+    # D-29-12, wanted: after the wiring the pre-check sees the smaller slot
+    # count of a big stock. Three million files are 17,578 MiB of main process,
+    # which leaves the 64 GB box two Standard slots instead of four.
+    without = profile.resolve(Profile.STANDARD, _big_box()).values.ocr_slots
+    profile.note_index_files(3_000_000)
+    with_stock = profile.resolve(Profile.STANDARD, _big_box(), index_files=3_000_000).values.ocr_slots
+    assert (without, with_stock) == (4, 2)
+    rig = Rig(tmp_path)
+    await rig.check("standard", "int8")
+    assert judge.calls[0]["slots"] == with_stock
+
+
 async def test_the_pending_costs_count_the_growth_of_the_writer_heap(tmp_path: Path, judge: JudgeSpy) -> None:
     rig = Rig(tmp_path, embed_slots=lambda: 1, engine_loaded=lambda: False, cutter_built=lambda: False)
     await rig.check("performance", "int8")

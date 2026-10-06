@@ -42,10 +42,12 @@ parallel embed lane fits beside the OCR slots (embed_lane_fits, PAR-04).
 
 Quick 261005-vit adds the full index term (owner decision of 2026-10-05): the
 main process grows by MAIN_PROCESS_PER_FILE_BYTES per indexed file
-(main_process_bytes), and the memory term can take it off (index_files). No
-caller hands a file count in yet, so every slot count stays as it was; Economy
-has no memory term at all, and the probe and the guard read the free memory
-live, where the growth is already contained.
+(main_process_bytes), and the memory term takes it off (index_files). Since
+plan 29-10 (D-29-12) the poller hands the count in (note_index_files, the
+living indexed documents of the state database, rounded down to whole
+thousands), so Standard and Performance lose slots as the stock grows. Economy
+has no memory term at all and stays value for value; the probe and the guard
+read the free memory live, where the growth is already contained.
 
 The module is neutral: stdlib, findling.config and findling.hardware only, so
 that both the worker and the api may import it. It logs nothing, neither
@@ -242,7 +244,7 @@ def ocr_slots(profile: Profile, hardware: Hardware | None, *, weights: str = _IN
     return max(1, min(core_term, memory_term, cap))
 
 
-def _profile_values(profile: Profile, hardware: Hardware | None, weights: str) -> ProfileValues:
+def _profile_values(profile: Profile, hardware: Hardware | None, weights: str, index_files: int) -> ProfileValues:
     if profile is Profile.ECONOMY:
         # Existing constants only, no new literal: this row is today's container.
         return ProfileValues(
@@ -257,7 +259,7 @@ def _profile_values(profile: Profile, hardware: Hardware | None, weights: str) -
             ocr_dpi=OCR_DPI,
             memory_reserve_share=None,
         )
-    slots = ocr_slots(profile, hardware, weights=weights)
+    slots = ocr_slots(profile, hardware, weights=weights, index_files=index_files)
     if profile is Profile.STANDARD:
         return ProfileValues(
             ocr_slots=slots,
@@ -303,13 +305,14 @@ _OVERRIDES: Final[tuple[tuple[str, str, int, tuple[int, int] | None], ...]] = (
 _FIELDS: Final = tuple(item.name for item in fields(ProfileValues))
 
 
-def resolve(profile: Profile, hardware: Hardware | None, *, weights: str = _INT8) -> Resolution:
+def resolve(profile: Profile, hardware: Hardware | None, *, weights: str = _INT8, index_files: int = 0) -> Resolution:
     """The value table of a profile on a box, with the admin overrides applied.
 
     ``weights`` is the precision in force; only fp32 moves a number (the slots
-    of Standard and Performance, D-25-01). Economy stays value for value.
+    of Standard and Performance, D-25-01). ``index_files`` is the full index
+    term (D-29-12) and moves the same slots. Economy stays value for value.
     """
-    base = _profile_values(profile, hardware, weights)
+    base = _profile_values(profile, hardware, weights, index_files)
     sources = dict.fromkeys(_FIELDS, SOURCE_PROFILE)
     overridden: dict[str, int] = {}
     for field, name, default, bounds in _OVERRIDES:
@@ -334,6 +337,9 @@ class ProfileSnapshot:
     resolution: Resolution
     # The precision in force as findling.precision reports it, "int8" or "fp32".
     weights: str
+    # The living indexed files the slot formula counts (D-29-12), rounded down
+    # to whole thousands by note_index_files; 0 until the poller reports.
+    index_files: int
     # Whether a parallel embed lane fits in memory beside the OCR slots, the
     # static part of the RAM condition of PAR-04. Plan 25-09 adds the live part.
     embed_lane_fits: bool
@@ -344,25 +350,33 @@ class ProfileSnapshot:
         return self.chosen is not None and self.effective != self.chosen
 
 
-def _embed_lane_fits(level: Profile, hardware: Hardware | None, weights: str, slots: int) -> bool:
+def _embed_lane_fits(level: Profile, hardware: Hardware | None, weights: str, slots: int, index_files: int) -> bool:
     """True when the memory term after the activations still holds every OCR slot.
 
     Research pattern 4, static part: known hardware, Standard or Performance in
-    effect, and floor((budget - reserve - baseline - activations - fp32 extra) /
-    cost) at least the OCR slots of the effective values and at least one.
+    effect, and floor((budget - reserve - main process - activations - fp32
+    extra) / cost) at least the OCR slots of the effective values and at least
+    one. The main process carries the full index term (D-29-12), the same one
+    the slots were computed with.
     """
     if hardware is None or level not in {Profile.STANDARD, Profile.PERFORMANCE}:
         return False
-    term = _memory_term(level, hardware, extra_bytes=EMBED_ACTIVATION_BYTES + _weights_bytes(weights))
+    term = _memory_term(
+        level, hardware, extra_bytes=EMBED_ACTIVATION_BYTES + _weights_bytes(weights), index_files=index_files
+    )
     return term >= max(1, slots)
 
 
 def _compute(
-    hardware: Hardware | None, chosen: Profile | None, weights: str, cap: Profile | None = None
+    hardware: Hardware | None,
+    chosen: Profile | None,
+    weights: str,
+    cap: Profile | None = None,
+    index_files: int = 0,
 ) -> ProfileSnapshot:
     suggested = suggest(hardware)
     level = effective(chosen, suggested, cap)
-    resolution = resolve(level, hardware, weights=weights)
+    resolution = resolve(level, hardware, weights=weights, index_files=index_files)
     return ProfileSnapshot(
         hardware=hardware,
         chosen=chosen,
@@ -371,7 +385,8 @@ def _compute(
         cap=cap,
         resolution=resolution,
         weights=weights,
-        embed_lane_fits=_embed_lane_fits(level, hardware, weights, resolution.values.ocr_slots),
+        index_files=index_files,
+        embed_lane_fits=_embed_lane_fits(level, hardware, weights, resolution.values.ocr_slots, index_files),
     )
 
 
@@ -391,14 +406,21 @@ _HARDWARE: Hardware | None = None
 _CHOSEN: Profile | None = None
 _WEIGHTS: str = _INT8
 _CAP: Profile | None = None
+_INDEX_FILES: int = 0
 _SNAPSHOT: ProfileSnapshot = _compute(None, None, _INT8)
+
+# The step note_index_files rounds the file count down to (D-29-12). A pass
+# adds a handful of files; a new snapshot per pass would make the status route
+# flap and recompute the table for a term worth 6 KiB per file. A thousand
+# files are 6 MiB, far below the 250 MiB of one slot.
+_INDEX_FILES_STEP: Final = 1000
 
 
 def note_hardware(hardware: Hardware) -> None:
     """Publish the reading of this start. Called once from the lifespan."""
     global _HARDWARE, _SNAPSHOT
     _HARDWARE = hardware
-    _SNAPSHOT = _compute(_HARDWARE, _CHOSEN, _WEIGHTS, _CAP)
+    _SNAPSHOT = _compute(_HARDWARE, _CHOSEN, _WEIGHTS, _CAP, _INDEX_FILES)
 
 
 def note_cap(cap: Profile | None) -> None:
@@ -412,7 +434,7 @@ def note_cap(cap: Profile | None) -> None:
     if cap is _CAP:
         return
     _CAP = cap
-    _SNAPSHOT = _compute(_HARDWARE, _CHOSEN, _WEIGHTS, _CAP)
+    _SNAPSHOT = _compute(_HARDWARE, _CHOSEN, _WEIGHTS, _CAP, _INDEX_FILES)
 
 
 def note_weights(value: str | None) -> None:
@@ -426,7 +448,27 @@ def note_weights(value: str | None) -> None:
     if value not in _WEIGHT_NAMES or value == _WEIGHTS:
         return
     _WEIGHTS = value
-    _SNAPSHOT = _compute(_HARDWARE, _CHOSEN, _WEIGHTS, _CAP)
+    _SNAPSHOT = _compute(_HARDWARE, _CHOSEN, _WEIGHTS, _CAP, _INDEX_FILES)
+
+
+def note_index_files(count: int | None) -> None:
+    """Publish the living indexed files of the state database (D-29-12).
+
+    The full index term of the slot formula: MAIN_PROCESS_PER_FILE_BYTES per
+    file comes off the memory term of Standard and Performance, Economy ignores
+    it. The count is rounded down to whole thousands; None and a negative count
+    change nothing. The snapshot is only recomputed on a change of the rounded
+    value. Called by the poller at the start of its work and after every pass
+    that wrote verdicts; this module never imports the store.
+    """
+    global _INDEX_FILES, _SNAPSHOT
+    if count is None or count < 0:
+        return
+    rounded = count // _INDEX_FILES_STEP * _INDEX_FILES_STEP
+    if rounded == _INDEX_FILES:
+        return
+    _INDEX_FILES = rounded
+    _SNAPSHOT = _compute(_HARDWARE, _CHOSEN, _WEIGHTS, _CAP, _INDEX_FILES)
 
 
 def note_chosen(value: str | None) -> None:
@@ -443,7 +485,7 @@ def note_chosen(value: str | None) -> None:
     if chosen is _CHOSEN:
         return
     _CHOSEN = chosen
-    _SNAPSHOT = _compute(_HARDWARE, _CHOSEN, _WEIGHTS, _CAP)
+    _SNAPSHOT = _compute(_HARDWARE, _CHOSEN, _WEIGHTS, _CAP, _INDEX_FILES)
 
 
 def snapshot() -> ProfileSnapshot:
@@ -457,9 +499,10 @@ def snapshot() -> ProfileSnapshot:
 
 def reset() -> None:
     """Back to the resting state. For tests only; the container never forgets."""
-    global _HARDWARE, _CHOSEN, _WEIGHTS, _CAP, _SNAPSHOT
+    global _HARDWARE, _CHOSEN, _WEIGHTS, _CAP, _INDEX_FILES, _SNAPSHOT
     _HARDWARE = None
     _CHOSEN = None
     _WEIGHTS = _INT8
     _CAP = None
+    _INDEX_FILES = 0
     _SNAPSHOT = _compute(None, None, _INT8)

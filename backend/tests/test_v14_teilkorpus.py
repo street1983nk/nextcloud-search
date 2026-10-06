@@ -600,3 +600,61 @@ def test_the_docstring_of_the_slot_tool_names_what_the_baseline_holds() -> None:
     head = SLOT_COSTS.read_text(encoding="utf-8").split('"""')[1]
     for item in ("MAIN_PROCESS_BASELINE_BYTES", "CUTTER_LOAD_BYTES", "EMBED_WEIGHTS_LOAD_BYTES", "EMBED_LANE_RESERVE"):
         assert item in head, item
+
+
+# The full index term in the calculation (plan 29-10, D-29-12). The output of the
+# standard cell as it stood before the term, read on 2026-10-06 with
+# OCR_SLOT_COST_BYTES 250 MiB; --dateien 0 and no --dateien must keep it byte for byte.
+STANDARD_CELL_BEFORE_THE_TERM = (
+    "rechnung-bytes 2473471872",
+    "rechnung-mib 2358.9",
+    "grenze-bytes 2720819059",
+)
+S_VOLL_FILES = 52_137
+
+
+def test_rechnung_without_files_is_the_output_of_before(slot_costs: ModuleType) -> None:
+    cell = ("rechnung", "--profil", "standard", "--slots", "4", "--praezision", "int8")
+    plain = run(SLOT_COSTS, *cell)
+    zero = run(SLOT_COSTS, *cell, "--dateien", "0")
+    assert plain.returncode == zero.returncode == 0, plain.stderr + zero.stderr
+    assert tuple(plain.stdout.splitlines()) == STANDARD_CELL_BEFORE_THE_TERM
+    assert zero.stdout == plain.stdout
+    assert slot_costs.calculation("standard", 4, "int8") == slot_costs.calculation("standard", 4, "int8", files=0)
+
+
+def test_the_table_without_files_is_the_table_of_before() -> None:
+    plain = run(SLOT_COSTS, "rechnung")
+    zero = run(SLOT_COSTS, "rechnung", "--dateien", "0")
+    assert plain.returncode == zero.returncode == 0
+    assert zero.stdout == plain.stdout
+    assert plain.stdout.splitlines()[0] == (
+        "zelle m7g.large S-voll economy int8 slots 1 rechnung-mib 1507.5 grenze-mib 1658.2 probe keine plan 21:15"
+    )
+
+
+def test_rechnung_with_files_adds_six_kib_per_file(slot_costs: ModuleType) -> None:
+    before = slot_costs.calculation("standard", 4, "int8")
+    with_stock = slot_costs.calculation("standard", 4, "int8", files=S_VOLL_FILES)
+    assert with_stock - before == S_VOLL_FILES * 6144
+    answer = run(
+        SLOT_COSTS, "rechnung", "--profil", "standard", "--slots", "4", "--praezision", "int8", "--dateien", "52137"
+    )
+    assert answer.returncode == 0, answer.stderr
+    lines = answer.stdout.splitlines()
+    assert "dateien 52137" in lines
+    assert f"rechnung-bytes {before + 52_137 * 6144}" in lines
+
+
+def test_the_s_voll_cell_is_carried_with_the_term(slot_costs: ModuleType) -> None:
+    """The anon peak of S-voll, 1788.9 MiB, against the calculation with its 52,137 files."""
+    peak = 17_889 * MIB // 10
+    assert slot_costs.verdict(peak, slot_costs.calculation("economy", 1, "int8")) == "nicht getragen"
+    assert slot_costs.verdict(peak, slot_costs.calculation("economy", 1, "int8", files=S_VOLL_FILES)) == "getragen"
+
+
+@pytest.mark.parametrize("files", ["-1", "1.5", "zwei", "", "²"])
+def test_rechnung_refuses_a_file_count_that_is_no_count(slot_costs: ModuleType, files: str) -> None:
+    answer = run(SLOT_COSTS, "rechnung", "--dateien", files)
+    assert answer.returncode == slot_costs.EXIT_USAGE
+    assert "--dateien" in answer.stderr
