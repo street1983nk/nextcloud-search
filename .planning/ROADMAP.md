@@ -337,7 +337,7 @@ Plans:
 
 - [x] 29-11-PLAN.md , Versionen 1.4.0, Migration Version001400, Upgrade-Strecke ab v1.3.2 mit neuer Saat (D-29-01)
 - [x] 29-12-PLAN.md , wörtliche Übernahme der abgenommenen Texte, Gate auf D-24-04
-- [ ] 29-13-PLAN.md , Push mit Owner-Wort, CI-Beweis Fremdinstallation + Upgrade (Owner-Checkpoint)
+- [x] 29-13-PLAN.md , Push mit Owner-Wort, CI-Beweis Fremdinstallation + Upgrade (Owner-Checkpoint)
 - [ ] 29-14-PLAN.md , Phasenaudit, Befundfixe, Owner-Abnahme der Launch-Härtung (Owner-Checkpoint)
 - [ ] 29-15-PLAN.md , Tag v1.4.0 mit Owner-Wort, Release-Belegkette (Owner-Checkpoint)
 - [ ] 29-16-PLAN.md , Einreichung 2x HTTP 201, Issue-Antworten, Pillow-Issue, Zustandspflege (Owner-Checkpoints)
@@ -355,7 +355,7 @@ Plans:
 | 26. N OCR-Slots und Speicherwächter | v1.4 | 14/14 | Complete    | 2026-09-29 |
 | 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 16/16 | Complete    | 2026-09-29 |
 | 28. Abnahme-Anfahrt | v1.4 | 14/14 | Complete    | 2026-10-06 |
-| 29. Härtung und Store-Einreichung 1.4.0 | v1.4 | 12/16 | In Progress|  |
+| 29. Härtung und Store-Einreichung 1.4.0 | v1.4 | 13/16 | In Progress|  |
 
 ## Nach v1.3 (Wiedervorlage)
 
