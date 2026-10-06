@@ -1608,8 +1608,13 @@ PHP_TREE_HASH_TODAY = "a2986165eb84fe751a5a5a9af05f84628caafcaf688ccb2dbb6e5f695
 # unsupported_variant) and nc/queue.py (CompanionChoice.verdicts and the
 # fallback per list in acknowledge, K6). No file came and none went, so
 # PACKAGE_FILES_TODAY stays at 71. The PHP pair moved in the same plan.
+# Measured again by plan 29-05, one reading over the merged tree 24784b59 plus
+# both tasks: plan 29-05 changed nc/client.py (ShortRead and the size check in
+# _stream_file) and worker/poller.py (the sidecar skip before judge and the
+# short read branch). No file came and none went, so PACKAGE_FILES_TODAY stays
+# at 71. The PHP pair does not move: php/ is unchanged.
 PACKAGE_FILES_TODAY = 71
-PACKAGE_TREE_HASH_TODAY = "1ff0c5ca9abbda809c1106d53d493de5d9d3a2a8c8289c88ebefe33f43599433"
+PACKAGE_TREE_HASH_TODAY = "0e149a742c0cc1b5cf24bd0c9edf6c73d05a5166f089f26282289ed0c316cc27"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

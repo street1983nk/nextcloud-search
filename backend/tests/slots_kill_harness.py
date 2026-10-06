@@ -329,10 +329,10 @@ def _job_of(queue_id: int, file_id: int, kind: str, mime: str, size: int) -> Que
 
 
 async def _fetch(
-    nc: AsyncNextcloudApp, file_id: int, user_id: str, fp: IO[bytes], *, client: object = None
+    nc: AsyncNextcloudApp, file_id: int, user_id: str, fp: IO[bytes], *, client: object = None, expected: int = 0
 ) -> int | None:
     """The content gateway: the bytes of a scan are its file id, which the extractor reads back."""
-    del nc, user_id, client
+    del nc, user_id, client, expected
     body = f"{file_id}".encode("ascii")
     fp.write(body)
     return len(body)

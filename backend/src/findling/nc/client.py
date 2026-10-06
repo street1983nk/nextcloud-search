@@ -230,14 +230,34 @@ class FileTooLargeError(Exception):
     """
 
 
+class ShortRead(Exception):
+    """The gateway ended its answer before the size the queue named was reached.
+
+    An answer that is cut without a protocol error, behind a proxy or on a
+    chunked transfer, used to be extracted as it was and ended as corrupt: a
+    verdict about a file that is perfectly fine (#18 case 2, D-29-04). It is a
+    passing fault of this one download and the caller fetches again. The
+    message carries the file id and the two byte counts and nothing else: no
+    name, no path (T-02-56).
+    """
+
+
 async def _stream_file(
     client: httpx.AsyncClient,
     header_user: str,
     file_id: int,
     user_id: str,
     fp: IO[bytes],
+    *,
+    expected: int,
 ) -> int | None:
-    """Stream one gateway answer into the sink, return the byte count."""
+    """Stream one gateway answer into the sink, return the byte count.
+
+    ``expected`` is the size the queue named for the file. Zero or less means
+    unknown, a row requeueAs created carries size 0, and then nothing is
+    checked. More bytes than expected is no cut but a file that grew, and the
+    byte cap stays the only upper limit for that.
+    """
     written = 0
     cap = settings().max_file_bytes
     async with client.stream(
@@ -263,6 +283,8 @@ async def _stream_file(
             # otherwise stall every other request in the process, indexing and
             # search alike.
             await asyncio.to_thread(fp.write, chunk)
+    if expected > 0 and written < expected:
+        raise ShortRead(f"file id {file_id} ended at {written} of {expected} bytes")
     return written
 
 
@@ -273,6 +295,7 @@ async def fetch_file_stream(
     fp: IO[bytes],
     *,
     client: httpx.AsyncClient | None = None,
+    expected: int = 0,
 ) -> int | None:
     """Read one file through the content gateway, return the number of bytes.
 
@@ -299,13 +322,16 @@ async def fetch_file_stream(
     Third, ``client`` exists so that a caller with many files can hand in one
     pooled client instead of paying for a connection per file. Phase 2 does that
     from the indexing loop; a single call may leave it out and gets its own.
+
+    ``expected`` is the size the queue named for the file. An answer that ends
+    below it raises :class:`ShortRead`; zero, the default, checks nothing.
     """
     header_user = await nc.user
     if client is not None:
-        return await _stream_file(client, header_user, file_id, user_id, fp)
+        return await _stream_file(client, header_user, file_id, user_id, fp, expected=expected)
 
     async with new_gateway_client() as owned_client:
-        return await _stream_file(owned_client, header_user, file_id, user_id, fp)
+        return await _stream_file(owned_client, header_user, file_id, user_id, fp, expected=expected)
 
 
 # ---------------------------------------------------------------------------

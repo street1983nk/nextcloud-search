@@ -32,6 +32,7 @@ from findling.nc.client import (
     AsyncNextcloudApp,
     FileTooLargeError,
     NextcloudException,
+    ShortRead,
     app_api_headers,
     fetch_file_stream,
     gateway_url,
@@ -221,6 +222,43 @@ async def test_a_download_beyond_the_byte_cap_is_cut_off(monkeypatch: pytest.Mon
         assert len(sink.getvalue()) <= 8
     finally:
         config.settings.cache_clear()
+
+
+async def test_a_download_that_ends_short_of_the_expected_size_raises_short_read() -> None:
+    # #18 case 2 (D-29-04): the gateway closed the answer cleanly after sixty of
+    # a hundred bytes. Without the check the cut file is extracted and ends as
+    # corrupt, a verdict about a file that is perfectly fine.
+    gateway = _Gateway(chunks=[bytes(60)])
+
+    async with gateway.client() as client:
+        with pytest.raises(ShortRead) as raised:
+            await fetch_file_stream(_app(), 4711, "testuser", io.BytesIO(), client=client, expected=100)
+
+    # T-29-16: the file id and the two numbers, no name and no path.
+    assert str(raised.value) == "file id 4711 ended at 60 of 100 bytes"
+
+
+@pytest.mark.parametrize("expected", [0, -1])
+async def test_an_unknown_expected_size_checks_nothing(expected: int) -> None:
+    # A row requeueAs created carries size 0, and no size is no reason to call a
+    # download short.
+    gateway = _Gateway(chunks=[bytes(60)])
+
+    async with gateway.client() as client:
+        written = await fetch_file_stream(_app(), 1, "testuser", io.BytesIO(), client=client, expected=expected)
+
+    assert written == 60
+
+
+async def test_a_download_longer_than_expected_is_not_short() -> None:
+    # The file grew between the crawl and the download. That is no cut, and the
+    # byte cap stays the only upper limit.
+    gateway = _Gateway(chunks=[bytes(120)])
+
+    async with gateway.client() as client:
+        written = await fetch_file_stream(_app(), 1, "testuser", io.BytesIO(), client=client, expected=100)
+
+    assert written == 120
 
 
 async def test_an_unexpected_error_is_not_swallowed() -> None:

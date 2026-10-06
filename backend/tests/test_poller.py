@@ -58,7 +58,7 @@ from findling.index.schema import FIELD_BODY_DE, FIELD_FILE_ID, FIELD_NAME
 from findling.index.wordlist_nl import dutch_mark
 from findling.index.writer import IndexBatchWriter
 from findling.main import APP, active_poller, enabled_handler
-from findling.nc.client import AsyncNextcloudApp, NextcloudException
+from findling.nc.client import AsyncNextcloudApp, NextcloudException, ShortRead
 from findling.nc.queue import (
     LANE_INDEX,
     TOPUP_IDLE,
@@ -285,8 +285,9 @@ def _gateway(bodies: dict[int, bytes | BaseException | None], fetched: list[int]
         fp: IO[bytes],
         *,
         client: Any = None,
+        expected: int = 0,
     ) -> int | None:
-        del nc, user_id, client
+        del nc, user_id, client, expected
         if fetched is not None:
             fetched.append(file_id)
         body = bodies.get(file_id, BODY_BYTES)
@@ -4588,3 +4589,234 @@ async def test_the_solo_run_holds_the_gate_at_one(store: Store, writer: IndexBat
     assert [call[2] for call in solo] == [1, 1], "one extraction at a time"
     assert [call[0] for call in extract.calls[-2:]] == [300, 302], "claim order"
     assert guard.take_child_kills() == 2
+
+
+# -- sidecars: macOS AppleDouble and Office lock stubs (D-29-02, D-29-05) ------
+
+
+@pytest.mark.parametrize(
+    ("title", "path"),
+    [
+        ("._IMG_1.jpg", "/u/files/Fotos/._IMG_1.jpg"),
+        ("~$Bericht.docx", "/u/files/Berichte/~$Bericht.docx"),
+        # No path at all: the title is the fallback for the base name.
+        ("._x.pdf", ""),
+    ],
+)
+async def test_a_sidecar_is_skipped_as_system_file_before_a_single_byte(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, title: str, path: str
+) -> None:
+    # #18 and #22: on the reporting instance 4,486 of 6,685 corrupt verdicts
+    # were sidecars. They carry no document content, so the verdict is taken
+    # before the download and it is honest about what the file is.
+    job = _job(mime="application/pdf", title=title, path=path)
+    queue = _FakeQueue(ClaimResult(jobs=(job,)))
+    fetched: list[int] = []
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, fetched=fetched)
+
+    result = await poller.run_once()
+
+    assert fetched == []
+    assert result.skipped == 1
+    row = store.file_row(4711)
+    assert row is not None
+    assert (row["state"], row["reason"]) == ("skipped", "system_file")
+    assert queue.skips == [{4711: "system_file"}]
+    assert queue.acknowledged == [([91], {})]
+
+
+@pytest.mark.parametrize(
+    ("title", "path"),
+    [
+        (".hidden.txt", "Notizen/.hidden.txt"),
+        ("a._b.txt", "Notizen/a._b.txt"),
+        ("x~$y.txt", "Notizen/x~$y.txt"),
+        ("_x.txt", "Notizen/_x.txt"),
+        # A folder that looks like a sidecar does not make its files sidecars.
+        ("notes.txt", "._Ordner/notes.txt"),
+    ],
+)
+async def test_a_name_that_only_resembles_a_sidecar_is_indexed(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, index: Index, title: str, path: str
+) -> None:
+    # T-29-17: the base name has to START with the marker. A hidden file, a
+    # marker in the middle of a name and a leading underscore are documents.
+    job = _job(title=title, path=path)
+    queue = _FakeQueue(ClaimResult(jobs=(job,)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    result = await poller.run_once()
+
+    assert result.indexed == 1
+    assert _stored_ids(index) == [4711]
+
+
+async def test_an_indexed_sidecar_leaves_the_index_with_its_new_verdict(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, index: Index
+) -> None:
+    # Before 1.4.0 a ._notes.txt with readable bytes was indexed and answered
+    # searches with garbage. The new verdict has to take it out again, from the
+    # index and from the prefilter, or the sidecar keeps being found.
+    first = _job(title="notes.txt", path="Notizen/notes.txt")
+    second = _job(92, title="._notes.txt", path="Notizen/._notes.txt")
+    queue = _FakeQueue(ClaimResult(jobs=(first,)), ClaimResult(jobs=(second,)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    await poller.run_once()
+    assert _stored_ids(index) == [4711]
+    assert store.acl_rows() == 2
+
+    await poller.run_once()
+
+    assert _stored_ids(index) == []
+    assert store.acl_rows() == 0
+    row = store.file_row(4711)
+    assert row is not None
+    assert (row["state"], row["reason"]) == ("skipped", "system_file")
+
+
+async def test_a_delete_job_of_a_sidecar_keeps_its_own_branch(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The kind branches stand before the skip and stay as they were: a delete
+    # of a sidecar is still a deletion and never a system_file verdict.
+    job = _job(title="._x.pdf", path="._x.pdf", kind="delete")
+    queue = _FakeQueue(ClaimResult(jobs=(job,)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    await poller.run_once()
+
+    assert queue.skips == [{}]
+    assert queue.acknowledged == [([91], {})]
+
+
+def test_the_sidecar_check_reads_the_base_name_only() -> None:
+    assert poller_module._is_sidecar("._IMG_1.jpg")
+    assert poller_module._is_sidecar("~$Bericht.docx")
+    assert not poller_module._is_sidecar(".hidden.txt")
+    assert not poller_module._is_sidecar("a._b.txt")
+    assert not poller_module._is_sidecar("x~$y.docx")
+    assert not poller_module._is_sidecar("_x.txt")
+    assert not poller_module._is_sidecar("")
+
+
+# -- short downloads (D-29-04, #18 case 2) ------------------------------------
+
+
+@dataclass(slots=True)
+class _ShortGateway:
+    """A fetch that comes back short a set number of times per file, then whole.
+
+    ``expected`` records what the poller asked the client to check against, so a
+    test can see that the size of the job really travels into the download.
+    """
+
+    shorts: dict[int, int]
+    calls: list[int] = field(default_factory=list)
+    expected: list[int] = field(default_factory=list)
+
+    async def __call__(
+        self,
+        nc: AsyncNextcloudApp,
+        file_id: int,
+        user_id: str,
+        fp: IO[bytes],
+        *,
+        client: Any = None,
+        expected: int = 0,
+    ) -> int | None:
+        del nc, user_id, client
+        self.calls.append(file_id)
+        self.expected.append(expected)
+        if self.shorts.get(file_id, 0) > 0:
+            self.shorts[file_id] -= 1
+            fp.write(BODY_BYTES[:5])
+            raise ShortRead(f"file id {file_id} ended at 5 of {expected} bytes")
+        fp.write(BODY_BYTES)
+        return len(BODY_BYTES)
+
+
+async def test_a_short_download_is_fetched_once_more_and_then_indexed(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, index: Index
+) -> None:
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+    gateway = _ShortGateway(shorts={4711: 1})
+    poller._fetch = gateway
+
+    result = await poller.run_once()
+
+    assert gateway.calls == [4711, 4711]
+    assert gateway.expected == [len(BODY_BYTES), len(BODY_BYTES)]
+    assert result.indexed == 1
+    assert _stored_ids(index) == [4711]
+    assert queue.acknowledged == [([91], {})]
+
+
+async def test_a_download_that_stays_short_gets_no_verdict_and_the_pass_goes_on(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, index: Index, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Twice short: the row is neither done nor failed and never corrupt. It is
+    # not unlocked either, because an unlock gives the delivery back and the
+    # row would circle forever (T-29-15); it runs into the lock timeout, the
+    # next hand-out counts, and the give-up rule of the queue ends it as
+    # repeatedly_stuck if it never arrives whole.
+    short = _job(91, 4711, title="Gehaltsabrechnung Mueller.txt", path="Personal/Gehaltsabrechnung Mueller.txt")
+    whole = _job(92, 4712)
+    queue = _FakeQueue(ClaimResult(jobs=(short, whole)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+    gateway = _ShortGateway(shorts={4711: 2})
+    poller._fetch = gateway
+
+    with caplog.at_level("INFO", logger="findling.worker.poller"):
+        result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert gateway.calls == [4711, 4711, 4712]
+    assert store.file_row(4711) is None
+    assert queue.acknowledged == [([92], {})]
+    assert queue.skips == [{}]
+    assert queue.unlocked == []
+    assert _stored_ids(index) == [4712]
+    lines = [line for line in _poller_lines(caplog) if "short" in line]
+    assert lines, "the hand-back is said in the log"
+    for line in lines:
+        assert "Gehaltsabrechnung" not in line
+        assert "Personal" not in line
+        assert "4711" not in line
+
+
+async def test_an_ocr_row_that_stays_short_gets_no_verdict(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    extract = _Extractor(outcome=ExtractionOutcome.indexed(BODY))
+    queue = _FakeQueue(ClaimResult(jobs=(_ocr_job(len(BODY_BYTES)),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, extract=extract)
+    gateway = _ShortGateway(shorts={4711: 2})
+    poller._fetch = gateway
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert gateway.calls == [4711, 4711]
+    assert extract.calls == []
+    assert store.file_row(4711) is None
+    assert queue.acknowledged == [([], {})]
+
+
+async def test_an_ocr_row_that_stays_short_beside_others_gets_no_verdict(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, index: Index
+) -> None:
+    jobs = tuple(_ocr_row(offset) for offset in range(2))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    extract = _Extractor(outcome=ExtractionOutcome.indexed(BODY))
+    poller = _slot_poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, extract=extract, ocr_slots=2)
+    gateway = _ShortGateway(shorts={7000: 2})
+    poller._fetch = gateway
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert store.file_row(7000) is None
+    assert _stored_ids(index) == [7001]
+    assert queue.acknowledged == [([301], {})]
