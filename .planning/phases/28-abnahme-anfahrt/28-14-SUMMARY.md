@@ -171,3 +171,14 @@ des Phasenabschlusses). Der Orchestrator las C7 als Deckung fuer die Folge-Pushe
 Session; das Audit wertet das zu Recht als nicht woertlich belegt. Eine NACHTRAEGLICHE
 woertliche Owner-Bestaetigung fuer Schub 3 und den #24-Merge STEHT AUS; bis dahin
 bleibt T-28-69 offen (28-SECURITY.md, status open) und es wird nicht weiter gepusht.
+
+### Nachtraegliche Owner-Bestaetigung (06.10.2026)
+
+Am 06.10.2026 wurde dem Owner zu Sessionbeginn woertlich die Frage gestellt:
+"Bestaetigst du nachtraeglich woertlich: (a) den dritten Push aae091bd..1a115cd9
+(die 4 Abschluss-Doku-Commits)? (b) den Squash-Merge von Dependabot #24?" Der
+weitere Ablauf (Signal nachtragen, secure-phase 28 erneut, Push der lokalen
+Commits ab c2091395, danach plan-phase 29) war in derselben Nachricht benannt.
+Der Owner antwortete woertlich: "ok weiter". Damit sind Schub 3 und der
+#24-Merge nachtraeglich bestaetigt und der Folge-Push der lokalen Commits
+freigegeben. T-28-69 ist damit gedeckt.
