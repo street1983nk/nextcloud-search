@@ -1956,6 +1956,27 @@ Vokabelregel in der #18-Antwort gefunden, es ist ersetzt.
 
 ## Die Abnahme 1.4.0
 
-Textabnahme 1.4.0: ausstehend. Hier steht nach dem Checkpoint das Wort des
-Owners im Wortlaut, die Antwort auf (a) und die Ratifizierung (oder Ablehnung
-mit Folge-Plan) von (b) bis (e).
+Textabnahme 1.4.0: **2026-10-06, im Wortlaut: "ok abgenommen".** Der Owner
+hat den Entwurf Teil 1 bis 9 gesehen und wie vorgelegt abgenommen; das Wort
+kam über den Orchestrator von Phase 29 an den Checkpoint von Plan 29-02.
+
+- **(a) EN- und FR-Fassung des D-24-04-Satzes: wie vorgeschlagen
+  abgenommen.** Englisch und Französisch stehen damit wörtlich fest, so wie in
+  Teil 1; der deutsche Satz bleibt unverändert.
+- **(b) bis (e): ratifiziert.** `skipped` für die drei neuen Codes (29-01), der
+  `filterwarnings`-Eintrag statt `httpx2` (29-03), `ocr_failed` außerhalb der
+  Nachprüfung (29-09) und die Grenze von D-29-06(b) wie in Teil 7 (29-07). Kein
+  Fix-Plan vor 29-12 nötig.
+- **Die drei offenen Punkte zum Lesen bleiben wie im Entwurf:** die Abhilfe von
+  `out_of_memory` (Teil 4), die 40-Megapixel-Schwelle nur für PNG und TIFF
+  (Teil 5) und der Satz zum Linux-Container im Pillow-Issue (Teil 8).
+- Der Vorschlag "Error class" für die Verwaltungskarte (Teil 4) ist mit dem
+  Entwurf abgenommen; ob 29-12 die Zeile einbaut, folgt dem Umfang von 29-12.
+
+Änderungen des Owners am Entwurf: keine.
+
+Die wörtliche Übernahme in beide `info.xml`, die drei READMEs, die Labels und
+Kataloge und die zwei Variablentexte ist Plan 29-12. Die Release-Notiz geht
+mit dem Tag in 29-15 hinaus. Die fünf Issue-Antworten und das Pillow-Issue
+bleiben Entwürfe, bis 29-16 sie nach dem Release und nach einer erneuten
+Freigabe des Owners postet.
