@@ -8,9 +8,13 @@ Findling ist eine Nextcloud-ExApp, die die kaputte Suche repariert: ein Containe
 
 Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
 
-## Current State (nach v1.3, 2026-09-27)
+## Current State (nach Phase 29, 2026-10-06)
 
-**Shipped:** Findling 1.3.0 im Nextcloud App Store (beide Apps signiert, Submission 27.09.2026, Lauf 36304007154, je HTTP 201, Tag v1.3.0 auf 744d7e4).
+**Shipped:** Findling 1.4.0 im Nextcloud App Store (beide Apps signiert, Submission 06.10.2026, Lauf 37473805519, je HTTP 201, Tag v1.4.0 auf 99326ae2). Phase 29 komplett: Launch-Haertung (Audit 0 CRIT / 0 HIGH), alle sechs oeffentlichen #18-Zusagen geliefert (Sidecar-Skip, TIFF-Shim, JPEG-draft + Header-Schaetzung, OLE-Sniff, Fehlerklasse je Datei, Altbestands-Nachpruefung in Baendern hinter dem Companion-Signal), Upgrade-Strecke 1.3.2 auf 1.4.0 in CI Ende zu Ende bewiesen, Vollindex-Term in der Laufzeit-Slotrechnung (D-29-12), K6-Faehigkeitssignal mit Rueckfall je Liste. Offen laut D-29-11: vier box-gebundene Feldbelege (naechste Anfahrt). Milestone v1.4 damit fertig gebaut, Abschlussfrage offen.
+
+## Frueherer Stand (nach v1.3, 2026-09-27)
+
+**Shipped (damals):** Findling 1.3.0 im Nextcloud App Store (beide Apps signiert, Submission 27.09.2026, Lauf 36304007154, je HTTP 201, Tag v1.3.0 auf 744d7e4).
 
 - Lexikalische Suche in sechs Sprachen (de, en + es, it, nl, pt): vier neue Analyseketten messend abgenommen, Schema traegt immer sechs Koerperfelder, befuellt wird nur nach FINDLING_LANGUAGES (Werk bleibt de,en; Bestandsinstallationen upgraden ohne Umbau)
 - Re-Analyse-Umbau (index/rebuild.py): Sprachwechsel ohne Download, OCR oder Neu-Einbettung; wiederaufnahmefaehig, Platzpruefung vorab, atomarer Tausch, Fortschritt auf der Adminseite; CI beweist beide Richtungen (UPGRADE_FROM_TAG=v1.2.0)
@@ -185,4 +189,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-27, Milestone v1.4 Leistungsprofile gestartet*
+*Last updated: 2026-10-06, Phase 29 komplett, 1.4.0 im Store*
