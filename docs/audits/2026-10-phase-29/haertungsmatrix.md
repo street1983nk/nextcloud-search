@@ -51,3 +51,21 @@ Audit in 29-13, Fix in 29-14 (29-14-PLAN: "Alle Befunde H-29-NN aus der Härtung
 Keine. Alle sechs Lückentests laufen grün, kein Test trägt eine xfail-Marke, es gibt keinen Befund H-29-NN aus diesem Plan.
 
 Offen bleibt nur der Nachweis der beiden Linux-Fälle aus `test_slots_kill.py` je Einzelfall: die CI läuft mit `-q` ohne `-rs`. 29-13 kann ihn mit einem CI-Lauf belegen, der `-rs` oder `-v` für diese Datei setzt.
+
+## Erneuter Lauf (Plan 29-14)
+
+06.10.2026, Baum `1c5c9995` plus die Fixe von 29-14 (lokal, Windows), alle Bestandstests der Matrix und alle sechs Lückentests in einem Aufruf: `PYTHONUTF8=1 uv run pytest -q -rs tests/test_launch_hardening.py tests/test_slots_kill.py` plus die 23 Einzelfälle der Spalte "Bestehender Test" und `tests/test_info_xml_defaults.py`.
+
+Ergebnis: **37 passed, 2 skipped.** Die beiden übersprungenen Fälle sind wieder die Linux-SIGKILL-Fälle (`test_slots_kill.py:171`, `:212`, Grund "SIGKILL and process groups, Linux CI carries it"); ihr Beleg insgesamt ist der grüne Python-Lauf 37460204981 auf 7b8b4271. Für den Namensbeleg hat `.github/workflows/python.yml` jetzt einen eigenen Schritt mit `pytest -v -rs tests/test_slots_kill.py`; die Laufnummer folgt mit dem nächsten freigegebenen Push.
+
+| Zeile | Ergebnis 06.10. (29-14) |
+|---|---|
+| 1 OOM mitten in N Slots | passed (Unit und Lückentest), SIGKILL-Fall skipped lokal |
+| 2 Kill beider Spuren | passed (Lückentest), SIGKILL-Fall skipped lokal |
+| 3 Hardware-Schrumpfung | passed |
+| 4 Profilwechsel im Vektor-Reindex | passed |
+| 5 Modellwechsel im Vektor-Reindex | passed |
+| 6 Umgebungsvariable gegen Profil | passed (inklusive 8 Fälle `test_info_xml_defaults.py`) |
+| 7 Upgrade 1.3.2 auf 1.4.0 | passed; Ende-zu-Ende-Beleg HaRP-Lauf 37460204929 (Store upgrade 0 bis 6) |
+
+`grep -c xfail backend/tests/test_launch_hardening.py` ergibt 0. Kein Befund H-29-NN; die Befunde des Phasenaudits (F-29-01 bis F-29-05) stehen in `README.md`.
