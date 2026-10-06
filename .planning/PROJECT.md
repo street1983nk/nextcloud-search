@@ -10,7 +10,7 @@ Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inkl
 
 ## Current State (nach Phase 29, 2026-10-06)
 
-**Shipped:** Findling 1.4.0 im Nextcloud App Store (beide Apps signiert, Submission 06.10.2026, Lauf 37473805519, je HTTP 201, Tag v1.4.0 auf 99326ae2). Phase 29 komplett: Launch-Haertung (Audit 0 CRIT / 0 HIGH), alle sechs oeffentlichen #18-Zusagen geliefert (Sidecar-Skip, TIFF-Shim, JPEG-draft + Header-Schaetzung, OLE-Sniff, Fehlerklasse je Datei, Altbestands-Nachpruefung in Baendern hinter dem Companion-Signal), Upgrade-Strecke 1.3.2 auf 1.4.0 in CI Ende zu Ende bewiesen, Vollindex-Term in der Laufzeit-Slotrechnung (D-29-12), K6-Faehigkeitssignal mit Rueckfall je Liste. Offen laut D-29-11: vier box-gebundene Feldbelege (naechste Anfahrt). Milestone v1.4 damit fertig gebaut, Abschlussfrage offen.
+**Shipped:** Findling 1.4.0 im Nextcloud App Store (beide Apps signiert, Submission 06.10.2026, Lauf 37473805519, je HTTP 201, Tag v1.4.0 auf 99326ae2). Phase 29 komplett: Launch-Haertung (Audit 0 CRIT / 0 HIGH), alle sechs oeffentlichen #18-Zusagen geliefert (Sidecar-Skip, TIFF-Shim, JPEG-draft + Header-Schaetzung, OLE-Sniff, Fehlerklasse je Datei, Altbestands-Nachpruefung in Baendern hinter dem Companion-Signal), Upgrade-Strecke 1.3.2 auf 1.4.0 in CI Ende zu Ende bewiesen, Vollindex-Term in der Laufzeit-Slotrechnung (D-29-12), K6-Faehigkeitssignal mit Rueckfall je Liste. Offen laut D-29-11: vier box-gebundene Feldbelege (naechste Anfahrt). Milestone v1.4 am 06.10.2026 geschlossen und archiviert (.planning/milestones/v1.4-*).
 
 ## Frueherer Stand (nach v1.3, 2026-09-27)
 

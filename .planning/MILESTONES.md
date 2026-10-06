@@ -1,5 +1,26 @@
 # Project Milestones: Findling (Nextcloud Zero-Config-Suche)
 
+## v1.4 Leistungsprofile (Shipped: 2026-10-06)
+
+**Delivered:** Findling 1.4.0 im Nextcloud App Store (beide Apps, Submission-Lauf 37473805519 mit 2x HTTP 201, Tag v1.4.0 auf 99326ae2): Leistungsprofile als Opt-in (Sparsam bleibt unveraenderter Default; Standard gibt hoechstens die halbe Box frei, Leistung alles bis auf einen Kern), parallele OCR-Slots mit Speicherwaechter, parallele Einbettungsspur, Modellwahl int8/fp32, Settings-Oberflaeche mit Vorab-Pruefung, dazu alle sechs oeffentlich zugesagten #18-Fixklassen und die selbsttaetige Nachpruefung der Altbestaende nach dem Upgrade.
+
+**Phases completed:** 24 bis 29 (6 Phasen, 78 Plaene, 175 Tasks)
+
+**Timeline:** 27.09. bis 06.10.2026 (10 Tage, 651 Commits, 697 Dateien; die grosse Zeilenzahl ist ueberwiegend Mess-Rohdaten der Abnahme-Anfahrt)
+
+**Key accomplishments:**
+
+- Profil-Geruest als Anteils-Formel (economy/standard/performance) mit Hardware-Erkennung und Vorschlag, Sparsam gepinnt Wert fuer Wert; der D-24-04-Anteils-Satz steht woertlich in allen sechs Store-Texten und wird per Gate (SHARE_SENTENCE_DE/EN/FR) gesichert
+- Parallelitaet in zwei Spuren: Einbettung als eigener Nebenlaeufer (PHP-Art-Filter, K6-gekoppelt) und N OCR-Slots mit KIND_BATCH-Companion, Drosselung, oom_score_adj-Kindern und selbsttaetiger Profil-Rueckstufung; Vorab-Pruefung ("Uebernehmen und pruefen") mit N-Slot-Probe und Verdikt in der ersten echten Settings-Flaeche
+- Abnahme-Anfahrt: 18-Zellen-Matrix (ARM+x86, drei Profile) am gebauten Produkt, jedes Zaehltor exakt 5000, Kosten 34,64 von 59,43 USD, kompletter Abbau mit Sweep ueber 17 Regionen auf 0; OCR_SLOT_COST_BYTES per Owner-Wort auf 250 MiB, Vollindex-Term (6 KiB je Datei) in Phase 29 in die Laufzeit-Slotrechnung verdrahtet
+- Die #18-Geschichte: 6.685 Fehlurteile einer Nutzer-Instanz gemeinsam mit dem Melder in fuenf Klassen zerlegt und alle fuenf in 1.4.0 geliefert (Sidecar-Skip ._/~$, TIFF-Shim inkl. In-Memory-SF0-Patch bis 32 MiB und Pillow-Upstream-Issue #10139, JPEG-draft-Decode mit Header-Vorabschaetzung, OLE/CFB-Sniff stdlib-only, Download-Groessenpruefung mit Retry); Fehlerklasse je Datei in /diagnose, occ und Admin-Karte; Altbestands-Nachpruefung in Baendern hinter dem Companion-Faehigkeitssignal (verdicts=2, skipped-Rueckfall nie auf corrupt)
+- Upgrade-Strecke 1.3.2 auf 1.4.0 Ende zu Ende in CI bewiesen (Saat: AppleDouble-Sidecar + Grau+Extra-TIFF; alle zehn Zusicherungen, keine Neu-Einbettung, economy nach dem Upgrade, Recheck-Marke done); Migration verwirft backend_app_version
+- Release-Disziplin: Audit 0 CRIT / 0 HIGH (F-29-01 DoS im SF0-Patch vor Release gefixt), Owner-Abnahme per gemeinsamer Playwright-Runde mit echten Testdateien, Tag-Laeufe 7/7 gruen, Signaturen doppelt verifiziert, Submission 2x HTTP 201, sechs oeffentliche Antworten am Release-Tag; secure-phase 28 = 71/71, secure-phase 29 = 65/65
+
+**Vorbehalte:** Vier box-gebundene Feldbelege bewusst auf die naechste Anfahrt vertagt (D-29-11: Fall-1-Belege, fp32-Rueckkehr-Vollstaendigkeit, Fall-2-Feldlauf, 250-MiB-Feldlauf); F-29-03 (Dateicache mit falscher Groesse endet als repeatedly_stuck) als 1.4.1-Kandidat dokumentiert; Issues #15/#18/#19/#21/#22 bewusst offen, bis der Melder bestaetigt; Kostenzahl 34,09 vs 34,64 USD in zwei Doku-Stellen uneinheitlich (beide im Deckel).
+
+---
+
 ## v1.3 Sprachausbau (Shipped: 2026-09-27)
 
 **Delivered:** Findling 1.3.0 im Nextcloud App Store (beide Apps, Submission-Lauf 36304007154 mit 2x HTTP 201, Tag v1.3.0 auf 744d7e4): lexikalische Suche in Spanisch, Italienisch, Niederlaendisch und Portugiesisch mit Re-Analyse-Umbau statt Vollreindex, UI in fuenf neuen Katalogen (es/it/nl/pt_BR/pt_PT), niederlaendische Komposita-Zerlegung, alle offenen Boxzahlen aus v1.2 nachgemessen, Kaltstart-Fix (erste Suche antwortet lexikalisch statt leer).

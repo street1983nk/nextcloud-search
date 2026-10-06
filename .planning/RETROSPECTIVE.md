@@ -158,6 +158,33 @@
 
 ---
 
+## Milestone: v1.4, Leistungsprofile
+
+**Shipped:** 2026-10-06
+**Phases:** 6 | **Plans:** 78 | **Commits:** 651
+
+### What Was Built
+
+- Leistungsprofile als Opt-in-Anteilsformel (Sparsam bleibt Default, Wert fuer Wert gepinnt): N OCR-Slots mit Speicherwaechter, parallele Einbettungsspur, Modellwahl int8/fp32, Settings-Flaeche mit Vorab-Pruefung
+- Abnahme-Anfahrt mit 18-Zellen-Matrix (ARM+x86) am gebauten Produkt, Kosten 34,64/59,43 USD, danach Vollabbau auf 0; Slotkosten 250 MiB per Owner-Wort, Vollindex-Term spaeter zur Laufzeit verdrahtet
+- Alle fuenf #18-Fehlurteilsklassen geliefert (Sidecars, TIFF-Varianten inkl. Pillow-Upstream-Issue, JPEG-Deckel-Decode, OLE/CFB, Kurz-Downloads) plus Fehlerklasse je Datei und selbsttaetige Altbestands-Nachpruefung hinter dem Companion-Signal
+- Upgrade-Strecke 1.3.2 auf 1.4.0 mit echter Saat in CI; Store-Release 1.4.0 (2x HTTP 201), sechs oeffentliche Antworten am Release-Tag
+
+### What Worked
+
+- Ein einzelnes, gut gefuehrtes Community-Issue (#18) als halber Release-Treiber: die gemeinsame Diagnose mit dem Melder lieferte Klassen, Zahlen und oeffentliche Zusagen, die die Phase praezise schnitten
+- Checkpoint-Disziplin bei Pushes: jedes Owner-Wort einzeln, woertlich dokumentiert; ein Executor verweigerte zu Recht einen ungedeckten Nachpush (Lehre aus T-28-69 verankert)
+- Live-Abnahme per echter Testdateien (CFB aus dem Test-Helfer, SampleFormat-3-TIFF) auf der Dev-Instanz statt gestellter Daten; der K6-Versionswaechter wurde dabei nebenbei live belegt
+- Serielle src-Wellen gegen die Baumhash-Ratsche: 6 src-Plaene nacheinander, je mit eigener Messung, kein einziger Pin-Konflikt
+- Plan-Checker fing vor der Ausfuehrung einen echten K6-Fehler (skipped-Rueckfall auf corrupt waere im PHP-Spiegel verloren gegangen)
+
+### What Did Not Work / Lessons
+
+- CI-Zusicherungen gegen Altversionen muessen am Altverhalten gemessen werden, nicht an Annahmen: drei rote Laeufe (Sprachmarke de,en statt leer; Schemamarke hebt sich nicht; eigener Auditbericht fiel durchs Docs-Gate) kamen alle aus dem Pruefgeruest, keiner aus dem Produkt
+- Executoren, die nach dem letzten Fix die Vollsuite nicht erneut fahren, brauchen den Post-Merge-Vollauf als Netz (zweimal noetig gewesen)
+- /tmp mit Windows-Python bleibt eine Falle (dritter Vorfall); explizite Pfade verwenden
+- Der Store-Submission-Plan verlangte das Wort "einreichen", die Freigabefrage nannte aber nur die Sache; Wort-Formulierungen in Plaenen und Checkpoint-Fragen von Anfang an gleich ziehen
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
