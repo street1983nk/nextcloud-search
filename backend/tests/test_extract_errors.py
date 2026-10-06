@@ -19,13 +19,13 @@ from pathlib import Path
 
 import pytest
 from docx.opc.exceptions import PackageNotFoundError
-from PIL import UnidentifiedImageError
 
 # lxml ships no type information for its C extension, so pyright cannot see the
 # submodule. Importing the real class is the point of this test file: the mapping
 # in errors.py matches class names as strings, and only the genuine exception
 # object proves that those strings still describe reality.
 from lxml import etree  # pyright: ignore[reportAttributeAccessIssue]
+from PIL import UnidentifiedImageError
 
 from findling import config
 from findling.extract.dispatch import (
@@ -414,4 +414,15 @@ def test_the_detail_survives_the_pipe_from_the_child_to_the_parent() -> None:
     # The sandbox sends the outcome over a multiprocessing pipe, which pickles it.
     outcome = ExtractionOutcome.from_exception(zipfile.BadZipFile("File is not a zip file"))
 
-    assert pickle.loads(pickle.dumps(outcome)) == outcome  # noqa: S301
+    arrived = pickle.loads(pickle.dumps(outcome))  # noqa: S301
+
+    assert arrived == outcome
+    assert arrived.detail == "zipfile.BadZipFile"
+
+
+def test_the_detail_is_no_part_of_the_verdict() -> None:
+    # Equality is the verdict: the same state and reason from two readers is the
+    # same verdict, and the class next to it is a diagnosis datum.
+    assert ExtractionOutcome.failed(Reason.CORRUPT, detail="zipfile.BadZipFile") == ExtractionOutcome.failed(
+        Reason.CORRUPT
+    )

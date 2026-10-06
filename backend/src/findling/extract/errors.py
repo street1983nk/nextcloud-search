@@ -208,6 +208,15 @@ class ExtractionOutcome:
     reason: Reason | None = None
     text: str = field(default="", repr=False)
     text_chars: int = 0
+    # The class of the exception behind a failure, as module.qualname, and
+    # nothing else (D-29-09, issue #18). Last and defaulted, so that the outcome
+    # still pickles across the pipe from the extraction child and every older
+    # call site still builds it. Never the message and never a path: a reader
+    # quotes what it read, and that is file content (T-02-56). It is a datum
+    # for the diagnosis and not part of the verdict, so the closed list of
+    # reasons stays closed, and that is also why it takes no part in equality:
+    # two outcomes are the same verdict when state, reason and text agree.
+    detail: str | None = field(default=None, compare=False)
 
     def __post_init__(self) -> None:
         allowed = STATE_REASONS.get(self.state)
@@ -237,9 +246,9 @@ class ExtractionOutcome:
         return cls(state=State.SKIPPED, reason=reason)
 
     @classmethod
-    def failed(cls, reason: Reason) -> ExtractionOutcome:
+    def failed(cls, reason: Reason, *, detail: str | None = None) -> ExtractionOutcome:
         """A file we wanted to index and could not. This is what the status page counts."""
-        return cls(state=State.FAILED, reason=reason)
+        return cls(state=State.FAILED, reason=reason, detail=detail)
 
     @classmethod
     def from_exception(cls, error: BaseException) -> ExtractionOutcome:
@@ -253,9 +262,18 @@ class ExtractionOutcome:
         parser means the document beat the parser, and letting it travel further
         would end the child process for a reason nobody can read off the status
         page afterwards.
+
+        Both branches carry the class that was raised as ``detail``, and it is
+        the raised class rather than the one the table matched: a
+        PIL.UnidentifiedImageError stays that name even where a base class of
+        it decides the reason. The name is built from the type alone and the
+        exception object is never turned into a string here, because its
+        message is where a path or a quoted line of the file would sit.
         """
-        for klass in type(error).__mro__:
+        raised = type(error)
+        detail = f"{raised.__module__}.{raised.__qualname__}"
+        for klass in raised.__mro__:
             reason = _EXCEPTION_REASONS.get(f"{klass.__module__}.{klass.__qualname__}")
             if reason is not None:
-                return cls.failed(reason)
-        return cls.failed(Reason.CORRUPT)
+                return cls.failed(reason, detail=detail)
+        return cls.failed(Reason.CORRUPT, detail=detail)

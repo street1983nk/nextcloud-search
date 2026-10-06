@@ -30,6 +30,7 @@ the callers decide where their database lives.
 from __future__ import annotations
 
 import logging
+import re
 import sqlite3
 import time
 from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
@@ -466,6 +467,22 @@ _TOMBSTONE_SQL: Final = """
 UPDATE files SET deleted_at = ? WHERE file_id = ?
 """
 
+# The error class next to a verdict (D-29-09). Written and cleared in the
+# transaction of record(), so the two can never describe two different
+# attempts; give_up() and reset_for_reindex() clear it for the same reason.
+_RECORD_ERROR_SQL: Final = """
+INSERT OR REPLACE INTO file_errors (file_id, error_class, recorded_at) VALUES (?, ?, ?)
+"""
+_FORGET_ERROR_SQL: Final = "DELETE FROM file_errors WHERE file_id = ?"
+_FORGET_ORPHAN_ERRORS_SQL: Final = "DELETE FROM file_errors WHERE file_id NOT IN (SELECT file_id FROM files)"
+
+# What an error class may look like before it is stored: module.qualname of a
+# real class, so letters, digits, underscores and dots, and short. Anything else
+# is dropped rather than cut, because a cut name is a name nobody raised, and
+# the shape is what keeps a path, a message or markup out of a column an admin
+# page shows (T-29-18, T-29-19).
+_ERROR_CLASS_SHAPE: Final = re.compile(r"[A-Za-z0-9_.]{1,200}")
+
 _RECORD_MOUNT_SQL: Final = """
 INSERT INTO mounts (storage_id, root_id, cursor_file_id, files_seen, updated_at)
 VALUES (?, ?, ?, ?, ?)
@@ -822,6 +839,7 @@ class Store:
         content_hash: str | None = None,
         text_chars: int = 0,
         ocr_used: bool = False,
+        error_class: str | None = None,
     ) -> None:
         """Write the verdict for one file, rejecting anything outside the list.
 
@@ -842,14 +860,27 @@ class Store:
         document nobody looked at from one that went through the engine and
         produced nothing: without it, both are a row with no text and no
         explanation for the hour of CPU that went into the second one.
+
+        ``error_class`` is the class of the exception behind a failure, as
+        module.qualname (D-29-09). It lands in ``file_errors`` in the same
+        transaction as the verdict, and a verdict without one removes the old
+        row, so the class shown next to a verdict always belongs to it. A value
+        outside the shape of a class name is stored as nothing rather than
+        refused: the verdict is the part that must not get lost.
         """
         allowed = STATE_REASONS.get(state)
         if allowed is None:
             raise ValueError(f"unknown state {state!r}, expected one of {sorted(STATE_REASONS)}")
         if reason not in allowed:
             raise ValueError(f"reason {reason!r} does not belong to state {state!r}")
+        detail = error_class if error_class is not None and _ERROR_CLASS_SHAPE.fullmatch(error_class) else None
+        now = int(time.time())
 
         with self._transaction():
+            if detail is None:
+                self._conn.execute(_FORGET_ERROR_SQL, (file_id,))
+            else:
+                self._conn.execute(_RECORD_ERROR_SQL, (file_id, detail, now))
             self._conn.execute(
                 _RECORD_SQL,
                 (
@@ -867,10 +898,23 @@ class Store:
                     state,
                     reason,
                     int(ocr_used),
-                    int(time.time()),
+                    now,
                     self.index_version,
                 ),
             )
+
+    def error_class(self, file_id: int) -> str | None:
+        """The class of the exception behind the last verdict of one file, or None.
+
+        None as well on a database that has not been opened for writing since
+        the table arrived: the read connection of the diagnosis cannot create
+        it, and a missing table means nothing was recorded, not an error.
+        """
+        try:
+            row = self._conn.execute("SELECT error_class FROM file_errors WHERE file_id = ?", (file_id,)).fetchone()
+        except sqlite3.OperationalError:
+            return None
+        return str(row[0]) if row else None
 
     def file_row(self, file_id: int) -> dict[str, Any] | None:
         """The whole row for one file, or None when it has never been judged."""
@@ -1043,6 +1087,9 @@ class Store:
             raise ValueError(f"reason {reason!r} does not belong to state {state!r}")
 
         with self._transaction():
+            # The verdict of the other side carries no exception, so a class
+            # left from an earlier attempt would describe a verdict that is gone.
+            self._conn.execute(_FORGET_ERROR_SQL, (file_id,))
             self._conn.execute(
                 _GIVE_UP_SQL,
                 (file_id, storage_id, root_id, mime, size, mtime, etag, state, reason, self.index_version),
@@ -1122,6 +1169,7 @@ class Store:
         """
         with self._transaction():
             cursor = self._conn.execute("DELETE FROM files WHERE index_version < ?", (index_version,))
+            self._conn.execute(_FORGET_ORPHAN_ERRORS_SQL)
         self._forget_all_vectors()
         return cursor.rowcount
 

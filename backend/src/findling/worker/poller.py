@@ -2063,6 +2063,10 @@ class Poller:
                 content_hash=verdict.content_hash,
                 text_chars=verdict.outcome.text_chars,
                 ocr_used=verdict.ocr_used,
+                # The class of the reader error (D-29-09). It goes to the state
+                # database and to the diagnosis, never into the acknowledgement
+                # above, which carries the reason code alone.
+                error_class=verdict.outcome.detail,
             )
 
     # -- plumbing --------------------------------------------------------

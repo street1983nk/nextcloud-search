@@ -123,3 +123,20 @@ CREATE TABLE IF NOT EXISTS mounts (
     files_seen     INTEGER NOT NULL DEFAULT 0,
     updated_at     INTEGER NOT NULL
 );
+
+-- The class of the exception behind the last failed verdict of a file, as
+-- module.qualname (D-29-09, issue #18). A datum for the diagnosis and not a
+-- verdict: the state and the reason above stay the closed list, and this only
+-- says which reader gave up. Never the message of the exception and never a
+-- path, because a reader quotes what it read (T-02-56). record() writes and
+-- clears it in the transaction of the verdict, so a later verdict without an
+-- exception leaves no stale class behind.
+--
+-- IF NOT EXISTS like everything in this file, so an existing database gets the
+-- table on its next open without a reindex and without a new SCHEMA_VERSION.
+-- A database that lost it loses the diagnosis and nothing else.
+CREATE TABLE IF NOT EXISTS file_errors (
+    file_id     INTEGER PRIMARY KEY,
+    error_class TEXT NOT NULL,      -- module.qualname, [A-Za-z0-9_.], at most 200
+    recorded_at INTEGER NOT NULL
+);
