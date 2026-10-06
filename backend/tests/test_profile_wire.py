@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from findling.nc.queue import LANE_ALL, LANES
+from findling.nc.queue import LANE_ALL, LANES, VERDICTS_GENERATION
 from findling.precision import PRECISION_DEFAULT, PRECISION_NAMES, Precision
 from findling.profile import PROFILE_NAMES, Profile
 from findling.store.vectors import WEIGHTS_FP32, WEIGHTS_INT8
@@ -124,3 +124,18 @@ def test_both_sides_accept_the_same_token_shape() -> None:
     # thrown away by the other.
     assert "preg_match('/^[0-9a-f]{32}$/D', $stored)" in _source()
     assert 're.compile(r"[0-9a-f]{32}")' in QUEUE_CLIENT.read_text(encoding="utf-8")
+
+
+def test_the_verdict_generation_travels_under_one_name_and_one_value() -> None:
+    # K6, plan 29-01: the companion announces the generation of its verdict
+    # vocabulary as "verdicts", the container reads exactly that key and sends
+    # the three new skipped codes only on exactly this value. A rename or a
+    # different number on one side only would keep the container on the
+    # fallback codes forever, or worse, send codes a companion refuses.
+    controller = PROFILE_CONTROLLER.read_text(encoding="utf-8")
+    queue_client = QUEUE_CLIENT.read_text(encoding="utf-8")
+
+    generation = re.findall(r"public const VERDICTS_GENERATION = (\d+);", controller)
+    assert generation == [str(VERDICTS_GENERATION)]
+    assert controller.count("'verdicts' => self::VERDICTS_GENERATION") == 1
+    assert queue_client.count('payload.get("verdicts")') == 1

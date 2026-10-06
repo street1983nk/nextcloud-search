@@ -98,7 +98,7 @@ final class ProfileControllerTest extends TestCase {
 		$response = $this->controller($this->backendAppId())->profile();
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
-		self::assertSame(['profile' => 'standard', 'precision' => 'int8', 'confirmed' => null], $response->getData());
+		self::assertSame(['profile' => 'standard', 'precision' => 'int8', 'confirmed' => null, 'verdicts' => 2], $response->getData());
 	}
 
 	public function testAMissingKeyMeansEconomy(): void {
@@ -107,7 +107,7 @@ final class ProfileControllerTest extends TestCase {
 		$response = $this->controller($this->backendAppId())->profile();
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
-		self::assertSame(['profile' => 'economy', 'precision' => 'int8', 'confirmed' => null], $response->getData());
+		self::assertSame(['profile' => 'economy', 'precision' => 'int8', 'confirmed' => null, 'verdicts' => 2], $response->getData());
 	}
 
 	public function testAValueOutsideTheSetMeansEconomyAndIsNotLogged(): void {
@@ -123,7 +123,7 @@ final class ProfileControllerTest extends TestCase {
 		$response = $this->controller($this->backendAppId())->profile();
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
-		self::assertSame(['profile' => 'economy', 'precision' => 'int8', 'confirmed' => null], $response->getData());
+		self::assertSame(['profile' => 'economy', 'precision' => 'int8', 'confirmed' => null, 'verdicts' => 2], $response->getData());
 	}
 
 	public function testAFailedReadAnswersAsAFailureWithoutAProfileName(): void {
@@ -173,7 +173,7 @@ final class ProfileControllerTest extends TestCase {
 		$response = $this->controller($this->backendAppId())->profile();
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
-		self::assertSame(['profile' => 'standard', 'precision' => 'fp32', 'confirmed' => null], $response->getData());
+		self::assertSame(['profile' => 'standard', 'precision' => 'fp32', 'confirmed' => null, 'verdicts' => 2], $response->getData());
 	}
 
 	/** @return array<string, array{string}> */
@@ -203,7 +203,7 @@ final class ProfileControllerTest extends TestCase {
 		$response = $this->controller($this->backendAppId())->profile();
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
-		self::assertSame(['profile' => 'standard', 'precision' => null, 'confirmed' => null], $response->getData());
+		self::assertSame(['profile' => 'standard', 'precision' => null, 'confirmed' => null, 'verdicts' => 2], $response->getData());
 	}
 
 	// -- the confirmation token (D-26-04) --------------------------------------
@@ -218,7 +218,7 @@ final class ProfileControllerTest extends TestCase {
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
 		self::assertSame(
-			['profile' => 'standard', 'precision' => 'int8', 'confirmed' => self::TOKEN],
+			['profile' => 'standard', 'precision' => 'int8', 'confirmed' => self::TOKEN, 'verdicts' => 2],
 			$response->getData(),
 		);
 	}
@@ -266,7 +266,7 @@ final class ProfileControllerTest extends TestCase {
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
 		self::assertSame(
-			['profile' => 'standard', 'precision' => 'int8', 'confirmed' => null],
+			['profile' => 'standard', 'precision' => 'int8', 'confirmed' => null, 'verdicts' => 2],
 			$response->getData(),
 		);
 	}
@@ -278,6 +278,32 @@ final class ProfileControllerTest extends TestCase {
 
 		self::assertSame(Http::STATUS_INTERNAL_SERVER_ERROR, $response->getStatus());
 		self::assertSame(['error' => 'profile unreadable'], $response->getData());
+	}
+
+	// -- the verdict capability signal (K6, plan 29-01) ------------------------
+
+	public function testTheAnswerAnnouncesTheVerdictGeneration(): void {
+		// A 1.4.0 container sends system_file, legacy_format and
+		// unsupported_variant only to a companion that announces 2 here;
+		// QueueController refuses a whole list with one unknown code.
+		$this->stored('standard');
+
+		$response = $this->controller($this->backendAppId())->profile();
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		$data = $response->getData();
+		self::assertIsArray($data);
+		self::assertSame(2, $data['verdicts']);
+		self::assertSame(2, ProfileController::VERDICTS_GENERATION);
+	}
+
+	public function testAForeignExAppGetsNoVerdictGeneration(): void {
+		$response = $this->controller('some_other_backend')->profile();
+
+		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+		$data = $response->getData();
+		self::assertIsArray($data);
+		self::assertArrayNotHasKey('verdicts', $data);
 	}
 
 	public function testThePrecisionsAreAClosedSetWithInt8AsDefault(): void {

@@ -36,6 +36,18 @@ use Psr\Log\LoggerInterface;
  * no session is involved.
  */
 class ProfileController extends OCSController {
+	/**
+	 * The generation of the verdict vocabulary this companion stores (K6).
+	 *
+	 * 2 means: this companion knows system_file, legacy_format and
+	 * unsupported_variant under skipped. A container may send those three codes
+	 * only to a companion that announces this value, because
+	 * QueueController refuses the whole failure or skip list with a 400 as soon
+	 * as one code in it is unknown. A 1.3 companion sends no such field, and
+	 * the container then maps the three codes onto older ones on the wire.
+	 */
+	public const VERDICTS_GENERATION = 2;
+
 	public function __construct(
 		IRequest $request,
 		private SettingsService $settingsService,
@@ -48,7 +60,9 @@ class ProfileController extends OCSController {
 	 * GET /ocs/v2.php/apps/findling/profile
 	 *
 	 * Answers with {"profile": "economy" | "standard" | "performance",
-	 * "precision": "int8" | "fp32" | null, "confirmed": "<32 hex>" | null}.
+	 * "precision": "int8" | "fp32" | null, "confirmed": "<32 hex>" | null,
+	 * "verdicts": 2}. verdicts is the constant VERDICTS_GENERATION, the
+	 * capability signal for the three skipped codes of release 1.4.0 (K6).
 	 * null is a stored precision outside the set; the container keeps its last
 	 * known precision on it rather than reindexing for a typo. confirmed is the
 	 * token the admin stored to lift a lowering of the memory guard (D-26-04),
@@ -74,6 +88,7 @@ class ProfileController extends OCSController {
 				'profile' => $this->settingsService->profile(),
 				'precision' => $this->settingsService->modelPrecision(),
 				'confirmed' => $this->settingsService->profileConfirmed(),
+				'verdicts' => self::VERDICTS_GENERATION,
 			]);
 		} catch (\Throwable $e) {
 			// A static sentence; the exception travels in its own field, which
