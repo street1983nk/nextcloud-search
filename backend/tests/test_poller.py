@@ -58,7 +58,7 @@ from findling.index.schema import FIELD_BODY_DE, FIELD_FILE_ID, FIELD_NAME
 from findling.index.wordlist_nl import dutch_mark
 from findling.index.writer import IndexBatchWriter
 from findling.main import APP, active_poller, enabled_handler
-from findling.nc.client import AsyncNextcloudApp, NextcloudException
+from findling.nc.client import AsyncNextcloudApp, NextcloudException, ShortRead
 from findling.nc.queue import (
     LANE_INDEX,
     TOPUP_IDLE,
@@ -4697,3 +4697,125 @@ def test_the_sidecar_check_reads_the_base_name_only() -> None:
     assert not poller_module._is_sidecar("x~$y.docx")
     assert not poller_module._is_sidecar("_x.txt")
     assert not poller_module._is_sidecar("")
+
+
+# -- short downloads (D-29-04, #18 case 2) ------------------------------------
+
+
+@dataclass(slots=True)
+class _ShortGateway:
+    """A fetch that comes back short a set number of times per file, then whole.
+
+    ``expected`` records what the poller asked the client to check against, so a
+    test can see that the size of the job really travels into the download.
+    """
+
+    shorts: dict[int, int]
+    calls: list[int] = field(default_factory=list)
+    expected: list[int] = field(default_factory=list)
+
+    async def __call__(
+        self,
+        nc: AsyncNextcloudApp,
+        file_id: int,
+        user_id: str,
+        fp: IO[bytes],
+        *,
+        client: Any = None,
+        expected: int = 0,
+    ) -> int | None:
+        del nc, user_id, client
+        self.calls.append(file_id)
+        self.expected.append(expected)
+        if self.shorts.get(file_id, 0) > 0:
+            self.shorts[file_id] -= 1
+            fp.write(BODY_BYTES[:5])
+            raise ShortRead(f"file id {file_id} ended at 5 of {expected} bytes")
+        fp.write(BODY_BYTES)
+        return len(BODY_BYTES)
+
+
+async def test_a_short_download_is_fetched_once_more_and_then_indexed(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, index: Index
+) -> None:
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+    gateway = _ShortGateway(shorts={4711: 1})
+    poller._fetch = gateway
+
+    result = await poller.run_once()
+
+    assert gateway.calls == [4711, 4711]
+    assert gateway.expected == [len(BODY_BYTES), len(BODY_BYTES)]
+    assert result.indexed == 1
+    assert _stored_ids(index) == [4711]
+    assert queue.acknowledged == [([91], {})]
+
+
+async def test_a_download_that_stays_short_gets_no_verdict_and_the_pass_goes_on(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, index: Index, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Twice short: the row is neither done nor failed and never corrupt. It is
+    # not unlocked either, because an unlock gives the delivery back and the
+    # row would circle forever (T-29-15); it runs into the lock timeout, the
+    # next hand-out counts, and the give-up rule of the queue ends it as
+    # repeatedly_stuck if it never arrives whole.
+    short = _job(91, 4711, title="Gehaltsabrechnung Mueller.txt", path="Personal/Gehaltsabrechnung Mueller.txt")
+    whole = _job(92, 4712)
+    queue = _FakeQueue(ClaimResult(jobs=(short, whole)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+    gateway = _ShortGateway(shorts={4711: 2})
+    poller._fetch = gateway
+
+    with caplog.at_level("INFO", logger="findling.worker.poller"):
+        result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert gateway.calls == [4711, 4711, 4712]
+    assert store.file_row(4711) is None
+    assert queue.acknowledged == [([92], {})]
+    assert queue.skips == [{}]
+    assert queue.unlocked == []
+    assert _stored_ids(index) == [4712]
+    lines = [line for line in _poller_lines(caplog) if "short" in line]
+    assert lines, "the hand-back is said in the log"
+    for line in lines:
+        assert "Gehaltsabrechnung" not in line
+        assert "Personal" not in line
+        assert "4711" not in line
+
+
+async def test_an_ocr_row_that_stays_short_gets_no_verdict(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    extract = _Extractor(outcome=ExtractionOutcome.indexed(BODY))
+    queue = _FakeQueue(ClaimResult(jobs=(_ocr_job(len(BODY_BYTES)),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, extract=extract)
+    gateway = _ShortGateway(shorts={4711: 2})
+    poller._fetch = gateway
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert gateway.calls == [4711, 4711]
+    assert extract.calls == []
+    assert store.file_row(4711) is None
+    assert queue.acknowledged == [([], {})]
+
+
+async def test_an_ocr_row_that_stays_short_beside_others_gets_no_verdict(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, index: Index
+) -> None:
+    jobs = tuple(_ocr_row(offset) for offset in range(2))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    extract = _Extractor(outcome=ExtractionOutcome.indexed(BODY))
+    poller = _slot_poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, extract=extract, ocr_slots=2)
+    gateway = _ShortGateway(shorts={7000: 2})
+    poller._fetch = gateway
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert store.file_row(7000) is None
+    assert _stored_ids(index) == [7001]
+    assert queue.acknowledged == [([301], {})]
