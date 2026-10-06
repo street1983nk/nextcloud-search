@@ -41,6 +41,7 @@ from findling.store.repo import (
     EMBEDDING_MARK,
     LEGACY_LANGUAGES,
     LEGACY_SCHEMA_STEPS,
+    RECHECK_MARK,
     SCHEMA_VERSION,
     STATE_REASONS,
     STORE_SCHEMA_MARK,
@@ -1390,3 +1391,46 @@ def test_an_existing_database_without_the_table_gets_it_on_the_next_open(tmp_pat
         assert reopened.error_class(7) == "zipfile.BadZipFile"
     finally:
         reopened.close()
+
+
+# -- the raw reader of the re-check (D-29-10) ---------------------------------
+
+
+def test_recheck_scan_reads_living_rows_above_the_cursor_in_ascending_order(store: Store) -> None:
+    store.record(5, replace(a_file(5), path="docs/._x.docx"), "failed", "corrupt")
+    store.record(3, a_file(3), "indexed", content_hash="abc", text_chars=3)
+    store.record(9, a_file(9), "skipped", "system_file")
+    store.record(7, a_file(7), "failed", "ocr_failed")
+    store.tombstone(9)
+
+    rows, last = store.recheck_scan(after=0, limit=10)
+
+    assert rows == [
+        (3, "indexed", None, "files/report-3.pdf"),
+        (5, "failed", "corrupt", "docs/._x.docx"),
+        (7, "failed", "ocr_failed", "files/report-7.pdf"),
+    ]
+    assert last == 7
+
+
+def test_recheck_scan_reads_one_block_and_ends_with_none(store: Store) -> None:
+    for file_id in (1, 2, 3):
+        store.record(file_id, a_file(file_id), "failed", "corrupt")
+
+    first, first_last = store.recheck_scan(after=0, limit=2)
+    second, second_last = store.recheck_scan(after=first_last or 0, limit=2)
+    third, third_last = store.recheck_scan(after=second_last or 0, limit=2)
+
+    assert [row[0] for row in first] == [1, 2]
+    assert first_last == 2
+    assert [row[0] for row in second] == [3]
+    assert second_last == 3
+    assert third == []
+    assert third_last is None
+
+
+def test_the_recheck_mark_is_a_meta_key_of_its_own() -> None:
+    # A position of a one time sweep, never a version: the index generation
+    # and the vector marks stay untouched by it (no full reindex, D-29-10).
+    assert RECHECK_MARK == "recheck_1_4_0"
+    assert RECHECK_MARK not in _DEFAULT_META

@@ -50,7 +50,7 @@ from findling import guard, lane
 from findling.config import OCR_SLOT_COST_BYTES, SCHEMA_VERSION, settings
 from findling.extract.dispatch import Route
 from findling.extract.dispatch import extract as dispatch_extract
-from findling.extract.errors import ChildKilled, ExtractionOutcome, Reason
+from findling.extract.errors import ChildKilled, ExtractionOutcome, Reason, is_sidecar_name
 from findling.extract.pool import SlotPool
 from findling.hardware import Hardware
 from findling.index.open import DUTCH_MARK, LANGUAGES_MARK, REBUILD_MARK, SCHEMA_MARK, expected_versions, open_index
@@ -4724,13 +4724,13 @@ async def test_a_delete_job_of_a_sidecar_keeps_its_own_branch(
 
 
 def test_the_sidecar_check_reads_the_base_name_only() -> None:
-    assert poller_module._is_sidecar("._IMG_1.jpg")
-    assert poller_module._is_sidecar("~$Bericht.docx")
-    assert not poller_module._is_sidecar(".hidden.txt")
-    assert not poller_module._is_sidecar("a._b.txt")
-    assert not poller_module._is_sidecar("x~$y.docx")
-    assert not poller_module._is_sidecar("_x.txt")
-    assert not poller_module._is_sidecar("")
+    assert is_sidecar_name("._IMG_1.jpg")
+    assert is_sidecar_name("~$Bericht.docx")
+    assert not is_sidecar_name(".hidden.txt")
+    assert not is_sidecar_name("a._b.txt")
+    assert not is_sidecar_name("x~$y.docx")
+    assert not is_sidecar_name("_x.txt")
+    assert not is_sidecar_name("")
 
 
 # -- short downloads (D-29-04, #18 case 2) ------------------------------------

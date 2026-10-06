@@ -42,6 +42,7 @@ from findling.extract.errors import (
     ExtractionOutcome,
     Reason,
     State,
+    is_sidecar_name,
 )
 from findling.store import repo
 
@@ -426,3 +427,20 @@ def test_the_detail_is_no_part_of_the_verdict() -> None:
     assert ExtractionOutcome.failed(Reason.CORRUPT, detail="zipfile.BadZipFile") == ExtractionOutcome.failed(
         Reason.CORRUPT
     )
+
+
+# -- the sidecar rule (D-29-05, D-29-10) --------------------------------------
+
+
+def test_a_sidecar_name_starts_with_the_apple_double_or_the_lock_stub_marker() -> None:
+    # The one copy of the rule: the poller skips by it and the re-check of the
+    # old stock selects by it, so both ask the same question.
+    assert is_sidecar_name("._x.docx")
+    assert is_sidecar_name("~$x.xlsx")
+
+
+def test_a_name_that_merely_contains_a_marker_is_a_document() -> None:
+    assert not is_sidecar_name(".hidden")
+    assert not is_sidecar_name("a._b")
+    assert not is_sidecar_name("x~$.docx")
+    assert not is_sidecar_name("")
