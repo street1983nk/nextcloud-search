@@ -213,6 +213,19 @@ def test_the_snapshot_expects_the_stamped_languages_mark() -> None:
     assert "'.marks.languages == null'" not in run
 
 
+def test_the_rebuild_step_demands_the_schema_of_the_running_code() -> None:
+    # v1.3.2 and this code share the index schema, so the language jump of
+    # "Store upgrade 6" moves no schema mark (deploy-harp run 37455892381). A
+    # schema bump in config.py has to turn this gate red, because then the
+    # rebuild answers a schema drift again and the demand is one step up.
+    from findling.config import SCHEMA_VERSION
+
+    assert SCHEMA_VERSION == 2
+    run = _run("Store upgrade 6,")
+    assert 'if [ "${was}" = "2" ] && [ "${now}" = "2" ]; then' in run
+    assert "which is exactly one step" not in run
+
+
 def test_the_assurances_demand_the_languages_mark_unchanged() -> None:
     # The set the upgrade registers is de,en, so the mark has to read the same
     # on both sides; any other value after the upgrade is a restamp.

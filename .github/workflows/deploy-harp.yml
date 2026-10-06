@@ -5260,31 +5260,22 @@ jobs:
             fi
           }
 
-          echo "--- 1, the schema mark moved by exactly one step ---"
-          # Three branches, after the shape of the tantivyVersion block in
-          # "Store upgrade 5": a value that cannot be compared, a value that did
-          # not move, and a value that moved further than one step. One step is
-          # the only right answer, because SCHEMA_VERSION is a counter and a
-          # rebuild answers the drift of the running code and no other.
+          echo "--- 1, the schema mark stays at the schema of the running code ---"
+          # Until plan 29-13 this demanded one step up, which held while the
+          # start was v1.2.0 (index SCHEMA_VERSION 1). v1.3.2 and this code both
+          # carry 2, so a language jump has no schema drift to answer: run
+          # 37455892381 read 2 on both sides. The demand is 2 before and 2
+          # after (findling.config.SCHEMA_VERSION, pinned by a test); that the
+          # rebuild went through and stamped is assurance 2, because only
+          # stamp_after_swap writes the new set into an existing directory.
           was=$(jq -r '.marks.schemaVersion' "${before}")
           now=$(jq -r '.marks.schemaVersion' "${after}")
-          case "${was}:${now}" in
-            *[!0-9:]*|:*|*:)
-              echo "::error::schemaVersion is not a pair of numbers (${was} before, ${now} after), so nothing here can be compared"
-              fail=1
-              ;;
-            *)
-              if [ "$(( now - was ))" = "1" ]; then
-                echo "the schema mark went from ${was} to ${now}, which is exactly one step"
-              elif [ "${was}" = "${now}" ]; then
-                echo "::error::the schema mark is still ${was} after the rebuild, so nothing was stamped and the rebuild did not go through"
-                fail=1
-              else
-                echo "::error::the schema mark went from ${was} to ${now}, which is not the one step a rebuild answers"
-                fail=1
-              fi
-              ;;
-          esac
+          if [ "${was}" = "2" ] && [ "${now}" = "2" ]; then
+            echo "the schema mark reads 2 before and after the rebuild, the schema of the running code"
+          else
+            echo "::error::the schema mark went from '${was}' to '${now}', and it has to read 2 on both sides, the schema of v1.3.2 and of this code"
+            fail=1
+          fi
 
           echo "--- 2, the languages mark names the set, in schema field order ---"
           now=$(jq -r '.marks.languages' "${after}")
@@ -5410,7 +5401,7 @@ jobs:
           # only if both halves of this milestone are: the rebuild has to have
           # carried the stored text through the Spanish chain (phase 18), and
           # the field list of a question has to have taken body_es in once the
-          # schema mark moved (phase 19). Either half missing and this is
+          # languages mark named es (phase 19). Either half missing and this is
           # nought.
           #
           # A nought here is a finding and never a reason to soften the
@@ -5444,7 +5435,7 @@ jobs:
             echo "### Rebuild on the upgraded installation (${MATRIX_SERVER_VERSION}, ${MATRIX_RUNNER})"
             echo ""
             echo "- \`FINDLING_LANGUAGES=${REBUILD_LANGUAGES}\` was set on the container of the upgraded instance and the container was created again on the volume \`${UPGRADE_VOLUME}\`, without a second registration"
-            echo "- the schema mark moved by exactly one step, the languages mark reads \`${REBUILD_LANGUAGES_NORMALISED}\`"
+            echo "- the schema mark reads 2 on both sides, the languages mark reads \`${REBUILD_LANGUAGES_NORMALISED}\`"
             echo "- the rebuild banner was observed up while the run was on and down after it, in ${running_rounds} of ${rounds} readings"
             echo "- unchanged: the hits for Belehrung, Auszug and Erinnerung, the document counts, the work stock"
             echo "- a search inside the run answered with hits, no indexing pass ran during it, no \`built by different code\` line (no generation raised)"
