@@ -1631,8 +1631,13 @@ PHP_TREE_HASH_TODAY = "3f72f80dcbefe041968eb1161d377c2c8e85f3d4c2a5d7e27815631e9
 # verdict for an unmappable TIFF variant, the JPEG draft, the rotation in place
 # and the header estimate against RLIMIT_AS). No file came and none went, so
 # PACKAGE_FILES_TODAY stays at 71. The PHP pair does not move: php/ is unchanged.
-PACKAGE_FILES_TODAY = 71
-PACKAGE_TREE_HASH_TODAY = "42f2fd36817063952c3611e3ffead8dbaa530b4c36489f1a3e2e76b6d3014e7a"
+# Measured again by plan 29-08: plan 29-08 added cfb.py and changed dispatch.py
+# (extract/cfb.py: the stdlib reader of the compound file directory behind the
+# OLE sniff, D-29-08; extract/dispatch.py: the sniff at the top of
+# _run_ooxml_route). One file came and none went, so PACKAGE_FILES_TODAY moves
+# to 72. The PHP pair does not move: php/ is unchanged.
+PACKAGE_FILES_TODAY = 72
+PACKAGE_TREE_HASH_TODAY = "266b49eaa4fb184599d5943a7a7ad6c9d198cdf3097338a274da3a9981357a1d"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

@@ -189,11 +189,16 @@ QUALIFIED_WRITING_CALLS: frozenset[tuple[str, str]] = frozenset(
     }
 )
 
-# The writes of the file travel path, measured against the package. Six, and
+# The writes of the file travel path, measured against the package. Seven, and
 # every one of them is the container's own scratch volume, the child's own
 # /proc entry or a read the gate cannot tell apart from a write:
 #
-#   extract/image.py: open        Image.open(path) on a picture. It reads, but
+#   extract/cfb.py: open          open(path, "rb") in ole_verdict (plan 29-08):
+#                                 the OLE sniff reads the header and directory
+#                                 sectors of the scratch file the dispatcher was
+#                                 handed. Read only, but counted for the same
+#                                 reason as the entry below.
+#   extract/image.py: open       Image.open(path) on a picture. It reads, but
 #                                 the mode of an open() is not readable off this
 #                                 call, and a call that may write is counted as
 #                                 one. It is listed rather than excused, because
@@ -218,11 +223,12 @@ QUALIFIED_WRITING_CALLS: frozenset[tuple[str, str]] = frozenset(
 #                                 than unlinking a second time, which is why one
 #                                 entry covers both callers.
 #
-# This is a ratchet and not a tautology. A seventh entry means the container puts
+# This is a ratchet and not a tautology. An eighth entry means the container puts
 # something on a disk in a place nobody has looked at yet, and the three
 # questions that belong to it are which directory, what is in the name, and who
 # chose that name. Failing here is the moment those questions can still be asked.
 EXPECTED_TRAVEL_PATH_WRITES = (
+    "extract/cfb.py: open",
     "extract/image.py: open",
     "extract/sandbox.py: write_text",
     "extract/sandbox.py: write_text",

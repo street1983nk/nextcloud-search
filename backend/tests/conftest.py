@@ -19,10 +19,11 @@ the unauthorized case.
 """
 
 import importlib.util
+import struct
 import sys
 import warnings
 from base64 import b64encode
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
@@ -490,3 +491,85 @@ def schema_2_index(tmp_path: Path) -> Index:
     named at :func:`fill_index`: only the schema may differ between the two.
     """
     return write_index(tmp_path, FIXTURE_DOCUMENTS)
+
+
+# A compound file (MS-CFB) written from the specification, for the OLE sniff of
+# plan 29-08. Built in the test rather than committed: no binary fixture, and no
+# file of the user who reported #18 either. The layout is the simplest one a
+# conforming writer may produce: sector 0 is the one FAT sector, the directory
+# starts at sector 1 and runs on in order.
+CFB_SIGNATURE: Final = bytes.fromhex("d0cf11e0a1b11ae1")
+CFB_FREE: Final = 0xFFFFFFFF
+CFB_END_OF_CHAIN: Final = 0xFFFFFFFE
+CFB_FAT_SECTOR: Final = 0xFFFFFFFD
+CFB_ENTRY_BYTES: Final = 128
+CFB_STREAM: Final = 2
+_CFB_ROOT: Final = 5
+
+
+def cfb_entry(name: str, object_type: int = CFB_STREAM, *, name_length: int | None = None) -> bytes:
+    """One 128 byte directory entry; ``name_length`` overrides the declared length."""
+    encoded = name.encode("utf-16-le") + b"\0\0"
+    declared = len(encoded) if name_length is None else name_length
+    entry = (
+        encoded.ljust(64, b"\0")[:64]
+        + struct.pack("<HBB3I", declared, object_type, 1, CFB_FREE, CFB_FREE, CFB_FREE)
+        + bytes(16 + 4 + 8 + 8)
+        + struct.pack("<IQ", CFB_END_OF_CHAIN, 0)
+    )
+    assert len(entry) == CFB_ENTRY_BYTES
+    return entry
+
+
+def build_cfb(
+    stream_names: Sequence[str],
+    *,
+    sector_shift: int = 9,
+    fat: dict[int, int] | None = None,
+    first_directory: int = 1,
+    fat_sector_count: int = 1,
+    raw_entries: Sequence[bytes] = (),
+) -> bytes:
+    """A compound file whose directory holds a root entry and one stream per name.
+
+    ``fat`` overrides single FAT entries (a cycle, a jump past the header DIFAT),
+    ``first_directory`` and ``fat_sector_count`` overwrite the header fields of
+    the same name, ``raw_entries`` are appended to the directory as they are.
+    """
+    sector = 1 << sector_shift
+    entries = [cfb_entry("Root Entry", _CFB_ROOT), *(cfb_entry(name) for name in stream_names), *raw_entries]
+    per_sector = sector // CFB_ENTRY_BYTES
+    while len(entries) % per_sector:
+        entries.append(bytes(CFB_ENTRY_BYTES))
+    directory = [b"".join(entries[start : start + per_sector]) for start in range(0, len(entries), per_sector)]
+
+    table = [CFB_FAT_SECTOR]
+    for number in range(1, len(directory) + 1):
+        table.append(number + 1 if number < len(directory) else CFB_END_OF_CHAIN)
+    for number, following in (fat or {}).items():
+        table.extend([CFB_FREE] * (number + 1 - len(table)))
+        table[number] = following
+    table.extend([CFB_FREE] * (sector // 4 - len(table)))
+
+    major = 3 if sector_shift == 9 else 4
+    header = (
+        CFB_SIGNATURE
+        + bytes(16)
+        + struct.pack("<HHHHH", 0x3E, major, 0xFFFE, sector_shift, 6)
+        + bytes(6)
+        + struct.pack(
+            "<9I",
+            0 if major == 3 else len(directory),
+            fat_sector_count,
+            first_directory,
+            0,
+            0x1000,
+            CFB_END_OF_CHAIN,
+            0,
+            CFB_END_OF_CHAIN,
+            0,
+        )
+        + struct.pack("<109I", 0, *([CFB_FREE] * 108))
+    )
+    fat_sector = struct.pack(f"<{sector // 4}I", *table[: sector // 4])
+    return header.ljust(sector, b"\0") + fat_sector + b"".join(directory)
