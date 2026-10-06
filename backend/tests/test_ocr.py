@@ -1208,6 +1208,49 @@ def test_a_sample_format_patch_never_reaches_outside_the_buffer() -> None:
     assert image._normalise_sample_format(bytearray(data)) is False
 
 
+def _ifd_chain_on_one_array(ifds: int, values: int) -> bytearray:
+    """A little endian TIFF of ``ifds`` IFDs whose SampleFormat all point at one array.
+
+    Each IFD has a single entry, SampleFormat as SHORT with ``values`` values at
+    the same offset, and links to the next; the shared array of zeros sits at
+    the end. Built by hand, because no writer produces it and that is the point.
+    """
+    first = 8
+    ifd_bytes = 2 + 12 + 4
+    array_at = first + ifds * ifd_bytes
+    data = bytearray(b"II*\x00" + struct.pack("<I", first))
+    for number in range(ifds):
+        following = first + (number + 1) * ifd_bytes if number + 1 < ifds else 0
+        data += struct.pack("<H", 1)
+        data += struct.pack("<HHII", _TAG_SAMPLE_FORMAT, 3, values, array_at)
+        data += struct.pack("<I", following)
+    data += bytes(2 * values)
+    return data
+
+
+def test_a_sample_format_array_shared_by_many_ifds_is_walked_at_most_once_over() -> None:
+    # Audit finding F-29-01 (plan 29-14). The entry budget bounded the IFD
+    # entries, not the values behind them: every IFD may point its SampleFormat
+    # at the same large array, and each one walked it again, so a crafted file
+    # of n bytes cost about n squared steps instead of the one pass T-29-23b
+    # promises. Three IFDs on an array of half the file already walk more
+    # values than the file holds; that is no TIFF a writer makes, it is the
+    # honest verdict.
+    data = _ifd_chain_on_one_array(ifds=3, values=1000)
+
+    assert image._normalise_sample_format(data) is False
+
+
+def test_a_shared_small_sample_format_array_of_a_multi_page_tiff_is_still_patched() -> None:
+    # Positive control of F-29-01: three pages sharing one array of three
+    # values (an RGB fax archive written by a frugal tool) stay well inside the
+    # bound and are patched as before.
+    data = _ifd_chain_on_one_array(ifds=3, values=3)
+
+    assert image._normalise_sample_format(data) is True
+    assert bytes(data[-6:]) == struct.pack("<HHH", 1, 1, 1)
+
+
 @pytest.mark.parametrize("mode", ["I;16", "RGB"])
 def test_a_float_tiff_is_an_unsupported_variant_and_not_corrupt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str

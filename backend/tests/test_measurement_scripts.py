@@ -793,8 +793,12 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # templates/admin.php (the error class row of the lookup card). No file came
 # and none went, so PHP_FILES_TODAY stays at 90. The package pair does not
 # move: backend/src/findling is unchanged.
+# Measured again by plan 29-14: plan 29-14 fixed F-29-02 in
+# lib/Migration/Version001400Date20261006000000.php (the class comment named
+# the wrong classes of the re-check). No file came and none went, so
+# PHP_FILES_TODAY stays at 90.
 PHP_FILES_TODAY = 90
-PHP_TREE_HASH_TODAY = "49ed9359a24e10f39ff18a071146b62889db6e584a21a1d28b772e7254a72031"
+PHP_TREE_HASH_TODAY = "0763e83968bebcec150c2f55b466ad1fd9d23d57c3df68039fcfa94d3be9f7b4"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
@@ -1659,8 +1663,12 @@ PHP_TREE_HASH_TODAY = "49ed9359a24e10f39ff18a071146b62889db6e584a21a1d28b772e725
 # (the pre-check resolves with the stock in force). No file came and none
 # went, so PACKAGE_FILES_TODAY stays at 73. The PHP pair does not move: php/ is
 # unchanged.
+# Measured again by plan 29-14: plan 29-14 fixed F-29-01 in extract/image.py
+# (the SampleFormat patch got a budget of its own for the values it walks, so a
+# shared array behind many IFDs is no longer walked once per IFD). No file came
+# and none went, so PACKAGE_FILES_TODAY stays at 73.
 PACKAGE_FILES_TODAY = 73
-PACKAGE_TREE_HASH_TODAY = "38dab3268b8df758298a567b4af762a151102c4952b9608c4e6507c271fe61c9"
+PACKAGE_TREE_HASH_TODAY = "3be00d8f8313ae50019f5517b1846eff66ab9ac80cd89765daae3ae90ac3cd2e"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

@@ -171,8 +171,20 @@ jobs:
       - name: The many core address space trap of the Office path (DI-06.1-31)
         run: uv run pytest -q tests/test_sandbox.py -k many_core_trap --no-header
 
+      # The two SIGKILL cases of test_slots_kill.py (a killed main process and
+      # a killed child mid pass) run on Linux only, and this job is the only
+      # place they run at all. A line reading "4723 passed, 14 skipped" never
+      # said whether they were among the passed or the skipped, so the hardening
+      # matrix of plan 29-04 could not name them. -v prints each case with its
+      # result, -rs prints every skip with its reason; the step costs the few
+      # seconds the two cases take, the same duplication as the trap above.
+      - name: The SIGKILL cases by name (test_slots_kill.py)
+        run: uv run pytest -v -rs tests/test_slots_kill.py --no-header
+
+      # -rs names every skip of the suite with its reason, so a case that falls
+      # out silently on Linux shows up in the log instead of in a count.
       - name: Tests
-        run: uv run pytest -q
+        run: uv run pytest -q -rs
 
   # The only job in this repository that runs on arm64. The target hardware of
   # this app is a 4 GB ARM board, and the decision it feeds is whether the

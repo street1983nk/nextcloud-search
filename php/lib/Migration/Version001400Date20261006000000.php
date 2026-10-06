@@ -48,11 +48,13 @@ use OCP\Migration\SimpleMigrationStep;
  * with the instance in maintenance mode, without a logged in user, and at a
  * moment when AppAPI may be restarting the container, so a migration that waits
  * on the container can turn an app update into a failed one. The second look
- * that 1.4.0 brings with it, the recheck of every failed(corrupt) and
- * skipped(unreadable) verdict under the readers of this release (D-29-10, plan
- * 29-09), is deliberately not here either: it runs in the container, after the
- * update is over and the instance is back, and it is marked done there under
- * its own mark. This file stays what it is: a few lines that drop one key.
+ * that 1.4.0 brings with it, the recheck of the classes this release fixes
+ * (failed(corrupt), failed(out_of_memory), the three new skipped codes and
+ * every sidecar name, under the readers of this release; D-29-10, plan 29-09,
+ * worker/recheck.py), is deliberately not here either: it runs in the
+ * container, after the update is over and the instance is back, and it is
+ * marked done there under its own mark. This file stays what it is: a few
+ * lines that drop one key.
  *
  * The class name and the file name have to be identical to the character.
  * Nextcloud loads migrations by file name and instantiates the class of the

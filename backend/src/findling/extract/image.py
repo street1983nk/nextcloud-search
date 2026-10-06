@@ -423,10 +423,14 @@ def _normalise_sample_format(buffer: bytearray) -> bool:
     Only exactly 0 is changed; a 3 next to it stays a 3 and the file then fails
     to open as the variant it is (T-29-23). Every offset is checked against the
     buffer before it is read or written, a loop of IFDs ends at the first repeat,
-    and the entries walked are bounded by what the buffer can hold, so a hostile
-    file costs at most one pass over its own bytes (T-29-23b). False means the
-    structure did not hold or there was nothing to patch, and the caller answers
-    with the honest verdict.
+    and both the IFDs with their entries and the SampleFormat values behind
+    them are bounded by what the buffer can hold, so a hostile file costs at
+    most one pass over its own bytes (T-29-23b). The second bound is audit
+    finding F-29-01 of plan 29-14: many IFDs may point at one shared array, and
+    without a budget of its own each of them walked it again, which made a
+    crafted file quadratic. False means the structure did not hold, the budget
+    ran out, or there was nothing to patch, and the caller answers with the
+    honest verdict.
     """
     length = len(buffer)
     if length < 8:
@@ -435,7 +439,12 @@ def _normalise_sample_format(buffer: bytearray) -> bool:
     if magic not in _TIFF_MAGICS:
         return False
     order = "<" if magic == _TIFF_MAGICS[0] else ">"
-    budget = length // 12
+    # The bytes of the IFDs walked, header and link included, so a chain of
+    # empty IFDs is bounded as well: an honest file holds each of them once.
+    budget = length
+    # SampleFormat values, two bytes each: no honest file walks more of them
+    # than it holds bytes for (F-29-01).
+    values_left = length // 2
     seen: set[int] = set()
     patched = False
     (ifd,) = struct.unpack_from(order + "I", buffer, 4)
@@ -445,7 +454,7 @@ def _normalise_sample_format(buffer: bytearray) -> bool:
         seen.add(ifd)
         (count,) = struct.unpack_from(order + "H", buffer, ifd)
         following = ifd + 2 + 12 * count
-        budget -= count
+        budget -= 6 + 12 * count
         if following + 4 > length or budget < 0:
             return False
         for number in range(count):
@@ -456,7 +465,8 @@ def _normalise_sample_format(buffer: bytearray) -> bool:
             if kind != _TIFF_SHORT:
                 return False
             at = entry + 8 if values <= 2 else struct.unpack_from(order + "I", buffer, entry + 8)[0]
-            if at + 2 * values > length:
+            values_left -= values
+            if at + 2 * values > length or values_left < 0:
                 return False
             for value in range(values):
                 where = at + 2 * value
