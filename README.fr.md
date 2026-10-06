@@ -23,6 +23,10 @@ Le modèle, c'est vous qui l'apportez, et aucun contenu ne quitte votre serveur.
 - Recherche sémantique : trouve les documents par des périphrases
 - Chaque résultat est vérifié par Nextcloud selon vos droits
 - Aucune configuration : la première indexation démarre d'elle-même
+- Profils de performance : Économe par défaut, Standard et Performance après
+  une vérification préalable du matériel
+- Modèle de recherche : int8 intégré, le fp32 plus précis se télécharge une
+  fois sous Standard et Performance
 
 ## Types de fichiers pris en charge
 
@@ -43,6 +47,9 @@ reconnaissance optique.
   l'image v1.3, méthode et données brutes dans
   [docs/performance.md](docs/performance.md)).
 - CPU : 2 cœurs suffisent, amd64 et arm64, pas de GPU
+- Sans aucune intervention, Findling continue de fonctionner aussi sobrement
+  qu'avant. Avec plus de matériel, un profil libère au plus la moitié de la
+  machine (profil Standard) ou tout sauf un cœur (profil Performance).
 
 ## Installation
 

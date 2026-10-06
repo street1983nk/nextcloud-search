@@ -283,7 +283,7 @@ aus Plan 20-03. Diese Tabelle kann also nicht an einem Wortlaut zerbrechen.
 | `Timed out while reading` | Zeitüberschreitung beim Lesen | Tempo scaduto durante la lettura |
 | `The next run tries again.` | Wird beim nächsten Lauf erneut versucht. | La prossima passata riprova. |
 | `Not enough memory while reading` | Zu wenig Speicher beim Lesen | Memoria insufficiente durante la lettura |
-| `The next run tries again. If it happens again, lower the size cap.` | Wird beim nächsten Lauf erneut versucht. Bei Wiederholung den Größen-Cap senken. | La prossima passata riprova. Se succede di nuovo, abbassare il limite di dimensione. |
+| `The next run tries again. If it happens again, give each document more memory: deploy Findling Backend with a larger FINDLING_EXTRACT_ADDRESS_SPACE_BYTES, for example 1073741824 (1 GiB).` | Wird beim nächsten Lauf erneut versucht. Bei Wiederholung jedem Dokument mehr Speicher geben: Findling Backend mit einem größeren FINDLING_EXTRACT_ADDRESS_SPACE_BYTES bereitstellen, zum Beispiel 1073741824 (1 GiB). | La prossima passata riprova. Se succede di nuovo, dare più memoria a ogni documento: distribuire Findling Backend con un FINDLING_EXTRACT_ADDRESS_SPACE_BYTES più grande, per esempio 1073741824 (1 GiB). |
 | `File was not retrievable` | Datei war nicht abrufbar | Non è stato possibile recuperare il file |
 | `Stuck repeatedly` | Mehrfach hängen geblieben | Bloccato più volte |
 | `Findling does not try this file again. Use the lookup to check whether it opens outside of Nextcloud.` | Findling versucht diese Datei nicht mehr. Über die Diagnose prüfen, ob sie sich außerhalb von Nextcloud öffnen lässt. | Findling non riprova più con questo file. Con la verifica controllare se si apre fuori da Nextcloud. |
@@ -299,6 +299,7 @@ aus Plan 20-03. Diese Tabelle kann also nicht an einem Wortlaut zerbrechen.
 | `Not seen yet` | Noch nicht gesehen | Non ancora visto |
 | `State unknown right now` | Zustand im Moment unbekannt | Stato sconosciuto in questo momento |
 | `File ID: %s` | Datei-ID: %s | ID del file: %s |
+| `Error class: %s` | Fehlerklasse: %s | Classe di errore: %s |
 | `Last checked %s` | Zuletzt geprüft: %s | Ultimo controllo: %s |
 | `The lookup did not work. Nothing about this file has changed.` | Die Prüfung hat nicht funktioniert. An dieser Datei hat sich nichts geändert. | La verifica non ha funzionato. Per questo file non è cambiato nulla. |
 | `The state of this file is unknown right now because the backend does not answer.` | Der Zustand dieser Datei ist im Moment unbekannt, weil das Backend nicht antwortet. | In questo momento lo stato di questo file è sconosciuto, perché il servizio non risponde. |

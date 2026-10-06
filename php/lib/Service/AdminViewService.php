@@ -528,7 +528,7 @@ final class AdminViewService {
 		],
 		'out_of_memory' => [
 			'Not enough memory while reading',
-			'The next run tries again. If it happens again, lower the size cap.',
+			'The next run tries again. If it happens again, give each document more memory: deploy Findling Backend with a larger FINDLING_EXTRACT_ADDRESS_SPACE_BYTES, for example 1073741824 (1 GiB).',
 		],
 		'gateway_error' => [
 			'File was not retrievable',

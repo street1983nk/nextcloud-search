@@ -21,6 +21,10 @@ You bring the model, and no content leaves your server.
 - Semantic search: finds documents through paraphrases
 - Every result is permission-checked by Nextcloud
 - No configuration: the first index run starts on its own
+- Performance profiles: Economy by default, Standard and Performance after a
+  pre-check of the hardware
+- Search model: int8 built in, the more accurate fp32 can be downloaded once
+  under Standard and Performance
 
 ## Supported file types
 
@@ -38,6 +42,9 @@ CSV, and images (JPEG, PNG, TIFF, WebP) through OCR.
   v1.3 image, method and raw data in
   [docs/performance.md](docs/performance.md)).
 - CPU: 2 cores are enough, amd64 and arm64, no GPU
+- Without any change on your side, Findling keeps running as economically as
+  before. Anyone with more hardware can use a profile to free at most half of
+  the box (Standard profile) or everything but one core (Performance profile).
 
 ## Installation
 

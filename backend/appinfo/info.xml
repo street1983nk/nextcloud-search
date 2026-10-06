@@ -86,6 +86,7 @@
 - The External App behind the Findling search app: text extraction, OCR and the search index
 - Runs entirely inside your own instance and does nothing without the Findling app
 - Never modifies your files
+- Performance profile and search model are chosen on the admin page of the Findling app
 - Privacy: everything runs locally, no telemetry, nothing leaves your server
 - Search languages: German and English by default, Spanish, Italian, Dutch and Portuguese available
 
@@ -107,11 +108,14 @@ Requirements:
 - RAM: 4 GB is enough, 730.2 MB resident after an index run, under a hard 2 GB limit (measured)
 - CPU: 2 cores are enough, amd64 and arm64
 
+Without any change on your side, Findling keeps running as economically as before. Anyone with more hardware can use a profile to free at most half of the box (Standard profile) or everything but one core (Performance profile).
+
 Enterprise support and paid add-ons: request a quote at admin@infranode.dev]]></description>
 	<description lang="de"><![CDATA[Was Findling Backend ist:
 - Die External App hinter der Such-App Findling: Textauszug, Texterkennung und der Suchindex
 - Läuft komplett in Ihrer eigenen Instanz und tut ohne die App Findling nichts
 - Verändert nie Ihre Dateien
+- Leistungsprofil und Suchmodell werden in der Verwaltung der App Findling gewählt
 - Datenschutz: alles läuft lokal, keine Telemetrie, nichts verlässt den Server
 - Suchsprachen: Deutsch und Englisch voreingestellt, Spanisch, Italienisch, Niederländisch und Portugiesisch verfügbar
 
@@ -133,11 +137,14 @@ Anforderungen:
 - RAM: 4 GB genügen, 730,2 MB resident nach einem Indexlauf, unter einer harten 2-GB-Grenze (gemessen)
 - CPU: 2 Kerne genügen, amd64 und arm64
 
+Ohne Zutun läuft Findling unverändert sparsam wie bisher. Wer mehr Hardware hat, gibt per Profil höchstens die Hälfte der Box frei (Profil Standard) oder alles bis auf einen Kern (Profil Leistung).
+
 Enterprise-Support und bezahlte Add-ons: Angebot anfordern unter admin@infranode.dev]]></description>
 	<description lang="fr"><![CDATA[Ce qu'est Findling Backend :
 - L'External App derrière l'application de recherche Findling : extraction de texte, reconnaissance optique et index
 - Fonctionne entièrement dans votre propre instance et ne fait rien sans l'application Findling
 - Ne modifie jamais vos fichiers
+- Le profil de performance et le modèle de recherche se choisissent dans la page d'administration de l'application Findling
 - Confidentialité : tout fonctionne localement, aucune télémétrie, rien ne quitte votre serveur
 - Langues de recherche : allemand et anglais par défaut, espagnol, italien, néerlandais et portugais disponibles
 
@@ -158,6 +165,8 @@ Prérequis :
 - Nextcloud 33 à 35, applications : AppAPI, Findling Backend (External Apps), Findling
 - RAM : 4 Go suffisent, 730,2 Mo résidents après une indexation, sous une limite stricte de 2 Go (mesuré)
 - CPU : 2 cœurs suffisent, amd64 et arm64
+
+Sans aucune intervention, Findling continue de fonctionner aussi sobrement qu'avant. Avec plus de matériel, un profil libère au plus la moitié de la machine (profil Standard) ou tout sauf un cœur (profil Performance).
 
 Support entreprise et modules payants : demande de devis à admin@infranode.dev]]></description>
 	<version>1.4.0</version>
@@ -536,7 +545,7 @@ Support entreprise et modules payants : demande de devis à admin@infranode.dev]
 			<variable>
 				<name>FINDLING_EXTRACT_ADDRESS_SPACE_BYTES</name>
 				<display-name>Memory a single document may take while it is read</display-name>
-				<description>A whole number of bytes. It caps the address space of the process that reads one document, so a broken or hostile file cannot take the machine down with it. The default of 536870912 (512 MB) reads every office document and every scanned page at 300 dpi. Very large photos, around 40 megapixels and up, need more and otherwise end as failed with the reason out_of_memory; 1073741824 (1 GiB) reads them. The cap holds for each reading process on its own; where the profile reads several documents side by side, each of them may take this much.</description>
+				<description>A whole number of bytes. It caps the address space of the process that reads one document, so a broken or hostile file cannot take the machine down with it. The default of 536870912 (512 MB) reads every office document and every scanned page at 300 dpi. Very large PNG and TIFF images, around 40 megapixels and up, need more and otherwise end as failed with the reason out_of_memory; 1073741824 (1 GiB) reads them. Large JPEGs are decoded at reduced scale and rarely reach the cap. The cap holds for each reading process on its own: under Economy one document is read at a time, under Standard and Performance several are read side by side, and each of them may take this much.</description>
 				<default>536870912</default>
 			</variable>
 			<!--
@@ -547,13 +556,13 @@ Support entreprise et modules payants : demande de devis à admin@infranode.dev]
 				config.MAX_CELLS: AppAPI sets a declared default as a real
 				environment variable, and a value that differs from the constant
 				would overrule every box (test_info_xml_defaults.py keeps the two
-				equal). The wording of the description is provisional until the
-				owner accepts the text draft of plan 29-02.
+				equal). The wording of the description is the one the owner
+				accepted with the text draft of plan 29-02 on 2026-10-06.
 			-->
 			<variable>
 				<name>FINDLING_MAX_CELLS</name>
 				<display-name>Cells a single spreadsheet may have</display-name>
-				<description>A whole number of cells per spreadsheet file. The default of 200000 reads ordinary workbooks and keeps a single export with a million rows from taking the machine down. A larger file is skipped with the reason too_many_cells rather than indexed in part. Anything that is not a positive whole number falls back to the default.</description>
+				<description>A whole number of cells per spreadsheet file. The default of 200000 reads ordinary workbooks and keeps a single export with a million rows from taking the machine down. A larger file is skipped with the reason too_many_cells rather than indexed in part. Anything that is not a positive whole number falls back to the default. A new value applies to the files read from then on; a spreadsheet already skipped is read again when it changes.</description>
 				<default>200000</default>
 			</variable>
 		</environment-variables>

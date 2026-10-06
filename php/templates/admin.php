@@ -863,6 +863,7 @@ $magnifyIcon = 'M9.5,3A6.5,6.5 0 0,1 16,9.5C16,11.11 15.41,12.59 14.44,13.73L14.
 		<p class="findling-path" id="findling-diagnosis-path" hidden></p>
 		<p id="findling-diagnosis-label" hidden></p>
 		<p class="settings-hint" id="findling-diagnosis-remedy" hidden></p>
+		<p class="settings-hint" id="findling-diagnosis-errorclass" hidden></p>
 		<p class="settings-hint" id="findling-diagnosis-note" hidden></p>
 		<p class="settings-hint" id="findling-diagnosis-id" hidden></p>
 		<p class="settings-hint" id="findling-diagnosis-checked" hidden></p>

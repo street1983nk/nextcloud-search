@@ -107,12 +107,13 @@ bleibt. Die 4 GB und die harte 2-GB-Grenze sind Anforderungen und keine
 Messzahlen; die 103,2 kommt in keinem der sechs Texte mehr vor, statt neben
 der neuen Zahl zu stehen.
 
-**Stand dieser Datei:** Die sechs Texte unten sind die Fassung 1.3.0, vom
-Owner am 27.09.2026 abgenommen und in Plan 23-07 am 27.09.2026 wörtlich in
-beide `info.xml` übernommen. Vorlage und beide `info.xml` sind damit
-wortgleich; ein Unterschied zwischen ihnen ist Drift. Die Messzahl ist 730,2 MB
-(D-09), in den sechs Texten und in den drei READMEs. Der Entwurf mit allen
-Gegenüberstellungen steht unten im Abschnitt "Entwurf v1.3.0".
+**Stand dieser Datei:** Die sechs Texte unten sind die Fassung 1.4.0, vom
+Owner am 06.10.2026 abgenommen (Abschnitt "Entwurf 1.4.0 (Phase 29)") und in
+Plan 29-12 am 06.10.2026 wörtlich in beide `info.xml` übernommen. Vorlage und
+beide `info.xml` sind damit wortgleich; ein Unterschied zwischen ihnen ist
+Drift. Die Messzahl ist 730,2 MB (D-09), in den sechs Texten und in den drei
+READMEs. Der Entwurf mit allen Gegenüberstellungen steht unten im Abschnitt
+"Entwurf 1.4.0 (Phase 29)", der vorige im Abschnitt "Entwurf v1.3.0".
 
 ---
 
@@ -148,6 +149,8 @@ What Findling does:
 - Semantic search: finds documents through paraphrases
 - Every result is permission-checked by Nextcloud
 - No configuration: the first index run starts on its own
+- Performance profiles: Economy by default, Standard and Performance after a pre-check of the hardware
+- Search model: int8 built in, the more accurate fp32 can be downloaded once under Standard and Performance
 - Privacy: everything runs locally, no telemetry, nothing leaves your server
 - Search languages: German and English by default, Spanish, Italian, Dutch and Portuguese available
 
@@ -169,6 +172,8 @@ Requirements:
 - RAM: 4 GB is enough, 730.2 MB resident after an index run, under a hard 2 GB limit (measured)
 - CPU: 2 cores are enough, amd64 and arm64
 
+Without any change on your side, Findling keeps running as economically as before. Anyone with more hardware can use a profile to free at most half of the box (Standard profile) or everything but one core (Performance profile).
+
 Enterprise support and paid add-ons: request a quote at admin@infranode.dev
 
 ## `<description lang="de">`
@@ -179,6 +184,8 @@ Was Findling kann:
 - Semantische Suche: findet Dokumente auch über Umschreibungen
 - Jeder Treffer wird von Nextcloud rechtegeprüft
 - Keine Konfiguration: der erste Indexlauf startet von selbst
+- Leistungsprofile: Sparsam voreingestellt, Standard und Leistung nach einer Vorab-Prüfung der Hardware
+- Suchmodell: int8 eingebaut, das genauere fp32 unter Standard und Leistung einmalig ladbar
 - Datenschutz: alles läuft lokal, keine Telemetrie, nichts verlässt den Server
 - Suchsprachen: Deutsch und Englisch voreingestellt, Spanisch, Italienisch, Niederländisch und Portugiesisch verfügbar
 
@@ -200,6 +207,8 @@ Anforderungen:
 - RAM: 4 GB genügen, 730,2 MB resident nach einem Indexlauf, unter einer harten 2-GB-Grenze (gemessen)
 - CPU: 2 Kerne genügen, amd64 und arm64
 
+Ohne Zutun läuft Findling unverändert sparsam wie bisher. Wer mehr Hardware hat, gibt per Profil höchstens die Hälfte der Box frei (Profil Standard) oder alles bis auf einen Kern (Profil Leistung).
+
 Enterprise-Support und bezahlte Add-ons: Angebot anfordern unter admin@infranode.dev
 
 ## `<description lang="fr">`
@@ -210,6 +219,8 @@ Ce que Findling sait faire :
 - Recherche sémantique : trouve les documents par des périphrases
 - Chaque résultat est vérifié par Nextcloud selon vos droits
 - Aucune configuration : la première indexation démarre d'elle-même
+- Profils de performance : Économe par défaut, Standard et Performance après une vérification préalable du matériel
+- Modèle de recherche : int8 intégré, le fp32 plus précis se télécharge une fois sous Standard et Performance
 - Confidentialité : tout fonctionne localement, aucune télémétrie, rien ne quitte votre serveur
 - Langues de recherche : allemand et anglais par défaut, espagnol, italien, néerlandais et portugais disponibles
 
@@ -230,6 +241,8 @@ Prérequis :
 - Nextcloud 33 à 35, applications : AppAPI, Findling Backend (External Apps), Findling
 - RAM : 4 Go suffisent, 730,2 Mo résidents après une indexation, sous une limite stricte de 2 Go (mesuré)
 - CPU : 2 cœurs suffisent, amd64 et arm64
+
+Sans aucune intervention, Findling continue de fonctionner aussi sobrement qu'avant. Avec plus de matériel, un profil libère au plus la moitié de la machine (profil Standard) ou tout sauf un cœur (profil Performance).
 
 Support entreprise et modules payants : demande de devis à admin@infranode.dev
 
@@ -263,6 +276,7 @@ What Findling Backend is:
 - The External App behind the Findling search app: text extraction, OCR and the search index
 - Runs entirely inside your own instance and does nothing without the Findling app
 - Never modifies your files
+- Performance profile and search model are chosen on the admin page of the Findling app
 - Privacy: everything runs locally, no telemetry, nothing leaves your server
 - Search languages: German and English by default, Spanish, Italian, Dutch and Portuguese available
 
@@ -284,6 +298,8 @@ Requirements:
 - RAM: 4 GB is enough, 730.2 MB resident after an index run, under a hard 2 GB limit (measured)
 - CPU: 2 cores are enough, amd64 and arm64
 
+Without any change on your side, Findling keeps running as economically as before. Anyone with more hardware can use a profile to free at most half of the box (Standard profile) or everything but one core (Performance profile).
+
 Enterprise support and paid add-ons: request a quote at admin@infranode.dev
 
 ## `<description lang="de">`
@@ -292,6 +308,7 @@ Was Findling Backend ist:
 - Die External App hinter der Such-App Findling: Textauszug, Texterkennung und der Suchindex
 - Läuft komplett in Ihrer eigenen Instanz und tut ohne die App Findling nichts
 - Verändert nie Ihre Dateien
+- Leistungsprofil und Suchmodell werden in der Verwaltung der App Findling gewählt
 - Datenschutz: alles läuft lokal, keine Telemetrie, nichts verlässt den Server
 - Suchsprachen: Deutsch und Englisch voreingestellt, Spanisch, Italienisch, Niederländisch und Portugiesisch verfügbar
 
@@ -313,6 +330,8 @@ Anforderungen:
 - RAM: 4 GB genügen, 730,2 MB resident nach einem Indexlauf, unter einer harten 2-GB-Grenze (gemessen)
 - CPU: 2 Kerne genügen, amd64 und arm64
 
+Ohne Zutun läuft Findling unverändert sparsam wie bisher. Wer mehr Hardware hat, gibt per Profil höchstens die Hälfte der Box frei (Profil Standard) oder alles bis auf einen Kern (Profil Leistung).
+
 Enterprise-Support und bezahlte Add-ons: Angebot anfordern unter admin@infranode.dev
 
 ## `<description lang="fr">`
@@ -321,6 +340,7 @@ Ce qu'est Findling Backend :
 - L'External App derrière l'application de recherche Findling : extraction de texte, reconnaissance optique et index
 - Fonctionne entièrement dans votre propre instance et ne fait rien sans l'application Findling
 - Ne modifie jamais vos fichiers
+- Le profil de performance et le modèle de recherche se choisissent dans la page d'administration de l'application Findling
 - Confidentialité : tout fonctionne localement, aucune télémétrie, rien ne quitte votre serveur
 - Langues de recherche : allemand et anglais par défaut, espagnol, italien, néerlandais et portugais disponibles
 
@@ -341,6 +361,8 @@ Prérequis :
 - Nextcloud 33 à 35, applications : AppAPI, Findling Backend (External Apps), Findling
 - RAM : 4 Go suffisent, 730,2 Mo résidents après une indexation, sous une limite stricte de 2 Go (mesuré)
 - CPU : 2 cœurs suffisent, amd64 et arm64
+
+Sans aucune intervention, Findling continue de fonctionner aussi sobrement qu'avant. Avec plus de matériel, un profil libère au plus la moitié de la machine (profil Standard) ou tout sauf un cœur (profil Performance).
 
 Support entreprise et modules payants : demande de devis à admin@infranode.dev
 

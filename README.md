@@ -22,6 +22,10 @@ Das Modell bringen Sie mit, kein Inhalt verlässt Ihren Server.
 - Semantische Suche: findet Dokumente auch über Umschreibungen
 - Jeder Treffer wird von Nextcloud rechtegeprüft
 - Keine Konfiguration: der erste Indexlauf startet von selbst
+- Leistungsprofile: Sparsam voreingestellt, Standard und Leistung nach einer
+  Vorab-Prüfung der Hardware
+- Suchmodell: int8 eingebaut, das genauere fp32 unter Standard und Leistung
+  einmalig ladbar
 
 ## Unterstützte Dateitypen
 
@@ -40,6 +44,9 @@ Markdown, CSV sowie Bilder (JPEG, PNG, TIFF, WebP) per Texterkennung.
   gegen das v1.3-Abbild, Methode und Rohdaten in
   [docs/performance.md](docs/performance.md)).
 - CPU: 2 Kerne genügen, amd64 und arm64, keine GPU
+- Ohne Zutun läuft Findling unverändert sparsam wie bisher. Wer mehr Hardware
+  hat, gibt per Profil höchstens die Hälfte der Box frei (Profil Standard) oder
+  alles bis auf einen Kern (Profil Leistung).
 
 ## Installation
 
