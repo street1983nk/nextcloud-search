@@ -245,8 +245,8 @@ samt Abschluss-Doku dieses Plans freigegeben.
 
 Geschrieben am 06.10.2026 in Plan 29-15, nach dem Tag-Push. Jede Zeile trägt
 eine Zahl, eine Laufnummer oder einen Wortlaut; keine ist geschätzt oder aus
-einem früheren Release übernommen. Die Zeilen 6 und folgende (Einreichung,
-HTTP-Codes, Gegenprobe der App-Seiten) schreibt Plan 29-16.
+einem früheren Release übernommen. Die Zeilen 6 bis 8 (Einreichung,
+HTTP-Codes, Gegenprobe der App-Seiten) hat Plan 29-16 geschrieben.
 
 Owner-Wort zum Tag, wörtlich: Frage "Gibst du das Wort fuer Tag v1.4.0 auf
 99326ae2?" (nach komplettem CI-Grün auf 99326ae2), Antwort "go" (06.10.2026).
@@ -258,6 +258,22 @@ Owner-Wort zum Tag, wörtlich: Frage "Gibst du das Wort fuer Tag v1.4.0 auf
 | 3 | **Anhänge** | `findling.tar.gz` **529.651 B**, `findling.tar.gz.sig` **684 B**, `findling_backend.tar.gz` **33.663 B**, `findling_backend.tar.gz.sig` **684 B**. Alle unter der Store-Grenze von 20.971.520 B; die größere Hälfte liegt bei 2,5 Prozent davon (v1.3.2: 371.641 B und 32.427 B). Unabhängig nachgeprüft: Anhänge per `gh release download` geholt, beide Zertifikate frisch aus `nextcloud/app-certificate-requests` (`subject=CN=findling`, `subject=CN=findling_backend`), `openssl dgst -sha512 -verify` lieferte lokal `findling: Verified OK` und `findling_backend: Verified OK`; in den Archiven `<version>1.4.0</version>` beidseitig und `<image-tag>1.4.0</image-tag>` |
 | 4 | **Container-Abbild** | `docker manifest inspect ghcr.io/street1983nk/findling_backend:1.4.0` mit leerem `DOCKER_CONFIG`, also ohne Login: `application/vnd.oci.image.index.v1+json` mit `linux/amd64` und `linux/arm64`, dazu die zwei Herkunftsbelege als `unknown/unknown`. Abgefragt **vor** der Einreichung |
 | 5 | **Release-Notiz** | `gh release edit v1.4.0 --notes-file` mit der abgenommenen englischen Faktenliste aus `docs/store-listing.md`, "Entwurf 1.4.0" Teil 6, als Kopf vor den generierten Notizen. Einzige Abweichung ist der dort vorab vereinbarte Zusatz "and on the admin page" in der Zeile zur Fehlerklasse, weil 29-12 die Zeile "Error class" auf der Verwaltungskarte gebaut hat. Beleg `gh release view v1.4.0 --json body --jq .body \| head -5`: "Findling 1.4.0. Both apps need to be on 1.4.0." gefolgt von den Zeilen zu Performance profiles, Search model und Reading and OCR processes; der Dank an budachst und #18 stehen im Text |
+| 6 | **Einreichung** | `gh workflow run store-submit.yml -f tag=v1.4.0` (register aus), Lauf **37473805519** ("Store submission", workflow_dispatch, 06.10.2026 13:49 UTC), success, auf `99326ae2`. Kein zweiter Lauf |
+| 7 | **Antwortcodes** | Im Protokoll von Lauf 37473805519 wörtlich: `release findling v1.4.0: HTTP 201` und `release findling_backend v1.4.0: HTTP 201`, je gefolgt von `... v1.4.0 is in the store` |
+| 8 | **Gegenprobe** | Je App-Seite einzeln abgerufen (nicht die Katalogdatei): `https://apps.nextcloud.com/apps/findling` HTTP 200, Versionszeile NC 35 verlinkt `releases/download/v1.4.0/findling.tar.gz` mit Text "1.4.0"; `https://apps.nextcloud.com/apps/findling_backend` HTTP 200, Versionszeile NC 35 verlinkt `releases/download/v1.4.0/findling_backend.tar.gz` mit Text "1.4.0". Auf beiden Seiten kein "1.3.2" mehr |
+
+### Die sechs öffentlichen Posts (06.10.2026, nach den zwei 201)
+
+Texte zeichengleich aus `docs/store-listing.md`, "Entwurf 1.4.0" Teil 7 und
+Teil 8 (gegen die per API zurückgelesenen Körper verglichen). Kein Issue wurde
+geschlossen; alle fünf Melder-Issues stehen weiter auf OPEN.
+
+- #15: https://github.com/street1983nk/nextcloud-search/issues/15#issuecomment-6017714268
+- #18: https://github.com/street1983nk/nextcloud-search/issues/18#issuecomment-6017714646
+- #19: https://github.com/street1983nk/nextcloud-search/issues/19#issuecomment-6017715049
+- #21: https://github.com/street1983nk/nextcloud-search/issues/21#issuecomment-6017715570
+- #22: https://github.com/street1983nk/nextcloud-search/issues/22#issuecomment-6017716016
+- Pillow upstream: https://github.com/python-pillow/Pillow/issues/10139
 
 ### Die sieben Tag-Läufe, alle success
 

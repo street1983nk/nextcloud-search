@@ -40,7 +40,7 @@
 ### Messung und Release (MESS/REL, Fortsetzung ab MESS-10/REL-04)
 
 - [ ] **MESS-10**: Abnahme-Anfahrt am gebauten Produkt: RAM-Messung je Profilstufe auf echter Hardware, BEVOR die Settings-UI die Stufe anbietet (Owner-Auflage 24.09.); Rechenblatt + Kostendeckel VOR dem Boxstart zur Owner-Freigabe, Runbook-Disziplin (Cron-Intervall-Gate, Digest-Wechsel, Rohdaten committen)
-- [ ] **REL-04**: v1.4.0 eingereicht: beide Apps in gleicher Version (PHP-Kopplung K6: KIND_BATCH/Art-Filter sind Companion-Release), Haertung + Audits wie gehabt, Store-Texte gate-konform mit Owner-Abnahme (inkl. Anteils-Aussage "Findling nimmt hoechstens X der Box" im Owner-Wortlaut)
+- [x] **REL-04**: v1.4.0 eingereicht: beide Apps in gleicher Version (PHP-Kopplung K6: KIND_BATCH/Art-Filter sind Companion-Release), Haertung + Audits wie gehabt, Store-Texte gate-konform mit Owner-Abnahme (inkl. Anteils-Aussage "Findling nimmt hoechstens X der Box" im Owner-Wortlaut) (erfuellt 06.10.2026: Release-Lauf 37470623070, store-submit-Lauf 37473805519 mit zweimal HTTP 201, beide App-Seiten nennen 1.4.0; Belegkette Zeilen 1 bis 8 in docs/audits/2026-10-phase-29/README.md; Vorbehalt D-29-11: Box-Belege verschoben)
 
 ## Future Requirements (deferred)
 
@@ -76,7 +76,7 @@
 | PRUEF-01 | Phase 27 | Complete |
 | UI-01 | Phase 27 | Complete |
 | MESS-10 | Phase 28 | Pending |
-| REL-04 | Phase 29 | Pending |
+| REL-04 | Phase 29 | Complete (store-submit 37473805519, 2x HTTP 201) |
 
 **Coverage:** 14/14 v1.4-Requirements zugeordnet, keine Waisen, keine Doppelungen.
 
