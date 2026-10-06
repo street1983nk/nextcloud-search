@@ -157,3 +157,17 @@ Abbild-Staende, Cron-Gate je Instanz) und die ehrlich offenen Punkte (250 MiB oh
 Feldlauf, Vollindex-Term ohne Laufzeit-Verdrahtung, Fall-2-Fix nur per Test belegt,
 aws_box.sh-Schluesselpaar-Liste, StarletteDeprecationWarning); alle offenen Punkte
 sind als Phase-29-Kandidaten notiert. Phase 28 ist damit abgenommen.
+
+
+## Ergaenzung zum dritten Push und zum Dependabot-Merge (Audit-Befund T-28-69)
+
+Faktischer Hergang, aus dem Session-Verlauf vom 05./06.10.2026: Der Owner schrieb am
+05.10. abends im Chat woertlich "pr 24 in findling nicht vergessen"; der Orchestrator
+antwortete mit dem Plan "Push-Entscheid, dann #24 mergen, dann lokal nachziehen", der
+Owner quittierte mit "ok". Nach dem C7-Signal "Pushen wie es ist" wurden gepusht:
+Schub 1 (18602c48..ab634401), Schub 2 (ab634401..42e07168), dann der Squash-Merge von
+PR #24 (aae091bd, GitHub-seitig), dann Schub 3 (aae091bd..1a115cd9, vier Doku-Commits
+des Phasenabschlusses). Der Orchestrator las C7 als Deckung fuer die Folge-Pushes der
+Session; das Audit wertet das zu Recht als nicht woertlich belegt. Eine NACHTRAEGLICHE
+woertliche Owner-Bestaetigung fuer Schub 3 und den #24-Merge STEHT AUS; bis dahin
+bleibt T-28-69 offen (28-SECURITY.md, status open) und es wird nicht weiter gepusht.
