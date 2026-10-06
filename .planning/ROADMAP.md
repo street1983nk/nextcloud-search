@@ -312,7 +312,35 @@ Plans:
   3. Beide Apps tragen 1.4.0 (PHP-Kopplung K6), sind signiert, und die Submission liefert 2x HTTP 201.
   4. Die Store-Texte sind gate-konform (Faktenliste, eine Messzahl) und enthalten die Anteils-Aussage im Owner-Wortlaut; der Owner hat sie vor der Abgabe abgenommen.
 
-**Plans**: TBD
+Lesart Erfolgskriterium 2 per D-29-01: Upgrade-Strecke 1.3.2 auf 1.4.0 (aktueller Store-Stand).
+
+**Plans**: 16 plans in 13 Wellen
+
+Plans:
+**Wave 1**
+
+- [ ] 29-01-PLAN.md , drei skipped-Reasons (system_file, legacy_format, unsupported_variant) in allen Kopien + 16 l10n, K6-Fähigkeitssignal verdicts mit Draht-Rückfall
+- [ ] 29-02-PLAN.md , Textentwurf 1.4.0 (Store-Texte mit D-24-04, Labels, Variablentexte, Release-Notiz, Issue-Antworten, Pillow-Issue) mit Owner-Abnahme
+- [ ] 29-03-PLAN.md , Hygiene: FINDLING_MAX_CELLS deklariert (#21), Starlette-Filter, aws_box Schlüsselpaar-ID, D-29-13 verifiziert
+- [ ] 29-04-PLAN.md , Härtungsmatrix Erfolgskriterium 1, Lückentests (nur Tests)
+
+**Wave 2 bis 7** *(seriell wegen Baumhash-Pins)*
+
+- [ ] 29-05-PLAN.md , Sidecar-Skip ._*/~$* vor judge (D-29-02/05) und Download-Größenprüfung ShortRead (D-29-04)
+- [ ] 29-06-PLAN.md , Fehlerdetail je Datei: detail, Tabelle file_errors, errorClass in Diagnose (D-29-09)
+- [ ] 29-07-PLAN.md , TIFF-Shim und Variantenurteil (D-29-06), JPEG draft + Header-Schätzung (D-29-07)
+- [ ] 29-08-PLAN.md , OLE/CFB-Sniff unter OOXML-Endung (D-29-08)
+- [ ] 29-09-PLAN.md , Altbestands-Nachprüfung nach dem Upgrade, Bänder + Meta-Marke, an Companion-Signal gekoppelt (D-29-10)
+- [ ] 29-10-PLAN.md , Vollindex-Term zur Laufzeit und im Slotkosten-Skript (D-29-12)
+
+**Wave 8 bis 13**
+
+- [ ] 29-11-PLAN.md , Versionen 1.4.0, Migration Version001400, Upgrade-Strecke ab v1.3.2 mit neuer Saat (D-29-01)
+- [ ] 29-12-PLAN.md , wörtliche Übernahme der abgenommenen Texte, Gate auf D-24-04
+- [ ] 29-13-PLAN.md , Push mit Owner-Wort, CI-Beweis Fremdinstallation + Upgrade (Owner-Checkpoint)
+- [ ] 29-14-PLAN.md , Phasenaudit, Befundfixe, Owner-Abnahme der Launch-Härtung (Owner-Checkpoint)
+- [ ] 29-15-PLAN.md , Tag v1.4.0 mit Owner-Wort, Release-Belegkette (Owner-Checkpoint)
+- [ ] 29-16-PLAN.md , Einreichung 2x HTTP 201, Issue-Antworten, Pillow-Issue, Zustandspflege (Owner-Checkpoints)
 
 ## Progress
 
@@ -327,7 +355,7 @@ Plans:
 | 26. N OCR-Slots und Speicherwächter | v1.4 | 14/14 | Complete    | 2026-09-29 |
 | 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 16/16 | Complete    | 2026-09-29 |
 | 28. Abnahme-Anfahrt | v1.4 | 14/14 | Complete    | 2026-10-06 |
-| 29. Härtung und Store-Einreichung 1.4.0 | v1.4 | 0/? | Not started | - |
+| 29. Härtung und Store-Einreichung 1.4.0 | v1.4 | 0/16 | Planned | - |
 
 ## Nach v1.3 (Wiedervorlage)
 
