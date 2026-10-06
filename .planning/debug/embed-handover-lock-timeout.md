@@ -162,3 +162,29 @@ Zeigt sie einen Transport-Timeout, wird Option B (Sofort-Retry) nachgeruestet, s
 die Ursache serverseitig gesucht. Belege fuer die naechste Anfahrt stehen oben unter Offen.
 Fall 2 ist mit a0ac5aee behoben (Band 200, Kopplungstest an MAX_LIST_LENGTH); der
 Feldbeleg eines echten Laufs steht aus und reist mit der naechsten Anfahrt.
+
+
+## Boxlose Vertiefung Phase 29 (06.10.2026, Plan 29-03)
+
+Kein Verhaltensbau (Owner-Entscheid A). Geprüft wurde nur, was ohne Box prüfbar ist.
+
+Stand der Diagnose (D-29-13, erledigt):
+
+- `git show --stat a0ac5aee`: Commit liegt vor (queue.py, embedding.py, zwei Testdateien, Baumhash).
+- `backend/src/findling/nc/queue.py:640`: "could not hand %d files to another track, %s status=%s after %.1f s" (Typ, Status, Dauer, nie der Ausnahmetext, T-24-19).
+- `backend/src/findling/worker/embedding.py:276`: Folgezeile "could not move %d files to the %s track, they run into the lock timeout".
+- `tests/test_queue_client.py`: beide Diagnosetests grün (89 passed), status=400 mit Dauer und status=none.
+
+Messung der 60 s, lokal: ein Server auf 127.0.0.1 hält die Antwort zurück, gefahren wird der echte Pfad `DocumentQueue.requeue` (30 Ids) über nc_py_api 0.30.3 und niquests 3.21.0, `NPA_TIMEOUT=30` (Default, `nc_py_api/options.py:21`, als ein int an die AsyncSession, `_session.py:297`). Das Messskript lag nur temporär im Arbeitsbaum und ist nicht committet.
+
+| Szenario | Dauer bis zum Fehlschlag | Ausnahmeklasse, Status in der Diagnosezeile |
+|---|---|---|
+| Server liest die Anfrage, antwortet nie | 30,1 s | NextcloudException status=408 (nc_py_api wandelt ReadTimeout in 408) |
+| Statuszeile und Header kommen, der Body bleibt aus | 30,0 s | ConnectionError status=none |
+| Antwort tröpfelt, ein Byte alle 20 s | nach 200 s noch offen (äußerer Wächter) | keine: der int gilt je Lesevorgang, nicht als Gesamtfrist |
+| Verbindungsaufbau scheitert (TEST-NET 192.0.2.1) | 21,0 s | ConnectionError status=none (Windows gibt den SYN-Versuch vor den 30 s auf) |
+| Backlog voll, nie akzeptiert (lokal) | 2,0 s | ConnectionError status=none (Windows antwortet mit Reset) |
+
+Ergebnis zur Hypothese A7 ("30 s Connect plus 30 s Read = 60 s"): **in der einfachen Form widerlegt.** Eine einzelne Anfrage, deren Antwort ausbleibt, scheitert nach 30 s, nicht nach 60 s, und ohne Wiederholung (30,1 s). Ein gescheiterter Verbindungsaufbau beendet die Anfrage, ein Lese-Timeout kann sich daran nicht anschließen. Die gemessenen 60,004 s und 60,006 s aus Lauf 9 brauchen deshalb zwei aufeinanderfolgende Wartezeiten von 30 s (etwa zwei aufgelöste Adressen, deren Verbindungsaufbau je 30 s hängt), eine Gegenstelle, die unter 30 s Abstand Bytes liefert und nach 60 s abbricht (Proxy oder Webserver mit fester Frist), oder einen anderen `NPA_TIMEOUT` im Container. Welcher Fall vorliegt, sagt die Diagnosezeile beim nächsten Vorfall: `status=408 after 30` hieße "Antwort bleibt aus", `ConnectionError status=none after 60` hieße "Abbruch außerhalb des Clients", ein Wert um 60 zusammen mit status=408 spräche für `NPA_TIMEOUT=60` (Beleg B3).
+
+Der Feldbeleg ist verschoben (D-29-11): Diagnosezeile, Server- und Webserver-Log und die env des Containers (B1 bis B3) werden bei der nächsten Anfahrt erhoben; vorher wird nichts gebaut.
