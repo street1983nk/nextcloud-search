@@ -47,7 +47,7 @@ Markdown, CSV sowie Bilder (JPEG, PNG, TIFF, WebP) per Texterkennung.
 - Ohne Zutun läuft Findling unverändert sparsam wie bisher. Wer mehr Hardware
   hat, gibt per Profil höchstens die Hälfte der Box frei (Profil Standard) oder
   alles bis auf einen Kern (Profil Leistung).
-- Die beiden zusätzlichen Profile schalten mehrere OCR-Plätze und eine parallele
+- Die beiden zusätzlichen Profile schalten mehrere OCR-Slots und eine parallele
   Einbettungsspur frei und verkürzen so die Indexierung. Umgestellt wird mit
   einem Klick in den Verwaltungseinstellungen unter Findling; ein Vorschlag
   passend zur Box steht daneben.
