@@ -117,7 +117,7 @@ from findling.nc.queue import (
     QueueJob,
 )
 from findling.precision import note_chosen_precision
-from findling.profile import Profile, note_chosen
+from findling.profile import Profile, note_chosen, note_index_files
 from findling.profile import snapshot as profile_snapshot
 from findling.store.repo import FileMeta, Store, open_store
 from findling.store.vectors import VectorStore, open_vectors
@@ -503,6 +503,11 @@ class Poller:
         # memory only, as a shortcut: the truth is RECHECK_MARK in state.db,
         # and a new process reads it once and learns the same.
         self._recheck_done = False
+        # Whether this process told the profile its stock yet (D-29-12). The
+        # first pass does it before the claim, so that the slots of that very
+        # pass already carry the full index term; after it, every pass that
+        # wrote verdicts reports again.
+        self._index_files_noted = False
         self._writer = writer
         self._owns_resources = store is None and writer is None
         self._tmp_dir = resolved.tmp_dir if tmp_dir is None else tmp_dir
@@ -886,6 +891,13 @@ class Poller:
         # not latency, it is a boot loop on exactly the hardware this app targets.
         queue = await asyncio.to_thread(self._open)
 
+        # The stock this process starts on, once (D-29-12). Before the profile
+        # is read, so the snapshot the claim and the slots read below already
+        # knows it.
+        if not self._index_files_noted:
+            await self._note_index_files()
+            self._index_files_noted = True
+
         # The profile the admin chose, asked once per round (D-24-01) and before
         # the claim, because the lane of the claim, the OCR rows this pass keeps
         # and the slots it reads them on all follow from it (D-26-07, D-26-13).
@@ -1146,6 +1158,8 @@ class Poller:
         #    An abort in between leaves the file unjudged, so the redelivery
         #    repeats the work instead of acknowledging a half written state.
         await asyncio.to_thread(self._record_verdicts, verdicts)
+        if verdicts:
+            await self._note_index_files()
 
         # 3b. The handover to the trailing tracks, after the commit and before
         #     the acknowledgement. An abort right here costs one repeated text
@@ -2222,6 +2236,24 @@ class Poller:
         except Exception as error:
             LOGGER.warning("could not refresh the version marks, %s", type(error).__name__)
             return False
+
+    async def _note_index_files(self) -> None:
+        """Tell the profile how many living files the index holds (D-29-12).
+
+        The full index term of the slot formula: the main process grows by
+        MAIN_PROCESS_PER_FILE_BYTES per indexed file, and Standard and
+        Performance lose slots as the stock grows; Economy ignores it. The
+        profile rounds the count down to whole thousands and recomputes only on
+        a change of that value, so the status route stays quiet while a pass
+        adds a handful of files. One COUNT over the state database, off the
+        loop. A failed count changes nothing, the last value stays in force.
+        """
+        try:
+            count = await asyncio.to_thread(self._store_or_die().indexed_alive)
+        except sqlite3.Error as error:
+            LOGGER.warning("could not count the indexed files for the slot formula, %s", type(error).__name__)
+            return
+        note_index_files(count)
 
     def _store_or_die(self) -> Store:
         if self._store is None:  # pragma: no cover - _open sets it

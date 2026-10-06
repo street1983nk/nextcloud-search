@@ -643,7 +643,10 @@ class ProbeRun:
 
             probe.note_step("calc")
             state = profile.snapshot()
-            resolution = profile.resolve(target, self._hardware(), weights=precision)
+            # The full index term of the stock in force (D-29-12): the target
+            # is judged with the slots it would get on this stock, not on an
+            # empty one.
+            resolution = profile.resolve(target, self._hardware(), weights=precision, index_files=state.index_files)
             slots = resolution.values.ocr_slots
             # Pitfall 6: the children read DPI and page cap from the same
             # environment the resolution reads; the page count barely moves the
