@@ -1150,6 +1150,7 @@ def test_sf0_compressed_probe(compression: str, order: str) -> None:
     # the change, so the load dies at the decoder. If this ever starts to work,
     # the buffer copy of way (ii) can be retired.
     with Image.open(BytesIO(data)) as picture:
+        assert isinstance(picture, TiffImagePlugin.TiffImageFile)
         picture.tag_v2[_TAG_SAMPLE_FORMAT] = (1,)
         picture.tag[_TAG_SAMPLE_FORMAT] = (1,)
         with pytest.raises(OSError, match="decoder error -2"):
@@ -1242,7 +1243,7 @@ def test_garbage_without_any_magic_is_corrupt(tmp_path: Path) -> None:
 
 def _pristine_open_info() -> dict[tuple[object, ...], tuple[str, str]]:
     """OPEN_INFO as Pillow ships it, read in a fresh interpreter that never saw the shim."""
-    answer = subprocess.run(  # noqa: S603 - an argument list, never a shell
+    answer = subprocess.run(
         [sys.executable, "-c", "from PIL import TiffImagePlugin as T; print(repr(sorted(T.OPEN_INFO.items())))"],
         capture_output=True,
         check=True,
