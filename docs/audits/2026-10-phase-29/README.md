@@ -219,7 +219,7 @@ Die Matrix aus 29-04 ist am 06.10.2026 erneut gefahren, Ergebnis in `haertungsma
 
 ### SIGKILL-Namensbeleg
 
-`.github/workflows/python.yml` hat einen eigenen Schritt "The SIGKILL cases by name (test_slots_kill.py)" mit `pytest -v -rs`, und der Gesamtlauf läuft mit `-rs`. Der nächste vom Owner freigegebene Push zeigt die beiden Fälle `test_a_killed_main_process_mid_pass_loses_no_row_and_indexes_once` und `test_a_killed_child_mid_pass_is_retried_alone_and_indexed_once` namentlich mit Ergebnis; die Laufnummer kommt nach diesem Push hierher.
+`.github/workflows/python.yml` hat einen eigenen Schritt "The SIGKILL cases by name (test_slots_kill.py)" mit `pytest -v -rs`, und der Gesamtlauf läuft mit `-rs`. Beleg: Lauf 37467788135 (Python gates auf 99326ae2, 06.10.2026) zeigt beide Fälle namentlich PASSED: `test_a_killed_main_process_mid_pass_loses_no_row_and_indexes_once` und `test_a_killed_child_mid_pass_is_retried_alone_and_indexed_once`.
 
 ## Owner-Abnahme der Haertung (06.10.2026)
 
