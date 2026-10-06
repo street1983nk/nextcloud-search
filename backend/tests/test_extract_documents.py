@@ -31,6 +31,7 @@ from pptx import Presentation
 from pptx.util import Emu
 from pypdf.errors import EmptyFileError, FileNotDecryptedError
 
+from conftest import build_cfb
 from findling import config
 from findling.config import EXTRACT_ARCHIVE_MEMBER_MAX_BYTES
 from findling.extract import sandbox
@@ -751,6 +752,91 @@ def test_the_dispatcher_reaches_the_three_ooxml_routes(tmp_path: Path) -> None:
 
         assert outcome.state is State.INDEXED
         assert needle in outcome.text
+
+
+# ---------------------------------------------------------------------------
+# The OLE sniff of plan 29-08 (D-29-08, issue #18), through the dispatcher.
+#
+# The cases of the reader itself live in test_cfb.py. Here the question is the
+# wiring: a compound file under an OOXML mimetype gets its verdict before any
+# ZIP reader is asked, and everything else takes exactly the way it took before.
+# The scratch name is the one the poller hands over, never the Nextcloud name.
+# ---------------------------------------------------------------------------
+
+DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+
+
+@pytest.mark.parametrize("mime", [DOCX_MIME, XLSX_MIME, PPTX_MIME])
+def test_a_password_protected_office_file_is_skipped_encrypted_and_not_corrupt(mime: str, tmp_path: Path) -> None:
+    path = _write(tmp_path, "job-4711.part", build_cfb(["\x06DataSpaces", "EncryptionInfo", "EncryptedPackage"]))
+
+    outcome = extract(path, mime, Path(path).stat().st_size)
+
+    assert outcome == ExtractionOutcome.skipped(Reason.ENCRYPTED)
+
+
+@pytest.mark.parametrize(
+    ("mime", "stream"),
+    [(DOCX_MIME, "WordDocument"), (XLSX_MIME, "Workbook"), (XLSX_MIME, "Book"), (PPTX_MIME, "PowerPoint Document")],
+)
+def test_an_old_binary_office_file_under_a_new_name_is_skipped_legacy_format(
+    mime: str, stream: str, tmp_path: Path
+) -> None:
+    path = _write(tmp_path, "job-4711.part", build_cfb(["\x05SummaryInformation", stream]))
+
+    outcome = extract(path, mime, Path(path).stat().st_size)
+
+    assert outcome == ExtractionOutcome.skipped(Reason.LEGACY_FORMAT)
+
+
+def test_a_legacy_compound_file_under_the_docx_type_is_legacy_whatever_its_streams_say(tmp_path: Path) -> None:
+    # A Workbook stream under the Word mimetype: the sniff names the container,
+    # it does not cross check it against the extension the file arrived under.
+    path = _write(tmp_path, "job-4711.part", build_cfb(["Workbook"]))
+
+    assert extract(path, DOCX_MIME, Path(path).stat().st_size) == ExtractionOutcome.skipped(Reason.LEGACY_FORMAT)
+
+
+@pytest.mark.parametrize(
+    ("mime", "raised"),
+    [
+        (DOCX_MIME, "docx.opc.exceptions.PackageNotFoundError"),
+        (XLSX_MIME, "zipfile.BadZipFile"),
+        (PPTX_MIME, "pptx.exc.PackageNotFoundError"),
+    ],
+)
+def test_a_broken_package_without_the_ole_signature_stays_failed_corrupt_with_its_class(
+    mime: str, raised: str, tmp_path: Path
+) -> None:
+    # The class each reader raised before the sniff existed (plan 29-06 carries
+    # it as detail); python-docx and python-pptx wrap BadZipFile in their own.
+    path = _write(tmp_path, "job-4711.part", NOT_A_ZIP)
+
+    outcome = extract(path, mime, Path(path).stat().st_size)
+
+    assert outcome == ExtractionOutcome.failed(Reason.CORRUPT)
+    assert outcome.detail == raised
+
+
+def test_a_compound_file_without_a_known_stream_keeps_the_old_way(tmp_path: Path) -> None:
+    # An OLE file the sniff cannot name (here a bare summary stream) is not
+    # guessed at: it travels on into the ZIP reader and ends as before.
+    path = _write(tmp_path, "job-4711.part", build_cfb(["\x05SummaryInformation"]))
+
+    outcome = extract(path, XLSX_MIME, Path(path).stat().st_size)
+
+    assert outcome == ExtractionOutcome.failed(Reason.CORRUPT)
+
+
+@pytest.mark.parametrize("mime", ["application/msword", "application/vnd.ms-excel", "application/vnd.ms-powerpoint"])
+def test_the_old_office_mimetypes_stay_outside_the_allowlist(mime: str, tmp_path: Path) -> None:
+    # judge is unchanged: a file Nextcloud itself calls .doc, .xls or .ppt is
+    # still refused on its type, before the sniff could be reached.
+    path = _write(tmp_path, "job-4711.part", build_cfb(["WordDocument"]))
+
+    assert extract(path, mime, Path(path).stat().st_size) == ExtractionOutcome.skipped(Reason.MIME_NOT_ALLOWED)
 
 
 # ---------------------------------------------------------------------------
