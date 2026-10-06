@@ -319,10 +319,10 @@ Lesart Erfolgskriterium 2 per D-29-01: Upgrade-Strecke 1.3.2 auf 1.4.0 (aktuelle
 Plans:
 **Wave 1**
 
-- [ ] 29-01-PLAN.md , drei skipped-Reasons (system_file, legacy_format, unsupported_variant) in allen Kopien + 16 l10n, K6-Fähigkeitssignal verdicts mit Draht-Rückfall
+- [x] 29-01-PLAN.md , drei skipped-Reasons (system_file, legacy_format, unsupported_variant) in allen Kopien + 16 l10n, K6-Fähigkeitssignal verdicts mit Draht-Rückfall
 - [ ] 29-02-PLAN.md , Textentwurf 1.4.0 (Store-Texte mit D-24-04, Labels, Variablentexte, Release-Notiz, Issue-Antworten, Pillow-Issue) mit Owner-Abnahme
-- [ ] 29-03-PLAN.md , Hygiene: FINDLING_MAX_CELLS deklariert (#21), Starlette-Filter, aws_box Schlüsselpaar-ID, D-29-13 verifiziert
-- [ ] 29-04-PLAN.md , Härtungsmatrix Erfolgskriterium 1, Lückentests (nur Tests)
+- [x] 29-03-PLAN.md , Hygiene: FINDLING_MAX_CELLS deklariert (#21), Starlette-Filter, aws_box Schlüsselpaar-ID, D-29-13 verifiziert
+- [x] 29-04-PLAN.md , Härtungsmatrix Erfolgskriterium 1, Lückentests (nur Tests)
 
 **Wave 2 bis 7** *(seriell wegen Baumhash-Pins)*
 
@@ -355,7 +355,7 @@ Plans:
 | 26. N OCR-Slots und Speicherwächter | v1.4 | 14/14 | Complete    | 2026-09-29 |
 | 27. Vorab-Prüfung und Settings-Oberfläche | v1.4 | 16/16 | Complete    | 2026-09-29 |
 | 28. Abnahme-Anfahrt | v1.4 | 14/14 | Complete    | 2026-10-06 |
-| 29. Härtung und Store-Einreichung 1.4.0 | v1.4 | 0/16 | Planned | - |
+| 29. Härtung und Store-Einreichung 1.4.0 | v1.4 | 3/16 | In Progress|  |
 
 ## Nach v1.3 (Wiedervorlage)
 

@@ -4,8 +4,8 @@ milestone: v1.4
 milestone_name: Leistungsprofile
 status: executing
 stopped_at: Quick 261003-wxg umgesetzt (3 lokale Commits); nächst Push + CI-Abbild + Lauf 8 L-T (neues Abbild + neue Companion-App), Box geparkt
-last_updated: "2026-10-06T05:43:27.187Z"
-last_activity: 2026-10-06 -- Phase 29 planning complete
+last_updated: "2026-10-06T05:45:30.284Z"
+last_activity: 2026-10-06 -- Phase 29 execution started
 progress:
   total_phases: 6
   completed_phases: 5
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-27 after v1.3 milestone)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 28, Abnahme-Anfahrt
+**Current focus:** Phase 29 — Härtung und Store-Einreichung 1.4.0
 
 ## Current Position
 
-Phase: 28 (Abnahme-Anfahrt), in Ausführung
-Plan: 14 of 14
-Status: Ready to execute
-Last activity: 2026-10-06 -- Phase 29 planning complete
+Phase: 29 (Härtung und Store-Einreichung 1.4.0) — EXECUTING
+Plan: 1 of 16
+Status: Executing Phase 29
+Last activity: 2026-10-06 -- Phase 29 execution started
 
 Progress: [█████████░] 87%
 
