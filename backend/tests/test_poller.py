@@ -64,6 +64,7 @@ from findling.nc.queue import (
     TOPUP_IDLE,
     TOPUP_SUPPLIED,
     TOPUP_UNAVAILABLE,
+    VERDICTS_GENERATION,
     CallResult,
     ClaimResult,
     CompanionChoice,
@@ -72,7 +73,7 @@ from findling.nc.queue import (
     QueueStats,
 )
 from findling.profile import Profile, note_hardware, snapshot
-from findling.store.repo import FileMeta, Store, open_store
+from findling.store.repo import RECHECK_MARK, FileMeta, Store, open_store
 from findling.worker import poller as poller_module
 from findling.worker.poller import (
     RETREAT_AFTER_ROUNDS,
@@ -210,6 +211,10 @@ class _FakeQueue:
         # The guard's confirmation token out of the same answer (D-26-04).
         # None by default, a companion before plan 26-02.
         self.confirmed_answer: str | None = None
+        # The verdict generation of K6 out of the same answer. None by default,
+        # a companion before 1.4.0, which keeps the re-check of the old stock
+        # from starting (D-29-10).
+        self.verdicts_answer: int | None = None
         # A companion older than 1.4.0: the read goes through the real
         # DocumentQueue.companion_choice over a session that answers 404, so the
         # test proves the error path the poller really meets and not a fake
@@ -227,7 +232,10 @@ class _FakeQueue:
         if self.profile_route_missing:
             return await DocumentQueue(cast("AsyncNextcloudApp", _AppWithoutProfileRoute())).companion_choice()
         return CompanionChoice(
-            profile=self.profile_answer, precision=self.precision_answer, confirmed=self.confirmed_answer
+            profile=self.profile_answer,
+            precision=self.precision_answer,
+            confirmed=self.confirmed_answer,
+            verdicts=self.verdicts_answer,
         )
 
     async def claim(self, *, limit: int, max_bytes: int, lane: str | None = None) -> ClaimResult:
@@ -4853,3 +4861,101 @@ async def test_an_ocr_row_that_stays_short_beside_others_gets_no_verdict(
     assert store.file_row(7000) is None
     assert _stored_ids(index) == [7001]
     assert queue.acknowledged == [([301], {})]
+
+
+# -- the re-check of the old stock behind the companion signal (D-29-10, K6) --
+
+
+class _RecheckQueue(_FakeQueue):
+    """A queue that hands a requeued file out again, as the companion does."""
+
+    def __init__(self, job: QueueJob) -> None:
+        super().__init__()
+        self._job = job
+
+    async def requeue(self, file_ids: Any, *, kind: str) -> CallResult:
+        answer = await super().requeue(file_ids, kind=kind)
+        if self._job.file_id in list(file_ids):
+            self._batches.append(ClaimResult(jobs=(self._job,)))
+        return answer
+
+
+def _corrupt_sidecar(store: Store) -> QueueJob:
+    job = _job(
+        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        title="._x.docx",
+        path="Akten/._x.docx",
+    )
+    store.record(
+        job.file_id,
+        FileMeta(
+            storage_id=3, root_id=2, path=job.path, title=job.title, mime=job.mime, size=job.size, mtime=job.mtime
+        ),
+        "failed",
+        "corrupt",
+    )
+    return job
+
+
+async def test_without_the_signal_the_re_check_never_starts(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # A 1.3.2 companion: it would only store the old codes again (K6).
+    job = _corrupt_sidecar(store)
+    queue = _RecheckQueue(job)
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    await poller.run_once()
+    await poller.run_once()
+
+    assert queue.requeues == []
+    assert store.read_meta().get(RECHECK_MARK, "") == ""
+
+
+async def test_with_the_signal_a_corrupt_sidecar_ends_as_system_file_once(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    job = _corrupt_sidecar(store)
+    queue = _RecheckQueue(job)
+    queue.verdicts_answer = VERDICTS_GENERATION
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    await poller.run_once()
+
+    assert queue.requeues == [([job.file_id], "content")]
+    assert store.read_meta()[RECHECK_MARK] == "done"
+    row = store.file_row(job.file_id)
+    assert row is not None
+    assert (row["state"], row["reason"]) == ("skipped", "system_file")
+
+    for _ in range(3):
+        await poller.run_once()
+    assert queue.requeues == [([job.file_id], "content")]
+
+
+async def test_a_failing_re_check_neither_ends_the_round_nor_gives_up(
+    store: Store,
+    writer: IndexBatchWriter,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    calls: list[int] = []
+
+    async def broken(store: Store, queue: DocumentQueue) -> bool:
+        del store, queue
+        calls.append(1)
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(poller_module, "recheck_step", broken)
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)))
+    queue.verdicts_answer = VERDICTS_GENERATION
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    first = await poller.run_once()
+    await poller.run_once()
+
+    assert first.state == ROUND_WORKED
+    assert queue.claims == 2
+    assert len(calls) == 2
+    assert any("re-check of the fix classes stopped, OperationalError" in line for line in _poller_lines(caplog))
