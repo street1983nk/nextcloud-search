@@ -11,6 +11,10 @@ permissions) and the `findling_backend` External App under `backend/`
 (extraction, OCR, the index). `docs/dev-setup.md` describes the development
 stack; a disposable Nextcloud is required for anything beyond unit tests.
 
+`.planning/` is the project's own working log (plans, audits, decisions) and
+is checked in on purpose: every release decision is traceable there. Nothing
+in it ships, and pull requests never need to touch it.
+
 ## The gates
 
 Backend (from `backend/`, green locally before you push):

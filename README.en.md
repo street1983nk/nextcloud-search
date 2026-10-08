@@ -2,6 +2,12 @@
 
 # Findling
 
+[![Python gates](https://github.com/street1983nk/nextcloud-search/actions/workflows/python.yml/badge.svg)](https://github.com/street1983nk/nextcloud-search/actions/workflows/python.yml)
+[![PHP and store metadata gates](https://github.com/street1983nk/nextcloud-search/actions/workflows/php.yml/badge.svg)](https://github.com/street1983nk/nextcloud-search/actions/workflows/php.yml)
+[![Security scans](https://github.com/street1983nk/nextcloud-search/actions/workflows/security.yml/badge.svg)](https://github.com/street1983nk/nextcloud-search/actions/workflows/security.yml)
+[![Nextcloud App Store](https://img.shields.io/badge/App_Store-findling-0082c9)](https://apps.nextcloud.com/apps/findling)
+[![Licence](https://img.shields.io/badge/Licence-AGPL--3.0--or--later-blue)](LICENSE)
+
 Full text search, OCR and semantic search for Nextcloud, with zero
 configuration. Results appear in the normal search bar.
 
@@ -10,6 +16,8 @@ The [MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) hands Findlin
 rights of the asking user; measured by the
 [fidelity test](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/tests/integration/test_content_hit_fidelity.py).
 You bring the model, and no content leaves your server.
+
+![Semantic search in the Nextcloud search bar: no word of the question appears in the found document, the hit comes through meaning](store/media/screenshot-search-v2.png)
 
 ## What Findling does
 
@@ -56,6 +64,22 @@ Install both store entries, always in the same version:
 [Findling Backend](https://apps.nextcloud.com/apps/findling_backend)
 (External Apps). The first index run then starts on its own;
 `occ findling:index --status` shows the progress.
+
+## Architecture
+
+Findling is two apps under one version:
+
+- **findling** (store section Apps): the PHP companion app registers the
+  search provider in the search bar and checks every hit against Nextcloud's
+  permissions before it is shown.
+- **findling_backend** (store section External Apps): the container does the
+  work, text extraction, OCR (Tesseract), the full text index (Tantivy) and
+  the semantic index (SQLite with sqlite-vec). It is reachable only through
+  AppAPI/HaRP, and the routes that return content are not reachable from the
+  browser.
+
+The index lives in the app volume on your server; there is no service in
+between and nothing leaves the instance.
 
 ## Privacy
 

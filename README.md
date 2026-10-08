@@ -2,6 +2,12 @@ Deutsch | [English](README.en.md) | [Français](README.fr.md)
 
 # Findling
 
+[![Python gates](https://github.com/street1983nk/nextcloud-search/actions/workflows/python.yml/badge.svg)](https://github.com/street1983nk/nextcloud-search/actions/workflows/python.yml)
+[![PHP and store metadata gates](https://github.com/street1983nk/nextcloud-search/actions/workflows/php.yml/badge.svg)](https://github.com/street1983nk/nextcloud-search/actions/workflows/php.yml)
+[![Security scans](https://github.com/street1983nk/nextcloud-search/actions/workflows/security.yml/badge.svg)](https://github.com/street1983nk/nextcloud-search/actions/workflows/security.yml)
+[![Nextcloud App Store](https://img.shields.io/badge/App_Store-findling-0082c9)](https://apps.nextcloud.com/apps/findling)
+[![Lizenz](https://img.shields.io/badge/Lizenz-AGPL--3.0--or--later-blue)](LICENSE)
+
 Volltextsuche, Texterkennung und semantische Suche für Nextcloud, ohne
 Konfiguration. Treffer erscheinen in der normalen Suchleiste.
 
@@ -10,6 +16,8 @@ Der [MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) reicht Findli
 genau den Rechten des fragenden Nutzers; gemessen im
 [Fidelity-Test](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/tests/integration/test_content_hit_fidelity.py).
 Das Modell bringen Sie mit, kein Inhalt verlässt Ihren Server.
+
+![Die semantische Suche in der Nextcloud-Suchleiste: kein Wort der Frage steht im gefundenen Dokument, der Treffer kommt über die Bedeutung](store/media/screenshot-search-v2.png)
 
 ## Was Findling kann
 
@@ -59,6 +67,22 @@ Beide Store-Einträge installieren, immer in derselben Version:
 [Findling Backend](https://apps.nextcloud.com/apps/findling_backend)
 (External Apps). Danach startet der erste Indexlauf von selbst;
 `occ findling:index --status` zeigt den Fortschritt.
+
+## Architektur
+
+Findling besteht aus zwei Apps unter einer Version:
+
+- **findling** (Store-Bereich Apps): die PHP-Begleit-App registriert den
+  Suchanbieter in der Suchleiste und prüft jeden Treffer gegen die
+  Nextcloud-Rechte, bevor er angezeigt wird.
+- **findling_backend** (Store-Bereich External Apps): der Container macht die
+  Arbeit, Textauszug, Texterkennung (Tesseract), Volltextindex (Tantivy) und
+  semantischer Index (SQLite mit sqlite-vec). Er ist nur über AppAPI/HaRP
+  erreichbar, und die Routen, die Inhalte liefern, sind aus dem Browser nicht
+  erreichbar.
+
+Der Index liegt im App-Volume auf Ihrem Server; es gibt keinen Dienst
+dazwischen und nichts verlässt die Instanz.
 
 ## Datenschutz
 

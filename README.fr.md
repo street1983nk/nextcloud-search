@@ -2,6 +2,12 @@
 
 # Findling
 
+[![Python gates](https://github.com/street1983nk/nextcloud-search/actions/workflows/python.yml/badge.svg)](https://github.com/street1983nk/nextcloud-search/actions/workflows/python.yml)
+[![PHP and store metadata gates](https://github.com/street1983nk/nextcloud-search/actions/workflows/php.yml/badge.svg)](https://github.com/street1983nk/nextcloud-search/actions/workflows/php.yml)
+[![Security scans](https://github.com/street1983nk/nextcloud-search/actions/workflows/security.yml/badge.svg)](https://github.com/street1983nk/nextcloud-search/actions/workflows/security.yml)
+[![Nextcloud App Store](https://img.shields.io/badge/App_Store-findling-0082c9)](https://apps.nextcloud.com/apps/findling)
+[![Licence](https://img.shields.io/badge/Licence-AGPL--3.0--or--later-blue)](LICENSE)
+
 Recherche plein texte, reconnaissance optique et recherche sémantique pour
 Nextcloud, sans configuration. Les résultats apparaissent dans la barre de
 recherche normale.
@@ -11,6 +17,8 @@ Le [MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) transmet les r
 exactement les droits de l'utilisateur qui demande ; mesuré par le
 [test de fidélité](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/tests/integration/test_content_hit_fidelity.py).
 Le modèle, c'est vous qui l'apportez, et aucun contenu ne quitte votre serveur.
+
+![La recherche sémantique dans la barre de recherche Nextcloud : aucun mot de la question ne figure dans le document trouvé, le résultat vient du sens](store/media/screenshot-search-v2.png)
 
 ## Ce que Findling sait faire
 
@@ -62,6 +70,22 @@ Installer les deux entrées du store, toujours dans la même version :
 [Findling Backend](https://apps.nextcloud.com/apps/findling_backend)
 (External Apps). La première indexation démarre ensuite d'elle-même ;
 `occ findling:index --status` montre la progression.
+
+## Architecture
+
+Findling se compose de deux applications sous une même version :
+
+- **findling** (section Apps du store) : l'application compagnon PHP
+  enregistre le fournisseur de recherche dans la barre de recherche et
+  vérifie chaque résultat contre les droits Nextcloud avant de l'afficher.
+- **findling_backend** (section External Apps du store) : le conteneur fait
+  le travail, extraction de texte, reconnaissance optique (Tesseract), index
+  plein texte (Tantivy) et index sémantique (SQLite avec sqlite-vec). Il
+  n'est joignable que par AppAPI/HaRP, et les routes qui renvoient du contenu
+  ne sont pas joignables depuis le navigateur.
+
+L'index vit dans le volume de l'application sur votre serveur ; il n'y a
+aucun service intermédiaire et rien ne quitte l'instance.
 
 ## Confidentialité
 
