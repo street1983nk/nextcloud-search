@@ -76,7 +76,10 @@ stage_companion() {
 	for d in appinfo lib templates js css img l10n; do
 		cp -R "php/${d}" "${app}/${d}"
 	done
-	cp LICENSE THIRD-PARTY.md "${app}/"
+	# CHANGELOG.md travels because the store renders it on the release listing;
+	# an app whose store page answers "what changed" beats one that points at
+	# the compare view.
+	cp LICENSE THIRD-PARTY.md CHANGELOG.md "${app}/"
 	find "${app}" -name '.gitkeep' -delete
 	echo "staged tree:"
 	find "${app}" -maxdepth 1 -mindepth 1 -printf '  %P\n' | sort
@@ -108,7 +111,7 @@ stage_backend() {
 	app="${stage}/findling_backend"
 	mkdir -p "${app}/appinfo"
 	cp backend/appinfo/info.xml "${app}/appinfo/info.xml"
-	cp LICENSE THIRD-PARTY.md "${app}/"
+	cp LICENSE THIRD-PARTY.md CHANGELOG.md "${app}/"
 	cmp backend/appinfo/info.xml "${app}/appinfo/info.xml"
 	echo "info.xml is byte identical to the working tree, so AppAPI will read the routes it expects"
 }
