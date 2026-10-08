@@ -2015,3 +2015,20 @@ die abgelöste September-Fassung auslieferte. Begründung und Beleg stehen in
 `store/media/README.md`, Vermerk vom 08.10.2026. Owner-Wort vom 08.10.2026:
 "ja bitte findling und findling backend bilder auch". Die sechs Texte oben
 bleiben die abgenommene Fassung 1.4.0 und reisen unverändert mit.
+
+Eingereicht: 2026-10-08, Tag v1.4.1 auf db6a2b14, Submission-Lauf 37817687639,
+findling HTTP 201 (17:35:17Z) und findling_backend HTTP 201 (17:35:19Z). Alle
+sieben Workflows auf dem Tag grün; der Resilience-Lauf 37809406729 hing beim
+ersten Versuch über eine Stunde im Setup-Schritt des kill-resume-Jobs
+(Runner-Infrastruktur, derselbe Commit war auf main nach 13 Minuten grün),
+wurde abgebrochen und war im Wiederholungslauf nach 13 Minuten grün. Vier
+Assets am Release, Manifestindex ghcr.io/street1983nk/findling_backend:1.4.1
+mit linux/amd64 und linux/arm64, anonym abgefragt.
+
+Gegenprobe von außen, 2026-10-08: beide Store-Seiten nennen 1.4.1 und betten
+die vier -v2-Spiegeladressen ein; der Spiegel hat alle vier um 17:52Z mit den
+byteidentischen Größen geholt (447925, 277061, 159786, 451825 Bytes; Latenz
+nach der Submission etwa 15 Minuten). Sichtprüfung per Playwright: die
+Findling-Seite zeigt das Kopfbild mit Schriftzug "Findling", die Backend-Seite
+erstmals ihr eigenes mit "Findling Backend". Die alte Adresse `header.png`
+antwortet auf raw.githubusercontent.com mit 404.
