@@ -60,6 +60,10 @@ jobs:
         working-directory: backend
         run: uv export --frozen --format requirements-txt --no-emit-project --no-dev -o "${RUNNER_TEMP}/requirements-audit.txt"
 
+      # --disable-pip audits the pinned list as text instead of dry-run
+      # installing it; without the flag pip tried to build lxml from source
+      # on the runner and the job failed on a missing libxml2, not on an
+      # advisory.
       - name: Audit against the advisory databases
         working-directory: backend
-        run: uvx pip-audit --strict -r "${RUNNER_TEMP}/requirements-audit.txt"
+        run: uvx pip-audit --strict --disable-pip -r "${RUNNER_TEMP}/requirements-audit.txt"

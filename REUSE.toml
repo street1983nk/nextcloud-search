@@ -1,0 +1,23 @@
+# Licensing information in REUSE 3.2 form (reuse.software), as bulk
+# annotations rather than per-file headers: the textual gates of this
+# repository judge files by their first lines, and 250 header edits would be
+# churn without information. THIRD-PARTY.md stays the narrative account of
+# what ships and why it is compatible; this file is the machine readable half.
+version = 1
+SPDX-PackageName = "Findling"
+SPDX-PackageSupplier = "street1983nk <admin@infranode.dev>"
+SPDX-PackageDownloadLocation = "https://github.com/street1983nk/nextcloud-search"
+
+[[annotations]]
+path = "**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 street1983nk"
+SPDX-License-Identifier = "AGPL-3.0-or-later"
+
+# The two app icons are own work that embeds nine icon paths from Material
+# Design Icons (Apache-2.0); the attribution lives in THIRD-PARTY.md.
+[[annotations]]
+path = ["php/img/app.svg", "php/img/app-dark.svg"]
+precedence = "override"
+SPDX-FileCopyrightText = ["2026 street1983nk", "Material Design Icons contributors"]
+SPDX-License-Identifier = "AGPL-3.0-or-later AND Apache-2.0"

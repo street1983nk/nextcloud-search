@@ -1,0 +1,27 @@
+# Editor-agnostic basics; the authoritative formatters are ruff (Python) and
+# the php.yml gates (PHP). LF everywhere: the release archive refuses CRLF in
+# shipped text files (scripts/release/store-archive.sh).
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.py]
+indent_style = space
+indent_size = 4
+
+[*.php]
+indent_style = tab
+
+[*.{yml,yaml,json}]
+indent_style = space
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[Makefile]
+indent_style = tab
