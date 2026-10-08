@@ -64,6 +64,15 @@ dependencies = [
     "semantic-text-splitter==0.33.0",
 ]
 
+# The unit suite covered 92 per cent of src/findling when the floor was
+# introduced (2026-10-08); 90 leaves room for refactors and still catches a
+# feature that arrives without its tests. Integration and resilience runs add
+# coverage on top but need a live stack, so the floor is measured where every
+# contributor can run it.
+[tool.coverage.report]
+fail_under = 90
+skip_covered = true
+
 [dependency-groups]
 dev = [
     "ruff==0.16.10",
@@ -71,6 +80,7 @@ dev = [
     "vulture==2.16",
     "pytest==9.1.1",
     "pytest-asyncio==1.4.0",
+    "pytest-cov==7.1.0",
 ]
 # Build time only, and deliberately a group of its own rather than a dependency.
 # onnxruntime.quantization imports the `onnx` package, which onnxruntime itself

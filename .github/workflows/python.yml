@@ -182,9 +182,11 @@ jobs:
         run: uv run pytest -v -rs tests/test_slots_kill.py --no-header
 
       # -rs names every skip of the suite with its reason, so a case that falls
-      # out silently on Linux shows up in the log instead of in a count.
+      # out silently on Linux shows up in the log instead of in a count. The
+      # coverage floor (fail_under in pyproject.toml) rides along here: a
+      # feature that arrives without its tests fails this step.
       - name: Tests
-        run: uv run pytest -q -rs
+        run: uv run pytest -q -rs --cov=src/findling --cov-report=term
 
   # The only job in this repository that runs on arm64. The target hardware of
   # this app is a 4 GB ARM board, and the decision it feeds is whether the
