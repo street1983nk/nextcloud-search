@@ -1,0 +1,20 @@
+name: Feature request
+description: Propose an improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What should the search find or do that it does not today, and why does it matter
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed shape
+      description: If you have a concrete behaviour or setting in mind, sketch it here
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do today instead

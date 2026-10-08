@@ -1,0 +1,48 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. For a security problem, please use
+        "Report a vulnerability" under the Security tab instead of this form.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you do, what did you expect, what happened instead
+    validations:
+      required: true
+  - type: input
+    id: findling-version
+    attributes:
+      label: Findling version
+      description: Both apps carry the same version; the admin page shows it
+      placeholder: "1.4.1"
+    validations:
+      required: true
+  - type: input
+    id: nextcloud-version
+    attributes:
+      label: Nextcloud version
+      placeholder: "35.0.0"
+    validations:
+      required: true
+  - type: input
+    id: hardware
+    attributes:
+      label: Hardware and profile
+      description: RAM, CPU architecture, and the chosen performance profile
+      placeholder: "4 GB, arm64, Economy"
+  - type: textarea
+    id: admin-page
+    attributes:
+      label: What the Findling admin page shows
+      description: Coverage figures and, if present, the affected entries of the error list (they carry a file id)
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant lines from the backend container or the Nextcloud log, with file names redacted as needed
+      render: text

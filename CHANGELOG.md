@@ -4,6 +4,16 @@ All notable changes to Findling (the `findling` companion app and the
 `findling_backend` External App) are documented here. Both apps carry the
 same version. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- SECURITY.md with the two private reporting channels, CONTRIBUTING.md, and
+  issue and pull request templates.
+- CI security scans: CodeQL over the Python half and pip-audit over the
+  locked dependency set, weekly on top of every push.
+- This changelog; it travels with both store archives from the next release.
+
 ## [1.4.1] - 2026-10-08
 
 ### Fixed

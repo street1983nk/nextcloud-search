@@ -1,0 +1,65 @@
+# The two scans that look for what the test suites do not: CodeQL reads the
+# Python half for known-bad code shapes, and pip-audit holds the locked
+# dependency set against the public advisory databases. Weekly on top of every
+# push, because an advisory can arrive for a tree that did not change.
+#
+# CodeQL covers Python only: the PHP companion is outside CodeQL's language
+# set, its static coverage is php -l plus PHPUnit in php.yml.
+name: Security scans
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '30 5 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  codeql:
+    name: CodeQL (python)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          languages: python
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+
+  pip-audit:
+    name: pip-audit over the locked set
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+
+      # The runtime set only (--no-dev): an advisory against a dev tool is
+      # worth knowing but must not block a release the tool never ships in;
+      # dependabot moves the dev set on its weekly pass anyway.
+      - name: Export the locked runtime set
+        working-directory: backend
+        run: uv export --frozen --format requirements-txt --no-emit-project --no-dev -o "${RUNNER_TEMP}/requirements-audit.txt"
+
+      - name: Audit against the advisory databases
+        working-directory: backend
+        run: uvx pip-audit --strict -r "${RUNNER_TEMP}/requirements-audit.txt"
