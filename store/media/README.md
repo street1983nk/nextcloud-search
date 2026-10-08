@@ -14,16 +14,32 @@ und nicht als Faustregel darunter.
 
 | Bild | Größe | Grenze |
 |---|---|---|
-| `header.png` | 447925 Bytes (438 KiB) | 2 MiB je Bild |
-| `header-backend.png` | 451825 Bytes (442 KiB) | 2 MiB je Bild |
-| `screenshot-admin.png` | 159786 Bytes (156 KiB) | 2 MiB je Bild |
-| `screenshot-search.png` | 277061 Bytes (271 KiB) | 2 MiB je Bild |
+| `header-v2.png` | 447925 Bytes (438 KiB) | 2 MiB je Bild |
+| `header-backend-v2.png` | 451825 Bytes (442 KiB) | 2 MiB je Bild |
+| `screenshot-admin-v2.png` | 159786 Bytes (156 KiB) | 2 MiB je Bild |
+| `screenshot-search-v2.png` | 277061 Bytes (271 KiB) | 2 MiB je Bild |
 
 Die Zahlen sind nicht gepflegt, sondern geprüft: `backend/tests/test_store_metadata.py`
 hält jede von ihnen gegen die Datei, die wirklich in diesem Verzeichnis liegt.
 Wer ein Bild austauscht und die Zahl stehen lässt, bekommt ein rotes Gate mit
 der heutigen Größe in der Meldung. Eine Zahl, die beim Tippen stimmte, ist
 schlechter als gar keine.
+
+## Vermerk vom 08.10.2026: alle vier Dateien auf versionierte Namen
+
+Die vier Bilder heißen seit dem 08.10.2026 `*-v2.png`, byteidentisch zu den
+Dateien davor; nur die Namen und damit die Adressen sind neu. Der Grund ist
+der Bildspiegel des App Stores (`usercontent.apps.nextcloud.com`): er hält die
+ERSTE jemals geholte Fassung einer Adresse für immer und holt nie nach, und
+Browser cachen seine Antworten bis 2038. `header.png` lag dort noch als die
+abgelöste 168515-Byte-Fassung vom September, und Geräte, die während des
+Spiegel-Ausfalls Anfang Oktober leere Antworten gesehen hatten, zeigten gar
+nichts mehr. Ein ersetztes Bild am gleichen Pfad kommt im Store also nie an;
+deshalb reist jede künftige Bildänderung unter einem neuen Dateinamen
+(`-v3` und so weiter). Dasselbe war beim MCP Connector am 08.10.2026 mit
+Release 0.5.1 nötig und ist dort in `docs/store-submission.md` belegt. Die
+historischen Vermerke unten behalten die alten Namen, weil sie den Stand
+beschreiben, den sie geprüft haben.
 
 ## Die Live-Bestätigung der Adressen, 21.09.2026
 
@@ -133,7 +149,7 @@ einzige Kennung, die in einem Bild vorkommt, ist das Konto `Verwaltung`.
 
 ## Die drei Bilder
 
-### `screenshot-search.png` (1440 x 700)
+### `screenshot-search-v2.png` (1440 x 700)
 
 **Wofür:** das Produktversprechen in einem Bild, seit Plan 06-12 das der
 semantischen Suche. Die gewöhnliche Unified Search von Nextcloud, darin die
@@ -158,7 +174,7 @@ aus der semantischen Suche stammen. Die weiteren Einträge der Gruppe sind die
 näheren Nachbarn des kleinen Bestands in Rangfolge, so antwortet das Produkt
 wirklich.
 
-### `screenshot-admin.png` (1440 x 1100)
+### `screenshot-admin-v2.png` (1440 x 1100)
 
 **Wofür:** was ein Selfhoster sehen will, bevor er etwas installiert. **Beide**
 Deckungszahlen seit Plan 06-09: der Deckungsgrad der Volltextsuche mit seinem
@@ -179,7 +195,7 @@ Deckungszahlen im Bild sind damit 87 Prozent und nicht 100, und das ist die
 Absicht; dass die zweite Zahl der ersten gleicht, sagt dem Betrachter genau
 das Richtige, nämlich dass jedes indexierte Dokument auch einen Vektor trägt.
 
-### `header.png` (1376 x 768)
+### `header-v2.png` (1376 x 768)
 
 **Wofür:** das erste Bild der Store-Seite der Companion-Hälfte.
 
@@ -198,7 +214,7 @@ die Headline `Semantic Search`. Unten der Schriftzug `Findling`. Aller Text im
 Bild ist Zeichen für Zeichen geprüft (Regel vom 08.09.2026). Kein fremdes
 Markenzeichen im Bild.
 
-### `header-backend.png` (1376 x 768)
+### `header-backend-v2.png` (1376 x 768)
 
 **Wofür:** das erste Bild der Store-Seite der Backend-Hälfte, sobald die
 Adresse mit dem nächsten Release reist (siehe Vermerk oben).

@@ -155,7 +155,7 @@ Support entreprise et modules payants : demande de devis à admin@infranode.dev]
 		test_lockstep_versions.py asks the same question on every ordinary run,
 		which is the cheap half of the same guard.
 	-->
-	<version>1.4.0</version>
+	<version>1.4.1</version>
 	<!--
 		The SPDX spelling and not the short one. info.xsd accepts both, but it
 		lists agpl, mit, mpl and apache under the heading Deprecated, and the
@@ -222,9 +222,9 @@ Support entreprise et modules payants : demande de devis à admin@infranode.dev]
 		store/media/README.md says what each image shows, how it was taken, and
 		why it comes from the development instance rather than from CI.
 	-->
-	<screenshot>https://raw.githubusercontent.com/street1983nk/nextcloud-search/main/store/media/header.png</screenshot>
-	<screenshot>https://raw.githubusercontent.com/street1983nk/nextcloud-search/main/store/media/screenshot-search.png</screenshot>
-	<screenshot>https://raw.githubusercontent.com/street1983nk/nextcloud-search/main/store/media/screenshot-admin.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/street1983nk/nextcloud-search/main/store/media/header-v2.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/street1983nk/nextcloud-search/main/store/media/screenshot-search-v2.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/street1983nk/nextcloud-search/main/store/media/screenshot-admin-v2.png</screenshot>
 	<!--
 		The same donation link as the sister project of this author. The
 		platform is named in the type attribute because the schema knows the

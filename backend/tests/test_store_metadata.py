@@ -1288,7 +1288,7 @@ _CLEAN_INFO = """<?xml version="1.0"?>
 \t<description>What it does, in English.</description>
 \t<description lang="de">Was sie tut, auf Deutsch.</description>
 \t<description lang="fr">Ce qu'elle fait, en francais.</description>
-\t<screenshot>{prefix}header.png</screenshot>
+\t<screenshot>{prefix}header-v2.png</screenshot>
 \t<version>1.0.0</version>
 </info>
 """.replace("{prefix}", RAW_MEDIA_PREFIX)
@@ -1296,7 +1296,7 @@ _CLEAN_INFO = """<?xml version="1.0"?>
 # The one address in the clean sample that is not made up: it names an image
 # that really is under store/media, so the sample passes the existence rule for
 # the same reason the two real files do.
-_CLEAN_SCREENSHOT = f"\t<screenshot>{RAW_MEDIA_PREFIX}header.png</screenshot>\n"
+_CLEAN_SCREENSHOT = f"\t<screenshot>{RAW_MEDIA_PREFIX}header-v2.png</screenshot>\n"
 
 
 def test_the_clean_sample_is_clean() -> None:

@@ -2002,3 +2002,16 @@ Kataloge und die zwei Variablentexte ist Plan 29-12. Die Release-Notiz geht
 mit dem Tag in 29-15 hinaus. Die fünf Issue-Antworten und das Pillow-Issue
 bleiben Entwürfe, bis 29-16 sie nach dem Release und nach einer erneuten
 Freigabe des Owners postet.
+
+---
+
+# Release 1.4.1 (08.10.2026): Bild-Fix ohne Textänderung
+
+Kein Textentscheid und kein Entwurf: 1.4.1 ändert an den sechs Texten oben
+kein Wort. Die vier Store-Bilder heißen seit diesem Release `*-v2.png`
+(byteidentisch, nur die Namen und damit die Adressen sind neu), weil der
+Bildspiegel des Stores eine Adresse nie nachholt und für `header.png` noch
+die abgelöste September-Fassung auslieferte. Begründung und Beleg stehen in
+`store/media/README.md`, Vermerk vom 08.10.2026. Owner-Wort vom 08.10.2026:
+"ja bitte findling und findling backend bilder auch". Die sechs Texte oben
+bleiben die abgenommene Fassung 1.4.0 und reisen unverändert mit.
