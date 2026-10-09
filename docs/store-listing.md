@@ -2005,6 +2005,22 @@ Freigabe des Owners postet.
 
 ---
 
+# Release 1.4.2 (09.10.2026): Deckungsgrad-Fix ohne Textänderung
+
+Kein Textentscheid und kein Entwurf: 1.4.2 ändert an den sechs Texten oben
+kein Wort. Das Release trägt den Fix zu Issue #25 (der Nenner des
+Deckungsgrads zählt nur noch Storages mit aktuellem Mount, und bei je Nutzer
+eingebundenen Fremdspeichern benennt die Seite die Mehrfachzählung in einem
+eigenen Satz, neu in allen acht Sprachen) sowie den Hygiene-Block der Woche
+(SECURITY.md, Sicherheits-Scans, privacy.md, Scorecard, Best-Practices-Badge).
+Owner-Wort vom 09.10.2026: "go" nach gezeigtem Stand. Die sechs Texte oben
+bleiben die abgenommene Fassung 1.4.0 und reisen unverändert mit.
+
+Eingereicht: 2026-10-09, Tag v1.4.2 auf 17363bb2, Submission-Lauf 37966034379,
+findling HTTP 201 (17:24:40Z) und findling_backend HTTP 201 (17:24:41Z). Alle
+sieben Workflows auf dem Tag grün, dazu die acht Läufe desselben Commits auf
+main. Vier Assets am Release, zwei Pakete und zwei Signaturen.
+
 # Release 1.4.1 (08.10.2026): Bild-Fix ohne Textänderung
 
 Kein Textentscheid und kein Entwurf: 1.4.1 ändert an den sechs Texten oben
