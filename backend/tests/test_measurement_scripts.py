@@ -797,8 +797,13 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # lib/Migration/Version001400Date20261006000000.php (the class comment named
 # the wrong classes of the re-check). No file came and none went, so
 # PHP_FILES_TODAY stays at 90.
+# Measured again by issue #25 (the mounted-storages filter and the duplicates
+# sentence): ScanStatsService.php (totals() now sums over the storages the
+# crawl walks today), AdminViewService.php (the flag and the conditions it is
+# composed of) and templates/admin.php (the sentence and its element) changed
+# their bytes. No file came and none went, so PHP_FILES_TODAY stays at 90.
 PHP_FILES_TODAY = 90
-PHP_TREE_HASH_TODAY = "0763e83968bebcec150c2f55b466ad1fd9d23d57c3df68039fcfa94d3be9f7b4"
+PHP_TREE_HASH_TODAY = "bee7a95422d96ad9462e594bd7f1f55dc01e6efbb20c572740392c8c06259225"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
