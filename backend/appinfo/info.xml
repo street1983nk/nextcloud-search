@@ -169,7 +169,7 @@ Prérequis :
 Sans aucune intervention, Findling continue de fonctionner aussi sobrement qu'avant. Avec plus de matériel, un profil libère au plus la moitié de la machine (profil Standard) ou tout sauf un cœur (profil Performance).
 
 Support entreprise et modules payants : demande de devis à admin@infranode.dev]]></description>
-	<version>1.4.1</version>
+	<version>1.4.2</version>
 	<!--
 		The SPDX spelling and not the short one. info.xsd accepts both, but it
 		lists agpl, mit, mpl and apache under the heading Deprecated, and the
@@ -263,7 +263,7 @@ Support entreprise et modules payants : demande de devis à admin@infranode.dev]
 				so this exact tag has to exist in the registry before a release
 				is published, not after.
 			-->
-			<image-tag>1.4.1</image-tag>
+			<image-tag>1.4.2</image-tag>
 		</docker-install>
 		<routes>
 			<!--

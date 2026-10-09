@@ -4,7 +4,7 @@ All notable changes to Findling (the `findling` companion app and the
 `findling_backend` External App) are documented here. Both apps carry the
 same version. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [1.4.2] - 2026-10-09
 
 ### Fixed
 
@@ -128,6 +128,7 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
   and every result permission checked by Nextcloud. The patch releases 1.0.1
   to 1.0.3 of the same days carried store metadata and packaging fixes.
 
+[1.4.2]: https://github.com/street1983nk/nextcloud-search/compare/v1.4.1...v1.4.2
 [1.4.1]: https://github.com/street1983nk/nextcloud-search/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/street1983nk/nextcloud-search/compare/v1.3.2...v1.4.0
 [1.3.2]: https://github.com/street1983nk/nextcloud-search/compare/v1.3.1...v1.3.2
