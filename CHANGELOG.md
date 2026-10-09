@@ -13,6 +13,13 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
 - CI security scans: CodeQL over the Python half and pip-audit over the
   locked dependency set, weekly on top of every push.
 - This changelog; it travels with both store archives from the next release.
+- docs/privacy.md: what is stored where, who can read it, the remedies (host
+  disk encryption, a deliberate backup policy), and why the app does not
+  roll its own index encryption. The READMEs also name the lockstep guard:
+  on a major or minor version mismatch between the two apps, the search
+  answers with nothing instead of possibly wrong results.
+- A weekly OpenSSF Scorecard run that publishes its result; the README
+  carries the badge.
 
 ## [1.4.1] - 2026-10-08
 
