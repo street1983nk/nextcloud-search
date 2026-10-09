@@ -36,12 +36,10 @@ on:
     - cron: '17 4 1 * *'
   workflow_dispatch:
 
+# Read-only at the top: the registry write sits at the two jobs that push,
+# so a step added to a future job starts with no write rights at all.
 permissions:
   contents: read
-  # Pushing to ghcr needs nothing but the token this workflow already gets. A
-  # separate personal access token would be one more long lived secret with
-  # write access to the registry, for no gain.
-  packages: write
 
 # Serialised per branch, but deliberately never cancelled. This workflow pushes:
 # a cancelled run can leave one architecture in the registry without the other,
@@ -67,6 +65,12 @@ jobs:
     # eight times a cold build, so an honest slowdown still fits, and a job that
     # hangs costs minutes instead of the default six hours.
     timeout-minutes: 20
+    permissions:
+      contents: read
+      # Pushing to ghcr needs nothing but the token this job already gets. A
+      # separate personal access token would be one more long lived secret
+      # with write access to the registry, for no gain.
+      packages: write
     strategy:
       # One architecture failing should not hide the state of the other one.
       fail-fast: false
@@ -518,6 +522,11 @@ jobs:
     # read on 03.09.2026. Ten minutes is far beyond anything this job has ever
     # cost and is still a bound rather than the default six hours.
     timeout-minutes: 10
+    permissions:
+      contents: read
+      # This job publishes the merged manifest, so it carries the same
+      # job-scoped registry write as the build job above.
+      packages: write
     steps:
       - name: Collect the digests
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1

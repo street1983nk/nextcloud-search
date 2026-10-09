@@ -40,10 +40,10 @@ on:
         type: boolean
         default: false
 
+# Read-only at the top; the one write right this workflow needs sits at the
+# job whose release step uses it, so every other step starts with nothing.
 permissions:
-  # Only what the release step needs, and only because of it. Everything else
-  # in this workflow reads.
-  contents: write
+  contents: read
 
 # No cancel-in-progress here, and that is the one place in this repository where
 # the setting differs from the other workflows on purpose. Elsewhere an older
@@ -97,6 +97,11 @@ jobs:
     # GitHub default of 360 minutes. The first real run replaces this paragraph
     # with a measured range.
     timeout-minutes: 20
+
+    permissions:
+      # Only what the gh release create step needs, and only because of it.
+      # Everything else in this job reads.
+      contents: write
 
     steps:
       # Actions are pinned to commit SHAs, never to tags: a moved tag would be
