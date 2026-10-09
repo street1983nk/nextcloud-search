@@ -5,6 +5,7 @@
 [![Python gates](https://github.com/street1983nk/nextcloud-search/actions/workflows/python.yml/badge.svg)](https://github.com/street1983nk/nextcloud-search/actions/workflows/python.yml)
 [![PHP and store metadata gates](https://github.com/street1983nk/nextcloud-search/actions/workflows/php.yml/badge.svg)](https://github.com/street1983nk/nextcloud-search/actions/workflows/php.yml)
 [![Security scans](https://github.com/street1983nk/nextcloud-search/actions/workflows/security.yml/badge.svg)](https://github.com/street1983nk/nextcloud-search/actions/workflows/security.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/street1983nk/nextcloud-search/badge)](https://scorecard.dev/viewer/?uri=github.com/street1983nk/nextcloud-search)
 [![Nextcloud App Store](https://img.shields.io/badge/App_Store-findling-0082c9)](https://apps.nextcloud.com/apps/findling)
 [![Licence](https://img.shields.io/badge/Licence-AGPL--3.0--or--later-blue)](LICENSE)
 
@@ -63,7 +64,13 @@ Install both store entries, always in the same version:
 [Findling](https://apps.nextcloud.com/apps/findling) (Apps) and
 [Findling Backend](https://apps.nextcloud.com/apps/findling_backend)
 (External Apps). The first index run then starts on its own;
-`occ findling:index --status` shows the progress.
+`occ findling:index --status` shows the progress. With many scanned documents
+the first run can take a long time (OCR is compute heavy); measured run times
+live in [docs/performance.md](docs/performance.md).
+
+If the two apps run in different major or minor versions, the search answers
+with nothing instead of possibly wrong results, and the admin page names both
+version numbers.
 
 ## Architecture
 
@@ -86,7 +93,9 @@ between and nothing leaves the instance.
 Everything runs locally in the container, no telemetry, files are never
 modified. What is stored is the extracted text, in the backend app's own data
 area: a backup of that area contains it, and the index is not encrypted at
-rest.
+rest. The remedies, full disk encryption of the host and a deliberate backup
+policy, are laid out with their reasoning in [docs/privacy.md](docs/privacy.md)
+(German).
 
 ## Measurements
 

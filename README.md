@@ -5,6 +5,7 @@ Deutsch | [English](README.en.md) | [Français](README.fr.md)
 [![Python gates](https://github.com/street1983nk/nextcloud-search/actions/workflows/python.yml/badge.svg)](https://github.com/street1983nk/nextcloud-search/actions/workflows/python.yml)
 [![PHP and store metadata gates](https://github.com/street1983nk/nextcloud-search/actions/workflows/php.yml/badge.svg)](https://github.com/street1983nk/nextcloud-search/actions/workflows/php.yml)
 [![Security scans](https://github.com/street1983nk/nextcloud-search/actions/workflows/security.yml/badge.svg)](https://github.com/street1983nk/nextcloud-search/actions/workflows/security.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/street1983nk/nextcloud-search/badge)](https://scorecard.dev/viewer/?uri=github.com/street1983nk/nextcloud-search)
 [![Nextcloud App Store](https://img.shields.io/badge/App_Store-findling-0082c9)](https://apps.nextcloud.com/apps/findling)
 [![Lizenz](https://img.shields.io/badge/Lizenz-AGPL--3.0--or--later-blue)](LICENSE)
 
@@ -66,7 +67,13 @@ Beide Store-Einträge installieren, immer in derselben Version:
 [Findling](https://apps.nextcloud.com/apps/findling) (Apps) und
 [Findling Backend](https://apps.nextcloud.com/apps/findling_backend)
 (External Apps). Danach startet der erste Indexlauf von selbst;
-`occ findling:index --status` zeigt den Fortschritt.
+`occ findling:index --status` zeigt den Fortschritt. Bei vielen gescannten
+Dokumenten kann der erste Lauf lange dauern (Texterkennung ist rechenintensiv);
+gemessene Laufzeiten stehen in [docs/performance.md](docs/performance.md).
+
+Laufen die beiden Apps in unterschiedlicher Major- oder Minor-Version,
+antwortet die Suche mit nichts statt mit womöglich falschen Treffern, und die
+Verwaltungsseite nennt beide Versionsnummern.
 
 ## Architektur
 
@@ -89,7 +96,9 @@ dazwischen und nichts verlässt die Instanz.
 Alles läuft lokal im Container, keine Telemetrie, Dateien werden nie
 verändert. Gespeichert wird der extrahierte Text im Datenbereich der
 Backend-App: Eine Sicherung dieses Bereichs enthält ihn, und der Index ist
-nicht verschlüsselt gespeichert.
+nicht verschlüsselt gespeichert. Die Abhilfen, Festplattenverschlüsselung des
+Hosts und ein bewusster Umgang mit Sicherungen, stehen mit Begründung in
+[docs/privacy.md](docs/privacy.md).
 
 ## Messwerte
 

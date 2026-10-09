@@ -5,6 +5,7 @@
 [![Python gates](https://github.com/street1983nk/nextcloud-search/actions/workflows/python.yml/badge.svg)](https://github.com/street1983nk/nextcloud-search/actions/workflows/python.yml)
 [![PHP and store metadata gates](https://github.com/street1983nk/nextcloud-search/actions/workflows/php.yml/badge.svg)](https://github.com/street1983nk/nextcloud-search/actions/workflows/php.yml)
 [![Security scans](https://github.com/street1983nk/nextcloud-search/actions/workflows/security.yml/badge.svg)](https://github.com/street1983nk/nextcloud-search/actions/workflows/security.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/street1983nk/nextcloud-search/badge)](https://scorecard.dev/viewer/?uri=github.com/street1983nk/nextcloud-search)
 [![Nextcloud App Store](https://img.shields.io/badge/App_Store-findling-0082c9)](https://apps.nextcloud.com/apps/findling)
 [![Licence](https://img.shields.io/badge/Licence-AGPL--3.0--or--later-blue)](LICENSE)
 
@@ -69,7 +70,15 @@ Installer les deux entrées du store, toujours dans la même version :
 [Findling](https://apps.nextcloud.com/apps/findling) (Apps) et
 [Findling Backend](https://apps.nextcloud.com/apps/findling_backend)
 (External Apps). La première indexation démarre ensuite d'elle-même ;
-`occ findling:index --status` montre la progression.
+`occ findling:index --status` montre la progression. Avec beaucoup de
+documents numérisés, la première indexation peut être longue (la
+reconnaissance optique est coûteuse en calcul) ; les durées mesurées se
+trouvent dans [docs/performance.md](docs/performance.md).
+
+Si les deux applications tournent dans des versions majeures ou mineures
+différentes, la recherche répond par rien plutôt que par des résultats
+potentiellement faux, et la page d'administration affiche les deux numéros de
+version.
 
 ## Architecture
 
@@ -92,7 +101,9 @@ aucun service intermédiaire et rien ne quitte l'instance.
 Tout fonctionne localement dans le conteneur, aucune télémétrie, les fichiers
 ne sont jamais modifiés. Ce qui est conservé, c'est le texte extrait, dans la
 zone de données propre à l'application backend : une sauvegarde de cette zone
-le contient, et l'index n'est pas chiffré au repos.
+le contient, et l'index n'est pas chiffré au repos. Les remèdes, chiffrement
+du disque de l'hôte et politique de sauvegarde réfléchie, sont expliqués avec
+leurs raisons dans [docs/privacy.md](docs/privacy.md) (en allemand).
 
 ## Mesures
 
