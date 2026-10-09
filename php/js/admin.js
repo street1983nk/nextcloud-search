@@ -317,7 +317,7 @@
       // The model line of plan 25-04: the precision and whether the vectors
       // are computed again. A run that starts or ends moves nothing else here.
       (view.backend || {}).precisionActive, (view.backend || {}).reembedRunning,
-      coverage.provisional, coverage.mountsFinished,
+      coverage.provisional, coverage.duplicates, coverage.mountsFinished,
       coverage.mountsTotal, estimate.ocrMeasured, estimate.secondsLeft,
       estimate.bytesExpected, estimate.startupValues, estimate.spaceWarning,
       estimate.firstIndexDone, errorSignature(view)
@@ -389,6 +389,9 @@
     shown('findling-coverage-unknown', hasDenominator && !hasFraction && coverage.recounting !== true)
     shown('findling-coverage-leftout', hasDenominator)
     shown('findling-coverage-provisional', hasDenominator && coverage.provisional === true)
+    // The sentence is static and rendered by the template; the script only
+    // decides whether the settled gap of issue #25 is on display.
+    shown('findling-coverage-duplicates', hasDenominator && coverage.duplicates === true)
     shown('findling-coverage-empty', !hasDenominator)
 
     semanticBlock(coverage, hasDenominator, (view.backend || {}).engineState)

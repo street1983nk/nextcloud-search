@@ -6,6 +6,18 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
 
 ## [Unreleased]
 
+### Fixed
+
+- The coverage denominator no longer counts storages that left the mount
+  list: frozen rows of an old mount configuration padded it forever and the
+  page answered 7 per cent on an instance whose coverage was complete (#25).
+  The rows themselves stay, only the figure stops reading them.
+- When external storages are mounted once per user, the same share is
+  counted once per mount. The page now says so, in a sentence that appears
+  only when everything is settled and a gap remains; a real dedup per mount
+  configuration is a candidate for 1.5 because it has to answer the ACL
+  question first (#25).
+
 ### Added
 
 - SECURITY.md with the two private reporting channels, CONTRIBUTING.md, and

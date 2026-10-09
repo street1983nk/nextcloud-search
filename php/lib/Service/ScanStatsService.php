@@ -326,59 +326,98 @@ final class ScanStatsService {
 	}
 
 	/**
-	 * The sum of every counter over every mount, plus how many mounts are
-	 * through.
+	 * Rows per IN band of totals(). Well under every placeholder limit of the
+	 * three databases, and one band is one query, so a thousand home storages
+	 * are two queries and not a thousand.
+	 */
+	private const TOTALS_BAND = 500;
+
+	/**
+	 * The sum of every counter over the mounted storages, plus how many of
+	 * those mounts are through.
 	 *
 	 * Always all eight keys, zero for the ones nothing was written for yet. The
 	 * shape follows FileStateService::counts(): a status answer that leaves an
 	 * empty value out makes "nothing was counted" and "the counter is broken"
 	 * indistinguishable, and this figure is the headline number of the page.
 	 *
-	 * mountsTotal is the number of rows and mountsFinished the number of rows
-	 * with a finished_at. As long as the two differ the number is a lower bound,
-	 * and the caller has to label it as provisional and name both figures.
+	 * The caller names the storages, and that is the fix of issue #25. Rows of
+	 * storages that left the mount list stay in the table on purpose, with the
+	 * reasoning at ScanRecountJob: the container keeps the documents of such a
+	 * mount, so deleting the row would open the opposite gap for good. But a
+	 * figure that keeps counting the sightings of mounts nobody crawls any more
+	 * answered "7 per cent" on an instance whose coverage was complete, frozen
+	 * rows of an old mount configuration padding the denominator forever. The
+	 * list has to come from the same source the crawl walks
+	 * (StorageService::getMounts), so the figure and the work mean the same set
+	 * of mounts; a second composition here would drift the day a switch flips.
+	 * An empty list is an honest answer of zeros, not a fallback to everything.
 	 *
+	 * mountsTotal is the number of rows among the named storages and
+	 * mountsFinished the number of those with a finished_at. As long as the two
+	 * differ the number is a lower bound, and the caller has to label it as
+	 * provisional and name both figures.
+	 *
+	 * @param list<int> $mountedStorageIds the storages the crawl walks today
 	 * @return array{
 	 *     filesSeen:int, bytesSeen:int, ocrCandidates:int, pdfSeen:int,
 	 *     overCap:int, excluded:int, mountsTotal:int, mountsFinished:int
 	 * }
 	 */
-	public function totals(): array {
+	public function totals(array $mountedStorageIds): array {
 		$totals = array_fill_keys(array_values(self::COUNTERS), 0);
 		$totals['mountsTotal'] = 0;
 		$totals['mountsFinished'] = 0;
 
-		$qb = $this->db->getQueryBuilder();
-		$qb->selectAlias($qb->func()->count('*'), 'mounts_total');
-		foreach (array_keys(self::COUNTERS) as $column) {
-			$qb->selectAlias($qb->func()->sum($column), 'sum_' . $column);
+		$ids = array_values(array_unique(array_filter(
+			array_map(intval(...), $mountedStorageIds),
+			static fn (int $id): bool => $id > 0,
+		)));
+		if ($ids === []) {
+			return $totals;
 		}
-		$qb->from(self::TABLE_NAME);
 
-		$result = $qb->executeQuery();
-		$row = $result->fetch();
-		$result->closeCursor();
-
-		if (is_array($row)) {
-			$totals['mountsTotal'] = (int)($row['mounts_total'] ?? 0);
-			foreach (self::COUNTERS as $column => $key) {
-				// A sum over an empty table is null on all three databases, and
-				// null cast to int is the zero this method promises.
-				$totals[$key] = (int)($row['sum_' . $column] ?? 0);
+		foreach (array_chunk($ids, self::TOTALS_BAND) as $band) {
+			$qb = $this->db->getQueryBuilder();
+			$qb->selectAlias($qb->func()->count('*'), 'mounts_total');
+			foreach (array_keys(self::COUNTERS) as $column) {
+				$qb->selectAlias($qb->func()->sum($column), 'sum_' . $column);
 			}
-		}
+			$qb->from(self::TABLE_NAME)
+				->where($qb->expr()->in(
+					'storage_id',
+					$qb->createNamedParameter($band, IQueryBuilder::PARAM_INT_ARRAY),
+				));
 
-		$finished = $this->db->getQueryBuilder();
-		$finished->selectAlias($finished->func()->count('*'), 'mounts_finished')
-			->from(self::TABLE_NAME)
-			->where($finished->expr()->isNotNull('finished_at'));
+			$result = $qb->executeQuery();
+			$row = $result->fetch();
+			$result->closeCursor();
 
-		$result = $finished->executeQuery();
-		$row = $result->fetch();
-		$result->closeCursor();
+			if (is_array($row)) {
+				$totals['mountsTotal'] += (int)($row['mounts_total'] ?? 0);
+				foreach (self::COUNTERS as $column => $key) {
+					// A sum over an empty band is null on all three databases,
+					// and null cast to int is the zero this method promises.
+					$totals[$key] += (int)($row['sum_' . $column] ?? 0);
+				}
+			}
 
-		if (is_array($row)) {
-			$totals['mountsFinished'] = (int)($row['mounts_finished'] ?? 0);
+			$finished = $this->db->getQueryBuilder();
+			$finished->selectAlias($finished->func()->count('*'), 'mounts_finished')
+				->from(self::TABLE_NAME)
+				->where($finished->expr()->isNotNull('finished_at'))
+				->andWhere($finished->expr()->in(
+					'storage_id',
+					$finished->createNamedParameter($band, IQueryBuilder::PARAM_INT_ARRAY),
+				));
+
+			$result = $finished->executeQuery();
+			$row = $result->fetch();
+			$result->closeCursor();
+
+			if (is_array($row)) {
+				$totals['mountsFinished'] += (int)($row['mounts_finished'] ?? 0);
+			}
 		}
 
 		return $totals;

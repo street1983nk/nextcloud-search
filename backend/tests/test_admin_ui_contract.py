@@ -2380,6 +2380,51 @@ def test_the_guard_lines_are_built_out_of_closed_sets() -> None:
             assert key in keys, (catalogue.name, key)
 
 
+#: The sentence of issue #25, written out here because four places have to
+#: carry it or its flag identically: the template renders it, the script only
+#: toggles it, the service composes the flag, and every catalogue translates
+#: it. The denominator of the coverage figure counts an external storage once
+#: per user mount (reproduced with two sftp mounts of one directory: 30 files,
+#: denominator 60), and this sentence is what keeps the page honest about it
+#: until a dedup answers the ACL question.
+DUPLICATES_SENTENCE = (
+    "External storages mounted once per user are counted once per mount, so the same file can stand "
+    "in this figure several times. The search itself holds every file once."
+)
+
+
+def test_the_duplicates_sentence_of_issue_25_stands_wherever_it_is_rendered() -> None:
+    """The settled gap of issue #25: element, toggle, flag and translations.
+
+    The flag may only come up when every other explanation is used up, so the
+    service side is pinned to the composed conditions and not just to the key:
+    external storages on, queues idle, every mount counted through, the
+    container answering, no recount pending, and the failed files accounted
+    for. A flag that fired earlier would name per-user mounts on an instance
+    that is simply still working.
+    """
+    template = TEMPLATE.read_text(encoding="utf-8")
+    script = SCRIPT.read_text(encoding="utf-8")
+    view = ADMIN_VIEW.read_text(encoding="utf-8")
+
+    assert (
+        'id="findling-coverage-duplicates"<?php if (!$hasDenominator || !$duplicates) { ?> hidden<?php } ?>' in template
+    )
+    assert DUPLICATES_SENTENCE in template
+
+    assert "shown('findling-coverage-duplicates', hasDenominator && coverage.duplicates === true)" in script
+    # The fingerprint of the poll carries the flag, or a gap that settles while
+    # nothing else moves would never reach the page.
+    assert "coverage.provisional, coverage.duplicates, coverage.mountsFinished," in script
+
+    assert view.count("'duplicates' => ") == 1
+    assert "$duplicates = $externalStorageOn" in view
+    assert "&& $indexed + max(0, $failed) < $indexable;" in view
+
+    for catalogue in L10N_CATALOGUES:
+        assert DUPLICATES_SENTENCE in catalogue_of(catalogue), catalogue.name
+
+
 # Plan 26-08: the service reads the object guard of the status answer key by
 # key through guardField, and the container spells those keys in GuardReport.
 # Two spellings of one contract, held together here (T-26-28).
@@ -3201,8 +3246,9 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     # 261003-d3y (the threshold cause hardware_short, D-24-07), six of plan
     # 29-01 (label and remedy of system_file, legacy_format, unsupported_variant),
     # one of plan 29-12 (the error class line of the lookup card; the remedy of
-    # out_of_memory changed its key and so moved nothing)
-    assert len(keys_of["de.json"]) == 299
+    # out_of_memory changed its key and so moved nothing), one of issue #25
+    # (the sentence about shares counted once per user mount)
+    assert len(keys_of["de.json"]) == 300
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:

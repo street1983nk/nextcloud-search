@@ -592,7 +592,18 @@ final class AdminViewService {
 	public function overview(): array {
 		$states = $this->fileStateService->counts();
 		$queue = $this->queueService->stats();
-		$scan = $this->scanStats->totals();
+
+		// The storages whose rows may enter the figure, from the same source
+		// the crawl walks (issue #25). Rows of storages that left the mount
+		// list stay in the table, with the reasoning at ScanRecountJob; here
+		// they stay out of the denominator, because frozen sightings of an old
+		// mount configuration padded it forever and the page answered seven
+		// per cent on an instance whose coverage was complete.
+		$mountedStorageIds = [];
+		foreach ($this->storageService->getMounts() as $mount) {
+			$mountedStorageIds[] = (int)$mount['storage_id'];
+		}
+		$scan = $this->scanStats->totals($mountedStorageIds);
 
 		$scheduled = (int)($queue['scheduled'] ?? 0);
 		$running = (int)($queue['running'] ?? 0);
@@ -722,7 +733,16 @@ final class AdminViewService {
 			// two numbers; nothing here decides what happens to the search,
 			// which is ExAppService and the search provider.
 			'lockstep' => $this->exAppService->lockstep($answer),
-			'coverage' => $this->coverage($scan, $backend, $backendReachable, $indexable, $refusedByType),
+			'coverage' => $this->coverage(
+				$scan,
+				$backend,
+				$backendReachable,
+				$indexable,
+				$refusedByType,
+				$this->settingsService->indexExternalStorage(),
+				($scheduled + $running) === 0,
+				(int)($states['failed'] ?? 0),
+			),
 			'estimate' => $this->estimate($scan, $backend, $backendReachable, $indexable, $scheduled + $running),
 			'errors' => $this->errors(),
 			'rules' => $this->rules(),
@@ -1728,10 +1748,26 @@ final class AdminViewService {
 	 * window until the next recount of ScanRecountJob (quick task 260929-kii),
 	 * and both percentages are null in it.
 	 *
+	 * ``duplicates`` is the honest sentence of issue #25. External storages
+	 * mounted once per user get one filecache tree per user, so the crawl sees
+	 * and counts the same share once per mount, while no switch of this app can
+	 * tell two of those trees apart without answering the ACL question first
+	 * (two users may legitimately see different subsets of one share). The flag
+	 * is therefore true exactly when every other explanation is used up:
+	 * external storages are indexed at all, nothing is queued or running, every
+	 * mount is counted through, the container answers, no recount is pending,
+	 * and still fewer documents are indexed than the denominator holds after
+	 * the failed ones are accounted for. The page then says that the figure can
+	 * count one file several times instead of selling the gap as missing
+	 * coverage.
+	 *
 	 * @param int $refusedByType skipped(mime_not_allowed), counted once in overview()
+	 * @param bool $externalStorageOn whether external storages are indexed at all
+	 * @param bool $queuesIdle nothing scheduled and nothing running
+	 * @param int $failed failed verdicts, they explain a gap without duplicates
 	 * @return array{
 	 *     indexed:int, indexable:int, deliberatelyLeftOut:int, percent:int|null,
-	 *     embedded:int, embeddedPercent:int|null, recounting:bool,
+	 *     embedded:int, embeddedPercent:int|null, recounting:bool, duplicates:bool,
 	 *     provisional:bool, mountsTotal:int, mountsFinished:int
 	 * }
 	 */
@@ -1741,6 +1777,9 @@ final class AdminViewService {
 		bool $backendReachable,
 		int $indexable,
 		int $refusedByType,
+		bool $externalStorageOn,
+		bool $queuesIdle,
+		int $failed,
 	): array {
 		$overCap = max(0, (int)$scan['overCap']);
 		$excluded = max(0, (int)$scan['excluded']);
@@ -1779,6 +1818,21 @@ final class AdminViewService {
 		// a sentence of its own instead of "backend does not answer".
 		$recounting = $backendReachable && $indexable > 0 && $indexed > $indexable;
 
+		// Everything settled and still a gap the failed files do not explain:
+		// with external storages in the index the one remaining cause is a
+		// share counted once per user mount (issue #25, reproduced with two
+		// sftp mounts of one directory). Without external storages the flag
+		// stays off, because the sentence would name a cause that cannot
+		// exist on this instance.
+		$duplicates = $externalStorageOn
+			&& $queuesIdle
+			&& $backendReachable
+			&& !$recounting
+			&& $percent !== null
+			&& $mountsTotal > 0
+			&& $mountsFinished === $mountsTotal
+			&& $indexed + max(0, $failed) < $indexable;
+
 		return [
 			'indexed' => $indexed,
 			'indexable' => $indexable,
@@ -1787,6 +1841,7 @@ final class AdminViewService {
 			'embedded' => $embeddedKnown ? $embedded : 0,
 			'embeddedPercent' => $embeddedPercent,
 			'recounting' => $recounting,
+			'duplicates' => $duplicates,
 			// A scan that has not walked every mount to its end has counted a
 			// lower bound, and the page has to say so and name both figures. An
 			// estimate that quietly corrects itself upwards looks like a defect.

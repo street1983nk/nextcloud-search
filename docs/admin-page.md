@@ -124,9 +124,25 @@ Update liest.
 Eine Grenze bleibt bewusst: Zeilen von Mounts, die aus der Mount-Liste
 verschwinden (ein gelöschter Nutzer, ein abgeschalteter Schalter), bleiben
 stehen. Der Container behält die Dokumente eines solchen Mounts nach heutigem
-Stand, weil sein Abgleich nur gelistete Mounts läuft; Zähler und Nenner bleiben
-so zueinander stimmig. Löschte die Nachzählung die Zeile, stünde der Zähler auf
-Dauer über dem Nenner.
+Stand, weil sein Abgleich nur gelistete Mounts läuft. Löschte die Nachzählung
+die Zeile, stünde der Zähler auf Dauer über dem Nenner.
+
+Seit Issue #25 zählen diese stehengebliebenen Zeilen aber nicht mehr in den
+Nenner: `totals()` summiert nur noch über die Storages, die aktuell einen
+gecrawlten Mount haben, aus derselben Quelle, die der Crawl läuft. Eingefrorene
+Zählstände einer alten Mount-Konfiguration hatten den Nenner sonst für immer
+aufgebläht (gemeldet mit 7 Prozent Anzeige bei real vollständiger Abdeckung).
+Steht der Zähler dadurch über dem Nenner, greift der Abschnitt unten.
+
+Eine zweite Grenze benennt die Seite seit Issue #25 selbst: externe Speicher,
+die je Nutzer einmal eingebunden sind, bekommen je Einbindung einen eigenen
+Filecache-Baum, und der Crawl zählt dieselbe Share deshalb einmal pro Nutzer.
+Sind die Warteschlangen leer, alle Mounts durchgezählt, der Container
+erreichbar und bleibt trotzdem eine Lücke, die die fehlgeschlagenen Dateien
+nicht erklären, zeigt die Seite den Satz, dass dieselbe Datei mehrfach in der
+Zahl stehen kann. Eine echte Deduplizierung je Mount-Konfiguration braucht
+zuerst die ACL-Antwort (zwei Nutzer dürfen verschiedene Teilmengen derselben
+Share sehen) und ist ein Kandidat für 1.5.
 
 ### Wenn der Zähler über dem Nenner steht
 

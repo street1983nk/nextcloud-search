@@ -10,6 +10,7 @@ OC.L10N.register(
     "Deliberately left out: %s": "Deixados de fora de propósito: %s",
     "Those files are too large, of a type Findling does not read, or excluded by a rule. They are not in the denominator above, so the coverage figure can reach a hundred per cent.": "Esses ficheiros são demasiado grandes, de um tipo que o Findling não lê, ou excluídos por uma regra. Não estão no denominador acima, de modo que a cobertura pode chegar a cem por cento.",
     "Provisional figure, %1$s of %2$s storages have been counted through.": "Valor provisório, foram contados %1$s de %2$s armazenamentos.",
+    "External storages mounted once per user are counted once per mount, so the same file can stand in this figure several times. The search itself holds every file once.": "Os armazenamentos externos montados uma vez por utilizador são contados uma vez por montagem, pelo que o mesmo ficheiro pode aparecer várias vezes neste número. A pesquisa contém cada ficheiro apenas uma vez.",
     "Findable by meaning": "Encontrável pelo significado",
     "%1$s of %2$s indexable files can also be found by meaning": "%1$s de %2$s ficheiros indexáveis também podem ser encontrados pelo significado",
     "Model: %1$s": "Modelo: %1$s",

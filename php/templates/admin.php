@@ -87,6 +87,10 @@ $provisional = ($coverage['provisional'] ?? false) === true;
 // page shows neither a share nor a fraction with a numerator above its
 // denominator then, and not the sentence about a silent backend either.
 $recounting = ($coverage['recounting'] ?? false) === true;
+// Everything settled and still a gap: the denominator counts a share once per
+// user mount (issue #25). The sentence names the cause instead of selling the
+// gap as missing coverage.
+$duplicates = ($coverage['duplicates'] ?? false) === true;
 $mountsTotal = $whole($coverage['mountsTotal'] ?? 0);
 $mountsFinished = $whole($coverage['mountsFinished'] ?? 0);
 
@@ -431,6 +435,8 @@ $banners = [
 	</p>
 
 	<p class="settings-hint" id="findling-coverage-provisional"<?php if (!$hasDenominator || !$provisional) { ?> hidden<?php } ?>><?php p($l->t('Provisional figure, %1$s of %2$s storages have been counted through.', [$count($mountsFinished), $count($mountsTotal)])); ?></p>
+
+	<p class="settings-hint" id="findling-coverage-duplicates"<?php if (!$hasDenominator || !$duplicates) { ?> hidden<?php } ?>><?php p($l->t('External storages mounted once per user are counted once per mount, so the same file can stand in this figure several times. The search itself holds every file once.')); ?></p>
 
 	<?php
 	/*
