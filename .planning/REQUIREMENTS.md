@@ -64,6 +64,7 @@
 - Kleiner Reranker fuer Top-10 (optional)
 - CLIP-Bildsuche (SigLIP2, Lizenz je Modell pruefen)
 - whisper.cpp-Transkription als Opt-in
+- Auszug (Snippet) auch fuer Treffer, die nur ueber ein Zusatzsprachenfeld kommen (z. B. body_cs; L-30-02, Owner 10.10.2026)
 - `.msg` (extract-msg, GPL-3 pruefen), Franzoesisches Koerperfeld, Suchlatenz bei >= 12 parallelen Anfragen
 
 ## Out of Scope

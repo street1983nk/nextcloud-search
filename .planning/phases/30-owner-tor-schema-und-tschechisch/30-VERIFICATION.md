@@ -1,9 +1,18 @@
 ---
 phase: 30-owner-tor-schema-und-tschechisch
 verified: 2026-10-10T10:19:39Z
-status: human_needed
-score: 12/13 must-haves verified (1 UNCERTAIN, Owner-Entscheid)
-overrides_applied: 0
+status: passed
+score: 13/13 must-haves verified (1 per Owner-Override)
+overrides_applied: 1
+overrides:
+  - must_have: "Store-Texte und READMEs nennen zehn OCR-Sprachen inklusive Tschechisch und Tschechisch als verfügbare Suchsprache"
+    reason: "READMEs haben keine Suchsprachen-Zeile; Kurztext-Regel; Suchsprachen stehen in allen sechs Store-Texten und in docs/language-analyzers.md"
+    accepted_by: "street1983nk"
+    accepted_at: "2026-10-10"
+owner_decisions:
+  - item: "L-30-02 (LOW): Treffer nur über body_cs ohne Auszug"
+    decision: "Für 1.5.0 angenommen; Auszug aus Zusatzsprachen als v1.6-Kandidat in REQUIREMENTS.md notiert"
+    decided_at: "2026-10-10"
 deferred:
   - truth: "Wortlaut des fünften Grenz-Eintrags (Tschechisch ohne Stammformreduktion) ist vom Owner abgenommen"
     addressed_in: "Phase 36"
@@ -21,7 +30,7 @@ human_verification:
 
 **Phasenziel:** Alle offenen Owner-Entscheide des Milestones sind getroffen, das Schema für v1.5 steht in einem einzigen Schritt fest, und Admins können Tschechisch für OCR und lexikalische Suche einschalten.
 **Verifiziert:** 2026-10-10T10:19:39Z
-**Status:** human_needed
+**Status:** passed (Owner-Entscheide 10.10.2026: README-Override angenommen, L-30-02 für 1.5.0 angenommen, Prüfung in v1.6)
 **Re-Verifikation:** Nein, erste Verifikation
 
 ## Zielerreichung
