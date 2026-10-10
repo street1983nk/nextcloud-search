@@ -433,7 +433,7 @@ jobs:
         env:
           DIGEST: ${{ steps.push.outputs.digest }}
         run: |
-          echo "expected: ces listed, at least 3 of 4 Czech words, 0 tokens on a white page"
+          echo "expected: ces listed, at least 3 of 4 Czech words, at least 3 Czech-only letters in the raw text, none of them when read with eng, 0 tokens on a white page"
           docker run --rm --network none \
             -v "${GITHUB_WORKSPACE}/backend/tests:/probe:ro" \
             -v "${GITHUB_WORKSPACE}/testdata/fonts:/fonts:ro" \
