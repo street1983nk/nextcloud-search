@@ -284,6 +284,13 @@ RUN apt-get update \
 # of installed size (2256 + 2654 + 5924 + 1952 + 2535 + 4369 kB, read from the
 # same index on the same day).
 #
+# ces joined them in 2026-10 (plan 30-02, CZ-01, issue #26: Czech OCR promised
+# for 1.5). Verified on 2026-10-10 against api.ftp-master.debian.org (madison)
+# and packages.debian.org/trixie: version 1:4.1.0-2, component main,
+# Architecture: all, source package tesseract-lang, download 1411716 bytes,
+# installed size 3722.0 kB. Same pattern as the six above: offered, not a
+# default, proven by its own --list-langs check below.
+#
 # What this does NOT do, and the distinction is the whole point: it makes the
 # six languages available, it does not switch them on. OCR_DEFAULT_LANGUAGES in
 # backend/src/findling/config.py stays at deu, eng and fra, because every extra
@@ -317,8 +324,9 @@ RUN apt-get update \
 # with the repository, because the image is what is distributed. Measured on
 # 2026-09-01, the engine and libtesseract5 share one copyright file and the
 # language packs of that day, deu, eng and osd, share a second one
-# (tessdata_fast), so two copies covered all five packages. The seven packs
-# that joined later, fra on 2026-09-06 and the six of 2026-09-21, are built
+# (tessdata_fast), so two copies covered all five packages. The eight packs
+# that joined later, fra on 2026-09-06, the six of 2026-09-21 and ces in
+# 2026-10, are built
 # from the very same source package tesseract-lang and therefore carry the very
 # same debian/copyright. That is a statement about the source package and
 # deliberately not a second byte comparison inside the image, which this
@@ -339,6 +347,7 @@ RUN apt-get update \
         tesseract-ocr-por=1:4.1.0-2 \
         tesseract-ocr-dan=1:4.1.0-2 \
         tesseract-ocr-est=1:4.1.0-2 \
+        tesseract-ocr-ces=1:4.1.0-2 \
         tesseract-ocr-osd=1:4.1.0-2 \
     && rm -rf /var/lib/apt/lists/* \
     && tesseract --list-langs 2>&1 | grep -qx deu \
@@ -350,6 +359,7 @@ RUN apt-get update \
     && tesseract --list-langs 2>&1 | grep -qx por \
     && tesseract --list-langs 2>&1 | grep -qx dan \
     && tesseract --list-langs 2>&1 | grep -qx est \
+    && tesseract --list-langs 2>&1 | grep -qx ces \
     && test -s /usr/share/doc/tesseract-ocr/copyright \
     && test -s /usr/share/doc/tesseract-ocr-deu/copyright \
     && install -D -m 0444 /usr/share/doc/tesseract-ocr/copyright \

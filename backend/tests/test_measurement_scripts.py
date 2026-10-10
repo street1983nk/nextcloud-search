@@ -1677,8 +1677,12 @@ PHP_TREE_HASH_TODAY = "bee7a95422d96ad9462e594bd7f1f55dc01e6efbb20c572740392c8c0
 # list with its named exceptions) and changed index/analyzer.py (TOKENIZER_CS
 # and czech_analyzer). One file came and none went, so PACKAGE_FILES_TODAY goes
 # from 73 to 74. The PHP pair does not move: php/ is unchanged.
+# Measured again by plan 30-02 on 2026-10-10 (Czech OCR, CZ-01): plan 30-02
+# changed config.py (ces joins OCR_LANGUAGE_ALLOWLIST, now ten entries, the
+# default stays at three). No file came and none went, so PACKAGE_FILES_TODAY
+# stays at 74. The PHP pair does not move: php/ is unchanged.
 PACKAGE_FILES_TODAY = 74
-PACKAGE_TREE_HASH_TODAY = "85d26511dfd02aac5d6a2c597ae7c126b08481075bada9dfafdb11d85d86f295"
+PACKAGE_TREE_HASH_TODAY = "d09ecf1f679e1ba40d946e78f1df873f0ace83dbb39b8d91a1327c05f24e5272"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

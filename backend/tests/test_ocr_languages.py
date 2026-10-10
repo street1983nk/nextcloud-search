@@ -1,7 +1,8 @@
-"""Nine OCR languages on offer, three of them the default, and one image that has to agree.
+"""Ten OCR languages on offer, three of them the default, and one image that has to agree.
 
 Plan 16-10 put six more language packs into ``backend/Dockerfile`` (spa, ita,
-nld, por, dan, est) and six more entries into ``OCR_LANGUAGE_ALLOWLIST``. That
+nld, por, dan, est) and six more entries into ``OCR_LANGUAGE_ALLOWLIST``, and
+plan 30-02 added the tenth, ces (Czech, issue #26), the same way. That
 is two lists in two files, and the two ways they can part company are both
 silent:
 
@@ -16,12 +17,12 @@ So this file reads the Dockerfile as text, exactly like ``test_ocr_french.py``
 does for the French half, and asserts both halves against the list in
 ``findling.config``. The list is imported and never written down a second time:
 a test that repeats the set it guards agrees with itself on the very day
-somebody adds a tenth language, which is the only day it matters.
+somebody adds an eleventh language, which is the only day it matters.
 
 The third assertion is the other half of the decision and just as deliberate:
 the default stays at three. Every additional language loads another
 traineddata, which costs time and memory on every single OCR page (T-16-37).
-Nine languages available is a feature; nine languages switched on for every
+Ten languages available is a feature; ten languages switched on for every
 existing installation is a slowdown nobody ordered.
 
 Since plan 18-09 the file carries a second pair, and it is the same shape of
@@ -68,7 +69,7 @@ APT_LINE = re.compile(r"tesseract-ocr-([a-z]{3})=1:4[.]1[.]0-2")
 # engine which languages it can actually see.
 PROVEN_LINE = re.compile(r"list-langs.*grep -qx ([a-z]{3})")
 
-# The language whose two lines the mutation below removes. Any of the nine
+# The language whose two lines the mutation below removes. Any of the ten
 # would do; spa is the first of the six that plan 16-10 added.
 MUTATED_LANGUAGE = "spa"
 
@@ -143,8 +144,8 @@ def test_every_offered_language_is_proven_when_the_image_is_built() -> None:
 
 
 def test_the_default_stays_at_three_and_is_a_true_subset_of_the_offer() -> None:
-    # Three, and the number is the assertion. Making all nine the default would
-    # load six more traineddata files on every page of every scan, on every
+    # Three, and the number is the assertion. Making all ten the default would
+    # load seven more traineddata files on every page of every scan, on every
     # instance that upgrades, in exchange for a language most of them do not
     # have. An instance that wants Spanish says so through
     # FINDLING_OCR_LANGUAGES and pays for exactly what it uses.
@@ -157,6 +158,27 @@ def test_the_default_stays_at_three_and_is_a_true_subset_of_the_offer() -> None:
     # Which three they are is the subject of backend/tests/test_ocr_french.py,
     # and one statement belongs in one file.
     assert set(OCR_DEFAULT_LANGUAGES) < set(OCR_LANGUAGE_ALLOWLIST)
+
+
+def test_czech_is_accepted_in_the_admin_order_without_a_warning(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """deu+ces, the setting issue #26 asks for, passes the allowlist untouched.
+
+    Kept in the admin's order and without a line: a warning here would mean the
+    allowlist still refuses ces and the admin would get the built in default
+    back instead of Czech.
+    """
+    monkeypatch.setenv("FINDLING_OCR_LANGUAGES", "deu+ces")
+    settings.cache_clear()
+    try:
+        with caplog.at_level(logging.WARNING, logger="findling"):
+            chosen = settings().ocr_languages
+    finally:
+        settings.cache_clear()
+
+    assert chosen == ("deu", "ces")
+    assert [record for record in caplog.records if "FINDLING_OCR_LANGUAGES" in record.getMessage()] == []
 
 
 # -- the body languages against the OCR languages ------------------------------

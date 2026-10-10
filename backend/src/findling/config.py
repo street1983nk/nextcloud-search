@@ -390,6 +390,11 @@ OCR_DEFAULT_LANGUAGES = ("deu", "eng", "fra")
 # existing installation, without anybody having asked for it. An instance with
 # Spanish scans sets FINDLING_OCR_LANGUAGES and pays for exactly what it uses.
 #
+# ces made it ten in 2026-10 (plan 30-02, CZ-01, issue #26), again with its own
+# apt line and its own build time check, and again only offered: the default
+# does not grow with the offer, for the same per page cost as above. An
+# instance with Czech scans sets FINDLING_OCR_LANGUAGES, for example deu+ces.
+#
 # This set is maintained together with the apt block in backend/Dockerfile, and
 # backend/tests/test_ocr_languages.py compares the two in both directions (as
 # backend/tests/test_ocr_french.py does for the French half), so the pair
@@ -397,7 +402,7 @@ OCR_DEFAULT_LANGUAGES = ("deu", "eng", "fra")
 # Switching on the Fraktur option means uncommenting tesseract-ocr-frk there and
 # adding "frk" here, in the same change. Adding it here alone would produce a
 # call that tesseract rejects on every page.
-OCR_LANGUAGE_ALLOWLIST = frozenset({"deu", "eng", "fra", "spa", "ita", "nld", "por", "dan", "est"})
+OCR_LANGUAGE_ALLOWLIST = frozenset({"deu", "eng", "fra", "spa", "ita", "nld", "por", "dan", "est", "ces"})
 
 # The only place where a body language code turns into a tesseract name, built
 # the way SNOWBALL_NAME above is built and for the same reason: a closed mapping
