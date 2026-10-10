@@ -1710,8 +1710,13 @@ PHP_TREE_HASH_TODAY = "bee7a95422d96ad9462e594bd7f1f55dc01e6efbb20c572740392c8c0
 # GROWTH_PER_LANGUAGE with the cs measurement, the value stays at 0.40). No file
 # came and none went, so PACKAGE_FILES_TODAY stays at 74. The PHP pair does not
 # move: php/ is unchanged.
+# Measured again by plan 30-09 on 2026-10-10 (Plan 30-09, Befund L-30-01 of the
+# phase 30 audit): plan 30-09 changed index/stopwords_cs.py (the docstring now
+# carries the NOTICE lines of Apache Lucene and the path of the Apache-2.0 text
+# in the image; the two lists are untouched). No file came and none went, so
+# PACKAGE_FILES_TODAY stays at 74. The PHP pair does not move: php/ is unchanged.
 PACKAGE_FILES_TODAY = 74
-PACKAGE_TREE_HASH_TODAY = "21275bc1829dda9598bbf9aec582b60068df387bad116ba53c265fe7d74ebff9"
+PACKAGE_TREE_HASH_TODAY = "200f270a8eced6ca2797f92eaeb5e41dd9c4d860946ba74a3176df71422ecc43"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

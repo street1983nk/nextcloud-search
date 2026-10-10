@@ -273,6 +273,14 @@ Keine Performance-Befunde.
   ist durch `sha256sum | cut` einzeilig hex. Der Job hat
   `permissions: contents: read` und kein Geheimnis.
 
+## LOW-Entscheidungen
+
+| Befund | Entscheidung | Grund |
+|---|---|---|
+| L-30-01 NOTICE fehlt im Modul | **fix** | billig und risikolos: nur der Docstring, beide Listen und der Digest bleiben gleich. Regressionstest `test_phase30_audit.py::test_the_shipped_module_carries_the_lucene_notice_and_the_licence_path`, lokal vor dem Fix rot gesehen (`ValueError`: Zeile "Apache Lucene" fehlt), danach grün. |
+| L-30-02 Treffer nur über body_cs ohne Auszug | **accept** | dokumentierte allgemeine Grenze aller Ausbausprachen (`docs/language-analyzers.md:504`); der Treffer bleibt, die Unterzeile zeigt den Pfad. Eine Reparatur braucht entweder ein gespeichertes body_cs (Schemaschritt, D-30-08 verbietet einen zweiten in v1.5) oder einen eigenen Hervorhebungsweg über den gespeicherten Text, also ein Feature. Kandidat für die Zeit nach v1.5, kein Platz in den Phasen 31 bis 36. |
+| L-30-03 Vektordigest ungeprüft in GITHUB_ENV | **accept** | Quelle ist der Container des geprüften Commits, Form `sha256sum \| cut` einzeilig hex, Job ohne Geheimnis mit `contents: read`. Eine Formprüfung kostet einen weiteren deploy-harp-Lauf (rund 18 min) ohne Gewinn an Sicherheit; wird mitgenommen, sobald Phase 31 die Strecke ohnehin anfasst (Andockblock FMT-06). |
+
 ## Was gegengeprüft wurde, nicht nur gelesen
 
 | Prüfung | Verfahren (anders als die Umsetzung) | Ergebnis |

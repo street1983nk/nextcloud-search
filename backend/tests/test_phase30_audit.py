@@ -346,6 +346,31 @@ def test_the_image_build_copies_no_scripts_tree_beyond_the_model_tool() -> None:
     assert from_scripts == ["COPY --from=scripts dev/quantize_model.py /tmp/quantize_model.py"]
 
 
+# The attribution lines of the NOTICE file of Apache Lucene at releases/lucene/10.5.2,
+# read from raw.githubusercontent.com on 2026-10-10 (audit finding L-30-01).
+LUCENE_NOTICE = (
+    "Apache Lucene",
+    "Copyright 2001-2025 The Apache Software Foundation",
+    "This product includes software developed at",
+    "The Apache Software Foundation (http://www.apache.org/).",
+)
+
+
+def test_the_shipped_module_carries_the_lucene_notice_and_the_licence_path() -> None:
+    """L-30-01: Apache-2.0 section 4(d) in the artifact that is distributed.
+
+    The image carries stopwords_cs.py and neither THIRD-PARTY.md nor REUSE.toml,
+    so the attribution has to stand in the module itself, and the module has to
+    say where the licence text lies inside the image.
+    """
+    doc = (PACKAGE / "index" / "stopwords_cs.py").read_text(encoding="utf-8")
+    lines = [line.strip() for line in doc.splitlines()]
+    position = lines.index(LUCENE_NOTICE[0])
+    assert tuple(lines[position : position + 5]) == (*LUCENE_NOTICE[:2], "", *LUCENE_NOTICE[2:])
+    assert "/usr/share/common-licenses/Apache-2.0" in doc
+    assert "LICENSES/Apache-2.0.txt" in doc
+
+
 def test_the_package_runtime_reaches_for_no_network_in_the_czech_path() -> None:
     for path in (PACKAGE / "index" / "stopwords_cs.py", PACKAGE / "index" / "analyzer.py"):
         imported = _imported_modules(ast.parse(path.read_text(encoding="utf-8")))

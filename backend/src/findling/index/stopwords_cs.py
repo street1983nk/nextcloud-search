@@ -16,6 +16,21 @@ tantivy chain the index runs (lowercase, ascii_fold), the duplicates the fold
 creates are dropped (172 lines, 171 unique, 169 folded), and the exceptions
 below are removed. The order is the order of first appearance in the original.
 
+The attribution notice of Apache Lucene, carried here under Apache-2.0 section
+4(d), because this module is the part of the list that is distributed: the
+image carries it, and it carries neither THIRD-PARTY.md nor REUSE.toml (audit
+finding L-30-01 of plan 30-09). The lines are those of NOTICE.txt at the tag
+above:
+
+    Apache Lucene
+    Copyright 2001-2025 The Apache Software Foundation
+
+    This product includes software developed at
+    The Apache Software Foundation (http://www.apache.org/).
+
+The licence text: ``LICENSES/Apache-2.0.txt`` in the source repository, and
+``/usr/share/common-licenses/Apache-2.0`` (Debian base-files) in the image.
+
 Why one list and not a list plus a supplement as in :mod:`findling.index.stopwords`:
 tantivy 0.26.2 carries no Czech list at all, so there is no built in list the
 fold could tear. The folded list alone is what the cs chain filters, behind the
