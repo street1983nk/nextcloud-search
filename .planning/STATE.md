@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 30-04-PLAN.md
-last_updated: "2026-10-10T06:29:52.822Z"
-last_activity: 2026-10-10 -- Plan 30-04 abgeschlossen (body_cs, SCHEMA_VERSION 3, GOLD_V1_5)
+stopped_at: Completed 30-05-PLAN.md
+last_updated: "2026-10-10T07:03:54.330Z"
+last_activity: 2026-10-10 -- Plan 30-05 abgeschlossen (cs an/aus über den Bandlauf bewiesen, A2 gemessen)
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 9
-  completed_plans: 4
-  percent: 44
+  completed_plans: 5
+  percent: 56
 ---
 
 # Project State
@@ -26,11 +26,11 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 30 von 30-36 (Owner-Tor, Schema und Tschechisch)
-Plan: 30-04 abgeschlossen, als Nächstes 30-05
+Plan: 30-05 abgeschlossen, als Nächstes 30-06
 Status: In Ausführung
-Last activity: 2026-10-10 -- Plan 30-04 abgeschlossen
+Last activity: 2026-10-10 -- Plan 30-05 abgeschlossen
 
-Progress: [████░░░░░░] 44%
+Progress: [██████░░░░] 56%
 
 ## Performance Metrics
 
@@ -39,6 +39,7 @@ Progress: [████░░░░░░] 44%
 - v1.5: 30-02 in ca. 35 min (2 Tasks, 7 Dateien)
 - v1.5: 30-03 in ca. 45 min (2 Tasks, 7 Dateien)
 - v1.5: 30-04 in ca. 40 min (3 Tasks, 14 Dateien)
+- v1.5: 30-05 in ca. 75 min (2 Tasks, 3 Dateien)
 
 ## Accumulated Context
 
@@ -54,6 +55,7 @@ Progress: [████░░░░░░] 44%
 - 30-02: ces nur angeboten, OCR-Standard bleibt deu+eng+fra; Image-Probe CZ-01 auf amd64 und arm64 gruen (Lauf 38027012519).
 - 30-03: LEGACY_SCHEMA_STEPS {(1,2),(2,3),(1,3)}; QUERYABLE_SCHEMA_GENERATIONS {2,3} ausgeschrieben, _of_the_marks fragt die Menge statt SCHEMA_VERSION; A5 bestaetigt (Ordnerfilter ueber files.path, kein zweiter Schemaschritt).
 - 30-04: cs am Ende von SUPPORTED_LANGUAGES, ausserhalb Snowball (STEMMERLESS_LANGUAGES); body_cs als 14. Feld, neun Ketten unbedingt; SCHEMA_VERSION 3 mit GOLD_V1_5. Store upgrade 6 verlangt bereits Schema 2 vorher, 3 nachher (30-07 nur noch der cs-Teil). CZ-02 bleibt offen bis 30-05 bis 30-07.
+- 30-05: Bestand (Schema 2, Schema 1) baut unter Schema-3-Code nicht um, cs an/aus per Bandlauf ohne Neu-Einbettung bewiesen; GROWTH_PER_LANGUAGE bleibt 0.40 (cs gemessen 0.358, es 0.361, 2000 Dokumente). CZ-02 offen bis 30-07, CZ-03 bis zur Doku (30-08/30-09).
 
 ### Offene Faeden (kein aktiver Auftrag)
 
@@ -73,6 +75,6 @@ Progress: [████░░░░░░] 44%
 
 ## Session Continuity
 
-Last session: 2026-10-10T06:29:52.803Z
-Stopped at: Completed 30-04-PLAN.md
+Last session: 2026-10-10T07:03:54.313Z
+Stopped at: Completed 30-05-PLAN.md
 Resume file: None
