@@ -439,14 +439,15 @@ SHARE_SENTENCES = {DEFAULT_LANGUAGE: SHARE_SENTENCE_EN, "de": SHARE_SENTENCE_DE,
 
 # The known limitations of the language work (HART-05, owner decision D-06 of
 # phase 23): a block of its own in every one of the six descriptions, under a
-# heading per language, with exactly four points. The French heading keeps the
-# space before the colon, like every other heading of the French texts.
+# heading per language, with exactly five points since D-30-06 of phase 30,
+# which extends D-06 of phase 23 by the Czech entry. The French heading keeps
+# the space before the colon, like every other heading of the French texts.
 LIMITATION_HEADINGS = {
     DEFAULT_LANGUAGE: "Known limitations:",
     "de": "Bekannte Grenzen:",
     "fr": "Limites connues :",
 }
-LIMITATION_COUNT = 4
+LIMITATION_COUNT = 5
 
 # Where the long form of those limitations lives, and the heading of the short
 # list inside it. D-06 asks for the English list of the store text to stand in
@@ -1008,7 +1009,7 @@ def _descriptions(name: str, source: str) -> tuple[list[tuple[str, str]], list[s
 
 
 def scan_limitations(name: str, source: str) -> list[str]:
-    """The four known limitations of D-06 under their heading, in every description.
+    """The five known limitations of D-06 and D-30-06 under their heading, in every description.
 
     A block that is gone and a block that lost or gained a point are both
     findings, and each one names the half and the language, because the six
@@ -1086,7 +1087,7 @@ def scan_limitations_against_doc(name: str, source: str, doc: str) -> list[str]:
 
     D-06 says the store text and docs/language-analyzers.md carry the same
     list. A comparison is the only way that claim can go red: two lists that
-    are each four points long can still say different things.
+    are each five points long can still say different things.
     """
     documented = documented_limitations(doc)
     if documented is None:
@@ -1237,7 +1238,7 @@ def test_the_language_analyzers_doc_carries_its_short_list_before_it_is_compared
     assert len(documented) == LIMITATION_COUNT
 
 
-def test_every_description_carries_the_four_known_limitations_under_its_heading() -> None:
+def test_every_description_carries_the_five_known_limitations_under_its_heading() -> None:
     # D-06 and HART-05 over all six descriptions at once.
     violations = [
         message
@@ -1699,7 +1700,9 @@ def test_a_language_line_that_moved_away_from_the_limitations_is_reported() -> N
     # privacy point above it: both lines are still there, and the order of D-11
     # is not.
     source = PHP_INFO.read_text(encoding="utf-8")
-    language = "- Search languages: German and English by default, Spanish, Italian, Dutch and Portuguese available"
+    language = (
+        "- Search languages: German and English by default, Spanish, Italian, Dutch, Portuguese and Czech available"
+    )
     privacy = "- Privacy: everything runs locally, no telemetry, nothing leaves your server"
     swapped = source.replace(f"{privacy}\n{language}", f"{language}\n{privacy}", 1)
     assert swapped != source

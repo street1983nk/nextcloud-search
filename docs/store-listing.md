@@ -2005,6 +2005,67 @@ Freigabe des Owners postet.
 
 ---
 
+# Entwurf v1.5.0 (Teil Phase 30)
+
+**Owner-Abnahme offen, mit der Store-Text-Abnahme vor Release (REL-05,
+Phase 36); Grundlage D-30-06.** Plan 30-08, 10.10.2026. D-30-06 erweitert die
+Grenzliste von D-06 (vier Einträge) um einen fünften Eintrag zu Tschechisch.
+Der Wortlaut unten ist ein Vorschlag des Planers und noch nicht vom Owner
+abgenommen.
+
+Anders als beim Entwurf 1.4.0 steht der Wortlaut schon jetzt in beiden
+`info.xml` (alle sechs Beschreibungen) und zeichengleich in der Kurzliste von
+`docs/language-analyzers.md`, weil die Gates `LIMITATION_COUNT = 5` und den
+Abgleich Doku gegen Store-Text verlangen. Eingereicht ist nichts: die Texte
+reisen erst mit dem Release 1.5.0, und das Release folgt erst der Abnahme.
+Ändert der Owner den Wortlaut, ändern sich alle drei Stellen gemeinsam (dieser
+Abschnitt, die Kurzliste der Doku, die sechs Beschreibungen).
+
+## Teil 1: der fünfte Eintrag der Grenzliste
+
+| Sprache | Wortlaut (letzter Punkt unter der Grenzliste) |
+|---|---|
+| en ("Known limitations:") | `- Czech: no stemming, inflected forms count as separate words` |
+| de ("Bekannte Grenzen:") | `- Tschechisch: keine Stammformreduktion, gebeugte Formen gelten als eigene Wörter` |
+| fr ("Limites connues :") | `- Tchèque : pas de racinisation, les formes fléchies comptent comme des mots distincts` |
+
+Langform: `docs/language-analyzers.md`, Abschnitt "Known limits", Absatz
+"Czech: no stemming, inflected forms are separate words (CZ-03)", und Abschnitt
+"Czech".
+
+## Teil 2: die Suchsprachen-Zeile (D-11), alle sechs Beschreibungen
+
+| Sprache | Wortlaut |
+|---|---|
+| en | `- Search languages: German and English by default, Spanish, Italian, Dutch, Portuguese and Czech available` |
+| de | `- Suchsprachen: Deutsch und Englisch voreingestellt, Spanisch, Italienisch, Niederländisch, Portugiesisch und Tschechisch verfügbar` |
+| fr | `- Langues de recherche : allemand et anglais par défaut, espagnol, italien, néerlandais, portugais et tchèque disponibles` |
+
+## Teil 3: die OCR-Zeile, nur `findling` (die Backend-Texte tragen keine)
+
+| Sprache | Wortlaut |
+|---|---|
+| en | `- OCR for scanned PDFs and images: ten languages available, German, English and French are the default` |
+| de | `- Texterkennung für gescannte PDFs und Bilder: zehn Sprachen verfügbar, voreingestellt sind Deutsch, Englisch und Französisch` |
+| fr | `- Reconnaissance optique pour les PDF numérisés et les images : dix langues disponibles, allemand, anglais et français par défaut` |
+
+Die drei READMEs nennen in ihrer Faktenzeile zur Texterkennung zehn Sprachen
+und Tschechisch in der Klammerliste.
+
+## Teil 4: zwei Variablentexte in `backend/appinfo/info.xml`
+
+- `FINDLING_LANGUAGES`: "Comma separated, out of de, en, es, it, nl, pt and
+  cs; cs works without stemming, so inflected forms count as separate words."
+  Der Rest des Textes bleibt.
+- `FINDLING_OCR_LANGUAGES`: die Liste endet auf "dan (Danish), est (Estonian)
+  and ces (Czech)"; der Schlusssatz sagt jetzt "the index side is tuned for
+  German and English by default" statt "only", weil der Index seit 1.3.0
+  weitere Sprachen tragen kann.
+
+Abnahme durch den Owner: offen (REL-05).
+
+---
+
 # Release 1.4.2 (09.10.2026): Deckungsgrad-Fix ohne Textänderung
 
 Kein Textentscheid und kein Entwurf: 1.4.2 ändert an den sechs Texten oben

@@ -629,20 +629,24 @@ not pay for that.
 ### Known limitations (short list, HART-05)
 
 The short version of this section, in the wording the store text carries (owner
-decision D-06 of phase 23). The list below is character for character the
-English "Known limitations:" block of both store descriptions, drafted in
-`docs/store-listing.md`, section "Entwurf v1.3.0"; a change here is a change
-there.
+decision D-06 of phase 23, extended to five entries by D-30-06 of phase 30). The
+list below is character for character the English "Known limitations:" block of
+both store descriptions, drafted in `docs/store-listing.md`, section "Entwurf
+v1.3.0", and for the fifth entry section "Entwurf v1.5.0 (Teil Phase 30)"; a
+change here is a change there. The wording of the fifth entry is a draft until
+the owner accepts the store text before the release (REL-05).
 
 - Spanish: año and ano are treated as the same word
 - Portuguese: spellings before and after the spelling reform are not unified
 - Compound words are split for German and Dutch only
 - French has no full text analysis chain for document text
+- Czech: no stemming, inflected forms count as separate words
 
-The four entries point back to the long form: `año` equals `ano` above, no
+The five entries point back to the long form: `año` equals `ano` above, no
 Portuguese orthographic unification above, compounds are German and Dutch
-above, and the paragraph on French next to the two language settings at the
-top of this page.
+above, the paragraph on French next to the two language settings at the top of
+this page, and the Czech inflection limit above together with the section
+"Czech".
 
 **Footnote on the length of this page.** The owner rule of 07.09.2026 applies to
 store descriptions and READMEs, which are short lists of facts. This file is

@@ -802,6 +802,10 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # crawl walks today), AdminViewService.php (the flag and the conditions it is
 # composed of) and templates/admin.php (the sentence and its element) changed
 # their bytes. No file came and none went, so PHP_FILES_TODAY stays at 90.
+# Measured again by plan 30-08 (the fifth known limitation, Czech, and ten OCR
+# languages in the store texts): the only byte change under php/ is
+# appinfo/info.xml, which the recipe does not read, so neither the hash nor
+# PHP_FILES_TODAY moves; the recipe was run over php/ and gives the value below.
 PHP_FILES_TODAY = 90
 PHP_TREE_HASH_TODAY = "bee7a95422d96ad9462e594bd7f1f55dc01e6efbb20c572740392c8c06259225"
 
