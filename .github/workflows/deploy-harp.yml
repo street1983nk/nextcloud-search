@@ -82,7 +82,18 @@ env:
   # variable rather than as a literal inside a URL, so that a later release is
   # one line here and not a search through a step.
   #
-  # v1.3.2 since 2026-10-06 (plan 29-11, D-29-01), because it IS the newest
+  # v1.4.2 since 2026-10-10 (plan 30-06, D-30-07), because it is the newest
+  # release and the version in the store (published 2026-10-09, assets
+  # findling.tar.gz, findling_backend.tar.gz and both .sig, image
+  # ghcr.io/street1983nk/findling_backend:1.4.2 anonymous with linux/amd64 and
+  # linux/arm64, checked 2026-10-10). 1.4.2 judges the two seed files of
+  # "Store upgrade 2b" rightly and has run the recheck of D-29-10 to "done"
+  # before the upgrade, so "Store upgrade 3c" demands done and "Store upgrade
+  # 5" demands that the upgrade moves no counter, no verdict, no vector and no
+  # mark. The tree carries 1.4.2 as well, so "Store upgrade 4" runs its equal
+  # version branch until the bump of the release.
+  #
+  # v1.3.2 from 2026-10-06 until 2026-10-10 (plan 29-11, D-29-01), because it was the newest
   # release of this repository and the version in the store: plan 23 published
   # v1.3.0, and the bugfix releases v1.3.1 and v1.3.2 followed on 2026-09-29
   # and 2026-09-30. 1.4.0 lives in this tree alone since phase 29. So these are
@@ -126,7 +137,7 @@ env:
   # about the newest published release, so it goes stale with every release and
   # the assurances hanging off it have to be read again each time, never
   # softened.
-  UPGRADE_FROM_TAG: v1.3.2
+  UPGRADE_FROM_TAG: v1.4.2
 
 jobs:
   deploy-harp:
@@ -2918,8 +2929,9 @@ jobs:
       # The upgrade proof of plan 11-07, and success criterion 2 of phase 11:
       # an installation that really came out of the release assets of
       # UPGRADE_FROM_TAG is brought to the state of this commit, and the index
-      # it built survives that untouched. Since plan 29-11 that tag is v1.3.2
-      # and the jump is 1.3.2 to 1.4.0 (D-29-01; plan 18-12 had v1.2.0 and plan
+      # it built survives that untouched. Since plan 30-06 that tag is v1.4.2
+      # and the code of phase 30 is laid over it (D-30-07); plan 29-11 had
+      # v1.3.2 and the jump 1.3.2 to 1.4.0 (D-29-01; plan 18-12 had v1.2.0 and plan
       # 23-06 the jump 1.2.0 to 1.3.0, plan 16-09 v1.1.0 and 1.1.0 to 1.2.0);
       # the value and the reason for it stand at the top of this file and
       # nowhere else.
@@ -3359,7 +3371,20 @@ jobs:
       # and a crawl that is ordered is a crawl that happens; every file the
       # index already holds comes back through the fast path unchanged.
       # =====================================================================
-      - name: Store upgrade 2b, two files 1.3.2 judges wrongly, judged by 1.3.2 (D-29-10)
+      # The seed of the released installation since plan 30-06 (D-30-07): the
+      # same two files plan 29-11 sowed for the recheck of D-29-10, an
+      # AppleDouble sidecar and a grey TIFF with an unspecified extra channel.
+      # 1.4.2 judges both rightly the first time, measured in the code of the
+      # tag and not assumed: the poller skips a sidecar by its base name before
+      # the first byte (backend/src/findling/worker/poller.py:1480 of v1.4.2,
+      # skipped(system_file)), the picture is read through the TIFF shim of plan
+      # 29-07 (extract/image.py:127) and indexed, and findling_file_state holds
+      # skipped and failed only (php/lib/Command/IndexCommand.php:140), so the
+      # picture carries no verdict there. This step asserts exactly that, in
+      # both halves, and the seed word finding exactly the picture. Until plan
+      # 30-06 the step sowed the same files under 1.3.2 and asserted
+      # failed(corrupt) for both.
+      - name: Store upgrade 2b, the seed of the released installation, judged by 1.4.2
         if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
         run: |
           seed_dir=data/testuser/files/fix-seed
@@ -3458,7 +3483,7 @@ jobs:
           # The AppleDouble header: the magic 00 05 16 07, the version
           # 00 02 00 00, sixteen filler bytes and an entry count of nought, the
           # 26 bytes macOS writes in front of a resource fork. It is no ZIP, so
-          # the Word reader of 1.3.2 fails on it, which is the verdict of #22.
+          # the Word reader of 1.3.x failed on it (#22); 1.4.2 skips it by name.
           printf '\000\005\026\007\000\002\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000' \
             > "${seed_dir}/${sidecar_name}"
           magic=$(od -An -tx1 -N4 "${seed_dir}/${sidecar_name}" | tr -d ' \n')
@@ -3510,36 +3535,68 @@ jobs:
             exit 1
           fi
 
-          # Fail closed, both files and both halves: failed(corrupt) in the
-          # state database of the container and in findling_file_state of
-          # Nextcloud. The second half is what the counters of "Store upgrade
-          # 5" are derived from, so it is measured here and not assumed.
+          # Fail closed, both files and both halves: the state database of the
+          # container and findling_file_state of Nextcloud. The verdicts are
+          # the ones the comment above this step reads out of the code of
+          # 1.4.2, and "Store upgrade 5" demands them unchanged after the
+          # upgrade, so they are measured here and not assumed.
           fail=0
-          for seed in "picture:${tiff_id}" "sidecar:${sidecar_id}"; do
-            label="${seed%%:*}"
-            id="${seed#*:}"
-            verdict=$(seed_probe verdict "${id}")
-            recorded=$(q "SELECT state || '/' || IFNULL(reason, '') FROM oc_findling_file_state WHERE file_id = ${id};")
-            if [ "${verdict}" != "failed/corrupt" ] || [ "${recorded}" != "failed/corrupt" ]; then
-              echo "::error::the ${label} is '${verdict}' in state.db and '${recorded}' in findling_file_state, and ${UPGRADE_FROM_TAG} has to book it as failed/corrupt in both, or the recheck would prove nothing"
-              fail=1
-            else
-              echo "the ${label} is failed/corrupt in state.db and in findling_file_state"
-            fi
-          done
-          hits=$(seed_hits) || exit 1
-          if [ "${hits}" != "0" ]; then
-            echo "::error::the seed word brings back ${hits} file(s) on the ${UPGRADE_FROM_TAG} installation, so the picture was read before the upgrade and the recheck would prove nothing"
+          sidecar=$(seed_probe verdict "${sidecar_id}" || echo "unreadable")
+          sidecar_recorded=$(q "SELECT state || '/' || IFNULL(reason, '') FROM oc_findling_file_state WHERE file_id = ${sidecar_id};")
+          if [ "${sidecar}" != "skipped/system_file" ] || [ "${sidecar_recorded}" != "skipped/system_file" ]; then
+            echo "::error::the sidecar is '${sidecar}' in state.db and '${sidecar_recorded}' in findling_file_state, and ${UPGRADE_FROM_TAG} has to book it as skipped/system_file in both"
             fail=1
+          else
+            echo "the sidecar is skipped/system_file in state.db and in findling_file_state"
+          fi
+          tiff=$(seed_probe verdict "${tiff_id}" || echo "unreadable")
+          tiff_recorded=$(q "SELECT COUNT(*) FROM oc_findling_file_state WHERE file_id = ${tiff_id};")
+          if [ "${tiff}" != "indexed/" ] || [ "${tiff_recorded}" != "0" ]; then
+            echo "::error::the picture is '${tiff}' in state.db with ${tiff_recorded} verdict(s) in findling_file_state, and ${UPGRADE_FROM_TAG} has to index it and record nothing for it"
+            fail=1
+          else
+            echo "the picture is indexed in state.db and carries no verdict in findling_file_state"
+          fi
+          # The seed word has to find exactly the picture. Asked again within
+          # the rest of the same budget, because the verdict in state.db may
+          # stand a moment before the searcher sees the commit; one answer
+          # that is not exactly the picture at the end is the finding.
+          found=""
+          while :; do
+            hits=$(seed_hits) || exit 1
+            if [ "${hits}" = "1" ] \
+               && jq -e --arg id "${tiff_id}" '.ocs.data.entries[0].attributes.fileId == $id' "${RUNNER_TEMP}/seed-term.json" > /dev/null; then
+              found="yes"
+              break
+            fi
+            if [ "$(date +%s)" -ge "${deadline}" ]; then
+              break
+            fi
+            sleep 5
+          done
+          if [ -z "${found}" ]; then
+            echo "::error::the seed word brings back ${hits} file(s) on the ${UPGRADE_FROM_TAG} installation instead of exactly the picture ${tiff_id}"
+            jq -r '.ocs.data.entries[]? | "\(.attributes.fileId) \(.title)"' "${RUNNER_TEMP}/seed-term.json" || true
+            fail=1
+          else
+            echo "the seed word finds exactly the file id ${tiff_id}"
           fi
           if [ "${fail}" -ne 0 ]; then
             exit 1
           fi
-          echo "sown: a picture and a sidecar, both failed(corrupt) under ${UPGRADE_FROM_TAG}, and the seed word finds nothing"
+          echo "sown: a picture indexed and a sidecar skipped(system_file) under ${UPGRADE_FROM_TAG}, and the seed word finds exactly the picture"
           {
             echo "UPGRADE_SEED_TIFF_ID=${tiff_id}"
             echo "UPGRADE_SEED_SIDECAR_ID=${sidecar_id}"
           } >> "${GITHUB_ENV}"
+
+          # ---------------------------------------------------------------
+          # Phase 31 (FMT-06) appends its legacy_format seed here: further
+          # files sown into the same fix-seed folder, scanned, judged by
+          # ${UPGRADE_FROM_TAG} under the same budget and exported next to
+          # the two ids above. The two seeds before this mark stay as they
+          # are, so the assurances of "Store upgrade 5" keep their subject.
+          # ---------------------------------------------------------------
 
       - name: Store upgrade 3, the state of the released installation, before anything moves
         if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
@@ -4084,15 +4141,16 @@ jobs:
         run: |
           . "${RUNNER_TEMP}/seed-probe.sh"
           # The embedding mark is written by an idle pass of the poller once
-          # every indexed document carries a vector (_claim_a_whole_stock of
-          # 1.3.2), so it may trail the drain by a few rounds. Waited for with
-          # the budget of the drain and without cron.php, because the poller is
-          # the only writer.
+          # every indexed document carries a vector, so it may trail the drain
+          # by a few rounds, and the picture of "Store upgrade 2b" is embedded
+          # after its verdict. Both waited for with the budget of the drain and
+          # without cron.php, because the poller is the only writer.
           deadline=$(( $(date +%s) + UPGRADE_DRAIN_BUDGET_SECONDS ))
           while :; do
             embedding=$(seed_probe meta embedding_version) || exit 1
-            case "${embedding}" in
-              absent|''|unknown) ;;
+            tiff_chunks=$(seed_probe chunks "${UPGRADE_SEED_TIFF_ID}") || exit 1
+            case "${embedding}:${tiff_chunks}" in
+              absent:*|:*|unknown:*|*:0) ;;
               *) break ;;
             esac
             if [ "$(date +%s)" -ge "${deadline}" ]; then
@@ -4101,16 +4159,24 @@ jobs:
             sleep 5
           done
           recheck=$(seed_probe meta recheck_1_4_0) || exit 1
-          stock=$(seed_probe stock "${UPGRADE_SEED_TIFF_ID}") || exit 1
+          # The whole stock, the picture included (no row has file id 0): the
+          # picture was embedded under the released version, and a second
+          # embedding of it after the upgrade is exactly what assurance 8 must
+          # catch.
+          stock=$(seed_probe stock 0) || exit 1
           tiff_chunks=$(seed_probe chunks "${UPGRADE_SEED_TIFF_ID}") || exit 1
           sidecar_chunks=$(seed_probe chunks "${UPGRADE_SEED_SIDECAR_ID}") || exit 1
           echo "recheck mark '${recheck}', embedding mark '${embedding}', vector stock ${stock}, seed chunks ${tiff_chunks} and ${sidecar_chunks}"
 
-          # The counter sample of assurance 6: 1.3.2 has no recheck and never
-          # writes the mark, so "done" after the upgrade is the new code at
-          # work and nothing that was there before.
-          if [ "${recheck}" != "absent" ]; then
-            echo "::error::the ${UPGRADE_FROM_TAG} installation already carries the recheck mark '${recheck}', so its value after the upgrade would prove nothing"
+          # The before state of assurance 6 since plan 30-06: 1.4.2 runs the
+          # recheck of D-29-10 once at the first round with the companion of
+          # the new verdicts and writes done at its end
+          # (backend/src/findling/worker/recheck.py:129 of v1.4.2). An
+          # installation of 1.4.2 therefore carries done before the upgrade,
+          # and anything else here means the released version did not do what
+          # it promised, which no step after this one could repair.
+          if [ "${recheck}" != "done" ]; then
+            echo "::error::the ${UPGRADE_FROM_TAG} installation carries the recheck mark '${recheck}' instead of done, so the recheck of D-29-10 did not run to its end on the released version"
             exit 1
           fi
           # An embedding mark and a vector stock to compare, or "no new
@@ -4127,9 +4193,10 @@ jobs:
               exit 1
               ;;
           esac
-          # Both seed files are failed, so neither may carry a chunk.
-          if [ "${tiff_chunks}" != "0" ] || [ "${sidecar_chunks}" != "0" ]; then
-            echo "::error::the seed files carry ${tiff_chunks} and ${sidecar_chunks} chunk(s) on the ${UPGRADE_FROM_TAG} installation, and a failed file carries none"
+          # The picture is indexed and carries its vectors, the sidecar was
+          # skipped before its first byte and carries none.
+          if [ "${tiff_chunks}" = "0" ] || [ "${sidecar_chunks}" != "0" ]; then
+            echo "::error::the picture carries ${tiff_chunks} and the sidecar ${sidecar_chunks} chunk(s) on the ${UPGRADE_FROM_TAG} installation, and the indexed picture has to carry some, the skipped sidecar none"
             exit 1
           fi
           {
@@ -4188,10 +4255,12 @@ jobs:
           echo "installed_version went from ${installed_before} to ${installed_after}"
 
           # The two cases, both named, and both branches stay. They were
-          # written in plan 11-07 for a version step that had not happened yet;
-          # since plan 29-11 the tree carries 1.4.0 against the 1.3.2 of
-          # UPGRADE_FROM_TAG, so it is the FIRST branch that runs, and it is the
-          # one that matters: it demands that the instance really performed the
+          # written in plan 11-07 for a version step that had not happened yet.
+          # Since plan 30-06 tree and UPGRADE_FROM_TAG both carry 1.4.2, so the
+          # SECOND branch runs until the bump of the next release; from plan
+          # 29-11 to then the tree carried 1.4.0 against the 1.3.2 of the tag
+          # and the first branch ran. The first one is the one that matters
+          # whenever the versions differ: it demands that the instance really performed the
           # app update. A silent "nothing happened" with a newer version on disk
           # would be a store update that leaves a user on the old migrations,
           # and the migration of the minor jump (Version001400Date20261006000000,
@@ -4220,7 +4289,7 @@ jobs:
             echo "the instance performed the app update: ${installed_before} to ${installed_after}"
           else
             echo "::notice::the companion of this commit carries ${new_companion}, the same version ${UPGRADE_FROM_TAG} published, so this run measures the file exchange without a version step"
-            echo "With the bump of plan 29-11 the tree carries 1.4.0 against the 1.3.2 of the tag, so the branch above is the one that is expected to run."
+            echo "Since plan 30-06 the tag is v1.4.2 and the tree carries 1.4.2 as well, so this is the branch that is expected to run until the bump of the next release."
             if [ "${installed_after}" != "${installed_before}" ]; then
               echo "::error::installed_version moved from ${installed_before} to ${installed_after} although both sides carry the same version"
               exit 1
@@ -4400,8 +4469,11 @@ jobs:
       # code arriving on an existing installation, which is the counter sample:
       # an upgrade that changed nothing at all would pass five assertions and
       # mean that the new files never took effect. Since plan 29-11 there are
-      # eight: 3b is the recheck of the seed, 8 says the recheck cost no new
-      # embedding of the existing stock, and the sixth reads the recheck mark.
+      # eight: 3b is the seed, 8 says nothing was embedded again, and the
+      # sixth reads the recheck mark. Since plan 30-06 (start v1.4.2) the sixth
+      # reads it as done on both sides, because 1.4.2 already ran the recheck,
+      # and the counter sample of the new code is the new image "Store upgrade
+      # 4" demands next to the rebuild "Store upgrade 6" drives.
       #
       # The five are sharper since the tag moved to v1.2.0 on 2026-09-24, and
       # that is the whole reason the tag moved rather than the block being
@@ -4436,52 +4508,47 @@ jobs:
       # question that follows belongs to the owner and not to a test edit.
       #
       # The seed of "Store upgrade 2b" and what it does to assurance 3, since
-      # plan 29-11 (D-29-10). Before the upgrade both seed files stand as
-      # failed(corrupt), in the state database of the container and in
-      # findling_file_state of Nextcloud, and "Store upgrade 2b" asserted both.
-      # After it the recheck of 1.4.0 hands every failed(corrupt) file back to
-      # the content track once, and the poller judges them again: the sidecar
-      # becomes skipped(system_file) before its first byte, the picture is read
-      # through the shim and indexed. Derived counter by counter, each against
-      # the snapshot of "Store upgrade 3":
+      # plan 30-06 (D-30-07). 1.4.2 judged both seed files rightly before the
+      # upgrade: the sidecar skipped(system_file) in the state database of the
+      # container and in findling_file_state, the picture indexed with its
+      # vectors and no verdict in Nextcloud. Its recheck of D-29-10 reads done
+      # ("Store upgrade 3c"), and recheck_step returns at once on done
+      # (backend/src/findling/worker/recheck.py of this tree), so nothing
+      # hands a file back across the upgrade. Derived counter by counter, each
+      # against the snapshot of "Store upgrade 3", and every step is nought:
       #
-      #   container.docs       +1  the picture enters the index, the sidecar never does
-      #   container.indexed    +1  the picture
-      #   container.skipped    +1  the sidecar, skipped(system_file)
-      #   container.failed     -2  neither seed is failed any more
-      #   nextcloud.skipped    +1  the sidecar, recorded with its new reason
-      #   nextcloud.failed     -2  the picture's verdict is revoked, the sidecar's replaced
-      #   nextcloud.scheduled   0  the requeued rows are worked off before the snapshot
+      #   container.docs        0  the picture was in the index before, the sidecar never is
+      #   container.indexed     0  the picture keeps indexed
+      #   container.skipped     0  the sidecar keeps skipped(system_file)
+      #   container.failed      0  nothing is judged again
+      #   nextcloud.skipped     0  the sidecar keeps its recorded reason
+      #   nextcloud.failed      0  nothing is judged again
+      #   nextcloud.scheduled   0  nothing is requeued
       #   nextcloud.running     0  likewise
-      #   rebuildState          0  nothing on this leg rebuilds
+      #   rebuildState          0  nothing on this leg rebuilds, idle on both sides
       #
-      # The failed(corrupt) files of the reference corpus are handed back as
-      # well, and they move nothing: 1.4.0 judges them failed(corrupt) again. If
-      # one of them came back with another verdict, the lines above would turn
-      # red and name the counter, which is a finding about this release and
-      # never a reason to widen a line. Every value is compared exactly, none
-      # with "at least".
+      # Until plan 30-06 the start was v1.3.2, both seeds were failed(corrupt)
+      # before the upgrade and six of these counters moved by the derived step
+      # of the recheck (+1, +1, +1, -2, +1, -2). A counter that moves now is a
+      # finding about this code, and never a reason to widen a line. Every
+      # value is compared exactly, none with "at least".
       #
-      # The snapshot waits until the recheck is done and its rows are worked
-      # off: the recheck mark reads done, both seed files carry their new
-      # verdict, the picture carries its vectors and the work stock is empty.
-      # The deadline is UPGRADE_DRAIN_BUDGET_SECONDS, because a handful of
-      # files is a small part of the drain of "Store upgrade 2" and no second
-      # number is invented. The wait asks the poller alone and runs no
-      # cron.php, so no background job gets a chance to queue work the
-      # unchanged lines would then catch.
+      # The snapshot waits until the work stock is empty and both seed files
+      # carry their verdict, the picture with its vectors. The deadline is
+      # UPGRADE_DRAIN_BUDGET_SECONDS, because no second number is invented.
+      # The wait asks the poller alone and runs no cron.php, so no background
+      # job gets a chance to queue work the unchanged lines would then catch.
       #
-      # Assurance 3b states the recheck itself, the half the counters cannot
-      # carry on their own: the sidecar is skipped(system_file) on both sides,
-      # the picture is indexed and has no verdict left in Nextcloud, and the
-      # seed word finds exactly the file id of the picture. Assurance 8 states
-      # what the recheck must not cost: no vector of a file embedded before the
-      # upgrade is written again, the embedding mark stays, and the profile in
-      # force is economy (D-29-01). The recheck starts only once the companion
-      # of this commit announces the new verdicts, which needs the branch "the
-      # instance performed the app update" of "Store upgrade 4"; in the equal
-      # version branch 3, 3b, 6 and 8 are red, and that is correct, because no
-      # recheck ran.
+      # Assurance 3b states the verdicts the counters cannot carry on their
+      # own: the sidecar is still skipped(system_file) on both sides, the
+      # picture still indexed with no verdict in Nextcloud, and the seed word
+      # finds exactly its file id. Assurance 2 demands the stored schema mark
+      # 2 by value: this code carries SCHEMA_VERSION 3 (body_cs, D-30-08), the
+      # mark is stamped only by a rebuild, and a plain upgrade under de,en
+      # starts none (30-RESEARCH pitfall 8, T-30-26). Assurance 8 states that
+      # nothing was embedded again: the embedding mark stays, the whole vector
+      # stock, the picture included, is the same rows chunk id for chunk id,
+      # and the profile in force is economy (D-29-01).
       - name: Store upgrade 5, the eight assurances after the upgrade
         if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
         env:
@@ -4494,8 +4561,8 @@ jobs:
           . "${RUNNER_TEMP}/upgrade-probe.sh"
           . "${RUNNER_TEMP}/seed-probe.sh"
 
-          # The recheck worked off before the snapshot (D-29-10), see the
-          # comment above this step.
+          # The work stock empty and both seeds settled before the snapshot,
+          # see the comment above this step.
           deadline=$(( $(date +%s) + UPGRADE_DRAIN_BUDGET_SECONDS ))
           settled=""
           while [ "$(date +%s)" -lt "${deadline}" ]; do
@@ -4517,7 +4584,7 @@ jobs:
             sleep 5
           done
           if [ -z "${settled}" ]; then
-            echo "::warning::the recheck was not worked off within UPGRADE_DRAIN_BUDGET_SECONDS, the assurances below name what is missing"
+            echo "::warning::the installation did not settle within UPGRADE_DRAIN_BUDGET_SECONDS, the assurances below name what is missing"
           fi
 
           snapshot "${RUNNER_TEMP}/upgrade-after.json" after
@@ -4552,6 +4619,16 @@ jobs:
           for mark in schemaVersion indexVersion analyzerVersion wordlistHash; do
             unchanged ".marks.${mark}" "a version mark moved, and a moved mark is a full reindex on every installation in the field (D-04)"
           done
+          # And the schema mark by value: 2, the one of 1.4.2, although this
+          # code carries 3, because only a rebuild stamps it (pitfall 8 of
+          # phase 30, T-30-26). Unchanged alone would also pass a 3 on both
+          # sides, which is a start that was never 1.4.2.
+          if ! jq -e '.marks.schemaVersion == "2"' "${after}" > /dev/null; then
+            echo "::error::the stored schema mark reads '$(jq -r '.marks.schemaVersion' "${after}")' after the upgrade instead of 2, so a schema 3 directory was stamped without the rebuild a changed language set orders"
+            fail=1
+          else
+            echo "the stored schema mark reads 2 after the upgrade, the 2 of ${UPGRADE_FROM_TAG}, with no rebuild"
+          fi
 
           # tantivyVersion is the one mark that MAY move, and only in its patch
           # number. The store compares the index format half since the owner
@@ -4590,44 +4667,35 @@ jobs:
             echo "moved on purpose  .marks.tantivyVersion ${was} to ${now}, same index format half (E-17-7 option a)"
           fi
 
-          # Exactly before plus step, for the six counters the recheck of the
-          # seed moves (D-29-10); both values have to be numbers, and the step
-          # is the derived one of the comment above this step.
-          moved_by_seed() {
-            path="$1"
-            step="$2"
-            meaning="$3"
-            was=$(jq -r "${path}" "${before}")
-            now=$(jq -r "${path}" "${after}")
-            case "${was}:${now}" in
-              [0-9]*:[0-9]*) ;;
-              *) echo "::error::${path} is not a number on both sides (${was}, ${now})"; fail=1; return ;;
-            esac
-            if [ "$(( was + step ))" != "${now}" ]; then
-              echo "::error::${meaning}: ${path} was ${was} before the upgrade and is ${now} after it, and the recheck of the two seed files allows exactly ${step}"
-              fail=1
-            else
-              echo "moved by ${step}  ${path} ${was} to ${now}   (the recheck of D-29-10)"
-            fi
-          }
-
-          echo "--- 3, the document counts, moved by exactly what the recheck of the seed allows ---"
-          moved_by_seed '.container.docs' 1 "the number of documents in the index moved by something other than the one rechecked picture"
-          moved_by_seed '.container.indexed' 1 "the container counts indexed files that moved by something other than the one rechecked picture"
-          moved_by_seed '.container.skipped' 1 "the container counts skipped files that moved by something other than the one rechecked sidecar"
-          moved_by_seed '.container.failed' -2 "the container counts failed files that moved by something other than the two rechecked seed files"
-          moved_by_seed '.nextcloud.skipped' 1 "Nextcloud's skipped files moved by something other than the one rechecked sidecar"
-          moved_by_seed '.nextcloud.failed' -2 "Nextcloud's failed files moved by something other than the two rechecked seed files"
+          # Every counter exactly as before: the recheck of D-29-10 is done on
+          # the released installation and hands nothing back (the derivation
+          # stands in the comment above this step). Each value is compared as
+          # it stands, never with "at least".
+          echo "--- 3, the document counts, every one unchanged ---"
+          unchanged '.container.docs' "the number of documents in the index moved across an upgrade that judges nothing again"
+          unchanged '.container.indexed' "the container counts indexed files that moved across an upgrade that judges nothing again"
+          unchanged '.container.skipped' "the container counts skipped files that moved across an upgrade that judges nothing again"
+          unchanged '.container.failed' "the container counts failed files that moved across an upgrade that judges nothing again"
+          unchanged '.nextcloud.skipped' "Nextcloud's skipped files moved across an upgrade that judges nothing again"
+          unchanged '.nextcloud.failed' "Nextcloud's failed files moved across an upgrade that judges nothing again"
           unchanged '.nextcloud.scheduled' "the work stock is not empty after the upgrade, so something requeued work nobody asked for"
           unchanged '.nextcloud.running' "a worker holds queue rows after the upgrade, so something requeued work nobody asked for"
           unchanged '.container.rebuildState' "a rebuild directory appeared or went away across the upgrade, and no step of this block rebuilds anything"
+          # And idle by value, because unchanged alone would also pass a band
+          # run that was already going before the upgrade (T-30-26).
+          if ! jq -e '.container.rebuildState == "idle"' "${after}" > /dev/null; then
+            echo "::error::the rebuild state reads '$(jq -r '.container.rebuildState' "${after}")' after the upgrade instead of idle, so a band run is going on an installation that changed no language"
+            fail=1
+          else
+            echo "the rebuild state is idle after the upgrade, no band run"
+          fi
 
-          echo "--- 3b, the recheck judged the two seed files again (D-29-10) ---"
+          echo "--- 3b, the two seed files keep the verdict of ${UPGRADE_FROM_TAG} ---"
           sidecar=$(seed_probe verdict "${UPGRADE_SEED_SIDECAR_ID}" || echo "unreadable")
           sidecar_recorded=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
             "SELECT state || '/' || IFNULL(reason, '') FROM oc_findling_file_state WHERE file_id = ${UPGRADE_SEED_SIDECAR_ID};")
           if [ "${sidecar}" != "skipped/system_file" ] || [ "${sidecar_recorded}" != "skipped/system_file" ]; then
-            echo "::error::the sidecar is '${sidecar}' in state.db and '${sidecar_recorded}' in findling_file_state after the upgrade, and the recheck has to leave skipped/system_file in both"
+            echo "::error::the sidecar is '${sidecar}' in state.db and '${sidecar_recorded}' in findling_file_state after the upgrade, and an upgrade that judges nothing again has to leave skipped/system_file in both"
             fail=1
           else
             echo "the sidecar is skipped/system_file in state.db and in findling_file_state"
@@ -4636,7 +4704,7 @@ jobs:
           tiff_recorded=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
             "SELECT COUNT(*) FROM oc_findling_file_state WHERE file_id = ${UPGRADE_SEED_TIFF_ID};")
           if [ "${tiff}" != "indexed/" ] || [ "${tiff_recorded}" != "0" ]; then
-            echo "::error::the picture is '${tiff}' in state.db with ${tiff_recorded} verdict(s) left in findling_file_state after the upgrade, and the recheck has to leave it indexed with none"
+            echo "::error::the picture is '${tiff}' in state.db with ${tiff_recorded} verdict(s) left in findling_file_state after the upgrade, and an upgrade that judges nothing again has to leave it indexed with none"
             fail=1
           else
             echo "the picture is indexed in state.db and carries no verdict in findling_file_state"
@@ -4646,11 +4714,11 @@ jobs:
             fail=1
           elif [ "${seed}" != "1" ] \
                || ! jq -e --arg id "${UPGRADE_SEED_TIFF_ID}" '.ocs.data.entries[0].attributes.fileId == $id' "${RUNNER_TEMP}/upgrade-term.json" > /dev/null; then
-            echo "::error::the seed word brings back ${seed} file(s) after the upgrade instead of exactly the rechecked picture ${UPGRADE_SEED_TIFF_ID}"
+            echo "::error::the seed word brings back ${seed} file(s) after the upgrade instead of exactly the picture ${UPGRADE_SEED_TIFF_ID}"
             jq -r '.ocs.data.entries[]? | "\(.attributes.fileId) \(.title)"' "${RUNNER_TEMP}/upgrade-term.json" || true
             fail=1
           else
-            echo "the seed word finds exactly the file id ${UPGRADE_SEED_TIFF_ID}, the picture 1.3.2 had booked as corrupt"
+            echo "the seed word finds exactly the file id ${UPGRADE_SEED_TIFF_ID}, as it did on ${UPGRADE_FROM_TAG}"
           fi
 
           echo "--- 4, no reindex banner ---"
@@ -4681,13 +4749,15 @@ jobs:
             fi
           fi
 
-          echo "--- 6, the recheck mark, and this one HAS to have changed ---"
-          # The counter sample of this block since plan 29-11: the new code
-          # arriving on an existing installation. 1.3.2 has no recheck and never
-          # writes the mark, and "Store upgrade 3c" asserted it absent on the
-          # released installation; done after the upgrade is therefore the
-          # recheck of D-29-10 having run to its end, and nothing that was there
-          # before. An upgrade that changed nothing would leave it absent.
+          echo "--- 6, the recheck mark stays done, and the languages mark stays de,en ---"
+          # Since plan 30-06 the start is v1.4.2, which ran the recheck of
+          # D-29-10 to its end ("Store upgrade 3c" asserted done before the
+          # upgrade). After it the mark has to read done again: recheck_step
+          # returns at once on done, so the upgrade hands no file back, which
+          # assurance 3 holds counter by counter. Anything else would be the
+          # new code starting the sweep over. From plan 29-11 to 30-06 the start
+          # was v1.3.2, which never wrote the mark, and this assurance was the
+          # counter sample absent before, done after.
           #
           # The languages mark, which carried this assurance from 2026-09-24
           # until v1.3.2 became the start, stays as the unchanged half. Plan
@@ -4702,15 +4772,15 @@ jobs:
           # rebuild really runs.
           recheck=$(seed_probe meta recheck_1_4_0 || echo "unreadable")
           if [ "${recheck}" != "done" ]; then
-            echo "::error::the recheck mark reads '${recheck}' after the upgrade instead of done, so the recheck of D-29-10 did not run to its end"
+            echo "::error::the recheck mark reads '${recheck}' after the upgrade instead of the done it read on ${UPGRADE_FROM_TAG}, so the new code started the sweep of D-29-10 over"
             fail=1
           else
-            echo "the recheck mark was absent before the upgrade and reads done after it"
+            echo "the recheck mark read done before the upgrade and reads done after it, nothing was handed back"
           fi
           was=$(jq -r '.marks.languages' "${before}")
           now=$(jq -r '.marks.languages' "${after}")
           if [ "${was}" != "de,en" ] || [ "${now}" != "${was}" ]; then
-            echo "::error::the report named the languages mark as '${was}' before the upgrade and as '${now}' after it, and it has to read de,en on both sides, because nothing on this leg rebuilds and the fresh directory of 1.3.2 was stamped de,en"
+            echo "::error::the report named the languages mark as '${was}' before the upgrade and as '${now}' after it, and it has to read de,en on both sides, because nothing on this leg rebuilds and the fresh directory of ${UPGRADE_FROM_TAG} was stamped de,en"
             jq -r '.marks' "${before}" "${after}"
             fail=1
           else
@@ -4746,16 +4816,18 @@ jobs:
           fi
 
           echo "--- 8, nothing was embedded again, and the profile in force is economy (D-29-01) ---"
-          # The recheck must not cost what it was built to avoid. The embedding
-          # mark of "Store upgrade 3c" has to be the mark after the upgrade, or
-          # the container answered a vector drift by emptying the stock. The
-          # vector stock without the picture has to be the same rows, chunk id
-          # for chunk id, or a file embedded before the upgrade was embedded
-          # again. The picture itself carries vectors now, once, as the one new
-          # document of this leg. A chunk id can only be reused when the rows
-          # with the highest ids are written again in the same shape, which the
-          # unchanged count of files and rows next to the digest leaves as the
-          # one blind spot of this reading, named rather than hidden.
+          # The upgrade must not cost a vector. The embedding mark of "Store
+          # upgrade 3c" has to be the mark after the upgrade, or the container
+          # answered a vector drift by emptying the stock. The whole vector
+          # stock, the picture of the seed included, has to be the same rows,
+          # chunk id for chunk id, or a file embedded before the upgrade was
+          # embedded again; until plan 30-06 the picture was new on this leg
+          # and stood outside the digest, since then it was embedded under the
+          # released version and stands inside it. A chunk id can only be
+          # reused when the rows with the highest ids are written again in the
+          # same shape, which the unchanged count of files and rows next to the
+          # digest leaves as the one blind spot of this reading, named rather
+          # than hidden.
           embedding=$(seed_probe meta embedding_version || echo "unreadable")
           if [ "${embedding}" != "${UPGRADE_EMBEDDING_MARK}" ]; then
             echo "::error::the embedding mark went from '${UPGRADE_EMBEDDING_MARK}' to '${embedding}' across the upgrade, so the vector stock was declared stale"
@@ -4763,18 +4835,18 @@ jobs:
           else
             echo "unchanged  embedding mark = ${embedding}"
           fi
-          stock=$(seed_probe stock "${UPGRADE_SEED_TIFF_ID}" || echo "unreadable")
+          stock=$(seed_probe stock 0 || echo "unreadable")
           if [ "${stock}" != "${UPGRADE_VECTOR_STOCK}" ]; then
-            echo "::error::the vector stock without the picture went from ${UPGRADE_VECTOR_STOCK} to ${stock} (digest:files:rows), so a file embedded before the upgrade was embedded again"
+            echo "::error::the vector stock went from ${UPGRADE_VECTOR_STOCK} to ${stock} (digest:files:rows), so a file embedded before the upgrade was embedded again"
             fail=1
           else
-            echo "unchanged  vector stock without the picture = ${stock}"
+            echo "unchanged  vector stock, the picture included = ${stock}, nothing was embedded again"
           fi
           vectors=$(seed_probe chunks "${UPGRADE_SEED_TIFF_ID}" || echo "unreadable")
           case "${vectors}" in
-            [1-9]*) echo "the picture carries ${vectors} chunk(s), embedded once as a new document" ;;
+            [1-9]*) echo "the picture carries ${vectors} chunk(s), the ones it was embedded with before the upgrade" ;;
             *)
-              echo "::error::the picture carries '${vectors}' chunks after the upgrade, so the semantic half never saw the rechecked file"
+              echo "::error::the picture carries '${vectors}' chunks after the upgrade, so the semantic half lost the indexed file"
               fail=1
               ;;
           esac
@@ -4800,11 +4872,11 @@ jobs:
             echo "- companion \`${UPGRADE_OLD_COMPANION}\` out of the release assets, upgraded to \`${UPGRADE_NEW_COMPANION}\` of this commit"
             echo "- the container was unregistered without the data removing flag and registered again on the volume \`${UPGRADE_VOLUME}\`"
             echo "- unchanged: the hits for Belehrung, Auszug and Erinnerung, four of the five index marks (index_version among them) and the index format half of the fifth, the work stock"
-            echo "- the document counts moved by exactly what the recheck of the two seed files allows, every counter exact"
-            echo "- the recheck of D-29-10 ran to done: the AppleDouble sidecar is skipped(system_file), the grey TIFF with an extra channel is indexed, and \`${SEED_WORD}\` finds exactly its file id"
+            echo "- every document count unchanged, every counter exact: the recheck of D-29-10 read done before and after the upgrade and handed nothing back"
+            echo "- the seed of \`${UPGRADE_FROM_TAG}\` keeps its verdicts: the AppleDouble sidecar is skipped(system_file), the grey TIFF with an extra channel is indexed, and \`${SEED_WORD}\` finds exactly its file id"
             echo "- no reindex banner, no \`start_rebuild_on_drift\` line in the container log"
-            echo "- nothing embedded again: embedding mark and vector stock unchanged apart from the one new picture; the profile in force is economy"
-            echo "- the languages mark is empty before and after, nothing was stamped without a rebuild"
+            echo "- nothing embedded again: embedding mark and the whole vector stock, the picture included, unchanged; the profile in force is economy"
+            echo "- schemaVersion stays 2 and the languages mark stays de,en, the rebuild state is idle: nothing was stamped and nothing rebuilt without a language change"
             echo "- the Spanish question \`alemanes\` still answers with nought hits, because the field list of a question hangs on the stored schema mark and not on the code"
             echo ""
             echo "The reindex branch of D-05 is deliberately not driven here; its absence is what this run asserts."

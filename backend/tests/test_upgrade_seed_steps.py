@@ -1,13 +1,18 @@
 """The gate over the seed of the upgrade proof in ``.github/workflows/deploy-harp.yml``.
 
-The upgrade proof starts from v1.3.2 since plan 29-11 (D-29-01), and the seed of
-"Store upgrade 2b" is the only place where the recheck of D-29-10 (plan 29-09)
-meets real files on a real instance: an AppleDouble sidecar and a grey TIFF with
-an unspecified extra channel, both judged failed(corrupt) by the released
-container, both to be judged again by 1.4.0 without a reindex. Every unit test
-of the recheck runs against fakes. If a part of this seed got lost in an edit,
-the proof would not turn red; it would stay green and prove less, and nobody
-reads a missing line. That is the whole reason this module exists.
+The upgrade proof starts from v1.4.2 since plan 30-06 (D-30-07); from plan 29-11
+(D-29-01) to then it started from v1.3.2. The seed of "Store upgrade 2b" is the
+same two real files as before, an AppleDouble sidecar and a grey TIFF with an
+unspecified extra channel, but the released container judges them rightly now:
+1.4.2 skips the sidecar as skipped(system_file) before its first byte
+(worker/poller.py:1480 of v1.4.2) and reads the picture through the shim of plan
+29-07 (extract/image.py:127). Its recheck of D-29-10 has already run to "done"
+on the released installation (worker/recheck.py:129), so the upgrade to this
+code must move nothing at all: no counter, no verdict, no vector, no mark. If a
+part of this seed or of these assurances got lost in an edit, the proof would
+not turn red; it would stay green and prove less, and nobody reads a missing
+line. That is the whole reason this module exists. Phase 31 (FMT-06) appends its
+legacy_format seed at the marked end of "Store upgrade 2b".
 
 The workflow is loaded with yaml and every step is found by the start of its
 name, so a statement is about the step it names and not about a string that
@@ -87,8 +92,16 @@ def _bash_parses(run: str, tmp_path: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_the_proof_starts_from_v1_3_2() -> None:
-    assert _workflow()["env"]["UPGRADE_FROM_TAG"] == "v1.3.2"
+def test_the_proof_starts_from_v1_4_2() -> None:
+    assert _workflow()["env"]["UPGRADE_FROM_TAG"] == "v1.4.2"
+
+
+def test_the_old_start_stands_in_comments_only() -> None:
+    # v1.3.2 may stay in the chronicle of the comments, never in a value or a
+    # line a shell runs.
+    for number, line in enumerate(WORKFLOW.read_text(encoding="utf-8").splitlines(), start=1):
+        if "1.3.2" in line:
+            assert line.lstrip().startswith("#"), f"line {number}: {line.strip()}"
 
 
 def test_the_seed_word_is_the_same_in_script_and_workflow() -> None:
@@ -123,16 +136,29 @@ def test_the_seed_step_scans_and_lets_the_old_container_judge() -> None:
     assert "docker pause" not in run
 
 
-def test_the_seed_step_asserts_failed_corrupt_fail_closed() -> None:
+def test_the_seed_step_asserts_the_verdict_of_1_4_2_fail_closed() -> None:
     # Both halves, the state database of the container and findling_file_state
-    # of Nextcloud, and a red end in the branch that sees anything else.
+    # of Nextcloud, and a red end in the branch that sees anything else. 1.4.2
+    # judges rightly: the sidecar skipped(system_file) on both sides, the
+    # picture indexed with no verdict left in Nextcloud (only skipped and
+    # failed are recorded there, php/lib/Command/IndexCommand.php:140).
     run = _run(SEED_STEP)
-    assert '"${verdict}" != "failed/corrupt"' in run
-    assert '"${recorded}" != "failed/corrupt"' in run
-    assert 'for seed in "picture:${tiff_id}" "sidecar:${sidecar_id}"; do' in run
+    assert '"${sidecar}" != "skipped/system_file"' in run
+    assert '"${sidecar_recorded}" != "skipped/system_file"' in run
+    assert '"${tiff}" != "indexed/"' in run
+    assert '"${tiff_recorded}" != "0"' in run
+    assert "failed/corrupt" not in run
     assert re.search(r'if \[ "\$\{fail\}" -ne 0 \]; then\s+exit 1', run)
-    # The seed word finds nothing before and after sowing.
-    assert run.count('if [ "${hits}" != "0" ]; then') == 2
+    # The seed word finds nothing before sowing, and exactly the picture after.
+    assert run.count('if [ "${hits}" != "0" ]; then') == 1
+    assert ".ocs.data.entries[0].attributes.fileId == $id" in run
+
+
+def test_the_seed_step_leaves_room_for_phase_31() -> None:
+    run = _run(SEED_STEP)
+    assert "Phase 31 (FMT-06) appends its legacy_format seed here" in run
+    # The mark stands at the end, after the export of the two file ids.
+    assert run.index("Phase 31 (FMT-06)") > run.index('} >> "${GITHUB_ENV}"')
 
 
 def test_the_seed_step_exports_both_file_ids() -> None:
@@ -169,20 +195,22 @@ ASSURANCE_STEP = "Store upgrade 5,"
 # upgrade 3c" instead, and this bound keeps it there.
 SNAPSHOT_RUN_MAX = 20726
 
-# The derivation of the comment above "Store upgrade 5": every counter of the
-# snapshot that the recheck of the two seed files moves, with its exact step.
-# Every other counter of the snapshot is compared with unchanged().
-DERIVED_STEPS = {
-    ".container.docs": 1,
-    ".container.indexed": 1,
-    ".container.skipped": 1,
-    ".container.failed": -2,
-    ".nextcloud.skipped": 1,
-    ".nextcloud.failed": -2,
-}
-UNCHANGED_COUNTERS = (".nextcloud.scheduled", ".nextcloud.running", ".container.rebuildState")
+# The derivation of the comment above "Store upgrade 5" since plan 30-06: the
+# recheck of D-29-10 is done on the released installation, so nothing hands a
+# file back across the upgrade and every counter of the snapshot is compared
+# with unchanged(). Until plan 30-06 six of them moved by a derived step.
+UNCHANGED_COUNTERS = (
+    ".container.docs",
+    ".container.indexed",
+    ".container.skipped",
+    ".container.failed",
+    ".nextcloud.skipped",
+    ".nextcloud.failed",
+    ".nextcloud.scheduled",
+    ".nextcloud.running",
+    ".container.rebuildState",
+)
 
-_MOVED = re.compile(r"^\s*moved_by_seed '([^']+)' (-?\d+) ", re.MULTILINE)
 _UNCHANGED = re.compile(r"^\s*unchanged '([^']+)' ", re.MULTILINE)
 
 
@@ -241,9 +269,14 @@ def test_the_record_step_reads_the_before_state_of_the_seed() -> None:
     run = _run(RECORD_STEP)
     assert '. "${RUNNER_TEMP}/seed-probe.sh"' in run
     assert "seed_probe meta recheck_1_4_0" in run
-    assert 'if [ "${recheck}" != "absent" ]; then' in run
+    # 1.4.2 ran its recheck to the end before the upgrade (worker/recheck.py:129).
+    assert 'if [ "${recheck}" != "done" ]; then' in run
     assert "seed_probe meta embedding_version" in run
-    assert 'seed_probe stock "${UPGRADE_SEED_TIFF_ID}"' in run
+    # The whole stock, the picture included: it was embedded under 1.4.2 and
+    # must not be embedded again.
+    assert "seed_probe stock 0" in run
+    assert '"${tiff_chunks}" = "0"' in run
+    assert '"${sidecar_chunks}" != "0"' in run
     assert 'echo "UPGRADE_EMBEDDING_MARK=${embedding}"' in run
     assert 'echo "UPGRADE_VECTOR_STOCK=${stock}"' in run
 
@@ -272,22 +305,28 @@ def test_the_upgrade_step_keeps_the_app_update_branch_fail_closed() -> None:
     assert 'echo "the instance performed the app update: ' in run
 
 
-def test_every_counter_is_moved_by_exactly_the_derived_step() -> None:
+def test_every_counter_is_held_unchanged() -> None:
     run = _run(ASSURANCE_STEP)
-    moved = {path: int(step) for path, step in _MOVED.findall(run)}
-    assert moved == DERIVED_STEPS
+    assert "moved_by_seed" not in run
     unchanged = set(_UNCHANGED.findall(run))
     for counter in UNCHANGED_COUNTERS:
         assert counter in unchanged, counter
-    # No counter is moved and held unchanged at the same time.
-    assert not unchanged & set(DERIVED_STEPS)
 
 
 def test_no_counter_is_compared_with_at_least() -> None:
     run = _run(ASSURANCE_STEP)
     assert " -ge " not in run
     assert ">=" not in run
-    assert '[ "$(( was + step ))" != "${now}" ]' in run
+    assert 'if [ "${was}" != "${now}" ]; then' in run
+
+
+def test_the_assurance_step_demands_no_rebuild_and_schema_2() -> None:
+    # A plain upgrade under de,en rebuilds nothing, so the stored schema mark
+    # stays the 2 of 1.4.2 although this code carries 3 (30-RESEARCH pitfall 8),
+    # and the rebuild state stays idle (T-30-26).
+    run = _run(ASSURANCE_STEP)
+    assert '.marks.schemaVersion == "2"' in run
+    assert '.container.rebuildState == "idle"' in run
 
 
 def test_the_assurance_step_waits_for_the_recheck_without_cron() -> None:
@@ -297,7 +336,7 @@ def test_the_assurance_step_waits_for_the_recheck_without_cron() -> None:
     assert "0:done:indexed/:skipped/system_file:[1-9]*)" in run
 
 
-def test_the_assurance_step_states_the_recheck_of_both_seed_files() -> None:
+def test_the_assurance_step_states_both_seed_files_kept_their_verdict() -> None:
     run = _run(ASSURANCE_STEP)
     assert 'seed_probe verdict "${UPGRADE_SEED_SIDECAR_ID}"' in run
     assert '"${sidecar}" != "skipped/system_file"' in run
@@ -314,6 +353,7 @@ def test_the_assurance_step_states_that_nothing_was_embedded_again() -> None:
     run = _run(ASSURANCE_STEP)
     assert 'if [ "${embedding}" != "${UPGRADE_EMBEDDING_MARK}" ]; then' in run
     assert 'if [ "${stock}" != "${UPGRADE_VECTOR_STOCK}" ]; then' in run
+    assert "seed_probe stock 0" in run
     assert "for mark in schemaVersion indexVersion analyzerVersion wordlistHash; do" in run
     assert "'.profileEffective'" in run
     assert 'if [ "${profile}" != "economy" ]; then' in run
@@ -326,7 +366,11 @@ def test_the_assurance_step_carries_no_expression() -> None:
 
 
 def test_the_old_version_pair_is_gone_from_the_texts() -> None:
-    assert "1.3.0 against the 1.2.0" not in WORKFLOW.read_text(encoding="utf-8")
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert "1.3.0 against the 1.2.0" not in text
+    # No step demands a recheck mark that is absent before the upgrade any more.
+    assert '"${recheck}" != "absent"' not in text
+    assert "judges wrongly" not in text
 
 
 @pytest.mark.parametrize("prefix", [SNAPSHOT_STEP, RECORD_STEP, UPGRADE_STEP, ASSURANCE_STEP])
