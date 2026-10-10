@@ -55,14 +55,17 @@ Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inkl
 
 ### Active
 
-(v1.4 Leistungsprofile, Owner-Bestaetigung 27.09.2026; REQ-IDs in REQUIREMENTS.md.)
+(v1.5 Umsteiger-Release, Owner-Freigabe 10.10.2026; REQ-IDs in REQUIREMENTS.md.)
 
-- Leistungsprofile mit Anteils-Formeln, Sparsam Wert fuer Wert gepinnt
-- Einbettungsspur als Nebenlaeufer + N OCR-Slots (inkl. PHP-Anspruchsseite)
-- Hardware-Erkennung mit Profil-Vorschlag, Admin bestaetigt
-- Vorab-Pruefung vor dem Speichern + OOM-Rueckfall zur Laufzeit
-- Modellwahl (e5-small int8/fp32) inkl. Marken-Reparatur embedding_version
-- Admin-Settings-UI; Abnahme-Anfahrt am gebauten Produkt
+- Umstiegsweg von fulltextsearch/Elasticsearch (Doku + Admin-Hinweis bei Doppel-Provider)
+- Typ- und Ordnerfilter direkt in der Unified Search
+- Ausschlussmuster als Einstellung inkl. Mac-Bundles (#22)
+- Neue Formate: .eml, ZIP-Inhalte, .doc/.xls ohne LibreOffice, HEIC
+- Tschechisch: OCR + lexikalisches Feld ohne Stemmer (#26)
+- Grenzwerte auf der Admin-Seite sichtbar (#21), F-29-03, Wortlaut-Feinschliff
+- Stretch: "Aehnliche Dokumente" ueber vorhandene Vektoren; Mess-Spike granite-embedding-97m-multilingual-r2 gegen e5-small; Design-Spike #25-Dedup
+
+Vorlaeufig v1.6: granite-Wechsel (nur bei Messgewinn), #25-Dedup-Bau, kleiner Reranker, CLIP-Bildsuche (SigLIP2, Lizenz je Modell), whisper.cpp-Transkription als Opt-in.
 
 Nicht in v1.4 (Wiedervorlage): Franzoesisches Koerperfeld (benannte Luecke); F-23-04; idle-Guard EmbeddingModel.release() (Kandidat, beim Roadmapping pruefen).
 
@@ -128,9 +131,25 @@ Weiter in der Wiedervorlage: Sortierung nach Name/Groesse (Schema-Sprung), Mimet
 | Kein Vorwaermen beim Start, Kaltstart lexikalisch sofort, Ladefenster-Restrisiko akzeptiert (D-03/D-08) | RAM-Budget auf 4-GB-Boxen schlaegt Latenzkomfort | ✓ Good, Kaltsuche 973 ms MIT Treffern statt 0; Restrisiko als AR-23-01 dokumentiert |
 | gone-Reparaturlauf als Upgrade-Migration (D-04, Issue #14) | Arbeit ist genau die, die ohne den Bug angefallen waere | ✓ Good, Upgrade-CI-Beweis skipped 8→7; budachst-Bestaetigung steht aus (Issue offen) |
 
-## Current Milestone: v1.4 Leistungsprofile
+## Current Milestone: v1.5 Umsteiger-Release
 
-**Goal:** Findling passt seine Geschwindigkeit der Hardware an: Wer mehr als die 4-GB-Referenzbox hat, bekommt per Profil-Opt-in Parallelitaet (Einbettungsspur + N OCR-Slots), das 4-GB-Versprechen bleibt der unveraenderte Default.
+**Goal:** Wer heute fulltextsearch mit Elasticsearch betreibt, findet keinen Grund mehr zu bleiben: Findling deckt die erwarteten Funktionen (Filter in der Unified Search, Ausschlussmuster, Mail-/Archiv-/Altformate, weitere Sprache) ab und bietet einen klaren Umstiegsweg.
+
+**Target features (Owner-Freigabe 10.10.2026):**
+- UMST: Doku-Seite "Von Elasticsearch umsteigen" + Admin-Hinweis, wenn fulltextsearch parallel aktiv ist (Doppeltreffer); Wortlaut "OCR ohne Dateiaenderung und ohne Elasticsearch", NIE "einzige OCR" (workflow_ocr existiert fuer NC 33-35)
+- USRCH: Typfilter und "in diesem Ordner" als Custom Filter des Unified-Search-Providers
+- EXCL: Ausschlussmuster als Einstellung, Mac-Bundles (#22)
+- FMT: .eml (stdlib), ZIP-Inhalte mit Zip-Bomb-Grenzen, .doc/.xls ohne LibreOffice (olefile/xlrd), HEIC
+- CZ: ces-OCR (Weg wie dan/est) + tschechisches Koerperfeld ohne Stemmer, Umbau nur bei Aktivierung (#26)
+- POL: #21 Grenzwerte nur anzeigen, F-29-03, Wortlaut "This box has fewer cores"
+- Stretch: "Aehnliche Dokumente" (Vektoren vorhanden), granite-Messung (nur Messung), #25-Dedup-Design
+
+**Key context:** Recherche 10.10.2026 (ES-Schmerzpunkte, Konkurrenz, Technik-Hebel) liegt vor, Gegenproben gemacht: tantivy-py 0.26.2 ist aktuell; granite r2 = ModernBERT, CLS-Pooling, keine Praefixe, eigener int8-Build noetig (quint8_avx2 ist x86-only); files_fulltextsearch_tesseract endet laut Store-Katalog bei NC 32. Ausgeschlossen: sqlite-vector (ELv2), Jina (CC BY-NC), EmbeddingGemma (Gemma Terms). .eml-Dateien IN Nextcloud sind Nextcloud-Files, kein Verstoss gegen "keine fremden Quellen".
+
+<details>
+<summary>Archiv: Milestone-Beschreibung v1.4 (abgeschlossen 2026-10-06)</summary>
+
+**Goal (v1.4):** Findling passt seine Geschwindigkeit der Hardware an: Wer mehr als die 4-GB-Referenzbox hat, bekommt per Profil-Opt-in Parallelitaet (Einbettungsspur + N OCR-Slots), das 4-GB-Versprechen bleibt der unveraenderte Default.
 
 **Target features (Owner-Entscheide 24./25.09.2026, bestaetigt 27.09.):**
 - Leistungsprofile Sparsam/Standard/Leistung als Anteils-Formeln, nicht feste Slotzahlen; Sparsam Wert fuer Wert gegen heute gepinnt (Store-Zahl darf nicht wandern)
@@ -141,6 +160,10 @@ Weiter in der Wiedervorlage: Sortierung nach Name/Groesse (Schema-Sprung), Mimet
 - Erste echte Admin-Settings-UI (ui-phase-Gate); keine App-Spaltung
 
 **Key context:** Vorarbeit .planning/research/BL-F04-vorarbeit-2026-09-25.md; Basiszahlen B1-B5 aus der Phase-22-Anfahrt (CI-Slot-Faktor F4 = 3,955, Skalierung real); KEINE Entdeckungs-Anfahrt noetig, aber eine Abnahme-Anfahrt am gebauten Produkt (Owner-Auflage: RAM-Messung je Stufe, bevor die UI sie anbietet). Offene Tor-Fragen der ersten Phase: Weg des Profils in den Container (Wege A/B/C), Anteile je Profil im Owner-Wortlaut, fp32-Lieferweg (K7).
+
+**Ergebnis:** Alles geliefert, 1.4.0 am 06.10.2026 eingereicht, danach 1.4.1 und 1.4.2 (Issue #25, 09.10.).
+
+</details>
 
 <details>
 <summary>Archiv: Milestone-Beschreibung v1.3 (abgeschlossen 2026-09-27)</summary>
@@ -189,4 +212,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-06, Phase 29 komplett, 1.4.0 im Store*
+*Last updated: 2026-10-10, Milestone v1.5 Umsteiger-Release gestartet*
