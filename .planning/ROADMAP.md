@@ -107,7 +107,7 @@ Plans:
 - [x] 30-03-PLAN.md: Schema-2-Layout einfrieren, Ratsche ("2","3")/("1","3"), Pflicht-Fix _of_the_marks, Prüfzeile A5
 - [x] 30-04-PLAN.md: Sprache cs, Feld body_cs, SCHEMA_VERSION 3, GOLD_V1_5
 - [x] 30-05-PLAN.md: pytest-Beweis: Bestand ohne Umbau, cs an und aus, Feldebene, Messung A2
-- [ ] 30-06-PLAN.md: Upgrade-Strecke auf v1.4.2, Bestand de,en ohne Umbau in deploy-harp
+- [x] 30-06-PLAN.md: Upgrade-Strecke auf v1.4.2, Bestand de,en ohne Umbau in deploy-harp
 - [ ] 30-07-PLAN.md: deploy-harp Store upgrade 6/7: cs an und wieder aus
 - [ ] 30-08-PLAN.md: Doku, Grenzliste mit fünf Einträgen, Store-Texte und READMEs
 - [ ] 30-09-PLAN.md: Security-, Bug- und Performance-Audit der Phase, Befunde fixen, 30-AUDIT.md
@@ -191,7 +191,7 @@ Plans:
 | 12-16 (Archiv) | v1.2 | 63/63 | Complete | 2026-09-21 |
 | 17-23 (Archiv) | v1.3 | 69/69 | Complete | 2026-09-27 |
 | 24-29 (Archiv) | v1.4 | 78/78 | Complete | 2026-10-06 |
-| 30. Owner-Tor, Schema und Tschechisch | v1.5 | 5/9 | In Progress|  |
+| 30. Owner-Tor, Schema und Tschechisch | v1.5 | 6/9 | In Progress|  |
 | 31. Neue Formate und Nachholweg | v1.5 | 0/? | Not started | - |
 | 32. Filter in der Unified Search | v1.5 | 0/? | Not started | - |
 | 33. Ausschlussmuster und Admin-Feinschliff | v1.5 | 0/? | Not started | - |
