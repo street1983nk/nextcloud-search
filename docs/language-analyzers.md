@@ -540,8 +540,16 @@ of the short list (D-30-06).
 **Czech content words on the stop word list.** The Lucene list carries a few
 words that are content words in their own right, `strana` (page, side, party),
 `zprávy` (news) and `první` (first) among them. Under `body_cs` they produce no
-term, so a question of that word alone finds nothing through the Czech field;
-on an instance that also runs `de` or `en`, those chains still index the word.
+term, so a question of that word alone finds nothing through the Czech field.
+The other chains catch it only in part. `en` folds the accents and indexes such
+a word in both spellings (`zprávy` and `zpravy` both meet `zpravi`). `de` does
+not fold Czech accents, so it indexes the word only as written: a word without
+accents such as `strana` is found either way, but on `de,cs`, one of the two
+sets named under "Switching it on" above, a question without accents
+(`zpravy`, `prvni`) finds a document with `zprávy` or `první` through no body
+field at all. Typing the
+accents finds it through `body_de`; an instance that wants the accentless
+question to work as well adds `en` to the language set (`de,en,cs`).
 The alternative is a list edited by this project, which needs a criterion, a
 maintainer and a review against every later Lucene release. D-30-05 keeps the
 Lucene state and removes only the two forms the fold creates (`byt`, `jez`),
