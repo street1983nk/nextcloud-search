@@ -36,7 +36,7 @@
 
 ### Tschechisch (CZ, Issue #26)
 
-- [ ] **CZ-01**: Admin kann Tschechisch als OCR-Sprache waehlen (`ces` im Image und in der Allowlist, Bau-Pruefung wie dan/est)
+- [x] **CZ-01**: Admin kann Tschechisch als OCR-Sprache waehlen (`ces` im Image und in der Allowlist, Bau-Pruefung wie dan/est)
 - [ ] **CZ-02**: Admin kann Tschechisch als lexikalische Sprache einschalten: eigenes Koerperfeld ohne Stemmer (Kleinschreibung, Akzentfaltung, tschechische Stoppwoerter mit Lizenzbeleg); Wechsel per Re-Analyse-Umbau, Bestandsinstallationen ohne `cs` bauen nicht um
 - [ ] **CZ-03**: Grenze dokumentiert: tschechische Suche ohne Stammformreduktion (Flexionsformen werden als eigene Woerter behandelt, Semantik gleicht teilweise aus)
 
@@ -96,7 +96,7 @@
 | FMT-04 | Phase 31 | Pending |
 | FMT-05 | Phase 31 | Pending |
 | FMT-06 | Phase 31 | Pending |
-| CZ-01 | Phase 30 | Pending |
+| CZ-01 | Phase 30 | Complete |
 | CZ-02 | Phase 30 | Pending |
 | CZ-03 | Phase 30 | Pending |
 | POL-01 | Phase 33 | Pending |

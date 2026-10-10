@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 30-01-PLAN.md
-last_updated: "2026-10-10T05:03:55.160Z"
-last_activity: 2026-10-10 -- Plan 30-01 abgeschlossen (Kette cs, Lucene-Stoppliste)
+stopped_at: Completed 30-02-PLAN.md
+last_updated: "2026-10-10T05:21:10.393Z"
+last_activity: 2026-10-10 -- Plan 30-02 abgeschlossen (OCR ces, CI-Lauf 38027012519)
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 9
-  completed_plans: 1
-  percent: 11
+  completed_plans: 2
+  percent: 22
 ---
 
 # Project State
@@ -26,16 +26,17 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 30 von 30-36 (Owner-Tor, Schema und Tschechisch)
-Plan: 30-01 abgeschlossen, als Nächstes 30-02
+Plan: 30-02 abgeschlossen, als Nächstes 30-03
 Status: In Ausführung
-Last activity: 2026-10-10 -- Plan 30-01 abgeschlossen
+Last activity: 2026-10-10 -- Plan 30-02 abgeschlossen
 
-Progress: [█░░░░░░░░░] 11%
+Progress: [██░░░░░░░░] 22%
 
 ## Performance Metrics
 
 - v1.4: 6 Phasen, 78 Plaene in 10 Tagen (Referenz)
 - v1.5: 30-01 in ca. 21 min (3 Tasks, 9 Dateien)
+- v1.5: 30-02 in ca. 35 min (2 Tasks, 7 Dateien)
 
 ## Accumulated Context
 
@@ -48,6 +49,7 @@ Progress: [█░░░░░░░░░] 11%
 - Stretch-Phase 35 kann ohne Release-Risiko entfallen; kein Modellwechsel in v1.5.
 
 - 30-01: Tschechische Stoppliste = Lucene 10.5.2 gefaltet (167), Ausnahmen byt (Wohnung) und jez (Wehr), kein achtes Merkmal, ANALYZER_VERSION bleibt 1.
+- 30-02: ces nur angeboten, OCR-Standard bleibt deu+eng+fra; Image-Probe CZ-01 auf amd64 und arm64 gruen (Lauf 38027012519).
 
 ### Offene Faeden (kein aktiver Auftrag)
 
@@ -67,6 +69,6 @@ Progress: [█░░░░░░░░░] 11%
 
 ## Session Continuity
 
-Last session: 2026-10-10T05:03:50.566Z
-Stopped at: Completed 30-01-PLAN.md
+Last session: 2026-10-10T05:21:10.378Z
+Stopped at: Completed 30-02-PLAN.md
 Resume file: None
