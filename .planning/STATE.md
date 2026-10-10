@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 30-03-PLAN.md
-last_updated: "2026-10-10T05:47:27.598Z"
-last_activity: 2026-10-10 -- Plan 30-03 abgeschlossen (Ratsche 2->3, Lesetor-Fix)
+stopped_at: Completed 30-04-PLAN.md
+last_updated: "2026-10-10T06:29:52.822Z"
+last_activity: 2026-10-10 -- Plan 30-04 abgeschlossen (body_cs, SCHEMA_VERSION 3, GOLD_V1_5)
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 9
-  completed_plans: 3
-  percent: 33
+  completed_plans: 4
+  percent: 44
 ---
 
 # Project State
@@ -26,11 +26,11 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 30 von 30-36 (Owner-Tor, Schema und Tschechisch)
-Plan: 30-03 abgeschlossen, als Nächstes 30-04
+Plan: 30-04 abgeschlossen, als Nächstes 30-05
 Status: In Ausführung
-Last activity: 2026-10-10 -- Plan 30-03 abgeschlossen
+Last activity: 2026-10-10 -- Plan 30-04 abgeschlossen
 
-Progress: [███░░░░░░░] 33%
+Progress: [████░░░░░░] 44%
 
 ## Performance Metrics
 
@@ -38,6 +38,7 @@ Progress: [███░░░░░░░] 33%
 - v1.5: 30-01 in ca. 21 min (3 Tasks, 9 Dateien)
 - v1.5: 30-02 in ca. 35 min (2 Tasks, 7 Dateien)
 - v1.5: 30-03 in ca. 45 min (2 Tasks, 7 Dateien)
+- v1.5: 30-04 in ca. 40 min (3 Tasks, 14 Dateien)
 
 ## Accumulated Context
 
@@ -52,6 +53,7 @@ Progress: [███░░░░░░░] 33%
 - 30-01: Tschechische Stoppliste = Lucene 10.5.2 gefaltet (167), Ausnahmen byt (Wohnung) und jez (Wehr), kein achtes Merkmal, ANALYZER_VERSION bleibt 1.
 - 30-02: ces nur angeboten, OCR-Standard bleibt deu+eng+fra; Image-Probe CZ-01 auf amd64 und arm64 gruen (Lauf 38027012519).
 - 30-03: LEGACY_SCHEMA_STEPS {(1,2),(2,3),(1,3)}; QUERYABLE_SCHEMA_GENERATIONS {2,3} ausgeschrieben, _of_the_marks fragt die Menge statt SCHEMA_VERSION; A5 bestaetigt (Ordnerfilter ueber files.path, kein zweiter Schemaschritt).
+- 30-04: cs am Ende von SUPPORTED_LANGUAGES, ausserhalb Snowball (STEMMERLESS_LANGUAGES); body_cs als 14. Feld, neun Ketten unbedingt; SCHEMA_VERSION 3 mit GOLD_V1_5. Store upgrade 6 verlangt bereits Schema 2 vorher, 3 nachher (30-07 nur noch der cs-Teil). CZ-02 bleibt offen bis 30-05 bis 30-07.
 
 ### Offene Faeden (kein aktiver Auftrag)
 
@@ -71,6 +73,6 @@ Progress: [███░░░░░░░] 33%
 
 ## Session Continuity
 
-Last session: 2026-10-10T05:47:27.578Z
-Stopped at: Completed 30-03-PLAN.md
+Last session: 2026-10-10T06:29:52.803Z
+Stopped at: Completed 30-04-PLAN.md
 Resume file: None
