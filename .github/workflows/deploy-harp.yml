@@ -20,6 +20,14 @@ name: HaRP deploy
 # that finds the content of a file nobody configured anything for.
 on:
   push:
+    # A push block that names only paths starts on every tag, because GitHub
+    # does not evaluate paths for a tag push. The source mirror pre-release of
+    # plan 31-01 creates a tag (source-1.5-dev), so the push side names every
+    # branch and the release tags only; a release tag still runs this workflow.
+    branches:
+      - '**'
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
     paths:
       - 'backend/**'
       # The whole companion and not only its appinfo, because the store install
