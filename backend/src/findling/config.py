@@ -183,6 +183,14 @@ SNOWBALL_NAME = {
 # backend/tests/test_language_allowlist.py holds both. A code here is never
 # entered in SNOWBALL_NAME, and its tantivy name never in LANGUAGE_ALLOWLIST:
 # tantivy 0.26.2 knows no Czech, and either entry is a ValueError at start up.
+#
+# The set steers no code path: the chain of each such code is registered by
+# hand in findling.index.open.open_index and its field spelled out in
+# findling.index.schema.build_schema, because every chain there has a factory
+# of its own. It is bound to that wiring by a test instead
+# (test_every_stemmerless_language_has_a_field_and_a_registered_chain in
+# backend/tests/test_index_open.py), which turns red for a code here that has
+# no body field, no field on the chain of its name, or no registered chain.
 STEMMERLESS_LANGUAGES = frozenset({"cs"})
 
 # The two measured recipes of the constituent dictionary. full is recipe A

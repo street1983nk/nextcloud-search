@@ -1726,8 +1726,13 @@ PHP_TREE_HASH_TODAY = "bee7a95422d96ad9462e594bd7f1f55dc01e6efbb20c572740392c8c0
 # index/open.py and api/resources.py follow the seventh body field. No file came
 # and none went, so PACKAGE_FILES_TODAY stays at 74. The PHP pair does not move:
 # php/ is unchanged.
+# Measured again by the fix of review finding IN-02 of phase 30 on 2026-10-10:
+# config.py says over STEMMERLESS_LANGUAGES that the set steers no code path
+# and names the test that binds it to the wiring. No file came and none went,
+# so PACKAGE_FILES_TODAY stays at 74. The PHP pair does not move: php/ is
+# unchanged.
 PACKAGE_FILES_TODAY = 74
-PACKAGE_TREE_HASH_TODAY = "e006381e228db2d3cdda5cc682f107849848e7fd4e5ede5139882315ae27264d"
+PACKAGE_TREE_HASH_TODAY = "00a724d2a5bf57e99f4a57184a623a32c6cf2be5f2ca9147f5159d52d50e6ae5"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

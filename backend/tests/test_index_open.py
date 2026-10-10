@@ -308,6 +308,39 @@ def test_body_cs_answers_on_its_own_chain(index_dir: Path) -> None:
     assert _hits(index, "smlouva", [FIELD_BODY_CS]) == 0
 
 
+@pytest.mark.parametrize("code", sorted(STEMMERLESS_LANGUAGES))
+def test_every_stemmerless_language_has_a_field_and_a_registered_chain(index_dir: Path, code: str) -> None:
+    """Finding IN-02 of the phase 30 review: the set is bound to the wiring.
+
+    STEMMERLESS_LANGUAGES steers nothing by itself; the chain of such a code is
+    registered by hand in open_index and its field is spelled out in
+    build_schema, because every chain there has a factory of its own. The test
+    that compares the set with SUPPORTED_LANGUAGES would stay green for a code
+    that has neither, and the first add_document would then fail at runtime. So
+    every code of the set has to show all three here, on a real directory: a
+    body field, that field analysed by the chain named after the code (read off
+    the meta.json tantivy wrote), and a registered chain behind that name, which
+    is what lets the write go through and the word be found.
+    """
+    assert code in BODY_FIELD, f"{code} is stemmerless but has no body field"
+    field = BODY_FIELD[code]
+    index = open_index(index_dir, CONSTITUENTS)
+    writer = index.writer(heap_size=15_000_000, num_threads=1)
+    document = Document()
+    document.add_unsigned(FIELD_FILE_ID, 1)
+    document.add_text(field, "findlingprobe")
+    writer.add_document(document)
+    writer.commit()
+    writer.wait_merging_threads()
+    index.reload()
+    meta = json.loads((index_dir / "meta.json").read_text(encoding="utf-8"))
+    entries = [entry for entry in meta["schema"] if entry["name"] == field]
+
+    assert len(entries) == 1, f"{field} is not in the schema"
+    assert entries[0]["options"]["indexing"]["tokenizer"] == code
+    assert _hits(index, "findlingprobe", [field]) == 1
+
+
 def test_the_two_identifiers_and_mtime_are_fast_fields(index_dir: Path) -> None:
     index = open_index(index_dir, CONSTITUENTS)
     _write(index, file_id=42, storage_id=7, mtime=1_700_000_000)
