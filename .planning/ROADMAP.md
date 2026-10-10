@@ -79,7 +79,7 @@ Details im Archiv: .planning/milestones/v1.4-ROADMAP.md
 
 **Reihenfolge-Logik:** Alle Schema- und Markenaenderungen des Milestones (tschechisches Koerperfeld, eventuelle Felder fuer Archiv-Mitglieder) fallen in Phase 30 in EINEM Schritt, damit ein Re-Analyse-Umbau hoechstens einmal faellt. Die Formate (Phase 31) bauen auf diesem eingefrorenen Schema auf und bringen nur den Nachholweg fuer bisher uebersprungene Dateien mit. Die Umstiegs-Doku (Phase 34) kommt nach den Funktionsphasen, weil ihr Funktionsvergleich nur Geliefertes nennen darf. Die Stretch-Phase 35 kann ohne Release-Risiko ganz oder teilweise entfallen.
 
-- [ ] **Phase 30: Owner-Tor, Schema und Tschechisch** - Offene Owner-Entscheide klaeren, Schema/Marken fuer v1.5 einmalig festlegen, Tschechisch fuer OCR und lexikalische Suche
+- [x] **Phase 30: Owner-Tor, Schema und Tschechisch** - Offene Owner-Entscheide klaeren, Schema/Marken fuer v1.5 einmalig festlegen, Tschechisch fuer OCR und lexikalische Suche
 - [ ] **Phase 31: Neue Formate und Nachholweg** - .eml, ZIP-Inhalte, .doc, .xls, HEIC indexierbar; Altbestand wird nach dem Upgrade selbsttaetig nachgeholt; F-29-03 behoben
 - [ ] **Phase 32: Filter in der Unified Search** - Dateityp- und Ordnerfilter direkt in der Nextcloud Unified Search
 - [ ] **Phase 33: Ausschlussmuster und Admin-Feinschliff** - Platzhalter-Ausschluesse inkl. Mac-Bundles (#22), Grenzwerte sichtbar (#21), Hardware-Hinweis umformuliert
@@ -191,7 +191,7 @@ Plans:
 | 12-16 (Archiv) | v1.2 | 63/63 | Complete | 2026-09-21 |
 | 17-23 (Archiv) | v1.3 | 69/69 | Complete | 2026-09-27 |
 | 24-29 (Archiv) | v1.4 | 78/78 | Complete | 2026-10-06 |
-| 30. Owner-Tor, Schema und Tschechisch | v1.5 | 9/9 | In Progress|  |
+| 30. Owner-Tor, Schema und Tschechisch | v1.5 | 9/9 | Complete | 2026-10-10 |
 | 31. Neue Formate und Nachholweg | v1.5 | 0/? | Not started | - |
 | 32. Filter in der Unified Search | v1.5 | 0/? | Not started | - |
 | 33. Ausschlussmuster und Admin-Feinschliff | v1.5 | 0/? | Not started | - |

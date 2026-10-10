@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 30-09-PLAN.md
+stopped_at: Phase 30 abgeschlossen (verifiziert, Review behoben)
 last_updated: "2026-10-10T10:13:44.931Z"
-last_activity: 2026-10-10 -- Plan 30-09 abgeschlossen, Phase 30 wartet auf Verifikation
+last_activity: 2026-10-10 -- Phase 30 abgeschlossen, als Nächstes Phase 31 planen
 progress:
   total_phases: 7
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 9
   completed_plans: 9
-  percent: 100
+  percent: 14
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .planning/MILESTONES.md (v1.0 bis v1.4).
 
 **Core Value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 30, Owner-Tor, Schema und Tschechisch
+**Current focus:** Phase 31, Formate, Nachholweg und POL-02
 
 ## Current Position
 
-Phase: 30 von 30-36 (Owner-Tor, Schema und Tschechisch)
-Plan: 9/9 Pläne abgeschlossen (30-09 zuletzt), als Nächstes Phasen-Verifikation
-Status: Pläne fertig, Verifikation offen
-Last activity: 2026-10-10 -- Plan 30-09 abgeschlossen (Audit 30-AUDIT.md, status fixed)
+Phase: 31 von 30-36 (Formate, Nachholweg und POL-02)
+Plan: noch nicht geplant
+Status: Phase 30 abgeschlossen (Verifikation passed, Review WR-01/WR-02/IN-01..03 behoben, CI grün auf e56cce00)
+Last activity: 2026-10-10 -- Phase 30 abgeschlossen
 
-Progress: [██████████] 100%
+Progress: [█░░░░░░] 1/7 Phasen
 
 ## Performance Metrics
 
