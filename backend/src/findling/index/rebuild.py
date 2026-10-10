@@ -143,6 +143,9 @@ LOGGER = logging.getLogger("findling.index.rebuild")
 # directory holds today. The reasoning stands at may_rebuild; the number is 0.40
 # because a run that is refused before it starts costs a log line and a run that
 # dies halfway costs the whole pass.
+# Measured for cs on 2026-10-10 (plan 30-05, 2000 documents, 9.88 MB of text):
+# filling the stemmerless Czech chain on top of de,en grows the directory by 0.358
+# of what it held, against 0.361 for es on the same text, so 0.40 holds for cs.
 GROWTH_PER_LANGUAGE: Final = 0.40
 
 # The two answers of the precheck, as text rather than as an enum, for the reason

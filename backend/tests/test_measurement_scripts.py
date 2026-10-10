@@ -1701,8 +1701,13 @@ PHP_TREE_HASH_TODAY = "bee7a95422d96ad9462e594bd7f1f55dc01e6efbb20c572740392c8c0
 # plan 30-04 changed config.py (SCHEMA_VERSION 2 -> 3, with its reason). No file
 # came and none went, so PACKAGE_FILES_TODAY stays at 74. The PHP pair does not
 # move: php/ is unchanged.
+# Measured again by plan 30-05 on 2026-10-10 (the space assumption A2 for cs,
+# CZ-02): plan 30-05 changed index/rebuild.py (one comment line block over
+# GROWTH_PER_LANGUAGE with the cs measurement, the value stays at 0.40). No file
+# came and none went, so PACKAGE_FILES_TODAY stays at 74. The PHP pair does not
+# move: php/ is unchanged.
 PACKAGE_FILES_TODAY = 74
-PACKAGE_TREE_HASH_TODAY = "89d7a5f884bad046f866e771df0b977a6eaef7d451263bcd2ba12ae291bba321"
+PACKAGE_TREE_HASH_TODAY = "21275bc1829dda9598bbf9aec582b60068df387bad116ba53c265fe7d74ebff9"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

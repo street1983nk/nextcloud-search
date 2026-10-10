@@ -34,11 +34,11 @@ import gc
 import hashlib
 import json
 import logging
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 import pytest
-from tantivy import Document, Index
+from tantivy import Document, Filter, Index, TextAnalyzerBuilder, Tokenizer
 
 from conftest import CONSTITUENTS, open_schema_1_index, open_schema_2_index, write_wordlist
 from findling.api.resources import field_plan_for
@@ -64,10 +64,13 @@ from findling.index.schema import (
     FIELD_STORAGE_ID,
     FIELD_TITLE,
 )
+from findling.index.stopwords_cs import CZECH_EXCEPTIONS
 from findling.index.writer import IndexBatchWriter, IndexRecord
 from findling.query.rewrite import LEGACY_PLAN, FieldPlan, build_query
 from findling.store.repo import Store, open_store
 from findling.store.vectors import EMBEDDING_DIMENSIONS, Chunk, open_vectors
+
+LUCENE_ORIGINAL = Path(__file__).resolve().parent / "fixtures" / "lucene_cz_stopwords_10_5_2.txt"
 
 # The field counts of the two layouts, written out rather than read from the
 # schema module: the claim is about what lies on disk, and a count taken from
@@ -457,3 +460,90 @@ def _switch_cs_on_over_a_stale_target(volume: Path, monkeypatch: pytest.MonkeyPa
     verdict = _run(store)
     assert verdict == REBUILD_THROUGH
     return store, verdict
+
+
+# -- the Czech chain on field level, on de,cs ---------------------------------
+
+
+def _czech_index(directory: Path, bodies: Mapping[int, str]) -> Index:
+    """A fresh index of this code, written through the real writer under de,cs."""
+    index = open_index(directory, CONSTITUENTS)
+    writer = IndexBatchWriter(index, directory=directory, min_free_bytes=0, languages=("de", "cs"))
+    for file_id, body in bodies.items():
+        writer.add(
+            IndexRecord(
+                file_id=file_id,
+                storage_id=1,
+                name=f"Akte-{file_id}.pdf",
+                title=f"Akte {file_id}",
+                path=f"/Akten/Akte-{file_id}.pdf",
+                ext="pdf",
+                body=body,
+                mtime=1_700_000_000 + file_id,
+            )
+        )
+    writer.flush()
+    writer.close()
+    index.reload()
+    return index
+
+
+def _fold(word: str) -> str:
+    """The flat spelling of a word, by a chain that folds and does nothing else.
+
+    Built here and not taken from czech_analyzer(), because that chain drops
+    exactly the words this file asks about.
+    """
+    folding = TextAnalyzerBuilder(Tokenizer.simple()).filter(Filter.lowercase()).filter(Filter.ascii_fold()).build()
+    (token,) = folding.analyze(word)
+    return token
+
+
+def _lucene_entries() -> Sequence[str]:
+    """Every entry of the Lucene original whose flat spelling is not a named exception."""
+    entries = [line.strip() for line in LUCENE_ORIGINAL.read_text(encoding="utf-8").splitlines() if line.strip()]
+    return [entry for entry in entries if _fold(entry) not in CZECH_EXCEPTIONS]
+
+
+def test_czech_stop_words_in_both_spellings_leave_nothing_on_body_cs(tmp_path: Path) -> None:
+    """Every entry of the original list, in its own and in its flat spelling.
+
+    Two questions per spelling, because one of them alone is trivially green:
+    the search line goes through the chain of the field and comes back empty
+    for a stop word whatever the index holds, so the term dictionary is asked
+    as well. The control document is found through a content word (positive
+    control), which shows that the field is filled and the search reaches it.
+    """
+    entries = _lucene_entries()
+    assert {"proč", "už", "jsem", "a", "nebo"} <= set(entries)
+    index = _czech_index(tmp_path / "index", {1: "proč už jsem a nebo " + " ".join(entries), 2: "Pronájem kanceláře"})
+    searcher = index.searcher()
+
+    assert _found_in(index, "pronajem", FIELD_BODY_CS) == {2}
+    assert searcher.doc_freq(FIELD_BODY_CS, "kancelare") == 1
+    for entry in entries:
+        for spelling in (entry, _fold(entry)):
+            assert _found_in(index, spelling, FIELD_BODY_CS) == set(), spelling
+            assert searcher.doc_freq(FIELD_BODY_CS, spelling) == 0, spelling
+
+
+def test_an_inflection_pair_stays_two_terms_on_body_cs(tmp_path: Path) -> None:
+    """CZ-03, the negative case: the documented limit of a chain without a stemmer, not a fault.
+
+    smlouva and its locative smlouvě are two terms, so the one does not find
+    the other. The accent pair of one form does land on one term: the locative
+    is found through its flat spelling with a capital letter.
+    """
+    index = _czech_index(tmp_path / "index", {1: "smlouva", 2: "smlouvě"})
+
+    assert _found_in(index, "smlouvě", FIELD_BODY_CS) == {2}
+    assert 1 not in _found_in(index, "smlouvě", FIELD_BODY_CS)
+    assert _found_in(index, "Smlouve", FIELD_BODY_CS) == {2}
+
+
+def test_the_exception_byt_stays_a_content_word_on_body_cs(tmp_path: Path) -> None:
+    """byt, flat, is the noun for a flat, and a lease for one has to be findable by it."""
+    index = _czech_index(tmp_path / "index", {1: "Nájemní smlouva na byt"})
+
+    assert "byt" in CZECH_EXCEPTIONS
+    assert _found_in(index, "byt", FIELD_BODY_CS) == {1}
