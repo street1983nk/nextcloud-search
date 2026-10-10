@@ -346,14 +346,19 @@ SOURCE_SHA256 = "61f06aa1e7567ee8c72e895ea33229033669ac1cc52c6d40369a9ee2b76ad91
 | A5 | Phase 32 (Ordnerfilter USRCH-02) braucht kein Schemafeld, weil `state.db` eine `path`-Spalte hat (schema.sql:44) und `path` im Index nur gespeichert, nicht indexiert ist; Filterung als Store-Vorfilter wie `prefilter_visible` | SC4 | Wenn Phase 32 doch einen tantivy-Pfadfilter will, wäre das ein zweiter Schemaschritt nach Phase 30. Im Plan als ausdrückliche Prüfzeile aufnehmen |
 | A6 | Downgrade-Verhalten 1.5 -> 1.4.2 wie beschrieben | Runtime State | nur Doku |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Lucene-Liste wörtlich oder mit benannter Ausschlussliste?**
    - What we know: Faltung macht `být` zu `byt` (Wohnung); Original enthält `strana`, `zprávy`, `první`, `nový` u. a.
    - What's unclear: ob der Owner D-30-02 wörtlich meint.
    - Recommendation: Owner-Checkpoint im ersten Plan. Vorschlag: Liste wörtlich übernehmen, aber `byt` (Faltungskollision, entsteht erst durch uns) per benannter, getesteter Ausnahme nicht filtern; die Nachrichtenwörter (`strana` usw.) als dokumentierte Grenze stehen lassen, weil sie dem Original entsprechen.
+   - RESOLVED: D-30-05 (Lucene 10.5.2 gefaltet und entdoppelt, `byt` als benannte Ausnahme, alle 66 neu entstandenen Formen einzeln geprüft, Inhaltswörter des Originals bleiben; umgesetzt in Plan 30-01).
 2. **Grenzliste auf fünf Einträge** (D-06 vs. ROADMAP SC5): Empfehlung, SC5 als neue Owner-Festlegung lesen und den Wortlaut des fünften Eintrags (en/de/fr) im Plan vorlegen, z. B. "Czech: no stemming, inflected forms are separate words".
+   - RESOLVED: D-30-06 (fünfter Eintrag in de/en/fr entworfen, Owner-Abnahme mit REL-05 vor Release; umgesetzt in Plan 30-08).
 3. **Umbau "in beide Richtungen" in CI:** Empfehlung: Store upgrade 6 `de,en` -> `de,cs` (cs an, en ab, Schema 2 -> 3, Frage `smlouve` trifft Dokument `smlouvě`), neuer Schritt Store upgrade 7 `de,cs` -> `de,en` (cs ab, Schema bleibt 3, `smlouve` trifft wieder über `body_en`, Sprachmarke `de,en`). Kosten: ein weiterer Container-Neustart. Alternativ "Aus"-Richtung nur in pytest; Owner-Kriterium SC3 spricht von CI, beides zählt, Empfehlung deploy-harp.
+   - RESOLVED: D-30-07 (beide Richtungen in deploy-harp, UPGRADE_FROM_TAG v1.4.2; umgesetzt in Plänen 30-06 und 30-07, pytest-Gegenstück 30-05).
+4. **Einziger Schemaschritt des Milestones und Ordnerfilter ohne Schemafeld (A5):** Braucht Phase 32 (USRCH-02) ein tantivy-Pfadfeld, oder reicht die `path`-Spalte in `state.db`? Empfehlung: Schema 2 -> 3 nur mit `body_cs`, Ordnerfilter als Store-Vorfilter, als Prüfzeile im Plan festhalten.
+   - RESOLVED: D-30-08 (SCHEMA_VERSION 2 -> 3, LEGACY_SCHEMA_STEPS ("2","3"),("1","3"), Prüfzeile A5; umgesetzt in Plänen 30-03 und 30-04).
 
 ## Environment Availability
 

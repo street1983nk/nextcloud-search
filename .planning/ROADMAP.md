@@ -100,7 +100,17 @@ Details im Archiv: .planning/milestones/v1.4-ROADMAP.md
   3. Eine Bestandsinstallation ohne `cs` upgradet von 1.4.2 ohne Umbau und ohne Neu-Einbettung; Beweis in der Upgrade-CI-Strecke (UPGRADE_FROM_TAG=v1.4.2), Umbau in beide Richtungen fuer `cs` ebenfalls in CI bewiesen
   4. Das Schema traegt nach dieser Phase alle Felder, die v1.5 braucht (auch fuer Archiv-Mitglieder, falls im Tor so entschieden); spaetere v1.5-Phasen aendern weder Schema noch Indexmarken
   5. Die Grenze "tschechische Suche ohne Stammformreduktion" steht in der Doku (dreisprachig) und in der Grenzliste
-**Plans**: TBD
+**Plans**: 9 plans
+Plans:
+- [ ] 30-01-PLAN.md: Tschechische Stoppliste aus Lucene 10.5.2 (gefaltet, Ausnahmen geprüft, Lizenzbeleg) und stemmerlose Kette cs
+- [ ] 30-02-PLAN.md: OCR-Sprache ces im Image, Allowlist, Bau-Prüfung und Bild-Beweis
+- [ ] 30-03-PLAN.md: Schema-2-Layout einfrieren, Ratsche ("2","3")/("1","3"), Pflicht-Fix _of_the_marks, Prüfzeile A5
+- [ ] 30-04-PLAN.md: Sprache cs, Feld body_cs, SCHEMA_VERSION 3, GOLD_V1_5
+- [ ] 30-05-PLAN.md: pytest-Beweis: Bestand ohne Umbau, cs an und aus, Feldebene, Messung A2
+- [ ] 30-06-PLAN.md: Upgrade-Strecke auf v1.4.2, Bestand de,en ohne Umbau in deploy-harp
+- [ ] 30-07-PLAN.md: deploy-harp Store upgrade 6/7: cs an und wieder aus
+- [ ] 30-08-PLAN.md: Doku, Grenzliste mit fünf Einträgen, Store-Texte und READMEs
+- [ ] 30-09-PLAN.md: Security-, Bug- und Performance-Audit der Phase, Befunde fixen, 30-AUDIT.md
 **UI hint**: yes
 
 ### Phase 31: Neue Formate und Nachholweg
