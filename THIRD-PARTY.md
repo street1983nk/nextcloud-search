@@ -230,15 +230,45 @@ objects next to the extension module, so they stay replaceable.
 Findling only ever decodes. The x265 encoder is never called, but it lies in the
 image (about 11.4 MB on arm64 and 22.8 MB on amd64, unpacked), so it is
 distributed and its licence obligations apply in full, including the duty to
-offer the complete corresponding source. The sources are the upstream tags
-`LICENSES_bundled.txt` names: libheif `v1.23.4`
-(github.com/strukturag/libheif), libde265 `v1.1.3`
-(github.com/strukturag/libde265) and x265 `4.2`
-(bitbucket.org/multicoreware/x265_git).
+offer the complete corresponding source. `LICENSES_bundled.txt` points at the
+upstream tags (libheif `v1.23.4`, libde265 `v1.1.3`, x265 `4.2`); the exact
+archives, their checksums and the mirror that keeps them available are the next
+section.
 
 The Windows wheel of the same release carries a different x265 build (it is
 built from an MSYS2 recipe, not from `libheif/build_libs.py`); it never reaches
 the image and is not the subject of this file.
+
+### Corresponding source of the native libraries in the image
+
+A pointer to an upstream tag is not a lasting way to meet the source duty of
+GPL-2.0-or-later and LGPL-3.0: tags move, download pages go away. So the exact
+archives the manylinux wheels were built from are pinned here by SHA-256 and
+mirrored as release assets. The build recipe that turns them into the wheels is
+`libheif/build_libs.py` inside the pillow-heif sdist (it holds the three
+download URLs below and the cmake options); the upstream wheel workflow
+(`.github/workflows/wheels.yml` at tag `v1.8.0`, commit
+`1486e9fbf38d9e1b52706cba8182ab03bfa3cfed`) runs exactly that script as
+`CIBW_BEFORE_ALL_LINUX`. The sdist is therefore the carrier of the build
+scripts, and it is one of the four archives.
+
+| Archive | Version | URL | SHA-256 | Licence |
+|---|---|---|---|---|
+| `pillow_heif-1.8.0.tar.gz` | 1.8.0 | https://files.pythonhosted.org/packages/source/p/pillow_heif/pillow_heif-1.8.0.tar.gz | `e47c27432c6fd3d66c22f0de9f27fd379383b646c947520bc485854ce72060d0` | BSD-3-Clause |
+| `x265_4.2.tar.gz` | 4.2 | https://bitbucket.org/multicoreware/x265_git/downloads/x265_4.2.tar.gz | `40b1ea0453e0309f0eba934e0ddf533f8f6295966679e8894e8f1c1c8d5e1210` | GPL-2.0-or-later |
+| `libde265-1.1.3.tar.gz` | 1.1.3 | https://github.com/strukturag/libde265/releases/download/v1.1.3/libde265-1.1.3.tar.gz | `554228bd17788c99a7e63b37ab5634722190e6e2bf60c1dcb01cef328e133905` | LGPL-3.0 |
+| `libheif-1.23.4.tar.gz` | 1.23.4 | https://github.com/strukturag/libheif/releases/download/v1.23.4/libheif-1.23.4.tar.gz | `d0c02b4b0e978f34a1974b6f3eea7975a537bf7a9195ffeea38e7242ff316fdd` | LGPL-3.0 |
+
+`scripts/release/corresponding_source.py` carries the same four rows as its
+constant `ARCHIVES` (`backend/tests/test_corresponding_source.py` holds table and
+script to each other and the pillow-heif row to the pin). `fetch` downloads and
+checks them, `--verify-only` checks a directory that already holds them, and
+`publish --tag <tag>` uploads exactly these four files to a GitHub release.
+Every Findling release carries these archives as assets (release checklist
+REL-05 in `docs/store-listing.md`). Until the first release that does, the
+mirror for the development image `ghcr.io/street1983nk/findling_backend:dev` is
+the pre-release
+https://github.com/street1983nk/nextcloud-search/releases/tag/source-1.5-dev.
 
 ## Czech stop word list (Apache Lucene)
 
