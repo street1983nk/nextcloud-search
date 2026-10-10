@@ -30,8 +30,9 @@ controller (T-29-29), with a cursor in the meta key RECHECK_MARK that moves only
 after a band really reached the queue, judged on ``ok`` and never on ``count``
 (bug audit M1 of plan 06.1-17). A restart resumes at the cursor, and after the
 last band the mark says "done" and the run never comes back (T-29-31). The
-poller starts it only once the companion announces VERDICTS_GENERATION (K6):
-before that, the companion would only store the old codes again.
+poller starts it only once the companion announces one of
+KNOWN_VERDICTS_GENERATIONS (K6, D-31-08): before that, the companion would only
+store the old codes again.
 """
 
 from __future__ import annotations

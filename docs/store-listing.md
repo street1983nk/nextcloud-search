@@ -1650,7 +1650,19 @@ englischen Text wie bisher.
 |---|---|---|---|---|
 | `system_file` | System or helper file | System- oder Hilfsdatei | None. macOS metadata files (._) and Office lock files (~$) carry no document content. | Keine. macOS-Metadateien (._) und Office-Sperrdateien (~$) enthalten keinen Dokumentinhalt. |
 | `legacy_format` | Old Office format under a new name | Altes Office-Format unter neuem Namen | Save the file again in the current Office format (.docx, .xlsx, .pptx). | Datei im aktuellen Office-Format (.docx, .xlsx, .pptx) neu speichern. |
-| `unsupported_variant` | Image variant that cannot be read | Bildvariante, die nicht gelesen werden kann | None. The image uses an encoding the image library does not support. | Keine. Das Bild nutzt eine Kodierung, die die Bildbibliothek nicht unterstützt. |
+| `unsupported_variant` | Variant of this format that cannot be read | Variante dieses Formats, die nicht gelesen werden kann | None. The file uses a variant or an encoding Findling cannot read, for example Word 95 or an unusual image encoding. | Keine. Die Datei nutzt eine Variante oder Kodierung, die Findling nicht lesen kann, zum Beispiel Word 95 oder eine ungewöhnliche Bildkodierung. |
+| `mime_not_allowed` | File type not supported (unverändert) | Dateityp nicht unterstützt (unverändert) | None. Findling reads PDF, Office, OpenDocument, text, mails, ZIP files and images. | Keine. Findling liest PDF, Office, OpenDocument, Text, Mails, ZIP-Dateien und Bilder. |
+| ZIP-Grenzcode (Name siehe unten) | ZIP file over the safety limits | ZIP-Datei über den Sicherheitsgrenzen | None. ZIP files that are nested too deep, too large, too densely packed or hold too many files are skipped so the container keeps running. | Keine. ZIP-Dateien, die zu tief verschachtelt, zu groß oder zu dicht gepackt sind oder zu viele Dateien enthalten, werden übersprungen, damit der Container weiterläuft. |
+
+**Nachtrag Plan 31-02 (D-31-03): Wortlaut Entwurf Phase 31, Owner-Abnahme bei REL-05.**
+Die Zeile `unsupported_variant` ist allgemein gefasst (ab 1.5 auch .doc und
+.xls, die nicht gelesen werden können), die Abhilfe von `mime_not_allowed`
+nennt Mails und ZIP-Dateien, und die letzte Zeile ist der neue Skip-Code für
+ZIP-Dateien über den Grenzen. Dessen Codename trägt den gesperrten Wortstamm
+der Vokabelregel (E-H2) und steht deshalb nicht in dieser Datei; er steht mit
+denselben Sätzen in `docs/formats.md`, Abschnitt "Skip codes". Aus demselben
+Grund sagen alle sichtbaren Sätze ZIP-Datei statt des gesperrten Worts; der
+Code gilt nur für ZIP (Plan 31-04).
 
 Passwortgeschützte Office-Dateien unter OOXML-Endung (Plan 29-08) bekommen das
 bestehende Urteil `encrypted` mit dem bestehenden Label "Password protected"

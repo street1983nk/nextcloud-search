@@ -303,7 +303,8 @@ STATE_REASONS: Final[Mapping[str, frozenset[str | None]]] = {
             "unreadable",  # a permission setting, not a deletion (#14)
             "system_file",  # a sidecar of the operating system or of Office, not a document
             "legacy_format",  # a format this image does not read, under a name it would
-            "unsupported_variant",  # an honest verdict on a picture, not a broken file
+            "unsupported_variant",  # an honest verdict on a variant, not a broken file
+            "archive_limit",  # a safety limit of the container, not a broken file
         }
     ),
     "failed": frozenset(

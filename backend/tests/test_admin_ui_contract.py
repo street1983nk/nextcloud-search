@@ -59,6 +59,8 @@ import re
 from collections.abc import Callable, Mapping
 from pathlib import Path
 
+import pytest
+
 from findling import guard, precision, probe
 from findling.api.status import PROFILE_VALUE_KEYS, GuardReport
 from findling.config import (
@@ -2425,6 +2427,88 @@ def test_the_duplicates_sentence_of_issue_25_stands_wherever_it_is_rendered() ->
         assert DUPLICATES_SENTENCE in catalogue_of(catalogue), catalogue.name
 
 
+# Plan 31-02 (D-31-03, Befund 13 of the plan check): every visible sentence of
+# phase 31 travels in one bundle, two new ones for the ZIP code archive_limit and
+# three changed ones. Each sentence is held in each catalogue as its own test
+# case, named by sentence and file, so a red run says which file lacks which
+# sentence instead of stopping at the first. The value is the sentence id, the
+# sentence and the former key it replaces (None for a new one); a former key
+# left in a file would be a dead row nobody renders.
+#
+# The visible wording avoids the blocked term of the owner's vocabulary rule
+# (E-H2, test_store_metadata.py and test_public_artifacts.py): archive_limit is
+# reserved for ZIP (plan 31-04), so the label says ZIP file.
+REASON_SENTENCES_31_02: dict[str, tuple[str, str | None]] = {
+    "archive_limit-label": ("ZIP file over the safety limits", None),
+    "archive_limit-help": (
+        (
+            "None. ZIP files that are nested too deep, too large, too densely packed or hold too many files "
+            "are skipped so the container keeps running."
+        ),
+        None,
+    ),
+    "unsupported_variant-label": ("Variant of this format that cannot be read", "Image variant that cannot be read"),
+    "unsupported_variant-help": (
+        (
+            "None. The file uses a variant or an encoding Findling cannot read, for example Word 95 or an "
+            "unusual image encoding."
+        ),
+        "None. The image uses an encoding the image library does not support.",
+    ),
+    "mime_not_allowed-help": (
+        "None. Findling reads PDF, Office, OpenDocument, text, mails, ZIP files and images.",
+        "None. Findling reads PDF, Office, OpenDocument, text and images.",
+    ),
+}
+
+# The sixteen files by name, so that no catalogue drops out of L10N_CATALOGUES
+# without a red line: eight language codes, each as the JSON PHP reads and the
+# script the browser reads.
+EXPECTED_CATALOGUE_NAMES = frozenset(
+    f"{code}.{suffix}"
+    for code in ("de", "de_DE", "es", "fr", "it", "nl", "pt_BR", "pt_PT")
+    for suffix in ("js", "json")
+)
+
+BLOCKED_STEM = "arch" + "iv"
+
+
+def test_the_catalogue_list_holds_all_sixteen_files() -> None:
+    names = [path.name for path in L10N_CATALOGUES]
+
+    assert len(names) == 16
+    assert set(names) == EXPECTED_CATALOGUE_NAMES
+
+
+@pytest.mark.parametrize("catalogue", L10N_CATALOGUES, ids=lambda path: path.name)
+@pytest.mark.parametrize("sentence_id", sorted(REASON_SENTENCES_31_02))
+def test_the_reason_sentence_of_plan_31_02_stands_translated_in_the_catalogue(
+    sentence_id: str, catalogue: Path
+) -> None:
+    sentence, former = REASON_SENTENCES_31_02[sentence_id]
+    values = catalogue_of(catalogue)
+
+    assert sentence in values, (catalogue.name, sentence_id)
+    value = values[sentence]
+    assert isinstance(value, str), (catalogue.name, sentence_id)
+    assert value.strip() != "", (catalogue.name, sentence_id)
+    assert value != sentence, (catalogue.name, sentence_id)
+    if former is not None:
+        assert former not in values, (catalogue.name, sentence_id)
+    if catalogue.name.startswith("de"):
+        assert BLOCKED_STEM not in value.lower(), (catalogue.name, sentence_id)
+
+
+def test_the_reason_sentences_of_plan_31_02_stand_in_the_service() -> None:
+    view = ADMIN_VIEW.read_text(encoding="utf-8")
+
+    assert "\t\t'archive_limit' => [\n" in view
+    for sentence_id, (sentence, former) in REASON_SENTENCES_31_02.items():
+        assert view.count(f"'{sentence}'") == 1, sentence_id
+        if former is not None:
+            assert f"'{former}'" not in view, sentence_id
+
+
 # Plan 26-08: the service reads the object guard of the status answer key by
 # key through guardField, and the container spells those keys in GuardReport.
 # Two spellings of one contract, held together here (T-26-28).
@@ -3247,8 +3331,11 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     # 29-01 (label and remedy of system_file, legacy_format, unsupported_variant),
     # one of plan 29-12 (the error class line of the lookup card; the remedy of
     # out_of_memory changed its key and so moved nothing), one of issue #25
-    # (the sentence about shares counted once per user mount)
-    assert len(keys_of["de.json"]) == 300
+    # (the sentence about shares counted once per user mount), two of plan
+    # 31-02 (label and remedy of archive_limit; the three changed sentences of
+    # unsupported_variant and mime_not_allowed changed their keys and so moved
+    # nothing)
+    assert len(keys_of["de.json"]) == 302
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:
@@ -3782,6 +3869,16 @@ def test_every_language_table_carries_every_key_with_the_catalogue_wording() -> 
         for key, cells in rows.items():
             expected = [" / ".join(forms_of(german[key]))] + [" / ".join(forms_of(t[key])) for t in targets]
             assert cells == expected, (document.name, key)
+
+
+@pytest.mark.parametrize("document", [document for document, _ in LANGUAGE_TABLES], ids=lambda path: path.name)
+def test_every_language_table_names_the_reason_sentences_of_plan_31_02(document: Path) -> None:
+    rows = language_table(document)
+
+    for sentence_id, (sentence, former) in REASON_SENTENCES_31_02.items():
+        assert sentence in rows, (document.name, sentence_id)
+        if former is not None:
+            assert former not in rows, (document.name, sentence_id)
 
 
 def test_the_excluded_tile_names_the_rule_it_counts() -> None:

@@ -239,6 +239,49 @@ def test_the_three_verdicts_of_plan_29_01_are_decisions_and_never_failures(code:
         ExtractionOutcome.failed(reason)
 
 
+def test_archive_limit_of_plan_31_02_is_a_decision_and_never_a_failure() -> None:
+    """A ZIP file over a safety limit is skipped, in every copy (D-31-03).
+
+    The limits are there so the container keeps running; a file that crosses one
+    is a deliberate decision about that file, not a parser that lost, and it
+    must not count as an error on the page.
+    """
+    reason = Reason("archive_limit")
+
+    assert reason.value == "archive_limit"
+    assert reason in STATE_REASONS[State.SKIPPED]
+    assert reason not in STATE_REASONS[State.FAILED]
+    assert "archive_limit" in repo.STATE_REASONS["skipped"]
+    assert "archive_limit" not in repo.STATE_REASONS["failed"]
+    assert "archive_limit" in _php_reasons()
+    assert "archive_limit" in _php_state_reasons()["skipped"]
+    assert "archive_limit" not in _php_state_reasons()["failed"]
+
+    assert ExtractionOutcome.skipped(reason).reason is reason
+    with pytest.raises(ValueError, match="does not belong"):
+        ExtractionOutcome.failed(reason)
+
+
+PHP_ADMIN_VIEW_SERVICE = PHP_FILE_STATE_SERVICE.parent / "AdminViewService.php"
+
+
+def test_every_reason_code_has_a_label_and_a_remedy_on_the_status_page() -> None:
+    """The fourth list: REASON_TEXT of AdminViewService, compared like the PHP one.
+
+    A code without a row falls into the fallback of reasonText() and reads
+    "Unknown reason (code)" on the status page, which is a drift nobody notices
+    until an admin asks. A row for a code no list knows is a label for a state
+    that can never occur.
+    """
+    source = PHP_ADMIN_VIEW_SERVICE.read_text(encoding="utf-8")
+    block = re.search(r"private const REASON_TEXT = \[(.*?)\n\t\];", source, re.DOTALL)
+    assert block is not None, "the REASON_TEXT constant is no longer where this test looks for it"
+    rows = set(re.findall(r"^\t\t'([a-z_]+)' => \[$", block.group(1), re.MULTILINE))
+    ours = {reason.value for reasons in STATE_REASONS.values() for reason in reasons if reason is not None}
+
+    assert rows == ours
+
+
 def test_an_ocr_failure_cannot_be_dressed_up_as_a_decision() -> None:
     # skipped(ocr_failed) would move a broken engine out of the error count on the
     # status page and into the "we decided against it" column, which is the one

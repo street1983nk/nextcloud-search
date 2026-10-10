@@ -4986,12 +4986,15 @@ async def test_without_the_signal_the_re_check_never_starts(
     assert store.read_meta().get(RECHECK_MARK, "") == ""
 
 
+@pytest.mark.parametrize("generation", [2, 3])
 async def test_with_the_signal_a_corrupt_sidecar_ends_as_system_file_once(
-    store: Store, writer: IndexBatchWriter, tmp_path: Path
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, generation: int
 ) -> None:
+    # Plan 31-02 (D-31-08): a 1.4.2 companion announces 2, a 1.5 one 3; both
+    # store the three codes of 1.4.0, so the re-check of 1.4.0 starts on both.
     job = _corrupt_sidecar(store)
     queue = _RecheckQueue(job)
-    queue.verdicts_answer = VERDICTS_GENERATION
+    queue.verdicts_answer = generation
     poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
 
     await poller.run_once()

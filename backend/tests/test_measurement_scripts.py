@@ -806,8 +806,17 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # languages in the store texts): the only byte change under php/ is
 # appinfo/info.xml, which the recipe does not read, so neither the hash nor
 # PHP_FILES_TODAY moves; the recipe was run over php/ and gives the value below.
+# Measured again by plan 31-02 on 2026-10-11 (archive_limit, a wider
+# unsupported_variant and verdict generation 3, D-31-03, D-31-08):
+# ProfileController.php (VERDICTS_GENERATION 2 -> 3), FileStateService.php
+# (archive_limit in REASONS and STATE_REASONS), AdminViewService.php (the row
+# of archive_limit and the new wordings of unsupported_variant and
+# mime_not_allowed in REASON_TEXT) and tests/Unit/ProfileControllerTest.php
+# (verdicts 3) changed their bytes. The sixteen l10n catalogues changed too,
+# which the recipe does not read; the value below was run over php/ after all
+# of them. No file came and none went, so PHP_FILES_TODAY stays at 90.
 PHP_FILES_TODAY = 90
-PHP_TREE_HASH_TODAY = "bee7a95422d96ad9462e594bd7f1f55dc01e6efbb20c572740392c8c06259225"
+PHP_TREE_HASH_TODAY = "97a83197183dc583e995e190a3cdc8fe99afb6d6e127c03c0b27ff6824c3f3af"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
@@ -1731,8 +1740,17 @@ PHP_TREE_HASH_TODAY = "bee7a95422d96ad9462e594bd7f1f55dc01e6efbb20c572740392c8c0
 # and names the test that binds it to the wiring. No file came and none went,
 # so PACKAGE_FILES_TODAY stays at 74. The PHP pair does not move: php/ is
 # unchanged.
+# Measured again by plan 31-02 on 2026-10-11 (archive_limit, a wider
+# unsupported_variant and verdict generation 3, D-31-03, D-31-08):
+# extract/errors.py (Reason.ARCHIVE_LIMIT in the skipped group, the comment of
+# UNSUPPORTED_VARIANT widened), store/repo.py (archive_limit in STATE_REASONS),
+# nc/queue.py (VERDICTS_GENERATION 3, KNOWN_VERDICTS_GENERATIONS {2, 3}, the
+# public SKIPPED_FALLBACK_WITHOUT_SIGNAL and one fallback table per generation),
+# worker/poller.py (recheck_1_4_0 starts on every known generation) and
+# worker/recheck.py (its docstring says so). No file came and none went, so
+# PACKAGE_FILES_TODAY stays at 74.
 PACKAGE_FILES_TODAY = 74
-PACKAGE_TREE_HASH_TODAY = "00a724d2a5bf57e99f4a57184a623a32c6cf2be5f2ca9147f5159d52d50e6ae5"
+PACKAGE_TREE_HASH_TODAY = "d6062645b06dbf59ae382dfb0026b68c36f53045a66a37c86a5818174bb32a0d"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

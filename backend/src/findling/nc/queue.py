@@ -38,6 +38,7 @@ import re
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Any, Final
 
 from findling.nc.client import (
@@ -124,60 +125,98 @@ MAX_ACK_LIST: Final = 256
 # The generation of the verdict vocabulary a companion announces in the field
 # ``verdicts`` of its profile answer (K6), ProfileController::VERDICTS_GENERATION
 # on the other side. 2 means it stores system_file, legacy_format and
-# unsupported_variant under skipped. A companion that does not announce it,
-# a 1.3.2 for instance, refuses the WHOLE failure or skip list with a 400 as soon
-# as one code in it is unknown (QueueController), so those three codes leave this
-# container only towards a companion that announced exactly this value.
-VERDICTS_GENERATION: Final = 2
-
-# What the three codes become on the wire towards a companion without the signal,
-# one table per list. FileStateService::record judges the PAIR of state and code
-# and drops a pair that is not in its STATE_REASONS, and a dropped pair leaves
-# the file without any verdict in the PHP mirror. So every target here is a code
-# the old companion stores under the state of the list it travels in; a test
-# reads the PHP constant and holds both tables against it.
+# unsupported_variant under skipped (release 1.4.0); 3 means it stores
+# archive_limit as well (release 1.5.0, D-31-03). A companion that does not
+# announce it, a 1.3.2 for instance, refuses the WHOLE failure or skip list with
+# a 400 as soon as one code in it is unknown (QueueController), so a code leaves
+# this container only towards a companion that announced a generation which
+# knows it.
 #
-# skipped: a sidecar or an old format under a new name is not a document type
-# this app reads, which is mime_not_allowed (unreadable would be a statement
-# about permissions, and corrupt is not a skipped code at all); an image variant
-# the decoder cannot map is an image that is not read, image_not_ocrable.
-_SKIPPED_FALLBACK: Final[Mapping[str, str]] = {
-    "system_file": "mime_not_allowed",
-    "legacy_format": "mime_not_allowed",
-    "unsupported_variant": "image_not_ocrable",
-}
+# VERDICTS_GENERATION is the generation of this code; KNOWN_VERDICTS_GENERATIONS
+# are the ones it can talk to (D-31-08). 2 stays valid because AppAPI updates
+# the container and the companion apart: a 1.5 container meets a 1.4.2
+# companion as often as a 1.5 one, and reading its 2 as "no signal" would send
+# the three codes of 1.4.0 back onto their 1.3 substitutes (31-RESEARCH
+# Pitfall 2). The other order, a 1.5 companion in front of a 1.4.2 container,
+# is the one the 1.4.2 code cannot help: it reads 3 as no signal and stores the
+# substitutes in Nextcloud. docs/formats.md, section "Upgrade order", names the
+# order that avoids it, and the one time run after the upgrade (plan 31-11)
+# re-judges exactly the files whose Nextcloud row carries a substitute out of
+# SKIPPED_FALLBACK_WITHOUT_SIGNAL while this container holds the real code.
+VERDICTS_GENERATION: Final = 3
+KNOWN_VERDICTS_GENERATIONS: Final = frozenset({2, 3})
 
-# failed: purely defensive. ExtractionOutcome.failed refuses the three codes, so
+# What the codes become on the wire towards a companion that does not know them,
+# one table per list and generation. FileStateService::record judges the PAIR of
+# state and code and drops a pair that is not in its STATE_REASONS, and a
+# dropped pair leaves the file without any verdict in the PHP mirror. So every
+# target here is a code the older companion stores under the state of the list
+# it travels in; a test reads the PHP constant and holds every table against it.
+#
+# skipped without the signal: a sidecar or an old format under a new name is not
+# a document type this app reads, which is mime_not_allowed (unreadable would be
+# a statement about permissions, and corrupt is not a skipped code at all); a
+# variant the reader cannot map is a file that is not read, image_not_ocrable.
+# Public and limited to these three pairs, because plan 31-11 matches the
+# Nextcloud rows a 1.4.2 container wrote against exactly them.
+SKIPPED_FALLBACK_WITHOUT_SIGNAL: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "system_file": "mime_not_allowed",
+        "legacy_format": "mime_not_allowed",
+        "unsupported_variant": "image_not_ocrable",
+    }
+)
+
+# archive_limit is an archive over a safety limit; the nearest code an older
+# companion knows is too_large, "over a limit" as well.
+_SKIPPED_FALLBACK_BY_GENERATION: Final[Mapping[int | None, Mapping[str, str]]] = MappingProxyType(
+    {
+        3: MappingProxyType({}),
+        2: MappingProxyType({"archive_limit": "too_large"}),
+        None: MappingProxyType({**SKIPPED_FALLBACK_WITHOUT_SIGNAL, "archive_limit": "too_large"}),
+    }
+)
+
+# failed: purely defensive. ExtractionOutcome.failed refuses the four codes, so
 # the failure list never carries them; should a defect put one there, corrupt is
-# the failed code the old companion knows.
-_FAILED_FALLBACK: Final[Mapping[str, str]] = {
-    "system_file": "corrupt",
-    "legacy_format": "corrupt",
-    "unsupported_variant": "corrupt",
-}
+# the failed code every older companion knows.
+_FAILED_FALLBACK_BY_GENERATION: Final[Mapping[int | None, Mapping[str, str]]] = MappingProxyType(
+    {
+        3: MappingProxyType({}),
+        2: MappingProxyType({"archive_limit": "corrupt"}),
+        None: MappingProxyType(
+            {
+                "system_file": "corrupt",
+                "legacy_format": "corrupt",
+                "unsupported_variant": "corrupt",
+                "archive_limit": "corrupt",
+            }
+        ),
+    }
+)
 
 
-def _wire_reason(reason: str, verdicts: int | None, *, fallback: Mapping[str, str]) -> str:
+def _wire_reason(reason: str, verdicts: int | None, tables: Mapping[int | None, Mapping[str, str]]) -> str:
     """The code as it may travel to the companion at hand.
 
-    Unchanged towards a companion that announced VERDICTS_GENERATION; otherwise
-    mapped through ``fallback``, the table of the list the code travels in.
-    Every code outside the table travels unchanged in both cases.
+    ``tables`` holds one fallback table per generation for the list the code
+    travels in. The table of the announced generation maps what that companion
+    does not know; an unknown generation reads like no signal. Every code
+    outside the table travels unchanged.
     """
-    if verdicts == VERDICTS_GENERATION:
-        return reason
-    return fallback.get(reason, reason)
+    table = tables.get(verdicts, tables[None])
+    return table.get(reason, reason)
 
 
 def _verdicts(value: object) -> int | None:
-    """The announced verdict generation, only ever exactly VERDICTS_GENERATION.
+    """The announced verdict generation, only ever one of KNOWN_VERDICTS_GENERATIONS.
 
-    A closed set like profile and precision (T-29-02): a bool is not a number
-    here, a string is not one either, and any other value is None.
+    A closed set like profile and precision (T-29-02, T-31-04): a bool is not a
+    number here, a string is not one either, and any other value is None.
     """
     if isinstance(value, bool) or not isinstance(value, int):
         return None
-    return value if value == VERDICTS_GENERATION else None
+    return value if value in KNOWN_VERDICTS_GENERATIONS else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -270,8 +309,9 @@ class CompanionChoice:
     admin confirmed with occ, 32 lower case hex digits, or None. A 1.3 or early
     1.4 companion does not know the field at all, which reads as None.
 
-    ``verdicts`` is the capability signal of K6: VERDICTS_GENERATION when the
-    companion stores the three skipped codes of release 1.4.0, None otherwise.
+    ``verdicts`` is the capability signal of K6: one of KNOWN_VERDICTS_GENERATIONS
+    (2: the companion stores the three skipped codes of release 1.4.0; 3: also
+    archive_limit of release 1.5.0), None otherwise.
     """
 
     profile: str | None
@@ -567,22 +607,22 @@ class DocumentQueue:
         for every single empty poll.
 
         The codes pass _wire_reason first (K6). The container keeps the real
-        code in its own state store; only the wire to a companion that did not
-        announce VERDICTS_GENERATION falls back, per list onto a code that
-        companion stores under that state. The re-check of D-29-10 (plan 29-09)
-        starts only once the signal is there and then corrects the PHP mirror
-        from the real codes in state.db.
+        code in its own state store; only the wire to a companion whose
+        generation does not know a code falls back, per list and generation onto
+        a code that companion stores under that state. The re-check of D-29-10
+        (plan 29-09) starts only once a known generation is announced and then
+        corrects the PHP mirror from the real codes in state.db.
         """
         verdicts = self._companion_verdicts
         skips = {
-            file_id: _wire_reason(reason, verdicts, fallback=_SKIPPED_FALLBACK)
+            file_id: _wire_reason(reason, verdicts, _SKIPPED_FALLBACK_BY_GENERATION)
             for file_id, reason in (skipped or {}).items()
         }
         if not done and not failed and not skips:
             return CallResult(ok=True)
 
         failures = [
-            {"queueId": queue_id, "reason": _wire_reason(reason, verdicts, fallback=_FAILED_FALLBACK)}
+            {"queueId": queue_id, "reason": _wire_reason(reason, verdicts, _FAILED_FALLBACK_BY_GENERATION)}
             for queue_id, reason in failed.items()
         ]
         decisions = _capped_skips(skips)
@@ -670,7 +710,7 @@ class DocumentQueue:
         missing field of a companion that predates it, is None.
 
         ``verdicts`` is kept on this instance as well, because acknowledge reads
-        it there: only exactly VERDICTS_GENERATION counts, and a failed read
+        it there: only a value out of KNOWN_VERDICTS_GENERATIONS counts, and a failed read
         resets it to None, which is the side that sends only codes every
         companion knows (K6, T-29-01).
         """

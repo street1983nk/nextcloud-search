@@ -33,10 +33,9 @@ from typing import Any, cast
 
 import pytest
 
+from findling.nc import queue as queue_module
 from findling.nc.client import AsyncNextcloudApp
 from findling.nc.queue import (
-    _FAILED_FALLBACK,
-    _SKIPPED_FALLBACK,
     KIND_EMBED,
     KINDS,
     LANE_EMBED,
@@ -45,11 +44,9 @@ from findling.nc.queue import (
     TOPUP_IDLE,
     TOPUP_SUPPLIED,
     TOPUP_UNAVAILABLE,
-    VERDICTS_GENERATION,
     CompanionChoice,
     DocumentQueue,
     QueueJob,
-    _wire_reason,
 )
 from findling.store import repo
 
@@ -1012,9 +1009,18 @@ async def test_a_requeue_error_without_a_status_says_none(caplog: pytest.LogCapt
 
 
 # -- the verdict capability signal and the fallback on the wire (K6, plan 29-01) --
+#
+# Plan 31-02 (D-31-08) raised the generation to 3 and kept 2 valid: AppAPI
+# updates the container and the companion apart, so a 1.5 container meets a
+# 1.4.2 companion (announces 2) as well as a 1.5 one (announces 3).
 
 PHP_FILE_STATE_SERVICE = PACKAGE_ROOT.parents[2] / "php" / "lib" / "Service" / "FileStateService.php"
+FORMATS_DOC = PACKAGE_ROOT.parents[2] / "docs" / "formats.md"
 NEW_CODES = ("system_file", "legacy_format", "unsupported_variant")
+# The codes each generation added to the vocabulary of the companion. A code
+# reaches a companion only if it announced a generation at least as high.
+CODES_OF_GENERATION: dict[int, tuple[str, ...]] = {2: NEW_CODES, 3: ("archive_limit",)}
+ALL_NEW_CODES = (*NEW_CODES, "archive_limit")
 
 
 def _php_state_reasons() -> dict[str, set[str]]:
@@ -1030,21 +1036,47 @@ def _php_state_reasons() -> dict[str, set[str]]:
     return mapping
 
 
-async def test_a_companion_announcing_the_generation_reads_as_verdicts_2() -> None:
-    session = _FakeSession({("GET", PROFILE_PATH): {"profile": "standard", "precision": "int8", "verdicts": 2}})
+def _codes_unknown_to(generation: int | None) -> set[str]:
+    """The codes a companion of this generation (None: no signal) does not store."""
+    return {
+        code
+        for introduced, codes in CODES_OF_GENERATION.items()
+        if generation is None or introduced > generation
+        for code in codes
+    }
+
+
+def test_the_container_knows_the_generations_2_and_3() -> None:
+    known = queue_module.KNOWN_VERDICTS_GENERATIONS
+    assert known == frozenset({2, 3})
+    assert queue_module.VERDICTS_GENERATION == 3 == max(known)
+
+
+@pytest.mark.parametrize("generation", [2, 3])
+async def test_a_companion_announcing_a_known_generation_reads_as_that_generation(generation: int) -> None:
+    session = _FakeSession(
+        {("GET", PROFILE_PATH): {"profile": "standard", "precision": "int8", "verdicts": generation}}
+    )
 
     choice = await _queue(session).companion_choice()
 
-    assert choice.verdicts == VERDICTS_GENERATION == 2
+    assert choice.verdicts == generation
 
 
-@pytest.mark.parametrize("value", [None, True, False, 1, 3, "2", 2.0, [2], {"v": 2}])
+@pytest.mark.parametrize("value", [None, True, False, 0, 1, 4, "2", "3", 2.0, 3.0, [2], {"v": 3}])
 async def test_any_other_verdicts_value_reads_as_none(value: object) -> None:
-    # T-29-02: a closed set like profile and precision. True is an int in
-    # Python and 2.0 compares equal to 2, neither of them is the signal.
+    # T-29-02, T-31-04: a closed set like profile and precision. True is an int
+    # in Python and 2.0 compares equal to 2, neither of them is the signal.
     session = _FakeSession({("GET", PROFILE_PATH): {"profile": "standard", "verdicts": value}})
 
     assert (await _queue(session).companion_choice()).verdicts is None
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"), [(2, 2), (3, 3), (1, None), (4, None), (True, None), ("3", None), (None, None)]
+)
+def test_verdicts_is_a_closed_set_of_two_generations(value: object, expected: int | None) -> None:
+    assert queue_module._verdicts(value) == expected
 
 
 async def test_a_companion_without_the_verdicts_field_reads_as_none() -> None:
@@ -1066,8 +1098,8 @@ def _ack_body(session: _FakeSession) -> dict[str, Any]:
     return cast("dict[str, Any]", acks[0]["json"])
 
 
-_SKIPS = {11: "system_file", 12: "legacy_format", 13: "unsupported_variant", 14: "too_large"}
-_FAILS = {21: "system_file", 22: "legacy_format", 23: "unsupported_variant", 24: "timeout"}
+_SKIPS = {11: "system_file", 12: "legacy_format", 13: "unsupported_variant", 14: "too_large", 15: "archive_limit"}
+_FAILS = {21: "system_file", 22: "legacy_format", 23: "unsupported_variant", 24: "timeout", 25: "archive_limit"}
 
 
 @pytest.mark.parametrize("answer", [{"profile": "standard"}, {"profile": "standard", "verdicts": 1}, None])
@@ -1090,23 +1122,57 @@ async def test_without_the_signal_no_new_code_leaves_the_container(answer: dict[
         {"fileId": 12, "reason": "mime_not_allowed"},
         {"fileId": 13, "reason": "image_not_ocrable"},
         {"fileId": 14, "reason": "too_large"},
+        {"fileId": 15, "reason": "too_large"},
     ]
     assert body["failed"] == [
         {"queueId": 21, "reason": "corrupt"},
         {"queueId": 22, "reason": "corrupt"},
         {"queueId": 23, "reason": "corrupt"},
         {"queueId": 24, "reason": "timeout"},
+        {"queueId": 25, "reason": "corrupt"},
     ]
     serialized = repr(body)
-    for code in NEW_CODES:
+    for code in ALL_NEW_CODES:
         assert code not in serialized
+
+
+async def test_towards_generation_2_only_archive_limit_falls_back() -> None:
+    # T-31-03: the 1.4.2 companion stores the three codes of 1.4.0 but refuses
+    # a list that carries archive_limit.
+    session = _FakeSession(
+        {
+            ("GET", PROFILE_PATH): {"profile": "standard", "verdicts": 2},
+            ("DELETE", ACK_PATH): {"acknowledged": 1},
+        }
+    )
+    queue = _queue(session)
+    await queue.companion_choice()
+
+    await queue.acknowledge([1], _FAILS, _SKIPS)
+
+    body = _ack_body(session)
+    assert body["skipped"] == [
+        {"fileId": 11, "reason": "system_file"},
+        {"fileId": 12, "reason": "legacy_format"},
+        {"fileId": 13, "reason": "unsupported_variant"},
+        {"fileId": 14, "reason": "too_large"},
+        {"fileId": 15, "reason": "too_large"},
+    ]
+    assert body["failed"] == [
+        {"queueId": 21, "reason": "system_file"},
+        {"queueId": 22, "reason": "legacy_format"},
+        {"queueId": 23, "reason": "unsupported_variant"},
+        {"queueId": 24, "reason": "timeout"},
+        {"queueId": 25, "reason": "corrupt"},
+    ]
+    assert "archive_limit" not in repr(body)
 
 
 class _FlakyProfileSession(_FakeSession):
     """Announces the signal on the first profile read and fails on the second."""
 
     def __init__(self) -> None:
-        super().__init__({("GET", PROFILE_PATH): {"profile": "standard", "verdicts": 2}})
+        super().__init__({("GET", PROFILE_PATH): {"profile": "standard", "verdicts": 3}})
         self.profile_reads = 0
 
     async def ocs(self, method: str, path: str, **kwargs: Any) -> Any:
@@ -1122,18 +1188,21 @@ async def test_a_failed_read_after_the_signal_falls_back_again() -> None:
     # The signal is the answer of the round, not a memory of an earlier one.
     session = _FlakyProfileSession()
     queue = _queue(session)
-    assert (await queue.companion_choice()).verdicts == VERDICTS_GENERATION
+    assert (await queue.companion_choice()).verdicts == 3
     assert (await queue.companion_choice()).verdicts is None
 
-    await queue.acknowledge([], {}, {11: "system_file"})
+    await queue.acknowledge([], {}, {11: "system_file", 12: "archive_limit"})
 
-    assert _ack_body(session)["skipped"] == [{"fileId": 11, "reason": "mime_not_allowed"}]
+    assert _ack_body(session)["skipped"] == [
+        {"fileId": 11, "reason": "mime_not_allowed"},
+        {"fileId": 12, "reason": "too_large"},
+    ]
 
 
-async def test_with_the_signal_the_codes_travel_unchanged() -> None:
+async def test_towards_generation_3_every_code_travels_unchanged() -> None:
     session = _FakeSession(
         {
-            ("GET", PROFILE_PATH): {"profile": "standard", "verdicts": 2},
+            ("GET", PROFILE_PATH): {"profile": "standard", "verdicts": 3},
             ("DELETE", ACK_PATH): {"acknowledged": 1},
         }
     )
@@ -1147,40 +1216,86 @@ async def test_with_the_signal_the_codes_travel_unchanged() -> None:
     assert body["failed"] == [{"queueId": queue_id, "reason": reason} for queue_id, reason in _FAILS.items()]
 
 
-def test_every_skipped_fallback_is_a_skipped_pair_the_companion_stores() -> None:
+def test_the_fallback_without_signal_is_public_and_holds_the_three_pairs_of_1_4() -> None:
+    # 31-11 re-judges a file only where the Nextcloud row carries exactly one of
+    # these substitutes (Befund 7), so the table is public and holds nothing
+    # else; archive_limit is added only in the table of the wire.
+    assert dict(queue_module.SKIPPED_FALLBACK_WITHOUT_SIGNAL) == {
+        "system_file": "mime_not_allowed",
+        "legacy_format": "mime_not_allowed",
+        "unsupported_variant": "image_not_ocrable",
+    }
+
+
+def test_the_skipped_fallback_per_generation() -> None:
+    tables = queue_module._SKIPPED_FALLBACK_BY_GENERATION
+    assert set(tables) == {None, 2, 3}
+    assert dict(tables[3]) == {}
+    assert dict(tables[2]) == {"archive_limit": "too_large"}
+    assert dict(tables[None]) == {**queue_module.SKIPPED_FALLBACK_WITHOUT_SIGNAL, "archive_limit": "too_large"}
+
+
+def test_the_failed_fallback_per_generation() -> None:
+    tables = queue_module._FAILED_FALLBACK_BY_GENERATION
+    assert set(tables) == {None, 2, 3}
+    assert dict(tables[3]) == {}
+    assert dict(tables[2]) == {"archive_limit": "corrupt"}
+    assert dict(tables[None]) == dict.fromkeys(ALL_NEW_CODES, "corrupt")
+
+
+@pytest.mark.parametrize("generation", [None, 2, 3])
+def test_every_skipped_fallback_is_a_skipped_pair_that_generation_stores(generation: int | None) -> None:
     # FileStateService::record drops a pair that is not in STATE_REASONS, and
     # the file then has no verdict in the PHP mirror at all. A skipped fallback
-    # onto corrupt would be exactly that pair.
+    # onto corrupt would be exactly that pair. The PHP source is the newest
+    # generation; an older one stores the same table minus the codes added
+    # after it.
     php = _php_state_reasons()
+    unknown = _codes_unknown_to(generation)
+    table = queue_module._SKIPPED_FALLBACK_BY_GENERATION[generation]
 
-    assert set(_SKIPPED_FALLBACK) == set(NEW_CODES)
-    for code, target in _SKIPPED_FALLBACK.items():
-        assert target in php["skipped"], (code, target)
+    assert set(table) == unknown
+    for code, target in table.items():
+        assert target in php["skipped"] - unknown, (code, target)
         assert target in repo.STATE_REASONS["skipped"], (code, target)
-        assert target not in NEW_CODES
-    assert "corrupt" not in _SKIPPED_FALLBACK.values()
+    assert "corrupt" not in table.values()
 
 
-def test_every_failed_fallback_is_a_failed_pair_the_companion_stores() -> None:
+@pytest.mark.parametrize("generation", [None, 2, 3])
+def test_every_failed_fallback_is_a_failed_pair_that_generation_stores(generation: int | None) -> None:
     php = _php_state_reasons()
+    unknown = _codes_unknown_to(generation)
+    table = queue_module._FAILED_FALLBACK_BY_GENERATION[generation]
 
-    assert set(_FAILED_FALLBACK) == set(NEW_CODES)
-    for code, target in _FAILED_FALLBACK.items():
-        assert target in php["failed"], (code, target)
+    assert set(table) == unknown
+    for code, target in table.items():
+        assert target in php["failed"] - unknown, (code, target)
         assert target in repo.STATE_REASONS["failed"], (code, target)
-        assert target not in NEW_CODES
 
 
 def test_the_new_codes_are_skipped_only_in_the_companion() -> None:
     # The failed table is defensive because the failed list never carries them.
     php = _php_state_reasons()
-    for code in NEW_CODES:
+    for code in ALL_NEW_CODES:
         assert code in php["skipped"]
         assert code not in php["failed"]
 
 
-@pytest.mark.parametrize("verdicts", [None, 1, 2])
+@pytest.mark.parametrize("verdicts", [None, 1, 2, 3])
 def test_every_other_code_travels_unchanged(verdicts: int | None) -> None:
     for code in ("too_large", "excluded", "unreadable", "gone", "corrupt", "timeout"):
-        assert _wire_reason(code, verdicts, fallback=_SKIPPED_FALLBACK) == code
-        assert _wire_reason(code, verdicts, fallback=_FAILED_FALLBACK) == code
+        assert queue_module._wire_reason(code, verdicts, queue_module._SKIPPED_FALLBACK_BY_GENERATION) == code
+        assert queue_module._wire_reason(code, verdicts, queue_module._FAILED_FALLBACK_BY_GENERATION) == code
+
+
+def test_the_upgrade_order_is_documented() -> None:
+    # Befund 7: a 1.5 companion in front of a 1.4.2 container gets the 1.3
+    # substitutes of the three codes stored for good; the doc names the order
+    # that avoids it and the one time run that heals the other one.
+    text = FORMATS_DOC.read_text(encoding="utf-8")
+    assert "\n## Upgrade order\n" in text
+    section = text.split("\n## Upgrade order\n", 1)[1].split("\n## ", 1)[0]
+    assert "backend (ExApp) first" in section
+    assert "`recheck_1_5_0`" in section
+    for code in NEW_CODES:
+        assert f"`{code}`" in section

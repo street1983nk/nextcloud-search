@@ -460,7 +460,7 @@ final class AdminViewService {
 		],
 		'mime_not_allowed' => [
 			'File type not supported',
-			'None. Findling reads PDF, Office, OpenDocument, text and images.',
+			'None. Findling reads PDF, Office, OpenDocument, text, mails, ZIP files and images.',
 		],
 		'encrypted' => [
 			'Password protected',
@@ -503,8 +503,12 @@ final class AdminViewService {
 			'Save the file again in the current Office format (.docx, .xlsx, .pptx).',
 		],
 		'unsupported_variant' => [
-			'Image variant that cannot be read',
-			'None. The image uses an encoding the image library does not support.',
+			'Variant of this format that cannot be read',
+			'None. The file uses a variant or an encoding Findling cannot read, for example Word 95 or an unusual image encoding.',
+		],
+		'archive_limit' => [
+			'ZIP file over the safety limits',
+			'None. ZIP files that are nested too deep, too large, too densely packed or hold too many files are skipped so the container keeps running.',
 		],
 		'empty_file' => [
 			'File is empty',

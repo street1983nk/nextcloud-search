@@ -110,9 +110,9 @@ from findling.nc.queue import (
     KIND_EMBED,
     KIND_METADATA,
     KIND_OCR,
+    KNOWN_VERDICTS_GENERATIONS,
     LANE_INDEX,
     TOPUP_SUPPLIED,
-    VERDICTS_GENERATION,
     DocumentQueue,
     QueueJob,
 )
@@ -919,15 +919,16 @@ class Poller:
 
         # The re-check of the old stock after the upgrade (D-29-10): the files
         # of the classes 1.4.0 fixes go back to the queue once, without a full
-        # reindex. Only on the signal of K6, because only the 1.4.0 companion
-        # stores the new codes; before it, the re-check would only write the
-        # old codes again. The run is one time (RECHECK_MARK says "done"
-        # afterwards, and the flag spares later rounds even the meta read), and
+        # reindex. Only on the signal of K6, because only a companion of a known
+        # generation (2 from 1.4.0 on, 3 from 1.5.0 on, D-31-08) stores the new
+        # codes; before it, the re-check would only write the old codes again.
+        # The run is one time (RECHECK_MARK says "done" afterwards, and the
+        # flag spares later rounds even the meta read), and
         # it stands before the claim so the rows it hands back can be claimed
         # in the same round. Its length is bounded: about 43 requeue calls on
         # the stock of the reporting instance. A failure is a log line with the
         # class name and nothing else; the next round tries again at the cursor.
-        if not self._recheck_done and choice.verdicts == VERDICTS_GENERATION:
+        if not self._recheck_done and choice.verdicts in KNOWN_VERDICTS_GENERATIONS:
             try:
                 self._recheck_done = await recheck_step(self._store_or_die(), queue)
             except Exception as error:

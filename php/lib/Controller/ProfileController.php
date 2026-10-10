@@ -40,13 +40,16 @@ class ProfileController extends OCSController {
 	 * The generation of the verdict vocabulary this companion stores (K6).
 	 *
 	 * 2 means: this companion knows system_file, legacy_format and
-	 * unsupported_variant under skipped. A container may send those three codes
-	 * only to a companion that announces this value, because
-	 * QueueController refuses the whole failure or skip list with a 400 as soon
-	 * as one code in it is unknown. A 1.3 companion sends no such field, and
-	 * the container then maps the three codes onto older ones on the wire.
+	 * unsupported_variant under skipped (release 1.4.0). 3 means: also
+	 * archive_limit, and the formats of 1.5 (mail, ZIP, .doc, .xls, HEIC)
+	 * (D-31-03, D-31-08). A container may send a code only to a companion that
+	 * announces a generation which knows it, because QueueController refuses
+	 * the whole failure or skip list with a 400 as soon as one code in it is
+	 * unknown. A 1.3 companion sends no such field, and the container then maps
+	 * the codes onto older ones on the wire; a 1.5 container still treats 2 as
+	 * known and maps only archive_limit for it.
 	 */
-	public const VERDICTS_GENERATION = 2;
+	public const VERDICTS_GENERATION = 3;
 
 	public function __construct(
 		IRequest $request,
@@ -61,8 +64,8 @@ class ProfileController extends OCSController {
 	 *
 	 * Answers with {"profile": "economy" | "standard" | "performance",
 	 * "precision": "int8" | "fp32" | null, "confirmed": "<32 hex>" | null,
-	 * "verdicts": 2}. verdicts is the constant VERDICTS_GENERATION, the
-	 * capability signal for the three skipped codes of release 1.4.0 (K6).
+	 * "verdicts": 3}. verdicts is the constant VERDICTS_GENERATION, the
+	 * capability signal for the skipped codes of releases 1.4.0 and 1.5.0 (K6).
 	 * null is a stored precision outside the set; the container keeps its last
 	 * known precision on it rather than reindexing for a typo. confirmed is the
 	 * token the admin stored to lift a lowering of the memory guard (D-26-04),

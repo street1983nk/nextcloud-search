@@ -111,7 +111,9 @@ class Reason(StrEnum):
     UNREADABLE = "unreadable"  # written by the PHP half: no user asked may read it, a Team Folder ACL (#14)
     SYSTEM_FILE = "system_file"  # macOS AppleDouble (._) or Office lock stub (~$), no document content (#18, #22)
     LEGACY_FORMAT = "legacy_format"  # an old OLE container under an OOXML extension
-    UNSUPPORTED_VARIANT = "unsupported_variant"  # an image variant the decoder cannot map
+    # a variant of a readable format the reader cannot map: an image encoding, Word 95, BIFF before 5
+    UNSUPPORTED_VARIANT = "unsupported_variant"
+    ARCHIVE_LIMIT = "archive_limit"  # a ZIP archive over the depth, size, count or ratio limits (D-31-03)
 
     # failed, the things we wanted to do and could not
     EMPTY_FILE = "empty_file"
@@ -144,7 +146,8 @@ STATE_REASONS: Final[Mapping[State, frozenset[Reason | None]]] = {
             Reason.UNREADABLE,  # a permission setting, not a deletion (#14)
             Reason.SYSTEM_FILE,  # a sidecar of the operating system or of Office, not a document
             Reason.LEGACY_FORMAT,  # a format this image does not read, under a name it would
-            Reason.UNSUPPORTED_VARIANT,  # an honest verdict on a picture, not a broken file
+            Reason.UNSUPPORTED_VARIANT,  # an honest verdict on a variant, not a broken file
+            Reason.ARCHIVE_LIMIT,  # a safety limit of the container, not a broken file
         }
     ),
     State.FAILED: frozenset(

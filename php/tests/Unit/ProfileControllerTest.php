@@ -98,7 +98,7 @@ final class ProfileControllerTest extends TestCase {
 		$response = $this->controller($this->backendAppId())->profile();
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
-		self::assertSame(['profile' => 'standard', 'precision' => 'int8', 'confirmed' => null, 'verdicts' => 2], $response->getData());
+		self::assertSame(['profile' => 'standard', 'precision' => 'int8', 'confirmed' => null, 'verdicts' => 3], $response->getData());
 	}
 
 	public function testAMissingKeyMeansEconomy(): void {
@@ -107,7 +107,7 @@ final class ProfileControllerTest extends TestCase {
 		$response = $this->controller($this->backendAppId())->profile();
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
-		self::assertSame(['profile' => 'economy', 'precision' => 'int8', 'confirmed' => null, 'verdicts' => 2], $response->getData());
+		self::assertSame(['profile' => 'economy', 'precision' => 'int8', 'confirmed' => null, 'verdicts' => 3], $response->getData());
 	}
 
 	public function testAValueOutsideTheSetMeansEconomyAndIsNotLogged(): void {
@@ -123,7 +123,7 @@ final class ProfileControllerTest extends TestCase {
 		$response = $this->controller($this->backendAppId())->profile();
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
-		self::assertSame(['profile' => 'economy', 'precision' => 'int8', 'confirmed' => null, 'verdicts' => 2], $response->getData());
+		self::assertSame(['profile' => 'economy', 'precision' => 'int8', 'confirmed' => null, 'verdicts' => 3], $response->getData());
 	}
 
 	public function testAFailedReadAnswersAsAFailureWithoutAProfileName(): void {
@@ -173,7 +173,7 @@ final class ProfileControllerTest extends TestCase {
 		$response = $this->controller($this->backendAppId())->profile();
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
-		self::assertSame(['profile' => 'standard', 'precision' => 'fp32', 'confirmed' => null, 'verdicts' => 2], $response->getData());
+		self::assertSame(['profile' => 'standard', 'precision' => 'fp32', 'confirmed' => null, 'verdicts' => 3], $response->getData());
 	}
 
 	/** @return array<string, array{string}> */
@@ -203,7 +203,7 @@ final class ProfileControllerTest extends TestCase {
 		$response = $this->controller($this->backendAppId())->profile();
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
-		self::assertSame(['profile' => 'standard', 'precision' => null, 'confirmed' => null, 'verdicts' => 2], $response->getData());
+		self::assertSame(['profile' => 'standard', 'precision' => null, 'confirmed' => null, 'verdicts' => 3], $response->getData());
 	}
 
 	// -- the confirmation token (D-26-04) --------------------------------------
@@ -218,7 +218,7 @@ final class ProfileControllerTest extends TestCase {
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
 		self::assertSame(
-			['profile' => 'standard', 'precision' => 'int8', 'confirmed' => self::TOKEN, 'verdicts' => 2],
+			['profile' => 'standard', 'precision' => 'int8', 'confirmed' => self::TOKEN, 'verdicts' => 3],
 			$response->getData(),
 		);
 	}
@@ -266,7 +266,7 @@ final class ProfileControllerTest extends TestCase {
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
 		self::assertSame(
-			['profile' => 'standard', 'precision' => 'int8', 'confirmed' => null, 'verdicts' => 2],
+			['profile' => 'standard', 'precision' => 'int8', 'confirmed' => null, 'verdicts' => 3],
 			$response->getData(),
 		);
 	}
@@ -284,7 +284,8 @@ final class ProfileControllerTest extends TestCase {
 
 	public function testTheAnswerAnnouncesTheVerdictGeneration(): void {
 		// A 1.4.0 container sends system_file, legacy_format and
-		// unsupported_variant only to a companion that announces 2 here;
+		// unsupported_variant only to a companion that announces 2 or more
+		// here, a 1.5.0 container archive_limit only on 3 (D-31-08);
 		// QueueController refuses a whole list with one unknown code.
 		$this->stored('standard');
 
@@ -293,8 +294,8 @@ final class ProfileControllerTest extends TestCase {
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
 		$data = $response->getData();
 		self::assertIsArray($data);
-		self::assertSame(2, $data['verdicts']);
-		self::assertSame(2, ProfileController::VERDICTS_GENERATION);
+		self::assertSame(3, $data['verdicts']);
+		self::assertSame(3, ProfileController::VERDICTS_GENERATION);
 	}
 
 	public function testAForeignExAppGetsNoVerdictGeneration(): void {

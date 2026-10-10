@@ -116,6 +116,7 @@ class FileStateService {
 		'system_file',
 		'legacy_format',
 		'unsupported_variant',
+		'archive_limit',
 		// failed
 		'empty_file',
 		'corrupt',
@@ -167,6 +168,7 @@ class FileStateService {
 			'system_file',
 			'legacy_format',
 			'unsupported_variant',
+			'archive_limit',
 		],
 		'failed' => [
 			'empty_file',
