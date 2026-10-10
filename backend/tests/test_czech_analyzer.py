@@ -126,7 +126,10 @@ def test_the_exceptions_stay_terms_and_original_content_words_stay_stop_words(ch
 
 
 def test_a_token_longer_than_the_limit_is_dropped(chain: TextAnalyzer) -> None:
-    assert chain.analyze("x" * MAX_TOKEN_CHARS) == ["x" * MAX_TOKEN_CHARS]
+    # tantivy's remove_long keeps a token only while it is shorter than the
+    # limit, measured on 0.26.2: 47 characters stay, 48 already go.
+    assert chain.analyze("x" * (MAX_TOKEN_CHARS - 1)) == ["x" * (MAX_TOKEN_CHARS - 1)]
+    assert chain.analyze("x" * MAX_TOKEN_CHARS) == []
     assert chain.analyze("x" * (MAX_TOKEN_CHARS + 1)) == []
 
 

@@ -64,3 +64,10 @@ testdata/corpus-truth.json text eol=lf
 # scripts/dev/build_corpus.py and a checkout that rewrote a byte of it would
 # fail the build rather than change the pixels quietly.
 testdata/fonts/** -text
+
+# The Czech stop word list of Apache Lucene, vendored byte for byte (plan 30-01).
+# scripts/dev/czech_stopwords.py holds its bytes against a pinned SHA-256 and
+# refuses to run on anything else, so a checkout that turned its newlines into
+# carriage return pairs would stop the generator on a machine where nothing is
+# wrong.
+backend/tests/fixtures/lucene_cz_stopwords_10_5_2.txt -text

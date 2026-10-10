@@ -127,6 +127,7 @@ from tantivy import Filter, TextAnalyzer, TextAnalyzerBuilder, Tokenizer
 
 from findling.config import DEFAULT_COMPOUND_DICT, LANGUAGE_ALLOWLIST, SNOWBALL_NAME, settings
 from findling.index.stopwords import FOLDED_STOPWORDS
+from findling.index.stopwords_cs import CZECH_STOPWORDS_FOLDED
 from findling.index.wordlist import FUGEN, SYSTEM_WORDLIST, load_constituents, rss_bytes, wordlist_hash
 from findling.index.wordlist_nl import TUSSENKLANKEN, build_artifact_nl
 
@@ -153,6 +154,10 @@ TOKENIZER_ES = "es"
 TOKENIZER_IT = "it"
 TOKENIZER_NL = "nl"
 TOKENIZER_PT = "pt"
+# The stemmerless Czech chain of plan 30-01. It is built by czech_analyzer and
+# not by snowball_analyzer, because tantivy carries neither a Czech stemmer nor
+# a Czech stop word list.
+TOKENIZER_CS = "cs"
 TOKENIZER_NAME = "name"
 
 # Longest token that may reach the index. Generous on purpose: it exists to stop
@@ -368,6 +373,40 @@ def snowball_analyzer(language: str) -> TextAnalyzer:
         .filter(Filter.custom_stopword(list(folded)))
         .filter(Filter.remove_long(MAX_TOKEN_CHARS))
         .filter(Filter.stemmer(name))
+        .build()
+    )
+
+
+def czech_analyzer() -> TextAnalyzer:
+    """Build the Czech chain: fold, drop the folded Lucene stop words, no stemmer.
+
+    No stemmer, because tantivy 0.26.2 carries no Czech Snowball stemmer. That
+    is a documented limit (CZ-03), not an oversight: an accent pair of the same
+    form lands on one term, an inflection pair such as smlouva and its locative
+    stays two. A home made stemmer would be a second piece of language data to
+    maintain and a second mark to version.
+
+    The fold stands in front of the stop word filter, at the same position as in
+    the Snowball chains and for the same measured reason: only that position
+    keeps the accented and the flat spelling of a word on one term, and it lets
+    one folded list close the stop words in both spellings. The list is the
+    Lucene original, folded and deduplicated by scripts/dev/czech_stopwords.py,
+    minus the named exceptions documented in :mod:`findling.index.stopwords_cs`.
+
+    Outside :func:`snowball_analyzer` and outside SNOWBALL_NAME on purpose:
+    tantivy knows no "czech", so Filter.stopword and Filter.stemmer would raise
+    at startup, and a name in LANGUAGE_ALLOWLIST that the running engine cannot
+    build is exactly what the allowlist exists to prevent.
+
+    ANALYZER_VERSION does not move for this chain. It is new, it serves a new
+    field, and it changes no tokenisation of any index already written.
+    """
+    return (
+        TextAnalyzerBuilder(Tokenizer.simple())
+        .filter(Filter.lowercase())
+        .filter(Filter.ascii_fold())
+        .filter(Filter.custom_stopword(list(CZECH_STOPWORDS_FOLDED)))
+        .filter(Filter.remove_long(MAX_TOKEN_CHARS))
         .build()
     )
 

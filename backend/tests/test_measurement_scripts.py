@@ -1672,8 +1672,13 @@ PHP_TREE_HASH_TODAY = "bee7a95422d96ad9462e594bd7f1f55dc01e6efbb20c572740392c8c0
 # (the SampleFormat patch got a budget of its own for the values it walks, so a
 # shared array behind many IFDs is no longer walked once per IFD). No file came
 # and none went, so PACKAGE_FILES_TODAY stays at 73.
-PACKAGE_FILES_TODAY = 73
-PACKAGE_TREE_HASH_TODAY = "3be00d8f8313ae50019f5517b1846eff66ab9ac80cd89765daae3ae90ac3cd2e"
+# Measured again by plan 30-01 on 2026-10-10 (the stemmerless Czech chain,
+# CZ-02): plan 30-01 added index/stopwords_cs.py (the folded Lucene stop word
+# list with its named exceptions) and changed index/analyzer.py (TOKENIZER_CS
+# and czech_analyzer). One file came and none went, so PACKAGE_FILES_TODAY goes
+# from 73 to 74. The PHP pair does not move: php/ is unchanged.
+PACKAGE_FILES_TODAY = 74
+PACKAGE_TREE_HASH_TODAY = "85d26511dfd02aac5d6a2c597ae7c126b08481075bada9dfafdb11d85d86f295"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

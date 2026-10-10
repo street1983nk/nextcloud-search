@@ -21,3 +21,20 @@ path = ["php/img/app.svg", "php/img/app-dark.svg"]
 precedence = "override"
 SPDX-FileCopyrightText = ["2026 street1983nk", "Material Design Icons contributors"]
 SPDX-License-Identifier = "AGPL-3.0-or-later AND Apache-2.0"
+
+# The Czech stop word list of Apache Lucene (plan 30-01), vendored byte for byte
+# as test data; the attribution and the NOTICE line live in THIRD-PARTY.md.
+[[annotations]]
+path = "backend/tests/fixtures/lucene_cz_stopwords_10_5_2.txt"
+precedence = "override"
+SPDX-FileCopyrightText = "The Apache Software Foundation"
+SPDX-License-Identifier = "Apache-2.0"
+
+# The folded and reduced form of that list, generated into the package by
+# scripts/dev/czech_stopwords.py: a modified version under Apache-2.0 section
+# 4(b) inside a module of Findling.
+[[annotations]]
+path = "backend/src/findling/index/stopwords_cs.py"
+precedence = "override"
+SPDX-FileCopyrightText = ["2026 street1983nk", "The Apache Software Foundation"]
+SPDX-License-Identifier = "AGPL-3.0-or-later AND Apache-2.0"

@@ -197,6 +197,116 @@ were read at tantivy tag 0.26.2 on 2026-09-23; before the next store submission
 they are read again at whatever tag is pinned then, and the date here is moved
 with them.
 
+## Czech stop word list (Apache Lucene)
+
+Added in plan 30-01. tantivy 0.26.2 carries no Czech stop word list, so the
+stemmerless chain `cs` filters through a list derived from the one of Apache
+Lucene's CzechAnalyzer. The derived list is compiled into the package; the
+original is vendored unchanged as test data.
+
+| Item | Value |
+|---|---|
+| Source | `https://raw.githubusercontent.com/apache/lucene/releases/lucene/10.5.2/lucene/analysis/common/src/resources/org/apache/lucene/analysis/cz/stopwords.txt` |
+| Tag | `releases/lucene/10.5.2` |
+| Last commit touching the file | `e8e4245d9b36123446546ff15967ac95429ea2b0` |
+| SHA-256 of the original | `61f06aa1e7567ee8c72e895ea33229033669ac1cc52c6d40369a9ee2b76ad915` (172 lines, 171 unique) |
+| Licence | **Apache-2.0**, compatible with the AGPL-3.0 of Findling; text in `LICENSES/Apache-2.0.txt` |
+| NOTICE | Apache Lucene, Copyright 2001-2025 The Apache Software Foundation. This product includes software developed at The Apache Software Foundation (http://www.apache.org/). |
+| Original in the repository | `backend/tests/fixtures/lucene_cz_stopwords_10_5_2.txt`, byte for byte, protected by `-text` in `.gitattributes` |
+| Producer | `scripts/dev/czech_stopwords.py`, which refuses to run on any other bytes |
+| Derived artifact | `backend/src/findling/index/stopwords_cs.py`, `CZECH_STOPWORDS_FOLDED` (167 entries) and `CZECH_EXCEPTIONS` |
+
+Changes against the original (Apache-2.0 section 4(b)): every entry is folded to
+ASCII by the same tantivy chain the index runs (lowercase, ascii_fold), the
+duplicates the fold creates are dropped (171 unique entries become 169 folded
+forms), the order of first appearance is kept, and two folded forms are removed
+as named exceptions:
+
+- `byt`, folded from `být` ("to be"): `byt` is the noun "flat, apartment", a
+  common word in leases. Lucene filters unfolded and never meets this collision.
+- `jez`, folded from `jež` ("which", relative pronoun): `jez` is the noun
+  "weir", a plain content word.
+
+The review behind the exceptions covers every folded form that is no entry of
+the original, 67 of them (the research had counted 66; the generator and an
+independent unicodedata recount both give 67). Criterion, the only one: a form
+is an exception exactly when the folded form is at the same time a common,
+standalone Czech content word with a different meaning than the original entry,
+one that users really search without accents. A folded form that is only the
+flat spelling of the same word stays. Content words of the original itself
+(`strana`, `zprávy`, `první` and so on) stay as Lucene ships them. Meanings of
+the flat forms were looked up on en.wiktionary.org on 2026-10-10 ("wikt").
+
+| form | original | verdict | reason |
+|---|---|---|---|
+| timto | tímto | keep | same word, "hereby, by this"; wikt: no cs entry for the flat form |
+| budes | budeš | keep | same word, "you will"; wikt: no cs entry for the flat form |
+| jses | jseš | keep | same word, "you are (colloquial)"; wikt: no cs entry for the flat form |
+| muj | můj | keep | same word, "my"; wikt: no cs entry for the flat form |
+| svym | svým | keep | same word, "one's own"; wikt: no cs entry for the flat form |
+| proc | proč | keep | same word, "why"; wikt: no cs entry for the flat form |
+| mate | máte | keep | same word, "you have"; flat form also 3sg of mast, to confuse (wikt), rare |
+| kteri | kteří | keep | same word, "who, which (pl.)"; wikt: no cs entry for the flat form |
+| nam | nám | keep | same word, "to us"; wikt: no cs entry for the flat form |
+| mit | mít | keep | same word, "to have"; wikt: no cs entry for the flat form |
+| protoze | protože | keep | same word, "because"; wikt: no cs entry for the flat form |
+| nasi | naši | keep | same word, "our"; wikt: no cs entry for the flat form |
+| napiste | napište | keep | same word, "write (imperative)"; wikt: no cs entry for the flat form |
+| coz | což | keep | same word, "which"; wikt: no cs entry for the flat form |
+| tim | tím | keep | same word, "by that"; wikt: no cs entry for the flat form |
+| takze | takže | keep | same word, "so"; wikt: no cs entry for the flat form |
+| svych | svých | keep | same word, "one's own"; wikt: no cs entry for the flat form |
+| jeji | její | keep | same word, "her"; wikt: no cs entry for the flat form |
+| svymi | svými | keep | same word, "one's own"; wikt: no cs entry for the flat form |
+| prave | pravé | keep | same word, "right, genuine"; wikt: no cs entry for the flat form |
+| ci | či | keep | same word, "or"; wikt: no cs entry for the flat form |
+| tema | téma | keep | same word, "topic"; wikt: no cs entry for the flat form |
+| pres | přes | keep | same word, "across, over"; flat form also informal pres, press (wikt), rare |
+| vam | vám | keep | same word, "to you"; wikt: no cs entry for the flat form |
+| kdyz | když | keep | same word, "when"; wikt: no cs entry for the flat form |
+| vsak | však | keep | same word, "however"; wikt: no cs entry for the flat form |
+| clanku | článku | keep | same word, "article (gen./loc.)"; wikt: no cs entry for the flat form |
+| clanky | články | keep | same word, "articles"; wikt: no cs entry for the flat form |
+| pred | před | keep | same word, "before"; wikt: no cs entry for the flat form |
+| jeste | ještě | keep | same word, "still, yet"; wikt: no cs entry for the flat form |
+| az | až | keep | same word, "until"; wikt: no cs entry for the flat form |
+| take | také | keep | same word, "also"; wikt: no cs entry for the flat form |
+| prvni | první | keep | same word, "first"; wikt: no cs entry for the flat form |
+| vase | vaše | keep | same word, "your"; wikt: no cs entry for the flat form |
+| ktera | která | keep | same word, "which (f.)"; wikt: no cs entry for the flat form |
+| nas | nás | keep | same word, "us"; wikt: no cs entry for the flat form |
+| novy | nový | keep | same word, "new"; wikt: no cs entry for the flat form |
+| muze | může | keep | same word, "can"; wikt: no cs entry for the flat form |
+| sve | své | keep | same word, "one's own"; wikt: no cs entry for the flat form |
+| jine | jiné | keep | same word, "other"; wikt: no cs entry for the flat form |
+| zpravy | zprávy | keep | same word, "news, messages"; wikt: no cs entry for the flat form |
+| nove | nové | keep | same word, "new"; wikt: no cs entry for the flat form |
+| neni | není | keep | same word, "is not"; wikt: no cs entry for the flat form |
+| vas | vás | keep | same word, "you (acc.)"; wikt: no cs entry for the flat form |
+| uz | už | keep | same word, "already"; wikt: no cs entry for the flat form |
+| byt | být | exception | "to be"; flat form is the noun byt, flat/apartment (wikt), common in leases |
+| vice | více | keep | same word, "more"; wikt: no cs entry for the flat form |
+| jiz | již | keep | same word, "already"; wikt: no cs entry for the flat form |
+| nez | než | keep | same word, "than"; wikt: no cs entry for the flat form |
+| ktery | který | keep | same word, "which (m.)"; wikt: no cs entry for the flat form |
+| ktere | které | keep | same word, "which"; wikt: no cs entry for the flat form |
+| ma | má | keep | same word, "has, my"; wikt: no cs entry for the flat form |
+| pri | při | keep | same word, "at, during"; wikt: no cs entry for the flat form |
+| dalsi | další | keep | same word, "next, further"; wikt: no cs entry for the flat form |
+| zpet | zpět | keep | same word, "back"; wikt: no cs entry for the flat form |
+| pricemz | přičemž | keep | same word, "whereby"; wikt: no cs entry for the flat form |
+| ja | já | keep | same word, "I"; wikt: no cs entry for the flat form |
+| me | mě | keep | same word, "me"; wikt: no cs entry for the flat form |
+| tem | těm | keep | same word, "to those"; wikt: no cs entry for the flat form |
+| temu | těmu | keep | same word, "to that (archaic)"; wikt: no cs entry for the flat form |
+| nemu | němu | keep | same word, "to him"; wikt: no cs entry for the flat form |
+| nemuz | němuž | keep | same word, "to which"; wikt: no cs entry for the flat form |
+| jehoz | jehož | keep | same word, "whose"; wikt: no cs entry for the flat form |
+| jelikoz | jelikož | keep | same word, "since, because"; wikt: no cs entry for the flat form |
+| jez | jež | exception | "which (relative)"; flat form is the noun jez, weir (wikt), a plain content word |
+| jakoz | jakož | keep | same word, "as well as"; wikt: no cs entry for the flat form |
+| nacez | načež | keep | same word, "whereupon"; wikt: no cs entry for the flat form |
+
 ## Python packages of the semantic path, and the model they run
 
 Added in phase 6. Five packages and one model, all pinned exactly in
