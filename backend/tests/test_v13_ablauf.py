@@ -29,6 +29,11 @@ from pathlib import Path
 import pytest
 
 from test_measurement_scripts import V13_RUN_DIR, a_boxless_run
+from test_upgrade_compatibility import GOLD_V1_3
+
+# The schema the v1.3 trip ran on, frozen with the trip: the witness table of
+# 1.3.x and 1.4.x and never findling.config.SCHEMA_VERSION, which moved on.
+V13_SCHEMA_VERSION = GOLD_V1_3["schema_version"]
 
 RUN_SCRIPT = V13_RUN_DIR / "00-lauf.sh"
 FETCH_SCRIPT = V13_RUN_DIR / "00-abholen.sh"
@@ -822,8 +827,15 @@ def test_the_run_plan_writes_down_e1_to_e14_with_a_number() -> None:
 
 
 def test_the_run_plan_e1_holds_the_constants_of_the_code_and_of_the_run_script() -> None:
-    """E1 is read out of the code when written; the gate of 00-lauf.sh hands the same pairs to 90e."""
-    from findling.config import EMBED_TOKEN_CAP, INDEX_VERSION, SCHEMA_VERSION
+    """E1 is read out of the code when written; the gate of 00-lauf.sh hands the same pairs to 90e.
+
+    When written, and the trip has run since: section 3 of 00-ablauf.md forbids
+    adapting the expectation after the measurement. So the one constant the code
+    moved after the trip, SCHEMA_VERSION (2 -> 3 in plan 30-04, body_cs), is read
+    from GOLD_V1_3, the witness of the schema the v1.3 code carried, and not from
+    the code. The other constants did not move and are still read from the code.
+    """
+    from findling.config import EMBED_TOKEN_CAP, INDEX_VERSION
     from findling.index.analyzer import ANALYZER_VERSION
     from findling.index.open import TANTIVY_VERSION
     from findling.store.vectors import EMBEDDING_MODEL, WEIGHTS_INT8, embedding_mark
@@ -833,8 +845,8 @@ def test_the_run_plan_e1_holds_the_constants_of_the_code_and_of_the_run_script()
     from_code = {
         f"analyzer_version={ANALYZER_VERSION}",
         f"index_version={INDEX_VERSION}",
-        f"store_schema_version={SCHEMA_VERSION}",
-        f"schema_version={SCHEMA_VERSION}",
+        f"store_schema_version={V13_SCHEMA_VERSION}",
+        f"schema_version={V13_SCHEMA_VERSION}",
         f"tantivy_version={TANTIVY_VERSION}",
         f"embedding_version={embedding_mark(EMBEDDING_MODEL, tokens=EMBED_TOKEN_CAP, weights=WEIGHTS_INT8)}",
         "languages=de,en",

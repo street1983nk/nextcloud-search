@@ -46,7 +46,15 @@ LOGGER = logging.getLogger("findling.config")
 # schema that was never shipped and therefore an upgrade path nothing proves.
 # The step is what makes the rebuild visible; backend/tests/test_upgrade_compatibility.py
 # carries the reason beside the gold values it moved.
-SCHEMA_VERSION = 2
+#
+# It walked from 2 to 3 on 2026-10-10, under D-30-02 and D-30-08 and 30-CONTEXT
+# "Folge fuer Phase 30": one field, body_cs, joined (CZ-02), and this is the only
+# schema step of milestone v1.5. An installation without cs does not rebuild for
+# it: findling.store.repo.LEGACY_SCHEMA_STEPS carries the pair ("2", "3"), and the
+# field plan keeps reading a schema 2 directory through
+# findling.api.resources.QUERYABLE_SCHEMA_GENERATIONS. GOLD_V1_5 in the same test
+# file holds the step, GOLD_V1_3 stays as the witness of schema 2.
+SCHEMA_VERSION = 3
 
 # Layout of the on disk index directory, including the tantivy index format.
 # tantivy 0.26.0 reports index_format v7 and does not promise stability across

@@ -1697,8 +1697,12 @@ PHP_TREE_HASH_TODAY = "bee7a95422d96ad9462e594bd7f1f55dc01e6efbb20c572740392c8c0
 # registered unconditionally, nine registrations) and query/rewrite.py
 # (BODY_BOOST cs 0.6). No file came and none went, so PACKAGE_FILES_TODAY stays at
 # 74. The PHP pair does not move: php/ is unchanged.
+# Measured again by plan 30-04 Task 3 on 2026-10-10 (the schema step, D-30-08):
+# plan 30-04 changed config.py (SCHEMA_VERSION 2 -> 3, with its reason). No file
+# came and none went, so PACKAGE_FILES_TODAY stays at 74. The PHP pair does not
+# move: php/ is unchanged.
 PACKAGE_FILES_TODAY = 74
-PACKAGE_TREE_HASH_TODAY = "73ad4fc43c4120e12285a1b397c6b32fa2147d30cda38fd38be404620f70717f"
+PACKAGE_TREE_HASH_TODAY = "89d7a5f884bad046f866e771df0b977a6eaef7d451263bcd2ba12ae291bba321"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

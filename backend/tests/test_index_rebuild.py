@@ -757,7 +757,8 @@ def test_the_schema_mark_of_the_stamp_is_the_one_the_expectation_carries() -> No
     expected = expected_versions("a-digest", "de,en")
 
     assert _SCHEMA_MARK in expected
-    assert expected[_SCHEMA_MARK] == str(SCHEMA_VERSION) == "2"
+    # "3" since plan 30-04 (body_cs, D-30-08), "2" before it.
+    assert expected[_SCHEMA_MARK] == str(SCHEMA_VERSION) == "3"
 
 
 def test_a_finished_rebuild_stamps_the_schema_the_languages_and_clears_the_mark(

@@ -214,15 +214,18 @@ def test_the_snapshot_expects_the_stamped_languages_mark() -> None:
 
 
 def test_the_rebuild_step_demands_the_schema_of_the_running_code() -> None:
-    # v1.3.2 and this code share the index schema, so the language jump of
-    # "Store upgrade 6" moves no schema mark (deploy-harp run 37455892381). A
-    # schema bump in config.py has to turn this gate red, because then the
-    # rebuild answers a schema drift again and the demand is one step up.
+    # From plan 29-13 to 30-04 v1.3.2 and this code shared schema 2, so the
+    # language jump of "Store upgrade 6" moved no schema mark (deploy-harp run
+    # 37455892381). Plan 30-04 raised SCHEMA_VERSION to 3 (body_cs, D-30-08):
+    # the start still carries 2, the rebuild builds and stamps the schema of
+    # this code, so the demand is 2 before and 3 after. A further schema bump in
+    # config.py has to turn this gate red again.
     from findling.config import SCHEMA_VERSION
 
-    assert SCHEMA_VERSION == 2
+    assert SCHEMA_VERSION == 3
     run = _run("Store upgrade 6,")
-    assert 'if [ "${was}" = "2" ] && [ "${now}" = "2" ]; then' in run
+    assert 'if [ "${was}" = "2" ] && [ "${now}" = "3" ]; then' in run
+    assert '[ "${now}" = "2" ]; then' not in run
     assert "which is exactly one step" not in run
 
 

@@ -5260,20 +5260,24 @@ jobs:
             fi
           }
 
-          echo "--- 1, the schema mark stays at the schema of the running code ---"
+          echo "--- 1, the schema mark reads the start before and the running code after ---"
           # Until plan 29-13 this demanded one step up, which held while the
-          # start was v1.2.0 (index SCHEMA_VERSION 1). v1.3.2 and this code both
-          # carry 2, so a language jump has no schema drift to answer: run
-          # 37455892381 read 2 on both sides. The demand is 2 before and 2
-          # after (findling.config.SCHEMA_VERSION, pinned by a test); that the
-          # rebuild went through and stamped is assurance 2, because only
-          # stamp_after_swap writes the new set into an existing directory.
+          # start was v1.2.0 (index SCHEMA_VERSION 1). From 29-13 to 30-04
+          # v1.3.2 and this code both carried 2, so the demand was 2 on both
+          # sides (run 37455892381). Plan 30-04 raised SCHEMA_VERSION to 3
+          # (body_cs, D-30-08): the upgrade alone keeps 2, because the pair
+          # ("2", "3") of LEGACY_SCHEMA_STEPS is no drift, and the rebuild this
+          # step forces through the languages mark builds a directory of the
+          # running code and stamps 3. The demand is 2 before and 3 after
+          # (findling.config.SCHEMA_VERSION, pinned by a test); that the
+          # rebuild went through and stamped is assurance 2 as well, because
+          # only stamp_after_swap writes the new set into an existing directory.
           was=$(jq -r '.marks.schemaVersion' "${before}")
           now=$(jq -r '.marks.schemaVersion' "${after}")
-          if [ "${was}" = "2" ] && [ "${now}" = "2" ]; then
-            echo "the schema mark reads 2 before and after the rebuild, the schema of the running code"
+          if [ "${was}" = "2" ] && [ "${now}" = "3" ]; then
+            echo "the schema mark reads 2 before the rebuild and 3 after it, the schema of the start and of the running code"
           else
-            echo "::error::the schema mark went from '${was}' to '${now}', and it has to read 2 on both sides, the schema of v1.3.2 and of this code"
+            echo "::error::the schema mark went from '${was}' to '${now}', and it has to read 2 before the rebuild (the schema of the start) and 3 after it (the schema of this code)"
             fail=1
           fi
 
@@ -5435,7 +5439,7 @@ jobs:
             echo "### Rebuild on the upgraded installation (${MATRIX_SERVER_VERSION}, ${MATRIX_RUNNER})"
             echo ""
             echo "- \`FINDLING_LANGUAGES=${REBUILD_LANGUAGES}\` was set on the container of the upgraded instance and the container was created again on the volume \`${UPGRADE_VOLUME}\`, without a second registration"
-            echo "- the schema mark reads 2 on both sides, the languages mark reads \`${REBUILD_LANGUAGES_NORMALISED}\`"
+            echo "- the schema mark reads 2 before and 3 after the rebuild, the languages mark reads \`${REBUILD_LANGUAGES_NORMALISED}\`"
             echo "- the rebuild banner was observed up while the run was on and down after it, in ${running_rounds} of ${rounds} readings"
             echo "- unchanged: the hits for Belehrung, Auszug and Erinnerung, the document counts, the work stock"
             echo "- a search inside the run answered with hits, no indexing pass ran during it, no \`built by different code\` line (no generation raised)"
