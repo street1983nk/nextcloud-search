@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Roadmap v1.5 geschrieben, noch nicht committet
-last_updated: "2026-10-10T04:41:21.105Z"
-last_activity: 2026-10-10 -- Phase 30 planning complete
+stopped_at: Completed 30-01-PLAN.md
+last_updated: "2026-10-10T05:03:55.160Z"
+last_activity: 2026-10-10 -- Plan 30-01 abgeschlossen (Kette cs, Lucene-Stoppliste)
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 9
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 11
 ---
 
 # Project State
@@ -26,16 +26,16 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 30 von 30-36 (Owner-Tor, Schema und Tschechisch)
-Plan: noch keiner
-Status: Ready to execute
-Last activity: 2026-10-10 -- Phase 30 planning complete
+Plan: 30-01 abgeschlossen, als Nächstes 30-02
+Status: In Ausführung
+Last activity: 2026-10-10 -- Plan 30-01 abgeschlossen
 
-Progress: [----------] 0%
+Progress: [█░░░░░░░░░] 11%
 
 ## Performance Metrics
 
 - v1.4: 6 Phasen, 78 Plaene in 10 Tagen (Referenz)
-- v1.5: noch keine Plaene abgeschlossen
+- v1.5: 30-01 in ca. 21 min (3 Tasks, 9 Dateien)
 
 ## Accumulated Context
 
@@ -46,6 +46,8 @@ Progress: [----------] 0%
 - F-29-03 (POL-02) reist mit den Formaten in Phase 31 (gleicher Indexierpfad).
 - Umstiegs-Doku (Phase 34) erst nach den Funktionsphasen, damit der Funktionsvergleich nur Geliefertes nennt.
 - Stretch-Phase 35 kann ohne Release-Risiko entfallen; kein Modellwechsel in v1.5.
+
+- 30-01: Tschechische Stoppliste = Lucene 10.5.2 gefaltet (167), Ausnahmen byt (Wohnung) und jez (Wehr), kein achtes Merkmal, ANALYZER_VERSION bleibt 1.
 
 ### Offene Faeden (kein aktiver Auftrag)
 
@@ -65,6 +67,6 @@ Progress: [----------] 0%
 
 ## Session Continuity
 
-Last session: 2026-10-10
-Stopped at: Roadmap v1.5 geschrieben, noch nicht committet
-Resume file: keine
+Last session: 2026-10-10T05:03:50.566Z
+Stopped at: Completed 30-01-PLAN.md
+Resume file: None

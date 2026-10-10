@@ -102,7 +102,7 @@ Details im Archiv: .planning/milestones/v1.4-ROADMAP.md
   5. Die Grenze "tschechische Suche ohne Stammformreduktion" steht in der Doku (dreisprachig) und in der Grenzliste
 **Plans**: 9 plans
 Plans:
-- [ ] 30-01-PLAN.md: Tschechische Stoppliste aus Lucene 10.5.2 (gefaltet, Ausnahmen geprüft, Lizenzbeleg) und stemmerlose Kette cs
+- [x] 30-01-PLAN.md: Tschechische Stoppliste aus Lucene 10.5.2 (gefaltet, Ausnahmen geprüft, Lizenzbeleg) und stemmerlose Kette cs
 - [ ] 30-02-PLAN.md: OCR-Sprache ces im Image, Allowlist, Bau-Prüfung und Bild-Beweis
 - [ ] 30-03-PLAN.md: Schema-2-Layout einfrieren, Ratsche ("2","3")/("1","3"), Pflicht-Fix _of_the_marks, Prüfzeile A5
 - [ ] 30-04-PLAN.md: Sprache cs, Feld body_cs, SCHEMA_VERSION 3, GOLD_V1_5
@@ -191,7 +191,7 @@ Plans:
 | 12-16 (Archiv) | v1.2 | 63/63 | Complete | 2026-09-21 |
 | 17-23 (Archiv) | v1.3 | 69/69 | Complete | 2026-09-27 |
 | 24-29 (Archiv) | v1.4 | 78/78 | Complete | 2026-10-06 |
-| 30. Owner-Tor, Schema und Tschechisch | v1.5 | 0/? | Not started | - |
+| 30. Owner-Tor, Schema und Tschechisch | v1.5 | 1/9 | In Progress|  |
 | 31. Neue Formate und Nachholweg | v1.5 | 0/? | Not started | - |
 | 32. Filter in der Unified Search | v1.5 | 0/? | Not started | - |
 | 33. Ausschlussmuster und Admin-Feinschliff | v1.5 | 0/? | Not started | - |
