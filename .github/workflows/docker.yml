@@ -422,6 +422,24 @@ jobs:
             --entrypoint python \
             "${IMAGE}@${DIGEST}" /probe/probe_image_search.py model-gone
 
+      # CZ-01 (plan 30-02, issue #26). What this proves: tesseract-ocr-ces is in
+      # the image, and a rendered Czech page read with -l ces comes back as text
+      # that the stemmerless chain cs turns into the expected search terms, with
+      # a white page of the same size as the guard against an empty answer.
+      # What it does not prove: character accuracy; three of four expected words
+      # are enough, see the docstring of the script. Network cut, digest
+      # reference, both architectures of the matrix, like the steps above.
+      - name: Czech OCR in the image (CZ-01)
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          echo "expected: ces listed, at least 3 of 4 Czech words, 0 tokens on a white page"
+          docker run --rm --network none \
+            -v "${GITHUB_WORKSPACE}/backend/tests:/probe:ro" \
+            -v "${GITHUB_WORKSPACE}/testdata/fonts:/fonts:ro" \
+            --entrypoint python \
+            "${IMAGE}@${DIGEST}" /probe/probe_image_ocr_czech.py /fonts/DejaVuSans.ttf
+
       # The environment is the one from the local probe, deliberately. Without
       # HP_SHARED_KEY the app binds APP_PORT, frpc logs one line and exits, and
       # the published port is what the heartbeat is asked on.
