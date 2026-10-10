@@ -547,7 +547,7 @@ async def _fetch_file(self, job: QueueJob) -> _Read | None:
 | A5 | `decode_threads=1` spart Adressraum unter `RLIMIT_AS` | Muster 7 | Nur Leistung; messen |
 | A6 | HEIC braucht einen höheren Speicherfaktor als JPEG | Muster 7, Pitfall 12 | Kind stirbt statt ehrlichem Urteil |
 | A7 | Viele `.doc`/`.xls` sind RTF/HTML/CSV/DOCX unter Altendung | Muster 5/6 | Nur Mehraufwand im Sniff, kein Risiko |
-| A8 | #18 Fall 2 schnitt nicht reproduzierbar gleich ab | Muster 9 | Proxy mit fester Kappung würde abgeschnittene Dateien indexieren. Entscheid nach Plan-Check (Owner-Linie, 31-03): keine Längenausnahme, Restrisiko in Code, SUMMARY und docs/formats.md benannt |
+| A8 | #18 Fall 2 schnitt nicht reproduzierbar gleich ab | Muster 9 | Proxy mit fester Kappung würde abgeschnittene Dateien indexieren. Entscheid nach Plan-Check (Claude's Discretion, Veto möglich, 31-03): keine Längenausnahme, Restrisiko in Code, SUMMARY und docs/formats.md benannt |
 | A9 | Debian-libheif-Weg spart Image-Größe, kostet Build-Aufwand | Alternatives | Nur Entscheidungsgrundlage |
 | A10 | EOCD-Offsets (Feld "total entries" bei +10, ZIP64-Locator 20 Bytes vor EOCD) | Code Examples | Vorprüfung greift nicht; zipfile-Ausnahme bleibt Netz |
 
