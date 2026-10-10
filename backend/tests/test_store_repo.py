@@ -523,9 +523,9 @@ def test_the_schema_exception_falls_closed() -> None:
     the same reason: the branch is one line inside a loop, and a rearranged loop
     could keep every case above green while the rule stopped meaning anything.
 
-    The last two lines are the ones that make this a ratchet rather than a
-    licence. The step is a pair and not a comparison of numbers, so a schema 3
-    that drops a field does not inherit the excuse of schema 2: whoever raises
+    The last lines are the ones that make this a ratchet rather than a
+    licence. The step is a pair and not a comparison of numbers, so a schema 4
+    that drops a field does not inherit the excuse of schema 3: whoever raises
     the mark again has to write the new pair down here and say in the same
     commit why an index of the old layout can still answer every query this code
     builds.
@@ -535,9 +535,41 @@ def test_the_schema_exception_falls_closed() -> None:
     assert _schema_is_legacy("", "2") is False
     assert _schema_is_legacy(UNKNOWN_VERSION, "2") is False
     assert _schema_is_legacy("2", "1") is False
-    assert _schema_is_legacy("1", "3") is False
-    assert _schema_is_legacy("2", "3") is False
-    assert set(LEGACY_SCHEMA_STEPS) == {("1", "2")}
+    # The two steps of phase 30 (D-30-08), written down before schema 3 exists.
+    assert _schema_is_legacy("1", "3") is True
+    assert _schema_is_legacy("2", "3") is True
+    assert _schema_is_legacy("3", "2") is False
+    assert _schema_is_legacy(None, "3") is False
+    assert _schema_is_legacy(UNKNOWN_VERSION, "3") is False
+    assert _schema_is_legacy("3", "4") is False
+    assert set(LEGACY_SCHEMA_STEPS) == {("1", "2"), ("2", "3"), ("1", "3")}
+
+
+# -- the step to schema 3 (plan 30-03, D-30-08) --------------------------------
+#
+# The expected marks are written out as "3" rather than read from
+# expected_versions(): SCHEMA_VERSION is still 2 when these cases are written,
+# and the ratchet has to carry the step before the schema takes it.
+
+
+@pytest.mark.parametrize("stored", ["1", "2"])
+def test_a_stored_schema_of_one_or_two_is_no_drift_under_schema_three(store: Store, stored: str) -> None:
+    store.write_meta(_SCHEMA_MARK, stored)
+
+    assert store.version_mismatch({_SCHEMA_MARK: "3"}) == []
+
+
+def test_a_stored_schema_three_under_schema_two_is_a_drift(store: Store) -> None:
+    # The backwards direction: a newer directory under older code is no step.
+    store.write_meta(_SCHEMA_MARK, "3")
+
+    assert store.version_mismatch({_SCHEMA_MARK: "2"}) == [_SCHEMA_MARK]
+
+
+def test_an_unnamed_schema_is_still_a_drift_under_schema_three(store: Store) -> None:
+    assert store.read_meta()[_SCHEMA_MARK] == UNKNOWN_VERSION
+
+    assert store.version_mismatch({_SCHEMA_MARK: "3"}) == [_SCHEMA_MARK]
 
 
 def test_the_other_marks_are_untouched_by_the_schema_exception(store: Store) -> None:

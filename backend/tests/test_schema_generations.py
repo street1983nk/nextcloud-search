@@ -45,10 +45,13 @@ known to be a call that can fail.
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 from tantivy import Index
 
-from conftest import FIXTURE_DOCUMENTS
+from conftest import FIXTURE_DOCUMENTS, SCHEMA_2_DIRECTORY, write_schema_2_index
 from findling.index.schema import (
     FIELD_BODY_DE,
     FIELD_BODY_EN,
@@ -83,6 +86,26 @@ FIELDS_SCHEMA_1: tuple[str, ...] = (
     "mtime",
 )
 
+# The index schema of 1.3.0 up to 1.4.2, written out and frozen for the same
+# reason as the tuple above. Plan 30-03 froze it while it was still equal to
+# FIELDS, because from plan 30-04 on build_schema() grows body_cs and this list
+# does not: it names what every installation of those releases carries on disk.
+FIELDS_SCHEMA_2: tuple[str, ...] = (
+    "file_id",
+    "storage_id",
+    "name",
+    "title",
+    "path",
+    "ext",
+    "body_de",
+    "body_en",
+    "body_es",
+    "body_it",
+    "body_nl",
+    "body_pt",
+    "mtime",
+)
+
 # The prefix that marks a body field. The four fields plan 18-01 added all carry
 # it, and so do the two that were there before, which is what makes it the right
 # thing to test a name against: a body field is the one kind of field a language
@@ -96,6 +119,39 @@ def test_the_frozen_list_has_the_nine_names_of_the_old_schema() -> None:
     # that is not there; a tuple that gained one would make them all weaker.
     assert len(FIELDS_SCHEMA_1) == 9
     assert len(set(FIELDS_SCHEMA_1)) == 9
+
+
+def test_the_frozen_list_of_schema_two_has_thirteen_names() -> None:
+    assert len(FIELDS_SCHEMA_2) == 13
+    assert len(set(FIELDS_SCHEMA_2)) == 13
+
+
+def test_the_three_generations_are_nested() -> None:
+    # The inclusion LEGACY_SCHEMA_STEPS rests on for its pairs ("1", "2"),
+    # ("2", "3") and ("1", "3"): no generation drops a field of the one before.
+    assert set(FIELDS_SCHEMA_1) <= set(FIELDS_SCHEMA_2) <= set(FIELDS)
+
+
+def test_the_legacy_plan_exists_in_schema_two() -> None:
+    names = set(LEGACY_PLAN.fields) | set(LEGACY_PLAN.title_only) | set(LEGACY_PLAN.boosts)
+    missing = sorted(names - set(FIELDS_SCHEMA_2))
+    assert not missing, f"the legacy plan names {missing}, which an index of schema 2 does not have"
+
+
+def test_the_schema_two_fixture_carries_exactly_the_frozen_names(tmp_path: Path) -> None:
+    # Read out of the directory tantivy wrote, and not out of the builder, so
+    # that what is held is the layout on disk.
+    write_schema_2_index(tmp_path, FIXTURE_DOCUMENTS)
+    meta = json.loads((tmp_path / SCHEMA_2_DIRECTORY / "meta.json").read_text(encoding="utf-8"))
+
+    assert sorted(entry["name"] for entry in meta["schema"]) == sorted(FIELDS_SCHEMA_2)
+
+
+def test_the_schema_two_fixture_rejects_a_field_it_does_not_have(schema_2_index: Index) -> None:
+    # The counter probe: the case above would be green for a fixture whose
+    # directory nobody ever opened.
+    with pytest.raises(ValueError, match="body_cs"):
+        schema_2_index.parse_query_lenient("smlouva", default_field_names=["body_cs"])
 
 
 def test_the_new_schema_is_a_superset_of_the_old_one() -> None:
