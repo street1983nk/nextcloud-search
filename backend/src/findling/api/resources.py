@@ -92,7 +92,7 @@ DEGRADED_TTL_SECONDS: Final = 5.0
 # behind it is a different size and the question behind it changes at a
 # different speed. ``terms_with_prefix`` with an empty prefix walks the whole
 # term dictionary of a field by its own documentation, and the limit cuts only
-# afterwards; six chains means six such walks. What it answers is which chains
+# afterwards; seven chains means seven such walks. What it answers is which chains
 # carry terms at all, and that is a property of an index directory: it changes
 # when a rebuild swaps a directory in, which this module is told about through
 # reset_read_side(), and otherwise only while the very first documents of a new
@@ -156,7 +156,7 @@ class ReadSide:
     field_plan: FieldPlan = LEGACY_PLAN
     # Whether that plan reaches fewer fields than the stored marks promise, which
     # is the one state the two language values of the admin page cannot show
-    # (audit finding M-19-03). Both of them would go on saying "six chains are
+    # (audit finding M-19-03). Both of them would go on saying "seven chains are
     # switched on and filled" while a question reaches two, because one is read
     # out of the marks and the other out of the term dictionary, and neither is
     # read out of the plan. It is measured here, beside the plan and out of the
@@ -964,12 +964,12 @@ def filled_languages() -> tuple[str, ...]:
     otherwise. That is the whole probe: not how many terms there are, only
     whether there is one.
 
-    **Which chains are asked, and why not all six** (audit finding M-18-08). The
+    **Which chains are asked, and why not all seven** (audit finding M-18-08). The
     ones the settings switch on, plus German, and nothing else. The probe walks
     the entire term dictionary of a field by tantivy's own documentation and the
     limit cuts only afterwards, so every field asked is a full walk over the
     dictionary of a directory that the projection of this project puts at 560 MB
-    for 100000 files. Six of those every thirty seconds on a 4 GB box, for an
+    for 100000 files. Seven of those every thirty seconds on a 4 GB box, for an
     instance that runs German alone, is a cost that grows with the index and
     buys an answer nobody needs: a chain that is switched off is not filled and
     is not going to be. German is in whatever the settings say, because
@@ -979,7 +979,7 @@ def filled_languages() -> tuple[str, ...]:
 
     **Why one try per chain and not one for all of them** (audit finding
     M-18-01). The whole probe used to sit in a single generator inside a single
-    ``try``, so one field that raised discarded the measurement of all six. That
+    ``try``, so one field that raised discarded the measurement of all of them. That
     is not a corner: an index of the old generation has nine fields and no
     ``body_es`` at all, ``terms_with_prefix`` raises on it, and the answer was
     an empty tuple for every chain, on exactly the installation this line was

@@ -174,7 +174,7 @@ def open_index(path: Path, constituents: Sequence[str], *, dutch: str | None = N
     # field: body_es'", and it does so even when the document does not carry
     # that field at all. Hanging these four lines on the active language set
     # would therefore stop the indexer on every installation that does not run
-    # all six languages. The filling hangs on the language set, the registration
+    # every body language. The filling hangs on the language set, the registration
     # does not.
     #
     # It costs nothing. The Snowball chains are compiled into tantivy and bring

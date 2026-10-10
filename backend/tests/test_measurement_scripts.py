@@ -1721,8 +1721,13 @@ PHP_TREE_HASH_TODAY = "bee7a95422d96ad9462e594bd7f1f55dc01e6efbb20c572740392c8c0
 # the same run and a crawl under way survives the update. No file came and none
 # went, so PACKAGE_FILES_TODAY stays at 74. The PHP pair does not move: php/ is
 # unchanged.
+# Measured again by the fix of review finding IN-01 of phase 30 on 2026-10-10:
+# comments only, the counts of body fields and chains in index/rebuild.py,
+# index/open.py and api/resources.py follow the seventh body field. No file came
+# and none went, so PACKAGE_FILES_TODAY stays at 74. The PHP pair does not move:
+# php/ is unchanged.
 PACKAGE_FILES_TODAY = 74
-PACKAGE_TREE_HASH_TODAY = "93aa1eabd38e2570bff29b258418028aa5e2ad94b51f6281253699e494633e7e"
+PACKAGE_TREE_HASH_TODAY = "e006381e228db2d3cdda5cc682f107849848e7fd4e5ede5139882315ae27264d"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

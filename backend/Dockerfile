@@ -292,12 +292,14 @@ RUN apt-get update \
 # default, proven by its own --list-langs check below.
 #
 # What this does NOT do, and the distinction is the whole point: it makes the
-# six languages available, it does not switch them on. OCR_DEFAULT_LANGUAGES in
+# seven languages available, it does not switch them on. OCR_DEFAULT_LANGUAGES in
 # backend/src/findling/config.py stays at deu, eng and fra, because every extra
 # language loads another traineddata and costs time and memory on every single
 # page of every scan. An instance that wants Spanish says so through
 # FINDLING_OCR_LANGUAGES, and only that instance pays for it. The analyzer
-# chain of the index is untouched by all of this and stays German and English.
+# chains of the index are untouched by all of this and are a setting of their
+# own (FINDLING_LANGUAGES): German and English by default, Czech since 1.5 as
+# its own choice like the other optional languages.
 #
 # osd is in the list although the call form uses --psm 3, not --psm 1: the
 # orientation and script model is what makes a rotated scan recoverable at all,

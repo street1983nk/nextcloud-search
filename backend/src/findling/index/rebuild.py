@@ -200,9 +200,11 @@ REBUILD_SUFFIX: Final = ".rebuild"
 #
 # A file beside the index rather than a comparison of two Schema objects,
 # because equality of a tantivy Schema is not part of its promise, and because
-# the language set is not in the schema at all: the six body fields exist in
-# every build, and which of them a run FILLS is a decision of the settings. The
-# fingerprint covers both, since the language set is one of its six marks.
+# the language set is not in the schema at all: every body field of the schema
+# a directory was built under exists in it (seven since schema 3, six in a
+# directory of schema 2 that a 1.5 container still reads), and which of them a
+# run FILLS is a decision of the settings. The fingerprint covers both, since
+# the schema and the language set are two of its seven marks.
 #
 # The leading dot keeps it out of the way of tantivy, which names its own files
 # by segment id and reads meta.json.
