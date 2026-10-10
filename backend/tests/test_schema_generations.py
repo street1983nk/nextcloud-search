@@ -53,6 +53,7 @@ from tantivy import Index
 
 from conftest import FIXTURE_DOCUMENTS, SCHEMA_2_DIRECTORY, write_schema_2_index
 from findling.index.schema import (
+    FIELD_BODY_CS,
     FIELD_BODY_DE,
     FIELD_BODY_EN,
     FIELD_BODY_ES,
@@ -132,6 +133,13 @@ def test_the_three_generations_are_nested() -> None:
     assert set(FIELDS_SCHEMA_1) <= set(FIELDS_SCHEMA_2) <= set(FIELDS)
 
 
+def test_schema_three_adds_exactly_body_cs_to_schema_two() -> None:
+    # The one schema step of milestone v1.5 (D-30-08): a true superset of the
+    # thirteen names every 1.3 and 1.4 installation carries, by exactly one field.
+    assert set(FIELDS_SCHEMA_2) < set(FIELDS)
+    assert set(FIELDS) - set(FIELDS_SCHEMA_2) == {FIELD_BODY_CS}
+
+
 def test_the_legacy_plan_exists_in_schema_two() -> None:
     names = set(LEGACY_PLAN.fields) | set(LEGACY_PLAN.title_only) | set(LEGACY_PLAN.boosts)
     missing = sorted(names - set(FIELDS_SCHEMA_2))
@@ -192,7 +200,13 @@ def test_the_body_fields_of_the_language_build_out_are_the_ones_the_old_schema_l
     # may not reach for while a stock index is still in the field, and phase 19 is
     # the phase that is allowed to reach for them, once the stored schema_version
     # says which generation is on disk.
-    absent = sorted(field for field in FIELDS if field.startswith(BODY_PREFIX) and field not in FIELDS_SCHEMA_1)
+    #
+    # Read against FIELDS_SCHEMA_2 and not against FIELDS since plan 30-04: the
+    # step this case names is the one from schema 1 to schema 2, and body_cs of
+    # schema 3 is the case above.
+    absent = sorted(
+        field for field in FIELDS_SCHEMA_2 if field.startswith(BODY_PREFIX) and field not in FIELDS_SCHEMA_1
+    )
     assert absent == sorted([FIELD_BODY_ES, FIELD_BODY_IT, FIELD_BODY_NL, FIELD_BODY_PT])
 
     # And the two that are in both, so that a body field which quietly left the

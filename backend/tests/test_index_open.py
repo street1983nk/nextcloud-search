@@ -19,6 +19,7 @@ has to handle; identifiers stay ASCII as the project rules require.
 """
 
 import ast
+import json
 import logging
 import threading
 import time
@@ -30,7 +31,14 @@ import pytest
 from tantivy import Document, Filter, Index, TextAnalyzer, TextAnalyzerBuilder, Tokenizer
 
 from conftest import open_schema_1_index, write_wordlist_nl
-from findling.config import INDEX_VERSION, SCHEMA_VERSION, SNOWBALL_NAME, settings
+from findling.config import (
+    INDEX_VERSION,
+    SCHEMA_VERSION,
+    SNOWBALL_NAME,
+    STEMMERLESS_LANGUAGES,
+    SUPPORTED_LANGUAGES,
+    settings,
+)
 from findling.index import analyzer
 from findling.index.analyzer import (
     ANALYZER_VERSION,
@@ -54,6 +62,7 @@ from findling.index.open import (
 )
 from findling.index.schema import (
     BODY_FIELD,
+    FIELD_BODY_CS,
     FIELD_BODY_DE,
     FIELD_BODY_EN,
     FIELD_BODY_ES,
@@ -184,10 +193,12 @@ def test_reopen_answers_the_same_query(index_dir: Path) -> None:
     assert _hits(reopened, "frist") == 1
 
 
-def test_the_schema_carries_exactly_the_thirteen_documented_fields() -> None:
-    # Nine until 2026-09-24, thirteen since: the four body fields of the v1.3
-    # languages sit between body_en and mtime, which is schema field order and
-    # therefore the order of this tuple as well.
+def test_the_schema_carries_exactly_the_fourteen_documented_fields() -> None:
+    # Nine until 2026-09-24, thirteen until plan 30-04, fourteen since: the four
+    # body fields of the v1.3 languages and body_cs of v1.5 sit between body_en
+    # and mtime, which is schema field order and therefore the order of this
+    # tuple as well. The thirteen of schema 2 stand frozen in
+    # tests/test_schema_generations.py as FIELDS_SCHEMA_2.
     assert FIELDS == (
         FIELD_FILE_ID,
         FIELD_STORAGE_ID,
@@ -201,10 +212,11 @@ def test_the_schema_carries_exactly_the_thirteen_documented_fields() -> None:
         FIELD_BODY_IT,
         FIELD_BODY_NL,
         FIELD_BODY_PT,
+        FIELD_BODY_CS,
         FIELD_MTIME,
     )
-    assert len(FIELDS) == 13
-    assert len(set(FIELDS)) == 13
+    assert len(FIELDS) == 14
+    assert len(set(FIELDS)) == 14
 
 
 def test_the_body_field_map_and_the_language_names_carry_the_same_codes() -> None:
@@ -215,8 +227,13 @@ def test_the_body_field_map_and_the_language_names_carry_the_same_codes() -> Non
     # that fills or registers through the other must not be able to pair es with
     # the Italian chain, and a code that exists in one alone is either a field
     # nobody can fill or a chain for a field that does not exist.
-    assert tuple(BODY_FIELD) == ("de", "en", "es", "it", "nl", "pt")
-    assert tuple(BODY_FIELD) == tuple(SNOWBALL_NAME)
+    #
+    # Since plan 30-04 one code reaches its chain without a Snowball name: cs,
+    # through czech_analyzer. SNOWBALL_NAME is therefore BODY_FIELD minus the
+    # stemmerless codes, in the same order, and BODY_FIELD is SUPPORTED_LANGUAGES.
+    assert tuple(BODY_FIELD) == ("de", "en", "es", "it", "nl", "pt", "cs")
+    assert tuple(BODY_FIELD) == SUPPORTED_LANGUAGES
+    assert tuple(SNOWBALL_NAME) == tuple(code for code in BODY_FIELD if code not in STEMMERLESS_LANGUAGES)
     assert tuple(BODY_FIELD.values()) == FIELDS[FIELDS.index(FIELD_BODY_DE) : FIELDS.index(FIELD_MTIME)]
 
 
@@ -255,6 +272,37 @@ def test_a_document_that_fills_all_six_bodies_is_accepted(index_dir: Path) -> No
     assert _hits(index, "preavviso", [FIELD_BODY_IT]) == 1
     assert _hits(index, "opzegtermijn", [FIELD_BODY_NL]) == 1
     assert _hits(index, "previo", [FIELD_BODY_PT]) == 1
+
+
+def test_body_cs_is_an_unstored_field_on_the_czech_chain(index_dir: Path) -> None:
+    # CZ-02: its own body field, read off the meta.json tantivy wrote and not off
+    # the builder, so that what is held is the layout on disk. Not stored, like
+    # every body field but the German one, and analysed by the chain named cs.
+    index = open_index(index_dir, CONSTITUENTS)
+    _write(index)
+    meta = json.loads((index_dir / "meta.json").read_text(encoding="utf-8"))
+    entry = next(field for field in meta["schema"] if field["name"] == FIELD_BODY_CS)
+
+    assert entry["options"]["stored"] is False
+    assert entry["options"]["indexing"]["tokenizer"] == "cs"
+
+
+def test_body_cs_answers_on_its_own_chain(index_dir: Path) -> None:
+    # The accent pair of one form (Pitfall 2 of 30-RESEARCH), not the inflection
+    # pair: without a stemmer smlouva and smlouve stay two terms.
+    index = open_index(index_dir, CONSTITUENTS)
+    writer = index.writer(heap_size=15_000_000, num_threads=1)
+    document = Document()
+    document.add_unsigned(FIELD_FILE_ID, 1)
+    document.add_text(FIELD_BODY_CS, "Nájemní smlouvě o řízení")
+    writer.add_document(document)
+    writer.commit()
+    writer.wait_merging_threads()
+    index.reload()
+
+    assert _hits(index, "smlouve", [FIELD_BODY_CS]) == 1
+    assert _hits(index, "rizeni", [FIELD_BODY_CS]) == 1
+    assert _hits(index, "smlouva", [FIELD_BODY_CS]) == 0
 
 
 def test_the_two_identifiers_and_mtime_are_fast_fields(index_dir: Path) -> None:
@@ -440,7 +488,7 @@ def test_the_schema_does_not_change_with_the_language_setting(monkeypatch: pytes
         index = open_index(index_dir, CONSTITUENTS)
         _write(index, body_en="The notice period is three months.")
 
-        assert len(FIELDS) == 13
+        assert len(FIELDS) == 14
         assert _hits(index, "notice", [FIELD_BODY_EN]) == 1
     finally:
         settings.cache_clear()
@@ -580,11 +628,11 @@ def test_the_only_index_opened_without_a_word_list_is_never_asked_a_question() -
 # that stopped importing has to be a red gate and not an error in collection.
 OPENING_SOURCE = PACKAGE_ROOT / OPENING_MODULE
 
-# Six body chains, the file name chain, the chain that indexes nothing. Not a
-# tautology, a ratchet: seven means a body field whose chain nobody registered
-# and therefore a writer that raises on every document, nine means a name the
-# schema does not persist and that nothing can ever ask for.
-EXPECTED_REGISTRATIONS = 8
+# Seven body chains (cs since plan 30-04), the file name chain, the chain that
+# indexes nothing. Not a tautology, a ratchet: eight means a body field whose
+# chain nobody registered and therefore a writer that raises on every document,
+# ten means a name the schema does not persist and that nothing can ever ask for.
+EXPECTED_REGISTRATIONS = 9
 
 
 def registrations_of_open_index(source: str, filename: str = OPENING_MODULE) -> tuple[list[int], list[int]]:
@@ -668,7 +716,7 @@ def test_the_registration_reader_fires_on_a_staged_sample() -> None:
     assert elsewhere == ([], []), elsewhere
 
 
-def test_open_index_registers_eight_chains_and_hangs_none_of_them_on_a_condition() -> None:
+def test_open_index_registers_nine_chains_and_hangs_none_of_them_on_a_condition() -> None:
     free, conditional = registrations_of_open_index(OPENING_SOURCE.read_text(encoding="utf-8"))
 
     assert conditional == [], (
@@ -676,7 +724,7 @@ def test_open_index_registers_eight_chains_and_hangs_none_of_them_on_a_condition
         "installation the condition is false on: " + ", ".join(f"{OPENING_MODULE}:{line}" for line in conditional)
     )
     assert len(free) == EXPECTED_REGISTRATIONS, free
-    # And the six of them that belong to a body field are exactly the six codes
+    # And the seven of them that belong to a body field are exactly the seven codes
     # the schema carries, so the count above cannot be met by registering one
     # chain twice and leaving a field without one.
     assert len(BODY_FIELD) + 2 == EXPECTED_REGISTRATIONS

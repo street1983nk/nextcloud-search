@@ -321,6 +321,13 @@ def test_the_four_build_out_weights_lie_below_english_and_english_below_german()
     assert BODY_BOOST["en"] < BODY_BOOST["de"]
 
 
+def test_czech_weighs_like_the_other_build_out_languages() -> None:
+    # Assumption A3 of plan 30-04: body_cs stands at the weight of the four
+    # build out languages, below body_en, for the same reason they do.
+    assert BODY_BOOST["cs"] == BODY_BOOST["es"]
+    assert BODY_BOOST["cs"] < BODY_BOOST["en"]
+
+
 def test_every_producible_plan_keeps_its_build_out_fields_below_english(probe_index: Index) -> None:
     # The same promise over every plan a directory can ask for, and not only over
     # the one set that happens to be in the table. A weight that is right in the
