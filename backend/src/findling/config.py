@@ -145,7 +145,14 @@ LANGUAGE_ALLOWLIST = frozenset(
 # iterates over this tuple and never over the admin's input, so "es,de" and
 # "de,es" resolve to the same tuple, carry the same language marker and leave an
 # index that never needed a rebuild alone.
-SUPPORTED_LANGUAGES = ("de", "en", "es", "it", "nl", "pt")
+#
+# cs joined at the end in plan 30-04 (CZ-02), and the end is the only place it
+# could join. The normalisation, the order of BODY_FIELD and the display all
+# follow this tuple, so appending keeps every language set an installation
+# already carries byte for byte the same; "cs,de" reads as "de,cs". It has a
+# body field and a chain like the six before it, and no Snowball name: see
+# STEMMERLESS_LANGUAGES below.
+SUPPORTED_LANGUAGES = ("de", "en", "es", "it", "nl", "pt", "cs")
 
 # The only place where a schema field code turns into a tantivy language name.
 # Every value here has to stand in LANGUAGE_ALLOWLIST above: an entry without
@@ -159,6 +166,16 @@ SNOWBALL_NAME = {
     "nl": "dutch",
     "pt": "portuguese",
 }
+
+# The product languages without a tantivy Snowball stemmer. Their chain comes
+# from a factory of its own (findling.index.analyzer.czech_analyzer for cs),
+# which never touches Filter.stopword or Filter.stemmer and therefore never
+# LANGUAGE_ALLOWLIST. Together with the keys of SNOWBALL_NAME they make up
+# SUPPORTED_LANGUAGES exactly, and the two sets do not overlap;
+# backend/tests/test_language_allowlist.py holds both. A code here is never
+# entered in SNOWBALL_NAME, and its tantivy name never in LANGUAGE_ALLOWLIST:
+# tantivy 0.26.2 knows no Czech, and either entry is a ValueError at start up.
+STEMMERLESS_LANGUAGES = frozenset({"cs"})
 
 # The two measured recipes of the constituent dictionary. full is recipe A
 # (276496 entries, 14 of 16 test compounds), nouns is recipe C (86345 entries,
@@ -431,6 +448,7 @@ TESSERACT_NAME = {
     "it": "ita",
     "nl": "nld",
     "pt": "por",
+    "cs": "ces",
 }
 
 # Pages per document before the OCR loop stops and the state becomes truncated.

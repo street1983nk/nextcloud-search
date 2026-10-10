@@ -1690,8 +1690,15 @@ PHP_TREE_HASH_TODAY = "bee7a95422d96ad9462e594bd7f1f55dc01e6efbb20c572740392c8c0
 # (QUERYABLE_SCHEMA_GENERATIONS, _of_the_marks asks the set instead of
 # SCHEMA_VERSION). No file came and none went, so PACKAGE_FILES_TODAY stays at
 # 74. The PHP pair does not move: php/ is unchanged.
+# Measured again by plan 30-04 Task 1+2 on 2026-10-10 (cs as a product language
+# and body_cs, CZ-02): plan 30-04 changed config.py (cs at the end of
+# SUPPORTED_LANGUAGES, STEMMERLESS_LANGUAGES, TESSERACT_NAME cs -> ces),
+# index/schema.py (FIELD_BODY_CS, fourteen fields), index/open.py (the Czech chain
+# registered unconditionally, nine registrations) and query/rewrite.py
+# (BODY_BOOST cs 0.6). No file came and none went, so PACKAGE_FILES_TODAY stays at
+# 74. The PHP pair does not move: php/ is unchanged.
 PACKAGE_FILES_TODAY = 74
-PACKAGE_TREE_HASH_TODAY = "0f07f40cc0f1746cd15750f9835dfd0c6c9aab6bfca7d089af7701869e93e0f6"
+PACKAGE_TREE_HASH_TODAY = "73ad4fc43c4120e12285a1b397c6b32fa2147d30cda38fd38be404620f70717f"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

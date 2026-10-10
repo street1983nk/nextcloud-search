@@ -107,7 +107,9 @@ CURRENT_SCHEMA: Final = str(SCHEMA_VERSION)
 # The four languages of the v1.3 build out, read out of the two lists that
 # already exist rather than spelled a third time. LEGACY_LANGUAGES is the pair
 # every release up to 1.2.0 searched; whatever is in the supported set and not in
-# that pair is what this phase added and what these weights are about.
+# that pair is what this phase added and what these weights are about. Since
+# plan 30-04 that includes cs, at the same weight (assumption A3), so the probe
+# below moves five weights together and not four.
 BUILD_OUT: Final = tuple(code for code in SUPPORTED_LANGUAGES if code not in LEGACY_LANGUAGES)
 
 # MEASURED 2026-09-24 against tantivy 0.26.2, by the sweep in
@@ -344,10 +346,11 @@ def test_every_producible_plan_keeps_its_build_out_fields_below_english(probe_in
                 continue
             assert plan.boosts[field] < plan.boosts[FIELD_BODY_EN], f"{field} weighs at least as much as body_en"
             checked += 1
-    # Four build out languages, each of them in half of the sets that carry en:
-    # 4 * 2 ** (6 - 2). Written out so that a loop which silently stopped looking
-    # cannot pass as a loop that looked and found nothing wrong.
-    assert checked == 64
+    # Five build out languages since plan 30-04 (cs joined the four), each of
+    # them in half of the sets that carry en: 5 * 2 ** (7 - 2). Written out so
+    # that a loop which silently stopped looking cannot pass as a loop that
+    # looked and found nothing wrong.
+    assert checked == 160
 
 
 def test_the_two_hits_answer_the_question_through_chains_that_disagree(probe_index: Index) -> None:
@@ -364,6 +367,10 @@ def test_the_two_hits_answer_the_question_through_chains_that_disagree(probe_ind
         "es": [MULTI_CHAIN_HIT],
         "it": [MULTI_CHAIN_HIT],
         "pt": [MULTI_CHAIN_HIT],
+        # The Czech chain has no stemmer (CZ-03), so it reaches neither
+        # "documents" nor "documento" and stays out of the disagreement: the
+        # three against three above is untouched by the seventh field.
+        "cs": [],
     }
 
 

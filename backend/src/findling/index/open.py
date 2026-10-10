@@ -27,6 +27,7 @@ from tantivy import Filter, Index, Searcher, TextAnalyzer, TextAnalyzerBuilder, 
 from findling.config import INDEX_VERSION, SCHEMA_VERSION, SNOWBALL_NAME
 from findling.index.analyzer import (
     ANALYZER_VERSION,
+    TOKENIZER_CS,
     TOKENIZER_DE,
     TOKENIZER_EN,
     TOKENIZER_ES,
@@ -35,6 +36,7 @@ from findling.index.analyzer import (
     TOKENIZER_NL,
     TOKENIZER_PT,
     cached_german_analyzer,
+    czech_analyzer,
     dutch_chain_for,
     english_analyzer,
     name_analyzer,
@@ -141,7 +143,7 @@ def stored_only_analyzer() -> TextAnalyzer:
 
 
 def open_index(path: Path, constituents: Sequence[str], *, dutch: str | None = None) -> Index:
-    """Create or open the index at ``path`` and register its eight analyzers.
+    """Create or open the index at ``path`` and register its nine analyzers.
 
     ``constituents`` is the prepared word list from
     :func:`findling.index.wordlist.load_constituents`; it decides how German text
@@ -191,6 +193,10 @@ def open_index(path: Path, constituents: Sequence[str], *, dutch: str | None = N
     # behind the folding (D-07). dutch_chain_for makes the choice, not this line.
     index.register_tokenizer(TOKENIZER_NL, dutch_chain_for(dutch))
     index.register_tokenizer(TOKENIZER_PT, snowball_analyzer(SNOWBALL_NAME["pt"]))
+    # Czech, free like the four above and for the same reason: a field without a
+    # registered chain breaks every add_document, cs active or not. It costs
+    # nothing, because the chain brings no automaton, only a folded stop list.
+    index.register_tokenizer(TOKENIZER_CS, czech_analyzer())
     index.register_tokenizer(TOKENIZER_NAME, name_analyzer())
     index.register_tokenizer(TOKENIZER_STORED_ONLY, stored_only_analyzer())
     return index

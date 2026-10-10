@@ -1,15 +1,22 @@
-"""The thirteen fields of the index, with the reason for every column of the table.
+"""The fourteen fields of the index, with the reason for every column of the table.
 
 A tantivy schema is written once and read for the lifetime of the index: a field
 that is added later means a reindex, and a field that is stored without being
 needed is paid for on every disk of every installation. So this module is a table
-with thirteen rows and a line of reasoning per row, and nothing else.
+with fourteen rows and a line of reasoning per row, and nothing else.
 
 Four of the six body fields arrived on 2026-09-24 with the language build out of
 v1.3, under owner decision E-17-2 option a of 2026-09-23: the schema carries all
 six body fields at all times, and FINDLING_LANGUAGES decides which of them a
 document is written into and nothing else. A language that is switched on later
 is therefore a filling question and never a schema question.
+
+The seventh body field, body_cs, arrived on 2026-10-10 with plan 30-04 (CZ-02),
+the one schema step of milestone v1.5 (D-30-08): Czech on a chain without a
+stemmer, and the same rule as above, so that switching cs on later is a filling
+question as well. Installations of schema 2 keep their thirteen fields until a
+rebuild runs anyway; the pair ("2", "3") of findling.store.repo.LEGACY_SCHEMA_STEPS
+is what keeps the step itself from forcing one.
 
 Three decisions carry real cost and are therefore measured rather than argued.
 
@@ -48,6 +55,7 @@ from typing import Final
 from tantivy import Schema, SchemaBuilder
 
 from findling.index.analyzer import (
+    TOKENIZER_CS,
     TOKENIZER_DE,
     TOKENIZER_EN,
     TOKENIZER_ES,
@@ -69,6 +77,7 @@ FIELD_BODY_ES: Final = "body_es"
 FIELD_BODY_IT: Final = "body_it"
 FIELD_BODY_NL: Final = "body_nl"
 FIELD_BODY_PT: Final = "body_pt"
+FIELD_BODY_CS: Final = "body_cs"
 FIELD_MTIME: Final = "mtime"
 
 # In schema order. Callers that build documents read the names from here, because
@@ -88,6 +97,7 @@ FIELDS: Final = (
     FIELD_BODY_IT,
     FIELD_BODY_NL,
     FIELD_BODY_PT,
+    FIELD_BODY_CS,
     FIELD_MTIME,
 )
 
@@ -104,6 +114,7 @@ BODY_FIELD: Final = {
     "it": FIELD_BODY_IT,
     "nl": FIELD_BODY_NL,
     "pt": FIELD_BODY_PT,
+    "cs": FIELD_BODY_CS,
 }
 
 # Built into tantivy: one token, the whole field, unchanged. The right choice for
@@ -173,6 +184,10 @@ def build_schema() -> Schema:
     # Portuguese, the fourth and last of the v1.3 build out. Measured with the
     # three above: the four empty fields cost 0.40 percent of directory size.
     builder.add_text_field(FIELD_BODY_PT, stored=False, tokenizer_name=TOKENIZER_PT)
+    # Czech, the one field of v1.5. Stemmerless (folding and stop words only, see
+    # findling.index.analyzer.czech_analyzer), and not stored like every body
+    # field but the German one.
+    builder.add_text_field(FIELD_BODY_CS, stored=False, tokenizer_name=TOKENIZER_CS)
     # Display today, sorting and since/until later. Fast rather than indexed: a
     # range over a column is what a date filter needs, a term is not.
     builder.add_integer_field(FIELD_MTIME, stored=True, indexed=False, fast=True)
