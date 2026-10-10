@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 30-06-PLAN.md
-last_updated: "2026-10-10T07:30:32.450Z"
-last_activity: 2026-10-10 -- Plan 30-06 abgeschlossen
+stopped_at: Completed 30-07-PLAN.md
+last_updated: "2026-10-10T08:30:01.220Z"
+last_activity: 2026-10-10 -- Plan 30-07 abgeschlossen
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 9
-  completed_plans: 6
-  percent: 67
+  completed_plans: 7
+  percent: 78
 ---
 
 # Project State
@@ -26,11 +26,11 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 30 von 30-36 (Owner-Tor, Schema und Tschechisch)
-Plan: 30-06 abgeschlossen, als Nächstes 30-07
+Plan: 30-07 abgeschlossen, als Nächstes 30-08
 Status: In Ausführung
-Last activity: 2026-10-10 -- Plan 30-06 abgeschlossen
+Last activity: 2026-10-10 -- Plan 30-07 abgeschlossen
 
-Progress: [███████░░░] 67%
+Progress: [████████░░] 78%
 
 ## Performance Metrics
 
@@ -41,6 +41,7 @@ Progress: [███████░░░] 67%
 - v1.5: 30-04 in ca. 40 min (3 Tasks, 14 Dateien)
 - v1.5: 30-05 in ca. 75 min (2 Tasks, 3 Dateien)
 - v1.5: 30-06 in ca. 60 min (2 Tasks, 2 Dateien)
+- v1.5: 30-07 in ca. 55 min (2 Tasks, 3 Dateien)
 
 ## Accumulated Context
 
@@ -58,6 +59,7 @@ Progress: [███████░░░] 67%
 - 30-04: cs am Ende von SUPPORTED_LANGUAGES, ausserhalb Snowball (STEMMERLESS_LANGUAGES); body_cs als 14. Feld, neun Ketten unbedingt; SCHEMA_VERSION 3 mit GOLD_V1_5. Store upgrade 6 verlangt bereits Schema 2 vorher, 3 nachher (30-07 nur noch der cs-Teil). CZ-02 bleibt offen bis 30-05 bis 30-07.
 - 30-05: Bestand (Schema 2, Schema 1) baut unter Schema-3-Code nicht um, cs an/aus per Bandlauf ohne Neu-Einbettung bewiesen; GROWTH_PER_LANGUAGE bleibt 0.40 (cs gemessen 0.358, es 0.361, 2000 Dokumente). CZ-02 offen bis 30-07, CZ-03 bis zur Doku (30-08/30-09).
 - 30-06: Upgrade-Strecke startet von v1.4.2 (D-30-07); 1.4.2 urteilt die Saat richtig (Sidecar skipped/system_file, Bild indexed), recheck_1_4_0 done vor und nach dem Upgrade, Store upgrade 5 haelt alle neun Zaehler unveraendert und verlangt schemaVersion 2 und rebuildState idle per Wert; Andockblock fuer Phase 31 am Ende von Store upgrade 2b. deploy-harp-Lauf 38033629694 gruen ueber Store upgrade 0 bis 6. CZ-02 offen bis 30-07.
+- 30-07: Store upgrade 6 schaltet de,en -> de,cs (ohne en, Pitfall 5), neuer Store upgrade 7 zurueck auf de,en; smlouve 1/1/1/1, proc 1/1/0/1, Schema 2 -> 3 -> 3, Lesestelle per Container-Probe de,cs bzw. de,en, vectors.db ueber beide Umbauten gleich. term_hits zaehlt bei Ein-Wort-Fragen keine Vektortreffer (one-term-Regel, api/search.py:307). Fuellkorpus 64 -> 256 (de,cs-Bandlauf sonst unsichtbar, Lauf 38035652649). deploy-harp-Lauf 38036946762 gruen ueber Store upgrade 0 bis 7. CZ-02 abgehakt.
 
 ### Offene Faeden (kein aktiver Auftrag)
 
@@ -77,6 +79,6 @@ Progress: [███████░░░] 67%
 
 ## Session Continuity
 
-Last session: 2026-10-10T07:30:32.433Z
-Stopped at: Completed 30-06-PLAN.md
+Last session: 2026-10-10T08:30:01.200Z
+Stopped at: Completed 30-07-PLAN.md
 Resume file: None
