@@ -229,6 +229,28 @@ Doku selbst empfiehlt und die der CI-Beweis fährt, findet die akzentlose Frage
 as written with its accents; on `de,cs` a question without accents finds it
 through no body field."
 
+## Behebung
+
+Alle fünf Befunde am 2026-10-10 behoben, je Befund ein Commit auf `main`. Vor
+jedem Commit lokal grün: `ruff check`, `ruff format --check` (backend und
+scripts), `pyright` (`PYRIGHT_PYTHON_FORCE_VERSION=latest`), `vulture`, die
+betroffenen Tests; vor dem Push zusätzlich die volle Suite (4852 passed,
+25 skipped).
+
+| Befund | Commit | Fix |
+|---|---|---|
+| WR-01 | `4668ba1b` | `open.py`: `_fingerprints_of_the_same_run` lässt einen gespeicherten `rebuild_for`, der sich nur in einer per `LEGACY_SCHEMA_STEPS` entschuldigten älteren Schemamarke unterscheidet, als denselben Lauf gelten und übernimmt ihn unter dem aktuellen Fingerabdruck. `.rebuild-for` im Umbauziel bleibt streng (Verwerfen bei anderem Sprachsatz/Layout unverändert grün). Regressionstest `test_an_update_across_an_excused_schema_step_lets_the_crawl_carry_on` gegen den alten `open.py` rot (Generation 2 -> 3), Positivkontrolle: neue Wortliste im selben Update erhöht weiterhin. Baumhash-Pin nachgezogen. |
+| WR-02 | `c1107320` | `probe_image_ocr_czech.py` prüft den Rohtext vor der Faltung auf Buchstaben, die nur ein Modell mit tschechischem Alphabet schreibt (`řěčůšžň`, mindestens 3 von 4), und liest denselben Streifen mit `eng` als Positivkontrolle (muss 0 liefern). Lokal gegen `findling_backend:dev`: ces ok (4 Buchstaben, eng-Kontrolle 0); Kopie mit `eng` statt `ces` findet weiter 4 von 4 Wörtern, scheitert aber an 0 Buchstaben (FAILED, Exit 1). Echo-Zeile in `docker.yml` angepasst. |
+| IN-01 | `2a695562` | Kommentare in `rebuild.py`, `open.py`, `api/resources.py` und `Dockerfile` auf sieben Felder/Ketten bzw. "jedes Körperfeld des Schemas" umgestellt; Dockerfile nennt die Indexketten als eigene Einstellung (Deutsch und Englisch ab Werk, Tschechisch seit 1.5). Baumhash-Pin nachgezogen. |
+| IN-02 | `716dbc87` | Verdrahtung bleibt explizit, die Menge wird per Test daran gebunden: `test_every_stemmerless_language_has_a_field_and_a_registered_chain` verlangt je Code Körperfeld, Feld auf der Kette gleichen Namens (meta.json) und registrierte Kette (Schreiben und Treffer). Begründung: jede Kette in `open_index` hat eine eigene Fabrik, eine mengengesteuerte Schleife bräuchte eine zweite Code-zu-Fabrik-Tabelle mit eigenem Paritätstest. Gegenproben rot: Fantasiecode `sk` (kein Feld), entfernte cs-Registrierung (Schreibfehler). Baumhash-Pin nachgezogen. |
+| IN-03 | `e56cce00` | `docs/language-analyzers.md`: `en` indexiert solche Wörter in beiden Schreibweisen, `de` nur wie geschrieben; auf `de,cs` findet die akzentlose Frage (`zpravy`, `prvni`) nichts, mit Akzenten über `body_de`; Ausweg `en` dazunehmen (`de,en,cs`). Per Analyse der drei Ketten belegt. |
+
+CI auf `e56cce00`, alle grün: Python gates 38046798121, Integration
+38046798014, Multi-arch image 38046798045 (Schritt CZ-01 auf amd64 und arm64:
+4 tschechische Buchstaben, eng-Kontrolle 0, ok), HaRP deploy 38046798127,
+Resilience 38046798078, Security scans 38046798099, OpenSSF Scorecard
+38046798070.
+
 ---
 
 _Geprüft: 2026-10-10_
