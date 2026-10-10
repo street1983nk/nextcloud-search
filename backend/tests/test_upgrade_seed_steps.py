@@ -189,11 +189,18 @@ RECORD_STEP = "Store upgrade 3c,"
 UPGRADE_STEP = "Store upgrade 4,"
 ASSURANCE_STEP = "Store upgrade 5,"
 
-# The length of the run block of "Store upgrade 3" before plan 29-11 touched it,
-# measured with yaml on the tree of b013af40. STATE.md carries the deferred item
-# that this block must not grow; the growth of this plan went into "Store
-# upgrade 3c" instead, and this bound keeps it there.
-SNAPSHOT_RUN_MAX = 20726
+# The length of the run block of "Store upgrade 3", measured with yaml. Until
+# plan 30-07 it was 20726, the length before plan 29-11 touched it (tree of
+# b013af40): STATE.md carries the deferred item that this block must not grow,
+# and the growth of 29-11 went into "Store upgrade 3c" instead. Plan 30-07
+# (D-30-07) raised it on purpose to 20957: the two Czech counts of the snapshot
+# (czech, czechStop) have to be read where every other value of a snapshot is
+# read, by the one snapshot() both sides of every rebuild share, and a second
+# reader would compare two measurements instead of two states. Their
+# explanation went into the YAML comment above the step, outside the run block.
+# The run carries no expression, so the 21000 character cap of a templated run
+# does not apply to it; the bound stays a bound on growth.
+SNAPSHOT_RUN_MAX = 20957
 
 # The derivation of the comment above "Store upgrade 5" since plan 30-06: the
 # recheck of D-29-10 is done on the released installation, so nothing hands a
@@ -242,12 +249,14 @@ def test_the_snapshot_expects_the_stamped_languages_mark() -> None:
 
 
 def test_the_rebuild_step_demands_the_schema_of_the_running_code() -> None:
-    # From plan 29-13 to 30-04 v1.3.2 and this code shared schema 2, so the
-    # language jump of "Store upgrade 6" moved no schema mark (deploy-harp run
-    # 37455892381). Plan 30-04 raised SCHEMA_VERSION to 3 (body_cs, D-30-08):
-    # the start still carries 2, the rebuild builds and stamps the schema of
-    # this code, so the demand is 2 before and 3 after. A further schema bump in
-    # config.py has to turn this gate red again.
+    # v1.4.2 stamps 2, this code stamps 3 after a rebuild. From plan 29-13 to
+    # 30-04 v1.3.2 and this code shared schema 2, so the language jump of
+    # "Store upgrade 6" moved no schema mark (deploy-harp run 37455892381).
+    # Plan 30-04 raised SCHEMA_VERSION to 3 (body_cs, D-30-08): the start of
+    # the proof (v1.4.2 since plan 30-06) carries 2, the rebuild builds and
+    # stamps the schema of this code, so the demand is 2 before and 3 after,
+    # and 3 on both sides of the way back in "Store upgrade 7". A further
+    # schema bump in config.py has to turn this gate red again.
     from findling.config import SCHEMA_VERSION
 
     assert SCHEMA_VERSION == 3
@@ -255,6 +264,8 @@ def test_the_rebuild_step_demands_the_schema_of_the_running_code() -> None:
     assert 'if [ "${was}" = "2" ] && [ "${now}" = "3" ]; then' in run
     assert '[ "${now}" = "2" ]; then' not in run
     assert "which is exactly one step" not in run
+    back = _run("Store upgrade 7,")
+    assert 'if [ "${was}" = "3" ] && [ "${now}" = "3" ]; then' in back
 
 
 def test_the_assurances_demand_the_languages_mark_unchanged() -> None:
@@ -373,7 +384,153 @@ def test_the_old_version_pair_is_gone_from_the_texts() -> None:
     assert "judges wrongly" not in text
 
 
-@pytest.mark.parametrize("prefix", [SNAPSHOT_STEP, RECORD_STEP, UPGRADE_STEP, ASSURANCE_STEP])
+# --- cs switched on and off again (plan 30-07, D-30-07) ----------------------
+
+CORPUS_STEP = "Store upgrade 2,"
+REBUILD_STEP = "Store upgrade 6,"
+BACK_STEP = "Store upgrade 7,"
+
+# The Czech document, as the printf of "Store upgrade 2" writes it: octal UTF-8
+# for "Proc je Smlouve o najmu bytu treba podpis." with c caron, e caron, a
+# acute and r caron, because the workflow stays ASCII.
+CZECH_PRINTF = r"printf 'Pro\304\215 je Smlouv\304\233 o n\303\241jmu bytu t\305\231eba podpis.\n'"
+CZECH_SENTENCE = "Proč je Smlouvě o nájmu bytu třeba podpis.\n"
+
+
+def _job_env() -> dict[str, Any]:
+    env = _workflow()["jobs"][JOB]["env"]
+    assert isinstance(env, dict)
+    return env
+
+
+def test_the_rebuild_switches_cs_on_without_en_and_back() -> None:
+    # 30-RESEARCH pitfall 5: on a set with en, body_en folds the Czech accents
+    # and the proof would be green without the Czech chain. Unsorted on
+    # purpose, so the normalisation of the mark is measured.
+    env = _job_env()
+    assert env["REBUILD_LANGUAGES"] == "cs,de"
+    assert env["REBUILD_LANGUAGES_NORMALISED"] == "de,cs"
+    assert env["REBUILD_LANGUAGES_BACK"] == "de,en"
+    assert "en" not in env["REBUILD_LANGUAGES"].split(",")
+    assert 'recreate_with_languages "${REBUILD_LANGUAGES}"' in _run(REBUILD_STEP)
+    assert 'recreate_with_languages "${REBUILD_LANGUAGES_BACK}"' in _run(BACK_STEP)
+
+
+def test_the_six_language_proof_is_untouched() -> None:
+    # 30-RESEARCH pitfall 7: the language proof stays at six languages, cs is
+    # proved on the upgrade path alone. Seven occurrences before plan 30-07.
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert text.count("de,en,es,it,nl,pt") == 7
+    assert "de,en,es,it,nl,pt,cs" not in text
+
+
+def test_the_corpus_carries_the_czech_document() -> None:
+    run = _run(CORPUS_STEP)
+    assert CZECH_PRINTF + " \\\n  > data/testuser/files/upgrade-dopis-cs.txt" in run
+
+
+def test_the_czech_printf_writes_the_sentence_of_the_plan() -> None:
+    # The octal escapes decode to the sentence of plan 30-07, so the document
+    # really carries Smlouve with a caron and the stop word Proc with one.
+    octal = CZECH_PRINTF.removeprefix("printf '").removesuffix("'")
+    written = re.sub(r"\\([0-7]{3})", lambda found: chr(int(found.group(1), 8)), octal)
+    written = written.replace("\\n", "\n")
+    assert written.encode("latin-1").decode("utf-8") == CZECH_SENTENCE
+
+
+def test_the_snapshot_carries_both_czech_counts_beside_the_terms() -> None:
+    run = _run(SNAPSHOT_STEP)
+    assert "czech=$(term_hits smlouve) || return 1" in run
+    assert "czech_stop=$(term_hits proc) || return 1" in run
+    assert "czech: $czech," in run
+    assert "czechStop: $czechstop," in run
+    start = run.index("terms: {")
+    assert "czech" not in run[start : run.index("},", start)]
+
+
+def test_the_czech_chain_reads_one_one_then_nought_then_one() -> None:
+    # smlouve 1, 1, 1, 1 and proc 1, 1, 0, 1 across release, upgrade, cs on and
+    # cs off (comment above "Store upgrade 3").
+    one_one = "'.czech == 1 and .czechStop == 1'"
+    one_nought = "'.czech == 1 and .czechStop == 0'"
+    assert one_one + ' "${RUNNER_TEMP}/upgrade-before.json"' in _run(SNAPSHOT_STEP)
+    assert one_one + ' "${after}"' in _run(ASSURANCE_STEP)
+    rebuild = _run(REBUILD_STEP)
+    assert one_one + ' "${before}"' in rebuild
+    assert one_nought + ' "${after}"' in rebuild
+    back = _run(BACK_STEP)
+    assert one_nought + ' "${before}"' in back
+    assert one_one + ' "${after}"' in back
+
+
+def test_the_rebuild_asks_the_reading_side_which_languages_it_searches() -> None:
+    # Not only the marks: the reading side of the volume has to search and fill
+    # de,cs after the rebuild (no en field asked or filled) and de,en after the
+    # way back (body_cs without a term). Every body field is probed, not only
+    # the active set plus German, or a left over body_cs would go unseen.
+    rebuild = _run(REBUILD_STEP)
+    assert "cat > \"${RUNNER_TEMP}/rebuild-languages.py\" <<'PY'" in rebuild
+    assert "resources.searched_languages()" in rebuild
+    assert "for code, field in BODY_FIELD.items() if searcher.terms_with_prefix(field" in rebuild
+    assert '.searched == "de,cs" and .filled == "de,cs"' in rebuild
+    assert '.searched == "de,en" and .filled == "de,en"' in _run(BACK_STEP)
+
+
+def test_the_rebuild_keeps_the_spanish_nought_and_claims_no_spanish_hit() -> None:
+    rebuild = _run(REBUILD_STEP)
+    assert "'.spanish == 0' \"${after}\"" in rebuild
+    assert ".spanish == 1" not in rebuild
+
+
+def test_the_way_back_stands_exactly_once_right_after_the_rebuild() -> None:
+    names = [str(step.get("name", "")) for step in _steps()]
+    assert len(_named(BACK_STEP)) == 1
+    rebuild = next(number for number, name in enumerate(names) if name.startswith(REBUILD_STEP))
+    assert names[rebuild + 1].startswith(BACK_STEP)
+    assert _named(BACK_STEP)[0]["if"] == _named(REBUILD_STEP)[0]["if"]
+
+
+def test_both_rebuilds_share_one_restart_and_one_reader() -> None:
+    rebuild = _run(REBUILD_STEP)
+    back = _run(BACK_STEP)
+    assert "cat > \"${RUNNER_TEMP}/rebuild-probe.sh\" <<'SH'" in rebuild
+    for run in (rebuild, back):
+        assert '. "${RUNNER_TEMP}/upgrade-probe.sh"' in run
+        assert '. "${RUNNER_TEMP}/rebuild-probe.sh"' in run
+        assert "take_app_password" in run
+    # One restart, written once: the way back does not build a second one.
+    assert "docker create" not in back
+    assert rebuild.count("docker create") == 1
+
+
+def test_no_vector_is_written_across_both_rebuilds() -> None:
+    rebuild = _run(REBUILD_STEP)
+    back = _run(BACK_STEP)
+    assert 'echo "REBUILD_VECTORS_BEFORE=${vectors_before}" >> "${GITHUB_ENV}"' in rebuild
+    assert 'if [ "${vectors_before}" != "${vectors_after}" ]; then' in rebuild
+    assert (
+        'if [ "${vectors_after}" != "${vectors_before}" ] '
+        '|| [ "${vectors_after}" != "${REBUILD_VECTORS_BEFORE}" ]; then' in back
+    )
+
+
+def test_the_way_back_demands_the_factory_mark_and_no_drift() -> None:
+    back = _run(BACK_STEP)
+    assert 'if [ "${now}" != "${REBUILD_LANGUAGES_BACK}" ]; then' in back
+    assert "'.marks.languages == $set and .marks.schemaVersion == \"3\"'" in back
+    assert "grep -c 'built by different code'" in back
+    assert 'if [ "${fail}" -ne 0 ]; then' in back
+
+
+@pytest.mark.parametrize("prefix", [REBUILD_STEP, BACK_STEP])
+def test_the_rebuild_steps_carry_no_expression(prefix: str) -> None:
+    assert "${{" not in _run(prefix)
+
+
+@pytest.mark.parametrize(
+    "prefix",
+    [CORPUS_STEP, SNAPSHOT_STEP, RECORD_STEP, UPGRADE_STEP, ASSURANCE_STEP, REBUILD_STEP, BACK_STEP],
+)
 def test_the_changed_steps_parse_in_bash(prefix: str, tmp_path: Path) -> None:
     answer = _bash_parses(_run(prefix), tmp_path)
     assert answer.returncode == 0, answer.stderr

@@ -424,16 +424,25 @@ jobs:
       # The language set "Store upgrade 6" orders the rebuild with, and it is
       # deliberately not in schema field order. config.py::_languages iterates
       # over SUPPORTED_LANGUAGES and never over the admin's input, so the mark
-      # the rebuild stamps has to read de,en,es whatever order it was asked in.
+      # the rebuild stamps has to read de,cs whatever order it was asked in.
       # A set that was already sorted would let a normalisation that does not
       # happen pass unnoticed, and the mark is what the next start compares
       # against: an unnormalised one would order a rebuild at every boot.
       #
-      # es and not it, nl or pt for one reason only: Spanish is the language the
-      # owner decision E-17-3 is written about, and docs/language-analyzers.md
-      # carries its example with both variables.
-      REBUILD_LANGUAGES: 'es,de,en'
-      REBUILD_LANGUAGES_NORMALISED: 'de,en,es'
+      # cs since plan 30-07 (D-30-07), es from plan 19-08 until then. Spanish
+      # is proved on a fresh installation by the language proof step above,
+      # which runs six languages and stays at six (30-RESEARCH pitfall 7). And
+      # the set carries no en on purpose (pitfall 5): the English chain folds
+      # Czech accents and stems, so on de,en,cs the question smlouve would find
+      # the document that writes the word with a caron through body_en, green
+      # without the Czech chain. On de,cs only body_cs can answer it, because
+      # the German chain does not fold.
+      #
+      # REBUILD_LANGUAGES_BACK is the set "Store upgrade 7" switches back to,
+      # the factory set: cs off again, en on again, through a second band run.
+      REBUILD_LANGUAGES: 'cs,de'
+      REBUILD_LANGUAGES_NORMALISED: 'de,cs'
+      REBUILD_LANGUAGES_BACK: 'de,en'
 
     steps:
       # Actions are pinned to commit SHAs, never to tags: a moved tag would be
@@ -3190,6 +3199,22 @@ jobs:
             echo 'La empresa confirma la entrega de los documentos del piso en Madrid.'
           } > data/testuser/files/upgrade-carta-es.txt
 
+          # The Czech document of plan 30-07 (D-30-07), written for this proof:
+          # "Proc je Smlouve o najmu bytu treba podpis." with its accents, as
+          # octal UTF-8 because this file stays ASCII. It carries two words
+          # the rebuilds of "Store upgrade 6" and "Store upgrade 7" are read by,
+          # both asked as ONE word, so the one term rule above keeps the vector
+          # half out of both counts. smlouve against Smlouve with a caron: on
+          # de,en body_en folds and stems both to smlouv, on de,cs only body_cs
+          # folds them together (the German chain keeps the caron). proc against
+          # Proc with a caron, a Czech stop word: on de,en body_en finds it, on
+          # de,cs nothing does, because the German chain keeps the caron and the
+          # Czech chain drops the word. Measured over the shipped chains on
+          # 2026-10-10. The file name carries neither word, or the name field
+          # would answer the questions the body fields are there to answer.
+          printf 'Pro\304\215 je Smlouv\304\233 o n\303\241jmu bytu t\305\231eba podpis.\n' \
+            > data/testuser/files/upgrade-dopis-cs.txt
+
           # The fill corpus, and it exists for one measured reason: it is what
           # makes the rebuild of "Store upgrade 6" long enough to be watched.
           #
@@ -3598,6 +3623,22 @@ jobs:
           # are, so the assurances of "Store upgrade 5" keep their subject.
           # ---------------------------------------------------------------
 
+      # The tenth and eleventh value of a snapshot, since plan 30-07 (D-30-07):
+      # czech counts the question smlouve and czechStop the question proc, both
+      # against the Czech document of "Store upgrade 2", and both as keys of
+      # their own beside .terms for the reason the Spanish count gives below
+      # (the precondition that every term answers exactly one file). The chain
+      # they carry is the separating proof of 30-RESEARCH pitfall 5:
+      #
+      #   step                    set     smlouve  proc
+      #   3, released 1.4.2       de,en      1       1    body_en folds and stems both
+      #   5, after the upgrade    de,en      1       1    nothing rebuilt
+      #   6, cs switched on       de,cs      1       0    only body_cs, which drops proc
+      #   7, cs switched off      de,en      1       1    body_en again
+      #
+      # smlouve alone would be green on every row for a reason that has nothing
+      # to do with the Czech chain; the nought of proc in step 6 between the
+      # ones around it is what says en was really out of the question.
       - name: Store upgrade 3, the state of the released installation, before anything moves
         if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
         run: |
@@ -3922,6 +3963,15 @@ jobs:
               cat "${RUNNER_TEMP}/upgrade-term.json" >&2
               return 1
             fi
+            # The two Czech questions (plan 30-07), comment above this step.
+            # term_hits fails closed and answers digits only, so an empty
+            # value here is a broken call and ends the snapshot.
+            czech=$(term_hits smlouve) || return 1
+            czech_stop=$(term_hits proc) || return 1
+            if [ -z "${czech}" ] || [ -z "${czech_stop}" ]; then
+              echo "a Czech question carried no readable count" >&2
+              return 1
+            fi
 
             jq -n \
               --arg label "${label}" \
@@ -3938,6 +3988,8 @@ jobs:
               --arg filters "${filters}" \
               --arg rebuild "${rebuild}" \
               --argjson spanish "${spanish}" \
+              --argjson czech "${czech}" \
+              --argjson czechstop "${czech_stop}" \
               '{
                  label: $label,
                  terms: {
@@ -3946,6 +3998,8 @@ jobs:
                    Erinnerung: $erinnerung
                  },
                  spanish: $spanish,
+                 czech: $czech,
+                 czechStop: $czechstop,
                  container: {
                    docs: $report.docs,
                    indexed: $report.indexed,
@@ -4025,7 +4079,13 @@ jobs:
             jq '.marks' "${RUNNER_TEMP}/upgrade-before.json"
             exit 1
           fi
-          echo "three terms, one file each; the Spanish question with no hit at all; the languages mark de,en; the state is on record in upgrade-before.json"
+          # The first row of the Czech chain (comment above this step): on
+          # de,en body_en answers both questions with the one Czech document.
+          if ! jq -e '.czech == 1 and .czechStop == 1' "${RUNNER_TEMP}/upgrade-before.json" > /dev/null; then
+            echo "::error::smlouve answers $(jq -r '.czech' "${RUNNER_TEMP}/upgrade-before.json") and proc $(jq -r '.czechStop' "${RUNNER_TEMP}/upgrade-before.json") document(s) on the ${UPGRADE_FROM_TAG} installation, and on de,en body_en has to bring back the one Czech document for each"
+            exit 1
+          fi
+          echo "three terms, one file each; the Spanish question with no hit at all; smlouve and proc one file each; the languages mark de,en; the state is on record in upgrade-before.json"
 
       - name: Store upgrade 3b, the always enabled apps this checkout does not carry
         if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
@@ -4814,6 +4874,14 @@ jobs:
           else
             echo "the Spanish question answers $(jq -r '.spanish' "${after}") hits after the upgrade, unchanged against the ${UPGRADE_FROM_TAG} installation, which is the window between upgrade and rebuild measured instead of assumed"
           fi
+          # The second row of the Czech chain of plan 30-07 (comment above
+          # "Store upgrade 3"): no rebuild, so body_en still answers both.
+          if ! jq -e '.czech == 1 and .czechStop == 1' "${after}" > /dev/null; then
+            echo "::error::smlouve answers $(jq -r '.czech' "${after}") and proc $(jq -r '.czechStop' "${after}") document(s) after the upgrade, and without a rebuild both have to answer the one Czech document as before"
+            fail=1
+          else
+            echo "smlouve and proc answer one document each after the upgrade, as before it"
+          fi
 
           echo "--- 8, nothing was embedded again, and the profile in force is economy (D-29-01) ---"
           # The upgrade must not cost a vector. The embedding mark of "Store
@@ -4878,6 +4946,7 @@ jobs:
             echo "- nothing embedded again: embedding mark and the whole vector stock, the picture included, unchanged; the profile in force is economy"
             echo "- schemaVersion stays 2 and the languages mark stays de,en, the rebuild state is idle: nothing was stamped and nothing rebuilt without a language change"
             echo "- the Spanish question \`alemanes\` still answers with nought hits, because the field list of a question hangs on the stored schema mark and not on the code"
+            echo "- the Czech questions \`smlouve\` and \`proc\` answer one document each, as before the upgrade"
             echo ""
             echo "The reindex branch of D-05 is deliberately not driven here; its absence is what this run asserts."
           } >> "${GITHUB_STEP_SUMMARY}"
@@ -4927,11 +4996,40 @@ jobs:
         run: |
           . "${RUNNER_TEMP}/upgrade-probe.sh"
 
+          # The readers and the restart "Store upgrade 6" and "Store upgrade 7"
+          # share, written once and sourced twice, in the shape of upgrade-probe.sh:
+          # two restarts built twice would be two restarts that drift apart, and
+          # the second one is the way back (plan 30-07, D-30-07).
+          #
+          # The python half of index_languages, in a file of its own so that it
+          # reaches the container through stdin with its indentation intact. It
+          # asks the reading side of a fresh process on the same volume, the
+          # function the admin status calls (resources.searched_languages, the
+          # language codes a bare word reaches, out of the field plan of the
+          # marks), and probes EVERY body field for a term, not only the active
+          # set plus German that resources.filled_languages walks: after cs is
+          # switched off, body_cs is not in that walk, and an empty answer there
+          # would say nothing. A field that cannot be asked is a raise and a red
+          # step, never a chain that counts as empty.
+          cat > "${RUNNER_TEMP}/rebuild-languages.py" <<'PY'
+          import json
+
+          from findling.api import resources
+          from findling.index.schema import BODY_FIELD
+
+          side = resources.read_side()
+          if side is None:
+              raise SystemExit("no reading side: this container holds no index the probe could open")
+          searcher = side.index.searcher()
+          filled = [code for code, field in BODY_FIELD.items() if searcher.terms_with_prefix(field, "", limit=1)]
+          print(json.dumps({"searched": ",".join(resources.searched_languages()), "filled": ",".join(filled)}))
+          PY
+
+          cat > "${RUNNER_TEMP}/rebuild-probe.sh" <<'SH'
           # The digest of the vector stock, in the container that holds it. It
-          # lives here and not in the shared probe because this is the only step
-          # that asks the question, and it answers the word absent rather than
-          # failing on a missing file: whether there is a stock at all is a
-          # precondition below and not a detail of the reader.
+          # answers the word absent rather than failing on a missing file:
+          # whether there is a stock at all is a precondition of the step that
+          # asks and not a detail of the reader.
           vectors_digest() {
             container=$(findling_container)
             if [ -z "${container}" ]; then
@@ -4941,6 +5039,195 @@ jobs:
             docker exec "${container}" sh -c \
               'if [ -f "${APP_PERSISTENT_STORAGE}/vectors.db" ]; then sha256sum "${APP_PERSISTENT_STORAGE}/vectors.db" | cut -d" " -f1; else echo absent; fi'
           }
+
+          # The searched and the filled language codes of the volume, as one
+          # line of JSON. Fail closed: a probe that did not answer is an error
+          # and never an empty set.
+          index_languages() {
+            container=$(findling_container)
+            if [ -z "${container}" ]; then
+              echo "no running findling_backend container, so there is no index to ask" >&2
+              return 1
+            fi
+            docker exec -i "${container}" python - < "${RUNNER_TEMP}/rebuild-languages.py"
+          }
+
+          # Sets apppw and prints nothing of it.
+          take_app_password() {
+            # The two ways are the ones overview.sh uses, in the same order and
+            # for the same reason, and the value itself is never printed.
+            apppw=""
+            if NC_PASS=password "${RUNNER_TEMP}/nc-occ.sh" user:add-app-password admin \
+              --password-from-env > "${RUNNER_TEMP}/rebuild-apppw.txt" 2>&1; then
+              apppw=$(grep -oE '[A-Za-z0-9+/=._-]{40,}' "${RUNNER_TEMP}/rebuild-apppw.txt" | tail -1)
+            fi
+            if [ -z "${apppw}" ]; then
+              apppw=$(curl -s -u admin:password -H 'OCS-APIRequest: true' \
+                'http://localhost:8080/ocs/v2.php/core/getapppassword?format=json' \
+                | grep -o '"apppassword":"[^"]*"' | cut -d'"' -f4 || true)
+            fi
+            if [ -z "${apppw}" ]; then
+              echo "::error::no app password could be taken, so the rebuild banner could not be read while the run is on"
+              exit 1
+            fi
+            # Audit finding L-19-06, and both lines are cheap insurance rather
+            # than a leak that was measured. Only the length is ever printed, so
+            # nothing writes the value today; a later set -x, an error message
+            # from curl or a run with ACTIONS_STEP_DEBUG would write it
+            # unredacted, and the file underneath holds it in the clear on the
+            # runner for the rest of the job. The credential belongs to a
+            # throwaway instance whose admin password is the word password,
+            # which is why this is two lines and not a design.
+            echo "::add-mask::${apppw}"
+            rm -f "${RUNNER_TEMP}/rebuild-apppw.txt"
+            echo "app password: obtained (length ${#apppw})"
+          }
+
+          # One overview call and nothing else, the status code on stdout and
+          # the body in the file the caller names.
+          fast_overview() {
+            curl -s -o "$1" -w '%{http_code}' \
+              -u "admin:${apppw}" \
+              -H 'OCS-APIRequest: true' \
+              -H 'Accept: application/json' \
+              http://localhost:8080/index.php/apps/findling/admin/overview
+          }
+
+          # The container created again with FINDLING_LANGUAGES=$1 and nothing
+          # else changed; sets rebuild_start. The comment at the call in "Store
+          # upgrade 6" says why every step of it is the way it is.
+          recreate_with_languages() {
+            languages="$1"
+            container=$(findling_container)
+            if [ -z "${container}" ]; then
+              echo "::error::no running findling_backend container to restart"
+              docker ps -a
+              exit 1
+            fi
+            spec="${RUNNER_TEMP}/rebuild-container.json"
+            docker inspect "${container}" > "${spec}"
+
+            image=$(jq -r '.[0].Config.Image' "${spec}")
+            netmode=$(jq -r '.[0].HostConfig.NetworkMode' "${spec}")
+            policy=$(jq -r '.[0].HostConfig.RestartPolicy.Name // ""' "${spec}")
+            if [ -z "${image}" ] || [ "${image}" = "null" ]; then
+              echo "::error::docker inspect names no image for ${container}"
+              exit 1
+            fi
+            # --net host is what app_api:daemon:register set for harp_proxy_host
+            # further up in this file, and it is the reason this reconstruction is
+            # short: no ports, no networks and no aliases to carry. A container in
+            # any other mode is one this step does not understand.
+            if [ "${netmode}" != "host" ]; then
+              echo "::error::${container} runs in network mode ${netmode} and not host, which is not the shape harp_proxy_host creates"
+              exit 1
+            fi
+            # An entrypoint or a command the container overrides would be lost by
+            # a plain docker run, and losing it silently would start a container
+            # that does something else. Compared against the image rather than
+            # carried, because carrying an override is how this reconstruction
+            # would grow into a second deployment path.
+            docker image inspect "${image}" > "${RUNNER_TEMP}/rebuild-image.json"
+            for field in Entrypoint Cmd; do
+              mine=$(jq -c ".[0].Config.${field}" "${spec}")
+              theirs=$(jq -c ".[0].Config.${field}" "${RUNNER_TEMP}/rebuild-image.json")
+              if [ "${mine}" != "${theirs}" ]; then
+                echo "::error::the container overrides ${field} (${mine} against ${theirs} of the image), and this restart carries no overrides"
+                exit 1
+              fi
+            done
+
+            envfile="${RUNNER_TEMP}/rebuild-env.list"
+            jq -r '.[0].Config.Env[]' "${spec}" > "${RUNNER_TEMP}/rebuild-env-all.list"
+            grep -v '^FINDLING_LANGUAGES=' "${RUNNER_TEMP}/rebuild-env-all.list" > "${envfile}" || true
+            if [ ! -s "${envfile}" ]; then
+              echo "::error::the container carries no environment left after the filter, which is not a container this restart understands"
+              exit 1
+            fi
+            printf 'FINDLING_LANGUAGES=%s\n' "${languages}" >> "${envfile}"
+            # The names only. The environment of this container carries APP_SECRET
+            # among other things, and a step log is not the place for it.
+            echo "the environment of the restarted container, by name:"
+            cut -d= -f1 "${envfile}" | sort | tr '\n' ' '
+            echo
+
+            mounts="${RUNNER_TEMP}/rebuild-mounts.list"
+            jq -r '.[0].Mounts[]
+                   | if .Type == "volume" then "type=volume,source=" + .Name + ",target=" + .Destination + (if .RW then "" else ",readonly" end)
+                     elif .Type == "bind" then "type=bind,source=" + .Source + ",target=" + .Destination + (if .RW then "" else ",readonly" end)
+                     else "UNSUPPORTED " + .Type end' "${spec}" > "${mounts}"
+            if grep -q '^UNSUPPORTED' "${mounts}"; then
+              echo "::error::the container has a mount this restart does not understand:"
+              cat "${mounts}"
+              exit 1
+            fi
+            if ! grep -q "source=${UPGRADE_VOLUME}," "${mounts}"; then
+              echo "::error::the container does not mount ${UPGRADE_VOLUME}, so the restart would not be about the index this proof built"
+              cat "${mounts}"
+              exit 1
+            fi
+            echo "the mounts carried over:"
+            cat "${mounts}"
+
+            labels="${RUNNER_TEMP}/rebuild-labels.list"
+            jq -r '.[0].Config.Labels // {} | to_entries[] | .key + "=" + .value' "${spec}" > "${labels}"
+
+            # The one thing docker inspect does not describe, and the finding of
+            # run 35997241359. HaRP writes the client certificate of the tunnel,
+            # its key and the CA into /certs/frp of the container AFTER it created
+            # it, through docker exec; the image brings that directory along empty
+            # and owned by the app user for exactly that purpose (the comment at
+            # the chown line of backend/Dockerfile). The three files therefore live
+            # in the writable layer of the container, which docker rm takes with
+            # it, and a container created again out of the image alone finds no
+            # readable certificate: harp_connect.sh configures the tunnel without a
+            # client certificate, the frp server refuses every login with EOF, and
+            # the installation is left with a container that is up, an app that
+            # answers on its socket and a Nextcloud that reports backendReachable
+            # false. The rebuild ran and finished in two seconds in that run, and
+            # the loop below spent its whole budget reading an empty backend block.
+            #
+            # docker exec runs as the image user, the same uid harp_connect.sh
+            # reads them with, so this test asks the very question the tunnel asks.
+            certs="${RUNNER_TEMP}/rebuild-certs.tar"
+            if ! docker exec "${container}" sh -c \
+              'test -r /certs/frp/client.crt && test -r /certs/frp/client.key && test -r /certs/frp/ca.crt'; then
+              echo "::error::${container} carries no readable /certs/frp/client.crt, client.key and ca.crt, so this restart has no tunnel to hand to the container it creates"
+              echo "HaRP places those three through docker exec after it created the container, and this step cannot invent them."
+              docker exec "${container}" ls -la /certs/frp || true
+              docker logs "${container}" 2>&1 | grep -i 'harp_connect' || true
+              exit 1
+            fi
+            docker cp "${container}:/certs/frp" - > "${certs}"
+
+            run_args=(--name "${container}" --network host --env-file "${envfile}")
+            if [ -n "${policy}" ] && [ "${policy}" != "no" ]; then
+              run_args+=(--restart "${policy}")
+            fi
+            while IFS= read -r mount; do
+              if [ -n "${mount}" ]; then run_args+=(--mount "${mount}"); fi
+            done < "${mounts}"
+            while IFS= read -r label; do
+              if [ -n "${label}" ]; then run_args+=(--label "${label}"); fi
+            done < "${labels}"
+
+            # Created, then filled, then started, and in that order. frpc reads
+            # /certs/frp once while it comes up, so a container that is started
+            # first and handed its certificates afterwards spends the rest of its
+            # life in the reconnect loop that this three step dance exists to
+            # avoid. docker cp works against a created container, which is what
+            # makes the window between the two commands the right place for it.
+            docker rm -f "${container}" > /dev/null
+            docker create "${run_args[@]}" "${image}" > /dev/null
+            docker cp - "${container}:/certs" < "${certs}"
+            rebuild_start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            docker start "${container}" > /dev/null
+            docker ps --filter "name=${container}" --format '{{.Names}}\t{{.Image}}\t{{.Status}}'
+            echo "the container was created again at ${rebuild_start} with FINDLING_LANGUAGES=${languages} and the tunnel certificates of its predecessor"
+          }
+          SH
+
+          . "${RUNNER_TEMP}/rebuild-probe.sh"
 
           # ---------------------------------------------------------------
           # The state the rebuild starts from, and the four conditions that
@@ -4980,50 +5267,24 @@ jobs:
             echo "The vector stock is opened on the first indexing pass, so its absence here is a finding about that pass."
             exit 1
           fi
-          echo "languages mark de,en, no rebuild directory, three terms with one file each, a vector stock to compare"
+          # The row of the Czech chain this rebuild starts from (comment above
+          # "Store upgrade 3"): both questions answered through body_en, so the
+          # nought of proc after the rebuild is a change and not a constant.
+          if ! jq -e '.czech == 1 and .czechStop == 1' "${before}" > /dev/null; then
+            echo "::error::smlouve answers $(jq -r '.czech' "${before}") and proc $(jq -r '.czechStop' "${before}") document(s) before the rebuild, and on de,en both have to answer the one Czech document"
+            exit 1
+          fi
+          # Handed to "Store upgrade 7", which compares the stock after the way
+          # back with this one: two rebuilds, not one vector written.
+          echo "REBUILD_VECTORS_BEFORE=${vectors_before}" >> "${GITHUB_ENV}"
+          echo "languages mark de,en, no rebuild directory, three terms with one file each, smlouve and proc one file each, a vector stock to compare"
 
           # The app password, taken once and used for every overview call of the
           # loop below. overview.sh takes a fresh one on every call, which costs
           # a second or more, and a second is a long time against a rebuild of
           # a few seconds: the banner has to be read WHILE the run is on, so the
-          # reader has to be cheap. The two ways are the ones overview.sh uses,
-          # in the same order and for the same reason, and the value itself is
-          # never printed.
-          apppw=""
-          if NC_PASS=password "${RUNNER_TEMP}/nc-occ.sh" user:add-app-password admin \
-            --password-from-env > "${RUNNER_TEMP}/rebuild-apppw.txt" 2>&1; then
-            apppw=$(grep -oE '[A-Za-z0-9+/=._-]{40,}' "${RUNNER_TEMP}/rebuild-apppw.txt" | tail -1)
-          fi
-          if [ -z "${apppw}" ]; then
-            apppw=$(curl -s -u admin:password -H 'OCS-APIRequest: true' \
-              'http://localhost:8080/ocs/v2.php/core/getapppassword?format=json' \
-              | grep -o '"apppassword":"[^"]*"' | cut -d'"' -f4 || true)
-          fi
-          if [ -z "${apppw}" ]; then
-            echo "::error::no app password could be taken, so the rebuild banner could not be read while the run is on"
-            exit 1
-          fi
-          # Audit finding L-19-06, and both lines are cheap insurance rather
-          # than a leak that was measured. Only the length is ever printed, so
-          # nothing writes the value today; a later set -x, an error message
-          # from curl or a run with ACTIONS_STEP_DEBUG would write it
-          # unredacted, and the file underneath holds it in the clear on the
-          # runner for the rest of the job. The credential belongs to a
-          # throwaway instance whose admin password is the word password,
-          # which is why this is two lines and not a design.
-          echo "::add-mask::${apppw}"
-          rm -f "${RUNNER_TEMP}/rebuild-apppw.txt"
-          echo "app password: obtained (length ${#apppw})"
-
-          # One overview call and nothing else, the status code on stdout and
-          # the body in the file the caller names.
-          fast_overview() {
-            curl -s -o "$1" -w '%{http_code}' \
-              -u "admin:${apppw}" \
-              -H 'OCS-APIRequest: true' \
-              -H 'Accept: application/json' \
-              http://localhost:8080/index.php/apps/findling/admin/overview
-          }
+          # reader has to be cheap (take_app_password and fast_overview above).
+          take_app_password
 
           # The counter sample for the reader itself: it has to work BEFORE the
           # restart, or a loop that sees no banner would be a loop that cannot
@@ -5045,132 +5306,7 @@ jobs:
           # everything else carried over, and every shape this reconstruction
           # does not understand ends the step instead of being guessed at.
           # ---------------------------------------------------------------
-          container=$(findling_container)
-          if [ -z "${container}" ]; then
-            echo "::error::no running findling_backend container to restart"
-            docker ps -a
-            exit 1
-          fi
-          spec="${RUNNER_TEMP}/rebuild-container.json"
-          docker inspect "${container}" > "${spec}"
-
-          image=$(jq -r '.[0].Config.Image' "${spec}")
-          netmode=$(jq -r '.[0].HostConfig.NetworkMode' "${spec}")
-          policy=$(jq -r '.[0].HostConfig.RestartPolicy.Name // ""' "${spec}")
-          if [ -z "${image}" ] || [ "${image}" = "null" ]; then
-            echo "::error::docker inspect names no image for ${container}"
-            exit 1
-          fi
-          # --net host is what app_api:daemon:register set for harp_proxy_host
-          # further up in this file, and it is the reason this reconstruction is
-          # short: no ports, no networks and no aliases to carry. A container in
-          # any other mode is one this step does not understand.
-          if [ "${netmode}" != "host" ]; then
-            echo "::error::${container} runs in network mode ${netmode} and not host, which is not the shape harp_proxy_host creates"
-            exit 1
-          fi
-          # An entrypoint or a command the container overrides would be lost by
-          # a plain docker run, and losing it silently would start a container
-          # that does something else. Compared against the image rather than
-          # carried, because carrying an override is how this reconstruction
-          # would grow into a second deployment path.
-          docker image inspect "${image}" > "${RUNNER_TEMP}/rebuild-image.json"
-          for field in Entrypoint Cmd; do
-            mine=$(jq -c ".[0].Config.${field}" "${spec}")
-            theirs=$(jq -c ".[0].Config.${field}" "${RUNNER_TEMP}/rebuild-image.json")
-            if [ "${mine}" != "${theirs}" ]; then
-              echo "::error::the container overrides ${field} (${mine} against ${theirs} of the image), and this restart carries no overrides"
-              exit 1
-            fi
-          done
-
-          envfile="${RUNNER_TEMP}/rebuild-env.list"
-          jq -r '.[0].Config.Env[]' "${spec}" > "${RUNNER_TEMP}/rebuild-env-all.list"
-          grep -v '^FINDLING_LANGUAGES=' "${RUNNER_TEMP}/rebuild-env-all.list" > "${envfile}" || true
-          if [ ! -s "${envfile}" ]; then
-            echo "::error::the container carries no environment left after the filter, which is not a container this restart understands"
-            exit 1
-          fi
-          printf 'FINDLING_LANGUAGES=%s\n' "${REBUILD_LANGUAGES}" >> "${envfile}"
-          # The names only. The environment of this container carries APP_SECRET
-          # among other things, and a step log is not the place for it.
-          echo "the environment of the restarted container, by name:"
-          cut -d= -f1 "${envfile}" | sort | tr '\n' ' '
-          echo
-
-          mounts="${RUNNER_TEMP}/rebuild-mounts.list"
-          jq -r '.[0].Mounts[]
-                 | if .Type == "volume" then "type=volume,source=" + .Name + ",target=" + .Destination + (if .RW then "" else ",readonly" end)
-                   elif .Type == "bind" then "type=bind,source=" + .Source + ",target=" + .Destination + (if .RW then "" else ",readonly" end)
-                   else "UNSUPPORTED " + .Type end' "${spec}" > "${mounts}"
-          if grep -q '^UNSUPPORTED' "${mounts}"; then
-            echo "::error::the container has a mount this restart does not understand:"
-            cat "${mounts}"
-            exit 1
-          fi
-          if ! grep -q "source=${UPGRADE_VOLUME}," "${mounts}"; then
-            echo "::error::the container does not mount ${UPGRADE_VOLUME}, so the restart would not be about the index this proof built"
-            cat "${mounts}"
-            exit 1
-          fi
-          echo "the mounts carried over:"
-          cat "${mounts}"
-
-          labels="${RUNNER_TEMP}/rebuild-labels.list"
-          jq -r '.[0].Config.Labels // {} | to_entries[] | .key + "=" + .value' "${spec}" > "${labels}"
-
-          # The one thing docker inspect does not describe, and the finding of
-          # run 35997241359. HaRP writes the client certificate of the tunnel,
-          # its key and the CA into /certs/frp of the container AFTER it created
-          # it, through docker exec; the image brings that directory along empty
-          # and owned by the app user for exactly that purpose (the comment at
-          # the chown line of backend/Dockerfile). The three files therefore live
-          # in the writable layer of the container, which docker rm takes with
-          # it, and a container created again out of the image alone finds no
-          # readable certificate: harp_connect.sh configures the tunnel without a
-          # client certificate, the frp server refuses every login with EOF, and
-          # the installation is left with a container that is up, an app that
-          # answers on its socket and a Nextcloud that reports backendReachable
-          # false. The rebuild ran and finished in two seconds in that run, and
-          # the loop below spent its whole budget reading an empty backend block.
-          #
-          # docker exec runs as the image user, the same uid harp_connect.sh
-          # reads them with, so this test asks the very question the tunnel asks.
-          certs="${RUNNER_TEMP}/rebuild-certs.tar"
-          if ! docker exec "${container}" sh -c \
-            'test -r /certs/frp/client.crt && test -r /certs/frp/client.key && test -r /certs/frp/ca.crt'; then
-            echo "::error::${container} carries no readable /certs/frp/client.crt, client.key and ca.crt, so this restart has no tunnel to hand to the container it creates"
-            echo "HaRP places those three through docker exec after it created the container, and this step cannot invent them."
-            docker exec "${container}" ls -la /certs/frp || true
-            docker logs "${container}" 2>&1 | grep -i 'harp_connect' || true
-            exit 1
-          fi
-          docker cp "${container}:/certs/frp" - > "${certs}"
-
-          run_args=(--name "${container}" --network host --env-file "${envfile}")
-          if [ -n "${policy}" ] && [ "${policy}" != "no" ]; then
-            run_args+=(--restart "${policy}")
-          fi
-          while IFS= read -r mount; do
-            if [ -n "${mount}" ]; then run_args+=(--mount "${mount}"); fi
-          done < "${mounts}"
-          while IFS= read -r label; do
-            if [ -n "${label}" ]; then run_args+=(--label "${label}"); fi
-          done < "${labels}"
-
-          # Created, then filled, then started, and in that order. frpc reads
-          # /certs/frp once while it comes up, so a container that is started
-          # first and handed its certificates afterwards spends the rest of its
-          # life in the reconnect loop that this three step dance exists to
-          # avoid. docker cp works against a created container, which is what
-          # makes the window between the two commands the right place for it.
-          docker rm -f "${container}" > /dev/null
-          docker create "${run_args[@]}" "${image}" > /dev/null
-          docker cp - "${container}:/certs" < "${certs}"
-          rebuild_start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          docker start "${container}" > /dev/null
-          docker ps --filter "name=${container}" --format '{{.Names}}\t{{.Image}}\t{{.Status}}'
-          echo "the container was created again at ${rebuild_start} with FINDLING_LANGUAGES=${REBUILD_LANGUAGES} and the tunnel certificates of its predecessor"
+          recreate_with_languages "${REBUILD_LANGUAGES}"
 
           # ---------------------------------------------------------------
           # The run, watched. The loop leaves the moment the rebuild is through
@@ -5472,31 +5608,40 @@ jobs:
             echo "vectors.db is unchanged at ${vectors_after}"
           fi
 
-          echo "--- 10, the Spanish question finds exactly one document now ---"
-          # The far end of the before and after of plan 19-08, and it is green
-          # only if both halves of this milestone are: the rebuild has to have
-          # carried the stored text through the Spanish chain (phase 18), and
-          # the field list of a question has to have taken body_es in once the
-          # languages mark named es (phase 19). Either half missing and this is
-          # nought.
+          echo "--- 10, the Czech chain answers alone: smlouve finds the document, proc finds nothing ---"
+          # The third row of the Czech chain of plan 30-07 (comment above
+          # "Store upgrade 3"), and it is green only if the rebuild carried the
+          # stored text through the Czech chain AND the field list of a
+          # question took body_cs in AND en is out of the question. The first
+          # two are smlouve, the third is the nought of proc, which body_en
+          # answered with one hit on both rows before this one. The reading
+          # side is asked directly as well: searched and filled both de,cs,
+          # so no en field is asked and no en field carries a term.
           #
-          # A nought here is a finding and never a reason to soften the
-          # assertion. It means the rebuild filled no Spanish field or the
-          # field plan opened none, and that is exactly the failure this whole
-          # path was built to catch.
-          #
-          # The two counter proofs stand elsewhere on purpose, one per state
-          # they are about: "Store upgrade 3" asserts nought on the released
-          # installation and assurance 7 of "Store upgrade 5" asserts nought
-          # after the upgrade and before this rebuild. Without those two this
-          # number would be a hit that might always have been there, and with
-          # them the whole chain reads 0, 0, 1.
-          if ! jq -e '.spanish == 1' "${after}" > /dev/null; then
-            echo "::error::the question alemanes answers $(jq -r '.spanish' "${after}") document(s) after the rebuild and it has to answer exactly one"
-            echo "A nought means the rebuild wrote no body_es field or the field plan of a question did not take it in; more than one means a second document of this account answers a question that was chosen to have exactly one answer."
+          # A wrong number here is a finding and never a reason to soften the
+          # assertion. Until plan 30-07 this assurance was the Spanish far end
+          # of plan 19-08 (alemanes 0, 0, 1 across es,de,en); Spanish is proved
+          # by the language proof step of every leg, and the nought it keeps
+          # here says the rebuild fills the chains of its set and no other.
+          languages_now=$(index_languages) || languages_now=""
+          if ! printf '%s' "${languages_now}" | jq -e '.searched == "de,cs" and .filled == "de,cs"' > /dev/null 2>&1; then
+            echo "::error::the reading side of the volume answers '${languages_now}' after the rebuild, and it has to search and fill de,cs and nothing else, or a hit below could come from a field other than body_cs"
             fail=1
           else
-            echo "the question alemanes went from $(jq -r '.spanish' "${before}") to $(jq -r '.spanish' "${after}") hits across the rebuild, which is the Spanish chain and the field plan working together"
+            echo "the reading side searches de,cs and the fields that carry terms are de,cs: no en field is asked or filled"
+          fi
+          if ! jq -e '.czech == 1 and .czechStop == 0' "${after}" > /dev/null; then
+            echo "::error::smlouve answers $(jq -r '.czech' "${after}") and proc $(jq -r '.czechStop' "${after}") document(s) after the rebuild to de,cs, and it has to be one and nought"
+            echo "smlouve nought means body_cs was not written or not asked; proc one means a field that folds and keeps the Czech stop word, body_en, is still being asked."
+            fail=1
+          else
+            echo "smlouve went from $(jq -r '.czech' "${before}") to $(jq -r '.czech' "${after}") and proc from $(jq -r '.czechStop' "${before}") to $(jq -r '.czechStop' "${after}") across the rebuild, which is body_cs alone answering"
+          fi
+          if ! jq -e '.spanish == 0' "${after}" > /dev/null; then
+            echo "::error::the question alemanes answers $(jq -r '.spanish' "${after}") document(s) after a rebuild to de,cs, which carries no Spanish chain"
+            fail=1
+          else
+            echo "the question alemanes still answers nought, the rebuild filled no chain outside its set"
           fi
 
           if [ "${fail}" -ne 0 ]; then
@@ -5516,7 +5661,221 @@ jobs:
             echo "- unchanged: the hits for Belehrung, Auszug and Erinnerung, the document counts, the work stock"
             echo "- a search inside the run answered with hits, no indexing pass ran during it, no \`built by different code\` line (no generation raised)"
             echo "- \`vectors.db\` is byte for byte the same file"
-            echo "- the Spanish question \`alemanes\` went from 0 hits to 1 across the rebuild: nought on the released installation, nought after the upgrade and before this rebuild, one after it"
+            echo "- cs switched on without en: the reading side searches and fills de,cs, \`smlouve\` finds the document that writes it with a caron (1, 1, 1 across release, upgrade and this rebuild), the stop word \`proc\` went 1, 1, 0"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      # =====================================================================
+      # The way back (plan 30-07, D-30-07, ROADMAP phase 30 criterion 3): the
+      # rebuild "in both directions". "Store upgrade 6" switched cs on and en
+      # off; this step switches back to the factory set on the same volume,
+      # through the same restart (recreate_with_languages of rebuild-probe.sh)
+      # and the same band run. The schema stays 3, because the directory the
+      # band run builds is one of the running code either way; the languages
+      # mark goes back to de,en; body_cs is left without a term, and the last
+      # row of the Czech chain (comment above "Store upgrade 3") reads one and
+      # one again. Not one vector is written, measured against the stock
+      # "Store upgrade 6" read before its own rebuild.
+      #
+      # The middle of the run is not watched here. The banner and the canary
+      # are statements about a band run as such and "Store upgrade 6" makes
+      # them; this step is about where the run ends.
+      # =====================================================================
+      - name: Store upgrade 7, cs switched off again, the rebuild back to de,en
+        if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
+        env:
+          # As in "Store upgrade 6": the two matrix values arrive as plain
+          # environment variables and the run text stays expression free.
+          MATRIX_SERVER_VERSION: ${{ matrix.server-version }}
+          MATRIX_RUNNER: ${{ matrix.runner }}
+        run: |
+          . "${RUNNER_TEMP}/upgrade-probe.sh"
+          . "${RUNNER_TEMP}/rebuild-probe.sh"
+
+          # ---------------------------------------------------------------
+          # Where "Store upgrade 6" left the installation, and the conditions
+          # that make the assurances below mean anything.
+          # ---------------------------------------------------------------
+          snapshot "${RUNNER_TEMP}/rebuild-back-before.json" rebuild-back-before
+          before="${RUNNER_TEMP}/rebuild-back-before.json"
+          echo "the state before the way back:"
+          jq . "${before}"
+          vectors_before=$(vectors_digest)
+          echo "the vector stock before the way back: ${vectors_before}"
+
+          if ! jq -e --arg set "${REBUILD_LANGUAGES_NORMALISED}" '.marks.languages == $set and .marks.schemaVersion == "3"' "${before}" > /dev/null; then
+            echo "::error::the installation reports the languages mark '$(jq -r '.marks.languages' "${before}")' and the schema mark '$(jq -r '.marks.schemaVersion' "${before}")', and the way back has to start where \"Store upgrade 6\" ended, at ${REBUILD_LANGUAGES_NORMALISED} and 3"
+            exit 1
+          fi
+          if ! jq -e '.container.rebuildState == "idle"' "${before}" > /dev/null; then
+            echo "::error::a rebuild directory is already lying on the volume, so this step would measure the end of somebody else's run"
+            exit 1
+          fi
+          if ! jq -e '[.terms[]] | all(. == 1)' "${before}" > /dev/null; then
+            echo "::error::not every one of the three terms brings back exactly one file before the way back"
+            jq '.terms' "${before}"
+            exit 1
+          fi
+          if ! jq -e '.czech == 1 and .czechStop == 0' "${before}" > /dev/null; then
+            echo "::error::smlouve answers $(jq -r '.czech' "${before}") and proc $(jq -r '.czechStop' "${before}") document(s) on de,cs, and the way back has to start from one and nought"
+            exit 1
+          fi
+          if [ -z "${REBUILD_VECTORS_BEFORE}" ] || [ "${vectors_before}" = "absent" ]; then
+            echo "::error::there is no vector stock to compare (before the way back '${vectors_before}', before the rebuild of Store upgrade 6 '${REBUILD_VECTORS_BEFORE}')"
+            exit 1
+          fi
+          echo "languages mark ${REBUILD_LANGUAGES_NORMALISED} at schema 3, no rebuild directory, three terms with one file each, smlouve one and proc nought, a vector stock to compare"
+
+          take_app_password
+          code=$(fast_overview "${RUNNER_TEMP}/rebuild-back-overview-before.json") || code="000"
+          if [ "${code}" != "200" ] \
+            || ! jq -e --arg set "${REBUILD_LANGUAGES_NORMALISED}" '.backend.rebuildRunning == false and .backend.languagesActive == $set' \
+                 "${RUNNER_TEMP}/rebuild-back-overview-before.json" > /dev/null; then
+            echo "::error::the overview answered HTTP ${code} without the idle state at ${REBUILD_LANGUAGES_NORMALISED} it has to show before the restart"
+            head -c 600 "${RUNNER_TEMP}/rebuild-back-overview-before.json"
+            exit 1
+          fi
+          echo "the overview reports rebuildRunning false at languagesActive ${REBUILD_LANGUAGES_NORMALISED}"
+
+          # ---------------------------------------------------------------
+          # The restart with the factory set, and the wait for the band run to
+          # end. The loop leaves the moment the overview reports the run over
+          # and the mark at de,en; the mark is written only after the swap, so
+          # it cannot read de,en before the run is through.
+          # ---------------------------------------------------------------
+          recreate_with_languages "${REBUILD_LANGUAGES_BACK}"
+
+          probe="${RUNNER_TEMP}/rebuild-back-during.json"
+          finished=""
+          reachable=""
+          rounds=0
+          deadline=$(( $(date +%s) + REBUILD_BUDGET_SECONDS ))
+          while [ "$(date +%s)" -lt "${deadline}" ]; do
+            rounds=$(( rounds + 1 ))
+            code=$(fast_overview "${probe}") || code="000"
+            if [ "${code}" = "200" ]; then
+              if [ "$(jq -r '.backendReachable' "${probe}" 2> /dev/null || echo "")" = "true" ]; then
+                reachable="yes"
+              fi
+              running=$(jq -r '.backend.rebuildRunning' "${probe}" 2> /dev/null || echo "")
+              active=$(jq -r '.backend.languagesActive' "${probe}" 2> /dev/null || echo "")
+              if [ "${running}" = "false" ] && [ "${active}" = "${REBUILD_LANGUAGES_BACK}" ]; then
+                finished="yes"
+                break
+              fi
+            fi
+            sleep 1
+          done
+          if [ -z "${finished}" ]; then
+            if [ -z "${reachable}" ]; then
+              echo "::error::Nextcloud did not reach the backend in a single one of ${rounds} rounds, so nothing about the way back was measured here"
+            else
+              echo "::error::the rebuild back to ${REBUILD_LANGUAGES_BACK} did not finish within REBUILD_BUDGET_SECONDS=${REBUILD_BUDGET_SECONDS} after ${rounds} rounds"
+              echo "This is a finding about the rebuild and not a reason to raise the budget."
+            fi
+            head -c 1000 "${probe}" || true
+            echo
+            docker logs "$(findling_container)" 2>&1 | tail -n 80 || true
+            exit 1
+          fi
+          echo "the rebuild back is through after ${rounds} rounds, languagesActive is ${REBUILD_LANGUAGES_BACK}"
+
+          whole_log="${RUNNER_TEMP}/rebuild-back-exapp.log"
+          docker logs "$(findling_container)" > "${whole_log}" 2>&1
+          snapshot "${RUNNER_TEMP}/rebuild-back-after.json" rebuild-back-after
+          after="${RUNNER_TEMP}/rebuild-back-after.json"
+          echo "the state after the way back:"
+          jq . "${after}"
+          vectors_after=$(vectors_digest)
+          echo "the vector stock after the way back: ${vectors_after}"
+
+          # ---------------------------------------------------------------
+          # The seven assurances of the way back, every one of them run and
+          # fail=1 rather than exit 1, for the reason "Store upgrade 5" states.
+          # ---------------------------------------------------------------
+          fail=0
+
+          echo "--- 1, the schema mark reads 3 before and after: the way back builds the schema of this code again ---"
+          was=$(jq -r '.marks.schemaVersion' "${before}")
+          now=$(jq -r '.marks.schemaVersion' "${after}")
+          if [ "${was}" = "3" ] && [ "${now}" = "3" ]; then
+            echo "the schema mark reads 3 before the way back and 3 after it"
+          else
+            echo "::error::the schema mark went from '${was}' to '${now}', and it has to read 3 on both sides of the way back"
+            fail=1
+          fi
+
+          echo "--- 2, the languages mark is the factory set again ---"
+          now=$(jq -r '.marks.languages' "${after}")
+          if [ "${now}" != "${REBUILD_LANGUAGES_BACK}" ]; then
+            echo "::error::the languages mark reads ${now} after the way back, and it has to read ${REBUILD_LANGUAGES_BACK}"
+            fail=1
+          else
+            echo "the languages mark went from $(jq -r '.marks.languages' "${before}") to ${now}"
+          fi
+
+          echo "--- 3, the reading side searches de,en and body_cs carries no term ---"
+          languages_now=$(index_languages) || languages_now=""
+          if ! printf '%s' "${languages_now}" | jq -e '.searched == "de,en" and .filled == "de,en"' > /dev/null 2>&1; then
+            echo "::error::the reading side of the volume answers '${languages_now}' after the way back, and it has to search and fill de,en and nothing else; a filled cs is a Czech chain the way back left behind"
+            fail=1
+          else
+            echo "the reading side searches de,en and the fields that carry terms are de,en: cs is no longer filled"
+          fi
+
+          echo "--- 4, the same hits for the three terms and the same documents ---"
+          for path in .terms.Belehrung .terms.Auszug .terms.Erinnerung .container.docs .container.indexed .nextcloud.scheduled .nextcloud.running; do
+            was=$(jq -r "${path}" "${before}")
+            now=$(jq -r "${path}" "${after}")
+            if [ "${was}" != "${now}" ]; then
+              echo "::error::${path} was ${was} before the way back and is ${now} after it"
+              fail=1
+            else
+              echo "unchanged  ${path} = ${was}"
+            fi
+          done
+
+          echo "--- 5, smlouve and proc find the document again, through body_en ---"
+          if ! jq -e '.czech == 1 and .czechStop == 1' "${after}" > /dev/null; then
+            echo "::error::smlouve answers $(jq -r '.czech' "${after}") and proc $(jq -r '.czechStop' "${after}") document(s) after the way back to de,en, and body_en has to answer both with the one Czech document"
+            fail=1
+          else
+            echo "smlouve went from $(jq -r '.czech' "${before}") to $(jq -r '.czech' "${after}") and proc from $(jq -r '.czechStop' "${before}") to $(jq -r '.czechStop' "${after}") across the way back"
+          fi
+
+          echo "--- 6, no drift line: the band run answers the language jump, no generation is raised ---"
+          drift=$(grep -c 'built by different code' "${whole_log}" || true)
+          if [ "${drift}" != "0" ]; then
+            echo "::error::the container log carries ${drift} line(s) of start_rebuild_on_drift, so the way back raised the generation and ordered a full reindex behind the band run"
+            grep -n 'built by different code' "${whole_log}" || true
+            fail=1
+          else
+            echo "no start_rebuild_on_drift line in $(wc -l < "${whole_log}") lines of container log"
+          fi
+
+          echo "--- 7, the vector stock is byte for byte the file it was before both rebuilds ---"
+          if [ "${vectors_after}" != "${vectors_before}" ] || [ "${vectors_after}" != "${REBUILD_VECTORS_BEFORE}" ]; then
+            echo "::error::vectors.db reads ${vectors_after} after the way back, ${vectors_before} before it and ${REBUILD_VECTORS_BEFORE} before the rebuild of Store upgrade 6, so something was embedded again"
+            fail=1
+          else
+            echo "vectors.db is unchanged at ${vectors_after}, before the rebuild of Store upgrade 6, before the way back and after it"
+          fi
+
+          if [ "${fail}" -ne 0 ]; then
+            echo "the two states side by side:"
+            diff -u "${before}" "${after}" || true
+            exit 1
+          fi
+
+          echo "all seven assurances of the way back hold"
+          {
+            echo ""
+            echo "### Rebuild back to the factory set (${MATRIX_SERVER_VERSION}, ${MATRIX_RUNNER})"
+            echo ""
+            echo "- \`FINDLING_LANGUAGES=${REBUILD_LANGUAGES_BACK}\` was set on the same container and volume after the rebuild to \`${REBUILD_LANGUAGES_NORMALISED}\`"
+            echo "- the schema mark reads 3 before and after, the languages mark went from \`${REBUILD_LANGUAGES_NORMALISED}\` to \`${REBUILD_LANGUAGES_BACK}\`, the reading side searches and fills de,en and body_cs carries no term"
+            echo "- unchanged: the hits for Belehrung, Auszug and Erinnerung, the document counts, the work stock; no \`built by different code\` line"
+            echo "- \`smlouve\` 1, 1, 1, 1 and the stop word \`proc\` 1, 1, 0, 1 across release, upgrade, cs on and cs off"
+            echo "- \`vectors.db\` is byte for byte the file it was before both rebuilds"
           } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Collect the logs and tear the deployment down
@@ -5553,7 +5912,8 @@ jobs:
             upgrade-providers.json upgrade-exapp.log \
             rebuild-before.json rebuild-after.json rebuild-during.json \
             upgrade-rebuild-before-status.txt upgrade-rebuild-after-status.txt \
-            rebuild-window.log rebuild-exapp.log rebuild-mounts.list; do
+            rebuild-window.log rebuild-exapp.log rebuild-mounts.list \
+            rebuild-back-before.json rebuild-back-after.json rebuild-back-exapp.log; do
             if [ -f "${RUNNER_TEMP}/${evidence}" ]; then
               cp "${RUNNER_TEMP}/${evidence}" "${RUNNER_TEMP}/harp-logs/${evidence}"
             fi

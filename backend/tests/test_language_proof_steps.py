@@ -48,18 +48,24 @@ after of plan 19-08 lives. They are deliberately NOT in ``CLAIMS``: they say
 nothing about the proof step, so a renamed proof step must not silence them and
 they must not make a renamed proof step cost more findings than it silences.
 
-5. The precondition ``[.terms[]] | all(. == 1)`` stands exactly twice and
-   unchanged. It demands exactly one file for every term of the snapshot, and
-   the Spanish question is SUPPOSED to answer with nought before the rebuild.
-   Making room for it by loosening that expression would leave every assurance
-   behind it standing on nothing, and a gate that watches it is cheaper than a
-   later run that no longer says what it says.
+5. The precondition ``[.terms[]] | all(. == 1)`` stands exactly three times
+   and unchanged (twice until plan 30-07 added "Store upgrade 7", the way
+   back from cs, which starts from the same precondition). It demands
+   exactly one file for every term of the snapshot, and the Spanish question
+   is SUPPOSED to answer with nought before the rebuild. Making room for it
+   by loosening that expression would leave every assurance behind it
+   standing on nothing, and a gate that watches it is cheaper than a later
+   run that no longer says what it says.
 6. The Spanish count stands in the snapshot under a key of its OWN and never
    inside the ``terms`` object, which is the other half of the same sentence.
-7. The three assurances exist: twice against nought and once against one.
-   Nought on the released installation, nought after the upgrade and before the
-   rebuild, one after it. Any one of them missing and the other two are a number
-   without a counter proof.
+7. The three Spanish assurances exist, all three against nought since plan
+   30-07 (D-30-07): on the released installation, after the upgrade and before
+   the rebuild, and after the rebuild to de,cs, which carries no Spanish chain.
+   Until then the third was a one, the far end of plan 19-08 across a rebuild
+   to es,de,en; the rebuild of the upgrade path proves the Czech chain now
+   (30-RESEARCH pitfall 5), and Spanish is proved by the language proof step
+   on every leg. A ``.spanish == 1`` that comes back is a claim no step makes
+   true any more, so it is a finding.
 
 **Why text and not a YAML parser.** The reason ``test_workflow_pins.py`` gives at
 length and ``test_lockstep_versions.py`` repeats: this backend has no yaml
@@ -126,10 +132,11 @@ COUNT_ASSERTION = "entries | length"
 EXCERPT_ASSERTION = "entries[0].subline"
 
 # The precondition of the upgrade path, word for word. It stands once in "Store
-# upgrade 3" and once in "Store upgrade 6", and the number is part of the claim:
-# one occurrence means a place that used to demand it stopped demanding it.
+# upgrade 3", once in "Store upgrade 6" and once in "Store upgrade 7" (plan
+# 30-07), and the number is part of the claim: one occurrence fewer means a
+# place that used to demand it stopped demanding it.
 PRECONDITION = "[.terms[]] | all(. == 1)"
-PRECONDITION_EXPECTED = 2
+PRECONDITION_EXPECTED = 3
 
 # The Spanish count in the snapshot, as the jq call writes it. The key is asked
 # for in full rather than as the bare word "spanish", which stands in half the
@@ -137,11 +144,12 @@ PRECONDITION_EXPECTED = 2
 SPANISH_KEY = "spanish: $spanish"
 SPANISH_VALUE = "$spanish"
 
-# The three assurances, as the three jq expressions that carry them.
+# The three assurances, as the jq expression that carries them. Three noughts
+# since plan 30-07 and no one (statement 7 of the module docstring).
 SPANISH_ZERO = ".spanish == 0"
-SPANISH_ZERO_EXPECTED = 2
+SPANISH_ZERO_EXPECTED = 3
 SPANISH_ONE = ".spanish == 1"
-SPANISH_ONE_EXPECTED = 1
+SPANISH_ONE_EXPECTED = 0
 
 # The terms object of the snapshot, from its opening line to the closing brace
 # at the same indentation. The Spanish count must not be in there, and reading
@@ -365,27 +373,27 @@ def scan_spanish_key(source: str) -> list[str]:
 
 
 def scan_spanish_assurances(source: str) -> list[str]:
-    """Twice against nought, once against one, and all three are needed.
+    """Three times against nought, never against one, and all three are needed.
 
-    The chain is 0, 0, 1: nought on the released installation, nought after the
-    upgrade and before the rebuild, one after it. The first nought is the
-    counter proof of the one, the second is the CI half of success criterion 2
-    of phase 19, and a one without either of them is a hit that might always
-    have been there.
+    The chain is 0, 0, 0 since plan 30-07: nought on the released installation,
+    nought after the upgrade and before the rebuild (the CI half of success
+    criterion 2 of phase 19), and nought after the rebuild to de,cs, which says
+    a rebuild fills the chains of its set and no other.
     """
     findings: list[str] = []
     zeros = source.count(SPANISH_ZERO)
     if zeros != SPANISH_ZERO_EXPECTED:
         findings.append(
             f"the workflow asserts '{SPANISH_ZERO}' {zeros} times and not {SPANISH_ZERO_EXPECTED}: "
-            "once on the released installation and once after the upgrade and before the rebuild, "
-            "and without both of them the hit at the far end is a hit that might always have been there"
+            "on the released installation, after the upgrade and before the rebuild, and after the "
+            "rebuild to a set without es"
         )
     ones = source.count(SPANISH_ONE)
     if ones != SPANISH_ONE_EXPECTED:
         findings.append(
-            f"the workflow asserts '{SPANISH_ONE}' {ones} times and not {SPANISH_ONE_EXPECTED}, "
-            "so nothing says the rebuild and the field plan of a question made the document findable"
+            f"the workflow asserts '{SPANISH_ONE}' {ones} times and not {SPANISH_ONE_EXPECTED}: "
+            "the rebuild of the upgrade path carries no Spanish chain since plan 30-07, so a one "
+            "there is a claim no step makes true"
         )
     return findings
 
@@ -495,7 +503,7 @@ def test_the_spanish_count_is_its_own_key_and_not_a_fourth_term() -> None:
 
 
 def test_the_three_spanish_assurances_are_all_there() -> None:
-    # Twice against nought, once against one, and the chain reads 0, 0, 1.
+    # Three times against nought and never against one: the chain reads 0, 0, 0.
     source = WORKFLOW.read_text(encoding="utf-8")
 
     assert source.count(SPANISH_ZERO) == SPANISH_ZERO_EXPECTED
@@ -581,7 +589,12 @@ jobs:
         run: |
           echo the other gated one
           jq -e '[.terms[]] | all(. == 1)' rebuild-before.json
-          jq -e '.spanish == 1' rebuild-after.json
+          jq -e '.spanish == 0' rebuild-after.json
+
+      - name: Store upgrade 7, cs switched off again, the rebuild back to de,en
+        if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04'
+        run: |
+          jq -e '[.terms[]] | all(. == 1)' rebuild-back-before.json
 """
 
 
@@ -799,11 +812,11 @@ def test_a_loosened_precondition_is_reported() -> None:
     findings = scan(_LOOSENED)
 
     assert len(findings) == 1
-    assert "stands 1 times in the workflow and not 2" in findings[0]
+    assert "stands 2 times in the workflow and not 3" in findings[0]
 
 
 def test_a_missing_counter_proof_is_reported() -> None:
     findings = scan(_NO_COUNTER)
 
     assert len(findings) == 1
-    assert "asserts '.spanish == 0' 1 times and not 2" in findings[0]
+    assert "asserts '.spanish == 0' 2 times and not 3" in findings[0]
