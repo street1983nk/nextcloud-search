@@ -26,6 +26,25 @@ dependencies = [
     # dragged it in stops needing it. So it becomes a direct edge here. Net new
     # PyPI packages of phase 3: zero.
     "pillow==12.3.0",
+    # Phase 31, three formats that need a reader of their own. All three are
+    # pinned exactly because each decides what a file of its type yields, and
+    # THIRD-PARTY.md carries their licences (test_third_party_versions.py holds
+    # the versions there to these pins).
+    #
+    # olefile reads the streams of an OLE2 compound file (CFB), which is the
+    # container of a legacy .doc. BSD-2-Clause, pure Python.
+    "olefile==0.47",
+    # xlrd reads .xls (BIFF2 to BIFF8) and, since 2.0, nothing else, so it
+    # cannot become a second reader of .xlsx next to openpyxl. BSD-3-Clause,
+    # pure Python.
+    "xlrd==2.0.2",
+    # pillow-heif is the HEIC/HEIF plugin of Pillow. pi-heif, its decode only
+    # sibling, is discontinued since pillow-heif 1.5.0. The source is
+    # BSD-3-Clause, but the binary wheels bundle libheif and libde265 (LGPL-3.0)
+    # and the x265 encoder (GPL-2.0-or-later), so the wheel as a whole is
+    # GPL-2.0-or-later. That is reachable from AGPL-3.0 through GPLv3; the
+    # corresponding source is mirrored, see scripts/release/corresponding_source.py.
+    "pillow-heif==1.8.0",
     # Phase 6, the semantic half of the search. Every edge below is pinned
     # exactly, because every one of them decides what a search returns.
     #

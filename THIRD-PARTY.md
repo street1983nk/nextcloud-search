@@ -150,22 +150,27 @@ updates ourselves.
 
 ## Python packages of the extraction and index path
 
-All ten are installed from PyPI into `/app/.venv` and are pinned exactly in
-`backend/pyproject.toml` and `backend/uv.lock`. All ten ship wheels; no
-`setup.py` runs at installation time.
+All thirteen are installed from PyPI into `/app/.venv` and are pinned exactly in
+`backend/pyproject.toml` and `backend/uv.lock`. All thirteen ship wheels; no
+`setup.py` runs at installation time. `backend/tests/test_third_party_versions.py`
+holds every version in the three Python tables of this file to its pin, since
+plan 31-01 found seven of them one or more releases behind.
 
 | Package | Version | Licence | Source repository | Place in the image |
 |---|---|---|---|---|
 | `tantivy` | 0.26.2 | MIT | github.com/quickwit-oss/tantivy-py | `/app/.venv/lib/python3.13/site-packages/tantivy` |
 | `pypdfium2` | 5.13.0 | Apache-2.0 or BSD-3-Clause (wrapper), BSD-3-Clause (bundled PDFium) | github.com/pypdfium2-team/pypdfium2 | `/app/.venv/lib/python3.13/site-packages/pypdfium2` |
-| `pypdf` | 6.16.1 | BSD-3-Clause | github.com/py-pdf/pypdf | `/app/.venv/lib/python3.13/site-packages/pypdf` |
+| `pypdf` | 6.19.0 | BSD-3-Clause | github.com/py-pdf/pypdf | `/app/.venv/lib/python3.13/site-packages/pypdf` |
 | `python-docx` | 1.2.0 | MIT | github.com/python-openxml/python-docx | `/app/.venv/lib/python3.13/site-packages/docx` |
 | `python-pptx` | 1.0.2 | MIT | github.com/scanny/python-pptx | `/app/.venv/lib/python3.13/site-packages/pptx` |
 | `openpyxl` | 3.1.5 | MIT | foss.heptapod.net/openpyxl/openpyxl | `/app/.venv/lib/python3.13/site-packages/openpyxl` |
-| `striprtf` | 0.0.32 | BSD-3-Clause | github.com/joshy/striprtf | `/app/.venv/lib/python3.13/site-packages/striprtf` |
-| `charset-normalizer` | 3.5.1 | MIT | github.com/jawah/charset_normalizer | `/app/.venv/lib/python3.13/site-packages/charset_normalizer` |
-| `lxml` | 6.1.1 | BSD-3-Clause (bundled libxml2 and libxslt: MIT) | github.com/lxml/lxml | `/app/.venv/lib/python3.13/site-packages/lxml` |
+| `striprtf` | 0.0.33 | BSD-3-Clause | github.com/joshy/striprtf | `/app/.venv/lib/python3.13/site-packages/striprtf` |
+| `charset-normalizer` | 3.5.2 | MIT | github.com/jawah/charset_normalizer | `/app/.venv/lib/python3.13/site-packages/charset_normalizer` |
+| `lxml` | 6.1.3 | BSD-3-Clause (bundled libxml2 and libxslt: MIT) | github.com/lxml/lxml | `/app/.venv/lib/python3.13/site-packages/lxml` |
 | `pillow` | 12.3.0 | MIT-CMU | github.com/python-pillow/Pillow | `/app/.venv/lib/python3.13/site-packages/PIL` |
+| `olefile` | 0.47 | BSD-2-Clause | github.com/decalage2/olefile | `/app/.venv/lib/python3.13/site-packages/olefile` |
+| `xlrd` | 2.0.2 | BSD-3-Clause | github.com/python-excel/xlrd | `/app/.venv/lib/python3.13/site-packages/xlrd` |
+| `pillow-heif` | 1.8.0 | BSD-3-Clause (source); binary wheel GPL-2.0-or-later, see below | github.com/bigcat88/pillow_heif | `/app/.venv/lib/python3.13/site-packages/pillow_heif` and `pillow_heif.libs` |
 
 `tantivy` was the one entry whose licence was **not** readable from its PyPI
 metadata: the 0.26.0 release carried neither a `license` field nor a licence
@@ -196,6 +201,44 @@ dependency, and the folded supplementary list shipped in this repository
 were read at tantivy tag 0.26.2 on 2026-09-23; before the next store submission
 they are read again at whatever tag is pinned then, and the date here is moved
 with them.
+
+### pillow-heif and the libraries in its wheels
+
+Added in phase 31 (plan 31-01) for HEIC and HEIF photos. pillow-heif replaces
+pi-heif, its decode only sibling, which upstream discontinued with pillow-heif
+1.5.0. The source code of pillow-heif is BSD-3-Clause; its binary wheels are
+not, because they bundle three native libraries. The list below is read out of
+`LICENSES_bundled.txt` of the installed 1.8.0 wheel (cp313, manylinux x86_64 and
+aarch64, identical text) and checked against the files in `pillow_heif.libs`
+and the version strings compiled into them on 2026-10-11.
+
+| Library | Version | Licence | File in the wheel |
+|---|---|---|---|
+| libheif | 1.23.4 | LGPL-3.0 | `pillow_heif.libs/libheif-<hash>.so.1.23.4` |
+| libde265 | 1.1.3 | LGPL-3.0 | `pillow_heif.libs/libde265-<hash>.so.0.2.3` |
+| x265 | 4.2 (`4.2+1-e444744`) | GPL-2.0-or-later | `pillow_heif.libs/libx265-<hash>.so.216` |
+
+`LICENSES_bundled.txt` says "GPLv2" for x265 and for the wheel as a whole; the
+source files of x265 say "either version 2 of the License, or (at your option)
+any later version", so the precise identifier is GPL-2.0-or-later. That is the
+licence of the wheel as a whole, and it is compatible with the AGPL-3.0 of
+Findling the same way the word list is: GPL-2.0-or-later may be used under
+GPLv3, and GPLv3 and AGPLv3 are explicitly combinable (AGPLv3 section 13).
+libheif and libde265 are LGPL-3.0 and are linked dynamically, as separate shared
+objects next to the extension module, so they stay replaceable.
+
+Findling only ever decodes. The x265 encoder is never called, but it lies in the
+image (about 11.4 MB on arm64 and 22.8 MB on amd64, unpacked), so it is
+distributed and its licence obligations apply in full, including the duty to
+offer the complete corresponding source. The sources are the upstream tags
+`LICENSES_bundled.txt` names: libheif `v1.23.4`
+(github.com/strukturag/libheif), libde265 `v1.1.3`
+(github.com/strukturag/libde265) and x265 `4.2`
+(bitbucket.org/multicoreware/x265_git).
+
+The Windows wheel of the same release carries a different x265 build (it is
+built from an MSYS2 recipe, not from `libheif/build_libs.py`); it never reaches
+the image and is not the subject of this file.
 
 ## Czech stop word list (Apache Lucene)
 
@@ -319,10 +362,10 @@ held.
 | Package | Version | Licence | Source repository | Place in the image |
 |---|---|---|---|---|
 | `tokenizers` | 0.23.2 | Apache-2.0 | github.com/huggingface/tokenizers | `/app/.venv/lib/python3.13/site-packages/tokenizers` |
-| `numpy` | 2.5.2 | BSD-3-Clause (wheel metadata: `BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0` for bundled parts) | github.com/numpy/numpy | `/app/.venv/lib/python3.13/site-packages/numpy` |
+| `numpy` | 2.5.3 | BSD-3-Clause (wheel metadata: `BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0` for bundled parts) | github.com/numpy/numpy | `/app/.venv/lib/python3.13/site-packages/numpy` |
 | `onnxruntime` | 1.30.0 | MIT | github.com/microsoft/onnxruntime | `/app/.venv/lib/python3.13/site-packages/onnxruntime` |
 | `sqlite-vec` | 0.1.9 | Apache-2.0 | github.com/asg017/sqlite-vec | `/app/.venv/lib/python3.13/site-packages/sqlite_vec`, and the extension itself a second time at `/usr/local/lib/findling/vec0.so` |
-| `semantic-text-splitter` | 0.32.0 | MIT | github.com/benbrandt/text-splitter | `/app/.venv/lib/python3.13/site-packages/semantic_text_splitter` |
+| `semantic-text-splitter` | 0.33.0 | MIT | github.com/benbrandt/text-splitter | `/app/.venv/lib/python3.13/site-packages/semantic_text_splitter` |
 
 `sqlite-vec` is the entry with the second copy, and the copy is the point. The
 package ships a prebuilt shared library inside its wheel, and that library is
@@ -371,7 +414,7 @@ list of distributed material.
 |---|---|---|---|---|
 | `python:3.13-slim-trixie` base image | digest `sha256:ffb752e1…c6e30a` | Debian base: mixed free licences, per package under `/usr/share/doc/*/copyright`; CPython: PSF-2.0 | docker-library/python | the image itself |
 | `nc-py-api[app]` | 0.30.3 | BSD-3-Clause | github.com/cloud-py-api/nc_py_api | `/app/.venv` |
-| `fastapi` | 0.141.1 | MIT | github.com/fastapi/fastapi | `/app/.venv` |
+| `fastapi` | 0.142.2 | MIT | github.com/fastapi/fastapi | `/app/.venv` |
 | `httpx` | 0.28.1 | BSD-3-Clause | github.com/encode/httpx | `/app/.venv` |
 | `frpc` | frp 0.61.1 | Apache-2.0 | fatedier/frp, fetched from the pinned commit of nextcloud/HaRP that vendors the byte identical tarball | `/usr/local/bin/frpc` |
 
@@ -473,6 +516,15 @@ docker run --rm --entrypoint sh ghcr.io/street1983nk/findling_backend:dev \
 
 # the pinned versions of the Python side
 grep -A 20 '^dependencies' backend/pyproject.toml
+
+# olefile, xlrd and pillow-heif as installed (plan 31-01), and the bundled
+# libraries of the pillow-heif wheel with their licences, inside the built image
+(cd backend && uv pip show olefile xlrd pillow-heif)
+docker run --rm --entrypoint sh ghcr.io/street1983nk/findling_backend:dev -c \
+    'd=/app/.venv/lib/python3.13/site-packages;
+     cat $d/pillow_heif-*.dist-info/licenses/LICENSES_bundled.txt;
+     ls -l $d/pillow_heif.libs/;
+     python -c "import pillow_heif; print(pillow_heif.libheif_info())"'
 
 # the icon path data against the pinned upstream commit
 mdi=9e04201d4557e729822fb57f62a316c3dea1d4a8

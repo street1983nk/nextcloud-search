@@ -38,3 +38,12 @@ path = "backend/src/findling/index/stopwords_cs.py"
 precedence = "override"
 SPDX-FileCopyrightText = ["2026 street1983nk", "The Apache Software Foundation"]
 SPDX-License-Identifier = "AGPL-3.0-or-later AND Apache-2.0"
+
+# Packages that live only in the backend image, never in this repository
+# (plan 31-01): olefile (BSD-2-Clause), xlrd (BSD-3-Clause) and pillow-heif,
+# whose binary wheel bundles libheif and libde265 (LGPL-3.0) and x265
+# (GPL-2.0-or-later). REUSE annotates files of the repository, and no file of
+# theirs is in it, so there is deliberately no annotation here. Their account,
+# with versions, licences and the corresponding source of the native
+# libraries, is THIRD-PARTY.md, sections "Python packages of the extraction and
+# index path" and "pillow-heif and the libraries in its wheels".
