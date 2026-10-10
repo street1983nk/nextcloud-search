@@ -297,8 +297,8 @@ php/lib/Migration/Version001500Date2026MMDD000000.php (backend_app_version verwe
 
 **Ursache:** `_stream_file` vergleicht die gelesenen Bytes mit `expected` (Größe aus der Queue = Dateicache) und wirft `ShortRead`, wenn weniger kommen (`client.py:286-287`). `_fetch_file` versucht es genau einmal erneut; zweimal kurz gibt die Zeile ohne Urteil und ohne Unlock zurück (`poller.py:1502-1511`), die Queue zählt Auslieferungen und schreibt nach der dritten `failed(repeatedly_stuck)`. Ist der Cache dauerhaft zu groß (externer Speicher außerhalb von Nextcloud geändert, Größe bei serverseitiger Verschlüsselung), endet jede solche Datei dort (deferred-items.md 29, F-29-03).
 **Fix:** In `_fetch_file` beide Versuche vergleichen: gleiche Bytezahl **und** gleicher Inhalts-Hash (der `_HashingSink` liefert ihn ohnehin) heißt "das ist die Datei"; dann den zweiten Read normal weiterreichen (Extraktion, Urteil wie jede andere Datei). Unterschiedliche Längen oder Hashes bleiben der vorübergehende Fehler von D-29-04. Bei 0 Bytes zweimal gleich: normaler Weg -> `failed(empty_file)` aus `judge`. Logzeile nur mit Zahlen ("file cache size is stale, read N of M bytes twice"), nie Pfad.
-**Altfälle:** Bereits als `repeatedly_stuck` aufgegebene Dateien liegen im Container als `give_up`-Zeile gegen ihren ETag (`reconcile.py:505-517`) und kommen ohne ETag-Wechsel nie zurück. Ob die 1.5-Nachprüfung sie einmal mitnimmt, ist eine offene Frage (siehe unten).
-**Restrisiko:** Ein Proxy, der jede Antwort an derselben Stelle abschneidet, sähe ebenfalls zweimal gleich aus. D-29-04 kam aus #18 Fall 2 (Abbruch hinter Proxy); dort war der Abbruch nicht reproduzierbar gleich [ASSUMED]. Abmilderung: Wenn `written` ein Vielfaches gängiger Puffergrößen ist (z. B. glatte MiB), trotzdem als vorübergehend werten; im Plan entscheiden.
+**Altfälle:** Bereits als `repeatedly_stuck` aufgegebene Dateien liegen im Container als `give_up`-Zeile gegen ihren ETag (`reconcile.py:505-517`) und kommen ohne ETag-Wechsel nie zurück. Ob die 1.5-Nachprüfung sie einmal mitnimmt, war Open Question 1 (RESOLVED: D-31-02, ja). Ergänzung aus dem Plan-Check: eine Datei, die nach dem letzten 1.4.2-Abgleich-Zyklus aufgegeben wurde, hat im Container noch gar keine Zeile; sie holt die Nachhol-Ausnahme im give_up-Zweig von Teil B (31-11).
+**Restrisiko:** Ein Proxy, der jede Antwort an derselben Stelle abschneidet, sähe ebenfalls zweimal gleich aus. D-29-04 kam aus #18 Fall 2 (Abbruch hinter Proxy); dort war der Abbruch nicht reproduzierbar gleich [ASSUMED]. Abmilderung: Wenn `written` ein Vielfaches gängiger Puffergrößen ist (z. B. glatte MiB), trotzdem als vorübergehend werten; im Plan entscheiden. (Entschieden in 31-03: keine solche Ausnahme, weil sie dem POL-02-Wortlaut widerspricht; A8 wird als Restrisiko dokumentiert.)
 
 ### Anti-Patterns to Avoid
 
@@ -547,38 +547,40 @@ async def _fetch_file(self, job: QueueJob) -> _Read | None:
 | A5 | `decode_threads=1` spart Adressraum unter `RLIMIT_AS` | Muster 7 | Nur Leistung; messen |
 | A6 | HEIC braucht einen höheren Speicherfaktor als JPEG | Muster 7, Pitfall 12 | Kind stirbt statt ehrlichem Urteil |
 | A7 | Viele `.doc`/`.xls` sind RTF/HTML/CSV/DOCX unter Altendung | Muster 5/6 | Nur Mehraufwand im Sniff, kein Risiko |
-| A8 | #18 Fall 2 schnitt nicht reproduzierbar gleich ab | Muster 9 | Proxy mit fester Kappung würde abgeschnittene Dateien indexieren |
+| A8 | #18 Fall 2 schnitt nicht reproduzierbar gleich ab | Muster 9 | Proxy mit fester Kappung würde abgeschnittene Dateien indexieren. Entscheid nach Plan-Check (Owner-Linie, 31-03): keine Längenausnahme, Restrisiko in Code, SUMMARY und docs/formats.md benannt |
 | A9 | Debian-libheif-Weg spart Image-Größe, kostet Build-Aufwand | Alternatives | Nur Entscheidungsgrundlage |
 | A10 | EOCD-Offsets (Feld "total entries" bei +10, ZIP64-Locator 20 Bytes vor EOCD) | Code Examples | Vorprüfung greift nicht; zipfile-Ausnahme bleibt Netz |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Bereits aufgegebene `repeatedly_stuck`-Dateien einmal mitnehmen? (Owner-Entscheid möglich)**
+Alle acht Fragen sind durch die Owner-Entscheide in 31-CONTEXT.md vom 10.10.2026 aufgelöst; die Verweise stehen je Frage.
+
+1. **Bereits aufgegebene `repeatedly_stuck`-Dateien einmal mitnehmen? (RESOLVED: D-31-02, ja, einmalig im Nachholweg; umgesetzt in 31-11 Teil A und, für Dateien ohne Containerzeile, über die Nachhol-Ausnahme in Teil B)**
    - Was wir wissen: Der POL-02-Fix wirkt nur für künftige Downloads; aufgegebene Dateien kommen ohne ETag-Wechsel nie zurück.
    - Unklar: `repeatedly_stuck` entsteht auch durch andere Ursachen (Kind-Abstürze), ein Nachlauf kostet höchstens drei Auslieferungen je Datei.
    - Empfehlung: in Teil A des Nachholwegs aufnehmen (einmalig, gebändert); Owner-Veto möglich, da D-30-04 es nicht nennt.
 
-2. **D-30-04-Wortlaut gegen Code-Realität (Owner-Info, kein Entscheid nötig)**
+2. **D-30-04-Wortlaut gegen Code-Realität (RESOLVED: D-31-01, Teil A plus Teil B präzisieren D-30-04)**
    - D-30-04 spricht von "als `legacy_format` übersprungenen .doc/.xls"; echte .doc/.xls hatten nie eine Zeile. Die Empfehlung (Teil A + B) erfüllt die Absicht vollständig. Kurz bestätigen lassen.
 
-3. **Skip-Code für Grenzüberschreitungen: ein neuer Code `archive_limit` (Owner-Entscheid wegen sichtbarem Wortlaut)**
+3. **Skip-Code für Grenzüberschreitungen: ein neuer Code `archive_limit` (RESOLVED: D-31-03, ein neuer Code `archive_limit`)**
    - Alternativen: `too_large` wiederverwenden (Hilfetext "Raise the value under 'Largest file to read'" wäre irreführend) oder mehrere Codes (l10n-Kosten).
    - Empfehlung: genau ein Code, Label etwa "Archive over the safety limits", Hilfe "None. Archives that are too deep, too large or too densely packed are skipped so the container keeps running."
 
-4. **Nicht lesbare .doc/.xls-Varianten: welcher Code?**
+4. **Nicht lesbare .doc/.xls-Varianten: welcher Code? (RESOLVED: D-31-03, `unsupported_variant` mit allgemeinerem Label)**
    - Empfehlung: `unsupported_variant` mit verallgemeinertem Label ("Variant of this format that cannot be read"); `legacy_format` bleibt für PowerPoint-Altformat unter `.pptx`. Beides ändert sichtbaren Text (l10n-Kette); Store-Text-Abnahme REL-05.
 
-5. **`zip` in einer der sechs Typfilter-Gruppen?**
+5. **`zip` in einer der sechs Typfilter-Gruppen? (RESOLVED: D-31-05, in keiner Gruppe, als Grenze dokumentiert)**
    - Was wir wissen: Phase 32 liefert genau sechs Gruppen (`SearchFilters::TYPES`), `zip` passt in keine.
    - Empfehlung: in keiner Gruppe, als Grenze in `docs/search-filters.md` nennen; `doc`/`dot` zu documents, `xls`/`xlt` zu spreadsheets, `heic`/`heif` zu images.
 
-6. **Mail-Anhänge: nur Namen oder auch Inhalt?**
+6. **Mail-Anhänge: nur Namen oder auch Inhalt? (RESOLVED: D-31-04, nur Namen; Inhalt ist v1.6-Kandidat)**
    - Empfehlung: nur Namen in 1.5 (FMT-01 verlangt keine Anhänge); Inhalt als späterer Ausbau über die ZIP-Mitgliedsschleife. Owner-Veto möglich.
 
-7. **ZIP-Grenzwerte als Admin-Einstellung?**
+7. **ZIP-Grenzwerte als Admin-Einstellung? (RESOLVED: D-31-07, feste Konstanten mit Startwerten, im Plan 31-08 gemessen und begründet festgelegt; keine Admin-Einstellung)**
    - Empfehlung: nein, feste Konstanten in `config.py` mit Begründung (Zero-Config); Phase 33 zeigt Grenzwerte nur an (#21).
 
-8. **pillow-heif-Wheel mit 11,4 MB ungenutztem x265-Encoder**
+8. **pillow-heif-Wheel mit 11,4 MB ungenutztem x265-Encoder (RESOLVED: D-31-06, pillow-heif-Wheel; Lizenzlage und korrespondierender Quelltext in 31-01)**
    - Empfehlung: in Kauf nehmen; Debian-Weg erst, wenn die Image-Größe zum Problem wird. Lizenzlage (GPLv2-or-later) in THIRD-PARTY.md ausführlich begründen.
 
 ## Environment Availability
