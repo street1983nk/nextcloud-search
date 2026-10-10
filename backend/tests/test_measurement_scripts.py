@@ -1685,8 +1685,13 @@ PHP_TREE_HASH_TODAY = "bee7a95422d96ad9462e594bd7f1f55dc01e6efbb20c572740392c8c0
 # plan 30-03 changed store/repo.py (LEGACY_SCHEMA_STEPS gains ("2", "3") and
 # ("1", "3")). No file came and none went, so PACKAGE_FILES_TODAY stays at 74.
 # The PHP pair does not move: php/ is unchanged.
+# Measured again by plan 30-03 Task 2 on 2026-10-10 (the field plan gate, the
+# Pflicht-Fix of 30-CONTEXT): plan 30-03 changed api/resources.py
+# (QUERYABLE_SCHEMA_GENERATIONS, _of_the_marks asks the set instead of
+# SCHEMA_VERSION). No file came and none went, so PACKAGE_FILES_TODAY stays at
+# 74. The PHP pair does not move: php/ is unchanged.
 PACKAGE_FILES_TODAY = 74
-PACKAGE_TREE_HASH_TODAY = "34d61421a152ad00fd47c12a4bc75e03c4df52a6df92c07530d408f96ad84e1e"
+PACKAGE_TREE_HASH_TODAY = "0f07f40cc0f1746cd15750f9835dfd0c6c9aab6bfca7d089af7701869e93e0f6"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

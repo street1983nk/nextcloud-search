@@ -39,7 +39,7 @@ from typing import Final
 
 from tantivy import Index
 
-from findling.config import SCHEMA_VERSION, settings
+from findling.config import settings
 from findling.embed.engine import engine_precision, shared_model
 from findling.embed.model import EmbeddingModel
 from findling.index.open import LANGUAGES_MARK, SCHEMA_MARK, expected_versions, open_index, open_reader
@@ -389,6 +389,20 @@ def _read_only_vectors(path: Path) -> VectorStore | None:
         return None
 
 
+# The schema generations whose directory answers a plan built out of its own
+# marks. _probed drops every name a directory does not carry, so a schema 2
+# directory asked under schema 3 code loses body_cs and nothing else.
+#
+# "1" stays out: 1.2.x knew de and en only, and LEGACY_PLAN is exact there.
+#
+# Written out rather than derived from SCHEMA_VERSION, by the same pairs-not-
+# arithmetic rule as store.repo.LEGACY_SCHEMA_STEPS: a future raise has to extend
+# this set on purpose. The literal comparison it replaces would have sent every
+# installation with es, it, nl or pt back to the legacy pair on the day the
+# schema became 3 (30-RESEARCH pitfall 1, 30-CONTEXT Pflicht-Fix, D-30-08).
+QUERYABLE_SCHEMA_GENERATIONS: Final = frozenset({"2", "3"})
+
+
 def _of_the_marks(marks: Mapping[str, str]) -> FieldPlan | None:
     """The plan the two stored marks describe, None when they give no permission.
 
@@ -399,11 +413,11 @@ def _of_the_marks(marks: Mapping[str, str]) -> FieldPlan | None:
     it.
 
     The reasoning of both gates is in the docstring of the caller. In short: a
-    schema mark that is not literally the current one is no permission, and a
-    language mark that names no code this schema knows leaves nothing to search
-    in.
+    schema mark outside :data:`QUERYABLE_SCHEMA_GENERATIONS` is no permission,
+    and a language mark that names no code this schema knows leaves nothing to
+    search in.
     """
-    if marks.get(SCHEMA_MARK) != str(SCHEMA_VERSION):
+    if marks.get(SCHEMA_MARK) not in QUERYABLE_SCHEMA_GENERATIONS:
         return None
 
     stored = marks.get(LANGUAGES_MARK, "")
@@ -570,8 +584,8 @@ def field_plan_for(marks: Mapping[str, str], index: Index) -> FieldPlan:
 
     **The gate falls closed**, in the shape of
     :func:`findling.store.repo._schema_is_legacy` and for its reason. Anything
-    that is not literally the current mark, which covers an absent mark, the
-    intermediate ``"1"`` of every installation that has not rebuilt yet,
+    outside :data:`QUERYABLE_SCHEMA_GENERATIONS`, which covers an absent mark,
+    the ``"1"`` of every installation that still runs the nine field layout,
     ``UNKNOWN_VERSION`` and any generation this code has never seen, is answered
     with :data:`findling.query.rewrite.LEGACY_PLAN`. A state that cannot be read
     is no permission: an index whose schema never named itself could be any
