@@ -44,7 +44,7 @@ from pathlib import Path
 import pytest
 from tantivy import Index, SchemaBuilder
 
-from findling.api.resources import field_plan_for, plan_falls_short
+from findling.api.resources import QUERYABLE_SCHEMA_GENERATIONS, field_plan_for, plan_falls_short
 from findling.config import SCHEMA_VERSION, SUPPORTED_LANGUAGES
 from findling.index.open import LANGUAGES_MARK, SCHEMA_MARK, expected_versions
 from findling.index.schema import (
@@ -56,7 +56,7 @@ from findling.index.schema import (
     FIELD_TITLE,
 )
 from findling.query.rewrite import BODY_BOOST, EMPTY_PLAN, LEGACY_PLAN, build_query
-from findling.store.repo import LEGACY_LANGUAGES, open_store
+from findling.store.repo import LEGACY_LANGUAGES, UNKNOWN_VERSION, open_store
 
 # The mark a directory carries once the rebuild of phase 18 has run on it. Read
 # out of findling.config rather than written as "2", because a literal here would
@@ -168,13 +168,52 @@ def test_the_computed_plan_of_a_stock_installation_goes_through_the_query_builde
     assert rewritten.query is not None
 
 
-@pytest.mark.parametrize("stored", ["3", "", "abc", "UNKNOWN_VERSION"])
+@pytest.mark.parametrize("stored", ["4", "", "abc", "UNKNOWN_VERSION", UNKNOWN_VERSION])
 def test_a_schema_generation_this_code_never_saw_is_no_permission(stored: str, schema_2_index: Index) -> None:
     # The gate falls closed, in the shape of store.repo._schema_is_legacy and for
     # its reason: an index whose schema names a generation nobody wrote could be
     # any schema, and naming a field it does not carry is the ValueError the
     # first half of this file provokes.
     assert field_plan_for({SCHEMA_MARK: stored, LANGUAGES_MARK: "de,en,es"}, schema_2_index) == LEGACY_PLAN
+
+
+# -- the generations the marks may describe (plan 30-03, 30-CONTEXT Pflicht-Fix) --
+#
+# 30-RESEARCH pitfall 1: a gate that compares the schema mark literally with
+# SCHEMA_VERSION would, on the day that constant becomes 3, send every stock
+# installation with es, it, nl or pt back to the legacy pair, silently. The
+# cases below hold the gate against a closed set instead.
+
+
+def test_a_schema_three_mark_on_a_schema_two_directory_keeps_spanish(schema_2_index: Index) -> None:
+    marks = {SCHEMA_MARK: "3", LANGUAGES_MARK: "de,en,es"}
+
+    plan = field_plan_for(marks, schema_2_index)
+
+    assert FIELD_BODY_ES in plan.fields
+    assert "body_cs" not in plan.fields
+    assert plan_falls_short(marks, plan) is False
+
+
+def test_a_stock_schema_two_installation_keeps_spanish_under_schema_three_code(
+    schema_2_index: Index,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The real case after the upgrade: the directory and its mark stay at 2
+    # while the code says 3. raising=False because the gate no longer reads the
+    # constant at all, which is the point; the patch stays as the statement that
+    # its value does not matter.
+    monkeypatch.setattr("findling.api.resources.SCHEMA_VERSION", 3, raising=False)
+
+    plan = field_plan_for({SCHEMA_MARK: "2", LANGUAGES_MARK: "de,en,es"}, schema_2_index)
+
+    assert plan.fields == (FIELD_BODY_DE, FIELD_BODY_EN, FIELD_BODY_ES, FIELD_NAME, FIELD_TITLE)
+
+
+def test_the_queryable_generations_hold_the_current_one_and_not_the_first() -> None:
+    # "1" stays out: 1.2.x knew de and en only, and LEGACY_PLAN is exact there.
+    assert str(SCHEMA_VERSION) in QUERYABLE_SCHEMA_GENERATIONS
+    assert "1" not in QUERYABLE_SCHEMA_GENERATIONS
 
 
 def test_a_directory_without_a_schema_mark_is_no_permission_either(schema_2_index: Index) -> None:
