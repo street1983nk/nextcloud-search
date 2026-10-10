@@ -1681,8 +1681,12 @@ PHP_TREE_HASH_TODAY = "bee7a95422d96ad9462e594bd7f1f55dc01e6efbb20c572740392c8c0
 # changed config.py (ces joins OCR_LANGUAGE_ALLOWLIST, now ten entries, the
 # default stays at three). No file came and none went, so PACKAGE_FILES_TODAY
 # stays at 74. The PHP pair does not move: php/ is unchanged.
+# Measured again by plan 30-03 Task 1 on 2026-10-10 (the schema ratchet, D-30-08):
+# plan 30-03 changed store/repo.py (LEGACY_SCHEMA_STEPS gains ("2", "3") and
+# ("1", "3")). No file came and none went, so PACKAGE_FILES_TODAY stays at 74.
+# The PHP pair does not move: php/ is unchanged.
 PACKAGE_FILES_TODAY = 74
-PACKAGE_TREE_HASH_TODAY = "d09ecf1f679e1ba40d946e78f1df873f0ace83dbb39b8d91a1327c05f24e5272"
+PACKAGE_TREE_HASH_TODAY = "34d61421a152ad00fd47c12a4bc75e03c4df52a6df92c07530d408f96ad84e1e"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

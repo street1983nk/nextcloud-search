@@ -138,12 +138,27 @@ _SCHEMA_MARK: Final = "schema_version"
 # set(DEFAULT_FIELDS) <= set(FIELDS_SCHEMA_1). An index of the old layout can
 # therefore answer every query this code builds.
 #
+# Plan 30-03 wrote down the two steps to schema 3, before schema 3 exists, on
+# owner decision D-30-08 (phase 30 is the only schema step of the milestone,
+# SCHEMA_VERSION 2 to 3, LEGACY_SCHEMA_STEPS ("2","3") and ("1","3")).
+#
+# ("2", "3"): schema 3 adds the one field body_cs and drops none, so every field
+# the query builder names stands in both generations. The test file named above
+# holds that as set(FIELDS_SCHEMA_1) <= set(FIELDS_SCHEMA_2) <= set(FIELDS),
+# with FIELDS_SCHEMA_2 frozen as the thirteen names of 1.3.0 to 1.4.2. The empty
+# body_cs of a schema 2 directory is reached only once cs is switched on, which
+# is a drift of the language mark and starts the rebuild on its own.
+#
+# ("1", "3"): a 1.2.x installation that goes straight to 1.5 would otherwise get
+# exactly the full rebuild that ("1", "2") prevents, for the same reason and with
+# the same inclusion behind it.
+#
 # Pairs and not a comparison of numbers, and that is the whole ratchet. A
-# schema 3 that drops a field would inherit nothing from this line: whoever
+# schema 4 that drops a field would inherit nothing from this line: whoever
 # raises the mark again has to write the new pair down here and say in the same
 # commit why the older layout still answers. A rule of the shape
 # int(stored) < int(expected) would excuse that raise silently.
-LEGACY_SCHEMA_STEPS: Final = frozenset({("1", "2")})
+LEGACY_SCHEMA_STEPS: Final = frozenset({("1", "2"), ("2", "3"), ("1", "3")})
 
 # Where the redelivery of the vector stock has got to, or an empty value when no
 # redelivery is running.
