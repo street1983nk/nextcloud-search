@@ -155,6 +155,35 @@ GOLD_V1_3 = {
     DUTCH_MARK: "off",
 }
 
+# The third gold table, beside the two above and replacing neither.
+#
+# Schema-Marke 2 -> 3 unter D-30-02 / 30-CONTEXT "Folge für Phase 30" and D-30-08
+# of 2026-10-10: Czech gets a body field of its own (CZ-02), body_cs, and the
+# schema step that carries it is the only one of milestone v1.5, so that a
+# rebuild falls at most once (D-30-08; D-30-03 keeps archives out of the schema).
+# Bestand ohne cs baut nicht um: an installation of 1.3.x or 1.4.x carries "2",
+# and the pair ("2", "3") of findling.store.repo.LEGACY_SCHEMA_STEPS reads that
+# as legacy rather than as a difference, so the upgrade shows no banner and
+# starts no rebuild; the field plan keeps answering over the thirteen fields on
+# disk through QUERYABLE_SCHEMA_GENERATIONS (plan 30-03). Proven in the store by
+# backend/tests/test_store_repo.py and in the field by the CI leg "Store upgrade 5".
+# Only an installation that switches cs on rebuilds, and it does so because its
+# language mark moves, which is the rule the sixth mark has followed since 1.3.
+#
+# GOLD_V1_3 stays as the witness of what every 1.3.x and 1.4.x installation
+# carries on disk, as GOLD_V1_0_AND_V1_1 stays for 1.0.x to 1.2.x. The other six
+# marks did not move with this one and must not, for the reason given at GOLD_V1_3:
+# a second mark moving in the same release would make the reason for this one
+# unprovable. No eighth mark came with Czech either (30-RESEARCH Pattern 3).
+GOLD_V1_5 = {
+    "schema_version": "3",
+    "index_version": "1",
+    "analyzer_version": "1",
+    "tantivy_version": GOLD_INDEX_FORMAT,
+    LANGUAGES_MARK: GOLD_LANGUAGES,
+    DUTCH_MARK: "off",
+}
+
 # The six marks an index carries. A mark that disappears counts as a difference
 # in Store.version_mismatch, so a set that shrank would trigger a rebuild just as
 # surely as a value that changed.
@@ -299,22 +328,43 @@ def test_an_upgrade_from_1_0_x_to_1_2_x_now_moves_exactly_one_mark() -> None:
 
     The digest handed in is arbitrary, because the word list is held through its
     Debian pin in the test below rather than through a literal here.
+
+    Since plan 30-04 the moved value reads "3" and not "2": the running code is
+    two steps away from this table, and the store excuses that distance through
+    the pair ("1", "3") of LEGACY_SCHEMA_STEPS, not through this file. Still one
+    mark and no second one.
     """
     findings = drift_findings(expected_versions("digest-egal", GOLD_LANGUAGES))
 
     assert len(findings) == 1, findings
     assert "schema_version" in findings[0], findings
-    assert "'2'" in findings[0], findings
+    assert f"'{GOLD_V1_5['schema_version']}'" in findings[0], findings
     assert "'1'" in findings[0], findings
 
 
-def test_an_index_built_by_this_code_carries_the_marks_of_v1_3() -> None:
-    """The new floor. What v1.2 held against GOLD_V1_0_AND_V1_1, v1.3 holds against this.
+def test_an_upgrade_from_1_3_x_and_1_4_x_moves_exactly_the_schema_mark() -> None:
+    """The step of plan 30-04, held against the witness of 1.3.x and 1.4.x.
+
+    Against GOLD_V1_3 the running code differs in schema_version and in nothing
+    else: the language mark and the Dutch mark of the factory setting stay where
+    they were. That the one difference costs no rebuild is the pair ("2", "3")
+    in the store, see the paragraph at GOLD_V1_5.
+    """
+    findings = drift_findings(expected_versions("digest-egal", GOLD_LANGUAGES, dutch_mark="off"), GOLD_V1_3)
+
+    assert len(findings) == 1, findings
+    assert "schema_version" in findings[0], findings
+    assert "'3'" in findings[0], findings
+    assert "'2'" in findings[0], findings
+
+
+def test_an_index_built_by_this_code_carries_the_marks_of_v1_5() -> None:
+    """The new floor. What v1.3 and v1.4 held against GOLD_V1_3, v1.5 holds against this.
 
     Without it the release would have a moved mark and no table to hold the moved
     state against, which is a ratchet that was opened and never closed again.
     """
-    findings = drift_findings(expected_versions("digest-egal", GOLD_LANGUAGES), GOLD_V1_3)
+    findings = drift_findings(expected_versions("digest-egal", GOLD_LANGUAGES, dutch_mark="off"), GOLD_V1_5)
 
     assert findings == [], findings
 
@@ -357,6 +407,24 @@ def test_the_schema_mark_moved_by_exactly_one_step() -> None:
     assert step == 1, step
     for mark in ("index_version", "analyzer_version", TANTIVY_MARK):
         assert GOLD_V1_3[mark] == GOLD_V1_0_AND_V1_1[mark], mark
+
+
+def test_the_schema_mark_of_v1_5_moved_by_exactly_one_step() -> None:
+    """2 -> 3 under D-30-02 and D-30-08, one step and every other mark at rest.
+
+    The same argument as the case above, one release later: the state 2 is
+    shipped (1.3.0 to 1.4.2), so 3 is a step out of a schema that exists in the
+    field. Held over all marks of GOLD_V1_3, the language and the Dutch mark
+    included, because those two are the ones this step could most easily drag
+    along.
+    """
+    step = int(GOLD_V1_5["schema_version"]) - int(GOLD_V1_3["schema_version"])
+
+    assert step == 1, step
+    assert set(GOLD_V1_5) == set(GOLD_V1_3)
+    for mark in GOLD_V1_3:
+        if mark != "schema_version":
+            assert GOLD_V1_5[mark] == GOLD_V1_3[mark], mark
 
 
 def test_the_index_format_of_the_banner_holds_as_well() -> None:
