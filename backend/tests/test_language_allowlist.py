@@ -31,9 +31,16 @@ would prove nothing.
 
 from __future__ import annotations
 
+import pytest
 from tantivy import Filter, TextAnalyzerBuilder, Tokenizer
 
-from findling.config import LANGUAGE_ALLOWLIST, SNOWBALL_NAME, SUPPORTED_LANGUAGES
+from findling.config import (
+    LANGUAGE_ALLOWLIST,
+    SNOWBALL_NAME,
+    STEMMERLESS_LANGUAGES,
+    SUPPORTED_LANGUAGES,
+    settings,
+)
 
 # The staged mutation of this file, and the reason it is this name: measured on
 # 2026-09-23, it has a stemmer and no builtin stop word list, which is exactly
@@ -85,8 +92,18 @@ def test_every_offered_language_is_carried_by_the_running_tantivy() -> None:
 
 
 def test_every_product_language_stands_in_the_allowlist() -> None:
-    unmapped = sorted(set(SUPPORTED_LANGUAGES) - set(SNOWBALL_NAME))
-    assert unmapped == [], f"these field codes have no tantivy name at all: {unmapped}"
+    # Since plan 30-04 a product language reaches its chain in one of two ways:
+    # through a tantivy Snowball name, or through a factory of its own for a
+    # language tantivy has no stemmer for (Czech, CZ-02). The two ways have to
+    # cover the product languages exactly and may not overlap, or a code would
+    # either have no chain at all or two that disagree about which one it is.
+    snowball = set(SNOWBALL_NAME)
+    assert set(SUPPORTED_LANGUAGES) == snowball | STEMMERLESS_LANGUAGES, (
+        f"these field codes have no chain at all: {sorted(set(SUPPORTED_LANGUAGES) - snowball - STEMMERLESS_LANGUAGES)}"
+    )
+    assert snowball.isdisjoint(STEMMERLESS_LANGUAGES), (
+        f"these codes claim a Snowball name and a factory of their own: {sorted(snowball & STEMMERLESS_LANGUAGES)}"
+    )
 
     missing = [
         f"{code} maps to {name}, and {name} is not in LANGUAGE_ALLOWLIST: that is a panic waiting for phase 18"
@@ -95,6 +112,40 @@ def test_every_product_language_stands_in_the_allowlist() -> None:
     ]
 
     assert missing == [], f"the map reaches past the allowlist: {missing}"
+
+
+def test_a_stemmerless_language_never_reaches_the_snowball_side() -> None:
+    # The anti pattern of plan 30-04, held as a case: "czech" in the allowlist or
+    # as a Snowball name would be handed to Filter.stopword, and tantivy 0.26.2
+    # answers that with a ValueError at start up. Neither the codes nor any
+    # tantivy name for them may stand on that side.
+    assert STEMMERLESS_LANGUAGES.isdisjoint(LANGUAGE_ALLOWLIST)
+    assert "czech" not in LANGUAGE_ALLOWLIST
+    assert "czech" not in SNOWBALL_NAME.values()
+    assert sorted(STEMMERLESS_LANGUAGES) == ["cs"]
+
+
+@pytest.mark.parametrize(
+    ("configured", "expected"),
+    [
+        ("cs,de", ("de", "cs")),
+        ("de,cs", ("de", "cs")),
+        ("de,en", ("de", "en")),
+        ("cs", ("cs",)),
+    ],
+)
+def test_czech_can_be_switched_on_and_normalises_behind_the_others(
+    monkeypatch: pytest.MonkeyPatch, configured: str, expected: tuple[str, ...]
+) -> None:
+    # cs stands at the end of SUPPORTED_LANGUAGES, so the normalised marker of
+    # every language set an installation already carries stays byte for byte
+    # the same, and "cs,de" reads as "de,cs".
+    monkeypatch.setenv("FINDLING_LANGUAGES", configured)
+    settings.cache_clear()
+    try:
+        assert settings().languages == expected
+    finally:
+        settings.cache_clear()
 
 
 def test_the_guard_sees_a_language_with_a_stemmer_but_no_stop_word_list() -> None:
@@ -108,16 +159,20 @@ def test_the_guard_sees_a_language_with_a_stemmer_but_no_stop_word_list() -> Non
     assert MUTATED_LANGUAGE not in LANGUAGE_ALLOWLIST
 
 
-def test_the_thirteen_hold_and_the_six_are_a_true_subset() -> None:
+def test_the_thirteen_hold_and_the_seven_are_a_true_subset() -> None:
     # Thirteen, and the number is the assertion. It is not a taste decision that
     # may drift with the next language somebody wants: it is the size of the
     # intersection the engine serves, and a fourteenth entry means the engine
     # grew one, which is a measurement somebody has to redo and defend.
     assert len(LANGUAGE_ALLOWLIST) == 13
 
-    # Six body fields, and a true subset of the thirteen in both directions:
-    # the product may never offer a language the engine refuses, and the
-    # allowlist has to stay the larger of the two, because it is the set the
-    # chain factory of phase 18 validates against and not the set it ships.
-    assert len(SUPPORTED_LANGUAGES) == 6
+    # Seven body fields since plan 30-04, six of them through Snowball and Czech
+    # through its own factory, at the end of the tuple. The six Snowball names
+    # stay a true subset of the thirteen: the product may never offer a language
+    # the engine refuses, and the allowlist has to stay the larger of the two,
+    # because it is the set the chain factory validates against and not the set
+    # it ships.
+    assert len(SUPPORTED_LANGUAGES) == 7
+    assert SUPPORTED_LANGUAGES[-1] == "cs"
+    assert len(SNOWBALL_NAME) == 6
     assert set(SNOWBALL_NAME.values()) < set(LANGUAGE_ALLOWLIST)
