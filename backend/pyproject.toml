@@ -78,7 +78,7 @@ dependencies = [
     # is not installed here, because a fallback path is not a dependency (D-10).
     "sqlite-vec==0.1.9",
     # Chunking. Splits a document into passages along sentence and paragraph
-    # boundaries instead of every N characters. 0.32.0 (2026-06-16), cp310-abi3
+    # boundaries instead of every N characters. 0.33.0 (2026-09-24), cp310-abi3
     # wheel, so one wheel serves every Python from 3.10 on.
     "semantic-text-splitter==0.33.0",
 ]
