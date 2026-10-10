@@ -2,13 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
-status: planning
-last_updated: "2026-10-10T12:00:00.000Z"
-last_activity: 2026-10-10
+status: executing
+stopped_at: Roadmap v1.5 geschrieben, noch nicht committet
+last_updated: "2026-10-10T04:41:21.105Z"
+last_activity: 2026-10-10 -- Phase 30 planning complete
 progress:
   total_phases: 7
   completed_phases: 0
-  total_plans: 0
+  total_plans: 9
   completed_plans: 0
   percent: 0
 ---
@@ -26,8 +27,8 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 
 Phase: 30 von 30-36 (Owner-Tor, Schema und Tschechisch)
 Plan: noch keiner
-Status: Bereit zur Planung (`/gsd:plan-phase 30`)
-Last activity: 2026-10-10 -- Roadmap v1.5 erstellt (7 Phasen, 26/26 Requirements zugeordnet)
+Status: Ready to execute
+Last activity: 2026-10-10 -- Phase 30 planning complete
 
 Progress: [----------] 0%
 
@@ -51,8 +52,10 @@ Progress: [----------] 0%
 - Vier box-gebundene Feldbelege warten auf die naechste Anfahrt (D-29-11).
 - Issues #15/#18/#19/#21/#22 bleiben offen, bis der Melder bestaetigt; Schliessen nur mit
   Owner-Wort je Issue.
+
 - Reddit-Post-Entwurf liegt verifiziert in Outlook ("Reddit-Entwurf: Findling 1.4.0 + MCP
   Connector"); Konto-Appeal pruefen, Owner postet selbst.
+
 - Dev-Instanz (Port 8090) lief am 06.10. mit Abnahme-Testdateien und Backend-Hostprozess;
   bei Gelegenheit aufraeumen.
 
