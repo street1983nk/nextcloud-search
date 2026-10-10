@@ -358,7 +358,11 @@ jobs:
       # measured 3.9 s against the real writer with three chains on 2026-09-24;
       # the cron loop needs two or three more rounds of its five second pause.
       # Sixty to a hundred and twenty seconds against 866 spare is why this
-      # number is not touched.
+      # number is not touched. Plan 30-07 raised the fill corpus to 256
+      # documents (128 MB, the reason stands at the fill corpus): at 170
+      # documents per minute that is 90 s of embedding and about four times
+      # the 3.9 s of writing, and the step took 40 s with 64 in run
+      # 38035652649, so the spare stays far above half of the 900.
       UPGRADE_DRAIN_BUDGET_SECONDS: '900'
 
       # The budget "Store upgrade 6" gives the rebuild of the index directory,
@@ -381,7 +385,12 @@ jobs:
       # that shape. Add the container coming up and the six analysis chains
       # being built, of which the German one carries a 276496 entry automaton,
       # and the whole run is well inside half a minute. 300 stands untouched and
-      # is now roughly a tenfold margin rather than a hundredfold one.
+      # is now roughly a tenfold margin rather than a hundredfold one. Since
+      # plan 30-07 the fill corpus is 128 MB and two rebuilds run, de,cs in
+      # "Store upgrade 6" and back to de,en in "Store upgrade 7"; by the chain
+      # costs measured at the fill corpus each carries about twice the work of
+      # the 32 MB over three chains, so both stay inside a minute and the same
+      # budget holds for each.
       #
       # Why there is a budget at all rather than a loop that waits: an unbounded
       # wait in CI is a hanging run, a hanging run costs the job its whole
@@ -3240,9 +3249,22 @@ jobs:
           # split, so every one of these documents costs two or three chunks
           # whatever its length, and MAX_TEXT_CHARS is 524288, so 500019
           # characters are carried whole and nothing lands in the truncated
-          # state. 64 documents are therefore 64 documents of indexing work and
-          # 32 MB of carrying work, and the expected window is 4 to 8 s, which
-          # is 15 to 30 rounds of the reader that watches it.
+          # state. 64 documents were therefore 64 documents of indexing work and
+          # 32 MB of carrying work, and the expected window was 4 to 8 s.
+          #
+          # 256 since plan 30-07, and the reason is the run that found it,
+          # 38035652649. With the rebuild switched from es,de,en to de,cs the
+          # same 32 MB went through two chains instead of three, and the Czech
+          # one, without a stemmer, is the cheapest of them: measured on
+          # 2026-10-10 over this very block, 0.5 MB costs 0.036 s in the German
+          # chain, 0.018 s in the English, 0.019 s in the Spanish and 0.006 s in
+          # the Czech one. The band run was over before Nextcloud reached the
+          # restarted container (2 rounds, the banner up in 0 of them), where
+          # the es run of 38033629694 had shown it in 2 of 4. Four times the
+          # text buys back more than the window three chains had: about 128 MB
+          # through de and cs, roughly twice the carrying of 32 MB through
+          # de, en and es. The window is bought with text, as above, and the
+          # assurances that need it are not touched.
           #
           # The words are deliberately botanical. None of them carries Belehrung,
           # Auszug, Erinnerung, florpel or findling-canary, and none of them
@@ -3258,7 +3280,7 @@ jobs:
             mv "${block}.grown" "${block}"
           done
           head -c 500000 "${block}" > "${block}.capped"
-          for number in $(seq 1 64); do
+          for number in $(seq 1 256); do
             {
               printf 'Fuelltext Nummer %s\n' "${number}"
               cat "${block}.capped"
@@ -5329,7 +5351,8 @@ jobs:
           # printed whatever happens, because the next person to size the fill
           # corpus of "Store upgrade 2" needs a number and not an impression:
           # one round is a window that was nearly missed, nought is the finding
-          # of run 36001341420, and the fill corpus is dimensioned for 15 to 30.
+          # of run 36001341420 and, with de,cs, of run 38035652649, and the fill
+          # corpus is dimensioned for 15 to 30.
           running_rounds=0
           deadline=$(( $(date +%s) + REBUILD_BUDGET_SECONDS ))
           while [ "$(date +%s)" -lt "${deadline}" ]; do
@@ -5512,8 +5535,8 @@ jobs:
             # grained enough for a corpus that carries in tenths of a second,
             # and the canary of assurance 5 needs a search AND a second reading
             # inside the same window. The fill corpus of "Store upgrade 2" is
-            # the knob: it is 64 documents of 500019 characters today and it
-            # buys about 8 s of carrying.
+            # the knob: it is 256 documents of 500019 characters since plan
+            # 30-07, about 128 MB through the de and cs chains.
             fail=1
           else
             echo "the banner was up while the run was on:"

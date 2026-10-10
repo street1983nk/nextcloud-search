@@ -429,6 +429,16 @@ def test_the_corpus_carries_the_czech_document() -> None:
     assert CZECH_PRINTF + " \\\n  > data/testuser/files/upgrade-dopis-cs.txt" in run
 
 
+def test_the_fill_corpus_keeps_the_de_cs_rebuild_watchable() -> None:
+    # Run 38035652649: with 64 fill documents the band run to de,cs was over
+    # before Nextcloud reached the restarted container, banner up in 0 rounds.
+    # The Czech chain carries the fill text about six times cheaper than the
+    # Spanish one, so the window is bought back with four times the text.
+    run = _run(CORPUS_STEP)
+    assert "for number in $(seq 1 256); do" in run
+    assert "seq 1 64" not in run
+
+
 def test_the_czech_printf_writes_the_sentence_of_the_plan() -> None:
     # The octal escapes decode to the sentence of plan 30-07, so the document
     # really carries Smlouve with a caron and the stop word Proc with one.
