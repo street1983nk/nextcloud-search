@@ -9,7 +9,11 @@ findings:
   medium: 0
   low: 3
   total: 3
-status: issues_found
+status: fixed
+fix_run: 2026-10-10
+fix_commits: 9e9764bf
+fixed: [L-30-01]
+still_open: [L-30-02, L-30-03]
 ---
 
 # Phase 30: Security-, Bug- und Performance-Audit
@@ -280,6 +284,30 @@ Keine Performance-Befunde.
 | L-30-01 NOTICE fehlt im Modul | **fix** | billig und risikolos: nur der Docstring, beide Listen und der Digest bleiben gleich. Regressionstest `test_phase30_audit.py::test_the_shipped_module_carries_the_lucene_notice_and_the_licence_path`, lokal vor dem Fix rot gesehen (`ValueError`: Zeile "Apache Lucene" fehlt), danach grün. |
 | L-30-02 Treffer nur über body_cs ohne Auszug | **accept** | dokumentierte allgemeine Grenze aller Ausbausprachen (`docs/language-analyzers.md:504`); der Treffer bleibt, die Unterzeile zeigt den Pfad. Eine Reparatur braucht entweder ein gespeichertes body_cs (Schemaschritt, D-30-08 verbietet einen zweiten in v1.5) oder einen eigenen Hervorhebungsweg über den gespeicherten Text, also ein Feature. Kandidat für die Zeit nach v1.5, kein Platz in den Phasen 31 bis 36. |
 | L-30-03 Vektordigest ungeprüft in GITHUB_ENV | **accept** | Quelle ist der Container des geprüften Commits, Form `sha256sum \| cut` einzeilig hex, Job ohne Geheimnis mit `contents: read`. Eine Formprüfung kostet einen weiteren deploy-harp-Lauf (rund 18 min) ohne Gewinn an Sicherheit; wird mitgenommen, sobald Phase 31 die Strecke ohnehin anfasst (Andockblock FMT-06). |
+
+## Status nach dem Fix-Lauf (10.10.2026)
+
+- 0 CRITICAL, 0 HIGH, 0 MEDIUM. L-30-01 gefixt (9e9764bf), L-30-02 und L-30-03
+  bewusst akzeptiert (`still_open` enthält nur diese beiden LOW-accept-Befunde).
+  Keine Owner-Frage, kein Konflikt mit D-30-08: der Fix ändert nur einen
+  Docstring, keine Marke, kein Schema, keine Kette.
+- Lokal vor dem Fix-Commit: ruff check grün, ruff format --check 198 Dateien,
+  pyright (latest) 0 Fehler, vulture grün, volle Suite **4849 passed, 25 skipped**
+  in 636,9 s (vor dem Plan 4787 passed, 25 skipped; plus 62 Fälle von
+  `test_phase30_audit.py`).
+- Baumhash `200f270a...ecc43`, `PACKAGE_FILES_TODAY` bleibt 74, Journalabsatz
+  "Plan 30-09, Befund L-30-01".
+- CI auf 9e9764bf, alle grün: Python gates **38042757203** (4860 passed,
+  14 skipped; die 92 ResourceWarnings "unclosed database" stehen gleich zahlreich
+  schon im Lauf 38039184261 vor diesem Plan), HaRP deploy **38042757174** (vier
+  Jobs, Store upgrade 5 "all eight assurances hold", Store upgrade 6 "all ten
+  assurances hold", Store upgrade 7 durch), Multi-arch image 38042757235,
+  Integration 38042757173, Resilience 38042757189, Security scans 38042757175,
+  OpenSSF Scorecard 38042757172.
+- Gegenprobe im Artefakt: `findling_backend:dev` neu gezogen (erzeugt
+  2026-10-10T09:50Z, also aus 9e9764bf); `stopwords_cs.py` im Image trägt die
+  vier NOTICE-Zeilen (Zeilen 25 bis 29) und den Pfad
+  `/usr/share/common-licenses/Apache-2.0`, der dort mit 11358 Byte liegt.
 
 ## Was gegengeprüft wurde, nicht nur gelesen
 

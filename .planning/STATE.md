@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 30-08-PLAN.md
-last_updated: "2026-10-10T08:50:47.874Z"
-last_activity: 2026-10-10 -- Plan 30-08 abgeschlossen
+stopped_at: Completed 30-09-PLAN.md
+last_updated: "2026-10-10T10:13:44.931Z"
+last_activity: 2026-10-10 -- Plan 30-09 abgeschlossen, Phase 30 wartet auf Verifikation
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 9
-  completed_plans: 8
-  percent: 89
+  completed_plans: 9
+  percent: 100
 ---
 
 # Project State
@@ -26,11 +26,11 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 30 von 30-36 (Owner-Tor, Schema und Tschechisch)
-Plan: 30-08 abgeschlossen, als Nächstes 30-09
-Status: In Ausführung
-Last activity: 2026-10-10 -- Plan 30-08 abgeschlossen
+Plan: 9/9 Pläne abgeschlossen (30-09 zuletzt), als Nächstes Phasen-Verifikation
+Status: Pläne fertig, Verifikation offen
+Last activity: 2026-10-10 -- Plan 30-09 abgeschlossen (Audit 30-AUDIT.md, status fixed)
 
-Progress: [█████████░] 89%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -43,6 +43,7 @@ Progress: [█████████░] 89%
 - v1.5: 30-06 in ca. 60 min (2 Tasks, 2 Dateien)
 - v1.5: 30-07 in ca. 55 min (2 Tasks, 3 Dateien)
 - v1.5: 30-08 in ca. 50 min (2 Tasks, 10 Dateien)
+- v1.5: 30-09 in ca. 75 min (3 Tasks, 4 Dateien)
 
 ## Accumulated Context
 
@@ -62,6 +63,7 @@ Progress: [█████████░] 89%
 - 30-06: Upgrade-Strecke startet von v1.4.2 (D-30-07); 1.4.2 urteilt die Saat richtig (Sidecar skipped/system_file, Bild indexed), recheck_1_4_0 done vor und nach dem Upgrade, Store upgrade 5 haelt alle neun Zaehler unveraendert und verlangt schemaVersion 2 und rebuildState idle per Wert; Andockblock fuer Phase 31 am Ende von Store upgrade 2b. deploy-harp-Lauf 38033629694 gruen ueber Store upgrade 0 bis 6. CZ-02 offen bis 30-07.
 - 30-07: Store upgrade 6 schaltet de,en -> de,cs (ohne en, Pitfall 5), neuer Store upgrade 7 zurueck auf de,en; smlouve 1/1/1/1, proc 1/1/0/1, Schema 2 -> 3 -> 3, Lesestelle per Container-Probe de,cs bzw. de,en, vectors.db ueber beide Umbauten gleich. term_hits zaehlt bei Ein-Wort-Fragen keine Vektortreffer (one-term-Regel, api/search.py:307). Fuellkorpus 64 -> 256 (de,cs-Bandlauf sonst unsichtbar, Lauf 38035652649). deploy-harp-Lauf 38036946762 gruen ueber Store upgrade 0 bis 7. CZ-02 abgehakt.
 - 30-08: Grenze CZ-03 in docs/language-analyzers.md (Abschnitt Czech, Langform, Lizenz) und als fuenfter Eintrag der Grenzliste in allen sechs Store-Texten, zeichengleich mit der Doku-Kurzliste, LIMITATION_COUNT 5 (D-30-06); Suchsprachen-/OCR-/env-Texte und READMEs nennen cs/ces. Wortlaut ist Entwurf (docs/store-listing.md 'Entwurf v1.5.0 (Teil Phase 30)'), Owner-Abnahme offen bis REL-05. PHP-Baumhash unveraendert (Rezept liest nur *.php). CZ-03 abgehakt.
+- 30-09: Audit der Phase 30 (30-AUDIT.md, status fixed): 0 CRITICAL, 0 HIGH, 0 MEDIUM, 3 LOW. L-30-01 gefixt (Lucene-NOTICE und Lizenzpfad im ausgelieferten Modul stopwords_cs.py, 9e9764bf, im Image belegt); L-30-02 accept (Treffer nur über body_cs ohne Auszug, dokumentierte Grenze); L-30-03 accept (Vektordigest ungeprüft in GITHUB_ENV, mitnehmen, wenn Phase 31 deploy-harp anfasst). Platzannahme unabhängig gemessen: cs +0,287/+0,299 unter 0,40. CI Python gates 38042757203, HaRP 38042757174 grün.
 
 ### Offene Faeden (kein aktiver Auftrag)
 
@@ -83,6 +85,6 @@ Progress: [█████████░] 89%
 
 ## Session Continuity
 
-Last session: 2026-10-10T08:50:47.853Z
+Last session: 2026-10-10T10:13:44.914Z
 Stopped at: Completed 30-08-PLAN.md
 Resume file: None
