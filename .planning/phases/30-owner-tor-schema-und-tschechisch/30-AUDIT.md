@@ -167,6 +167,67 @@ die zeigt, dass sie auf das Geprüfte reagiert und nicht auf etwas anderes.
   Sprache im abgelehnten Umbau, nicht durch Phase 30 entstanden, Lesestelle
   fragt ohnehin nach den Marken. Kein Befund.
 
+## Performance
+
+Gemessen am 2026-10-10 (11:21 bis 11:27) auf dem Entwicklungsrechner: Windows 11
+Pro 10.0.26200, 12 logische Kerne, Python 3.13.13, tantivy 0.26.2. Skript nur im
+Scratch-Verzeichnis, nicht im Repo.
+
+**Korpora, bewusst anders als 30-05** (dort `.dev/probe-live/loadcorpus` und ein
+Zipf-Korpus über die Fixture-Wortliste, 2000 Dokumente à 4940 Zeichen, rohe
+`Document`-Objekte):
+
+- `cswiki`: Klartext von 50 Artikeln der tschechischen Wikipedia (Praha, Brno,
+  Nájemní smlouva, Daň z přidané hodnoty, Karel Čapek und andere), über die
+  MediaWiki-API am 2026-10-10 abgerufen, 2 272 708 Zeichen. Echte tschechische
+  Flexion und Akzente, also der Fall, für den body_cs da ist.
+- `repo-prose`: Markdown aus `.planning/` und `docs/` dieses Repos, auf dieselbe
+  Länge gekürzt; echte deutsch-englische Prosa mit Code-Bezeichnern.
+- Beide in 1516 Dokumente à 1500 Zeichen geschnitten, geschrieben über den
+  Produkt-Schreibpfad `IndexBatchWriter` (Normalisierung, Löschen per Term,
+  `languages=` je Aufbau), ein Commit, gemessen mit
+  `findling.store.repo.index_bytes`, also der Funktion, die `may_rebuild` liest.
+
+| Messgröße | Wert | Vergleich | Urteil |
+|---|---|---|---|
+| Zuwachs `de,en` -> `de,en,cs`, cswiki | 4 818 809 -> 6 202 834 B, **+0,287** | `GROWTH_PER_LANGUAGE` 0,40; `es` auf gleichem Text +0,294; 30-05: 0,358 | in Ordnung |
+| Zuwachs `de,en` -> `de,en,cs`, repo-prose | 3 156 218 -> 4 100 818 B, **+0,299** | `es` +0,285 | in Ordnung |
+| Umschalten `de,en` -> `de,cs` | cswiki -0,019, repo-prose +0,017 | Vorprüfung rechnet +0,40 (ein neues Feld) | in Ordnung, Vorprüfung konservativ |
+| Durchsatz `czech_analyzer()`, cswiki | **33,8 Mio. Zeichen/s** | deutsche Snowball-Kette 14,3; deutsche Produktkette (Fixture-Liste) 12,2; `english_analyzer()` 14,4; `es` 13,6 | in Ordnung, 2,4- bis 2,8-mal schneller als Deutsch |
+| Durchsatz `czech_analyzer()`, repo-prose | **51,7 Mio. Zeichen/s** | Snowball de 21,7; Produkt de 17,8; en 18,1; es 18,5 | in Ordnung |
+| Kosten `custom_stopword` (167 Einträge) | cswiki 33,8 gegen 34,1 ohne Filter (1 %), repo-prose 51,7 gegen 56,8 (9 %) | | in Ordnung |
+| Suchlatenz Schema 2 `de,en` | 31,3 / 33,9 / 34,8 µs je Frage | | Bezug |
+| Suchlatenz Schema 3 `de,en` (body_cs leer, nicht gefragt) | 32,3 / 33,5 / 34,2 µs | Schema 2 | in Ordnung, Vorzeichen wechselt zwischen den Läufen, innerhalb der Streuung |
+| Suchlatenz Schema 3 `de,cs` | 34,3 / 33,2 / 32,7 µs | Schema 2 `de,en` | in Ordnung |
+| Suchlatenz Schema 3 `de,en,cs` | 39,5 / 38,7 / 38,8 µs | `de,en` | ein drittes Körperfeld kostet rund 5 µs (+15 %), erwartbar |
+| Image: `tesseract-ocr-ces` | Installed-Size **3722 kB** (`dpkg-query` im Image), `ces.traineddata` 3 795 684 B | 30-02: Registry-Layer +1 721 710 B (amd64), +1 733 153 B (arm64), inkl. Codeänderungen 30-01 | in Ordnung |
+
+Verfahren im Einzelnen:
+
+- **Größe:** je Sprachsatz ein frisches Verzeichnis. Der ganze Lauf wurde dreimal
+  gefahren, die Größen waren in allen drei Läufen bytegleich (zitiert sind die
+  Zahlen des Laufs 11:27). Die cswiki-Zahl liegt unter der aus 30-05, weil kürzere
+  Dokumente (1500 statt 4940 Zeichen) mehr Fixanteil je Dokument tragen (Felder
+  name, title, path, ext, mtime); maßgeblich für `GROWTH_PER_LANGUAGE` bleibt der
+  höchste gemessene Wert, 0,358 aus 30-05, und auch er liegt unter 0,40.
+- **Durchsatz:** `TextAnalyzer.analyze` über alle 1516 Stücke, fünf Wiederholungen,
+  Median. Die deutsche Snowball-Kette ist nachgebaut (simple, lowercase,
+  ascii_fold, `Filter.stopword("german")`, `Filter.stemmer("german")`,
+  remove_long), weil `snowball_analyzer("german")` mangels gemessenem Supplement
+  absichtlich ablehnt; die Produktkette `german_analyzer` läuft mit der
+  Test-Fixture-Wortliste, nicht mit den 276 496 Einträgen der Box.
+- **Latenz:** 1516 cswiki-Dokumente je Verzeichnis, Schema 2 über die eingefrorene
+  Fixture `open_schema_2_index`, Feldplan über `field_plan_for` aus den Marken;
+  84 Fragen (80 zufällige Terme aus dem Korpus, Seed 30, plus vier Zwei-Wort-
+  Fragen), `build_query` plus `search(limit=20)`, sieben Runden in zufälliger
+  Reihenfolge der Verzeichnisse, Median der Rundensumme durch 84. Drei
+  Skriptläufe, alle drei Werte zitiert.
+- **Image:** `docker run --network none ghcr.io/street1983nk/findling_backend:dev`
+  (Digest-Stand 2026-10-10T07:13Z): `dpkg-query -W -f='${Installed-Size}'
+  tesseract-ocr-ces` = 3722, `tesseract --list-langs` nennt `ces`.
+
+Keine Performance-Befunde.
+
 ## Befunde
 
 ### L-30-01 (LOW): NOTICE-Zeilen von Apache Lucene fehlen im ausgelieferten Modul
@@ -227,3 +288,6 @@ die zeigt, dass sie auf das Geprüfte reagiert und nicht auf etwas anderes.
 | Auszug für cs | Index `de,cs`, vier Fragen | L-30-02 bestätigt |
 | Image | `docker run` auf `findling_backend:dev` | `ces` gelistet, Generator fehlt, Modul ohne NOTICE |
 | REUSE | CI-Lauf 38040459964 (lokal kein `reuse`) | konform 3.3 |
+| Platzannahme A2 | echter tschechischer Text und Repo-Prosa, Produkt-Schreibpfad, 1500 statt 4940 Zeichen | +0,287 und +0,299, unter 0,40 |
+| Kettenkosten | Durchsatz gegen drei Snowball-Ketten, mit und ohne Stoppfilter | cs am schnellsten |
+| Suchweg | Schema 2 gegen Schema 3 ohne cs, drei Läufe | kein Unterschied über die Streuung hinaus |
