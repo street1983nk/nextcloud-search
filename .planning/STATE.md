@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 30-07-PLAN.md
-last_updated: "2026-10-10T08:30:01.220Z"
-last_activity: 2026-10-10 -- Plan 30-07 abgeschlossen
+stopped_at: Completed 30-08-PLAN.md
+last_updated: "2026-10-10T08:50:47.874Z"
+last_activity: 2026-10-10 -- Plan 30-08 abgeschlossen
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 9
-  completed_plans: 7
-  percent: 78
+  completed_plans: 8
+  percent: 89
 ---
 
 # Project State
@@ -26,11 +26,11 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 30 von 30-36 (Owner-Tor, Schema und Tschechisch)
-Plan: 30-07 abgeschlossen, als Nächstes 30-08
+Plan: 30-08 abgeschlossen, als Nächstes 30-09
 Status: In Ausführung
-Last activity: 2026-10-10 -- Plan 30-07 abgeschlossen
+Last activity: 2026-10-10 -- Plan 30-08 abgeschlossen
 
-Progress: [████████░░] 78%
+Progress: [█████████░] 89%
 
 ## Performance Metrics
 
@@ -42,6 +42,7 @@ Progress: [████████░░] 78%
 - v1.5: 30-05 in ca. 75 min (2 Tasks, 3 Dateien)
 - v1.5: 30-06 in ca. 60 min (2 Tasks, 2 Dateien)
 - v1.5: 30-07 in ca. 55 min (2 Tasks, 3 Dateien)
+- v1.5: 30-08 in ca. 50 min (2 Tasks, 10 Dateien)
 
 ## Accumulated Context
 
@@ -60,8 +61,11 @@ Progress: [████████░░] 78%
 - 30-05: Bestand (Schema 2, Schema 1) baut unter Schema-3-Code nicht um, cs an/aus per Bandlauf ohne Neu-Einbettung bewiesen; GROWTH_PER_LANGUAGE bleibt 0.40 (cs gemessen 0.358, es 0.361, 2000 Dokumente). CZ-02 offen bis 30-07, CZ-03 bis zur Doku (30-08/30-09).
 - 30-06: Upgrade-Strecke startet von v1.4.2 (D-30-07); 1.4.2 urteilt die Saat richtig (Sidecar skipped/system_file, Bild indexed), recheck_1_4_0 done vor und nach dem Upgrade, Store upgrade 5 haelt alle neun Zaehler unveraendert und verlangt schemaVersion 2 und rebuildState idle per Wert; Andockblock fuer Phase 31 am Ende von Store upgrade 2b. deploy-harp-Lauf 38033629694 gruen ueber Store upgrade 0 bis 6. CZ-02 offen bis 30-07.
 - 30-07: Store upgrade 6 schaltet de,en -> de,cs (ohne en, Pitfall 5), neuer Store upgrade 7 zurueck auf de,en; smlouve 1/1/1/1, proc 1/1/0/1, Schema 2 -> 3 -> 3, Lesestelle per Container-Probe de,cs bzw. de,en, vectors.db ueber beide Umbauten gleich. term_hits zaehlt bei Ein-Wort-Fragen keine Vektortreffer (one-term-Regel, api/search.py:307). Fuellkorpus 64 -> 256 (de,cs-Bandlauf sonst unsichtbar, Lauf 38035652649). deploy-harp-Lauf 38036946762 gruen ueber Store upgrade 0 bis 7. CZ-02 abgehakt.
+- 30-08: Grenze CZ-03 in docs/language-analyzers.md (Abschnitt Czech, Langform, Lizenz) und als fuenfter Eintrag der Grenzliste in allen sechs Store-Texten, zeichengleich mit der Doku-Kurzliste, LIMITATION_COUNT 5 (D-30-06); Suchsprachen-/OCR-/env-Texte und READMEs nennen cs/ces. Wortlaut ist Entwurf (docs/store-listing.md 'Entwurf v1.5.0 (Teil Phase 30)'), Owner-Abnahme offen bis REL-05. PHP-Baumhash unveraendert (Rezept liest nur *.php). CZ-03 abgehakt.
 
 ### Offene Faeden (kein aktiver Auftrag)
+
+- Owner-Abnahme des Wortlauts des fuenften Grenz-Eintrags Tschechisch (en/de/fr) samt Suchsprachen-/OCR-/env-Texten bei REL-05 (Phase 36); Entwurf in docs/store-listing.md 'Entwurf v1.5.0 (Teil Phase 30)'.
 
 - Vier box-gebundene Feldbelege warten auf die naechste Anfahrt (D-29-11).
 - Issues #15/#18/#19/#21/#22 bleiben offen, bis der Melder bestaetigt; Schliessen nur mit
@@ -79,6 +83,6 @@ Progress: [████████░░] 78%
 
 ## Session Continuity
 
-Last session: 2026-10-10T08:30:01.200Z
-Stopped at: Completed 30-07-PLAN.md
+Last session: 2026-10-10T08:50:47.853Z
+Stopped at: Completed 30-08-PLAN.md
 Resume file: None

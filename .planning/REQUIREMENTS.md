@@ -38,7 +38,7 @@
 
 - [x] **CZ-01**: Admin kann Tschechisch als OCR-Sprache waehlen (`ces` im Image und in der Allowlist, Bau-Pruefung wie dan/est)
 - [x] **CZ-02**: Admin kann Tschechisch als lexikalische Sprache einschalten: eigenes Koerperfeld ohne Stemmer (Kleinschreibung, Akzentfaltung, tschechische Stoppwoerter mit Lizenzbeleg); Wechsel per Re-Analyse-Umbau, Bestandsinstallationen ohne `cs` bauen nicht um
-- [ ] **CZ-03**: Grenze dokumentiert: tschechische Suche ohne Stammformreduktion (Flexionsformen werden als eigene Woerter behandelt, Semantik gleicht teilweise aus)
+- [x] **CZ-03**: Grenze dokumentiert: tschechische Suche ohne Stammformreduktion (Flexionsformen werden als eigene Woerter behandelt, Semantik gleicht teilweise aus)
 
 ### Feinschliff (POL)
 
@@ -55,7 +55,7 @@
 ### Haertung und Release (HART/REL)
 
 - [ ] **HART-06**: Launch-Haertung vor Abgabe: Audit Security/Bugs/Performance (0 CRIT/0 HIGH), boesartige Archive/Mails/OLE-Dateien als Testkorpus, Upgrade-Strecke 1.4.2 -> 1.5.0 in CI, Fremdinstallation
-- [ ] **REL-05**: Store-Einreichung 1.5.0 beider Apps (Owner-Abnahme Text + Playwright-Runde vorher), Beleg in docs/store-listing.md
+- [ ] **REL-05**: Store-Einreichung 1.5.0 beider Apps (Owner-Abnahme Text + Playwright-Runde vorher), Beleg in docs/store-listing.md. Teil der Textabnahme: Wortlaut des fuenften Grenz-Eintrags Tschechisch (D-30-06, Entwurf aus 30-08 in docs/store-listing.md 'Entwurf v1.5.0 (Teil Phase 30)')
 
 ## Future (v1.6, vorlaeufig)
 
@@ -98,7 +98,7 @@
 | FMT-06 | Phase 31 | Pending |
 | CZ-01 | Phase 30 | Complete |
 | CZ-02 | Phase 30 | Complete |
-| CZ-03 | Phase 30 | Pending |
+| CZ-03 | Phase 30 | Complete |
 | POL-01 | Phase 33 | Pending |
 | POL-02 | Phase 31 | Pending |
 | POL-03 | Phase 33 | Pending |
