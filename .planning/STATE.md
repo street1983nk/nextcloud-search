@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 30-02-PLAN.md
-last_updated: "2026-10-10T05:21:10.393Z"
-last_activity: 2026-10-10 -- Plan 30-02 abgeschlossen (OCR ces, CI-Lauf 38027012519)
+stopped_at: Completed 30-03-PLAN.md
+last_updated: "2026-10-10T05:47:27.598Z"
+last_activity: 2026-10-10 -- Plan 30-03 abgeschlossen (Ratsche 2->3, Lesetor-Fix)
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 9
-  completed_plans: 2
-  percent: 22
+  completed_plans: 3
+  percent: 33
 ---
 
 # Project State
@@ -26,17 +26,18 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 30 von 30-36 (Owner-Tor, Schema und Tschechisch)
-Plan: 30-02 abgeschlossen, als Nächstes 30-03
+Plan: 30-03 abgeschlossen, als Nächstes 30-04
 Status: In Ausführung
-Last activity: 2026-10-10 -- Plan 30-02 abgeschlossen
+Last activity: 2026-10-10 -- Plan 30-03 abgeschlossen
 
-Progress: [██░░░░░░░░] 22%
+Progress: [███░░░░░░░] 33%
 
 ## Performance Metrics
 
 - v1.4: 6 Phasen, 78 Plaene in 10 Tagen (Referenz)
 - v1.5: 30-01 in ca. 21 min (3 Tasks, 9 Dateien)
 - v1.5: 30-02 in ca. 35 min (2 Tasks, 7 Dateien)
+- v1.5: 30-03 in ca. 45 min (2 Tasks, 7 Dateien)
 
 ## Accumulated Context
 
@@ -50,6 +51,7 @@ Progress: [██░░░░░░░░] 22%
 
 - 30-01: Tschechische Stoppliste = Lucene 10.5.2 gefaltet (167), Ausnahmen byt (Wohnung) und jez (Wehr), kein achtes Merkmal, ANALYZER_VERSION bleibt 1.
 - 30-02: ces nur angeboten, OCR-Standard bleibt deu+eng+fra; Image-Probe CZ-01 auf amd64 und arm64 gruen (Lauf 38027012519).
+- 30-03: LEGACY_SCHEMA_STEPS {(1,2),(2,3),(1,3)}; QUERYABLE_SCHEMA_GENERATIONS {2,3} ausgeschrieben, _of_the_marks fragt die Menge statt SCHEMA_VERSION; A5 bestaetigt (Ordnerfilter ueber files.path, kein zweiter Schemaschritt).
 
 ### Offene Faeden (kein aktiver Auftrag)
 
@@ -69,6 +71,6 @@ Progress: [██░░░░░░░░] 22%
 
 ## Session Continuity
 
-Last session: 2026-10-10T05:21:10.378Z
-Stopped at: Completed 30-02-PLAN.md
+Last session: 2026-10-10T05:47:27.578Z
+Stopped at: Completed 30-03-PLAN.md
 Resume file: None
