@@ -26,10 +26,10 @@ Le modèle, c'est vous qui l'apportez, et aucun contenu ne quitte votre serveur.
 
 - Recherche plein texte avec traitement des mots allemands : mots composés,
   flexion, trémas, phrases, exclusions, filtre par type de fichier
-- Reconnaissance optique pour les PDF numérisés et les images : neuf langues
+- Reconnaissance optique pour les PDF numérisés et les images : dix langues
   disponibles (allemand, anglais, français, espagnol, italien, néerlandais,
-  portugais, danois, estonien), allemand, anglais et français activés par
-  défaut
+  portugais, danois, estonien, tchèque), allemand, anglais et français activés
+  par défaut
 - Recherche sémantique : trouve les documents par des périphrases
 - Chaque résultat est vérifié par Nextcloud selon vos droits
 - Aucune configuration : la première indexation démarre d'elle-même

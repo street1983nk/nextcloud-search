@@ -25,9 +25,9 @@ You bring the model, and no content leaves your server.
 
 - Full text search with German word handling: compounds, inflection, umlauts,
   phrases, exclusions, a file type filter
-- OCR for scanned PDFs and images: nine languages available (German, English,
-  French, Spanish, Italian, Dutch, Portuguese, Danish, Estonian), German,
-  English and French switched on by default
+- OCR for scanned PDFs and images: ten languages available (German, English,
+  French, Spanish, Italian, Dutch, Portuguese, Danish, Estonian, Czech),
+  German, English and French switched on by default
 - Semantic search: finds documents through paraphrases
 - Every result is permission-checked by Nextcloud
 - No configuration: the first index run starts on its own

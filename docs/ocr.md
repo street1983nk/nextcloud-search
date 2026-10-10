@@ -83,6 +83,24 @@ an der Auflösung und am Zeitlimit je Seite hat dieser Nachtrag nichts geändert
 und der Index hat keine sechs Sprachen gelernt. Die Analysekette von Tantivy
 bleibt Deutsch und Englisch.
 
+## Nachtrag 10.10.2026: Tschechisch als zehnte Sprache
+
+Seit Plan 30-02 (Issue #26) installiert das Abbild ein zehntes Sprachpaket:
+`ces`, als `tesseract-ocr-ces` aus derselben Quelle `tesseract-lang` und in
+derselben harten Fassung `1:4.1.0-2`. Es wird beim Bau mit
+`tesseract --list-langs` geprüft wie die anderen, und `OCR_LANGUAGE_ALLOWLIST`
+in `backend/src/findling/config.py` hat damit zehn Einträge: `deu`, `eng`,
+`fra`, `spa`, `ita`, `nld`, `por`, `dan`, `est` und `ces`. Der Bild-Beweis
+läuft in `.github/workflows/docker.yml` im Schritt "Czech OCR in the image
+(CZ-01)" auf amd64 und arm64: eine tschechische Zeile wird im gebauten Abbild
+über `-l ces` gelesen (`backend/tests/probe_image_ocr_czech.py`).
+
+Der Standard bleibt `deu+eng+fra`, aus demselben Grund wie oben. Anders als
+Französisch hat Tschechisch seit 1.5.0 auch eine Analysekette im Index (`cs`,
+ohne Stammformreduktion); die Kette ist eine eigene Einstellung
+(`FINDLING_LANGUAGES`) und in `docs/language-analyzers.md`, Abschnitt "Czech",
+beschrieben. Die Zahlen dieser Seite bleiben unverändert stehen.
+
 ## Die Deckel-Kaskade
 
 Vier Zeitdeckel und ein Speicherdeckel greifen ineinander, und die Reihenfolge

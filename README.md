@@ -25,10 +25,10 @@ Das Modell bringen Sie mit, kein Inhalt verlässt Ihren Server.
 
 - Volltextsuche mit deutscher Wortbehandlung: Komposita, Flexion, Umlaute,
   Phrasen, Ausschlüsse, Dateityp-Filter
-- Texterkennung für gescannte PDFs und Bilder: neun Sprachen verfügbar
+- Texterkennung für gescannte PDFs und Bilder: zehn Sprachen verfügbar
   (Deutsch, Englisch, Französisch, Spanisch, Italienisch, Niederländisch,
-  Portugiesisch, Dänisch, Estnisch), voreingestellt sind Deutsch, Englisch und
-  Französisch
+  Portugiesisch, Dänisch, Estnisch, Tschechisch), voreingestellt sind Deutsch,
+  Englisch und Französisch
 - Semantische Suche: findet Dokumente auch über Umschreibungen
 - Jeder Treffer wird von Nextcloud rechtegeprüft
 - Keine Konfiguration: der erste Indexlauf startet von selbst

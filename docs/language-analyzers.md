@@ -4,7 +4,10 @@ This page describes the analysis chains of the five languages that come out of
 one factory: Spanish, Italian, Dutch, Portuguese and, because it is the same
 factory, English. German is the reasoned exception and has a page of its own in
 `docs/german-analyzer.md`: it carries a compound splitter and no folding filter,
-and neither of those decisions survives being copied here.
+and neither of those decisions survives being copied here. Czech, available since
+1.5.0, is the second exception: tantivy carries no Czech stemmer, so its chain
+has none and comes out of a factory of its own, described in the section
+"Czech" below.
 
 Everything below was measured rather than reasoned about. The run is
 `docs/measurements/2026-09-analyseketten/` of 2026-09-23, rerun on 2026-09-24
@@ -15,9 +18,10 @@ report), and every number on this page can be traced to a line of
 ## Switching a language on, and when it takes effect
 
 `FINDLING_LANGUAGES` takes a comma separated list out of `de`, `en`, `es`, `it`,
-`nl` and `pt`, and the factory setting is `de,en`. Since plan 18-02 the value is
-filtered against the set this build has a body field and a chain for, so all six
-codes are real choices and none of them falls out in silence. The order you type
+`nl`, `pt` and, since 1.5.0, `cs`, and the factory setting is `de,en`. Since plan
+18-02 the value is filtered against the set this build has a body field and a
+chain for, so all seven codes are real choices and none of them falls out in
+silence. The order you type
 does not matter: the resolved set is always in schema field order, so `es,de` and
 `de,es` are the same setting and neither of them rebuilds an index the other one
 would have left alone. An empty or unknown value keeps `de,en` and logs a warning
@@ -66,10 +70,10 @@ installation that was left alone, not at one that failed to migrate.
 
 **The body languages and the OCR languages are two settings, and they are set
 separately.** `FINDLING_LANGUAGES` decides which analysis chains an index
-carries: `de`, `en`, `es`, `it`, `nl`, `pt`, factory setting `de,en`.
+carries: `de`, `en`, `es`, `it`, `nl`, `pt`, `cs`, factory setting `de,en`.
 `FINDLING_OCR_LANGUAGES` decides which models tesseract loads when it reads a
-scan: `deu`, `eng`, `fra`, `spa`, `ita`, `nld`, `por`, `dan`, `est`, factory
-setting `deu+eng+fra`. Neither follows the other, and that is deliberate: an
+scan: `deu`, `eng`, `fra`, `spa`, `ita`, `nld`, `por`, `dan`, `est`, `ces`,
+factory setting `deu+eng+fra`. Neither follows the other, and that is deliberate: an
 instance with born digital Spanish documents needs the Spanish chain and no
 Spanish scanner, and an instance that scans French post needs the French scanner
 while French has no chain in this build at all.
@@ -138,11 +142,12 @@ field the index does not carry is the `ValueError` that leaves the search bar of
 a live installation empty (measurement M-1 of the phase 19 research).
 
 **The field list hangs on `schema_version`, and that gate falls closed.** If the
-schema mark of the directory does not stand on the current generation, a question
-searches exactly the fields every release up to 1.2.0 carried: `body_de`,
-`body_en`, the file name and the title, held as
-`findling.query.rewrite.LEGACY_PLAN`. Anything that is not literally the current
-mark is read that way, which covers an absent mark, the intermediate `1` of every
+schema mark of the directory does not stand on a generation this code can query
+(2 and 3 since 1.5.0, `findling.api.resources.QUERYABLE_SCHEMA_GENERATIONS`), a
+question searches exactly the fields every release up to 1.2.0 carried:
+`body_de`, `body_en`, the file name and the title, held as
+`findling.query.rewrite.LEGACY_PLAN`. Anything that is not literally one of those
+two marks is read that way, which covers an absent mark, the intermediate `1` of every
 installation that has not rebuilt yet, and any generation this code has never
 seen. A state that cannot be read is no permission. Behind the marks the same
 gate stands a second time: one `doc_freq(field, "")` per body field asks the
@@ -155,9 +160,9 @@ directory is exactly the shape that probe is there for.
 The field plan is the reason none is needed: the question runs through all active
 fields and each of them analyses it with its own chain, so a Spanish word meets
 the Spanish chain without anybody having to decide that it is Spanish. What
-orders the results is the field boost, `body_de` 1.0, `body_en` 0.8 and the four
-languages of this build out 0.6, so the new chains rank below English rather than
-beside it. The absence is structural rather than a matter of discipline:
+orders the results is the field boost, `body_de` 1.0, `body_en` 0.8 and the other
+languages of this build, Czech included, 0.6, so the new chains rank below
+English rather than beside it. The absence is structural rather than a matter of discipline:
 `field_plan_for` takes no search text in any shape, so a detector is not
 forbidden here, it has nothing to attach to
 (`backend/tests/test_no_language_detection.py`).
@@ -397,6 +402,100 @@ runs all 891 built in entries of the four languages in both spellings.
 The two red rows are the price of the chain. They are not repairable without
 making another row red, and the section below says what each of them costs.
 
+## Czech
+
+Since 1.5.0 (phase 30, issue #26) `cs` is the seventh search language. It is the
+first one without a stemmer, because tantivy 0.26.2 carries no Czech Snowball
+stemmer and no Czech stop word list, so it does not come out of the factory of
+this page but out of `findling.index.analyzer.czech_analyzer`, a chain of its
+own that is registered whatever the language set says.
+
+**Switching it on.** `FINDLING_LANGUAGES=de,en,cs` (or `de,cs`) and a container
+restart, exactly as for every other language above. The difference of the
+language mark starts the rebuild, and the rebuild re-analyses the stored German
+body text (`body_de`, the only stored copy of the extracted text) into the
+fourteenth field `body_cs`. No file is read from Nextcloud again, no page goes
+through OCR again and no vector is computed again: `vectors.db` stays byte for
+byte the same, proved on a real index in `backend/tests/test_czech_switch.py`
+(plan 30-05) and on a real Nextcloud in the upgrade proof of
+`.github/workflows/deploy-harp.yml` (plan 30-07). Czech scans need the second
+variable as well: `FINDLING_OCR_LANGUAGES=deu+eng+ces`.
+
+**Switching it off rebuilds as well.** Taking `cs` out of the set is a
+difference of the language mark like any other, so the rebuild runs again, the
+index directory keeps the field `body_cs` in its schema and leaves it empty, and
+the vectors are again not touched.
+
+**An installation that never names `cs` is left alone.** The fourteenth field
+moves `findling.config.SCHEMA_VERSION` from 2 to 3, and the upgrade to 1.5.0
+still starts no rebuild on its own: the stored mark 2 is no difference, and the
+reading side accepts the generations 2 and 3 (section "What a question searches"
+above). The schema mark moves to 3 at the end of the first rebuild and at no
+earlier moment, which is the same rule 1.3.0 introduced for the step from 1 to 2.
+
+**The chain.**
+
+```text
+simple -> lowercase -> ascii_fold -> custom_stopword(Czech, folded) -> remove_long(48)
+```
+
+There is no stemmer because there is none in tantivy, and a home made one would
+be a second piece of language data with its own maintenance and a version mark
+that rebuilds every Czech index whenever it moves. The fold stands in front of
+the stop word filter for the same reason as in the Snowball chains: it puts the
+accented and the flat spelling of one word form on one term, and one folded list
+then closes the stop words in both spellings. What that means for a search,
+held by `backend/tests/test_czech_analyzer.py` and
+`backend/tests/test_czech_switch.py`:
+
+| Case | Terms under the shipped chain | Meet |
+|---|---|---|
+| `smlouvě` / `smlouve` / `SMLOUVĚ` | `smlouve` three times | yes, the accent pair of one form |
+| `smlouva` / `smlouvě` | `smlouva` against `smlouve` | **no, an inflection pair (CZ-03)** |
+| `proč`, `už`, `jsem`, both spellings | no token | stop words |
+| `Nájemní smlouva na byt` | `najemni`, `smlouva`, `byt` | `byt` is a named exception |
+
+**The stop word list.** Source: `cz/stopwords.txt` of the CzechAnalyzer of
+Apache Lucene, tag `releases/lucene/10.5.2` (owner decisions D-30-02 and
+D-30-05). The original is folded by the same lowercase and fold the chain runs,
+the duplicates the fold creates are dropped (171 unique entries become 169
+folded forms), and two folded forms are removed as named exceptions, because
+the fold turns them into a different Czech content word:
+
+- `byt`, folded from `být` ("to be"): `byt` is "flat, apartment", a common word
+  in leases.
+- `jez`, folded from `jež` ("which"): `jez` is "weir".
+
+167 entries remain. They live in `backend/src/findling/index/stopwords_cs.py`
+as `CZECH_STOPWORDS_FOLDED` and are produced by `scripts/dev/czech_stopwords.py`,
+never by hand. The review of all 67 folded forms that are no entry of the
+original stands in `THIRD-PARTY.md`. Content words that the original itself
+carries, such as `strana`, `zprávy` or `první`, stay on the list as Lucene ships
+them (D-30-05): a proven list is kept rather than edited into a list of our own,
+and the price is named under "Known limits" below.
+
+**Space.** One more filled chain, measured on 2026-10-10 (plan 30-05) over 2000
+documents and 9.88 million characters of text: the index directory grows by 0.358
+of what it held under `de,en`, against 0.361 for Spanish on the same text. The
+rebuild reserves 0.40 per newly filled language before it starts
+(`findling.index.rebuild.GROWTH_PER_LANGUAGE`), so the space check for Czech is
+the same as for every other language, and a chain without a stemmer turned out
+to cost no more than a Snowball chain.
+
+**A half filled rebuild target from older code is discarded.** A rebuild that
+was interrupted under 1.4.x leaves a target directory behind whose fingerprint
+names schema 2. Under 1.5.0 that fingerprint no longer matches the marks the
+code expects, so the target is thrown away and the run starts from the
+beginning; nothing of it is mixed into the new directory
+(`_make_the_target_fit_this_code` in `findling.index.rebuild`, held by
+`backend/tests/test_czech_switch.py`).
+
+**Going back from 1.5 to 1.4.2 is not tested and not supported.** Nobody has
+measured what a 1.4.2 container does with an index directory or a `state.db`
+written by 1.5.0, and this page therefore makes no statement about it, in either
+direction. The way back is the usual backup of the app data volume
+(`APP_PERSISTENT_STORAGE`) taken before the upgrade.
+
 ## Known limits
 
 These are measured, documented and deliberately not fixed here. Each one names
@@ -419,8 +518,34 @@ excerpt path per body field, which means six stored copies of every text instead
 of one, and the price is the size of the index on the machines this product is
 built for. Because of that price the limit is documented rather than repaired. It
 stays in this documentation and is not part of the store text: the owner decision
-D-06 of phase 23 fixes the short list below at four entries, and on 27.09.2026 the
-owner confirmed that this limit is not added to it.
+D-06 of phase 23 fixed the short list below, D-30-06 of phase 30 extends it by
+the Czech entry to five points and no further, and on 27.09.2026 the owner
+confirmed that this limit is not added to it.
+
+**Czech: no stemming, inflected forms are separate words (CZ-03).** `smlouva`
+(the contract, nominative) and `smlouvě` (dative and locative) produce the two
+terms `smlouva` and `smlouve`, so a full text search for one form does not find
+a document that carries only the other one. Czech inflects nouns, adjectives and
+pronouns over seven cases, so for Czech this is the normal case and not an edge.
+What does meet is the accent pair of one form: `smlouvě`, `smlouve` and
+`SMLOUVĚ` are one term. The semantic half of the hybrid search makes up for part
+of it: from two words on the vector side joins in and meets a document through
+its meaning rather than through a term, while a question of one word stays
+purely lexical (section "What a question searches"). The alternative is a Czech
+stemmer, and tantivy 0.26.2 carries none; a home made stemmer or a lemma list
+would be a second piece of language data with its own maintenance and a version
+mark that rebuilds every Czech index whenever it moves. This is the fifth entry
+of the short list (D-30-06).
+
+**Czech content words on the stop word list.** The Lucene list carries a few
+words that are content words in their own right, `strana` (page, side, party),
+`zprávy` (news) and `první` (first) among them. Under `body_cs` they produce no
+term, so a question of that word alone finds nothing through the Czech field;
+on an instance that also runs `de` or `en`, those chains still index the word.
+The alternative is a list edited by this project, which needs a criterion, a
+maintainer and a review against every later Lucene release. D-30-05 keeps the
+Lucene state and removes only the two forms the fold creates (`byt`, `jez`),
+because those are collisions this project introduced and Lucene never meets.
 
 **The number class with an accented suffix, Spanish.** `información` and
 `informacion` share the term `informacion`, and `informaciones` produces
@@ -536,9 +661,23 @@ The supplement adds no new word list either. It is derived mechanically from
 those same built in lists by `scripts/dev/stopword_supplement.py`, it contains
 only folded forms of entries that already exist there, and it is therefore
 covered by the same licence and the same provenance. No new PyPI package, no new
-data file and no own vocabulary enters the image because of this page.
+data file and no own vocabulary enters the image because of the Snowball chains.
+
+The Czech stop word list is the one word list of this page that tantivy does not
+carry. It comes from Apache Lucene 10.5.2, file
+`lucene/analysis/common/src/resources/org/apache/lucene/analysis/cz/stopwords.txt`,
+under the **Apache-2.0** licence, which is compatible with the AGPL-3.0 of this
+project; the licence text is `LICENSES/Apache-2.0.txt` and the NOTICE of Apache
+Lucene is carried in `THIRD-PARTY.md`. Change notice in the sense of section
+4(b) of that licence: the entries are folded to ASCII, the duplicates of the
+fold are dropped and the folded forms `byt` and `jez` are removed. The original
+lies byte for byte in `backend/tests/fixtures/lucene_cz_stopwords_10_5_2.txt`,
+the producer `scripts/dev/czech_stopwords.py` refuses to run on any other bytes,
+and the full provenance, the SHA-256 of the original and the review table stand
+in `THIRD-PARTY.md`, section "Czech stop word list (Apache Lucene)".
 
 The preparation and measurement code stays in the repository:
 `backend/src/findling/index/analyzer.py`,
 `backend/src/findling/index/stopwords.py`, `scripts/dev/stopword_supplement.py`,
-`scripts/dev/chain_probe.py` and `scripts/dev/measure_chains.sh`.
+`scripts/dev/chain_probe.py` and `scripts/dev/measure_chains.sh`, and for Czech
+`backend/src/findling/index/stopwords_cs.py` and `scripts/dev/czech_stopwords.py`.
