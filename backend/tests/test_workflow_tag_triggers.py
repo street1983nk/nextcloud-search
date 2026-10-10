@@ -173,6 +173,7 @@ def test_the_release_pattern_admits_release_tags_and_nothing_else() -> None:
     assert _matches(tags, "v1.4.2")
     assert _matches(tags, "v10.20.30")
     assert not _matches(tags, "source-1.5-dev")
+    assert not _matches(tags, "source-1.5-dev.2")
     assert not _matches(tags, "v1.5")
     assert not _matches(tags, "v1.5.0-rc1")
     assert not _matches(tags, "1.5.0")
@@ -182,7 +183,10 @@ def test_no_workflow_starts_on_the_source_mirror_tag() -> None:
     for name, block in _push_blocks().items():
         assert isinstance(block, dict), name
         if "tags" in block:
-            assert not _matches(block["tags"], "source-1.5-dev"), name
+            # source-1.5-dev.2 is the mirror that carries the archives, after the
+            # first tag became an immutable release without them (plan 31-01).
+            for tag in ("source-1.5-dev", "source-1.5-dev.2"):
+                assert not _matches(block["tags"], tag), (name, tag)
         else:
             # Without a tag filter only a branch filter is left, and a branch
             # filter alone means no tag starts this workflow.

@@ -128,16 +128,31 @@ def _dry_run(script: ModuleType, capsys: pytest.CaptureFixture[str], tag: str, d
     return [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.strip()]
 
 
-def test_publish_uploads_exactly_the_four_archives(
+def test_publish_attaches_exactly_the_four_archives_when_it_creates(
     script: ModuleType, capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:
+    # The repository publishes immutable releases: once a release is out, no
+    # asset can be added. So the archives travel in the create call itself, and
+    # gh creates a draft, uploads and publishes only then. Plan 31-01 learnt
+    # this the hard way: a create without assets followed by an upload was
+    # answered with HTTP 422 "Cannot upload assets to an immutable release".
     (tmp_path / "stray.txt").write_text("not an archive", encoding="utf-8")
     commands = _dry_run(script, capsys, "source-1.5-dev", tmp_path)
-    uploads = [c for c in commands if c[:3] == ["gh", "release", "upload"]]
-    assert len(uploads) == 1
-    files = [arg for arg in uploads[0] if arg.startswith(str(tmp_path))]
+    assert len(commands) == 1
+    create = commands[0]
+    assert create[:3] == ["gh", "release", "create"]
+    files = [arg for arg in create if arg.startswith(str(tmp_path))]
     assert sorted(Path(f).name for f in files) == sorted(a.name for a in script.ARCHIVES)
-    assert "--clobber" in uploads[0]
+
+
+def test_publish_onto_an_existing_release_uploads_the_four_with_clobber(script: ModuleType, tmp_path: Path) -> None:
+    commands = script.publish_commands("source-x", tmp_path, release_exists=True, target="main")
+    assert len(commands) == 1
+    upload = commands[0]
+    assert upload[:4] == ["gh", "release", "upload", "source-x"]
+    files = [arg for arg in upload if arg.startswith(str(tmp_path))]
+    assert sorted(Path(f).name for f in files) == sorted(a.name for a in script.ARCHIVES)
+    assert "--clobber" in upload
 
 
 def test_publish_creates_a_prerelease_that_is_never_latest(

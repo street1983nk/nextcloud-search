@@ -27,7 +27,7 @@ Usage, from the root of the repository (stdlib only, any Python 3.13):
 
     python scripts/release/corresponding_source.py fetch dist/source
     python scripts/release/corresponding_source.py --verify-only dist/source
-    python scripts/release/corresponding_source.py publish --tag source-1.5-dev \\
+    python scripts/release/corresponding_source.py publish --tag source-1.5-dev.2 \\
         --source-dir dist/source [--dry-run]
 
 ``fetch`` downloads every archive that is missing or wrong, checks its SHA-256
@@ -35,10 +35,14 @@ and refuses to keep a file that does not match. ``--verify-only`` checks a
 directory that already holds the archives and touches nothing; ``--expect
 NAME=SHA256`` replaces the list it checks, which is how the test exercises it
 without a network. ``publish`` creates a GitHub pre-release for the tag if there
-is none (never marked latest) and uploads exactly the four archives with
-``--clobber``. It refuses a tag of the form vMAJOR.MINOR.PATCH: those are the
-store releases, which release.yml creates, and the mirror is attached to them
-by hand at REL-05 (docs/store-listing.md).
+is none (never marked latest), with exactly the four archives in the create
+call, because this repository publishes immutable releases and a published
+release takes no further asset. An existing draft or mutable release gets the
+four with ``--clobber``; a published immutable one is refused. ``publish`` also
+refuses a tag of the form vMAJOR.MINOR.PATCH: those are the store releases,
+which release.yml creates. They are immutable too, so the four archives have to
+be in the create call of release.yml itself; that change belongs to REL-05
+(docs/store-listing.md, release checklist v1.5.0).
 """
 
 from __future__ import annotations
@@ -178,35 +182,46 @@ def release_notes() -> str:
 
 
 def publish_commands(tag: str, directory: Path, *, release_exists: bool, target: str) -> list[list[str]]:
-    """The gh calls that put exactly the four archives on the release of ``tag``."""
+    """The gh calls that put exactly the four archives on the release of ``tag``.
+
+    This repository publishes immutable releases: once a release is published,
+    no asset can be added to it. So a new release gets the archives in its
+    create call, and gh then creates a draft, uploads and publishes last. An
+    existing release can only take an upload while it is a draft or mutable;
+    ``main`` refuses an immutable one before it gets here.
+    """
     if RELEASE_TAG.fullmatch(tag):
         raise ValueError(f"refusing {tag}: a vMAJOR.MINOR.PATCH tag is a store release, see REL-05")
-    commands: list[list[str]] = []
-    if not release_exists:
-        commands.append(
-            [
-                "gh", "release", "create", tag,
-                "--repo", REPOSITORY,
-                "--target", target,
-                "--prerelease",
-                "--latest=false",
-                "--title", TITLE,
-                "--notes", release_notes(),
-            ]
-        )  # fmt: skip
     files = [str(directory / a.name) for a in ARCHIVES]
-    commands.append(["gh", "release", "upload", tag, *files, "--repo", REPOSITORY, "--clobber"])
-    return commands
+    if release_exists:
+        return [["gh", "release", "upload", tag, *files, "--repo", REPOSITORY, "--clobber"]]
+    return [
+        [
+            "gh", "release", "create", tag, *files,
+            "--repo", REPOSITORY,
+            "--target", target,
+            "--prerelease",
+            "--latest=false",
+            "--title", TITLE,
+            "--notes", release_notes(),
+        ]
+    ]  # fmt: skip
 
 
-def _release_exists(tag: str) -> bool:
+def _release_state(tag: str) -> dict[str, object] | None:
+    """None when there is no release for ``tag``, its JSON view otherwise."""
     result = subprocess.run(  # noqa: S603 - fixed argument list, tag validated by the caller
-        ["gh", "release", "view", tag, "--repo", REPOSITORY, "--json", "tagName"],  # noqa: S607 - gh from PATH by design
+        ["gh", "release", "view", tag, "--repo", REPOSITORY, "--json", "tagName,isImmutable,isDraft"],  # noqa: S607 - gh from PATH by design
         capture_output=True,
         text=True,
         check=False,
     )
-    return result.returncode == 0
+    if result.returncode != 0:
+        return None
+    state = json.loads(result.stdout)
+    if not isinstance(state, dict):
+        raise TypeError(f"gh release view returned {type(state).__name__}, not an object")
+    return state
 
 
 def _parse_expect(values: list[str]) -> list[Expected]:
@@ -262,8 +277,17 @@ def main(argv: list[str] | None = None) -> int:
             for problem in problems:
                 print(problem, file=sys.stderr)
             return 1
-        exists = _release_exists(args.tag)
-        for command in publish_commands(args.tag, args.source_dir, release_exists=exists, target=args.target):
+        state = _release_state(args.tag)
+        if state is not None and state.get("isImmutable") and not state.get("isDraft"):
+            print(
+                f"refusing {args.tag}: the release is published and immutable, no asset can be added; "
+                "a mirror needs a new tag",
+                file=sys.stderr,
+            )
+            return 1
+        for command in publish_commands(
+            args.tag, args.source_dir, release_exists=state is not None, target=args.target
+        ):
             print("running: " + " ".join(command[:4]))
             subprocess.run(command, check=True)  # noqa: S603 - fixed gh argument list built above
         return 0

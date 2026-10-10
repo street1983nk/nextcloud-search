@@ -2071,45 +2071,60 @@ Abnahme durch den Owner: offen (REL-05).
 Seit Plan 31-01 verteilt das Backend-Image mit dem pillow-heif-Wheel drei native
 Bibliotheken als Binärdateien: x265 (GPL-2.0-or-later), libheif und libde265
 (beide LGPL-3.0). Wer sie verteilt, muss den vollständigen korrespondierenden
-Quelltext samt Build-Skripten bereithalten. Die vier exakten Quellpakete stehen mit
-SHA-256 in THIRD-PARTY.md, Abschnitt "Corresponding source of the native
+Quelltext samt Build-Skripten bereithalten. Die vier exakten Quellpakete stehen
+mit SHA-256 in THIRD-PARTY.md, Abschnitt "Corresponding source of the native
 libraries in the image", und deckungsgleich in
 `scripts/release/corresponding_source.py`. Ausgeführt wird dieser Punkt bei
-REL-05 in Phase 36; `release.yml` bleibt dafür unverändert, weil der Workflow
-nur die zwei Store-Pakete kennt und der Spiegel ohne Signaturschlüssel auskommt.
+REL-05 in Phase 36.
 
-- [ ] **Corresponding source:** nach dem Lauf von `release.yml` für das Tag
-  `vX.Y.Z` (das Release existiert dann), aus der Wurzel des Repositorys:
+**Wichtig, belegt in Plan 31-01:** Das Repository veröffentlicht
+unveränderliche Releases (`gh api repos/street1983nk/nextcloud-search/immutable-releases`
+meldet `enabled: true`; v1.4.2 trägt `isImmutable: true`). Einem
+veröffentlichten Release lässt sich kein Asset mehr hinzufügen; ein späteres
+`gh release upload` endet mit HTTP 422 "Cannot upload assets to an immutable
+release" (so geschehen beim ersten Anlegen von `source-1.5-dev`). Die vier
+Quellpakete müssen deshalb im selben `gh release create` mitreisen, das
+`release.yml` für `vX.Y.Z` ausführt (gh legt dann erst einen Entwurf an, lädt
+hoch und veröffentlicht zuletzt). `release.yml` wird in Plan 31-01 nicht
+geändert; die Änderung gehört zu REL-05.
+
+- [ ] **Corresponding source in `release.yml`:** vor dem Schritt, der mit
+  `gh release create` das GitHub-Release anlegt, einen Schritt einfügen, der
 
   ```bash
-  uv run --no-project python scripts/release/corresponding_source.py fetch dist/source
-  gh release upload vX.Y.Z dist/source/* --repo street1983nk/nextcloud-search --clobber
+  python3 scripts/release/corresponding_source.py fetch dist/source
   ```
 
-  `fetch` lädt jedes Quellpaket, prüft dessen SHA-256 und behält keine Datei, die
-  nicht passt. `dist/` ist in `.gitignore`, die Quellpakete landen also nie im
-  Repository.
+  ausführt (stdlib, kein Netz außer den vier HTTPS-Quellen, bricht bei
+  falschem SHA-256 ab), und dem `gh release create` die vier Dateien
+  `dist/source/pillow_heif-*.tar.gz`, `dist/source/x265_*.tar.gz`,
+  `dist/source/libde265-*.tar.gz` und `dist/source/libheif-*.tar.gz` als
+  weitere Assets mitgeben. `dist/` ist in `.gitignore`, die Quellpakete landen
+  nie im Repository.
 - [ ] **Prüfschritt:** die Assets frisch vom Release laden und gegen die Tabelle
   prüfen; der Punkt ist erst erledigt, wenn alle vier Zeilen "ok" melden und der
   Exitcode 0 ist:
 
   ```bash
-  gh release download vX.Y.Z --repo street1983nk/nextcloud-search -D /tmp/check \
-      -p 'pillow_heif-*.tar.gz' -p 'x265_*.tar.gz' -p 'libde265-*.tar.gz' -p 'libheif-*.tar.gz'
+  gh release download vX.Y.Z --repo street1983nk/nextcloud-search -D /tmp/check       -p 'pillow_heif-*.tar.gz' -p 'x265_*.tar.gz' -p 'libde265-*.tar.gz' -p 'libheif-*.tar.gz'
   uv run --no-project python scripts/release/corresponding_source.py --verify-only /tmp/check
   ```
-- [ ] Ändert sich der pillow-heif-Pin, ändern sich die Liste im Skript und die Tabelle in
-  THIRD-PARTY.md gemeinsam (Versionen und Hashes aus `libheif/build_libs.py` des
-  neuen sdist und aus `LICENSES_bundled.txt` des neuen Wheels);
-  `backend/tests/test_corresponding_source.py` hält beide und den Pin zusammen.
+- [ ] Ändert sich der pillow-heif-Pin, ändern sich die Liste im Skript und die
+  Tabelle in THIRD-PARTY.md gemeinsam (Versionen und Hashes aus
+  `libheif/build_libs.py` des neuen sdist und aus `LICENSES_bundled.txt` des
+  neuen Wheels); `backend/tests/test_corresponding_source.py` hält beide und den
+  Pin zusammen.
 
-`publish --tag` des Skripts legt ein Pre-Release an (nie als latest markiert)
-und weist Tags der Form `vX.Y.Z` ab; es ist für den Spiegel des
-Entwicklungsimages gedacht. Der derzeitige Spiegel für
+`publish --tag` des Skripts legt ein Pre-Release mit den vier Quellpaketen im
+selben Aufruf an (nie als latest markiert), weist ein schon veröffentlichtes
+unveränderliches Release ab und weist Tags der Form `vX.Y.Z` ab; es ist für den
+Spiegel des Entwicklungsimages gedacht. Der derzeitige Spiegel für
 `ghcr.io/street1983nk/findling_backend:dev` ist das Pre-Release
-`source-1.5-dev`, angelegt in Plan 31-01. Ein Tag dieser Form startet keinen
-Workflow, seit alle Workflows mit push-Trigger nur Branches und
-`v[0-9]+.[0-9]+.[0-9]+` annehmen (`backend/tests/test_workflow_tag_triggers.py`).
+`source-1.5-dev.2`, angelegt in Plan 31-01. Das erste Pre-Release
+`source-1.5-dev` blieb wegen der Unveränderlichkeit ohne Assets und verweist in
+seinem Text auf `source-1.5-dev.2`. Tags dieser Form starten keinen Workflow,
+seit alle Workflows mit push-Trigger nur Branches und `v[0-9]+.[0-9]+.[0-9]+`
+annehmen (`backend/tests/test_workflow_tag_triggers.py`).
 
 ---
 

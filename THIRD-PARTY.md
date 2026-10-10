@@ -263,12 +263,14 @@ scripts, and it is one of the four archives.
 constant `ARCHIVES` (`backend/tests/test_corresponding_source.py` holds table and
 script to each other and the pillow-heif row to the pin). `fetch` downloads and
 checks them, `--verify-only` checks a directory that already holds them, and
-`publish --tag <tag>` uploads exactly these four files to a GitHub release.
-Every Findling release carries these archives as assets (release checklist
-REL-05 in `docs/store-listing.md`). Until the first release that does, the
-mirror for the development image `ghcr.io/street1983nk/findling_backend:dev` is
-the pre-release
-https://github.com/street1983nk/nextcloud-search/releases/tag/source-1.5-dev.
+`publish --tag <tag>` creates a GitHub pre-release with exactly these four
+files in the same call. That matters because this repository publishes
+immutable releases: a published release takes no further asset. Every Findling
+release carries these archives as assets, attached in the create call of
+`release.yml` (release checklist REL-05 in `docs/store-listing.md`). Until the
+first release that does, the mirror for the development image
+`ghcr.io/street1983nk/findling_backend:dev` is the pre-release
+https://github.com/street1983nk/nextcloud-search/releases/tag/source-1.5-dev.2.
 
 ## Czech stop word list (Apache Lucene)
 
