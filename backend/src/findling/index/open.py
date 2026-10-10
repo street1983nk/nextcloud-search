@@ -45,7 +45,7 @@ from findling.index.analyzer import (
 from findling.index.schema import TOKENIZER_STORED_ONLY, build_schema
 from findling.index.wordlist import wordlist_hash
 from findling.index.wordlist_nl import DUTCH_LIST_OFF
-from findling.store.repo import Store
+from findling.store.repo import LEGACY_SCHEMA_STEPS, Store
 
 LOGGER = logging.getLogger("findling.index.open")
 
@@ -282,6 +282,31 @@ def fingerprint(expected: Mapping[str, str]) -> str:
     return hashlib.sha256(material.encode("utf-8")).hexdigest()[:16]
 
 
+def _fingerprints_of_the_same_run(expected: Mapping[str, str]) -> frozenset[str]:
+    """The fingerprints a crawl under way for ``expected`` may have been started with.
+
+    The current one, and one more for every older schema mark that
+    :data:`findling.store.repo.LEGACY_SCHEMA_STEPS` excuses on the way to the
+    current one. A schema step the ratchet says is no drift must not make a crawl
+    that is already under way look like the work of other code either: an update
+    from 1.4.2, which wrote its fingerprint with schema "2", to 1.5, which expects
+    "3", would otherwise raise the generation a second time and make every
+    verdict the running crawl has already written stale (finding WR-01 of the
+    phase 30 review). Every other mark still has to match exactly, so a word
+    list, analyzer or tantivy change in the same update still starts over.
+
+    Only the fingerprint in ``state.db`` is read this leniently. The one inside a
+    half filled rebuild target (``.rebuild-for``) stays strict, because there a
+    different schema means a different field layout in the target directory.
+    """
+    current = expected[SCHEMA_MARK]
+    variants = {fingerprint(expected)}
+    for older, newer in LEGACY_SCHEMA_STEPS:
+        if newer == current:
+            variants.add(fingerprint({**expected, SCHEMA_MARK: older}))
+    return frozenset(variants)
+
+
 def start_rebuild_on_drift(
     store: Store, expected: Mapping[str, str], *, answered_elsewhere: frozenset[str] = frozenset()
 ) -> int | None:
@@ -304,7 +329,10 @@ def start_rebuild_on_drift(
     fingerprint, leaves the generation alone and carries on; a container whose
     code changed again finds a different one and starts a rebuild for the new
     code. Without that distinction a box that restarts nightly would make the
-    work of every day stale on the next morning.
+    work of every day stale on the next morning. A stored fingerprint that
+    differs from the current one only in a schema mark the ratchet excuses is
+    the same run as well (:func:`_fingerprints_of_the_same_run`), so an update
+    across such a step lets a crawl under way carry on.
 
     **What it does not do is declare anything current.** The marks stay as they
     are, so the banner stays up for as long as the work is not through. That is
@@ -330,7 +358,15 @@ def start_rebuild_on_drift(
         return None
 
     wanted = fingerprint(expected)
-    if store.read_meta().get(REBUILD_MARK) == wanted:
+    stored = store.read_meta().get(REBUILD_MARK)
+    if stored == wanted:
+        return None
+    if stored in _fingerprints_of_the_same_run(expected):
+        # The crawl under way was started by the code before a schema step the
+        # ratchet excuses; it is taken over under the fingerprint of this code
+        # rather than started again, so the next start takes the branch above.
+        store.write_meta(REBUILD_MARK, wanted)
+        LOGGER.info("a rebuild started before the schema step is under way; it carries on")
         return None
 
     generation = store.index_version + 1

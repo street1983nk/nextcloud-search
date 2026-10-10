@@ -51,15 +51,18 @@ from findling.index.analyzer import (
 from findling.index.open import (
     DUTCH_MARK,
     LANGUAGES_MARK,
+    REBUILD_MARK,
     SCHEMA_MARK,
     TANTIVY_VERSION,
     expected_versions,
+    fingerprint,
     open_index,
     open_reader,
     stamp_a_new_directory,
     stamp_after_rebuild,
     start_rebuild_on_drift,
 )
+from findling.index.rebuild import MARKS_A_REBUILD_ANSWERS
 from findling.index.schema import (
     BODY_FIELD,
     FIELD_BODY_CS,
@@ -1341,6 +1344,58 @@ def test_a_second_drift_during_a_rebuild_starts_a_new_one(tmp_path: Path) -> Non
     assert first is not None
     assert second == first + 1
     store.close()
+
+
+def _a_1_4_2_crawl_under_way(tmp_path: Path) -> tuple[Store, int]:
+    """A volume of 1.4.2 in the middle of a full crawl, as the update finds it.
+
+    1.4.2 expected schema "2", found a word list drift and raised the
+    generation, writing the fingerprint of its own expectation next to it.
+    """
+    store = _drifted_store(tmp_path)
+    store.write_meta(SCHEMA_MARK, "2")
+    expected_of_1_4_2 = {**expected_versions(DIGEST, LANGUAGES), SCHEMA_MARK: "2"}
+    first = start_rebuild_on_drift(store, expected_of_1_4_2, answered_elsewhere=MARKS_A_REBUILD_ANSWERS)
+    assert first is not None
+    return store, first
+
+
+def test_an_update_across_an_excused_schema_step_lets_the_crawl_carry_on(tmp_path: Path) -> None:
+    """Finding WR-01 of the phase 30 review.
+
+    The step from schema 2 to 3 is no drift by the ratchet, so it must not make
+    the crawl 1.4.2 started look like the work of other code: raising the
+    generation again would make every verdict that crawl already wrote stale.
+    The run is taken over under the fingerprint of this code, so the next
+    start finds its own mark.
+    """
+    store, first = _a_1_4_2_crawl_under_way(tmp_path)
+    expected = expected_versions(DIGEST, LANGUAGES)
+    assert expected[SCHEMA_MARK] == "3"
+
+    try:
+        assert start_rebuild_on_drift(store, expected, answered_elsewhere=MARKS_A_REBUILD_ANSWERS) is None
+        assert store.index_version == first
+        assert store.read_meta()[REBUILD_MARK] == fingerprint(expected)
+        assert start_rebuild_on_drift(store, expected, answered_elsewhere=MARKS_A_REBUILD_ANSWERS) is None
+        assert store.index_version == first
+    finally:
+        store.close()
+
+
+def test_an_update_that_moves_a_real_mark_with_the_schema_still_starts_over(tmp_path: Path) -> None:
+    # The positive control of the case above: only the excused schema mark is
+    # forgiven. A new word list in the same update is a drift of its own, and
+    # the crawl under way was aimed at the old one.
+    store, first = _a_1_4_2_crawl_under_way(tmp_path)
+
+    try:
+        second = start_rebuild_on_drift(
+            store, expected_versions("another-digest", LANGUAGES), answered_elsewhere=MARKS_A_REBUILD_ANSWERS
+        )
+        assert second == first + 1
+    finally:
+        store.close()
 
 
 def test_a_tombstoned_row_does_not_hold_the_rebuild_open(tmp_path: Path) -> None:

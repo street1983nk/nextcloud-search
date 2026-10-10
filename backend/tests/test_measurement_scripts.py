@@ -1715,8 +1715,14 @@ PHP_TREE_HASH_TODAY = "bee7a95422d96ad9462e594bd7f1f55dc01e6efbb20c572740392c8c0
 # carries the NOTICE lines of Apache Lucene and the path of the Apache-2.0 text
 # in the image; the two lists are untouched). No file came and none went, so
 # PACKAGE_FILES_TODAY stays at 74. The PHP pair does not move: php/ is unchanged.
+# Measured again by the fix of review finding WR-01 of phase 30 on 2026-10-10:
+# index/open.py got _fingerprints_of_the_same_run, so a stored rebuild
+# fingerprint that differs only in a schema mark LEGACY_SCHEMA_STEPS excuses is
+# the same run and a crawl under way survives the update. No file came and none
+# went, so PACKAGE_FILES_TODAY stays at 74. The PHP pair does not move: php/ is
+# unchanged.
 PACKAGE_FILES_TODAY = 74
-PACKAGE_TREE_HASH_TODAY = "200f270a8eced6ca2797f92eaeb5e41dd9c4d860946ba74a3176df71422ecc43"
+PACKAGE_TREE_HASH_TODAY = "93aa1eabd38e2570bff29b258418028aa5e2ad94b51f6281253699e494633e7e"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
