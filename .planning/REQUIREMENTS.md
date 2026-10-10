@@ -81,7 +81,34 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (wird vom Roadmapper gefuellt) | | |
+| UMST-01 | Phase 34 | Pending |
+| UMST-02 | Phase 34 | Pending |
+| UMST-03 | Phase 34 | Pending |
+| USRCH-01 | Phase 32 | Pending |
+| USRCH-02 | Phase 32 | Pending |
+| USRCH-03 | Phase 32 | Pending |
+| EXCL-01 | Phase 33 | Pending |
+| EXCL-02 | Phase 33 | Pending |
+| EXCL-03 | Phase 33 | Pending |
+| FMT-01 | Phase 31 | Pending |
+| FMT-02 | Phase 31 | Pending |
+| FMT-03 | Phase 31 | Pending |
+| FMT-04 | Phase 31 | Pending |
+| FMT-05 | Phase 31 | Pending |
+| FMT-06 | Phase 31 | Pending |
+| CZ-01 | Phase 30 | Pending |
+| CZ-02 | Phase 30 | Pending |
+| CZ-03 | Phase 30 | Pending |
+| POL-01 | Phase 33 | Pending |
+| POL-02 | Phase 31 | Pending |
+| POL-03 | Phase 33 | Pending |
+| STR-01 | Phase 35 | Pending |
+| STR-02 | Phase 35 | Pending |
+| STR-03 | Phase 35 | Pending |
+| HART-06 | Phase 36 | Pending |
+| REL-05 | Phase 36 | Pending |
+
+**Coverage:** 26/26 v1.5-Requirements zugeordnet, keine Waisen, keine Doppelungen. STR-* (Phase 35) duerfen ohne Release-Risiko entfallen.
 
 ---
-*Requirements defined: 2026-10-10*
+*Requirements defined: 2026-10-10. Traceability gefuellt: 2026-10-10 (Roadmap v1.5, Phasen 30-36).*
