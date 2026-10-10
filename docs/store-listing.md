@@ -2021,6 +2021,12 @@ findling HTTP 201 (17:24:40Z) und findling_backend HTTP 201 (17:24:41Z). Alle
 sieben Workflows auf dem Tag grün, dazu die acht Läufe desselben Commits auf
 main. Vier Assets am Release, zwei Pakete und zwei Signaturen.
 
+Gegenprobe von außen, 2026-10-10: der Store war am Abend des 09.10. von hier
+aus nicht erreichbar (Verbindungs-Timeout, github.com zur selben Zeit normal).
+Am Morgen danach nennen beide Kataloge 1.4.2 als neueste Fassung, findling mit
+`created` 17:24:40Z und findling_backend mit 17:24:41Z, sekundengleich mit den
+zwei HTTP 201 des Submit-Laufs.
+
 # Release 1.4.1 (08.10.2026): Bild-Fix ohne Textänderung
 
 Kein Textentscheid und kein Entwurf: 1.4.1 ändert an den sechs Texten oben
