@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 31-01-PLAN.md
-last_updated: "2026-10-10T23:16:44.727Z"
-last_activity: 2026-10-11 -- Plan 31-01 abgeschlossen, als Nächstes 31-02
+stopped_at: Completed 31-02-PLAN.md
+last_updated: "2026-10-11T00:09:17.508Z"
+last_activity: 2026-10-11 -- Plan 31-02 abgeschlossen, als Nächstes 31-03
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 24
-  completed_plans: 10
+  completed_plans: 11
   percent: 14
 ---
 
@@ -26,11 +26,11 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 31 von 30-36 (Formate, Nachholweg und POL-02)
-Plan: 1 von 15 erledigt (31-01), nächster Plan 31-02
-Status: Phase 31 in Ausführung; 31-01 abgeschlossen (Pins, Lizenzbelege, Quellpflicht, Workflow-Trigger, Imagegröße; CI grün auf f124673c und bc287c11)
-Last activity: 2026-10-11 -- Plan 31-01 abgeschlossen
+Plan: 2 von 15 erledigt (31-01, 31-02), nächster Plan 31-03
+Status: Phase 31 in Ausführung; 31-02 abgeschlossen (archive_limit, allgemeineres unsupported_variant, Verdict-Generation 3 mit weiter gültiger 2; CI grün auf aa498caf)
+Last activity: 2026-10-11 -- Plan 31-02 abgeschlossen
 
-Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 1/15 Pläne
+Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 2/15 Pläne
 
 ## Performance Metrics
 
@@ -45,6 +45,7 @@ Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 1/15 Pläne
 - v1.5: 30-08 in ca. 50 min (2 Tasks, 10 Dateien)
 - v1.5: 30-09 in ca. 75 min (3 Tasks, 4 Dateien)
 - v1.5: 31-01 in ca. 105 min (4 Tasks, 15 Dateien)
+- v1.5: 31-02 in ca. 85 min (2 Tasks, 39 Dateien)
 
 ## Accumulated Context
 
@@ -66,10 +67,13 @@ Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 1/15 Pläne
 - 30-08: Grenze CZ-03 in docs/language-analyzers.md (Abschnitt Czech, Langform, Lizenz) und als fuenfter Eintrag der Grenzliste in allen sechs Store-Texten, zeichengleich mit der Doku-Kurzliste, LIMITATION_COUNT 5 (D-30-06); Suchsprachen-/OCR-/env-Texte und READMEs nennen cs/ces. Wortlaut ist Entwurf (docs/store-listing.md 'Entwurf v1.5.0 (Teil Phase 30)'), Owner-Abnahme offen bis REL-05. PHP-Baumhash unveraendert (Rezept liest nur *.php). CZ-03 abgehakt.
 - 30-09: Audit der Phase 30 (30-AUDIT.md, status fixed): 0 CRITICAL, 0 HIGH, 0 MEDIUM, 3 LOW. L-30-01 gefixt (Lucene-NOTICE und Lizenzpfad im ausgelieferten Modul stopwords_cs.py, 9e9764bf, im Image belegt); L-30-02 accept (Treffer nur über body_cs ohne Auszug, dokumentierte Grenze); L-30-03 accept (Vektordigest ungeprüft in GITHUB_ENV, mitnehmen, wenn Phase 31 deploy-harp anfasst). Platzannahme unabhängig gemessen: cs +0,287/+0,299 unter 0,40. CI Python gates 38042757203, HaRP 38042757174 grün.
 - 31-01: olefile 0.47, xlrd 2.0.2, pillow-heif 1.8.0 exakt gepinnt (keine weiteren transitiven Pakete); THIRD-PARTY.md mit libheif 1.23.4, libde265 1.1.3 (LGPL-3.0), x265 4.2 (GPL-2.0-or-later), sieben Altversionen korrigiert, Versionsgate test_third_party_versions.py. Quellpflicht: vier gehashte Quellpakete (scripts/release/corresponding_source.py), Spiegel für :dev = Pre-Release source-1.5-dev.2 (source-1.5-dev blieb leer, unveränderlich). Repo veröffentlicht unveränderliche Releases: REL-05 muss release.yml die Quellpakete im gh release create mitgeben. Kein Nicht-v-Tag startet einen Workflow (test_workflow_tag_triggers.py). Image komprimiert +6,18 MB amd64, +7,29 MB arm64.
+- 31-02: Skip-Code archive_limit (skipped, nur ZIP) in allen vier Codelisten; unsupported_variant allgemein gefasst, mime_not_allowed-Hilfe nennt Mails und ZIP-Dateien; fünf Sätze in 16 Katalogen und fünf Dokus (80 einzeln benannte Testfälle). Sichtbarer Wortlaut sagt ZIP file/ZIP-Datei, weil die Vokabelregel E-H2 den Wortstamm in deutscher Prosa und in docs/store-listing.md sperrt; Codename deshalb nur in docs/formats.md (Abschnitt Skip codes). VERDICTS_GENERATION 3 auf beiden Seiten, Container kennt {2, 3}, archive_limit an 2 und ohne Signal als too_large/corrupt; öffentliche SKIPPED_FALLBACK_WITHOUT_SIGNAL für 31-11; recheck_1_4_0 startet bei 2 und 3; Upgrade-Reihenfolge (Backend zuerst) in docs/formats.md. Wortlaut Entwurf, Owner-Abnahme bei REL-05.
 
 ### Offene Faeden (kein aktiver Auftrag)
 
 - REL-05 (Phase 36): release.yml muss die vier Quellpakete (corresponding_source.py fetch) im eigenen gh release create mitgeben; ein späteres gh release upload scheitert an unveränderlichen Releases (belegt in 31-01). Leeres Pre-Release source-1.5-dev bleibt mit Verweistext, Löschen nur mit Owner-Wort.
+
+- Owner-Abnahme der fünf Urteilssätze von 31-02 (archive_limit, unsupported_variant, mime_not_allowed) bei REL-05; Entwurf in docs/store-listing.md Teil 4 und docs/formats.md Abschnitt Skip codes.
 
 - Owner-Abnahme des Wortlauts des fuenften Grenz-Eintrags Tschechisch (en/de/fr) samt Suchsprachen-/OCR-/env-Texten bei REL-05 (Phase 36); Entwurf in docs/store-listing.md 'Entwurf v1.5.0 (Teil Phase 30)'.
 
@@ -89,6 +93,6 @@ Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 1/15 Pläne
 
 ## Session Continuity
 
-Last session: 2026-10-10T23:16:44.712Z
-Stopped at: Completed 31-01-PLAN.md
+Last session: 2026-10-11T00:09:17.492Z
+Stopped at: Completed 31-02-PLAN.md
 Resume file: None
