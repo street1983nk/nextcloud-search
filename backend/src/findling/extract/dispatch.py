@@ -254,12 +254,29 @@ def _run_ooxml_route(route: Route, path: str) -> ExtractionOutcome:
     these three routes ask, because only their extensions are worn by such files.
     The sidecar skip does not belong here: this function never sees the path in
     Nextcloud, only the scratch file, and that check stands in the poller.
+
+    Since 1.5 (plan 31-06) an old Word or Excel document under the new name is
+    read, by the .doc and the .xls reader, whichever its streams say it is and
+    whatever the route says (cfb.py). skipped(legacy_format) is left for
+    PowerPoint and for the old binary files the sniff cannot place.
     """
     from findling.extract import cfb
 
-    verdict = cfb.ole_verdict(path)
-    if verdict is not None:
-        return verdict
+    match cfb.ole_kind(path):
+        case "encrypted":
+            return ExtractionOutcome.skipped(Reason.ENCRYPTED)
+        case "word":
+            from findling.extract import legacy_doc
+
+            return legacy_doc.extract_doc(path)
+        case "excel":
+            from findling.extract import legacy_xls
+
+            return legacy_xls.extract_xls(path)
+        case "legacy":
+            return ExtractionOutcome.skipped(Reason.LEGACY_FORMAT)
+        case None:
+            pass
 
     from findling.extract import office
 

@@ -1771,8 +1771,18 @@ PHP_TREE_HASH_TODAY = "0d4206abef3ae73e772b02331495b560041a02008a588f63798351b8a
 # [MS-DOC], decode_compressed with the table of 2.9.73). One file came, so
 # PACKAGE_FILES_TODAY moves to 76. The PHP pair does not move: php/ is
 # unchanged.
-PACKAGE_FILES_TODAY = 76
-PACKAGE_TREE_HASH_TODAY = "ae65ecacd1e9132885183cc662a6926cc8b93c9da6c7f94f13b878888c26b398"
+#
+# Measured again by Plan 31-06 (FMT-04) on 2026-10-11: extract/legacy_xls.py
+# is new (extract_msexcel with the sniff for XLSX, HTML and text under an
+# Excel name, extract_xls over xlrd with the cell limit of XLSX).
+# extract/cfb.py names a compound file by kind (ole_kind, from the streams at
+# the top of its tree) and now holds the chain checks legacy_doc.py kept to
+# itself (check_fat_size, walk_stream, which also wants ENDOFCHAIN at the end
+# of a chain); dispatch.py hands Word and Excel under an OOXML name to the
+# legacy readers. One file came, so PACKAGE_FILES_TODAY moves to 77. The PHP
+# pair does not move: php/ is unchanged.
+PACKAGE_FILES_TODAY = 77
+PACKAGE_TREE_HASH_TODAY = "b69c625d0a5f581892244fb4b00bdc65005c8e90de0980e16cca69233305585a"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

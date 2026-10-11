@@ -193,7 +193,7 @@ QUALIFIED_WRITING_CALLS: frozenset[tuple[str, str]] = frozenset(
 # every one of them is the container's own scratch volume, the child's own
 # /proc entry or a read the gate cannot tell apart from a write:
 #
-#   extract/cfb.py: open          open(path, "rb") in ole_verdict (plan 29-08):
+#   extract/cfb.py: open          open(path, "rb") in ole_kind (plan 29-08):
 #                                 the OLE sniff reads the header and directory
 #                                 sectors of the scratch file the dispatcher was
 #                                 handed. Read only, but counted for the same

@@ -59,12 +59,13 @@ ExtractionOutcome.from_exception, which keeps the class name and nothing else.
 length, so a cycle cannot hang it, but it does not notice one either: a cycle
 inside the declared length gives back repeated sectors as if they were the
 stream. So the chains of both streams we read, and the chain of the mini stream
-they may live in, are walked once more here with a set of visited sectors, and
-a sector seen twice is CorruptDocument. Before olefile opens the file, the
+they may live in, are walked once more with a set of visited sectors, and a
+sector seen twice is CorruptCompoundFile. Before olefile opens the file, the
 declared number of FAT sectors is held against the size of the file: olefile
 appends every FAT sector to an array by copying it, and measured on 0.47,
 20 000 declared FAT sectors in a file of 180 kB cost 29 s before it reports
-anything, growing with the square of the count. Every offset and length from
+anything, growing with the square of the count. Both checks live in cfb.py
+since plan 31-06, which holds the .xls reader to the same rules. Every offset and length from
 the file is checked against the stream it points into before a byte is read,
 the number of pieces is bounded by lcbClx, and reading ends at twice the
 character cap (field codes go after reading, so the cap alone could leave a
@@ -80,17 +81,16 @@ This module does not log. Everything it reads is content of a user's file.
 
 from __future__ import annotations
 
-import array
 import re
 import struct
 from itertools import pairwise
 from pathlib import Path
-from typing import Any, Final, NamedTuple
+from typing import Final, NamedTuple
 
 import olefile
 
 from findling import config
-from findling.extract import office, text
+from findling.extract import cfb, office, text
 from findling.extract.dispatch import cap_text
 from findling.extract.errors import ExtractionOutcome, Reason, State
 
@@ -99,15 +99,6 @@ _RTF_SIGNATURE: Final = b"{\\rtf"
 _ZIP_SIGNATURE: Final = b"PK\x03\x04"
 _UTF8_BOM: Final = b"\xef\xbb\xbf"
 _SNIFF_BYTES: Final = 4096
-
-# [MS-CFB] 2.2, read before olefile opens the file.
-_CFB_HEADER_BYTES: Final = 512
-_SECTOR_SHIFT_AT: Final = 0x1E
-_FAT_SECTOR_COUNT_AT: Final = 0x2C
-_ALLOWED_SHIFTS: Final = frozenset({9, 12})
-# How many FAT sectors more than the file needs are still accepted: one, for a
-# writer that allocates the next FAT sector before the sectors it describes.
-_FAT_SLACK_SECTORS: Final = 1
 
 _WORD_STREAM: Final = "WordDocument"
 
@@ -201,7 +192,7 @@ def extract_doc(path: str) -> ExtractionOutcome:
     """The text of a Word 97 to 2003 binary document, or a named verdict."""
     cap = config.settings().max_text_chars
     try:
-        _check_fat_size(path)
+        cfb.check_fat_size(path)
         with olefile.OleFileIO(path, raise_defects=olefile.DEFECT_INCORRECT) as ole:
             if not ole.exists(_WORD_STREAM):
                 return ExtractionOutcome.skipped(Reason.UNSUPPORTED_VARIANT)
@@ -213,7 +204,7 @@ def extract_doc(path: str) -> ExtractionOutcome:
                 raise CorruptDocument
             table = _read_stream(ole, fib.table_stream)
         raw, complete = _piece_text(word, table, fib, cap * _RAW_PER_CAPPED_CHAR)
-    except (OSError, ValueError, struct.error, RecursionError, CorruptDocument) as error:
+    except (OSError, ValueError, struct.error, RecursionError, CorruptDocument, cfb.CorruptCompoundFile) as error:
         return ExtractionOutcome.from_exception(error)
 
     outcome = cap_text(_visible(raw))
@@ -227,60 +218,11 @@ def decode_compressed(raw: bytes) -> str:
     return raw.decode("latin-1").translate(_COMPRESSED_TABLE)
 
 
-def _check_fat_size(path: str) -> None:
-    """Refuse a FAT that declares more sectors than the file could need (see above)."""
-    with Path(path).open("rb") as handle:
-        size = handle.seek(0, 2)
-        handle.seek(0)
-        header = handle.read(_CFB_HEADER_BYTES)
-    if len(header) != _CFB_HEADER_BYTES:
-        raise CorruptDocument
-    (shift,) = struct.unpack_from("<H", header, _SECTOR_SHIFT_AT)
-    if shift not in _ALLOWED_SHIFTS:
-        raise CorruptDocument
-    sector = 1 << shift
-    sectors_in_file = -(-size // sector) - 1
-    needed = -(-sectors_in_file // (sector // 4))
-    (declared,) = struct.unpack_from("<I", header, _FAT_SECTOR_COUNT_AT)
-    if declared > needed + _FAT_SLACK_SECTORS:
-        raise CorruptDocument
-
-
 def _read_stream(ole: olefile.OleFileIO, name: str) -> bytes:
     """The bytes of a top level stream, after its sector chain was walked once."""
     data = ole.openstream(name).read()
-    # The chain tables of olefile (fat, minifat, the sector sizes, the start and
-    # size of an entry) are not part of its typed interface in typeshed. They are
-    # read untyped and checked for their type before use; olefile is pinned at
-    # 0.47, and the LibreOffice fixtures turn red if a version moves them.
-    internals: Any = ole
-    root = internals.root
-    if root is None:
-        raise CorruptDocument
-    entry = root.kids_dict.get(name.lower())
-    if entry is None:
-        raise CorruptDocument
-    if entry.is_minifat:
-        _visit_once(internals.fat, root.isectStart, root.size, internals.sectorsize)
-        _visit_once(internals.minifat, entry.isectStart, entry.size, internals.minisectorsize)
-    else:
-        _visit_once(internals.fat, entry.isectStart, entry.size, internals.sectorsize)
+    cfb.walk_stream(ole, name)
     return data
-
-
-def _visit_once(table: object, start: object, size: object, sector: object) -> None:
-    """Follow the links of a stream of ``size`` bytes; a sector seen twice is a cycle."""
-    if not (
-        isinstance(table, array.array) and isinstance(start, int) and isinstance(size, int) and isinstance(sector, int)
-    ):
-        raise CorruptDocument
-    seen: set[int] = set()
-    current = start
-    for _ in range(-(-size // sector)):
-        if current in seen or current >= len(table):
-            raise CorruptDocument
-        seen.add(current)
-        current = table[current]
 
 
 def _read_fib(word: bytes) -> _Fib | ExtractionOutcome:

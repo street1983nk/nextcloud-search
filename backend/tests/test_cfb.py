@@ -15,6 +15,7 @@ in a loop.
 
 from __future__ import annotations
 
+import struct
 import time
 from pathlib import Path
 from zipfile import ZipFile
@@ -23,8 +24,7 @@ import pytest
 
 from conftest import CFB_END_OF_CHAIN, CFB_STREAM, build_cfb, cfb_entry
 from findling.extract import cfb
-from findling.extract.cfb import ole_verdict
-from findling.extract.errors import ExtractionOutcome, Reason
+from findling.extract.cfb import ole_kind
 
 SHIFTS = pytest.mark.parametrize("sector_shift", [9, 12], ids=["512", "4096"])
 
@@ -41,21 +41,71 @@ def test_a_password_protected_office_document_is_skipped_encrypted(tmp_path: Pat
     # every encrypted package carries next to them.
     payload = build_cfb(["\x06DataSpaces", "EncryptionInfo", "EncryptedPackage"], sector_shift=sector_shift)
 
-    assert ole_verdict(_file(tmp_path, payload)) == ExtractionOutcome.skipped(Reason.ENCRYPTED)
+    assert ole_kind(_file(tmp_path, payload)) == "encrypted"
+
+
+@SHIFTS
+@pytest.mark.parametrize(
+    ("stream", "kind"),
+    [("WordDocument", "word"), ("Workbook", "excel"), ("Book", "excel"), ("PowerPoint Document", "legacy")],
+)
+def test_an_old_binary_document_is_named_by_its_top_level_stream(
+    tmp_path: Path, sector_shift: int, stream: str, kind: str
+) -> None:
+    # Plan 31-06: Word and Excel go to the legacy readers, PowerPoint stays
+    # legacy_format. streams= links the entries into the tree of the root, as
+    # every real writer does.
+    payload = build_cfb(["\x05SummaryInformation"], streams={stream: b"inhalt"}, sector_shift=sector_shift)
+
+    assert ole_kind(_file(tmp_path, payload)) == kind
 
 
 @SHIFTS
 @pytest.mark.parametrize("stream", ["Workbook", "Book", "WordDocument", "PowerPoint Document"])
-def test_an_old_binary_document_is_skipped_legacy_format(tmp_path: Path, sector_shift: int, stream: str) -> None:
+def test_a_known_stream_outside_the_tree_of_the_root_is_legacy(tmp_path: Path, sector_shift: int, stream: str) -> None:
+    # The entries without streams= are not linked into the tree: the name is in
+    # the directory, but no reader that opens the top level finds it (olefile
+    # and xlrd both walk the tree). That is the shape of an object embedded in
+    # some other compound file, and it stays legacy_format as before 1.5.
     payload = build_cfb(["\x05SummaryInformation", stream], sector_shift=sector_shift)
 
-    assert ole_verdict(_file(tmp_path, payload)) == ExtractionOutcome.skipped(Reason.LEGACY_FORMAT)
+    assert ole_kind(_file(tmp_path, payload)) == "legacy"
+
+
+@pytest.mark.parametrize(
+    ("top", "embedded", "kind"),
+    [
+        ("WordDocument", "Workbook", "word"),
+        ("Workbook", "WordDocument", "excel"),
+        ("PowerPoint Document", "Workbook", "legacy"),
+    ],
+    ids=["doc-with-a-chart", "xls-with-a-letter", "ppt-with-a-chart"],
+)
+def test_an_embedded_object_does_not_decide_the_kind(tmp_path: Path, top: str, embedded: str, kind: str) -> None:
+    # A .doc with an embedded Excel chart carries a Workbook stream in a storage
+    # below the top; the file is still a Word document.
+    payload = build_cfb([], streams={top: b"inhalt"}, raw_entries=[cfb_entry(embedded)])
+
+    assert ole_kind(_file(tmp_path, payload)) == kind
+
+
+def test_a_cycle_in_the_tree_of_the_root_ends(tmp_path: Path) -> None:
+    payload = bytearray(build_cfb([], streams={"Andere": b"x", "WordDocument": b"y"}))
+    # Entry 2 (WordDocument) gets entry 1 as its right sibling: 1 -> 2 -> 1.
+    directory_at = 2 * 512
+    struct.pack_into("<I", payload, directory_at + 2 * 128 + 0x48, 1)
+
+    started = time.monotonic()
+    kind = ole_kind(_file(tmp_path, bytes(payload)))
+
+    assert kind == "word"
+    assert time.monotonic() - started < 1
 
 
 def test_encryption_outranks_an_old_stream_in_the_same_directory(tmp_path: Path) -> None:
     payload = build_cfb(["Workbook", "EncryptionInfo", "EncryptedPackage"])
 
-    assert ole_verdict(_file(tmp_path, payload)) == ExtractionOutcome.skipped(Reason.ENCRYPTED)
+    assert ole_kind(_file(tmp_path, payload)) == "encrypted"
 
 
 def test_a_directory_spread_over_several_sectors_is_read_to_its_end(tmp_path: Path) -> None:
@@ -63,7 +113,9 @@ def test_a_directory_spread_over_several_sectors_is_read_to_its_end(tmp_path: Pa
     # third directory sector, so the chain has to be followed through the FAT.
     names = [f"Stream{number}" for number in range(9)] + ["WordDocument"]
 
-    assert ole_verdict(_file(tmp_path, build_cfb(names))) == ExtractionOutcome.skipped(Reason.LEGACY_FORMAT)
+    assert ole_kind(_file(tmp_path, build_cfb(names))) == "legacy"
+    linked = build_cfb(names[:-1], streams={"WordDocument": b"inhalt"})
+    assert ole_kind(_file(tmp_path, linked, "linked.part")) == "word"
 
 
 @pytest.mark.parametrize("name", ["MyWorkbookCopy", "Books", "EncryptionInfoBackup", "workbook", "WordDocument2"])
@@ -72,14 +124,14 @@ def test_only_whole_names_count_and_never_a_part_of_one(tmp_path: Path, name: st
     # scan misfires, and a lower case "workbook" is not what Excel writes.
     payload = build_cfb(["\x05SummaryInformation", name])
 
-    assert ole_verdict(_file(tmp_path, payload)) is None
+    assert ole_kind(_file(tmp_path, payload)) is None
 
 
 def test_a_name_that_is_not_a_stream_does_not_count(tmp_path: Path) -> None:
     # A storage called Workbook is not the workbook stream of an .xls file.
     payload = build_cfb([], raw_entries=[cfb_entry("Workbook", object_type=1)])
 
-    assert ole_verdict(_file(tmp_path, payload)) is None
+    assert ole_kind(_file(tmp_path, payload)) is None
 
 
 def test_a_zip_package_is_none_and_left_to_the_office_reader(tmp_path: Path) -> None:
@@ -87,16 +139,16 @@ def test_a_zip_package_is_none_and_left_to_the_office_reader(tmp_path: Path) -> 
     with ZipFile(target, "w") as archive:
         archive.writestr("[Content_Types].xml", "<Types/>")
 
-    assert ole_verdict(str(target)) is None
+    assert ole_kind(str(target)) is None
 
 
 @pytest.mark.parametrize("payload", [b"", b"\xd0\xcf\x11", b"PK\x03\x04" + bytes(600)], ids=["empty", "short", "zip"])
 def test_a_file_without_the_full_signature_is_none(tmp_path: Path, payload: bytes) -> None:
-    assert ole_verdict(_file(tmp_path, payload)) is None
+    assert ole_kind(_file(tmp_path, payload)) is None
 
 
 def test_a_missing_file_is_none_and_not_an_exception(tmp_path: Path) -> None:
-    assert ole_verdict(str(tmp_path / "gone.part")) is None
+    assert ole_kind(str(tmp_path / "gone.part")) is None
 
 
 @pytest.mark.parametrize("cycle", [{1: 1}, {1: 2, 2: 1}], ids=["self", "two"])
@@ -105,7 +157,7 @@ def test_a_fat_chain_with_a_cycle_ends_in_none(tmp_path: Path, cycle: dict[int, 
     payload = build_cfb(names, fat=cycle)
 
     started = time.monotonic()
-    verdict = ole_verdict(_file(tmp_path, payload))
+    verdict = ole_kind(_file(tmp_path, payload))
 
     assert verdict is None
     assert time.monotonic() - started < 1
@@ -115,14 +167,14 @@ def test_a_directory_longer_than_the_cap_ends_in_none(tmp_path: Path, monkeypatc
     monkeypatch.setattr(cfb, "_MAX_DIRECTORY_SECTORS", 2)
     names = [f"Stream{number}" for number in range(10)] + ["WordDocument"]
 
-    assert ole_verdict(_file(tmp_path, build_cfb(names))) is None
+    assert ole_kind(_file(tmp_path, build_cfb(names))) is None
 
 
 def test_the_same_directory_under_the_cap_is_read(tmp_path: Path) -> None:
     # The positive control of the case above: the file itself is sound.
     names = [f"Stream{number}" for number in range(10)] + ["WordDocument"]
 
-    assert ole_verdict(_file(tmp_path, build_cfb(names))) == ExtractionOutcome.skipped(Reason.LEGACY_FORMAT)
+    assert ole_kind(_file(tmp_path, build_cfb(names))) == "legacy"
 
 
 @pytest.mark.parametrize(
@@ -133,7 +185,7 @@ def test_the_same_directory_under_the_cap_is_read(tmp_path: Path) -> None:
 def test_absurd_header_fields_end_in_none(tmp_path: Path, first_directory: int, fat_sector_count: int) -> None:
     payload = build_cfb(["EncryptionInfo"], first_directory=first_directory, fat_sector_count=fat_sector_count)
 
-    assert ole_verdict(_file(tmp_path, payload)) is None
+    assert ole_kind(_file(tmp_path, payload)) is None
 
 
 def test_an_absurd_fat_count_alone_reads_no_more_than_the_header_difat(tmp_path: Path) -> None:
@@ -141,7 +193,7 @@ def test_an_absurd_fat_count_alone_reads_no_more_than_the_header_difat(tmp_path:
     # the header DIFAT it needs and never tries to honour the declared count.
     payload = build_cfb(["EncryptionInfo"], fat_sector_count=0xFFFFFFFF)
 
-    assert ole_verdict(_file(tmp_path, payload)) == ExtractionOutcome.skipped(Reason.ENCRYPTED)
+    assert ole_kind(_file(tmp_path, payload)) == "encrypted"
 
 
 @SHIFTS
@@ -149,8 +201,8 @@ def test_a_truncated_compound_file_ends_in_none(tmp_path: Path, sector_shift: in
     names = [f"Stream{number}" for number in range(40)] + ["EncryptionInfo"]
     whole = build_cfb(names, sector_shift=sector_shift)
 
-    assert ole_verdict(_file(tmp_path, whole, "whole.part")) == ExtractionOutcome.skipped(Reason.ENCRYPTED)
-    assert ole_verdict(_file(tmp_path, whole[: len(whole) - 100])) is None
+    assert ole_kind(_file(tmp_path, whole, "whole.part")) == "encrypted"
+    assert ole_kind(_file(tmp_path, whole[: len(whole) - 100])) is None
 
 
 @pytest.mark.parametrize("shift", [0, 8, 10, 16, 0xFFFF])
@@ -158,14 +210,14 @@ def test_a_sector_shift_outside_the_specification_ends_in_none(tmp_path: Path, s
     payload = bytearray(build_cfb(["EncryptionInfo"]))
     payload[0x1E:0x20] = shift.to_bytes(2, "little")
 
-    assert ole_verdict(_file(tmp_path, bytes(payload))) is None
+    assert ole_kind(_file(tmp_path, bytes(payload))) is None
 
 
 @pytest.mark.parametrize("length", [0, 1, 66, 0xFFFF], ids=["zero", "odd", "over-64", "huge"])
 def test_a_stream_entry_with_an_impossible_name_length_ends_in_none(tmp_path: Path, length: int) -> None:
     payload = build_cfb([], raw_entries=[cfb_entry("EncryptionInfo", CFB_STREAM, name_length=length)])
 
-    assert ole_verdict(_file(tmp_path, payload)) is None
+    assert ole_kind(_file(tmp_path, payload)) is None
 
 
 def test_a_name_that_is_no_valid_utf16_ends_in_none(tmp_path: Path) -> None:
@@ -174,7 +226,7 @@ def test_a_name_that_is_no_valid_utf16_ends_in_none(tmp_path: Path) -> None:
     broken[0:2] = b"\x00\xd8"
     payload = build_cfb([], raw_entries=[bytes(broken)])
 
-    assert ole_verdict(_file(tmp_path, payload)) is None
+    assert ole_kind(_file(tmp_path, payload)) is None
 
 
 def test_a_directory_chain_past_the_header_difat_is_the_named_gap(tmp_path: Path) -> None:
@@ -189,7 +241,7 @@ def test_a_directory_chain_past_the_header_difat_is_the_named_gap(tmp_path: Path
     payload.extend(bytes(offset - len(payload)))
     payload.extend(second)
 
-    assert ole_verdict(_file(tmp_path, bytes(payload))) is None
+    assert ole_kind(_file(tmp_path, bytes(payload))) is None
 
 
 def test_only_the_directory_is_read_and_never_the_whole_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -206,5 +258,5 @@ def test_only_the_directory_is_read_and_never_the_whole_file(tmp_path: Path, mon
 
     monkeypatch.setattr(cfb, "_read_at", counting)
 
-    assert ole_verdict(path) == ExtractionOutcome.skipped(Reason.LEGACY_FORMAT)
+    assert ole_kind(path) == "legacy"
     assert sum(requested) <= 3 * 512

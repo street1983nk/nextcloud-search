@@ -29,7 +29,7 @@ import docx
 import olefile
 import pytest
 
-from conftest import CFB_END_OF_CHAIN, CFB_FREE, build_cfb
+from conftest import CFB_END_OF_CHAIN, build_cfb, cfb_with_difat
 from findling.config import settings
 from findling.extract.errors import ExtractionOutcome, Reason, State
 from findling.extract.legacy_doc import decode_compressed, extract_doc, extract_msword
@@ -54,11 +54,6 @@ _F_WHICH_TBL_STM = 0x0200
 _F_OBFUSCATED = 0x8000
 _FC_COMPRESSED = 0x40000000
 _TEXT_AT = 0x800
-
-# [MS-CFB] 2.2 header fields.
-_FAT_COUNT_AT = 0x2C
-_FIRST_DIFAT_AT = 0x44
-_DIFAT_COUNT_AT = 0x48
 
 
 def word_streams(
@@ -523,32 +518,13 @@ def test_a_fat_chain_that_ends_early_is_corrupt_in_time(tmp_path: Path) -> None:
     assert _corrupt(_timed(_write(tmp_path, _word_payload(fat={start + 2: CFB_END_OF_CHAIN}))))
 
 
-def _with_difat(payload: bytes, *, sectors: int, fat_count: int, last_next: int | None) -> bytes:
-    """``payload`` grown to ``sectors`` sectors plus a DIFAT chain at its end.
-
-    The DIFAT sectors list no further FAT sector (FREESECT), so the FAT stays
-    the one the payload brought; only the chain itself is under test. The last
-    DIFAT sector points to ``last_next``, or back to the first one when None.
-    """
-    grown = bytearray(payload.ljust((sectors + 1) * 512, b"\0"))
-    count = max(1, -(-(fat_count - 109) // 127))
-    chain = [sectors + index for index in range(count)]
-    for index in range(count):
-        following = chain[index + 1] if index + 1 < count else (chain[0] if last_next is None else last_next)
-        grown += struct.pack("<127I", *([CFB_FREE] * 127)) + struct.pack("<I", following)
-    struct.pack_into("<I", grown, _FAT_COUNT_AT, fat_count)
-    struct.pack_into("<I", grown, _FIRST_DIFAT_AT, chain[0])
-    struct.pack_into("<I", grown, _DIFAT_COUNT_AT, count)
-    return bytes(grown)
-
-
 def test_a_difat_cycle_is_corrupt_in_time(tmp_path: Path) -> None:
     # 110 FAT sectors need a file of about 7 MB before a DIFAT sector is due at all.
     payload = _word_payload()
 
-    cycled = _timed(_write(tmp_path, _with_difat(payload, sectors=13_960, fat_count=110, last_next=None), "a.doc"))
+    cycled = _timed(_write(tmp_path, cfb_with_difat(payload, sectors=13_960, fat_count=110, last_next=None), "a.doc"))
     control = _timed(
-        _write(tmp_path, _with_difat(payload, sectors=13_960, fat_count=110, last_next=CFB_END_OF_CHAIN), "b.doc")
+        _write(tmp_path, cfb_with_difat(payload, sectors=13_960, fat_count=110, last_next=CFB_END_OF_CHAIN), "b.doc")
     )
 
     assert _corrupt(cycled)
@@ -559,7 +535,7 @@ def test_a_fat_declared_larger_than_the_file_is_corrupt_in_time(tmp_path: Path) 
     # Measured on olefile 0.47: 20 000 declared FAT sectors in a file of 180 kB,
     # each pointing at sector 0, cost 29 s before olefile reports anything, and
     # the cost grows with the square of the count.
-    payload = _with_difat(_word_payload(), sectors=200, fat_count=20_000, last_next=CFB_END_OF_CHAIN)
+    payload = cfb_with_difat(_word_payload(), sectors=200, fat_count=20_000, last_next=CFB_END_OF_CHAIN)
     grown = bytearray(payload)
     for difat in range(200, len(grown) // 512 - 1):
         struct.pack_into("<127I", grown, (difat + 1) * 512, *([0] * 127))

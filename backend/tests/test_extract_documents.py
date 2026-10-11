@@ -777,24 +777,48 @@ def test_a_password_protected_office_file_is_skipped_encrypted_and_not_corrupt(m
     assert outcome == ExtractionOutcome.skipped(Reason.ENCRYPTED)
 
 
+LEGACY_FIXTURES = Path(__file__).parent / "fixtures" / "legacy"
+
+
 @pytest.mark.parametrize(
-    ("mime", "stream"),
-    [(DOCX_MIME, "WordDocument"), (XLSX_MIME, "Workbook"), (XLSX_MIME, "Book"), (PPTX_MIME, "PowerPoint Document")],
+    ("mime", "fixture", "word"),
+    [
+        (DOCX_MIME, "word97-latin.doc", "wortquendel"),
+        (XLSX_MIME, "biff8-values.xls", "zellquendel"),
+        # The stream decides and not the name (T-31-19): a Word file under the
+        # spreadsheet type is a Word file, and the readers it reaches are the
+        # same hardened ones a real .doc or .xls reaches. Refusing it for the
+        # mismatch would only hide a whole document from the search.
+        (XLSX_MIME, "word97-latin.doc", "wortquendel"),
+        (DOCX_MIME, "biff8-values.xls", "zellquendel"),
+        (PPTX_MIME, "word97-latin.doc", "wortquendel"),
+    ],
+    ids=["doc-as-docx", "xls-as-xlsx", "doc-as-xlsx", "xls-as-docx", "doc-as-pptx"],
 )
-def test_an_old_binary_office_file_under_a_new_name_is_skipped_legacy_format(
-    mime: str, stream: str, tmp_path: Path
-) -> None:
-    path = _write(tmp_path, "job-4711.part", build_cfb(["\x05SummaryInformation", stream]))
+def test_an_old_word_or_excel_file_under_a_new_name_is_read(mime: str, fixture: str, word: str, tmp_path: Path) -> None:
+    # Until 1.4.2 these ended as skipped(legacy_format), the deliberate limit of
+    # D-29-08; plan 31-06 reads them with the .doc and .xls readers.
+    path = _write(tmp_path, "job-4711.part", (LEGACY_FIXTURES / fixture).read_bytes())
 
     outcome = extract(path, mime, Path(path).stat().st_size)
 
-    assert outcome == ExtractionOutcome.skipped(Reason.LEGACY_FORMAT)
+    assert outcome.state is State.INDEXED
+    assert word in outcome.text
 
 
-def test_a_legacy_compound_file_under_the_docx_type_is_legacy_whatever_its_streams_say(tmp_path: Path) -> None:
-    # A Workbook stream under the Word mimetype: the sniff names the container,
-    # it does not cross check it against the extension the file arrived under.
-    path = _write(tmp_path, "job-4711.part", build_cfb(["Workbook"]))
+@pytest.mark.parametrize("mime", [DOCX_MIME, XLSX_MIME, PPTX_MIME])
+def test_an_old_powerpoint_file_under_a_new_name_stays_legacy_format(mime: str, tmp_path: Path) -> None:
+    payload = build_cfb(["\x05SummaryInformation"], streams={"PowerPoint Document": b"folien"})
+    path = _write(tmp_path, "job-4711.part", payload)
+
+    assert extract(path, mime, Path(path).stat().st_size) == ExtractionOutcome.skipped(Reason.LEGACY_FORMAT)
+
+
+@pytest.mark.parametrize("stream", ["WordDocument", "Workbook", "Book"])
+def test_a_known_stream_outside_the_tree_of_the_root_stays_legacy_format(stream: str, tmp_path: Path) -> None:
+    # The name is in the directory but not reachable from the root, where both
+    # readers look: the shape of an embedded object. legacy_format as before.
+    path = _write(tmp_path, "job-4711.part", build_cfb(["\x05SummaryInformation", stream]))
 
     assert extract(path, DOCX_MIME, Path(path).stat().st_size) == ExtractionOutcome.skipped(Reason.LEGACY_FORMAT)
 

@@ -695,3 +695,25 @@ def build_cfb(
     fat_bytes = struct.pack(f"<{fat_sectors * (sector // 4)}I", *table[: fat_sectors * (sector // 4)])
     body = b"".join(data.ljust(content_sectors[name] * sector, b"\0") for name, data in contents.items())
     return header.ljust(sector, b"\0") + fat_bytes + b"".join(directory) + body
+
+
+def cfb_with_difat(payload: bytes, *, sectors: int, fat_count: int, last_next: int | None) -> bytes:
+    """``payload`` (512 byte sectors) grown to ``sectors`` sectors plus a DIFAT chain at its end.
+
+    The DIFAT sectors list no further FAT sector (FREESECT), so the FAT stays
+    the one the payload brought; only the chain itself is under test. The last
+    DIFAT sector points to ``last_next``, or back to the first one when None.
+    The header fields are those of [MS-CFB] 2.2: number of FAT sectors at 0x2C,
+    first DIFAT sector at 0x44, number of DIFAT sectors at 0x48. Moved here from
+    test_legacy_doc.py in plan 31-06, the .xls reader is tested with it too.
+    """
+    grown = bytearray(payload.ljust((sectors + 1) * 512, b"\0"))
+    count = max(1, -(-(fat_count - 109) // 127))
+    chain = [sectors + index for index in range(count)]
+    for index in range(count):
+        following = chain[index + 1] if index + 1 < count else (chain[0] if last_next is None else last_next)
+        grown += struct.pack("<127I", *([CFB_FREE] * 127)) + struct.pack("<I", following)
+    struct.pack_into("<I", grown, 0x2C, fat_count)
+    struct.pack_into("<I", grown, 0x44, chain[0])
+    struct.pack_into("<I", grown, 0x48, count)
+    return bytes(grown)
