@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 31-06-PLAN.md
-last_updated: "2026-10-11T07:20:00.000Z"
-last_activity: 2026-10-11 -- Plan 31-06 abgeschlossen, als Nächstes 31-07
+stopped_at: 31-07 Checkpoint Task 3 (Owner-Entscheid 48-MP-HEIF)
+last_updated: "2026-10-11T08:30:00.000Z"
+last_activity: 2026-10-11 -- Plan 31-07 am Checkpoint, Owner-Entscheid offen
 progress:
   total_phases: 7
   completed_phases: 1
@@ -26,9 +26,9 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 31 von 30-36 (Formate, Nachholweg und POL-02)
-Plan: 6 von 15 erledigt (31-01 bis 31-06), nächster Plan 31-07
+Plan: 6 von 15 erledigt (31-01 bis 31-06), 31-07 am Checkpoint (Task 1 und 2 committet: 44cf3fc7, fc6e2f2d)
 Status: Phase 31 in Ausführung; 31-06 abgeschlossen (.xls-Extraktor gebaut und getestet, noch nicht freigeschaltet, das folgt in 31-10; FMT-04 bleibt bis dahin offen; OLE-Word/Excel unter OOXML-Namen wird gelesen; CI grün auf 5d6f1be6)
-Last activity: 2026-10-11 -- Plan 31-06 abgeschlossen
+Last activity: 2026-10-11 -- Plan 31-07 bis zum Checkpoint ausgeführt (HEIC im Bildpfad, Messung amd64/arm64)
 
 Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 6/15 Pläne
 
@@ -103,10 +103,11 @@ Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 6/15 Pläne
 
 ### Blockers/Concerns
 
+- 31-07 Checkpoint (Task 3): 48-MP-HEIF endet unter 512 MiB auf amd64 und arm64 als skipped(too_large) (docker.yml 38121953472, 38122992533). Owner wählt option-a (Standard-Adressraum anheben) oder option-b (Grenze dokumentieren); dazu offen: HEIF-Faktor (vorläufig 3, Planregel ergäbe 5,5 und sperrte 24 MP). Messbericht docs/measurements/2026-10-formate-v15/README.md, Abschnitt HEIC-Dekodier-RAM.
 - Kill-Kriterium Nextcloud (ES-freie Volltextsuche mit OCR angekuendigt -> Neubewertung) weiter beobachten.
 
 ## Session Continuity
 
-Last session: 2026-10-11T03:00:00.000Z
-Stopped at: Completed 31-05-PLAN.md
-Resume file: None
+Last session: 2026-10-11T08:30:00.000Z
+Stopped at: 31-07 Checkpoint Task 3 (Owner-Entscheid 48-MP-HEIF)
+Resume file: .planning/phases/31-neue-formate-und-nachholweg/31-07-PLAN.md
