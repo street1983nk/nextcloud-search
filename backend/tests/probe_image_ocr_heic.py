@@ -71,7 +71,7 @@ import pillow_heif
 from PIL import Image, ImageDraw, ImageFont
 
 TERM: Final = "fotoquendel"
-SENTENCE: Final = f"{TERM} im Kellerarchiv der Gemeinde"
+SENTENCE: Final = f"{TERM} im Kellerraum der Gemeinde"
 DEFAULT_FONT: Final = "/fonts/DejaVuSans.ttf"
 
 # The page of part 1: over the minimum edge of the picture branch, so it is a

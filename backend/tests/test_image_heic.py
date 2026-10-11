@@ -37,7 +37,7 @@ FONT = Path(__file__).resolve().parents[2] / "testdata" / "fonts" / "DejaVuSans.
 # The word the engine has to find, made up so that it stands in no dictionary
 # and in no other file of the repository, like the -quendel words of 31-05/06.
 TERM = "fotoquendel"
-SENTENCE = f"{TERM} im Kellerarchiv der Gemeinde"
+SENTENCE = f"{TERM} im Kellerraum der Gemeinde"
 
 # Over the minimum edge of 640 pixels and well under the aspect ratio cap, so
 # the picture is a plausible document and reaches the engine.
