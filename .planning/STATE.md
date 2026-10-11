@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: 31-07 Checkpoint Task 3 (Owner-Entscheid 48-MP-HEIF)
-last_updated: "2026-10-11T08:30:00.000Z"
-last_activity: 2026-10-11 -- Plan 31-07 am Checkpoint, Owner-Entscheid offen
+stopped_at: Completed 31-07-PLAN.md
+last_updated: "2026-10-11T09:00:00.000Z"
+last_activity: 2026-10-11 -- Plan 31-07 abgeschlossen, als Nächstes 31-08
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 24
-  completed_plans: 15
+  completed_plans: 16
   percent: 14
 ---
 
@@ -26,11 +26,11 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 31 von 30-36 (Formate, Nachholweg und POL-02)
-Plan: 6 von 15 erledigt (31-01 bis 31-06), 31-07 am Checkpoint (Task 1 und 2 committet: 44cf3fc7, fc6e2f2d)
-Status: Phase 31 in Ausführung; 31-06 abgeschlossen (.xls-Extraktor gebaut und getestet, noch nicht freigeschaltet, das folgt in 31-10; FMT-04 bleibt bis dahin offen; OLE-Word/Excel unter OOXML-Namen wird gelesen; CI grün auf 5d6f1be6)
-Last activity: 2026-10-11 -- Plan 31-07 bis zum Checkpoint ausgeführt (HEIC im Bildpfad, Messung amd64/arm64)
+Plan: 7 von 15 erledigt (31-01 bis 31-07), nächster Plan 31-08
+Status: Phase 31 in Ausführung; 31-07 abgeschlossen (HEIC/HEIF im Bildpfad, im Image auf amd64 und arm64 per OCR gelesen, noch nicht freigeschaltet, das folgt in 31-10; FMT-05 bleibt bis dahin offen; eine malloc-Arena im Extraktionskind, 48-MP-HEIF passt unter 512 MiB; CI grün auf c64bdf04)
+Last activity: 2026-10-11 -- Plan 31-07 abgeschlossen
 
-Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 6/15 Pläne
+Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 7/15 Pläne
 
 ## Performance Metrics
 
@@ -50,6 +50,7 @@ Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 6/15 Pläne
 - v1.5: 31-04 in ca. 75 min (2 Tasks, 5 Dateien)
 - v1.5: 31-05 in ca. 90 min (2 Tasks, 9 Dateien)
 - v1.5: 31-06 in ca. 230 min (2 Tasks, 15 Dateien; davon ca. 175 min ein swappender Gegenproben-Lauf)
+- v1.5: 31-07 in ca. 130 min ohne Checkpoint-Wartezeit (3 Tasks, 10 Dateien)
 
 ## Accumulated Context
 
@@ -76,6 +77,7 @@ Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 6/15 Pläne
 - 31-04: extract/mail.py (extract_eml, noch nicht in Dispatch/Allowlist, Freischaltung 31-10): Subject/From/To/Cc dekodiert, Body plain vor HTML über text.html_to_text (gemeinsame gehärtete Strecke, extract_html unverändert), Anhänge nur als Namen über clean_display_name (Bidi/Steuerzeichen raus, 255 Zeichen; 31-08 nutzt sie für ZIP-Namen). count_parts zählt öffnende Begrenzerzeilen deklarierter Boundaries vor dem Parsen (alle Schreibweisen inkl. RFC 2231, CR-Zeilenenden), über MAX_MAIL_PARTS 1000 nur Kopfzeilen -> indexed(truncated). RecursionError (Parser, get_body, iter_attachments, get_content) -> failed(corrupt) detail RecursionError; kaputte Kopfzeile wird ausgelassen. 2500 multipart-Ebenen enden an der Vorzählung (Plan-Widerspruch dokumentiert). CI Python gates 38101409837 und sechs weitere grün.
 - 31-05: extract/legacy_doc.py (extract_msword mit Sniff OLE/RTF/DOCX/HTML, extract_doc, noch nicht in Dispatch/Allowlist, Freischaltung 31-10; 31-06 nutzt extract_doc für OLE unter .docx): olefile mit DEFECT_INCORRECT, Text über FIB/Clx/PlcPcd nach [MS-DOC] 2.4.1, A1 (fcClx 0x01A2/lcbClx 0x01A6) gegen FibRgFcLcb97 und LibreOffice-Dateien belegt, komprimierte Stücke mit Sondertabelle 2.9.73 (nicht cp1252). Urteile: fEncrypted -> encrypted (fObfuscated allein ignoriert, wie FibBase verlangt), nFib < 0x00C1 oder kein WordDocument -> unsupported_variant, sonst CorruptDocument -> failed(corrupt). Eigener Schutz zusätzlich zu olefile: FAT-Größe gegen Dateigröße vor dem Öffnen (20 000 deklarierte FAT-Sektoren kosten olefile 29 s), zweiter Kettenlauf mit Besuchsmenge (olefile liefert Zyklen still als Wiederholung), RecursionError bei tiefem Verzeichnisbaum. Fixtures aus LibreOffice 26.2.4.2 mit Suchwörtern wortquendel/glyphquendel/zellquendel (Saat für 31-12); build_cfb kann Ströme. CI Python gates 38105517809 und sechs weitere grün.
 - 31-06: extract/legacy_xls.py (extract_msexcel mit Sniff OLE/XLSX/Markup/Text, extract_xls über xlrd mit on_demand, ragged_rows=True, Logsenke im Speicher, Zellgrenze max_cells; noch nicht in Allowlist für application/vnd.ms-excel, Freischaltung 31-10). Werte zeichengleich mit extract_xlsx derselben Quelle (3 ohne .0, Datum als str(datetime), #DIV/0!). Zählregel wie XLSX (was die Bibliothek liefert, leere Zellen mit), xlrd liefert mit ragged_rows aber nur bis zur letzten Zelle je Zeile, openpyxl das Rechteck. Befund 9: xlrds CFB-Leser folgt einer Ministrom-Kette ohne Besuchsmenge (Zyklus = Endlosschleife mit wachsendem Speicher); deshalb vor xlrd cfb.check_fat_size, olefile, cfb.walk_stream für Workbook und Book, mit ENDOFCHAIN-Pflicht am Kettenende. Kettenprüfungen aus legacy_doc nach cfb.py verschoben (detail bei .doc-Kettenfehlern jetzt cfb.CorruptCompoundFile). cfb.ole_kind ersetzt ole_verdict und entscheidet nach den Strömen an der Spitze des Verzeichnisbaums: Word/Excel unter .docx/.xlsx/.pptx werden nach Inhalt gelesen, legacy_format nur noch PowerPoint und bekannte Namen außerhalb der Baumspitze; OLE ohne bekannten Namen bleibt failed(corrupt) wie bisher. CI Python gates 38119372322 (5198 passed) und sechs weitere grün.
+- 31-07: pillow-heif im Bildpfad (thumbnails/depth/aux aus, decode_threads=1), abgeschnittene HEIC -> failed(corrupt), HEIF über der Schätzung -> skipped(too_large). Checkpoint ausgelöst (48 MP too_large, Lauf 38121953472); Owner-Entscheid: MALLOC_ARENA_MAX messen, Fall A eingetreten: mallopt(M_ARENA_MAX, 1) nur im Extraktionskind (sandbox._limit_malloc_arenas), fester HEIF-Anteil 160 -> 32 MiB, 48 MP mit 15,7/17,0 % Rest unter 512 MiB indexed (Lauf 38125992894), Text-/OCR-Weg unverändert; Limit bleibt 512 MiB. HEIF-Schätzung = 80 MiB + 7 B/px (RGB), 9 B/px sonst, statt Faktor. FMT-05 offen bis 31-10. Offen für 31-15: JPEG failed(out_of_memory) gegen HEIF skipped(too_large).
 
 ### Offene Faeden (kein aktiver Auftrag)
 
@@ -103,11 +105,10 @@ Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 6/15 Pläne
 
 ### Blockers/Concerns
 
-- 31-07 Checkpoint (Task 3): 48-MP-HEIF endet unter 512 MiB auf amd64 und arm64 als skipped(too_large) (docker.yml 38121953472, 38122992533). Owner wählt option-a (Standard-Adressraum anheben) oder option-b (Grenze dokumentieren); dazu offen: HEIF-Faktor (vorläufig 3, Planregel ergäbe 5,5 und sperrte 24 MP). Messbericht docs/measurements/2026-10-formate-v15/README.md, Abschnitt HEIC-Dekodier-RAM.
 - Kill-Kriterium Nextcloud (ES-freie Volltextsuche mit OCR angekuendigt -> Neubewertung) weiter beobachten.
 
 ## Session Continuity
 
-Last session: 2026-10-11T08:30:00.000Z
-Stopped at: 31-07 Checkpoint Task 3 (Owner-Entscheid 48-MP-HEIF)
-Resume file: .planning/phases/31-neue-formate-und-nachholweg/31-07-PLAN.md
+Last session: 2026-10-11T09:00:00.000Z
+Stopped at: Completed 31-07-PLAN.md
+Resume file: None
