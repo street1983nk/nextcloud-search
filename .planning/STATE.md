@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 31-03-PLAN.md
-last_updated: "2026-10-11T00:52:35.841Z"
-last_activity: 2026-10-11 -- Plan 31-03 abgeschlossen, als Nächstes 31-04
+stopped_at: Completed 31-04-PLAN.md
+last_updated: "2026-10-11T01:45:00.000Z"
+last_activity: 2026-10-11 -- Plan 31-04 abgeschlossen, als Nächstes 31-05
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 24
-  completed_plans: 12
+  completed_plans: 13
   percent: 14
 ---
 
@@ -26,11 +26,11 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 31 von 30-36 (Formate, Nachholweg und POL-02)
-Plan: 3 von 15 erledigt (31-01, 31-02, 31-03), nächster Plan 31-04
-Status: Phase 31 in Ausführung; 31-03 abgeschlossen (POL-02: zweimal gleich kurz mit gleichem Hash = echte Datei, keine Längenausnahme, Restrisiko A8 dokumentiert; CI grün auf 441637e7)
-Last activity: 2026-10-11 -- Plan 31-03 abgeschlossen
+Plan: 4 von 15 erledigt (31-01 bis 31-04), nächster Plan 31-05
+Status: Phase 31 in Ausführung; 31-04 abgeschlossen (.eml-Extraktor gebaut und getestet, noch nicht freigeschaltet, das folgt in 31-10; FMT-01 bleibt bis dahin offen; CI grün auf 4e08b18e)
+Last activity: 2026-10-11 -- Plan 31-04 abgeschlossen
 
-Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 3/15 Pläne
+Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 4/15 Pläne
 
 ## Performance Metrics
 
@@ -47,6 +47,7 @@ Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 3/15 Pläne
 - v1.5: 31-01 in ca. 105 min (4 Tasks, 15 Dateien)
 - v1.5: 31-02 in ca. 85 min (2 Tasks, 39 Dateien)
 - v1.5: 31-03 in ca. 85 min (2 Tasks, 8 Dateien)
+- v1.5: 31-04 in ca. 75 min (2 Tasks, 5 Dateien)
 
 ## Accumulated Context
 
@@ -70,10 +71,12 @@ Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 3/15 Pläne
 - 31-01: olefile 0.47, xlrd 2.0.2, pillow-heif 1.8.0 exakt gepinnt (keine weiteren transitiven Pakete); THIRD-PARTY.md mit libheif 1.23.4, libde265 1.1.3 (LGPL-3.0), x265 4.2 (GPL-2.0-or-later), sieben Altversionen korrigiert, Versionsgate test_third_party_versions.py. Quellpflicht: vier gehashte Quellpakete (scripts/release/corresponding_source.py), Spiegel für :dev = Pre-Release source-1.5-dev.2 (source-1.5-dev blieb leer, unveränderlich). Repo veröffentlicht unveränderliche Releases: REL-05 muss release.yml die Quellpakete im gh release create mitgeben. Kein Nicht-v-Tag startet einen Workflow (test_workflow_tag_triggers.py). Image komprimiert +6,18 MB amd64, +7,29 MB arm64.
 - 31-02: Skip-Code archive_limit (skipped, nur ZIP) in allen vier Codelisten; unsupported_variant allgemein gefasst, mime_not_allowed-Hilfe nennt Mails und ZIP-Dateien; fünf Sätze in 16 Katalogen und fünf Dokus (80 einzeln benannte Testfälle). Sichtbarer Wortlaut sagt ZIP file/ZIP-Datei, weil die Vokabelregel E-H2 den Wortstamm in deutscher Prosa und in docs/store-listing.md sperrt; Codename deshalb nur in docs/formats.md (Abschnitt Skip codes). VERDICTS_GENERATION 3 auf beiden Seiten, Container kennt {2, 3}, archive_limit an 2 und ohne Signal als too_large/corrupt; öffentliche SKIPPED_FALLBACK_WITHOUT_SIGNAL für 31-11; recheck_1_4_0 startet bei 2 und 3; Upgrade-Reihenfolge (Backend zuerst) in docs/formats.md. Wortlaut Entwurf, Owner-Abnahme bei REL-05.
 - 31-03: POL-02 (F-29-03) im Code: ShortRead trägt written und content_hash (Hash füllt _stream_into aus dem _HashingSink, der Client hasht nicht); _fetch_file nimmt zwei kurze Antworten mit gleicher Länge UND gleichem Hash als die echte Datei (Scratch des zweiten Versuchs, Größe = tatsächliche, kein dritter Download), 0 Bytes zweimal -> failed(empty_file), verschiedene kurze Antworten bleiben D-29-04. Keine Längenausnahme; Restrisiko A8 (Proxy kappt byte-genau gleich) in Docstring, docs/formats.md "Stale file cache size" und SUMMARY, Owner-Veto möglich. Bereits aufgegebene repeatedly_stuck-Zeilen holt 31-11 nach. CI Python gates 38098844595 und sieben weitere grün.
+- 31-04: extract/mail.py (extract_eml, noch nicht in Dispatch/Allowlist, Freischaltung 31-10): Subject/From/To/Cc dekodiert, Body plain vor HTML über text.html_to_text (gemeinsame gehärtete Strecke, extract_html unverändert), Anhänge nur als Namen über clean_display_name (Bidi/Steuerzeichen raus, 255 Zeichen; 31-08 nutzt sie für ZIP-Namen). count_parts zählt öffnende Begrenzerzeilen deklarierter Boundaries vor dem Parsen (alle Schreibweisen inkl. RFC 2231, CR-Zeilenenden), über MAX_MAIL_PARTS 1000 nur Kopfzeilen -> indexed(truncated). RecursionError (Parser, get_body, iter_attachments, get_content) -> failed(corrupt) detail RecursionError; kaputte Kopfzeile wird ausgelassen. 2500 multipart-Ebenen enden an der Vorzählung (Plan-Widerspruch dokumentiert). CI Python gates 38101409837 und sechs weitere grün.
 
 ### Offene Faeden (kein aktiver Auftrag)
 
 - Owner-Veto zu A8 (31-03) möglich: dann Längenausnahme aus dem ersten Planstand.
+- FMT-01 erst auf Complete, wenn 31-10 .eml in Allowlist/Dispatch freischaltet (Extraktor seit 31-04 fertig).
 
 - REL-05 (Phase 36): release.yml muss die vier Quellpakete (corresponding_source.py fetch) im eigenen gh release create mitgeben; ein späteres gh release upload scheitert an unveränderlichen Releases (belegt in 31-01). Leeres Pre-Release source-1.5-dev bleibt mit Verweistext, Löschen nur mit Owner-Wort.
 
@@ -97,6 +100,6 @@ Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 3/15 Pläne
 
 ## Session Continuity
 
-Last session: 2026-10-11T00:09:17.492Z
-Stopped at: Completed 31-02-PLAN.md
+Last session: 2026-10-11T01:45:00.000Z
+Stopped at: Completed 31-04-PLAN.md
 Resume file: None
