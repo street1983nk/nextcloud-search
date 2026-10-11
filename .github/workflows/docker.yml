@@ -454,10 +454,12 @@ jobs:
       # heic-threads for assumption A5), which the report of
       # docs/measurements/2026-10-formate-v15 takes from this log. Network cut,
       # digest reference, both architectures of the matrix. Its own deadline,
-      # about eight times the 35 s of its first run (38121953472), so a hang
-      # costs this step and not the whole job budget.
+      # a multiple of what its runs took (35 s in 38121953472, before part 3,
+      # the MALLOC_ARENA_MAX sweep over the HEIC and the corpus, came with the
+      # owner checkpoint of plan 31-07), so a hang costs this step and not the
+      # whole job budget.
       - name: HEIC OCR and decode memory in the image (FMT-05)
-        timeout-minutes: 5
+        timeout-minutes: 10
         env:
           DIGEST: ${{ steps.push.outputs.digest }}
         run: |
@@ -465,8 +467,9 @@ jobs:
           docker run --rm --network none \
             -v "${GITHUB_WORKSPACE}/backend/tests:/probe:ro" \
             -v "${GITHUB_WORKSPACE}/testdata/fonts:/fonts:ro" \
+            -v "${GITHUB_WORKSPACE}/testdata/corpus:/corpus:ro" \
             --entrypoint python \
-            "${IMAGE}@${DIGEST}" /probe/probe_image_ocr_heic.py /fonts/DejaVuSans.ttf
+            "${IMAGE}@${DIGEST}" /probe/probe_image_ocr_heic.py /fonts/DejaVuSans.ttf /corpus
 
       # The environment is the one from the local probe, deliberately. Without
       # HP_SHARED_KEY the app binds APP_PORT, frpc logs one line and exits, and

@@ -39,6 +39,21 @@ For assumption A5 one more line, ``heic-threads``: the 24 MP HEIC loaded without
 a cap with the library default of four decoder threads, against the one thread
 the branch registers.
 
+**Part 3, glibc malloc arenas (no gate, owner decision at the checkpoint of
+plan 31-07).** The fixed part of the HEIF cost looked like the malloc arena of
+the decoder thread. Each child of this part runs with ``MALLOC_ARENA_MAX``
+unset, 1 or 2 in its environment, which glibc reads when the process starts and
+which the tesseract grandchild inherits:
+
+- ``heic-arena``: the HEIC of 12, 24 and 48 MP, loaded without a cap (VmPeak
+  growth), and the full ``extract_image`` under the real cap with the estimate
+  switched off (``full``), so the line says whether the whole way fits and how
+  high the absolute VmPeak of the child went, against 90 percent of the cap.
+- ``arena-path``: the ordinary text and OCR ways of the child through
+  ``dispatch.extract`` on corpus files (text PDF, DOCX, scanned PDF on the OCR
+  route, JPEG), with verdict, seconds, absolute VmPeak and VmHWM, so a cost of a
+  smaller arena count on the rest of the child shows.
+
 One line per size and format, starting with ``heic-ram``, so the report can
 take them from the log. Nothing in part 2 fails the step: a child under the cap
 that dies instead of answering is a finding and is printed as the verdict
@@ -51,8 +66,8 @@ photograph. Nothing recognised is printed except the expected word found.
 Run it like this:
 
     docker run --rm --network none -v "$PWD/backend/tests:/probe:ro" \\
-        -v "$PWD/testdata/fonts:/fonts:ro" \\
-        --entrypoint python IMAGE /probe/probe_image_ocr_heic.py /fonts/DejaVuSans.ttf
+        -v "$PWD/testdata/fonts:/fonts:ro" -v "$PWD/testdata/corpus:/corpus:ro" \\
+        --entrypoint python IMAGE /probe/probe_image_ocr_heic.py /fonts/DejaVuSans.ttf /corpus
 """
 
 from __future__ import annotations
@@ -64,6 +79,7 @@ import statistics
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 from typing import Final
 
@@ -94,6 +110,19 @@ CHILD_SECONDS: Final = 180
 PARENT_SECONDS: Final = CHILD_SECONDS + 30
 
 MIB: Final = 1024 * 1024
+
+# Part 3: the values of MALLOC_ARENA_MAX, None for unset.
+ARENAS: Final = (None, "1", "2")
+
+# Part 3: the ordinary ways of the child, as (file in the corpus, mimetype,
+# forced route or None). Text PDF, Office, the scan on the OCR route, a picture.
+PATHS: Final = (
+    ("01-text-layer.pdf", "application/pdf", None),
+    ("10-kuendigung.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", None),
+    ("13-ratsvorlage-scan.pdf", "application/pdf", "ocr"),
+    ("17-beleg.jpg", "image/jpeg", None),
+)
+DEFAULT_CORPUS: Final = "/corpus"
 
 
 def _status() -> dict[str, int]:
@@ -182,13 +211,66 @@ def _child_extract(path: str) -> dict[str, object]:
     }
 
 
-def _ask(mode: str, path: Path) -> dict[str, object] | None:
+def _child_full(path: str) -> dict[str, object]:
+    """The whole picture branch under the cap, with the estimate switched off."""
+    _child_setup(capped=True)
+    from findling.extract import image
+
+    image._over_address_space = lambda _picture: None
+    before = _status()
+    started = time.monotonic()
+    try:
+        outcome = image.extract_image(path)
+        verdict = f"{outcome.state.value}/{outcome.reason.value if outcome.reason else '-'}"
+    except MemoryError:
+        verdict = "failed/out_of_memory(MemoryError)"
+    seconds = time.monotonic() - started
+    after = _status()
+    return {
+        "verdict": verdict,
+        "seconds": seconds,
+        "start": before["VmSize"],
+        "vmpeak": after["VmPeak"],
+        "vmhwm": after["VmHWM"],
+        "vmpeak_delta": after["VmPeak"] - before["VmSize"],
+    }
+
+
+def _child_path(path: str, mime: str, route: str) -> dict[str, object]:
+    """One file through dispatch.extract, the way the extraction child calls it."""
+    _child_setup(capped=True)
+    from findling.extract.dispatch import Route, extract
+
+    before = _status()
+    started = time.monotonic()
+    try:
+        outcome = extract(path, mime, Path(path).stat().st_size, Route(route) if route != "-" else None)
+        verdict = f"{outcome.state.value}/{outcome.reason.value if outcome.reason else '-'}"
+    except MemoryError:
+        verdict = "failed/out_of_memory(MemoryError)"
+    seconds = time.monotonic() - started
+    after = _status()
+    return {
+        "verdict": verdict,
+        "seconds": seconds,
+        "start": before["VmSize"],
+        "vmpeak": after["VmPeak"],
+        "vmhwm": after["VmHWM"],
+    }
+
+
+def _ask(mode: str, path: Path, *extra: str, arena: str | None = None) -> dict[str, object] | None:
     """Run one child and return what it printed, or None when it gave no answer."""
+    environment = dict(os.environ)
+    environment.pop("MALLOC_ARENA_MAX", None)
+    if arena is not None:
+        environment["MALLOC_ARENA_MAX"] = arena
     try:
         finished = subprocess.run(  # noqa: S603 - our own interpreter and this very file
-            [sys.executable, __file__, "--child", mode, str(path)],
+            [sys.executable, __file__, "--child", mode, str(path), *extra],
             capture_output=True,
             check=False,
+            env=environment,
             timeout=PARENT_SECONDS,
             text=True,
         )
@@ -258,6 +340,47 @@ def _threads(arch: str, path: Path) -> None:
         )
 
 
+def _seconds(answers: list[dict[str, object]]) -> str:
+    values = [float(str(answer["seconds"])) for answer in answers if answer.get("seconds") is not None]
+    return f"{statistics.median(values):.2f}" if values else "n/a"
+
+
+def _arenas(folder: Path, font_path: str, corpus: Path) -> None:
+    """Part 3: MALLOC_ARENA_MAX unset, 1 and 2, on the HEIC and on the ordinary ways."""
+    arch = platform.machine()
+    pictures = {megapixels: folder / f"arena-{megapixels}.heic" for megapixels in SIZES}
+    for megapixels, size in SIZES.items():
+        _write_heic(pictures[megapixels], size, font_path, grid=True)
+    for arena in ARENAS:
+        label = arena or "unset"
+        for megapixels, path in pictures.items():
+            loads = [answer for answer in (_ask("load", path, arena=arena) for _ in range(REPEATS)) if answer]
+            fulls = [_ask("full", path, arena=arena) or {"verdict": "child_died"} for _ in range(REPEATS)]
+            print(
+                f"heic-arena arch={arch} arena={label} mp={megapixels} "
+                f"load_vmpeak_delta_mib={_mib(loads, 'vmpeak_delta')} "
+                f"load_vmhwm_delta_mib={_mib(loads, 'vmhwm_delta')} "
+                f"full_start_mib={_mib(fulls, 'start')} "
+                f"full_vmpeak_mib={_mib(fulls, 'vmpeak')} "
+                f"full_vmpeak_delta_mib={_mib(fulls, 'vmpeak_delta')} "
+                f"full_vmhwm_mib={_mib(fulls, 'vmhwm')} "
+                f"full_seconds={_seconds(fulls)} "
+                f"full_verdict={','.join(sorted({str(answer['verdict']) for answer in fulls}))}"
+            )
+        for name, mime, route in PATHS:
+            source = corpus / name
+            runs = [
+                _ask("path", source, mime, route or "-", arena=arena) or {"verdict": "child_died"}
+                for _ in range(REPEATS)
+            ]
+            print(
+                f"arena-path arch={arch} arena={label} file={name} "
+                f"start_mib={_mib(runs, 'start')} vmpeak_mib={_mib(runs, 'vmpeak')} "
+                f"vmhwm_mib={_mib(runs, 'vmhwm')} seconds={_seconds(runs)} "
+                f"verdict={','.join(sorted({str(answer['verdict']) for answer in runs}))}"
+            )
+
+
 def _mib(answers: list[dict[str, object]], key: str) -> str:
     """The median of one field over the answers, in MiB, or n/a without any."""
     values = [int(str(answer[key])) for answer in answers if answer.get(key) is not None]
@@ -304,6 +427,10 @@ def main(argv: list[str]) -> int:
         mode, path = argv[2], argv[3]
         if mode == "extract":
             answer = _child_extract(path)
+        elif mode == "full":
+            answer = _child_full(path)
+        elif mode == "path":
+            answer = _child_path(path, argv[4], argv[5])
         else:
             answer = _child_load(path, capped=mode == "load-capped", threads=4 if mode == "load-threads4" else 1)
         print(json.dumps(answer))
@@ -313,12 +440,17 @@ def main(argv: list[str]) -> int:
     if not Path(font_path).is_file():
         print(f"font missing: {font_path}")
         return 2
+    corpus = Path(argv[2] if len(argv) > 2 else DEFAULT_CORPUS)
 
     with tempfile.TemporaryDirectory(prefix="heic-probe-") as name:
         folder = Path(name)
         proved = _proof(folder, font_path)
         print("heic ocr in the image: " + ("ok" if proved else "FAILED"))
         _measure(folder, font_path)
+        if corpus.is_dir():
+            _arenas(folder, font_path, corpus)
+        else:
+            print(f"corpus missing: {corpus}, part 3 skipped")
     return 0 if proved else 1
 
 
