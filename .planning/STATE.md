@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 31-02-PLAN.md
-last_updated: "2026-10-11T00:09:17.508Z"
-last_activity: 2026-10-11 -- Plan 31-02 abgeschlossen, als Nächstes 31-03
+stopped_at: Completed 31-03-PLAN.md
+last_updated: "2026-10-11T00:52:35.841Z"
+last_activity: 2026-10-11 -- Plan 31-03 abgeschlossen, als Nächstes 31-04
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 24
-  completed_plans: 11
+  completed_plans: 12
   percent: 14
 ---
 
@@ -26,11 +26,11 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 31 von 30-36 (Formate, Nachholweg und POL-02)
-Plan: 2 von 15 erledigt (31-01, 31-02), nächster Plan 31-03
-Status: Phase 31 in Ausführung; 31-02 abgeschlossen (archive_limit, allgemeineres unsupported_variant, Verdict-Generation 3 mit weiter gültiger 2; CI grün auf aa498caf)
-Last activity: 2026-10-11 -- Plan 31-02 abgeschlossen
+Plan: 3 von 15 erledigt (31-01, 31-02, 31-03), nächster Plan 31-04
+Status: Phase 31 in Ausführung; 31-03 abgeschlossen (POL-02: zweimal gleich kurz mit gleichem Hash = echte Datei, keine Längenausnahme, Restrisiko A8 dokumentiert; CI grün auf 441637e7)
+Last activity: 2026-10-11 -- Plan 31-03 abgeschlossen
 
-Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 2/15 Pläne
+Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 3/15 Pläne
 
 ## Performance Metrics
 
@@ -46,6 +46,7 @@ Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 2/15 Pläne
 - v1.5: 30-09 in ca. 75 min (3 Tasks, 4 Dateien)
 - v1.5: 31-01 in ca. 105 min (4 Tasks, 15 Dateien)
 - v1.5: 31-02 in ca. 85 min (2 Tasks, 39 Dateien)
+- v1.5: 31-03 in ca. 85 min (2 Tasks, 8 Dateien)
 
 ## Accumulated Context
 
@@ -68,8 +69,11 @@ Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 2/15 Pläne
 - 30-09: Audit der Phase 30 (30-AUDIT.md, status fixed): 0 CRITICAL, 0 HIGH, 0 MEDIUM, 3 LOW. L-30-01 gefixt (Lucene-NOTICE und Lizenzpfad im ausgelieferten Modul stopwords_cs.py, 9e9764bf, im Image belegt); L-30-02 accept (Treffer nur über body_cs ohne Auszug, dokumentierte Grenze); L-30-03 accept (Vektordigest ungeprüft in GITHUB_ENV, mitnehmen, wenn Phase 31 deploy-harp anfasst). Platzannahme unabhängig gemessen: cs +0,287/+0,299 unter 0,40. CI Python gates 38042757203, HaRP 38042757174 grün.
 - 31-01: olefile 0.47, xlrd 2.0.2, pillow-heif 1.8.0 exakt gepinnt (keine weiteren transitiven Pakete); THIRD-PARTY.md mit libheif 1.23.4, libde265 1.1.3 (LGPL-3.0), x265 4.2 (GPL-2.0-or-later), sieben Altversionen korrigiert, Versionsgate test_third_party_versions.py. Quellpflicht: vier gehashte Quellpakete (scripts/release/corresponding_source.py), Spiegel für :dev = Pre-Release source-1.5-dev.2 (source-1.5-dev blieb leer, unveränderlich). Repo veröffentlicht unveränderliche Releases: REL-05 muss release.yml die Quellpakete im gh release create mitgeben. Kein Nicht-v-Tag startet einen Workflow (test_workflow_tag_triggers.py). Image komprimiert +6,18 MB amd64, +7,29 MB arm64.
 - 31-02: Skip-Code archive_limit (skipped, nur ZIP) in allen vier Codelisten; unsupported_variant allgemein gefasst, mime_not_allowed-Hilfe nennt Mails und ZIP-Dateien; fünf Sätze in 16 Katalogen und fünf Dokus (80 einzeln benannte Testfälle). Sichtbarer Wortlaut sagt ZIP file/ZIP-Datei, weil die Vokabelregel E-H2 den Wortstamm in deutscher Prosa und in docs/store-listing.md sperrt; Codename deshalb nur in docs/formats.md (Abschnitt Skip codes). VERDICTS_GENERATION 3 auf beiden Seiten, Container kennt {2, 3}, archive_limit an 2 und ohne Signal als too_large/corrupt; öffentliche SKIPPED_FALLBACK_WITHOUT_SIGNAL für 31-11; recheck_1_4_0 startet bei 2 und 3; Upgrade-Reihenfolge (Backend zuerst) in docs/formats.md. Wortlaut Entwurf, Owner-Abnahme bei REL-05.
+- 31-03: POL-02 (F-29-03) im Code: ShortRead trägt written und content_hash (Hash füllt _stream_into aus dem _HashingSink, der Client hasht nicht); _fetch_file nimmt zwei kurze Antworten mit gleicher Länge UND gleichem Hash als die echte Datei (Scratch des zweiten Versuchs, Größe = tatsächliche, kein dritter Download), 0 Bytes zweimal -> failed(empty_file), verschiedene kurze Antworten bleiben D-29-04. Keine Längenausnahme; Restrisiko A8 (Proxy kappt byte-genau gleich) in Docstring, docs/formats.md "Stale file cache size" und SUMMARY, Owner-Veto möglich. Bereits aufgegebene repeatedly_stuck-Zeilen holt 31-11 nach. CI Python gates 38098844595 und sieben weitere grün.
 
 ### Offene Faeden (kein aktiver Auftrag)
+
+- Owner-Veto zu A8 (31-03) möglich: dann Längenausnahme aus dem ersten Planstand.
 
 - REL-05 (Phase 36): release.yml muss die vier Quellpakete (corresponding_source.py fetch) im eigenen gh release create mitgeben; ein späteres gh release upload scheitert an unveränderlichen Releases (belegt in 31-01). Leeres Pre-Release source-1.5-dev bleibt mit Verweistext, Löschen nur mit Owner-Wort.
 

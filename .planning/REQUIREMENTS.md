@@ -43,7 +43,7 @@
 ### Feinschliff (POL)
 
 - [ ] **POL-01**: Admin sieht die wirksamen Grenzwerte (Zellgrenze, Adressraum, Groessengrenze, OCR-Seitendeckel) auf der Admin-Seite, nur lesend, mit Hinweis wie sie geaendert werden (#21)
-- [ ] **POL-02**: Datei mit veralteter Groesse im Dateicache endet nicht mehr als `repeatedly_stuck`, sondern wird korrekt gelesen oder mit benanntem Urteil uebersprungen (F-29-03)
+- [x] **POL-02**: Datei mit veralteter Groesse im Dateicache endet nicht mehr als `repeatedly_stuck`, sondern wird korrekt gelesen oder mit benanntem Urteil uebersprungen (F-29-03)
 - [ ] **POL-03**: Hardware-Hinweis "This box has fewer cores..." ist in allen Katalogen verstaendlich umformuliert
 
 ### Stretch (STR)
@@ -101,7 +101,7 @@
 | CZ-02 | Phase 30 | Complete |
 | CZ-03 | Phase 30 | Complete |
 | POL-01 | Phase 33 | Pending |
-| POL-02 | Phase 31 | Pending |
+| POL-02 | Phase 31 | Complete |
 | POL-03 | Phase 33 | Pending |
 | STR-01 | Phase 35 | Pending |
 | STR-02 | Phase 35 | Pending |
