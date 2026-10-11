@@ -64,7 +64,10 @@ jobs:
     # a half minutes (run 32111380972, 18.08.2026). Twenty minutes is roughly
     # eight times a cold build, so an honest slowdown still fits, and a job that
     # hangs costs minutes instead of the default six hours.
-    timeout-minutes: 20
+    # Plan 31-07 adds the HEIC probe with a deadline of its own of fifteen
+    # minutes (encoding and decoding 48 MP pictures, three times each), so the
+    # job gets those fifteen on top of the twenty it had.
+    timeout-minutes: 35
     permissions:
       contents: read
       # Pushing to ghcr needs nothing but the token this job already gets. A
@@ -439,6 +442,30 @@ jobs:
             -v "${GITHUB_WORKSPACE}/testdata/fonts:/fonts:ro" \
             --entrypoint python \
             "${IMAGE}@${DIGEST}" /probe/probe_image_ocr_czech.py /fonts/DejaVuSans.ttf
+
+      # FMT-05 and D-31-06 (plan 31-07). Part 1 is the gate: a HEIC with a
+      # rendered sentence, written at run time by the encoder in the pillow-heif
+      # wheel, read by extract_image in a child under the real RLIMIT_AS, has
+      # to come back indexed with the word fotoquendel, a white HEIC as
+      # skipped(empty_text), and the opener has to carry its four options.
+      # Part 2 is a measurement and never fails the step: 12, 24 and 48 MP,
+      # HEIC as a grid of 512 pixel tiles and JPEG as the counter measurement,
+      # three children each, the medians as lines starting with heic-ram (and
+      # heic-threads for assumption A5), which the report of
+      # docs/measurements/2026-10-formate-v15 takes from this log. Network cut,
+      # digest reference, both architectures of the matrix. Its own deadline,
+      # so a hang costs this step and not the whole job budget.
+      - name: HEIC OCR and decode memory in the image (FMT-05)
+        timeout-minutes: 15
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          echo "expected: options False,False,False,1, the HEIC page indexed with fotoquendel, the white HEIC skipped/empty_text; then the heic-ram lines"
+          docker run --rm --network none \
+            -v "${GITHUB_WORKSPACE}/backend/tests:/probe:ro" \
+            -v "${GITHUB_WORKSPACE}/testdata/fonts:/fonts:ro" \
+            --entrypoint python \
+            "${IMAGE}@${DIGEST}" /probe/probe_image_ocr_heic.py /fonts/DejaVuSans.ttf
 
       # The environment is the one from the local probe, deliberately. Without
       # HP_SHARED_KEY the app binds APP_PORT, frpc logs one line and exits, and

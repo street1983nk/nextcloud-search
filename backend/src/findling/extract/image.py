@@ -29,6 +29,15 @@ module hands it an encoded page and reads its verdicts. That import costs pdfium
 in a child that may only ever see pictures, which is the honest price of having
 exactly one place where this project talks to tesseract.
 
+**HEIC and HEIF are readable since plan 31-07 (FMT-05).** pillow-heif is
+registered as a Pillow plugin when this module is imported, so a phone photograph
+in HEIC takes the same way as a JPEG: the bomb guard, the plausibility rules, the
+estimate against the address space and the EXIF rotation. What differs is
+written next to the place it differs at: the options of the registration, the
+ValueError of a truncated file, and the larger working copies of the estimate.
+Whether a HEIC is handed to this module at all is the allowlist of dispatch.py,
+which opens for it in plan 31-10.
+
 Like every module of this package, this one never writes: the file is opened for
 reading, every rotation, every scaling and every patched TIFF tag happens in
 memory, and the original is not touched even on the error path (IDX-07,
@@ -37,13 +46,16 @@ T-03-805).
 
 from __future__ import annotations
 
+import math
 import struct
 import sys
 import time
+from collections.abc import Mapping
 from io import BytesIO
 from pathlib import Path
 from typing import Final
 
+import pillow_heif
 from PIL import Image, ImageOps, TiffImagePlugin
 
 from findling import config
@@ -126,6 +138,27 @@ def _register_tiff_variants() -> frozenset[tuple[object, ...]]:
 # extraction child imports this module before it opens a single picture.
 _SHIM_KEYS: Final = _register_tiff_variants()
 
+# HEIC and HEIF as a Pillow plugin (FMT-05, D-31-06), registered here for the
+# reason the TIFF shim is: before the first picture is opened. Four options,
+# each against a default of the library:
+#
+# thumbnails=False. Since pillow-heif 1.8.0 a draft may pick an embedded
+# preview picture instead of the image (pitfall 11 of the phase research). At
+# the draft target of today no preview would be large enough, but OCR on a
+# preview is never the intent, and the option makes it independent of any
+# later target.
+# depth_images=False and aux_images=False. A depth map and an alpha or gain map
+# are pictures this branch never reads; not decoding them keeps libheif out of
+# code paths and memory this branch has no use for (T-31-20).
+# decode_threads=1. The extraction child decodes one file at a time under
+# RLIMIT_AS, and every decoder thread wants a stack inside that address space,
+# which is the OpenBLAS lesson of sandbox.py (assumption A5, measured in the
+# image probe of plan 31-07).
+#
+# DISABLE_SECURITY_LIMITS is left at its default, False: the limits libheif
+# brings for image size and box counts stay in force next to the bomb guard.
+pillow_heif.register_heif_opener(thumbnails=False, depth_images=False, aux_images=False, decode_threads=1)
+
 # Under this many pixels on the long edge nothing is a document. Icons, avatars,
 # signature stamps and preview thumbnails all live far below it, and a scan of a
 # postcard lives far above it (pitfall 6).
@@ -157,7 +190,15 @@ _MIN_OCR_CHARS: Final = 20
 # for RGB after the draft), and RLIMIT_AS counts address space rather than the
 # working set measured there, so it is a floor and is checked in the field at the
 # next visit (D-29-11), not claimed as exact.
-_WORKING_COPIES: Final = 2
+_DEFAULT_WORKING_COPIES: Final = 2
+
+# The working copies of a format whose decoder needs more than the picture and
+# one copy, keyed by the format Pillow names (``Image.format``). HEIF: libheif
+# holds the decoded YCbCr planes and pillow-heif an RGB buffer of its own while
+# Pillow fills its picture from that buffer, and there is no draft that brings a
+# HEIC down before the decode (pitfall 12). Provisional value of the phase
+# research, replaced by the measurement of plan 31-07.
+_WORKING_COPIES: Final[Mapping[str, float]] = {"HEIF": 3}
 
 # What the estimate writes as detail, a fixed name and never a number from the
 # file (T-29-24). It reads like the class names plan 29-06 stores, on purpose.
@@ -329,15 +370,35 @@ def _over_address_space(picture: Image.Image) -> ExtractionOutcome | None:
     and that death reads as a broken file (#18). With it the verdict says what
     happened. The size is the one after the draft, so a camera picture that the
     draft brings down is judged at its reduced size.
+
+    A HEIF over the estimate is skipped(too_large) rather than
+    failed(out_of_memory). It has no draft, so its decoded size is the size the
+    file declares, and no other child under the same cap would read it: that is
+    a property of the file against the configuration, which an admin can act on
+    through FINDLING_EXTRACT_ADDRESS_SPACE_BYTES, the same kind of decision as
+    the pixel cap (pitfall 12). The verdict of every other format is the one of
+    D-29-07 and stays as it was.
     """
     room = _address_space_room()
     if room is None:
         return None
-    width, height = picture.size
-    needed = width * height * _pixel_bytes(picture.mode) * _WORKING_COPIES
-    if needed > room:
+    if _estimated_bytes(picture) > room:
+        if picture.format == "HEIF":
+            return ExtractionOutcome.skipped(Reason.TOO_LARGE)
         return ExtractionOutcome.failed(Reason.OUT_OF_MEMORY, detail=_HEADER_ESTIMATE)
     return None
+
+
+def _estimated_bytes(picture: Image.Image) -> int:
+    """What decoding the picture at its present size costs, by the header alone.
+
+    Width times height times the bytes Pillow keeps per pixel, times the working
+    copies of its format; a factor that is not whole is rounded up, so the
+    estimate never comes out below the product it stands for.
+    """
+    width, height = picture.size
+    copies = _WORKING_COPIES.get(picture.format or "", _DEFAULT_WORKING_COPIES)
+    return math.ceil(width * height * _pixel_bytes(picture.mode) * copies)
 
 
 def _class_of(error: BaseException) -> str:
@@ -530,6 +591,18 @@ def _read_frames(picture: Image.Image, resolved: Settings) -> ExtractionOutcome:
             break
         if frame_count > 1:
             picture.seek(number)
+        try:
+            # Spelled out here and nowhere else, so the handler is as narrow as
+            # the one call it is about. libheif reports pixel data that ends
+            # before the picture does as a ValueError from load() (pillow-heif
+            # 1.8.0, measured in plan 31-07), where every other decoder of this
+            # branch raises an OSError; without this, a truncated HEIC would leave
+            # the branch as an exception instead of a verdict (T-31-22). The
+            # transpose below would call load() anyway, so nothing is decoded
+            # that was not decoded before.
+            picture.load()
+        except ValueError as error:
+            return ExtractionOutcome.failed(Reason.CORRUPT, detail=_class_of(error))
         attempted += 1
         try:
             parts.append(ocr.read_page(_encode_frame(picture), languages, resolved.ocr_page_seconds))

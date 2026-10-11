@@ -1781,8 +1781,17 @@ PHP_TREE_HASH_TODAY = "0d4206abef3ae73e772b02331495b560041a02008a588f63798351b8a
 # of a chain); dispatch.py hands Word and Excel under an OOXML name to the
 # legacy readers. One file came, so PACKAGE_FILES_TODAY moves to 77. The PHP
 # pair does not move: php/ is unchanged.
+#
+# Measured again by Plan 31-07 (FMT-05, D-31-06) on 2026-10-11, provisional
+# HEIF factor: extract/image.py registers pillow-heif as a Pillow plugin
+# (thumbnails, depth and auxiliary images off, one decoder thread), keeps its
+# working copies per format (HEIF 3 from the phase research, every other format
+# 2 as before), answers a HEIF over the estimate with skipped(too_large) and the
+# ValueError of a truncated HEIC with failed(corrupt). No file came and none
+# went, so PACKAGE_FILES_TODAY stays at 77. The PHP pair does not move: php/ is
+# unchanged.
 PACKAGE_FILES_TODAY = 77
-PACKAGE_TREE_HASH_TODAY = "b69c625d0a5f581892244fb4b00bdc65005c8e90de0980e16cca69233305585a"
+PACKAGE_TREE_HASH_TODAY = "e8f550448eca37abc3bc7e3b6191dbeb2a7540aee1aea444c37d4d96905cdca0"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
