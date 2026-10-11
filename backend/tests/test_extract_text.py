@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 from findling import config
-from findling.extract.dispatch import extract
+from findling.extract.dispatch import cap_text, extract
 from findling.extract.errors import ExtractionOutcome, Reason, State
 from findling.extract.text import BYTE_ORDER_MARK, extract_html, extract_plain, extract_rtf, html_to_text
 
@@ -336,3 +336,33 @@ def test_the_dispatcher_reaches_all_three_text_routes(
 
     assert outcome.state is State.INDEXED
     assert needle in outcome.text
+
+
+# Finding 15 of plan 31-09: U+001C belongs to the member marks of a ZIP file and
+# to nothing else. A text file that carries the character would otherwise hand
+# the excerpt code a stray line it could read as the name of an inner file.
+STRAY_MARK_TEXT = (
+    "Sehr geehrte Damen und Herren, vorher\x1cname.txt\nnachher folgt der Rest "
+    "des Schreibens mit der Bitte um eine kurze Bestätigung bis Monatsende."
+)
+
+
+def test_a_text_file_with_the_archive_mark_is_indexed_without_it(tmp_path: Path) -> None:
+    payload = STRAY_MARK_TEXT.encode("utf-8")
+    outcome = extract(_write(tmp_path, "brief.txt", payload), "text/plain", len(payload))
+
+    assert outcome.state is State.INDEXED
+    assert "\x1c" not in outcome.text
+    assert "vorhername.txt\nnachher" in outcome.text
+
+
+def test_cap_text_removes_the_archive_mark_by_default() -> None:
+    outcome = cap_text("vorher\x1cnachher")
+
+    assert outcome == ExtractionOutcome.indexed("vorhernachher")
+
+
+def test_cap_text_keeps_the_archive_mark_for_the_archive_reader() -> None:
+    outcome = cap_text("\x1cname.txt\ntext\n\n", member_marks=True)
+
+    assert outcome == ExtractionOutcome.indexed("\x1cname.txt\ntext\n\n")

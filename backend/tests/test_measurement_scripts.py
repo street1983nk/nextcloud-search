@@ -1809,8 +1809,17 @@ PHP_TREE_HASH_TODAY = "0d4206abef3ae73e772b02331495b560041a02008a588f63798351b8a
 # ARCHIVE_TIME_SHARE and ARCHIVE_MEMBER_MARK. One file came, so
 # PACKAGE_FILES_TODAY moves to 78. The PHP pair does not move: php/ is
 # unchanged.
+#
+# Measured again by Plan 31-09 (FMT-02, D-30-03) on 2026-10-11: index/search.py
+# names the inner file in front of the excerpt of a ZIP hit (the last
+# ARCHIVE_MEMBER_MARK before the first highlight, highlights moved behind the
+# prefix, the prefix for ext zip only, U+001C removed from every excerpt), the
+# semantic passage does the same, extract/dispatch.py cap_text removes U+001C
+# from every text unless member_marks is set, and extract/archive.py is the one
+# caller that sets it. No file came and none went, so PACKAGE_FILES_TODAY stays
+# at 78. The PHP pair does not move: php/ is unchanged.
 PACKAGE_FILES_TODAY = 78
-PACKAGE_TREE_HASH_TODAY = "e31b130073a882d3ecca3c6f21d5e085bf5dec564c2e12703d12fbb0d170b080"
+PACKAGE_TREE_HASH_TODAY = "3d649243778d91e28b81d4df551688be03546c2418b96c3faa7dd5a57ded20ad"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

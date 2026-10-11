@@ -137,7 +137,7 @@ def judge(mime: str, size: int) -> Route | ExtractionOutcome:
     return route
 
 
-def cap_text(text: str) -> ExtractionOutcome:
+def cap_text(text: str, *, member_marks: bool = False) -> ExtractionOutcome:
     """Turn a raw extracted string into a verdict, with the character cap applied.
 
     The single place where extracted text becomes an outcome, for two reasons.
@@ -149,7 +149,16 @@ def cap_text(text: str) -> ExtractionOutcome:
     The other reason is emptiness. Every extractor can come back with nothing,
     and skipped(empty_text) is the honest state for that. Whitespace counts as
     nothing; an index entry consisting of three line breaks helps no one.
+
+    ARCHIVE_MEMBER_MARK (U+001C) is removed from every text here, unless
+    ``member_marks`` is set, and only the ZIP reader sets it (plan 31-09,
+    finding 15). The excerpt code reads the line after the last mark as the
+    name of an inner file; a text file that carried the character itself would
+    otherwise put a line of its own text in that place. Because this is the one
+    place every extractor passes, no format can forget it.
     """
+    if not member_marks:
+        text = text.replace(config.ARCHIVE_MEMBER_MARK, "")
     if not text.strip():
         return ExtractionOutcome.skipped(Reason.EMPTY_TEXT)
     cap = config.settings().max_text_chars

@@ -45,10 +45,10 @@ from typing import Final, Protocol
 
 from tantivy import DocAddress, Document, Index, Occur, Order, Query, Schema, Searcher, SnippetGenerator
 
-from findling.config import SEARCH_SCAN_MAX, settings
+from findling.config import ARCHIVE_MEMBER_MARK, SEARCH_SCAN_MAX, settings
 from findling.embed.model import EmbedOutcome, to_int8
 from findling.index.fusion import ChunkHit, documents_from_chunks, near_enough, reciprocal_rank_fusion
-from findling.index.schema import FIELD_BODY_DE, FIELD_FILE_ID, FIELD_MTIME
+from findling.index.schema import FIELD_BODY_DE, FIELD_EXT, FIELD_FILE_ID, FIELD_MTIME
 from findling.store.repo import Store
 from findling.store.vectors import BestChunk, VectorStore
 
@@ -68,6 +68,13 @@ LOGGER = logging.getLogger("findling.index.search")
 # and boundaries that move with the request produce duplicates and gaps at page
 # transitions (finding of 18.09.2026 in _sorted_round).
 _SCAN_CHUNK_MIN: Final = 128
+
+# The excerpt of a ZIP hit names the inner file it comes from (D-30-03, plan
+# 31-09): "innen/rechnung.txt: ... fragment ...". Only a document stored with
+# this extension gets the name, and the separator between name and fragment is
+# the one the highlights are moved by.
+ARCHIVE_EXTENSION: Final = "zip"
+MEMBER_SEPARATOR: Final = ": "
 
 # How many merged documents are handed to the permission prefilter at a time.
 # The window is 100 by default, so in practice this is one band and the constant
@@ -799,6 +806,96 @@ def _rank_chunks(semantic: SemanticSide | None, file_ids: Sequence[int]) -> dict
         return {}
 
 
+def _member_at(stored: str, position: int) -> str | None:
+    """The name of the inner file whose section holds ``position``, or None.
+
+    The text of a ZIP file is a row of sections, each one ARCHIVE_MEMBER_MARK,
+    the cleaned display name and a line break (plan 31-08). The last mark at or
+    before the position opens the section, and the name runs to the next line
+    break: a cleaned name carries no control character, so it cannot contain
+    one itself.
+    """
+    mark = stored.rfind(ARCHIVE_MEMBER_MARK, 0, position + 1)
+    if mark < 0:
+        return None
+    end = stored.find("\n", mark + 1)
+    name = stored[mark + 1 : end if end >= 0 else len(stored)]
+    return name or None
+
+
+def _member_of(stored: str, fragment: str, offset: int) -> str | None:
+    """The inner file a fragment comes from, read at ``offset`` characters into it.
+
+    The generator cuts its fragment out of the stored text, so ``str.find``
+    places it. The first place wins when the same words stand in two members,
+    which is the documented limit of a lookup without a schema field
+    (31-RESEARCH, pattern 4). A fragment the stored text does not contain gets
+    no name, and the excerpt stays what it was.
+    """
+    position = stored.find(fragment)
+    if position < 0:
+        return None
+    return _member_at(stored, position + offset)
+
+
+def _is_archive(document: Document) -> bool:
+    """Whether the document is a ZIP file, the only kind whose text carries member marks.
+
+    Asked of the stored extension and of nothing else. Since plan 31-09
+    cap_text removes U+001C from every text except the one of the ZIP reader,
+    but a text file indexed before that may still carry the character in its
+    stored body (finding 15). Without this check a stray line of such a file
+    would be shown as the name of an inner file.
+    """
+    return document.get_first(FIELD_EXT) == ARCHIVE_EXTENSION
+
+
+def _stored_body(document: Document) -> str:
+    stored = document.get_first(FIELD_BODY_DE)
+    return stored if isinstance(stored, str) else ""
+
+
+def _without_marks(text: str, highlights: list[tuple[int, int]]) -> tuple[str, list[tuple[int, int]]]:
+    """The text without U+001C, with every highlight moved by the marks before it.
+
+    The mark is a separator of the stored text and never something to show.
+    Every text without it, which is every document of every format but a ZIP
+    file, comes back as the very same objects.
+    """
+    if ARCHIVE_MEMBER_MARK not in text:
+        return text, highlights
+
+    def moved(bound: int) -> int:
+        return bound - text.count(ARCHIVE_MEMBER_MARK, 0, bound)
+
+    return text.replace(ARCHIVE_MEMBER_MARK, ""), [(moved(start), moved(end)) for start, end in highlights]
+
+
+def _named(name: str | None, text: str, highlights: list[tuple[int, int]]) -> tuple[str, list[tuple[int, int]]]:
+    """Put the name of the inner file in front, and move the highlights behind it (pitfall 14)."""
+    if name is None:
+        return text, highlights
+    shift = len(name) + len(MEMBER_SEPARATOR)
+    return f"{name}{MEMBER_SEPARATOR}{text}", [(start + shift, end + shift) for start, end in highlights]
+
+
+def _excerpt(file_id: int, document: Document, fragment: str, highlights: list[tuple[int, int]]) -> SnippetText:
+    """One lexical excerpt as it leaves the container: no mark, and for a ZIP file the inner file.
+
+    The name is read at the first highlight rather than at the start of the
+    fragment. The fragmenter starts at the first token of its window, and for a
+    short ZIP file that is the first member even when the hit sits in the
+    second one; the highlight is where the searched word actually is.
+    """
+    name = None
+    if _is_archive(document):
+        offset = highlights[0][0] if highlights else 0
+        name = _member_of(_stored_body(document), fragment, offset)
+    text, moved = _without_marks(fragment, highlights)
+    text, moved = _named(name, text, moved)
+    return SnippetText(file_id=file_id, text=text, highlights=moved)
+
+
 def _passage_of(document: Document, chunk: BestChunk | None, *, limit: int) -> str:
     """The stored text between two character offsets, cut to the excerpt cap.
 
@@ -818,14 +915,22 @@ def _passage_of(document: Document, chunk: BestChunk | None, *, limit: int) -> s
     on the two paths, because ``set_max_num_chars`` compares bytes inside the
     fragmenter while this one counts characters, and the direction of that
     difference is the harmless one: an excerpt of this path is never longer
-    than the number an operator set.
+    than the number an operator set. For a ZIP file the name of the inner file
+    comes in front of that text (D-30-03), read at the start of the chunk the
+    same way the lexical path reads it; the cap holds for the text taken out of
+    the document, and the name of at most 255 characters is added to it.
+    U+001C never leaves this function.
     """
     if chunk is None:
         return ""
     values = document.to_dict().get(FIELD_BODY_DE, [])
     if not values:
         return ""
-    return str(values[0])[chunk.char_start : chunk.char_end][:limit]
+    stored = str(values[0])
+    passage = stored[chunk.char_start : chunk.char_end][:limit]
+    name = _member_at(stored, chunk.char_start) if _is_archive(document) else None
+    text, _ = _named(name, passage.replace(ARCHIVE_MEMBER_MARK, ""), [])
+    return text
 
 
 def snippets_for(
@@ -863,6 +968,14 @@ def snippets_for(
     chunk that matched, carrying no highlights because there is no literal match
     to mark (D-13). Without the bundle, and whenever the vector branch fails,
     this function behaves exactly as it did before plan 06-08.
+
+    Both paths name the inner file for a ZIP hit, "innen/rechnung.txt: ..."
+    (D-30-03, plan 31-09). There is no schema field for it (D-30-08): the name
+    is read out of the stored text the document already holds, at the last
+    member mark before the first highlight, and the highlights are moved behind
+    the prefix. Only a document with the extension zip gets a name, and U+001C
+    is removed from every excerpt; for every other document, which carries no
+    mark, the excerpt is the very one of before.
     """
     visible = store.prefilter_visible(uid, file_ids)
     if not visible:
@@ -887,9 +1000,9 @@ def snippets_for(
         snippet = generator.snippet_from_doc(document)
         fragment = snippet.fragment()
         if fragment:
-            excerpts.append(
-                SnippetText(file_id=file_id, text=fragment, highlights=char_ranges(fragment, snippet.highlighted()))
-            )
+            # The ranges are converted to characters on the fragment as the
+            # engine cut it, and only then moved for the marks and the name.
+            excerpts.append(_excerpt(file_id, document, fragment, char_ranges(fragment, snippet.highlighted())))
             continue
         # The second path, and it produces text without marks on purpose: there
         # is no literal match in this document, so a highlight would point at a

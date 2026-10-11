@@ -223,7 +223,9 @@ def extract_zip(path: str) -> ExtractionOutcome:
 
     if budget.files and budget.encrypted == budget.files:
         return ExtractionOutcome.skipped(Reason.ENCRYPTED)
-    outcome = cap_text("".join(sections))
+    # The one caller that keeps the marks: they are what the excerpt code of
+    # plan 31-09 reads the name of the inner file from.
+    outcome = cap_text("".join(sections), member_marks=True)
     if truncated and outcome.state is State.INDEXED:
         return ExtractionOutcome.indexed(outcome.text, truncated=True)
     return outcome
