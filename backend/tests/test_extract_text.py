@@ -19,7 +19,7 @@ import pytest
 from findling import config
 from findling.extract.dispatch import extract
 from findling.extract.errors import ExtractionOutcome, Reason, State
-from findling.extract.text import BYTE_ORDER_MARK, extract_html, extract_plain, extract_rtf
+from findling.extract.text import BYTE_ORDER_MARK, extract_html, extract_plain, extract_rtf, html_to_text
 
 GERMAN = (
     "Sehr geehrte Damen und Herren, die Kündigungsfrist für das Mietverhältnis "
@@ -208,6 +208,64 @@ def test_the_parser_resolves_no_external_entity_and_reaches_no_network(tmp_path:
     # The reference survives as text, which is the proof that the parser saw an
     # entity and declined to follow it rather than never noticing one.
     assert "&leak;" in outcome.text
+
+
+def test_html_to_text_keeps_the_text_and_drops_the_script() -> None:
+    # The string route that the mail reader uses (FMT-01): an HTML part arrives
+    # as text, already decoded by the email package, and never as a file.
+    text = html_to_text("<html><body><p>Rechnung</p><script>x()</script></body></html>")
+
+    assert "Rechnung" in text
+    assert "x()" not in text
+
+
+def test_html_to_text_reads_a_string_with_an_encoding_declaration() -> None:
+    # Pitfall 5 of phase 31: lxml refuses a str that carries an encoding
+    # declaration with a ValueError. A mail part in XHTML has exactly that.
+    markup = (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<html xmlns="http://www.w3.org/1999/xhtml"><head><style>p { color: rebeccapurple; }</style></head>'
+        "<body><p>Grundstücksverkehrsgenehmigung</p></body></html>"
+    )
+
+    text = html_to_text(markup)
+
+    assert "Grundstücksverkehrsgenehmigung" in text
+    assert "rebeccapurple" not in text
+
+
+def test_html_to_text_ignores_an_encoding_the_string_no_longer_has() -> None:
+    # A mail part declared iso-8859-1 arrives decoded. Handing its UTF-8 bytes to
+    # a parser that still believes the declaration turns every umlaut into two
+    # wrong characters, and the word is then findable by nothing.
+    markup = (
+        '<?xml version="1.0" encoding="iso-8859-1"?>\n'
+        '<html xmlns="http://www.w3.org/1999/xhtml"><body><p>Kündigungsfrist</p></body></html>'
+    )
+
+    assert html_to_text(markup) == "Kündigungsfrist"
+
+
+def test_html_to_text_resolves_no_external_entity(tmp_path: Path) -> None:
+    # The same proof as for the file route above, through the string route: the
+    # entity names a real file, and only a parser without the three switches
+    # would read it.
+    secret = tmp_path / "secret.txt"
+    secret.write_bytes(b"TOPSECRET-PASSPHRASE")
+    markup = (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        "<!DOCTYPE html [\n"
+        f'  <!ENTITY leak SYSTEM "{secret.as_uri()}">\n'
+        '  <!ENTITY call SYSTEM "http://127.0.0.1:9/collect">\n'
+        "]>\n"
+        '<html xmlns="http://www.w3.org/1999/xhtml"><body><p>Anlage &leak; &call;</p></body></html>'
+    )
+
+    text = html_to_text(markup)
+
+    assert "TOPSECRET" not in text
+    assert "PASSPHRASE" not in text
+    assert "&leak;" in text
 
 
 def test_rtf_yields_its_text(tmp_path: Path) -> None:

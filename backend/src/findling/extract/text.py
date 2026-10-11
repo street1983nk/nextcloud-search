@@ -32,6 +32,7 @@ them imports the analysis half of the package.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from charset_normalizer import from_bytes
@@ -65,6 +66,10 @@ _HTML_PARSER = html.HTMLParser(no_network=True)
 # "{*}" matches the tag in any namespace and in none, so one tuple serves both
 # parsers and the two branches cannot drift apart again.
 _INVISIBLE_TAGS = ("{*}script", "{*}style")
+
+# A leading XML declaration, with the whitespace in front of it. Only used on the
+# string route, where the encoding it names is no longer true (html_to_text).
+_XML_DECLARATION = re.compile(r"\A\s*<\?xml[^>]*\?>")
 
 # Above this share of replacement characters the fallback decoding is not a text
 # any more, it is a guess that failed.
@@ -190,16 +195,39 @@ def extract_html(path: str) -> ExtractionOutcome:
         # The raw bytes, not the decoded string: an XML parser reads its own
         # encoding declaration, and handing it text that no longer matches that
         # declaration is how a document becomes unparseable on the way in.
-        root = etree.fromstring(raw, parser=_XML_PARSER)
-    else:
-        root = html.document_fromstring(text, parser=_HTML_PARSER)
+        return cap_text(_visible_text(etree.fromstring(raw, parser=_XML_PARSER)))
+    return cap_text(html_to_text(text))
 
+
+def html_to_text(markup: str) -> str:
+    """The visible text of HTML or XHTML that already is a string, script and style removed.
+
+    The route for markup that never was a file of its own, the HTML part of a mail
+    (FMT-01) being the first: the email package hands it over decoded. Same two
+    hardened parsers and the same removal as extract_html, so a file and a mail
+    part cannot drift apart in what they let through.
+
+    XHTML goes to the XML parser as UTF-8 bytes with its declaration taken off
+    (pitfall 5 of phase 31). lxml refuses a str that declares an encoding with a
+    ValueError, and the declared encoding is stale anyway once the text is a str:
+    it named the bytes before they were decoded, and UTF-8 is what they are now.
+
+    Raises what lxml raises for markup it cannot read; the caller decides what a
+    broken part costs.
+    """
+    if _looks_like_xml(markup):
+        source = _without_xml_declaration(markup).encode("utf-8")
+        return _visible_text(etree.fromstring(source, parser=_XML_PARSER))
+    return _visible_text(html.document_fromstring(markup, parser=_HTML_PARSER))
+
+
+def _visible_text(root: etree._Element) -> str:
+    """Remove script and style from a parsed tree and join what is left."""
     for element in list(root.iter(*_INVISIBLE_TAGS)):
         parent = element.getparent()
         if parent is not None:
             parent.remove(element)
-
-    return cap_text(" ".join(part.strip() for part in root.itertext() if part.strip()))
+    return " ".join(part.strip() for part in root.itertext() if part.strip())
 
 
 def extract_rtf(path: str) -> ExtractionOutcome:
@@ -230,3 +258,8 @@ def _looks_like_xml(text: str) -> bool:
     instead of reporting failed(xml_invalid).
     """
     return text.lstrip().startswith("<?xml")
+
+
+def _without_xml_declaration(text: str) -> str:
+    """The document with a leading XML declaration removed, everything else kept."""
+    return _XML_DECLARATION.sub("", text, count=1)

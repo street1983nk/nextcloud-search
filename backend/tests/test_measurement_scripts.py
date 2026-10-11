@@ -1758,8 +1758,14 @@ PHP_TREE_HASH_TODAY = "0d4206abef3ae73e772b02331495b560041a02008a588f63798351b8a
 # file cache size, _stream_into fills in the hash of its sink, the comments of
 # the two hand-back paths say so). No file came and none went, so
 # PACKAGE_FILES_TODAY stays at 74. The PHP pair does not move: php/ is unchanged.
-PACKAGE_FILES_TODAY = 74
-PACKAGE_TREE_HASH_TODAY = "ee6357700ae63a8ac01692627df2080e5904f34acb8534e1f5c25d3eb90b13dd"
+# Measured again by Plan 31-04 (FMT-01, D-31-04) on 2026-10-11: extract/mail.py
+# is new (extract_eml, count_parts before parsing, MAX_MAIL_PARTS,
+# clean_display_name) and extract/text.py hands its HTML core out as
+# html_to_text, which extract_html now calls. One file came, so
+# PACKAGE_FILES_TODAY moves to 75. The PHP pair does not move: php/ is
+# unchanged.
+PACKAGE_FILES_TODAY = 75
+PACKAGE_TREE_HASH_TODAY = "a8b438c1779a38492f0ccc2b886bbcd6229d2c0e355426defe85159dfbfbbf55"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
