@@ -1372,7 +1372,8 @@ class Poller:
 
         A child killed from outside is reported to the guard here, from the
         loop thread, and the row comes back without a verdict for the solo run.
-        None is a download that stayed short twice: no verdict and no solo run,
+        None is a download that stayed short twice with two different answers
+        (the same answer twice is the file, POL-02): no verdict and no solo run,
         the row goes back the way the content branch hands it back (D-29-04).
         """
         async with self._gate.slot():
@@ -1501,7 +1502,9 @@ class Poller:
             self._collect(job, ExtractionOutcome.skipped(Reason.TOO_LARGE), done, failed, verdicts)
             return 0
         except ShortRead:
-            # Short twice in a row. No verdict, since nothing is known about
+            # Short twice in a row, and the two answers differ; the same short
+            # answer twice is the file and never gets here (POL-02, see
+            # _fetch_file). No verdict, since nothing is known about
             # the file, and never corrupt (D-29-04). Not unlocked either: an
             # unlock gives the delivery back, and a file that is always cut
             # would circle forever (T-29-15). The row runs into the lock
@@ -1966,19 +1969,43 @@ class Poller:
         **A short answer is fetched once more, at once** (D-29-04). The gateway
         that cut one download usually delivers the next one whole, and a second
         try in the same pass costs one download where the lock timeout would
-        cost the row its place in the queue. A second short answer raises
-        :class:`ShortRead` on to the caller, which hands the row back without a
-        verdict. There is no third try and no counter of its own here: the
-        delivery count of the queue is the counter (T-29-15).
+        cost the row its place in the queue. A second short answer that differs
+        from the first raises :class:`ShortRead` on to the caller, which hands
+        the row back without a verdict. There is no third try and no counter of
+        its own here: the delivery count of the queue is the counter (T-29-15).
+
+        **The same short answer twice is the file** (POL-02, F-29-03). The size
+        the queue names comes from the file cache of Nextcloud, and that cache
+        can be wrong for good: a file changed on external storage behind the
+        back of Nextcloud, or a size under server side encryption. Such a file
+        arrives short on every try, and before this rule every one of them
+        ended as failed(repeatedly_stuck). Two answers with the same byte count
+        and the same content hash are taken as the real file: the scratch file
+        of the second try is kept and travels on with its real size, so judge,
+        the extractor and the unchanged check all see what arrived. No third
+        download. Zero bytes twice is the same answer twice as well, and judge
+        then names it failed(empty_file). There is no exception by length.
+
+        Residual risk A8, accepted: a proxy that cuts every answer at exactly
+        the same byte delivers the same short answer twice, and the file is
+        then indexed with the cut content instead of being given up. The log
+        line below names both numbers, which is how the case shows; the remedy
+        is the proxy, not Findling. #18 case 2, where D-29-04 came from, did not
+        cut at the same byte twice (docs/formats.md, "Stale file cache size").
         """
         try:
             return await self._fetch_once(job)
-        except ShortRead:
+        except ShortRead as first:
             LOGGER.info("download of one file came back short, fetching it once more")
-        return await self._fetch_once(job)
+            return await self._fetch_once(job, same_as=first)
 
-    async def _fetch_once(self, job: QueueJob) -> _Read | None:
-        """One download into scratch, see :meth:`_fetch_file`."""
+    async def _fetch_once(self, job: QueueJob, *, same_as: ShortRead | None = None) -> _Read | None:
+        """One download into scratch, see :meth:`_fetch_file`.
+
+        ``same_as`` is the short answer of the first try. When this try comes
+        back short with the same byte count and the same hash, its scratch
+        file is kept and returned as the read.
+        """
         scratch = self._tmp_dir / f"job-{job.queue_id}{SCRATCH_SUFFIX}"
         try:
             written, sink = await self._stream_into(scratch, job)
@@ -1987,7 +2014,13 @@ class Poller:
             # caller records it as skipped(too_large) and the pass goes on.
             _discard(scratch)
             raise
-        except ShortRead:
+        except ShortRead as cut:
+            if same_as is not None and (cut.written, cut.content_hash) == (same_as.written, same_as.content_hash):
+                # Numbers only, never a name or a path (T-02-56).
+                LOGGER.info(
+                    "the file cache names a stale size, the same %d of %d bytes arrived twice", cut.written, job.size
+                )
+                return _Read(path=scratch, size=cut.written, content_hash=cut.content_hash)
             # A passing fault of this one download and never a gateway
             # problem either: the cut bytes go, and the pass goes on.
             _discard(scratch)
@@ -2022,6 +2055,10 @@ class Poller:
                 # (D-29-04). A row without a size carries 0 and is not checked.
                 expected=job.size,
             )
+        except ShortRead as cut:
+            # The client counts but does not hash. What the comparison of two
+            # tries needs is what really reached the sink (POL-02).
+            raise ShortRead(str(cut), written=sink.written, content_hash=sink.content_hash) from cut
         finally:
             await asyncio.to_thread(handle.close)
         return written, sink

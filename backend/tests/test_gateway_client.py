@@ -238,6 +238,21 @@ async def test_a_download_that_ends_short_of_the_expected_size_raises_short_read
     assert str(raised.value) == "file id 4711 ended at 60 of 100 bytes"
 
 
+async def test_a_short_read_carries_the_byte_count_and_a_place_for_the_hash() -> None:
+    # POL-02 (F-29-03): the poller compares two short answers by length and by
+    # hash. The client counts the bytes; the hash is taken by the sink of the
+    # poller, which fills it in, so the client leaves it empty.
+    gateway = _Gateway(chunks=[bytes(60)])
+
+    async with gateway.client() as client:
+        with pytest.raises(ShortRead) as raised:
+            await fetch_file_stream(_app(), 4711, "testuser", io.BytesIO(), client=client, expected=100)
+
+    assert raised.value.written == 60
+    assert raised.value.content_hash == ""
+    assert ShortRead("file id 1 ended at 2 of 3 bytes", written=2, content_hash="ab").content_hash == "ab"
+
+
 @pytest.mark.parametrize("expected", [0, -1])
 async def test_an_unknown_expected_size_checks_nothing(expected: int) -> None:
     # A row requeueAs created carries size 0, and no size is no reason to call a

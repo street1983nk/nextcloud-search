@@ -1749,8 +1749,14 @@ PHP_TREE_HASH_TODAY = "97a83197183dc583e995e190a3cdc8fe99afb6d6e127c03c0b27ff682
 # worker/poller.py (recheck_1_4_0 starts on every known generation) and
 # worker/recheck.py (its docstring says so). No file came and none went, so
 # PACKAGE_FILES_TODAY stays at 74.
+# Measured again by Plan 31-03 (POL-02, F-29-03) on 2026-10-11: nc/client.py
+# (ShortRead carries written and content_hash) and worker/poller.py
+# (_fetch_file takes the same short answer twice as the file under a stale
+# file cache size, _stream_into fills in the hash of its sink, the comments of
+# the two hand-back paths say so). No file came and none went, so
+# PACKAGE_FILES_TODAY stays at 74. The PHP pair does not move: php/ is unchanged.
 PACKAGE_FILES_TODAY = 74
-PACKAGE_TREE_HASH_TODAY = "d6062645b06dbf59ae382dfb0026b68c36f53045a66a37c86a5818174bb32a0d"
+PACKAGE_TREE_HASH_TODAY = "ee6357700ae63a8ac01692627df2080e5904f34acb8534e1f5c25d3eb90b13dd"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

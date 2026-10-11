@@ -21,3 +21,7 @@ Three codes of the status page change with 1.5 (D-31-03): one is new, two get a 
 | `mime_not_allowed` (remedy only) | File type not supported | None. Findling reads PDF, Office, OpenDocument, text, mails, ZIP files and images. |
 
 `archive_limit` is used for ZIP files only. A companion of generation 2 (Findling app 1.4.x) does not know it; towards that companion the backend reports it as `too_large`, and without any generation signal as well. The German wording is in `docs/store-listing.md`, part 4.
+
+## Stale file cache size
+
+When Nextcloud's file cache names a larger size than the file really has (a file changed on external storage outside Nextcloud, or a size under server side encryption), the backend downloads it twice, and if both answers have the same length and the same content hash it reads them as the real file and judges it like any other, instead of ending it as `repeatedly_stuck` (POL-02); two short answers that differ stay a passing fault and the row comes back later. The case shows in the backend log as `the file cache names a stale size, the same N of M bytes arrived twice`, numbers only. The limit (A8): a proxy that cuts every answer at exactly the same byte looks the same, and that file is then indexed with the cut content; the remedy is the proxy configuration, not Findling.

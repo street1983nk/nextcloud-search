@@ -239,7 +239,18 @@ class ShortRead(Exception):
     passing fault of this one download and the caller fetches again. The
     message carries the file id and the two byte counts and nothing else: no
     name, no path (T-02-56).
+
+    ``written`` and ``content_hash`` are what the caller compares two short
+    answers by (POL-02, F-29-03): the same length and the same bytes twice are
+    the file itself under a stale size in the file cache, not a cut. This
+    client counts the bytes but does not hash them; the hash is taken by the
+    sink of the poller on the way, and the poller fills it in.
     """
+
+    def __init__(self, message: str, *, written: int, content_hash: str = "") -> None:
+        super().__init__(message)
+        self.written = written
+        self.content_hash = content_hash
 
 
 async def _stream_file(
@@ -284,7 +295,7 @@ async def _stream_file(
             # search alike.
             await asyncio.to_thread(fp.write, chunk)
     if expected > 0 and written < expected:
-        raise ShortRead(f"file id {file_id} ended at {written} of {expected} bytes")
+        raise ShortRead(f"file id {file_id} ended at {written} of {expected} bytes", written=written)
     return written
 
 

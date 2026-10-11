@@ -4824,6 +4824,10 @@ class _ShortGateway:
 
     ``expected`` records what the poller asked the client to check against, so a
     test can see that the size of the job really travels into the download.
+
+    Every cut ends one byte earlier than the one before. A cut that falls on the
+    same byte twice is no passing fault but a stale size in the file cache
+    (POL-02, F-29-03), and that case has its own gateway below.
     """
 
     shorts: dict[int, int]
@@ -4845,8 +4849,9 @@ class _ShortGateway:
         self.expected.append(expected)
         if self.shorts.get(file_id, 0) > 0:
             self.shorts[file_id] -= 1
-            fp.write(BODY_BYTES[:5])
-            raise ShortRead(f"file id {file_id} ended at 5 of {expected} bytes")
+            cut = BODY_BYTES[: 4 + self.shorts[file_id]]
+            fp.write(cut)
+            raise ShortRead(f"file id {file_id} ended at {len(cut)} of {expected} bytes", written=len(cut))
         fp.write(BODY_BYTES)
         return len(BODY_BYTES)
 
@@ -4935,6 +4940,195 @@ async def test_an_ocr_row_that_stays_short_beside_others_gets_no_verdict(
     assert store.file_row(7000) is None
     assert _stored_ids(index) == [7001]
     assert queue.acknowledged == [([301], {})]
+
+
+# -- a stale size in the file cache (POL-02, F-29-03) ---------------------------
+
+
+def _text_of(length: int, *, last: bytes = b" ") -> bytes:
+    """Searchable text of exactly ``length`` bytes, the last byte chosen."""
+    body = BODY_BYTES * (length // len(BODY_BYTES))
+    return (body + b" " * (length - len(body)))[: length - 1] + last
+
+
+@dataclass(slots=True)
+class _AnswerGateway:
+    """A fetch that hands out one prepared answer per call, in order.
+
+    An answer shorter than the size the poller expects raises ShortRead the way
+    the client does, after the bytes went into the sink. That is the stale file
+    cache of F-29-03: Nextcloud names one size, the file has another.
+    """
+
+    answers: list[bytes]
+    calls: list[int] = field(default_factory=list)
+
+    async def __call__(
+        self,
+        nc: AsyncNextcloudApp,
+        file_id: int,
+        user_id: str,
+        fp: IO[bytes],
+        *,
+        client: Any = None,
+        expected: int = 0,
+    ) -> int | None:
+        del nc, user_id, client
+        self.calls.append(file_id)
+        answer = self.answers[len(self.calls) - 1]
+        fp.write(answer)
+        if expected > 0 and len(answer) < expected:
+            raise ShortRead(f"file id {file_id} ended at {len(answer)} of {expected} bytes", written=len(answer))
+        return len(answer)
+
+
+async def test_the_same_short_answer_twice_is_the_file_and_gets_its_verdict(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, index: Index, caplog: pytest.LogCaptureFixture
+) -> None:
+    # F-29-03: the file cache says 1000 bytes, the file has 700. Two answers of
+    # the same length and the same bytes are the file, not a cut; before POL-02
+    # the row went back unjudged until the queue wrote repeatedly_stuck.
+    title, path = "Gehaltsabrechnung Mueller.txt", "Personal/Gehaltsabrechnung Mueller.txt"
+    job = _job(91, 4711, size=1000, title=title, path=path)
+    queue = _FakeQueue(ClaimResult(jobs=(job,)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+    body = _text_of(700)
+    gateway = _AnswerGateway(answers=[body, body])
+    poller._fetch = gateway
+
+    with caplog.at_level("INFO", logger="findling.worker.poller"):
+        result = await poller.run_once()
+
+    assert gateway.calls == [4711, 4711], "two downloads and never a third"
+    assert result.indexed == 1
+    assert _stored_ids(index) == [4711]
+    assert queue.acknowledged == [([91], {})]
+    row = store.file_row(4711)
+    assert row is not None
+    assert row["content_hash"] == hashlib.sha256(body).hexdigest()
+    assert list((tmp_path / "tmp").iterdir()) == [], "the kept scratch file is gone after the verdict"
+    stale = [line for line in _poller_lines(caplog) if "stale" in line]
+    assert stale == ["the file cache names a stale size, the same 700 of 1000 bytes arrived twice"]
+    for line in _poller_lines(caplog):
+        assert "Gehaltsabrechnung" not in line
+        assert "Personal" not in line
+        assert "4711" not in line
+
+
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [
+        pytest.param(_text_of(700), _text_of(650), id="different-length"),
+        pytest.param(_text_of(700), _text_of(700, last=b"x"), id="same-length-different-bytes"),
+    ],
+)
+async def test_two_different_short_answers_stay_a_passing_fault_without_a_verdict(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, index: Index, first: bytes, second: bytes
+) -> None:
+    # D-29-04 stays for a real cut: two short answers that differ say nothing
+    # about the file, so the row goes back unjudged, neither done nor failed.
+    queue = _FakeQueue(ClaimResult(jobs=(_job(91, 4711, size=1000),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+    gateway = _AnswerGateway(answers=[first, second])
+    poller._fetch = gateway
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert gateway.calls == [4711, 4711]
+    assert store.file_row(4711) is None
+    assert queue.acknowledged == [([], {})]
+    assert queue.unlocked == []
+    assert _stored_ids(index) == []
+    assert list((tmp_path / "tmp").iterdir()) == []
+
+
+async def test_a_short_read_that_leaves_the_fetch_carries_the_numbers_of_the_sink(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The comparison of the two tries needs the byte count and the hash of what
+    # really arrived, so the ShortRead that leaves _fetch_file carries both.
+    job = _job(91, 4711, size=1000)
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=_FakeQueue())
+    second = _text_of(650)
+    poller._fetch = _AnswerGateway(answers=[_text_of(700), second])
+    (tmp_path / "tmp").mkdir(parents=True, exist_ok=True)
+
+    with pytest.raises(ShortRead) as raised:
+        await poller._fetch_file(job)
+
+    assert raised.value.written == 650
+    assert raised.value.content_hash == hashlib.sha256(second).hexdigest()
+    assert str(raised.value) == "file id 4711 ended at 650 of 1000 bytes"
+
+
+async def test_an_empty_answer_twice_is_an_empty_file_and_never_stuck(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # Zero bytes twice is the same answer twice: the file is empty, the cache
+    # is stale, and judge names it failed(empty_file).
+    queue = _FakeQueue(ClaimResult(jobs=(_job(91, 4711, size=10),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+    gateway = _AnswerGateway(answers=[b"", b""])
+    poller._fetch = gateway
+
+    result = await poller.run_once()
+
+    assert gateway.calls == [4711, 4711]
+    assert result.failed == 1
+    assert queue.acknowledged == [([], {91: Reason.EMPTY_FILE.value})]
+
+
+async def test_the_same_short_answer_of_exactly_one_mebibyte_is_the_file_as_well(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, index: Index
+) -> None:
+    # There is no exception by length (plan 31-03, finding 5): a cut on a round
+    # buffer size would look the same, and that is the accepted residual risk
+    # A8 of docs/formats.md. Without this case a quiet 1 MiB rule could return.
+    queue = _FakeQueue(ClaimResult(jobs=(_job(91, 4711, size=2_000_000),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+    body = _text_of(1_048_576)
+    gateway = _AnswerGateway(answers=[body, body])
+    poller._fetch = gateway
+
+    result = await poller.run_once()
+
+    assert gateway.calls == [4711, 4711]
+    assert result.indexed == 1
+    assert _stored_ids(index) == [4711]
+    assert queue.acknowledged == [([91], {})]
+
+
+def test_the_stale_file_cache_size_is_documented_with_its_limit() -> None:
+    # The admin reads the log line in docs/formats.md, and the residual risk A8
+    # stands there by name; the line of the doc is the line of the code.
+    doc = (Path(__file__).resolve().parents[2] / "docs" / "formats.md").read_text(encoding="utf-8")
+    section = doc.split("## Stale file cache size", 1)[1].split("\n## ", 1)[0]
+    assert "(A8)" in section
+    assert "repeatedly_stuck" in section
+    assert "`the file cache names a stale size, the same N of M bytes arrived twice`" in section
+    source = Path(poller_module.__file__).read_text(encoding="utf-8")
+    assert '"the file cache names a stale size, the same %d of %d bytes arrived twice"' in source
+
+
+async def test_an_ocr_row_with_the_same_short_answer_twice_is_read(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The scan track fetches through the same _fetch_file and takes the same
+    # rule: the engine runs on the bytes that arrived, with their real size.
+    extract = _Extractor(outcome=ExtractionOutcome.indexed(BODY))
+    queue = _FakeQueue(ClaimResult(jobs=(_ocr_job(1000),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, extract=extract)
+    body = _text_of(700)
+    gateway = _AnswerGateway(answers=[body, body])
+    poller._fetch = gateway
+
+    result = await poller.run_once()
+
+    assert gateway.calls == [4711, 4711]
+    assert [call["size"] for call in extract.calls] == [700]
+    assert result.state == ROUND_WORKED
+    assert queue.acknowledged == [([91], {})]
 
 
 # -- the re-check of the old stock behind the companion signal (D-29-10, K6) --
