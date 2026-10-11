@@ -1790,8 +1790,17 @@ PHP_TREE_HASH_TODAY = "0d4206abef3ae73e772b02331495b560041a02008a588f63798351b8a
 # ValueError of a truncated HEIC with failed(corrupt). No file came and none
 # went, so PACKAGE_FILES_TODAY stays at 77. The PHP pair does not move: php/ is
 # unchanged.
+#
+# Measured again by Plan 31-07 on 2026-10-11, after the owner decision at its
+# checkpoint: extract/image.py estimates a HEIF by the measured model (80 MiB
+# fixed plus 7 bytes a pixel for RGB, 9 for other modes) instead of a factor,
+# every other format keeps its two working copies; extract/sandbox.py limits
+# the malloc arenas of the extraction child to one through mallopt before the
+# parsers load (_limit_malloc_arenas). No file came and none went, so
+# PACKAGE_FILES_TODAY stays at 77. The PHP pair does not move: php/ is
+# unchanged.
 PACKAGE_FILES_TODAY = 77
-PACKAGE_TREE_HASH_TODAY = "e8f550448eca37abc3bc7e3b6191dbeb2a7540aee1aea444c37d4d96905cdca0"
+PACKAGE_TREE_HASH_TODAY = "3dd8dc3c9dbd42b52109a84361ca6ce9e3a654139c446a5315eb18108692b8e3"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

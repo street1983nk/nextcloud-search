@@ -52,6 +52,7 @@ import away from being false.
 from __future__ import annotations
 
 import contextlib
+import ctypes
 import multiprocessing as mp
 import os
 import sys
@@ -115,6 +116,41 @@ def _limit_address_space(cap: int) -> None:
     import resource
 
     resource.setrlimit(resource.RLIMIT_AS, (cap, cap))
+
+
+# M_ARENA_MAX of glibc's malloc.h, and the one arena the child keeps.
+_M_ARENA_MAX: Final = -8
+_CHILD_MALLOC_ARENAS: Final = 1
+
+
+def _limit_malloc_arenas() -> None:
+    """Let every thread of this process allocate from the main malloc arena.
+
+    glibc gives a thread that allocates its own arena and reserves 64 MiB of
+    address space for it, aligned to 128 MiB, of which almost nothing becomes
+    resident. RLIMIT_AS counts the reservation all the same. The HEIC decoder
+    of plan 31-07 is such a thread, even with one decoder thread: measured in
+    the image (docker.yml run 38124726627, amd64 and arm64 alike), a 48 MP HEIC
+    took 427 to 444 MiB of address space under the cap without this and 358
+    with it, and the fixed part of every HEIC fell from 160 to 32 MiB. The text
+    PDF, Office, scanned PDF and JPEG ways of the child kept their seconds,
+    their VmPeak and their VmHWM to the tenth of a MiB, because this child does
+    its work in one thread and has nothing to gain from a second arena.
+
+    Set here, in the child only, through mallopt rather than MALLOC_ARENA_MAX in
+    the environment: the main process runs the search and the embedding with
+    threads of its own, and the tesseract grandchild inherits the environment,
+    and neither was measured with one arena. Before the first import of the
+    parsers, so no thread exists yet that already took an arena. Off Linux and
+    with a C library without mallopt (musl) nothing is done.
+    """
+    if not sys.platform.startswith("linux"):
+        return
+    libc = ctypes.CDLL(None)
+    mallopt = getattr(libc, "mallopt", None)
+    if mallopt is None:
+        return
+    mallopt(_M_ARENA_MAX, _CHILD_MALLOC_ARENAS)
 
 
 def _kill_child_tree(process: SpawnProcess) -> None:
@@ -322,6 +358,8 @@ def _child_main(pipe: PipeEnd, address_space_bytes: int) -> None:
         _lower_own_standing()
     _shed_secrets()
     _limit_address_space(address_space_bytes)
+    # Before any import that could start a thread, see the function.
+    _limit_malloc_arenas()
     # Before the import below and not after it: the cap is in place now, and the
     # numeric libraries the dispatcher pulls in read these variables while they
     # initialise. The paragraph above the function says what happens without it.

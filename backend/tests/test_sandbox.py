@@ -667,6 +667,101 @@ def test_the_native_thread_pools_are_pinned_to_one_thread(monkeypatch: pytest.Mo
         assert os.environ[name] == "1"
 
 
+class _FakeLibc:
+    """A C library that records what mallopt was asked."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[int, int]] = []
+
+    def mallopt(self, parameter: int, value: int) -> int:
+        self.calls.append((parameter, value))
+        return 1
+
+
+def test_the_malloc_arenas_of_the_child_are_limited_to_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Owner decision at the checkpoint of plan 31-07: the HEIC decoder thread
+    # reserved a malloc arena of its own, 128 MiB of address space under
+    # RLIMIT_AS for nothing resident. M_ARENA_MAX is -8 in glibc's malloc.h.
+    libc = _FakeLibc()
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(sandbox.ctypes, "CDLL", lambda _name: libc)
+
+    sandbox._limit_malloc_arenas()
+
+    assert libc.calls == [(-8, 1)]
+
+
+def test_a_libc_without_mallopt_is_left_alone(monkeypatch: pytest.MonkeyPatch) -> None:
+    # musl and other C libraries have no mallopt of this kind; the child goes on.
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(sandbox.ctypes, "CDLL", lambda _name: object())
+
+    sandbox._limit_malloc_arenas()
+
+
+def test_off_linux_the_arenas_are_not_touched(monkeypatch: pytest.MonkeyPatch) -> None:
+    libc = _FakeLibc()
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(sandbox.ctypes, "CDLL", lambda _name: libc)
+
+    sandbox._limit_malloc_arenas()
+
+    assert libc.calls == []
+
+
+# A child that starts one thread which allocates through malloc, and prints how
+# much address space that cost. With the limit the thread shares the main arena;
+# without it glibc reserves a new arena for the thread (64 MiB, aligned to 128).
+_ARENA_CHILD = """
+import threading
+from pathlib import Path
+from findling.extract import sandbox
+if {limited}:
+    sandbox._limit_malloc_arenas()
+def size():
+    for line in Path("/proc/self/status").read_text().splitlines():
+        if line.startswith("VmSize:"):
+            return int(line.split()[1]) * 1024
+kept = []
+def work():
+    kept.extend(bytearray(4096) for _ in range(200))
+before = size()
+thread = threading.Thread(target=work)
+thread.start()
+grown = 0
+while thread.is_alive():
+    grown = max(grown, size() - before)
+thread.join()
+grown = max(grown, size() - before)
+print(grown)
+"""
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="mallopt and /proc are glibc and Linux")
+def test_a_thread_of_the_child_reserves_no_arena_of_its_own() -> None:
+    # The counterfactual runs next to the case, so a glibc that stops creating
+    # arenas per thread makes this test red on the control and not quietly green.
+    def grown(limited: bool) -> int:
+        finished = subprocess.run(  # noqa: S603 - our own interpreter and a fixed script
+            [sys.executable, "-c", _ARENA_CHILD.format(limited=limited)],
+            capture_output=True,
+            check=True,
+            text=True,
+            timeout=60,
+        )
+        return int(finished.stdout.strip())
+
+    assert grown(limited=False) >= 64 * 1024 * 1024
+    assert grown(limited=True) < 32 * 1024 * 1024
+
+
+def test_the_arenas_are_limited_before_the_parsers_load() -> None:
+    body = SANDBOX_SOURCE.read_text(encoding="utf-8").split("def _child_main", 1)[1]
+
+    assert body.index("_limit_malloc_arenas()") < body.index("_pin_native_thread_pools()")
+    assert body.index("_limit_malloc_arenas()") < body.index("from findling.extract.dispatch import ")
+
+
 def test_the_thread_pools_are_pinned_before_the_parsers_load() -> None:
     # Order is the property, exactly as with the shedding above: these variables
     # are read while a native library initialises, so a pin after the dispatcher

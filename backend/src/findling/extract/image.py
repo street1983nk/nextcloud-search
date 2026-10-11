@@ -46,11 +46,9 @@ T-03-805).
 
 from __future__ import annotations
 
-import math
 import struct
 import sys
 import time
-from collections.abc import Mapping
 from io import BytesIO
 from pathlib import Path
 from typing import Final
@@ -189,16 +187,42 @@ _MIN_OCR_CHARS: Final = 20
 # from the measured peaks on an 8192 by 5464 picture (131 MiB for CMYK, 48 MiB
 # for RGB after the draft), and RLIMIT_AS counts address space rather than the
 # working set measured there, so it is a floor and is checked in the field at the
-# next visit (D-29-11), not claimed as exact.
-_DEFAULT_WORKING_COPIES: Final = 2
+# next visit (D-29-11), not claimed as exact. Every format except HEIF.
+_WORKING_COPIES: Final = 2
 
-# The working copies of a format whose decoder needs more than the picture and
-# one copy, keyed by the format Pillow names (``Image.format``). HEIF: libheif
-# holds the decoded YCbCr planes and pillow-heif an RGB buffer of its own while
-# Pillow fills its picture from that buffer, and there is no draft that brings a
-# HEIC down before the decode (pitfall 12). Provisional value of the phase
-# research, replaced by the measurement of plan 31-07.
-_WORKING_COPIES: Final[Mapping[str, float]] = {"HEIF": 3}
+# HEIF is estimated by a model measured in the image, not by a factor (plan
+# 31-07, owner decision at its checkpoint, D-31-06). libheif holds the decoded
+# planes, pillow-heif an RGB buffer of its own while Pillow fills its picture
+# from it, and there is no draft that brings a HEIC down before the decode, so
+# the cost is a fixed part plus a part per pixel, and a factor on the picture
+# alone was wrong at both ends: 3 missed the fixed part at 12 MP and let 36 to
+# 38 MP through that do not fit, 5.5 (what covers 12 MP) refused 24 MP that do.
+#
+# The figures, docker.yml run 38124726627 on 2026-10-11, 12, 24 and 48 MP HEIC
+# as a grid of 512 pixel tiles, medians of three children, amd64 and arm64
+# within 0.2 MiB of each other, with the malloc arenas of the extraction child
+# limited to one (sandbox.py, _limit_malloc_arenas):
+#
+#   growth of VmPeak while loading:   113.4, 195.4, 357.6 MiB
+#   growth over the whole branch:     154.0, 217.6, 357.6 MiB (cap in place)
+#
+# The load lies on a line, 32.0 MiB plus 7.00 bytes per pixel, exactly at all
+# three sizes. Below 48 MP the scaled working copy for the engine (3500 pixels
+# on the long edge, about 35 MiB, plus its grey copy) comes after the load and
+# raises the whole branch above it; the most it adds over the line is 72.6 MiB
+# at 12 MP (154.0 - 81.4). The model takes the slope as measured and a fixed
+# part of 80 MiB over those 72.6, so it lies over every measured value, over the
+# load line and over the line through the whole branch at 12 and 24 MP (90.9 MiB
+# plus 5.43 bytes per pixel) at every size up to the pixel cap: there is no size
+# at which the estimate says "fits" and the branch does not.
+#
+# Measured on RGB, the mode every 8 bit HEIC without alpha opens in. A picture
+# with alpha decodes a fourth plane and a four byte buffer, two more bytes a
+# pixel by the same arithmetic; not measured, so it is taken as the upper bound
+# for every other mode.
+_HEIF_FIXED_BYTES: Final = 80 * 1024 * 1024
+_HEIF_BYTES_PER_PIXEL: Final = 7
+_HEIF_BYTES_PER_PIXEL_OTHER_MODES: Final = 9
 
 # What the estimate writes as detail, a fixed name and never a number from the
 # file (T-29-24). It reads like the class names plan 29-06 stores, on purpose.
@@ -392,13 +416,19 @@ def _over_address_space(picture: Image.Image) -> ExtractionOutcome | None:
 def _estimated_bytes(picture: Image.Image) -> int:
     """What decoding the picture at its present size costs, by the header alone.
 
-    Width times height times the bytes Pillow keeps per pixel, times the working
-    copies of its format; a factor that is not whole is rounded up, so the
-    estimate never comes out below the product it stands for.
+    A HEIF by the measured model above; every other format as width times
+    height times the bytes Pillow keeps per pixel, times the working copies.
     """
     width, height = picture.size
-    copies = _WORKING_COPIES.get(picture.format or "", _DEFAULT_WORKING_COPIES)
-    return math.ceil(width * height * _pixel_bytes(picture.mode) * copies)
+    if picture.format == "HEIF":
+        return _heif_estimate(width, height, picture.mode)
+    return width * height * _pixel_bytes(picture.mode) * _WORKING_COPIES
+
+
+def _heif_estimate(width: int, height: int, mode: str) -> int:
+    """The address space a HEIF of this size and mode costs on its way through this branch."""
+    per_pixel = _HEIF_BYTES_PER_PIXEL if mode == "RGB" else _HEIF_BYTES_PER_PIXEL_OTHER_MODES
+    return _HEIF_FIXED_BYTES + width * height * per_pixel
 
 
 def _class_of(error: BaseException) -> str:

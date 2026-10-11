@@ -260,3 +260,96 @@ def test_a_heic_over_the_free_address_space_is_too_large(tmp_path: Path, monkeyp
     assert (heic_outcome.state, heic_outcome.reason) == (State.SKIPPED, Reason.TOO_LARGE)
     assert jpeg_outcome.state is State.INDEXED
     assert len(engine.calls) == 1
+
+
+# ---------------------------------------------------------------------------
+# The measured model of the HEIF estimate (owner decision at the checkpoint of
+# plan 31-07). The figures are the medians of docker.yml run 38124726627, with
+# the malloc arenas of the extraction child limited to one, in MiB.
+# ---------------------------------------------------------------------------
+
+_MIB = 1024 * 1024
+
+# Size, growth of VmPeak over the whole branch under the cap, and the address
+# space the child had used before it (cap minus room), per architecture.
+_MEASURED = {
+    12: ((4032, 3024), 154.1),
+    24: ((5712, 4284), 218.0),
+    48: ((8064, 6048), 357.8),
+}
+_CAP_MIB = 512
+_START_MIB = {"amd64": 73.0, "arm64": 65.7}
+
+
+# The working copy for the engine: at most 3500 pixels on the long edge, a
+# 4:3 photo then has 3500 x 2625, in four bytes of colour and one of grey.
+_SCALED_PIXELS = 3500 * 2625
+
+
+def _bound_of_the_need(pixels: int) -> float:
+    """An upper bound of what the branch needs at any size, in MiB.
+
+    The load line (32.0 MiB plus 7.00 bytes per pixel, exact at all three
+    measured sizes) plus the scaled working copy and its grey copy that come
+    after the load, five bytes for each pixel of the scaled picture.
+    """
+    return 32.0 + 7.0 * pixels / _MIB + 5 * min(pixels, _SCALED_PIXELS) / _MIB
+
+
+@pytest.mark.parametrize("megapixels", sorted(_MEASURED))
+def test_the_bound_lies_over_the_measurement(megapixels: int) -> None:
+    (width, height), needed = _MEASURED[megapixels]
+
+    assert _bound_of_the_need(width * height) >= needed
+
+
+@pytest.mark.parametrize("megapixels", sorted(_MEASURED))
+def test_the_model_lies_over_every_measured_need(megapixels: int) -> None:
+    (width, height), needed = _MEASURED[megapixels]
+
+    assert image._heif_estimate(width, height, "RGB") / _MIB > needed
+
+
+@pytest.mark.parametrize("arch", sorted(_START_MIB))
+@pytest.mark.parametrize("megapixels", [12, 24, 48])
+def test_twelve_twenty_four_and_forty_eight_megapixels_fit_a_fresh_child(arch: str, megapixels: int) -> None:
+    # The room a fresh extraction child has under the default cap of 512 MiB,
+    # measured; the photo sizes of an iPhone have to fit it, which a factor of
+    # 5.5 (what the rule of the plan gave) did not for 24 MP.
+    (width, height), _needed = _MEASURED[megapixels]
+    room = (_CAP_MIB - _START_MIB[arch]) * _MIB
+
+    assert image._heif_estimate(width, height, "RGB") <= room
+
+
+def test_there_is_no_size_where_the_model_says_fits_and_the_branch_does_not() -> None:
+    # The gap of the factor 3 between 36 and 38 MP, closed for every size up to
+    # the pixel cap: wherever the model is at or under a room, the measured
+    # need is under it as well, because the model lies over the need everywhere.
+    for megapixels in range(1, image._MAX_PIXELS // 1_000_000 + 1):
+        pixels = megapixels * 1_000_000
+        width = int((pixels * 4 / 3) ** 0.5)
+        height = pixels // width
+        assert image._heif_estimate(width, height, "RGB") / _MIB > _bound_of_the_need(width * height), megapixels
+
+
+def test_a_mode_with_alpha_is_estimated_higher_than_rgb() -> None:
+    assert image._heif_estimate(4032, 3024, "RGBA") > image._heif_estimate(4032, 3024, "RGB")
+
+
+@pytest.mark.parametrize(("spare", "fits"), [(0, True), (-1, False)])
+def test_the_verdict_turns_exactly_at_the_estimate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, spare: int, fits: bool
+) -> None:
+    engine = _install_engine(monkeypatch)
+    path = _heic(tmp_path, "grenze.heic")
+    monkeypatch.setattr(image, "_address_space_room", lambda: image._heif_estimate(*PAGE, "RGB") + spare)
+
+    outcome = image.extract_image(str(path))
+
+    if fits:
+        assert outcome.state is State.INDEXED
+        assert len(engine.calls) == 1
+    else:
+        assert (outcome.state, outcome.reason) == (State.SKIPPED, Reason.TOO_LARGE)
+        assert engine.calls == []
