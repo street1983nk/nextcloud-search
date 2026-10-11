@@ -434,17 +434,18 @@ final class AdminViewService {
 	 * blank cell is also what a drift between the three reason lists would look
 	 * like, so the two cases have to stay distinguishable.
 	 *
-	 * Twenty codes, which is one more than FileStateService::REASONS holds today:
-	 * `excluded` is the reason of the exclusion rules of plan 04-08 and it is
-	 * already in the contract, so its row is here from the start. The other
+	 * Twenty-five codes, exactly the ones FileStateService::REASONS holds and the
+	 * reason codes of the container. `excluded`, the reason of the exclusion rules
+	 * of plan 04-08, had its row here before it reached that list. The other
 	 * direction is the one that would hurt, and it cannot happen unnoticed: a
 	 * code without a row falls into the fallback of reasonText() and is shown as
-	 * "Unknown reason (code)".
+	 * "Unknown reason (code)", and a backend test compares this table with the
+	 * code list of the container.
 	 *
 	 * The strings are read from here and handed to IL10N::t() rather than being
 	 * written as literals at the call site. This app has no string extractor, its
 	 * translation files are written by hand, and one table next to the contract
-	 * it copies is easier to check against that contract than twenty calls spread
+	 * it copies is easier to check against that contract than twenty-five calls spread
 	 * over a match expression.
 	 *
 	 * @var array<string, array{0:string, 1:string}> reason code to label and remedy

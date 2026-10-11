@@ -618,15 +618,16 @@ AUSNAHMEN: dict[tuple[str, str], str] = {
     ),
     ("l10n-spanish.md", "vokabular"): (
         "The Spanish noun for a file begins with the stem of the blocked term and is the most common word "
-        "of that catalogue, so all 61 hits of this document are that noun and none of them is the German "
+        "of that catalogue, so all 84 hits of this document are that noun and none of them is the German "
         "form the family exists to catch. Rewording is not open here: the column holds the shipped wordings "
         "of php/l10n/es.json, and a document that spelled them differently would stop being their source."
     ),
     ("l10n-italian.md", "vokabular"): (
         "The Italian nouns for a storage space begin with the stem of the blocked term and carry an "
-        "Italian ending, so all nine hits of this document are those two nouns and none of them is the "
+        "Italian ending, so all ten hits of this document are those two nouns and none of them is the "
         "German form the family exists to catch. The single German occurrence this file carried on "
-        "25.09.2026 was reworded rather than excused, which is why nine is the number here and not ten. "
+        "25.09.2026 was reworded rather than excused; the tenth hit is an Italian noun that came with the "
+        "coverage fix of 09.10.2026 (#25). "
         "Rewording the rest is not open: the column holds the shipped wordings of php/l10n/it.json, and a "
         "document that spelled them differently would stop being their source."
     ),
