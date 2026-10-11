@@ -23,7 +23,7 @@ import struct
 import sys
 import warnings
 from base64 import b64encode
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
@@ -572,15 +572,33 @@ CFB_STREAM: Final = 2
 _CFB_ROOT: Final = 5
 
 
-def cfb_entry(name: str, object_type: int = CFB_STREAM, *, name_length: int | None = None) -> bytes:
-    """One 128 byte directory entry; ``name_length`` overrides the declared length."""
+CFB_MINI_STREAM_CUTOFF: Final = 0x1000
+
+
+def cfb_entry(
+    name: str,
+    object_type: int = CFB_STREAM,
+    *,
+    name_length: int | None = None,
+    start: int = CFB_END_OF_CHAIN,
+    size: int = 0,
+    child: int = CFB_FREE,
+    right: int = CFB_FREE,
+) -> bytes:
+    """One 128 byte directory entry; ``name_length`` overrides the declared length.
+
+    ``start`` and ``size`` place a stream in the file, ``child`` and ``right``
+    link the entry into the directory tree (plan 31-05). The defaults are the
+    unlinked empty entry the sniff of plan 29-08 reads, which looks at names
+    only.
+    """
     encoded = name.encode("utf-16-le") + b"\0\0"
     declared = len(encoded) if name_length is None else name_length
     entry = (
         encoded.ljust(64, b"\0")[:64]
-        + struct.pack("<HBB3I", declared, object_type, 1, CFB_FREE, CFB_FREE, CFB_FREE)
+        + struct.pack("<HBB3I", declared, object_type, 1, CFB_FREE, right, child)
         + bytes(16 + 4 + 8 + 8)
-        + struct.pack("<IQ", CFB_END_OF_CHAIN, 0)
+        + struct.pack("<IQ", start, size)
     )
     assert len(entry) == CFB_ENTRY_BYTES
     return entry
@@ -591,30 +609,68 @@ def build_cfb(
     *,
     sector_shift: int = 9,
     fat: dict[int, int] | None = None,
-    first_directory: int = 1,
-    fat_sector_count: int = 1,
+    first_directory: int | None = None,
+    fat_sector_count: int | None = None,
     raw_entries: Sequence[bytes] = (),
+    streams: Mapping[str, bytes] | None = None,
 ) -> bytes:
     """A compound file whose directory holds a root entry and one stream per name.
 
     ``fat`` overrides single FAT entries (a cycle, a jump past the header DIFAT),
     ``first_directory`` and ``fat_sector_count`` overwrite the header fields of
     the same name, ``raw_entries`` are appended to the directory as they are.
+
+    ``streams`` (plan 31-05) adds streams with content, so that a reader that
+    opens streams (olefile) can be given a whole file: the entries are linked
+    into the directory tree (root child, then a chain of right siblings, which
+    is a legal if unbalanced red-black tree), and the content follows the
+    directory sector by sector in the FAT. Every stream is padded with zero
+    bytes to at least the mini stream cutoff of 4096 bytes, which keeps it in
+    the FAT and out of the MiniFAT; the padding is part of the stream and its
+    declared size. The mini stream is out of scope here, the tests of the MiniFAT
+    patch a file that LibreOffice wrote. Without ``streams`` the bytes are the
+    same as before the switch existed.
     """
     sector = 1 << sector_shift
-    entries = [cfb_entry("Root Entry", _CFB_ROOT), *(cfb_entry(name) for name in stream_names), *raw_entries]
+    contents = {name: data.ljust(CFB_MINI_STREAM_CUTOFF, b"\0") for name, data in (streams or {}).items()}
+    content_sectors = {name: -(-len(data) // sector) for name, data in contents.items()}
+    linked = streams is not None
+    names = [*stream_names, *contents]
     per_sector = sector // CFB_ENTRY_BYTES
+    real_entries = 1 + len(names) + len(raw_entries)
+    directory_sectors = -(-real_entries // per_sector)
+
+    # FAT sectors first, then the directory, then the streams. One FAT sector
+    # describes sector // 4 sectors, itself included.
+    fat_sectors = 1
+    while fat_sectors * (sector // 4) < fat_sectors + directory_sectors + sum(content_sectors.values()):
+        fat_sectors += 1
+    directory_at = fat_sectors
+
+    entries = [cfb_entry("Root Entry", _CFB_ROOT, child=1 if linked and names else CFB_FREE)]
+    table = [CFB_FAT_SECTOR] * fat_sectors
+    table += [number + 1 for number in range(directory_at, directory_at + directory_sectors - 1)]
+    table.append(CFB_END_OF_CHAIN)
+    next_free = directory_at + directory_sectors
+    for index, name in enumerate(names, start=1):
+        right = index + 1 if linked and index < len(names) else CFB_FREE
+        if name not in contents:
+            entries.append(cfb_entry(name, right=right))
+            continue
+        count = content_sectors[name]
+        entries.append(cfb_entry(name, start=next_free, size=len(contents[name]), right=right))
+        table += [number + 1 for number in range(next_free, next_free + count - 1)]
+        table.append(CFB_END_OF_CHAIN)
+        next_free += count
+    entries += raw_entries
     while len(entries) % per_sector:
         entries.append(bytes(CFB_ENTRY_BYTES))
     directory = [b"".join(entries[start : start + per_sector]) for start in range(0, len(entries), per_sector)]
 
-    table = [CFB_FAT_SECTOR]
-    for number in range(1, len(directory) + 1):
-        table.append(number + 1 if number < len(directory) else CFB_END_OF_CHAIN)
     for number, following in (fat or {}).items():
         table.extend([CFB_FREE] * (number + 1 - len(table)))
         table[number] = following
-    table.extend([CFB_FREE] * (sector // 4 - len(table)))
+    table.extend([CFB_FREE] * (fat_sectors * (sector // 4) - len(table)))
 
     major = 3 if sector_shift == 9 else 4
     header = (
@@ -625,16 +681,17 @@ def build_cfb(
         + struct.pack(
             "<9I",
             0 if major == 3 else len(directory),
-            fat_sector_count,
-            first_directory,
+            fat_sectors if fat_sector_count is None else fat_sector_count,
+            directory_at if first_directory is None else first_directory,
             0,
-            0x1000,
+            CFB_MINI_STREAM_CUTOFF,
             CFB_END_OF_CHAIN,
             0,
             CFB_END_OF_CHAIN,
             0,
         )
-        + struct.pack("<109I", 0, *([CFB_FREE] * 108))
+        + struct.pack("<109I", *range(fat_sectors), *([CFB_FREE] * (109 - fat_sectors)))
     )
-    fat_sector = struct.pack(f"<{sector // 4}I", *table[: sector // 4])
-    return header.ljust(sector, b"\0") + fat_sector + b"".join(directory)
+    fat_bytes = struct.pack(f"<{fat_sectors * (sector // 4)}I", *table[: fat_sectors * (sector // 4)])
+    body = b"".join(data.ljust(content_sectors[name] * sector, b"\0") for name, data in contents.items())
+    return header.ljust(sector, b"\0") + fat_bytes + b"".join(directory) + body

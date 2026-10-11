@@ -1764,8 +1764,15 @@ PHP_TREE_HASH_TODAY = "0d4206abef3ae73e772b02331495b560041a02008a588f63798351b8a
 # html_to_text, which extract_html now calls. One file came, so
 # PACKAGE_FILES_TODAY moves to 75. The PHP pair does not move: php/ is
 # unchanged.
-PACKAGE_FILES_TODAY = 75
-PACKAGE_TREE_HASH_TODAY = "a8b438c1779a38492f0ccc2b886bbcd6229d2c0e355426defe85159dfbfbbf55"
+#
+# Measured again by Plan 31-05 (FMT-03, D-31-03) on 2026-10-11:
+# extract/legacy_doc.py is new (extract_msword with the sniff for RTF, DOCX and
+# HTML under a Word name, extract_doc over olefile and the piece table of
+# [MS-DOC], decode_compressed with the table of 2.9.73). One file came, so
+# PACKAGE_FILES_TODAY moves to 76. The PHP pair does not move: php/ is
+# unchanged.
+PACKAGE_FILES_TODAY = 76
+PACKAGE_TREE_HASH_TODAY = "ae65ecacd1e9132885183cc662a6926cc8b93c9da6c7f94f13b878888c26b398"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
