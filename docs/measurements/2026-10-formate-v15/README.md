@@ -197,7 +197,9 @@ Thread-Vergleich (24-MP-HEIC, Laden ohne Deckel, Zeilen `heic-threads`):
   Deckel (485,6/485,8 MiB): wenn eine Reservierung scheitert, weicht malloc aus.
   Das Laden gelang, mit 11,8 und 2,9 MiB Luft. Danach bräuchte der volle Pfad
   noch die verkleinerte Arbeitskopie für die OCR (beim 12- und 24-MP-HEIF 22 bis
-  41 MiB über dem Laden); die passt in diese Luft nicht.
+  41 MiB über dem Laden); die passt in diese Luft nicht. (Widerlegt im
+  Folgelauf, siehe "Korrektur" unten: Der volle Pfad passte mit 2,6 bis
+  11,5 MiB Rest.)
 
 **A5 (decode_threads=1 spart Adressraum unter RLIMIT_AS): bestätigt.** Mit dem
 Bibliotheksstandard von vier Threads bräuchte schon das 24-MP-HEIC 707 MiB
@@ -216,13 +218,151 @@ gebraucht), was dort nichts kostet, weil der Bedarf weit unter der Restgröße
 liegt; zwischen rund 36 und 38 MP schätzt er aber "passt", während der volle
 Pfad nach der Geraden über 440 MiB bräuchte. Faktor und Modell sind deshalb
 nicht in diesem Lauf festgelegt, sondern Teil der Owner-Entscheidung zu
-Plan 31-07 (Checkpoint, siehe unten).
+Plan 31-07 (Checkpoint, siehe unten; das Messmodell steht im Abschnitt
+"Eine malloc-Arena im Extraktionskind").
 
 ### 48 MP unter dem Standard-Adressraum
 
-Ein 48-MP-HEIF ("HEIF Max") endet unter dem Standard-Adressraum von 512 MiB auf
-beiden Architekturen als `skipped(too_large)`. Das ist das Urteil der Schätzung
-(558,1 MiB gegen 439,3 bzw. 446,6 MiB Restgröße), und die Messung unter dem
-Deckel gibt ihr recht: das Laden allein passt mit 2,9 MiB Luft (arm64), der
-volle Pfad nicht. Damit ist der Checkpoint von Plan 31-07 ausgelöst; der
-Standard-Adressraum bleibt unverändert, bis der Owner entschieden hat.
+Ein 48-MP-HEIF ("HEIF Max") endete in diesem Lauf unter dem Standard-Adressraum
+von 512 MiB auf beiden Architekturen als `skipped(too_large)`. Das war das
+Urteil der Schätzung (558,1 MiB gegen 439,3 bzw. 446,6 MiB Restgröße); das
+Laden allein passte unter dem Deckel mit 2,9 MiB Luft (arm64). Damit war der
+Checkpoint von Plan 31-07 ausgelöst.
+
+Korrektur aus dem Folgelauf 38124726627: Hier stand, der volle Pfad passe nicht
+in diese Luft. Gemessen (Schätzung abgeschaltet) passte er doch, mit einer
+Spitze von 500,5 MiB (amd64) und 509,4 MiB (arm64) von 512 MiB, also 11,5 und
+2,6 MiB Rest. Ein Urteil "passt" mit so wenig Rest wäre trotzdem keines, auf
+das man sich verlassen kann. Wie es weiterging, steht im folgenden Abschnitt.
+
+---
+
+## Eine malloc-Arena im Extraktionskind (Owner-Entscheid zu Plan 31-07)
+
+**Entscheid des Owners am Checkpoint (11.10.2026):** Erst messen, ob
+`MALLOC_ARENA_MAX` den festen Anteil des HEIF-Bedarfs senkt (unset, 1, 2, beide
+Architekturen, 12/24/48 MP, Median aus drei Läufen, dazu die Wirkung auf den
+übrigen Text- und OCR-Weg des Kinds). Passt ein 48-MP-HEIF mit einem Wert sicher
+unter 512 MiB (mindestens 10 Prozent Rest) ohne messbaren Nachteil, wird der
+Wert gezielt für das Extraktionskind gesetzt (Fall A); sonst bleibt es bei
+too_large und einem Satz in docs/formats.md (Fall B). Das Limit bleibt in beiden
+Fällen bei 512 MiB. Die Schätzung wird ein Messmodell statt eines Faktors.
+
+**Ergebnis: Fall A, `MALLOC_ARENA_MAX` = 1.**
+
+### Messung der drei Werte
+
+Lauf **38124726627** (Commit `ff610f10`), Teil 3 der Probe: jedes Kind bekam
+`MALLOC_ARENA_MAX` über die Umgebung. "Laden" wie oben (ohne Deckel),
+"voller Pfad" ist `extract_image` unter dem Deckel von 512 MiB mit
+abgeschalteter Schätzung; ausgewiesen ist die absolute VmPeak-Spitze des Kinds,
+denn sie ist es, die an `RLIMIT_AS` stößt. 90 Prozent des Deckels sind
+460,8 MiB. Alle Werte in MiB.
+
+| Architektur | MALLOC_ARENA_MAX | MP | VmPeak-Zuwachs Laden | VmPeak-Spitze voller Pfad | Rest zu 512 MiB bei 48 MP | Urteil | Sekunden |
+|---|---|---|---|---|---|---|---|
+| amd64 | unset | 12 / 24 / 48 | 241,4 / 323,4 / 485,6 | 354,9 / 418,6 / 500,5 | 11,5 (2,2 %) | indexed | 0,76 / 0,97 / 1,33 |
+| amd64 | 1 | 12 / 24 / 48 | 113,4 / 195,4 / 357,6 | 226,9 / 290,6 / 430,6 | 81,4 (15,9 %) | indexed | 0,76 / 0,97 / 1,32 |
+| amd64 | 2 | 12 / 24 / 48 | 177,4 / 259,4 / 421,6 | 290,9 / 354,6 / 494,6 | 17,4 (3,4 %) | indexed | 0,76 / 0,97 / 1,32 |
+| arm64 | unset | 12 / 24 / 48 | 241,5 / 323,5 / 485,8 | 347,8 / 411,7 / 509,4 | 2,6 (0,5 %) | indexed | 0,65 / 0,84 / 1,18 |
+| arm64 | 1 | 12 / 24 / 48 | 113,5 / 195,5 / 357,8 | 219,8 / 283,7 / 423,4 | 88,6 (17,3 %) | indexed | 0,66 / 0,85 / 1,19 |
+| arm64 | 2 | 12 / 24 / 48 | 177,5 / 259,5 / 421,8 | 283,8 / 347,7 / 487,4 | 24,6 (4,8 %) | indexed | 0,67 / 0,86 / 1,19 |
+
+Die residente Seite (VmHWM des vollen Pfads, 158 bis 363 MiB je nach Größe)
+unterscheidet sich zwischen den drei Werten um höchstens 1,5 MiB. Jede
+zusätzliche Arena kostet 64 MiB Adressraum (unset gegen 2 gegen 1: 128 und
+64 MiB mehr) und belegt davon fast nichts.
+
+Der übrige Weg des Kinds, dieselben Kinder über `dispatch.extract`, Median aus
+drei Läufen:
+
+| Architektur | Datei (Weg) | VmPeak | VmHWM | Sekunden | Urteil |
+|---|---|---|---|---|---|
+| amd64 | 01-text-layer.pdf (Text-PDF) | 88,7 | 47,7 bis 47,8 | 0,12 | indexed |
+| amd64 | 10-kuendigung.docx (Office, mit numpy) | 171,9 bis 172,3 | 67,1 bis 67,3 | 0,33 | indexed |
+| amd64 | 13-ratsvorlage-scan.pdf (OCR-Route, Tesseract) | 99,9 | 62,5 bis 62,6 | 2,78 | indexed |
+| amd64 | 17-beleg.jpg (Bild-OCR) | 73,4 | 36,1 bis 36,4 | 0,37 | indexed |
+| arm64 | 01-text-layer.pdf | 81,6 | 46,7 | 0,10 | indexed |
+| arm64 | 10-kuendigung.docx | 157,6 bis 157,7 | 66,8 | 0,28 bis 0,31 | indexed |
+| arm64 | 13-ratsvorlage-scan.pdf | 92,9 | 61,8 | 2,66 bis 2,67 | indexed |
+| arm64 | 17-beleg.jpg | 66,2 | 35,1 | 0,33 | indexed |
+
+Die Spannen sind die Werte für unset, 1 und 2; wo nur eine Zahl steht, waren
+alle drei gleich. Kein messbarer Nachteil: Das Kind arbeitet in einem Thread
+(die nativen Thread-Pools sind seit Plan 06.1-19 auf 1 gepinnt), und der
+Tesseract-Enkel ist ein eigener Prozess. Mehrere Arenen braucht im Kind
+niemand. Im Hauptprozess dagegen laufen Suche, Einbettung (onnxruntime) und
+Server mit eigenen Threads, und dort ist nichts gemessen.
+
+### Umsetzung
+
+`extract/sandbox.py`, `_limit_malloc_arenas`: `mallopt(M_ARENA_MAX, 1)` über
+ctypes im Kind, direkt nach `RLIMIT_AS` und vor dem ersten Import der Parser,
+nicht über die Umgebung. So bleiben der Hauptprozess und der Tesseract-Enkel
+unberührt. Abseits von Linux und mit einer C-Bibliothek ohne `mallopt` passiert
+nichts. Ein Test im Linux-Lauf startet ein Kind mit einem Thread, der über
+malloc anlegt, und verlangt ohne Grenze mindestens 64 MiB Adressraumzuwachs,
+mit Grenze unter 32 MiB (lokal im Image gemessen: 72 gegen 8 MiB).
+
+Gegenprobe im gebauten Image, Lauf **38125992894** (Commit `c64bdf04`, Index
+`sha256:d4feb56ab220934834565f9980824738f988826a5db8d0d5352519535bb428f5`,
+amd64 `sha256:f40bef8f4e155f29f20e272b77cdcc69551d1ff46e5efc3bb839887779d2cbb7`,
+arm64 `sha256:4b98d18664af198e2f6b4f95280209a1ab9b364845b42c002f982106cc75f634`):
+Die Probe ruft dieselbe Funktion in jedem Kind, und die Werte mit `mallopt`
+gleichen denen mit `MALLOC_ARENA_MAX=1` auf 0,1 MiB.
+
+| Architektur | MP | VmPeak-Zuwachs Laden | VmPeak-Zuwachs voller Pfad | Restgröße | Schätzung (Modell) | Spitze absolut | Rest zu 512 MiB | Urteil |
+|---|---|---|---|---|---|---|---|---|
+| amd64 | 12 | 113,4 | 154,0 | 437,9 | 161,4 | 228,1 | 283,9 | indexed |
+| amd64 | 24 | 195,4 | 217,6 | 437,9 | 243,4 | 291,7 | 220,3 | indexed |
+| amd64 | 48 | 357,6 | 357,6 | 437,9 | 405,6 | 431,7 | 80,3 (15,7 %) | **indexed** |
+| arm64 | 12 | 113,5 | 154,1 | 445,0 | 161,4 | 221,1 | 290,9 | indexed |
+| arm64 | 24 | 195,5 | 218,0 | 445,0 | 243,4 | 285,0 | 227,0 | indexed |
+| arm64 | 48 | 357,8 | 357,8 | 445,0 | 405,6 | 424,8 | 87,2 (17,0 %) | **indexed** |
+
+Das Kind startet hier mit 74,1 (amd64) und 67,0 MiB (arm64), 1,1 und 1,3 MiB
+mehr als im Sweep, weil die Probe jetzt `sandbox` importiert. Der OCR-Treffer
+`fotoquendel` kam in jedem Lauf.
+
+**A5 neu bewertet:** Mit einer Arena kosten vier Decoder-Threads genauso viel
+Adressraum wie einer (24 MP: 195,4 gegen 195,4 MiB). Der Unterschied, den A5
+gemessen hatte, waren die Arenen der zusätzlichen Threads. `decode_threads=1`
+bleibt trotzdem: Es kostet nichts und hält die CPU-Last eines Kinds bei einem
+Kern, wie bei Tesseract.
+
+### Das Messmodell der Schätzung
+
+Statt `Breite x Höhe x 4 x Faktor` schätzt `extract/image.py` ein HEIF als
+**80 MiB fest plus 7 Byte je Pixel** (RGB; 9 Byte für andere Modi, siehe unten).
+Herleitung aus den Werten mit einer Arena:
+
+- Das Laden liegt genau auf einer Geraden: 32,0 MiB plus 7,00 Byte je Pixel
+  (12 MP: 32,0 + 81,4 = 113,4; 24 MP: 32,0 + 163,4 = 195,4; 48 MP: 32,0 + 325,6 =
+  357,6).
+- Bei 12 und 24 MP liegt der volle Pfad darüber, weil nach dem Laden die
+  verkleinerte Arbeitskopie für die OCR entsteht (höchstens 3500 x 2625 Pixel,
+  4 Byte Farbe und 1 Byte Grau). Der größte Abstand zur Ladegeraden ist
+  72,6 MiB (12 MP: 154,0 minus 81,4).
+- Die Steigung wird übernommen, der feste Anteil auf 80 MiB über diese 72,6 MiB
+  gesetzt. Damit liegt das Modell über jedem gemessenen Wert und über der
+  Schranke "Ladegerade plus 5 Byte je Pixel der verkleinerten Kopie" bei jeder
+  Größe bis zur Pixelgrenze von 50 MP. Es gibt keine Größe, bei der die
+  Schätzung "passt" sagt und der Pfad nicht passt; die Lücke des Faktors 3
+  zwischen 36 und 38 MP ist geschlossen.
+- 12, 24 und 48 MP passen in ein frisches Kind (Schätzung 161,4 / 243,4 /
+  405,6 MiB gegen 437,9 bzw. 445,0 MiB Restgröße). Bei 50 MP (Pixelgrenze)
+  schätzt das Modell 413,8 MiB, also passt jedes HEIF, das die Pixelgrenze
+  durchlässt, in ein frisches Kind. Ein Kind, das schon viele Dateien gelesen hat
+  und dessen Adressraum gewachsen ist, urteilt ehrlich `skipped(too_large)`.
+- Ein HEIF mit Alpha dekodiert eine vierte Ebene und einen Puffer mit 4 statt
+  3 Byte; das sind nach derselben Rechnung 2 Byte je Pixel mehr. Nicht gemessen,
+  deshalb als obere Schranke für jeden Modus außer RGB.
+
+Die Tests in `backend/tests/test_image_heic.py` halten das fest (Modell über
+jedem Messwert, 12/24/48 MP passen in ein frisches Kind beider Architekturen,
+keine Lücke bis 50 MP, das Urteil kippt genau an der Schätzung) und werden mit
+Faktor 3, Faktor 5,5, 40 MiB fest oder 6 Byte je Pixel rot.
+
+**Offen für das Audit 31-15:** Ein JPEG über der Schätzung endet weiter als
+`failed(out_of_memory)` (D-29-07), ein HEIF als `skipped(too_large)`. Ob beide
+Formate dasselbe Urteil bekommen sollen, ist dort zu entscheiden.

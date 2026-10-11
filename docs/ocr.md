@@ -125,12 +125,15 @@ Die oberen drei Ebenen liefern ein teilindexiertes Ergebnis, die unteren beiden
 ein Scheitern. Das ist die ganze Logik der Tabelle.
 
 HEIC-Fotos brauchen beim Dekodieren deutlich mehr Adressraum als JPEG gleicher
-Größe, rund 160 MiB fest plus 7 Byte je Pixel (24 MP: 323 MiB, gemessen auf
-amd64 und arm64, `docs/measurements/2026-10-formate-v15/`, Abschnitt
-"HEIC-Dekodier-RAM"), weil es für HEIC keinen verkleinernden Draft gibt. Ein
-48-MP-Foto ("HEIF Max") passt deshalb nicht unter den Standard von 512 MiB und
-endet als `skipped(too_large)`; wer solche Fotos lesen will, hebt
-`FINDLING_EXTRACT_ADDRESS_SPACE_BYTES` an.
+Größe, weil es für HEIC keinen verkleinernden Draft gibt: mit der einen
+malloc-Arena, auf die das Extraktionskind seit Plan 31-07 begrenzt ist, rund
+32 MiB fest plus 7 Byte je Pixel, ein 48-MP-Foto ("HEIF Max") also 358 MiB
+(gemessen auf amd64 und arm64, `docs/measurements/2026-10-formate-v15/`,
+Abschnitte "HEIC-Dekodier-RAM" und "Eine malloc-Arena im Extraktionskind"). Es
+passt damit unter den Standard von 512 MiB mit rund 80 MiB Rest; ein HEIC, das
+die Schätzung nicht in den verbleibenden Adressraum legt, endet als
+`skipped(too_large)` und lässt sich über `FINDLING_EXTRACT_ADDRESS_SPACE_BYTES`
+lesbar machen.
 
 ## Abweichung von STACK.md
 
