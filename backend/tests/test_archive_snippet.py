@@ -47,7 +47,7 @@ CONSTITUENTS = FIXTURE.read_text(encoding="utf-8").split()
 OWNER = "owner"
 MARK = ARCHIVE_MEMBER_MARK
 
-TWO_MEMBERS = f"{MARK}a.txt\nerstes\n\n{MARK}innen/rechnung.txt\narchivquendel und mehr\n\n"
+TWO_MEMBERS = f"{MARK}a.txt\nerstes\n\n{MARK}innen/rechnung.txt\nzipquendel und mehr\n\n"
 SAME_WORD_TWICE = f"{MARK}erste.txt\ndoppelquendel hier\n\n{MARK}zweite.txt\ndoppelquendel dort\n\n"
 # What a text file indexed by 1.4.2 may have stored: U+001C in the middle of its
 # own text, followed by something that looks like a name.
@@ -111,10 +111,10 @@ def _marked(snippet: SnippetText) -> list[str]:
 
 
 def test_a_hit_in_the_second_member_names_the_second_member(index: Index, store: Store) -> None:
-    snippet = _one(index, store, "archivquendel", 10)
+    snippet = _one(index, store, "zipquendel", 10)
 
     assert snippet.text.startswith("innen/rechnung.txt: ")
-    assert _marked(snippet) == ["archivquendel"]
+    assert _marked(snippet) == ["zipquendel"]
 
 
 def test_a_hit_in_the_first_member_names_the_first_member(index: Index, store: Store) -> None:
@@ -125,7 +125,7 @@ def test_a_hit_in_the_first_member_names_the_first_member(index: Index, store: S
 
 
 def test_the_mark_never_reaches_the_delivered_text(index: Index, store: Store) -> None:
-    for text, file_id in (("archivquendel", 10), ("erstes", 10), ("doppelquendel", 11), ("bestandquendel", 13)):
+    for text, file_id in (("zipquendel", 10), ("erstes", 10), ("doppelquendel", 11), ("bestandquendel", 13)):
         snippet = _one(index, store, text, file_id)
         assert MARK not in snippet.text
 
@@ -220,12 +220,12 @@ def test_a_stored_text_without_a_mark_has_no_name() -> None:
 def test_the_semantic_passage_names_the_inner_file(index: Index) -> None:
     document = index_search._document_for(index, 10)
     assert document is not None
-    start = TWO_MEMBERS.index("archivquendel")
+    start = TWO_MEMBERS.index("zipquendel")
     chunk = BestChunk(file_id=10, char_start=start, char_end=len(TWO_MEMBERS))
 
     passage = index_search._passage_of(document, chunk, limit=settings().snippet_chars)
 
-    assert passage.startswith("innen/rechnung.txt: archivquendel")
+    assert passage.startswith("innen/rechnung.txt: zipquendel")
     assert MARK not in passage
 
 
