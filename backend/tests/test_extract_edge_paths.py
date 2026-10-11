@@ -189,11 +189,25 @@ QUALIFIED_WRITING_CALLS: frozenset[tuple[str, str]] = frozenset(
     }
 )
 
-# The writes of the file travel path, measured against the package. Seven, and
+# The writes of the file travel path, measured against the package. Ten, and
 # every one of them is the container's own scratch volume, the child's own
 # /proc entry or a read the gate cannot tell apart from a write:
 #
-#   extract/cfb.py: open          open(path, "rb") in ole_kind (plan 29-08):
+#   extract/archive.py: open     twice (plan 31-08). Once a read: the central
+#                                 directory of the scratch file, or of an inner
+#                                 ZIP file, is counted before zipfile opens it;
+#                                 counted for the same reason as the two reads
+#                                 below. Once a write: a member of a ZIP file is
+#                                 streamed into "<scratch file>.m<n>.part" next to
+#                                 the scratch file of the job. The directory is
+#                                 the poller's, the name is the scratch name plus
+#                                 a running number, and the member name never
+#                                 takes part (T-31-25).
+#   extract/archive.py: unlink   removes that member file in a finally, right
+#                                 after its reader. A file a killed child leaves
+#                                 behind ends in .part and goes with the sweep of
+#                                 the poller.
+#   extract/cfb.py: open         open(path, "rb") in ole_kind (plan 29-08):
 #                                 the OLE sniff reads the header and directory
 #                                 sectors of the scratch file the dispatcher was
 #                                 handed. Read only, but counted for the same
@@ -223,11 +237,14 @@ QUALIFIED_WRITING_CALLS: frozenset[tuple[str, str]] = frozenset(
 #                                 than unlinking a second time, which is why one
 #                                 entry covers both callers.
 #
-# This is a ratchet and not a tautology. An eighth entry means the container puts
+# This is a ratchet and not a tautology. An eleventh entry means the container puts
 # something on a disk in a place nobody has looked at yet, and the three
 # questions that belong to it are which directory, what is in the name, and who
 # chose that name. Failing here is the moment those questions can still be asked.
 EXPECTED_TRAVEL_PATH_WRITES = (
+    "extract/archive.py: open",
+    "extract/archive.py: open",
+    "extract/archive.py: unlink",
     "extract/cfb.py: open",
     "extract/image.py: open",
     "extract/sandbox.py: write_text",

@@ -29,6 +29,7 @@ import tempfile
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from typing import Final
 
 LOGGER = logging.getLogger("findling.config")
 
@@ -380,6 +381,63 @@ EXTRACT_ARCHIVE_MEMBER_MAX_BYTES = 64 * 1024 * 1024
 # streams the sheets, so a workbook whose XML expands tenfold costs nothing, and
 # a sum here would refuse ordinary large exports for no gain.
 EXTRACT_ARCHIVE_TOTAL_MAX_BYTES = 256 * 1024 * 1024
+
+# ---------------------------------------------------------------------------
+# ZIP files as documents (FMT-02, D-31-07, plan 31-08). Every limit below holds
+# for the whole ZIP file, all nesting levels together, through one shared budget
+# (extract/archive.py, _ArchiveBudget): fifty inner ZIP files just under a limit
+# each are one ZIP file over it. EXTRACT_ARCHIVE_TOTAL_MAX_BYTES above is the cap
+# of the declared and of the really read uncompressed bytes, for the reason given
+# there. The measurements of 2026-10-11 behind each number, with command line,
+# machine and medians, are in docs/measurements/2026-10-formate-v15/README.md,
+# section "ZIP-Grenzwerte". Fixed constants, no admin setting (D-31-07).
+# ---------------------------------------------------------------------------
+
+# Central directory headers per ZIP file, counted by extract/archive.py itself
+# before zipfile builds one ZipInfo per header; the count in the end record is
+# never believed, because zipfile reads the directory by its byte length and
+# ignores that count. Measured: 10 000 headers cost ZipFile 5.5 MiB and 0.34 s,
+# 100 000 cost 55.9 MiB and 3.3 s. Far above any folder of documents a person
+# packs, and two orders of magnitude under the address space of the child.
+ARCHIVE_MAX_ENTRIES = 10_000
+
+# Byte length of the central directory, checked before it is read. zipfile reads
+# the whole directory at once and keeps the decoded names: measured, its peak is
+# twice the directory length plus 0.55 KiB per header (10 000 headers with 4 KiB
+# names: 82.5 MiB). At both limits at once (10 000 headers, 8 MiB) it measured
+# 19.5 MiB and 0.29 s; the own count reads in 64 KiB blocks and peaks at 64 KiB.
+# A directory record of a real file takes 46 bytes plus its name and extra
+# fields, typically 100 to 300 bytes; 8 MiB leave 838 bytes for each of 10 000
+# headers. The limit, like every one here, is drawn from the shared budget, so
+# an outer and an inner directory open at the same time stay within it together.
+ARCHIVE_MAX_CENTRAL_DIRECTORY_BYTES = 8 * 1024 * 1024
+
+# Declared uncompressed size over compressed size of one member, judged from
+# ARCHIVE_RATIO_MIN_BYTES on. Measured with deflate level 9: ten real files of
+# 1 to 56 MB (CSV, JSON, word list, SQL dump, two logs, XML, HTML, DOCX) between
+# 1.1 and 17.9 to 1; deflate itself ends at 1028.6 to 1 (50 MiB of zero bytes).
+# 100 to 1 is five times the most redundant real file and a tenth of the ceiling.
+ARCHIVE_MAX_RATIO = 100
+ARCHIVE_RATIO_MIN_BYTES = 1024 * 1024
+
+# Nesting: the ZIP file itself is level 1, a ZIP file inside it level 2 and read
+# with the same budget, a ZIP file inside that one ends the whole ZIP file as
+# skipped(archive_limit). A self reproducing ZIP file (a quine) ends here.
+ARCHIVE_MAX_DEPTH = 2
+
+# Members handed to a text reader per ZIP file, and the share of
+# extract_timeout_seconds the member loop may spend. Either one ends the loop
+# with indexed(truncated) instead of losing everything to the kill of the child.
+# Measured: 200 small DOCX, PDF and TXT members in 2.34 s, 11.7 ms a member, so
+# 1 000 members take about 12 s of the 90 s; the share stops a slower box first.
+ARCHIVE_MAX_TEXT_MEMBERS = 1000
+ARCHIVE_TIME_SHARE = 0.75
+
+# The mark in front of every member section of the text of a ZIP file: U+001C,
+# the file separator. The tokenizer drops it, and the snippet code of plan 31-09
+# looks for the last one before a hit to name the inner file (D-30-03). It is
+# removed from every member text, so it stands at the marks and nowhere else.
+ARCHIVE_MEMBER_MARK: Final = "\x1c"
 
 # ---------------------------------------------------------------------------
 # OCR. Every number below was measured on 2026-09-01 in the shipping image and

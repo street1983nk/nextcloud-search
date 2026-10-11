@@ -366,3 +366,145 @@ Faktor 3, Faktor 5,5, 40 MiB fest oder 6 Byte je Pixel rot.
 **Offen für das Audit 31-15:** Ein JPEG über der Schätzung endet weiter als
 `failed(out_of_memory)` (D-29-07), ein HEIF als `skipped(too_large)`. Ob beide
 Formate dasselbe Urteil bekommen sollen, ist dort zu entscheiden.
+
+---
+
+## ZIP-Grenzwerte
+
+Plan 31-08 (FMT-02, D-31-07). Die Startwerte des Owners waren 10 000
+Einträge, 256 MiB entpackt, Rate 100 zu 1 ab 1 MiB, Tiefe 2 und kein OCR in
+ZIP-Dateien, mit dem Auftrag, sie zu messen und begründet festzulegen.
+
+Alle Messungen am 11.10.2026 auf dem Entwicklungsrechner (Windows 11, Intel
+Core i5-1335U, 16 GB RAM, CPython 3.13.13 über uv), jede Lesung in einem
+frischen Interpreter, drei Wiederholungen, angegeben ist der Median (die
+Werte von tracemalloc waren in allen drei Läufen gleich). Die Skripte lagen im
+Scratch-Verzeichnis der Sitzung und sind nicht Teil des Repos; ihr Verfahren
+steht je Abschnitt.
+
+### 1. Zentralverzeichnis
+
+Verfahren: ZIP-Dateien mit N leeren Einträgen (`zipfile`, Namen
+`d/000000.txt`), dazu Dateien, die nur aus einem Zentralverzeichnis und dem
+Endsatz bestehen (die Form einer Speicherbombe, ohne lokale Kopfzeilen), mit
+10 000 bzw. 100 000 Köpfen und Namen von 100, 792, 1600 und 4096 Byte.
+Gemessen wurde die Spitze von tracemalloc und die Zeit um
+`len(ZipFile(path).infolist())`, danach dieselben Dateien mit der eigenen
+Zählung `count_central_directory`.
+
+| Datei | Länge des Verzeichnisses | ZipFile Spitze | ZipFile Zeit | eigene Zählung Spitze | eigene Zählung Zeit |
+|---|---|---|---|---|---|
+| 1 000 leere Einträge | 0,06 MB | 0,59 MiB | 0,034 s | | |
+| 10 000 leere Einträge | 0,6 MB | 5,47 MiB | 0,338 s | 0,064 MiB | 0,055 s |
+| 50 000 leere Einträge | 2,9 MB | 28,01 MiB | 1,615 s | | |
+| 100 000 leere Einträge | 5,8 MB | 55,88 MiB | 3,232 s | 0,064 MiB | 0,555 s |
+| nur Verzeichnis, 10 000 x 100 Byte | 1,46 MB | 6,27 MiB | 0,256 s | | |
+| nur Verzeichnis, 100 000 x 100 Byte | 14,6 MB | 63,89 MiB | 2,383 s | | |
+| nur Verzeichnis, 10 000 x 792 Byte (beide Grenzen) | 8,38 MB (7,99 MiB) | 19,47 MiB | 0,290 s | 0,064 MiB | 0,091 s |
+| nur Verzeichnis, 10 000 x 1600 Byte | 16,5 MB | 34,88 MiB | 0,296 s | | |
+| nur Verzeichnis, 10 000 x 4096 Byte | 41,4 MB | 82,49 MiB | 0,349 s | abgelehnt vor dem Lesen | |
+
+Auswertung: Die Spitze von `ZipFile` folgt etwa 2 x Länge des Verzeichnisses
+plus 0,55 KiB je Kopf (das Verzeichnis wird am Stück gelesen, die Namen
+dekodiert behalten). Die eigene Zählung liest in Blöcken von 64 KiB und bleibt
+bei 64 KiB, unabhängig von Zahl und Länge. Mit beiden Grenzen zugleich
+(10 000 Köpfe, 8 MiB) kostet `ZipFile` 19,5 MiB: unter 4 Prozent der 512 MiB
+Adressraum des Extraktionskinds. Ohne die Längengrenze hätten 10 000 Köpfe mit
+Namen von 4 KiB 82,5 MiB gekostet, bei 50 MiB Dateigröße wären es über 100 MiB.
+
+### 2. Kompressionsrate realer Dateien
+
+Verfahren: jede Datei mit `zipfile.ZIP_DEFLATED` und Stufe 9 gepackt, Rate =
+entpackte Größe / gepackte Größe. Zehn echte Dateien ab 1 MB, die als
+redundant gelten (Exporte, Logs, Markup); dazu Nullbytes als Obergrenze von
+Deflate (A4).
+
+| Datei | Größe | Rate |
+|---|---|---|
+| CSV, Messprotokoll aus dem Repo | 1,06 MB | 3,9 : 1 |
+| CSV, Export des Lastkorpus | 56,0 MB | 5,4 : 1 |
+| JSON, Tokenizer des Modells | 17,1 MB | 4,4 : 1 |
+| TXT, Wortliste | 3,3 MB | 4,7 : 1 |
+| SQL-Dump | 2,0 MB | 3,6 : 1 |
+| Log einer IDE | 5,6 MB | 12,2 : 1 |
+| Log einer Desktop-App | 5,6 MB | 17,9 : 1 |
+| XML, Regeldatei von Office | 1,07 MB | 11,9 : 1 |
+| HTML, Office-Cache | 2,7 MB | 3,1 : 1 |
+| DOCX, Vorlage (schon gepackt) | 2,3 MB | 1,1 : 1 |
+| Nullbytes, 1 MiB | 1 MiB | 1015,1 : 1 |
+| Nullbytes, 50 MiB | 50 MiB | 1028,6 : 1 |
+
+A4 bestätigt: Deflate endet bei rund 1030 zu 1 (gemessen 1028,6). Die
+redundanteste reale Datei (ein Log) liegt bei 17,9 zu 1, also über dem Faktor
+5 unter der Grenze von 100 zu 1. Eine Anhebung ist nicht nötig.
+
+### 3. Zeit je Mitglied
+
+Verfahren: eine ZIP-Datei mit 200 kleinen Mitgliedern (je ein Drittel DOCX
+mit einem Absatz, eine Seite PDF mit Textschicht, TXT mit 2 KB), gelesen mit
+`extract_zip` in einem frischen Interpreter, also mit den Importen der Leser.
+
+| Lauf | Zeit | je Mitglied |
+|---|---|---|
+| 1 | 2,76 s | 13,8 ms |
+| 2 | 2,34 s | 11,7 ms |
+| 3 | 2,30 s | 11,5 ms |
+
+Median 2,34 s, 11,7 ms je Mitglied. 1 000 Mitglieder mit Text brauchen damit
+rund 12 s von den 90 s, die 75 Prozent der Frist von 120 s erlauben. Auf einer
+langsameren Box hält zuerst der Zeitanteil an und das Ergebnis heißt
+`indexed(truncated)`, nicht der Kill. Der Deckel bleibt bei 1 000.
+
+### 4. Codepage der Namen (A3)
+
+Verfahren: ä, ö, ü, Ä, Ö, Ü, ß in cp437 und cp850 kodiert und verglichen.
+Ergebnis: in beiden Codepages dieselben Bytes (0x84, 0x94, 0x81, 0x8E, 0x99,
+0x9A, 0xE1), und `zipfile` dekodiert sie ohne UTF-8-Flag als cp437 richtig.
+A3 bestätigt; der Test mit einem Namen "Größe.txt" ohne Flag liest ihn richtig.
+
+### 5. Offsets von Endsatz, ZIP64 und Kopf (A10)
+
+Gegen PKWARE APPNOTE 6.3.10 (Abschnitte 4.3.12 bis 4.3.16) und gegen die
+gelesene Quelle von CPython 3.13.13 (`Lib/zipfile/__init__.py`):
+
+- Endsatz (4.3.16): 22 Byte fest, Eintragszahl gesamt bei +10, Länge des
+  Verzeichnisses bei +12, Offset bei +16, Kommentarlänge bei +20; bestätigt.
+- ZIP64-Locator (4.3.15): 20 Byte, direkt vor dem Endsatz; bestätigt.
+- ZIP64-Endsatz (4.3.14): 56 Byte fest, Länge bei +40, Offset bei +48;
+  bestätigt.
+- Kopf im Verzeichnis (4.3.12): 46 Byte fest, Namenslänge bei +28, Extra bei
+  +30, Kommentar bei +32; bestätigt.
+- CPython: `_EndRecData64` Zeilen 252 bis 309, `_EndRecData` 312 bis 369,
+  `_RealGetContents` 1460 bis 1540 (concat 1475 und 1476, Beginn des
+  Verzeichnisses 1482, Schleife `while total < size_cd` ab 1489). Die
+  Eintragszahl des Endsatzes kommt in der Schleife nicht vor.
+
+Ein Befund über A10 hinaus: `_EndRecData64` liest den Locator **immer**, nicht
+nur wenn Felder des Endsatzes 0xFFFF tragen. Ein Locator vor einem gewöhnlichen
+Endsatz ersetzt dessen Länge und Offset. Die eigene Vorprüfung bildet das
+genau so ab; ein Test mit einem ZIP64-Endsatz hinter vorangestellten Bytes
+belegt den Weg über `concat`.
+
+### Festgelegte Werte
+
+Die Grenzen gelten für die ZIP-Datei als Ganzes: Einträge, Verzeichnisbytes,
+deklarierte und gelesene Bytes und Mitglieder mit Text kommen aus einem
+gemeinsamen Budget, das an jede innere Ebene weitergereicht wird (Befund 10).
+Die Zahl der Einträge bestimmt die eigene Zählung der Köpfe vor `ZipFile`,
+nie das Feld im Endsatz, weil `zipfile` das Verzeichnis über seine Bytelänge
+liest (Blocker 2).
+
+| Grenze | Startwert D-31-07 | gemessene Grundlage | festgelegt | Begründung |
+|---|---|---|---|---|
+| Einträge (`ARCHIVE_MAX_ENTRIES`) | 10 000 | 5,5 MiB und 0,34 s bei 10 000, 55,9 MiB und 3,2 s bei 100 000 | 10 000 | weit über einer gepackten Dokumentenmappe, zwei Größenordnungen unter dem Adressraum |
+| Länge des Verzeichnisses (`ARCHIVE_MAX_CENTRAL_DIRECTORY_BYTES`) | keiner | Spitze 2 x Länge plus 0,55 KiB je Kopf, an beiden Grenzen 19,5 MiB | 8 MiB | 838 Byte je Kopf bei 10 000 Köpfen, ein realer Kopf braucht 100 bis 300 |
+| Entpackt gesamt (`EXTRACT_ARCHIVE_TOTAL_MAX_BYTES`) | 256 MiB | vorhandene Konstante, Begründung in config.py | 256 MiB | halber Adressraum, fünffache Dateigröße; gilt für deklarierte und gelesene Bytes |
+| Rate (`ARCHIVE_MAX_RATIO`, `ARCHIVE_RATIO_MIN_BYTES`) | 100 : 1 ab 1 MiB | reale Dateien bis 17,9 : 1, Deflate bis 1028,6 : 1 | 100 : 1 ab 1 MiB | fünffacher Abstand zur redundantesten realen Datei, ein Zehntel der Obergrenze |
+| Tiefe (`ARCHIVE_MAX_DEPTH`) | 2 | Quine mit 720 Byte endet benannt nach zwei Öffnungen | 2 | eine innere ZIP-Datei wird gelesen, eine darin beendet die ganze Datei |
+| Mitglieder mit Text (`ARCHIVE_MAX_TEXT_MEMBERS`) | 1 000 | 11,7 ms je Mitglied, 1 000 in rund 12 s | 1 000 | passt mit Abstand in den Zeitanteil |
+| Zeitanteil (`ARCHIVE_TIME_SHARE`) | 75 % von 120 s | wie oben | 0,75 | ein großes Paket endet als `indexed(truncated)` statt durch den Kill |
+| Einzelmitglied | über `max_file_bytes` übergehen | gleiche Grenze wie für Einzeldateien | 50 MiB | das Mitglied bleibt Name, die Datei läuft weiter |
+| OCR | keins | eine Tesseract-Seite kostet 300 bis 600 MB und Sekunden | keins | Bilder bleiben Namen, ein PDF zählt nur mit Textschicht |
+
+Abweichungen vom Startwert: keine. Neu gegenüber D-31-07 ist allein die
+Längengrenze des Verzeichnisses (Blocker 2 der Planprüfung).

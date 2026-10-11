@@ -1799,8 +1799,18 @@ PHP_TREE_HASH_TODAY = "0d4206abef3ae73e772b02331495b560041a02008a588f63798351b8a
 # parsers load (_limit_malloc_arenas). No file came and none went, so
 # PACKAGE_FILES_TODAY stays at 77. The PHP pair does not move: php/ is
 # unchanged.
-PACKAGE_FILES_TODAY = 77
-PACKAGE_TREE_HASH_TODAY = "3dd8dc3c9dbd42b52109a84361ca6ce9e3a654139c446a5315eb18108692b8e3"
+#
+# Measured again by Plan 31-08 (FMT-02, D-31-07) on 2026-10-11: extract/
+# archive.py is new (ZIP files as documents: the central directory counted by
+# its own headers before ZipFile, one shared budget over all nesting levels,
+# member readers without OCR), and config.py carries the measured ZIP limits
+# ARCHIVE_MAX_ENTRIES, ARCHIVE_MAX_CENTRAL_DIRECTORY_BYTES, ARCHIVE_MAX_RATIO,
+# ARCHIVE_RATIO_MIN_BYTES, ARCHIVE_MAX_DEPTH, ARCHIVE_MAX_TEXT_MEMBERS,
+# ARCHIVE_TIME_SHARE and ARCHIVE_MEMBER_MARK. One file came, so
+# PACKAGE_FILES_TODAY moves to 78. The PHP pair does not move: php/ is
+# unchanged.
+PACKAGE_FILES_TODAY = 78
+PACKAGE_TREE_HASH_TODAY = "e31b130073a882d3ecca3c6f21d5e085bf5dec564c2e12703d12fbb0d170b080"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
