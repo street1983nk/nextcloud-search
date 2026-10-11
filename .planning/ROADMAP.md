@@ -129,7 +129,7 @@ Plans:
 - [x] 31-02-PLAN.md: Skip-Code archive_limit, allgemeineres unsupported_variant, l10n-Kette (16 Dateien + 5 Dokus), Verdict-Generation 3 mit weiter gültiger 2
 - [x] 31-03-PLAN.md: POL-02, zweimal gleich kurz mit gleichem Hash = echte Datei (F-29-03)
 - [x] 31-04-PLAN.md: .eml-Extraktor (Kopfzeilen, Text, HTML-only, Anhänge nur Namen)
-- [ ] 31-05-PLAN.md: .doc-Extraktor über olefile und Piece Table, Sniff, benannte Urteile
+- [x] 31-05-PLAN.md: .doc-Extraktor über olefile und Piece Table, Sniff, benannte Urteile
 - [ ] 31-06-PLAN.md: .xls-Extraktor mit XLSX-Zellgrenze, OLE-Word/Excel unter OOXML-Namen lesen
 - [ ] 31-07-PLAN.md: HEIC/HEIF im Bildpfad, RAM-Messung amd64/arm64, Speicherfaktor, Image-Probe
 - [ ] 31-08-PLAN.md: ZIP-Extraktor, EOCD-Vorprüfung, Grenzwerte gemessen (D-31-07), Bombenkorpus
@@ -208,7 +208,7 @@ Plans:
 | 17-23 (Archiv) | v1.3 | 69/69 | Complete | 2026-09-27 |
 | 24-29 (Archiv) | v1.4 | 78/78 | Complete | 2026-10-06 |
 | 30. Owner-Tor, Schema und Tschechisch | v1.5 | 9/9 | Complete | 2026-10-10 |
-| 31. Neue Formate und Nachholweg | v1.5 | 4/15 | In Progress | - |
+| 31. Neue Formate und Nachholweg | v1.5 | 5/15 | In Progress | - |
 | 32. Filter in der Unified Search | v1.5 | 0/? | Not started | - |
 | 33. Ausschlussmuster und Admin-Feinschliff | v1.5 | 0/? | Not started | - |
 | 34. Umstiegsweg | v1.5 | 0/? | Not started | - |
