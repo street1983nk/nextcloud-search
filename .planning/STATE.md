@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 31-05-PLAN.md
-last_updated: "2026-10-11T03:00:00.000Z"
-last_activity: 2026-10-11 -- Plan 31-05 abgeschlossen, als Nächstes 31-06
+stopped_at: Completed 31-06-PLAN.md
+last_updated: "2026-10-11T07:20:00.000Z"
+last_activity: 2026-10-11 -- Plan 31-06 abgeschlossen, als Nächstes 31-07
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 24
-  completed_plans: 14
+  completed_plans: 15
   percent: 14
 ---
 
@@ -26,11 +26,11 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 31 von 30-36 (Formate, Nachholweg und POL-02)
-Plan: 5 von 15 erledigt (31-01 bis 31-05), nächster Plan 31-06
-Status: Phase 31 in Ausführung; 31-05 abgeschlossen (.doc-Extraktor gebaut und getestet, noch nicht freigeschaltet, das folgt in 31-10; FMT-03 bleibt bis dahin offen; CI grün auf faa11e16)
-Last activity: 2026-10-11 -- Plan 31-05 abgeschlossen
+Plan: 6 von 15 erledigt (31-01 bis 31-06), nächster Plan 31-07
+Status: Phase 31 in Ausführung; 31-06 abgeschlossen (.xls-Extraktor gebaut und getestet, noch nicht freigeschaltet, das folgt in 31-10; FMT-04 bleibt bis dahin offen; OLE-Word/Excel unter OOXML-Namen wird gelesen; CI grün auf 5d6f1be6)
+Last activity: 2026-10-11 -- Plan 31-06 abgeschlossen
 
-Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 5/15 Pläne
+Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 6/15 Pläne
 
 ## Performance Metrics
 
@@ -49,6 +49,7 @@ Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 5/15 Pläne
 - v1.5: 31-03 in ca. 85 min (2 Tasks, 8 Dateien)
 - v1.5: 31-04 in ca. 75 min (2 Tasks, 5 Dateien)
 - v1.5: 31-05 in ca. 90 min (2 Tasks, 9 Dateien)
+- v1.5: 31-06 in ca. 230 min (2 Tasks, 15 Dateien; davon ca. 175 min ein swappender Gegenproben-Lauf)
 
 ## Accumulated Context
 
@@ -74,12 +75,15 @@ Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 5/15 Pläne
 - 31-03: POL-02 (F-29-03) im Code: ShortRead trägt written und content_hash (Hash füllt _stream_into aus dem _HashingSink, der Client hasht nicht); _fetch_file nimmt zwei kurze Antworten mit gleicher Länge UND gleichem Hash als die echte Datei (Scratch des zweiten Versuchs, Größe = tatsächliche, kein dritter Download), 0 Bytes zweimal -> failed(empty_file), verschiedene kurze Antworten bleiben D-29-04. Keine Längenausnahme; Restrisiko A8 (Proxy kappt byte-genau gleich) in Docstring, docs/formats.md "Stale file cache size" und SUMMARY, Owner-Veto möglich. Bereits aufgegebene repeatedly_stuck-Zeilen holt 31-11 nach. CI Python gates 38098844595 und sieben weitere grün.
 - 31-04: extract/mail.py (extract_eml, noch nicht in Dispatch/Allowlist, Freischaltung 31-10): Subject/From/To/Cc dekodiert, Body plain vor HTML über text.html_to_text (gemeinsame gehärtete Strecke, extract_html unverändert), Anhänge nur als Namen über clean_display_name (Bidi/Steuerzeichen raus, 255 Zeichen; 31-08 nutzt sie für ZIP-Namen). count_parts zählt öffnende Begrenzerzeilen deklarierter Boundaries vor dem Parsen (alle Schreibweisen inkl. RFC 2231, CR-Zeilenenden), über MAX_MAIL_PARTS 1000 nur Kopfzeilen -> indexed(truncated). RecursionError (Parser, get_body, iter_attachments, get_content) -> failed(corrupt) detail RecursionError; kaputte Kopfzeile wird ausgelassen. 2500 multipart-Ebenen enden an der Vorzählung (Plan-Widerspruch dokumentiert). CI Python gates 38101409837 und sechs weitere grün.
 - 31-05: extract/legacy_doc.py (extract_msword mit Sniff OLE/RTF/DOCX/HTML, extract_doc, noch nicht in Dispatch/Allowlist, Freischaltung 31-10; 31-06 nutzt extract_doc für OLE unter .docx): olefile mit DEFECT_INCORRECT, Text über FIB/Clx/PlcPcd nach [MS-DOC] 2.4.1, A1 (fcClx 0x01A2/lcbClx 0x01A6) gegen FibRgFcLcb97 und LibreOffice-Dateien belegt, komprimierte Stücke mit Sondertabelle 2.9.73 (nicht cp1252). Urteile: fEncrypted -> encrypted (fObfuscated allein ignoriert, wie FibBase verlangt), nFib < 0x00C1 oder kein WordDocument -> unsupported_variant, sonst CorruptDocument -> failed(corrupt). Eigener Schutz zusätzlich zu olefile: FAT-Größe gegen Dateigröße vor dem Öffnen (20 000 deklarierte FAT-Sektoren kosten olefile 29 s), zweiter Kettenlauf mit Besuchsmenge (olefile liefert Zyklen still als Wiederholung), RecursionError bei tiefem Verzeichnisbaum. Fixtures aus LibreOffice 26.2.4.2 mit Suchwörtern wortquendel/glyphquendel/zellquendel (Saat für 31-12); build_cfb kann Ströme. CI Python gates 38105517809 und sechs weitere grün.
+- 31-06: extract/legacy_xls.py (extract_msexcel mit Sniff OLE/XLSX/Markup/Text, extract_xls über xlrd mit on_demand, ragged_rows=True, Logsenke im Speicher, Zellgrenze max_cells; noch nicht in Allowlist für application/vnd.ms-excel, Freischaltung 31-10). Werte zeichengleich mit extract_xlsx derselben Quelle (3 ohne .0, Datum als str(datetime), #DIV/0!). Zählregel wie XLSX (was die Bibliothek liefert, leere Zellen mit), xlrd liefert mit ragged_rows aber nur bis zur letzten Zelle je Zeile, openpyxl das Rechteck. Befund 9: xlrds CFB-Leser folgt einer Ministrom-Kette ohne Besuchsmenge (Zyklus = Endlosschleife mit wachsendem Speicher); deshalb vor xlrd cfb.check_fat_size, olefile, cfb.walk_stream für Workbook und Book, mit ENDOFCHAIN-Pflicht am Kettenende. Kettenprüfungen aus legacy_doc nach cfb.py verschoben (detail bei .doc-Kettenfehlern jetzt cfb.CorruptCompoundFile). cfb.ole_kind ersetzt ole_verdict und entscheidet nach den Strömen an der Spitze des Verzeichnisbaums: Word/Excel unter .docx/.xlsx/.pptx werden nach Inhalt gelesen, legacy_format nur noch PowerPoint und bekannte Namen außerhalb der Baumspitze; OLE ohne bekannten Namen bleibt failed(corrupt) wie bisher. CI Python gates 38119372322 (5198 passed) und sechs weitere grün.
 
 ### Offene Faeden (kein aktiver Auftrag)
 
 - Owner-Veto zu A8 (31-03) möglich: dann Längenausnahme aus dem ersten Planstand.
 - FMT-01 erst auf Complete, wenn 31-10 .eml in Allowlist/Dispatch freischaltet (Extraktor seit 31-04 fertig).
 - FMT-03 erst auf Complete, wenn 31-10 .doc über extract_msword freischaltet (Extraktor seit 31-05 fertig).
+- FMT-04 erst auf Complete, wenn 31-10 .xls über extract_msexcel freischaltet (Extraktor seit 31-06 fertig).
+- 31-15 (Audit): ENDOFCHAIN-Pflicht in cfb.walk_stream (gilt seit 31-06 auch für .doc) und FAT-Schranke an echten Bestandsdateien prüfen.
 
 - REL-05 (Phase 36): release.yml muss die vier Quellpakete (corresponding_source.py fetch) im eigenen gh release create mitgeben; ein späteres gh release upload scheitert an unveränderlichen Releases (belegt in 31-01). Leeres Pre-Release source-1.5-dev bleibt mit Verweistext, Löschen nur mit Owner-Wort.
 
