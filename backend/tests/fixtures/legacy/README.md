@@ -1,6 +1,6 @@
 # Testdateien für den .doc- und den .xls-Leser (Pläne 31-05 und 31-06, FMT-03 und FMT-04)
 
-Drei Word-97-Dateien und zwei Excel-97-Dateien (BIFF8), geschrieben von
+Vier Word-97-Dateien und zwei Excel-97-Dateien (BIFF8), geschrieben von
 LibreOffice aus eigenem Inhalt. Die Suchwörter sind erfunden, damit Plan 31-12
 die Dateien als Saat wiederverwenden kann. Lizenz wie das übrige Repository
 (eigenes Werk, AGPL-3.0-or-later über die `**`-Annotation in `REUSE.toml`).
@@ -12,6 +12,7 @@ die Dateien als Saat wiederverwenden kann. Lizenz wie das übrige Repository
 | `word97-table-field.doc` | Tabelle mit zwei Zeilen und zwei Spalten, Seitenzahlfeld, festes Datumsfeld | `zellquendel` | `d662ad00e1997f8ef7944d5e449807a6bcfabbbda421971e6f3c6be728b3185c` |
 | `biff8-values.xls` | zwei Blätter: Text, ganze Zahl 3, Zahl 2,5, Datum 15.03.2024, leere Zelle, Fehlerzelle `=1/0`; zweites Blatt heißt `geheimblatt` | `zellquendel`, `blattquendel` | `77c04f4d82efe8ca60ea9ec442f3b59ccc5bd872d1663bcb5ea0edabb65c7b48` |
 | `biff8-far-cell.xls` | eine einzige Zelle in Zeile 65000, Spalte 200 | `fernquendel` | `eeb1697c38f926ba5d979a280fa48d8dc647e8d4eec50ea83ec226fea91aa4fb` |
+| `word97-ole-seed.doc` | kurzer deutscher Text; Saat des Upgrade-Beweises (Plan 31-12), dort als `seed-ole-under-docx.docx` unter dem Namen einer .docx-Datei | `hullequendel` | `5fdf780437074dfee01ca1d7aebdb1bdb4b7c9e4be34a67a02950e8523727589` |
 
 ## Herkunft
 
@@ -32,12 +33,19 @@ die Dateien als Saat wiederverwenden kann. Lizenz wie das übrige Repository
 
 - Aufruf aus `backend/`: `uv run python ../scripts/dev/make_legacy_fixtures.py`
   (Optionen `--soffice PFAD`, `--output VERZEICHNIS`, `--only doc` oder
-  `--only xls`). Plan 31-06 lief mit `--only xls`, die .doc-Dateien sind
-  unverändert die aus Plan 31-05.
+  `--only xls`, `--name QUELLE`). Plan 31-06 lief mit `--only xls`, die
+  .doc-Dateien sind unverändert die aus Plan 31-05.
+- `word97-ole-seed.doc` erzeugt am 12.10.2026 in Plan 31-12 mit
+  `--name word97-ole-seed`, mit derselben LibreOffice 26.2.4.2; die übrigen
+  fünf Dateien blieben unberührt. Der Upgrade-Beweis sät sie als
+  `.github/fixtures/upgrade-seed-formats/seed-ole-under-docx.docx` (Kopie,
+  Byte für Byte, erzeugt von `scripts/ci/make_upgrade_seed_formats.py`); 1.4.2
+  urteilt sie als `skipped(legacy_format)`, 1.5 liest sie mit dem .doc-Leser.
 
 LibreOffice schreibt nie zweimal dieselben Bytes. Die Tests in
-`tests/test_legacy_doc.py` und `tests/test_legacy_xls.py` pinnen deshalb den
-SHA-256 der eingecheckten Dateien; wer das Werkzeug erneut laufen lässt, pinnt
+`tests/test_legacy_doc.py`, `tests/test_legacy_xls.py` und
+`tests/test_upgrade_seed_fixture.py` pinnen deshalb den SHA-256 der
+eingecheckten Dateien; wer das Werkzeug erneut laufen lässt, pinnt
 die neuen Werte.
 
 ## Was die Dateien zeigen (gemessen)

@@ -30,9 +30,15 @@ The three sources and what each one is for:
 - biff8-far-cell (plan 31-06): a single cell at row 65000, column 200 (counted
   from 1) with "fernquendel", the file that turns xlrd's padding of rows into
   millions of entries unless ragged_rows is on.
+- word97-ole-seed (plan 31-12, FMT-06): a short Word 97 document with
+  "hullequendel". The upgrade proof of deploy-harp.yml sows it under a .docx
+  name (.github/fixtures/upgrade-seed-formats/seed-ole-under-docx.docx, a byte
+  for byte copy), where 1.4.2 books it as skipped(legacy_format) and 1.5 reads
+  it with the .doc reader.
 
 ``--only doc`` or ``--only xls`` writes one family alone, so the digests of the
-other one stay where they are.
+other one stay where they are. ``--name word97-ole-seed`` writes one source
+alone, for the same reason.
 
 Security rule, carried unchanged from T-02-14: the tool writes its own sources
 and reads nothing but what LibreOffice made of them. It never reads state.db,
@@ -42,7 +48,7 @@ A private LibreOffice profile in the temporary directory keeps the run away
 from the profile of the desktop session (a lock file there makes soffice wait
 silently) and from its settings.
 
-Usage: make_legacy_fixtures.py [--soffice PATH] [--output DIR] [--only doc|xls]
+Usage: make_legacy_fixtures.py [--soffice PATH] [--output DIR] [--only doc|xls] [--name SOURCE]
 """
 
 import argparse
@@ -164,6 +170,13 @@ _TABLE_FIELD = (
     " ist fest.</text:p>\n"
 )
 
+# The seed of the upgrade proof (plan 31-12). One word that stands in no other
+# file of the repository, so a hit in the upgrade proof names exactly this file.
+_OLE_SEED = (
+    "<text:p>Das hullequendel steht in einem alten Word-Dokument.</text:p>\n"
+    "<text:p>Es tr\u00e4gt den Namen eines neuen, und das ist der ganze Trick.</text:p>\n"
+)
+
 # Per family: suffix of the source, its head and tail, the conversion filter of
 # soffice and the suffix of the result.
 _FAMILIES = {
@@ -177,6 +190,7 @@ SOURCES = {
     "word97-table-field": ("doc", _TABLE_FIELD),
     "biff8-values": ("xls", _VALUES),
     "biff8-far-cell": ("xls", _FAR_CELL),
+    "word97-ole-seed": ("doc", _OLE_SEED),
 }
 
 
@@ -210,6 +224,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--soffice", type=Path, default=DEFAULT_SOFFICE)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--only", choices=sorted(_FAMILIES), default=None)
+    parser.add_argument("--name", choices=sorted(SOURCES), default=None)
     args = parser.parse_args(argv)
 
     args.output.mkdir(parents=True, exist_ok=True)
@@ -217,6 +232,8 @@ def main(argv: list[str]) -> int:
         work = Path(tmp)
         for name, (family, body) in SOURCES.items():
             if args.only is not None and family != args.only:
+                continue
+            if args.name is not None and name != args.name:
                 continue
             source_suffix, head, tail, target_filter, suffix = _FAMILIES[family]
             source = work / f"{name}{source_suffix}"

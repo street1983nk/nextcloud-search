@@ -1,0 +1,13 @@
+From: Hausverwaltung <verwaltung@example.org>
+To: Mieter <mieter@example.org>
+Subject: Notiz zum Keller
+Date: Thu, 01 Oct 2026 09:00:00 +0200
+Message-ID: <seed-mail@example.org>
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
+<html><body>
+<p>Das mailquendel steht nur im HTML-Teil dieser Nachricht.</p>
+<p>Bitte den Keller bis Freitag leeren.</p>
+</body></html>
