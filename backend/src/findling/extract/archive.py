@@ -29,8 +29,9 @@ docs/measurements/2026-10-formate-v15/README.md, section "ZIP-Grenzwerte"
 3. *Reading with a count.* A member is streamed into a scratch file named by a
    running number, never by its name, read by the reader its extension
    selects, and deleted at once. zipfile holds every read to the declared size
-   (and refuses overlapping entries, CVE-2024-0450); the bytes are counted
-   again against the same budget.
+   (and refuses overlapping entries, CVE-2024-0450, but only warns about two
+   entries at the same header, a warning that quotes the name and is therefore
+   silenced in _copy); the bytes are counted again against the same budget.
 
 **One budget for all levels (finding 10).** Entries, directory bytes, declared
 and read bytes and the members handed to a reader are drawn from one
@@ -59,6 +60,7 @@ from __future__ import annotations
 import lzma
 import struct
 import time
+import warnings
 import zlib
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -433,13 +435,28 @@ def _read_member(
 
 
 def _copy(archive: ZipFile, info: ZipInfo, member: Path, budget: _ArchiveBudget) -> bool:
-    """Stream one member into its scratch file, counted. False when its data is broken."""
+    """Stream one member into its scratch file, counted. False when its data is broken.
+
+    Two answers of ``archive.open`` are handled here besides the overlap
+    refusal (security audit 31-15). zipfile only warns, instead of refusing,
+    when the next entry starts at the very same local header, and its warning
+    quotes the member name; a warning goes to stderr, which is the container
+    log (H-31-02). It is caught and dropped: the repeated reads it allows count
+    against the read budget like every other read. And a directory that claims
+    to sit behind the end of the file makes zipfile shift every local header
+    below zero, so ``seek`` raises OSError; that member is broken, not the ZIP
+    file around it (L-31-02).
+    """
     with member.open("wb") as sink:
         try:
-            source = archive.open(info)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                source = archive.open(info)
         except BadZipFile as error:
             if _is_overlap(error):
                 raise OverLimit from None
+            return False
+        except OSError:
             return False
         with source:
             while True:

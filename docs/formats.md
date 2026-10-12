@@ -18,7 +18,7 @@ No headless office suite is involved: the image carries no LibreOffice, antiword
 |---|---|
 | What is read | Subject, From, To and Cc, decoded in any charset; the text part, or the text of an HTML only mail through the same hardened HTML route as an HTML file; the names of the attachments |
 | What is not read | The content of attachments (D-31-04): a search for `vertrag.pdf` finds the mail, a word inside that PDF does not. Bcc, the Received chain and every other header |
-| Verdict when it cannot be read | A mail with more than 1000 MIME parts gives its headers only, `indexed(truncated)`. A mail nested so deep that the parser runs out of recursion ends as `failed(corrupt)` with the detail `RecursionError`. A header the parser cannot read is left out, the rest of the mail is still indexed |
+| Verdict when it cannot be read | A mail with more than 1000 MIME parts gives its headers only, `indexed(truncated)`. A header longer than 32 KiB is read up to that length, and a mail whose headers together would cost the parser more than 1 MiB gives its headers only; both end as `indexed(truncated)`. A mail nested so deep that the parser runs out of recursion ends as `failed(corrupt)` with the detail `RecursionError`. A header the parser cannot read is left out, the rest of the mail is still indexed |
 
 Mail addresses in From, To and Cc become searchable text. Who sees a hit is decided by the same permission check as for every other file (see `docs/privacy.md`).
 

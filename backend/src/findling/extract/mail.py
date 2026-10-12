@@ -32,6 +32,20 @@ parsed at all; the headers alone are read, and the verdict is
 indexed(truncated). The loop over the attachments counts against the same limit
 as a second line, for a structure the rough count should ever miss.
 
+**Headers are bounded in length and in total (security audit 31-15, H-31-01).**
+The header parser of the email package is pure Python and grows faster than
+the length it reads. Measured on CPython 3.13.13 in the extraction child: a To
+of 100 000 addresses (1.2 MB) and a Content-Type of 100 000 parameters (1 MB)
+each ran into the extraction deadline of 120 s, and 900 parts with a
+Content-Type of 8 KiB took 97 s, because the parser reads the structural
+headers of every part more than once (the feed parser, get_content_type,
+get_filename). count_parts bounds the parts, not the length of a header. So
+every header value the parser is handed is cut to MAX_HEADER_CHARS first, and
+every value it parses counts against MAX_HEADER_BUDGET for the whole mail; past
+the budget the body is given up and only the headers are read, as for a mail
+with too many parts. A cut header and a spent budget both make the verdict
+indexed(truncated).
+
 **RecursionError ends as failed(corrupt) with the detail "RecursionError".**
 Nesting needs no boundary at all (message/rfc822 inside message/rfc822), so no
 count before parsing sees every deep structure coming. The error is caught
@@ -52,11 +66,12 @@ from __future__ import annotations
 import io
 import re
 import unicodedata
-from email import policy
+from dataclasses import dataclass
 from email.message import EmailMessage, Message
 from email.parser import BytesHeaderParser, BytesParser
+from email.policy import EmailPolicy
 from pathlib import Path
-from typing import cast
+from typing import Any, Final, cast
 from urllib.parse import unquote_to_bytes
 
 from lxml import etree  # pyright: ignore[reportAttributeAccessIssue]
@@ -74,6 +89,16 @@ MAX_MAIL_PARTS = 1000
 # The longest name of an attachment that goes into the text. A file system
 # allows 255 bytes per name; a longer one is not a name but a payload.
 MAX_DISPLAY_NAME_CHARS = 255
+
+# The longest header value the parser is handed, and how many characters of
+# header values it may parse for one mail (H-31-01, see the module docstring).
+# 32 KiB hold a To or Cc of about 1000 addresses; parsing one such value took
+# 0.25 s on the development machine. The budget is spent by every read of a
+# header, structural ones included, and holds the worst case of a whole mail to
+# a few seconds there (31-AUDIT.md, H-31-01), while a mail with the full 1000
+# attachments of MAX_MAIL_PARTS and ordinary headers stays far below it.
+MAX_HEADER_CHARS = 32 * 1024
+MAX_HEADER_BUDGET = 1024 * 1024
 
 _HEADERS = ("subject", "from", "to", "cc")
 
@@ -107,23 +132,83 @@ _QUOTED_PAIR = re.compile(rb"\\(.)")
 _HIDDEN_FORMATTING = frozenset("\u200e\u200f\u061c\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069")
 
 
+class _HeaderBudgetSpent(Exception):
+    """The header values of this mail cost more parsing than MAX_HEADER_BUDGET allows."""
+
+
+@dataclass(slots=True)
+class _HeaderBudget:
+    """What is left to parse of the header values of one mail, and whether a value was cut."""
+
+    left: int = MAX_HEADER_BUDGET
+    cut: bool = False
+
+    def take(self, value: str) -> str:
+        if len(value) > MAX_HEADER_CHARS:
+            value = value[:MAX_HEADER_CHARS]
+            self.cut = True
+        if len(value) > self.left:
+            raise _HeaderBudgetSpent
+        self.left -= len(value)
+        return value
+
+
+class _BoundedPolicy(EmailPolicy):
+    """policy.default, with every header value cut and counted before the parser reads it.
+
+    header_fetch_parse is the one place the email package turns a stored raw
+    value into a parsed header: ``message[name]``, get_content_type, get_param,
+    get_filename and the feed parser all come through it. A value that is
+    already a parsed header object is passed on as it is.
+    """
+
+    header_budget: _HeaderBudget | None = None
+
+    def header_fetch_parse(self, name: str, value: Any) -> Any:
+        if self.header_budget is not None and isinstance(value, str):
+            value = self.header_budget.take(value)
+        return super().header_fetch_parse(name, value)
+
+
+# The policy every parse of this module starts from; each mail gets a clone
+# with a fresh budget, because a policy object cannot be changed once built.
+_BOUNDED: Final = _BoundedPolicy()
+
+
+def _policy_for(budget: _HeaderBudget) -> EmailPolicy:
+    """A clone of _BOUNDED that spends ``budget``.
+
+    clone() takes every attribute the class defines; typeshed lists only the
+    fields of EmailPolicy, so the call goes through Any.
+    """
+    return cast("EmailPolicy", cast("Any", _BOUNDED).clone(header_budget=budget))
+
+
 def extract_eml(path: str) -> ExtractionOutcome:
     """The searchable text of one .eml file, with the limits described above."""
     raw = Path(path).read_bytes()
     if count_parts(raw) > MAX_MAIL_PARTS:
-        head = BytesHeaderParser(policy=policy.default).parse(io.BytesIO(raw))
-        return _cut(cap_text(_joined(_header_lines(head))))
+        return _headers_only(raw)
 
+    budget = _HeaderBudget()
     try:
-        message = cast("EmailMessage", BytesParser(policy=policy.default).parse(io.BytesIO(raw)))
+        message = cast("EmailMessage", BytesParser(policy=_policy_for(budget)).parse(io.BytesIO(raw)))
         lines = _header_lines(message)
         lines.append(_body_text(message))
         names, complete = _attachment_names(message)
+    except _HeaderBudgetSpent:
+        return _headers_only(raw)
     except RecursionError:
         return ExtractionOutcome.failed(Reason.CORRUPT, detail="RecursionError")
 
     outcome = cap_text(_joined([*lines, *names]))
-    return outcome if complete else _cut(outcome)
+    return outcome if complete and not budget.cut else _cut(outcome)
+
+
+def _headers_only(raw: bytes) -> ExtractionOutcome:
+    """Subject, From, To and Cc alone, marked truncated: the way out of every limit on the body."""
+    head = BytesHeaderParser(policy=_policy_for(_HeaderBudget())).parse(io.BytesIO(raw))
+    return _cut(cap_text(_joined(_header_lines(head))))
 
 
 def count_parts(raw: bytes) -> int:
@@ -203,11 +288,14 @@ def _header_text(message: Message, name: str) -> str | None:
     The header parser recurses on nested comments and quoted strings, and a
     header is the cheapest place for a crafted mail to put that: one header
     lost is a smaller loss than the mail. RecursionError is an Exception and
-    is caught here on purpose.
+    is caught here on purpose. A spent header budget is not a broken header
+    and goes on to extract_eml, which reads the headers alone then.
     """
     try:
         value = message[name]
         return None if value is None else str(value)
+    except _HeaderBudgetSpent:
+        raise
     except Exception:
         return None
 
@@ -267,6 +355,8 @@ def _filename_of(part: Message) -> str:
     """
     try:
         name = part.get_filename()
+    except _HeaderBudgetSpent:
+        raise
     except Exception:
         return ""
     return clean_display_name(name) if name else ""

@@ -1857,8 +1857,18 @@ PHP_TREE_HASH_TODAY = "bad993f8230804cf83a552f151dbed9d0ea1b16e71dd2a2d1705c0a1b
 # main.py starts the one time task and arms every task through
 # _armable_tasks. One file came, so PACKAGE_FILES_TODAY moves to 79. The PHP
 # pair does not move: php/ is unchanged.
+#
+# Measured again by Plan 31-15, Befund H-31-01, H-31-02, L-31-02 and M-31-02,
+# on 2026-10-12 (the audit of phase 31): extract/mail.py cuts every header value
+# to MAX_HEADER_CHARS and counts it against MAX_HEADER_BUDGET through a bounded
+# email policy, and reads the headers alone once the budget is spent;
+# extract/archive.py drops the overlap warning of zipfile that quotes a member
+# name and treats an OSError of archive.open as a broken member;
+# extract/legacy_doc.py names Word 6 and 95 (wIdent 0xA5DC)
+# skipped(unsupported_variant). No file came and none went, so
+# PACKAGE_FILES_TODAY stays at 79. The PHP pair does not move.
 PACKAGE_FILES_TODAY = 79
-PACKAGE_TREE_HASH_TODAY = "02e9cddd8ad7cdc25784d57184c752c1fa01e273ad7acfbb9d26c740f40a9e38"
+PACKAGE_TREE_HASH_TODAY = "71a4df123983f3370493f0e114230358324b71e2248326b454e96abfb228a5bd"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

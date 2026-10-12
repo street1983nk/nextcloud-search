@@ -50,8 +50,9 @@ properties, which this reader does not read.
 **Named verdicts (D-31-03).** No WordDocument stream: skipped(unsupported_variant).
 fEncrypted: skipped(encrypted), which covers XOR obfuscation too, since
 fObfuscated only means something when fEncrypted is set and otherwise MUST be
-ignored (FibBase). nFib below 0x00C1, which is Word 6 and 95 and older:
-skipped(unsupported_variant). Every structure the specification does not allow
+ignored (FibBase). nFib below 0x00C1, which is Word 6 and 95 and older, and the
+FIB identifier 0xA5DC of Word 6 and 95 itself: skipped(unsupported_variant).
+Every structure the specification does not allow
 raises CorruptDocument, and that and every exception of olefile go through
 ExtractionOutcome.from_exception, which keeps the class name and nothing else.
 
@@ -105,6 +106,13 @@ _WORD_STREAM: Final = "WordDocument"
 # [MS-DOC] 2.5.2 FibBase and 2.5.1 Fib.
 _FIB_BASE_BYTES: Final = 32
 _W_IDENT: Final = 0xA5EC
+# The identifier of Word 6.0 and Word 95, which [MS-DOC] does not describe (it
+# starts at Word 97). Measured on a real Word 6 file of an Office installation
+# in the audit of plan 31-15 (finding M-31-02): wIdent 0xA5DC, nFib 0x0068, no
+# table stream, fEncrypted at the same bit as in Word 97. Before the fix such a
+# file was failed(corrupt), although the docstring and D-31-03 name it
+# skipped(unsupported_variant).
+_W_IDENT_WORD6: Final = 0xA5DC
 _FLAGS_AT: Final = 0x0A
 _F_ENCRYPTED: Final = 0x0100
 _F_WHICH_TBL_STM: Final = 0x0200
@@ -231,11 +239,11 @@ def _read_fib(word: bytes) -> _Fib | ExtractionOutcome:
         raise CorruptDocument
     w_ident, n_fib = struct.unpack_from("<HH", word, 0)
     (flags,) = struct.unpack_from("<H", word, _FLAGS_AT)
-    if w_ident != _W_IDENT:
+    if w_ident not in (_W_IDENT, _W_IDENT_WORD6):
         raise CorruptDocument
     if flags & _F_ENCRYPTED:
         return ExtractionOutcome.skipped(Reason.ENCRYPTED)
-    if n_fib < _NFIB_WORD97:
+    if w_ident == _W_IDENT_WORD6 or n_fib < _NFIB_WORD97:
         return ExtractionOutcome.skipped(Reason.UNSUPPORTED_VARIANT)
     if len(word) < _FC_CLX_AT + 8:
         raise CorruptDocument

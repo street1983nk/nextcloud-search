@@ -259,7 +259,7 @@ _ZIP_CASES: dict[str, tuple[Callable[[], bytes], tuple[State, Reason | None], st
         lambda: _with_end(build_zip([Member(b"a.txt", b"x")]), 46 + 5, 0x7FFFFFFF),
         (State.INDEXED, None),
         "a.txt",
-        "L-31-02",
+        None,
     ),
     "local-header-past-the-end": (
         lambda: build_zip([Member(b"weg.txt", b"x", offset=10_000_000), _text("bleibwort")]),
@@ -308,7 +308,7 @@ _ZIP_CASES: dict[str, tuple[Callable[[], bytes], tuple[State, Reason | None], st
         ),
         (State.INDEXED, None),
         "aussenwort",
-        "L-31-02",
+        None,
     ),
     "depth-three": (
         lambda: build_zip([Member(b"e2.zip", build_zip([Member(b"e3.zip", build_zip([_text("tiefwort")]))]))]),
@@ -380,19 +380,19 @@ _MAIL_CASES: dict[str, tuple[Callable[[], bytes], tuple[State, Reason | None], s
         lambda: b"Subject: " + b"wort " * 200_000 + b"\r\nFrom: a@b.de\r\n\r\nkoerperwort\r\n",
         (State.INDEXED, Reason.TRUNCATED),
         "koerperwort",
-        "H-31-01",
+        None,
     ),
     "to-of-1-mib": (
         lambda: b"To: " + b",".join(b"u%d@x.de" % i for i in range(100_000)) + b"\r\n\r\nkoerperwort\r\n",
         (State.INDEXED, Reason.TRUNCATED),
         "u0@x.de",
-        "H-31-01",
+        None,
     ),
     "to-of-1-mib-with-names": (
         lambda: b"To: " + b",".join(b'"N %d" <u%d@x.de>' % (i, i) for i in range(60_000)) + b"\r\n\r\nkoerperwort\r\n",
         (State.INDEXED, Reason.TRUNCATED),
         "u0@x.de",
-        "H-31-01",
+        None,
     ),
     "broken-base64": (
         lambda: _HEAD + b"Content-Type: text/plain\r\nContent-Transfer-Encoding: base64\r\n\r\n!!!!@@@@====abc$$\r\n",
@@ -427,7 +427,9 @@ _MAIL_CASES: dict[str, tuple[Callable[[], bytes], tuple[State, Reason | None], s
             + b"; ".join(b"p%d=v" % i for i in range(10_000))
             + b"\r\n\r\nbody\r\n"
         ),
-        (State.INDEXED, None),
+        # 89 KB of Content-Type: cut to MAX_HEADER_CHARS since H-31-01, so the
+        # text is still read and the verdict says that a header was shortened.
+        (State.INDEXED, Reason.TRUNCATED),
         "body",
         None,
     ),
@@ -450,7 +452,7 @@ _MAIL_CASES: dict[str, tuple[Callable[[], bytes], tuple[State, Reason | None], s
         ),
         (State.INDEXED, Reason.TRUNCATED),
         "hallo",
-        "H-31-01",
+        None,
     ),
     "600-parts-with-8-kib-content-types": (
         lambda: (
@@ -464,7 +466,7 @@ _MAIL_CASES: dict[str, tuple[Callable[[], bytes], tuple[State, Reason | None], s
         ),
         (State.INDEXED, Reason.TRUNCATED),
         "hallo",
-        "H-31-01",
+        None,
     ),
 }
 
@@ -478,6 +480,30 @@ def test_every_mail_of_the_corpus_ends_in_a_named_verdict(
     ran, _ = _corpus_case(worker, tmp_path, "korpus.eml", build(), MAIL)
 
     _expect(ran, state, reason, contains=word)
+
+
+def test_a_mail_with_999_ordinary_attachments_stays_whole(tmp_path: Path) -> None:
+    # The control of the header budget of H-31-01: a real mail at the part limit,
+    # with ordinary headers, is read to its end and not marked truncated.
+    from findling.extract.mail import extract_eml
+
+    attachments = b"".join(
+        b'--b\r\nContent-Type: application/pdf; name="Rechnung_2026_%06d.pdf"\r\n'
+        b'Content-Disposition: attachment; filename="Rechnung_2026_%06d.pdf"\r\n'
+        b"Content-Transfer-Encoding: base64\r\n\r\nJVBERi0xLjQK\r\n" % (index, index)
+        for index in range(999)
+    )
+    path = tmp_path / "anhaenge.eml"
+    path.write_bytes(
+        b"From: Anna <anna@example.de>\r\nTo: Bernd <b@example.de>, Carla <c@example.de>\r\nSubject: Akte\r\n"
+        b'MIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary="b"\r\n\r\n'
+        b"--b\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nHallo\r\n" + attachments + b"--b--\r\n"
+    )
+
+    outcome = extract_eml(str(path))
+
+    assert (outcome.state, outcome.reason) == (State.INDEXED, None)
+    assert outcome.text.count("Rechnung_2026_") == 999
 
 
 def test_an_html_part_reads_no_entity_and_no_doctype(worker: sandbox.ExtractionWorker, tmp_path: Path) -> None:
@@ -757,7 +783,6 @@ def _word6_stream(flags: int = 0) -> bytes:
     return bytes(word)
 
 
-@pytest.mark.xfail(strict=True, reason="M-31-02")
 @pytest.mark.parametrize(("flags", "reason"), [(0x0000, Reason.UNSUPPORTED_VARIANT), (0x0100, Reason.ENCRYPTED)])
 def test_a_word_6_or_95_file_is_an_unsupported_variant_and_not_a_damaged_one(
     flags: int, reason: Reason, worker: sandbox.ExtractionWorker, tmp_path: Path
@@ -1010,7 +1035,6 @@ def _log_corpus() -> dict[str, tuple[bytes, str]]:
 _CONTROL_WARNING = "DecompressionBombWarning"
 
 
-@pytest.mark.xfail(strict=True, reason="H-31-02")
 def test_no_line_of_the_corpus_run_carries_a_name_a_subject_or_an_address(
     tmp_path: Path, capfd: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
 ) -> None:
