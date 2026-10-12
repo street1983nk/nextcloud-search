@@ -606,7 +606,7 @@ NEW_SEED_IDS = (
 # stamps, counters, locks and cursors.
 UNSTABLE_COLUMN_PARTS = ("_at", "updated", "deliver", "lock", "cursor", "attempts", "retries", "index_version")
 
-_ID_PATTERN = "grep -Eq '^[0-9]+$'"
+_ID_PATTERN = '[[ "${value}" =~ ^[0-9]+$ ]]'
 
 
 def _formats_generator() -> Any:
@@ -775,16 +775,16 @@ def test_the_digest_leaves_out_the_seed_and_the_changed_candidates_only() -> Non
     assert "expected_candidates" not in call
     for name in ("UPGRADE_SEED_TIFF_ID", "UPGRADE_SEED_SIDECAR_ID", *NEW_SEED_IDS):
         assert f"${{{name}}}" in run[run.index("seed_ids=") : run.index(call)], name
-    assert "grep -Eq '^[0-9]+(,[0-9]+){9}$'" in run
+    assert '[[ "${seed_ids}" =~ ^[0-9]+(,[0-9]+){9}$ ]]' in run
 
 
 def test_the_digest_and_the_lists_are_checked_before_the_environment() -> None:
     run = _run(RECORD_STEP)
     env_block = run.rindex('} >> "${GITHUB_ENV}"')
     for pattern in (
-        "grep -Eq '^[0-9a-f]{64}$'",
-        "grep -Eq '^([0-9]+(,[0-9]+)*)?$'",
-        "grep -Eq '^([0-9]+=[a-z]+/[a-z_]*(,[0-9]+=[a-z]+/[a-z_]*)*)?$'",
+        '[[ "${old_digest}" =~ ^[0-9a-f]{64}$ ]]',
+        '[[ "${list}" =~ ^([0-9]+(,[0-9]+)*)?$ ]]',
+        '[[ "${list}" =~ ^([0-9]+=[a-z]+/[a-z_]*(,[0-9]+=[a-z]+/[a-z_]*)*)?$ ]]',
     ):
         assert run.index(pattern) < env_block, pattern
     for name in (
@@ -794,7 +794,7 @@ def test_the_digest_and_the_lists_are_checked_before_the_environment() -> None:
         "UPGRADE_CATCHUP_CHANGED",
         "UPGRADE_CATCHUP_CHANGED_VERDICTS",
     ):
-        assert run.index(f'echo "{name}=') > run.index("grep -Eq '^[0-9a-f]{64}$'"), name
+        assert run.index(f'echo "{name}=') > run.index('[[ "${old_digest}" =~ ^[0-9a-f]{64}$ ]]'), name
 
 
 def test_the_two_candidate_lists_are_disjoint_before_the_environment() -> None:
@@ -900,21 +900,21 @@ def _env_writes(run: str) -> list[tuple[int, str, str]]:
 
 
 def _checked_before(run: str, variable: str, before: int) -> bool:
-    """Whether ``variable`` is held to a pattern somewhere before ``before``."""
+    """Whether ``variable`` is held to a pattern somewhere before ``before``.
+
+    Only ``[[ =~ ]]`` counts, because it holds the whole value; printf piped
+    into grep -Eq matched line by line, so "335" plus a second line passed
+    (L-31-07 of 31-AUDIT), and it is no longer accepted here.
+    """
     head = run[:before]
-    direct = (
-        f'[[ "${{{variable}}}" =~ ',
-        f"printf '%s' \"${{{variable}}}\" | grep -Eq '^",
-        f"printf '%s\\n' \"${{{variable}}}\" | grep -Eq '^",
-    )
-    if any(form in head for form in direct):
+    if f'[[ "${{{variable}}}" =~ ' in head:
         return True
     # A loop over the values, with the check on the loop variable in its body.
     for loop in re.finditer(r"^\s*for (\w+) in ([^\n]*); do\n(.*?)^\s*done$", head, re.MULTILINE | re.DOTALL):
         name, values, body = loop.group(1), loop.group(2), loop.group(3)
         if f'"${{{variable}}}"' not in values:
             continue
-        if f'[[ "${{{name}}}" =~ ' in body or re.search(rf"printf '%s(\\n)?' \"\$\{{{name}\}}\" \| grep -Eq '\^", body):
+        if f'[[ "${{{name}}}" =~ ' in body:
             return True
     return False
 

@@ -128,7 +128,12 @@ def sha256_of(path: Path) -> str:
 
 
 def verify(directory: Path, expected: list[Expected]) -> list[str]:
-    """Return one line per archive that is missing or does not match."""
+    """Return one line per archive that is missing or does not match, and per entry nobody expects.
+
+    The directory is the mirror, so it holds the expected archives and nothing
+    else: a foreign file beside them is a problem too, even though publish would
+    upload only the expected names (security audit 31-15, L-31-03).
+    """
     problems: list[str] = []
     for item in expected:
         path = directory / item.name
@@ -138,6 +143,9 @@ def verify(directory: Path, expected: list[Expected]) -> list[str]:
         actual = sha256_of(path)
         if actual != item.sha256:
             problems.append(f"sha256 mismatch: {item.name} is {actual}, expected {item.sha256}")
+    wanted = {item.name for item in expected}
+    if directory.is_dir():
+        problems += [f"unexpected: {entry.name}" for entry in sorted(directory.iterdir()) if entry.name not in wanted]
     return problems
 
 
@@ -230,6 +238,9 @@ def _parse_expect(values: list[str]) -> list[Expected]:
         name, _, digest = value.partition("=")
         if not name or not SHA256.fullmatch(digest):
             raise SystemExit(f"--expect wants NAME=SHA256 with 64 lowercase hex characters, got {value!r}")
+        # A plain file name inside the checked directory, never a path out of it (L-31-03).
+        if name in (".", "..") or Path(name).name != name or "/" in name or "\\" in name:
+            raise SystemExit(f"--expect wants a plain file name, got {name!r}")
         expected.append(Expected(name, digest))
     return expected
 

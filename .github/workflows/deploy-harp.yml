@@ -3834,7 +3834,7 @@ jobs:
           heic_id=$(file_id_of "${heic_name}")
           ole_id=$(file_id_of "${ole_name}")
           for value in "${mail_id}" "${zip_id}" "${bomb_id}" "${doc_id}" "${xls_id}" "${heic_id}" "${ole_id}"; do
-            if ! printf '%s' "${value}" | grep -Eq '^[0-9]+$'; then
+            if ! [[ "${value}" =~ ^[0-9]+$ ]]; then
               echo "::error::an upload of the new formats left no file id ('${value}')"
               exit 1
             fi
@@ -3966,7 +3966,7 @@ jobs:
           # 2. The upload, and the queue row the listener writes for it.
           upload "${stale_name}" || exit 1
           stale_id=$(file_id_of "${stale_name}")
-          if ! printf '%s' "${stale_id}" | grep -Eq '^[0-9]+$'; then
+          if ! [[ "${stale_id}" =~ ^[0-9]+$ ]]; then
             echo "::error::the upload of the stale file left no file id ('${stale_id}'), step 2 of the fixed order"
             exit 1
           fi
@@ -4075,7 +4075,7 @@ jobs:
           words_find_nothing "on the ${UPGRADE_FROM_TAG} installation after the seed" || exit 1
 
           for value in "${mail_id}" "${zip_id}" "${bomb_id}" "${doc_id}" "${xls_id}" "${heic_id}" "${ole_id}" "${stale_id}"; do
-            if ! printf '%s' "${value}" | grep -Eq '^[0-9]+$'; then
+            if ! [[ "${value}" =~ ^[0-9]+$ ]]; then
               echo "::error::a seed id of the new formats is '${value}' and not a number, so it does not go into GITHUB_ENV"
               exit 1
             fi
@@ -4792,7 +4792,7 @@ jobs:
             exit 1
           fi
           seed_ids="${UPGRADE_SEED_TIFF_ID},${UPGRADE_SEED_SIDECAR_ID},${UPGRADE_SEED_MAIL_ID},${UPGRADE_SEED_ZIP_ID},${UPGRADE_SEED_BOMB_ID},${UPGRADE_SEED_DOC_ID},${UPGRADE_SEED_XLS_ID},${UPGRADE_SEED_HEIC_ID},${UPGRADE_SEED_OLE_ID},${UPGRADE_SEED_STALE_ID}"
-          if ! printf '%s' "${seed_ids}" | grep -Eq '^[0-9]+(,[0-9]+){9}$'; then
+          if ! [[ "${seed_ids}" =~ ^[0-9]+(,[0-9]+){9}$ ]]; then
             echo "::error::the ten seed ids read '${seed_ids}', so the old stock cannot be told from the seed"
             exit 1
           fi
@@ -4847,17 +4847,17 @@ jobs:
           done
 
           for list in "${expected_candidates}" "${expected_changed}"; do
-            # A line and not a bare string: an empty list is a valid
-            # answer, and grep sees no line at all in an empty input.
-            if ! printf '%s\n' "${list}" | grep -Eq '^([0-9]+(,[0-9]+)*)?$'; then
+            # The whole value and not line by line (L-31-07 of 31-AUDIT):
+            # an empty list is a valid answer and matches as well.
+            if ! [[ "${list}" =~ ^([0-9]+(,[0-9]+)*)?$ ]]; then
               echo "::error::a list of catch-up candidates reads '${list}' and not a comma separated list of ids"
               exit 1
             fi
           done
           for list in "${candidate_states}" "${expected_changed_verdicts}"; do
-            # A line and not a bare string: an empty list is a valid
-            # answer, and grep sees no line at all in an empty input.
-            if ! printf '%s\n' "${list}" | grep -Eq '^([0-9]+=[a-z]+/[a-z_]*(,[0-9]+=[a-z]+/[a-z_]*)*)?$'; then
+            # The whole value and not line by line (L-31-07 of 31-AUDIT):
+            # an empty list is a valid answer and matches as well.
+            if ! [[ "${list}" =~ ^([0-9]+=[a-z]+/[a-z_]*(,[0-9]+=[a-z]+/[a-z_]*)*)?$ ]]; then
               echo "::error::a list of candidate verdicts reads '${list}' and not id=state/reason entries"
               exit 1
             fi
@@ -4872,7 +4872,7 @@ jobs:
 
           old_stock=$(seed_probe digest "${seed_ids}${expected_changed:+,${expected_changed}}") || exit 1
           old_digest=${old_stock%%:*}
-          if ! printf '%s' "${old_digest}" | grep -Eq '^[0-9a-f]{64}$'; then
+          if ! [[ "${old_digest}" =~ ^[0-9a-f]{64}$ ]]; then
             echo "::error::the digest of the old stock reads '${old_stock}' and not a sha256 with a count"
             exit 1
           fi

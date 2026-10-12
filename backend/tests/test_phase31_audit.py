@@ -99,10 +99,6 @@ SECRETS = (
 )
 
 
-def _xfail(finding: str | None) -> list[pytest.MarkDecorator]:
-    return [] if finding is None else [pytest.mark.xfail(strict=True, reason=finding)]
-
-
 # -- the sandbox ------------------------------------------------------------------
 
 
@@ -230,7 +226,7 @@ def _with_end(plain: bytes, size: int, offset: int) -> bytes:
 
 
 _ZIP_CASES: dict[str, tuple[Callable[[], bytes], tuple[State, Reason | None], str, str | None]] = {
-    # name: (builder, verdict, a word the text must hold, the finding while it is red)
+    # name: (builder, verdict, a word the text must hold, the finding the case stands for)
     # Declared small, real 20 MiB of zeros: zipfile stops at the declaration, the
     # CRC fails, the member keeps its name and the next member is read.
     "lying-small": (
@@ -259,7 +255,7 @@ _ZIP_CASES: dict[str, tuple[Callable[[], bytes], tuple[State, Reason | None], st
         lambda: _with_end(build_zip([Member(b"a.txt", b"x")]), 46 + 5, 0x7FFFFFFF),
         (State.INDEXED, None),
         "a.txt",
-        None,
+        "L-31-02",
     ),
     "local-header-past-the-end": (
         lambda: build_zip([Member(b"weg.txt", b"x", offset=10_000_000), _text("bleibwort")]),
@@ -308,7 +304,7 @@ _ZIP_CASES: dict[str, tuple[Callable[[], bytes], tuple[State, Reason | None], st
         ),
         (State.INDEXED, None),
         "aussenwort",
-        None,
+        "L-31-02",
     ),
     "depth-three": (
         lambda: build_zip([Member(b"e2.zip", build_zip([Member(b"e3.zip", build_zip([_text("tiefwort")]))]))]),
@@ -327,7 +323,7 @@ _ZIP_CASES: dict[str, tuple[Callable[[], bytes], tuple[State, Reason | None], st
 }
 
 
-@pytest.mark.parametrize("case", [pytest.param(name, marks=_xfail(row[3])) for name, row in _ZIP_CASES.items()])
+@pytest.mark.parametrize("case", list(_ZIP_CASES))
 def test_every_zip_of_the_corpus_ends_in_a_named_verdict(
     case: str, worker: sandbox.ExtractionWorker, tmp_path: Path
 ) -> None:
@@ -380,19 +376,19 @@ _MAIL_CASES: dict[str, tuple[Callable[[], bytes], tuple[State, Reason | None], s
         lambda: b"Subject: " + b"wort " * 200_000 + b"\r\nFrom: a@b.de\r\n\r\nkoerperwort\r\n",
         (State.INDEXED, Reason.TRUNCATED),
         "koerperwort",
-        None,
+        "H-31-01",
     ),
     "to-of-1-mib": (
         lambda: b"To: " + b",".join(b"u%d@x.de" % i for i in range(100_000)) + b"\r\n\r\nkoerperwort\r\n",
         (State.INDEXED, Reason.TRUNCATED),
         "u0@x.de",
-        None,
+        "H-31-01",
     ),
     "to-of-1-mib-with-names": (
         lambda: b"To: " + b",".join(b'"N %d" <u%d@x.de>' % (i, i) for i in range(60_000)) + b"\r\n\r\nkoerperwort\r\n",
         (State.INDEXED, Reason.TRUNCATED),
         "u0@x.de",
-        None,
+        "H-31-01",
     ),
     "broken-base64": (
         lambda: _HEAD + b"Content-Type: text/plain\r\nContent-Transfer-Encoding: base64\r\n\r\n!!!!@@@@====abc$$\r\n",
@@ -431,7 +427,7 @@ _MAIL_CASES: dict[str, tuple[Callable[[], bytes], tuple[State, Reason | None], s
         # text is still read and the verdict says that a header was shortened.
         (State.INDEXED, Reason.TRUNCATED),
         "body",
-        None,
+        "H-31-01",
     ),
     "boundary-collision": (
         lambda: (
@@ -452,7 +448,7 @@ _MAIL_CASES: dict[str, tuple[Callable[[], bytes], tuple[State, Reason | None], s
         ),
         (State.INDEXED, Reason.TRUNCATED),
         "hallo",
-        None,
+        "H-31-01",
     ),
     "600-parts-with-8-kib-content-types": (
         lambda: (
@@ -466,12 +462,12 @@ _MAIL_CASES: dict[str, tuple[Callable[[], bytes], tuple[State, Reason | None], s
         ),
         (State.INDEXED, Reason.TRUNCATED),
         "hallo",
-        None,
+        "H-31-01",
     ),
 }
 
 
-@pytest.mark.parametrize("case", [pytest.param(name, marks=_xfail(row[3])) for name, row in _MAIL_CASES.items()])
+@pytest.mark.parametrize("case", list(_MAIL_CASES))
 def test_every_mail_of_the_corpus_ends_in_a_named_verdict(
     case: str, worker: sandbox.ExtractionWorker, tmp_path: Path
 ) -> None:
@@ -1144,16 +1140,15 @@ def _record_stuck(store: Store, file_id: int) -> None:
         ("", None),
         ("text", None),
         (" 12", None),
-        ("99999999999999999999", None),
-        (chr(0x00B2), None),  # superscript two: isdigit, but int() refuses it
-        (chr(0x0661) + chr(0x0662), None),  # Arabic-Indic twelve: isdigit and int(), never written by us
+        ("99999999999999999999", "L-31-01"),
+        (chr(0x00B2), "L-31-01"),  # superscript two: isdigit, but int() refuses it
+        (chr(0x0661) + chr(0x0662), "L-31-01"),  # Arabic-Indic twelve: isdigit and int(), never written by us
     ],
 )
 async def test_a_manipulated_cursor_of_part_a_starts_again_at_zero(
-    store: Store, mark: str, finding: str | None, request: pytest.FixtureRequest
+    store: Store, mark: str, finding: str | None
 ) -> None:
-    if finding is not None:
-        request.applymarker(pytest.mark.xfail(strict=True, reason=finding))
+    del finding  # the finding the value stands for, for the report
     _record_stuck(store, 7)
     store.write_meta(CATCHUP_MARK, mark)
     queue = _Queue()
@@ -1543,14 +1538,12 @@ def test_the_mirror_check_refuses_a_manipulated_and_a_missing_archive(tmp_path: 
     assert _verify(str(tmp_path), "--expect", expect).returncode != 0
 
 
-@pytest.mark.xfail(strict=True, reason="L-31-03")
 def test_the_mirror_check_refuses_a_foreign_archive_beside_the_expected_ones(tmp_path: Path) -> None:
     expect = _archive(tmp_path, "quelle.tar.gz", b"echt")
     (tmp_path / "fremd.tar.gz").write_bytes(b"fremd")
     assert _verify(str(tmp_path), "--expect", expect).returncode != 0
 
 
-@pytest.mark.xfail(strict=True, reason="L-31-03")
 def test_the_mirror_check_refuses_a_name_that_leaves_the_directory(tmp_path: Path) -> None:
     mirror = tmp_path / "spiegel"
     mirror.mkdir()
@@ -1577,7 +1570,6 @@ def test_the_search_module_loads_no_reader_of_phase_31() -> None:
 # -- deploy-harp: the pattern checks in front of GITHUB_ENV --------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="L-31-07")
 def test_no_pattern_check_of_the_upgrade_steps_matches_line_by_line() -> None:
     # grep -E matches a line, so "335\n412" passes ^[0-9]+$; [[ =~ ]] holds the
     # whole value. The checks of 31-12 used the first, those of 31-13 the second.
