@@ -11,9 +11,9 @@ findings:
   total: 3
 status: fixed
 fix_run: 2026-10-10
-fix_commits: 9e9764bf
-fixed: [L-30-01]
-still_open: [L-30-02, L-30-03]
+fix_commits: 9e9764bf, cafa34df
+fixed: [L-30-01, L-30-03]
+still_open: [L-30-02]
 ---
 
 # Phase 30: Security-, Bug- und Performance-Audit
@@ -283,7 +283,7 @@ Keine Performance-Befunde.
 |---|---|---|
 | L-30-01 NOTICE fehlt im Modul | **fix** | billig und risikolos: nur der Docstring, beide Listen und der Digest bleiben gleich. Regressionstest `test_phase30_audit.py::test_the_shipped_module_carries_the_lucene_notice_and_the_licence_path`, lokal vor dem Fix rot gesehen (`ValueError`: Zeile "Apache Lucene" fehlt), danach grün. |
 | L-30-02 Treffer nur über body_cs ohne Auszug | **accept** | dokumentierte allgemeine Grenze aller Ausbausprachen (`docs/language-analyzers.md:504`); der Treffer bleibt, die Unterzeile zeigt den Pfad. Eine Reparatur braucht entweder ein gespeichertes body_cs (Schemaschritt, D-30-08 verbietet einen zweiten in v1.5) oder einen eigenen Hervorhebungsweg über den gespeicherten Text, also ein Feature. Kandidat für die Zeit nach v1.5, kein Platz in den Phasen 31 bis 36. |
-| L-30-03 Vektordigest ungeprüft in GITHUB_ENV | **accept** | Quelle ist der Container des geprüften Commits, Form `sha256sum \| cut` einzeilig hex, Job ohne Geheimnis mit `contents: read`. Eine Formprüfung kostet einen weiteren deploy-harp-Lauf (rund 18 min) ohne Gewinn an Sicherheit; wird mitgenommen, sobald Phase 31 die Strecke ohnehin anfasst (Andockblock FMT-06). |
+| L-30-03 Vektordigest ungeprüft in GITHUB_ENV | **fix (Phase 31, Plan 31-13)** | Bis 31-13 accept (Quelle ist der Container des geprüften Commits, Job ohne Geheimnis mit `contents: read`). Geschlossen mit cafa34df: jede GITHUB_ENV-Schreibstelle von Store upgrade 2b bis 7 prüft ihre Werte vorher per Muster, darunter `REBUILD_VECTORS_BEFORE` (`^[0-9a-f]{64}$`) und Store upgrade 4 (`UPGRADE_NEW_CONTAINER`, `UPGRADE_NEW_COMPANION`, neu `UPGRADE_NEW_RESTARTS`, `UPGRADE_FINISHED_AT`). Gate-Fälle `test_upgrade_seed_steps.py::test_every_value_is_checked_before_it_goes_into_the_environment` (sechs Schritte) und `::test_the_upgrade_step_checks_the_new_container_and_companion`. Grüner Lauf HaRP deploy **38256198997** auf a3911835. |
 
 ## Status nach dem Fix-Lauf (10.10.2026)
 
@@ -308,6 +308,11 @@ Keine Performance-Befunde.
   2026-10-10T09:50Z, also aus 9e9764bf); `stopwords_cs.py` im Image trägt die
   vier NOTICE-Zeilen (Zeilen 25 bis 29) und den Pfad
   `/usr/share/common-licenses/Apache-2.0`, der dort mit 11358 Byte liegt.
+- Nachtrag 12.10.2026: L-30-03 mit 31-13 geschlossen: alle GITHUB_ENV-Schreibstellen
+  von Store upgrade 2b bis 7 prüfen ihre Werte vorher, darunter Store upgrade 4.
+  Commit cafa34df (Musterprüfungen und Gate), a3911835 (Fehler der Strecke aus
+  31-12 im Saat-Probe, kein Bezug zu L-30-03); HaRP deploy **38256198997** grün
+  über Store upgrade 0 bis 7. `still_open` enthält nur noch L-30-02.
 
 ## Was gegengeprüft wurde, nicht nur gelesen
 
