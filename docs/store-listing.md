@@ -2080,11 +2080,13 @@ Abnahme durch den Owner: offen (REL-05).
 
 # Entwurf v1.5.0 (Teil Phase 31)
 
-**Owner-Abnahme offen, mit der Store-Text-Abnahme vor Release (REL-05,
-Phase 36); Grundlage FMT-01 bis FMT-06, D-31-04, D-31-05.** Plan 31-14,
-12.10.2026. Der Wortlaut unten ist ein Vorschlag des Planers, vom Ausführenden
-nur gekürzt und an die Vokabelregel angepasst, und noch nicht vom Owner
-abgenommen.
+**Vom Owner abgenommen am 2026-10-12 (Owner-Abnahme Teil Phase 31): Teil 1
+bis Teil 4; Grundlage FMT-01 bis FMT-06, D-31-04, D-31-05.** Plan 31-14,
+12.10.2026. Der Wortlaut unten war ein Vorschlag des Planers, vom Ausführenden
+nur gekürzt und an die Vokabelregel angepasst; der Owner hat ihn am 12.10.2026
+so abgenommen ("wie du empfehlst"). REL-05 selbst bleibt offen: dazu gehören
+noch die Abnahme des Teils Phase 30, die Abnahme des Store-Gesamttexts vor dem
+Release, die Playwright-Runde und die Einreichung (Phase 36).
 
 Wie beim Teil Phase 30 steht der Wortlaut schon jetzt in beiden `info.xml`
 (alle sechs Beschreibungen) und in den drei READMEs, weil das Gate
@@ -2143,6 +2145,16 @@ Je README nur der Absatz unter der Dateitypen-Überschrift, ungebrochen:
 >
 > `README.fr.md`: PDF (numérisés aussi), DOC, DOCX, PPTX, XLS, XLSX, ODT, ODS, ODP, HTML, RTF, TXT, Markdown, CSV, e-mails (EML), fichiers ZIP (les fichiers contenus, sans OCR), ainsi que les images (JPEG, PNG, TIFF, WebP, HEIC) par reconnaissance optique.
 
+Mit der Abnahme vom 12.10.2026 folgt in jeder README unter diesem Absatz ein
+eigener Absatz mit genau einem Verweis auf `docs/formats.md`; der Absatz oben
+bleibt unverändert:
+
+> `README.md`: Grenzen und Details: [docs/formats.md](docs/formats.md).
+>
+> `README.en.md`: Limits and details: [docs/formats.md](docs/formats.md).
+>
+> `README.fr.md`: Limites et détails : [docs/formats.md](docs/formats.md).
+
 ## Teil 3: die Wortlaute der Urteile (aus Plan 31-02)
 
 Unverändert aus Plan 31-02, hier noch einmal zur Abnahme gebündelt; sie stehen
@@ -2167,11 +2179,14 @@ sammelt und zeichengleich gegen `docs/language-analyzers.md` geprüft wird,
 während "ohne Texterkennung" schon in der ZIP-Zeile von Teil 1 steht und der
 Typfilter in `docs/formats.md` und `docs/search-filters.md` erklärt ist.
 
-Ohne Wort des Owners bleibt die Grenzliste bei fünf Einträgen
-(`LIMITATION_COUNT = 5`). Sagt der Owner ja, ändern sich die sechs
-Beschreibungen, `docs/language-analyzers.md` und die Konstante gemeinsam.
+Entscheid des Owners vom 12.10.2026 (wie empfohlen): nein. ZIP kommt nicht
+als sechster Eintrag in die Grenzliste; sie bleibt bei fünf Einträgen
+(`LIMITATION_COUNT = 5`), die sechs Beschreibungen und
+`docs/language-analyzers.md` bleiben unverändert.
 
-Abnahme durch den Owner: offen (REL-05).
+Abnahme durch den Owner: erteilt am 2026-10-12 für Teil 1 bis Teil 4 dieses
+Abschnitts (Owner-Abnahme Teil Phase 31). REL-05 bleibt für den Gesamttext
+offen.
 
 ---
 

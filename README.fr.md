@@ -45,6 +45,8 @@ TXT, Markdown, CSV, e-mails (EML), fichiers ZIP (les fichiers contenus, sans
 OCR), ainsi que les images (JPEG, PNG, TIFF, WebP, HEIC) par reconnaissance
 optique.
 
+Limites et détails : [docs/formats.md](docs/formats.md).
+
 ## Prérequis
 
 - Nextcloud 33 à 35 avec l'application AppAPI (HaRP comme cible de

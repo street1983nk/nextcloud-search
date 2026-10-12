@@ -42,6 +42,8 @@ PDF (scanned too), DOC, DOCX, PPTX, XLS, XLSX, ODT, ODS, ODP, HTML, RTF, TXT,
 Markdown, CSV, mails (EML), ZIP files (the files inside, without OCR), and
 images (JPEG, PNG, TIFF, WebP, HEIC) through OCR.
 
+Limits and details: [docs/formats.md](docs/formats.md).
+
 ## Requirements
 
 - Nextcloud 33 to 35 with the AppAPI app (HaRP as the deploy target)

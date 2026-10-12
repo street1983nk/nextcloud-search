@@ -43,6 +43,8 @@ PDF (auch gescannt), DOC, DOCX, PPTX, XLS, XLSX, ODT, ODS, ODP, HTML, RTF,
 TXT, Markdown, CSV, Mails (EML), ZIP-Dateien (die enthaltenen Dateien, ohne
 Texterkennung) sowie Bilder (JPEG, PNG, TIFF, WebP, HEIC) per Texterkennung.
 
+Grenzen und Details: [docs/formats.md](docs/formats.md).
+
 ## Anforderungen
 
 - Nextcloud 33 bis 35 mit der App AppAPI (HaRP als Deploy-Ziel)
