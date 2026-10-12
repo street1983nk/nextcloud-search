@@ -64,7 +64,7 @@ dependencies = [
     "numpy==2.5.3",
     # The inference runtime that runs the ONNX model turning text into a 384
     # dimensional vector, and the tool that quantises the model at build time.
-    # The pinned 1.30.0 carries a cp313 manylinux_2_28_aarch64 wheel, which the
+    # The pinned 1.31.0 carries a cp313 manylinux_2_28_aarch64 wheel, which the
     # ARM box needs.
     "onnxruntime==1.31.0",
     # The vector store: a loadable SQLite extension, brute force KNN, no second
