@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 31-11-PLAN.md
-last_updated: "2026-10-12T11:15:00.000Z"
-last_activity: 2026-10-12 -- Plan 31-11 abgeschlossen, als Nächstes 31-12
+stopped_at: Completed 31-12-PLAN.md
+last_updated: "2026-10-12T12:10:00.000Z"
+last_activity: 2026-10-12 -- Plan 31-12 abgeschlossen (Workflow-Commit lokal), als Nächstes 31-13
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 24
-  completed_plans: 20
+  completed_plans: 21
   percent: 14
 ---
 
@@ -26,11 +26,11 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 31 von 30-36 (Formate, Nachholweg und POL-02)
-Plan: 11 von 15 erledigt (31-01 bis 31-11), nächster Plan 31-12
-Status: Phase 31 in Ausführung; 31-11 abgeschlossen (einmaliger Nachholweg recheck_1_5_0: Teil A über state.db, Teil B sofort fälliger Abgleich mit give_up-Ausnahme und gezieltem Neu-Urteil, Einmal-Modus bei abgeschaltetem Abgleich; CI grün auf 1a18e4b2). FMT-01 bis FMT-06 Pending bis zum E2E-Beweis in 31-13 (Owner-Linie)
-Last activity: 2026-10-12 -- Plan 31-11 abgeschlossen
+Plan: 12 von 15 erledigt (31-01 bis 31-12), nächster Plan 31-13
+Status: Phase 31 in Ausführung; 31-12 abgeschlossen (Saat der neuen Formate unter v1.4.2 in Store upgrade 2b, repeatedly_stuck in fester Reihenfolge, Aufzeichnung in 3c; 8cf62567 gepusht und CI grün, Workflow-Commit b021f16c LOKAL, Push nur zusammen mit 31-13 Task 1). FMT-01 bis FMT-06 Pending bis zum E2E-Beweis in 31-13 (Owner-Linie)
+Last activity: 2026-10-12 -- Plan 31-12 abgeschlossen
 
-Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 11/15 Pläne
+Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 12/15 Pläne
 
 ## Performance Metrics
 
@@ -55,6 +55,7 @@ Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 11/15 Pläne
 - v1.5: 31-09 in ca. 75 min (1 Task, 6 Dateien)
 - v1.5: 31-10 in ca. 150 min inkl. ca. 70 min CI (2 Tasks, 15 Dateien)
 - v1.5: 31-11 in ca. 70 min inkl. ca. 25 min CI (3 Tasks, 12 Dateien)
+- v1.5: 31-12 in ca. 55 min inkl. ca. 30 min Testläufe und CI (3 Tasks, 15 Dateien)
 
 ## Accumulated Context
 
@@ -86,11 +87,12 @@ Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 11/15 Pläne
 - 31-09: Auszug eines ZIP-Treffers beginnt mit "<innere Datei>: " in snippets_for und _passage_of; Name aus dem gespeicherten body_de an der letzten Marke U+001C vor dem ersten Highlight (nicht vor dem Fragmentanfang: tantivy beginnt das Fragment einer kurzen ZIP-Datei im ersten Mitglied, gemessen), Highlights erst in Zeichen umgerechnet, dann um entfernte Marken und den Präfix verschoben. Präfix nur bei gespeichertem ext zip; U+001C aus jedem Auszug entfernt. cap_text(text, *, member_marks=False) entfernt U+001C, nur archive.py setzt member_marks=True (Befund 15). Kein Schemafeld, SCHEMA_VERSION 3 (D-30-08). 10 Gegenproben rot. CI Python gates 38132651127 (70be3383) und 38133773017 (ddaa4c51) samt allen weiteren Läufen grün.
 - 31-10: message/rfc822, application/zip, application/msword, application/vnd.ms-excel, image/heic, image/heif in dispatch.ALLOWED_MIMETYPES und StorageService::ALLOWED_MIMETYPES (a14c03c3, ein Commit), Routen MAIL/ZIP/DOC/XLS, HEIC/HEIF über Route.OCR; gemeinsamer Begründungsabsatz an beiden Listen, Paritätstest vergleicht ihn. OCR_CERTAIN_MIMETYPES + HEIC/HEIF. TYPE_GROUPS: doc/dot, xls/xlt, heic/heif; zip in keiner Gruppe (D-31-05), Grenze in docs/search-filters.md. Migration Version001500Date20261012000000: markScanStale, dann backend_app_version verwerfen; kein Containeraufruf. Kind-Test extract_guarded für eml/zip/doc/xls (2a5ad6a5). CI a14c03c3 alle acht grün (Python 38223115485, PHP 38223115697 mit 598 Tests, HaRP 38223115654 Store upgrade 0 bis 7); auf 5cba95fc alle acht grün (HaRP 38227673884). FMT-01 bis FMT-05 Complete, Live-Beweis Upload bis Treffer folgt mit der Saat 31-12/31-13.
 - 31-11: Nachholweg FMT-06 im Container. worker/catchup.py Teil A unter recheck_1_5_0 (fehlt/Ziffern/reconcile/done): legacy_format außer PowerPoint, nicht indexierte Zeilen der sechs neuen Typen (Mimetyp, Endung nur ohne Mimetyp), einmal jede repeatedly_stuck-Zeile; Start bei Generation 3 nach recheck_1_4_0. Teil B: Marke reconcile macht den Abgleich sofort fällig (Ruhe-Tor bleibt), der erste Durchgang unter der Marke spult alle Cursor zurück, give_up-Zweig ohne Containerzeile wird Arbeit, Neu-Urteil nur bei exaktem 1.3-Ersatzcode (SKIPPED_FALLBACK_WITHOUT_SIGNAL importiert, known_skip_reasons einmal je Seite), done nur nach einem unter der Marke begonnenen vollständigen Zyklus. Einmal-Modus Reconcile.run(once=True) in main._CATCHUP_RECONCILE bei FINDLING_RECONCILE_ENABLED=false, active_reconcile() bleibt None, _armable_tasks an allen Arm-Stellen. FMT-01 bis FMT-05 auf Owner-Wort zurück auf Pending bis 31-13 (a646061d). CI 1a18e4b2 alle sieben grün (Python 38238806249, HaRP 38238806189 Store upgrade 0 bis 7, Resilience 38238806242).
+- 31-12: Saat der neuen Formate (.github/fixtures/upgrade-seed-formats, Generator scripts/ci/make_upgrade_seed_formats.py, ZIPs von Hand, Bombe Tiefe 3 plus Nullbytes 158:1, 7095 Byte). Store upgrade 2b am ehemaligen Andockblock: sieben Dateien per WebDAV (1.4.2 reiht die sechs neuen Typen und die Bombe nie ein, Word-OLE unter .docx skipped/legacy_format), .txt in fester Reihenfolge (docker stop, Upload, Größe in oc_filecache und Queue +4096, docker start, Sperre je Auslieferung um 3600 s zurück; 3 kurze Lesungen, vierter Claim schreibt failed/repeatedly_stuck), vorher Warten auf den ersten Abgleich-Zyklus (sonst give_up-Zeile möglich), danach Größe per sqlite3 zurück; state.db 0 Zeilen. 3c: recheck_1_5_0 absent, Altbestand ohne Nachhol-Kandidaten (gegen die Ermittlung gehalten), UPGRADE_OLD_STOCK_DIGEST über file_id/state/reason/etag/Chunk-Zahl. Checkpoint nicht ausgelöst. CI 8cf62567 alle sieben grün (Python 38244385443, HaRP 38244385580). b021f16c ungepusht.
 
 ### Offene Faeden (kein aktiver Auftrag)
 
 - Owner-Veto zu A8 (31-03) möglich: dann Längenausnahme aus dem ersten Planstand.
-- 31-12/31-13: Live-Beweis Upload bis Treffer für die neuen Typen (Saat) nachliefern; recheck_1_5_0 in Store upgrade 3c abwesend und in Store upgrade 5 done belegen. FMT-01 bis FMT-06 stehen bis dahin auf Pending (Owner-Linie).
+- 31-13: b021f16c (Workflow 31-12) liegt lokal und darf nur zusammen mit 31-13 Task 1 gepusht werden, vorher nichts pushen. Live-Beweis Upload bis Treffer für die neuen Typen, recheck_1_5_0 in Store upgrade 5 done, Logzitate der 1.4.2-Saat aus 2b/3c übernehmen; STALE "indexed" setzt das Rücksetzen der Dateicache-Größe in 2b voraus. FMT-01 bis FMT-06 stehen bis dahin auf Pending (Owner-Linie).
 - 31-15 (Audit): Kosten des gezielten Neu-Urteils (known_skip_reasons je Seite) mit realistischem Anteil messen; erneutes Zurückspulen nach Neustart mitten im Nachholzyklus auf großen Instanzen bewerten.
 - 31-14: Kosten von str.find je ZIP-Treffer auf großem ZIP-Text messen (T-31-30).
 - 31-15 (Audit): Umbenennungsweg des Pollers (_rewrite_metadata) übernimmt den gespeicherten Text; eine vor 1.5 indexierte .txt mit U+001C, umbenannt zu .zip, bekäme bis zur nächsten Inhaltsextraktion einen Präfix aus der eigenen Zeile; bewerten.
@@ -119,6 +121,6 @@ Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 11/15 Pläne
 
 ## Session Continuity
 
-Last session: 2026-10-12T11:15:00.000Z
-Stopped at: Completed 31-11-PLAN.md
+Last session: 2026-10-12T12:10:00.000Z
+Stopped at: Completed 31-12-PLAN.md
 Resume file: None

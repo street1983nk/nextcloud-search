@@ -136,7 +136,7 @@ Plans:
 - [x] 31-09-PLAN.md: Auszug nennt die innere Datei (ohne Schemafeld)
 - [x] 31-10-PLAN.md: Freischaltung beider Allowlists, Typgruppen (zip in keiner), Minor-Migration 1.5
 - [x] 31-11-PLAN.md: einmaliger Nachholweg recheck_1_5_0 (Teil A state.db inkl. repeatedly_stuck, Teil B Abgleich)
-- [ ] 31-12-PLAN.md: deploy-harp: Saat der neuen Formate unter v1.4.2, Aufzeichnung vor dem Upgrade
+- [x] 31-12-PLAN.md: deploy-harp: Saat der neuen Formate unter v1.4.2, Aufzeichnung vor dem Upgrade
 - [ ] 31-13-PLAN.md: deploy-harp: Store upgrade 5 Altbestand/Saat getrennt, L-30-03, Strecke 0 bis 7 grün
 - [ ] 31-14-PLAN.md: docs/formats.md, Store-Text-Entwurf v1.5.0 (Teil Phase 31) zur Abnahme REL-05
 - [ ] 31-15-PLAN.md: Security-, Bug- und Performance-Audit mit bösartigem Formatkorpus, Befunde fixen
@@ -208,7 +208,7 @@ Plans:
 | 17-23 (Archiv) | v1.3 | 69/69 | Complete | 2026-09-27 |
 | 24-29 (Archiv) | v1.4 | 78/78 | Complete | 2026-10-06 |
 | 30. Owner-Tor, Schema und Tschechisch | v1.5 | 9/9 | Complete | 2026-10-10 |
-| 31. Neue Formate und Nachholweg | v1.5 | 11/15 | In Progress | - |
+| 31. Neue Formate und Nachholweg | v1.5 | 12/15 | In Progress | - |
 | 32. Filter in der Unified Search | v1.5 | 0/? | Not started | - |
 | 33. Ausschlussmuster und Admin-Feinschliff | v1.5 | 0/? | Not started | - |
 | 34. Umstiegsweg | v1.5 | 0/? | Not started | - |
