@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 32-01-PLAN.md
-last_updated: "2026-10-12T21:45:00.000Z"
-last_activity: 2026-10-12 -- Plan 32-01 abgeschlossen (Typfilter serverseitig, FilterDefinition types, Paritätstest)
+stopped_at: Completed 32-02-PLAN.md
+last_updated: "2026-10-13T00:30:00.000Z"
+last_activity: 2026-10-13 -- Plan 32-02 abgeschlossen (Ordnerfilter in PHP, Recheck im Unterbaum, fail-open)
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 32
-  completed_plans: 25
+  completed_plans: 26
   percent: 14
 ---
 
@@ -26,11 +26,11 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 32 von 30-36 (Filter in der Unified Search)
-Plan: 1 von 8 erledigt (32-01), nächster 32-02 (Ordnerfilter in PHP)
-Status: Phase 32 in Ausführung; 32-01 abgeschlossen (Provider deklariert types, gemeinsamer Parser SearchFilters::typesFrom, D-05 per D-32-07 aufgehoben). USRCH-01/03 bleiben Pending bis 32-07 bzw. 32-06
-Last activity: 2026-10-12 -- Plan 32-01 abgeschlossen
+Plan: 2 von 8 erledigt (32-01, 32-02), nächster 32-03 (Ordnerbudget gemessen)
+Status: Phase 32 in Ausführung; 32-02 abgeschlossen (Provider deklariert folder, SearchService löst den Ordner im Nutzerbaum auf, Vorauswahl über Koordinaten, Recheck auf dem Ordnerknoten, jeder Fehler ergibt die ungefilterte Suche). USRCH-01/02/03 bleiben Pending bis 32-06/32-07
+Last activity: 2026-10-13 -- Plan 32-02 abgeschlossen
 
-Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passed, 659f5631); Phase 32: 1/8 Pläne
+Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passed, 659f5631); Phase 32: 2/8 Pläne
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 - v1.5: 31-14 in ca. 60 min inkl. ca. 27 min Volltestläufe und ca. 20 min CI (2 Tasks, 11 Dateien)
 - v1.5: 31-15 in ca. 250 min inkl. ca. 75 min Volltestläufe und ca. 60 min CI (3 Tasks, 16 Dateien)
 - v1.5: 32-01 in ca. 50 min inkl. ca. 12 min Volltestlauf und ca. 25 min CI (2 Tasks, 8 Dateien)
+- v1.5: 32-02 in ca. 120 min inkl. Flake-Fix vorab, ca. 25 min Volltestläufe und ca. 45 min CI (2 Tasks, 9 Dateien)
 
 ## Accumulated Context
 
@@ -96,6 +97,7 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 - 31-14: docs/formats.md je Format (gelesen, nicht gelesen, Urteil), ZIP-Grenzen gleich config.py, Typfilter, Nachholweg, Not supported; .ppt ist mime_not_allowed, nur PowerPoint-OLE unter .pptx bleibt legacy_format. Dateitypen-Liste in allen sechs Beschreibungen und drei READMEs mit DOC, XLS, Mails (EML), ZIP ohne Texterkennung, HEIC; ZIP-Zeile ohne gesperrten Wortstamm (E-H2). Gate: fünf Formatwörter je Liste, jede Liste zeichengleich zum Entwurf Teil Phase 31. Grenzliste bleibt fünf, Empfehlung an den Owner: kein ZIP-Eintrag. Commits f1aa9137, 76ce8463; CI Python 38264572771, PHP 38264572714.
 - 31-15: Audit der Phase 31 (31-AUDIT.md, status fixed): Korpus aus ZIP, Mail, Word, Excel, HEIC durch das Sandbox-Kind. H-31-01 Mail-Kopfzeilen (1,2 MB To hielt den Indexer 120 s): Richtlinie kürzt jede Kopfzeile auf 32 KiB, 1 MiB Parser-Budget je Mail, danach nur Kopfzeilen (indexed(truncated)); echte Mail mit 999 Anhängen bleibt ganz. H-31-02 Overlap-Warnung von zipfile mit Mitgliedsnamen im Log verworfen. M-31-01 gewöhnliche Runde lässt Abgeschriebene ohne Zeile liegen, solange der Nachholweg offen ist (nur der Nachholzyklus übergibt, einmal). M-31-02 Word 6/95 (wIdent 0xA5DC, an echter Datei gefunden) skipped(unsupported_variant). L-31-01 resume_after (recheck und catchup), L-31-02 OSError eines Mitglieds, L-31-03 Spiegelcheck, L-31-07 [[ =~ ]] in deploy-harp. Accept: L-31-04 JPEG/HEIF-Urteil, L-31-05 Office-Mitglied ohne Vorzählung, L-31-06 Umbenennen/Neustart, L-31-08 Teil B ohne Generation, L-31-09 Korpuslücken (Phase 36), L-31-10 Neu-Urteil +15,5 % je Seite (0,06 ms). Commits 02e11bf1, 013d1c58, 97891f3a, 004dc865, 53fae392; CI Python 38292944805, HaRP 38292944828 grün.
 - 32-01: Provider deklariert den Custom Filter types (FilterDefinition TYPE_STRING, exklusiv als Standard; SearchComposer stable34 legt Custom-Definitionen nur unter der eigenen Provider-ID ab, daher ohne Wirkung auf andere Apps). Ein Parser SearchFilters::typesFrom() für Ergebnisseite und Dialog: geschlossene Menge TYPES, MAX_TYPES_LENGTH 200 vor dem Split, trim nur Leerzeichen und Tab (pdf  ergibt keine Gruppe). Tür trägt types in TYPES-Reihenfolge, Datum bleibt draußen. D-05-Tests umgedreht mit Vermerk D-32-07. Paritätstest über PHP TYPES, /search, /snippets, /diagnose, TYPE_GROUPS; types [] gleich fehlendes Feld, 422 bleibt. Commit ed2908fc; CI PHP 38309357692 (620 Tests), Python 38309357739 (Versuch 2, Versuch 1 Flake in test_main_lifespan, deferred-items.md), Integration 38309357675 (Providerliste meldet types:string), HaRP 38309357673 grün.
+- 32-02: Ordnerfilter nur in PHP (D-32-06). SearchFilters::folder ohne Default, reist nie über das Netz (Body byte-gleich, Test). Provider FILTER_FOLDER 'folder' (TYPE_STRING), MAX_FOLDER_LENGTH 4000, folderOf() still (Nicht-String, Überlänge, Steuerzeichen, Wurzel ergeben null). SearchService: scopeOf() über Folder::get() plus Präfixprüfung gegen den Nutzerordner, scopeCoordinates() aus IFileAccess::getByFileId und den Mounts unter dem Ordner (eine Mountliste je Lauf), Vorauswahl über Storage plus Rohpfad mit Trennzeichen, Recheck readableFile($scope ?? $userFolder); ohne Mountliste oder Ordnereintrag keine Koordinaten (Recheck entscheidet allein, M4-Formel). FOLDER_FETCH_LIMIT 100, FOLDER_MAX_ROUNDS 6 (A2, Messung 32-03); A1 offen bis 32-06. Logzeilen ohne Kontext. Vorab Flake-Fix 39e8eca9 (detect im Test festgehalten). Commit 53daf104; CI PHP 38316403027 (645 Tests), Python 38316403112, Integration 38316403070, HaRP 38316403120 grün.
 
 ### Offene Faeden (kein aktiver Auftrag)
 
@@ -125,6 +127,6 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 
 ## Session Continuity
 
-Last session: 2026-10-12T21:45:00.000Z
-Stopped at: Completed 32-01-PLAN.md
+Last session: 2026-10-13T00:30:00.000Z
+Stopped at: Completed 32-02-PLAN.md
 Resume file: None

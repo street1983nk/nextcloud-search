@@ -152,7 +152,7 @@ Plans:
 **Plans**: 8 plans (seriell, eine Welle je Plan)
 Plans:
 - [x] 32-01-PLAN.md: Typfilter serverseitig (FilterDefinition types, gemeinsamer Parser, Tür mit types, D-05 umgedreht), Paritätstest und leere Liste im Backend
-- [ ] 32-02-PLAN.md: Ordnerfilter in PHP (folder, Folder::get, Vorauswahl über Koordinaten, Recheck im Unterbaum, fail-open)
+- [x] 32-02-PLAN.md: Ordnerfilter in PHP (folder, Folder::get, Vorauswahl über Koordinaten, Recheck im Unterbaum, fail-open)
 - [ ] 32-03-PLAN.md: Ordnerbudget gemessen (enger Ordner, Treffer tief im Ranking), Konstanten belegt
 - [ ] 32-04-PLAN.md: Listener auf jeder angemeldeten Seite, Vanilla-Plugin mit sieben Filtereinträgen, Vertragstest
 - [ ] 32-05-PLAN.md: l10n-Kette der vier neuen Sätze (16 Kataloge, 5 Dokus)
@@ -218,7 +218,7 @@ Plans:
 | 24-29 (Archiv) | v1.4 | 78/78 | Complete | 2026-10-06 |
 | 30. Owner-Tor, Schema und Tschechisch | v1.5 | 9/9 | Complete | 2026-10-10 |
 | 31. Neue Formate und Nachholweg | v1.5 | 15/15 | In Progress (Verifikation offen) | - |
-| 32. Filter in der Unified Search | v1.5 | 1/8 | In Progress | - |
+| 32. Filter in der Unified Search | v1.5 | 2/8 | In Progress | - |
 | 33. Ausschlussmuster und Admin-Feinschliff | v1.5 | 0/? | Not started | - |
 | 34. Umstiegsweg | v1.5 | 0/? | Not started | - |
 | 35. Stretch: Aehnliche Dokumente und Spikes | v1.5 | 0/? | Not started | - |
