@@ -159,7 +159,7 @@ plan 31-01 found seven of them one or more releases behind.
 | Package | Version | Licence | Source repository | Place in the image |
 |---|---|---|---|---|
 | `tantivy` | 0.26.2 | MIT | github.com/quickwit-oss/tantivy-py | `/app/.venv/lib/python3.13/site-packages/tantivy` |
-| `pypdfium2` | 5.13.0 | Apache-2.0 or BSD-3-Clause (wrapper), BSD-3-Clause (bundled PDFium) | github.com/pypdfium2-team/pypdfium2 | `/app/.venv/lib/python3.13/site-packages/pypdfium2` |
+| `pypdfium2` | 5.14.0 | Apache-2.0 or BSD-3-Clause (wrapper), BSD-3-Clause (bundled PDFium) | github.com/pypdfium2-team/pypdfium2 | `/app/.venv/lib/python3.13/site-packages/pypdfium2` |
 | `pypdf` | 6.19.0 | BSD-3-Clause | github.com/py-pdf/pypdf | `/app/.venv/lib/python3.13/site-packages/pypdf` |
 | `python-docx` | 1.2.0 | MIT | github.com/python-openxml/python-docx | `/app/.venv/lib/python3.13/site-packages/docx` |
 | `python-pptx` | 1.0.2 | MIT | github.com/scanny/python-pptx | `/app/.venv/lib/python3.13/site-packages/pptx` |
@@ -395,7 +395,7 @@ held.
 |---|---|---|---|---|
 | `tokenizers` | 0.23.2 | Apache-2.0 | github.com/huggingface/tokenizers | `/app/.venv/lib/python3.13/site-packages/tokenizers` |
 | `numpy` | 2.5.3 | BSD-3-Clause (wheel metadata: `BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0` for bundled parts) | github.com/numpy/numpy | `/app/.venv/lib/python3.13/site-packages/numpy` |
-| `onnxruntime` | 1.30.0 | MIT | github.com/microsoft/onnxruntime | `/app/.venv/lib/python3.13/site-packages/onnxruntime` |
+| `onnxruntime` | 1.31.0 | MIT | github.com/microsoft/onnxruntime | `/app/.venv/lib/python3.13/site-packages/onnxruntime` |
 | `sqlite-vec` | 0.1.9 | Apache-2.0 | github.com/asg017/sqlite-vec | `/app/.venv/lib/python3.13/site-packages/sqlite_vec`, and the extension itself a second time at `/usr/local/lib/findling/vec0.so` |
 | `semantic-text-splitter` | 0.33.0 | MIT | github.com/benbrandt/text-splitter | `/app/.venv/lib/python3.13/site-packages/semantic_text_splitter` |
 
@@ -446,7 +446,7 @@ list of distributed material.
 |---|---|---|---|---|
 | `python:3.13-slim-trixie` base image | digest `sha256:ffb752e1…c6e30a` | Debian base: mixed free licences, per package under `/usr/share/doc/*/copyright`; CPython: PSF-2.0 | docker-library/python | the image itself |
 | `nc-py-api[app]` | 0.30.3 | BSD-3-Clause | github.com/cloud-py-api/nc_py_api | `/app/.venv` |
-| `fastapi` | 0.142.2 | MIT | github.com/fastapi/fastapi | `/app/.venv` |
+| `fastapi` | 0.143.0 | MIT | github.com/fastapi/fastapi | `/app/.venv` |
 | `httpx` | 0.28.1 | BSD-3-Clause | github.com/encode/httpx | `/app/.venv` |
 | `frpc` | frp 0.61.1 | Apache-2.0 | fatedier/frp, fetched from the pinned commit of nextcloud/HaRP that vendors the byte identical tarball | `/usr/local/bin/frpc` |
 
