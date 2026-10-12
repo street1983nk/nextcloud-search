@@ -802,8 +802,12 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # crawl walks today), AdminViewService.php (the flag and the conditions it is
 # composed of) and templates/admin.php (the sentence and its element) changed
 # their bytes. No file came and none went, so PHP_FILES_TODAY stays at 90.
+# Measured again by issue #27 (the result page opens its own #app-content, the
+# one element that scrolls inside the clipped #content): templates/search.php
+# changed its bytes. No file came and none went, so PHP_FILES_TODAY stays at
+# 90.
 PHP_FILES_TODAY = 90
-PHP_TREE_HASH_TODAY = "bee7a95422d96ad9462e594bd7f1f55dc01e6efbb20c572740392c8c06259225"
+PHP_TREE_HASH_TODAY = "f16b01c0a877ffa391b92f5b03e4914391e0cbba58111d6756773cc3b3347abe"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

@@ -1412,6 +1412,60 @@ def scan_page_stylesheet_for_a_reachable_row(name: str, source: str) -> list[str
     return findings
 
 
+# The scroll container of the result page (issue #27). Nextcloud puts the output
+# of a user page into #content, and core/css/apps.scss gives #content a fixed
+# height and "overflow: clip" (seen from v32.0.0 to v34.0.4). The one element
+# that scrolls inside it is #app-content ("overflow: auto", "height: 100%"),
+# and the server does not supply it: a page that does not open it itself cannot
+# be scrolled at all, and every hit below the fold is out of reach. search.css
+# and search.js were written for that container from the start; the template
+# was the half that never opened it.
+SCROLL_CONTAINER_OPENER = '<div id="app-content">'
+PAGE_BLOCK_CLASS = 'class="findling-search"'
+
+_PHP_SECTION = re.compile(r"<\?php.*?\?>", re.DOTALL)
+_CSS_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
+_DIV_TAG = re.compile(r"<div\b[^>]*>|</div\s*>")
+
+
+def scan_page_template_for_the_scroll_container(name: str, source: str) -> list[str]:
+    """Findings of the result page: the page block has to sit in an #app-content of its own.
+
+    The PHP sections are cut out first, comments and conditions with them, so
+    what is judged is the markup the browser receives. Its first div has to be
+    the container, the second the page block, and the div that closes the
+    container has to be the last element of the file.
+    """
+    markup = _PHP_SECTION.sub("", source)
+    tags = [match.group(0) for match in _DIV_TAG.finditer(markup)]
+    opened = markup.count('id="app-content"')
+    if opened != 1:
+        return [f"{name}: opens #app-content {opened} times, the page needs it once"]
+    if len(tags) < 2 or tags[0] != SCROLL_CONTAINER_OPENER or PAGE_BLOCK_CLASS not in tags[1]:
+        return [f"{name}: the page block is not the first child of {SCROLL_CONTAINER_OPENER!r}, so nothing scrolls"]
+
+    findings: list[str] = []
+    depth = 0
+    closed_at = -1
+    for position, tag in enumerate(tags):
+        depth += -1 if tag.startswith("</") else 1
+        if depth == 0:
+            closed_at = position
+            break
+    if closed_at != len(tags) - 1:
+        findings.append(f"{name}: #app-content is closed before the end of the page, so part of it cannot scroll")
+    elif markup[markup.rfind("</div") :].split(">", 1)[1].strip() != "":
+        findings.append(f"{name}: markup follows the closing #app-content, outside the scroll container")
+    return findings
+
+
+def scan_page_stylesheet_for_the_scroll_container(name: str, source: str) -> list[str]:
+    """Findings of the result page stylesheet: #app-content keeps the rules of the server."""
+    if "#app-content" in _CSS_COMMENT.sub("", source):
+        return [f"{name}: styles #app-content, whose overflow and height are the scrolling of the page"]
+    return []
+
+
 Scanner = Callable[[str, str], list[str]]
 
 
@@ -1771,6 +1825,45 @@ def test_every_control_of_the_filter_row_can_be_reached() -> None:
         "\t\tmin-height: 44px;\n\t}\n}\n"
     )
     assert len(scan_page_stylesheet_for_a_reachable_row("sample.css", dirty)) == 4
+
+
+def test_the_result_page_brings_its_own_scroll_container() -> None:
+    """Issue #27: a result list longer than the window has to scroll.
+
+    Reproduced in the browser on 12.10.2026: without the container nothing on
+    the page moves under the wheel, the scroll bar or the keyboard; with it the
+    page scrolls to the last hit and the pager. The reason is in the comment at
+    SCROLL_CONTAINER_OPENER, and search.js depends on it as well: the return
+    mark calls scrollIntoView, which moves the nearest scrollable ancestor.
+
+    **What this gate does not prove.** It reads markup and cannot lay a page
+    out. A rule of the theme or of a later Nextcloud that clips #app-content
+    would pass here; the sight check with more hits than the window holds stays
+    a human one.
+    """
+    template = PAGE_TEMPLATE.read_text(encoding="utf-8")
+    stylesheet = PAGE_STYLESHEET.read_text(encoding="utf-8")
+
+    assert scan_page_template_for_the_scroll_container(PAGE_TEMPLATE.name, template) == []
+    assert scan_page_stylesheet_for_the_scroll_container(PAGE_STYLESHEET.name, stylesheet) == []
+    # The anti vacuity clause: the markup that was judged is the page block.
+    assert PAGE_BLOCK_CLASS in template
+    # And it goes red on every shape: the page as 1.4.2 shipped it, a container
+    # closed too early, markup after it, a second one, and a stylesheet that
+    # takes the scrolling over.
+    head = '<?php\n/* <div id="app-content"> in a comment does not count */\n?>\n'
+    bare = head + '<div class="findling-search">\n\t<div class="findling-search__head"></div>\n</div>\n'
+    early = head + '<div id="app-content">\n<div class="findling-search">\n</div>\n</div>\n<div></div>\n'
+    trailing = head + '<div id="app-content">\n<div class="findling-search">\n</div>\n</div>\n<p></p>\n'
+    twice = head + '<div id="app-content"><div class="findling-search"></div></div><div id="app-content"></div>\n'
+    good = head + '<div id="app-content">\n<div class="findling-search">\n\t<?php } ?>\n</div>\n</div>\n'
+    assert len(scan_page_template_for_the_scroll_container("sample.php", bare)) == 1
+    assert len(scan_page_template_for_the_scroll_container("sample.php", early)) == 1
+    assert len(scan_page_template_for_the_scroll_container("sample.php", trailing)) == 1
+    assert len(scan_page_template_for_the_scroll_container("sample.php", twice)) == 1
+    assert scan_page_template_for_the_scroll_container("sample.php", good) == []
+    assert len(scan_page_stylesheet_for_the_scroll_container("sample.css", "#app-content {\n}\n")) == 1
+    assert scan_page_stylesheet_for_the_scroll_container("sample.css", "/* #app-content */\n") == []
 
 
 # -- self tests: the gate has to report every shape it judges --------------

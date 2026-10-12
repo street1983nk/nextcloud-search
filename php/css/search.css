@@ -19,9 +19,10 @@
  * is no six hundred anywhere. The file name carries its rank in its weight and
  * not in a fourth size.
  *
- * #app-content is not touched. It is the scroll container of the page and it
- * belongs to the server; this file sets the inner padding and the reading width
- * of its own block and nothing else.
+ * #app-content is not touched. It is the scroll container of the page: the
+ * template opens it (the server does not, issue #27) and the server rules give
+ * it its overflow and height; this file sets the inner padding and the reading
+ * width of its own block and nothing else.
  *
  * The focus ring is never touched. Nothing here removes an outline.
  */

@@ -186,6 +186,14 @@ $maxQueryLength = \OCA\Findling\Controller\PageController::MAX_QUERY_LENGTH;
 // that approved nothing still needs its way back.
 $showPager = $previousUrl !== null || $nextUrl !== null || ($page >= $maxPage && $hasMore);
 ?>
+<?php /* The scroll container of the page (issue #27). Nextcloud puts this
+         output into #content, which core/css/apps.scss gives a fixed height
+         and "overflow: clip". The element that scrolls inside it is
+         #app-content, and the server does not supply one: without this div a
+         result list longer than the window cannot be scrolled at all.
+         search.css leaves it to the server rules, and search.js relies on it
+         as the scrollable ancestor of scrollIntoView. */ ?>
+<div id="app-content">
 <div class="findling-search">
 
 	<?php /* Block 1: the head. Exactly one h1 on this page, and without a term
@@ -575,4 +583,5 @@ $showPager = $previousUrl !== null || $nextUrl !== null || ($page >= $maxPage &&
 		</div>
 	<?php } ?>
 
+</div>
 </div>
