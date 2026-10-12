@@ -766,6 +766,20 @@ def test_every_word_file_of_the_corpus_ends_in_a_named_verdict(
     ran, _ = _corpus_case(worker, tmp_path, "korpus.doc", build(), DOC)
 
     _expect(ran, state, reason, contains=word)
+    if case in _REFUSED_BY_THE_READER:
+        # The reader's own length check refuses these, not a struct.error that
+        # happens to land on the same verdict further down.
+        assert ran.outcome.detail == "findling.extract.legacy_doc.CorruptDocument"
+
+
+_REFUSED_BY_THE_READER = frozenset(
+    {
+        "millions-of-pieces-declared",
+        "fc-one-past-the-stream-end",
+        "unicode-fc-past-the-stream-end",
+        "worddocument-of-0-bytes",
+    }
+)
 
 
 def _word6_stream(flags: int = 0) -> bytes:
