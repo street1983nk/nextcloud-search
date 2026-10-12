@@ -3487,7 +3487,9 @@ jobs:
               return sqlite3.connect(f"file:{ROOT}/{name}?mode=ro", uri=True, timeout=30)
 
 
-          question, subject = sys.argv[1], sys.argv[2]
+          # The reconcile question carries no subject (run 38250670039).
+          question = sys.argv[1]
+          subject = sys.argv[2] if len(sys.argv) > 2 else ""
           if question == "verdict":
               row = connect("state.db").execute(
                   "SELECT state, IFNULL(reason, '') FROM files WHERE file_id = ? AND deleted_at IS NULL",

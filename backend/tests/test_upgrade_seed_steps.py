@@ -1123,3 +1123,124 @@ def test_the_stock_question_takes_a_list() -> None:
     part = probe[probe.index('elif question == "stock":') : probe.index('elif question == "rows":')]
     assert 'excluded = {int(part) for part in subject.split(",") if part}' in part
     assert "if row[1] not in excluded" in part
+
+
+def _probe_source() -> str:
+    """The seed-probe.py the run of "Store upgrade 2b" writes, dedented."""
+    run = _run(SEED_STEP)
+    start = run.index("cat > \"${RUNNER_TEMP}/seed-probe.py\" <<'PY'\n") + len(
+        "cat > \"${RUNNER_TEMP}/seed-probe.py\" <<'PY'\n"
+    )
+    return run[start : run.index("\nPY\n", start)] + "\n"
+
+
+def test_the_probe_answers_the_reconcile_question_without_a_subject(tmp_path: Path) -> None:
+    # Run 38250670039 (plan 31-13): "seed_probe reconcile" is asked with one
+    # argument, and a probe that read sys.argv[2] for every question failed
+    # with IndexError on each round, so the wait for the first reconcile cycle
+    # of 1.4.2 read "unreadable" until its budget ran out. Executed here
+    # against a state.db with the reconcile table of v1.4.2
+    # (store/repo.py:548-569 of the tag), both answers.
+    import sqlite3
+    import sys
+
+    probe = tmp_path / "seed-probe.py"
+    probe.write_text(_probe_source(), encoding="utf-8")
+    database = tmp_path / "state.db"
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "CREATE TABLE reconcile (storage_id INTEGER PRIMARY KEY, after_file_id INTEGER NOT NULL,"
+            " started_at REAL, finished_at REAL)"
+        )
+        connection.execute("INSERT INTO reconcile VALUES (1, 17, 1.0, NULL)")
+    environment = {**__import__("os").environ, "APP_PERSISTENT_STORAGE": str(tmp_path)}
+
+    def ask() -> str:
+        done = subprocess.run(  # noqa: S603 - an argument list, never a shell
+            [sys.executable, str(probe), "reconcile"],
+            capture_output=True,
+            text=True,
+            env=environment,
+            check=False,
+        )
+        assert done.returncode == 0, done.stderr
+        return done.stdout.strip()
+
+    assert ask() == "open"
+    with sqlite3.connect(database) as connection:
+        connection.execute("UPDATE reconcile SET after_file_id = 0, finished_at = 2.0")
+    assert ask() == "done"
+
+
+def test_the_probe_answers_every_question_of_3c_and_5(tmp_path: Path) -> None:
+    # Every question "Store upgrade 3c" and "Store upgrade 5" ask, executed
+    # against databases built from store/schema.sql and the chunks table of
+    # store/vectors.sql (both unchanged since v1.4.2: git diff v1.4.2 HEAD of
+    # the two files is empty), so a broken question shows here and not an
+    # hour into deploy-harp.
+    import os
+    import sqlite3
+    import sys
+
+    store = REPO_ROOT / "backend" / "src" / "findling" / "store"
+    probe = tmp_path / "seed-probe.py"
+    probe.write_text(_probe_source(), encoding="utf-8")
+    with sqlite3.connect(tmp_path / "state.db") as connection:
+        connection.executescript((store / "schema.sql").read_text(encoding="utf-8"))
+        rows = (
+            (1, "/a.txt", "text/plain", "indexed", None, "e1"),
+            (2, "/b.docx", "", "skipped", "legacy_format", "e2"),
+            (3, "/c.pptx", "", "skipped", "legacy_format", "e3"),
+            (4, "/d.txt", "text/plain", "failed", "repeatedly_stuck", "e4"),
+            (5, "/e.eml", "message/rfc822", "skipped", "mime_not_allowed", "e5"),
+        )
+        for file_id, path, mime, state, reason, etag in rows:
+            connection.execute(
+                "INSERT INTO files (file_id, storage_id, root_id, path, mime, size, mtime, etag, state, reason)"
+                " VALUES (?, 1, 1, ?, ?, 10, 1, ?, ?, ?)",
+                (file_id, path, mime, etag, state, reason),
+            )
+        connection.execute("INSERT INTO meta VALUES ('recheck_1_4_0', 'done')")
+    vectors = (store / "vectors.sql").read_text(encoding="utf-8")
+    chunks = vectors[vectors.index("CREATE TABLE IF NOT EXISTS chunks") :]
+    with sqlite3.connect(tmp_path / "vectors.db") as connection:
+        connection.execute(chunks[: chunks.index(");") + 2])
+        connection.executemany(
+            "INSERT INTO chunks VALUES (?, ?, 0, 0, 5)",
+            ((1, 1), (2, 1), (3, 4), (4, 9)),
+        )
+    environment = {**os.environ, "APP_PERSISTENT_STORAGE": str(tmp_path)}
+
+    def ask(*arguments: str) -> str:
+        done = subprocess.run(  # noqa: S603 - an argument list, never a shell
+            [sys.executable, str(probe), *arguments],
+            capture_output=True,
+            text=True,
+            env=environment,
+            check=False,
+        )
+        assert done.returncode == 0, (arguments, done.stderr)
+        return done.stdout.strip()
+
+    assert ask("verdict", "1") == "indexed/"
+    assert ask("verdict", "2") == "skipped/legacy_format"
+    assert ask("verdict", "8") == "none"
+    assert ask("meta", "recheck_1_4_0") == "done"
+    assert ask("meta", "recheck_1_5_0") == "absent"
+    assert ask("chunks", "1") == "2"
+    assert ask("rows", "4") == "1"
+    # Part A: legacy_format without PowerPoint, the new type, the written off.
+    assert ask("catchup", "0").split() == [
+        "2=skipped/legacy_format",
+        "4=failed/repeatedly_stuck",
+        "5=skipped/mime_not_allowed",
+    ]
+    assert ask("catchup", "2,5").split() == ["4=failed/repeatedly_stuck"]
+    whole = ask("stock", "0")
+    assert whole.endswith(":3:4")
+    assert ask("stock", "9").endswith(":2:3")
+    assert ask("stock", "4,9").endswith(":1:2")
+    assert ask("stock", "4,9") != ask("stock", "4")
+    digest = ask("digest", "4,5")
+    assert re.fullmatch(r"[0-9a-f]{64}:3", digest)
+    assert ask("digest", "") != digest
