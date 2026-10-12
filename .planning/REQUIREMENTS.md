@@ -91,12 +91,12 @@
 | EXCL-01 | Phase 33 | Pending |
 | EXCL-02 | Phase 33 | Pending |
 | EXCL-03 | Phase 33 | Pending |
-| FMT-01 | Phase 31 | Complete (E2E in deploy-harp 38256198997, 31-13) |
-| FMT-02 | Phase 31 | Complete (E2E in deploy-harp 38256198997, 31-13) |
-| FMT-03 | Phase 31 | Complete (E2E in deploy-harp 38256198997, 31-13) |
+| FMT-01 | Phase 31 | Complete (E2E in deploy-harp 38256198997, 31-13; Audit 31-15: Kopfzeilengrenze H-31-01, deploy-harp 38292944828) |
+| FMT-02 | Phase 31 | Complete (E2E in deploy-harp 38256198997, 31-13; Audit 31-15: H-31-02 und L-31-02 gefixt) |
+| FMT-03 | Phase 31 | Complete (E2E in deploy-harp 38256198997, 31-13; Audit 31-15: Word 6/95 als unsupported_variant, M-31-02) |
 | FMT-04 | Phase 31 | Complete (E2E in deploy-harp 38256198997, 31-13) |
 | FMT-05 | Phase 31 | Complete (E2E in deploy-harp 38256198997, 31-13) |
-| FMT-06 | Phase 31 | Complete (Upgrade-CI-Beweis deploy-harp 38256198997, 31-13) |
+| FMT-06 | Phase 31 | Complete (Upgrade-CI-Beweis deploy-harp 38256198997, 31-13; Audit 31-15: M-31-01 und L-31-01 gefixt, deploy-harp 38292944828) |
 | CZ-01 | Phase 30 | Complete |
 | CZ-02 | Phase 30 | Complete |
 | CZ-03 | Phase 30 | Complete |

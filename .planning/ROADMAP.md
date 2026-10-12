@@ -139,7 +139,7 @@ Plans:
 - [x] 31-12-PLAN.md: deploy-harp: Saat der neuen Formate unter v1.4.2, Aufzeichnung vor dem Upgrade
 - [x] 31-13-PLAN.md: deploy-harp: Store upgrade 5 Altbestand/Saat getrennt, L-30-03, Strecke 0 bis 7 grün
 - [x] 31-14-PLAN.md: docs/formats.md, Store-Text-Entwurf v1.5.0 (Teil Phase 31) zur Abnahme REL-05
-- [ ] 31-15-PLAN.md: Security-, Bug- und Performance-Audit mit bösartigem Formatkorpus, Befunde fixen
+- [x] 31-15-PLAN.md: Security-, Bug- und Performance-Audit mit bösartigem Formatkorpus, Befunde fixen
 
 ### Phase 32: Filter in der Unified Search
 **Goal**: Nutzer koennen direkt in der Nextcloud Unified Search nach Dateityp und Ordner filtern, ohne die Ergebnisseite zu oeffnen
@@ -208,7 +208,7 @@ Plans:
 | 17-23 (Archiv) | v1.3 | 69/69 | Complete | 2026-09-27 |
 | 24-29 (Archiv) | v1.4 | 78/78 | Complete | 2026-10-06 |
 | 30. Owner-Tor, Schema und Tschechisch | v1.5 | 9/9 | Complete | 2026-10-10 |
-| 31. Neue Formate und Nachholweg | v1.5 | 14/15 | In Progress | - |
+| 31. Neue Formate und Nachholweg | v1.5 | 15/15 | In Progress (Verifikation offen) | - |
 | 32. Filter in der Unified Search | v1.5 | 0/? | Not started | - |
 | 33. Ausschlussmuster und Admin-Feinschliff | v1.5 | 0/? | Not started | - |
 | 34. Umstiegsweg | v1.5 | 0/? | Not started | - |
