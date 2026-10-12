@@ -3507,6 +3507,70 @@ jobs:
               ).fetchall()
               digest = hashlib.sha256(repr(rows).encode()).hexdigest()
               print(f"{digest}:{len({row[1] for row in rows})}:{len(rows)}")
+          elif question == "rows":
+              # Every row of the file, a tombstone included: "no row" means none.
+              row = connect("state.db").execute("SELECT COUNT(*) FROM files WHERE file_id = ?", (int(subject),)).fetchone()
+              print(row[0])
+          elif question == "reconcile":
+              # The question _is_due of 1.4.2 asks (worker/reconcile.py:645-653):
+              # a finished cycle and no walk in the middle of a mount.
+              row = connect("state.db").execute(
+                  "SELECT MAX(finished_at), SUM(CASE WHEN after_file_id > 0 THEN 1 ELSE 0 END) FROM reconcile"
+              ).fetchone()
+              print("done" if row[0] is not None and not row[1] else "open")
+          elif question == "catchup":
+              # Part A of the catch-up of 1.5 over the old stock, the rule of
+              # select_catchup_candidates in backend/src/findling/worker/catchup.py
+              # written out, because the container asked here runs 1.4.2.
+              excluded = {int(part) for part in subject.split(",") if part}
+              new_types = {
+                  "message/rfc822",
+                  "application/zip",
+                  "application/msword",
+                  "application/vnd.ms-excel",
+                  "image/heic",
+                  "image/heif",
+              }
+              new_endings = {"eml", "zip", "doc", "dot", "xls", "xlt", "heic", "heif"}
+              powerpoint_types = {
+                  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                  "application/vnd.ms-powerpoint",
+              }
+              powerpoint_endings = {"pptx", "ppt", "pps", "ppsx", "pot", "potx"}
+              rows = connect("state.db").execute(
+                  "SELECT file_id, state, IFNULL(reason, ''), path, IFNULL(mime, '') FROM files"
+                  " WHERE deleted_at IS NULL ORDER BY file_id"
+              )
+              for file_id, state, reason, path, mime in rows:
+                  if file_id in excluded:
+                      continue
+                  ending = path.rsplit(".", 1)[-1].lower() if "." in path else ""
+                  powerpoint = mime in powerpoint_types if mime else ending in powerpoint_endings
+                  new_type = mime in new_types if mime else ending in new_endings
+                  if (
+                      (state == "skipped" and reason == "legacy_format" and not powerpoint)
+                      or (state in ("skipped", "failed") and new_type)
+                      or (state == "failed" and reason == "repeatedly_stuck")
+                  ):
+                      print(f"{file_id}={state}/{reason}")
+          elif question == "digest":
+              # The old stock over its stable columns only: file_id, state,
+              # reason and etag of every live row of files, and the number of
+              # chunks of the file in the vector stock. No time stamp, no
+              # counter, no lock or cursor field. One line per file, sorted by
+              # file_id, the excluded ids left out.
+              excluded = {int(part) for part in subject.split(",") if part}
+              counts = dict(connect("vectors.db").execute("SELECT file_id, COUNT(*) FROM chunks GROUP BY file_id").fetchall())
+              stable = connect("state.db").execute(
+                  "SELECT file_id, state, IFNULL(reason, ''), IFNULL(etag, '') FROM files"
+                  " WHERE deleted_at IS NULL ORDER BY file_id"
+              )
+              lines = [
+                  f"{file_id}|{state}|{reason}|{etag}|{counts.get(file_id, 0)}"
+                  for file_id, state, reason, etag in stable
+                  if file_id not in excluded
+              ]
+              print(f"{hashlib.sha256(chr(10).join(lines).encode()).hexdigest()}:{len(lines)}")
           else:
               sys.exit(f"unknown question {question}")
           PY
@@ -3646,12 +3710,372 @@ jobs:
           } >> "${GITHUB_ENV}"
 
           # ---------------------------------------------------------------
-          # Phase 31 (FMT-06) appends its legacy_format seed here: further
-          # files sown into the same fix-seed folder, scanned, judged by
-          # ${UPGRADE_FROM_TAG} under the same budget and exported next to
-          # the two ids above. The two seeds before this mark stay as they
-          # are, so the assurances of "Store upgrade 5" keep their subject.
+          # The seed of the new formats (plan 31-12, FMT-06), where phase 31
+          # was announced at the end of this step. Eight files out of
+          # .github/fixtures/upgrade-seed-formats (written by
+          # scripts/ci/make_upgrade_seed_formats.py and held byte for byte by
+          # backend/tests/test_upgrade_seed_fixture.py), each with a word of
+          # its own, and a small ZIP bomb without one. What 1.4.2 makes of
+          # them is read out of the code of the tag, not assumed (the table
+          # of 31-12-SUMMARY):
+          #
+          #   eml, zip, bomb, doc, xls, heic  never queued: the listener asks
+          #     the allowlist (php/lib/Listener/FileEventListener.php:381),
+          #     which names none of the six types
+          #     (php/lib/Service/StorageService.php:111-130), so neither
+          #     state.db nor findling_file_state ever holds a row of them
+          #   Word 97 under .docx  skipped(legacy_format), the compound file
+          #     sniff of backend/src/findling/extract/cfb.py:105 finds the
+          #     stream WordDocument
+          #   seed-stale-size.txt  failed(repeatedly_stuck) in Nextcloud and
+          #     no row in state.db, by the fixed order below
+          #
+          # The six files arrive by WebDAV, the way a user uploads, so the
+          # listener of 1.4.2 is what decides about them; the stale file
+          # follows separately, because its order matters.
           # ---------------------------------------------------------------
+          formats_dir=findling-src/.github/fixtures/upgrade-seed-formats
+          mail_name=seed-mail.eml
+          zip_name=seed-archive.zip
+          bomb_name=seed-bomb.zip
+          doc_name=seed-word.doc
+          xls_name=seed-excel.xls
+          heic_name=seed-photo.heic
+          ole_name=seed-ole-under-docx.docx
+          stale_name=seed-stale-size.txt
+          # One word per file, the SEED_WORDS of the generator; the bomb
+          # carries none.
+          format_words="mailquendel archivquendel wortquendel zellquendel fotoquendel hullequendel cachequendel"
+
+          # The hit count of one word, fail closed like seed_hits above.
+          word_hits() {
+            word_body="${RUNNER_TEMP}/seed-word-$1.json"
+            word_code=$(curl -s -o "${word_body}" -w '%{http_code}' \
+              -u "testuser:${TESTUSER_PASS}" \
+              -H 'OCS-APIRequest: true' \
+              -H 'Accept: application/json' \
+              "http://localhost:8080/ocs/v2.php/search/providers/findling/search?term=$1")
+            word_count=$(jq -r '.ocs.data.entries | length' "${word_body}" 2> /dev/null || true)
+            case "${word_code}:${word_count}" in
+              200:[0-9]*) printf '%s\n' "${word_count}" ;;
+              *)
+                echo "the search for $1 answered HTTP ${word_code} without a readable entry list" >&2
+                head -c 600 "${word_body}" >&2
+                return 1
+                ;;
+            esac
+          }
+          # Every word finds nothing, with a positive control in the same
+          # breath: the picture of the seed above is found exactly once, so a
+          # nought below is an answer of the container and not a search that
+          # never reached it.
+          words_find_nothing() {
+            control=$(seed_hits) || return 1
+            if [ "${control}" != "1" ]; then
+              echo "::error::the positive control found ${control} file(s) for the seed word of the picture instead of one, so the searches of the new words would prove nothing ($1)"
+              return 1
+            fi
+            for word in ${format_words}; do
+              found=$(word_hits "${word}") || return 1
+              if [ "${found}" != "0" ]; then
+                echo "::error::${word} brings back ${found} file(s) $1, and on ${UPGRADE_FROM_TAG} it has to find nothing"
+                return 1
+              fi
+            done
+            echo "none of the seven words finds a file $1, and the positive control finds the picture"
+          }
+          # A WebDAV upload as the ordinary user, so the node events of
+          # Nextcloud fire and the listener of the companion runs.
+          upload() {
+            upload_code=$(curl -s -o /dev/null -w '%{http_code}' \
+              -u "testuser:${TESTUSER_PASS}" \
+              -T "${formats_dir}/$1" \
+              "http://localhost:8080/remote.php/dav/files/testuser/fix-seed/$1")
+            case "${upload_code}" in
+              201|204) ;;
+              *)
+                echo "::error::the upload of $1 answered HTTP ${upload_code}"
+                return 1
+                ;;
+            esac
+          }
+          file_id_of() {
+            q "SELECT fileid FROM oc_filecache WHERE storage = '${storage}' AND path = 'files/fix-seed/$1';"
+          }
+          mime_of() {
+            q "SELECT m.mimetype FROM oc_filecache f JOIN oc_mimetypes m ON m.id = f.mimetype WHERE f.fileid = $1;"
+          }
+
+          words_find_nothing "before anything of the new formats was sown" || exit 1
+
+          for name in "${mail_name}" "${zip_name}" "${bomb_name}" "${doc_name}" "${xls_name}" "${heic_name}" "${ole_name}"; do
+            upload "${name}" || exit 1
+          done
+          mail_id=$(file_id_of "${mail_name}")
+          zip_id=$(file_id_of "${zip_name}")
+          bomb_id=$(file_id_of "${bomb_name}")
+          doc_id=$(file_id_of "${doc_name}")
+          xls_id=$(file_id_of "${xls_name}")
+          heic_id=$(file_id_of "${heic_name}")
+          ole_id=$(file_id_of "${ole_name}")
+          for value in "${mail_id}" "${zip_id}" "${bomb_id}" "${doc_id}" "${xls_id}" "${heic_id}" "${ole_id}"; do
+            if ! printf '%s' "${value}" | grep -Eq '^[0-9]+$'; then
+              echo "::error::an upload of the new formats left no file id ('${value}')"
+              exit 1
+            fi
+          done
+          # The types Nextcloud gave the names, because the verdicts above
+          # are verdicts about these types and nothing else.
+          for pair in "${mail_id}=message/rfc822" "${zip_id}=application/zip" "${bomb_id}=application/zip" \
+                      "${doc_id}=application/msword" "${xls_id}=application/vnd.ms-excel" "${heic_id}=image/heic" \
+                      "${ole_id}=application/vnd.openxmlformats-officedocument.wordprocessingml.document"; do
+            mime=$(mime_of "${pair%%=*}")
+            if [ "${mime}" != "${pair#*=}" ]; then
+              echo "::error::the file id ${pair%%=*} carries the type '${mime}' instead of ${pair#*=}"
+              exit 1
+            fi
+          done
+
+          # The Word file under the new name is the one of the seven the
+          # listener queues; the six others it never queues. Waited for until
+          # the queue is empty and the Word file has its verdict, and only
+          # then is the absence of the six a statement.
+          deadline=$(( $(date +%s) + UPGRADE_DRAIN_BUDGET_SECONDS ))
+          rounds=0
+          judged=""
+          while [ "$(date +%s)" -lt "${deadline}" ]; do
+            rounds=$(( rounds + 1 ))
+            open=$(open_rows)
+            ole=$(seed_probe verdict "${ole_id}" || echo unreadable)
+            echo "round ${rounds}: open=${open} word-under-docx=${ole}, $(( deadline - $(date +%s) ))s of the budget left"
+            case "${open}:${ole}" in
+              0:none|0:unreadable|[!0]*) ;;
+              *) judged="yes"; break ;;
+            esac
+            sleep 5
+          done
+          if [ -z "${judged}" ]; then
+            echo "::error::the ${UPGRADE_FROM_TAG} container did not judge the Word file under the .docx name within UPGRADE_DRAIN_BUDGET_SECONDS=${UPGRADE_DRAIN_BUDGET_SECONDS}"
+            "${RUNNER_TEMP}/nc-occ.sh" findling:index || true
+            docker logs "${UPGRADE_OLD_CONTAINER}" 2>&1 | tail -n 60 || true
+            exit 1
+          fi
+
+          fail=0
+          for pair in "eml=${mail_id}" "zip=${zip_id}" "bomb=${bomb_id}" "doc=${doc_id}" "xls=${xls_id}" "heic=${heic_id}"; do
+            rows=$(seed_probe rows "${pair#*=}" || echo unreadable)
+            recorded=$(q "SELECT COUNT(*) FROM oc_findling_file_state WHERE file_id = ${pair#*=};")
+            if [ "${rows}" != "0" ] || [ "${recorded}" != "0" ]; then
+              echo "::error::the ${pair%%=*} seed has ${rows} row(s) in state.db and ${recorded} in findling_file_state, and ${UPGRADE_FROM_TAG} must never have queued it"
+              fail=1
+            else
+              echo "the ${pair%%=*} seed has no row in state.db and none in findling_file_state"
+            fi
+          done
+          ole=$(seed_probe verdict "${ole_id}" || echo unreadable)
+          ole_recorded=$(q "SELECT state || '/' || IFNULL(reason, '') FROM oc_findling_file_state WHERE file_id = ${ole_id};")
+          if [ "${ole}" != "skipped/legacy_format" ] || [ "${ole_recorded}" != "skipped/legacy_format" ]; then
+            echo "::error::the Word file under the .docx name is '${ole}' in state.db and '${ole_recorded}' in findling_file_state, and ${UPGRADE_FROM_TAG} has to book it as skipped/legacy_format in both"
+            fail=1
+          else
+            echo "the Word file under the .docx name is skipped/legacy_format in state.db and in findling_file_state"
+          fi
+          if [ "${fail}" -ne 0 ]; then
+            exit 1
+          fi
+
+          # ---------------------------------------------------------------
+          # The file 1.4.2 gives up on, in the fixed order of plan 31-12 and
+          # with 1.4.2 writing the verdict itself; no line of this step writes
+          # a verdict into a table. Every step is read out of the code of the
+          # tag (31-12-SUMMARY):
+          #
+          #   1. the container stops, so nothing claims the row early
+          #   2. the upload: the listener queues without a running container
+          #      (FileEventListener.php:487 calls enqueueFile, nothing asks
+          #      for the container)
+          #   3. a larger size in oc_filecache and in the queue row: the claim
+          #      hands out the size of the node (QueueService.php:840, 907),
+          #      which is the size of the file cache, and the container
+          #      expects exactly that many bytes
+          #      (backend/src/findling/nc/client.py:286, ShortRead)
+          #   4. the container starts again and arms itself, because it was
+          #      enabled when it stopped (main.py:1111)
+          #   5. every hand out is read short twice, the row goes back
+          #      unjudged and is NOT unlocked (worker/poller.py:1502-1511),
+          #      so it waits out its lock; dating the claim back past
+          #      LOCK_TIMEOUT (900 s for content, QueueMapper.php:102, 147)
+          #      makes the next claim count (QueueMapper.php:402 raises
+          #      retries), and the fourth claim finds retries over
+          #      MAX_DELIVERIES 3 and writes failed(repeatedly_stuck)
+          #      (QueueService.php:65, 325-326)
+          #
+          # state.db keeps no row of the file. The container writes no
+          # verdict for a short read, and the one way a row of a written off
+          # file appears there is a cycle of the reconcile after the give up
+          # (worker/reconcile.py:505-517). That cycle does not come: it is
+          # due at once only on an installation that never finished one, and
+          # otherwise once a day (reconcile.py:645-653, 24 hours by default,
+          # FINDLING_RECONCILE_MIN_INTERVAL_HOURS is not set by this job). So
+          # the first cycle of the released installation is waited for here,
+          # before anything of the order happens, and the nought in state.db
+          # is the one value this proof accepts.
+          # ---------------------------------------------------------------
+          deadline=$(( $(date +%s) + UPGRADE_DRAIN_BUDGET_SECONDS ))
+          walked=""
+          while [ "$(date +%s)" -lt "${deadline}" ]; do
+            cycle=$(seed_probe reconcile || echo unreadable)
+            if [ "${cycle}" = "done" ]; then
+              walked="yes"
+              break
+            fi
+            echo "the reconcile of the released installation is '${cycle}', $(( deadline - $(date +%s) ))s of the budget left"
+            sleep 10
+          done
+          if [ -z "${walked}" ]; then
+            echo "::error::the ${UPGRADE_FROM_TAG} container did not finish a reconcile cycle within UPGRADE_DRAIN_BUDGET_SECONDS=${UPGRADE_DRAIN_BUDGET_SECONDS}, so a cycle after the give up could not be ruled out"
+            exit 1
+          fi
+          echo "the released installation finished its reconcile cycle, so the next one is a day away"
+
+          # 1. The container stops.
+          container="${UPGRADE_OLD_CONTAINER}"
+          docker stop -t 60 "${container}" > /dev/null
+          running=$(docker inspect --format '{{.State.Running}}' "${container}")
+          if [ "${running}" != "false" ]; then
+            echo "::error::${container} still runs after docker stop (Running=${running}), step 1 of the fixed order"
+            exit 1
+          fi
+          echo "step 1: ${container} is stopped"
+
+          # 2. The upload, and the queue row the listener writes for it.
+          upload "${stale_name}" || exit 1
+          stale_id=$(file_id_of "${stale_name}")
+          if ! printf '%s' "${stale_id}" | grep -Eq '^[0-9]+$'; then
+            echo "::error::the upload of the stale file left no file id ('${stale_id}'), step 2 of the fixed order"
+            exit 1
+          fi
+          queued=$(q "SELECT COUNT(*) || ':' || IFNULL(MAX(retries), '') || ':' || IFNULL(MAX(kind), '') FROM oc_findling_queue WHERE file_id = ${stale_id};")
+          if [ "${queued}" != "1:0:content" ]; then
+            echo "::error::the queue holds '${queued}' (rows:retries:kind) for the stale file instead of 1:0:content, so the listener did not queue it while the container was stopped, step 2 of the fixed order"
+            exit 1
+          fi
+          echo "step 2: the listener queued the stale file ${stale_id} as one content row with no delivery, the container stopped"
+
+          # 3. A size larger than the file, in the file cache and in the row.
+          #    Four kilobytes more stays far below the byte cap, so the claim
+          #    hands the file out instead of skipping it as too large.
+          stale_bytes=$(wc -c < "${formats_dir}/${stale_name}")
+          stale_size=$(( stale_bytes + 4096 ))
+          q "UPDATE oc_filecache SET size = ${stale_size} WHERE fileid = ${stale_id};"
+          q "UPDATE oc_findling_queue SET size = ${stale_size} WHERE file_id = ${stale_id};"
+          sizes=$(q "SELECT (SELECT size FROM oc_filecache WHERE fileid = ${stale_id}) || ':' || (SELECT size FROM oc_findling_queue WHERE file_id = ${stale_id});")
+          if [ "${sizes}" != "${stale_size}:${stale_size}" ]; then
+            echo "::error::the file cache and the queue row carry '${sizes}' instead of ${stale_size} for both, step 3 of the fixed order"
+            exit 1
+          fi
+          echo "step 3: the stale file holds ${stale_bytes} bytes and its size reads ${stale_size} in oc_filecache and in the queue row"
+
+          # 4. The container starts and has to come up armed.
+          restarted=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          docker start "${container}" > /dev/null
+          deadline=$(( $(date +%s) + UPGRADE_DRAIN_BUDGET_SECONDS ))
+          armed=""
+          while [ "$(date +%s)" -lt "${deadline}" ]; do
+            # grep -c reads the whole log; grep -q would leave early and
+            # end docker logs on a broken pipe, which pipefail reads as a
+            # failure of a line that was found.
+            arming=$(docker logs --since "${restarted}" "${container}" 2>&1 | grep -c 'indexing continues without a switch' || true)
+            if [ "${arming}" -gt 0 ]; then
+              armed="yes"
+              break
+            fi
+            sleep 5
+          done
+          if [ -z "${armed}" ]; then
+            echo "::error::${container} did not come up armed within UPGRADE_DRAIN_BUDGET_SECONDS=${UPGRADE_DRAIN_BUDGET_SECONDS}, step 4 of the fixed order"
+            docker logs --since "${restarted}" "${container}" 2>&1 | tail -n 60 || true
+            exit 1
+          fi
+          echo "step 4: ${container} runs again and indexes without a switch"
+
+          # 5. Every delivery read short twice, then the claim dated back.
+          deadline=$(( $(date +%s) + UPGRADE_DRAIN_BUDGET_SECONDS ))
+          backdated=0
+          given_up=""
+          while [ "$(date +%s)" -lt "${deadline}" ]; do
+            given=$(q "SELECT state || '/' || IFNULL(reason, '') FROM oc_findling_file_state WHERE file_id = ${stale_id};")
+            if [ "${given}" = "failed/repeatedly_stuck" ]; then
+              given_up="yes"
+              break
+            fi
+            short=$(docker logs --since "${restarted}" "${container}" 2>&1 | grep -c 'download of one file stayed short twice' || true)
+            if [ "${short}" -gt "${backdated}" ]; then
+              q "UPDATE oc_findling_queue SET locked_at = datetime(locked_at, '-3600 seconds') WHERE file_id = ${stale_id};"
+              backdated=$(( backdated + 1 ))
+              row=$(q "SELECT retries || ' ' || IFNULL(locked_at, '') FROM oc_findling_queue WHERE file_id = ${stale_id};")
+              case "${row}" in
+                [0-9]*' '[0-9][0-9][0-9][0-9]-*) ;;
+                *)
+                  echo "::error::the queue row of the stale file reads '${row}' after the claim was dated back, step 5 of the fixed order"
+                  exit 1
+                  ;;
+              esac
+              echo "step 5: short read ${short}, the claim is dated back past the lock timeout (retries and lock now ${row})"
+            fi
+            sleep 5
+          done
+          if [ -z "${given_up}" ]; then
+            echo "::error::${UPGRADE_FROM_TAG} did not give the stale file up as failed/repeatedly_stuck within UPGRADE_DRAIN_BUDGET_SECONDS=${UPGRADE_DRAIN_BUDGET_SECONDS} after ${backdated} dated back claim(s), step 5 of the fixed order"
+            q "SELECT kind, retries, locked_at, size FROM oc_findling_queue WHERE file_id = ${stale_id};" || true
+            docker logs --since "${restarted}" "${container}" 2>&1 | tail -n 60 || true
+            exit 1
+          fi
+          short=$(docker logs --since "${restarted}" "${container}" 2>&1 | grep -c 'download of one file stayed short twice' || true)
+          left=$(q "SELECT COUNT(*) FROM oc_findling_queue WHERE file_id = ${stale_id};")
+          if [ "${short}" != "3" ] || [ "${left}" != "0" ]; then
+            echo "::error::the give up came after ${short} short read(s) with ${left} queue row(s) left, and the rule of ${UPGRADE_FROM_TAG} is three deliveries and the row taken out"
+            exit 1
+          fi
+          echo "step 5: three deliveries read short, the fourth claim wrote failed/repeatedly_stuck and took the row out"
+
+          # The file cache gets the true size back, the way it has it after
+          # a storage that recovers: the cause of the give up is gone, and
+          # what 1.5 makes of the file is a statement about the catch-up and
+          # not about a size this step invented. A write to the file cache
+          # and nothing else, so no node event reaches the listener and the
+          # written off state stays as 1.4.2 left it.
+          q "UPDATE oc_filecache SET size = ${stale_bytes} WHERE fileid = ${stale_id};"
+          restored=$(q "SELECT size FROM oc_filecache WHERE fileid = ${stale_id};")
+          stale=$(seed_probe rows "${stale_id}" || echo unreadable)
+          stale_recorded=$(q "SELECT state || '/' || IFNULL(reason, '') FROM oc_findling_file_state WHERE file_id = ${stale_id};")
+          left=$(q "SELECT COUNT(*) FROM oc_findling_queue WHERE file_id = ${stale_id};")
+          if [ "${restored}" != "${stale_bytes}" ] || [ "${stale}" != "0" ] \
+             || [ "${stale_recorded}" != "failed/repeatedly_stuck" ] || [ "${left}" != "0" ]; then
+            echo "::error::the stale file reads size ${restored} of ${stale_bytes}, ${stale} row(s) in state.db, '${stale_recorded}' in findling_file_state and ${left} queue row(s); demanded are the true size, no row, failed/repeatedly_stuck and no queue row"
+            exit 1
+          fi
+          echo "the stale file is failed/repeatedly_stuck in findling_file_state, has no row in state.db and none in the queue"
+
+          words_find_nothing "on the ${UPGRADE_FROM_TAG} installation after the seed" || exit 1
+
+          for value in "${mail_id}" "${zip_id}" "${bomb_id}" "${doc_id}" "${xls_id}" "${heic_id}" "${ole_id}" "${stale_id}"; do
+            if ! printf '%s' "${value}" | grep -Eq '^[0-9]+$'; then
+              echo "::error::a seed id of the new formats is '${value}' and not a number, so it does not go into GITHUB_ENV"
+              exit 1
+            fi
+          done
+          echo "sown under ${UPGRADE_FROM_TAG}: six new types and the bomb without a row, the Word file under .docx skipped(legacy_format), the stale file failed(repeatedly_stuck) without a container row"
+          {
+            echo "UPGRADE_SEED_MAIL_ID=${mail_id}"
+            echo "UPGRADE_SEED_ZIP_ID=${zip_id}"
+            echo "UPGRADE_SEED_BOMB_ID=${bomb_id}"
+            echo "UPGRADE_SEED_DOC_ID=${doc_id}"
+            echo "UPGRADE_SEED_XLS_ID=${xls_id}"
+            echo "UPGRADE_SEED_HEIC_ID=${heic_id}"
+            echo "UPGRADE_SEED_OLE_ID=${ole_id}"
+            echo "UPGRADE_SEED_STALE_ID=${stale_id}"
+          } >> "${GITHUB_ENV}"
 
       # The tenth and eleventh value of a snapshot, since plan 30-07 (D-30-07):
       # czech counts the question smlouve and czechStop the question proc, both
@@ -4225,11 +4649,17 @@ jobs:
       # does not carry, and a step of its own because that run block stays at
       # the size it had (plan 29-11): the recheck mark, the embedding mark and
       # the vector stock, read on the released installation. "Store upgrade 5"
-      # holds the state after the upgrade against exactly these values.
+      # holds the state after the upgrade against exactly these values. Since
+      # plan 31-12 (FMT-06) the step records the catch-up of 1.5 as well: the
+      # mark recheck_1_5_0 (absent), the catch-up candidates of the old stock
+      # and a digest of that stock over its stable columns.
       - name: Store upgrade 3c, the recheck mark and the vector stock before anything moves
         if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
         run: |
           . "${RUNNER_TEMP}/seed-probe.sh"
+          q() {
+            sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" "$1"
+          }
           # The embedding mark is written by an idle pass of the poller once
           # every indexed document carries a vector, so it may trail the drain
           # by a few rounds, and the picture of "Store upgrade 2b" is embedded
@@ -4292,6 +4722,140 @@ jobs:
           {
             echo "UPGRADE_EMBEDDING_MARK=${embedding}"
             echo "UPGRADE_VECTOR_STOCK=${stock}"
+          } >> "${GITHUB_ENV}"
+
+          # ---------------------------------------------------------------
+          # The catch-up of 1.5 (plan 31-12, FMT-06), recorded before the
+          # upgrade. Three things "Store upgrade 5" (plan 31-13) holds the
+          # state after the upgrade against.
+          #
+          # 1. recheck_1_5_0 is absent: 1.4.2 does not know the mark, so the
+          #    catch-up has not run on this installation.
+          # 2. The candidates of the catch-up in the OLD stock, every file
+          #    except the seed. Part A is the rule of worker/catchup.py over
+          #    state.db (the question catchup of seed-probe.py); part B is a
+          #    file Nextcloud wrote off as repeatedly_stuck that the container
+          #    holds no row of, a pair of the mixed window (Nextcloud holds the
+          #    1.3 fallback code, the container the real one, the table
+          #    SKIPPED_FALLBACK_WITHOUT_SIGNAL of nc/queue.py), and a file of
+          #    the six new types Nextcloud holds and the container does not.
+          #    The determination of plan 31-12 (31-12-SUMMARY, out of the
+          #    corpus of "Store upgrade 2" and the code of v1.4.2) found none:
+          #    no file of the old stock is legacy_format, repeatedly_stuck or
+          #    of a new type, and "Store upgrade 4" upgrades the companion
+          #    before the container, so no mixed window arises. The two lists
+          #    below are that determination, and the stock is held against it
+          #    rather than taken as it comes. UPGRADE_CATCHUP_CANDIDATES are
+          #    the candidates whose verdict stays the same (they stay in the
+          #    digest), UPGRADE_CATCHUP_CHANGED the ones whose verdict changes,
+          #    with the expected new verdict in UPGRADE_CATCHUP_CHANGED_VERDICTS
+          #    (they leave the digest). The two lists never share an id.
+          # 3. A digest of the old stock over its stable columns: file_id,
+          #    state, reason and etag of every live row of the files table of
+          #    state.db and the number of chunks of the file in vectors.db, one
+          #    line per file, sorted by file_id. The columns left out are the
+          #    ones that move without the verdict moving: path, title, size,
+          #    mtime, content_hash, text_chars, attempts, ocr_used, indexed_at,
+          #    index_version and deleted_at. Left out of it are the ten seed
+          #    ids and UPGRADE_CATCHUP_CHANGED.
+          # ---------------------------------------------------------------
+          catchup=$(seed_probe meta recheck_1_5_0) || exit 1
+          if [ "${catchup}" != "absent" ]; then
+            echo "::error::the ${UPGRADE_FROM_TAG} installation carries the catch-up mark '${catchup}', and a release that does not know it has to leave it absent"
+            exit 1
+          fi
+          seed_ids="${UPGRADE_SEED_TIFF_ID},${UPGRADE_SEED_SIDECAR_ID},${UPGRADE_SEED_MAIL_ID},${UPGRADE_SEED_ZIP_ID},${UPGRADE_SEED_BOMB_ID},${UPGRADE_SEED_DOC_ID},${UPGRADE_SEED_XLS_ID},${UPGRADE_SEED_HEIC_ID},${UPGRADE_SEED_OLE_ID},${UPGRADE_SEED_STALE_ID}"
+          if ! printf '%s' "${seed_ids}" | grep -Eq '^[0-9]+(,[0-9]+){9}$'; then
+            echo "::error::the ten seed ids read '${seed_ids}', so the old stock cannot be told from the seed"
+            exit 1
+          fi
+
+          # The determination of plan 31-12: no candidate in the old stock.
+          expected_candidates=""
+          expected_changed=""
+          expected_changed_verdicts=""
+
+          found=""
+          part_a=$(seed_probe catchup "${seed_ids}") || exit 1
+          for entry in ${part_a}; do
+            found="${found} ${entry%%=*}"
+            echo "part A candidate in the old stock: ${entry}"
+          done
+          written_off=$(q "SELECT file_id FROM oc_findling_file_state WHERE state = 'failed' AND reason = 'repeatedly_stuck' AND file_id NOT IN (${seed_ids}) ORDER BY file_id;")
+          for id in ${written_off}; do
+            rows=$(seed_probe rows "${id}") || exit 1
+            if [ "${rows}" = "0" ]; then
+              found="${found} ${id}"
+              echo "part B candidate in the old stock: ${id}, written off without a container row"
+            fi
+          done
+          fallbacks=$(q "SELECT file_id || '=' || reason FROM oc_findling_file_state WHERE state = 'skipped' AND reason IN ('mime_not_allowed', 'image_not_ocrable') AND file_id NOT IN (${seed_ids}) ORDER BY file_id;")
+          for entry in ${fallbacks}; do
+            held=$(seed_probe verdict "${entry%%=*}") || exit 1
+            case "${entry#*=}:${held}" in
+              mime_not_allowed:skipped/system_file|mime_not_allowed:skipped/legacy_format|image_not_ocrable:skipped/unsupported_variant)
+                found="${found} ${entry%%=*}"
+                echo "part B candidate in the old stock: ${entry}, the container holds ${held}"
+                ;;
+            esac
+          done
+          unknown=$(q "SELECT f.fileid FROM oc_filecache f JOIN oc_mimetypes m ON m.id = f.mimetype WHERE m.mimetype IN ('message/rfc822', 'application/zip', 'application/msword', 'application/vnd.ms-excel', 'image/heic', 'image/heif') AND f.path LIKE 'files/%' AND f.fileid NOT IN (${seed_ids}) ORDER BY f.fileid;")
+          for id in ${unknown}; do
+            found="${found} ${id}"
+            echo "part B candidate in the old stock: ${id}, a new type outside the seed"
+          done
+          found_sorted=$(printf '%s\n' ${found} | sort -nu | tr '\n' ' ' | sed -e 's/ *$//')
+          expected_sorted=$(printf '%s\n' ${expected_candidates//,/ } ${expected_changed//,/ } | sort -nu | tr '\n' ' ' | sed -e 's/ *$//')
+          if [ "${found_sorted}" != "${expected_sorted}" ]; then
+            echo "::error::the old stock holds the catch-up candidates '${found_sorted}' and the determination of plan 31-12 names '${expected_sorted}'; derive the two lists again instead of taking the stock as it comes"
+            exit 1
+          fi
+          echo "the old stock holds the catch-up candidates '${found_sorted}', as determined"
+
+          # The state of every unchanged candidate before the upgrade.
+          candidate_states=""
+          for id in ${expected_candidates//,/ }; do
+            held=$(seed_probe verdict "${id}") || exit 1
+            candidate_states="${candidate_states:+${candidate_states},}${id}=${held}"
+          done
+
+          for list in "${expected_candidates}" "${expected_changed}"; do
+            # A line and not a bare string: an empty list is a valid
+            # answer, and grep sees no line at all in an empty input.
+            if ! printf '%s\n' "${list}" | grep -Eq '^([0-9]+(,[0-9]+)*)?$'; then
+              echo "::error::a list of catch-up candidates reads '${list}' and not a comma separated list of ids"
+              exit 1
+            fi
+          done
+          for list in "${candidate_states}" "${expected_changed_verdicts}"; do
+            # A line and not a bare string: an empty list is a valid
+            # answer, and grep sees no line at all in an empty input.
+            if ! printf '%s\n' "${list}" | grep -Eq '^([0-9]+=[a-z]+/[a-z_]*(,[0-9]+=[a-z]+/[a-z_]*)*)?$'; then
+              echo "::error::a list of candidate verdicts reads '${list}' and not id=state/reason entries"
+              exit 1
+            fi
+          done
+          # The two lists never share an id: a candidate either keeps its
+          # verdict and stays in the digest, or changes it and leaves it.
+          shared=$(comm -12 <(printf '%s\n' ${expected_candidates//,/ } | sort) <(printf '%s\n' ${expected_changed//,/ } | sort) | tr '\n' ' ' | sed -e 's/ *$//')
+          if [ -n "${shared}" ]; then
+            echo "::error::the ids '${shared}' stand in UPGRADE_CATCHUP_CANDIDATES and in UPGRADE_CATCHUP_CHANGED, and a candidate cannot both keep and change its verdict"
+            exit 1
+          fi
+
+          old_stock=$(seed_probe digest "${seed_ids}${expected_changed:+,${expected_changed}}") || exit 1
+          old_digest=${old_stock%%:*}
+          if ! printf '%s' "${old_digest}" | grep -Eq '^[0-9a-f]{64}$'; then
+            echo "::error::the digest of the old stock reads '${old_stock}' and not a sha256 with a count"
+            exit 1
+          fi
+          echo "recheck_1_5_0 is absent; the old stock of ${old_stock#*:} file(s) has the digest ${old_digest}"
+          {
+            echo "UPGRADE_OLD_STOCK_DIGEST=${old_digest}"
+            echo "UPGRADE_CATCHUP_CANDIDATES=${expected_candidates}"
+            echo "UPGRADE_CATCHUP_CANDIDATE_STATES=${candidate_states}"
+            echo "UPGRADE_CATCHUP_CHANGED=${expected_changed}"
+            echo "UPGRADE_CATCHUP_CHANGED_VERDICTS=${expected_changed_verdicts}"
           } >> "${GITHUB_ENV}"
 
       - name: Store upgrade 4, the upgrade itself, in two halves

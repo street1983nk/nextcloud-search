@@ -11,8 +11,10 @@ on the released installation (worker/recheck.py:129), so the upgrade to this
 code must move nothing at all: no counter, no verdict, no vector, no mark. If a
 part of this seed or of these assurances got lost in an edit, the proof would
 not turn red; it would stay green and prove less, and nobody reads a missing
-line. That is the whole reason this module exists. Phase 31 (FMT-06) appends its
-legacy_format seed at the marked end of "Store upgrade 2b".
+line. That is the whole reason this module exists. Since plan 31-12 (FMT-06) the
+same step sows the seed of the new formats where phase 31 was announced, and
+"Store upgrade 3c" records the catch-up mark and the old stock before the
+upgrade; their gate is the last section of this module.
 
 The workflow is loaded with yaml and every step is found by the start of its
 name, so a statement is about the step it names and not about a string that
@@ -152,13 +154,6 @@ def test_the_seed_step_asserts_the_verdict_of_1_4_2_fail_closed() -> None:
     # The seed word finds nothing before sowing, and exactly the picture after.
     assert run.count('if [ "${hits}" != "0" ]; then') == 1
     assert ".ocs.data.entries[0].attributes.fileId == $id" in run
-
-
-def test_the_seed_step_leaves_room_for_phase_31() -> None:
-    run = _run(SEED_STEP)
-    assert "Phase 31 (FMT-06) appends its legacy_format seed here" in run
-    # The mark stands at the end, after the export of the two file ids.
-    assert run.index("Phase 31 (FMT-06)") > run.index('} >> "${GITHUB_ENV}"')
 
 
 def test_the_seed_step_exports_both_file_ids() -> None:
@@ -543,4 +538,273 @@ def test_the_rebuild_steps_carry_no_expression(prefix: str) -> None:
 )
 def test_the_changed_steps_parse_in_bash(prefix: str, tmp_path: Path) -> None:
     answer = _bash_parses(_run(prefix), tmp_path)
+    assert answer.returncode == 0, answer.stderr
+
+
+# --- The seed of the new formats and the catch-up record (plan 31-12) -------
+#
+# FMT-06. "Store upgrade 2b" sows eight more files where phase 31 was announced:
+# six new types and a ZIP bomb that 1.4.2 never queues, a Word 97 file under a
+# .docx name that 1.4.2 books as skipped(legacy_format), and a text file that
+# 1.4.2 gives up on as failed(repeatedly_stuck), in a fixed order and with no
+# verdict written by hand. "Store upgrade 3c" records the catch-up mark, the
+# candidates of the catch-up in the old stock and a digest of that stock.
+
+FORMATS_GENERATOR = REPO_ROOT / "scripts" / "ci" / "make_upgrade_seed_formats.py"
+
+NEW_SEED_IDS = (
+    "UPGRADE_SEED_MAIL_ID",
+    "UPGRADE_SEED_ZIP_ID",
+    "UPGRADE_SEED_BOMB_ID",
+    "UPGRADE_SEED_DOC_ID",
+    "UPGRADE_SEED_XLS_ID",
+    "UPGRADE_SEED_HEIC_ID",
+    "UPGRADE_SEED_OLE_ID",
+    "UPGRADE_SEED_STALE_ID",
+)
+
+# Name parts of the columns a digest of stable state must not read: time
+# stamps, counters, locks and cursors.
+UNSTABLE_COLUMN_PARTS = ("_at", "updated", "deliver", "lock", "cursor", "attempts", "retries", "index_version")
+
+_ID_PATTERN = "grep -Eq '^[0-9]+$'"
+
+
+def _formats_generator() -> Any:
+    spec = importlib.util.spec_from_file_location("make_upgrade_seed_formats", FORMATS_GENERATOR)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _new_seed_block() -> str:
+    """The part of "Store upgrade 2b" after the export of the two earlier ids."""
+    run = _run(SEED_STEP)
+    return run[run.index('echo "UPGRADE_SEED_SIDECAR_ID=${sidecar_id}"') :]
+
+
+def _digest_query(run: str) -> str:
+    """The SELECT of the digest question of seed-probe.py, up to its FROM."""
+    start = run.index('elif question == "digest":')
+    select = run.index("SELECT file_id, state", start)
+    return run[select : run.index("FROM files", select)]
+
+
+def test_the_seed_step_sows_the_new_formats_where_phase_31_was_announced() -> None:
+    # Replaces test_the_seed_step_leaves_room_for_phase_31 (plan 31-12): the
+    # mark was a place holder for exactly this seed, so the mark is gone and
+    # the seed stands where it was, after the export of the two earlier ids.
+    run = _run(SEED_STEP)
+    assert "appends its legacy_format seed here" not in run
+    assert "Phase 31 (FMT-06)" not in run
+    exported = run.index('echo "UPGRADE_SEED_SIDECAR_ID=${sidecar_id}"')
+    assert run.index("The seed of the new formats (plan 31-12, FMT-06)") > exported
+    assert run.index("formats_dir=findling-src/.github/fixtures/upgrade-seed-formats") > exported
+    assert run.index('echo "UPGRADE_SEED_STALE_ID=${stale_id}"') > exported
+
+
+def test_the_seed_of_the_new_formats_stands_once_in_the_workflow() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert text.count("formats_dir=findling-src/.github/fixtures/upgrade-seed-formats") == 1
+    assert text.count('echo "UPGRADE_SEED_STALE_ID=${stale_id}"') == 1
+    assert not _named("Store upgrade 2c")
+
+
+def test_the_seed_names_the_files_and_words_of_the_generator() -> None:
+    module = _formats_generator()
+    block = _new_seed_block()
+    for name in [*module.SEED_WORDS, module.BOMB]:
+        assert f"={name}" in block, name
+    words = re.search(r'format_words="([a-z ]+)"', block)
+    assert words is not None
+    assert words.group(1).split() == list(module.SEED_WORDS.values())
+
+
+def test_the_new_formats_arrive_by_upload_and_not_by_a_written_verdict() -> None:
+    block = _new_seed_block()
+    assert '-T "${formats_dir}/$1"' in block
+    assert "remote.php/dav/files/testuser/fix-seed/$1" in block
+    assert "INSERT INTO oc_findling_file_state" not in block
+    assert "INSERT INTO oc_findling_queue" not in block
+
+
+def test_no_line_writes_a_verdict_into_a_table() -> None:
+    # T-31-40b: the give up is written by 1.4.2 and by nothing else.
+    for prefix in (SEED_STEP, RECORD_STEP):
+        for line in _run(prefix).splitlines():
+            if "repeatedly_stuck" in line or "legacy_format" in line:
+                upper = line.upper()
+                assert "UPDATE " not in upper, line
+                assert "INSERT " not in upper, line
+                assert "REPLACE " not in upper, line
+
+
+def test_the_stale_file_follows_the_fixed_order() -> None:
+    # Stop, upload, the larger size in oc_filecache and in the queue row,
+    # start, then the claim dated back per delivery (plan 31-12, Befund 3).
+    block = _new_seed_block()
+    stop = block.index('docker stop -t 60 "${container}"')
+    upload = block.index('upload "${stale_name}"')
+    cache = block.index("UPDATE oc_filecache SET size = ${stale_size}")
+    queue = block.index("UPDATE oc_findling_queue SET size = ${stale_size}")
+    start = block.index('docker start "${container}"')
+    backdate = block.index("UPDATE oc_findling_queue SET locked_at = datetime(locked_at, '-3600 seconds')")
+    assert stop < upload < cache < start
+    assert upload < queue < start
+    assert start < backdate
+    # The queue row has to exist before the container runs, which is the
+    # proof that the listener queued without it.
+    assert block.index('if [ "${queued}" != "1:0:content" ]; then') < start
+    # The give up after exactly the deliveries of MAX_DELIVERIES.
+    assert 'if [ "${short}" != "3" ] || [ "${left}" != "0" ]; then' in block
+    assert "grep -c 'download of one file stayed short twice'" in block
+
+
+def test_the_order_waits_for_the_first_reconcile_cycle_first() -> None:
+    # The nought in state.db for the stale file holds only if no cycle comes
+    # after the give up, and none comes once the first cycle is finished.
+    block = _new_seed_block()
+    assert block.index("cycle=$(seed_probe reconcile || echo unreadable)") < block.index(
+        'docker stop -t 60 "${container}"'
+    )
+    assert 'elif question == "reconcile":' in _run(SEED_STEP)
+
+
+def test_the_new_seed_is_asserted_fail_closed_under_1_4_2() -> None:
+    block = _new_seed_block()
+    # The six types and the bomb: no row on either side.
+    assert (
+        '"eml=${mail_id}" "zip=${zip_id}" "bomb=${bomb_id}" "doc=${doc_id}" "xls=${xls_id}" "heic=${heic_id}"' in block
+    )
+    assert 'if [ "${rows}" != "0" ] || [ "${recorded}" != "0" ]; then' in block
+    # The Word file under .docx: skipped/legacy_format on both sides.
+    ole_check = 'if [ "${ole}" != "skipped/legacy_format" ] || [ "${ole_recorded}" != "skipped/legacy_format" ]; then'
+    assert ole_check in block
+    # The stale file: written off in Nextcloud, no row in state.db, the
+    # determined value and not "0 or 1" (Blocker 1).
+    assert '|| [ "${stale_recorded}" != "failed/repeatedly_stuck" ]' in block
+    assert '[ "${stale}" != "0" ]' in block
+    assert 'stale=$(seed_probe rows "${stale_id}" || echo unreadable)' in block
+    # The seven words find nothing, before and after, with a positive control.
+    assert block.count("words_find_nothing ") == 2
+    assert 'if [ "${control}" != "1" ]; then' in block
+    assert 'if [ "${fail}" -ne 0 ]; then' in block
+
+
+def test_every_new_seed_id_is_checked_before_it_goes_into_the_environment() -> None:
+    block = _new_seed_block()
+    # The last export of the step; the first one in this slice closes the
+    # export of the two earlier ids.
+    env_block = block.rindex('} >> "${GITHUB_ENV}"')
+    check = block.rindex(_ID_PATTERN, 0, env_block)
+    for name in NEW_SEED_IDS:
+        line = block.index(f'echo "{name}=')
+        assert check < line < env_block, name
+    for variable in ("mail_id", "zip_id", "bomb_id", "doc_id", "xls_id", "heic_id", "ole_id", "stale_id"):
+        assert f'"${{{variable}}}"' in block[block.rindex("for value in", 0, check) : check], variable
+
+
+def test_the_record_step_demands_the_catch_up_mark_absent() -> None:
+    run = _run(RECORD_STEP)
+    assert "catchup=$(seed_probe meta recheck_1_5_0) || exit 1" in run
+    assert 'if [ "${catchup}" != "absent" ]; then' in run
+
+
+def test_the_record_step_names_the_mark_of_the_store() -> None:
+    from findling.store.repo import CATCHUP_MARK
+
+    assert f"seed_probe meta {CATCHUP_MARK}" in _run(RECORD_STEP)
+
+
+def test_the_digest_reads_stable_columns_only() -> None:
+    probe = _run(SEED_STEP)
+    columns = _digest_query(probe)
+    for column in ("file_id", "state", "reason", "etag"):
+        assert column in columns, column
+    for part in UNSTABLE_COLUMN_PARTS:
+        assert part not in columns, part
+    assert "SELECT file_id, COUNT(*) FROM chunks GROUP BY file_id" in probe
+    assert "ORDER BY file_id" in probe[probe.index('elif question == "digest":') :]
+
+
+def test_the_digest_leaves_out_the_seed_and_the_changed_candidates_only() -> None:
+    run = _run(RECORD_STEP)
+    call = 'old_stock=$(seed_probe digest "${seed_ids}${expected_changed:+,${expected_changed}}") || exit 1'
+    assert call in run
+    assert "expected_candidates" not in call
+    for name in ("UPGRADE_SEED_TIFF_ID", "UPGRADE_SEED_SIDECAR_ID", *NEW_SEED_IDS):
+        assert f"${{{name}}}" in run[run.index("seed_ids=") : run.index(call)], name
+    assert "grep -Eq '^[0-9]+(,[0-9]+){9}$'" in run
+
+
+def test_the_digest_and_the_lists_are_checked_before_the_environment() -> None:
+    run = _run(RECORD_STEP)
+    env_block = run.rindex('} >> "${GITHUB_ENV}"')
+    for pattern in (
+        "grep -Eq '^[0-9a-f]{64}$'",
+        "grep -Eq '^([0-9]+(,[0-9]+)*)?$'",
+        "grep -Eq '^([0-9]+=[a-z]+/[a-z_]*(,[0-9]+=[a-z]+/[a-z_]*)*)?$'",
+    ):
+        assert run.index(pattern) < env_block, pattern
+    for name in (
+        "UPGRADE_OLD_STOCK_DIGEST",
+        "UPGRADE_CATCHUP_CANDIDATES",
+        "UPGRADE_CATCHUP_CANDIDATE_STATES",
+        "UPGRADE_CATCHUP_CHANGED",
+        "UPGRADE_CATCHUP_CHANGED_VERDICTS",
+    ):
+        assert run.index(f'echo "{name}=') > run.index("grep -Eq '^[0-9a-f]{64}$'"), name
+
+
+def test_the_two_candidate_lists_are_disjoint_before_the_environment() -> None:
+    # Vierte Runde, Punkt 1: an id in both lists ends the step, and the check
+    # stands before anything is written.
+    run = _run(RECORD_STEP)
+    disjoint = run.index("shared=$(comm -12 <(printf '%s\\n' ${expected_candidates//,/ } | sort)")
+    assert 'if [ -n "${shared}" ]; then' in run[disjoint:]
+    assert disjoint < run.rindex('} >> "${GITHUB_ENV}"')
+    assert disjoint < run.index('echo "UPGRADE_CATCHUP_CANDIDATES=')
+
+
+def test_the_old_stock_is_held_against_the_determination() -> None:
+    run = _run(RECORD_STEP)
+    assert 'if [ "${found_sorted}" != "${expected_sorted}" ]; then' in run
+    # The determination of 31-12-SUMMARY: no candidate in the old stock.
+    assert 'expected_candidates=""' in run
+    assert 'expected_changed=""' in run
+
+
+def test_part_a_of_the_probe_is_the_rule_of_catchup() -> None:
+    # The container asked in 3c runs 1.4.2, so the rule is written out in the
+    # probe; these are the sets of worker/catchup.py, held equal here.
+    from findling.worker import catchup
+
+    probe = _run(SEED_STEP)
+    part = probe[probe.index('elif question == "catchup":') : probe.index('elif question == "digest":')]
+    for mime in (*catchup.NEW_MIMETYPES, *catchup._POWERPOINT_MIMETYPES):
+        assert f'"{mime}"' in part, mime
+    for ending in (*catchup._NEW_EXTENSIONS, *catchup._POWERPOINT_EXTENSIONS):
+        assert f'"{ending}"' in part, ending
+    record = _run(RECORD_STEP)
+    for mime in catchup.NEW_MIMETYPES:
+        assert f"'{mime}'" in record, mime
+
+
+def test_the_mixed_window_pairs_are_the_fallback_table() -> None:
+    from findling.nc.queue import SKIPPED_FALLBACK_WITHOUT_SIGNAL
+
+    run = _run(RECORD_STEP)
+    for real, fallback in SKIPPED_FALLBACK_WITHOUT_SIGNAL.items():
+        assert f"{fallback}:skipped/{real}" in run, real
+
+
+@pytest.mark.parametrize("prefix", [SEED_STEP, RECORD_STEP])
+def test_the_seed_and_record_steps_carry_no_expression(prefix: str) -> None:
+    assert "${{" not in _run(prefix)
+
+
+def test_the_record_step_parses_in_bash(tmp_path: Path) -> None:
+    answer = _bash_parses(_run(RECORD_STEP), tmp_path)
     assert answer.returncode == 0, answer.stderr
