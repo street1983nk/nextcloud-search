@@ -5972,7 +5972,7 @@ jobs:
         # which one they got. Every earlier report names the old form; that
         # name stays valid for the runs that wrote it, and this one applies
         # from here on.
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: harp-logs-${{ matrix.server-version }}-${{ matrix.runner }}
           path: ${{ runner.temp }}/harp-logs
