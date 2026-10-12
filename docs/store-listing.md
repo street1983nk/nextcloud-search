@@ -2140,6 +2140,37 @@ annehmen (`backend/tests/test_workflow_tag_triggers.py`).
 
 ---
 
+# Release 1.4.3 (12.10.2026): Scroll-Fix ohne Textänderung
+
+Kein Textentscheid und kein Entwurf: 1.4.3 ändert an den sechs Texten oben
+kein Wort. Das Release trägt nur den Fix zu Issue #27: Die Ergebnisseite
+öffnet jetzt ihr eigenes `<div id="app-content">`, das einzige Element, das
+im festen, mit `overflow: clip` beschnittenen `#content` scrollen kann. Vorher
+ließ sich eine Trefferliste, die länger als das Fenster ist, gar nicht
+scrollen. Gebaut auf dem Zweig `release/1.4.x` ab v1.4.2, damit nichts aus
+der 1.5-Arbeit auf main mitreist; der Fix selbst steht auch auf main.
+
+Stand vor der Einreichung: Tag v1.4.3 auf 0f088d05 (Fix f22c1561), alle
+sieben Workflows auf dem Tag grün, Release-Lauf 38216289322, vier Assets am
+Release (zwei Pakete, zwei Signaturen), `isImmutable: true`, v1.4.3 ist
+latest. Manifestindex ghcr.io/street1983nk/findling_backend:1.4.3 mit
+linux/amd64 und linux/arm64, anonym abgefragt (Digest
+sha256:036eb67e3e1144bc371142e18fcbfe94327b2a6edbfc0d1aea2f32d93302fc6d).
+Gegenprobe per Playwright auf der HaRP-Testinstanz (Port 8096, NC 34.0.3):
+`#content` mit `overflow: clip`, darin genau ein `#app-content` mit
+`overflow: auto`, das Mausrad scrollt bis ganz unten.
+
+Eingereicht: noch offen, wartet auf das Owner-Wort. Auslöser ist der Workflow
+"Store submission" (`store-submit.yml`), per Hand mit dem Tag:
+
+```bash
+gh workflow run store-submit.yml --repo street1983nk/nextcloud-search --ref main -f tag=v1.4.3
+```
+
+`register` bleibt aus (beide App-IDs sind registriert), Direktmodus leer.
+Nach dem Lauf hier Lauf-ID, beide HTTP 201 mit Zeit und die Gegenprobe der
+Kataloge nachtragen.
+
 # Release 1.4.2 (09.10.2026): Deckungsgrad-Fix ohne Textänderung
 
 Kein Textentscheid und kein Entwurf: 1.4.2 ändert an den sechs Texten oben
