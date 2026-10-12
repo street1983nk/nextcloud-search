@@ -926,6 +926,19 @@ def test_a_format_of_1_5_is_indexed_through_judge_with_its_word(mime: str, tmp_p
     assert word in outcome.text
 
 
+@pytest.mark.parametrize("mime", sorted(NEW_FORMAT_ROUTES))
+def test_a_format_of_1_5_is_indexed_in_the_extraction_child(mime: str, tmp_path: Path) -> None:
+    # The same way as above, but in the child the poller uses (extract_guarded):
+    # a fresh process that imports the reader of the route itself, with the
+    # timeout and, on Linux, RLIMIT_AS and one malloc arena.
+    path, word = _new_format_file(tmp_path, mime)
+
+    outcome = sandbox.extract_guarded(path, mime, Path(path).stat().st_size)
+
+    assert outcome.state is State.INDEXED, f"{mime} came back as {outcome.state}/{outcome.reason}"
+    assert word in outcome.text
+
+
 @pytest.mark.parametrize(
     "mime", ["image/gif", "image/bmp", "application/vnd.ms-powerpoint", "application/x-7z-compressed"]
 )
