@@ -149,7 +149,16 @@ Plans:
   1. Nutzer waehlt in der Unified Search einen der sechs Typfilter des Findling-Providers und sieht nur Treffer dieses Typs
   2. Nutzer schraenkt die Suche auf einen Ordner ein und sieht nur Treffer aus diesem Ordner und seinen Unterordnern; Treffer ohne Leserecht erscheinen weiterhin nie (finaler PHP-Recheck unveraendert)
   3. Unbekannte, leere oder manipulierte Filterwerte werden ignoriert: die Suche liefert dieselben Treffer wie ohne Filter, nie eine leere Liste oder einen Fehler (Regressionstest auf PHP- und Backend-Seite)
-**Plans**: TBD
+**Plans**: 8 plans (seriell, eine Welle je Plan)
+Plans:
+- [ ] 32-01-PLAN.md: Typfilter serverseitig (FilterDefinition types, gemeinsamer Parser, Tür mit types, D-05 umgedreht), Paritätstest und leere Liste im Backend
+- [ ] 32-02-PLAN.md: Ordnerfilter in PHP (folder, Folder::get, Vorauswahl über Koordinaten, Recheck im Unterbaum, fail-open)
+- [ ] 32-03-PLAN.md: Ordnerbudget gemessen (enger Ordner, Treffer tief im Ranking), Konstanten belegt
+- [ ] 32-04-PLAN.md: Listener auf jeder angemeldeten Seite, Vanilla-Plugin mit sieben Filtereinträgen, Vertragstest
+- [ ] 32-05-PLAN.md: l10n-Kette der vier neuen Sätze (16 Kataloge, 5 Dokus)
+- [ ] 32-06-PLAN.md: deploy-harp auf 33/34/35/arm64, Gruppenordner und Share in team-folder-acl, Doku und Store-Entwurf Teil Phase 32
+- [ ] 32-07-PLAN.md: Owner-Abnahme gemeinsam per Playwright (Checkpoint), Wortlaut nachziehen
+- [ ] 32-08-PLAN.md: Security-, Bug- und Performance-Audit mit Korpus manipulierter Filterwerte, Befunde fixen
 **UI hint**: yes
 
 ### Phase 33: Ausschlussmuster und Admin-Feinschliff
