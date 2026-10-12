@@ -85,9 +85,9 @@
 | UMST-01 | Phase 34 | Pending |
 | UMST-02 | Phase 34 | Pending |
 | UMST-03 | Phase 34 | Pending |
-| USRCH-01 | Phase 32 | Pending |
+| USRCH-01 | Phase 32 | Pending (serverseitig in 32-01, ed2908fc; Abhaken nach Owner-Abnahme 32-07) |
 | USRCH-02 | Phase 32 | Pending |
-| USRCH-03 | Phase 32 | Pending |
+| USRCH-03 | Phase 32 | Pending (Backend-Hälfte und PHP-Parser in 32-01, ed2908fc; Abhaken nach CI-Beleg 32-06) |
 | EXCL-01 | Phase 33 | Pending |
 | EXCL-02 | Phase 33 | Pending |
 | EXCL-03 | Phase 33 | Pending |

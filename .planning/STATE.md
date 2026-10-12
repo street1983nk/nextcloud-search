@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 31-15-PLAN.md
-last_updated: "2026-10-12T19:20:00.000Z"
-last_activity: 2026-10-12 -- Quick: Owner-Abnahme Entwurf Teil Phase 31 vermerkt, ZIP nicht in der Grenzliste, README-Verweise auf docs/formats.md; Phase 31 wartet auf Verifikation
+stopped_at: Completed 32-01-PLAN.md
+last_updated: "2026-10-12T21:45:00.000Z"
+last_activity: 2026-10-12 -- Plan 32-01 abgeschlossen (Typfilter serverseitig, FilterDefinition types, Paritätstest)
 progress:
   total_phases: 7
   completed_phases: 1
-  total_plans: 24
-  completed_plans: 24
+  total_plans: 32
+  completed_plans: 25
   percent: 14
 ---
 
@@ -21,16 +21,16 @@ progress:
 Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .planning/MILESTONES.md (v1.0 bis v1.4).
 
 **Core Value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 31, Formate, Nachholweg und POL-02
+**Current focus:** Phase 32, Filter in der Unified Search
 
 ## Current Position
 
-Phase: 31 von 30-36 (Formate, Nachholweg und POL-02)
-Plan: 15 von 15 erledigt (31-01 bis 31-15), Verifikation und Review der Phase 31 offen
-Status: Phase 31 ausgeführt, nicht verifiziert; 31-15 abgeschlossen (31-AUDIT.md status fixed: H-31-01, H-31-02, M-31-01, M-31-02, L-31-01/02/03/07 gefixt, L-31-04/05/06/08/09/10 accept). FMT-01 bis FMT-06 Complete
-Last activity: 2026-10-12 -- Plan 31-15 abgeschlossen
+Phase: 32 von 30-36 (Filter in der Unified Search)
+Plan: 1 von 8 erledigt (32-01), nächster 32-02 (Ordnerfilter in PHP)
+Status: Phase 32 in Ausführung; 32-01 abgeschlossen (Provider deklariert types, gemeinsamer Parser SearchFilters::typesFrom, D-05 per D-32-07 aufgehoben). USRCH-01/03 bleiben Pending bis 32-07 bzw. 32-06
+Last activity: 2026-10-12 -- Plan 32-01 abgeschlossen
 
-Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 15/15 Pläne, Verifikation offen
+Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passed, 659f5631); Phase 32: 1/8 Pläne
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 15/15 Pläne, Verifikati
 - v1.5: 31-13 in ca. 115 min inkl. ca. 50 min CI und ca. 25 min Volltestläufe (2 Tasks, 4 Dateien)
 - v1.5: 31-14 in ca. 60 min inkl. ca. 27 min Volltestläufe und ca. 20 min CI (2 Tasks, 11 Dateien)
 - v1.5: 31-15 in ca. 250 min inkl. ca. 75 min Volltestläufe und ca. 60 min CI (3 Tasks, 16 Dateien)
+- v1.5: 32-01 in ca. 50 min inkl. ca. 12 min Volltestlauf und ca. 25 min CI (2 Tasks, 8 Dateien)
 
 ## Accumulated Context
 
@@ -94,12 +95,14 @@ Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 15/15 Pläne, Verifikati
 - 31-13: Store upgrade 5 "the ten assurances": Saat-Warteschleife im Drain-Budget (recheck_1_5_0 done, Bombe beurteilt, sieben Saatdateien indexed mit Chunks > 0, jedes Wort genau seine Datei), Zähler per moved()/unchanged() exakt (docs/indexed +7, nextcloud.failed -1, Rest 0), Zusicherung 9 Saat (ZIP-Auszug innen/notiz.txt, STALE indexed ohne Nextcloud-Urteil, Bombe skipped/archive_limit beidseitig, Running/RestartCount wie Ende Store upgrade 4, Kanariensuche), Zusicherung 10 Altbestand (Kandidaten einzeln, Digest wie 3c). Vektorbestand ohne die acht neuen Saat-IDs gegen 3c. L-30-03 geschlossen: jede GITHUB_ENV-Schreibstelle 2b bis 7 musterprüft, Store upgrade 4 hält UPGRADE_NEW_RESTARTS und UPGRADE_FINISHED_AT. Erster Push rot (38250670039): seed-probe.py las sys.argv[2] auch für reconcile, Fix a3911835 mit ausgeführtem Probe-Test. Nachholdauer 303 s bis done, 360 s bis alles gefunden (300 Dateien Altbestand). CI a3911835 alle grün (HaRP 38256198997, Python 38256199035). FMT-01 bis FMT-06 Complete.
 - 31-14: docs/formats.md je Format (gelesen, nicht gelesen, Urteil), ZIP-Grenzen gleich config.py, Typfilter, Nachholweg, Not supported; .ppt ist mime_not_allowed, nur PowerPoint-OLE unter .pptx bleibt legacy_format. Dateitypen-Liste in allen sechs Beschreibungen und drei READMEs mit DOC, XLS, Mails (EML), ZIP ohne Texterkennung, HEIC; ZIP-Zeile ohne gesperrten Wortstamm (E-H2). Gate: fünf Formatwörter je Liste, jede Liste zeichengleich zum Entwurf Teil Phase 31. Grenzliste bleibt fünf, Empfehlung an den Owner: kein ZIP-Eintrag. Commits f1aa9137, 76ce8463; CI Python 38264572771, PHP 38264572714.
 - 31-15: Audit der Phase 31 (31-AUDIT.md, status fixed): Korpus aus ZIP, Mail, Word, Excel, HEIC durch das Sandbox-Kind. H-31-01 Mail-Kopfzeilen (1,2 MB To hielt den Indexer 120 s): Richtlinie kürzt jede Kopfzeile auf 32 KiB, 1 MiB Parser-Budget je Mail, danach nur Kopfzeilen (indexed(truncated)); echte Mail mit 999 Anhängen bleibt ganz. H-31-02 Overlap-Warnung von zipfile mit Mitgliedsnamen im Log verworfen. M-31-01 gewöhnliche Runde lässt Abgeschriebene ohne Zeile liegen, solange der Nachholweg offen ist (nur der Nachholzyklus übergibt, einmal). M-31-02 Word 6/95 (wIdent 0xA5DC, an echter Datei gefunden) skipped(unsupported_variant). L-31-01 resume_after (recheck und catchup), L-31-02 OSError eines Mitglieds, L-31-03 Spiegelcheck, L-31-07 [[ =~ ]] in deploy-harp. Accept: L-31-04 JPEG/HEIF-Urteil, L-31-05 Office-Mitglied ohne Vorzählung, L-31-06 Umbenennen/Neustart, L-31-08 Teil B ohne Generation, L-31-09 Korpuslücken (Phase 36), L-31-10 Neu-Urteil +15,5 % je Seite (0,06 ms). Commits 02e11bf1, 013d1c58, 97891f3a, 004dc865, 53fae392; CI Python 38292944805, HaRP 38292944828 grün.
+- 32-01: Provider deklariert den Custom Filter types (FilterDefinition TYPE_STRING, exklusiv als Standard; SearchComposer stable34 legt Custom-Definitionen nur unter der eigenen Provider-ID ab, daher ohne Wirkung auf andere Apps). Ein Parser SearchFilters::typesFrom() für Ergebnisseite und Dialog: geschlossene Menge TYPES, MAX_TYPES_LENGTH 200 vor dem Split, trim nur Leerzeichen und Tab (pdf  ergibt keine Gruppe). Tür trägt types in TYPES-Reihenfolge, Datum bleibt draußen. D-05-Tests umgedreht mit Vermerk D-32-07. Paritätstest über PHP TYPES, /search, /snippets, /diagnose, TYPE_GROUPS; types [] gleich fehlendes Feld, 422 bleibt. Commit ed2908fc; CI PHP 38309357692 (620 Tests), Python 38309357739 (Versuch 2, Versuch 1 Flake in test_main_lifespan, deferred-items.md), Integration 38309357675 (Providerliste meldet types:string), HaRP 38309357673 grün.
 
 ### Offene Faeden (kein aktiver Auftrag)
 
 - Owner-Veto zu A8 (31-03) möglich: dann Längenausnahme aus dem ersten Planstand.
 - Erledigt 12.10.2026 (Quick, Owner-Wort "wie du empfehlst"): Entwurf Teil Phase 31 (Dateitypen-Liste, README-Zeilen, Urteils-Wortlaute) abgenommen; ZIP kommt nicht in die Grenzliste, LIMITATION_COUNT bleibt 5; drei READMEs verweisen unter dem Dateitypen-Absatz auf docs/formats.md. REL-05 bleibt offen (Teil Phase 30, Gesamttext, Playwright-Runde, Einreichung).
-- Phase 31: Verifikation und Review durch den Owner (nach 31-15 bewusst nicht als verifiziert abgeschlossen).
+- Phase 31: Verifikation 9/9 passed (659f5631); Review durch den Owner offen.
+- Flake test_main_lifespan.py::test_the_status_answer_is_the_same_with_and_without_the_one_time_task (Live-Wert profile.memoryAvailableBytes im Vergleich), siehe .planning/phases/32-filter-in-der-unified-search/deferred-items.md; Fix im Test braucht einen Auftrag.
 - Phase 36 (aus 31-AUDIT, accept): DIFAT-Zyklus ab 7 MB und DOCX mit einer Million Köpfen im ZIP in den Launch-Korpus; Diagnosezeile für recheck_1_5_0; Neustart mitten im Nachholzyklus und Rückfall der Companion auf Generation 2 in die Upgrade-Matrix; Cursor in embedding.py (deferred-items.md).
 
 - REL-05 (Phase 36): release.yml muss die vier Quellpakete (corresponding_source.py fetch) im eigenen gh release create mitgeben; ein späteres gh release upload scheitert an unveränderlichen Releases (belegt in 31-01). Leeres Pre-Release source-1.5-dev bleibt mit Verweistext, Löschen nur mit Owner-Wort.
@@ -122,6 +125,6 @@ Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 15/15 Pläne, Verifikati
 
 ## Session Continuity
 
-Last session: 2026-10-12T19:20:00.000Z
-Stopped at: Completed 31-15-PLAN.md
+Last session: 2026-10-12T21:45:00.000Z
+Stopped at: Completed 32-01-PLAN.md
 Resume file: None
