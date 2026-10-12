@@ -831,6 +831,10 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # StorageCrawlJob.php (HEIC and HEIF in OCR_CERTAIN_MIMETYPES) and
 # StorageCrawlJobTest.php (the HEIC recount case) changed their bytes. No file
 # went, so PHP_FILES_TODAY moves to 92.
+# Measured again by Plan 31-14 on 2026-10-12 (the file type list of 1.5 in the
+# store texts, FMT-01 to FMT-05): the only byte change under php/ is
+# appinfo/info.xml, which the recipe does not read, so neither the hash nor
+# PHP_FILES_TODAY moves; the recipe was run over php/ and gives the value below.
 PHP_FILES_TODAY = 92
 PHP_TREE_HASH_TODAY = "bad993f8230804cf83a552f151dbed9d0ea1b16e71dd2a2d1705c0a1b5f57048"
 

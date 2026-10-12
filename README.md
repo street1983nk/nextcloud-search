@@ -39,8 +39,9 @@ Das Modell bringen Sie mit, kein Inhalt verlässt Ihren Server.
 
 ## Unterstützte Dateitypen
 
-PDF (auch gescannt), DOCX, PPTX, XLSX, ODT, ODS, ODP, HTML, RTF, TXT,
-Markdown, CSV sowie Bilder (JPEG, PNG, TIFF, WebP) per Texterkennung.
+PDF (auch gescannt), DOC, DOCX, PPTX, XLS, XLSX, ODT, ODS, ODP, HTML, RTF,
+TXT, Markdown, CSV, Mails (EML), ZIP-Dateien (die enthaltenen Dateien, ohne
+Texterkennung) sowie Bilder (JPEG, PNG, TIFF, WebP, HEIC) per Texterkennung.
 
 ## Anforderungen
 

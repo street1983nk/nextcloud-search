@@ -40,9 +40,10 @@ Le modèle, c'est vous qui l'apportez, et aucun contenu ne quitte votre serveur.
 
 ## Types de fichiers pris en charge
 
-PDF (numérisés aussi), DOCX, PPTX, XLSX, ODT, ODS, ODP, HTML, RTF, TXT,
-Markdown, CSV, ainsi que les images (JPEG, PNG, TIFF, WebP) par
-reconnaissance optique.
+PDF (numérisés aussi), DOC, DOCX, PPTX, XLS, XLSX, ODT, ODS, ODP, HTML, RTF,
+TXT, Markdown, CSV, e-mails (EML), fichiers ZIP (les fichiers contenus, sans
+OCR), ainsi que les images (JPEG, PNG, TIFF, WebP, HEIC) par reconnaissance
+optique.
 
 ## Prérequis
 

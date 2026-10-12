@@ -466,6 +466,30 @@ LANGUAGE_LINE_OPENINGS = {
     "fr": "- Langues de recherche :",
 }
 
+# The file type list of the store texts and of the READMEs (FMT-01 to FMT-05,
+# plan 31-14). Release 1.5 reads mails, ZIP files, Word and Excel 97 to 2003
+# and HEIC photos, and a store page that does not name them sells an app that
+# reads less than it does. Five format words, the same in every language
+# because they are file type names; each is matched as a whole word, so DOCX
+# does not stand in for DOC nor XLSX for XLS.
+FILE_TYPE_HEADINGS = {
+    DEFAULT_LANGUAGE: "Supported file types:",
+    "de": "Unterstützte Dateitypen:",
+    "fr": "Types de fichiers pris en charge :",
+}
+README_FILE_TYPE_HEADINGS = {
+    "README.en.md": "## Supported file types",
+    "README.md": "## Unterstützte Dateitypen",
+    "README.fr.md": "## Types de fichiers pris en charge",
+}
+FORMATS_OF_1_5 = ("DOC", "XLS", "EML", "ZIP", "HEIC")
+
+# Where the wording of that list is drafted, and how the draft opens. The six
+# lists are held character for character against it, so that the draft the
+# owner approves at REL-05 and the texts that travel with the release cannot
+# say two different things (the pattern of the Czech entry in plan 30-08).
+DRAFT_OF_PHASE_31 = "# Entwurf v1.5.0 (Teil Phase 31)"
+
 
 def _named(language: str) -> str:
     """How a language is spelled in a finding."""
@@ -1108,6 +1132,96 @@ def scan_limitations_against_doc(name: str, source: str, doc: str) -> list[str]:
     return violations
 
 
+def formats_missing(text: str) -> list[str]:
+    """The format words of 1.5 that do not stand in a text as whole words."""
+    return [word for word in FORMATS_OF_1_5 if re.search(rf"\b{word}\b", text) is None]
+
+
+def scan_file_types(name: str, source: str) -> list[str]:
+    """The file type list of every description names the five formats of 1.5.
+
+    A list that is gone and a list that lost a format are both findings, and each
+    names the half and the language, like the limitation block above.
+    """
+    descriptions, broken = _descriptions(name, source)
+    violations = list(broken)
+    for language, text in descriptions:
+        if language not in FILE_TYPE_HEADINGS:
+            continue
+        points = list_under(text, FILE_TYPE_HEADINGS[language])
+        if points is None:
+            violations.append(
+                f"{name}: the description for {_named(language)} has no block {FILE_TYPE_HEADINGS[language]!r}"
+            )
+            continue
+        missing = formats_missing("\n".join(points))
+        if missing:
+            violations.append(
+                f"{name}: the file type list for {_named(language)} does not name {', '.join(missing)} "
+                f"(FMT-01 to FMT-05)"
+            )
+
+    return violations
+
+
+def scan_readme_file_types(name: str, source: str) -> list[str]:
+    """The file type section of one README names the five formats of 1.5."""
+    heading = README_FILE_TYPE_HEADINGS[name]
+    lines = source.splitlines()
+    if heading not in lines:
+        return [f"{name}: has no section {heading!r}"]
+
+    after = lines[lines.index(heading) + 1 :]
+    end = next((at for at, line in enumerate(after) if line.startswith("## ")), len(after))
+    missing = formats_missing("\n".join(after[:end]))
+    if missing:
+        return [f"{name}: the section {heading!r} does not name {', '.join(missing)} (FMT-01 to FMT-05)"]
+
+    return []
+
+
+def drafted_file_types(listing: str) -> dict[str, list[str]] | None:
+    """The file type lists of the draft of phase 31, by language, or None without the draft.
+
+    The draft carries each list as a fenced block whose first line is the
+    heading of its language; the language is read off that heading, so a block
+    under a heading nobody ships is not a list of this gate.
+    """
+    if DRAFT_OF_PHASE_31 not in listing.splitlines():
+        return None
+
+    section = listing.split(f"\n{DRAFT_OF_PHASE_31}\n", 1)[1].split("\n# ", 1)[0]
+    languages = {heading: language for language, heading in FILE_TYPE_HEADINGS.items()}
+    drafted: dict[str, list[str]] = {}
+    for block in re.findall(r"^```\n(.*?)\n```$", section, re.DOTALL | re.MULTILINE):
+        heading, *points = block.splitlines()
+        if heading in languages:
+            drafted[languages[heading]] = points
+
+    return drafted
+
+
+def scan_file_types_against_draft(name: str, source: str, listing: str) -> list[str]:
+    """Every file type list of one info.xml against the draft of its language, character for character."""
+    drafted = drafted_file_types(listing)
+    if drafted is None:
+        return [f"docs/store-listing.md: has no section {DRAFT_OF_PHASE_31!r}"]
+
+    descriptions, broken = _descriptions(name, source)
+    violations = list(broken)
+    for language, text in descriptions:
+        if language not in FILE_TYPE_HEADINGS:
+            continue
+        shipped = list_under(text, FILE_TYPE_HEADINGS[language]) or []
+        if shipped != drafted.get(language):
+            violations.append(
+                f"{name}: the file type list for {_named(language)} differs from the draft in "
+                f"docs/store-listing.md ({DRAFT_OF_PHASE_31}): store {shipped!r}, draft {drafted.get(language)!r}"
+            )
+
+    return violations
+
+
 def _sources() -> list[tuple[str, str]]:
     """The three files this gate reads, as (name, source)."""
     return [(path.name, path.read_text(encoding="utf-8")) for path in (PHP_INFO, BACKEND_INFO, README)]
@@ -1269,6 +1383,50 @@ def test_the_language_line_stands_right_before_the_limitations_in_all_six_descri
         for path in (PHP_INFO, BACKEND_INFO)
         for message in scan_language_line(
             f"{path.parent.parent.name}/appinfo/info.xml", path.read_text(encoding="utf-8")
+        )
+    ]
+
+    assert violations == []
+
+
+def test_every_description_names_the_formats_of_1_5_in_its_file_type_list() -> None:
+    violations = [
+        message
+        for path in (PHP_INFO, BACKEND_INFO)
+        for message in scan_file_types(f"{path.parent.parent.name}/appinfo/info.xml", path.read_text(encoding="utf-8"))
+    ]
+
+    assert violations == []
+
+
+def test_every_readme_names_the_formats_of_1_5_in_its_file_type_section() -> None:
+    violations = [
+        message
+        for path in (README, README_DE, README_FR)
+        for message in scan_readme_file_types(path.name, path.read_text(encoding="utf-8"))
+    ]
+
+    assert violations == []
+
+
+def test_the_draft_of_phase_31_carries_the_file_type_list_in_all_three_languages() -> None:
+    # The anti vacuity clause of the comparison below: a draft that lost a
+    # language would compare that language against None and say so, but a
+    # draft that lost all three must not look like a draft at all.
+    drafted = drafted_file_types(STORE_LISTING.read_text(encoding="utf-8"))
+
+    assert drafted is not None
+    assert sorted(drafted) == sorted(FILE_TYPE_HEADINGS)
+    assert all(formats_missing("\n".join(points)) == [] for points in drafted.values())
+
+
+def test_every_file_type_list_stands_in_the_draft_of_phase_31_character_for_character() -> None:
+    listing = STORE_LISTING.read_text(encoding="utf-8")
+    violations = [
+        message
+        for path in (PHP_INFO, BACKEND_INFO)
+        for message in scan_file_types_against_draft(
+            f"{path.parent.parent.name}/appinfo/info.xml", path.read_text(encoding="utf-8"), listing
         )
     ]
 
@@ -1712,6 +1870,82 @@ def test_a_language_line_that_moved_away_from_the_limitations_is_reported() -> N
     assert len(violations) == 1
     assert "the English default" in violations[0]
     assert "(D-11)" in violations[0]
+
+
+def test_a_file_type_list_that_lost_heic_is_reported_with_half_and_language() -> None:
+    # A staged real file: the French list of the backend half loses HEIC, and
+    # only that one text is named.
+    source = BACKEND_INFO.read_text(encoding="utf-8")
+    line = "- Images par reconnaissance optique : JPEG, PNG, TIFF, WebP, HEIC\n"
+    assert line in source
+
+    violations = scan_file_types(
+        "backend/appinfo/info.xml",
+        source.replace(line, "- Images par reconnaissance optique : JPEG, PNG, TIFF, WebP\n", 1),
+    )
+
+    assert len(violations) == 1
+    assert "lang=fr" in violations[0]
+    assert "does not name HEIC" in violations[0]
+
+
+def test_docx_does_not_stand_in_for_doc_nor_xlsx_for_xls() -> None:
+    # The list of 1.4 named DOCX and XLSX and neither DOC nor XLS. A substring
+    # match would have called it complete.
+    assert formats_missing("- PDF (scanned too), DOCX, PPTX, XLSX, ODT, ODS, ODP") == [
+        "DOC",
+        "XLS",
+        "EML",
+        "ZIP",
+        "HEIC",
+    ]
+
+
+def test_a_description_without_its_file_type_list_is_reported() -> None:
+    source = PHP_INFO.read_text(encoding="utf-8").replace(FILE_TYPE_HEADINGS["de"], "Dateitypen:", 1)
+
+    violations = scan_file_types("php/appinfo/info.xml", source)
+
+    assert len(violations) == 1
+    assert "lang=de" in violations[0]
+    assert "has no block" in violations[0]
+
+
+def test_a_readme_that_lost_zip_is_reported() -> None:
+    source = README_DE.read_text(encoding="utf-8")
+    mutated = re.sub(r"\bZIP\b", "RAR", source)
+    assert mutated != source
+
+    violations = scan_readme_file_types("README.md", mutated)
+
+    assert len(violations) == 1
+    assert "does not name ZIP" in violations[0]
+
+
+def test_a_file_type_list_that_differs_from_the_draft_in_one_character_is_reported() -> None:
+    # The English list of the companion half gains one letter; the comparison
+    # names that one text and no other.
+    source = PHP_INFO.read_text(encoding="utf-8")
+    line = "- Images through OCR: JPEG, PNG, TIFF, WebP, HEIC\n"
+    assert line in source
+
+    violations = scan_file_types_against_draft(
+        "php/appinfo/info.xml",
+        source.replace(line, "- Images through OCR: JPEG, PNG, TIFF, WebP, HEIC, BMP\n", 1),
+        STORE_LISTING.read_text(encoding="utf-8"),
+    )
+
+    assert len(violations) == 1
+    assert "the English default" in violations[0]
+    assert "differs from the draft" in violations[0]
+
+
+def test_a_store_listing_without_the_draft_of_phase_31_is_reported() -> None:
+    listing = STORE_LISTING.read_text(encoding="utf-8").replace(DRAFT_OF_PHASE_31, "# Gone", 1)
+
+    violations = scan_file_types_against_draft("php/appinfo/info.xml", PHP_INFO.read_text(encoding="utf-8"), listing)
+
+    assert violations == ["docs/store-listing.md: has no section '# Entwurf v1.5.0 (Teil Phase 31)'"]
 
 
 # -- the store rules that no schema of ours states: images and the two lists --

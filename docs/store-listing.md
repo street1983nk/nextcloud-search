@@ -2078,6 +2078,103 @@ Abnahme durch den Owner: offen (REL-05).
 
 ---
 
+# Entwurf v1.5.0 (Teil Phase 31)
+
+**Owner-Abnahme offen, mit der Store-Text-Abnahme vor Release (REL-05,
+Phase 36); Grundlage FMT-01 bis FMT-06, D-31-04, D-31-05.** Plan 31-14,
+12.10.2026. Der Wortlaut unten ist ein Vorschlag des Planers, vom Ausführenden
+nur gekürzt und an die Vokabelregel angepasst, und noch nicht vom Owner
+abgenommen.
+
+Wie beim Teil Phase 30 steht der Wortlaut schon jetzt in beiden `info.xml`
+(alle sechs Beschreibungen) und in den drei READMEs, weil das Gate
+`test_every_file_type_list_stands_in_the_draft_of_phase_31_character_for_character`
+jede Dateitypen-Liste zeichengleich gegen Teil 1 hält. Eingereicht ist nichts:
+die Texte reisen erst mit dem Release 1.5.0, und das Release folgt erst der
+Abnahme. Ändert der Owner den Wortlaut, ändern sich Teil 1, die sechs
+Beschreibungen und die drei READMEs gemeinsam. Die Grenzliste bleibt bei fünf
+Einträgen (D-30-06), Messzahl, Anforderungen und alle übrigen Zeilen bleiben
+unverändert. Details zu jedem Format stehen in `docs/formats.md`, nicht im
+Store-Text.
+
+## Teil 1: die Dateitypen-Liste, alle sechs Beschreibungen
+
+Gleich in `findling` und `findling_backend`. Die erste Zeile jedes Blocks ist
+die Überschrift in der Beschreibung.
+
+```
+Supported file types:
+- PDF (scanned too), DOC, DOCX, PPTX, XLS, XLSX, ODT, ODS, ODP
+- HTML, RTF, TXT, Markdown, CSV, mails (EML)
+- ZIP files: the files inside, without OCR
+- Images through OCR: JPEG, PNG, TIFF, WebP, HEIC
+```
+
+```
+Unterstützte Dateitypen:
+- PDF (auch gescannt), DOC, DOCX, PPTX, XLS, XLSX, ODT, ODS, ODP
+- HTML, RTF, TXT, Markdown, CSV, Mails (EML)
+- ZIP-Dateien: die enthaltenen Dateien, ohne Texterkennung
+- Bilder per Texterkennung: JPEG, PNG, TIFF, WebP, HEIC
+```
+
+```
+Types de fichiers pris en charge :
+- PDF (numérisés aussi), DOC, DOCX, PPTX, XLS, XLSX, ODT, ODS, ODP
+- HTML, RTF, TXT, Markdown, CSV, e-mails (EML)
+- Fichiers ZIP : les fichiers contenus, sans OCR
+- Images par reconnaissance optique : JPEG, PNG, TIFF, WebP, HEIC
+```
+
+Unterschied zum Store-Text 1.4.3 (heute im Store), je Sprache gleich gebaut:
+DOC und XLS in der ersten Zeile, Mails (EML) am Ende der zweiten, die
+ZIP-Zeile neu, HEIC am Ende der Bildzeile. Abweichung vom Planer-Vorschlag:
+die ZIP-Zeile sagt "ZIP files", "ZIP-Dateien" und "Fichiers ZIP", weil die
+Vokabelregel (E-H2) in diesem Dokument jede Schreibweise des gesperrten
+Wortstamms sperrt, auch die englische und die französische (wie in Plan 31-02).
+
+## Teil 2: die README-Zeilen
+
+Je README nur der Absatz unter der Dateitypen-Überschrift, ungebrochen:
+
+> `README.md`: PDF (auch gescannt), DOC, DOCX, PPTX, XLS, XLSX, ODT, ODS, ODP, HTML, RTF, TXT, Markdown, CSV, Mails (EML), ZIP-Dateien (die enthaltenen Dateien, ohne Texterkennung) sowie Bilder (JPEG, PNG, TIFF, WebP, HEIC) per Texterkennung.
+>
+> `README.en.md`: PDF (scanned too), DOC, DOCX, PPTX, XLS, XLSX, ODT, ODS, ODP, HTML, RTF, TXT, Markdown, CSV, mails (EML), ZIP files (the files inside, without OCR), and images (JPEG, PNG, TIFF, WebP, HEIC) through OCR.
+>
+> `README.fr.md`: PDF (numérisés aussi), DOC, DOCX, PPTX, XLS, XLSX, ODT, ODS, ODP, HTML, RTF, TXT, Markdown, CSV, e-mails (EML), fichiers ZIP (les fichiers contenus, sans OCR), ainsi que les images (JPEG, PNG, TIFF, WebP, HEIC) par reconnaissance optique.
+
+## Teil 3: die Wortlaute der Urteile (aus Plan 31-02)
+
+Unverändert aus Plan 31-02, hier noch einmal zur Abnahme gebündelt; sie stehen
+so in `AdminViewService::REASON_TEXT`, in den 16 Katalogen und in
+`docs/formats.md`, Abschnitt "Skip codes". Der Codename des ZIP-Grenzcodes
+trägt den gesperrten Wortstamm und steht deshalb nur dort.
+
+| Code | Label EN | Label DE | Abhilfe EN | Abhilfe DE |
+|---|---|---|---|---|
+| ZIP-Grenzcode (neu) | ZIP file over the safety limits | ZIP-Datei über den Sicherheitsgrenzen | None. ZIP files that are nested too deep, too large, too densely packed or hold too many files are skipped so the container keeps running. | Keine. ZIP-Dateien, die zu tief verschachtelt, zu groß oder zu dicht gepackt sind oder zu viele Dateien enthalten, werden übersprungen, damit der Container weiterläuft. |
+| `unsupported_variant` (allgemeiner) | Variant of this format that cannot be read | Variante dieses Formats, die nicht gelesen werden kann | None. The file uses a variant or an encoding Findling cannot read, for example Word 95 or an unusual image encoding. | Keine. Die Datei nutzt eine Variante oder Kodierung, die Findling nicht lesen kann, zum Beispiel Word 95 oder eine ungewöhnliche Bildkodierung. |
+| `mime_not_allowed` (nur Abhilfe) | File type not supported | Dateityp nicht unterstützt | None. Findling reads PDF, Office, OpenDocument, text, mails, ZIP files and images. | Keine. Findling liest PDF, Office, OpenDocument, Text, Mails, ZIP-Dateien und Bilder. |
+
+## Teil 4: Vorschlag zur Grenzliste
+
+Frage an den Owner: Soll "ZIP: Inhalt ohne Texterkennung, unter keinem
+Typfilter" als sechster Eintrag in die Grenzliste ("Known limitations:",
+"Bekannte Grenzen:", "Limites connues :")?
+
+Empfehlung: nein, weil die Grenzliste seit D-06 die Grenzen der Sprachen
+sammelt und zeichengleich gegen `docs/language-analyzers.md` geprüft wird,
+während "ohne Texterkennung" schon in der ZIP-Zeile von Teil 1 steht und der
+Typfilter in `docs/formats.md` und `docs/search-filters.md` erklärt ist.
+
+Ohne Wort des Owners bleibt die Grenzliste bei fünf Einträgen
+(`LIMITATION_COUNT = 5`). Sagt der Owner ja, ändern sich die sechs
+Beschreibungen, `docs/language-analyzers.md` und die Konstante gemeinsam.
+
+Abnahme durch den Owner: offen (REL-05).
+
+---
+
 # Release-Checkliste v1.5.0 (REL-05): Corresponding source
 
 Seit Plan 31-01 verteilt das Backend-Image mit dem pillow-heif-Wheel drei native

@@ -38,8 +38,9 @@ You bring the model, and no content leaves your server.
 
 ## Supported file types
 
-PDF (scanned too), DOCX, PPTX, XLSX, ODT, ODS, ODP, HTML, RTF, TXT, Markdown,
-CSV, and images (JPEG, PNG, TIFF, WebP) through OCR.
+PDF (scanned too), DOC, DOCX, PPTX, XLS, XLSX, ODT, ODS, ODP, HTML, RTF, TXT,
+Markdown, CSV, mails (EML), ZIP files (the files inside, without OCR), and
+images (JPEG, PNG, TIFF, WebP, HEIC) through OCR.
 
 ## Requirements
 

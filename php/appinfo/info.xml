@@ -54,9 +54,10 @@ Known limitations:
 Together with the [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector), Findling forms the retrieval layer for your own RAG: AI assistants search your document contents with exactly the rights of the asking user, and no content leaves your server.
 
 Supported file types:
-- PDF (scanned too), DOCX, PPTX, XLSX, ODT, ODS, ODP
-- HTML, RTF, TXT, Markdown, CSV
-- Images through OCR: JPEG, PNG, TIFF, WebP
+- PDF (scanned too), DOC, DOCX, PPTX, XLS, XLSX, ODT, ODS, ODP
+- HTML, RTF, TXT, Markdown, CSV, mails (EML)
+- ZIP files: the files inside, without OCR
+- Images through OCR: JPEG, PNG, TIFF, WebP, HEIC
 
 Requirements:
 - Nextcloud 33 to 35, apps: AppAPI, Findling Backend (External Apps), Findling
@@ -87,9 +88,10 @@ Bekannte Grenzen:
 Zusammen mit dem [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) ergibt Findling die Retrieval-Schicht für Ihr eigenes RAG: KI-Assistenten durchsuchen Ihre Dokumentinhalte mit genau den Rechten des fragenden Nutzers, und kein Inhalt verlässt Ihren Server.
 
 Unterstützte Dateitypen:
-- PDF (auch gescannt), DOCX, PPTX, XLSX, ODT, ODS, ODP
-- HTML, RTF, TXT, Markdown, CSV
-- Bilder per Texterkennung: JPEG, PNG, TIFF, WebP
+- PDF (auch gescannt), DOC, DOCX, PPTX, XLS, XLSX, ODT, ODS, ODP
+- HTML, RTF, TXT, Markdown, CSV, Mails (EML)
+- ZIP-Dateien: die enthaltenen Dateien, ohne Texterkennung
+- Bilder per Texterkennung: JPEG, PNG, TIFF, WebP, HEIC
 
 Anforderungen:
 - Nextcloud 33 bis 35, Apps: AppAPI, Findling Backend (External Apps), Findling
@@ -120,9 +122,10 @@ Limites connues :
 Avec le [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector), Findling forme la couche de récupération de votre propre RAG : les assistants IA cherchent dans le contenu de vos documents avec exactement les droits de l'utilisateur qui demande, et aucun contenu ne quitte votre serveur.
 
 Types de fichiers pris en charge :
-- PDF (numérisés aussi), DOCX, PPTX, XLSX, ODT, ODS, ODP
-- HTML, RTF, TXT, Markdown, CSV
-- Images par reconnaissance optique : JPEG, PNG, TIFF, WebP
+- PDF (numérisés aussi), DOC, DOCX, PPTX, XLS, XLSX, ODT, ODS, ODP
+- HTML, RTF, TXT, Markdown, CSV, e-mails (EML)
+- Fichiers ZIP : les fichiers contenus, sans OCR
+- Images par reconnaissance optique : JPEG, PNG, TIFF, WebP, HEIC
 
 Prérequis :
 - Nextcloud 33 à 35, applications : AppAPI, Findling Backend (External Apps), Findling
