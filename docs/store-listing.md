@@ -2160,16 +2160,21 @@ Gegenprobe per Playwright auf der HaRP-Testinstanz (Port 8096, NC 34.0.3):
 `#content` mit `overflow: clip`, darin genau ein `#app-content` mit
 `overflow: auto`, das Mausrad scrollt bis ganz unten.
 
-Eingereicht: noch offen, wartet auf das Owner-Wort. Auslöser ist der Workflow
-"Store submission" (`store-submit.yml`), per Hand mit dem Tag:
+Owner-Abnahme am 12.10.2026 gemeinsam per Playwright auf derselben Instanz,
+diesmal mit dem Release-Image 1.4.3 als Backend und einer echten Trefferliste
+(25 Treffer, Fensterhöhe 800 px): Das Mausrad scrollt `#app-content` bis ganz
+unten (2949 von 2949 px), die Blätterleiste ist sichtbar.
 
-```bash
-gh workflow run store-submit.yml --repo street1983nk/nextcloud-search --ref main -f tag=v1.4.3
-```
+Eingereicht am 12.10.2026 über den Workflow "Store submission"
+(`store-submit.yml`, `--ref main -f tag=v1.4.3`, `register` aus,
+Direktmodus leer), Lauf 38220544036:
 
-`register` bleibt aus (beide App-IDs sind registriert), Direktmodus leer.
-Nach dem Lauf hier Lauf-ID, beide HTTP 201 mit Zeit und die Gegenprobe der
-Kataloge nachtragen.
+- release findling v1.4.3: HTTP 201, 07:56:14Z
+- release findling_backend v1.4.3: HTTP 201, 07:56:15Z
+
+Gegenprobe der Kataloge direkt danach: Der Katalog für Plattform 34.0.0
+führt findling noch mit 1.4.2 als neuester Version (Katalog-Cache); die
+Gegenprobe wird nachgeholt.
 
 # Release 1.4.2 (09.10.2026): Deckungsgrad-Fix ohne Textänderung
 
