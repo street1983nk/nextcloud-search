@@ -208,6 +208,19 @@ FMT-06, FMT-02 und die anderen FMT bleiben **Pending** (Owner-Linie: E2E-Beweis 
 - Risiko für den ersten CI-Lauf: Nach `docker start` muss der HaRP-Tunnel wieder stehen. Die positive Kontrolle zeigt das mit klarer Meldung. Store upgrade 6 erzeugt Container neu (`docker create`), hier wird derselbe Container wieder gestartet, die Zertifikate bleiben in seinem Dateisystem.
 - Lokal liegt ein Image `findling_backend:1.4.3` von heute (ca. 4 h alt). Es stammt nicht aus diesem Plan, Herkunft unbekannt (Parallel-Session?).
 
-## Abschlussprüfung (nach dem letzten Commit dieses Plans)
+## Abschlussprüfung (nach dem Docs-Commit 564231c8)
 
-Wird nach dem Docs-Commit ergänzt.
+```
+$ git fetch origin
+$ git log origin/main..HEAD --oneline
+564231c8 docs(31-12): complete seed plan (1.4.2 seed and record, workflow commit held for 31-13)
+b021f16c ci(31-12): sow the new formats on 1.4.2 and record them before the upgrade
+$ git branch -r --contains b021f16c
+(leer)
+```
+
+Der Workflow-Commit b021f16c steht auf keinem Remote-Zweig. Dieser Nachtrag ist ein eigener lokaler Commit, ebenfalls ungepusht.
+
+## Self-Check: PASSED
+
+make_upgrade_seed_formats.py, word97-ole-seed.doc, die acht Saatdateien und diese SUMMARY sind vorhanden. 8cf62567 liegt auf origin/main, b021f16c und 564231c8 nur lokal. `grep "appends its legacy_format seed here"` im Workflow und `grep "def test_the_seed_step_leaves_room_for_phase_31"` im Gate sind leer.
