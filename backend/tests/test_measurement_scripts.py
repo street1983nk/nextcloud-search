@@ -818,8 +818,12 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # Measured again on 2026-10-11 beside plan 31-03: comments only, the docblock
 # of REASON_TEXT in AdminViewService.php names twenty-five codes instead of
 # twenty. No file came and none went, so PHP_FILES_TODAY stays at 90.
+# Measured again by issue #27 (the result page opens its own #app-content, the
+# one element that scrolls inside the clipped #content): templates/search.php
+# changed its bytes. No file came and none went, so PHP_FILES_TODAY stays at
+# 90.
 PHP_FILES_TODAY = 90
-PHP_TREE_HASH_TODAY = "0d4206abef3ae73e772b02331495b560041a02008a588f63798351b8aaf079a0"
+PHP_TREE_HASH_TODAY = "6ab9f601f5caf0bd4519ae4f72654b4f42251630a5b4a281bffdad1b5e276dd4"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
