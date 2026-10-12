@@ -570,17 +570,18 @@ def test_a_file_without_an_extension_is_judged_by_the_announced_type(
 @pytest.mark.parametrize(
     ("name", "mime"),
     [
-        ("brief.docx", "application/zip"),
+        ("brief.docx", "application/x-7z-compressed"),
         ("bericht.pdf", "application/x-msdownload"),
-        ("notiz.txt", "application/vnd.ms-excel"),
+        ("notiz.txt", "application/vnd.ms-powerpoint"),
     ],
-    ids=["zip-called-docx", "binary-called-pdf", "legacy-office-called-txt"],
+    ids=["7z-called-docx", "binary-called-pdf", "legacy-powerpoint-called-txt"],
 )
 def test_a_type_outside_the_allowlist_is_skipped_whatever_the_name_says(name: str, mime: str, tmp_path: Path) -> None:
     # The allowlist decides, and it decides before a single byte is read. The
-    # third row is the pre 2007 Office format, which is documented non support
-    # rather than a gap: the name is the one an ordinary user would give it, and
-    # it changes nothing.
+    # third row is the PowerPoint format before 2007, which is documented non
+    # support rather than a gap: the name is the one an ordinary user would give
+    # it, and it changes nothing. Until plan 31-10 the first row was a ZIP file
+    # and the third an .xls; both types are read since then.
     payload = b"PK\x03\x04 nothing that belongs in an index"
 
     outcome = extract(_write(tmp_path, name, payload), mime, len(payload))

@@ -320,18 +320,18 @@ def test_a_mimetype_outside_the_allowlist_is_judged_without_reaching_an_extracto
         "video/mp4",
         "video/quicktime",
         "audio/mpeg",
-        "application/zip",
+        # ZIP, .doc and .xls left this list with plan 31-10 (FMT-02 to FMT-04);
+        # the archive formats besides ZIP and the PowerPoint format before 2007
+        # stay out.
         "application/x-tar",
-        "application/msword",
-        "application/vnd.ms-excel",
+        "application/x-7z-compressed",
         "application/vnd.ms-powerpoint",
         # The pictures that stay out. Until plan 03-10 this line read image/jpeg
         # and image/png, because no picture was read at all; those two are in the
-        # allowlist now, and the three below took their place. Each of them is a
-        # further decoder in the sandbox child, which is attack surface a picture
-        # from a stranger's phone gets to reach, and none of them carries the
+        # allowlist now. HEIC left with plan 31-10 (FMT-05). The two below are a
+        # further decoder in the sandbox child each, which is attack surface a
+        # picture from a stranger's phone gets to reach, and neither carries the
         # documents this app is about (T-03-1003).
-        "image/heic",
         "image/bmp",
         "image/gif",
     ],
@@ -353,6 +353,12 @@ def test_video_archive_image_and_legacy_office_are_deliberately_not_supported(mi
         ("application/rtf", Route.RTF),
         (PLAIN, Route.PLAIN),
         ("text/markdown", Route.PLAIN),
+        ("message/rfc822", Route.MAIL),
+        ("application/zip", Route.ZIP),
+        ("application/msword", Route.DOC),
+        ("application/vnd.ms-excel", Route.XLS),
+        ("image/heic", Route.OCR),
+        ("image/heif", Route.OCR),
     ],
 )
 def test_an_allowed_mimetype_yields_its_route(mime: str, expected: Route) -> None:

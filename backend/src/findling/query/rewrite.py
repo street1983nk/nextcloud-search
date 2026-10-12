@@ -187,12 +187,18 @@ TYPE_PREFIX: Final = "type:"
 # extension that is not listed is reachable under no chip, and a file without an
 # extension is reachable under none of them either, because extension_of returns
 # the empty string for it and an empty raw field produces no term at all.
+#
+# The formats of 1.5 (plan 31-10): "doc" and "dot" join the documents, "xls" and
+# "xlt" the spreadsheets, "heic" and "heif" the images, and "eml" stood in text
+# already. "zip" stands in no group, by owner decision D-31-05: an archive has no
+# document type of its own, whatever its members are, so a ZIP file appears only
+# when no group is chosen. docs/search-filters.md names that as a limit.
 TYPE_GROUPS: Final[Mapping[str, tuple[str, ...]]] = {
     "pdf": ("pdf",),
-    "documents": ("docx", "odt", "rtf"),
-    "spreadsheets": ("xlsx", "ods", "csv"),
+    "documents": ("docx", "odt", "rtf", "doc", "dot"),
+    "spreadsheets": ("xlsx", "ods", "csv", "xls", "xlt"),
     "presentations": ("pptx", "odp"),
-    "images": ("jpg", "jpeg", "jps", "mpo", "png", "tif", "tiff", "webp"),
+    "images": ("jpg", "jpeg", "jps", "mpo", "png", "tif", "tiff", "webp", "heic", "heif"),
     "text": (
         "txt",
         "text",

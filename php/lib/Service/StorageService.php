@@ -79,13 +79,14 @@ class StorageService {
 
 	/**
 	 * The document allowlist of the zero config guard rails: PDF, the OOXML
-	 * trio, OpenDocument, plain text and Markdown, RTF and HTML, and since
-	 * plan 03-10 the four picture formats that OCR can read.
+	 * trio, OpenDocument, plain text and Markdown, RTF and HTML, since plan
+	 * 03-10 the picture formats that OCR can read, and since plan 31-10 mails,
+	 * ZIP files, Word and Excel 97 to 2003 and HEIC photos.
 	 *
-	 * Everything else, and that includes video, audio and archives, is not a
-	 * document and is never queued. Two spellings are listed for RTF because
-	 * instances disagree on which one they store, and an entry this instance
-	 * has never seen simply drops out below.
+	 * Everything else, and that includes video, audio and every archive format
+	 * but ZIP, is not a document and is never queued. Two spellings are listed
+	 * for RTF because instances disagree on which one they store, and an entry
+	 * this instance has never seen simply drops out below.
 	 *
 	 * The pictures, and why exactly these four: JPEG is what a phone upload is,
 	 * PNG is what a screenshot and most exported notices are, TIFF is what a
@@ -94,10 +95,23 @@ class StorageService {
 	 * measured, with the WebP result written up as measurement 4 of
 	 * docs/ocr.md.
 	 *
-	 * HEIC, BMP and GIF stay out. HEIC needs a further decoder inside the
-	 * sandbox child, and every decoder is attack surface that a picture from a
-	 * stranger's phone gets to reach; BMP and GIF carry documents essentially
-	 * never, so the same surface would be bought for nothing at all.
+	 * Since 1.5 (plan 31-10) the allowlist reads five more kinds of file. A
+	 * mail (message/rfc822) gives its subject, its senders and recipients, its
+	 * text part and the names of its attachments, never their content. A ZIP
+	 * file (application/zip) gives the text of its members, without OCR inside
+	 * the archive and inside limits that are counted before the archive is
+	 * opened. Word and Excel 97 to 2003 (application/msword,
+	 * application/vnd.ms-excel) are read by olefile and xlrd in the sandbox
+	 * child, without a headless office suite. HEIC and HEIF photos
+	 * (image/heic, image/heif) are decoded by pillow-heif in the same child
+	 * and go to OCR like the other pictures. What stays outside, and why: BMP
+	 * and GIF carry documents essentially never, so a further decoder that a
+	 * picture from a stranger's phone gets to reach would be bought for
+	 * nothing; the PowerPoint format before 2007 has no reader; further
+	 * archive formats (7z, rar, tar, gz) and Outlook .msg files would each be
+	 * a parser of its own that no decision opened. This paragraph stands
+	 * identically next to both lists, and
+	 * backend/tests/test_allowlist_parity.py compares the two.
 	 *
 	 * This list is kept twice on purpose, here and in the container's
 	 * dispatch.ALLOWED_MIMETYPES, because each side has to hold on the day the
@@ -127,6 +141,12 @@ class StorageService {
 		'image/png',
 		'image/tiff',
 		'image/webp',
+		'image/heic',
+		'image/heif',
+		'message/rfc822',
+		'application/zip',
+		'application/msword',
+		'application/vnd.ms-excel',
 	];
 
 	/**

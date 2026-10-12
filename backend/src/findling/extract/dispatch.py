@@ -9,24 +9,28 @@ What is deliberately absent, and why:
 
 * Moving pictures and sound carry no text. There is nothing to index and nothing
   a text extractor could do except waste a process slot.
-* Container formats such as compressed archives are not opened at all. Unpacking
-  untrusted input means path traversal on write and a decompression bomb on read,
-  for the sake of files we would then have to judge one by one anyway.
+* Archive formats other than ZIP are not opened at all. Since plan 31-10 a ZIP
+  file is read (FMT-02), by archive.py and never unpacked to disk: its central
+  directory is counted before ZipFile sees it, one budget holds over every
+  nesting level, and no member is sent to OCR. 7z, rar, tar and gz would each
+  be a parser of their own for the same path traversal and decompression bomb
+  questions, and no decision opened them.
 * Pictures need OCR to mean anything, and since plan 03-09 that path exists:
   ``Route.OCR`` hands a page to the engine and comes back with text or with a
   verdict that says why there is none. There are two ways onto that route and
   they are different in kind. A scanned PDF gets there through the kind of its
   job, because a second attempt at the same file is a property of the order and
-  not of the file. The four picture formats of D-05 get there through this table,
+  not of the file. The picture formats of D-05 get there through this table,
   because being a picture is a property of the file and nothing else. Which
   decoder opens it is therefore read off the mimetype: pdfium for a document,
-  Pillow for a picture. HEIC, BMP and GIF stay out, and the reason is written
-  down in both allowlists rather than in one.
-* Legacy Office (the pre-2007 binary formats, extensions doc, xls and ppt) is
-  outside v1: it needs antiword, catdoc or a headless office suite, which is a
-  multiple of the image size and a process zoo of its own. Those files land as
-  skipped(mime_not_allowed), because documented non support is more honest than a
-  shaky crutch.
+  Pillow for a picture. Since plan 31-10 HEIC and HEIF are two of the picture
+  formats (FMT-05); BMP and GIF are not, and the reason is written down in both
+  allowlists rather than in one.
+* Word and Excel 97 to 2003 (extensions doc and xls) are read since plan 31-10
+  (FMT-03, FMT-04), by olefile and xlrd in the sandbox child and without a
+  headless office suite. The PowerPoint format before 2007 (ppt) has no reader
+  and lands as skipped(mime_not_allowed), because documented non support is
+  more honest than a shaky crutch.
 
 The size cap is checked here for the second time. The PHP crawl enforces it when
 a file is queued, which is the cheap place, and this is the line that still holds
@@ -61,42 +65,67 @@ class Route(StrEnum):
     PLAIN = "plain"
     # The fourth kind of branch, and the only one that is reached in two ways:
     # by the kind of the job, for a scanned PDF that the text pass handed over,
-    # and by the mimetype, for the four picture formats below. The first of the
+    # and by the mimetype, for the picture formats below. The first of the
     # two is why there is no pseudo mimetype for scans: it would make every
     # reader of the table believe Nextcloud can hand one over, and judge would
     # have to know about job kinds to keep it out. A picture is not that case,
     # it really does arrive with a type of its own.
     OCR = "ocr"
+    # The four document routes of 1.5 (plan 31-10). Each one has a reader of its
+    # own: mail.py (31-04), archive.py (31-08), legacy_doc.py (31-05) and
+    # legacy_xls.py (31-06).
+    MAIL = "mail"
+    ZIP = "zip"
+    DOC = "doc"
+    XLS = "xls"
 
 
 # The picture formats of D-05, kept as a set of their own because two places need
 # them: the allowlist below, and the branch that decides which decoder opens the
-# file. Four in, three deliberately out.
+# file. Six in, two deliberately out.
 #
-# In, and why these four: JPEG is what a phone upload is, PNG is what a screenshot
-# and most exported notices are, TIFF is what a scanner and a fax gateway write,
-# and WebP is what a browser saves today. All four are read by the Pillow and the
+# In, and why these: JPEG is what a phone upload is, PNG is what a screenshot and
+# most exported notices are, TIFF is what a scanner and a fax gateway write, and
+# WebP is what a browser saves today. All four are read by the Pillow and the
 # leptonica of this image, measured, with the WebP result written up as
-# measurement 4 of docs/ocr.md.
+# measurement 4 of docs/ocr.md. HEIC and HEIF are what an iPhone camera writes;
+# they joined with plan 31-10, read by pillow-heif in the sandbox child (plan
+# 31-07, measured in docs/measurements/2026-10-formate-v15).
 #
-# Out, and why: HEIC needs a further decoder in the sandbox child, and every
-# decoder is attack surface that a picture from a stranger's phone gets to reach.
-# BMP and GIF carry documents essentially never, so the same surface would be
-# bought for nothing at all. The identical paragraph stands next to the PHP list,
-# because a decision that is readable in one place only is a decision the other
-# place will undo.
+# The two that stay outside, and why, are part of the paragraph above the
+# allowlist below, which stands identically next to the PHP list, because a
+# decision that is readable in one place only is a decision the other place will
+# undo.
 IMAGE_MIMETYPES: Final[frozenset[str]] = frozenset(
     {
         "image/jpeg",
         "image/png",
         "image/tiff",
         "image/webp",
+        "image/heic",
+        "image/heif",
     }
 )
 
 
 # The allowlist. Nextcloud hands the mimetype over with the queue entry, so this
 # is the type the server determined, not one we guessed from a file name.
+#
+# Since 1.5 (plan 31-10) the allowlist reads five more kinds of file. A mail
+# (message/rfc822) gives its subject, its senders and recipients, its text part
+# and the names of its attachments, never their content. A ZIP file
+# (application/zip) gives the text of its members, without OCR inside the
+# archive and inside limits that are counted before the archive is opened. Word
+# and Excel 97 to 2003 (application/msword, application/vnd.ms-excel) are read
+# by olefile and xlrd in the sandbox child, without a headless office suite.
+# HEIC and HEIF photos (image/heic, image/heif) are decoded by pillow-heif in the
+# same child and go to OCR like the other pictures. What stays outside, and why:
+# BMP and GIF carry documents essentially never, so a further decoder that a
+# picture from a stranger's phone gets to reach would be bought for nothing; the
+# PowerPoint format before 2007 has no reader; further archive formats (7z, rar,
+# tar, gz) and Outlook .msg files would each be a parser of its own that no
+# decision opened. This paragraph stands identically next to both lists, and
+# backend/tests/test_allowlist_parity.py compares the two.
 ALLOWED_MIMETYPES: Final[Mapping[str, Route]] = {
     "application/pdf": Route.PDF,
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": Route.DOCX,
@@ -112,8 +141,12 @@ ALLOWED_MIMETYPES: Final[Mapping[str, Route]] = {
     "text/plain": Route.PLAIN,
     "text/markdown": Route.PLAIN,
     "text/csv": Route.PLAIN,
+    "message/rfc822": Route.MAIL,
+    "application/zip": Route.ZIP,
+    "application/msword": Route.DOC,
+    "application/vnd.ms-excel": Route.XLS,
     # Spread rather than written out again, so that the set above stays the one
-    # place the four types are named. Two literal lists would be the same drift
+    # place the six types are named. Two literal lists would be the same drift
     # this file already warns about, one file further in.
     **dict.fromkeys(IMAGE_MIMETYPES, Route.OCR),
 }
@@ -250,6 +283,8 @@ def _run_route(route: Route, path: str, mime: str) -> ExtractionOutcome:
             return odf.extract_odf(path)
         case Route.DOCX | Route.PPTX | Route.XLSX:
             return _run_ooxml_route(route, path)
+        case Route.MAIL | Route.ZIP | Route.DOC | Route.XLS:
+            return _run_format_of_1_5(route, path)
         case _:
             return _run_text_route(route, path)
 
@@ -296,6 +331,34 @@ def _run_ooxml_route(route: Route, path: str) -> ExtractionOutcome:
             return office.extract_pptx(path)
         case _:
             return office.extract_xlsx(path)
+
+
+def _run_format_of_1_5(route: Route, path: str) -> ExtractionOutcome:
+    """The four document routes of 1.5 (plan 31-10), each with its own reader.
+
+    Imported in the branch like every other format module, so that a child that
+    never sees a mail or an old Office file never loads olefile or xlrd. The two
+    Office readers sniff the first bytes themselves: a .doc that is really RTF,
+    HTML or a DOCX, and an .xls that is really XLSX, markup or text, goes to the
+    reader of what it is.
+    """
+    match route:
+        case Route.MAIL:
+            from findling.extract import mail
+
+            return mail.extract_eml(path)
+        case Route.ZIP:
+            from findling.extract import archive
+
+            return archive.extract_zip(path)
+        case Route.DOC:
+            from findling.extract import legacy_doc
+
+            return legacy_doc.extract_msword(path)
+        case _:
+            from findling.extract import legacy_xls
+
+            return legacy_xls.extract_msexcel(path)
 
 
 def _run_text_route(route: Route, path: str) -> ExtractionOutcome:

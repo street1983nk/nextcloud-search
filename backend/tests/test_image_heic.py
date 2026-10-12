@@ -29,7 +29,7 @@ import pillow_heif
 import pytest
 from PIL import Image, ImageDraw, ImageFont
 
-from findling.extract import image, ocr
+from findling.extract import dispatch, image, ocr
 from findling.extract.errors import Reason, State
 
 FONT = Path(__file__).resolve().parents[2] / "testdata" / "fonts" / "DejaVuSans.ttf"
@@ -145,6 +145,34 @@ def test_a_heic_reaches_the_engine_upright_and_whole(tmp_path: Path, monkeypatch
     with _handed_over(engine) as handed:
         assert handed.size == PAGE
         assert handed.mode == "L"
+
+
+@pytest.mark.parametrize("mime", ["image/heic", "image/heif"])
+def test_a_heic_is_judged_onto_the_picture_branch(mime: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Plan 31-10: the way a queued photo takes in the child, judge on the
+    # mimetype Nextcloud stored, the OCR route, and Pillow with the HEIF plugin
+    # rather than pdfium, because the mimetype is a picture type.
+    engine = _install_engine(monkeypatch)
+    path = _heic(tmp_path, "seite.heic")
+
+    assert dispatch.judge(mime, path.stat().st_size) is dispatch.Route.OCR
+
+    outcome = dispatch.extract(str(path), mime, path.stat().st_size)
+
+    assert outcome.state is State.INDEXED
+    assert TERM in outcome.text
+    assert len(engine.calls) == 1
+
+
+@needs_engine
+@pytest.mark.parametrize("mime", ["image/heic", "image/heif"])
+def test_the_engine_reads_the_word_of_a_heic_through_judge(mime: str, tmp_path: Path) -> None:
+    path = _heic(tmp_path, "seite.heic")
+
+    outcome = dispatch.extract(str(path), mime, path.stat().st_size)
+
+    assert outcome.state is State.INDEXED
+    assert TERM in outcome.text.lower()
 
 
 @needs_engine

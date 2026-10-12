@@ -119,6 +119,9 @@ class StorageCrawlJob extends QueuedJob {
 	 * for, and the audience of this app has believed a status screen that knew
 	 * nothing once already.
 	 *
+	 * HEIC and HEIF joined with plan 31-10, together with the allowlist of
+	 * StorageService: a photo of an iPhone carries no text layer either.
+	 *
 	 * @var list<string>
 	 */
 	private const OCR_CERTAIN_MIMETYPES = [
@@ -126,6 +129,8 @@ class StorageCrawlJob extends QueuedJob {
 		'image/png',
 		'image/tiff',
 		'image/webp',
+		'image/heic',
+		'image/heif',
 	];
 
 	/**

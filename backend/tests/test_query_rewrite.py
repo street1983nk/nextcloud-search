@@ -492,7 +492,7 @@ def test_the_text_syntax_and_the_group_parameter_are_united(index: Index) -> Non
     # of explaining an empty list that is nobody's mistake.
     rewritten = build_query(index, "type:pdf vertrag", groups=["documents"])
 
-    assert rewritten.extensions == ("pdf", "docx", "odt", "rtf")
+    assert rewritten.extensions == ("pdf", "docx", "odt", "rtf", "doc", "dot")
     assert _found(index, rewritten) == [1, 2]
 
 
@@ -559,6 +559,78 @@ def test_without_a_group_and_without_a_bound_there_is_no_filter_clause(index: In
     rewritten = build_query(index, "frist", groups=[], since=None, until=None)
 
     assert rewritten.filter_query is None
+
+
+# -- the formats of 1.5 under the six groups (plan 31-10, D-31-05) -----------
+#
+# Four files of the new kinds with one shared word, in an index of their own so
+# that the three documents above keep answering what they answered before. The
+# ZIP file is the case of D-31-05: an archive has no document type of its own,
+# so it belongs to no group and appears only when no group is chosen.
+
+NEW_FORMATS = (
+    (11, "Bericht.doc", "doc"),
+    (12, "Tabelle.xls", "xls"),
+    (13, "Foto.heic", "heic"),
+    (14, "Akten.zip", "zip"),
+)
+NEW_FORMAT_WORD = "formquendel"
+
+
+@pytest.fixture(scope="module")
+def new_format_index(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Index]:
+    directory = tmp_path_factory.mktemp("query-index-1-5")
+    built = open_index(directory, CONSTITUENTS)
+    writer = built.writer(heap_size=15_000_000, num_threads=1)
+    for file_id, name, extension in NEW_FORMATS:
+        document = Document()
+        document.add_unsigned(FIELD_FILE_ID, file_id)
+        document.add_unsigned(FIELD_STORAGE_ID, 1)
+        document.add_text(FIELD_NAME, name)
+        document.add_text(FIELD_TITLE, name.rsplit(".", 1)[0])
+        document.add_text(FIELD_PATH, f"/Akten/{name}")
+        document.add_text(FIELD_EXT, extension)
+        document.add_text(FIELD_BODY_DE, f"Das {NEW_FORMAT_WORD} steht in dieser Datei.")
+        document.add_integer(FIELD_MTIME, 1_700_000_000 + file_id)
+        writer.add_document(document)
+    writer.commit()
+    built.reload()
+    yield built
+    writer.wait_merging_threads()
+
+
+def test_the_extensions_of_1_5_stand_in_their_groups() -> None:
+    assert {"doc", "dot"} <= set(TYPE_GROUPS["documents"])
+    assert {"xls", "xlt"} <= set(TYPE_GROUPS["spreadsheets"])
+    assert {"heic", "heif"} <= set(TYPE_GROUPS["images"])
+    assert "eml" in TYPE_GROUPS["text"]
+
+
+def test_zip_stands_in_no_group() -> None:
+    # D-31-05, an owner decision: a ZIP file is a container, not a document type.
+    assert [group for group, extensions in TYPE_GROUPS.items() if "zip" in extensions] == []
+
+
+@pytest.mark.parametrize(("group", "expected"), [("documents", [11]), ("spreadsheets", [12]), ("images", [13])])
+def test_a_group_finds_its_format_of_1_5(new_format_index: Index, group: str, expected: list[int]) -> None:
+    assert _found(new_format_index, build_query(new_format_index, NEW_FORMAT_WORD, groups=[group])) == expected
+
+
+@pytest.mark.parametrize("group", sorted(TYPE_GROUPS))
+def test_no_group_finds_a_zip_file(new_format_index: Index, group: str) -> None:
+    assert 14 not in _found(new_format_index, build_query(new_format_index, NEW_FORMAT_WORD, groups=[group]))
+
+
+def test_all_six_groups_together_leave_only_the_zip_file_out(new_format_index: Index) -> None:
+    # The one place where all six chips are not the same as none: the ZIP file
+    # is the documented difference (docs/search-filters.md, the limits).
+    every_group = _found(new_format_index, build_query(new_format_index, NEW_FORMAT_WORD, groups=list(TYPE_GROUPS)))
+
+    assert every_group == [11, 12, 13]
+
+
+def test_without_a_group_the_zip_file_is_found(new_format_index: Index) -> None:
+    assert _found(new_format_index, build_query(new_format_index, NEW_FORMAT_WORD)) == [11, 12, 13, 14]
 
 
 def test_the_filter_clause_carries_the_expected_set_on_its_own(index: Index) -> None:

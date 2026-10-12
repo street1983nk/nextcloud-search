@@ -18,8 +18,10 @@ import socket
 import time
 import tracemalloc
 from collections.abc import Callable, Sequence
+from email.message import EmailMessage
+from io import BytesIO
 from pathlib import Path
-from zipfile import ZipFile
+from zipfile import ZIP_DEFLATED, ZipFile
 
 import docx
 import openpyxl
@@ -35,7 +37,7 @@ from conftest import build_cfb
 from findling import config
 from findling.config import EXTRACT_ARCHIVE_MEMBER_MAX_BYTES
 from findling.extract import sandbox
-from findling.extract.dispatch import ALLOWED_MIMETYPES, IMAGE_MIMETYPES, Route, extract
+from findling.extract.dispatch import ALLOWED_MIMETYPES, IMAGE_MIMETYPES, Route, extract, judge
 from findling.extract.errors import ExtractionOutcome, Reason, State
 from findling.extract.odf import extract_odf
 from findling.extract.office import extract_docx, extract_pptx, extract_xlsx
@@ -854,13 +856,81 @@ def test_a_compound_file_without_a_known_stream_keeps_the_old_way(tmp_path: Path
     assert outcome == ExtractionOutcome.failed(Reason.CORRUPT)
 
 
-@pytest.mark.parametrize("mime", ["application/msword", "application/vnd.ms-excel", "application/vnd.ms-powerpoint"])
-def test_the_old_office_mimetypes_stay_outside_the_allowlist(mime: str, tmp_path: Path) -> None:
-    # judge is unchanged: a file Nextcloud itself calls .doc, .xls or .ppt is
+def test_the_old_powerpoint_mimetype_stays_outside_the_allowlist(tmp_path: Path) -> None:
+    # Since plan 31-10 a file Nextcloud calls .doc or .xls is read; .ppt is
     # still refused on its type, before the sniff could be reached.
-    path = _write(tmp_path, "job-4711.part", build_cfb(["WordDocument"]))
+    path = _write(tmp_path, "job-4711.part", build_cfb(["PowerPoint Document"]))
 
-    assert extract(path, mime, Path(path).stat().st_size) == ExtractionOutcome.skipped(Reason.MIME_NOT_ALLOWED)
+    outcome = extract(path, "application/vnd.ms-powerpoint", Path(path).stat().st_size)
+
+    assert outcome == ExtractionOutcome.skipped(Reason.MIME_NOT_ALLOWED)
+
+
+# The four formats of 1.5 that arrive as documents, each on its own route
+# (plan 31-10). The pictures of 1.5, HEIC and HEIF, take the OCR route and are
+# held in test_image_heic.py, next to the stand in for the engine.
+NEW_FORMAT_ROUTES = {
+    "message/rfc822": Route.MAIL,
+    "application/zip": Route.ZIP,
+    "application/msword": Route.DOC,
+    "application/vnd.ms-excel": Route.XLS,
+}
+
+LEGACY = Path(__file__).resolve().parent / "fixtures" / "legacy"
+
+
+def _mail_payload() -> bytes:
+    message = EmailMessage()
+    message["Subject"] = "Angebot Dachsanierung"
+    message["From"] = "Erika Mustermann <erika@example.org>"
+    message["To"] = "max@example.org"
+    message.set_content("Bitte bis Freitag das postquendel pr\u00fcfen.")
+    return bytes(message)
+
+
+def _zip_payload() -> bytes:
+    sink = BytesIO()
+    with ZipFile(sink, "w", ZIP_DEFLATED) as target:
+        target.writestr("innen/rechnung.txt", "Der zipquendel steht in der Rechnung.")
+    return sink.getvalue()
+
+
+def _new_format_file(tmp_path: Path, mime: str) -> tuple[str, str]:
+    """A file of one of the four document formats of 1.5, and the word it carries."""
+    match mime:
+        case "message/rfc822":
+            return _write(tmp_path, "post.eml", _mail_payload()), "postquendel"
+        case "application/zip":
+            return _write(tmp_path, "akten.zip", _zip_payload()), "zipquendel"
+        case "application/msword":
+            return str(LEGACY / "word97-latin.doc"), "wortquendel"
+        case _:
+            return str(LEGACY / "biff8-values.xls"), "zellquendel"
+
+
+@pytest.mark.parametrize(("mime", "route"), sorted(NEW_FORMAT_ROUTES.items()))
+def test_a_format_of_1_5_is_judged_onto_its_own_route(mime: str, route: Route) -> None:
+    assert judge(mime, 100) is route
+
+
+@pytest.mark.parametrize("mime", sorted(NEW_FORMAT_ROUTES))
+def test_a_format_of_1_5_is_indexed_through_judge_with_its_word(mime: str, tmp_path: Path) -> None:
+    # The whole way a queued file takes in the child: judge on the mimetype,
+    # then the extractor of the route. The word is the one the reader of each
+    # format was built against in plans 31-04 to 31-08.
+    path, word = _new_format_file(tmp_path, mime)
+
+    outcome = extract(path, mime, Path(path).stat().st_size)
+
+    assert outcome.state is State.INDEXED, f"{mime} came back as {outcome.state}/{outcome.reason}"
+    assert word in outcome.text
+
+
+@pytest.mark.parametrize(
+    "mime", ["image/gif", "image/bmp", "application/vnd.ms-powerpoint", "application/x-7z-compressed"]
+)
+def test_what_1_5_leaves_out_is_still_refused_on_its_type(mime: str) -> None:
+    assert judge(mime, 1024) == ExtractionOutcome.skipped(Reason.MIME_NOT_ALLOWED)
 
 
 # ---------------------------------------------------------------------------
@@ -1188,15 +1258,20 @@ def test_every_route_of_the_allowlist_has_an_extractor_behind_it(tmp_path: Path)
         Route.HTML: _write(tmp_path, "seite.html", b"<html><body><p>Ein Absatz.</p></body></html>"),
         Route.RTF: _write(tmp_path, "brief.rtf", rb"{\rtf1\ansi Ein Absatz.\par}"),
         Route.PLAIN: _write(tmp_path, "notiz.txt", b"Ein Absatz."),
+        Route.MAIL: _write(tmp_path, "post.eml", _mail_payload()),
+        Route.ZIP: _write(tmp_path, "akten.zip", _zip_payload()),
+        Route.DOC: str(LEGACY / "word97-latin.doc"),
+        Route.XLS: str(LEGACY / "biff8-values.xls"),
     }
 
     # Route.OCR is the one route with no fixture here, and that is deliberate
     # rather than an omission: its extractor needs an engine, the development
     # machine has none, and it is covered in tests/test_ocr.py where the engine
     # can be stood in for. Until plan 03-10 no mimetype reached it at all; since
-    # then the four picture formats do, so what is asserted here is that those
-    # four are exactly the ones and that the walk below skips them for the reason
-    # above rather than by accident.
+    # then the picture formats do (six since plan 31-10, HEIC and HEIF in
+    # tests/test_image_heic.py), so what is asserted here is that those are
+    # exactly the ones and that the walk below skips them for the reason above
+    # rather than by accident.
     assert set(fixtures) == set(Route) - {Route.OCR}
     assert {mime for mime, route in ALLOWED_MIMETYPES.items() if route is Route.OCR} == set(IMAGE_MIMETYPES)
 

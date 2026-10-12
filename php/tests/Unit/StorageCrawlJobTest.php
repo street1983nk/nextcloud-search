@@ -343,6 +343,40 @@ final class StorageCrawlJobTest extends TestCase {
 		self::assertInstanceOf(\DateTimeInterface::class, $sets['finished_at']);
 	}
 
+	public function testAHeicAndAHeifPhotoCountAsOcrCandidates(): void {
+		// Plan 31-10: the two photo types of an iPhone joined the allowlist and
+		// carry no text layer, so they belong to the lower bound of the OCR
+		// interval like the four older picture types. A ZIP file and a mail are
+		// documents with text and count as neither.
+		$time = $this->createMock(ITimeFactory::class);
+		$time->method('getTime')->willReturn(self::NOW);
+
+		$storageService = $this->createMock(StorageService::class);
+		$storageService->method('mountRootPath')->willReturn('files');
+		$storageService->expects($this->exactly(2))->method('getFilesInMount')->willReturnOnConsecutiveCalls(
+			[
+				$this->entry(20, 'files/Urlaub.heic', 300, 'image/heic'),
+				$this->entry(21, 'files/Beleg.heif', 300, 'image/heif'),
+				$this->entry(22, 'files/Akten.zip', 300, 'application/zip'),
+				$this->entry(23, 'files/Post.eml', 300, 'message/rfc822'),
+			],
+			[],
+		);
+
+		$jobList = $this->createMock(IJobList::class);
+		$jobList->expects($this->never())->method('scheduleAfter');
+
+		$this->runJob(
+			$this->recountJob($time, $jobList, $storageService, $this->scanStats(self::finishedRow())),
+			self::recountArgument(0),
+		);
+
+		$sets = $this->statements[1][1];
+		self::assertSame(4, $sets['files_seen']);
+		self::assertSame(2, $sets['ocr_candidates']);
+		self::assertSame(0, $sets['pdf_seen']);
+	}
+
 	public function testARecountLeavesAMountThatIsBeingCrawledAlone(): void {
 		$time = $this->createMock(ITimeFactory::class);
 		$time->method('getTime')->willReturn(self::NOW);

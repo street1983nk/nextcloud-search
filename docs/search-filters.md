@@ -10,14 +10,16 @@ side: the companion app knows the six group names and not a single extension.
 | Group | Extensions |
 |---|---|
 | `pdf` | `pdf` |
-| `documents` | `docx`, `odt`, `rtf` |
-| `spreadsheets` | `xlsx`, `ods`, `csv` |
+| `documents` | `docx`, `odt`, `rtf`, `doc`, `dot` |
+| `spreadsheets` | `xlsx`, `ods`, `csv`, `xls`, `xlt` |
 | `presentations` | `pptx`, `odp` |
-| `images` | `jpg`, `jpeg`, `jps`, `mpo`, `png`, `tif`, `tiff`, `webp` |
+| `images` | `jpg`, `jpeg`, `jps`, `mpo`, `png`, `tif`, `tiff`, `webp`, `heic`, `heif` |
 | `text` | `txt`, `text`, `md`, `markdown`, `mdown`, `mdwn`, `mkd`, `htm`, `html`, `json`, `xml`, `yaml`, `yml`, `conf`, `cnf`, `eml`, `adoc`, `asciidoc`, `org`, `fb2`, `js` |
 
 The extensions are the ones the mimetype mapping of the server produces for the
-eighteen mimetypes the indexer accepts. Both `jpg` and `jpeg` are listed, and so
+twenty four mimetypes the indexer accepts. Since 1.5 these include Word and
+Excel 97 to 2003 (`doc`, `dot`, `xls`, `xlt`), HEIC photos (`heic`, `heif`) and
+mails (`eml`, which stood under text before). Both `jpg` and `jpeg` are listed, and so
 are `tif` and `tiff`, because a file with the other spelling wears the same
 symbol in the file list and would otherwise fall out of a filter it visibly
 belongs to.
@@ -32,14 +34,15 @@ the same search combine as a union: `type:pdf` together with the chip for images
 finds both, because the intersection of the two would be guaranteed empty and the
 page has no way of explaining an empty list that is nobody's mistake.
 
-## The two limits
+## The limits
 
-These two belong here and deliberately not into the code, because both are
+The first two belong here and deliberately not into the code, because both are
 properties of the index rather than decisions a reader could make differently.
+The third is a decision, and it is written down here as well.
 
 **An extension that is not listed is reachable under no group.** The table is an
 allowlist, not a mapping with a fallback. A `.epub` file is indexed if its
-mimetype is one of the eighteen the extractor accepts, and it is found by every
+mimetype is one of the twenty four the extractor accepts, and it is found by every
 unfiltered search, but no chip of the six brings it up.
 
 **A file without an extension is reachable under no group either.** The indexer
@@ -47,6 +50,12 @@ writes the extension into a raw field, `extension_of` returns the empty string
 for a name without a dot, and an empty raw field produces no term at all. A term
 query therefore cannot reach such a file, under any group. Unfiltered searches
 find it as before.
+
+**A ZIP file belongs to no group.** Since 1.5 the text of the files inside a
+ZIP file is searchable, and a hit names the inner file in its excerpt. The
+ZIP file itself has no document type, whatever its members are, so `zip` stands
+in none of the six groups: a ZIP file appears only when no group is chosen, and
+choosing all six groups therefore finds slightly less than choosing none.
 
 ## The period
 

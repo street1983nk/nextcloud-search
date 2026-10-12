@@ -822,8 +822,17 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # one element that scrolls inside the clipped #content): templates/search.php
 # changed its bytes. No file came and none went, so PHP_FILES_TODAY stays at
 # 90.
-PHP_FILES_TODAY = 90
-PHP_TREE_HASH_TODAY = "6ab9f601f5caf0bd4519ae4f72654b4f42251630a5b4a281bffdad1b5e276dd4"
+# Moved on 2026-10-12 by Plan 31-10 (FMT-01 to FMT-05, D-31-05): two files
+# came, the minor step migration of 1.5,
+# php/lib/Migration/Version001500Date20261012000000.php (drops the recorded
+# backend version and marks the coverage denominator stale), and its unit test
+# php/tests/Unit/Version001500Date20261012000000Test.php. StorageService.php
+# (six mimetypes in ALLOWED_MIMETYPES and the shared paragraph),
+# StorageCrawlJob.php (HEIC and HEIF in OCR_CERTAIN_MIMETYPES) and
+# StorageCrawlJobTest.php (the HEIC recount case) changed their bytes. No file
+# went, so PHP_FILES_TODAY moves to 92.
+PHP_FILES_TODAY = 92
+PHP_TREE_HASH_TODAY = "bad993f8230804cf83a552f151dbed9d0ea1b16e71dd2a2d1705c0a1b5f57048"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
@@ -1822,8 +1831,18 @@ PHP_TREE_HASH_TODAY = "6ab9f601f5caf0bd4519ae4f72654b4f42251630a5b4a281bffdad1b5
 # from every text unless member_marks is set, and extract/archive.py is the one
 # caller that sets it. No file came and none went, so PACKAGE_FILES_TODAY stays
 # at 78. The PHP pair does not move: php/ is unchanged.
+#
+# Measured again by Plan 31-10 (FMT-01 to FMT-05, D-31-05) on 2026-10-12:
+# extract/dispatch.py opens the allowlist for message/rfc822, application/zip,
+# application/msword, application/vnd.ms-excel, image/heic and image/heif, with
+# the routes MAIL, ZIP, DOC and XLS, the reader of each one in
+# _run_format_of_1_5, HEIC and HEIF in IMAGE_MIMETYPES and the paragraph shared
+# with the PHP list; query/rewrite.py puts doc and dot under documents, xls and
+# xlt under spreadsheets, heic and heif under images, and zip in no group. No
+# file came and none went, so PACKAGE_FILES_TODAY stays at 78. The PHP pair
+# moves in the same commit (see above).
 PACKAGE_FILES_TODAY = 78
-PACKAGE_TREE_HASH_TODAY = "3d649243778d91e28b81d4df551688be03546c2418b96c3faa7dd5a57ded20ad"
+PACKAGE_TREE_HASH_TODAY = "abba4c464ff3e71a7a2fd885b08b92edf8e02559f4902421f3c4261c605a642d"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
