@@ -10,11 +10,15 @@ use OCA\Findling\Service\SearchCaps;
 use OCA\Findling\Service\SearchFilters;
 use OCA\Findling\Service\SearchOutcome;
 use OCA\Findling\Service\SearchService;
+use OCP\Files\Cache\ICacheEntry;
 use OCP\Files\Cache\IFileAccess;
+use OCP\Files\Config\ICachedMountInfo;
 use OCP\Files\Config\IUserMountCache;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
+use OCP\Files\NotFoundException;
+use OCP\Files\NotPermittedException;
 use OCP\IUser;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -982,7 +986,7 @@ final class SearchServiceTest extends TestCase {
 	 * service that handed down a fresh object with one field copied.
 	 */
 	private function narrowed(): SearchFilters {
-		return new SearchFilters(['pdf', 'documents'], 'newest', 1757980800, null);
+		return new SearchFilters(['pdf', 'documents'], 'newest', 1757980800, null, null);
 	}
 
 	/**
@@ -996,6 +1000,7 @@ final class SearchServiceTest extends TestCase {
 		self::assertSame($expected->sort, $arrived->sort, 'sort at ' . $where);
 		self::assertSame($expected->since, $arrived->since, 'since at ' . $where);
 		self::assertSame($expected->until, $arrived->until, 'until at ' . $where);
+		self::assertSame($expected->folder, $arrived->folder, 'folder at ' . $where);
 	}
 
 	/**
@@ -1184,5 +1189,417 @@ final class SearchServiceTest extends TestCase {
 
 		self::assertSame([], $outcome->hits);
 		self::assertNull($outcome->failure);
+	}
+
+	// -- plan 32-02: the folder of the dialog, resolved in PHP ----------------
+	//
+	// The world of every case below: user testuser, user folder
+	// /testuser/files on storage 7 (raw path files), the folder /Projekte
+	// (file id 500, raw path files/Projekte on storage 7), a share mounted
+	// inside it at /testuser/files/Projekte/Geteilt/ from storage 9 with the
+	// raw root files/Quelle, and a share outside it at
+	// /testuser/files/Andere/Extern/ from storage 11.
+	//
+	// The candidates and where the file cache puts them:
+	//   21 storage 7  files/Andere/x.pdf          outside
+	//   22 storage 7  files/Projekte/a.pdf        inside
+	//   23 storage 7  files/Projekte/Sub/b.pdf    inside, one level down
+	//   24 storage 9  files/Quelle/c.pdf          inside, through the share
+	//   25 storage 7  files/Projekte2/c.pdf       outside, a bare prefix
+	//   26 storage 11 files/X/y.pdf               outside, the other share
+
+	private const FOLDER_ID = 500;
+
+	/**
+	 * @return list<array{fileId:int}>
+	 */
+	private function folderCandidates(): array {
+		return [['fileId' => 21], ['fileId' => 22], ['fileId' => 23], ['fileId' => 24], ['fileId' => 25], ['fileId' => 26]];
+	}
+
+	private function filtersWithFolder(?string $folder = '/Projekte'): SearchFilters {
+		return new SearchFilters([], SearchFilters::SORT_DEFAULT, null, null, $folder);
+	}
+
+	private function cacheEntry(int $storageId, string $path): ICacheEntry&MockObject {
+		$entry = $this->createMock(ICacheEntry::class);
+		$entry->method('getStorageId')->willReturn($storageId);
+		$entry->method('getPath')->willReturn($path);
+
+		return $entry;
+	}
+
+	private function mount(string $mountPoint, int $storageId, string $root): ICachedMountInfo&MockObject {
+		$mount = $this->createMock(ICachedMountInfo::class);
+		$mount->method('getMountPoint')->willReturn($mountPoint);
+		$mount->method('getStorageId')->willReturn($storageId);
+		$mount->method('getRootInternalPath')->willReturn($root);
+
+		return $mount;
+	}
+
+	/**
+	 * The mounts and the file cache of the world above. The folder entry is
+	 * answered by getByFileId, the candidates by one getByFileIds per page.
+	 */
+	private function folderWorld(): void {
+		$this->mountCache->method('getMountsForUser')->willReturn([
+			$this->mount('/testuser/', 7, ''),
+			$this->mount('/testuser/files/Projekte/Geteilt/', 9, 'files/Quelle'),
+			$this->mount('/testuser/files/Andere/Extern/', 11, 'files/X'),
+		]);
+		$this->fileAccess->method('getByFileId')->willReturnCallback(
+			fn (int $fileId): ?ICacheEntry => $fileId === self::FOLDER_ID ? $this->cacheEntry(7, 'files/Projekte') : null,
+		);
+		$entries = [
+			21 => $this->cacheEntry(7, 'files/Andere/x.pdf'),
+			22 => $this->cacheEntry(7, 'files/Projekte/a.pdf'),
+			23 => $this->cacheEntry(7, 'files/Projekte/Sub/b.pdf'),
+			24 => $this->cacheEntry(9, 'files/Quelle/c.pdf'),
+			25 => $this->cacheEntry(7, 'files/Projekte2/c.pdf'),
+			26 => $this->cacheEntry(11, 'files/X/y.pdf'),
+		];
+		$this->fileAccess->method('getByFileIds')->willReturnCallback(
+			static function (array $fileIds) use ($entries): array {
+				$found = [];
+				foreach ($fileIds as $fileId) {
+					if (isset($entries[$fileId])) {
+						$found[$fileId] = $entries[$fileId];
+					}
+				}
+
+				return $found;
+			},
+		);
+	}
+
+	/**
+	 * A folder node with a path, whose resolutions are recorded in $resolved
+	 * and answered out of $nodes.
+	 *
+	 * @param array<int,File> $nodes
+	 * @param list<int> $resolved
+	 */
+	private function folderNode(string $path, int $id, array $nodes = [], ?array &$resolved = null): Folder&MockObject {
+		$resolved = [];
+		$folder = $this->createMock(Folder::class);
+		$folder->method('getPath')->willReturn($path);
+		$folder->method('getId')->willReturn($id);
+		$folder->method('getFirstNodeById')->willReturnCallback(
+			static function (int $fileId) use (&$resolved, $nodes): ?File {
+				$resolved[] = $fileId;
+
+				return $nodes[$fileId] ?? null;
+			},
+		);
+		$folder->method('getRelativePath')->willReturnCallback(
+			static fn (string $full): ?string => str_starts_with($full, '/testuser/files/') ? substr($full, strlen('/testuser/files')) : null,
+		);
+
+		return $folder;
+	}
+
+	/**
+	 * A logger that records every line, message and context, at every level.
+	 *
+	 * @param list<array{string,array<mixed>}> $lines
+	 */
+	private function recordingLogger(array &$lines): LoggerInterface&MockObject {
+		$logger = $this->createMock(LoggerInterface::class);
+		$record = static function (string|\Stringable $message, array $context = []) use (&$lines): void {
+			$lines[] = [(string)$message, $context];
+		};
+		foreach (['emergency', 'alert', 'critical', 'error', 'warning', 'notice', 'info', 'debug'] as $level) {
+			$logger->method($level)->willReturnCallback($record);
+		}
+
+		return $logger;
+	}
+
+	public function testWithoutAFolderTheRecheckAsksTheUserFolderAsBeforeAndNeverResolvesAPath(): void {
+		// The regression case: no folder, the run is the run of plan 32-01.
+		$userFolder = $this->folderNode('/testuser/files', 1, [], $resolved);
+		$userFolder->expects(self::never())->method('get');
+		$this->rootFolder->method('getUserFolder')->willReturn($userFolder);
+		$this->folderWorld();
+		$this->fileAccess->expects(self::never())->method('getByFileId');
+		$this->exApp->method('searchCandidates')->willReturn($this->page($this->folderCandidates()));
+
+		$this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(), SearchFilters::none());
+
+		// Every candidate lies on a storage this user has a mount on, so the
+		// ordinary reduction keeps all six and the user folder is asked for each.
+		self::assertSame([21, 22, 23, 24, 25, 26], $resolved);
+	}
+
+	public function testAFolderNarrowsTheRecheckToItsSubtreeAndDropsOutsideCandidatesWithoutARecheck(): void {
+		$inside = $this->readableFile('a.pdf', 'application/pdf', 'Projekte');
+		$scope = $this->folderNode('/testuser/files/Projekte', self::FOLDER_ID, [22 => $inside], $resolvedInScope);
+		$userFolder = $this->folderNode('/testuser/files', 1, [], $resolvedInUserFolder);
+		$userFolder->method('get')->willReturnCallback(
+			static fn (string $path): Folder => $path === '/Projekte' ? $scope : throw new NotFoundException(),
+		);
+		$this->rootFolder->method('getUserFolder')->willReturn($userFolder);
+		$this->folderWorld();
+		$this->exApp->method('searchCandidates')->willReturn($this->page($this->folderCandidates()));
+		$this->exApp->method('snippets')->willReturn([]);
+
+		// A recheck budget of exactly three: if an outside candidate cost a
+		// recheck, 24 would never be reached.
+		$outcome = $this->service()->run(
+			$this->user(),
+			'quarterly report',
+			false,
+			0,
+			$this->caps(pageSize: 3, recheckPerHit: 1),
+			$this->filtersWithFolder(),
+		);
+
+		self::assertSame([22, 23, 24], $resolvedInScope, 'the reduction let the wrong candidates through');
+		self::assertSame([], $resolvedInUserFolder, 'the recheck asked the user folder in the folder mode');
+		self::assertCount(1, $outcome->hits);
+		self::assertSame(22, $outcome->hits[0]->fileId);
+		self::assertSame('Projekte/a.pdf', $outcome->hits[0]->path);
+		// All six decided, so the cursor stands behind the page.
+		self::assertSame(6, $outcome->nextCursor);
+	}
+
+	public function testAFileTheFolderDoesNotResolveIsNoHitEvenWhenTheReductionKeptIt(): void {
+		// The recheck is the boundary, not the reduction: 23 lies inside by its
+		// coordinates and the folder node still does not resolve it.
+		$scope = $this->folderNode('/testuser/files/Projekte', self::FOLDER_ID, [], $resolvedInScope);
+		$userFolder = $this->folderNode('/testuser/files', 1, [23 => $this->readableFile('b.pdf', 'application/pdf', 'Projekte/Sub')]);
+		$userFolder->method('get')->willReturn($scope);
+		$this->rootFolder->method('getUserFolder')->willReturn($userFolder);
+		$this->folderWorld();
+		$this->exApp->method('searchCandidates')->willReturn($this->page([['fileId' => 23]]));
+		$this->exApp->expects(self::never())->method('snippets');
+
+		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(), $this->filtersWithFolder());
+
+		self::assertSame([23], $resolvedInScope);
+		self::assertSame([], $outcome->hits);
+		self::assertSame(SearchOutcome::FAILURE_ALL_CANDIDATES_REJECTED, $outcome->failure);
+	}
+
+	public function testAThrowingBulkLookupSendsEveryCandidateToTheRecheckInTheFolder(): void {
+		// T-32-07: the reduction is never the boundary. Without its verdict all
+		// six go to the recheck on the folder node, and the hits stay right.
+		$inside = $this->readableFile('a.pdf', 'application/pdf', 'Projekte');
+		$scope = $this->folderNode('/testuser/files/Projekte', self::FOLDER_ID, [22 => $inside], $resolvedInScope);
+		$userFolder = $this->folderNode('/testuser/files', 1, [21 => $this->readableFile('x.pdf', 'application/pdf', 'Andere')], $resolvedInUserFolder);
+		$userFolder->method('get')->willReturn($scope);
+		$this->rootFolder->method('getUserFolder')->willReturn($userFolder);
+		$this->mountCache->method('getMountsForUser')->willReturn([$this->mount('/testuser/', 7, '')]);
+		$this->fileAccess->method('getByFileId')->willReturn($this->cacheEntry(7, 'files/Projekte'));
+		$this->fileAccess->method('getByFileIds')->willThrowException(new \RuntimeException('database gone'));
+		$this->exApp->method('searchCandidates')->willReturn($this->page($this->folderCandidates()));
+		$this->exApp->method('snippets')->willReturn([]);
+
+		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(), $this->filtersWithFolder());
+
+		self::assertSame([21, 22, 23, 24, 25, 26], $resolvedInScope);
+		self::assertSame([], $resolvedInUserFolder);
+		self::assertSame([22], array_map(static fn (ApprovedHit $hit): int => $hit->fileId, $outcome->hits));
+	}
+
+	public function testAThrowingFolderLookupLeavesNoCoordinatesAndTheRecheckDecidesAlone(): void {
+		// Without the cache entry of the folder there are no coordinates: the
+		// ordinary storage reduction runs, the fetch limit is the M4 formula,
+		// and the recheck still runs on the folder node.
+		$inside = $this->readableFile('a.pdf', 'application/pdf', 'Projekte');
+		$scope = $this->folderNode('/testuser/files/Projekte', self::FOLDER_ID, [22 => $inside], $resolvedInScope);
+		$userFolder = $this->folderNode('/testuser/files', 1);
+		$userFolder->method('get')->willReturn($scope);
+		$this->rootFolder->method('getUserFolder')->willReturn($userFolder);
+		$this->mountCache->method('getMountsForUser')->willReturn([
+			$this->mount('/testuser/', 7, ''),
+			$this->mount('/testuser/files/Projekte/Geteilt/', 9, 'files/Quelle'),
+			$this->mount('/testuser/files/Andere/Extern/', 11, 'files/X'),
+		]);
+		$this->fileAccess->method('getByFileId')->willThrowException(new \RuntimeException('database gone'));
+		$this->fileAccess->method('getByFileIds')->willReturnCallback(
+			fn (array $fileIds): array => array_combine($fileIds, array_map(fn (int $id): ICacheEntry => $this->cacheEntry(7, 'files/any'), $fileIds)),
+		);
+		$limits = [];
+		$this->exApp->method('searchCandidates')->willReturnCallback(
+			function (string $userId, string $term, int $limit) use (&$limits): array {
+				$limits[] = $limit;
+
+				return $this->page($this->folderCandidates());
+			},
+		);
+		$this->exApp->method('snippets')->willReturn([]);
+
+		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(), $this->filtersWithFolder());
+
+		self::assertSame([21, 22, 23, 24, 25, 26], $resolvedInScope);
+		self::assertSame([min(20 * 4, 40 + 20)], $limits, 'the folder mode fetched as if it had coordinates');
+		self::assertSame([22], array_map(static fn (ApprovedHit $hit): int => $hit->fileId, $outcome->hits));
+	}
+
+	/**
+	 * The user folder ids the recheck saw for one folder value, with a user
+	 * folder whose get() is given by the case, and every log line.
+	 *
+	 * @param \Closure(string): mixed $get
+	 * @return array{resolved:list<int>,lines:list<array{string,array<mixed>}>,limits:list<int>}
+	 */
+	private function runWithAFolderThatFails(?string $folder, \Closure $get): array {
+		$lines = [];
+		$this->logger = $this->recordingLogger($lines);
+		$userFolder = $this->folderNode('/testuser/files', 1, [], $resolved);
+		$userFolder->method('get')->willReturnCallback($get);
+		$this->rootFolder = $this->createMock(IRootFolder::class);
+		$this->rootFolder->method('getUserFolder')->willReturn($userFolder);
+		$this->mountCache = $this->createMock(IUserMountCache::class);
+		$this->fileAccess = $this->createMock(IFileAccess::class);
+		$this->folderWorld();
+		$this->exApp = $this->createMock(ExAppService::class);
+		$this->exApp->method('driftOnRecord')->willReturn(null);
+		$limits = [];
+		$this->exApp->method('searchCandidates')->willReturnCallback(
+			function (string $userId, string $term, int $limit) use (&$limits): array {
+				$limits[] = $limit;
+
+				return $this->page($this->folderCandidates());
+			},
+		);
+
+		$this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(), $this->filtersWithFolder($folder));
+
+		return ['resolved' => $resolved, 'lines' => $lines, 'limits' => $limits];
+	}
+
+	public function testEveryFolderThatCannotBeUsedGivesTheSearchWithoutAFolder(): void {
+		// USRCH-03 and T-32-05/T-32-06: a missing folder, one the user may not
+		// open, any other failure, a file instead of a folder, a node outside
+		// the user folder and the user folder itself all hand the recheck the
+		// same ids in the same order as the run without a folder, and no log
+		// line names the value.
+		$without = $this->runWithAFolderThatFails(null, static fn (): never => throw new \LogicException('get() must not be called without a folder'));
+
+		$foreign = $this->folderNode('/anderer/files/Projekte', 900);
+		$sibling = $this->folderNode('/testuser/files2/Projekte', 901);
+		$root = $this->folderNode('/testuser/files', 902);
+		$file = $this->readableFile('Projekte', 'application/pdf', '');
+
+		$failures = [
+			'not found' => static fn (): never => throw new NotFoundException('/testuser/files/Projekte'),
+			'not permitted' => static fn (): never => throw new NotPermittedException('/testuser/files/Projekte'),
+			'anything else' => static fn (): never => throw new \TypeError('/testuser/files/Projekte'),
+			'a file' => static fn (): File => $file,
+			'a foreign tree' => static fn (): Folder => $foreign,
+			'a sibling tree with the same prefix' => static fn (): Folder => $sibling,
+			'the user folder itself' => static fn (): Folder => $root,
+		];
+
+		foreach ($failures as $name => $get) {
+			$with = $this->runWithAFolderThatFails('/Projekte', $get);
+
+			self::assertSame($without['resolved'], $with['resolved'], $name . ': the recheck saw other ids than without a folder');
+			self::assertSame($without['limits'], $with['limits'], $name . ': the fetch differed from the run without a folder');
+			foreach ($with['lines'] as [$message, $context]) {
+				self::assertStringNotContainsString('Projekte', $message, $name . ': a log line names the folder');
+				self::assertStringNotContainsString('Projekte', (string)json_encode($context), $name . ': a log context names the folder');
+				self::assertArrayNotHasKey('exception', $context, $name . ': an exception could carry the path');
+			}
+		}
+
+		self::assertSame([21, 22, 23, 24, 25, 26], $without['resolved']);
+	}
+
+	public function testTheFolderModeFetchesMoreRoundsOfTheFolderLimit(): void {
+		// A2 as a constant: up to FOLDER_MAX_ROUNDS rounds of FOLDER_FETCH_LIMIT
+		// candidates while every candidate falls outside the folder and costs no
+		// recheck. The caps of the dialog say three rounds.
+		$fetchLimit = $this->constantInt('FOLDER_FETCH_LIMIT');
+		$rounds = $this->constantInt('FOLDER_MAX_ROUNDS');
+		self::assertSame(100, $fetchLimit);
+		self::assertSame(6, $rounds);
+		self::assertSame($this->constantInt('MAX_LIMIT', ExAppService::class), $fetchLimit, 'ExAppService would clamp a larger limit');
+
+		$scope = $this->folderNode('/testuser/files/Projekte', self::FOLDER_ID, [], $resolvedInScope);
+		$userFolder = $this->folderNode('/testuser/files', 1);
+		$userFolder->method('get')->willReturn($scope);
+		$this->rootFolder->method('getUserFolder')->willReturn($userFolder);
+		$this->folderWorld();
+
+		$asked = [];
+		$this->exApp->method('searchCandidates')->willReturnCallback(
+			function (string $userId, string $term, int $limit, int $offset) use (&$asked): array {
+				$asked[] = [$limit, $offset];
+
+				return $this->pageWithMore([['fileId' => 21], ['fileId' => 25], ['fileId' => 26]], $offset + $limit);
+			},
+		);
+
+		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(maxRounds: 3), $this->filtersWithFolder());
+
+		self::assertSame([[100, 0], [100, 100], [100, 200], [100, 300], [100, 400], [100, 500]], $asked);
+		self::assertSame([], $resolvedInScope);
+		self::assertTrue($outcome->hasMore);
+	}
+
+	public function testTheOffsetCeilingStillEndsTheFolderMode(): void {
+		$ceiling = $this->constantInt('MAX_CONTAINER_OFFSET');
+		$scope = $this->folderNode('/testuser/files/Projekte', self::FOLDER_ID);
+		$userFolder = $this->folderNode('/testuser/files', 1);
+		$userFolder->method('get')->willReturn($scope);
+		$this->rootFolder->method('getUserFolder')->willReturn($userFolder);
+		$this->folderWorld();
+
+		$offsets = [];
+		$this->exApp->method('searchCandidates')->willReturnCallback(
+			function (string $userId, string $term, int $limit, int $offset) use (&$offsets): array {
+				$offsets[] = $offset;
+
+				return $this->pageWithMore([['fileId' => 21]], $offset + $limit);
+			},
+		);
+
+		$outcome = $this->service()->run($this->user(), 'quarterly report', false, $ceiling - 200, $this->caps(), $this->filtersWithFolder());
+
+		self::assertSame([$ceiling - 200, $ceiling - 100, $ceiling], $offsets);
+		self::assertSame(SearchOutcome::FAILURE_OFFSET_CEILING, $outcome->failure);
+	}
+
+	public function testWithoutAFolderTheFetchLimitFollowsTheM4Formula(): void {
+		// pageSize 20, overfetch 4, recheck budget min(64, 40) = 40: the limit
+		// is min(80, 40 - rechecks + 20) per round, three rounds.
+		$this->folderResolvingNothing();
+		$limits = [];
+		$this->exApp->method('searchCandidates')->willReturnCallback(
+			function (string $userId, string $term, int $limit, int $offset) use (&$limits): array {
+				$limits[] = $limit;
+
+				return $this->pageWithMore($this->candidates(3), $offset + 3);
+			},
+		);
+
+		$this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(), SearchFilters::none());
+
+		self::assertSame([60, 57, 54], $limits);
+	}
+
+	public function testAFileVisibleUnderTwoPathsIsFoundInsideTheFolder(): void {
+		// The same file through the user folder under /Andere and through a share
+		// inside /Projekte. The folder node resolves the copy inside the folder,
+		// and the user folder is never asked, so the hit carries the inside path.
+		$inside = $this->readableFile('c.pdf', 'application/pdf', 'Projekte/Geteilt');
+		$outside = $this->readableFile('c.pdf', 'application/pdf', 'Andere');
+		$scope = $this->folderNode('/testuser/files/Projekte', self::FOLDER_ID, [24 => $inside]);
+		$userFolder = $this->folderNode('/testuser/files', 1, [24 => $outside], $resolvedInUserFolder);
+		$userFolder->method('get')->willReturn($scope);
+		$this->rootFolder->method('getUserFolder')->willReturn($userFolder);
+		$this->folderWorld();
+		$this->exApp->method('searchCandidates')->willReturn($this->page([['fileId' => 24]]));
+		$this->exApp->method('snippets')->willReturn([]);
+
+		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(), $this->filtersWithFolder());
+
+		self::assertSame([], $resolvedInUserFolder);
+		self::assertCount(1, $outcome->hits);
+		self::assertSame('Projekte/Geteilt/c.pdf', $outcome->hits[0]->path);
 	}
 }

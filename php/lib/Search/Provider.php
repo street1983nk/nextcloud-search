@@ -102,6 +102,26 @@ final class Provider implements IFilteringProvider {
 	 */
 	public const FILTER_TYPES = 'types';
 
+	/**
+	 * The second filter of our own, the folder of USRCH-02 (plan 32-02).
+	 *
+	 * Its own name and deliberately not path, the name the Files provider of
+	 * the core uses: over there the value is a LIKE prefix without a
+	 * separator, so /Projekte also matches /Projekte2. Here it is a folder and
+	 * everything below it, resolved in the tree of the asking user. Free in
+	 * the core and inside the [-0-9a-z] rule of FilterDefinition.
+	 */
+	public const FILTER_FOLDER = 'folder';
+
+	/**
+	 * The longest raw folder value folderOf() reads at all, in bytes.
+	 *
+	 * 4000 is the width of the path column of oc_filecache: no path the file
+	 * cache can hold is longer, so a longer value is not a folder anybody
+	 * picked but a value somebody built, and it is read as no folder at all.
+	 */
+	public const MAX_FOLDER_LENGTH = 4000;
+
 	public function __construct(
 		private IL10N $l10n,
 		private IURLGenerator $urlGenerator,
@@ -153,7 +173,8 @@ final class Provider implements IFilteringProvider {
 	 * name of this list against a definition when it loads the providers and
 	 * throws for a name without one, which costs the provider list of every
 	 * app in the dialog; getCustomFilters() below is what keeps this name
-	 * resolvable.
+	 * resolvable. The sixth, folder, joined with plan 32-02 (USRCH-02) under
+	 * the same rule.
 	 *
 	 * @return list<string>
 	 */
@@ -165,11 +186,12 @@ final class Provider implements IFilteringProvider {
 			IFilter::BUILTIN_SINCE,
 			IFilter::BUILTIN_UNTIL,
 			self::FILTER_TYPES,
+			self::FILTER_FOLDER,
 		];
 	}
 
 	/**
-	 * No second id triggers this provider. Its one filter of its own is
+	 * No second id triggers this provider. Its two filters of its own are
 	 * declared in getCustomFilters() below, with the definition a custom name
 	 * cannot do without: a name without one turns the whole provider list into
 	 * an error.
@@ -182,8 +204,9 @@ final class Provider implements IFilteringProvider {
 	}
 
 	/**
-	 * Exactly one filter of our own, the type groups, and its definition is
-	 * what keeps the provider list of the whole dialog valid.
+	 * Exactly two filters of our own, the type groups and since plan 32-02 the
+	 * folder, and their definitions are what keeps the provider list of the
+	 * whole dialog valid.
 	 *
 	 * Until plan 32-01 this list was empty on purpose and the type filter lived
 	 * on the own result page only (D-05). D-32-07 lifts that decision for the
@@ -205,11 +228,18 @@ final class Provider implements IFilteringProvider {
 	 * exclusive check is only reached for this provider, which lists the name.
 	 * Exclusive states what the filter is, a narrowing only Findling knows.
 	 *
+	 * The folder is a string for the same reason: one path relative to the
+	 * user folder, read by folderOf() below. Same exclusive default, same
+	 * effect.
+	 *
 	 * @return list<FilterDefinition>
 	 */
 	#[\Override]
 	public function getCustomFilters(): array {
-		return [new FilterDefinition(self::FILTER_TYPES, FilterDefinition::TYPE_STRING)];
+		return [
+			new FilterDefinition(self::FILTER_TYPES, FilterDefinition::TYPE_STRING),
+			new FilterDefinition(self::FILTER_FOLDER, FilterDefinition::TYPE_STRING),
+		];
 	}
 
 	#[\Override]
@@ -230,7 +260,8 @@ final class Provider implements IFilteringProvider {
 		// for them), declared in getCustomFilters() with the definition a name
 		// of our own cannot do without. The sort mode stays the default and is
 		// offered on the own result page only; ordering the dialog is not part
-		// of this phase.
+		// of this phase. The folder joined with plan 32-02 (USRCH-02); it is
+		// resolved in SearchService and never leaves PHP (D-32-06).
 		//
 		// The type groups are reduced to the closed set before they leave this
 		// method and both bounds are clamped, so that neither a tampered value
@@ -241,6 +272,7 @@ final class Provider implements IFilteringProvider {
 			SearchFilters::SORT_DEFAULT,
 			$this->epochWithin($this->epochOf($query, IFilter::BUILTIN_SINCE)),
 			$this->epochWithin($this->epochOf($query, IFilter::BUILTIN_UNTIL)),
+			$this->folderOf($query),
 		);
 
 		$outcome = $this->searchService->run(
@@ -361,6 +393,40 @@ final class Provider implements IFilteringProvider {
 	}
 
 	/**
+	 * The folder of the dialog as a path relative to the user folder, with a
+	 * leading slash and without a trailing one, or no folder at all.
+	 *
+	 * The same defensive shape as typesOf() above: a value that is not a
+	 * string, is longer than MAX_FOLDER_LENGTH or carries a control character
+	 * is a value somebody built, and it is read as no folder (D-32-03, ROADMAP
+	 * success criterion 3). The root of the user folder narrows nothing and is
+	 * no folder either. An empty value never reaches this method, because the
+	 * core answers it with HTTP 400 before any provider is asked (D-32-01); it
+	 * is still read as no folder here.
+	 *
+	 * A value with '..' is not refused here but in SearchService, which
+	 * resolves the path with Folder::get() and checks that the node lies
+	 * inside the user folder. One place decides what a folder is, and it is
+	 * the one that sees the tree. Nothing here throws and nothing here logs the
+	 * value.
+	 */
+	private function folderOf(ISearchQuery $query): ?string {
+		$filter = $query->getFilter(self::FILTER_FOLDER);
+		if ($filter === null) {
+			return null;
+		}
+
+		$value = $filter->get();
+		if (!is_string($value) || strlen($value) > self::MAX_FOLDER_LENGTH || preg_match('/[\x00-\x1F\x7F]/', $value) !== 0) {
+			return null;
+		}
+
+		$path = '/' . trim($value, '/');
+
+		return $path === '/' ? null : $path;
+	}
+
+	/**
 	 * One of the two built in date bounds as a Unix epoch, or nothing at all.
 	 *
 	 * The same defensive shape as titleOnly() above, and for the same reason.
@@ -477,7 +543,8 @@ final class Provider implements IFilteringProvider {
 	 * decision rather than a forgotten parameter: the page owns its own filter
 	 * row, and handing it a bound it does not show as a chip would leave a user
 	 * in front of fewer hits than the dialog promised, with nothing on the page
-	 * saying why.
+	 * saying why. The folder of the dialog stays out for the same reason: the
+	 * page has no folder filter (plan 32-02 defers it).
 	 *
 	 * @param list<string> $types the active type groups, already canonical
 	 */

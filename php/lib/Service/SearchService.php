@@ -103,6 +103,30 @@ class SearchService {
 	private const MAX_MIME_LENGTH = 255;
 
 	/**
+	 * The candidates one round asks for when a folder narrows the run and the
+	 * cheap reduction can tell inside from outside (plan 32-02, USRCH-02).
+	 *
+	 * The container knows nothing about the folder (D-32-06), so it ranks the
+	 * whole index and this side throws away what lies outside. A candidate the
+	 * reduction throws away costs no recheck, which is why the folder mode may
+	 * ask for more than the M4 formula below allows. 100 and not more, because
+	 * that is ExAppService::MAX_LIMIT: a larger number would be clamped there
+	 * without a word.
+	 *
+	 * Starting value of the research (assumption A2), measured in plan 32-03.
+	 */
+	private const FOLDER_FETCH_LIMIT = 100;
+
+	/**
+	 * The rounds of a run in the folder mode, if the caps of the caller allow
+	 * fewer. Six times FOLDER_FETCH_LIMIT is the reach of one dialog search into
+	 * the ranking of the whole index; the wall clock and MAX_CONTAINER_OFFSET
+	 * stay the limits that end it earlier. Starting value of the research
+	 * (assumption A2), measured in plan 32-03.
+	 */
+	private const FOLDER_MAX_ROUNDS = 6;
+
+	/**
 	 * The monotonic clock of a run, in nanoseconds, as a callable.
 	 *
 	 * @var \Closure(): float
@@ -141,7 +165,11 @@ class SearchService {
 	 *                               would then drop rows out of the middle of
 	 *                               that page, and it would open a second place
 	 *                               at the permission boundary where there is
-	 *                               exactly one.
+	 *                               exactly one. The folder is the one value
+	 *                               that never travels (D-32-06) and is applied
+	 *                               here instead, and not as a second question:
+	 *                               the one recheck is asked on the folder node
+	 *                               instead of the user folder, see scopeOf()
 	 */
 	public function run(IUser $user, string $term, bool $titleOnly, int $startCursor, SearchCaps $caps, SearchFilters $filters): SearchOutcome {
 		$deadline = ($this->clock)() + $caps->budgetSeconds * 1_000_000_000.0;
@@ -192,7 +220,19 @@ class SearchService {
 			return $this->nothing($startCursor, SearchOutcome::FAILURE_NO_HOME_FOLDER);
 		}
 
-		$storageIds = $this->storageIdsOfUser($user);
+		// One mount list for the whole run, read once and used twice: the
+		// storages of the ordinary reduction and the coordinates of a folder.
+		$mounts = $this->mountsOfUser($user);
+		$storageIds = self::storageIdsOf($mounts ?? []);
+
+		// The folder of the dialog (plan 32-02, USRCH-02), resolved once per run
+		// in the tree of the asking user. Every failure is the search without a
+		// folder (USRCH-03): $scope stays null and the run below is byte for
+		// byte the run it was before this plan.
+		$scope = $this->scopeOf($userFolder, $filters->folder);
+		$coordinates = $scope === null || $mounts === null ? null : $this->scopeCoordinates($scope, $mounts);
+		$maxRounds = $coordinates === null ? $caps->maxRounds : max($caps->maxRounds, self::FOLDER_MAX_ROUNDS);
+
 		$recheckBudget = min($caps->recheckAbsolute, $pageSize * $caps->recheckPerHit);
 		$rechecks = 0;
 		$offset = max(0, $startCursor);
@@ -218,7 +258,7 @@ class SearchService {
 		// Buying the sentence of DI-07-03 with the permission chain is the one
 		// trade the roadmap rules out. This run reports the state it already
 		// had; it does not change it.
-		for ($round = 0; $round < $caps->maxRounds; $round++) {
+		for ($round = 0; $round < $maxRounds; $round++) {
 			if (count($approved) >= $pageSize || $rechecks >= $recheckBudget || ($this->clock)() >= $deadline) {
 				break;
 			}
@@ -240,7 +280,17 @@ class SearchService {
 			// no recheck. The remaining wall clock travels with the call, so
 			// the request timeout can never overdraw the deadline (perf H5),
 			// and the per call ceiling of this caller travels with it as well.
-			$fetchLimit = min($pageSize * $caps->overfetch, $recheckBudget - $rechecks + $pageSize);
+			//
+			// The folder mode with coordinates is the one exception. A candidate
+			// the reduction throws out as outside the folder costs no recheck,
+			// so the budget arithmetic above does not bound what such a round
+			// may usefully fetch; the recheck budget still bounds what is
+			// examined, and the wall clock and the offset ceiling still end the
+			// run. Without coordinates the reduction cannot tell inside from
+			// outside, every candidate would cost a recheck, and M4 holds.
+			$fetchLimit = $coordinates !== null
+				? self::FOLDER_FETCH_LIMIT
+				: min($pageSize * $caps->overfetch, $recheckBudget - $rechecks + $pageSize);
 			$page = $this->exApp->searchCandidates(
 				$uid,
 				$term,
@@ -285,7 +335,7 @@ class SearchService {
 				continue;
 			}
 
-			$keptIds = $this->reduceIds($candidates, $storageIds);
+			$keptIds = $this->reduceIds($candidates, $storageIds, $coordinates);
 
 			// The one and only permission decision of this product. A candidate
 			// becomes a hit when this user's own folder resolves its file id to
@@ -335,8 +385,9 @@ class SearchService {
 
 				if ($keptIds !== null && !isset($keptIds[$candidate['fileId']])) {
 					// Decided, not skipped: the file lives on a storage this
-					// user has no mount on, so the recheck could only repeat
-					// the verdict at a higher price.
+					// user has no mount on, or outside the folder of the
+					// dialog, so the recheck could only repeat the verdict at
+					// a higher price.
 					$consumed++;
 					continue;
 				}
@@ -354,7 +405,16 @@ class SearchService {
 				// reason it happens before anything else: two lines later a
 				// title and a path of that node would already have been read,
 				// and one call later a snippet of its content would exist.
-				$node = self::readableFile($userFolder, $candidate['fileId']);
+				//
+				// With a folder the same question is asked on the folder node:
+				// the same resolution with a narrower root path, so a file
+				// outside the folder does not resolve and is dropped exactly
+				// like a file this user cannot see. It also settles a file that
+				// is visible under two paths, its own and a share inside the
+				// folder: the folder resolves it inside the folder, where the
+				// user folder might have answered with the other path. The path
+				// shown stays relative to the user folder.
+				$node = self::readableFile($scope ?? $userFolder, $candidate['fileId']);
 				if ($node === null) {
 					continue;
 				}
@@ -491,6 +551,11 @@ class SearchService {
 	 * this method would call the hidden file deleted, which is the wrong
 	 * sentence of issue #14 in a new place; the queue draws that line out of
 	 * the mount cache instead, see QueueService::readerOf().
+	 *
+	 * The parameter is still called $userFolder, and since plan 32-02 it can
+	 * be any folder in the tree of the user: the search asks it on the folder
+	 * of the dialog when one narrows the run. The question is the same, only
+	 * the root path it is asked under is narrower.
 	 */
 	public static function readableFile(Folder $userFolder, int $fileId): ?File {
 		return self::readableNode($userFolder->getFirstNodeById($fileId));
@@ -544,11 +609,25 @@ class SearchService {
 	 * back is safe. An array is a verdict per positive file id: present means
 	 * "worth a recheck", absent means "cannot be this user's file".
 	 *
+	 * With a folder (plan 32-02) the storage check is replaced by the
+	 * coordinates of scopeCoordinates(): an entry is kept when one coordinate
+	 * has its storage and the raw path of the entry lies at or below the root
+	 * of that coordinate, with a separator, so files/Projekte2 is not inside
+	 * files/Projekte. Still a reduction and never a boundary: the coordinates
+	 * live in the raw path space of oc_filecache (assumption A1, checked in
+	 * plan 32-06 against a team folder and a share), and what they keep is
+	 * decided by the recheck on the folder node. Should A1 fail somewhere, the
+	 * folder loses hits, never gains foreign ones.
+	 *
 	 * @param list<array{fileId:int,title?:string,snippet?:string}> $candidates
 	 * @param array<int,true> $storageIds
+	 * @param list<array{int,string}>|null $coordinates storage id and raw root
+	 *                                                  path of every place the
+	 *                                                  folder covers, or null
+	 *                                                  without a folder
 	 * @return array<int,true>|null
 	 */
-	private function reduceIds(array $candidates, array $storageIds): ?array {
+	private function reduceIds(array $candidates, array $storageIds, ?array $coordinates = null): ?array {
 		$fileIds = [];
 		foreach ($candidates as $candidate) {
 			if ($candidate['fileId'] > 0) {
@@ -556,7 +635,7 @@ class SearchService {
 			}
 		}
 
-		if ($fileIds === [] || $storageIds === []) {
+		if ($fileIds === [] || ($coordinates === null && $storageIds === [])) {
 			return null;
 		}
 
@@ -570,7 +649,14 @@ class SearchService {
 		$kept = [];
 		foreach ($fileIds as $fileId) {
 			$entry = $entries[$fileId] ?? null;
-			if ($entry !== null && isset($storageIds[$entry->getStorageId()])) {
+			if ($entry === null) {
+				continue;
+			}
+
+			$inside = $coordinates === null
+				? isset($storageIds[$entry->getStorageId()])
+				: self::withinCoordinates($entry->getStorageId(), $entry->getPath(), $coordinates);
+			if ($inside) {
 				$kept[$fileId] = true;
 			}
 		}
@@ -579,26 +665,139 @@ class SearchService {
 	}
 
 	/**
-	 * The numeric storage ids this user has a mount on, fetched once per run
-	 * and keyed by id for the lookup in the reduction. An empty map means the
-	 * reduction is skipped, not that the user sees nothing.
+	 * Whether one cache entry lies at or below one of the coordinates.
 	 *
-	 * @return array<int,true>
+	 * An empty root is the root of a storage and covers all of it. Otherwise
+	 * the path is the root itself or starts with the root and a separator,
+	 * never with the root alone.
+	 *
+	 * @param list<array{int,string}> $coordinates
 	 */
-	private function storageIdsOfUser(IUser $user): array {
-		try {
-			$mounts = $this->mountCache->getMountsForUser($user);
-		} catch (\Throwable $e) {
-			$this->logger->debug('Findling: mount list unavailable, skipping the cheap reduction', ['exception' => $e]);
-			return [];
+	private static function withinCoordinates(int $storageId, string $path, array $coordinates): bool {
+		foreach ($coordinates as [$coordinateStorage, $root]) {
+			if ($coordinateStorage !== $storageId) {
+				continue;
+			}
+
+			if ($root === '' || $path === $root || str_starts_with($path, $root . '/')) {
+				return true;
+			}
 		}
 
+		return false;
+	}
+
+	/**
+	 * The mounts of this user, fetched once per run, or null when the mount
+	 * cache does not answer. Null skips the ordinary reduction and leaves a
+	 * folder without coordinates; it never means that the user sees nothing.
+	 *
+	 * @return list<\OCP\Files\Config\ICachedMountInfo>|null
+	 */
+	private function mountsOfUser(IUser $user): ?array {
+		try {
+			return array_values($this->mountCache->getMountsForUser($user));
+		} catch (\Throwable $e) {
+			$this->logger->debug('Findling: mount list unavailable, skipping the cheap reduction', ['exception' => $e]);
+			return null;
+		}
+	}
+
+	/**
+	 * The numeric storage ids of a mount list, keyed by id for the lookup in
+	 * the reduction. An empty map means the reduction is skipped, not that the
+	 * user sees nothing.
+	 *
+	 * @param list<\OCP\Files\Config\ICachedMountInfo> $mounts
+	 * @return array<int,true>
+	 */
+	private static function storageIdsOf(array $mounts): array {
 		$storageIds = [];
 		foreach ($mounts as $mount) {
 			$storageIds[$mount->getStorageId()] = true;
 		}
 
 		return $storageIds;
+	}
+
+	/**
+	 * The folder of the dialog as a node in the tree of the asking user, or
+	 * null for the search without a folder.
+	 *
+	 * Null for no folder, and null for every failure, and the two are the same
+	 * answer on purpose (USRCH-03, T-32-06): a folder that does not exist, one
+	 * this user may not open, a file instead of a folder and a path that leaves
+	 * the user folder all give the hits of the search without the filter, so
+	 * the answer says nothing about what exists elsewhere.
+	 *
+	 * Folder::get() resolves the path relative to the user folder, normalises
+	 * it and refuses an invalid one with an exception. The prefix check behind
+	 * it is the second wall against a traversal: should get() ever normalise a
+	 * '..' instead of refusing it, a node outside the user folder is still no
+	 * folder here. Even past both walls nothing foreign could be shown, because
+	 * the recheck runs inside the tree this method hands back.
+	 *
+	 * No readability question here: the one question stays in readableFile()
+	 * (test_php_acl_boundary.py), and a folder the user can resolve but not
+	 * read yields no readable file below it anyway. Never a log line with the
+	 * path, which is user content.
+	 */
+	private function scopeOf(Folder $userFolder, ?string $folder): ?Folder {
+		if ($folder === null) {
+			return null;
+		}
+
+		try {
+			$node = $userFolder->get($folder);
+		} catch (\Throwable) {
+			$this->logger->debug('Findling: the narrowing of the dialog was ignored');
+			return null;
+		}
+
+		if (!$node instanceof Folder || !str_starts_with($node->getPath(), $userFolder->getPath() . '/')) {
+			$this->logger->debug('Findling: the narrowing of the dialog was ignored');
+			return null;
+		}
+
+		return $node;
+	}
+
+	/**
+	 * Every place a folder covers, as storage id and raw root path in the
+	 * space of oc_filecache, or null when the folder cannot be placed.
+	 *
+	 * The first coordinate is the folder itself: its own cache entry names its
+	 * storage and its raw path. Every mount whose mount point lies below the
+	 * folder adds its storage and the internal path of its root, which is how
+	 * a share or a team folder inside the folder is covered. Read from the
+	 * mount list the run already holds, so the folder costs one cache lookup
+	 * and no second mount query.
+	 *
+	 * @param list<\OCP\Files\Config\ICachedMountInfo> $mounts
+	 * @return list<array{int,string}>|null
+	 */
+	private function scopeCoordinates(Folder $scope, array $mounts): ?array {
+		try {
+			$entry = $this->fileAccess->getByFileId($scope->getId());
+		} catch (\Throwable) {
+			// No exception in the context: its message could carry a path.
+			$this->logger->debug('Findling: no coordinates for the narrowing, the recheck decides alone');
+			return null;
+		}
+
+		if ($entry === null) {
+			return null;
+		}
+
+		$coordinates = [[$entry->getStorageId(), $entry->getPath()]];
+		$prefix = $scope->getPath() . '/';
+		foreach ($mounts as $mount) {
+			if (str_starts_with($mount->getMountPoint(), $prefix)) {
+				$coordinates[] = [$mount->getStorageId(), $mount->getRootInternalPath()];
+			}
+		}
+
+		return $coordinates;
 	}
 
 	/**

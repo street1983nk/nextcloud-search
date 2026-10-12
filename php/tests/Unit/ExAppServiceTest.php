@@ -677,8 +677,8 @@ final class ExAppServiceTest extends TestCase {
 	 *
 	 * @param list<string> $types
 	 */
-	private function filters(array $types = [], string $sort = SearchFilters::SORT_DEFAULT, ?int $since = null, ?int $until = null): SearchFilters {
-		return new SearchFilters($types, $sort, $since, $until);
+	private function filters(array $types = [], string $sort = SearchFilters::SORT_DEFAULT, ?int $since = null, ?int $until = null, ?string $folder = null): SearchFilters {
+		return new SearchFilters($types, $sort, $since, $until, $folder);
 	}
 
 	/**
@@ -863,6 +863,33 @@ final class ExAppServiceTest extends TestCase {
 		$body = $this->snippetBodyFor(SearchFilters::none());
 
 		self::assertSame(['query', 'fileIds', 'titleOnly'], array_keys($body));
+	}
+
+	// -- plan 32-02: the folder never travels (D-32-06, T-32-08) --------------
+
+	public function testTheFolderNeverReachesTheCandidateBody(): void {
+		// The container answers an unknown field with a 422 (extra="forbid"),
+		// and the path it knows is the one of a single fetching user anyway.
+		// Byte for byte the body of the same filters without a folder.
+		$with = $this->searchBodyFor($this->filters(['pdf'], 'newest', 1757980800, 1758067200, '/Projekte'));
+		$without = $this->searchBodyFor($this->filters(['pdf'], 'newest', 1757980800, 1758067200, null));
+
+		self::assertArrayNotHasKey('folder', $with);
+		self::assertSame(json_encode($without), json_encode($with));
+	}
+
+	public function testTheFolderNeverReachesTheExcerptBody(): void {
+		$with = $this->snippetBodyFor($this->filters(['pdf'], 'newest', 1757980800, 1758067200, '/Projekte'));
+		$without = $this->snippetBodyFor($this->filters(['pdf'], 'newest', 1757980800, 1758067200, null));
+
+		self::assertArrayNotHasKey('folder', $with);
+		self::assertSame(json_encode($without), json_encode($with));
+	}
+
+	public function testAFolderAloneLeavesTheUnfilteredBodyUntouched(): void {
+		$body = $this->searchBodyFor($this->filters([], SearchFilters::SORT_DEFAULT, null, null, '/Projekte'));
+
+		self::assertSame(['query', 'limit', 'offset', 'titleOnly'], array_keys($body));
 	}
 
 	// -- A3: the inner call measures itself and reports only when it was slow -

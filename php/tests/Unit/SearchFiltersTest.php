@@ -97,4 +97,30 @@ final class SearchFiltersTest extends TestCase {
 
 		self::assertSame(SearchFilters::TYPES, SearchFilters::typesFrom($raw));
 	}
+
+	// -- plan 32-02: the folder, the fifth value -------------------------------
+
+	public function testNothingNarrowedCarriesNoFolder(): void {
+		self::assertNull(SearchFilters::none()->folder);
+		self::assertFalse(SearchFilters::none()->hasAny());
+	}
+
+	public function testAFolderAloneCountsAsANarrowing(): void {
+		// It takes away every hit outside of it, so the reset link has
+		// something to remove.
+		$filters = new SearchFilters([], SearchFilters::SORT_DEFAULT, null, null, '/Projekte');
+
+		self::assertSame('/Projekte', $filters->folder);
+		self::assertTrue($filters->hasAny());
+	}
+
+	public function testTheConstructorHasNoSilentDefaultForTheFolder(): void {
+		// The rule of the class: a caller that forgot the folder must not look
+		// like a caller that has none. Five required parameters, none optional.
+		$constructor = (new \ReflectionClass(SearchFilters::class))->getConstructor();
+
+		self::assertNotNull($constructor);
+		self::assertSame(5, $constructor->getNumberOfRequiredParameters());
+		self::assertSame('folder', $constructor->getParameters()[4]->getName());
+	}
 }

@@ -13,7 +13,8 @@ namespace OCA\Findling\Service;
  * SearchService and through both calls of ExAppService as four more positions,
  * and a call site reading run($user, $term, false, 0, $caps, [], 'newest', null,
  * 1757980800) tells no reader which value means what. Written out once here,
- * every caller names the field it sets.
+ * every caller names the field it sets. A fifth value, the folder of the
+ * unified search dialog, joined with plan 32-02 and is the one that stays in PHP.
  *
  * Unlike SearchCaps this class does have a factory, and the difference is
  * deliberate rather than an oversight. There a default would have been a number
@@ -116,12 +117,25 @@ final class SearchFilters {
 	 *                        seconds, or null for no lower bound
 	 * @param int|null $until upper bound of the modification date, Unix epoch in
 	 *                        seconds, or null for no upper bound
+	 * @param string|null $folder the folder of the unified search dialog
+	 *                            (plan 32-02, USRCH-02): a path relative to the
+	 *                            user folder of the asking user, with a leading
+	 *                            slash and without a trailing one, or null for
+	 *                            no folder. It is the one field of this object
+	 *                            that never travels over the wire (D-32-06):
+	 *                            only PHP sees the tree of the asking user, the
+	 *                            path the container knows is the one of a
+	 *                            single fetching user and wrong for shares and
+	 *                            team folders. ExAppService builds its bodies
+	 *                            out of explicit keys, so this value has no way
+	 *                            into one; SearchService resolves it
 	 */
 	public function __construct(
 		public readonly array $types,
 		public readonly string $sort,
 		public readonly ?int $since,
 		public readonly ?int $until,
+		public readonly ?string $folder,
 	) {
 	}
 
@@ -134,7 +148,7 @@ final class SearchFilters {
 	 * forgot to pass its filters look exactly like a caller that has none.
 	 */
 	public static function none(): self {
-		return new self([], self::SORT_DEFAULT, null, null);
+		return new self([], self::SORT_DEFAULT, null, null, null);
 	}
 
 	/**
@@ -195,8 +209,9 @@ final class SearchFilters {
 	 * state (D-07) decide whether they appear at all. A sort mode takes nothing
 	 * away: it puts the same hits in another order, so a reset link that offered
 	 * to remove it would point at something that is not hiding a single result.
+	 * A folder does count: it takes away every hit outside of it.
 	 */
 	public function hasAny(): bool {
-		return $this->types !== [] || $this->since !== null || $this->until !== null;
+		return $this->types !== [] || $this->since !== null || $this->until !== null || $this->folder !== null;
 	}
 }

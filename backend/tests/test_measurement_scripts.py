@@ -844,8 +844,17 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # through the door onto the result page; ProviderTest.php turns the two D-05
 # cases round and adds the cases of the new filter. No file went, so
 # PHP_FILES_TODAY moves to 93.
+# Moved on 2026-10-13 by Plan 32-02 (USRCH-02, USRCH-03, D-32-06): the folder
+# filter of the unified search, resolved in PHP. SearchFilters.php gained the
+# fifth field folder; Search/Provider.php declares the custom filter folder
+# and reads it in folderOf(); PageController.php passes no folder;
+# Service/SearchService.php resolves the folder, narrows the reduction to its
+# coordinates and asks the one recheck on the folder node; the four unit tests
+# SearchFiltersTest.php, ProviderTest.php, ExAppServiceTest.php and
+# SearchServiceTest.php changed with them. No file came and none went, so
+# PHP_FILES_TODAY stays at 93.
 PHP_FILES_TODAY = 93
-PHP_TREE_HASH_TODAY = "3154299545d8f8c2554fc5f844c0a399c14479416ea99cb09d2c924c62c81053"
+PHP_TREE_HASH_TODAY = "3b906d4a9ead107332df127a5c16330334071bed876de92af0231d582ab34a29"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

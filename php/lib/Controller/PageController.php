@@ -528,6 +528,9 @@ final class PageController extends Controller {
 			$address['sort'],
 			$since,
 			$address['until'],
+			// The result page has no folder filter (deferred in phase 32), so
+			// its address never narrows to a folder.
+			null,
 		);
 	}
 

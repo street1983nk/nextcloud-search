@@ -587,24 +587,29 @@ final class ProviderTest extends TestCase {
 				IFilter::BUILTIN_SINCE,
 				IFilter::BUILTIN_UNTIL,
 				'types',
+				'folder',
 			],
 			$this->provider()->getSupportedFilters(),
 		);
 	}
 
-	public function testTheProviderDefinesExactlyTheTypeFilterOfItsOwn(): void {
+	public function testTheProviderDefinesExactlyTheTypeAndTheFolderFilterOfItsOwn(): void {
 		// D-05 lifted by USRCH-01 (D-32-07): the definition is what keeps the
 		// provider list valid. This case asserted an empty list until plan
 		// 32-01; it is turned round and not deleted, because the warning behind
 		// it still holds: a name of our own without a FilterDefinition turns the
-		// whole provider list of the dialog into an error. One definition, a
-		// string, named like the address parameter of the result page.
+		// whole provider list of the dialog into an error. Two definitions since
+		// plan 32-02 (USRCH-02), both strings: the type groups, named like the
+		// address parameter of the result page, and the folder.
 		$custom = $this->provider()->getCustomFilters();
 
-		self::assertCount(1, $custom);
+		self::assertCount(2, $custom);
 		self::assertInstanceOf(FilterDefinition::class, $custom[0]);
 		self::assertSame('types', $custom[0]->name());
 		self::assertSame(FilterDefinition::TYPE_STRING, $custom[0]->type());
+		self::assertInstanceOf(FilterDefinition::class, $custom[1]);
+		self::assertSame('folder', $custom[1]->name());
+		self::assertSame(FilterDefinition::TYPE_STRING, $custom[1]->type());
 	}
 
 	public function testEverySupportedNameThatIsNoCoreNameHasADefinition(): void {
@@ -626,7 +631,7 @@ final class ProviderTest extends TestCase {
 
 		$own = array_values(array_diff($provider->getSupportedFilters(), $core));
 
-		self::assertSame(['types'], $own);
+		self::assertSame(['types', 'folder'], $own);
 		self::assertSame([], array_values(array_diff($own, $defined)));
 		self::assertSame([], array_values(array_intersect($defined, $core)), 'a core name may not be defined again');
 	}
@@ -804,5 +809,127 @@ final class ProviderTest extends TestCase {
 		self::assertInstanceOf(SearchFilters::class, $filters);
 		self::assertSame(['pdf'], $filters->types);
 		self::assertSame(SearchFilters::SORT_DEFAULT, $filters->sort);
+	}
+
+	// -- plan 32-02: the folder of the dialog --------------------------------
+
+	/**
+	 * @return array<string,array{string,string}>
+	 */
+	public static function foldersThatAreRead(): array {
+		return [
+			'a leading slash' => ['/Projekte', '/Projekte'],
+			'a trailing slash' => ['Projekte/', '/Projekte'],
+			'a nested folder with a trailing slash' => ['/Projekte/2026/', '/Projekte/2026'],
+			'a folder with blanks and umlauts' => ['/Ablage Büro', '/Ablage Büro'],
+		];
+	}
+
+	#[\PHPUnit\Framework\Attributes\DataProvider('foldersThatAreRead')]
+	public function testAFolderInTheDialogTravelsIntoTheRunInItsCanonicalShape(string $raw, string $expected): void {
+		$filters = $this->filtersOf($this->filteredQuery([Provider::FILTER_FOLDER => $raw]));
+
+		self::assertInstanceOf(SearchFilters::class, $filters);
+		self::assertSame($expected, $filters->folder);
+		self::assertSame([], $filters->types);
+	}
+
+	public function testAFolderValueThatIsNoFolderIsTheSearchWithoutAFilterAndThrowsNothing(): void {
+		// USRCH-03 at this end: the root, the empty value, values of the wrong
+		// kind, control characters and an overlong value all leave the run
+		// exactly as it is without the filter, none() in every field. The empty
+		// value never arrives from the core (D-32-01), it is read as no folder
+		// all the same. '..' is not decided here but in SearchService.
+		$wrong = [
+			'/',
+			'//',
+			'',
+			5,
+			null,
+			true,
+			['a'],
+			new \stdClass(),
+			"/Projekte\0",
+			"/Projekte\n",
+			"/Projekte\x7F",
+			'/' . str_repeat('x', Provider::MAX_FOLDER_LENGTH),
+		];
+
+		foreach ($wrong as $index => $value) {
+			$searchService = $this->createMock(SearchService::class);
+			$handed = null;
+			$searchService->method('run')->willReturnCallback(
+				function (
+					IUser $user,
+					string $term,
+					bool $titleOnly,
+					int $startCursor,
+					SearchCaps $caps,
+					SearchFilters $filters,
+				) use (&$handed): SearchOutcome {
+					$handed = $filters;
+
+					return $this->outcome();
+				},
+			);
+
+			$provider = new Provider($this->l10n, $this->urlGenerator, $searchService, $this->logger);
+			$provider->search($this->user(), $this->filteredQuery([Provider::FILTER_FOLDER => $value]));
+
+			self::assertInstanceOf(SearchFilters::class, $handed, 'value ' . $index . ' never reached the run');
+			self::assertNull($handed->folder, 'value ' . $index . ' became a folder');
+			self::assertEquals(SearchFilters::none(), $handed, 'value ' . $index . ' narrowed the run');
+		}
+	}
+
+	public function testAValueAtTheLengthBoundIsStillAFolder(): void {
+		// The other edge of the same bound, so that it is a bound.
+		$raw = '/' . str_repeat('x', Provider::MAX_FOLDER_LENGTH - 1);
+
+		self::assertSame(Provider::MAX_FOLDER_LENGTH, strlen($raw));
+		self::assertSame($raw, $this->filtersOf($this->filteredQuery([Provider::FILTER_FOLDER => $raw]))?->folder);
+	}
+
+	public function testAFolderAndADateArriveTogether(): void {
+		// D-32-02: folder plus date has to work in the dialog.
+		$filters = $this->filtersOf($this->filteredQuery([
+			Provider::FILTER_FOLDER => '/Projekte',
+			IFilter::BUILTIN_SINCE => new \DateTimeImmutable('@1757980800'),
+		]));
+
+		self::assertInstanceOf(SearchFilters::class, $filters);
+		self::assertSame('/Projekte', $filters->folder);
+		self::assertSame(1757980800, $filters->since);
+	}
+
+	public function testAFolderAndATypeGroupArriveTogether(): void {
+		// The plugin never sends both at once; a hand built request may.
+		$filters = $this->filtersOf($this->filteredQuery([
+			Provider::FILTER_FOLDER => '/Projekte',
+			Provider::FILTER_TYPES => 'pdf',
+		]));
+
+		self::assertInstanceOf(SearchFilters::class, $filters);
+		self::assertSame('/Projekte', $filters->folder);
+		self::assertSame(['pdf'], $filters->types);
+	}
+
+	public function testTheEntryPointNeverCarriesTheFolder(): void {
+		// The result page has no folder filter, so the door leaves it out.
+		$this->routingUrls();
+		$this->searchService->method('run')->willReturn($this->outcome(
+			hits: [new ApprovedHit(11, 'Report.pdf', 'Projekte/Report.pdf', 'application/pdf', 0)],
+			nextCursor: 137,
+			hasMore: true,
+		));
+
+		$result = $this->provider()->search($this->user(), $this->filteredQuery([
+			Provider::FILTER_FOLDER => '/Projekte',
+			Provider::FILTER_TYPES => 'pdf',
+		]));
+		$entries = $this->entriesOf($result);
+
+		self::assertCount(2, $entries);
+		self::assertSame('/index.php/apps/findling/?query=quarterly+report&types=pdf', $entries[1]['resourceUrl']);
 	}
 }
