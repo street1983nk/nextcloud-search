@@ -14,6 +14,7 @@ use OCA\Findling\Service\SearchService;
 use OCP\IL10N;
 use OCP\IURLGenerator;
 use OCP\IUser;
+use OCP\Search\FilterDefinition;
 use OCP\Search\IFilter;
 use OCP\Search\ISearchQuery;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -469,6 +470,51 @@ final class ProviderTest extends TestCase {
 		self::assertSame(137, $result->jsonSerialize()['cursor']);
 	}
 
+	public function testTheEntryPointCarriesTheActiveTypeGroupsIntoThePage(): void {
+		// Plan 32-01: the page shows the type groups as chips, so a user who
+		// leaves the dialog through the door arrives in front of the narrowing
+		// that produced the group. Canonical order, comma separated, exactly the
+		// value the page reads back through the same parser. The dates and the
+		// file name switch stay as they were: dates out, names only when set.
+		$this->routingUrls();
+		$this->searchService->method('run')->willReturn($this->outcome(
+			hits: [new ApprovedHit(11, 'Report.pdf', 'Board/Report.pdf', 'application/pdf', 0)],
+			nextCursor: 137,
+			hasMore: true,
+		));
+
+		$result = $this->provider()->search($this->user(), $this->filteredQuery([
+			Provider::FILTER_TYPES => 'images,pdf',
+			IFilter::BUILTIN_SINCE => new \DateTimeImmutable('@1757980800'),
+		]));
+		$entries = $this->entriesOf($result);
+
+		self::assertCount(2, $entries);
+		self::assertSame(
+			'/index.php/apps/findling/?query=quarterly+report&types=pdf%2Cimages',
+			$entries[1]['resourceUrl'],
+		);
+	}
+
+	public function testTheEntryPointCarriesNoTypesParameterWithoutATypeGroup(): void {
+		// An unknown value leaves no group behind, and no group means no
+		// parameter at all rather than an empty one.
+		$this->routingUrls();
+		$this->searchService->method('run')->willReturn($this->outcome(
+			hits: [new ApprovedHit(11, 'Report.pdf', 'Board/Report.pdf', 'application/pdf', 0)],
+			nextCursor: 137,
+			hasMore: true,
+		));
+
+		$result = $this->provider()->search($this->user(), $this->filteredQuery([
+			Provider::FILTER_TYPES => 'videos',
+		]));
+		$entries = $this->entriesOf($result);
+
+		self::assertCount(2, $entries);
+		self::assertSame('/index.php/apps/findling/?query=quarterly+report', $entries[1]['resourceUrl']);
+	}
+
 	public function testACompleteGroupHasNoEntryPointBecauseThePageWouldShowTheSameHits(): void {
 		$this->routingUrls();
 		$this->searchService->method('run')->willReturn($this->outcome(
@@ -528,28 +574,117 @@ final class ProviderTest extends TestCase {
 
 	// -- the filters of the dialog, declared and read ------------------------
 
-	public function testTheProviderDeclaresAllFourBuiltinFiltersSoTheDialogNeverSkipsIt(): void {
+	public function testTheProviderDeclaresAllFourBuiltinFiltersAndItsTypeFilterSoTheDialogNeverSkipsIt(): void {
 		// Not one of the twelve, and one line, because a provider that is skipped
 		// for an undeclared filter looks exactly like a broken backend: no error,
 		// no entry, no hint. Until the two dates joined this list, every search
-		// with a date set was such a search.
+		// with a date set was such a search. The fifth name is our own since
+		// plan 32-01 (USRCH-01).
 		self::assertSame(
 			[
 				IFilter::BUILTIN_TERM,
 				IFilter::BUILTIN_TITLE_ONLY,
 				IFilter::BUILTIN_SINCE,
 				IFilter::BUILTIN_UNTIL,
+				'types',
 			],
 			$this->provider()->getSupportedFilters(),
 		);
 	}
 
-	public function testTheProviderDefinesNoFilterOfItsOwn(): void {
-		// D-05 as an assertion. A name of our own would need a FilterDefinition,
-		// and a name without one turns the whole provider list of the dialog
-		// into an error, so file type and sort mode are offered on the own
-		// result page and nowhere in here.
-		self::assertSame([], $this->provider()->getCustomFilters());
+	public function testTheProviderDefinesExactlyTheTypeFilterOfItsOwn(): void {
+		// D-05 lifted by USRCH-01 (D-32-07): the definition is what keeps the
+		// provider list valid. This case asserted an empty list until plan
+		// 32-01; it is turned round and not deleted, because the warning behind
+		// it still holds: a name of our own without a FilterDefinition turns the
+		// whole provider list of the dialog into an error. One definition, a
+		// string, named like the address parameter of the result page.
+		$custom = $this->provider()->getCustomFilters();
+
+		self::assertCount(1, $custom);
+		self::assertInstanceOf(FilterDefinition::class, $custom[0]);
+		self::assertSame('types', $custom[0]->name());
+		self::assertSame(FilterDefinition::TYPE_STRING, $custom[0]->type());
+	}
+
+	public function testEverySupportedNameThatIsNoCoreNameHasADefinition(): void {
+		// The check the core runs in SearchComposer::loadFilters() while it
+		// loads every provider, written out here because a failure there throws
+		// for the whole dialog and not for this group (T-32-02). The seven core
+		// names are the ones SearchComposer defines itself.
+		$core = [
+			IFilter::BUILTIN_TERM,
+			IFilter::BUILTIN_SINCE,
+			IFilter::BUILTIN_UNTIL,
+			IFilter::BUILTIN_TITLE_ONLY,
+			IFilter::BUILTIN_PERSON,
+			IFilter::BUILTIN_PLACES,
+			IFilter::BUILTIN_PROVIDER,
+		];
+		$provider = $this->provider();
+		$defined = array_map(static fn (FilterDefinition $definition): string => $definition->name(), $provider->getCustomFilters());
+
+		$own = array_values(array_diff($provider->getSupportedFilters(), $core));
+
+		self::assertSame(['types'], $own);
+		self::assertSame([], array_values(array_diff($own, $defined)));
+		self::assertSame([], array_values(array_intersect($defined, $core)), 'a core name may not be defined again');
+	}
+
+	public function testATypeGroupInTheDialogTravelsIntoTheRun(): void {
+		$filters = $this->filtersOf($this->filteredQuery([Provider::FILTER_TYPES => 'pdf']));
+
+		self::assertInstanceOf(SearchFilters::class, $filters);
+		self::assertSame(['pdf'], $filters->types);
+		self::assertSame(SearchFilters::SORT_DEFAULT, $filters->sort);
+	}
+
+	public function testATypeGroupAndADateArriveTogether(): void {
+		// D-32-02: type plus date has to work in the dialog.
+		$filters = $this->filtersOf($this->filteredQuery([
+			Provider::FILTER_TYPES => 'images,PDF',
+			IFilter::BUILTIN_SINCE => new \DateTimeImmutable('@1757980800'),
+		]));
+
+		self::assertInstanceOf(SearchFilters::class, $filters);
+		self::assertSame(['pdf', 'images'], $filters->types);
+		self::assertSame(1757980800, $filters->since);
+		self::assertNull($filters->until);
+	}
+
+	public function testATypeValueThatNamesNoGroupIsTheSearchWithoutAFilterAndThrowsNothing(): void {
+		// D-32-03 and ROADMAP success criterion 3: whatever reaches the provider
+		// and is not a group leaves the run exactly as it is without the filter,
+		// none() in all four fields. The strings name no group, the rest are
+		// values of the wrong kind from over there, where a string filter
+		// carries a string.
+		$wrong = ['videos', '', ',,,', "pdf\0", str_pad('pdf,', 5000, 'x'), 5, null, true, ['pdf'], new \stdClass()];
+
+		foreach ($wrong as $index => $value) {
+			$searchService = $this->createMock(SearchService::class);
+			$handed = null;
+			$searchService->method('run')->willReturnCallback(
+				function (
+					IUser $user,
+					string $term,
+					bool $titleOnly,
+					int $startCursor,
+					SearchCaps $caps,
+					SearchFilters $filters,
+				) use (&$handed): SearchOutcome {
+					$handed = $filters;
+
+					return $this->outcome();
+				},
+			);
+
+			$provider = new Provider($this->l10n, $this->urlGenerator, $searchService, $this->logger);
+			$provider->search($this->user(), $this->filteredQuery([Provider::FILTER_TYPES => $value]));
+
+			self::assertInstanceOf(SearchFilters::class, $handed, 'value ' . $index . ' never reached the run');
+			self::assertSame([], $handed->types, 'value ' . $index . ' became a type group');
+			self::assertEquals(SearchFilters::none(), $handed, 'value ' . $index . ' narrowed the run');
+		}
 	}
 
 	public function testADateInTheSinceFilterTravelsIntoTheRunAsItsEpoch(): void {
@@ -652,18 +787,22 @@ final class ProviderTest extends TestCase {
 		self::assertSame(0, $filters->since);
 	}
 
-	public function testTheDialogNeverCarriesATypeGroupOrASortMode(): void {
-		// The guard against a type or a sort filter being smuggled into the
-		// dialog later. Both would need a FilterDefinition of their own, and
-		// what a name without a definition costs is the provider list of every
-		// app in the dialog, not only ours (D-05).
+	public function testTheDialogCarriesATypeGroupButNeverASortMode(): void {
+		// D-05 lifted by USRCH-01 (D-32-07): the definition is what keeps the
+		// provider list valid. Until plan 32-01 this case asserted that the
+		// dialog carried neither a type group nor a sort mode; it is turned
+		// round for the type group and kept for the sort mode, which stays on
+		// the own result page. A sort value smuggled in under the name sort is
+		// a name this provider never declared, so it never becomes a mode.
 		$filters = $this->filtersOf($this->filteredQuery([
 			IFilter::BUILTIN_SINCE => new \DateTimeImmutable('@1757980800'),
 			IFilter::BUILTIN_TITLE_ONLY => true,
+			Provider::FILTER_TYPES => 'pdf',
+			'sort' => 'newest',
 		]));
 
 		self::assertInstanceOf(SearchFilters::class, $filters);
-		self::assertSame([], $filters->types);
+		self::assertSame(['pdf'], $filters->types);
 		self::assertSame(SearchFilters::SORT_DEFAULT, $filters->sort);
 	}
 }

@@ -372,40 +372,21 @@ final class PageController extends Controller {
 	 * and a second one over here would be the second filter vocabulary that the
 	 * value object refuses in as many words.
 	 *
-	 * Canonicalised into the order of that closed list rather than kept in the
-	 * order somebody wrote it, and the reason lies one plan further on: the
-	 * cursor path of a filtered search is bound to a fingerprint of the request
-	 * state (plan 13-08), and without this step a user who picks the same two
-	 * groups in the other order would produce another fingerprint and land back
-	 * on page one for no reason he could see.
-	 *
-	 * The loop over the closed list does four things at once, which is why
-	 * there is no sorting step, no deduplicating step and no counting step: it
-	 * leaves out what is unknown, it leaves out what is empty, it keeps a name
-	 * that was written twice exactly once, and it cannot yield more entries
-	 * than the closed list has, so six is the ceiling whatever arrives.
+	 * The reading itself is SearchFilters::typesFrom() since plan 32-01, the
+	 * same parser the type filter of the unified search dialog goes through,
+	 * because both carry the same comma separated value and one value must not
+	 * have two readings. Why the result is canonicalised into the order of the
+	 * closed list (the fingerprint of plan 13-08) is written there.
 	 *
 	 * @return list<string>
 	 */
 	private function typeGroups(): array {
 		$raw = $this->request->getParam('types', '');
-		if (!is_string($raw) || $raw === '') {
+		if (!is_string($raw)) {
 			return [];
 		}
 
-		$asked = [];
-		foreach (explode(',', $raw) as $part) {
-			$asked[strtolower(trim($part))] = true;
-		}
-
-		$groups = [];
-		foreach (SearchFilters::TYPES as $group) {
-			if (isset($asked[$group])) {
-				$groups[] = $group;
-			}
-		}
-
-		return $groups;
+		return SearchFilters::typesFrom($raw);
 	}
 
 	/**

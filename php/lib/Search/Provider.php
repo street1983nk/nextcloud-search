@@ -11,6 +11,7 @@ use OCA\Findling\Service\SearchService;
 use OCP\IL10N;
 use OCP\IURLGenerator;
 use OCP\IUser;
+use OCP\Search\FilterDefinition;
 use OCP\Search\IFilter;
 use OCP\Search\IFilteringProvider;
 use OCP\Search\ISearchQuery;
@@ -90,6 +91,17 @@ final class Provider implements IFilteringProvider {
 	private const MAX_RECHECKS_PER_HIT = 2;
 	private const MAX_RECHECKS_ABSOLUTE = 64;
 
+	/**
+	 * The one filter this provider defines itself, the type groups of USRCH-01.
+	 *
+	 * The name is the address parameter of the own result page on purpose:
+	 * the same word carries the same comma separated value in both places and
+	 * goes through the same parser, SearchFilters::typesFrom(). It is free in
+	 * the core, which reserves term, since, until, title-only, person, places
+	 * and provider, and it satisfies the [-0-9a-z] rule of FilterDefinition.
+	 */
+	public const FILTER_TYPES = 'types';
+
 	public function __construct(
 		private IL10N $l10n,
 		private IURLGenerator $urlGenerator,
@@ -136,6 +148,13 @@ final class Provider implements IFilteringProvider {
 	 * it, which is why the repair is one line here and its effect two screens
 	 * below.
 	 *
+	 * The fifth name, types, is our own since plan 32-01 (USRCH-01) and the
+	 * only one in this list that is not a core name. The core resolves every
+	 * name of this list against a definition when it loads the providers and
+	 * throws for a name without one, which costs the provider list of every
+	 * app in the dialog; getCustomFilters() below is what keeps this name
+	 * resolvable.
+	 *
 	 * @return list<string>
 	 */
 	#[\Override]
@@ -145,13 +164,15 @@ final class Provider implements IFilteringProvider {
 			IFilter::BUILTIN_TITLE_ONLY,
 			IFilter::BUILTIN_SINCE,
 			IFilter::BUILTIN_UNTIL,
+			self::FILTER_TYPES,
 		];
 	}
 
 	/**
-	 * No second id triggers this provider, and it defines no filter of its own.
-	 * A custom filter would have to be registered with a definition, and a name
-	 * without one turns the whole provider list into an error.
+	 * No second id triggers this provider. Its one filter of its own is
+	 * declared in getCustomFilters() below, with the definition a custom name
+	 * cannot do without: a name without one turns the whole provider list into
+	 * an error.
 	 *
 	 * @return list<string>
 	 */
@@ -161,20 +182,34 @@ final class Provider implements IFilteringProvider {
 	}
 
 	/**
-	 * No filter of our own, and the list stays empty on purpose in v1.2.
+	 * Exactly one filter of our own, the type groups, and its definition is
+	 * what keeps the provider list of the whole dialog valid.
 	 *
-	 * A custom filter has to be registered together with a FilterDefinition,
-	 * and a name without one turns the whole provider list of the dialog into
-	 * an error, which costs every provider and not only this one. File type and
-	 * sort mode therefore live on the own result page and nowhere else in this
-	 * version: the dialog understands the term, the file name switch and the
-	 * two built in dates, and that is the complete contract (D-05).
+	 * Until plan 32-01 this list was empty on purpose and the type filter lived
+	 * on the own result page only (D-05). D-32-07 lifts that decision for the
+	 * type groups and for nothing else; the sort mode stays on the page. The
+	 * warning D-05 was built on still holds and is the reason for this method:
+	 * a custom name in getSupportedFilters() without a definition here makes
+	 * the core throw while it loads the providers, and that costs every
+	 * provider in the dialog, not only this one.
 	 *
-	 * @return list<\OCP\Search\FilterDefinition>
+	 * A string and not a list of strings, because the value travels as one
+	 * comma separated word, exactly like the address parameter of the result
+	 * page, and SearchFilters::typesFrom() reads it.
+	 *
+	 * Exclusive, which is the default of the constructor, and the choice is
+	 * one of documentation rather than effect (SearchComposer, stable34). The
+	 * core keeps a custom definition under the id of the provider that
+	 * declared it, so no other provider ever resolves this name: a request
+	 * that carries it to another provider drops it as unknown, and the
+	 * exclusive check is only reached for this provider, which lists the name.
+	 * Exclusive states what the filter is, a narrowing only Findling knows.
+	 *
+	 * @return list<FilterDefinition>
 	 */
 	#[\Override]
 	public function getCustomFilters(): array {
-		return [];
+		return [new FilterDefinition(self::FILTER_TYPES, FilterDefinition::TYPE_STRING)];
 	}
 
 	#[\Override]
@@ -188,19 +223,21 @@ final class Provider implements IFilteringProvider {
 		}
 
 		$titleOnly = $this->titleOnly($query);
+		$types = $this->typesOf($query);
 
-		// What this dialog is able to narrow, and it is exactly two things. The
-		// type groups stay empty and the sort mode stays the default, and
-		// neither of the two is an unfinished corner: a chip of our own would
-		// need a FilterDefinition, a name without one breaks the provider list
-		// of the whole dialog, so file type and sort mode are offered on the
-		// own result page instead (D-05).
+		// What this dialog is able to narrow: the type groups and the two dates.
+		// The type groups joined with plan 32-01 (USRCH-01; D-32-07 lifts D-05
+		// for them), declared in getCustomFilters() with the definition a name
+		// of our own cannot do without. The sort mode stays the default and is
+		// offered on the own result page only; ordering the dialog is not part
+		// of this phase.
 		//
-		// Both bounds are clamped before they leave this method, so that an
-		// absurd date from over there cannot become a range query across an
-		// absurd span.
+		// The type groups are reduced to the closed set before they leave this
+		// method and both bounds are clamped, so that neither a tampered value
+		// nor an absurd date reaches the container as something it answers
+		// with a 422 (D-32-03).
 		$filters = new SearchFilters(
-			[],
+			$types,
 			SearchFilters::SORT_DEFAULT,
 			$this->epochWithin($this->epochOf($query, IFilter::BUILTIN_SINCE)),
 			$this->epochWithin($this->epochOf($query, IFilter::BUILTIN_UNTIL)),
@@ -253,7 +290,7 @@ final class Provider implements IFilteringProvider {
 		// of paging rather than two, and the page is the one that survives a
 		// bookmark.
 		if ($outcome->hasMore && $entries !== []) {
-			$entries[] = $this->entryPoint($term, $titleOnly);
+			$entries[] = $this->entryPoint($term, $titleOnly, $types);
 		}
 
 		// A run that hit the paging ceiling is complete() with the hits it has,
@@ -296,6 +333,31 @@ final class Provider implements IFilteringProvider {
 		$filter = $query->getFilter(IFilter::BUILTIN_TITLE_ONLY);
 
 		return $filter !== null && $filter->get() === true;
+	}
+
+	/**
+	 * The type groups of the dialog, read through the one parser of the result
+	 * page, or none at all.
+	 *
+	 * The same defensive shape as titleOnly() above. The value of a string
+	 * filter is a string over there, so anything else is a defect on that side
+	 * and counts as "not set". A string is reduced to the closed set by
+	 * SearchFilters::typesFrom(): an unknown, empty, overlong or tampered value
+	 * leaves no group behind, and the search runs exactly as it would without
+	 * the filter (D-32-03, ROADMAP success criterion 3). Nothing here throws
+	 * and nothing here logs the value.
+	 *
+	 * @return list<string>
+	 */
+	private function typesOf(ISearchQuery $query): array {
+		$filter = $query->getFilter(self::FILTER_TYPES);
+		if ($filter === null) {
+			return [];
+		}
+
+		$value = $filter->get();
+
+		return is_string($value) ? SearchFilters::typesFrom($value) : [];
 	}
 
 	/**
@@ -399,10 +461,16 @@ final class Provider implements IFilteringProvider {
 	/**
 	 * The last entry of the group, which is not a hit but a door.
 	 *
-	 * The address carries the term and, if it was set, the built in filter, and
-	 * nothing else: no page and no cursor path, because the way in is always page
-	 * one. Parameters that are not a placeholder of the route are appended as a
-	 * query string by the url generator, which is what the page reads.
+	 * The address carries the term, the built in file name filter if it was set
+	 * and the type groups if any were set, and nothing else: no page and no
+	 * cursor path, because the way in is always page one. Parameters that are
+	 * not a placeholder of the route are appended as a query string by the url
+	 * generator, which is what the page reads.
+	 *
+	 * The type groups travel since plan 32-01 because the page shows them as
+	 * chips: a user arriving there sees the narrowing that produced the group
+	 * and can take it off with one click. They arrive in the order of
+	 * SearchFilters::TYPES, the canonical form the page reads back.
 	 *
 	 * The two date bounds of the dialog are knowingly left out of that address.
 	 * The door leads to page one of a search nobody narrowed, and that is a
@@ -410,15 +478,19 @@ final class Provider implements IFilteringProvider {
 	 * row, and handing it a bound it does not show as a chip would leave a user
 	 * in front of fewer hits than the dialog promised, with nothing on the page
 	 * saying why.
+	 *
+	 * @param list<string> $types the active type groups, already canonical
 	 */
-	private function entryPoint(string $term, bool $titleOnly): SearchResultEntry {
+	private function entryPoint(string $term, bool $titleOnly, array $types): SearchResultEntry {
 		$entry = new SearchResultEntry(
 			thumbnailUrl: '',
 			title: $this->l10n->t('Show all results'),
 			subline: $this->l10n->t('Opens the Findling results page'),
 			resourceUrl: $this->urlGenerator->linkToRoute(
 				'findling.page.index',
-				['query' => $term] + ($titleOnly ? ['names' => '1'] : []),
+				['query' => $term]
+					+ ($titleOnly ? ['names' => '1'] : [])
+					+ ($types === [] ? [] : ['types' => implode(',', $types)]),
 			),
 			icon: 'icon-search',
 		);

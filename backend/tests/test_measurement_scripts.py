@@ -835,8 +835,17 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # store texts, FMT-01 to FMT-05): the only byte change under php/ is
 # appinfo/info.xml, which the recipe does not read, so neither the hash nor
 # PHP_FILES_TODAY moves; the recipe was run over php/ and gives the value below.
-PHP_FILES_TODAY = 92
-PHP_TREE_HASH_TODAY = "bad993f8230804cf83a552f151dbed9d0ea1b16e71dd2a2d1705c0a1b5f57048"
+# Moved on 2026-10-12 by Plan 32-01 (USRCH-01, D-32-03, D-32-07): one file
+# came, php/tests/Unit/SearchFiltersTest.php (the cases of the shared parser).
+# SearchFilters.php gained typesFrom() and MAX_TYPES_LENGTH, the one parser of
+# the type groups; PageController.php reads its types parameter through it;
+# Search/Provider.php declares the custom filter types with its
+# FilterDefinition, reads it through the same parser and carries the groups
+# through the door onto the result page; ProviderTest.php turns the two D-05
+# cases round and adds the cases of the new filter. No file went, so
+# PHP_FILES_TODAY moves to 93.
+PHP_FILES_TODAY = 93
+PHP_TREE_HASH_TODAY = "3154299545d8f8c2554fc5f844c0a399c14479416ea99cb09d2c924c62c81053"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

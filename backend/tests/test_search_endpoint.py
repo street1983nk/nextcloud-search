@@ -453,6 +453,27 @@ def test_an_unknown_group_name_is_refused_and_never_ignored(client: TestClient, 
     assert response.status_code == 422
 
 
+def test_an_empty_group_list_behaves_like_no_filter_at_all(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    # D-32-03, the backend half of ROADMAP success criterion 3. The PHP side
+    # reduces every value of the unified search filter to the closed set, and a
+    # value it throws away entirely leaves an empty list behind. That list has
+    # to be the answer of a body without the field: same candidates, same
+    # order. The corpus carries pdf and docx, so a filter that silently applied
+    # would show in the ids.
+    headers = sign(indexed_volume.bob)
+
+    unfiltered = _search(client, headers, limit=100)["candidates"]
+    empty = _search(client, headers, types=[], limit=100)["candidates"]
+
+    assert unfiltered != []
+    assert {candidate["fileId"] % 2 for candidate in unfiltered} == {0, 1}
+    assert [candidate["fileId"] for candidate in empty] == [candidate["fileId"] for candidate in unfiltered]
+
+
 def test_an_unknown_sort_name_is_refused(client: TestClient, sign: Sign) -> None:
     # The engine falls back to relevance for a name it does not know, on
     # purpose: a second exception down there would turn a typo into an HTTP 500.
