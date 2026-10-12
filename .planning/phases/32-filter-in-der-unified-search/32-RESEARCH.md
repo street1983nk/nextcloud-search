@@ -312,18 +312,22 @@ Siehe Pattern 1 bis 5. Ergänzend, die Tür im Provider:
 | A3 | `window._nc_event_bus` ist zum Klickzeitpunkt der globale SimpleBus | Pattern 5 | Emit verpufft; Feature-Erkennung plus Playwright-Abnahme deckt es auf [ASSUMED, Quelle Bibliothek gelesen] |
 | A4 | `Folder::get()` wirft bei `..`-Segmenten | Pattern 3 | Traversal bliebe trotzdem ohne Wirkung, weil der Recheck im (dann falschen) Unterbaum des Nutzers läuft; nie fremde Dateien [ASSUMED] |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Kriterium 3 und leere Parameter (Owner)**
    - Bekannt: Leere Strings und Arrays weist der Kern mit 400 ab, bevor Findling läuft; das Plugin sendet nie leer.
    - Empfehlung: Kriterium 3 lesen als "jeder Wert, der den Provider erreicht"; Kernverhalten in `docs/search-filters.md` und als Regressionsprobe (Status 400 erwartet) festhalten.
+   - RESOLVED: D-32-01 (leere Werte weist der Kern mit 400 ab; Probe in 32-06, Doku in docs/search-filters.md)
 2. **Typ plus Ordner gleichzeitig (Owner)**
    - Bekannt: Getrennte Chips ergeben getrennte Gruppen. Ein kombinierter Dialog bräuchte eigene Modal-UI.
    - Empfehlung: nicht in Phase 32; als Grenze dokumentieren, Kombination Typ plus Datum und Ordner plus Datum funktioniert.
+   - RESOLVED: D-32-02 (Typ und Ordner als getrennte Gruppen, Grenze dokumentiert)
 3. **Backend-Hälfte von Kriterium 3 (Owner, kurz)**
    - Bekannt: Container lehnt unbekannte Gruppen mit 422 ab, bewusst und getestet.
    - Empfehlung: so lassen; Backend-Beleg = Paritätstest plus "leere Liste gleich fehlendes Feld".
+   - RESOLVED: D-32-03 (Container-422 bleibt, Backend-Beleg über Paritätstest)
 4. **Label-Wortlaut der sieben Einträge** (de/en/fr): Entwurf im Plan, Owner sieht ihn bei der Playwright-Abnahme.
+   - RESOLVED: D-32-04 (Wortlaut-Abnahme per Playwright in 32-07)
 
 ## Environment Availability
 
