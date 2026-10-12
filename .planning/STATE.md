@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 31-13-PLAN.md
-last_updated: "2026-10-12T14:05:00.000Z"
-last_activity: 2026-10-12 -- Plan 31-13 abgeschlossen (deploy-harp 38256198997 grün über Store upgrade 0 bis 7), als Nächstes 31-14
+stopped_at: Completed 31-14-PLAN.md
+last_updated: "2026-10-12T15:10:00.000Z"
+last_activity: 2026-10-12 -- Plan 31-14 abgeschlossen (docs/formats.md, Dateitypen-Liste in Store-Texten und READMEs, Entwurf Teil Phase 31 offen bis REL-05), als Nächstes 31-15
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 24
-  completed_plans: 22
+  completed_plans: 23
   percent: 14
 ---
 
@@ -26,11 +26,11 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 31 von 30-36 (Formate, Nachholweg und POL-02)
-Plan: 13 von 15 erledigt (31-01 bis 31-13), nächster Plan 31-14
-Status: Phase 31 in Ausführung; 31-13 abgeschlossen (Store upgrade 5 mit zehn Zusicherungen, Altbestand getrennt von der Saat, L-30-03 geschlossen; gemeinsamer Push mit b021f16c, Fix a3911835 der Saat-Probe, deploy-harp 38256198997 grün über Store upgrade 0 bis 7). FMT-01 bis FMT-06 Complete
-Last activity: 2026-10-12 -- Plan 31-13 abgeschlossen
+Plan: 14 von 15 erledigt (31-01 bis 31-14), nächster Plan 31-15
+Status: Phase 31 in Ausführung; 31-14 abgeschlossen (docs/formats.md je Format mit Grenzen, Privacy-Satz, CHANGELOG Unreleased, Dateitypen-Liste in sechs Beschreibungen und drei READMEs, Entwurf v1.5.0 Teil Phase 31 in docs/store-listing.md, Owner-Abnahme offen bis REL-05). FMT-01 bis FMT-06 Complete
+Last activity: 2026-10-12 -- Plan 31-14 abgeschlossen
 
-Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 13/15 Pläne
+Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 14/15 Pläne
 
 ## Performance Metrics
 
@@ -57,6 +57,7 @@ Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 13/15 Pläne
 - v1.5: 31-11 in ca. 70 min inkl. ca. 25 min CI (3 Tasks, 12 Dateien)
 - v1.5: 31-12 in ca. 55 min inkl. ca. 30 min Testläufe und CI (3 Tasks, 15 Dateien)
 - v1.5: 31-13 in ca. 115 min inkl. ca. 50 min CI und ca. 25 min Volltestläufe (2 Tasks, 4 Dateien)
+- v1.5: 31-14 in ca. 60 min inkl. ca. 27 min Volltestläufe und ca. 20 min CI (2 Tasks, 11 Dateien)
 
 ## Accumulated Context
 
@@ -90,13 +91,15 @@ Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 13/15 Pläne
 - 31-11: Nachholweg FMT-06 im Container. worker/catchup.py Teil A unter recheck_1_5_0 (fehlt/Ziffern/reconcile/done): legacy_format außer PowerPoint, nicht indexierte Zeilen der sechs neuen Typen (Mimetyp, Endung nur ohne Mimetyp), einmal jede repeatedly_stuck-Zeile; Start bei Generation 3 nach recheck_1_4_0. Teil B: Marke reconcile macht den Abgleich sofort fällig (Ruhe-Tor bleibt), der erste Durchgang unter der Marke spult alle Cursor zurück, give_up-Zweig ohne Containerzeile wird Arbeit, Neu-Urteil nur bei exaktem 1.3-Ersatzcode (SKIPPED_FALLBACK_WITHOUT_SIGNAL importiert, known_skip_reasons einmal je Seite), done nur nach einem unter der Marke begonnenen vollständigen Zyklus. Einmal-Modus Reconcile.run(once=True) in main._CATCHUP_RECONCILE bei FINDLING_RECONCILE_ENABLED=false, active_reconcile() bleibt None, _armable_tasks an allen Arm-Stellen. FMT-01 bis FMT-05 auf Owner-Wort zurück auf Pending bis 31-13 (a646061d). CI 1a18e4b2 alle sieben grün (Python 38238806249, HaRP 38238806189 Store upgrade 0 bis 7, Resilience 38238806242).
 - 31-12: Saat der neuen Formate (.github/fixtures/upgrade-seed-formats, Generator scripts/ci/make_upgrade_seed_formats.py, ZIPs von Hand, Bombe Tiefe 3 plus Nullbytes 158:1, 7095 Byte). Store upgrade 2b am ehemaligen Andockblock: sieben Dateien per WebDAV (1.4.2 reiht die sechs neuen Typen und die Bombe nie ein, Word-OLE unter .docx skipped/legacy_format), .txt in fester Reihenfolge (docker stop, Upload, Größe in oc_filecache und Queue +4096, docker start, Sperre je Auslieferung um 3600 s zurück; 3 kurze Lesungen, vierter Claim schreibt failed/repeatedly_stuck), vorher Warten auf den ersten Abgleich-Zyklus (sonst give_up-Zeile möglich), danach Größe per sqlite3 zurück; state.db 0 Zeilen. 3c: recheck_1_5_0 absent, Altbestand ohne Nachhol-Kandidaten (gegen die Ermittlung gehalten), UPGRADE_OLD_STOCK_DIGEST über file_id/state/reason/etag/Chunk-Zahl. Checkpoint nicht ausgelöst. CI 8cf62567 alle sieben grün (Python 38244385443, HaRP 38244385580). b021f16c ungepusht.
 - 31-13: Store upgrade 5 "the ten assurances": Saat-Warteschleife im Drain-Budget (recheck_1_5_0 done, Bombe beurteilt, sieben Saatdateien indexed mit Chunks > 0, jedes Wort genau seine Datei), Zähler per moved()/unchanged() exakt (docs/indexed +7, nextcloud.failed -1, Rest 0), Zusicherung 9 Saat (ZIP-Auszug innen/notiz.txt, STALE indexed ohne Nextcloud-Urteil, Bombe skipped/archive_limit beidseitig, Running/RestartCount wie Ende Store upgrade 4, Kanariensuche), Zusicherung 10 Altbestand (Kandidaten einzeln, Digest wie 3c). Vektorbestand ohne die acht neuen Saat-IDs gegen 3c. L-30-03 geschlossen: jede GITHUB_ENV-Schreibstelle 2b bis 7 musterprüft, Store upgrade 4 hält UPGRADE_NEW_RESTARTS und UPGRADE_FINISHED_AT. Erster Push rot (38250670039): seed-probe.py las sys.argv[2] auch für reconcile, Fix a3911835 mit ausgeführtem Probe-Test. Nachholdauer 303 s bis done, 360 s bis alles gefunden (300 Dateien Altbestand). CI a3911835 alle grün (HaRP 38256198997, Python 38256199035). FMT-01 bis FMT-06 Complete.
+- 31-14: docs/formats.md je Format (gelesen, nicht gelesen, Urteil), ZIP-Grenzen gleich config.py, Typfilter, Nachholweg, Not supported; .ppt ist mime_not_allowed, nur PowerPoint-OLE unter .pptx bleibt legacy_format. Dateitypen-Liste in allen sechs Beschreibungen und drei READMEs mit DOC, XLS, Mails (EML), ZIP ohne Texterkennung, HEIC; ZIP-Zeile ohne gesperrten Wortstamm (E-H2). Gate: fünf Formatwörter je Liste, jede Liste zeichengleich zum Entwurf Teil Phase 31. Grenzliste bleibt fünf, Empfehlung an den Owner: kein ZIP-Eintrag. Commits f1aa9137, 76ce8463; CI Python 38264572771, PHP 38264572714.
 
 ### Offene Faeden (kein aktiver Auftrag)
 
 - Owner-Veto zu A8 (31-03) möglich: dann Längenausnahme aus dem ersten Planstand.
 - 31-15 (Audit): Nachholdauer der Saat (303 s bis recheck_1_5_0 done, 360 s bis alle Wörter, 300 Dateien Altbestand) für große Instanzen gesondert messen, Teil B ist ein Abgleich über alle Metadaten.
 - 31-15 (Audit): Kosten des gezielten Neu-Urteils (known_skip_reasons je Seite) mit realistischem Anteil messen; erneutes Zurückspulen nach Neustart mitten im Nachholzyklus auf großen Instanzen bewerten.
-- 31-14: Kosten von str.find je ZIP-Treffer auf großem ZIP-Text messen (T-31-30).
+- 31-15 (aus 31-14 verschoben): Kosten von str.find je ZIP-Treffer auf großem ZIP-Text messen (T-31-30).
+- REL-05: Owner-Abnahme des Entwurfs Teil Phase 31 (Dateitypen-Liste, README-Zeilen, Urteils-Wortlaute, Grenzlisten-Frage) zusammen mit Teil Phase 30.
 - 31-15 (Audit): Umbenennungsweg des Pollers (_rewrite_metadata) übernimmt den gespeicherten Text; eine vor 1.5 indexierte .txt mit U+001C, umbenannt zu .zip, bekäme bis zur nächsten Inhaltsextraktion einen Präfix aus der eigenen Zeile; bewerten.
 - 31-15 (Audit): Office-Mitglied in einer ZIP-Datei öffnet seine eigene ZipFile ohne Kopfzählung (wie eine einzelne DOCX), begrenzt durch max_file_bytes und Frist; bewerten.
 - 31-15 (Audit): ENDOFCHAIN-Pflicht in cfb.walk_stream (gilt seit 31-06 auch für .doc) und FAT-Schranke an echten Bestandsdateien prüfen.
@@ -123,6 +126,6 @@ Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 13/15 Pläne
 
 ## Session Continuity
 
-Last session: 2026-10-12T14:05:00.000Z
-Stopped at: Completed 31-13-PLAN.md
+Last session: 2026-10-12T15:10:00.000Z
+Stopped at: Completed 31-14-PLAN.md
 Resume file: None

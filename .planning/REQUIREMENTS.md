@@ -55,7 +55,7 @@
 ### Haertung und Release (HART/REL)
 
 - [ ] **HART-06**: Launch-Haertung vor Abgabe: Audit Security/Bugs/Performance (0 CRIT/0 HIGH), boesartige Archive/Mails/OLE-Dateien als Testkorpus, Upgrade-Strecke 1.4.2 -> 1.5.0 in CI, Fremdinstallation
-- [ ] **REL-05**: Store-Einreichung 1.5.0 beider Apps (Owner-Abnahme Text + Playwright-Runde vorher), Beleg in docs/store-listing.md. Teil der Textabnahme: Wortlaut des fuenften Grenz-Eintrags Tschechisch (D-30-06, Entwurf aus 30-08 in docs/store-listing.md 'Entwurf v1.5.0 (Teil Phase 30)')
+- [ ] **REL-05**: Store-Einreichung 1.5.0 beider Apps (Owner-Abnahme Text + Playwright-Runde vorher), Beleg in docs/store-listing.md. Teil der Textabnahme: Wortlaut des fuenften Grenz-Eintrags Tschechisch (D-30-06, Entwurf aus 30-08 in docs/store-listing.md 'Entwurf v1.5.0 (Teil Phase 30)'); Dateitypen-Liste, README-Zeilen, Urteils-Wortlaute und Grenzlisten-Frage (Entwurf aus 31-14, 'Entwurf v1.5.0 (Teil Phase 31)')
 
 ## Future (v1.6, vorlaeufig)
 
