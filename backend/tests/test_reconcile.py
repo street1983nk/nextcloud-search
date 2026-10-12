@@ -820,6 +820,380 @@ async def test_run_survives_an_exception_and_ends_on_the_stop_event(store: Store
     assert task.done()
 
 
+# -- the catch-up cycle of 1.5 (FMT-06, D-31-01, D-31-02) -------------------
+#
+# Part A of worker/catchup.py ends with CATCHUP_MARK on CATCHUP_RECONCILE. From
+# then on one cycle is due at once, and two narrow exceptions hold while it
+# runs: a file written off over there without a row here is work instead of a
+# give-up, and a file whose Nextcloud row carries the 1.3 substitute of the code
+# this container holds is judged again. Both end with the mark on done.
+
+
+def _catchup(store: Store, mark: str | None = repo.CATCHUP_RECONCILE) -> None:
+    if mark is not None:
+        store.write_meta(repo.CATCHUP_MARK, mark)
+
+
+def _walked_an_hour_ago(store: Store) -> None:
+    store.set_reconcile_cursor(STORAGE, 0, finished=True, at=int(NOW - HOUR))
+
+
+def test_the_catch_up_mark_makes_a_cycle_due_at_once(store: Store) -> None:
+    _walked_an_hour_ago(store)
+    round_under_test = Reconcile(store=store, min_interval_hours=24, hour=2, clock=lambda: NOW, hour_of=lambda: 9)
+
+    assert round_under_test._is_due(store) is False
+    _catchup(store)
+    assert round_under_test._is_due(store) is True
+
+
+@pytest.mark.parametrize("mark", [None, "done", "17"])
+def test_without_the_catch_up_request_the_cadence_is_the_old_one(store: Store, mark: str | None) -> None:
+    _walked_an_hour_ago(store)
+    _catchup(store, mark)
+    round_under_test = Reconcile(store=store, min_interval_hours=24, hour=2, clock=lambda: NOW, hour_of=lambda: 9)
+
+    assert round_under_test._is_due(store) is False
+
+
+async def test_the_quiet_gate_holds_the_catch_up_cycle_back(store: Store) -> None:
+    _catchup(store)
+    files = _FakeFiles(SliceResult(files=(a_row(10, etag="aaa"),), final=True))
+
+    result = await _reconcile(store, files, _FakeQueue(scheduled=5000)).run_once()
+
+    assert result.state == ROUND_QUEUE_BUSY
+    assert files.asked == []
+    assert store.read_meta()[repo.CATCHUP_MARK] == repo.CATCHUP_RECONCILE
+
+
+async def test_the_catch_up_cycle_hands_over_the_unknown_files_and_not_the_known_ones(store: Store) -> None:
+    for file_id in range(1, 51):
+        store.record(file_id, a_file(file_id, etag=f"e{file_id}"), "indexed", content_hash="h")
+    _walked_an_hour_ago(store)
+    _catchup(store)
+    rows = tuple(a_row(file_id, etag=f"e{file_id}") for file_id in range(1, 51))
+    rows += tuple(a_row(file_id, etag="new") for file_id in (51, 52, 53))
+    queue = _FakeQueue()
+
+    result = await _reconcile(store, _FakeFiles(SliceResult(files=rows, final=True)), queue, slice_size=60).run_once()
+
+    assert result.state == ROUND_WALKED
+    assert queue.kinds_of(KIND_CONTENT) == [51, 52, 53]
+    assert store.read_meta()[repo.CATCHUP_MARK] == repo.CATCHUP_DONE
+
+
+class _GiveUpSpy:
+    """Counts the calls of Store.give_up while letting them through."""
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self.calls: list[int] = []
+        original = Store.give_up
+
+        def spy(store: Store, file_id: int, **kwargs: Any) -> None:
+            self.calls.append(file_id)
+            original(store, file_id, **kwargs)
+
+        monkeypatch.setattr(Store, "give_up", spy)
+
+
+def test_under_the_catch_up_mark_a_written_off_file_without_a_row_is_work(
+    store: Store, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Blocker 1 of the plan check of 31-11.
+
+    A file Nextcloud wrote off after the last 1.4.2 cycle has no row here. Part
+    A cannot see it, and the ordinary comparison would write it off here too
+    instead of giving it the second chance of D-31-02.
+    """
+    spy = _GiveUpSpy(monkeypatch)
+    _catchup(store)
+    mount = Mount(storage_id=STORAGE, root_id=ROOT, overridden_root=ROOT + 1)
+
+    stale, given_up = Reconcile._compare(store, mount, [a_given_up_row(10, etag="aaa")])
+
+    assert (stale, given_up) == ([10], 0)
+    assert spy.calls == []
+    assert store.file_row(10) is None
+
+
+@pytest.mark.parametrize("mark", [None, "done"])
+def test_without_the_catch_up_request_a_written_off_file_is_written_off(
+    store: Store, monkeypatch: pytest.MonkeyPatch, mark: str | None
+) -> None:
+    spy = _GiveUpSpy(monkeypatch)
+    _catchup(store, mark)
+    mount = Mount(storage_id=STORAGE, root_id=ROOT, overridden_root=ROOT + 1)
+
+    stale, given_up = Reconcile._compare(store, mount, [a_given_up_row(10, etag="aaa")])
+
+    assert (stale, given_up) == ([], 1)
+    assert spy.calls == [10]
+
+
+@pytest.mark.parametrize("mark", [None, "reconcile", "done"])
+async def test_the_stranded_handover_heals_under_every_mark(store: Store, mark: str | None) -> None:
+    a_stranded_scan(store, 10, etag="aaa")
+    _catchup(store, mark)
+    files = _FakeFiles(SliceResult(files=(a_given_up_row(10, etag="aaa"),), final=True))
+    queue = _FakeQueue()
+
+    result = await _reconcile(store, files, queue).run_once()
+
+    assert queue.kinds_of(KIND_CONTENT) == [10]
+    assert result.given_up == 0
+
+
+async def test_under_the_catch_up_mark_failed_here_and_written_off_there_stays_as_it_is(store: Store) -> None:
+    store.record(10, a_file(10, etag="aaa"), "failed", "corrupt", content_hash="h")
+    _catchup(store)
+    files = _FakeFiles(SliceResult(files=(a_given_up_row(10, etag="aaa"),), final=True))
+    queue = _FakeQueue()
+
+    result = await _reconcile(store, files, queue).run_once()
+
+    assert queue.kinds_of(KIND_CONTENT) == []
+    assert result.stale == 0
+
+
+def _judged(store: Store, file_id: int, reason: str, *, etag: str = "aaa") -> None:
+    store.record(file_id, a_file(file_id, etag=etag), "skipped", reason)
+
+
+def _compare_one(store: Store, row: FileRow) -> list[int]:
+    mount = Mount(storage_id=STORAGE, root_id=ROOT, overridden_root=ROOT + 1)
+    stale, _ = Reconcile._compare(store, mount, [row])
+    return stale
+
+
+@pytest.mark.parametrize(
+    ("ours", "substitute"),
+    [
+        ("system_file", "mime_not_allowed"),
+        ("legacy_format", "mime_not_allowed"),
+        ("unsupported_variant", "image_not_ocrable"),
+    ],
+)
+def test_the_wrong_upgrade_order_is_judged_again_under_the_mark(store: Store, ours: str, substitute: str) -> None:
+    # W2, direction 1: a 1.4.2 container in front of a 1.5 companion stored
+    # the 1.3 substitute over there; this container holds the real code.
+    _judged(store, 10, ours)
+    _catchup(store)
+
+    assert _compare_one(store, a_row(10, etag="aaa", state="skipped", reason=substitute)) == [10]
+
+
+@pytest.mark.parametrize(
+    ("ours", "theirs"),
+    [
+        ("system_file", "system_file"),
+        ("legacy_format", "legacy_format"),
+        ("unsupported_variant", "unsupported_variant"),
+        ("mime_not_allowed", "mime_not_allowed"),
+        ("too_large", "mime_not_allowed"),
+        ("too_large", "image_not_ocrable"),
+        ("system_file", "image_not_ocrable"),
+        ("unsupported_variant", "mime_not_allowed"),
+    ],
+)
+def test_the_right_upgrade_order_is_left_alone_under_the_mark(store: Store, ours: str, theirs: str) -> None:
+    # W2, direction 2: both halves agree, or the code over there is not the
+    # substitute of the code here. Nothing is judged again.
+    _judged(store, 10, ours)
+    _catchup(store)
+
+    assert _compare_one(store, a_row(10, etag="aaa", state="skipped", reason=theirs)) == []
+
+
+def test_the_substitute_on_a_moved_etag_is_ordinary_stale_work(store: Store) -> None:
+    _judged(store, 10, "system_file", etag="old")
+    _catchup(store, None)
+
+    assert _compare_one(store, a_row(10, etag="aaa", state="skipped", reason="mime_not_allowed")) == [10]
+
+
+@pytest.mark.parametrize("mark", [None, "done", "17"])
+def test_the_substitute_is_only_healed_once(store: Store, mark: str | None) -> None:
+    _judged(store, 10, "system_file")
+    _catchup(store, mark)
+
+    assert _compare_one(store, a_row(10, etag="aaa", state="skipped", reason="mime_not_allowed")) == []
+
+
+def test_a_page_of_a_thousand_rows_asks_for_the_stored_reasons_once(
+    store: Store, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for file_id in range(1, 1001):
+        _judged(store, file_id, "system_file")
+    _catchup(store)
+    calls: list[int] = []
+    original = Store.known_skip_reasons
+
+    def counting(self: Store, file_ids: Any) -> dict[int, str]:
+        calls.append(len(file_ids))
+        return original(self, file_ids)
+
+    monkeypatch.setattr(Store, "known_skip_reasons", counting)
+    mount = Mount(storage_id=STORAGE, root_id=ROOT, overridden_root=ROOT + 1)
+    rows = [a_row(file_id, etag="aaa", state="skipped", reason="mime_not_allowed") for file_id in range(1, 1001)]
+
+    stale, _ = Reconcile._compare(store, mount, rows)
+
+    assert len(calls) == 1
+    assert stale == list(range(1, 1001))
+
+
+async def test_an_interrupted_catch_up_cycle_keeps_the_mark_and_a_finished_one_ends_it(store: Store) -> None:
+    _catchup(store)
+    queue = _FakeQueue()
+    first = _FakeFiles(SliceResult(files=(a_row(10, etag="aaa"), a_row(11, etag="bbb"))), SliceResult(unavailable=True))
+
+    interrupted = await _reconcile(store, first, queue).run_once()
+
+    assert interrupted.state == ROUND_UNAVAILABLE
+    assert store.read_meta()[repo.CATCHUP_MARK] == repo.CATCHUP_RECONCILE
+
+    finished = await _reconcile(store, _FakeFiles(SliceResult(final=True)), queue).run_once()
+
+    assert finished.state == ROUND_WALKED
+    assert store.read_meta()[repo.CATCHUP_MARK] == repo.CATCHUP_DONE
+
+
+async def test_a_walk_begun_before_the_mark_is_walked_again_from_the_front(store: Store) -> None:
+    # The catch-up rules hold for the pages of the cycle that ends with done.
+    # A walk that began before the mark carried them for none of its pages, so
+    # the first round under the mark goes back to the front of every mount.
+    store.set_reconcile_cursor(STORAGE, 11, at=int(NOW - HOUR))
+    _catchup(store)
+    files = _FakeFiles(SliceResult(files=(a_row(5, etag="aaa"),), final=True))
+
+    result = await _reconcile(store, files, _FakeQueue()).run_once()
+
+    assert result.state == ROUND_WALKED
+    assert [asked[2] for asked in files.asked] == [0]
+    assert store.read_meta()[repo.CATCHUP_MARK] == repo.CATCHUP_DONE
+
+
+async def test_after_done_the_cadence_is_the_old_one_again(store: Store) -> None:
+    _catchup(store)
+    queue = _FakeQueue()
+    await _reconcile(store, _FakeFiles(SliceResult(final=True)), queue).run_once()
+
+    again = await _reconcile(store, _FakeFiles(SliceResult(final=True)), queue, now=NOW + HOUR).run_once()
+
+    assert again.state == ROUND_NOT_DUE
+    assert store.read_meta()[repo.CATCHUP_MARK] == repo.CATCHUP_DONE
+
+
+class _CountingReconcile(Reconcile):
+    """A reconcile on fakes that counts its rounds and reads a clock under test control."""
+
+    def __init__(self, store: Store, files: _FakeFiles, queue: _FakeQueue, clock: list[float]) -> None:
+        super().__init__(
+            store=store,
+            client_factory=lambda: cast("AsyncNextcloudApp", None),
+            files_factory=lambda nc: cast("Any", files),
+            queue_factory=lambda nc: cast("Any", queue),
+            slice_size=2,
+            quiet_max=100,
+            hour=2,
+            min_interval_hours=24,
+            pause_seconds=0.0,
+            tick_seconds=0.001,
+            clock=lambda: clock[0],
+            hour_of=lambda: 2,
+        )
+        self.rounds = 0
+
+    async def run_once(self) -> Any:
+        self.rounds += 1
+        return await super().run_once()
+
+
+async def test_the_one_time_mode_runs_one_cycle_writes_done_and_ends(store: Store) -> None:
+    _catchup(store)
+    clock = [NOW]
+    once = _CountingReconcile(
+        store, _FakeFiles(SliceResult(files=(a_row(10, etag="aaa"),), final=True)), _FakeQueue(), clock
+    )
+    once.arm()
+    stop = asyncio.Event()
+
+    await asyncio.wait_for(once.run(stop, once=True), timeout=5)
+
+    assert once.rounds == 1
+    assert store.read_meta()[repo.CATCHUP_MARK] == repo.CATCHUP_DONE
+    assert not stop.is_set(), "it ended by itself"
+
+
+async def test_the_one_time_mode_waits_for_part_a_and_starts_no_ordinary_cycle(store: Store) -> None:
+    clock = [NOW]
+    once = _CountingReconcile(store, _FakeFiles(), _FakeQueue(), clock)
+    once.arm()
+    stop = asyncio.Event()
+    task = asyncio.create_task(once.run(stop, once=True))
+
+    for _ in range(20):
+        clock[0] += 49 * HOUR
+        await asyncio.sleep(0.002)
+    assert once.rounds == 0, "no ordinary cycle, however late it is"
+
+    _catchup(store)
+    await asyncio.wait_for(task, timeout=5)
+
+    assert once.rounds == 1
+    assert store.read_meta()[repo.CATCHUP_MARK] == repo.CATCHUP_DONE
+
+
+async def test_the_one_time_mode_keeps_going_until_a_cycle_is_through(store: Store) -> None:
+    _catchup(store)
+    files = _FakeFiles(
+        SliceResult(files=(a_row(10, etag="aaa"),)), SliceResult(unavailable=True), SliceResult(final=True)
+    )
+    once = _CountingReconcile(store, files, _FakeQueue(), [NOW])
+    once._back_off = lambda: None  # type: ignore[method-assign]
+    once.arm()
+
+    await asyncio.wait_for(once.run(asyncio.Event(), once=True), timeout=5)
+
+    assert once.rounds == 2
+    assert store.read_meta()[repo.CATCHUP_MARK] == repo.CATCHUP_DONE
+
+
+@pytest.mark.parametrize("mark", ["done"])
+async def test_the_one_time_mode_on_a_finished_catch_up_does_nothing(store: Store, mark: str) -> None:
+    _catchup(store, mark)
+    once = _CountingReconcile(store, _FakeFiles(), _FakeQueue(), [NOW])
+    once.arm()
+
+    await asyncio.wait_for(once.run(asyncio.Event(), once=True), timeout=5)
+
+    assert once.rounds == 0
+
+
+async def test_the_one_time_mode_stays_silent_while_not_armed(store: Store) -> None:
+    _catchup(store)
+    clock = [NOW]
+    once = _CountingReconcile(store, _FakeFiles(), _FakeQueue(), clock)
+    stop = asyncio.Event()
+    task = asyncio.create_task(once.run(stop, once=True))
+
+    for _ in range(10):
+        clock[0] += 49 * HOUR
+        await asyncio.sleep(0.002)
+    assert once.rounds == 0
+
+    once.arm()
+    await asyncio.wait_for(task, timeout=5)
+    assert once.rounds == 1
+
+
+async def test_an_ordinary_cycle_never_writes_the_catch_up_mark(store: Store) -> None:
+    await _reconcile(store, _FakeFiles(SliceResult(final=True)), _FakeQueue()).run_once()
+
+    assert repo.CATCHUP_MARK not in store.read_meta()
+
+
 # -- the properties a grep has to keep --------------------------------------
 
 

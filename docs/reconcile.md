@@ -252,6 +252,85 @@ Scheiben und vor allem das Ruhe-Gate, das vor jeder einzelnen Scheibe erneut
 geprüft wird. Ein Abgleich, der nur nachts erträglich ist, ist ein Abgleich, den
 ein Admin abschaltet.
 
+## Der einmalige Nachholzyklus nach dem Upgrade auf 1.5
+
+Release 1.5 liest Mails (.eml), ZIP-Dateien, Word und Excel 97 bis 2003 (.doc,
+.xls) sowie HEIC/HEIF-Fotos, dazu Word- und Excel-Container unter einem
+OOXML-Namen. Der Bestand einer Instanz wird nach dem Upgrade ohne Eingriff des
+Admins nachgeholt (FMT-06, D-31-01). Dafür gibt es zwei Teile unter dem
+Meta-Schlüssel `recheck_1_5_0` in `state.db`.
+
+**Teil A, Durchlauf über state.db.** Der Poller reiht in Bändern zu höchstens
+200 Dateien einmal neu ein:
+
+- `skipped(legacy_format)`, außer PowerPoint (ein altes PowerPoint-Format bleibt
+  auch unter 1.5 `legacy_format`),
+- jede nicht indexierte Zeile mit einem der sechs neuen Typen. Solche Zeilen
+  entstehen nur im Mischfenster, in dem eine 1.5-Companion die neuen Typen
+  schon einreiht, ein 1.4.2-Container sie aber als `mime_not_allowed` speichert,
+- einmal jede Zeile `failed(repeatedly_stuck)` (D-31-02). Die häufigste Ursache,
+  eine veraltete Größe im Dateicache, behebt 1.5 (POL-02).
+
+Teil A startet erst, wenn die Companion Generation 3 meldet und die
+Nachprüfung von 1.4 (`recheck_1_4_0`) fertig ist.
+
+**Teil B, ein sofort fälliger Abgleichzyklus.** Die Dateien der neuen Typen
+hatten unter 1.4.2 nie eine Zeile im Container, weil die Companion sie gar
+nicht eingereiht hat. Nur die Dateiliste findet sie. Deshalb ist nach Teil A
+ein Zyklus sofort fällig, unabhängig von Stunde und Mindestpause. Er vergleicht
+wie jeder Zyklus nur Metadaten. Das Ruhe-Gate gilt weiter, der Zyklus wartet
+also auf eine ruhige Warteschlange. Der erste Durchgang unter der Marke
+beginnt jeden Mount von vorn, damit kein halber Zyklus von vorher mitzählt.
+
+Für die Dauer dieses einen Zyklus gelten zwei enge Ausnahmen:
+
+- **Abgeschriebene Dateien ohne Containerzeile.** Hat Nextcloud eine Datei nach
+  dem letzten Zyklus von 1.4.2 als `repeatedly_stuck` abgeschrieben, kennt der
+  Container sie nicht, und Teil A sieht sie nicht. Ein gewöhnlicher Zyklus
+  übernimmt das Endurteil (die vierte Grenze unter "Wie er arbeitet"). Im
+  Nachholzyklus reiht er sie stattdessen ein und schreibt nichts. Scheitert sie
+  wieder, übernimmt der nächste gewöhnliche Zyklus das Endurteil wie bisher.
+  Als Dauerregel brächte die Ausnahme die Dauerlast aus IN-03 zurück, deshalb
+  gilt sie nur unter der Marke.
+- **Falsche Upgrade-Reihenfolge.** Lief eine 1.5-Companion vor dem
+  1.4.2-Container, hat der Container die Codes `system_file`, `legacy_format`
+  und `unsupported_variant` als 1.3-Ersatz gemeldet (`mime_not_allowed` bzw.
+  `image_not_ocrable`). Eine Datei wird nur dann neu beurteilt, wenn der
+  Container einen der drei Codes hält und die Nextcloud-Zeile genau dessen
+  Ersatzcode trägt. Bei der richtigen Reihenfolge (docs/formats.md, "Upgrade
+  order") sind sich beide Seiten einig, und es wird nichts neu gelesen.
+
+**Was nicht passiert.** Kein Vollcrawl, keine Neu-Einbettung, keine Änderung an
+indexierten Zeilen, an der Indexgeneration oder an den Vektormarken. Ein
+Vollcrawl würde jede Datei der Instanz neu herunterladen, weil der Schnellweg
+erst nach dem Download über den Inhalts-Hash vergleicht.
+
+**Auch bei abgeschaltetem Abgleich.** Steht `FINDLING_RECONCILE_ENABLED` auf
+`false`, startet der Container trotzdem einen Abgleich im Einmal-Modus. Er
+wartet auf Teil A, fährt genau einen Zyklus und endet. Danach bleibt der
+Abgleich aus, wie eingestellt. Das Protokoll nennt beide Zeilen:
+`findling reconcile is switched off, the index follows events only` und
+`one catch-up cycle after the upgrade runs once`. Für alles andere, was den
+Abgleich als abgeschaltet erkennt, bleibt er abgeschaltet. Auch dieser Task
+läuft nur, solange das Backend aktiviert ist.
+
+**Die Werte der Marke.**
+
+| Wert | Bedeutung |
+|---|---|
+| fehlt | Teil A hat nicht begonnen |
+| Ziffern | Cursor von Teil A, die letzte Datei-ID, deren Band angekommen ist |
+| `reconcile` | Teil A ist fertig, der Nachholzyklus ist fällig oder läuft |
+| `done` | ein Nachholzyklus ist vollständig durchgelaufen, nichts davon läuft je wieder |
+
+Ein unbekannter Wert startet Teil A wieder bei null.
+
+**Wo der Admin den Stand sieht.** Im Containerprotokoll stehen nur Zahlen:
+`the catch-up after the upgrade handed N files back in M bands, one reconcile
+cycle follows` nach Teil A und `the catch-up cycle after the upgrade is
+complete` nach Teil B. Die Marke selbst steht in der Tabelle `meta` von
+`state.db` im Volume des Containers. `occ findling:diagnose` zeigt sie nicht.
+
 ## Die Einstellungen
 
 Alle fünf stehen in der `info.xml` des Backends und werden von `config.py`
@@ -261,7 +340,7 @@ Wert.
 
 | Variable | Vorgabe | Wirkung |
 |---|---|---|
-| `FINDLING_RECONCILE_ENABLED` | `true` | Schaltet den Abgleich ganz ab. Aus heißt: der Index ist nur so gut wie der Ereignisstrom. |
+| `FINDLING_RECONCILE_ENABLED` | `true` | Schaltet den Abgleich ganz ab. Aus heißt: der Index ist nur so gut wie der Ereignisstrom. Einzige Ausnahme ist der einmalige Nachholzyklus nach dem Upgrade auf 1.5 (Abschnitt oben). |
 | `FINDLING_RECONCILE_HOUR` | `2` | Bevorzugte Stunde der Containerzeit, 0 bis 23. |
 | `FINDLING_RECONCILE_MIN_INTERVAL_HOURS` | `24` | Mindestabstand zwischen zwei vollständigen Zyklen. |
 | `FINDLING_RECONCILE_QUIET_MAX` | `100` | Wartende Zeilen, ab denen der Abgleich aussetzt (D-03). |

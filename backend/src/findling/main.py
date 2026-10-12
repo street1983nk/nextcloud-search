@@ -37,7 +37,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequenc
 from concurrent.futures import Future
 from contextlib import asynccontextmanager
 from functools import partial
-from typing import Any, Final
+from typing import Any, Final, Protocol
 
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
@@ -66,11 +66,11 @@ from findling.nc.client import (
 from findling.nc.queue import CompanionChoice, DocumentQueue
 from findling.profile import note_hardware
 from findling.profile import snapshot as profile_snapshot
-from findling.store.repo import open_read_only, open_store
+from findling.store.repo import CATCHUP_DONE, CATCHUP_MARK, open_read_only, open_store
 from findling.worker.embedding import EmbedRunner
 from findling.worker.poller import POLLER_STOP_SECONDS, STAND_DOWN_SECONDS, Poller, _pause, default_poller
 from findling.worker.probe_run import ProbeRun
-from findling.worker.reconcile import RECONCILE_STOP_SECONDS, Reconcile, default_reconcile
+from findling.worker.reconcile import RECONCILE_STOP_SECONDS, Reconcile, default_catchup_reconcile, default_reconcile
 from findling.worker.watch import GuardWatch
 
 LOGGER = logging.getLogger("findling")
@@ -85,6 +85,14 @@ _POLLER: Poller | None = None
 # arm and silence it. It is None while the comparison is switched off, which is
 # the difference between a task that does nothing and no task at all.
 _RECONCILE: Reconcile | None = None
+
+# The one time reconcile of the catch-up after the upgrade to 1.5, and only
+# where the admin switched the reconcile off (FMT-06, D-31-01). A variable of
+# its own and deliberately not _RECONCILE: active_reconcile() stays None, so
+# everything that reads "the reconcile is switched off" from it keeps reading
+# exactly that. The lifespan creates it, the enable arms it like every task, and
+# it ends by itself after its one cycle.
+_CATCHUP_RECONCILE: Reconcile | None = None
 
 # The embed runner beside the poller (PAR-01), at module level for the same
 # reason: the AppAPI handler arms and silences it, and the rebuild stands it down
@@ -232,6 +240,34 @@ def active_reconcile() -> Reconcile | None:
     return _RECONCILE
 
 
+class _Armable(Protocol):
+    """What the enable, the start and the rebuild do to a background task."""
+
+    def arm(self) -> None: ...
+
+    def silence(self) -> None: ...
+
+
+def _armable_tasks(*, after_rebuild: bool = False) -> list[_Armable]:
+    """The tasks one enable, disable or start arms or silences together.
+
+    One list for every place that arms, so that a task added later cannot be
+    armed at the start and forgotten at the enable. The one time catch-up
+    reconcile belongs to it like every other task: built silenced, armed only
+    on a container that is enabled (plan 31-11).
+
+    ``after_rebuild`` is the narrower list of :func:`_arm_the_poller`. A rebuild
+    stands only the poller and the runner down, so only those two are armed
+    again behind it; arming a reconcile there would undo a disable that
+    arrived in the meantime for a task the rebuild never touched.
+    """
+    if after_rebuild:
+        candidates: tuple[_Armable | None, ...] = (active_poller(), active_embedding())
+    else:
+        candidates = (active_poller(), active_reconcile(), active_embedding(), _CATCHUP_RECONCILE)
+    return [task for task in candidates if task is not None]
+
+
 def active_embedding() -> EmbedRunner | None:
     """The embed runner of this process, None while the lifespan is not running."""
     return _EMBEDDING
@@ -329,9 +365,7 @@ async def enabled_handler(enabled: bool, nc: AsyncNextcloudApp) -> str:
             "the enable is remembered but nothing is armed: this volume belongs to another Nextcloud instance, "
             "see docs/uninstall.md"
         )
-    for task in (active_poller(), active_reconcile(), active_embedding()):
-        if task is None:
-            continue
+    for task in _armable_tasks():
         if not enabled:
             task.silence()
         elif not shared_volume:
@@ -394,7 +428,32 @@ def _a_rebuild_may_start() -> bool:
     return _REBUILDING is None or _REBUILDING.done()
 
 
-async def _guarded_reconcile(reconcile: Reconcile, stop_event: asyncio.Event) -> None:
+def _the_catch_up_is_open() -> bool:
+    """False only where state.db says the catch-up of 1.5 is done (CATCHUP_MARK).
+
+    A container without a state database has not caught up on anything, and
+    one whose database cannot be read is no reason to refuse the one cycle: the
+    task it starts is silent until it is armed and reads the mark again itself.
+    Opened read only, and closed again at once.
+    """
+    path = settings().state_db
+    if not path.is_file():
+        return True
+    try:
+        store = open_read_only(path)
+    except (OSError, sqlite3.Error) as error:
+        LOGGER.warning("the catch-up mark could not be read at the start, an %s", type(error).__name__)
+        return True
+    try:
+        return store.read_meta().get(CATCHUP_MARK) != CATCHUP_DONE
+    except sqlite3.Error as error:
+        LOGGER.warning("the catch-up mark could not be read at the start, an %s", type(error).__name__)
+        return True
+    finally:
+        store.close()
+
+
+async def _guarded_reconcile(reconcile: Reconcile, stop_event: asyncio.Event, *, once: bool = False) -> None:
     """Run the repair task and let nothing out of it but a log line.
 
     ``Reconcile.run`` already survives an exception inside a round. This is the
@@ -406,7 +465,9 @@ async def _guarded_reconcile(reconcile: Reconcile, stop_event: asyncio.Event) ->
     traceback here would carry whatever a library put into its message.
     """
     try:
-        await reconcile.run(stop_event)
+        # The one time mode only where it is asked for, so the regular task is
+        # called exactly as before.
+        await (reconcile.run(stop_event, once=True) if once else reconcile.run(stop_event))
     except asyncio.CancelledError:
         raise
     except Exception as error:
@@ -694,9 +755,8 @@ def _arm_the_poller() -> None:
     """
     if not _was_enabled_before_this_start():
         return
-    for task in (active_poller(), active_embedding()):
-        if task is not None:
-            task.arm()
+    for task in _armable_tasks(after_rebuild=True):
+        task.arm()
 
 
 def _rebuild_is_due() -> bool:
@@ -1051,6 +1111,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     else:
         LOGGER.info("findling reconcile is switched off, the index follows events only")
 
+    # The one exception to the switch above (FMT-06, D-31-01, plan 31-11). The
+    # upgrade to 1.5 promises the catch-up of the stock without an admin doing
+    # anything, and its second part is one reconcile cycle: the files of the new
+    # types have no row in state.db, and only the file list finds them. A
+    # reconcile that is off must not hide them for good, so one task in the one
+    # time mode starts until the catch-up mark says done; it waits for part A,
+    # walks one cycle and ends, and the wish of the admin holds again from then
+    # on. Its own variable, its own stop event, started silenced and armed like
+    # every other task (_armable_tasks). A mark that says done starts nothing.
+    global _CATCHUP_RECONCILE
+    stop_catchup = asyncio.Event()
+    catching_up: asyncio.Task[None] | None = None
+    if not settings().reconcile_enabled and await asyncio.to_thread(_the_catch_up_is_open):
+        _CATCHUP_RECONCILE = default_catchup_reconcile()
+        catching_up = asyncio.create_task(_guarded_reconcile(_CATCHUP_RECONCILE, stop_catchup, once=True))
+        LOGGER.info("one catch-up cycle after the upgrade runs once")
+
     # The third task, and only where the unload is switched on. There is no else
     # branch with a log line here, and that is a decision rather than an
     # oversight: the factory setting of the span is off, and a line at every
@@ -1105,9 +1182,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "index into belongs to another instance"
         )
     elif was_enabled:
-        for task in (active_poller(), active_reconcile(), active_embedding()):
-            if task is not None:
-                task.arm()
+        for task in _armable_tasks():
+            task.arm()
         LOGGER.info("findling backend was enabled before this start, indexing continues without a switch")
 
     # The fourth task, and the three conditions in front of it are the whole
@@ -1166,6 +1242,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         stop_indexing.set()
         stop_embedding.set()
         stop_reconcile.set()
+        stop_catchup.set()
         stop_release.set()
         stop_rebuild.set()
 
@@ -1240,6 +1317,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if _RECONCILE is not None:
             await _RECONCILE.aclose()
             _RECONCILE = None
+
+        # The one time reconcile the same way and inside the same budget: its
+        # cycle is a reconcile cycle, bounded by the same slices.
+        if catching_up is not None:
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(asyncio.shield(catching_up), timeout=RECONCILE_STOP_SECONDS)
+            if not catching_up.done():
+                catching_up.cancel()
+                await asyncio.gather(catching_up, return_exceptions=True)
+        if _CATCHUP_RECONCILE is not None:
+            await _CATCHUP_RECONCILE.aclose()
+            _CATCHUP_RECONCILE = None
 
         if releasing is not None:
             with contextlib.suppress(TimeoutError):

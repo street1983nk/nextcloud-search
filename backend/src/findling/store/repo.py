@@ -184,6 +184,17 @@ EMBEDDING_BACKLOG_MARK: Final = "embedding_backlog_at"
 # restarts in the middle of the work and the rest of the sweep must resume.
 RECHECK_MARK: Final = "recheck_1_4_0"
 
+# Where the one time catch-up after the upgrade to 1.5 has got to (FMT-06,
+# D-31-01, worker/catchup.py). A meta key of its own for the reasons of
+# RECHECK_MARK above. Its values: missing means not started; digits are the
+# cursor of part A, the walk over this database; CATCHUP_RECONCILE means part A
+# is over and one reconcile cycle is due at once (part B), or running; and
+# CATCHUP_DONE means one such cycle has finished. A value nobody could have
+# written starts part A again at zero.
+CATCHUP_MARK: Final = "recheck_1_5_0"
+CATCHUP_RECONCILE: Final = "reconcile"
+CATCHUP_DONE: Final = "done"
+
 # The marks that say nothing about the tantivy index.
 #
 # :meth:`Store.version_mismatch` reports every divergence it finds, including
@@ -435,6 +446,24 @@ SELECT file_id, state, reason, path FROM files
  ORDER BY file_id
  LIMIT ?
 """
+
+# The sister of the query above for the catch-up of 1.5 (worker/catchup.py): the
+# same walk, plus the mimetype. The selection there decides by the type the
+# server determined, and a give-up row of the reconcile carries no path at all,
+# so the file name alone would miss exactly the rows D-31-02 asks for.
+_CATCHUP_SCAN_SQL: Final = """
+SELECT file_id, state, reason, path, mime FROM files
+ WHERE deleted_at IS NULL AND file_id > ?
+ ORDER BY file_id
+ LIMIT ?
+"""
+
+# Puts every reconcile bookmark back at the front of its mount, and nothing
+# else: started_at, finished_at and every row of the files table stay. The
+# catch-up cycle of 1.5 calls it once, so that the cycle it waits for covers
+# every page under the catch-up rules and not only the rest of a walk that
+# began before them.
+_REWIND_RECONCILE_SQL: Final = "UPDATE reconcile SET after_file_id = 0 WHERE after_file_id > 0"
 
 _IS_UNCHANGED_SQL: Final = """
 SELECT 1 FROM files
@@ -1206,6 +1235,19 @@ class Store:
         ]
         return rows, (rows[-1][0] if rows else None)
 
+    def catchup_scan(self, *, after: int, limit: int) -> tuple[list[tuple[int, str, str | None, str, str]], int | None]:
+        """One block of living rows above ``after`` for the catch-up of 1.5, and its last id.
+
+        Like :meth:`recheck_scan`, with the mimetype as a fifth value (the
+        reasoning stands at :data:`_CATCHUP_SCAN_SQL`); the selection lives in
+        worker/catchup.py.
+        """
+        rows = [
+            (int(file_id), str(state), None if reason is None else str(reason), str(path), str(mime))
+            for file_id, state, reason, path, mime in self._conn.execute(_CATCHUP_SCAN_SQL, (after, limit))
+        ]
+        return rows, (rows[-1][0] if rows else None)
+
     def reset_for_reindex(self, index_version: int) -> int:
         """Forget every verdict older than this generation, return how many.
 
@@ -1303,6 +1345,36 @@ class Store:
             )
             known.update({int(file_id): etag for file_id, etag in rows})
         return known
+
+    def known_skip_reasons(self, file_ids: Sequence[int]) -> dict[int, str]:
+        """The reason of every living skipped row among these files, tombstones aside.
+
+        The question of the catch-up cycle of 1.5 (worker/reconcile.py,
+        ``_compare``): a file this container judged skipped(system_file) may
+        stand in Nextcloud under the 1.3 substitute a 1.4.2 container wrote
+        towards a 1.5 companion. Asked once per page, banded like
+        :meth:`known_etags` and for the same reason.
+        """
+        if not file_ids:
+            return {}
+
+        reasons: dict[int, str] = {}
+        for start in range(0, len(file_ids), _ACL_BAND):
+            band = file_ids[start : start + _ACL_BAND]
+            placeholders = ",".join("?" * len(band))
+            rows = self._conn.execute(
+                # Placeholders only, as in known_etags above.
+                "SELECT file_id, reason FROM files WHERE deleted_at IS NULL AND state = 'skipped' "  # noqa: S608
+                f"AND reason IS NOT NULL AND file_id IN ({placeholders})",
+                tuple(band),
+            )
+            reasons.update({int(file_id): str(reason) for file_id, reason in rows})
+        return reasons
+
+    def rewind_reconcile_walk(self) -> None:
+        """Put every reconcile bookmark back at the front (:data:`_REWIND_RECONCILE_SQL`)."""
+        with self._transaction():
+            self._conn.execute(_REWIND_RECONCILE_SQL)
 
     def reconcile_cursor(self, storage_id: int) -> ReconcileCursor:
         """Where the walk over this mount stopped, at the front when nobody walked it."""

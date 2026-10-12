@@ -73,7 +73,7 @@ from findling.nc.queue import (
     QueueStats,
 )
 from findling.profile import Profile, note_hardware, snapshot
-from findling.store.repo import RECHECK_MARK, FileMeta, Store, open_store
+from findling.store.repo import CATCHUP_MARK, CATCHUP_RECONCILE, RECHECK_MARK, FileMeta, Store, open_store
 from findling.worker import poller as poller_module
 from findling.worker.poller import (
     RETREAT_AFTER_ROUNDS,
@@ -5230,3 +5230,120 @@ async def test_a_failing_re_check_neither_ends_the_round_nor_gives_up(
     assert queue.claims == 2
     assert len(calls) == 2
     assert any("re-check of the fix classes stopped, OperationalError" in line for line in _poller_lines(caplog))
+
+
+# -- the catch-up after the upgrade to 1.5 behind generation 3 (FMT-06, D-31-01) --
+
+
+def _refused_zip(store: Store, file_id: int = 5000) -> None:
+    """A ZIP file a 1.4.2 container refused in the mixed window (pitfall 3)."""
+    store.record(
+        file_id,
+        FileMeta(
+            storage_id=3,
+            root_id=2,
+            path="Akten/pack.zip",
+            title="pack.zip",
+            mime="application/zip",
+            size=10,
+            mtime=1_756_600_000,
+        ),
+        "skipped",
+        "mime_not_allowed",
+    )
+
+
+@pytest.mark.parametrize("generation", [None, 2])
+async def test_below_generation_3_the_catch_up_never_starts(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, generation: int | None
+) -> None:
+    store.write_meta(RECHECK_MARK, "done")
+    _refused_zip(store)
+    queue = _FakeQueue()
+    queue.verdicts_answer = generation
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    await poller.run_once()
+    await poller.run_once()
+
+    assert queue.requeues == []
+    assert CATCHUP_MARK not in store.read_meta()
+
+
+async def test_on_generation_3_the_catch_up_hands_the_refused_zip_back_once(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    store.write_meta(RECHECK_MARK, "done")
+    _refused_zip(store)
+    queue = _FakeQueue()
+    queue.verdicts_answer = VERDICTS_GENERATION
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    for _ in range(3):
+        await poller.run_once()
+
+    assert queue.requeues == [([5000], "content")]
+    assert store.read_meta()[CATCHUP_MARK] == CATCHUP_RECONCILE
+
+
+async def test_on_a_1_3_stock_the_re_check_of_1_4_runs_first_and_the_catch_up_after_it(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    job = _corrupt_sidecar(store)
+    _refused_zip(store)
+    queue = _RecheckQueue(job)
+    queue.verdicts_answer = VERDICTS_GENERATION
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    await poller.run_once()
+
+    assert queue.requeues == [([job.file_id], "content"), ([5000], "content")]
+    assert store.read_meta()[RECHECK_MARK] == "done"
+    assert store.read_meta()[CATCHUP_MARK] == CATCHUP_RECONCILE
+
+
+async def test_the_catch_up_waits_while_the_re_check_of_1_4_cannot_finish(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def unfinished(store: Store, queue: DocumentQueue) -> bool:
+        del store, queue
+        return False
+
+    monkeypatch.setattr(poller_module, "recheck_step", unfinished)
+    _refused_zip(store)
+    queue = _FakeQueue()
+    queue.verdicts_answer = VERDICTS_GENERATION
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    await poller.run_once()
+
+    assert queue.requeues == []
+    assert CATCHUP_MARK not in store.read_meta()
+
+
+async def test_a_failing_catch_up_neither_ends_the_round_nor_gives_up(
+    store: Store,
+    writer: IndexBatchWriter,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    calls: list[int] = []
+
+    async def broken(store: Store, queue: DocumentQueue) -> bool:
+        del store, queue
+        calls.append(1)
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(poller_module, "catchup_step", broken)
+    store.write_meta(RECHECK_MARK, "done")
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)))
+    queue.verdicts_answer = VERDICTS_GENERATION
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    first = await poller.run_once()
+    await poller.run_once()
+
+    assert first.state == ROUND_WORKED
+    assert len(calls) == 2
+    assert any("catch-up after the upgrade stopped, OperationalError" in line for line in _poller_lines(caplog))

@@ -113,6 +113,7 @@ from findling.nc.queue import (
     KNOWN_VERDICTS_GENERATIONS,
     LANE_INDEX,
     TOPUP_SUPPLIED,
+    VERDICTS_GENERATION,
     DocumentQueue,
     QueueJob,
 )
@@ -121,6 +122,7 @@ from findling.profile import Profile, note_chosen, note_index_files
 from findling.profile import snapshot as profile_snapshot
 from findling.store.repo import FileMeta, Store, open_store
 from findling.store.vectors import VectorStore, open_vectors
+from findling.worker.catchup import catchup_step
 from findling.worker.embedding import (
     EMBED_INCOMPLETE,
     EMBED_NO_STORED_TEXT,
@@ -503,6 +505,9 @@ class Poller:
         # memory only, as a shortcut: the truth is RECHECK_MARK in state.db,
         # and a new process reads it once and learns the same.
         self._recheck_done = False
+        # The same shortcut for the catch-up after the upgrade to 1.5 (FMT-06):
+        # True once part A is over; the truth is CATCHUP_MARK in state.db.
+        self._catchup_done = False
         # Whether this process told the profile its stock yet (D-29-12). The
         # first pass does it before the claim, so that the slots of that very
         # pass already carry the full index term; after it, every pass that
@@ -933,6 +938,18 @@ class Poller:
                 self._recheck_done = await recheck_step(self._store_or_die(), queue)
             except Exception as error:
                 LOGGER.warning("the re-check of the fix classes stopped, %s", type(error).__name__)
+
+        # The catch-up after the upgrade to 1.5 (FMT-06, D-31-01), part A: the
+        # rows 1.5 judges differently go back to the queue once, without a full
+        # crawl; part B is one reconcile cycle the mark makes due. Only on
+        # generation 3, because only a 1.5 companion queues and stores the new
+        # types, and only after the re-check of 1.4 above, which a 1.3.x stock
+        # still needs first. Same failure rule as the re-check.
+        if self._recheck_done and not self._catchup_done and choice.verdicts == VERDICTS_GENERATION:
+            try:
+                self._catchup_done = await catchup_step(self._store_or_die(), queue)
+            except Exception as error:
+                LOGGER.warning("the catch-up after the upgrade stopped, %s", type(error).__name__)
 
         # Where the embedding runs this pass (PAR-01, PAR-04). In Economy the
         # embed runner must have parked before this pass claims anything, so

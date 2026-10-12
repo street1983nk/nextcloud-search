@@ -31,7 +31,8 @@ from fastapi.testclient import TestClient
 
 from conftest import Corpus, write_wordlist
 from findling import lane
-from findling.api import resources
+from findling import main as findling_main
+from findling.api import resources, status
 from findling.config import settings
 from findling.hardware import Hardware
 from findling.index.open import LANGUAGES_MARK, open_index
@@ -43,22 +44,29 @@ from findling.main import (
     REBUILD_STOP_SECONDS,
     RELEASE_TICK_SECONDS,
     _arm_the_poller,
+    _armable_tasks,
     _rebuild_is_due,
     _rebuild_the_index_directory,
     _release_when_idle,
     _run_the_rebuild,
     _stand_the_poller_down,
     active_embedding,
+    active_reconcile,
     enabled_handler,
     lifespan,
 )
+from findling.nc.files import Mount, MountResult, SliceResult
+from findling.nc.queue import CallResult, QueueStats
 from findling.profile import snapshot
-from findling.store.repo import Store, open_store
+from findling.store.repo import CATCHUP_MARK, Store, open_store
 from findling.worker.embedding import EmbeddingTrack, EmbedRunner
 from findling.worker.poller import Poller, default_poller
+from findling.worker.reconcile import Reconcile, RoundResult
 
 if TYPE_CHECKING:
     from findling.nc.client import AsyncNextcloudApp
+    from findling.nc.files import FileList
+    from findling.nc.queue import DocumentQueue
 
 
 def _a_writer_on_the_live_directory() -> IndexBatchWriter:
@@ -1685,3 +1693,331 @@ def test_a_restore_that_throws_does_not_keep_the_container_from_starting(
     assert "PermissionError" in said[0]
     assert "/a/path" not in said[0]
     assert "poller" in journal, "the start went on to the poller"
+
+
+# ---------------------------------------------------------------------------
+# The catch-up cycle of 1.5 where the admin switched the reconcile off (FMT-06,
+# D-31-01, finding 6 of the plan check of 31-11). The upgrade promises the
+# catch-up without an admin doing anything, and a reconcile that is off must
+# not hide the new types for good; the switch of the admin holds again from
+# the end of that one cycle on, and nothing that reads "the reconcile is off"
+# may see otherwise.
+# ---------------------------------------------------------------------------
+
+
+class _FakeCatchup:
+    """The one time reconcile, as far as the lifespan is concerned."""
+
+    def __init__(self, *, ignores_the_stop: bool = False) -> None:
+        self.armed = False
+        self.onces: list[bool] = []
+        self.closes = 0
+        self._ignores_the_stop = ignores_the_stop
+
+    def arm(self) -> None:
+        self.armed = True
+
+    def silence(self) -> None:
+        self.armed = False
+
+    async def run(self, stop_event: asyncio.Event, *, once: bool = False) -> None:
+        self.onces.append(once)
+        if self._ignores_the_stop:
+            await asyncio.Event().wait()
+        await stop_event.wait()
+
+    async def aclose(self) -> None:
+        self.closes += 1
+
+
+def _reconcile_switched_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FINDLING_RECONCILE_ENABLED", "false")
+    settings.cache_clear()
+
+
+def _the_catch_up_mark(value: str | None = None) -> str:
+    """Write the mark when a value is given; answer what it says afterwards."""
+    store = open_store(settings().state_db)
+    try:
+        if value is not None:
+            store.write_meta(CATCHUP_MARK, value)
+        return store.read_meta().get(CATCHUP_MARK, "")
+    finally:
+        store.close()
+
+
+def _install_a_catch_up(monkeypatch: pytest.MonkeyPatch, catchup: object) -> tuple[_FakeIndexingTask, list[int]]:
+    """Fake poller, reconcile and runner, a quiet rebuild, and the catch-up under test."""
+    poller = _FakeIndexingTask()
+    built: list[int] = []
+    monkeypatch.setattr("findling.main.default_poller", lambda **_: poller)
+    monkeypatch.setattr("findling.main.default_reconcile", lambda: _FakeIndexingTask())
+    monkeypatch.setattr("findling.main.EmbedRunner", _FakeRunner().build)
+    monkeypatch.setattr("findling.main._rebuild_the_index_directory", _FakeRebuildTask().run)
+
+    def factory() -> object:
+        built.append(1)
+        return catchup
+
+    monkeypatch.setattr("findling.main.default_catchup_reconcile", factory)
+    return poller, built
+
+
+def test_with_the_reconcile_off_and_the_catch_up_open_one_silenced_task_starts(
+    volume: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    del volume
+    _reconcile_switched_off(monkeypatch)
+    catchup = _FakeCatchup()
+    _, built = _install_a_catch_up(monkeypatch, catchup)
+    caplog.set_level(logging.INFO, logger="findling")
+
+    with TestClient(APP) as client:
+        assert client.portal is not None
+        client.portal.call(asyncio.sleep, 0)
+        assert built == [1]
+        assert catchup.onces == [True], "one task, in the one time mode"
+        assert catchup.armed is False, "silenced like every task of a container that is not enabled"
+        assert active_reconcile() is None, "the reconcile still reads as switched off"
+        assert findling_main._CATCHUP_RECONCILE is catchup
+
+    assert catchup.closes == 1
+    assert findling_main._CATCHUP_RECONCILE is None
+    lines = [record.getMessage() for record in caplog.records]
+    assert "findling reconcile is switched off, the index follows events only" in lines
+    assert "one catch-up cycle after the upgrade runs once" in lines
+
+
+def test_with_the_reconcile_off_and_the_catch_up_done_nothing_starts(
+    volume: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    del volume
+    _reconcile_switched_off(monkeypatch)
+    _the_catch_up_mark("done")
+    catchup = _FakeCatchup()
+    _, built = _install_a_catch_up(monkeypatch, catchup)
+    caplog.set_level(logging.INFO, logger="findling")
+
+    with TestClient(APP):
+        assert findling_main._CATCHUP_RECONCILE is None
+
+    assert built == []
+    assert catchup.onces == []
+    lines = [record.getMessage() for record in caplog.records]
+    assert "findling reconcile is switched off, the index follows events only" in lines
+    assert "one catch-up cycle after the upgrade runs once" not in lines
+
+
+@pytest.mark.usefixtures("volume")
+def test_with_the_reconcile_on_the_regular_one_carries_the_catch_up(monkeypatch: pytest.MonkeyPatch) -> None:
+    catchup = _FakeCatchup()
+    _, built = _install_a_catch_up(monkeypatch, catchup)
+
+    with TestClient(APP):
+        assert findling_main._CATCHUP_RECONCILE is None
+
+    assert built == []
+
+
+def test_the_enable_arms_and_the_disable_silences_the_one_time_task(
+    volume: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    del volume
+    _reconcile_switched_off(monkeypatch)
+    catchup = _FakeCatchup()
+    poller, _ = _install_a_catch_up(monkeypatch, catchup)
+
+    with TestClient(APP) as client:
+        assert client.portal is not None
+        assert _enable_on_the_loop_of_the_lifespan(client) == ""
+        assert (poller.armed, catchup.armed) == (True, True)
+        client.portal.call(enabled_handler, False, cast("AsyncNextcloudApp", None))
+        assert (poller.armed, catchup.armed) == (False, False)
+
+
+def test_a_start_with_the_enable_mark_arms_the_one_time_task(volume: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    del volume
+    _reconcile_switched_off(monkeypatch)
+    catchup = _FakeCatchup()
+    _install_a_catch_up(monkeypatch, catchup)
+    settings().armed_marker.write_text("", encoding="utf-8")
+
+    with TestClient(APP):
+        assert catchup.armed is True
+
+
+def test_the_armable_tasks_name_the_one_time_task_only_while_it_exists(monkeypatch: pytest.MonkeyPatch) -> None:
+    poller, reconcile, runner, catchup = _FakeIndexingTask(), _FakeIndexingTask(), _FakeRunner(), _FakeCatchup()
+    monkeypatch.setattr("findling.main._POLLER", poller)
+    monkeypatch.setattr("findling.main._RECONCILE", None)
+    monkeypatch.setattr("findling.main._EMBEDDING", runner)
+    monkeypatch.setattr("findling.main._CATCHUP_RECONCILE", None)
+
+    assert _armable_tasks() == [poller, runner]
+
+    monkeypatch.setattr("findling.main._RECONCILE", reconcile)
+    monkeypatch.setattr("findling.main._CATCHUP_RECONCILE", catchup)
+
+    assert _armable_tasks() == [poller, reconcile, runner, catchup]
+    assert _armable_tasks(after_rebuild=True) == [poller, runner]
+
+
+@pytest.mark.usefixtures("volume")
+def test_the_rebuild_arms_the_poller_and_the_runner_and_never_a_reconcile(monkeypatch: pytest.MonkeyPatch) -> None:
+    poller, reconcile, runner, catchup = _FakeIndexingTask(), _FakeIndexingTask(), _FakeRunner(), _FakeCatchup()
+    monkeypatch.setattr("findling.main._POLLER", poller)
+    monkeypatch.setattr("findling.main._RECONCILE", reconcile)
+    monkeypatch.setattr("findling.main._EMBEDDING", runner)
+    monkeypatch.setattr("findling.main._CATCHUP_RECONCILE", catchup)
+    settings().armed_marker.write_text("", encoding="utf-8")
+
+    _arm_the_poller()
+
+    assert (poller.armed, runner.armed) == (True, True)
+    assert (reconcile.armed, catchup.armed) == (False, False)
+
+
+def test_every_arm_and_silence_goes_through_the_armable_tasks() -> None:
+    source = MAIN_SOURCE.read_text(encoding="utf-8")
+
+    assert "for task in (active_" not in source
+    assert source.count("_armable_tasks(") >= 4
+
+
+def test_a_one_time_task_that_hangs_is_cancelled_inside_its_budget(
+    volume: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    del volume
+    _reconcile_switched_off(monkeypatch)
+    catchup = _FakeCatchup(ignores_the_stop=True)
+    _install_a_catch_up(monkeypatch, catchup)
+    monkeypatch.setattr("findling.main.RECONCILE_STOP_SECONDS", 0.05)
+    started = time.monotonic()
+
+    with TestClient(APP) as client:
+        assert client.portal is not None
+        client.portal.call(asyncio.sleep, 0)
+
+    assert time.monotonic() - started < 20
+    assert catchup.closes == 1
+    assert findling_main._CATCHUP_RECONCILE is None
+
+
+def test_the_status_answer_is_the_same_with_and_without_the_one_time_task(
+    volume: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """INFO 5: nothing that reads "the reconcile is off" sees the catch-up."""
+    del volume
+    _reconcile_switched_off(monkeypatch)
+    _the_catch_up_mark("reconcile")
+    _install_a_catch_up(monkeypatch, _FakeCatchup())
+
+    def answer() -> dict[str, object]:
+        dumped = status.report().model_dump()
+        dumped.pop("diskFreeBytes", None)
+        return dumped
+
+    with TestClient(APP):
+        assert findling_main._CATCHUP_RECONCILE is not None
+        assert active_reconcile() is None
+        during = answer()
+
+    _the_catch_up_mark("done")
+    with TestClient(APP):
+        assert findling_main._CATCHUP_RECONCILE is None
+        assert active_reconcile() is None
+        without = answer()
+
+    assert during == without
+
+
+def test_no_route_reads_the_one_time_task() -> None:
+    api = MAIN_SOURCE.parent / "api"
+    sources = [path.read_text(encoding="utf-8") for path in sorted(api.glob("*.py"))]
+
+    assert sources
+    assert not any("_CATCHUP_RECONCILE" in source or "active_reconcile" in source for source in sources)
+
+
+class _OneMount:
+    """One mount with one empty final page, and a queue that is always quiet."""
+
+    async def mounts(self) -> MountResult:
+        return MountResult(mounts=(Mount(storage_id=3, root_id=17, overridden_root=18),))
+
+    async def page(self, *, storage: int, root: int, after: int, limit: int) -> SliceResult:
+        del storage, root, after, limit
+        return SliceResult(files=(), final=True)
+
+    async def stats(self) -> QueueStats:
+        return QueueStats(scheduled=0)
+
+    async def requeue(self, file_ids: object, *, kind: str) -> CallResult:
+        del file_ids, kind
+        return CallResult(ok=True)
+
+
+class _RealOnce(Reconcile):
+    """The real reconcile on fakes, counting its rounds, with a clock far ahead."""
+
+    def __init__(self) -> None:
+        fake = _OneMount()
+        super().__init__(
+            client_factory=lambda: cast("AsyncNextcloudApp", None),
+            files_factory=lambda nc: cast("FileList", fake),
+            queue_factory=lambda nc: cast("DocumentQueue", fake),
+            tick_seconds=0.001,
+            pause_seconds=0.0,
+            clock=lambda: time.time() + 100 * 3600,
+        )
+        self.rounds = 0
+
+    async def run_once(self) -> RoundResult:
+        self.rounds += 1
+        return await super().run_once()
+
+
+def _wait_on_the_loop(client: TestClient, seconds: float) -> None:
+    assert client.portal is not None
+    client.portal.call(asyncio.sleep, seconds)
+
+
+def test_a_disabled_container_holds_the_cycle_until_the_enable_then_runs_it_once(
+    volume: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    del volume
+    _reconcile_switched_off(monkeypatch)
+    _the_catch_up_mark("reconcile")
+    once = _RealOnce()
+    _install_a_catch_up(monkeypatch, once)
+
+    with TestClient(APP) as client:
+        _wait_on_the_loop(client, 0.1)
+        assert once.rounds == 0, "a container that is not enabled compares nothing"
+
+        assert _enable_on_the_loop_of_the_lifespan(client) == ""
+        for _ in range(300):
+            _wait_on_the_loop(client, 0.01)
+            if _the_catch_up_mark() == "done":
+                break
+        _wait_on_the_loop(client, 0.1)
+        assert once.rounds == 1, "exactly one cycle, and none after it"
+
+    assert _the_catch_up_mark() == "done"
+
+
+def test_a_disable_while_the_cycle_waits_silences_it_again(volume: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    del volume
+    _reconcile_switched_off(monkeypatch)
+    once = _RealOnce()
+    _install_a_catch_up(monkeypatch, once)
+
+    with TestClient(APP) as client:
+        assert client.portal is not None
+        assert _enable_on_the_loop_of_the_lifespan(client) == ""
+        _wait_on_the_loop(client, 0.05)
+        client.portal.call(enabled_handler, False, cast("AsyncNextcloudApp", None))
+        _the_catch_up_mark("reconcile")
+        _wait_on_the_loop(client, 0.1)
+
+        assert once.rounds == 0

@@ -55,8 +55,8 @@ from findling.config import settings
 from findling.nc import client as nc_client
 from findling.nc.client import AsyncNextcloudApp
 from findling.nc.files import FileList, FileRow, Mount
-from findling.nc.queue import KIND_CONTENT, KIND_DELETE, DocumentQueue
-from findling.store.repo import Store, open_store
+from findling.nc.queue import KIND_CONTENT, KIND_DELETE, SKIPPED_FALLBACK_WITHOUT_SIGNAL, DocumentQueue
+from findling.store.repo import CATCHUP_DONE, CATCHUP_MARK, CATCHUP_RECONCILE, Store, open_store
 
 LOGGER = logging.getLogger("findling.worker.reconcile")
 
@@ -118,6 +118,13 @@ HANDOVER_REASON: Final = "no_text_layer"
 # as ordinary unknown work.
 EXCLUDED_STATE: Final = "skipped"
 EXCLUDED_REASON: Final = "excluded"
+
+# The substitutes a 1.4.2 container wrote towards a 1.5 companion, as the
+# Nextcloud row carries them (state skipped, code out of the table). Imported
+# from nc/queue.py rather than written out, because that table is what the old
+# container sent, and the catch-up cycle has to match exactly that.
+_SUBSTITUTE_STATE: Final = "skipped"
+_SUBSTITUTES: Final = frozenset(SKIPPED_FALLBACK_WITHOUT_SIGNAL.values())
 
 # How long the shutdown waits for a round to end before it stops waiting. Same
 # budget as the poller, and for the same reason: a slice is bounded work.
@@ -183,6 +190,11 @@ class _Tally:
 def _local_hour() -> int:
     """The hour of the container clock, which is the only clock this round has."""
     return time.localtime().tm_hour
+
+
+def _catchup_requested(store: Store) -> bool:
+    """True while the catch-up of 1.5 asks for its one reconcile cycle (worker/catchup.py)."""
+    return store.read_meta().get(CATCHUP_MARK) == CATCHUP_RECONCILE
 
 
 def _open_state() -> Store | None:
@@ -255,6 +267,11 @@ class Reconcile:
         self._queue: DocumentQueue | None = None
         self._cooldown = 0.0
         self._armed = asyncio.Event()
+        # Whether this object already put the bookmarks back at the front for
+        # the catch-up cycle of 1.5 (run_once). In memory on purpose: a restart
+        # in the middle of that cycle walks it again from the front, which costs
+        # a repetition of metadata and never work.
+        self._catchup_rewound = False
 
     # -- lifecycle -------------------------------------------------------
 
@@ -286,17 +303,32 @@ class Reconcile:
 
     # -- the loop --------------------------------------------------------
 
-    async def run(self, stop_event: asyncio.Event) -> None:
+    async def run(self, stop_event: asyncio.Event, *, once: bool = False) -> None:
         """Round after round until the stop event, silent while not armed.
 
         An exception inside a round is logged and does not end the task, and it
         does not touch the poller either. The search is the part a user sees, and
         a repair that failed must not take it along.
+
+        ``once`` is the catch-up cycle of 1.5 on an instance whose admin switched
+        the reconcile off (main.py). Such a task compares nothing until part A of
+        the catch-up has put CATCHUP_MARK on CATCHUP_RECONCILE, then runs rounds
+        until one of them has walked the whole cycle and written CATCHUP_DONE,
+        and ends. It never starts an ordinary cycle: the switch of the admin
+        holds again from the end of that one cycle on.
         """
         while not stop_event.is_set():
             if not self._armed.is_set():
                 await _first_of(self._armed.wait(), stop_event.wait())
                 continue
+            if once:
+                mark = await self._catchup_mark()
+                if mark == CATCHUP_DONE:
+                    LOGGER.info("the catch-up cycle has run, the reconcile stays switched off")
+                    return
+                if mark != CATCHUP_RECONCILE:
+                    await _pause(self._tick, stop_event)
+                    continue
             try:
                 await self.run_once()
             # Deliberately every exception, and only the type name is logged: a
@@ -305,7 +337,24 @@ class Reconcile:
                 kind_of_failure = type(error).__name__
                 LOGGER.error("reconcile round ended in an unexpected %s", kind_of_failure)
                 self._back_off()
+            if once and await self._catchup_mark() == CATCHUP_DONE:
+                LOGGER.info("the catch-up cycle has run, the reconcile stays switched off")
+                return
             await _pause(self._tick + self._cooldown, stop_event)
+
+    async def _catchup_mark(self) -> str:
+        """The value of CATCHUP_MARK, empty while there is no state or it cannot be read."""
+        try:
+            if self._store is None:
+                self._store = await asyncio.to_thread(_open_state)
+            if self._store is None:
+                return ""
+            return (await asyncio.to_thread(self._store.read_meta)).get(CATCHUP_MARK, "")
+        # Every exception, and the type name only, as in run above.
+        except Exception as error:
+            kind_of_failure = type(error).__name__
+            LOGGER.error("the catch-up mark could not be read, an %s", kind_of_failure)
+            return ""
 
     async def run_once(self) -> RoundResult:
         """One round: the two gates, then mount by mount, slice by slice."""
@@ -324,6 +373,17 @@ class Reconcile:
         gate = await self._quiet(queue)
         if gate is not None:
             return RoundResult(gate)
+
+        # 1b. The catch-up cycle of 1.5 (worker/catchup.py, part B), read once
+        #     per round. Only a round that starts under the mark may end it, and
+        #     the first such round of this object goes back to the front of
+        #     every mount: a walk begun before the mark carried the catch-up
+        #     rules for none of its pages, and finishing its rest would end the
+        #     catch-up after half a cycle.
+        catchup = await asyncio.to_thread(_catchup_requested, store)
+        if catchup and not self._catchup_rewound:
+            await asyncio.to_thread(store.rewind_reconcile_walk)
+            self._catchup_rewound = True
 
         # 2. The cadence, decided against our own clock and the stamps in the
         #    reconcile table, never against Nextcloud. An interrupted walk
@@ -350,6 +410,11 @@ class Reconcile:
                 return self._report(ended, len(found.mounts), tally)
 
         self._reset_cooldown()
+        if catchup:
+            # Every mount walked to its end, all of it under the catch-up rules:
+            # the catch-up is over and never comes back (FMT-06).
+            await asyncio.to_thread(store.write_meta, CATCHUP_MARK, CATCHUP_DONE)
+            LOGGER.info("the catch-up cycle after the upgrade is complete")
         return self._report(ROUND_WALKED, len(found.mounts), tally)
 
     # -- one mount -------------------------------------------------------
@@ -484,11 +549,37 @@ class Reconcile:
         recognised before either of them and turned back into content work,
         which is the same thing ``occ findling:index --restart`` does for it,
         one night earlier and without anybody having to know.
+
+        **During the catch-up cycle of 1.5 a file written off over there without
+        a row here is work, not a give-up** (D-31-02, blocker 1 of the plan check
+        of 31-11). Most write-offs of 1.4.2 came from a stale file cache size,
+        which 31-03 fixes (POL-02), and D-31-02 gives every one of them a second
+        chance. A file Nextcloud wrote off after the last 1.4.2 cycle has no row
+        here at all, so part A of the catch-up cannot see it, and the branch
+        below would write it off here as well. While CATCHUP_MARK says
+        CATCHUP_RECONCILE it is handed over instead and nothing is written. Only
+        under that mark: as a standing rule it would bring IN-03 back as
+        permanent load. A file that fails again is written off over there again,
+        and the next ordinary cycle writes it off here as before.
+
+        **During the same cycle the wrong upgrade order is judged again, and
+        only that.** A 1.4.2 container in front of a 1.5 companion recognised
+        no signal and sent the 1.3 substitute of system_file, legacy_format and
+        unsupported_variant (SKIPPED_FALLBACK_WITHOUT_SIGNAL in nc/queue.py), so
+        the Nextcloud row is wrong while this container holds the right code
+        against the same etag. Such a file is work when this container holds one
+        of the three codes AND the page carries exactly its substitute; in every
+        other case, the right order above all, where both halves agree, it is
+        left alone. The stored codes are asked once per page.
         """
         known = store.known_etags([row.file_id for row in rows])
         # Asked once per page rather than once per row: it is a cached lookup,
         # and the branch below is on the hot path of every slice of every cycle.
         ocr_enabled = settings().ocr_enabled
+        # Once per page as well, and the two questions of the catch-up cost
+        # nothing outside it: no mark, no second query.
+        catchup = _catchup_requested(store)
+        ours = Reconcile._substitute_candidates(store, rows, known) if catchup else {}
         stale: list[int] = []
         given_up = 0
         for row in rows:
@@ -498,9 +589,16 @@ class Reconcile:
                 stale.append(row.file_id)
                 continue
             if stored == row.etag:
+                reason = ours.get(row.file_id)
+                if reason is not None and SKIPPED_FALLBACK_WITHOUT_SIGNAL.get(reason) == row.reason:
+                    stale.append(row.file_id)
                 continue
             if stored is None and row.state == EXCLUDED_STATE and row.reason == EXCLUDED_REASON:
                 # Nothing is written here, on purpose: see the constant.
+                continue
+            if stored is None and written_off and catchup:
+                # The second chance of D-31-02, once: see the docstring.
+                stale.append(row.file_id)
                 continue
             if stored is None and written_off:
                 store.give_up(
@@ -518,6 +616,21 @@ class Reconcile:
                 continue
             stale.append(row.file_id)
         return stale, given_up
+
+    @staticmethod
+    def _substitute_candidates(store: Store, rows: Sequence[FileRow], known: dict[int, str | None]) -> dict[int, str]:
+        """The stored skipped codes of the page rows that could be a wrong upgrade order.
+
+        Only rows with an unchanged etag whose Nextcloud row carries one of the
+        substitutes are asked for, in one question for the whole page; the
+        comparison with the exact substitute of the stored code is the caller's.
+        """
+        candidates = [
+            row.file_id
+            for row in rows
+            if row.state == _SUBSTITUTE_STATE and row.reason in _SUBSTITUTES and known.get(row.file_id) == row.etag
+        ]
+        return store.known_skip_reasons(candidates)
 
     @staticmethod
     def _is_a_stranded_handover(store: Store, row: FileRow, stored: str | None) -> bool:
@@ -633,7 +746,11 @@ class Reconcile:
     def _is_due(self, store: Store) -> bool:
         """Whether a cycle may start now, against our own clock and the stamps.
 
-        Three answers in order. An interrupted walk is always due, because a
+        Four answers in order. A catch-up cycle the upgrade to 1.5 asked for
+        (CATCHUP_MARK on CATCHUP_RECONCILE, worker/catchup.py) is due at once,
+        whatever the hour and the pause say: the files it finds are documents
+        the instance has and nobody can find yet. The quiet gate still stands
+        before it. An interrupted walk is always due, because a
         half-finished comparison is worth less than none at all. A container that
         never ran a cycle is due at once, and the quiet gate above is what keeps
         that from colliding with an initial index. Everything else waits out the
@@ -641,6 +758,8 @@ class Reconcile:
         twice the pause it runs whatever the hour is, because a box that is only
         switched on during the day must not lose the guarantee entirely.
         """
+        if _catchup_requested(store):
+            return True
         state = store.reconcile_state()
         if state.unfinished:
             return True
@@ -712,6 +831,15 @@ def default_reconcile() -> Reconcile:
     return Reconcile()
 
 
+def default_catchup_reconcile() -> Reconcile:
+    """The one time reconcile of the catch-up of 1.5 where the reconcile is off.
+
+    The same object as :func:`default_reconcile`; a factory of its own so that
+    main.py keeps it apart from the regular one and a test can replace each.
+    """
+    return Reconcile()
+
+
 # The two helpers below are copies of the ones in worker/poller.py, and the copy
 # is deliberate. They are private there, this module may not reach into the
 # internals of a sibling, and making them public would be an edit to a module
@@ -753,5 +881,6 @@ __all__ = [
     "ROUND_WALKED",
     "Reconcile",
     "RoundResult",
+    "default_catchup_reconcile",
     "default_reconcile",
 ]

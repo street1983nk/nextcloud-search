@@ -1841,8 +1841,20 @@ PHP_TREE_HASH_TODAY = "bad993f8230804cf83a552f151dbed9d0ea1b16e71dd2a2d1705c0a1b
 # xlt under spreadsheets, heic and heif under images, and zip in no group. No
 # file came and none went, so PACKAGE_FILES_TODAY stays at 78. The PHP pair
 # moves in the same commit (see above).
-PACKAGE_FILES_TODAY = 78
-PACKAGE_TREE_HASH_TODAY = "abba4c464ff3e71a7a2fd885b08b92edf8e02559f4902421f3c4261c605a642d"
+#
+# Measured again by Plan 31-11 (FMT-06, D-31-01, D-31-02) on 2026-10-12:
+# worker/catchup.py is new (part A of the one time catch-up after the upgrade
+# to 1.5, the mark recheck_1_5_0); worker/reconcile.py makes the catch-up cycle
+# due at once, rewinds the walk once, hands written off files without a row and
+# the 1.3 substitutes of the wrong upgrade order over while the mark says
+# reconcile, writes done after the cycle and runs once where the reconcile is
+# off; worker/poller.py starts part A on generation 3; store/repo.py carries
+# CATCHUP_MARK, catchup_scan, known_skip_reasons and rewind_reconcile_walk;
+# main.py starts the one time task and arms every task through
+# _armable_tasks. One file came, so PACKAGE_FILES_TODAY moves to 79. The PHP
+# pair does not move: php/ is unchanged.
+PACKAGE_FILES_TODAY = 79
+PACKAGE_TREE_HASH_TODAY = "02e9cddd8ad7cdc25784d57184c752c1fa01e273ad7acfbb9d26c740f40a9e38"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
