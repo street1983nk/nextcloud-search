@@ -3501,10 +3501,15 @@ jobs:
               row = connect("vectors.db").execute("SELECT COUNT(*) FROM chunks WHERE file_id = ?", (int(subject),)).fetchone()
               print(row[0])
           elif question == "stock":
-              rows = connect("vectors.db").execute(
-                  "SELECT chunk_id, file_id, ordinal, char_start, char_end FROM chunks WHERE file_id != ? ORDER BY chunk_id",
-                  (int(subject),),
-              ).fetchall()
+              # The stock without the listed file ids; "0" leaves out nothing.
+              excluded = {int(part) for part in subject.split(",") if part}
+              rows = [
+                  row
+                  for row in connect("vectors.db").execute(
+                      "SELECT chunk_id, file_id, ordinal, char_start, char_end FROM chunks ORDER BY chunk_id"
+                  )
+                  if row[1] not in excluded
+              ]
               digest = hashlib.sha256(repr(rows).encode()).hexdigest()
               print(f"{digest}:{len({row[1] for row in rows})}:{len(rows)}")
           elif question == "rows":
@@ -3704,6 +3709,14 @@ jobs:
             exit 1
           fi
           echo "sown: a picture indexed and a sidecar skipped(system_file) under ${UPGRADE_FROM_TAG}, and the seed word finds exactly the picture"
+          # Every value is held to its pattern before it goes into GITHUB_ENV
+          # (L-30-03): the case above matched a prefix of digits only.
+          for value in "${tiff_id}" "${sidecar_id}"; do
+            if ! [[ "${value}" =~ ^[0-9]+$ ]]; then
+              echo "::error::a seed id reads '${value}' and not a number, so it does not go into GITHUB_ENV"
+              exit 1
+            fi
+          done
           {
             echo "UPGRADE_SEED_TIFF_ID=${tiff_id}"
             echo "UPGRADE_SEED_SIDECAR_ID=${sidecar_id}"
@@ -4719,6 +4732,18 @@ jobs:
             echo "::error::the picture carries ${tiff_chunks} and the sidecar ${sidecar_chunks} chunk(s) on the ${UPGRADE_FROM_TAG} installation, and the indexed picture has to carry some, the skipped sidecar none"
             exit 1
           fi
+          # Both values held to the shape their writers give them before they
+          # go into GITHUB_ENV (L-30-03): the mark of embedding_mark() in
+          # backend/src/findling/store/vectors.py (model/element/dimensions/
+          # tokens and an optional weight part), the stock as digest:files:rows.
+          if ! [[ "${embedding}" =~ ^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+){3,4}$ ]]; then
+            echo "::error::the embedding mark reads '${embedding}' and not the shape model/element/dimensions/tokens, so it does not go into GITHUB_ENV"
+            exit 1
+          fi
+          if ! [[ "${stock}" =~ ^[0-9a-f]{64}:[0-9]+:[0-9]+$ ]]; then
+            echo "::error::the vector stock reads '${stock}' and not digest:files:rows, so it does not go into GITHUB_ENV"
+            exit 1
+          fi
           {
             echo "UPGRADE_EMBEDDING_MARK=${embedding}"
             echo "UPGRADE_VECTOR_STOCK=${stock}"
@@ -5110,9 +5135,39 @@ jobs:
           # a limit, no docker update sets one anywhere in this file, so there is
           # nothing to restore. The day a step here measures a limit, it has to
           # be set again right at this point.
+          #
+          # The restart count of the new container and the end of this step,
+          # held for "Store upgrade 5" (plan 31-13): the ZIP bomb of the seed
+          # is judged after this point, and a container that fell over on it
+          # and was brought back by docker shows as a higher count there. The
+          # end time measures how long the catch-up of the seed takes.
+          restarts=$(docker inspect --format '{{.RestartCount}}' "${container}")
+          finished=$(date +%s)
+          # Every value held to its pattern before it goes into GITHUB_ENV
+          # (L-30-03 of 30-AUDIT, which named exactly this block): the name
+          # docker gives the container, the version of info.xml as the release
+          # automation writes it, and two counts.
+          if ! [[ "${container}" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]]; then
+            echo "::error::the container after the upgrade is named '${container}', which is not one docker container name, so it does not go into GITHUB_ENV"
+            exit 1
+          fi
+          version_pattern='^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'
+          if ! [[ "${new_companion}" =~ ${version_pattern} ]]; then
+            echo "::error::the companion of this commit carries the version '${new_companion}', which is not major.minor.patch, so it does not go into GITHUB_ENV"
+            exit 1
+          fi
+          for value in "${restarts}" "${finished}"; do
+            if ! [[ "${value}" =~ ^[0-9]+$ ]]; then
+              echo "::error::a count of the container after the upgrade reads '${value}' and not a number, so it does not go into GITHUB_ENV"
+              exit 1
+            fi
+          done
+          echo "the container after the upgrade has restarted ${restarts} time(s)"
           {
             echo "UPGRADE_NEW_CONTAINER=${container}"
             echo "UPGRADE_NEW_COMPANION=${new_companion}"
+            echo "UPGRADE_NEW_RESTARTS=${restarts}"
+            echo "UPGRADE_FINISHED_AT=${finished}"
           } >> "${GITHUB_ENV}"
 
       # Five assurances about something that did NOT move and one about
@@ -5127,7 +5182,10 @@ jobs:
       # sixth reads the recheck mark. Since plan 30-06 (start v1.4.2) the sixth
       # reads it as done on both sides, because 1.4.2 already ran the recheck,
       # and the counter sample of the new code is the new image "Store upgrade
-      # 4" demands next to the rebuild "Store upgrade 6" drives.
+      # 4" demands next to the rebuild "Store upgrade 6" drives. Since plan
+      # 31-13 there are ten, and the counter sample is the seed of the new
+      # formats arriving without an admin (assurance 9), kept apart from the
+      # old stock that must not move (assurance 10).
       #
       # The five are sharper since the tag moved to v1.2.0 on 2026-09-24, and
       # that is the whole reason the tag moved rather than the block being
@@ -5167,25 +5225,56 @@ jobs:
       # container and in findling_file_state, the picture indexed with its
       # vectors and no verdict in Nextcloud. Its recheck of D-29-10 reads done
       # ("Store upgrade 3c"), and recheck_step returns at once on done
-      # (backend/src/findling/worker/recheck.py of this tree), so nothing
-      # hands a file back across the upgrade. Derived counter by counter, each
-      # against the snapshot of "Store upgrade 3", and every step is nought:
+      # (backend/src/findling/worker/recheck.py of this tree), so nothing of
+      # the old stock is handed back across the upgrade.
       #
-      #   container.docs        0  the picture was in the index before, the sidecar never is
-      #   container.indexed     0  the picture keeps indexed
-      #   container.skipped     0  the sidecar keeps skipped(system_file)
-      #   container.failed      0  nothing is judged again
-      #   nextcloud.skipped     0  the sidecar keeps its recorded reason
-      #   nextcloud.failed      0  nothing is judged again
-      #   nextcloud.scheduled   0  nothing is requeued
+      # Since plan 31-13 (FMT-06, D-31-02) the seed of the new formats moves
+      # three counters, and only by the step it derives. Under 1.4.2
+      # (31-12-SUMMARY, out of the code of the tag): the mail, the ZIP file,
+      # the bomb, the doc, the xls and the HEIC photo have no row on either
+      # side; the Word file under .docx is skipped(legacy_format) on both; the
+      # stale text file is failed(repeatedly_stuck) in findling_file_state
+      # with no row in state.db. After the upgrade the catch-up of 1.5
+      # (backend/src/findling/worker/catchup.py) hands the Word file back by
+      # part A (legacy_format, no PowerPoint) and the other seven by part B
+      # (no container row; the stale file by the exception for a written off
+      # file). Seven are indexed (extract/dispatch.py routes all six types
+      # and reads the Word container under .docx by content), the bomb ends
+      # as skipped(archive_limit) (extract/archive.py, depth 3 over
+      # ARCHIVE_MAX_DEPTH 2), and an indexed file takes back the skipped and
+      # failed verdicts of Nextcloud (FileStateService::revokeFailures through
+      # QueueService::acknowledge). docs counts the tantivy documents, which
+      # are the indexed files (findling.tools.index_status), and a skipped
+      # file is never one. Derived counter by counter, each against the
+      # snapshot of "Store upgrade 3":
+      #
+      #   container.docs       +7  mail, ZIP, doc, xls, HEIC, stale text, Word under .docx
+      #   container.indexed    +7  the same seven
+      #   container.skipped     0  +1 the bomb skipped(archive_limit), -1 the Word file leaves legacy_format
+      #   container.failed      0  the stale file never had a container row, the old stock is not judged again
+      #   nextcloud.skipped     0  +1 the bomb recorded, -1 legacy_format of the Word file taken back
+      #   nextcloud.failed     -1  failed(repeatedly_stuck) of the stale file taken back
+      #   nextcloud.scheduled   0  every handed back row is waited out
       #   nextcloud.running     0  likewise
-      #   rebuildState          0  nothing on this leg rebuilds, idle on both sides
+      #   container.rebuildState  0  nothing on this leg rebuilds, idle on both sides
       #
       # Until plan 30-06 the start was v1.3.2, both seeds were failed(corrupt)
       # before the upgrade and six of these counters moved by the derived step
-      # of the recheck (+1, +1, +1, -2, +1, -2). A counter that moves now is a
-      # finding about this code, and never a reason to widen a line. Every
-      # value is compared exactly, none with "at least".
+      # of the recheck (+1, +1, +1, -2, +1, -2); from 30-06 to 31-13 every step
+      # was nought. A counter that moves by anything else is a finding about
+      # this code, and never a reason to widen a line. Every value is compared
+      # exactly, none with "at least".
+      #
+      # Assurance 9 is the seed itself: the catch-up mark recheck_1_5_0 reads
+      # done, every one of the seven words finds exactly its file, the excerpt
+      # of the ZIP hit names innen/notiz.txt, the seven are indexed with their
+      # vectors and no verdict left in Nextcloud, the stale file among them,
+      # and the bomb is skipped(archive_limit) on both sides while the
+      # container runs on with the restart count of "Store upgrade 4" and
+      # answers the canary search. Assurance 10 is the old stock: every
+      # catch-up candidate of 3c as determined, and the digest of 3c over the
+      # same files. Neither asks an admin for anything: no restart of the
+      # index, no scan, no cron run, no hand on the container.
       #
       # The snapshot waits until the work stock is empty and both seed files
       # carry their verdict, the picture with its vectors. The deadline is
@@ -5203,7 +5292,7 @@ jobs:
       # nothing was embedded again: the embedding mark stays, the whole vector
       # stock, the picture included, is the same rows chunk id for chunk id,
       # and the profile in force is economy (D-29-01).
-      - name: Store upgrade 5, the eight assurances after the upgrade
+      - name: Store upgrade 5, the ten assurances after the upgrade
         if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
         env:
           # As in "Store upgrade 6": the two matrix values arrive as plain
@@ -5215,9 +5304,66 @@ jobs:
           . "${RUNNER_TEMP}/upgrade-probe.sh"
           . "${RUNNER_TEMP}/seed-probe.sh"
 
-          # The work stock empty and both seeds settled before the snapshot,
-          # see the comment above this step.
+          # The seed of the new formats, caught up by the container alone (see
+          # the comment above this step), waited for with the one budget of the
+          # drain and without a cron run. Caught up means: the catch-up mark
+          # reads done, the bomb is judged, each of the seven files is indexed
+          # with its vectors, and each word finds exactly its file. The vectors
+          # are part of the wait because "Store upgrade 6" digests vectors.db
+          # and must not read it while the seed is still being embedded.
+          seed_words="mailquendel=${UPGRADE_SEED_MAIL_ID} archivquendel=${UPGRADE_SEED_ZIP_ID} wortquendel=${UPGRADE_SEED_DOC_ID} zellquendel=${UPGRADE_SEED_XLS_ID} fotoquendel=${UPGRADE_SEED_HEIC_ID} hullequendel=${UPGRADE_SEED_OLE_ID} cachequendel=${UPGRADE_SEED_STALE_ID}"
+          indexed_seed="${UPGRADE_SEED_MAIL_ID} ${UPGRADE_SEED_ZIP_ID} ${UPGRADE_SEED_DOC_ID} ${UPGRADE_SEED_XLS_ID} ${UPGRADE_SEED_HEIC_ID} ${UPGRADE_SEED_OLE_ID} ${UPGRADE_SEED_STALE_ID}"
+          new_seed_ids="${UPGRADE_SEED_MAIL_ID},${UPGRADE_SEED_ZIP_ID},${UPGRADE_SEED_BOMB_ID},${UPGRADE_SEED_DOC_ID},${UPGRADE_SEED_XLS_ID},${UPGRADE_SEED_HEIC_ID},${UPGRADE_SEED_OLE_ID},${UPGRADE_SEED_STALE_ID}"
           deadline=$(( $(date +%s) + UPGRADE_DRAIN_BUDGET_SECONDS ))
+          caught_up=""
+          catchup_done_at=""
+          while :; do
+            missing=""
+            catchup=$(seed_probe meta recheck_1_5_0 2> /dev/null || echo "unreadable")
+            if [ "${catchup}" = "done" ] && [ -z "${catchup_done_at}" ]; then
+              catchup_done_at=$(date +%s)
+            fi
+            [ "${catchup}" = "done" ] || missing="${missing} catch-up mark '${catchup}';"
+            bomb=$(seed_probe verdict "${UPGRADE_SEED_BOMB_ID}" 2> /dev/null || echo "unreadable")
+            [ "${bomb}" = "skipped/archive_limit" ] || missing="${missing} bomb '${bomb}';"
+            for id in ${indexed_seed}; do
+              verdict=$(seed_probe verdict "${id}" 2> /dev/null || echo "unreadable")
+              chunks=$(seed_probe chunks "${id}" 2> /dev/null || echo "unreadable")
+              case "${verdict}:${chunks}" in
+                indexed/:[1-9]*) ;;
+                *) missing="${missing} file id ${id} '${verdict}' with ${chunks} chunk(s);" ;;
+              esac
+            done
+            if [ -z "${missing}" ]; then
+              for pair in ${seed_words}; do
+                hits=$(term_hits "${pair%%=*}" 2> /dev/null || echo "unreadable")
+                if [ "${hits}" != "1" ] \
+                   || ! jq -e --arg id "${pair#*=}" '(.ocs.data.entries | length == 1) and .ocs.data.entries[0].attributes.fileId == $id' "${RUNNER_TEMP}/upgrade-term.json" > /dev/null; then
+                  missing="${missing} ${pair%%=*} brings back ${hits} hit(s) and not exactly its file;"
+                fi
+              done
+            fi
+            if [ -z "${missing}" ]; then
+              caught_up="yes"
+              break
+            fi
+            if ! [ "$(date +%s)" -lt "${deadline}" ]; then
+              break
+            fi
+            echo "waiting for the seed:${missing} $(( deadline - $(date +%s) ))s left"
+            sleep 5
+          done
+          if [ -n "${caught_up}" ]; then
+            # The duration of the catch-up for the performance audit of plan
+            # 31-15, read at the granularity of this loop (one round is five
+            # seconds plus its questions).
+            echo "the seed is caught up: recheck_1_5_0 read done $(( catchup_done_at - UPGRADE_FINISHED_AT ))s and every word found exactly its file $(( $(date +%s) - UPGRADE_FINISHED_AT ))s after the end of Store upgrade 4"
+          else
+            echo "::warning::the seed was not caught up within UPGRADE_DRAIN_BUDGET_SECONDS, assurance 9 below names what is missing:${missing}"
+          fi
+
+          # The work stock empty and both seeds settled before the snapshot,
+          # see the comment above this step, within the same budget.
           settled=""
           while [ "$(date +%s)" -lt "${deadline}" ]; do
             open=$("${RUNNER_TEMP}/nc-occ.sh" findling:index | awk '
@@ -5321,17 +5467,38 @@ jobs:
             echo "moved on purpose  .marks.tantivyVersion ${was} to ${now}, same index format half (E-17-7 option a)"
           fi
 
-          # Every counter exactly as before: the recheck of D-29-10 is done on
-          # the released installation and hands nothing back (the derivation
-          # stands in the comment above this step). Each value is compared as
-          # it stands, never with "at least".
-          echo "--- 3, the document counts, every one unchanged ---"
-          unchanged '.container.docs' "the number of documents in the index moved across an upgrade that judges nothing again"
-          unchanged '.container.indexed' "the container counts indexed files that moved across an upgrade that judges nothing again"
-          unchanged '.container.skipped' "the container counts skipped files that moved across an upgrade that judges nothing again"
-          unchanged '.container.failed' "the container counts failed files that moved across an upgrade that judges nothing again"
-          unchanged '.nextcloud.skipped' "Nextcloud's skipped files moved across an upgrade that judges nothing again"
-          unchanged '.nextcloud.failed' "Nextcloud's failed files moved across an upgrade that judges nothing again"
+          # A counter that moves by the step the table above derives, and by
+          # nothing else: the value after is the value before plus the step.
+          moved() {
+            path="$1"
+            step="$2"
+            meaning="$3"
+            was=$(jq -r "${path}" "${before}")
+            now=$(jq -r "${path}" "${after}")
+            if ! [[ "${was}" =~ ^[0-9]+$ ]]; then
+              echo "::error::${meaning}: ${path} read '${was}' before the upgrade, which is no count to move from"
+              fail=1
+              return 0
+            fi
+            if [ "${now}" != "$(( was + step ))" ]; then
+              echo "::error::${meaning}: ${path} was ${was} before the upgrade and is ${now} after it, and the derived step is ${step}"
+              fail=1
+            else
+              echo "moved      ${path} ${was} to ${now}, the derived step ${step}   (${meaning})"
+            fi
+          }
+
+          # Every counter exactly: the recheck of D-29-10 hands nothing of the
+          # old stock back, and the catch-up moves the seed of the new formats
+          # by the steps of the table above this step. Each value is compared
+          # as it stands, never with "at least".
+          echo "--- 3, the document counts, unchanged or moved by exactly the seed ---"
+          moved '.container.docs' +7 "the index holds a number of documents other than the old stock and the seven caught up files of the seed"
+          moved '.container.indexed' +7 "the container counts indexed files other than the old stock and the seven caught up files of the seed"
+          unchanged '.container.skipped' "the container counts skipped files other than the bomb in and the Word file under .docx out"
+          unchanged '.container.failed' "the container counts failed files that moved across an upgrade that judges the old stock not again"
+          unchanged '.nextcloud.skipped' "Nextcloud's skipped files moved by other than the bomb in and legacy_format of the Word file out"
+          moved '.nextcloud.failed' -1 "Nextcloud's failed files moved by other than the written off stale file taken back"
           unchanged '.nextcloud.scheduled' "the work stock is not empty after the upgrade, so something requeued work nobody asked for"
           unchanged '.nextcloud.running' "a worker holds queue rows after the upgrade, so something requeued work nobody asked for"
           unchanged '.container.rebuildState' "a rebuild directory appeared or went away across the upgrade, and no step of this block rebuilds anything"
@@ -5497,12 +5664,16 @@ jobs:
           else
             echo "unchanged  embedding mark = ${embedding}"
           fi
-          stock=$(seed_probe stock 0 || echo "unreadable")
+          # Since plan 31-13 the stock without the eight new seed ids: none of
+          # them carried a vector under ${UPGRADE_FROM_TAG} (no row, skipped or
+          # written off), so the whole stock of 3c is the old stock, and the
+          # vectors of the seven caught up files are assurance 9.
+          stock=$(seed_probe stock "${new_seed_ids}" || echo "unreadable")
           if [ "${stock}" != "${UPGRADE_VECTOR_STOCK}" ]; then
-            echo "::error::the vector stock went from ${UPGRADE_VECTOR_STOCK} to ${stock} (digest:files:rows), so a file embedded before the upgrade was embedded again"
+            echo "::error::the vector stock without the new seed went from ${UPGRADE_VECTOR_STOCK} to ${stock} (digest:files:rows), so a file embedded before the upgrade was embedded again"
             fail=1
           else
-            echo "unchanged  vector stock, the picture included = ${stock}, nothing was embedded again"
+            echo "unchanged  vector stock without the new seed, the picture included = ${stock}, nothing was embedded again"
           fi
           vectors=$(seed_probe chunks "${UPGRADE_SEED_TIFF_ID}" || echo "unreadable")
           case "${vectors}" in
@@ -5520,13 +5691,156 @@ jobs:
             echo "the profile in force after the upgrade is economy"
           fi
 
+          echo "--- 9, the seed of the new formats is caught up without an admin (FMT-06, D-31-02, SC2) ---"
+          catchup=$(seed_probe meta recheck_1_5_0 || echo "unreadable")
+          if [ "${catchup}" != "done" ]; then
+            echo "::error::the catch-up mark reads '${catchup}' after the upgrade instead of done, so the catch-up of 1.5 did not run to its end on its own"
+            fail=1
+          else
+            echo "the catch-up mark recheck_1_5_0 read absent before the upgrade and reads done after it"
+          fi
+          for pair in ${seed_words}; do
+            word="${pair%%=*}"
+            id="${pair#*=}"
+            if ! hits=$(term_hits "${word}"); then
+              echo "::error::the search for ${word} did not answer readably after the upgrade"
+              fail=1
+              continue
+            fi
+            if [ "${hits}" != "1" ] \
+               || ! jq -e --arg id "${id}" '(.ocs.data.entries | length == 1) and .ocs.data.entries[0].attributes.fileId == $id' "${RUNNER_TEMP}/upgrade-term.json" > /dev/null; then
+              echo "::error::${word} brings back ${hits} file(s) after the upgrade instead of exactly the file id ${id}"
+              jq -r '.ocs.data.entries[]? | "file id \(.attributes.fileId)"' "${RUNNER_TEMP}/upgrade-term.json" || true
+              fail=1
+              continue
+            fi
+            echo "${word} finds exactly the file id ${id}"
+            if [ "${id}" = "${UPGRADE_SEED_ZIP_ID}" ]; then
+              # The excerpt of the ZIP hit names the inner file (plan 31-09);
+              # only its length goes into the log, never its text.
+              if ! jq -e '.ocs.data.entries[0].subline | startswith("innen/notiz.txt: ")' "${RUNNER_TEMP}/upgrade-term.json" > /dev/null; then
+                echo "::error::the excerpt of the ZIP hit does not start with the inner file innen/notiz.txt (it holds $(jq -r '.ocs.data.entries[0].subline | length' "${RUNNER_TEMP}/upgrade-term.json") characters)"
+                fail=1
+              else
+                echo "the excerpt of the ZIP hit starts with the inner file innen/notiz.txt"
+              fi
+            fi
+          done
+          for id in ${indexed_seed}; do
+            verdict=$(seed_probe verdict "${id}" || echo "unreadable")
+            recorded=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
+              "SELECT COUNT(*) FROM oc_findling_file_state WHERE file_id = ${id};")
+            chunks=$(seed_probe chunks "${id}" || echo "unreadable")
+            if [ "${verdict}" != "indexed/" ] || [ "${recorded}" != "0" ]; then
+              echo "::error::the seed file ${id} is '${verdict}' in state.db with ${recorded} verdict(s) in findling_file_state after the upgrade, and the catch-up has to index it with no verdict left in Nextcloud"
+              fail=1
+            elif ! [[ "${chunks}" =~ ^[1-9][0-9]*$ ]]; then
+              echo "::error::the seed file ${id} is indexed and carries '${chunks}' chunks, so the semantic half never received it"
+              fail=1
+            else
+              echo "the seed file ${id} is indexed with ${chunks} chunk(s) and carries no verdict in findling_file_state"
+            fi
+          done
+          # The stale file by name, because it is the one D-31-02 is about: it
+          # was written off by ${UPGRADE_FROM_TAG} without a container row, and
+          # "Store upgrade 2b" gave the file cache its true size back.
+          stale=$(seed_probe verdict "${UPGRADE_SEED_STALE_ID}" || echo "unreadable")
+          stale_recorded=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
+            "SELECT COUNT(*) FROM oc_findling_file_state WHERE file_id = ${UPGRADE_SEED_STALE_ID};")
+          if [ "${stale}" != "indexed/" ] || [ "${stale_recorded}" != "0" ]; then
+            echo "::error::the file ${UPGRADE_FROM_TAG} wrote off as failed(repeatedly_stuck) is '${stale}' in state.db with ${stale_recorded} verdict(s) in findling_file_state, and the catch-up has to index it and take the failed verdict back (D-31-02)"
+            fail=1
+          else
+            echo "the file ${UPGRADE_FROM_TAG} wrote off as failed(repeatedly_stuck) without a container row is indexed, and findling_file_state holds no verdict of it any more"
+          fi
+          # The bomb, and the container that judged it still standing (SC2):
+          # running, with the restart count of the end of "Store upgrade 4",
+          # and answering the canary search after the verdict.
+          bomb=$(seed_probe verdict "${UPGRADE_SEED_BOMB_ID}" || echo "unreadable")
+          bomb_recorded=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
+            "SELECT state || '/' || IFNULL(reason, '') FROM oc_findling_file_state WHERE file_id = ${UPGRADE_SEED_BOMB_ID};")
+          if [ "${bomb}" != "skipped/archive_limit" ] || [ "${bomb_recorded}" != "skipped/archive_limit" ]; then
+            echo "::error::the ZIP bomb is '${bomb}' in state.db and '${bomb_recorded}' in findling_file_state after the upgrade, and it has to end as skipped/archive_limit in both"
+            fail=1
+          else
+            echo "the ZIP bomb is skipped/archive_limit in state.db and in findling_file_state"
+          fi
+          alive=$(docker inspect --format '{{.State.Running}} {{.RestartCount}}' "${UPGRADE_NEW_CONTAINER}" 2> /dev/null || echo "gone")
+          if [ "${alive}" != "true ${UPGRADE_NEW_RESTARTS}" ]; then
+            echo "::error::the container reads Running and RestartCount '${alive}' after the bomb, and it has to run on with the ${UPGRADE_NEW_RESTARTS} restart(s) it had at the end of Store upgrade 4"
+            fail=1
+          else
+            echo "the container runs, restart count ${UPGRADE_NEW_RESTARTS} as at the end of Store upgrade 4"
+          fi
+          if curl -sf -u "testuser:${TESTUSER_PASS}" \
+               -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+               'http://localhost:8080/ocs/v2.php/search/providers/findling/search?term=findling-canary' \
+               | jq -e '.ocs.data.entries | length == 1' > /dev/null 2>&1; then
+            echo "the container answers the canary search after the bomb"
+          else
+            echo "::error::the container does not answer the canary search after the bomb"
+            fail=1
+          fi
+
+          echo "--- 10, the old stock as determined, the digest of 3c (pitfall 13) ---"
+          # Every candidate one by one before the digest (31-12-SUMMARY: both
+          # lists are empty, and an empty list is a line of its own). A
+          # candidate that keeps its verdict keeps it on both sides; Nextcloud
+          # holds no row of an indexed file.
+          if [ -z "${UPGRADE_CATCHUP_CANDIDATE_STATES}" ]; then
+            echo "no catch-up candidate of the old stock keeps its verdict (empty list of Store upgrade 3c)"
+          fi
+          for entry in ${UPGRADE_CATCHUP_CANDIDATE_STATES//,/ }; do
+            held=$(seed_probe verdict "${entry%%=*}" || echo "unreadable")
+            recorded=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
+              "SELECT state || '/' || IFNULL(reason, '') FROM oc_findling_file_state WHERE file_id = ${entry%%=*};")
+            case "${entry#*=}" in
+              indexed/*) want_recorded="" ;;
+              *) want_recorded="${entry#*=}" ;;
+            esac
+            if [ "${held}" != "${entry#*=}" ] || [ "${recorded}" != "${want_recorded}" ]; then
+              echo "::error::the catch-up candidate ${entry%%=*} was ${entry#*=} before the upgrade and is '${held}' in state.db and '${recorded}' in findling_file_state after it, and its verdict was determined to stay"
+              fail=1
+            else
+              echo "the catch-up candidate ${entry%%=*} keeps ${entry#*=}"
+            fi
+          done
+          if [ -z "${UPGRADE_CATCHUP_CHANGED_VERDICTS}" ]; then
+            echo "no catch-up candidate of the old stock changes its verdict (empty list of Store upgrade 3c)"
+          fi
+          for entry in ${UPGRADE_CATCHUP_CHANGED_VERDICTS//,/ }; do
+            held=$(seed_probe verdict "${entry%%=*}" || echo "unreadable")
+            recorded=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
+              "SELECT state || '/' || IFNULL(reason, '') FROM oc_findling_file_state WHERE file_id = ${entry%%=*};")
+            case "${entry#*=}" in
+              indexed/*) want_recorded="" ;;
+              *) want_recorded="${entry#*=}" ;;
+            esac
+            if [ "${held}" != "${entry#*=}" ] || [ "${recorded}" != "${want_recorded}" ]; then
+              echo "::error::the catch-up candidate ${entry%%=*} is '${held}' in state.db and '${recorded}' in findling_file_state after the upgrade, and the determined new verdict is ${entry#*=}"
+              fail=1
+            else
+              echo "the catch-up candidate ${entry%%=*} changed to ${entry#*=}, as determined"
+            fi
+          done
+          # The digest over the same files as in "Store upgrade 3c": every
+          # file but the ten seed ids and UPGRADE_CATCHUP_CHANGED.
+          seed_ids="${UPGRADE_SEED_TIFF_ID},${UPGRADE_SEED_SIDECAR_ID},${UPGRADE_SEED_MAIL_ID},${UPGRADE_SEED_ZIP_ID},${UPGRADE_SEED_BOMB_ID},${UPGRADE_SEED_DOC_ID},${UPGRADE_SEED_XLS_ID},${UPGRADE_SEED_HEIC_ID},${UPGRADE_SEED_OLE_ID},${UPGRADE_SEED_STALE_ID}"
+          after_stock=$(seed_probe digest "${seed_ids}${UPGRADE_CATCHUP_CHANGED:+,${UPGRADE_CATCHUP_CHANGED}}" || echo "unreadable")
+          if [ "${after_stock%%:*}" != "${UPGRADE_OLD_STOCK_DIGEST}" ]; then
+            echo "::error::the digest of the old stock went from ${UPGRADE_OLD_STOCK_DIGEST} to '${after_stock}' across the upgrade, so a file of the old stock changed its state, reason, etag or number of chunks"
+            fail=1
+          else
+            echo "unchanged  the digest of the old stock over ${after_stock#*:} file(s) = ${UPGRADE_OLD_STOCK_DIGEST}"
+          fi
+
           if [ "${fail}" -ne 0 ]; then
             echo "the two states side by side:"
             diff -u "${before}" "${after}" || true
             exit 1
           fi
 
-          echo "all eight assurances hold"
+          echo "all ten assurances hold"
           {
             echo ""
             echo "### Upgrade from \`${UPGRADE_FROM_TAG}\` on ${MATRIX_SERVER_VERSION} (${MATRIX_RUNNER})"
@@ -5534,7 +5848,9 @@ jobs:
             echo "- companion \`${UPGRADE_OLD_COMPANION}\` out of the release assets, upgraded to \`${UPGRADE_NEW_COMPANION}\` of this commit"
             echo "- the container was unregistered without the data removing flag and registered again on the volume \`${UPGRADE_VOLUME}\`"
             echo "- unchanged: the hits for Belehrung, Auszug and Erinnerung, four of the five index marks (index_version among them) and the index format half of the fifth, the work stock"
-            echo "- every document count unchanged, every counter exact: the recheck of D-29-10 read done before and after the upgrade and handed nothing back"
+            echo "- every counter exact: the recheck of D-29-10 read done before and after the upgrade and handed nothing of the old stock back; the catch-up moved docs and indexed by +7 and Nextcloud's failed files by -1, as derived"
+            echo "- the catch-up of 1.5 ran without an admin: recheck_1_5_0 absent before and done after; mail, ZIP (excerpt names innen/notiz.txt), doc, xls, HEIC, the Word file under .docx and the stale file written off by \`${UPGRADE_FROM_TAG}\` each found by exactly its word; the ZIP bomb skipped(archive_limit) with the container running on"
+            echo "- the old stock untouched: every catch-up candidate as determined, the digest of state, reason, etag and chunk count the one of Store upgrade 3c"
             echo "- the seed of \`${UPGRADE_FROM_TAG}\` keeps its verdicts: the AppleDouble sidecar is skipped(system_file), the grey TIFF with an extra channel is indexed, and \`${SEED_WORD}\` finds exactly its file id"
             echo "- no reindex banner, no \`start_rebuild_on_drift\` line in the container log"
             echo "- nothing embedded again: embedding mark and the whole vector stock, the picture included, unchanged; the profile in force is economy"
@@ -5869,7 +6185,12 @@ jobs:
             exit 1
           fi
           # Handed to "Store upgrade 7", which compares the stock after the way
-          # back with this one: two rebuilds, not one vector written.
+          # back with this one: two rebuilds, not one vector written. Held to
+          # the shape of sha256sum before it goes into GITHUB_ENV (L-30-03).
+          if ! [[ "${vectors_before}" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::the digest of vectors.db reads '${vectors_before}' and not a sha256, so it does not go into GITHUB_ENV"
+            exit 1
+          fi
           echo "REBUILD_VECTORS_BEFORE=${vectors_before}" >> "${GITHUB_ENV}"
           echo "languages mark de,en, no rebuild directory, three terms with one file each, smlouve and proc one file each, a vector stock to compare"
 

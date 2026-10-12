@@ -197,23 +197,28 @@ ASSURANCE_STEP = "Store upgrade 5,"
 # does not apply to it; the bound stays a bound on growth.
 SNAPSHOT_RUN_MAX = 20957
 
-# The derivation of the comment above "Store upgrade 5" since plan 30-06: the
-# recheck of D-29-10 is done on the released installation, so nothing hands a
-# file back across the upgrade and every counter of the snapshot is compared
-# with unchanged(). Until plan 30-06 six of them moved by a derived step.
-UNCHANGED_COUNTERS = (
-    ".container.docs",
-    ".container.indexed",
-    ".container.skipped",
-    ".container.failed",
-    ".nextcloud.skipped",
-    ".nextcloud.failed",
-    ".nextcloud.scheduled",
-    ".nextcloud.running",
-    ".container.rebuildState",
-)
+# The derivation of the comment above "Store upgrade 5". Since plan 30-06 the
+# recheck of D-29-10 is done on the released installation and hands nothing
+# back; since plan 31-13 the catch-up of 1.5 (FMT-06) moves exactly the seed of
+# the new formats: seven files indexed (mail, ZIP, doc, xls, HEIC, the stale
+# text file, and the Word file under .docx that leaves skipped(legacy_format)),
+# the ZIP bomb skipped(archive_limit) on both sides, and the failed verdict of
+# the stale file taken back by its success report. A nought is compared with
+# unchanged(), every other step with moved() and exactly that step.
+DERIVED_STEPS = {
+    ".container.docs": 7,
+    ".container.indexed": 7,
+    ".container.skipped": 0,
+    ".container.failed": 0,
+    ".nextcloud.skipped": 0,
+    ".nextcloud.failed": -1,
+    ".nextcloud.scheduled": 0,
+    ".nextcloud.running": 0,
+    ".container.rebuildState": 0,
+}
 
 _UNCHANGED = re.compile(r"^\s*unchanged '([^']+)' ", re.MULTILINE)
+_MOVED = re.compile(r"^\s*moved '([^']+)' ([+-][0-9]+) ", re.MULTILINE)
 
 
 def test_the_new_steps_stand_exactly_once() -> None:
@@ -311,12 +316,39 @@ def test_the_upgrade_step_keeps_the_app_update_branch_fail_closed() -> None:
     assert 'echo "the instance performed the app update: ' in run
 
 
-def test_every_counter_is_held_unchanged() -> None:
+def _assurance_comment() -> str:
+    """The YAML comment right above "Store upgrade 5", where the table stands."""
+    text = WORKFLOW.read_text(encoding="utf-8")
+    start = text.index("      - name: " + ASSURANCE_STEP)
+    return text[text.rindex('} >> "${GITHUB_ENV}"', 0, start) : start]
+
+
+def test_every_counter_is_unchanged_or_moved_by_its_derived_step() -> None:
+    # Replaces test_every_counter_is_held_unchanged (plan 31-13): the seed of
+    # the new formats is caught up across the upgrade, so three counters move,
+    # each by the step the table derives and by nothing else.
     run = _run(ASSURANCE_STEP)
-    assert "moved_by_seed" not in run
-    unchanged = set(_UNCHANGED.findall(run))
-    for counter in UNCHANGED_COUNTERS:
-        assert counter in unchanged, counter
+    unchanged = _UNCHANGED.findall(run)
+    moved = _MOVED.findall(run)
+    for counter, step in DERIVED_STEPS.items():
+        if step == 0:
+            assert unchanged.count(counter) == 1, counter
+            assert counter not in [path for path, _ in moved], counter
+        else:
+            assert moved.count((counter, f"{step:+d}")) == 1, counter
+            assert counter not in unchanged, counter
+    assert len(moved) == len([step for step in DERIVED_STEPS.values() if step != 0])
+    # The helper compares exactly: the value after is the value before plus
+    # the step, never a bound.
+    assert 'if [ "${now}" != "$(( was + step ))" ]; then' in run
+
+
+def test_the_table_of_the_derived_steps_stands_above_the_step() -> None:
+    comment = _assurance_comment()
+    for counter, step in DERIVED_STEPS.items():
+        written = "0" if step == 0 else f"{step:+d}"
+        pattern = rf"^\s*#\s+{re.escape(counter.lstrip('.'))}\s+{re.escape(written)}\s"
+        assert re.search(pattern, comment, re.MULTILINE), counter
 
 
 def test_no_counter_is_compared_with_at_least() -> None:
@@ -359,7 +391,14 @@ def test_the_assurance_step_states_that_nothing_was_embedded_again() -> None:
     run = _run(ASSURANCE_STEP)
     assert 'if [ "${embedding}" != "${UPGRADE_EMBEDDING_MARK}" ]; then' in run
     assert 'if [ "${stock}" != "${UPGRADE_VECTOR_STOCK}" ]; then' in run
-    assert "seed_probe stock 0" in run
+    # Since plan 31-13 the stock without the eight new seed ids: none of them
+    # carried a vector under 1.4.2, so the stock of 3c is the old stock, and
+    # the seven caught up files carry their own vectors after the upgrade.
+    assert 'stock=$(seed_probe stock "${new_seed_ids}" || echo "unreadable")' in run
+    assert "seed_probe stock 0" not in run
+    ids = run[run.index("new_seed_ids=") : run.index("\n", run.index("new_seed_ids="))]
+    for name in NEW_SEED_IDS:
+        assert f"${{{name}}}" in ids, name
     assert "for mark in schemaVersion indexVersion analyzerVersion wordlistHash; do" in run
     assert "'.profileEffective'" in run
     assert 'if [ "${profile}" != "economy" ]; then' in run
@@ -808,3 +847,279 @@ def test_the_seed_and_record_steps_carry_no_expression(prefix: str) -> None:
 def test_the_record_step_parses_in_bash(tmp_path: Path) -> None:
     answer = _bash_parses(_run(RECORD_STEP), tmp_path)
     assert answer.returncode == 0, answer.stderr
+
+
+# --- The catch-up after the upgrade, and L-30-03 (plan 31-13) ---------------
+#
+# FMT-06, D-31-02, SC2. "Store upgrade 5" keeps two statements apart that fail
+# for opposite reasons (31-RESEARCH pitfall 13): the old stock did not move,
+# and the seed of the new formats arrived without an admin doing anything. The
+# checkpoint of plan 31-12 was not raised (31-12-SUMMARY), so the seed is the
+# full one: seven words, the ZIP bomb and the stale file of the fixed order.
+
+ENV_OF_SEED = {
+    "seed-mail.eml": "UPGRADE_SEED_MAIL_ID",
+    "seed-archive.zip": "UPGRADE_SEED_ZIP_ID",
+    "seed-word.doc": "UPGRADE_SEED_DOC_ID",
+    "seed-excel.xls": "UPGRADE_SEED_XLS_ID",
+    "seed-photo.heic": "UPGRADE_SEED_HEIC_ID",
+    "seed-ole-under-docx.docx": "UPGRADE_SEED_OLE_ID",
+    "seed-stale-size.txt": "UPGRADE_SEED_STALE_ID",
+}
+
+# The steps whose writes into GITHUB_ENV are held to a pattern first (L-30-03
+# of 30-AUDIT, T-31-41).
+ENV_STEPS = (SEED_STEP, RECORD_STEP, UPGRADE_STEP, ASSURANCE_STEP, REBUILD_STEP, BACK_STEP)
+
+_ENV_LINE = re.compile(r'^\s*echo "([A-Z0-9_]+)=\$\{([a-z_]+)\}"')
+_DIGEST_CALL = re.compile(r'seed_probe digest "([^"]+)"')
+
+
+def _env_writes(run: str) -> list[tuple[int, str, str]]:
+    """Every value a run writes into GITHUB_ENV: (offset, name, shell variable)."""
+    writes: list[tuple[int, str, str]] = []
+    lines = run.splitlines(keepends=True)
+    offsets = [0]
+    for line in lines:
+        offsets.append(offsets[-1] + len(line))
+    for number, line in enumerate(lines):
+        if '>> "${GITHUB_ENV}"' not in line:
+            continue
+        if line.strip().startswith("}"):
+            opening = max(index for index in range(number) if lines[index].strip() == "{")
+            body = lines[opening + 1 : number]
+            start = offsets[opening]
+        else:
+            body = [line]
+            start = offsets[number]
+        for entry in body:
+            found = _ENV_LINE.match(entry)
+            assert found is not None, f"a write into GITHUB_ENV that is not one plain variable: {entry.strip()}"
+            writes.append((start, found.group(1), found.group(2)))
+    return writes
+
+
+def _checked_before(run: str, variable: str, before: int) -> bool:
+    """Whether ``variable`` is held to a pattern somewhere before ``before``."""
+    head = run[:before]
+    direct = (
+        f'[[ "${{{variable}}}" =~ ',
+        f"printf '%s' \"${{{variable}}}\" | grep -Eq '^",
+        f"printf '%s\\n' \"${{{variable}}}\" | grep -Eq '^",
+    )
+    if any(form in head for form in direct):
+        return True
+    # A loop over the values, with the check on the loop variable in its body.
+    for loop in re.finditer(r"^\s*for (\w+) in ([^\n]*); do\n(.*?)^\s*done$", head, re.MULTILINE | re.DOTALL):
+        name, values, body = loop.group(1), loop.group(2), loop.group(3)
+        if f'"${{{variable}}}"' not in values:
+            continue
+        if f'[[ "${{{name}}}" =~ ' in body or re.search(rf"printf '%s(\\n)?' \"\$\{{{name}\}}\" \| grep -Eq '\^", body):
+            return True
+    return False
+
+
+@pytest.mark.parametrize("prefix", ENV_STEPS)
+def test_every_value_is_checked_before_it_goes_into_the_environment(prefix: str) -> None:
+    # L-30-03: a later step reads these values as shell text, so each one is
+    # held to its pattern in the step that writes it, before the write.
+    run = _run(prefix)
+    for start, name, variable in _env_writes(run):
+        assert _checked_before(run, variable, start), f"{prefix} {name}"
+
+
+def test_the_upgrade_step_checks_the_new_container_and_companion() -> None:
+    # Named on purpose: L-30-03 named Store upgrade 4, whose two values went in
+    # unchecked until plan 31-13, and the restart count and the end time go in
+    # beside them now.
+    run = _run(UPGRADE_STEP)
+    names = {name: variable for _, name, variable in _env_writes(run)}
+    for name in ("UPGRADE_NEW_CONTAINER", "UPGRADE_NEW_COMPANION", "UPGRADE_NEW_RESTARTS", "UPGRADE_FINISHED_AT"):
+        assert name in names, name
+    assert names["UPGRADE_NEW_CONTAINER"] == "container"
+    assert names["UPGRADE_NEW_COMPANION"] == "new_companion"
+    assert '[[ "${container}" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]]' in run
+    assert '[[ "${new_companion}" =~ ${version_pattern} ]]' in run
+    assert "restarts=$(docker inspect --format '{{.RestartCount}}' \"${container}\")" in run
+
+
+def test_the_checker_of_the_environment_sees_a_missing_check() -> None:
+    # The negative sample of the two helpers above, so their green means something.
+    unchecked = 'x=$(date)\n{\n  echo "UPGRADE_X=${x}"\n} >> "${GITHUB_ENV}"\n'
+    start, name, variable = _env_writes(unchecked)[0]
+    assert name == "UPGRADE_X"
+    assert not _checked_before(unchecked, variable, start)
+    checked = (
+        'x=$(date)\nif ! [[ "${x}" =~ ^[0-9]+$ ]]; then exit 1; fi\n{\n  echo "UPGRADE_X=${x}"\n} >> "${GITHUB_ENV}"\n'
+    )
+    start, _, variable = _env_writes(checked)[0]
+    assert _checked_before(checked, variable, start)
+    looped = 'for value in "${x}"; do\n  if ! [[ "${value}" =~ ^[0-9]+$ ]]; then exit 1; fi\ndone\n'
+    start, _, variable = _env_writes(looped + unchecked)[0]
+    assert _checked_before(looped + unchecked, variable, start)
+
+
+def test_the_assurance_step_does_nothing_an_admin_would_do() -> None:
+    # SC4: no restart of the index, no scan, no cron run, no container
+    # handling and no hand written row anywhere in the step.
+    run = _run(ASSURANCE_STEP)
+    for forbidden in (
+        "--restart",
+        "files:scan",
+        "cron.php",
+        "app_api:",
+        "docker stop",
+        "docker start",
+        "docker restart",
+        "docker create",
+        "docker rm",
+        "UPDATE ",
+        "INSERT ",
+        "DELETE ",
+    ):
+        assert forbidden not in run, forbidden
+    calls = re.findall(r'"\$\{RUNNER_TEMP\}/nc-occ\.sh" ([^\n]*)', run)
+    assert calls
+    for call in calls:
+        assert call.startswith("findling:index |"), call
+
+
+def test_the_step_name_counts_its_assurances() -> None:
+    assert _named(ASSURANCE_STEP)[0]["name"] == "Store upgrade 5, the ten assurances after the upgrade"
+    run = _run(ASSURANCE_STEP)
+    for number in range(1, 11):
+        assert f'echo "--- {number}, ' in run, number
+    assert 'echo "all ten assurances hold"' in run
+
+
+def test_every_seed_word_finds_exactly_its_file_within_the_budget() -> None:
+    module = _formats_generator()
+    run = _run(ASSURANCE_STEP)
+    words = run[run.index("seed_words=") : run.index("\n", run.index("seed_words="))]
+    for name, word in module.SEED_WORDS.items():
+        assert f"{word}=${{{ENV_OF_SEED[name]}}}" in words, word
+    assert len(words.split()) == len(module.SEED_WORDS)
+    exact = "(.ocs.data.entries | length == 1) and .ocs.data.entries[0].attributes.fileId == $id"
+    # The wait for the catch-up, the words and the vectors comes before the
+    # snapshot, with the one budget of the drain.
+    wait = run.index("while :; do")
+    snapshot = run.index('snapshot "${RUNNER_TEMP}/upgrade-after.json" after')
+    assert run.index("UPGRADE_DRAIN_BUDGET_SECONDS") < wait < run.index(exact) < snapshot
+    assert run.count(exact) >= 2
+    # The error names the word and the file ids it brought back, never a text.
+    seed_part = run[run.index('echo "--- 9, ') :]
+    assert "\\(.attributes.fileId)" in seed_part
+    assert ".title)" not in seed_part
+    assert ".subline)" not in seed_part
+
+
+def test_the_exact_hit_filter_reads_one_entry_of_the_right_file(tmp_path: Path) -> None:
+    # Evaluated and not only found: without the parentheses jq binds "and"
+    # inside the pipe and fails on the entry list (seen in the stub run of
+    # plan 31-13), which in the step reads as "not exactly its file".
+    jq = shutil.which("jq")
+    if jq is None:
+        pytest.skip("no jq on this machine, the filter cannot be evaluated here")
+    run = _run(ASSURANCE_STEP)
+    found = re.findall(r"jq -e --arg id \"\$\{pair#\*=\}\" '([^']+)'|jq -e --arg id \"\$\{id\}\" '([^']+)'", run)
+    filters = {first or second for first, second in found}
+    assert len(filters) == 1
+    (expression,) = filters
+    answer = tmp_path / "answer.json"
+    answer.write_text('{"ocs":{"data":{"entries":[{"attributes":{"fileId":"7"}}]}}}', encoding="utf-8")
+    for wanted, code in (("7", 0), ("8", 1)):
+        done = subprocess.run(  # noqa: S603 - an argument list, never a shell
+            [jq, "-e", "--arg", "id", wanted, expression, str(answer)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert done.returncode == code, (wanted, done.stderr)
+
+
+def test_the_zip_hit_shows_the_inner_file() -> None:
+    run = _run(ASSURANCE_STEP)
+    assert '.ocs.data.entries[0].subline | startswith("innen/notiz.txt: ")' in run
+    assert "archivquendel=${UPGRADE_SEED_ZIP_ID}" in run
+
+
+def test_the_seven_files_are_indexed_with_vectors_and_no_verdict_left() -> None:
+    run = _run(ASSURANCE_STEP)
+    start = run.index('indexed_seed="')
+    line = run[start : run.index("\n", start)]
+    for name in ENV_OF_SEED.values():
+        assert f"${{{name}}}" in line, name
+    assert "UPGRADE_SEED_BOMB_ID" not in line
+    assert 'if [ "${verdict}" != "indexed/" ] || [ "${recorded}" != "0" ]; then' in run
+    assert 'chunks=$(seed_probe chunks "${id}"' in run
+
+
+def test_the_stale_file_is_indexed_after_the_upgrade() -> None:
+    # D-31-02 end to end (31-12 was not option-b): the file 1.4.2 wrote off is
+    # indexed, and Nextcloud took its failed verdict back.
+    run = _run(ASSURANCE_STEP)
+    assert "cachequendel=${UPGRADE_SEED_STALE_ID}" in run
+    assert 'stale=$(seed_probe verdict "${UPGRADE_SEED_STALE_ID}"' in run
+    assert 'if [ "${stale}" != "indexed/" ] || [ "${stale_recorded}" != "0" ]; then' in run
+
+
+def test_the_bomb_is_skipped_and_the_container_lives() -> None:
+    run = _run(ASSURANCE_STEP)
+    bomb = run.index(
+        'if [ "${bomb}" != "skipped/archive_limit" ] || [ "${bomb_recorded}" != "skipped/archive_limit" ]; then'
+    )
+    alive = run.index(
+        "alive=$(docker inspect --format '{{.State.Running}} {{.RestartCount}}' \"${UPGRADE_NEW_CONTAINER}\""
+    )
+    assert 'if [ "${alive}" != "true ${UPGRADE_NEW_RESTARTS}" ]; then' in run
+    canary = run.index("term=findling-canary")
+    assert bomb < alive < canary
+
+
+def test_the_catch_up_mark_reads_done_and_the_recheck_mark_stays() -> None:
+    from findling.store.repo import CATCHUP_MARK, RECHECK_MARK
+
+    run = _run(ASSURANCE_STEP)
+    assert f"seed_probe meta {CATCHUP_MARK}" in run
+    assert 'if [ "${catchup}" != "done" ]; then' in run
+    assert f"seed_probe meta {RECHECK_MARK}" in run
+    assert 'if [ "${recheck}" != "done" ]; then' in run
+    # The duration of the catch-up, for the performance audit of 31-15.
+    assert "UPGRADE_FINISHED_AT" in run
+
+
+def test_every_catch_up_candidate_is_held_one_by_one() -> None:
+    run = _run(ASSURANCE_STEP)
+    same = "for entry in ${UPGRADE_CATCHUP_CANDIDATE_STATES//,/ }; do"
+    changed = "for entry in ${UPGRADE_CATCHUP_CHANGED_VERDICTS//,/ }; do"
+    for loop in (same, changed):
+        start = run.index(loop)
+        body = run[start : run.index("\ndone", start)]
+        assert 'seed_probe verdict "${entry%%=*}"' in body, loop
+        assert "oc_findling_file_state WHERE file_id = ${entry%%=*}" in body, loop
+        assert "::error::" in body, loop
+    # An empty list is a line of its own and not a silent nothing.
+    assert "no catch-up candidate of the old stock keeps its verdict" in run
+    assert "no catch-up candidate of the old stock changes its verdict" in run
+
+
+def test_the_digest_after_the_upgrade_leaves_out_what_3c_left_out() -> None:
+    record = _run(RECORD_STEP)
+    run = _run(ASSURANCE_STEP)
+    start = record.index("seed_ids=")
+    assert record[start : record.index("\n", start)] in run
+    before = _DIGEST_CALL.findall(record)
+    after = _DIGEST_CALL.findall(run)
+    assert len(before) == 1
+    assert len(after) == 1
+    assert after[0] == before[0].replace("expected_changed", "UPGRADE_CATCHUP_CHANGED")
+    assert 'if [ "${after_stock%%:*}" != "${UPGRADE_OLD_STOCK_DIGEST}" ]; then' in run
+    # The candidates are held before the digest is compared.
+    assert run.index("for entry in ${UPGRADE_CATCHUP_CANDIDATE_STATES//,/ }; do") < run.index("seed_probe digest")
+
+
+def test_the_stock_question_takes_a_list() -> None:
+    probe = _run(SEED_STEP)
+    part = probe[probe.index('elif question == "stock":') : probe.index('elif question == "rows":')]
+    assert 'excluded = {int(part) for part in subject.split(",") if part}' in part
+    assert "if row[1] not in excluded" in part
