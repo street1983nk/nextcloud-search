@@ -23,6 +23,10 @@ Im Einzelnen:
 
 - **Volltextindex (Tantivy):** der extrahierte Text jeder indexierten Datei in
   durchsuchbarer Form, dazu Dateiname, Pfad und Metadaten wie Änderungszeit.
+  Seit 1.5 gehören bei Mails (.eml) die Kopfzeilen Betreff, Von, An und Cc
+  samt Mailadressen sowie die Namen der Anhänge zum durchsuchbaren Text (Bcc
+  und Anhanginhalte nicht); ein Treffer läuft durch dieselbe Rechteprüfung wie
+  jeder andere Inhalt.
 - **Semantischer Index (SQLite mit sqlite-vec):** Textabschnitte und ihre
   Vektoren. Die Vektoren selbst sind kein Klartext, die Abschnitte daneben
   schon.

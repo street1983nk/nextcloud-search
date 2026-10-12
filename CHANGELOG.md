@@ -4,6 +4,28 @@ All notable changes to Findling (the `findling` companion app and the
 `findling_backend` External App) are documented here. Both apps carry the
 same version. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- Mails (.eml): subject, sender, recipients, text and the names of
+  attachments; attachment content is not read.
+- ZIP files: the text of the files inside, without OCR, within fixed limits
+  (docs/formats.md); a ZIP file stands in no type filter group.
+- Word 97 to 2003 (.doc) and Excel 97 to 2003 (.xls), read without
+  LibreOffice; .xls under the cell limit of XLSX.
+- HEIC and HEIF photos through OCR.
+- The excerpt of a hit inside a ZIP file names the inner file.
+- A one time catch up after the upgrade, without a full reindex: files of
+  the new types, old Word and Excel files under OOXML names, and files given
+  up as repeatedly stuck are read once more.
+
+### Fixed
+
+- A file whose size in Nextcloud's file cache is larger than the file is now
+  read when two downloads agree, instead of ending as repeatedly stuck
+  (POL-02, F-29-03).
+
 ## [1.4.3] - 2026-10-12
 
 ### Fixed
