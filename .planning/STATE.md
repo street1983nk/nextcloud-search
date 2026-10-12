@@ -102,7 +102,7 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 - Owner-Veto zu A8 (31-03) möglich: dann Längenausnahme aus dem ersten Planstand.
 - Erledigt 12.10.2026 (Quick, Owner-Wort "wie du empfehlst"): Entwurf Teil Phase 31 (Dateitypen-Liste, README-Zeilen, Urteils-Wortlaute) abgenommen; ZIP kommt nicht in die Grenzliste, LIMITATION_COUNT bleibt 5; drei READMEs verweisen unter dem Dateitypen-Absatz auf docs/formats.md. REL-05 bleibt offen (Teil Phase 30, Gesamttext, Playwright-Runde, Einreichung).
 - Phase 31: Verifikation 9/9 passed (659f5631); Review durch den Owner offen.
-- Flake test_main_lifespan.py::test_the_status_answer_is_the_same_with_and_without_the_one_time_task (Live-Wert profile.memoryAvailableBytes im Vergleich), siehe .planning/phases/32-filter-in-der-unified-search/deferred-items.md; Fix im Test braucht einen Auftrag.
+- Erledigt 12.10.2026: Flake test_main_lifespan.py::test_the_status_answer_is_the_same_with_and_without_the_one_time_task (Live-Wert profile.memoryAvailableBytes im Vergleich); der Test hält die Hardware-Lesung fest, Vergleich bleibt vollständig, siehe deferred-items.md der Phase 32.
 - Phase 36 (aus 31-AUDIT, accept): DIFAT-Zyklus ab 7 MB und DOCX mit einer Million Köpfen im ZIP in den Launch-Korpus; Diagnosezeile für recheck_1_5_0; Neustart mitten im Nachholzyklus und Rückfall der Companion auf Generation 2 in die Upgrade-Matrix; Cursor in embedding.py (deferred-items.md).
 
 - REL-05 (Phase 36): release.yml muss die vier Quellpakete (corresponding_source.py fetch) im eigenen gh release create mitgeben; ein späteres gh release upload scheitert an unveränderlichen Releases (belegt in 31-01). Leeres Pre-Release source-1.5-dev bleibt mit Verweistext, Löschen nur mit Owner-Wort.

@@ -1906,8 +1906,14 @@ def test_a_one_time_task_that_hangs_is_cancelled_inside_its_budget(
 def test_the_status_answer_is_the_same_with_and_without_the_one_time_task(
     volume: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """INFO 5: nothing that reads "the reconcile is off" sees the catch-up."""
+    """INFO 5: nothing that reads "the reconcile is off" sees the catch-up.
+
+    Each start reads the hardware once, and the free memory of the box moves
+    between two starts. The reading is held still so that the comparison stays
+    whole: every field of the answer, the hardware included, must match.
+    """
     del volume
+    monkeypatch.setattr("findling.main.detect", lambda: _A_READING)
     _reconcile_switched_off(monkeypatch)
     _the_catch_up_mark("reconcile")
     _install_a_catch_up(monkeypatch, _FakeCatchup())
