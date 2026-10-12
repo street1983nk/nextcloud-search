@@ -1867,8 +1867,17 @@ PHP_TREE_HASH_TODAY = "bad993f8230804cf83a552f151dbed9d0ea1b16e71dd2a2d1705c0a1b
 # extract/legacy_doc.py names Word 6 and 95 (wIdent 0xA5DC)
 # skipped(unsupported_variant). No file came and none went, so
 # PACKAGE_FILES_TODAY stays at 79. The PHP pair does not move.
+#
+# Measured again by Plan 31-15, Befund M-31-01 and L-31-01, on 2026-10-12:
+# worker/reconcile.py tells the catch-up cycle (a round that began under the
+# mark reconcile) from an ordinary round the mark overtook, and an ordinary
+# round leaves a written off file without a row alone while the catch-up is
+# open; worker/recheck.py reads its cursor through resume_after (ASCII digits
+# up to the largest SQLite integer, anything else restarts at zero), and
+# worker/catchup.py uses the same function. No file came and none went, so
+# PACKAGE_FILES_TODAY stays at 79. The PHP pair does not move.
 PACKAGE_FILES_TODAY = 79
-PACKAGE_TREE_HASH_TODAY = "71a4df123983f3370493f0e114230358324b71e2248326b454e96abfb228a5bd"
+PACKAGE_TREE_HASH_TODAY = "c549892278fef1112f2df5707ba4fd4f597d5f0c1adbf0b126dc8537db8b09db"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

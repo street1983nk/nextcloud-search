@@ -84,9 +84,25 @@ def select_candidates(rows: Iterable[tuple[int, str, str | None, str]]) -> list[
     return chosen
 
 
-def _cursor(mark: str) -> int:
-    """Where to resume. A value nobody could have written restarts at zero."""
-    return int(mark) if mark.isdigit() else 0
+# The largest file id SQLite can hold, and so the largest cursor anybody wrote.
+_MAX_CURSOR: Final = 2**63 - 1
+
+
+def resume_after(mark: str) -> int:
+    """Where a walk over state.db resumes. A value nobody could have written restarts at zero.
+
+    The cursor is written as ``str`` of a file id, so only ASCII digits up to
+    the largest SQLite integer are ever there. ``str.isdigit`` alone also
+    accepts superscripts, which int() refuses, and digits of other scripts,
+    which it reads; and a number beyond SQLite's integers made the next query
+    raise. Each of the three stopped the walk at every round for good
+    (security audit 31-15, L-31-01). Shared with the catch-up of 1.5, which
+    keeps its cursor the same way.
+    """
+    if not (mark.isascii() and mark.isdigit()):
+        return 0
+    value = int(mark)
+    return value if value <= _MAX_CURSOR else 0
 
 
 async def recheck_step(store: Store, queue: DocumentQueue) -> bool:
@@ -102,7 +118,7 @@ async def recheck_step(store: Store, queue: DocumentQueue) -> bool:
     if mark == RECHECK_DONE:
         return True
 
-    after = _cursor(mark)
+    after = resume_after(mark)
     handed = 0
     bands = 0
     while True:

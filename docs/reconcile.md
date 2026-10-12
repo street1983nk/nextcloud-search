@@ -291,7 +291,12 @@ Für die Dauer dieses einen Zyklus gelten zwei enge Ausnahmen:
   Nachholzyklus reiht er sie stattdessen ein und schreibt nichts. Scheitert sie
   wieder, übernimmt der nächste gewöhnliche Zyklus das Endurteil wie bisher.
   Als Dauerregel brächte die Ausnahme die Dauerlast aus IN-03 zurück, deshalb
-  gilt sie nur unter der Marke.
+  gilt sie nur unter der Marke. Solange der Nachholweg offen ist (Teil A läuft
+  oder die Marke steht auf `reconcile`), lässt eine gewöhnliche Runde, die vor
+  der Marke begann, solche Dateien ganz liegen: sie schreibt kein Endurteil und
+  reiht nichts ein. So bekommt jede Datei ihre zweite Chance genau einmal, im
+  Nachholzyklus, auch wenn Teil A mitten in einer laufenden Runde fertig wird
+  (Audit 31-15, M-31-01).
 - **Falsche Upgrade-Reihenfolge.** Lief eine 1.5-Companion vor dem
   1.4.2-Container, hat der Container die Codes `system_file`, `legacy_format`
   und `unsupported_variant` als 1.3-Ersatz gemeldet (`mime_not_allowed` bzw.

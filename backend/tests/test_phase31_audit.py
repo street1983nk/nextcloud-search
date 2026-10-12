@@ -1144,9 +1144,9 @@ def _record_stuck(store: Store, file_id: int) -> None:
         ("", None),
         ("text", None),
         (" 12", None),
-        ("99999999999999999999", "L-31-01"),
-        (chr(0x00B2), "L-31-01"),  # superscript two: isdigit, but int() refuses it
-        (chr(0x0661) + chr(0x0662), "L-31-01"),  # Arabic-Indic twelve: isdigit and int(), never written by us
+        ("99999999999999999999", None),
+        (chr(0x00B2), None),  # superscript two: isdigit, but int() refuses it
+        (chr(0x0661) + chr(0x0662), None),  # Arabic-Indic twelve: isdigit and int(), never written by us
     ],
 )
 async def test_a_manipulated_cursor_of_part_a_starts_again_at_zero(
@@ -1209,6 +1209,33 @@ async def test_a_companion_falling_back_to_generation_2_pauses_part_a_and_breaks
     assert bands[1] == bands[2]
     assert sorted({file_id for band in bands for file_id in band}) == list(range(1, 451))
     assert store.read_meta()[CATCHUP_MARK] == CATCHUP_RECONCILE
+
+
+@pytest.mark.parametrize("mark", ["99999999999999999999", chr(0x00B2), chr(0x0661) + chr(0x0662)])
+async def test_a_manipulated_cursor_of_the_re_check_of_1_4_starts_again_at_zero(tmp_path: Path, mark: str) -> None:
+    # Part A waits for the re-check of 1.4, so a cursor that stops the re-check
+    # stops the catch-up of 1.5 as well.
+    from findling.worker.recheck import recheck_step
+
+    store = open_store(tmp_path / "state.db")
+    try:
+        meta = FileMeta(
+            storage_id=_STORAGE,
+            root_id=_ROOT,
+            path="files/kaputt.pdf",
+            title="kaputt.pdf",
+            mime="application/pdf",
+            size=1024,
+            mtime=1_700_000_000,
+        )
+        store.record(7, meta, "failed", "corrupt")
+        store.write_meta(RECHECK_MARK, mark)
+        queue = _Queue()
+
+        assert await recheck_step(store, cast("Any", queue)) is True
+        assert queue.content() == [7]
+    finally:
+        store.close()
 
 
 # -- part B: the mark in the middle of a cycle, the restart, the one cycle ------------------
@@ -1291,7 +1318,6 @@ async def test_a_hand_switch_to_done_in_the_middle_of_the_cycle_ends_the_second_
     assert store.read_meta()[CATCHUP_MARK] == CATCHUP_DONE
 
 
-@pytest.mark.xfail(strict=True, reason="M-31-01")
 async def test_the_mark_turning_to_reconcile_inside_an_ordinary_round_gives_every_file_one_chance(
     store: Store,
 ) -> None:
@@ -1318,7 +1344,6 @@ async def test_the_mark_turning_to_reconcile_inside_an_ordinary_round_gives_ever
     assert sorted(handed) == [10, 20], handed
 
 
-@pytest.mark.xfail(strict=True, reason="M-31-01")
 async def test_a_give_up_while_part_a_is_under_way_is_not_lost(store: Store) -> None:
     # Part A stopped after a band that did not arrive; its cursor stands behind
     # file 10. An ordinary round then meets file 10, written off over there.

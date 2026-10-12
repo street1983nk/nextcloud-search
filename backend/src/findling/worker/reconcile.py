@@ -405,7 +405,7 @@ class Reconcile:
         #    picks up there instead of at the front.
         tally = _Tally()
         for mount in found.mounts:
-            ended = await self._walk(store, files, queue, mount, tally)
+            ended = await self._walk(store, files, queue, mount, tally, catchup_round=catchup)
             if ended is not None:
                 return self._report(ended, len(found.mounts), tally)
 
@@ -426,8 +426,15 @@ class Reconcile:
         queue: DocumentQueue,
         mount: Mount,
         tally: _Tally,
+        *,
+        catchup_round: bool = False,
     ) -> str | None:
-        """Walk one mount to its end. Returns a state when the round has to stop."""
+        """Walk one mount to its end. Returns a state when the round has to stop.
+
+        ``catchup_round`` says that the round began under CATCHUP_RECONCILE and
+        is therefore the catch-up cycle of 1.5 (run_once); _compare needs it to
+        tell that cycle apart from an ordinary round the mark overtook.
+        """
         cursor = await asyncio.to_thread(store.reconcile_cursor, mount.storage_id)
         after = cursor.after_file_id
 
@@ -460,7 +467,7 @@ class Reconcile:
             tally.seen += len(page.files)
             upto = max((row.file_id for row in page.files), default=after)
 
-            stale, given_up = await asyncio.to_thread(self._compare, store, mount, page.files)
+            stale, given_up = await asyncio.to_thread(self._compare, store, mount, page.files, catchup_round)
             missing = await asyncio.to_thread(self._missing_of, store, mount, after, upto, page)
             tally.given_up += given_up
 
@@ -493,7 +500,9 @@ class Reconcile:
             await asyncio.sleep(self._pause)
 
     @staticmethod
-    def _compare(store: Store, mount: Mount, rows: Sequence[FileRow]) -> tuple[list[int], int]:
+    def _compare(
+        store: Store, mount: Mount, rows: Sequence[FileRow], catchup_round: bool = True
+    ) -> tuple[list[int], int]:
         """Split one page into work and into verdicts, and remember the verdicts.
 
         A file whose stored version mark matches the page is done and costs
@@ -562,6 +571,19 @@ class Reconcile:
         permanent load. A file that fails again is written off over there again,
         and the next ordinary cycle writes it off here as before.
 
+        **While the catch-up is open, an ordinary round leaves such a file
+        alone** (security audit 31-15, M-31-01). The poller and the reconcile
+        are two tasks, so part A can end, or stand with its cursor behind a band
+        that did not arrive, in the middle of an ordinary round. Written off by
+        the 1.4 rule there, a file got a row that part A had already passed and
+        the catch-up cycle then read as known: it lost its chance. Handed over
+        there, it got a second chance in the catch-up cycle as well. So from the
+        first cursor of part A until CATCHUP_DONE, a round that did not begin
+        under CATCHUP_RECONCILE (``catchup_round``) neither writes such a file
+        off nor hands it over; the catch-up cycle does the latter, once. Without
+        the mark and after CATCHUP_DONE the rule of 1.4 holds, and part A, when
+        it starts later, reads the rows that rule wrote.
+
         **During the same cycle the wrong upgrade order is judged again, and
         only that.** A 1.4.2 container in front of a 1.5 companion recognised
         no signal and sent the 1.3 substitute of system_file, legacy_format and
@@ -577,8 +599,11 @@ class Reconcile:
         # and the branch below is on the hot path of every slice of every cycle.
         ocr_enabled = settings().ocr_enabled
         # Once per page as well, and the two questions of the catch-up cost
-        # nothing outside it: no mark, no second query.
-        catchup = _catchup_requested(store)
+        # nothing outside it: no mark, no second query. The mark is read per
+        # page, so a hand set CATCHUP_DONE ends the second chance at once.
+        mark = store.read_meta().get(CATCHUP_MARK, "")
+        catchup = catchup_round and mark == CATCHUP_RECONCILE
+        held = mark not in ("", CATCHUP_DONE) and not catchup
         ours = Reconcile._substitute_candidates(store, rows, known) if catchup else {}
         stale: list[int] = []
         given_up = 0
@@ -599,6 +624,10 @@ class Reconcile:
             if stored is None and written_off and catchup:
                 # The second chance of D-31-02, once: see the docstring.
                 stale.append(row.file_id)
+                continue
+            if stored is None and written_off and held:
+                # Left to the catch-up cycle, neither written off nor handed
+                # over (M-31-01): see the docstring.
                 continue
             if stored is None and written_off:
                 store.give_up(

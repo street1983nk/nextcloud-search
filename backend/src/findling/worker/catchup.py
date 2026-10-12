@@ -70,7 +70,7 @@ from findling.extract.dispatch import extension_of
 from findling.extract.errors import Reason, State
 from findling.nc.queue import KIND_CONTENT, DocumentQueue
 from findling.store.repo import CATCHUP_DONE, CATCHUP_MARK, CATCHUP_RECONCILE, RECHECK_MARK, Store
-from findling.worker.recheck import RECHECK_DONE
+from findling.worker.recheck import RECHECK_DONE, resume_after
 from findling.worker.reconcile import REQUEUE_BAND
 
 LOGGER = logging.getLogger("findling.worker.catchup")
@@ -145,11 +145,6 @@ def select_catchup_candidates(rows: Iterable[tuple[int, str, str | None, str, st
     return chosen
 
 
-def _cursor(mark: str) -> int:
-    """Where to resume. A value nobody could have written restarts at zero."""
-    return int(mark) if mark.isdigit() else 0
-
-
 async def catchup_step(store: Store, queue: DocumentQueue) -> bool:
     """Run part A to its end, or up to a band that did not arrive.
 
@@ -166,7 +161,8 @@ async def catchup_step(store: Store, queue: DocumentQueue) -> bool:
     if mark in (CATCHUP_RECONCILE, CATCHUP_DONE):
         return True
 
-    after = _cursor(mark)
+    # A value nobody could have written restarts at zero (L-31-01, recheck.py).
+    after = resume_after(mark)
     handed = 0
     bands = 0
     while True:
