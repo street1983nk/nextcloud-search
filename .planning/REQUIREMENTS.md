@@ -27,11 +27,11 @@
 
 ### Formate (FMT)
 
-- [ ] **FMT-01**: Nutzer findet Inhalt von `.eml`-Dateien (Betreff, Absender, Empfaenger, Textteil; HTML-Teil als Text)
-- [ ] **FMT-02**: Nutzer findet Inhalt von Dateien in ZIP-Archiven (Treffer zeigt Archiv + innere Datei); harte Grenzen fuer Verschachtelungstiefe, entpackte Gesamtgroesse, Dateianzahl und Kompressionsrate; Grenzueberschreitung = sichtbares Skip-Urteil, nie Absturz
-- [ ] **FMT-03**: Nutzer findet Text aus Legacy-Word (`.doc`) ohne LibreOffice (olefile/stdlib); nicht lesbare Varianten enden als benanntes Skip-Urteil
-- [ ] **FMT-04**: Nutzer findet Text aus Legacy-Excel (`.xls`) ohne LibreOffice (xlrd), mit derselben Zellgrenze wie XLSX
-- [ ] **FMT-05**: Nutzer findet Text in HEIC/HEIF-Fotos per OCR (pi-heif oder gleichwertig, arm64-tauglich)
+- [x] **FMT-01**: Nutzer findet Inhalt von `.eml`-Dateien (Betreff, Absender, Empfaenger, Textteil; HTML-Teil als Text)
+- [x] **FMT-02**: Nutzer findet Inhalt von Dateien in ZIP-Archiven (Treffer zeigt Archiv + innere Datei); harte Grenzen fuer Verschachtelungstiefe, entpackte Gesamtgroesse, Dateianzahl und Kompressionsrate; Grenzueberschreitung = sichtbares Skip-Urteil, nie Absturz
+- [x] **FMT-03**: Nutzer findet Text aus Legacy-Word (`.doc`) ohne LibreOffice (olefile/stdlib); nicht lesbare Varianten enden als benanntes Skip-Urteil
+- [x] **FMT-04**: Nutzer findet Text aus Legacy-Excel (`.xls`) ohne LibreOffice (xlrd), mit derselben Zellgrenze wie XLSX
+- [x] **FMT-05**: Nutzer findet Text in HEIC/HEIF-Fotos per OCR (pi-heif oder gleichwertig, arm64-tauglich)
 - [ ] **FMT-06**: Bestandsinstallationen: Dateien, die bisher als `legacy_format` bzw. nicht unterstuetzt uebersprungen wurden, werden nach dem Upgrade selbsttaetig nachgeholt (Upgrade-CI-Beweis)
 
 ### Tschechisch (CZ, Issue #26)
@@ -91,11 +91,11 @@
 | EXCL-01 | Phase 33 | Pending |
 | EXCL-02 | Phase 33 | Pending |
 | EXCL-03 | Phase 33 | Pending |
-| FMT-01 | Phase 31 | Pending |
-| FMT-02 | Phase 31 | Pending |
-| FMT-03 | Phase 31 | Pending |
-| FMT-04 | Phase 31 | Pending |
-| FMT-05 | Phase 31 | Pending |
+| FMT-01 | Phase 31 | Complete |
+| FMT-02 | Phase 31 | Complete |
+| FMT-03 | Phase 31 | Complete |
+| FMT-04 | Phase 31 | Complete |
+| FMT-05 | Phase 31 | Complete |
 | FMT-06 | Phase 31 | Pending |
 | CZ-01 | Phase 30 | Complete |
 | CZ-02 | Phase 30 | Complete |

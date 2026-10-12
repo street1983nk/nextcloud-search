@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 31-09-PLAN.md
-last_updated: "2026-10-11T10:50:00.000Z"
-last_activity: 2026-10-11 -- Plan 31-09 abgeschlossen, als Nächstes 31-10
+stopped_at: Completed 31-10-PLAN.md
+last_updated: "2026-10-12T09:30:00.000Z"
+last_activity: 2026-10-12 -- Plan 31-10 abgeschlossen, als Nächstes 31-11
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 24
-  completed_plans: 18
+  completed_plans: 19
   percent: 14
 ---
 
@@ -26,11 +26,11 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 31 von 30-36 (Formate, Nachholweg und POL-02)
-Plan: 9 von 15 erledigt (31-01 bis 31-09), nächster Plan 31-10
-Status: Phase 31 in Ausführung; 31-09 abgeschlossen (Auszug eines ZIP-Treffers nennt die innere Datei, ohne Schemafeld; U+001C nur noch im Text von ZIP-Dateien; ZIP-Freischaltung folgt in 31-10, FMT-02 bleibt bis dahin offen; CI grün auf 70be3383 und ddaa4c51)
-Last activity: 2026-10-11 -- Plan 31-09 abgeschlossen
+Plan: 10 von 15 erledigt (31-01 bis 31-10), nächster Plan 31-11
+Status: Phase 31 in Ausführung; 31-10 abgeschlossen (eml, zip, doc, xls, heic/heif in beiden Allowlists in einem Commit, Typgruppen ohne zip, Minor-Migration 1.5; FMT-01 bis FMT-05 Complete, FMT-06 offen bis 31-11 bis 31-13; CI grün auf a14c03c3 und 5cba95fc)
+Last activity: 2026-10-12 -- Plan 31-10 abgeschlossen
 
-Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 8/15 Pläne
+Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 10/15 Pläne
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 8/15 Pläne
 - v1.5: 31-07 in ca. 130 min ohne Checkpoint-Wartezeit (3 Tasks, 10 Dateien)
 - v1.5: 31-08 in ca. 120 min (2 Tasks, 6 Dateien)
 - v1.5: 31-09 in ca. 75 min (1 Task, 6 Dateien)
+- v1.5: 31-10 in ca. 150 min inkl. ca. 70 min CI (2 Tasks, 15 Dateien)
 
 ## Accumulated Context
 
@@ -82,14 +83,13 @@ Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 8/15 Pläne
 - 31-07: pillow-heif im Bildpfad (thumbnails/depth/aux aus, decode_threads=1), abgeschnittene HEIC -> failed(corrupt), HEIF über der Schätzung -> skipped(too_large). Checkpoint ausgelöst (48 MP too_large, Lauf 38121953472); Owner-Entscheid: MALLOC_ARENA_MAX messen, Fall A eingetreten: mallopt(M_ARENA_MAX, 1) nur im Extraktionskind (sandbox._limit_malloc_arenas), fester HEIF-Anteil 160 -> 32 MiB, 48 MP mit 15,7/17,0 % Rest unter 512 MiB indexed (Lauf 38125992894), Text-/OCR-Weg unverändert; Limit bleibt 512 MiB. HEIF-Schätzung = 80 MiB + 7 B/px (RGB), 9 B/px sonst, statt Faktor. FMT-05 offen bis 31-10. Offen für 31-15: JPEG failed(out_of_memory) gegen HEIF skipped(too_large).
 - 31-08: extract/archive.py (extract_zip, noch nicht in Allowlist/Dispatch, Freischaltung 31-10 nach dem Snippet 31-09): Köpfe des Zentralverzeichnisses selbst gezählt nach der Schleife von zipfile (Endsatz und ZIP64-Locator wie CPython _EndRecData/_EndRecData64, Locator wird immer gelesen), Zahl im Endsatz nie geglaubt; ZipFile erst danach. Ein _ArchiveBudget für alle Ebenen (Einträge, Verzeichnisbytes, deklarierte und gelesene Bytes, Mitglieder mit Text, Frist). Grenzen gemessen, alle Startwerte D-31-07 bestätigt: 10 000 Einträge (5,5 MiB), Verzeichnis 8 MiB neu (ZipFile an beiden Grenzen 19,5 MiB), 256 MiB, Rate 100:1 ab 1 MiB (reale Dateien bis 17,9:1, Deflate 1028,6:1), Tiefe 2, 1 000 Mitglieder (11,7 ms je Mitglied), Zeitanteil 0,75. Text = Abschnitte U+001C + bereinigter Name + Zeilenumbruch + Text, auch Namen ohne Text; kein OCR. Mitglieder als <scratch>.m<n>.part (Poller-Sweep räumt Reste). Bombenkorpus mit echtem 720-Byte-Quine, Kind mit Selbstabbruch; 18 Gegenproben rot. CI Python gates 38129929315 (5277 passed) und sechs weitere grün.
 - 31-09: Auszug eines ZIP-Treffers beginnt mit "<innere Datei>: " in snippets_for und _passage_of; Name aus dem gespeicherten body_de an der letzten Marke U+001C vor dem ersten Highlight (nicht vor dem Fragmentanfang: tantivy beginnt das Fragment einer kurzen ZIP-Datei im ersten Mitglied, gemessen), Highlights erst in Zeichen umgerechnet, dann um entfernte Marken und den Präfix verschoben. Präfix nur bei gespeichertem ext zip; U+001C aus jedem Auszug entfernt. cap_text(text, *, member_marks=False) entfernt U+001C, nur archive.py setzt member_marks=True (Befund 15). Kein Schemafeld, SCHEMA_VERSION 3 (D-30-08). 10 Gegenproben rot. CI Python gates 38132651127 (70be3383) und 38133773017 (ddaa4c51) samt allen weiteren Läufen grün.
+- 31-10: message/rfc822, application/zip, application/msword, application/vnd.ms-excel, image/heic, image/heif in dispatch.ALLOWED_MIMETYPES und StorageService::ALLOWED_MIMETYPES (a14c03c3, ein Commit), Routen MAIL/ZIP/DOC/XLS, HEIC/HEIF über Route.OCR; gemeinsamer Begründungsabsatz an beiden Listen, Paritätstest vergleicht ihn. OCR_CERTAIN_MIMETYPES + HEIC/HEIF. TYPE_GROUPS: doc/dot, xls/xlt, heic/heif; zip in keiner Gruppe (D-31-05), Grenze in docs/search-filters.md. Migration Version001500Date20261012000000: markScanStale, dann backend_app_version verwerfen; kein Containeraufruf. Kind-Test extract_guarded für eml/zip/doc/xls (2a5ad6a5). CI a14c03c3 alle acht grün (Python 38223115485, PHP 38223115697 mit 598 Tests, HaRP 38223115654 Store upgrade 0 bis 7); auf 5cba95fc alle acht grün (HaRP 38227673884). FMT-01 bis FMT-05 Complete, Live-Beweis Upload bis Treffer folgt mit der Saat 31-12/31-13.
 
 ### Offene Faeden (kein aktiver Auftrag)
 
 - Owner-Veto zu A8 (31-03) möglich: dann Längenausnahme aus dem ersten Planstand.
-- FMT-01 erst auf Complete, wenn 31-10 .eml in Allowlist/Dispatch freischaltet (Extraktor seit 31-04 fertig).
-- FMT-03 erst auf Complete, wenn 31-10 .doc über extract_msword freischaltet (Extraktor seit 31-05 fertig).
-- FMT-04 erst auf Complete, wenn 31-10 .xls über extract_msexcel freischaltet (Extraktor seit 31-06 fertig).
-- FMT-02 erst auf Complete, wenn 31-10 application/zip über extract_zip freischaltet (Extraktor seit 31-08, Auszug mit innerer Datei seit 31-09 fertig).
+- 31-11 Teil A: nicht indexierte Zeilen mit den sechs neuen Mimetypen aufnehmen (Pitfall 3, Mischfenster mit 1.4.2-Container).
+- 31-12/31-13: Live-Beweis Upload bis Treffer für die neuen Typen (Saat) nachliefern; FMT-01 bis FMT-05 stehen auf Complete mit Unit-/Kind-/Paritätsbeleg.
 - 31-14: Kosten von str.find je ZIP-Treffer auf großem ZIP-Text messen (T-31-30).
 - 31-15 (Audit): Umbenennungsweg des Pollers (_rewrite_metadata) übernimmt den gespeicherten Text; eine vor 1.5 indexierte .txt mit U+001C, umbenannt zu .zip, bekäme bis zur nächsten Inhaltsextraktion einen Präfix aus der eigenen Zeile; bewerten.
 - 31-15 (Audit): Office-Mitglied in einer ZIP-Datei öffnet seine eigene ZipFile ohne Kopfzählung (wie eine einzelne DOCX), begrenzt durch max_file_bytes und Frist; bewerten.
@@ -117,6 +117,6 @@ Progress: [█░░░░░░] 1/7 Phasen; Phase 31: 8/15 Pläne
 
 ## Session Continuity
 
-Last session: 2026-10-11T10:50:00.000Z
-Stopped at: Completed 31-09-PLAN.md
+Last session: 2026-10-12T09:30:00.000Z
+Stopped at: Completed 31-10-PLAN.md
 Resume file: None
