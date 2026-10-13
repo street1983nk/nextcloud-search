@@ -407,17 +407,21 @@ if excluded:
 | A4 | `occ findling:purge` entfernt den ganzen appconfig der App, also auch `exclusion_patterns` | Speicherort | sonst bleibt ein Schlüssel nach Purge liegen |
 | A5 | Die gemessenen Matcher-Zeiten übertragen sich auf den echten Code in PHP 8.2 (CI) | Grenzwerte | Grenzen nach unten anpassen; Audit misst nach |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Weg C ändert das Verhalten des Abgleichs für bekannte Dateien unter Regel.**
    - Wissen: im Geist des Owner-Entscheids vom 03.10.2026, schließt B1 auch für Präfixe.
    - Unklar: ob der Owner das als neue Entscheidung sehen will.
    - Empfehlung: als Planer-Entscheidung mit ausdrücklichem Veto-Hinweis im Plan führen; keine Rückfrage vorab.
+   - **Erledigt:** Owner-Entscheid D-33-01 (13.10.2026, 33-CONTEXT.md), Weg C freigegeben; umgesetzt in 33-03, Urteilsbereinigung dazu in 33-04 Task 3 (PE-9).
 2. **Bereinigung der Urteilszeilen auch für Präfix-Räumungen (SubtreeExpandJob)?**
    - Wissen: B2 betrifft Präfixe heute genauso; Erfolgskriterium 3 spricht allgemein von "ausgeschlossene Dateien".
    - Empfehlung: ja, gleiche Methode in beiden Räumwegen; die Präfix-Treffer bleiben unverändert, nur die Fehlerliste wird ehrlicher.
+   - **Erledigt:** Planer-Entscheidung PE-4 (33-01-PLAN.md), Owner-Frage G4 in 33-01 Task 2; umgesetzt in 33-04.
 3. **`?` über `/` hinweg?** Empfehlung nein (Planer-Entscheidung, Begründung oben).
+   - **Erledigt:** Planer-Entscheidung PE-1, Owner-Frage G2 in 33-01 Task 2; die Grenzen 32/60 (D-33-03) laufen als G1.
 4. **Muster ohne Platzhalter erlauben?** Empfehlung ablehnen mit Verweis auf die Ordnerliste.
+   - **Erledigt:** Planer-Entscheidung PE-2 (Code `no_wildcard`), Owner-Frage G3 in 33-01 Task 2. Die Frage nach den weiteren "box"-Sätzen (Abschnitt Hardware-Hinweis) läuft als PE-6 und G5.
 
 ## Environment Availability
 
@@ -496,7 +500,7 @@ Wegen Baumhash- und Katalogkonflikten seriell in Wellen; Python-Anteile können 
 | 33-06 | Doku (admin-page.md, Muster-Doku dreisprachig wo nötig, CHANGELOG, Store-Entwurf Teil Phase 33), Dev-Nachweis 8090 mit Owner per Playwright | 5 |
 | 33-07 | Security-, Bug- und Performance-Audit (Matcher-Korpus, Schreibpfad-Messung, Kehrjob auf großem Korpus) | 6 |
 
-Vorher: 33-UI-SPEC.md (UI-Phase-Gate).
+Vorher: 33-UI-SPEC.md (UI-Phase-Gate). **Überholt:** D-33-02 (Owner, 13.10.2026) verzichtet auf eine UI-SPEC; die Planung umfasst 33-01 bis 33-11 (ROADMAP.md).
 
 ## Sources
 
