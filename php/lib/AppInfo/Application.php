@@ -8,6 +8,7 @@ use OCA\Findling\Listener\FileEventListener;
 use OCA\Findling\Listener\GroupEventListener;
 use OCA\Findling\Listener\LoadUnifiedSearchFiltersListener;
 use OCA\Findling\Listener\ShareEventListener;
+use OCA\Findling\Search\FilterProvider;
 use OCA\Findling\Search\Provider;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
@@ -52,6 +53,10 @@ class Application extends App implements IBootstrap {
 	 */
 	public function register(IRegistrationContext $context): void {
 		$context->registerSearchProvider(Provider::class);
+		// The hidden provider the filter chips ask (Befund A of plan 32-07): its
+		// order is null, so the dialog lists it nowhere, and a request without
+		// a chip parameter is answered with nothing. See FilterProvider.
+		$context->registerSearchProvider(FilterProvider::class);
 
 		// A loop and not four calls, because this list is the answer to "how
 		// many ways are there from a file event into the queue". COMP-03 allows

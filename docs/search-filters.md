@@ -84,8 +84,12 @@ The limits:
   of the unified search is sent with every chip.
 - **An empty value is refused by Nextcloud itself.** A request with `types=` or
   `folder=` and nothing after it is answered with HTTP 400 by the Nextcloud
-  core, before Findling is asked. The filter entries never send an empty value;
-  choosing the root folder sends no folder at all (D-32-01).
+  core, before Findling is asked. The filter entries never send an empty value
+  (D-32-01). Choosing the root folder sends `folder=/`, which narrows nothing:
+  the chip "File contents in /" shows the hits of the search without a folder.
+- **A cancelled folder picker shows no hits.** The chip "File contents in a
+  folder" stays, but carries no folder, and a chip without a parameter answers
+  with nothing until a folder is chosen.
 - **Unknown or manipulated values are ignored.** An unknown type group, an
   overlong value, a folder that does not exist, a path with `..`, a file instead
   of a folder or a folder outside the user's own tree: the search answers
@@ -97,6 +101,38 @@ The limits:
   folder.
 - **ZIP files stay outside every type group** here as well (see "The limits"
   above).
+
+### How the chips reach Findling
+
+The Nextcloud core keeps every filter entry an app registers in its list of
+providers, and a search without a chip asks each entry once, without the
+parameter of any chip. The seven entries therefore do not ask the provider
+`findling` (the one group "File contents" of a search without a chip) but a
+second, hidden provider, `findling-filter`:
+
+- Its order is null, so the provider list of the dialog does not name it: it is
+  neither a group nor a menu entry of its own.
+- A request without `types` and without `folder` is answered with an empty
+  group and never reaches the backend. That is every request the core sends for
+  a menu entry while no chip is set, and the core shows no group without a hit.
+- A request with `types` or `folder` is handed to the provider `findling` as it
+  came: same filters, same rights, same recheck, same group name.
+
+An admin who limits the providers of the unified search with the core setting
+`unified_search.providers_allowed` has to allow `findling-filter` next to
+`findling`, or the chips of Findling stay empty.
+
+**One dependency on core internals.** The date of the core is only sent with a
+chip whose provider declares `since` and `until`. The core looks that up in its
+provider list under the `searchFrom` of the chip and, for `findling-filter`,
+finds nothing there and falls back to the chip itself. So the callback of each
+entry writes the filter map (`since`, `until`, `types`, `folder`) onto `this`,
+which the core sets to the menu entry it copies the chip from right after the
+callback (Nextcloud 33 to 35 and master, read on 2026-10-13). This is not an API.
+If a later core calls the callback differently, the entries still work and
+still filter by type and folder; only a type or folder chip together with the
+date filter loses the date. The script sets the map only when `this` is an
+object, so nothing throws.
 
 ## The period
 

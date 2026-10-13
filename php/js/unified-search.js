@@ -31,10 +31,31 @@
  * without parameters. Sending again is what keeps the fresh chip filtered; the
  * folder entry sends the folder it remembers instead of asking again.
  *
- * Why the root sends no folder. A parameter with an empty value is refused by
- * the core with HTTP 400 before Findling is asked, and the root of the user
- * folder means no narrowing at all. So the root, or a choice that is no path,
- * sends an empty parameter object and never an empty string.
+ * Why the entries ask findling-filter and not findling (Befund A of plan
+ * 32-07). The core keeps every registered entry in its provider list and, in a
+ * search without a chip, asks each of them under searchFrom without any
+ * parameter. Pointed at the real provider that was eight identical requests per
+ * term and seven groups with the same unfiltered hits. Search\FilterProvider is
+ * hidden from the dialog (order null) and answers a request without types and
+ * without folder with nothing, so the chipless requests cost no backend call
+ * and show no group. The real provider findling stays the one group of a search
+ * without a chip.
+ *
+ * Why the callback sets this.filters. The core resolves the filters a chip
+ * supports through the provider named in searchFrom; findling-filter is not in
+ * its list, so it falls back to the chip itself, and without a filter map the
+ * date of the core would not be sent with the chip. The callback runs as a
+ * method of the menu entry (this is the entry) and the chip is a copy of the
+ * entry made right after it, so a map set on this travels into the chip. That
+ * is an internal of the core, not an API (docs/search-filters.md): if a core
+ * calls the callback without the entry as this, nothing breaks but the date
+ * next to a chip, because the map is only set when this is an object.
+ *
+ * Why the root sends folder '/'. A parameter with an empty value is refused by
+ * the core with HTTP 400 before Findling is asked, so the value is never empty.
+ * The root is a chip of its own: it narrows nothing, and Provider::folderOf()
+ * reads '/' as no folder, but the group appears. A cancelled picker sends
+ * nothing, and a chip without a parameter shows no hits.
  *
  * Feature detection before every API. The legacy search has no
  * OCA.UnifiedSearch, the folder picker of OC.dialogs is deprecated, and a page
@@ -47,15 +68,30 @@
  *     addProviderFilter    stable34:674-704, stable35:1212-1240 (callback first, chip second)
  *     handlePluginFilter   stable34:828-845, stable35:1365-1380 (parameters on an existing chip)
  *   apps/files/src/plugins/search/folderSearch.ts       the same mechanism for "In folder"
+ * and for the provider list and this.filters (Befund A of plan 32-07):
+ *   UnifiedSearchModal.vue  providers: groupProvidersByApp([...providers, ...externalFilters])
+ *     stable34:436, stable35:739; find() asks type: searchFrom ?? id, stable34:520;
+ *     providerIsCompatibleWithFilters resolves searchFrom, stable34:866-880,
+ *     stable35:1403-1417; buildCategoryParams, stable35:1069-1095
+ *   lib/private/Search/SearchComposer.php  getProviders() skips a null order,
+ *     search() does not ask it
  */
 'use strict'
 
 ;(function () {
-  // The app id and the provider id of Findling. Entries carry it as appId (the
-  // group of the menu) and as searchFrom (the provider the chip asks), never as
-  // their own id: the core matches chips and providers by id, and an entry
-  // called findling would collide with the provider itself.
+  // The app id of Findling. Entries carry it as appId (the group of the menu),
+  // never as their own id: the core matches chips and providers by id, and an
+  // entry called findling would collide with the real provider.
   const APP_ID = 'findling'
+
+  // The hidden provider every chip asks (Search\FilterProvider). Never the real
+  // provider findling, see the header.
+  const SEARCH_FROM = 'findling-filter'
+
+  // The filter map of a chip, in the shape the provider list of the core
+  // carries for a provider: the two dates of the core and the two filters of
+  // Findling.
+  const CHIP_FILTERS = { since: 'datetime', until: 'datetime', types: 'string', folder: 'string' }
 
   const TYPE_ID_PREFIX = 'findling-type-'
   const FOLDER_ID = 'findling-folder'
@@ -135,17 +171,30 @@
     return '/' + picked.replace(/^\/+|\/+$/g, '')
   }
 
+  /**
+   * Hand the filter map to the chip the core is about to copy from this entry.
+   * Only when this is an object; a core that calls the callback differently
+   * costs the date next to a chip and nothing else.
+   */
+  function markChip (entry) {
+    if (entry === null || typeof entry !== 'object') {
+      return
+    }
+    entry.filters = Object.assign({}, CHIP_FILTERS)
+  }
+
   function sendFolder (folder) {
     const parts = folder.split('/')
     const name = parts[parts.length - 1] !== '' ? parts[parts.length - 1] : '/'
     const params = {}
-    if (folder !== '' && folder !== '/') {
+    // Never an empty value (HTTP 400 of the core); the root goes as '/'.
+    if (folder !== '') {
       params.folder = folder
     }
     sendLater({
       id: FOLDER_ID,
       appId: APP_ID,
-      searchFrom: APP_ID,
+      searchFrom: SEARCH_FROM,
       filterUpdateText: filled(t('findling', 'File contents in %s'), name),
       filterParams: params,
     })
@@ -153,8 +202,8 @@
 
   /**
    * Open the folder picker of the core. A cancelled picker sends nothing, the
-   * same as the "In folder" entry of the Files app: the chip stays and searches
-   * without a folder until a folder is chosen.
+   * same as the "In folder" entry of the Files app: the chip stays, and without
+   * a folder it shows no hits until a folder is chosen.
    */
   function pickFolder () {
     const dialogs = folderPicker()
@@ -187,14 +236,15 @@
     api.registerFilterAction({
       id: id,
       appId: APP_ID,
-      searchFrom: APP_ID,
+      searchFrom: SEARCH_FROM,
       label: label,
       icon: appIcon(),
       callback: guarded(function () {
+        markChip(this)
         sendLater({
           id: id,
           appId: APP_ID,
-          searchFrom: APP_ID,
+          searchFrom: SEARCH_FROM,
           filterUpdateText: label,
           filterParams: { types: group },
         })
@@ -206,13 +256,14 @@
     api.registerFilterAction({
       id: FOLDER_ID,
       appId: APP_ID,
-      searchFrom: APP_ID,
+      searchFrom: SEARCH_FROM,
       label: t('findling', 'File contents in a folder'),
       icon: appIcon(),
       // apply is false when the entry is already applied: the core is about to
       // replace the chip with one without parameters, so the remembered folder
       // goes out again. Before any choice the picker opens instead.
       callback: guarded(function (apply) {
+        markChip(this)
         if (apply === false && chosenFolder !== null) {
           sendFolder(chosenFolder)
           return

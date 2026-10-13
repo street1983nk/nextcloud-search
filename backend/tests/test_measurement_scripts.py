@@ -868,8 +868,14 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # BeforeTemplateRenderedEvent. The script itself, php/js/unified-search.js, is
 # not in this tree, because the recipe globs **/*.php. No file went, so
 # PHP_FILES_TODAY moves to 95.
-PHP_FILES_TODAY = 95
-PHP_TREE_HASH_TODAY = "e5b9c78625d8f419327bb0da94a5362ccfff0e513a299121ff9c057505710a3c"
+# Moved on 2026-10-13 by Plan 32-07, Befund A (USRCH-01, USRCH-02): the hidden
+# provider the filter chips ask. Two files came,
+# php/lib/Search/FilterProvider.php (order null, an empty group without types
+# and folder, otherwise Provider::search) and its unit test
+# php/tests/Unit/FilterProviderTest.php; AppInfo/Application.php registers it
+# next to the real provider. No file went, so PHP_FILES_TODAY moves to 97.
+PHP_FILES_TODAY = 97
+PHP_TREE_HASH_TODAY = "e8bb5819cde1f6a0b3cf1faed2e3a0054a0c280cab9be76c85f79cb1bb8cff8e"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

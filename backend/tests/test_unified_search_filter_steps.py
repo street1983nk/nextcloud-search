@@ -25,6 +25,10 @@ What the step has to carry, one claim per line of ``CLAIMS``:
    slash.
 6. It asks both empty values and expects HTTP 400 from the core (D-32-01).
 7. It sows the seed PDF of the repository and takes the seed away again.
+8. It asks the hidden provider of the chips, ``findling-filter`` (Befund A of
+   plan 32-07): absent from the provider list, an empty group without
+   ``types`` and ``folder``, the seed PDF under ``types=pdf``, the seed folder
+   under ``folder``, and the unfiltered answer under ``folder=/``.
 
 The gate falls closed: a step that cannot be found costs one finding per claim.
 Every claim has a staged sample that makes it fire.
@@ -67,6 +71,15 @@ FAIL_OPEN = (
 REFUSED = ("refused empty-types 'types='", "refused empty-folder 'folder='")
 REFUSED_STATUS = '!= "400"'
 SEED = ("findling-src/testdata/corpus/01-text-layer.pdf", "-X DELETE")
+HIDDEN = (
+    '[.ocs.data[] | select(.id == "findling-filter")] | length == 0',
+    "/ocs/v2.php/search/providers/findling-filter/search'",
+    "status=$(search chipless)",
+    "'.ocs.data.entries | length == 0'",
+    "probe chip-pdf \"${id_pdf}\" pdf 'types=pdf'",
+    "probe chip-folder \"${id_txt} ${id_md} ${id_pdf}\" none 'folder=/Filterprobe32'",
+    "same chip-root 'folder=/'",
+)
 
 CLAIMS = (
     "the step stands once between the language proof and the drift probe",
@@ -76,6 +89,7 @@ CLAIMS = (
     "the step asks every manipulated value",
     "the step asks both empty values and expects HTTP 400",
     "the step sows the seed PDF and takes the seed away again",
+    "the step asks the hidden provider of the chips",
 )
 
 
@@ -117,6 +131,9 @@ def scan(source: str) -> list[str]:
     missing = [part for part in SEED if part not in body]
     if missing:
         findings.append(f"the step does not sow or remove its seed: {missing}")
+    missing = [part for part in HIDDEN if part not in body]
+    if missing:
+        findings.append(f"the step does not ask the hidden provider of the chips: {missing}")
     return findings
 
 
@@ -169,6 +186,13 @@ jobs:
           refused empty-types 'types='
           refused empty-folder 'folder='
           if [ "${code}" != "400" ]; then exit 1; fi
+          jq -e '[.ocs.data[] | select(.id == "findling-filter")] | length == 0' providers.json
+          route='http://localhost:8080/ocs/v2.php/search/providers/findling-filter/search'
+          status=$(search chipless)
+          jq -e '.ocs.data.entries | length == 0' hit-chipless.json
+          probe chip-pdf "${id_pdf}" pdf 'types=pdf'
+          probe chip-folder "${id_txt} ${id_md} ${id_pdf}" none 'folder=/Filterprobe32'
+          same chip-root 'folder=/'
           curl -X DELETE "${dav}/Filterprobe32"
 
       - name: The drift probe both directions share
@@ -211,6 +235,27 @@ def test_a_step_that_lost_a_manipulated_value_is_reported() -> None:
     findings = scan(lost)
     assert len(findings) == 1
     assert "'folder=/../../'" in findings[0]
+
+
+def test_a_step_without_the_chipless_probe_is_reported() -> None:
+    # Befund A of plan 32-07: the empty answer of findling-filter without a
+    # chip is what keeps the seven groups out of every search.
+    lost = _CLEAN.replace("          status=$(search chipless)\n", "", 1)
+
+    assert lost != _CLEAN
+    findings = scan(lost)
+    assert len(findings) == 1
+    assert "hidden provider of the chips" in findings[0]
+    assert "status=$(search chipless)" in findings[0]
+
+
+def test_a_step_that_lists_the_hidden_provider_is_reported() -> None:
+    listed = _CLEAN.replace('select(.id == "findling-filter")] | length == 0', 'select(.id == "findling-filter")]', 1)
+
+    assert listed != _CLEAN
+    findings = scan(listed)
+    assert len(findings) == 1
+    assert "hidden provider of the chips" in findings[0]
 
 
 def test_a_step_in_the_wrong_place_is_reported() -> None:

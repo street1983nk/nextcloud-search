@@ -1569,6 +1569,32 @@ jobs:
           fi
           echo "mixed: HTTP 200 and the ids of types=pdf"
 
+          # -- the hidden provider of the chips (Befund A of plan 32-07) ---------
+          # The seven menu entries ask findling-filter, because the core asks
+          # every entry once per search even without a chip. Its order is
+          # null, so the provider list must not name it; a request without
+          # types and without folder answers an empty group, one with a chip
+          # parameter the same hits as the real provider, and folder=/ the
+          # hits of the search without a filter.
+          if ! jq -e '[.ocs.data[] | select(.id == "findling-filter")] | length == 0' "${work}/providers.json" > /dev/null; then
+            echo "::error::the provider list names findling-filter, so the dialog shows it as a group and a menu entry of its own"
+            exit 1
+          fi
+          echo "provider list: findling-filter hidden, as its null order asks"
+          route_real="${route}"
+          route='http://localhost:8080/ocs/v2.php/search/providers/findling-filter/search'
+          status=$(search chipless)
+          if [ "${status}" != "200" ] || ! jq -e '.ocs.data.entries | length == 0' "${work}/hit-chipless.json" > /dev/null; then
+            echo "::error::findling-filter without types and folder answered HTTP ${status} and not an empty group; every search without a chip would show the Findling hits seven times again"
+            show chipless
+            exit 1
+          fi
+          echo "chipless: HTTP 200 and an empty group from findling-filter"
+          probe chip-pdf "${id_pdf}" pdf 'types=pdf'
+          probe chip-folder "${id_txt} ${id_md} ${id_pdf}" none 'folder=/Filterprobe32'
+          same chip-root 'folder=/'
+          route="${route_real}"
+
           # -- D-32-01, the core and not Findling --------------------------------
           refused empty-types 'types='
           refused empty-folder 'folder='
@@ -1580,6 +1606,7 @@ jobs:
             echo "- filter map: types and folder as string"
             echo "- types=pdf, types=text, folder and sub folder, type and folder with a date: as expected"
             echo "- seven manipulated values and pdf,videos: the answer without a filter, HTTP 200"
+            echo "- findling-filter: hidden from the provider list, empty without a chip, types=pdf, folder and folder=/ as the real provider"
             echo "- empty types= and folder=: HTTP 400 from the core (D-32-01)"
           } >> "${GITHUB_STEP_SUMMARY}"
 

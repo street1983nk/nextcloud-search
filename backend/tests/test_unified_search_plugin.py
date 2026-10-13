@@ -7,10 +7,11 @@ is held from two sides that do not share a method:
 
 - **a reading of the source** (comments removed, string literals kept): the six
   groups in the order of ``SearchFilters::TYPES`` as PHP declares it, the ids,
-  ``appId`` and ``searchFrom``, feature detection before every API, the emit
-  inside a ``setTimeout``, no empty folder value, the translation keys of the
-  wording draft D-32-04 and a list of prohibitions. Every rule has a self test
-  on a sample script, with the clean sample as the positive control.
+  ``appId`` and ``searchFrom``, the filter map handed to the chip, feature
+  detection before every API, the emit inside a ``setTimeout``, no empty folder
+  value, the translation keys of the wording draft D-32-04 and a list of
+  prohibitions. Every rule has a self test on a sample script, with the clean
+  sample as the positive control.
 - **a run of the script** in node, inside a sandbox that plays the core
   frontend: what is registered, what each click sends and when, what a folder
   choice sends, and that a page without one of the APIs neither registers nor
@@ -26,6 +27,18 @@ stable34:674-704, stable35:1212-1240); ``handlePluginFilter`` sets
 ``extraParams`` only on a chip that already exists (stable34:828-845,
 stable35:1365-1380); a parameter with an empty value is refused by the core with
 HTTP 400 before Findling is asked (32-RESEARCH, pitfall 3).
+
+Befund A of plan 32-07 added three facts, read in the same branches and in
+master: the modal keeps every registered entry in its provider list
+(``groupProvidersByApp([...providers, ...externalFilters])``, stable34:436,
+stable35:739) and asks each of them without a chip under
+``type: searchFrom ?? id`` (stable34:520), which is why every entry asks the
+hidden provider ``findling-filter`` and never the real one; the callback runs as
+a method of the menu entry and the chip is a copy of that entry made right after
+it (stable34:674-704); and ``providerIsCompatibleWithFilters`` resolves the
+filters of a chip through ``searchFrom`` and falls back to the chip itself
+(stable34:866-880, stable35:1403-1417), which is why the callback hands the chip
+a filter map through ``this``.
 """
 
 import json
@@ -44,6 +57,11 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN = REPO_ROOT / "php" / "js" / "unified-search.js"
 
 APP_ID = "findling"
+# The hidden provider every chip asks (php/lib/Search/FilterProvider.php).
+SEARCH_FROM = "findling-filter"
+# The filter map the callback hands to the chip, in the shape of the provider
+# list of the core: the two dates of the core and the two filters of Findling.
+CHIP_FILTERS = {"since": "datetime", "until": "datetime", "types": "string", "folder": "string"}
 TYPE_ID_PREFIX = "findling-type-"
 FOLDER_ID = "findling-folder"
 ADD_FILTER_EVENT = "nextcloud:unified-search:add-filter"
@@ -138,9 +156,14 @@ def type_entries(code: str) -> list[tuple[str, str]] | None:
     return re.findall(r"\[\s*'([a-z]+)'\s*,\s*'([^']*)'\s*\]", match.group(1))
 
 
+def _names_bound_to(code: str, value: str) -> set[str]:
+    """The identifiers a ``const`` binds to the string ``value``."""
+    return set(re.findall(r"\bconst\s+(\w+)\s*=\s*'" + re.escape(value) + "'", code))
+
+
 def _app_id_names(code: str) -> set[str]:
     """The identifiers a ``const`` binds to the string 'findling'."""
-    return set(re.findall(r"\bconst\s+(\w+)\s*=\s*'findling'", code))
+    return _names_bound_to(code, APP_ID)
 
 
 def contract_findings(name: str, source: str, php_types: list[str] | None) -> list[str]:
@@ -164,27 +187,43 @@ def contract_findings(name: str, source: str, php_types: list[str] | None) -> li
         )
 
     # The ids. Never exactly 'findling', which is the id of the provider and
-    # would collide with it in the chip list of the core.
+    # would collide with it in the chip list of the core, and never
+    # 'findling-filter', the id of the hidden provider.
     findings.extend(
         f"{name}: lacks the id literal {literal!r}"
         for literal in (TYPE_ID_PREFIX, FOLDER_ID)
         if repr(literal) not in code
     )
     names = _app_id_names(code)
+    hidden = _names_bound_to(code, SEARCH_FROM)
     for value in re.findall(r"\bid\s*:\s*([^,}\s]+)", code):
         if value in {"'findling'", '"findling"'} or value in names:
             findings.append(f"{name}: registers or sends the id 'findling', the id of the provider itself")
+        if value in {f"'{SEARCH_FROM}'", f'"{SEARCH_FROM}"'} or value in hidden:
+            findings.append(f"{name}: registers or sends the id '{SEARCH_FROM}', the id of the hidden provider")
 
-    # appId and searchFrom: 'findling' on every entry and every event.
-    for key in ("appId", "searchFrom"):
+    # appId 'findling' (the group of the menu) and searchFrom 'findling-filter'
+    # (the provider the chip asks, Befund A of plan 32-07) on every entry and
+    # every event. A searchFrom of 'findling' asks the real provider once per
+    # entry in every search without a chip.
+    for key, wanted, bound in (("appId", APP_ID, names), ("searchFrom", SEARCH_FROM, hidden)):
         values = re.findall(r"\b" + key + r"\s*:\s*([^,}\s]+)", code)
         if not values:
             findings.append(f"{name}: never sets {key}")
         findings.extend(
-            f"{name}: sets {key} to {value}, not to 'findling'"
+            f"{name}: sets {key} to {value}, not to {wanted!r}"
             for value in values
-            if value != "'findling'" and value not in names
+            if value != repr(wanted) and value not in bound
         )
+
+    # The filter map of the chip: without it the core sends no date with a chip,
+    # because findling-filter is in no provider list it could read one from.
+    # Set on this, and only when this is an object (a core that calls the
+    # callback otherwise costs the date and nothing else).
+    if re.search(r"\.filters\s*=(?!=)", code) is None:
+        findings.append(f"{name}: never hands a filter map to the chip (this.filters)")
+    if re.search(r"typeof\s+\w+\s*[!=]==\s*'object'", code) is None:
+        findings.append(f"{name}: sets the filter map without asking whether this is an object")
 
     # Two call sites: one in the loop over the six groups, one for the folder.
     calls = len(re.findall(r"\.registerFilterAction\s*\(", code))
@@ -217,12 +256,13 @@ def contract_findings(name: str, source: str, php_types: list[str] | None) -> li
 
     # No empty folder value: the core answers an empty parameter with HTTP 400
     # and Findling is never asked.
-    if re.search(r"\bfolder\s*:\s*['\"`]", code):
+    # The one literal allowed is the type name of the filter map, 'string'.
+    if re.search(r"\bfolder\s*:\s*['\"`](?!string['\"`])", code):
         findings.append(f"{name}: sends a literal folder value")
     if re.search(r"(?:\|\||\?\?)\s*''", code):
         findings.append(f"{name}: falls back to an empty string, which would reach the core as an empty parameter")
-    if not (re.search(r"!==\s*''", code) and re.search(r"!==\s*'/'", code)):
-        findings.append(f"{name}: sets the folder without ruling out '' and the root '/'")
+    if re.search(r"!==\s*''", code) is None:
+        findings.append(f"{name}: sets the folder without ruling out ''")
 
     # Translation keys: only the ten of the draft, every new one used, and only
     # through the catalogue of findling.
@@ -297,9 +337,11 @@ function sandbox (options) {
   if (options.api !== false) {
     win.OCA = { UnifiedSearch: {} }
     if (options.register !== false) {
+      // The store of the core keeps an object of its own, not the argument;
+      // the callback later runs as a method of that object.
       win.OCA.UnifiedSearch.registerFilterAction = (action) => {
         if (options.registerThrows) { throw new Error('register failed') }
-        log.registered.push(action)
+        log.registered.push(Object.assign({}, action))
       }
     }
   }
@@ -337,13 +379,28 @@ function flush (log) {
   }
 }
 
+// The way the core clicks: the callback as a method of the menu entry, then
+// the chip as a copy of that entry (addProviderFilter, stable34:674-704).
 function click (log, id, apply) {
   const action = log.registered.find((entry) => entry.id === id)
+  delete action.filters
   const before = log.emitted.length
   try { action.callback(apply) } catch (error) { log.errors.push(String(error && error.message)) }
+  const chip = Object.assign({}, action)
   const synchronous = log.emitted.length - before
   flush(log)
-  return { synchronous, sent: log.emitted.slice(before + synchronous) }
+  const chipFilters = chip.filters === undefined ? null : chip.filters
+  return { synchronous, sent: log.emitted.slice(before + synchronous), chipFilters }
+}
+
+// A core that calls the callback without the entry as this.
+function detached (log, id, apply) {
+  const action = log.registered.find((entry) => entry.id === id)
+  const callback = action.callback
+  const before = log.emitted.length
+  try { callback(apply) } catch (error) { log.errors.push(String(error && error.message)) }
+  flush(log)
+  return { sent: log.emitted.slice(before) }
 }
 
 function pick (log, value) {
@@ -384,6 +441,10 @@ folder.notAString = pick(full, ['/Projekte'])
 click(full, 'findling-folder', true)
 folder.replacement = pick(full, "/Belege/$& und $'")
 report.folder = folder
+report.detached = {
+  type: detached(full, 'findling-type-pdf', true),
+  folder: detached(full, 'findling-folder', false),
+}
 report.errors = full.errors
 
 const loading = sandbox({ readyState: 'loading', fireLoaded: true })
@@ -499,8 +560,9 @@ def test_the_run_registers_seven_entries_in_the_order_of_the_php_groups(tmp_path
     ]
     for entry in report["registered"]:
         assert entry["appId"] == APP_ID
-        assert entry["searchFrom"] == APP_ID
-        assert entry["id"] != APP_ID
+        # Befund A of plan 32-07: the hidden provider, never the real one.
+        assert entry["searchFrom"] == SEARCH_FROM
+        assert entry["id"] not in {APP_ID, SEARCH_FROM}
         assert entry["icon"] == "/apps/findling/img/app.svg"
         assert entry["callback"] == "function"
     labels = [entry["label"] for entry in report["registered"]]
@@ -519,7 +581,7 @@ def test_every_type_click_sends_its_group_later_and_again_on_the_second_click(tm
             "detail": {
                 "id": entry_id,
                 "appId": APP_ID,
-                "searchFrom": APP_ID,
+                "searchFrom": SEARCH_FROM,
                 "filterUpdateText": label,
                 "filterParams": {"types": group},
             },
@@ -529,12 +591,17 @@ def test_every_type_click_sends_its_group_later_and_again_on_the_second_click(tm
         for click in (clicks["first"], clicks["again"]):
             assert click["synchronous"] == 0
             assert click["sent"] == [expected]
+            # The chip, copied from the entry after the callback, carries the
+            # filter map, so the date of the core travels with it.
+            assert click["chipFilters"] == CHIP_FILTERS
 
 
 def test_the_folder_entry_opens_the_folder_picker_and_sends_the_chosen_folder(tmp_path: Path) -> None:
     folder = run_in_node(PLUGIN, tmp_path)["folder"]
 
-    assert folder["open"] == {"synchronous": 0, "sent": []}
+    # The picker opens and nothing is sent yet; a picker cancelled now leaves
+    # the chip without a parameter, which findling-filter answers with nothing.
+    assert folder["open"] == {"synchronous": 0, "sent": [], "chipFilters": CHIP_FILTERS}
     assert folder["pickerCount"] == 1
     assert folder["pickerArgs"] == [
         "[Choose the folder to search in]",
@@ -553,24 +620,39 @@ def test_the_folder_entry_opens_the_folder_picker_and_sends_the_chosen_folder(tm
             "detail": {
                 "id": FOLDER_ID,
                 "appId": APP_ID,
-                "searchFrom": APP_ID,
+                "searchFrom": SEARCH_FROM,
                 "filterUpdateText": "[File contents in %s]".replace("%s", "2026"),
                 "filterParams": {"folder": "/Projekte/2026"},
             },
         }
     ]
     # The second click on the applied entry sends the remembered folder again,
-    # without a second picker.
+    # without a second picker, and hands the fresh chip the filter map again.
     assert folder["again"]["sent"] == folder["chosen"]["sent"]
+    assert folder["again"]["chipFilters"] == CHIP_FILTERS
     assert folder["pickerCountAfterAgain"] == 1
 
 
-def test_the_root_and_an_empty_choice_send_no_folder_value_at_all(tmp_path: Path) -> None:
+def test_the_root_and_an_empty_choice_send_the_root_and_never_an_empty_value(tmp_path: Path) -> None:
+    # Befund A of plan 32-07: a chip without a parameter shows no hits, so the
+    # root goes as '/', which Provider::folderOf() reads as no narrowing. Never
+    # an empty value, which the core refuses with HTTP 400.
     folder = run_in_node(PLUGIN, tmp_path)["folder"]
 
     for choice in (folder["root"], folder["empty"]):
-        assert [sent["detail"]["filterParams"] for sent in choice["sent"]] == [{}]
+        assert [sent["detail"]["filterParams"] for sent in choice["sent"]] == [{"folder": "/"}]
+        assert [sent["detail"]["filterUpdateText"] for sent in choice["sent"]] == ["[File contents in /]"]
     assert folder["notAString"]["sent"] == []
+
+
+def test_a_callback_without_the_entry_as_this_still_sends_and_never_throws(tmp_path: Path) -> None:
+    # The dependency on the core internal is one of the date and nothing else:
+    # a core that calls the callback detached loses the filter map, not the chip.
+    report = run_in_node(PLUGIN, tmp_path)
+
+    assert report["errors"] == []
+    assert [sent["detail"]["filterParams"] for sent in report["detached"]["type"]["sent"]] == [{"types": "pdf"}]
+    assert len(report["detached"]["folder"]["sent"]) == 1
 
 
 def test_a_folder_name_is_text_and_never_a_replacement_pattern(tmp_path: Path) -> None:
@@ -632,6 +714,7 @@ def test_a_missing_api_registers_less_and_never_throws(
 _SAMPLE = """'use strict'
 ;(function () {
   const APP = 'findling'
+  const FROM = 'findling-filter'
   const TYPE_ENTRIES = [
     ['pdf', 'PDF'],
     ['documents', 'Documents'],
@@ -654,10 +737,15 @@ _SAMPLE = """'use strict'
   }
   function folderParams (path) {
     const params = {}
-    if (path !== '' && path !== '/') {
+    if (path !== '') {
       params.folder = path
     }
     return params
+  }
+  function mapOn (entry) {
+    if (typeof entry === 'object' && entry !== null) {
+      entry.filters = { since: 'datetime', until: 'datetime', types: 'string', folder: 'string' }
+    }
   }
   const api = window.OCA && window.OCA.UnifiedSearch
   if (!api || typeof api.registerFilterAction !== 'function') {
@@ -666,16 +754,19 @@ _SAMPLE = """'use strict'
   TYPE_ENTRIES.forEach(function (entry) {
     const id = 'findling-type-' + entry[0]
     const label = t('findling', 'File contents: %s').replace('%s', function () { return t('findling', entry[1]) })
-    api.registerFilterAction({ id: id, appId: APP, searchFrom: APP, label: label, icon: picon(), callback: function () {
-      later({ id: id, appId: APP, searchFrom: APP, filterUpdateText: label, filterParams: { types: entry[0] } })
+    api.registerFilterAction({ id: id, appId: APP, searchFrom: FROM, label: label, icon: picon(),
+      callback: function () {
+      mapOn(this)
+      later({ id: id, appId: APP, searchFrom: FROM, filterUpdateText: label, filterParams: { types: entry[0] } })
     } })
   })
   const dialogs = window.OC && window.OC.dialogs
   if (dialogs && typeof dialogs.filepicker === 'function') {
-    api.registerFilterAction({ id: 'findling-folder', appId: 'findling', searchFrom: APP,
+    api.registerFilterAction({ id: 'findling-folder', appId: 'findling', searchFrom: 'findling-filter',
       label: t('findling', 'File contents in a folder'), icon: picon(), callback: function () {
+        mapOn(this)
         dialogs.filepicker(t('findling', 'Choose the folder to search in'), function (path) {
-          later({ id: 'findling-folder', appId: APP, searchFrom: APP,
+          later({ id: 'findling-folder', appId: APP, searchFrom: FROM,
             filterUpdateText: t('findling', 'File contents in %s'), filterParams: folderParams(path) })
         })
       } })
@@ -699,6 +790,7 @@ def test_the_sample_runs_and_the_run_sees_what_the_reading_sees(tmp_path: Path) 
     assert report["errors"] == []
     assert len(report["registered"]) == 7
     assert all(click["first"]["synchronous"] == 0 for click in report["types"].values())
+    assert all(click["first"]["chipFilters"] == CHIP_FILTERS for click in report["types"].values())
 
 
 def test_markup_from_a_string_is_a_finding() -> None:
@@ -726,14 +818,12 @@ def test_an_emit_inside_the_callback_is_a_finding(tmp_path: Path) -> None:
 
 def test_an_empty_folder_value_is_a_finding() -> None:
     literal = _SAMPLE.replace("filterParams: folderParams(path)", "filterParams: { folder: '' }")
-    unguarded = _SAMPLE.replace("if (path !== '' && path !== '/') {", "if (path) {")
+    unguarded = _SAMPLE.replace("if (path !== '') {", "if (path) {")
     fallback = _SAMPLE.replace("params.folder = path", "params.folder = path || ''")
     assert len({literal, unguarded, fallback, _SAMPLE}) == 4
 
     assert contract_findings("sample.js", literal, _TYPES) == ["sample.js: sends a literal folder value"]
-    assert contract_findings("sample.js", unguarded, _TYPES) == [
-        "sample.js: sets the folder without ruling out '' and the root '/'"
-    ]
+    assert contract_findings("sample.js", unguarded, _TYPES) == ["sample.js: sets the folder without ruling out ''"]
     assert contract_findings("sample.js", fallback, _TYPES) == [
         "sample.js: falls back to an empty string, which would reach the core as an empty parameter"
     ]
@@ -747,6 +837,56 @@ def test_the_id_of_the_provider_is_a_finding() -> None:
     expected = "sample.js: registers or sends the id 'findling', the id of the provider itself"
     assert expected in contract_findings("sample.js", literal, _TYPES)
     assert expected in contract_findings("sample.js", bound, _TYPES)
+
+    hidden = _SAMPLE.replace("{ id: 'findling-folder', appId: 'findling'", "{ id: FROM, appId: 'findling'")
+    assert hidden != _SAMPLE
+    assert "sample.js: registers or sends the id 'findling-filter', the id of the hidden provider" in (
+        contract_findings("sample.js", hidden, _TYPES)
+    )
+
+
+def test_a_search_from_of_the_real_provider_is_a_finding(tmp_path: Path) -> None:
+    # Befund A of plan 32-07: searchFrom 'findling' asks the real provider once
+    # per entry in every search without a chip.
+    literal = _SAMPLE.replace("searchFrom: 'findling-filter',", "searchFrom: 'findling',")
+    bound = _SAMPLE.replace("const FROM = 'findling-filter'", "const FROM = 'findling'")
+    assert len({literal, bound, _SAMPLE}) == 3
+
+    assert contract_findings("sample.js", literal, _TYPES) == [
+        "sample.js: sets searchFrom to 'findling', not to 'findling-filter'"
+    ]
+    assert contract_findings("sample.js", bound, _TYPES) == [
+        "sample.js: sets searchFrom to FROM, not to 'findling-filter'",
+        "sample.js: sets searchFrom to FROM, not to 'findling-filter'",
+        "sample.js: sets searchFrom to FROM, not to 'findling-filter'",
+    ]
+
+    # The run sees it from the other side.
+    sample = tmp_path / "real.js"
+    sample.write_text(literal, encoding="utf-8")
+    report = run_in_node(sample, tmp_path)
+    assert report["registered"][-1]["searchFrom"] == APP_ID
+
+
+def test_a_chip_without_a_filter_map_is_a_finding(tmp_path: Path) -> None:
+    unmapped = _SAMPLE.replace(
+        "entry.filters = { since: 'datetime', until: 'datetime', types: 'string', folder: 'string' }", "return"
+    )
+    unchecked = _SAMPLE.replace("if (typeof entry === 'object' && entry !== null) {", "if (entry) {")
+    assert len({unmapped, unchecked, _SAMPLE}) == 3
+
+    assert contract_findings("sample.js", unmapped, _TYPES) == [
+        "sample.js: never hands a filter map to the chip (this.filters)"
+    ]
+    assert contract_findings("sample.js", unchecked, _TYPES) == [
+        "sample.js: sets the filter map without asking whether this is an object"
+    ]
+
+    # The run sees a chip without the map.
+    sample = tmp_path / "unmapped.js"
+    sample.write_text(unmapped, encoding="utf-8")
+    report = run_in_node(sample, tmp_path)
+    assert all(click["first"]["chipFilters"] is None for click in report["types"].values())
 
 
 def test_a_group_order_other_than_the_php_one_is_a_finding() -> None:
