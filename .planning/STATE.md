@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 32-05-PLAN.md
-last_updated: "2026-10-13T02:40:00.000Z"
-last_activity: 2026-10-13 -- Plan 32-05 abgeschlossen (vier Sätze der Filtereinträge in 16 Katalogen und 5 Sprachtabellen)
+stopped_at: Completed 32-06-PLAN.md
+last_updated: "2026-10-13T06:30:00.000Z"
+last_activity: 2026-10-13 -- Plan 32-06 abgeschlossen (deploy-harp-Beleg auf 33/34/35/arm64, A1 über Gruppenordner und Share belegt, Doku und Store-Entwurf Teil Phase 32)
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 32
-  completed_plans: 29
+  completed_plans: 30
   percent: 14
 ---
 
@@ -26,11 +26,11 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 32 von 30-36 (Filter in der Unified Search)
-Plan: 5 von 8 erledigt (32-01 bis 32-05), nächster 32-06 (deploy-harp, Gruppenordner und Share, Doku)
-Status: Phase 32 in Ausführung; 32-05 abgeschlossen (vier Sätze der Filtereinträge in allen 16 Katalogen und fünf Sprachtabellen, Vertragsfall Skriptschlüssel gegen Katalog; Wortlaut wartet auf Owner-Abnahme 32-07). USRCH-01/02/03 bleiben Pending bis 32-06/32-07
-Last activity: 2026-10-13 -- Plan 32-05 abgeschlossen
+Plan: 6 von 8 erledigt (32-01 bis 32-06), nächster 32-07 (Owner-Abnahme per Playwright, Checkpoint)
+Status: Phase 32 in Ausführung; 32-06 abgeschlossen (drei Erfolgskriterien und D-32-01 auf allen vier deploy-harp-Beinen belegt, A1 in team-folder-acl belegt, docs/search-filters.md, Store-Entwurf Teil Phase 32 zur Abnahme). USRCH-03 Complete; USRCH-01/02 Pending bis 32-07
+Last activity: 2026-10-13 -- Plan 32-06 abgeschlossen
 
-Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passed, 659f5631); Phase 32: 5/8 Pläne
+Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passed, 659f5631); Phase 32: 6/8 Pläne
 
 ## Performance Metrics
 
@@ -64,6 +64,7 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 - v1.5: 32-03 in ca. 150 min inkl. ca. 7 min Korpus, ca. 35 min Messung, ca. 25 min Volltestläufe und ca. 30 min CI (2 Tasks, 5 Dateien plus Rohdaten)
 - v1.5: 32-04 in ca. 105 min inkl. ca. 13 min Volltestlauf und ca. 35 min CI (2 Tasks, 6 Dateien)
 - v1.5: 32-05 in ca. 85 min inkl. ca. 13 min Volltestlauf und ca. 25 min CI (2 Tasks, 23 Dateien)
+- v1.5: 32-06 in ca. 150 min inkl. ca. 25 min Volltestläufe und ca. 45 min CI (3 Tasks, 6 Dateien)
 
 ## Accumulated Context
 
@@ -104,6 +105,7 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 - 32-03: Ordnerbudget gemessen (docs/measurements/2026-10-ordnerfilter/, Regel vor der Messung): Korpus 1000 Außendateien oben, 10 + 1 Ordnertreffer auf Rang 1001 bis 1011. A (M4, 3 Runden) und B (6 x 100) leer mit isPaginated false (Pitfall 4 belegt), C (10 x 100) verfehlt Rang 1001, D (12 x 100) findet alle in 0,134 s Median, Maximum 0,366 s; ohne Ordner kein Rückschritt (Langreihe je 100 Werte abwechselnd gegen 39e8eca9: minus 1,5 und minus 2,9 Prozent; die 20er-Reihe zeigte bei limit 10 +14,5 Prozent Rauschen). FOLDER_MAX_ROUNDS 12, Test leitet die Abrufe aus den Konstanten ab. Dialog sendet limit 5 (stable34). Dev-Instanz: occ upgrade, Host-Backend 1.4.0 -> 1.4.2 neu registriert. Commit 060d637b; CI PHP 38325827607 (645 Tests), Python 38325827589 grün.
 - 32-04: LoadUnifiedSearchFiltersListener (BeforeTemplateRenderedEvent, nur isLoggedIn, Util::addScript plus addTranslations, sonst nichts) und php/js/unified-search.js: sechs Typeinträge findling-type-<gruppe> in TYPES-Reihenfolge und findling-folder über registerFilterAction, appId/searchFrom findling; Event add-filter immer in setTimeout 0 (Kern ruft callback vor dem push), jeder Klick sendet (Pitfall 2), Ordner merkt den letzten Pfad und sendet ihn bei apply false erneut, ohne gemerkten Ordner öffnet der Picker; Wurzel und '' senden {} (Chip 'File contents in /'), Abbruch sendet nichts wie Files; %s per Ersatzfunktion ($& im Ordnernamen bleibt Text); alles in guarded(), Ordnereintrag nur mit OC.dialogs.filepicker. Vertragstest liest den Quelltext und fährt das Skript in einer node-vm-Sandbox, Selbsttests mit Positivkontrolle, 5 Gegenproben am echten Skript rot. PHP-Test über getScripts() plus rohe statische Util-Listen per Reflection (reihenfolgeunabhängig). PHP_FILES_TODAY 95. Commit 68893ef0; CI PHP 38330232409 (648 Tests), Python 38330232425, Integration 38330232257, HaRP 38330232192 grün.
 - 32-05: Vier Sätze der Filtereinträge (File contents: %s, File contents in a folder, File contents in %s, Choose the folder to search in) in allen 16 Katalogen hinter File contents, de/fr zeichengleich D-32-04, es usted (Elija), it/nl Infinitiv, pt Imperativ (Escolha); fünf Sprachtabellen je vier Zeilen plus Nachtrag 13.10.2026. Vertragsfall Skriptschlüssel gegen jede Katalogdatei (liest auch TYPE_ENTRIES), RED 64 Befunde. Schlüsselzahl de.json 302 auf 306 mit Begründungsabsatz. Wortlaut wartet auf Owner-Abnahme 32-07. Commit 0f355b0b; CI PHP 38334174243 (648 Tests), Python 38334174281 (5625 passed), Integration 38334174253, HaRP 38334174230, alle acht grün.
+- 32-06: deploy-harp-Schritt 'Unified search filters, type and folder on the ordinary search route' ohne if: (Vertragstest test_unified_search_filter_steps.py, nutzt collect_steps des Sprachbelegs): Filterkarte types/folder string, Saat drei Texte plus 01-text-layer.pdf (Wort reference, IDs per PROPFIND), types=pdf/text, folder samt Unterordner, Typ und Ordner mit Datum (dazu until-Gegenprobe), sieben manipulierte Werte gleich ungefiltert, pdf,videos gleich pdf, types= und folder= leer HTTP 400 (D-32-01) auf stable33/34/35 und arm64 (HaRP 38339350221). team-folder-acl Abschnitt 8: (a) Mountpunkt Gruppenordner, (b) ACL-Unterordner, (c) per Nutzerregel gesperrte Datei nie (Sperre per PROPFIND 404/207 belegt), (d) empfangener Share über Mountpunkt aus shared_with_me; A1 belegt, kein Fix in SearchService (Integration 38339350216). docs/search-filters.md 'In the unified search', Store-Entwurf Teil Phase 32 (Owner-Abnahme offen, REL-05), CHANGELOG. Commits b44006dd, 64350f8c, 2d6b0214; python.yml per Dispatch 38341903380 grün. USRCH-03 Complete.
 
 ### Offene Faeden (kein aktiver Auftrag)
 
@@ -114,6 +116,8 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 - Phase 36 (aus 31-AUDIT, accept): DIFAT-Zyklus ab 7 MB und DOCX mit einer Million Köpfen im ZIP in den Launch-Korpus; Diagnosezeile für recheck_1_5_0; Neustart mitten im Nachholzyklus und Rückfall der Companion auf Generation 2 in die Upgrade-Matrix; Cursor in embedding.py (deferred-items.md).
 
 - REL-05 (Phase 36): release.yml muss die vier Quellpakete (corresponding_source.py fetch) im eigenen gh release create mitgeben; ein späteres gh release upload scheitert an unveränderlichen Releases (belegt in 31-01). Leeres Pre-Release source-1.5-dev bleibt mit Verweistext, Löschen nur mit Owner-Wort.
+
+- Owner-Abnahme des Store-Satzes Teil Phase 32 (Filter nach Dateityp oder Ordner, en/de/fr) bei REL-05; Entwurf in docs/store-listing.md 'Entwurf v1.5.0 (Teil Phase 32)', info.xml und READMEs erst danach.
 
 - Owner-Abnahme des Wortlauts des fuenften Grenz-Eintrags Tschechisch (en/de/fr) samt Suchsprachen-/OCR-/env-Texten bei REL-05 (Phase 36); Entwurf in docs/store-listing.md 'Entwurf v1.5.0 (Teil Phase 30)'.
 
@@ -133,6 +137,6 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 
 ## Session Continuity
 
-Last session: 2026-10-13T02:40:00.000Z
-Stopped at: Completed 32-05-PLAN.md
+Last session: 2026-10-13T06:30:00.000Z
+Stopped at: Completed 32-06-PLAN.md
 Resume file: None
