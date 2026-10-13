@@ -4,8 +4,8 @@ milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
 stopped_at: Completed 32-06-PLAN.md
-last_updated: "2026-10-13T06:30:00.000Z"
-last_activity: 2026-10-13 -- Plan 32-06 abgeschlossen (deploy-harp-Beleg auf 33/34/35/arm64, A1 über Gruppenordner und Share belegt, Doku und Store-Entwurf Teil Phase 32)
+last_updated: "2026-10-13T08:00:00.000Z"
+last_activity: 2026-10-13 -- 32-07 Befund A gefixt (Option A1, Commit 4d616071, CI grün, Browser-Nachprobe grün); Owner-Abnahme 32-07 Task 2 offen
 progress:
   total_phases: 7
   completed_phases: 1
@@ -28,7 +28,7 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 Phase: 32 von 30-36 (Filter in der Unified Search)
 Plan: 6 von 8 erledigt (32-01 bis 32-06), nächster 32-07 (Owner-Abnahme per Playwright, Checkpoint)
 Status: Phase 32 in Ausführung; 32-06 abgeschlossen (drei Erfolgskriterien und D-32-01 auf allen vier deploy-harp-Beinen belegt, A1 in team-folder-acl belegt, docs/search-filters.md, Store-Entwurf Teil Phase 32 zur Abnahme). USRCH-03 Complete; USRCH-01/02 Pending bis 32-07
-Last activity: 2026-10-13 -- Plan 32-06 abgeschlossen
+Last activity: 2026-10-13 -- 32-07 Befund A gefixt (Option A1), Owner-Abnahme Task 2 offen
 
 Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passed, 659f5631); Phase 32: 6/8 Pläne
 
@@ -106,6 +106,7 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 - 32-04: LoadUnifiedSearchFiltersListener (BeforeTemplateRenderedEvent, nur isLoggedIn, Util::addScript plus addTranslations, sonst nichts) und php/js/unified-search.js: sechs Typeinträge findling-type-<gruppe> in TYPES-Reihenfolge und findling-folder über registerFilterAction, appId/searchFrom findling; Event add-filter immer in setTimeout 0 (Kern ruft callback vor dem push), jeder Klick sendet (Pitfall 2), Ordner merkt den letzten Pfad und sendet ihn bei apply false erneut, ohne gemerkten Ordner öffnet der Picker; Wurzel und '' senden {} (Chip 'File contents in /'), Abbruch sendet nichts wie Files; %s per Ersatzfunktion ($& im Ordnernamen bleibt Text); alles in guarded(), Ordnereintrag nur mit OC.dialogs.filepicker. Vertragstest liest den Quelltext und fährt das Skript in einer node-vm-Sandbox, Selbsttests mit Positivkontrolle, 5 Gegenproben am echten Skript rot. PHP-Test über getScripts() plus rohe statische Util-Listen per Reflection (reihenfolgeunabhängig). PHP_FILES_TODAY 95. Commit 68893ef0; CI PHP 38330232409 (648 Tests), Python 38330232425, Integration 38330232257, HaRP 38330232192 grün.
 - 32-05: Vier Sätze der Filtereinträge (File contents: %s, File contents in a folder, File contents in %s, Choose the folder to search in) in allen 16 Katalogen hinter File contents, de/fr zeichengleich D-32-04, es usted (Elija), it/nl Infinitiv, pt Imperativ (Escolha); fünf Sprachtabellen je vier Zeilen plus Nachtrag 13.10.2026. Vertragsfall Skriptschlüssel gegen jede Katalogdatei (liest auch TYPE_ENTRIES), RED 64 Befunde. Schlüsselzahl de.json 302 auf 306 mit Begründungsabsatz. Wortlaut wartet auf Owner-Abnahme 32-07. Commit 0f355b0b; CI PHP 38334174243 (648 Tests), Python 38334174281 (5625 passed), Integration 38334174253, HaRP 38334174230, alle acht grün.
 - 32-06: deploy-harp-Schritt 'Unified search filters, type and folder on the ordinary search route' ohne if: (Vertragstest test_unified_search_filter_steps.py, nutzt collect_steps des Sprachbelegs): Filterkarte types/folder string, Saat drei Texte plus 01-text-layer.pdf (Wort reference, IDs per PROPFIND), types=pdf/text, folder samt Unterordner, Typ und Ordner mit Datum (dazu until-Gegenprobe), sieben manipulierte Werte gleich ungefiltert, pdf,videos gleich pdf, types= und folder= leer HTTP 400 (D-32-01) auf stable33/34/35 und arm64 (HaRP 38339350221). team-folder-acl Abschnitt 8: (a) Mountpunkt Gruppenordner, (b) ACL-Unterordner, (c) per Nutzerregel gesperrte Datei nie (Sperre per PROPFIND 404/207 belegt), (d) empfangener Share über Mountpunkt aus shared_with_me; A1 belegt, kein Fix in SearchService (Integration 38339350216). docs/search-filters.md 'In the unified search', Store-Entwurf Teil Phase 32 (Owner-Abnahme offen, REL-05), CHANGELOG. Commits b44006dd, 64350f8c, 2d6b0214; python.yml per Dispatch 38341903380 grün. USRCH-03 Complete.
+- 32-07 Befund A gefixt (Plan-Abweichung vor dem Checkpoint, Owner-Entscheid 13.10.: Option A1): versteckter Provider Search\FilterProvider (ID findling-filter, getOrder null, Filter und Name vom echten Provider; ohne types und folder sofort leere Gruppe ohne Backend-Aufruf, sonst Provider::search). unified-search.js: searchFrom findling-filter an allen sieben Einträgen, Callback setzt this.filters {since, until, types, folder} nur wenn this ein Objekt ist (Kern-Interna, docs/search-filters.md), Wurzel sendet folder=/, Abbruch zeigt keine Treffer. Echter Provider findling unverändert. FilterProviderTest 13 Fälle, Vertragstest und deploy-harp-Probe (findling-filter versteckt, leer ohne Chip, types=pdf, folder, folder=/) erweitert; Gegenproben rot (PHPUnit auf Wegwerf-Zweig 38349488409, JS am echten Skript). PHP_FILES_TODAY 97. Commit 4d616071; CI PHP 38347181812 (661 Tests), Python 38347181819, Integration 38347181828 (team-folder-acl grün), HaRP 38347181759 (alle vier Beine) grün. Browser-Nachprobe 8090: eine Findling-Gruppe ungefiltert (Dashboard und Files), Chip PDF, Ordner /Abnahme32, PDF plus Heute, Abbruch, Wurzel, Markup-Ordner grün; Protokoll 32-07-ABNAHME.md Abschnitt 'Befund A Fix'.
 
 ### Offene Faeden (kein aktiver Auftrag)
 
@@ -137,6 +138,6 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 
 ## Session Continuity
 
-Last session: 2026-10-13T06:30:00.000Z
-Stopped at: Completed 32-06-PLAN.md
+Last session: 2026-10-13T08:00:00.000Z
+Stopped at: 32-07 Befund A gefixt, wartet auf Owner-Abnahme (Task 2)
 Resume file: None

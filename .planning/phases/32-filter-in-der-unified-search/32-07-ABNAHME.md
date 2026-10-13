@@ -70,7 +70,7 @@ Grün heißt: im Browser gemessen (Accessibility-Baum, DOM oder Netzwerkmitschni
 
 ## Befunde
 
-### Befund A (rot, Produktfehler, nicht gefixt): sieben Scheingruppen und achtfache Anfrage in der ungefilterten Suche
+### Befund A (rot, Produktfehler, gefixt mit Option A1, siehe "Befund A Fix"): sieben Scheingruppen und achtfache Anfrage in der ungefilterten Suche
 
 Beobachtung (Dashboard und Files, testuser, `abnahme32`, kein Chip gesetzt):
 
@@ -118,6 +118,83 @@ erscheinen sieben irreführend benannte Doppelgruppen, und Findling trägt die
 achtfache Last je Suchbegriff. Nach Owner-Regel ein Produktfehler; gemäß
 Auftrag nicht selbst gefixt, Entscheidung über einen Fix-Agenten beim Owner.
 Bis dahin ist die Owner-Abnahme von USRCH-01 und USRCH-02 nicht sinnvoll.
+
+### Befund A Fix (Plan-Abweichung in 32-07, vor dem Checkpoint)
+
+Owner-Entscheid 13.10.2026: Option A1. Umgesetzt im Commit `4d616071`
+("fix(32-07): the filter chips ask a hidden provider, no ghost groups without
+a chip"), gepusht auf origin/main. Plan-Abweichung innerhalb von 32-07 (Befund
+vor dem Checkpoint gefixt); in der 32-07-SUMMARY von Task 3 nachzutragen.
+
+Mechanismus (Kern stable33, stable34, stable35, master, Zeilen im Kommentar von
+`php/js/unified-search.js`): Jeder Eintrag aus `registerFilterAction` steht in
+der Providerliste des Dialogs; ohne Chip fragt `find()` jeden Eintrag unter
+`type: searchFrom ?? id` ohne Parameter ab. Gruppen erscheinen nur mit Treffern.
+`SearchComposer::getProviders()` lässt einen Provider mit `getOrder() === null`
+weg, `search()` prüft die Reihenfolge nicht.
+
+Umsetzung:
+
+- Neue Klasse `php/lib/Search/FilterProvider.php`, ID `findling-filter`,
+  `getOrder()` immer `null`, Filter, Definitionen und Gruppenname
+  ("Dateiinhalte") vom echten Provider übernommen. Ohne `types` und ohne
+  `folder`: sofort leere Gruppe, kein Aufruf von `SearchService::run`. Sonst
+  `Provider::search()` unverändert (gleiche Rechteprüfung, gleicher Recheck).
+  Registriert in `AppInfo/Application.php` neben dem echten Provider.
+- `php/js/unified-search.js`: `searchFrom: 'findling-filter'` an allen sieben
+  Einträgen und Ereignissen; jeder Callback setzt `this.filters = {since,
+  until, types, folder}` (nur wenn `this` ein Objekt ist, Schutzrahmen
+  `guarded()` bleibt), damit das Datum des Kerns mit dem Chip reist; Wurzelwahl
+  sendet `folder=/` (PHP liest `/` als keine Einschränkung, die Gruppe
+  erscheint); Abbruch sendet weiter nichts, der Chip zeigt dann keine Treffer.
+- Der echte Provider `findling` ist unverändert, sichtbar und antwortet gleich.
+- Kern-Interna als bewusste Abhängigkeit dokumentiert in
+  `docs/search-filters.md` (Abschnitt "How the chips reach Findling") und im
+  Kopfkommentar des Skripts: ruft ein künftiger Kern den Callback nicht mehr als
+  Methode des Menüeintrags auf, fällt nur das Datum neben einem Chip weg.
+  Dazu der Hinweis auf `unified_search.providers_allowed` (dort muss
+  `findling-filter` mit erlaubt sein).
+
+Tests und Gegenproben:
+
+| Ebene | Was | Ergebnis | Gegenprobe |
+|---|---|---|---|
+| PHPUnit | `FilterProviderTest` (13 Fälle: ID, Reihenfolge null auf vier Routen, Name, Filter, leer ohne `types`/`folder` in drei Varianten ohne Backend-Aufruf, Typ-Chip mit demselben Nutzer an `SearchService::run`, Ordner kanonisch, Wurzel `/` ohne Einschränkung mit Treffern, Chip plus Datum, Abgelehntes bleibt abgelehnt, Konstruktor hält nur `Provider`) | CI php.yml 38347181812 grün, 661 Tests (vorher 648) | Wegwerf-Zweig ohne Leer-Zweig: php.yml 38349488409 rot, genau die drei Leer-Fälle; Zweig danach gelöscht |
+| Node-Vertragstest | `searchFrom` `findling-filter`, Filterkarte am Chip (Klick als Methode, Chip als Kopie wie im Kern), Wurzel und leere Wahl ergeben `{folder: '/'}`, losgelöster Callback sendet weiter und wirft nicht; Lese-Regeln und Selbsttests dazu | lokal 30 passed, CI python.yml 38347181819 grün | am echten Skript (Kopie, danach byte-gleich zurück): ohne `markChip(this)` 2 rot, `searchFrom` `findling` 4 rot, Wurzel wieder ohne `folder` 1 rot, ohne Objektprüfung 2 rot |
+| deploy-harp | neue Proben im Schritt der Unified-Search-Filter: Providerliste ohne `findling-filter`, `findling-filter` ohne `types`/`folder` HTTP 200 und leere Liste, `types=pdf` liefert das Saat-PDF, `folder=/Filterprobe32` die drei Saatdateien, `folder=/` die ungefilterte Antwort; Gate `test_unified_search_filter_steps.py` um Anspruch 8 erweitert | HaRP deploy 38347181759 grün auf allen vier Beinen (stable33, stable34, stable35, stable34 arm64) | Gate auf dem echten Workflow ohne `same chip-root` meldet genau einen Befund; zwei neue Selbsttests |
+| Sonst | `test_php_acl_boundary.py` unverändert und grün; team-folder-acl (Integration 38347181828) grün; Baumhash 97 Dateien `e8bb5819...ff8e` | grün | |
+
+Lokale Gates vor dem Commit (aus `backend/`, `PYTHONUTF8=1`): pytest 5626
+passed, 30 skipped; ruff check, ruff format --check, pyright (latest) 0 Fehler,
+vulture ohne Befund; `node --check php/js/unified-search.js`; `php -l` über die
+vier PHP-Dateien per `php:8.3-cli`. Weitere CI auf `4d616071` grün: Resilience
+38347181820, Security scans 38347181769, OpenSSF Scorecard 38347181804,
+Multi-arch image 38347181821.
+
+Browser-Nachprobe auf der Dev-Instanz 8090 (`php/` als Bind-Mount, Stand
+`4d616071`), testuser, Sprache de. Abweichung: Playwright-MCP stand in dieser
+Sitzung nicht zur Verfügung; gefahren mit lokalem Playwright 1.63 (Chromium,
+headless, Viewport 1920 x 1009) per Skript, gemessen über DOM und
+Netzwerkmitschnitt. Bilder im Scratch-Ordner `abnahme32\`.
+
+| Nr. | Probe | Ergebnis | Beleg | Bild |
+|---|---|---|---|---|
+| A1 | Ungefilterte Suche `abnahme32`, Dashboard | grün | genau eine Findling-Gruppe "Dateiinhalte" (5 Treffer plus "Weitere Ergebnisse laden"), daneben "Dateien"; eine Anfrage an `providers/findling`, sieben an `providers/findling-filter` ohne Parameter (leer, ohne Backend-Aufruf) | `fix-a-p1-ungefiltert.png` |
+| A1b | dasselbe in Files | grün | eine Findling-Gruppe; Konsole nur viewer-Warnung und tiptap-Fehler der text-App (wie Probe 12) | `fix-a-p1-ungefiltert-files.png` |
+| A2 | Chip "Dateiinhalte: PDF" | grün | Gruppe "Dateiinhalte: PDF" nur Bericht.pdf; Anfrage `findling-filter/search?...&types=pdf` | `fix-a-p2-chip-pdf.png` |
+| A3 | Ordner `/Abnahme32` | grün | Gruppe "Dateiinhalte in Abnahme32": Bericht.pdf, Notiz.txt, Tabelle.xlsx, Probe.txt (Projekt und Markup-Ordner eingeschlossen, Woanders32 fehlt); Anfrage `folder=/Abnahme32` | `fix-a-p3-ordner-abnahme32.png` |
+| A4 | Chip PDF plus "Heute" | grün | Anfrage `findling-filter/search?...&since=2026-10-12T22:00:00.000Z&until=2026-10-13T21:59:59.999Z&...&types=pdf`, Treffer Bericht.pdf | `fix-a-p4-chip-heute.png` |
+| A5 | Ordnerauswahl abbrechen (Schließen) | grün | Chip "Dateiinhalte in einem Ordner" bleibt, "Keine passenden Suchergebnisse", keine Anfrage mit `folder`, kein Toast; Konsole `FilePicker: No nodes selected` (Kern, wie in Probe 5) | `fix-a-p5-abbruch.png` |
+| A6 | Wurzel wählen ("testuser auswählen") | grün | Chip und Gruppe "Dateiinhalte in /" mit den 5 ungefilterten Treffern; Anfrage `folder=/`, HTTP 200, kein Toast | `fix-a-p6-wurzel.png` |
+| A7 | Markup-Ordner | grün | Chip und Gruppe "Dateiinhalte in <img src=x onerror=alert(1)>" als Text, Treffer nur Probe.txt; kein Dialog, 0 `img` mit `src=x` oder `onerror` | `fix-a-p7-markup.png` |
+
+Vorab per OCS auf 8090: Providerliste nennt nur `findling`; `findling-filter`
+ohne Parameter leer, mit `types=pdf` Bericht.pdf, mit `folder=/Abnahme32` die
+vier Dateien darunter, mit `folder=/` dieselben fünf Treffer wie `findling`.
+
+Saat `/Abnahme32` und `/Woanders32` stehen weiter (Task 3). Folge für die
+Owner-Fragen unten: Frage 1 ist entschieden (A1), das Verhalten zu Frage 4
+(Wurzel) und 5 (Abbruch, jetzt ohne Treffer) hat sich mit dem Fix geändert.
 
 ### Befund B (Owner-Frage): Chip nach abgebrochener Ordnerauswahl
 
