@@ -166,6 +166,10 @@ aus Plan 20-03. Diese Tabelle kann also nicht an einem Wortlaut zerbrechen.
 |---|---|---|
 | `Findling` | Findling | Findling |
 | `File contents` | Dateiinhalte | Contenuto dei file |
+| `File contents: %s` | Dateiinhalte: %s | Contenuto dei file: %s |
+| `File contents in a folder` | Dateiinhalte in einem Ordner | Contenuto dei file in una cartella |
+| `File contents in %s` | Dateiinhalte in %s | Contenuto dei file in %s |
+| `Choose the folder to search in` | Ordner für die Suche wählen | Scegliere la cartella in cui cercare |
 | `Search coverage` | Deckungsgrad der Suche | Copertura della ricerca |
 | `%1$s of %2$s indexable files are searchable` | %1$s von %2$s indexierbaren Dateien sind durchsuchbar | %1$s file indicizzabili su %2$s si possono trovare con la ricerca |
 | `%s files are searchable. The count of indexable files is being updated, and the share is shown again afterwards.` | %s Dateien sind durchsuchbar. Die Zahl der indexierbaren Dateien wird gerade neu ermittelt, danach erscheint der Anteil wieder. | %s file si possono trovare con la ricerca. Il numero dei file indicizzabili è in fase di aggiornamento, poi la quota verrà mostrata di nuovo. |
@@ -468,6 +472,8 @@ aus Plan 20-03. Diese Tabelle kann also nicht an einem Wortlaut zerbrechen.
 | `Choose a profile and check it on this box. Until then Economy stays in force.` | Ein Profil wählen und auf dieser Box prüfen. Bis dahin bleibt Sparsam wirksam. | Scegliere un profilo e verificarlo su questa macchina. Fino ad allora resta in vigore Risparmio. |
 
 **Nachtrag 29.09.2026 (Review der Phase 27, WR-05).** 82 Zeilen sind ergänzt: die 72 Schlüssel der Phase 27 (Plan 27-13, Oberfläche des Leistungsprofils) und 10 ältere aus den Plänen 25-04 und 26-05, die beim Abschluss der Phase 26 schon fehlten. Die ergänzten Zeilen sind nicht abgetippt, sondern mechanisch aus `php/l10n/de.json` und den Katalogen der Spalten dieser Tabelle übernommen, stehen hinter dem Schlüssel, der ihnen in `de.json` vorausgeht, und tragen genau den Wortlaut, den die App ausliefert. Seitdem hält `test_every_language_table_carries_every_key_with_the_catalogue_wording` in `backend/tests/test_admin_ui_contract.py` diese Tabelle gegen die Kataloge, in beide Richtungen und Zelle für Zelle. Die Zählungen weiter oben und unten sind der Stand ihres Datums; die maßgebliche Zählung steht in `docs/l10n-catalogues.md`.
+
+**Nachtrag 13.10.2026 (Phase 32, Plan 32-05).** Vier Zeilen sind ergänzt: die Sätze der Filtereinträge, die `php/js/unified-search.js` in das Menü der Unified Search hängt (Entwurf D-32-04): die Beschriftung eines Typeintrags, der Ordnereintrag, sein Chip und der Titel der Ordnerauswahl. Sie stehen hinter `File contents`, wie in `php/l10n/de.json`, und sind mechanisch aus den Katalogen übernommen. Der Wortlaut ist ein Entwurf; der Owner nimmt ihn in Plan 32-07 ab, Änderungen fließen dort in Kataloge und Tabelle zurück.
 
 ## Ausnahmen für das Vollständigkeitsgate G2
 

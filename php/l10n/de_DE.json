@@ -2,6 +2,10 @@
     "translations": {
         "Findling": "Findling",
         "File contents": "Dateiinhalte",
+        "File contents: %s": "Dateiinhalte: %s",
+        "File contents in a folder": "Dateiinhalte in einem Ordner",
+        "File contents in %s": "Dateiinhalte in %s",
+        "Choose the folder to search in": "Ordner für die Suche wählen",
         "Search coverage": "Deckungsgrad der Suche",
         "%1$s of %2$s indexable files are searchable": "%1$s von %2$s indexierbaren Dateien sind durchsuchbar",
         "%s files are searchable. The count of indexable files is being updated, and the share is shown again afterwards.": "%s Dateien sind durchsuchbar. Die Zahl der indexierbaren Dateien wird gerade neu ermittelt, danach erscheint der Anteil wieder.",

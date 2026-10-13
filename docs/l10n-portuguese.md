@@ -290,6 +290,10 @@ Erzeugung die dreispaltige Fassung zeichengleich reproduziert hatte (204 von 204
 |---|---|---|---|
 | `Findling` | Findling | Findling | Findling |
 | `File contents` | Dateiinhalte | Conteúdo dos ficheiros | Conteúdo dos arquivos |
+| `File contents: %s` | Dateiinhalte: %s | Conteúdo dos ficheiros: %s | Conteúdo dos arquivos: %s |
+| `File contents in a folder` | Dateiinhalte in einem Ordner | Conteúdo dos ficheiros numa pasta | Conteúdo dos arquivos em uma pasta |
+| `File contents in %s` | Dateiinhalte in %s | Conteúdo dos ficheiros em %s | Conteúdo dos arquivos em %s |
+| `Choose the folder to search in` | Ordner für die Suche wählen | Escolha a pasta onde pesquisar | Escolha a pasta onde pesquisar |
 | `Search coverage` | Deckungsgrad der Suche | Cobertura da pesquisa | Cobertura da pesquisa |
 | `%1$s of %2$s indexable files are searchable` | %1$s von %2$s indexierbaren Dateien sind durchsuchbar | %1$s de %2$s ficheiros indexáveis podem ser encontrados pela pesquisa | %1$s de %2$s arquivos indexáveis podem ser encontrados pela pesquisa |
 | `%s files are searchable. The count of indexable files is being updated, and the share is shown again afterwards.` | %s Dateien sind durchsuchbar. Die Zahl der indexierbaren Dateien wird gerade neu ermittelt, danach erscheint der Anteil wieder. | %s ficheiros podem ser encontrados pela pesquisa. O número de ficheiros indexáveis está a ser atualizado; depois a percentagem volta a ser mostrada. | %s arquivos podem ser encontrados pela pesquisa. O número de arquivos indexáveis está sendo atualizado; depois a porcentagem volta a aparecer. |
@@ -592,6 +596,8 @@ Erzeugung die dreispaltige Fassung zeichengleich reproduziert hatte (204 von 204
 | `Choose a profile and check it on this box. Until then Economy stays in force.` | Ein Profil wählen und auf dieser Box prüfen. Bis dahin bleibt Sparsam wirksam. | Escolha um perfil e verifique-o nesta máquina. Até lá, o Económico continua em vigor. | Escolha um perfil e verifique-o nesta máquina. Até lá, o Econômico continua em vigor. |
 
 **Nachtrag 29.09.2026 (Review der Phase 27, WR-05).** 82 Zeilen sind ergänzt: die 72 Schlüssel der Phase 27 (Plan 27-13, Oberfläche des Leistungsprofils) und 10 ältere aus den Plänen 25-04 und 26-05, die beim Abschluss der Phase 26 schon fehlten. Die ergänzten Zeilen sind nicht abgetippt, sondern mechanisch aus `php/l10n/de.json` und den Katalogen der Spalten dieser Tabelle übernommen, stehen hinter dem Schlüssel, der ihnen in `de.json` vorausgeht, und tragen genau den Wortlaut, den die App ausliefert. Seitdem hält `test_every_language_table_carries_every_key_with_the_catalogue_wording` in `backend/tests/test_admin_ui_contract.py` diese Tabelle gegen die Kataloge, in beide Richtungen und Zelle für Zelle. Die Zählungen weiter oben und unten sind der Stand ihres Datums; die maßgebliche Zählung steht in `docs/l10n-catalogues.md`.
+
+**Nachtrag 13.10.2026 (Phase 32, Plan 32-05).** Vier Zeilen sind ergänzt: die Sätze der Filtereinträge, die `php/js/unified-search.js` in das Menü der Unified Search hängt (Entwurf D-32-04): die Beschriftung eines Typeintrags, der Ordnereintrag, sein Chip und der Titel der Ordnerauswahl. Sie stehen hinter `File contents`, wie in `php/l10n/de.json`, und sind mechanisch aus den Katalogen übernommen. Der Wortlaut ist ein Entwurf; der Owner nimmt ihn in Plan 32-07 ab, Änderungen fließen dort in Kataloge und Tabelle zurück.
 
 ## Was diese Kataloge nicht leisten
 

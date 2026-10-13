@@ -3,6 +3,10 @@ OC.L10N.register(
     {
     "Findling": "Findling",
     "File contents": "Contenu des fichiers",
+    "File contents: %s": "Contenu des fichiers : %s",
+    "File contents in a folder": "Contenu des fichiers dans un dossier",
+    "File contents in %s": "Contenu des fichiers dans %s",
+    "Choose the folder to search in": "Choisir le dossier où chercher",
     "Search coverage": "Couverture de la recherche",
     "%1$s of %2$s indexable files are searchable": "%1$s des %2$s fichiers indexables peuvent être trouvés par la recherche",
     "%s files are searchable. The count of indexable files is being updated, and the share is shown again afterwards.": "%s fichiers peuvent être trouvés par la recherche. Le nombre de fichiers indexables est en cours de mise à jour, la part s'affichera de nouveau ensuite.",

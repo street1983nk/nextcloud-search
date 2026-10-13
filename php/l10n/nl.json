@@ -2,6 +2,10 @@
     "translations": {
         "Findling": "Findling",
         "File contents": "Inhoud van bestanden",
+        "File contents: %s": "Inhoud van bestanden: %s",
+        "File contents in a folder": "Inhoud van bestanden in een map",
+        "File contents in %s": "Inhoud van bestanden in %s",
+        "Choose the folder to search in": "De map kiezen om in te zoeken",
         "Search coverage": "Dekking van de zoekfunctie",
         "%1$s of %2$s indexable files are searchable": "%1$s van %2$s indexeerbare bestanden zijn doorzoekbaar",
         "%s files are searchable. The count of indexable files is being updated, and the share is shown again afterwards.": "%s bestanden zijn doorzoekbaar. Het aantal indexeerbare bestanden wordt bijgewerkt; daarna verschijnt het aandeel weer.",

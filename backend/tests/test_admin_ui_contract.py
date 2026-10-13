@@ -3391,6 +3391,16 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     All sixteen files moved in one commit, and the five language documents
     carry its row, held by the language table gate since review WR-11.
     Whoever moves it next writes the next paragraph.
+
+    It stands at 306 since 13.10.2026, and the rise of four is plan 32-05 of
+    phase 32: the sentences of the filter entries php/js/unified-search.js puts
+    into the menu of the unified search (D-32-04), the label of a type entry,
+    the folder entry, its chip and the title of the folder picker. The six
+    group names they build on existed already. All sixteen files moved in one
+    commit, the five language documents carry the rows, and the wording is a
+    draft the owner reads in plan 32-07. test_unified_search_plugin.py holds
+    every key the script uses against every catalogue. Whoever moves it next
+    writes the next paragraph.
     """
     for language, twin in ((L10N_JSON, L10N_DE_DE_JSON), (L10N_JS, L10N_DE_DE_JS)):
         assert twin.is_file(), f"{twin.name} is missing, so everybody on de_DE reads this app in English"
@@ -3427,8 +3437,9 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     # (the sentence about shares counted once per user mount), two of plan
     # 31-02 (label and remedy of archive_limit; the three changed sentences of
     # unsupported_variant and mime_not_allowed changed their keys and so moved
-    # nothing)
-    assert len(keys_of["de.json"]) == 302
+    # nothing), four of plan 32-05 (the filter entries of the unified search,
+    # D-32-04)
+    assert len(keys_of["de.json"]) == 306
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:

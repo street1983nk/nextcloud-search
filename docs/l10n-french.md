@@ -430,8 +430,14 @@ deutschen Übersetzung.
 | `No check yet.` | Noch keine Prüfung. | Pas encore de vérification. |
 | `Choose a profile and check it on this box. Until then Economy stays in force.` | Ein Profil wählen und auf dieser Box prüfen. Bis dahin bleibt Sparsam wirksam. | Choisir un profil et le vérifier sur cette machine. D'ici là, Économe reste en vigueur. |
 | `File contents` | Dateiinhalte | Contenu des fichiers |
+| `File contents: %s` | Dateiinhalte: %s | Contenu des fichiers : %s |
+| `File contents in a folder` | Dateiinhalte in einem Ordner | Contenu des fichiers dans un dossier |
+| `File contents in %s` | Dateiinhalte in %s | Contenu des fichiers dans %s |
+| `Choose the folder to search in` | Ordner für die Suche wählen | Choisir le dossier où chercher |
 
 **Nachtrag 29.09.2026 (Review der Phase 27, WR-05).** 83 Zeilen sind ergänzt: die 72 Schlüssel der Phase 27 (Plan 27-13, Oberfläche des Leistungsprofils) und 10 ältere aus den Plänen 25-04 und 26-05, die beim Abschluss der Phase 26 schon fehlten. Im französischen Dokument fehlte außerdem die Zeile `File contents`, die der Nachtrag vom 19.09.2026 unten nennt; sie steht jetzt in der Tabelle. Die ergänzten Zeilen sind nicht abgetippt, sondern mechanisch aus `php/l10n/de.json` und den Katalogen der Spalten dieser Tabelle übernommen, stehen hinter dem Schlüssel, der ihnen in `de.json` vorausgeht, und tragen genau den Wortlaut, den die App ausliefert. Seitdem hält `test_every_language_table_carries_every_key_with_the_catalogue_wording` in `backend/tests/test_admin_ui_contract.py` diese Tabelle gegen die Kataloge, in beide Richtungen und Zelle für Zelle. Die Zählungen weiter oben und unten sind der Stand ihres Datums; die maßgebliche Zählung steht in `docs/l10n-catalogues.md`.
+
+**Nachtrag 13.10.2026 (Phase 32, Plan 32-05).** Vier Zeilen sind ergänzt: die Sätze der Filtereinträge, die `php/js/unified-search.js` in das Menü der Unified Search hängt (Entwurf D-32-04): die Beschriftung eines Typeintrags, der Ordnereintrag, sein Chip und der Titel der Ordnerauswahl. Sie stehen hinter `File contents`, wie in `php/l10n/de.json`, und sind mechanisch aus den Katalogen übernommen. Der Wortlaut ist ein Entwurf; der Owner nimmt ihn in Plan 32-07 ab, Änderungen fließen dort in Kataloge und Tabelle zurück.
 
 ## Ausnahmen für das Vollständigkeitsgate G2
 

@@ -37,7 +37,7 @@ from typing import Any
 
 import pytest
 
-from test_admin_ui_contract import scan_prose, scan_script
+from test_admin_ui_contract import L10N_CATALOGUES, catalogue_of, scan_prose, scan_script
 from test_type_vocabulary_parity import PHP_SEARCH_FILTERS, php_type_groups
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -241,6 +241,37 @@ def contract_findings(name: str, source: str, php_types: list[str] | None) -> li
     return findings
 
 
+def used_keys(source: str) -> set[str]:
+    """Every key the source asks the catalogue of findling for, comments ignored.
+
+    The literal calls, plus the group names of ``TYPE_ENTRIES``, which reach
+    ``t('findling', entry[1])`` through a variable and would be missed by a
+    reading of the literal calls alone.
+    """
+    code = code_of(source)
+    keys = set(re.findall(r"\bt\(\s*'findling'\s*,\s*'((?:\\.|[^'\\])*)'", code))
+    keys.update(key for _, key in type_entries(code) or [])
+    return keys
+
+
+def keys_missing_from_catalogues(
+    name: str, source: str, catalogues: dict[str, dict[str, str | list[str]]]
+) -> list[str]:
+    """Every key the source uses that a catalogue lacks, one line per file and key.
+
+    Plan 32-05: a key the script translates and no catalogue carries reaches the
+    menu in English on every language, and no gate on the catalogues alone sees
+    it, because they compare the catalogues with each other and not with the
+    script.
+    """
+    return [
+        f"{name}: the key {key!r} is missing from {file_name}"
+        for file_name, catalogue in catalogues.items()
+        for key in sorted(used_keys(source))
+        if key not in catalogue
+    ]
+
+
 # -- the run in node ---------------------------------------------------------
 
 # A sandbox that plays the core frontend. It reports what the script registered
@@ -431,6 +462,17 @@ def test_the_plugin_breaks_none_of_the_prohibitions_of_the_two_pages() -> None:
     source = PLUGIN.read_text(encoding="utf-8")
 
     assert scan_script(PLUGIN.name, source) + scan_prose(PLUGIN.name, source) == []
+
+
+def test_every_key_of_the_plugin_stands_in_every_catalogue() -> None:
+    source = PLUGIN.read_text(encoding="utf-8")
+    catalogues = {path.name: catalogue_of(path) for path in L10N_CATALOGUES}
+
+    # The anti vacuity clauses: all sixteen files are read, and the reading of
+    # the script finds the ten keys of D-32-04, so an empty set cannot pass.
+    assert len(catalogues) == 16
+    assert used_keys(source) == ALLOWED_KEYS
+    assert keys_missing_from_catalogues(PLUGIN.name, source, catalogues) == []
 
 
 def test_node_accepts_the_syntax_of_the_plugin() -> None:
@@ -747,3 +789,28 @@ def test_a_comment_neither_hides_nor_creates_a_finding() -> None:
     assert "sample.js: never emits nextcloud:unified-search:add-filter" in contract_findings(
         "sample.js", hidden, _TYPES
     )
+
+
+def test_a_key_the_catalogue_lacks_is_a_finding() -> None:
+    # A catalogue written for this test, not read from php/l10n: every key of
+    # the draft, with a value that is no translation of anybody's.
+    complete: dict[str, str | list[str]] = {key: f"<{key}>" for key in ALLOWED_KEYS}
+    unknown = _SAMPLE.replace("'Choose the folder to search in'", "'Pick a folder'")
+    commented = _SAMPLE.replace("'use strict'", "'use strict'\n// t('findling', 'Only a comment')")
+    assert len({unknown, commented, _SAMPLE}) == 3
+
+    # The positive control: the clean sample against the complete catalogue.
+    assert used_keys(_SAMPLE) == ALLOWED_KEYS
+    assert keys_missing_from_catalogues("sample.js", _SAMPLE, {"xx.json": complete}) == []
+    # A key the script uses and the catalogue lacks, once per file.
+    assert keys_missing_from_catalogues("sample.js", unknown, {"xx.json": complete, "yy.js": complete}) == [
+        "sample.js: the key 'Pick a folder' is missing from xx.json",
+        "sample.js: the key 'Pick a folder' is missing from yy.js",
+    ]
+    # A group name reached through TYPE_ENTRIES counts like a literal call.
+    without_group = {key: value for key, value in complete.items() if key != "Spreadsheets"}
+    assert keys_missing_from_catalogues("sample.js", _SAMPLE, {"xx.json": without_group}) == [
+        "sample.js: the key 'Spreadsheets' is missing from xx.json"
+    ]
+    # A call inside a comment is no use of a key.
+    assert keys_missing_from_catalogues("sample.js", commented, {"xx.json": complete}) == []
