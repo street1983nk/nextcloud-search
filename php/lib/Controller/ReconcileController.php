@@ -262,8 +262,11 @@ class ReconcileController extends OCSController {
 	/**
 	 * The rule of today as a question about one internal path, or null.
 	 *
-	 * Null while no prefix is in force, so an instance without exclusions pays
-	 * nothing for this, the same stance as the event listener and describe().
+	 * Null while no rule is in force, neither a prefix nor a pattern, so an
+	 * instance without exclusions pays nothing for this, the same stance as the
+	 * event listener and describe(). Both lists since plan 33-02: a guard on the
+	 * prefixes alone would leave every row of an instance with patterns only
+	 * unmarked (pitfall 1 of the phase 33 research).
 	 * Otherwise the root of the mount is resolved once per page and every row
 	 * is asked through the one helper on the one path space, exactly the shape of
 	 * the crawl (StorageCrawlJob), so that the slice, the crawl, the listener and
@@ -273,7 +276,7 @@ class ReconcileController extends OCSController {
 	 * @return (\Closure(string): bool)|null
 	 */
 	private function exclusionPredicate(int $storage, int $root): ?\Closure {
-		if ($this->exclusionService->prefixes() === []) {
+		if (!$this->exclusionService->hasRules()) {
 			return null;
 		}
 

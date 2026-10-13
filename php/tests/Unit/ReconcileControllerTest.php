@@ -69,8 +69,9 @@ final class ReconcileControllerTest extends TestCase {
 
 	/**
 	 * @param list<string> $prefixes
+	 * @param list<string> $patterns
 	 */
-	private function controller(array $prefixes): ReconcileController {
+	private function controller(array $prefixes, array $patterns = []): ReconcileController {
 		$request = $this->createMock(IRequest::class);
 		$callerAppId = $this->backendAppId();
 		$request->method('getHeader')->willReturnCallback(
@@ -79,7 +80,11 @@ final class ReconcileControllerTest extends TestCase {
 
 		$appConfig = $this->createMock(IAppConfig::class);
 		$appConfig->method('getValueArray')->willReturnCallback(
-			static fn (string $app, string $key, array $default = []): array => $key === SettingsService::KEY_EXCLUSIONS ? $prefixes : $default,
+			static fn (string $app, string $key, array $default = []): array => match ($key) {
+				SettingsService::KEY_EXCLUSIONS => $prefixes,
+				SettingsService::KEY_EXCLUSION_PATTERNS => $patterns,
+				default => $default,
+			},
 		);
 		$logger = $this->createMock(LoggerInterface::class);
 
@@ -153,6 +158,21 @@ final class ReconcileControllerTest extends TestCase {
 		$this->fileStateService->method('verdictsFor')->willReturn([]);
 
 		$files = $this->filesOf($this->controller(['loadtest']));
+
+		self::assertSame(1, $files[0]['fileId']);
+		self::assertSame(['skipped', 'excluded'], [$files[0]['state'], $files[0]['reason']]);
+		self::assertSame(2, $files[1]['fileId']);
+		self::assertSame(['', ''], [$files[1]['state'], $files[1]['reason']]);
+	}
+
+	public function testWithPatternsOnlyTheRowAPatternMatchesCarriesTheExcludedMark(): void {
+		// Pitfall 1 of the phase 33 research at the slice: the predicate used to
+		// be null whenever the prefix list was empty, so an instance whose only
+		// rule is a pattern marked nothing. No prefix is stored here.
+		$this->sliceOfTwo();
+		$this->fileStateService->method('verdictsFor')->willReturn([]);
+
+		$files = $this->filesOf($this->controller([], ['load*']));
 
 		self::assertSame(1, $files[0]['fileId']);
 		self::assertSame(['skipped', 'excluded'], [$files[0]['state'], $files[0]['reason']]);

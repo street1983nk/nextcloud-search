@@ -55,6 +55,16 @@ final class SettingsService {
 	 * second spelling cannot create a key nobody reads.
 	 */
 	public const KEY_EXCLUSIONS = 'exclusions';
+
+	/**
+	 * The wildcard patterns of D-30-01, a list of their own next to the
+	 * prefixes. A separate key and not more entries in the one above: a prefix
+	 * stored by 1.4.2 may hold a literal * or ? (both are legal in a Nextcloud
+	 * name), and a shared list would read it as a pattern after the upgrade and
+	 * change what it excludes. A missing key reads as an empty list, so no
+	 * migration exists for it.
+	 */
+	public const KEY_EXCLUSION_PATTERNS = 'exclusion_patterns';
 	public const KEY_MAX_FILE_BYTES = 'max_file_bytes';
 	public const KEY_INDEX_TEAM_FOLDERS = 'index_team_folders';
 	public const KEY_INDEX_EXTERNAL_STORAGE = 'index_external_storage';

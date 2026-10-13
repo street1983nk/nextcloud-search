@@ -41,6 +41,18 @@ apart:
    nowhere else. That is the same quiet failure as above, one layer further in:
    the admin excluded a folder, the page agrees with them, and the index fills up
    anyway.
+6. Since plan 33-02, for the patterns of D-30-01: the three call sites that
+   skip their root lookup on an instance without rules (the event listener,
+   ``QueueService::describe`` and the reconcile slice) ask
+   ``ExclusionService::hasRules()`` and no longer whether the prefix list is
+   empty. A guard on the prefixes alone checks nothing on an instance that only
+   has patterns (pitfall 1 of the phase 33 research).
+7. Since plan 33-02 as well: the matcher and the normalisation of a pattern
+   contain no glob function, no regular expression and no split of the path
+   into segments, read method by method (T-33-03, ReDoS), and the normalisation
+   refuses a dot segment with the traversal code like the prefixes do. The one
+   fixed ``preg_replace`` in ``trimmed()`` is not part of this probe and stays
+   allowed: a fixed pattern, linear, on the prefix path since 1.0.
 
 **Why this is a textual check and not a PHP test.** There is no PHP test
 environment on the development machine and none in this repository; the PHP side
@@ -157,6 +169,17 @@ SHARED_TRIM = "$this->trimmed("
 # The two halves of the space, by signature.
 VALIDATION_METHOD = "public function normalise("
 COMPARISON_METHOD = "public function isExcluded("
+
+# The guard of the three call sites that skip their root lookup without rules,
+# and the two shapes of the guard it replaced (plan 33-02, pitfall 1).
+RULE_GUARD = "hasRules()"
+OLD_GUARDS = ("prefixes() !== []", "prefixes() === []")
+
+# The two methods of the pattern half, by name (fixed in plan 33-02), and what
+# neither of them may contain. preg_ covers every function of the family.
+PATTERN_METHODS = ("function matchesAPattern(", "function normalisePattern(")
+PATTERN_FORBIDDEN = ("fnmatch(", "preg_", "explode(")
+PATTERN_TRAVERSAL_CODE = "ERROR_TRAVERSAL"
 
 # Lines that are not a statement: blank, and the comment shapes PHP uses. ``#``
 # covers an attribute as well, which is the safe direction here too: an
@@ -288,6 +311,43 @@ def scan_segment_refusal(name: str, source: str) -> list[str]:
     return violations
 
 
+def scan_old_guards(name: str, source: str) -> list[str]:
+    """Findings of one file: every statement that still guards on the prefixes alone."""
+    return [
+        f"{name}:{number}: guards on the prefix list alone ({guard}), so an instance with "
+        f"patterns and no prefix checks nothing here; ask ExclusionService::{RULE_GUARD}"
+        for number, line in statements(source)
+        for guard in OLD_GUARDS
+        if guard in line
+    ]
+
+
+def scan_pattern_methods(name: str, source: str) -> list[str]:
+    """Findings of the pattern half: a forbidden call in the matcher or the normalisation.
+
+    Read method by method, so the fixed ``preg_replace`` of ``trimmed()`` is
+    outside every body judged here. A method that disappeared is an assertion
+    and not a pass, through method_body().
+    """
+    violations: list[str] = []
+    for signature in PATTERN_METHODS:
+        body = method_body(name, source, signature)
+        violations.extend(
+            f"{name}: {signature.removeprefix('function ')}) contains {forbidden}, which is a glob, "
+            "a regular expression or a split of the path, and none of them is linear by construction"
+            for forbidden in PATTERN_FORBIDDEN
+            if forbidden in body
+        )
+
+    if PATTERN_TRAVERSAL_CODE not in method_body(name, source, PATTERN_METHODS[1]):
+        violations.append(
+            f"{name}: normalisePattern() never answers {PATTERN_TRAVERSAL_CODE}, so a pattern with a "
+            "dot segment is stored and matches nothing"
+        )
+
+    return violations
+
+
 def _call_sites() -> list[tuple[str, str]]:
     """The two call paths of the exclusion, as (file name, source)."""
     return [(path.name, path.read_text(encoding="utf-8")) for path in (CRAWL, LISTENER)]
@@ -405,6 +465,39 @@ def test_an_excluded_row_is_handed_out_as_a_delete_order() -> None:
         f"{QUEUE_SERVICE.name}: the exclusion branch of describe() does not answer with a "
         "delete order, so a tombstoned excluded file is not re-deleted"
     )
+
+
+def test_no_call_site_guards_on_the_prefixes_alone() -> None:
+    # Plan 33-02, pitfall 1. Every PHP file of the app except the service that
+    # owns both lists, so a fourth guard written next week is caught as well.
+    violations = [
+        message
+        for path in sorted(PHP_ROOT.rglob("*.php"))
+        if path != EXCLUSION_SERVICE
+        for message in scan_old_guards(path.name, path.read_text(encoding="utf-8"))
+    ]
+
+    assert violations == []
+
+
+def test_exactly_the_three_known_call_sites_ask_has_rules() -> None:
+    # The guard is asked where the root lookup is skipped, and nowhere else: the
+    # crawl and the diagnosis call isExcluded() without a guard, and a fourth
+    # caller would be a place nobody reviewed for the pattern half.
+    callers = {
+        path.name
+        for path in PHP_ROOT.rglob("*.php")
+        if path != EXCLUSION_SERVICE
+        and any(RULE_GUARD in line for _, line in statements(path.read_text(encoding="utf-8")))
+    }
+
+    assert callers == {LISTENER.name, QUEUE_SERVICE.name, RECONCILE_CONTROLLER.name}
+
+
+def test_the_pattern_half_holds_no_glob_no_regex_and_no_split() -> None:
+    source = EXCLUSION_SERVICE.read_text(encoding="utf-8")
+
+    assert scan_pattern_methods(EXCLUSION_SERVICE.name, source) == []
 
 
 def test_the_two_mount_switches_are_read_and_the_external_entry_is_live() -> None:
@@ -647,3 +740,124 @@ def test_a_comment_is_not_a_statement() -> None:
     source = "<?php\n\n// a line comment\n/* an opening line */\n * a docblock line\n#[Attribute]\n$cap = 1;\n"
 
     assert statements(source) == [(1, "<?php"), (7, "$cap = 1;")]
+
+
+# -- self tests of the pattern half (plan 33-02) ---------------------------
+
+_CLEAN_GUARD = """<?php
+
+class ExampleListener {
+\tprivate function queue(): void {
+\t\t// A comment may name prefixes() !== [] without being a guard.
+\t\tif (!$isDeletion && $this->exclusionService->hasRules()) {
+\t\t\t$relative = $this->exclusionService->mountRelativePath($path, $root);
+\t\t}
+\t}
+}
+"""
+
+_CLEAN_PATTERN_SERVICE = """<?php
+
+class ExamplePatternService {
+\tprivate function normalisePattern(string $pattern): array {
+\t\t$value = $this->withoutTheFilesFolder($this->trimmed(trim($pattern)));
+\t\t$framed = '/' . $value . '/';
+\t\tif (str_contains($framed, '/../') || str_contains($framed, '/./')) {
+\t\t\treturn [null, self::ERROR_TRAVERSAL];
+\t\t}
+
+\t\treturn [$value, null];
+\t}
+
+\tprivate function matchesAPattern(string $path): bool {
+\t\t$characters = mb_str_split('/' . $path);
+\t\tforeach ($characters as $character) {
+\t\t\t$state = (($state << 1) & ($masks[$character] ?? 0)) | ($state & $star);
+\t\t}
+
+\t\treturn ($state & $accept) !== 0;
+\t}
+
+\tprivate function trimmed(string $path): string {
+\t\t$collapsed = preg_replace('#/+#', '/', $path);
+
+\t\treturn trim($collapsed ?? $path, '/');
+\t}
+}
+"""
+
+
+def test_the_clean_guard_sample_is_clean() -> None:
+    # The counter sample, and it pins the comment case: the docblocks of the
+    # three call sites explain the guard they replaced.
+    assert scan_old_guards("ExampleListener.php", _CLEAN_GUARD) == []
+
+
+def test_a_guard_on_the_prefixes_alone_is_reported() -> None:
+    source = _CLEAN_GUARD.replace("$this->exclusionService->hasRules()", "$this->exclusionService->prefixes() !== []")
+
+    violations = scan_old_guards("ExampleListener.php", source)
+
+    assert len(violations) == 1
+    assert RULE_GUARD in violations[0]
+
+
+def test_the_other_shape_of_the_old_guard_is_reported() -> None:
+    source = _CLEAN_GUARD.replace(
+        "!$isDeletion && $this->exclusionService->hasRules()", "$this->exclusionService->prefixes() === []"
+    )
+
+    violations = scan_old_guards("ExampleListener.php", source)
+
+    assert len(violations) == 1
+    assert "prefixes() === []" in violations[0]
+
+
+def test_the_preg_replace_of_trimmed_alone_is_clean() -> None:
+    # The counter sample of the two below. The one fixed preg_replace of the
+    # file stands in trimmed(), and trimmed() is called from the normalisation,
+    # so a probe over the whole file or over the call would report it.
+    assert scan_pattern_methods("ExamplePatternService.php", _CLEAN_PATTERN_SERVICE) == []
+
+
+def test_a_regular_expression_in_the_matcher_is_reported() -> None:
+    source = _CLEAN_PATTERN_SERVICE.replace(
+        "\t\treturn ($state & $accept) !== 0;",
+        "\t\treturn preg_match($this->translated($pattern), $path) === 1;",
+    )
+
+    violations = scan_pattern_methods("ExamplePatternService.php", source)
+
+    assert len(violations) == 1
+    assert "matchesAPattern" in violations[0]
+    assert "preg_" in violations[0]
+
+
+def test_a_glob_or_a_split_in_the_normalisation_is_reported() -> None:
+    source = _CLEAN_PATTERN_SERVICE.replace(
+        "\t\t$framed = '/' . $value . '/';",
+        "\t\t$framed = implode('/', explode('/', $value));\n\t\t$hit = fnmatch($value, 'x');",
+    )
+
+    violations = scan_pattern_methods("ExamplePatternService.php", source)
+
+    assert len(violations) == 2
+    assert all("normalisePattern" in message for message in violations)
+    assert any("fnmatch(" in message for message in violations)
+    assert any("explode(" in message for message in violations)
+
+
+def test_a_normalisation_that_keeps_a_dot_segment_is_reported() -> None:
+    source = _CLEAN_PATTERN_SERVICE.replace("return [null, self::ERROR_TRAVERSAL];", "return [$value, null];")
+
+    violations = scan_pattern_methods("ExamplePatternService.php", source)
+
+    assert len(violations) == 1
+    assert PATTERN_TRAVERSAL_CODE in violations[0]
+
+
+def test_a_matcher_that_disappeared_is_not_a_pass() -> None:
+    source = _CLEAN_PATTERN_SERVICE.replace("function matchesAPattern(", "function matchesSomething(")
+
+    with pytest.raises(AssertionError, match="is gone"):
+        scan_pattern_methods("ExamplePatternService.php", source)

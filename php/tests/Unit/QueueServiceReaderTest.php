@@ -10,6 +10,7 @@ use OCA\Findling\Service\ExclusionService;
 use OCA\Findling\Service\FileStateService;
 use OCA\Findling\Service\QueueService;
 use OCA\Findling\Service\ReaderContext;
+use OCA\Findling\Service\SettingsService;
 use OCA\Findling\Service\StorageService;
 use OCP\BackgroundJob\IJobList;
 use OCP\Files\Config\ICachedMountFileInfo;
@@ -88,10 +89,18 @@ final class QueueServiceReaderTest extends TestCase {
 		);
 	}
 
-	private function service(): QueueService {
+	/**
+	 * @param list<string> $patterns the stored exclusion patterns, none by default
+	 */
+	private function service(array $patterns = []): QueueService {
 		$storageService = $this->createMock(StorageService::class);
+		$storageService->method('mountRootPath')->willReturn('files');
+		$appConfig = $this->createMock(IAppConfig::class);
+		$appConfig->method('getValueArray')->willReturnCallback(
+			static fn (string $app, string $key, array $default = []): array => $key === SettingsService::KEY_EXCLUSION_PATTERNS ? $patterns : $default,
+		);
 		$exclusions = new ExclusionService(
-			$this->createMock(IAppConfig::class),
+			$appConfig,
 			$storageService,
 			$this->createMock(IJobList::class),
 			$this->createMock(LoggerInterface::class),
@@ -404,5 +413,37 @@ final class QueueServiceReaderTest extends TestCase {
 
 		self::assertSame([], $this->service()->claim(32, 1_000_000));
 		self::assertSame($before, $this->active);
+	}
+
+	public function testWithPatternsOnlyAClaimUnderAPatternBecomesADeleteOrder(): void {
+		// Pitfall 1 of the phase 33 research at describe(): the guard used to
+		// ask the prefix list alone, so on an instance whose only rule is a
+		// pattern the bytes of a file under it were handed out again. The
+		// answer is the delete order of CR-01, with no prefix stored at all.
+		$this->mountsFor(['anna']);
+		$file = $this->file(true);
+		$file->method('getInternalPath')->willReturn('files/Vortrag.key/Data/notes.pdf');
+		$this->foldersResolving(['anna' => $file]);
+
+		$sources = $this->service(['*.key'])->claim(32, 1_000_000);
+
+		self::assertSame(
+			['fileId' => self::FILE_ID, 'storageId' => 3, 'kind' => QueueMapper::KIND_DELETE],
+			$sources[self::ROW_ID] ?? null,
+		);
+	}
+
+	public function testWithPatternsOnlyAClaimNextToThePatternIsHandedOut(): void {
+		// The positive control of the case above: the same rule, a path it
+		// does not name, and the row is a content order with its bytes.
+		$this->mountsFor(['anna']);
+		$file = $this->file(true);
+		$file->method('getInternalPath')->willReturn('files/Vortraege/notes.pdf');
+		$this->foldersResolving(['anna' => $file]);
+
+		$sources = $this->service(['*.key'])->claim(32, 1_000_000);
+
+		self::assertSame(QueueMapper::KIND_CONTENT, $sources[self::ROW_ID]['kind'] ?? null);
+		self::assertSame('anna', $sources[self::ROW_ID]['fetchAs'] ?? null);
 	}
 }

@@ -12,14 +12,25 @@ use OCP\IAppConfig;
 use Psr\Log\LoggerInterface;
 
 /**
- * The folder exclusions, and the one comparison that decides them.
+ * The exclusions, two lists of them, and the one comparison that decides them.
  *
- * A prefix match on the path, without wildcards and without patterns. That is
- * D-06 and it is a decision about the audience rather than about the code: an
- * admin of a small instance can say what "Backups" leaves out, and nobody has to
- * find out what a glob does to a folder whose name contains a bracket. A pattern
- * language would be one line more here and a support case for every instance
- * that guessed wrong.
+ * The first list is the prefixes of D-06: a prefix match on the path, so an
+ * admin of a small instance can say what "Backups" leaves out without learning a
+ * pattern language. Those prefixes are compared exactly as in 1.4.2, byte for
+ * byte, and a prefix that holds a literal * or ? stays a literal prefix.
+ *
+ * The second list is the patterns of D-30-01 (owner gate of 10.10.2026), stored
+ * under a key of their own: * stands for any run of characters including the
+ * slash, ? for exactly one character but never the slash, upper and lower case
+ * count, and there is nothing else. No double star, no negation, no brackets, no
+ * braces, no escape and no regular expression: what an admin types is what the
+ * help sentence on the page explains, and a bundle like *.photoslibrary or a
+ * node_modules folder at any depth is said in one entry. A pattern hits a
+ * path when it matches the path itself or one of its ancestors at a slash, so
+ * it reads like a prefix for folders. The comparison is a bit parallel matcher,
+ * one pass over the path per pattern, linear in the path length whatever the
+ * pattern looks like, because the path is chosen by a user and the comparison
+ * runs inside every write of the instance (T-33-03).
  *
  * Where the prefixes apply, in full, and this paragraph was made precise in plan
  * 04-09 because the clearing and the diagnosis both had to rely on it. A prefix
@@ -115,6 +126,39 @@ final class ExclusionService {
 	public const ERROR_TOO_MANY = 'too_many';
 
 	/**
+	 * The field of the pattern list in the answer of the write route, and its
+	 * bounds: thirty two patterns of sixty characters each (D-33-03, a planner
+	 * decision the owner confirmed on 13.10.2026 as G1). Thirty two because
+	 * every write of the instance pays every pattern once, and the measured
+	 * worst case of 33-RESEARCH is 8.4 ms for thirty two patterns over a path of
+	 * four thousand characters; sixty because a realistic pattern is fifteen to
+	 * twenty one characters long and because it keeps the technical bound of
+	 * the matcher at a distance: one bit per symbol that is not a star plus the
+	 * bit of the empty prefix, and a 64 bit int holds 62 of them below the sign.
+	 * Counted in characters (mb_strlen) and not in bytes, so an accented name is
+	 * not punished for its encoding.
+	 */
+	public const FIELD_PATTERNS = 'exclusionPatterns';
+	public const MAX_PATTERNS = 32;
+	public const MAX_PATTERN_LENGTH = 60;
+
+	/**
+	 * The codes only a pattern can earn. A prefix never gets one of them,
+	 * because the prefix validation stays as it was in 1.4.2.
+	 */
+	public const ERROR_DOUBLE_STAR = 'double_star';
+	public const ERROR_UNSUPPORTED_CHARACTER = 'unsupported_character';
+	public const ERROR_NEGATION = 'negation';
+	public const ERROR_CONTROL_CHARACTER = 'control_character';
+	public const ERROR_NO_LITERAL = 'no_literal';
+	public const ERROR_NO_WILDCARD = 'no_wildcard';
+
+	/** The two wildcards of D-30-01, and the characters that are refused. */
+	private const STAR = '*';
+	private const ANY = '?';
+	private const REFUSED_CHARACTERS = ['[', ']', '{', '}', '\\'];
+
+	/**
 	 * The folder every home mount carries between the storage root and the files
 	 * of the user. Named once, because it is stripped in two places below and a
 	 * second literal is how the two would stop agreeing.
@@ -132,6 +176,22 @@ final class ExclusionService {
 	 * @var list<string>|null
 	 */
 	private ?array $cached = null;
+
+	/**
+	 * The normalised patterns and their compiled form, resolved once per request
+	 * for the same reason and with the same lifetime as the prefixes above.
+	 *
+	 * @var list<string>|null
+	 */
+	private ?array $cachedPatterns = null;
+
+	/**
+	 * One entry per pattern: the mask per literal character, the mask of the
+	 * question mark, the mask of the stars and the accepting bit.
+	 *
+	 * @var list<array{masks: array<array-key, int>, any: int, star: int, accept: int}>
+	 */
+	private array $compiled = [];
 
 	/** Counter of everything that was refused, for the log line below. */
 	private int $rejected = 0;
@@ -420,6 +480,363 @@ final class ExclusionService {
 	}
 
 	/**
+	 * The patterns in force, normalised, and compiled for the matcher.
+	 *
+	 * Read defensively for the reason prefixes() gives: ``occ config:app:set
+	 * findling exclusion_patterns`` writes past savePatterns(), so every stored
+	 * entry goes through the same normalisation as an entry of the form, and an
+	 * entry it refuses is dropped and counted rather than compared. That covers
+	 * the shapes that would hurt on the write path of the instance as well: an
+	 * entry longer than sixty characters, one with a double star or one without
+	 * a single literal character never reaches the matcher. Beyond thirty two
+	 * the list is cut and the cut is named. Both warnings carry counts and the
+	 * ceiling, never a value (T-33-05, T-33-06).
+	 *
+	 * @return list<string>
+	 */
+	public function patterns(): array {
+		if ($this->cachedPatterns !== null) {
+			return $this->cachedPatterns;
+		}
+
+		$stored = $this->appConfig->getValueArray(Application::APP_ID, SettingsService::KEY_EXCLUSION_PATTERNS, []);
+
+		$patterns = [];
+		$unusable = 0;
+		$remaining = count($stored);
+		foreach ($stored as $entry) {
+			$remaining--;
+
+			if (!is_string($entry)) {
+				$unusable++;
+				continue;
+			}
+
+			[$normalised] = $this->normalisePattern($entry);
+			if ($normalised === null) {
+				$unusable++;
+				continue;
+			}
+
+			$patterns[$normalised] = true;
+			if (count($patterns) >= self::MAX_PATTERNS) {
+				if ($remaining > 0) {
+					$this->logger->warning(
+						'Findling: the stored pattern list exceeds the ceiling, entries beyond it are not applied',
+						['dropped' => $remaining, 'ceiling' => self::MAX_PATTERNS],
+					);
+				}
+				break;
+			}
+		}
+
+		if ($unusable > 0) {
+			$this->logger->warning(
+				'Findling: stored exclusion patterns are not usable, so they are neither in force nor shown',
+				['unusable' => $unusable, 'inForce' => count($patterns)],
+			);
+		}
+
+		$this->remember(array_map('strval', array_keys($patterns)));
+
+		return $this->cachedPatterns ?? [];
+	}
+
+	/**
+	 * Judge a whole pattern list without writing anything, in the shape of
+	 * validate(): a list of codes, never a value and never a mapping per entry.
+	 *
+	 * @param list<mixed> $patterns
+	 * @return list<string> error codes, empty when the list fits
+	 */
+	public function validatePatterns(array $patterns): array {
+		$errors = [];
+		if (count($patterns) > self::MAX_PATTERNS) {
+			$errors[] = self::ERROR_TOO_MANY;
+		}
+
+		$seen = [];
+		foreach ($patterns as $entry) {
+			if (!is_string($entry)) {
+				$errors[] = self::ERROR_EMPTY;
+				continue;
+			}
+
+			[$normalised, $error] = $this->normalisePattern($entry);
+			if ($normalised === null) {
+				$errors[] = $error ?? self::ERROR_EMPTY;
+				continue;
+			}
+
+			if (isset($seen[$normalised])) {
+				$errors[] = self::ERROR_DUPLICATE;
+				continue;
+			}
+			$seen[$normalised] = true;
+		}
+
+		if ($errors !== []) {
+			$this->reject();
+		}
+
+		return array_values(array_unique($errors));
+	}
+
+	/**
+	 * Write the whole pattern list, or none of it.
+	 *
+	 * Validates again rather than trusting the caller, like save(). The request
+	 * cache is replaced with what was written, so a comparison later in the same
+	 * request already sees the new list. The clearing of documents a new pattern
+	 * covers is planned by plan 33-04; until then the answer is the error list.
+	 *
+	 * @param list<mixed> $patterns
+	 * @return list<string> error codes, empty when the list was written
+	 */
+	public function savePatterns(array $patterns): array {
+		$errors = $this->validatePatterns($patterns);
+		if ($errors !== []) {
+			return $errors;
+		}
+
+		$clean = [];
+		foreach ($patterns as $entry) {
+			[$normalised] = $this->normalisePattern((string)$entry);
+			if ($normalised !== null) {
+				$clean[$normalised] = true;
+			}
+		}
+
+		$list = array_map('strval', array_keys($clean));
+		$this->appConfig->setValueArray(Application::APP_ID, SettingsService::KEY_EXCLUSION_PATTERNS, $list);
+		$this->remember($list);
+
+		return [];
+	}
+
+	/**
+	 * The patterns of a list that are not in force yet, normalised.
+	 *
+	 * The counterpart of newPrefixes() for the confirmation of the page. No
+	 * nesting is reduced here: two patterns have no subtree relation one can
+	 * read off their text.
+	 *
+	 * @param list<mixed> $patterns
+	 * @return list<string>
+	 */
+	public function newPatterns(array $patterns): array {
+		$inForce = $this->patterns();
+
+		$added = [];
+		foreach ($patterns as $entry) {
+			if (!is_string($entry)) {
+				continue;
+			}
+
+			[$normalised] = $this->normalisePattern($entry);
+			if ($normalised === null || in_array($normalised, $inForce, true)) {
+				continue;
+			}
+
+			$added[$normalised] = true;
+		}
+
+		return array_map('strval', array_keys($added));
+	}
+
+	/**
+	 * Is any rule in force at all, a prefix or a pattern?
+	 *
+	 * The guard of the three call sites that skip their root lookup on an
+	 * instance without rules: the event listener, describe() and the reconcile
+	 * slice. They used to ask whether the prefix list was empty, and an instance
+	 * with patterns and no prefix would then check nothing at all (pitfall 1 of
+	 * the phase 33 research).
+	 */
+	public function hasRules(): bool {
+		return $this->prefixes() !== [] || $this->patterns() !== [];
+	}
+
+	/**
+	 * One pattern as it is stored and compared, or the code that refuses it.
+	 *
+	 * The answer is a pair: the normalised pattern and null, or null and one of
+	 * the closed error codes. The steps, in order: trim; refuse control
+	 * characters and anything that is not valid UTF-8; compose to NFC, because
+	 * the file cache stores composed names and a client on macOS types
+	 * decomposed ones; count characters; refuse the characters of a class, a
+	 * brace or an escape; collapse slashes, drop the outer ones and
+	 * a ``files/`` vanguard through the same helpers the prefixes use; refuse a
+	 * leading ! (there is no negation), a dot segment, a double star, an entry without a wildcard (that one belongs
+	 * in the prefix list) and an entry without a single literal character (it
+	 * would exclude everything).
+	 *
+	 * The segment test does not split the value, it looks for the dot segment
+	 * between two slashes of the value with a slash added at both ends, so the
+	 * same refusal as normalise() holds without a second way of reading a path.
+	 * No regular expression and no glob function anywhere in here: the gate in
+	 * backend/tests/test_exclusion_path_space.py reads this body.
+	 *
+	 * @return array{0: string, 1: null}|array{0: null, 1: string}
+	 */
+	private function normalisePattern(string $pattern): array {
+		$value = trim($pattern);
+		if ($value === '') {
+			return [null, self::ERROR_EMPTY];
+		}
+
+		if (!mb_check_encoding($value, 'UTF-8')) {
+			return [null, self::ERROR_UNSUPPORTED_CHARACTER];
+		}
+
+		foreach (mb_str_split($value) as $character) {
+			$codePoint = mb_ord($character, 'UTF-8');
+			if ($codePoint < 0x20 || ($codePoint >= 0x7F && $codePoint <= 0x9F)) {
+				return [null, self::ERROR_CONTROL_CHARACTER];
+			}
+		}
+
+		$value = $this->composed($value);
+		if (mb_strlen($value) > self::MAX_PATTERN_LENGTH) {
+			return [null, self::ERROR_TOO_LONG];
+		}
+
+		foreach (self::REFUSED_CHARACTERS as $refused) {
+			if (str_contains($value, $refused)) {
+				return [null, self::ERROR_UNSUPPORTED_CHARACTER];
+			}
+		}
+
+		$value = $this->withoutTheFilesFolder($this->trimmed($value));
+		if ($value === '') {
+			return [null, self::ERROR_EMPTY];
+		}
+
+		if (str_starts_with($value, '!')) {
+			return [null, self::ERROR_NEGATION];
+		}
+
+		$framed = '/' . $value . '/';
+		if (str_contains($framed, '/../') || str_contains($framed, '/./')) {
+			return [null, self::ERROR_TRAVERSAL];
+		}
+
+		if (str_contains($value, self::STAR . self::STAR)) {
+			return [null, self::ERROR_DOUBLE_STAR];
+		}
+
+		if (!str_contains($value, self::STAR) && !str_contains($value, self::ANY)) {
+			return [null, self::ERROR_NO_WILDCARD];
+		}
+
+		if (str_replace([self::STAR, self::ANY, '/'], '', $value) === '') {
+			return [null, self::ERROR_NO_LITERAL];
+		}
+
+		return [$value, null];
+	}
+
+	/**
+	 * Keep a normalised pattern list and its compiled form for this request.
+	 *
+	 * One pattern becomes four numbers and a table, and that is the whole
+	 * compiler. Every symbol that is not a star gets one bit, counted from bit 1;
+	 * bit 0 stands for "nothing of the pattern consumed yet". A literal sets its
+	 * bit in the mask of its character, a question mark sets its bit in the mask
+	 * of any character, and a star sets the bit of the symbol count in front of
+	 * it in the star mask, which is the self loop of that state. The accepting
+	 * bit is the bit of the last symbol.
+	 *
+	 * @param list<string> $patterns
+	 */
+	private function remember(array $patterns): void {
+		$compiled = [];
+		foreach ($patterns as $pattern) {
+			$masks = [];
+			$any = 0;
+			$star = 0;
+			$symbols = 0;
+			foreach (mb_str_split($pattern) as $character) {
+				if ($character === self::STAR) {
+					$star |= 1 << $symbols;
+					continue;
+				}
+
+				$symbols++;
+				$bit = 1 << $symbols;
+				if ($character === self::ANY) {
+					$any |= $bit;
+				} else {
+					$masks[$character] = ($masks[$character] ?? 0) | $bit;
+				}
+			}
+
+			$compiled[] = ['masks' => $masks, 'any' => $any, 'star' => $star, 'accept' => 1 << $symbols];
+		}
+
+		$this->cachedPatterns = $patterns;
+		$this->compiled = $compiled;
+	}
+
+	/**
+	 * Does one of the patterns in force match this path or one of its ancestors?
+	 *
+	 * Shift-And with self loops for the stars, one pass over the path per
+	 * pattern, so the cost is the path length times the number of patterns and
+	 * nothing the shape of a pattern can raise (T-33-03). The path is split into
+	 * characters once per call and not once per pattern, and a character is a
+	 * Unicode character, so ``Caf?`` matches the composed ``Cafe`` with an
+	 * accent.
+	 *
+	 * The pass runs over the path with a slash in front. After that first slash
+	 * the empty state is switched on a second time, which is the path without
+	 * the slash: a pattern that begins with a star may then match the slash in
+	 * front, so ``*``/``node_modules/*`` hits a node_modules folder at the top
+	 * of a home, and a pattern that begins with a literal stays anchored at the
+	 * start of the mount. The question mark never matches a slash. A match is
+	 * accepted at every slash and at the end of the path, which is the ancestor
+	 * or self reading of a prefix: the pattern of a bundle folder hits every
+	 * file inside the bundle. A state of zero ends the pass of that pattern.
+	 *
+	 * No regular expression, no glob function, no recursion and no split of the
+	 * path into segments: the gate in backend/tests/test_exclusion_path_space.py
+	 * reads this body.
+	 */
+	private function matchesAPattern(string $path): bool {
+		$this->patterns();
+		if ($this->compiled === []) {
+			return false;
+		}
+
+		$characters = mb_str_split('/' . $path);
+		$last = count($characters) - 1;
+
+		foreach ($this->compiled as $pattern) {
+			$masks = $pattern['masks'];
+			$any = $pattern['any'];
+			$star = $pattern['star'];
+			$accept = $pattern['accept'];
+
+			$state = 1;
+			foreach ($characters as $index => $character) {
+				$allowed = ($masks[$character] ?? 0) | ($character === '/' ? 0 : $any);
+				$state = (($state << 1) & $allowed) | ($state & $star);
+				if ($index === 0) {
+					$state |= 1;
+				}
+				if ($state === 0) {
+					break;
+				}
+				if ($index > 0 && ($state & $accept) !== 0 && ($index === $last || $characters[$index + 1] === '/')) {
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+	/**
 	 * How many indexed documents these prefixes would take out of the index.
 	 *
 	 * The number the inline confirmation names, and the reason the confirmation
@@ -490,14 +907,18 @@ final class ExclusionService {
 	 * tombstone, in that order and each of them idempotent. So this method is one
 	 * job entry per subtree and nothing else (research pattern 9, way A).
 	 *
-	 * Way B is the net underneath, and it is worth naming because it is the half
-	 * that catches what this method misses: a folder that did not resolve while
-	 * the admin was saving, a mount that only appears later, a home that was
-	 * created afterwards. Those files drop out of the enumeration the comparison
-	 * run reads, the container finds them locally known and absent from the page
-	 * and turns them into deletions by itself. It costs no code here and it takes
-	 * up to FINDLING_RECONCILE_MIN_INTERVAL_HOURS, which is why way A exists: it
-	 * makes the effect visible while the admin is still looking at the page.
+	 * The net underneath is the comparison run, and it is worth naming because it
+	 * is the half that catches what this method misses: a folder that did not
+	 * resolve while the admin was saving, a mount that only appears later, a home
+	 * that was created afterwards, a folder renamed under a rule inside one
+	 * mount. Since the owner decision of 03.10.2026 those files no longer drop
+	 * out of the enumeration; the slice keeps them and marks them as
+	 * skipped(excluded). Owner decision D-33-01 of 13.10.2026 makes that mark
+	 * work as the net again: a file the container knows and a rule of today
+	 * covers is removed by the next comparison run, changed or not (plan 33-03).
+	 * It takes up to FINDLING_RECONCILE_MIN_INTERVAL_HOURS, which is why way A
+	 * exists: it makes the effect visible while the admin is still looking at
+	 * the page.
 	 *
 	 * And why there is no fourth writing container route for any of this: the
 	 * three writes of a forget are already idempotent and already in the right
@@ -636,11 +1057,13 @@ final class ExclusionService {
 	 * StorageService::isIndexedStorage since phase 2, and
 	 * backend/tests/test_exclusion_path_space.py reports any second comparison.
 	 *
-	 * The comparison is str_starts_with against ``<prefix>`` and ``<prefix>/``,
-	 * both shapes, so ``Archiv`` matches the folder and everything inside it and
-	 * does not match ``Archivar.pdf``. Deliberately no glob and no regular
-	 * expression: it is explainable, and there is no way to mis-enter it for the
-	 * zero config audience this app is for (D-06).
+	 * The prefix comparison is str_starts_with against ``<prefix>`` and
+	 * ``<prefix>/``, both shapes, so ``Archiv`` matches the folder and everything
+	 * inside it and does not match ``Archivar.pdf``. It is the comparison of
+	 * 1.4.2 unchanged, and it runs first. The patterns of D-30-01 follow through
+	 * matchesAPattern(), on the very same path, so every call site sees them
+	 * without a change of its own. Still no glob function and no regular
+	 * expression in either half.
 	 */
 	public function isExcluded(string $mountRelativePath): bool {
 		$path = $this->trimmed($mountRelativePath);
@@ -654,7 +1077,7 @@ final class ExclusionService {
 			}
 		}
 
-		return false;
+		return $this->matchesAPattern($path);
 	}
 
 	/**
@@ -791,6 +1214,22 @@ final class ExclusionService {
 		$vanguard = self::HOME_FILES_FOLDER . '/';
 
 		return str_starts_with($path, $vanguard) ? substr($path, strlen($vanguard)) : $path;
+	}
+
+	/**
+	 * The value in Unicode normalisation form C, or as it came when it cannot be
+	 * composed, the same fallback as Provider::composed(). Nextcloud ships the
+	 * polyfill, so the fallback is for a runtime without intl and without it.
+	 * Used for patterns only: the prefixes stay exactly as 1.4.2 stored them.
+	 */
+	private function composed(string $value): string {
+		if (!class_exists(\Normalizer::class)) {
+			return $value;
+		}
+
+		$composed = \Normalizer::normalize($value, \Normalizer::FORM_C);
+
+		return is_string($composed) ? $composed : $value;
 	}
 
 	/**

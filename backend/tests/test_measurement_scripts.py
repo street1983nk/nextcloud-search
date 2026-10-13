@@ -883,8 +883,20 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # SearchServiceTest.php counts the lookups of the longest folder run, one mount
 # list, one folder entry and one bulk lookup per round. No file came and none
 # went, so PHP_FILES_TODAY stays at 97.
-PHP_FILES_TODAY = 97
-PHP_TREE_HASH_TODAY = "5cb3e48f5d8f89cfc24ea4e431c845409257c0fcafeda04dfad0460f65b68fb2"
+# Moved on 2026-10-13 by Plan 33-02 (EXCL-01, EXCL-03, D-30-01, D-33-03): the
+# exclusion patterns next to the prefixes. Service/ExclusionService.php gained
+# the pattern list under its own app config key (read defensively, at most 32
+# patterns of 60 characters), the closed refusal codes, the bit parallel
+# matcher and hasRules(); Service/SettingsService.php names the key
+# exclusion_patterns; the guards of Listener/FileEventListener.php,
+# Service/QueueService.php and Controller/ReconcileController.php ask
+# hasRules() instead of the prefix list; QueueServiceReaderTest.php and
+# ReconcileControllerTest.php carry the case of an instance with patterns
+# only. Two files came, php/tests/Unit/ExclusionServiceTest.php and
+# php/tests/Unit/FileEventListenerTest.php. No file went, so PHP_FILES_TODAY
+# moves to 99.
+PHP_FILES_TODAY = 99
+PHP_TREE_HASH_TODAY = "2fb90d372c5fdf315d5103bc4f07733d7dea3caf2cce1ae906ae50c83b454282"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

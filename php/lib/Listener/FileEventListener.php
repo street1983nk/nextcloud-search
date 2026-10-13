@@ -428,17 +428,20 @@ class FileEventListener implements IEventListener {
 		// for the verdict, and backend/tests/test_exclusion_path_space.py
 		// reports any second comparison.
 		//
-		// The list is asked first so that the root lookup does not happen at
+		// The rules are asked first so that the root lookup does not happen at
 		// all on an instance without exclusions, which is the default of a zero
 		// config app and therefore the overwhelmingly common case: this method
-		// runs inside every single write on the instance.
+		// runs inside every single write on the instance. Both lists and not the
+		// prefixes alone since plan 33-02: an instance with patterns and no prefix
+		// would otherwise check nothing here (pitfall 1 of the phase 33
+		// research).
 		//
 		// A deletion skips this question, and that is the third exception of
 		// this kind rather than a forgotten branch. An excluded file that gets
 		// deleted has to leave the index, and an exclusion branch in front of
 		// the deletion would drop the delete row and keep the document
 		// findable for good.
-		if (!$isDeletion && $this->exclusionService->prefixes() !== []) {
+		if (!$isDeletion && $this->exclusionService->hasRules()) {
 			$relative = $this->exclusionService->mountRelativePath(
 				$node->getInternalPath(),
 				$this->storageService->mountRootPath($storageId, $rootId),

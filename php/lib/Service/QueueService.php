@@ -881,9 +881,12 @@ class QueueService {
 		// because the node must not matter to the container for a file it is
 		// about to forget.
 		//
-		// The list is asked first so that the root lookup costs nothing on an
-		// instance without exclusions, same as in the event listener.
-		if ($this->exclusionService->prefixes() !== []) {
+		// The rules are asked first so that the root lookup costs nothing on an
+		// instance without exclusions, same as in the event listener. Both
+		// lists and not the prefixes alone since plan 33-02, or an instance with
+		// patterns only would hand out the bytes of every file under them
+		// (pitfall 1 of the phase 33 research).
+		if ($this->exclusionService->hasRules()) {
 			$relative = $this->exclusionService->mountRelativePath(
 				$node->getInternalPath(),
 				$this->storageService->mountRootPath($storageId, $rootId),
