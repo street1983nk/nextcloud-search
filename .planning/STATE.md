@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 32-08-PLAN.md
-last_updated: "2026-10-13T12:00:00.000Z"
-last_activity: 2026-10-13 -- 32-08 abgeschlossen (Audit, M-32-01 gefixt d09e5a5a, Owner-Frage M-32-02); Verifikation Phase 32 offen
+stopped_at: Completed 33-01-PLAN.md
+last_updated: "2026-10-13T18:20:00.000Z"
+last_activity: 2026-10-13 -- 33-01 abgeschlossen (Wortlaut der Phase 33 vom Owner abgenommen, G5 = c)
 progress:
   total_phases: 7
   completed_phases: 1
-  total_plans: 32
-  completed_plans: 32
+  total_plans: 43
+  completed_plans: 33
   percent: 14
 ---
 
@@ -21,16 +21,16 @@ progress:
 Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .planning/MILESTONES.md (v1.0 bis v1.4).
 
 **Core Value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 32, Filter in der Unified Search
+**Current focus:** Phase 33, Ausschlussmuster und Admin-Feinschliff
 
 ## Current Position
 
-Phase: 32 von 30-36 (Filter in der Unified Search)
-Plan: 8 von 8 erledigt (32-01 bis 32-08), Phase 32 ausgeführt, Verifikation offen
-Status: Phase 32 ausgeführt; 32-08 Audit abgeschlossen (32-AUDIT.md, status issues_found): M-32-01 gefixt (d09e5a5a), L-32-02 und L-32-06 gefixt (4c481f74), fünf LOW entschieden; M-32-02 (Dokumente gelöschter Nutzer bleiben im Index) offen als Owner-Frage. USRCH-01, USRCH-02 und USRCH-03 Complete
-Last activity: 2026-10-13 -- 32-08 abgeschlossen (Audit), Owner-Frage M-32-02, danach Verifikation Phase 32
+Phase: 33 von 30-36 (Ausschlussmuster und Admin-Feinschliff)
+Plan: 1 von 11 erledigt (33-01), nächster Plan 33-02
+Status: Phase 33 läuft (33-01 erledigt, Wortlaut abgenommen). Phase 32 ausgeführt; 32-08 Audit abgeschlossen (32-AUDIT.md, status issues_found): M-32-01 gefixt (d09e5a5a), L-32-02 und L-32-06 gefixt (4c481f74), fünf LOW entschieden; M-32-02 (Dokumente gelöschter Nutzer bleiben im Index) offen als Owner-Frage. USRCH-01, USRCH-02 und USRCH-03 Complete
+Last activity: 2026-10-13 -- 33-01 abgeschlossen: Wortlaut abgenommen (33-WORTLAUT.md, 45c00a2f); Phase 32: Verifikation und Owner-Frage M-32-02 weiter offen
 
-Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passed, 659f5631); Phase 32: 8/8 Pläne (Verifikation offen)
+Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passed, 659f5631); Phase 32: 8/8 Pläne (Verifikation offen); Phase 33: 1/11 Pläne
 
 ## Performance Metrics
 
@@ -67,6 +67,7 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 - v1.5: 32-06 in ca. 150 min inkl. ca. 25 min Volltestläufe und ca. 45 min CI (3 Tasks, 6 Dateien)
 - v1.5: 32-07 Task 3 in ca. 120 min inkl. ca. 13 min Volltestlauf und CI (1 Task, 4 Dateien plus Planung)
 - v1.5: 32-08 in ca. 330 min inkl. ca. 40 min Korpusaufbau, ca. 40 min Volltestläufe und ca. 50 min CI (3 Tasks, 8 Dateien)
+- v1.5: 33-01 in ca. 20 min inkl. Checkpoint und zwei CI-Runden (2 Tasks, 2 Dateien)
 
 ## Accumulated Context
 
@@ -111,6 +112,7 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 - 32-07 Befund A gefixt (Plan-Abweichung vor dem Checkpoint, Owner-Entscheid 13.10.: Option A1): versteckter Provider Search\FilterProvider (ID findling-filter, getOrder null, Filter und Name vom echten Provider; ohne types und folder sofort leere Gruppe ohne Backend-Aufruf, sonst Provider::search). unified-search.js: searchFrom findling-filter an allen sieben Einträgen, Callback setzt this.filters {since, until, types, folder} nur wenn this ein Objekt ist (Kern-Interna, docs/search-filters.md), Wurzel sendet folder=/, Abbruch zeigt keine Treffer. Echter Provider findling unverändert. FilterProviderTest 13 Fälle, Vertragstest und deploy-harp-Probe (findling-filter versteckt, leer ohne Chip, types=pdf, folder, folder=/) erweitert; Gegenproben rot (PHPUnit auf Wegwerf-Zweig 38349488409, JS am echten Skript). PHP_FILES_TODAY 97. Commit 4d616071; CI PHP 38347181812 (661 Tests), Python 38347181819, Integration 38347181828 (team-folder-acl grün), HaRP 38347181759 (alle vier Beine) grün. Browser-Nachprobe 8090: eine Findling-Gruppe ungefiltert (Dashboard und Files), Chip PDF, Ordner /Abnahme32, PDF plus Heute, Abbruch, Wurzel, Markup-Ordner grün; Protokoll 32-07-ABNAHME.md Abschnitt 'Befund A Fix'.
 - 32-07 abgeschlossen: Owner-Abnahme 13.10.2026, Wortlaut de/en/fr unverändert, Verhalten abgenommen. Symbol: sieben Einträge app-white.svg (f4fc7efa), Haupteintrag "Dateiinhalte" über php/img/findling.svg (f60ca146), weil SearchComposer::fetchIcon <provider id>.svg vor app.svg fragt; App-Navigation (info.xml app.svg) unverändert. Nebenwirkung auf Owner-Wort angenommen: Theming-Tab- und Homescreen-Symbol der Findling-Seiten werden weiße Lupe statt leerem Quadrat, auf bestehenden Instanzen erst nach neuem Theming-Cachebuster. Saat /Abnahme32 und /Woanders32 per WebDAV gelöscht, erst Cron (SubtreeExpandJob), dann Papierkorb; Containerzeilen tombstoned, 0 Dokumente im Index. USRCH-01 und USRCH-02 Complete.
 - 32-08 Audit (32-AUDIT.md): Korpus aus 59 manipulierten Werten gegen 8090 als alice/bob mit Freigabe, beide Provider gleich, nie ein Fremdtreffer, Logs sauber mit Positivkontrolle. M-32-01: '.'-Segment und NFD lösten zu einem Ordnerknoten mit nicht kanonischem Pfad auf, leere Gruppe; Provider::folderOf() komponiert NFC und liest ein '.'-Segment als keinen Ordner (d09e5a5a). Waisen aus 32-07: Abgleich 01:08 lief vor dem Löschen; Positivkontrolle missing=1011, alle entfernt. M-32-02 Owner-Frage: Storages, die die Mountliste verlassen (gelöschter Nutzer), läuft der Abgleich nie, ihre Dokumente bleiben (live belegt mit carol, Kontrolle im selben Lauf missing=1). Performance P1 bis P5 unabhängig gemessen, ungefilterter Body byte-gleich zur Basis. CI 4c481f74 alle acht grün, PHPUnit 666 Tests.
+- 33-01: Wortlaut der Phase 33 (33-WORTLAUT.md) vom Owner am 13.10.2026 unverändert abgenommen, en/de/fr: Musterliste, 13 Fehlermeldungen über 11 Codes, zahlenlose Musterbestätigung, Diagnose-Abhilfe, Grenzblock "Limits per file" mit Änderungsweg über occ app_api:app:unregister, B3-Ersatz, hardware_short; 28 neue Schlüssel, Schlüsselzahl 306 auf 334. G1 bis G4 (a): 32 Muster zu je 60 Zeichen, ? nie über /, Groß/Klein zählt, no_wildcard abgelehnt, Urteilszeilen in beiden Räumwegen gelöscht. G5 (c), Abweichung von PE-6: 33-07 ersetzt hardware_short und alle sechs weiteren box-Sätze (Vermerk in 33-07-PLAN.md). Commits 33bf0e5d, 45c00a2f; CI Security scans und Scorecard grün.
 
 ### Offene Faeden (kein aktiver Auftrag)
 
@@ -144,6 +146,6 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 
 ## Session Continuity
 
-Last session: 2026-10-13T12:00:00.000Z
-Stopped at: Completed 32-08-PLAN.md, Owner-Frage M-32-02, danach Verifikation Phase 32
+Last session: 2026-10-13T18:20:00.000Z
+Stopped at: Completed 33-01-PLAN.md, weiter mit 33-02
 Resume file: None
