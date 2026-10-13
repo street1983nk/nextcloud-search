@@ -1258,6 +1258,349 @@ jobs:
             echo "::warning::[${present}] still answer a hit ${rounds_gone} cron round(s) and 60s after the removal, so the stock of the steps below is not yet the one they were measured against (L-19-05)"
           fi
 
+      # =====================================================================
+      # The three success criteria of phase 32, on a real Nextcloud and on
+      # every leg of the matrix (plan 32-06).
+      #
+      # THIS STEP CARRIES NO "if:" AND MUST NOT BE GIVEN ONE, for the reason
+      # the language proof above states: PHPUnit runs against stable34 only
+      # (32-RESEARCH pitfall 7), so the mechanics the core supplies around the
+      # two filters, FilterDefinition, StringFilter and the HTTP 400 for an
+      # empty value, are proved on stable33, on stable35 and on arm64 here and
+      # nowhere else. backend/tests/test_unified_search_filter_steps.py holds
+      # the absence of the condition and every probe below as assertions.
+      #
+      # What is asked, over the ordinary OCS route and as the ordinary user:
+      #   criterion 1  types=pdf and types=text narrow to their group
+      #   criterion 2  folder narrows to the files below it, sub folders
+      #                included, and the recheck stays the PHP one
+      #   criterion 3  manipulated values answer exactly what the search
+      #                without a filter answers, and never an error (D-32-03)
+      #   D-32-01      an EMPTY value is refused by the core with HTTP 400
+      #                before Findling is asked. That is the core and not
+      #                Findling; the plugin never sends one. If a server
+      #                version changes it, this step goes red and the limit in
+      #                docs/search-filters.md is to be judged again.
+      #   D-32-02      a type or a folder together with a date work together;
+      #                a type chip and a folder chip at once are two groups,
+      #                which no single request can show and this step does not
+      #                ask.
+      #
+      # The search is hybrid, so the semantic half may bring foreign files of
+      # the account (the skeleton of the test user). "Exactly" below is about
+      # the four seed ids: the seed part of an answer has to match to the id,
+      # and a foreign id has to satisfy the filter as well (a PDF title under
+      # types=pdf, no PDF title under types=text, none at all under a folder,
+      # because nothing but the seed lives below /Filterprobe32).
+      #
+      # The seed goes again at the end. No later step counts hits of this
+      # word: the drift and uninstall steps ask for the canary only, and
+      # "Uninstall 3" removes the volume and with it the index long before the
+      # store passes write their corpus.
+      # =====================================================================
+      - name: Unified search filters, type and folder on the ordinary search route
+        run: |
+          work="${RUNNER_TEMP}/unified-filters"
+          mkdir -p "${work}"
+          dav='http://localhost:8080/remote.php/dav/files/testuser'
+          route='http://localhost:8080/ocs/v2.php/search/providers/findling/search'
+
+          # -- the filter map, fail closed like declared_filters() -----------
+          status=$(curl -s -o "${work}/providers.json" -w '%{http_code}' \
+            -u "testuser:${TESTUSER_PASS}" \
+            -H 'OCS-APIRequest: true' \
+            -H 'Accept: application/json' \
+            'http://localhost:8080/ocs/v2.php/search/providers')
+          if [ "${status}" != "200" ] \
+            || ! jq -e '[.ocs.data[] | select(.id == "findling")] | length == 1' "${work}/providers.json" > /dev/null 2>&1; then
+            echo "::error::the provider list answered HTTP ${status} without exactly one findling entry, which is a broken call and not an absent filter"
+            head -c 600 "${work}/providers.json" || true
+            exit 1
+          fi
+          if ! jq -e '.ocs.data[] | select(.id == "findling") | .filters.types == "string" and .filters.folder == "string"' \
+               "${work}/providers.json" > /dev/null; then
+            echo "::error::the filter map of findling does not name types and folder as string"
+            jq -c '.ocs.data[] | select(.id == "findling") | .filters' "${work}/providers.json" || true
+            exit 1
+          fi
+          echo "filter map of findling: $(jq -c '.ocs.data[] | select(.id == "findling") | .filters' "${work}/providers.json")"
+
+          # -- the seed ------------------------------------------------------
+          # Three text files with one sentence and the seed PDF of the
+          # repository, which carries a real text layer ("Findling reference
+          # corpus / This page carries a real text layer.") and so never waits
+          # for OCR. All four answer the word reference; one of them lives
+          # outside the folder the folder probes ask for.
+          pdf='findling-src/testdata/corpus/01-text-layer.pdf'
+          if [ ! -s "${pdf}" ]; then
+            echo "::error::${pdf} is not in the checkout, so there is no PDF to sow"
+            exit 1
+          fi
+          printf 'Findling reference corpus filterprobe32\n' > "${work}/seed.txt"
+          # A minute of margin on both clocks, the runner and the instance are
+          # the same machine but the mtime is taken inside the PUT.
+          before=$(( $(date +%s) - 60 ))
+          for dir in Filterprobe32 Filterprobe32/Innen Andere32; do
+            status=$(curl -s -o /dev/null -w '%{http_code}' -X MKCOL \
+              -u "testuser:${TESTUSER_PASS}" "${dav}/${dir}")
+            if [ "${status}" != "201" ]; then
+              echo "::error::MKCOL ${dir} answered HTTP ${status}"
+              exit 1
+            fi
+          done
+          upload() {
+            status=$(curl -s -o /dev/null -w '%{http_code}' -T "$1" \
+              -u "testuser:${TESTUSER_PASS}" "${dav}/$2")
+            case "${status}" in
+              201|204) echo "$2 uploaded over WebDAV, HTTP ${status}" ;;
+              *) echo "::error::the upload of $2 answered HTTP ${status}"; exit 1 ;;
+            esac
+          }
+          upload "${work}/seed.txt" Filterprobe32/Oben.txt
+          upload "${work}/seed.txt" Filterprobe32/Innen/Tief.md
+          upload "${pdf}" Filterprobe32/Bericht.pdf
+          upload "${work}/seed.txt" Andere32/Fremd.txt
+          after=$(( $(date +%s) + 86400 ))
+
+          # The ids out of WebDAV, never out of the search that is being judged.
+          fileid_re='<oc:fileid>([0-9]+)</oc:fileid>'
+          fileid() {
+            body=$(curl -s -X PROPFIND -H 'Depth: 0' -H 'Content-Type: application/xml' \
+              -u "testuser:${TESTUSER_PASS}" \
+              --data '<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns"><d:prop><oc:fileid/></d:prop></d:propfind>' \
+              "${dav}/$1")
+            if [[ "${body}" =~ ${fileid_re} ]]; then
+              printf '%s' "${BASH_REMATCH[1]}"
+            fi
+          }
+          id_txt=$(fileid Filterprobe32/Oben.txt)
+          id_md=$(fileid Filterprobe32/Innen/Tief.md)
+          id_pdf=$(fileid Filterprobe32/Bericht.pdf)
+          id_other=$(fileid Andere32/Fremd.txt)
+          for pair in "Oben.txt=${id_txt}" "Tief.md=${id_md}" "Bericht.pdf=${id_pdf}" "Fremd.txt=${id_other}"; do
+            if ! [[ "${pair#*=}" =~ ^[0-9]+$ ]]; then
+              echo "::error::PROPFIND gave no file id for ${pair%%=*}"
+              exit 1
+            fi
+          done
+          seed="[${id_txt},${id_md},${id_pdf},${id_other}]"
+          echo "seed ids: Oben.txt ${id_txt}, Tief.md ${id_md}, Bericht.pdf ${id_pdf}, Fremd.txt ${id_other}"
+
+          # -- the helpers -----------------------------------------------------
+          # search <label> [key=value ...]: the word reference, limit 25 (the
+          # default ceiling of unified-search.max-results-per-request), every
+          # further pair url encoded. Prints the HTTP status.
+          search() {
+            label="$1"
+            shift
+            extra=()
+            for pair in "$@"; do
+              extra+=(--data-urlencode "${pair}")
+            done
+            curl -s -G -o "${work}/hit-${label}.json" -w '%{http_code}' \
+              -u "testuser:${TESTUSER_PASS}" \
+              -H 'OCS-APIRequest: true' \
+              -H 'Accept: application/json' \
+              --data-urlencode 'term=reference' --data-urlencode 'limit=25' \
+              "${extra[@]}" "${route}"
+          }
+          # Every file id of an answer, sorted; the door to the result page has
+          # none (its attributes are an empty array) and is skipped as such.
+          all_ids() {
+            jq -r '[.ocs.data.entries[] | .attributes | objects | .fileId // empty | tonumber] | sort | map(tostring) | join(" ")' \
+              "${work}/hit-$1.json"
+          }
+          seed_ids() {
+            jq -r --argjson seed "${seed}" \
+              '[.ocs.data.entries[] | .attributes | objects | .fileId // empty | tonumber | select(. as $i | $seed | any(.[]; . == $i))] | sort | map(tostring) | join(" ")' \
+              "${work}/hit-$1.json"
+          }
+          foreign_titles() {
+            jq -r --argjson seed "${seed}" \
+              '.ocs.data.entries[] | select((.attributes | type) == "object" and .attributes.fileId != null) | select((.attributes.fileId | tonumber) as $i | $seed | any(.[]; . == $i) | not) | .title' \
+              "${work}/hit-$1.json"
+          }
+          sorted() {
+            printf '%s\n' "$@" | sed '/^$/d' | sort -n | paste -sd' ' -
+          }
+          show() {
+            echo "--- the raw answer of $1 ---"
+            head -c 2000 "${work}/hit-$1.json" || true
+            echo
+          }
+
+          # probe <label> "<expected seed ids>" <none|pdf|text> [key=value ...]
+          probe() {
+            label="$1"
+            want=$(sorted $2)
+            rule="$3"
+            shift 3
+            status=$(search "${label}" "$@")
+            if [ "${status}" != "200" ]; then
+              echo "::error::${label}: HTTP ${status} for $*"
+              show "${label}"
+              exit 1
+            fi
+            got=$(seed_ids "${label}") || { echo "::error::${label}: the answer is no readable OCS result"; show "${label}"; exit 1; }
+            if [ "${got}" != "${want}" ]; then
+              echo "::error::${label}: the seed ids are [${got}] and not [${want}] for $*"
+              show "${label}"
+              exit 1
+            fi
+            while IFS= read -r title; do
+              [ -n "${title}" ] || continue
+              lower="${title,,}"
+              case "${rule}" in
+                pdf) [[ "${lower}" =~ \.pdf$ ]] && continue ;;
+                text) [[ "${lower}" =~ \.pdf$ ]] || continue ;;
+              esac
+              echo "::error::${label}: the foreign hit '${title}' does not satisfy the filter ${rule} for $*"
+              show "${label}"
+              exit 1
+            done < <(foreign_titles "${label}")
+            echo "${label}: HTTP 200, seed ids [${got}] as expected, foreign hits within the filter, for $*"
+          }
+
+          # same <label> key=value: HTTP 200 and the very ids of the search
+          # without a filter (criterion 3, D-32-03).
+          same() {
+            label="$1"
+            shift
+            status=$(search "${label}" "$@")
+            if [ "${status}" != "200" ]; then
+              echo "::error::${label}: HTTP ${status} for a manipulated value; criterion 3 asks for the answer without a filter, never an error"
+              show "${label}"
+              exit 1
+            fi
+            got=$(all_ids "${label}") || { echo "::error::${label}: the answer is no readable OCS result"; show "${label}"; exit 1; }
+            if [ "${got}" != "${baseline}" ]; then
+              echo "::error::${label}: ids [${got}] and not the unfiltered [${baseline}]"
+              show "${label}"
+              exit 1
+            fi
+            echo "${label}: HTTP 200 and the ids of the unfiltered search"
+          }
+
+          # refused <label> key=: the core answers an empty value with 400.
+          refused() {
+            label="$1"
+            status=$(search "${label}" "$2")
+            if [ "${status}" != "400" ]; then
+              echo "::error::${label}: the empty value $2 answered HTTP ${status} and not 400. The core changed (D-32-01); judge the limit in docs/search-filters.md again"
+              show "${label}"
+              exit 1
+            fi
+            echo "${label}: HTTP 400 for the empty value $2, refused by the core before Findling is asked (D-32-01)"
+          }
+
+          # -- wait for the seed -------------------------------------------------
+          # --restart and the poll loop of the language proof above, for the
+          # same reasons and against the same budget: the same clock and four
+          # small documents of one sentence each.
+          timeout 300 ./occ findling:index --restart --no-interaction
+          want_all=$(sorted "${id_txt}" "${id_md}" "${id_pdf}" "${id_other}")
+          deadline=$(( $(date +%s) + LANGUAGE_PROOF_BUDGET_SECONDS ))
+          rounds=0
+          got=""
+          while [ "$(date +%s)" -lt "${deadline}" ]; do
+            rounds=$(( rounds + 1 ))
+            timeout 300 php -f cron.php > "${work}/cron-${rounds}.log" 2>&1 || true
+            status=$(search wait)
+            if [ "${status}" = "200" ]; then
+              got=$(seed_ids wait 2> /dev/null || true)
+              if [ "${got}" = "${want_all}" ]; then
+                break
+              fi
+            fi
+            echo "round ${rounds}: HTTP ${status}, seed ids [${got}] of [${want_all}], $(( deadline - $(date +%s) ))s of the budget left"
+            sleep 10
+          done
+          if [ "${got}" != "${want_all}" ]; then
+            echo "::error::the unfiltered search did not bring back all four seed files within LANGUAGE_PROOF_BUDGET_SECONDS=${LANGUAGE_PROOF_BUDGET_SECONDS} after ${rounds} cron rounds"
+            show wait
+            tail -n 40 "${work}/cron-${rounds}.log" || true
+            docker logs "${EXAPP_CONTAINER}" 2>&1 | tail -n 60 || true
+            exit 1
+          fi
+          echo "all four seed files answer the unfiltered search after ${rounds} cron round(s)"
+
+          # -- the baseline, and the positive control of every comparison ------
+          # Two unfiltered calls in a row have to agree, or a comparison with
+          # them would measure noise rather than a filter that was ignored.
+          status=$(search baseline)
+          [ "${status}" = "200" ] || { echo "::error::the unfiltered search answered HTTP ${status}"; show baseline; exit 1; }
+          baseline=$(all_ids baseline)
+          status=$(search baseline-again)
+          [ "${status}" = "200" ] || { echo "::error::the unfiltered search answered HTTP ${status}"; show baseline-again; exit 1; }
+          again=$(all_ids baseline-again)
+          if [ -z "${baseline}" ] || [ "${baseline}" != "${again}" ]; then
+            echo "::error::two unfiltered searches answered [${baseline}] and [${again}], so no comparison below could mean anything"
+            exit 1
+          fi
+          echo "unfiltered ids, twice the same: [${baseline}]"
+
+          # -- criteria 1 and 2, and the date next to each (D-32-02) ------------
+          probe pdf "${id_pdf}" pdf 'types=pdf'
+          probe text "${id_txt} ${id_md} ${id_other}" text 'types=text'
+          probe folder "${id_txt} ${id_md} ${id_pdf}" none 'folder=/Filterprobe32'
+          probe inner "${id_md}" none 'folder=/Filterprobe32/Innen'
+          probe pdf-since "${id_pdf}" pdf 'types=pdf' "since=${before}"
+          # The counter sample of the line above: the same type with a bound
+          # that ends before the upload has to lose the seed PDF, or the date
+          # was not applied next to the type at all.
+          probe pdf-until "" pdf 'types=pdf' "until=${before}"
+          # A folder with a lower bound a day ahead: no findling hit, HTTP 200.
+          probe folder-future "" none 'folder=/Filterprobe32' "since=${after}"
+
+          # -- criterion 3, manipulated values (D-32-03) -------------------------
+          same unknown 'types=videos'
+          same long "types=$(printf 'a%.0s' $(seq 1 5000))"
+          same missing 'folder=/gibtsnicht'
+          same dots 'folder=/../../'
+          same file 'folder=/Filterprobe32/Oben.txt'
+          same root 'folder=/'
+          same doubled 'folder=//'
+          # A mixed value keeps the known name and drops the unknown one.
+          status=$(search mixed 'types=pdf,videos')
+          if [ "${status}" != "200" ] || [ "$(all_ids mixed)" != "$(all_ids pdf)" ]; then
+            echo "::error::mixed: HTTP ${status}, ids [$(all_ids mixed 2> /dev/null || true)] and not the ids of types=pdf [$(all_ids pdf)]"
+            show mixed
+            exit 1
+          fi
+          echo "mixed: HTTP 200 and the ids of types=pdf"
+
+          # -- D-32-01, the core and not Findling --------------------------------
+          refused empty-types 'types='
+          refused empty-folder 'folder='
+
+          {
+            echo ""
+            echo "### Unified search filters on ${{ matrix.server-version }} / ${{ matrix.runner }}"
+            echo ""
+            echo "- filter map: types and folder as string"
+            echo "- types=pdf, types=text, folder and sub folder, type and folder with a date: as expected"
+            echo "- seven manipulated values and pdf,videos: the answer without a filter, HTTP 200"
+            echo "- empty types= and folder=: HTTP 400 from the core (D-32-01)"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          # -- and the seed goes again -----------------------------------------
+          for dir in Filterprobe32 Andere32; do
+            status=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \
+              -u "testuser:${TESTUSER_PASS}" "${dav}/${dir}")
+            case "${status}" in
+              200|204) echo "${dir} removed again, HTTP ${status}" ;;
+              *) echo "::error::the removal of ${dir} answered HTTP ${status}"; exit 1 ;;
+            esac
+          done
+          status=$(search gone)
+          left=$(seed_ids gone 2> /dev/null || true)
+          if [ "${status}" != "200" ] || [ -n "${left}" ]; then
+            echo "::error::after the removal the search answered HTTP ${status} with the seed ids [${left}]"
+            show gone
+            exit 1
+          fi
+          echo "the seed is gone from the answers of this user"
+
       # The four steps below are the runtime half of the lockstep promise of
       # D-11, and they sit here rather than anywhere else on purpose: the step
       # above has just shown what an agreeing pair does, which is the counter
