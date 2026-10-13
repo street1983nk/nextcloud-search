@@ -6,12 +6,14 @@ namespace OCA\Findling\AppInfo;
 
 use OCA\Findling\Listener\FileEventListener;
 use OCA\Findling\Listener\GroupEventListener;
+use OCA\Findling\Listener\LoadUnifiedSearchFiltersListener;
 use OCA\Findling\Listener\ShareEventListener;
 use OCA\Findling\Search\Provider;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
+use OCP\AppFramework\Http\Events\BeforeTemplateRenderedEvent;
 
 class Application extends App implements IBootstrap {
 	public const APP_ID = 'findling';
@@ -119,6 +121,13 @@ class Application extends App implements IBootstrap {
 		] as $event) {
 			$context->registerEventListener($event, GroupEventListener::class);
 		}
+
+		// The page event, on a line of its own because it has nothing to do with
+		// the queue: it loads js/unified-search.js, which puts the type and folder
+		// entries of Findling into the menu of the unified search (plan 32-04).
+		// Every page and not only Files, because the search opens from the header
+		// of every page; the listener docblock has the reasoning.
+		$context->registerEventListener(BeforeTemplateRenderedEvent::class, LoadUnifiedSearchFiltersListener::class);
 	}
 
 	public function boot(IBootContext $context): void {

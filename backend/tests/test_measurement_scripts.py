@@ -859,8 +859,17 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # report at both constants; SearchServiceTest.php reads both constants instead
 # of the starting values. No file came and none went, so PHP_FILES_TODAY stays
 # at 93.
-PHP_FILES_TODAY = 93
-PHP_TREE_HASH_TODAY = "ad0e7eec291d577b0016cef93ec0d68e326d158c7ae9df155d41801495692068"
+# Moved on 2026-10-13 by Plan 32-04 (USRCH-01, USRCH-02, D-32-05): the seven
+# filter entries of Findling in the menu of the unified search. Two files came,
+# php/lib/Listener/LoadUnifiedSearchFiltersListener.php (loads the script and
+# the catalogue of findling on every page of a logged in user) and its unit
+# test php/tests/Unit/LoadUnifiedSearchFiltersListenerTest.php;
+# AppInfo/Application.php registers the listener for
+# BeforeTemplateRenderedEvent. The script itself, php/js/unified-search.js, is
+# not in this tree, because the recipe globs **/*.php. No file went, so
+# PHP_FILES_TODAY moves to 95.
+PHP_FILES_TODAY = 95
+PHP_TREE_HASH_TODAY = "e5b9c78625d8f419327bb0da94a5362ccfff0e513a299121ff9c057505710a3c"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
