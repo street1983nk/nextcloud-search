@@ -1613,4 +1613,30 @@ final class SearchServiceTest extends TestCase {
 		self::assertCount(1, $outcome->hits);
 		self::assertSame('Projekte/Geteilt/c.pdf', $outcome->hits[0]->path);
 	}
+
+	public function testTheFolderModeReadsTheMountListAndTheFolderEntryOnceAndTheCacheOncePerRound(): void {
+		// P2 of the phase 32 audit: the longest folder run, every candidate
+		// outside the folder, all FOLDER_MAX_ROUNDS rounds. One mount list and
+		// one cache entry of the folder for the whole run, one bulk lookup per
+		// round, and no recheck at all. The query log of the dev instance shows
+		// the same shape (32-AUDIT.md, Performance P2).
+		$rounds = $this->constantInt('FOLDER_MAX_ROUNDS');
+		$scope = $this->folderNode('/testuser/files/Projekte', self::FOLDER_ID, [], $resolvedInScope);
+		$userFolder = $this->folderNode('/testuser/files', 1);
+		$userFolder->expects(self::once())->method('get')->willReturn($scope);
+		$this->rootFolder->method('getUserFolder')->willReturn($userFolder);
+		$this->mountCache->expects(self::once())->method('getMountsForUser')->willReturn([$this->mount('/testuser/', 7, '')]);
+		$this->fileAccess->expects(self::once())->method('getByFileId')->willReturn($this->cacheEntry(7, 'files/Projekte'));
+		$this->fileAccess->expects(self::exactly($rounds))->method('getByFileIds')->willReturnCallback(
+			fn (array $fileIds): array => array_combine($fileIds, array_map(fn (int $fileId): ICacheEntry => $this->cacheEntry(7, 'files/Andere/x.pdf'), $fileIds)),
+		);
+		$this->exApp->expects(self::exactly($rounds))->method('searchCandidates')->willReturnCallback(
+			fn (string $userId, string $term, int $limit, int $offset): array => $this->pageWithMore([['fileId' => 21], ['fileId' => 25], ['fileId' => 26]], $offset + $limit),
+		);
+		$this->exApp->expects(self::never())->method('snippets');
+
+		$this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(maxRounds: 3), $this->filtersWithFolder());
+
+		self::assertSame([], $resolvedInScope);
+	}
 }

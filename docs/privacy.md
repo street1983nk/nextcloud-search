@@ -97,5 +97,15 @@ tiefer, mit geprüftem Krypto, für den Index und die Nextcloud-Daten zugleich.
 - Läuft die Begleit-App in einer anderen Major- oder Minor-Version als das
   Backend, antwortet die Suche mit nichts statt mit womöglich falschen
   Treffern, und die Verwaltungsseite nennt beide Versionsnummern.
+- Findling schreibt weder Suchbegriffe noch Pfade oder Ordnernamen in seine
+  Logzeilen. Nextcloud selbst hängt aber an jede Zeile in `nextcloud.log` die
+  Adresse der laufenden Anfrage an, und die Adresse einer Suche enthält den
+  Suchbegriff und, mit dem Ordnerfilter der Unified Search, den gewählten
+  Ordner. Entsteht während einer Suche eine Zeile, steht beides also daneben:
+  bei einer Störung des Backends (nicht erreichbar, Fehlerantwort, verschiedene
+  Versionen; Warnungen von AppAPI und Findling), auf dem Loglevel info bei einem
+  Backend-Aufruf über einer Sekunde und auf dem Loglevel debug. Im
+  Normalbetrieb auf der Voreinstellung (Warnung) schreibt eine Suche keine
+  Zeile.
 - Messwerte, Methoden und Rohdaten zu allen Zahlen dieses Projekts:
   [performance.md](performance.md) und [embeddings.md](embeddings.md).

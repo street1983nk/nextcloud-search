@@ -879,8 +879,12 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # no folder, because Folder::get() resolves both to a node below which the
 # recheck finds nothing; ProviderTest.php carries the cases. No file came and
 # none went, so PHP_FILES_TODAY stays at 97.
+# Measured again by Plan 32-08, Befund L-32-06 (P2 of the audit): one case in
+# SearchServiceTest.php counts the lookups of the longest folder run, one mount
+# list, one folder entry and one bulk lookup per round. No file came and none
+# went, so PHP_FILES_TODAY stays at 97.
 PHP_FILES_TODAY = 97
-PHP_TREE_HASH_TODAY = "a54f310483ee3cf2c649a9648b507c67a9bf70e00180e157fef539012012aad2"
+PHP_TREE_HASH_TODAY = "5cb3e48f5d8f89cfc24ea4e431c845409257c0fcafeda04dfad0460f65b68fb2"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

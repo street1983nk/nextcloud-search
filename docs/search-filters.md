@@ -91,9 +91,18 @@ The limits:
   folder" stays, but carries no folder, and a chip without a parameter answers
   with nothing until a folder is chosen.
 - **Unknown or manipulated values are ignored.** An unknown type group, an
-  overlong value, a folder that does not exist, a path with `..`, a file instead
-  of a folder or a folder outside the user's own tree: the search answers
-  exactly as it would without the filter, never with an error (D-32-03).
+  overlong value, a folder that does not exist, a path with `..` or with a `.`
+  segment, a file instead of a folder or a folder outside the user's own tree:
+  the search answers exactly as it would without the filter, never with an
+  error (D-32-03). A folder name in a decomposed Unicode form is composed first
+  (NFC), the form Nextcloud stores names in.
+- **A folder renamed or deleted while its chip stands is no folder any more.**
+  The chip keeps the old name, and the group shows the hits of the search
+  without a folder, the same answer as for a folder that never existed.
+- **An array form is an error of the core.** `types[]=pdf` or `folder[]=/x`
+  ends in HTTP 500 inside the Nextcloud core, before Findling is asked; the
+  core expects one string per filter. The core's own Files provider answers
+  `path[]` and `term[]` the same way. The filter entries never send one.
 - **A mixed value keeps the known names.** `pdf,videos` filters by `pdf` only;
   the unknown name is dropped.
 - **The result page has no folder filter.** The entry "Show all results" at the
