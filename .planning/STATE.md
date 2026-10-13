@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 32-06-PLAN.md
-last_updated: "2026-10-13T08:00:00.000Z"
-last_activity: 2026-10-13 -- 32-07 Befund A gefixt (Option A1, Commit 4d616071, CI grün, Browser-Nachprobe grün); Owner-Abnahme 32-07 Task 2 offen
+stopped_at: Completed 32-07-PLAN.md
+last_updated: "2026-10-13T10:30:00.000Z"
+last_activity: 2026-10-13 -- 32-07 abgeschlossen (Owner-Abnahme, Symbol findling.svg f60ca146, Saat geräumt); nächster 32-08
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 32
-  completed_plans: 30
+  completed_plans: 31
   percent: 14
 ---
 
@@ -26,11 +26,11 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 32 von 30-36 (Filter in der Unified Search)
-Plan: 6 von 8 erledigt (32-01 bis 32-06), nächster 32-07 (Owner-Abnahme per Playwright, Checkpoint)
-Status: Phase 32 in Ausführung; 32-06 abgeschlossen (drei Erfolgskriterien und D-32-01 auf allen vier deploy-harp-Beinen belegt, A1 in team-folder-acl belegt, docs/search-filters.md, Store-Entwurf Teil Phase 32 zur Abnahme). USRCH-03 Complete; USRCH-01/02 Pending bis 32-07
-Last activity: 2026-10-13 -- 32-07 Befund A gefixt (Option A1), Owner-Abnahme Task 2 offen
+Plan: 7 von 8 erledigt (32-01 bis 32-07), nächster 32-08 (Security-, Bug- und Performance-Audit)
+Status: Phase 32 in Ausführung; 32-06 abgeschlossen (drei Erfolgskriterien und D-32-01 auf allen vier deploy-harp-Beinen belegt, A1 in team-folder-acl belegt, docs/search-filters.md, Store-Entwurf Teil Phase 32 zur Abnahme). 32-07 abgeschlossen (Owner-Abnahme 13.10.2026, Wortlaut unverändert, weiße Lupe an allen acht Einträgen). USRCH-01, USRCH-02 und USRCH-03 Complete
+Last activity: 2026-10-13 -- 32-07 abgeschlossen, nächster 32-08
 
-Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passed, 659f5631); Phase 32: 6/8 Pläne
+Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passed, 659f5631); Phase 32: 7/8 Pläne
 
 ## Performance Metrics
 
@@ -65,6 +65,7 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 - v1.5: 32-04 in ca. 105 min inkl. ca. 13 min Volltestlauf und ca. 35 min CI (2 Tasks, 6 Dateien)
 - v1.5: 32-05 in ca. 85 min inkl. ca. 13 min Volltestlauf und ca. 25 min CI (2 Tasks, 23 Dateien)
 - v1.5: 32-06 in ca. 150 min inkl. ca. 25 min Volltestläufe und ca. 45 min CI (3 Tasks, 6 Dateien)
+- v1.5: 32-07 Task 3 in ca. 120 min inkl. ca. 13 min Volltestlauf und CI (1 Task, 4 Dateien plus Planung)
 
 ## Accumulated Context
 
@@ -107,6 +108,7 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 - 32-05: Vier Sätze der Filtereinträge (File contents: %s, File contents in a folder, File contents in %s, Choose the folder to search in) in allen 16 Katalogen hinter File contents, de/fr zeichengleich D-32-04, es usted (Elija), it/nl Infinitiv, pt Imperativ (Escolha); fünf Sprachtabellen je vier Zeilen plus Nachtrag 13.10.2026. Vertragsfall Skriptschlüssel gegen jede Katalogdatei (liest auch TYPE_ENTRIES), RED 64 Befunde. Schlüsselzahl de.json 302 auf 306 mit Begründungsabsatz. Wortlaut wartet auf Owner-Abnahme 32-07. Commit 0f355b0b; CI PHP 38334174243 (648 Tests), Python 38334174281 (5625 passed), Integration 38334174253, HaRP 38334174230, alle acht grün.
 - 32-06: deploy-harp-Schritt 'Unified search filters, type and folder on the ordinary search route' ohne if: (Vertragstest test_unified_search_filter_steps.py, nutzt collect_steps des Sprachbelegs): Filterkarte types/folder string, Saat drei Texte plus 01-text-layer.pdf (Wort reference, IDs per PROPFIND), types=pdf/text, folder samt Unterordner, Typ und Ordner mit Datum (dazu until-Gegenprobe), sieben manipulierte Werte gleich ungefiltert, pdf,videos gleich pdf, types= und folder= leer HTTP 400 (D-32-01) auf stable33/34/35 und arm64 (HaRP 38339350221). team-folder-acl Abschnitt 8: (a) Mountpunkt Gruppenordner, (b) ACL-Unterordner, (c) per Nutzerregel gesperrte Datei nie (Sperre per PROPFIND 404/207 belegt), (d) empfangener Share über Mountpunkt aus shared_with_me; A1 belegt, kein Fix in SearchService (Integration 38339350216). docs/search-filters.md 'In the unified search', Store-Entwurf Teil Phase 32 (Owner-Abnahme offen, REL-05), CHANGELOG. Commits b44006dd, 64350f8c, 2d6b0214; python.yml per Dispatch 38341903380 grün. USRCH-03 Complete.
 - 32-07 Befund A gefixt (Plan-Abweichung vor dem Checkpoint, Owner-Entscheid 13.10.: Option A1): versteckter Provider Search\FilterProvider (ID findling-filter, getOrder null, Filter und Name vom echten Provider; ohne types und folder sofort leere Gruppe ohne Backend-Aufruf, sonst Provider::search). unified-search.js: searchFrom findling-filter an allen sieben Einträgen, Callback setzt this.filters {since, until, types, folder} nur wenn this ein Objekt ist (Kern-Interna, docs/search-filters.md), Wurzel sendet folder=/, Abbruch zeigt keine Treffer. Echter Provider findling unverändert. FilterProviderTest 13 Fälle, Vertragstest und deploy-harp-Probe (findling-filter versteckt, leer ohne Chip, types=pdf, folder, folder=/) erweitert; Gegenproben rot (PHPUnit auf Wegwerf-Zweig 38349488409, JS am echten Skript). PHP_FILES_TODAY 97. Commit 4d616071; CI PHP 38347181812 (661 Tests), Python 38347181819, Integration 38347181828 (team-folder-acl grün), HaRP 38347181759 (alle vier Beine) grün. Browser-Nachprobe 8090: eine Findling-Gruppe ungefiltert (Dashboard und Files), Chip PDF, Ordner /Abnahme32, PDF plus Heute, Abbruch, Wurzel, Markup-Ordner grün; Protokoll 32-07-ABNAHME.md Abschnitt 'Befund A Fix'.
+- 32-07 abgeschlossen: Owner-Abnahme 13.10.2026, Wortlaut de/en/fr unverändert, Verhalten abgenommen. Symbol: sieben Einträge app-white.svg (f4fc7efa), Haupteintrag "Dateiinhalte" über php/img/findling.svg (f60ca146), weil SearchComposer::fetchIcon <provider id>.svg vor app.svg fragt; App-Navigation (info.xml app.svg) unverändert. Nebenwirkung auf Owner-Wort angenommen: Theming-Tab- und Homescreen-Symbol der Findling-Seiten werden weiße Lupe statt leerem Quadrat, auf bestehenden Instanzen erst nach neuem Theming-Cachebuster. Saat /Abnahme32 und /Woanders32 per WebDAV gelöscht, erst Cron (SubtreeExpandJob), dann Papierkorb; Containerzeilen tombstoned, 0 Dokumente im Index. USRCH-01 und USRCH-02 Complete.
 
 ### Offene Faeden (kein aktiver Auftrag)
 
@@ -130,7 +132,7 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
   Connector"); Konto-Appeal pruefen, Owner postet selbst.
 
 - Dev-Instanz (Port 8090) lief am 06.10. mit Abnahme-Testdateien und Backend-Hostprozess;
-  bei Gelegenheit aufraeumen. Seit 32-03: Host-Backend 1.4.2 läuft, Cron der Instanz läuft nicht von selbst; die 1011 Messdateien sind gelöscht und der Papierkorb geleert, ihre Einträge stehen bis zum nächsten Abgleich noch im Container-Index (Recheck verwirft sie, Dialog liefert 0).
+  bei Gelegenheit aufraeumen. Seit 32-03: Host-Backend 1.4.2 läuft, Cron der Instanz läuft nicht von selbst; die 1011 Messdateien sind gelöscht und der Papierkorb geleert, ihre Einträge stehen noch im Container-Index (Recheck verwirft sie, Dialog liefert 0). Für 32-08: der Abgleich vom 13.10. 01:08 (Nachholzyklus) meldete missing=0 trotz 1011 verwaister Zeilen ohne oc_filecache-Eintrag (32-07-ABNAHME.md, Aufräumen). Saat aus 32-07 geräumt.
 
 ### Blockers/Concerns
 
@@ -138,6 +140,6 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 
 ## Session Continuity
 
-Last session: 2026-10-13T08:00:00.000Z
-Stopped at: 32-07 Befund A gefixt, wartet auf Owner-Abnahme (Task 2)
+Last session: 2026-10-13T10:30:00.000Z
+Stopped at: Completed 32-07-PLAN.md, nächster 32-08
 Resume file: None

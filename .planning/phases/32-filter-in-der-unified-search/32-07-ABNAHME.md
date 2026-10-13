@@ -1,7 +1,7 @@
 # Phase 32 Plan 07: Abnahmeprotokoll der Filter in der Unified Search
 
 Task 1 (Proben vorab per Playwright) ist gefahren. Task 2 (gemeinsame Abnahme
-mit dem Owner) ist offen; dieses Protokoll nimmt nichts ab.
+mit dem Owner) ist abgeschlossen, Antworten und Vermerk unter "Owner-Abnahme".
 
 ## Stand
 
@@ -320,3 +320,125 @@ Offene Frage an den Owner: Der Eintrag "Dateiinhalte" (echter Provider) zeigt
 weiter kein Symbol. Ihn ebenfalls mit Symbol zu versehen hieße, `app.svg`
 selbst weiß zu machen oder eine Datei `findling.svg` anzulegen, die der Kern
 zuerst sucht; beides berührt mehr als die sieben Einträge.
+
+Antwort des Owners 13.10.2026 nach Ansicht von `owner-7-symbol.png` und
+`owner-7-symbol-dunkel.png` auf Option 1 ("Abnehmen, und auch der Haupteintrag
+'Dateiinhalte' bekommt eine Lupe; neue Datei findling.svg, die Nextcloud für den
+Sucheintrag zuerst nimmt; App-Navigation bleibt unverändert"): "ok". Auf die
+danach gemeldete Nebenwirkung (Tab- und Homescreen-Symbol, siehe unten): "mach
+wie deine Empfehlung", also Option 1 mit Nebenwirkung.
+
+### Symbol des Haupteintrags (Commit `f60ca146`)
+
+Kern gelesen (nextcloud/server stable33, stable34, stable35, gleichlautend):
+
+- `SearchComposer::fetchIcon($appId, $providerId)` fragt der Reihe nach
+  `imagePath(providerId, providerId.svg)`, `imagePath(providerId, app.svg)`,
+  `imagePath(appId, providerId.svg)`, `imagePath(appId, appId.svg)`,
+  `imagePath(appId, app.svg)`. Provider und App heißen `findling`, also nimmt
+  der Kern `img/findling.svg` vor `img/app.svg`.
+- App-Navigation: `NavigationManager` nimmt das `<icon>` aus `info.xml`
+  (`app.svg`) und fällt nur ohne Eintrag auf `AppManager::getAppIcon` zurück.
+  App-Liste und Update-Hinweis fragen `getAppIcon(..., dark: true)` zuerst und
+  landen bei `app-dark.svg`. Die Navigation ist von `findling.svg` nicht
+  berührt.
+- Nebenwirkung: `OCA\Theming\Util::getAppIcon` sucht `img/<appId>.svg` vor
+  `img/app.svg`. Daraus baut `IconBuilder` das Tab-Symbol
+  (`/apps/theming/favicon/findling`) und das Homescreen-Symbol
+  (`/apps/theming/icon/findling`) der Findling-Seiten, sobald Imagick SVG
+  umwandeln kann (auf 8090: ja, SVG, PNG, ICO).
+
+Umsetzung: `php/img/findling.svg` (dieselbe weiße Lupe wie `app-white.svg`,
+Kommentar nennt den Grund und die Nebenwirkung), REUSE.toml und THIRD-PARTY.md
+nennen die vierte Datei, `reuse lint` konform (2691 / 2691). Kein PHP, kein
+Skript geändert. Vertragstest
+`test_the_entry_of_the_real_provider_finds_the_white_glyph_under_its_id`: die
+ID aus `Provider::getId()` gelesen, `img/<id>.svg` existiert, zeichnet genau die
+Pfaddaten von `app.svg` und nur weiß, die Navigation in `info.xml` nennt weiter
+`app.svg`. Gegenproben (Kopie, danach byte-gleich zurück): Datei fehlt, Füllung
+`currentColor`, Füllung `#000`, Navigation auf `findling.svg` gestellt: je
+genau dieser Test rot. Lokale Gates aus `backend/` mit `PYTHONUTF8=1`: pytest
+5628 passed, 30 skipped; ruff check, ruff format --check, pyright (latest) 0
+Fehler, vulture ohne Befund; `node --check php/js/unified-search.js`. CI auf
+`f60ca146` alle acht grün: Python gates 38361677147, PHP 38361677194, HaRP
+deploy 38361677008, Integration 38361677059, Resilience 38361677356, Security
+scans 38361677104, OpenSSF Scorecard 38361677013, Multi-arch image
+38361677007.
+
+Nebenwirkung Tab- und Homescreen-Symbol, gemessen auf 8090:
+
+| Stand | Beleg | Bild |
+|---|---|---|
+| vorher (`app.svg`, `currentColor`) | `/apps/theming/icon/findling` HTTP 200, leeres blaues Quadrat ohne Lupe | `touchicon-vor.png` |
+| nachher, frisch erzeugt | `IconBuilder::getTouchIcon('findling')` im Container (nichts gespeichert), `Util::getAppIcon` meldet `custom_apps/findling/img/findling.svg`: weiße Lupe auf der Hauptfarbe | `touchicon-nach.png` |
+| nachher, ausgeliefert | `/apps/theming/icon/findling` liefert weiter das alte Bild (SHA-256 `cdeee01c...` vorher wie nachher) | |
+
+Zwischenspeicher: Das Theming legt das erzeugte Symbol unter
+`touchIcon-<app><Hauptfarbe>` in einem Ordner je Cachebuster ab
+(`ImageManager::getCachedImage`, `getCacheFolder`). Auf bestehenden Instanzen
+erscheint die Lupe im Tab erst, wenn der Cachebuster des Theming steigt (etwa
+bei einer Änderung der Theming-Einstellungen); auf einer frischen Instanz
+sofort. Ob ein App-Update den Cachebuster hebt, ist nicht geprüft. Die
+Dev-Instanz bleibt so, der Zwischenspeicher wurde nicht geleert.
+
+Messung im Menü "Orte" (8090, testuser, Dashboard, `abnahme32`, Playwright
+1.63 Chromium headless, Skript- und Bild-Cache per `fetch(url, {cache:
+'reload'})` erneuert: `unified-search.js` HTTP 200 mit `app-white`,
+`findling.svg` und `app-white.svg` HTTP 200 `image/svg+xml` weiß, `app.svg`
+unverändert in `currentColor`; Providerliste per OCS: `findling` mit
+`/custom_apps/findling/img/findling.svg`). Helligkeit des Symbols (Canvas mit
+dem berechneten Filter) und des Menühintergrunds, 0 bis 255, Hell- und
+Dunkeldarstellung per Browser-Farbschema bei unveränderter Nutzereinstellung:
+
+| Eintrag | Symbol | hell: Symbol / Grund / Abstand | dunkel: Symbol / Grund / Abstand |
+|---|---|---|---|
+| Kerneinträge Dateien, Tags, Teams, Kommentare, Einstellungen | Kern | 0 / 255 / 255 | 255 / 23 / 232 |
+| Dateiinhalte (echter Provider) | `findling.svg` | 0 / 255 / 255 | 255 / 23 / 232 |
+| Dateiinhalte: PDF, Dokumente, Tabellen, Präsentationen, Bilder, Text | `app-white.svg` | je 0 / 255 / 255 | je 255 / 23 / 232 |
+| Dateiinhalte in einem Ordner | `app-white.svg` | 0 / 255 / 255 | 255 / 23 / 232 |
+
+Alle acht Findling-Einträge gleich den Kerneinträgen (vorher "Dateiinhalte"
+mit `app.svg`: Abstand hell 0, dunkel 23, siehe Tabelle oben). Ungefilterte Suche hell und dunkel: Gruppen
+"Dateien" und "Dateiinhalte", genau eine Findling-Gruppe; keine
+Konsolenfehler. Bilder: `owner-8-symbol.png`, `owner-8-symbol-dunkel.png`.
+
+App-Navigation vorher und nachher: `info.xml` nennt vor dem Commit
+(`f60ca146~1`) und danach `<icon>app.svg</icon>`; der Navigationseintrag
+`findling` im Initialzustand `core-apps` des Dashboards trägt
+`/custom_apps/findling/img/app.svg`, ausgeliefert mit SHA-256 `045cbbf4...`,
+gleich `app.svg` im Stand vor dem Commit. testuser: Theming-Einstellung
+`enabled-themes: []` (Standard) und Sprache `de`, nicht umgestellt.
+
+## Aufräumen (Task 3)
+
+| Schritt | Beleg |
+|---|---|
+| Vorher | PROPFIND `/Abnahme32`, `/Woanders32` je 207; Share 3 (Link auf `/Woanders32/Notiz.txt`) in der Share-Liste; `state.db`: 4 + 7 Saatzeilen ohne `deleted_at`, je mit ACL-Zeile |
+| WebDAV DELETE | `/Abnahme32` 204, `/Woanders32` 204; danach PROPFIND `/Abnahme32`, `/Woanders32`, `/Woanders32/Tuer` je 404; Share-Liste nur noch Share 1, Share 3 ist mit der Datei weg |
+| Cron vor dem Papierkorb (Lehre 32-03) | zwei `SubtreeExpandJob` (`kind: delete`, Vorfahren 1741 und 1744) eingeplant, mit `cron.php` abgearbeitet (Modus der Instanz war schon `cron`, nicht umgestellt); Backend-Log: `committed 13 documents` |
+| Container-Index danach | `state.db`: die 11 Saatzeilen tragen `deleted_at`, 0 ACL-Zeilen; tantivy (nur lesend, Abfrage je Datei-ID): 0 Dokumente für die 11 IDs. Positivkontrolle derselben Abfrage: 1011 Messdateien und 9 von 13 Korpusdateien gefunden |
+| Papierkorb | `occ trashbin:cleanup testuser`, danach PROPFIND auf `trashbin/testuser/trash/` ohne Eintrag |
+| Suche | OCS `term=abnahme32` und `term=tuerprobe32` je HTTP 200 mit 0 Einträgen; Kanarie `findling-canary` 1 Eintrag |
+
+Die 1011 Messdateien aus 32-03 (Datei-IDs 730 bis 1740, Storage 3) stehen
+weiter im Container-Index: `state.db` ohne `deleted_at`, ACL vorhanden, 1011
+Dokumente in tantivy; in `oc_filecache` gibt es keine dieser IDs mehr. Auf dem
+Weg der Saat nicht zu bereinigen: Die Dateien sind seit 32-03 samt Papierkorb
+weg, ein Löschereignis lässt sich nicht mehr auslösen. Auffällig für 32-08: Der
+Abgleich lief am 13.10. um 01:08 (Nachholzyklus nach dem Upgrade) über alle drei
+Storages, `seen=1488 stale=0 missing=0`, und hat die 1011 verwaisten Zeilen
+nicht als fehlend gemeldet, obwohl `gone_in_range` sie nach dem Wortlaut der
+Abfrage finden müsste. Nicht weiter untersucht (Auftrag: Dev unverändert lassen,
+für 32-08 dokumentieren). Der Recheck verwirft die Einträge weiterhin.
+
+Owner-Abnahme: 13.10.2026, Wortlaut unverändert wie in der Wortlaut-Tabelle
+(de "Dateiinhalte: PDF", "Dateiinhalte: Dokumente", "Dateiinhalte: Tabellen",
+"Dateiinhalte: Präsentationen", "Dateiinhalte: Bilder", "Dateiinhalte: Text",
+"Dateiinhalte in einem Ordner", "Ordner für die Suche wählen", "Dateiinhalte in
+%s"; en "File contents: %s", "File contents in a folder", "Choose the folder to
+search in", "File contents in %s"; fr "Contenu des fichiers : %s" mit
+gewöhnlichem Leerzeichen, "Contenu des fichiers dans un dossier", "Choisir le
+dossier où chercher", "Contenu des fichiers dans %s"), Verhalten "Abgenommen",
+Symbol: weiße Lupe für alle acht Einträge (Owner: 'ok' nach Ansicht der Bilder),
+Nebenwirkung Tab- und Homescreen-Symbol nach Owner-Wort "mach wie deine
+Empfehlung" angenommen.

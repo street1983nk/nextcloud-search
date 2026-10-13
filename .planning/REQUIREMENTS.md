@@ -15,8 +15,8 @@
 
 ### Unified Search (USRCH)
 
-- [ ] **USRCH-01**: Nutzer kann in der Nextcloud Unified Search nach Dateityp filtern (die sechs bestehenden Typgruppen) ueber einen Custom Filter des Findling-Providers
-- [ ] **USRCH-02**: Nutzer kann die Suche in der Unified Search auf einen Ordner einschraenken (Pfad-Praefix, inklusive Unterordner); die Rechtegrenze bleibt der finale PHP-Recheck
+- [x] **USRCH-01**: Nutzer kann in der Nextcloud Unified Search nach Dateityp filtern (die sechs bestehenden Typgruppen) ueber einen Custom Filter des Findling-Providers
+- [x] **USRCH-02**: Nutzer kann die Suche in der Unified Search auf einen Ordner einschraenken (Pfad-Praefix, inklusive Unterordner); die Rechtegrenze bleibt der finale PHP-Recheck
 - [x] **USRCH-03**: Unbekannte oder leere Filterwerte fuehren nie zu einer leeren oder fehlerhaften Suche, sondern werden ignoriert (Regressionstest)
 
 ### Ausschluesse (EXCL, Issue #22)
@@ -85,8 +85,8 @@
 | UMST-01 | Phase 34 | Pending |
 | UMST-02 | Phase 34 | Pending |
 | UMST-03 | Phase 34 | Pending |
-| USRCH-01 | Phase 32 | Pending (serverseitig in 32-01, ed2908fc; Menüeinträge in 32-04, 68893ef0; Kataloge in 32-05, 0f355b0b; deploy-harp 33/34/35/arm64 in 32-06, b44006dd; Abhaken nach Owner-Abnahme 32-07) |
-| USRCH-02 | Phase 32 | Pending (serverseitig in 32-02, 53daf104; Budget gemessen in 32-03, 060d637b, FOLDER_MAX_ROUNDS 12; Ordnereintrag im Menü in 32-04, 68893ef0; Kataloge in 32-05, 0f355b0b; Gruppenordner- und Share-Beleg 32-06, 64350f8c, Integration 38339350216; deploy-harp 33/34/35/arm64 in 32-06; Abhaken nach Owner-Abnahme 32-07) |
+| USRCH-01 | Phase 32 | Complete (Owner-Abnahme 13.10.2026 in 32-07, Befund A gefixt 4d616071, Symbole f4fc7efa und f60ca146; serverseitig in 32-01, ed2908fc; Menüeinträge in 32-04, 68893ef0; Kataloge in 32-05, 0f355b0b; deploy-harp 33/34/35/arm64 in 32-06, b44006dd) |
+| USRCH-02 | Phase 32 | Complete (Owner-Abnahme 13.10.2026 in 32-07; serverseitig in 32-02, 53daf104; Budget gemessen in 32-03, 060d637b, FOLDER_MAX_ROUNDS 12; Ordnereintrag im Menü in 32-04, 68893ef0; Kataloge in 32-05, 0f355b0b; Gruppenordner- und Share-Beleg 32-06, 64350f8c, Integration 38339350216; deploy-harp 33/34/35/arm64 in 32-06) |
 | USRCH-03 | Phase 32 | Complete (Backend-Hälfte und PHP-Parser in 32-01, ed2908fc; Ordner fail-open in 32-02, 53daf104; CI-Beleg auf 33/34/35/arm64 in 32-06, b44006dd, HaRP 38339350221) |
 | EXCL-01 | Phase 33 | Pending |
 | EXCL-02 | Phase 33 | Pending |

@@ -157,7 +157,7 @@ Plans:
 - [x] 32-04-PLAN.md: Listener auf jeder angemeldeten Seite, Vanilla-Plugin mit sieben Filtereinträgen, Vertragstest
 - [x] 32-05-PLAN.md: l10n-Kette der vier neuen Sätze (16 Kataloge, 5 Dokus)
 - [x] 32-06-PLAN.md: deploy-harp auf 33/34/35/arm64, Gruppenordner und Share in team-folder-acl, Doku und Store-Entwurf Teil Phase 32
-- [ ] 32-07-PLAN.md: Owner-Abnahme gemeinsam per Playwright (Checkpoint), Wortlaut nachziehen
+- [x] 32-07-PLAN.md: Owner-Abnahme gemeinsam per Playwright (Checkpoint), Wortlaut nachziehen
 - [ ] 32-08-PLAN.md: Security-, Bug- und Performance-Audit mit Korpus manipulierter Filterwerte, Befunde fixen
 **UI hint**: yes
 
@@ -218,7 +218,7 @@ Plans:
 | 24-29 (Archiv) | v1.4 | 78/78 | Complete | 2026-10-06 |
 | 30. Owner-Tor, Schema und Tschechisch | v1.5 | 9/9 | Complete | 2026-10-10 |
 | 31. Neue Formate und Nachholweg | v1.5 | 15/15 | In Progress (Verifikation offen) | - |
-| 32. Filter in der Unified Search | v1.5 | 6/8 | In Progress | - |
+| 32. Filter in der Unified Search | v1.5 | 7/8 | In Progress | - |
 | 33. Ausschlussmuster und Admin-Feinschliff | v1.5 | 0/? | Not started | - |
 | 34. Umstiegsweg | v1.5 | 0/? | Not started | - |
 | 35. Stretch: Aehnliche Dokumente und Spikes | v1.5 | 0/? | Not started | - |
