@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 32-04-PLAN.md
-last_updated: "2026-10-13T01:40:00.000Z"
-last_activity: 2026-10-13 -- Plan 32-04 abgeschlossen (Listener und Vanilla-Plugin mit sieben Filtereinträgen)
+stopped_at: Completed 32-05-PLAN.md
+last_updated: "2026-10-13T02:40:00.000Z"
+last_activity: 2026-10-13 -- Plan 32-05 abgeschlossen (vier Sätze der Filtereinträge in 16 Katalogen und 5 Sprachtabellen)
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 32
-  completed_plans: 28
+  completed_plans: 29
   percent: 14
 ---
 
@@ -26,11 +26,11 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 32 von 30-36 (Filter in der Unified Search)
-Plan: 4 von 8 erledigt (32-01 bis 32-04), nächster 32-05 (l10n der vier neuen Sätze)
-Status: Phase 32 in Ausführung; 32-04 abgeschlossen (Listener auf jeder angemeldeten Seite, unified-search.js mit sechs Typeinträgen und einem Ordnereintrag, Vertragstest mit node-Lauf). USRCH-01/02/03 bleiben Pending bis 32-06/32-07
-Last activity: 2026-10-13 -- Plan 32-04 abgeschlossen
+Plan: 5 von 8 erledigt (32-01 bis 32-05), nächster 32-06 (deploy-harp, Gruppenordner und Share, Doku)
+Status: Phase 32 in Ausführung; 32-05 abgeschlossen (vier Sätze der Filtereinträge in allen 16 Katalogen und fünf Sprachtabellen, Vertragsfall Skriptschlüssel gegen Katalog; Wortlaut wartet auf Owner-Abnahme 32-07). USRCH-01/02/03 bleiben Pending bis 32-06/32-07
+Last activity: 2026-10-13 -- Plan 32-05 abgeschlossen
 
-Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passed, 659f5631); Phase 32: 4/8 Pläne
+Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passed, 659f5631); Phase 32: 5/8 Pläne
 
 ## Performance Metrics
 
@@ -63,6 +63,7 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 - v1.5: 32-02 in ca. 120 min inkl. Flake-Fix vorab, ca. 25 min Volltestläufe und ca. 45 min CI (2 Tasks, 9 Dateien)
 - v1.5: 32-03 in ca. 150 min inkl. ca. 7 min Korpus, ca. 35 min Messung, ca. 25 min Volltestläufe und ca. 30 min CI (2 Tasks, 5 Dateien plus Rohdaten)
 - v1.5: 32-04 in ca. 105 min inkl. ca. 13 min Volltestlauf und ca. 35 min CI (2 Tasks, 6 Dateien)
+- v1.5: 32-05 in ca. 85 min inkl. ca. 13 min Volltestlauf und ca. 25 min CI (2 Tasks, 23 Dateien)
 
 ## Accumulated Context
 
@@ -102,6 +103,7 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 - 32-02: Ordnerfilter nur in PHP (D-32-06). SearchFilters::folder ohne Default, reist nie über das Netz (Body byte-gleich, Test). Provider FILTER_FOLDER 'folder' (TYPE_STRING), MAX_FOLDER_LENGTH 4000, folderOf() still (Nicht-String, Überlänge, Steuerzeichen, Wurzel ergeben null). SearchService: scopeOf() über Folder::get() plus Präfixprüfung gegen den Nutzerordner, scopeCoordinates() aus IFileAccess::getByFileId und den Mounts unter dem Ordner (eine Mountliste je Lauf), Vorauswahl über Storage plus Rohpfad mit Trennzeichen, Recheck readableFile($scope ?? $userFolder); ohne Mountliste oder Ordnereintrag keine Koordinaten (Recheck entscheidet allein, M4-Formel). FOLDER_FETCH_LIMIT 100, FOLDER_MAX_ROUNDS 6 (A2, Messung 32-03); A1 offen bis 32-06. Logzeilen ohne Kontext. Vorab Flake-Fix 39e8eca9 (detect im Test festgehalten). Commit 53daf104; CI PHP 38316403027 (645 Tests), Python 38316403112, Integration 38316403070, HaRP 38316403120 grün.
 - 32-03: Ordnerbudget gemessen (docs/measurements/2026-10-ordnerfilter/, Regel vor der Messung): Korpus 1000 Außendateien oben, 10 + 1 Ordnertreffer auf Rang 1001 bis 1011. A (M4, 3 Runden) und B (6 x 100) leer mit isPaginated false (Pitfall 4 belegt), C (10 x 100) verfehlt Rang 1001, D (12 x 100) findet alle in 0,134 s Median, Maximum 0,366 s; ohne Ordner kein Rückschritt (Langreihe je 100 Werte abwechselnd gegen 39e8eca9: minus 1,5 und minus 2,9 Prozent; die 20er-Reihe zeigte bei limit 10 +14,5 Prozent Rauschen). FOLDER_MAX_ROUNDS 12, Test leitet die Abrufe aus den Konstanten ab. Dialog sendet limit 5 (stable34). Dev-Instanz: occ upgrade, Host-Backend 1.4.0 -> 1.4.2 neu registriert. Commit 060d637b; CI PHP 38325827607 (645 Tests), Python 38325827589 grün.
 - 32-04: LoadUnifiedSearchFiltersListener (BeforeTemplateRenderedEvent, nur isLoggedIn, Util::addScript plus addTranslations, sonst nichts) und php/js/unified-search.js: sechs Typeinträge findling-type-<gruppe> in TYPES-Reihenfolge und findling-folder über registerFilterAction, appId/searchFrom findling; Event add-filter immer in setTimeout 0 (Kern ruft callback vor dem push), jeder Klick sendet (Pitfall 2), Ordner merkt den letzten Pfad und sendet ihn bei apply false erneut, ohne gemerkten Ordner öffnet der Picker; Wurzel und '' senden {} (Chip 'File contents in /'), Abbruch sendet nichts wie Files; %s per Ersatzfunktion ($& im Ordnernamen bleibt Text); alles in guarded(), Ordnereintrag nur mit OC.dialogs.filepicker. Vertragstest liest den Quelltext und fährt das Skript in einer node-vm-Sandbox, Selbsttests mit Positivkontrolle, 5 Gegenproben am echten Skript rot. PHP-Test über getScripts() plus rohe statische Util-Listen per Reflection (reihenfolgeunabhängig). PHP_FILES_TODAY 95. Commit 68893ef0; CI PHP 38330232409 (648 Tests), Python 38330232425, Integration 38330232257, HaRP 38330232192 grün.
+- 32-05: Vier Sätze der Filtereinträge (File contents: %s, File contents in a folder, File contents in %s, Choose the folder to search in) in allen 16 Katalogen hinter File contents, de/fr zeichengleich D-32-04, es usted (Elija), it/nl Infinitiv, pt Imperativ (Escolha); fünf Sprachtabellen je vier Zeilen plus Nachtrag 13.10.2026. Vertragsfall Skriptschlüssel gegen jede Katalogdatei (liest auch TYPE_ENTRIES), RED 64 Befunde. Schlüsselzahl de.json 302 auf 306 mit Begründungsabsatz. Wortlaut wartet auf Owner-Abnahme 32-07. Commit 0f355b0b; CI PHP 38334174243 (648 Tests), Python 38334174281 (5625 passed), Integration 38334174253, HaRP 38334174230, alle acht grün.
 
 ### Offene Faeden (kein aktiver Auftrag)
 
@@ -131,6 +133,6 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 
 ## Session Continuity
 
-Last session: 2026-10-13T01:40:00.000Z
-Stopped at: Completed 32-04-PLAN.md
+Last session: 2026-10-13T02:40:00.000Z
+Stopped at: Completed 32-05-PLAN.md
 Resume file: None
