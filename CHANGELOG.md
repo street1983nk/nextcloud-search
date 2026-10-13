@@ -19,6 +19,9 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
 - A one time catch up after the upgrade, without a full reindex: files of
   the new types, old Word and Excel files under OOXML names, and files given
   up as repeatedly stuck are read once more.
+- Unified search: filter Findling hits by type group (six entries) or by
+  folder, sub folders included; unknown values are ignored
+  (docs/search-filters.md).
 
 ### Fixed
 

@@ -2190,6 +2190,34 @@ offen.
 
 ---
 
+# Entwurf v1.5.0 (Teil Phase 32)
+
+**Owner-Abnahme offen, Teil von REL-05; info.xml und READMEs werden erst nach
+der Abnahme geändert.** Plan 32-06, 13.10.2026. Grundlage USRCH-01 bis
+USRCH-03, D-32-01 bis D-32-03. Der Wortlaut unten ist ein Vorschlag und noch
+nicht vom Owner abgenommen. Eingereicht ist nichts.
+
+## Teil 1: eine neue Zeile der Funktionsliste, alle sechs Beschreibungen
+
+| Sprache | Wortlaut |
+|---|---|
+| en | `- Filter by file type or folder directly in the Nextcloud search` |
+| de | `- Filter nach Dateityp oder Ordner direkt in der Nextcloud-Suche` |
+| fr | `- Filtre par type de fichier ou par dossier directement dans la recherche Nextcloud` |
+
+Keine Zahl, keine Grenze im Store-Text: die Grenzen (zwei Filter gleichzeitig
+ergeben zwei Gruppen, leerer Wert, Ergebnisseite ohne Ordnerfilter) stehen in
+`docs/search-filters.md`, Abschnitt "In the unified search".
+
+## Teil 2: die README-Zeilen
+
+Vorschlag: dieselbe Zeile in der Funktionsliste der drei READMEs, im Wortlaut
+von Teil 1 (de in `README.md`, en in `README.en.md`, fr in `README.fr.md`).
+
+Abnahme durch den Owner: offen (REL-05).
+
+---
+
 # Release-Checkliste v1.5.0 (REL-05): Corresponding source
 
 Seit Plan 31-01 verteilt das Backend-Image mit dem pillow-heif-Wheel drei native

@@ -4,6 +4,8 @@ The result page offers six type groups, and the search line offers the same six
 words behind `type:`. Both are resolved through one table, `TYPE_GROUPS` in
 `backend/src/findling/query/rewrite.py`. There is no second table on the PHP
 side: the companion app knows the six group names and not a single extension.
+Since 1.5 the unified search of Nextcloud offers the same six groups and a
+folder filter as well (see "In the unified search" below).
 
 ## The table
 
@@ -56,6 +58,45 @@ ZIP file is searchable, and a hit names the inner file in its excerpt. The
 ZIP file itself has no document type, whatever its members are, so `zip` stands
 in none of the six groups: a ZIP file appears only when no group is chosen, and
 choosing all six groups therefore finds slightly less than choosing none.
+
+## In the unified search
+
+Since 1.5 the filter menu of the Nextcloud search shows seven entries of
+Findling: one per type group ("File contents: PDF" and so on) and "File
+contents in a folder". A type entry narrows the Findling group to that type
+group, the folder entry opens the folder picker and narrows it to the chosen
+folder.
+
+- The folder includes its sub folders.
+- The folder is resolved and checked in the companion app, in the file tree of
+  the user who searches, so shares and team folders behave as in the Files app.
+  Every hit is still rechecked against the rights of that user; the folder never
+  shows a file the user cannot open.
+- The folder is never sent to the container; only the companion app sees it.
+
+The limits:
+
+- **A type chip and a folder chip at the same time are two groups, not one.**
+  The unified search asks a provider once per chip, so "PDF" and "in Projects"
+  produce one group of PDF files and one group of files in Projects, not the
+  PDF files in Projects (D-32-02).
+- **A type or a folder together with the date filter work together.** The date
+  of the unified search is sent with every chip.
+- **An empty value is refused by Nextcloud itself.** A request with `types=` or
+  `folder=` and nothing after it is answered with HTTP 400 by the Nextcloud
+  core, before Findling is asked. The filter entries never send an empty value;
+  choosing the root folder sends no folder at all (D-32-01).
+- **Unknown or manipulated values are ignored.** An unknown type group, an
+  overlong value, a folder that does not exist, a path with `..`, a file instead
+  of a folder or a folder outside the user's own tree: the search answers
+  exactly as it would without the filter, never with an error (D-32-03).
+- **A mixed value keeps the known names.** `pdf,videos` filters by `pdf` only;
+  the unknown name is dropped.
+- **The result page has no folder filter.** The entry "Show all results" at the
+  end of a group carries the type groups to the result page, but not the
+  folder.
+- **ZIP files stay outside every type group** here as well (see "The limits"
+  above).
 
 ## The period
 
