@@ -86,7 +86,7 @@
 | UMST-02 | Phase 34 | Pending |
 | UMST-03 | Phase 34 | Pending |
 | USRCH-01 | Phase 32 | Pending (serverseitig in 32-01, ed2908fc; Abhaken nach Owner-Abnahme 32-07) |
-| USRCH-02 | Phase 32 | Pending (serverseitig in 32-02, 53daf104; Abhaken nach Gruppenordner- und Share-Beleg 32-06 und Owner-Abnahme 32-07) |
+| USRCH-02 | Phase 32 | Pending (serverseitig in 32-02, 53daf104; Budget gemessen in 32-03, 060d637b, FOLDER_MAX_ROUNDS 12; Abhaken nach Gruppenordner- und Share-Beleg 32-06 und Owner-Abnahme 32-07) |
 | USRCH-03 | Phase 32 | Pending (Backend-Hälfte und PHP-Parser in 32-01, ed2908fc; Ordner fail-open in 32-02, 53daf104; Abhaken nach CI-Beleg 32-06) |
 | EXCL-01 | Phase 33 | Pending |
 | EXCL-02 | Phase 33 | Pending |

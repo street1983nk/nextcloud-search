@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 32-02-PLAN.md
-last_updated: "2026-10-13T00:30:00.000Z"
-last_activity: 2026-10-13 -- Plan 32-02 abgeschlossen (Ordnerfilter in PHP, Recheck im Unterbaum, fail-open)
+stopped_at: Completed 32-03-PLAN.md
+last_updated: "2026-10-13T00:45:00.000Z"
+last_activity: 2026-10-13 -- Plan 32-03 abgeschlossen (Ordnerbudget gemessen, FOLDER_MAX_ROUNDS 12)
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 32
-  completed_plans: 26
+  completed_plans: 27
   percent: 14
 ---
 
@@ -26,11 +26,11 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 32 von 30-36 (Filter in der Unified Search)
-Plan: 2 von 8 erledigt (32-01, 32-02), nächster 32-03 (Ordnerbudget gemessen)
-Status: Phase 32 in Ausführung; 32-02 abgeschlossen (Provider deklariert folder, SearchService löst den Ordner im Nutzerbaum auf, Vorauswahl über Koordinaten, Recheck auf dem Ordnerknoten, jeder Fehler ergibt die ungefilterte Suche). USRCH-01/02/03 bleiben Pending bis 32-06/32-07
-Last activity: 2026-10-13 -- Plan 32-02 abgeschlossen
+Plan: 3 von 8 erledigt (32-01 bis 32-03), nächster 32-04 (Listener und Vanilla-Plugin)
+Status: Phase 32 in Ausführung; 32-03 abgeschlossen (Ordnerbudget auf der Dev-Instanz gemessen, 12 x 100 gewählt nach vorher festgelegter Regel). USRCH-01/02/03 bleiben Pending bis 32-06/32-07
+Last activity: 2026-10-13 -- Plan 32-03 abgeschlossen
 
-Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passed, 659f5631); Phase 32: 2/8 Pläne
+Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passed, 659f5631); Phase 32: 3/8 Pläne
 
 ## Performance Metrics
 
@@ -61,6 +61,7 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 - v1.5: 31-15 in ca. 250 min inkl. ca. 75 min Volltestläufe und ca. 60 min CI (3 Tasks, 16 Dateien)
 - v1.5: 32-01 in ca. 50 min inkl. ca. 12 min Volltestlauf und ca. 25 min CI (2 Tasks, 8 Dateien)
 - v1.5: 32-02 in ca. 120 min inkl. Flake-Fix vorab, ca. 25 min Volltestläufe und ca. 45 min CI (2 Tasks, 9 Dateien)
+- v1.5: 32-03 in ca. 150 min inkl. ca. 7 min Korpus, ca. 35 min Messung, ca. 25 min Volltestläufe und ca. 30 min CI (2 Tasks, 5 Dateien plus Rohdaten)
 
 ## Accumulated Context
 
@@ -98,6 +99,7 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 - 31-15: Audit der Phase 31 (31-AUDIT.md, status fixed): Korpus aus ZIP, Mail, Word, Excel, HEIC durch das Sandbox-Kind. H-31-01 Mail-Kopfzeilen (1,2 MB To hielt den Indexer 120 s): Richtlinie kürzt jede Kopfzeile auf 32 KiB, 1 MiB Parser-Budget je Mail, danach nur Kopfzeilen (indexed(truncated)); echte Mail mit 999 Anhängen bleibt ganz. H-31-02 Overlap-Warnung von zipfile mit Mitgliedsnamen im Log verworfen. M-31-01 gewöhnliche Runde lässt Abgeschriebene ohne Zeile liegen, solange der Nachholweg offen ist (nur der Nachholzyklus übergibt, einmal). M-31-02 Word 6/95 (wIdent 0xA5DC, an echter Datei gefunden) skipped(unsupported_variant). L-31-01 resume_after (recheck und catchup), L-31-02 OSError eines Mitglieds, L-31-03 Spiegelcheck, L-31-07 [[ =~ ]] in deploy-harp. Accept: L-31-04 JPEG/HEIF-Urteil, L-31-05 Office-Mitglied ohne Vorzählung, L-31-06 Umbenennen/Neustart, L-31-08 Teil B ohne Generation, L-31-09 Korpuslücken (Phase 36), L-31-10 Neu-Urteil +15,5 % je Seite (0,06 ms). Commits 02e11bf1, 013d1c58, 97891f3a, 004dc865, 53fae392; CI Python 38292944805, HaRP 38292944828 grün.
 - 32-01: Provider deklariert den Custom Filter types (FilterDefinition TYPE_STRING, exklusiv als Standard; SearchComposer stable34 legt Custom-Definitionen nur unter der eigenen Provider-ID ab, daher ohne Wirkung auf andere Apps). Ein Parser SearchFilters::typesFrom() für Ergebnisseite und Dialog: geschlossene Menge TYPES, MAX_TYPES_LENGTH 200 vor dem Split, trim nur Leerzeichen und Tab (pdf  ergibt keine Gruppe). Tür trägt types in TYPES-Reihenfolge, Datum bleibt draußen. D-05-Tests umgedreht mit Vermerk D-32-07. Paritätstest über PHP TYPES, /search, /snippets, /diagnose, TYPE_GROUPS; types [] gleich fehlendes Feld, 422 bleibt. Commit ed2908fc; CI PHP 38309357692 (620 Tests), Python 38309357739 (Versuch 2, Versuch 1 Flake in test_main_lifespan, deferred-items.md), Integration 38309357675 (Providerliste meldet types:string), HaRP 38309357673 grün.
 - 32-02: Ordnerfilter nur in PHP (D-32-06). SearchFilters::folder ohne Default, reist nie über das Netz (Body byte-gleich, Test). Provider FILTER_FOLDER 'folder' (TYPE_STRING), MAX_FOLDER_LENGTH 4000, folderOf() still (Nicht-String, Überlänge, Steuerzeichen, Wurzel ergeben null). SearchService: scopeOf() über Folder::get() plus Präfixprüfung gegen den Nutzerordner, scopeCoordinates() aus IFileAccess::getByFileId und den Mounts unter dem Ordner (eine Mountliste je Lauf), Vorauswahl über Storage plus Rohpfad mit Trennzeichen, Recheck readableFile($scope ?? $userFolder); ohne Mountliste oder Ordnereintrag keine Koordinaten (Recheck entscheidet allein, M4-Formel). FOLDER_FETCH_LIMIT 100, FOLDER_MAX_ROUNDS 6 (A2, Messung 32-03); A1 offen bis 32-06. Logzeilen ohne Kontext. Vorab Flake-Fix 39e8eca9 (detect im Test festgehalten). Commit 53daf104; CI PHP 38316403027 (645 Tests), Python 38316403112, Integration 38316403070, HaRP 38316403120 grün.
+- 32-03: Ordnerbudget gemessen (docs/measurements/2026-10-ordnerfilter/, Regel vor der Messung): Korpus 1000 Außendateien oben, 10 + 1 Ordnertreffer auf Rang 1001 bis 1011. A (M4, 3 Runden) und B (6 x 100) leer mit isPaginated false (Pitfall 4 belegt), C (10 x 100) verfehlt Rang 1001, D (12 x 100) findet alle in 0,134 s Median, Maximum 0,366 s; ohne Ordner kein Rückschritt (Langreihe je 100 Werte abwechselnd gegen 39e8eca9: minus 1,5 und minus 2,9 Prozent; die 20er-Reihe zeigte bei limit 10 +14,5 Prozent Rauschen). FOLDER_MAX_ROUNDS 12, Test leitet die Abrufe aus den Konstanten ab. Dialog sendet limit 5 (stable34). Dev-Instanz: occ upgrade, Host-Backend 1.4.0 -> 1.4.2 neu registriert. Commit 060d637b; CI PHP 38325827607 (645 Tests), Python 38325827589 grün.
 
 ### Offene Faeden (kein aktiver Auftrag)
 
@@ -119,7 +121,7 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
   Connector"); Konto-Appeal pruefen, Owner postet selbst.
 
 - Dev-Instanz (Port 8090) lief am 06.10. mit Abnahme-Testdateien und Backend-Hostprozess;
-  bei Gelegenheit aufraeumen.
+  bei Gelegenheit aufraeumen. Seit 32-03: Host-Backend 1.4.2 läuft, Cron der Instanz läuft nicht von selbst; die 1011 Messdateien sind gelöscht und der Papierkorb geleert, ihre Einträge stehen bis zum nächsten Abgleich noch im Container-Index (Recheck verwirft sie, Dialog liefert 0).
 
 ### Blockers/Concerns
 
@@ -127,6 +129,6 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 
 ## Session Continuity
 
-Last session: 2026-10-13T00:30:00.000Z
-Stopped at: Completed 32-02-PLAN.md
+Last session: 2026-10-13T00:45:00.000Z
+Stopped at: Completed 32-03-PLAN.md
 Resume file: None
