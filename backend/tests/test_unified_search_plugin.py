@@ -563,10 +563,43 @@ def test_the_run_registers_seven_entries_in_the_order_of_the_php_groups(tmp_path
         # Befund A of plan 32-07: the hidden provider, never the real one.
         assert entry["searchFrom"] == SEARCH_FROM
         assert entry["id"] not in {APP_ID, SEARCH_FROM}
-        assert entry["icon"] == "/apps/findling/img/app.svg"
+        # The white glyph, owner acceptance of plan 32-07 (13.10.2026).
+        assert entry["icon"] == "/apps/findling/img/app-white.svg"
         assert entry["callback"] == "function"
     labels = [entry["label"] for entry in report["registered"]]
     assert labels == [f"[File contents: [{key}]]" for key in GROUP_KEYS] + ["[File contents in a folder]"]
+
+
+def test_every_entry_shows_the_glyph_of_the_app_in_a_colour_the_menu_keeps_visible(tmp_path: Path) -> None:
+    # Owner acceptance of plan 32-07 (13.10.2026): every entry carries the
+    # symbol of Findling. The menu of the core shows the icon as an img with
+    # filter: var(--background-invert-if-bright) (UnifiedSearchModal.vue,
+    # .filter-button__icon, stable33 to stable35), and its own icons are white
+    # (#fff). A glyph in currentColor is black inside an img, the inversion
+    # turns it white on the white menu, and it vanishes; that was the state
+    # before. So the file each entry names has to exist, draw the glyph of
+    # app.svg and draw it in white only.
+    report = run_in_node(PLUGIN, tmp_path)
+    prefix = f"/apps/{APP_ID}/img/"
+    glyph = re.findall(r'\bd="([^"]+)"', (REPO_ROOT / "php" / "img" / "app.svg").read_text(encoding="utf-8"))
+    assert len(glyph) == 1
+
+    icons = {entry["icon"] for entry in report["registered"]}
+    assert len(report["registered"]) == 7
+    assert len(icons) == 1
+    icon = icons.pop()
+    assert icon.startswith(prefix)
+    svg = REPO_ROOT / "php" / "img" / icon.removeprefix(prefix)
+    assert svg.is_file(), f"{svg} is missing"
+    text = svg.read_text(encoding="utf-8")
+    drawing = text[text.index("<svg") :]
+
+    assert re.findall(r'\bd="([^"]+)"', drawing) == glyph
+    assert "currentColor" not in drawing
+    fills = re.findall(r'\bfill\s*[=:]\s*"?([^";\s>]+)', drawing)
+    assert fills
+    assert {fill.lower() for fill in fills} <= {"#fff", "#ffffff", "white"}
+    assert "stroke" not in drawing
 
 
 def test_every_type_click_sends_its_group_later_and_again_on_the_second_click(tmp_path: Path) -> None:

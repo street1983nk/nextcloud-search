@@ -14,10 +14,10 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 street1983nk"
 SPDX-License-Identifier = "AGPL-3.0-or-later"
 
-# The two app icons are own work that embeds nine icon paths from Material
+# The three app icons are own work that embeds nine icon paths from Material
 # Design Icons (Apache-2.0); the attribution lives in THIRD-PARTY.md.
 [[annotations]]
-path = ["php/img/app.svg", "php/img/app-dark.svg"]
+path = ["php/img/app.svg", "php/img/app-dark.svg", "php/img/app-white.svg"]
 precedence = "override"
 SPDX-FileCopyrightText = ["2026 street1983nk", "Material Design Icons contributors"]
 SPDX-License-Identifier = "AGPL-3.0-or-later AND Apache-2.0"

@@ -140,9 +140,13 @@
     return template.replace('%s', function () { return value })
   }
 
+  // The glyph of the app in white (img/app-white.svg), the convention of the
+  // core icons: the menu shows it as an img and inverts it on a bright
+  // background. app.svg draws in currentColor, which is black inside an img
+  // and vanishes after the inversion.
   function appIcon () {
     const oc = window.OC
-    return oc && typeof oc.imagePath === 'function' ? oc.imagePath(APP_ID, 'app') : ''
+    return oc && typeof oc.imagePath === 'function' ? oc.imagePath(APP_ID, 'app-white') : ''
   }
 
   /** Send the event one turn later, after the core has pushed the chip. */
