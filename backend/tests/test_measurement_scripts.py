@@ -874,8 +874,13 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # and folder, otherwise Provider::search) and its unit test
 # php/tests/Unit/FilterProviderTest.php; AppInfo/Application.php registers it
 # next to the real provider. No file went, so PHP_FILES_TODAY moves to 97.
+# Measured again by Plan 32-08, Befund M-32-01 (USRCH-03): Search/Provider.php
+# composes the folder value into NFC and reads a value with a '.' segment as
+# no folder, because Folder::get() resolves both to a node below which the
+# recheck finds nothing; ProviderTest.php carries the cases. No file came and
+# none went, so PHP_FILES_TODAY stays at 97.
 PHP_FILES_TODAY = 97
-PHP_TREE_HASH_TODAY = "e8bb5819cde1f6a0b3cf1faed2e3a0054a0c280cab9be76c85f79cb1bb8cff8e"
+PHP_TREE_HASH_TODAY = "a54f310483ee3cf2c649a9648b507c67a9bf70e00180e157fef539012012aad2"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

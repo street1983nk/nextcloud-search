@@ -822,7 +822,26 @@ final class ProviderTest extends TestCase {
 			'a trailing slash' => ['Projekte/', '/Projekte'],
 			'a nested folder with a trailing slash' => ['/Projekte/2026/', '/Projekte/2026'],
 			'a folder with blanks and umlauts' => ['/Ablage Büro', '/Ablage Büro'],
+			// M-32-01 of the phase 32 audit: the file cache stores names in NFC,
+			// so a decomposed spelling travels composed.
+			'a decomposed umlaut is composed' => ["/Ablage Bu\u{0308}ro", '/Ablage Büro'],
+			'a name that starts with a dot is a name' => ['/.versteckt', '/.versteckt'],
+			'three dots are a name' => ['/Projekte/...', '/Projekte/...'],
 		];
+	}
+
+	public function testADotSegmentIsNoFolderAndNotAnEmptyGroup(): void {
+		// M-32-01 of the phase 32 audit: Folder::get() resolves '/Projekte/.'
+		// to a node whose path keeps the dot, and the recheck below it found
+		// nothing. No picker produces a dot segment, so the value is no folder
+		// and the run is the run without the filter (USRCH-03).
+		foreach (['.', '/.', '/Projekte/.', '/./Projekte', '/Projekte/./2026', '\\Projekte\\.\\2026', "/Projekte/./"] as $raw) {
+			$filters = $this->filtersOf($this->filteredQuery([Provider::FILTER_FOLDER => $raw]));
+
+			self::assertInstanceOf(SearchFilters::class, $filters, $raw);
+			self::assertNull($filters->folder, $raw . ' became a folder');
+			self::assertEquals(SearchFilters::none(), $filters, $raw . ' narrowed the run');
+		}
 	}
 
 	#[\PHPUnit\Framework\Attributes\DataProvider('foldersThatAreRead')]

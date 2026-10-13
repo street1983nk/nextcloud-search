@@ -409,6 +409,19 @@ final class Provider implements IFilteringProvider {
 	 * inside the user folder. One place decides what a folder is, and it is
 	 * the one that sees the tree. Nothing here throws and nothing here logs the
 	 * value.
+	 *
+	 * Two spellings are settled here because Folder::get() does not settle
+	 * them, and both were Befund M-32-01 of the phase 32 audit. The core
+	 * normalises a path for get() with PathHelper::normalizePath(), which turns
+	 * backslashes into slashes and folds double slashes, but keeps a '.'
+	 * segment and keeps the Unicode form. Such a value still resolves, to a
+	 * folder node whose path is spelled the way the value was ('/Projekte/.',
+	 * 'Café' with a combining accent), and the recheck below that node then
+	 * finds no file at all, because every file it could find carries the
+	 * canonical path. A value somebody built ended in an empty group instead
+	 * of the search without the filter (USRCH-03). So the value is composed
+	 * into NFC, the form the file cache of Nextcloud stores names in, and a
+	 * value with a '.' segment, which no picker produces, is no folder.
 	 */
 	private function folderOf(ISearchQuery $query): ?string {
 		$filter = $query->getFilter(self::FILTER_FOLDER);
@@ -417,13 +430,38 @@ final class Provider implements IFilteringProvider {
 		}
 
 		$value = $filter->get();
-		if (!is_string($value) || strlen($value) > self::MAX_FOLDER_LENGTH || preg_match('/[\x00-\x1F\x7F]/', $value) !== 0) {
+		if (!is_string($value)) {
+			return null;
+		}
+
+		$value = self::composed($value);
+		if (strlen($value) > self::MAX_FOLDER_LENGTH || preg_match('/[\x00-\x1F\x7F]/', $value) !== 0) {
+			return null;
+		}
+
+		if (in_array('.', preg_split('#[/\\\\]#', $value) ?: [], true)) {
 			return null;
 		}
 
 		$path = '/' . trim($value, '/');
 
 		return $path === '/' ? null : $path;
+	}
+
+	/**
+	 * The value in Unicode normalisation form C, or as it came when it cannot
+	 * be composed (no intl and no polyfill, or not valid UTF-8). Nextcloud
+	 * itself ships the polyfill, so the fallback is for a runtime without
+	 * either, where the value then simply does not resolve.
+	 */
+	private static function composed(string $value): string {
+		if (!class_exists(\Normalizer::class)) {
+			return $value;
+		}
+
+		$composed = \Normalizer::normalize($value, \Normalizer::FORM_C);
+
+		return is_string($composed) ? $composed : $value;
 	}
 
 	/**

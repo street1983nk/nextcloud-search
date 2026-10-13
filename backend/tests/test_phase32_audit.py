@@ -589,7 +589,8 @@ FOLDER_CASES = (
     Case("delete", "folder=%2FProjekte%7F", (UNFILTERED,)),
     Case("NFC name", "folder=" + _q("/" + CAFE_NFC), (frozenset({"Cafe.txt"}),)),
     # M-32-01 as well: the NFD spelling resolved and found nothing below it.
-    Case("NFD name", "folder=" + _q("/" + CAFE_NFD), (frozenset({"Cafe.txt"}), UNFILTERED)),
+    # Since the fix the value is composed into NFC and narrows like the NFC one.
+    Case("NFD name", "folder=" + _q("/" + CAFE_NFD), (frozenset({"Cafe.txt"}),)),
     Case("bidi override", "folder=" + _q("/Projekte‮"), (UNFILTERED,)),
     Case("bidi in front", "folder=" + _q("/‮etkejorP"), (UNFILTERED,)),
     Case("4000 characters", "folder=" + _q("/" + "a" * 3999), (UNFILTERED,)),
@@ -613,13 +614,14 @@ FOLDER_CASES = (
     Case("tilde bob", "folder=" + _q("~bob/Geheim"), (UNFILTERED,)),
     Case("proc self", "folder=" + _q("/proc/self/root"), (UNFILTERED,)),
     # M-32-01: a dot segment resolved to a node with a path nobody else uses,
-    # and the recheck below it found nothing, an empty group.
+    # and the recheck below it found nothing, an empty group. Since the fix a
+    # value with a dot segment is no folder at all.
     Case("dot", "folder=.", (UNFILTERED,)),
     Case("slash dot", "folder=%2F.", (UNFILTERED,)),
-    Case("trailing dot segment", "folder=%2FProjekte%2F.", (UNFILTERED, PROJEKTE)),
-    Case("leading dot segment", "folder=%2F.%2FProjekte", (UNFILTERED, PROJEKTE)),
-    Case("inner dot segment", "folder=%2FProjekte%2F.%2FUnter", (UNFILTERED, frozenset({"Tief.pdf"}))),
-    Case("backslash dot segment", "folder=" + _q("\\Projekte\\.\\Unter"), (UNFILTERED, frozenset({"Tief.pdf"}))),
+    Case("trailing dot segment", "folder=%2FProjekte%2F.", (UNFILTERED,)),
+    Case("leading dot segment", "folder=%2F.%2FProjekte", (UNFILTERED,)),
+    Case("inner dot segment", "folder=%2FProjekte%2F.%2FUnter", (UNFILTERED,)),
+    Case("backslash dot segment", "folder=" + _q("\\Projekte\\.\\Unter"), (UNFILTERED,)),
     Case("a hidden name is no dot segment", "folder=%2F.versteckt32", (UNFILTERED,)),
     Case("other case on a case sensitive storage", "folder=%2Fprojekte", (UNFILTERED,)),
     Case("dot dot", "folder=..", (UNFILTERED,)),
