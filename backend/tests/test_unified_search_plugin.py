@@ -589,7 +589,11 @@ def test_every_entry_shows_the_glyph_of_the_app_in_a_colour_the_menu_keeps_visib
     assert len(icons) == 1
     icon = icons.pop()
     assert icon.startswith(prefix)
-    svg = REPO_ROOT / "php" / "img" / icon.removeprefix(prefix)
+    assert_white_glyph(REPO_ROOT / "php" / "img" / icon.removeprefix(prefix), glyph)
+
+
+def assert_white_glyph(svg: Path, glyph: list[str]) -> None:
+    """The file exists and draws exactly the given path data, in white only."""
     assert svg.is_file(), f"{svg} is missing"
     text = svg.read_text(encoding="utf-8")
     drawing = text[text.index("<svg") :]
@@ -600,6 +604,26 @@ def test_every_entry_shows_the_glyph_of_the_app_in_a_colour_the_menu_keeps_visib
     assert fills
     assert {fill.lower() for fill in fills} <= {"#fff", "#ffffff", "white"}
     assert "stroke" not in drawing
+
+
+def test_the_entry_of_the_real_provider_finds_the_white_glyph_under_its_id() -> None:
+    # Owner acceptance of plan 32-07 (13.10.2026): the entry "File contents" of
+    # the real provider carries the white glyph as well. The core picks its icon
+    # in SearchComposer::fetchIcon (stable33 to stable35) and asks
+    # imagePath(<provider id>, '<provider id>.svg') first, app.svg only later; so
+    # the white glyph has to live under the id the provider returns. The app
+    # navigation names app.svg in info.xml and has to keep doing so, so the
+    # navigation icon stays the one it was.
+    provider = (REPO_ROOT / "php" / "lib" / "Search" / "Provider.php").read_text(encoding="utf-8")
+    ids = re.findall(r"function getId\(\): string \{\s*return '([^']+)';", provider)
+    assert ids == [APP_ID]
+    glyph = re.findall(r'\bd="([^"]+)"', (REPO_ROOT / "php" / "img" / "app.svg").read_text(encoding="utf-8"))
+    assert len(glyph) == 1
+
+    assert_white_glyph(REPO_ROOT / "php" / "img" / f"{ids[0]}.svg", glyph)
+
+    info = (REPO_ROOT / "php" / "appinfo" / "info.xml").read_text(encoding="utf-8")
+    assert re.findall(r"<navigation>.*?<icon>([^<]+)</icon>.*?</navigation>", info) == ["app.svg"]
 
 
 def test_every_type_click_sends_its_group_later_and_again_on_the_second_click(tmp_path: Path) -> None:
