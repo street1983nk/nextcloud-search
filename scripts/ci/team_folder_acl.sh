@@ -360,8 +360,188 @@ for key in acl plain; do
 	fi
 done
 
-log "verdicts: acl=${verdict[acl]} plain=${verdict[plain]}"
+# -- 8. the folder filter of the unified search (plan 32-06, assumption A1) ----
+#
+# The folder filter narrows the hits in PHP: SearchService resolves the folder
+# in the tree of the asking user, drops candidates outside it cheaply over the
+# raw coordinates (storage id plus internal path out of IFileAccess and the
+# mount list) and rechecks the rest on the folder node. Assumption A1 of
+# 32-RESEARCH is that those coordinates share one path space for a team folder
+# (a jail on __groupfolders/<id>) and for a received share (the storage of the
+# owner). If they did not, the preselection would drop the hits below exactly
+# these two kinds of mount, and probes (a), (b) and (d) would be empty.
+#
+# Four probes, each with its own ::error:: line:
+#   (a) the mount point of the plain team folder brings its file back
+#   (b) the sub folder of the ACL team folder brings the ACL file back and not
+#       the plain file, which lies in the other team folder
+#   (c) a folder whose file is denied to member 2 by an ACL rule never brings
+#       that file back to member 2; member 1 finds it there (the control)
+#   (d) a folder member 1 shares with member 2 is filterable over its mount
+#       point in the tree of member 2, read from the share answer, and a folder
+#       of member 2's own does not bring the shared file back
+#
+# Every line logs the user, the folder, the expectation and the ids, never a
+# file content.
+
+MARKER_LOCKED="teamlockedmarker${TAG}z"
+MARKER_SHARE="teamsharemarker${TAG}w"
+LOCKED_DIR="locked"
+SHARE_FOLDER="ShareF-${TAG}"
+OWN_FOLDER="OwnF-${TAG}"
+folder_failed=0
+
+hits_in() {  # $1 user, $2 term, $3 folder; prints the sorted file ids of the findling entries
+	curl -sfS -G -u "$1:${PASS}" \
+		-H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+		--data-urlencode "term=$2" --data-urlencode 'limit=100' \
+		--data-urlencode "folder=$3" \
+		"${NC_URL}/ocs/v2.php/search/providers/findling/search" \
+		| jq -r '[.ocs.data.entries[] | .attributes | objects | .fileId // empty | tonumber] | sort | map(tostring) | join(" ")' \
+		| tr -d '\r' || printf 'error'
+}
+
+ids_of() {  # $1 user, $2 term; the same without a folder
+	curl -sfS -G -u "$1:${PASS}" \
+		-H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+		--data-urlencode "term=$2" --data-urlencode 'limit=100' \
+		"${NC_URL}/ocs/v2.php/search/providers/findling/search" \
+		| jq -r '[.ocs.data.entries[] | .attributes | objects | .fileId // empty | tonumber] | sort | map(tostring) | join(" ")' \
+		| tr -d '\r' || printf 'error'
+}
+
+fileid_of() {  # $1 user, $2 path below the files root; prints the file id
+	dav "$1" -X PROPFIND -H 'Depth: 0' \
+		--data '<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns"><d:prop><oc:fileid/></d:prop></d:propfind>' \
+		"${NC_URL}/remote.php/dav/files/$1/$2" | sed -n 's|.*<oc:fileid>\([0-9]*\)</oc:fileid>.*|\1|p'
+}
+
+put_note() {  # $1 user, $2 path below the files root, $3 marker
+	local file="${WORK}/note-$3.txt"
+	printf 'Team folder ACL regression note. The marker is %s and nothing else.\n' "$3" > "${file}"
+	dav "$1" -T "${file}" -o /dev/null "${NC_URL}/remote.php/dav/files/$1/$2"
+}
+
+expect_ids() {  # $1 probe, $2 user, $3 term, $4 folder, $5 expected ids ('' for none)
+	local got
+	got=$(hits_in "$2" "$3" "$4")
+	if [ "${got}" = "$5" ]; then
+		log "folder filter $1: user $2, folder $4, expected [$5], got [${got}]"
+		return 0
+	fi
+	log "::error::folder filter $1: user $2, folder $4, expected [$5], got [${got}]"
+	folder_failed=1
+}
+
 if [ "${verdict[acl]}" = "ok" ] && [ "${verdict[plain]}" = "ok" ]; then
+	# The file for probe (c): uploaded by member 1 into a folder below SUB,
+	# then denied to member 2 by a user rule on that folder. A deeper rule
+	# overrides the +read of SUB, and no group rule stands on the same path,
+	# where allow would win (groupfolders Rule::mergeRules).
+	dav "${MEMBERS[0]}" -X MKCOL -o /dev/null \
+		"${NC_URL}/remote.php/dav/files/${MEMBERS[0]}/${ACL_FOLDER}/${SUB}/${LOCKED_DIR}"
+	put_note "${MEMBERS[0]}" "${ACL_FOLDER}/${SUB}/${LOCKED_DIR}/note.txt" "${MARKER_LOCKED}"
+	locked_file=$(fileid_of "${MEMBERS[0]}" "${ACL_FOLDER}/${SUB}/${LOCKED_DIR}/note.txt")
+	occ groupfolders:permissions "${acl_id}" --user="${MEMBERS[1]}" -- "${SUB}/${LOCKED_DIR}" -read
+	# The lock measured rather than assumed: member 2 cannot see the file over
+	# WebDAV, member 1 can.
+	locked_code_2=$(curl -s -o /dev/null -w '%{http_code}' -u "${MEMBERS[1]}:${PASS}" -X PROPFIND -H 'Depth: 0' \
+		"${NC_URL}/remote.php/dav/files/${MEMBERS[1]}/${ACL_FOLDER}/${SUB}/${LOCKED_DIR}/note.txt")
+	locked_code_1=$(curl -s -o /dev/null -w '%{http_code}' -u "${MEMBERS[0]}:${PASS}" -X PROPFIND -H 'Depth: 0' \
+		"${NC_URL}/remote.php/dav/files/${MEMBERS[0]}/${ACL_FOLDER}/${SUB}/${LOCKED_DIR}/note.txt")
+	if [ "${locked_code_2}" != "404" ] || [ "${locked_code_1}" != "207" ]; then
+		log "::error::folder filter (c): the ACL lock did not hold, PROPFIND answered ${locked_code_2} to ${MEMBERS[1]} and ${locked_code_1} to ${MEMBERS[0]} (expected 404 and 207)"
+		folder_failed=1
+	fi
+	log "locked file ${locked_file}: PROPFIND ${locked_code_2} for ${MEMBERS[1]}, ${locked_code_1} for ${MEMBERS[0]}"
+
+	# The share for probe (d): the folder first, shared, then the file of
+	# member 2 set up, and only then the file uploaded. The access list a
+	# claim hands the container comes from the mount cache, and member 2 gets
+	# the share mount there when its file system is set up after the share
+	# exists (the reason step 3 sets up every account first).
+	dav "${MEMBERS[0]}" -X MKCOL -o /dev/null "${NC_URL}/remote.php/dav/files/${MEMBERS[0]}/${SHARE_FOLDER}"
+	dav "${MEMBERS[1]}" -X MKCOL -o /dev/null "${NC_URL}/remote.php/dav/files/${MEMBERS[1]}/${OWN_FOLDER}"
+	share_answer=$(dav "${MEMBERS[0]}" -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+		--data-urlencode "path=/${SHARE_FOLDER}" --data-urlencode 'shareType=0' \
+		--data-urlencode "shareWith=${MEMBERS[1]}" --data-urlencode 'permissions=1' \
+		"${NC_URL}/ocs/v2.php/apps/files_sharing/api/v1/shares")
+	share_id=$(printf '%s' "${share_answer}" | jq -r '.ocs.data.id // ""' | tr -d '\r')
+	if ! [[ "${share_id}" =~ ^[0-9]+$ ]]; then
+		log "::error::folder filter (d): the share answer carries no id"
+		log "${share_answer}"
+		exit 1
+	fi
+	dav "${MEMBERS[1]}" -X PROPFIND -H 'Depth: 1' -o /dev/null "${NC_URL}/remote.php/dav/files/${MEMBERS[1]}/"
+	received=$(dav "${MEMBERS[1]}" -G -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+		--data-urlencode 'shared_with_me=true' \
+		"${NC_URL}/ocs/v2.php/apps/files_sharing/api/v1/shares")
+	share_target=$(printf '%s' "${received}" | jq -r --arg id "${share_id}" \
+		'[.ocs.data[] | select((.id | tostring) == $id) | .file_target][0] // ""' | tr -d '\r')
+	if [[ "${share_target}" != /* ]]; then
+		log "::error::folder filter (d): ${MEMBERS[1]} does not report share ${share_id} with a mount point"
+		log "${received}"
+		exit 1
+	fi
+	log "share ${share_id}: ${SHARE_FOLDER} of ${MEMBERS[0]} is mounted at ${share_target} for ${MEMBERS[1]}"
+	put_note "${MEMBERS[0]}" "${SHARE_FOLDER}/note.txt" "${MARKER_SHARE}"
+	share_file=$(fileid_of "${MEMBERS[0]}" "${SHARE_FOLDER}/note.txt")
+	for pair in "locked=${locked_file}" "share=${share_file}"; do
+		if ! [[ "${pair#*=}" =~ ^[0-9]+$ ]]; then
+			log "::error::the upload of the ${pair%%=*} file reported no file id"
+			exit 1
+		fi
+	done
+
+	if [ "${CRAWL}" = "1" ]; then
+		occ findling:index --restart --no-interaction
+		timeout 60 ${OCC} background-job:worker 'OCA\Findling\BackgroundJobs\SchedulerJob' --once || true
+		timeout 120 ${OCC} background-job:worker 'OCA\Findling\BackgroundJobs\StorageCrawlJob' --stop_after 60 || true
+		occ findling:index
+	fi
+
+	# Both new files indexed before a folder is asked: member 1 finds the
+	# locked file and member 2 the shared one, each without a folder.
+	deadline=$(( $(date +%s) + DEADLINE ))
+	while :; do
+		got_locked=$(ids_of "${MEMBERS[0]}" "${MARKER_LOCKED}")
+		got_share=$(ids_of "${MEMBERS[1]}" "${MARKER_SHARE}")
+		if [ "${got_locked}" = "${locked_file}" ] && [ "${got_share}" = "${share_file}" ]; then
+			log "indexed: ${MEMBERS[0]} finds the locked file, ${MEMBERS[1]} finds the shared file"
+			break
+		fi
+		if [ "$(date +%s)" -ge "${deadline}" ]; then
+			log "::error::within ${DEADLINE} seconds ${MEMBERS[0]} found [${got_locked}] for the locked file ${locked_file} and ${MEMBERS[1]} [${got_share}] for the shared file ${share_file}"
+			exit 1
+		fi
+		sleep 5
+	done
+
+	# (a) the mount point of the plain team folder; the ACL folder as the
+	# counter sample, because the plain file does not lie there.
+	expect_ids "(a)" "${MEMBERS[1]}" "${MARKER_PLAIN}" "/${PLAIN_FOLDER}" "${plain_file}"
+	expect_ids "(a) counter" "${MEMBERS[1]}" "${MARKER_PLAIN}" "/${ACL_FOLDER}" ""
+	# (b) SUB inside the ACL team folder, and its mount point including SUB.
+	expect_ids "(b)" "${MEMBERS[1]}" "${MARKER_ACL}" "/${ACL_FOLDER}/${SUB}" "${acl_file}"
+	expect_ids "(b) mount point" "${MEMBERS[1]}" "${MARKER_ACL}" "/${ACL_FOLDER}" "${acl_file}"
+	expect_ids "(b) outside" "${MEMBERS[1]}" "${MARKER_PLAIN}" "/${ACL_FOLDER}/${SUB}" ""
+	# (c) the locked file, never for member 2, with any of the folders above
+	# it; member 1 finds it in the same folder (the control).
+	expect_ids "(c)" "${MEMBERS[1]}" "${MARKER_LOCKED}" "/${ACL_FOLDER}/${SUB}" ""
+	expect_ids "(c) locked folder" "${MEMBERS[1]}" "${MARKER_LOCKED}" "/${ACL_FOLDER}/${SUB}/${LOCKED_DIR}" ""
+	expect_ids "(c) control" "${MEMBERS[0]}" "${MARKER_LOCKED}" "/${ACL_FOLDER}/${SUB}" "${locked_file}"
+	# (d) the received share over its mount point, and an own folder of
+	# member 2 that does not hold it.
+	expect_ids "(d)" "${MEMBERS[1]}" "${MARKER_SHARE}" "${share_target}" "${share_file}"
+	expect_ids "(d) own folder" "${MEMBERS[1]}" "${MARKER_SHARE}" "/${OWN_FOLDER}" ""
+	expect_ids "(d) outsider" "${OUTSIDER}" "${MARKER_SHARE}" "/${SHARE_FOLDER}" ""
+else
+	log "the folder filter probes did not run, because the verdicts above are not both ok"
+	folder_failed=1
+fi
+
+log "verdicts: acl=${verdict[acl]} plain=${verdict[plain]} folder=$([ "${folder_failed}" = "0" ] && echo ok || echo failed)"
+if [ "${verdict[acl]}" = "ok" ] && [ "${verdict[plain]}" = "ok" ] && [ "${folder_failed}" = "0" ]; then
 	log "team folder ACL scenario passed"
 	exit 0
 fi
