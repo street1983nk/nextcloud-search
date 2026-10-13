@@ -269,4 +269,54 @@ Findling-Ergebnisseite".
 
 ## Owner-Abnahme
 
-Offen. Wird erst in Task 2 gemeinsam mit dem Owner ausgefüllt.
+### Antworten 13.10.2026
+
+Gemeinsame Runde per Playwright an der Dev-Instanz 8090. Antworten des Owners
+wörtlich:
+
+| Frage | Antwort des Owners |
+|---|---|
+| Typeinträge "Dateiinhalte: PDF" usw. (Präfix) | "So lassen" |
+| SVG-Symbol für die Menüeinträge (unsere Einträge haben als einzige im Menü kein Symbol; gleiches SVG wie die Gruppe "Dateiinhalte" für alle sieben Einträge) | "Ja, Findling-Symbol" |
+| Ordnereintrag "Dateiinhalte in einem Ordner" | "So lassen" |
+| Verhalten (Typfilter, Ordnerfilter inkl. Unterordner, Wurzel "Dateiinhalte in /", zwei getrennte Gruppen, leerer Chip nach Abbruch) | "Abgenommen" |
+| en/fr Wortlaut inkl. normalem Leerzeichen vor dem Doppelpunkt im Französischen | "So abnehmen" |
+
+Symbol-Änderung: Bild wird dem Owner gezeigt, Vermerk folgt.
+
+### Symbol-Änderung (Commit `f4fc7efa`)
+
+Befund vor der Änderung, im Browser gemessen: Die sieben Einträge trugen schon
+`icon` mit `/custom_apps/findling/img/app.svg` (geladen, 16 px), ebenso der
+Eintrag "Dateiinhalte" des echten Providers (Kern, `fetchIcon`). Das Menü zeigt
+ein Symbol als `img` mit `filter: var(--background-invert-if-bright)`
+(`.filter-button__icon`, stable33 bis stable35), die Kernsymbole sind weiß
+(`#fff`). `app.svg` zeichnet in `currentColor`, im `img` also schwarz; hell
+invertiert der Kern es zu Weiß auf Weiß, dunkel bleibt es Schwarz auf Dunkel.
+Darum war kein Symbol zu sehen.
+
+Umsetzung: neue Datei `php/img/app-white.svg` (dieselbe Lupe wie `app.svg`,
+weiß), alle sieben Einträge nennen sie über `OC.imagePath('findling',
+'app-white')`; REUSE.toml und THIRD-PARTY.md nennen die dritte Datei. Kein PHP
+geändert, Baumhash unberührt. `app.svg` und damit der Eintrag "Dateiinhalte"
+des echten Providers sind unverändert (nicht erbeten).
+
+Messung auf 8090 (Skript-Cache per `fetch(..., {cache: 'reload'})` erneuert,
+ausgeliefertes Skript gleich Repo-Stand, `app-white.svg` HTTP 200
+`image/svg+xml`): Symbol per Canvas mit dem berechneten Filter gezeichnet,
+mittlere Helligkeit gegen den Menühintergrund (0 bis 255).
+
+| Eintrag | hell | dunkel |
+|---|---|---|
+| Kerneinträge Dateien, Tags, Teams, Kommentare, Einstellungen | 255 | 232 |
+| sieben Findling-Einträge (`app-white.svg`) | 255 | 232 |
+| "Dateiinhalte" des echten Providers (`app.svg`, unverändert) | 0 | 23 |
+
+Ungefilterte Suche `abnahme32` hell und dunkel: Gruppen "Dateien" und
+"Dateiinhalte", also genau eine Findling-Gruppe; keine Konsolenfehler.
+Bilder: `owner-7-symbol.png`, `owner-7-symbol-dunkel.png`.
+
+Offene Frage an den Owner: Der Eintrag "Dateiinhalte" (echter Provider) zeigt
+weiter kein Symbol. Ihn ebenfalls mit Symbol zu versehen hieße, `app.svg`
+selbst weiß zu machen oder eine Datei `findling.svg` anzulegen, die der Kern
+zuerst sucht; beides berührt mehr als die sieben Einträge.
