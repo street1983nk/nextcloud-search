@@ -171,7 +171,19 @@ Plans:
   3. Ausgeschlossene Dateien erscheinen in Status und Diagnose als "excluded", nie als Fehler; zu viele, zu lange oder Regex-artige Eingaben werden mit verstaendlicher Meldung abgelehnt (kein ReDoS)
   4. Admin sieht Zellgrenze, Adressraum, Groessengrenze und OCR-Seitendeckel nur lesend auf der Admin-Seite, mit Hinweis, wie sie geaendert werden (#21)
   5. Der Hardware-Hinweis ("This box has fewer cores...") ist in allen Katalogen verstaendlich umformuliert, die Katalog-Gates bleiben gruen
-**Plans**: TBD
+**Plans**: 11 plans (seriell, eine Welle je Plan)
+Plans:
+- [ ] 33-01-PLAN.md: Wortlaut-Entwurf en/de/fr (Musterliste, Meldungen je Code, Grenzblock, Änderungshinweis, Hardware-Satz), Owner-Abnahme (Checkpoint)
+- [ ] 33-02-PLAN.md: ExclusionService mit Mustern (exclusion_patterns, Codes, NFC, bitparalleler Matcher, hasRules an drei Guards), Gate D, ExclusionServiceTest
+- [ ] 33-03-PLAN.md: Container: Weg C im Abgleich (D-33-01), Statusfelder maxCells und extractAddressSpaceBytes
+- [ ] 33-04-PLAN.md: Weg A: ExclusionSweepJob beim Speichern neuer Muster, Urteilszeilen in beiden Räumwegen gelöscht (B2)
+- [ ] 33-05-PLAN.md: Admin-Seite: Liste Excluded patterns, Routen mit zwei Listen, Meldung je Code, zahlenlose Bestätigung, Diagnose-Abhilfe
+- [ ] 33-06-PLAN.md: Admin-Seite: Grenzblock nur lesend mit Änderungshinweis, B3-Satz ersetzt, Doku-Abschnitt
+- [ ] 33-07-PLAN.md: l10n-Kette (16 Kataloge, 5 Dokus), Hardware-Satz POL-03, Regelblock-Gate, Schlüsselzahl
+- [ ] 33-08-PLAN.md: Doku (admin-page.md, reconcile.md), CHANGELOG, Store-Entwurf Teil Phase 33 (Abnahme REL-05)
+- [ ] 33-09-PLAN.md: Nachweis EXCL-02 auf 8090 über Weg A und Weg C mit Positivkontrolle und Gegenprobe
+- [ ] 33-10-PLAN.md: Owner-Abnahme gemeinsam per Playwright (Checkpoint), Wortlaut nachziehen, Anforderungen abhaken
+- [ ] 33-11-PLAN.md: Security-, Bug- und Performance-Audit (Matcher-Orakel, Schreibpfad, Kehrjob), Befunde fixen
 **UI hint**: yes
 
 ### Phase 34: Umstiegsweg
@@ -220,7 +232,7 @@ Plans:
 | 30. Owner-Tor, Schema und Tschechisch | v1.5 | 9/9 | Complete | 2026-10-10 |
 | 31. Neue Formate und Nachholweg | v1.5 | 15/15 | In Progress (Verifikation offen) | - |
 | 32. Filter in der Unified Search | v1.5 | 8/8 | Executed, verification pending | - |
-| 33. Ausschlussmuster und Admin-Feinschliff | v1.5 | 0/? | Not started | - |
+| 33. Ausschlussmuster und Admin-Feinschliff | v1.5 | 0/11 | Planned | - |
 | 34. Umstiegsweg | v1.5 | 0/? | Not started | - |
 | 35. Stretch: Aehnliche Dokumente und Spikes | v1.5 | 0/? | Not started | - |
 | 36. Haertung und Store-Einreichung 1.5.0 | v1.5 | 0/? | Not started | - |
