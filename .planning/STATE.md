@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 32-07-PLAN.md
-last_updated: "2026-10-13T10:30:00.000Z"
-last_activity: 2026-10-13 -- 32-07 abgeschlossen (Owner-Abnahme, Symbol findling.svg f60ca146, Saat geräumt); nächster 32-08
+stopped_at: Completed 32-08-PLAN.md
+last_updated: "2026-10-13T12:00:00.000Z"
+last_activity: 2026-10-13 -- 32-08 abgeschlossen (Audit, M-32-01 gefixt d09e5a5a, Owner-Frage M-32-02); Verifikation Phase 32 offen
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 32
-  completed_plans: 31
+  completed_plans: 32
   percent: 14
 ---
 
@@ -26,11 +26,11 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 32 von 30-36 (Filter in der Unified Search)
-Plan: 7 von 8 erledigt (32-01 bis 32-07), nächster 32-08 (Security-, Bug- und Performance-Audit)
-Status: Phase 32 in Ausführung; 32-06 abgeschlossen (drei Erfolgskriterien und D-32-01 auf allen vier deploy-harp-Beinen belegt, A1 in team-folder-acl belegt, docs/search-filters.md, Store-Entwurf Teil Phase 32 zur Abnahme). 32-07 abgeschlossen (Owner-Abnahme 13.10.2026, Wortlaut unverändert, weiße Lupe an allen acht Einträgen). USRCH-01, USRCH-02 und USRCH-03 Complete
-Last activity: 2026-10-13 -- 32-07 abgeschlossen, nächster 32-08
+Plan: 8 von 8 erledigt (32-01 bis 32-08), Phase 32 ausgeführt, Verifikation offen
+Status: Phase 32 ausgeführt; 32-08 Audit abgeschlossen (32-AUDIT.md, status issues_found): M-32-01 gefixt (d09e5a5a), L-32-02 und L-32-06 gefixt (4c481f74), fünf LOW entschieden; M-32-02 (Dokumente gelöschter Nutzer bleiben im Index) offen als Owner-Frage. USRCH-01, USRCH-02 und USRCH-03 Complete
+Last activity: 2026-10-13 -- 32-08 abgeschlossen (Audit), Owner-Frage M-32-02, danach Verifikation Phase 32
 
-Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passed, 659f5631); Phase 32: 7/8 Pläne
+Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passed, 659f5631); Phase 32: 8/8 Pläne (Verifikation offen)
 
 ## Performance Metrics
 
@@ -66,6 +66,7 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 - v1.5: 32-05 in ca. 85 min inkl. ca. 13 min Volltestlauf und ca. 25 min CI (2 Tasks, 23 Dateien)
 - v1.5: 32-06 in ca. 150 min inkl. ca. 25 min Volltestläufe und ca. 45 min CI (3 Tasks, 6 Dateien)
 - v1.5: 32-07 Task 3 in ca. 120 min inkl. ca. 13 min Volltestlauf und CI (1 Task, 4 Dateien plus Planung)
+- v1.5: 32-08 in ca. 330 min inkl. ca. 40 min Korpusaufbau, ca. 40 min Volltestläufe und ca. 50 min CI (3 Tasks, 8 Dateien)
 
 ## Accumulated Context
 
@@ -109,6 +110,7 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 - 32-06: deploy-harp-Schritt 'Unified search filters, type and folder on the ordinary search route' ohne if: (Vertragstest test_unified_search_filter_steps.py, nutzt collect_steps des Sprachbelegs): Filterkarte types/folder string, Saat drei Texte plus 01-text-layer.pdf (Wort reference, IDs per PROPFIND), types=pdf/text, folder samt Unterordner, Typ und Ordner mit Datum (dazu until-Gegenprobe), sieben manipulierte Werte gleich ungefiltert, pdf,videos gleich pdf, types= und folder= leer HTTP 400 (D-32-01) auf stable33/34/35 und arm64 (HaRP 38339350221). team-folder-acl Abschnitt 8: (a) Mountpunkt Gruppenordner, (b) ACL-Unterordner, (c) per Nutzerregel gesperrte Datei nie (Sperre per PROPFIND 404/207 belegt), (d) empfangener Share über Mountpunkt aus shared_with_me; A1 belegt, kein Fix in SearchService (Integration 38339350216). docs/search-filters.md 'In the unified search', Store-Entwurf Teil Phase 32 (Owner-Abnahme offen, REL-05), CHANGELOG. Commits b44006dd, 64350f8c, 2d6b0214; python.yml per Dispatch 38341903380 grün. USRCH-03 Complete.
 - 32-07 Befund A gefixt (Plan-Abweichung vor dem Checkpoint, Owner-Entscheid 13.10.: Option A1): versteckter Provider Search\FilterProvider (ID findling-filter, getOrder null, Filter und Name vom echten Provider; ohne types und folder sofort leere Gruppe ohne Backend-Aufruf, sonst Provider::search). unified-search.js: searchFrom findling-filter an allen sieben Einträgen, Callback setzt this.filters {since, until, types, folder} nur wenn this ein Objekt ist (Kern-Interna, docs/search-filters.md), Wurzel sendet folder=/, Abbruch zeigt keine Treffer. Echter Provider findling unverändert. FilterProviderTest 13 Fälle, Vertragstest und deploy-harp-Probe (findling-filter versteckt, leer ohne Chip, types=pdf, folder, folder=/) erweitert; Gegenproben rot (PHPUnit auf Wegwerf-Zweig 38349488409, JS am echten Skript). PHP_FILES_TODAY 97. Commit 4d616071; CI PHP 38347181812 (661 Tests), Python 38347181819, Integration 38347181828 (team-folder-acl grün), HaRP 38347181759 (alle vier Beine) grün. Browser-Nachprobe 8090: eine Findling-Gruppe ungefiltert (Dashboard und Files), Chip PDF, Ordner /Abnahme32, PDF plus Heute, Abbruch, Wurzel, Markup-Ordner grün; Protokoll 32-07-ABNAHME.md Abschnitt 'Befund A Fix'.
 - 32-07 abgeschlossen: Owner-Abnahme 13.10.2026, Wortlaut de/en/fr unverändert, Verhalten abgenommen. Symbol: sieben Einträge app-white.svg (f4fc7efa), Haupteintrag "Dateiinhalte" über php/img/findling.svg (f60ca146), weil SearchComposer::fetchIcon <provider id>.svg vor app.svg fragt; App-Navigation (info.xml app.svg) unverändert. Nebenwirkung auf Owner-Wort angenommen: Theming-Tab- und Homescreen-Symbol der Findling-Seiten werden weiße Lupe statt leerem Quadrat, auf bestehenden Instanzen erst nach neuem Theming-Cachebuster. Saat /Abnahme32 und /Woanders32 per WebDAV gelöscht, erst Cron (SubtreeExpandJob), dann Papierkorb; Containerzeilen tombstoned, 0 Dokumente im Index. USRCH-01 und USRCH-02 Complete.
+- 32-08 Audit (32-AUDIT.md): Korpus aus 59 manipulierten Werten gegen 8090 als alice/bob mit Freigabe, beide Provider gleich, nie ein Fremdtreffer, Logs sauber mit Positivkontrolle. M-32-01: '.'-Segment und NFD lösten zu einem Ordnerknoten mit nicht kanonischem Pfad auf, leere Gruppe; Provider::folderOf() komponiert NFC und liest ein '.'-Segment als keinen Ordner (d09e5a5a). Waisen aus 32-07: Abgleich 01:08 lief vor dem Löschen; Positivkontrolle missing=1011, alle entfernt. M-32-02 Owner-Frage: Storages, die die Mountliste verlassen (gelöschter Nutzer), läuft der Abgleich nie, ihre Dokumente bleiben (live belegt mit carol, Kontrolle im selben Lauf missing=1). Performance P1 bis P5 unabhängig gemessen, ungefilterter Body byte-gleich zur Basis. CI 4c481f74 alle acht grün, PHPUnit 666 Tests.
 
 ### Offene Faeden (kein aktiver Auftrag)
 
@@ -131,8 +133,10 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 - Reddit-Post-Entwurf liegt verifiziert in Outlook ("Reddit-Entwurf: Findling 1.4.0 + MCP
   Connector"); Konto-Appeal pruefen, Owner postet selbst.
 
-- Dev-Instanz (Port 8090) lief am 06.10. mit Abnahme-Testdateien und Backend-Hostprozess;
-  bei Gelegenheit aufraeumen. Seit 32-03: Host-Backend 1.4.2 läuft, Cron der Instanz läuft nicht von selbst; die 1011 Messdateien sind gelöscht und der Papierkorb geleert, ihre Einträge stehen noch im Container-Index (Recheck verwirft sie, Dialog liefert 0). Für 32-08: der Abgleich vom 13.10. 01:08 (Nachholzyklus) meldete missing=0 trotz 1011 verwaister Zeilen ohne oc_filecache-Eintrag (32-07-ABNAHME.md, Aufräumen). Saat aus 32-07 geräumt.
+- Dev-Instanz (Port 8090): Host-Backend 1.4.2 läuft, Cron der Instanz läuft nicht von selbst (vor dem Leeren eines Papierkorbs cron.php von Hand). Seit 32-08 sauber: die 1011 Waisen aus 32-03 hat der Abgleich entfernt, Audit-Saat (alice, bob, Messkorpus) abgeräumt, Nutzer gelöscht. Bewusst stehen geblieben: ein Dokument (Datei 2970) des gelöschten Nutzers carol als Beleg für M-32-02.
+
+- Owner-Frage M-32-02 (32-AUDIT.md): Dokumente von Storages, die die Mountliste verlassen (gelöschter Nutzer, abgeschalteter Mount), bleiben für immer im Index und belegen Kandidatenplätze (Ordnermodus: Rang 1200). Fix nur in backend/src (D-30-08/D-32-06 dieser Phase verboten); eigener Plan in Phase 36 oder Einschub, Karenz für zurückkehrende Mounts?
+- Phase 36 (aus 32-AUDIT, accept): Groß- und Kleinschreibung auf externen Speichern ohne Unterscheidung (L-32-04) in den Launch-Korpus; Symbol-Nebenwirkung im Releasetext (L-32-07, REL-05); Array-Form der Filter endet im Kern mit 500 (L-32-01, Upstream-Meldung nur auf Owner-Wort).
 
 ### Blockers/Concerns
 
@@ -140,6 +144,6 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 
 ## Session Continuity
 
-Last session: 2026-10-13T10:30:00.000Z
-Stopped at: Completed 32-07-PLAN.md, nächster 32-08
+Last session: 2026-10-13T12:00:00.000Z
+Stopped at: Completed 32-08-PLAN.md, Owner-Frage M-32-02, danach Verifikation Phase 32
 Resume file: None
