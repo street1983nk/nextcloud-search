@@ -205,6 +205,7 @@ Plans:
   2. Upgrade-Strecke 1.4.2 -> 1.5.0 laeuft in CI Ende zu Ende gruen (Nachholweg, Ausschluesse, ohne Umbau bei Werkssprachen) und eine Fremdinstallation auf frischer Nextcloud funktioniert
   3. Owner hat Store-Text und Produkt in einer gemeinsamen Playwright-Runde mit echten Testdateien abgenommen
   4. Beide Apps 1.5.0 sind eingereicht (2x HTTP 201), der Beleg steht in docs/store-listing.md
+  5. M-32-02 behoben (Owner 13.10.2026): Dokumente geloeschter Nutzer verlassen den Index beim naechsten Abgleich; Dokumente verschwundener externer Speicher nach 30 Tagen Karenz; Beleg auf einer Instanz mit Positivkontrolle
 **Plans**: TBD
 
 ## Progress
