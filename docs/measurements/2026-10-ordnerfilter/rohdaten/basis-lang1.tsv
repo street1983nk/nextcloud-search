@@ -1,0 +1,7 @@
+variant	query	limit	hits	isPaginated	median_s	max_s	n
+basis-lang1	ohne	5	5	true	0.061013	0.228080	50
+basis-lang1	innen	5	5	true	0.057295	0.329582	50
+basis-lang1	einzeln	5	5	true	0.057413	0.328082	50
+basis-lang1	ohne	10	10	true	0.062671	0.209909	50
+basis-lang1	innen	10	10	true	0.059489	0.226843	50
+basis-lang1	einzeln	10	10	true	0.059020	0.324608	50

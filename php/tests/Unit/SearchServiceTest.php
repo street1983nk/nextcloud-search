@@ -1512,12 +1512,23 @@ final class SearchServiceTest extends TestCase {
 	public function testTheFolderModeFetchesMoreRoundsOfTheFolderLimit(): void {
 		// A2 as a constant: up to FOLDER_MAX_ROUNDS rounds of FOLDER_FETCH_LIMIT
 		// candidates while every candidate falls outside the folder and costs no
-		// recheck. The caps of the dialog say three rounds.
+		// recheck. The caps of the dialog say three rounds. Both values are
+		// measured (plan 32-03, docs/measurements/2026-10-ordnerfilter/) and read
+		// here, so the expected calls follow the constants.
 		$fetchLimit = $this->constantInt('FOLDER_FETCH_LIMIT');
 		$rounds = $this->constantInt('FOLDER_MAX_ROUNDS');
 		self::assertSame(100, $fetchLimit);
-		self::assertSame(6, $rounds);
 		self::assertSame($this->constantInt('MAX_LIMIT', ExAppService::class), $fetchLimit, 'ExAppService would clamp a larger limit');
+		self::assertGreaterThan(3, $rounds, 'the folder mode has to reach further than the three rounds of the dialog caps');
+		self::assertLessThanOrEqual(
+			$this->constantInt('MAX_CONTAINER_OFFSET'),
+			($rounds - 1) * $fetchLimit,
+			'every round of the folder mode has to start at an offset the container accepts',
+		);
+		$expected = [];
+		for ($round = 0; $round < $rounds; $round++) {
+			$expected[] = [$fetchLimit, $round * $fetchLimit];
+		}
 
 		$scope = $this->folderNode('/testuser/files/Projekte', self::FOLDER_ID, [], $resolvedInScope);
 		$userFolder = $this->folderNode('/testuser/files', 1);
@@ -1536,7 +1547,7 @@ final class SearchServiceTest extends TestCase {
 
 		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(maxRounds: 3), $this->filtersWithFolder());
 
-		self::assertSame([[100, 0], [100, 100], [100, 200], [100, 300], [100, 400], [100, 500]], $asked);
+		self::assertSame($expected, $asked);
 		self::assertSame([], $resolvedInScope);
 		self::assertTrue($outcome->hasMore);
 	}

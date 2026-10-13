@@ -1,0 +1,7 @@
+variant	query	limit	hits	isPaginated	median_s	max_s	n
+C	ohne	5	5	true	0.071103	0.216869	20
+C	innen	5	0	false	0.112463	0.181362	20
+C	einzeln	5	0	false	0.111122	0.165437	20
+C	ohne	10	10	true	0.059581	0.268009	20
+C	innen	10	0	false	0.124086	0.182093	20
+C	einzeln	10	0	false	0.109856	0.286085	20

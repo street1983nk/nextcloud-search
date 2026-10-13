@@ -853,8 +853,14 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # SearchFiltersTest.php, ProviderTest.php, ExAppServiceTest.php and
 # SearchServiceTest.php changed with them. No file came and none went, so
 # PHP_FILES_TODAY stays at 93.
+# Moved on 2026-10-13 by Plan 32-03 (USRCH-02, assumption A2): the folder
+# budget measured on the dev instance, docs/measurements/2026-10-ordnerfilter/.
+# Service/SearchService.php sets FOLDER_MAX_ROUNDS from 6 to 12 and names the
+# report at both constants; SearchServiceTest.php reads both constants instead
+# of the starting values. No file came and none went, so PHP_FILES_TODAY stays
+# at 93.
 PHP_FILES_TODAY = 93
-PHP_TREE_HASH_TODAY = "3b906d4a9ead107332df127a5c16330334071bed876de92af0231d582ab34a29"
+PHP_TREE_HASH_TODAY = "ad0e7eec291d577b0016cef93ec0d68e326d158c7ae9df155d41801495692068"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

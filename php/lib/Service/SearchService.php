@@ -113,18 +113,26 @@ class SearchService {
 	 * that is ExAppService::MAX_LIMIT: a larger number would be clamped there
 	 * without a word.
 	 *
-	 * Starting value of the research (assumption A2), measured in plan 32-03.
+	 * Measured in plan 32-03 (assumption A2), see
+	 * docs/measurements/2026-10-ordnerfilter/README.md: twelve rounds of 100
+	 * found the hits of a folder ranked behind 1000 better hits outside it in
+	 * 0.134 s median.
 	 */
 	private const FOLDER_FETCH_LIMIT = 100;
 
 	/**
 	 * The rounds of a run in the folder mode, if the caps of the caller allow
-	 * fewer. Six times FOLDER_FETCH_LIMIT is the reach of one dialog search into
-	 * the ranking of the whole index; the wall clock and MAX_CONTAINER_OFFSET
-	 * stay the limits that end it earlier. Starting value of the research
-	 * (assumption A2), measured in plan 32-03.
+	 * fewer. Twelve times FOLDER_FETCH_LIMIT is the reach of one dialog search
+	 * into the ranking of the whole index, rank 1200; the last round starts at
+	 * offset 1100, below MAX_CONTAINER_OFFSET. The wall clock and
+	 * MAX_CONTAINER_OFFSET stay the limits that end a run earlier.
+	 *
+	 * Measured in plan 32-03, see docs/measurements/2026-10-ordnerfilter/README.md:
+	 * the starting value of the research, six rounds, reached rank 600 and left
+	 * a folder whose hits ranked from 1001 on with an empty group; twelve
+	 * rounds found them in 0.134 s median.
 	 */
-	private const FOLDER_MAX_ROUNDS = 6;
+	private const FOLDER_MAX_ROUNDS = 12;
 
 	/**
 	 * The monotonic clock of a run, in nanoseconds, as a callable.
