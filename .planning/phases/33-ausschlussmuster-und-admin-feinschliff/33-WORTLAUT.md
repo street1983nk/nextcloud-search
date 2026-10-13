@@ -1,7 +1,7 @@
 # Phase 33: Wortlaut-Entwurf (en, de, fr)
 
 Stand: 13.10.2026, Entwurf aus Plan 33-01 Task 1 auf Basis von Commit c9b76321.
-Status: **Entwurf, wartet auf Owner-Abnahme** (Task 2, blockierender Checkpoint).
+Status: **vom Owner abgenommen am 13.10.2026**, unverändert in en, de und fr (siehe "Owner-Abnahme" am Ende).
 
 Grundlage: 33-CONTEXT.md (D-30-01, D-33-01 bis D-33-03), 33-01-PLAN.md (PE-1 bis PE-10),
 33-RESEARCH.md (Muster-Semantik, Grenzwerte für #21, Hardware-Hinweis).
@@ -160,7 +160,7 @@ Weitere Sätze mit "box" im Katalog (Frage G5): Der Plan nennt drei, im Katalog 
 | admin.php:1021, admin.js:1484 | fp32 is set, but this box has too little memory for it. The search uses int8. | fp32 is set, but Findling sees too little memory for it. The search uses int8. | fp32 ist gesetzt, aber Findling sieht zu wenig Arbeitsspeicher dafür. Die Suche nutzt int8. | fp32 est activé, mais Findling voit trop peu de mémoire pour lui. La recherche utilise int8. |
 | admin.php:1224 | Choose a profile and check it on this box. Until then Economy stays in force. | Choose a profile and check it on this server. Until then Economy stays in force. | Ein Profil wählen und auf diesem Server prüfen. Bis dahin bleibt Sparsam wirksam. | Choisir un profil et le vérifier sur ce serveur. D'ici là, Économe reste en vigueur. |
 
-Nur gültig, wenn G5 mit (b) oder (c) beantwortet wird; bei (a) bleiben alle sechs unverändert.
+G5 ist mit (c) beantwortet: alle sechs Sätze werden in 33-07 ersetzt.
 
 ## (G) Fragen an den Owner
 
@@ -199,4 +199,17 @@ Nur gültig, wenn G5 mit (b) oder (c) beantwortet wird; bei (a) bleiben alle sec
 
 ## Owner-Abnahme
 
-Offen. Wird in Task 2 wörtlich mit Datum eingetragen.
+Owner-Antwort vom 13.10.2026, wörtlich (übermittelt über den Orchestrator von `/gsd:execute-phase`):
+
+> - G1: (a) 32 Muster zu je 60 Zeichen.
+> - G2: (a) Groß- und Kleinschreibung zählt, `?` passt nie auf `/` (wie PE-1).
+> - G3: (a) `no_wildcard` wird abgelehnt.
+> - G4: (a) Die Urteilszeilen werden in beiden Räumwegen gelöscht, auch bei den Präfixen.
+> - G5: (c) Alle sechs weiteren "box"-Sätze werden ersetzt, zusätzlich zu `hardware_short`. Abweichung von PE-6, Owner-Wort.
+> - Wortlaut: "abgenommen", unverändert in de, en und fr.
+
+Folgen für 33-02 bis 33-08:
+
+- G1 bis G4 bestätigen D-33-03, PE-1, PE-2 und PE-4 unverändert; keine Folge für die Pläne.
+- G5 weicht von PE-6 ab: 33-07 ersetzt sieben Sätze statt einem, nämlich `hardware_short` und die sechs Sätze der Tabelle unter F, mit dem Wortlaut der Spalten "Vorschlag neu", de und fr. Schlüsselzahl gleich (sechs zusätzliche Schlüsselwechsel). Vermerk steht in 33-07-PLAN.md unter `<context>`.
+- Alle Tabellen dieser Datei gelten jetzt als abgenommener Wortlaut; die Folgepläne übernehmen ihn zeichengleich. Schlüsselbilanz: 28 neue Schlüssel, Schlüsselzahl 306 auf 334.
