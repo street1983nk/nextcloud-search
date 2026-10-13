@@ -71,3 +71,11 @@ testdata/fonts/** -text
 # carriage return pairs would stop the generator on a machine where nothing is
 # wrong.
 backend/tests/fixtures/lucene_cz_stopwords_10_5_2.txt -text
+
+# The ExclusionService of v1.4.2, vendored byte for byte as the old side of the
+# difference test of plan 33-02. backend/tests/test_exclusion_driver.py holds
+# its bytes against the git blob id of the tag, so a checkout that turned its
+# newlines into carriage return pairs would fail the provenance test on a
+# machine where nothing is wrong, and the old side would no longer be the file
+# 1.4.2 shipped.
+backend/tests/fixtures/exclusion_v1_4_2/** -text

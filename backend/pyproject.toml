@@ -156,6 +156,9 @@ paths = ["src", "tests"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+# A stopwatch test, skipped unless FINDLING_TIMING=1: a shared CI runner is no
+# place to judge milliseconds (plan 33-02, the timing series of the matcher).
+markers = ["timing: measures run time, runs only with FINDLING_TIMING=1"]
 # A synchronous enabled_handler still works with nc-py-api 0.30.x but only emits a
 # DeprecationWarning, and it breaks hard in 0.31.0. Turning that warning into an
 # error is the only way the mistake surfaces before the release that removes it.
