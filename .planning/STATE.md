@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 33-02-PLAN.md
-last_updated: "2026-10-14T00:30:00.000Z"
-last_activity: 2026-10-14 -- 33-02 abgeschlossen (Ausschlussmuster im Kern, Differenztest gegen v1.4.2, Laufzeitreihe linear)
+stopped_at: Completed 33-03-PLAN.md
+last_updated: "2026-10-14T12:00:00.000Z"
+last_activity: 2026-10-14 -- 33-03 abgeschlossen (Weg C im Abgleich, Statusfelder maxCells und extractAddressSpaceBytes)
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 43
-  completed_plans: 34
+  completed_plans: 35
   percent: 14
 ---
 
@@ -26,11 +26,11 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 33 von 30-36 (Ausschlussmuster und Admin-Feinschliff)
-Plan: 2 von 11 erledigt (33-01, 33-02), nächster Plan 33-03
-Status: Phase 33 läuft (33-01 Wortlaut abgenommen, 33-02 Muster im ExclusionService, CI grün). Phase 32 ausgeführt; 32-08 Audit abgeschlossen (32-AUDIT.md, status issues_found): M-32-01 gefixt (d09e5a5a), L-32-02 und L-32-06 gefixt (4c481f74), fünf LOW entschieden; M-32-02 (Dokumente gelöschter Nutzer bleiben im Index) offen als Owner-Frage. USRCH-01, USRCH-02 und USRCH-03 Complete
-Last activity: 2026-10-14 -- 33-02 abgeschlossen: exclusion_patterns, bitparalleler Matcher, hasRules an drei Guards, Differenztest gegen v1.4.2 (75f5f29e, 3c1d5a97); Phase 32: Verifikation und Owner-Frage M-32-02 weiter offen
+Plan: 3 von 11 erledigt (33-01, 33-02, 33-03), nächster Plan 33-04
+Status: Phase 33 läuft (33-01 Wortlaut abgenommen, 33-02 Muster im ExclusionService, 33-03 Weg C im Abgleich und zwei Statusgrenzen, CI grün). Phase 32 ausgeführt; 32-08 Audit abgeschlossen (32-AUDIT.md, status issues_found): M-32-01 gefixt (d09e5a5a), L-32-02 und L-32-06 gefixt (4c481f74), fünf LOW entschieden; M-32-02 (Dokumente gelöschter Nutzer bleiben im Index) offen als Owner-Frage. USRCH-01, USRCH-02 und USRCH-03 Complete
+Last activity: 2026-10-14 -- 33-03 abgeschlossen: bekannte Datei unter Regel wird im Abgleich stale Arbeit (D-33-01), Statusfelder maxCells und extractAddressSpaceBytes (eff4a9bf); Phase 32: Verifikation und Owner-Frage M-32-02 weiter offen
 
-Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passed, 659f5631); Phase 32: 8/8 Pläne (Verifikation offen); Phase 33: 2/11 Pläne
+Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passed, 659f5631); Phase 32: 8/8 Pläne (Verifikation offen); Phase 33: 3/11 Pläne
 
 ## Performance Metrics
 
@@ -69,6 +69,7 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 - v1.5: 32-08 in ca. 330 min inkl. ca. 40 min Korpusaufbau, ca. 40 min Volltestläufe und ca. 50 min CI (3 Tasks, 8 Dateien)
 - v1.5: 33-01 in ca. 20 min inkl. Checkpoint und zwei CI-Runden (2 Tasks, 2 Dateien)
 - v1.5: 33-02 in ca. 150 min inkl. zweier Volltestläufe (je ca. 14 min) und zweier CI-Runden (3 Tasks, 17 Dateien)
+- v1.5: 33-03 in ca. 110 min inkl. ca. 14 min Volltestlauf und ca. 25 min CI (2 Tasks, 5 Dateien)
 
 ## Accumulated Context
 
@@ -115,6 +116,7 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 - 32-08 Audit (32-AUDIT.md): Korpus aus 59 manipulierten Werten gegen 8090 als alice/bob mit Freigabe, beide Provider gleich, nie ein Fremdtreffer, Logs sauber mit Positivkontrolle. M-32-01: '.'-Segment und NFD lösten zu einem Ordnerknoten mit nicht kanonischem Pfad auf, leere Gruppe; Provider::folderOf() komponiert NFC und liest ein '.'-Segment als keinen Ordner (d09e5a5a). Waisen aus 32-07: Abgleich 01:08 lief vor dem Löschen; Positivkontrolle missing=1011, alle entfernt. M-32-02 Owner-Frage: Storages, die die Mountliste verlassen (gelöschter Nutzer), läuft der Abgleich nie, ihre Dokumente bleiben (live belegt mit carol, Kontrolle im selben Lauf missing=1). Performance P1 bis P5 unabhängig gemessen, ungefilterter Body byte-gleich zur Basis. CI 4c481f74 alle acht grün, PHPUnit 666 Tests.
 - 33-01: Wortlaut der Phase 33 (33-WORTLAUT.md) vom Owner am 13.10.2026 unverändert abgenommen, en/de/fr: Musterliste, 13 Fehlermeldungen über 11 Codes, zahlenlose Musterbestätigung, Diagnose-Abhilfe, Grenzblock "Limits per file" mit Änderungsweg über occ app_api:app:unregister, B3-Ersatz, hardware_short; 28 neue Schlüssel, Schlüsselzahl 306 auf 334. G1 bis G4 (a): 32 Muster zu je 60 Zeichen, ? nie über /, Groß/Klein zählt, no_wildcard abgelehnt, Urteilszeilen in beiden Räumwegen gelöscht. G5 (c), Abweichung von PE-6: 33-07 ersetzt hardware_short und alle sechs weiteren box-Sätze (Vermerk in 33-07-PLAN.md). Commits 33bf0e5d, 45c00a2f; CI Security scans und Scorecard grün.
 - 33-02: Muster im appconfig-Schlüssel exclusion_patterns (SettingsService::KEY_EXCLUSION_PATTERNS), defensiv gelesen, höchstens 32 zu 60 Zeichen, elf geschlossene Codes, NFC beim Speichern; bitparalleler Matcher matchesAPattern ohne fnmatch/preg/explode (Gate D methodengenau); isExcluded prüft Präfixe von 1.4.2 unverändert, dann Muster; hasRules() an Listener, describe() und Reconcile-Slice. Differenztest gegen die byte-gleiche v1.4.2-Fixture (backend/tests/fixtures/exclusion_v1_4_2, Blob 805c6339) über den wiederverwendbaren Treiber backend/tests/drivers/exclusion_driver.php: keine Abweichung, Positivkontrolle *.key genau ein Unterschied. Laufzeitreihe 250 bis 4000 Zeichen: Quotient t(4000)/t(1000) 4,00 gutartig und 3,94 feindlich, feindlich 6,10 ms bei 4000. PHPUnit 666 auf 743. Baumhash 2fb90d37, PHP_FILES_TODAY 99. CI 75f5f29e acht grün, 3c1d5a97 sieben grün.
+- 33-03: Weg C (D-33-01): _compare macht eine lebende Zeile (row.file_id in known, auch etag None; known_etags liefert keine Grabsteine) mit Marke skipped(excluded) zu stale Arbeit, vor dem etag-Vergleich; describe() macht daraus den Löschauftrag, nach dem Grabstein bleibt die Datei liegen. Band und Ruhe-Tor unverändert (Test mit 150 Dateien). StatusResponse trägt maxCells und extractAddressSpaceBytes in beiden Antwortformen. Paket-Baumhash 567467b7, 79 Dateien. CI eff4a9bf sieben grün.
 
 ### Offene Faeden (kein aktiver Auftrag)
 
@@ -149,5 +151,5 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 ## Session Continuity
 
 Last session: 2026-10-14T00:30:00.000Z
-Stopped at: Completed 33-02-PLAN.md, weiter mit 33-03
+Stopped at: Completed 33-03-PLAN.md, weiter mit 33-04
 Resume file: None
