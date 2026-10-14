@@ -1092,7 +1092,7 @@ $fp32Bytes = $whole($_['fp32DownloadBytes'] ?? 0);
 $slotCaps = ['standard' => 4, 'performance' => 16];
 $profileDescriptions = [
 	'economy' => $l->t('One OCR slot, as before.'),
-	'standard' => $l->t('At most half of this box, up to %s OCR slots.', [$count($slotCaps['standard'])]),
+	'standard' => $l->t('At most half of the hardware Findling sees, up to %s OCR slots.', [$count($slotCaps['standard'])]),
 	'performance' => $l->t('Everything but one core, up to %s OCR slots.', [$count($slotCaps['performance'])]),
 ];
 
@@ -1129,7 +1129,7 @@ $profileShrunk = $guardCauseName === '' && $profileChosen !== '' && $profileEffe
 // Z13, one line for the precision verdict of the model.
 $precisionSentences = [
 	'fp32_unavailable' => $l->t('The fp32 model is not available. The search uses int8.'),
-	'fp32_on_a_tight_box' => $l->t('fp32 is set, but this box has too little memory for it. The search uses int8.'),
+	'fp32_on_a_tight_box' => $l->t('fp32 is set, but Findling sees too little memory for it. The search uses int8.'),
 	'fp32_not_in_economy' => $l->t('fp32 is only available in Standard and Performance. The search uses int8.'),
 	'fp32_active_in_economy' => $l->t('fp32 stays active under Economy. To go back to int8, choose Standard or Performance and clear the tick.'),
 	'downloading' => $l->t('The fp32 model is being downloaded.'),
@@ -1180,7 +1180,7 @@ $probeCauseNames = [
 	'digest_mismatch' => $l->t('The model file does not match its checksum and was deleted.'),
 	'disk_short' => $l->t('Not enough disk space for the fp32 model.'),
 	'memory_unknown' => $l->t('The available memory could not be read.'),
-	'hardware_short' => $l->t('This box has fewer cores or less memory than the profile needs: Standard needs 3 cores and 6 GB, Performance 6 cores and 12 GB.'),
+	'hardware_short' => $l->t('Findling sees fewer CPU cores or less memory than this profile requires. Standard requires at least 3 cores and 6 GB of memory, Performance at least 6 cores and 12 GB. If the backend container has a memory or CPU limit, that limit counts.'),
 	'interrupted' => $l->t('The check was interrupted by a restart of the backend.'),
 	'pause_timeout' => $l->t('The running indexing batch did not end within %s.', [$checkNumber('seconds', $span)]),
 	'probe_failed' => $l->t('The check stopped with an error.'),
@@ -1249,14 +1249,14 @@ foreach (is_array($_['profileEnv'] ?? null) ? $_['profileEnv'] : [] as $envEntry
 ?>
 <div id="findling-profile" class="section">
 	<h2><?php p($l->t('Performance profile')); ?></h2>
-	<p class="settings-hint"><?php p($l->t('How much of this box Findling may use. Without a change Findling stays on Economy.')); ?></p>
+	<p class="settings-hint"><?php p($l->t('How much of the server\'s hardware Findling may use. Without a change Findling stays on Economy.')); ?></p>
 
 	<div class="findling-profile__facts">
 		<p id="findling-profile-hardware"<?php if (!$hardwareKnown) { ?> hidden<?php } ?>><?php p($l->t('Detected: cores %1$s, memory %2$s', [$count($hardwareCores ?? 0), $size($hardwareMemory ?? 0)])); ?></p>
 		<p id="findling-profile-hardware-unknown"<?php if ($hardwareKnown) { ?> hidden<?php } ?>><?php p($l->t('This backend does not report its hardware yet.')); ?></p>
-		<p id="findling-profile-suggested"<?php if ($profileSuggested === '') { ?> hidden<?php } ?>><?php p($l->t('Suggested for this box: %s', [$profileNames[$profileSuggested] ?? ''])); ?></p>
+		<p id="findling-profile-suggested"<?php if ($profileSuggested === '') { ?> hidden<?php } ?>><?php p($l->t('Suggested for this hardware: %s', [$profileNames[$profileSuggested] ?? ''])); ?></p>
 		<p id="findling-profile-in-force"<?php if ($profileEffective === '') { ?> hidden<?php } ?>><?php p($l->t('In force: %s', [$profileNames[$profileEffective] ?? ''])); ?></p>
-		<p class="settings-hint" id="findling-profile-shrunk"<?php if (!$profileShrunk) { ?> hidden<?php } ?>><?php p($l->t('Chosen %1$s, in force %2$s: this box has less hardware than the chosen profile needs.', [$profileNames[$profileChosen] ?? '', $profileNames[$profileEffective] ?? ''])); ?></p>
+		<p class="settings-hint" id="findling-profile-shrunk"<?php if (!$profileShrunk) { ?> hidden<?php } ?>><?php p($l->t('Chosen %1$s, in force %2$s: Findling sees less hardware than the chosen profile requires.', [$profileNames[$profileChosen] ?? '', $profileNames[$profileEffective] ?? ''])); ?></p>
 		<p class="findling-banner findling-banner--warning" id="findling-profile-guard"<?php if (!$profileGuardShown) { ?> hidden<?php } ?>>
 			<svg class="findling-banner__icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($alertIcon); ?>"/></svg>
 			<span class="findling-banner__text" id="findling-profile-guard-text"><?php p($profileGuardLine); ?></span>
@@ -1332,7 +1332,7 @@ foreach (is_array($_['profileEnv'] ?? null) ? $_['profileEnv'] : [] as $envEntry
 	<div class="findling-card" id="findling-profile-verdict" tabindex="-1"<?php if ($probeRunning) { ?> hidden<?php } ?>>
 		<div id="findling-profile-verdict-empty"<?php if ($checkShown) { ?> hidden<?php } ?>>
 			<h3 class="findling-subheading"><?php p($l->t('No check yet.')); ?></h3>
-			<p class="settings-hint"><?php p($l->t('Choose a profile and check it on this box. Until then Economy stays in force.')); ?></p>
+			<p class="settings-hint"><?php p($l->t('Choose a profile and check it on this server. Until then Economy stays in force.')); ?></p>
 		</div>
 		<p class="findling-chip findling-chip--<?php p($checkVerdict !== '' ? $checkVerdict : 'fits'); ?>" id="findling-profile-verdict-chip"<?php if (!$checkShown) { ?> hidden<?php } ?>>
 			<?php foreach ($verdictIcons as $verdictCode => $verdictIcon) { ?>

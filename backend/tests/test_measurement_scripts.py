@@ -928,8 +928,14 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # the size field points at that block; AdminViewServiceTest.php carries the
 # cases of the two counters and of the view. No file came and none went, so
 # PHP_FILES_TODAY stays at 103.
+# Moved on 2026-10-14 by Plan 33-07 (POL-03, the owner's answer G5 (c)): the
+# hardware hint. templates/admin.php words hardware_short and the six other
+# sentences of the profile block that said "box" anew, each under a key of its
+# own; the sixteen catalogues under php/l10n moved with it but are not in this
+# tree, because the recipe globs **/*.php. No file came and none went, so
+# PHP_FILES_TODAY stays at 103.
 PHP_FILES_TODAY = 103
-PHP_TREE_HASH_TODAY = "2dbfe17d033d41dc4b7cabd818cde4e25691c8c9f444fc1c8e8073e535518f39"
+PHP_TREE_HASH_TODAY = "1761f54cdf4b5fe5faf5500b7a01565f82f3fd63e8874ca8260fc913ffce03f9"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

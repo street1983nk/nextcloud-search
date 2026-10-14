@@ -1706,7 +1706,7 @@
       digest_mismatch: t('findling', 'The model file does not match its checksum and was deleted.'),
       disk_short: t('findling', 'Not enough disk space for the fp32 model.'),
       memory_unknown: t('findling', 'The available memory could not be read.'),
-      hardware_short: t('findling', 'This box has fewer cores or less memory than the profile needs: Standard needs 3 cores and 6 GB, Performance 6 cores and 12 GB.'),
+      hardware_short: t('findling', 'Findling sees fewer CPU cores or less memory than this profile requires. Standard requires at least 3 cores and 6 GB of memory, Performance at least 6 cores and 12 GB. If the backend container has a memory or CPU limit, that limit counts.'),
       interrupted: t('findling', 'The check was interrupted by a restart of the backend.'),
       pause_timeout: t('findling', 'The running indexing batch did not end within %s.'),
       probe_failed: t('findling', 'The check stopped with an error.')
@@ -1741,7 +1741,7 @@
   function precisionSentences () {
     return {
       fp32_unavailable: t('findling', 'The fp32 model is not available. The search uses int8.'),
-      fp32_on_a_tight_box: t('findling', 'fp32 is set, but this box has too little memory for it. The search uses int8.'),
+      fp32_on_a_tight_box: t('findling', 'fp32 is set, but Findling sees too little memory for it. The search uses int8.'),
       fp32_not_in_economy: t('findling', 'fp32 is only available in Standard and Performance. The search uses int8.'),
       fp32_active_in_economy: t('findling', 'fp32 stays active under Economy. To go back to int8, choose Standard or Performance and clear the tick.'),
       downloading: t('findling', 'The fp32 model is being downloaded.')
@@ -2281,7 +2281,7 @@
     shown('findling-profile-hardware-unknown', !known)
 
     if (profile.suggested !== '') {
-      text('findling-profile-suggested', fill(t('findling', 'Suggested for this box: %s'), [names[profile.suggested]]))
+      text('findling-profile-suggested', fill(t('findling', 'Suggested for this hardware: %s'), [names[profile.suggested]]))
     }
     shown('findling-profile-suggested', profile.suggested !== '')
     if (profile.effective !== '') {
@@ -2304,7 +2304,7 @@
     const shrunk = guardCause === '' && chosen !== '' && profile.effective !== '' && chosen !== profile.effective
     if (shrunk) {
       text('findling-profile-shrunk', fill(
-        t('findling', 'Chosen %1$s, in force %2$s: this box has less hardware than the chosen profile needs.'),
+        t('findling', 'Chosen %1$s, in force %2$s: Findling sees less hardware than the chosen profile requires.'),
         [names[chosen], names[profile.effective]]))
     }
     shown('findling-profile-shrunk', shrunk)

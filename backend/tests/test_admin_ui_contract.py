@@ -2985,14 +2985,62 @@ def test_the_hardware_short_sentence_carries_the_thresholds_of_the_config() -> N
 
     The figures are read from findling.config, so a change of a threshold fails
     here instead of leaving the sentence of the admin page quietly out of date.
+    POL-03, plan 33-07: the wording says what Findling sees, which profile it
+    means and that a limit of the backend container counts, instead of "this
+    box"; the owner accepted it in 33-WORTLAUT.md on 13.10.2026.
     """
     sentence = (
-        "This box has fewer cores or less memory than the profile needs: "
-        f"Standard needs {SUGGEST_STANDARD_CORES} cores and {SUGGEST_STANDARD_MEMORY_BYTES // 10**9} GB, "
-        f"Performance {SUGGEST_PERFORMANCE_CORES} cores and {SUGGEST_PERFORMANCE_MEMORY_BYTES // 10**9} GB."
+        "Findling sees fewer CPU cores or less memory than this profile requires. "
+        f"Standard requires at least {SUGGEST_STANDARD_CORES} cores and "
+        f"{SUGGEST_STANDARD_MEMORY_BYTES // 10**9} GB of memory, "
+        f"Performance at least {SUGGEST_PERFORMANCE_CORES} cores and "
+        f"{SUGGEST_PERFORMANCE_MEMORY_BYTES // 10**9} GB. "
+        "If the backend container has a memory or CPU limit, that limit counts."
     )
     assert template_map(TEMPLATE.read_text(encoding="utf-8"), "probeCauseNames")["hardware_short"] == sentence
     assert script_map(SCRIPT.read_text(encoding="utf-8"), "probeCauseNames")["hardware_short"] == sentence
+
+
+# POL-03 and the owner's answer G5 (c) of plan 33-01: the seven sentences of the
+# page that said "box", each replaced by a key of its own in plan 33-07.
+BOX_SENTENCES_BEFORE = (
+    (
+        "This box has fewer cores or less memory than the profile needs: Standard needs 3 cores and 6 GB, "
+        "Performance 6 cores and 12 GB."
+    ),
+    "How much of this box Findling may use. Without a change Findling stays on Economy.",
+    "Suggested for this box: %s",
+    "Chosen %1$s, in force %2$s: this box has less hardware than the chosen profile needs.",
+    "At most half of this box, up to %s OCR slots.",
+    "fp32 is set, but this box has too little memory for it. The search uses int8.",
+    "Choose a profile and check it on this box. Until then Economy stays in force.",
+)
+BOX_KEY = re.compile(r"\bbox\b")
+
+
+def test_no_sentence_of_the_page_says_box_any_more() -> None:
+    """POL-03 and G5 (c): no former box sentence is left behind anywhere.
+
+    A replaced key that stays in a catalogue is an orphan nobody reads, and one
+    that stays in a language table is a row the owner approves while the page
+    says something else. The search runs over the sixteen catalogues, the
+    template, the script and the five language documents, and asks in addition
+    that no key of de.json carries the word box at all.
+    """
+    places = [*L10N_CATALOGUES, TEMPLATE, SCRIPT, *(document for document, _ in LANGUAGE_TABLES)]
+    findings = [
+        f"{path.name}: {sentence[:40]!r}"
+        for path in places
+        for sentence in BOX_SENTENCES_BEFORE
+        if sentence in path.read_text(encoding="utf-8")
+    ]
+
+    assert findings == []
+    assert [key for key in catalogue_of(L10N_JSON) if BOX_KEY.search(key)] == []
+    # The anti vacuity clause: the places are the twenty three files, and the
+    # search finds a former sentence where one stands.
+    assert len(places) == 23
+    assert any(sentence in "x " + BOX_SENTENCES_BEFORE[2] + " y" for sentence in BOX_SENTENCES_BEFORE)
 
 
 def test_the_script_and_the_template_name_every_probe_code_alike() -> None:
@@ -3208,6 +3256,118 @@ def test_every_sentence_of_the_profile_block_is_in_every_catalogue() -> None:
     assert len(scan_missing_sentences({"Apply", "Profile"}, {"a.json": frozenset({"Profile"})})) == 1
 
 
+# Plan 33-07 (EXCL-01, EXCL-03, POL-01, T-33-24): the parts of the template and
+# of the script that are the block "Rules and limits", cut at markers that stand
+# once in each file. The template part is two pieces, the variables of block
+# five (where the refusal maps, the pattern help and the limit lines live) and
+# the markup from the block's own div to the end of the file. The script part
+# is two pieces as well, the rules functions up to the profile block and the
+# limit lines behind render().
+RULES_TEMPLATE_START = " * Block five: the four things an admin may change."
+RULES_SCRIPT_START = " * Block five, the four rules, and the one part of this page that writes."
+LIMITS_SCRIPT_START = " * One line of the limits per file (plan 33-06)"
+LIMITS_SCRIPT_END = "  function cadence (view) {"
+
+
+def rules_block_sentences() -> set[str]:
+    """Every catalogue key the template and the script of the rules block ask for."""
+    template_source = TEMPLATE.read_text(encoding="utf-8")
+    script_source = SCRIPT.read_text(encoding="utf-8")
+    assert template_source.count(RULES_BLOCK_START) == 1, RULES_BLOCK_START
+    template = (
+        cut_between(template_source, RULES_TEMPLATE_START, PROFILE_TEMPLATE_START)
+        + template_source[template_source.index(RULES_BLOCK_START) :]
+    )
+    script = cut_between(script_source, RULES_SCRIPT_START, PROFILE_SCRIPT_START) + cut_between(
+        script_source, LIMITS_SCRIPT_START, LIMITS_SCRIPT_END
+    )
+    # A plural call would need its composite key; the block has none, and one
+    # that arrives is a red line here rather than a sentence this gate skips.
+    assert TEMPLATE_PLURAL.search(template) is None
+    assert SCRIPT_PLURAL.search(script) is None
+    return {
+        match.replace("\\'", "'")
+        for pattern, part in ((TEMPLATE_SENTENCE, template), (SCRIPT_SENTENCE, script))
+        for match in pattern.findall(part)
+    }
+
+
+def test_every_sentence_of_the_rules_block_is_in_every_catalogue() -> None:
+    """T-33-24: every text of the block "Rules and limits" in all sixteen files.
+
+    Until plan 33-07 only the profile block was read against every catalogue,
+    so the 28 sentences of plans 33-05 and 33-06 shipped in English without a
+    single gate going red. This gate reads the sentences off the rules block
+    itself, template and script, and asks for each of them in each file.
+    """
+    sentences = rules_block_sentences()
+
+    # The anti vacuity clause: the cut found the block, the pattern list, a
+    # sentence for every refusal code of both lists, the numberless
+    # confirmations and the limits block with its change hint.
+    for sentence in (
+        "Excluded folders",
+        "Excluded patterns",
+        PATTERN_HELP,
+        FOLDER_HELP,
+        "No pattern is set.",
+        "Add pattern",
+        "Remove pattern %s",
+        "Enter a pattern.",
+        "A folder path may be at most %s bytes long.",
+        "A pattern may be at most %s characters long.",
+        "At most %s folders can be excluded.",
+        "At most %s patterns are allowed.",
+        "This pattern is already in the list.",
+        "The entry must not contain . or .. as a folder name.",
+        "Use a single *: it already matches across folders.",
+        "Brackets, braces and the backslash are not allowed. Only * and ? are wildcards.",
+        "A leading ! is not supported. Patterns only exclude.",
+        "The entry contains a control character.",
+        "A pattern needs at least one character besides * and ?, otherwise it would exclude everything.",
+        'This entry has no * or ?. Add it under "Excluded folders" instead.',
+        (
+            "Remove indexed content? Excluding %s also removes the already indexed documents that match that "
+            "pattern from the index. The files themselves stay untouched on disk."
+        ),
+        (
+            "Remove indexed content? Excluding %s also removes the already indexed documents that match these "
+            "patterns from the index. The files themselves stay untouched on disk."
+        ),
+        "Limits per file",
+        "Largest file the backend reads: %1$s (%2$s)",
+        "Pages read per scanned document: %1$s, from the profile %2$s",
+        CAP_SENTENCE,
+        "Steps in the documentation",
+    ):
+        assert sentence in sentences, sentence
+    assert len(sentences) >= 50, len(sentences)
+
+    catalogues = {path.name: frozenset(catalogue_of(path)) for path in L10N_CATALOGUES}
+    findings = scan_missing_sentences(sentences, catalogues)
+
+    assert findings == []
+    # And the scan can go red on this very block: the German catalogue without
+    # the label of the pattern list is exactly one finding, and it names both.
+    lost = {"de.json": catalogues["de.json"] - {"Excluded patterns"}}
+    assert scan_missing_sentences(sentences, lost) == ["de.json: lacks 'Excluded patterns'"]
+
+
+def test_the_remedy_of_an_excluded_file_is_in_every_catalogue() -> None:
+    """The diagnosis remedy of plan 33-05 names both lists, in all eight languages.
+
+    AdminViewService translates it on the server, outside both cut blocks, so
+    the gate above does not see it. The former sentence that named the folder
+    list alone is gone from every file.
+    """
+    service = (REPO_ROOT / "php" / "lib" / "Service" / "AdminViewService.php").read_text(encoding="utf-8")
+    assert f"'{EXCLUDED_REMEDY}'" in service
+    for path in L10N_CATALOGUES:
+        catalogue = catalogue_of(path)
+        assert EXCLUDED_REMEDY in catalogue, path.name
+        assert 'Remove the matching entry under "Excluded folders".' not in catalogue, path.name
+
+
 def test_the_two_translation_files_carry_the_same_keys() -> None:
     """IN-02, and the reason it is a gate rather than a single deletion.
 
@@ -3408,6 +3568,21 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     draft the owner reads in plan 32-07. test_unified_search_plugin.py holds
     every key the script uses against every catalogue. Whoever moves it next
     writes the next paragraph.
+
+    It stands at 334 since 14.10.2026, and the rise of 28 is plan 33-07 of
+    phase 33: the sentences plans 33-05 and 33-06 put on the page, the pattern
+    list with its help, the thirteen refusal sentences of both lists, the two
+    numberless confirmations and the block "Limits per file" with its change
+    hint (EXCL-01, EXCL-03, POL-01). Ten keys changed in place and moved no
+    figure: the folder help, the diagnosis remedy, the ceiling sentence of
+    finding B3, hardware_short (POL-03) and the six other sentences that said
+    "box" (the owner's answer G5 (c)). All sixteen files moved in one commit,
+    the five language documents carry the rows, the German and French wording
+    is the one the owner accepted in 33-WORTLAUT.md, the five other languages
+    are machine drafts under the same dated reservation as the rest.
+    test_every_sentence_of_the_rules_block_is_in_every_catalogue holds the
+    block against every catalogue. Whoever moves it next writes the next
+    paragraph.
     """
     for language, twin in ((L10N_JSON, L10N_DE_DE_JSON), (L10N_JS, L10N_DE_DE_JS)):
         assert twin.is_file(), f"{twin.name} is missing, so everybody on de_DE reads this app in English"
@@ -3445,8 +3620,10 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     # 31-02 (label and remedy of archive_limit; the three changed sentences of
     # unsupported_variant and mime_not_allowed changed their keys and so moved
     # nothing), four of plan 32-05 (the filter entries of the unified search,
-    # D-32-04)
-    assert len(keys_of["de.json"]) == 306
+    # D-32-04), 28 of plan 33-07 (patterns, refusals, confirmations and limits
+    # of plans 33-05 and 33-06; the ten changed sentences, the seven box
+    # sentences among them, changed their keys and so moved nothing)
+    assert len(keys_of["de.json"]) == 334
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:
