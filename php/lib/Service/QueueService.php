@@ -892,6 +892,13 @@ class QueueService {
 				$this->storageService->mountRootPath($storageId, $rootId),
 			);
 			if ($this->exclusionService->isExcluded($relative)) {
+				// PE-9: the verdict of the file goes with it. The acknowledgement
+				// of the container revokes verdicts for content and ocr rows
+				// only, and never no_text_layer, so without this line a file the
+				// reconcile clears (way C) would stay in the tiles and the error
+				// list with whatever it was judged before the rule arrived.
+				$this->fileStateService->forgetVerdicts([$fileId]);
+
 				return [
 					'fileId' => $fileId,
 					'storageId' => $storageId,

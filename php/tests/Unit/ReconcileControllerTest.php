@@ -217,4 +217,75 @@ final class ReconcileControllerTest extends TestCase {
 			self::assertSame(self::WIRE_FIELDS, array_keys($row));
 		}
 	}
+
+	// -- the verdicts of excluded rows (plan 33-04, PE-9) ---------------------
+
+	public function testTheVerdictOfAnExcludedRowIsForgottenAndTheControlKeepsItsOwn(): void {
+		// The slice knows nothing about the container, so this is also the case
+		// of a file the container never held as a living row: describe() never
+		// sees such a file, and the slice is where its verdict goes.
+		$this->sliceOfTwo();
+		$this->fileStateService->method('verdictsFor')->willReturn([
+			1 => ['state' => 'skipped', 'reason' => 'image_not_ocrable'],
+			2 => ['state' => 'failed', 'reason' => 'corrupt'],
+		]);
+		$forgotten = [];
+		$this->fileStateService->expects($this->once())->method('forgetVerdicts')->willReturnCallback(
+			function (array $fileIds) use (&$forgotten): int {
+				$forgotten[] = array_values($fileIds);
+
+				return count($fileIds);
+			},
+		);
+
+		$response = $this->controller(['loadtest'])->filesSlice(self::STORAGE, self::ROOT, 0, 2);
+		$data = $response->getData();
+
+		self::assertSame([[1]], $forgotten, 'the excluded row loses its verdict, the control does not');
+		self::assertIsArray($data);
+		self::assertIsArray($data['files']);
+		self::assertSame(['skipped', 'excluded'], [$data['files'][0]['state'], $data['files'][0]['reason']]);
+		self::assertSame(['failed', 'corrupt'], [$data['files'][1]['state'], $data['files'][1]['reason']]);
+		self::assertFalse($data['final']);
+	}
+
+	public function testAnExcludedRowWithoutAStoredVerdictCostsNoWrite(): void {
+		$this->sliceOfTwo();
+		$this->fileStateService->method('verdictsFor')->willReturn([
+			2 => ['state' => 'failed', 'reason' => 'corrupt'],
+		]);
+		$this->fileStateService->expects($this->never())->method('forgetVerdicts');
+
+		$files = $this->filesOf($this->controller(['loadtest']));
+
+		self::assertSame(['skipped', 'excluded'], [$files[0]['state'], $files[0]['reason']]);
+	}
+
+	public function testWithoutARuleNoVerdictIsForgotten(): void {
+		$this->sliceOfTwo();
+		$this->fileStateService->method('verdictsFor')->willReturn([
+			1 => ['state' => 'skipped', 'reason' => 'image_not_ocrable'],
+		]);
+		$this->fileStateService->expects($this->never())->method('forgetVerdicts');
+
+		$files = $this->filesOf($this->controller([]));
+
+		self::assertSame(['skipped', 'image_not_ocrable'], [$files[0]['state'], $files[0]['reason']]);
+	}
+
+	public function testAFailingCleanupStillAnswersTheSliceUnchanged(): void {
+		// The cleanup is retried on the next round; a reconcile that stopped
+		// over it would stop the repair it exists for.
+		$this->sliceOfTwo();
+		$this->fileStateService->method('verdictsFor')->willReturn([
+			1 => ['state' => 'skipped', 'reason' => 'image_not_ocrable'],
+		]);
+		$this->fileStateService->method('forgetVerdicts')->willThrowException(new \RuntimeException('database gone'));
+
+		$files = $this->filesOf($this->controller(['loadtest']));
+
+		self::assertCount(2, $files);
+		self::assertSame(['skipped', 'excluded'], [$files[0]['state'], $files[0]['reason']]);
+		self::assertSame(['', ''], [$files[1]['state'], $files[1]['reason']]);
+	}
 }

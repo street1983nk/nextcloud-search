@@ -218,6 +218,19 @@ def test_the_step_delegates_instead_of_holding_a_second_removal() -> None:
     assert "purgeService->run(" in source
 
 
+def test_every_background_job_of_the_app_is_removed_by_the_purge() -> None:
+    # Plan 33-04 brought a fifth job, ExclusionSweepJob, and the fixed list above
+    # would not have noticed it missing from the purge. Read off the directory
+    # instead, so the next job is caught the day it arrives: a job of a removed
+    # app stays in the list and every cron pass afterwards fails on its class.
+    jobs_dir = REPO_ROOT / "php" / "lib" / "BackgroundJobs"
+    source = PURGE_SERVICE.read_text(encoding="utf-8")
+    jobs = sorted(path.stem for path in jobs_dir.glob("*.php"))
+
+    assert "ExclusionSweepJob" in jobs
+    assert [job for job in jobs if f"{job}::class" not in source] == []
+
+
 # -- self tests: the gate has to report every shape it judges --------------
 
 _CLEAN_STEP = """<?php

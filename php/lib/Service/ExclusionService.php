@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\Findling\Service;
 
 use OCA\Findling\AppInfo\Application;
+use OCA\Findling\BackgroundJobs\ExclusionSweepJob;
 use OCA\Findling\BackgroundJobs\SubtreeExpandJob;
 use OCA\Findling\Db\QueueMapper;
 use OCP\BackgroundJob\IJobList;
@@ -587,8 +588,26 @@ final class ExclusionService {
 	 *
 	 * Validates again rather than trusting the caller, like save(). The request
 	 * cache is replaced with what was written, so a comparison later in the same
-	 * request already sees the new list. The clearing of documents a new pattern
-	 * covers is planned by plan 33-04; until then the answer is the error list.
+	 * request already sees the new list.
+	 *
+	 * Every change of the set restarts the sweep of way A (plan 33-04, PE-10),
+	 * and a change is anything that moves the fingerprint: a pattern added as
+	 * much as a pattern removed. Every planned ExclusionSweepJob is removed and,
+	 * when the new set is not empty, exactly one is planned from the start with
+	 * the fingerprint of the new set. A restart and not a continuation, because
+	 * a sweep that was halfway through under the old set has not looked at the
+	 * first half of the instance with the new one. A run that is under way while
+	 * this method removes its successor ends at its next fingerprint check
+	 * without planning one, and so does any entry the removal did not catch,
+	 * two saves in quick succession for example. An unchanged set, also in
+	 * another order or another spelling of the same normal form, plans nothing
+	 * and leaves a running sweep alone. An empty set plans nothing either: what
+	 * was cleared comes back through the reconcile once no rule covers it.
+	 *
+	 * The scan is not marked stale here. The one form that writes this list
+	 * writes the cap and the switches through SettingsService::save() in the
+	 * same request, and that method already marks the scan stale for the whole
+	 * form; a second mark here would be a second place deciding it.
 	 *
 	 * @param list<mixed> $patterns
 	 * @return list<string> error codes, empty when the list was written
@@ -598,6 +617,8 @@ final class ExclusionService {
 		if ($errors !== []) {
 			return $errors;
 		}
+
+		$before = $this->patternFingerprint();
 
 		$clean = [];
 		foreach ($patterns as $entry) {
@@ -611,7 +632,49 @@ final class ExclusionService {
 		$this->appConfig->setValueArray(Application::APP_ID, SettingsService::KEY_EXCLUSION_PATTERNS, $list);
 		$this->remember($list);
 
+		$after = self::fingerprintOf($list);
+		if (!hash_equals($before, $after)) {
+			$this->jobList->remove(ExclusionSweepJob::class);
+			if ($list !== []) {
+				$this->jobList->add(ExclusionSweepJob::class, ExclusionSweepJob::startArgument($after));
+			}
+
+			// Counts and never a pattern or the fingerprint (T-33-14).
+			$this->logger->info('Findling: restarted the sweep of the exclusion patterns', [
+				'patterns' => count($list),
+				'planned' => $list === [] ? 0 : 1,
+			]);
+		}
+
 		return [];
+	}
+
+	/**
+	 * The fingerprint of the pattern set in force, as the sweep carries it.
+	 *
+	 * A sweep job compares the fingerprint of its argument with this one before
+	 * every run and ends without a successor when they differ (PE-10), so a run
+	 * planned for an older set never clears a file under a pattern that was
+	 * taken back.
+	 */
+	public function patternFingerprint(): string {
+		return self::fingerprintOf($this->patterns());
+	}
+
+	/**
+	 * SHA-256 over the normalised patterns, sorted and joined with a line feed.
+	 *
+	 * Sorted, so the order an admin typed them in does not count as a change;
+	 * normalised, because that is what patterns() and savePatterns() hand in. A
+	 * line feed cannot stand in a pattern (control characters are refused), so
+	 * two different sets never join to the same text.
+	 *
+	 * @param list<string> $patterns
+	 */
+	private static function fingerprintOf(array $patterns): string {
+		sort($patterns, SORT_STRING);
+
+		return hash('sha256', implode("\n", $patterns));
 	}
 
 	/**
@@ -1049,7 +1112,8 @@ final class ExclusionService {
 	 * third call site exists because the reconcile of plan 03-12 is a third way
 	 * into the queue that never sees a path, so the hand-out of the bytes is the
 	 * last point the rules of today can be applied (review finding CR-01).
-	 * Call sites with comparisons of their
+	 * The reconcile slice and, since plan 33-04, ExclusionSweepJob ask it the
+	 * same way. Call sites with comparisons of their
 	 * own are pitfall 4 of the phase research, and the failure mode is quiet: the crawl
 	 * leaves the folder alone, every save inside it queues the file again, and
 	 * the index fills up slowly with exactly what was supposed to be left out

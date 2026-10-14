@@ -6,6 +6,7 @@ namespace OCA\Findling\BackgroundJobs;
 
 use OCA\Findling\AppInfo\Application;
 use OCA\Findling\Db\QueueMapper;
+use OCA\Findling\Service\FileStateService;
 use OCA\Findling\Service\QueueService;
 use OCA\Findling\Service\StorageService;
 use OCP\AppFramework\Utility\ITimeFactory;
@@ -109,6 +110,7 @@ class SubtreeExpandJob extends QueuedJob {
 		private IJobList $jobList,
 		private StorageService $storageService,
 		private QueueService $queueService,
+		private FileStateService $fileStateService,
 		private IAppConfig $appConfig,
 		private IDBConnection $db,
 		private LoggerInterface $logger,
@@ -139,6 +141,7 @@ class SubtreeExpandJob extends QueuedJob {
 		$seen = 0;
 		$queued = 0;
 		$band = 0;
+		$bandIds = [];
 
 		// The writes of a run go in transaction bands rather than one commit per
 		// file, see TX_BAND. Nothing in the band throws for "already there", which
@@ -195,13 +198,17 @@ class SubtreeExpandJob extends QueuedJob {
 					$kind,
 				);
 				$queued++;
+				$bandIds[] = (int)$entry->getId();
 
 				if (++$band >= self::TX_BAND) {
+					$this->forgetVerdictsOfABand($kind, $bandIds);
+					$bandIds = [];
 					$this->db->commit();
 					$this->db->beginTransaction();
 					$band = 0;
 				}
 			}
+			$this->forgetVerdictsOfABand($kind, $bandIds);
 			$this->db->commit();
 		} catch (\Throwable $e) {
 			$this->db->rollBack();
@@ -238,5 +245,29 @@ class SubtreeExpandJob extends QueuedJob {
 			'kind' => $kind,
 			'last_file_id' => $lastFileId,
 		]);
+	}
+
+	/**
+	 * The verdict rows of a band that was just queued for deletion, gone with it.
+	 *
+	 * Only for kind delete, which is the clearing of a new prefix (plan 04-09)
+	 * and a deleted folder; a folder restored from the trash bin comes back as
+	 * content and is judged afresh. A file this clearing takes out of the index
+	 * kept its verdict in findling_file_state until plan 33-04, so the tiles
+	 * Skipped and Failed and the error list went on counting a file the rule had
+	 * cleared (finding B2, PE-4, owner answer G4 of 13.10.2026: in both clearing
+	 * paths, the prefixes as well). An acl or a content job leaves the verdicts
+	 * alone: the file stays where it is, and its verdict still describes it.
+	 * Inside the transaction of the band, so the delete rows and the forgotten
+	 * verdicts are committed together.
+	 *
+	 * @param list<int> $fileIds
+	 */
+	private function forgetVerdictsOfABand(string $kind, array $fileIds): void {
+		if ($kind !== QueueMapper::KIND_DELETE || $fileIds === []) {
+			return;
+		}
+
+		$this->fileStateService->forgetVerdicts($fileIds);
 	}
 }

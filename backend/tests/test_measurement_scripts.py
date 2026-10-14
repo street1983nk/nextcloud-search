@@ -895,8 +895,21 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # only. Two files came, php/tests/Unit/ExclusionServiceTest.php and
 # php/tests/Unit/FileEventListenerTest.php. No file went, so PHP_FILES_TODAY
 # moves to 99.
-PHP_FILES_TODAY = 99
-PHP_TREE_HASH_TODAY = "2fb90d372c5fdf315d5103bc4f07733d7dea3caf2cce1ae906ae50c83b454282"
+# Moved on 2026-10-14 by Plan 33-04 (EXCL-02, EXCL-03, PE-4, PE-9, PE-10): the
+# sweep of way A and the verdicts in every clearing path. One file came in
+# lib, BackgroundJobs/ExclusionSweepJob.php (bands over every mount, bound to
+# a fingerprint of the pattern set); Service/ExclusionService.php plans it
+# from savePatterns() and computes patternFingerprint();
+# Service/FileStateService.php gained forgetVerdicts(), which
+# BackgroundJobs/SubtreeExpandJob.php (kind delete), Service/QueueService.php
+# (describe() under a rule) and Controller/ReconcileController.php (rows of the
+# slice marked excluded) call; Service/PurgeService.php removes the new job.
+# Two tests came, php/tests/Unit/ExclusionSweepJobTest.php and
+# php/tests/Unit/SubtreeExpandJobTest.php; QueueServiceReaderTest.php and
+# ReconcileControllerTest.php carry the verdict cases. No file went, so
+# PHP_FILES_TODAY moves to 102.
+PHP_FILES_TODAY = 102
+PHP_TREE_HASH_TODAY = "da53dd886c8642ea31259ff51d665abf3521ff012ce92c992d2ba60f1e590d71"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

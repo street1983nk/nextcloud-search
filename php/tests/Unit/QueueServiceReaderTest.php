@@ -12,7 +12,10 @@ use OCA\Findling\Service\QueueService;
 use OCA\Findling\Service\ReaderContext;
 use OCA\Findling\Service\SettingsService;
 use OCA\Findling\Service\StorageService;
+use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\BackgroundJob\IJobList;
+use OCP\DB\QueryBuilder\IExpressionBuilder;
+use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\Files\Config\ICachedMountFileInfo;
 use OCP\Files\Config\IUserMountCache;
 use OCP\Files\File;
@@ -91,8 +94,9 @@ final class QueueServiceReaderTest extends TestCase {
 
 	/**
 	 * @param list<string> $patterns the stored exclusion patterns, none by default
+	 * @param FileStateService|null $fileState a real service over the verdict double, the mock by default
 	 */
-	private function service(array $patterns = []): QueueService {
+	private function service(array $patterns = [], ?FileStateService $fileState = null): QueueService {
 		$storageService = $this->createMock(StorageService::class);
 		$storageService->method('mountRootPath')->willReturn('files');
 		$appConfig = $this->createMock(IAppConfig::class);
@@ -108,7 +112,7 @@ final class QueueServiceReaderTest extends TestCase {
 
 		return new QueueService(
 			$this->queueMapper,
-			$this->fileStateService,
+			$fileState ?? $this->fileStateService,
 			$exclusions,
 			$storageService,
 			$this->mountCache,
@@ -445,5 +449,122 @@ final class QueueServiceReaderTest extends TestCase {
 
 		self::assertSame(QueueMapper::KIND_CONTENT, $sources[self::ROW_ID]['kind'] ?? null);
 		self::assertSame('anna', $sources[self::ROW_ID]['fetchAs'] ?? null);
+	}
+
+	/**
+	 * The verdict rows of findling_file_state, keyed by file id: state, reason.
+	 *
+	 * @var array<int, array{string, string}>
+	 */
+	private array $verdictRows = [];
+
+	/**
+	 * A real FileStateService over a connection double that holds the rows
+	 * above and runs a delete against them. It understands eq, neq and in and
+	 * nothing else, so a delete that filtered by state or reason would be
+	 * evaluated as written, and a composite condition fails the test loudly
+	 * instead of deleting by accident.
+	 */
+	private function verdictTable(): FileStateService {
+		$db = $this->createMock(IDBConnection::class);
+		$db->method('getQueryBuilder')->willReturnCallback(function (): IQueryBuilder {
+			$params = [];
+			$conditions = [];
+			$isDelete = false;
+
+			$expr = $this->createMock(IExpressionBuilder::class);
+			foreach (['eq', 'neq', 'in'] as $operator) {
+				$expr->method($operator)->willReturnCallback(
+					static fn (mixed $column, mixed $param): string => $operator . '|' . (string)$column . '|' . (string)$param,
+				);
+			}
+
+			$qb = $this->createMock(IQueryBuilder::class);
+			$qb->method('expr')->willReturn($expr);
+			$qb->method('delete')->willReturnCallback(function () use ($qb, &$isDelete): IQueryBuilder {
+				$isDelete = true;
+
+				return $qb;
+			});
+			$qb->method('createNamedParameter')->willReturnCallback(function (mixed $value) use (&$params): string {
+				$name = ':p' . count($params);
+				$params[$name] = $value;
+
+				return $name;
+			});
+			foreach (['where', 'andWhere'] as $clause) {
+				$qb->method($clause)->willReturnCallback(function (mixed ...$predicates) use ($qb, &$conditions): IQueryBuilder {
+					foreach ($predicates as $predicate) {
+						$conditions[] = $predicate;
+					}
+
+					return $qb;
+				});
+			}
+			$qb->method('executeStatement')->willReturnCallback(function () use (&$isDelete, &$conditions, &$params): int {
+				self::assertTrue($isDelete, 'the verdict double runs deletes only');
+				$removed = 0;
+				foreach ($this->verdictRows as $fileId => [$state, $reason]) {
+					$row = ['file_id' => $fileId, 'state' => $state, 'reason' => $reason];
+					$matches = true;
+					foreach ($conditions as $condition) {
+						if (!is_string($condition)) {
+							self::fail('the verdict double understands eq, neq and in only');
+						}
+						[$operator, $column, $param] = explode('|', $condition);
+						$value = $params[$param] ?? null;
+						$matches = $matches && match ($operator) {
+							'in' => in_array($row[$column], (array)$value, true),
+							'eq' => $row[$column] === $value,
+							default => $row[$column] !== $value,
+						};
+					}
+					if ($matches) {
+						unset($this->verdictRows[$fileId]);
+						$removed++;
+					}
+				}
+
+				return $removed;
+			});
+
+			return $qb;
+		});
+
+		return new FileStateService($db, $this->createMock(ITimeFactory::class), $this->createMock(LoggerInterface::class));
+	}
+
+	public function testAClaimUnderARuleTakesTheNoTextLayerVerdictAlong(): void {
+		// PE-9, plan 33-04. The acknowledgement of the container revokes
+		// verdicts of content and ocr rows only and never no_text_layer, so the
+		// delete order of way C has to take the verdict along itself. The other
+		// row is a control: a file the claim is not about keeps its verdict.
+		$this->verdictRows = [
+			self::FILE_ID => ['skipped', 'no_text_layer'],
+			4343 => ['skipped', 'image_not_ocrable'],
+		];
+		$this->mountsFor(['anna']);
+		$file = $this->file(true);
+		$file->method('getInternalPath')->willReturn('files/Vortrag.key/Data/notes.pdf');
+		$this->foldersResolving(['anna' => $file]);
+
+		$sources = $this->service(['*.key'], $this->verdictTable())->claim(32, 1_000_000);
+
+		self::assertSame(QueueMapper::KIND_DELETE, $sources[self::ROW_ID]['kind'] ?? null);
+		self::assertSame([4343 => ['skipped', 'image_not_ocrable']], $this->verdictRows);
+	}
+
+	public function testAClaimNextToTheRuleForgetsNoVerdict(): void {
+		// The counter case: the same rule, a path it does not name, a content
+		// order, and no verdict is touched.
+		$this->fileStateService->expects($this->never())->method('forgetVerdicts');
+		$this->mountsFor(['anna']);
+		$file = $this->file(true);
+		$file->method('getInternalPath')->willReturn('files/Vortraege/notes.pdf');
+		$this->foldersResolving(['anna' => $file]);
+
+		$sources = $this->service(['*.key'])->claim(32, 1_000_000);
+
+		self::assertSame(QueueMapper::KIND_CONTENT, $sources[self::ROW_ID]['kind'] ?? null);
 	}
 }

@@ -29,11 +29,15 @@ use Psr\Log\LoggerInterface;
  * unlike the crawl cursor (IDX-02). A lost reconcile cursor costs a repetition
  * and never work, because the reconcile is pure repair and idempotent.
  *
- * Nothing here writes. There is no code path from this class into the queue, into
- * the state table or into the file system, and the read-only gate on the Python
- * side needs no allowlist entry for either route, because it only judges writing
- * HTTP methods. That is deliberate and it stays that way: a GET entered into
- * OCS_WRITE_ALLOWLIST would widen a security gate for nothing.
+ * Nothing here writes, with one narrow exception since plan 33-04. There is no
+ * code path from this class into the queue or into the file system, and the
+ * read-only gate on the Python side needs no allowlist entry for either route,
+ * because it only judges writing HTTP methods. That is deliberate and it stays
+ * that way: a GET entered into OCS_WRITE_ALLOWLIST would widen a security gate
+ * for nothing. The exception is forgetExcludedVerdicts(): the slice removes the
+ * stored verdict rows of the files on its page that a rule of today covers
+ * (PE-9), which leaves the answer of the route unchanged; its docblock says why
+ * that write lives here.
  *
  * The answers carry file ids, etags, sizes, modification times, mimetypes and,
  * since plan 05-03, the end state this side holds for the file as two codes out
@@ -247,16 +251,67 @@ class ReconcileController extends OCSController {
 		);
 
 		$rows = [];
+		$stale = [];
 		foreach ($files as $row) {
 			$excluded = ($row['excluded'] ?? false) === true;
 			unset($row['excluded']);
+			$fileId = (int)($row['fileId'] ?? 0);
+			if ($excluded && isset($verdicts[$fileId])) {
+				$stale[] = $fileId;
+			}
 			$verdict = $excluded
 				? ['state' => self::EXCLUDED_STATE, 'reason' => self::EXCLUDED_REASON]
-				: ($verdicts[(int)($row['fileId'] ?? 0)] ?? ['state' => '', 'reason' => '']);
+				: ($verdicts[$fileId] ?? ['state' => '', 'reason' => '']);
 			$rows[] = $row + $verdict;
 		}
 
+		$this->forgetExcludedVerdicts($stale);
+
 		return $rows;
+	}
+
+	/**
+	 * Remove the stored verdicts of the rows on this page a rule of today covers.
+	 *
+	 * The one write of this class, and the reason it is here and not in the
+	 * crawl (plan 33-04, PE-9, decided after reading both). This is the place
+	 * that already holds both halves of the question, the live mark and the
+	 * stored verdict, for every file of every mount once per reconcile round,
+	 * one statement per page and only for the ids that have a row. It reaches
+	 * the two cases way C leaves behind otherwise: a no_text_layer row, which
+	 * the acknowledgement of the container never revokes, and a file the
+	 * container never knew, which describe() never sees. The crawl would reach
+	 * them only on the next recount, which may be days away.
+	 *
+	 * Why a write under a GET is acceptable here, and stays narrow. No gate
+	 * forbids it: the read only gate judges writing HTTP calls of the container
+	 * and its allowlist concerns routes that delete index content, while this
+	 * deletes rows of this app's own table over the ordinary connection. The
+	 * answer of the route does not change by it, because an excluded row
+	 * carries skipped(excluded) whatever the table held, so the GET stays
+	 * idempotent for its caller. And the ids come from the page this request
+	 * read and from isExcluded() on the one path space, never from the caller
+	 * (T-33-38).
+	 *
+	 * A failure here costs this round and not the slice: the verdict is removed
+	 * on the next one, and a reconcile that stopped over a cleanup would stop
+	 * the repair it exists for.
+	 *
+	 * @param list<int> $fileIds
+	 */
+	private function forgetExcludedVerdicts(array $fileIds): void {
+		if ($fileIds === []) {
+			return;
+		}
+
+		try {
+			$forgotten = $this->fileStateService->forgetVerdicts($fileIds);
+		} catch (\Throwable $e) {
+			$this->logger->warning('Findling: could not remove the verdicts of excluded files', ['exception' => $e]);
+			return;
+		}
+
+		$this->logger->debug('Findling: removed the verdicts of excluded files', ['forgotten' => $forgotten]);
 	}
 
 	/**

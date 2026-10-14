@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\Findling\Service;
 
 use OCA\Findling\AppInfo\Application;
+use OCA\Findling\BackgroundJobs\ExclusionSweepJob;
 use OCA\Findling\BackgroundJobs\ScanRecountJob;
 use OCA\Findling\BackgroundJobs\SchedulerJob;
 use OCA\Findling\BackgroundJobs\StorageCrawlJob;
@@ -52,18 +53,19 @@ use OCP\Migration\IOutput;
  */
 class PurgeService {
 	/**
-	 * The four background jobs of this app.
+	 * The five background jobs of this app.
 	 *
-	 * SubtreeExpandJob and ScanRecountJob are in this list although
-	 * IndexCommand::restart() does not know them. A restart only has to clear
-	 * what carries a cursor, an uninstall has to leave nothing behind that
-	 * Nextcloud would try to load.
+	 * SubtreeExpandJob, ScanRecountJob and ExclusionSweepJob (plan 33-04) are
+	 * in this list although IndexCommand::restart() does not know them. A
+	 * restart only has to clear what carries a cursor, an uninstall has to
+	 * leave nothing behind that Nextcloud would try to load.
 	 */
 	private const JOBS = [
 		SchedulerJob::class,
 		StorageCrawlJob::class,
 		SubtreeExpandJob::class,
 		ScanRecountJob::class,
+		ExclusionSweepJob::class,
 	];
 
 	/**

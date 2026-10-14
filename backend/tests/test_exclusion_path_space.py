@@ -111,6 +111,14 @@ EXCLUSION_SERVICE = PHP_ROOT / "Service" / "ExclusionService.php"
 # rule out through the same helper and the same path space as the other three.
 RECONCILE_CONTROLLER = PHP_ROOT / "Controller" / "ReconcileController.php"
 
+# The fifth call site, added in plan 33-04 for way A of the patterns. A pattern
+# cannot be resolved into folder ids the way a prefix can, so the sweep walks
+# every file of every mount and asks the rule of today for each of them. It has
+# to ask it through the one helper on the one path space like the crawl does,
+# or the sweep would clear what the crawl indexes, or leave in the index what
+# the crawl leaves alone.
+EXCLUSION_SWEEP = PHP_ROOT / "BackgroundJobs" / "ExclusionSweepJob.php"
+
 # The one helper both call paths go through, and the one method that builds the
 # path they hand it.
 HELPER_CALL = "isExcluded"
@@ -348,6 +356,47 @@ def scan_pattern_methods(name: str, source: str) -> list[str]:
     return violations
 
 
+_HELPER_ON_THE_PATH_SPACE = re.compile(r"isExcluded\(\s*\$this->exclusionService->mountRelativePath\(")
+_HELPER_CALL_SITE = re.compile(r"(?<!function )isExcluded\(")
+
+
+def scan_sweep(name: str, source: str) -> list[str]:
+    """Findings of the sweep job (plan 33-04), empty list when it is clean.
+
+    Stricter than the crawl on purpose: every call of the helper has to take
+    the path straight out of ``mountRelativePath``, nested in the call, so a
+    path the sweep assembled next to the call cannot reach the comparison. The
+    statements are joined first, because the nested call spans two lines.
+    """
+    violations: list[str] = []
+    code = statements(source)
+
+    for number, line in code:
+        for comparison in PREFIX_COMPARISONS:
+            if comparison in line:
+                violations.append(
+                    f"{name}:{number}: compares a path with {comparison} instead of asking "
+                    f"ExclusionService::{HELPER_CALL}, which is a second path space"
+                )
+
+    joined = "\n".join(line for _, line in code)
+    calls = len(_HELPER_CALL_SITE.findall(joined))
+    on_the_space = len(_HELPER_ON_THE_PATH_SPACE.findall(joined))
+
+    if calls == 0:
+        violations.append(
+            f"{name}: never calls ExclusionService::{HELPER_CALL}, so the sweep clears nothing "
+            "or clears by a rule of its own"
+        )
+    elif on_the_space != calls:
+        violations.append(
+            f"{name}: hands ExclusionService::{HELPER_CALL} a path it built itself instead of "
+            f"the one out of ExclusionService::{PATH_SPACE_CALL}, which is a second path space"
+        )
+
+    return violations
+
+
 def _call_sites() -> list[tuple[str, str]]:
     """The two call paths of the exclusion, as (file name, source)."""
     return [(path.name, path.read_text(encoding="utf-8")) for path in (CRAWL, LISTENER)]
@@ -361,11 +410,28 @@ def test_the_four_files_of_the_exclusion_exist() -> None:
     # file it cannot read, so a gate that lost its files would look perfect.
     missing = [
         path.name
-        for path in (CRAWL, LISTENER, STORAGE_SERVICE, QUEUE_SERVICE, EXCLUSION_SERVICE, RECONCILE_CONTROLLER)
+        for path in (
+            CRAWL,
+            LISTENER,
+            STORAGE_SERVICE,
+            QUEUE_SERVICE,
+            EXCLUSION_SERVICE,
+            RECONCILE_CONTROLLER,
+            EXCLUSION_SWEEP,
+        )
         if not path.is_file()
     ]
 
     assert missing == []
+
+
+def test_the_sweep_asks_the_helper_on_the_one_path_space() -> None:
+    # Plan 33-04, the fifth call site. The sweep decides which indexed files a
+    # new pattern takes out of the index, so a second answer here clears files
+    # the crawl keeps or keeps files the crawl leaves alone.
+    source = EXCLUSION_SWEEP.read_text(encoding="utf-8")
+
+    assert scan_sweep(EXCLUSION_SWEEP.name, source) == []
 
 
 def test_the_validation_and_the_comparison_share_one_path_space() -> None:
@@ -480,10 +546,12 @@ def test_no_call_site_guards_on_the_prefixes_alone() -> None:
     assert violations == []
 
 
-def test_exactly_the_three_known_call_sites_ask_has_rules() -> None:
+def test_exactly_the_known_call_sites_ask_has_rules() -> None:
     # The guard is asked where the root lookup is skipped, and nowhere else: the
-    # crawl and the diagnosis call isExcluded() without a guard, and a fourth
-    # caller would be a place nobody reviewed for the pattern half.
+    # crawl and the diagnosis call isExcluded() without a guard, and another
+    # caller would be a place nobody reviewed for the pattern half. The sweep of
+    # plan 33-04 is the fourth: without any rule it ends before it reads a
+    # single mount.
     callers = {
         path.name
         for path in PHP_ROOT.rglob("*.php")
@@ -491,7 +559,7 @@ def test_exactly_the_three_known_call_sites_ask_has_rules() -> None:
         and any(RULE_GUARD in line for _, line in statements(path.read_text(encoding="utf-8")))
     }
 
-    assert callers == {LISTENER.name, QUEUE_SERVICE.name, RECONCILE_CONTROLLER.name}
+    assert callers == {LISTENER.name, QUEUE_SERVICE.name, RECONCILE_CONTROLLER.name, EXCLUSION_SWEEP.name}
 
 
 def test_the_pattern_half_holds_no_glob_no_regex_and_no_split() -> None:
@@ -861,3 +929,66 @@ def test_a_matcher_that_disappeared_is_not_a_pass() -> None:
 
     with pytest.raises(AssertionError, match="is gone"):
         scan_pattern_methods("ExamplePatternService.php", source)
+
+
+# -- self tests of the sweep probe (plan 33-04) ------------------------------
+
+_CLEAN_SWEEP = """<?php
+
+final class ExampleSweepJob {
+\tprotected function run($argument): void {
+\t\tif (!$this->exclusionService->hasRules()) {
+\t\t\treturn;
+\t\t}
+
+\t\t$mountRoot = $this->storageService->mountRootPath($storageId, $overriddenRoot);
+\t\tforeach ($this->storageService->getFilesInMount($storageId, $overriddenRoot, $cursor, 10) as $entry) {
+\t\t\tif ($this->exclusionService->isExcluded(
+\t\t\t\t$this->exclusionService->mountRelativePath($entry->getPath(), $mountRoot),
+\t\t\t)) {
+\t\t\t\t$hits[] = $entry->getId();
+\t\t\t}
+\t\t}
+\t}
+}
+"""
+
+
+def test_the_clean_sweep_sample_is_clean() -> None:
+    # The counter sample of the two below, in the shape of the real job.
+    assert scan_sweep("ExampleSweepJob.php", _CLEAN_SWEEP) == []
+
+
+def test_a_sweep_that_never_asks_the_helper_is_reported() -> None:
+    source = _CLEAN_SWEEP.replace("$this->exclusionService->isExcluded(", "$this->matches(")
+
+    violations = scan_sweep("ExampleSweepJob.php", source)
+
+    assert len(violations) == 1
+    assert f"never calls ExclusionService::{HELPER_CALL}" in violations[0]
+
+
+def test_a_sweep_that_builds_its_own_path_is_reported() -> None:
+    # The quiet one: the helper is asked, but with a path assembled next to the
+    # call, so the comparison is shared and the space is not.
+    source = _CLEAN_SWEEP.replace(
+        "$this->exclusionService->mountRelativePath($entry->getPath(), $mountRoot),",
+        "$mountRoot . '/' . $entry->getPath(),",
+    )
+
+    violations = scan_sweep("ExampleSweepJob.php", source)
+
+    assert len(violations) == 1
+    assert "a path it built itself" in violations[0]
+
+
+def test_a_sweep_with_a_hand_rolled_comparison_is_reported() -> None:
+    source = _CLEAN_SWEEP.replace(
+        "\t\t\t\t$hits[] = $entry->getId();\n",
+        "\t\t\t\t$hits[] = $entry->getId();\n\t\t\t}\n\t\t\tif (fnmatch('*.key', $entry->getPath())) {\n",
+    )
+
+    violations = scan_sweep("ExampleSweepJob.php", source)
+
+    assert len(violations) == 1
+    assert "fnmatch" in violations[0]

@@ -353,6 +353,52 @@ class FileStateService {
 	}
 
 	/**
+	 * Remove every verdict row of these files, whatever it says.
+	 *
+	 * The counterpart of revokeFailures() for a file an exclusion rule takes out
+	 * of the index (finding B2 of the phase 33 research). The tiles Skipped and
+	 * Failed and the error list read this table, so a file that was judged
+	 * before a rule arrived kept its verdict after the rule had cleared it from
+	 * the index: issue #22 is 266 thousand skipped(image_not_ocrable) rows of
+	 * Keynote bundles that an exclusion would otherwise leave on the page for
+	 * good. Excluded is not an error, and it has no row of its own here (see
+	 * ExclusionService), so what is left of an excluded file in this table is
+	 * nothing.
+	 *
+	 * Unlike revokeFailures() this takes no_text_layer along as well. That row
+	 * is the memo of the handover to the OCR track, and a file under a rule is
+	 * read by neither track again; should the rule be taken back, the file comes
+	 * back through the reconcile and is judged afresh.
+	 *
+	 * Called by every clearing path: the sweep of a new pattern and the
+	 * clearing of a new prefix (way A), and describe() and the reconcile slice
+	 * for the files the reconcile clears (way C). Idempotent, a file without a
+	 * row costs nothing but its share of one statement.
+	 *
+	 * Banded for the reason revokeFailures() gives: every database has a
+	 * ceiling on bound parameters and they differ.
+	 *
+	 * @param int[] $fileIds
+	 * @return int how many verdict rows were removed
+	 */
+	public function forgetVerdicts(array $fileIds): int {
+		$wanted = array_values(array_unique(array_filter($fileIds, static fn (int $fileId): bool => $fileId > 0)));
+		if ($wanted === []) {
+			return 0;
+		}
+
+		$forgotten = 0;
+		foreach (array_chunk($wanted, self::MAX_LOOKUP) as $band) {
+			$qb = $this->db->getQueryBuilder();
+			$qb->delete(self::TABLE_NAME)
+				->where($qb->expr()->in('file_id', $qb->createNamedParameter($band, IQueryBuilder::PARAM_INT_ARRAY)));
+			$forgotten += $qb->executeStatement();
+		}
+
+		return $forgotten;
+	}
+
+	/**
 	 * One number per state, zero for the states nothing was written for yet.
 	 * The status page needs a complete row, not a sparse one.
 	 *
