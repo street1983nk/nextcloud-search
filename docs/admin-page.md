@@ -67,8 +67,8 @@ zweite Regel. Die Bedingungen in der Reihenfolge, in der sie greifen:
    sind drin, weil das Inhalts-Gate sie entschlüsselt übergibt.
 4. Sie liegt unter dem Größen-Cap. Was darüber liegt, zählt der Crawl als
    `overCap` und zieht es ab.
-5. Sie liegt unter keinem Ausschluss-Präfix. Was darunter liegt, zählt der Crawl
-   als `excluded` und zieht es ab.
+5. Sie liegt unter keinem Ausschluss, weder unter einem Präfix noch unter einem
+   Muster. Was darunter liegt, zählt der Crawl als `excluded` und zieht es ab.
 
 Die Prozentzahl wird abgerundet und bleibt bei 99 stehen, solange auch nur eine
 Datei fehlt. Eine Seite, die 100 Prozent meldet und dabei Dateien übrig hat, ist
@@ -405,7 +405,7 @@ antwortet, gewinnt:
 2. **Bricht sie eine Regel von HEUTE?** Live berechnet, aus keiner
    Datenbankzeile: Papierkorb, nicht indexierter Speicher, Ordner statt Datei,
    nicht zugelassener Typ, über dem geltenden Cap, unter einem
-   Ausschluss-Präfix. Diese Stufe muss live sein, denn `mime_not_allowed` wird
+   Ausschluss-Präfix oder einem Ausschlussmuster. Diese Stufe muss live sein, denn `mime_not_allowed` wird
    nie geschrieben: der Crawl filtert den Mimetype in der Abfrage und sieht eine
    unpassende Datei niemals.
 3. **Steht sie im Arbeitsvorrat?** Dann wartet sie, oder sie wird gerade
@@ -599,7 +599,7 @@ Absicht (ADM-04, D-08).
 
 | Schalter | Default | Wirkt ab wann | Wirkt wo |
 |---|---|---|---|
-| Ordner-Ausschlüsse | leere Liste, höchstens 64 Einträge mit je 256 Zeichen | nächster Lauf, plus sofortige aktive Räumung des Bestands | Crawl, Ereignis-Listener, Abgleich, Diagnose (Stufe 2) |
+| Ausschlüsse (Ordner und Muster) | zwei leere Listen; Ordner höchstens 64 Einträge mit je 256 Byte, Muster höchstens 32 mit je 60 Zeichen | nächster Lauf, plus sofortige aktive Räumung des Bestands und der Abgleich als Netz | Crawl, Ereignis-Listener, Abgleich, Diagnose (Stufe 2) |
 | Größen-Cap | 50 MiB (52428800 Byte), Untergrenze 1 MiB, Obergrenze der vom Container gemeldete Wert | nächster Lauf | Crawl (aus dem Cache-Eintrag), zusätzlich im Container |
 | Team Folders | AN | nächster Lauf | Mountliste des Crawls und des Abgleichs |
 | External Storage | AUS | nächster Lauf | Mountliste des Crawls und des Abgleichs |
@@ -668,8 +668,11 @@ Satz; die Diagnose gilt dann der Datei selbst.
 
 ## Der Pfadraum der Ausschlüsse
 
-Ein Ausschluss ist ein Pfad-Präfix, ohne Muster und ohne Platzhalter (D-06), und
-er wird relativ zur Wurzel des Mounts verglichen, auf dem eine Datei liegt.
+Ein Eintrag unter "Ausgeschlossene Ordner" ist ein Pfad-Präfix ohne Platzhalter
+(D-06), und er wird relativ zur Wurzel des Mounts verglichen, auf dem eine Datei
+liegt. Regeln mit `*` und `?` stehen seit 1.5 in der zweiten Liste
+"Ausgeschlossene Muster" (Abschnitt "Ausschlussmuster" unten); sie vergleicht im
+selben Pfadraum.
 
 In einem User-Home ist diese Wurzel der `files`-Ordner des Benutzers. Drei
 Beispiele:
@@ -704,7 +707,205 @@ mit zweihunderttausend Dateien wären das zweihunderttausend Zeilen für eine
 Antwort, die aus vier Vergleichen folgt, und jede davon wäre in dem Moment
 falsch, in dem die Regel zurückgenommen wird.
 
+## Ausschlussmuster
+
+Die Liste "Ausgeschlossene Muster" steht im Block "Regeln und Grenzen" direkt
+unter "Ausgeschlossene Ordner" (EXCL-01). Sie ist für Regeln gedacht, die sich
+nicht als ein fester Ordner schreiben lassen: Mac-Bundles, die überall im Home
+liegen können, oder Build-Ordner in jeder Projektkopie. Die Präfixe der
+Ordnerliste gelten unverändert weiter, Byte für Byte wie in 1.4.2; ein
+Differenztest gegen den Quelltext von 1.4.2 hält das fest.
+
+### Syntax
+
+Es gibt genau zwei Platzhalter (D-30-01), sonst nichts: kein `**`, keine
+Negation, keine Zeichenklassen, keine regulären Ausdrücke.
+
+| Zeichen | Bedeutung | Beispiel | trifft | trifft nicht |
+|---|---|---|---|---|
+| `*` | beliebig viele Zeichen, auch keines, auch über Ordner hinweg | `*.photoslibrary` | `Fotos/Mediathek.photoslibrary/database/Photos.sqlite` | `Notiz.photoslibrary.txt` |
+| `*` | dasselbe, vorne und hinten | `*/node_modules/*` | `node_modules/react/index.js` (oben im Home) und `Projekte/web/node_modules/x/y.js` (tief) | `Projekte/node_modules_alt/x.js` |
+| `?` | genau ein Zeichen innerhalb eines Namens, nie `/` | `Scan_??.pdf` | `Scan_01.pdf` | `Scan_1.pdf`, `Scan_0/.pdf` |
+| ohne führenden `*` | am Anfang des Mounts verankert | `Backups/*` | `Backups/2024/x.pdf` | `Alt/Backups/x.pdf` |
+
+Vier Regeln entscheiden darüber, ob ein Muster trifft:
+
+- **Vorfahre oder die Datei selbst.** Ein Muster trifft, wenn es auf den ganzen
+  Pfad passt oder auf einen Vorfahren an einer `/`-Grenze. Deshalb nimmt
+  `*.photoslibrary` jede Datei innerhalb des Bundles mit, und deshalb trifft es
+  `Notiz.photoslibrary.txt` nicht: hinter `.photoslibrary` steht dort weder das
+  Ende des Namens noch ein `/`.
+- **Oben im Home.** Verglichen wird auch gegen den Pfad mit einem `/` davor.
+  So greift `*/node_modules/*` auch für einen `node_modules`-Ordner direkt im
+  Home oder an der Wurzel eines Team Folders, nicht nur tiefer.
+- **Groß- und Kleinschreibung zählt**, wie bei den Präfixen (Owner-Entscheid vom 13.10.2026).
+  `*.key` trifft `Vortrag.key`, aber nicht `Vortrag.KEY`.
+- **Unicode in NFC.** Ein Muster wird beim Speichern nach NFC komponiert, so wie
+  der Datei-Cache von Nextcloud Namen ablegt. Ein auf macOS getipptes `é` in
+  zerlegter Form trifft damit dieselben Dateien wie das komponierte. `?` steht
+  für ein Zeichen, nicht für ein Byte: `Caf?` trifft `Café`.
+
+Beim Speichern wird jedes Muster gekürzt und vereinheitlicht wie ein Präfix:
+Leerraum außen weg, doppelte `/` zusammengelegt, `/` am Anfang und am Ende weg,
+ein führendes `files/` weg. `/Fotos/*.jpg/` und `Fotos/*.jpg` sind also dasselbe
+Muster, und als doppelt gilt ein Eintrag nach dieser Vereinheitlichung. Die
+Zeichen `( ) + $ ^ .` sind erlaubt und stehen für sich selbst.
+
+### Pfadraum
+
+Muster vergleichen im selben Pfadraum wie die Präfixe (Abschnitt oben): relativ
+zur Wurzel des Mounts, auf dem die Datei liegt. In einem Home ist das der
+`files`-Ordner des Nutzers, in einem Team Folder und auf einem externen Speicher
+dessen eigene Wurzel. Ein Muster gilt in allen Homes und allen Mounts zugleich;
+eines für eine einzelne Person gibt es nicht. Die Seite und die Fehlerliste
+zeigen Pfade in genau dieser Form, deshalb sagt der Hilfesatz "wie ihn die Listen
+dieser Seite zeigen".
+
+### Groß geschriebene Endungen
+
+Weil Groß- und Kleinschreibung zählt, trifft `*.key` ein Bundle nicht, dessen
+Endung groß geschrieben ist (`Vortrag.KEY`). Das kommt vor, wenn Dateien von
+einem anderen System oder aus einem alten Backup stammen. Wer solche Bundles
+sieht, legt eine zweite Regel an, also `*.key` und `*.KEY`. Ob eine Datei
+betroffen ist, zeigt die Diagnose der Einzeldatei: steht sie nach dem Speichern
+nicht auf "Durch Regel ausgeschlossen", fehlt die Schreibweise.
+
+### Typische Mac-Bundles
+
+Ein Mac-Bundle ist auf dem Mac ein einziges Symbol, in Nextcloud aber ein Ordner
+mit oft tausenden Dateien. Findling liest sie einzeln, und die meisten landen in
+der Fehlerliste (Issue #22: 266.000 Einträge aus Keynote-Bundles). Bewährte
+Muster:
+
+| Muster | Was es ausschließt |
+|---|---|
+| `*.photoslibrary` | Fotos-Mediathek |
+| `*.app` | Programme |
+| `*.bundle` | Plug-ins und Ressourcenbündel |
+| `*.key` | Keynote-Präsentationen |
+| `*.pages` | Pages-Dokumente |
+| `*.numbers` | Numbers-Tabellen |
+| `*.fcpbundle` | Final-Cut-Pro-Mediatheken |
+
+Jedes dieser Muster trifft das Bundle als Ordner samt Inhalt und ebenso eine
+gleichnamige Einzeldatei.
+
+### Grenzen
+
+| Liste | Einträge | Länge je Eintrag |
+|---|---|---|
+| Ausgeschlossene Ordner | 64 | 256 Byte |
+| Ausgeschlossene Muster | 32 | 60 Zeichen |
+
+Die Präfixgrenzen sind unverändert. Die Mustergrenzen sind D-33-03, vom Owner
+am 13.10.2026 bestätigt: jeder Schreibvorgang der Instanz prüft jedes
+Muster einmal, und der in Plan 33-02 gemessene schlimmste Fall von 32 Mustern
+zu je 60 Zeichen über einen Pfad von 4000 Zeichen liegt bei rund 6 ms je Aufruf. Der Vergleich ist linear in der
+Pfadlänge, ohne reguläre Ausdrücke, und kein Muster kann ihn verlangsamen. Ein
+realistisches Muster ist 15 bis 21 Zeichen lang. Gezählt werden Zeichen nach NFC,
+nicht Bytes.
+
+### Abgelehnte Eingaben
+
+Die Seite prüft beide Listen vor jedem Schreiben, und ein einziger Fehler hält
+das ganze Formular auf: "Die Regeln wurden nicht gespeichert. Es hat sich nichts
+geändert." Darunter steht je Code ein eigener Satz an der Liste, zu der er
+gehört. Kein Satz und keine Antwort des Servers enthält den eingegebenen Wert,
+nur den Code und höchstens die Grenzzahl.
+
+| Code | Liste | Grund |
+|---|---|---|
+| `empty` | beide | Der Eintrag ist leer oder besteht nur aus Leerraum und `/`. |
+| `too_long` | beide | Ordner über 256 Byte, Muster über 60 Zeichen. |
+| `too_many` | beide | Mehr als 64 Ordner oder mehr als 32 Muster. |
+| `duplicate` | beide | Der Eintrag steht nach der Vereinheitlichung schon in der Liste. |
+| `traversal` | beide | Ein Ordnername `.` oder `..` im Eintrag; er würde aus dem Pfadraum hinausführen. |
+| `double_star` | nur Muster | `**` hat keine eigene Bedeutung, ein einfacher `*` gilt schon über Ordner hinweg. |
+| `unsupported_character` | nur Muster | `[`, `]`, `{`, `}` oder Backslash, oder kein gültiges UTF-8. Nur `*` und `?` sind Platzhalter. |
+| `negation` | nur Muster | Ein führendes `!`. Muster schließen nur aus, eine Ausnahme von einer Regel gibt es nicht. |
+| `control_character` | nur Muster | Ein Steuerzeichen, etwa ein Zeilenumbruch. |
+| `no_literal` | nur Muster | Nur `*`, `?` und `/`, etwa `*`, `*/*` oder `?*`; so ein Muster schlösse alles aus. |
+| `no_wildcard` | nur Muster | Weder `*` noch `?`. So ein Eintrag gehört unter "Ausgeschlossene Ordner". |
+
+Die sechs reinen Muster-Codes kann die Ordnerliste nicht auslösen, weil ihre
+Prüfung wie in 1.4.2 bleibt. Steht in `appconfig` eine Liste, die nicht über die
+Seite kam (`occ config:app:set findling exclusion_patterns`), gilt dieselbe
+Prüfung beim Lesen: ein unbrauchbarer Eintrag gilt nicht und erscheint nicht,
+Einträge über der Grenze von 32 werden nicht angewendet, und das Protokoll nennt
+nur die Zahl der verworfenen Einträge.
+
+### Was beim Speichern passiert
+
+Vor dem Schreiben fragt die Seite nach, wie bei neuen Ordnern, aber ohne Zahl:
+"Indexierte Inhalte entfernen? Der Ausschluss von `*.key` entfernt außerdem die
+bereits indexierten Dokumente, auf die dieses Muster passt, aus dem Index." Eine
+Zahl gibt es für Muster nicht, weil sich ein Muster nicht billig in Ordner
+auflösen lässt (PE-5).
+
+Danach wirkt ein Muster auf drei Wegen:
+
+1. **Neue und geänderte Dateien** unter einem Muster reiht weder der
+   Ereignis-Listener noch der Crawl ein. Das gilt ab dem Speichern.
+2. **Weg A, der Kehrjob.** Jede Änderung der Musterliste, nach der noch
+   mindestens ein Muster steht, plant genau einen `ExclusionSweepJob`. Er beginnt in der nächsten Cron-Runde, geht in Bändern
+   (1000 Dateien oder 30 Sekunden je Lauf) über jeden Mount und reiht für jede
+   bereits indexierte Datei unter einem Muster einen Löschauftrag ein. Auf einer
+   großen Instanz läuft er über mehrere Cron-Runden. Ändert sich die Liste
+   währenddessen, endet der alte Lauf und ein neuer beginnt von vorn.
+3. **Weg C, der Abgleich als Netz** (D-33-01). Spätestens beim nächsten
+   Abgleichzyklus verlässt jede Datei den Index, die der Container kennt und die
+   unter einer Regel liegt, geändert oder nicht. Der Takt kommt aus
+   `FINDLING_RECONCILE_MIN_INTERVAL_HOURS` (Vorgabe 24 Stunden),
+   `FINDLING_RECONCILE_HOUR` (Vorgabe 2 Uhr Containerzeit) und dem Ruhe-Gate
+   `FINDLING_RECONCILE_QUIET_MAX`, siehe `docs/reconcile.md`. Dieser Weg fängt
+   ein, was Weg A nicht sieht: eine Regel, die per `occ` gesetzt wurde, einen
+   Mount, der später auftaucht, einen Ordner, der innerhalb eines Mounts unter
+   eine Regel umbenannt wird. Er gilt für Präfixe genauso.
+
+In beiden Räumwegen verschwinden auch die alten Einträge dieser Dateien aus der
+Fehlerliste, `skipped(no_text_layer)` eingeschlossen (Owner-Entscheid vom 13.10.2026, Issue #22).
+Das gilt seit 1.5 auch für das Räumen nach einem neuen Präfix.
+
+Die Kopfzahl zieht mit der nächsten Nachzählung nach: gespeicherte Regeln machen
+sie fällig, und `ScanRecountJob` prüft das alle 15 Minuten. Bis dahin können
+Nenner und "Bewusst ausgelassen" noch den alten Stand zeigen. Die Diagnose einer
+Einzeldatei rechnet live und zeigt "Durch Regel ausgeschlossen" sofort nach dem
+Speichern, mit der Abhilfe "Den passenden Eintrag unter "Ausgeschlossene Ordner"
+oder "Ausgeschlossene Muster" entfernen."
+
+**Die Dateien selbst bleiben unverändert**, wie beim Räumen nach Präfixen: es
+verschwinden Indexzeilen, nichts auf der Platte.
+
+### Ein Muster entfernen
+
+Wird ein Muster entfernt, endet ein laufender Kehrjob bei seiner nächsten
+Prüfung, ohne weiter zu räumen. Die Dateien kommen über den Abgleich zurück: im
+nächsten Zyklus sind sie für den Container unbekannt und liegen unter keiner
+Regel mehr, also werden sie gelesen. Eine Datei, die sich vorher ändert, kommt
+schon über den Ereignis-Listener zurück. Wer nicht warten will, nimmt wie bei
+den Präfixen `occ findling:index --restart`, das jedes Dokument der Instanz neu
+liest.
+
+### Muster oder Ordner?
+
+Ein fester Ordner gehört unter "Ausgeschlossene Ordner": das ist der schnellere
+Vergleich, und nur dort nennt die Bestätigung eine Dokumentzahl. Ein Eintrag ohne
+`*` und `?` wird in der Musterliste deshalb abgelehnt (`no_wildcard`, Owner-Entscheid
+vom 13.10.2026); ein Literal-Muster wäre eine zweite Schreibweise derselben Regel und wirkte
+anders als der gleichlautende Präfix. Beide Listen gelten nebeneinander: eine
+Datei ist ausgeschlossen, wenn ein Präfix oder ein Muster sie trifft, und die
+Präfixe werden zuerst geprüft.
+
+### Was im Protokoll steht
+
+Nur Zähler und Kennungen: Zahl der Muster, Zahl der geplanten Kehrjobs,
+gesehene und geräumte Dateien je Lauf mit Speicher-ID und Cursor, verworfene
+Einträge. Nie ein Muster, ein Pfad oder ein Fingerabdruck des Mustersatzes.
+
 ## Was beim Hinzufügen und beim Entfernen eines Ausschlusses passiert
+
+Dieser Abschnitt beschreibt die Ordnerliste; für Muster steht dasselbe im
+Abschnitt "Ausschlussmuster" oben.
 
 **Hinzufügen.** Ein neuer Ausschluss räumt den Bestand aktiv (D-07): die Inhalte
 und die ACL-Zeilen unterhalb des Präfixes verlassen den Index, damit der Index

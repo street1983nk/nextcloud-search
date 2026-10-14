@@ -70,6 +70,9 @@ Der Container zieht, die PHP-App liefert nur. Der Ablauf je Scheibe:
    der Container für dieselbe Datei `skipped(no_text_layer)`, ist das
    Endurteil der Nextcloud-Seite kein Endurteil, sondern eine verlorene
    Übergabe an die OCR-Spur, und die Datei wird eingereiht.
+
+   Und eine Datei unter einer Ausschlussregel folgt eigenen Regeln, siehe den
+   Abschnitt "Dateien unter einer Ausschlussregel (D-33-01)".
 6. Beides über `POST /queues/documents/requeue` einreihen, getrennt nach Art.
 7. Cursor fortschreiben, kurz pausieren, nächste Scheibe.
 
@@ -135,6 +138,73 @@ nächtlicher Download jedes Scans der Instanz.
 ein, weil der Neuaufbau jede Datei neu beurteilt. Er ist der schnelle Weg, wenn
 jemand die Fehlerliste ansieht und nicht bis zur nächsten Nacht warten will; der
 Abgleich ist der Weg, der auch ohne Zuschauer funktioniert.
+
+## Dateien unter einer Ausschlussregel (D-33-01)
+
+Die Regeln selbst kennt nur die PHP-Seite: Ordner-Präfixe und seit 1.5
+Ausschlussmuster (`docs/admin-page.md`, Abschnitt "Ausschlussmuster"). Der
+Container trägt keine Präfixliste und kein Muster und vergleicht keinen Pfad. Die
+Seite des Abgleichs liefert jede Datei des Mounts, auch die ausgeschlossenen, und
+markiert eine Datei unter einer Regel von heute live mit `skipped(excluded)`.
+Der Container liest nur diese Marke.
+
+**Die Regel seit dem Owner-Entscheid vom 13.10.2026 (D-33-01):** eine Datei, die
+der Container kennt und die die Seite markiert, wird beim nächsten Abgleich aus
+dem Index entfernt, ob sie sich geändert hat oder nicht. Die Regel von heute
+entscheidet. Der Ablauf:
+
+1. Der Vergleich macht aus der bekannten Datei unter der Marke eine
+   Inhaltsaufgabe. Der Zweig steht vor dem ETag-Vergleich; ein gleicher ETag hält
+   die Datei also nicht mehr im Index. Bekannt heißt: eine lebende Zeile in der
+   Tabelle `files`, ein Grabstein zählt nicht.
+2. Die PHP-Seite macht beim Abholen (`QueueService::describe()`) aus dieser
+   Aufgabe den Löschauftrag, weil die Datei unter einer Regel liegt.
+3. Der Poller nimmt das Dokument aus dem Index, vergisst die Berechtigungen und
+   setzt den Grabstein.
+4. Ab der nächsten Runde ist die Datei für den Container unbekannt und trägt die
+   Marke. Dieser Fall bleibt liegen und wird nicht wieder eingereiht.
+
+Die Urteilszeilen der Datei in `findling_file_state` verschwinden dabei mit,
+`skipped(no_text_layer)` eingeschlossen: beim Abholen in `describe()` und schon
+beim Lesen der Seite für jede Zeile, die sie als ausgeschlossen markiert. Die
+Fehlerliste der Verwaltungsseite zeigt danach keine alten Einträge
+ausgeschlossener Dateien mehr (Issue #22).
+
+**Was vorher galt.** Der Owner-Entscheid vom 03.10.2026, Teil a (Lauf 7 der
+28-07-Kette), regelte nur die dem Container unbekannte Datei unter einer Regel:
+sie wird nicht eingereiht und nicht gespeichert. Vorher war sie jede Runde
+eingereiht, beim Abholen gelöscht und in der nächsten Runde wieder unbekannt
+gefunden worden; diese Menge brach das Ruhe-Gate, und die Runde kam bei jedem
+Takt zurück. Den Fall "bekannt und unverändert" regelte der Entscheid nicht, und
+der ETag-Vergleich ließ so eine Datei im Index. Ein neuer Ausschluss räumte den
+Bestand deshalb nur über den Teilbaum-Job beim Speichern, und was der nicht sah,
+blieb für immer auffindbar. D-33-01 erweitert Teil a um genau diesen Fall, im
+Sinn des Entscheids.
+
+**Warum der Abgleich dieses Netz sein muss.** Das Räumen beim Speichern (der
+Teilbaum-Job für Präfixe, der Kehrjob für Muster) sieht nur, was im Moment des
+Speicherns da ist und über die Seite gespeichert wurde. Der Abgleich fängt den
+Rest ein:
+
+- eine Regel, die per `occ config:app:set` gesetzt wurde,
+- ein Mount, der nach dem Speichern auftaucht, etwa ein neuer Nutzer oder ein
+  eingeschalteter Team Folder,
+- ein Ordner, der innerhalb eines Mounts unter eine Regel umbenannt wird; der
+  Ereignis-Listener markiert dann nur die Zählung als veraltet.
+
+Das gilt für Präfixe und Muster gleich. Die Verzögerung ist der Takt des
+Abgleichs, also bis zu `FINDLING_RECONCILE_MIN_INTERVAL_HOURS`, bevorzugt in der
+Stunde `FINDLING_RECONCILE_HOUR` und nur bei ruhiger Warteschlange.
+
+**Kein Schleifenrisiko.** Die Mitgliedschaft in den lebenden Zeilen ist die
+Bremse: nach dem Grabstein ist die Datei unbekannt und fällt in den Zweig, der
+nichts tut. Viele bekannte Dateien unter einer neuen Regel werden in Bändern zu
+höchstens 200 Aufträgen eingereiht, und das Ruhe-Gate vor der nächsten Seite
+beendet die Runde, bis der Poller sie abgearbeitet hat.
+
+**Der Rückweg.** Eine zurückgenommene Regel nimmt die Marke mit, weil sie live
+berechnet und nie gespeichert wird. Im nächsten Zyklus ist die Datei unbekannt
+ohne Marke, also gewöhnliche Arbeit, und sie kommt in den Index zurück.
 
 ## Warum der Abgleich nichts in den Index schreibt
 

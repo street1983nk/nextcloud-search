@@ -2218,6 +2218,67 @@ Abnahme durch den Owner: offen (REL-05).
 
 ---
 
+# Entwurf v1.5.0 (Teil Phase 33)
+
+**Owner-Abnahme offen, Teil von REL-05; info.xml und READMEs werden erst nach
+der Abnahme geändert.** Plan 33-08, 14.10.2026. Grundlage EXCL-01 bis EXCL-03,
+POL-01, POL-03; D-30-01, D-33-01 bis D-33-03. Der Wortlaut unten ist ein
+Vorschlag und noch nicht vom Owner abgenommen. Eingereicht ist nichts.
+
+## Teil 1: eine neue Zeile der Funktionsliste, alle sechs Beschreibungen
+
+Gleich in `findling` und `findling_backend`, Vorschlag für den Platz: hinter
+"Keine Konfiguration: der erste Indexlauf startet von selbst".
+
+| Sprache | Wortlaut |
+|---|---|
+| en | `- Exclude folders or patterns such as *.photoslibrary from the index` |
+| de | `- Ordner oder Muster wie *.photoslibrary vom Index ausschließen` |
+| fr | `- Exclure de l'index des dossiers ou des motifs comme *.photoslibrary` |
+
+Keine Zahl im Store-Text. Syntax, Grenzen (32 Muster zu je 60 Zeichen, 64
+Ordner zu je 256 Byte), abgelehnte Eingaben und die zwei Räumwege stehen in
+`docs/admin-page.md`, Abschnitt "Ausschlussmuster".
+
+Eine neue Zeile statt der Änderung einer vorhandenen: die sechs
+Beschreibungen nennen Ausschlussregeln heute gar nicht, und das Wort
+"Ausschlüsse" in der Funktionsliste der READMEs (Teil 2) meint die Suchsyntax,
+also den Ausschluss eines Worts in der Anfrage, nicht die Regeln der
+Verwaltungsseite.
+
+## Teil 2: die README-Zeilen
+
+Vorschlag: dieselbe Zeile in der Funktionsliste der drei READMEs ("Was Findling
+kann", "What Findling does", "Ce que Findling sait faire"), im Wortlaut von
+Teil 1 (de in `README.md`, en in `README.en.md`, fr in `README.fr.md`), am
+selben Platz hinter der Zeile "Keine Konfiguration".
+
+Unverändert bleiben `README.md:27` ("Phrasen, Ausschlüsse, Dateityp-Filter"),
+`README.en.md:27` ("phrases, exclusions, a file type filter") und
+`README.fr.md:28` ("phrases, exclusions, filtre par type de fichier"): die
+Zeilen beschreiben die Suchsyntax und sind von Phase 33 nicht betroffen.
+
+## Teil 3: Grenzblock und Hardware-Satz ohne Store-Zeile
+
+Frage an den Owner: Brauchen der Grenzblock "Grenzen je Datei" (POL-01,
+Issue #21) und der neu formulierte Hardware-Hinweis (POL-03) eine eigene Zeile
+im Store-Text oder in den READMEs?
+
+Empfehlung: nein, wegen der Regel "Kurze Produkttexte". Der Grenzblock zeigt
+nur lesend, was schon als Deploy-Option in `backend/appinfo/info.xml`
+beschrieben ist; der Weg zum Ändern steht in `docs/admin-page.md`, Abschnitt
+"Grenzen je Datei ändern". Der Hardware-Hinweis ist ein Satz der
+Verwaltungsseite und keine Funktion.
+
+Davon getrennt und schon in `deferred-items.md` der Phase 33 vermerkt: die
+Profilzeile der sechs Beschreibungen und `README.md:61` sagen noch "die Hälfte
+der Box" ("half of the box"). Die Seite sagt seit Plan 33-07 nirgends mehr
+"box"; ein Wortlaut dafür gehört zur Gesamtabnahme REL-05 in Phase 36.
+
+Abnahme durch den Owner: offen (REL-05).
+
+---
+
 # Release-Checkliste v1.5.0 (REL-05): Corresponding source
 
 Seit Plan 31-01 verteilt das Backend-Image mit dem pillow-heif-Wheel drei native

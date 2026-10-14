@@ -22,6 +22,19 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
 - Unified search: filter Findling hits by type group (six entries) or by
   folder, sub folders included; unknown values are ignored
   (docs/search-filters.md).
+- Exclusion patterns with `*` and `?` on the admin page, for example Mac
+  bundles (`*.photoslibrary`) or build folders (`*/node_modules/*`); existing
+  folder exclusions keep working. At most 32 patterns of 60 characters
+  (docs/admin-page.md) (#22).
+- The admin page shows the limits per file read only, with how to change
+  them (#21).
+
+### Changed
+
+- Files under a rule leave the index at the next reconcile even when they
+  did not change, and their old entries leave the error list (#22).
+- The hint about too little hardware for a profile is reworded in all
+  languages.
 
 ### Fixed
 
