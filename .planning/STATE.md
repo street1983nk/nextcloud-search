@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 33-06-PLAN.md
-last_updated: "2026-10-14T07:00:00.000Z"
-last_activity: 2026-10-14 -- 33-06 abgeschlossen (Grenzen je Datei nur lesend auf der Admin-Seite, B3-Satz ersetzt, Doku-Abschnitt mit Anker)
+stopped_at: Completed 33-07-PLAN.md
+last_updated: "2026-10-14T08:00:00.000Z"
+last_activity: 2026-10-14 -- 33-07 abgeschlossen (Hardware-Hinweis und sechs box-Sätze ersetzt, alle Sätze der Phase in 16 Katalogen und 5 Sprachtabellen, Regelblock-Gate)
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 43
-  completed_plans: 38
+  completed_plans: 39
   percent: 14
 ---
 
@@ -26,11 +26,11 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 33 von 30-36 (Ausschlussmuster und Admin-Feinschliff)
-Plan: 6 von 11 erledigt (33-01 bis 33-06), nächster Plan 33-07
-Status: Phase 33 läuft (33-01 Wortlaut abgenommen, 33-02 Muster im ExclusionService, 33-03 Weg C im Abgleich und zwei Statusgrenzen, 33-04 Kehrjob und Urteilsbereinigung, 33-05 Musterliste auf der Admin-Seite, 33-06 Grenzblock nur lesend, CI grün). Phase 32 ausgeführt; 32-08 Audit abgeschlossen (32-AUDIT.md, status issues_found): M-32-01 gefixt (d09e5a5a), L-32-02 und L-32-06 gefixt (4c481f74), fünf LOW entschieden; M-32-02 (Dokumente gelöschter Nutzer bleiben im Index) offen als Owner-Frage. USRCH-01, USRCH-02 und USRCH-03 Complete
-Last activity: 2026-10-14 -- 33-06 abgeschlossen: Block Limits per file im Regelblock (Größengrenze, Speicher je Dokument, Zellen, OCR-Seiten, je mit Deploy-Option), B3-Satz ersetzt, Änderungshinweis mit Tag-Link auf docs/admin-page.md#limits-per-file (72d1c032); Phase 32: Verifikation und Owner-Frage M-32-02 weiter offen
+Plan: 7 von 11 erledigt (33-01 bis 33-07), nächster Plan 33-08
+Status: Phase 33 läuft (33-01 Wortlaut abgenommen, 33-02 Muster im ExclusionService, 33-03 Weg C im Abgleich und zwei Statusgrenzen, 33-04 Kehrjob und Urteilsbereinigung, 33-05 Musterliste auf der Admin-Seite, 33-06 Grenzblock nur lesend, 33-07 Kataloge und Hardware-Hinweis, CI grün). Phase 32 ausgeführt; 32-08 Audit abgeschlossen (32-AUDIT.md, status issues_found): M-32-01 gefixt (d09e5a5a), L-32-02 und L-32-06 gefixt (4c481f74), fünf LOW entschieden; M-32-02 (Dokumente gelöschter Nutzer bleiben im Index) offen als Owner-Frage. USRCH-01, USRCH-02 und USRCH-03 Complete
+Last activity: 2026-10-14 -- 33-07 abgeschlossen: hardware_short und sechs weitere box-Sätze unter neuen Schlüsseln (POL-03, G5 c), 28 neue Schlüssel der Pläne 33-05/33-06 in 16 Katalogen und 5 Sprachtabellen, Schlüsselzahl 334, Regelblock-Gate (0fb85deb); Phase 32: Verifikation und Owner-Frage M-32-02 weiter offen
 
-Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passed, 659f5631); Phase 32: 8/8 Pläne (Verifikation offen); Phase 33: 6/11 Pläne
+Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passed, 659f5631); Phase 32: 8/8 Pläne (Verifikation offen); Phase 33: 7/11 Pläne
 
 ## Performance Metrics
 
@@ -73,6 +73,7 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 - v1.5: 33-04 in ca. 75 min inkl. ca. 14 min Volltestlauf und ca. 30 min CI (3 Tasks, 14 Dateien)
 - v1.5: 33-05 in ca. 110 min inkl. ca. 14 min Volltestlauf, Sichtprobe und ca. 30 min CI (2 Tasks, 9 Dateien)
 - v1.5: 33-06 in ca. 150 min inkl. zweier Volltestläufe (je ca. 17 min), Sichtprobe und ca. 35 min CI (2 Tasks, 9 Dateien)
+- v1.5: 33-07 in ca. 85 min inkl. Volltestlauf (14:40 min) und ca. 35 min CI (2 Tasks, 25 Dateien)
 
 ## Accumulated Context
 
@@ -123,6 +124,7 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 - 33-04: ExclusionSweepJob (Weg A für Muster): Argument {storage, root, cursor, fingerprint}, Bänder bis 1000 Dateien über Mounts, Wanduhr 30 s, Nachfolger nach 5 s; Fingerabdruck SHA-256 über sortierte normalisierte Muster, veralteter Lauf endet ohne Nachfolger; savePatterns() entfernt und plant bei jeder Änderung neu (leerer Satz nur entfernen). FileStateService::forgetVerdicts() löscht jede Urteilszeile (auch no_text_layer), gerufen von Kehrjob, SubtreeExpandJob (kind delete, G4), describe() unter Regel und Abgleichs-Slice (PE-9, Slice statt Crawl: kein Gate verbietet es, Antwort unverändert). PurgeService entfernt den neuen Job (Regel 2, Gate liest BackgroundJobs). PHPUnit 743 auf 766. Baumhash da53dd88, PHP_FILES_TODAY 102. CI 14d6b591 acht grün.
 - 33-05: Regelrouten nehmen exclusionPatterns neben exclusions, beide Listen vor jedem Schreiben geprüft, 400 mit Codes beider Listen, nie Werte; Vorschau mit newPatterns ohne Zahl (PE-5). rules() trägt exclusionPatterns und vier Grenzen (auch Präfixgrenzen, Regel 2). Seite: Liste Excluded patterns, Maps folderErrorSentences (5 Codes aus validate()) und patternErrorSentences (11), Satz je Code am Fehlerelement der Liste ohne Zeilenmarkierung (Antwort ohne Index); vom Server abgelehnte Vorschau zeigt Sätze statt Bestätigung; zahlenlose Bestätigung mit Muster im code-Element. Diagnose-Abhilfe nennt beide Listen. PHPUnit 766 auf 777. Baumhash 48aa61a8, PHP_FILES_TODAY 103. Neue Sätze erst in 33-07 im Katalog. CI 2aa25e56 acht grün.
 - 33-06: backend() liest maxCells und extractAddressSpaceBytes als optionalCounter (null bei 1.4.x); limits() liefert file (Decke containerCap()), address_space, cells, pages (ocrMaxPages mit Quelle env oder profile und Profil in Kraft). Block Limits per file unter dem Größenfeld, nur lesend, Optionsnamen aus Template-Map $limitVariables (Gate D-27-14, per Test gleich LIMIT_VARIABLES), Zeilen folgen jedem Poll über textContent. B3-Satz ersetzt (auch Docblocks und Doku). Änderungshinweis: occ app_api:app:unregister findling_backend ohne --rm-data, Link https://github.com/street1983nk/nextcloud-search/blob/v1.5.0/docs/admin-page.md#limits-per-file; Tag nur in $limitsDocsUrl (REL-05 hebt dort). PHPUnit 777 auf 789. Baumhash 2dbfe17d, PHP_FILES_TODAY 103. Neue Sätze erst in 33-07 im Katalog. CI 72d1c032 acht grün.
+- 33-07: hardware_short und die sechs weiteren box-Sätze (G5 c) unter neuen Schlüsseln in Template, Skript, 16 Katalogen und 5 Sprachtabellen; 28 neue Schlüssel der Pläne 33-05/33-06 (Musterliste, 13 Fehlersätze, zwei zahlenlose Bestätigungen, Grenzblock mit Änderungshinweis) plus drei Schlüsselwechsel (Ordnerhilfe, Diagnose-Abhilfe, B3); Schlüsselzahl 306 auf 334. de/fr zeichengleich aus 33-WORTLAUT.md, es/it/nl/pt_PT/pt_BR maschineller Entwurf unter Vorbehalt. Neue Gates: Regelblock gegen jeden Katalog (Schnitt in zwei Stücken je Datei), kein box-Satz in 23 Dateien und kein box-Schlüssel in de.json. Baumhash 1761f54c, PHP_FILES_TODAY 103. Store-Text info.xml sagt noch half of the box: deferred-items.md für Phase 36. CI 0fb85deb acht grün.
 
 ### Offene Faeden (kein aktiver Auftrag)
 
@@ -156,6 +158,6 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 
 ## Session Continuity
 
-Last session: 2026-10-14T07:00:00.000Z
-Stopped at: Completed 33-06-PLAN.md, weiter mit 33-07
+Last session: 2026-10-14T08:00:00.000Z
+Stopped at: Completed 33-07-PLAN.md, weiter mit 33-08
 Resume file: None
