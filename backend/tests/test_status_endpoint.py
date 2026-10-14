@@ -55,7 +55,7 @@ from findling import guard, lane, memory_guard, precision, probe
 from findling.api import resources
 from findling.api.resources import ReadSide
 from findling.api.status import NO_VECTORS_YET, PROFILE_VALUE_KEYS, STATE_UNREADABLE, VECTORS_UNREADABLE, report
-from findling.config import MAX_FILE_BYTES, settings
+from findling.config import EXTRACT_ADDRESS_SPACE_BYTES, MAX_CELLS, MAX_FILE_BYTES, settings
 from findling.embed import weights
 from findling.embed.engine import ENGINE_COLD, ENGINE_DISABLED, ENGINE_MISSING, ENGINE_STATES
 from findling.embed.model import load_count
@@ -96,6 +96,11 @@ FIELDS = {
     "diskTotalBytes",
     "indexBytes",
     "maxFileBytes",
+    # The two limits of POL-01 the admin page shows next to the size cap, read
+    # only and out of the same settings: the cell cap of a spreadsheet and the
+    # address space of one extraction.
+    "maxCells",
+    "extractAddressSpaceBytes",
     "engineState",
     # The five of plan 18-10, and they are one group in two halves. The two
     # language fields answer "which chain is switched on" against "which chain
@@ -672,6 +677,57 @@ def test_the_size_cap_is_reported_even_without_a_state_database(
     answer = _status(client, sign("admin"))
 
     assert answer["maxFileBytes"] == MAX_FILE_BYTES
+
+
+def test_the_two_limits_of_the_page_are_reported_with_their_defaults_without_a_state_database(
+    client: TestClient,
+    sign: Sign,
+    volume: Path,
+) -> None:
+    # POL-01: the limit block of the admin page shows them read only. Written
+    # out as numbers and not only as the constants, so a moved default shows
+    # here as well.
+    assert not (volume / "state.db").exists()
+
+    answer = _status(client, sign("admin"))
+
+    assert (answer["maxCells"], answer["extractAddressSpaceBytes"]) == (MAX_CELLS, EXTRACT_ADDRESS_SPACE_BYTES)
+    assert (answer["maxCells"], answer["extractAddressSpaceBytes"]) == (200_000, 536_870_912)
+
+
+def test_the_two_limits_follow_the_environment_without_a_state_database(
+    client: TestClient,
+    sign: Sign,
+    volume: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert not (volume / "state.db").exists()
+    monkeypatch.setenv("FINDLING_MAX_CELLS", "12345")
+    monkeypatch.setenv("FINDLING_EXTRACT_ADDRESS_SPACE_BYTES", "268435456")
+    settings.cache_clear()
+
+    answer = _status(client, sign("admin"))
+
+    assert (answer["maxCells"], answer["extractAddressSpaceBytes"]) == (12345, 268_435_456)
+
+
+def test_the_two_limits_are_carried_over_on_an_indexed_volume(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The second answer form, the one with counters out of the state database.
+    # Left out of the carry over, both would fall back to nought on every
+    # installation that has indexed anything (Pitfall 2, like maxFileBytes).
+    monkeypatch.setenv("FINDLING_MAX_CELLS", "12345")
+    monkeypatch.setenv("FINDLING_EXTRACT_ADDRESS_SPACE_BYTES", "268435456")
+    settings.cache_clear()
+
+    answer = _status(client, sign("admin"))
+
+    assert answer["indexed"] > 0
+    assert (answer["maxCells"], answer["extractAddressSpaceBytes"]) == (12345, 268_435_456)
 
 
 def test_a_request_without_any_appapi_header_is_unauthorized(client: TestClient) -> None:

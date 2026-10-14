@@ -1936,8 +1936,16 @@ PHP_TREE_HASH_TODAY = "2fb90d372c5fdf315d5103bc4f07733d7dea3caf2cce1ae906ae50c83
 # up to the largest SQLite integer, anything else restarts at zero), and
 # worker/catchup.py uses the same function. No file came and none went, so
 # PACKAGE_FILES_TODAY stays at 79. The PHP pair does not move.
+#
+# Moved on 2026-10-14 by Plan 33-03 (D-33-01, POL-01): worker/reconcile.py
+# hands a file it knows (a living row) and the page marks skipped(excluded) to
+# the content track before the etag comparison, so the rule of today also
+# clears a known unchanged file; api/status.py reports maxCells and
+# extractAddressSpaceBytes next to maxFileBytes, in both answer forms. No file
+# came and none went, so PACKAGE_FILES_TODAY stays at 79. The PHP pair does
+# not move: php/ is unchanged.
 PACKAGE_FILES_TODAY = 79
-PACKAGE_TREE_HASH_TODAY = "c549892278fef1112f2df5707ba4fd4f597d5f0c1adbf0b126dc8537db8b09db"
+PACKAGE_TREE_HASH_TODAY = "567467b795e8ceab743eb55d8d7cf3bdc750526c0e97ce3adfe09f7cf219849a"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

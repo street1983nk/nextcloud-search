@@ -109,13 +109,22 @@ HANDOVER_REASON: Final = "no_text_layer"
 # the vocabulary of the wire against drift.
 #
 # The rule itself belongs to the PHP half and only there (D-06): this container
-# carries no prefix list and compares no path, it reads two codes off the page.
-# The mark is live, worked out for the version the page carries, and it is never
-# written into the files table here. A stored skipped(excluded) against the etag
-# would outlive a lifted rule through the branch ``stored == row.etag`` in
-# _compare, and the file would stay out of the index for good. Without a stored
-# row the mark simply disappears with the rule, and the next round reads the file
-# as ordinary unknown work.
+# carries no prefix list, no pattern and compares no path, it reads two codes
+# off the page. The mark is live, worked out for the version the page carries,
+# and it is never written into the files table here. A stored skipped(excluded)
+# against the etag would outlive a lifted rule through the branch
+# ``stored == row.etag`` in _compare, and the file would stay out of the index
+# for good. Without a stored row the mark simply disappears with the rule, and
+# the next round reads the file as ordinary unknown work.
+#
+# A file this container knows (a living row, tombstones aside) and the page
+# marks is work, whether its etag moved or not (D-33-01, owner 13.10.2026, which
+# widens part a of the owner decision of 03.10.2026: the rule of today decides,
+# also for a known unchanged file). The claim of that content order is what
+# describe() on the PHP side turns into the delete order, the poller sets the
+# tombstone, and the next round reads the file as unknown plus excluded and
+# leaves it alone. That is the net behind the sweep of new rules: a rule set by
+# occ, a mount that shows up later, a rename into an excluded folder.
 EXCLUDED_STATE: Final = "skipped"
 EXCLUDED_REASON: Final = "excluded"
 
@@ -543,8 +552,11 @@ class Reconcile:
         stayed unfinished and came back every tick. The PHP half now marks the row
         live as skipped(excluded) and this branch leaves it alone without storing
         anything, so a lifted rule makes the file work in the very next round. A
-        file known here under another etag stays stale work, and describe() keeps
-        turning it into the delete order that takes it out of the index.
+        file known here is stale work under the mark, under another etag and
+        under the same one alike (D-33-01, owner 13.10.2026: the rule of today
+        decides), and describe() turns it into the delete order that takes it
+        out of the index. The branch stands before the etag comparison for that
+        reason; after the tombstone the file is unknown and left alone.
 
         **The one exception to that last sentence, and it is the second half of
         DI-05-23.** A file that carries skipped(no_text_layer) here and
@@ -611,6 +623,12 @@ class Reconcile:
             stored = known.get(row.file_id)
             written_off = row.state == GIVEN_UP_STATE and row.reason == GIVEN_UP_REASON
             if written_off and ocr_enabled and Reconcile._is_a_stranded_handover(store, row, stored):
+                stale.append(row.file_id)
+                continue
+            if row.state == EXCLUDED_STATE and row.reason == EXCLUDED_REASON and row.file_id in known:
+                # D-33-01: a living row under a rule of today is work, whatever
+                # its etag says; describe() turns the claim into the delete
+                # order. Membership, not the value: a living row may hold None.
                 stale.append(row.file_id)
                 continue
             if stored == row.etag:

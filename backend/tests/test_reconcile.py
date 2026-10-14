@@ -26,6 +26,7 @@ from __future__ import annotations
 import asyncio
 import re
 from collections.abc import Iterator
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, cast
 
@@ -385,6 +386,113 @@ async def test_a_known_excluded_file_with_a_new_etag_stays_content_work(store: S
 
     assert queue.kinds_of(KIND_CONTENT) == [10]
     assert result.stale == 1
+
+
+async def test_a_known_unchanged_excluded_file_becomes_content_work(store: Store) -> None:
+    """The defect B1 of phase 33, and the reconcile as the net for exclusions.
+
+    D-33-01 (owner, 13.10.2026): the rule of today decides, also for a known
+    unchanged file. Before, the etag branch said "done" first and the file stayed
+    in the index for good under a rule set by occ, on a mount that showed up
+    later, or after a rename into an excluded folder. The claim of the content
+    order is what describe() turns into the delete order.
+    """
+    store.record(10, a_file(10, etag="aaa"), "indexed", content_hash="a")
+    files = _FakeFiles(SliceResult(files=(a_excluded_row(10, etag="aaa"),), final=True))
+    queue = _FakeQueue()
+
+    result = await _reconcile(store, files, queue).run_once()
+
+    assert queue.kinds_of(KIND_CONTENT) == [10]
+    assert queue.kinds_of(KIND_DELETE) == []
+    assert result.stale == 1
+
+
+async def test_a_living_row_without_an_etag_under_a_rule_becomes_content_work(store: Store) -> None:
+    # The membership in known decides, not the stored value: a living row whose
+    # etag is None is still a document of this container (W3 of the plan check).
+    store.record(10, replace(a_file(10, etag="aaa"), etag=None), "indexed", content_hash="a")
+    assert store.known_etags([10]) == {10: None}
+    files = _FakeFiles(SliceResult(files=(a_excluded_row(10, etag="aaa"),), final=True))
+    queue = _FakeQueue()
+
+    result = await _reconcile(store, files, queue).run_once()
+
+    assert queue.kinds_of(KIND_CONTENT) == [10]
+    assert result.stale == 1
+
+
+async def test_a_known_unchanged_file_without_the_mark_costs_nothing(store: Store) -> None:
+    # The positive control of the two tests above: same store, same etag, no mark.
+    store.record(10, a_file(10, etag="aaa"), "indexed", content_hash="a")
+    files = _FakeFiles(SliceResult(files=(a_row(10, etag="aaa", state="indexed"),), final=True))
+    queue = _FakeQueue()
+
+    result = await _reconcile(store, files, queue).run_once()
+
+    assert queue.requeues == []
+    assert result.stale == 0
+
+
+async def test_an_excluded_file_is_cleared_once_and_then_left_alone(store: Store) -> None:
+    # No loop: the first round hands the known file over, the delete order of
+    # describe() ends in a tombstone, and the next round reads the file as
+    # unknown plus excluded and leaves it where it is.
+    store.record(10, a_file(10, etag="aaa"), "indexed", content_hash="a")
+    queue = _FakeQueue()
+
+    first = await _reconcile(
+        store, _FakeFiles(SliceResult(files=(a_excluded_row(10, etag="aaa"),), final=True)), queue
+    ).run_once()
+    store.tombstone(10)
+    second = await _reconcile(
+        store,
+        _FakeFiles(SliceResult(files=(a_excluded_row(10, etag="aaa"),), final=True)),
+        queue,
+        now=NOW + 25 * HOUR,
+    ).run_once()
+
+    assert (first.stale, second.stale) == (1, 0)
+    assert queue.kinds_of(KIND_CONTENT) == [10]
+
+
+async def test_150_known_excluded_files_travel_in_one_band_and_the_quiet_gate_holds_the_next_slice(
+    store: Store,
+) -> None:
+    """T-33-09: the new branch adds no path of its own around band and quiet gate.
+
+    One mixed page: 150 known unchanged files under a rule, 20 unknown ones under
+    a rule, 10 known unchanged files without a rule and 5 unknown ordinary files.
+    The 155 stale ids stay below REQUEUE_BAND and travel as one band; the queue
+    then holds 155 rows, above the quiet mark of 100, so the gate before the next
+    slice ends the round with the bookmark behind the first page.
+    """
+    for number in range(1, 151):
+        store.record(number, a_file(number, etag="aaa"), "indexed", content_hash="a")
+    for number in range(171, 181):
+        store.record(number, a_file(number, etag="aaa"), "indexed", content_hash="a")
+    rows = (
+        *(a_excluded_row(number, etag="aaa") for number in range(1, 151)),
+        *(a_excluded_row(number, etag="aaa") for number in range(151, 171)),
+        *(a_row(number, etag="aaa", state="indexed") for number in range(171, 181)),
+        *(a_row(number, etag="aaa") for number in range(181, 186)),
+    )
+    files = _FakeFiles(SliceResult(files=rows), SliceResult(files=(a_row(500, etag="aaa"),), final=True))
+
+    class _CountsWhatItIsHanded(_FakeQueue):
+        async def requeue(self, file_ids: Any, *, kind: str) -> CallResult:
+            result = await super().requeue(file_ids, kind=kind)
+            self.scheduled += result.count
+            return result
+
+    queue = _CountsWhatItIsHanded()
+    result = await _reconcile(store, files, queue, slice_size=500).run_once()
+
+    assert result.state == ROUND_QUEUE_BUSY
+    assert queue.kinds_of(KIND_CONTENT) == [*range(1, 151), *range(181, 186)]
+    assert [len(ids) for ids, kind in queue.requeues if kind == KIND_CONTENT] == [155]
+    assert len(files.asked) == 1
+    assert store.reconcile_cursor(STORAGE).after_file_id == 185
 
 
 async def test_a_round_of_only_excluded_files_closes_the_mount(store: Store) -> None:

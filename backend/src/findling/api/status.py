@@ -60,7 +60,10 @@ like for the first few minutes, and the honest answer to it is zeros plus a line
 saying so. One value is handed out even then: ``maxFileBytes`` is read from the
 environment and not from the database, and the page needs it to clamp its own
 setting to the cap this container really enforces. An empty container is no
-reason to show a setting that does not apply.
+reason to show a setting that does not apply. ``maxCells`` and
+``extractAddressSpaceBytes`` travel with it for the same reason: they come out
+of the environment as well, and the limit block of the admin page shows them
+read only (POL-01).
 
 Who may ask. The route is declared with access level ADMIN in appinfo/info.xml,
 and that is what the AppAPI proxy enforces, in
@@ -307,6 +310,11 @@ class StatusResponse(BaseModel):
     # enforced it. Reported so that the setting on the page can be clamped to it
     # instead of displaying a number that does not apply (pitfall 2).
     maxFileBytes: int = 0
+    # Two more limits of one file, reported for the limit block of the admin
+    # page (POL-01) and nothing else: the cell cap of a spreadsheet and the
+    # address space of one extraction. Read only, out of the same settings.
+    maxCells: int = 0
+    extractAddressSpaceBytes: int = 0
     # Which of five states the embedding engine is in, out of embed/engine.py.
     # The other half of ``embedded`` above and never a second spelling of it:
     # that counter counts documents, this one describes the process, and no
@@ -570,6 +578,8 @@ def _volume() -> StatusResponse:
         diskTotalBytes=total,
         indexBytes=index_bytes(resolved.index_dir),
         maxFileBytes=resolved.max_file_bytes,
+        maxCells=resolved.max_cells,
+        extractAddressSpaceBytes=resolved.extract_address_space_bytes,
     )
 
 
@@ -701,6 +711,9 @@ def _of(store: Store, volume: StatusResponse) -> StatusResponse:
         diskTotalBytes=volume.diskTotalBytes,
         indexBytes=volume.indexBytes,
         maxFileBytes=volume.maxFileBytes,
+        # Carried over like the size cap, for the same Pitfall 2.
+        maxCells=volume.maxCells,
+        extractAddressSpaceBytes=volume.extractAddressSpaceBytes,
     )
 
 
