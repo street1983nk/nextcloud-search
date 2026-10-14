@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 33-04-PLAN.md
-last_updated: "2026-10-14T04:05:00.000Z"
-last_activity: 2026-10-14 -- 33-04 abgeschlossen (ExclusionSweepJob mit Fingerabdruck, forgetVerdicts in allen Räumwegen)
+stopped_at: Completed 33-05-PLAN.md
+last_updated: "2026-10-14T05:10:00.000Z"
+last_activity: 2026-10-14 -- 33-05 abgeschlossen (Musterliste auf der Admin-Seite, Meldung je Code, zahlenlose Bestätigung)
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 43
-  completed_plans: 36
+  completed_plans: 37
   percent: 14
 ---
 
@@ -26,11 +26,11 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 33 von 30-36 (Ausschlussmuster und Admin-Feinschliff)
-Plan: 4 von 11 erledigt (33-01 bis 33-04), nächster Plan 33-05
-Status: Phase 33 läuft (33-01 Wortlaut abgenommen, 33-02 Muster im ExclusionService, 33-03 Weg C im Abgleich und zwei Statusgrenzen, 33-04 Kehrjob und Urteilsbereinigung, CI grün). Phase 32 ausgeführt; 32-08 Audit abgeschlossen (32-AUDIT.md, status issues_found): M-32-01 gefixt (d09e5a5a), L-32-02 und L-32-06 gefixt (4c481f74), fünf LOW entschieden; M-32-02 (Dokumente gelöschter Nutzer bleiben im Index) offen als Owner-Frage. USRCH-01, USRCH-02 und USRCH-03 Complete
-Last activity: 2026-10-14 -- 33-04 abgeschlossen: ExclusionSweepJob räumt Dateien unter neuen Mustern samt Urteilszeilen, forgetVerdicts auch in SubtreeExpandJob, describe() und Abgleichs-Slice (14d6b591); Phase 32: Verifikation und Owner-Frage M-32-02 weiter offen
+Plan: 5 von 11 erledigt (33-01 bis 33-05), nächster Plan 33-06
+Status: Phase 33 läuft (33-01 Wortlaut abgenommen, 33-02 Muster im ExclusionService, 33-03 Weg C im Abgleich und zwei Statusgrenzen, 33-04 Kehrjob und Urteilsbereinigung, 33-05 Musterliste auf der Admin-Seite, CI grün). Phase 32 ausgeführt; 32-08 Audit abgeschlossen (32-AUDIT.md, status issues_found): M-32-01 gefixt (d09e5a5a), L-32-02 und L-32-06 gefixt (4c481f74), fünf LOW entschieden; M-32-02 (Dokumente gelöschter Nutzer bleiben im Index) offen als Owner-Frage. USRCH-01, USRCH-02 und USRCH-03 Complete
+Last activity: 2026-10-14 -- 33-05 abgeschlossen: Liste Excluded patterns, Regelrouten mit exclusionPatterns (beide Listen vor jedem Schreiben geprüft), Satz je Code je Liste, zahlenlose Bestätigung, Diagnose-Abhilfe mit beiden Listen (2aa25e56); Phase 32: Verifikation und Owner-Frage M-32-02 weiter offen
 
-Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passed, 659f5631); Phase 32: 8/8 Pläne (Verifikation offen); Phase 33: 4/11 Pläne
+Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passed, 659f5631); Phase 32: 8/8 Pläne (Verifikation offen); Phase 33: 5/11 Pläne
 
 ## Performance Metrics
 
@@ -71,6 +71,7 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 - v1.5: 33-02 in ca. 150 min inkl. zweier Volltestläufe (je ca. 14 min) und zweier CI-Runden (3 Tasks, 17 Dateien)
 - v1.5: 33-03 in ca. 110 min inkl. ca. 14 min Volltestlauf und ca. 25 min CI (2 Tasks, 5 Dateien)
 - v1.5: 33-04 in ca. 75 min inkl. ca. 14 min Volltestlauf und ca. 30 min CI (3 Tasks, 14 Dateien)
+- v1.5: 33-05 in ca. 110 min inkl. ca. 14 min Volltestlauf, Sichtprobe und ca. 30 min CI (2 Tasks, 9 Dateien)
 
 ## Accumulated Context
 
@@ -119,6 +120,7 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 - 33-02: Muster im appconfig-Schlüssel exclusion_patterns (SettingsService::KEY_EXCLUSION_PATTERNS), defensiv gelesen, höchstens 32 zu 60 Zeichen, elf geschlossene Codes, NFC beim Speichern; bitparalleler Matcher matchesAPattern ohne fnmatch/preg/explode (Gate D methodengenau); isExcluded prüft Präfixe von 1.4.2 unverändert, dann Muster; hasRules() an Listener, describe() und Reconcile-Slice. Differenztest gegen die byte-gleiche v1.4.2-Fixture (backend/tests/fixtures/exclusion_v1_4_2, Blob 805c6339) über den wiederverwendbaren Treiber backend/tests/drivers/exclusion_driver.php: keine Abweichung, Positivkontrolle *.key genau ein Unterschied. Laufzeitreihe 250 bis 4000 Zeichen: Quotient t(4000)/t(1000) 4,00 gutartig und 3,94 feindlich, feindlich 6,10 ms bei 4000. PHPUnit 666 auf 743. Baumhash 2fb90d37, PHP_FILES_TODAY 99. CI 75f5f29e acht grün, 3c1d5a97 sieben grün.
 - 33-03: Weg C (D-33-01): _compare macht eine lebende Zeile (row.file_id in known, auch etag None; known_etags liefert keine Grabsteine) mit Marke skipped(excluded) zu stale Arbeit, vor dem etag-Vergleich; describe() macht daraus den Löschauftrag, nach dem Grabstein bleibt die Datei liegen. Band und Ruhe-Tor unverändert (Test mit 150 Dateien). StatusResponse trägt maxCells und extractAddressSpaceBytes in beiden Antwortformen. Paket-Baumhash 567467b7, 79 Dateien. CI eff4a9bf sieben grün.
 - 33-04: ExclusionSweepJob (Weg A für Muster): Argument {storage, root, cursor, fingerprint}, Bänder bis 1000 Dateien über Mounts, Wanduhr 30 s, Nachfolger nach 5 s; Fingerabdruck SHA-256 über sortierte normalisierte Muster, veralteter Lauf endet ohne Nachfolger; savePatterns() entfernt und plant bei jeder Änderung neu (leerer Satz nur entfernen). FileStateService::forgetVerdicts() löscht jede Urteilszeile (auch no_text_layer), gerufen von Kehrjob, SubtreeExpandJob (kind delete, G4), describe() unter Regel und Abgleichs-Slice (PE-9, Slice statt Crawl: kein Gate verbietet es, Antwort unverändert). PurgeService entfernt den neuen Job (Regel 2, Gate liest BackgroundJobs). PHPUnit 743 auf 766. Baumhash da53dd88, PHP_FILES_TODAY 102. CI 14d6b591 acht grün.
+- 33-05: Regelrouten nehmen exclusionPatterns neben exclusions, beide Listen vor jedem Schreiben geprüft, 400 mit Codes beider Listen, nie Werte; Vorschau mit newPatterns ohne Zahl (PE-5). rules() trägt exclusionPatterns und vier Grenzen (auch Präfixgrenzen, Regel 2). Seite: Liste Excluded patterns, Maps folderErrorSentences (5 Codes aus validate()) und patternErrorSentences (11), Satz je Code am Fehlerelement der Liste ohne Zeilenmarkierung (Antwort ohne Index); vom Server abgelehnte Vorschau zeigt Sätze statt Bestätigung; zahlenlose Bestätigung mit Muster im code-Element. Diagnose-Abhilfe nennt beide Listen. PHPUnit 766 auf 777. Baumhash 48aa61a8, PHP_FILES_TODAY 103. Neue Sätze erst in 33-07 im Katalog. CI 2aa25e56 acht grün.
 
 ### Offene Faeden (kein aktiver Auftrag)
 
@@ -152,6 +154,6 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 
 ## Session Continuity
 
-Last session: 2026-10-14T04:05:00.000Z
-Stopped at: Completed 33-04-PLAN.md, weiter mit 33-05
+Last session: 2026-10-14T05:10:00.000Z
+Stopped at: Completed 33-05-PLAN.md, weiter mit 33-06
 Resume file: None
