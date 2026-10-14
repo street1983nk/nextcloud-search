@@ -30,8 +30,12 @@ use Psr\Log\LoggerInterface;
  * writing down: the form has to name the number of documents a new exclusion
  * takes out of the index BEFORE it writes anything, and a write route that
  * sometimes only previews would be exactly the route where somebody eventually
- * takes the wrong branch. So it is a GET, it touches nothing, and the writing
- * route stays a route that always writes.
+ * takes the wrong branch. So it touches nothing, and the writing route stays a
+ * route that always writes. It is a POST all the same (finding L-33-09-01 of
+ * plan 33-09): the lists travel in the body, because a list in the query
+ * string is a list in every log line Nextcloud writes for the request (the
+ * url field) and in the access log of the web server, and the prefixes and
+ * patterns of an instance belong in neither.
  *
  * The fourth one is the only writing route of this phase, and like the other two
  * it lives under /apps/findling/ rather than in the OCS space. That is a
@@ -204,7 +208,7 @@ final class SettingsController extends Controller {
 	}
 
 	/**
-	 * GET /apps/findling/admin/rules/preview
+	 * POST /apps/findling/admin/rules/preview
 	 *
 	 * What the list in the form would remove from the index, before anything is
 	 * written. The answer is the prefixes of the list that are not in force yet,
@@ -214,8 +218,12 @@ final class SettingsController extends Controller {
 	 * reached.
 	 *
 	 * A reading route, and it writes nothing at all: no appconfig, no queue row,
-	 * no job. That is why it is a GET and why it is separate from the write, see
-	 * the class docblock.
+	 * no job. That is why it is separate from the write, see the class docblock.
+	 * The verb is POST nevertheless, and only for where the lists travel: in the
+	 * body they reach no URL, so neither the url field of nextcloud.log nor the
+	 * access log of the web server ever carries a prefix or a pattern (finding
+	 * L-33-09-01, owner decision of 14.10.2026). The request token is checked like
+	 * on every other admin route of this class.
 	 *
 	 * The new prefixes travel back, and they are the one value of this page that
 	 * comes back the way somebody typed it, normalised. That is deliberate and it
@@ -240,7 +248,7 @@ final class SettingsController extends Controller {
 	 * @param list<mixed> $exclusions the prefix list as the form holds it
 	 * @param list<mixed> $exclusionPatterns the pattern list as the form holds it
 	 */
-	#[\OCP\AppFramework\Http\Attribute\FrontpageRoute(verb: 'GET', url: '/admin/rules/preview')]
+	#[\OCP\AppFramework\Http\Attribute\FrontpageRoute(verb: 'POST', url: '/admin/rules/preview')]
 	public function previewRules(array $exclusions = [], array $exclusionPatterns = []): DataResponse {
 		$list = array_values($exclusions);
 		$patterns = array_values($exclusionPatterns);

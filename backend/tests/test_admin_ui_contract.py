@@ -4393,7 +4393,7 @@ def test_the_script_sends_the_pattern_list_and_cuts_the_confirmation_around_it()
         "indexExternalStorage",
         "exclusionPatterns",
     ]
-    assert "['exclusionPatterns[]', pattern]" in script
+    assert "body: JSON.stringify({ exclusions: exclusions, exclusionPatterns: patterns })" in script
     assert "text('findling-rules-confirm-patterns-value', addedPatterns.join(', '))" in script
     for sentence in (
         (
@@ -4407,6 +4407,81 @@ def test_the_script_sends_the_pattern_list_and_cuts_the_confirmation_around_it()
     ):
         assert f"t('findling', '{sentence}')" in script
         assert f"t('findling', '{sentence}').replace" not in script
+
+
+SETTINGS_CONTROLLER = REPO_ROOT / "php" / "lib" / "Controller" / "SettingsController.php"
+_RULES_ROUTE = re.compile(r"Route\(verb: '(\w+)', url: '(/admin/rules[^']*)'\)")
+_PREVIEW_FUNCTION = re.compile(r"async function preview \(.*?\n  \}\n", re.DOTALL)
+
+
+def scan_rules_routes(controller: str, script: str) -> list[str]:
+    """Every rules route of the admin page carries its lists in the body, never in an address.
+
+    Finding L-33-09-01 of plan 33-09: the preview was a GET with every prefix
+    and pattern in the query string, and Nextcloud writes the address of a
+    request into the url field of each log line it writes for it, so a refused
+    preview put the rules of the instance into nextcloud.log and the access
+    log. One finding per rules route that is not a POST, one when the script
+    has no preview function, and one per way the preview could put the lists
+    into its address again.
+    """
+    findings: list[str] = []
+    routes = _RULES_ROUTE.findall(controller)
+    if not routes:
+        findings.append("the controller declares no rules route")
+    findings.extend(f"{url} is a {verb} route" for verb, url in routes if verb != "POST")
+    function = _PREVIEW_FUNCTION.search(script)
+    if function is None:
+        return [*findings, "the script has no preview function"]
+    body = function.group(0)
+    if "method: 'POST'" not in body:
+        findings.append("the preview is not sent as a POST")
+    if "body: JSON.stringify(" not in body:
+        findings.append("the preview carries no body")
+    findings.extend(
+        f"the preview builds an address with {marker}" for marker in ("URLSearchParams", "'?'") if marker in body
+    )
+    return findings
+
+
+def test_the_rules_preview_never_travels_in_an_address_again() -> None:
+    """L-33-09-01, owner decision of 14.10.2026: the rules preview is a POST with a body."""
+    controller = SETTINGS_CONTROLLER.read_text(encoding="utf-8")
+    assert scan_rules_routes(controller, SCRIPT.read_text(encoding="utf-8")) == []
+    # Anti vacuity: both rules routes are seen, the preview and the write.
+    assert {url for _, url in _RULES_ROUTE.findall(controller)} == {"/admin/rules", "/admin/rules/preview"}
+
+
+def test_a_preview_by_get_or_in_the_query_is_one_finding_each() -> None:
+    """The self test of the scan: clean is clean, each way back to the address is a finding."""
+    attribute = "#[\\OCP\\AppFramework\\Http\\Attribute\\FrontpageRoute"
+    controller = (
+        f"{attribute}(verb: 'POST', url: '/admin/rules/preview')]\n{attribute}(verb: 'POST', url: '/admin/rules')]\n"
+    )
+    script = (
+        "  async function preview (exclusions, patterns) {\n"
+        "    const response = await fetch(url, {\n"
+        "      method: 'POST',\n"
+        "      body: JSON.stringify({ exclusions: exclusions })\n"
+        "    })\n"
+        "  }\n"
+    )
+    assert scan_rules_routes(controller, script) == []
+
+    by_get = controller.replace("'POST', url: '/admin/rules/preview'", "'GET', url: '/admin/rules/preview'")
+    assert scan_rules_routes(by_get, script) == ["/admin/rules/preview is a GET route"]
+
+    in_query = script.replace("fetch(url, {", "fetch(url + '?' + new URLSearchParams(params).toString(), {")
+    assert scan_rules_routes(controller, in_query) == [
+        "the preview builds an address with URLSearchParams",
+        "the preview builds an address with '?'",
+    ]
+
+    bare = script.replace("      method: 'POST',\n", "").replace(
+        "      body: JSON.stringify({ exclusions: exclusions })\n", ""
+    )
+    assert scan_rules_routes(controller, bare) == ["the preview is not sent as a POST", "the preview carries no body"]
+    assert scan_rules_routes(controller, "") == ["the script has no preview function"]
 
 
 def test_the_remedy_of_an_excluded_file_names_both_lists() -> None:

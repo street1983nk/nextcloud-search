@@ -1231,14 +1231,22 @@
    * on a refusal: a refused list comes back as codes, and those are what the
    * page shows next to the list instead of a confirmation for a save that
    * cannot happen.
+   *
+   * The two lists travel in the body of a POST and never in the address
+   * (finding L-33-09-01 of plan 33-09). An address ends up in the log line
+   * Nextcloud writes for the request and in the access log of the web server,
+   * and the folders and patterns of an instance belong in neither. The route
+   * still writes nothing; the verb says where the values travel.
    */
-  async function preview (params) {
-    const url = OC.generateUrl('/apps/findling/' + ROUTE_RULES_PREVIEW) + '?' + new URLSearchParams(params).toString()
-    const response = await fetch(url, {
+  async function preview (exclusions, patterns) {
+    const response = await fetch(OC.generateUrl('/apps/findling/' + ROUTE_RULES_PREVIEW), {
+      method: 'POST',
       headers: {
         requesttoken: document.head.dataset.requesttoken,
+        'Content-Type': 'application/json',
         Accept: 'application/json'
-      }
+      },
+      body: JSON.stringify({ exclusions: exclusions, exclusionPatterns: patterns })
     })
 
     return { ok: response.ok, status: response.status, body: await response.json() }
@@ -1277,15 +1285,9 @@
 
     let answer = null
     try {
-      // One pair per entry, because a list travels as repeated parameters and
-      // a joined string would arrive as one folder with commas in its name.
-      const reply = await preview(
-        exclusions.map(function (prefix) {
-          return ['exclusions[]', prefix]
-        }).concat(patterns.map(function (pattern) {
-          return ['exclusionPatterns[]', pattern]
-        }))
-      )
+      // Both lists as JSON arrays, so a folder with a comma in its name stays
+      // one folder.
+      const reply = await preview(exclusions, patterns)
       if (reply.ok) {
         answer = reply.body
       } else if (reply.status === 400) {

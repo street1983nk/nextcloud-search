@@ -934,8 +934,14 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # own; the sixteen catalogues under php/l10n moved with it but are not in this
 # tree, because the recipe globs **/*.php. No file came and none went, so
 # PHP_FILES_TODAY stays at 103.
+# Moved on 2026-10-14 by Plan 33-09 (finding L-33-09-01, owner decision of
+# 14.10.2026): the rules preview of lib/Controller/SettingsController.php is a
+# POST, so prefixes and patterns travel in the body and reach no address and no
+# log line; lib/Service/ExclusionService.php logs a refused pattern with a
+# sentence of its own; tests/Unit/SettingsControllerTest.php holds both. No file
+# came and none went, so PHP_FILES_TODAY stays at 103.
 PHP_FILES_TODAY = 103
-PHP_TREE_HASH_TODAY = "1761f54cdf4b5fe5faf5500b7a01565f82f3fd63e8874ca8260fc913ffce03f9"
+PHP_TREE_HASH_TODAY = "6b4a5994dd005fe3bc4c19cc6f959517a681e296db4d785f7d18c8099a59d52c"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

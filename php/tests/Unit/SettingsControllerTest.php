@@ -317,7 +317,66 @@ final class SettingsControllerTest extends TestCase {
 		self::assertSame([], $this->writes);
 	}
 
-	// -- GET admin/rules/preview ----------------------------------------------
+	// -- POST admin/rules/preview ---------------------------------------------
+
+	/**
+	 * Finding L-33-09-01 of plan 33-09: the lists travel in the body.
+	 *
+	 * A GET carried every prefix and every pattern in the query string, and
+	 * Nextcloud writes the address of the request into the url field of each
+	 * log line, so a refused preview put the rules of the instance into
+	 * nextcloud.log. The verb is read off the route attribute itself, and the
+	 * request token check stays on like on the writing route next to it.
+	 */
+	public function testThePreviewIsAPostRouteSoNoRuleTravelsInAnAddress(): void {
+		$route = self::routeOf('previewRules');
+		self::assertSame('POST', $route['verb'] ?? null);
+		self::assertSame('/admin/rules/preview', $route['url'] ?? null);
+		self::assertSame(self::routeOf('saveRules')['verb'] ?? null, $route['verb'] ?? null);
+
+		$method = new \ReflectionMethod(SettingsController::class, 'previewRules');
+		foreach ($method->getAttributes() as $attribute) {
+			self::assertStringNotContainsString('CSRF', $attribute->getName());
+			self::assertStringNotContainsString('NoAdminRequired', $attribute->getName());
+		}
+	}
+
+	public function testARefusedPatternIsLoggedAsAPatternAndARefusedPrefixAsAFolder(): void {
+		$this->controller()->previewRules(['Archiv'], ['[0-9]*']);
+		$patternLines = array_column($this->logLines, 'message');
+		$this->assertTheLogOnlyCounts();
+
+		$this->logLines = [];
+		$this->controller()->previewRules(['./Archiv'], ['*.key']);
+		$folderLines = array_column($this->logLines, 'message');
+		$this->assertTheLogOnlyCounts();
+
+		self::assertContains('Findling: refused an exclusion pattern that is not a usable pattern', $patternLines);
+		self::assertNotContains('Findling: refused an exclusion entry that is not a usable folder path', $patternLines);
+		self::assertContains('Findling: refused an exclusion entry that is not a usable folder path', $folderLines);
+		self::assertNotContains('Findling: refused an exclusion pattern that is not a usable pattern', $folderLines);
+		foreach (array_merge($patternLines, $folderLines) as $message) {
+			foreach (['Archiv', '[0-9]', '*.key'] as $value) {
+				self::assertStringNotContainsString($value, $message);
+			}
+		}
+	}
+
+	/**
+	 * The arguments of the route attribute of one method, by name.
+	 *
+	 * @return array<array-key, mixed>
+	 */
+	private static function routeOf(string $method): array {
+		$reflection = new \ReflectionMethod(SettingsController::class, $method);
+		foreach ($reflection->getAttributes() as $attribute) {
+			if (str_ends_with($attribute->getName(), '\FrontpageRoute')) {
+				return $attribute->getArguments();
+			}
+		}
+		self::fail('no route attribute on ' . $method);
+	}
+
 
 	public function testThePreviewNamesTheNewPatternsAndCountsOnlyThePrefixes(): void {
 		$this->values[SettingsService::KEY_EXCLUSIONS] = ['Archiv'];

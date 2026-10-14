@@ -194,6 +194,12 @@ final class ExclusionService {
 	 */
 	private array $compiled = [];
 
+	/** The log sentence of a refused folder entry, unchanged since 1.4.2. */
+	private const REJECTED_FOLDER = 'Findling: refused an exclusion entry that is not a usable folder path';
+
+	/** The log sentence of a refused pattern, without the pattern. */
+	private const REJECTED_PATTERN = 'Findling: refused an exclusion pattern that is not a usable pattern';
+
 	/** Counter of everything that was refused, for the log line below. */
 	private int $rejected = 0;
 
@@ -387,7 +393,7 @@ final class ExclusionService {
 		}
 
 		if ($errors !== []) {
-			$this->reject();
+			$this->reject(self::REJECTED_FOLDER);
 		}
 
 		return array_values(array_unique($errors));
@@ -577,7 +583,7 @@ final class ExclusionService {
 		}
 
 		if ($errors !== []) {
-			$this->reject();
+			$this->reject(self::REJECTED_PATTERN);
 		}
 
 		return array_values(array_unique($errors));
@@ -1300,14 +1306,14 @@ final class ExclusionService {
 	 * A refused entry, counted and never written out.
 	 *
 	 * The same rule as FileStateService::reject() and SettingsService::reject():
-	 * what arrives here is a folder name of a private instance, and the log of
-	 * this app carries counters and codes and nothing somebody else wrote.
+	 * what arrives here is a folder name or a pattern of a private instance, and
+	 * the log of this app carries counters and codes and nothing somebody else
+	 * wrote. The sentence names the list the entry was refused from, so a
+	 * refused pattern is not reported as a folder path (finding L-33-09-01 of
+	 * plan 33-09); the folder sentence is the one of 1.4.2, word for word.
 	 */
-	private function reject(): void {
+	private function reject(string $message): void {
 		$this->rejected++;
-		$this->logger->warning(
-			'Findling: refused an exclusion entry that is not a usable folder path',
-			['rejected' => $this->rejected],
-		);
+		$this->logger->warning($message, ['rejected' => $this->rejected]);
 	}
 }
