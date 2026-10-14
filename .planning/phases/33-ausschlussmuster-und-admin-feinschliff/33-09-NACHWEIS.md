@@ -1,9 +1,8 @@
 # Phase 33 Plan 09: Nachweis EXCL-02 auf der Dev-Instanz 8090
 
-**Stand: angehalten nach Task 1 (Weg A) wegen Befund L-33-09-01 (siehe unten).**
-Task 1 ist bis auf den Rückweg gefahren, Task 2 (Weg C) ist noch nicht begonnen.
-Die Instanz steht bewusst im Zustand nach Weg A (Abschnitt "Zustand beim Anhalten"),
-damit die Fortsetzung dort ansetzen kann.
+**Stand:** Task 1 (Weg A) ergab um 10:31 den Befund L-33-09-01, der Lauf hielt an.
+Owner-Entscheid vom 14.10.2026: Option 1, die Vorschau geht per POST. Fix `fe813988`
+(Abschnitt "Fix L-33-09-01"), danach Rückweg von Task 1, Task 2 (Weg C) und Aufräumen.
 
 ## Stand
 
@@ -139,20 +138,192 @@ Kontext, nicht das Kernfeld `url`.
 **Nebenbefund.** Eine abgelehnte Musterliste loggt "refused an exclusion entry that is not a usable
 folder path", obwohl es kein Ordnerpfad war.
 
-**Nicht gefixt** (Auftrag: Produktfehler nicht still fixen, wenn der Fix Verhalten ändert). Ein Fix
-ändert entweder die Route (Vorschau als POST mit Body, wie das Speichern) oder das Logverhalten.
-Optionen für den Owner:
+**Zunächst nicht gefixt** (Auftrag: Produktfehler nicht still fixen, wenn der Fix Verhalten ändert),
+Lauf um 10:31 angehalten und mit drei Optionen gemeldet (POST, keine Warnung in der Vorschau,
+hinnehmen). **Owner-Entscheid 14.10.2026: Option 1**, die Vorschau geht per POST.
 
-1. Vorschau auf POST umstellen (Werte nur im Body; beseitigt auch das Access-Log), Seite und PHPUnit nachziehen.
-2. Ablehnung in der Vorschau nicht mehr als Warnung loggen (die Antwort trägt die Codes schon), Speichern loggt weiter; Access-Log bleibt.
-3. Als bekannt hinnehmen und in docs/admin-page.md vermerken (Wert ist Admin-Konfiguration, Log ist Admin-Log).
+## Fix L-33-09-01 (Commit `fe813988`)
 
-## Zustand beim Anhalten (für die Fortsetzung)
+- `SettingsController::previewRules()`: Route `POST /admin/rules/preview` statt GET, Docblocks
+  von Klasse und Methode nennen den Grund; Request-Token wird wie bei jeder Admin-Route geprüft
+  (kein Attribut, das die Prüfung aufhebt; Gate `test_php_trust_boundary.py` unverändert grün).
+- `php/js/admin.js`: `preview(exclusions, patterns)` schickt beide Listen als JSON im Body,
+  mit `requesttoken` und `Content-Type: application/json`, ohne Query.
+- `ExclusionService::reject()`: Satz je Liste, Ordner unverändert wie 1.4.2 ("refused an
+  exclusion entry that is not a usable folder path"), Muster neu "refused an exclusion pattern
+  that is not a usable pattern"; Kontext weiter nur der Zähler.
+- PHPUnit (`SettingsControllerTest.php`): Verb und URL aus dem Routenattribut, gleiches Verb wie
+  das Speichern, kein Attribut, das CSRF oder Admin aufhebt; Logsatz je Liste ohne Werte.
+  CI: 791 Tests, 2976 Assertions (vorher 789).
+- Gate `scan_rules_routes` in `test_admin_ui_contract.py` mit Selbsttest: jede Regelroute ist
+  POST, die Vorschau hat `method: 'POST'` und einen Body und baut keine Adresse mit
+  `URLSearchParams` oder `'?'`; Anti-Leere: beide Regelrouten werden gesehen. Gegenprobe mit
+  Controller und Skript aus `git show HEAD:` (Stand vor dem Fix): 2 rot (Gate mit 6 Befunden,
+  Body-Prüfung im Mustertest), Selbsttest grün; eigene Kopien zurück, `cmp` gleich.
+- PHP-Baumhash `1761f54c...` auf `6b4a5994dd005fe3bc4c19cc6f959517a681e296db4d785f7d18c8099a59d52c`,
+  103 Dateien; Gegenprobe per Shell (`find`, `LC_ALL=C sort`, Wagenrücklauf entfernt, `sha256sum`) gleich.
+- Gates lokal: pytest 5682 passed, 159 skipped (16:48 min), ruff, ruff format (222), pyright
+  0 Fehler, vulture leer, reuse 2730/2730, `node --check`, `php -l` (php:8.3-cli) je Datei.
+- CI `fe813988`, alle mit `gh run watch --exit-status` grün: PHP and store metadata gates
+  38542497810, Python gates 38542497613, Security scans 38542497846, OpenSSF Scorecard
+  38542497926, Resilience 38542497538, Multi-arch image 38542497556, Integration 38542497748,
+  HaRP deploy 38542497788.
 
-- `exclusions` = `["Archiv"]`, `exclusion_patterns` = `["*.key","*\/node_modules\/*"]` (Weg A aktiv).
-- Saat Weg A liegt: 2991 bis 2998 wie oben; A, D, Bild 2995 aus dem Index, F nie eingereiht.
-- Keine Findling-Jobs offen außer dem regulären ScanRecountJob.
-- Host-Backend unverändert (pid 987667, Standardtakt des Abgleichs 24 h / Stunde 2; nächster Abgleich frühestens 15.10. 02:00).
-- App-Passwort `nachweis3309` für testuser besteht noch (Token im Scratch `testuser.tok`), wird beim Aufräumen gelöscht.
-- Offen aus Task 1: Rückweg (Muster auf der Seite entfernen, `occ findling:index --restart`, A wieder 1).
-- Offen: Task 2 (Weg C mit Gegenprobe), Aufräumen, Endzustand.
+### Nachweis des Fixes auf 8090
+
+Positivkontrolle: `befund-log-url.txt` (alter Stand, 10 Zeilen mit allen Regelwerten im Feld `url`).
+
+| Schritt | Erwartung (vorher notiert, 11:04:25) | Ergebnis |
+|---|---|---|
+| Ausgeliefertes Skript | nach `fetch(url,{cache:'reload'})` mit POST-Vorschau | ja (Body-Zeile im ausgelieferten `admin.js`) |
+| Erster Versuch 11:04 | Vorschau POST 400 mit Satz | **POST 405**: Nextcloud hält die Routen der App im APCu-Cache, der Bind-Mount ändert keine App-Version. Container `findling-nextcloud` neu gestartet (11:05), danach 400 mit Codes. Umgebung, kein Befund |
+| Abgelehnte Vorschau `[0-9]*` | Satz am Musterfeld, Anfrage POST mit Body | Satz "Eckige und geschweifte Klammern ...", `POST /apps/findling/admin/rules/preview` mit Body `{"exclusions":["Archiv"],"exclusionPatterns":["*.key","*/node_modules/*","[0-9]*"]}`; Bild `f1-ablehnung-nach-fix.png` |
+| Gültige Vorschau `*.fixprobe-nichts` | Bestätigung wie bisher | Bestätigung mit dem Muster im code-Element, abgebrochen; `f2-bestaetigung-nach-fix.png` |
+| Alte GET-Adresse | abgelehnt | `GET .../preview?exclusions[]=Archiv` 405 |
+| nextcloud.log | vorher 2523 Zeilen; neue Zeilen ohne Regelwerte | 4 neue Zeilen (zwei Ablehnungen), `url` = `/apps/findling/admin/rules/preview` ohne Query; grep `Archiv`, `*.key`, `node_modules`, `[0-9]`, `fixprobe`, `exclusionPatterns%5B` je 0; Satz der Musterablehnung jetzt "refused an exclusion pattern that is not a usable pattern" |
+| Access-Log ab 09:05Z | keine Regelwerte | 473 Zeilen, `exclusionPatterns`, `*.key`, `node_modules`, `fixprobe` je 0; `Archiv` 1, das ist die eigene GET-Gegenprobe mit curl (405) |
+
+## Rückweg Task 1
+
+| Schritt | Erwartung | Ergebnis |
+|---|---|---|
+| Muster auf der Seite entfernen, speichern (11:27:56) | keine Bestätigung, `exclusion_patterns` `[]`, `exclusions` `["Archiv"]`, kein Kehrjob | so; nur ein POST `/admin/rules`; `a4-rueckweg-gespeichert.png` |
+| `occ findling:index --restart -n`, cron.php bis kein Crawl-Job | 480 Queue-Zeilen, Abarbeitung | Crawl nach 6 cron-Läufen fertig (11:28:31), Queue leer 11:35:29 |
+| Suche | A 1, D 1, F 1 (F war nie eingereiht), E 0 | A 1, B 1, C 1, D 1, E 0, F 1; Urteile 2995 und 2996 wieder `image_not_ocrable` |
+
+Dauer des Rückwegs über `--restart`: rund 7,5 Minuten (ganzer Bestand neu eingereiht).
+
+## Task 2: Weg C über den Abgleich
+
+### Saat Weg C (Neustart R0 vorher)
+
+Neustart R0 um 11:39:31: Hauptbaum, `FINDLING_OCR_ENABLED=false`, Abgleich auf Standard (24 h,
+Stunde 2, nicht fällig). OCR aus, damit das PDF ohne Textschicht mit `skipped(no_text_layer)`
+stehen bleibt (der Host-Prozess hat kein Tesseract, mit OCR an würde daraus `failed(ocr_unavailable)`).
+
+| Kürzel | Pfad | Wort | Datei-ID | Urteil nach der Indexierung |
+|---|---|---|---|---|
+| G | `/Abnahme33c/Praesentation.key/Data/notiz.txt` | zyqgira | 3004 | indexed |
+| H | `/Abnahme33c/Altordner/notiz.txt` | zyqhoxu | 3005 | indexed |
+| K (Kontrolle) | `/Abnahme33c/Kontrolle/notiz.txt` | zyqkapo | 3006 | indexed |
+| Bild unter Bundle | `/Abnahme33c/Praesentation.key/Data/bild.png` | , | 3007 | `skipped(no_text_layer)` |
+| Bild Kontrolle | `/Abnahme33c/Kontrolle/bild.png` | , | 3008 | `skipped(no_text_layer)` |
+| PDF ohne Textschicht | `/Abnahme33c/Praesentation.key/scan.pdf` | , | 3009 | `skipped(no_text_layer)` |
+
+Mit OCR aus bekommen auch die Bilder `no_text_layer` (sie gehen den Weg eines Scans), nicht
+`image_not_ocrable`; damit liegen drei `no_text_layer`-Zeilen vor (PE-9). Indexiert 11:40:13,
+G, H, K je 1 Treffer. `findling_file_state` vorher: 3007, 3008, 3009 (`fs_c_vorher.txt`).
+
+### Regeln am Formular vorbei (11:45:27)
+
+```
+occ config:app:set findling exclusion_patterns --value='["*.key"]' --type=array
+occ config:app:set findling exclusions --value='["Archiv","Abnahme33c/Altordner"]' --type=array
+```
+
+Erwartung: kein ExclusionSweepJob, kein SubtreeExpandJob, Queue leer, G und H weiter 1.
+Ergebnis: Jobs vorher 0, nachher 0, auch nach einem cron.php 0; Queue 0; G 1, H 1, K 1.
+Die Diagnose von G sagt sofort `excluded` (live), der Index hält G aber weiter (B1).
+
+### Fälligkeit und Läufe des Abgleichs
+
+Regel aus `reconcile.py` (`_is_due`, Zeilen 793 bis 822): kein offener Lauf, seit dem letzten
+Ende mindestens `FINDLING_RECONCILE_MIN_INTERVAL_HOURS`, und die Stunde der Hostuhr gleich
+`FINDLING_RECONCILE_HOUR`; sonst erst nach dem doppelten Intervall. Geprüft wird je Takt
+(`RECONCILE_TICK_SECONDS` 300, erster Takt beim Start). Letztes Ende aus `state.db`, Tabelle
+`reconcile`, `MAX(finished_at)` (Skript `rstate.py`, nur lesend), Ortszeit des Hosts (UTC+2).
+
+| Lauf | Codestand | letztes Ende vorher | Neustart | gesetzte Stunde | erwarteter Start | tatsächlicher Start | Ende | Logzeile (nur Zähler) |
+|---|---|---|---|---|---|---|---|---|
+| 1 Gegenprobe | `bd4e13af` (Elternteil von `eff4a9bf`, vor 33-03), Worktree `abnahme33-gegenprobe` | 13.10. 12:56:05 | 11:46:08 | 13 (t1 = 13.10. 13:56:05) | erster Takt, weil seit dem Ende mehr als 2 h vergangen sind | erster Takt beim Start (11:46:08 bis 11:46:10) | 11:46:10 | `walked, mounts=3 slices=3 seen=491 stale=0 missing=0 given_up=0` |
+| 2 neuer Stand | `fe813988` (main) | 11:46:10 | 11:47:18 | 12 (t1 = 12:46:10) | erster Takt nach 12:46:10, also 12:47:2x | 12:47:2x (Takt 12 nach dem Start) | 12:47:27 | `walked, mounts=3 slices=3 seen=491 stale=7 missing=0 given_up=0` |
+| 3 neuer Stand, zweiter Abgleich | `fe813988` | 12:47:27 | 12:48:08 | 13 (t1 = 13:47:27) | erster Takt nach 13:47:27, also 13:48:1x | 13:48:1x | 13:48:16 | `walked, mounts=3 slices=3 seen=491 stale=0 missing=0 given_up=0` |
+
+Alle drei Starts mit `FINDLING_RECONCILE_MIN_INTERVAL_HOURS=1` und `FINDLING_OCR_ENABLED=false`.
+Zwischen Lauf 1 und Lauf 2 lief von 11:46:23 bis 11:47:14 der Hauptbaum ohne die Variablen
+(Abweichung A2 unten); Standardtakt 24 h, also kein Abgleich, `state.db` bestätigt das.
+
+Gegenprobe-Prozess: Python des Hauptbaums mit `PYTHONPATH=<worktree>/backend/src`, gleicher
+Speicher `.dev/storage`, gleiches Geheimnis. Positivkontrolle des Codestands vor dem Start:
+`findling.worker.reconcile.__file__` zeigt in den Worktree und der Quelltext enthält den
+Weg-C-Zweig `row.file_id in known` nicht; im Hauptbaum enthält er ihn.
+
+### Ergebnis je Datei
+
+| Datei | vorher (nach Saat) | nach Lauf 1, alter Stand (Gegenprobe) | nach Lauf 2, neuer Stand | nach Lauf 3 | nach dem Rückweg |
+|---|---|---|---|---|---|
+| G `Praesentation.key/Data/notiz.txt` (Muster) | 1 | **1** | **0** | 0 | 1 |
+| H `Altordner/notiz.txt` (Präfix) | 1 | **1** | **0** | 0 | 1 |
+| K Kontrolle | 1 | 1 | 1 | 1 | 1 |
+| A `Vortrag.key/Data/notiz.txt` (aus Task 1, auch unter `*.key`) | 1 | 1 | 0 | , | 1 |
+| F `Vortrag.key/Data/neu.txt` (aus Task 1) | 1 | , | 0 | , | 1 |
+| Diagnose G und H | `excluded` sofort nach dem occ-Befehl | `excluded` | `excluded` | , | , |
+
+Lauf 2 räumte genau sieben Dateien (`stale=7`): G, H, Bild 3007, PDF 3009 und aus Task 1 A, F
+und Bild 2995. Abholung ohne cron.php: Der Abgleich reiht über `requeue` ein, der Poller holte
+sie ab, `describe()` machte Löschaufträge daraus (`claimed=7 committed=7`, `DELETE` quittiert),
+12:47:51 G 0 und H 0. Lauf 3 reihte nichts ein (`stale=0`, Queue 0), keine Schleife.
+
+Dauer bis zum Verschwinden, Weg C: vom Setzen der Regeln (11:45:27) bis 12:47:51, bestimmt nur
+durch die Fälligkeit; vom Start des fälligen Laufs bis zum Verschwinden unter 30 Sekunden.
+Weg A zum Vergleich: rund eine Minute nach dem Speichern.
+
+### Urteilszeilen (PE-9, B2), `findling_file_state`
+
+| Datei-ID | vorher (11:40:13) | nach Lauf 1 | nach Lauf 3 |
+|---|---|---|---|
+| 3007 Bild unter `Praesentation.key` | `skipped(no_text_layer)` | weg | weg |
+| 3009 PDF unter `Praesentation.key` | `skipped(no_text_layer)` | weg | weg |
+| 3008 Kontrollbild | `skipped(no_text_layer)` | bleibt | bleibt |
+| 2995 Bild unter `Vortrag.key` (Task 1) | `skipped(image_not_ocrable)` | nicht abgefragt | weg |
+| 2996 Kontrollbild (Task 1) | `skipped(image_not_ocrable)` | , | bleibt |
+
+Die Urteilszeilen unter der per occ gesetzten Regel verschwanden schon im Gegenprobe-Lauf. Das
+ist kein Widerspruch zur Gegenprobe: Die Bereinigung sitzt laut 33-04 im Abgleichs-Slice der
+PHP-Seite (`ReconcileController::forgetExcludedVerdicts()`), und `php/` ist in beiden Läufen der
+neue Stand. Der Codestand des Containers entscheidet nur, ob das Dokument den Index verlässt;
+das zeigen G und H (1 auf dem alten, 0 auf dem neuen Stand). SQL-Ausgaben: `fs_c_vorher.txt`,
+`fs_c_nachher.txt`, `protokoll.log`.
+
+### Rückweg Weg C
+
+Regeln per occ zurück (`exclusions` `["Archiv"]`, `exclusion_patterns` `[]`, 13:58),
+`occ findling:index --restart -n`, cron.php bis der Crawl fertig war (8 Läufe, 13:58:21),
+Queue leer 13:59:19: G 1, H 1, K 1, A 1, F 1.
+
+## Aufräumen und Endzustand
+
+Erwartung (13:59:31 und 14:58:01) vor jedem Schritt im Rohprotokoll.
+
+| Schritt | Ergebnis |
+|---|---|
+| WebDAV `DELETE` `/Abnahme33`, `/Abnahme33c`, `/node_modules`, `/Archiv/alt.txt` | je 204; `/Archiv` selbst (1.4.2-Bestand mit zwei Dateien) bleibt |
+| cron.php bis kein SubtreeExpandJob | 6 Läufe (13:59:49), 13 Löschzeilen abgeholt (`claimed=13 committed=13`) |
+| danach Papierkorb (`occ trashbin:cleanup testuser`) | geleert, Reihenfolge wie in 32-07 |
+| Suche nach allen neun Saatwörtern | je 0 |
+| PROPFIND `/Abnahme33`, `/Abnahme33c`, `/node_modules`, `/Archiv/alt.txt` | je 404 |
+| Host-Backend ohne die Testvariablen neu registriert (14:57:34) | Status 1.4.2, `docs` 469 wie vor dem Plan |
+| Worktree `abnahme33-gegenprobe` | entfernt; issue-14, release-1.3, release-1.4.x unberührt |
+| App-Passwort `nachweis3309` (ID 101) | gelöscht, altes Token danach 401, Tokendatei im Scratch gelöscht |
+| `exclusions` | `["Archiv"]`, hex `5B22417263686976225D`, byte-gleich zum Anfang |
+| `exclusion_patterns` | Schlüssel gelöscht wie vor dem Plan (`config:app:get` Exit 1, liest sich als leere Liste) |
+| Jobs, Queue | nur der reguläre ScanRecountJob, Queue 0 |
+| Datei 2970 (carol, M-32-02) | nicht angefasst: im Container weiter `indexed`, ohne Grabstein, ACL `carol` |
+
+## Abweichungen
+
+- **A1 Befund L-33-09-01 und Fix im Plan** (Owner-Entscheid Option 1), eigener Commit `fe813988`.
+- **A2 Registrierskript ersetzt den Gegenprobe-Prozess.** `register-exapp.sh` hält einen laufenden
+  Prozess für veraltet, wenn eine Routenprobe 404 ergibt; mit dem Gegenprobe-Prozess ergab die
+  Probe für `^/status$` 404, das Skript startete 11:46:23 den Hauptbaum ohne die Variablen. Der
+  Abgleich der Gegenprobe war da schon gelaufen (11:46:10). Für Lauf 2 und 3 wurde der Prozess
+  vorher beendet und das Skript mit den Variablen gestartet.
+- **A3 Routen-Cache.** Nach dem Wechsel GET auf POST antwortete die Instanz 405, weil Nextcloud die
+  Routen im APCu hält und der Bind-Mount keine App-Version ändert; Container neu gestartet.
+- **A4 OCR für die Weg-C-Läufe aus** (`FINDLING_OCR_ENABLED=false`), damit `no_text_layer` stehen
+  bleibt; dadurch tragen auch die Bilder `no_text_layer`.
+- **A5 Kehrjob und Präfix** (Hinweis H1 oben): Weg A reiht auch Dateien unter einem Präfix als
+  Löschzeile ein; idempotent, kein Befund.
+- **A6 Wartezeiten** über ereignisgetriebene Wartebefehle (`tail -f` auf Backend- und Access-Log mit
+  `grep -m1`, Hintergrundbefehle), kein `sleep`. Zweimal überbrückte ein `timeout 2 tail -f`
+  das Ende eines gestoppten Prozesses beziehungsweise den Neustart des Containers.
