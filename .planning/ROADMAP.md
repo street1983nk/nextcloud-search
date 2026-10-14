@@ -174,7 +174,7 @@ Plans:
 **Plans**: 11 plans (seriell, eine Welle je Plan)
 Plans:
 - [x] 33-01-PLAN.md: Wortlaut-Entwurf en/de/fr (Musterliste, Meldungen je Code, Grenzblock, Änderungshinweis, Hardware-Satz), Owner-Abnahme (Checkpoint) (abgenommen 13.10.2026, 45c00a2f)
-- [ ] 33-02-PLAN.md: ExclusionService mit Mustern (exclusion_patterns, Codes, NFC, bitparalleler Matcher, hasRules an drei Guards), Gate D, ExclusionServiceTest
+- [x] 33-02-PLAN.md: ExclusionService mit Mustern (exclusion_patterns, Codes, NFC, bitparalleler Matcher, hasRules an drei Guards), Gate D, ExclusionServiceTest (75f5f29e, 3c1d5a97)
 - [ ] 33-03-PLAN.md: Container: Weg C im Abgleich (D-33-01), Statusfelder maxCells und extractAddressSpaceBytes
 - [ ] 33-04-PLAN.md: Weg A: ExclusionSweepJob beim Speichern neuer Muster, Urteilszeilen in beiden Räumwegen gelöscht (B2)
 - [ ] 33-05-PLAN.md: Admin-Seite: Liste Excluded patterns, Routen mit zwei Listen, Meldung je Code, zahlenlose Bestätigung, Diagnose-Abhilfe
@@ -232,7 +232,7 @@ Plans:
 | 30. Owner-Tor, Schema und Tschechisch | v1.5 | 9/9 | Complete | 2026-10-10 |
 | 31. Neue Formate und Nachholweg | v1.5 | 15/15 | In Progress (Verifikation offen) | - |
 | 32. Filter in der Unified Search | v1.5 | 8/8 | Executed, verification pending | - |
-| 33. Ausschlussmuster und Admin-Feinschliff | v1.5 | 1/11 | In Progress | - |
+| 33. Ausschlussmuster und Admin-Feinschliff | v1.5 | 2/11 | In Progress | - |
 | 34. Umstiegsweg | v1.5 | 0/? | Not started | - |
 | 35. Stretch: Aehnliche Dokumente und Spikes | v1.5 | 0/? | Not started | - |
 | 36. Haertung und Store-Einreichung 1.5.0 | v1.5 | 0/? | Not started | - |
