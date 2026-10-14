@@ -976,6 +976,64 @@ $megabyte = 1048576;
 $capMb = max(1, intdiv($capBytes, $megabyte));
 $ceilingMb = max(1, intdiv($ceilingBytes, $megabyte));
 
+// The four limits per file of POL-01 (plan 33-06), read only: nothing in this
+// block is an input, the four are deploy options of the container. Each line
+// carries its value and the name of its deploy option, and the name sits in a
+// code element of its own, the technique of the env lines of the profile block:
+// the sentence is translated with a marker in its place and cut at that marker.
+// A line without a value from the status answer stays hidden (container 1.4.x).
+$limitsView = is_array($_['limits'] ?? null) ? $_['limits'] : [];
+$limitMarker = "\u{E000}";
+$limitOf = static function (string $key) use ($limitsView): array {
+	$entry = is_array($limitsView[$key] ?? null) ? $limitsView[$key] : [];
+	$value = is_int($entry['value'] ?? null) && $entry['value'] >= 0 ? $entry['value'] : null;
+
+	return [
+		'value' => $value ?? 0,
+		'shown' => ($entry['shown'] ?? false) === true && $value !== null,
+		'source' => is_string($entry['source'] ?? null) ? $entry['source'] : '',
+		'profile' => is_string($entry['profile'] ?? null) ? $entry['profile'] : '',
+	];
+};
+$limitFile = $limitOf('file');
+$limitAddressSpace = $limitOf('address_space');
+$limitCells = $limitOf('cells');
+$limitPages = $limitOf('pages');
+// The lines with a deploy option in a code element, keyed by the id suffix the
+// script writes into. The page limit has a second form for the source
+// "profile", which names the profile in force instead of the option. The
+// option names come out of this map, the rule of the env lines (D-27-14), and
+// never out of the view; a contract test holds the map equal to
+// AdminViewService::LIMIT_VARIABLES.
+$limitVariables = [
+	'file' => 'FINDLING_MAX_FILE_BYTES',
+	'address-space' => 'FINDLING_EXTRACT_ADDRESS_SPACE_BYTES',
+	'cells' => 'FINDLING_MAX_CELLS',
+	'pages-env' => 'FINDLING_OCR_MAX_PAGES',
+];
+$limitLines = [
+	'file' => [$limitFile, $l->t('Largest file the backend reads: %1$s (%2$s)', [$size($limitFile['value']), $limitMarker])],
+	'address-space' => [$limitAddressSpace, $l->t('Memory one document may use while it is read: %1$s (%2$s)', [$size($limitAddressSpace['value']), $limitMarker])],
+	'cells' => [$limitCells, $l->t('Cells read per spreadsheet file: %1$s (%2$s)', [$count($limitCells['value']), $limitMarker])],
+	'pages-env' => [
+		['shown' => $limitPages['shown'] && $limitPages['source'] === 'env'] + $limitPages,
+		$l->t('Pages read per scanned document: %1$s (%2$s)', [$count($limitPages['value']), $limitMarker]),
+	],
+];
+$limitPagesProfileShown = $limitPages['shown'] && $limitPages['source'] === 'profile' && isset($profileNames[$limitPages['profile']]);
+$limitPagesProfileLine = $l->t('Pages read per scanned document: %1$s, from the profile %2$s', [$count($limitPages['value']), $profileNames[$limitPages['profile']] ?? '']);
+// The way to change a limit, whole on the page, and the link for the details.
+// The link points at the documentation of exactly this release, a tag URL; the
+// tag is spelled here once, so the release step moves it in one place (REL-05).
+$limitsChangeMarker = "\u{E000}";
+$limitsChangeCommand = 'occ app_api:app:unregister findling_backend';
+$limitsChangeParts = explode(
+	$limitsChangeMarker,
+	$l->t('These limits are deploy options of Findling Backend. To change one, run %s, which keeps the data, and deploy Findling Backend again with the new value.', [$limitsChangeMarker]),
+	2,
+) + ['', ''];
+$limitsDocsUrl = 'https://github.com/street1983nk/nextcloud-search/blob/v1.5.0/docs/admin-page.md#limits-per-file';
+
 // Icon path data: Material Design Icons by Pictogrammers, Apache-2.0, pinned by
 // commit in THIRD-PARTY.md. The cross of a remove button, which is the only
 // icon-only control on this page and therefore the one that has to carry its
@@ -1387,8 +1445,32 @@ foreach (is_array($_['profileEnv'] ?? null) ? $_['profileEnv'] : [] as $envEntry
 		<span class="findling-rules__unit" id="findling-rules-cap-unit">MB</span>
 	</div>
 	<p class="settings-hint" id="findling-rules-cap-help"><?php p($l->t('Files above this size are recorded as skipped (too large) and never read.')); ?>
-		<?php p($l->t('The backend of this instance reads at most %s MB. For more, raise FINDLING_MAX_FILE_BYTES in the app settings of AppAPI, which restarts the container.', [$count($ceilingMb)])); ?></p>
+		<?php p($l->t('The backend of this instance reads at most %s MB. This ceiling is a deploy option, see "Limits per file".', [$count($ceilingMb)])); ?></p>
 	<p class="findling-rules__error" id="findling-rules-cap-error" hidden></p>
+
+	<?php
+	/*
+	 * The limits per file of POL-01 (plan 33-06), read only. Four values the
+	 * container reports, each with the deploy option that sets it; none of them
+	 * is a field, because AppAPI cannot change a deploy option after the deploy.
+	 * The sentence under the list names the way that does work, whole, and the
+	 * link only adds the details. The script rewrites the text spans on every
+	 * poll and never the markup.
+	 */
+	?>
+	<div class="findling-limits" id="findling-limits">
+		<h3 class="findling-subheading" id="findling-limits-heading"><?php p($l->t('Limits per file')); ?></h3>
+		<ul class="findling-limits__list" aria-labelledby="findling-limits-heading">
+			<?php foreach ($limitLines as $limitId => [$limitEntry, $limitSentence]) {
+				$limitParts = explode($limitMarker, $limitSentence, 2) + ['', ''];
+				?>
+				<li id="findling-limits-<?php p($limitId); ?>"<?php if (!$limitEntry['shown']) { ?> hidden<?php } ?>><span id="findling-limits-<?php p($limitId); ?>-before"><?php p($limitParts[0]); ?></span><code><?php p($limitVariables[$limitId]); ?></code><span id="findling-limits-<?php p($limitId); ?>-after"><?php p($limitParts[1]); ?></span></li>
+			<?php } ?>
+			<li id="findling-limits-pages-profile"<?php if (!$limitPagesProfileShown) { ?> hidden<?php } ?>><?php p($limitPagesProfileLine); ?></li>
+		</ul>
+		<p class="settings-hint" id="findling-limits-change"><?php p($limitsChangeParts[0]); ?><code><?php p($limitsChangeCommand); ?></code><?php p($limitsChangeParts[1]); ?>
+			<a href="<?php p($limitsDocsUrl); ?>" target="_blank" rel="noreferrer noopener"><?php p($l->t('Steps in the documentation')); ?></a></p>
+	</div>
 
 	<div class="findling-rules__toggle">
 		<input type="checkbox" class="checkbox" id="findling-rules-team-folders" name="indexTeamFolders"<?php if ($teamFolders) { ?> checked<?php } ?>>

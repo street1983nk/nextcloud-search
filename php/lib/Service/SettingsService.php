@@ -76,8 +76,9 @@ final class SettingsService {
 	 * Not one of the four switches and deliberately not on the page as an input:
 	 * it is a measurement of the other side, written by the admin view whenever
 	 * the container answered, and read by maxFileBytes(). An admin who wants a
-	 * higher ceiling raises FINDLING_MAX_FILE_BYTES in the AppAPI app settings,
-	 * which restarts the container, because that variable is read at start.
+	 * higher ceiling raises FINDLING_MAX_FILE_BYTES, a deploy option that is
+	 * read at start: unregister the ExApp without --rm-data and deploy it again
+	 * with the new value (docs/admin-page.md#limits-per-file).
 	 */
 	public const KEY_CONTAINER_CAP = 'container_max_file_bytes';
 

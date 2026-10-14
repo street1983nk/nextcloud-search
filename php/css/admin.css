@@ -618,3 +618,28 @@
 .findling-profile__env code {
 	overflow-wrap: anywhere;
 }
+
+/* The limits per file of the rules block (plan 33-06), read only: the shape of
+   the env lines above, at the size of the text around them, because these are
+   the values and not a note about them. */
+.findling-limits {
+	margin-block-start: calc(var(--default-grid-baseline) * 4);
+}
+
+.findling-limits__list {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--default-grid-baseline) * 2);
+	margin-block: calc(var(--default-grid-baseline) * 2);
+	padding-inline-start: 0;
+	list-style: none;
+}
+
+.findling-limits__list code,
+#findling-limits-change code {
+	overflow-wrap: anywhere;
+}
+
+#findling-limits-change a {
+	text-decoration: underline;
+}

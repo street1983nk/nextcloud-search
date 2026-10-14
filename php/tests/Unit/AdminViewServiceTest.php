@@ -720,4 +720,116 @@ final class AdminViewServiceTest extends TestCase {
 			$table['excluded'] ?? null,
 		);
 	}
+
+	// -- the limits per file, read only (POL-01, plan 33-06) -----------------
+
+	/**
+	 * The judged view of backend() for one status answer.
+	 *
+	 * backend() is private and reads nothing but the answer, so it is asked
+	 * through reflection on an instance without its constructor, instead of
+	 * building the whole overview out of a dozen doubles.
+	 *
+	 * @param array<mixed>|null $answer
+	 * @return array<string,mixed>
+	 */
+	private static function backendView(?array $answer): array {
+		$service = (new \ReflectionClass(AdminViewService::class))->newInstanceWithoutConstructor();
+		$view = (new \ReflectionMethod(AdminViewService::class, 'backend'))->invoke($service, $answer);
+		self::assertIsArray($view);
+
+		return $view;
+	}
+
+	public function testTheTwoNewLimitsOfTheContainerArePassedThrough(): void {
+		$view = self::backendView(['maxFileBytes' => 52_428_800, 'maxCells' => 200_000, 'extractAddressSpaceBytes' => 536_870_912]);
+
+		self::assertSame(200_000, $view['maxCells']);
+		self::assertSame(536_870_912, $view['extractAddressSpaceBytes']);
+	}
+
+	public function testAContainerWithoutTheTwoFieldsGivesNullAndNotNought(): void {
+		// A container of 1.4.x reports maxFileBytes and nothing of plan 33-03.
+		// Nought would read as "no spreadsheet cell is read"; null hides the line.
+		$view = self::backendView(['maxFileBytes' => 52_428_800]);
+
+		self::assertNull($view['maxCells']);
+		self::assertNull($view['extractAddressSpaceBytes']);
+		self::assertNull(self::backendView(null)['maxCells']);
+	}
+
+	/**
+	 * The judgement of optionalCounter(): a non negative integer or null, and
+	 * nothing is cast (T-33-21).
+	 *
+	 * @return array<string,array{mixed}>
+	 */
+	public static function everythingThatIsNotALimit(): array {
+		return [
+			'a numeric string' => ['200000'],
+			'a negative number' => [-1],
+			'a fraction' => [1.5],
+			'a boolean' => [true],
+			'markup' => ['<b>200000</b>'],
+			'a list' => [[200_000]],
+		];
+	}
+
+	#[DataProvider('everythingThatIsNotALimit')]
+	public function testALimitThatIsNotAWholeNumberIsRefused(mixed $value): void {
+		$view = self::backendView(['maxCells' => $value, 'extractAddressSpaceBytes' => $value]);
+
+		self::assertNull($view['maxCells']);
+		self::assertNull($view['extractAddressSpaceBytes']);
+	}
+
+	public function testTheFourLimitsComeOutOfTheReadingsThatAlreadyExist(): void {
+		$answer = self::profileAnswer();
+		$backend = self::backendView($answer + ['maxCells' => 200_000, 'extractAddressSpaceBytes' => 536_870_912]);
+
+		self::assertSame([
+			'file' => ['value' => 52_428_800, 'variable' => 'FINDLING_MAX_FILE_BYTES', 'shown' => true],
+			'address_space' => ['value' => 536_870_912, 'variable' => 'FINDLING_EXTRACT_ADDRESS_SPACE_BYTES', 'shown' => true],
+			'cells' => ['value' => 200_000, 'variable' => 'FINDLING_MAX_CELLS', 'shown' => true],
+			// Source profile: the entry names the profile in force.
+			'pages' => ['value' => 50, 'variable' => 'FINDLING_OCR_MAX_PAGES', 'shown' => true, 'source' => 'profile', 'profile' => 'standard'],
+		], AdminViewService::limits(52_428_800, $backend, $answer));
+	}
+
+	public function testAContainerOfOneFourHidesTheTwoNewLinesAndKeepsTheCeiling(): void {
+		// The ceiling is the remembered one and stays; the two new limits and a
+		// container without the object profile leave their lines hidden.
+		$limits = AdminViewService::limits(52_428_800, self::backendView(['maxFileBytes' => 52_428_800]), []);
+
+		self::assertSame(['value' => 52_428_800, 'variable' => 'FINDLING_MAX_FILE_BYTES', 'shown' => true], $limits['file']);
+		self::assertSame(['value' => null, 'variable' => 'FINDLING_EXTRACT_ADDRESS_SPACE_BYTES', 'shown' => false], $limits['address_space']);
+		self::assertSame(['value' => null, 'variable' => 'FINDLING_MAX_CELLS', 'shown' => false], $limits['cells']);
+		self::assertSame(['value' => null, 'variable' => 'FINDLING_OCR_MAX_PAGES', 'shown' => false, 'source' => '', 'profile' => ''], $limits['pages']);
+	}
+
+	public function testAPageLimitSetByTheEnvironmentNamesNoProfile(): void {
+		$answer = self::profileAnswer();
+		$answer['profile']['sources']['ocrMaxPages'] = 'env';
+
+		self::assertSame(
+			['value' => 50, 'variable' => 'FINDLING_OCR_MAX_PAGES', 'shown' => true, 'source' => 'env', 'profile' => ''],
+			AdminViewService::limits(52_428_800, [], $answer)['pages'],
+		);
+	}
+
+	public function testAForeignSourceOrAnUnknownProfileHidesThePageLimit(): void {
+		$foreign = self::profileAnswer();
+		$foreign['profile']['sources']['ocrMaxPages'] = '<b>env</b>';
+		$unknown = self::profileAnswer();
+		$unknown['profile']['effective'] = 'turbo';
+		$cast = self::profileAnswer();
+		$cast['profile']['values']['ocrMaxPages'] = '50';
+
+		foreach ([$foreign, $unknown, $cast] as $answer) {
+			$pages = AdminViewService::limits(52_428_800, [], $answer)['pages'];
+			self::assertFalse($pages['shown']);
+			self::assertSame('', $pages['source']);
+			self::assertSame('', $pages['profile']);
+		}
+	}
 }

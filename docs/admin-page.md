@@ -757,14 +757,58 @@ meldet der Container seinen eigenen Deckel in der Statusantwort, die Seite merkt
 sich diesen Wert (er überlebt damit einen gestoppten Container) und klemmt die
 Eingabe daran.
 
-Um darüber hinaus zu gehen, reicht die Seite nicht. Nötig sind zwei Schritte:
-
-1. `FINDLING_MAX_FILE_BYTES` in den AppAPI-App-Einstellungen der ExApp
-   "Findling Backend" hochsetzen.
-2. Den Container neu starten, weil die Variable beim Start gelesen wird.
-
+Um darüber hinaus zu gehen, reicht die Seite nicht. `FINDLING_MAX_FILE_BYTES`
+ist eine Deploy-Option, und AppAPI kann sie nach dem Deploy nicht mehr ändern;
+eine App-Einstellung dafür gibt es nicht. Der Weg steht im nächsten Abschnitt.
 Danach meldet der Container den neuen Deckel, die Obergrenze des Feldes wandert
 mit, und der Wert lässt sich auf der Seite setzen.
+
+<a id="limits-per-file"></a>
+## Grenzen je Datei ändern
+
+Im Block "Regeln und Grenzen" zeigt die Seite unter dem Feld "Größte zu lesende
+Datei" vier Grenzen je Datei, jede mit dem Namen ihrer Deploy-Option. Die Werte
+kommen aus der Statusantwort des Containers und werden auf der Seite nur
+gelesen, keiner ist ein Eingabefeld. Grenzwerte in der Oberfläche editierbar zu
+machen ist bewusst außerhalb des Umfangs, weil AppAPI eine Deploy-Option nach dem
+Deploy nicht mehr ändert.
+
+| Grenze | Deploy-Option | Standard | Wirkung |
+|---|---|---|---|
+| Größte Datei, die das Backend liest | `FINDLING_MAX_FILE_BYTES` | 52428800 (50 MB) | Größere Dateien werden schon beim Durchlaufen der Dateiliste als `skipped(too_large)` übersprungen und nie gelesen. |
+| Speicher, den ein Dokument beim Lesen belegen darf | `FINDLING_EXTRACT_ADDRESS_SPACE_BYTES` | 536870912 (512 MiB) | Deckelt den Adressraum des Prozesses, der ein Dokument liest; ein Dokument darüber endet als `failed(out_of_memory)`. |
+| Gelesene Zellen je Tabellendatei | `FINDLING_MAX_CELLS` | 200000 | Eine Tabelle mit mehr Zellen wird als `skipped(too_many_cells)` übersprungen, nicht teilweise indexiert. |
+| Gelesene Seiten je gescanntem Dokument | `FINDLING_OCR_MAX_PAGES` | aus dem Profil: 30 Sparsam, 100 Standard, 150 Leistung | Darüber wird das Dokument mit den gelesenen Seiten indexiert und als gekürzt markiert. Ein gesetzter Wert überstimmt das Profil. |
+
+Die Standardwerte stehen in `backend/src/findling/config.py`, die Beschreibungen
+der Optionen in `backend/appinfo/info.xml`. Eine Grenze, die ein Container der
+Version 1.4 noch nicht meldet (Speicher je Dokument und Zellen), bleibt auf der
+Seite verborgen statt mit 0 zu erscheinen.
+
+Eine Deploy-Option wird beim Deploy gesetzt, und AppAPI 34 übernimmt sie danach
+unverändert, auch bei einem Update. Zum Ändern einer Grenze:
+
+1. Das Backend abmelden, **ohne** `--rm-data`:
+
+   ```bash
+   occ app_api:app:unregister findling_backend
+   ```
+
+   Der Datenspeicher des Containers (`nc_app_findling_backend_data`) bleibt dabei
+   erhalten, mit Index, Vektoren und Zustand. Die Begleit-App mit ihren Regeln
+   bleibt ebenfalls unberührt.
+2. "Findling Backend" erneut bereitstellen und dabei den neuen Wert setzen:
+   entweder in der Nextcloud-Oberfläche unter "Apps" bei der Installation in den
+   Deploy-Optionen, oder per `occ app_api:app:register` mit `--env`, zum Beispiel
+   `--env FINDLING_MAX_CELLS=400000`.
+3. Nach dem Start meldet der Container den neuen Wert, und die Seite zeigt ihn
+   beim nächsten Abfragen ohne Neuladen.
+
+Daten und Index bleiben dabei erhalten; der neue Wert gilt für die Dateien, die
+danach gelesen werden. Für `FINDLING_MAX_CELLS` sagt `info.xml` ausdrücklich:
+eine schon übersprungene Tabelle wird wieder gelesen, wenn sie sich ändert. Wie lange die Neuregistrierung dauert und was eine
+`docker update`-Grenze dabei verliert, steht in `docs/performance.md`
+(Abschnitt zur Wiederherstellung per Neuregistrierung).
 
 ## Der occ-Zweitzugang
 

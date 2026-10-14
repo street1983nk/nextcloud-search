@@ -276,6 +276,23 @@ final class AdminViewService {
 	];
 
 	/**
+	 * The deploy option behind each of the four limits per file (POL-01).
+	 *
+	 * Spelled here once and never taken out of the answer of the container, for
+	 * the reason ENV_VARIABLES is: the container reports numbers, and which
+	 * option sets them is decided in backend/appinfo/info.xml.
+	 */
+	private const LIMIT_VARIABLES = [
+		'file' => 'FINDLING_MAX_FILE_BYTES',
+		'address_space' => 'FINDLING_EXTRACT_ADDRESS_SPACE_BYTES',
+		'cells' => 'FINDLING_MAX_CELLS',
+		'pages' => 'FINDLING_OCR_MAX_PAGES',
+	];
+
+	/** The two sources of a profile value, findling.profile SOURCE_PROFILE and SOURCE_ENV. */
+	private const LIMIT_PAGE_SOURCES = ['profile', 'env'];
+
+	/**
 	 * The size of the fp32 model file of the release, in bytes.
 	 *
 	 * Equal to backend/src/findling/embed/weights.py FP32_BYTES, held equal by
@@ -751,6 +768,8 @@ final class AdminViewService {
 			'estimate' => $this->estimate($scan, $backend, $backendReachable, $indexable, $scheduled + $running),
 			'errors' => $this->errors(),
 			'rules' => $this->rules(),
+			// The four limits per file, read only (POL-01, plan 33-06).
+			'limits' => self::limits($this->settingsService->containerCap(), $backend, $answered),
 			// Whether an admin ever stored a profile: "nothing chosen yet" and
 			// "economy chosen" are two different lines (Z1, Z2).
 			'profileStored' => $this->settingsService->profileStored(),
@@ -916,6 +935,66 @@ final class AdminViewService {
 	}
 
 	/**
+	 * The four limits per file of the block "Limits per file", read only
+	 * (POL-01, plan 33-06).
+	 *
+	 * One entry each, with the value, the deploy option that sets it and whether
+	 * the page shows the line. Every value comes out of a reading that already
+	 * exists, so no limit is judged twice:
+	 *
+	 * - ``file`` is the ceiling of the container, SettingsService::containerCap(),
+	 *   the same figure as ``rules.maxFileBytesCeiling`` and not the value of the
+	 *   field "Largest file to read". It is remembered, so the line stays while
+	 *   the container is down, and it is always shown.
+	 * - ``address_space`` and ``cells`` are the optional counters of backend().
+	 *   A container of 1.4.x leaves them out, the value is null and the line
+	 *   hidden, never a limit of nought.
+	 * - ``pages`` is ``profile.values.ocrMaxPages`` with its source, the reading
+	 *   profileEnv() makes for the env lines. With the source "profile" the entry
+	 *   names the profile in force, because the sentence on the page says which
+	 *   profile the number comes from; without a known source or profile the
+	 *   line stays hidden.
+	 *
+	 * Nothing here is writable: the four are deploy options, and the page names
+	 * the way to change them instead of offering a field (REQUIREMENTS.md, out of
+	 * scope "Grenzwerte in der UI editierbar").
+	 *
+	 * @param array<string,mixed> $backend the judged view of backend()
+	 * @param array<mixed> $answer the decoded status answer, or an empty array
+	 * @return array{
+	 *     file:array{value:int, variable:string, shown:bool},
+	 *     address_space:array{value:int|null, variable:string, shown:bool},
+	 *     cells:array{value:int|null, variable:string, shown:bool},
+	 *     pages:array{value:int|null, variable:string, shown:bool, source:string, profile:string}
+	 * }
+	 */
+	public static function limits(int $ceiling, array $backend, array $answer): array {
+		$addressSpace = self::nonNegativeInt($backend['extractAddressSpaceBytes'] ?? null);
+		$cells = self::nonNegativeInt($backend['maxCells'] ?? null);
+
+		$values = self::profileField($answer, 'values');
+		$sources = self::profileField($answer, 'sources');
+		$pages = is_array($values) ? self::nonNegativeInt($values['ocrMaxPages'] ?? null) : null;
+		$source = is_array($sources) ? ($sources['ocrMaxPages'] ?? null) : null;
+		$source = is_string($source) && in_array($source, self::LIMIT_PAGE_SOURCES, true) ? $source : '';
+		$profile = self::profileName(self::profileField($answer, 'effective')) ?? '';
+		$pagesShown = $pages !== null && ($source === 'env' || ($source === 'profile' && $profile !== ''));
+
+		return [
+			'file' => ['value' => max(0, $ceiling), 'variable' => self::LIMIT_VARIABLES['file'], 'shown' => true],
+			'address_space' => ['value' => $addressSpace, 'variable' => self::LIMIT_VARIABLES['address_space'], 'shown' => $addressSpace !== null],
+			'cells' => ['value' => $cells, 'variable' => self::LIMIT_VARIABLES['cells'], 'shown' => $cells !== null],
+			'pages' => [
+				'value' => $pages,
+				'variable' => self::LIMIT_VARIABLES['pages'],
+				'shown' => $pagesShown,
+				'source' => $pagesShown ? $source : '',
+				'profile' => $pagesShown && $source === 'profile' ? $profile : '',
+			],
+		];
+	}
+
+	/**
 	 * The whole cores the container detected, or null.
 	 *
 	 * @param array<mixed> $answer
@@ -965,9 +1044,11 @@ final class AdminViewService {
 	 *
 	 * ``maxFileBytesCeiling`` is the upper bound of the input field, and it is a
 	 * figure of the container rather than of this app. For more than that,
-	 * ``FINDLING_MAX_FILE_BYTES`` has to be raised in the AppAPI app settings,
-	 * which restarts the container, because the variable is read at start and
-	 * ``settings()`` is lru_cached over it. Naming the ceiling is what keeps this
+	 * ``FINDLING_MAX_FILE_BYTES`` has to be raised, and it is a deploy option:
+	 * AppAPI 34 cannot change it after the deploy, so the way is an unregister
+	 * without ``--rm-data`` and a deploy with the new value (plan 33-06, finding
+	 * B3). The variable is read at start and ``settings()`` is lru_cached over
+	 * it. Naming the ceiling is what keeps this
 	 * page from showing a cap the container would ignore (pitfall 2, T-04-50);
 	 * without it the field would accept a hundred megabytes, the crawl would queue
 	 * an eighty megabyte PDF, and the container would answer
@@ -2344,6 +2425,12 @@ final class AdminViewService {
 			'diskTotalBytes' => $this->counter($answer, 'diskTotalBytes'),
 			'indexBytes' => $this->counter($answer, 'indexBytes'),
 			'maxFileBytes' => $this->counter($answer, 'maxFileBytes'),
+			// The two limits of plan 33-03 that the page names read only in the
+			// block "Limits per file" (POL-01). Optional counters: a container of
+			// 1.4.x leaves both keys out, and a missing limit is a hidden line on
+			// the page, never a limit of nought.
+			'maxCells' => $this->optionalCounter($answer, 'maxCells'),
+			'extractAddressSpaceBytes' => $this->optionalCounter($answer, 'extractAddressSpaceBytes'),
 			'engineState' => self::engineState($answer['engineState'] ?? null),
 			// The language diagnosis of plan 18-10, and the two lines are not
 			// one line twice. The first is the set the index was built under,
@@ -2418,11 +2505,13 @@ final class AdminViewService {
 	 *
 	 * The same judgement as counter() above with one difference: a value that is
 	 * not there and a value of nought are two different findings here, and the
-	 * caller decides what to do with each. Used for exactly one field, and the
-	 * reason it exists rather than being a nullable branch inside counter() is
-	 * that every other counter of this protocol is a number this container can
-	 * always answer, so making them all nullable would put a null check on
-	 * seventeen call sites in order to serve one.
+	 * caller decides what to do with each. Used for the few fields a container
+	 * of an older release does not report (``embedded``, and since plan 33-06
+	 * ``maxCells`` and ``extractAddressSpaceBytes``), and the reason it exists
+	 * rather than being a nullable branch inside counter() is that every other
+	 * counter of this protocol is a number this container can always answer, so
+	 * making them all nullable would put a null check on seventeen call sites in
+	 * order to serve three.
 	 *
 	 * @param array<mixed> $answer
 	 */

@@ -2399,8 +2399,15 @@ def test_every_new_status_key_has_exactly_one_line_in_the_service() -> None:
         "rebuildBlockedBytes",
         "precisionActive",
         "reembedRunning",
+        "maxCells",
+        "extractAddressSpaceBytes",
     ):
         assert view.count(f"'{key}' => ") == 1, key
+    # The two limits of plan 33-03 (POL-01, plan 33-06) are optional counters:
+    # a container of 1.4.x leaves them out, and a missing limit is a hidden line
+    # on the page, never a limit of nought.
+    for key in ("maxCells", "extractAddressSpaceBytes"):
+        assert f"'{key}' => $this->optionalCounter($answer, '{key}')," in view, key
     assert "'rebuildRunning' => ($answer['rebuildRunning'] ?? false) === true," in view
     for key in ("rebuildDone", "rebuildTotal", "rebuildBlockedBytes"):
         assert f"'{key}' => $this->counter($answer, '{key}')," in view, key
@@ -4245,3 +4252,166 @@ def test_a_refusal_map_without_a_code_is_one_finding() -> None:
     assert len(scan_rule_error_map("sample", valued, valued, codes)) == 1
 
     assert len(scan_rule_error_map("sample", clean, missing, codes)) == 2
+
+
+# Plan 33-06 (POL-01): the four limits per file, read only, with the deploy
+# option of each in a code element, and the change hint that replaces the
+# sentence of finding B3. Words of 33-WORTLAUT.md (E), character for character.
+ADMIN_PAGE_DOC = REPO_ROOT / "docs" / "admin-page.md"
+LIMITS_BLOCK_START = '<div class="findling-limits" id="findling-limits">'
+LIMITS_BLOCK_END = "<?php p($l->t('Steps in the documentation')); ?></a></p>"
+LIMITS_DOCS_URL = "https://github.com/street1983nk/nextcloud-search/blob/v1.5.0/docs/admin-page.md#limits-per-file"
+LIMITS_ANCHOR = '<a id="limits-per-file"></a>'
+LIMIT_SENTENCES = (
+    "Largest file the backend reads: %1$s (%2$s)",
+    "Memory one document may use while it is read: %1$s (%2$s)",
+    "Cells read per spreadsheet file: %1$s (%2$s)",
+    "Pages read per scanned document: %1$s (%2$s)",
+)
+LIMIT_PROFILE_SENTENCE = "Pages read per scanned document: %1$s, from the profile %2$s"
+LIMIT_VARIABLES = (
+    "FINDLING_MAX_FILE_BYTES",
+    "FINDLING_EXTRACT_ADDRESS_SPACE_BYTES",
+    "FINDLING_MAX_CELLS",
+    "FINDLING_OCR_MAX_PAGES",
+)
+LIMITS_CHANGE_HINT = (
+    "These limits are deploy options of Findling Backend. To change one, run %s, which keeps the data, "
+    "and deploy Findling Backend again with the new value."
+)
+CAP_SENTENCE = (
+    'The backend of this instance reads at most %s MB. This ceiling is a deploy option, see "Limits per file".'
+)
+CAP_SENTENCE_BEFORE = "in the app settings of AppAPI"
+_DOCS_LINK = re.compile(r"https://github\.com/street1983nk/nextcloud-search/blob/[^'\"\s<>]+")
+_TAG_LINK = re.compile(
+    r"https://github\.com/street1983nk/nextcloud-search/blob/v\d+\.\d+\.\d+/docs/[a-z0-9-]+\.md#(?P<anchor>[a-z0-9-]+)"
+)
+
+
+def scan_limits_link(template: str, doc: str) -> list[str]:
+    """Findings of the link of the change hint, held against the documentation.
+
+    PE-8: one link, a versioned tag URL in plain ASCII, and its anchor exists
+    exactly once in the documentation as a fixed ASCII anchor. The tag URL only
+    resolves once the tag exists, so the anchor is held here against the file.
+    """
+    findings: list[str] = []
+    links = _DOCS_LINK.findall(template)
+    if len(links) != 1:
+        findings.append(f"the template carries {len(links)} links into the documentation instead of one")
+    for link in links:
+        if not link.isascii():
+            findings.append(f"the link {link} is not plain ASCII")
+        match = _TAG_LINK.fullmatch(link)
+        if match is None:
+            findings.append(f"the link {link} does not point at a release tag")
+            continue
+        anchor = f'<a id="{match.group("anchor")}"></a>'
+        if doc.count(anchor) != 1:
+            findings.append(f"the anchor {anchor} is not in the documentation exactly once")
+    return findings
+
+
+def test_the_rules_block_shows_the_four_limits_read_only() -> None:
+    """POL-01 (a): four lines, the option of each in a code element, no input."""
+    template = TEMPLATE.read_text(encoding="utf-8")
+    view = ADMIN_VIEW.read_text(encoding="utf-8")
+    block = cut_between(template, LIMITS_BLOCK_START, LIMITS_BLOCK_END)
+
+    assert "$l->t('Limits per file')" in block
+    for line in ("file", "address-space", "cells", "pages-env"):
+        assert f"'{line}' => [" in template, line
+    # Each line is cut at the marker and the option sits in a code element
+    # outside the translated sentence; the profile form names no option.
+    # The option names come out of a map of the template (D-27-14), and the map
+    # names the options the service names, line for line.
+    assert "<code><?php p($limitVariables[$limitId]); ?></code>" in block
+    template_names = re.search(r"\$limitVariables = \[(.*?)\];", template, re.DOTALL)
+    service_names = re.search(r"private const LIMIT_VARIABLES = \[(.*?)\];", view, re.DOTALL)
+    assert template_names is not None
+    assert service_names is not None
+    assert re.findall(r"=> '([A-Z_]+)',", template_names.group(1)) == list(LIMIT_VARIABLES)
+    assert re.findall(r"=> '([A-Z_]+)',", service_names.group(1)) == list(LIMIT_VARIABLES)
+    assert 'id="findling-limits-<?php p($limitId); ?>-before"' in block
+    assert 'id="findling-limits-<?php p($limitId); ?>-after"' in block
+    assert 'id="findling-limits-pages-profile"' in block
+    for sentence in LIMIT_SENTENCES:
+        assert f"$l->t('{sentence}', [" in template, sentence
+        assert template.count(f"'{sentence}'") == 1, sentence
+    assert f"$l->t('{LIMIT_PROFILE_SENTENCE}', [" in template
+    for variable in LIMIT_VARIABLES:
+        assert f"=> '{variable}'," in view, variable
+        assert variable not in "".join(LIMIT_SENTENCES), variable
+    # Nothing in the block can be typed into or chosen.
+    assert re.search(r"<\s*(input|select|textarea|button)\b", block) is None
+    # Under the field "Largest file to read", which stays as it is.
+    assert template.index('id="findling-rules-cap"') < template.index(LIMITS_BLOCK_START)
+    assert 'name="maxFileBytes"' in template
+
+
+def test_the_wrong_appapi_sentence_is_gone_from_both_halves() -> None:
+    """POL-01 (b), finding B3: the sentence about AppAPI app settings is replaced."""
+    template = TEMPLATE.read_text(encoding="utf-8")
+    script = SCRIPT.read_text(encoding="utf-8")
+
+    assert CAP_SENTENCE_BEFORE not in template
+    assert CAP_SENTENCE_BEFORE not in script
+    assert f"$l->t('{CAP_SENTENCE}', [$count($ceilingMb)])" in template
+    assert f"$l->t('{LIMITS_CHANGE_HINT}', [$limitsChangeMarker])" in template
+    assert "$limitsChangeCommand = 'occ app_api:app:unregister findling_backend';" in template
+    assert "--rm-data" not in cut_between(template, LIMITS_BLOCK_START, LIMITS_BLOCK_END)
+    assert "$l->t('Steps in the documentation')" in template
+
+
+def test_the_change_hint_links_the_anchor_of_the_documentation() -> None:
+    """POL-01 (c), PE-8: the tag URL, once, and its ASCII anchor once in the docs."""
+    template = TEMPLATE.read_text(encoding="utf-8")
+    doc = ADMIN_PAGE_DOC.read_text(encoding="utf-8")
+
+    assert scan_limits_link(template, doc) == []
+    assert template.count(LIMITS_DOCS_URL) == 1
+    assert f"$limitsDocsUrl = '{LIMITS_DOCS_URL}';" in template
+    assert '<a href="<?php p($limitsDocsUrl); ?>" target="_blank" rel="noreferrer noopener">' in template
+    assert LIMITS_DOCS_URL.isascii()
+    assert doc.count(LIMITS_ANCHOR) == 1
+    assert LIMITS_ANCHOR.isascii()
+    section = doc.split(LIMITS_ANCHOR, 1)[1]
+    assert section.lstrip("\r\n").startswith("## Grenzen je Datei ")
+    for variable in LIMIT_VARIABLES:
+        assert variable in section, variable
+
+
+def test_a_link_with_another_anchor_or_without_a_tag_is_one_finding() -> None:
+    """The self test of the link scan: clean is clean, each fault one finding."""
+    doc = f"text\n{LIMITS_ANCHOR}\n## Grenzen je Datei\n"
+    assert scan_limits_link(f"'{LIMITS_DOCS_URL}'", doc) == []
+
+    other_anchor = LIMITS_DOCS_URL.replace("#limits-per-file", "#limits")
+    assert len(scan_limits_link(f"'{other_anchor}'", doc)) == 1
+
+    untagged = LIMITS_DOCS_URL.replace("/blob/v1.5.0/", "/blob/main/")
+    assert len(scan_limits_link(f"'{untagged}'", doc)) == 1
+
+    assert len(scan_limits_link(f"'{LIMITS_DOCS_URL}'", "no anchor here")) == 1
+
+
+def test_the_script_writes_the_limits_as_text_only() -> None:
+    """POL-01 (d): the poll rewrites the two spans of each line through textContent."""
+    script = SCRIPT.read_text(encoding="utf-8")
+    body = re.search(r"\n  function limitsView \(limits\) \{\n(.*?)\n  \}\n", script, re.DOTALL)
+    line = re.search(r"\n  function limitLine \(id, entry, sentence, format\) \{\n(.*?)\n  \}\n", script, re.DOTALL)
+
+    assert body is not None
+    assert line is not None
+    assert "limitsView(view.limits)" in script
+    for sentence in (*LIMIT_SENTENCES, LIMIT_PROFILE_SENTENCE):
+        assert f"t('findling', '{sentence}')" in body.group(1), sentence
+    for source in (body.group(1), line.group(1)):
+        for writer in ("innerHTML", "outerHTML", "insertAdjacent", "createElement", "appendChild", "document.write"):
+            assert writer not in source, writer
+    assert "text(id + '-before', parts[0])" in line.group(1)
+    assert "text(id + '-after', parts.slice(1).join(''))" in line.group(1)
+    # The option names stay in the template; the script never writes one.
+    for variable in LIMIT_VARIABLES:
+        assert variable not in body.group(1), variable

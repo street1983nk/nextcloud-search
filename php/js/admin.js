@@ -72,6 +72,11 @@
   // divides by, named on both sides so that the two cannot drift.
   const BYTES_PER_MEGABYTE = 1048576
 
+  // The marker that stands in for a deploy option in a sentence of the limits
+  // block until the sentence is cut around the code element (plan 33-06), the
+  // same code point the template uses.
+  const LIMIT_MARKER = String.fromCharCode(0xE000)
+
   // The eight states of the inventory, by the key the template gave their icons.
   // The script shows one of them and hides the rest; it never builds one,
   // because a reason code that became markup here would be the one place on this
@@ -2482,12 +2487,63 @@
     // admin touched it, for the reason the rules below are not rendered.
     profileView(view)
 
+    // The limits per file are no form, so they follow every poll.
+    limitsView(view.limits)
+
     // view.rules is deliberately not rendered. Block five is a form somebody may
     // be halfway through filling in, and a poll every five seconds that wrote
     // the stored values back into it would throw away what they just typed. The
     // rules of the answer are read at one moment only: after a save, out of the
     // answer of the save itself, which is the one moment they are known to have
     // changed and the form is known not to be in the middle of anything.
+  }
+
+  /**
+   * One line of the limits per file (plan 33-06): the sentence filled with the
+   * value and a marker in place of the deploy option, cut at the marker into
+   * the two text spans around the code element of the template. The option
+   * name itself stays in the template and is never written from here.
+   */
+  function limitLine (id, entry, sentence, format) {
+    const value = entry !== null && typeof entry === 'object' ? wholeOrNull(entry.value) : null
+    const visible = value !== null && entry.shown === true
+    if (visible) {
+      const parts = fill(sentence, [format(value), LIMIT_MARKER]).split(LIMIT_MARKER)
+      text(id + '-before', parts[0])
+      text(id + '-after', parts.slice(1).join(''))
+    }
+    shown(id, visible)
+  }
+
+  /**
+   * The four limits per file, read only, out of view.limits on every poll.
+   *
+   * Unlike view.rules this block is no form, so writing it on every poll
+   * throws nothing away; a container that came back with other deploy options
+   * shows its values without a reload. A line without a value stays hidden,
+   * which is what a container of 1.4.x looks like. Text nodes only.
+   */
+  function limitsView (limits) {
+    if (limits === null || typeof limits !== 'object') {
+      return
+    }
+
+    limitLine('findling-limits-file', limits.file, t('findling', 'Largest file the backend reads: %1$s (%2$s)'), size)
+    limitLine('findling-limits-address-space', limits.address_space, t('findling', 'Memory one document may use while it is read: %1$s (%2$s)'), size)
+    limitLine('findling-limits-cells', limits.cells, t('findling', 'Cells read per spreadsheet file: %1$s (%2$s)'), count)
+
+    const pages = limits.pages !== null && typeof limits.pages === 'object' ? limits.pages : {}
+    limitLine('findling-limits-pages-env', pages.source === 'env' ? pages : null, t('findling', 'Pages read per scanned document: %1$s (%2$s)'), count)
+
+    const names = profileNames()
+    const pageValue = wholeOrNull(pages.value)
+    const fromProfile = pages.shown === true && pageValue !== null && pages.source === 'profile' &&
+      Object.prototype.hasOwnProperty.call(names, pages.profile)
+    if (fromProfile) {
+      text('findling-limits-pages-profile',
+        fill(t('findling', 'Pages read per scanned document: %1$s, from the profile %2$s'), [count(pageValue), names[pages.profile]]))
+    }
+    shown('findling-limits-pages-profile', fromProfile)
   }
 
   function cadence (view) {

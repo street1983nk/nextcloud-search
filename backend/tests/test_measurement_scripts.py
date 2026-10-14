@@ -918,8 +918,18 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # sentences and the numberless confirmation; AdminViewServiceTest.php carries
 # the remedy case. One test came, php/tests/Unit/SettingsControllerTest.php
 # (both routes with both lists). No file went, so PHP_FILES_TODAY moves to 103.
+# Moved on 2026-10-14 by Plan 33-06 (POL-01, finding B3): the limits per file,
+# read only. Service/AdminViewService.php reads maxCells and
+# extractAddressSpaceBytes as optional counters out of the status answer and
+# hands the four limits to the page as the view limits(); its docblock and the
+# one of Service/SettingsService.php no longer send an admin to AppAPI app
+# settings that do not exist; templates/admin.php carries the block "Limits per
+# file" with the change hint and its versioned link, and the ceiling sentence of
+# the size field points at that block; AdminViewServiceTest.php carries the
+# cases of the two counters and of the view. No file came and none went, so
+# PHP_FILES_TODAY stays at 103.
 PHP_FILES_TODAY = 103
-PHP_TREE_HASH_TODAY = "48aa61a8304ca59479df8c6d55f38ee2f2b253837bbaab0b838f727a7e9a80b1"
+PHP_TREE_HASH_TODAY = "2dbfe17d033d41dc4b7cabd818cde4e25691c8c9f444fc1c8e8073e535518f39"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
