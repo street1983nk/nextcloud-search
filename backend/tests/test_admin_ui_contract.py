@@ -4057,3 +4057,191 @@ def test_a_placed_file_with_another_checksum_is_not_called_deleted() -> None:
     assert "cause === 'digest_mismatch' && result.fp32Deleted !== true" in script
     assert f"t('findling', '{PLACED_MISMATCH}')" in script
     assert str(catalogue_of(L10N_JSON)[PLACED_MISMATCH]).startswith("Die auf dem Volume abgelegte Modelldatei")
+
+
+# Plan 33-05: the second list of the rules block, "Excluded patterns", and one
+# sentence per code a refused save can carry, next to the list it belongs to.
+# The codes are read out of ExclusionService.php and not copied here, so a code
+# the server learns tomorrow is a red line here until the page can say it.
+EXCLUSION_SERVICE = REPO_ROOT / "php" / "lib" / "Service" / "ExclusionService.php"
+RULES_BLOCK_START = '<div id="findling-rules" class="section">'
+RULES_BLOCK_END = '<template id="findling-rules-row">'
+FOLDER_HELP = (
+    "Prefix match on the path as the lists on this page show it, without wildcards. "
+    'For wildcards use "Excluded patterns". Example: Backups'
+)
+FOLDER_HELP_BEFORE = (
+    "Prefix match on the path as the lists on this page show it, no wildcards and no patterns. Example: Backups"
+)
+PATTERN_HELP = (
+    "Matched against the path as the lists on this page show it. * stands for any number of characters, "
+    "also across folders. ? stands for exactly one character within a name. Upper and lower case count. "
+    "Examples: %1$s and %2$s"
+)
+EXCLUDED_REMEDY = 'Remove the matching entry under "Excluded folders" or "Excluded patterns".'
+# The two codes whose sentence names the bound of its list, and the only
+# placeholder any sentence of the two maps may carry.
+BOUNDED_CODES = frozenset({"too_long", "too_many"})
+
+
+def exclusion_error_codes(source: str) -> dict[str, str]:
+    """Every ``ERROR_*`` constant of ExclusionService.php, name to code."""
+    return dict(re.findall(r"public const (ERROR_[A-Z_]+) = '([a-z_]+)';", source))
+
+
+def prefix_validation_codes(source: str) -> set[str]:
+    """The codes the prefix validation can answer with, read off its body.
+
+    The folder list keeps the validation of 1.4.2, so it never earns the six
+    codes only a pattern can; reading the body rather than listing five codes
+    here is what keeps this gate honest the day that changes.
+    """
+    body = re.search(r"public function validate\(array \$prefixes\): array \{(.*?)\n\t\}\n", source, re.DOTALL)
+    assert body is not None, "ExclusionService::validate is no longer where this test looks for it"
+    names = set(re.findall(r"self::(ERROR_[A-Z_]+)", body.group(1)))
+    codes = exclusion_error_codes(source)
+    assert names <= set(codes)
+    return {codes[name] for name in names}
+
+
+def scan_rule_error_map(
+    name: str,
+    in_template: Mapping[str, str],
+    in_script: Mapping[str, str],
+    codes: set[str],
+) -> list[str]:
+    """Findings of one map of refusal sentences, held against the codes of its list."""
+    findings: list[str] = []
+    if dict(in_template) != dict(in_script):
+        findings.append(f"{name}: the template and the script word the codes differently")
+    findings.extend(f"{name}: has no sentence for the code {code}" for code in sorted(codes - set(in_script)))
+    findings.extend(f"{name}: has a sentence for the unknown code {code}" for code in sorted(set(in_script) - codes))
+    for code, sentence in sorted(in_script.items()):
+        expected = ["%s"] if code in BOUNDED_CODES else []
+        if PRINTF_DIRECTIVE.findall(sentence) != expected:
+            findings.append(f"{name}: the sentence of {code} carries a placeholder other than the bound")
+    return findings
+
+
+def rule_error_maps() -> dict[str, tuple[dict[str, str], dict[str, str], set[str]]]:
+    """Both maps of both halves, with the codes each one has to cover."""
+    template = TEMPLATE.read_text(encoding="utf-8")
+    script = SCRIPT.read_text(encoding="utf-8")
+    service = EXCLUSION_SERVICE.read_text(encoding="utf-8")
+    return {
+        "folderErrorSentences": (
+            template_map(template, "folderErrorSentences"),
+            script_map(script, "folderErrorSentences"),
+            prefix_validation_codes(service),
+        ),
+        "patternErrorSentences": (
+            template_map(template, "patternErrorSentences"),
+            script_map(script, "patternErrorSentences"),
+            set(exclusion_error_codes(service).values()),
+        ),
+    }
+
+
+def test_the_rules_block_carries_the_pattern_list_under_the_folder_list() -> None:
+    """EXCL-01: the second list in the shape of the first, words of 33-WORTLAUT.md (A)."""
+    template = TEMPLATE.read_text(encoding="utf-8")
+    block = cut_between(template, RULES_BLOCK_START, RULES_BLOCK_END)
+
+    for element in (
+        "findling-rules-patterns-label",
+        "findling-rules-patterns-help",
+        "findling-rules-patterns-empty",
+        "findling-rules-patterns-list",
+        "findling-rules-patterns-new",
+        "findling-rules-patterns-add",
+        "findling-rules-patterns-new-error",
+    ):
+        assert block.count(f'id="{element}"') == 1, element
+    for sentence in ("Excluded patterns", "No pattern is set.", "Add pattern"):
+        assert f"$l->t('{sentence}')" in block, sentence
+    assert "$l->t('Remove pattern %s', [$pattern])" in block
+    assert f"$l->t('{PATTERN_HELP}', array_keys($exampleMarkers))" in template
+    assert "$exampleMarkers = [\"\\u{E001}\" => '*.photoslibrary', \"\\u{E002}\" => '*/node_modules/*'];" in template
+    assert "?><code><?php p($exampleMarkers[$helpPart]); ?></code><?php" in block
+    assert 'maxlength="<?php p((string)$maxPatternLength); ?>"' in block
+
+    assert f"$l->t('{FOLDER_HELP}')" in block
+    assert FOLDER_HELP_BEFORE not in template
+    assert (
+        block.index('id="findling-rules-list"')
+        < block.index('id="findling-rules-patterns-list"')
+        < block.index('id="findling-rules-cap"')
+    )
+
+
+def test_both_halves_name_every_refusal_code_of_both_lists_alike() -> None:
+    """Success criterion 3: every code of either list is a sentence on the page."""
+    findings = [
+        finding
+        for name, (in_template, in_script, codes) in rule_error_maps().items()
+        for finding in scan_rule_error_map(name, in_template, in_script, codes)
+    ]
+    assert findings == []
+
+    maps = rule_error_maps()
+    assert len(maps["patternErrorSentences"][2]) == 11
+    assert maps["folderErrorSentences"][2] == {"empty", "too_long", "too_many", "duplicate", "traversal"}
+
+
+def test_no_refusal_sentence_carries_a_placeholder_but_the_bound() -> None:
+    """PE-7: the value somebody typed has no place in any sentence of the two maps."""
+    for name, (_, in_script, _) in rule_error_maps().items():
+        for code, sentence in in_script.items():
+            directives = PRINTF_DIRECTIVE.findall(sentence)
+            assert directives == (["%s"] if code in BOUNDED_CODES else []), (name, code)
+
+
+def test_the_script_sends_the_pattern_list_and_cuts_the_confirmation_around_it() -> None:
+    """The form carries exclusionPatterns, and a pattern is never part of a sentence."""
+    script = SCRIPT.read_text(encoding="utf-8")
+    body = re.search(r"send\(ROUTE_RULES, \{(.*?)\}\)", script, re.DOTALL)
+
+    assert body is not None
+    assert re.findall(r"(\w+):", body.group(1)) == [
+        "exclusions",
+        "maxFileBytes",
+        "indexTeamFolders",
+        "indexExternalStorage",
+        "exclusionPatterns",
+    ]
+    assert "['exclusionPatterns[]', pattern]" in script
+    assert "text('findling-rules-confirm-patterns-value', addedPatterns.join(', '))" in script
+    for sentence in (
+        (
+            "Remove indexed content? Excluding %s also removes the already indexed documents that match that "
+            "pattern from the index. The files themselves stay untouched on disk."
+        ),
+        (
+            "Remove indexed content? Excluding %s also removes the already indexed documents that match these "
+            "patterns from the index. The files themselves stay untouched on disk."
+        ),
+    ):
+        assert f"t('findling', '{sentence}')" in script
+        assert f"t('findling', '{sentence}').replace" not in script
+
+
+def test_the_remedy_of_an_excluded_file_names_both_lists() -> None:
+    """33-WORTLAUT.md (D): the diagnosis sends the admin to both lists."""
+    service = ADMIN_VIEW.read_text(encoding="utf-8")
+    assert f"'{EXCLUDED_REMEDY}'," in service
+    assert 'Remove the matching entry under "Excluded folders".' not in service
+
+
+def test_a_refusal_map_without_a_code_is_one_finding() -> None:
+    """The self test of the scan: clean is clean, one missing code is one finding."""
+    codes = {"empty", "too_long", "negation"}
+    clean = {"empty": "Enter it.", "too_long": "At most %s.", "negation": "No negation."}
+    assert scan_rule_error_map("sample", clean, clean, codes) == []
+
+    missing = {code: sentence for code, sentence in clean.items() if code != "negation"}
+    assert len(scan_rule_error_map("sample", missing, missing, codes)) == 1
+
+    valued = {**clean, "negation": "The entry %1$s is refused."}
+    assert len(scan_rule_error_map("sample", valued, valued, codes)) == 1
+
+    assert len(scan_rule_error_map("sample", clean, missing, codes)) == 2

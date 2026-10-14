@@ -903,6 +903,59 @@ $magnifyIcon = 'M9.5,3A6.5,6.5 0 0,1 16,9.5C16,11.11 15.41,12.59 14.44,13.73L14.
 $rules = is_array($_['rules'] ?? null) ? $_['rules'] : [];
 
 $prefixes = is_array($rules['exclusions'] ?? null) ? $rules['exclusions'] : [];
+// The second list of plan 33-05, the patterns of D-30-01, and the four bounds
+// of the two lists. The bounds come out of the view, which reads them from
+// ExclusionService, so the sentences below name the numbers the server judges
+// with; a bound that is missing is nought and the sentence names nought rather
+// than a guess.
+$patterns = is_array($rules['exclusionPatterns'] ?? null) ? $rules['exclusionPatterns'] : [];
+$maxPrefixes = $whole($rules['maxPrefixes'] ?? 0);
+$maxPrefixLength = $whole($rules['maxPrefixLength'] ?? 0);
+$maxPatterns = $whole($rules['maxPatterns'] ?? 0);
+$maxPatternLength = $whole($rules['maxPatternLength'] ?? 0);
+
+// One sentence per code a refused save can carry, per list (plan 33-05,
+// 33-WORTLAUT.md section B). The script holds the same two maps under the same
+// names and shows them after a save, because a refusal only exists once the
+// form was sent; they stand here as well so that the two halves of the page
+// carry one wording each, which backend/tests/test_admin_ui_contract.py
+// compares. A code, never the entry: the answer of the route carries no value
+// somebody typed, and none of these sentences has a place for one. The only
+// placeholder is the bound of the list.
+$folderErrorSentences = [
+	'empty' => $l->t('Enter a folder path.'),
+	'too_long' => $l->t('A folder path may be at most %s bytes long.', [$count($maxPrefixLength)]),
+	'too_many' => $l->t('At most %s folders can be excluded.', [$count($maxPrefixes)]),
+	'duplicate' => $l->t('This path is already excluded.'),
+	'traversal' => $l->t('The entry must not contain . or .. as a folder name.'),
+];
+$patternErrorSentences = [
+	'empty' => $l->t('Enter a pattern.'),
+	'too_long' => $l->t('A pattern may be at most %s characters long.', [$count($maxPatternLength)]),
+	'too_many' => $l->t('At most %s patterns are allowed.', [$count($maxPatterns)]),
+	'duplicate' => $l->t('This pattern is already in the list.'),
+	'traversal' => $l->t('The entry must not contain . or .. as a folder name.'),
+	'double_star' => $l->t('Use a single *: it already matches across folders.'),
+	'unsupported_character' => $l->t('Brackets, braces and the backslash are not allowed. Only * and ? are wildcards.'),
+	'negation' => $l->t('A leading ! is not supported. Patterns only exclude.'),
+	'control_character' => $l->t('The entry contains a control character.'),
+	'no_literal' => $l->t('A pattern needs at least one character besides * and ?, otherwise it would exclude everything.'),
+	'no_wildcard' => $l->t('This entry has no * or ?. Add it under "Excluded folders" instead.'),
+];
+
+// The help sentence of the pattern list names two examples, and the examples
+// are code and not words: they sit in code elements of their own, and the
+// translated sentence carries a marker in their place, the technique of the
+// env lines of the profile block. Two markers, so a language that names the
+// examples in the other order still puts each one where it belongs.
+$exampleMarkers = ["\u{E001}" => '*.photoslibrary', "\u{E002}" => '*/node_modules/*'];
+$patternHelpParts = preg_split(
+	'/(\x{E001}|\x{E002})/u',
+	$l->t('Matched against the path as the lists on this page show it. * stands for any number of characters, also across folders. ? stands for exactly one character within a name. Upper and lower case count. Examples: %1$s and %2$s', array_keys($exampleMarkers)),
+	-1,
+	PREG_SPLIT_DELIM_CAPTURE,
+);
+$patternHelpParts = is_array($patternHelpParts) ? $patternHelpParts : [];
 $capBytes = $whole($rules['maxFileBytes'] ?? 0);
 $ceilingBytes = $whole($rules['maxFileBytesCeiling'] ?? 0);
 $teamFolders = ($rules['indexTeamFolders'] ?? false) === true;
@@ -1258,7 +1311,7 @@ foreach (is_array($_['profileEnv'] ?? null) ? $_['profileEnv'] : [] as $envEntry
 	 */
 	?>
 	<label class="findling-rules__label" id="findling-rules-exclusions-label" for="findling-rules-new"><?php p($l->t('Excluded folders')); ?></label>
-	<p class="settings-hint" id="findling-rules-exclusions-help"><?php p($l->t('Prefix match on the path as the lists on this page show it, no wildcards and no patterns. Example: Backups')); ?></p>
+	<p class="settings-hint" id="findling-rules-exclusions-help"><?php p($l->t('Prefix match on the path as the lists on this page show it, without wildcards. For wildcards use "Excluded patterns". Example: Backups')); ?></p>
 
 	<p class="settings-hint" id="findling-rules-exclusions-empty"<?php if ($prefixes !== []) { ?> hidden<?php } ?>><?php p($l->t('No folder is excluded.')); ?></p>
 
@@ -1277,10 +1330,54 @@ foreach (is_array($_['profileEnv'] ?? null) ? $_['profileEnv'] : [] as $envEntry
 
 	<div class="findling-rules__add">
 		<input type="text" id="findling-rules-new" name="exclusion" autocomplete="off"
+			data-max-entries="<?php p((string)$maxPrefixes); ?>" data-max-length="<?php p((string)$maxPrefixLength); ?>"
 			aria-describedby="findling-rules-exclusions-help findling-rules-new-error" placeholder="Backups">
 		<button type="button" id="findling-rules-add"><?php p($l->t('Add exclusion')); ?></button>
 	</div>
 	<p class="findling-rules__error" id="findling-rules-new-error" hidden></p>
+
+	<?php
+	/*
+	 * The second list, the patterns of D-30-01 (plan 33-05), in the shape of
+	 * the first: one label for the list and its field, a help sentence, an empty
+	 * sentence, the rows, the field and the error element. The rows are cloned
+	 * by the script from the same row template as the folders, so the rule "the
+	 * script never builds markup" holds for this list as well; a pattern is a
+	 * text node and an aria-label and nothing else.
+	 */
+	?>
+	<label class="findling-rules__label" id="findling-rules-patterns-label" for="findling-rules-patterns-new"><?php p($l->t('Excluded patterns')); ?></label>
+	<p class="settings-hint" id="findling-rules-patterns-help"><?php foreach ($patternHelpParts as $helpPart) {
+		if (is_string($helpPart) && isset($exampleMarkers[$helpPart])) {
+			?><code><?php p($exampleMarkers[$helpPart]); ?></code><?php
+		} else {
+			p(is_string($helpPart) ? $helpPart : '');
+		}
+	} ?></p>
+
+	<p class="settings-hint" id="findling-rules-patterns-empty"<?php if ($patterns !== []) { ?> hidden<?php } ?>><?php p($l->t('No pattern is set.')); ?></p>
+
+	<ul class="findling-rules__list" id="findling-rules-patterns-list" aria-labelledby="findling-rules-patterns-label">
+		<?php foreach ($patterns as $pattern) {
+			$pattern = is_string($pattern) ? $pattern : '';
+			?>
+			<li class="findling-rules__row">
+				<span class="findling-path findling-rules__prefix"><?php p($pattern); ?></span>
+				<button type="button" class="findling-rules__remove" aria-label="<?php p($l->t('Remove pattern %s', [$pattern])); ?>">
+					<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($closeIcon); ?>"/></svg>
+				</button>
+			</li>
+		<?php } ?>
+	</ul>
+
+	<div class="findling-rules__add">
+		<input type="text" id="findling-rules-patterns-new" name="exclusionPattern" autocomplete="off"
+			maxlength="<?php p((string)$maxPatternLength); ?>"
+			data-max-entries="<?php p((string)$maxPatterns); ?>" data-max-length="<?php p((string)$maxPatternLength); ?>"
+			aria-describedby="findling-rules-patterns-help findling-rules-patterns-new-error" placeholder="*.photoslibrary">
+		<button type="button" id="findling-rules-patterns-add"><?php p($l->t('Add pattern')); ?></button>
+	</div>
+	<p class="findling-rules__error" id="findling-rules-patterns-new-error" hidden></p>
 
 	<div class="findling-rules__field">
 		<label class="findling-rules__label" for="findling-rules-cap"><?php p($l->t('Largest file to read')); ?></label>
@@ -1337,10 +1434,24 @@ foreach (is_array($_['profileEnv'] ?? null) ? $_['profileEnv'] : [] as $envEntry
 	 * banners of block one carry, in the destructive icon colour here.
 	 */
 	?>
+	<?php
+	/*
+	 * Two lines next to the one icon since plan 33-05: the sentence for new
+	 * folders and under it the sentence for new patterns, each shown only when
+	 * the save brings something new of its kind (33-WORTLAUT.md section C). The
+	 * second has no number (PE-5): a pattern does not resolve into a folder one
+	 * could count under. Its patterns stand in a code element of their own,
+	 * between the two halves of the translated sentence, which the script cuts
+	 * at its placeholder.
+	 */
+	?>
 	<div class="findling-rules__confirm" id="findling-rules-confirm" role="group" aria-labelledby="findling-rules-confirm-text" hidden>
 		<p class="findling-rules__confirm-text" id="findling-rules-confirm-text">
 			<svg class="findling-rules__confirm-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($alertIcon); ?>"/></svg>
-			<span id="findling-rules-confirm-message"></span>
+			<span class="findling-rules__confirm-lines">
+				<span class="findling-rules__confirm-line" id="findling-rules-confirm-message"></span>
+				<span class="findling-rules__confirm-line" id="findling-rules-confirm-patterns" hidden><span id="findling-rules-confirm-patterns-before"></span><code class="findling-path" id="findling-rules-confirm-patterns-value"></code><span id="findling-rules-confirm-patterns-after"></span></span>
+			</span>
 		</p>
 		<div class="findling-rules__confirm-actions">
 			<button type="button" class="findling-rules__confirm-accept" id="findling-rules-confirm-accept"><?php p($l->t('Exclude and remove')); ?></button>

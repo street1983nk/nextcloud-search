@@ -80,7 +80,8 @@ use Psr\Log\LoggerInterface;
  * of the admin page is this controller.
  *
  * Only the last route writes, and it writes appconfig plus one job entry per
- * newly excluded subtree: the clearing of D-07 is planned in the background job
+ * newly excluded subtree and, when the pattern set changed, one sweep job (plan
+ * 33-04): the clearing of D-07 is planned in the background job
  * list of Nextcloud and never carried out inside this request. There is no code
  * path from this class into the index, and none into the file system at all.
  * The log follows the rule of the other controllers of this app: a static
@@ -228,20 +229,36 @@ final class SettingsController extends Controller {
 	 * being previewed. A preview of a list that cannot be saved would be a number
 	 * for a consequence that will not happen.
 	 *
+	 * The patterns of D-30-01 travel next to the prefixes (plan 33-05). Both
+	 * lists are judged before anything is counted, and a refusal names the codes
+	 * of both, so the page can put each sentence next to the list it belongs to.
+	 * The new patterns come back like the new prefixes, for the same reason, and
+	 * without a number of documents (PE-5): a pattern does not resolve into a
+	 * folder one could count under, and walking every file of the instance to
+	 * count it is not a preview.
+	 *
 	 * @param list<mixed> $exclusions the prefix list as the form holds it
+	 * @param list<mixed> $exclusionPatterns the pattern list as the form holds it
 	 */
 	#[\OCP\AppFramework\Http\Attribute\FrontpageRoute(verb: 'GET', url: '/admin/rules/preview')]
-	public function previewRules(array $exclusions = []): DataResponse {
+	public function previewRules(array $exclusions = [], array $exclusionPatterns = []): DataResponse {
 		$list = array_values($exclusions);
+		$patterns = array_values($exclusionPatterns);
 
 		$listErrors = $this->exclusionService->validate($list);
-		if ($listErrors !== []) {
+		$patternErrors = $this->exclusionService->validatePatterns($patterns);
+		if ($listErrors !== [] || $patternErrors !== []) {
 			$this->logger->warning('Findling: refused to preview a list of exclusions that did not validate', [
 				'exclusions' => count($listErrors),
+				'exclusionPatterns' => count($patternErrors),
 			]);
 
 			return new DataResponse(
-				['exclusions' => $listErrors, 'error' => 'The rules were not saved.'],
+				[
+					'exclusions' => $listErrors,
+					ExclusionService::FIELD_PATTERNS => $patternErrors,
+					'error' => 'The rules were not saved.',
+				],
 				Http::STATUS_BAD_REQUEST,
 			);
 		}
@@ -254,6 +271,7 @@ final class SettingsController extends Controller {
 				'newPrefixes' => $newPrefixes,
 				'affectedDocuments' => $affected,
 				'capped' => $affected >= ExclusionService::PREVIEW_CAP,
+				'newPatterns' => $this->exclusionService->newPatterns($patterns),
 			]);
 		} catch (\Throwable $e) {
 			// A failed preview may not block the save. The page falls back to the
@@ -306,7 +324,18 @@ final class SettingsController extends Controller {
 	 * latency AdminViewService::rules() reports, and the page names both the wait
 	 * and the command that skips it.
 	 *
+	 * The pattern list of D-30-01 is the fifth value of the form (plan 33-05)
+	 * and follows the same rule: it is judged together with the other four
+	 * before anything is written, so an invalid pattern leaves the prefixes, the
+	 * cap and both switches untouched, and an invalid prefix leaves the patterns
+	 * untouched. The refusal carries the codes of both lists under their own
+	 * field names, so the page puts each sentence next to the list it belongs to.
+	 * A new pattern plans its own clearing inside ExclusionService::savePatterns()
+	 * (way A of plan 33-04); a save that changes only patterns writes the prefix
+	 * list exactly as it stood and plans no subtree clearing.
+	 *
 	 * @param list<mixed> $exclusions the prefix list as the form holds it
+	 * @param list<mixed> $exclusionPatterns the pattern list as the form holds it
 	 */
 	#[\OCP\AppFramework\Http\Attribute\FrontpageRoute(verb: 'POST', url: '/admin/rules')]
 	public function saveRules(
@@ -314,21 +343,25 @@ final class SettingsController extends Controller {
 		int $maxFileBytes = 0,
 		bool $indexTeamFolders = true,
 		bool $indexExternalStorage = false,
+		array $exclusionPatterns = [],
 	): DataResponse {
 		$list = array_values($exclusions);
+		$patterns = array_values($exclusionPatterns);
 
 		$fieldErrors = $this->settingsService->validate([
 			SettingsService::FIELD_MAX_FILE_BYTES => $maxFileBytes,
 		]);
 		$listErrors = $this->exclusionService->validate($list);
+		$patternErrors = $this->exclusionService->validatePatterns($patterns);
 
-		if ($fieldErrors !== [] || $listErrors !== []) {
+		if ($fieldErrors !== [] || $listErrors !== [] || $patternErrors !== []) {
 			// Counted, never quoted. What arrives in the list is a folder name of
 			// a private instance, and the log of this app carries counters and
 			// codes and nothing somebody else wrote.
 			$this->logger->warning('Findling: refused a set of rules that did not validate', [
 				'fields' => count($fieldErrors),
 				'exclusions' => count($listErrors),
+				'exclusionPatterns' => count($patternErrors),
 			]);
 
 			return new DataResponse(
@@ -336,6 +369,7 @@ final class SettingsController extends Controller {
 					'saved' => false,
 					'fields' => $fieldErrors,
 					'exclusions' => $listErrors,
+					ExclusionService::FIELD_PATTERNS => $patternErrors,
 					'error' => 'The rules were not saved.',
 				],
 				Http::STATUS_BAD_REQUEST,
@@ -365,12 +399,20 @@ final class SettingsController extends Controller {
 				'indexExternalStorage' => $indexExternalStorage,
 			]);
 			$savedListErrors = $savedFieldErrors === [] ? $this->exclusionService->save($list) : [];
+			// The patterns are written last and only after both writes above
+			// held. Like the prefixes, nothing about them depends on a value
+			// another request could move, so a refusal here cannot arise from
+			// this request after the validation above.
+			$savedPatternErrors = $savedFieldErrors === [] && $savedListErrors === []
+				? $this->exclusionService->savePatterns($patterns)
+				: [];
 
-			if ($savedFieldErrors !== [] || $savedListErrors !== []) {
+			if ($savedFieldErrors !== [] || $savedListErrors !== [] || $savedPatternErrors !== []) {
 				// Counted, never quoted, same as the refusal above.
 				$this->logger->warning('Findling: refused a set of rules at the write itself', [
 					'fields' => count($savedFieldErrors),
 					'exclusions' => count($savedListErrors),
+					'exclusionPatterns' => count($savedPatternErrors),
 				]);
 
 				return new DataResponse(
@@ -378,17 +420,19 @@ final class SettingsController extends Controller {
 						'saved' => false,
 						'fields' => $savedFieldErrors,
 						'exclusions' => $savedListErrors,
+						ExclusionService::FIELD_PATTERNS => $savedPatternErrors,
 						'error' => 'The rules were not saved.',
 					],
 					Http::STATUS_BAD_REQUEST,
 				);
 			}
 		} catch (\Throwable $e) {
-			// The only way to get here is the database itself, because both
-			// values were judged above. The page says nothing was saved, which
-			// may understate a failure between the two writes; the honest part is
-			// that appconfig is the whole of what either call touches, so the
-			// worst case is one of two keys and the next save fixes it.
+			// The only way to get here is the database itself, because every
+			// value was judged above. The page says nothing was saved, which
+			// may understate a failure between the writes; the honest part is
+			// that appconfig and the job list are the whole of what the calls
+			// touch, so the worst case is a part of the keys and the next save
+			// fixes it.
 			$this->logger->error('Findling: could not save the rules', ['exception' => $e]);
 
 			return new DataResponse(
@@ -401,6 +445,7 @@ final class SettingsController extends Controller {
 			'saved' => true,
 			'fields' => [],
 			'exclusions' => [],
+			ExclusionService::FIELD_PATTERNS => [],
 			'rules' => $this->view->rules(),
 		]);
 	}

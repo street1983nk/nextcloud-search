@@ -908,8 +908,18 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # php/tests/Unit/SubtreeExpandJobTest.php; QueueServiceReaderTest.php and
 # ReconcileControllerTest.php carry the verdict cases. No file went, so
 # PHP_FILES_TODAY moves to 102.
-PHP_FILES_TODAY = 102
-PHP_TREE_HASH_TODAY = "da53dd886c8642ea31259ff51d665abf3521ff012ce92c992d2ba60f1e590d71"
+# Moved on 2026-10-14 by Plan 33-05 (EXCL-01, EXCL-03, PE-5, PE-7): the pattern
+# list on the admin page. Controller/SettingsController.php takes
+# exclusionPatterns next to exclusions in both rules routes, judges both lists
+# before anything is written and answers with the codes of both;
+# Service/AdminViewService.php hands the stored patterns and the four bounds of
+# the two lists to the page and names both lists in the remedy of an excluded
+# file; templates/admin.php carries the second list, the two maps of refusal
+# sentences and the numberless confirmation; AdminViewServiceTest.php carries
+# the remedy case. One test came, php/tests/Unit/SettingsControllerTest.php
+# (both routes with both lists). No file went, so PHP_FILES_TODAY moves to 103.
+PHP_FILES_TODAY = 103
+PHP_TREE_HASH_TODAY = "48aa61a8304ca59479df8c6d55f38ee2f2b253837bbaab0b838f727a7e9a80b1"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

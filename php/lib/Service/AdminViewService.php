@@ -489,7 +489,7 @@ final class AdminViewService {
 		],
 		'excluded' => [
 			'Excluded by a rule',
-			'Remove the matching entry under "Excluded folders".',
+			'Remove the matching entry under "Excluded folders" or "Excluded patterns".',
 		],
 		'unreadable' => [
 			'Not readable for the users asked',
@@ -989,8 +989,16 @@ final class AdminViewService {
 	 * with no way of telling waiting from broken. The command is the way to skip
 	 * the wait, and it is the same one the reindex banner names.
 	 *
+	 * The patterns of D-30-01 come out of ExclusionService as well, normalised
+	 * for the same reason (plan 33-05). The four bounds of the two lists travel
+	 * with them, read from the constants of ExclusionService, so the page judges
+	 * a too long or a surplus entry against the numbers the server judges with
+	 * and names them in its sentence, instead of carrying a second copy of them.
+	 *
 	 * @return array{
-	 *     exclusions:list<string>, maxFileBytes:int, maxFileBytesCeiling:int,
+	 *     exclusions:list<string>, exclusionPatterns:list<string>,
+	 *     maxPrefixes:int, maxPrefixLength:int, maxPatterns:int, maxPatternLength:int,
+	 *     maxFileBytes:int, maxFileBytesCeiling:int,
 	 *     indexTeamFolders:bool, indexExternalStorage:bool,
 	 *     cleanupLatencyHours:int, restartCommand:string
 	 * }
@@ -998,6 +1006,11 @@ final class AdminViewService {
 	public function rules(): array {
 		return [
 			'exclusions' => $this->exclusionService->prefixes(),
+			'exclusionPatterns' => $this->exclusionService->patterns(),
+			'maxPrefixes' => ExclusionService::MAX_PREFIXES,
+			'maxPrefixLength' => ExclusionService::MAX_PREFIX_LENGTH,
+			'maxPatterns' => ExclusionService::MAX_PATTERNS,
+			'maxPatternLength' => ExclusionService::MAX_PATTERN_LENGTH,
 			'maxFileBytes' => $this->settingsService->maxFileBytes(),
 			'maxFileBytesCeiling' => $this->settingsService->containerCap(),
 			'indexTeamFolders' => $this->settingsService->indexTeamFolders(),

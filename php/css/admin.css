@@ -506,6 +506,17 @@
 	margin-block: 0;
 }
 
+/* The sentence for new folders and the one for new patterns, one under the
+   other next to the one icon (plan 33-05). Block only while shown, so the
+   hidden attribute keeps its meaning. */
+.findling-rules__confirm-line:not([hidden]) {
+	display: block;
+}
+
+.findling-rules__confirm-line:not([hidden]) + .findling-rules__confirm-line {
+	margin-block-start: calc(var(--default-grid-baseline) * 2);
+}
+
 .findling-rules__confirm-icon {
 	flex: 0 0 auto;
 	width: calc(var(--default-grid-baseline) * 4);

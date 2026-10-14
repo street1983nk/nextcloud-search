@@ -91,6 +91,9 @@
   // replaced out of the answer of a save. Reading it off the list at comparison
   // time would compare the list with itself and never find anything new.
   let inForcePrefixes = []
+  // The patterns as they are stored, for the same reason and with the same
+  // lifetime as the prefixes above (plan 33-05).
+  let inForcePatterns = []
   let timer = null
   let unchanged = 0
   let signature = ''
@@ -900,15 +903,24 @@
    * that acts while somebody is still typing is a control that acts on a half
    * typed path.
    *
-   * The list can grow, which is the one place on this page where an element has
-   * to come into existence at runtime. It is cloned from the template element
-   * the PHP template holds, and its two variable parts are a text node and an
-   * aria-label. So the rule still holds: this script never assembles markup out
-   * of a string, and a folder name can therefore not become an element no
-   * matter what characters it contains.
+   * The lists can grow, the folders and since plan 33-05 the patterns, which is
+   * the one place on this page where an element has to come into existence at
+   * runtime. A row is cloned from the template element the PHP template holds,
+   * and its two variable parts are a text node and an aria-label. So the rule
+   * still holds: this script never assembles markup out of a string, and a
+   * folder name or a pattern can therefore not become an element no matter
+   * what characters it contains.
    */
-  function currentPrefixes () {
-    const list = document.getElementById('findling-rules-list')
+  const FOLDER_LIST = 'findling-rules-list'
+  const PATTERN_LIST = 'findling-rules-patterns-list'
+  const FOLDER_FIELD = 'findling-rules-new'
+  const PATTERN_FIELD = 'findling-rules-patterns-new'
+  const FOLDER_ERROR = 'findling-rules-new-error'
+  const PATTERN_ERROR = 'findling-rules-patterns-new-error'
+
+  /** The entries of one of the two lists, as their rows show them. */
+  function currentEntries (listId) {
+    const list = document.getElementById(listId)
     if (list === null) {
       return []
     }
@@ -920,9 +932,111 @@
     )
   }
 
-  /** Show or hide the "nothing is excluded" sentence, after every change. */
+  function currentPrefixes () {
+    return currentEntries(FOLDER_LIST)
+  }
+
+  function currentPatterns () {
+    return currentEntries(PATTERN_LIST)
+  }
+
+  /** Show or hide the two "nothing is set" sentences, after every change. */
   function refreshEmptyState () {
     shown('findling-rules-exclusions-empty', currentPrefixes().length === 0)
+    shown('findling-rules-patterns-empty', currentPatterns().length === 0)
+  }
+
+  /**
+   * One sentence per code a refused save can carry, per list, the maps
+   * $folderErrorSentences and $patternErrorSentences of the template (plan
+   * 33-05). A code and never the entry: the answer of the route carries no
+   * value somebody typed, and the only placeholder is the bound of the list.
+   */
+  function folderErrorSentences () {
+    return {
+      empty: t('findling', 'Enter a folder path.'),
+      too_long: t('findling', 'A folder path may be at most %s bytes long.'),
+      too_many: t('findling', 'At most %s folders can be excluded.'),
+      duplicate: t('findling', 'This path is already excluded.'),
+      traversal: t('findling', 'The entry must not contain . or .. as a folder name.')
+    }
+  }
+
+  function patternErrorSentences () {
+    return {
+      empty: t('findling', 'Enter a pattern.'),
+      too_long: t('findling', 'A pattern may be at most %s characters long.'),
+      too_many: t('findling', 'At most %s patterns are allowed.'),
+      duplicate: t('findling', 'This pattern is already in the list.'),
+      traversal: t('findling', 'The entry must not contain . or .. as a folder name.'),
+      double_star: t('findling', 'Use a single *: it already matches across folders.'),
+      unsupported_character: t('findling', 'Brackets, braces and the backslash are not allowed. Only * and ? are wildcards.'),
+      negation: t('findling', 'A leading ! is not supported. Patterns only exclude.'),
+      control_character: t('findling', 'The entry contains a control character.'),
+      no_literal: t('findling', 'A pattern needs at least one character besides * and ?, otherwise it would exclude everything.'),
+      no_wildcard: t('findling', 'This entry has no * or ?. Add it under "Excluded folders" instead.')
+    }
+  }
+
+  /**
+   * One bound of a list, out of the data attribute of its field. The template
+   * writes the numbers the server judges with, so this page never carries a
+   * second copy of them; a missing or broken attribute is nought, and nought
+   * means "not judged here", the server still is.
+   */
+  function boundOf (fieldId, attribute) {
+    const field = document.getElementById(fieldId)
+    const value = field === null ? Number.NaN : Number.parseInt(field.getAttribute(attribute) || '', 10)
+    return Number.isInteger(value) && value > 0 ? value : 0
+  }
+
+  /**
+   * The sentence of one code, with the bound of its list where it names one.
+   * Codes this page does not know are left out; the head line of the feedback
+   * still says that nothing was saved.
+   */
+  function refusalSentence (code, sentences, fieldId) {
+    if (typeof code !== 'string' || !Object.prototype.hasOwnProperty.call(sentences, code)) {
+      return ''
+    }
+    if (code === 'too_long') {
+      return sentences[code].replace('%s', numbers.format(boundOf(fieldId, 'data-max-length')))
+    }
+    if (code === 'too_many') {
+      return sentences[code].replace('%s', numbers.format(boundOf(fieldId, 'data-max-entries')))
+    }
+    return sentences[code]
+  }
+
+  /** Every sentence of one list of codes, each one a sentence of its own. */
+  function refusalSentences (codes, sentences, fieldId) {
+    if (!Array.isArray(codes)) {
+      return []
+    }
+    return codes
+      .map(function (code) {
+        return refusalSentence(code, sentences, fieldId)
+      })
+      .filter(function (sentence) {
+        return sentence !== ''
+      })
+  }
+
+  /**
+   * The codes of a refused save or preview, next to the list each belongs to.
+   * The pattern list is written first, so the focus ends in the upper of the
+   * two fields when both lists were refused.
+   */
+  function showRefusal (body) {
+    const answer = body !== null && typeof body === 'object' ? body : {}
+    const patterns = refusalSentences(answer.exclusionPatterns, patternErrorSentences(), PATTERN_FIELD)
+    const folders = refusalSentences(answer.exclusions, folderErrorSentences(), FOLDER_FIELD)
+    if (patterns.length > 0) {
+      fieldError(PATTERN_ERROR, PATTERN_FIELD, patterns.join(' '))
+    }
+    if (folders.length > 0) {
+      fieldError(FOLDER_ERROR, FOLDER_FIELD, folders.join(' '))
+    }
   }
 
   /** One error at one field, with the focus moved into it. */
@@ -939,9 +1053,12 @@
     shown(errorId, false)
   }
 
-  /** One row of the exclusion list, cloned from the template of the page. */
-  function addPrefixRow (prefix) {
-    const list = document.getElementById('findling-rules-list')
+  /**
+   * One row of either list, cloned from the one row template of the page. The
+   * remove label arrives translated with its placeholder still in it.
+   */
+  function addRow (listId, value, removeLabel) {
+    const list = document.getElementById(listId)
     const template = document.getElementById('findling-rules-row')
     if (list === null || template === null) {
       return
@@ -954,12 +1071,22 @@
       return
     }
 
-    label.textContent = prefix
+    label.textContent = value
     // A function replacement, because a plain string is a replacement PATTERN
     // and a folder named with $& or $' in it would be mangled (review finding
     // WR-04).
-    remove.setAttribute('aria-label', t('findling', 'Remove exclusion %s').replace('%s', function () { return prefix }))
+    remove.setAttribute('aria-label', removeLabel.replace('%s', function () { return value }))
     list.appendChild(row)
+  }
+
+  /** One row of the exclusion list. */
+  function addPrefixRow (prefix) {
+    addRow(FOLDER_LIST, prefix, t('findling', 'Remove exclusion %s'))
+  }
+
+  /** One row of the pattern list. */
+  function addPatternRow (pattern) {
+    addRow(PATTERN_LIST, pattern, t('findling', 'Remove pattern %s'))
   }
 
   /**
@@ -997,18 +1124,71 @@
     }
 
     if (list !== null) {
-      list.addEventListener('click', function (event) {
-        const remove = event.target.closest('.findling-rules__remove')
-        if (remove === null) {
+      list.addEventListener('click', removeRow)
+    }
+  }
+
+  /** Remove the row a remove button sits in, for either list. */
+  function removeRow (event) {
+    const remove = event.target.closest('.findling-rules__remove')
+    if (remove === null) {
+      return
+    }
+    const row = remove.closest('.findling-rules__row')
+    if (row !== null) {
+      row.remove()
+      refreshEmptyState()
+      touched()
+    }
+  }
+
+  /**
+   * Add and remove for the pattern list (plan 33-05), local and not saved, in
+   * the shape of the folder list.
+   *
+   * The local check is the part the page can judge without the server: an
+   * empty field, an entry already in the list, an entry above the length bound
+   * and a list at its bound. Everything about the shape of a pattern, a double
+   * star, a bracket, a missing wildcard, is the server's to judge, and its
+   * answer comes back as codes after a save.
+   */
+  function setupPatternList () {
+    const field = document.getElementById(PATTERN_FIELD)
+    const add = document.getElementById('findling-rules-patterns-add')
+    const list = document.getElementById(PATTERN_LIST)
+
+    if (add !== null && field !== null) {
+      add.addEventListener('click', function () {
+        const value = field.value.trim()
+        const patterns = currentPatterns()
+        const maxLength = boundOf(PATTERN_FIELD, 'data-max-length')
+        const maxEntries = boundOf(PATTERN_FIELD, 'data-max-entries')
+        let code = ''
+        if (value === '') {
+          code = 'empty'
+        } else if (patterns.indexOf(value) !== -1) {
+          code = 'duplicate'
+        } else if (maxLength > 0 && Array.from(value.normalize('NFC')).length > maxLength) {
+          code = 'too_long'
+        } else if (maxEntries > 0 && patterns.length >= maxEntries) {
+          code = 'too_many'
+        }
+        if (code !== '') {
+          fieldError(PATTERN_ERROR, PATTERN_FIELD, refusalSentence(code, patternErrorSentences(), PATTERN_FIELD))
           return
         }
-        const row = remove.closest('.findling-rules__row')
-        if (row !== null) {
-          row.remove()
-          refreshEmptyState()
-          touched()
-        }
+
+        clearFieldError(PATTERN_ERROR)
+        addPatternRow(value)
+        field.value = ''
+        field.focus()
+        refreshEmptyState()
+        touched()
       })
+    }
+
+    if (list !== null) {
+      list.addEventListener('click', removeRow)
     }
   }
 
@@ -1035,6 +1215,30 @@
     })
   }
 
+  function newPatternsOf (patterns) {
+    return patterns.filter(function (pattern) {
+      return inForcePatterns.indexOf(pattern) === -1
+    })
+  }
+
+  /**
+   * The reading preview route, answering with its status rather than throwing
+   * on a refusal: a refused list comes back as codes, and those are what the
+   * page shows next to the list instead of a confirmation for a save that
+   * cannot happen.
+   */
+  async function preview (params) {
+    const url = OC.generateUrl('/apps/findling/' + ROUTE_RULES_PREVIEW) + '?' + new URLSearchParams(params).toString()
+    const response = await fetch(url, {
+      headers: {
+        requesttoken: document.head.dataset.requesttoken,
+        Accept: 'application/json'
+      }
+    })
+
+    return { ok: response.ok, status: response.status, body: await response.json() }
+  }
+
   /**
    * The inline confirmation of D-07: name the consequence before it happens.
    *
@@ -1058,7 +1262,7 @@
    * the sentence appears without a figure instead of claiming nought documents,
    * which would be the one wrong thing this box could say.
    */
-  async function confirmNewExclusions (exclusions) {
+  async function confirmNewExclusions (exclusions, patterns) {
     const box = document.getElementById('findling-rules-confirm')
     const cancel = document.getElementById('findling-rules-confirm-cancel')
     const save = document.getElementById('findling-rules-save')
@@ -1068,21 +1272,35 @@
 
     let answer = null
     try {
-      answer = await ask(ROUTE_RULES_PREVIEW, exclusions.map(function (prefix) {
-        // One pair per entry, because a list travels as repeated parameters and
-        // a joined string would arrive as one folder with commas in its name.
-        return ['exclusions[]', prefix]
-      }))
+      // One pair per entry, because a list travels as repeated parameters and
+      // a joined string would arrive as one folder with commas in its name.
+      const reply = await preview(
+        exclusions.map(function (prefix) {
+          return ['exclusions[]', prefix]
+        }).concat(patterns.map(function (pattern) {
+          return ['exclusionPatterns[]', pattern]
+        }))
+      )
+      if (reply.ok) {
+        answer = reply.body
+      } else if (reply.status === 400) {
+        // A list the server refuses gets its sentences and no confirmation:
+        // the save could not happen, so there is no consequence to weigh.
+        showRefusal(reply.body)
+        feedback(false, t('findling', 'The rules were not saved. Nothing changed.'))
+        return false
+      }
     } catch (error) {
       answer = null
     }
 
     const answered = answer !== null && Array.isArray(answer.newPrefixes)
-    if (answered && answer.newPrefixes.length === 0) {
+    const prefixes = answered ? answer.newPrefixes : newExclusionsOf(exclusions)
+    const addedPatterns = answer !== null && Array.isArray(answer.newPatterns) ? answer.newPatterns : newPatternsOf(patterns)
+    if (prefixes.length === 0 && addedPatterns.length === 0) {
       return true
     }
 
-    const prefixes = answered ? answer.newPrefixes : newExclusionsOf(exclusions)
     const counted = answered && Number.isInteger(answer.affectedDocuments)
     const documents = counted
       ? (answer.capped === true
@@ -1107,6 +1325,20 @@
         : t('findling', 'Remove indexed content? Excluding %s also removes the documents already indexed under that path from the index. The files themselves stay untouched on disk.')
           .replace('%s', function () { return prefixes.join(', ') })
     )
+    shown('findling-rules-confirm-message', prefixes.length > 0)
+
+    // The sentence for new patterns, without a number (PE-5), under the one
+    // for new folders. The patterns go into a code element of their own and
+    // the translated sentence is cut at its placeholder around it, so no
+    // pattern is ever part of a translated string.
+    const patternSentence = addedPatterns.length === 1
+      ? t('findling', 'Remove indexed content? Excluding %s also removes the already indexed documents that match that pattern from the index. The files themselves stay untouched on disk.')
+      : t('findling', 'Remove indexed content? Excluding %s also removes the already indexed documents that match these patterns from the index. The files themselves stay untouched on disk.')
+    const cut = patternSentence.indexOf('%s')
+    text('findling-rules-confirm-patterns-before', cut === -1 ? patternSentence : patternSentence.slice(0, cut))
+    text('findling-rules-confirm-patterns-value', addedPatterns.join(', '))
+    text('findling-rules-confirm-patterns-after', cut === -1 ? '' : patternSentence.slice(cut + 2))
+    shown('findling-rules-confirm-patterns', addedPatterns.length > 0)
 
     shown('findling-rules-confirm', true)
     if (save !== null) {
@@ -1188,11 +1420,13 @@
       return
     }
     clearFieldError('findling-rules-cap-error')
-    clearFieldError('findling-rules-new-error')
+    clearFieldError(FOLDER_ERROR)
+    clearFieldError(PATTERN_ERROR)
 
     const exclusions = currentPrefixes()
-    if (confirmed !== true && newExclusionsOf(exclusions).length > 0) {
-      const proceed = await confirmNewExclusions(exclusions)
+    const patterns = currentPatterns()
+    if (confirmed !== true && (newExclusionsOf(exclusions).length > 0 || newPatternsOf(patterns).length > 0)) {
+      const proceed = await confirmNewExclusions(exclusions, patterns)
       if (!proceed) {
         return
       }
@@ -1209,7 +1443,8 @@
         exclusions: exclusions,
         maxFileBytes: megabytes * BYTES_PER_MEGABYTE,
         indexTeamFolders: checked('findling-rules-team-folders'),
-        indexExternalStorage: checked('findling-rules-external-storage')
+        indexExternalStorage: checked('findling-rules-external-storage'),
+        exclusionPatterns: patterns
       })
 
       if (answer.ok && answer.body.saved === true) {
@@ -1220,9 +1455,11 @@
       }
 
       // "Nothing changed" is the payload of this message. The route writes all
-      // four values or none of them, so an administrator does not have to work
-      // out which half held.
+      // five values or none of them, so an administrator does not have to work
+      // out which half held. Under it, each refused code of either list as a
+      // sentence of its own next to that list (plan 33-05).
       feedback(false, t('findling', 'The rules were not saved. Nothing changed.'))
+      showRefusal(answer.body)
     } catch (error) {
       feedback(false, t('findling', 'The rules were not saved. Nothing changed.'))
     } finally {
@@ -1289,6 +1526,22 @@
       // confirmation a second time, for a clearing that already happened.
       inForcePrefixes = currentPrefixes()
     }
+
+    const patternList = document.getElementById(PATTERN_LIST)
+    if (patternList !== null && Array.isArray(rules.exclusionPatterns)) {
+      // Rebuilt from the answer for the same reason: the server composes a
+      // pattern to NFC and folds its slashes.
+      while (patternList.firstChild !== null) {
+        patternList.removeChild(patternList.firstChild)
+      }
+      rules.exclusionPatterns.forEach(function (pattern) {
+        if (typeof pattern === 'string') {
+          addPatternRow(pattern)
+        }
+      })
+      refreshEmptyState()
+      inForcePatterns = currentPatterns()
+    }
   }
 
   /**
@@ -1303,10 +1556,12 @@
     shown('findling-rules-effect', false)
     refreshEmptyState()
     setupExclusionList()
+    setupPatternList()
 
-    // The list as the server rendered it is the list in force. Read before any
-    // handler can change it.
+    // The lists as the server rendered them are the lists in force. Read
+    // before any handler can change them.
     inForcePrefixes = currentPrefixes()
+    inForcePatterns = currentPatterns()
 
     const save = document.getElementById('findling-rules-save')
     if (save !== null) {

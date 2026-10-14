@@ -704,4 +704,20 @@ final class AdminViewServiceTest extends TestCase {
 		// on the admin card and in a terminal.
 		self::assertSame('', AdminViewService::errorClass(['errorClass' => $value]));
 	}
+
+	// -- the diagnosis of an excluded file names both lists (plan 33-05) ----
+
+	public function testTheRemedyOfAnExcludedFileNamesBothListsOfThePage(): void {
+		// Read off the table the diagnosis translates, because the diagnosis
+		// itself needs a file system. A file under a pattern is "excluded" like
+		// a file under a prefix, and a remedy that named only the folder list
+		// would send the admin to a list where no entry matches.
+		$table = (new \ReflectionClassConstant(AdminViewService::class, 'REASON_TEXT'))->getValue();
+
+		self::assertIsArray($table);
+		self::assertSame(
+			['Excluded by a rule', 'Remove the matching entry under "Excluded folders" or "Excluded patterns".'],
+			$table['excluded'] ?? null,
+		);
+	}
 }
