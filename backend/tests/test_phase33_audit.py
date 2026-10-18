@@ -1,0 +1,1641 @@
+"""The probes of the phase 33 audit (33-AUDIT.md): exclusion patterns and limits.
+
+Phase 33 put a new comparison into the write path of every file of an instance
+(the event listener asks ExclusionService::isExcluded), a mass removal path
+(ExclusionSweepJob, way C of the reconcile, the clearing of verdict rows) and a
+new admin input (the pattern list of the rules form). This module holds the
+audit probes as regression tests, in three groups.
+
+**The oracle, run through the driver of plan 33-02.** A reference matcher
+written for this audit from the prose of ``docs/admin-page.md`` (section
+"Ausschlussmuster"), not from the PHP code: a recursive definition over lists
+of characters with a memo, no ``fnmatch``, no regular expression and nothing of
+the bit masks of the service. A generated corpus (fixed seed) plus fixed edge
+groups is answered by the real ``php/lib/Service/ExclusionService.php`` through
+``backend/tests/drivers/exclusion_driver.php`` (unchanged) on ``php:8.3-cli``,
+and every answer has to agree with the oracle. Without Docker these are
+skipped with that reason.
+
+**Source probes.** ``token_get_all`` of PHP itself (a one-off script run by the
+same image) instead of the regular expressions of gate D: which functions the
+matcher and the normaliser call, how many ``preg_*`` calls the service holds,
+and which variables reach a logger call of the classes of the phase.
+
+**Instance probes, skipped without an instance.** The refusal corpus against
+the rules routes, a second writer over ``occ config:app:set`` with garbage,
+the rights of a non admin and the request token, and the log of instance and
+backend with a positive control. They need these variables:
+
+    FINDLING_AUDIT33_URL          http://localhost:8090
+    FINDLING_AUDIT33_ADMIN_PASS   password of admin
+    FINDLING_AUDIT33_USER         a non admin account (testuser)
+    FINDLING_AUDIT33_USER_PASS    its password
+    FINDLING_AUDIT33_CONTAINER    name of the Nextcloud container (occ, log)
+    FINDLING_AUDIT33_BACKEND_LOG  path of the backend log (log probe)
+    FINDLING_AUDIT33_BACKEND_URL  http://127.0.0.1:10035 (log probe control)
+
+Every value of the instance corpus carries the marker ``q33`` and nothing else
+in the instance does, so the log probe searches one word. The instance is left
+as it was found: the pattern key is deleted again, files the probes wrote are
+deleted over WebDAV, cron.php runs and the trash bin of the user is emptied.
+
+Only ASCII in this file: every other character is written as an escape.
+"""
+
+from __future__ import annotations
+
+import base64
+import json
+import os
+import random
+import shutil
+import subprocess
+import time
+import unicodedata
+from contextlib import closing
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+import httpx
+import pytest
+
+REPO = Path(__file__).resolve().parents[2]
+DRIVER = "backend/tests/drivers/exclusion_driver.php"
+SOURCE = "php/lib/Service/ExclusionService.php"
+IMAGE = os.environ.get("FINDLING_AUDIT33_PHP_IMAGE", "php:8.3-cli")
+# php:8.3-cli carries neither intl nor the polyfill of Nextcloud, so the service
+# falls back to the raw value where it composes a pattern to NFC (finding
+# L-33-01). The image of the instance (nextcloud:34.0.3-apache, PHP 8.5 with
+# intl) answers the same corpus with the runtime of production.
+NO_NORMALIZER = IMAGE == "php:8.3-cli"
+OUT_DIR = os.environ.get("FINDLING_AUDIT33_OUT", "")
+
+# ---------------------------------------------------------------------------
+# Docker
+# ---------------------------------------------------------------------------
+
+
+def _docker() -> str:
+    docker = shutil.which("docker")
+    if docker is None:
+        pytest.skip("docker is not available")
+    probe = subprocess.run(  # noqa: S603 - an argument list, never a shell
+        [docker, "version", "--format", "{{.Server.Version}}"],
+        capture_output=True,
+        check=False,
+        timeout=60,
+    )
+    if probe.returncode != 0:
+        pytest.skip("docker is installed but its daemon does not answer")
+    return docker
+
+
+def run_driver(payload: dict[str, Any]) -> dict[str, Any]:
+    """One run of the unchanged driver of 33-02 over the service of today."""
+    docker = _docker()
+    answer = subprocess.run(  # noqa: S603 - an argument list, never a shell
+        [
+            docker,
+            "run",
+            "--rm",
+            "-i",
+            "--entrypoint",
+            "php",
+            "-v",
+            f"{REPO}:/app:ro",
+            "-w",
+            "/app",
+            IMAGE,
+            DRIVER,
+            SOURCE,
+            "answers",
+        ],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+        timeout=600,
+        env={**os.environ, "MSYS_NO_PATHCONV": "1"},
+    )
+    assert answer.returncode == 0, answer.stderr
+    result = json.loads(answer.stdout)
+    assert isinstance(result, dict)
+    return result
+
+
+def _write_out(name: str, data: object) -> None:
+    """Large outputs go to a file of the audit run, never into the test output."""
+    if not OUT_DIR:
+        return
+    target = Path(OUT_DIR)
+    target.mkdir(parents=True, exist_ok=True)
+    (target / name).write_text(json.dumps(data, ensure_ascii=True, indent=1), encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# The oracle, from docs/admin-page.md section "Ausschlussmuster"
+# ---------------------------------------------------------------------------
+#
+# What the documentation says, and nothing else:
+#
+# - two wildcards: "*" any number of characters, none included, across folders;
+#   "?" exactly one character inside a name, never "/";
+# - a pattern hits when it fits the whole path or an ancestor at a "/" border;
+# - it is compared against the path and against the path with a "/" in front;
+# - case counts; the pattern is composed to NFC on save, "?" is one character,
+#   not one byte;
+# - on save a pattern is trimmed like a prefix: outer white space away, double
+#   "/" folded, "/" at the start and the end away, a leading "files/" away;
+# - refusals: empty, too_long (over 60 characters after NFC), traversal ("." or
+#   ".." as a folder name), double_star, unsupported_character ([ ] { } and
+#   backslash), negation (a leading "!"), control_character, no_literal (only
+#   "*", "?" and "/"), no_wildcard (neither "*" nor "?"); duplicates after the
+#   normalisation count once; more than 32 are not applied;
+# - prefixes: a path is under a prefix when it is the prefix or starts with the
+#   prefix and "/".
+#
+# Assumption A1 (the documentation names the path space, not the shape of a
+# path handed in): a path is folded like a prefix, double "/" into one and "/"
+# at both ends away. White space of a path is kept as it is, names may begin or
+# end with a blank.
+
+STAR = "*"
+ANY = "?"
+SLASH = "/"
+MAX_PATTERNS = 32
+MAX_PATTERN_LENGTH = 60
+REFUSED = frozenset("[]{}\\")
+
+
+def _fold_slashes(value: str) -> str:
+    while "//" in value:
+        value = value.replace("//", "/")
+    return value.strip(SLASH)
+
+
+def doc_problems(raw: object) -> tuple[set[str], str | None]:
+    """Every refusal code the documentation gives for one entry, and its stored form."""
+    if not isinstance(raw, str):
+        return {"not_a_string"}, None
+    text = unicodedata.normalize("NFC", raw.strip(" \t"))
+    text = _fold_slashes(text)
+    if text.startswith("files/"):
+        text = text[len("files/") :]
+    problems: set[str] = set()
+    if text == "":
+        problems.add("empty")
+    if len(text) > MAX_PATTERN_LENGTH:
+        problems.add("too_long")
+    if any(segment in {".", ".."} for segment in text.split(SLASH)):
+        problems.add("traversal")
+    if STAR + STAR in text:
+        problems.add("double_star")
+    if any(c in REFUSED for c in text):
+        problems.add("unsupported_character")
+    if text.startswith("!"):
+        problems.add("negation")
+    if any(ord(c) < 0x20 or ord(c) == 0x7F for c in text):
+        problems.add("control_character")
+    if text != "" and all(c in "*?/" for c in text):
+        problems.add("no_literal")
+    if text != "" and STAR not in text and ANY not in text:
+        problems.add("no_wildcard")
+    return problems, (text if not problems else None)
+
+
+def doc_patterns_in_force(stored: list[Any]) -> list[str]:
+    """What a stored list means: usable entries, once each, at most 32."""
+    kept: list[str] = []
+    for raw in stored:
+        _problems, text = doc_problems(raw)
+        if text is None or text in kept:
+            continue
+        kept.append(text)
+        if len(kept) >= MAX_PATTERNS:
+            break
+    return kept
+
+
+def doc_fits(pattern: str, path: str) -> bool:
+    """Does the pattern fit the whole path or an ancestor of it at a "/" border."""
+    # fits(i, j): the rest of the pattern from i fits the path from j up to its
+    # end or up to a "/". The recursive definition, filled as a memo table from
+    # the back, because a path of 4000 characters is deeper than the stack.
+    p = list(pattern)
+    s = list(path)
+    width = len(s) + 1
+    memo = [False] * ((len(p) + 1) * width)
+    for j in range(len(s) + 1):
+        memo[len(p) * width + j] = j == len(s) or s[j] == SLASH
+    for i in range(len(p) - 1, -1, -1):
+        row = i * width
+        below = (i + 1) * width
+        for j in range(len(s), -1, -1):
+            if p[i] == STAR:
+                result = memo[below + j] or (j < len(s) and memo[row + j + 1])
+            elif p[i] == ANY:
+                result = j < len(s) and s[j] != SLASH and memo[below + j + 1]
+            else:
+                result = j < len(s) and s[j] == p[i] and memo[below + j + 1]
+            memo[row + j] = result
+    return memo[0]
+
+
+def doc_path(path: str) -> str:
+    """Assumption A1: a path folded like a prefix."""
+    return _fold_slashes(path)
+
+
+def doc_excluded(prefixes: list[str], patterns: list[str], path: str) -> bool:
+    folded = doc_path(path)
+    if folded == "":
+        return False
+    for prefix in prefixes:
+        if folded == prefix or folded.startswith(prefix + SLASH):
+            return True
+    return any(doc_fits(pattern, folded) or doc_fits(pattern, SLASH + folded) for pattern in patterns)
+
+
+# ---------------------------------------------------------------------------
+# The corpus
+# ---------------------------------------------------------------------------
+
+SEED = 3311
+RANDOM_RUNS = 60
+
+E_ACUTE = "\u00e9"
+U_UMLAUT = "\u00dc"
+CJK = "\u4e2d"
+EMOJI = "\U0001f600"
+COMBINING_ACUTE = "\u0301"
+LITERALS = ["a", "b", "c", "A", ".", "-", "_", " ", "x", E_ACUTE, U_UMLAUT, CJK, EMOJI, "(", ")", "+", "$", "^"]
+
+# Raw entries the read path has to drop, mixed into some random runs.
+UNUSABLE = ["**/x", "[a]*", "!*.x", "*", "a/../*.b", "nowild", "", "*\nx", "x" * 61 + "*", 7, None, ["*.x"]]
+
+
+@dataclass
+class Run:
+    group: str
+    stored: list[Any]
+    paths: list[str]
+    prefixes: list[str] = field(default_factory=list)
+
+
+def _literal(rng: random.Random) -> str:
+    return rng.choice(LITERALS)
+
+
+def _segment(rng: random.Random, low: int = 1, high: int = 8) -> str:
+    name = "".join(_literal(rng) for _ in range(rng.randint(low, high))).strip(" ")
+    if name in {"", ".", ".."}:
+        name = "d"
+    return name
+
+
+def _gen_pattern(rng: random.Random) -> str:
+    while True:
+        pieces = []
+        for _ in range(rng.randint(2, 12)):
+            roll = rng.random()
+            if roll < 0.25:
+                pieces.append(STAR)
+            elif roll < 0.4:
+                pieces.append(ANY)
+            elif roll < 0.5:
+                pieces.append(SLASH)
+            else:
+                pieces.append(_literal(rng))
+        text = "".join(pieces)
+        if doc_problems(text)[1] is not None:
+            return text
+
+
+def _decorate(rng: random.Random, pattern: str) -> str:
+    """A raw spelling of the same pattern the save has to normalise."""
+    roll = rng.random()
+    if roll < 0.06:
+        return SLASH + pattern + SLASH
+    if roll < 0.1:
+        return "files/" + pattern
+    if roll < 0.14:
+        return " " + pattern + "\t"
+    if roll < 0.18:
+        return pattern.replace(SLASH, "//")
+    return pattern
+
+
+def _instantiate(rng: random.Random, pattern: str) -> str:
+    out = []
+    for c in pattern:
+        if c == STAR:
+            out.append("".join(rng.choice([*LITERALS, SLASH]) for _ in range(rng.randint(0, 5))))
+        elif c == ANY:
+            out.append(_literal(rng))
+        else:
+            out.append(c)
+    return "".join(out)
+
+
+def _canonical(path: str) -> str:
+    path = _fold_slashes(path).strip(" ")
+    segments = ["d" if s in {".", ".."} else s for s in path.split(SLASH)]
+    path = SLASH.join(segments).strip(" ")
+    return path or "x"
+
+
+def _mutate(rng: random.Random, path: str) -> str:
+    if not path:
+        return path
+    at = rng.randrange(len(path))
+    roll = rng.random()
+    if roll < 0.34:
+        return path[:at] + _literal(rng) + path[at + 1 :]
+    if roll < 0.67:
+        return path[:at] + rng.choice([*LITERALS, SLASH]) + path[at:]
+    return path[:at] + path[at + 1 :]
+
+
+def _related_path(rng: random.Random, pattern: str) -> str:
+    path = _instantiate(rng, doc_problems(pattern)[1] or pattern)
+    if rng.random() < 0.4:
+        path = SLASH.join(_segment(rng) for _ in range(rng.randint(1, 2))) + SLASH + path
+    if rng.random() < 0.5:
+        path = path + SLASH + SLASH.join(_segment(rng) for _ in range(rng.randint(1, 2)))
+    if rng.random() < 0.35:
+        path = _mutate(rng, path)
+    return _canonical(path)
+
+
+def _random_path(rng: random.Random) -> str:
+    return _canonical(SLASH.join(_segment(rng) for _ in range(rng.randint(1, 4))))
+
+
+def random_runs() -> list[Run]:
+    rng = random.Random(SEED)  # noqa: S311 - a corpus with a fixed seed, no secret
+    runs = []
+    for _ in range(RANDOM_RUNS):
+        patterns = [_gen_pattern(rng) for _ in range(rng.randint(1, 3))]
+        stored: list[object] = [_decorate(rng, p) for p in patterns]
+        if rng.random() < 0.3:
+            stored.insert(rng.randrange(len(stored) + 1), rng.choice(UNUSABLE))
+        paths = []
+        for pattern in patterns:
+            paths.extend(_related_path(rng, pattern) for _ in range(16))
+        paths.extend(_random_path(rng) for _ in range(8))
+        runs.append(Run("random", stored, paths))
+    return runs
+
+
+def _sixty(rng: random.Random) -> str:
+    while True:
+        text = "".join(rng.choice([STAR, ANY, ANY, "a", "b", "/", E_ACUTE]) for _ in range(MAX_PATTERN_LENGTH))
+        text = text.replace(STAR + STAR, STAR + "a")
+        text = ("a" + text)[:MAX_PATTERN_LENGTH] if text[0] == SLASH else text
+        text = text[:-1] + "b" if text[-1] == SLASH else text
+        if len(text) == MAX_PATTERN_LENGTH and doc_problems(text)[1] == text:
+            return text
+
+
+def edge_runs() -> list[Run]:
+    rng = random.Random(SEED + 1)  # noqa: S311 - a corpus with a fixed seed, no secret
+    nfd_cafe = "Cafe" + COMBINING_ACUTE
+    nfc_cafe = "Caf" + E_ACUTE
+    long_deep = "d/" * 1997 + "x.key"
+    long_name = "a" * 3996 + ".key"
+    long_mixed = "/".join("seg" + str(i) for i in range(700))[:3990] + "/n.key"
+    long_random = _canonical("".join(rng.choice([*LITERALS, SLASH]) for _ in range(4000)))
+    nm_long = "node_modules/" + "x" * 3980 + "/y.js"
+    sixties = [_sixty(rng) for _ in range(12)]
+    runs = [
+        Run(
+            "doc_examples",
+            ["*.photoslibrary", "*/node_modules/*", "Scan_??.pdf", "Backups/*", "*.key"],
+            [
+                "Fotos/Mediathek.photoslibrary/database/Photos.sqlite",
+                "Notiz.photoslibrary.txt",
+                "node_modules/react/index.js",
+                "Projekte/web/node_modules/x/y.js",
+                "Projekte/node_modules_alt/x.js",
+                "Scan_01.pdf",
+                "Scan_1.pdf",
+                "Scan_0/.pdf",
+                "Backups/2024/x.pdf",
+                "Alt/Backups/x.pdf",
+                "Vortrag.key",
+                "Vortrag.KEY",
+                "Mediathek.photoslibrary",
+            ],
+        ),
+        Run(
+            "empty_segments",
+            ["a//*.q", "//*.k//", "x/ /*y", "/files//m/*", "files/files/*.f"],
+            [
+                "a/1.q",
+                "a//1.q",
+                "/a/1.q/",
+                "b/a/1.q",
+                "z.k",
+                "z/w.k/v",
+                "x/ /1y",
+                "x/1y",
+                "m/1",
+                "files/m/1",
+                "files/1.f",
+                "1.f",
+                "files//files/1.f",
+            ],
+        ),
+        Run(
+            "star_edges",
+            ["*q", "q*", "*a*b*", "*/node_modules/*", "Backups/*"],
+            [
+                "q",
+                "xq",
+                "qx",
+                "x/q",
+                "q/x",
+                "xq/y",
+                "aXb",
+                "ab",
+                "ba",
+                "a/b",
+                "node_modules",
+                "node_modules/x",
+                "a/node_modules",
+                "Backups",
+                "Backups/x",
+                "x/Backups/y",
+            ],
+        ),
+        Run(
+            "question_before_slash",
+            ["a?/*.t", "?/x*", "*/?", "Scan_??.pdf"],
+            [
+                "ab/1.t",
+                "a/b/1.t",
+                "a/1.t",
+                "abc/1.t",
+                "a/x1",
+                "ab/x1",
+                "q/r",
+                "q/rs",
+                "q/r/s",
+                "Scan_0/.pdf",
+                "Scan_ab.pdf",
+                "Scan_a.pdf/x",
+            ],
+        ),
+        Run(
+            "multibyte",
+            ["Caf?", "?" + CJK + "*", "*" + EMOJI, U_UMLAUT + "?er*"],
+            [
+                nfc_cafe,
+                nfc_cafe + "/x",
+                "Cafe",
+                "Caf" + EMOJI,
+                "Caf" + E_ACUTE + E_ACUTE,
+                "a" + CJK,
+                EMOJI + CJK + "/z",
+                CJK + CJK,
+                "x" + EMOJI,
+                EMOJI,
+                U_UMLAUT + "ber",
+                U_UMLAUT + EMOJI + "er/x",
+                "U\u0308ber",
+            ],
+        ),
+        Run(
+            "nfd_against_nfc",
+            [nfd_cafe + "*", "Caf" + E_ACUTE + "?", "*e" + COMBINING_ACUTE],
+            [
+                nfc_cafe,
+                nfd_cafe,
+                nfc_cafe + "x",
+                nfd_cafe + "x",
+                "Caf" + E_ACUTE + "x",
+                "Cafex",
+                "xe" + COMBINING_ACUTE,
+                "x" + E_ACUTE,
+            ],
+        ),
+        Run(
+            "long_paths",
+            ["*.key", "*/node_modules/*", "a*b*c*d*e*f*g*h*i*j*k*l*m*n*o*p*q*r*s*t*u*v*w*x*y*z*", "d/?/*.zz"],
+            [long_deep, long_name, long_mixed, long_random, nm_long, "d/" * 1998 + "zz", "d/x/" + "y" * 3990 + ".zz"],
+        ),
+        Run(
+            "sixty_character_patterns",
+            sixties[:4],
+            [_related_path(rng, p) for p in sixties[:4] for _ in range(8)] + [long_random, long_deep],
+        ),
+        Run(
+            "sixty_character_patterns",
+            sixties[4:8],
+            [_related_path(rng, p) for p in sixties[4:8] for _ in range(8)] + [long_random, long_name],
+        ),
+        Run(
+            "sixty_character_patterns",
+            sixties[8:],
+            [_related_path(rng, p) for p in sixties[8:] for _ in range(8)] + [long_mixed],
+        ),
+        Run(
+            "prefix_and_pattern",
+            ["*.key", "Archiv/*", "Backups/*/alt*"],
+            [
+                "Archiv/x.pdf",
+                "Archiv/v.key",
+                "Archivar.pdf",
+                "Archivar/v.key",
+                "Backups/2024/x",
+                "Backups/2024/alt.txt",
+                "Backups/2024/neu/alt",
+                "Backup/2024/alt",
+                "a/b.key/c",
+            ],
+            prefixes=["Archiv", "Backups/2024"],
+        ),
+        Run(
+            "white_space_edges",
+            ["?x*", "* ", " *.k "],
+            [" x", "x ", " x/y", "ax", "x", "a /b", "a/ b", "a.k", " a.k"],
+        ),
+    ]
+    over = [f"*.k{i:03d}" for i in range(40)]
+    runs.append(
+        Run("ceiling_and_duplicates", [*over[:3], "/" + over[0] + "/", *over], [f"x.k{i:03d}" for i in range(40)])
+    )
+    return runs
+
+
+@dataclass
+class Deviation:
+    group: str
+    stored: list[Any]
+    path: str
+    oracle: bool
+    php: bool
+
+
+@dataclass
+class OracleRun:
+    pairs: dict[str, int] = field(default_factory=dict)
+    deviations: list[Deviation] = field(default_factory=list)
+    kept_mismatch: list[tuple[str, list[str], list[str]]] = field(default_factory=list)
+    log_entries: list[dict[str, Any]] = field(default_factory=list)
+
+
+@pytest.fixture(scope="module")
+def oracle_run() -> OracleRun:
+    _docker()
+    result = OracleRun()
+    report: list[dict[str, Any]] = []
+    for run in random_runs() + edge_runs():
+        answer = run_driver(
+            {"config": {"exclusions": run.prefixes, "exclusion_patterns": run.stored}, "paths": run.paths}
+        )
+        kept = doc_patterns_in_force(run.stored)
+        if answer["patterns"] != kept:
+            result.kept_mismatch.append((run.group, kept, answer["patterns"]))
+        php_answers = answer["isExcluded"]
+        assert len(php_answers) == len(run.paths)
+        result.pairs[run.group] = result.pairs.get(run.group, 0) + len(run.paths)
+        result.log_entries.extend(answer["log"])
+        for path, php in zip(run.paths, php_answers, strict=True):
+            mine = doc_excluded(run.prefixes, kept, path)
+            if mine != php:
+                result.deviations.append(Deviation(run.group, run.stored, path, mine, php))
+        report.append(
+            {
+                "group": run.group,
+                "stored": run.stored,
+                "kept": kept,
+                "php_kept": answer["patterns"],
+                "paths": len(run.paths),
+            }
+        )
+    _write_out(
+        "oracle.json",
+        {
+            "pairs": result.pairs,
+            "total": sum(result.pairs.values()),
+            "deviations": [d.__dict__ for d in result.deviations],
+            "kept_mismatch": result.kept_mismatch,
+            "runs": report,
+        },
+    )
+    return result
+
+
+GROUPS = [
+    "random",
+    "doc_examples",
+    "empty_segments",
+    "star_edges",
+    "question_before_slash",
+    "multibyte",
+    "nfd_against_nfc",
+    "long_paths",
+    "sixty_character_patterns",
+    "prefix_and_pattern",
+    "white_space_edges",
+    "ceiling_and_duplicates",
+]
+
+
+def test_the_oracle_reads_the_examples_of_the_documentation_as_written() -> None:
+    """Positive control of the oracle itself, without Docker: the table rows of the doc."""
+    assert doc_excluded([], ["*.photoslibrary"], "Fotos/Mediathek.photoslibrary/database/Photos.sqlite")
+    assert not doc_excluded([], ["*.photoslibrary"], "Notiz.photoslibrary.txt")
+    assert doc_excluded([], ["*/node_modules/*"], "node_modules/react/index.js")
+    assert doc_excluded([], ["*/node_modules/*"], "Projekte/web/node_modules/x/y.js")
+    assert not doc_excluded([], ["*/node_modules/*"], "Projekte/node_modules_alt/x.js")
+    assert doc_excluded([], ["Scan_??.pdf"], "Scan_01.pdf")
+    assert not doc_excluded([], ["Scan_??.pdf"], "Scan_1.pdf")
+    assert not doc_excluded([], ["Scan_??.pdf"], "Scan_0/.pdf")
+    assert doc_excluded([], ["Backups/*"], "Backups/2024/x.pdf")
+    assert not doc_excluded([], ["Backups/*"], "Alt/Backups/x.pdf")
+    assert doc_excluded([], ["*.key"], "Vortrag.key")
+    assert not doc_excluded([], ["*.key"], "Vortrag.KEY")
+    assert doc_excluded([], [doc_problems("Caf?")[1] or ""], "Caf" + E_ACUTE)
+    assert doc_problems("/Fotos/*.jpg/")[1] == doc_problems("Fotos/*.jpg")[1] == "Fotos/*.jpg"
+    assert doc_problems("*")[0] == {"no_literal"}
+    assert doc_problems("node_modules")[0] == {"no_wildcard"}
+
+
+def test_the_corpus_has_at_least_2000_pairs(oracle_run: OracleRun) -> None:
+    total = sum(oracle_run.pairs.values())
+    assert total >= 2000, oracle_run.pairs
+    assert oracle_run.pairs["random"] >= 2000, oracle_run.pairs
+    assert set(oracle_run.pairs) == set(GROUPS)
+
+
+L_33_01 = "L-33-01: php:8.3-cli has no Normalizer, the service keeps an NFD pattern raw"
+
+
+@pytest.mark.parametrize(
+    "group",
+    [
+        pytest.param(g, marks=pytest.mark.xfail(NO_NORMALIZER, strict=True, reason=L_33_01))
+        if g == "nfd_against_nfc"
+        else g
+        for g in GROUPS
+    ],
+)
+def test_the_matcher_agrees_with_the_oracle_of_the_documentation(oracle_run: OracleRun, group: str) -> None:
+    found = [d for d in oracle_run.deviations if d.group == group]
+    assert found == [], [(d.stored, ascii(d.path)[:120], d.oracle, d.php) for d in found[:5]]
+
+
+@pytest.mark.xfail(NO_NORMALIZER, strict=True, reason=L_33_01)
+def test_the_list_in_force_is_the_list_of_the_documentation(oracle_run: OracleRun) -> None:
+    assert oracle_run.kept_mismatch == []
+
+
+def test_the_driver_log_of_the_corpus_carries_counters_only(oracle_run: OracleRun) -> None:
+    for entry in oracle_run.log_entries:
+        context = entry.get("context", {})
+        assert all(isinstance(v, int) for v in context.values()), entry
+
+
+def test_the_comparison_sees_a_difference_when_there_is_one() -> None:
+    """Positive control of the comparison: the oracle with another pattern than PHP."""
+    paths = ["a/b.key", "a/b.pages", "x/y.key/z"]
+    answer = run_driver({"config": {"exclusions": [], "exclusion_patterns": ["*.key"]}, "paths": paths})
+    mine = [doc_excluded([], ["*.pages"], p) for p in paths]
+    assert mine != answer["isExcluded"]
+    assert [doc_excluded([], ["*.key"], p) for p in paths] == answer["isExcluded"]
+
+
+# ---------------------------------------------------------------------------
+# Source probes over token_get_all
+# ---------------------------------------------------------------------------
+
+PROBE_PHP = r"""<?php
+declare(strict_types=1);
+$skip = [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT, T_OPEN_TAG, T_CLOSE_TAG, T_INLINE_HTML];
+$all = [];
+foreach (array_slice($argv, 1) as $file) {
+    $t = [];
+    $line = 1;
+    foreach (token_get_all(file_get_contents($file)) as $tok) {
+        if (is_array($tok)) {
+            $line = $tok[2];
+            if (in_array($tok[0], $skip, true)) {
+                continue;
+            }
+            $t[] = [token_name($tok[0]), $tok[1], $line];
+        } else {
+            $t[] = ['CHAR', $tok, $line];
+        }
+    }
+    $n = count($t);
+    $functions = [];
+    for ($i = 0; $i < $n - 1; $i++) {
+        if ($t[$i][0] !== 'T_FUNCTION' || $t[$i + 1][0] !== 'T_STRING') {
+            continue;
+        }
+        $j = $i + 2;
+        while ($j < $n && !($t[$j][0] === 'CHAR' && ($t[$j][1] === '{' || $t[$j][1] === ';'))) {
+            $j++;
+        }
+        if ($j >= $n || $t[$j][1] === ';') {
+            continue;
+        }
+        $depth = 0;
+        for ($k = $j; $k < $n; $k++) {
+            $v = $t[$k];
+            $opens = ['T_CURLY_OPEN', 'T_DOLLAR_OPEN_CURLY_BRACES'];
+            if (($v[0] === 'CHAR' && $v[1] === '{') || in_array($v[0], $opens, true)) {
+                $depth++;
+            } elseif ($v[0] === 'CHAR' && $v[1] === '}') {
+                $depth--;
+                if ($depth === 0) {
+                    break;
+                }
+            }
+        }
+        $functions[$t[$i + 1][1]] = [$j, $k];
+    }
+    $owner = function (int $at) use ($functions): string {
+        foreach ($functions as $name => [$a, $b]) {
+            if ($at > $a && $at < $b) {
+                return $name;
+            }
+        }
+        return '';
+    };
+    $calls = [];
+    $evals = [];
+    $logs = [];
+    $names = ['T_STRING', 'T_NAME_FULLY_QUALIFIED', 'T_NAME_QUALIFIED', 'T_EXIT'];
+    for ($i = 1; $i < $n - 1; $i++) {
+        if ($t[$i][0] === 'T_EVAL') {
+            $evals[] = [$owner($i), $t[$i][2]];
+        }
+        if (!in_array($t[$i][0], $names, true) || $t[$i + 1][1] !== '(') {
+            continue;
+        }
+        $prev = $t[$i - 1][0];
+        $kind = 'function';
+        if ($prev === 'T_OBJECT_OPERATOR' || $prev === 'T_NULLSAFE_OBJECT_OPERATOR') {
+            $kind = 'method';
+        } elseif ($prev === 'T_DOUBLE_COLON') {
+            $kind = 'static';
+        } elseif ($prev === 'T_NEW') {
+            $kind = 'new';
+        } elseif ($prev === 'T_FUNCTION') {
+            $kind = 'declaration';
+        }
+        $receiver = $kind === 'method' || $kind === 'static' ? $t[$i - 2][1] : '';
+        $first = $t[$i + 2][0] === 'T_CONSTANT_ENCAPSED_STRING' ? $t[$i + 2][1] : null;
+        $calls[] = [$owner($i), ltrim($t[$i][1], '\\'), $kind, $receiver, $t[$i][2], $first];
+        $isLogger = $kind === 'method' && (
+            ($t[$i - 2][1] === 'logger' && $t[$i - 3][0] === 'T_OBJECT_OPERATOR' && $t[$i - 4][1] === '$this')
+            || $t[$i - 2][1] === '$logger'
+        );
+        if (!$isLogger) {
+            continue;
+        }
+        $stack = [];
+        $vars = [];
+        $props = [];
+        for ($k = $i + 1; $k < $n; $k++) {
+            $v = $t[$k];
+            if ($v[1] === '(' && $v[0] === 'CHAR') {
+                $stack[] = in_array($t[$k - 1][0], $names, true) ? ltrim($t[$k - 1][1], '\\') : '';
+            } elseif ($v[1] === ')' && $v[0] === 'CHAR') {
+                array_pop($stack);
+                if ($stack === []) {
+                    break;
+                }
+            } elseif ($v[0] === 'T_VARIABLE') {
+                // Reduced to a number or a truth value: inside count(), or one
+                // side of a comparison.
+                $compare = [
+                    'T_IS_IDENTICAL', 'T_IS_NOT_IDENTICAL', 'T_IS_EQUAL', 'T_IS_NOT_EQUAL',
+                    'T_IS_SMALLER_OR_EQUAL', 'T_IS_GREATER_OR_EQUAL',
+                ];
+                $counted = in_array('count', array_slice($stack, 1), true)
+                    || in_array($t[$k + 1][0], $compare, true) || in_array($t[$k - 1][0], $compare, true);
+                if ($v[1] === '$this' && $t[$k + 1][0] === 'T_OBJECT_OPERATOR' && $t[$k + 3][1] !== '(') {
+                    $props[] = [$t[$k + 2][1], $counted];
+                } elseif ($v[1] !== '$this') {
+                    $vars[] = [$v[1], $counted];
+                }
+            }
+        }
+        $message = $t[$i + 2][0] === 'T_CONSTANT_ENCAPSED_STRING' || $t[$i + 2][0] === 'T_STRING' ? $t[$i + 2][1] : '';
+        $logs[] = [$owner($i), $t[$i][1], $t[$i][2], $message, $vars, $props];
+    }
+    $lines = array_map(fn ($r) => [$t[$r[0]][2], $t[$r[1]][2]], $functions);
+    $all[$file] = ['functions' => $lines, 'calls' => $calls, 'evals' => $evals, 'logs' => $logs];
+}
+echo json_encode($all, JSON_THROW_ON_ERROR);
+"""
+
+PHASE_CLASSES = [
+    "php/lib/Service/ExclusionService.php",
+    "php/lib/BackgroundJobs/ExclusionSweepJob.php",
+    "php/lib/BackgroundJobs/SubtreeExpandJob.php",
+    "php/lib/BackgroundJobs/StorageCrawlJob.php",
+    "php/lib/Service/FileStateService.php",
+    "php/lib/Controller/SettingsController.php",
+    "php/lib/Service/AdminViewService.php",
+    "php/lib/Listener/FileEventListener.php",
+    "php/lib/Service/QueueService.php",
+    "php/lib/Controller/ReconcileController.php",
+    "php/lib/Service/PurgeService.php",
+    "php/lib/Service/SettingsService.php",
+]
+
+# Names of variables that carry a path, a pattern, a prefix or the fingerprint.
+FORBIDDEN_LOG_VARIABLES = frozenset(
+    {
+        "$path",
+        "$paths",
+        "$pattern",
+        "$patterns",
+        "$prefix",
+        "$prefixes",
+        "$fingerprint",
+        "$raw",
+        "$entry",
+        "$list",
+        "$mountRelativePath",
+        "$internalPath",
+        "$relative",
+        "$normalised",
+        "$stored",
+        "$exclusions",
+        "$exclusionPatterns",
+        "$name",
+        "$argument",
+    }
+)
+FORBIDDEN_LOG_PROPERTIES = frozenset({"cachedPatterns", "cachedPrefixes", "fingerprint"})
+
+
+def run_probe(tmp: Path, files: list[str], extra: dict[str, str] | None = None) -> dict[str, Any]:
+    docker = _docker()
+    (tmp / "probe.php").write_text(PROBE_PHP, encoding="utf-8")
+    for name, text in (extra or {}).items():
+        (tmp / name).write_text(text, encoding="utf-8")
+    answer = subprocess.run(  # noqa: S603 - an argument list, never a shell
+        [
+            docker,
+            "run",
+            "--rm",
+            "--entrypoint",
+            "php",
+            "-v",
+            f"{REPO}:/app:ro",
+            "-v",
+            f"{tmp}:/probe:ro",
+            "-w",
+            "/app",
+            IMAGE,
+            "/probe/probe.php",
+            *files,
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+        timeout=300,
+        env={**os.environ, "MSYS_NO_PATHCONV": "1"},
+    )
+    assert answer.returncode == 0, answer.stderr
+    result = json.loads(answer.stdout)
+    assert isinstance(result, dict)
+    return result
+
+
+SYNTHETIC = """<?php
+class X {
+    // preg_match($a) fnmatch('x') eval('1;')
+    public function matchesAPattern(string $path): bool {
+        $s = 'preg_match(';
+        if (fnmatch('*', $path)) { return true; }
+        eval('$a = 1;');
+        $this->logger->warning('m', [
+            'p' => $path, 'n' => count($patterns), 'b' => $list === [] ? 0 : 1, 'q' => $this->fingerprint,
+        ]);
+        return preg_match('#a#', $path) === 1 || $this->matchesAPattern($path);
+    }
+}
+"""
+
+
+def _callees(calls: list[list[Any]], function: str) -> list[list[Any]]:
+    return [c for c in calls if c[0] == function]
+
+
+def _reaches_itself(calls: list[list[Any]], functions: set[str], start: str) -> bool:
+    edges: dict[str, set[str]] = {}
+    for owner, name, kind, receiver, _line, _first in calls:
+        if kind in {"method", "static"} and receiver in {"$this", "self", "static"} and name in functions:
+            edges.setdefault(owner, set()).add(name)
+    seen: set[str] = set()
+    todo = list(edges.get(start, set()))
+    while todo:
+        current = todo.pop()
+        if current == start:
+            return True
+        if current in seen:
+            continue
+        seen.add(current)
+        todo.extend(edges.get(current, set()))
+    return False
+
+
+def test_the_token_probe_finds_real_calls_and_nothing_in_comments_or_strings(tmp_path: Path) -> None:
+    """Positive control of the source probe."""
+    data = run_probe(tmp_path, ["/probe/x.php"], {"x.php": SYNTHETIC})["/probe/x.php"]
+    calls = data["calls"]
+    names = [c[1] for c in _callees(calls, "matchesAPattern") if c[2] == "function"]
+    assert names.count("preg_match") == 1
+    assert names.count("fnmatch") == 1
+    assert len(data["evals"]) == 1
+    assert _reaches_itself(calls, set(data["functions"]), "matchesAPattern")
+    (log,) = data["logs"]
+    assert log[4] == [["$path", False], ["$patterns", True], ["$list", True]]
+    assert log[5] == [["fingerprint", False]]
+
+
+def test_the_matcher_and_the_normaliser_use_no_glob_no_regex_no_eval_and_no_recursion(tmp_path: Path) -> None:
+    data = run_probe(tmp_path, [SOURCE])[SOURCE]
+    functions = set(data["functions"])
+    assert {"matchesAPattern", "normalisePattern", "trimmed"} <= functions
+    for name in ("matchesAPattern", "normalisePattern"):
+        called = [c[1].lower() for c in _callees(data["calls"], name) if c[2] == "function"]
+        assert not [c for c in called if c == "fnmatch" or c.startswith("preg_")], (name, called)
+        assert not [e for e in data["evals"] if e[0] == name]
+        assert not _reaches_itself(data["calls"], functions, name), name
+    _write_out("source_probe_service.json", data)
+
+
+def test_the_service_holds_exactly_one_preg_call_the_allowed_one_in_trimmed(tmp_path: Path) -> None:
+    data = run_probe(tmp_path, [SOURCE])[SOURCE]
+    pregs = [c for c in data["calls"] if c[2] == "function" and c[1].lower().startswith("preg_")]
+    assert len(pregs) == 1, pregs
+    owner, name, _kind, _receiver, _line, first = pregs[0]
+    assert (owner, name, first) == ("trimmed", "preg_replace", "'#/+#'")
+    assert data["evals"] == []
+
+
+def test_no_log_call_of_the_phase_classes_carries_a_path_a_pattern_or_the_fingerprint(tmp_path: Path) -> None:
+    data = run_probe(tmp_path, PHASE_CLASSES)
+    seen = 0
+    offending = []
+    for file, info in data.items():
+        for owner, method, line, message, variables, props in info["logs"]:
+            seen += 1
+            for name, counted in variables:
+                if name in FORBIDDEN_LOG_VARIABLES and not counted:
+                    offending.append((file, line, owner, method, name))
+            for name, counted in props:
+                if name in FORBIDDEN_LOG_PROPERTIES and not counted:
+                    offending.append((file, line, owner, method, "->" + name))
+            _ = message
+    _write_out("source_probe_logs.json", data)
+    assert seen > 20
+    assert offending == []
+
+
+# ---------------------------------------------------------------------------
+# Instance probes
+# ---------------------------------------------------------------------------
+
+URL = os.environ.get("FINDLING_AUDIT33_URL", "")
+ADMIN_PASS = os.environ.get("FINDLING_AUDIT33_ADMIN_PASS", "")
+USER = os.environ.get("FINDLING_AUDIT33_USER", "")
+USER_PASS = os.environ.get("FINDLING_AUDIT33_USER_PASS", "")
+CONTAINER = os.environ.get("FINDLING_AUDIT33_CONTAINER", "")
+BACKEND_LOG = os.environ.get("FINDLING_AUDIT33_BACKEND_LOG", "")
+BACKEND_URL = os.environ.get("FINDLING_AUDIT33_BACKEND_URL", "")
+
+instance = pytest.mark.skipif(
+    not (URL and ADMIN_PASS and USER and USER_PASS and CONTAINER),
+    reason="no audit instance (FINDLING_AUDIT33_URL and friends)",
+)
+
+MARK = "q33"
+PREVIEW = "/index.php/apps/findling/admin/rules/preview"
+SAVE = "/index.php/apps/findling/admin/rules"
+OVERVIEW = "/index.php/apps/findling/admin/overview"
+PAGE = "/index.php/settings/admin/findling"
+
+
+def occ(*args: str) -> subprocess.CompletedProcess[str]:
+    docker = _docker()
+    return subprocess.run(  # noqa: S603 - an argument list, never a shell
+        [docker, "exec", "-u", "www-data", CONTAINER, "php", "occ", *args],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+        timeout=600,
+        env={**os.environ, "MSYS_NO_PATHCONV": "1"},
+    )
+
+
+def container_php(code: str) -> str:
+    docker = _docker()
+    out = subprocess.run(  # noqa: S603 - an argument list, never a shell
+        [docker, "exec", "-u", "www-data", CONTAINER, "php", "-r", code],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+        timeout=600,
+        env={**os.environ, "MSYS_NO_PATHCONV": "1"},
+    )
+    return out.stdout
+
+
+def sql(query: str) -> list[list[Any]]:
+    code = (
+        '$db = new PDO("sqlite:/var/www/html/data/nextcloud.db");'
+        "echo json_encode($db->query(base64_decode('"
+        + base64.b64encode(query.encode()).decode()
+        + "'))->fetchAll(PDO::FETCH_NUM));"
+    )
+    rows = json.loads(container_php(code))
+    assert isinstance(rows, list)
+    return rows
+
+
+def cron() -> None:
+    docker = _docker()
+    subprocess.run(  # noqa: S603 - an argument list, never a shell
+        [docker, "exec", "-u", "www-data", CONTAINER, "php", "cron.php"],
+        capture_output=True,
+        check=True,
+        timeout=600,
+    )
+
+
+def nextcloud_log() -> list[str]:
+    return container_php('readfile("/var/www/html/data/nextcloud.log");').splitlines()
+
+
+def access_log_since(since: str) -> list[str]:
+    docker = _docker()
+    out = subprocess.run(  # noqa: S603 - an argument list, never a shell
+        [docker, "logs", "--since", since, CONTAINER],
+        capture_output=True,
+        check=False,
+        timeout=120,
+    )
+    return (out.stdout + out.stderr).decode("utf-8", "replace").splitlines()
+
+
+def backend_log() -> list[str]:
+    if not BACKEND_LOG:
+        return []
+    return Path(BACKEND_LOG).read_text(encoding="utf-8", errors="replace").splitlines()
+
+
+def client(user: str, password: str) -> tuple[httpx.Client, str]:
+    session = httpx.Client(base_url=URL, auth=(user, password), timeout=300)
+    token = session.get("/index.php/csrftoken").json()["token"]
+    return session, token
+
+
+def rules_snapshot() -> tuple[str, str, int]:
+    exclusions = occ("config:app:get", "findling", "exclusions")
+    patterns = occ("config:app:get", "findling", "exclusion_patterns")
+    jobs = sum(
+        1
+        for line in occ("background-job:list").stdout.splitlines()
+        if "ExclusionSweepJob" in line or "SubtreeExpandJob" in line
+    )
+    return exclusions.stdout.strip(), f"{patterns.returncode}:{patterns.stdout.strip()}", jobs
+
+
+@dataclass(frozen=True, slots=True)
+class Refusal:
+    label: str
+    body: dict[str, Any] | None
+    expected: frozenset[str]
+    form: str | None = None
+    field: str = "exclusionPatterns"
+
+
+OK = frozenset({"ok"})
+ANY_CODE = frozenset({"any"})
+
+
+def _p(*values: object) -> dict[str, Any]:
+    return {"exclusions": ["Archiv"], "exclusionPatterns": list(values)}
+
+
+def refusal_cases() -> list[Refusal]:
+    def code(*names: str) -> frozenset[str]:
+        return frozenset(names)
+
+    return [
+        Refusal("empty: empty string", _p(""), code("empty")),
+        Refusal("empty: blanks", _p("   "), code("empty")),
+        Refusal("empty: slashes", _p("///"), code("empty")),
+        Refusal("empty: one slash", _p("/"), code("empty")),
+        Refusal("too_long: 66 ascii", _p("*q33ab" + "a" * 60), code("too_long")),
+        Refusal("too_long: 61 after NFC from NFD", _p("*q33ac" + ("e" + COMBINING_ACUTE) * 55), code("too_long")),
+        Refusal("ok: 60 after NFC from NFD", _p("*q33ad" + ("e" + COMBINING_ACUTE) * 54), OK),
+        Refusal("too_long: 4 MB", _p("q33ae*" + "x" * (4 * 1024 * 1024)), code("too_long")),
+        Refusal("too_many: 33", _p(*[f"*.q33af{i:02d}" for i in range(33)]), code("too_many")),
+        Refusal("too_many: 1000", _p(*[f"*.q33ag{i:04d}" for i in range(1000)]), code("too_many")),
+        Refusal("too_many: 40000", _p(*[f"*.q33ah{i:05d}" for i in range(40000)]), code("too_many")),
+        Refusal("duplicate: same", _p("*.q33ba", "*.q33ba"), code("duplicate")),
+        Refusal("duplicate: slashes", _p("*.q33bb", "/*.q33bb/"), code("duplicate")),
+        Refusal("duplicate: files vanguard", _p("*.q33bc", "files/*.q33bc"), code("duplicate")),
+        Refusal(
+            "duplicate: NFD and NFC",
+            _p("Caf" + E_ACUTE + "*q33bd", "Cafe" + COMBINING_ACUTE + "*q33bd"),
+            code("duplicate"),
+        ),
+        Refusal("traversal: leading dotdot", _p("../*.q33ca"), code("traversal")),
+        Refusal("traversal: inner dot", _p("a/./*q33cb"), code("traversal")),
+        Refusal("traversal: inner dotdot", _p("*/../q33cc"), code("traversal")),
+        Refusal("traversal: trailing dotdot", _p("q33cd*/.."), code("traversal")),
+        Refusal("double_star: front", _p("**/q33da"), code("double_star")),
+        Refusal("double_star: back", _p("q33db/**"), code("double_star")),
+        Refusal("double_star: triple", _p("*q33dc***"), code("double_star")),
+        Refusal("double_star: inner", _p("q33dd/**/x"), code("double_star")),
+        Refusal("unsupported: brackets", _p("[q33ea]*"), code("unsupported_character")),
+        Refusal("unsupported: braces", _p("q33eb{a,b}*"), code("unsupported_character")),
+        Refusal("unsupported: backslash", _p("*q33ec\\x"), code("unsupported_character")),
+        Refusal("unsupported: closing bracket", _p("]q33ed*"), code("unsupported_character")),
+        Refusal(
+            "unsupported: invalid UTF-8 (form body)",
+            None,
+            code("unsupported_character"),
+            form="exclusions%5B%5D=Archiv&exclusionPatterns%5B%5D=%FFq33ee%2A",
+        ),
+        Refusal("negation: plain", _p("!*.q33fa"), code("negation")),
+        Refusal("negation: no star first", _p("!q33fb*"), code("negation")),
+        Refusal("negation: after blanks", _p("  !*q33fc"), code("negation")),
+        Refusal("negation: after a slash", _p("/!*q33fd"), frozenset({"negation", "ok"})),
+        Refusal("control: line feed", _p("*q33ga\n.x"), code("control_character")),
+        Refusal("control: NUL", _p("*q33gb\u0000x"), code("control_character")),
+        Refusal("control: bell", _p("*q33gc\u0007x"), code("control_character")),
+        Refusal("control: delete", _p("*q33gd\u007fx"), code("control_character")),
+        Refusal("control: tab inside", _p("*q33ge\tx"), code("control_character")),
+        Refusal("control: C1 next line", _p("*q33gf\u0085x"), frozenset({"control_character", "ok"})),
+        Refusal("no_literal: star", _p("*"), code("no_literal")),
+        Refusal("no_literal: star slash star", _p("*/*"), code("no_literal")),
+        Refusal("no_literal: question star", _p("?*"), code("no_literal")),
+        Refusal("no_literal: mixed", _p("*?/?*"), code("no_literal")),
+        Refusal("no_wildcard: plain", _p("q33ha"), code("no_wildcard")),
+        Refusal("no_wildcard: dotted", _p("q33hb.key"), code("no_wildcard")),
+        Refusal("no_wildcard: fullwidth asterisk", _p("\uff0aq33hc"), code("no_wildcard")),
+        Refusal("no_wildcard: asterisk operator", _p("\u2217q33hd"), code("no_wildcard")),
+        Refusal("no_wildcard: low asterisk", _p("\u204eq33he"), code("no_wildcard")),
+        Refusal("no_wildcard: small asterisk", _p("\ufe61q33hf"), code("no_wildcard")),
+        Refusal("no_wildcard: fullwidth question mark", _p("\uff1fq33hh"), code("no_wildcard")),
+        Refusal("ok: fullwidth asterisk as literal next to a star", _p("*\uff0aq33hg"), OK),
+        Refusal("bidi: override inside", _p("*q33ia\u202e.key"), frozenset({"control_character", "ok"})),
+        Refusal("bidi: override in front", _p("\u202e*q33ib"), frozenset({"control_character", "ok"})),
+        Refusal("bidi: isolate", _p("*q33ic\u2066x"), frozenset({"control_character", "ok"})),
+        Refusal("shape: array in the list", _p(["*.q33ja"]), ANY_CODE),
+        Refusal("shape: nested arrays", _p([["*.q33jb"]]), ANY_CODE),
+        Refusal("shape: object in the list", _p({"a": "*.q33jc"}), ANY_CODE),
+        Refusal("shape: number", _p(5), ANY_CODE),
+        Refusal("shape: null", _p(None), ANY_CODE),
+        Refusal("shape: boolean", _p(True), ANY_CODE),
+        Refusal(
+            "shape: string instead of a list",
+            {"exclusions": ["Archiv"], "exclusionPatterns": "*.q33jd"},
+            frozenset({"core_400"}),
+        ),
+        Refusal(
+            "shape: object instead of a list", {"exclusions": ["Archiv"], "exclusionPatterns": {"x": "*.q33je"}}, OK
+        ),
+        Refusal(
+            "shape: number instead of a list",
+            {"exclusions": ["Archiv"], "exclusionPatterns": 7},
+            frozenset({"core_400"}),
+        ),
+        Refusal(
+            "prefix list: traversal",
+            {"exclusions": ["../q33ka"], "exclusionPatterns": []},
+            code("traversal"),
+            field="exclusions",
+        ),
+        Refusal(
+            "prefix list: duplicate",
+            {"exclusions": ["q33kb", "/q33kb/"], "exclusionPatterns": []},
+            code("duplicate"),
+            field="exclusions",
+        ),
+        Refusal(
+            "prefix list: too long",
+            {"exclusions": ["q33kc" + "x" * 300], "exclusionPatterns": []},
+            code("too_long"),
+            field="exclusions",
+        ),
+    ]
+
+
+@dataclass
+class RefusalAnswer:
+    status: int
+    codes: list[str]
+    echoed: bool
+    text: str
+
+
+def ask_rules(
+    session: httpx.Client, token: str, route: str, case: Refusal, extra: dict[str, Any] | None = None
+) -> RefusalAnswer:
+    headers = {"requesttoken": token}
+    if case.form is not None:
+        headers["Content-Type"] = "application/x-www-form-urlencoded"
+        form = case.form
+        if extra:
+            form += "&" + "&".join(f"{k}={v}" for k, v in extra.items())
+        response = session.post(route, content=form.encode(), headers=headers)
+    else:
+        body = dict(case.body or {})
+        body.update(extra or {})
+        response = session.post(route, json=body, headers=headers)
+    codes: list[str] = []
+    try:
+        data = response.json()
+        value = data.get(case.field) if isinstance(data, dict) else None
+        if isinstance(value, list):
+            codes = [str(v) for v in value]
+    except ValueError:
+        pass
+    text = response.text
+    # Valid previews name the new patterns by design; the probe is about refusals.
+    echoed = MARK in text and response.status_code != 200
+    return RefusalAnswer(response.status_code, codes, echoed, text[:300])
+
+
+def _judge(case: Refusal, answer: RefusalAnswer) -> str | None:
+    if answer.status >= 500:
+        return f"HTTP {answer.status}"
+    if answer.echoed:
+        return "value in the answer"
+    if case.expected == OK:
+        return None if answer.status == 200 else f"expected 200, got {answer.status} {answer.codes}"
+    if answer.status == 200:
+        return None if "ok" in case.expected else f"expected a refusal {sorted(case.expected)}, got 200"
+    if answer.status != 400:
+        return f"expected 400, got {answer.status}"
+    if "core_400" in case.expected:
+        return None
+    if "any" in case.expected:
+        return None if answer.codes else "400 without a code"
+    return None if set(answer.codes) & case.expected else f"codes {answer.codes} not in {sorted(case.expected)}"
+
+
+@dataclass
+class InstanceRun:
+    started: str = ""
+    log_start: int = 0
+    backend_start: int = 0
+    preview: dict[str, RefusalAnswer] = field(default_factory=dict)
+    save: dict[str, RefusalAnswer] = field(default_factory=dict)
+    before: tuple[str, str, int] = ("", "", 0)
+    after: tuple[str, str, int] = ("", "", 0)
+
+
+@pytest.fixture(scope="module")
+def instance_run() -> InstanceRun:
+    run = InstanceRun()
+    run.started = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    run.log_start = len(nextcloud_log())
+    run.backend_start = len(backend_log())
+    run.before = rules_snapshot()
+    session, token = client("admin", ADMIN_PASS)
+    with closing(session):
+        for case in refusal_cases():
+            run.preview[case.label] = ask_rules(session, token, PREVIEW, case)
+        # The other three fields as they stand, so a refusal of the save comes
+        # from the list under test alone.
+        rules = session.get(OVERVIEW, headers={"requesttoken": token}).json()["rules"]
+        save_extra = {
+            "maxFileBytes": rules["maxFileBytes"],
+            "indexTeamFolders": rules["indexTeamFolders"],
+            "indexExternalStorage": rules["indexExternalStorage"],
+        }
+        form_extra = {
+            "maxFileBytes": str(rules["maxFileBytes"]),
+            "indexTeamFolders": "1" if rules["indexTeamFolders"] else "0",
+            "indexExternalStorage": "1" if rules["indexExternalStorage"] else "0",
+        }
+        for case in refusal_cases():
+            if "ok" in case.expected:
+                continue  # a valid list would be written; the save probe is about refusals
+            extra: dict[str, Any] = form_extra if case.form is not None else save_extra
+            run.save[case.label] = ask_rules(session, token, SAVE, case, extra)
+    run.after = rules_snapshot()
+    _write_out(
+        "refusals.json",
+        {
+            "preview": {k: v.__dict__ for k, v in run.preview.items()},
+            "save": {k: v.__dict__ for k, v in run.save.items()},
+            "before": run.before,
+            "after": run.after,
+        },
+    )
+    return run
+
+
+H_33_01 = "H-33-01: a list sent as a string or a number ends saveRules in a TypeError, HTTP 500, arguments in the log"
+H_33_01_CASES = frozenset({"shape: string instead of a list", "shape: number instead of a list"})
+
+
+@instance
+@pytest.mark.parametrize(
+    "case",
+    [
+        pytest.param(
+            c, id=c.label, marks=pytest.mark.xfail(strict=True, reason=H_33_01) if c.label in H_33_01_CASES else ()
+        )
+        for c in refusal_cases()
+    ],
+)
+def test_a_refused_entry_names_its_code_never_fails_and_never_echoes(instance_run: InstanceRun, case: Refusal) -> None:
+    answer = instance_run.preview[case.label]
+    assert _judge(case, answer) is None, (_judge(case, answer), answer.status, answer.codes)
+    if case.label in instance_run.save:
+        saved = instance_run.save[case.label]
+        assert saved.status < 500, saved.status
+        assert not saved.echoed
+        assert _judge(case, saved) is None, (_judge(case, saved), saved.status, saved.codes)
+
+
+@instance
+def test_a_refused_save_writes_nothing(instance_run: InstanceRun) -> None:
+    assert instance_run.before == instance_run.after
+
+
+@instance
+def test_the_rules_routes_refuse_a_non_admin_and_a_request_without_token() -> None:
+    before = rules_snapshot()
+    body = {"exclusions": ["q33ra"], "exclusionPatterns": ["*.q33rb"], "maxFileBytes": 0}
+    session, token = client(USER, USER_PASS)
+    with closing(session):
+        user_preview = session.post(PREVIEW, json=body, headers={"requesttoken": token})
+        user_save = session.post(SAVE, json=body, headers={"requesttoken": token})
+        user_overview = session.get(OVERVIEW, headers={"requesttoken": token})
+    anonymous = httpx.post(URL + SAVE, json=body, timeout=60)
+    session, _token = client("admin", ADMIN_PASS)
+    with closing(session):
+        no_token = session.post(SAVE, json=body)
+        no_token_preview = session.post(PREVIEW, json=body)
+        get_save = session.get(SAVE)
+    after = rules_snapshot()
+    outcome = {
+        "user_preview": user_preview.status_code,
+        "user_save": user_save.status_code,
+        "user_overview": user_overview.status_code,
+        "anonymous_save": anonymous.status_code,
+        "admin_save_without_token": no_token.status_code,
+        "admin_preview_without_token": no_token_preview.status_code,
+        "admin_get_save": get_save.status_code,
+    }
+    _write_out("rights.json", outcome)
+    assert user_preview.status_code == 403
+    assert user_save.status_code == 403
+    assert user_overview.status_code == 403
+    assert anonymous.status_code in {401, 412}
+    assert no_token.status_code == 412
+    assert no_token_preview.status_code == 412
+    assert get_save.status_code == 405
+    for response in (user_preview, user_save, anonymous, no_token, no_token_preview):
+        assert MARK not in response.text
+    assert before == after
+
+
+# Each value with the list the documentation says is in force afterwards.
+GARBAGE = [
+    ("plain string", ["q33ma not json"], []),
+    ("object", ['{"a":"*.q33mb"}', "--type=array"], ["*.q33mb"]),
+    ("mixed list", ['[1,2.5,{"x":"*.q33mc"},null,true,["*.q33md"],"*.q33me"]', "--type=array"], ["*.q33me"]),
+    (
+        "1000 entries",
+        [json.dumps([f"*.q33mf{i:04d}" for i in range(1000)]), "--type=array"],
+        [f"*.q33mf{i:04d}" for i in range(32)],
+    ),
+    ("integer", ["42", "--type=integer"], []),
+]
+CANARY = ["*.q33my"]
+
+
+def _webdav(session: httpx.Client, method: str, path: str, content: bytes | None = None) -> httpx.Response:
+    return session.request(method, f"/remote.php/dav/files/{USER}{path}", content=content)
+
+
+def _jobs(name: str) -> list[str]:
+    ids = []
+    for line in occ("background-job:list", "--limit=500").stdout.splitlines():
+        cells = [c.strip() for c in line.split("|")]
+        if len(cells) > 2 and cells[2].endswith("\\" + name):
+            ids.append(cells[1])
+    return ids
+
+
+def _patterns_seen_by_the_web(admin: httpx.Client, token: str, expected: list[str], seconds: float = 30) -> list[str]:
+    """The web process reads appconfig through a local cache of the core; wait for it."""
+    deadline = time.monotonic() + seconds
+    shown: list[str] = []
+    while time.monotonic() < deadline:
+        shown = admin.get(OVERVIEW, headers={"requesttoken": token}).json()["rules"]["exclusionPatterns"]
+        if shown == expected:
+            break
+        time.sleep(1)
+    return shown
+
+
+def _cron_until_gone(name: str, runs: int = 10) -> int:
+    done = 0
+    while _jobs(name) and done < runs:
+        cron()
+        done += 1
+    return done
+
+
+H_33_02 = "H-33-02: a pattern key of another type than array (occ --type=integer) stops the listener, page and overview"
+
+
+@instance
+@pytest.mark.parametrize(
+    ("label", "value", "in_force"),
+    [
+        pytest.param(*g, id=g[0], marks=pytest.mark.xfail(strict=True, reason=H_33_02) if g[0] == "integer" else ())
+        for g in GARBAGE
+    ],
+)
+def test_a_second_writer_with_garbage_breaks_neither_page_nor_crawl_nor_listener(
+    label: str, value: list[str], in_force: list[str]
+) -> None:
+    log_start = len(nextcloud_log())
+    admin, admin_token = client("admin", ADMIN_PASS)
+    user = httpx.Client(base_url=URL, auth=(USER, USER_PASS), timeout=120)
+    folder = "/Audit3311occ"
+    findings: dict[str, Any] = {"label": label}
+    cleanup_start = log_start
+    try:
+        # The canary proves the web process switched to the garbage below.
+        occ("config:app:set", "findling", "exclusion_patterns", "--value=" + json.dumps(CANARY), "--type=array")
+        findings["canary"] = _patterns_seen_by_the_web(admin, admin_token, CANARY)
+        # occ refuses to change the type of a key, so the key goes first; both
+        # commands run back to back before the web view is asked again.
+        occ("config:app:delete", "findling", "exclusion_patterns")
+        findings["set"] = occ(
+            "config:app:set", "findling", "exclusion_patterns", "--value=" + value[0], *value[1:]
+        ).returncode
+        findings["stored"] = occ("config:app:get", "findling", "exclusion_patterns", "--details").stdout[-400:]
+        findings["shown"] = _patterns_seen_by_the_web(admin, admin_token, in_force)
+        time.sleep(5)
+        findings["shown_again"] = _patterns_seen_by_the_web(admin, admin_token, in_force, seconds=1)
+        findings["page"] = admin.get(PAGE).status_code
+        findings["overview"] = admin.get(OVERVIEW, headers={"requesttoken": admin_token}).status_code
+        _webdav(user, "MKCOL", folder)
+        put = _webdav(user, "PUT", folder + "/l.txt", b"listener probe")
+        findings["put"] = put.status_code
+        file_id = int(put.headers.get("OC-FileId", "0" * 8)[:8])
+        query = f"select count(*) from oc_findling_queue where file_id = {file_id}"  # noqa: S608 - an int
+        findings["queued"] = sql(query)[0][0]
+        diagnose = occ("findling:diagnose", str(file_id))
+        findings["diagnose"] = [diagnose.returncode, diagnose.stdout.splitlines()[1:2]]
+        # The crawl: a recount crawl (StorageCrawlJob) asks isExcluded for every
+        # file of every mount. The MKCOL above marked the scan stale (listener),
+        # and ScanRecountJob plans the crawl; forced here so the crawl runs on the
+        # garbage and not up to 15 minutes later.
+        findings["crawl_jobs_before"] = len(_jobs("StorageCrawlJob"))
+        for job in _jobs("ScanRecountJob"):
+            occ("background-job:execute", "--force-execute", job)
+        findings["crawl_jobs_planned"] = len(_jobs("StorageCrawlJob"))
+        findings["crawl_cron_runs"] = _cron_until_gone("StorageCrawlJob")
+        findings["crawl_jobs_after"] = len(_jobs("StorageCrawlJob"))
+    finally:
+        cleanup_start = len(nextcloud_log())
+        _webdav(user, "DELETE", folder)
+        occ("config:app:delete", "findling", "exclusion_patterns")
+        findings["cleanup_cron_runs"] = _cron_until_gone("SubtreeExpandJob")
+        occ("trashbin:cleanup", USER)
+        user.close()
+        admin.close()
+    lines = nextcloud_log()[log_start:]
+    probe_lines = lines[: cleanup_start - log_start]
+    errors = [line for line in probe_lines if '"level":3' in line or '"level":4' in line]
+    findling_lines = [json.loads(line) for line in lines if '"app":"findling"' in line]
+    findings["errors"] = [e[:600] for e in errors]
+    findings["findling"] = [{"message": f.get("message"), "data": f.get("data")} for f in findling_lines]
+    findings["cleanup_errors"] = [
+        e[:600] for e in lines[cleanup_start - log_start :] if '"level":3' in e or '"level":4' in e
+    ]
+    _write_out(f"garbage_{label.replace(' ', '_')}.json", findings)
+    assert findings["canary"] == CANARY, findings
+    assert findings["set"] == 0, findings
+    assert findings["shown"] == in_force, findings
+    assert findings["shown_again"] == in_force, findings
+    assert findings["page"] == 200, findings
+    assert findings["overview"] == 200, findings
+    assert findings["put"] in {201, 204}, findings
+    assert findings["queued"] >= 1, findings
+    assert findings["diagnose"][0] == 0, findings
+    assert findings["crawl_jobs_planned"] >= 1, findings
+    assert findings["crawl_jobs_after"] == 0, findings
+    assert errors == [], errors[:2]
+    for entry in findling_lines:
+        assert MARK not in json.dumps(entry.get("data", {})), entry
+        assert MARK not in str(entry.get("message", "")), entry
+
+
+@instance
+def test_no_log_line_carries_a_corpus_value(instance_run: InstanceRun) -> None:
+    """Runs after the corpus; the positive control proves both logs are read."""
+    marker = "zz3311ctl" + str(int(time.time()))
+    httpx.request("PROPFIND", URL + "/remote.php/dav/files/" + marker, auth=(marker, "wrong"), timeout=60)
+    if BACKEND_URL:
+        httpx.get(BACKEND_URL + "/" + marker, timeout=60)
+    time.sleep(1)
+    lines = nextcloud_log()[instance_run.log_start :]
+    backend = backend_log()[instance_run.backend_start :]
+    access = access_log_since(instance_run.started)
+    assert any(marker in line for line in lines), "positive control missing in nextcloud.log"
+    if BACKEND_URL and BACKEND_LOG:
+        assert any(marker in line for line in backend), "positive control missing in the backend log"
+    assert any(marker in line for line in access), "positive control missing in the access log"
+    # The TypeError lines of H-33-01 are judged by their own test below.
+    type_errors = [line for line in lines if TYPE_ERROR in line]
+    hits = {
+        "nextcloud.log": [line[:300] for line in lines if MARK in line and TYPE_ERROR not in line],
+        "backend": [line[:300] for line in backend if MARK in line],
+        "access": [line[:300] for line in access if MARK in line],
+    }
+    _write_out(
+        "log_probe.json",
+        {
+            "lines": len(lines),
+            "backend": len(backend),
+            "access": len(access),
+            "hits": hits,
+            "type_errors": len(type_errors),
+            "type_errors_with_value": sum(1 for line in type_errors if MARK in line),
+        },
+    )
+    assert hits == {"nextcloud.log": [], "backend": [], "access": []}
+
+
+TYPE_ERROR = "saveRules(): Argument #"
+
+
+@instance
+@pytest.mark.xfail(strict=True, reason=H_33_01)
+def test_a_wrong_list_shape_leaves_neither_a_500_nor_a_value_in_the_log() -> None:
+    log_start = len(nextcloud_log())
+    session, token = client("admin", ADMIN_PASS)
+    with closing(session):
+        rules = session.get(OVERVIEW, headers={"requesttoken": token}).json()["rules"]
+        body = {
+            "exclusions": rules["exclusions"],
+            "exclusionPatterns": "*.q33xa",
+            "maxFileBytes": rules["maxFileBytes"],
+            "indexTeamFolders": rules["indexTeamFolders"],
+            "indexExternalStorage": rules["indexExternalStorage"],
+        }
+        response = session.post(SAVE, json=body, headers={"requesttoken": token})
+    lines = nextcloud_log()[log_start:]
+    assert response.status_code < 500, response.status_code
+    assert not [line for line in lines if MARK in line]
+
+
+@instance
+def test_a_pattern_stored_in_nfd_by_occ_hits_the_nfc_name_on_the_instance() -> None:
+    """The NFC half the driver of php:8.3-cli cannot show (L-33-01), on the real runtime."""
+    user = httpx.Client(base_url=URL, auth=(USER, USER_PASS), timeout=120)
+    folder = "/Audit3311nfc"
+    nfc_name = "Caf" + E_ACUTE + ".txt"
+    session, token = client("admin", ADMIN_PASS)
+    try:
+        _webdav(user, "MKCOL", folder)
+        put = _webdav(user, "PUT", folder + "/" + nfc_name, b"nfc probe")
+        assert put.status_code in {201, 204}
+        before = occ("findling:diagnose", f"{USER}:Audit3311nfc/{nfc_name}").stdout
+        stored = json.dumps(["Audit3311nfc/Cafe" + COMBINING_ACUTE + "*"])
+        assert (
+            occ("config:app:set", "findling", "exclusion_patterns", "--value=" + stored, "--type=array").returncode == 0
+        )
+        after = occ("findling:diagnose", f"{USER}:Audit3311nfc/{nfc_name}").stdout
+        shown = _patterns_seen_by_the_web(session, token, ["Audit3311nfc/Caf" + E_ACUTE + "*"])
+    finally:
+        occ("config:app:delete", "findling", "exclusion_patterns")
+        _webdav(user, "DELETE", folder)
+        _cron_until_gone("SubtreeExpandJob")
+        occ("trashbin:cleanup", USER)
+        user.close()
+        session.close()
+    _write_out("nfc_instance.json", {"before": before, "after": after, "shown": shown})
+    assert "xcluded" not in before
+    assert "xcluded" in after
+    assert shown == ["Audit3311nfc/Caf" + E_ACUTE + "*"]
