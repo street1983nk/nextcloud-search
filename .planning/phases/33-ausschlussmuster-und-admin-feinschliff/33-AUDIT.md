@@ -7,16 +7,17 @@ findings:
   critical: 0
   high: 2
   medium: 0
-  low: 4
-  total: 6
+  low: 5
+  total: 7
 status: issues_found
 ---
 
 # Phase 33: Security-, Bug- und Performance-Audit
 
-**Stand:** Task 1 (Sicherheit) abgeschlossen am 18.10.2026. Task 2 (Fehler), Task 3
+**Stand:** Task 1 (Sicherheit) und Task 2 (Fehler) abgeschlossen am 18.10.2026. Task 3
 (Performance) und Task 4 (Fixes, LOW-Entscheidungen, Abschluss) folgen; `fix_run`,
-`fix_commits`, `fixed` und `still_open` trägt erst Task 4 ein.
+`fix_commits`, `fixed` und `still_open` trägt erst Task 4 ein. Rote Proben stehen bis Task 4
+als `xfail(strict=True)` mit der Befund-ID im Test.
 
 **Umfang:** `git diff 12a73359..92441a16` (Basis = Elternteil von 75f5f29e, dem ersten
 Commit mit "(33-02)"; 21 Commits). Mit Planung 75 Dateien, 10 030 Zeilen dazu, 551 weg;
@@ -257,6 +258,53 @@ Fingerabdruck. Siehe **L-33-03**.
   lokale Staging nimmt wieder die ignorierten Markerdateien `.claude-active` mit (bekannt aus
   32-AUDIT, CI baut aus frischem Checkout).
 
+## Bugs
+
+Gefahren als ein Szenario auf 8090 (Fixture `bug_run`, Rohdaten `bugs.json`), dreimal:
+18.10.2026 23:44 bis 23:53 Ortszeit, 19.10. ab 00:01 (volle Datei) und nach der Korrektur der
+B2-Prüfung erneut; Werte unten aus dem ersten Lauf, Abweichungen der späteren Läufe genannt.
+Dazu drei Einzelproben:
+
+```
+FINDLING_AUDIT33_STATE_DB=<repo>/.dev/storage/state.db uv run python -m pytest -q tests/test_phase33_audit.py -rxXs -p no:randomly -k "test_b1 or test_b2 or test_b3 or test_b4 or test_b5 or scenario"
+```
+
+**Saat** (testuser, WebDAV, je ein Wort ohne deutsche Wortbestandteile): R
+`Audit3311bug/Ordner/r1.txt` (Datei 3197, `zyrnoka`), K `Audit3311bug/Keep/k1.txt` (3199,
+Kontrolle), S1 `Audit3311bug/Sweep/a.pat1/s1.txt` (3202), S2 `.../b.pat2/s2.txt` (3204), S3
+`.../c.pat6/s3.txt` (3206), D `Audit3311bug/Both/x.pat3/d1.txt` (3209), später V
+`Archiv/v3311.txt` (3210). Positivkontrolle: alle sechs Wörter je 1 Treffer vor dem ersten
+Schritt. Regeln über die echte Speicherroute (`POST /admin/rules` mit Token, die drei übrigen
+Felder wie die Übersicht sie meldet).
+
+| Nr. | Fall (Plan) | Verfahren | Ergebnis | Urteil |
+|---|---|---|---|---|
+| B1 | Ordner innerhalb eines Mounts unter ein Muster umbenannt | `*.bndl` gespeichert (Kehrjob, 2 cron-Läufe, nichts getroffen), dann `MOVE Audit3311bug/Ordner` nach `Ordner.bndl` (201). Abgleich fällig gemacht wie in 32-AUDIT: `finished_at` und `started_at` der Tabelle `reconcile` in `state.db` um 49 Stunden zurück (5 Zeilen), der laufende Prozess nahm ihn beim nächsten Takt auf | nach dem MOVE keine Queue-Zeile für R, kein Kehrjob, kein SubtreeExpandJob, kein Crawl-Job; nach einem Poll des Backends (150 s) R weiter 1 Treffer. Abgleich: `reconcile round walked, mounts=3 slices=3 seen=484 stale=2 missing=1 given_up=0` (zweiter Lauf `missing=0`), danach R 0, K 1 | in Ordnung (Weg C) |
+| B1b | Muster zurückgenommen, Dateien kommen zurück | S1 war unter `*.pat1` geräumt (B2), `*.pat1` in B3 zurückgenommen | vor dem Abgleich S1 0, nach dem Abgleich 1 (`missing=1`) | in Ordnung, wie "Ein Muster entfernen" |
+| B2 | Muster entfernen, während ein Kehrjob läuft | `*.pat1, *.pat2` gespeichert: genau ein Job (storage 0, cursor 0, Fingerabdruck `5ecc6c24...`). Dann `*.pat1`: genau ein Job (0, 0, `1a1b7a89...`), der alte ist weg, der neue läuft von vorn. Danach als Band im Flug der Nachfolger des alten Satzes über `IJobList::add` des Kerns eingehängt (storage 3, root 82, cursor 3196, `5ecc6c24...`), wie ihn ein laufendes Band nach dem Speichern anlegt; cron.php | nach ein bis zwei cron-Läufen keine Kehrjobs mehr (cron.php erreicht das eingehängte Band nicht immer im ersten Lauf); nie ein Nachfolger des alten Satzes, also kein Job mit `5ecc6c24...` und anderer ID; Queue: Löschzeile für S1, **keine für S2** (nur unter dem entfernten Muster), keine für S3 und K. Treffer S1 0, S2 1, S3 1, K 1 | in Ordnung |
+| B2b | leerer Satz (N3) | `[]` gespeichert | HTTP 200, kein Kehrjob in der Jobliste | in Ordnung |
+| B3 | zwei schnelle Speichervorgänge | `*.pat2` und direkt danach `*.pat6`, ohne cron dazwischen | genau ein Job mit dem Fingerabdruck von `*.pat6`; gespeichert `["*.pat6"]`; nach cron S3 0, S2 1 | in Ordnung |
+| B3b | zwei Speichervorgänge im selben Moment | `test_b3_two_saves_at_the_same_moment_leave_one_sweep_for_the_stored_set`: zwei Sitzungen, `threading.Barrier`, 30 Runden (davor ein Lauf mit 6) mit `["*.race2","*.roundN"]` gegen `["*.race6","*.roundN"]` | alle 72 Antworten 200; in jeder Runde genau ein Job mit dem Fingerabdruck des gespeicherten Satzes; in 4 von 30 (2 von 6) Runden steht daneben ein Job des unterlegenen Satzes, der an seiner ersten Prüfung ohne Räumen endet (B2) | in Ordnung; Restrisiko **L-33-05** |
+| B4 | Muster und Präfix decken dieselbe Datei | Urteil `skipped(no_text_layer)` für D gesetzt, dann Präfix `Audit3311bug/Both` und Muster `*.pat3` in einem Speichern | ein Kehrjob und ein SubtreeExpandJob geplant; nach dem ersten cron-Lauf **genau eine** Queue-Zeile für D (`delete`), Urteilszeile weg; Rest in 7 weiteren Läufen ohne zweite Zeile; keine Logzeile Level 3; D 0, K 1 | in Ordnung |
+| B5 | Urteil einer Datei unter Regel, die der Container nie kannte | V unter dem Präfix `Archiv` angelegt: keine Queue-Zeile (Listener lässt sie aus, der Container kennt sie nie); Urteil `skipped(no_text_layer)` gesetzt; derselbe Abgleich wie B1 | nach dem Abgleich Urteilszeile weg (Slice von 33-04 Task 3, `ReconcileController::forgetExcludedVerdicts`), keine Queue-Zeile, V 0 Treffer | in Ordnung |
+| B6 | Gruppenordner (#22-Form) | `occ app:list`: groupfolders nicht installiert | Verweis auf PHPUnit `ExclusionSweepJobTest::testExactlyTheTwoFilesUnderThePatternAreClearedAndForgotten` (Mount `__groupfolders/1`, Datei `__groupfolders/1/AG/2024/X.key/b.txt`, Löschzeile für die Bundle-Datei des Homes und des Team Folders), grün in CI php.yml 39162854657 auf 92441a16; der Pfadraum der Team Folders ist in 1.4.2 unverändert (Differenztest 33-02) | in Ordnung (Testprobe) |
+| B7 | Status eines 1.4.x-Containers ohne die zwei neuen Felder | Proxy auf Port 10036 vor dem Backend (`strip_proxy.py` im Scratch), der aus `GET /status` die Felder `maxCells` und `extractAddressSpaceBytes` entfernt; Port in `oc_ex_apps` umgestellt und zurück. Seite per Playwright 1.59 (Chromium headless) als admin, Grenzblock vor und nach dem ersten Poll | Positivkontrolle ohne Proxy: Datei, Speicher, Zellen, Seiten (Profil) sichtbar. Mit Proxy (5 Statusantworten umgeschrieben, je 2 Felder entfernt): Übersicht `address_space` und `cells` mit `value: null, shown: false`; Zeilen Speicher und Zellen verborgen, Datei und Seiten sichtbar, vor und nach dem Poll gleich; 0 Konsolenfehler, 0 `pageerror`. Danach Port 10035, Statusroute direkt 200, Proxy beendet | in Ordnung |
+| B8 | Link des Grenzblocks | `test_b8_the_limit_block_links_exactly_the_tag_url_of_pe8_and_the_anchor_exists` und mit `FINDLING_AUDIT33_NETWORK=1` `test_b8_the_anchor_answers_on_blob_main` | Template nennt genau `https://github.com/street1983nk/nextcloud-search/blob/v1.5.0/docs/admin-page.md#limits-per-file` einmal, `limits-per-file` einmal; `docs/admin-page.md` trägt `<a id="limits-per-file"></a>` genau einmal, direkt vor "## Grenzen je Datei ändern"; `blob/main/docs/admin-page.md` HTTP 200 mit dem Anker. Der Tag-Link selbst antwortet erst mit v1.5.0 | in Ordnung |
+
+**Aufräumen** (im `finally` des Szenarios, Ergebnis in `bugs.json`): Regeln über die Route auf
+`exclusions` `["Archiv"]` und Muster `[]`, dann `occ config:app:delete findling
+exclusion_patterns`; WebDAV `DELETE /Audit3311bug` und `/Archiv/v3311.txt`; cron.php bis kein
+SubtreeExpandJob und kein Kehrjob mehr da ist, danach `occ trashbin:cleanup testuser`;
+gesetzte Urteilszeilen gelöscht. Endzustand: `exclusions` `["Archiv"]`,
+`exclusion_patterns` fehlt (Exit 1), Jobliste nur ScanRecountJob
+(`test_the_scenario_left_the_instance_as_it_found_it`).
+
+**Nebenbefund ohne ID:** Im ersten Wettlauf (Threads, die vor dem Speichern die Übersicht
+lasen) endete eine `GET /admin/overview` mit HTTP 500, `SQLSTATE[HY000]: General error: 5
+database is locked`. Die Dev-Instanz läuft auf SQLite, das Nextcloud nur für Tests vorsieht;
+die Probe B3b liest die Felder deshalb einmal vorher und schickt nur die zwei POST
+gleichzeitig.
+
 ## Befunde
 
 ### H-33-01 (HIGH): Eine Liste als String oder Zahl endet in HTTP 500 mit allen Regelwerten im Log
@@ -354,6 +402,23 @@ Fingerabdruck. Siehe **L-33-03**.
   in Antwort oder Log.
 - **Fixvorschlag:** accept oder Doku-Zeile beim Code `empty` ("oder kein Text").
 
+### L-33-05 (LOW, hergeleitet): Zwei gleichzeitige Speichervorgänge könnten den Kehrjob des gespeicherten Satzes verlieren
+
+- **Ort:** `ExclusionService::savePatterns()` (Zeile 621 bis 656): erst `setValueArray`, dann
+  `jobList->remove(ExclusionSweepJob::class)` und `add(...)`, ohne Sperre über die drei
+  Schritte.
+- **Beleg:** B3b, 36 Runden mit zwei gleichzeitigen POST: der Job des gespeicherten Satzes
+  war immer da, in 6 Runden stand ein Job des unterlegenen Satzes daneben (endet am
+  Fingerabdruck). Nicht beobachtet, aber aus der Reihenfolge möglich: A schreibt, B schreibt,
+  B plant, **A entfernt** (auch den Job von B) und plant den eigenen. Gespeichert ist dann der
+  Satz von B, geplant nur der Lauf von A, der am Fingerabdruck endet.
+- **Einordnung:** Folge ist nur Verzögerung: die Dateien unter dem gespeicherten Satz verlassen
+  den Index dann erst über Weg C (spätestens im nächsten Abgleich), und neue Schreibvorgänge
+  darunter reiht der Listener ohnehin nicht ein. Nur zwei Admins, die im selben Moment
+  speichern, erreichen den Fall.
+- **Fixvorschlag:** accept mit Zielphase 36 (Launch-Korpus), oder `remove`/`add` so
+  ordnen, dass der Plan aus dem nach dem Schreiben gelesenen Satz entsteht.
+
 ## Nebenbefunde ohne Befund-ID
 
 - **occ-Verzögerung:** Ein per occ gesetzter Wert erreicht den Webprozess erst nach 2 bis 4
@@ -375,3 +440,6 @@ Fingerabdruck. Siehe **L-33-03**.
 | Rechte | Nicht-Admin, anonym, ohne Token, falsches Verb | 403 / 401 / 412 / 405, nichts geschrieben |
 | Quelltext | `token_get_all` statt regulärer Ausdrücke, mit Positivkontrolle | kein Glob, kein Regex außer `trimmed()`, keine Rekursion, Logs nur Zähler |
 | Logs | drei Quellen mit Positivkontrolle; Loglevel 0 gefahren | Normalbetrieb sauber; L-33-03 |
+| Räumwege | echte Saat, echte Speicherroute, Nachfolger über `IJobList::add` des Kerns, Abgleich über den Stempel in `state.db` statt über Tests mit Doppeln | B1 bis B5 in Ordnung |
+| Wettlauf | zwei Sitzungen hinter einer Barriere, 36 Runden | Job des gespeicherten Satzes immer da; L-33-05 |
+| Seite mit 1.4.x-Status | Proxy, der zwei Felder aus `/status` nimmt, Seite im Browser | Zeilen verborgen, keine Fehler |

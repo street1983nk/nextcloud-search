@@ -45,11 +45,14 @@ Only ASCII in this file: every other character is written as an escape.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import os
 import random
 import shutil
+import sqlite3
 import subprocess
+import threading
 import time
 import unicodedata
 from contextlib import closing
@@ -1639,3 +1642,453 @@ def test_a_pattern_stored_in_nfd_by_occ_hits_the_nfc_name_on_the_instance() -> N
     assert "xcluded" not in before
     assert "xcluded" in after
     assert shown == ["Audit3311nfc/Caf" + E_ACUTE + "*"]
+
+
+# ---------------------------------------------------------------------------
+# Task 2: edge cases of the clearing ways and of the page
+# ---------------------------------------------------------------------------
+#
+# One scenario on the instance, in the order of 33-AUDIT.md "## Bugs", written
+# to bugs.json; the tests below judge its parts. It needs, besides the
+# variables above, the state database of the backend for the reconcile stamp:
+#
+#     FINDLING_AUDIT33_STATE_DB     path of state.db of the backend
+#
+# The seed words carry no German word parts, so the compound splitting of the
+# index finds nothing else. Every file lives under /Audit3311bug of the user,
+# and one under /Archiv (the prefix the instance holds).
+
+STATE_DB = os.environ.get("FINDLING_AUDIT33_STATE_DB", "")
+SWEEP = "ExclusionSweepJob"
+BUG_ROOT = "/Audit3311bug"
+BUG_SEED = {
+    "R": ("/Audit3311bug/Ordner/r1.txt", "zyrnoka"),
+    "K": ("/Audit3311bug/Keep/k1.txt", "zyrkelo"),
+    "S1": ("/Audit3311bug/Sweep/a.pat1/s1.txt", "zyrpaxa"),
+    "S2": ("/Audit3311bug/Sweep/b.pat2/s2.txt", "zyrpbeo"),
+    "S3": ("/Audit3311bug/Sweep/c.pat6/s3.txt", "zyrpcia"),
+    "D": ("/Audit3311bug/Both/x.pat3/d1.txt", "zyrdumo"),
+}
+VERDICT_FILE = ("/Archiv/v3311.txt", "zyrvoxa")
+
+bug_instance = pytest.mark.skipif(
+    not (URL and ADMIN_PASS and USER and USER_PASS and CONTAINER and STATE_DB and BACKEND_LOG),
+    reason="no audit instance with state database (FINDLING_AUDIT33_STATE_DB)",
+)
+
+
+def fingerprint(patterns: list[str]) -> str:
+    """The fingerprint the sweep carries (docblock of fingerprintOf), for a crafted job."""
+    return hashlib.sha256("\n".join(sorted(patterns)).encode()).hexdigest()
+
+
+def hits(user: httpx.Client, word: str) -> int:
+    response = user.get(
+        "/ocs/v2.php/search/providers/findling/search",
+        params={"term": word, "format": "json", "limit": 20},
+        headers={"OCS-APIRequest": "true"},
+    )
+    entries = response.json()["ocs"]["data"]["entries"]
+    return sum(1 for e in entries if isinstance(e.get("attributes"), dict) and e["attributes"].get("fileId"))
+
+
+def wait_hits(user: httpx.Client, words: dict[str, int], seconds: float) -> dict[str, int]:
+    deadline = time.monotonic() + seconds
+    seen: dict[str, int] = {}
+    while True:
+        seen = {w: hits(user, w) for w in words}
+        if seen == words or time.monotonic() > deadline:
+            return seen
+        time.sleep(5)
+
+
+def sweep_jobs() -> list[dict[str, Any]]:
+    rows = sql("select id, argument from oc_jobs where class = 'OCA\\Findling\\BackgroundJobs\\ExclusionSweepJob'")
+    return [{"id": r[0], **json.loads(r[1])} for r in rows]
+
+
+def add_sweep_job(argument: dict[str, Any]) -> None:
+    """A job added through the IJobList of the core, as a running band would add its successor."""
+    code = (
+        "require '/var/www/html/lib/base.php';"
+        "\\OCP\\Server::get(\\OCP\\BackgroundJob\\IJobList::class)->add("
+        "'OCA\\Findling\\BackgroundJobs\\ExclusionSweepJob', json_decode(base64_decode('"
+        + base64.b64encode(json.dumps(argument).encode()).decode()
+        + "'), true));"
+    )
+    container_php(code)
+
+
+def queue_rows(file_id: int) -> list[list[Any]]:
+    return sql(f"select kind, claim_token from oc_findling_queue where file_id = {int(file_id)}")  # noqa: S608 - an int
+
+
+def verdicts(file_id: int) -> list[list[Any]]:
+    return sql(f"select state, reason from oc_findling_file_state where file_id = {int(file_id)}")  # noqa: S608 - an int
+
+
+def plant_verdict(file_id: int) -> None:
+    """A stored verdict skipped(no_text_layer), as the container reports it with OCR off."""
+    sql(
+        "insert or replace into oc_findling_file_state (file_id, state, reason, updated_at) "  # noqa: S608 - an int
+        f"values ({int(file_id)}, 'skipped', 'no_text_layer', datetime('now'))"
+    )
+
+
+def save_rules(admin: httpx.Client, token: str, exclusions: list[str], patterns: list[str]) -> int:
+    rules = admin.get(OVERVIEW, headers={"requesttoken": token}).json()["rules"]
+    body = {
+        "exclusions": exclusions,
+        "exclusionPatterns": patterns,
+        "maxFileBytes": rules["maxFileBytes"],
+        "indexTeamFolders": rules["indexTeamFolders"],
+        "indexExternalStorage": rules["indexExternalStorage"],
+    }
+    return admin.post(SAVE, json=body, headers={"requesttoken": token}).status_code
+
+
+def _put(user: httpx.Client, path: str, text: str) -> int:
+    parts = path.strip("/").split("/")
+    for depth in range(1, len(parts)):
+        _webdav(user, "MKCOL", "/" + "/".join(parts[:depth]))
+    response = _webdav(user, "PUT", path, text.encode())
+    assert response.status_code in {201, 204}, (path, response.status_code)
+    return int(response.headers["OC-FileId"][:8])
+
+
+def roll_back_the_reconcile_stamp(hours: int = 49) -> int:
+    """The escape of _is_due: twice the pause runs whatever the hour, like 32-AUDIT."""
+    with sqlite3.connect(STATE_DB, timeout=30) as db:
+        cursor = db.execute(
+            "update reconcile set finished_at = finished_at - ?, started_at = started_at - ? "
+            "where finished_at is not null",
+            (hours * 3600, hours * 3600),
+        )
+        return cursor.rowcount
+
+
+def wait_for_a_reconcile_round(start: int, seconds: float = 420) -> str:
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        for line in backend_log()[start:]:
+            if "reconcile round" in line:
+                return line
+        time.sleep(5)
+    return ""
+
+
+@pytest.fixture(scope="module")
+def bug_run() -> dict[str, Any]:
+    out: dict[str, Any] = {"steps": []}
+    admin, token = client("admin", ADMIN_PASS)
+    user = httpx.Client(base_url=URL, auth=(USER, USER_PASS), timeout=120)
+    ids: dict[str, int] = {}
+    log_start = len(nextcloud_log())
+
+    def step(name: str, **data: Any) -> None:
+        out["steps"].append({"step": name, "at": time.strftime("%H:%M:%S"), **data})
+        _write_out("bugs.json", out)
+
+    try:
+        # Seed and wait for the index.
+        for key, (path, word) in BUG_SEED.items():
+            ids[key] = _put(user, path, word)
+        out["ids"] = ids
+        seeded = wait_hits(user, {w: 1 for _p, w in BUG_SEED.values()}, 300)
+        step("seed", hits=seeded)
+
+        # B2: patterns taken back while a sweep runs.
+        home = sql(f"select storage, parent from oc_filecache where fileid = {ids['K']}")[0][0]  # noqa: S608 - an int
+        files_root = sql(f"select fileid from oc_filecache where storage = {int(home)} and path = 'files'")[0][0]  # noqa: S608
+        out["save_p12"] = save_rules(admin, token, ["Archiv"], ["*.pat1", "*.pat2"])
+        out["jobs_after_p12"] = sweep_jobs()
+        out["save_p1"] = save_rules(admin, token, ["Archiv"], ["*.pat1"])
+        out["jobs_after_p1"] = sweep_jobs()
+        stale: dict[str, Any] = {"storage": int(home), "root": int(files_root), "cursor": min(ids.values()) - 1}
+        stale["fingerprint"] = fingerprint(["*.pat1", "*.pat2"])
+        add_sweep_job(stale)
+        out["jobs_with_the_band_in_flight"] = sweep_jobs()
+        out["fingerprint_p1"] = fingerprint(["*.pat1"])
+        out["fingerprint_p12"] = stale["fingerprint"]
+        runs = []
+        for _ in range(6):
+            if not sweep_jobs():
+                break
+            cron()
+            runs.append(sweep_jobs())
+        out["jobs_per_cron_run_b2"] = runs
+        out["queue_after_b2"] = {k: queue_rows(ids[k]) for k in ("S1", "S2", "S3", "K")}
+        step("b2 sweeps", runs=len(runs))
+        out["hits_after_b2"] = wait_hits(user, {"zyrpaxa": 0, "zyrpbeo": 1, "zyrpcia": 1, "zyrkelo": 1}, 200)
+        out["save_empty"] = save_rules(admin, token, ["Archiv"], [])
+        out["jobs_after_empty"] = sweep_jobs()
+        step("b2 done", hits=out["hits_after_b2"])
+
+        # B3: two quick saves back to back (the race of two at the same moment
+        # is test_b3_two_saves_at_the_same_moment_...).
+        out["save_a"] = save_rules(admin, token, ["Archiv"], ["*.pat2"])
+        out["save_b"] = save_rules(admin, token, ["Archiv"], ["*.pat6"])
+        out["jobs_after_two_saves"] = sweep_jobs()
+        out["fingerprint_p6"] = fingerprint(["*.pat6"])
+        out["fingerprint_p2"] = fingerprint(["*.pat2"])
+        out["stored_after_race"] = _patterns_seen_by_the_web(admin, token, ["*.pat6"], seconds=3)
+        out["jobs_after_race"] = sweep_jobs()
+        runs = []
+        for _ in range(6):
+            if not sweep_jobs():
+                break
+            cron()
+            runs.append(sweep_jobs())
+        out["jobs_per_cron_run_b3"] = runs
+        stored = out["stored_after_race"]
+        expect_b3 = {"zyrpbeo": 0 if "*.pat2" in stored else 1, "zyrpcia": 0 if "*.pat6" in stored else 1}
+        out["hits_after_b3"] = wait_hits(user, expect_b3, 200)
+        out["expect_b3"] = expect_b3
+        step("b3 done", hits=out["hits_after_b3"])
+
+        # B4: a prefix and a pattern over the same file, with a verdict row.
+        plant_verdict(ids["D"])
+        out["verdict_d_before"] = verdicts(ids["D"])
+        out["save_both"] = save_rules(admin, token, ["Archiv", "Audit3311bug/Both"], [*stored, "*.pat3"])
+        out["jobs_after_both"] = {
+            "sweep": sweep_jobs(),
+            "subtree": len(_jobs("SubtreeExpandJob")),
+        }
+        b4_log = len(nextcloud_log())
+        cron()
+        out["queue_d_after_one_cron"] = queue_rows(ids["D"])
+        out["verdict_d_after_one_cron"] = verdicts(ids["D"])
+        out["cron_runs_b4"] = 1 + _cron_until_gone("SubtreeExpandJob") + _cron_until_gone(SWEEP)
+        out["queue_d_after"] = queue_rows(ids["D"])
+        out["verdict_d_after"] = verdicts(ids["D"])
+        out["errors_b4"] = [line[:400] for line in nextcloud_log()[b4_log:] if '"level":3' in line]
+        out["hits_after_b4"] = wait_hits(user, {"zyrdumo": 0, "zyrkelo": 1}, 200)
+        step("b4 done", hits=out["hits_after_b4"])
+
+        # B5: a verdict row of a file under a rule that the container never knew.
+        ids["V"] = _put(user, *VERDICT_FILE)
+        out["queue_v"] = queue_rows(ids["V"])
+        plant_verdict(ids["V"])
+        out["verdict_v_before"] = verdicts(ids["V"])
+
+        # B1: a folder renamed under a pattern inside the mount.
+        out["save_bndl"] = save_rules(admin, token, ["Archiv", "Audit3311bug/Both"], [*stored, "*.pat3", "*.bndl"])
+        out["cron_runs_bndl"] = _cron_until_gone(SWEEP)
+        out["hits_r_before_rename"] = hits(user, "zyrnoka")
+        move = user.request(
+            "MOVE",
+            f"/remote.php/dav/files/{USER}/Audit3311bug/Ordner",
+            headers={"Destination": f"{URL}/remote.php/dav/files/{USER}/Audit3311bug/Ordner.bndl"},
+        )
+        out["move"] = move.status_code
+        out["queue_r_after_move"] = queue_rows(ids["R"])
+        out["jobs_after_move"] = {
+            "sweep": len(sweep_jobs()),
+            "subtree": len(_jobs("SubtreeExpandJob")),
+            "crawl": len(_jobs("StorageCrawlJob")),
+        }
+        out["cron_runs_after_move"] = _cron_until_gone("SubtreeExpandJob")
+        out["queue_r_after_cron"] = queue_rows(ids["R"])
+        # One poll of the backend (up to 120 s) before the reconcile.
+        time.sleep(150)
+        out["hits_r_before_reconcile"] = hits(user, "zyrnoka")
+        out["hits_s1_before_reconcile"] = hits(user, "zyrpaxa")
+        step("b1 before reconcile", r=out["hits_r_before_reconcile"])
+
+        backend_start = len(backend_log())
+        out["stamps_rolled_back"] = roll_back_the_reconcile_stamp()
+        out["reconcile_line"] = wait_for_a_reconcile_round(backend_start)
+        out["hits_after_reconcile"] = wait_hits(
+            user, {"zyrnoka": 0, "zyrkelo": 1, "zyrpaxa": 1, "zyrdumo": 0, "zyrvoxa": 0}, 300
+        )
+        out["verdict_v_after"] = verdicts(ids["V"])
+        out["queue_v_after"] = queue_rows(ids["V"])
+        step("b1 and b5 after reconcile", hits=out["hits_after_reconcile"])
+    finally:
+        out["restore_save"] = save_rules(admin, token, ["Archiv"], [])
+        occ("config:app:delete", "findling", "exclusion_patterns")
+        _webdav(user, "DELETE", BUG_ROOT)
+        _webdav(user, "DELETE", VERDICT_FILE[0])
+        _cron_until_gone("SubtreeExpandJob")
+        _cron_until_gone(SWEEP)
+        occ("trashbin:cleanup", USER)
+        for file_id in ids.values():
+            sql(f"delete from oc_findling_file_state where file_id = {int(file_id)}")  # noqa: S608 - an int
+        out["end"] = {
+            "exclusions": occ("config:app:get", "findling", "exclusions").stdout.strip(),
+            "patterns_exit": occ("config:app:get", "findling", "exclusion_patterns").returncode,
+            "jobs": [
+                line[:90]
+                for line in occ("background-job:list", "--limit=500").stdout.splitlines()
+                if "Findling" in line
+            ],
+        }
+        out["errors"] = [
+            line[:500] for line in nextcloud_log()[log_start:] if '"level":3' in line or '"level":4' in line
+        ]
+        _write_out("bugs.json", out)
+        user.close()
+        admin.close()
+    return out
+
+
+@bug_instance
+def test_b2_taking_a_pattern_back_replaces_the_planned_sweep_by_one_from_the_start(bug_run: dict[str, Any]) -> None:
+    after_p12 = bug_run["jobs_after_p12"]
+    after_p1 = bug_run["jobs_after_p1"]
+    assert [j["fingerprint"] for j in after_p12] == [bug_run["fingerprint_p12"]]
+    assert [(j["fingerprint"], j["storage"], j["cursor"]) for j in after_p1] == [(bug_run["fingerprint_p1"], 0, 0)]
+
+
+@bug_instance
+def test_b2_a_band_of_the_old_set_ends_without_successor_and_clears_nothing(bug_run: dict[str, Any]) -> None:
+    planted = [
+        j["id"] for j in bug_run["jobs_with_the_band_in_flight"] if j["fingerprint"] == bug_run["fingerprint_p12"]
+    ]
+    assert len(planted) == 1
+    # cron.php may reach the planted band only in a later run; what must never
+    # appear is a successor, a job of the old set with another id.
+    for run in bug_run["jobs_per_cron_run_b2"]:
+        assert all(j["id"] in planted for j in run if j["fingerprint"] == bug_run["fingerprint_p12"]), run
+    assert bug_run["jobs_per_cron_run_b2"][-1] == []
+    assert bug_run["queue_after_b2"]["S2"] == []
+    assert bug_run["hits_after_b2"] == {"zyrpaxa": 0, "zyrpbeo": 1, "zyrpcia": 1, "zyrkelo": 1}
+
+
+@bug_instance
+def test_b2_an_empty_set_plans_no_sweep(bug_run: dict[str, Any]) -> None:
+    assert bug_run["save_empty"] == 200
+    assert bug_run["jobs_after_empty"] == []
+
+
+@bug_instance
+def test_b3_two_quick_saves_leave_one_sweep_for_the_stored_set(bug_run: dict[str, Any]) -> None:
+    assert [j["fingerprint"] for j in bug_run["jobs_after_two_saves"]] == [bug_run["fingerprint_p6"]]
+    assert bug_run["stored_after_race"] == ["*.pat6"]
+    assert bug_run["hits_after_b3"] == {"zyrpbeo": 1, "zyrpcia": 0}
+
+
+RACE_ROUNDS = 30
+
+
+@instance
+def test_b3_two_saves_at_the_same_moment_leave_one_sweep_for_the_stored_set() -> None:
+    """Two admins press save at once: one sweep, the one of the set that was stored."""
+    base_session, base_token = client("admin", ADMIN_PASS)
+    with closing(base_session):
+        rules = base_session.get(OVERVIEW, headers={"requesttoken": base_token}).json()["rules"]
+    fields = {k: rules[k] for k in ("maxFileBytes", "indexTeamFolders", "indexExternalStorage")}
+    sessions = [client("admin", ADMIN_PASS) for _ in range(2)]
+    rounds = []
+    try:
+        for number in range(RACE_ROUNDS):
+            sets = [["*.race2", f"*.round{number}"], ["*.race6", f"*.round{number}"]]
+            gate = threading.Barrier(2)
+            status: dict[int, int] = {}
+
+            def racer(index: int, patterns: list[str], gate: threading.Barrier, status: dict[int, int]) -> None:
+                session, token = sessions[index]
+                body = {"exclusions": ["Archiv"], "exclusionPatterns": patterns, **fields}
+                gate.wait()
+                status[index] = session.post(SAVE, json=body, headers={"requesttoken": token}).status_code
+
+            threads = [threading.Thread(target=racer, args=(i, sets[i], gate, status)) for i in range(2)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+            stored = json.loads(occ("config:app:get", "findling", "exclusion_patterns").stdout or "[]")
+            jobs = sweep_jobs()
+            rounds.append({"status": status, "stored": stored, "jobs": [j["fingerprint"] for j in jobs]})
+            _cron_until_gone(SWEEP)
+    finally:
+        session, token = sessions[0]
+        session.post(
+            SAVE, json={"exclusions": ["Archiv"], "exclusionPatterns": [], **fields}, headers={"requesttoken": token}
+        )
+        for session, _token in sessions:
+            session.close()
+        occ("config:app:delete", "findling", "exclusion_patterns")
+        _cron_until_gone(SWEEP)
+    _write_out("b3_race.json", rounds)
+    # The sweep of the stored set is planned. A second job of the losing set may
+    # stand next to it (two of six rounds in the first run): it carries another
+    # fingerprint and ends at its first check without clearing (PE-10, shown on
+    # the instance by B2), so one run works to the end.
+    for entry in rounds:
+        assert all(code == 200 for code in entry["status"].values()), entry
+        assert entry["jobs"].count(fingerprint(entry["stored"])) == 1, entry
+        assert len(entry["jobs"]) <= 2, entry
+
+
+@bug_instance
+def test_b4_a_prefix_and_a_pattern_over_one_file_give_one_delete_and_no_error(bug_run: dict[str, Any]) -> None:
+    assert bug_run["verdict_d_before"] == [["skipped", "no_text_layer"]]
+    assert len(bug_run["queue_d_after_one_cron"]) <= 1
+    assert all(row[0] == "delete" for row in bug_run["queue_d_after_one_cron"])
+    assert bug_run["verdict_d_after"] == []
+    assert bug_run["errors_b4"] == []
+    assert bug_run["hits_after_b4"] == {"zyrdumo": 0, "zyrkelo": 1}
+
+
+@bug_instance
+def test_b5_a_verdict_of_a_file_the_container_never_knew_goes_with_the_reconcile(bug_run: dict[str, Any]) -> None:
+    assert bug_run["queue_v"] == []
+    assert bug_run["verdict_v_before"] == [["skipped", "no_text_layer"]]
+    assert bug_run["reconcile_line"]
+    assert bug_run["verdict_v_after"] == []
+
+
+@bug_instance
+def test_b1_a_folder_renamed_under_a_pattern_leaves_the_index_with_the_reconcile(bug_run: dict[str, Any]) -> None:
+    assert bug_run["move"] == 201
+    assert bug_run["hits_r_before_rename"] == 1
+    assert bug_run["reconcile_line"]
+    assert bug_run["hits_after_reconcile"]["zyrnoka"] == 0
+    assert bug_run["hits_after_reconcile"]["zyrkelo"] == 1
+
+
+@bug_instance
+def test_b1_a_pattern_taken_back_brings_its_files_back_with_the_reconcile(bug_run: dict[str, Any]) -> None:
+    assert bug_run["hits_after_reconcile"]["zyrpaxa"] == 1
+
+
+@bug_instance
+def test_the_scenario_left_the_instance_as_it_found_it(bug_run: dict[str, Any]) -> None:
+    assert bug_run["end"]["exclusions"] == '["Archiv"]'
+    assert bug_run["end"]["patterns_exit"] == 1
+    assert all("ExclusionSweepJob" not in j and "SubtreeExpandJob" not in j for j in bug_run["end"]["jobs"])
+
+
+# B8: the link of the limit block (PE-8). The tag answers 404 until v1.5.0 is
+# tagged, so only the shape of the URL is checked, and the anchor is checked in
+# the documentation of the repository and, with network, on blob/main.
+
+LIMITS_URL = "https://github.com/street1983nk/nextcloud-search/blob/v1.5.0/docs/admin-page.md#limits-per-file"
+LIMITS_ANCHOR = '<a id="limits-per-file"></a>'
+
+
+def test_b8_the_limit_block_links_exactly_the_tag_url_of_pe8_and_the_anchor_exists() -> None:
+    template = (REPO / "php" / "templates" / "admin.php").read_text(encoding="utf-8")
+    docs = (REPO / "docs" / "admin-page.md").read_text(encoding="utf-8")
+    links = [part.split("'")[0] for part in template.split("'https://github.com/")[1:]]
+    assert ["https://github.com/" + link for link in links].count(LIMITS_URL) == 1
+    assert template.count("limits-per-file") == 1
+    assert docs.count(LIMITS_ANCHOR) == 1
+    heading = docs.split(LIMITS_ANCHOR, 1)[1].lstrip().splitlines()[0]
+    assert heading.startswith("## ")
+    assert LIMITS_URL.isascii()
+
+
+@pytest.mark.skipif(
+    not os.environ.get("FINDLING_AUDIT33_NETWORK"), reason="no network probe (FINDLING_AUDIT33_NETWORK)"
+)
+def test_b8_the_anchor_answers_on_blob_main() -> None:
+    page = httpx.get(
+        "https://github.com/street1983nk/nextcloud-search/blob/main/docs/admin-page.md",
+        timeout=60,
+        follow_redirects=True,
+    )
+    _write_out("b8_link.json", {"status": page.status_code, "anchor": page.text.count("limits-per-file")})
+    assert page.status_code == 200
+    assert "limits-per-file" in page.text
