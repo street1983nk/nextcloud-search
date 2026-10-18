@@ -394,6 +394,12 @@ aus Plan 20-03. Diese Tabelle kann also nicht an einem Wortlaut zerbrechen.
 | `Rules saved. The next run applies them.` | Regeln gespeichert. Der nächste Lauf übernimmt sie. | Regels opgeslagen. De volgende doorloop neemt ze over. |
 | `The rules were not saved. Nothing changed.` | Die Regeln wurden nicht gespeichert. Es hat sich nichts geändert. | De regels zijn niet opgeslagen. Er is niets veranderd. |
 | `Enter a size between %1$s and %2$s MB.` | Eine Größe zwischen %1$s und %2$s MB eingeben. | Een grootte tussen %1$s en %2$s MB invoeren. |
+| `B` | B | B |
+| `KB` | KB | KB |
+| `MB` | MB | MB |
+| `GB` | GB | GB |
+| `TB` | TB | TB |
+| `PB` | PB | PB |
 | `Enter a folder path.` | Einen Ordnerpfad eingeben. | Een mappad invoeren. |
 | `This path is already excluded.` | Dieser Pfad ist bereits ausgeschlossen. | Dit pad is al uitgesloten. |
 | `A folder path may be at most %s bytes long.` | Ein Ordnerpfad darf höchstens %s Byte lang sein. | Een mappad mag hoogstens %s bytes lang zijn. |
@@ -569,6 +575,10 @@ keine Grenze, sondern das Ergebnis des Zählens, und jeder Eintrag trägt seinen
   die niederländische Liste eine Stelle länger ist als die italienische.
 - `%1$s (ID %2$s)` (seit Quick-Task 260929-s7p, Issue #14): zwei Platzhalter und die
   Abkürzung ID, die in jeder Sprache dieses Baums gleich geschrieben wird.
+- `B`, `KB`, `MB`, `GB`, `TB`, `PB` (seit Plan 33-10, Owner-Entscheid vom 18.10.2026):
+  die Einheitensymbole der Größenangaben auf der Admin-Seite. Sie laufen durch den Katalog,
+  damit das Französische o, Ko, Mo, Go, To und Po schreibt; diese Sprache behält die
+  englischen Symbole.
 
 Die Liste ist nicht geraten worden. Drei Läufe, in dieser Reihenfolge:
 

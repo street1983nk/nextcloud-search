@@ -940,8 +940,14 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # log line; lib/Service/ExclusionService.php logs a refused pattern with a
 # sentence of its own; tests/Unit/SettingsControllerTest.php holds both. No file
 # came and none went, so PHP_FILES_TODAY stays at 103.
+# Moved on 2026-10-18 by Plan 33-10 (the owner's answer to O1 of the acceptance
+# round, "fr angleichen sonst abgenommen"): templates/admin.php takes the unit
+# symbols of a size and the unit label of the field "Largest file to read" from
+# the catalogue, so that French writes o, Ko, Mo, Go, To and Po; the sixteen
+# catalogues under php/l10n moved with it but are not in this tree. No file came
+# and none went, so PHP_FILES_TODAY stays at 103.
 PHP_FILES_TODAY = 103
-PHP_TREE_HASH_TODAY = "6b4a5994dd005fe3bc4c19cc6f959517a681e296db4d785f7d18c8099a59d52c"
+PHP_TREE_HASH_TODAY = "0e566c065cbe034dd577b87ce1b1878321b4c1090fb50047eaa3aec9e290fe6b"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

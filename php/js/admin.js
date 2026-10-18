@@ -39,10 +39,10 @@
   const SECONDS_PER_HOUR = 3600
   const SECONDS_PER_DAY = 86400
 
-  // The same unit table the template uses, so that a size does not change its
-  // shape when the first poll arrives. The symbols are not translated, in
-  // Nextcloud either.
-  const SIZE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+  // The same six steps the template takes, so that a size does not change its
+  // shape when the first poll arrives. How many there are is fixed here; their
+  // symbols come from the catalogue in sizeUnits() below.
+  const SIZE_UNIT_COUNT = 6
   const BYTES_PER_UNIT = 1024
 
   // The four addresses this page asks, written out whole rather than assembled
@@ -168,7 +168,7 @@
   function size (bytes) {
     let value = Math.max(0, Number.isFinite(bytes) ? bytes : 0)
     let unit = 0
-    while (value >= BYTES_PER_UNIT && unit < SIZE_UNITS.length - 1) {
+    while (value >= BYTES_PER_UNIT && unit < SIZE_UNIT_COUNT - 1) {
       value /= BYTES_PER_UNIT
       unit++
     }
@@ -178,7 +178,27 @@
       maximumFractionDigits: digits
     }).format(value)
 
-    return formatted + ' ' + SIZE_UNITS[unit]
+    return formatted + ' ' + sizeUnits()[unit]
+  }
+
+  /**
+   * The six unit symbols of a size, through the catalogue since plan 33-10.
+   *
+   * French writes o, Ko, Mo, Go, To and Po (the owner's decision of
+   * 18.10.2026), every other language of this app keeps the English symbol as
+   * its value. The template asks for the same six keys in the same order. Read
+   * at every call rather than once at load, and each key spelled out, so that a
+   * grep for a key finds its caller.
+   */
+  function sizeUnits () {
+    return [
+      t('findling', 'B'),
+      t('findling', 'KB'),
+      t('findling', 'MB'),
+      t('findling', 'GB'),
+      t('findling', 'TB'),
+      t('findling', 'PB')
+    ]
   }
 
   /** The same duration as a point in the past, for the sentence that needs one. */
@@ -2467,7 +2487,7 @@
     shown('findling-banner-rebuild', backend.rebuildRunning === true)
 
     // The other outcome of the same run. The figure is the missing amount and
-    // it is formatted with the unit table the template uses, so the sentence
+    // it is formatted with the unit symbols the template uses, so the sentence
     // does not change its shape when the first poll arrives.
     const blockedBytes = whole(backend.rebuildBlockedBytes)
     text('findling-banner-rebuild-space-text',

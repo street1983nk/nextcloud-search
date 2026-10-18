@@ -124,16 +124,27 @@ Speichern); sie war in 33-09 A5 mit zwei Mustern auf der Seite.
 | en | de | fr | Bild |
 |---|---|---|---|
 | Limits per file | Grenzen je Datei | Limites par fichier | `p1-grenzblock-*.png` |
-| Largest file the backend reads: 50.0 MB (`FINDLING_MAX_FILE_BYTES`) | Größte Datei, die das Backend liest: 50,0 MB (`FINDLING_MAX_FILE_BYTES`) | Plus grand fichier lu par le service : 50,0 MB (`FINDLING_MAX_FILE_BYTES`) | `p1-grenzblock-*.png` |
-| Memory one document may use while it is read: 512.0 MB (`FINDLING_EXTRACT_ADDRESS_SPACE_BYTES`) | Speicher, den ein Dokument beim Lesen belegen darf: 512,0 MB (`FINDLING_EXTRACT_ADDRESS_SPACE_BYTES`) | Mémoire qu'un document peut occuper pendant sa lecture : 512,0 MB (`FINDLING_EXTRACT_ADDRESS_SPACE_BYTES`) | `p1-grenzblock-*.png` |
+| Largest file the backend reads: 50.0 MB (`FINDLING_MAX_FILE_BYTES`) | Größte Datei, die das Backend liest: 50,0 MB (`FINDLING_MAX_FILE_BYTES`) | Plus grand fichier lu par le service : 50,0 Mo (`FINDLING_MAX_FILE_BYTES`) | `p1-grenzblock-*.png`, fr nach dem Fix `fix-grenzblock-fr.png` |
+| Memory one document may use while it is read: 512.0 MB (`FINDLING_EXTRACT_ADDRESS_SPACE_BYTES`) | Speicher, den ein Dokument beim Lesen belegen darf: 512,0 MB (`FINDLING_EXTRACT_ADDRESS_SPACE_BYTES`) | Mémoire qu'un document peut occuper pendant sa lecture : 512,0 Mo (`FINDLING_EXTRACT_ADDRESS_SPACE_BYTES`) | `p1-grenzblock-*.png`, fr nach dem Fix `fix-grenzblock-fr.png` |
 | Cells read per spreadsheet file: 200,000 (`FINDLING_MAX_CELLS`) | Gelesene Zellen je Tabellendatei: 200.000 (`FINDLING_MAX_CELLS`) | Cellules lues par classeur : 200 000 (`FINDLING_MAX_CELLS`) | `p1-grenzblock-*.png` |
 | Pages read per scanned document: 30, from the profile Economy | Gelesene Seiten je gescanntem Dokument: 30, aus dem Profil Sparsam | Pages lues par document numérisé : 30, selon le profil Économe | `p1-grenzblock-*.png` |
 | These limits are deploy options of Findling Backend. To change one, run `occ app_api:app:unregister findling_backend`, which keeps the data, and deploy Findling Backend again with the new value. | Diese Grenzen sind Deploy-Optionen von Findling Backend. Zum Ändern `occ app_api:app:unregister findling_backend` ausführen, was die Daten behält, und Findling Backend mit dem neuen Wert erneut bereitstellen. | Ces limites sont des options de déploiement de Findling Backend. Pour en modifier une, exécuter `occ app_api:app:unregister findling_backend`, ce qui conserve les données, puis redéployer Findling Backend avec la nouvelle valeur. | `p1-grenzblock-*.png` |
 | Steps in the documentation | Schritte in der Dokumentation | Étapes dans la documentation | `p1-grenzblock-*.png` |
 | The backend of this instance reads at most 50 MB. This ceiling is a deploy option, see "Limits per file". | Das Backend dieser Instanz liest höchstens 50 MB. Diese Obergrenze ist eine Deploy-Option, siehe "Grenzen je Datei". | Le service de cette instance lit au maximum 50 Mo. Ce plafond est une option de déploiement, voir "Limites par fichier". | `p1-regelblock-*.png` |
+| Einheit am Feld "Largest file to read": MB | Einheit am Feld: MB | Unité du champ : Mo | `fix-regelblock-{fr,de}.png` |
 
 Die Umgebungsform der Seitenzeile ("Pages read per scanned document: %1$s (%2$s)") ist an dieser
 Instanz verborgen (Quelle `profile`); ihr Wortlaut steht in 33-WORTLAUT.md E.
+
+**Owner-Entscheid O1 vom 18.10.2026:** "fr angleichen sonst abgenommen", Richtung auf Rückfrage
+"Mo überall". Umgesetzt in Task 3: Die sechs Einheitensymbole der Seite (`B`, `KB`, `MB`, `GB`,
+`TB`, `PB`) sind eigene Katalogschlüssel, im Größenformat des Templates (`$size`), im Formatierer
+des Skripts (`sizeUnits()`) und als Einheit am Feld "Largest file to read". Nur fr weicht ab
+(o, Ko, Mo, Go, To, Po), alle anderen Sprachen behalten das englische Symbol als Wert. Die Sätze
+"... lit au maximum %s Mo" und "Saisir une taille comprise entre %1$s et %2$s Mo." schrieben
+schon vorher Mo und blieben unverändert. Probe an 8090 nach dem Fix: fr zeigt "50,0 Mo",
+"512,0 Mo" und am Feld "Mo" (`fix-grenzblock-fr.png`, `fix-regelblock-fr.png`), de unverändert
+"50,0 MB", "512,0 MB" und "MB" (`fix-grenzblock-de.png`, `fix-regelblock-de.png`).
 
 ### F: Hardware-Satz und weitere G5-Sätze
 
@@ -153,7 +164,8 @@ Instanz verborgen (Quelle `profile`); ihr Wortlaut steht in 33-WORTLAUT.md E.
 
 ## Offene Fragen an den Owner
 
-- **O1 Einheiten im Französischen:** Der Grenzblock schreibt in fr "50,0 MB" und "512,0 MB"
+- **O1 Einheiten im Französischen** (entschieden 18.10.2026: "fr angleichen", "Mo überall",
+  umgesetzt in Task 3, siehe Tabelle E): Der Grenzblock schrieb in fr "50,0 MB" und "512,0 MB"
   (Größenformat der Seite, `$size`, in allen Sprachen MB), der Satz direkt darüber sagt "50 Mo".
   So lassen (Konvention der Seite) oder für fr "Mo" vorsehen (Formatfrage, eigener Schritt)?
 - **O2 Ablehnung und Zeile:** Nach einer Ablehnung bleibt der Eintrag als ungespeicherte Zeile in

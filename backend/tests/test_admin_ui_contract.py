@@ -588,6 +588,17 @@ JS_PLURAL_FORM = re.compile(r'\n"([^"]*)"\);\s*\Z')
 # no German value equals its English key; the tree says otherwise and was read on
 # 25.09.2026 rather than assumed. Four keys do, and each of them is a proper name
 # or a word German writes the way English does.
+# Since plan 33-10 (the owner's decision of 18.10.2026, "fr angleichen sonst
+# abgenommen" with the direction "Mo ueberall"): the six unit symbols of a size
+# on the admin page are keys of their own, so that French can write o, Ko, Mo,
+# Go, To and Po. Every other language of this tree keeps the English symbol as
+# its value, which is why the six stand in every list below except the French
+# one, and in that list they would be a forgotten wording.
+UNIT_SYMBOLS_THAT_STAY_ENGLISH = dict.fromkeys(
+    ("B", "KB", "MB", "GB", "TB", "PB"),
+    "the symbol of a size unit, which this language writes the way English does",
+)
+
 VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
     "de": {
         "Findling": "the name of the app, the same word in every language of this tree",
@@ -600,6 +611,7 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
         # Since quick task 260929-s7p (issue #14): the error list shows the id
         # of every file, and ID is the same abbreviation in every language.
         "%1$s (ID %2$s)": "two placeholders and the abbreviation ID, the same in every language of this tree",
+        **UNIT_SYMBOLS_THAT_STAY_ENGLISH,
     },
     # Spanish, read off the file on 25.09.2026 rather than guessed: the gate was
     # run once with an empty list and reported four findings, two keys over two
@@ -612,6 +624,7 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
         # Since quick task 260929-s7p (issue #14): the error list shows the id
         # of every file, and ID is the same abbreviation in every language.
         "%1$s (ID %2$s)": "two placeholders and the abbreviation ID, the same in every language of this tree",
+        **UNIT_SYMBOLS_THAT_STAY_ENGLISH,
     },
     # Italian, read off the file on 25.09.2026 rather than guessed: the gate was
     # run once with an empty list and reported six findings, three keys over two
@@ -632,6 +645,7 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
         # Since quick task 260929-s7p (issue #14): the error list shows the id
         # of every file, and ID is the same abbreviation in every language.
         "%1$s (ID %2$s)": "two placeholders and the abbreviation ID, the same in every language of this tree",
+        **UNIT_SYMBOLS_THAT_STAY_ENGLISH,
     },
     # Dutch, read off the file on 25.09.2026 rather than guessed: the gate was
     # run once with an empty list and reported eight findings, four keys over
@@ -653,6 +667,7 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
         # Since quick task 260929-s7p (issue #14): the error list shows the id
         # of every file, and ID is the same abbreviation in every language.
         "%1$s (ID %2$s)": "two placeholders and the abbreviation ID, the same in every language of this tree",
+        **UNIT_SYMBOLS_THAT_STAY_ENGLISH,
     },
     # European Portuguese, read off the file on 25.09.2026 rather than guessed:
     # the gate was run once with an empty list and reported four findings, two
@@ -669,6 +684,7 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
         # Since quick task 260929-s7p (issue #14): the error list shows the id
         # of every file, and ID is the same abbreviation in every language.
         "%1$s (ID %2$s)": "two placeholders and the abbreviation ID, the same in every language of this tree",
+        **UNIT_SYMBOLS_THAT_STAY_ENGLISH,
     },
     # Brazilian Portuguese, read off the file on 25.09.2026 rather than guessed
     # and rather than copied from the pt_PT entry above: the gate was run once
@@ -683,6 +699,7 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
         # Since quick task 260929-s7p (issue #14): the error list shows the id
         # of every file, and ID is the same abbreviation in every language.
         "%1$s (ID %2$s)": "two placeholders and the abbreviation ID, the same in every language of this tree",
+        **UNIT_SYMBOLS_THAT_STAY_ENGLISH,
     },
     "fr": {
         "Findling": "the name of the app, the same word in all three languages",
@@ -3583,6 +3600,17 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     test_every_sentence_of_the_rules_block_is_in_every_catalogue holds the
     block against every catalogue. Whoever moves it next writes the next
     paragraph.
+
+    It stands at 340 since 18.10.2026, and the rise of six is plan 33-10: the
+    unit symbols B, KB, MB, GB, TB and PB of every size on the admin page, the
+    formatter of the template, the one of the script and the unit label of the
+    field "Largest file to read", became keys of their own. The owner's answer
+    to O1 of the acceptance round was "fr angleichen sonst abgenommen", with
+    the direction "Mo ueberall": French writes o, Ko, Mo, Go, To and Po, every
+    other language keeps the English symbol as its value and names the six
+    under its exceptions of gate G2. All sixteen files moved in one commit, and
+    the five language documents carry the rows. Whoever moves it next writes
+    the next paragraph.
     """
     for language, twin in ((L10N_JSON, L10N_DE_DE_JSON), (L10N_JS, L10N_DE_DE_JS)):
         assert twin.is_file(), f"{twin.name} is missing, so everybody on de_DE reads this app in English"
@@ -3622,8 +3650,9 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     # nothing), four of plan 32-05 (the filter entries of the unified search,
     # D-32-04), 28 of plan 33-07 (patterns, refusals, confirmations and limits
     # of plans 33-05 and 33-06; the ten changed sentences, the seven box
-    # sentences among them, changed their keys and so moved nothing)
-    assert len(keys_of["de.json"]) == 334
+    # sentences among them, changed their keys and so moved nothing), six of
+    # plan 33-10 (the unit symbols of a size, the owner's answer to O1)
+    assert len(keys_of["de.json"]) == 340
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:

@@ -99,6 +99,10 @@ Prüfungen".
   Repositorium verbietet ihn (weder U+2014 noch U+2013).
 - **Die Platzhalter sind die des Schlüssels**, in Art und Zahl. `%1$s in %2$s` wird
   `%1$s dans %2$s` und niemals `%s dans %s`.
+- **Größeneinheiten als o, Ko, Mo, Go, To, Po** (seit Plan 33-10, Owner-Entscheid vom
+  18.10.2026: "fr angleichen sonst abgenommen", Richtung "Mo überall"). Die sechs Symbole
+  der Admin-Seite (`B` bis `PB`) sind eigene Schlüssel; nur das Französische weicht vom
+  englischen Symbol ab, so wie die Sätze `... lit au maximum %s Mo` und `6 Go` es schon taten.
 
 ## Pluralformen
 
@@ -312,6 +316,12 @@ deutschen Übersetzung.
 | `Rules saved. The next run applies them.` | Regeln gespeichert. Der nächste Lauf übernimmt sie. | Règles enregistrées. Le prochain passage les applique. |
 | `The rules were not saved. Nothing changed.` | Die Regeln wurden nicht gespeichert. Es hat sich nichts geändert. | Les règles n'ont pas été enregistrées. Rien n'a changé. |
 | `Enter a size between %1$s and %2$s MB.` | Eine Größe zwischen %1$s und %2$s MB eingeben. | Saisir une taille comprise entre %1$s et %2$s Mo. |
+| `B` | B | o |
+| `KB` | KB | Ko |
+| `MB` | MB | Mo |
+| `GB` | GB | Go |
+| `TB` | TB | To |
+| `PB` | PB | Po |
 | `Enter a folder path.` | Einen Ordnerpfad eingeben. | Saisir un chemin de dossier. |
 | `This path is already excluded.` | Dieser Pfad ist bereits ausgeschlossen. | Ce chemin est déjà exclu. |
 | `A folder path may be at most %s bytes long.` | Ein Ordnerpfad darf höchstens %s Byte lang sein. | Un chemin de dossier peut compter au maximum %s octets. |

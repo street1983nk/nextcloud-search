@@ -155,8 +155,9 @@ $count = static function (int $value) use ($l): string {
  * full stop before the decimal no matter what the session language is. The
  * script formats the same number with Intl.NumberFormat and the same unit
  * table, so both halves of the page agree on what one and a half gigabytes
- * looks like. The unit names are not translated, in Nextcloud either: they are
- * symbols and they read the same in every language this app ships.
+ * looks like. The unit symbols come from the catalogue since plan 33-10:
+ * French writes o, Ko, Mo, Go, To and Po (the owner's decision of 18.10.2026),
+ * every other language of this app keeps the English symbol as its value.
  *
  * Defined next to $count above since plan 18-10, and no longer among the
  * variables of block two. The space warning of the rebuild sits in the banner
@@ -165,7 +166,7 @@ $count = static function (int $value) use ($l): string {
  * prevent.
  */
 $size = static function (int $bytes) use ($l): string {
-	$units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+	$units = [$l->t('B'), $l->t('KB'), $l->t('MB'), $l->t('GB'), $l->t('TB'), $l->t('PB')];
 	$value = (float)max(0, $bytes);
 	$unit = 0;
 	while ($value >= 1024 && $unit < count($units) - 1) {
@@ -1442,7 +1443,7 @@ foreach (is_array($_['profileEnv'] ?? null) ? $_['profileEnv'] : [] as $envEntry
 		<input type="number" id="findling-rules-cap" name="maxFileBytes" inputmode="numeric"
 			min="1" max="<?php p((string)$ceilingMb); ?>" step="1" value="<?php p((string)$capMb); ?>"
 			aria-describedby="findling-rules-cap-unit findling-rules-cap-help findling-rules-cap-error">
-		<span class="findling-rules__unit" id="findling-rules-cap-unit">MB</span>
+		<span class="findling-rules__unit" id="findling-rules-cap-unit"><?php p($l->t('MB')); ?></span>
 	</div>
 	<p class="settings-hint" id="findling-rules-cap-help"><?php p($l->t('Files above this size are recorded as skipped (too large) and never read.')); ?>
 		<?php p($l->t('The backend of this instance reads at most %s MB. This ceiling is a deploy option, see "Limits per file".', [$count($ceilingMb)])); ?></p>

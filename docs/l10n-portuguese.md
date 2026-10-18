@@ -477,6 +477,12 @@ Erzeugung die dreispaltige Fassung zeichengleich reproduziert hatte (204 von 204
 | `Rules saved. The next run applies them.` | Regeln gespeichert. Der nächste Lauf übernimmt sie. | Regras guardadas. A próxima passagem aplica-as. | Regras salvas. A próxima execução vai aplicá-las. |
 | `The rules were not saved. Nothing changed.` | Die Regeln wurden nicht gespeichert. Es hat sich nichts geändert. | As regras não foram guardadas. Nada mudou. | As regras não foram salvas. Nada mudou. |
 | `Enter a size between %1$s and %2$s MB.` | Eine Größe zwischen %1$s und %2$s MB eingeben. | Indique um tamanho entre %1$s e %2$s MB. | Informe um tamanho entre %1$s e %2$s MB. |
+| `B` | B | B | B |
+| `KB` | KB | KB | KB |
+| `MB` | MB | MB | MB |
+| `GB` | GB | GB | GB |
+| `TB` | TB | TB | TB |
+| `PB` | PB | PB | PB |
 | `Enter a folder path.` | Einen Ordnerpfad eingeben. | Indique um caminho de pasta. | Informe um caminho de pasta. |
 | `This path is already excluded.` | Dieser Pfad ist bereits ausgeschlossen. | Este caminho já está excluído. | Este caminho já está excluído. |
 | `A folder path may be at most %s bytes long.` | Ein Ordnerpfad darf höchstens %s Byte lang sein. | Um caminho de pasta pode ter no máximo %s bytes. | Um caminho de pasta pode ter no máximo %s bytes. |
@@ -667,6 +673,10 @@ keine Grenze, sondern das Ergebnis des Zählens, und jeder Eintrag trägt seinen
 - `PDF`: Eigenname eines Dateiformats, in jeder Sprache dieselbe Abkürzung.
 - `%1$s (ID %2$s)` (seit Quick-Task 260929-s7p, Issue #14): zwei Platzhalter und die
   Abkürzung ID, die in jeder Sprache dieses Baums gleich geschrieben wird.
+- `B`, `KB`, `MB`, `GB`, `TB`, `PB` (seit Plan 33-10, Owner-Entscheid vom 18.10.2026):
+  die Einheitensymbole der Größenangaben auf der Admin-Seite. Sie laufen durch den Katalog,
+  damit das Französische o, Ko, Mo, Go, To und Po schreibt; diese Sprache behält die
+  englischen Symbole.
 
 **Liste für `pt_BR`**, ebenfalls genau zwei Schlüssel, dieselben und aus demselben Grund:
 
@@ -675,6 +685,10 @@ keine Grenze, sondern das Ergebnis des Zählens, und jeder Eintrag trägt seinen
 - `PDF`: Eigenname eines Dateiformats, in jeder Sprache dieselbe Abkürzung.
 - `%1$s (ID %2$s)` (seit Quick-Task 260929-s7p, Issue #14): zwei Platzhalter und die
   Abkürzung ID, die in jeder Sprache dieses Baums gleich geschrieben wird.
+- `B`, `KB`, `MB`, `GB`, `TB`, `PB` (seit Plan 33-10, Owner-Entscheid vom 18.10.2026):
+  die Einheitensymbole der Größenangaben auf der Admin-Seite. Sie laufen durch den Katalog,
+  damit das Französische o, Ko, Mo, Go, To und Po schreibt; diese Sprache behält die
+  englischen Symbole.
 
 Dass die beiden Listen gleich sind, ist ein Befund und keine Übernahme: die brasilianische ist
 eigens gemessen worden, mit denselben drei Läufen wie die europäische. Kein Eintrag ohne Liste:
