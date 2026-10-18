@@ -1,9 +1,9 @@
 # Phase 33 Plan 10: Abnahmeprotokoll (Proben vorab und Abnahme durch den Owner)
 
 **Stand:** Task 1 erledigt (Proben vorab, 18.10.2026). Task 2 (gemeinsame Runde mit dem Owner)
-steht aus; dieses Protokoll ist ihre Vorlage. Keine Selbstabnahme (D-33-02): die Spalte
-"Ergebnis" sagt nur, ob die Maschine die Erwartung gesehen hat, nicht ob der Owner den Wortlaut
-abnimmt.
+vollzogen am 18.10.2026, Owner-Abnahme am Ende dieses Protokolls. Keine Selbstabnahme (D-33-02):
+die Spalte "Ergebnis" sagt nur, ob die Maschine die Erwartung gesehen hat; die Abnahme des
+Wortlauts steht unter "Abnahme durch den Owner".
 
 ## Stand
 
@@ -185,7 +185,28 @@ schon vorher Mo und blieben unverändert. Probe an 8090 nach dem Fix: fr zeigt "
   Genügt das, oder soll die Runde ein Bild unter einem Bundle mit Urteilszeile zeigen?
 - **Vermerk:** Tag-Link geht erst mit v1.5.0 auf.
 
+## Die gemeinsame Runde (Task 2, 18.10.2026)
+
+Gefahren per Playwright an http://localhost:8090, gesteuert vom Ausführenden, gesehen und
+entschieden vom Owner am geteilten Browserfenster. Bilder im Scratch-Ordner (Präfix `runde-`):
+
+| Schritt | Was der Owner sah | Bild |
+|---|---|---|
+| 1 Regelblock | "Ausgeschlossene Ordner" mit `Archiv`, darunter "Ausgeschlossene Muster" mit Hilfesatz, Beispielen und gespeichertem `*.photoslibrary`; direkt darunter Grenzblock und "Größte zu lesende Datei" (Schritte 4 und 5 im selben Bild) | `runde-01-regelblock.png` |
+| 2 Ungültiges Muster | `[0-9]*` eingetragen, "Regeln speichern": Satz am Feld "Eckige und geschweifte Klammern sowie der Backslash sind nicht erlaubt. Nur * und ? sind Platzhalter.", nichts gespeichert, Zeile danach entfernt | `runde-02-ablehnung.png`, `runde-03-ablehnungssatz.png` |
+| 3 Suche | Als admin P und Q je 0 (Rechte-Filter greift, Saat gehört testuser); als testuser P `zyqpemar` 0 Treffer, Q `zyqquilo` genau 1 Treffer ("notiz.txt, Notiz Kontrolle zyqquilo") | `runde-04-suche-p.png`, `runde-05-suche-p-testuser.png`, `runde-06-suche-q-testuser.png` |
+| 4 Doku-Weg | Über `blob/main/docs/admin-page.md#limits-per-file` direkt im Abschnitt "Grenzen je Datei ändern" (Tabelle der vier Grenzen, Änderungsschritte); Seitenlink trägt die Tag-Form, geht erst mit v1.5.0 auf | `runde-07-doku-anker.png` |
+| 5 Hardware-Satz | Über die Wortlauttabelle F gelesen (O4 Variante a) | Tabelle F |
+| 6 Wortlaut de/en/fr | Über die Tabellen A bis F dieses Protokolls, zeichengleich mit der laufenden Seite | Tabellen A bis F |
+| 7 Beleg 33-09 | Kurzfassung von Weg A, Weg C und Gegenproben vorgetragen; Beleg genügt dem Owner (O5) | 33-09-NACHWEIS.md |
+| Nachtrag fr-Fix | Nach dem Mo-Fix aus Task 3: Grenzblock fr "50,0 Mo" und "512,0 Mo", Feld-Label "Mo", Satz darüber "50 Mo", alles einheitlich; de unverändert MB | `runde-08-grenzblock-fr-mo.png`, `fix-grenzblock-{fr,de}.png` |
+
+Antworten des Owners zu den offenen Fragen: O1 "fr angleichen" mit Richtung "Mo überall"
+(umgesetzt in Task 3, Tabelle E); O2, O3 und O5 mit "sonst abgenommen" akzeptiert (keine
+Änderung); O4 Variante a (Satz über Tabelle F abgenommen).
+
 ## Abnahme durch den Owner
 
-Steht aus (Task 2). Der Eintrag mit Datum und wörtlicher Antwort folgt hier; bewusst noch ohne
-die Marke, die die Prüfung von Task 2 sucht.
+Owner-Abnahme: 18.10.2026, "fr angleichen sonst abgenommen" -> Richtung auf Rückfrage
+"Mo überall" -> nach Sichtprobe des Fixes am Browser (`runde-08-grenzblock-fr-mo.png`):
+"abgenommen".

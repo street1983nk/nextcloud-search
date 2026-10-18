@@ -182,7 +182,7 @@ Plans:
 - [x] 33-07-PLAN.md: l10n-Kette (16 Kataloge, 5 Dokus), Hardware-Satz POL-03, Regelblock-Gate, Schlüsselzahl (0fb85deb)
 - [x] 33-08-PLAN.md: Doku (admin-page.md, reconcile.md), CHANGELOG, Store-Entwurf Teil Phase 33 (Abnahme REL-05) (57739fe8)
 - [x] 33-09-PLAN.md: Nachweis EXCL-02 auf 8090 über Weg A und Weg C mit Positivkontrolle und Gegenprobe
-- [ ] 33-10-PLAN.md: Owner-Abnahme gemeinsam per Playwright (Checkpoint), Wortlaut nachziehen, Anforderungen abhaken
+- [x] 33-10-PLAN.md: Owner-Abnahme gemeinsam per Playwright (Checkpoint), Wortlaut nachziehen (fr-Einheiten Mo, 18.10.2026); Anforderungen hakt 33-11 ab
 - [ ] 33-11-PLAN.md: Security-, Bug- und Performance-Audit (Matcher-Orakel, Schreibpfad, Kehrjob), Befunde fixen
 **UI hint**: yes
 
