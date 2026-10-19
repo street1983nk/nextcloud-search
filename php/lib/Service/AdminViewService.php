@@ -584,6 +584,7 @@ final class AdminViewService {
 		private ITimeFactory $timeFactory,
 		private IL10N $l10n,
 		private IDateTimeFormatter $dateTimeFormatter,
+		private ParallelSearchService $parallelSearch,
 	) {
 	}
 
@@ -608,7 +609,7 @@ final class AdminViewService {
 	 *     probeStep:string, profileCheck:?array<string,mixed>,
 	 *     profileEnv:list<array{field:string, value:int, variable:string}>,
 	 *     reindexDocuments:int, reindexSecondsInt8:?int, reindexSecondsFp32:?int,
-	 *     fp32DownloadBytes:int
+	 *     fp32DownloadBytes:int, parallelSearch:bool
 	 * }
 	 */
 	public function overview(): array {
@@ -801,6 +802,11 @@ final class AdminViewService {
 			'reindexSecondsInt8' => self::reindexSeconds($chunks, self::checkRate($check, 'rateInt8')),
 			'reindexSecondsFp32' => self::reindexSeconds($chunks, self::checkRate($check, 'rateFp32')),
 			'fp32DownloadBytes' => self::FP32_DOWNLOAD_BYTES,
+			// UMST-02: an app of the full text search framework is enabled for
+			// anyone, so results can appear twice in the search bar. Rendered by
+			// the template only; the script leaves the banner alone, because the
+			// apps are switched on the apps page and the admin reloads after it.
+			'parallelSearch' => $this->parallelSearch->active(),
 		];
 	}
 

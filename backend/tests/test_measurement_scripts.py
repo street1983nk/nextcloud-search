@@ -957,8 +957,18 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # letting the type conflict stop the listener, the crawl and the page;
 # tests/Unit/ExclusionServiceTest.php holds the cases. No file came and none
 # went, so PHP_FILES_TODAY stays at 103.
-PHP_FILES_TODAY = 103
-PHP_TREE_HASH_TODAY = "79bbd1f1903899acbcb3427171d2ab18e8789ee5c80b4f71337bf0f44677ca12"
+# Moved on 2026-10-19 by Plan 34-03 (UMST-02, PE-34-1, PE-34-2): the detection
+# of the full text search framework next to Findling. One file came in lib,
+# Service/ParallelSearchService.php (isEnabledForAnyone for fulltextsearch and
+# files_fulltextsearch, one bool, nothing logged); Service/AdminViewService.php
+# takes it as a new dependency and hands the key parallelSearch to the page;
+# tests/Unit/SettingsControllerTest.php builds the view with it and reads the
+# key out of the overview route. One test came,
+# php/tests/Unit/ParallelSearchServiceTest.php (no app, each app alone, both,
+# the asked ids, a platform app alone). No file went, so PHP_FILES_TODAY moves
+# to 105.
+PHP_FILES_TODAY = 105
+PHP_TREE_HASH_TODAY = "e44b0fcbae23611fd1849c3a4924f00c3c983e8d43d514fd964b05d6834f60a3"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
