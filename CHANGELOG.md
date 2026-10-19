@@ -28,6 +28,10 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
   (docs/admin-page.md) (#22).
 - The admin page shows the limits per file read only, with how to change
   them (#21).
+- A migration page from fulltextsearch/Elasticsearch in German, English and
+  French (docs/migrate-from-fulltextsearch.md).
+- A banner on the admin page while fulltextsearch or files_fulltextsearch is
+  enabled, with a link to that page.
 
 ### Changed
 
