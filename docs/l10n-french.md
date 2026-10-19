@@ -354,6 +354,13 @@ deutschen Übersetzung.
 | `Search results` | Suchergebnisse | Résultats de recherche |
 | `%1$s in %2$s` | %1$s in %2$s | %1$s dans %2$s |
 | `last opened` | zuletzt geöffnet | ouvert en dernier |
+| `Similar documents` | Ähnliche Dokumente | Documents similaires |
+| `Similar documents to %s` | Ähnliche Dokumente zu %s | Documents similaires à %s |
+| `Similar to: %s` | Ähnlich zu: %s | Similaire à : %s |
+| `Back to the results` | Zurück zu den Treffern | Retour aux résultats |
+| `No similar documents found` | Keine ähnlichen Dokumente gefunden | Aucun document similaire trouvé |
+| `None of your other files is close enough in content. Files that have not yet been prepared for the semantic search, or that contain no text, have no similar documents.` | Keine Ihrer anderen Dateien ist inhaltlich nah genug. Dateien, die noch nicht für die semantische Suche erfasst sind oder keinen Text enthalten, haben keine ähnlichen Dokumente. | Aucun de vos autres fichiers n'est assez proche par son contenu. Les fichiers qui ne sont pas encore pris en compte par la recherche sémantique ou qui ne contiennent pas de texte n'ont pas de documents similaires. |
+| `This file is not available` | Diese Datei ist nicht verfügbar | Ce fichier n'est pas disponible |
 | `Show all results` | Alle Treffer anzeigen | Afficher tous les résultats |
 | `Opens the Findling results page` | Öffnet die Findling-Ergebnisseite | Ouvre la page de résultats de Findling |
 | `Previous page` | Vorherige Seite | Page précédente |
@@ -481,6 +488,8 @@ deutschen Übersetzung.
 **Nachtrag 14.10.2026 (Phase 33, Plan 33-07).** Zwei Änderungen in einem Zug. Erstens der Hardware-Hinweis (POL-03): `hardware_short` und die sechs weiteren Sätze, die "box" sagten (Owner-Antwort G5 (c) in Plan 33-01), tragen neue Schlüssel; ihre Zeilen sind ersetzt, die Schlüsselzahl bleibt dabei gleich. Zweitens 28 neue Zeilen für die Sätze der Ausschlussmuster und des Grenzblocks (EXCL-01, EXCL-03, POL-01), dazu drei weitere ersetzte Zeilen: die Hilfe der Ordnerliste, die Abhilfe der Diagnose und der Satz zur Größendecke. Die Zeilen stehen an derselben Stelle wie in `php/l10n/de.json` und sind mechanisch aus den Katalogen übernommen. Der deutsche und der französische Wortlaut ist der, den der Owner am 13.10.2026 in Plan 33-01 abgenommen hat; die Abnahme auf der Seite folgt in Plan 33-10.
 
 **Nachtrag 19.10.2026 (Phase 34, Plan 34-03).** Eine Zeile ist ergänzt: der Hinweis der Statusseite, solange eine App des Volltextsuche-Frameworks (fulltextsearch, files_fulltextsearch) neben Findling aktiviert ist (UMST-02). Sie steht an derselben Stelle wie in `php/l10n/de.json`, direkt hinter dem Platzbanner des Umbaus, und ist mechanisch aus den Katalogen übernommen. Der Linktext dahinter ist der vorhandene Schlüssel `Steps in the documentation`; die Adresse steht im Template und in keinem Katalog. Der deutsche und der französische Wortlaut ist der, den der Owner am 19.10.2026 in `34-WORTLAUT.md` abgenommen hat.
+
+**Nachtrag 19.10.2026 (Phase 35, Plan 35-13).** Sieben Zeilen sind ergänzt: der Wortlaut der Ähnlich-Ansicht (STR-01), also der Textlink "Ähnliche Dokumente" an jedem Treffer samt vorgelesenem Namen mit dem Titel, die Überschrift "Ähnlich zu: %s", der Rückweg zu den Treffern und die beiden Leerzustände, davon einer für jede unbekannte, fremde, gelöschte oder nicht lesbare Ausgangsdatei. Sie stehen an derselben Stelle wie in `php/l10n/de.json`, direkt hinter `last opened`, und sind mechanisch aus den Katalogen übernommen. Der deutsche und der französische Wortlaut ist der, den der Owner am 19.10.2026 in `35-WORTLAUT.md` abgenommen hat.
 
 ## Ausnahmen für das Vollständigkeitsgate G2
 
