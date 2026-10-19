@@ -1513,16 +1513,12 @@ def _cron_until_gone(name: str, runs: int = 10) -> int:
 
 # H-33-02 (fixed in Task 4 of 33-11): a pattern key of another type than array
 # (occ --type=integer) stopped the listener, the page and the overview.
-H_33_02 = "H-33-02: a pattern key of another type than array (occ --type=integer) stops the listener, page and overview"
 
 
 @instance
 @pytest.mark.parametrize(
     ("label", "value", "in_force"),
-    [
-        pytest.param(*g, id=g[0], marks=pytest.mark.xfail(strict=True, reason=H_33_02) if g[0] == "integer" else ())
-        for g in GARBAGE
-    ],
+    [pytest.param(*g, id=g[0]) for g in GARBAGE],
 )
 def test_a_second_writer_with_garbage_breaks_neither_page_nor_crawl_nor_listener(
     label: str, value: list[str], in_force: list[str]
@@ -1613,7 +1609,6 @@ def _cron_with_pause_until_gone(name: str, runs: int = 40) -> int:
 
 
 @instance
-@pytest.mark.xfail(strict=True, reason=H_33_02)
 def test_a_prefix_key_of_another_type_breaks_neither_page_nor_listener() -> None:
     """The twin of H-33-02 on the prefix key, which 1.4.2 already read the same way."""
     log_start = len(nextcloud_log())
@@ -1678,7 +1673,9 @@ def test_a_prefix_key_of_another_type_breaks_neither_page_nor_listener() -> None
     warnings = [f for f in findling_lines if "not usable folder paths" in str(f.get("message", ""))]
     assert warnings, "the unusable key is named"
     for entry in warnings:
-        assert all(isinstance(v, int) for v in (entry.get("data") or {}).values()), entry
+        # The core adds the app and writes the numbers as strings.
+        data = {k: v for k, v in (entry.get("data") or {}).items() if k != "app"}
+        assert data == {"unusable": "1", "inForce": "0"}, entry
 
 
 def _patterns_seen_by_the_web_key(admin: httpx.Client, token: str, key: str, expected: list[str]) -> list[str]:

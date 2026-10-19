@@ -951,8 +951,14 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # refuse a value that is not a list with the code empty instead of ending in a
 # TypeError with the arguments in the log; tests/Unit/SettingsControllerTest.php
 # holds the cases. No file came and none went, so PHP_FILES_TODAY stays at 103.
+# Moved on 2026-10-19 by Plan 33-11 (finding H-33-02 of the audit):
+# lib/Service/ExclusionService.php reads a prefix or pattern key that occ stored
+# with another type than array as an empty list, named in numbers, instead of
+# letting the type conflict stop the listener, the crawl and the page;
+# tests/Unit/ExclusionServiceTest.php holds the cases. No file came and none
+# went, so PHP_FILES_TODAY stays at 103.
 PHP_FILES_TODAY = 103
-PHP_TREE_HASH_TODAY = "2f07e7fb5cbb29e0b3f5816e296b4a10bcdb195a4700a4e502f718e30d6ec060"
+PHP_TREE_HASH_TODAY = "79bbd1f1903899acbcb3427171d2ab18e8789ee5c80b4f71337bf0f44677ca12"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

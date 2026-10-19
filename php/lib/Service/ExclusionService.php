@@ -9,6 +9,7 @@ use OCA\Findling\BackgroundJobs\ExclusionSweepJob;
 use OCA\Findling\BackgroundJobs\SubtreeExpandJob;
 use OCA\Findling\Db\QueueMapper;
 use OCP\BackgroundJob\IJobList;
+use OCP\Exceptions\AppConfigTypeConflictException;
 use OCP\IAppConfig;
 use Psr\Log\LoggerInterface;
 
@@ -237,7 +238,23 @@ final class ExclusionService {
 			return $this->cached;
 		}
 
-		$stored = $this->appConfig->getValueArray(Application::APP_ID, SettingsService::KEY_EXCLUSIONS, []);
+		try {
+			$stored = $this->appConfig->getValueArray(Application::APP_ID, SettingsService::KEY_EXCLUSIONS, []);
+		} catch (AppConfigTypeConflictException) {
+			// The key holds another type than array, which occ config:app:set
+			// --type=integer writes without complaint. Read as a list without a
+			// single usable entry, so the listener, the crawl and the page keep
+			// working, and named like any other unusable value: one line, in
+			// numbers. The exception itself stays out of the log, its trace
+			// carries the arguments of the call (finding H-33-02 of audit 33-11).
+			$this->logger->warning(
+				'Findling: stored exclusion entries are not usable folder paths, so they are neither in force nor shown',
+				['unusable' => 1, 'inForce' => 0],
+			);
+			$this->cached = [];
+
+			return $this->cached;
+		}
 
 		$prefixes = [];
 		$unusable = 0;
@@ -506,7 +523,21 @@ final class ExclusionService {
 			return $this->cachedPatterns;
 		}
 
-		$stored = $this->appConfig->getValueArray(Application::APP_ID, SettingsService::KEY_EXCLUSION_PATTERNS, []);
+		try {
+			$stored = $this->appConfig->getValueArray(Application::APP_ID, SettingsService::KEY_EXCLUSION_PATTERNS, []);
+		} catch (AppConfigTypeConflictException) {
+			// Same as in prefixes(): a key of another type than array stopped the
+			// listener for every write of the instance and broke the page before
+			// audit 33-11 (H-33-02). Now it is a list without a usable entry,
+			// named in numbers, and the request remembers it like any other list.
+			$this->logger->warning(
+				'Findling: stored exclusion patterns are not usable, so they are neither in force nor shown',
+				['unusable' => 1, 'inForce' => 0],
+			);
+			$this->remember([]);
+
+			return $this->cachedPatterns ?? [];
+		}
 
 		$patterns = [];
 		$unusable = 0;

@@ -8,6 +8,7 @@ use OCA\Findling\Service\ExclusionService;
 use OCA\Findling\Service\SettingsService;
 use OCA\Findling\Service\StorageService;
 use OCP\BackgroundJob\IJobList;
+use OCP\Exceptions\AppConfigTypeConflictException;
 use OCP\IAppConfig;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -51,14 +52,19 @@ final class ExclusionServiceTest extends TestCase {
 	/**
 	 * @param list<mixed> $prefixes the stored value of the prefix key
 	 * @param list<mixed>|null $patterns the stored value of the pattern key, null when the key is absent
+	 * @param list<string> $conflicts keys that occ stored with another type than array, so the core
+	 *                                throws on reading them as one (finding H-33-02 of audit 33-11)
 	 */
-	private function service(array $prefixes = [], ?array $patterns = []): ExclusionService {
+	private function service(array $prefixes = [], ?array $patterns = [], array $conflicts = []): ExclusionService {
 		$this->logLines = [];
 		$this->written = [];
 
 		$appConfig = $this->createMock(IAppConfig::class);
 		$appConfig->method('getValueArray')->willReturnCallback(
-			static function (string $app, string $key, array $default = []) use ($prefixes, $patterns): array {
+			static function (string $app, string $key, array $default = []) use ($prefixes, $patterns, $conflicts): array {
+				if (in_array($key, $conflicts, true)) {
+					throw new AppConfigTypeConflictException('conflict with value type from database');
+				}
 				if ($key === SettingsService::KEY_EXCLUSIONS) {
 					return $prefixes;
 				}
@@ -308,6 +314,55 @@ final class ExclusionServiceTest extends TestCase {
 
 		self::assertSame([], $service->patterns());
 		self::assertSame([], $this->logLines);
+	}
+
+	/**
+	 * occ config:app:set findling exclusion_patterns --value=42 --type=integer is
+	 * accepted by occ, and reading the key as an array then throws in the core.
+	 * Before audit 33-11 that stopped the listener for every write of the
+	 * instance and broke the page (H-33-02). The key reads as an empty list now,
+	 * named in numbers like any other unusable value, the prefixes keep working,
+	 * and the line is written once per request, not once per question.
+	 */
+	public function testAPatternKeyOfAnotherTypeReadsAsAnEmptyListAndIsCounted(): void {
+		$service = $this->service(['Archiv'], [], [SettingsService::KEY_EXCLUSION_PATTERNS]);
+
+		self::assertSame([], $service->patterns());
+		self::assertSame([], $service->patterns());
+		self::assertSame(['Archiv'], $service->prefixes());
+		self::assertTrue($service->isExcluded('Archiv/x.pdf'));
+		self::assertFalse($service->isExcluded('Vortrag.key'));
+		self::assertTrue($service->hasRules());
+		self::assertCount(1, $this->logLines);
+		self::assertSame('warning', $this->logLines[0]['level']);
+		self::assertSame(['unusable' => 1, 'inForce' => 0], $this->logLines[0]['context']);
+	}
+
+	/** The twin of the case above on the prefix key, which 1.4.2 read the same way. */
+	public function testAPrefixKeyOfAnotherTypeReadsAsAnEmptyListAndIsCounted(): void {
+		$service = $this->service([], ['*.key'], [SettingsService::KEY_EXCLUSIONS]);
+
+		self::assertSame([], $service->prefixes());
+		self::assertSame([], $service->prefixes());
+		self::assertSame(['*.key'], $service->patterns());
+		self::assertTrue($service->isExcluded('Vortrag.key'));
+		self::assertFalse($service->isExcluded('Archiv/x.pdf'));
+		self::assertCount(1, $this->logLines);
+		self::assertSame('warning', $this->logLines[0]['level']);
+		self::assertSame(['unusable' => 1, 'inForce' => 0], $this->logLines[0]['context']);
+	}
+
+	/** Both keys of another type: no rule at all, and nothing that throws. */
+	public function testBothKeysOfAnotherTypeLeaveNoRuleAndNoThrow(): void {
+		$service = $this->service(['Archiv'], ['*.key'], [SettingsService::KEY_EXCLUSIONS, SettingsService::KEY_EXCLUSION_PATTERNS]);
+
+		self::assertFalse($service->hasRules());
+		self::assertFalse($service->isExcluded('Archiv/x.pdf'));
+		self::assertFalse($service->isExcluded('Vortrag.key'));
+		self::assertCount(2, $this->logLines);
+		foreach ($this->logLines as $line) {
+			self::assertSame(['unusable' => 1, 'inForce' => 0], $line['context']);
+		}
 	}
 
 	// -- the prefixes of 1.4.2 ------------------------------------------------
