@@ -1,6 +1,6 @@
 # Das dreisprachige Testset der semantischen Suche
 
-204 Paare aus einer Umschreibung und dem Abschnitt, den sie meint: 42 auf
+282 Paare aus einer Umschreibung und dem Abschnitt, den sie meint: 120 auf
 Deutsch, 42 auf Englisch, 120 auf Französisch. Sie beantworten zwei Fragen, die
 sich sonst nur behaupten lassen: was die selbst gebaute int8-Quantisierung des
 Modells an Qualität kostet (D-02), und ob die E5-Präfixe `query: ` und
@@ -54,22 +54,23 @@ Eine Zeile JSON je Fall, vier Felder, alle vier Zeichenketten und keines leer:
 
 Der Bestand aller `passage`-Felder einer Sprache ist zugleich die
 **Ablenkermenge**: jede Anfrage konkurriert gegen alle übrigen Abschnitte
-derselben Datei, also gegen 41 auf Deutsch und Englisch und gegen 119 auf
+derselben Datei, also gegen 41 auf Englisch und gegen 119 auf Deutsch und
 Französisch. Eine zweite Liste gibt es deshalb nicht, und sie kann folglich
 auch nicht von der ersten abdriften. Damit ein Rang überhaupt entscheidbar
 bleibt, prüft ein Test, dass keine zwei Abschnitte einer Sprache gleich sind.
 
 **Eine Folge davon, die beim Lesen der Messwerte zählt:** die Ablenkermenge ist
-Teil der Aufgabe. Ein MRR-Wert über 120 französische Fälle ist mit einem über 42
-deutsche nicht vergleichbar, weil der französische Wert gegen dreimal so viele
-Mitbewerber erkämpft ist. Vergleichbar sind ausschließlich zwei Läufe über
-dieselbe Datei.
+Teil der Aufgabe. Ein MRR-Wert über 120 Fälle ist mit einem über 42 nicht
+vergleichbar, weil er gegen dreimal so viele Mitbewerber erkämpft ist. Das gilt
+auch innerhalb einer Sprache: die deutschen Werte vom September (42 Fälle) und
+die über die erweiterte Datei (120 Fälle) sind zwei verschiedene Aufgaben.
+Vergleichbar sind ausschließlich zwei Läufe über dieselbe Datei.
 
 ## Fallzahl je Sprache
 
 | Datei | Fälle | Sprache der Prosa |
 |---|---|---|
-| `de.jsonl` | 42 | Deutsch, mit echten Umlauten und ß |
+| `de.jsonl` | 120 | Deutsch, mit echten Umlauten und ß |
 | `en.jsonl` | 42 | Englisch |
 | `fr.jsonl` | 120 | Französisch, mit echten Akzenten und Cedille |
 
@@ -92,6 +93,26 @@ Fälle halbieren den Standardfehler etwa. Die Fälle `fr-01` bis `fr-42` sind
 dabei unverändert geblieben; `fr-43` bis `fr-120` sind hinzugekommen und
 gehorchen derselben Regel, maschinell geprüft im selben Testlauf.
 
+### Erweiterung Oktober 2026
+
+Das deutsche Set ist am 19.10.2026 von 42 auf 120 Fälle gewachsen (Owner-Entscheid
+D-35-10), bevor der Vergleich zwischen multilingual-e5-small und granite
+(`docs/measurements/2026-10-granite-vergleich/`) seine erste Zahl misst. Anlass
+ist derselbe wie beim Französischen: kleine Effekte kamen im September auf 42
+deutschen Fällen mit t-Werten unter 1 heraus, und auf einer so dünnen Grundlage
+lässt sich kein Modellwechsel entscheiden. Die Fälle `de-01` bis `de-42` sind
+byte-gleich geblieben; `de-43` bis `de-120` sind hinzugekommen und gehorchen
+derselben Regel. Zusätzlich zur maschinellen Prüfung sind alle neuen Fälle auf
+Wortstamm-Brücken durchgesehen worden, die die Prüfung nicht fängt (etwa
+`spät` gegen `Verspätung`); zwei solche Fälle wurden umgeschrieben, ihr
+`note` vermerkt das. Die September-Läufe lassen sich auf genau ihrem damaligen
+Bestand nachrechnen, indem die Datei vorher auf ihre ersten 42 Zeilen gekürzt
+wird:
+
+```bash
+head -42 testdata/semantik/de.jsonl > /tmp/de-september.jsonl
+```
+
 ## Herkunft und Lizenz
 
 | Quelle | Was daraus stammt | Lizenz |
@@ -99,6 +120,7 @@ gehorchen derselben Regel, maschinell geprüft im selben Testlauf.
 | `scripts/dev/build_corpus.py` (dieses Repositorium) | 20 der 42 deutschen Abschnitte, nämlich `de-02` bis `de-19`, `de-41` und `de-42`: die Pachtvereinbarung, die Ratsvorlage, der Bescheid, die Kündigung, der Schweizer und der österreichische Fall sowie die sechs kurzen Belege aus dem Bildpfad. Die längeren sind wörtlich übernommen, die kurzen Belege sind aus ihren Einzelzeilen zu einem Satz zusammengezogen, ohne ein Wort zu ändern | AGPL-3.0-or-later, wie das übrige Repositorium |
 | selbst verfasst für diesen Zweck | die übrigen 22 deutschen Abschnitte (`de-01` und `de-20` bis `de-40`), alle englischen und alle französischen Abschnitte, sämtliche Anfragen und sämtliche Anmerkungen | AGPL-3.0-or-later |
 | selbst verfasst am 05.09.2026 für die Nachmessung | die 78 französischen Fälle `fr-43` bis `fr-120`, in denselben Gattungen wie die ersten 42 und über dreißig weitere Sachgebiete verteilt: Vereinsförderung, Wahlen, Schule und Kinderbetreuung, Personenstand, Friedhof, Bauordnung, Verkehr und Parken, Wasser und Abwasser, Abfall, Abgaben, Vergabe, Ratsarbeit, Haushalt, Sozialhilfe, Archiv, Gefahrenabwehr, Nahverkehr, Energie, Gesundheit, Verwaltungsdigitalisierung, Nachbarschaft und Landwirtschaft | AGPL-3.0-or-later |
+| selbst verfasst am 19.10.2026 für den granite-Vergleich | die 78 deutschen Fälle `de-43` bis `de-120`, alltagssprachliche Anfragen gegen amts- oder fachsprachliche Abschnitte aus Verwaltung, Miete, Arbeit, Versicherung, Gesundheit, Technik, Schule, Verein, Steuer, Verkehr, Energie und Familie | AGPL-3.0-or-later |
 
 **Nichts davon ist übersetzt.** Die englischen und die französischen Fälle sind
 in ihrer Sprache verfasst worden, in denselben Gattungen wie die deutschen:
