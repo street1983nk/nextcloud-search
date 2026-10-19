@@ -2029,8 +2029,16 @@ PHP_TREE_HASH_TODAY = "04a2c174abd5f24ec8db9e2f6cd05b5dae34a2c04e204167656a81bd4
 # extractAddressSpaceBytes next to maxFileBytes, in both answer forms. No file
 # came and none went, so PACKAGE_FILES_TODAY stays at 79. The PHP pair does
 # not move: php/ is unchanged.
+#
+# Moved on 2026-10-19 by Plan 35-04 (STR-01, PE-35-4): the pure function
+# centroid came into index/fusion.py; it reads the stored int8 vectors of one
+# document as signed bytes, sums them, renormalises and quantises through
+# embed/model.py to_int8, so the similar documents view gets its query vector
+# without a model. No file came and none went, so PACKAGE_FILES_TODAY stays at
+# 79. The PHP pair does not move. Recomputed independently with find, sort,
+# tr and sha256sum over the CRLF normalised tree: 030cb71f... both ways.
 PACKAGE_FILES_TODAY = 79
-PACKAGE_TREE_HASH_TODAY = "567467b795e8ceab743eb55d8d7cf3bdc750526c0e97ce3adfe09f7cf219849a"
+PACKAGE_TREE_HASH_TODAY = "030cb71fe8a7b82eee9b575720cb9ae5da8d76f13c0d74d410c292d8b7967b28"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
