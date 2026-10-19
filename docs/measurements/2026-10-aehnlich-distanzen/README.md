@@ -10,6 +10,11 @@ das ist eine andere Verteilung. Ohne eigene Obergrenze füllt ein kleiner
 Bestand die Liste mit Unbeteiligtem (Pitfall 3 der Phasen-Recherche, Annahmen
 A1 und A7).
 
+**Nachtrag 19.10.2026:** Nach dem Owner-Entscheid für Weg 2 (Abschnitt 7)
+liefert die Nachmessung mit Fassungspaaren `SIMILAR_CEILING` 54,5
+(Abschnitt 10). Die Verdikte unten gelten für den ersten Lauf und bleiben als
+Beleg stehen.
+
 ## Die Verdikte, zuerst
 
 **Erstens: Regel nicht erfüllbar. `SIMILAR_CEILING` bekommt keinen Wert.**
@@ -392,3 +397,81 @@ Fremdpaare darunter) als Information aus, damit sichtbar ist, was der Wert für
 themenverwandte, aber verschiedene Dokumente bedeutet. Sie entscheidet nicht
 über den Wert. Annahme A1 (Mittelwert gegen Minimum) bleibt außerhalb dieser
 Nachmessung.
+
+### 10.2 Ergebnis: `SIMILAR_CEILING` 54,5
+
+**Die Regel ist erfüllt. `SIMILAR_CEILING` = 54,5** (int8-L2-Skala, nur
+`intfloat/multilingual-e5-small` int8 wie ausgeliefert). Grundlage für Plan
+35-05; die Konstante in `config.py` setzt erst 35-05.
+
+- (F1) Kandidat 46,0: dort liegen in jeder Sprache alle Fassungspaare
+  darunter (Englisch erreicht 95 Prozent erst bei 46,0, bei 45,5 sind es 9 von
+  10); abgeschnitten werden dort 100 Prozent der unbeteiligten Paare in allen
+  drei Sprachen.
+- (F2) Obergrenze 63,5: der größte Rasterwert, der überall mindestens 90
+  Prozent der unbeteiligten Paare abschneidet (Deutsch 0,9552, Englisch
+  0,9722, Französisch 0,9098; bei 64,0 fällt Französisch auf 0,8782). Unter
+  63,5 geht kein Fassungspaar verloren (0 von 30, 0 von 10, 0 von 30).
+- (F3) Mitte von 46,0 und 63,5 ist 54,75, abgerundet 54,5. Abstand 8,5 nach
+  unten und 9,0 nach oben.
+- (F4) erfüllt: 30, 10 und 30 Fassungspaare.
+
+Bei 54,5 liegen alle 70 Fassungspaare darunter und alle 3660 unbeteiligten
+Paare darüber.
+
+| Population | Anzahl | Minimum | 1. Quartil | Median | 3. Quartil | Maximum |
+|---|---:|---:|---:|---:|---:|---:|
+| Deutsch Fassungen | 30 | 23,3452 | 28,2489 | 34,5975 | 36,2491 | 41,8091 |
+| Deutsch unbeteiligt | 1740 | 55,4076 | 67,6739 | 70,4095 | 73,0633 | 84,3682 |
+| Englisch Fassungen | 10 | 23,1301 | 29,4710 | 32,9031 | 40,3191 | 45,6289 |
+| Englisch unbeteiligt | 180 | 61,0492 | 68,3081 | 71,4143 | 74,5318 | 82,3286 |
+| Französisch Fassungen | 30 | 22,8254 | 28,2356 | 31,5357 | 35,0141 | 41,6293 |
+| Französisch unbeteiligt | 1740 | 57,6888 | 65,6201 | 67,7975 | 70,4432 | 82,1158 |
+
+Anders als im ersten Lauf trennen sich die Verteilungen: zwischen der weitesten
+Fassung (45,6289, Englisch) und dem nächsten unbeteiligten Paar (55,4076,
+Deutsch) liegt eine Lücke von knapp 10 Punkten.
+
+```
+   value   ver de   ver en   ver fr     cut de   cut en   cut fr
+    46.0   1.0000   1.0000   1.0000     1.0000   1.0000   1.0000
+    54.5   1.0000   1.0000   1.0000     1.0000   1.0000   1.0000
+    55.5   1.0000   1.0000   1.0000     0.9994   1.0000   1.0000
+    63.5   1.0000   1.0000   1.0000     0.9552   0.9722   0.9098
+    64.0   1.0000   1.0000   1.0000     0.9414   0.9611   0.8782
+```
+
+Selbsttest dieses Laufs (`rohdaten/02-selftest.txt`): 0,0000 / 97,3088 /
+179,6051 / 254,0000 gegen `nearest()`, wie im ersten Lauf.
+
+### 10.3 Was 54,5 bedeutet und was nicht
+
+- **Information, nicht entscheidend (Gruppenprobe):** bei 54,5 liegen 26,32
+  Prozent der 38 Gruppenpaare des e2e-Korpus darunter (10 von 38) und 0 der
+  287 Fremdpaare. Die Ähnlich-Ansicht zeigt mit diesem Wert also Fassungen und
+  sehr nahe Texte, aber die meisten themenverwandten, verschieden formulierten
+  Dokumente nicht. Das ist die Folge des Maßes, das der Owner gewählt hat, und
+  gehört in die Erwartung an STR-01.
+- **Grenzen des Bestands:** Die Basisdokumente mischen vier zufällige
+  Abschnitte verschiedener Fälle; echte Dokumente sind thematisch
+  geschlossener. Eine Fassung streicht und stellt um, sie formuliert nicht
+  neu. Umformulierte Fassungen können weiter auseinanderliegen. Die Abschnitte
+  sind kurze Verwaltungstexte; die Zahl der Chunks je Dokument weist das
+  Werkzeug nicht aus.
+- **Kein OCR-Rauschen**, wie in Abschnitt 8. Nur e5-small int8; ein
+  Modellwechsel verlangt eine neue Messung mit Regel vor dem Lauf.
+
+### 10.4 Nachvollziehen
+
+```
+cd backend
+PYTHONUTF8=1 uv run python ../scripts/dev/vector_distances.py --selftest
+PYTHONUTF8=1 uv run python ../scripts/dev/vector_distances.py --versions --derive \
+    --model-dir <modellverzeichnis> --dataset-dir ../testdata/semantik \
+    --groups ../docs/measurements/2026-10-aehnlich-distanzen/gruppen.tsv
+```
+
+Ausgabe vollständig in `rohdaten/02-selftest.txt` und `rohdaten/02-versions.txt`,
+Umgebung, Speicher (3086 MB frei vor dem Lauf) und Modell-Hash in
+`rohdaten/02-umgebung.txt`. Der Lauf dauerte rund 33 Sekunden (19:29:02 bis
+19:29:35 UTC), strikt seriell.
