@@ -1,7 +1,7 @@
 # Phase 34: Wortlaut-Entwurf (de, en, fr)
 
 Stand: 19.10.2026, Entwurf aus Plan 34-01 Task 1 auf Basis von Commit 2dd8a566.
-Status: **Entwurf, Owner-Abnahme offen** (blockierender Checkpoint 34-01 Task 2, siehe "Owner-Abnahme" am Ende).
+Status: **vom Owner abgenommen am 19.10.2026**, alle Empfehlungen übernommen (siehe "Owner-Abnahme" am Ende).
 Abfragedatum der Fakten über fulltextsearch: 19.10.2026, 06:09 UTC (GitHub-API `repos/nextcloud/<app>/releases`
 und App-Store-API `https://apps.nextcloud.com/api/v1/platform/{32.0.0,33.0.0,34.0.3,35.0.0}/apps.json`).
 
@@ -427,8 +427,8 @@ MCP-Connector-Absatz.
 | fr | `Passer de fulltextsearch/Elasticsearch à Findling : [étapes dans la documentation](https://github.com/street1983nk/nextcloud-search/blob/v1.5.0/docs/migrate-from-fulltextsearch.fr.md)` |
 
 `php/appinfo/info.xml` und `backend/appinfo/info.xml` bleiben bis REL-05 (Phase 36) unverändert (PE-34-7);
-der Abschnitt in `docs/store-listing.md` trägt den Kopfsatz "Owner-Abnahme offen, Teil von REL-05", sofern der
-Owner die Store-Zeile nicht schon in diesem Checkpoint abnimmt.
+der Abschnitt in `docs/store-listing.md` trägt den Kopfsatz "Owner-Abnahme offen, Teil von REL-05". Stand nach
+dem Checkpoint: Wortlaut am 19.10.2026 abgenommen, förmliche Release-Abnahme offen (REL-05).
 
 ## (E) Fragen an den Owner
 
@@ -495,4 +495,25 @@ Die Entwurfstexte aus A bis D (ohne Abschnitt E) lagen als Scratch-Datei vor und
 
 ## Owner-Abnahme
 
-Offen (34-01 Task 2).
+Owner-Abnahme: 19.10.2026, "abgenommen" (alle Empfehlungen O2-O10, README-Variante 2, Store-Zeile als Wortlaut abgenommen, REL-05 offen)
+
+Owner-Wort wörtlich: "abgenommen" (19.10.2026, übermittelt über den Orchestrator von `/gsd:execute-phase`).
+Damit gelten die Empfehlungen aus Abschnitt E:
+
+- O2: (a) en "OCR without changing files and without Elasticsearch", fr "OCR sans modifier les fichiers et sans Elasticsearch".
+- O3: (b) Verbot in allen drei Sprachen mit Lookahead `(?![-\w])`, Dateireichweite wie in Abschnitt E, `docs/performance.md:1025` als Positivkontrolle.
+- O4: (a) zwei Faktenlisten.
+- O5: (a) fulltextsearch_sql und fulltextsearch_postgresql einmal neutral im Pflegestand; die Zeilen `[O5]` bleiben, die Markierung `[O5]` selbst entfällt auf den Seiten.
+- O6: (a) sprachabhängige Tag-URLs und (c) `<documentation><admin>` erst in Phase 36 (REL-05).
+- O7: (a) Hinweissatz wie Abschnitt B.
+- O9: (b) README-Variante 2, eigener kurzer Abschnitt vor "Installation".
+- O10: (a) keine UI-SPEC.
+- Store-Zeile (D): Wortlaut abgenommen; die förmliche Release-Abnahme bleibt offen, Teil von REL-05. Der Entwurfsabschnitt in `docs/store-listing.md` trägt deshalb weiter den Kopfsatz "Owner-Abnahme offen, Teil von REL-05" mit dem Zusatz, dass der Wortlaut am 19.10.2026 abgenommen wurde.
+
+Folgen für 34-02 bis 34-04:
+
+- Keine Antwort weicht von PE-34-1 bis PE-34-7 ab; die Pläne laufen unverändert.
+- 34-02: das Gate `test_migration_path.py` prüft das Verbot in de, en und fr (O3 b) und die drei Formeln aus O2 zeichengleich; die Seiten übernehmen Abschnitt A zeichengleich, ersetzen nur die Zeilen `[Beleg 34-02]` durch den Befund auf 8090 und entfernen die Markierung `[O5]`.
+- 34-03: Hinweissatz und Linkform aus Abschnitt B zeichengleich (Schlüsselzahl 340 auf 341).
+- 34-04: README nach Variante 2, Store-Zeile aus Abschnitt D zeichengleich.
+- Alle Abschnitte dieser Datei gelten jetzt als abgenommener Wortlaut.

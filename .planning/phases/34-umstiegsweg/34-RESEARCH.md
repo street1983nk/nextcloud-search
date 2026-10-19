@@ -438,17 +438,17 @@ assert FORBIDDEN.search("Findling ist die einzige OCR") is not None
 | A4 | Doppelte Treffer erscheinen tatsächlich in der Suchleiste, wenn beide mit funktionierender Plattform laufen | Hinweistext | ohne Elasticsearch-Lauf nur aus Quelltext belegt; Satz vorsichtig formulieren ("können doppelt erscheinen") |
 | A5 | ocr_search verändert keine Dateien | Andere OCR-Wege | nur Store-Beschreibung; wird auf der Seite nicht genannt, daher geringes Risiko |
 
-## Open Questions (Owner-Fragen für den Wortlaut-Checkpoint 34-01)
+## Open Questions (Owner-Fragen für den Wortlaut-Checkpoint 34-01) (RESOLVED in 34-01, 19.10.2026)
 
-1. **O1 Form der Seite:** drei Dateien `docs/migrate-from-fulltextsearch{,.en,.fr}.md` mit Sprachumschalter (Empfehlung) oder eine Datei?
-2. **O2 Pflichtformel en/fr:** "OCR without changing files and without Elasticsearch" / "OCR sans modifier les fichiers et sans Elasticsearch"?
-3. **O3 Verbotsreichweite:** nur "einzige OCR" oder auch "only OCR" und "seule OCR"; Dateireichweite wie oben?
-4. **O4 Funktionsvergleich:** zwei Faktenlisten ("Was Findling mitbringt", "Was sich ändert") statt Gegenüberstellung; Deck-Verlust und externe Speicher nennen?
-5. **O5 Drittanbieter:** fulltextsearch_sql/postgresql auf der Seite erwähnen (für deren Nutzer gilt Schritt 6 nicht) oder nur "die verwendete Plattform-App"?
-6. **O6 Links:** Admin-Hinweis sprachabhängig auf Tag-URL `v1.5.0` (Empfehlung) oder fest auf Englisch; `<documentation><admin>` in `info.xml` ergänzen (eine URL, nur bei REL-05)?
-7. **O7 Hinweistext:** Vorschlag en "Full text search (fulltextsearch) is switched on next to Findling. Both search the same files, so results can appear twice in the search bar. Switch off the old apps once Findling has finished its first index run."; de/fr entsprechend.
-8. **O8 Nachweis mit Elasticsearch:** Doppeltreffer live mit einem Elasticsearch-Container zeigen (RAM ~1 bis 2 GB, Owner-Regel "parallel nur mit Speicher") oder nur Quelltext-Beleg plus Hinweis an/aus?
-9. **O9 README-Platz:** Zeile in "Was Findling kann" oder eigener kurzer Abschnitt "Umstieg" vor "Installation"?
+1. **O1 Form der Seite:** drei Dateien `docs/migrate-from-fulltextsearch{,.en,.fr}.md` mit Sprachumschalter (Empfehlung) oder eine Datei? Beantwortet durch D-34-01 (34-CONTEXT.md), vermerkt in 34-WORTLAUT.md Abschnitt E.
+2. **O2 Pflichtformel en/fr:** "OCR without changing files and without Elasticsearch" / "OCR sans modifier les fichiers et sans Elasticsearch"? Beantwortet: 34-WORTLAUT.md, Abschnitt "Owner-Abnahme" (19.10.2026).
+3. **O3 Verbotsreichweite:** nur "einzige OCR" oder auch "only OCR" und "seule OCR"; Dateireichweite wie oben? Beantwortet: 34-WORTLAUT.md, Abschnitt "Owner-Abnahme" (19.10.2026).
+4. **O4 Funktionsvergleich:** zwei Faktenlisten ("Was Findling mitbringt", "Was sich ändert") statt Gegenüberstellung; Deck-Verlust und externe Speicher nennen? Beantwortet: 34-WORTLAUT.md, Abschnitt "Owner-Abnahme" (19.10.2026).
+5. **O5 Drittanbieter:** fulltextsearch_sql/postgresql auf der Seite erwähnen (für deren Nutzer gilt Schritt 6 nicht) oder nur "die verwendete Plattform-App"? Beantwortet: 34-WORTLAUT.md, Abschnitt "Owner-Abnahme" (19.10.2026).
+6. **O6 Links:** Admin-Hinweis sprachabhängig auf Tag-URL `v1.5.0` (Empfehlung) oder fest auf Englisch; `<documentation><admin>` in `info.xml` ergänzen (eine URL, nur bei REL-05)? Beantwortet: 34-WORTLAUT.md, Abschnitt "Owner-Abnahme" (19.10.2026).
+7. **O7 Hinweistext:** Vorschlag en "Full text search (fulltextsearch) is switched on next to Findling. Both search the same files, so results can appear twice in the search bar. Switch off the old apps once Findling has finished its first index run."; de/fr entsprechend. Beantwortet: 34-WORTLAUT.md, Abschnitt "Owner-Abnahme" (19.10.2026).
+8. **O8 Nachweis mit Elasticsearch:** Doppeltreffer live mit einem Elasticsearch-Container zeigen (RAM ~1 bis 2 GB, Owner-Regel "parallel nur mit Speicher") oder nur Quelltext-Beleg plus Hinweis an/aus? Beantwortet durch D-34-02 (34-CONTEXT.md), vermerkt in 34-WORTLAUT.md Abschnitt E.
+9. **O9 README-Platz:** Zeile in "Was Findling kann" oder eigener kurzer Abschnitt "Umstieg" vor "Installation"? Beantwortet: 34-WORTLAUT.md, Abschnitt "Owner-Abnahme" (19.10.2026).
 
 ## Environment Availability
 
