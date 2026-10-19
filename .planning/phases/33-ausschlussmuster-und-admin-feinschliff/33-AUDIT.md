@@ -7,15 +7,15 @@ findings:
   critical: 0
   high: 2
   medium: 0
-  low: 5
-  total: 7
+  low: 6
+  total: 8
 status: issues_found
 ---
 
 # Phase 33: Security-, Bug- und Performance-Audit
 
-**Stand:** Task 1 (Sicherheit) und Task 2 (Fehler) abgeschlossen am 18.10.2026. Task 3
-(Performance) und Task 4 (Fixes, LOW-Entscheidungen, Abschluss) folgen; `fix_run`,
+**Stand:** Task 1 (Sicherheit) und Task 2 (Fehler) abgeschlossen am 18.10.2026, Task 3
+(Performance) am 19.10.2026. Task 4 (Fixes, LOW-Entscheidungen, Abschluss) folgt; `fix_run`,
 `fix_commits`, `fixed` und `still_open` trägt erst Task 4 ein. Rote Proben stehen bis Task 4
 als `xfail(strict=True)` mit der Befund-ID im Test.
 
@@ -305,6 +305,161 @@ database is locked`. Die Dev-Instanz läuft auf SQLite, das Nextcloud nur für T
 die Probe B3b liest die Felder deshalb einmal vorher und schickt nur die zwei POST
 gleichzeitig.
 
+## Performance
+
+Gemessen am 19.10.2026 zwischen 00:22 und 03:40 Ortszeit auf dem Entwicklungsrechner:
+Windows 11 Pro 10.0.26200, Intel Core i5-1335U, 16 GB RAM (15,7 GB sichtbar), Docker
+Desktop; Instanz `findling-nextcloud` (Nextcloud 34.0.3, PHP 8.5.9, SQLite, `php/` als
+Bind-Mount), Backend 1.4.2 als Host-Prozess (Port 10035, Semantik aus,
+`engineState: missing`). Freier RAM vor der ersten Messung 2,71 GB, vor P3 2,27 GB (neben
+der Dev-Instanz liefen die drei Container der HaRP-Umgebung). Skripte und Rohdaten im
+Scratch (`perf/p1_series.py` bis `perf/p5_page.js`, je eine JSON-Datei), nicht im Repo.
+
+Jedes Verfahren weicht vom Prototyp in 33-RESEARCH ("Messung am Prototyp", 13.10.2026)
+ab: der Prototyp maß ein Skript auf `php:8.3-cli` mit eigener Mustermenge; hier messen P1
+den echten `ExclusionService` über den unveränderten Treiber, P2 bis P5 die echte Instanz
+mit dem echten Listener, Kehrjob, Abgleich und der echten Seite.
+
+| Nr. | Messgröße | Wert | Vergleich | Urteil |
+|---|---|---|---|---|
+| P1 | Matcher, gutartig, Median je Aufruf 250 / 1000 / 4000 Zeichen | 0,356 / 1,414 / 5,808 ms (Max 0,478 / 1,874 / 11,413) | 33-02: 0,454 / 1,506 / 6,025 ms (-22 / -6 / -4 %) | in Ordnung |
+| P1 | Matcher, feindlich, Median 250 / 1000 / 4000 | 0,337 / 1,368 / 5,469 ms (Max 0,483 / 1,729 / 9,058) | 33-02: 0,476 / 1,547 / 6,096 ms (**-29** / -12 / -10 %) | in Ordnung, Begründung unten |
+| P1 | t(4000)/t(1000) | gutartig 4,11, feindlich 4,00 | Band 2,5 bis 6; 33-02: 4,00 / 3,94 | in Ordnung |
+| P1 | feindlicher Median bei 4000 | 5,47 ms | Decke 12,6 ms; Prototyp 8,4 ms | in Ordnung |
+| P2 | Upload je Datei aus Client-Sicht, 0 / 4 / 32 Muster (je 100, verschränkt) | Median 169,2 / 170,6 / 169,5 ms; Max 270,9 / 385,5 / 475,6 ms | 0 gegen 32: **+0,2 %** im Median | in Ordnung |
+| P2 | dieselben Uploads im Access-Log (Sekundenauflösung) | Summe der Blockspannen 15 / 17 / 18 s je 100 | grob 150 bis 180 ms je Upload | in Ordnung (Plausibilität) |
+| P2 | `isExcluded()` im Prozess der Instanz, 68 Zeichen, 0 / 4 / 32 Muster | Median 0,27 / 14,8 / 103,8 µs (Max 17,5 / 2 336 / 7 182 µs) | Prototyp 75 Zeichen: 22 / 180 µs (-33 / -42 %) | in Ordnung |
+| P3 | Kehrjob über 10 000 Dateien (2 500 im Bundle), Instanz gesamt 11 390 Dateien | 12 Bänder in 12 cron-Läufen; Lauf Median 0,48 s, Max 9,59 s (erster Lauf mit den übrigen fälligen Jobs) | Wanduhr 30 s je Lauf | in Ordnung |
+| P3 | Löschzeilen gegen Treffer | 2 502 Dateien mit Löschzeile = 2 500 im Bundle + 2 unter dem Präfix `Archiv`; 0 außerhalb | 2 500 Bundle-Dateien | in Ordnung |
+| P3 | Fehlerliste | 10 gesetzte Fehlerurteile im Bundle weg, 5 außerhalb geblieben; Übersicht `failed` 33 vor, 23 nach | , | in Ordnung |
+| P4 | Abgleich Weg C, 5 000 bekannte Dateien unter einem per occ gesetzten Muster | 11 Takte am Ruhe-Tor, je Takt eine Scheibe übergeben (377, 9 x 500, 123), 3 260 s vom Rücksetzen bis zur letzten Übergabe, Takt 302,9 s | Takt 300 s, Scheibe 500, Ruhe-Marke 100 (`config.py`) | in Ordnung, Restbefund L-33-06 |
+| P4 | Ergebnis Runde 1 | 5 000 von 5 000 im Container mit Grabstein, 5 000 von 5 000 Urteilszeilen `no_text_layer` weg, Warteschlange 0 | , | in Ordnung |
+| P4 | Runde 2 | `walked, mounts=3 slices=15 seen=6227 stale=0 missing=0`, 0 neue Warteschlangenzeilen (Trigger) | keine Wiedereinreihung verlangt | in Ordnung |
+| P4 | Scheibe mit 500 ausgeschlossenen Zeilen im Prozess | Seite lesen 7,0 bis 8,6 ms; Urteile anhängen und bereinigen mit 500 zu löschenden Urteilen Median 5,6 ms, ohne 0,41 ms (je 3 Läufe) | , | in Ordnung |
+| P5 | Admin-Seite, 0 / 32 Muster (je 30 Ladevorgänge, verschränkt) | `load` Median 413,6 / 420,7 ms (Max 548,7 / 498,8), DOMContentLoaded 334,5 / 346,9 ms, erstes Byte 92,8 / 96,4 ms | 32 gegen 0: +1,7 % (`load`) | in Ordnung |
+| P5 | Größe | HTML 107 608 / 123 445 Byte (die 32 Musterzeilen der Liste); Übersicht 14 135 / 14 569 Byte (die Musterliste) | , | in Ordnung |
+| P5 | Statusantwort des Containers | 37 Felder, 984 Byte; ohne `maxCells` und `extractAddressSpaceBytes` 929 Byte (55 Byte); `git diff v1.4.2 HEAD -- backend/src/findling/api/status.py` fügt genau diese zwei Felder hinzu | 1.4.2: dieselben 35 Felder | in Ordnung |
+
+**P1, Verfahren:** `perf/p1_series.py` ruft aus `backend/` die Helfer von
+`tests/test_exclusion_driver.py` (Mustersätze, Pfade, `run_driver`) und liest Median und
+Maximum der Treiberantwort; dazu die Verify-Probe des Plans
+`FINDLING_TIMING=1 uv run python -m pytest -q tests/test_exclusion_driver.py -rs` am Ende
+von Task 3: 5 passed, Mediane gutartig 0,357 / 1,431 / 5,914 ms, feindlich 0,350 / 1,316 /
+5,316 ms bei 250 / 1000 / 4000 Zeichen, Quotienten 4,13 und 4,04. Je Länge 3 Pfade, 50 Wiederholungen, also 150 Aufrufe je Zelle;
+`php:8.3-cli`. **Abweichung über 25 Prozent:** nur feindlich bei 250 Zeichen (0,337 gegen
+0,476 ms), also schneller. Bei kurzen Pfaden trägt der feste Anteil je Aufruf
+(`hrtime`, Methodenaufruf, `mb_str_split`) den größten Teil, und der schwankt mit dem
+Zustand der Maschine; bei 4000 Zeichen liegen beide Sätze innerhalb von 10 Prozent von
+33-02, und die Quotienten sind gleich. Kein Befund.
+
+**P2, Verfahren:** testuser, WebDAV-PUT kleiner Textdateien unter
+`Perf3311i/Projekte/Kunde<k>/2024/Unterlagen/Besprechungsnotiz-<n>.txt` (68 bis 70
+Zeichen, kein Muster trifft, jede Datei wird also eingereiht). Muster per
+`occ config:app:set --type=array` (erste vier bzw. alle 32 gutartigen Muster aus P1),
+abgewartet, bis die Übersicht sie zeigt, dann 4 s für den Zwischenspeicher. Verschränkt:
+10 Runden, jede Runde jeder Satz mit 10 Uploads in rotierender Reihenfolge, ein
+verworfener Aufwärm-Upload je Block. **Erster Versuch verworfen:** vier Blöcke zu je 100
+in der Reihenfolge 0, 4, 32, 0 ergaben Median 175,5 / 180,6 / 288,8 / 225,3 ms; der zweite
+0-Block war 28 Prozent langsamer als der erste, die Reihe maß also die Drift (Backend
+indexierte die Uploads gleichzeitig), nicht die Muster. **Mittelwert:** 173,8 / 186,4 /
+199,2 ms; die Differenz kommt aus je einem bis zwei langsamen 10er-Blöcken (Blockmedian
+275, 305 und 325 ms), die in den Sätzen 4 und 32 lagen. Die Kosten des Musters selbst
+zeigt die Messung im Prozess: `perf/p2c.php` per `docker exec` auf der Instanz, echter
+Dienst über `\OCP\Server::get`, echter appconfig-Wert, 7 Pfade je 1000 mal, drei Läufe je
+Satz; 32 Muster kosten 0,104 ms, das sind 0,06 Prozent eines Uploads. Schneller als der
+Prototyp, weil `mb_str_split` des Pfads einmal je Datei läuft und nicht je Muster
+(Empfehlung aus 33-RESEARCH, umgesetzt) und PHP 8.5 statt 8.3 rechnet. Die Zeit je Upload
+aus dem Nextcloud-Log gibt es auf Loglevel 2 nicht (keine Zeile je Anfrage), Loglevel 0
+schreibt Muster in Kernzeilen (L-33-03); deshalb das Access-Log des Containers.
+
+**P3, Verfahren:** RAM unter 4 GB frei, also halbierter Korpus: 10 000 statt 20 000
+Dateien, davon 2 500 statt 5 000 unter einem Bundle, Verhältnis wie im Plan. Angelegt
+direkt im Datenverzeichnis des Containers (7 500 unter
+`Perf3311k/Abteilung<a>/Jahr<y>/Projekt<p>/Unterlagen/Teil<t>/`, 2 500 unter
+`Perf3311k/Medien/Fotos.plib3311/Masters/<y>/<m>/<d>/`, 1,2 s) und mit
+`occ files:scan --path=testuser/files/Perf3311k` eingelesen (10,1 s). Der Scan löst kein
+Ereignis des Listeners aus (Warteschlange danach 0), der Kehrjob hat also den ganzen
+Bestand vor sich. Muster `*.plib3311` über die echte Speicherroute (HTTP 200 in 96,8 ms,
+genau ein ExclusionSweepJob), dann cron.php mit 5,5 s Pause (Intervall des Jobs 5 s), bis
+kein Kehrjob mehr da war. Gezählt wurden die Löschzeilen über einen Trigger auf
+`oc_findling_queue` (eigenes Werkzeug neben dem Zähler des Jobs, der auf Level 0 loggt;
+danach entfernt). Die zwei Dateien außerhalb des Bundles sind `Archiv/alte-notiz.md` und
+`Archiv/ereignis-probe.md` unter dem Präfix in Kraft; der Kehrjob räumt Präfix-Dateien
+unterwegs erneut, so steht es im Kopf von `ExclusionSweepJob.php`. Bänder: 1 000 Dateien
+je Lauf (`BATCH_SIZE`), Laufzeit 0,41 bis 0,73 s außer dem ersten Lauf. Keine Zahl aus
+33-RESEARCH zum Vergleich (dort nur die Kosten je Vergleich); Durchsatz rund 2 000
+Dateien je Sekunde Laufzeit.
+
+**Abbau P3:** WebDAV `DELETE /Perf3311k` (204). Mein erster Aufräumlauf rief cron ohne
+Pause und leerte den Papierkorb, bevor der SubtreeExpandJob fertig war; der Job endete mit
+"Error while running background job" (Argument nur Zahlen), also der bekannte
+Nebenbefund aus `deferred-items.md` (Löschjob nach geleertem Papierkorb), hier erneut
+gesehen. Die Dateien kannte der Container nie, es blieb nichts im Index. Dazu schrieb der
+Kern beim Leeren des Papierkorbs 77 Zeilen "More than 1000 expressions in a list are not
+allowed on Oracle." (`FilesMetadata\Service\MetadataRequestService.php:160`, Kern, schon
+am 12.10. im Log). filecache danach 0 Zeilen unter `Perf3311k`, 5 gesetzte Urteile mit
+den Dateien weg.
+
+**P4, Verfahren:** 5 000 Dateien unter
+`Perf3311r/Medien/Archiv.wegc3311/Band<x>/Teil<y>/Mappe<z>/` im Datenverzeichnis angelegt
+und gescannt (5 000 wie im Plan; der Korpus ist klein auf der Platte und der Container
+indexiert ohne Semantik, die RAM-Grenze betrifft P3). Bekannt gemacht über
+`QueueService::enqueueFile` im Container, also dieselbe Zeile, die Crawl oder Listener
+schreiben (der Zähl-Crawl von S3 reiht nicht ein, er zählt; ein erster Versuch, sie über
+den Abgleich selbst als fehlend einzureihen, lief mit 500 je Takt und wurde abgebrochen):
+670,7 s bis alle 5 000 im Container lebten. Dann je Datei ein Urteil
+`skipped(no_text_layer)` in `oc_findling_file_state`, Muster `*.wegc3311` per
+`occ config:app:set --type=array` (Weg C allein: occ plant keinen Kehrjob, geprüft: 0
+ExclusionSweepJob), Übersicht zeigt das Muster. Fällig gemacht wie in B1, hier für alle
+Zeilen der Tabelle `reconcile` in `state.db` (Lesezeichen 0, Stempel 49 Stunden zurück).
+Zeitpunkte aus dem Backend-Log, das ein Thread des Skripts mitlas (Ankunftszeit je
+Zeile, Auflösung 0,05 s). Der erste Takt kam 233 s nach dem Rücksetzen. **Ruhe-Tor:** jede
+Runde übergab genau eine Scheibe (die Scheibe vor dem Tor wird ganz übergeben), meldete
+"reconcile stands down, 500 rows are scheduled and the quiet mark is 100" und endete
+`queue_busy`; der Poller arbeitete die 500 Löschaufträge zwischen zwei Takten ab, die
+nächste Runde setzte am Lesezeichen fort. Weg C räumt bei Standardwerten also 500 Dateien
+je 5 Minuten, 5 000 in 50 Minuten. Das passt zu `docs/reconcile.md` ("in Bändern zu
+höchstens 200 Aufträgen eingereiht, und das Ruhe-Gate vor der nächsten Seite beendet die
+Runde"): eine Seite von 500 ging in drei Bändern hinüber, dann hielt das Tor. Weg C ist
+das Netz unter Weg A, nicht der Hauptweg. **Kosten der Urteilsbereinigung:**
+`perf/p4_slice.php` ruft auf der Instanz `StorageService::getFileSlice` mit dem Prädikat des
+Controllers und dessen `withVerdicts` (per Reflection, die Route selbst prüft den
+AppAPI-Aufrufer) über dieselben 500 Zeilen, abwechselnd mit 500 frisch gesetzten Urteilen
+und ohne: die Bereinigung kostet rund 5 ms je Scheibe, also rund 10 µs je Urteil, neben
+7 ms für das Lesen der Seite. Runde 2: Lesezeichen und Stempel erneut zurück, Trigger auf
+`oc_findling_queue`; erster Takt nach 271,5 s, eine Runde über alle drei Mounts, nichts
+eingereiht. **Fälligkeit nach der Regel aus 33-09** (`_is_due`: kein offener Lauf, dann
+Pause und Stunde, sonst die doppelte Pause; geprüft je Takt von 300 s): hier über die
+doppelte Pause (Stempel 49 Stunden zurück), der Start kam je mit dem nächsten Takt
+(233 s bzw. 271,5 s nach dem Rücksetzen), wie die Regel es verlangt.
+
+Beobachtung am Ende von Runde 1 (Befund **L-33-06**): die letzte Scheibe gehörte zum
+Ende von Mount 3 (testuser), danach stand das Ruhe-Tor vor Mount 4 (kollegin). Alle drei
+Lesezeichen standen dann auf 0 mit Stempel, `MAX(finished_at)` war frisch, und der
+Abgleich galt als fertig: in den zwei folgenden Takten kam keine Runde mehr, obwohl Mount 4
+in diesem Zyklus nicht gelaufen war. Erst die rückgesetzte Runde 2 lief über alle drei.
+
+**P5, Verfahren:** `perf/p5_page.js`, Playwright (Chromium headless, aus der Installation
+in `amt-einfach`), eine angemeldete Sitzung als admin, Seite `/settings/admin/findling`;
+Muster per occ (0 = Schlüssel gelöscht, 32 = die gutartigen aus P1), abgewartet, bis die
+Übersicht den Satz zeigt. 6 Runden, je Runde beide Sätze in wechselnder Reihenfolge mit je
+5 Ladevorgängen, also 30 je Satz. Gelesen aus `performance.getEntriesByType('navigation')`
+(`responseStart`, `responseEnd`, `domContentLoadedEventEnd`, `loadEventEnd`, je minus
+`startTime`, `decodedBodySize`) und dem `PerformanceResourceTiming` der ersten Abfrage der
+Übersicht. Die erste Abfrage kommt 30,3 s nach dem Laden (Median), also mit dem ersten
+Takt der Seite und nicht beim Laden; die Seite selbst kommt fertig aus dem Template. Der
+Unterschied von 15,8 KB im HTML ist die Liste der 32 Muster samt Bedienelementen, die
+Ladezeit wächst um 7 ms. Kein Browser lief parallel zu einem Testlauf.
+
+**Abbau P2 und P4:** WebDAV `DELETE` von `Perf3311r`, `Perf3311w` und `Perf3311i` (je 204),
+cron mit 6 s Pause bis kein SubtreeExpandJob mehr da war (5 Läufe), erst dann
+`occ trashbin:cleanup testuser`; Regeln über die Route auf `["Archiv"]` und `[]`, danach
+`occ config:app:delete findling exclusion_patterns`. Ergebnis: filecache unter den drei
+Ordnern 0 Zeilen, Warteschlange 0, im Container 0 lebende Zeilen unter `Perf3311` (5 750
+mit Grabstein, wie jeder gelöschte Bestand), `exclusions` `["Archiv"]`,
+`exclusion_patterns` fehlt (Exit 1), Jobliste nur ScanRecountJob, keine verwaisten Urteile
+außer den 20, die vor dem Audit schon da waren (13.10. und 18.10.).
+
 ## Befunde
 
 ### H-33-01 (HIGH): Eine Liste als String oder Zahl endet in HTTP 500 mit allen Regelwerten im Log
@@ -418,6 +573,25 @@ gleichzeitig.
   speichern, erreichen den Fall.
 - **Fixvorschlag:** accept mit Zielphase 36 (Launch-Korpus), oder `remove`/`add` so
   ordnen, dass der Plan aus dem nach dem Schreiben gelesenen Satz entsteht.
+
+### L-33-06 (LOW, Performance): Endet eine Runde am Ruhe-Tor genau zwischen zwei Mounts, gilt der Zyklus als fertig
+
+- **Ort:** `backend/src/findling/worker/reconcile.py` (`run_once`, Schleife über die Mounts,
+  Zeile 416 bis 419; `_is_due`, Zeile 808 bis 822) und `backend/src/findling/store/repo.py`
+  (`_RECONCILE_STATE_SQL`, Zeile 613 bis 615: `MAX(finished_at)` und die Zahl der Mounts
+  mit Lesezeichen über 0).
+- **Beleg (gefahren, P4):** die letzte Scheibe von Mount 3 schloss den Mount (Lesezeichen 0,
+  Stempel), das Tor hielt vor Mount 4. Danach trug keine Zeile ein Lesezeichen über 0, und
+  `MAX(finished_at)` war der eben geschriebene Stempel; die zwei folgenden Takte starteten
+  keine Runde. Mount 4 wäre erst im nächsten Zyklus (24 Stunden später) gelaufen.
+- **Einordnung:** ein Mount, der in der Reihenfolge nach einem Mount mit viel Arbeit am Ende
+  steht, wartet einen Zyklus länger; trifft das Tor in jedem Zyklus dieselbe Grenze, öfter.
+  Kein Datenverlust: Weg A räumt neue Muster unabhängig davon, und der nächste Zyklus
+  beginnt wieder vorn. Die Regel stammt aus Phase 3 und ist nicht Teil des Phasen-Diffs;
+  Phase 33 hat nur die Arbeitsmenge von Weg C vergrößert, die das Tor auslöst.
+- **Fixvorschlag:** beim Halt am Tor vor einem Mount dessen Lesezeichen als begonnen
+  schreiben (oder den Zyklus über einen eigenen Beginn-Stempel statt `MAX(finished_at)`
+  führen), Regressionstest im Stil von `test_reconcile.py`.
 
 ## Nebenbefunde ohne Befund-ID
 
