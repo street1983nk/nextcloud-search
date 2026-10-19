@@ -1,7 +1,7 @@
 # Phase 35: Wortlaut-Entwurf (de, en, fr)
 
 Stand: 19.10.2026, Entwurf aus Plan 35-01 Task 1 auf Basis von Commit 5a66ba1e.
-Status: **Entwurf, Owner-Abnahme offen** (Abschnitt E).
+Status: **vom Owner abgenommen am 19.10.2026**, alle Empfehlungen übernommen (Abschnitt E).
 
 Grundlage: 35-CONTEXT.md (D-35-01 sichtbarer Textlink je Treffer, D-35-02 Ansicht per GET-Parameter
 `similar`, D-35-03 höchstens zehn Nachbarn als normale Trefferliste, D-35-04 Kopf "Ähnlich zu: ..." mit
@@ -184,5 +184,32 @@ wurden per `grep` geprüft, jede Prüfung mit einer Positivkontrolle auf einer e
 
 ## (E) Owner-Abnahme
 
-Offen. Wird in Task 2 nach dem Owner-Entscheid ausgefüllt (Zeile `Owner-Abnahme: TT.MM.JJJJ, ...` und
-Unterabschnitt "Folgen für 35-06 und 35-07").
+Owner-Abnahme: 19.10.2026, "Abgenommen (alle Empfehlungen)", alle Sätze wie vorgelegt, O1-O6 je Option a
+
+Owner-Wort wörtlich: "Abgenommen" (19.10.2026, übermittelt über den Orchestrator von `/gsd:execute-phase`):
+alle sieben Sätze aus Tabelle A wie vorgelegt, alle Fragen O1 bis O6 je Empfehlung (a). Tabelle A und
+Abschnitt B gelten damit unverändert als **abgenommen**. Der vom Orchestrator vorgegebene Zeilentext enthielt
+einen Geviertstrich; er steht hier mit Komma, weil die Datei nach Projektregel und Plan-Prüfung keine
+Halbgeviert- oder Geviertstriche tragen darf.
+
+### Folgen für 35-06 und 35-07
+
+- O1 (a): der Textlink "Similar documents" mit `aria-label` "Similar documents to %s" steht an jedem
+  Treffer der Ergebnisseite, auch an Namenstreffern und Bildern; 35-06 liefert dafür kein Feld über Vektoren,
+  35-07 rendert den Link ohne Bedingung als eigenes `<a>` unter dem Zeilen-Link.
+- O2 (a): die Ähnlich-Ansicht hat keine Filter- und Sortierzeile, keinen Pager und keinen Ähnlich-Link je
+  Nachbar; 35-06 setzt die Filter-, Sortier- und Pager-Werte der Ansicht leer, 35-07 verzweigt Block 2b,
+  Block 5 und den Ähnlich-Link auf die Ansicht.
+- O3 (a): echte Kopien bleiben als Nachbarn, ohne Markierung und ohne eigenen Satz; keine
+  Inhaltsgleichheitsprüfung in 35-06.
+- O4 (a): zwei Leerzustände: "No similar documents found" mit dem Erklärsatz aus Tabelle A, und "This file
+  is not available" als ein Zustand für unbekannte, fremde, gelöschte, nicht lesbare Ausgangsdatei und einen
+  ungültigen Wert von `similar`; 35-06 liefert genau diese zwei Zustände an das Template, ohne Zahl;
+  im Zustand "nicht verfügbar" ist das h1 "Similar documents"; "The index is still being built" erscheint
+  in der Ansicht nicht; Backend-Ausfall nutzt die Bestandsbanner, kein Leerzustand daneben.
+- O5 (a): `aria-label` des Textlinks nur mit dem Titel, Schlüssel "Similar documents to %s".
+- O6 (a): Rückweg als Link-Satz "Back to the results", gestaltet wie der Reset-Link, in jedem Zustand der
+  Ansicht direkt unter dem h1; Ziel ist die Ergebnisseite mit mitgegebenem Suchbegriff und Filtern, ohne
+  Begriff die leere Suchseite.
+- 35-07 verwendet die sieben englischen Schlüssel aus Tabelle A zeichengleich im Template; 35-13 übernimmt
+  de und fr zeichengleich in die 16 Kataloge und fünf Sprachtabellen, Schlüsselzahl 341 auf 348.
