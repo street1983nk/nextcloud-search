@@ -49,6 +49,7 @@ from findling.api.diagnose import ROUTER as DIAGNOSE_ROUTER
 from findling.api.probe import ROUTER as PROBE_ROUTER
 from findling.api.rates import ROUTER as RATES_ROUTER
 from findling.api.search import ROUTER as SEARCH_ROUTER
+from findling.api.similar import ROUTER as SIMILAR_ROUTER
 from findling.api.snippets import ROUTER as SNIPPETS_ROUTER
 from findling.api.status import ROUTER as STATUS_ROUTER
 from findling.config import TESSERACT_NAME, settings
@@ -1348,6 +1349,7 @@ APP.add_middleware(AppAPIAuthMiddleware)
 # The routers are mounted behind the middleware, so no route of this app can
 # ever be reached without a verified AppAPI header.
 APP.include_router(SEARCH_ROUTER)
+APP.include_router(SIMILAR_ROUTER)
 APP.include_router(SNIPPETS_ROUTER)
 APP.include_router(STATUS_ROUTER)
 APP.include_router(RATES_ROUTER)

@@ -954,6 +954,28 @@ VECTOR_MAX_DISTANCE_RANGE = (0.0, 254.0)
 VECTOR_DISTANCE_BAND = 14.0
 VECTOR_DISTANCE_BAND_RANGE = (0.0, 254.0)
 
+# Similar documents (STR-01, plan 35-05): how many chunks the one scan asks for,
+# and how far a neighbour may lie from the source to count as similar.
+#
+# The scan width is the same order of magnitude as VECTOR_SCAN_MAX, and for the
+# same reason: sqlite-vec visits the whole stock whatever k is, so a wider k
+# costs nothing in the scan and only buys room for neighbours the permission
+# prefilter later drops. The caller adds the chunk count of the source on top,
+# because those chunks sit nearest of all and are removed first.
+#
+# The ceiling is a measurement and holds for multilingual-e5-small on the int8
+# L2 scale and for no other model. It comes out of
+# docs/measurements/2026-10-aehnlich-distanzen/README.md, section 10 (re-run with
+# real document pairs, 19.10.2026): the widest base/version pair lies at 45.63,
+# the nearest unrelated pair at 55.41, and the rule fixed before the run puts
+# the line at 54.5. Topically related but differently worded documents mostly
+# fall outside it; that is the documented scope of the view and not a defect.
+#
+# Fixed constants and not settings: no environment variable, no entry in
+# info.xml (PE-35-5). A different model needs a new measurement, not a screw.
+SIMILAR_SCAN_CHUNKS = 300
+SIMILAR_CEILING = 54.5
+
 # ---------------------------------------------------------------------------
 # Profiles (v1.4, BL-F04)
 # ---------------------------------------------------------------------------

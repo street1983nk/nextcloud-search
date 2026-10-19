@@ -69,8 +69,9 @@ HTTP_VERBS = frozenset({"get", "post", "put", "patch", "delete", "head", "option
 # pre-check). The list is the anti-vacuity clause of the route scan below: a
 # parser that stopped recognising decorators would find zero forbidden paths
 # over zero routes and look perfectly healthy. Every plan that adds a route
-# adds it here too, otherwise the clause stops being a ratchet.
-KNOWN_ROUTES = ("/diagnose", "/probe", "/probe/state", "/rates", "/search", "/snippets", "/status")
+# adds it here too, otherwise the clause stops being a ratchet. Plan 35-05 added
+# /similar.
+KNOWN_ROUTES = ("/diagnose", "/probe", "/probe/state", "/rates", "/search", "/similar", "/snippets", "/status")
 
 
 # -- the hygienic readers --------------------------------------------------

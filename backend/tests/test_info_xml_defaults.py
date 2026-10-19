@@ -124,7 +124,8 @@ def test_the_extraction_address_space_is_declared() -> None:
 # AppAPI signed requests", haproxy_agent.py), and so did ExAppProxyController
 # before it. A content route on that list is therefore reachable by every
 # logged in user, past the permission recheck that only the PHP side performs.
-CONTENT_ROUTES = ("/search", "/snippets")
+# /similar joined in plan 35-05: its ids say which documents resemble a file.
+CONTENT_ROUTES = ("/search", "/similar", "/snippets")
 
 
 def _declared_route_urls() -> list[str]:

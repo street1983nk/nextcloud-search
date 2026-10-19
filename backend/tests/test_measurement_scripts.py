@@ -2037,8 +2037,19 @@ PHP_TREE_HASH_TODAY = "04a2c174abd5f24ec8db9e2f6cd05b5dae34a2c04e204167656a81bd4
 # without a model. No file came and none went, so PACKAGE_FILES_TODAY stays at
 # 79. The PHP pair does not move. Recomputed independently with find, sort,
 # tr and sha256sum over the CRLF normalised tree: 030cb71f... both ways.
-PACKAGE_FILES_TODAY = 79
-PACKAGE_TREE_HASH_TODAY = "030cb71fe8a7b82eee9b575720cb9ae5da8d76f13c0d74d410c292d8b7967b28"
+#
+# Moved on 2026-10-19 by Plan 35-05 (STR-01, PE-35-4, PE-35-5): one file came,
+# api/similar.py, the undeclared content route POST /similar that answers the
+# neighbour ids of one document out of its stored vectors, without a model;
+# store/vectors.py carries vectors_of, index/search.py carries
+# similar_candidates (the permission gate on the source first, then on the
+# ranked window), config.py carries SIMILAR_SCAN_CHUNKS and SIMILAR_CEILING
+# (54.5, docs/measurements/2026-10-aehnlich-distanzen/ section 10), and main.py
+# mounts the router. One file came and none went, so PACKAGE_FILES_TODAY moves
+# to 80. The PHP pair does not move. Recomputed independently with find, sort,
+# tr and sha256sum over the CRLF normalised tree: ad36dbfb... both ways.
+PACKAGE_FILES_TODAY = 80
+PACKAGE_TREE_HASH_TODAY = "ad36dbfb89141ef04fabc30f33288377fcf9ababb2088d4d92eacfd9454570f1"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

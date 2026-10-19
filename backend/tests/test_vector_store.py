@@ -383,6 +383,28 @@ def test_chunks_of_without_ids_asks_nothing(vectors: VectorStore) -> None:
     assert vectors.chunks_of([]) == {}
 
 
+# -- vectors_of: the stored vectors of one document (plan 35-05) -------------
+
+
+def test_vectors_of_answers_the_stored_bytes_in_ordinal_order(vectors: VectorStore) -> None:
+    # Written out of order on purpose: the answer follows the ordinal and not
+    # the insertion, because a centroid over a document is only reproducible if
+    # its inputs arrive in one order.
+    vectors.replace_chunks(7, [a_chunk(2), a_chunk(0), a_chunk(1)])
+    vectors.replace_chunks(8, [a_chunk(0, seed=80)])
+
+    stored = vectors.vectors_of(7)
+
+    assert stored == [a_vector(0), a_vector(1), a_vector(2)]
+    assert all(len(vector) == EMBEDDING_DIMENSIONS for vector in stored)
+
+
+def test_vectors_of_an_unknown_document_is_an_empty_list(vectors: VectorStore) -> None:
+    vectors.replace_chunks(7, [a_chunk(0)])
+
+    assert vectors.vectors_of(999) == []
+
+
 # -- the mark and the two artefacts ----------------------------------------
 
 

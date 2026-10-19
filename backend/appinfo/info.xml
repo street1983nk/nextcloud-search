@@ -280,7 +280,9 @@ Support entreprise et modules payants : demande de devis à admin@infranode.dev]
 				for nothing. No route is reachable without a Nextcloud login
 				(T-02-72).
 
-				/search and /snippets are deliberately not declared. Their only
+				/search, /snippets and /similar are deliberately not declared
+				(/similar since plan 35-05: its ids say which documents
+				resemble a file, so it is a content route as well). Their only
 				caller is the companion, over PublicFunctions::exAppRequest, and
 				that path never consults this table: HaRP skips the route check
 				for AppAPI signed requests ("We skip routes checking for AppAPI
