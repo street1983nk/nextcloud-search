@@ -199,8 +199,16 @@ Checkpoint in 35-10, mit dem dann erneut gelesenen Satz.
 
 ## 7. Owner-Abnahme der Regel
 
-Offen. Der Owner sieht die vier Bedingungen aus Abschnitt 1, das Rechenblatt aus
-Abschnitt 6 und zehn zufällig gezogene neue deutsche Fälle. Die Ziehung:
+Owner-Abnahme: 19.10.2026, "Regel abgenommen"
+
+Abgenommen ohne Änderung: die Regel (a) bis (d) aus Abschnitt 1, die Methode,
+die Stichprobe (500 Dokumente, Seed `granite-35`), der Kostendeckel (5,2 h,
+0,60 USD) und das deutsche Testset mit 120 Fällen. Ab dem ersten Lauf in 35-09
+ist die Regel eingefroren.
+
+Vorgelegt wurden die vier Bedingungen aus Abschnitt 1, das Rechenblatt aus
+Abschnitt 6 und zehn zufällig gezogene neue deutsche Fälle (de-99, de-79, de-57,
+de-90, de-83, de-72, de-116, de-111, de-85, de-54). Die Ziehung:
 
 ```bash
 sed -n '43,120p' testdata/semantik/de.jsonl \
