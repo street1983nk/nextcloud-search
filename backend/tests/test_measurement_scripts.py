@@ -967,8 +967,14 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # php/tests/Unit/ParallelSearchServiceTest.php (no app, each app alone, both,
 # the asked ids, a platform app alone). No file went, so PHP_FILES_TODAY moves
 # to 105.
+# Moved on 2026-10-19 a second time by Plan 34-03 (UMST-02, PE-34-2, PE-34-3):
+# templates/admin.php carries the banner findling-banner-parallel after the
+# loop over $banners, hidden unless parallelSearch is true, with the link to
+# the migration page out of a map of three tag URLs chosen by the language
+# code; the sixteen catalogues under php/l10n moved with it but are not in this
+# tree. No file came and none went, so PHP_FILES_TODAY stays at 105.
 PHP_FILES_TODAY = 105
-PHP_TREE_HASH_TODAY = "e44b0fcbae23611fd1849c3a4924f00c3c983e8d43d514fd964b05d6834f60a3"
+PHP_TREE_HASH_TODAY = "4b826c12af7a9ab716af08ba2dec7c7fbc44936c7d272b60ca6e59d46a36d876"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

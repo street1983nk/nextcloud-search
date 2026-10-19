@@ -1022,6 +1022,23 @@ eine schon übersprungene Tabelle wird wieder gelesen, wenn sie sich ändert. Wi
 `docker update`-Grenze dabei verliert, steht in `docs/performance.md`
 (Abschnitt zur Wiederherstellung per Neuregistrierung).
 
+## Hinweis bei parallelem fulltextsearch
+
+Ist eine der beiden Apps `fulltextsearch` oder `files_fulltextsearch` neben
+Findling aktiviert, für alle oder nur für eine Gruppe, zeigt der Block
+"Deckungsgrad der Suche" einen gelben Hinweis. Die Folge: beide Systeme
+durchsuchen dieselben Dateien, und Treffer aus derselben Datei können doppelt in
+der Suchleiste erscheinen, einmal unter "Dateiinhalte" und einmal in der Gruppe
+von fulltextsearch. Plattform-Apps wie `fulltextsearch_elasticsearch` lösen den
+Hinweis allein nicht aus, weil sie nichts in die Suchleiste bringen.
+
+Der Link "Schritte in der Dokumentation" führt auf die Umstiegs-Seite in der
+Sprache des Admins ([migrate-from-fulltextsearch.md](migrate-from-fulltextsearch.md),
+auf Englisch und Französisch daneben). Nach dem Deaktivieren der Apps ist der
+Hinweis beim nächsten Laden der Seite weg; das Abfragen alle fünf Sekunden
+schaltet ihn nicht um, weil die Apps auf der Apps-Seite gewechselt werden und
+die Statusseite danach ohnehin neu geladen wird.
+
 ## Der occ-Zweitzugang
 
 Für einen Support-Fall ist der wichtigste Zugang der ohne Browser, und die Seite
