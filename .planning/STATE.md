@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 34-02-PLAN.md, weiter mit 34-03
-last_updated: "2026-10-19T07:34:26.269Z"
-last_activity: 2026-10-19 -- Phase 34 execution started
+stopped_at: Phase 34 ausgefuehrt (34-01 bis 34-06), Verifikation offen
+last_updated: "2026-10-19T14:32:38.300Z"
+last_activity: 2026-10-19 -- Phase 34 executed, verification pending
 progress:
   total_phases: 7
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 49
-  completed_plans: 45
-  percent: 57
+  completed_plans: 49
+  percent: 71
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .planning/MILESTONES.md (v1.0 bis v1.4).
 
 **Core Value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 34 — umstiegsweg
+**Current focus:** Phase 34 , umstiegsweg
 
 ## Current Position
 
-Phase: 34 (umstiegsweg) — EXECUTING
-Plan: 1 of 6
-Status: Executing Phase 34
-Last activity: 2026-10-19 -- Phase 34 execution started
+Phase: 34 (umstiegsweg) , EXECUTED, Verifikation offen
+Plan: 6 of 6
+Status: Phase 34 ausgefuehrt, Verifier als naechstes
+Last activity: 2026-10-19 -- Phase 34 executed, verification pending
 
-Progress: [█████████░] 92%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -136,6 +136,10 @@ Progress: [█████████░] 92%
 - 33-11: Audit Phase 33 geschlossen (33-AUDIT.md, status fixed). H-33-01: Regelrouten nehmen beide Listen als mixed, eine Nicht-Liste ergibt 400 mit dem bestehenden Code empty (ff4deaa9). H-33-02: patterns() und prefixes() lesen einen Schlüssel anderen Typs als leere Liste mit Zählerwarnung (3657bb43). LOW nach Entscheidungslinien des Orchestrators (Owner schlief, überstimmbar): L-33-01 accept (Orakel liest den Rückfall ohne Normalizer, kein xfail), L-33-02 accept (F1 Bidi), L-33-03 accept mit Doku-Präzisierung (F2 Fingerabdruck im Jobargument), L-33-04 und L-33-05 accept; L-33-06 (Ruhe-Tor zwischen Mounts schließt den Zyklus) accept nach Executor-Entscheid, Zielphase 36 (F3)
 - 34-01: Wortlaut der Phase 34 (34-WORTLAUT.md) vom Owner am 19.10.2026 abgenommen, alle Empfehlungen: O2 Formeln en "OCR without changing files and without Elasticsearch" / fr "OCR sans modifier les fichiers et sans Elasticsearch"; O3 Verbot in de/en/fr mit Lookahead, performance.md:1025 Positivkontrolle; O4 zwei Faktenlisten; O5 fulltextsearch_sql/postgresql einmal neutral; O6 sprachabhängige Tag-URLs, documentation-Element erst Phase 36; O7 Hinweissatz "Mindestens eine App des Volltextsuche-Frameworks ..."; O9 README-Variante 2 (eigener Abschnitt vor Installation); O10 keine UI-SPEC. Store-Zeile als Wortlaut abgenommen, REL-05 offen. PE-34-1 bis PE-34-7 unverändert. Commits d017dd60, 267aacdc; CI grün.
 - 34-02: Abschalt-Schritte auf 8090 belegt (A1 Tabellenreste oc_fulltextsearch_index/_ticks plus oc_migrations bleiben nach app:remove; A2 reset ohne Plattform verständlicher Fehler, --no-interaction tut nichts; A3 Store-Installation geht). Seite nennt Aufräum-SQL mit Datensicherungs-Hinweis; die drei Ersatz-Absätze gehen in 34-05 dem Owner zur Abnahme vor.
+- 34-03: Admin-Banner "Parallelbetrieb" (PE-34-1/2: Render-Zeitpunkt entscheidet, isEnabledForAnyone; Ausgaben über p(), Link aus drei festen Tag-URLs nach Sprache). Merge 19498c7e, CI grün.
+- 34-04: Drei Umstiegs-Seiten (de/en/fr) mit Sprachumschaltern, README-Abschnitte vor "Installation", Store-Entwurf v1.5.0 in docs/store-listing.md, CHANGELOG. Merge 0cb3b5ed, CI grün.
+- 34-05: Gemeinsame Owner-Abnahme 19.10.2026 auf 8090, "abgenommen" (Phase 34 gesamt), Store-Entwurf "Auch abgenommen" (info.xml bleibt bis REL-05). Eine Owner-Änderung in der Runde: Doku-Link als Button mit Rahmen (findling-banner__link). Protokoll 34-05-ABNAHME.md, Commits fdfef7ba, a701b4f9; CI alle grün.
+- 34-06: Audit der Phase 34 geschlossen (34-AUDIT.md): 0 CRITICAL/HIGH/MEDIUM, 2 LOW. L-34-02 gefixt (151bc30b, fr-Pflichtformel ohne Zeilenumbruch), L-34-01 accept (Geviertstriche in STATE.md, Werkzeugausgabe, nicht ausgeliefert). Security/Bugs/Performance belegt (Poll -1,6 Prozent, keine zusätzliche DB-Abfrage), Audit-Modul test_phase34_audit.py (39 Tests mit Netz und Mutation). UMST-01..03 in REQUIREMENTS.md auf Complete. Merge 73f6a03e; volle Suite 5761 passed. Offen für Phase 36: docs/embeddings.md:497 "jahrelang verwaist" gegen Pflegestand der Umstiegs-Seite (Owner-Frage), Tag-Links blob/v1.5.0 nach Tag prüfen, Store-Entwurf in REL-05.
 
 ### Offene Faeden (kein aktiver Auftrag)
 

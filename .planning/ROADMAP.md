@@ -83,7 +83,7 @@ Details im Archiv: .planning/milestones/v1.4-ROADMAP.md
 - [x] **Phase 31: Neue Formate und Nachholweg** - .eml, ZIP-Inhalte, .doc, .xls, HEIC indexierbar; Altbestand wird nach dem Upgrade selbsttaetig nachgeholt; F-29-03 behoben
 - [x] **Phase 32: Filter in der Unified Search** - Dateityp- und Ordnerfilter direkt in der Nextcloud Unified Search
 - [x] **Phase 33: Ausschlussmuster und Admin-Feinschliff** - Platzhalter-Ausschluesse inkl. Mac-Bundles (#22), Grenzwerte sichtbar (#21), Hardware-Hinweis umformuliert
-- [ ] **Phase 34: Umstiegsweg** - Umstiegs-Seite dreisprachig, Admin-Hinweis bei parallelem fulltextsearch, Verlinkung aus README und Store-Text
+- [x] **Phase 34: Umstiegsweg** - Umstiegs-Seite dreisprachig, Admin-Hinweis bei parallelem fulltextsearch, Verlinkung aus README und Store-Text (completed 2026-10-19)
 - [ ] **Phase 35: Stretch: Aehnliche Dokumente und Spikes** - Aehnliche Dokumente ueber vorhandene Vektoren, granite-Messbericht, #25-Dedup-Designnotiz (entfaellt bei Bedarf ohne Release-Risiko)
 - [ ] **Phase 36: Haertung und Store-Einreichung 1.5.0** - Launch-Haertung mit boesartigem Formatkorpus und Upgrade-Strecke 1.4.2 -> 1.5.0, danach Einreichung beider Apps
 
@@ -201,7 +201,7 @@ Plans:
 - [x] 34-03-PLAN.md: ParallelSearchService (isEnabledForAnyone) mit PHPUnit, Warnbanner mit Sprach-Link, l10n-Kette, Linkgate verallgemeinert
 - [x] 34-04-PLAN.md: README-Verweise de/en/fr, Store-Entwurf Teil Phase 34, CHANGELOG, Gate-Erweiterung
 - [x] 34-05-PLAN.md: Gemeinsame Playwright-Abnahme auf 8090 mit simuliertem App-Flag (D-34-02)
-- [ ] 34-06-PLAN.md: Security-, Bug- und Performance-Audit, UMST-01 bis UMST-03 abhaken
+- [x] 34-06-PLAN.md: Security-, Bug- und Performance-Audit, UMST-01 bis UMST-03 abhaken
 **UI hint**: yes
 
 ### Phase 35: Stretch: Aehnliche Dokumente und Spikes
@@ -240,7 +240,7 @@ Plans:
 | 31. Neue Formate und Nachholweg | v1.5 | 15/15 | In Progress (Verifikation offen) | - |
 | 32. Filter in der Unified Search | v1.5 | 8/8 | Executed, verification pending | - |
 | 33. Ausschlussmuster und Admin-Feinschliff | v1.5 | 11/11 | Executed, verification pending | - |
-| 34. Umstiegsweg | v1.5 | 5/6 | In Progress|  |
+| 34. Umstiegsweg | v1.5 | 6/6 | Complete   | 2026-10-19 |
 | 35. Stretch: Aehnliche Dokumente und Spikes | v1.5 | 0/? | Not started | - |
 | 36. Haertung und Store-Einreichung 1.5.0 | v1.5 | 0/? | Not started | - |
 
