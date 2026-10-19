@@ -15,7 +15,7 @@ still_open: [L-34-01, L-34-02]
 
 # Phase 34: Security-, Bug- und Performance-Audit
 
-**Stand:** Task 1 (Sicherheit) und Task 2 (Fehler) am 19.10.2026.
+**Stand:** Task 1 (Sicherheit), Task 2 (Fehler) und Task 3 (Performance) am 19.10.2026.
 
 **Umfang:** `git diff 00dbafab..a701b4f9` (Basis = Elternteil von d5258548, dem ersten Commit
 mit "(34-02)"; 16 Commits). Mit Planung 47 Dateien, 2 193 Zeilen dazu, 44 weg; ohne
@@ -198,6 +198,35 @@ ist ein Unterschied (`test_the_fact_check_sees_a_wrong_date`).
 **Aufräumen:** jeder Instanzfall räumt im `finally` beide Schlüssel `enabled`; die Fixture
 prüft vorher und nachher per SQL, dass keine Zeile steht. Nach dem Lauf:
 `SELECT ... configkey = 'enabled' AND appid IN (...)` leer.
+
+## Performance
+
+Gemessen am 19.10.2026 zwischen 15:25 und 15:42 Ortszeit auf dem Entwicklungsrechner:
+Windows 11 Pro 10.0.26200, Intel Core i5-1335U, 16 GB RAM, Docker Desktop; Instanz
+`findling-nextcloud` (Nextcloud 34.0.3, PHP 8.5.9, SQLite, `php/` als Bind-Mount), Backend
+als Container `nc_app_findling_backend` 1.4.3. Freier RAM vor der ersten Messung 3,9 GB
+(`MemFree` 3 924 272 kB); kein Browser lief parallel zu einem Testlauf, die Messungen liefen
+einzeln nacheinander. Skripte und Rohdaten im ignorierten Verzeichnis `.dev/audit34/`
+(`p1_poll.py`, `p2_page.js`, `p3_queries.py`, `p4_pagediff.py`, je eine JSON-Datei), nicht
+im Repo. Flag jeweils `occ config:app:set fulltextsearch enabled --value=yes`, ohne Flag
+`config:app:delete`; nach jedem Wechsel gewartet, bis die Übersicht den neuen Wert meldet
+(Zwischenspeicher der AppConfig) bzw. 6 s auf der Seite.
+
+| Nr. | Messgröße | Wert ohne / mit Flag | Vergleich | Urteil |
+|---|---|---|---|---|
+| P1 | Pollroute `GET /apps/findling/admin/overview` als admin mit Token, je 100 Aufrufe, verschränkt (10 Runden, Reihenfolge wechselnd, je Block ein verworfener Aufwärmaufruf) | Median 55,38 / 54,51 ms, Maximum 94,61 / 102,62 ms, Mittel 57,82 / 56,69 ms | Median-Differenz **-0,87 ms (-1,6 %)**; Kriterium unter 5 % oder unter 2 ms | in Ordnung |
+| P2 | Admin-Seite `/settings/admin/findling`, Playwright (Chromium headless), je 10 Ladevorgänge, verschränkt (5 Runden, je Block ein verworfener Aufwärmlauf), `performance.getEntriesByType('navigation')` | `load` Median 382,6 / 394,5 ms (Max 589,9 / 413,0), DOMContentLoaded 320,1 / 333,1 ms, erstes Byte 123,3 / 123,2 ms | `load` +3,1 %; erstes Byte gleich, also kein Serveranteil; der Rest ist der sichtbare Banner im Layout. Bannerzustand in allen 20 Läufen wie erwartet, 0 `pageerror` | in Ordnung |
+| P3 | Datenbankabfragen je Pollaufruf, `query_log_file` mit `query_log_file_requestid` und `query_log_file_backtrace` (statt Debug-Modus), je 5 Aufrufe | ohne Flag 186 (einmal 187), mit Flag 186, danach ohne Flag 186 | keine Abfrage mit `ParallelSearchService` im Backtrace; die eine Zeile mit `AppManager` im ersten Block ist `oc_webhook_listeners` des Kerns. `isEnabledForAnyone` liest die beim Request ohnehin geladene AppConfig (`AppManager::getEnabledAppsValues`, Zwischenspeicher `enabledAppsCache`) | in Ordnung (0 zusätzliche Abfragen) |
+| P4 | Größe der Pollantwort | 15 836 / 15 835 Byte, 36 Schlüssel | der neue Schlüssel `,"parallelSearch":false` sind 23 Byte (0,15 %); mit Flag 1 Byte weniger (`true`) | in Ordnung |
+| P4b | Größe der Seite (HTML) | 113 662 bis 113 678 / 113 682 bis 113 694 Byte (Playwright `decodedBodySize`) | Diff zweier Abrufe (`p4_pagediff.py`, Token maskiert): der Kern nimmt `fulltextsearch` in `_oc_appswebroots` auf, der Banner verliert ` hidden`; sonst gleich | in Ordnung |
+
+**Ausgangszustand danach (Beleg):** `occ config:system:get query_log_file` Exit 1,
+`occ config:app:get fulltextsearch enabled` Exit 1, `occ config:system:get debug` Exit 1
+(nie gesetzt), `/tmp/q34.log` im Container gelöscht.
+
+**Nebenbefund ohne ID:** 186 Datenbankabfragen je Pollaufruf sind unabhängig von Phase 34
+(gleich ohne Flag). Nicht Teil des Phasen-Diffs; in `deferred-items.md` notiert für die
+Launch-Härtung (Phase 36).
 
 ## Befunde
 
