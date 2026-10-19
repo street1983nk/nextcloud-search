@@ -34,7 +34,7 @@ Owner-Entscheide (Stand 19.10.2026), gesperrt für die Planung. Grundlage: 34-RE
 O1 und O8 sind durch D-34-01 und D-34-02 beantwortet und werden nicht erneut gefragt.
 
 - **O2 Pflichtformel en/fr:** Vorschlag "OCR without changing files and without Elasticsearch" / "OCR sans modifier les fichiers et sans Elasticsearch".
-- **O3 Verbotsgate-Reichweite:** nur "einzige OCR" oder auch "only OCR" und "seule(s) OCR"; Dateireichweite `docs/**` (ohne `docs/measurements/**`), `README*.md`, `CHANGELOG.md`, beide `info.xml`, `php/templates/**`, `php/l10n/**`, `store/**`; Bindestrich-Ausnahme `docs/performance.md:1025` per Lookahead `(?![-\w])` bestätigen.
+- **O3 Verbotsgate-Reichweite:** nur "einzige OCR" oder auch "only OCR" und "seule(s) OCR"; Dateireichweite `docs/**` (ohne `docs/measurements/**`), `README*.md`, `CHANGELOG.md`, beide `info.xml`, `php/templates/**`, `php/l10n/**`, `store/**` nur Textdateien (`.md`, `.txt`, `.xml`, `.json`, `.html`; Bilder wie PNG ausgenommen); Bindestrich-Ausnahme `docs/performance.md:1025` per Lookahead `(?![-\w])` bestätigen.
 - **O4 Vergleichsform:** zwei Faktenlisten "Was Findling mitbringt" und "Was sich beim Umstieg ändert" statt Gegenüberstellung; Deck-Verlust und externe Speicher darin nennen.
 - **O5 Drittanbieter:** fulltextsearch_sql und fulltextsearch_postgresql auf der Seite erwähnen oder nur "die verwendete Plattform-App".
 - **O6 Admin-Hinweis-Link und info.xml:** sprachabhängig auf Tag-URL (Empfehlung) oder fest Englisch; `<documentation><admin>` in `info.xml` in Phase 36 ergänzen ja/nein.
