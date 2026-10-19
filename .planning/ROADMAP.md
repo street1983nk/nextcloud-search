@@ -261,7 +261,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 35-07-PLAN.md: Ergebnisseite: Textlink je Treffer, Ähnlich-Ansicht, PHP-Baumhash
+- [x] 35-07-PLAN.md: Ergebnisseite: Textlink je Treffer, Ähnlich-Ansicht, PHP-Baumhash
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
@@ -318,7 +318,7 @@ Plans:
 | 32. Filter in der Unified Search | v1.5 | 8/8 | Executed, verification pending | - |
 | 33. Ausschlussmuster und Admin-Feinschliff | v1.5 | 11/11 | Executed, verification pending | - |
 | 34. Umstiegsweg | v1.5 | 6/6 | Complete   | 2026-10-19 |
-| 35. Stretch: Aehnliche Dokumente und Spikes | v1.5 | 7/13 | In Progress|  |
+| 35. Stretch: Aehnliche Dokumente und Spikes | v1.5 | 8/13 | In Progress|  |
 | 36. Haertung und Store-Einreichung 1.5.0 | v1.5 | 0/? | Not started | - |
 
 ## Nach v1.3 (Wiedervorlage)
