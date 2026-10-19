@@ -245,16 +245,19 @@ final class SettingsController extends Controller {
 	 * folder one could count under, and walking every file of the instance to
 	 * count it is not a preview.
 	 *
-	 * @param list<mixed> $exclusions the prefix list as the form holds it
-	 * @param list<mixed> $exclusionPatterns the pattern list as the form holds it
+	 * Both lists are taken as mixed and judged by listOf() below, for the reason
+	 * written there (finding H-33-01 of audit 33-11).
+	 *
+	 * @param mixed $exclusions the prefix list as the form holds it
+	 * @param mixed $exclusionPatterns the pattern list as the form holds it
 	 */
 	#[\OCP\AppFramework\Http\Attribute\FrontpageRoute(verb: 'POST', url: '/admin/rules/preview')]
-	public function previewRules(array $exclusions = [], array $exclusionPatterns = []): DataResponse {
-		$list = array_values($exclusions);
-		$patterns = array_values($exclusionPatterns);
+	public function previewRules(mixed $exclusions = [], mixed $exclusionPatterns = []): DataResponse {
+		[$list, $listShape] = self::listOf($exclusions);
+		[$patterns, $patternShape] = self::listOf($exclusionPatterns);
 
-		$listErrors = $this->exclusionService->validate($list);
-		$patternErrors = $this->exclusionService->validatePatterns($patterns);
+		$listErrors = $listShape !== [] ? $listShape : $this->exclusionService->validate($list);
+		$patternErrors = $patternShape !== [] ? $patternShape : $this->exclusionService->validatePatterns($patterns);
 		if ($listErrors !== [] || $patternErrors !== []) {
 			$this->logger->warning('Findling: refused to preview a list of exclusions that did not validate', [
 				'exclusions' => count($listErrors),
@@ -342,25 +345,28 @@ final class SettingsController extends Controller {
 	 * (way A of plan 33-04); a save that changes only patterns writes the prefix
 	 * list exactly as it stood and plans no subtree clearing.
 	 *
-	 * @param list<mixed> $exclusions the prefix list as the form holds it
-	 * @param list<mixed> $exclusionPatterns the pattern list as the form holds it
+	 * Both lists are taken as mixed and judged by listOf() below, for the reason
+	 * written there (finding H-33-01 of audit 33-11).
+	 *
+	 * @param mixed $exclusions the prefix list as the form holds it
+	 * @param mixed $exclusionPatterns the pattern list as the form holds it
 	 */
 	#[\OCP\AppFramework\Http\Attribute\FrontpageRoute(verb: 'POST', url: '/admin/rules')]
 	public function saveRules(
-		array $exclusions = [],
+		mixed $exclusions = [],
 		int $maxFileBytes = 0,
 		bool $indexTeamFolders = true,
 		bool $indexExternalStorage = false,
-		array $exclusionPatterns = [],
+		mixed $exclusionPatterns = [],
 	): DataResponse {
-		$list = array_values($exclusions);
-		$patterns = array_values($exclusionPatterns);
+		[$list, $listShape] = self::listOf($exclusions);
+		[$patterns, $patternShape] = self::listOf($exclusionPatterns);
 
 		$fieldErrors = $this->settingsService->validate([
 			SettingsService::FIELD_MAX_FILE_BYTES => $maxFileBytes,
 		]);
-		$listErrors = $this->exclusionService->validate($list);
-		$patternErrors = $this->exclusionService->validatePatterns($patterns);
+		$listErrors = $listShape !== [] ? $listShape : $this->exclusionService->validate($list);
+		$patternErrors = $patternShape !== [] ? $patternShape : $this->exclusionService->validatePatterns($patterns);
 
 		if ($fieldErrors !== [] || $listErrors !== [] || $patternErrors !== []) {
 			// Counted, never quoted. What arrives in the list is a folder name of
@@ -456,6 +462,30 @@ final class SettingsController extends Controller {
 			ExclusionService::FIELD_PATTERNS => [],
 			'rules' => $this->view->rules(),
 		]);
+	}
+
+	/**
+	 * One list of the rule routes as it arrived, and the codes of its shape.
+	 *
+	 * The parameters are mixed and not array on purpose. With a native array
+	 * type the core calls the route with whatever the request carries, and a
+	 * string or a number there ended the call in a TypeError: HTTP 500 and a
+	 * log line whose trace carried every argument of the call, the folder list
+	 * and the pattern value included (finding H-33-01 of audit 33-11; the prefix
+	 * list had the same form since 1.4.2). The page never sends anything but a
+	 * list, so a value that is not one comes from a built request, and it is
+	 * refused like an entry that is not text: with the code empty, which the
+	 * page already turns into a sentence, and never with the value. An object
+	 * stays what it was before, its values in order.
+	 *
+	 * @return array{0: list<mixed>, 1: list<string>} the list, and the codes of a value that is not one
+	 */
+	private static function listOf(mixed $value): array {
+		if (!is_array($value)) {
+			return [[], [ExclusionService::ERROR_EMPTY]];
+		}
+
+		return [array_values($value), []];
 	}
 
 	/**

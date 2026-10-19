@@ -32,6 +32,7 @@ use OCP\IRequest;
 use OCP\IUserManager;
 use OCP\IUserSession;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 
@@ -297,6 +298,79 @@ final class SettingsControllerTest extends TestCase {
 			self::assertStringNotContainsString('Privat', $logged);
 		}
 		$this->assertTheLogOnlyCounts();
+	}
+
+	/**
+	 * A list that is not a list at all, as only a built request can send it.
+	 * Before audit 33-11 the native array type made the core call saveRules()
+	 * into a TypeError: HTTP 500, and the trace of the log line carried every
+	 * argument, the prefix list and the pattern value included (H-33-01). Both
+	 * lists are taken as they come now and a value that is not a list is refused
+	 * with the code a value that is not text already earns, in both routes.
+	 *
+	 * @return iterable<string, array{mixed}>
+	 */
+	public static function notAList(): iterable {
+		yield 'a string' => ['*.q33jd'];
+		yield 'an empty string' => [''];
+		yield 'a number' => [7];
+		yield 'null' => [null];
+		yield 'true' => [true];
+	}
+
+	#[DataProvider('notAList')]
+	public function testAPatternListThatIsNoListIsRefusedWithACodeAndWritesNothing(mixed $value): void {
+		$this->values[SettingsService::KEY_EXCLUSIONS] = ['Alt'];
+
+		$response = $this->controller()->saveRules(['Alt'], self::CAP, true, false, $value);
+		$body = self::body($response);
+
+		self::assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		self::assertFalse($body['saved']);
+		self::assertSame([ExclusionService::ERROR_EMPTY], $body[ExclusionService::FIELD_PATTERNS]);
+		self::assertSame([], $body['exclusions']);
+		self::assertSame([], $this->writes, 'a refused form wrote a key');
+		self::assertSame([], $this->jobs);
+		self::assertStringNotContainsString('q33', json_encode($response->getData(), JSON_THROW_ON_ERROR));
+		$this->assertTheLogOnlyCounts();
+	}
+
+	#[DataProvider('notAList')]
+	public function testAPrefixListThatIsNoListIsRefusedWithACodeAndWritesNothing(mixed $value): void {
+		$response = $this->controller()->saveRules($value, self::CAP, true, false, ['*.key']);
+		$body = self::body($response);
+
+		self::assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		self::assertFalse($body['saved']);
+		self::assertSame([ExclusionService::ERROR_EMPTY], $body['exclusions']);
+		self::assertSame([], $body[ExclusionService::FIELD_PATTERNS]);
+		self::assertSame([], $this->writes, 'a refused form wrote a key');
+		self::assertSame([], $this->jobs);
+		$this->assertTheLogOnlyCounts();
+	}
+
+	#[DataProvider('notAList')]
+	public function testThePreviewRefusesEitherListThatIsNoList(mixed $value): void {
+		$patterns = $this->controller()->previewRules(['Archiv'], $value);
+		$prefixes = $this->controller()->previewRules($value, ['*.key']);
+
+		self::assertSame(Http::STATUS_BAD_REQUEST, $patterns->getStatus());
+		self::assertSame([ExclusionService::ERROR_EMPTY], self::body($patterns)[ExclusionService::FIELD_PATTERNS]);
+		self::assertSame([], self::body($patterns)['exclusions']);
+		self::assertSame(Http::STATUS_BAD_REQUEST, $prefixes->getStatus());
+		self::assertSame([ExclusionService::ERROR_EMPTY], self::body($prefixes)['exclusions']);
+		self::assertSame([], self::body($prefixes)[ExclusionService::FIELD_PATTERNS]);
+		self::assertSame([], $this->writes);
+		$this->assertTheLogOnlyCounts();
+	}
+
+	/** An object instead of a list stays what it was: its values, in order. */
+	public function testAnObjectInsteadOfAListIsReadAsItsValues(): void {
+		$response = $this->controller()->saveRules(['a' => 'Archiv'], self::CAP, true, false, ['x' => '*.key']);
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame(['Archiv'], $this->values[SettingsService::KEY_EXCLUSIONS]);
+		self::assertSame(['*.key'], $this->values[SettingsService::KEY_EXCLUSION_PATTERNS]);
 	}
 
 	public function testEveryCodeOfAPatternTravelsWithoutItsEntry(): void {

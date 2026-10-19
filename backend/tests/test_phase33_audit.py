@@ -68,10 +68,16 @@ DRIVER = "backend/tests/drivers/exclusion_driver.php"
 SOURCE = "php/lib/Service/ExclusionService.php"
 IMAGE = os.environ.get("FINDLING_AUDIT33_PHP_IMAGE", "php:8.3-cli")
 # php:8.3-cli carries neither intl nor the polyfill of Nextcloud, so the service
-# falls back to the raw value where it composes a pattern to NFC (finding
-# L-33-01). The image of the instance (nextcloud:34.0.3-apache, PHP 8.5 with
-# intl) answers the same corpus with the runtime of production.
-NO_NORMALIZER = IMAGE == "php:8.3-cli"
+# falls back to the raw value where it composes a pattern to NFC
+# (ExclusionService::composed()). Finding L-33-01, accepted: the runtime of
+# Nextcloud always has the class (intl or the polyfill of the server), and the
+# image of the instance (nextcloud:34.0.3-apache, PHP 8.5 with intl) answers the
+# same corpus with the composition. The oracle_run fixture asks the image
+# whether the class exists, and on an image without it the oracle reads a
+# pattern without composing it, which is the documented fallback; every other
+# rule is judged the same way on both images. The composition itself is then
+# proven on the real runtime by
+# test_a_pattern_stored_in_nfd_by_occ_hits_the_nfc_name_on_the_instance.
 OUT_DIR = os.environ.get("FINDLING_AUDIT33_OUT", "")
 
 # ---------------------------------------------------------------------------
@@ -178,11 +184,17 @@ def _fold_slashes(value: str) -> str:
     return value.strip(SLASH)
 
 
-def doc_problems(raw: object) -> tuple[set[str], str | None]:
-    """Every refusal code the documentation gives for one entry, and its stored form."""
+def doc_problems(raw: object, *, compose: bool = True) -> tuple[set[str], str | None]:
+    """Every refusal code the documentation gives for one entry, and its stored form.
+
+    compose=False is the fallback of a PHP runtime without the Normalizer class
+    (L-33-01): the entry keeps its code points as they came.
+    """
     if not isinstance(raw, str):
         return {"not_a_string"}, None
-    text = unicodedata.normalize("NFC", raw.strip(" \t"))
+    text = raw.strip(" \t")
+    if compose:
+        text = unicodedata.normalize("NFC", text)
     text = _fold_slashes(text)
     if text.startswith("files/"):
         text = text[len("files/") :]
@@ -208,11 +220,11 @@ def doc_problems(raw: object) -> tuple[set[str], str | None]:
     return problems, (text if not problems else None)
 
 
-def doc_patterns_in_force(stored: list[Any]) -> list[str]:
+def doc_patterns_in_force(stored: list[Any], *, compose: bool = True) -> list[str]:
     """What a stored list means: usable entries, once each, at most 32."""
     kept: list[str] = []
     for raw in stored:
-        _problems, text = doc_problems(raw)
+        _problems, text = doc_problems(raw, compose=compose)
         if text is None or text in kept:
             continue
         kept.append(text)
@@ -584,22 +596,40 @@ class Deviation:
 
 @dataclass
 class OracleRun:
+    composed: bool = True
     pairs: dict[str, int] = field(default_factory=dict)
     deviations: list[Deviation] = field(default_factory=list)
     kept_mismatch: list[tuple[str, list[str], list[str]]] = field(default_factory=list)
     log_entries: list[dict[str, Any]] = field(default_factory=list)
 
 
+def image_has_normalizer() -> bool:
+    """Asked of the image itself, never guessed from its name (L-33-01)."""
+    docker = _docker()
+    probe = subprocess.run(  # noqa: S603 - an argument list, never a shell
+        [docker, "run", "--rm", "--entrypoint", "php", IMAGE, "-r", 'echo class_exists("Normalizer") ? "yes" : "no";'],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+        timeout=600,
+        env={**os.environ, "MSYS_NO_PATHCONV": "1"},
+    )
+    assert probe.returncode == 0, probe.stderr
+    assert probe.stdout.strip() in {"yes", "no"}, probe.stdout
+    return probe.stdout.strip() == "yes"
+
+
 @pytest.fixture(scope="module")
 def oracle_run() -> OracleRun:
     _docker()
-    result = OracleRun()
+    result = OracleRun(composed=image_has_normalizer())
     report: list[dict[str, Any]] = []
     for run in random_runs() + edge_runs():
         answer = run_driver(
             {"config": {"exclusions": run.prefixes, "exclusion_patterns": run.stored}, "paths": run.paths}
         )
-        kept = doc_patterns_in_force(run.stored)
+        kept = doc_patterns_in_force(run.stored, compose=result.composed)
         if answer["patterns"] != kept:
             result.kept_mismatch.append((run.group, kept, answer["patterns"]))
         php_answers = answer["isExcluded"]
@@ -622,6 +652,8 @@ def oracle_run() -> OracleRun:
     _write_out(
         "oracle.json",
         {
+            "image": IMAGE,
+            "composed": result.composed,
             "pairs": result.pairs,
             "total": sum(result.pairs.values()),
             "deviations": [d.__dict__ for d in result.deviations],
@@ -675,26 +707,30 @@ def test_the_corpus_has_at_least_2000_pairs(oracle_run: OracleRun) -> None:
     assert set(oracle_run.pairs) == set(GROUPS)
 
 
-L_33_01 = "L-33-01: php:8.3-cli has no Normalizer, the service keeps an NFD pattern raw"
-
-
-@pytest.mark.parametrize(
-    "group",
-    [
-        pytest.param(g, marks=pytest.mark.xfail(NO_NORMALIZER, strict=True, reason=L_33_01))
-        if g == "nfd_against_nfc"
-        else g
-        for g in GROUPS
-    ],
-)
+@pytest.mark.parametrize("group", GROUPS)
 def test_the_matcher_agrees_with_the_oracle_of_the_documentation(oracle_run: OracleRun, group: str) -> None:
     found = [d for d in oracle_run.deviations if d.group == group]
     assert found == [], [(d.stored, ascii(d.path)[:120], d.oracle, d.php) for d in found[:5]]
 
 
-@pytest.mark.xfail(NO_NORMALIZER, strict=True, reason=L_33_01)
 def test_the_list_in_force_is_the_list_of_the_documentation(oracle_run: OracleRun) -> None:
     assert oracle_run.kept_mismatch == []
+
+
+def test_the_fallback_of_the_oracle_is_not_a_blind_spot() -> None:
+    """Positive control of compose=False: the two readings of an NFD pattern differ.
+
+    Without it, the oracle could agree with an image without the Normalizer class
+    on the nfd_against_nfc group for a reason that has nothing to do with the
+    composition, and L-33-01 would have hidden a real deviation.
+    """
+    nfd = "Cafe" + COMBINING_ACUTE + "*"
+    nfc_name = "Caf" + E_ACUTE + ".txt"
+    composed = doc_patterns_in_force([nfd])
+    raw = doc_patterns_in_force([nfd], compose=False)
+    assert composed != raw
+    assert doc_excluded([], composed, nfc_name)
+    assert not doc_excluded([], raw, nfc_name)
 
 
 def test_the_driver_log_of_the_corpus_carries_counters_only(oracle_run: OracleRun) -> None:
@@ -1209,10 +1245,12 @@ def refusal_cases() -> list[Refusal]:
         Refusal("shape: number", _p(5), ANY_CODE),
         Refusal("shape: null", _p(None), ANY_CODE),
         Refusal("shape: boolean", _p(True), ANY_CODE),
+        # H-33-01, fixed in Task 4 of 33-11: a value that is not a list earns the
+        # code of a value that is not text, in both lists and both routes.
         Refusal(
             "shape: string instead of a list",
             {"exclusions": ["Archiv"], "exclusionPatterns": "*.q33jd"},
-            frozenset({"core_400"}),
+            code("empty"),
         ),
         Refusal(
             "shape: object instead of a list", {"exclusions": ["Archiv"], "exclusionPatterns": {"x": "*.q33je"}}, OK
@@ -1220,7 +1258,22 @@ def refusal_cases() -> list[Refusal]:
         Refusal(
             "shape: number instead of a list",
             {"exclusions": ["Archiv"], "exclusionPatterns": 7},
-            frozenset({"core_400"}),
+            code("empty"),
+        ),
+        Refusal(
+            "shape: empty string instead of a list", {"exclusions": ["Archiv"], "exclusionPatterns": ""}, code("empty")
+        ),
+        Refusal(
+            "prefix list: string instead of a list",
+            {"exclusions": "q33xb", "exclusionPatterns": []},
+            code("empty"),
+            field="exclusions",
+        ),
+        Refusal(
+            "prefix list: number instead of a list",
+            {"exclusions": 7, "exclusionPatterns": []},
+            code("empty"),
+            field="exclusions",
         ),
         Refusal(
             "prefix list: traversal",
@@ -1290,8 +1343,6 @@ def _judge(case: Refusal, answer: RefusalAnswer) -> str | None:
         return None if "ok" in case.expected else f"expected a refusal {sorted(case.expected)}, got 200"
     if answer.status != 400:
         return f"expected 400, got {answer.status}"
-    if "core_400" in case.expected:
-        return None
     if "any" in case.expected:
         return None if answer.codes else "400 without a code"
     return None if set(answer.codes) & case.expected else f"codes {answer.codes} not in {sorted(case.expected)}"
@@ -1350,19 +1401,14 @@ def instance_run() -> InstanceRun:
     return run
 
 
-H_33_01 = "H-33-01: a list sent as a string or a number ends saveRules in a TypeError, HTTP 500, arguments in the log"
-H_33_01_CASES = frozenset({"shape: string instead of a list", "shape: number instead of a list"})
+# H-33-01 (fixed in Task 4 of 33-11): a list sent as a string or a number ended
+# saveRules in a TypeError, HTTP 500, with the arguments in the log.
 
 
 @instance
 @pytest.mark.parametrize(
     "case",
-    [
-        pytest.param(
-            c, id=c.label, marks=pytest.mark.xfail(strict=True, reason=H_33_01) if c.label in H_33_01_CASES else ()
-        )
-        for c in refusal_cases()
-    ],
+    [pytest.param(c, id=c.label) for c in refusal_cases()],
 )
 def test_a_refused_entry_names_its_code_never_fails_and_never_echoes(instance_run: InstanceRun, case: Refusal) -> None:
     answer = instance_run.preview[case.label]
@@ -1465,6 +1511,8 @@ def _cron_until_gone(name: str, runs: int = 10) -> int:
     return done
 
 
+# H-33-02 (fixed in Task 4 of 33-11): a pattern key of another type than array
+# (occ --type=integer) stopped the listener, the page and the overview.
 H_33_02 = "H-33-02: a pattern key of another type than array (occ --type=integer) stops the listener, page and overview"
 
 
@@ -1554,6 +1602,98 @@ def test_a_second_writer_with_garbage_breaks_neither_page_nor_crawl_nor_listener
         assert MARK not in str(entry.get("message", "")), entry
 
 
+def _cron_with_pause_until_gone(name: str, runs: int = 40) -> int:
+    """Jobs that plan their successor a few seconds ahead need the pause between runs."""
+    done = 0
+    while _jobs(name) and done < runs:
+        time.sleep(6)
+        cron()
+        done += 1
+    return done
+
+
+@instance
+@pytest.mark.xfail(strict=True, reason=H_33_02)
+def test_a_prefix_key_of_another_type_breaks_neither_page_nor_listener() -> None:
+    """The twin of H-33-02 on the prefix key, which 1.4.2 already read the same way."""
+    log_start = len(nextcloud_log())
+    admin, admin_token = client("admin", ADMIN_PASS)
+    user = httpx.Client(base_url=URL, auth=(USER, USER_PASS), timeout=120)
+    folder = "/Audit3311pfx"
+    findings: dict[str, Any] = {}
+    stored_before = occ("config:app:get", "findling", "exclusions").stdout.strip()
+    cleanup_start = log_start
+    try:
+        occ("config:app:delete", "findling", "exclusions")
+        findings["set"] = occ("config:app:set", "findling", "exclusions", "--value=42", "--type=integer").returncode
+        findings["stored"] = occ("config:app:get", "findling", "exclusions", "--details").stdout[-200:]
+        # The web process sees the change through the local cache of the core;
+        # wait for the overview to answer for the integer, whatever it answers.
+        deadline = time.monotonic() + 30
+        status = 0
+        while time.monotonic() < deadline:
+            answer = admin.get(OVERVIEW, headers={"requesttoken": admin_token})
+            status = answer.status_code
+            if status != 200 or answer.json()["rules"]["exclusions"] == []:
+                break
+            time.sleep(1)
+        time.sleep(5)
+        overview = admin.get(OVERVIEW, headers={"requesttoken": admin_token})
+        findings["overview"] = overview.status_code
+        findings["shown"] = overview.json()["rules"]["exclusions"] if overview.status_code == 200 else None
+        findings["page"] = admin.get(PAGE).status_code
+        _webdav(user, "MKCOL", folder)
+        put = _webdav(user, "PUT", folder + "/p.txt", b"listener probe")
+        findings["put"] = put.status_code
+        file_id = int(put.headers.get("OC-FileId", "0" * 8)[:8])
+        query = f"select count(*) from oc_findling_queue where file_id = {file_id}"  # noqa: S608 - an int
+        findings["queued"] = sql(query)[0][0]
+        diagnose = occ("findling:diagnose", str(file_id))
+        findings["diagnose"] = diagnose.returncode
+    finally:
+        cleanup_start = len(nextcloud_log())
+        occ("config:app:delete", "findling", "exclusions")
+        occ("config:app:set", "findling", "exclusions", "--value=" + stored_before, "--type=array")
+        findings["restored"] = _patterns_seen_by_the_web_key(
+            admin, admin_token, "exclusions", json.loads(stored_before)
+        )
+        _webdav(user, "DELETE", folder)
+        findings["cleanup_cron_runs"] = _cron_with_pause_until_gone("SubtreeExpandJob")
+        occ("trashbin:cleanup", USER)
+        user.close()
+        admin.close()
+    lines = nextcloud_log()[log_start:cleanup_start]
+    errors = [line for line in lines if '"level":3' in line or '"level":4' in line]
+    findling_lines = [json.loads(line) for line in lines if '"app":"findling"' in line]
+    _write_out("garbage_prefix_integer.json", {**findings, "errors": [e[:600] for e in errors]})
+    assert findings["set"] == 0, findings
+    assert findings["overview"] == 200, findings
+    assert findings["shown"] == [], findings
+    assert findings["page"] == 200, findings
+    assert findings["put"] in {201, 204}, findings
+    assert findings["queued"] >= 1, findings
+    assert findings["diagnose"] == 0, findings
+    assert findings["restored"] == json.loads(stored_before), findings
+    assert errors == [], errors[:2]
+    warnings = [f for f in findling_lines if "not usable folder paths" in str(f.get("message", ""))]
+    assert warnings, "the unusable key is named"
+    for entry in warnings:
+        assert all(isinstance(v, int) for v in (entry.get("data") or {}).values()), entry
+
+
+def _patterns_seen_by_the_web_key(admin: httpx.Client, token: str, key: str, expected: list[str]) -> list[str]:
+    deadline = time.monotonic() + 30
+    shown: list[str] = []
+    while time.monotonic() < deadline:
+        answer = admin.get(OVERVIEW, headers={"requesttoken": token})
+        if answer.status_code == 200:
+            shown = answer.json()["rules"][key]
+            if shown == expected:
+                break
+        time.sleep(1)
+    return shown
+
+
 @instance
 def test_no_log_line_carries_a_corpus_value(instance_run: InstanceRun) -> None:
     """Runs after the corpus; the positive control proves both logs are read."""
@@ -1594,23 +1734,41 @@ TYPE_ERROR = "saveRules(): Argument #"
 
 
 @instance
-@pytest.mark.xfail(strict=True, reason=H_33_01)
-def test_a_wrong_list_shape_leaves_neither_a_500_nor_a_value_in_the_log() -> None:
+@pytest.mark.parametrize(
+    ("field_name", "value"),
+    [("exclusionPatterns", "*.q33xa"), ("exclusionPatterns", 33), ("exclusions", "q33xb"), ("exclusions", 33)],
+)
+def test_a_wrong_list_shape_leaves_neither_a_500_nor_a_value_in_the_log(field_name: str, value: object) -> None:
+    """H-33-01 and its twin on the prefix list of 1.4.2, after the fix of 33-11 Task 4."""
     log_start = len(nextcloud_log())
+    before = rules_snapshot()
     session, token = client("admin", ADMIN_PASS)
     with closing(session):
         rules = session.get(OVERVIEW, headers={"requesttoken": token}).json()["rules"]
         body = {
             "exclusions": rules["exclusions"],
-            "exclusionPatterns": "*.q33xa",
+            "exclusionPatterns": rules["exclusionPatterns"],
             "maxFileBytes": rules["maxFileBytes"],
             "indexTeamFolders": rules["indexTeamFolders"],
             "indexExternalStorage": rules["indexExternalStorage"],
         }
+        body[field_name] = value
         response = session.post(SAVE, json=body, headers={"requesttoken": token})
+        preview = session.post(
+            PREVIEW,
+            json={k: body[k] for k in ("exclusions", "exclusionPatterns")},
+            headers={"requesttoken": token},
+        )
     lines = nextcloud_log()[log_start:]
-    assert response.status_code < 500, response.status_code
+    assert response.status_code == 400, response.status_code
+    assert response.json()[field_name] == ["empty"], response.text[:300]
+    assert preview.status_code == 400, preview.status_code
+    assert preview.json()[field_name] == ["empty"], preview.text[:300]
+    assert MARK not in response.text
+    assert MARK not in preview.text
     assert not [line for line in lines if MARK in line]
+    assert not [line for line in lines if TYPE_ERROR in line]
+    assert rules_snapshot() == before
 
 
 @instance

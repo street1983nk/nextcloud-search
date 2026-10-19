@@ -946,8 +946,13 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # the catalogue, so that French writes o, Ko, Mo, Go, To and Po; the sixteen
 # catalogues under php/l10n moved with it but are not in this tree. No file came
 # and none went, so PHP_FILES_TODAY stays at 103.
+# Moved on 2026-10-19 by Plan 33-11 (finding H-33-01 of the audit): the two rule
+# routes of lib/Controller/SettingsController.php take both lists as mixed and
+# refuse a value that is not a list with the code empty instead of ending in a
+# TypeError with the arguments in the log; tests/Unit/SettingsControllerTest.php
+# holds the cases. No file came and none went, so PHP_FILES_TODAY stays at 103.
 PHP_FILES_TODAY = 103
-PHP_TREE_HASH_TODAY = "0e566c065cbe034dd577b87ce1b1878321b4c1090fb50047eaa3aec9e290fe6b"
+PHP_TREE_HASH_TODAY = "2f07e7fb5cbb29e0b3f5816e296b4a10bcdb195a4700a4e502f718e30d6ec060"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
