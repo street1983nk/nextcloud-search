@@ -1,0 +1,7 @@
+selftest      the distance of this tool against nearest() of a real store
+file 1        store 0.0000  own 0.0000
+file 2        store 97.3088  own 97.3088
+file 3        store 179.6051  own 179.6051
+file 4        store 254.0000  own 254.0000
+maximum       254.0000 of the metric maximum 254.0000
+verdict       the tool and the store agree to four digits

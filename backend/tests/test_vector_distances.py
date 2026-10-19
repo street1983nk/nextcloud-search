@@ -427,3 +427,128 @@ def test_the_similar_report_carries_no_case_of_the_test_set() -> None:
             record = json.loads(line)
             assert record[QUERY_FIELD] not in text, record["id"]
             assert record[PASSAGE_FIELD] not in text, record["id"]
+
+
+# ---------------------------------------------------------------------------
+# The version mode (Plan 35-04B): a base document against its own version
+# ---------------------------------------------------------------------------
+
+
+def test_the_version_mode_can_be_named_with_the_derivation(tool: Any) -> None:
+    args = tool.parse_args(["--versions", "--derive"])
+
+    assert args.versions is True
+    assert args.derive is True
+
+
+def test_the_blocks_are_the_shuffle_of_seed_3504_in_fours_with_one_drawn_position(tool: Any) -> None:
+    import random
+
+    blocks = tool.version_blocks(42)
+
+    generator = random.Random(3504)  # noqa: S311 - the fixed measurement seed, no secret
+    order = list(range(42))
+    generator.shuffle(order)
+    expected = [(tuple(order[start : start + 4]), generator.randrange(4)) for start in range(0, 40, 4)]
+
+    assert tool.VERSION_SEED == 3504
+    assert blocks == expected
+    assert len(blocks) == 10
+    # The rest of two falls away, every other position is used exactly once.
+    used = [position for positions, _ in blocks for position in positions]
+    assert len(used) == len(set(used)) == 40
+
+
+def test_the_blocks_are_the_same_on_every_call_and_count_30_of_120(tool: Any) -> None:
+    first = tool.version_blocks(120)
+    second = tool.version_blocks(120)
+
+    assert first == second
+    assert len(first) == 30
+    assert all(0 <= dropped < 4 for _, dropped in first)
+
+
+def test_the_version_drops_the_drawn_section_and_reverses_the_other_three(tool: Any) -> None:
+    sections = ["s0", "s1", "s2", "s3", "s4", "s5"]
+    blocks = [((5, 0, 3, 1), 2)]
+
+    documents = tool.version_documents(sections, blocks)
+
+    assert documents == [("s5\n\ns0\n\ns3\n\ns1", "s1\n\ns0\n\ns5")]
+
+
+def test_the_version_pairs_are_one_per_block_and_the_unrelated_cross_the_blocks(tool: Any) -> None:
+    documents = [(axis(0), axis(0)), (axis(1), between(1, 2)), (axis(3), axis(3, sign=-1.0))]
+
+    population = tool.version_pairs("en", documents)
+
+    assert population.related.tolist() == pytest.approx([0.0, tool.l2_distance(axis(1), between(1, 2)), 254.0])
+    # Six documents make 15 pairs, the three of one block are the related ones.
+    assert population.unrelated.size == 12
+
+
+def test_the_version_ceiling_is_the_middle_of_both_ends_rounded_down_to_the_grid(tool: Any) -> None:
+    # (F1) answers 10.5, (F2) answers 99.5 (everything at 100 lies beyond it),
+    # the middle 55.0 lies on the grid already.
+    populations = [_population(tool, language, [10.2] * 19 + [80.0], [100.0] * 10) for language in ("de", "en", "fr")]
+
+    verdict = tool.derive_versions(populations)
+
+    assert verdict.candidate == pytest.approx(10.5)
+    assert verdict.upper == pytest.approx(99.5)
+    assert verdict.satisfied is True
+    assert verdict.ceiling == pytest.approx(55.0)
+
+
+def test_the_version_ceiling_rounds_a_quarter_down(tool: Any) -> None:
+    # Candidate 10.5, upper 20.0: the middle 15.25 is rounded down to 15.0.
+    populations = [_population(tool, language, [10.2] * 20, [20.2] * 10) for language in ("de", "en", "fr")]
+
+    verdict = tool.derive_versions(populations)
+
+    assert verdict.upper == pytest.approx(20.0)
+    assert verdict.ceiling == pytest.approx(15.0)
+
+
+def test_the_version_ceiling_is_refused_when_the_candidate_lies_above_the_upper_end(tool: Any) -> None:
+    populations = [
+        _population(tool, "de", [10.2] * 20, [100.0] * 10),
+        _population(tool, "en", [10.2] * 20, [100.0] * 10),
+        _population(tool, "fr", [30.0] * 20, [20.0, 25.0] + [100.0] * 8),
+    ]
+
+    verdict = tool.derive_versions(populations)
+
+    assert verdict.satisfied is False
+    assert verdict.ceiling is None
+    assert verdict.candidate == pytest.approx(30.0)
+    assert verdict.upper == pytest.approx(24.5)
+    assert verdict.lost == {"de": 0, "en": 0, "fr": 20}
+    assert "nicht erfuellbar" in tool.version_verdict(verdict)
+
+
+def test_the_version_rule_is_not_checkable_under_ten_pairs_in_one_language(tool: Any) -> None:
+    populations = [
+        _population(tool, "de", [10.2] * 20, [100.0] * 10),
+        _population(tool, "en", [10.2] * 9, [100.0] * 10),
+        _population(tool, "fr", [10.2] * 20, [100.0] * 10),
+    ]
+
+    verdict = tool.derive_versions(populations)
+
+    assert verdict.satisfied is False
+    assert verdict.ceiling is None
+    assert "nicht erfuellbar" in tool.version_verdict(verdict)
+
+
+def test_the_version_reports_print_numbers_and_no_text(tool: Any) -> None:
+    import dataclasses
+    import inspect
+
+    for function in (tool.version_report, tool.version_verdict, tool.run_versions):
+        source = inspect.getsource(function)
+        assert f'record["{QUERY_FIELD}"]' not in source, function.__name__
+        assert f'record["{PASSAGE_FIELD}"]' not in source, function.__name__
+    fields = {field.name for field in dataclasses.fields(tool.VersionDerivation)}
+    assert "text" not in fields
+    assert "passage" not in fields
