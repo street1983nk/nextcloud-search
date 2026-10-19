@@ -2279,6 +2279,38 @@ Abnahme durch den Owner: offen (REL-05).
 
 ---
 
+# Entwurf v1.5.0 (Teil Phase 34)
+
+**Owner-Abnahme offen, Teil von REL-05; info.xml wird erst nach der Abnahme
+geändert, die READMEs verlinken die Seite seit Phase 34.** Plan 34-04,
+19.10.2026. Grundlage UMST-03, PE-34-7. Den Wortlaut unten hat der Owner am
+19.10.2026 abgenommen (`.planning/phases/34-umstiegsweg/34-WORTLAUT.md`,
+Abschnitt D); offen ist die förmliche Release-Abnahme. Eingereicht ist nichts.
+
+## Teil 1: eine Verweiszeile, alle sechs Beschreibungen
+
+Gleich in `findling` und `findling_backend`, Platz: eigene Zeile hinter der
+Funktionsliste, vor dem Absatz zum MCP Connector. Absolute Tag-URL auf die
+Seite der jeweiligen Sprache, keine Zahl im Text.
+
+| Sprache | Wortlaut |
+|---|---|
+| en | `Switching from fulltextsearch/Elasticsearch: [steps in the documentation](https://github.com/street1983nk/nextcloud-search/blob/v1.5.0/docs/migrate-from-fulltextsearch.en.md)` |
+| de | `Umstieg von fulltextsearch/Elasticsearch: [Schritte in der Dokumentation](https://github.com/street1983nk/nextcloud-search/blob/v1.5.0/docs/migrate-from-fulltextsearch.md)` |
+| fr | `Passer de fulltextsearch/Elasticsearch à Findling : [étapes dans la documentation](https://github.com/street1983nk/nextcloud-search/blob/v1.5.0/docs/migrate-from-fulltextsearch.fr.md)` |
+
+Tag-Links lösen erst mit v1.5.0 auf; vor der Einreichung prüfen.
+
+## Teil 2: die README-Zeilen
+
+Geändert in Phase 34 nach der Wortlaut-Abnahme (O9, Variante 2): je README ein
+kurzer Abschnitt direkt vor "Installation" mit relativem Link auf die Seite der
+eigenen Sprache.
+
+Abnahme durch den Owner: Wortlaut erteilt am 19.10.2026, Release offen (REL-05).
+
+---
+
 # Release-Checkliste v1.5.0 (REL-05): Corresponding source
 
 Seit Plan 31-01 verteilt das Backend-Image mit dem pillow-heif-Wheel drei native

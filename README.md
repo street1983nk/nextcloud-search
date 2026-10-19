@@ -65,6 +65,10 @@ Grenzen und Details: [docs/formats.md](docs/formats.md).
   einem Klick in den Verwaltungseinstellungen unter Findling; ein Vorschlag
   passend zur Box steht daneben.
 
+## Umstieg von fulltextsearch
+
+Schritte zum Abschalten von fulltextsearch/Elasticsearch und was sich ändert: [docs/migrate-from-fulltextsearch.md](docs/migrate-from-fulltextsearch.md).
+
 ## Installation
 
 Beide Store-Einträge installieren, immer in derselben Version:

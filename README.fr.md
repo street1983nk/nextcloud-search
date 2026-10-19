@@ -68,6 +68,10 @@ Limites et détails : [docs/formats.md](docs/formats.md).
   fait en un clic dans les paramètres d'administration sous Findling ; une
   suggestion adaptée à la machine est affichée à côté.
 
+## Passer de fulltextsearch à Findling
+
+Étapes pour désactiver fulltextsearch/Elasticsearch et ce qui change : [docs/migrate-from-fulltextsearch.fr.md](docs/migrate-from-fulltextsearch.fr.md).
+
 ## Installation
 
 Installer les deux entrées du store, toujours dans la même version :

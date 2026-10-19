@@ -62,6 +62,10 @@ Limits and details: [docs/formats.md](docs/formats.md).
   lane, which shortens indexing. Switch with one click in the admin settings
   under Findling; a suggestion matching your box is shown next to it.
 
+## Switching from fulltextsearch
+
+Steps to switch off fulltextsearch/Elasticsearch and what changes: [docs/migrate-from-fulltextsearch.en.md](docs/migrate-from-fulltextsearch.en.md).
+
 ## Installation
 
 Install both store entries, always in the same version:
