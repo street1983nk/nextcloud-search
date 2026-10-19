@@ -2281,11 +2281,12 @@ Abnahme durch den Owner: offen (REL-05).
 
 # Entwurf v1.5.0 (Teil Phase 34)
 
-**Owner-Abnahme offen, Teil von REL-05; info.xml wird erst nach der Abnahme
-geändert, die READMEs verlinken die Seite seit Phase 34.** Plan 34-04,
-19.10.2026. Grundlage UMST-03, PE-34-7. Den Wortlaut unten hat der Owner am
-19.10.2026 abgenommen (`.planning/phases/34-umstiegsweg/34-WORTLAUT.md`,
-Abschnitt D); offen ist die förmliche Release-Abnahme. Eingereicht ist nichts.
+**Owner-Abnahme 19.10.2026; info.xml wird erst mit REL-05 geändert, die
+READMEs verlinken die Seite seit Phase 34.** Plan 34-04, 19.10.2026. Grundlage
+UMST-03, PE-34-7. Den Wortlaut unten hat der Owner am 19.10.2026 abgenommen
+(`.planning/phases/34-umstiegsweg/34-WORTLAUT.md`, Abschnitt D), den Entwurf
+als Ganzes in der Abnahme-Runde von Plan 34-05 am selben Tag. Der förmliche
+Release-Schritt (info.xml) bleibt bei REL-05. Eingereicht ist nichts.
 
 ## Teil 1: eine Verweiszeile, alle sechs Beschreibungen
 
@@ -2307,7 +2308,8 @@ Geändert in Phase 34 nach der Wortlaut-Abnahme (O9, Variante 2): je README ein
 kurzer Abschnitt direkt vor "Installation" mit relativem Link auf die Seite der
 eigenen Sprache.
 
-Abnahme durch den Owner: Wortlaut erteilt am 19.10.2026, Release offen (REL-05).
+Abnahme durch den Owner: Wortlaut und Entwurf erteilt am 19.10.2026 (Plan
+34-05); der Release-Schritt info.xml bleibt bei REL-05.
 
 ---
 

@@ -431,7 +431,7 @@ $migrationDocsUrl = $migrationDocsUrls[str_starts_with($languageCode, 'de') ? 'd
 		<p class="findling-banner findling-banner--warning" id="findling-banner-parallel"<?php if (!$parallelSearch) { ?> hidden<?php } ?>>
 			<svg class="findling-banner__icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($alertIcon); ?>"/></svg>
 			<span class="findling-banner__text" id="findling-banner-parallel-text"><?php p($l->t('At least one app of the full text search framework (fulltextsearch, files_fulltextsearch) is enabled next to Findling. Results from the same file can then appear twice in the search bar. Disable these apps once Findling has finished its first index run.')); ?></span>
-			<a href="<?php p($migrationDocsUrl); ?>" target="_blank" rel="noreferrer noopener"><?php p($l->t('Steps in the documentation')); ?></a>
+			<a class="findling-banner__link" href="<?php p($migrationDocsUrl); ?>" target="_blank" rel="noreferrer noopener"><?php p($l->t('Steps in the documentation')); ?></a>
 		</p>
 	</div>
 

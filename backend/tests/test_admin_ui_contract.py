@@ -4757,7 +4757,9 @@ PARALLEL_BANNER_OPEN = (
 )
 PARALLEL_FLAG_READ = "$parallelSearch = ($_['parallelSearch'] ?? false) === true;"
 PARALLEL_LINK = (
-    '<a href="<?php p($migrationDocsUrl); ?>" target="_blank" rel="noreferrer noopener">'
+    # The class reads as a bordered button, the owner's word of 19.10.2026 in
+    # the acceptance round of plan 34-05; the rule lives in php/css/admin.css.
+    '<a class="findling-banner__link" href="<?php p($migrationDocsUrl); ?>" target="_blank" rel="noreferrer noopener">'
     "<?php p($l->t('Steps in the documentation')); ?></a>"
 )
 COVERAGE_BANNERS_OPEN = '<div id="findling-coverage-banners">'

@@ -32,8 +32,8 @@ answers O2 to O5), and this module keeps what that acceptance fixed:
   the accepted wording, and links the page of its own language with a relative
   link exactly once; a link to the page of another language is one finding.
 * **Store draft (plan 34-04).** ``docs/store-listing.md`` carries the section
-  ``# Entwurf v1.5.0 (Teil Phase 34)`` once, with the head sentence that the
-  owner acceptance is open as part of REL-05, and one table row per language
+  ``# Entwurf v1.5.0 (Teil Phase 34)`` once, with the head sentence naming the
+  owner acceptance of 19.10.2026 (plan 34-05), and one table row per language
   of the store descriptions: the accepted line, a tag URL of v1.5.0 on the page
   of that language, no digit in the prose. ``info.xml`` stays unchanged until
   REL-05, so the gate reads the languages from it and never the line.
@@ -454,7 +454,9 @@ README_SECTIONS: dict[str, tuple[Path, str, str]] = {
 README_NEXT_HEADING = "## Installation"
 
 DRAFT_OF_PHASE_34 = "# Entwurf v1.5.0 (Teil Phase 34)"
-DRAFT_HEAD = "Owner-Abnahme offen, Teil von REL-05"
+# The draft was accepted by the owner in the acceptance round of plan 34-05;
+# the formal release step (info.xml) stays with REL-05 in phase 36.
+DRAFT_HEAD = "Owner-Abnahme 19.10.2026"
 TAG_BASE = "https://github.com/street1983nk/nextcloud-search/blob/v1.5.0/docs/"
 
 # The store line of 34-WORTLAUT.md section (D), one per description language;

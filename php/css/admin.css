@@ -101,6 +101,27 @@
 	overflow-wrap: anywhere;
 }
 
+/* The documentation link of the parallel search banner reads as a button, the
+   owner's decision of 19.10.2026: a bare link next to three sentences was easy
+   to miss. Border and text share currentColor, so the pair the theme ships for
+   the banner surface keeps carrying the contrast in both modes. */
+.findling-banner__link {
+	flex: 0 0 auto;
+	align-self: center;
+	padding: var(--default-grid-baseline) calc(var(--default-grid-baseline) * 3);
+	border: 2px solid currentColor;
+	border-radius: var(--border-radius-element);
+	color: inherit;
+	font-weight: bold;
+	text-decoration: none;
+	white-space: nowrap;
+}
+
+.findling-banner__link:hover,
+.findling-banner__link:focus {
+	text-decoration: underline;
+}
+
 /* -- the coverage figure --------------------------------------------------- */
 
 .findling-figure {

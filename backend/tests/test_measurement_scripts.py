@@ -973,8 +973,15 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # the migration page out of a map of three tag URLs chosen by the language
 # code; the sixteen catalogues under php/l10n moved with it but are not in this
 # tree. No file came and none went, so PHP_FILES_TODAY stays at 105.
+# Moved on 2026-10-19 a third time by Plan 34-05 (the owner's word in the
+# acceptance round, "der doku button braucht ein rahmen"): the documentation
+# link of the banner findling-banner-parallel reads as a bordered button.
+# templates/admin.php gives the anchor the class findling-banner__link, and
+# php/css/admin.css carries the rule, which is not in this tree because the
+# recipe globs **/*.php. No file came and none went, so PHP_FILES_TODAY stays
+# at 105.
 PHP_FILES_TODAY = 105
-PHP_TREE_HASH_TODAY = "4b826c12af7a9ab716af08ba2dec7c7fbc44936c7d272b60ca6e59d46a36d876"
+PHP_TREE_HASH_TODAY = "04a2c174abd5f24ec8db9e2f6cd05b5dae34a2c04e204167656a81bd4a4a7446"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
