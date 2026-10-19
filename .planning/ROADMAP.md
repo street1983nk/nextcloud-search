@@ -253,7 +253,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 35-05-PLAN.md: Container-Route /similar (vectors_of, similar_candidates, Ratschen)
+- [x] 35-05-PLAN.md: Container-Route /similar (vectors_of, similar_candidates, Ratschen)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -318,7 +318,7 @@ Plans:
 | 32. Filter in der Unified Search | v1.5 | 8/8 | Executed, verification pending | - |
 | 33. Ausschlussmuster und Admin-Feinschliff | v1.5 | 11/11 | Executed, verification pending | - |
 | 34. Umstiegsweg | v1.5 | 6/6 | Complete   | 2026-10-19 |
-| 35. Stretch: Aehnliche Dokumente und Spikes | v1.5 | 4/13 | In Progress|  |
+| 35. Stretch: Aehnliche Dokumente und Spikes | v1.5 | 6/13 | In Progress|  |
 | 36. Haertung und Store-Einreichung 1.5.0 | v1.5 | 0/? | Not started | - |
 
 ## Nach v1.3 (Wiedervorlage)
