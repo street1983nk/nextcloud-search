@@ -3611,6 +3611,17 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     under its exceptions of gate G2. All sixteen files moved in one commit, and
     the five language documents carry the rows. Whoever moves it next writes
     the next paragraph.
+
+    It stands at 341 since 19.10.2026, and the rise of one is plan 34-03: the
+    banner of UMST-02, the sentence the coverage block shows while an app of
+    the full text search framework (fulltextsearch, files_fulltextsearch) is
+    enabled next to Findling. Its link text is the existing key "Steps in the
+    documentation" and moved nothing; the link itself is a literal of the
+    template and never a catalogue value. All sixteen files moved in one
+    commit, the five language documents carry the row, the German and French
+    wording is the one the owner accepted in 34-WORTLAUT.md, the five other
+    languages are machine drafts under the same dated reservation as the rest.
+    Whoever moves it next writes the next paragraph.
     """
     for language, twin in ((L10N_JSON, L10N_DE_DE_JSON), (L10N_JS, L10N_DE_DE_JS)):
         assert twin.is_file(), f"{twin.name} is missing, so everybody on de_DE reads this app in English"
@@ -3651,8 +3662,9 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     # D-32-04), 28 of plan 33-07 (patterns, refusals, confirmations and limits
     # of plans 33-05 and 33-06; the ten changed sentences, the seven box
     # sentences among them, changed their keys and so moved nothing), six of
-    # plan 33-10 (the unit symbols of a size, the owner's answer to O1)
-    assert len(keys_of["de.json"]) == 340
+    # plan 33-10 (the unit symbols of a size, the owner's answer to O1), one of
+    # plan 34-03 (the banner of UMST-02)
+    assert len(keys_of["de.json"]) == 341
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:
@@ -4564,33 +4576,54 @@ CAP_SENTENCE = (
     'The backend of this instance reads at most %s MB. This ceiling is a deploy option, see "Limits per file".'
 )
 CAP_SENTENCE_BEFORE = "in the app settings of AppAPI"
+DOCS_DIR = REPO_ROOT / "docs"
+RELEASE_TAG = "v1.5.0"
+# Plan 34-03 (UMST-02, PE-34-3): the three migration pages of plan 34-02, one
+# full literal per language, chosen in the template through getLanguageCode().
+MIGRATION_DOCS_URLS = {
+    "de": "https://github.com/street1983nk/nextcloud-search/blob/v1.5.0/docs/migrate-from-fulltextsearch.md",
+    "fr": "https://github.com/street1983nk/nextcloud-search/blob/v1.5.0/docs/migrate-from-fulltextsearch.fr.md",
+    "en": "https://github.com/street1983nk/nextcloud-search/blob/v1.5.0/docs/migrate-from-fulltextsearch.en.md",
+}
+# Every link of the template into the documentation, PE-34-5: the link of the
+# limits block with its anchor and the three migration pages without one.
+EXPECTED_DOCS_LINKS = (LIMITS_DOCS_URL, *MIGRATION_DOCS_URLS.values())
 _DOCS_LINK = re.compile(r"https://github\.com/street1983nk/nextcloud-search/blob/[^'\"\s<>]+")
 _TAG_LINK = re.compile(
-    r"https://github\.com/street1983nk/nextcloud-search/blob/v\d+\.\d+\.\d+/docs/[a-z0-9-]+\.md#(?P<anchor>[a-z0-9-]+)"
+    r"https://github\.com/street1983nk/nextcloud-search/blob/(?P<tag>v\d+\.\d+\.\d+)/docs/"
+    r"(?P<file>[a-z0-9-]+(?:\.[a-z]{2})?\.md)(?:#(?P<anchor>[a-z0-9-]+))?"
 )
 
 
-def scan_limits_link(template: str, doc: str) -> list[str]:
-    """Findings of the link of the change hint, held against the documentation.
+def scan_docs_links(template: str, docs: Path, expected: tuple[str, ...] = EXPECTED_DOCS_LINKS) -> list[str]:
+    """Findings of the links into the documentation, held against the files under docs/.
 
-    PE-8: one link, a versioned tag URL in plain ASCII, and its anchor exists
-    exactly once in the documentation as a fixed ASCII anchor. The tag URL only
-    resolves once the tag exists, so the anchor is held here against the file.
+    PE-8, generalised by PE-34-5 in plan 34-03: the template carries exactly
+    the expected links, each a URL on the release tag in plain ASCII whose
+    target file exists under docs/, and an anchor, where a link has one, exists
+    exactly once in that file as a fixed ASCII anchor. The tag URL only
+    resolves once the tag exists, so file and anchor are held here against the
+    repository.
     """
     findings: list[str] = []
     links = _DOCS_LINK.findall(template)
-    if len(links) != 1:
-        findings.append(f"the template carries {len(links)} links into the documentation instead of one")
+    if sorted(links) != sorted(expected):
+        findings.append(f"the template carries the documentation links {sorted(links)} instead of {sorted(expected)}")
     for link in links:
         if not link.isascii():
             findings.append(f"the link {link} is not plain ASCII")
         match = _TAG_LINK.fullmatch(link)
-        if match is None:
-            findings.append(f"the link {link} does not point at a release tag")
+        if match is None or match.group("tag") != RELEASE_TAG:
+            findings.append(f"the link {link} does not point at the release tag {RELEASE_TAG}")
             continue
-        anchor = f'<a id="{match.group("anchor")}"></a>'
-        if doc.count(anchor) != 1:
-            findings.append(f"the anchor {anchor} is not in the documentation exactly once")
+        target = docs / match.group("file")
+        if not target.is_file():
+            findings.append(f"the link {link} points at {match.group('file')}, which is not under docs/")
+            continue
+        if match.group("anchor") is not None:
+            anchor = f'<a id="{match.group("anchor")}"></a>'
+            if target.read_text(encoding="utf-8").count(anchor) != 1:
+                findings.append(f"the anchor {anchor} is not in {target.name} exactly once")
     return findings
 
 
@@ -4650,7 +4683,7 @@ def test_the_change_hint_links_the_anchor_of_the_documentation() -> None:
     template = TEMPLATE.read_text(encoding="utf-8")
     doc = ADMIN_PAGE_DOC.read_text(encoding="utf-8")
 
-    assert scan_limits_link(template, doc) == []
+    assert scan_docs_links(template, DOCS_DIR) == []
     assert template.count(LIMITS_DOCS_URL) == 1
     assert f"$limitsDocsUrl = '{LIMITS_DOCS_URL}';" in template
     assert '<a href="<?php p($limitsDocsUrl); ?>" target="_blank" rel="noreferrer noopener">' in template
@@ -4663,18 +4696,189 @@ def test_the_change_hint_links_the_anchor_of_the_documentation() -> None:
         assert variable in section, variable
 
 
-def test_a_link_with_another_anchor_or_without_a_tag_is_one_finding() -> None:
+def _docs_fixture(root: Path, admin_page: str = f"text\n{LIMITS_ANCHOR}\n## Grenzen je Datei\n") -> Path:
+    """A docs directory with the four files the expected links point at."""
+    docs = root / "docs"
+    docs.mkdir(parents=True)
+    (docs / "admin-page.md").write_text(admin_page, encoding="utf-8")
+    for suffix in (".md", ".en.md", ".fr.md"):
+        (docs / f"migrate-from-fulltextsearch{suffix}").write_text("text\n", encoding="utf-8")
+    return docs
+
+
+def _quoted(links: tuple[str, ...]) -> str:
+    return "\n".join(f"'{link}'" for link in links)
+
+
+def test_a_link_with_another_anchor_or_without_a_tag_is_one_finding(tmp_path: Path) -> None:
     """The self test of the link scan: clean is clean, each fault one finding."""
-    doc = f"text\n{LIMITS_ANCHOR}\n## Grenzen je Datei\n"
-    assert scan_limits_link(f"'{LIMITS_DOCS_URL}'", doc) == []
+    docs = _docs_fixture(tmp_path)
+    assert scan_docs_links(_quoted(EXPECTED_DOCS_LINKS), docs) == []
 
     other_anchor = LIMITS_DOCS_URL.replace("#limits-per-file", "#limits")
-    assert len(scan_limits_link(f"'{other_anchor}'", doc)) == 1
+    assert len(scan_docs_links(f"'{other_anchor}'", docs, (other_anchor,))) == 1
 
     untagged = LIMITS_DOCS_URL.replace("/blob/v1.5.0/", "/blob/main/")
-    assert len(scan_limits_link(f"'{untagged}'", doc)) == 1
+    assert len(scan_docs_links(f"'{untagged}'", docs, (untagged,))) == 1
 
-    assert len(scan_limits_link(f"'{LIMITS_DOCS_URL}'", "no anchor here")) == 1
+    no_anchor = _docs_fixture(tmp_path / "bare", admin_page="no anchor here")
+    assert len(scan_docs_links(_quoted(EXPECTED_DOCS_LINKS), no_anchor)) == 1
+
+
+def test_a_fifth_link_or_a_link_to_a_missing_file_is_one_finding(tmp_path: Path) -> None:
+    """PE-34-5: the generalised scan counts the set and finds each target file."""
+    docs = _docs_fixture(tmp_path)
+
+    fifth = "https://github.com/street1983nk/nextcloud-search/blob/v1.5.0/docs/admin-page.md"
+    assert len(scan_docs_links(_quoted((*EXPECTED_DOCS_LINKS, fifth)), docs)) == 1
+
+    missing = "https://github.com/street1983nk/nextcloud-search/blob/v1.5.0/docs/migrate-from-elsewhere.md"
+    assert len(scan_docs_links(_quoted((*EXPECTED_DOCS_LINKS, missing)), docs, (*EXPECTED_DOCS_LINKS, missing))) == 1
+
+    on_main = MIGRATION_DOCS_URLS["en"].replace("/blob/v1.5.0/", "/blob/main/")
+    assert len(scan_docs_links(f"'{on_main}'", docs, (on_main,))) == 1
+
+    # Without its third language the set is short by one, which is one finding.
+    assert len(scan_docs_links(_quoted(EXPECTED_DOCS_LINKS[:-1]), docs)) == 1
+
+
+# Plan 34-03 (UMST-02, PE-34-2, PE-34-3): the hint while the full text search
+# framework runs next to Findling. The sentence of 34-WORTLAUT.md (B),
+# character for character; the link text is the key that already exists.
+PARALLEL_BANNER_ID = "findling-banner-parallel"
+PARALLEL_SENTENCE = (
+    "At least one app of the full text search framework (fulltextsearch, files_fulltextsearch) is enabled next "
+    "to Findling. Results from the same file can then appear twice in the search bar. Disable these apps once "
+    "Findling has finished its first index run."
+)
+PARALLEL_BANNER_OPEN = (
+    '<p class="findling-banner findling-banner--warning" id="findling-banner-parallel"'
+    "<?php if (!$parallelSearch) { ?> hidden<?php } ?>>"
+)
+PARALLEL_FLAG_READ = "$parallelSearch = ($_['parallelSearch'] ?? false) === true;"
+PARALLEL_LINK = (
+    '<a href="<?php p($migrationDocsUrl); ?>" target="_blank" rel="noreferrer noopener">'
+    "<?php p($l->t('Steps in the documentation')); ?></a>"
+)
+COVERAGE_BANNERS_OPEN = '<div id="findling-coverage-banners">'
+BANNER_LOOP_OPEN = "<?php foreach ($banners as $banner) { ?>"
+BANNER_LOOP_CLOSE = "\n\t\t<?php } ?>\n"
+
+
+def scan_parallel_banner(template: str, script: str) -> list[str]:
+    """Findings of the banner of UMST-02 in the template and the script.
+
+    One element with its id, of the warning kind, outside the loop over
+    $banners and inside the banner block, hidden unless the overview key is
+    true, carrying the accepted sentence and a link into a new tab without
+    referrer and opener whose text is the existing key. The URL comes out of a
+    map of three full literals chosen by the language code, and the script
+    never touches the banner, because it is rendered on the server only.
+    """
+    findings: list[str] = []
+    banners = template.count(f'id="{PARALLEL_BANNER_ID}"')
+    if banners != 1:
+        findings.append(f"the template carries {banners} banners {PARALLEL_BANNER_ID}")
+        return findings
+    if template.count(PARALLEL_BANNER_OPEN) != 1:
+        findings.append("the banner is not a warning paragraph hidden unless parallelSearch is true")
+        return findings
+    start = template.index(PARALLEL_BANNER_OPEN)
+    block = template.index(COVERAGE_BANNERS_OPEN)
+    loop_end = template.index(BANNER_LOOP_CLOSE, template.index(BANNER_LOOP_OPEN, block))
+    block_end = template.index("\n\t</div>", loop_end)
+    if not loop_end < start < block_end:
+        findings.append("the banner does not stand after the loop over $banners inside #findling-coverage-banners")
+    element = template[start : template.index("</p>", start)]
+    text_span = (
+        f'<span class="findling-banner__text" id="{PARALLEL_BANNER_ID}-text">'
+        f"<?php p($l->t('{PARALLEL_SENTENCE}')); ?></span>"
+    )
+    if text_span not in element:
+        findings.append("the banner does not carry the accepted sentence in its text span")
+    if PARALLEL_LINK not in element:
+        findings.append("the banner has no link into a new tab with rel noreferrer noopener and the existing link text")
+    if PARALLEL_FLAG_READ not in template:
+        findings.append("the template does not read parallelSearch as a strict bool")
+    if PARALLEL_BANNER_ID in script:
+        findings.append(f"the script mentions {PARALLEL_BANNER_ID}")
+    return findings
+
+
+def test_the_parallel_banner_stands_alone_and_links_the_migration_page() -> None:
+    """UMST-02: the banner of PE-34-2, rendered on the server, untouched by the script."""
+    template = TEMPLATE.read_text(encoding="utf-8")
+    script = SCRIPT.read_text(encoding="utf-8")
+    view = ADMIN_VIEW.read_text(encoding="utf-8")
+
+    assert scan_parallel_banner(template, script) == []
+    # The key is built once, out of the detection class of PE-34-1.
+    assert view.count("'parallelSearch' => ") == 1
+    assert "'parallelSearch' => $this->parallelSearch->active()," in view
+    # The sentence stands once in the template, so a second copy cannot drift.
+    assert template.count(f"'{PARALLEL_SENTENCE}'") == 1
+
+
+def test_the_migration_link_follows_the_language_of_the_admin() -> None:
+    """PE-34-3: three full literals in a map, chosen by the language code, nothing joined."""
+    template = TEMPLATE.read_text(encoding="utf-8")
+
+    map_source = re.search(r"\$migrationDocsUrls = \[(.*?)\];", template, re.DOTALL)
+    assert map_source is not None, "the template lost its map of migration links"
+    entries = dict(re.findall(r"'([a-z]{2})' => '([^']+)',", map_source.group(1)))
+    assert entries == MIGRATION_DOCS_URLS
+    for url in MIGRATION_DOCS_URLS.values():
+        assert template.count(url) == 1, url
+    # The choice: a code starting with de reads the German page, with fr the
+    # French one, every other code the English one.
+    assert "$languageCode = $l->getLanguageCode();" in template
+    assert "str_starts_with($languageCode, 'de')" in template
+    assert "str_starts_with($languageCode, 'fr')" in template
+    assert "$migrationDocsUrl = $migrationDocsUrls[" in template
+    # No URL is put together out of pieces, so every one of them is visible
+    # to the link scan above.
+    assert re.search(r"migrate-from-fulltextsearch['\"]\s*\.", template) is None
+    assert re.search(r"\.\s*['\"]\.(?:en\.|fr\.)?md['\"]", template) is None
+
+
+def test_no_catalogue_value_carries_a_link() -> None:
+    """T-34-09: a translator cannot bend the hint or its link through a catalogue value.
+
+    No key and no value carries a URL scheme or a path into this repository.
+    The bare host name github.com is allowed, and it has to be: the sentence of
+    a failed model download names the two hosts an admin must reach, as words
+    and not as a link (plan 27-13). The hint of plan 34-03 names neither.
+    """
+    for path in L10N_CATALOGUES:
+        text = path.read_text(encoding="utf-8")
+        start = text.index("{")
+        values = json.loads(text[start : text.rindex("}") + 1])
+        translations = values.get("translations", values)
+        for key, value in translations.items():
+            for word in ("http", "street1983nk", "nextcloud-search/"):
+                assert word not in str(value), (path.name, key)
+                assert word not in key, (path.name, key)
+        if path.suffix == ".json":
+            assert "github.com" not in str(translations.get(PARALLEL_SENTENCE, "")), path.name
+
+
+def test_a_banner_in_the_loop_without_rel_or_in_the_script_is_a_finding() -> None:
+    """The self test of the banner scan: clean is clean, each fault one finding."""
+    template = TEMPLATE.read_text(encoding="utf-8")
+    script = SCRIPT.read_text(encoding="utf-8")
+
+    assert scan_parallel_banner(template, script) == []
+    assert len(scan_parallel_banner(template, script + f"\nshown('{PARALLEL_BANNER_ID}', true)\n")) == 1
+    without_rel = template.replace(PARALLEL_LINK, PARALLEL_LINK.replace(' rel="noreferrer noopener"', ""))
+    assert len(scan_parallel_banner(without_rel, script)) == 1
+    always_shown = template.replace(PARALLEL_BANNER_OPEN, PARALLEL_BANNER_OPEN.replace(" hidden", " data-x"))
+    assert len(scan_parallel_banner(always_shown, script)) == 1
+    assert len(scan_parallel_banner(template.replace(f'id="{PARALLEL_BANNER_ID}"', 'id="x"'), script)) == 1
+    # Moved in front of the loop it is still one banner, at the wrong place.
+    start = template.index(PARALLEL_BANNER_OPEN)
+    banner = template[start : template.index("</p>", start) + len("</p>")]
+    moved = template.replace(banner, "").replace(BANNER_LOOP_OPEN, banner + BANNER_LOOP_OPEN, 1)
+    assert len(scan_parallel_banner(moved, script)) == 1
 
 
 def test_the_script_writes_the_limits_as_text_only() -> None:

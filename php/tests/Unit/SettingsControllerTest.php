@@ -11,12 +11,14 @@ use OCA\Findling\Service\AdminViewService;
 use OCA\Findling\Service\ExAppService;
 use OCA\Findling\Service\ExclusionService;
 use OCA\Findling\Service\FileStateService;
+use OCA\Findling\Service\ParallelSearchService;
 use OCA\Findling\Service\PathResolverService;
 use OCA\Findling\Service\QueueService;
 use OCA\Findling\Service\ReaderContext;
 use OCA\Findling\Service\ScanStatsService;
 use OCA\Findling\Service\SettingsService;
 use OCA\Findling\Service\StorageService;
+use OCP\App\IAppManager;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\Utility\ITimeFactory;
@@ -49,7 +51,8 @@ use Psr\Log\LoggerInterface;
  * ones are built on a doubled IAppConfig that keeps its values in an array and
  * records every write, and on a doubled job list that records every entry it is
  * handed. Everything AdminViewService needs beyond the two services is a bare
- * double, because the only method these routes ask of it is rules().
+ * double, because the rules routes ask it for rules() only; the overview case
+ * of plan 34-03 runs over the same doubles and reads one key of the answer.
  */
 #[CoversClass(SettingsController::class)]
 final class SettingsControllerTest extends TestCase {
@@ -149,6 +152,9 @@ final class SettingsControllerTest extends TestCase {
 			$time,
 			$this->createMock(IL10N::class),
 			$this->createMock(IDateTimeFormatter::class),
+			// Final, so built for real over a doubled app manager that answers
+			// false for every app (plan 34-03).
+			new ParallelSearchService($this->createMock(IAppManager::class)),
 		);
 
 		return new SettingsController(
@@ -490,5 +496,17 @@ final class SettingsControllerTest extends TestCase {
 		self::assertSame([ExclusionService::ERROR_TRAVERSAL], $body['exclusions']);
 		self::assertSame([], $body[ExclusionService::FIELD_PATTERNS]);
 		self::assertSame([], $this->writes);
+	}
+
+	public function testTheOverviewCarriesParallelSearchAsFalseWithoutTheFramework(): void {
+		// UMST-02, plan 34-03: the key is always there and a bool. The app
+		// manager double answers false for every app, which is an instance
+		// without fulltextsearch and files_fulltextsearch.
+		$response = $this->controller()->overview();
+		$body = self::body($response);
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus(), json_encode($this->logLines) ?: '');
+		self::assertArrayHasKey('parallelSearch', $body);
+		self::assertFalse($body['parallelSearch']);
 	}
 }

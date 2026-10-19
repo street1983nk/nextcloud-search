@@ -386,6 +386,27 @@ $banners = [
 		'shown' => $rebuildBlockedBytes > 0,
 	],
 ];
+
+// The hint of UMST-02 (plan 34-03): an app of the full text search framework is
+// enabled next to Findling, so results can appear twice in the search bar. It
+// is not one of the banners above, because it carries a link and none of them
+// does, and because the script never touches it: the apps are switched on the
+// apps page, and the admin loads this page again afterwards (PE-34-2).
+//
+// The link points at the migration page of exactly this release, a tag URL as
+// for the limits block below, because the docs do not travel in the release
+// archive. Three full literals and not one URL put together out of a language
+// suffix, so that the link gate sees every address this page can open; the
+// language code picks the page, German for de and its regions, French for fr,
+// English for everything else (PE-34-3).
+$parallelSearch = ($_['parallelSearch'] ?? false) === true;
+$migrationDocsUrls = [
+	'de' => 'https://github.com/street1983nk/nextcloud-search/blob/v1.5.0/docs/migrate-from-fulltextsearch.md',
+	'fr' => 'https://github.com/street1983nk/nextcloud-search/blob/v1.5.0/docs/migrate-from-fulltextsearch.fr.md',
+	'en' => 'https://github.com/street1983nk/nextcloud-search/blob/v1.5.0/docs/migrate-from-fulltextsearch.en.md',
+];
+$languageCode = $l->getLanguageCode();
+$migrationDocsUrl = $migrationDocsUrls[str_starts_with($languageCode, 'de') ? 'de' : (str_starts_with($languageCode, 'fr') ? 'fr' : 'en')];
 ?>
 <div id="findling-coverage" class="section">
 	<h2 id="findling-coverage-heading"><?php p($l->t('Search coverage')); ?></h2>
@@ -407,6 +428,11 @@ $banners = [
 				<span class="findling-banner__text" id="<?php p($banner['id']); ?>-text"><?php p($banner['text']); ?></span>
 			</p>
 		<?php } ?>
+		<p class="findling-banner findling-banner--warning" id="findling-banner-parallel"<?php if (!$parallelSearch) { ?> hidden<?php } ?>>
+			<svg class="findling-banner__icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($alertIcon); ?>"/></svg>
+			<span class="findling-banner__text" id="findling-banner-parallel-text"><?php p($l->t('At least one app of the full text search framework (fulltextsearch, files_fulltextsearch) is enabled next to Findling. Results from the same file can then appear twice in the search bar. Disable these apps once Findling has finished its first index run.')); ?></span>
+			<a href="<?php p($migrationDocsUrl); ?>" target="_blank" rel="noreferrer noopener"><?php p($l->t('Steps in the documentation')); ?></a>
+		</p>
 	</div>
 
 	<p class="findling-figure" id="findling-coverage-figure"<?php if (!$hasFraction) { ?> hidden<?php } ?>>
@@ -1025,7 +1051,8 @@ $limitPagesProfileShown = $limitPages['shown'] && $limitPages['source'] === 'pro
 $limitPagesProfileLine = $l->t('Pages read per scanned document: %1$s, from the profile %2$s', [$count($limitPages['value']), $profileNames[$limitPages['profile']] ?? '']);
 // The way to change a limit, whole on the page, and the link for the details.
 // The link points at the documentation of exactly this release, a tag URL; the
-// tag is spelled here once, so the release step moves it in one place (REL-05).
+// tag is spelled here and in the three migration links of the hint above, and
+// the link gate holds all four, so the release step moves them together (REL-05).
 $limitsChangeMarker = "\u{E000}";
 $limitsChangeCommand = 'occ app_api:app:unregister findling_backend';
 $limitsChangeParts = explode(
