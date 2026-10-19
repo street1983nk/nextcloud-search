@@ -446,7 +446,7 @@ def test_the_blocks_are_the_shuffle_of_seed_3504_in_fours_with_one_drawn_positio
 
     blocks = tool.version_blocks(42)
 
-    generator = random.Random(3504)
+    generator = random.Random(3504)  # noqa: S311 - the fixed measurement seed, no secret
     order = list(range(42))
     generator.shuffle(order)
     expected = [(tuple(order[start : start + 4]), generator.randrange(4)) for start in range(0, 40, 4)]

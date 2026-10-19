@@ -61,6 +61,18 @@ and the corpus documents are compared through
 :func:`findling.index.fusion.centroid`, the very function the similar view
 runs. Its rule stands in docs/measurements/2026-10-aehnlich-distanzen/README.md
 and was committed before this mode existed.
+
+**The version mode** (Plan 35-04B, the owner's way 2) measures real document
+pairs: per language the sections of the test set are shuffled with seed 3504
+into blocks of four, a base document joins the four, its version drops one
+drawn section and reverses the other three. Base against version is the
+related pair, documents of different blocks are the unrelated pairs, both
+compared centroid against centroid. Its rule stands in section 10.1 of the same
+report and was committed before this mode existed::
+
+    uv run python ../scripts/dev/vector_distances.py --versions --derive \\
+        --model-dir /path/to/model --dataset-dir ../testdata/semantik \\
+        --groups ../docs/measurements/2026-10-aehnlich-distanzen/gruppen.tsv
 """
 
 from __future__ import annotations
@@ -70,6 +82,7 @@ import contextlib
 import io
 import json
 import logging
+import random
 import sys
 import tempfile
 from collections.abc import Callable, Mapping, Sequence
@@ -225,6 +238,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--similar",
         action="store_true",
         help="document against document, for the similar documents ceiling (with --derive: derive it)",
+    )
+    parser.add_argument(
+        "--versions",
+        action="store_true",
+        help="a base document against its own version, for the ceiling of Plan 35-04B (with --derive: derive it)",
     )
     parser.add_argument("--groups", type=Path, default=None, help="the topic group table of the e2e corpus (tsv)")
     parser.add_argument("--model-dir", type=Path, default=None, help="the directory holding model.onnx and tokenizer")
@@ -492,8 +510,17 @@ def _quietly_extracted(reader: Callable[..., object], path: str, mimetype: str, 
             print(f"note: {Path(path).name} produced {lines} line(s) of reader output", file=sys.stderr)
 
 
-def corpus_stock(model: EmbeddingModel, model_dir: Path) -> list[CorpusChunk]:
-    """Every corpus text, cut by the real chunker and embedded as a passage."""
+@dataclass(frozen=True)
+class Chunker:
+    """The chunker of the package, built once per run because the tokenizer is large."""
+
+    tokenizer: Any
+    splitter: Any
+    token_cap: int
+
+
+def open_chunker(model_dir: Path) -> Chunker:
+    """The tokenizer and splitter the container cuts with, under its own settings."""
     from findling.config import settings
 
     resolved = settings()
@@ -503,10 +530,28 @@ def corpus_stock(model: EmbeddingModel, model_dir: Path) -> list[CorpusChunk]:
         chunk_tokens=resolved.embed_chunk_tokens,
         overlap=resolved.embed_chunk_overlap,
     )
+    return Chunker(tokenizer=tokenizer, splitter=splitter, token_cap=resolved.embed_token_cap)
 
+
+def corpus_stock(model: EmbeddingModel, model_dir: Path) -> list[CorpusChunk]:
+    """Every corpus text, cut by the real chunker and embedded as a passage."""
+    return chunk_and_embed(model, open_chunker(model_dir), sorted(corpus_texts().items()))
+
+
+def chunk_and_embed(
+    model: EmbeddingModel,
+    chunker: Chunker,
+    named_texts: Sequence[tuple[str, str]],
+) -> list[CorpusChunk]:
+    """Named texts, cut by the real chunker and embedded as passages, by name and ordinal."""
     pieces: list[tuple[str, int, str]] = []
-    for name, text in sorted(corpus_texts().items()):
-        for span in chunk_spans(text, tokenizer=tokenizer, splitter=splitter, token_cap=resolved.embed_token_cap):
+    for name, text in named_texts:
+        for span in chunk_spans(
+            text,
+            tokenizer=chunker.tokenizer,
+            splitter=chunker.splitter,
+            token_cap=chunker.token_cap,
+        ):
             pieces.append((name, span.ordinal, text[span.char_start : span.char_end]))
     if not pieces:
         message = "the corpus produced no chunk at all"
@@ -1211,6 +1256,228 @@ def run_similar(args: argparse.Namespace, model: EmbeddingModel, model_dir: Path
 
 
 # ---------------------------------------------------------------------------
+# The version mode: a base document against its own version (Plan 35-04B)
+# ---------------------------------------------------------------------------
+
+# The rule of docs/measurements/2026-10-aehnlich-distanzen/README.md, section
+# 10.1, written down before this mode existed.
+VERSION_SEED: Final = 3504  # (F0) one fresh random.Random(3504) per language
+VERSION_BLOCK: Final = 4  # (F0) sections per base document
+VERSION_JOIN: Final = "\n\n"  # (F0) sections are separated by one empty line
+MINIMUM_VERSION_PAIRS: Final = 10  # (F4) fewer pairs in one language make the rule not checkable
+
+
+@dataclass(frozen=True)
+class VersionDerivation:
+    """What rule (F1) to (F4) make of the three populations, as numbers only."""
+
+    candidate: float
+    upper: float | None
+    ceiling: float | None
+    satisfied: bool
+    checkable: bool
+    cut: dict[str, float]
+    lost: dict[str, int]
+
+
+def version_blocks(count: int) -> list[tuple[tuple[int, ...], int]]:
+    """The blocks of one language: four shuffled positions each, and the drawn one.
+
+    One generator per call, seeded with ``VERSION_SEED``: the positions are
+    shuffled first, then one ``randrange(4)`` per block names the section the
+    version drops. A rest below four falls away.
+    """
+    generator = random.Random(VERSION_SEED)  # noqa: S311 - a fixed measurement seed, no secret
+    order = list(range(count))
+    generator.shuffle(order)
+    whole = count - count % VERSION_BLOCK
+    return [
+        (tuple(order[start : start + VERSION_BLOCK]), generator.randrange(VERSION_BLOCK))
+        for start in range(0, whole, VERSION_BLOCK)
+    ]
+
+
+def version_documents(
+    sections: Sequence[str],
+    blocks: Sequence[tuple[tuple[int, ...], int]],
+) -> list[tuple[str, str]]:
+    """The base document and its version per block. Kept in memory, never printed."""
+    documents: list[tuple[str, str]] = []
+    for positions, dropped in blocks:
+        base = [sections[position] for position in positions]
+        kept = [section for index, section in enumerate(base) if index != dropped]
+        documents.append((VERSION_JOIN.join(base), VERSION_JOIN.join(reversed(kept))))
+    return documents
+
+
+def version_pairs(language: str, documents: Sequence[tuple[bytes, bytes]]) -> SimilarPopulation:
+    """Base against version per block, and every pair of documents of different blocks."""
+    related = np.array([l2_distance(base, version) for base, version in documents], dtype=np.float64)
+    flat = [(block, vector) for block, pair in enumerate(documents) for vector in pair]
+    unrelated = np.array(
+        [
+            l2_distance(flat[first][1], flat[second][1])
+            for first in range(len(flat))
+            for second in range(first + 1, len(flat))
+            if flat[first][0] != flat[second][0]
+        ],
+        dtype=np.float64,
+    )
+    return SimilarPopulation(language=language, related=related, unrelated=unrelated)
+
+
+def _cut_everywhere(populations: Sequence[SimilarPopulation], value: float) -> bool:
+    return all(
+        1.0 - _share_at_or_under(population.unrelated, value) >= UNRELATED_CUT - TOLERANCE for population in populations
+    )
+
+
+def _floor_to_grid(value: float) -> float:
+    return round(float(np.floor(value / GRID_STEP + TOLERANCE)) * GRID_STEP, 4)
+
+
+def derive_versions(populations: Sequence[SimilarPopulation]) -> VersionDerivation:
+    """Rule (F1) to (F4), mechanically, on the grid of step 0.5."""
+    grid = _grid(0.0, METRIC_MAXIMUM)
+    candidate = next(
+        value
+        for value in grid
+        if all(_share_at_or_under(population.related, value) >= RELATED_SHARE - TOLERANCE for population in populations)
+    )
+    cut = {population.language: 1.0 - _share_at_or_under(population.unrelated, candidate) for population in populations}
+    admissible = [value for value in grid if _cut_everywhere(populations, value)]
+    upper = admissible[-1] if admissible else None
+    lost = {
+        population.language: (int(np.count_nonzero(population.related > upper)) if upper is not None else 0)
+        for population in populations
+    }
+    checkable = all(population.related.size >= MINIMUM_VERSION_PAIRS for population in populations)
+    satisfied = checkable and upper is not None and candidate <= upper
+    ceiling = _floor_to_grid((candidate + upper) / 2.0) if satisfied and upper is not None else None
+    return VersionDerivation(
+        candidate=candidate,
+        upper=upper,
+        ceiling=ceiling,
+        satisfied=satisfied,
+        checkable=checkable,
+        cut=cut,
+        lost=lost,
+    )
+
+
+def version_report(populations: Sequence[SimilarPopulation], derivation: VersionDerivation | None) -> str:
+    header = f"{'population':<22}{'n':>7}{'min':>12}{'p25':>12}{'median':>12}{'p75':>12}{'max':>12}"
+    lines = [f"versions      seed {VERSION_SEED}, blocks of {VERSION_BLOCK}, one section dropped", "", header]
+    for population in populations:
+        lines.append(_quartile_line(f"{population.language} versions", population.related))
+        lines.append(_quartile_line(f"{population.language} unrelated", population.unrelated))
+    if derivation is None:
+        return "\n".join(lines)
+
+    upper = "none" if derivation.upper is None else f"{derivation.upper:.1f}"
+    lines.extend(
+        [
+            "",
+            (
+                f"rule (F1)     smallest grid value with {RELATED_SHARE:.2f} of version pairs at or under it: "
+                f"{derivation.candidate:.1f}"
+            ),
+            "              cut of unrelated pairs there: "
+            + ", ".join(f"{language} {share:.{DIGITS}f}" for language, share in derivation.cut.items()),
+            f"rule (F2)     largest grid value cutting {UNRELATED_CUT:.2f} of unrelated pairs everywhere: {upper}",
+            "              version pairs beyond it: "
+            + ", ".join(
+                f"{language} {count} of {population.related.size}"
+                for (language, count), population in zip(derivation.lost.items(), populations, strict=True)
+            ),
+            f"rule (F4)     at least {MINIMUM_VERSION_PAIRS} version pairs per language: "
+            + ("met" if derivation.checkable else "NOT met"),
+        ]
+    )
+    languages = [population.language for population in populations]
+    lines.extend(
+        [
+            "",
+            f"{'value':>8}"
+            + "".join(f"{'ver ' + language:>9}" for language in languages)
+            + "  "
+            + "".join(f"{'cut ' + language:>9}" for language in languages),
+        ]
+    )
+    marks = {derivation.candidate}
+    if derivation.upper is not None:
+        marks.add(derivation.upper)
+    if derivation.ceiling is not None:
+        marks.add(derivation.ceiling)
+    shown = sorted(
+        {
+            _rounded(mark + step * GRID_STEP)
+            for mark in marks
+            for step in range(-RASTER_STEPS, RASTER_STEPS + 1)
+            if 0.0 <= mark + step * GRID_STEP <= METRIC_MAXIMUM
+        }
+    )
+    lines.extend(_similar_raster_line(populations, value) for value in shown)
+    return "\n".join(lines)
+
+
+def version_verdict(derivation: VersionDerivation) -> str:
+    """The one line the report quotes: a value, or the rule that was not met."""
+    if not derivation.checkable:
+        return "SIMILAR_CEILING   none: Regel nicht erfuellbar, (F4) fewer than ten version pairs"
+    if derivation.ceiling is None:
+        return "SIMILAR_CEILING   none: Regel nicht erfuellbar, (F1) lies above (F2)"
+    return f"SIMILAR_CEILING   {derivation.ceiling:.1f}"
+
+
+def measure_version_language(model: EmbeddingModel, chunker: Chunker, path: Path) -> SimilarPopulation:
+    """The version pairs and the unrelated pairs of one language file."""
+    records = load_dataset(path)
+    blocks = version_blocks(len(records))
+    documents = version_documents([record["passage"] for record in records], blocks)
+    named: list[tuple[str, str]] = []
+    for block, (base, version) in enumerate(documents):
+        named.append((f"{path.stem}-b{block:02d}-base", base))
+        named.append((f"{path.stem}-b{block:02d}-version", version))
+    chunks = documents_of(chunk_and_embed(model, chunker, named))
+    pairs: list[tuple[bytes, bytes]] = []
+    for block in range(len(documents)):
+        base = centroid(chunks[f"{path.stem}-b{block:02d}-base"])
+        version = centroid(chunks[f"{path.stem}-b{block:02d}-version"])
+        if base is None or version is None:
+            message = f"{path.stem} block {block}: a document without a vector"
+            raise MeasurementError(message)
+        pairs.append((base, version))
+    return version_pairs(path.stem, pairs)
+
+
+def run_versions(args: argparse.Namespace, model: EmbeddingModel, model_dir: Path) -> str:
+    chunker = open_chunker(model_dir)
+    populations = [measure_version_language(model, chunker, path) for path in _languages(args.dataset_dir)]
+    derivation = derive_versions(populations) if args.derive else None
+    sections = [version_report(populations, derivation)]
+    if derivation is not None and derivation.ceiling is not None and args.groups is not None:
+        # Information only, rule section 10.1: the group probe does not decide.
+        documents = documents_of(chunk_and_embed(model, chunker, sorted(corpus_texts().items())))
+        centroids = {name: vector for name, chunks in documents.items() if (vector := centroid(chunks)) is not None}
+        probe = group_probe(read_groups(args.groups), centroids, ceiling=derivation.ceiling)
+        if probe is not None:
+            sections.extend(
+                [
+                    "",
+                    (
+                        f"information   group probe at {probe.ceiling:.1f} (not deciding): "
+                        f"group pairs under {probe.group_share:.{DIGITS}f} of {probe.group_pairs}, "
+                        f"foreign pairs under {probe.foreign_share:.{DIGITS}f} of {probe.foreign_pairs}"
+                    ),
+                ]
+            )
+    if derivation is not None:
+        sections.extend(["", version_verdict(derivation)])
+    return "\n".join(sections)
+
+
+# ---------------------------------------------------------------------------
 # The command line
 # ---------------------------------------------------------------------------
 
@@ -1245,6 +1512,9 @@ def run(args: argparse.Namespace) -> str:
 
     model, model_dir = _model(args.model_dir)
 
+    if args.versions:
+        return run_versions(args, model, model_dir)
+
     if args.similar:
         return run_similar(args, model, model_dir)
 
@@ -1272,8 +1542,9 @@ def run(args: argparse.Namespace) -> str:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
-    if not (args.selftest or args.testset or args.corpus or args.derive or args.similar):
-        print("REFUSED: name one of --selftest, --testset, --corpus, --derive or --similar", file=sys.stderr)
+    if not (args.selftest or args.testset or args.corpus or args.derive or args.similar or args.versions):
+        modes = "--selftest, --testset, --corpus, --derive, --similar or --versions"
+        print(f"REFUSED: name one of {modes}", file=sys.stderr)
         return 2
     try:
         print(run(args))
