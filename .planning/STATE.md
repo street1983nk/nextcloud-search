@@ -4,8 +4,8 @@ milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
 stopped_at: Completed 34-02-PLAN.md, weiter mit 34-03
-last_updated: "2026-10-19T07:25:56.077Z"
-last_activity: "2026-10-19 -- 34-02 abgeschlossen: Umstiegs-Seiten de/en/fr, Gate test_migration_path.py, Abschalt-Schritte auf 8090 belegt (A1-A3 bestätigt)"
+last_updated: "2026-10-19T07:34:26.269Z"
+last_activity: 2026-10-19 -- Phase 34 execution started
 progress:
   total_phases: 7
   completed_phases: 4
@@ -21,14 +21,14 @@ progress:
 Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .planning/MILESTONES.md (v1.0 bis v1.4).
 
 **Core Value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 34, Umstiegsweg
+**Current focus:** Phase 34 — umstiegsweg
 
 ## Current Position
 
-Phase: 34 von 30-36 (Umstiegsweg)
-Plan: 2 von 6 erledigt (34-01, 34-02), weiter mit 34-03
-Status: Phase 34 in Ausführung: 34-02 drei Umstiegs-Seiten plus Gate (d5258548, 0e3af73e, 64fb4146). 34-01 Wortlaut de/en/fr (Seite, Hinweis, README, Store-Zeile) vom Owner am 19.10.2026 abgenommen, alle Empfehlungen O2-O10. Davor: Phase 33 verifiziert (passed_with_conditions 5/5, e7408b57).
-Last activity: 2026-10-19 -- 34-02 abgeschlossen: Seiten docs/migrate-from-fulltextsearch{,.en,.fr}.md, Gate test_migration_path.py, Nachweis 34-02-NACHWEIS.md
+Phase: 34 (umstiegsweg) — EXECUTING
+Plan: 1 of 6
+Status: Executing Phase 34
+Last activity: 2026-10-19 -- Phase 34 execution started
 
 Progress: [█████████░] 92%
 
