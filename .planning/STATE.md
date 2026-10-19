@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 33-10-PLAN.md
-last_updated: "2026-10-18T20:25:00.000Z"
-last_activity: 2026-10-18 -- 33-10 abgeschlossen (gemeinsame Playwright-Abnahme auf 8090, Owner-Abnahme mit fr-Einheiten-Fix "Mo überall", Saat geräumt)
+stopped_at: Completed 33-11-PLAN.md
+last_updated: "2026-10-19T03:30:00.000Z"
+last_activity: 2026-10-19 -- 33-11 abgeschlossen (Audit Phase 33: H-33-01 und H-33-02 gefixt, sechs LOW entschieden, EXCL-01..03, POL-01, POL-03 Complete)
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 43
-  completed_plans: 42
+  completed_plans: 43
   percent: 14
 ---
 
@@ -26,11 +26,11 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 33 von 30-36 (Ausschlussmuster und Admin-Feinschliff)
-Plan: 10 von 11 erledigt (33-01 bis 33-10), nächster Plan 33-11 (Audit, hakt EXCL-01..03, POL-01, POL-03 ab)
-Status: Phase 33 läuft (33-01 Wortlaut abgenommen, 33-02 Muster im ExclusionService, 33-03 Weg C im Abgleich und zwei Statusgrenzen, 33-04 Kehrjob und Urteilsbereinigung, 33-05 Musterliste auf der Admin-Seite, 33-06 Grenzblock nur lesend, 33-07 Kataloge und Hardware-Hinweis, 33-08 Doku, CHANGELOG und Store-Entwurf, 33-09 Nachweis EXCL-02 auf 8090 mit Fix L-33-09-01, 33-10 gemeinsame Owner-Abnahme mit fr-Einheiten-Fix). Phase 32 ausgeführt; 32-08 Audit abgeschlossen (32-AUDIT.md, status issues_found): M-32-01 gefixt (d09e5a5a), L-32-02 und L-32-06 gefixt (4c481f74), fünf LOW entschieden; M-32-02 (Dokumente gelöschter Nutzer bleiben im Index) offen als Owner-Frage. USRCH-01, USRCH-02 und USRCH-03 Complete
-Last activity: 2026-10-18 -- 33-10 abgeschlossen: gemeinsame Playwright-Abnahme auf 8090 (Schritte 1-4 live, Wortlaut über Tabellen, 33-09-Beleg genügt); Owner-Abnahme 18.10.2026 "fr angleichen sonst abgenommen" -> "Mo überall" -> "abgenommen"; Einheiten als sechs Katalogschlüssel (nur fr weicht ab: o/Ko/Mo/Go/To/Po, Schlüsselzahl 334 auf 340), Saat /Abnahme33 geräumt, Endzustand exclusions ["Archiv"], exclusion_patterns weg
+Plan: 11 von 11 erledigt (33-01 bis 33-11), Phase 33 ausgeführt, Verifikation offen
+Status: Phase 33 ausgeführt, Verifikation offen (33-01 Wortlaut abgenommen, 33-02 Muster im ExclusionService, 33-03 Weg C im Abgleich und zwei Statusgrenzen, 33-04 Kehrjob und Urteilsbereinigung, 33-05 Musterliste auf der Admin-Seite, 33-06 Grenzblock nur lesend, 33-07 Kataloge und Hardware-Hinweis, 33-08 Doku, CHANGELOG und Store-Entwurf, 33-09 Nachweis EXCL-02 auf 8090 mit Fix L-33-09-01, 33-10 gemeinsame Owner-Abnahme mit fr-Einheiten-Fix, 33-11 Audit: 33-AUDIT.md status fixed, H-33-01 (ff4deaa9) und H-33-02 (3657bb43) gefixt, sechs LOW entschieden, Owner-Fragen F1 bis F3 offen und nicht blockierend; EXCL-01, EXCL-02, EXCL-03, POL-01 und POL-03 Complete). Phase 32 ausgeführt; 32-08 Audit abgeschlossen (32-AUDIT.md, status issues_found): M-32-01 gefixt (d09e5a5a), L-32-02 und L-32-06 gefixt (4c481f74), fünf LOW entschieden; M-32-02 (Dokumente gelöschter Nutzer bleiben im Index) offen als Owner-Frage. USRCH-01, USRCH-02 und USRCH-03 Complete
+Last activity: 2026-10-19 -- 33-11 abgeschlossen: Performance-Audit auf 8090 (Matcher linear, Quotient 4,0/4,1; Write-Kosten 0 gegen 32 Muster +0,2 % im Median; Kehrjob 10 000 Dateien in 12 Bändern; Weg C 5 000 Dateien eine Scheibe je Takt; Seite +1,7 %), neuer LOW L-33-06; Fixes H-33-01 (Nicht-Liste in den Regelrouten -> 400 empty statt 500) und H-33-02 (Schlüssel anderen Typs -> leere Liste statt Listener-Stopp), je mit Zwilling für die Präfixliste; Korpus restlos entfernt, Endzustand wie nach 33-10
 
-Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passed, 659f5631); Phase 32: 8/8 Pläne (Verifikation offen); Phase 33: 10/11 Pläne
+Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passed, 659f5631); Phase 32: 8/8 Pläne (Verifikation offen); Phase 33: 11/11 Pläne (Verifikation offen)
 
 ## Performance Metrics
 
@@ -76,6 +76,7 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 - v1.5: 33-07 in ca. 85 min inkl. Volltestlauf (14:40 min) und ca. 35 min CI (2 Tasks, 25 Dateien)
 - v1.5: 33-08 in ca. 25 min inkl. Volltestlauf (14:11 min) und CI (2 Tasks, 4 Dateien)
 - v1.5: 33-09 in ca. 4 h 40 min inkl. Anhalten am Befund, Fix mit Volltestlauf (16:48 min), drei Abgleichsläufen nach Fälligkeit und CI (2 Tasks plus Fix, 7 Dateien)
+- v1.5: 33-11 in ca. 9 h über zwei Sitzungen (Task 3 und 4 ca. 4 h 30 min inkl. ca. 55 min Abgleich am Ruhe-Tor, zwei Volltestläufen je ca. 11 min und CI; 4 Tasks, 8 Dateien)
 
 ## Accumulated Context
 
@@ -130,6 +131,7 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 - 33-08: docs/admin-page.md Abschnitt Ausschlussmuster (Syntax mit Beispiel und Gegenbeispiel, Pfadraum, A1 zweite Regel *.KEY, NFC, Mac-Bundles, Grenzen 32/60, elf Codes, Weg A ab nächster Cron-Runde, Weg C spätestens beim nächsten Abgleich, Rückweg); docs/reconcile.md Abschnitt D-33-01 mit den Owner-Entscheiden vom 03.10. und 13.10.2026; CHANGELOG Added/Changed mit #21 und #22. Store-Entwurf Teil Phase 33 schlägt eine NEUE Funktionszeile vor, weil die README-Zeile Ausschlüsse/exclusions die Suchsyntax meint; Empfehlung: keine Store-Zeile für Grenzblock und Hardware-Satz. Abnahme REL-05. CI 57739fe8 zwei grün (nur Doku).
 - 33-09: EXCL-02 auf 8090 belegt (Weg A und Weg C mit Positivkontrolle, Kontrolle, Gegenfall .keynote und Gegenprobe auf bd4e13af); Befund L-33-09-01 nach Owner-Entscheid 14.10.2026 Option 1 gefixt: POST /admin/rules/preview mit Body, Logsatz je Liste, Gate scan_rules_routes (fe813988)
 - 33-10: Gemeinsame Owner-Abnahme 18.10.2026 auf 8090 (D-33-02 erfüllt): neun Vorab-Proben plus T-33-31 grün in de/en/fr (Protokoll 33-10-ABNAHME.md), Runde live (Regelblock, Ablehnung, Suche P 0/Q 1 als testuser, Doku-Anker über blob/main), O2/O3/O5 akzeptiert, O4 Variante a (Satz über Tabelle F; Host-Backend auf Windows meldet keinen Speicher, judge_hardware antwortete memory_unknown). O1 umgesetzt: Größeneinheiten als sechs Katalogschlüssel (Template $size, admin.js sizeUnits()), nur fr weicht ab (o, Ko, Mo, Go, To, Po), Schlüsselzahl 334 auf 340, Baumhash-Journal Plan 33-10 (9eff47b4). "Enter a size ... MB."-Satz bewusst nicht umgebaut (fr sagt dort schon Mo). EXCL/POL-Anforderungen bleiben Pending bis 33-11.
+- 33-11: Audit Phase 33 geschlossen (33-AUDIT.md, status fixed). H-33-01: Regelrouten nehmen beide Listen als mixed, eine Nicht-Liste ergibt 400 mit dem bestehenden Code empty (ff4deaa9). H-33-02: patterns() und prefixes() lesen einen Schlüssel anderen Typs als leere Liste mit Zählerwarnung (3657bb43). LOW nach Entscheidungslinien des Orchestrators (Owner schlief, überstimmbar): L-33-01 accept (Orakel liest den Rückfall ohne Normalizer, kein xfail), L-33-02 accept (F1 Bidi), L-33-03 accept mit Doku-Präzisierung (F2 Fingerabdruck im Jobargument), L-33-04 und L-33-05 accept; L-33-06 (Ruhe-Tor zwischen Mounts schließt den Zyklus) accept nach Executor-Entscheid, Zielphase 36 (F3)
 
 ### Offene Faeden (kein aktiver Auftrag)
 
@@ -163,6 +165,6 @@ Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passe
 
 ## Session Continuity
 
-Last session: 2026-10-14T13:05:00.000Z
-Stopped at: Completed 33-09-PLAN.md, weiter mit 33-10
+Last session: 2026-10-19T03:30:00.000Z
+Stopped at: Completed 33-11-PLAN.md, Phase 33 ausgeführt (Verifikation offen), weiter mit Phase 34
 Resume file: None

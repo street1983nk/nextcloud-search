@@ -21,9 +21,9 @@
 
 ### Ausschluesse (EXCL, Issue #22)
 
-- [ ] **EXCL-01**: Admin kann Ausschlussmuster mit Platzhaltern (z. B. `*.photoslibrary`, `*/node_modules/*`) auf der Admin-Seite pflegen; bestehende Praefix-Ausschluesse bleiben gueltig
-- [ ] **EXCL-02**: Mac-Bundles (Ordner mit Bundle-Endungen wie .photoslibrary, .app, .bundle) koennen mit einer Regel komplett ausgeschlossen werden; bereits indexierte Treffer daraus verschwinden aus dem Index
-- [ ] **EXCL-03**: Ausgeschlossene Dateien zaehlen sichtbar als "excluded" und nicht als Fehler; Musterzahl und -laenge sind begrenzt (kein ReDoS, keine Regex-Eingabe)
+- [x] **EXCL-01**: Admin kann Ausschlussmuster mit Platzhaltern (z. B. `*.photoslibrary`, `*/node_modules/*`) auf der Admin-Seite pflegen; bestehende Praefix-Ausschluesse bleiben gueltig
+- [x] **EXCL-02**: Mac-Bundles (Ordner mit Bundle-Endungen wie .photoslibrary, .app, .bundle) koennen mit einer Regel komplett ausgeschlossen werden; bereits indexierte Treffer daraus verschwinden aus dem Index
+- [x] **EXCL-03**: Ausgeschlossene Dateien zaehlen sichtbar als "excluded" und nicht als Fehler; Musterzahl und -laenge sind begrenzt (kein ReDoS, keine Regex-Eingabe)
 
 ### Formate (FMT)
 
@@ -42,9 +42,9 @@
 
 ### Feinschliff (POL)
 
-- [ ] **POL-01**: Admin sieht die wirksamen Grenzwerte (Zellgrenze, Adressraum, Groessengrenze, OCR-Seitendeckel) auf der Admin-Seite, nur lesend, mit Hinweis wie sie geaendert werden (#21)
+- [x] **POL-01**: Admin sieht die wirksamen Grenzwerte (Zellgrenze, Adressraum, Groessengrenze, OCR-Seitendeckel) auf der Admin-Seite, nur lesend, mit Hinweis wie sie geaendert werden (#21)
 - [x] **POL-02**: Datei mit veralteter Groesse im Dateicache endet nicht mehr als `repeatedly_stuck`, sondern wird korrekt gelesen oder mit benanntem Urteil uebersprungen (F-29-03)
-- [ ] **POL-03**: Hardware-Hinweis "This box has fewer cores..." ist in allen Katalogen verstaendlich umformuliert
+- [x] **POL-03**: Hardware-Hinweis "This box has fewer cores..." ist in allen Katalogen verstaendlich umformuliert
 
 ### Stretch (STR)
 
@@ -88,9 +88,9 @@
 | USRCH-01 | Phase 32 | Complete (Owner-Abnahme 13.10.2026 in 32-07, Befund A gefixt 4d616071, Symbole f4fc7efa und f60ca146; serverseitig in 32-01, ed2908fc; Menüeinträge in 32-04, 68893ef0; Kataloge in 32-05, 0f355b0b; deploy-harp 33/34/35/arm64 in 32-06, b44006dd) |
 | USRCH-02 | Phase 32 | Complete (Owner-Abnahme 13.10.2026 in 32-07; serverseitig in 32-02, 53daf104; Budget gemessen in 32-03, 060d637b, FOLDER_MAX_ROUNDS 12; Ordnereintrag im Menü in 32-04, 68893ef0; Kataloge in 32-05, 0f355b0b; Gruppenordner- und Share-Beleg 32-06, 64350f8c, Integration 38339350216; deploy-harp 33/34/35/arm64 in 32-06) |
 | USRCH-03 | Phase 32 | Complete (Backend-Hälfte und PHP-Parser in 32-01, ed2908fc; Ordner fail-open in 32-02, 53daf104; CI-Beleg auf 33/34/35/arm64 in 32-06, b44006dd, HaRP 38339350221; Audit 32-08: Punktsegment und NFD gaben eine leere Gruppe, gefixt d09e5a5a, Korpus 59 Werte gegen 8090 grün) |
-| EXCL-01 | Phase 33 | Pending |
-| EXCL-02 | Phase 33 | Pending |
-| EXCL-03 | Phase 33 | Pending |
+| EXCL-01 | Phase 33 | Complete |
+| EXCL-02 | Phase 33 | Complete |
+| EXCL-03 | Phase 33 | Complete |
 | FMT-01 | Phase 31 | Complete (E2E in deploy-harp 38256198997, 31-13; Audit 31-15: Kopfzeilengrenze H-31-01, deploy-harp 38292944828) |
 | FMT-02 | Phase 31 | Complete (E2E in deploy-harp 38256198997, 31-13; Audit 31-15: H-31-02 und L-31-02 gefixt) |
 | FMT-03 | Phase 31 | Complete (E2E in deploy-harp 38256198997, 31-13; Audit 31-15: Word 6/95 als unsupported_variant, M-31-02) |
@@ -100,9 +100,9 @@
 | CZ-01 | Phase 30 | Complete |
 | CZ-02 | Phase 30 | Complete |
 | CZ-03 | Phase 30 | Complete |
-| POL-01 | Phase 33 | Pending |
+| POL-01 | Phase 33 | Complete |
 | POL-02 | Phase 31 | Complete |
-| POL-03 | Phase 33 | Pending |
+| POL-03 | Phase 33 | Complete |
 | STR-01 | Phase 35 | Pending |
 | STR-02 | Phase 35 | Pending |
 | STR-03 | Phase 35 | Pending |

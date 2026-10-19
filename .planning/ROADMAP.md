@@ -183,7 +183,7 @@ Plans:
 - [x] 33-08-PLAN.md: Doku (admin-page.md, reconcile.md), CHANGELOG, Store-Entwurf Teil Phase 33 (Abnahme REL-05) (57739fe8)
 - [x] 33-09-PLAN.md: Nachweis EXCL-02 auf 8090 über Weg A und Weg C mit Positivkontrolle und Gegenprobe
 - [x] 33-10-PLAN.md: Owner-Abnahme gemeinsam per Playwright (Checkpoint), Wortlaut nachziehen (fr-Einheiten Mo, 18.10.2026); Anforderungen hakt 33-11 ab
-- [ ] 33-11-PLAN.md: Security-, Bug- und Performance-Audit (Matcher-Orakel, Schreibpfad, Kehrjob), Befunde fixen
+- [x] 33-11-PLAN.md: Security-, Bug- und Performance-Audit (Matcher-Orakel, Schreibpfad, Kehrjob), Befunde fixen (H-33-01 ff4deaa9, H-33-02 3657bb43, sechs LOW entschieden; EXCL-01..03, POL-01, POL-03 Complete)
 **UI hint**: yes
 
 ### Phase 34: Umstiegsweg
@@ -232,7 +232,7 @@ Plans:
 | 30. Owner-Tor, Schema und Tschechisch | v1.5 | 9/9 | Complete | 2026-10-10 |
 | 31. Neue Formate und Nachholweg | v1.5 | 15/15 | In Progress (Verifikation offen) | - |
 | 32. Filter in der Unified Search | v1.5 | 8/8 | Executed, verification pending | - |
-| 33. Ausschlussmuster und Admin-Feinschliff | v1.5 | 9/11 | In Progress | - |
+| 33. Ausschlussmuster und Admin-Feinschliff | v1.5 | 11/11 | Executed, verification pending | - |
 | 34. Umstiegsweg | v1.5 | 0/? | Not started | - |
 | 35. Stretch: Aehnliche Dokumente und Spikes | v1.5 | 0/? | Not started | - |
 | 36. Haertung und Store-Einreichung 1.5.0 | v1.5 | 0/? | Not started | - |

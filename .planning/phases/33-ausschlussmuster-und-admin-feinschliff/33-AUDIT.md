@@ -9,15 +9,21 @@ findings:
   medium: 0
   low: 6
   total: 8
-status: issues_found
+status: fixed
+fix_run: 2026-10-19
+fix_commits: [ff4deaa9, 3657bb43]
+fixed: [H-33-01, H-33-02]
+still_open: [L-33-01, L-33-02, L-33-03, L-33-04, L-33-05, L-33-06]
 ---
 
 # Phase 33: Security-, Bug- und Performance-Audit
 
-**Stand:** Task 1 (Sicherheit) und Task 2 (Fehler) abgeschlossen am 18.10.2026, Task 3
-(Performance) am 19.10.2026. Task 4 (Fixes, LOW-Entscheidungen, Abschluss) folgt; `fix_run`,
-`fix_commits`, `fixed` und `still_open` trägt erst Task 4 ein. Rote Proben stehen bis Task 4
-als `xfail(strict=True)` mit der Befund-ID im Test.
+**Stand:** geschlossen am 19.10.2026. Task 1 (Sicherheit) und Task 2 (Fehler) am 18.10.,
+Task 3 (Performance) und Task 4 (Fixes, LOW-Entscheidungen, Abschluss) am 19.10.2026. Beide
+HIGH-Befunde sind gefixt und mit Regressionstests belegt (Abschnitt "Fixes"), die sechs
+LOW-Befunde entschieden (Abschnitt "LOW-Entscheidungen"); kein `xfail` mehr im Audit-Test.
+Der Owner schlief während Task 4; die LOW-Entscheidungen folgen Entscheidungslinien des
+Orchestrators und sind als solche gekennzeichnet, damit der Owner sie überstimmen kann.
 
 **Umfang:** `git diff 12a73359..92441a16` (Basis = Elternteil von 75f5f29e, dem ersten
 Commit mit "(33-02)"; 21 Commits). Mit Planung 75 Dateien, 10 030 Zeilen dazu, 551 weg;
@@ -481,6 +487,7 @@ außer den 20, die vor dem Audit schon da waren (13.10. und 18.10.).
   einen ungültigen Eintrag mit einem Code ablehnen (400, Code statt Wert), in Vorschau und
   Speichern gleich; Regressionstest: die zwei xfail-Fälle dieses Befunds und
   `test_a_wrong_list_shape_leaves_neither_a_500_nor_a_value_in_the_log`.
+- **Status: gefixt** in ff4deaa9 (siehe "Fixes"), mit dem Zwilling `exclusions`.
 
 ### H-33-02 (HIGH): Ein Musterschlüssel anderen Typs hält den Listener an und bricht Seite und Übersicht
 
@@ -504,6 +511,9 @@ außer den 20, die vor dem Audit schon da waren (13.10. und 18.10.).
 - **Fixvorschlag:** in `patterns()` (und `prefixes()`) den Typkonflikt fangen, als
   unbrauchbare Liste zählen (Warnung mit Zählern) und `[]` liefern; Regressionstest: der
   xfail-Fall `integer` und ein PHPUnit-Fall mit werfendem `getValueArray`.
+- **Status: gefixt** in 3657bb43 (siehe "Fixes"). Der Zwilling in `prefixes()` war auf
+  8090 vor dem Fix ebenso rot (Seite und Übersicht 500, keine Queue-Zeile, `diagnose`
+  Exit 1) und ist mitgefixt.
 
 ### L-33-01 (LOW): Der Treiber von 33-02 läuft ohne Normalizer, die NFC-Hälfte sieht er nicht
 
@@ -617,3 +627,69 @@ außer den 20, die vor dem Audit schon da waren (13.10. und 18.10.).
 | Räumwege | echte Saat, echte Speicherroute, Nachfolger über `IJobList::add` des Kerns, Abgleich über den Stempel in `state.db` statt über Tests mit Doppeln | B1 bis B5 in Ordnung |
 | Wettlauf | zwei Sitzungen hinter einer Barriere, 36 Runden | Job des gespeicherten Satzes immer da; L-33-05 |
 | Seite mit 1.4.x-Status | Proxy, der zwei Felder aus `/status` nimmt, Seite im Browser | Zeilen verborgen, keine Fehler |
+| Laufzeit des Matchers | Treiber im Modus `timing`, 150 Aufrufe je Zelle, Quotient statt absoluter Zeit | linear, Quotient 4,0 und 4,1 |
+| Kosten je Write | verschränkte Upload-Reihe aus Client-Sicht und zusätzlich `isExcluded()` im Prozess der Instanz | +0,2 % im Median, 0,1 ms bei 32 Mustern |
+| Kehrjob | Löschzeilen über einen Trigger auf der Tabelle gezählt, nicht über den Zähler des Jobs | Löschzeilen gleich Treffer |
+| Weg C | Zeitpunkte aus dem mitgelesenen Backend-Log, zweite Runde mit Trigger | eine Scheibe je Takt; L-33-06 |
+| Fixes | RED vor dem Fix auf 8090 gefahren (11 rot), GREEN danach, PHPUnit-Fälle in CI | siehe "Fixes" |
+
+## Fixes (Task 4)
+
+Beide Fixes einzeln, je mit RED vor dem Fix, GREEN danach, voller Suite und Gates und dem
+Baumhash-Journal des PHP-Teils (`backend/tests/test_measurement_scripts.py`) im selben
+Commit. Kein Fix berührt Schema, Indexmarken oder eine Migration (D-30-08), keiner einen
+sichtbaren Satz: die Ablehnung nutzt den bestehenden Code `empty` (der Satz der Seite für
+diesen Code bleibt), die Warnzeile ist die bestehende mit Zählern.
+
+**RED** am 19.10.2026 gegen den unveränderten PHP-Stand (Testmodul mit den neuen
+Erwartungen, ohne xfail):
+`uv run python -m pytest -q tests/test_phase33_audit.py -p no:randomly -k "refused_entry_names or wrong_list_shape or second_writer or prefix_key_of_another_type or refused_save_writes"`:
+**11 failed**, 68 passed. Rot: fünf Formen im Ablehnungskorpus (String, Zahl, leerer
+String statt Musterliste; String und Zahl statt Präfixliste: Vorschau 400 ohne Code,
+Speichern 500), vier Fälle der Logprobe (beide Listen, String und Zahl), der Zweitschreiber
+`integer` und der neue Zwilling `test_a_prefix_key_of_another_type_breaks_neither_page_nor_listener`
+(Übersicht 500, Seite 500, PUT 201 ohne Queue-Zeile, `diagnose` Exit 1).
+
+| Befund | Commit | Fix (Datei) | GREEN | Suite und Gates |
+|---|---|---|---|---|
+| H-33-01 | ff4deaa9 | `php/lib/Controller/SettingsController.php`: `previewRules` und `saveRules` nehmen beide Listen als `mixed`; `listOf()` lehnt eine Nicht-Liste mit `empty` ab, ein Objekt bleibt seine Werte | 8090 nach Ablauf des OPcache (60 s): 79 passed, die zwei H-33-02-Fälle noch strict xfail; PHPUnit `SettingsControllerTest` +16 Fälle (je fünf Formen je Liste und Route, Objekt) | 5705 passed, 252 skipped; ruff, ruff format, pyright 0, vulture leer; `php -l` |
+| H-33-02 | 3657bb43 | `php/lib/Service/ExclusionService.php`: `patterns()` und `prefixes()` fangen `AppConfigTypeConflictException`, lesen den Schlüssel als Liste ohne brauchbaren Eintrag, merken sie für die Anfrage und melden die bestehende Warnung mit `unusable: 1, inForce: 0` | 8090: Zweitschreiber mit allen fünf Formen und Zwilling grün (6 passed), Orakel und Quelltextproben grün; PHPUnit `ExclusionServiceTest` +3 Fälle | 5705 passed, 252 skipped; Gates grün; `php -l` |
+
+Die Warnung erscheint im Log als `"data":{"app":"findling","unusable":"1","inForce":"0"}`
+(der Kern ergänzt `app` und schreibt die Zahlen als Text); die Probe prüft genau das. Der
+Treiber von 33-02 blieb unverändert; der Fang braucht dort keine Klasse, ein `catch` lädt
+nichts.
+
+Dazu ohne Produktcode: die zwei xfails von L-33-01 sind ersetzt (siehe unten), die Doku
+für L-33-03 präzisiert (`docs/admin-page.md`, Abschnitt "Was im Protokoll steht").
+
+**CI** des Stands 3657bb43 (ein Push mit ee7a101f, 5b2cf2f5, 003cee5d, ff4deaa9,
+3657bb43): alle acht Läufe grün (`gh run watch --exit-status` je ID): PHP and store metadata gates 39189895915 (PHPUnit OK, 810 Tests, 3197 Assertions), Python gates 39189895896, Security scans 39189895934, Resilience 39189895905, Integration 39189895884, HaRP deploy 39189895882, Multi-arch image 39189895922, OpenSSF Scorecard 39189895921. Danach das ganze Audit-Modul gegen 8090 (mit `FINDLING_AUDIT33_STATE_DB` und `FINDLING_AUDIT33_NETWORK=1`): **116 passed** in 14:49 min, kein xfail, kein Skip; Endzustand danach `exclusions` `["Archiv"]`, `exclusion_patterns` fehlt, Jobliste nur ScanRecountJob.
+
+## LOW-Entscheidungen
+
+"Orchestrator" heißt: Entscheidungslinie des Orchestrators für die Nacht vom 18. auf den
+19.10.2026, der Owner schlief; jede kann der Owner überstimmen. "Executor" heißt: neu in
+Task 3 gefunden, ohne Linie, vom Ausführenden entschieden.
+
+| Befund | Entscheidung | Grund | Zielphase | Quelle |
+|---|---|---|---|---|
+| L-33-01 | accept | Kein Fehler des Produkts: die Laufzeit von Nextcloud hat `\Normalizer` immer (intl oder Polyfill des Servers), auf 8090 belegt (S1: 0 Abweichungen auf `nextcloud:34.0.3-apache`, ein NFD-Muster per occ trifft den NFC-Namen). Die zwei xfails sind ersetzt: der Test fragt das Image, ob die Klasse existiert, und das Orakel liest auf einem Image ohne sie den dokumentierten Rückfall (Rohwert); jede andere Regel wird gleich geprüft. Die Positivkontrolle `test_the_fallback_of_the_oracle_is_not_a_blind_spot` zeigt, dass beide Lesarten eines NFD-Musters verschieden treffen. Grün auf `php:8.3-cli` und auf dem Image der Instanz (je 18 passed). | keine | Orchestrator |
+| L-33-02 | accept | Nur Admins schreiben Muster; Bidi- und Formatzeichen als `control_character` abzulehnen ist eine Verhaltensänderung der Eingabe, die der Owner entscheidet (Owner-Frage F1). | 36 | Orchestrator |
+| L-33-03 | accept, Doku präzisiert | Die Zeilen schreibt der Kern, nicht Findling. `docs/admin-page.md` sagt jetzt "Findling selbst schreibt nie ..." und nennt die Ausnahmen des Kerns (Debug-Level 0, Jobargument bei Start und Fehler, Feld `url`). Keine Katalogänderung. Den Fingerabdruck aus dem Jobargument zu nehmen ändert das Verhalten des Kehrjobs (Owner-Frage F2). | 36 | Orchestrator |
+| L-33-04 | accept | Der H-33-01-Fix erledigt ihn nicht (er betrifft die Liste, nicht ihre Einträge), macht ihn aber stimmig: eine Nicht-Liste und ein Eintrag, der kein Text ist, heißen beide `empty`. Erreichbar nur über eine gebaute Anfrage, nie über das Formular, kein Wert in Antwort oder Log. | keine | Orchestrator |
+| L-33-05 | accept | Hergeleitet, in 36 Runden mit zwei gleichzeitigen Speichervorgängen nie beobachtet; Folge wäre nur Verzögerung, der nächste Abgleich (Weg C) heilt es. | 36 (Launch-Korpus) | Orchestrator |
+| L-33-06 | accept | Folge ist ein Zyklus Verzögerung für die Mounts hinter der Torgrenze, kein Datenverlust; Weg A räumt neue Muster unabhängig davon. Die Regel stammt aus Phase 3 (außerhalb des Phasen-Diffs), und ein Fix ändert die Zyklusregel des Abgleichs, also den Kern des Netzes; das gehört in die Launch-Härtung mit eigener Gegenprobe (Owner-Frage F3). | 36 | Executor |
+
+## Offene Owner-Fragen
+
+Keine blockiert den Abschluss der Phase (alle LOW).
+
+- **F1 (L-33-02):** Sollen Bidi- und Formatzeichen (U+200E, U+200F, U+202A bis U+202E,
+  U+2066 bis U+2069, U+061C) in Mustern und Präfixen als `control_character` abgelehnt
+  werden? Satz und Code bestehen schon; geändert würde nur, was abgelehnt wird.
+- **F2 (L-33-03):** Soll das Argument des Kehrjobs den Fingerabdruck nicht mehr tragen
+  (etwa eine Laufnummer in appconfig statt des Hashes im Argument), damit auch die
+  Fehlerzeile des Kerns auf Level 3 ihn nicht nennt?
+- **F3 (L-33-06):** Soll der Abgleich in Phase 36 die Zyklusregel so ändern, dass ein Halt
+  am Ruhe-Tor zwischen zwei Mounts den Zyklus offen lässt?

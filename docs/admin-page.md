@@ -900,7 +900,18 @@ Präfixe werden zuerst geprüft.
 
 Nur Zähler und Kennungen: Zahl der Muster, Zahl der geplanten Kehrjobs,
 gesehene und geräumte Dateien je Lauf mit Speicher-ID und Cursor, verworfene
-Einträge. Nie ein Muster, ein Pfad oder ein Fingerabdruck des Mustersatzes.
+Einträge. Findling selbst schreibt nie ein Muster, einen Pfad oder einen
+Fingerabdruck des Mustersatzes.
+
+Zwei Zeilen des Nextcloud-Kerns sind davon ausgenommen, weil Findling sie nicht
+schreibt (Audit 33-11, L-33-03): Auf Loglevel 0 (Debug) protokolliert der Kern
+Abfragen samt Argumenten, darin kann ein Muster oder der Fingerabdruck stehen,
+und er nennt das Argument eines Hintergrundjobs beim Start (Level 0) und bei
+einem Fehler (Level 3, "Error while running background job"); beim Kehrjob ist
+das der Fingerabdruck. Auf dem üblichen Loglevel 2 erscheint im Normalbetrieb
+keine dieser Zeilen. Unabhängig davon trägt jede Zeile des Protokolls, auch eine
+Warnung von Findling, im Feld `url` die Adresse der Anfrage, in der sie entstand,
+bei einem Upload also dessen Pfad; dieses Feld setzt der Kern.
 
 ## Was beim Hinzufügen und beim Entfernen eines Ausschlusses passiert
 
