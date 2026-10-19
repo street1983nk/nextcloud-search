@@ -13,12 +13,15 @@ the unfiltered list.
 """
 
 import dataclasses
+import math
 from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 from tantivy import Document, Index, Query
 
+from findling.config import SIMILAR_CEILING
+from findling.embed.model import to_int8
 from findling.index.open import open_index
 from findling.index.schema import (
     FIELD_BODY_DE,
@@ -30,9 +33,10 @@ from findling.index.schema import (
     FIELD_STORAGE_ID,
     FIELD_TITLE,
 )
-from findling.index.search import CandidatePage, candidates
+from findling.index.search import CandidatePage, candidates, similar_candidates
 from findling.query.rewrite import build_query
 from findling.store.repo import Store, open_store
+from findling.store.vectors import EMBEDDING_DIMENSIONS, Chunk, VectorStore, open_vectors
 
 SEARCH_SOURCE = Path(__file__).resolve().parents[1] / "src" / "findling" / "index" / "search.py"
 
@@ -485,3 +489,111 @@ def test_the_merge_never_asks_who_may_see_a_document() -> None:
 
     assert "prefilter_visible" not in fusion
     assert "uid" not in fusion
+
+
+# ---------------------------------------------------------------------------
+# Similar documents (STR-01, plan 35-05): one scan over stored vectors
+# ---------------------------------------------------------------------------
+
+
+def _at(angle: float) -> bytes:
+    """A stored int8 vector on the unit circle of the first two axes.
+
+    Two such vectors at angles a and b lie 127 * 2 * sin(|a - b| / 2) apart on
+    the int8 L2 scale, so a test can place a neighbour at a chosen distance
+    without a model: 0.16 is about 20, 0.32 about 40 and 0.70 about 87.
+    """
+    return to_int8([math.cos(angle), math.sin(angle), *([0.0] * (EMBEDDING_DIMENSIONS - 2))])
+
+
+def _one_chunk(vectors: VectorStore, file_id: int, embedding: bytes) -> None:
+    vectors.replace_chunks(file_id, [Chunk(ordinal=0, char_start=0, char_end=100, embedding=embedding)])
+
+
+@pytest.fixture
+def similar_vectors(tmp_path: Path) -> Iterator[VectorStore]:
+    opened = open_vectors(tmp_path / "vectors.db")
+    yield opened
+    opened.close()
+
+
+def test_a_source_the_user_is_not_confirmed_for_answers_nothing_and_reads_no_vector(
+    store: Store, similar_vectors: VectorStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # File 2 is bob's alone. The answer for alice has to be the same empty list
+    # an unknown file gets, and it must come before a single vector is read:
+    # otherwise the time of the answer already tells whether file 2 has any.
+    _one_chunk(similar_vectors, 2, _at(0.0))
+    _one_chunk(similar_vectors, 3, _at(0.0))
+    reads: list[int] = []
+    original = VectorStore.vectors_of
+
+    def spy(self: VectorStore, file_id: int) -> list[bytes]:
+        reads.append(file_id)
+        return original(self, file_id)
+
+    monkeypatch.setattr(VectorStore, "vectors_of", spy)
+
+    assert similar_candidates(store, similar_vectors, ALICE, 2, 10) == []
+    assert reads == []
+    assert similar_candidates(store, similar_vectors, CAROL, 3, 10) == []
+    assert reads == []
+
+
+def test_a_source_without_vectors_answers_nothing(store: Store, similar_vectors: VectorStore) -> None:
+    _one_chunk(similar_vectors, 3, _at(0.0))
+
+    assert similar_candidates(store, similar_vectors, ALICE, 1, 10) == []
+
+
+def test_a_source_whose_vectors_have_no_direction_answers_nothing(store: Store, similar_vectors: VectorStore) -> None:
+    _one_chunk(similar_vectors, 1, bytes(EMBEDDING_DIMENSIONS))
+    _one_chunk(similar_vectors, 3, _at(0.0))
+
+    assert similar_candidates(store, similar_vectors, ALICE, 1, 10) == []
+
+
+def test_the_source_never_answers_itself_but_its_identical_copy_does(
+    store: Store, similar_vectors: VectorStore
+) -> None:
+    _one_chunk(similar_vectors, 1, _at(0.0))
+    _one_chunk(similar_vectors, 3, _at(0.0))
+
+    assert similar_candidates(store, similar_vectors, ALICE, 1, 10) == [3]
+
+
+def test_far_neighbours_and_unconfirmed_ones_drop_without_pushing_out_a_confirmed_one(
+    store: Store, similar_vectors: VectorStore
+) -> None:
+    # File 2 sits closest but is bob's alone, file 5 is alice's and further
+    # out, file 7 lies beyond the ceiling.
+    _one_chunk(similar_vectors, 1, _at(0.0))
+    _one_chunk(similar_vectors, 2, _at(0.08))
+    _one_chunk(similar_vectors, 5, _at(0.32))
+    _one_chunk(similar_vectors, 7, _at(0.70))
+
+    far = 127 * 2 * math.sin(0.70 / 2)
+    assert far > SIMILAR_CEILING
+    assert similar_candidates(store, similar_vectors, ALICE, 1, 10) == [5]
+    assert similar_candidates(store, similar_vectors, BOB, 1, 10) == [2, 5]
+
+
+def test_the_answer_is_capped_at_the_limit_and_ordered_by_the_nearest_chunk(
+    store: Store, similar_vectors: VectorStore
+) -> None:
+    _one_chunk(similar_vectors, 1, _at(0.0))
+    # Written far to near, so the order of the answer cannot be the insertion.
+    for file_id, angle in ((11, 0.32), (9, 0.24), (5, 0.16), (3, 0.08)):
+        _one_chunk(similar_vectors, file_id, _at(angle))
+    # A second chunk of file 11 that sits nearest of all: the document ranks by
+    # its best chunk.
+    similar_vectors.replace_chunks(
+        11,
+        [
+            Chunk(ordinal=0, char_start=0, char_end=100, embedding=_at(0.32)),
+            Chunk(ordinal=1, char_start=100, char_end=200, embedding=_at(0.04)),
+        ],
+    )
+
+    assert similar_candidates(store, similar_vectors, ALICE, 1, 10) == [11, 3, 5, 9]
+    assert similar_candidates(store, similar_vectors, ALICE, 1, 2) == [11, 3]

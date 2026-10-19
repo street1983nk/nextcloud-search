@@ -45,9 +45,9 @@ from typing import Final, Protocol
 
 from tantivy import DocAddress, Document, Index, Occur, Order, Query, Schema, Searcher, SnippetGenerator
 
-from findling.config import ARCHIVE_MEMBER_MARK, SEARCH_SCAN_MAX, settings
+from findling.config import ARCHIVE_MEMBER_MARK, SEARCH_SCAN_MAX, SIMILAR_CEILING, SIMILAR_SCAN_CHUNKS, settings
 from findling.embed.model import EmbedOutcome, to_int8
-from findling.index.fusion import ChunkHit, documents_from_chunks, near_enough, reciprocal_rank_fusion
+from findling.index.fusion import ChunkHit, centroid, documents_from_chunks, near_enough, reciprocal_rank_fusion
 from findling.index.schema import FIELD_BODY_DE, FIELD_EXT, FIELD_FILE_ID, FIELD_MTIME
 from findling.store.repo import Store
 from findling.store.vectors import BestChunk, VectorStore
@@ -1010,3 +1010,59 @@ def snippets_for(
         # empty excerpt of before, which is still a hit.
         excerpts.append(SnippetText(file_id=file_id, text=_passage_of(document, ranked.get(file_id), limit=cap)))
     return excerpts
+
+
+def similar_candidates(store: Store, vectors: VectorStore, uid: str, file_id: int, limit: int) -> list[int]:
+    """The documents that lie near one document, as file ids, nearest first (STR-01).
+
+    One scan over the stock and no model: the source document is already in
+    the vector table, so the mean of its own chunks is the query
+    (:func:`findling.index.fusion.centroid`). No schema change and no second
+    index, which is criterion 1 of phase 35.
+
+    **The source is checked before anything is read about it.** The first
+    question is whether the asking user is confirmed for the source at all,
+    through the same one gate every candidate passes. A foreign source, an
+    unknown one and one without vectors all end in the same empty list, and the
+    first of them ends there before a single vector of it is touched, so
+    neither the answer nor its timing tells whether somebody else's file has
+    vectors (T-35-13).
+
+    **The neighbours pass that gate as well, after the ranking and before the
+    cap.** The scan asks for :data:`findling.config.SIMILAR_SCAN_CHUNKS` chunks
+    plus the chunks of the source, because the source chunks sit nearest of all
+    and are removed first. A document of another user that lies nearer than an
+    own one still takes a place in that window; with a window this wide that
+    only bites on a stock dense with foreign near-duplicates, and it is the
+    same displacement class the ordinary semantic round has (pitfall 2,
+    T-35-15, named in the audit of the phase).
+
+    **Distances never leave this function.** The answer is ids in rank order,
+    because a distance would be a statement about how well a document matched,
+    and this project keeps those out of everything that leaves the container
+    (D-14). The ceiling is the one measured for this view and not the one of
+    the search: :data:`findling.config.SIMILAR_CEILING`. It is handed to
+    :func:`findling.index.fusion.near_enough` as band as well, so the band never
+    narrows what the ceiling lets through.
+    """
+    if not _permit(store, uid, [Candidate(file_id=file_id, score=0.0, mtime=0)]):
+        return []
+    source = vectors.vectors_of(file_id)
+    if not source:
+        return []
+    query = centroid(source)
+    if query is None:
+        return []
+    width = SIMILAR_SCAN_CHUNKS + len(source)
+    neighbours = vectors.nearest(query, width, k_max=width)
+    near = near_enough(
+        [
+            ChunkHit(file_id=neighbour.file_id, chunk_id=neighbour.chunk_id, distance=neighbour.distance)
+            for neighbour in neighbours
+            if neighbour.file_id != file_id
+        ],
+        ceiling=SIMILAR_CEILING,
+        band=SIMILAR_CEILING,
+    )
+    ranked = [Candidate(file_id=document.file_id, score=0.0, mtime=0) for document in documents_from_chunks(near)]
+    return [candidate.file_id for candidate in _permit(store, uid, ranked)[:limit]]

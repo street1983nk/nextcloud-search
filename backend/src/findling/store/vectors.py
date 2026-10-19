@@ -245,6 +245,17 @@ WHERE v.embedding MATCH vec_int8(?) AND k = ?
 ORDER BY v.distance
 """
 
+# The stored vectors of one document, in the order its chunks were cut. The
+# order is part of the answer: a mean over them is only reproducible if the
+# inputs arrive the same way every time (plan 35-05).
+_VECTORS_OF_SQL: Final = """
+SELECT v.embedding
+FROM chunks AS c
+JOIN chunk_vectors AS v ON v.rowid = c.chunk_id
+WHERE c.file_id = ?
+ORDER BY c.ordinal
+"""
+
 # The metric of this stock, spelled out because best_chunk_for cannot let vec0
 # choose it. An ``int8[384]`` column ranks under the default metric of vec0,
 # which is L2, and the two ways of asking have to agree: a document that leads
@@ -611,6 +622,18 @@ class VectorStore:
                     Span(chunk_id=int(row[0]), ordinal=int(row[2]), char_start=int(row[3]), char_end=int(row[4]))
                 )
         return spans
+
+    def vectors_of(self, file_id: int) -> list[bytes]:
+        """The stored vectors of one document, in ordinal order, as raw bytes.
+
+        What the similar documents view starts from (STR-01): the document is
+        already in the stock, so its own vectors are the question and no model
+        has to run. Empty means no vectors for this document, and that answer is
+        the same for a document that was never embedded and one that does not
+        exist, because this module cannot tell the two apart and should not try.
+        """
+        rows = self._conn.execute(_VECTORS_OF_SQL, (file_id,))
+        return [bytes(row[0]) for row in rows]
 
     def trace(self, callback: Callable[[str], object] | None) -> None:
         """Report every statement this connection runs, or stop reporting.
