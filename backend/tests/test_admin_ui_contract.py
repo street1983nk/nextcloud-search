@@ -3622,6 +3622,18 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     wording is the one the owner accepted in 34-WORTLAUT.md, the five other
     languages are machine drafts under the same dated reservation as the rest.
     Whoever moves it next writes the next paragraph.
+
+    It stands at 348 since 19.10.2026, and the rise of seven is plan 35-13:
+    the wording of the similar documents view of STR-01 that plan 35-07 put
+    into the template, the link under every hit and its label with the title,
+    the heading "Similar to: %s", the way back to the results, the two empty
+    states "No similar documents found" with its explanation and "This file is
+    not available", the one sentence for an unknown, a foreign, a deleted and
+    an unreadable source file alike. All sixteen files moved in one commit, the
+    five language documents carry the rows, the German and French wording is
+    the one the owner accepted in 35-WORTLAUT.md, the five other languages are
+    machine drafts under the same dated reservation as the rest. Whoever moves
+    it next writes the next paragraph.
     """
     for language, twin in ((L10N_JSON, L10N_DE_DE_JSON), (L10N_JS, L10N_DE_DE_JS)):
         assert twin.is_file(), f"{twin.name} is missing, so everybody on de_DE reads this app in English"
@@ -3663,8 +3675,9 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     # of plans 33-05 and 33-06; the ten changed sentences, the seven box
     # sentences among them, changed their keys and so moved nothing), six of
     # plan 33-10 (the unit symbols of a size, the owner's answer to O1), one of
-    # plan 34-03 (the banner of UMST-02)
-    assert len(keys_of["de.json"]) == 341
+    # plan 34-03 (the banner of UMST-02), seven of plan 35-13 (the similar
+    # documents view of STR-01, wording of 35-WORTLAUT.md)
+    assert len(keys_of["de.json"]) == 348
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:

@@ -432,6 +432,13 @@ aus Plan 20-03. Diese Tabelle kann also nicht an einem Wortlaut zerbrechen.
 | `Search results` | Suchergebnisse | Zoekresultaten |
 | `%1$s in %2$s` | %1$s in %2$s | %1$s in %2$s |
 | `last opened` | zuletzt geöffnet | laatst geopend |
+| `Similar documents` | Ähnliche Dokumente | Vergelijkbare documenten |
+| `Similar documents to %s` | Ähnliche Dokumente zu %s | Vergelijkbare documenten bij %s |
+| `Similar to: %s` | Ähnlich zu: %s | Vergelijkbaar met: %s |
+| `Back to the results` | Zurück zu den Treffern | Terug naar de resultaten |
+| `No similar documents found` | Keine ähnlichen Dokumente gefunden | Geen vergelijkbare documenten gevonden |
+| `None of your other files is close enough in content. Files that have not yet been prepared for the semantic search, or that contain no text, have no similar documents.` | Keine Ihrer anderen Dateien ist inhaltlich nah genug. Dateien, die noch nicht für die semantische Suche erfasst sind oder keinen Text enthalten, haben keine ähnlichen Dokumente. | Geen van uw andere bestanden komt inhoudelijk dicht genoeg in de buurt. Bestanden die nog niet zijn voorbereid voor de semantische zoekfunctie, of die geen tekst bevatten, hebben geen vergelijkbare documenten. |
+| `This file is not available` | Diese Datei ist nicht verfügbar | Dit bestand is niet beschikbaar |
 | `Show all results` | Alle Treffer anzeigen | Alle resultaten tonen |
 | `Opens the Findling results page` | Öffnet die Findling-Ergebnisseite | Opent de resultatenpagina van Findling |
 | `Previous page` | Vorherige Seite | Vorige pagina |
@@ -554,6 +561,8 @@ aus Plan 20-03. Diese Tabelle kann also nicht an einem Wortlaut zerbrechen.
 **Nachtrag 14.10.2026 (Phase 33, Plan 33-07).** Zwei Änderungen in einem Zug. Erstens der Hardware-Hinweis (POL-03): `hardware_short` und die sechs weiteren Sätze, die "box" sagten (Owner-Antwort G5 (c) in Plan 33-01), tragen neue Schlüssel; ihre Zeilen sind ersetzt, die Schlüsselzahl bleibt dabei gleich. Zweitens 28 neue Zeilen für die Sätze der Ausschlussmuster und des Grenzblocks (EXCL-01, EXCL-03, POL-01), dazu drei weitere ersetzte Zeilen: die Hilfe der Ordnerliste, die Abhilfe der Diagnose und der Satz zur Größendecke. Die Zeilen stehen an derselben Stelle wie in `php/l10n/de.json` und sind mechanisch aus den Katalogen übernommen. Der deutsche Wortlaut ist der, den der Owner am 13.10.2026 in Plan 33-01 abgenommen hat. Die niederländische Spalte ist ein maschineller Entwurf unter dem datierten Vorbehalt dieses Dokuments, abgeleitet aus den vorhandenen Werten verwandter Sätze (etwa `Excluded folders`, `Largest file to read` und der bisherigen Fassung von `hardware_short`); die Abnahme auf der Seite folgt in Plan 33-10.
 
 **Nachtrag 19.10.2026 (Phase 34, Plan 34-03).** Eine Zeile ist ergänzt: der Hinweis der Statusseite, solange eine App des Volltextsuche-Frameworks (fulltextsearch, files_fulltextsearch) neben Findling aktiviert ist (UMST-02). Sie steht an derselben Stelle wie in `php/l10n/de.json`, direkt hinter dem Platzbanner des Umbaus, und ist mechanisch aus den Katalogen übernommen. Der Linktext dahinter ist der vorhandene Schlüssel `Steps in the documentation`; die Adresse steht im Template und in keinem Katalog. Der deutsche Wortlaut ist der, den der Owner am 19.10.2026 in `34-WORTLAUT.md` abgenommen hat. Die niederländische Spalte ist ein maschineller Entwurf unter dem datierten Vorbehalt dieses Dokuments, abgeleitet aus den vorhandenen Werten verwandter Sätze (etwa `doorloop` für den Lauf und dem Infinitiv der Handlungsanweisungen).
+
+**Nachtrag 19.10.2026 (Phase 35, Plan 35-13).** Sieben Zeilen sind ergänzt: der Wortlaut der Ähnlich-Ansicht (STR-01), also der Textlink "Ähnliche Dokumente" an jedem Treffer samt vorgelesenem Namen mit dem Titel, die Überschrift "Ähnlich zu: %s", der Rückweg zu den Treffern und die beiden Leerzustände, davon einer für jede unbekannte, fremde, gelöschte oder nicht lesbare Ausgangsdatei. Sie stehen an derselben Stelle wie in `php/l10n/de.json`, direkt hinter `last opened`, und sind mechanisch aus den Katalogen übernommen. Der deutsche Wortlaut ist der, den der Owner am 19.10.2026 in `35-WORTLAUT.md` abgenommen hat. Die niederländische Spalte ist ein maschineller Entwurf unter dem datierten Vorbehalt dieses Dokuments.
 
 ## Ausnahmen für das Vollständigkeitsgate G2
 
