@@ -311,3 +311,84 @@ PYTHONUTF8=1 uv run python ../scripts/dev/vector_distances.py --similar --derive
 `<modellverzeichnis>` ist `/usr/local/share/findling/model` aus dem
 ausgelieferten Abbild, per `docker create` und `docker cp` nach außen kopiert.
 Der Lauf dauert auf der Entwicklungsmaschine rund 15 Sekunden.
+
+## 10. Nachmessung Weg 2: Fassungspaare
+
+Auf den Owner-Entscheid vom 19.10.2026 (Abschnitt 7, Weg 2) misst diese
+Nachmessung "verwandt" neu: nicht mehr eine Anfrage gegen ihren Abschnitt,
+sondern echte Dokumentpaare, Centroid gegen Centroid, so wie die
+Ähnlich-Ansicht fragt. Abschnitte 1 bis 9 bleiben als Beleg des ersten Laufs
+unverändert stehen.
+
+### 10.1 Regel (vor der Messung festgelegt)
+
+Diese Regel steht in einem eigenen Commit vor der Erweiterung des Werkzeugs und
+vor jeder Rohdatei der Nachmessung (Präfix `02-`). Der Wert wird mechanisch aus
+dem Raster abgeleitet, nicht nach Sicht der Zahlen gewählt.
+
+**Warum ein abgeleiteter Bestand und nicht `gruppen.tsv`.** Der e2e-Korpus hat
+26 Dateien mit Text, und seine Gruppen sind Themengruppen verschiedener Texte,
+keine Fassungen eines Inhalts. Ihre Zahlen sind seit Abschnitt 6 bekannt; eine
+neue Grenze auf denselben Paaren wäre nach Sicht der Zahlen gewählt. Der
+Korpus wird deshalb nicht verändert, und die Paar-Wahrheit kommt aus einem
+neuen, deterministisch erzeugten Bestand.
+
+**(F0) Der Bestand.** Quelle sind alle Abschnitte (Feld `passage`) der drei
+Dateien unter `testdata/semantik`, je Sprache für sich: Deutsch 120, Englisch
+42, Französisch 120, in der Reihenfolge der Datei. Je Sprache gilt:
+
+1. Ein Zufallsgenerator `random.Random(3504)` wird für jede Sprache neu
+   angelegt (Seed 3504, fest, hier festgelegt).
+2. Die Positionen 0 bis n minus 1 werden mit `shuffle` gemischt und der Reihe
+   nach in Blöcke zu je vier Abschnitten geteilt; ein Rest unter vier fällt
+   weg (Englisch: 2 Abschnitte). Das ergibt Deutsch 30, Englisch 10,
+   Französisch 30 Blöcke.
+3. **Basisdokument** eines Blocks: die vier Abschnitte in Blockreihenfolge,
+   getrennt durch eine Leerzeile.
+4. **Fassung** desselben Blocks: Block für Block zieht der Generator
+   `randrange(4)`, dieser Abschnitt wird gestrichen, die übrigen drei stehen in
+   umgekehrter Reihenfolge, getrennt durch eine Leerzeile. Das ist eine
+   überarbeitete Fassung: ein Absatz gestrichen, die anderen umgestellt, kein
+   Wort neu.
+5. Jedes Dokument wird wie im Produkt behandelt: Zerlegung mit dem Chunker des
+   Pakets, Einbettung als Passage, int8 per `to_int8`, Dokumentvektor per
+   `findling.index.fusion.centroid`.
+
+**Fassungspaare (verwandt):** je Block Basisdokument gegen seine Fassung,
+eine Distanz je Block. **Unbeteiligte Paare:** jedes ungeordnete Paar zweier
+Dokumente (Basis oder Fassung) aus verschiedenen Blöcken derselben Sprache.
+Sie teilen keinen Abschnitt. Erwartete Anzahlen: Deutsch 30 und 1740,
+Englisch 10 und 180, Französisch 30 und 1740.
+
+**(F1) Fassungen.** Kandidat ist der kleinste Rasterwert (Schritt 0,5 auf der
+int8-L2-Skala, 0 bis 254), unter dem (Distanz kleiner oder gleich dem Wert) in
+jeder Sprache mindestens 95 Prozent der Fassungspaare liegen. Bei 10
+englischen Paaren heißt das: alle 10.
+
+**(F2) Unbeteiligte.** Obergrenze ist der größte Rasterwert, der in jeder
+Sprache mindestens 90 Prozent der unbeteiligten Paare abschneidet (Distanz
+größer als der Wert). Die 90 Prozent sind dieselbe Grenze q wie in Abschnitt 1,
+mit derselben Herleitung (Liste von höchstens 10, Bezugsbestand 50
+unbeteiligte Dokumente, höchstens 5 Unbeteiligte im Mittel).
+
+**(F3) Der Wert.** Ist der Kandidat aus (F1) kleiner oder gleich der Obergrenze
+aus (F2), ist `SIMILAR_CEILING` die Mitte beider Werte, auf das 0,5-Raster
+abgerundet. Beide Enden sind Rasterwerte, die abgerundete Mitte liegt also
+immer zwischen ihnen und hält zu beiden Seiten Abstand, wie die Ableitung der
+Suchschwelle im September. Ist der Kandidat größer als die Obergrenze, oder
+gibt es keine Obergrenze, lautet das Ergebnis **"Regel nicht erfüllbar"**:
+kein Wert, beide Zahlen und der Verlust je Sprache in den Bericht, Plan 35-05
+startet nicht ohne Owner-Wort. Ein stiller Rückfall auf die Suchschwelle oder
+auf einen Wert aus Abschnitt 1 bis 9 ist ausgeschlossen.
+
+**(F4) Mindestumfang.** Hat eine Sprache weniger als 10 Fassungspaare, ist die
+Regel nicht prüfbar und das Ergebnis lautet ebenfalls "Regel nicht
+erfüllbar".
+
+**Was nicht entscheidet.** Die Gruppenprobe aus Abschnitt 1 (4) misst
+Themenverwandtschaft verschiedener Texte, nicht Fassungen eines Inhalts. Beim
+abgeleiteten Wert weist der Bericht ihre beiden Anteile (Gruppenpaare und
+Fremdpaare darunter) als Information aus, damit sichtbar ist, was der Wert für
+themenverwandte, aber verschiedene Dokumente bedeutet. Sie entscheidet nicht
+über den Wert. Annahme A1 (Mittelwert gegen Minimum) bleibt außerhalb dieser
+Nachmessung.
