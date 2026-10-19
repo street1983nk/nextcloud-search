@@ -1028,12 +1028,12 @@ def test_the_switch_line_is_line_one_of_the_page(language: str) -> None:
     assert lines[0] == FIRST_LINES[language]
 
 
-@pytest.mark.parametrize(
-    "language",
-    ["de", "en", pytest.param("fr", marks=pytest.mark.xfail(strict=True, reason="L-34-02"))],
-)
+@pytest.mark.parametrize("language", sorted(MIGRATION_PAGES))
 def test_the_formula_stands_on_one_line_of_the_page(language: str) -> None:
-    """A line based search (grep -F, a scraper of the store text) finds it."""
+    """A line based search (grep -F, a scraper of the store text) finds it.
+
+    Regression test of L-34-02: the French formula stood across a line break.
+    """
     lines = MIGRATION_PAGES[language].read_text(encoding="utf-8").splitlines()
     assert any(FORMULA_LINES[language] in line for line in lines)
 

@@ -4,9 +4,9 @@
 
 Cette page s'adresse aux administrateurs qui utilisent la recherche plein texte de Nextcloud
 (fulltextsearch) avec Elasticsearch ou une autre application de plateforme et veulent passer à
-Findling. Findling apporte la recherche plein texte, la recherche sémantique et l'OCR sans modifier
-les fichiers et sans Elasticsearch dans un seul conteneur, et ses résultats apparaissent dans la
-barre de recherche normale.
+Findling. Findling apporte la recherche plein texte, la recherche sémantique et
+l'OCR sans modifier les fichiers et sans Elasticsearch dans un seul conteneur, et ses résultats
+apparaissent dans la barre de recherche normale.
 
 Situation au 19 octobre 2026
 
