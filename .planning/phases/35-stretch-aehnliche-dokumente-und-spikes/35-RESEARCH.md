@@ -490,18 +490,22 @@ private function similarId(): ?int {
 | A6 | SMB listet Dateien, die der Nutzer nicht lesen darf, ohne aktivierte ACL-Prüfung | STR-03 Weg A | wenn falsch, wird Weg A sicherer; im Text als Prüfpunkt für v1.6 |
 | A7 | Ein Ähnlich-Ceiling lässt sich auf testdata/corpus und testdata/semantik sinnvoll ableiten (kleine Mengen) | Pitfall 3 | Schwelle zu weich/hart; Rückfall: 86,5 mit Vermerk, Owner-Frage |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Deutsches Testset 42 Fälle reicht für ein Verdikt?**
    - Bekannt: 2026-09-05 zeigte bei 42 Fällen t-Werte unter 1 für kleine Effekte; Französisch brauchte 120.
    - Unklar: ob der Owner vor der Messung `de.jsonl` auf 120 erweitern will (D-35-07 erlaubt es, wenn VOR der Messung; D-35-06 will Vergleichbarkeit, die ersten 42 bleiben unverändert).
    - Empfehlung: im Wortlaut-/Messvorbereitungs-Checkpoint als Frage stellen; Standard: 42 plus Vorzeichentest, Grenze offen benennen.
+   - RESOLVED: D-35-10 (Owner 19.10.): das deutsche Set wächst vor der Messung auf rund 120 Paare, die ersten 42 bleiben unverändert, e5-small wird im selben Lauf neu gemessen (Umsetzung 35-03).
 2. **amd64-Latenz auf dem Entwicklungsrechner oder auf einer Box?**
    - Empfehlung: Entwicklungsrechner mit gepinnten Kernen, wie Welle 0; nur bei RAM-Druck eine kleine x86-Box.
+   - RESOLVED: D-35-11 (Owner 19.10.): amd64 auf dem Entwicklungsrechner, strikt seriell, Browser zu; nur arm64 auf der gemieteten m7g (Umsetzung 35-09, 35-10).
 3. **Zustand "Quelle hat keine Vektoren" eigener Satz oder gleich "keine Nachbarn"?**
    - Empfehlung: gleicher Leerzustand mit erklärendem Satz (Datei noch nicht semantisch erfasst oder ohne Text); Wortlaut-Plan.
+   - RESOLVED: PE-35-3 (35-01-PLAN.md): ein Leerzustand "keine ähnlichen Dokumente" mit erklärendem Satz, getrennt vom einen Zustand "Datei nicht verfügbar"; Wortlaut final im Owner-Checkpoint 35-01 (Frage O4).
 4. **Ähnlich-Link auch bei Treffern der Namenssuche und bei Bildern ohne Text?**
    - Empfehlung: immer zeigen, der Leerzustand trägt; kein Vorab-Wissen über Vektoren auf der Seite (sonst neue Feldart im Kandidaten).
+   - RESOLVED: PE-35-2 (35-01-PLAN.md): Link an jedem Treffer, auch Namenstreffer und Bilder, ohne Vorwissen über Vektoren; Wortlaut final im Owner-Checkpoint 35-01 (Frage O1).
 
 ## Environment Availability
 
