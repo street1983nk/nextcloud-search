@@ -37,8 +37,10 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 import shutil
 import subprocess
+import sys
 import time
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
@@ -719,3 +721,536 @@ def test_toggling_the_flag_writes_no_log_line_with_an_app_id(clean_flags: None) 
     assert any(marker in line for line in access), "control line missing in the access log"
     named = [line for line in [*new_lines, *access] if any(a in line for a in APP_IDS)]
     assert named == []
+
+
+# ---------------------------------------------------------------------------
+# Bugs: the language map against an oracle
+# ---------------------------------------------------------------------------
+
+PAGE_BY_SUFFIX = {
+    ".md": TAG_BASE + "migrate-from-fulltextsearch.md",
+    ".fr.md": TAG_BASE + "migrate-from-fulltextsearch.fr.md",
+    ".en.md": TAG_BASE + "migrate-from-fulltextsearch.en.md",
+}
+
+
+def oracle_suffix(code: str) -> str:
+    """The rule of PE-34-3 in its own words: the German page for a code that
+    begins with de, the French page for one that begins with fr, else English."""
+    if code[:2] == "de":
+        return ".md"
+    if code[:2] == "fr":
+        return ".fr.md"
+    return ".en.md"
+
+
+ORACLE_TABLE = {
+    "de": ".md",
+    "de_DE": ".md",
+    "de_CH": ".md",
+    "fr": ".fr.md",
+    "fr_CA": ".fr.md",
+    "en": ".en.md",
+    "en_GB": ".en.md",
+    "es": ".en.md",
+    "pt_BR": ".en.md",
+    "nl": ".en.md",
+    "cs": ".en.md",
+    "": ".en.md",
+    "dsb": ".en.md",
+    "fur": ".en.md",
+}
+
+
+def test_the_oracle_table_follows_its_rule() -> None:
+    assert {code: oracle_suffix(code) for code in ORACLE_TABLE} == ORACLE_TABLE
+
+
+def test_the_link_of_the_template_follows_the_oracle_for_every_language() -> None:
+    codes = list(ORACLE_TABLE)
+    htmls = render([{"lang": code, "parallel": True} for code in codes])
+    chosen: dict[str, str | None] = {}
+    for code, html in zip(codes, htmls, strict=True):
+        anchors = [e for e in parse_banner(html) if e.tag == "a"]
+        assert len(anchors) == 1
+        chosen[code] = anchors[0].attrs.get("href")
+    assert chosen == {code: PAGE_BY_SUFFIX[suffix] for code, suffix in ORACLE_TABLE.items()}
+
+
+# ---------------------------------------------------------------------------
+# Bugs: the banner decision against appconfig rows read by SQL
+# ---------------------------------------------------------------------------
+
+
+def truth_from_rows(rows: dict[str, str]) -> bool:
+    """Enabled for anyone, as the core defines it: a row ``enabled`` whose value
+    is not ``no`` (``yes`` or a JSON list of groups)."""
+    return any(value != "no" for value in rows.values())
+
+
+BANNER_CASES: list[tuple[str, list[tuple[str, str]]]] = [
+    ("no row", []),
+    ("fulltextsearch yes", [("fulltextsearch", "yes")]),
+    ("files_fulltextsearch yes", [("files_fulltextsearch", "yes")]),
+    ("group only", [("fulltextsearch", '["findling-probe34"]')]),
+    ("value no", [("fulltextsearch", "no")]),
+    ("both no", [("fulltextsearch", "no"), ("files_fulltextsearch", "no")]),
+]
+
+
+@instance
+def test_the_banner_agrees_with_the_appconfig_rows_in_every_case(clean_flags: None) -> None:
+    _ = clean_flags
+    admin, token = client("admin", ADMIN_PASS)
+    seen: list[tuple[str, bool, int, bool | None]] = []
+    for label, flags in BANNER_CASES:
+        clear_flags()
+        for app_id, value in flags:
+            occ("config:app:set", app_id, "enabled", f"--value={value}")
+        rows = enabled_rows()
+        assert rows == dict(flags), label
+        truth = truth_from_rows(rows)
+        assert wait_for_overview(admin, token, expected=truth), label
+        status, visible = banner_state(admin)
+        seen.append((label, truth, status, visible))
+    assert seen == [(label, truth, 200, truth) for label, truth, _, _ in seen]
+    assert [truth for _, truth, _, _ in seen] == [False, True, True, True, False, False]
+
+
+@instance
+def test_the_disable_command_of_the_page_takes_three_ids_in_one_call(clean_flags: None) -> None:
+    """Step 4 names three ids in one call, none of them installed here."""
+    _ = clean_flags
+    answer = occ("app:disable", "files_fulltextsearch", "fulltextsearch_elasticsearch", "fulltextsearch")
+    assert answer.returncode == 0
+    assert answer.stdout.count("No such app enabled") == 3
+    assert enabled_rows() == {}
+
+
+# ---------------------------------------------------------------------------
+# Bugs: the facts of the pages
+# ---------------------------------------------------------------------------
+
+MIGRATION_PAGES = {
+    "de": REPO / "docs" / "migrate-from-fulltextsearch.md",
+    "en": REPO / "docs" / "migrate-from-fulltextsearch.en.md",
+    "fr": REPO / "docs" / "migrate-from-fulltextsearch.fr.md",
+}
+
+
+@dataclass(frozen=True, slots=True)
+class Claim:
+    app: str
+    source: str  # "store" (field created of the release) or "github" (published_at)
+    version: str
+    date: str  # ISO
+    spec: str = ""  # platformVersionSpec of the store release, where the page names the range
+
+
+# What the pages claim, one row per statement (Stand 19.10.2026).
+CLAIMS: tuple[Claim, ...] = (
+    Claim("fulltextsearch", "github", "v35.0.0", "2026-09-20"),
+    Claim("fulltextsearch", "store", "33.0.3", "2026-09-20", ">=33.0.0 <36.0.0"),
+    Claim("fulltextsearch", "store", "34.0.2", "2026-09-18"),
+    Claim("fulltextsearch", "store", "35.0.0", "2026-09-18"),
+    Claim("files_fulltextsearch", "store", "34.0.1", "2026-08-06", ">=34.0.0 <35.0.0"),
+    Claim("files_fulltextsearch", "store", "35.0.0", "2026-09-18", ">=35.0.0 <36.0.0"),
+    Claim("fulltextsearch_elasticsearch", "github", "v35.0.1", "2026-10-07"),
+    Claim("fulltextsearch_elasticsearch", "github", "v34.0.3", "2026-10-07"),
+    Claim("files_fulltextsearch_tesseract", "store", "32.0.0", "2026-01-19", ">=32.0.0 <33.0.0"),
+    Claim("fulltextsearch_sql", "store", "1.5.1", "2026-10-14"),
+    Claim("fulltextsearch_postgresql", "store", "0.1.4", "2026-10-10"),
+)
+
+# The answer of the App Store API (platform/{32.0.0,33.0.0,34.0.3,35.0.0}/apps.json,
+# field created) and of the GitHub releases API (published_at), queried with
+# curl and jq on 19.10.2026 at 13:21 UTC, independent of the gh query of 34-01:
+# per app and source the newest stable release.
+SNAPSHOT_NEWEST: dict[tuple[str, str], tuple[str, str]] = {
+    ("fulltextsearch", "github"): ("v35.0.0", "2026-09-20"),
+    ("fulltextsearch", "store"): ("35.0.0", "2026-09-18"),
+    ("files_fulltextsearch", "store"): ("35.0.0", "2026-09-18"),
+    ("fulltextsearch_elasticsearch", "github"): ("v35.0.1", "2026-10-07"),
+    ("files_fulltextsearch_tesseract", "store"): ("32.0.0", "2026-01-19"),
+    ("fulltextsearch_sql", "store"): ("1.5.1", "2026-10-14"),
+    ("fulltextsearch_postgresql", "store"): ("0.1.4", "2026-10-10"),
+}
+
+_SEMVER = re.compile(r"\bv?\d+\.\d+\.\d+\b")
+_DATE = re.compile(r"\b(\d\d)\.(\d\d)\.(\d{4})\b")
+
+
+def sections(text: str) -> list[str]:
+    """The text under each level two heading, in order."""
+    return text.split("\n## ")[1:]
+
+
+def _versions_and_dates(text: str) -> tuple[set[str], set[str]]:
+    versions = {v for v in _SEMVER.findall(text) if not _DATE.fullmatch(v)}
+    return versions, {f"{y}-{m}-{d}" for d, m, y in _DATE.findall(text)}
+
+
+def page_facts(text: str) -> dict[str, tuple[set[str], set[str]]]:
+    """Per bullet of the maintenance section: app id, versions, ISO dates."""
+    maintenance = sections(text)[2]
+    facts: dict[str, tuple[set[str], set[str]]] = {}
+    for bullet in maintenance.split("\n- ")[1:]:
+        first = bullet.split()[0].rstrip(",:")
+        if first.startswith(("fulltextsearch", "files_fulltextsearch")):
+            facts[first] = _versions_and_dates(bullet)
+            continue
+        # the bullet of the third party platform apps names two apps, each
+        # with its figures between the end of its link and the next link
+        for app in ("fulltextsearch_sql", "fulltextsearch_postgresql"):
+            own = bullet.split(f"/{app})", 1)[1].split("[", 1)[0] if f"/{app})" in bullet else ""
+            facts[app] = _versions_and_dates(own)
+    return facts
+
+
+def claimed_facts() -> dict[str, tuple[set[str], set[str]]]:
+    out: dict[str, tuple[set[str], set[str]]] = {}
+    for claim in CLAIMS:
+        versions, dates = out.setdefault(claim.app, (set(), set()))
+        versions.add(claim.version)
+        dates.add(claim.date)
+    return out
+
+
+@pytest.mark.parametrize("language", sorted(MIGRATION_PAGES))
+def test_every_fact_of_the_page_is_a_claim_of_the_audit(language: str) -> None:
+    text = MIGRATION_PAGES[language].read_text(encoding="utf-8")
+    assert page_facts(text) == claimed_facts()
+    assert any(day in text for day in ("19.10.2026", "19 October 2026", "19 octobre 2026"))
+
+
+def test_the_claims_agree_with_the_snapshot_of_the_audit_day() -> None:
+    for (app, source), (version, date) in SNAPSHOT_NEWEST.items():
+        mine = [c for c in CLAIMS if c.app == app and c.source == source]
+        # the page names the newest release of each source, older ones beside
+        # it are allowed (fulltextsearch 33.0.3 and 34.0.2 next to 35.0.0)
+        assert any(c.version == version and c.date == date for c in mine), (app, source)
+
+
+def test_the_fact_check_sees_a_wrong_date() -> None:
+    """Positive control: one changed date on a page is a difference."""
+    text = MIGRATION_PAGES["de"].read_text(encoding="utf-8").replace("14.10.2026", "15.10.2026")
+    assert page_facts(text) != claimed_facts()
+
+
+NETWORK = os.environ.get("FINDLING_AUDIT34_NETWORK", "") == "1"
+
+
+def _store_releases() -> dict[str, list[dict[str, Any]]]:
+    releases: dict[str, list[dict[str, Any]]] = {}
+    apps = {c.app for c in CLAIMS}
+    for platform in ("32.0.0", "33.0.0", "34.0.3", "35.0.0"):
+        answer = httpx.get(f"https://apps.nextcloud.com/api/v1/platform/{platform}/apps.json", timeout=300)
+        answer.raise_for_status()
+        for app in answer.json():
+            if app["id"] in apps:
+                known = releases.setdefault(app["id"], [])
+                known += [rel for rel in app["releases"] if rel not in known]
+    return releases
+
+
+def _github_releases(app: str) -> list[dict[str, Any]]:
+    answer = httpx.get(
+        f"https://api.github.com/repos/nextcloud/{app}/releases?per_page=10",
+        headers={"User-Agent": "findling-audit-34"},
+        timeout=60,
+    )
+    answer.raise_for_status()
+    data = answer.json()
+    assert isinstance(data, list)
+    return data
+
+
+def _numeric(version: str) -> tuple[int, ...]:
+    return tuple(int(x) for x in version.split("."))
+
+
+@pytest.mark.skipif(not NETWORK, reason="network probe, set FINDLING_AUDIT34_NETWORK=1")
+def test_every_claim_holds_in_the_app_store_and_on_github_today() -> None:
+    store = _store_releases()
+    wrong: list[str] = []
+    for claim in CLAIMS:
+        if claim.source == "store":
+            match = [r for r in store.get(claim.app, []) if r["version"] == claim.version]
+            if not match or match[0]["created"][:10] != claim.date:
+                wrong.append(f"{claim}: the store answers {match[:1]}")
+            elif claim.spec and match[0]["platformVersionSpec"] != claim.spec:
+                wrong.append(f"{claim}: the store says {match[0]['platformVersionSpec']}")
+        else:
+            rels = _github_releases(claim.app)
+            match = [r for r in rels if r["tag_name"] == claim.version]
+            if not match or match[0]["published_at"][:10] != claim.date:
+                wrong.append(f"{claim}: GitHub answers {[r['tag_name'] for r in rels[:3]]}")
+    tesseract = [r["version"] for r in store.get("files_fulltextsearch_tesseract", [])]
+    if tesseract != ["32.0.0"]:
+        wrong.append(f"files_fulltextsearch_tesseract has {tesseract}")
+    stale: list[str] = []
+    for (app, source), (version, _) in SNAPSHOT_NEWEST.items():
+        if source == "store":
+            stable = [r["version"] for r in store.get(app, []) if "-" not in r["version"] and not r["isNightly"]]
+            newest = max(stable, key=_numeric)
+        else:
+            newest = next(r["tag_name"] for r in _github_releases(app) if not r["prerelease"])
+        if newest != version:
+            stale.append(f"{app} ({source}): {newest} is newer than {version}")
+    assert wrong == []  # a wrong statement: MEDIUM
+    assert stale == []  # a newer release than the page names: LOW, the page says "Stand"
+
+
+# ---------------------------------------------------------------------------
+# Bugs: formula, switch line and links, checked without the gate
+# ---------------------------------------------------------------------------
+
+_C_CEDILLA = chr(0xE7)
+FORMULA_LINES = {
+    "de": "OCR ohne Datei" + chr(0xE4) + "nderung und ohne Elasticsearch",
+    "en": "OCR without changing files and without Elasticsearch",
+    "fr": "OCR sans modifier les fichiers et sans Elasticsearch",
+}
+_DE_LINK = "[Deutsch](migrate-from-fulltextsearch.md)"
+_EN_LINK = "[English](migrate-from-fulltextsearch.en.md)"
+_FR_NAME = f"Fran{_C_CEDILLA}ais"
+_FR_LINK = f"[{_FR_NAME}](migrate-from-fulltextsearch.fr.md)"
+FIRST_LINES = {
+    "de": f"Deutsch | {_EN_LINK} | {_FR_LINK}",
+    "en": f"{_DE_LINK} | English | {_FR_LINK}",
+    "fr": f"{_DE_LINK} | {_EN_LINK} | {_FR_NAME}",
+}
+
+
+@pytest.mark.parametrize("language", sorted(MIGRATION_PAGES))
+def test_the_switch_line_is_line_one_of_the_page(language: str) -> None:
+    lines = MIGRATION_PAGES[language].read_text(encoding="utf-8").splitlines()
+    assert lines[0] == FIRST_LINES[language]
+
+
+@pytest.mark.parametrize(
+    "language",
+    ["de", "en", pytest.param("fr", marks=pytest.mark.xfail(strict=True, reason="L-34-02"))],
+)
+def test_the_formula_stands_on_one_line_of_the_page(language: str) -> None:
+    """A line based search (grep -F, a scraper of the store text) finds it."""
+    lines = MIGRATION_PAGES[language].read_text(encoding="utf-8").splitlines()
+    assert any(FORMULA_LINES[language] in line for line in lines)
+
+
+LINKED_FILES = (
+    *MIGRATION_PAGES.values(),
+    REPO / "README.md",
+    REPO / "README.en.md",
+    REPO / "README.fr.md",
+)
+
+
+def relative_targets(path: Path) -> list[str]:
+    """Every Markdown link target that is neither absolute nor an anchor."""
+    rest = path.read_text(encoding="utf-8")
+    targets: list[str] = []
+    while "](" in rest:
+        _, rest = rest.split("](", 1)
+        target = rest.split(")", 1)[0].strip()
+        if target and not target.startswith(("http://", "https://", "mailto:", "#")):
+            targets.append(target.split("#", 1)[0])
+    return targets
+
+
+def test_every_relative_link_of_pages_and_readmes_resolves() -> None:
+    missing: list[str] = []
+    counted = 0
+    for path in LINKED_FILES:
+        for target in relative_targets(path):
+            counted += 1
+            if not (path.parent / target).exists():
+                missing.append(f"{path.name}: {target}")
+    assert counted > 20
+    assert missing == []
+
+
+def test_the_link_check_sees_a_missing_target(tmp_path: Path) -> None:
+    page = tmp_path / "p.md"
+    page.write_text("[a](nowhere.md) [b](https://x) [c](#top)\n", encoding="utf-8")
+    assert relative_targets(page) == ["nowhere.md"]
+    assert not (tmp_path / "nowhere.md").exists()
+
+
+# ---------------------------------------------------------------------------
+# Bugs: the steps of the page against the protocol of 34-02
+# ---------------------------------------------------------------------------
+
+NACHWEIS = REPO / ".planning" / "phases" / "34-umstiegsweg" / "34-02-NACHWEIS.md"
+
+# Commands of the steps the protocol does not hold verbatim, with what covers them.
+COVERED_ELSEWHERE = {
+    "occ fulltextsearch:live": "source only: row 7a, systemd unit of the wiki, linked in step 2",
+    "occ app:disable files_fulltextsearch fulltextsearch_elasticsearch fulltextsearch": (
+        "rows 4 and 4b, and the three ids in one call on 8090 in this audit"
+    ),
+    "occ app:remove <app-id>": "row 5b, the placeholder for both ids",
+}
+
+
+def step_commands(text: str) -> list[str]:
+    steps = sections(text)[3]
+    commands: list[str] = []
+    if "```sql" in steps:
+        before, rest = steps.split("```sql", 1)
+        block, after = rest.split("```", 1)
+        commands += [line.strip() for line in block.splitlines() if line.strip()]
+        steps = before + after
+    spans = steps.split("`")[1::2]
+    commands += [s for s in spans if s.startswith(("occ ", "--"))]
+    return commands
+
+
+@pytest.mark.parametrize("language", sorted(MIGRATION_PAGES))
+def test_every_command_of_the_steps_is_in_the_protocol_or_marked(language: str) -> None:
+    protocol = NACHWEIS.read_text(encoding="utf-8")
+    commands = step_commands(MIGRATION_PAGES[language].read_text(encoding="utf-8"))
+    assert len(commands) >= 8, commands
+    loose = [c for c in commands if c not in protocol and c not in COVERED_ELSEWHERE]
+    assert loose == []
+
+
+# ---------------------------------------------------------------------------
+# Bugs: quality of the gates, by mutation on a scratch copy
+# ---------------------------------------------------------------------------
+
+MUTATION = os.environ.get("FINDLING_AUDIT34_MUTATION", "") == "1"
+GATE_MODULES = ("tests/test_migration_path.py", "tests/test_admin_ui_contract.py")
+_FIFTH_LINK = (
+    '\n<a href="https://github.com/street1983nk/nextcloud-search/blob/v1.5.0/docs/formats.md"'
+    ' target="_blank" rel="noreferrer noopener">x</a>\n'
+)
+
+
+@dataclass(frozen=True, slots=True)
+class Mutation:
+    label: str
+    path: str
+    old: str  # "" appends
+    new: str
+    expected: frozenset[str]  # the gate tests that must go red, and no other
+
+
+MUTATIONS: tuple[Mutation, ...] = (
+    Mutation(
+        "formula removed (de)",
+        "docs/migrate-from-fulltextsearch.md",
+        FORMULA_LINES["de"],
+        "OCR ohne Elasticsearch",
+        frozenset({"test_pages_exist_with_switch_line_and_formula"}),
+    ),
+    Mutation(
+        "forbidden phrase (en)",
+        "docs/migrate-from-fulltextsearch.en.md",
+        "",
+        "\nFindling is the " + "on" + "ly OCR you need.\n",
+        frozenset({"test_forbidden_claim_occurs_in_no_shipped_file"}),
+    ),
+    Mutation(
+        "forbidden phrase (fr)",
+        "docs/migrate-from-fulltextsearch.fr.md",
+        "",
+        "\nFindling est la " + "seu" + "le OCR.\n",
+        frozenset({"test_forbidden_claim_occurs_in_no_shipped_file"}),
+    ),
+    Mutation(
+        "README.en.md on the German page",
+        "README.en.md",
+        "docs/migrate-from-fulltextsearch.en.md",
+        "docs/migrate-from-fulltextsearch.md",
+        frozenset({"test_readme_sections_link_the_page_of_their_language"}),
+    ),
+    Mutation(
+        "store draft on blob/main",
+        "docs/store-listing.md",
+        "blob/v1.5.0/docs/migrate-from-fulltextsearch.en.md",
+        "blob/main/docs/migrate-from-fulltextsearch.en.md",
+        frozenset({"test_draft_section_of_phase_34_carries_a_tag_link_per_language"}),
+    ),
+    Mutation(
+        "fifth link in the template",
+        "php/templates/admin.php",
+        "",
+        _FIFTH_LINK,
+        frozenset({"test_the_change_hint_links_the_anchor_of_the_documentation"}),
+    ),
+)
+
+
+@pytest.fixture(scope="module")
+def scratch_copy(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    root = tmp_path_factory.mktemp("gates")
+    for top in REPO.iterdir():
+        if top.is_file():
+            shutil.copy2(top, root / top.name)
+    shutil.copytree(REPO / "docs", root / "docs", ignore=shutil.ignore_patterns("measurements"))
+    shutil.copytree(REPO / "php", root / "php", ignore=shutil.ignore_patterns("vendor", "node_modules"))
+    shutil.copytree(REPO / "store", root / "store")
+    (root / "backend" / "appinfo").mkdir(parents=True)
+    shutil.copy2(REPO / "backend" / "appinfo" / "info.xml", root / "backend" / "appinfo" / "info.xml")
+    shutil.copy2(REPO / "backend" / "pyproject.toml", root / "backend" / "pyproject.toml")
+    shutil.copytree(
+        REPO / "backend" / "tests", root / "backend" / "tests", ignore=shutil.ignore_patterns("__pycache__")
+    )
+    return root
+
+
+def red_gate_tests(root: Path) -> set[str]:
+    """Run the two gate modules in the copy; the names of the failed tests."""
+    answer = subprocess.run(  # noqa: S603 - an argument list, never a shell
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-q",
+            "-rf",
+            "-p",
+            "no:cacheprovider",
+            "-p",
+            "no:randomly",
+            *GATE_MODULES,
+        ],
+        cwd=root / "backend",
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+        timeout=900,
+        env={**os.environ, "PYTHONUTF8": "1"},
+    )
+    assert "passed" in answer.stdout or "failed" in answer.stdout, answer.stdout + answer.stderr
+    red: set[str] = set()
+    for line in answer.stdout.splitlines():
+        if line.startswith("FAILED "):
+            node = line.split()[1].split("::", 1)[1]
+            red.add(node.split("[", 1)[0])
+    return red
+
+
+@pytest.mark.skipif(not MUTATION, reason="mutation run of the gates, set FINDLING_AUDIT34_MUTATION=1")
+def test_the_unmutated_copy_is_green(scratch_copy: Path) -> None:
+    assert red_gate_tests(scratch_copy) == set()
+
+
+@pytest.mark.skipif(not MUTATION, reason="mutation run of the gates, set FINDLING_AUDIT34_MUTATION=1")
+@pytest.mark.parametrize("mutation", MUTATIONS, ids=[m.label for m in MUTATIONS])
+def test_each_mutation_turns_exactly_its_gate_red(scratch_copy: Path, mutation: Mutation) -> None:
+    target = scratch_copy / mutation.path
+    original = target.read_bytes()
+    text = original.decode("utf-8")
+    if mutation.old:
+        assert mutation.old in text, mutation.label
+        mutated = text.replace(mutation.old, mutation.new, 1)
+    else:
+        mutated = text + mutation.new
+    target.write_bytes(mutated.encode("utf-8"))
+    try:
+        red = red_gate_tests(scratch_copy)
+    finally:
+        target.write_bytes(original)
+    assert red == mutation.expected

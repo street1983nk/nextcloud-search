@@ -7,15 +7,15 @@ findings:
   critical: 0
   high: 0
   medium: 0
-  low: 1
-  total: 1
+  low: 2
+  total: 2
 status: in_progress
-still_open: []
+still_open: [L-34-01, L-34-02]
 ---
 
 # Phase 34: Security-, Bug- und Performance-Audit
 
-**Stand:** Task 1 (Sicherheit) am 19.10.2026.
+**Stand:** Task 1 (Sicherheit) und Task 2 (Fehler) am 19.10.2026.
 
 **Umfang:** `git diff 00dbafab..a701b4f9` (Basis = Elternteil von d5258548, dem ersten Commit
 mit "(34-02)"; 16 Commits). Mit Planung 47 Dateien, 2 193 Zeilen dazu, 44 weg; ohne
@@ -154,6 +154,51 @@ Findling noch vom Kern. Kein Befund.
   `templates/admin.php`, `css/admin.css`, `l10n/de.json`, `l10n/fr.js` im Archiv und
   byte-gleich mit dem Repo (`cmp`); `tests/` nicht im Archiv.
 
+## Bugs
+
+Gefahren am 19.10.2026 zwischen 15:20 und 15:45 Ortszeit, alle Fälle als Tests des Moduls:
+
+```
+FINDLING_AUDIT34_NETWORK=1 FINDLING_AUDIT34_URL=http://localhost:8090 ... uv run python -m pytest -q tests/test_phase34_audit.py -rxXs -p no:randomly
+```
+
+Ergebnis des ganzen Moduls mit Instanz und Netz: **31 passed, 1 xfailed** (L-34-02). Die
+Mutationsproben dazu mit `FINDLING_AUDIT34_MUTATION=1 ... -k "mutation or unmutated"`:
+**7 passed**.
+
+| Nr. | Fall (Plan) | Verfahren (anders als die Umsetzung) | Ergebnis | Urteil |
+|---|---|---|---|---|
+| B1 | Sprach-Map | Orakel als Tabelle im Test aus der Regel "beginnt mit de: `.md`, mit fr: `.fr.md`, sonst `.en.md`" (`code[:2]`, nicht `str_starts_with`), Selbstprobe der Tabelle gegen die Regel; Wahl des Templates über das echte Fragment auf `php:8.3-cli` mit IL10N-Stub, href aus dem DOM (`test_the_link_of_the_template_follows_the_oracle_for_every_language`) | 14 Codes: de, de_DE, de_CH, fr, fr_CA, en, en_GB, es, pt_BR, nl, cs, leerer Code, dazu dsb und fur (beginnen mit d bzw. f, aber nicht mit de/fr): alle 14 gleich dem Orakel | in Ordnung |
+| B2 | Bannerentscheidung gegen SQL | `SELECT appid, configvalue FROM oc_appconfig WHERE configkey = 'enabled' AND appid IN (...)` per PDO im Container; Wahrheit "Zeile mit Wert ungleich `no`" (Definition des Kerns, `AppManager::getEnabledAppsValues`, NC 34.0.3 Zeile 158 bis 176); DOM der Seite per `html.parser` (`test_the_banner_agrees_with_the_appconfig_rows_in_every_case`) | sechs Fälle: keine Zeile (verborgen), fulltextsearch `yes` (sichtbar), files_fulltextsearch `yes` (sichtbar), fulltextsearch `["findling-probe34"]` mit admin nicht in der Gruppe (sichtbar), fulltextsearch `no` (verborgen), beide `no` (verborgen); Übersicht `parallelSearch` und DOM stimmen in allen sechs mit der SQL-Wahrheit überein | in Ordnung |
+| B3 | Faktenprüfung | App-Store-API `platform/{32.0.0,33.0.0,34.0.3,35.0.0}/apps.json` und GitHub-Releases-API per `curl` und `jq` am 19.10.2026 um 13:21 UTC (Rohdaten im Scratch `34-06/store-*.json`, `rel-*.json`), unabhängig von der `gh`-Abfrage aus 34-01; im Test zusätzlich per `httpx` neu abgefragt (`test_every_claim_holds_in_the_app_store_and_on_github_today`, `FINDLING_AUDIT34_NETWORK=1`) | Tabelle "Faktenprüfung" unten: alle elf Aussagen gleich, auf allen drei Seiten (`test_every_fact_of_the_page_is_a_claim_of_the_audit`, jede Version und jedes Datum im Abschnitt Pflegestand ist eine Aussage der Tabelle, keine ungeprüfte); kein neueres Release seit dem Schreiben der Seiten | in Ordnung |
+| B4 | Pflichtformel und Umschalter | Zeile 1 per Gleichheit; Formel zeilenweise wie `grep -F`, nicht über das Gate (`_flat` fügt Zeilen zusammen) | Umschalter in allen drei Seiten exakt; Formel de und en je in einer Zeile, **fr über einen Zeilenumbruch** ("l'OCR sans modifier" / "les fichiers et sans Elasticsearch", Zeile 7 bis 8) | **L-34-02** |
+| B5 | Relative Links | eigene Zerlegung der Linkziele per `str.split` (kein regulärer Ausdruck), Existenz des Pfads (`test_every_relative_link_of_pages_and_readmes_resolves`, Positivkontrolle `test_the_link_check_sees_a_missing_target`); `lychee` ist nicht installiert | drei Seiten und drei READMEs: alle relativen Ziele vorhanden | in Ordnung |
+| B6 | Gate-Qualität | Kopie des Baums im Temp-Verzeichnis (ohne `docs/measurements`), je Mutation die zwei Gate-Module dort gefahren, rote Tests aus `-rf` gelesen (`test_each_mutation_turns_exactly_its_gate_red`); Erwartung vor dem Lauf im Test notiert | unmutierte Kopie grün; Formel entfernt (de): nur `test_pages_exist_with_switch_line_and_formula`; Verbotsformel en und fr: je nur `test_forbidden_claim_occurs_in_no_shipped_file`; README.en.md auf die deutsche Seite: nur `test_readme_sections_link_the_page_of_their_language`; Store-Entwurf auf `blob/main`: nur `test_draft_section_of_phase_34_carries_a_tag_link_per_language`; fünfter Doku-Link im Template: nur `test_the_change_hint_links_the_anchor_of_the_documentation` | in Ordnung |
+| B7 | Schritte gegen 34-02-NACHWEIS | Befehle der Schritte (Inline-Code mit `occ`/`--` und SQL-Block) gegen den Text des Protokolls, je Sprache (`test_every_command_of_the_steps_is_in_the_protocol_or_marked`) | je Seite neun Befehle; wörtlich im Protokoll: `occ fulltextsearch:stop`, `occ fulltextsearch:reset`, `--no-interaction`, die drei SQL-Zeilen; abgedeckt anders: `occ fulltextsearch:live` (nur Quelle, Zeile 7a, Seite verlinkt das Wiki), `occ app:remove <app-id>` (Zeile 5b), `occ app:disable files_fulltextsearch fulltextsearch_elasticsearch fulltextsearch` (Zeilen 4 und 4b; im Audit zusätzlich wörtlich auf 8090 gefahren: drei Zeilen "No such app enabled", Exit 0, keine appconfig-Zeile, `test_the_disable_command_of_the_page_takes_three_ids_in_one_call`) | in Ordnung |
+
+**Faktenprüfung** (Abfrage 19.10.2026, 13:21 UTC; Store = Feld `created`, GitHub =
+`published_at`):
+
+| Aussage der Seiten | Store / GitHub am Audit-Tag | Urteil |
+|---|---|---|
+| fulltextsearch Release v35.0.0 am 20.09.2026 | GitHub v35.0.0 published 2026-09-20 (neuestes stabiles) | gleich |
+| fulltextsearch 33.0.3 (20.09.2026) für Nextcloud 33 bis 35 | Store 33.0.3 created 2026-09-20, `>=33.0.0 <36.0.0` | gleich |
+| fulltextsearch 34.0.2 und 35.0.0 (18.09.2026) | Store 34.0.2 und 35.0.0 created 2026-09-18 | gleich |
+| files_fulltextsearch 34.0.1 (06.08.2026) für Nextcloud 34 | Store 34.0.1 created 2026-08-06, `>=34.0.0 <35.0.0` | gleich |
+| files_fulltextsearch 35.0.0 (18.09.2026) für Nextcloud 35 | Store 35.0.0 created 2026-09-18, `>=35.0.0 <36.0.0` | gleich |
+| fulltextsearch_elasticsearch v35.0.1 und v34.0.3 am 07.10.2026 | GitHub beide published 2026-10-07 | gleich |
+| files_fulltextsearch_tesseract nur 32.0.0 (19.01.2026) für Nextcloud 32, keins für 33 bis 35 | Store genau ein Release 32.0.0, created 2026-01-19, `>=32.0.0 <33.0.0`; in den Listen 33.0.0, 34.0.3, 35.0.0 nicht vorhanden | gleich |
+| fulltextsearch_sql 1.5.1 (14.10.2026) | Store 1.5.1 created 2026-10-14 (neuestes) | gleich |
+| fulltextsearch_postgresql 0.1.4 (10.10.2026) | Store 0.1.4 created 2026-10-10 (neuestes) | gleich |
+| Deck liefert seine Karten an fulltextsearch | `nextcloud/deck` `appinfo/info.xml` auf `main`, Zeile 80 bis 82 `<fulltextsearch>` | gleich |
+
+Positivkontrolle der Faktenprüfung: ein auf der Seite geändertes Datum (14.10. zu 15.10.)
+ist ein Unterschied (`test_the_fact_check_sees_a_wrong_date`).
+
+**Aufräumen:** jeder Instanzfall räumt im `finally` beide Schlüssel `enabled`; die Fixture
+prüft vorher und nachher per SQL, dass keine Zeile steht. Nach dem Lauf:
+`SELECT ... configkey = 'enabled' AND appid IN (...)` leer.
+
 ## Befunde
 
 ### L-34-01 (LOW): Zwei Geviertstriche in STATE.md
@@ -165,3 +210,16 @@ Findling noch vom Kern. Kein Befund.
   das Zeichen selbst. STATE.md gehört dem Orchestrator, der Worktree-Agent schreibt es nicht.
 - **Fixvorschlag:** an den Orchestrator melden (Werkzeugausgabe nach dem Schreiben
   nachziehen); kein Produktfix.
+
+### L-34-02 (LOW): Die französische Pflichtformel steht über einem Zeilenumbruch
+
+- **Ort:** `docs/migrate-from-fulltextsearch.fr.md:7` bis `8`.
+- **Beleg (gefahren, B4):** `grep -cF "OCR sans modifier les fichiers et sans Elasticsearch"`
+  auf die Datei: 0; de und en: je 1. `test_the_formula_stands_on_one_line_of_the_page[fr]`
+  rot (strict xfail bis Task 4).
+- **Einordnung:** gerendert steht die Formel vollständig (Markdown macht aus dem Umbruch ein
+  Leerzeichen), das Gate von 34-02 fügt die Zeilen zusammen und ist grün. Eine
+  zeilenweise Suche (grep, ein Abgleich gegen den Store-Text) findet sie nicht. Kein falscher
+  Satz, kein sichtbarer Unterschied.
+- **Fixvorschlag:** die Zeilen 7 bis 8 so umbrechen, dass die Formel in einer Zeile steht;
+  Wortlaut unverändert.
