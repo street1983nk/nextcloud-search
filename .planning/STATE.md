@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 33-11-PLAN.md
-last_updated: "2026-10-19T03:30:00.000Z"
+stopped_at: Phase 33 verified (passed_with_conditions 5/5)
+last_updated: "2026-10-19T05:10:00.000Z"
 last_activity: 2026-10-19 -- 33-11 abgeschlossen (Audit Phase 33: H-33-01 und H-33-02 gefixt, sechs LOW entschieden, EXCL-01..03, POL-01, POL-03 Complete)
 progress:
   total_phases: 7
-  completed_phases: 1
+  completed_phases: 4
   total_plans: 43
   completed_plans: 43
-  percent: 14
+  percent: 57
 ---
 
 # Project State
@@ -26,11 +26,11 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 33 von 30-36 (Ausschlussmuster und Admin-Feinschliff)
-Plan: 11 von 11 erledigt (33-01 bis 33-11), Phase 33 ausgeführt, Verifikation offen
-Status: Phase 33 ausgeführt, Verifikation offen (33-01 Wortlaut abgenommen, 33-02 Muster im ExclusionService, 33-03 Weg C im Abgleich und zwei Statusgrenzen, 33-04 Kehrjob und Urteilsbereinigung, 33-05 Musterliste auf der Admin-Seite, 33-06 Grenzblock nur lesend, 33-07 Kataloge und Hardware-Hinweis, 33-08 Doku, CHANGELOG und Store-Entwurf, 33-09 Nachweis EXCL-02 auf 8090 mit Fix L-33-09-01, 33-10 gemeinsame Owner-Abnahme mit fr-Einheiten-Fix, 33-11 Audit: 33-AUDIT.md status fixed, H-33-01 (ff4deaa9) und H-33-02 (3657bb43) gefixt, sechs LOW entschieden, Owner-Fragen F1 bis F3 offen und nicht blockierend; EXCL-01, EXCL-02, EXCL-03, POL-01 und POL-03 Complete). Phase 32 ausgeführt; 32-08 Audit abgeschlossen (32-AUDIT.md, status issues_found): M-32-01 gefixt (d09e5a5a), L-32-02 und L-32-06 gefixt (4c481f74), fünf LOW entschieden; M-32-02 (Dokumente gelöschter Nutzer bleiben im Index) offen als Owner-Frage. USRCH-01, USRCH-02 und USRCH-03 Complete
+Plan: 11 von 11 erledigt (33-01 bis 33-11), Phase 33 verifiziert (passed_with_conditions 5/5, e7408b57)
+Status: Phase 33 verifiziert: passed_with_conditions 5/5, Bedingungen: Tag-Link bis v1.5.0 404, Hardware-Satz-Livebeleg in Phase 36, LOW-Entscheidungen L-33-01..06 nach Orchestrator-Linie mit offenen Owner-Fragen F1-F3. (33-01 Wortlaut abgenommen, 33-02 Muster im ExclusionService, 33-03 Weg C im Abgleich und zwei Statusgrenzen, 33-04 Kehrjob und Urteilsbereinigung, 33-05 Musterliste auf der Admin-Seite, 33-06 Grenzblock nur lesend, 33-07 Kataloge und Hardware-Hinweis, 33-08 Doku, CHANGELOG und Store-Entwurf, 33-09 Nachweis EXCL-02 auf 8090 mit Fix L-33-09-01, 33-10 gemeinsame Owner-Abnahme mit fr-Einheiten-Fix, 33-11 Audit: 33-AUDIT.md status fixed, H-33-01 (ff4deaa9) und H-33-02 (3657bb43) gefixt, sechs LOW entschieden, Owner-Fragen F1 bis F3 offen und nicht blockierend; EXCL-01, EXCL-02, EXCL-03, POL-01 und POL-03 Complete). Phase 32 ausgeführt; 32-08 Audit abgeschlossen (32-AUDIT.md, status issues_found): M-32-01 gefixt (d09e5a5a), L-32-02 und L-32-06 gefixt (4c481f74), fünf LOW entschieden; M-32-02 (Dokumente gelöschter Nutzer bleiben im Index) offen als Owner-Frage. USRCH-01, USRCH-02 und USRCH-03 Complete
 Last activity: 2026-10-19 -- 33-11 abgeschlossen: Performance-Audit auf 8090 (Matcher linear, Quotient 4,0/4,1; Write-Kosten 0 gegen 32 Muster +0,2 % im Median; Kehrjob 10 000 Dateien in 12 Bändern; Weg C 5 000 Dateien eine Scheibe je Takt; Seite +1,7 %), neuer LOW L-33-06; Fixes H-33-01 (Nicht-Liste in den Regelrouten -> 400 empty statt 500) und H-33-02 (Schlüssel anderen Typs -> leere Liste statt Listener-Stopp), je mit Zwilling für die Präfixliste; Korpus restlos entfernt, Endzustand wie nach 33-10
 
-Progress: [█░░░░░░] Phase 31: 15/15 Pläne (Verifikation 9/9 passed, 659f5631); Phase 32: 8/8 Pläne (Verifikation offen); Phase 33: 11/11 Pläne (Verifikation offen)
+Progress: [████░░░] Phasen 30-33 verifiziert (31: 9/9 passed; 32: passed, 84991d7a; 33: passed_with_conditions 5/5, e7408b57); als Naechstes Phase 34 (Umstiegsweg) planen
 
 ## Performance Metrics
 
