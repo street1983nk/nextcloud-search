@@ -194,7 +194,14 @@ Plans:
   1. Admin findet die Seite "Von fulltextsearch/Elasticsearch umsteigen" auf Deutsch, Englisch und Franzoesisch mit Abschalt-Schritten, Funktionsvergleich als Faktenliste und dem Wortlaut "OCR ohne Dateiaenderung und ohne Elasticsearch"; die Formulierung "einzige OCR" kommt nirgends vor (Gate)
   2. Ist fulltextsearch oder files_fulltextsearch parallel aktiv, sieht der Admin auf der Findling-Admin-Seite einen Hinweis mit Folge (doppelte Treffer) und Link auf die Umstiegs-Seite; ohne die alten Apps erscheint nichts
   3. README (de/en/fr) und Store-Textentwurf verlinken die Umstiegs-Seite, der Entwurf haelt die Kurztext-Regel und liegt dem Owner zur Abnahme vor
-**Plans**: TBD
+**Plans**: 6 plans
+Plans:
+- [ ] 34-01-PLAN.md: Wortlaut-Entwurf de/en/fr (Seite, Hinweis, README- und Store-Zeile) und blockierender Owner-Checkpoint O2-O7, O9, O10
+- [ ] 34-02-PLAN.md: Abschalt-Schritte auf 8090 belegt, drei Umstiegs-Seiten, Gate test_migration_path.py
+- [ ] 34-03-PLAN.md: ParallelSearchService (isEnabledForAnyone) mit PHPUnit, Warnbanner mit Sprach-Link, l10n-Kette, Linkgate verallgemeinert
+- [ ] 34-04-PLAN.md: README-Verweise de/en/fr, Store-Entwurf Teil Phase 34, CHANGELOG, Gate-Erweiterung
+- [ ] 34-05-PLAN.md: Gemeinsame Playwright-Abnahme auf 8090 mit simuliertem App-Flag (D-34-02)
+- [ ] 34-06-PLAN.md: Security-, Bug- und Performance-Audit, UMST-01 bis UMST-03 abhaken
 **UI hint**: yes
 
 ### Phase 35: Stretch: Aehnliche Dokumente und Spikes
