@@ -283,6 +283,8 @@ trennt? Denkbare Wege, ohne Wertung und ohne Wahl in diesem Plan:
    wäre eine Änderung von D-35-03.
 4. STR-01 in Phase 35 zurückstellen.
 
+Owner-Entscheid: 19.10.2026, Weg 2 (echte Dokumentpaare, Regel vor dem Lauf, neue Messung)
+
 ## 8. Was der Wert nicht ist
 
 - Dieser Bericht gilt nur für `intfloat/multilingual-e5-small`, int8, wie
