@@ -135,6 +135,24 @@ class SearchService {
 	private const FOLDER_MAX_ROUNDS = 12;
 
 	/**
+	 * The most neighbours the view of similar documents shows (D-35-03).
+	 *
+	 * Ten, on one page and without paging (PE-35-1): the view answers "what
+	 * else is like this file", and a list that has to be scrolled through is a
+	 * second search the user did not ask for.
+	 */
+	public const SIMILAR_MAX_HITS = 10;
+
+	/**
+	 * How many neighbours the container is asked for, so that ten can still be
+	 * left after the recheck has thrown away what this user may not open. The
+	 * container already runs its own prefilter on these, so a factor of three
+	 * is room for a recheck that disagrees, not for a prefilter that is absent;
+	 * the recheck ceiling of the caps bounds what is examined either way.
+	 */
+	public const SIMILAR_CANDIDATES = 30;
+
+	/**
 	 * The monotonic clock of a run, in nanoseconds, as a callable.
 	 *
 	 * @var \Closure(): float
@@ -427,35 +445,14 @@ class SearchService {
 					continue;
 				}
 
-				$title = PlainText::bounded($node->getName(), self::MAX_TITLE_LENGTH);
-				$path = PlainText::bounded(
-					ltrim((string)$userFolder->getRelativePath($node->getPath()), '/'),
-					self::MAX_PATH_LENGTH,
-				);
-				if ($title === null || $path === null) {
+				// Title, path, type and date come out of the confirmed node,
+				// never out of the container answer; see hitOf() below.
+				$hit = $this->hitOf($userFolder, $node, $candidate['fileId']);
+				if ($hit === null) {
 					continue;
 				}
 
-				// Title, path, type and date come out of the confirmed node,
-				// never out of the container answer. A confused or compromised
-				// backend can otherwise put the name of a foreign file in front
-				// of the user.
-				//
-				// The date is read here and nowhere else, behind the type check
-				// and behind the readability question, so it is read off a node
-				// this user is allowed to open. The candidate of the container
-				// carries a modification date of its own, and it is a proposal
-				// from before the recheck; filterCandidates() drops it, and this
-				// line is what keeps that right. The node is also the more
-				// truthful of the two, because it is the file system now and the
-				// index is the file system when it was last read.
-				$approved[] = new ApprovedHit(
-					$candidate['fileId'],
-					$title,
-					$path,
-					PlainText::bounded($node->getMimetype(), self::MAX_MIME_LENGTH) ?? '',
-					(int)$node->getMTime(),
-				);
+				$approved[] = $hit;
 			}
 
 			$decided += $consumed;
@@ -531,6 +528,131 @@ class SearchService {
 	}
 
 	/**
+	 * The neighbours of one document, as this user may see them (STR-01).
+	 *
+	 * In this class and not in a class of its own, for the reason the class
+	 * comment gives: the permission chain lives here once, and a second home
+	 * for it would be a second surface to keep in step.
+	 *
+	 * The order is the whole method. The source is rechecked first, before the
+	 * container hears its number: without that, /similar would answer for any
+	 * file id a user types into the address, and "which documents lie near file
+	 * 4711" would tell them that 4711 exists and roughly what it is about
+	 * (T-35-19). Unknown, foreign, deleted and unreadable sources are one state
+	 * here, FAILURE_SOURCE_UNAVAILABLE, and the container is not asked for any
+	 * of them. Only then are the neighbours asked for, and each one passes the
+	 * same recheck as a search hit before anything of it is read (T-35-20). The
+	 * container's answer is a proposal and nothing more; title, path, type and
+	 * date come out of the confirmed node.
+	 *
+	 * Nothing about the neighbours that did not survive leaves this method, not
+	 * even their number (T-35-22): see SimilarOutcome.
+	 */
+	public function similar(IUser $user, int $sourceId, SearchCaps $caps): SimilarOutcome {
+		$deadline = ($this->clock)() + $caps->budgetSeconds * 1_000_000_000.0;
+		$uid = $user->getUID();
+
+		// D-11 exactly as in run(): across a protocol break no answer of the
+		// container means what this side would read into it.
+		$drift = $this->exApp->driftOnRecord();
+		if ($drift !== null) {
+			$this->logger->warning('Findling: the two halves report different versions, answering with no neighbours', [
+				'companion' => $drift['companion'],
+				'backend' => $drift['container'],
+			]);
+
+			return new SimilarOutcome(null, [], false, SimilarOutcome::FAILURE_VERSION_DRIFT);
+		}
+
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($uid);
+		} catch (\Throwable $e) {
+			// The same reasoning as in run(): without a home folder no
+			// permission question can be asked, and the only safe answer to a
+			// question that cannot be asked is nothing.
+			$this->logger->warning('Findling: no home folder for this user, showing no neighbours', ['exception' => $e]);
+
+			return new SimilarOutcome(null, [], false, SimilarOutcome::FAILURE_NO_HOME_FOLDER);
+		}
+
+		// The source first, through the one permission question of the
+		// product. No log line here: a line per refused source would be a
+		// record of which numbers somebody tried.
+		$sourceNode = $sourceId > 0 ? self::readableFile($userFolder, $sourceId) : null;
+		$source = $sourceNode === null ? null : $this->hitOf($userFolder, $sourceNode, $sourceId);
+		if ($source === null) {
+			return new SimilarOutcome(null, [], false, SimilarOutcome::FAILURE_SOURCE_UNAVAILABLE);
+		}
+
+		// The page waits for nobody, so its own per call ceiling applies, and
+		// never more than the caps of the caller allow.
+		$answer = $this->exApp->similarCandidates(
+			$uid,
+			$sourceId,
+			self::SIMILAR_CANDIDATES,
+			$this->secondsLeft($deadline),
+			min($caps->requestCeilingSeconds, ExAppService::PAGE_REQUEST_TIMEOUT_SECONDS),
+		);
+		if ($answer === null) {
+			return new SimilarOutcome($source, [], false, SimilarOutcome::FAILURE_BACKEND_SILENT);
+		}
+
+		$degraded = $answer['degraded'];
+		if ($degraded) {
+			$this->logger->debug('Findling: backend answered in a degraded state');
+		}
+
+		// The source is dropped here a second time, although ExAppService
+		// already dropped it: this method must not depend on another class
+		// having done its part when the consequence is the source shown as its
+		// own neighbour.
+		$candidates = [];
+		foreach ($answer['candidates'] as $candidateId) {
+			if ($candidateId > 0 && $candidateId !== $sourceId) {
+				$candidates[] = ['fileId' => $candidateId];
+			}
+		}
+
+		if ($candidates === []) {
+			return new SimilarOutcome($source, [], $degraded, null);
+		}
+
+		// The cheap reduction of run(), as a speed-up and never as the
+		// boundary: whatever it lets through is still decided by the recheck.
+		$mounts = $this->mountsOfUser($user);
+		$keptIds = $this->reduceIds($candidates, self::storageIdsOf($mounts ?? []));
+
+		$hits = [];
+		$rechecks = 0;
+		foreach ($candidates as $candidate) {
+			if (count($hits) >= self::SIMILAR_MAX_HITS || $rechecks >= $caps->recheckAbsolute || ($this->clock)() >= $deadline) {
+				// What was confirmed so far is shown, and nothing is said about
+				// what was not examined: a shorter list is an answer, a number
+				// of unexamined neighbours would be a statement about them.
+				break;
+			}
+
+			$candidateId = $candidate['fileId'];
+			if ($keptIds !== null && !isset($keptIds[$candidateId])) {
+				continue;
+			}
+
+			$rechecks++;
+			$node = self::readableFile($userFolder, $candidateId);
+			if ($node === null) {
+				continue;
+			}
+
+			$hit = $this->hitOf($userFolder, $node, $candidateId);
+			if ($hit !== null) {
+				$hits[] = $hit;
+			}
+		}
+
+		return new SimilarOutcome($source, $hits, $degraded, null);
+	}
+
+	/**
 	 * The file behind an id, as this user may read it, or null.
 	 *
 	 * The two questions of the permission chain in one place, and the only
@@ -584,6 +706,46 @@ class SearchService {
 		}
 
 		return $node->isReadable() ? $node : null;
+	}
+
+	/**
+	 * One confirmed node as a hit, or null when its name or path cannot be
+	 * cleaned.
+	 *
+	 * Title, path, type and date come out of the confirmed node, never out of
+	 * the container answer. A confused or compromised backend can otherwise put
+	 * the name of a foreign file in front of the user. Shared by run() and
+	 * similar() since plan 35-06, so that the two views cannot drift apart in
+	 * what they read off a node.
+	 *
+	 * The date is read here and nowhere else, behind the type check and behind
+	 * the readability question, so it is read off a node this user is allowed
+	 * to open. The candidate of the container carries a modification date of
+	 * its own, and it is a proposal from before the recheck; filterCandidates()
+	 * drops it, and this method is what keeps that right. The node is also the
+	 * more truthful of the two, because it is the file system now and the index
+	 * is the file system when it was last read.
+	 *
+	 * The path stays relative to the user folder, whatever folder the node was
+	 * resolved under.
+	 */
+	private function hitOf(Folder $userFolder, File $node, int $fileId): ?ApprovedHit {
+		$title = PlainText::bounded($node->getName(), self::MAX_TITLE_LENGTH);
+		$path = PlainText::bounded(
+			ltrim((string)$userFolder->getRelativePath($node->getPath()), '/'),
+			self::MAX_PATH_LENGTH,
+		);
+		if ($title === null || $path === null) {
+			return null;
+		}
+
+		return new ApprovedHit(
+			$fileId,
+			$title,
+			$path,
+			PlainText::bounded($node->getMimetype(), self::MAX_MIME_LENGTH) ?? '',
+			(int)$node->getMTime(),
+		);
 	}
 
 	/**

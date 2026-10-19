@@ -10,6 +10,7 @@ use OCA\Findling\Service\SearchCaps;
 use OCA\Findling\Service\SearchFilters;
 use OCA\Findling\Service\SearchOutcome;
 use OCA\Findling\Service\SearchService;
+use OCA\Findling\Service\SimilarOutcome;
 use OCP\Files\Cache\ICacheEntry;
 use OCP\Files\Cache\IFileAccess;
 use OCP\Files\Config\ICachedMountInfo;
@@ -1638,5 +1639,192 @@ final class SearchServiceTest extends TestCase {
 		$this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(maxRounds: 3), $this->filtersWithFolder());
 
 		self::assertSame([], $resolvedInScope);
+	}
+
+	// -- plan 35-06: the neighbours of one document (STR-01) ------------------
+
+	private const SOURCE_ID = 42;
+
+	/**
+	 * A user folder that resolves exactly the nodes it is given, by id, and
+	 * nothing else. The relative path is the absolute one without the prefix of
+	 * the user folder, as the real folder answers it.
+	 *
+	 * @param array<int,File&MockObject> $nodes
+	 */
+	private function folderWith(array $nodes): Folder&MockObject {
+		$userFolder = $this->createMock(Folder::class);
+		$userFolder->method('getFirstNodeById')->willReturnCallback(
+			static fn (int $fileId): ?File => $nodes[$fileId] ?? null,
+		);
+		$userFolder->method('getRelativePath')->willReturnCallback(
+			static fn (string $path): string => substr($path, strlen('/testuser/files')),
+		);
+
+		$this->rootFolder->method('getUserFolder')->willReturn($userFolder);
+		$this->mountCache->method('getMountsForUser')->willReturn([]);
+
+		return $userFolder;
+	}
+
+	private function unreadableFile(): File&MockObject {
+		$file = $this->createMock(File::class);
+		$file->method('isReadable')->willReturn(false);
+		$file->expects(self::never())->method('getName');
+
+		return $file;
+	}
+
+	/**
+	 * @param list<int> $ids
+	 * @return array{candidates:list<int>,degraded:bool}
+	 */
+	private function neighbours(array $ids, bool $degraded = false): array {
+		return ['candidates' => $ids, 'degraded' => $degraded];
+	}
+
+	public function testASourceThisUserCannotReadIsUnavailableAndTheContainerIsNeverAsked(): void {
+		// The load bearing case of the plan (T-35-19). Asked about a source
+		// first, the container would answer for any number typed into the
+		// address, and its answer would say that the file exists and what lies
+		// near it. A file that does not resolve and one that resolves without
+		// the read bit are the same state, and in neither is the container asked.
+		$this->exApp->expects(self::never())->method('similarCandidates');
+
+		$this->folderWith([self::SOURCE_ID => $this->unreadableFile()]);
+		$unreadable = $this->service()->similar($this->user(), self::SOURCE_ID, $this->caps());
+		$unknown = $this->service()->similar($this->user(), 4711, $this->caps());
+		$invalid = $this->service()->similar($this->user(), 0, $this->caps());
+
+		foreach ([$unreadable, $unknown, $invalid] as $outcome) {
+			self::assertNull($outcome->source);
+			self::assertSame([], $outcome->hits);
+			self::assertSame(SimilarOutcome::FAILURE_SOURCE_UNAVAILABLE, $outcome->failure);
+		}
+	}
+
+	public function testWithoutAHomeFolderNoNeighbourIsAskedFor(): void {
+		$this->rootFolder->method('getUserFolder')
+			->willThrowException(new \RuntimeException('no home folder for this user'));
+		$this->exApp->expects(self::never())->method('similarCandidates');
+
+		$outcome = $this->service()->similar($this->user(), self::SOURCE_ID, $this->caps());
+
+		self::assertNull($outcome->source);
+		self::assertSame([], $outcome->hits);
+		self::assertSame(SimilarOutcome::FAILURE_NO_HOME_FOLDER, $outcome->failure);
+		self::assertSame(SearchOutcome::FAILURE_NO_HOME_FOLDER, $outcome->failure, 'the page branches on one vocabulary for both views');
+	}
+
+	public function testAVersionDriftOnRecordCostsTheViewWithoutAskingTheContainer(): void {
+		$exApp = $this->createMock(ExAppService::class);
+		$exApp->method('driftOnRecord')->willReturn(['companion' => '1.0.3', 'container' => '1.1.0']);
+		$exApp->expects(self::never())->method('similarCandidates');
+		$this->rootFolder->expects(self::never())->method('getUserFolder');
+
+		$service = new SearchService($exApp, $this->rootFolder, $this->mountCache, $this->fileAccess, $this->logger, null);
+		$outcome = $service->similar($this->user(), self::SOURCE_ID, $this->caps());
+
+		self::assertNull($outcome->source);
+		self::assertSame([], $outcome->hits);
+		self::assertSame(SimilarOutcome::FAILURE_VERSION_DRIFT, $outcome->failure);
+	}
+
+	public function testASilentBackendKeepsTheConfirmedSourceAndNamesTheSilence(): void {
+		$this->folderWith([self::SOURCE_ID => $this->readableFile('Mietvertrag.pdf')]);
+		$this->exApp->expects(self::once())->method('similarCandidates')->willReturn(null);
+
+		$outcome = $this->service()->similar($this->user(), self::SOURCE_ID, $this->caps());
+
+		// The heading can still name the file; what is missing is the list, and
+		// the page says why instead of claiming there are no neighbours.
+		self::assertNotNull($outcome->source);
+		self::assertSame('Mietvertrag.pdf', $outcome->source->title);
+		self::assertSame('Board/Mietvertrag.pdf', $outcome->source->path);
+		self::assertSame([], $outcome->hits);
+		self::assertSame(SimilarOutcome::FAILURE_BACKEND_SILENT, $outcome->failure);
+	}
+
+	public function testTenOfTwelveProposalsSurviveAndOnlyOutOfReadableNodesInTheOrderOfTheContainer(): void {
+		$nodes = [self::SOURCE_ID => $this->readableFile('Quelle.pdf')];
+		$ids = [];
+		for ($i = 0; $i < 12; $i++) {
+			$id = 100 + $i;
+			$ids[] = $id;
+			// Two of the twelve resolve without the read bit, one of them at
+			// the very front, so a service that took the first ten would fail.
+			$nodes[$id] = ($i === 0 || $i === 5) ? $this->unreadableFile() : $this->readableFile('Nachbar' . $i . '.pdf');
+		}
+		$this->folderWith($nodes);
+
+		$asked = null;
+		$this->exApp->expects(self::once())->method('similarCandidates')->willReturnCallback(
+			function (string $uid, int $fileId, int $limit) use (&$asked, $ids): array {
+				$asked = [$uid, $fileId, $limit];
+
+				return $this->neighbours($ids, true);
+			},
+		);
+
+		$outcome = $this->service()->similar($this->user(), self::SOURCE_ID, $this->caps());
+
+		self::assertSame(['testuser', self::SOURCE_ID, $this->constantInt('SIMILAR_CANDIDATES')], $asked);
+		self::assertCount($this->constantInt('SIMILAR_MAX_HITS'), $outcome->hits);
+		self::assertSame([101, 102, 103, 104, 106, 107, 108, 109, 110, 111], array_map(static fn (ApprovedHit $hit): int => $hit->fileId, $outcome->hits));
+		self::assertSame('Nachbar1.pdf', $outcome->hits[0]->title);
+		self::assertSame('Board/Nachbar1.pdf', $outcome->hits[0]->path);
+		self::assertSame('Quelle.pdf', $outcome->source?->title);
+		self::assertTrue($outcome->degraded);
+		self::assertNull($outcome->failure);
+	}
+
+	public function testTheSourceIsNeverItsOwnNeighbourEvenWhenTheContainerProposesIt(): void {
+		$this->folderWith([
+			self::SOURCE_ID => $this->readableFile('Quelle.pdf'),
+			7 => $this->readableFile('Nachbar.pdf'),
+		]);
+		$this->exApp->method('similarCandidates')->willReturn($this->neighbours([self::SOURCE_ID, 7]));
+
+		$outcome = $this->service()->similar($this->user(), self::SOURCE_ID, $this->caps());
+
+		self::assertSame([7], array_map(static fn (ApprovedHit $hit): int => $hit->fileId, $outcome->hits));
+		self::assertNull($outcome->failure);
+	}
+
+	public function testASpentRecheckCeilingOrWallClockEndsTheListWithWhatWasConfirmed(): void {
+		$nodes = [self::SOURCE_ID => $this->readableFile('Quelle.pdf')];
+		foreach ([1, 2, 3, 4, 5] as $id) {
+			$nodes[$id] = $this->readableFile('Nachbar' . $id . '.pdf');
+		}
+		$this->folderWith($nodes);
+
+		// The recheck ceiling: three examined, three shown, and no word about the
+		// two behind them. The first service runs on the real clock, so the
+		// round trip below moves a number nobody reads yet.
+		$now = 0.0;
+		$this->exApp->method('similarCandidates')->willReturnCallback(
+			function () use (&$now): array {
+				$now += 10 * 1_000_000_000.0;
+
+				return $this->neighbours([1, 2, 3, 4, 5]);
+			},
+		);
+		$capped = $this->service()->similar($this->user(), self::SOURCE_ID, $this->caps(recheckAbsolute: 3));
+
+		self::assertSame([1, 2, 3], array_map(static fn (ApprovedHit $hit): int => $hit->fileId, $capped->hits));
+		self::assertNull($capped->failure);
+
+		// The wall clock: the one round trip spends more than the whole budget,
+		// so nothing after it is examined, and the answer is still an answer and
+		// not an error.
+		$now = 0.0;
+		$clock = static function () use (&$now): float {
+			return $now;
+		};
+		$late = $this->service($clock)->similar($this->user(), self::SOURCE_ID, $this->caps(budgetSeconds: 2.5));
+
+		self::assertNotNull($late->source);
+		self::assertSame([], $late->hits);
+		self::assertNull($late->failure);
 	}
 }
