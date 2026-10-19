@@ -9,13 +9,19 @@ findings:
   medium: 0
   low: 2
   total: 2
-status: in_progress
-still_open: [L-34-01, L-34-02]
+status: fixed
+fix_run: 2026-10-19
+fix_commits: [151bc30b]
+fixed: [L-34-02]
+still_open: [L-34-01]
 ---
 
 # Phase 34: Security-, Bug- und Performance-Audit
 
-**Stand:** Task 1 (Sicherheit), Task 2 (Fehler) und Task 3 (Performance) am 19.10.2026.
+**Stand:** geschlossen am 19.10.2026. Task 1 (Sicherheit), Task 2 (Fehler), Task 3
+(Performance) und Task 4 (Fixes, LOW-Entscheidungen, Abschluss) am selben Tag. Kein Befund
+CRITICAL, HIGH oder MEDIUM; zwei LOW-Befunde, einer gefixt mit Regressionstest (L-34-02), einer
+entschieden (L-34-01, Abschnitt "LOW-Entscheidungen"); kein `xfail` mehr im Audit-Test.
 
 **Umfang:** `git diff 00dbafab..a701b4f9` (Basis = Elternteil von d5258548, dem ersten Commit
 mit "(34-02)"; 16 Commits). Mit Planung 47 Dateien, 2 193 Zeilen dazu, 44 weg; ohne
@@ -252,3 +258,57 @@ Launch-Härtung (Phase 36).
   Satz, kein sichtbarer Unterschied.
 - **Fixvorschlag:** die Zeilen 7 bis 8 so umbrechen, dass die Formel in einer Zeile steht;
   Wortlaut unverändert.
+- **Status: gefixt** in 151bc30b (siehe "Fixes").
+
+## Was gegengeprüft wurde, nicht nur gelesen
+
+| Prüfung | Verfahren (anders als die Umsetzung) | Ergebnis |
+|---|---|---|
+| Ausgaben des Templates | `token_get_all` statt der regulären Ausdrücke des Kontrakt-Gates, mit Positivkontrolle (acht Fehlerarten) | jede Banner-Ausgabe durch `p()`, href aus drei Literalen |
+| Markup im Katalog | echtes Fragment mit `p()` wie im Kern und injiziertem Wert, HTML per `html.parser`, Positivkontrolle mit rohem `p()` | als Text, keine Elemente, keine Attribute |
+| Rechte | eigenes Konto ohne Gruppen, anonym, ohne Token | 403 / 403 / 401, kein `parallelSearch`, kein Banner |
+| Logs | zwei Quellen mit Positivkontrolle, dreimal Flag hin und zurück | keine Zeile mit einer App-ID |
+| Sprachwahl | Orakeltabelle aus der Regel (`code[:2]`), Template über PHP mit Stub, 14 Codes | gleich |
+| Bannerentscheidung | Zeilen von `oc_appconfig` per SQL gegen DOM und Übersicht, sechs Fälle | gleich |
+| Fakten der Seiten | App-Store-API und GitHub-API per `curl`/`jq` und per `httpx`, nicht `gh` | elf Aussagen gleich, nichts veraltet |
+| Pflichtformel | zeilenweise wie `grep -F`, nicht über `_flat` des Gates | L-34-02 |
+| Links | eigene Zerlegung per `str.split`, Existenz des Pfads | alle vorhanden |
+| Gate-Qualität | sechs Mutationen auf einer Baumkopie, Erwartung vorher notiert | je genau der erwartete Test rot |
+| Schritte | Befehle der Seiten gegen den Text von 34-02-NACHWEIS, dazu der Drei-ID-Aufruf auf 8090 | alle belegt |
+| Kosten | verschränkte Reihen Poll (2 x 100) und Seite (2 x 10), Abfragen über `query_log_file` mit Backtrace | -1,6 % / +3,1 %, 0 zusätzliche Abfragen |
+| Fix | RED vor dem Fix gefahren, GREEN danach, volle Suite und Gates | siehe "Fixes" |
+
+## Fixes (Task 4)
+
+**RED** am 19.10.2026 gegen den unveränderten Text (Test ohne xfail):
+`uv run python -m pytest -q tests/test_phase34_audit.py -p no:randomly -k formula_stands`:
+**1 failed** (`[fr]`), 2 passed.
+
+| Befund | Commit | Fix (Datei) | GREEN | Suite und Gates |
+|---|---|---|---|---|
+| L-34-02 | 151bc30b | `docs/migrate-from-fulltextsearch.fr.md`: Zeilen 7 bis 9 neu umbrochen, "l'OCR sans modifier les fichiers et sans Elasticsearch" in einer Zeile; `git diff --word-diff=plain` ohne Wortänderung, also kein neuer Satz und keine l10n-Kette | `grep -cF` 1; Regressionstest grün in allen drei Sprachen | 5761 passed, 264 skipped (12:08 min); ruff check, ruff format (225 Dateien), pyright 0 Fehler, vulture leer |
+
+Kein Fix berührt `php/`, also keine Änderung am PHP-Baumhash (`test_measurement_scripts.py`
+unverändert). Danach das ganze Audit-Modul gegen 8090 mit
+`FINDLING_AUDIT34_MUTATION=1 FINDLING_AUDIT34_NETWORK=1` und den Instanzvariablen:
+**39 passed** in 1:30 min, kein xfail, kein Skip. Endzustand: keine Zeile `enabled` für beide
+App-IDs (`config:app:get` je Exit 1), `audit34user` gelöscht (`occ user:delete`).
+
+## LOW-Entscheidungen
+
+| Befund | Entscheidung | Grund | Zielphase | Quelle |
+|---|---|---|---|---|
+| L-34-01 | accept | Nicht ausgeliefert und nicht Teil des Produkts: `gsd-sdk` schreibt die Zeichen in `.planning/STATE.md`, das der Orchestrator führt; ein Worktree-Agent schreibt STATE.md nicht. Gemeldet an den Orchestrator in der SUMMARY von 34-06. | keine (Werkzeug) | Executor |
+| L-34-02 | fix | Billig und ohne Wortänderung; die Formel ist die Pflichtaussage von UMST-01 und soll auch zeilenweise auffindbar sein. | 34 | Executor |
+
+## Offene Punkte für Phase 36
+
+- Tag-Links `blob/v1.5.0/docs/migrate-from-fulltextsearch{,.en,.fr}.md` (Banner und
+  Store-Entwurf) nach dem Setzen des Tags prüfen; bis dahin prüft das Gate die Zieldatei im
+  Repo.
+- Store-Entwurf Phase 34 (`docs/store-listing.md`, Abschnitt "Entwurf v1.5.0 (Teil Phase
+  34)") in REL-05 in beide `info.xml` übernehmen.
+- `docs/embeddings.md:497` trägt die historische Aussage "jahrelang verwaist" über
+  fulltextsearch (34-CONTEXT "Deferred"), im Widerspruch zum Pflegestand der Umstiegs-Seite;
+  nicht geändert, Owner-Frage oder Phase 36.
+- 186 Datenbankabfragen je Pollaufruf, unabhängig von Phase 34 (`deferred-items.md`).
