@@ -83,6 +83,11 @@ WORST_CASES_REPORTED: Final = 5
 
 PREFIX_CHOICES: Final = ("on", "off")
 VECTOR_DTYPE_CHOICES: Final = ("fp32", "int8")
+# How one sentence vector is drawn out of the token vectors. e5 is trained with
+# the mean, granite-embedding-97m-multilingual-r2 with the first token (CLS).
+# The wrong pool does not fail, it measures a plausible and wrong number, which
+# is why the default stays the one every older run of this tool used.
+POOLING_CHOICES: Final = ("mean", "cls")
 
 
 class MeasurementError(Exception):
@@ -117,6 +122,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         required=True,
         choices=VECTOR_DTYPE_CHOICES,
         help="fp32 leaves the produced vectors alone, int8 quantises them before the comparison",
+    )
+    parser.add_argument(
+        "--pooling",
+        choices=POOLING_CHOICES,
+        default="mean",
+        help="mean averages the non padding tokens (e5), cls takes the first token (granite); default mean",
     )
     parser.add_argument(
         "--per-case",
@@ -175,12 +186,19 @@ def load_tokenizer(directory: Path) -> Any:
 
 
 def _pad_token(directory: Path) -> str:
-    special = directory / "special_tokens_map.json"
-    if special.is_file():
-        mapping = json.loads(special.read_text(encoding="utf-8"))
-        token = mapping.get("pad_token")
-        if isinstance(token, dict):
-            return str(token.get("content", "<pad>"))
+    """The pad token the model directory names, never an e5 assumption (pitfall 12).
+
+    special_tokens_map.json first, as before, so e5 reads exactly what it read
+    until now; tokenizer_config.json second, because granite names its pad token
+    only there.
+    """
+    for name in ("special_tokens_map.json", "tokenizer_config.json"):
+        source = directory / name
+        if not source.is_file():
+            continue
+        token = json.loads(source.read_text(encoding="utf-8")).get("pad_token")
+        if isinstance(token, dict) and isinstance(token.get("content"), str):
+            return str(token["content"])
         if isinstance(token, str):
             return token
     return "<pad>"
@@ -191,8 +209,8 @@ def _pad_id(tokenizer: Any, directory: Path) -> int:
     return 1 if identifier is None else int(identifier)
 
 
-def embed(texts: Sequence[str], model: Path, tokenizer: Any) -> np.ndarray:
-    """Mean pooled, L2 normalised sentence vectors, one row per text."""
+def embed(texts: Sequence[str], model: Path, tokenizer: Any, pooling: str = "mean") -> np.ndarray:
+    """Pooled (mean or cls), L2 normalised sentence vectors, one row per text."""
     if not model.is_file():
         message = f"model not found: {model}"
         raise MeasurementError(message)
@@ -216,9 +234,14 @@ def embed(texts: Sequence[str], model: Path, tokenizer: Any) -> np.ndarray:
             feed["attention_mask"] = attention_mask
         if "token_type_ids" in wanted:
             feed["token_type_ids"] = np.zeros_like(input_ids)
-        hidden = session.run(None, feed)[0]
-        rows.append(mean_pool(np.asarray(hidden, dtype=np.float32), attention_mask))
+        hidden = np.asarray(session.run(None, feed)[0], dtype=np.float32)
+        rows.append(cls_pool(hidden) if pooling == "cls" else mean_pool(hidden, attention_mask))
     return normalise(np.concatenate(rows, axis=0))
+
+
+def cls_pool(hidden: np.ndarray) -> np.ndarray:
+    """The vector of the first token. Padding sits at the end, so the mask is not needed."""
+    return hidden[:, 0, :]
 
 
 def mean_pool(hidden: np.ndarray, attention_mask: np.ndarray) -> np.ndarray:
@@ -297,6 +320,7 @@ def format_report(
     metrics: Metrics,
     ranked: Sequence[tuple[str, int]],
     per_case: bool = False,
+    pooling: str = "mean",
 ) -> str:
     lines = [
         f"model         {model}",
@@ -304,6 +328,7 @@ def format_report(
         f"dataset       {dataset.name}",
         f"prefixes      {prefixes}",
         f"vector-dtype  {vector_dtype}",
+        f"pooling       {pooling}",
         f"cases         {metrics.cases}",
         f"Recall@1      {metrics.recall_at_1:.4f}",
         f"Recall@5      {metrics.recall_at_5:.4f}",
@@ -330,6 +355,7 @@ def measure(
     dataset: Path,
     prefixes: str,
     vector_dtype: str,
+    pooling: str = "mean",
 ) -> tuple[Metrics, list[tuple[str, int]]]:
     # Cheapest check first, and the one that costs the most to discover late: a
     # missing model file would otherwise surface after the tokenizer has been
@@ -342,8 +368,8 @@ def measure(
 
     query_prefix = QUERY_PREFIX if prefixes == "on" else ""
     passage_prefix = PASSAGE_PREFIX if prefixes == "on" else ""
-    passages = embed([passage_prefix + record["passage"] for record in records], model, tokenizer)
-    queries = embed([query_prefix + record["query"] for record in records], model, tokenizer)
+    passages = embed([passage_prefix + record["passage"] for record in records], model, tokenizer, pooling)
+    queries = embed([query_prefix + record["query"] for record in records], model, tokenizer, pooling)
 
     if vector_dtype == "int8":
         passages = quantise_to_int8(passages)
@@ -357,7 +383,9 @@ def measure(
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     try:
-        metrics, ranked = measure(args.model, args.tokenizer, args.dataset, args.prefixes, args.vector_dtype)
+        metrics, ranked = measure(
+            args.model, args.tokenizer, args.dataset, args.prefixes, args.vector_dtype, args.pooling
+        )
     except MeasurementError as error:
         print(f"REFUSED: {error}", file=sys.stderr)
         return 2
@@ -371,6 +399,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             metrics,
             ranked,
             args.per_case,
+            args.pooling,
         )
     )
     return 0
