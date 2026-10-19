@@ -56,7 +56,13 @@ LANGUAGES: Final = ("de", "en", "fr")
 # roughly halves the standard error, so the follow up measurement can answer the
 # question. The floor lives here rather than in prose because a set that quietly
 # shrank back below it would take the answer with it.
-MINIMUM_CASES: Final[Mapping[str, int]] = {"de": 40, "en": 40, "fr": 120}
+#
+# Moved on 2026-10-19 by Plan 35-03 (STR-02, D-35-10): the German set grew to
+# 120 before the granite comparison, so the paired test can answer the question
+# for German too. In September small effects over 42 German cases came out with
+# t below 1, which is no basis for a verdict on a model change. The first 42
+# lines stay byte-identical, so the September runs can be recomputed on them.
+MINIMUM_CASES: Final[Mapping[str, int]] = {"de": 120, "en": 40, "fr": 120}
 
 FIELDS: Final = ("id", "query", "passage", "note")
 
@@ -154,7 +160,7 @@ def test_every_line_is_one_record_with_the_four_fields(language: str) -> None:
 
 @pytest.mark.parametrize("language", LANGUAGES)
 def test_each_language_carries_at_least_the_cases_its_verdict_needs(language: str) -> None:
-    """Forty for German and English, a hundred and twenty for French. See MINIMUM_CASES for why."""
+    """Forty for English, a hundred and twenty for German and French. See MINIMUM_CASES for why."""
     assert len(cases(language)) >= MINIMUM_CASES[language]
 
 
