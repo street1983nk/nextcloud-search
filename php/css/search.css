@@ -276,7 +276,11 @@
 .findling-sort__link:hover,
 .findling-sort__link:focus,
 .findling-filters__reset:hover,
-.findling-filters__reset:focus {
+.findling-filters__reset:focus,
+.findling-similar__back:hover,
+.findling-similar__back:focus,
+.findling-hit__similar:hover,
+.findling-hit__similar:focus {
 	background-color: var(--color-background-hover);
 }
 
@@ -315,6 +319,24 @@
 	align-items: center;
 	min-height: var(--default-clickable-area);
 	margin-inline-start: auto;
+	padding-inline: calc(var(--default-grid-baseline) * 2);
+	border-radius: var(--border-radius-small);
+	color: var(--color-main-text);
+	font-size: var(--font-size-small);
+	font-weight: 400;
+	line-height: var(--default-line-height);
+	text-decoration: underline;
+}
+
+/* The way back of the view of similar documents, directly under its heading.
+   The same sentence link as the reset link above, without the push to the far
+   end: it stands alone on its line and belongs to the heading it follows
+   (D-35-04, O6 (a)). */
+.findling-similar__back {
+	display: inline-flex;
+	align-items: center;
+	min-height: var(--default-clickable-area);
+	margin-block: 0 calc(var(--default-grid-baseline) * 4);
 	padding-inline: calc(var(--default-grid-baseline) * 2);
 	border-radius: var(--border-radius-small);
 	color: var(--color-main-text);
@@ -368,6 +390,36 @@
    reader, which is in the markup already and only loses its hidden attribute. */
 .findling-hit--returned .findling-hit__link {
 	background-color: var(--color-background-hover);
+}
+
+/* The link to the similar documents of a hit (STR-01, D-35-01). A sibling of
+   the row link and never an item of its grid: a link inside a link is invalid
+   markup, so the hit has two keyboard stops, the row and this sentence under
+   it. Indented by the width of the icon column so that it lines up with the
+   path above it, and underlined like the reset link, because it is a sentence
+   and not a second row. */
+.findling-hit__similar {
+	display: inline-flex;
+	align-items: center;
+	min-height: var(--default-clickable-area);
+	margin-block: 0 calc(var(--default-grid-baseline) * 2);
+	margin-inline-start: calc(var(--default-grid-baseline) * 6 + 32px);
+	padding-inline: calc(var(--default-grid-baseline) * 2);
+	border-radius: var(--border-radius-small);
+	color: var(--color-main-text);
+	font-size: var(--font-size-small);
+	font-weight: 400;
+	line-height: var(--default-line-height);
+	text-decoration: underline;
+}
+
+/* A visible ring for the keyboard on top of the hover surface, in the colour of
+   the text so that it holds in light, dark and high contrast alike. The ring of
+   the core is not removed anywhere; this one only makes sure the second stop of
+   a hit is as easy to find as the first. */
+.findling-hit__similar:focus-visible {
+	outline: 2px solid var(--color-main-text);
+	outline-offset: 2px;
 }
 
 .findling-hit__icon {
@@ -610,6 +662,12 @@
 		margin-block-start: 0;
 	}
 
+	/* The path runs the full width here, so the similar link follows it to the
+	   left edge of the row text. */
+	.findling-hit__similar {
+		margin-inline-start: calc(var(--default-grid-baseline) * 2);
+	}
+
 	.findling-pager__row {
 		flex-wrap: wrap;
 	}
@@ -636,7 +694,9 @@
 		min-height: 44px;
 	}
 
-	.findling-hit__link {
+	.findling-hit__link,
+	.findling-hit__similar,
+	.findling-similar__back {
 		min-height: 44px;
 	}
 
