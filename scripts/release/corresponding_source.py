@@ -81,10 +81,10 @@ class Archive(NamedTuple):
 ARCHIVES: tuple[Archive, ...] = (
     Archive(
         project="pillow-heif",
-        name="pillow_heif-1.8.0.tar.gz",
-        version="1.8.0",
-        url="https://files.pythonhosted.org/packages/source/p/pillow_heif/pillow_heif-1.8.0.tar.gz",
-        sha256="e47c27432c6fd3d66c22f0de9f27fd379383b646c947520bc485854ce72060d0",
+        name="pillow_heif-1.8.1.tar.gz",
+        version="1.8.1",
+        url="https://files.pythonhosted.org/packages/source/p/pillow_heif/pillow_heif-1.8.1.tar.gz",
+        sha256="521ebffb8a181d56c3904e5a61f20903edee0d9d3275967b8fb345f866215c06",
         licence="BSD-3-Clause",
     ),
     Archive(

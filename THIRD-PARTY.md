@@ -160,7 +160,7 @@ plan 31-01 found seven of them one or more releases behind.
 |---|---|---|---|---|
 | `tantivy` | 0.26.2 | MIT | github.com/quickwit-oss/tantivy-py | `/app/.venv/lib/python3.13/site-packages/tantivy` |
 | `pypdfium2` | 5.14.0 | Apache-2.0 or BSD-3-Clause (wrapper), BSD-3-Clause (bundled PDFium) | github.com/pypdfium2-team/pypdfium2 | `/app/.venv/lib/python3.13/site-packages/pypdfium2` |
-| `pypdf` | 6.19.0 | BSD-3-Clause | github.com/py-pdf/pypdf | `/app/.venv/lib/python3.13/site-packages/pypdf` |
+| `pypdf` | 6.20.1 | BSD-3-Clause | github.com/py-pdf/pypdf | `/app/.venv/lib/python3.13/site-packages/pypdf` |
 | `python-docx` | 1.2.0 | MIT | github.com/python-openxml/python-docx | `/app/.venv/lib/python3.13/site-packages/docx` |
 | `python-pptx` | 1.0.2 | MIT | github.com/scanny/python-pptx | `/app/.venv/lib/python3.13/site-packages/pptx` |
 | `openpyxl` | 3.1.5 | MIT | foss.heptapod.net/openpyxl/openpyxl | `/app/.venv/lib/python3.13/site-packages/openpyxl` |
@@ -170,7 +170,7 @@ plan 31-01 found seven of them one or more releases behind.
 | `pillow` | 12.3.0 | MIT-CMU | github.com/python-pillow/Pillow | `/app/.venv/lib/python3.13/site-packages/PIL` |
 | `olefile` | 0.47 | BSD-2-Clause | github.com/decalage2/olefile | `/app/.venv/lib/python3.13/site-packages/olefile` |
 | `xlrd` | 2.0.2 | BSD-3-Clause | github.com/python-excel/xlrd | `/app/.venv/lib/python3.13/site-packages/xlrd` |
-| `pillow-heif` | 1.8.0 | BSD-3-Clause (source); binary wheel GPL-2.0-or-later, see below | github.com/bigcat88/pillow_heif | `/app/.venv/lib/python3.13/site-packages/pillow_heif` and `pillow_heif.libs` |
+| `pillow-heif` | 1.8.1 | BSD-3-Clause (source); binary wheel GPL-2.0-or-later, see below | github.com/bigcat88/pillow_heif | `/app/.venv/lib/python3.13/site-packages/pillow_heif` and `pillow_heif.libs` |
 
 `tantivy` was the one entry whose licence was **not** readable from its PyPI
 metadata: the 0.26.0 release carried neither a `license` field nor a licence
@@ -254,7 +254,7 @@ scripts, and it is one of the four archives.
 
 | Archive | Version | URL | SHA-256 | Licence |
 |---|---|---|---|---|
-| `pillow_heif-1.8.0.tar.gz` | 1.8.0 | https://files.pythonhosted.org/packages/source/p/pillow_heif/pillow_heif-1.8.0.tar.gz | `e47c27432c6fd3d66c22f0de9f27fd379383b646c947520bc485854ce72060d0` | BSD-3-Clause |
+| `pillow_heif-1.8.1.tar.gz` | 1.8.1 | https://files.pythonhosted.org/packages/source/p/pillow_heif/pillow_heif-1.8.1.tar.gz | `521ebffb8a181d56c3904e5a61f20903edee0d9d3275967b8fb345f866215c06` | BSD-3-Clause |
 | `x265_4.2.tar.gz` | 4.2 | https://bitbucket.org/multicoreware/x265_git/downloads/x265_4.2.tar.gz | `40b1ea0453e0309f0eba934e0ddf533f8f6295966679e8894e8f1c1c8d5e1210` | GPL-2.0-or-later |
 | `libde265-1.1.3.tar.gz` | 1.1.3 | https://github.com/strukturag/libde265/releases/download/v1.1.3/libde265-1.1.3.tar.gz | `554228bd17788c99a7e63b37ab5634722190e6e2bf60c1dcb01cef328e133905` | LGPL-3.0 |
 | `libheif-1.23.4.tar.gz` | 1.23.4 | https://github.com/strukturag/libheif/releases/download/v1.23.4/libheif-1.23.4.tar.gz | `d0c02b4b0e978f34a1974b6f3eea7975a537bf7a9195ffeea38e7242ff316fdd` | LGPL-3.0 |
@@ -393,8 +393,8 @@ held.
 
 | Package | Version | Licence | Source repository | Place in the image |
 |---|---|---|---|---|
-| `tokenizers` | 0.23.2 | Apache-2.0 | github.com/huggingface/tokenizers | `/app/.venv/lib/python3.13/site-packages/tokenizers` |
-| `numpy` | 2.5.3 | BSD-3-Clause (wheel metadata: `BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0` for bundled parts) | github.com/numpy/numpy | `/app/.venv/lib/python3.13/site-packages/numpy` |
+| `tokenizers` | 0.23.3 | Apache-2.0 | github.com/huggingface/tokenizers | `/app/.venv/lib/python3.13/site-packages/tokenizers` |
+| `numpy` | 2.5.4 | BSD-3-Clause (wheel metadata: `BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0` for bundled parts) | github.com/numpy/numpy | `/app/.venv/lib/python3.13/site-packages/numpy` |
 | `onnxruntime` | 1.31.0 | MIT | github.com/microsoft/onnxruntime | `/app/.venv/lib/python3.13/site-packages/onnxruntime` |
 | `sqlite-vec` | 0.1.9 | Apache-2.0 | github.com/asg017/sqlite-vec | `/app/.venv/lib/python3.13/site-packages/sqlite_vec`, and the extension itself a second time at `/usr/local/lib/findling/vec0.so` |
 | `semantic-text-splitter` | 0.33.0 | MIT | github.com/benbrandt/text-splitter | `/app/.venv/lib/python3.13/site-packages/semantic_text_splitter` |
@@ -446,7 +446,7 @@ list of distributed material.
 |---|---|---|---|---|
 | `python:3.13-slim-trixie` base image | digest `sha256:ffb752e1…c6e30a` | Debian base: mixed free licences, per package under `/usr/share/doc/*/copyright`; CPython: PSF-2.0 | docker-library/python | the image itself |
 | `nc-py-api[app]` | 0.30.3 | BSD-3-Clause | github.com/cloud-py-api/nc_py_api | `/app/.venv` |
-| `fastapi` | 0.143.0 | MIT | github.com/fastapi/fastapi | `/app/.venv` |
+| `fastapi` | 0.143.2 | MIT | github.com/fastapi/fastapi | `/app/.venv` |
 | `httpx` | 0.28.1 | BSD-3-Clause | github.com/encode/httpx | `/app/.venv` |
 | `frpc` | frp 0.61.1 | Apache-2.0 | fatedier/frp, fetched from the pinned commit of nextcloud/HaRP that vendors the byte identical tarball | `/usr/local/bin/frpc` |
 
