@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Phase 33 verified (passed_with_conditions 5/5)
-last_updated: "2026-10-19T05:10:00.000Z"
-last_activity: 2026-10-19 -- 33-11 abgeschlossen (Audit Phase 33: H-33-01 und H-33-02 gefixt, sechs LOW entschieden, EXCL-01..03, POL-01, POL-03 Complete)
+stopped_at: Completed 34-01-PLAN.md
+last_updated: "2026-10-19T07:00:00.000Z"
+last_activity: 2026-10-19 -- 34-01 abgeschlossen (Wortlaut Phase 34 vom Owner abgenommen, alle Empfehlungen O2-O10)
 progress:
   total_phases: 7
   completed_phases: 4
-  total_plans: 43
-  completed_plans: 43
+  total_plans: 49
+  completed_plans: 44
   percent: 57
 ---
 
@@ -21,14 +21,14 @@ progress:
 Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .planning/MILESTONES.md (v1.0 bis v1.4).
 
 **Core Value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 33, Ausschlussmuster und Admin-Feinschliff
+**Current focus:** Phase 34, Umstiegsweg
 
 ## Current Position
 
-Phase: 33 von 30-36 (Ausschlussmuster und Admin-Feinschliff)
-Plan: 11 von 11 erledigt (33-01 bis 33-11), Phase 33 verifiziert (passed_with_conditions 5/5, e7408b57)
-Status: Phase 33 verifiziert: passed_with_conditions 5/5, Bedingungen: Tag-Link bis v1.5.0 404, Hardware-Satz-Livebeleg in Phase 36, LOW-Entscheidungen L-33-01..06 nach Orchestrator-Linie mit offenen Owner-Fragen F1-F3. (33-01 Wortlaut abgenommen, 33-02 Muster im ExclusionService, 33-03 Weg C im Abgleich und zwei Statusgrenzen, 33-04 Kehrjob und Urteilsbereinigung, 33-05 Musterliste auf der Admin-Seite, 33-06 Grenzblock nur lesend, 33-07 Kataloge und Hardware-Hinweis, 33-08 Doku, CHANGELOG und Store-Entwurf, 33-09 Nachweis EXCL-02 auf 8090 mit Fix L-33-09-01, 33-10 gemeinsame Owner-Abnahme mit fr-Einheiten-Fix, 33-11 Audit: 33-AUDIT.md status fixed, H-33-01 (ff4deaa9) und H-33-02 (3657bb43) gefixt, sechs LOW entschieden, Owner-Fragen F1 bis F3 offen und nicht blockierend; EXCL-01, EXCL-02, EXCL-03, POL-01 und POL-03 Complete). Phase 32 ausgeführt; 32-08 Audit abgeschlossen (32-AUDIT.md, status issues_found): M-32-01 gefixt (d09e5a5a), L-32-02 und L-32-06 gefixt (4c481f74), fünf LOW entschieden; M-32-02 (Dokumente gelöschter Nutzer bleiben im Index) offen als Owner-Frage. USRCH-01, USRCH-02 und USRCH-03 Complete
-Last activity: 2026-10-19 -- 33-11 abgeschlossen: Performance-Audit auf 8090 (Matcher linear, Quotient 4,0/4,1; Write-Kosten 0 gegen 32 Muster +0,2 % im Median; Kehrjob 10 000 Dateien in 12 Bändern; Weg C 5 000 Dateien eine Scheibe je Takt; Seite +1,7 %), neuer LOW L-33-06; Fixes H-33-01 (Nicht-Liste in den Regelrouten -> 400 empty statt 500) und H-33-02 (Schlüssel anderen Typs -> leere Liste statt Listener-Stopp), je mit Zwilling für die Präfixliste; Korpus restlos entfernt, Endzustand wie nach 33-10
+Phase: 34 von 30-36 (Umstiegsweg)
+Plan: 1 von 6 erledigt (34-01), weiter mit 34-02
+Status: Phase 34 in Ausführung: 34-01 Wortlaut de/en/fr (Seite, Hinweis, README, Store-Zeile) vom Owner am 19.10.2026 abgenommen, alle Empfehlungen O2-O10. Davor: Phase 33 verifiziert (passed_with_conditions 5/5, e7408b57).
+Last activity: 2026-10-19 -- 34-01 abgeschlossen: 34-WORTLAUT.md abgenommen (d017dd60, 267aacdc), Pflegestand fulltextsearch neu abgefragt (NC 35 jetzt Endfassung 35.0.0), CI Security scans und Scorecard grün
 
 Progress: [████░░░] Phasen 30-33 verifiziert (31: 9/9 passed; 32: passed, 84991d7a; 33: passed_with_conditions 5/5, e7408b57); als Naechstes Phase 34 (Umstiegsweg) planen
 
@@ -77,6 +77,7 @@ Progress: [████░░░] Phasen 30-33 verifiziert (31: 9/9 passed; 32: 
 - v1.5: 33-08 in ca. 25 min inkl. Volltestlauf (14:11 min) und CI (2 Tasks, 4 Dateien)
 - v1.5: 33-09 in ca. 4 h 40 min inkl. Anhalten am Befund, Fix mit Volltestlauf (16:48 min), drei Abgleichsläufen nach Fälligkeit und CI (2 Tasks plus Fix, 7 Dateien)
 - v1.5: 33-11 in ca. 9 h über zwei Sitzungen (Task 3 und 4 ca. 4 h 30 min inkl. ca. 55 min Abgleich am Ruhe-Tor, zwei Volltestläufen je ca. 11 min und CI; 4 Tasks, 8 Dateien)
+- v1.5: 34-01 in ca. 45 min inkl. Checkpoint und CI (2 Tasks, 2 Dateien)
 
 ## Accumulated Context
 
@@ -132,6 +133,7 @@ Progress: [████░░░] Phasen 30-33 verifiziert (31: 9/9 passed; 32: 
 - 33-09: EXCL-02 auf 8090 belegt (Weg A und Weg C mit Positivkontrolle, Kontrolle, Gegenfall .keynote und Gegenprobe auf bd4e13af); Befund L-33-09-01 nach Owner-Entscheid 14.10.2026 Option 1 gefixt: POST /admin/rules/preview mit Body, Logsatz je Liste, Gate scan_rules_routes (fe813988)
 - 33-10: Gemeinsame Owner-Abnahme 18.10.2026 auf 8090 (D-33-02 erfüllt): neun Vorab-Proben plus T-33-31 grün in de/en/fr (Protokoll 33-10-ABNAHME.md), Runde live (Regelblock, Ablehnung, Suche P 0/Q 1 als testuser, Doku-Anker über blob/main), O2/O3/O5 akzeptiert, O4 Variante a (Satz über Tabelle F; Host-Backend auf Windows meldet keinen Speicher, judge_hardware antwortete memory_unknown). O1 umgesetzt: Größeneinheiten als sechs Katalogschlüssel (Template $size, admin.js sizeUnits()), nur fr weicht ab (o, Ko, Mo, Go, To, Po), Schlüsselzahl 334 auf 340, Baumhash-Journal Plan 33-10 (9eff47b4). "Enter a size ... MB."-Satz bewusst nicht umgebaut (fr sagt dort schon Mo). EXCL/POL-Anforderungen bleiben Pending bis 33-11.
 - 33-11: Audit Phase 33 geschlossen (33-AUDIT.md, status fixed). H-33-01: Regelrouten nehmen beide Listen als mixed, eine Nicht-Liste ergibt 400 mit dem bestehenden Code empty (ff4deaa9). H-33-02: patterns() und prefixes() lesen einen Schlüssel anderen Typs als leere Liste mit Zählerwarnung (3657bb43). LOW nach Entscheidungslinien des Orchestrators (Owner schlief, überstimmbar): L-33-01 accept (Orakel liest den Rückfall ohne Normalizer, kein xfail), L-33-02 accept (F1 Bidi), L-33-03 accept mit Doku-Präzisierung (F2 Fingerabdruck im Jobargument), L-33-04 und L-33-05 accept; L-33-06 (Ruhe-Tor zwischen Mounts schließt den Zyklus) accept nach Executor-Entscheid, Zielphase 36 (F3)
+- 34-01: Wortlaut der Phase 34 (34-WORTLAUT.md) vom Owner am 19.10.2026 abgenommen, alle Empfehlungen: O2 Formeln en "OCR without changing files and without Elasticsearch" / fr "OCR sans modifier les fichiers et sans Elasticsearch"; O3 Verbot in de/en/fr mit Lookahead, performance.md:1025 Positivkontrolle; O4 zwei Faktenlisten; O5 fulltextsearch_sql/postgresql einmal neutral; O6 sprachabhängige Tag-URLs, documentation-Element erst Phase 36; O7 Hinweissatz "Mindestens eine App des Volltextsuche-Frameworks ..."; O9 README-Variante 2 (eigener Abschnitt vor Installation); O10 keine UI-SPEC. Store-Zeile als Wortlaut abgenommen, REL-05 offen. PE-34-1 bis PE-34-7 unverändert. Commits d017dd60, 267aacdc; CI grün.
 
 ### Offene Faeden (kein aktiver Auftrag)
 
@@ -165,6 +167,6 @@ Progress: [████░░░] Phasen 30-33 verifiziert (31: 9/9 passed; 32: 
 
 ## Session Continuity
 
-Last session: 2026-10-19T03:30:00.000Z
-Stopped at: Completed 33-11-PLAN.md, Phase 33 ausgeführt (Verifikation offen), weiter mit Phase 34
+Last session: 2026-10-19T07:00:00.000Z
+Stopped at: Completed 34-01-PLAN.md, weiter mit 34-02
 Resume file: None
