@@ -3,7 +3,7 @@ phase: 35-stretch-aehnliche-dokumente-und-spikes
 plan: 03
 subsystem: messung-str02
 tags: [testset, semantik, granite, entscheidungsregel, checkpoint]
-status: checkpoint-offen (Task 3, Owner-Abnahme)
+status: komplett (Owner-Abnahme 19.10.2026)
 requires: []
 provides:
   - "testdata/semantik/de.jsonl mit 120 Fällen (de-01 bis de-42 byte-gleich)"
@@ -23,13 +23,13 @@ decisions:
   - "int8-Fenster granite: --min-bytes 85000000 --max-bytes 110000000"
 metrics:
   completed: 2026-10-19
-  tasks_done: 2
+  tasks_done: 3
   tasks_total: 3
 ---
 
 # Phase 35 Plan 03: Messvorbereitung granite (STR-02) Summary
 
-Deutsches Testset von 42 auf 120 Paare erweitert (Untergrenze im Test gesichert) und die Entscheidungsregel samt Methode des granite-Berichts vor jeder Messung committet; Owner-Abnahme (Task 3) steht aus.
+Deutsches Testset von 42 auf 120 Paare erweitert (Untergrenze im Test gesichert) und die Entscheidungsregel samt Methode des granite-Berichts vor jeder Messung committet; der Owner hat beides am 19.10.2026 ohne Änderung abgenommen.
 
 ## Stand
 
@@ -37,7 +37,11 @@ Deutsches Testset von 42 auf 120 Paare erweitert (Untergrenze im Test gesichert)
 |---|---|---|---|
 | 1 | Deutsches Testset auf 120 Paare | f8ca7296 | erledigt |
 | 2 | Entscheidungsregel und Methode | 3d1a41b7 | erledigt |
-| 3 | Owner-Abnahme | , | **offen, blockierender Checkpoint** |
+| 3 | Owner-Abnahme | 43e5adac | erledigt: `Owner-Abnahme: 19.10.2026, "Regel abgenommen"`, keine Änderungen |
+
+## Task 3
+
+Owner-Antwort (über den Orchestrator): "Regel abgenommen". Regel (a) bis (d), Methode, Stichprobe (500 Dokumente, Seed `granite-35`), Kostendeckel (5,2 h, 0,60 USD) und das 120er-Testset gelten wie vorgelegt. Zeile am Zeilenanfang in Abschnitt 7 eingetragen; Prüfung `grep -E "^Owner-Abnahme: ..."` grün, `rohdaten/` existiert nicht. Doku-Gates (`test_public_artifacts`, `test_measurement_scripts`, `test_model_quality`) 568 passed. Die Regel ist eingefroren.
 
 ## Task 1: Belege
 
@@ -63,10 +67,10 @@ README mit Abschnitten 1 (Regel a bis d: Vorzeichentest einseitig 0,05; 5 Prozen
 
 ## Known Stubs
 
-- `docs/measurements/2026-10-granite-vergleich/README.md` Abschnitt 7 "Offen": Platzhalter für die Owner-Abnahme (Task 3), absichtlich.
+Keine. Die Abschnitte ab 8 (Ergebnisse) entstehen planmäßig in 35-09 bis 35-11.
 
 ## Self-Check: PASSED
 
-- docs/measurements/2026-10-granite-vergleich/README.md vorhanden
+- docs/measurements/2026-10-granite-vergleich/README.md vorhanden, Owner-Zeile in Abschnitt 7
 - testdata/semantik/de.jsonl 120 Zeilen
-- Commits f8ca7296 und 3d1a41b7 im Log
+- Commits f8ca7296, 3d1a41b7, 8aff64f8 und 43e5adac im Log
