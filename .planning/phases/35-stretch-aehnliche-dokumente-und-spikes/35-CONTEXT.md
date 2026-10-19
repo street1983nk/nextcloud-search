@@ -49,6 +49,12 @@ Drei Lieferstuecke, jedes einzeln streichbar ohne Release-Risiko:
   bisherigen docs/measurements-Laeufe (Vergleichbarkeit mit frueheren Zahlen).
 - **D-35-07:** Trefferqualitaet ueber feste Frage-Treffer-Paare, VOR der
   Messung definiert (Regel vor der Messung), automatisch auswertbar.
+- **D-35-10:** Das deutsche Qualitaets-Testset waechst vor der Messung von 42
+  auf rund 120 Frage-Treffer-Paare (Owner-Entscheid 19.10. auf die
+  Research-Frage); e5-small wird im selben Lauf neu gemessen, die
+  September-Zahlen gelten nicht mehr als Vergleichsbasis der Qualitaet.
+- **D-35-11:** amd64-Latenzmessung auf dem Entwicklungsrechner, strikt seriell
+  (keine Parallellast, Browser zu); nur arm64 laeuft auf der gemieteten m7g.
 
 ### Wortlaut-Prozess (Owner-Entscheid 19.10.2026)
 - **D-35-08:** Eigener Wortlaut-Plan am Phasenanfang wie 34-01: die neuen
