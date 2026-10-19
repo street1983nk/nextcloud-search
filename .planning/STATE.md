@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 34-01-PLAN.md
-last_updated: "2026-10-19T07:00:00.000Z"
-last_activity: 2026-10-19 -- 34-01 abgeschlossen (Wortlaut Phase 34 vom Owner abgenommen, alle Empfehlungen O2-O10)
+stopped_at: Completed 34-02-PLAN.md, weiter mit 34-03
+last_updated: "2026-10-19T07:25:56.077Z"
+last_activity: "2026-10-19 -- 34-02 abgeschlossen: Umstiegs-Seiten de/en/fr, Gate test_migration_path.py, Abschalt-Schritte auf 8090 belegt (A1-A3 bestätigt)"
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 49
-  completed_plans: 44
+  completed_plans: 45
   percent: 57
 ---
 
@@ -26,11 +26,11 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 34 von 30-36 (Umstiegsweg)
-Plan: 1 von 6 erledigt (34-01), weiter mit 34-02
-Status: Phase 34 in Ausführung: 34-01 Wortlaut de/en/fr (Seite, Hinweis, README, Store-Zeile) vom Owner am 19.10.2026 abgenommen, alle Empfehlungen O2-O10. Davor: Phase 33 verifiziert (passed_with_conditions 5/5, e7408b57).
-Last activity: 2026-10-19 -- 34-01 abgeschlossen: 34-WORTLAUT.md abgenommen (d017dd60, 267aacdc), Pflegestand fulltextsearch neu abgefragt (NC 35 jetzt Endfassung 35.0.0), CI Security scans und Scorecard grün
+Plan: 2 von 6 erledigt (34-01, 34-02), weiter mit 34-03
+Status: Phase 34 in Ausführung: 34-02 drei Umstiegs-Seiten plus Gate (d5258548, 0e3af73e, 64fb4146). 34-01 Wortlaut de/en/fr (Seite, Hinweis, README, Store-Zeile) vom Owner am 19.10.2026 abgenommen, alle Empfehlungen O2-O10. Davor: Phase 33 verifiziert (passed_with_conditions 5/5, e7408b57).
+Last activity: 2026-10-19 -- 34-02 abgeschlossen: Seiten docs/migrate-from-fulltextsearch{,.en,.fr}.md, Gate test_migration_path.py, Nachweis 34-02-NACHWEIS.md
 
-Progress: [████░░░] Phasen 30-33 verifiziert (31: 9/9 passed; 32: passed, 84991d7a; 33: passed_with_conditions 5/5, e7408b57); als Naechstes Phase 34 (Umstiegsweg) planen
+Progress: [█████████░] 92%
 
 ## Performance Metrics
 
@@ -78,6 +78,7 @@ Progress: [████░░░] Phasen 30-33 verifiziert (31: 9/9 passed; 32: 
 - v1.5: 33-09 in ca. 4 h 40 min inkl. Anhalten am Befund, Fix mit Volltestlauf (16:48 min), drei Abgleichsläufen nach Fälligkeit und CI (2 Tasks plus Fix, 7 Dateien)
 - v1.5: 33-11 in ca. 9 h über zwei Sitzungen (Task 3 und 4 ca. 4 h 30 min inkl. ca. 55 min Abgleich am Ruhe-Tor, zwei Volltestläufen je ca. 11 min und CI; 4 Tasks, 8 Dateien)
 - v1.5: 34-01 in ca. 45 min inkl. Checkpoint und CI (2 Tasks, 2 Dateien)
+- v1.5: 34-02 in ca. 53 min inkl. voller Suite und CI (3 Tasks, 5 Dateien)
 
 ## Accumulated Context
 
@@ -134,6 +135,7 @@ Progress: [████░░░] Phasen 30-33 verifiziert (31: 9/9 passed; 32: 
 - 33-10: Gemeinsame Owner-Abnahme 18.10.2026 auf 8090 (D-33-02 erfüllt): neun Vorab-Proben plus T-33-31 grün in de/en/fr (Protokoll 33-10-ABNAHME.md), Runde live (Regelblock, Ablehnung, Suche P 0/Q 1 als testuser, Doku-Anker über blob/main), O2/O3/O5 akzeptiert, O4 Variante a (Satz über Tabelle F; Host-Backend auf Windows meldet keinen Speicher, judge_hardware antwortete memory_unknown). O1 umgesetzt: Größeneinheiten als sechs Katalogschlüssel (Template $size, admin.js sizeUnits()), nur fr weicht ab (o, Ko, Mo, Go, To, Po), Schlüsselzahl 334 auf 340, Baumhash-Journal Plan 33-10 (9eff47b4). "Enter a size ... MB."-Satz bewusst nicht umgebaut (fr sagt dort schon Mo). EXCL/POL-Anforderungen bleiben Pending bis 33-11.
 - 33-11: Audit Phase 33 geschlossen (33-AUDIT.md, status fixed). H-33-01: Regelrouten nehmen beide Listen als mixed, eine Nicht-Liste ergibt 400 mit dem bestehenden Code empty (ff4deaa9). H-33-02: patterns() und prefixes() lesen einen Schlüssel anderen Typs als leere Liste mit Zählerwarnung (3657bb43). LOW nach Entscheidungslinien des Orchestrators (Owner schlief, überstimmbar): L-33-01 accept (Orakel liest den Rückfall ohne Normalizer, kein xfail), L-33-02 accept (F1 Bidi), L-33-03 accept mit Doku-Präzisierung (F2 Fingerabdruck im Jobargument), L-33-04 und L-33-05 accept; L-33-06 (Ruhe-Tor zwischen Mounts schließt den Zyklus) accept nach Executor-Entscheid, Zielphase 36 (F3)
 - 34-01: Wortlaut der Phase 34 (34-WORTLAUT.md) vom Owner am 19.10.2026 abgenommen, alle Empfehlungen: O2 Formeln en "OCR without changing files and without Elasticsearch" / fr "OCR sans modifier les fichiers et sans Elasticsearch"; O3 Verbot in de/en/fr mit Lookahead, performance.md:1025 Positivkontrolle; O4 zwei Faktenlisten; O5 fulltextsearch_sql/postgresql einmal neutral; O6 sprachabhängige Tag-URLs, documentation-Element erst Phase 36; O7 Hinweissatz "Mindestens eine App des Volltextsuche-Frameworks ..."; O9 README-Variante 2 (eigener Abschnitt vor Installation); O10 keine UI-SPEC. Store-Zeile als Wortlaut abgenommen, REL-05 offen. PE-34-1 bis PE-34-7 unverändert. Commits d017dd60, 267aacdc; CI grün.
+- 34-02: Abschalt-Schritte auf 8090 belegt (A1 Tabellenreste oc_fulltextsearch_index/_ticks plus oc_migrations bleiben nach app:remove; A2 reset ohne Plattform verständlicher Fehler, --no-interaction tut nichts; A3 Store-Installation geht). Seite nennt Aufräum-SQL mit Datensicherungs-Hinweis; die drei Ersatz-Absätze gehen in 34-05 dem Owner zur Abnahme vor.
 
 ### Offene Faeden (kein aktiver Auftrag)
 
@@ -167,6 +169,6 @@ Progress: [████░░░] Phasen 30-33 verifiziert (31: 9/9 passed; 32: 
 
 ## Session Continuity
 
-Last session: 2026-10-19T07:00:00.000Z
-Stopped at: Completed 34-01-PLAN.md, weiter mit 34-02
+Last session: 2026-10-19T07:25:56.059Z
+Stopped at: Completed 34-02-PLAN.md, weiter mit 34-03
 Resume file: None
