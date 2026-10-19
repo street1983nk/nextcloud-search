@@ -1,0 +1,16 @@
+free memory before the run (GlobalMemoryStatusEx, Windows 11 Pro 10.0.26200)
+2026-10-19T19:04:07Z total 16071 MB, available 3046 MB, load 81 %
+
+model directory
+source        ghcr.io/street1983nk/findling_backend:1.4.3, docker create + docker cp of /usr/local/share/findling/model
+model.onnx    118101091 bytes
+sha256        8da4c9ba0ad59f58e8566839425d7fd6339d31414d0ce5cba2d7d0afb75dd8b6
+MODEL_SHA256  8da4c9ba0ad59f58e8566839425d7fd6339d31414d0ce5cba2d7d0afb75dd8b6 (.github/workflows/integration.yml)
+check         identical
+
+run of 01-similar.txt
+start         2026-10-19T19:04:19Z
+end           2026-10-19T19:04:33Z
+exit code     0
+stderr        empty
+serial        no other test run, no browser, no second model process during the run

@@ -32,8 +32,11 @@ decides what a user is allowed to see (T-06-25, D-20).
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
+
+from findling.embed.model import to_int8
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -150,6 +153,51 @@ def near_enough(hits: Sequence[ChunkHit], *, ceiling: float, band: float) -> lis
         return []
     best = min(hit.distance for hit in under)
     return [hit for hit in under if hit.distance <= best + band]
+
+
+def centroid(vectors: Sequence[bytes]) -> bytes | None:
+    """The stored int8 vectors of one document as one query vector (STR-01).
+
+    The similar documents view asks "what lies near this document", and the
+    document is already in the store: its chunks carry their vectors. Averaging
+    them into one direction turns the question into one scan of the vector
+    table instead of one scan per chunk, and it needs no model at all, so the
+    view works on a box where the embedder is switched off or still loading.
+    Under the capped chunking of D-01 a document carries two or three chunks,
+    which is the reason a mean is a fair summary here and not a blur over a
+    whole book. Whether the mean ranks neighbours close enough to the minimum
+    over the chunks is measured, not assumed:
+    docs/measurements/2026-10-aehnlich-distanzen/README.md (assumption A1).
+
+    **The stored bytes are signed.** A component of -127 is stored as 0x81, and
+    read as an unsigned byte it would count as 129: the mean would then point
+    somewhere else, and still be a full, plausible vector. So every byte above
+    127 is read back as its value minus 256 before anything is added.
+
+    The sum is renormalised to unit length and quantised through
+    :func:`findling.embed.model.to_int8`, the same function every stored vector
+    went through, so the query lives on exactly the scale it is compared on and
+    there is no second rounding rule to drift.
+
+    No vectors give no query, and neither does a sum of length zero (two chunks
+    pointing in opposite directions): there is no direction to look in, and
+    inventing one would fill the list with arbitrary neighbours. Vectors of
+    different width are a broken store rather than an input, and are refused.
+    """
+    if not vectors:
+        return None
+    width = len(vectors[0])
+    if any(len(vector) != width for vector in vectors):
+        message = f"centroid needs vectors of one width, got {sorted({len(vector) for vector in vectors})}"
+        raise ValueError(message)
+    sums = [0] * width
+    for vector in vectors:
+        for index, value in enumerate(vector):
+            sums[index] += value - 256 if value > 127 else value
+    norm = math.sqrt(sum(value * value for value in sums))
+    if norm == 0.0:
+        return None
+    return to_int8([value / norm for value in sums])
 
 
 def reciprocal_rank_fusion(

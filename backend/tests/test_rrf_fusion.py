@@ -26,15 +26,18 @@ living next to the search rather than inside it.
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import pytest
 
+from findling.embed.model import to_int8
 from findling.index.fusion import (
     BOTH,
     LEXICAL,
     SEMANTIC,
     ChunkHit,
+    centroid,
     documents_from_chunks,
     near_enough,
     origins,
@@ -332,6 +335,79 @@ def test_the_gate_names_both_of_its_measured_numbers() -> None:
 
     assert "2026-09-06-vektordistanzen" in source
     assert "near_enough" in source
+
+
+# ---------------------------------------------------------------------------
+# The mean of the stored vectors of one document (STR-01, PE-35-4)
+# ---------------------------------------------------------------------------
+
+
+def signed(vector: bytes) -> list[int]:
+    """The stored bytes read back as the signed values they stand for.
+
+    Written out here rather than borrowed from the module, so that the cases
+    below do not trust the very reading they are about.
+    """
+    return [value - 256 if value > 127 else value for value in vector]
+
+
+def unit(dimension: int, width: int = 4, sign: float = 1.0) -> bytes:
+    """A stored unit vector along one axis, through the product quantisation."""
+    return to_int8([sign if index == dimension else 0.0 for index in range(width)])
+
+
+def test_the_mean_of_no_vectors_is_no_vector() -> None:
+    assert centroid([]) is None
+
+
+def test_the_mean_of_one_stored_vector_is_that_vector_within_one_step() -> None:
+    # A real looking direction rather than an axis, so that the renormalisation
+    # has something to round.
+    raw = [0.5, -0.3, 0.7, -0.1, 0.2, 0.0]
+    norm = math.sqrt(sum(value * value for value in raw))
+    stored = to_int8([value / norm for value in raw])
+
+    mean = centroid([stored])
+
+    assert mean is not None
+    assert len(mean) == len(stored)
+    assert all(abs(a - b) <= 1 for a, b in zip(signed(mean), signed(stored), strict=True))
+
+
+def test_the_mean_of_two_orthogonal_unit_vectors_lies_halfway_at_full_length() -> None:
+    mean = centroid([unit(0), unit(1)])
+
+    assert mean is not None
+    values = signed(mean)
+    expected = round(127 / math.sqrt(2))
+    assert abs(values[0] - expected) <= 1
+    assert abs(values[1] - expected) <= 1
+    assert values[0] == values[1]
+    assert values[2:] == [0, 0]
+    # Renormalised: back on the int8 scale of 127, not left at half length.
+    assert abs(math.sqrt(sum(value * value for value in values)) - 127) <= 1
+
+
+def test_a_byte_above_127_is_read_as_a_negative_component() -> None:
+    # 0x81 is -127 in a signed byte. Read unsigned it would be 129 and the mean
+    # would point the other way, still a full, plausible vector.
+    stored = unit(0, sign=-1.0)
+    assert stored[0] == 0x81
+
+    mean = centroid([stored])
+
+    assert mean is not None
+    assert signed(mean)[0] < 0
+    assert signed(mean)[0] == -127
+
+
+def test_two_opposite_vectors_have_no_direction_and_answer_none() -> None:
+    assert centroid([unit(2), unit(2, sign=-1.0)]) is None
+
+
+def test_vectors_of_unequal_width_are_refused() -> None:
+    with pytest.raises(ValueError, match="width"):
+        centroid([unit(0, width=4), unit(0, width=5)])
 
 
 # ---------------------------------------------------------------------------

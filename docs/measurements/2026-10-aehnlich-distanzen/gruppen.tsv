@@ -1,0 +1,40 @@
+Datei	Gruppe	Begründung
+01-text-layer.pdf	korpus-selbstbeschreibung	Der Text beschreibt den Referenzkorpus selbst ("Findling reference corpus") und seine Textschicht.
+02-scan-no-text-layer.pdf	ohne Gruppe	Ein Grauverlauf ohne Textschicht und ohne Text in RENDERED_TEXT, also kein Vektor.
+03-document.docx	korpus-selbstbeschreibung	Beschreibt sich als Büroteil des Referenzkorpus und nennt dieselben Umlautwörter wie 04 und 08.
+04-notes.txt	korpus-selbstbeschreibung	Beschreibt sich als Klartextteil des Referenzkorpus samt Zeichensatzprobe.
+05-picture.png	ohne Gruppe	Ein Bild ohne Text in RENDERED_TEXT, also kein Vektor.
+06-zero-bytes.pdf	ohne Gruppe	Leere Datei, kein Text.
+07-password-protected.pdf	ohne Gruppe	Verschlüsselt, der Lesepfad liefert keinen Text.
+08-legacy-encoding.txt	korpus-selbstbeschreibung	Beschreibt sich als Altkodierungsteil des Referenzkorpus mit denselben Probewörtern wie 04.
+09-bescheid.pdf	bau-und-liegenschaft	Bescheid über eine Grundstücksverkehrsgenehmigung, also ein Verwaltungsakt zu Grund und Boden.
+10-kuendigung.docx	ohne Gruppe	Kündigung eines Mietverhältnisses, ein privatrechtliches Wohnungsthema, das keiner Gruppe sicher zuzuordnen ist.
+11-uebersicht.odt	ohne Gruppe	Übersicht laufender Verträge eines Fachbereichs, ohne zweites Dokument zum selben Thema.
+12-aktenvermerk.txt	registratur	Aktenvermerk der Registratur zu Zuständigkeit und Rückfragen.
+13-ratsvorlage-scan.pdf	bau-und-liegenschaft	Ratsvorlage zur Aufstellung eines Bebauungsplans für ein Gewerbegebiet.
+14-pacht-mit-anhang.pdf	bau-und-liegenschaft	Anlagen einer Pachtvereinbarung über eine städtische Fläche mit Lageplan und Bestandsaufnahme.
+15-schweiz-baubewilligung.pdf	bau-und-liegenschaft	Baubewilligung für den Umbau eines Wohnhauses auf einem Grundstück.
+16-oesterreich-mitteilung.pdf	bau-und-liegenschaft	Mitteilung mit Grundbuchsauszug zu einer Liegenschaft und Vermessung.
+17-beleg.jpg	zahlung	Zahlungsavis mit Rechnungsnummer und Betrag.
+18-aushang.png	ohne Gruppe	Aushang der Stadtreinigung zur Sperrmüllabfuhr, ohne zweites Dokument zum selben Thema.
+19-uebermittlung.tif	fax-uebermittlung	Übermittlungsprotokoll einer Faxsendung mit Empfänger, Seitenzahl und Status.
+20-rueckruf.webp	ohne Gruppe	Rückrufbitte aus dem Ordnungsamt, ohne zweites Dokument zum selben Thema.
+21-sendebericht.tif	fax-uebermittlung	Sendebericht einer mehrseitigen Übertragung, dasselbe Thema wie 19.
+22-icon.png	ohne Gruppe	Ein Symbolbild ohne Text, also kein Vektor.
+23-gedreht.jpg	registratur	Lieferschein über Aktenordner zur Übergabe an die Registratur.
+24-abgeschnittener-trailer.pdf	ohne Gruppe	Absichtlich beschädigtes PDF, der Lesepfad liefert keinen Text.
+25-kaputte-xref.pdf	korpus-selbstbeschreibung	Trägt trotz beschädigter Querverweistabelle denselben Selbstbeschreibungstext wie 01.
+26-riesige-seitenzahl.pdf	ohne Gruppe	Absichtlich beschädigtes PDF, der Lesepfad liefert keinen Text.
+27-nullbytes-im-kopf.pdf	ohne Gruppe	Absichtlich beschädigtes PDF, der Lesepfad liefert keinen Text.
+28-ohne-seiten.pdf	ohne Gruppe	PDF ohne Seiten, kein Text.
+29-doppelt-komprimiert.pdf	pdf-strukturprobe	Ein Satz, der die eigene technische Besonderheit der Datei benennt (zweimal komprimierter Inhalt).
+30-nur-ein-bild.pdf	zahlung	Zahlungserinnerung der Stadtkasse zu einer offenen Rechnung.
+31-riesenformat.pdf	ohne Gruppe	Prüfdatei für ein ungewöhnliches Seitenformat, der Lesepfad liefert keinen Text.
+32-startxref-ins-leere.pdf	korpus-selbstbeschreibung	Trägt trotz ins Leere zeigendem startxref denselben Selbstbeschreibungstext wie 01.
+33-seitenbaum-zyklus.pdf	ohne Gruppe	Absichtlich zyklischer Seitenbaum, der Lesepfad liefert keinen Text.
+34-zip-bombe.docx	ohne Gruppe	ZIP-Bombe, die vor dem Lesen abgewiesen wird, kein Text.
+35-startaktion-javascript.pdf	pdf-strukturprobe	Ein Satz, der die eigene technische Besonderheit der Datei benennt (Startaktion mit Skriptobjekt).
+36-eingebettete-datei.pdf	pdf-strukturprobe	Ein Satz, der die eigene technische Besonderheit der Datei benennt (eingebettete Datei).
+37-verweis-ins-netz.pdf	pdf-strukturprobe	Ein Satz, der die eigene technische Besonderheit der Datei benennt (Verweis auf eine Netzadresse).
+38-aes256-verschluesselt.pdf	ohne Gruppe	Verschlüsselt, der Lesepfad liefert keinen Text.
+39-tief-verschachtelt.pdf	pdf-strukturprobe	Ein Satz, der die eigene technische Besonderheit der Datei benennt (tief verschachtelte Objekte).

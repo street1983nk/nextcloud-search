@@ -50,6 +50,17 @@ Run it, from anywhere, with the environment of the backend::
         --model-dir /path/to/model
     uv run python ../scripts/dev/vector_distances.py --derive \\
         --model-dir /path/to/model --dataset-dir ../testdata/semantik
+    uv run python ../scripts/dev/vector_distances.py --similar --derive \\
+        --model-dir /path/to/model --dataset-dir ../testdata/semantik \\
+        --groups ../docs/measurements/2026-10-aehnlich-distanzen/gruppen.tsv
+
+**The similar mode** (Plan 35-04) asks document against document instead of
+query against section: the query text and the section of one case are both
+embedded as passages, the sections of different cases are the unrelated pairs,
+and the corpus documents are compared through
+:func:`findling.index.fusion.centroid`, the very function the similar view
+runs. Its rule stands in docs/measurements/2026-10-aehnlich-distanzen/README.md
+and was committed before this mode existed.
 """
 
 from __future__ import annotations
@@ -61,7 +72,7 @@ import json
 import logging
 import sys
 import tempfile
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
@@ -82,6 +93,7 @@ for entry in (BACKEND_SOURCE, DEV_SCRIPTS):
 
 from findling.embed.chunker import chunk_spans, make_splitter  # noqa: E402
 from findling.embed.model import DIMENSIONS, EmbeddingModel, open_tokenizer, to_int8  # noqa: E402
+from findling.index.fusion import centroid  # noqa: E402
 
 # The three files of the test set, in the order the report tabulates them.
 LANGUAGES: Final = ("de", "en", "fr")
@@ -209,6 +221,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--testset", action="store_true", help="the three language files of testdata/semantik")
     parser.add_argument("--corpus", action="store_true", help="the probes against the texts of the e2e corpus")
     parser.add_argument("--derive", action="store_true", help="both populations plus the admissible grid")
+    parser.add_argument(
+        "--similar",
+        action="store_true",
+        help="document against document, for the similar documents ceiling (with --derive: derive it)",
+    )
+    parser.add_argument("--groups", type=Path, default=None, help="the topic group table of the e2e corpus (tsv)")
     parser.add_argument("--model-dir", type=Path, default=None, help="the directory holding model.onnx and tokenizer")
     parser.add_argument("--dataset-dir", type=Path, default=None, help="the directory holding de.jsonl and friends")
     return parser.parse_args(argv)
@@ -793,6 +811,406 @@ def _probe_effect(probes: Sequence[ProbeMeasurement], *, ceiling: float, band: f
 
 
 # ---------------------------------------------------------------------------
+# The similar mode: document against document (Plan 35-04)
+# ---------------------------------------------------------------------------
+
+# The rule of docs/measurements/2026-10-aehnlich-distanzen/README.md, section 1,
+# written down before the run. Named here so that the derivation below reads
+# the rule rather than restating it in literals.
+GERMAN_SIMILAR_CASES: Final = 42  # the first 42 lines of de.jsonl, which 35-03 keeps byte for byte
+RELATED_SHARE: Final = 0.95  # (1) share of related pairs at or under the ceiling, every language
+UNRELATED_CUT: Final = 0.90  # (2) share of unrelated pairs beyond the ceiling, every language
+GROUP_SHARE: Final = 0.80  # (4) share of group pairs at or under the ceiling
+FOREIGN_SHARE: Final = 0.10  # (4) share of foreign pairs at or under the ceiling, at most
+A1_OVERLAP: Final = 0.8  # (3) mean overlap of the first ten neighbours, mean against minimum
+SIMILAR_NEIGHBOURS: Final = 10  # the list of the view shows ten neighbours at most (D-35-03)
+MINIMUM_GROUPS: Final = 3  # (4) is checkable with three groups of two files or more
+NO_GROUP: Final = "ohne Gruppe"  # the group column of a file that belongs to no topic
+
+# How many grid steps the report shows on either side of the derived value.
+RASTER_STEPS: Final = 6
+
+
+@dataclass(frozen=True)
+class SimilarPopulation:
+    """The two distributions of one language, as numbers only.
+
+    ``related`` holds one distance per case: the query text and the section of
+    the same case, both embedded as passages. ``unrelated`` holds one distance
+    per unordered pair of sections of different cases.
+    """
+
+    language: str
+    related: np.ndarray
+    unrelated: np.ndarray
+
+
+@dataclass(frozen=True)
+class SimilarDerivation:
+    """What the rule makes of the three populations."""
+
+    candidate: float
+    ceiling: float | None
+    satisfied: bool
+    cut: dict[str, float]
+    fallback: float | None
+    fallback_lost: dict[str, int]
+
+
+@dataclass(frozen=True)
+class GroupProbe:
+    """The group probe of rule (4) under one ceiling."""
+
+    ceiling: float
+    group_pairs: int
+    foreign_pairs: int
+    group_share: float
+    foreign_share: float
+
+
+def similar_cases(records: Sequence[dict[str, str]], language: str) -> list[dict[str, str]]:
+    """The fixed selection of the run: German is cut to its first 42 cases.
+
+    Independent of the stand of Plan 35-03, which grows de.jsonl to about 120
+    cases and keeps the first 42 lines byte for byte. English and French are
+    taken whole.
+    """
+    if language == "de":
+        return list(records[:GERMAN_SIMILAR_CASES])
+    return list(records)
+
+
+def similar_pairs(language: str, queries: Sequence[bytes], passages: Sequence[bytes]) -> SimilarPopulation:
+    """The related and the unrelated pairs of one language, from stored vectors."""
+    if len(queries) != len(passages):
+        message = f"{language}: {len(queries)} query vectors against {len(passages)} sections"
+        raise MeasurementError(message)
+    related = np.array([l2_distance(query, passage) for query, passage in zip(queries, passages, strict=True)])
+    unrelated = np.array(
+        [
+            l2_distance(passages[first], passages[second])
+            for first in range(len(passages))
+            for second in range(first + 1, len(passages))
+        ],
+        dtype=np.float64,
+    )
+    return SimilarPopulation(language=language, related=related.astype(np.float64), unrelated=unrelated)
+
+
+def _share_at_or_under(values: np.ndarray, ceiling: float) -> float:
+    if values.size == 0:
+        return 0.0
+    return float(np.count_nonzero(values <= ceiling)) / float(values.size)
+
+
+def derive_similar(populations: Sequence[SimilarPopulation]) -> SimilarDerivation:
+    """Rule (1) and (2), mechanically, on the grid of step 0.5.
+
+    The candidate is the smallest grid value at or under which every language
+    keeps 95 percent of its related pairs. It becomes the ceiling only when it
+    cuts at least 90 percent of the unrelated pairs in every language. When it
+    does not, the answer carries the two numbers of the owner question instead:
+    the largest grid value that cuts 90 percent everywhere, and how many related
+    pairs every language would lose under it.
+    """
+    grid = _grid(0.0, METRIC_MAXIMUM)
+    candidate = next(
+        value
+        for value in grid
+        if all(_share_at_or_under(population.related, value) >= RELATED_SHARE - TOLERANCE for population in populations)
+    )
+    cut = {population.language: 1.0 - _share_at_or_under(population.unrelated, candidate) for population in populations}
+    satisfied = all(share >= UNRELATED_CUT - TOLERANCE for share in cut.values())
+
+    admissible = [
+        value
+        for value in grid
+        if all(
+            1.0 - _share_at_or_under(population.unrelated, value) >= UNRELATED_CUT - TOLERANCE
+            for population in populations
+        )
+    ]
+    fallback = admissible[-1] if admissible else None
+    fallback_lost = {
+        population.language: (int(np.count_nonzero(population.related > fallback)) if fallback is not None else 0)
+        for population in populations
+    }
+    return SimilarDerivation(
+        candidate=candidate,
+        ceiling=candidate if satisfied else None,
+        satisfied=satisfied,
+        cut=cut,
+        fallback=fallback,
+        fallback_lost=fallback_lost,
+    )
+
+
+def read_groups(path: Path) -> dict[str, str]:
+    """The group table: file name to topic group, header line first."""
+    if not path.is_file():
+        message = f"group table not found: {path}"
+        raise MeasurementError(message)
+    groups: dict[str, str] = {}
+    lines = path.read_text(encoding="utf-8").splitlines()
+    for number, line in enumerate(lines[1:], start=2):
+        if not line.strip():
+            continue
+        columns = line.split("\t")
+        if len(columns) != 3:
+            message = f"{path.name} line {number} has {len(columns)} columns, expected 3"
+            raise MeasurementError(message)
+        groups[columns[0]] = columns[1]
+    return groups
+
+
+def _group_split(groups: Mapping[str, str], centroids: Mapping[str, bytes]) -> tuple[np.ndarray, np.ndarray] | None:
+    """The centroid distances of the group pairs and of the foreign pairs, or None.
+
+    Files without a vector fall out of both counts. A file without a group is
+    only ever a foreign partner. Fewer than three groups with two files each
+    make the probe not checkable, which is None.
+    """
+    names = sorted(centroids)
+    group_of = {name: groups.get(name, NO_GROUP) for name in names}
+    sizes: dict[str, int] = {}
+    for group in group_of.values():
+        if group != NO_GROUP:
+            sizes[group] = sizes.get(group, 0) + 1
+    if sum(1 for size in sizes.values() if size >= 2) < MINIMUM_GROUPS:
+        return None
+    same: list[float] = []
+    foreign: list[float] = []
+    for first in range(len(names)):
+        for second in range(first + 1, len(names)):
+            left, right = names[first], names[second]
+            distance = l2_distance(centroids[left], centroids[right])
+            if group_of[left] == group_of[right] != NO_GROUP:
+                same.append(distance)
+            else:
+                foreign.append(distance)
+    return np.array(same, dtype=np.float64), np.array(foreign, dtype=np.float64)
+
+
+def group_probe(groups: Mapping[str, str], centroids: Mapping[str, bytes], *, ceiling: float) -> GroupProbe | None:
+    """Rule (4) under one ceiling, or None when the corpus cannot carry the probe."""
+    split = _group_split(groups, centroids)
+    if split is None:
+        return None
+    same, foreign = split
+    return GroupProbe(
+        ceiling=ceiling,
+        group_pairs=int(same.size),
+        foreign_pairs=int(foreign.size),
+        group_share=_share_at_or_under(same, ceiling),
+        foreign_share=_share_at_or_under(foreign, ceiling),
+    )
+
+
+def neighbour_overlap(
+    documents: Mapping[str, Sequence[bytes]],
+    *,
+    neighbours: int = SIMILAR_NEIGHBOURS,
+) -> dict[str, float]:
+    """Assumption A1: how far the mean ranks like the minimum, per multi chunk document.
+
+    The mean asks once: the centroid of the document against every chunk of the
+    other documents, minimum per document, which is what the view runs. The
+    minimum asks once per own chunk and keeps the smallest distance over both
+    sides. The answer is the share of the first ``neighbours`` documents the two
+    rankings have in common, between 0 and 1. Documents of one chunk have
+    nothing to compare and are left out; ties go to the file name.
+    """
+    overlap: dict[str, float] = {}
+    for name in sorted(documents):
+        chunks = documents[name]
+        others = [other for other in sorted(documents) if other != name]
+        if len(chunks) < 2 or not others:
+            continue
+        query = centroid(chunks)
+        if query is None:
+            continue
+        by_mean = sorted(
+            others, key=lambda other: (min(l2_distance(query, chunk) for chunk in documents[other]), other)
+        )
+        by_minimum = sorted(
+            others,
+            key=lambda other: (min(l2_distance(own, chunk) for own in chunks for chunk in documents[other]), other),
+        )
+        depth = min(neighbours, len(others))
+        overlap[name] = len(set(by_mean[:depth]) & set(by_minimum[:depth])) / depth
+    return overlap
+
+
+def measure_similar_language(model: EmbeddingModel, path: Path) -> SimilarPopulation:
+    """The two populations of one language, query text and section both as passages."""
+    records = similar_cases(load_dataset(path), path.stem)
+    passages = _embed_passages(model, [record["passage"] for record in records])
+    queries = _embed_passages(model, [record["query"] for record in records])
+    return similar_pairs(path.stem, queries, passages)
+
+
+def documents_of(stock: Sequence[CorpusChunk]) -> dict[str, list[bytes]]:
+    """The chunk vectors of every corpus file, in the order of their ordinals."""
+    grouped: dict[str, list[tuple[int, bytes]]] = {}
+    for chunk in stock:
+        grouped.setdefault(chunk.name, []).append((chunk.ordinal, chunk.vector))
+    return {name: [vector for _, vector in sorted(entries)] for name, entries in sorted(grouped.items())}
+
+
+def _quartile_line(label: str, values: np.ndarray) -> str:
+    return (
+        f"{label:<22}{values.size:>7}"
+        f"{float(np.min(values)):>12.{DIGITS}f}{float(np.percentile(values, 25)):>12.{DIGITS}f}"
+        f"{float(np.median(values)):>12.{DIGITS}f}{float(np.percentile(values, 75)):>12.{DIGITS}f}"
+        f"{float(np.max(values)):>12.{DIGITS}f}"
+    )
+
+
+def similar_population_report(populations: Sequence[SimilarPopulation]) -> str:
+    header = f"{'population':<22}{'n':>7}{'min':>12}{'p25':>12}{'median':>12}{'p75':>12}{'max':>12}"
+    lines = [header]
+    for population in populations:
+        lines.append(_quartile_line(f"{population.language} related", population.related))
+        lines.append(_quartile_line(f"{population.language} unrelated", population.unrelated))
+    return "\n".join(lines)
+
+
+def similar_corpus_report(documents: Mapping[str, Sequence[bytes]], overlap: Mapping[str, float]) -> str:
+    chunks = sum(len(vectors) for vectors in documents.values())
+    multi = sorted(name for name, vectors in documents.items() if len(vectors) > 1)
+    lines = [
+        f"corpus        {chunks} chunks over {len(documents)} files with text",
+        f"multi chunk   {len(multi)} files: {', '.join(multi) or 'none'}",
+    ]
+    if not overlap:
+        lines.append("A1            not checkable on the corpus: no file carries more than one chunk")
+        return "\n".join(lines)
+    for name, value in sorted(overlap.items()):
+        lines.append(f"overlap       {name:<34}{value:>8.{DIGITS}f}")
+    mean = sum(overlap.values()) / len(overlap)
+    verdict = "holds" if mean >= A1_OVERLAP - TOLERANCE else "FAILS, owner question"
+    lines.append(f"A1            mean overlap {mean:.{DIGITS}f} against {A1_OVERLAP}: {verdict}")
+    return "\n".join(lines)
+
+
+def _similar_raster_line(populations: Sequence[SimilarPopulation], value: float) -> str:
+    related = "".join(f"{_share_at_or_under(population.related, value):>9.{DIGITS}f}" for population in populations)
+    cut = "".join(f"{1.0 - _share_at_or_under(population.unrelated, value):>9.{DIGITS}f}" for population in populations)
+    return f"{value:>8.1f}{related}  {cut}"
+
+
+def similar_derivation_report(populations: Sequence[SimilarPopulation], derivation: SimilarDerivation) -> str:
+    languages = [population.language for population in populations]
+    header = (
+        f"{'value':>8}"
+        + "".join(f"{'rel ' + language:>9}" for language in languages)
+        + "  "
+        + "".join(f"{'cut ' + language:>9}" for language in languages)
+    )
+    lines = [
+        (
+            f"rule (1)      smallest grid value with {RELATED_SHARE:.2f} of related pairs at or under it: "
+            f"{derivation.candidate:.1f}"
+        ),
+        "rule (2)      cut of unrelated pairs at that value: "
+        + ", ".join(f"{language} {share:.{DIGITS}f}" for language, share in derivation.cut.items()),
+    ]
+    if derivation.satisfied:
+        lines.append(f"verdict       (1) and (2) hold, candidate {derivation.candidate:.1f}")
+    else:
+        lines.append(f"verdict       Regel nicht erfuellbar: (2) needs {UNRELATED_CUT:.2f} cut in every language")
+        if derivation.fallback is None:
+            lines.append("owner         no grid value cuts 90 percent of the unrelated pairs in every language")
+        else:
+            lost = ", ".join(
+                f"{language} {count} of {population.related.size}"
+                for (language, count), population in zip(derivation.fallback_lost.items(), populations, strict=True)
+            )
+            lines.append(f"owner         {derivation.fallback:.1f} would cut 90 percent everywhere and lose {lost}")
+    lines.extend(["", header])
+    anchor = derivation.candidate
+    marks = {anchor}
+    if derivation.fallback is not None:
+        marks.add(derivation.fallback)
+    shown = sorted(
+        {
+            _rounded(mark + step * GRID_STEP)
+            for mark in marks
+            for step in range(-RASTER_STEPS, RASTER_STEPS + 1)
+            if 0.0 <= mark + step * GRID_STEP <= METRIC_MAXIMUM
+        }
+    )
+    lines.extend(_similar_raster_line(populations, value) for value in shown)
+    return "\n".join(lines)
+
+
+def group_report(
+    groups: Mapping[str, str],
+    centroids: Mapping[str, bytes],
+    derivation: SimilarDerivation | None,
+) -> str:
+    split = _group_split(groups, centroids)
+    if split is None:
+        return "group probe   not checkable: fewer than three groups with two files that carry text"
+    same, foreign = split
+    lines = [f"group probe   {same.size} group pairs, {foreign.size} foreign pairs"]
+    lines.append(_quartile_line("group pairs", same))
+    lines.append(_quartile_line("foreign pairs", foreign))
+    if derivation is not None:
+        probe = group_probe(groups, centroids, ceiling=derivation.candidate)
+        if probe is not None:
+            holds = probe.group_share >= GROUP_SHARE - TOLERANCE and probe.foreign_share <= FOREIGN_SHARE + TOLERANCE
+            lines.append(
+                f"rule (4)      at {probe.ceiling:.1f}: group pairs under {probe.group_share:.{DIGITS}f}, "
+                f"foreign pairs under {probe.foreign_share:.{DIGITS}f}: {'holds' if holds else 'FAILS'}"
+            )
+    lines.extend(["", f"{'value':>8}{'group':>9}{'foreign':>9}"])
+    everything = np.concatenate([same, foreign])
+    for value in _grid(float(np.floor(np.min(everything))), float(np.ceil(np.max(everything)))):
+        lines.append(
+            f"{value:>8.1f}{_share_at_or_under(same, value):>9.{DIGITS}f}"
+            f"{_share_at_or_under(foreign, value):>9.{DIGITS}f}"
+        )
+    return "\n".join(lines)
+
+
+def similar_verdict(
+    derivation: SimilarDerivation,
+    groups: Mapping[str, str] | None,
+    centroids: Mapping[str, bytes],
+) -> str:
+    """The one line the report quotes: a value, or the rule that was not met."""
+    if not derivation.satisfied:
+        return "SIMILAR_CEILING   none: Regel nicht erfuellbar, (2) fails"
+    if groups is None:
+        return f"SIMILAR_CEILING   {derivation.candidate:.1f} under (1) and (2); (4) not run, --groups missing"
+    probe = group_probe(groups, centroids, ceiling=derivation.candidate)
+    if probe is None:
+        return "SIMILAR_CEILING   none: Regel nicht erfuellbar, (4) not checkable on the corpus"
+    if probe.group_share < GROUP_SHARE - TOLERANCE or probe.foreign_share > FOREIGN_SHARE + TOLERANCE:
+        return "SIMILAR_CEILING   none: Regel nicht erfuellbar, (4) fails"
+    return f"SIMILAR_CEILING   {derivation.candidate:.1f}"
+
+
+def run_similar(args: argparse.Namespace, model: EmbeddingModel, model_dir: Path) -> str:
+    populations = [measure_similar_language(model, path) for path in _languages(args.dataset_dir)]
+    documents = documents_of(corpus_stock(model, model_dir))
+    overlap = neighbour_overlap(documents)
+    centroids = {name: vector for name, chunks in documents.items() if (vector := centroid(chunks)) is not None}
+    groups = read_groups(args.groups) if args.groups is not None else None
+
+    sections = [similar_population_report(populations), "", similar_corpus_report(documents, overlap)]
+    derivation = derive_similar(populations) if args.derive else None
+    if derivation is not None:
+        sections.extend(["", similar_derivation_report(populations, derivation)])
+    if groups is not None:
+        sections.extend(["", group_report(groups, centroids, derivation)])
+    if derivation is not None:
+        sections.extend(["", similar_verdict(derivation, groups, centroids)])
+    return "\n".join(sections)
+
+
+# ---------------------------------------------------------------------------
 # The command line
 # ---------------------------------------------------------------------------
 
@@ -827,6 +1245,9 @@ def run(args: argparse.Namespace) -> str:
 
     model, model_dir = _model(args.model_dir)
 
+    if args.similar:
+        return run_similar(args, model, model_dir)
+
     if args.testset:
         measurements = [measure_language(model, path) for path in _languages(args.dataset_dir)]
         return testset_report(measurements)
@@ -851,8 +1272,8 @@ def run(args: argparse.Namespace) -> str:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
-    if not (args.selftest or args.testset or args.corpus or args.derive):
-        print("REFUSED: name one of --selftest, --testset, --corpus or --derive", file=sys.stderr)
+    if not (args.selftest or args.testset or args.corpus or args.derive or args.similar):
+        print("REFUSED: name one of --selftest, --testset, --corpus, --derive or --similar", file=sys.stderr)
         return 2
     try:
         print(run(args))

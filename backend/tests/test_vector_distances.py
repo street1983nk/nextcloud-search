@@ -147,6 +147,12 @@ def test_the_tool_names_neither_of_the_two_content_fields_in_its_output(tool: An
         tool.selftest,
         tool._gate_effect,
         tool._probe_effect,
+        tool.similar_population_report,
+        tool.similar_corpus_report,
+        tool.similar_derivation_report,
+        tool.group_report,
+        tool.similar_verdict,
+        tool.run_similar,
     )
     for function in printing:
         source = inspect.getsource(function)
@@ -159,7 +165,7 @@ def test_the_measurement_classes_carry_identifiers_and_numbers_and_no_text(tool:
     """A dataclass that holds a passage would leak it through any repr of it."""
     import dataclasses
 
-    for name in ("LanguageMeasurement", "CorpusChunk", "ProbeMeasurement"):
+    for name in ("LanguageMeasurement", "CorpusChunk", "ProbeMeasurement", "SimilarPopulation", "GroupProbe"):
         fields = {field.name for field in dataclasses.fields(getattr(tool, name))}
         assert "passage" not in fields, name
         assert "text" not in fields, name
@@ -232,3 +238,192 @@ def test_the_band_of_the_tool_is_measured_against_the_smallest_and_not_the_first
 
     assert tool.near_enough_rows(ascending, ceiling=50.0, band=5.0).tolist() == [[True, True, False]]
     assert tool.near_enough_rows(shuffled, ceiling=50.0, band=5.0).tolist() == [[False, True, True]]
+
+
+# ---------------------------------------------------------------------------
+# The similar mode (Plan 35-04): document against document
+# ---------------------------------------------------------------------------
+
+SIMILAR_REPORT = REPOSITORY / "docs" / "measurements" / "2026-10-aehnlich-distanzen" / "README.md"
+
+
+def axis(index: int, sign: float = 1.0) -> bytes:
+    """A stored unit vector along one axis of the real width."""
+    return to_int8(tuple(sign if position == index else 0.0 for position in range(DIMENSIONS)))
+
+
+def between(first: int, second: int) -> bytes:
+    """A stored unit vector halfway between two axes."""
+    share = 1.0 / math.sqrt(2.0)
+    return to_int8(tuple(share if position in (first, second) else 0.0 for position in range(DIMENSIONS)))
+
+
+def test_the_similar_mode_and_the_derivation_can_be_named_together(tool: Any) -> None:
+    args = tool.parse_args(["--similar", "--derive", "--groups", "gruppen.tsv"])
+
+    assert args.similar is True
+    assert args.derive is True
+    assert args.groups == Path("gruppen.tsv")
+
+
+def test_the_german_cases_are_the_first_42_lines_however_long_the_file_is(tool: Any) -> None:
+    # 35-03 grows de.jsonl to about 120 cases and keeps the first 42 byte for
+    # byte; this run measures exactly those, whatever the stand of 35-03 is.
+    records = [{"id": f"de-{number:03d}", "query": "q", "passage": "p"} for number in range(120)]
+
+    german = tool.similar_cases(records, "de")
+    english = tool.similar_cases(records, "en")
+
+    assert [record["id"] for record in german] == [f"de-{number:03d}" for number in range(42)]
+    assert len(english) == 120
+
+
+def test_the_related_pair_is_query_and_passage_of_one_case_and_the_unrelated_are_passage_pairs(
+    tool: Any,
+) -> None:
+    queries = [axis(0), axis(1), axis(2)]
+    passages = [axis(0), between(1, 3), axis(2, sign=-1.0)]
+
+    population = tool.similar_pairs("en", queries, passages)
+
+    assert population.related.tolist() == pytest.approx([0.0, tool.l2_distance(axis(1), between(1, 3)), 254.0])
+    # Every unordered pair of passages of different cases, once.
+    assert population.unrelated.size == 3
+    assert sorted(population.unrelated.tolist()) == pytest.approx(
+        sorted(
+            [
+                tool.l2_distance(passages[0], passages[1]),
+                tool.l2_distance(passages[0], passages[2]),
+                tool.l2_distance(passages[1], passages[2]),
+            ]
+        )
+    )
+
+
+def _population(tool: Any, language: str, related: list[float], unrelated: list[float]) -> Any:
+    import numpy as np
+
+    return tool.SimilarPopulation(
+        language=language,
+        related=np.array(related, dtype=np.float64),
+        unrelated=np.array(unrelated, dtype=np.float64),
+    )
+
+
+def test_the_ceiling_is_the_smallest_grid_value_under_which_95_percent_of_related_pairs_lie(tool: Any) -> None:
+    # Nineteen of twenty related pairs at 10.2 make 95 percent, so the grid
+    # answers 10.5 and not the outlier at 80; every unrelated pair lies beyond.
+    populations = [_population(tool, language, [10.2] * 19 + [80.0], [100.0] * 10) for language in ("de", "en", "fr")]
+
+    verdict = tool.derive_similar(populations)
+
+    assert verdict.satisfied is True
+    assert verdict.ceiling == pytest.approx(10.5)
+    assert verdict.cut == {"de": pytest.approx(1.0), "en": pytest.approx(1.0), "fr": pytest.approx(1.0)}
+
+
+def test_the_ceiling_is_refused_when_one_language_cuts_less_than_90_percent(tool: Any) -> None:
+    # French lets two of ten unrelated pairs through at the 95 percent value,
+    # which is 80 percent cut: the rule is not met, and no value is chosen.
+    populations = [
+        _population(tool, "de", [10.2] * 20, [100.0] * 10),
+        _population(tool, "en", [10.2] * 20, [100.0] * 10),
+        _population(tool, "fr", [30.0] * 20, [20.0, 25.0] + [100.0] * 8),
+    ]
+
+    verdict = tool.derive_similar(populations)
+
+    assert verdict.satisfied is False
+    assert verdict.ceiling is None
+    assert verdict.candidate == pytest.approx(30.0)
+    assert verdict.cut["fr"] == pytest.approx(0.8)
+    # The owner question carries both numbers: the largest grid value that cuts
+    # 90 percent everywhere, and what it costs in related pairs.
+    assert verdict.fallback == pytest.approx(24.5)
+    assert verdict.fallback_lost == {"de": 0, "en": 0, "fr": 20}
+
+
+def test_the_group_probe_counts_group_pairs_and_foreign_pairs_under_a_ceiling(tool: Any) -> None:
+    groups = {
+        "a1": "a",
+        "a2": "a",
+        "b1": "b",
+        "b2": "b",
+        "c1": "c",
+        "c2": "c",
+        "lose": tool.NO_GROUP,
+        "ohne-text": "c",
+    }
+    centroids = {
+        "a1": axis(0),
+        "a2": axis(0),
+        "b1": axis(1),
+        "b2": axis(1),
+        "c1": axis(2),
+        "c2": axis(2),
+        "lose": axis(3),
+    }
+
+    probe = tool.group_probe(groups, centroids, ceiling=50.0)
+
+    assert probe is not None
+    assert probe.group_pairs == 3
+    # Seven files with a vector make 21 pairs; the three group pairs leave 18,
+    # and every pair with the file without a group is one of them.
+    assert probe.foreign_pairs == 18
+    assert probe.group_share == pytest.approx(1.0)
+    assert probe.foreign_share == pytest.approx(0.0)
+
+
+def test_the_group_probe_is_not_checkable_with_fewer_than_three_groups_of_two(tool: Any) -> None:
+    groups = {"a1": "a", "a2": "a", "b1": "b", "b2": "b", "c1": "c"}
+    centroids = {name: axis(index) for index, name in enumerate(groups)}
+
+    assert tool.group_probe(groups, centroids, ceiling=50.0) is None
+
+
+def test_the_overlap_of_mean_and_minimum_is_a_number_between_0_and_1_per_multi_chunk_document(
+    tool: Any,
+) -> None:
+    # The document of two chunks lies between axis 0 and axis 1. Its mean finds
+    # the halfway document first, the minimum over its chunks finds the one on
+    # axis 0 first: one neighbour apart, everything when ten are compared.
+    documents = {
+        "mehr": [axis(0), axis(1)],
+        "achse": [axis(0)],
+        "halb": [between(0, 1)],
+        "fern": [axis(5)],
+    }
+
+    first = tool.neighbour_overlap(documents, neighbours=1)
+    ten = tool.neighbour_overlap(documents, neighbours=10)
+
+    assert set(first) == {"mehr"}
+    assert first["mehr"] == pytest.approx(0.0)
+    assert ten["mehr"] == pytest.approx(1.0)
+
+
+def test_the_similar_mode_measures_with_the_product_centroid(tool: Any) -> None:
+    from findling.index import fusion
+
+    assert tool.centroid is fusion.centroid
+
+
+def test_the_similar_report_carries_neither_kind_of_dash() -> None:
+    text = SIMILAR_REPORT.read_text(encoding="utf-8")
+    for dash in DASHES:
+        assert dash not in text
+
+
+def test_the_similar_report_carries_no_case_of_the_test_set() -> None:
+    import json
+
+    text = SIMILAR_REPORT.read_text(encoding="utf-8")
+    for language in ("de", "en", "fr"):
+        dataset = REPOSITORY / "testdata" / "semantik" / f"{language}.jsonl"
+        for line in dataset.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            assert record[QUERY_FIELD] not in text, record["id"]
+            assert record[PASSAGE_FIELD] not in text, record["id"]
