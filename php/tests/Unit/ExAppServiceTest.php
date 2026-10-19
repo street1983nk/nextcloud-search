@@ -620,6 +620,87 @@ final class ExAppServiceTest extends TestCase {
 		);
 	}
 
+	// -- plan 35-06: the neighbours of one document --------------------------
+
+	/**
+	 * What one answer of /similar leaves behind: the return value and every line.
+	 *
+	 * @param list<string> $lines
+	 * @return array{candidates:list<int>,degraded:bool}|null
+	 */
+	private function similarFor(mixed $answer, array &$lines = []): ?array {
+		$service = $this->service($this->recordingLogger($lines));
+		$service->method('proxyRequest')->willReturn(
+			is_string($answer) ? $this->answer($answer) : $answer,
+		);
+
+		return $service->similarCandidates('alice', 42, 30);
+	}
+
+	public function testTheNeighboursOfAValidAnswerArriveAsIdsInTheOrderOfTheContainer(): void {
+		$result = $this->similarFor('{"candidates":[{"fileId":7},{"fileId":9}],"degraded":false}');
+
+		self::assertSame(['candidates' => [7, 9], 'degraded' => false], $result);
+	}
+
+	public function testTheSourceAndIdsThatCannotPointAtAFileAreDroppedAndOnlyCounted(): void {
+		$lines = [];
+		$result = $this->similarFor(
+			'{"candidates":[{"fileId":42},{"fileId":"9"},{"fileId":0},{"fileId":-3},{"fileId":1.5},"x",{"fileId":11}]}',
+			$lines,
+		);
+
+		// The source is no neighbour of itself whatever the container says, and
+		// the five others cannot point at a file at all. What survives is the one
+		// real id; what remains of the rest is a number in one line.
+		self::assertNotNull($result);
+		self::assertSame([11], $result['candidates']);
+		self::assertSame(['Findling: dropped malformed similar candidates {"count":6}'], $lines);
+	}
+
+	public function testASilentBackendIsNullAndNotAnEmptyList(): void {
+		// Null and an empty list are two different pages: the banner of an
+		// unreachable backend, and "No similar documents found". A transport
+		// failure has to land on the first one.
+		self::assertNull($this->similarFor(['error' => 'cURL error 28']));
+		self::assertNull($this->similarFor('this is not JSON'));
+		self::assertSame(['candidates' => [], 'degraded' => false], $this->similarFor('{"candidates":[]}'));
+	}
+
+	public function testAnAnswerWithoutACandidateListIsNullWithAStaticLine(): void {
+		$missing = [];
+		$wrongShape = [];
+
+		self::assertNull($this->similarFor('{"degraded":true}', $missing));
+		self::assertNull($this->similarFor('{"candidates":"7,9"}', $wrongShape));
+		self::assertSame(['Findling: malformed similar answer []'], $missing);
+		self::assertSame(['Findling: malformed similar answer []'], $wrongShape);
+	}
+
+	public function testADegradedAnswerIsReportedToTheCaller(): void {
+		$result = $this->similarFor('{"candidates":[{"fileId":7}],"degraded":true}');
+
+		self::assertSame(['candidates' => [7], 'degraded' => true], $result);
+	}
+
+	public function testTheRequestGoesToSimilarWithExactlyTheSourceAndTheLimit(): void {
+		$service = $this->service();
+		$seen = null;
+		$service->expects(self::once())->method('proxyRequest')->willReturnCallback(
+			function (string $path, string $userId, string $method, array $params, float $timeout) use (&$seen): IResponse {
+				$seen = [$path, $userId, $method, $params];
+
+				return $this->answer('{"candidates":[]}');
+			},
+		);
+
+		$service->similarCandidates('alice', 42, 30);
+
+		// No user field in the body: identity travels in the AppAPI header, and
+		// the container refuses a body that names one with a 400.
+		self::assertSame(['/similar', 'alice', 'POST', ['fileId' => 42, 'limit' => 30]], $seen);
+	}
+
 	/**
 	 * The other half of migration Version001100Date20260911000000.
 	 *

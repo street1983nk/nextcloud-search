@@ -575,6 +575,87 @@ class ExAppService {
 	}
 
 	/**
+	 * The neighbours of one document, as file ids and nothing else (plan 35-06).
+	 *
+	 * Null and an empty list are two different answers here as well, and the
+	 * page needs both. Null means the backend said nothing usable: it is
+	 * missing, it timed out, it answered with an error or with a body that is
+	 * not this shape. The page then shows the banner of an unreachable backend.
+	 * An empty candidate list is a complete answer: the source has no vectors,
+	 * or nothing of this user lies near enough. The page then shows "No similar
+	 * documents found". Folding the two into one would tell a user whose
+	 * backend is down that his file has no neighbours.
+	 *
+	 * The caller asks only about a source that already passed the recheck in
+	 * SearchService. What comes back is still a proposal: an id that is not a
+	 * positive integer cannot point at a file, and the source itself is no
+	 * neighbour of itself whatever the container says, so both are dropped here
+	 * and counted, never named. Every id that survives goes through the same
+	 * recheck as a search hit before anything about it reaches the screen.
+	 *
+	 * There is no canary branch. The canary belongs to the search route, and on
+	 * this route a candidate without a file behind it is simply a defect.
+	 *
+	 * @param int $fileId the source, already confirmed readable for this user
+	 * @param float $ceilingSeconds how long this caller waits for the one call
+	 *                              this method makes; the remaining budget still
+	 *                              wins whenever it is the smaller number
+	 * @return array{candidates:list<int>,degraded:bool}|null
+	 */
+	public function similarCandidates(string $userId, int $fileId, int $limit, float $secondsLeft = self::PAGE_REQUEST_TIMEOUT_SECONDS, float $ceilingSeconds = self::PAGE_REQUEST_TIMEOUT_SECONDS): ?array {
+		// The container refuses a source below one with a 422, which would arrive
+		// here as a null after a round trip; asking nothing costs nothing.
+		if ($fileId <= 0) {
+			return null;
+		}
+
+		$limit = max(self::MIN_LIMIT, min(self::MAX_LIMIT, $limit));
+
+		$decoded = $this->call('/similar', $userId, [
+			'fileId' => $fileId,
+			'limit' => $limit,
+		], $secondsLeft, $ceilingSeconds);
+		if ($decoded === null) {
+			return null;
+		}
+
+		$candidates = $decoded['candidates'] ?? null;
+		if (!is_array($candidates)) {
+			$this->logger->warning('Findling: malformed similar answer');
+			return null;
+		}
+
+		$kept = [];
+		$seen = [];
+		$dropped = 0;
+		foreach ($candidates as $candidate) {
+			$candidateId = is_array($candidate) ? ($candidate['fileId'] ?? null) : null;
+			if (!is_int($candidateId) || $candidateId <= 0 || $candidateId === $fileId) {
+				$dropped++;
+				continue;
+			}
+
+			// A repeated id is not a defect worth a line, but it is never a
+			// second neighbour either: the list stays in the order of its first
+			// appearance.
+			if (isset($seen[$candidateId])) {
+				continue;
+			}
+			$seen[$candidateId] = true;
+			$kept[] = $candidateId;
+		}
+
+		if ($dropped > 0) {
+			$this->logger->warning('Findling: dropped malformed similar candidates', ['count' => $dropped]);
+		}
+
+		return [
+			'candidates' => $kept,
+			'degraded' => ($decoded['degraded'] ?? false) === true,
+		];
+	}
+
+	/**
 	 * A reading GET against the container, for the admin page and nothing else.
 	 *
 	 * Separate from call() above rather than a parameter on it, and the reason

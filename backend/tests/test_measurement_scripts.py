@@ -980,8 +980,17 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # php/css/admin.css carries the rule, which is not in this tree because the
 # recipe globs **/*.php. No file came and none went, so PHP_FILES_TODAY stays
 # at 105.
-PHP_FILES_TODAY = 105
-PHP_TREE_HASH_TODAY = "04a2c174abd5f24ec8db9e2f6cd05b5dae34a2c04e204167656a81bd4a4a7446"
+# Moved on 2026-10-19 by Plan 35-06 (STR-01, PE-35-6): one file came in lib,
+# Service/SimilarOutcome.php (the confirmed source, at most ten confirmed
+# neighbours, degraded and one failure reason, and no counting field);
+# Service/ExAppService.php learned similarCandidates, the proxy call to
+# /similar, and Service/SearchService.php learned similar, which rechecks the
+# source before the container is asked and every neighbour after it, with the
+# reading of a confirmed node moved into hitOf for both views; the two unit
+# tests tests/Unit/ExAppServiceTest.php and tests/Unit/SearchServiceTest.php
+# changed with them. No file went, so PHP_FILES_TODAY moves to 106.
+PHP_FILES_TODAY = 106
+PHP_TREE_HASH_TODAY = "35504a9029ba3613e088c5005eb432fe12d0c60b8930c8e11d0891e50d91f39e"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
