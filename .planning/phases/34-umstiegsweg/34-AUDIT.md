@@ -288,6 +288,13 @@ Launch-Härtung (Phase 36).
 |---|---|---|---|---|
 | L-34-02 | 151bc30b | `docs/migrate-from-fulltextsearch.fr.md`: Zeilen 7 bis 9 neu umbrochen, "l'OCR sans modifier les fichiers et sans Elasticsearch" in einer Zeile; `git diff --word-diff=plain` ohne Wortänderung, also kein neuer Satz und keine l10n-Kette | `grep -cF` 1; Regressionstest grün in allen drei Sprachen | 5761 passed, 264 skipped (12:08 min); ruff check, ruff format (225 Dateien), pyright 0 Fehler, vulture leer |
 
+**CI** des Stands 3a3ca2b5 (ein Push des Agentenzweigs mit 59ef521e, 2708d95d, 83532379,
+151bc30b, 3a3ca2b5; Zweig danach remote gelöscht, der Push auf `main` gehört dem
+Orchestrator nach dem Merge): alle vier Läufe grün (`gh run watch --exit-status` je ID):
+Python gates 39264837383, Integration 39264837352, Resilience 39264837394, HaRP deploy
+39264837414 (stable33, stable34 amd64 und arm64, stable35). "PHP and store metadata gates"
+startet nicht, weil kein Commit `php/` berührt (Pfadfilter des Workflows).
+
 Kein Fix berührt `php/`, also keine Änderung am PHP-Baumhash (`test_measurement_scripts.py`
 unverändert). Danach das ganze Audit-Modul gegen 8090 mit
 `FINDLING_AUDIT34_MUTATION=1 FINDLING_AUDIT34_NETWORK=1` und den Instanzvariablen:
