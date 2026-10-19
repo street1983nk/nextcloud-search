@@ -243,9 +243,9 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 35-01-PLAN.md: Wortlaut de/en/fr der Ähnlich-Ansicht, Owner-Abnahme (D-35-08)
-- [ ] 35-02-PLAN.md: Entscheidungsvorlage #25-Dedup je Mount-Config (STR-03)
-- [ ] 35-03-PLAN.md: granite-Vorbereitung: deutsches Testset auf 120, Entscheidungsregel vor der Messung, Owner-Abnahme
+- [x] 35-01-PLAN.md: Wortlaut de/en/fr der Ähnlich-Ansicht, Owner-Abnahme (D-35-08)
+- [x] 35-02-PLAN.md: Entscheidungsvorlage #25-Dedup je Mount-Config (STR-03)
+- [x] 35-03-PLAN.md: granite-Vorbereitung: deutsches Testset auf 120, Entscheidungsregel vor der Messung, Owner-Abnahme
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -318,7 +318,7 @@ Plans:
 | 32. Filter in der Unified Search | v1.5 | 8/8 | Executed, verification pending | - |
 | 33. Ausschlussmuster und Admin-Feinschliff | v1.5 | 11/11 | Executed, verification pending | - |
 | 34. Umstiegsweg | v1.5 | 6/6 | Complete   | 2026-10-19 |
-| 35. Stretch: Aehnliche Dokumente und Spikes | v1.5 | 0/? | Not started | - |
+| 35. Stretch: Aehnliche Dokumente und Spikes | v1.5 | 3/13 | In Progress|  |
 | 36. Haertung und Store-Einreichung 1.5.0 | v1.5 | 0/? | Not started | - |
 
 ## Nach v1.3 (Wiedervorlage)

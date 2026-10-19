@@ -4,8 +4,8 @@ milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
 stopped_at: Phase 35 context gathered
-last_updated: "2026-10-19T15:57:17.893Z"
-last_activity: 2026-10-19 -- Phase 35 planning complete
+last_updated: "2026-10-19T16:01:28.044Z"
+last_activity: 2026-10-19 -- Phase 35 execution started
 progress:
   total_phases: 7
   completed_phases: 5
@@ -21,14 +21,14 @@ progress:
 Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .planning/MILESTONES.md (v1.0 bis v1.4).
 
 **Core Value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 34 , umstiegsweg
+**Current focus:** Phase 35 — stretch-aehnliche-dokumente-und-spikes
 
 ## Current Position
 
-Phase: 34 , COMPLETE
-Plan: 6 of 6
-Status: Ready to execute
-Last activity: 2026-10-19 -- Phase 35 planning complete
+Phase: 35 (stretch-aehnliche-dokumente-und-spikes) — EXECUTING
+Plan: 1 of 13
+Status: Executing Phase 35
+Last activity: 2026-10-19 -- Phase 35 execution started
 
 Progress: [██████████] 100%
 
