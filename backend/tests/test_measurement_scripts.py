@@ -989,8 +989,13 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # reading of a confirmed node moved into hitOf for both views; the two unit
 # tests tests/Unit/ExAppServiceTest.php and tests/Unit/SearchServiceTest.php
 # changed with them. No file went, so PHP_FILES_TODAY moves to 106.
+# Moved on 2026-10-19 by Plan 35-07 (STR-01, D-35-01 to D-35-04): PageController.php, templates/search.php
+# and PageControllerTest.php changed; catalogues and CSS are not in the PHP tree. No file came or went, so
+# PHP_FILES_TODAY stays at 106. The controller reads the address value similar as a GET state of the one
+# result page, builds the similar address of every hit and the way back of the view; the template renders
+# the second link of a hit, the heading branch, the way back and the two states of the view.
 PHP_FILES_TODAY = 106
-PHP_TREE_HASH_TODAY = "35504a9029ba3613e088c5005eb432fe12d0c60b8930c8e11d0891e50d91f39e"
+PHP_TREE_HASH_TODAY = "9aa79bb73926212910b0e58d3def6eb0fef82ef650a28c3f1bf8f66df5fe853a"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

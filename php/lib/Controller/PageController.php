@@ -9,6 +9,7 @@ use OCA\Findling\Service\SearchCaps;
 use OCA\Findling\Service\SearchFilters;
 use OCA\Findling\Service\SearchOutcome;
 use OCA\Findling\Service\SearchService;
+use OCA\Findling\Service\SimilarOutcome;
 use OCA\Findling\Text\Highlighter;
 use OCA\Findling\Text\PlainText;
 use OCP\AppFramework\Controller;
@@ -59,7 +60,7 @@ use Psr\Log\LoggerInterface;
  * requirement altogether: both are forbidden for this class of route by the
  * same gate, so a logged in session stays the price of admission (T-09-06).
  *
- * The page decides no permission question of its own. It reads ten values out
+ * The page decides no permission question of its own. It reads eleven values out
  * of the address, checks them, and hands the numbers and the filters of this
  * page to the shared search service; who may see which file is answered there and in exactly one
  * place in the whole tree, which backend/tests/test_php_acl_boundary.py holds by
@@ -200,7 +201,7 @@ final class PageController extends Controller {
 	 * server with real values, so the page is complete before a single line of
 	 * script has run.
 	 *
-	 * Every one of the ten values in the address is untrusted input, and every
+	 * Every one of the eleven values in the address is untrusted input, and every
 	 * one of them falls back silently rather than producing a message: a term
 	 * that is too long is clamped, a filter that is not the one word this page
 	 * knows is not set, a page number outside the range is page one, a cursor
@@ -208,7 +209,8 @@ final class PageController extends Controller {
 	 * one of the six names is left out of the list, a sort mode that is not one
 	 * of the three is relevance, a quick range or a time bound of the wrong
 	 * shape is simply not set, and a fingerprint that does not belong to this
-	 * request state sends the path back to page one. The page makes no statement
+	 * request state sends the path back to page one, and a similar value that
+	 * is not the shape of a file id is not there at all. The page makes no statement
 	 * about its own address bar (T-09-09), because such a statement would only
 	 * ever be read by somebody who edited it.
 	 */
@@ -241,6 +243,11 @@ final class PageController extends Controller {
 			$page = 1;
 		}
 
+		$similarId = $this->similarId();
+		if ($similarId !== null) {
+			return $this->similarView($similarId, $address, $page, $cursors, $fingerprint);
+		}
+
 		$outcome = $this->outcome($address['query'], $address['titleOnly'], (int)end($cursors), $filters);
 
 		if ($outcome->failure === SearchOutcome::FAILURE_BACKEND_SILENT
@@ -260,7 +267,7 @@ final class PageController extends Controller {
 				'titleOnly' => $address['titleOnly'],
 				'page' => $page,
 				'maxPage' => self::MAX_PAGE,
-				'hits' => $this->rows($outcome, $address['sort']),
+				'hits' => $this->rows($outcome, $address, $page, $cursors, $fingerprint),
 				'hasMore' => $outcome->hasMore,
 				'degraded' => $outcome->degraded,
 				'failure' => $outcome->failure,
@@ -285,6 +292,99 @@ final class PageController extends Controller {
 				// dropping it, and it does that without the template taking
 				// the address apart a second time.
 				'formFilters' => $this->formFilters($address),
+				// The view of similar documents is not this one, and the three
+				// keys say so in the same words the other view uses (STR-01).
+				'similarSource' => null,
+				'similarState' => null,
+				'backUrl' => null,
+			],
+			TemplateResponse::RENDER_AS_USER,
+		);
+	}
+
+	/**
+	 * The view of the documents similar to one file, as a state of this same
+	 * address and not as a route of its own (STR-01, D-35-02).
+	 *
+	 * A GET state for the reason every other state of this page is one: the
+	 * back button of the browser, a bookmark and a middle click all keep working,
+	 * and there is no second address that hands out hits. The search term, the
+	 * filters and the position of the list the visitor came from travel along
+	 * untouched, because they are what the way back is built from; nothing of
+	 * them goes into the question about the neighbours.
+	 *
+	 * What the view leaves out is decided here and not in the template, in the
+	 * same spirit as the filter row (PE-35-1, O2 (a)): no chips, no sort links,
+	 * no reset link, no pager, no excerpt and no further similar link on a
+	 * neighbour. Ten neighbours need no narrowing, and one level keeps the way
+	 * back unambiguous.
+	 *
+	 * The state names are four and none of them carries a number. "unavailable"
+	 * is the one state for every source that did not pass the recheck, however
+	 * it failed (PE-35-3 (b), T-35-25); "failed" hands the reason of a silent
+	 * backend, a version drift or a missing home folder through to the banner
+	 * the page already has, and the template keeps every empty state away from
+	 * that banner.
+	 *
+	 * @param array{query:string,titleOnly:bool,types:list<string>,sort:string,range:?string,since:?int,until:?int} $address
+	 * @param list<int> $cursors
+	 */
+	private function similarView(int $sourceId, array $address, int $page, array $cursors, string $fingerprint): TemplateResponse {
+		$user = $this->userSession->getUser();
+		$outcome = $user === null
+			? new SimilarOutcome(null, [], false, SimilarOutcome::FAILURE_NO_HOME_FOLDER)
+			: $this->searchService->similar($user, $sourceId, $this->caps());
+
+		$unavailable = $outcome->failure === SimilarOutcome::FAILURE_SOURCE_UNAVAILABLE;
+		if ($unavailable) {
+			$state = 'unavailable';
+		} elseif ($outcome->failure !== null) {
+			$state = 'failed';
+		} else {
+			$state = $outcome->hits === [] ? 'empty' : 'ok';
+		}
+
+		if ($outcome->failure === SimilarOutcome::FAILURE_BACKEND_SILENT
+			|| $outcome->failure === SimilarOutcome::FAILURE_VERSION_DRIFT) {
+			// The same static sentence as the result view, for the same reason,
+			// and it says no more: no file id, no title, no user.
+			$this->logger->warning('Findling: the result page is showing an error block instead of hits');
+		}
+
+		$source = $outcome->source;
+
+		return new TemplateResponse(
+			Application::APP_ID,
+			'search',
+			[
+				'query' => $address['query'],
+				'titleOnly' => $address['titleOnly'],
+				'page' => $page,
+				'maxPage' => self::MAX_PAGE,
+				'hits' => $this->similarRows($outcome),
+				'hasMore' => false,
+				// The view has no hint banner of its own (O4 (a)): the sentence
+				// about an index still being built talks about results of a
+				// query the visitor did not type here.
+				'degraded' => false,
+				'failure' => $unavailable ? null : $outcome->failure,
+				'previousUrl' => null,
+				'nextUrl' => null,
+				'formAction' => $this->urlGenerator->linkToRoute('findling.page.index'),
+				'typeChips' => [],
+				'rangeChips' => [],
+				'sortLinks' => [],
+				'resetUrl' => null,
+				'sortMode' => $address['sort'],
+				'filtersActive' => false,
+				'showModified' => false,
+				'formFilters' => $this->formFilters($address),
+				'similarSource' => $source === null ? null : [
+					'fileId' => $source->fileId,
+					'title' => $source->title,
+				],
+				'similarState' => $state,
+				'backUrl' => $this->pageUrl($address, $page, $cursors, $fingerprint),
 			],
 			TemplateResponse::RENDER_AS_USER,
 		);
@@ -360,6 +460,30 @@ final class PageController extends Controller {
 		$page = (int)$raw;
 
 		return $page >= 1 && $page <= self::MAX_PAGE ? $page : 1;
+	}
+
+	/**
+	 * The file whose neighbours are asked for, or none for everything that is
+	 * not the id of a file.
+	 *
+	 * Silent like every other value of this address (T-35-24): a word, a zero,
+	 * a sign, an exponent and a number longer than any id a database hands out
+	 * all mean that this address carries no such request, and the page renders
+	 * as if the parameter were not there. Nineteen digits at most, because a
+	 * signed 64 bit id never has more; a nineteen digit number above the largest
+	 * integer is clamped by the cast and simply names no file. Whether the number names a file this user may
+	 * open is not a question for this method: the shared service answers it, and
+	 * it answers it with one state for every way of failing.
+	 */
+	private function similarId(): ?int {
+		$raw = $this->request->getParam('similar', '');
+		if (!is_string($raw) || preg_match('/^[1-9][0-9]{0,18}$/', $raw) !== 1) {
+			return null;
+		}
+
+		$id = (int)$raw;
+
+		return $id > 0 ? $id : null;
 	}
 
 	/**
@@ -648,15 +772,23 @@ final class PageController extends Controller {
 	 * has no node behind it and therefore no date to ask for, and it stays
 	 * empty as well rather than becoming the first of January 1970.
 	 *
-	 * @return list<array{fileId:int,title:string,path:string,iconUrl:string,url:string,modified:string,segments:list<array{text:string,mark:bool}>}>
+	 * The eighth value is the address of the similar view of that hit (STR-01,
+	 * D-35-01), and it is there for every hit with a file behind it: the page
+	 * does not know which file has vectors, and the empty state of the view says
+	 * why a name hit or an image has no neighbours (O1 (a)). The canary has no
+	 * file and therefore no such address.
+	 *
+	 * @param array{query:string,titleOnly:bool,types:list<string>,sort:string,range:?string,since:?int,until:?int} $address
+	 * @param list<int> $cursors
+	 * @return list<array{fileId:int,title:string,path:string,iconUrl:string,url:string,modified:string,segments:list<array{text:string,mark:bool}>,similarUrl?:string}>
 	 */
-	private function rows(SearchOutcome $outcome, string $sort): array {
-		$showModified = $this->showsModified($sort);
+	private function rows(SearchOutcome $outcome, array $address, int $page, array $cursors, string $fingerprint): array {
+		$showModified = $this->showsModified($address['sort']);
 		$rows = [];
 
 		foreach ($outcome->hits as $hit) {
 			$excerpt = $outcome->excerpts[$hit->fileId] ?? null;
-			$rows[] = [
+			$row = [
 				'fileId' => $hit->fileId,
 				'title' => $hit->title,
 				'path' => $hit->path,
@@ -667,9 +799,73 @@ final class PageController extends Controller {
 					: '',
 				'segments' => $excerpt === null ? [] : Highlighter::segments($excerpt['text'], $excerpt['highlights']),
 			];
+			if ($hit->fileId > 0) {
+				$row['similarUrl'] = $this->similarUrl($address, $page, $cursors, $fingerprint, $hit->fileId);
+			}
+			$rows[] = $row;
 		}
 
 		return $rows;
+	}
+
+	/**
+	 * The neighbours of the similar view as rows of the same shape, minus what
+	 * that view does not show.
+	 *
+	 * No excerpt, because there is no term that could be marked in one; no date,
+	 * because there is no date order; and no similar address, because the view
+	 * has one level and a way back that has to stay unambiguous (PE-35-1, D-35-03).
+	 * Title, path and icon come out of the confirmed node like on the result view,
+	 * so both views name a file in exactly the same words.
+	 *
+	 * @return list<array{fileId:int,title:string,path:string,iconUrl:string,url:string,modified:string,segments:list<array{text:string,mark:bool}>}>
+	 */
+	private function similarRows(SimilarOutcome $outcome): array {
+		$rows = [];
+
+		foreach ($outcome->hits as $hit) {
+			$rows[] = [
+				'fileId' => $hit->fileId,
+				'title' => $hit->title,
+				'path' => $hit->path,
+				'iconUrl' => $this->mimeTypes->mimeTypeIcon($hit->mimeType),
+				'url' => $this->fileUrl($hit->fileId),
+				'modified' => '',
+				'segments' => [],
+			];
+		}
+
+		return $rows;
+	}
+
+	/**
+	 * The address of the similar view of one hit, and it takes the position
+	 * along on purpose.
+	 *
+	 * This is the one link of the page besides the two paging links that carries
+	 * a cursor path and a fingerprint, and the reason is the way back. The view
+	 * builds its back link out of exactly these values, so "back to the results"
+	 * lands on the very screen the hit was on, with the same term, the same
+	 * filters and the same page, rather than on the first screen of the search
+	 * (D-35-02, D-35-04). The position is checked on the way in like any other:
+	 * a path that does not belong to the search is page one, silently.
+	 *
+	 * Built by the url generator over the arguments of pageUrl() and not glued
+	 * onto one of its results, so the encoding and the web root stay the
+	 * framework's business.
+	 *
+	 * @param array{query:string,titleOnly:bool,types:list<string>,sort:string,range:?string,since:?int,until:?int} $address
+	 * @param list<int> $cursors
+	 */
+	private function similarUrl(array $address, int $page, array $cursors, string $fingerprint, int $fileId): string {
+		$arguments = $this->filterArguments($address) + [
+			'page' => (string)$page,
+			'cursors' => implode('.', $cursors),
+			'fp' => $fingerprint,
+			'similar' => (string)$fileId,
+		];
+
+		return $this->urlGenerator->linkToRoute('findling.page.index', $arguments);
 	}
 
 	/**
@@ -844,7 +1040,8 @@ final class PageController extends Controller {
 	 * one of them and dropped by the other: a next link that lost the active
 	 * chips would page through a different result than the one on the screen.
 	 * What is not shared is the position, and it lives at exactly one of the
-	 * two call sites below.
+	 * two call sites below and in similarUrl(), whose view needs it for the way
+	 * back.
 	 *
 	 * A value that is not set is not written as an empty parameter, it is not
 	 * written at all, and the default sort mode is not written either. The

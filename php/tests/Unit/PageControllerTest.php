@@ -10,6 +10,7 @@ use OCA\Findling\Service\SearchCaps;
 use OCA\Findling\Service\SearchFilters;
 use OCA\Findling\Service\SearchOutcome;
 use OCA\Findling\Service\SearchService;
+use OCA\Findling\Service\SimilarOutcome;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\Files\IMimeTypeDetector;
 use OCP\IDateTimeFormatter;
@@ -1172,6 +1173,238 @@ final class PageControllerTest extends TestCase {
 		self::assertSame([], $hits[1]['segments']);
 		self::assertSame('/icon.svg', $hits[0]['iconUrl']);
 		self::assertStringContainsString('fileid=7', $hits[0]['url']);
+	}
+
+	// -- the view of similar documents (STR-01, plan 35-07) ------------------
+
+	/**
+	 * The query values of one address this page built, as the parameter array
+	 * a request for that address would carry.
+	 *
+	 * @return array<string,string>
+	 */
+	private function paramsOfUrl(string $url): array {
+		$query = parse_url($url, PHP_URL_QUERY);
+		self::assertIsString($query, "{$url} carries no query string");
+		parse_str($query, $params);
+
+		$strings = [];
+		foreach ($params as $key => $value) {
+			self::assertIsString($value, "{$key} of {$url}");
+			$strings[(string)$key] = $value;
+		}
+
+		return $strings;
+	}
+
+	/**
+	 * A fresh double that answers the similar question with one staged outcome
+	 * and records the id it was asked about. A run on the same double fails the
+	 * case, because the view must never cost a search.
+	 */
+	private function answeringSimilar(SimilarOutcome $outcome, ?int &$asked): void {
+		$searchService = $this->createMock(SearchService::class);
+		$searchService->expects(self::never())->method('run');
+		$searchService->method('similar')->willReturnCallback(
+			function (IUser $user, int $sourceId, SearchCaps $caps) use ($outcome, &$asked): SimilarOutcome {
+				$asked = $sourceId;
+
+				return $outcome;
+			},
+		);
+		$this->searchService = $searchService;
+	}
+
+	public function testASimilarValueThatIsNotTheShapeOfAFileIdIsNotThereAtAll(): void {
+		// Silent like every other value of this address (T-35-24): the page
+		// renders as if the parameter were absent and never asks about
+		// neighbours. Twenty digits are one more than any 64 bit id has.
+		$values = [null, '', '0', '-3', 'abc', '1e3', '00', ' 7', str_repeat('1', 20)];
+
+		foreach ($values as $value) {
+			$searchService = $this->createMock(SearchService::class);
+			$searchService->expects(self::never())->method('similar');
+			$searchService->expects(self::once())->method('run')->willReturn($this->outcome());
+			$this->searchService = $searchService;
+
+			$address = ['query' => 'akte'];
+			if ($value !== null) {
+				$address['similar'] = $value;
+			}
+
+			$params = $this->paramsOf($address);
+			$label = var_export($value, true);
+
+			self::assertNull($params['similarState'], $label);
+			self::assertNull($params['similarSource'], $label);
+			self::assertNull($params['backUrl'], $label);
+			self::assertCount(count(SearchFilters::TYPES), $params['typeChips'], $label);
+		}
+	}
+
+	public function testAFileIdAsksForTheNeighboursAndBuildsAViewWithoutControls(): void {
+		// One level, ten neighbours at most, and nothing to narrow or page
+		// through (PE-35-1, O2 (a)): no chips, no sort links, no reset link, no
+		// pager. The search the visitor came from is not run again.
+		$asked = null;
+		$this->answeringSimilar(new SimilarOutcome(
+			new ApprovedHit(42, 'Mietvertrag.pdf', 'Wohnung/Mietvertrag.pdf', 'application/pdf', 0),
+			[new ApprovedHit(43, 'Nebenkosten.pdf', 'Wohnung/Nebenkosten.pdf', 'application/pdf', 0)],
+			false,
+			null,
+		), $asked);
+
+		$params = $this->paramsOf(['query' => 'akte', 'types' => 'pdf', 'similar' => '42']);
+
+		self::assertSame(42, $asked);
+		self::assertSame('ok', $params['similarState']);
+		self::assertSame(['fileId' => 42, 'title' => 'Mietvertrag.pdf'], $params['similarSource']);
+		self::assertIsString($params['backUrl']);
+		self::assertSame([], $params['typeChips']);
+		self::assertSame([], $params['rangeChips']);
+		self::assertSame([], $params['sortLinks']);
+		self::assertNull($params['resetUrl']);
+		self::assertNull($params['previousUrl']);
+		self::assertNull($params['nextUrl']);
+		self::assertFalse($params['hasMore']);
+		self::assertNull($params['failure']);
+		self::assertSame('akte', $params['query']);
+	}
+
+	public function testEveryRowOfTheResultViewCarriesTheAddressOfItsSimilarView(): void {
+		// The link takes the whole position along, filters, page, cursor path
+		// and fingerprint, because the way back is built out of exactly these
+		// values (D-35-02). Built by the url generator, never glued together.
+		$this->answering($this->outcome(hits: [
+			new ApprovedHit(7, 'akte.pdf', 'Recht/akte.pdf', 'application/pdf', 0),
+			new ApprovedHit(8, 'notiz.txt', 'Recht/notiz.txt', 'text/plain', 0),
+		], nextCursor: 95, hasMore: true));
+
+		$address = ['query' => 'akte', 'types' => 'pdf', 'sort' => 'oldest', 'page' => '2', 'cursors' => '0.40'];
+		$bound = $this->bound($address);
+		$hits = $this->paramsOf($bound)['hits'];
+
+		self::assertCount(2, $hits);
+		foreach ([7, 8] as $index => $fileId) {
+			self::assertIsString($hits[$index]['similarUrl'] ?? null, "row {$index}");
+			self::assertStringStartsWith('/findling.page.index?', $hits[$index]['similarUrl']);
+			self::assertSame(
+				[
+					'query' => 'akte',
+					'types' => 'pdf',
+					'sort' => 'oldest',
+					'page' => '2',
+					'cursors' => '0.40',
+					'fp' => $bound['fp'],
+					'similar' => (string)$fileId,
+				],
+				$this->paramsOfUrl($hits[$index]['similarUrl']),
+				"row {$index}",
+			);
+		}
+	}
+
+	public function testTheWayBackIsTheSameAddressWithoutTheSimilarValue(): void {
+		// Follow the link of a row and read the back link of the view: it is
+		// the address the row was on, to the last value, minus the one that
+		// opened the view (D-35-04, O6 (a)).
+		$this->answering($this->outcome(hits: [
+			new ApprovedHit(7, 'akte.pdf', 'Recht/akte.pdf', 'application/pdf', 0),
+		], nextCursor: 95, hasMore: true));
+
+		$address = ['query' => 'akte', 'types' => 'pdf', 'page' => '2', 'cursors' => '0.40'];
+		$similarUrl = $this->paramsOf($this->bound($address))['hits'][0]['similarUrl'];
+		self::assertIsString($similarUrl);
+
+		$asked = null;
+		$this->answeringSimilar(new SimilarOutcome(
+			new ApprovedHit(7, 'akte.pdf', 'Recht/akte.pdf', 'application/pdf', 0),
+			[],
+			false,
+			null,
+		), $asked);
+
+		$view = $this->paramsOf($this->paramsOfUrl($similarUrl));
+		self::assertSame(7, $asked);
+		self::assertIsString($view['backUrl']);
+
+		$expected = $this->paramsOfUrl($similarUrl);
+		unset($expected['similar']);
+
+		self::assertSame($expected, $this->paramsOfUrl($view['backUrl']));
+		self::assertStringNotContainsString('similar=', $view['backUrl']);
+		self::assertSame('2', $expected['page'], 'the position survived the round trip');
+	}
+
+	public function testTheRowsOfTheSimilarViewCarryNoExcerptNoDateAndNoFurtherLink(): void {
+		// One level (PE-35-1): a neighbour has icon, title, path and its file
+		// link, and nothing that would mark, date or lead one level deeper.
+		$asked = null;
+		$this->answeringSimilar(new SimilarOutcome(
+			new ApprovedHit(42, 'Mietvertrag.pdf', 'Wohnung/Mietvertrag.pdf', 'application/pdf', 0),
+			[
+				new ApprovedHit(43, 'Nebenkosten.pdf', 'Wohnung/Nebenkosten.pdf', 'application/pdf', 1757980800),
+				new ApprovedHit(44, 'Kaution.txt', 'Wohnung/Kaution.txt', 'text/plain', 1758585600),
+			],
+			false,
+			null,
+		), $asked);
+
+		$params = $this->paramsOf(['query' => 'akte', 'sort' => 'newest', 'similar' => '42']);
+
+		self::assertFalse($params['showModified']);
+		self::assertCount(2, $params['hits']);
+		foreach ($params['hits'] as $index => $row) {
+			self::assertSame([], $row['segments'], "row {$index}");
+			self::assertSame('', $row['modified'], "row {$index}");
+			self::assertArrayNotHasKey('similarUrl', $row, "row {$index}");
+			self::assertSame('/icon.svg', $row['iconUrl'], "row {$index}");
+		}
+		self::assertSame('Nebenkosten.pdf', $params['hits'][0]['title']);
+		self::assertStringContainsString('fileid=43', $params['hits'][0]['url']);
+
+		// And no neighbours at all is its own state, still without a number.
+		$this->answeringSimilar(new SimilarOutcome(
+			new ApprovedHit(42, 'Mietvertrag.pdf', 'Wohnung/Mietvertrag.pdf', 'application/pdf', 0),
+			[],
+			false,
+			null,
+		), $asked);
+
+		$empty = $this->paramsOf(['similar' => '42']);
+		self::assertSame('empty', $empty['similarState']);
+		self::assertSame([], $empty['hits']);
+	}
+
+	public function testAnUnavailableSourceIsOneStateWithoutASourceAndWithoutABanner(): void {
+		// Unknown, foreign, deleted and unreadable are one state (PE-35-3 (b),
+		// T-35-25): no source, no title, no failure reason for a banner, and
+		// still the way back.
+		$asked = null;
+		$this->answeringSimilar(new SimilarOutcome(null, [], false, SimilarOutcome::FAILURE_SOURCE_UNAVAILABLE), $asked);
+
+		$params = $this->paramsOf(['query' => 'akte', 'similar' => '999999999']);
+
+		self::assertSame(999999999, $asked);
+		self::assertSame('unavailable', $params['similarState']);
+		self::assertNull($params['similarSource']);
+		self::assertNull($params['failure']);
+		self::assertSame([], $params['hits']);
+		self::assertIsString($params['backUrl']);
+
+		// A silent backend after a confirmed source is the existing banner and
+		// not an empty state: the reason travels through unchanged.
+		$this->answeringSimilar(new SimilarOutcome(
+			new ApprovedHit(42, 'Mietvertrag.pdf', 'Wohnung/Mietvertrag.pdf', 'application/pdf', 0),
+			[],
+			false,
+			SimilarOutcome::FAILURE_BACKEND_SILENT,
+		), $asked);
+
+		$failed = $this->paramsOf(['similar' => '42']);
+		self::assertSame('failed', $failed['similarState']);
+		self::assertSame(SearchOutcome::FAILURE_BACKEND_SILENT, $failed['failure']);
+		self::assertSame(['fileId' => 42, 'title' => 'Mietvertrag.pdf'], $failed['similarSource']);
 	}
 
 	// -- the numbers of the page ---------------------------------------------

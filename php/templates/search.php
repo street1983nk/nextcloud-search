@@ -28,7 +28,7 @@ declare(strict_types=1);
  * changes under the reader, so an assertive region would announce a sentence
  * that was already in the document order the moment it was read.
  *
- * @var array<string,mixed> $_ the nineteen parameters of PageController::index(), verbatim
+ * @var array<string,mixed> $_ the twenty two parameters of PageController::index(), verbatim
  * @var \OCP\IL10N $l
  */
 
@@ -56,7 +56,7 @@ $alertIcon = 'M11,15H13V17H11V15M11,7H13V13H11V7M12,2C6.47,2 2,6.5 2,12A10,10 0 
 $infoIcon = 'M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z';
 $closeIcon = 'M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z';
 
-// The parameter set, read defensively. The controller hands over nineteen keys
+// The parameter set, read defensively. The controller hands over twenty two keys
 // with checked types; reading them this way costs nothing and keeps a template
 // that is opened with a half filled array from turning a missing key into a
 // warning in the middle of the markup.
@@ -97,6 +97,20 @@ $filterSince = is_string($formFilters['since'] ?? null) ? $formFilters['since'] 
 $filterUntil = is_string($formFilters['until'] ?? null) ? $formFilters['until'] : '';
 
 $hasQuery = $query !== '';
+
+// The view of similar documents (STR-01), and it is a state of this page rather
+// than a page of its own. The controller decides it completely: whether this is
+// the view at all, which of its states holds, the title of the source and the
+// way back. The state is one of four words and never a number: "ok" and
+// "empty" for a confirmed source with or without neighbours, "unavailable" for
+// every source that did not pass the recheck, however it failed (PE-35-3 (b)),
+// and "failed" for a silent backend or a drift, which the banner explains.
+$similarSource = is_array($_['similarSource'] ?? null) ? $_['similarSource'] : null;
+$similarState = is_string($_['similarState'] ?? null) ? $_['similarState'] : null;
+$backUrl = is_string($_['backUrl'] ?? null) ? $_['backUrl'] : null;
+$inSimilar = $similarState !== null;
+$similarTitle = is_string($similarSource['title'] ?? null) ? $similarSource['title'] : null;
+$similarUnavailable = $similarState === 'unavailable';
 
 // The words of the ten chips and the three sort links, as a map from the wire
 // name to its label.
@@ -145,7 +159,9 @@ $ceiling = $failure === \OCA\Findling\Service\SearchOutcome::FAILURE_OFFSET_CEIL
 // the empty block and nowhere else (DI-07-03, decided as V-1a on 10.09.2026).
 $allRejected = $failure === \OCA\Findling\Service\SearchOutcome::FAILURE_ALL_CANDIDATES_REJECTED;
 $hasError = $silent || $drift || $noHome;
-$hasHint = !$hasError && ($ceiling || $degraded);
+// The view of similar documents has no hint of its own (O4 (a)): both
+// sentences talk about the results of a term, and the view answers no term.
+$hasHint = !$inSimilar && !$hasError && ($ceiling || $degraded);
 
 // Whether the empty state is allowed to speak, decided here next to the banner
 // it depends on (bug audit A of phase 9, 09.09.2026).
@@ -164,7 +180,15 @@ $hasHint = !$hasError && ($ceiling || $degraded);
 // stands under either banner. That is why this is not simply the absence of a
 // banner: a page that a hint reached before the user typed anything must still
 // say what it is for.
-$showEmpty = $hits === [] && (!$hasQuery || (!$hasError && !$hasHint));
+//
+// The view of similar documents answers the same question with its own two
+// states and the same rule (Pitfall 8 of phase 35): "no similar documents" and
+// "this file is not available" are claims, so neither of them speaks under an
+// error banner, with or without a term. A view that ended in "failed" has only
+// the banner and the way back.
+$showEmpty = $hits === [] && ($inSimilar
+	? ($similarState === 'empty' || $similarUnavailable) && !$hasError && !$hasHint
+	: (!$hasQuery || (!$hasError && !$hasHint)));
 
 // Where "try again" points. The address of this request, asked of the framework
 // rather than read out of the server array, and only when it is a path of this
@@ -199,15 +223,33 @@ $showPager = $previousUrl !== null || $nextUrl !== null || ($page >= $maxPage &&
 	<?php /* Block 1: the head. Exactly one h1 on this page, and without a term
 	         it is the title of the empty state below, which is why that block
 	         does not repeat it. The form carries neither page nor cursors, so
-	         every new search starts on page one. */ ?>
+	         every new search starts on page one.
+
+	         The view of similar documents is a third branch inside the same
+	         heading and not a second heading: it names the source when the
+	         source was confirmed, and says only "similar documents" when it was
+	         not, because the title of a file that did not pass the recheck must
+	         not appear (O4 (a)). The way back stands directly under the heading
+	         in every state of the view, and it leads to the list the visitor
+	         came from, position and all (D-35-04, O6 (a)). */ ?>
 	<div class="findling-search__head">
 		<h1 class="findling-search__title">
-			<?php if ($hasQuery) { ?>
+			<?php if ($inSimilar) { ?>
+				<?php if ($similarTitle !== null) { ?>
+					<?php p($l->t('Similar to: %s', [$similarTitle])); ?>
+				<?php } else { ?>
+					<?php p($l->t('Similar documents')); ?>
+				<?php } ?>
+			<?php } elseif ($hasQuery) { ?>
 				<?php p($l->t('Results for "%s"', [$query])); ?>
 			<?php } else { ?>
 				<?php p($l->t('Search your file contents')); ?>
 			<?php } ?>
 		</h1>
+
+		<?php if ($inSimilar && $backUrl !== null) { ?>
+			<a class="findling-similar__back" href="<?php p($backUrl); ?>"><?php p($l->t('Back to the results')); ?></a>
+		<?php } ?>
 
 		<form class="findling-search__form" method="get" action="<?php p($formAction); ?>">
 			<div class="findling-search__field">
@@ -322,8 +364,11 @@ $showPager = $previousUrl !== null || $nextUrl !== null || ($page >= $maxPage &&
 	         three would be the same piece of information, and it would be a
 	         counting oracle in front of the permission decision (T-13-42). A
 	         chip over an empty group looks like every other chip and leads to
-	         the empty state. */ ?>
-	<?php if ($hasQuery) { ?>
+	         the empty state.
+
+	         Not in the view of similar documents (PE-35-1, O2 (a)): ten
+	         neighbours at most need no narrowing. */ ?>
+	<?php if ($hasQuery && $similarState === null) { ?>
 		<div class="findling-filters">
 			<?php /* Three rows, three visible labels, three groups. The label is
 			         a span and never a heading, because this page has exactly one
@@ -432,7 +477,7 @@ $showPager = $previousUrl !== null || $nextUrl !== null || ($page >= $maxPage &&
 	         middle click opens it in a tab. Ordered, because the order is a
 	         ranking. */ ?>
 	<?php if ($hits !== []) { ?>
-		<ol class="findling-hits" aria-label="<?php p($l->t('Search results')); ?>">
+		<ol class="findling-hits" aria-label="<?php p($inSimilar ? $l->t('Similar documents') : $l->t('Search results')); ?>">
 			<?php foreach ($hits as $hit) {
 				$hitId = is_int($hit['fileId'] ?? null) ? $hit['fileId'] : 0;
 				$title = is_string($hit['title'] ?? null) ? $hit['title'] : '';
@@ -441,6 +486,10 @@ $showPager = $previousUrl !== null || $nextUrl !== null || ($page >= $maxPage &&
 				$url = is_string($hit['url'] ?? null) ? $hit['url'] : '';
 				$segments = is_array($hit['segments'] ?? null) ? $hit['segments'] : [];
 				$modified = is_string($hit['modified'] ?? null) ? $hit['modified'] : '';
+				// Present on every hit of the result view and on none of the
+				// view of similar documents, decided by the controller (O1 (a),
+				// PE-35-1).
+				$similarUrl = is_string($hit['similarUrl'] ?? null) ? $hit['similarUrl'] : null;
 				// Whether this row carries its date, and one answer serves the
 				// visible line and the spoken name alike. Under relevance the
 				// line does not exist, neither empty nor hidden, because a date
@@ -481,6 +530,17 @@ $showPager = $previousUrl !== null || $nextUrl !== null || ($page >= $maxPage &&
 							<span class="hidden-visually findling-hit__returned" hidden><?php p($l->t('last opened')); ?></span>
 						</span>
 					</a>
+					<?php /* The second stop of a hit, and a sibling of the row link
+					         rather than a part of it: a link inside a link is invalid
+					         markup and no keyboard could reach it on its own (D-35-01).
+					         Its name carries the title, because twenty five links of the
+					         same wording are indistinguishable in the link list of a
+					         screen reader; the visible text stands at the start of that
+					         name (Pitfall 9, WCAG 2.5.3, O5 (a)). */ ?>
+					<?php if ($similarUrl !== null) { ?>
+						<a class="findling-hit__similar" href="<?php p($similarUrl); ?>"
+							aria-label="<?php p($l->t('Similar documents to %s', [$title])); ?>"><?php p($l->t('Similar documents')); ?></a>
+					<?php } ?>
 				</li>
 			<?php } ?>
 		</ol>
@@ -521,7 +581,23 @@ $showPager = $previousUrl !== null || $nextUrl !== null || ($page >= $maxPage &&
 		         exactly the same reason. Neither of them says a word about
 		         permissions. */ ?>
 		<div class="findling-empty">
-			<?php if ($hasQuery) { ?>
+			<?php /* The two states of the view of similar documents come first,
+			         because that view may carry a term of the list it came from
+			         and must still never say "no file contains X". Neither state
+			         carries a number, and neither says a word about other
+			         people's files: "unavailable" is one sentence for an unknown,
+			         a foreign, a deleted and an unreadable source alike
+			         (PE-35-3 (b), T-35-25, T-35-26), and the explanation under
+			         "no similar documents" speaks of the user's own files only. */ ?>
+			<?php if ($inSimilar) { ?>
+				<svg class="findling-empty__icon" viewBox="0 0 24 24" width="64" height="64" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($fileSearchIcon); ?>"/></svg>
+				<?php if ($similarUnavailable) { ?>
+					<h2 class="findling-empty__heading"><?php p($l->t('This file is not available')); ?></h2>
+				<?php } else { ?>
+					<h2 class="findling-empty__heading"><?php p($l->t('No similar documents found')); ?></h2>
+					<p class="findling-empty__text"><?php p($l->t('None of your other files is close enough in content. Files that have not yet been prepared for the semantic search, or that contain no text, have no similar documents.')); ?></p>
+				<?php } ?>
+			<?php } elseif ($hasQuery) { ?>
 				<svg class="findling-empty__icon" viewBox="0 0 24 24" width="64" height="64" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($fileSearchIcon); ?>"/></svg>
 				<?php if ($filtersActive) { ?>
 					<h2 class="findling-empty__heading"><?php p($l->t('No results with the active filters')); ?></h2>
@@ -553,8 +629,9 @@ $showPager = $previousUrl !== null || $nextUrl !== null || ($page >= $maxPage &&
 	<?php /* Block 5: the pagination. Two ordinary links with the look of a
 	         button, so that they work without script and a middle click opens a
 	         tab. No total, no page count and no jump to the last page: all three
-	         would need a sum nobody measured. */ ?>
-	<?php if ($showPager) { ?>
+	         would need a sum nobody measured. Not in the view of similar
+	         documents, which has one page and no further one (PE-35-1). */ ?>
+	<?php if ($showPager && $similarState === null) { ?>
 		<div class="findling-pager">
 			<div class="findling-pager__row">
 				<?php if ($previousUrl !== null) { ?>
