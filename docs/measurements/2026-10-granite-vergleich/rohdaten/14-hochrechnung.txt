@@ -1,0 +1,22 @@
+schritt 14 hochrechnung der neu-einbettung, aus rohdaten/13-arm-durchsatz.txt
+bestand 52111 dokumente (2026-09-vergleichsmessung-m7g), stichprobe 500 dokumente
+annahme 1: linear in der dokumentzahl, chunks je dokument der stichprobe gelten fuer den bestand
+annahme 2: nur einbettung (text bleibt im volltextindex, keine extraktion, keine ocr), ein prozess,
+           zwei threads, box sonst leer, --memory 2g
+annahme 3: der gekoppelte septemberlauf (26 h 37 min 21 s, erste indexierung mit ocr daneben) ist
+           ein anderer fall; er steht skaliert mit dem verhaeltnis der einbettungsraten daneben,
+           als obergrenze fuer den fall, dass die einbettung die langsamere spur ist
+
+e5-int8: dokumente/min median 195.39 (laeufe 195.65, 195.13)
+e5-int8: chunks/dokument 2.8180, chunks hochgerechnet 146849
+e5-int8: chunks/s median 9.177
+e5-int8: neu-einbettung 52111 dokumente, einbettung allein: 4 h 26 min
+granite-int8: dokumente/min median 165.68 (laeufe 165.96, 165.39)
+granite-int8: chunks/dokument 2.8440, chunks hochgerechnet 148204
+granite-int8: chunks/s median 7.853
+granite-int8: neu-einbettung 52111 dokumente, einbettung allein: 5 h 14 min
+
+verhaeltnis zeit granite / e5 = 1.179
+e5-bezug einbettung allein september: rund 170 dokumente/min (diese messung e5 195.39, 115 prozent davon)
+e5-bezug gekoppelt september: 26 h 37 min 21 s (95841 s)
+granite gekoppelt, skaliert mit dem verhaeltnis (obergrenze nach annahme 3): 31 h 23 min

@@ -18,10 +18,25 @@ anmeldung durch den owner, als nachtrag unten. ohne gültige sitzung wird keine
 ressource angelegt, und es wird nicht geraten.
 
 -- 2 kontingent und zone (nach der anmeldung) --
-offen
+gelesen 2026-10-20T04:22Z, nach der anmeldung des owners (aws login, profil infranodedev)
+aws sts get-caller-identity: arn:aws:iam::<konto>:root
+konto-erreichbar ja
+quota-vcpu-standard 32.0
+angebot m7g.large eu-central-1a eu-central-1b eu-central-1c
+default-vpc vorhanden, default-subnetz in eu-central-1c vorhanden
+abbild-gepinnt ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-arm64-server-20260904 available arm64
+(neuestes arm64 nur zur kenntnis: ubuntu-noble-24.04-arm64-server-20261017; gepinnt bleibt)
 
--- 3 keine instanz aus früheren messungen (aws_box.sh status, nach der anmeldung) --
-offen
+-- 3 keine instanz aus früheren messungen (nach der anmeldung) --
+instanzen mit tag purpose=findling-phase5, nicht beendet: 0
+instanzen im konto in der region, nicht beendet: 0
+volumes mit tag: 0
+elastische adressen in der region: 0
+security group findling-loadtest: keine
+schlüsselpaar findling-loadtest im konto: keins (InvalidKeyPair.NotFound)
+lokaler schlüssel ~/.ssh/findling-loadtest: vorhanden, öffentlicher teil passt
+(ssh-keygen -y gegen .pub); er wird per import-key-pair eingespielt
+zustandsdatei: neues verzeichnis <zustandsverzeichnis>/granite-arm, keine alte box.env
 
 -- 4 das ausgelieferte image für arm64 --
 docker buildx imagetools inspect ghcr.io/street1983nk/findling_backend:1.4.3
