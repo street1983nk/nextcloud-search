@@ -1,7 +1,7 @@
 # Phase 36: Wortlaut-Vorabplan (de, en, fr)
 
 Stand: 20.10.2026, Entwurf aus Plan 36-01 auf Basis von Commit 47914ac9.
-Status: **Entwurf, Owner-Abnahme offen** (Abschnitt E).
+Status: **abgenommen am 20.10.2026** (Option A, alle Empfehlungen (a); Abschnitt E).
 
 Grundlage: 36-CONTEXT.md, D-36-03 (eine Sammelklasse, Arbeitsname `blocked_malicious`, Detailgrund in der
 Diagnose-Zeile), D-36-04 (Wortlaut vor Code und Katalogen), D-36-07 (Halbsatz `docs/embeddings.md`),
@@ -712,6 +712,40 @@ mit Positivkontrolle:
 
 # (E) Owner-Abnahme
 
-Platzhalter für Task 3 (Checkpoint): hier steht die Owner-Antwort wörtlich mit Datum, als Zeile
-`Owner-Abnahme: TT.MM.JJJJ, <Wortlaut>`, danach der Unterabschnitt mit den Folgen für die Pläne 36-06 bis
-36-11 (Antwort auf jede Frage O1 bis O13).
+Owner-Abnahme: 20.10.2026, "Abgenommen" (Option A). Alle Empfehlungen (a) übernommen für O1 bis O13, ausdrücklich: O4 = (a) Saat auf reine Tiefe 3 umbauen, O12 = 1000 (ARCHIVE_MALICIOUS_RATIO).
+
+Datum ISO: 2026-10-20. Der Entwurf aus Teil A (A1 bis A5) und Teil B (B1 bis B7) gilt damit ohne Änderung als
+abgenommene Fassung; spätere Pläne übernehmen die Sätze zeichengleich. REL-05 (Textabnahme Gesamttext) und die
+offenen Abnahmen der Teile Phase 30 bis 34 in `docs/store-listing.md` schließen mit dieser Abnahme.
+
+## Folgen für 36-06 bis 36-11
+
+- O1 (a): Wire-Code `blocked_malicious`, Zustand `skipped`, Generation 3 ohne neue Generation; Fallback für
+  1.4.x-Companions `skipped/too_large` bzw. `failed/corrupt` in `nc/queue.py` (36-06).
+- O2 (a): `zip_overlap` sperrt auf jeder Ebene; Korpusfall `inner-zip-with-overlap` in
+  `backend/tests/test_phase31_audit.py` wechselt von `INDEXED` auf `skipped/blocked_malicious` (36-07, 36-08).
+- O3 (a): neuer Schlüssel "Detail: %s" / "Detail: %s" / "Détail : %s" nur für `skipped`-Zeilen in
+  `php/js/admin.js`; `failed`-Zeilen behalten "Error class: %s" (36-06).
+- O4 (a): `scripts/ci/make_upgrade_seed_formats.py` baut `seed-bomb.zip` auf reine Tiefe 3 ohne Nullen-Mitglied
+  um, die Saat-Datei unter `.github/fixtures/upgrade-seed-formats/` wird neu erzeugt; die Erwartung
+  `skipped/archive_limit` in `.github/workflows/deploy-harp.yml` bleibt unverändert (36-07).
+- O5 (a): Korpusfall `name-nul-and-both-separators` wird `skipped/blocked_malicious` mit Detail `zip_traversal`
+  (36-07, 36-08).
+- O6 (a): Schwellen bestätigt: `mail_nesting` tiefer als 32 Ebenen, `image_pixels` über 100 MP UND mehr als
+  1000 Pixel je Dateibyte (36-09).
+- O7 (a): Reihenfolge in `archive._read_zip` bleibt (Einträge, Summe, dann Verhältnis); `lying-huge` bleibt
+  `archive_limit` (36-08).
+- O8 (a): keine Zeile zur Sammelklasse im Store-Text, Ähnlich-Zeile ohne Rechtezusatz (36-11).
+- O9 (a): Teil Phase 30 (Tschechisch-Grenzeintrag D-30-06, Suchsprachen-, OCR- und Variablentexte) abgenommen
+  wie in `docs/store-listing.md` und B1 (36-11).
+- O10 (a): Grenzliste bleibt bei fünf Einträgen, ZIP kommt nicht als sechster Eintrag (36-11).
+- O11 (a): Filter-, Ausschluss-, Ähnlich- und Umstiegszeilen an den Plätzen aus B1, kein eigener Grenzblock im
+  Store-Text, Wortwahl CHANGELOG "hostile files" wie B3 (36-11).
+- O12 (a): `ARCHIVE_MALICIOUS_RATIO = 1000` in `backend/src/findling/config.py`; Bereich über 100 bis
+  einschließlich 1000:1 bleibt `skipped/archive_limit`, erst über 1000:1 `skipped/blocked_malicious/zip_ratio`;
+  Korpus mit Positivkontrolle etwa 150:1 (bleibt `archive_limit`), Fall knapp über 1000:1 (`zip_ratio`), Fall
+  knapp darunter (`archive_limit`) (36-07, 36-08).
+- O13 (a): Abhilfe von `archive_limit` bleibt unverändert mit "too densely packed"; kein vierter Schlüssel,
+  Katalog-Schlüsselzahl 348 auf 351 (36-06).
+- Teil B: B1 geht zeichengleich in beide `info.xml` (sechs Beschreibungen, D-36-08 und D-36-16), B2 in die drei
+  READMEs, B3 als `[1.5.0]` ins CHANGELOG, B4 als Release-Notiz, B5 in `docs/embeddings.md:496-497` (36-11).
