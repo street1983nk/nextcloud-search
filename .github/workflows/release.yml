@@ -181,11 +181,21 @@ jobs:
       # NOT to hold a tag push back, v1.0.0 on a store/media/** commit, run
       # 34140924599, L-16-04; this check does not depend on that observation
       # in either direction.)
+      # The companion version is read once, here, for every run: the tag check
+      # below compares it with the tag, and the archive of the tree further
+      # down names its file and its top directory after it. On a dispatch it is
+      # the version on main, which is what a rehearsal archives.
+      - name: Read the companion version
+        run: |
+          companion_version=$(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' php/appinfo/info.xml)
+          test -n "${companion_version}" || { echo "php/appinfo/info.xml carries no version"; exit 1; }
+          echo "COMPANION_VERSION=${companion_version}" >> "${GITHUB_ENV}"
+
       - name: On a tag, the tag and both info.xml versions have to agree
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           tag="${GITHUB_REF#refs/tags/v}"
-          php_version=$(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' php/appinfo/info.xml)
+          php_version="${COMPANION_VERSION}"
           backend_version=$(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' backend/appinfo/info.xml)
           echo "git tag         ${tag}"
           echo "php version     ${php_version}      (php/appinfo/info.xml)"
@@ -474,10 +484,48 @@ jobs:
           done
           exit "${fail}"
 
-      # Four files: two archives and two release signatures. On a rehearsal
-      # these artifacts are the entire output of the run, which is why they are
-      # uploaded before the release step rather than after it.
-      - name: Upload both archives and both signatures
+      # ---------------------------------------------------------------------
+      # The corresponding source and the archive of the tree
+      # ---------------------------------------------------------------------
+
+      # The backend image distributes x265 (GPL-2.0-or-later), libheif and
+      # libde265 (LGPL-3.0) inside the pillow-heif wheel, so every release has
+      # to offer their complete corresponding source (D-36-15). The four exact
+      # archives and their SHA-256 live in scripts/release/corresponding_source.py
+      # and in THIRD-PARTY.md; fetch refuses any file whose hash differs, and
+      # --verify-only checks the directory again before anything is uploaded.
+      # Next to them goes a git archive of the tree this run builds from: the
+      # tag commit on a tag push, the head of main on a dispatch.
+      #
+      # All of it has to travel in the one gh release create below, because
+      # this repository publishes immutable releases and a published release
+      # takes no further asset (Pitfall 10). The archive of the tree lies in
+      # dist/, not in dist/source/: --verify-only accepts exactly the four
+      # expected files in that directory and nothing beside them.
+      #
+      # If an upstream source is down at tag time, this step fails loudly and
+      # no release is created. The fallback is manual and deliberately not a
+      # branch of this workflow: gh release download the four assets of the
+      # source mirror pre-release, check them with --verify-only, and rerun.
+      - name: Fetch the corresponding source and archive the tree
+        run: |
+          python3 scripts/release/corresponding_source.py fetch dist/source
+          python3 scripts/release/corresponding_source.py --verify-only dist/source
+          git archive --format=tar.gz --prefix="findling-${COMPANION_VERSION}/" \
+            -o "dist/findling-${COMPANION_VERSION}-source.tar.gz" HEAD
+          fail=0
+          for file in "dist/findling-${COMPANION_VERSION}-source.tar.gz" \
+            dist/source/pillow_heif-*.tar.gz dist/source/x265_*.tar.gz \
+            dist/source/libde265-*.tar.gz dist/source/libheif-*.tar.gz; do
+            test -s "${file}" || { echo "${file} is missing or empty"; fail=1; }
+          done
+          exit "${fail}"
+
+      # Nine files: two archives, two release signatures, the archive of the
+      # tree and the four source archives of the GPL and LGPL libraries. On a
+      # rehearsal these artifacts are the entire output of the run, which is
+      # why they are uploaded before the release step rather than after it.
+      - name: Upload the archives, the signatures and the sources
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: store-release
@@ -486,6 +534,8 @@ jobs:
             dist/findling.tar.gz.sig
             dist/findling_backend.tar.gz
             dist/findling_backend.tar.gz.sig
+            dist/findling-*-source.tar.gz
+            dist/source/*.tar.gz
           if-no-files-found: error
           retention-days: 30
 
@@ -500,7 +550,11 @@ jobs:
       # certificate and reveals nothing about the key. Attaching them means the
       # phase 6 submission can read the signature next to the archive it belongs
       # to, instead of a human copying a base64 blob out of a build log.
-      - name: Publish a GitHub release with both archives
+      #
+      # The archive of the tree and the four source archives travel in the same
+      # call, with the same globs as the upload above: an immutable release
+      # takes no asset once it is published (Pitfall 10, D-36-10, D-36-15).
+      - name: Publish a GitHub release with all nine files
         if: startsWith(github.ref, 'refs/tags/v') && (github.event_name == 'push' || inputs.create_release)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -512,12 +566,14 @@ jobs:
             dist/findling.tar.gz \
             dist/findling.tar.gz.sig \
             dist/findling_backend.tar.gz \
-            dist/findling_backend.tar.gz.sig
+            dist/findling_backend.tar.gz.sig \
+            dist/findling-*-source.tar.gz \
+            dist/source/*.tar.gz
 
       - name: Say that no release was published
         if: ${{ !(startsWith(github.ref, 'refs/tags/v') && (github.event_name == 'push' || inputs.create_release)) }}
         run: |
-          echo "No GitHub release was created. The four artifacts of this run are the output."
+          echo "No GitHub release was created. The nine artifact files of this run are the output."
           echo "That is the rehearsal path of plan 05-18 and the decision of the owner on 04.09.2026:"
           echo "a public release 1.0.0 that is not in the store yet could be found and installed."
 

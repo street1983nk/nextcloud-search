@@ -318,7 +318,8 @@ now matches what it names" is a claim about a regular expression and not a measu
 ### How to run it
 
 ```bash
-# The rehearsal: builds, signs, uploads four artifacts, creates NO release.
+# The rehearsal: builds, signs, uploads nine artifact files (two archives, two
+# signatures, the tree archive, four source archives), creates NO release.
 gh workflow run release.yml --ref main
 
 # The real thing: a tag does it, and create_release is not needed on a tag push.
