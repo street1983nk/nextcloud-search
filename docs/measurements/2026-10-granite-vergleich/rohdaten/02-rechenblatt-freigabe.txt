@@ -49,4 +49,6 @@ rohdaten sichern, abbauen (19-abbau.sh), vermerk im README unter
 "Abweichungen".
 
 -- 5 freigabe --
-offen bis zum blockierenden checkpoint von plan 35-10 (task 2)
+Owner-Freigabe: 20.10.2026, "Freigegeben (0,60 USD)", Deckel 0,60 USD bei 0,108016 USD/h, 5,2 h, Abbruch bei 80 Prozent (4 h 10 min seit LaunchTime)
+antwort des owners auf den blockierenden checkpoint von plan 35-10 (task 2),
+option-a (freigabe mit dem berechneten deckel), übermittelt vom orchestrator.
