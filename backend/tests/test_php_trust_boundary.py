@@ -314,10 +314,15 @@ def test_the_gate_sees_every_route_the_sources_declare() -> None:
     # Plan 27-07 adds three admin routes (probe start, probe state and the
     # downward write of the profile), all on ProfileSettingsController, so
     # the bound stands three higher from here on.
+    #
+    # Plan 36-03 adds GET /storages/gone on ReconcileController, the storage
+    # question of D-36-14. Counted on 2026-10-20 before it, the sources declared
+    # eighteen routes, so the bound had fallen behind; it moves to the count of
+    # today, nineteen, and the branch without the page controller to one less.
     if PAGE_CONTROLLER.is_file():
-        assert len(routes) >= 16  # plan 27-07 adds three admin routes
+        assert len(routes) >= 19  # plan 36-03: eighteen routes plus /storages/gone
     else:
-        assert len(routes) >= 15  # plan 27-07 adds three admin routes
+        assert len(routes) >= 18  # plan 36-03: eighteen routes plus /storages/gone
 
 
 def test_every_controller_of_the_app_carries_at_least_one_route() -> None:

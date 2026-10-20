@@ -18,7 +18,9 @@ use Psr\Log\LoggerInterface;
  * What Nextcloud really has, so that the container can compare it against what
  * it indexed.
  *
- * Two routes, both reading, and that is the whole class. The comparison itself
+ * Three routes, all reading, and that is the whole class. The third one, the
+ * storage question of plan 36-03, answers which storages the container no longer
+ * finds in the mount list are deleted or only switched off. The comparison itself
  * runs in the container (plan 03-12), because findling_file_state holds no
  * indexed rows at all: phase 2 records failures and skips there and nothing
  * else, so this side cannot form "in the index, but no longer on disk" without
@@ -31,8 +33,8 @@ use Psr\Log\LoggerInterface;
  *
  * Nothing here writes, with one narrow exception since plan 33-04. There is no
  * code path from this class into the queue or into the file system, and the
- * read-only gate on the Python side needs no allowlist entry for either route,
- * because it only judges writing HTTP methods. That is deliberate and it stays
+ * read-only gate on the Python side needs no allowlist entry for any route of
+ * it, because it only judges writing HTTP methods. That is deliberate and it stays
  * that way: a GET entered into OCS_WRITE_ALLOWLIST would widen a security gate
  * for nothing. The exception is forgetExcludedVerdicts(): the slice removes the
  * stored verdict rows of the files on its page that a rule of today covers
@@ -87,6 +89,15 @@ class ReconcileController extends OCSController {
 	private const EXCLUDED_STATE = 'skipped';
 	private const EXCLUDED_REASON = 'excluded';
 
+	/**
+	 * Storage ids per question of the storage route, the same ceiling as the
+	 * lists of QueueController. The container asks only for storages it holds
+	 * rows of and no longer finds in the mount list, which is a handful on any
+	 * real instance; a list beyond this is a defect and is refused, not clamped,
+	 * because a clamped answer would read as "the rest is not gone".
+	 */
+	private const MAX_STORAGE_IDS = 256;
+
 	public function __construct(
 		IRequest $request,
 		private StorageService $storageService,
@@ -137,6 +148,56 @@ class ReconcileController extends OCSController {
 		}
 
 		return new DataResponse(['mounts' => $mounts]);
+	}
+
+	/**
+	 * GET /ocs/v2.php/apps/findling/storages/gone?ids[]=...
+	 *
+	 * Answers with {"gone": [...], "deselected": [...]}, both lists out of the
+	 * asked ids and nothing else (plan 36-03, D-36-14, M-32-02). gone is a storage
+	 * without a row in oc_storages, deselected one that only a provider a Findling
+	 * switch turned off still carries; the reasoning stands at
+	 * StorageService::classifyAbsent.
+	 *
+	 * Only this side sees oc_storages and oc_mounts, and the container must never
+	 * delete out of an empty or disturbed mount list alone. So it deletes at once
+	 * only what this route confirms and keeps its grace period for the rest. A
+	 * companion of an older release answers 404 here, and the container reads
+	 * that as "nothing confirmed", which is the safe direction.
+	 *
+	 * No path, no mount point, no storage key and no user name in the answer or
+	 * in the log; a malformed list is refused without naming its values.
+	 */
+	#[\OCP\AppFramework\Http\Attribute\ExAppRequired]
+	#[\OCP\AppFramework\Http\Attribute\NoCSRFRequired]
+	#[\OCP\AppFramework\Http\Attribute\ApiRoute(verb: 'GET', url: '/storages/gone')]
+	public function goneStorages(): DataResponse {
+		$foreign = $this->rejectForeignCaller();
+		if ($foreign !== null) {
+			return $foreign;
+		}
+
+		$ids = $this->storageIdList($this->request->getParam('ids', []));
+		if ($ids === null) {
+			return $this->badStorageList();
+		}
+
+		try {
+			$answer = $this->storageService->classifyAbsent($ids);
+		} catch (\Throwable $e) {
+			// Same rule as in mounts(): no library message in the log, the
+			// exception travels in its own field.
+			$this->logger->error('Findling: could not classify the absent storages', ['exception' => $e]);
+			return new DataResponse(['error' => 'Storage state is not available.'], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+
+		$this->logger->debug('Findling: classified absent storages', [
+			'asked' => count($ids),
+			'gone' => count($answer['gone']),
+			'deselected' => count($answer['deselected']),
+		]);
+
+		return new DataResponse(['gone' => $answer['gone'], 'deselected' => $answer['deselected']]);
 	}
 
 	/**
@@ -342,11 +403,12 @@ class ReconcileController extends OCSController {
 	}
 
 	/**
-	 * The attribute on both methods above answers "is this a registered external
-	 * app", not "is this our external app". Every other backend on the instance
-	 * passes that test, so without this comparison an unrelated container could
-	 * read the file list of the whole instance through these two routes
-	 * (T-03-1101). AppAPI puts the calling app id into this header.
+	 * The attribute on every route of this class answers "is this a registered
+	 * external app", not "is this our external app". Every other backend on the
+	 * instance passes that test, so without this comparison an unrelated
+	 * container could read the file list of the whole instance or ask about its
+	 * storages through these routes (T-03-1101, T-36-09). AppAPI puts the
+	 * calling app id into this header.
 	 *
 	 * The same deliberate residual risk as in GatewayController and
 	 * QueueController applies: this trusts AppAPI to have authenticated the caller
@@ -379,6 +441,55 @@ class ReconcileController extends OCSController {
 
 		return new DataResponse(
 			['error' => 'Malformed mount reference.'],
+			Http::STATUS_BAD_REQUEST,
+		);
+	}
+
+	/**
+	 * The ids of the storage route as a list of positive integers, or null.
+	 *
+	 * The shape of QueueController::intList: at most MAX_STORAGE_IDS entries,
+	 * each a positive int or a string of digits, and the whole request refused
+	 * on the first entry that is not. A partially answered question would let
+	 * the container read an id that was dropped here as "not gone".
+	 *
+	 * @return list<int>|null
+	 */
+	private function storageIdList(mixed $raw): ?array {
+		if (!is_array($raw) || count($raw) > self::MAX_STORAGE_IDS) {
+			return null;
+		}
+
+		$ids = [];
+		foreach ($raw as $value) {
+			if (is_int($value)) {
+				$id = $value;
+			} elseif (is_string($value) && ctype_digit($value)) {
+				$id = (int)$value;
+			} else {
+				return null;
+			}
+
+			if ($id <= 0) {
+				return null;
+			}
+
+			$ids[$id] = true;
+		}
+
+		return array_keys($ids);
+	}
+
+	/**
+	 * A storage question that is not a list of storage ids, refused before it
+	 * reaches the database. The values are not logged, for the same reason as
+	 * in badMount().
+	 */
+	private function badStorageList(): DataResponse {
+		$this->logger->warning('Findling: rejected a storage question without a usable id list');
+
+		return new DataResponse(
+			['error' => 'Storage list is not valid.'],
 			Http::STATUS_BAD_REQUEST,
 		);
 	}

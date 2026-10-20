@@ -648,7 +648,14 @@ def test_a_reading_route_needs_no_allowlist_entry_and_gets_none() -> None:
     # it into OCS_WRITE_ALLOWLIST would not tighten anything. It would loosen
     # something: the same path would then be allowed for DELETE and POST as well,
     # and the ratchet below would have to be raised for no gain at all.
-    for path in ("/ocs/v2.php/apps/findling/mounts", "/ocs/v2.php/apps/findling/files/slice"):
+    # The third reading route, the storage question of plan 36-03 (D-36-14), is
+    # held the same way: a GET, never listed, and a writing call on it stays a
+    # violation.
+    for path in (
+        "/ocs/v2.php/apps/findling/mounts",
+        "/ocs/v2.php/apps/findling/files/slice",
+        "/ocs/v2.php/apps/findling/storages/gone",
+    ):
         source = f'async def f(nc):\n    await nc._session.ocs("GET", "{path}")\n'
 
         assert scan_source(CLIENT_MODULE, source) == [], path
@@ -665,6 +672,7 @@ def test_a_reading_route_needs_no_allowlist_entry_and_gets_none() -> None:
     assert not OCS_WRITE_ALLOWLIST & {
         "/ocs/v2.php/apps/findling/mounts",
         "/ocs/v2.php/apps/findling/files/slice",
+        "/ocs/v2.php/apps/findling/storages/gone",
     }
 
 

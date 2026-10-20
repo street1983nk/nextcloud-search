@@ -35,6 +35,11 @@ use Psr\Log\LoggerInterface;
  * mocked; its getFileSlice calls the predicate it was handed with invented
  * internal paths, which is what the real one does with the path of each cache
  * entry.
+ *
+ * Since plan 36-03 the suite also holds the storage question at its boundary:
+ * a foreign caller never reaches it, a malformed list is refused without its
+ * values in the log, a valid list is answered out of the service, and a
+ * failing lookup answers with a static sentence.
  */
 #[CoversClass(ReconcileController::class)]
 final class ReconcileControllerTest extends TestCase {
@@ -287,5 +292,102 @@ final class ReconcileControllerTest extends TestCase {
 		self::assertCount(2, $files);
 		self::assertSame(['skipped', 'excluded'], [$files[0]['state'], $files[0]['reason']]);
 		self::assertSame(['', ''], [$files[1]['state'], $files[1]['reason']]);
+	}
+
+	// -- the storage question of plan 36-03 (D-36-14, M-32-02, T-36-09 to T-36-12) --
+
+	/** Every log call of the storage controller, as level, message and context. @var list<array{string, string, array<mixed>}> */
+	private array $logged = [];
+
+	/**
+	 * A controller whose request carries the given caller and the given ids
+	 * parameter, and whose logger records everything it is handed.
+	 */
+	private function storageController(string $callerAppId, mixed $ids): ReconcileController {
+		$request = $this->createMock(IRequest::class);
+		$request->method('getHeader')->willReturnCallback(
+			static fn (string $name): string => $name === 'EX-APP-ID' ? $callerAppId : '',
+		);
+		$request->method('getParam')->willReturnCallback(
+			static fn (string $key, mixed $default = null): mixed => $key === 'ids' ? $ids : $default,
+		);
+
+		$logger = $this->createMock(LoggerInterface::class);
+		foreach (['debug', 'info', 'notice', 'warning', 'error'] as $level) {
+			$logger->method($level)->willReturnCallback(
+				function (string|\Stringable $message, array $context = []) use ($level): void {
+					$this->logged[] = [$level, (string)$message, $context];
+				},
+			);
+		}
+
+		return new ReconcileController(
+			$request,
+			$this->storageService,
+			$this->fileStateService,
+			new ExclusionService($this->createMock(IAppConfig::class), $this->storageService, $this->createMock(IJobList::class), $logger),
+			$logger,
+		);
+	}
+
+	public function testAForeignCallerNeverReachesTheStorageQuestion(): void {
+		$this->storageService->expects($this->never())->method('classifyAbsent');
+
+		$response = $this->storageController('some_other_exapp', ['9'])->goneStorages();
+
+		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+		self::assertSame(['error' => 'This route is reserved for the Findling backend.'], $response->getData());
+	}
+
+	public function testAMalformedStorageListIsRefusedWithoutItsValues(): void {
+		$this->storageService->expects($this->never())->method('classifyAbsent');
+
+		$malformed = [
+			'too long' => range(900001, 900257),
+			'not a number' => ['secretvalue'],
+			'negative' => [-4711],
+			'nought' => ['0'],
+			'a fraction' => [1.5],
+			'a nested list' => [['77123']],
+			'not a list' => 'secretvalue',
+		];
+		foreach ($malformed as $case => $ids) {
+			$response = $this->storageController($this->backendAppId(), $ids)->goneStorages();
+
+			self::assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus(), $case);
+			self::assertSame(['error' => 'Storage list is not valid.'], $response->getData(), $case);
+		}
+
+		$log = (string)json_encode($this->logged);
+		self::assertCount(count($malformed), $this->logged);
+		foreach (['secretvalue', '4711', '900001', '900257', '77123'] as $value) {
+			self::assertStringNotContainsString($value, $log);
+		}
+	}
+
+	public function testAValidListIsAnsweredOutOfTheService(): void {
+		$this->storageService->expects($this->once())->method('classifyAbsent')
+			->with([14, 15, 9])
+			->willReturn(['gone' => [14, 15], 'deselected' => [9]]);
+
+		$response = $this->storageController($this->backendAppId(), ['14', 15, 9, '9'])->goneStorages();
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame(['gone' => [14, 15], 'deselected' => [9]], $response->getData());
+	}
+
+	public function testAFailingLookupAnswersWithAStaticSentenceAndLogsNoMessage(): void {
+		$this->storageService->method('classifyAbsent')
+			->willThrowException(new \RuntimeException('SELECT secretcolumn FROM oc_storages'));
+
+		$response = $this->storageController($this->backendAppId(), [9])->goneStorages();
+
+		self::assertSame(Http::STATUS_INTERNAL_SERVER_ERROR, $response->getStatus());
+		self::assertSame(['error' => 'Storage state is not available.'], $response->getData());
+
+		$errors = array_values(array_filter($this->logged, static fn (array $entry): bool => $entry[0] === 'error'));
+		self::assertCount(1, $errors);
+		self::assertSame(['exception'], array_keys($errors[0][2]));
+		self::assertStringNotContainsString('secretcolumn', $errors[0][1]);
 	}
 }
