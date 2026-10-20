@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 36-01-PLAN.md (Owner-Abnahme 20.10.2026), next 36-02
-last_updated: "2026-10-20T14:58:53.692Z"
+stopped_at: Completed 36-03-PLAN.md, next 36-04
+last_updated: "2026-10-20T16:49:31.776Z"
 last_activity: 2026-10-20
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 78
-  completed_plans: 65
-  percent: 83
+  completed_plans: 66
+  percent: 85
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .planning/MILESTONES.md (v1.0 bis v1.4).
 
 **Core Value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 36 — Haertung und Store-Einreichung 1.5.0
+**Current focus:** Phase 36 , Haertung und Store-Einreichung 1.5.0
 
 ## Current Position
 
-Phase: 36 (Haertung und Store-Einreichung 1.5.0) — EXECUTING
-Plan: 3 of 16
+Phase: 36 (Haertung und Store-Einreichung 1.5.0) , EXECUTING
+Plan: 4 of 16
 Status: Ready to execute
 Last activity: 2026-10-20
 
-Progress: [████████░░] 83%
+Progress: [█████████░] 85%
 
 ## Performance Metrics
 
@@ -141,6 +141,7 @@ Progress: [████████░░] 83%
 - 34-05: Gemeinsame Owner-Abnahme 19.10.2026 auf 8090, "abgenommen" (Phase 34 gesamt), Store-Entwurf "Auch abgenommen" (info.xml bleibt bis REL-05). Eine Owner-Änderung in der Runde: Doku-Link als Button mit Rahmen (findling-banner__link). Protokoll 34-05-ABNAHME.md, Commits fdfef7ba, a701b4f9; CI alle grün.
 - Phase 35 (Kurzbilanz, 20.10.2026): Aehnlich-Ansicht geliefert und vom Owner abgenommen (35-01 Wortlaut, 35-05 POST /similar mit SIMILAR_CEILING 54,5 aus 35-04B Weg 2, 35-06 PHP-Rechtegrenze, 35-07/35-13 Ansicht und 16 Kataloge, 35-08 Playwright-Abnahme 19./20.10.). granite-Messbericht komplett (35-03 Regel vor der Messung, 35-09 amd64, 35-10 arm64 auf m7g.large fuer 0,0362 USD mit Abbau-Beleg, 35-11 Verdikt: Bedingung (a) verfehlt bei p=0,0944, Empfehlung "Wechsel nur mit Bedingung", e5-small bleibt in v1.5). Dedup-Notiz 35-02 (Empfehlung Weg B). Audit 35-12: 0 CRITICAL/HIGH/MEDIUM, 6 LOW alle behandelt (L-35-01 unknown-Marke liefert bei leerem Bestand nach, gefixt 5a98eee0; register-exapp.sh Stale-Probe gefixt 0e1e42f9; Massluecke dokumentiert c2b402cb; L-35-02/L-35-06 begruendet akzeptiert). STR-01 bis STR-03 Complete.
 - 34-06: Audit der Phase 34 geschlossen (34-AUDIT.md): 0 CRITICAL/HIGH/MEDIUM, 2 LOW. L-34-02 gefixt (151bc30b, fr-Pflichtformel ohne Zeilenumbruch), L-34-01 accept (Geviertstriche in STATE.md, Werkzeugausgabe, nicht ausgeliefert). Security/Bugs/Performance belegt (Poll -1,6 Prozent, keine zusätzliche DB-Abfrage), Audit-Modul test_phase34_audit.py (39 Tests mit Netz und Mutation). UMST-01..03 in REQUIREMENTS.md auf Complete. Merge 73f6a03e; volle Suite 5761 passed. Offen für Phase 36: docs/embeddings.md:497 "jahrelang verwaist" gegen Pflegestand der Umstiegs-Seite (Owner-Frage), Tag-Links blob/v1.5.0 nach Tag prüfen, Store-Entwurf in REL-05.
+- 36-03: GET /storages/gone (ExAppRequired plus rejectForeignCaller, höchstens 256 positive IDs, 400 ohne Werte, 500 statisch) antwortet {gone, deselected} aus StorageService::classifyAbsent. gone heißt: keine Zeile in oc_storages. deselected heißt: eine oc_mounts-Zeile trägt den abgeschalteten Team-Ordner- oder External-Provider UND isIndexedStorage() ist false (D-36-14). Alles andere ist Karenz im Container. Provider-Filter in SQL plus Zeilenprüfung in PHP, Bänder zu 200, bei beiden Schaltern an keine oc_mounts-Abfrage. PHPUnit 837 auf 846. Baumhash c5642f59, PHP_FILES_TODAY 107, Routen-Untergrenze 19. Lehre: TestCase::result() ist in PHPUnit 11 final, php -l sieht das nicht. CI cd111208 acht grün. docs/reconcile.md folgt mit 36-04.
 
 ### Offene Faeden (kein aktiver Auftrag)
 
@@ -174,6 +175,6 @@ Progress: [████████░░] 83%
 
 ## Session Continuity
 
-Last session: 2026-10-20T14:58:53.673Z
-Stopped at: Completed 36-01-PLAN.md (Owner-Abnahme 20.10.2026), next 36-02
+Last session: 2026-10-20T16:49:26.408Z
+Stopped at: Completed 36-03-PLAN.md, next 36-04
 Resume file: None
