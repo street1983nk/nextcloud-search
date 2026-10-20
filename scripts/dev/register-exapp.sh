@@ -197,12 +197,40 @@ stale_reason() {
 		return 0
 	fi
 
+	# The declared urls are the regexes AppAPI stores (^/status$); what curl
+	# needs is the path they anchor. Probing the regex literally answers 404
+	# for every route, which read as "stale" on every run and quietly turned
+	# the reuse branch below into dead code (second finding of audit 35-12).
 	for stale_route in ${ROUTE_URLS}; do
-		if [ "$(probe_code "${stale_auth}" "${stale_route}")" = "404" ]; then
-			printf 'the declared route %s is not mounted in it' "${stale_route}"
+		stale_path=$(printf '%s' "${stale_route}" | sed -e 's/^\^//' -e 's/\$$//' -e 's/^\///')
+		if [ "$(probe_code "${stale_auth}" "${stale_path}")" = "404" ]; then
+			printf 'the declared route %s is not mounted in it' "${stale_path}"
 			return 0
 		fi
 	done
+
+	# The content routes (/search, /snippets, /similar) stay out of info.xml on
+	# purpose, so the loop above cannot see them, and a process from before one
+	# of them was added answers every declared probe and still 404s the new
+	# route (finding of plan 35-13, fixed in audit 35-12). They are read from
+	# the API sources the same way the declared list is read from info.xml,
+	# because a literal list here would drift exactly like the one DI-04-01 is
+	# about. A GET on a POST-only route answers 405, which is a mounted path;
+	# only 404 says the path does not exist in the running process.
+	for stale_route in ${MOUNTED_URLS}; do
+		if [ "$(probe_code "${stale_auth}" "${stale_route}")" = "404" ]; then
+			printf 'the mounted route %s of the sources is not mounted in it' "${stale_route}"
+			return 0
+		fi
+	done
+}
+
+# Every path the FastAPI half mounts, read from the API sources (see the second
+# loop of stale_reason above for why this list exists and why it is not written
+# out here).
+mounted_routes() {
+	grep -rhoE '@ROUTER\.(get|post)\("/[^"]+"' "${REPO_ROOT}/backend/src/findling/api" \
+		| sed -e 's/.*("\///' -e 's/"$//' | sort -u
 }
 
 BACKEND_VERSION=$(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' "${INFO_XML}" | head -n 1)
@@ -226,6 +254,12 @@ ROUTES_PARSED=$(printf '%s\n' "${ROUTE_LINES}" | wc -l | tr -d ' ')
 if [ "${ROUTES_DECLARED}" != "${ROUTES_PARSED}" ]; then
 	printf '%s declares %s routes and %s could be read\n' \
 		"${INFO_XML}" "${ROUTES_DECLARED}" "${ROUTES_PARSED}" >&2
+	exit 1
+fi
+
+MOUNTED_URLS=$(mounted_routes)
+if [ -z "${MOUNTED_URLS}" ]; then
+	printf 'no mounted route could be read from the API sources\n' >&2
 	exit 1
 fi
 
