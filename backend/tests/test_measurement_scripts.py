@@ -2125,8 +2125,19 @@ PHP_TREE_HASH_TODAY = "c5642f59dfa6a332ff30872a3e8f46ebf049f1649b531d614f0188dc8
 # cut to the ids that were asked. No file came or went, so PACKAGE_FILES_TODAY
 # stays at 80. The PHP pair does not move. Recomputed independently with find,
 # sort, tr and sha256sum over the CRLF normalised tree: 7de293e1... both ways.
+#
+# Moved on 2026-10-20 a second time by Plan 36-04 (HART-06, D-36-05, D-36-14,
+# M-32-02): worker/reconcile.py carries VANISHED_STORAGE_GRACE_SECONDS, fixed at
+# 30 * 86_400 without a FINDLING_* setting, and _sweep_vanished, called in
+# run_once behind a full walk of a non empty list without a refused entry: gone
+# and deselected storages hand their documents to the queue as delete orders in
+# the same round, any other absent storage is stamped and goes after the grace,
+# and orphan bookmarks of storages that vanished mid walk are dropped (F4). No
+# file came or went, so PACKAGE_FILES_TODAY stays at 80. The PHP pair does not
+# move. Recomputed independently with find, sort, tr and sha256sum over the
+# CRLF normalised tree: 22846239... both ways.
 PACKAGE_FILES_TODAY = 80
-PACKAGE_TREE_HASH_TODAY = "7de293e18a71104826d70ae30ce665f320d9004396f9985af4ffabdf4639a33d"
+PACKAGE_TREE_HASH_TODAY = "228462397ac31d2119ca27b6ab7d4e0766527163e46c8465e859c76af21ab956"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

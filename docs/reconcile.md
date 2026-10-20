@@ -75,6 +75,9 @@ Der Container zieht, die PHP-App liefert nur. Der Ablauf je Scheibe:
    Abschnitt "Dateien unter einer Ausschlussregel (D-33-01)".
 6. Beides über `POST /queues/documents/requeue` einreihen, getrennt nach Art.
 7. Cursor fortschreiben, kurz pausieren, nächste Scheibe.
+8. Nach dem letzten Mount einer vollständig gelaufenen Runde: der Nachlauf über
+   Speicher, die nicht mehr gelistet sind (`GET /storages/gone?ids[]=`), siehe
+   den Abschnitt "Gelöschte, abgewählte und verschwundene Speicher (M-32-02)".
 
 Drei Grenzen sind dabei die eigentliche Arbeit, weil der Abgleich als einziger
 Teil des Systems aus einer Abwesenheit etwas folgert:
@@ -205,6 +208,53 @@ beendet die Runde, bis der Poller sie abgearbeitet hat.
 **Der Rückweg.** Eine zurückgenommene Regel nimmt die Marke mit, weil sie live
 berechnet und nie gespeichert wird. Im nächsten Zyklus ist die Datei unbekannt
 ohne Marke, also gewöhnliche Arbeit, und sie kommt in den Index zurück.
+
+## Gelöschte, abgewählte und verschwundene Speicher (M-32-02)
+
+Bis 1.4 lief der Abgleich nur über die Mounts, die die Liste trägt. Ein Speicher,
+der nicht mehr gelistet ist, hat keine Seite, die "gelöscht" sagen könnte: die
+Dokumente eines gelöschten Nutzers oder eines entfernten externen Speichers
+blieben für immer Kandidaten der Suche. Die PHP-Endprüfung hat sie nie
+ausgeliefert, aber sie belegten Plätze im Kandidatenfenster.
+
+Seit 1.5 folgt auf jede vollständig gelaufene Runde ein Nachlauf. Er läuft nur,
+wenn alle drei Bedingungen gelten: die Runde endete als `walked`, die Mountliste
+war nicht leer, und die Client-Schicht musste keinen Eintrag verwerfen. Eine
+leere, unvollständige oder unerreichbare Liste löscht nie etwas, weil sie genauso
+aussieht wie eine Instanz, deren Speicher alle verschwunden sind.
+
+Der Ablauf:
+
+1. Speicher, die wieder gelistet sind, verlieren ihren Erstsichtungs-Stempel.
+2. Lesezeichen (`reconcile`, `mounts`) von Speichern, die weder gelistet sind
+   noch lebende Zeilen haben, werden entfernt. Das schließt Befund F4: ein
+   Speicher, der mitten im Walk verschwand, ließ eine Zeile mit
+   `after_file_id > 0` zurück, und der Takt hielt die Runde deshalb in jedem
+   Tick für unterbrochen.
+3. Für alle übrigen nicht gelisteten Speicher mit lebenden Zeilen fragt der
+   Container `GET /storages/gone?ids[]=...`, in Bändern zu 256 (die Grenze von
+   `ReconcileController::MAX_STORAGE_IDS`). Die Antwort ist
+   `{"gone": [int], "deselected": [int]}`. `gone` sind Speicher ohne Zeile in
+   `oc_storages`, `deselected` sind Speicher, die nur noch ein per
+   Findling-Schalter abgewählter Anbieter trägt (D-36-14). Zahlen, nach denen
+   nicht gefragt wurde, verwirft der Container.
+4. `gone` und `deselected` verlieren ihre Dokumente sofort. Jeder andere
+   Speicher bekommt beim ersten Fehlen einen Stempel in der Tabelle
+   `vanished_storages` und verliert seine Dokumente erst, wenn dieser Stempel
+   30 Tage alt ist (D-36-05). Die 30 Tage sind fest und haben keinen Schalter.
+   Ein externer Speicher, der eine Woche nicht erreichbar ist, kostet so kein
+   einziges Dokument.
+5. Löschen heißt auch hier: Löschaufträge über `POST /queues/documents/requeue`
+   mit `kind=delete`, in Bändern zu 200. Erst wenn alle Bänder eines Speichers
+   angekommen sind, vergisst der Container dessen Lesezeichen und Stempel.
+   Scheitert ein Band, endet der Nachlauf, und die nächste fällige Runde
+   versucht es erneut.
+
+Jede Fehlantwort der Route ist "keine Antwort": ein Transportfehler, eine falsche
+Form, eine Nicht-Ganzzahl, und auch das 404 eines Companions der Reihe 1.4.x, der
+die Route noch nicht kennt. Dann gelten alle fehlenden Speicher als verschwunden,
+und es greift nur die Karenz. Ein Verlust der Tabelle `vanished_storages` setzt
+die Karenz neu und kostet nie ein Dokument.
 
 ## Warum der Abgleich nichts in den Index schreibt
 
@@ -441,7 +491,9 @@ darum steht er dort und nicht nur in der Python-Suite.
 ## Was im Protokoll steht
 
 Ausschließlich Zähler: Mounts, Scheiben, gesehene Dateien, eingereihte Dateien je
-Art. Kein Pfad, kein Dateiname, kein Titel. Die Dateiliste ist das Privateste,
+Art. Der Nachlauf über verschwundene Speicher schreibt eine Zeile mit seinen
+Zählern (`gone`, `deselected`, `stamped`, `removed`) und den Storage-IDs. Kein
+Pfad, kein Dateiname, kein Titel, keine Datei-Id. Die Dateiliste ist das Privateste,
 was dieser Container liest, und ein Protokoll, das sie mitschreibt, wäre eine
 Preisgabe (T-03-1205). Ein Test prüft das mit einem Grep über das Modul, weil
 diese Regel nicht absichtlich gebrochen wird, sondern beim Hinzufügen eines

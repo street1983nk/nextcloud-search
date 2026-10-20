@@ -36,6 +36,15 @@ the hour ``FINDLING_RECONCILE_HOUR``, and only while the queue is quiet (D-03).
 The maintenance window of Nextcloud is not a substitute and cannot be relied on;
 ``docs/reconcile.md`` carries that argument together with the numbers.
 
+**Storages that are no longer listed are swept, never guessed at.** After a
+walk that got through every mount of a non empty list without a refused entry,
+the documents of a storage Nextcloud deleted or of a provider the admin switched
+off go to the queue as delete orders in the same round; a storage that merely
+stopped being listed keeps them for VANISHED_STORAGE_GRACE_SECONDS (plan 36-04,
+M-32-02, D-36-05, D-36-14). A storage that vanished in the middle of a walk no
+longer leaves a bookmark above zero behind that held the cadence open for good
+(finding F4): drop_orphan_bookmarks and forget_storage take it away.
+
 **The log carries counters and nothing else.** Not a single field of the file
 list reaches it (T-03-1205), and a test greps for that, because this is a rule
 that gets broken while adding a helpful detail rather than on purpose.
@@ -162,6 +171,19 @@ SLICE_PAUSE_SECONDS: Final = 1.0
 # constant and holds the two numbers together, the same way the allowlist
 # parity gate does it.
 REQUEUE_BAND: Final = 200
+
+# How long a storage may be missing from the mount list before its documents
+# go, counted from the first round without it (D-36-05, plan 36-04). A storage
+# Nextcloud deleted or a provider the admin switched off goes at once; this is
+# the grace for everything else: an external mount that is down for a week, a
+# share that went away and comes back. Thirty days is long enough for any outage
+# an admin would still call an outage and short enough that the documents of a
+# removed storage do not hold candidate places for a quarter.
+#
+# Fixed on purpose and no FINDLING_* setting: a switch would be one more value
+# an admin can set to zero, and zero turns every short outage into a deletion of
+# a whole storage. The tests rehearse the grace by moving the stamp back in SQL.
+VANISHED_STORAGE_GRACE_SECONDS: Final = 30 * 86_400
 
 # Everything the round talks to, as a type. The defaults are the production
 # wiring and a test replaces them one by one.
@@ -417,6 +439,14 @@ class Reconcile:
             ended = await self._walk(store, files, queue, mount, tally, catchup_round=catchup)
             if ended is not None:
                 return self._report(ended, len(found.mounts), tally)
+
+        # 5. The storage sweep (plan 36-04, M-32-02), only behind a walk that got
+        #    through every mount of a list that was neither empty nor short of a
+        #    refused entry. An empty or incomplete list looks exactly like an
+        #    instance whose storages all went away, and reading it that way
+        #    would empty the index (T-36-13).
+        if found.mounts and not found.discarded:
+            await self._sweep_vanished(store, files, queue, frozenset(m.storage_id for m in found.mounts))
 
         self._reset_cooldown()
         if catchup:
@@ -759,6 +789,65 @@ class Reconcile:
                     return False
         return True
 
+    # -- the storage sweep -----------------------------------------------
+
+    async def _sweep_vanished(
+        self, store: Store, files: FileList, queue: DocumentQueue, listed: frozenset[int]
+    ) -> None:
+        """Hand the documents of deleted, switched off and long vanished storages to the queue.
+
+        Runs after a full walk only (run_once). A storage the list carries again
+        loses its stamp, a bookmark nobody needs any more goes (F4), and every
+        storage with living rows the list no longer carries is asked about. Gone
+        and deselected storages lose their documents at once (D-36-14); any
+        other one is stamped on its first absence and loses them once the stamp
+        is VANISHED_STORAGE_GRACE_SECONDS old (D-36-05). No answer to the
+        question means grace for all of them and never a deletion.
+
+        Deleting means delete orders through the queue and nothing else, in
+        bands of REQUEUE_BAND through _hand_over. The bookmark and the stamp of a
+        storage are forgotten only after all its bands arrived; a failed band
+        ends the sweep, and the next due round asks again.
+        """
+        known = await asyncio.to_thread(store.living_storages)
+        await asyncio.to_thread(store.clear_vanished, listed)
+        await asyncio.to_thread(store.drop_orphan_bookmarks, listed)
+        absent = sorted(known - listed)
+        if not absent:
+            return
+
+        answer = await files.gone_storages(absent)
+        gone = answer.gone if answer is not None else frozenset()
+        deselected = answer.deselected if answer is not None else frozenset()
+        now = int(self._clock())
+
+        stamped: list[int] = []
+        removed: list[int] = []
+        for storage_id in absent:
+            if storage_id not in gone and storage_id not in deselected:
+                first = await asyncio.to_thread(store.mark_vanished, storage_id, now)
+                if now - first < VANISHED_STORAGE_GRACE_SECONDS:
+                    stamped.append(storage_id)
+                    continue
+            file_ids = await asyncio.to_thread(store.living_file_ids, storage_id)
+            if not await self._hand_over(queue, (), file_ids):
+                LOGGER.warning("storage sweep stopped, %d storages handed over before the queue refused", len(removed))
+                break
+            await asyncio.to_thread(store.forget_storage, storage_id)
+            removed.append(storage_id)
+
+        # Counters and storage ids, never a path and never a file id (T-36-17).
+        LOGGER.info(
+            "storage sweep, absent=%d gone=%d deselected=%d stamped=%d removed=%d, removed storages %s, waiting %s",
+            len(absent),
+            len(gone),
+            len(deselected),
+            len(stamped),
+            len(removed),
+            removed,
+            stamped,
+        )
+
     # -- the two gates ---------------------------------------------------
 
     async def _quiet(self, queue: DocumentQueue) -> str | None:
@@ -926,6 +1015,7 @@ __all__ = [
     "ROUND_QUEUE_UNAVAILABLE",
     "ROUND_UNAVAILABLE",
     "ROUND_WALKED",
+    "VANISHED_STORAGE_GRACE_SECONDS",
     "Reconcile",
     "RoundResult",
     "default_catchup_reconcile",
