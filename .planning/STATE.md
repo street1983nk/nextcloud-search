@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
-status: ready_to_plan
-stopped_at: Phase 35 complete (14/13) — ready to discuss Phase 36
-last_updated: 2026-10-20T06:36:14.410Z
-last_activity: 2026-10-20 -- Phase 35 Audit geschlossen, STR-01 bis STR-03 abgehakt
+status: planning
+stopped_at: Phase 36 context gathered
+last_updated: "2026-10-20T09:33:05.309Z"
+last_activity: 2026-10-20
 progress:
   total_phases: 7
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 62
   completed_plans: 63
-  percent: 71
+  percent: 86
 ---
 
 # Project State
@@ -174,6 +174,6 @@ Progress: [██████████] 100%
 
 ## Session Continuity
 
-Last session: 2026-10-19T15:02:15.803Z
-Stopped at: Phase 35 context gathered
-Resume file: .planning/phases/35-stretch-aehnliche-dokumente-und-spikes/35-CONTEXT.md
+Last session: 2026-10-20T09:33:05.290Z
+Stopped at: Phase 36 context gathered
+Resume file: .planning/phases/36-haertung-und-store-einreichung-1-5-0/36-CONTEXT.md
