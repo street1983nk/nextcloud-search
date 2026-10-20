@@ -318,7 +318,7 @@ Vorlage ist Commit `aa498caf` (31-02, archive_limit), der 37 Dateien berührte. 
 ### Definition (Empfehlung)
 - **gelöscht** = Storage hat lebende Zeilen in state.db, steht nicht in der Mountliste, und `oc_storages` kennt die numerische ID nicht mehr -> Löschaufträge im selben Nachlauf ("beim nächsten Abgleich").
 - **verschwunden** = Storage nicht in der Mountliste, `oc_storages`-Eintrag existiert -> Erstsichtung stempeln, nach 30 Tagen Löschaufträge. Rückkehr in die Mountliste löscht den Stempel.
-- Ein abgeschalteter Findling-Schalter fällt damit unter "verschwunden" (30 Tage). Ob das gewollt ist, ist eine Owner-Frage (siehe Open Questions 2).
+- RESOLVED durch D-36-14 (Owner-Entscheid 20.10.): Ein abgeschalteter Findling-Schalter (Team-Ordner/externe Speicher) zählt NICHT als "verschwunden". Keine Karenz; die Dokumente verlassen den Index über die bestehende Ausschluss-Mechanik (Abwahl = Löschung ohne Karenz). Die Karenz gilt nur für Speicher, die aus oc_storages/Mounts echt weg sind. Die frühere Empfehlung "30 Tage auch bei Schalter aus" ist damit verworfen.
 
 ### Neue Lese-Route (PHP)
 `GET /ocs/v2.php/apps/findling/storages/gone?ids[]=...` in `ReconcileController`, gleiche Attribut-Trias und `rejectForeignCaller()` wie `mounts()`, Liste per `intList` begrenzt (QueueController-Muster, 256), Antwort `{"gone": [ids ohne oc_storages-Zeile]}`, eine Abfrage `SELECT numeric_id FROM storages WHERE numeric_id IN (...)`. GET braucht keinen Eintrag in `OCS_WRITE_ALLOWLIST` (ReconcileController-Docblock). Ein 1.4.x-Companion antwortet 404: der Container behandelt jede Nicht-200-Antwort als "unbekannt" und folgert nur die Karenz.
@@ -599,21 +599,26 @@ Phase ist kein Rename; relevant ist nur der Laufzeitzustand für M-32-02 und das
 | A5 | Groupfolders-Storage-IDs: mehrere Team-Ordner können einen Storage teilen | M-32-02 | Granularität storage_id statt (storage_id, root_id); ein gelöschter Team-Ordner in einem geteilten Storage würde nicht erkannt (heute schon so beim Abgleich) |
 | A6 | Store-Katalog übernimmt 1.5.0 erst nach Cache-Verzug | Reihenfolge | nur Zeitpunkt der Gegenprobe |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Upgrade-Ausgangsversion v1.4.3 statt v1.4.2?**
    - Bekannt: Store und Nutzer stehen auf 1.4.3; die Strecke-Lehre sagt "neuestes veröffentlichtes Release". ROADMAP/REQUIREMENTS nennen 1.4.2.
    - Empfehlung: v1.4.3 (nach dem Bump), Kriterium als erfüllt werten, weil 1.4.3 sich nur im PHP-Scroll-Fix unterscheidet; Owner bestätigt im Plan.
+   - RESOLVED: D-36-13 (Start von v1.4.3; UPGRADE_FROM_TAG erst nach dem Versionsbump auf 1.5.0 umstellen).
 2. **Abgeschalteter Findling-Schalter (Team-Ordner/externe Speicher) = 30 Tage Karenz?**
    - Bekannt: Schalter-aus lässt `oc_storages` stehen und fällt nach der Definition unter "verschwunden". Treffer aus solchen Speichern bestehen den PHP-Recheck weiter, solange der Nutzer lesen darf.
-   - Empfehlung: ja, gleiche Regel (kein Sonderweg); in docs/admin-page.md:124-128 die "bewusste Grenze" ersetzen.
+   - Empfehlung (VERWORFEN): ja, gleiche Regel (kein Sonderweg).
+   - RESOLVED: D-36-14, Gegenteil der Empfehlung. Abgeschalteter Schalter = KEINE Karenz; Abwahl = Löschung ohne Karenz über die bestehende Ausschluss-Mechanik. Karenz nur für Speicher, die aus oc_storages/Mounts echt weg sind. docs/admin-page.md:124-128 entsprechend beschreiben.
 3. **D-36-10 "git archive" vs. Checkliste "vier Quellpakete".**
    - Bekannt: Der Merker aus NEXT.md/STATE.md meint die vier GPL/LGPL-Quellpakete (Pflicht); das Diskussionslog beschreibt "git archive des Tags".
    - Empfehlung: beides im selben `gh release create`; die vier sind nicht verhandelbar.
+   - RESOLVED: D-36-15 (beides im selben Aufruf; vorher Versionsdrift x265 4.3 / libheif 1.23.6 fixen, Release-Blocker).
 4. **Ähnliche Dokumente (Phase 35) im Store-Text und CHANGELOG?**
    - Empfehlung: Funktionszeile im Vorabplan anbieten (Kurztext-Regel), CHANGELOG-Eintrag ergänzen.
+   - RESOLVED: D-36-16 (Faktenzeile plus CHANGELOG-Eintrag; Wortlaut de/en/fr über die Store-Text-Abnahme REL-05).
 5. **Bildbomben und Pfad-Traversal: wirklich gesperrt statt heute too_large/indexed?**
    - D-36-03 verlangt eine Klasse für alle Familien; Pattern 1 schlägt die engere Signaturregel vor. Der Vorabplan legt beides als Tabelle vor.
+   - RESOLVED: D-36-17 (blocked_malicious nur bei klarer Angriffssignatur: Traversal-Pfade, extreme Kompressionsverhältnisse, absurde Pixelzahlen; Grenzfälle behalten bestehende Urteile, archive_limit bleibt; exakte Schwellen im Vorabplan 36-01).
 
 ## Sources
 
