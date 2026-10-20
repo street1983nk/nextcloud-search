@@ -8,7 +8,11 @@ Findling ist eine Nextcloud-ExApp, die die kaputte Suche repariert: ein Containe
 
 Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
 
-## Current State (nach Phase 29, 2026-10-06)
+## Current State (nach Phase 35, 2026-10-20)
+
+**Phase 35 komplett (Stretch, Verifier passed, 14/13 Plaene inkl. Nachmessung 35-04B):** Aehnlich-Ansicht geliefert (STR-01: Link je Treffer, Serveransicht ?similar=fileId, POST /similar als undeklarierte Inhaltsroute, PHP-Recheck vor und nach dem Containeraufruf, SIMILAR_CEILING 54,5 aus Fassungspaar-Messung, Owner-Playwright-Abnahme 20.10.); granite-Messbericht mit Verdikt (STR-02: Bedingung (a) verfehlt bei p=0,0944, Ursache int8-Quantisierung, Empfehlung "Wechsel nur mit Bedingung", e5-small bleibt in v1.5; arm64 auf m7g.large fuer 0,0362 USD, Box abgebaut); Dedup-Entscheidungsvorlage (STR-03, Empfehlung Weg B, Owner-Fragen D1-D4 offen fuer v1.6). Audit 35-12: 0 CRIT/HIGH/MEDIUM, 6 LOW alle behandelt (u. a. unknown-Marke liefert bei leerem Vektorbestand jetzt nach). Validated in Phase 35: STR-01, STR-02, STR-03. Naechster Schritt: Phase 36 (Haertung + Store-Einreichung 1.5.0, REL-05, HART-06, M-32-02).
+
+## Frueherer Stand (nach Phase 29, 2026-10-06)
 
 **Shipped:** Findling 1.4.0 im Nextcloud App Store (beide Apps signiert, Submission 06.10.2026, Lauf 37473805519, je HTTP 201, Tag v1.4.0 auf 99326ae2). Phase 29 komplett: Launch-Haertung (Audit 0 CRIT / 0 HIGH), alle sechs oeffentlichen #18-Zusagen geliefert (Sidecar-Skip, TIFF-Shim, JPEG-draft + Header-Schaetzung, OLE-Sniff, Fehlerklasse je Datei, Altbestands-Nachpruefung in Baendern hinter dem Companion-Signal), Upgrade-Strecke 1.3.2 auf 1.4.0 in CI Ende zu Ende bewiesen, Vollindex-Term in der Laufzeit-Slotrechnung (D-29-12), K6-Faehigkeitssignal mit Rueckfall je Liste. Offen laut D-29-11: vier box-gebundene Feldbelege (naechste Anfahrt). Milestone v1.4 am 06.10.2026 geschlossen und archiviert (.planning/milestones/v1.4-*).
 
@@ -212,4 +216,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-10, Milestone v1.5 Umsteiger-Release gestartet*
+*Last updated: 2026-10-20, Phase 35 abgeschlossen (Verifier passed)*
