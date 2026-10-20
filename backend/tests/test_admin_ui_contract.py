@@ -611,6 +611,9 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
         # Since quick task 260929-s7p (issue #14): the error list shows the id
         # of every file, and ID is the same abbreviation in every language.
         "%1$s (ID %2$s)": "two placeholders and the abbreviation ID, the same in every language of this tree",
+        # Since plan 36-06 (answer O3 of 36-WORTLAUT.md): the detail line of a
+        # refused file, accepted by the owner as "Detail: %s" in German.
+        "Detail: %s": "the same noun in German, accepted word for word by the owner",
         **UNIT_SYMBOLS_THAT_STAY_ENGLISH,
     },
     # Spanish, read off the file on 25.09.2026 rather than guessed: the gate was
@@ -667,6 +670,9 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
         # Since quick task 260929-s7p (issue #14): the error list shows the id
         # of every file, and ID is the same abbreviation in every language.
         "%1$s (ID %2$s)": "two placeholders and the abbreviation ID, the same in every language of this tree",
+        # Since plan 36-06: the detail line of a refused file; Dutch writes the
+        # noun detail and the colon exactly as English does.
+        "Detail: %s": "detail is the same word in Dutch, and an invented difference would be a mistranslation",
         **UNIT_SYMBOLS_THAT_STAY_ENGLISH,
     },
     # European Portuguese, read off the file on 25.09.2026 rather than guessed:
@@ -3634,6 +3640,18 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     the one the owner accepted in 35-WORTLAUT.md, the five other languages are
     machine drafts under the same dated reservation as the rest. Whoever moves
     it next writes the next paragraph.
+
+    It stands at 351 since 20.10.2026, plan 36-06 (D-36-03, D-36-04): the
+    verdict class blocked_malicious, a file refused for an attack signature,
+    brought its label "File blocked as malicious" and its remedy to the status
+    page and the lookup card, and the card reads the signature code of a
+    skipped file under its own label "Detail: %s" (answer O3 of the owner),
+    while a failed file keeps "Error class: %s". The remedy of archive_limit
+    stayed as it was (answer O13) and moved nothing. All sixteen files moved in
+    one commit, the five language documents carry the rows, the German and
+    French wording is the one the owner accepted in 36-WORTLAUT.md, the five
+    other languages are machine drafts under the same dated reservation as the
+    rest. Whoever moves it next writes the next paragraph.
     """
     for language, twin in ((L10N_JSON, L10N_DE_DE_JSON), (L10N_JS, L10N_DE_DE_JS)):
         assert twin.is_file(), f"{twin.name} is missing, so everybody on de_DE reads this app in English"
@@ -3676,8 +3694,10 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     # sentences among them, changed their keys and so moved nothing), six of
     # plan 33-10 (the unit symbols of a size, the owner's answer to O1), one of
     # plan 34-03 (the banner of UMST-02), seven of plan 35-13 (the similar
-    # documents view of STR-01, wording of 35-WORTLAUT.md)
-    assert len(keys_of["de.json"]) == 348
+    # documents view of STR-01, wording of 35-WORTLAUT.md), three of plan 36-06
+    # (label and remedy of blocked_malicious and the detail line of a skipped
+    # file, D-36-03, D-36-04)
+    assert len(keys_of["de.json"]) == 351
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:

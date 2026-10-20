@@ -126,9 +126,10 @@ MAX_ACK_LIST: Final = 256
 # ``verdicts`` of its profile answer (K6), ProfileController::VERDICTS_GENERATION
 # on the other side. 2 means it stores system_file, legacy_format and
 # unsupported_variant under skipped (release 1.4.0); 3 means it stores
-# archive_limit as well (release 1.5.0, D-31-03). A companion that does not
-# announce it, a 1.3.2 for instance, refuses the WHOLE failure or skip list with
-# a 400 as soon as one code in it is unknown (QueueController), so a code leaves
+# archive_limit and blocked_malicious as well (release 1.5.0, D-31-03,
+# D-36-03). A companion that does not announce it, a 1.3.2 for instance,
+# refuses the WHOLE failure or skip list with a 400 as soon as one code in it
+# is unknown (QueueController), so a code leaves
 # this container only towards a companion that announced a generation which
 # knows it.
 #
@@ -168,28 +169,35 @@ SKIPPED_FALLBACK_WITHOUT_SIGNAL: Final[Mapping[str, str]] = MappingProxyType(
 )
 
 # archive_limit is an archive over a safety limit; the nearest code an older
-# companion knows is too_large, "over a limit" as well.
+# companion knows is too_large, "over a limit" as well. blocked_malicious
+# (36-06, D-36-03) is a file refused for an attack signature and takes the same
+# substitute: not read, and over what the container accepts. It joins
+# generation 3 without a new generation, because 1.5.0, the release that brings
+# generation 3, has not reached a companion yet.
 _SKIPPED_FALLBACK_BY_GENERATION: Final[Mapping[int | None, Mapping[str, str]]] = MappingProxyType(
     {
         3: MappingProxyType({}),
-        2: MappingProxyType({"archive_limit": "too_large"}),
-        None: MappingProxyType({**SKIPPED_FALLBACK_WITHOUT_SIGNAL, "archive_limit": "too_large"}),
+        2: MappingProxyType({"archive_limit": "too_large", "blocked_malicious": "too_large"}),
+        None: MappingProxyType(
+            {**SKIPPED_FALLBACK_WITHOUT_SIGNAL, "archive_limit": "too_large", "blocked_malicious": "too_large"}
+        ),
     }
 )
 
-# failed: purely defensive. ExtractionOutcome.failed refuses the four codes, so
+# failed: purely defensive. ExtractionOutcome.failed refuses the five codes, so
 # the failure list never carries them; should a defect put one there, corrupt is
 # the failed code every older companion knows.
 _FAILED_FALLBACK_BY_GENERATION: Final[Mapping[int | None, Mapping[str, str]]] = MappingProxyType(
     {
         3: MappingProxyType({}),
-        2: MappingProxyType({"archive_limit": "corrupt"}),
+        2: MappingProxyType({"archive_limit": "corrupt", "blocked_malicious": "corrupt"}),
         None: MappingProxyType(
             {
                 "system_file": "corrupt",
                 "legacy_format": "corrupt",
                 "unsupported_variant": "corrupt",
                 "archive_limit": "corrupt",
+                "blocked_malicious": "corrupt",
             }
         ),
     }
@@ -311,7 +319,7 @@ class CompanionChoice:
 
     ``verdicts`` is the capability signal of K6: one of KNOWN_VERDICTS_GENERATIONS
     (2: the companion stores the three skipped codes of release 1.4.0; 3: also
-    archive_limit of release 1.5.0), None otherwise.
+    archive_limit and blocked_malicious of release 1.5.0), None otherwise.
     """
 
     profile: str | None

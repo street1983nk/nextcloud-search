@@ -98,15 +98,31 @@ If the order was the other way round, nothing needs to be done by hand. Once bot
 
 ## Skip codes
 
-Three codes of the status page change with 1.5 (D-31-03): one is new, two get a new wording. The wording is a draft of phase 31 and is approved with the release (REL-05).
+Four codes of the status page change with 1.5 (D-31-03, D-36-03): two are new, two get a new wording. The wording of phase 31 is approved with the release (REL-05), the one of `blocked_malicious` was approved on 20.10.2026 (D-36-04).
 
 | Code | Label | Remedy |
 |---|---|---|
 | `archive_limit` (new) | ZIP file over the safety limits | None. ZIP files that are nested too deep, too large, too densely packed or hold too many files are skipped so the container keeps running. |
+| `blocked_malicious` (new) | File blocked as malicious | None. The file carries the signature of an attack (see the detail) and is not read any further, so the container keeps running. Remove or replace the file if it is not meant to be there. |
 | `unsupported_variant` (wider) | Variant of this format that cannot be read | None. The file uses a variant or an encoding Findling cannot read, for example Word 95 or an unusual image encoding. |
 | `mime_not_allowed` (remedy only) | File type not supported | None. Findling reads PDF, Office, OpenDocument, text, mails, ZIP files and images. |
 
 `archive_limit` is used for ZIP files only. A companion of generation 2 (Findling app 1.4.x) does not know it; towards that companion the backend reports it as `too_large`, and without any generation signal as well. The German wording is in `docs/store-listing.md`, part 4.
+
+`blocked_malicious` is used only for a file with a signature no normal tool produces (D-36-17); a file that is only large keeps its old verdict. The admin page shows one detail code under the label "Detail", always one of these eight:
+
+| Detail code | Signal |
+|---|---|
+| `zip_ratio` | a ZIP member of at least 1 MiB declares more than 1000 times its compressed size, on any level |
+| `zip_overlap` | ZIP members overlap each other, on any level |
+| `zip_traversal` | a ZIP member name holds a `..` segment, starts with `/`, `\` or a drive letter, or holds a NUL |
+| `package_entries` | an ODF or OOXML package lists more than 10 000 entries |
+| `xml_entities` | the XML parser of an ODF or OOXML part reports entity amplification |
+| `image_pixels` | a picture over 100 megapixels with more than 1000 pixels per byte of the file |
+| `mail_nesting` | a mail nests attached mails deeper than 32 levels |
+| `cfb_cycle` | a sector chain of an old Office file (OLE) runs in a circle |
+
+A ZIP member between 100 and 1000 times its compressed size stays `archive_limit`. Like `archive_limit`, `blocked_malicious` reaches a companion of generation 2 or one without a generation signal as `too_large`.
 
 ## Stale file cache size
 

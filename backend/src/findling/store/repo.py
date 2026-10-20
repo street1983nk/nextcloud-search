@@ -316,6 +316,7 @@ STATE_REASONS: Final[Mapping[str, frozenset[str | None]]] = {
             "legacy_format",  # a format this image does not read, under a name it would
             "unsupported_variant",  # an honest verdict on a variant, not a broken file
             "archive_limit",  # a safety limit of the container, not a broken file
+            "blocked_malicious",  # an attack signature, refused so the container keeps running
         }
     ),
     "failed": frozenset(
@@ -958,7 +959,8 @@ class Store:
         explanation for the hour of CPU that went into the second one.
 
         ``error_class`` is the class of the exception behind a failure, as
-        module.qualname (D-29-09). It lands in ``file_errors`` in the same
+        module.qualname (D-29-09), or a signature code (D-36-03) next to a
+        skipped(blocked_malicious); any state may carry one. It lands in ``file_errors`` in the same
         transaction as the verdict, and a verdict without one removes the old
         row, so the class shown next to a verdict always belongs to it. A value
         outside the shape of a class name is stored as nothing rather than

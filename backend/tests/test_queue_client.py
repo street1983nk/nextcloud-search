@@ -1019,8 +1019,9 @@ FORMATS_DOC = PACKAGE_ROOT.parents[2] / "docs" / "formats.md"
 NEW_CODES = ("system_file", "legacy_format", "unsupported_variant")
 # The codes each generation added to the vocabulary of the companion. A code
 # reaches a companion only if it announced a generation at least as high.
-CODES_OF_GENERATION: dict[int, tuple[str, ...]] = {2: NEW_CODES, 3: ("archive_limit",)}
-ALL_NEW_CODES = (*NEW_CODES, "archive_limit")
+# blocked_malicious joins generation 3 (36-06, D-36-03): 1.5.0 is unreleased.
+CODES_OF_GENERATION: dict[int, tuple[str, ...]] = {2: NEW_CODES, 3: ("archive_limit", "blocked_malicious")}
+ALL_NEW_CODES = (*NEW_CODES, "archive_limit", "blocked_malicious")
 
 
 def _php_state_reasons() -> dict[str, set[str]]:
@@ -1098,8 +1099,22 @@ def _ack_body(session: _FakeSession) -> dict[str, Any]:
     return cast("dict[str, Any]", acks[0]["json"])
 
 
-_SKIPS = {11: "system_file", 12: "legacy_format", 13: "unsupported_variant", 14: "too_large", 15: "archive_limit"}
-_FAILS = {21: "system_file", 22: "legacy_format", 23: "unsupported_variant", 24: "timeout", 25: "archive_limit"}
+_SKIPS = {
+    11: "system_file",
+    12: "legacy_format",
+    13: "unsupported_variant",
+    14: "too_large",
+    15: "archive_limit",
+    16: "blocked_malicious",
+}
+_FAILS = {
+    21: "system_file",
+    22: "legacy_format",
+    23: "unsupported_variant",
+    24: "timeout",
+    25: "archive_limit",
+    26: "blocked_malicious",
+}
 
 
 @pytest.mark.parametrize("answer", [{"profile": "standard"}, {"profile": "standard", "verdicts": 1}, None])
@@ -1123,6 +1138,7 @@ async def test_without_the_signal_no_new_code_leaves_the_container(answer: dict[
         {"fileId": 13, "reason": "image_not_ocrable"},
         {"fileId": 14, "reason": "too_large"},
         {"fileId": 15, "reason": "too_large"},
+        {"fileId": 16, "reason": "too_large"},
     ]
     assert body["failed"] == [
         {"queueId": 21, "reason": "corrupt"},
@@ -1130,15 +1146,16 @@ async def test_without_the_signal_no_new_code_leaves_the_container(answer: dict[
         {"queueId": 23, "reason": "corrupt"},
         {"queueId": 24, "reason": "timeout"},
         {"queueId": 25, "reason": "corrupt"},
+        {"queueId": 26, "reason": "corrupt"},
     ]
     serialized = repr(body)
     for code in ALL_NEW_CODES:
         assert code not in serialized
 
 
-async def test_towards_generation_2_only_archive_limit_falls_back() -> None:
-    # T-31-03: the 1.4.2 companion stores the three codes of 1.4.0 but refuses
-    # a list that carries archive_limit.
+async def test_towards_generation_2_only_the_codes_of_generation_3_fall_back() -> None:
+    # T-31-03, T-36-21: the 1.4.2 companion stores the three codes of 1.4.0 but
+    # refuses a list that carries archive_limit or blocked_malicious.
     session = _FakeSession(
         {
             ("GET", PROFILE_PATH): {"profile": "standard", "verdicts": 2},
@@ -1157,6 +1174,7 @@ async def test_towards_generation_2_only_archive_limit_falls_back() -> None:
         {"fileId": 13, "reason": "unsupported_variant"},
         {"fileId": 14, "reason": "too_large"},
         {"fileId": 15, "reason": "too_large"},
+        {"fileId": 16, "reason": "too_large"},
     ]
     assert body["failed"] == [
         {"queueId": 21, "reason": "system_file"},
@@ -1164,8 +1182,10 @@ async def test_towards_generation_2_only_archive_limit_falls_back() -> None:
         {"queueId": 23, "reason": "unsupported_variant"},
         {"queueId": 24, "reason": "timeout"},
         {"queueId": 25, "reason": "corrupt"},
+        {"queueId": 26, "reason": "corrupt"},
     ]
     assert "archive_limit" not in repr(body)
+    assert "blocked_malicious" not in repr(body)
 
 
 class _FlakyProfileSession(_FakeSession):
@@ -1191,11 +1211,12 @@ async def test_a_failed_read_after_the_signal_falls_back_again() -> None:
     assert (await queue.companion_choice()).verdicts == 3
     assert (await queue.companion_choice()).verdicts is None
 
-    await queue.acknowledge([], {}, {11: "system_file", 12: "archive_limit"})
+    await queue.acknowledge([], {}, {11: "system_file", 12: "archive_limit", 13: "blocked_malicious"})
 
     assert _ack_body(session)["skipped"] == [
         {"fileId": 11, "reason": "mime_not_allowed"},
         {"fileId": 12, "reason": "too_large"},
+        {"fileId": 13, "reason": "too_large"},
     ]
 
 
@@ -1219,7 +1240,8 @@ async def test_towards_generation_3_every_code_travels_unchanged() -> None:
 def test_the_fallback_without_signal_is_public_and_holds_the_three_pairs_of_1_4() -> None:
     # 31-11 re-judges a file only where the Nextcloud row carries exactly one of
     # these substitutes (Befund 7), so the table is public and holds nothing
-    # else; archive_limit is added only in the table of the wire.
+    # else; archive_limit and blocked_malicious are added only in the table of
+    # the wire.
     assert dict(queue_module.SKIPPED_FALLBACK_WITHOUT_SIGNAL) == {
         "system_file": "mime_not_allowed",
         "legacy_format": "mime_not_allowed",
@@ -1231,15 +1253,19 @@ def test_the_skipped_fallback_per_generation() -> None:
     tables = queue_module._SKIPPED_FALLBACK_BY_GENERATION
     assert set(tables) == {None, 2, 3}
     assert dict(tables[3]) == {}
-    assert dict(tables[2]) == {"archive_limit": "too_large"}
-    assert dict(tables[None]) == {**queue_module.SKIPPED_FALLBACK_WITHOUT_SIGNAL, "archive_limit": "too_large"}
+    assert dict(tables[2]) == {"archive_limit": "too_large", "blocked_malicious": "too_large"}
+    assert dict(tables[None]) == {
+        **queue_module.SKIPPED_FALLBACK_WITHOUT_SIGNAL,
+        "archive_limit": "too_large",
+        "blocked_malicious": "too_large",
+    }
 
 
 def test_the_failed_fallback_per_generation() -> None:
     tables = queue_module._FAILED_FALLBACK_BY_GENERATION
     assert set(tables) == {None, 2, 3}
     assert dict(tables[3]) == {}
-    assert dict(tables[2]) == {"archive_limit": "corrupt"}
+    assert dict(tables[2]) == {"archive_limit": "corrupt", "blocked_malicious": "corrupt"}
     assert dict(tables[None]) == dict.fromkeys(ALL_NEW_CODES, "corrupt")
 
 

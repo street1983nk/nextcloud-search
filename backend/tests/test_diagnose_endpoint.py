@@ -691,6 +691,35 @@ def test_a_failed_file_carries_the_class_of_its_reader_error(
         assert "Mueller" not in value
 
 
+def test_a_blocked_file_carries_its_signature_code_as_the_error_class(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    # D-36-03: a refused file is skipped(blocked_malicious), and the signature
+    # that refused it travels in the same column a reader error does. A fixed
+    # code of the closed list, never a member name or a message (T-36-23).
+    store = open_store(indexed_volume.root / "state.db")
+    meta = FileMeta(
+        storage_id=1,
+        root_id=1,
+        path=PRIVATE_PATH,
+        title=PRIVATE_TITLE,
+        mime="application/zip",
+        size=4096,
+        mtime=1_700_000_000,
+    )
+    store.record(PRIVATE_FILE_ID, meta, "skipped", "blocked_malicious", error_class="zip_ratio")
+    store.close()
+
+    answer = _diagnose(client, sign("admin"), PRIVATE_FILE_ID)
+
+    assert set(answer) == FIELDS
+    assert answer["state"] == "skipped"
+    assert answer["reason"] == "blocked_malicious"
+    assert answer["errorClass"] == "zip_ratio"
+
+
 def test_a_file_without_an_error_class_answers_with_the_empty_string(
     client: TestClient,
     sign: Sign,

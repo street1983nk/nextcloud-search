@@ -1075,7 +1075,9 @@ def test_no_line_of_the_corpus_run_carries_a_name_a_subject_or_an_address(
 # The codes each generation added (nc/queue.py, 31-02): a companion of an older
 # generation must never receive them unchanged.
 _NEW_IN_GENERATION_2 = frozenset({"system_file", "legacy_format", "unsupported_variant"})
-_NEW_IN_GENERATION_3 = frozenset({"archive_limit"})
+# blocked_malicious joins generation 3 (36-06, D-36-03): 1.5.0 is unreleased, so
+# the generation it belongs to has not reached a companion yet.
+_NEW_IN_GENERATION_3 = frozenset({"archive_limit", "blocked_malicious"})
 
 
 @pytest.mark.parametrize("generation", [None, 0, 1, 2, 3, 4, 99])
@@ -1097,6 +1099,12 @@ def test_no_code_reaches_a_companion_that_does_not_know_it(generation: int | Non
     if generation == 2:
         assert _wire_reason("archive_limit", 2, _SKIPPED_FALLBACK_BY_GENERATION) == "too_large"
         assert _wire_reason("archive_limit", 2, _FAILED_FALLBACK_BY_GENERATION) == "corrupt"
+    # blocked_malicious neither, towards generation 2 and without a signal (T-36-21).
+    if generation in (None, 2):
+        assert _wire_reason("blocked_malicious", generation, _SKIPPED_FALLBACK_BY_GENERATION) == "too_large"
+        assert _wire_reason("blocked_malicious", generation, _FAILED_FALLBACK_BY_GENERATION) == "corrupt"
+    if generation == 3:
+        assert _wire_reason("blocked_malicious", 3, _SKIPPED_FALLBACK_BY_GENERATION) == "blocked_malicious"
 
 
 # -- the catch-up mark under manipulation ------------------------------------------------

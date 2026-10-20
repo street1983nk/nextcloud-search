@@ -262,6 +262,41 @@ def test_archive_limit_of_plan_31_02_is_a_decision_and_never_a_failure() -> None
         ExtractionOutcome.failed(reason)
 
 
+def test_blocked_malicious_of_plan_36_06_is_a_decision_and_never_a_failure() -> None:
+    """A file with an attack signature is skipped, in every copy (D-36-03).
+
+    The container refuses to read it further so it keeps running; that is a
+    decision about the file and must not count as an error on the page.
+    """
+    reason = Reason("blocked_malicious")
+
+    assert reason is Reason.BLOCKED_MALICIOUS
+    assert reason in STATE_REASONS[State.SKIPPED]
+    assert reason not in STATE_REASONS[State.FAILED]
+    assert "blocked_malicious" in repo.STATE_REASONS["skipped"]
+    assert "blocked_malicious" not in repo.STATE_REASONS["failed"]
+    assert "blocked_malicious" in _php_reasons()
+    assert "blocked_malicious" in _php_state_reasons()["skipped"]
+    assert "blocked_malicious" not in _php_state_reasons()["failed"]
+
+    with pytest.raises(ValueError, match="does not belong"):
+        ExtractionOutcome.failed(reason)
+
+
+def test_a_skipped_verdict_carries_the_signature_code_as_its_detail() -> None:
+    # D-36-03, Pitfall 2: the detail is no longer reserved for a failure.
+    outcome = ExtractionOutcome.skipped(Reason.BLOCKED_MALICIOUS, detail="zip_ratio")
+
+    assert outcome.state is State.SKIPPED
+    assert outcome.reason is Reason.BLOCKED_MALICIOUS
+    assert outcome.detail == "zip_ratio"
+    assert outcome.text == ""
+    assert outcome.text_chars == 0
+    assert ExtractionOutcome.skipped(Reason.TOO_LARGE).detail is None
+    # The detail stays out of the verdict, as it does for a failure.
+    assert outcome == ExtractionOutcome.skipped(Reason.BLOCKED_MALICIOUS, detail="zip_overlap")
+
+
 PHP_ADMIN_VIEW_SERVICE = PHP_FILE_STATE_SERVICE.parent / "AdminViewService.php"
 
 

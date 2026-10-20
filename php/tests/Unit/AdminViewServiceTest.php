@@ -705,6 +705,80 @@ final class AdminViewServiceTest extends TestCase {
 		self::assertSame('', AdminViewService::errorClass(['errorClass' => $value]));
 	}
 
+	// -- the signature code of a refused file (plan 36-06, D-36-03) ----------
+
+	public function testTheRowOfBlockedMaliciousCarriesTheAcceptedWording(): void {
+		// 36-WORTLAUT A2, character for character.
+		$table = (new \ReflectionClassConstant(AdminViewService::class, 'REASON_TEXT'))->getValue();
+
+		self::assertIsArray($table);
+		self::assertSame(
+			[
+				'File blocked as malicious',
+				'None. The file carries the signature of an attack (see the detail) and is not read any further, so the container keeps running. Remove or replace the file if it is not meant to be there.',
+			],
+			$table['blocked_malicious'] ?? null,
+		);
+	}
+
+	public function testASignatureCodeHasTheShapeOfAnErrorClass(): void {
+		self::assertSame('zip_ratio', AdminViewService::errorClass(['errorClass' => 'zip_ratio']));
+		self::assertSame('', AdminViewService::errorClass(['errorClass' => '../x']));
+	}
+
+	public function testASkippedCardCarriesTheSignatureCodeWhenTheContainerAgrees(): void {
+		$container = ['state' => 'skipped', 'reason' => 'blocked_malicious', 'errorClass' => 'zip_ratio'];
+
+		self::assertSame(
+			'zip_ratio',
+			AdminViewService::detailOfVerdict(['state' => 'skipped', 'reason' => 'blocked_malicious'], $container),
+		);
+	}
+
+	public function testAFailedCardStillCarriesTheClassOfTheReaderError(): void {
+		$container = ['state' => 'failed', 'reason' => 'corrupt', 'errorClass' => 'zipfile.BadZipFile'];
+
+		self::assertSame(
+			'zipfile.BadZipFile',
+			AdminViewService::detailOfVerdict(['state' => 'failed', 'reason' => 'corrupt'], $container),
+		);
+	}
+
+	/**
+	 * Pairs of card and container that do not describe the same verdict.
+	 *
+	 * @return array<string,array{array<string,string>,array<string,string>}>
+	 */
+	public static function verdictsThatDisagree(): array {
+		return [
+			'skipped against failed' => [
+				['state' => 'skipped', 'reason' => 'blocked_malicious'],
+				['state' => 'failed', 'reason' => 'corrupt', 'errorClass' => 'zip_ratio'],
+			],
+			'another skipped reason' => [
+				['state' => 'skipped', 'reason' => 'too_large'],
+				['state' => 'skipped', 'reason' => 'blocked_malicious', 'errorClass' => 'zip_ratio'],
+			],
+			'indexed against skipped' => [
+				['state' => 'indexed', 'reason' => ''],
+				['state' => 'skipped', 'reason' => 'blocked_malicious', 'errorClass' => 'zip_ratio'],
+			],
+			'a code outside the shape' => [
+				['state' => 'skipped', 'reason' => 'blocked_malicious'],
+				['state' => 'skipped', 'reason' => 'blocked_malicious', 'errorClass' => '../x'],
+			],
+		];
+	}
+
+	/**
+	 * @param array<string,string> $verdict
+	 * @param array<string,string> $container
+	 */
+	#[DataProvider('verdictsThatDisagree')]
+	public function testADetailNeverStandsNextToAVerdictItDidNotCause(array $verdict, array $container): void {
+		self::assertSame('', AdminViewService::detailOfVerdict($verdict, $container));
+	}
+
 	// -- the diagnosis of an excluded file names both lists (plan 33-05) ----
 
 	public function testTheRemedyOfAnExcludedFileNamesBothListsOfThePage(): void {

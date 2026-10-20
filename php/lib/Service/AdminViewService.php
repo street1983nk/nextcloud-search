@@ -528,6 +528,10 @@ final class AdminViewService {
 			'ZIP file over the safety limits',
 			'None. ZIP files that are nested too deep, too large, too densely packed or hold too many files are skipped so the container keeps running.',
 		],
+		'blocked_malicious' => [
+			'File blocked as malicious',
+			'None. The file carries the signature of an attack (see the detail) and is not read any further, so the container keeps running. Remove or replace the file if it is not meant to be there.',
+		],
 		'empty_file' => [
 			'File is empty',
 			'None. The file has 0 bytes.',
@@ -1201,12 +1205,11 @@ final class AdminViewService {
 			?? $this->stageSixNotSeenYet($container);
 
 		// The class of the reader error belongs to a failed verdict of the
-		// container and to nothing else (D-29-09). Shown only when the card
-		// says failed and the container said so too, so that a class of an
-		// earlier attempt never stands next to a verdict it did not cause.
-		if (($verdict['state'] ?? '') === 'failed' && $container['state'] === 'failed') {
-			$verdict['errorClass'] = $container['errorClass'];
-		}
+		// container, the signature code to a skipped one (D-29-09, D-36-03),
+		// and to nothing else. Shown only when the card and the container say
+		// the same, so that a class of an earlier attempt never stands next to
+		// a verdict it did not cause.
+		$verdict['errorClass'] = self::detailOfVerdict($verdict, $container);
 
 		if ($resolved['namedUserMayNotRead'] ?? false) {
 			// The admin typed a user in front of the path who may not open the
@@ -1641,6 +1644,38 @@ final class AdminViewService {
 		$value = $answer['errorClass'] ?? null;
 
 		return is_string($value) && preg_match(self::ERROR_CLASS_PATTERN, $value) === 1 ? $value : '';
+	}
+
+	/**
+	 * The detail the card may print next to its verdict, or the empty string.
+	 *
+	 * A failed card carries the class of the reader error when the container
+	 * says failed too (D-29-09); a skipped card carries the signature code of
+	 * a refused file when the container says skipped with the same reason
+	 * (D-36-03). Every other pair gets nothing, so a detail of an earlier
+	 * attempt never stands next to a verdict it did not cause. The value is
+	 * judged by errorClass() once more, the shape check on both sides of the
+	 * boundary (T-36-22).
+	 *
+	 * @param array<mixed> $verdict the verdict the card shows
+	 * @param array<mixed> $container the verdict of the container, out of containerVerdict()
+	 */
+	public static function detailOfVerdict(array $verdict, array $container): string {
+		$state = $verdict['state'] ?? '';
+		if ($state !== ($container['state'] ?? null)) {
+			return '';
+		}
+		if ($state === 'failed') {
+			return self::errorClass($container);
+		}
+		if ($state === 'skipped'
+			&& is_string($verdict['reason'] ?? null)
+			&& $verdict['reason'] !== ''
+			&& $verdict['reason'] === ($container['reason'] ?? null)) {
+			return self::errorClass($container);
+		}
+
+		return '';
 	}
 
 	/**

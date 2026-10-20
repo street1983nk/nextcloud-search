@@ -1025,8 +1025,16 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # renames its result helper to resultOf, because TestCase::result() is final in PHPUnit 11 and the
 # suite ended with a fatal error in run 39449358560. No file came and none went, so PHP_FILES_TODAY stays
 # at 107.
+# Moved on 2026-10-20 by Plan 36-06 (HART-06, D-36-03): lib/Service/FileStateService.php carries
+# blocked_malicious in both lists, lib/Service/AdminViewService.php its REASON_TEXT row and
+# detailOfVerdict, which hands the signature code of a skipped card next to an agreeing container to the
+# lookup card; lib/Controller/ProfileController.php names the code in generation 3, which stays 3;
+# tests/Unit/AdminViewServiceTest.php and tests/Unit/ProfileControllerTest.php changed with them. The
+# catalogues are not in the PHP tree. No file came or went, so PHP_FILES_TODAY stays at 107.
+# Recomputed independently with find, sort, tr and sha256sum over the CRLF normalised tree: 60821e1a...
+# both ways.
 PHP_FILES_TODAY = 107
-PHP_TREE_HASH_TODAY = "c5642f59dfa6a332ff30872a3e8f46ebf049f1649b531d614f0188dc8ecde1f2"
+PHP_TREE_HASH_TODAY = "60821e1a430226b2530194ac098bd7b50cc28df4be5a978b0ba85b9b63dc034f"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
@@ -2144,8 +2152,17 @@ PHP_TREE_HASH_TODAY = "c5642f59dfa6a332ff30872a3e8f46ebf049f1649b531d614f0188dc8
 # repeated ids[] keys. No file came or went, so PACKAGE_FILES_TODAY stays at 80.
 # The PHP pair does not move. Recomputed independently with find, sort, tr and
 # sha256sum over the CRLF normalised tree: 2210b1bf... both ways.
+#
+# Moved on 2026-10-20 by Plan 36-06 (HART-06, D-36-03): extract/errors.py
+# carries Reason.BLOCKED_MALICIOUS under skipped and skipped() takes a detail,
+# store/repo.py carries the code in its list, and nc/queue.py sends it as
+# too_large or corrupt towards generation 2 and towards a companion without a
+# signal, inside generation 3. No file came or went, so PACKAGE_FILES_TODAY
+# stays at 80. The PHP pair moves in the same commit. Recomputed independently
+# with find, sort, tr and sha256sum over the CRLF normalised tree: 3271cb00...
+# both ways.
 PACKAGE_FILES_TODAY = 80
-PACKAGE_TREE_HASH_TODAY = "2210b1bf88801c816267d568d0573e9c00274fbef371faeb26d9c896a4f8b38a"
+PACKAGE_TREE_HASH_TODAY = "3271cb00e238dfaa19009daf0990581df60137420f279b0d364567acbf7e481a"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

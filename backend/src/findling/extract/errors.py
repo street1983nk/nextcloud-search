@@ -114,6 +114,8 @@ class Reason(StrEnum):
     # a variant of a readable format the reader cannot map: an image encoding, Word 95, BIFF before 5
     UNSUPPORTED_VARIANT = "unsupported_variant"
     ARCHIVE_LIMIT = "archive_limit"  # a ZIP archive over the depth, size, count or ratio limits (D-31-03)
+    # a file carrying an attack signature, refused before it is read (D-36-03)
+    BLOCKED_MALICIOUS = "blocked_malicious"
 
     # failed, the things we wanted to do and could not
     EMPTY_FILE = "empty_file"
@@ -148,6 +150,7 @@ STATE_REASONS: Final[Mapping[State, frozenset[Reason | None]]] = {
             Reason.LEGACY_FORMAT,  # a format this image does not read, under a name it would
             Reason.UNSUPPORTED_VARIANT,  # an honest verdict on a variant, not a broken file
             Reason.ARCHIVE_LIMIT,  # a safety limit of the container, not a broken file
+            Reason.BLOCKED_MALICIOUS,  # an attack signature, refused so the container keeps running
         }
     ),
     State.FAILED: frozenset(
@@ -211,8 +214,9 @@ class ExtractionOutcome:
     reason: Reason | None = None
     text: str = field(default="", repr=False)
     text_chars: int = 0
-    # The class of the exception behind a failure, as module.qualname, and
-    # nothing else (D-29-09, issue #18). Last and defaulted, so that the outcome
+    # The class of the exception behind a failure, as module.qualname, or the
+    # signature code of a refused file (D-36-03), and nothing else (D-29-09,
+    # issue #18). Last and defaulted, so that the outcome
     # still pickles across the pipe from the extraction child and every older
     # call site still builds it. Never the message and never a path: a reader
     # quotes what it read, and that is file content (T-02-56). It is a datum
@@ -244,9 +248,13 @@ class ExtractionOutcome:
         )
 
     @classmethod
-    def skipped(cls, reason: Reason) -> ExtractionOutcome:
-        """A file we decided not to index. Carries no text, by construction."""
-        return cls(state=State.SKIPPED, reason=reason)
+    def skipped(cls, reason: Reason, *, detail: str | None = None) -> ExtractionOutcome:
+        """A file we decided not to index. Carries no text, by construction.
+
+        ``detail`` is the signature code of a refused file (D-36-03), a fixed
+        code of a closed list and never a member name or a message.
+        """
+        return cls(state=State.SKIPPED, reason=reason, detail=detail)
 
     @classmethod
     def failed(cls, reason: Reason, *, detail: str | None = None) -> ExtractionOutcome:

@@ -41,13 +41,14 @@ class ProfileController extends OCSController {
 	 *
 	 * 2 means: this companion knows system_file, legacy_format and
 	 * unsupported_variant under skipped (release 1.4.0). 3 means: also
-	 * archive_limit, and the formats of 1.5 (mail, ZIP, .doc, .xls, HEIC)
-	 * (D-31-03, D-31-08). A container may send a code only to a companion that
+	 * archive_limit and blocked_malicious, and the formats of 1.5 (mail, ZIP,
+	 * .doc, .xls, HEIC) (D-31-03, D-31-08, D-36-03). blocked_malicious joins 3
+	 * without a new generation, because 1.5.0 has not reached anyone yet. A container may send a code only to a companion that
 	 * announces a generation which knows it, because QueueController refuses
 	 * the whole failure or skip list with a 400 as soon as one code in it is
 	 * unknown. A 1.3 companion sends no such field, and the container then maps
 	 * the codes onto older ones on the wire; a 1.5 container still treats 2 as
-	 * known and maps only archive_limit for it.
+	 * known and maps only archive_limit and blocked_malicious for it.
 	 */
 	public const VERDICTS_GENERATION = 3;
 

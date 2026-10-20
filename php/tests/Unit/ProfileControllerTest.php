@@ -285,8 +285,9 @@ final class ProfileControllerTest extends TestCase {
 	public function testTheAnswerAnnouncesTheVerdictGeneration(): void {
 		// A 1.4.0 container sends system_file, legacy_format and
 		// unsupported_variant only to a companion that announces 2 or more
-		// here, a 1.5.0 container archive_limit only on 3 (D-31-08);
-		// QueueController refuses a whole list with one unknown code.
+		// here, a 1.5.0 container archive_limit and blocked_malicious only on
+		// 3 (D-31-08, D-36-03); QueueController refuses a whole list with one
+		// unknown code. blocked_malicious joins 3 without a new generation.
 		$this->stored('standard');
 
 		$response = $this->controller($this->backendAppId())->profile();

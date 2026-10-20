@@ -748,8 +748,11 @@
   /**
    * The result card of one lookup, in the order the design contract fixes:
    * state chip, resolved path, reason label, remedy, error class, file id,
-   * last checked. The error class is only there for a failed file whose state
-   * card and container agree (plan 29-06); everywhere else its row stays hidden.
+   * last checked. The error class is there for a failed file whose state card
+   * and container agree (plan 29-06), and the signature code under its own
+   * label "Detail" for a skipped file refused as malicious whose card and
+   * container agree as well (plan 36-06, D-36-03); everywhere else its row
+   * stays hidden.
    *
    * Every element is in the template already and every icon of the inventory
    * with it, so this shows one and hides the others and writes text nodes. A new
@@ -799,7 +802,13 @@
       : reference)
     text('findling-diagnosis-label', label)
     text('findling-diagnosis-remedy', remedy)
-    text('findling-diagnosis-errorclass', t('findling', 'Error class: %s').replace('%s', function () { return errorClass }))
+    // A skipped file carries a signature code and no error (36-WORTLAUT O3),
+    // so it reads "Detail"; a failed one keeps "Error class". The code goes in
+    // through a function replacement as well (WR-04).
+    const detailLabel = view.state === 'skipped'
+      ? t('findling', 'Detail: %s')
+      : t('findling', 'Error class: %s')
+    text('findling-diagnosis-errorclass', detailLabel.replace('%s', function () { return errorClass }))
     text('findling-diagnosis-note', note)
     text('findling-diagnosis-id', t('findling', 'File ID: %s').replace('%s', String(fileId)))
     text('findling-diagnosis-checked', t('findling', 'Last checked %s').replace('%s', ago(elapsed(checkedAt))))
