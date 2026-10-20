@@ -1,5 +1,20 @@
 # Messung: granite-embedding-97m-multilingual-r2 gegen multilingual-e5-small (Plan 35-03, STR-02)
 
+## Die Verdikte, zuerst
+
+**Empfehlung für v1.6: Wechsel nur mit Bedingung.** Der gemessene int8-Build
+von granite verfehlt Bedingung (a). Auf Deutsch rücken 56 Fälle nach vorn und
+42 nach hinten, der Vorzeichentest ergibt p = 0,0944 bei einer Grenze von 0,05,
+obwohl die MRR um 19,2 Prozent steigt. (b) bis (d) sind erfüllt: Keine Sprache
+verliert MRR (mindestens +10,1 Prozent). Auf arm64 liegt `memory.peak` bei
+645,5 MiB gegen 683,7 MiB bei e5, und die kalte Einzelanfrage braucht höchstens
+1071 ms. Die Bedingung lautet: ein vorab festgelegtes, anders gebautes
+granite-Artefakt besteht in genau einem neuen Lauf die unveränderte Regel,
+sonst "kein Wechsel" (Abschnitt 20). Der Opt-in-Vorschlag ist tragfähig mit
+Bedingung: rund 8 Bauteile, 71 MB gzip mehr Image und 5 h 14 min
+Neu-Einbettung auf der 4-GB-Box (Abschnitt 19). Das ausgelieferte Modell
+bleibt in v1.5 e5-small.
+
 Stand: 2026-10-19. Dieser Bericht beantwortet, ob Findling in v1.6 das
 Einbettungsmodell von `intfloat/multilingual-e5-small` auf
 `ibm-granite/granite-embedding-97m-multilingual-r2` wechseln soll. Bis Plan
@@ -278,7 +293,7 @@ int8-Zeile; nur sie geht in die Regel ein. Rohdaten: `rohdaten/03-qualitaet-<mod
 0,4981 gegen 0,5515, Französisch 0,3148 gegen 0,3397. `mean` ist überall
 schlechter, der Schalter greift, die Läufe zählen.
 
-**granite bei 1024 Token:** nicht gemessen, das Werkzeug hat keinen
+**granite bei einer Sequenzlänge von 1024** ist nicht gemessen, das Werkzeug hat keinen
 Längenschalter (Abweichung 17.1 Punkt 3); die Zeile ginge ohnehin nicht in die
 Regel ein.
 
@@ -566,3 +581,157 @@ Rohdaten: `rohdaten/`.
 3. **Rein lokale Auswertung.** Kein neuer Modelllauf, kein Zugriff auf die Box
    oder das Konto; alle Zahlen dieses Plans kommen aus den Rohdaten von 35-09
    und 35-10.
+
+## 18. Anwendung der Regel
+
+Die Regel aus Abschnitt 1, Bedingung für Bedingung, an der ausgelieferten
+Kombination (int8-Modell, int8-Vektoren):
+
+- **Bedingung (a):** Deutsch, 98 bewegte Fälle, 56 nach vorn, 42 nach hinten,
+  einseitiger Vorzeichentest p = 0,0944 gegen die Grenze p < 0,05 (gepaarter
+  t-Wert 2,028, nur ausgewiesen). "Nicht schlechter" ist erfüllt (MRR 0,5279
+  gegen 0,4428, +19,21 Prozent), die verlangte Verbesserung auf dem Niveau 0,05
+  ist es nicht: **nicht erfüllt** (Abschnitt 10, `rohdaten/20-paarvergleich.txt`).
+- **Bedingung (b):** kleinste relative MRR-Änderung granite gegen e5 +10,07
+  Prozent (Englisch; Deutsch +19,21, Französisch +30,48) gegen die Grenze
+  höchstens 5 Prozent Rückgang: **erfüllt** (Abschnitt 10).
+- **Bedingung (c):** arm64, Laden plus erste Charge, `memory.peak` granite
+  645,5 MiB, Abstand zur 2-GiB-Grenze 1402,5 MiB gegen den geforderten
+  Mindestabstand von 1108,3 MiB (e5-Abstand im selben Lauf 1364,3 MiB minus
+  256 MiB); `RssAnon` nach erster Charge 324,0 MiB gegen 435,4 MiB bei e5:
+  **erfüllt** (Abschnitt 13, `rohdaten/12-arm-speicher.txt`).
+- **Bedingung (d):** arm64, Einzelanfrage kalt, granite p50 1065,3 ms und
+  Höchstwert der fünf Starts 1071,2 ms gegen die Decke von 1,5 s: **erfüllt**
+  (Abschnitt 12, `rohdaten/11-arm-latenz.txt`).
+
+Ist das Ergebnis eindeutig? Ja. Der p-Wert liegt fast beim Doppelten der
+Schwelle und nicht an ihr, und alle vier Bedingungen sind auf der Architektur
+gemessen, die die Regel nennt. Eine Owner-Frage nach Abschnitt 1 entsteht
+deshalb nicht. Da (a) verfehlt ist, lautet das Verdikt nach der Regel nicht
+"Wechsel".
+
+Begründung zur verfehlten Bedingung (a): granite ordnet auf Deutsch mehr Fälle
+besser als schlechter, und der Mittelwert der Reziprokränge steigt deutlich.
+Die Verbesserung verteilt sich aber nicht gleichmäßig genug über die Fälle:
+42 von 98 bewegten Fällen rutschen nach hinten, darunter einige weit
+(de-57 von Rang 7 auf 58, de-52 von 3 auf 43, de-98 von 28 auf 57). Der Verlust
+sitzt in der Quantisierung: In fp32 besteht granite den Vorzeichentest auf
+Deutsch klar (54 zu 23, p = 0,000269); der eigene int8-Build kostet granite
+0,1143 MRR, e5 nur 0,0379 (Abschnitt 9). Die Regel bewertet das Artefakt, das
+ausgeliefert würde, und das ist der int8-Build.
+
+## 19. Bewertung des Opt-in-Vorschlags
+
+Vorschlag: "Neuinstallation Standard granite, Bestand optional per Opt-in mit
+Rückweg". Bewertet sind die Stellen aus Abschnitt 5, je mit Aufwand in
+Bauteilen (ein Bauteil ist eine abgeschlossene Änderung mit eigenen Tests) und
+Risiko. Alles gilt für einen Bau in v1.6; dieser Bericht ändert keinen
+Produktcode.
+
+1. **Zwei Modelle im Image, Lizenz.** Zuwachs 123,2 MB unkomprimiert, 71,1 MB
+   gzip (Abschnitt 14). Dazu kommen eine eigene Lizenzdatei, etwa
+   `COPYING.granite-embedding-97m-multilingual-r2` mit dem Apache-2.0-Volltext
+   neben `COPYING.multilingual-e5-small` (`backend/Dockerfile` Zeile 389 und
+   die Prüfung ab Zeile 427), weil die Revision keine LICENSE-Datei trägt, ein
+   Abschnitt in `THIRD-PARTY.md` wie der für e5 (ab Zeile 416) und die
+   Erweiterung von `backend/tests/test_third_party_versions.py`, dazu ein
+   zweiter int8-Build im Image-Build mit eigener Prüfsumme. Aufwand: 1 Bauteil.
+   Risiko: niedrig. Möglich ist auch ein Weg ohne Zuwachs, wie ihn die
+   fp32-Gewichte heute gehen (`backend/src/findling/embed/weights.py`, MOD-02):
+   die Datei auf Admin-Aktion aus dem eigenen Release holen und gegen eine feste
+   sha256 prüfen. Für Neuinstallationen mit granite als Standard passt dieser
+   Weg nicht, weil Zero-Config und Offline-Installation das Modell im Image
+   verlangen.
+2. **Embedding-Marke und Drift.** Der Modellname steht als Konstante
+   `EMBEDDING_MODEL = "multilingual-e5-small"`
+   (`backend/src/findling/store/vectors.py:279`) und geht in `embedding_mark`
+   ein (`vectors.py:282`). Ein Wechsel ist damit eine Drift, und die löst heute
+   "alles neu einbetten" aus. Bei einer Neuinstallation gibt es keinen Bestand
+   und keine Drift. Beim Opt-in im Bestand ist die Drift gewollt. Die Konstante
+   muss dafür aus dem aktiven Modellprofil kommen. Während der Neu-Einbettung
+   passen e5-Bestand und granite-Anfrage nicht zusammen. Aufwand: 1 Bauteil.
+   Risiko: mittel. Ein falsch gesetzter Name ergibt einen gemischten Bestand,
+   der stumm schlechtere Treffer liefert, genau den Fall, den die Marke
+   verhindern soll.
+3. **Übergangszeit, zweite `vectors.db`, atomarer Wechsel, Rückweg.** Zwei
+   Wege: (i) Semantik während der Neu-Einbettung aus, nur Volltext, auf der
+   4-GB-Box rund 5 h 14 min (Abschnitt 15); (ii) eine zweite `vectors.db` je
+   Modell, die im Hintergrund gefüllt und am Ende atomar umgeschaltet wird.
+   Den Rückweg bildet das Behalten der alten Datei. Platz bei 438 Byte je Chunk
+   (`docs/embeddings.md`, Tabelle "Byte je Chunk"): 148.204 Chunks x 438 Byte =
+   64,9 MB für die granite-Datei bei 52.111 Dokumenten, die e5-Datei mit
+   64,3 MB bleibt daneben liegen. Weg (ii) ist für den Rückweg nötig, sonst
+   kostet jeder Rückweg eine weitere volle Neu-Einbettung. Aufwand: 2 Bauteile
+   (Datei je Modell samt Umschalter; Rückweg samt Anzeige auf der Admin-Seite).
+   Risiko: mittel bis hoch. Neustart, Upgrade und Abbruch mitten in der
+   Neu-Einbettung brauchen eigene Prüfpfade, wie in der Launch-Härtung
+   verlangt.
+4. **Chunker, Pad-Token, Pooling, Präfixe.** Der Wrapper ist an diesen Stellen
+   e5-fest: Präfixe `query: ` und `passage: `
+   (`backend/src/findling/embed/model.py:83` und `:84`), Pad-Marke `<pad>` mit
+   Rückfall auf `[PAD]` und id 0 (`model.py:108` und `:109`, angewandt in
+   `model.py:316` bis `:325`), Mittelwert-Pooling (`model.py:773` und `:774`)
+   und `token_type_ids` als Nullen (`model.py:767`). granite braucht CLS-Pooling,
+   keine Präfixe und das Pad-Token `<|endoftext|>` (id 179935) aus seiner
+   `tokenizer_config.json`. Der Chunker schneidet mit dem Tokenizer des Modells
+   (`backend/src/findling/embed/chunker.py:66`). Mit granite entstehen andere
+   Chunkgrenzen und 2,844 statt 2,818 Chunks je Dokument (Abschnitt 15).
+   Aufwand: 1 Bauteil für ein Modellprofil (Präfixe, Pooling, Pad-Token,
+   Dateien) und 1 Bauteil für Chunker-Tests je Tokenizer. Risiko: mittel. Die
+   Positivkontrolle zeigt, was ein vergessenes Pooling kostet: auf Deutsch MRR
+   0,3582 statt 0,5279 (Abschnitt 9), und zwar ohne jeden Fehler im Log.
+5. **Distanzriegel und `SIMILAR_CEILING`.** `VECTOR_MAX_DISTANCE = 86.5` und
+   `VECTOR_DISTANCE_BAND = 14.0` (`backend/src/findling/config.py:952` und
+   `:954`, gemessen in `docs/measurements/2026-09-06-vektordistanzen/`) und
+   `SIMILAR_CEILING = 54.5` (`config.py:977`, gemessen in
+   `docs/measurements/2026-10-aehnlich-distanzen/`) gelten nur für e5 auf der
+   int8-L2-Skala. Der Kommentar in `config.py` sagt das selbst: "A different
+   model needs a new measurement, not a screw." Für granite sind beide
+   Messungen neu zu fahren, und die drei Werte werden Standardwerte je
+   Modellprofil (die beiden Distanzriegel sind heute stille Stellschrauben per
+   Umgebungsvariable, `SIMILAR_CEILING` ist eine feste Konstante). Aufwand:
+   2 Bauteile (zwei Messungen mit vorab festgelegter Regel, dazu die Werte je
+   Profil). Risiko: hoch, wenn es ausgelassen
+   wird. Mit e5-Werten würde granite Treffer falsch abschneiden oder die Ansicht
+   "Ähnliche Dokumente" mit fremden Dokumenten füllen.
+6. **Dauer der Neu-Einbettung auf der 4-GB-Box.** Im Bestand mit 52.111
+   Dokumenten rund 5 h 14 min reine Einbettung (e5 zum Vergleich 4 h 26 min).
+   Die Obergrenze für den gekoppelten Fall liegt bei 31 h 23 min (Abschnitt 15).
+   Für eine Admin-Aktion, die über Nacht läuft, ist das tragbar. Aufwand:
+   0 Bauteile (nur ein Satz in der Admin-Doku). Risiko: niedrig.
+
+Summe: rund 8 Bauteile, dazu zwei neue Messungen.
+
+**Gesamturteil zum Vorschlag: tragfähig mit Bedingung.** Technisch trägt der
+Vorschlag. Das Image wächst um 71 MB gzip, der Speicher auf arm64 sinkt sogar,
+und die Neu-Einbettung passt in eine Nacht. Die Bedingungen sind: ein
+Modellprofil statt der e5-festen Konstanten (Punkte 2 und 4), eine zweite
+`vectors.db` mit atomarem Wechsel als Rückweg (Punkt 3) und neue Schwellen aus
+eigenen Messungen (Punkt 5). Vorher steht aber eine Voraussetzung, die den Bau
+erst sinnvoll macht: Das auszuliefernde granite-Artefakt muss die Regel aus
+Abschnitt 1 erfüllen. Das tut der gemessene int8-Build nicht (Abschnitt 18).
+
+## 20. Empfehlung für v1.6
+
+**Wechsel nur mit Bedingung: Ein granite-Artefakt in der Fassung, die
+ausgeliefert würde, erfüllt in einem neuen Lauf Bedingung (a) auf den
+unveränderten 120 deutschen Fällen nach der unveränderten Regel, und (b) bis (d)
+halten für genau dieses Artefakt. Ohne diesen Nachweis gilt "kein Wechsel".**
+
+Abgeleitet aus Abschnitt 18: (b), (c) und (d) sind erfüllt, (a) ist verfehlt.
+Der gemessene int8-Build wird deshalb nicht empfohlen. Der Verlust sitzt in der
+Quantisierung (fp32 besteht (a) klar, siehe Abschnitt 10). Darum ist ein anders
+gebautes Artefakt die einzige Bedingung, unter der ein Wechsel offen bleibt.
+Denkbar, aber nicht gemessen sind ein int8-Build mit unquantisierter
+Einbettungstabelle (rund 300 MB nach der Rechnung in Abschnitt 3) oder fp32
+selbst (390 MB). Beide ändern den Image-Zuwachs aus Abschnitt 14 und müssen (c)
+und (d) auf arm64 neu belegen.
+
+Damit die Bedingung die Regel nicht aufweicht: Jeder weitere Lauf auf denselben
+Fällen ist ein neuer Versuch, und mehrere Versuche, bis einer durchkommt,
+machen den Test wertlos. Der Vorschlag ist deshalb: genau ein Artefakt, das vor
+dem Lauf festgelegt und vom Owner abgenommen wird, ein Lauf, und die Regel aus
+Abschnitt 1 bleibt wortgleich. Verfehlt auch dieser Lauf (a), lautet das Urteil
+für v1.6 "kein Wechsel".
+
+Das ausgelieferte Modell bleibt in v1.5 e5-small.
