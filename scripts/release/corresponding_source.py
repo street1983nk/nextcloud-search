@@ -56,7 +56,7 @@ import sys
 import tempfile
 import urllib.request
 from pathlib import Path
-from typing import NamedTuple
+from typing import Final, NamedTuple
 
 REPOSITORY = "street1983nk/nextcloud-search"
 IMAGE = "ghcr.io/street1983nk/findling_backend:dev"
@@ -78,6 +78,12 @@ class Archive(NamedTuple):
     licence: str
 
 
+# The pillow-heif release whose libheif/build_libs.py the three library rows
+# below were read out of (LIBX265_URL, LIBDE265_URL, LIBHEIF_URL). A pin bump in
+# backend/pyproject.toml without reading the recipe again leaves this stamp
+# behind uv.lock, and backend/tests/test_corresponding_source.py turns red.
+RECIPE_READ_FOR_PILLOW_HEIF: Final = "1.8.1"
+
 ARCHIVES: tuple[Archive, ...] = (
     Archive(
         project="pillow-heif",
@@ -89,10 +95,10 @@ ARCHIVES: tuple[Archive, ...] = (
     ),
     Archive(
         project="x265",
-        name="x265_4.2.tar.gz",
-        version="4.2",
-        url="https://bitbucket.org/multicoreware/x265_git/downloads/x265_4.2.tar.gz",
-        sha256="40b1ea0453e0309f0eba934e0ddf533f8f6295966679e8894e8f1c1c8d5e1210",
+        name="x265_4.3.tar.gz",
+        version="4.3",
+        url="https://github.com/Multicorewareinc/x265/releases/download/4.3/x265_4.3.tar.gz",
+        sha256="83c53e4c8bbb8f1e33ed59e10a7d621d1d7801ca853910c3eb41f038b8ffb121",
         licence="GPL-2.0-or-later",
     ),
     Archive(
@@ -105,10 +111,10 @@ ARCHIVES: tuple[Archive, ...] = (
     ),
     Archive(
         project="libheif",
-        name="libheif-1.23.4.tar.gz",
-        version="1.23.4",
-        url="https://github.com/strukturag/libheif/releases/download/v1.23.4/libheif-1.23.4.tar.gz",
-        sha256="d0c02b4b0e978f34a1974b6f3eea7975a537bf7a9195ffeea38e7242ff316fdd",
+        name="libheif-1.23.6.tar.gz",
+        version="1.23.6",
+        url="https://github.com/strukturag/libheif/releases/download/v1.23.6/libheif-1.23.6.tar.gz",
+        sha256="4484346dc5995319dbc11e3a1c35d0a2ec46511ce370900869337fd2c7033125",
         licence="LGPL-3.0",
     ),
 )

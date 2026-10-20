@@ -208,15 +208,15 @@ Added in phase 31 (plan 31-01) for HEIC and HEIF photos. pillow-heif replaces
 pi-heif, its decode only sibling, which upstream discontinued with pillow-heif
 1.5.0. The source code of pillow-heif is BSD-3-Clause; its binary wheels are
 not, because they bundle three native libraries. The list below is read out of
-`LICENSES_bundled.txt` of the installed 1.8.0 wheel (cp313, manylinux x86_64 and
+`LICENSES_bundled.txt` of the pinned 1.8.1 wheel (cp313, manylinux x86_64 and
 aarch64, identical text) and checked against the files in `pillow_heif.libs`
-and the version strings compiled into them on 2026-10-11.
+and the version strings compiled into them on 2026-10-20 (plan 36-02).
 
 | Library | Version | Licence | File in the wheel |
 |---|---|---|---|
-| libheif | 1.23.4 | LGPL-3.0 | `pillow_heif.libs/libheif-<hash>.so.1.23.4` |
+| libheif | 1.23.6 | LGPL-3.0 | `pillow_heif.libs/libheif-<hash>.so.1.23.6` |
 | libde265 | 1.1.3 | LGPL-3.0 | `pillow_heif.libs/libde265-<hash>.so.0.2.3` |
-| x265 | 4.2 (`4.2+1-e444744`) | GPL-2.0-or-later | `pillow_heif.libs/libx265-<hash>.so.216` |
+| x265 | 4.3 (`4.3+1-e9b8812`) | GPL-2.0-or-later | `pillow_heif.libs/libx265-<hash>.so.217` |
 
 `LICENSES_bundled.txt` says "GPLv2" for x265 and for the wheel as a whole; the
 source files of x265 say "either version 2 of the License, or (at your option)
@@ -228,10 +228,10 @@ libheif and libde265 are LGPL-3.0 and are linked dynamically, as separate shared
 objects next to the extension module, so they stay replaceable.
 
 Findling only ever decodes. The x265 encoder is never called, but it lies in the
-image (about 11.4 MB on arm64 and 22.8 MB on amd64, unpacked), so it is
+image (about 11.4 MB on arm64 and 22.9 MB on amd64, unpacked), so it is
 distributed and its licence obligations apply in full, including the duty to
 offer the complete corresponding source. `LICENSES_bundled.txt` points at the
-upstream tags (libheif `v1.23.4`, libde265 `v1.1.3`, x265 `4.2`); the exact
+upstream tags (libheif `v1.23.6`, libde265 `v1.1.3`, x265 `4.3`); the exact
 archives, their checksums and the mirror that keeps them available are the next
 section.
 
@@ -247,17 +247,17 @@ archives the manylinux wheels were built from are pinned here by SHA-256 and
 mirrored as release assets. The build recipe that turns them into the wheels is
 `libheif/build_libs.py` inside the pillow-heif sdist (it holds the three
 download URLs below and the cmake options); the upstream wheel workflow
-(`.github/workflows/wheels.yml` at tag `v1.8.0`, commit
-`1486e9fbf38d9e1b52706cba8182ab03bfa3cfed`) runs exactly that script as
+(`.github/workflows/wheels.yml` at tag `v1.8.1`, commit
+`0ed53791bef34eeda0182b7a26476f99445922de`) runs exactly that script as
 `CIBW_BEFORE_ALL_LINUX`. The sdist is therefore the carrier of the build
 scripts, and it is one of the four archives.
 
 | Archive | Version | URL | SHA-256 | Licence |
 |---|---|---|---|---|
 | `pillow_heif-1.8.1.tar.gz` | 1.8.1 | https://files.pythonhosted.org/packages/source/p/pillow_heif/pillow_heif-1.8.1.tar.gz | `521ebffb8a181d56c3904e5a61f20903edee0d9d3275967b8fb345f866215c06` | BSD-3-Clause |
-| `x265_4.2.tar.gz` | 4.2 | https://bitbucket.org/multicoreware/x265_git/downloads/x265_4.2.tar.gz | `40b1ea0453e0309f0eba934e0ddf533f8f6295966679e8894e8f1c1c8d5e1210` | GPL-2.0-or-later |
+| `x265_4.3.tar.gz` | 4.3 | https://github.com/Multicorewareinc/x265/releases/download/4.3/x265_4.3.tar.gz | `83c53e4c8bbb8f1e33ed59e10a7d621d1d7801ca853910c3eb41f038b8ffb121` | GPL-2.0-or-later |
 | `libde265-1.1.3.tar.gz` | 1.1.3 | https://github.com/strukturag/libde265/releases/download/v1.1.3/libde265-1.1.3.tar.gz | `554228bd17788c99a7e63b37ab5634722190e6e2bf60c1dcb01cef328e133905` | LGPL-3.0 |
-| `libheif-1.23.4.tar.gz` | 1.23.4 | https://github.com/strukturag/libheif/releases/download/v1.23.4/libheif-1.23.4.tar.gz | `d0c02b4b0e978f34a1974b6f3eea7975a537bf7a9195ffeea38e7242ff316fdd` | LGPL-3.0 |
+| `libheif-1.23.6.tar.gz` | 1.23.6 | https://github.com/strukturag/libheif/releases/download/v1.23.6/libheif-1.23.6.tar.gz | `4484346dc5995319dbc11e3a1c35d0a2ec46511ce370900869337fd2c7033125` | LGPL-3.0 |
 
 `scripts/release/corresponding_source.py` carries the same four rows as its
 constant `ARCHIVES` (`backend/tests/test_corresponding_source.py` holds table and

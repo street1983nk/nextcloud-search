@@ -37,6 +37,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "release" / "corresponding_source.py"
 THIRD_PARTY = REPO_ROOT / "THIRD-PARTY.md"
 PYPROJECT = REPO_ROOT / "backend" / "pyproject.toml"
+UV_LOCK = REPO_ROOT / "backend" / "uv.lock"
 MODULE = "findling_corresponding_source"
 TABLE_HEADING = "### Corresponding source of the native libraries in the image"
 
@@ -91,25 +92,61 @@ def test_the_list_holds_the_sdist_and_the_three_libraries(script: ModuleType) ->
     assert set(projects) == {"pillow-heif", "x265", "libheif", "libde265"}
     assert projects["pillow-heif"].version == _pin("pillow-heif")
     assert projects["pillow-heif"].name == f"pillow_heif-{_pin('pillow-heif')}.tar.gz"
-    # The versions LICENSES_bundled.txt of the pinned wheel names.
-    assert projects["libheif"].version == "1.23.4"
+    # The versions build_libs.py of the pinned sdist downloads and
+    # LICENSES_bundled.txt of the pinned wheel names (pillow-heif 1.8.1).
+    assert projects["libheif"].version == "1.23.6"
     assert projects["libde265"].version == "1.1.3"
-    assert projects["x265"].version == "4.2"
+    assert projects["x265"].version == "4.3"
     assert projects["x265"].licence == "GPL-2.0-or-later"
     for archive in script.ARCHIVES:
         assert re.fullmatch(r"[0-9a-f]{64}", archive.sha256), archive.name
         assert archive.url.startswith("https://"), archive.name
         assert archive.url.endswith("/" + archive.name), archive.name
+        # File name and URL carry the version the row claims, so a half edited
+        # row (new name, old URL) cannot pass.
+        assert archive.version in archive.name, archive.name
+        if archive.project != "pillow-heif":
+            # The release directory of the three libraries names the tag.
+            assert archive.version in archive.url.removesuffix("/" + archive.name), archive.url
+
+
+def _locked(package: str) -> str:
+    """The version uv.lock resolves for a package, read from its [[package]] block."""
+    data = tomllib.loads(UV_LOCK.read_text(encoding="utf-8"))
+    for entry in data["package"]:
+        if entry["name"] == package:
+            return entry["version"]
+    raise AssertionError(f"{package} is not in uv.lock")
+
+
+def test_the_recipe_stamp_follows_the_locked_pillow_heif(script: ModuleType) -> None:
+    """A pillow-heif bump without a fresh reading of build_libs.py turns this red.
+
+    The three library versions are read out of build_libs.py of one pillow-heif
+    release; RECIPE_READ_FOR_PILLOW_HEIF names that release. When Dependabot
+    moves the pin, the stamp no longer matches and the list has to be read again
+    (D-36-15, finding F1 of phase 36).
+    """
+    projects = {a.project: a for a in script.ARCHIVES}
+    locked = _locked("pillow-heif")
+    assert locked == script.RECIPE_READ_FOR_PILLOW_HEIF
+    assert projects["pillow-heif"].version == locked
+
+
+def test_the_stamp_gate_fires_on_a_stale_stamp(script: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(script, "RECIPE_READ_FOR_PILLOW_HEIF", "1.8.0")
+    with pytest.raises(AssertionError):
+        test_the_recipe_stamp_follows_the_locked_pillow_heif(script)
 
 
 def test_verify_only_fails_on_a_manipulated_file(script: ModuleType, tmp_path: Path) -> None:
     genuine = b"genuine archive bytes"
     digest = hashlib.sha256(genuine).hexdigest()
-    (tmp_path / "x265_4.2.tar.gz").write_bytes(genuine)
-    expect = ["--expect", f"x265_4.2.tar.gz={digest}"]
+    (tmp_path / "x265_4.3.tar.gz").write_bytes(genuine)
+    expect = ["--expect", f"x265_4.3.tar.gz={digest}"]
     # Positive control: the genuine file passes.
     assert script.main(["--verify-only", str(tmp_path), *expect]) == 0
-    (tmp_path / "x265_4.2.tar.gz").write_bytes(genuine + b"x")
+    (tmp_path / "x265_4.3.tar.gz").write_bytes(genuine + b"x")
     assert script.main(["--verify-only", str(tmp_path), *expect]) != 0
 
 

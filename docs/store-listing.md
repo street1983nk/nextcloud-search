@@ -2361,6 +2361,14 @@ geändert; die Änderung gehört zu REL-05.
   `libheif/build_libs.py` des neuen sdist und aus `LICENSES_bundled.txt` des
   neuen Wheels); `backend/tests/test_corresponding_source.py` hält beide und den
   Pin zusammen.
+- [x] **Stand für 1.5.0:** x265 4.3, libheif 1.23.6 (pillow-heif 1.8.1, Plan
+  36-02), libde265 bleibt 1.1.3. Gelesen aus `libheif/build_libs.py` des sdist
+  1.8.1 und aus `LICENSES_bundled.txt` der Linux-Wheels (x86_64 und aarch64
+  gleichlautend); SHA-256 aus eigenem Download, gegengeprüft am Digest der
+  GitHub-Release-Assets. Der Stempel `RECIPE_READ_FOR_PILLOW_HEIF` im Skript
+  wird rot, sobald `backend/uv.lock` eine andere pillow-heif-Version auflöst.
+  Ein neuer Spiegel `source-1.5-dev.3` für das dev-Image wird hier nicht
+  angelegt (Owner-Wort in Plan 36-13).
 
 `publish --tag` des Skripts legt ein Pre-Release mit den vier Quellpaketen im
 selben Aufruf an (nie als latest markiert), weist ein schon veröffentlichtes

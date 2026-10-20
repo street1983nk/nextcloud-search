@@ -24,13 +24,18 @@ What this gate holds:
 
 from __future__ import annotations
 
+import importlib.util
 import re
+import sys
 import tomllib
 from pathlib import Path
+from types import ModuleType
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 THIRD_PARTY = REPO_ROOT / "THIRD-PARTY.md"
 PYPROJECT = REPO_ROOT / "backend" / "pyproject.toml"
+SCRIPT = REPO_ROOT / "scripts" / "release" / "corresponding_source.py"
+HEIF_LIBRARIES = ("libheif", "libde265", "x265")
 
 _PIN = re.compile(r"^(?P<name>[A-Za-z0-9_.-]+)(?:\[[^\]]*\])?==(?P<version>[^\s;]+)$")
 _CELL_NAME = re.compile(r"^`(?P<name>[A-Za-z0-9_.-]+)(?:\[[^\]]*\])?`$")
@@ -128,3 +133,33 @@ def test_the_gate_fires_on_a_stale_row() -> None:
     assert rows == {"pypdf": "0.0.1", "nc-py-api": "9.9.9"}
     pins = _pins()
     assert rows["pypdf"] != pins["pypdf"]
+
+
+def _archives() -> ModuleType:
+    specification = importlib.util.spec_from_file_location("findling_corresponding_source_versions", SCRIPT)
+    if specification is None or specification.loader is None:  # pragma: no cover
+        raise RuntimeError(f"the script is not at {SCRIPT}")
+    module = importlib.util.module_from_spec(specification)
+    sys.modules[specification.name] = module
+    specification.loader.exec_module(module)
+    return module
+
+
+def _library_rows(text: str) -> dict[str, str]:
+    """The version cell of the libheif, libde265 and x265 rows of the wheel table."""
+    rows: dict[str, str] = {}
+    for line in text.splitlines():
+        if not line.startswith("| "):
+            continue
+        cells = _split(line)
+        if cells[0] in HEIF_LIBRARIES and len(cells) == 4:
+            assert cells[0] not in rows, f"two rows for {cells[0]}"
+            rows[cells[0]] = cells[1].split(" ", 1)[0]
+    return rows
+
+
+def test_the_wheel_libraries_name_the_versions_of_the_source_list() -> None:
+    """THIRD-PARTY.md names the same three versions the corresponding source holds."""
+    module = _archives()
+    from_script = {a.project: a.version for a in module.ARCHIVES if a.project in HEIF_LIBRARIES}
+    assert _library_rows(THIRD_PARTY.read_text(encoding="utf-8")) == from_script
