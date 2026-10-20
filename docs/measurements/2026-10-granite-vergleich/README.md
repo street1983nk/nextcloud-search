@@ -241,3 +241,25 @@ Rohdaten: `rohdaten/`.
    (`rohdaten/02-int8.txt`). Die IBM-Datei `onnx/model_quint8_avx2.onnx` ist
    trotzdem als zusätzlicher Vergleichspunkt mitgemessen, wie in Abschnitt 3
    vorgesehen, ohne Gewicht für die Regel.
+5. **Einzelanfrage nicht über den Suchpfad.** Der Modell-Wrapper des Produkts
+   ist e5-fest (Mittelwert-Pooling, Präfixe, Pad-Token `<pad>`); granite liefe
+   dort nur mit einer Codeänderung (Pitfall 12), und Plan 35-09 ändert keinen
+   Produktcode. Die Einzelanfrage beider Modelle misst deshalb
+   `skripte/04-anfrage-latenz.py` mit onnxruntime direkt, im ausgelieferten
+   Image, mit gleichem Tokenizer-Umgang und gleichen Sitzungsoptionen. Kalt
+   heißt: Tokenizer und Sitzung laden plus erste Anfrage in einem frischen
+   Container (fünf Starts je Modell); warm heißt: 100 Anfragen aus `de.jsonl`
+   nach zehn Vorläufen. Der Durchsatz läuft unverändert über
+   `findling.embed.bench --mode tokens-per-second`.
+6. **Freier Speicher bei der Latenz.** Abschnitt 4 verlangt rund 4 GB frei.
+   Der Windows-Host hatte vor Schritt 4 rund 3,0 GB frei (Rest belegt durch den
+   laufenden Entwicklungsstapel, der nicht angehalten werden durfte); die
+   Docker-VM, in der gemessen wurde, hatte 6,2 GB verfügbar und keinen
+   Swap-Verbrauch. Beide Werte stehen vor jedem Block in
+   `rohdaten/04-latenz-amd64.txt`. Die Abbruchgrenze von 1 GB aus D-35-11 war
+   nie erreicht. Die Windows-Auslagerungsdatei ist immer teilweise belegt; als
+   Swap zählt deshalb nur ihr Wachstum während eines Schritts.
+7. **Image-Zuwachs ohne Probe-Image.** Kein Probe-Build wegen des Speichers;
+   der Zuwachs kommt aus den Dateigrößen. Für den Lizenztext steht
+   `backend/docker/licenses/COPYING.sqlite-vec` (Apache-2.0-Volltext), weil die
+   Revision keine LICENSE-Datei trägt.
