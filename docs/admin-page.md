@@ -121,11 +121,15 @@ Bestehende Installationen registrieren den Job mit dem Update auf 1.4.0, weil
 Nextcloud den Block `<background-jobs>` der `info.xml` bei Installation und
 Update liest.
 
-Eine Grenze bleibt bewusst: Zeilen von Mounts, die aus der Mount-Liste
-verschwinden (ein gelöschter Nutzer, ein abgeschalteter Schalter), bleiben
-stehen. Der Container behält die Dokumente eines solchen Mounts nach heutigem
-Stand, weil sein Abgleich nur gelistete Mounts läuft. Löschte die Nachzählung
-die Zeile, stünde der Zähler auf Dauer über dem Nenner.
+Mounts, die aus der Mount-Liste verschwinden, regelt seit 1.5 der Abgleich
+(M-32-02). Dokumente gelöschter Nutzer und gelöschter Speicher verlassen den
+Index im nächsten vollständigen Abgleich. Team-Ordner und externe Speicher, die
+per Findling-Schalter abgewählt sind, ebenso, ohne Karenz. Ein Speicher, der
+noch existiert, aber für niemanden mehr eingebunden ist, behält seine Dokumente
+30 Tage und verliert sie danach. Ist er vorher wieder eingebunden, verfällt die
+Frist, und ein neues Fehlen beginnt sie von vorn. Die Einzelheiten stehen in
+`docs/reconcile.md`. Die Zählzeile eines solchen Mounts löscht die Nachzählung
+weiterhin nicht.
 
 Seit Issue #25 zählen diese stehengebliebenen Zeilen aber nicht mehr in den
 Nenner: `totals()` summiert nur noch über die Storages, die aktuell einen

@@ -256,6 +256,26 @@ die Route noch nicht kennt. Dann gelten alle fehlenden Speicher als verschwunden
 und es greift nur die Karenz. Ein Verlust der Tabelle `vanished_storages` setzt
 die Karenz neu und kostet nie ein Dokument.
 
+Die IDs reisen als `ids[0]=7&ids[1]=14`, nicht als wiederholtes `ids[]`.
+nc_py_api hängt `format=json` über einen Hook an jede OCS-URL und baut die Query
+dabei aus einem Dict neu. Von wiederholten Schlüsseln bliebe nur der letzte,
+und jeder gelöschte Speicher außer dem letzten eines Bandes bekäme einen Stempel
+statt der Sofortlöschung (gefunden im Live-Beleg von Plan 36-05).
+
+**Wann ist ein Speicher "für niemanden eingebunden"?** Die Mountliste folgt
+`oc_mounts`, und Nextcloud 34 hält `oc_mounts` für externe Speicher bei jeder
+Änderung der Anwendbarkeit sofort synchron (Vorprüfung in Plan 36-05). Wer in
+der Anwendbarkeit steht, hat sofort eine Zeile, auch ohne je angemeldet gewesen
+zu sein. Ein Speicher, der nur noch einer leeren Gruppe zugeordnet ist, hat
+keine Zeile mehr und läuft in die Karenz. Das Löschen einer files_external-
+Konfiguration entfernt die Mounts, lässt die Zeile in `oc_storages` aber stehen.
+Auch das ist für Findling ein verschwundener Speicher mit Karenz, kein
+gelöschter.
+
+Belegt ist die Regel zweimal: dauerhaft im CI-Job `reconcile-and-dach` gegen
+eine echte Nextcloud (gelöschter Nutzer, Kontrollnutzer, drei externe Speicher,
+drei Zyklen) und einmal live auf der Entwicklungsinstanz mit Positivkontrolle.
+
 ## Warum der Abgleich nichts in den Index schreibt
 
 Es gibt genau einen Index-Schreiber im Prozess, und er gehört dem Poller. Ein
