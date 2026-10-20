@@ -460,6 +460,17 @@ Selbsttest dieses Laufs (`rohdaten/02-selftest.txt`): 0,0000 / 97,3088 /
   Werkzeug nicht aus.
 - **Kein OCR-Rauschen**, wie in Abschnitt 8. Nur e5-small int8; ein
   Modellwechsel verlangt eine neue Messung mit Regel vor dem Lauf.
+- **Mass der Route gegen Mass dieser Messung (A1, Audit 35-12):** Gemessen
+  wurde hier Centroid gegen Centroid (Dokument gegen Dokument); die Route aus
+  Plan 35-05 vergleicht den Centroid der Quelle gegen einzelne Abschnitte der
+  Nachbarn und wertet je Dokument das Minimum. Die beiden Masse koennen in
+  beide Richtungen voneinander abweichen (die Renormierung des Centroids kann
+  Aehnlichkeiten anheben); der Abstand von knapp 10 Punkten zwischen dem
+  entferntesten Fassungspaar (45,63) und dem naechsten unbeteiligten Paar
+  (55,41) ist der Spielraum, den die Decke 54,5 dafuer hat. Live
+  gegengeprueft im Audit 35-12: die byte-gleiche Kopie erscheint als
+  Nachbar, thematisch nur verwandte Dokumente fallen wie in der Gruppenprobe
+  ueberwiegend heraus, fremde nie.
 
 ### 10.4 Nachvollziehen
 
