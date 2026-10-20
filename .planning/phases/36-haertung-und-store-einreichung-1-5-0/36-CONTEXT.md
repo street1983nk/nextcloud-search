@@ -68,6 +68,29 @@ Beleg in docs/store-listing.md). Requirements: HART-06, REL-05.
   docs/store-listing.md und READMEs pruefen, DANN Owner-Abnahme, dann
   2x Submission mit Beleg in docs/store-listing.md.
 
+### Nachtraege aus der Research-Runde (Owner-Entscheide 20.10.2026)
+- **D-36-13:** Die CI-Upgrade-Strecke startet von v1.4.3 (tatsaechlicher
+  Store-Stand), nicht v1.4.2; der ROADMAP-Wortlaut wird entsprechend
+  gelesen. UPGRADE_FROM_TAG erst NACH dem Versionsbump auf 1.5.0 umstellen
+  (sonst "Store upgrade 4" rot).
+- **D-36-14:** Ein ABGESCHALTETER Findling-Schalter an einem externen
+  Speicher zaehlt NICHT als "verschwunden": keine Karenz, Dokumente
+  verlassen den Index ueber die bestehende Mechanik wie bei Ausschluessen.
+  Karenz nur fuer Speicher, die aus oc_storages/Mounts echt weg sind.
+- **D-36-15:** Quellpakete im Release: BEIDES im selben gh-release-create-
+  Aufruf: git archive des Tags PLUS die vier GPL-Quellpakete. Vorher den
+  Versionsdrift fixen: pillow-heif 1.8.1 bundelt x265 4.3 + libheif 1.23.6,
+  corresponding_source.py und THIRD-PARTY.md nennen noch 4.2/1.23.4
+  (RELEASE-BLOCKER, vor dem Tag).
+- **D-36-16:** Store-Text 1.5.0 bekommt eine Faktenzeile fuer "Aehnliche
+  Dokumente" plus CHANGELOG-Eintrag; Wortlaut de/en/fr durch die
+  Store-Text-Abnahme (REL-05).
+- **D-36-17:** blocked_malicious nur bei KLARER Angriffssignatur
+  (Traversal-Pfade, extreme Kompressionsverhaeltnisse, absurde
+  Pixelzahlen); Grenzfaelle wie ehrlich grosse Dateien behalten bestehende
+  Urteile (archive_limit bleibt). Exakte Schwellen und Wortlaute im
+  Vorabplan (D-36-04).
+
 ### Claude's Discretion
 - Definition "verschwundener externer Speicher" und die Abgleich-Mechanik
   (Research klaert die Storage-Semantik in oc_storages/oc_filecache).
