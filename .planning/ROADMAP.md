@@ -311,7 +311,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 36-02-PLAN.md: httpx/httpcore auf WARNING, Quellliste pillow-heif 1.8.1 (Release-Blocker), Quellpakete und git archive in release.yml
+- [x] 36-02-PLAN.md: httpx/httpcore auf WARNING, Quellliste pillow-heif 1.8.1 (Release-Blocker), Quellpakete und git archive in release.yml
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -384,7 +384,7 @@ Plans:
 | 33. Ausschlussmuster und Admin-Feinschliff | v1.5 | 11/11 | Executed, verification pending | - |
 | 34. Umstiegsweg | v1.5 | 6/6 | Complete   | 2026-10-19 |
 | 35. Stretch: Aehnliche Dokumente und Spikes | v1.5 | 14/13 | Complete    | 2026-10-20 |
-| 36. Haertung und Store-Einreichung 1.5.0 | v1.5 | 1/16 | In Progress|  |
+| 36. Haertung und Store-Einreichung 1.5.0 | v1.5 | 2/16 | In Progress|  |
 
 ## Nach v1.3 (Wiedervorlage)
 
