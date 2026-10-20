@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
-status: executing
-stopped_at: Phase 35 abgeschlossen, Audit 35-12 geschlossen
-last_updated: "2026-10-20T06:30:00.000Z"
+status: ready_to_plan
+stopped_at: Phase 35 complete (14/13) — ready to discuss Phase 36
+last_updated: 2026-10-20T06:36:14.410Z
 last_activity: 2026-10-20 -- Phase 35 Audit geschlossen, STR-01 bis STR-03 abgehakt
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 62
-  completed_plans: 49
+  completed_plans: 63
   percent: 71
 ---
 
@@ -21,14 +21,14 @@ progress:
 Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .planning/MILESTONES.md (v1.0 bis v1.4).
 
 **Core Value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 35 , stretch-aehnliche-dokumente-und-spikes
+**Current focus:** Phase 36 — haertung und store einreichung 1.5.0
 
 ## Current Position
 
-Phase: 35 (stretch-aehnliche-dokumente-und-spikes), ABGESCHLOSSEN (Verifier offen)
-Plan: 13 of 13 (plus Nachmessung 35-04B)
-Status: Audit 35-12 geschlossen, Anforderungen abgehakt
-Last activity: 2026-10-20 -- Phase 35 Audit geschlossen, STR-01 bis STR-03 abgehakt
+Phase: 36
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-10-20
 
 Progress: [██████████] 100%
 
