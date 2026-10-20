@@ -285,7 +285,7 @@ Plans:
 
 **Wave 11** *(blocked on Wave 10 completion)*
 
-- [ ] 35-12-PLAN.md: Security-, Bug- und Performance-Audit, Anforderungen abhaken
+- [x] 35-12-PLAN.md: Security-, Bug- und Performance-Audit, Anforderungen abhaken
 
 **UI hint**: yes
 
@@ -318,7 +318,7 @@ Plans:
 | 32. Filter in der Unified Search | v1.5 | 8/8 | Executed, verification pending | - |
 | 33. Ausschlussmuster und Admin-Feinschliff | v1.5 | 11/11 | Executed, verification pending | - |
 | 34. Umstiegsweg | v1.5 | 6/6 | Complete   | 2026-10-19 |
-| 35. Stretch: Aehnliche Dokumente und Spikes | v1.5 | 13/13 | Complete   | 2026-10-20 |
+| 35. Stretch: Aehnliche Dokumente und Spikes | v1.5 | 14/13 | Complete   | 2026-10-20 |
 | 36. Haertung und Store-Einreichung 1.5.0 | v1.5 | 0/? | Not started | - |
 
 ## Nach v1.3 (Wiedervorlage)
