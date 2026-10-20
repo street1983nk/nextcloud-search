@@ -48,9 +48,9 @@
 
 ### Stretch (STR)
 
-- [ ] **STR-01**: Nutzer kann auf der Ergebnisseite zu einem Treffer "Aehnliche Dokumente" abrufen (Vektor-Nachbarn aus dem bestehenden Index, Rechte-Recheck in PHP)
-- [ ] **STR-02**: Messbericht granite-embedding-97m-multilingual-r2 gegen e5-small (deutscher Korpus, Trefferqualitaet, CPU-Latenz amd64+arm64, RAM, eigener int8-Build) mit Empfehlung fuer v1.6; KEIN Modellwechsel in v1.5. Pflichtpunkte (Owner-Frage 10.10.): Image-Groessenzuwachs bei zwei Modellen im Image, Dauer der Neu-Einbettung auf der 4-GB-ARM-Box, Vorschlag "Neuinstallation Standard granite, Bestand optional per Opt-in mit Rueckweg" bewerten
-- [ ] **STR-03**: Design-Notiz #25-Dedup je Mount-Config (fileid-Mapping vs. per-User-Crawl, ACL-Folgen), Entscheidungsvorlage fuer v1.6
+- [x] **STR-01**: Nutzer kann auf der Ergebnisseite zu einem Treffer "Aehnliche Dokumente" abrufen (Vektor-Nachbarn aus dem bestehenden Index, Rechte-Recheck in PHP)
+- [x] **STR-02**: Messbericht granite-embedding-97m-multilingual-r2 gegen e5-small (deutscher Korpus, Trefferqualitaet, CPU-Latenz amd64+arm64, RAM, eigener int8-Build) mit Empfehlung fuer v1.6; KEIN Modellwechsel in v1.5. Pflichtpunkte (Owner-Frage 10.10.): Image-Groessenzuwachs bei zwei Modellen im Image, Dauer der Neu-Einbettung auf der 4-GB-ARM-Box, Vorschlag "Neuinstallation Standard granite, Bestand optional per Opt-in mit Rueckweg" bewerten
+- [x] **STR-03**: Design-Notiz #25-Dedup je Mount-Config (fileid-Mapping vs. per-User-Crawl, ACL-Folgen), Entscheidungsvorlage fuer v1.6
 
 ### Haertung und Release (HART/REL)
 
@@ -103,9 +103,9 @@
 | POL-01 | Phase 33 | Complete |
 | POL-02 | Phase 31 | Complete |
 | POL-03 | Phase 33 | Complete |
-| STR-01 | Phase 35 | Pending |
-| STR-02 | Phase 35 | Pending |
-| STR-03 | Phase 35 | Pending |
+| STR-01 | Phase 35 | Complete |
+| STR-02 | Phase 35 | Complete |
+| STR-03 | Phase 35 | Complete |
 | HART-06 | Phase 36 | Pending |
 | REL-05 | Phase 36 | Pending |
 

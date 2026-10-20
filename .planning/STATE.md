@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Phase 35 context gathered
-last_updated: "2026-10-19T16:01:28.044Z"
-last_activity: 2026-10-19 -- Phase 35 execution started
+stopped_at: Phase 35 abgeschlossen, Audit 35-12 geschlossen
+last_updated: "2026-10-20T06:30:00.000Z"
+last_activity: 2026-10-20 -- Phase 35 Audit geschlossen, STR-01 bis STR-03 abgehakt
 progress:
   total_phases: 7
   completed_phases: 5
@@ -21,14 +21,14 @@ progress:
 Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .planning/MILESTONES.md (v1.0 bis v1.4).
 
 **Core Value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 35 — stretch-aehnliche-dokumente-und-spikes
+**Current focus:** Phase 35 , stretch-aehnliche-dokumente-und-spikes
 
 ## Current Position
 
-Phase: 35 (stretch-aehnliche-dokumente-und-spikes) — EXECUTING
-Plan: 1 of 13
-Status: Executing Phase 35
-Last activity: 2026-10-19 -- Phase 35 execution started
+Phase: 35 (stretch-aehnliche-dokumente-und-spikes), ABGESCHLOSSEN (Verifier offen)
+Plan: 13 of 13 (plus Nachmessung 35-04B)
+Status: Audit 35-12 geschlossen, Anforderungen abgehakt
+Last activity: 2026-10-20 -- Phase 35 Audit geschlossen, STR-01 bis STR-03 abgehakt
 
 Progress: [██████████] 100%
 
@@ -139,6 +139,7 @@ Progress: [██████████] 100%
 - 34-03: Admin-Banner "Parallelbetrieb" (PE-34-1/2: Render-Zeitpunkt entscheidet, isEnabledForAnyone; Ausgaben über p(), Link aus drei festen Tag-URLs nach Sprache). Merge 19498c7e, CI grün.
 - 34-04: Drei Umstiegs-Seiten (de/en/fr) mit Sprachumschaltern, README-Abschnitte vor "Installation", Store-Entwurf v1.5.0 in docs/store-listing.md, CHANGELOG. Merge 0cb3b5ed, CI grün.
 - 34-05: Gemeinsame Owner-Abnahme 19.10.2026 auf 8090, "abgenommen" (Phase 34 gesamt), Store-Entwurf "Auch abgenommen" (info.xml bleibt bis REL-05). Eine Owner-Änderung in der Runde: Doku-Link als Button mit Rahmen (findling-banner__link). Protokoll 34-05-ABNAHME.md, Commits fdfef7ba, a701b4f9; CI alle grün.
+- Phase 35 (Kurzbilanz, 20.10.2026): Aehnlich-Ansicht geliefert und vom Owner abgenommen (35-01 Wortlaut, 35-05 POST /similar mit SIMILAR_CEILING 54,5 aus 35-04B Weg 2, 35-06 PHP-Rechtegrenze, 35-07/35-13 Ansicht und 16 Kataloge, 35-08 Playwright-Abnahme 19./20.10.). granite-Messbericht komplett (35-03 Regel vor der Messung, 35-09 amd64, 35-10 arm64 auf m7g.large fuer 0,0362 USD mit Abbau-Beleg, 35-11 Verdikt: Bedingung (a) verfehlt bei p=0,0944, Empfehlung "Wechsel nur mit Bedingung", e5-small bleibt in v1.5). Dedup-Notiz 35-02 (Empfehlung Weg B). Audit 35-12: 0 CRITICAL/HIGH/MEDIUM, 6 LOW alle behandelt (L-35-01 unknown-Marke liefert bei leerem Bestand nach, gefixt 5a98eee0; register-exapp.sh Stale-Probe gefixt 0e1e42f9; Massluecke dokumentiert c2b402cb; L-35-02/L-35-06 begruendet akzeptiert). STR-01 bis STR-03 Complete.
 - 34-06: Audit der Phase 34 geschlossen (34-AUDIT.md): 0 CRITICAL/HIGH/MEDIUM, 2 LOW. L-34-02 gefixt (151bc30b, fr-Pflichtformel ohne Zeilenumbruch), L-34-01 accept (Geviertstriche in STATE.md, Werkzeugausgabe, nicht ausgeliefert). Security/Bugs/Performance belegt (Poll -1,6 Prozent, keine zusätzliche DB-Abfrage), Audit-Modul test_phase34_audit.py (39 Tests mit Netz und Mutation). UMST-01..03 in REQUIREMENTS.md auf Complete. Merge 73f6a03e; volle Suite 5761 passed. Offen für Phase 36: docs/embeddings.md:497 "jahrelang verwaist" gegen Pflegestand der Umstiegs-Seite (Owner-Frage), Tag-Links blob/v1.5.0 nach Tag prüfen, Store-Entwurf in REL-05.
 
 ### Offene Faeden (kein aktiver Auftrag)
