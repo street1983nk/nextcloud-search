@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Phase 36 context gathered
-last_updated: "2026-10-20T10:52:32.213Z"
-last_activity: 2026-10-20 -- Phase 36 planning complete
+stopped_at: Completed 36-01-PLAN.md
+last_updated: "2026-10-20T11:08:30.631Z"
+last_activity: 2026-10-20 -- 36-01 complete (owner accepted wording)
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 78
-  completed_plans: 63
-  percent: 81
+  completed_plans: 64
+  percent: 82
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .planning/MILESTONES.md (v1.0 bis v1.4).
 
 **Core Value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 36 — haertung und store einreichung 1.5.0
+**Current focus:** Phase 36 — Haertung und Store-Einreichung 1.5.0
 
 ## Current Position
 
-Phase: 36
-Plan: Not started
+Phase: 36 (Haertung und Store-Einreichung 1.5.0) — EXECUTING
+Plan: 2 of 16
 Status: Ready to execute
-Last activity: 2026-10-20 -- Phase 36 planning complete
+Last activity: 2026-10-20 -- 36-01 complete (owner accepted wording)
 
-Progress: [██████████] 100%
+Progress: [████████░░] 82%
 
 ## Performance Metrics
 
@@ -174,6 +174,6 @@ Progress: [██████████] 100%
 
 ## Session Continuity
 
-Last session: 2026-10-20T09:33:05.290Z
-Stopped at: Phase 36 context gathered
-Resume file: .planning/phases/36-haertung-und-store-einreichung-1-5-0/36-CONTEXT.md
+Last session: 2026-10-20T11:08:18.437Z
+Stopped at: Completed 36-01-PLAN.md (Owner-Abnahme 20.10.2026), next 36-02
+Resume file: None

@@ -307,7 +307,7 @@ Plans:
 
 **Wave 1**
 
-- [ ] 36-01-PLAN.md: Wortlaut-Vorabplan (Sammelklasse, Schwellen, Saat-Entscheide, Store-Text-Gesamtentwurf 1.5.0), Owner-Abnahme
+- [x] 36-01-PLAN.md: Wortlaut-Vorabplan (Sammelklasse, Schwellen, Saat-Entscheide, Store-Text-Gesamtentwurf 1.5.0), Owner-Abnahme
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -384,7 +384,7 @@ Plans:
 | 33. Ausschlussmuster und Admin-Feinschliff | v1.5 | 11/11 | Executed, verification pending | - |
 | 34. Umstiegsweg | v1.5 | 6/6 | Complete   | 2026-10-19 |
 | 35. Stretch: Aehnliche Dokumente und Spikes | v1.5 | 14/13 | Complete    | 2026-10-20 |
-| 36. Haertung und Store-Einreichung 1.5.0 | v1.5 | 0/? | Not started | - |
+| 36. Haertung und Store-Einreichung 1.5.0 | v1.5 | 1/16 | In Progress|  |
 
 ## Nach v1.3 (Wiedervorlage)
 
