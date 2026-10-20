@@ -1,5 +1,20 @@
 # Messung: granite-embedding-97m-multilingual-r2 gegen multilingual-e5-small (Plan 35-03, STR-02)
 
+## Die Verdikte, zuerst
+
+**Empfehlung für v1.6: Wechsel nur mit Bedingung.** Der gemessene int8-Build
+von granite verfehlt Bedingung (a). Auf Deutsch rücken 56 Fälle nach vorn und
+42 nach hinten, der Vorzeichentest ergibt p = 0,0944 bei einer Grenze von 0,05,
+obwohl die MRR um 19,2 Prozent steigt. (b) bis (d) sind erfüllt: Keine Sprache
+verliert MRR (mindestens +10,1 Prozent). Auf arm64 liegt `memory.peak` bei
+645,5 MiB gegen 683,7 MiB bei e5, und die kalte Einzelanfrage braucht höchstens
+1071 ms. Die Bedingung lautet: ein vorab festgelegtes, anders gebautes
+granite-Artefakt besteht in genau einem neuen Lauf die unveränderte Regel,
+sonst "kein Wechsel" (Abschnitt 20). Der Opt-in-Vorschlag ist tragfähig mit
+Bedingung: rund 8 Bauteile, 71 MB gzip mehr Image und 5 h 14 min
+Neu-Einbettung auf der 4-GB-Box (Abschnitt 19). Das ausgelieferte Modell
+bleibt in v1.5 e5-small.
+
 Stand: 2026-10-19. Dieser Bericht beantwortet, ob Findling in v1.6 das
 Einbettungsmodell von `intfloat/multilingual-e5-small` auf
 `ibm-granite/granite-embedding-97m-multilingual-r2` wechseln soll. Bis Plan
@@ -215,7 +230,264 @@ sed -n '43,120p' testdata/semantik/de.jsonl \
   | shuf -n 10 --random-source=<(yes granite-35-03)
 ```
 
-## Abweichungen vom Rezept (Plan 35-09)
+## 8. Umgebung der Läufe
+
+Alle Läufe nutzen dasselbe ausgelieferte Image `ghcr.io/street1983nk/findling_backend:1.4.3`,
+Index-Digest `sha256:036eb67e3e1144bc371142e18fcbfe94327b2a6edbfc0d1aea2f32d93302fc6d`
+(`rohdaten/01-artefakte.txt`, `rohdaten/01-vorbedingungen.txt` Abschnitt 4).
+
+| | amd64 (Entwicklungsrechner) | arm64 (Messbox) |
+|---|---|---|
+| Rechner | Intel Core i5-1335U, 12 logische Kerne, gemessen auf `--cpuset-cpus 2,3` | m7g.large (Graviton3, CPU part 0xd40), 2 Kerne |
+| Speicher | Docker-VM 7.972.040 kB, davon 6,2 GB verfügbar, kein Swap-Verbrauch | Kernel-Kappe `mem=4G`, MemTotal 3.989.432 kB, kein Swap |
+| Container | `--network none`, 2 Threads | `--network none`, `--memory 2g --memory-swap 2g`, aus der cgroup zurückgelesen: `memory.max` 2147483648, `memory.swap.max` 0 |
+| System | Docker Desktop unter Windows 11 | Ubuntu 24.04 arm64 (Abbild 20260904), Kernel 7.0.0-1012-aws, Docker 29.1.3 |
+| Manifest | linux/amd64 `sha256:3d48d9854efa3208685cabd90c286ee5ad9aec699ef65a1d9540324decff905c` | linux/arm64 `sha256:317c4db4d5f5278b6ab4f8da084613102fa86718a1e2d5d915a22889cd353a04` |
+| Laufzeit im Image | Python 3.13.15, SQLite 3.46.1, onnxruntime 1.30.0 | gleich |
+| Rohdaten | `04-latenz-amd64.txt`, `03-qualitaet-*.txt` | `03-aufbau-arm.txt`, `11-arm-latenz.txt` |
+
+Die Modelldateien sind auf beiden Rechnern gegen dieselben sha256 geprüft:
+e5 int8 `8da4c9ba...8b6`, granite int8 `704c1ebc...e22` (`rohdaten/03-aufbau-arm.txt`,
+Block 6). Die Qualitätsläufe liefen auf amd64 im Image; die Gegenprobe mit
+onnxruntime 1.31.0 aus `backend/uv.lock` ergibt in allen drei Sprachen für jeden
+Fall denselben Rang (`rohdaten/03b-gegenprobe-ort131.txt`, Abweichung 17.1 Punkt 2).
+
+## 9. Trefferqualität
+
+Sequenzlänge 512, int8-Vektoren, e5 mit `--pooling mean --prefixes on`, granite
+mit `--pooling cls --prefixes off`. Die ausgelieferte Kombination ist jeweils die
+int8-Zeile; nur sie geht in die Regel ein. Rohdaten: `rohdaten/03-qualitaet-<modell>-<fassung>-<sprache>.txt`.
+
+**Deutsch (`de.jsonl`, 120 Fälle)**
+
+| Modell | Fassung | Fälle | Recall@1 | Recall@5 | MRR | Rohdatei |
+|---|---|---:|---:|---:|---:|---|
+| e5 | int8 (ausgeliefert) | 120 | 0,2917 | 0,5917 | 0,4428 | `03-qualitaet-e5-int8-de.txt` |
+| granite | int8, eigener Build | 120 | 0,4000 | 0,6750 | 0,5279 | `03-qualitaet-granite-int8-de.txt` |
+| e5 | fp32 | 120 | 0,3167 | 0,6750 | 0,4807 | `03-qualitaet-e5-fp32-de.txt` |
+| granite | fp32 | 120 | 0,5083 | 0,7917 | 0,6422 | `03-qualitaet-granite-fp32-de.txt` |
+| granite | IBM-int8 (nur Vergleich) | 120 | 0,3500 | 0,7000 | 0,5051 | `03-qualitaet-granite-ibmint8-de.txt` |
+
+**Englisch (`en.jsonl`, 42 Fälle)**
+
+| Modell | Fassung | Fälle | Recall@1 | Recall@5 | MRR | Rohdatei |
+|---|---|---:|---:|---:|---:|---|
+| e5 | int8 (ausgeliefert) | 42 | 0,3333 | 0,7143 | 0,5010 | `03-qualitaet-e5-int8-en.txt` |
+| granite | int8, eigener Build | 42 | 0,3810 | 0,7857 | 0,5515 | `03-qualitaet-granite-int8-en.txt` |
+| e5 | fp32 | 42 | 0,2619 | 0,7143 | 0,4647 | `03-qualitaet-e5-fp32-en.txt` |
+| granite | fp32 | 42 | 0,3571 | 0,8810 | 0,5796 | `03-qualitaet-granite-fp32-en.txt` |
+| granite | IBM-int8 (nur Vergleich) | 42 | 0,4048 | 0,7381 | 0,5668 | `03-qualitaet-granite-ibmint8-en.txt` |
+
+**Französisch (`fr.jsonl`, 120 Fälle)**
+
+| Modell | Fassung | Fälle | Recall@1 | Recall@5 | MRR | Rohdatei |
+|---|---|---:|---:|---:|---:|---|
+| e5 | int8 (ausgeliefert) | 120 | 0,1583 | 0,3417 | 0,2604 | `03-qualitaet-e5-int8-fr.txt` |
+| granite | int8, eigener Build | 120 | 0,1917 | 0,5250 | 0,3397 | `03-qualitaet-granite-int8-fr.txt` |
+| e5 | fp32 | 120 | 0,1667 | 0,3833 | 0,2870 | `03-qualitaet-e5-fp32-fr.txt` |
+| granite | fp32 | 120 | 0,3250 | 0,6417 | 0,4658 | `03-qualitaet-granite-fp32-fr.txt` |
+| granite | IBM-int8 (nur Vergleich) | 120 | 0,2167 | 0,5500 | 0,3662 | `03-qualitaet-granite-ibmint8-fr.txt` |
+
+**Positivkontrolle** (granite int8, `--pooling mean` gegen `cls`, MRR,
+`rohdaten/03-positivkontrolle.txt`): Deutsch 0,3582 gegen 0,5279, Englisch
+0,4981 gegen 0,5515, Französisch 0,3148 gegen 0,3397. `mean` ist überall
+schlechter, der Schalter greift, die Läufe zählen.
+
+**granite bei einer Sequenzlänge von 1024** ist nicht gemessen, das Werkzeug hat keinen
+Längenschalter (Abweichung 17.1 Punkt 3); die Zeile ginge ohnehin nicht in die
+Regel ein.
+
+**Plausibilität:** e5 fp32 auf Englisch (0,4647) und Französisch (0,2870) trifft
+die Septemberzahlen aus `docs/measurements/2026-09-05-modellqualitaet/`.
+
+Auffällig: Der Abstand zwischen fp32 und int8 ist bei granite viel größer als bei
+e5. Auf Deutsch verliert e5 durch int8 0,0379 MRR, granite 0,1143; auf
+Französisch e5 0,0266, granite 0,1261. Die Quantisierung kostet granite rund drei
+Viertel seines fp32-Vorsprungs.
+
+## 10. Paarvergleich
+
+Ausgewertet mit `skripte/20-paarvergleich.py` aus den Rängen je Fall der
+Rohdaten von Schritt 3, Ergebnis in `rohdaten/20-paarvergleich.txt`. "Nach vorn"
+heißt: granite setzt den richtigen Abschnitt auf einen kleineren Rang als e5.
+Fälle mit gleichem Rang zählen nicht. Der p-Wert ist der exakte einseitige
+Vorzeichentest, P(X >= nach vorn) bei X ~ Bin(bewegt; 0,5). Der t-Wert der
+Reziprokränge steht wie in Regel (a) verlangt daneben und entscheidet nichts.
+
+**Ausgelieferte Kombination (int8 gegen int8), geht in die Regel ein**
+
+| Sprache | Fälle | gleich | bewegt | nach vorn | nach hinten | p (einseitig) | t (Reziprokränge) | MRR e5 | MRR granite | relativ |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Deutsch | 120 | 22 | 98 | 56 | 42 | 0,0944 | 2,028 | 0,4428 | 0,5279 | +19,21 % |
+| Englisch | 42 | 9 | 33 | 18 | 15 | 0,364 | 0,792 | 0,5010 | 0,5515 | +10,07 % |
+| Französisch | 120 | 13 | 107 | 73 | 34 | 0,000103 | 2,268 | 0,2604 | 0,3397 | +30,48 % |
+
+**Zusatzzeilen ohne Gewicht für die Regel**
+
+| Sprache | Paar | bewegt | nach vorn | nach hinten | p (einseitig) | relativ MRR |
+|---|---|---:|---:|---:|---:|---:|
+| Deutsch | fp32 gegen fp32 | 77 | 54 | 23 | 0,000269 | +33,60 % |
+| Englisch | fp32 gegen fp32 | 33 | 22 | 11 | 0,0401 | +24,72 % |
+| Französisch | fp32 gegen fp32 | 106 | 79 | 27 | 2,16e-07 | +62,27 % |
+| Deutsch | e5 int8 gegen granite IBM-int8 | 92 | 50 | 42 | 0,233 | +14,06 % |
+| Englisch | e5 int8 gegen granite IBM-int8 | 33 | 18 | 15 | 0,364 | +13,14 % |
+| Französisch | e5 int8 gegen granite IBM-int8 | 108 | 71 | 37 | 0,000691 | +40,64 % |
+
+Gegenprobe auf Deutsch, unabhängig vom Skript: Die Spalten "per case" beider
+Rohdateien sind per `tr`, `sort` und `join` zusammengeführt und mit `awk`
+gezählt (120 Fälle, 56 nach vorn, 42 nach hinten, 22 gleich), der p-Wert ist mit
+`awk` über Logarithmen der Binomialkoeffizienten nachgerechnet (0,0944). Beide
+Wege geben dieselben Zahlen.
+
+## 11. Eigener int8-Build
+
+Rohdaten: `rohdaten/02-int8.txt`, `rohdaten/01-artefakte.txt`, `rohdaten/05-image-zuwachs.txt`.
+
+| Datei | Byte | sha256 |
+|---|---:|---|
+| granite fp32, Revision `835ad140` | 390.004.608 | `68e592b160673d30250824c1116bc6ab33f70efb22b97c9e1d7ce1e69c1c9d70` (gleich Abschnitt 3 und Hub) |
+| granite int8, eigener Build, Lauf a | 97.858.099 | `704c1ebca5fbb7cd83ced41827658ac4c9990c64f7f2874d22b78044e5022e22` |
+| granite int8, eigener Build, Lauf b | 97.858.099 | `704c1ebca5fbb7cd83ced41827658ac4c9990c64f7f2874d22b78044e5022e22` |
+| granite IBM-int8 `model_quint8_avx2.onnx` | 98.247.878 | `a6022dd8220ea6f6595562a1328ee216f4a94faa55362f2f4747c80f1e78772e` (gleich Hub) |
+
+- Beide Läufe liegen im Fenster 85.000.000 bis 110.000.000 Byte (Verhältnis
+  3,99 zu 1) und sind laut `cmp` byte-gleich.
+- **Befund A2:** Die Annahme A2 hält, `quantize_dynamic` läuft auf dem
+  ModernBERT-Graphen durch. Die einzige Meldung ist eine Warnung zu einem
+  Tensor `/Unsqueeze_6_output_0` vom Typ int64, der nicht quantisiert wird.
+- **Vergleich mit der IBM-Datei:** Der eigene Build schlägt die IBM-Datei auf
+  Deutsch (MRR 0,5279 gegen 0,5051), die IBM-Datei liegt auf Englisch (0,5668
+  gegen 0,5515) und Französisch (0,3662 gegen 0,3397) vorn (Abschnitt 9). Den
+  Vorzeichentest auf Deutsch besteht keine der beiden (Abschnitt 10). Die
+  IBM-Datei ist nach ihrem Namen auf AVX2 zugeschnitten und für arm64 nicht
+  gedacht; sie bleibt ein Vergleichspunkt.
+
+## 12. Latenz und Durchsatz
+
+Durchsatz über `findling.embed.bench --mode tokens-per-second` (Charge 8 x 512
+Token, 20 Runden, 2 Threads). Einzelanfrage über `skripte/04-anfrage-latenz.py`
+(Abweichung 17.1 Punkt 5): kalt heißt Tokenizer und Sitzung laden plus erste
+Anfrage in einem frischen Container, fünf Starts je Modell; warm heißt 100
+Anfragen aus `de.jsonl` nach zehn Vorläufen, angegeben ist der Median der fünf
+Starts.
+
+| Rechner | Modell | Token/s p50 | Token/s p95 | kalt p50 | kalt max | warm p50 | warm p95 | Rohdatei |
+|---|---|---:|---:|---:|---:|---:|---:|---|
+| amd64 | e5 int8 | 3624,2 | 2670,6 | 1368,1 ms | 1778,7 ms | 3,19 ms | 4,04 ms | `04-latenz-amd64.txt` |
+| amd64 | granite int8 | 2880,8 | 2584,0 | 1370,6 ms | 1888,9 ms | 4,19 ms | 5,25 ms | `04-latenz-amd64.txt` |
+| arm64 | e5 int8 | 3459,1 | 3446,5 | 751,4 ms | 758,3 ms | 4,65 ms | 5,42 ms | `11-arm-latenz.txt` |
+| arm64 | granite int8 | 3023,3 | 2992,1 | 1065,3 ms | 1071,2 ms | 5,45 ms | 6,50 ms | `11-arm-latenz.txt` |
+
+- granite ist im Durchsatz auf amd64 20,5 Prozent und auf arm64 12,6 Prozent
+  langsamer als e5.
+- Kalt dominiert das Laden: auf arm64 kostet granite rund 310 ms mehr (load
+  rund 1059 gegen 746 ms im Median); die erste Anfrage selbst liegt bei 6,5 gegen 5,3 ms.
+- Auf amd64 überschreiten beide Modelle die Decke von 1,5 s in einzelnen kalten
+  Starts (e5 einmal mit 1778,7 ms, granite zweimal mit 1547,4 und 1888,9 ms); der
+  Entwicklungsrechner streut stark. Die Regel (d) misst auf arm64, dort streuen
+  die fünf Starts um weniger als 15 ms.
+
+## 13. Arbeitsspeicher
+
+arm64, Methode aus `docs/measurements/2026-09-fp32-speicher/` Abschnitt 3,
+Charge 8 x 512 Token, 2 Threads, Arena aus, drei Läufe je Modell, Median
+(`rohdaten/12-arm-speicher.txt`). Grenze 2 GiB = 2.147.483.648 Byte.
+
+| Stufe | e5 int8 | granite int8 |
+|---|---:|---:|
+| `RssAnon` Start | 10.784 kB | 10.788 kB |
+| `RssAnon` nach Bibliotheken | 24.080 kB | 24.076 kB |
+| `RssAnon` nach Tokenizer | 311.044 kB | 237.268 kB |
+| `RssAnon` nach Sitzung | 443.760 kB | 304.792 kB |
+| `RssAnon` nach erster Charge | 445.832 kB (435,4 MiB) | 331.792 kB (324,0 MiB) |
+| `RssAnon` nach sechster Charge | 457.868 kB | 332.188 kB |
+| cgroup `memory.peak` | 716.947.456 B (683,7 MiB) | 676.896.768 B (645,5 MiB) |
+| Abstand `memory.peak` zur Grenze | 1364,3 MiB | 1402,5 MiB |
+| Abstand `RssAnon` erste Charge zur Grenze | 1612,6 MiB | 1724,0 MiB |
+
+Im Durchsatzlauf über 500 Dokumente (`rohdaten/13-arm-durchsatz.txt`, Charge 2,
+Median zweier Läufe) liegt `memory.peak` bei e5 bei 1.150.597.120 B (1097,3 MiB,
+Abstand 950,7 MiB) und bei granite bei 618.407.936 B (589,8 MiB, Abstand
+1458,2 MiB). Die Regel (c) misst Laden plus erste Charge; der Durchsatzlauf steht
+nur zur Einordnung hier. granite braucht in jeder Stufe weniger Speicher, vor
+allem weil sein Tokenizer kleiner ist (180.000 statt 250.002 Einträge) und die
+Sitzung um rund 65 MB leichter.
+
+## 14. Image-Zuwachs bei zwei Modellen
+
+Aus den Dateigrößen, kein Probe-Image (Abweichung 17.1 Punkt 7,
+`rohdaten/05-image-zuwachs.txt`):
+
+| Datei | unkomprimiert Byte | gzip Byte |
+|---|---:|---:|
+| `model.onnx` (eigener int8-Build) | 97.858.099 | 67.103.762 |
+| `tokenizer.json` | 25.301.672 | 4.016.312 |
+| `tokenizer_config.json` | 12.860 | 914 |
+| `special_tokens_map.json` | 871 | 192 |
+| `config.json` | 1.216 | 530 |
+| `1_Pooling/config.json` | 313 | 158 |
+| Lizenztext Apache-2.0 (vertreten durch `COPYING.sqlite-vec`) | 11.132 | 3.980 |
+| **Zuwachs granite** | **123.186.163** | **71.125.848** |
+| e5 heute (Modell, Tokenizer, Konfiguration) | 135.185.084 | 83.087.883 |
+| **Summe beider Modelle** | **258.371.247** | **154.213.731** |
+
+Liegen beide Modelle im Image, wächst es um 123,2 MB unkomprimiert und 71,1 MB
+gzip, das Modellgepäck verdoppelt sich ungefähr. Bei einem Ersatz statt einer
+Ergänzung würde das Image um mindestens 12,0 MB unkomprimiert und 12,0 MB gzip
+kleiner (die e5-Summe oben enthält `sentencepiece.bpe.model` und den Lizenztext
+nicht).
+
+## 15. Dauer der Neu-Einbettung auf der 4-GB-ARM-Box
+
+Hochrechnung, kein Volllauf (Pitfall 16): `skripte/14-hochrechnung.py` aus dem
+Durchsatz auf der Stichprobe von 500 Dokumenten (`rohdaten/13-arm-durchsatz.txt`,
+zwei Läufe je Modell), Ergebnis in `rohdaten/14-hochrechnung.txt`. Chunking je
+Modell-Tokenizer mit der 1024-Token-Kappe, Chunks zu 510 Token, Charge 2.
+
+| | e5 int8 | granite int8 |
+|---|---:|---:|
+| Dokumente je Minute (Einbettung allein, Median) | 195,39 | 165,68 |
+| Chunks je Dokument | 2,818 | 2,844 |
+| Chunks hochgerechnet auf 52.111 Dokumente | 146.849 | 148.204 |
+| **Neu-Einbettung 52.111 Dokumente, Einbettung allein** | **4 h 26 min** | **5 h 14 min** |
+| gekoppelt (erste Indexierung mit OCR daneben) | 26 h 37 min (Bezug September) | 31 h 23 min (Obergrenze, skaliert) |
+
+Annahmen, wie in `rohdaten/14-hochrechnung.txt` ausgewiesen:
+
+1. Linear in der Dokumentzahl; die Chunks je Dokument der Stichprobe gelten für
+   den Bestand.
+2. Einbettung allein: Nach einem Modellwechsel bleibt der extrahierte Text im
+   Volltextindex, weder Extraktion noch OCR fallen erneut an. Ein Prozess, zwei
+   Threads, Box sonst leer, `--memory 2g`.
+3. Der gekoppelte Septemberlauf ist ein anderer Fall; er steht mit dem
+   Verhältnis der Einbettungsraten (1,179) skaliert daneben, als Obergrenze für
+   den Fall, dass die Einbettung die langsamere Spur ist.
+
+e5-Bezug: Diese Messung sieht e5 bei 195,39 Dokumenten je Minute, 115 Prozent der
+rund 170 aus `docs/measurements/2026-09-vergleichsmessung-m7g/` Abschnitt 7. Der
+Unterschied passt zum Messaufbau (Text vorher extrahiert, keine Nextcloud auf der
+Box).
+
+## 16. Kosten und Verbleib
+
+Aus `rohdaten/90-kosten.txt` und `rohdaten/08-abbau-boxen.txt`:
+
+- Bezahlte Zeit von LaunchTime 04:23:29Z bis Terminate 04:43:36Z: 20 min 07 s
+  (0,3353 h).
+- Satz 0,108016 USD je Stunde (Abschnitt 6), Kosten **0,0362 USD netto**, 6,0
+  Prozent des Deckels von 0,60 USD und 6,4 Prozent der 5,2 h.
+- Abbruchgrenze (80 Prozent, 4 h 10 min) nie erreicht.
+- Verbleib: Instanz beendet ("User initiated"), Systemplatte mit der Instanz
+  gelöscht, Security Group und Schlüsselpaar gelöscht. Die unabhängige
+  Gegenprobe über das Profil zählt null laufende Instanzen, null Volumes, null
+  Adressen und null Schlüsselpaare in der Region. Es ist kein Snapshot entstanden.
+
+## 17. Abweichungen
+
+Alle Abweichungen vom Rezept aus 35-09 und 35-10 stehen unten unverändert, wie
+sie in den Plänen geschrieben wurden; 17.3 ergänzt die Auswertung.
+
+### 17.1 Abweichungen vom Rezept (Plan 35-09)
 
 Regel und Methode oben bleiben unverändert. Wo ein Lauf nicht genau wie
 beschrieben ging, steht es hier mit Grund. Ablauf: `skripte/00-ablauf.md`,
@@ -264,7 +536,7 @@ Rohdaten: `rohdaten/`.
    `backend/docker/licenses/COPYING.sqlite-vec` (Apache-2.0-Volltext), weil die
    Revision keine LICENSE-Datei trägt.
 
-## Abweichungen vom Rezept (Plan 35-10)
+### 17.2 Abweichungen vom Rezept (Plan 35-10)
 
 1. **Stichprobe ohne Volllauf des Korpus.** `skripte/06-stichprobe.py` geht die
    Schleife von `build_load_corpus.py --seed phase5` nach, zieht aber nur die
@@ -295,3 +567,171 @@ Rohdaten: `rohdaten/`.
 5. **Laufzeit weit unter dem Plan.** Box-Zeit 20 min 07 s statt geplanter
    4 h; die Messungen selbst liefen wie in `skripte/00-ablauf.md`, der
    Durchsatz mit zwei Läufen je Modell.
+
+### 17.3 Abweichungen der Auswertung (Plan 35-11)
+
+1. **Abweichungsblöcke verschoben.** Die beiden Blöcke 17.1 und 17.2 standen
+   zuvor ohne Nummer direkt hinter Abschnitt 7. Sie sind wortgleich unter
+   Abschnitt 17 gerückt, damit die Ergebnisse in der Reihenfolge des Plans
+   stehen. Die Abschnitte 1 bis 7 sind unverändert.
+2. **Zusatzzeilen im Paarvergleich.** Neben dem Paar der ausgelieferten
+   Kombination wertet `20-paarvergleich.py` auch fp32 gegen fp32 und e5 int8
+   gegen granite IBM-int8 aus. Diese Zeilen stehen getrennt und gehen nicht in
+   die Regel ein (Abschnitt 10).
+3. **Rein lokale Auswertung.** Kein neuer Modelllauf, kein Zugriff auf die Box
+   oder das Konto; alle Zahlen dieses Plans kommen aus den Rohdaten von 35-09
+   und 35-10.
+
+## 18. Anwendung der Regel
+
+Die Regel aus Abschnitt 1, Bedingung für Bedingung, an der ausgelieferten
+Kombination (int8-Modell, int8-Vektoren):
+
+- **Bedingung (a):** Deutsch, 98 bewegte Fälle, 56 nach vorn, 42 nach hinten,
+  einseitiger Vorzeichentest p = 0,0944 gegen die Grenze p < 0,05 (gepaarter
+  t-Wert 2,028, nur ausgewiesen). "Nicht schlechter" ist erfüllt (MRR 0,5279
+  gegen 0,4428, +19,21 Prozent), die verlangte Verbesserung auf dem Niveau 0,05
+  ist es nicht: **nicht erfüllt** (Abschnitt 10, `rohdaten/20-paarvergleich.txt`).
+- **Bedingung (b):** kleinste relative MRR-Änderung granite gegen e5 +10,07
+  Prozent (Englisch; Deutsch +19,21, Französisch +30,48) gegen die Grenze
+  höchstens 5 Prozent Rückgang: **erfüllt** (Abschnitt 10).
+- **Bedingung (c):** arm64, Laden plus erste Charge, `memory.peak` granite
+  645,5 MiB, Abstand zur 2-GiB-Grenze 1402,5 MiB gegen den geforderten
+  Mindestabstand von 1108,3 MiB (e5-Abstand im selben Lauf 1364,3 MiB minus
+  256 MiB); `RssAnon` nach erster Charge 324,0 MiB gegen 435,4 MiB bei e5:
+  **erfüllt** (Abschnitt 13, `rohdaten/12-arm-speicher.txt`).
+- **Bedingung (d):** arm64, Einzelanfrage kalt, granite p50 1065,3 ms und
+  Höchstwert der fünf Starts 1071,2 ms gegen die Decke von 1,5 s: **erfüllt**
+  (Abschnitt 12, `rohdaten/11-arm-latenz.txt`).
+
+Ist das Ergebnis eindeutig? Ja. Der p-Wert liegt fast beim Doppelten der
+Schwelle und nicht an ihr, und alle vier Bedingungen sind auf der Architektur
+gemessen, die die Regel nennt. Eine Owner-Frage nach Abschnitt 1 entsteht
+deshalb nicht. Da (a) verfehlt ist, lautet das Verdikt nach der Regel nicht
+"Wechsel".
+
+Begründung zur verfehlten Bedingung (a): granite ordnet auf Deutsch mehr Fälle
+besser als schlechter, und der Mittelwert der Reziprokränge steigt deutlich.
+Die Verbesserung verteilt sich aber nicht gleichmäßig genug über die Fälle:
+42 von 98 bewegten Fällen rutschen nach hinten, darunter einige weit
+(de-57 von Rang 7 auf 58, de-52 von 3 auf 43, de-98 von 28 auf 57). Der Verlust
+sitzt in der Quantisierung: In fp32 besteht granite den Vorzeichentest auf
+Deutsch klar (54 zu 23, p = 0,000269); der eigene int8-Build kostet granite
+0,1143 MRR, e5 nur 0,0379 (Abschnitt 9). Die Regel bewertet das Artefakt, das
+ausgeliefert würde, und das ist der int8-Build.
+
+## 19. Bewertung des Opt-in-Vorschlags
+
+Vorschlag: "Neuinstallation Standard granite, Bestand optional per Opt-in mit
+Rückweg". Bewertet sind die Stellen aus Abschnitt 5, je mit Aufwand in
+Bauteilen (ein Bauteil ist eine abgeschlossene Änderung mit eigenen Tests) und
+Risiko. Alles gilt für einen Bau in v1.6; dieser Bericht ändert keinen
+Produktcode.
+
+1. **Zwei Modelle im Image, Lizenz.** Zuwachs 123,2 MB unkomprimiert, 71,1 MB
+   gzip (Abschnitt 14). Dazu kommen eine eigene Lizenzdatei, etwa
+   `COPYING.granite-embedding-97m-multilingual-r2` mit dem Apache-2.0-Volltext
+   neben `COPYING.multilingual-e5-small` (`backend/Dockerfile` Zeile 389 und
+   die Prüfung ab Zeile 427), weil die Revision keine LICENSE-Datei trägt, ein
+   Abschnitt in `THIRD-PARTY.md` wie der für e5 (ab Zeile 416) und die
+   Erweiterung von `backend/tests/test_third_party_versions.py`, dazu ein
+   zweiter int8-Build im Image-Build mit eigener Prüfsumme. Aufwand: 1 Bauteil.
+   Risiko: niedrig. Möglich ist auch ein Weg ohne Zuwachs, wie ihn die
+   fp32-Gewichte heute gehen (`backend/src/findling/embed/weights.py`, MOD-02):
+   die Datei auf Admin-Aktion aus dem eigenen Release holen und gegen eine feste
+   sha256 prüfen. Für Neuinstallationen mit granite als Standard passt dieser
+   Weg nicht, weil Zero-Config und Offline-Installation das Modell im Image
+   verlangen.
+2. **Embedding-Marke und Drift.** Der Modellname steht als Konstante
+   `EMBEDDING_MODEL = "multilingual-e5-small"`
+   (`backend/src/findling/store/vectors.py:279`) und geht in `embedding_mark`
+   ein (`vectors.py:282`). Ein Wechsel ist damit eine Drift, und die löst heute
+   "alles neu einbetten" aus. Bei einer Neuinstallation gibt es keinen Bestand
+   und keine Drift. Beim Opt-in im Bestand ist die Drift gewollt. Die Konstante
+   muss dafür aus dem aktiven Modellprofil kommen. Während der Neu-Einbettung
+   passen e5-Bestand und granite-Anfrage nicht zusammen. Aufwand: 1 Bauteil.
+   Risiko: mittel. Ein falsch gesetzter Name ergibt einen gemischten Bestand,
+   der stumm schlechtere Treffer liefert, genau den Fall, den die Marke
+   verhindern soll.
+3. **Übergangszeit, zweite `vectors.db`, atomarer Wechsel, Rückweg.** Zwei
+   Wege: (i) Semantik während der Neu-Einbettung aus, nur Volltext, auf der
+   4-GB-Box rund 5 h 14 min (Abschnitt 15); (ii) eine zweite `vectors.db` je
+   Modell, die im Hintergrund gefüllt und am Ende atomar umgeschaltet wird.
+   Den Rückweg bildet das Behalten der alten Datei. Platz bei 438 Byte je Chunk
+   (`docs/embeddings.md`, Tabelle "Byte je Chunk"): 148.204 Chunks x 438 Byte =
+   64,9 MB für die granite-Datei bei 52.111 Dokumenten, die e5-Datei mit
+   64,3 MB bleibt daneben liegen. Weg (ii) ist für den Rückweg nötig, sonst
+   kostet jeder Rückweg eine weitere volle Neu-Einbettung. Aufwand: 2 Bauteile
+   (Datei je Modell samt Umschalter; Rückweg samt Anzeige auf der Admin-Seite).
+   Risiko: mittel bis hoch. Neustart, Upgrade und Abbruch mitten in der
+   Neu-Einbettung brauchen eigene Prüfpfade, wie in der Launch-Härtung
+   verlangt.
+4. **Chunker, Pad-Token, Pooling, Präfixe.** Der Wrapper ist an diesen Stellen
+   e5-fest: Präfixe `query: ` und `passage: `
+   (`backend/src/findling/embed/model.py:83` und `:84`), Pad-Marke `<pad>` mit
+   Rückfall auf `[PAD]` und id 0 (`model.py:108` und `:109`, angewandt in
+   `model.py:316` bis `:325`), Mittelwert-Pooling (`model.py:773` und `:774`)
+   und `token_type_ids` als Nullen (`model.py:767`). granite braucht CLS-Pooling,
+   keine Präfixe und das Pad-Token `<|endoftext|>` (id 179935) aus seiner
+   `tokenizer_config.json`. Der Chunker schneidet mit dem Tokenizer des Modells
+   (`backend/src/findling/embed/chunker.py:66`). Mit granite entstehen andere
+   Chunkgrenzen und 2,844 statt 2,818 Chunks je Dokument (Abschnitt 15).
+   Aufwand: 1 Bauteil für ein Modellprofil (Präfixe, Pooling, Pad-Token,
+   Dateien) und 1 Bauteil für Chunker-Tests je Tokenizer. Risiko: mittel. Die
+   Positivkontrolle zeigt, was ein vergessenes Pooling kostet: auf Deutsch MRR
+   0,3582 statt 0,5279 (Abschnitt 9), und zwar ohne jeden Fehler im Log.
+5. **Distanzriegel und `SIMILAR_CEILING`.** `VECTOR_MAX_DISTANCE = 86.5` und
+   `VECTOR_DISTANCE_BAND = 14.0` (`backend/src/findling/config.py:952` und
+   `:954`, gemessen in `docs/measurements/2026-09-06-vektordistanzen/`) und
+   `SIMILAR_CEILING = 54.5` (`config.py:977`, gemessen in
+   `docs/measurements/2026-10-aehnlich-distanzen/`) gelten nur für e5 auf der
+   int8-L2-Skala. Der Kommentar in `config.py` sagt das selbst: "A different
+   model needs a new measurement, not a screw." Für granite sind beide
+   Messungen neu zu fahren, und die drei Werte werden Standardwerte je
+   Modellprofil (die beiden Distanzriegel sind heute stille Stellschrauben per
+   Umgebungsvariable, `SIMILAR_CEILING` ist eine feste Konstante). Aufwand:
+   2 Bauteile (zwei Messungen mit vorab festgelegter Regel, dazu die Werte je
+   Profil). Risiko: hoch, wenn es ausgelassen
+   wird. Mit e5-Werten würde granite Treffer falsch abschneiden oder die Ansicht
+   "Ähnliche Dokumente" mit fremden Dokumenten füllen.
+6. **Dauer der Neu-Einbettung auf der 4-GB-Box.** Im Bestand mit 52.111
+   Dokumenten rund 5 h 14 min reine Einbettung (e5 zum Vergleich 4 h 26 min).
+   Die Obergrenze für den gekoppelten Fall liegt bei 31 h 23 min (Abschnitt 15).
+   Für eine Admin-Aktion, die über Nacht läuft, ist das tragbar. Aufwand:
+   0 Bauteile (nur ein Satz in der Admin-Doku). Risiko: niedrig.
+
+Summe: rund 8 Bauteile, dazu zwei neue Messungen.
+
+**Gesamturteil zum Vorschlag: tragfähig mit Bedingung.** Technisch trägt der
+Vorschlag. Das Image wächst um 71 MB gzip, der Speicher auf arm64 sinkt sogar,
+und die Neu-Einbettung passt in eine Nacht. Die Bedingungen sind: ein
+Modellprofil statt der e5-festen Konstanten (Punkte 2 und 4), eine zweite
+`vectors.db` mit atomarem Wechsel als Rückweg (Punkt 3) und neue Schwellen aus
+eigenen Messungen (Punkt 5). Vorher steht aber eine Voraussetzung, die den Bau
+erst sinnvoll macht: Das auszuliefernde granite-Artefakt muss die Regel aus
+Abschnitt 1 erfüllen. Das tut der gemessene int8-Build nicht (Abschnitt 18).
+
+## 20. Empfehlung für v1.6
+
+**Wechsel nur mit Bedingung: Ein granite-Artefakt in der Fassung, die
+ausgeliefert würde, erfüllt in einem neuen Lauf Bedingung (a) auf den
+unveränderten 120 deutschen Fällen nach der unveränderten Regel, und (b) bis (d)
+halten für genau dieses Artefakt. Ohne diesen Nachweis gilt "kein Wechsel".**
+
+Abgeleitet aus Abschnitt 18: (b), (c) und (d) sind erfüllt, (a) ist verfehlt.
+Der gemessene int8-Build wird deshalb nicht empfohlen. Der Verlust sitzt in der
+Quantisierung (fp32 besteht (a) klar, siehe Abschnitt 10). Darum ist ein anders
+gebautes Artefakt die einzige Bedingung, unter der ein Wechsel offen bleibt.
+Denkbar, aber nicht gemessen sind ein int8-Build mit unquantisierter
+Einbettungstabelle (rund 300 MB nach der Rechnung in Abschnitt 3) oder fp32
+selbst (390 MB). Beide ändern den Image-Zuwachs aus Abschnitt 14 und müssen (c)
+und (d) auf arm64 neu belegen.
+
+Damit die Bedingung die Regel nicht aufweicht: Jeder weitere Lauf auf denselben
+Fällen ist ein neuer Versuch, und mehrere Versuche, bis einer durchkommt,
+machen den Test wertlos. Der Vorschlag ist deshalb: genau ein Artefakt, das vor
+dem Lauf festgelegt und vom Owner abgenommen wird, ein Lauf, und die Regel aus
+Abschnitt 1 bleibt wortgleich. Verfehlt auch dieser Lauf (a), lautet das Urteil
+für v1.6 "kein Wechsel".
+
+Das ausgelieferte Modell bleibt in v1.5 e5-small.

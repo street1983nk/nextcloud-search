@@ -1,0 +1,150 @@
+schritt 20 paarvergleich, lokale auswertung der rohdaten aus schritt 3, kein modelllauf
+erste = e5, zweite = granite; verbessert heisst: granite hat den kleineren rang
+regel (a): vorzeichentest ueber die bewegten faelle, einseitig, niveau 0,05
+regel (b): relativer mrr-rueckgang hoechstens 5 prozent
+
+== de:int8: 03-qualitaet-e5-int8-de.txt gegen 03-qualitaet-granite-int8-de.txt
+faelle 120
+gleicher rang 22
+bewegt 98
+verbessert 56
+verschlechtert 42
+vorzeichentest einseitig p = 0.0944 (P(X >= 56), X ~ Bin(98, 0.5))
+vorzeichentest unter 0.05: nein
+gepaarter t-wert der reziprokraenge 2.028 (df 119)
+mrr erste 0.4428
+mrr zweite 0.5279
+mrr relative aenderung +19.21 prozent
+mrr-rueckgang ueber 5 prozent: nein
+verbessert: de-05 de-06 de-12 de-13 de-16 de-20 de-21 de-24 de-26 de-28 de-31 de-34 de-36 de-39 de-40 de-41 de-42 de-45 de-48 de-49 de-50 de-58 de-60 de-62 de-64 de-65 de-67 de-70 de-71 de-73 de-74 de-76 de-77 de-78 de-80 de-82 de-84 de-85 de-86 de-89 de-90 de-92 de-93 de-94 de-96 de-100 de-101 de-105 de-106 de-111 de-112 de-113 de-115 de-116 de-117 de-120
+verschlechtert: de-02 de-03 de-10 de-17 de-18 de-19 de-22 de-23 de-29 de-30 de-33 de-35 de-37 de-43 de-44 de-46 de-47 de-51 de-52 de-53 de-54 de-55 de-56 de-57 de-61 de-63 de-72 de-75 de-79 de-81 de-83 de-87 de-91 de-97 de-98 de-102 de-103 de-107 de-108 de-109 de-118 de-119
+
+== en:int8: 03-qualitaet-e5-int8-en.txt gegen 03-qualitaet-granite-int8-en.txt
+faelle 42
+gleicher rang 9
+bewegt 33
+verbessert 18
+verschlechtert 15
+vorzeichentest einseitig p = 0.364 (P(X >= 18), X ~ Bin(33, 0.5))
+vorzeichentest unter 0.05: nein
+gepaarter t-wert der reziprokraenge 0.792 (df 41)
+mrr erste 0.5010
+mrr zweite 0.5515
+mrr relative aenderung +10.07 prozent
+mrr-rueckgang ueber 5 prozent: nein
+verbessert: en-01 en-02 en-03 en-04 en-05 en-07 en-10 en-14 en-17 en-21 en-22 en-23 en-27 en-31 en-32 en-35 en-39 en-41
+verschlechtert: en-06 en-11 en-12 en-13 en-19 en-20 en-25 en-26 en-30 en-34 en-36 en-37 en-38 en-40 en-42
+
+== fr:int8: 03-qualitaet-e5-int8-fr.txt gegen 03-qualitaet-granite-int8-fr.txt
+faelle 120
+gleicher rang 13
+bewegt 107
+verbessert 73
+verschlechtert 34
+vorzeichentest einseitig p = 0.000103 (P(X >= 73), X ~ Bin(107, 0.5))
+vorzeichentest unter 0.05: ja
+gepaarter t-wert der reziprokraenge 2.268 (df 119)
+mrr erste 0.2604
+mrr zweite 0.3397
+mrr relative aenderung +30.48 prozent
+mrr-rueckgang ueber 5 prozent: nein
+verbessert: fr-02 fr-03 fr-07 fr-09 fr-12 fr-13 fr-19 fr-21 fr-22 fr-24 fr-25 fr-27 fr-31 fr-32 fr-33 fr-34 fr-35 fr-36 fr-37 fr-38 fr-41 fr-43 fr-44 fr-45 fr-46 fr-49 fr-50 fr-51 fr-52 fr-53 fr-55 fr-57 fr-59 fr-60 fr-62 fr-63 fr-64 fr-66 fr-67 fr-68 fr-69 fr-70 fr-71 fr-72 fr-73 fr-74 fr-76 fr-77 fr-79 fr-81 fr-82 fr-84 fr-87 fr-88 fr-89 fr-91 fr-92 fr-96 fr-97 fr-98 fr-100 fr-101 fr-102 fr-104 fr-105 fr-107 fr-108 fr-111 fr-112 fr-114 fr-115 fr-118 fr-119
+verschlechtert: fr-04 fr-05 fr-06 fr-10 fr-11 fr-14 fr-15 fr-17 fr-18 fr-20 fr-23 fr-26 fr-28 fr-29 fr-40 fr-42 fr-47 fr-54 fr-58 fr-61 fr-78 fr-80 fr-83 fr-90 fr-93 fr-94 fr-95 fr-99 fr-106 fr-109 fr-110 fr-116 fr-117 fr-120
+
+== de:fp32: 03-qualitaet-e5-fp32-de.txt gegen 03-qualitaet-granite-fp32-de.txt
+faelle 120
+gleicher rang 43
+bewegt 77
+verbessert 54
+verschlechtert 23
+vorzeichentest einseitig p = 0.000269 (P(X >= 54), X ~ Bin(77, 0.5))
+vorzeichentest unter 0.05: ja
+gepaarter t-wert der reziprokraenge 4.608 (df 119)
+mrr erste 0.4807
+mrr zweite 0.6422
+mrr relative aenderung +33.60 prozent
+mrr-rueckgang ueber 5 prozent: nein
+verbessert: de-05 de-11 de-12 de-13 de-16 de-22 de-24 de-26 de-30 de-31 de-36 de-40 de-41 de-42 de-45 de-48 de-49 de-51 de-54 de-56 de-58 de-60 de-64 de-68 de-70 de-71 de-73 de-74 de-76 de-77 de-78 de-80 de-82 de-85 de-86 de-89 de-90 de-91 de-92 de-93 de-94 de-96 de-98 de-102 de-105 de-106 de-107 de-108 de-111 de-112 de-113 de-115 de-117 de-120
+verschlechtert: de-02 de-03 de-10 de-14 de-18 de-19 de-20 de-23 de-29 de-44 de-46 de-47 de-52 de-55 de-75 de-79 de-81 de-84 de-100 de-101 de-103 de-109 de-119
+
+== en:fp32: 03-qualitaet-e5-fp32-en.txt gegen 03-qualitaet-granite-fp32-en.txt
+faelle 42
+gleicher rang 9
+bewegt 33
+verbessert 22
+verschlechtert 11
+vorzeichentest einseitig p = 0.0401 (P(X >= 22), X ~ Bin(33, 0.5))
+vorzeichentest unter 0.05: ja
+gepaarter t-wert der reziprokraenge 1.932 (df 41)
+mrr erste 0.4647
+mrr zweite 0.5796
+mrr relative aenderung +24.72 prozent
+mrr-rueckgang ueber 5 prozent: nein
+verbessert: en-01 en-02 en-03 en-04 en-05 en-07 en-10 en-14 en-21 en-22 en-23 en-27 en-29 en-30 en-32 en-34 en-35 en-38 en-39 en-40 en-41 en-42
+verschlechtert: en-06 en-12 en-13 en-17 en-20 en-24 en-25 en-26 en-33 en-36 en-37
+
+== fr:fp32: 03-qualitaet-e5-fp32-fr.txt gegen 03-qualitaet-granite-fp32-fr.txt
+faelle 120
+gleicher rang 14
+bewegt 106
+verbessert 79
+verschlechtert 27
+vorzeichentest einseitig p = 2.16e-07 (P(X >= 79), X ~ Bin(106, 0.5))
+vorzeichentest unter 0.05: ja
+gepaarter t-wert der reziprokraenge 4.619 (df 119)
+mrr erste 0.2870
+mrr zweite 0.4658
+mrr relative aenderung +62.27 prozent
+mrr-rueckgang ueber 5 prozent: nein
+verbessert: fr-03 fr-07 fr-09 fr-13 fr-14 fr-17 fr-19 fr-20 fr-21 fr-22 fr-24 fr-25 fr-27 fr-29 fr-30 fr-32 fr-33 fr-34 fr-36 fr-37 fr-38 fr-41 fr-42 fr-43 fr-44 fr-45 fr-46 fr-49 fr-50 fr-52 fr-53 fr-55 fr-57 fr-59 fr-60 fr-62 fr-63 fr-64 fr-65 fr-66 fr-67 fr-68 fr-69 fr-70 fr-71 fr-73 fr-74 fr-75 fr-76 fr-77 fr-79 fr-80 fr-81 fr-82 fr-83 fr-84 fr-87 fr-88 fr-89 fr-91 fr-92 fr-96 fr-97 fr-98 fr-101 fr-102 fr-104 fr-105 fr-107 fr-108 fr-109 fr-111 fr-112 fr-113 fr-114 fr-115 fr-116 fr-118 fr-119
+verschlechtert: fr-02 fr-05 fr-06 fr-10 fr-16 fr-18 fr-26 fr-28 fr-31 fr-35 fr-40 fr-47 fr-54 fr-58 fr-61 fr-72 fr-78 fr-90 fr-93 fr-94 fr-95 fr-99 fr-100 fr-103 fr-106 fr-110 fr-120
+
+== de:ibmint8: 03-qualitaet-e5-int8-de.txt gegen 03-qualitaet-granite-ibmint8-de.txt
+faelle 120
+gleicher rang 28
+bewegt 92
+verbessert 50
+verschlechtert 42
+vorzeichentest einseitig p = 0.233 (P(X >= 50), X ~ Bin(92, 0.5))
+vorzeichentest unter 0.05: nein
+gepaarter t-wert der reziprokraenge 1.591 (df 119)
+mrr erste 0.4428
+mrr zweite 0.5051
+mrr relative aenderung +14.06 prozent
+mrr-rueckgang ueber 5 prozent: nein
+verbessert: de-05 de-12 de-16 de-21 de-24 de-26 de-28 de-30 de-31 de-34 de-36 de-40 de-41 de-42 de-45 de-47 de-48 de-49 de-50 de-58 de-60 de-62 de-64 de-65 de-70 de-71 de-73 de-74 de-78 de-80 de-82 de-84 de-85 de-86 de-89 de-90 de-92 de-93 de-94 de-100 de-105 de-106 de-107 de-109 de-111 de-112 de-113 de-115 de-116 de-117
+verschlechtert: de-02 de-03 de-04 de-06 de-10 de-14 de-17 de-18 de-19 de-20 de-22 de-23 de-29 de-33 de-35 de-38 de-44 de-46 de-52 de-53 de-54 de-55 de-56 de-57 de-61 de-67 de-72 de-75 de-76 de-81 de-83 de-87 de-91 de-96 de-97 de-98 de-102 de-103 de-108 de-118 de-119 de-120
+
+== en:ibmint8: 03-qualitaet-e5-int8-en.txt gegen 03-qualitaet-granite-ibmint8-en.txt
+faelle 42
+gleicher rang 9
+bewegt 33
+verbessert 18
+verschlechtert 15
+vorzeichentest einseitig p = 0.364 (P(X >= 18), X ~ Bin(33, 0.5))
+vorzeichentest unter 0.05: nein
+gepaarter t-wert der reziprokraenge 1.051 (df 41)
+mrr erste 0.5010
+mrr zweite 0.5668
+mrr relative aenderung +13.14 prozent
+mrr-rueckgang ueber 5 prozent: nein
+verbessert: en-01 en-03 en-04 en-05 en-07 en-10 en-14 en-15 en-17 en-21 en-22 en-23 en-27 en-31 en-32 en-39 en-40 en-41
+verschlechtert: en-06 en-08 en-12 en-13 en-19 en-20 en-25 en-30 en-33 en-34 en-35 en-36 en-37 en-38 en-42
+
+== fr:ibmint8: 03-qualitaet-e5-int8-fr.txt gegen 03-qualitaet-granite-ibmint8-fr.txt
+faelle 120
+gleicher rang 12
+bewegt 108
+verbessert 71
+verschlechtert 37
+vorzeichentest einseitig p = 0.000691 (P(X >= 71), X ~ Bin(108, 0.5))
+vorzeichentest unter 0.05: ja
+gepaarter t-wert der reziprokraenge 2.884 (df 119)
+mrr erste 0.2604
+mrr zweite 0.3662
+mrr relative aenderung +40.64 prozent
+mrr-rueckgang ueber 5 prozent: nein
+verbessert: fr-02 fr-03 fr-09 fr-13 fr-19 fr-20 fr-21 fr-24 fr-25 fr-27 fr-30 fr-32 fr-33 fr-34 fr-35 fr-36 fr-37 fr-38 fr-41 fr-43 fr-44 fr-45 fr-46 fr-49 fr-50 fr-51 fr-52 fr-53 fr-55 fr-57 fr-59 fr-60 fr-62 fr-63 fr-64 fr-65 fr-66 fr-67 fr-68 fr-69 fr-71 fr-73 fr-74 fr-76 fr-77 fr-79 fr-81 fr-84 fr-87 fr-88 fr-89 fr-91 fr-92 fr-94 fr-96 fr-97 fr-98 fr-101 fr-102 fr-104 fr-105 fr-107 fr-108 fr-109 fr-111 fr-112 fr-113 fr-114 fr-115 fr-118 fr-119
+verschlechtert: fr-04 fr-05 fr-06 fr-07 fr-10 fr-14 fr-15 fr-16 fr-17 fr-18 fr-23 fr-26 fr-28 fr-29 fr-31 fr-40 fr-42 fr-47 fr-54 fr-61 fr-70 fr-72 fr-75 fr-78 fr-80 fr-82 fr-83 fr-90 fr-93 fr-95 fr-99 fr-100 fr-103 fr-106 fr-116 fr-117 fr-120
+
+schritt 20 fertig
