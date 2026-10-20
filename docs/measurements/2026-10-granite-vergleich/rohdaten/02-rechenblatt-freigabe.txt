@@ -1,0 +1,52 @@
+rechenblatt und deckel der arm64-box des granite-vergleichs, plan 35-10 (task 1)
+gerechnet 2026-10-20 auf der entwicklungsmaschine, vor jeder kostenpflichtigen
+ressource (D-35-05), nach docs/runbook-messbox.md abschnitt 2 und README
+abschnitt 6
+
+-- 1 die sätze, am 20.10.2026 neu gelesen --
+instanzsatz aus der öffentlichen preiskarte EU (Frankfurt), Linux On Demand,
+dieselbe quelle, die scripts/ops/aws_box.sh prices nennt (PRICE_CARD_URL):
+preis-gelesen 2026-10-20T02:24:12Z
+preis-quelle 2026-10-15T19:13:16Z (hawkFilePublicationDate der karte)
+preis m7g.large 0.0978000000 USD je stunde, netto
+gegen den gepinnten satz in aws_box.sh (INSTANCE_RATES m7g.large=0.0978): gleich
+gegen README abschnitt 6 (gelesen 19.10.2026 16:20Z): gleich
+
+speicher und adresse, die in aws_box.sh gepinnten sätze (PRICE_GP3_GB_MONTH,
+PRICE_IPV4_HOURLY), quelle dort genannt:
+  gp3 0.0952 USD je GB und monat, 40 GB systemplatte: 40 x 0,0952 / 730 = 0,005216 USD je stunde
+  ipv4 0.005 USD je stunde für die öffentliche adresse
+  kein datenvolume, kein snapshot, keine elastische adresse
+übertragung: eingehend kostenlos; ausgehend nur die rohdaten (unter 1 MB),
+unter jeder rechnungsschwelle, 0 USD angesetzt
+
+box gesamt je stunde: 0,0978 + 0,005 + 0,005216 = 0,108016 USD
+
+-- 2 laufzeit je schritt, mit puffer (lehre v1.1: laufzeit nicht unterschätzen) --
+posten                                                        plan     untergrenze früherer anfahrten
+aufbau: security group, schlüssel, instanz, mem=4G mit
+  neustart, docker, image ziehen (10-box-aufbau.sh)           1 h 00   0 h 12 (v1.3), 0 h 40 (v1.2)
+modellordner und text hochladen (rund 280 MB), sha256         0 h 30   nie gemessen
+latenz und speicher, beide modelle, seriell (11, 12)          1 h 00   nie gemessen
+durchsatz auf der stichprobe, beide modelle, 2 läufe (13)     1 h 00   nie gemessen
+rohdaten holen und committen, abbau (19-abbau.sh)             0 h 30   0 h 05 (v1.2)
+summe                                                         4 h 00
+
+-- 3 deckel --
+Deckel (USD) = 4,00 h x 0,108016 USD/h x 1,30 = 0,5617 USD, aufgerundet 0,60 USD
+Deckel (h)   = 4,00 h x 1,30 = 5,2 h
+reserve 30 prozent nach D-28-01. die sätze sind netto USD wie in aws_box.sh;
+eine umrechnung in euro steht hier bewusst nicht, weil kein amtlicher kurs
+gelesen wurde und der owner den deckel in USD abgenommen hat (README
+abschnitt 7: "5,2 h, 0,60 USD").
+
+-- 4 abbruchregel --
+bei 80 prozent des deckels wird abgebrochen: 0,48 USD oder 4 h 10 min seit
+LaunchTime, je nachdem, was zuerst erreicht ist (0,48 / 0,108016 = 4,44 h,
+also greift die zeitgrenze von 4 h 10 min zuerst). nach jedem messschritt
+wird die laufzeit seit LaunchTime gegen diese grenze geprüft. beim abbruch:
+rohdaten sichern, abbauen (19-abbau.sh), vermerk im README unter
+"Abweichungen".
+
+-- 5 freigabe --
+offen bis zum blockierenden checkpoint von plan 35-10 (task 2)
