@@ -38,6 +38,7 @@ of the gate.
 """
 
 import asyncio
+import logging
 import os
 from base64 import b64encode
 from collections.abc import Awaitable, Callable, Mapping, Sequence
@@ -52,6 +53,7 @@ from findling.config import settings
 __all__ = [
     "ASSET_HOSTS",
     "CHUNK_SIZE",
+    "CLIENT_LOGGERS",
     "GATEWAY_PATH",
     "NC_PY_API_VERIFIED_VERSION",
     "AppAPIAuthMiddleware",
@@ -72,6 +74,7 @@ __all__ = [
     "mounts",
     "new_gateway_client",
     "queue_stats",
+    "quiet_client_loggers",
     "read_profile",
     "requeue_documents",
     "run_app",
@@ -85,6 +88,25 @@ __all__ = [
 # import in this module only, and this alias is how the restriction stays cheap to
 # obey rather than something to work around.
 GatewayClient = httpx.AsyncClient
+
+# The two loggers of the HTTP client. httpx logs every request line on INFO,
+# and the OCS path of a file request carries the fileid and the userId
+# (L-35-06, D-36-09). They are named here because this is the one module that
+# may name the client at all.
+CLIENT_LOGGERS: Final = ("httpx", "httpcore")
+
+
+def quiet_client_loggers(log_level: str) -> None:
+    """Lift both client loggers to WARNING unless the process runs on debug.
+
+    FINDLING_LOG_LEVEL=debug is the way back to the request lines; any other
+    level keeps user and file ids out of the log.
+    """
+    if log_level == "debug":
+        return
+    for name in CLIENT_LOGGERS:
+        logging.getLogger(name).setLevel(logging.WARNING)
+
 
 # The release the header layout below was read against. It is named here so that
 # an upgrade has one obvious place to be re-verified.

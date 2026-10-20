@@ -61,6 +61,7 @@ from findling.nc.client import (
     AppAPIAuthMiddleware,
     AsyncNextcloudApp,
     create_app_client,
+    quiet_client_loggers,
     run_app,
     set_handlers,
 )
@@ -922,12 +923,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # application object, so the task has to be reachable from module level.
     global _POLLER
     logging.basicConfig(level=log_level().upper())
-    # httpx logs every request line on INFO, and the OCS path of a file request
-    # carries the fileid and the userId (L-35-06, D-36-09). Outside debug both
-    # client loggers stand on WARNING; FINDLING_LOG_LEVEL=debug brings them back.
-    if log_level() != "debug":
-        for client_logger in ("httpx", "httpcore"):
-            logging.getLogger(client_logger).setLevel(logging.WARNING)
+    # The HTTP client and httpcore under it log every request line on INFO, and
+    # the OCS path of a file request carries the fileid and the userId (L-35-06,
+    # D-36-09). Outside debug both stand on WARNING; FINDLING_LOG_LEVEL=debug
+    # brings them back. The names live in nc/client.py, the one module that may
+    # name the client.
+    quiet_client_loggers(log_level())
     # set_handlers adds routes to the application object, and the application
     # object outlives the lifespan: one process can start it once, a test suite
     # enters and leaves it many times on the same global APP. Without this guard

@@ -2092,8 +2092,16 @@ PHP_TREE_HASH_TODAY = "9aa79bb73926212910b0e58d3def6eb0fef82ef650a28c3f1bf8f66df
 # PACKAGE_FILES_TODAY stays at 80. The PHP pair does not move. Recomputed
 # independently with find, sort, tr and sha256sum over the CRLF normalised
 # tree: 2f73265b... both ways.
+#
+# Moved again on 2026-10-20 by Plan 36-02 (HART-06, gate A): the full suite
+# found the logger names in main.py, and test_gateway_client allows the client
+# to be named in nc/client.py only. The two names and the lift moved there as
+# CLIENT_LOGGERS and quiet_client_loggers, which the lifespan now calls. No
+# file came or went, so PACKAGE_FILES_TODAY stays at 80. The PHP pair does not
+# move. Recomputed independently with find, sort, tr and sha256sum over the
+# CRLF normalised tree: 92013822... both ways.
 PACKAGE_FILES_TODAY = 80
-PACKAGE_TREE_HASH_TODAY = "2f73265b5c6905c49b940716657f68f744af703e98d9cc7f50481af6f4c2de22"
+PACKAGE_TREE_HASH_TODAY = "920138228dc8c24c342a7f20c6a403d732a66045312338e3f08a4f8bb431f056"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
