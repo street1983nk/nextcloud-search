@@ -2767,6 +2767,356 @@ jobs:
 
           echo "one cycle, and all three cases are correct: new, changed, removed"
 
+      # M-32-02 (plan 36-05, D-36-05, D-36-06, D-36-14): documents of storages
+      # that are gone, switched off or mounted for nobody. Five storages, one
+      # file each, and every expectation below is a count of living rows per
+      # storage out of state.db, read by plain sqlite3 and never by the code
+      # under test:
+      #
+      # - gone36: the user is deleted, its home leaves oc_storages, the rows go
+      #   in the first cycle.
+      # - keep36: the control, it keeps its row through all three cycles.
+      # - E1: an external storage that stays mounted, until the Findling switch
+      #   for external storage goes off; then it goes without a grace period.
+      # - E2, E3: external storages that still exist and are mounted for
+      #   nobody. Both get a stamp in vanished_storages and keep their rows; E2
+      #   is backdated by 31 days and goes in the second cycle, E3 is not and
+      #   stays.
+      #
+      # How "mounted for nobody" is produced is the one thing measured before
+      # this was written (36-M3202-VORPRUEFUNG.md, way V4). Nextcloud 34 keeps
+      # oc_mounts in step with the applicable list of files_external at once, so
+      # moving a storage to a placeholder user that never logs in gives that user
+      # a row in oc_mounts on the spot, and no refresh way (files:scan of the
+      # owner, a WebDAV login of the owner, files:scan --all) removes it. A
+      # storage applicable to an empty group has no row in oc_mounts and keeps
+      # its row in oc_storages, without any refresh. The step that detaches E2
+      # and E3 checks exactly that through SQL and stops with an error if the
+      # core ever behaves differently. Nothing here deletes a row of oc_mounts.
+      #
+      # Every cycle is one run_once() of its own, the same way the reconcile
+      # step above runs it, and its queue is drained before anything is counted.
+      - name: "M-32-02: helpers for the storage sweep"
+        run: |
+          cat > m3202-lib.sh <<'SH'
+          STATE_DB="${{ runner.temp }}/findling/state.db"
+          M3202_PASS='findling-ci-m3202-2026'
+
+          # One SELECT against the Nextcloud database, through the server's own
+          # connection, so that the table prefix and the dialect are the ones
+          # occ uses. Prints the rows as JSON.
+          ncsql() {
+            php -r '
+              require "lib/base.php";
+              $c = \OC::$server->get(\OCP\IDBConnection::class);
+              echo json_encode($c->executeQuery($argv[1])->fetchAll()), "\n";
+            ' -- "$1"
+          }
+
+          # Living rows of one storage in state.db.
+          rows() {
+            python3 -c '
+          import sqlite3, sys
+          c = sqlite3.connect(sys.argv[1], timeout=30)
+          print(c.execute("SELECT COUNT(*) FROM files WHERE storage_id = ? AND deleted_at IS NULL", (int(sys.argv[2]),)).fetchone()[0])
+          ' "${STATE_DB}" "$1"
+          }
+
+          # The stamp of one storage in vanished_storages, empty without one.
+          stamp() {
+            python3 -c '
+          import sqlite3, sys
+          c = sqlite3.connect(sys.argv[1], timeout=30)
+          row = c.execute("SELECT first_missing_at FROM vanished_storages WHERE storage_id = ?", (int(sys.argv[2]),)).fetchone()
+          print("" if row is None else row[0])
+          ' "${STATE_DB}" "$1"
+          }
+
+          open_rows() {
+            ./occ findling:index | awk '
+              $1 == "scheduled" { scheduled = $2 }
+              /^  handed to the worker/ { running = $NF }
+              END { print (scheduled + 0) + (running + 0) }'
+          }
+
+          drain() {
+            deadline=$(( $(date +%s) + 300 ))
+            while :; do
+              open=$(open_rows)
+              echo "draining: open=${open}"
+              if [ "${open}" -eq 0 ]; then
+                break
+              fi
+              if [ "$(date +%s)" -ge "${deadline}" ]; then
+                echo "::error::the queue was not worked off in time"
+                ./occ findling:index
+                return 1
+              fi
+              sleep 5
+            done
+            # The index and the tombstones are written in batches, so the last
+            # write may be a moment behind the empty queue.
+            sleep 5
+          }
+
+          # Exactly one reconcile cycle, the RoundResult as the last line of $1.
+          cycle() {
+            (
+              cd findling-src/backend
+              export APP_ID=findling_backend
+              export APP_SECRET="${EXAPP_SECRET}"
+              export APP_VERSION=0.1.0
+              export NEXTCLOUD_URL=http://localhost:8080
+              export APP_PERSISTENT_STORAGE="${{ runner.temp }}/findling"
+              export FINDLING_RECONCILE_ENABLED=true
+              uv run python - <<'PY'
+          import asyncio
+          import json
+          import logging
+
+          from findling.worker.reconcile import Reconcile
+
+          logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
+          result = asyncio.run(Reconcile(min_interval_hours=0).run_once())
+          print(
+              json.dumps(
+                  {
+                      "state": result.state,
+                      "mounts": result.mounts,
+                      "seen": result.seen,
+                      "stale": result.stale,
+                      "missing": result.missing,
+                      "slices": result.slices,
+                  }
+              ),
+              flush=True,
+          )
+          PY
+            ) 2>&1 | tee "$1"
+            report=$(tail -n 1 "$1")
+            echo "round result: ${report}"
+            jq -e '.state == "walked"' <<< "${report}" > /dev/null \
+              || { echo "::error::the cycle did not walk the whole file list, so the sweep behind it never ran"; return 1; }
+          }
+
+          # One expectation per call: storage id, label, expected count, message.
+          expect_rows() {
+            got=$(rows "$1")
+            echo "$2 (storage $1): ${got} living rows, expected $3"
+            [ "${got}" -eq "$3" ] || { echo "::error::$4"; return 1; }
+          }
+
+          expect_stamped() {
+            got=$(stamp "$1")
+            echo "$2 (storage $1): stamp '${got}'"
+            [ -n "${got}" ] || { echo "::error::$3"; return 1; }
+          }
+
+          expect_unstamped() {
+            got=$(stamp "$1")
+            echo "$2 (storage $1): stamp '${got}'"
+            [ -z "${got}" ] || { echo "::error::$3"; return 1; }
+          }
+
+          table() {
+            for label in GONE KEEP E1 E2 E3; do
+              id_var="${label}_STORAGE"
+              echo "  ${label} storage ${!id_var}: $(rows "${!id_var}") living rows, stamp '$(stamp "${!id_var}")'"
+            done
+          }
+          SH
+          echo "helpers written"
+
+      - name: "M-32-02: four users, three external storages, one file each"
+        run: |
+          . ./m3202-lib.sh
+          ./occ app:enable files_external
+          ./occ config:system:set files_external_allow_create_new_local --value=true --type=boolean
+          # The switch goes on before the first file is written, so that the
+          # events of the three external files are not refused by it.
+          ./occ config:app:set findling index_external_storage --value=1 --type=boolean
+          for user in gone36 keep36 ext36; do
+            OC_PASS="${M3202_PASS}" ./occ user:add --password-from-env "${user}"
+          done
+          ./occ group:add m3202-empty
+
+          : > m3202.env
+          for n in 1 2 3; do
+            mkdir -p "${{ runner.temp }}/m3202/e${n}"
+            created=$(./occ files_external:create "/e${n}" local null::null \
+              -c "datadir=${{ runner.temp }}/m3202/e${n}")
+            echo "${created}"
+            config_id=$(awk '/created with id/ { print $NF }' <<< "${created}")
+            [ -n "${config_id}" ] || { echo "::error::files_external:create named no id for E${n}"; exit 1; }
+            ./occ files_external:applicable "${config_id}" --add-user ext36
+            echo "E${n}_MOUNT=${config_id}" >> m3202.env
+          done
+
+          # Written over WebDAV, so that the ordinary node events put them into
+          # the queue. One word per file, each standing in no other file.
+          put() {
+            printf '%s\n' "$3" > m3202-upload.txt
+            curl -sfS -u "$1:${M3202_PASS}" -T m3202-upload.txt \
+              "http://localhost:8080/remote.php/dav/files/$1/$2"
+          }
+          put gone36 m3202-gone.txt 'Der Abrissbescheid fuer das Nebengebaeude liegt vor.'
+          put keep36 m3202-keep.txt 'Der Kontrollstein bleibt an seinem Platz.'
+          put ext36 e1/m3202-e1.txt 'Das Pegelprotokoll der ersten Messstelle.'
+          put ext36 e2/m3202-e2.txt 'Das Pegelprotokoll der zweiten Messstelle, Wehrkante.'
+          put ext36 e3/m3202-e3.txt 'Das Pegelprotokoll der dritten Messstelle, Ufermauer.'
+
+          storage_of() {
+            ncsql "SELECT numeric_id FROM *PREFIX*storages WHERE id = 'home::$1'" | jq -r '.[0].numeric_id // empty'
+          }
+          mount_storage_of() {
+            ncsql "SELECT DISTINCT storage_id FROM *PREFIX*mounts WHERE mount_id = $1" | jq -r '.[0].storage_id // empty'
+          }
+          . ./m3202.env
+          {
+            echo "GONE_STORAGE=$(storage_of gone36)"
+            echo "KEEP_STORAGE=$(storage_of keep36)"
+            echo "E1_STORAGE=$(mount_storage_of "${E1_MOUNT}")"
+            echo "E2_STORAGE=$(mount_storage_of "${E2_MOUNT}")"
+            echo "E3_STORAGE=$(mount_storage_of "${E3_MOUNT}")"
+          } >> m3202.env
+          cat m3202.env
+          . ./m3202.env
+          for label in GONE KEEP E1 E2 E3; do
+            id_var="${label}_STORAGE"
+            [ -n "${!id_var}" ] || { echo "::error::no storage id for ${label}"; exit 1; }
+          done
+
+      - name: "M-32-02: wait until all five files are indexed"
+        run: |
+          . ./m3202-lib.sh
+          . ./m3202.env
+          deadline=$(( $(date +%s) + 300 ))
+          while :; do
+            missing=0
+            for label in GONE KEEP E1 E2 E3; do
+              id_var="${label}_STORAGE"
+              [ "$(rows "${!id_var}")" -ge 1 ] || missing=$((missing + 1))
+            done
+            open=$(open_rows)
+            echo "indexing: open=${open} storages without a row=${missing}"
+            if [ "${open}" -eq 0 ] && [ "${missing}" -eq 0 ]; then
+              break
+            fi
+            if [ "$(date +%s)" -ge "${deadline}" ]; then
+              echo "::error::the five files of the storage sweep were not indexed in time"
+              table
+              exit 1
+            fi
+            sleep 5
+          done
+          sleep 5
+          echo "before anything happens:"
+          table
+          {
+            echo "GONE_BEFORE=$(rows "${GONE_STORAGE}")"
+            echo "KEEP_BEFORE=$(rows "${KEEP_STORAGE}")"
+            echo "E1_BEFORE=$(rows "${E1_STORAGE}")"
+            echo "E2_BEFORE=$(rows "${E2_STORAGE}")"
+            echo "E3_BEFORE=$(rows "${E3_STORAGE}")"
+          } >> m3202.env
+
+      - name: "M-32-02: delete gone36, mount E2 and E3 for nobody"
+        run: |
+          . ./m3202-lib.sh
+          . ./m3202.env
+          ./occ user:delete gone36
+          # Way V4 of 36-M3202-VORPRUEFUNG.md: applicable to an empty group,
+          # which takes the rows out of oc_mounts at once. No refresh follows,
+          # because none is needed and a placeholder user would undo it.
+          ./occ files_external:applicable "${E2_MOUNT}" --remove-user ext36 --add-group m3202-empty
+          ./occ files_external:applicable "${E3_MOUNT}" --remove-user ext36 --add-group m3202-empty
+
+          echo "--- oc_storages ---"
+          storages=$(ncsql "SELECT numeric_id, id FROM *PREFIX*storages WHERE numeric_id IN (${GONE_STORAGE}, ${KEEP_STORAGE}, ${E1_STORAGE}, ${E2_STORAGE}, ${E3_STORAGE})")
+          echo "${storages}" | jq -c '.[]'
+          echo "--- oc_mounts ---"
+          mounts=$(ncsql "SELECT storage_id, user_id, mount_point, mount_provider_class FROM *PREFIX*mounts WHERE storage_id IN (${GONE_STORAGE}, ${KEEP_STORAGE}, ${E1_STORAGE}, ${E2_STORAGE}, ${E3_STORAGE})")
+          echo "${mounts}" | jq -c '.[]'
+
+          has_storage() { jq -e --argjson s "$1" 'any(.[]; (.numeric_id | tonumber) == $s)' <<< "${storages}" > /dev/null; }
+          has_mount() { jq -e --argjson s "$1" 'any(.[]; (.storage_id | tonumber) == $s)' <<< "${mounts}" > /dev/null; }
+          deviates="the Nextcloud core behaves differently from 36-M3202-VORPRUEFUNG.md"
+          ! has_storage "${GONE_STORAGE}" || { echo "::error::the home of the deleted user is still in oc_storages, ${deviates}"; exit 1; }
+          has_storage "${E2_STORAGE}" || { echo "::error::E2 left oc_storages, ${deviates}"; exit 1; }
+          has_storage "${E3_STORAGE}" || { echo "::error::E3 left oc_storages, ${deviates}"; exit 1; }
+          ! has_mount "${E2_STORAGE}" || { echo "::error::E2 is still in oc_mounts, ${deviates}"; exit 1; }
+          ! has_mount "${E3_STORAGE}" || { echo "::error::E3 is still in oc_mounts, ${deviates}"; exit 1; }
+          has_mount "${E1_STORAGE}" || { echo "::error::E1 is no longer in oc_mounts"; exit 1; }
+          has_mount "${KEEP_STORAGE}" || { echo "::error::the home of keep36 is not in oc_mounts"; exit 1; }
+
+          # The sweep is what is measured, not an event: nothing may be queued,
+          # and the deleted user still has its row in the index.
+          open=$(open_rows)
+          [ "${open}" -eq 0 ] || { echo "::error::${open} queue rows after the deletion, so the cycle below would measure something else"; exit 1; }
+          expect_rows "${GONE_STORAGE}" gone36 "${GONE_BEFORE}" "the documents of gone36 left the index before any cycle ran"
+
+      - name: "M-32-02: cycle 1, the deleted user goes, E2 and E3 get a stamp"
+        run: |
+          . ./m3202-lib.sh
+          . ./m3202.env
+          cycle m3202-cycle1.txt
+          drain
+          table
+          expect_rows "${GONE_STORAGE}" gone36 0 "the documents of the deleted user are still in the index after the cycle"
+          expect_rows "${KEEP_STORAGE}" keep36 "${KEEP_BEFORE}" "the control user lost documents"
+          expect_rows "${E1_STORAGE}" E1 "${E1_BEFORE}" "the storage that stays mounted lost documents"
+          expect_rows "${E2_STORAGE}" E2 "${E2_BEFORE}" "E2 lost documents without a grace period"
+          expect_rows "${E3_STORAGE}" E3 "${E3_BEFORE}" "E3 lost documents without a grace period"
+          expect_stamped "${E2_STORAGE}" E2 "E2 is mounted for nobody and has no row in vanished_storages"
+          expect_stamped "${E3_STORAGE}" E3 "E3 is mounted for nobody and has no row in vanished_storages"
+          expect_unstamped "${E1_STORAGE}" E1 "E1 is mounted and still got a stamp"
+          expect_unstamped "${KEEP_STORAGE}" keep36 "the home of keep36 is mounted and still got a stamp"
+
+      - name: "M-32-02: cycle 2, E2 backdated by 31 days goes, E3 stays"
+        run: |
+          . ./m3202-lib.sh
+          . ./m3202.env
+          echo "first_missing_at of E2 before: $(stamp "${E2_STORAGE}")"
+          python3 -c '
+          import sqlite3, sys
+          c = sqlite3.connect(sys.argv[1], timeout=30)
+          with c:
+              c.execute("UPDATE vanished_storages SET first_missing_at = first_missing_at - 31 * 86400 WHERE storage_id = ?", (int(sys.argv[2]),))
+          ' "${STATE_DB}" "${E2_STORAGE}"
+          echo "first_missing_at of E2 after:  $(stamp "${E2_STORAGE}")"
+          echo "first_missing_at of E3, not touched: $(stamp "${E3_STORAGE}")"
+          cycle m3202-cycle2.txt
+          drain
+          table
+          expect_rows "${E2_STORAGE}" E2 0 "E2 is past its grace period and kept its documents"
+          expect_rows "${E3_STORAGE}" E3 "${E3_BEFORE}" "E3 lost documents inside its grace period"
+          expect_stamped "${E3_STORAGE}" E3 "E3 lost its stamp although it is still mounted for nobody"
+          expect_rows "${KEEP_STORAGE}" keep36 "${KEEP_BEFORE}" "the control user lost documents"
+          expect_rows "${E1_STORAGE}" E1 "${E1_BEFORE}" "the storage that stays mounted lost documents"
+
+      - name: "M-32-02: cycle 3, the switch for external storage goes off, E1 goes at once"
+        run: |
+          . ./m3202-lib.sh
+          . ./m3202.env
+          ./occ config:app:set findling index_external_storage --value=0 --type=boolean
+          cycle m3202-cycle3.txt
+          drain
+          table
+          expect_rows "${E1_STORAGE}" E1 0 "the switched off external storage kept its documents"
+          expect_unstamped "${E1_STORAGE}" E1 "the switched off external storage got a grace stamp instead of going at once"
+          expect_rows "${E3_STORAGE}" E3 "${E3_BEFORE}" "E3 lost documents inside its grace period"
+          expect_stamped "${E3_STORAGE}" E3 "E3 lost its stamp"
+          expect_rows "${KEEP_STORAGE}" keep36 "${KEEP_BEFORE}" "the control user lost documents"
+
+          # The control once more, as a user would see it.
+          curl -sfS -G -u "keep36:${M3202_PASS}" \
+            -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+            --data-urlencode 'term=Kontrollstein' \
+            'http://localhost:8080/ocs/v2.php/search/providers/findling/search' -o m3202-keep.json
+          jq -e '.ocs.data.entries | length == 1' m3202-keep.json > /dev/null \
+            || { echo "::error::the control user no longer finds its own document"; cat m3202-keep.json; exit 1; }
+          echo "three cycles: deleted user, backdated vanished storage and switched off storage left the index, the control stayed"
+
       - name: Everything the failure had to say
         if: failure()
         run: |
@@ -2776,6 +3126,8 @@ jobs:
           ./occ findling:index || true
           echo "--- the reconcile round ---"
           cat reconcile.txt || true
+          echo "--- the storage sweep (M-32-02) ---"
+          cat m3202.env m3202-cycle1.txt m3202-cycle2.txt m3202-cycle3.txt m3202-keep.json 2>/dev/null || true
           echo "--- the last search answers ---"
           for answer in swiss-ss.json swiss-sharp.json austrian.json before-changed.json \
                         before-removed-owner.json before-removed-colleague.json \
