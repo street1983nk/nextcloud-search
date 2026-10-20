@@ -2115,8 +2115,18 @@ PHP_TREE_HASH_TODAY = "c5642f59dfa6a332ff30872a3e8f46ebf049f1649b531d614f0188dc8
 # file came or went, so PACKAGE_FILES_TODAY stays at 80. The PHP pair does not
 # move. Recomputed independently with find, sort, tr and sha256sum over the
 # CRLF normalised tree: 92013822... both ways.
+#
+# Moved on 2026-10-20 by Plan 36-04 (HART-06, D-36-05, D-36-14, M-32-02):
+# store/repo.py carries the six methods of the storage sweep (living_storages,
+# living_file_ids, mark_vanished, clear_vanished, forget_storage,
+# drop_orphan_bookmarks) over the new table vanished_storages of schema.sql,
+# nc/client.py carries gone_storages for GET /storages/gone, and nc/files.py
+# carries GoneResult and FileList.gone_storages in bands of 256 with the answer
+# cut to the ids that were asked. No file came or went, so PACKAGE_FILES_TODAY
+# stays at 80. The PHP pair does not move. Recomputed independently with find,
+# sort, tr and sha256sum over the CRLF normalised tree: 7de293e1... both ways.
 PACKAGE_FILES_TODAY = 80
-PACKAGE_TREE_HASH_TODAY = "920138228dc8c24c342a7f20c6a403d732a66045312338e3f08a4f8bb431f056"
+PACKAGE_TREE_HASH_TODAY = "7de293e18a71104826d70ae30ce665f320d9004396f9985af4ffabdf4639a33d"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

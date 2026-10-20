@@ -22,9 +22,9 @@ client per page would pay a connection setup per page and, on the PHP side, a
 Nextcloud bootstrap including the AppAPI signature check for every single one of
 them.
 
-Both calls of this module read. Neither needs an entry in the write allowlist of
+All three calls of this module read. None needs an entry in the write allowlist of
 the read-only gate, because that list only judges writing HTTP methods, and
-neither gets one: an entry that is not needed is a widening of a security gate
+none gets one: an entry that is not needed is a widening of a security gate
 for nothing.
 
 This module imports neither the Nextcloud client library nor an HTTP client, and
@@ -52,9 +52,16 @@ from typing import Any
 # caller uses, and a call to the plain name inside a method of the same name
 # reads like recursion to everybody who has ever debugged one.
 from findling.nc.client import AsyncNextcloudApp, files_slice
+from findling.nc.client import gone_storages as ask_gone_storages
 from findling.nc.client import mounts as read_mounts
 
 LOGGER = logging.getLogger("findling.nc.files")
+
+# How many storage ids one storage question may carry. Equal to
+# ReconcileController::MAX_STORAGE_IDS on the PHP side, which refuses a longer
+# list with HTTP 400; a test in tests/test_files_client.py reads the PHP constant
+# and holds the two numbers together.
+GONE_LOOKUP_BAND = 256
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,6 +124,20 @@ class MountResult:
     mounts: tuple[Mount, ...] = ()
     discarded: int = 0
     unavailable: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class GoneResult:
+    """The answer of the storage question (plan 36-04, D-36-14).
+
+    ``gone`` are storages Nextcloud no longer has at all, ``deselected`` are
+    storages only a provider the admin switched off in Findling still carries.
+    Both lose their documents at once; every other absent storage waits out the
+    grace. Only ids that were asked for ever appear here.
+    """
+
+    gone: frozenset[int] = frozenset()
+    deselected: frozenset[int] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)
@@ -248,8 +269,26 @@ def _row(entry: object) -> FileRow | None:
     )
 
 
+def _id_set(value: object) -> frozenset[int] | None:
+    """A list of positive whole numbers as a set, or None when any entry is not one.
+
+    One bad entry refuses the whole list, because this answer decides on delete
+    orders: a list that is read in part is a list that may be missing the entry
+    that would have said "keep".
+    """
+    if not isinstance(value, list):
+        return None
+    found: set[int] = set()
+    for entry in value:
+        number = _positive_int(entry)
+        if number is None:
+            return None
+        found.add(number)
+    return frozenset(found)
+
+
 class FileList:
-    """The two reading calls of the reconcile, bound to one client for the run."""
+    """The three reading calls of the reconcile, bound to one client for the run."""
 
     def __init__(self, nc: AsyncNextcloudApp) -> None:
         self._nc = nc
@@ -315,3 +354,38 @@ class FileList:
         final = payload.get("final") is True
 
         return SliceResult(files=tuple(rows), final=final, discarded=discarded)
+
+    async def gone_storages(self, ids: Sequence[int]) -> GoneResult | None:
+        """Ask which of these absent storages are deleted or switched off.
+
+        None means "no answer" and is the safe reading: a failed call, a 404 of
+        a 1.4.x companion that has no such route, a broken shape or a band that
+        failed. The reconcile then treats every absent storage as vanished and
+        waits out the grace (D-36-05). Ids in the answer that were not asked
+        for are dropped (T-36-14).
+        """
+        asked = list(dict.fromkeys(ids))
+        gone: set[int] = set()
+        deselected: set[int] = set()
+        for start in range(0, len(asked), GONE_LOOKUP_BAND):
+            band = asked[start : start + GONE_LOOKUP_BAND]
+            try:
+                answer = await ask_gone_storages(self._nc, band)
+            except Exception:
+                # Every exception, for the reason given in mounts(). The message
+                # is not logged: it is the kind of value a path arrives in.
+                LOGGER.warning("could not ask which storages are gone, treating all of them as vanished")
+                return None
+
+            payload = _mapping(answer)
+            band_gone = None if payload is None else _id_set(payload.get("gone"))
+            band_deselected = None if payload is None else _id_set(payload.get("deselected"))
+            if band_gone is None or band_deselected is None:
+                LOGGER.warning("the answer about gone storages was unusable, treating all of them as vanished")
+                return None
+
+            wanted = frozenset(band)
+            gone |= band_gone & wanted
+            deselected |= band_deselected & wanted
+
+        return GoneResult(gone=frozenset(gone), deselected=frozenset(deselected))

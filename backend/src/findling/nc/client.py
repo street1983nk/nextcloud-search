@@ -677,6 +677,25 @@ async def mounts(nc: AsyncNextcloudApp) -> object:
     )
 
 
+async def gone_storages(nc: AsyncNextcloudApp, ids: Sequence[int]) -> object:
+    """Which of these storages Nextcloud deleted, and which a switched off provider holds.
+
+    The storage question of plan 36-04 (D-36-14, M-32-02), asked for the
+    storages the mount list no longer carries while this container still holds
+    documents of them. Answers with {"gone": [int], "deselected": [int]}; at most
+    256 ids per call, the ceiling of ReconcileController::MAX_STORAGE_IDS.
+
+    Returned untyped on purpose, exactly like :func:`mounts`. A GET, therefore
+    no entry in OCS_WRITE_ALLOWLIST, for the reason given at the top of this
+    block.
+    """
+    return await nc._session.ocs(
+        "GET",
+        "/ocs/v2.php/apps/findling/storages/gone",
+        params={"ids[]": list(ids)},
+    )
+
+
 async def read_profile(nc: AsyncNextcloudApp) -> object:
     """The profile the admin stored on the companion side (D-24-01).
 

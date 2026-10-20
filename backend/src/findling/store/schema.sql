@@ -140,3 +140,20 @@ CREATE TABLE IF NOT EXISTS file_errors (
     error_class TEXT NOT NULL,      -- module.qualname, [A-Za-z0-9_.], at most 200
     recorded_at INTEGER NOT NULL
 );
+
+-- The first round in which the mount list no longer carried a storage that
+-- still has living rows here, and nothing else (plan 36-04, M-32-02). A storage
+-- Nextcloud deleted or a provider the admin switched off loses its documents in
+-- the same reconcile; a storage that merely stopped being listed (an external
+-- mount that is down, a share that went away for a while) keeps them until this
+-- stamp is 30 days old (D-36-05). A storage that comes back loses its stamp in
+-- the same round, so a later absence starts the grace again.
+--
+-- IF NOT EXISTS like everything in this file, so an existing database gets the
+-- table on its next open without a reindex and without a new SCHEMA_VERSION.
+-- Losing it restarts the grace and never costs a document: the stamp only ever
+-- delays a deletion, it never causes one. first_missing_at is epoch seconds.
+CREATE TABLE IF NOT EXISTS vanished_storages (
+    storage_id       INTEGER PRIMARY KEY,
+    first_missing_at INTEGER NOT NULL
+);

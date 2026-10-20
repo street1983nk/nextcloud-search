@@ -614,6 +614,31 @@ _RECONCILE_STATE_SQL: Final = """
 SELECT MAX(finished_at), SUM(CASE WHEN after_file_id > 0 THEN 1 ELSE 0 END) FROM reconcile
 """
 
+# The storage sweep of plan 36-04 (M-32-02, D-36-05, D-36-14). A living storage
+# is one with at least one row that is not a tombstone; the index files_storage
+# answers both questions without a scan of the table.
+_LIVING_STORAGES_SQL: Final = "SELECT DISTINCT storage_id FROM files WHERE deleted_at IS NULL"
+_LIVING_FILE_IDS_SQL: Final = "SELECT file_id FROM files WHERE storage_id = ? AND deleted_at IS NULL ORDER BY file_id"
+
+# The first sighting wins and is never moved by a later round: the grace counts
+# from the first round without the storage, not from the last.
+_MARK_VANISHED_SQL: Final = """
+INSERT INTO vanished_storages (storage_id, first_missing_at) VALUES (?, ?)
+ON CONFLICT(storage_id) DO NOTHING
+"""
+_FIRST_MISSING_SQL: Final = "SELECT first_missing_at FROM vanished_storages WHERE storage_id = ?"
+
+_FORGET_STORAGE_RECONCILE_SQL: Final = "DELETE FROM reconcile WHERE storage_id = ?"
+_FORGET_STORAGE_MOUNTS_SQL: Final = "DELETE FROM mounts WHERE storage_id = ?"
+_FORGET_STORAGE_VANISHED_SQL: Final = "DELETE FROM vanished_storages WHERE storage_id = ?"
+
+# Bookmarks and mirrors of storages that neither the list carries nor a living
+# row keeps: what a storage leaves behind when it vanished in the middle of a
+# walk (finding F4). Its reconcile row stood above zero for good, and _is_due
+# read that as an interrupted walk in every tick.
+_ORPHAN_RECONCILE_SQL: Final = "SELECT storage_id FROM reconcile"
+_ORPHAN_MOUNTS_SQL: Final = "SELECT storage_id FROM mounts"
+
 
 @dataclass(frozen=True, slots=True)
 class ReconcileCursor:
@@ -1416,6 +1441,76 @@ class Store:
             last_finished_at=None if row[0] is None else int(row[0]),
             unfinished=0 if row[1] is None else int(row[1]),
         )
+
+    # -- the storage sweep (plan 36-04, M-32-02) ----------------------------
+
+    def living_storages(self) -> frozenset[int]:
+        """Every storage id with at least one row that is not a tombstone."""
+        return frozenset(int(row[0]) for row in self._conn.execute(_LIVING_STORAGES_SQL))
+
+    def living_file_ids(self, storage_id: int) -> list[int]:
+        """The living file ids of one storage, ordered, tombstones aside."""
+        return [int(row[0]) for row in self._conn.execute(_LIVING_FILE_IDS_SQL, (storage_id,))]
+
+    def mark_vanished(self, storage_id: int, now: int) -> int:
+        """Stamp the first round without this storage and return that stamp.
+
+        A second call leaves the stamp alone and answers with the first one,
+        which is what lets the grace of D-36-05 count from the first absence.
+        """
+        with self._transaction():
+            self._conn.execute(_MARK_VANISHED_SQL, (storage_id, now))
+            row = self._conn.execute(_FIRST_MISSING_SQL, (storage_id,)).fetchone()
+        return now if row is None else int(row[0])
+
+    def clear_vanished(self, listed: Iterable[int]) -> None:
+        """Drop the stamp of every listed storage: it came back, the grace restarts.
+
+        Banded like :meth:`known_etags`, for the same parameter limit.
+        """
+        ids = sorted(listed)
+        if not ids:
+            return
+        with self._transaction():
+            for start in range(0, len(ids), _ACL_BAND):
+                band = ids[start : start + _ACL_BAND]
+                placeholders = ",".join("?" * len(band))
+                self._conn.execute(
+                    # Placeholders only, as in known_etags.
+                    f"DELETE FROM vanished_storages WHERE storage_id IN ({placeholders})",  # noqa: S608
+                    tuple(band),
+                )
+
+    def forget_storage(self, storage_id: int) -> None:
+        """Drop the bookmark, the mirror and the stamp of a storage that was swept.
+
+        Called only after its delete orders reached the queue. The file rows
+        themselves stay: the delete branch of the poller turns them into
+        tombstones, which is the one deletion path this project has.
+        """
+        with self._transaction():
+            self._conn.execute(_FORGET_STORAGE_RECONCILE_SQL, (storage_id,))
+            self._conn.execute(_FORGET_STORAGE_MOUNTS_SQL, (storage_id,))
+            self._conn.execute(_FORGET_STORAGE_VANISHED_SQL, (storage_id,))
+
+    def drop_orphan_bookmarks(self, listed: Iterable[int]) -> None:
+        """Drop reconcile and mounts rows of storages neither listed nor living (F4).
+
+        A storage with living rows is left alone here: whether its documents go
+        is the sweep's decision, and its bookmark goes with them.
+        """
+        keep = frozenset(listed) | self.living_storages()
+        reconcile = {int(row[0]) for row in self._conn.execute(_ORPHAN_RECONCILE_SQL)}
+        mounts = {int(row[0]) for row in self._conn.execute(_ORPHAN_MOUNTS_SQL)}
+        orphans_reconcile = sorted(reconcile - keep)
+        orphans_mounts = sorted(mounts - keep)
+        if not orphans_reconcile and not orphans_mounts:
+            return
+        with self._transaction():
+            for storage_id in orphans_reconcile:
+                self._conn.execute(_FORGET_STORAGE_RECONCILE_SQL, (storage_id,))
+            for storage_id in orphans_mounts:
+                self._conn.execute(_FORGET_STORAGE_MOUNTS_SQL, (storage_id,))
 
     def replace_acl(self, file_id: int, uids: Iterable[str]) -> None:
         """Write the permissions of one file as a whole, never as a change.

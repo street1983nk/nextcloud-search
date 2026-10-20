@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from findling.nc.client import AsyncNextcloudApp
-from findling.nc.files import FileList, FileRow, Mount
+from findling.nc.files import GONE_LOOKUP_BAND, FileList, FileRow, GoneResult, Mount
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "src" / "findling"
 CLIENT_SOURCE = PACKAGE_ROOT / "nc" / "client.py"
@@ -294,3 +294,119 @@ def test_the_reconcile_paths_stand_as_literals_at_the_call_site() -> None:
 
     assert source.count(f'"{MOUNTS_PATH}"') == 1
     assert source.count(f'"{SLICE_PATH}"') == 1
+
+
+# -- the storage question of plan 36-04 (HART-06, D-36-14, M-32-02) ----------------------
+#
+# The answer decides on delete orders for whole storages, so every way it can be
+# wrong has to end as "no answer". None is the safe reading: the reconcile then
+# treats every absent storage as vanished and waits out the grace of 30 days.
+
+GONE_PATH = "/ocs/v2.php/apps/findling/storages/gone"
+
+
+async def test_the_storage_question_answers_with_gone_and_deselected() -> None:
+    session = _FakeSession({("GET", GONE_PATH): {"gone": [14, 15], "deselected": [9]}})
+
+    result = await _files(session).gone_storages([14, 15, 9])
+
+    assert result == GoneResult(gone=frozenset({14, 15}), deselected=frozenset({9}))
+    method, path, kwargs = session.calls[0]
+    assert (method, path) == ("GET", GONE_PATH)
+    assert kwargs["params"] == {"ids[]": [14, 15, 9]}
+
+
+async def test_the_storage_question_keeps_only_the_ids_it_asked_for() -> None:
+    # T-36-14: an answer naming a storage nobody asked about must not turn it
+    # into a delete order for a storage the list still carries.
+    session = _FakeSession({("GET", GONE_PATH): {"gone": [14, 3], "deselected": ["9", 4]}})
+
+    result = await _files(session).gone_storages([14, 9])
+
+    assert result == GoneResult(gone=frozenset({14}), deselected=frozenset({9}))
+
+
+async def test_the_storage_question_without_ids_asks_nothing() -> None:
+    session = _FakeSession()
+
+    result = await _files(session).gone_storages([])
+
+    assert result == GoneResult(gone=frozenset(), deselected=frozenset())
+    assert session.calls == []
+
+
+async def test_a_failed_storage_question_is_no_answer() -> None:
+    # A 404 of a 1.4.x companion arrives as an exception of the client library.
+    session = _FakeSession(error=OSError("404 not found"))
+
+    assert await _files(session).gone_storages([14]) is None
+
+
+async def test_a_storage_answer_of_the_wrong_shape_is_no_answer() -> None:
+    for answer in (
+        "nonsense",
+        ["gone"],
+        {},
+        {"gone": [14]},
+        {"deselected": [9]},
+        {"gone": "14", "deselected": []},
+        {"gone": [14], "deselected": {"a": 1}},
+        {"gone": [14, "x"], "deselected": []},
+        {"gone": [True], "deselected": []},
+        {"gone": [0], "deselected": []},
+        {"gone": [-3], "deselected": []},
+        {"gone": [1.5], "deselected": []},
+    ):
+        session = _FakeSession({("GET", GONE_PATH): answer})
+
+        assert await _files(session).gone_storages([14, 9]) is None, answer
+
+
+async def test_an_empty_storage_answer_is_an_answer() -> None:
+    # PHP renders the two empty lists as [], and that is "nothing is gone".
+    session = _FakeSession({("GET", GONE_PATH): {"gone": [], "deselected": []}})
+
+    assert await _files(session).gone_storages([14]) == GoneResult(gone=frozenset(), deselected=frozenset())
+
+
+class _BandSession(_FakeSession):
+    """Answers every id it was asked as gone, and fails from band ``fail_at`` on."""
+
+    def __init__(self, fail_at: int | None = None) -> None:
+        super().__init__()
+        self._fail_at = fail_at
+
+    async def ocs(self, method: str, path: str, **kwargs: Any) -> Any:
+        self.calls.append((method, path, kwargs))
+        if self._fail_at is not None and len(self.calls) >= self._fail_at:
+            raise OSError("band failed")
+        return {"gone": list(kwargs["params"]["ids[]"]), "deselected": []}
+
+
+async def test_a_long_storage_question_travels_in_bands_of_the_php_limit() -> None:
+    session = _BandSession()
+    ids = list(range(1, 601))
+
+    result = await _files(session).gone_storages(ids)
+
+    assert GONE_LOOKUP_BAND == 256
+    assert [len(call[2]["params"]["ids[]"]) for call in session.calls] == [256, 256, 88]
+    assert result is not None
+    assert result.gone == frozenset(ids)
+
+
+async def test_one_failed_band_makes_the_whole_storage_question_no_answer() -> None:
+    session = _BandSession(fail_at=2)
+
+    assert await _files(session).gone_storages(list(range(1, 601))) is None
+
+
+def test_the_storage_question_path_stands_as_a_literal_at_the_call_site() -> None:
+    assert CLIENT_SOURCE.read_text(encoding="utf-8").count(f'"{GONE_PATH}"') == 1
+
+
+def test_the_storage_band_matches_the_php_limit() -> None:
+    controller = PACKAGE_ROOT.parents[2] / "php" / "lib" / "Controller" / "ReconcileController.php"
+    source = controller.read_text(encoding="utf-8")
+
+    assert f"MAX_STORAGE_IDS = {GONE_LOOKUP_BAND};" in source
