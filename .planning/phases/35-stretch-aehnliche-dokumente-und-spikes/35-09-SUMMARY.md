@@ -103,7 +103,7 @@ Keine. Tabellen und Verdikt im README entstehen planmäßig in 35-11, arm64 in 3
 
 ## Gates
 
-ruff check und format (backend und `../scripts`, dazu `04-anfrage-latenz.py`), pyright 0 errors, vulture, reuse lint grün; `test_model_quality`, `test_measurement_scripts`, `test_public_artifacts` grün (609 passed). Volle Suite: siehe Nachtrag unten.
+ruff check und format (backend und `../scripts`, dazu `04-anfrage-latenz.py`), pyright 0 errors, vulture, reuse lint grün; `test_model_quality`, `test_measurement_scripts`, `test_public_artifacts` grün (609 passed). Volle Suite (auf Stand fd28c6ce, seriell): 5855 passed, 264 skipped, 13 min 26 s.
 
 ## Self-Check: PASSED
 
