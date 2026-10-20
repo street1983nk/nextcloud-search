@@ -84,7 +84,7 @@ Details im Archiv: .planning/milestones/v1.4-ROADMAP.md
 - [x] **Phase 32: Filter in der Unified Search** - Dateityp- und Ordnerfilter direkt in der Nextcloud Unified Search
 - [x] **Phase 33: Ausschlussmuster und Admin-Feinschliff** - Platzhalter-Ausschluesse inkl. Mac-Bundles (#22), Grenzwerte sichtbar (#21), Hardware-Hinweis umformuliert
 - [x] **Phase 34: Umstiegsweg** - Umstiegs-Seite dreisprachig, Admin-Hinweis bei parallelem fulltextsearch, Verlinkung aus README und Store-Text (completed 2026-10-19)
-- [ ] **Phase 35: Stretch: Aehnliche Dokumente und Spikes** - Aehnliche Dokumente ueber vorhandene Vektoren, granite-Messbericht, #25-Dedup-Designnotiz (entfaellt bei Bedarf ohne Release-Risiko)
+- [x] **Phase 35: Stretch: Aehnliche Dokumente und Spikes** - Aehnliche Dokumente ueber vorhandene Vektoren, granite-Messbericht, #25-Dedup-Designnotiz (entfaellt bei Bedarf ohne Release-Risiko) (completed 2026-10-20)
 - [ ] **Phase 36: Haertung und Store-Einreichung 1.5.0** - Launch-Haertung mit boesartigem Formatkorpus und Upgrade-Strecke 1.4.2 -> 1.5.0, danach Einreichung beider Apps
 
 ## Phase Details
@@ -281,7 +281,7 @@ Plans:
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
-- [ ] 35-11-PLAN.md: granite-Messbericht mit Opt-in-Bewertung und Empfehlung für v1.6
+- [x] 35-11-PLAN.md: granite-Messbericht mit Opt-in-Bewertung und Empfehlung für v1.6
 
 **Wave 11** *(blocked on Wave 10 completion)*
 
@@ -318,7 +318,7 @@ Plans:
 | 32. Filter in der Unified Search | v1.5 | 8/8 | Executed, verification pending | - |
 | 33. Ausschlussmuster und Admin-Feinschliff | v1.5 | 11/11 | Executed, verification pending | - |
 | 34. Umstiegsweg | v1.5 | 6/6 | Complete   | 2026-10-19 |
-| 35. Stretch: Aehnliche Dokumente und Spikes | v1.5 | 12/13 | In Progress|  |
+| 35. Stretch: Aehnliche Dokumente und Spikes | v1.5 | 13/13 | Complete   | 2026-10-20 |
 | 36. Haertung und Store-Einreichung 1.5.0 | v1.5 | 0/? | Not started | - |
 
 ## Nach v1.3 (Wiedervorlage)
