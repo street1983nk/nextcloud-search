@@ -323,7 +323,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 36-05-PLAN.md: M-32-02 Beleg: CI-Integrationstest und Live-Beleg 8090 mit Positivkontrolle, Doku
+- [x] 36-05-PLAN.md: M-32-02 Beleg: CI-Integrationstest und Live-Beleg 8090 mit Positivkontrolle, Doku
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
@@ -384,7 +384,7 @@ Plans:
 | 33. Ausschlussmuster und Admin-Feinschliff | v1.5 | 11/11 | Executed, verification pending | - |
 | 34. Umstiegsweg | v1.5 | 6/6 | Complete   | 2026-10-19 |
 | 35. Stretch: Aehnliche Dokumente und Spikes | v1.5 | 14/13 | Complete    | 2026-10-20 |
-| 36. Haertung und Store-Einreichung 1.5.0 | v1.5 | 4/16 | In Progress|  |
+| 36. Haertung und Store-Einreichung 1.5.0 | v1.5 | 5/16 | In Progress|  |
 
 ## Nach v1.3 (Wiedervorlage)
 
