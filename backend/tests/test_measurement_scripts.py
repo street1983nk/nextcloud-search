@@ -2898,6 +2898,7 @@ def test_the_narrow_scope_covers_the_seven_run_directories_written_under_these_r
     )
     assert (GRANITE_RUN_DIR / "00-ablauf.md").is_file()
     found = scripts_of_this_run()
+    assert GRANITE_RUN_DIR / "01-artefakte.sh" in found
     assert V14_RUN_DIR / "01-teilkorpus.py" in found
     assert SUCCESSOR_LANGUAGE_CASES in found
     assert DRIVEN_LANGUAGE_CASES in found

@@ -1,0 +1,24 @@
+schritt 1 artefakte, 2026-10-20T00:00:34Z
+granite ibm-granite/granite-embedding-97m-multilingual-r2 revision 835ad14087e140460703cf0fae09f97d469d65c2
+speicher vorher: MemFree: 2534308 kB SwapTotal: 9437184 kB SwapFree: 8010312 kB 
+geholt onnx/model.onnx 390004608 byte sha256 68e592b160673d30250824c1116bc6ab33f70efb22b97c9e1d7ce1e69c1c9d70
+geholt tokenizer.json 25301672 byte sha256 4f2842d568e2724370aec203652a42ac783c7937f8347a1a2cc7506d71f1582f
+geholt tokenizer_config.json 12860 byte sha256 6ed69389e30a8ecabfce2f9ebcdf0c908b34056f24d994340f2f216521c057d5
+geholt special_tokens_map.json 871 byte sha256 013787ee251ff611722479197c00853b62113ad303cb0a36524231783c676c69
+geholt config.json 1216 byte sha256 de948b0bdc6f356afad7a84b276d8dd7e7fe10fb9add1bb5e610621c28e41ebc
+geholt 1_Pooling/config.json 313 byte sha256 8bc5c9a40814fcf48d2fbe7cfeff4bee6736c3c2a823ba0ce098985c59d12ab7
+pruefung fp32 sha256 gleich README 68e592b160673d30250824c1116bc6ab33f70efb22b97c9e1d7ce1e69c1c9d70, 390004608 byte: OK
+pruefung tokenizer 25301672 byte, sha256 4f2842d568e2724370aec203652a42ac783c7937f8347a1a2cc7506d71f1582f (= 4f2842d5...582f, = hub x-linked-etag): OK
+gegenprobe fp32 hub x-linked-etag 68e592b160673d30250824c1116bc6ab33f70efb22b97c9e1d7ce1e69c1c9d70: OK
+geholt onnx/model_quint8_avx2.onnx 98247878 byte sha256 a6022dd8220ea6f6595562a1328ee216f4a94faa55362f2f4747c80f1e78772e (= hub): OK
+e5 aus dem ausgelieferten Image ghcr.io/street1983nk/findling_backend:1.4.3
+image ghcr.io/street1983nk/findling_backend@sha256:036eb67e3e1144bc371142e18fcbfe94327b2a6edbfc0d1aea2f32d93302fc6d 2026-10-12T07:11:25.413190312Z
+e5 model.onnx 118101091 byte sha256 8da4c9ba0ad59f58e8566839425d7fd6339d31414d0ce5cba2d7d0afb75dd8b6
+e5 tokenizer.json 17082730 byte sha256 0b44a9d7b51c3c62626640cda0e2c2f70fdacdc25bbbd68038369d14ebdf4c39
+e5 tokenizer_config.json 443 byte sha256 a1d6bc8734a6f635dc158508bef000f8e2e5a759c7d92f984b2c86e5ff53425b
+e5 special_tokens_map.json 167 byte sha256 d05497f1da52c5e09554c0cd874037a083e1dc1b9cfd48034d1c717f1afc07a7
+e5 config.json 653 byte sha256 bbb7c1333fc4b3e27fbc9cd5d2070aabcc1d4dfb99917c3633e772f97545a6b6
+pruefung e5 model.onnx gleich MODEL_SHA256 8da4c9ba0ad59f58e8566839425d7fd6339d31414d0ce5cba2d7d0afb75dd8b6: OK
+pruefung e5 fp32 470268510 byte sha256 gleich Dockerfile ca456c06b3a9505ddfd9131408916dd79290368331e7d76bb621f1cba6bc8665: OK
+speicher nachher: MemFree: 2591516 kB SwapTotal: 9437184 kB SwapFree: 8010364 kB 
+schritt 1 fertig

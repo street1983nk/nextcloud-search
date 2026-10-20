@@ -214,3 +214,30 @@ de-90, de-83, de-72, de-116, de-111, de-85, de-54). Die Ziehung:
 sed -n '43,120p' testdata/semantik/de.jsonl \
   | shuf -n 10 --random-source=<(yes granite-35-03)
 ```
+
+## Abweichungen vom Rezept (Plan 35-09)
+
+Regel und Methode oben bleiben unverändert. Wo ein Lauf nicht genau wie
+beschrieben ging, steht es hier mit Grund. Ablauf: `skripte/00-ablauf.md`,
+Rohdaten: `rohdaten/`.
+
+1. **Tokenizer-Prüfsumme.** Abschnitt 3 nennt nur die sha256 des fp32-Modells.
+   `tokenizer.json` ist deshalb gegen Größe und Anfang und Ende der Prüfsumme
+   aus der Recherche von 35-03 (25.301.672 Byte, `4f2842d5...582f`) und gegen
+   die LFS-Prüfsumme geprüft, die der Hub im Kopf `x-linked-etag` mitschickt.
+   Der volle Wert steht in `rohdaten/01-artefakte.txt`.
+2. **onnxruntime im ausgelieferten Image.** Abschnitt 2 nennt für heute
+   onnxruntime 1.31.0; das ausgelieferte Image 1.4.3 trägt 1.30.0, erst
+   `backend/uv.lock` pinnt 1.31.0. Die Qualitätsläufe (Schritt 3) laufen wie
+   vorgeschrieben im ausgelieferten Image mit `--network none`. Die Gegenprobe
+   `skripte/03b-gegenprobe-ort131.sh` fährt die int8-Läufe beider Modelle in
+   allen drei Sprachen noch einmal mit 1.31.0 aus dem Lockfile (über `uv run`,
+   offline): alle Ränge je Fall sind gleich (`rohdaten/03b-gegenprobe-ort131.txt`).
+3. **granite bei 1024 Token.** Das Messwerkzeug hat die Sequenzlänge fest auf
+   512 (`MAX_SEQUENCE_TOKENS`), einen Schalter dafür gibt es nicht. Die
+   Zusatzzeile bei 1024 fehlt deshalb; sie geht ohnehin nicht in die Regel ein.
+4. **Annahme A2 gilt.** `quantize_dynamic` läuft auf dem ModernBERT-Graphen
+   durch, beide Läufe liegen im Fenster und sind byte-gleich
+   (`rohdaten/02-int8.txt`). Die IBM-Datei `onnx/model_quint8_avx2.onnx` ist
+   trotzdem als zusätzlicher Vergleichspunkt mitgemessen, wie in Abschnitt 3
+   vorgesehen, ohne Gewicht für die Regel.

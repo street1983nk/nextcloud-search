@@ -1,0 +1,57 @@
+schritt 2 int8, 2026-10-20T00:03:17Z
+eingabe WORK/granite/model.onnx sha256 68e592b160673d30250824c1116bc6ab33f70efb22b97c9e1d7ce1e69c1c9d70
+fenster 85000000 bis 110000000 byte
+speicher vor lauf a: MemFree: 3615504 kB SwapTotal: 9437184 kB SwapFree: 7430004 kB 
+WARNING:root:Please consider to run pre-processing before quantization. Refer to example: https://github.com/microsoft/onnxruntime-inference-examples/blob/main/quantization/image_classification/cpu/ReadMe.md 
+WARNING:root:Inference failed or unsupported type to quantize for tensor '/Unsqueeze_6_output_0', type is tensor_type {
+  elem_type: 7
+  shape {
+    dim {
+      dim_value: 1
+    }
+    dim {
+      dim_param: "unk__6"
+    }
+  }
+}
+.
+input       WORK\granite\model.onnx
+input size  390004608 bytes
+expected    117567128 bytes, the value this window was measured for
+input / 4   97501152 bytes
+window      85000000 to 110000000 bytes
+output      WORK\granite-int8-a\model.onnx
+output size 97858099 bytes
+ratio       3.99 to 1
+accepted: the quantised model is inside the size window
+lauf a fertig in 8 s: 97858099 byte sha256 704c1ebca5fbb7cd83ced41827658ac4c9990c64f7f2874d22b78044e5022e22
+speicher nach lauf a: MemFree: 3651436 kB SwapTotal: 9437184 kB SwapFree: 7430004 kB 
+speicher vor lauf b: MemFree: 3653484 kB SwapTotal: 9437184 kB SwapFree: 7430004 kB 
+WARNING:root:Please consider to run pre-processing before quantization. Refer to example: https://github.com/microsoft/onnxruntime-inference-examples/blob/main/quantization/image_classification/cpu/ReadMe.md 
+WARNING:root:Inference failed or unsupported type to quantize for tensor '/Unsqueeze_6_output_0', type is tensor_type {
+  elem_type: 7
+  shape {
+    dim {
+      dim_value: 1
+    }
+    dim {
+      dim_param: "unk__6"
+    }
+  }
+}
+.
+input       WORK\granite\model.onnx
+input size  390004608 bytes
+expected    117567128 bytes, the value this window was measured for
+input / 4   97501152 bytes
+window      85000000 to 110000000 bytes
+output      WORK\granite-int8-b\model.onnx
+output size 97858099 bytes
+ratio       3.99 to 1
+accepted: the quantised model is inside the size window
+lauf b fertig in 6 s: 97858099 byte sha256 704c1ebca5fbb7cd83ced41827658ac4c9990c64f7f2874d22b78044e5022e22
+speicher nach lauf b: MemFree: 3667056 kB SwapTotal: 9437184 kB SwapFree: 7436276 kB 
+lauf a im fenster: 97858099 byte
+lauf b im fenster: 97858099 byte
+cmp a gegen b: byte gleich
+schritt 2 fertig, status 0
