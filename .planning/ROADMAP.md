@@ -305,21 +305,68 @@ Plans:
 **Plans**: 16 plans
 Plans:
 
+**Wave 1**
+
 - [ ] 36-01-PLAN.md: Wortlaut-Vorabplan (Sammelklasse, Schwellen, Saat-Entscheide, Store-Text-Gesamtentwurf 1.5.0), Owner-Abnahme
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 36-02-PLAN.md: httpx/httpcore auf WARNING, Quellliste pillow-heif 1.8.1 (Release-Blocker), Quellpakete und git archive in release.yml
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 36-03-PLAN.md: M-32-02 PHP: Route GET /storages/gone (gelöscht/abgewählt)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 36-04-PLAN.md: M-32-02 Container: vanished_storages, Nachlauf im Abgleich, 30 Tage Karenz, F4
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 36-05-PLAN.md: M-32-02 Beleg: CI-Integrationstest und Live-Beleg 8090 mit Positivkontrolle, Doku
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 36-06-PLAN.md: Sammelklasse blocked_malicious durch die ganze Kette (Listen, Fallbacks, Admin-Karte, 16 Kataloge)
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
 - [ ] 36-07-PLAN.md: Bösartiger Formatkorpus als Generatoren und Sandbox-Test
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
 - [ ] 36-08-PLAN.md: Erkennung ZIP-, Paket- und XML-Signaturen, Saat seed-bomb.zip
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
 - [ ] 36-09-PLAN.md: Erkennung Bild-, Mail- und OLE-Signaturen, Korpus vollständig grün
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
 - [ ] 36-10-PLAN.md: Upgrade-Strecke mit Ausschlüssen
+
+**Wave 11** *(blocked on Wave 10 completion)*
+
 - [ ] 36-11-PLAN.md: Abgenommene Texte in info.xml, READMEs, CHANGELOG, embeddings.md
+
+**Wave 12** *(blocked on Wave 11 completion)*
+
 - [ ] 36-12-PLAN.md: Launch-Audit Security/Bugs/Performance, 0 CRIT / 0 HIGH
+
+**Wave 13** *(blocked on Wave 12 completion)*
+
 - [ ] 36-13-PLAN.md: Bump 1.5.0, UPGRADE_FROM_TAG v1.4.3, Bump-Push mit Owner-Wort, Spiegel-Entscheid
+
+**Wave 14** *(blocked on Wave 13 completion)*
+
 - [ ] 36-14-PLAN.md: Tag v1.5.0, Release mit Quellpflicht, Tag-Links, CI-Fremdinstallation
+
+**Wave 15** *(blocked on Wave 14 completion)*
+
 - [ ] 36-15-PLAN.md: Lokale Fremdinstallation und gemeinsame Playwright-Abnahme Text und Produkt
+
+**Wave 16** *(blocked on Wave 15 completion)*
+
 - [ ] 36-16-PLAN.md: Einreichung 2x HTTP 201, Beleg, Zustandspflege
 
 ## Progress
