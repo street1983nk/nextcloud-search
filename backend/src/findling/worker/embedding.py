@@ -1053,13 +1053,12 @@ class EmbeddingTrack:
         meta = store.read_meta()
         stored = meta.get(EMBEDDING_MARK, UNKNOWN_VERSION)
         if stored == UNKNOWN_VERSION:
-            self._claim_a_whole_stock(store, vectors, wanted)
-            return []
+            return self._claim_a_whole_stock(store, vectors, wanted)
         if stored != wanted:
             return self._answer_the_vector_drift(store, vectors, wanted)
         return self._next_backlog_band(store, meta.get(EMBEDDING_BACKLOG_MARK, ""))
 
-    def _claim_a_whole_stock(self, store: Store, vectors: VectorStore, wanted: str) -> None:
+    def _claim_a_whole_stock(self, store: Store, vectors: VectorStore, wanted: str) -> list[int]:
         """Write the mark once every indexed document carries a vector.
 
         **An empty container claims nothing.** At ``indexed == 0`` there is
@@ -1073,12 +1072,33 @@ class EmbeddingTrack:
         direction only, a stock holding a document the state database has
         forgotten, and in that direction "equal" would leave the mark unwritten
         for ever while "at least" answers the question that was asked.
+
+        **An empty stock under indexed documents starts the redelivery**
+        (L-35-01 of the phase 35 audit). This step runs only on a pass that
+        found the work stock empty, so an empty vector stock here means no
+        embedding is pending or ever coming: the instance indexed its documents
+        while it had no model, and waiting for ``embedded == indexed`` waits for
+        work nobody queued. There is no vector a mark could misname (the
+        concern of T-06.1-41 above needs at least one), so the cursor and the
+        mark are written in the drift order and the documents are asked back.
+        A stock that is partially filled keeps waiting, as before: those
+        vectors have no named model, and the only honest answer to them stays
+        the drift chain, which nothing here may trigger on a guess.
         """
         indexed = store.indexed_alive()
-        if indexed <= 0 or vectors.document_count() < indexed:
-            return
+        if indexed <= 0:
+            return []
+        stocked = vectors.document_count()
+        if stocked >= indexed:
+            store.write_meta(EMBEDDING_MARK, wanted)
+            LOGGER.info("every indexed document carries a vector, the embedding mark is current")
+            return []
+        if stocked > 0:
+            return []
+        store.write_meta(EMBEDDING_BACKLOG_MARK, BACKLOG_START)
         store.write_meta(EMBEDDING_MARK, wanted)
-        LOGGER.info("every indexed document carries a vector, the embedding mark is current")
+        LOGGER.warning("indexed documents stand over an empty vector stock, the stock is being written now")
+        return self._next_backlog_band(store, BACKLOG_START)
 
     def _answer_the_vector_drift(
         self, store: Store, vectors: VectorStore, wanted: str, *, switch: Precision | None = None

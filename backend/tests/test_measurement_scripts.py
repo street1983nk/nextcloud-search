@@ -2078,8 +2078,14 @@ PHP_TREE_HASH_TODAY = "9aa79bb73926212910b0e58d3def6eb0fef82ef650a28c3f1bf8f66df
 # mounts the router. One file came and none went, so PACKAGE_FILES_TODAY moves
 # to 80. The PHP pair does not move. Recomputed independently with find, sort,
 # tr and sha256sum over the CRLF normalised tree: ad36dbfb... both ways.
+# Plan 35-12 (audit of phase 35, finding L-35-01): worker/embedding.py lets an
+# idle pass that finds indexed documents over an empty vector stock under the
+# unknown mark start the redelivery, instead of waiting for an embedded count
+# that nothing is going to raise. No file came or went, so PACKAGE_FILES_TODAY
+# stays at 80. The PHP pair does not move. Recomputed independently with find,
+# sort, tr and sha256sum over the CRLF normalised tree: 5a348317... both ways.
 PACKAGE_FILES_TODAY = 80
-PACKAGE_TREE_HASH_TODAY = "ad36dbfb89141ef04fabc30f33288377fcf9ababb2088d4d92eacfd9454570f1"
+PACKAGE_TREE_HASH_TODAY = "5a348317a7f278307e650709e24dda52961c25cb1e5a19e7b47a1006e99791e1"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

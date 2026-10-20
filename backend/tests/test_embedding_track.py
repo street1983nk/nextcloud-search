@@ -1497,6 +1497,35 @@ async def test_a_stock_that_is_still_filling_is_not_claimed(
     assert store.read_meta()[EMBEDDING_MARK] == UNKNOWN_VERSION
 
 
+async def test_an_empty_stock_under_the_unknown_mark_starts_the_redelivery(
+    store: Store, writer: IndexBatchWriter, vectors: VectorStore, tmp_path: Path
+) -> None:
+    # L-35-01 of the phase 35 audit. An instance that indexed for a long time
+    # without a model holds indexed documents, an empty stock and the unknown
+    # mark. Waiting for embedded == indexed there waits for a redelivery that
+    # nobody starts, so the semantic half and the similar view of plan 35-05
+    # stay empty for ever on exactly the instance that got a model late. An
+    # empty stock cannot be claimed for a wrong model (the concern of
+    # T-06.1-41), because there is no vector to claim: the cursor and the mark
+    # are written in the drift order and the documents are asked back.
+    _judged(store, 4711)
+    _judged(store, 4712)
+    queue = _FakeQueue()
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, vectors=vectors)
+
+    await poller.run_once()
+
+    assert store.read_meta()[EMBEDDING_MARK] == _wanted_mark()
+    assert queue.requeues == [([4711, 4712], KIND_EMBED)]
+
+    # The second idle pass finds a current mark and an empty cursor: the
+    # redelivery ran once and does not loop, also when the embedding of the
+    # redelivered documents never succeeds.
+    await poller.run_once()
+
+    assert queue.requeues == [([4711, 4712], KIND_EMBED)]
+
+
 async def test_a_deleted_document_does_not_hold_the_mark_back_for_ever(
     store: Store, writer: IndexBatchWriter, vectors: VectorStore, tmp_path: Path
 ) -> None:
