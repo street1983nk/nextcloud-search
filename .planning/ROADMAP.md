@@ -327,7 +327,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 36-06-PLAN.md: Sammelklasse blocked_malicious durch die ganze Kette (Listen, Fallbacks, Admin-Karte, 16 Kataloge)
+- [x] 36-06-PLAN.md: Sammelklasse blocked_malicious durch die ganze Kette (Listen, Fallbacks, Admin-Karte, 16 Kataloge)
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
@@ -384,7 +384,7 @@ Plans:
 | 33. Ausschlussmuster und Admin-Feinschliff | v1.5 | 11/11 | Executed, verification pending | - |
 | 34. Umstiegsweg | v1.5 | 6/6 | Complete   | 2026-10-19 |
 | 35. Stretch: Aehnliche Dokumente und Spikes | v1.5 | 14/13 | Complete    | 2026-10-20 |
-| 36. Haertung und Store-Einreichung 1.5.0 | v1.5 | 5/16 | In Progress|  |
+| 36. Haertung und Store-Einreichung 1.5.0 | v1.5 | 6/16 | In Progress|  |
 
 ## Nach v1.3 (Wiedervorlage)
 
