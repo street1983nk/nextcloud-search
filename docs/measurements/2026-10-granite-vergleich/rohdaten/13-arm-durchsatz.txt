@@ -1,0 +1,123 @@
+schritt 13 durchsatz arm64, 2026-10-20T04:29:54Z
+image ghcr.io/street1983nk/findling_backend@sha256:036eb67e3e1144bc371142e18fcbfe94327b2a6edbfc0d1aea2f32d93302fc6d linux/arm64
+texte sha256 f0077c0e3beb0833624c684016d2622438e340dded3b1f7b9798df231315abef
+speicher box: MemTotal: 3989432 kB MemAvailable: 3342592 kB SwapTotal: 0 kB 
+
+== e5-int8 lauf 1, start 2026-10-20T04:29:54Z
+label=e5-int8
+onnxruntime=1.30.0
+threads=2
+pooling=mean
+prefix_chars=9
+embed_token_cap=1024
+embed_chunk_tokens=510
+embed_chunk_overlap=0
+embed_sequence_len=512
+embed_batch_size=2
+documents=500
+chunks=1409
+vectors=1409
+chunks_per_document_mean=2.8180
+chunks_per_document_max=3
+load_seconds=1.71
+chunk_seconds=7.94
+embed_seconds=145.39
+total_seconds=153.33
+documents_per_minute=195.65
+chunks_per_second=9.189
+rss_anon_end_kb=1063612
+cgroup_memory.max=2147483648
+cgroup_memory.peak=1150652416
+
+== granite-int8 lauf 1, start 2026-10-20T04:32:30Z
+label=granite-int8
+onnxruntime=1.30.0
+threads=2
+pooling=cls
+prefix_chars=0
+embed_token_cap=1024
+embed_chunk_tokens=510
+embed_chunk_overlap=0
+embed_sequence_len=512
+embed_batch_size=2
+documents=500
+chunks=1422
+vectors=1422
+chunks_per_document_mean=2.8440
+chunks_per_document_max=3
+load_seconds=2.73
+chunk_seconds=7.82
+embed_seconds=172.95
+total_seconds=180.77
+documents_per_minute=165.96
+chunks_per_second=7.866
+rss_anon_end_kb=514976
+cgroup_memory.max=2147483648
+cgroup_memory.peak=613982208
+
+== e5-int8 lauf 2, start 2026-10-20T04:35:35Z
+label=e5-int8
+onnxruntime=1.30.0
+threads=2
+pooling=mean
+prefix_chars=9
+embed_token_cap=1024
+embed_chunk_tokens=510
+embed_chunk_overlap=0
+embed_sequence_len=512
+embed_batch_size=2
+documents=500
+chunks=1409
+vectors=1409
+chunks_per_document_mean=2.8180
+chunks_per_document_max=3
+load_seconds=1.86
+chunk_seconds=7.96
+embed_seconds=145.78
+total_seconds=153.74
+documents_per_minute=195.13
+chunks_per_second=9.165
+rss_anon_end_kb=1063576
+cgroup_memory.max=2147483648
+cgroup_memory.peak=1150541824
+
+== granite-int8 lauf 2, start 2026-10-20T04:38:11Z
+label=granite-int8
+onnxruntime=1.30.0
+threads=2
+pooling=cls
+prefix_chars=0
+embed_token_cap=1024
+embed_chunk_tokens=510
+embed_chunk_overlap=0
+embed_sequence_len=512
+embed_batch_size=2
+documents=500
+chunks=1422
+vectors=1422
+chunks_per_document_mean=2.8440
+chunks_per_document_max=3
+load_seconds=2.64
+chunk_seconds=7.97
+embed_seconds=173.43
+total_seconds=181.39
+documents_per_minute=165.39
+chunks_per_second=7.839
+rss_anon_end_kb=523400
+cgroup_memory.max=2147483648
+cgroup_memory.peak=622833664
+
+== zusammenfassung (median ueber die laeufe)
+e5-int8 cgroup_memory.peak median 1150597120 (laeufe: 1150652416 1150541824)
+e5-int8 chunks median 1409 (laeufe: 1409 1409)
+e5-int8 chunks_per_document_mean median 2.818 (laeufe: 2.8180 2.8180)
+e5-int8 documents_per_minute median 195.39 (laeufe: 195.65 195.13)
+e5-int8 embed_seconds median 145.585 (laeufe: 145.39 145.78)
+e5-int8 total_seconds median 153.535 (laeufe: 153.33 153.74)
+granite-int8 cgroup_memory.peak median 618407936 (laeufe: 613982208 622833664)
+granite-int8 chunks median 1422 (laeufe: 1422 1422)
+granite-int8 chunks_per_document_mean median 2.844 (laeufe: 2.8440 2.8440)
+granite-int8 documents_per_minute median 165.675 (laeufe: 165.96 165.39)
+granite-int8 embed_seconds median 173.19 (laeufe: 172.95 173.43)
+granite-int8 total_seconds median 181.08 (laeufe: 180.77 181.39)
+schritt 13 fertig 2026-10-20T04:41:16Z

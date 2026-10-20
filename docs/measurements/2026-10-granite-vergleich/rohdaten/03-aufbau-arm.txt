@@ -1,0 +1,78 @@
+der aufbau der nackten m7g.large für den granite-vergleich, plan 35-10 (task 3)
+gefahren 2026-10-20, region eu-central-1, zone eu-central-1c
+voraussetzung: "Owner-Freigabe: 20.10.2026, "Freigegeben (0,60 USD)"" steht in
+02-rechenblatt-freigabe.txt (commit 45215015), vor jeder ressource.
+
+geheimnisregel dieser datei: keine ip-adresse, keine instanz-, volume-,
+gruppen-, schlüssel-, abbild- oder kontokennung. zugangsdaten nur aus der
+sitzung (aws configure export-credentials, ausgabe nicht gedruckt).
+
+anmeldung 2026-10-20T04:21:10Z: get-caller-identity arn:aws:iam::<konto>:root
+
+block-1-start 2026-10-20T04:23:01Z
+block-1-ende 2026-10-20T04:23:06Z
+-- block 1: security group --
+create-security-group findling-loadtest im default-vpc, tags Name=findling-loadtest
+purpose=findling-phase5. authorize-security-group-ingress: Return True, eine
+regel: tcp 22 von <eigene-adresse>/32 (adresse aus api.ipify.org, als ipv4
+geprüft). keine weiteren ports, die box braucht keine nextcloud.
+
+block-2-ende 2026-10-20T04:23:27Z
+-- block 2: schlüsselpaar --
+import-key-pair findling-loadtest aus dem vorhandenen öffentlichen teil
+(passt zum privaten teil, 01-vorbedingungen.txt abschnitt 3), tag
+purpose=findling-phase5. erster versuch scheiterte vor jeder anlage an einem
+windows-pfad im fileb://-argument, zweiter mit laufwerkspfad gelungen.
+
+block-3-run 2026-10-20T04:23:29Z
+block-3-ende 2026-10-20T04:23:47Z
+-- block 3: instanz --
+run-instances: gepinntes abbild ubuntu-noble-24.04-arm64-server-20260904,
+m7g.large, default-subnetz eu-central-1c, 40 gb gp3 root mit
+DeleteOnTermination=true, --instance-initiated-shutdown-behavior stop, tags an
+instanz und systemplatte. antwort: m7g.large eu-central-1c arm64,
+wait instance-running rc 0.
+LaunchTime 2026-10-20T04:23:29Z: beginn der bezahlten zeit.
+abbruchgrenze nach 02-rechenblatt-freigabe.txt: 4 h 10 min, also 2026-10-20T08:33:29Z.
+zustandsdatei in <zustandsverzeichnis>/granite-arm/box.env, umask 077.
+
+-- block 4: upload --
+upload start 2026-10-20T04:24:20Z
+upload ende  2026-10-20T04:26:05Z
+tar über ssh: e5/, granite-int8/ (int8-modell plus tokenizer-dateien),
+text/texte.jsonl, semantik/de.jsonl (repo-blob mit LF), skripte/. 265 MB auf der box.
+
+-- block 5: kappe (10-box-aufbau.sh kappe) --
+kappe start 2026-10-20T04:26:09Z
+GRUB_CMDLINE_LINUX_DEFAULT="$GRUB_CMDLINE_LINUX_DEFAULT mem=4G" in /etc/default/grub.d/99-mem4g.cfg
+update-grub: done
+kappe geschrieben 2026-10-20T04:26:10Z, danach sudo systemctl reboot
+nach dem neustart 04:26:27Z: MemTotal 3989432 kB, /proc/cmdline trägt mem=4G
+
+-- block 6: docker und prüfung (10-box-aufbau.sh docker, pruefen) --
+docker start 2026-10-20T04:26:32Z
+docker server 29.1.3, arm64
+docker pull ghcr.io/street1983nk/findling_backend@sha256:036eb67e3e1144bc371142e18fcbfe94327b2a6edbfc0d1aea2f32d93302fc6d
+docker ende 2026-10-20T04:27:06Z
+pruefen 2026-10-20T04:27:06Z
+meminfo MemTotal: 3989432 kB MemAvailable: 3201804 kB SwapTotal: 0 kB
+kappe MemTotal 3989432 kB unter 4194304 kB OK
+cmdline mem=4G 1
+nproc 2, uname -m aarch64, kernel 7.0.0-1012-aws
+cgroup cgroup2fs
+image ghcr.io/street1983nk/findling_backend@sha256:036eb67e3e1144bc371142e18fcbfe94327b2a6edbfc0d1aea2f32d93302fc6d linux/arm64
+sha256 e5/model.onnx 8da4c9ba0ad59f58e8566839425d7fd6339d31414d0ce5cba2d7d0afb75dd8b6 OK
+sha256 e5/tokenizer.json 0b44a9d7b51c3c62626640cda0e2c2f70fdacdc25bbbd68038369d14ebdf4c39 OK
+sha256 e5/tokenizer_config.json a1d6bc8734a6f635dc158508bef000f8e2e5a759c7d92f984b2c86e5ff53425b OK
+sha256 e5/special_tokens_map.json d05497f1da52c5e09554c0cd874037a083e1dc1b9cfd48034d1c717f1afc07a7 OK
+sha256 e5/config.json bbb7c1333fc4b3e27fbc9cd5d2070aabcc1d4dfb99917c3633e772f97545a6b6 OK
+sha256 granite-int8/model.onnx 704c1ebca5fbb7cd83ced41827658ac4c9990c64f7f2874d22b78044e5022e22 OK
+sha256 granite-int8/tokenizer.json 4f2842d568e2724370aec203652a42ac783c7937f8347a1a2cc7506d71f1582f OK
+sha256 granite-int8/tokenizer_config.json 6ed69389e30a8ecabfce2f9ebcdf0c908b34056f24d994340f2f216521c057d5 OK
+sha256 granite-int8/special_tokens_map.json 013787ee251ff611722479197c00853b62113ad303cb0a36524231783c676c69 OK
+sha256 granite-int8/config.json de948b0bdc6f356afad7a84b276d8dd7e7fe10fb9add1bb5e610621c28e41ebc OK
+sha256 text/texte.jsonl f0077c0e3beb0833624c684016d2622438e340dded3b1f7b9798df231315abef OK
+sha256 semantik/de.jsonl 700c74d2c40d30ad26ad2cbd0ad8567a4b51346ea2b7f570abe884a0811e4f51 OK
+pruefen gruen 2026-10-20T04:27:08Z
+urteil: von LaunchTime bis pruefen gruen 3 min 39 s, weit unter dem planwert
+von 1 h 30 min für aufbau plus upload.

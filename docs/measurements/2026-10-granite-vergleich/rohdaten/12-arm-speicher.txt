@@ -1,0 +1,163 @@
+schritt 12 speicher arm64, 2026-10-20T04:28:44Z
+image ghcr.io/street1983nk/findling_backend@sha256:036eb67e3e1144bc371142e18fcbfe94327b2a6edbfc0d1aea2f32d93302fc6d linux/arm64
+methode 2026-09-fp32-speicher abschnitt 3, batch 8 x 512 token, threads 2, arena aus
+speicher box: MemTotal: 3989432 kB MemAvailable: 3346252 kB SwapTotal: 0 kB 
+
+== e5-int8 lauf 1
+label=e5-int8
+pooling=mean
+prefix_chars=9
+sequence=512
+batch=8
+threads=2
+onnxruntime=1.30.0
+rss_anon_start_kb=10784
+rss_anon_libs_kb=24080
+rss_anon_tokenizer_kb=311040
+rss_anon_session_kb=443756
+rss_anon_batch1_kb=445832
+rss_anon_batch6_kb=458428
+delta_session_kb=132716
+delta_batch1_kb=134792
+cgroup_memory.max=2147483648
+cgroup_memory.swap.max=0
+cgroup_memory.peak=717561856
+cgroup_memory.current=472485888
+batch_seconds_median=1.2524
+passages_per_second=6.366
+
+== granite-int8 lauf 1
+label=granite-int8
+pooling=cls
+prefix_chars=0
+sequence=512
+batch=8
+threads=2
+onnxruntime=1.30.0
+rss_anon_start_kb=10788
+rss_anon_libs_kb=24084
+rss_anon_tokenizer_kb=237276
+rss_anon_session_kb=304800
+rss_anon_batch1_kb=331792
+rss_anon_batch6_kb=332188
+delta_session_kb=67524
+delta_batch1_kb=94516
+cgroup_memory.max=2147483648
+cgroup_memory.swap.max=0
+cgroup_memory.peak=676896768
+cgroup_memory.current=343060480
+batch_seconds_median=1.4721
+passages_per_second=5.431
+
+== e5-int8 lauf 2
+label=e5-int8
+pooling=mean
+prefix_chars=9
+sequence=512
+batch=8
+threads=2
+onnxruntime=1.30.0
+rss_anon_start_kb=10784
+rss_anon_libs_kb=24080
+rss_anon_tokenizer_kb=311044
+rss_anon_session_kb=443760
+rss_anon_batch1_kb=457432
+rss_anon_batch6_kb=457856
+delta_session_kb=132716
+delta_batch1_kb=146388
+cgroup_memory.max=2147483648
+cgroup_memory.swap.max=0
+cgroup_memory.peak=701059072
+cgroup_memory.current=471474176
+batch_seconds_median=1.2540
+passages_per_second=6.379
+
+== granite-int8 lauf 2
+label=granite-int8
+pooling=cls
+prefix_chars=0
+sequence=512
+batch=8
+threads=2
+onnxruntime=1.30.0
+rss_anon_start_kb=10788
+rss_anon_libs_kb=24076
+rss_anon_tokenizer_kb=237264
+rss_anon_session_kb=304788
+rss_anon_batch1_kb=331792
+rss_anon_batch6_kb=332160
+delta_session_kb=67524
+delta_batch1_kb=94528
+cgroup_memory.max=2147483648
+cgroup_memory.swap.max=0
+cgroup_memory.peak=676741120
+cgroup_memory.current=343113728
+batch_seconds_median=1.4687
+passages_per_second=5.445
+
+== e5-int8 lauf 3
+label=e5-int8
+pooling=mean
+prefix_chars=9
+sequence=512
+batch=8
+threads=2
+onnxruntime=1.30.0
+rss_anon_start_kb=10788
+rss_anon_libs_kb=24084
+rss_anon_tokenizer_kb=311044
+rss_anon_session_kb=443764
+rss_anon_batch1_kb=445260
+rss_anon_batch6_kb=457868
+delta_session_kb=132720
+delta_batch1_kb=134216
+cgroup_memory.max=2147483648
+cgroup_memory.swap.max=0
+cgroup_memory.peak=716947456
+cgroup_memory.current=471715840
+batch_seconds_median=1.2526
+passages_per_second=6.377
+
+== granite-int8 lauf 3
+label=granite-int8
+pooling=cls
+prefix_chars=0
+sequence=512
+batch=8
+threads=2
+onnxruntime=1.30.0
+rss_anon_start_kb=10780
+rss_anon_libs_kb=24076
+rss_anon_tokenizer_kb=237268
+rss_anon_session_kb=304792
+rss_anon_batch1_kb=331784
+rss_anon_batch6_kb=332256
+delta_session_kb=67524
+delta_batch1_kb=94516
+cgroup_memory.max=2147483648
+cgroup_memory.swap.max=0
+cgroup_memory.peak=676950016
+cgroup_memory.current=343363584
+batch_seconds_median=1.4570
+passages_per_second=5.491
+
+== zusammenfassung (median ueber die laeufe, kB; peak in byte)
+e5-int8 cgroup_memory.peak median 716947456 max 717561856 (laeufe: 717561856 701059072 716947456)
+e5-int8 delta_batch1_kb median 134792 max 146388 (laeufe: 134792 146388 134216)
+e5-int8 delta_session_kb median 132716 max 132720 (laeufe: 132716 132716 132720)
+e5-int8 rss_anon_batch1_kb median 445832 max 457432 (laeufe: 445832 457432 445260)
+e5-int8 rss_anon_batch6_kb median 457868 max 458428 (laeufe: 458428 457856 457868)
+e5-int8 rss_anon_libs_kb median 24080 max 24084 (laeufe: 24080 24080 24084)
+e5-int8 rss_anon_session_kb median 443760 max 443764 (laeufe: 443756 443760 443764)
+e5-int8 rss_anon_start_kb median 10784 max 10788 (laeufe: 10784 10784 10788)
+e5-int8 rss_anon_tokenizer_kb median 311044 max 311044 (laeufe: 311040 311044 311044)
+granite-int8 cgroup_memory.peak median 676896768 max 676950016 (laeufe: 676896768 676741120 676950016)
+granite-int8 delta_batch1_kb median 94516 max 94528 (laeufe: 94516 94528 94516)
+granite-int8 delta_session_kb median 67524 max 67524 (laeufe: 67524 67524 67524)
+granite-int8 rss_anon_batch1_kb median 331792 max 331792 (laeufe: 331792 331792 331784)
+granite-int8 rss_anon_batch6_kb median 332188 max 332256 (laeufe: 332188 332160 332256)
+granite-int8 rss_anon_libs_kb median 24076 max 24084 (laeufe: 24084 24076 24076)
+granite-int8 rss_anon_session_kb median 304792 max 304800 (laeufe: 304800 304788 304792)
+granite-int8 rss_anon_start_kb median 10788 max 10788 (laeufe: 10788 10788 10780)
+granite-int8 rss_anon_tokenizer_kb median 237268 max 237276 (laeufe: 237276 237264 237268)
+schritt 12 fertig 2026-10-20T04:29:47Z

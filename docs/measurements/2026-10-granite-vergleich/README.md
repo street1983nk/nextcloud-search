@@ -263,3 +263,35 @@ Rohdaten: `rohdaten/`.
    der Zuwachs kommt aus den Dateigrößen. Für den Lizenztext steht
    `backend/docker/licenses/COPYING.sqlite-vec` (Apache-2.0-Volltext), weil die
    Revision keine LICENSE-Datei trägt.
+
+## Abweichungen vom Rezept (Plan 35-10)
+
+1. **Stichprobe ohne Volllauf des Korpus.** `skripte/06-stichprobe.py` geht die
+   Schleife von `build_load_corpus.py --seed phase5` nach, zieht aber nur die
+   Namen und schreibt nur die 500 gezogenen Dateien; jede Datei hängt allein an
+   Seed, Kategorie und Laufnummer und ist byte-gleich mit dem Volllauf. Hinweis:
+   der Bestand der Septembermessung (52.111 Dokumente) wurde mit dem Seed
+   `phase5-full` gebaut; Abschnitt 2 legt `phase5` fest, und dabei bleibt es.
+   Die Verteilung der Formate ist bei beiden Seeds dieselbe.
+2. **Text einmal auf dem Entwicklungsrechner.** Der Text der Stichprobe
+   (darunter 100 Scans über die OCR-Spur) ist mit `skripte/07-text.sh` im
+   ausgelieferten Image ohne Netz extrahiert und als eine Datei auf die Box
+   gebracht (sha256 in `rohdaten/07-text.txt`, geprüft von
+   `10-box-aufbau.sh pruefen`). Der Text hängt nicht am Einbettungsmodell; auf
+   der Box laufen nur Chunking und Einbettung, und Dokumente je Minute meinen
+   deshalb "Einbettung allein", wie der e5-Bezug von rund 170 je Minute.
+3. **Deckel in USD.** Das Rechenblatt nennt den Deckel netto in USD wie
+   `aws_box.sh`, ohne Umrechnung in Euro, weil kein Kurs gelesen wurde und der
+   Owner den Deckel in USD abgenommen hat (Abschnitt 7).
+4. **Abbau im zweiten Anlauf.** Die aus der Sitzung exportierten Zugangsdaten
+   liefen nach rund 20 Minuten ab; der erste Abbauversuch (04:42Z) beendete
+   nichts, und die erste Fassung von `skripte/19-abbau.sh` zählte die
+   gescheiterten Gegenproben als null. Das Skript prüft seitdem die Sitzung vor
+   dem Abbau und bricht bei einer gescheiterten Gegenprobe ab. Der zweite
+   Anlauf beendete die Instanz um 04:43:36Z; eine unabhängige Gegenprobe über
+   das Profil belegt null Instanzen, Volumes, Adressen und Schlüssel
+   (`rohdaten/08-abbau-boxen.txt`). Schlusskosten 0,0362 USD gegen den Deckel
+   von 0,60 USD (`rohdaten/90-kosten.txt`).
+5. **Laufzeit weit unter dem Plan.** Box-Zeit 20 min 07 s statt geplanter
+   4 h; die Messungen selbst liefen wie in `skripte/00-ablauf.md`, der
+   Durchsatz mit zwei Läufen je Modell.

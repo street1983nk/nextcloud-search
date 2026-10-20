@@ -1,0 +1,64 @@
+kostenlose vorbedingungen der arm64-box des granite-vergleichs, plan 35-10 (task 1)
+gelesen 2026-10-20 ab 02:20 UTC auf der entwicklungsmaschine, region eu-central-1
+werkzeuge: aws cli v2 2.36.39, docker buildx imagetools, sha256sum
+
+geheimnisregel dieser datei, verbindlich: sie liegt im öffentlichen
+repositorium. keine kontokennung, keine ip-adresse, keine instanz-, volume-,
+snapshot-, gruppen- oder abbildkennung. ausgaben mit kennungen gingen nur aufs
+terminal; hier stehen ja/nein-zeilen, namen, zahlen und digests.
+
+-- 1 zugangsdaten und konto --
+profile der lokalen konfiguration: infranodedev, default (sitzungen über aws login)
+aws sts get-caller-identity --profile infranodedev --region eu-central-1:
+  "Your session has expired. Please reauthenticate using 'aws login'."
+aws sts get-caller-identity (default) --region eu-central-1: dieselbe antwort
+konto-erreichbar nein, stand 2026-10-20T02:22Z: anmeldung abgelaufen
+folge: abschnitte 2 und 3 (kontingent, laufende instanzen) erst nach der
+anmeldung durch den owner, als nachtrag unten. ohne gültige sitzung wird keine
+ressource angelegt, und es wird nicht geraten.
+
+-- 2 kontingent und zone (nach der anmeldung) --
+gelesen 2026-10-20T04:22Z, nach der anmeldung des owners (aws login, profil infranodedev)
+aws sts get-caller-identity: arn:aws:iam::<konto>:root
+konto-erreichbar ja
+quota-vcpu-standard 32.0
+angebot m7g.large eu-central-1a eu-central-1b eu-central-1c
+default-vpc vorhanden, default-subnetz in eu-central-1c vorhanden
+abbild-gepinnt ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-arm64-server-20260904 available arm64
+(neuestes arm64 nur zur kenntnis: ubuntu-noble-24.04-arm64-server-20261017; gepinnt bleibt)
+
+-- 3 keine instanz aus früheren messungen (nach der anmeldung) --
+instanzen mit tag purpose=findling-phase5, nicht beendet: 0
+instanzen im konto in der region, nicht beendet: 0
+volumes mit tag: 0
+elastische adressen in der region: 0
+security group findling-loadtest: keine
+schlüsselpaar findling-loadtest im konto: keins (InvalidKeyPair.NotFound)
+lokaler schlüssel ~/.ssh/findling-loadtest: vorhanden, öffentlicher teil passt
+(ssh-keygen -y gegen .pub); er wird per import-key-pair eingespielt
+zustandsdatei: neues verzeichnis <zustandsverzeichnis>/granite-arm, keine alte box.env
+
+-- 4 das ausgelieferte image für arm64 --
+docker buildx imagetools inspect ghcr.io/street1983nk/findling_backend:1.4.3
+  index sha256:036eb67e3e1144bc371142e18fcbfe94327b2a6edbfc0d1aea2f32d93302fc6d
+  linux/amd64 sha256:3d48d9854efa3208685cabd90c286ee5ad9aec699ef65a1d9540324decff905c
+  linux/arm64 sha256:317c4db4d5f5278b6ab4f8da084613102fa86718a1e2d5d915a22889cd353a04
+image-arm64-im-manifest ja
+der index-digest ist derselbe, gegen den 35-09 gemessen hat (rohdaten/01-artefakte.txt
+zeile 15); die box zieht per index-digest und bekommt damit das arm64-manifest darunter.
+
+-- 5 modelldateien aus 35-09, sha256 auf der entwicklungsmaschine --
+e5/model.onnx                 8da4c9ba0ad59f58e8566839425d7fd6339d31414d0ce5cba2d7d0afb75dd8b6 = README abschnitt 3
+e5/tokenizer.json             0b44a9d7b51c3c62626640cda0e2c2f70fdacdc25bbbd68038369d14ebdf4c39 = 01-artefakte.txt
+granite-int8-a/model.onnx     704c1ebca5fbb7cd83ced41827658ac4c9990c64f7f2874d22b78044e5022e22 = 02-int8.txt (lauf a, 97858099 byte)
+granite/tokenizer.json        4f2842d568e2724370aec203652a42ac783c7937f8347a1a2cc7506d71f1582f = 01-artefakte.txt
+granite/tokenizer_config.json 6ed69389e30a8ecabfce2f9ebcdf0c908b34056f24d994340f2f216521c057d5 = 01-artefakte.txt
+granite/special_tokens_map.json 013787ee251ff611722479197c00853b62113ad303cb0a36524231783c676c69 = 01-artefakte.txt
+granite/config.json           de948b0bdc6f356afad7a84b276d8dd7e7fe10fb9add1bb5e610621c28e41ebc = 01-artefakte.txt
+modelle-bereit ja, kein neubau auf der box; die werte stehen als sollwerte in
+skripte/10-box-aufbau.sh pruefen.
+
+-- 6 stichprobe und text, vor dem ersten durchsatzlauf --
+stichprobe 500 dokumente nach README abschnitt 2: rohdaten/06-stichprobe.txt
+text der stichprobe einmal im ausgelieferten image extrahiert: rohdaten/07-text.txt,
+texte.jsonl sha256 f0077c0e3beb0833624c684016d2622438e340dded3b1f7b9798df231315abef

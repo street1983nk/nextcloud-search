@@ -1,0 +1,24 @@
+schlusskosten der arm64-box des granite-vergleichs, plan 35-10
+gerechnet 2026-10-20 nach dem abbau, aus 03-aufbau-arm.txt und 08-abbau-boxen.txt
+
+LaunchTime                  2026-10-20T04:23:29Z (beginn der bezahlten zeit)
+terminate (api)             2026-10-20T04:43:36Z ("User initiated", 08-abbau-boxen.txt)
+laufzeit                    20 min 07 s = 0,3353 h
+satz                        0,0978 + 0,005 (ipv4) + 0,005216 (40 GB gp3) = 0,108016 USD/h
+kosten                      0,3353 h x 0,108016 USD/h = 0,0362 USD netto
+gegenprobe aws_box.sh status 04:43Z: "spent 0.04 USD so far"
+
+deckel                      0,60 USD / 5,2 h (Owner-Freigabe 20.10.2026)
+anteil am deckel            0,0362 / 0,60 = 6,0 prozent der kosten, 0,3353 / 5,2 = 6,4 prozent der zeit
+abbruchgrenze (80 prozent)  4 h 10 min, nie erreicht
+
+posten gegen den plan (02-rechenblatt-freigabe.txt):
+  aufbau und upload         plan 1 h 30 min, ist 3 min 39 s (04:23:29 bis 04:27:08)
+  latenz und speicher       plan 1 h 00 min, ist 2 min 31 s (04:27:16 bis 04:29:47)
+  durchsatz                 plan 1 h 00 min, ist 11 min 22 s (04:29:54 bis 04:41:16)
+  rohdaten und abbau        plan 0 h 30 min, ist 2 min 20 s (04:41:16 bis 04:43:36),
+                            darin ein erster abbauversuch ohne wirkung (08-abbau-boxen.txt)
+übertragung: eingehend kostenlos, ausgehend unter 1 MB, 0 USD angesetzt.
+die rechnung von AWS rechnet je sekunde und kann um rundung abweichen.
+
+urteil: unter dem deckel.
