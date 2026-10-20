@@ -1021,8 +1021,12 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # attribute trio fully qualified, rejectForeignCaller() first, at most 256 positive ids, 400 without the
 # values in the log and 500 with a static sentence; tests/Unit/ReconcileControllerTest.php holds the four
 # cases. No file came and none went, so PHP_FILES_TODAY stays at 107.
+# Moved on 2026-10-20 a third time by Plan 36-03 (HART-06, D-36-14): tests/Unit/StorageServiceTest.php
+# renames its result helper to resultOf, because TestCase::result() is final in PHPUnit 11 and the
+# suite ended with a fatal error in run 39449358560. No file came and none went, so PHP_FILES_TODAY stays
+# at 107.
 PHP_FILES_TODAY = 107
-PHP_TREE_HASH_TODAY = "d809c2158c2f379ec015806f70f05baff37bc32dc8f5aa447ffedb237fe49e07"
+PHP_TREE_HASH_TODAY = "c5642f59dfa6a332ff30872a3e8f46ebf049f1649b531d614f0188dc8ecde1f2"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

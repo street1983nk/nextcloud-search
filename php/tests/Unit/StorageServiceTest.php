@@ -129,14 +129,14 @@ final class StorageServiceTest extends TestCase {
 				default => self::fail('a query against an unexpected table: ' . $table),
 			};
 
-			return $this->result($rows);
+			return $this->resultOf($rows);
 		});
 
 		return $qb;
 	}
 
 	/** @param list<array<string, mixed>> $rows */
-	private function result(array $rows): IResult {
+	private function resultOf(array $rows): IResult {
 		$this->opened++;
 		$result = $this->createMock(IResult::class);
 		$result->method('fetch')->willReturnCallback(static function () use (&$rows): mixed {
