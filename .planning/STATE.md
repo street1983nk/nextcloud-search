@@ -4,14 +4,14 @@ milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
 stopped_at: Completed 36-03-PLAN.md, next 36-04
-last_updated: "2026-10-20T16:49:31.776Z"
+last_updated: "2026-10-20T17:51:24.797Z"
 last_activity: 2026-10-20
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 78
-  completed_plans: 66
-  percent: 85
+  completed_plans: 67
+  percent: 86
 ---
 
 # Project State
@@ -26,11 +26,11 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 36 (Haertung und Store-Einreichung 1.5.0) , EXECUTING
-Plan: 4 of 16
+Plan: 5 of 16
 Status: Ready to execute
 Last activity: 2026-10-20
 
-Progress: [█████████░] 85%
+Progress: [█████████░] 86%
 
 ## Performance Metrics
 
@@ -175,6 +175,6 @@ Progress: [█████████░] 85%
 
 ## Session Continuity
 
-Last session: 2026-10-20T16:49:26.408Z
+Last session: 2026-10-20T17:51:21.495Z
 Stopped at: Completed 36-03-PLAN.md, next 36-04
 Resume file: None

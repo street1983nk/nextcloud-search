@@ -319,7 +319,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 36-04-PLAN.md: M-32-02 Container: vanished_storages, Nachlauf im Abgleich, 30 Tage Karenz, F4
+- [x] 36-04-PLAN.md: M-32-02 Container: vanished_storages, Nachlauf im Abgleich, 30 Tage Karenz, F4
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -384,7 +384,7 @@ Plans:
 | 33. Ausschlussmuster und Admin-Feinschliff | v1.5 | 11/11 | Executed, verification pending | - |
 | 34. Umstiegsweg | v1.5 | 6/6 | Complete   | 2026-10-19 |
 | 35. Stretch: Aehnliche Dokumente und Spikes | v1.5 | 14/13 | Complete    | 2026-10-20 |
-| 36. Haertung und Store-Einreichung 1.5.0 | v1.5 | 3/16 | In Progress|  |
+| 36. Haertung und Store-Einreichung 1.5.0 | v1.5 | 4/16 | In Progress|  |
 
 ## Nach v1.3 (Wiedervorlage)
 
