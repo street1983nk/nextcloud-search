@@ -302,7 +302,25 @@ Plans:
   4. Beide Apps 1.5.0 sind eingereicht (2x HTTP 201), der Beleg steht in docs/store-listing.md
   5. M-32-02 behoben (Owner 13.10.2026): Dokumente geloeschter Nutzer verlassen den Index beim naechsten Abgleich; Dokumente verschwundener externer Speicher nach 30 Tagen Karenz; Beleg auf einer Instanz mit Positivkontrolle
 
-**Plans**: TBD
+**Plans**: 16 plans
+Plans:
+
+- [ ] 36-01-PLAN.md: Wortlaut-Vorabplan (Sammelklasse, Schwellen, Saat-Entscheide, Store-Text-Gesamtentwurf 1.5.0), Owner-Abnahme
+- [ ] 36-02-PLAN.md: httpx/httpcore auf WARNING, Quellliste pillow-heif 1.8.1 (Release-Blocker), Quellpakete und git archive in release.yml
+- [ ] 36-03-PLAN.md: M-32-02 PHP: Route GET /storages/gone (gelöscht/abgewählt)
+- [ ] 36-04-PLAN.md: M-32-02 Container: vanished_storages, Nachlauf im Abgleich, 30 Tage Karenz, F4
+- [ ] 36-05-PLAN.md: M-32-02 Beleg: CI-Integrationstest und Live-Beleg 8090 mit Positivkontrolle, Doku
+- [ ] 36-06-PLAN.md: Sammelklasse blocked_malicious durch die ganze Kette (Listen, Fallbacks, Admin-Karte, 16 Kataloge)
+- [ ] 36-07-PLAN.md: Bösartiger Formatkorpus als Generatoren und Sandbox-Test
+- [ ] 36-08-PLAN.md: Erkennung ZIP-, Paket- und XML-Signaturen, Saat seed-bomb.zip
+- [ ] 36-09-PLAN.md: Erkennung Bild-, Mail- und OLE-Signaturen, Korpus vollständig grün
+- [ ] 36-10-PLAN.md: Upgrade-Strecke mit Ausschlüssen
+- [ ] 36-11-PLAN.md: Abgenommene Texte in info.xml, READMEs, CHANGELOG, embeddings.md
+- [ ] 36-12-PLAN.md: Launch-Audit Security/Bugs/Performance, 0 CRIT / 0 HIGH
+- [ ] 36-13-PLAN.md: Bump 1.5.0, UPGRADE_FROM_TAG v1.4.3, Bump-Push mit Owner-Wort, Spiegel-Entscheid
+- [ ] 36-14-PLAN.md: Tag v1.5.0, Release mit Quellpflicht, Tag-Links, CI-Fremdinstallation
+- [ ] 36-15-PLAN.md: Lokale Fremdinstallation und gemeinsame Playwright-Abnahme Text und Produkt
+- [ ] 36-16-PLAN.md: Einreichung 2x HTTP 201, Beleg, Zustandspflege
 
 ## Progress
 
