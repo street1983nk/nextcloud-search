@@ -27,8 +27,12 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, cast
+from urllib.parse import parse_qs, urlsplit
 
-from findling.nc.client import AsyncNextcloudApp
+import niquests
+from nc_py_api._session import patch_param
+
+from findling.nc.client import AsyncNextcloudApp, gone_storage_params
 from findling.nc.files import GONE_LOOKUP_BAND, FileList, FileRow, GoneResult, Mount
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "src" / "findling"
@@ -313,7 +317,35 @@ async def test_the_storage_question_answers_with_gone_and_deselected() -> None:
     assert result == GoneResult(gone=frozenset({14, 15}), deselected=frozenset({9}))
     method, path, kwargs = session.calls[0]
     assert (method, path) == ("GET", GONE_PATH)
-    assert kwargs["params"] == {"ids[]": [14, 15, 9]}
+    assert kwargs["params"] == {"ids[0]": 14, "ids[1]": 15, "ids[2]": 9}
+
+
+def test_every_asked_storage_id_survives_the_ocs_hook_of_the_client_library() -> None:
+    """Found live on 8090 in plan 36-05: only the last id of a band reached PHP.
+
+    nc_py_api appends format=json to every OCS url through patch_param, which
+    rebuilds the query out of dict(parse_qsl(...)) and so keeps one value per
+    key. Repeated ``ids[]`` keys collapsed to the last one, and the deleted
+    storages 14 and 15 were stamped as vanished instead of being cleared. The
+    fake sessions above never build a url, so this test takes the real path:
+    the url niquests prepares from the params, then the hook of the library.
+    """
+    asked = [7, 14, 15, 17]
+    request = niquests.Request(
+        "GET", f"http://nc{GONE_PATH}", params={key: str(value) for key, value in gone_storage_params(asked).items()}
+    ).prepare()
+    assert request.url is not None
+
+    hooked = patch_param(request.url, "format", "json")
+
+    query = parse_qs(urlsplit(hooked).query)
+    assert query.pop("format") == ["json"]
+    assert {key: [int(value) for value in values] for key, values in query.items()} == {
+        "ids[0]": [7],
+        "ids[1]": [14],
+        "ids[2]": [15],
+        "ids[3]": [17],
+    }
 
 
 async def test_the_storage_question_keeps_only_the_ids_it_asked_for() -> None:
@@ -380,7 +412,7 @@ class _BandSession(_FakeSession):
         self.calls.append((method, path, kwargs))
         if self._fail_at is not None and len(self.calls) >= self._fail_at:
             raise OSError("band failed")
-        return {"gone": list(kwargs["params"]["ids[]"]), "deselected": []}
+        return {"gone": list(kwargs["params"].values()), "deselected": []}
 
 
 async def test_a_long_storage_question_travels_in_bands_of_the_php_limit() -> None:
@@ -390,7 +422,7 @@ async def test_a_long_storage_question_travels_in_bands_of_the_php_limit() -> No
     result = await _files(session).gone_storages(ids)
 
     assert GONE_LOOKUP_BAND == 256
-    assert [len(call[2]["params"]["ids[]"]) for call in session.calls] == [256, 256, 88]
+    assert [len(call[2]["params"]) for call in session.calls] == [256, 256, 88]
     assert result is not None
     assert result.gone == frozenset(ids)
 

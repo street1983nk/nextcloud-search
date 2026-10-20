@@ -2136,8 +2136,16 @@ PHP_TREE_HASH_TODAY = "c5642f59dfa6a332ff30872a3e8f46ebf049f1649b531d614f0188dc8
 # file came or went, so PACKAGE_FILES_TODAY stays at 80. The PHP pair does not
 # move. Recomputed independently with find, sort, tr and sha256sum over the
 # CRLF normalised tree: 22846239... both ways.
+#
+# Moved on 2026-10-20 by Plan 36-05 (HART-06, M-32-02, finding of the live
+# proof on 8090): nc/client.py sends the ids of the storage question as
+# ids[0], ids[1], ... through gone_storage_params, because the format=json hook
+# of nc_py_api rebuilds the query out of a dict and kept only the last of the
+# repeated ids[] keys. No file came or went, so PACKAGE_FILES_TODAY stays at 80.
+# The PHP pair does not move. Recomputed independently with find, sort, tr and
+# sha256sum over the CRLF normalised tree: 2210b1bf... both ways.
 PACKAGE_FILES_TODAY = 80
-PACKAGE_TREE_HASH_TODAY = "228462397ac31d2119ca27b6ab7d4e0766527163e46c8465e859c76af21ab956"
+PACKAGE_TREE_HASH_TODAY = "2210b1bf88801c816267d568d0573e9c00274fbef371faeb26d9c896a4f8b38a"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

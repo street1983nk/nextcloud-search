@@ -692,8 +692,22 @@ async def gone_storages(nc: AsyncNextcloudApp, ids: Sequence[int]) -> object:
     return await nc._session.ocs(
         "GET",
         "/ocs/v2.php/apps/findling/storages/gone",
-        params={"ids[]": list(ids)},
+        params=gone_storage_params(ids),
     )
+
+
+def gone_storage_params(ids: Sequence[int]) -> dict[str, int]:
+    """The id list of the storage question as query parameters with an index each.
+
+    ``ids[0]=7&ids[1]=14``, never ``ids[]=7&ids[]=14``. PHP reads both forms as
+    the same array, but nc_py_api adds format=json to every OCS url through a
+    hook that rebuilds the query out of a dict (``patch_param``), and a dict keeps
+    one value per key: of repeated ``ids[]`` keys only the last one arrived, so
+    every deleted storage but the last of a band was stamped as vanished instead
+    of being cleared (found live on 8090 in plan 36-05). Distinct keys survive
+    that hook.
+    """
+    return {f"ids[{index}]": storage_id for index, storage_id in enumerate(ids)}
 
 
 async def read_profile(nc: AsyncNextcloudApp) -> object:
