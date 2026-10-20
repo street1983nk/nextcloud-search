@@ -283,3 +283,15 @@ Rohdaten: `rohdaten/`.
 3. **Deckel in USD.** Das Rechenblatt nennt den Deckel netto in USD wie
    `aws_box.sh`, ohne Umrechnung in Euro, weil kein Kurs gelesen wurde und der
    Owner den Deckel in USD abgenommen hat (Abschnitt 7).
+4. **Abbau im zweiten Anlauf.** Die aus der Sitzung exportierten Zugangsdaten
+   liefen nach rund 20 Minuten ab; der erste Abbauversuch (04:42Z) beendete
+   nichts, und die erste Fassung von `skripte/19-abbau.sh` zählte die
+   gescheiterten Gegenproben als null. Das Skript prüft seitdem die Sitzung vor
+   dem Abbau und bricht bei einer gescheiterten Gegenprobe ab. Der zweite
+   Anlauf beendete die Instanz um 04:43:36Z; eine unabhängige Gegenprobe über
+   das Profil belegt null Instanzen, Volumes, Adressen und Schlüssel
+   (`rohdaten/08-abbau-boxen.txt`). Schlusskosten 0,0362 USD gegen den Deckel
+   von 0,60 USD (`rohdaten/90-kosten.txt`).
+5. **Laufzeit weit unter dem Plan.** Box-Zeit 20 min 07 s statt geplanter
+   4 h; die Messungen selbst liefen wie in `skripte/00-ablauf.md`, der
+   Durchsatz mit zwei Läufen je Modell.

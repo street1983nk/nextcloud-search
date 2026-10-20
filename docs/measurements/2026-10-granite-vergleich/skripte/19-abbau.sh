@@ -48,12 +48,28 @@ say() { printf '%s\n' "$*" | mask | tee -a "$OUT"; }
 aws_bin() {
     if command -v aws >/dev/null 2>&1; then aws "$@"; else "$AWS_CLI" "$@"; fi
 }
+# A call that fails is no count. Found on the first teardown of this run: the
+# exported session had expired, every call answered an error on stderr and
+# nothing on stdout, and a word count over nothing reported zero leftovers for
+# a box that was still running. So the answer of the api is taken first and a
+# failure ends this script red, before anything is counted.
 count() {
-    aws_bin --region eu-central-1 --output text ec2 "$@" | wc -w | tr -d ' '
+    answer=$(aws_bin --region eu-central-1 --output text ec2 "$@") || {
+        echo "gegenprobe gescheitert: ec2 $1 antwortet mit einem fehler, nichts gezählt" >&2
+        exit 1
+    }
+    printf '%s\n' "$answer" | wc -w | tr -d ' '
 }
 
 : >"$OUT"
 say "schritt 19 abbau der arm-box, start $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+# The session has to answer before anything is asked of it: a destroy against
+# an expired session terminates nothing and its output is easy to misread.
+if ! aws_bin --region eu-central-1 sts get-caller-identity >/dev/null 2>&1; then
+    say "sitzung antwortet nicht (abgelaufen?), es wird nichts abgebaut und nichts gezählt"
+    exit 1
+fi
+say "sitzung gültig, $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 say "befehl: FINDLING_STATE_BACKUP=<sicherung> sh scripts/ops/aws_box.sh destroy"
 sh "$REPO_ROOT/scripts/ops/aws_box.sh" destroy 2>&1 | mask | tee -a "$OUT" || true
 say "destroy ende $(date -u +%Y-%m-%dT%H:%M:%SZ)"

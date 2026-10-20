@@ -1,0 +1,55 @@
+schritt 19 abbau der arm-box, start 2026-10-20T04:43:32Z
+sitzung gültig, 2026-10-20T04:43:33Z
+befehl: FINDLING_STATE_BACKUP=<sicherung> sh scripts/ops/aws_box.sh destroy
+aws_box: the history of this box is backed up in /<zustandsdatei>.bak-granite-2026-10-20
+aws_box: terminating instance <instanz>
+aws_box: deleting security group <sg>
+aws_box: deleting key pair findling-loadtest
+aws_box: instance <instanz> is gone, verified against the api
+aws_box: volume none is gone, verified against the api
+aws_box: security group <sg> is gone, verified against the api
+aws_box: key pair findling-loadtest is gone, verified against the api
+aws_box: nothing carries purpose=findling-corpus-keep, so nothing of this
+run is kept. That is correct only if no snapshot was meant to be
+taken; aws_box.sh snapshot is the subcommand that takes one
+aws_box: volume <volume> carries purpose=findling-phase5, the resource itself is gone
+aws_box: nothing that carries purpose=findling-phase5 exists any more
+aws_box: the tags of what was deleted fall off the api on their own
+aws_box: every resource of this run is gone and /<zustandsdatei> is removed
+destroy ende 2026-10-20T04:44:18Z
+
+befehl: sh scripts/ops/aws_box.sh status (ohne zustandsdatei: suche nach dem tag)
+aws_box: no state file at /<zustandsdatei>, searching by tag purpose=findling-phase5
+instance <instanz>
+volume <volume>
+
+gegenproben gegen die api, 2026-10-20T04:44:22Z:
+instanzen-nicht-beendet 0
+volumes-mit-tag 0
+elastische-adressen-mit-tag 0, elastische-adressen-im-konto-gesamt 0
+security-groups-findling-loadtest 0
+abbau belegt: keine instanz, kein volume, keine adresse, keine gruppe der messung
+schritt 19 fertig 2026-10-20T04:44:31Z
+
+hinweis zu zeile 22 bis 24: die suche nach dem tag liest einen index, der
+nachläuft; die treffer sind die gerade beendete instanz und ihre gelöschte
+systemplatte (zeile 15: "the resource itself is gone").
+
+-- unabhängige gegenprobe, über das profil statt über die exportierte sitzung --
+2026-10-20T04:44:50Z, aws --profile infranodedev --region eu-central-1:
+describe-instances (tag purpose=findling-phase5): terminated, "User initiated (2026-10-20 04:43:36 GMT)", LaunchTime 2026-10-20T04:23:29+00:00
+instanzen im konto, nicht beendet (pending, running, stopping, stopped): 0
+volumes im konto in der region: 0
+elastische adressen im konto in der region: 0
+schlüsselpaare im konto in der region: 0
+
+-- vermerk: erster abbauversuch 2026-10-20T04:42:32Z ohne wirkung --
+die aus der sitzung exportierten zugangsdaten waren nach rund 20 minuten
+abgelaufen ("Credentials were refreshed, but the refreshed credentials are
+still expired."). destroy hat nichts beendet, und die erste fassung von
+19-abbau.sh zählte die fehlgeschlagenen gegenproben als null und meldete den
+abbau fälschlich als belegt; die box lief zu dem zeitpunkt noch. die fassung
+dieses laufs prüft die sitzung vor dem abbau und bricht bei einer
+fehlgeschlagenen gegenprobe ab. zweiter versuch mit frisch exportierter
+sitzung ab 04:43:32Z, siehe oben; die ausgabe des ersten versuchs ist durch
+diese datei ersetzt.
