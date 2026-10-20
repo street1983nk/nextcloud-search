@@ -277,7 +277,7 @@ Plans:
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
-- [ ] 35-10-PLAN.md: granite arm64 auf m7g nach Owner-Freigabe, Hochrechnung Neu-Einbettung, Abbau
+- [x] 35-10-PLAN.md: granite arm64 auf m7g nach Owner-Freigabe, Hochrechnung Neu-Einbettung, Abbau
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
@@ -318,7 +318,7 @@ Plans:
 | 32. Filter in der Unified Search | v1.5 | 8/8 | Executed, verification pending | - |
 | 33. Ausschlussmuster und Admin-Feinschliff | v1.5 | 11/11 | Executed, verification pending | - |
 | 34. Umstiegsweg | v1.5 | 6/6 | Complete   | 2026-10-19 |
-| 35. Stretch: Aehnliche Dokumente und Spikes | v1.5 | 11/13 | In Progress|  |
+| 35. Stretch: Aehnliche Dokumente und Spikes | v1.5 | 12/13 | In Progress|  |
 | 36. Haertung und Store-Einreichung 1.5.0 | v1.5 | 0/? | Not started | - |
 
 ## Nach v1.3 (Wiedervorlage)
