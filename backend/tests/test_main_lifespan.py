@@ -64,6 +64,8 @@ from findling.worker.poller import Poller, default_poller
 from findling.worker.reconcile import Reconcile, RoundResult
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from findling.nc.client import AsyncNextcloudApp
     from findling.nc.files import FileList
     from findling.nc.queue import DocumentQueue
@@ -2027,3 +2029,72 @@ def test_a_disable_while_the_cycle_waits_silences_it_again(volume: Path, monkeyp
         _wait_on_the_loop(client, 0.1)
 
         assert once.rounds == 0
+
+
+# ---------------------------------------------------------------------------
+# The client loggers. httpx writes every request line on INFO, and the OCS path
+# of a file request carries the fileid and the userId (L-35-06). Outside debug
+# both client loggers stand on WARNING; FINDLING_LOG_LEVEL=debug brings them back.
+# ---------------------------------------------------------------------------
+
+CLIENT_LOGGERS = ("httpx", "httpcore")
+A_REQUEST_LINE = "GET /ocs/v2.php/apps/files/42?userId=alice"
+
+
+@pytest.fixture
+def client_loggers_untouched() -> "Iterator[None]":
+    """Start both client loggers on NOTSET and hand back what they were before."""
+    before = {name: logging.getLogger(name).level for name in CLIENT_LOGGERS}
+    for name in CLIENT_LOGGERS:
+        logging.getLogger(name).setLevel(logging.NOTSET)
+    yield
+    for name, level in before.items():
+        logging.getLogger(name).setLevel(level)
+
+
+@pytest.mark.usefixtures("volume", "client_loggers_untouched")
+def test_the_client_loggers_stand_on_warning_by_default(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.delenv("FINDLING_LOG_LEVEL", raising=False)
+    settings.cache_clear()
+    caplog.set_level(logging.DEBUG)
+
+    with TestClient(APP):
+        pass
+
+    for name in CLIENT_LOGGERS:
+        assert logging.getLogger(name).getEffectiveLevel() == logging.WARNING
+    logging.getLogger("httpx").info(A_REQUEST_LINE)
+    assert [record for record in caplog.records if "userId=alice" in record.getMessage()] == []
+
+
+@pytest.mark.usefixtures("volume", "client_loggers_untouched")
+def test_the_client_loggers_speak_again_under_debug(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setenv("FINDLING_LOG_LEVEL", "debug")
+    settings.cache_clear()
+    caplog.set_level(logging.DEBUG)
+
+    with TestClient(APP):
+        pass
+
+    for name in CLIENT_LOGGERS:
+        assert logging.getLogger(name).getEffectiveLevel() < logging.WARNING
+    logging.getLogger("httpx").info(A_REQUEST_LINE)
+    assert [record for record in caplog.records if "userId=alice" in record.getMessage()] != []
+
+
+@pytest.mark.usefixtures("volume", "client_loggers_untouched")
+def test_the_own_logger_is_not_touched_by_the_client_lift(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FINDLING_LOG_LEVEL", "warning")
+    settings.cache_clear()
+    own = logging.getLogger("findling")
+    monkeypatch.setattr(own, "level", logging.WARNING)
+
+    with TestClient(APP):
+        pass
+
+    assert own.level == logging.WARNING
+    assert own.getEffectiveLevel() == logging.WARNING

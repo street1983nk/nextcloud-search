@@ -2084,8 +2084,16 @@ PHP_TREE_HASH_TODAY = "9aa79bb73926212910b0e58d3def6eb0fef82ef650a28c3f1bf8f66df
 # that nothing is going to raise. No file came or went, so PACKAGE_FILES_TODAY
 # stays at 80. The PHP pair does not move. Recomputed independently with find,
 # sort, tr and sha256sum over the CRLF normalised tree: 5a348317... both ways.
+#
+# Moved on 2026-10-20 by Plan 36-02 (HART-06, D-36-09): main.py lifts the
+# client loggers httpx and httpcore to WARNING in the lifespan unless
+# FINDLING_LOG_LEVEL is debug, because httpx logs the OCS path with the fileid
+# and the userId on INFO (L-35-06). No file came or went, so
+# PACKAGE_FILES_TODAY stays at 80. The PHP pair does not move. Recomputed
+# independently with find, sort, tr and sha256sum over the CRLF normalised
+# tree: 2f73265b... both ways.
 PACKAGE_FILES_TODAY = 80
-PACKAGE_TREE_HASH_TODAY = "5a348317a7f278307e650709e24dda52961c25cb1e5a19e7b47a1006e99791e1"
+PACKAGE_TREE_HASH_TODAY = "2f73265b5c6905c49b940716657f68f744af703e98d9cc7f50481af6f4c2de22"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
