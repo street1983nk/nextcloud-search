@@ -1,0 +1,86 @@
+schritt 3b, 2026-10-20T00:07:03Z, uv run aus backend, UV_OFFLINE=1
+onnxruntime 1.31.0 tokenizers 0.23.3 numpy 2.5.4
+
+speicher vorher: MemFree: 3457988 kB SwapTotal: 9437184 kB SwapFree: 7531220 kB 
+model         WORK\e5\model.onnx
+tokenizer     WORK\e5
+dataset       de.jsonl
+prefixes      on
+vector-dtype  int8
+pooling       mean
+cases         120
+Recall@1      0.2917
+Recall@5      0.5917
+MRR           0.4428
+worst ranks   de-105 rank 115, de-30 rank 70, de-113 rank 63, de-29 rank 62, de-48 rank 52
+per case      de-01 1, de-02 4, de-03 1, de-04 1, de-05 3, de-06 2, de-07 1, de-08 1, de-09 1, de-10 1, de-11 2, de-12 8, de-13 2, de-14 14, de-15 1, de-16 4, de-17 1, de-18 1, de-19 7, de-20 4, de-21 14, de-22 6, de-23 14, de-24 2, de-25 1, de-26 8, de-27 1, de-28 4, de-29 62, de-30 70, de-31 30, de-32 1, de-33 2, de-34 7, de-35 1, de-36 13, de-37 3, de-38 1, de-39 2, de-40 6, de-41 2, de-42 8, de-43 1, de-44 4, de-45 6, de-46 2, de-47 2, de-48 52, de-49 3, de-50 6, de-51 10, de-52 3, de-53 1, de-54 3, de-55 1, de-56 12, de-57 7, de-58 8, de-59 1, de-60 8, de-61 1, de-62 2, de-63 1, de-64 3, de-65 2, de-66 1, de-67 10, de-68 1, de-69 1, de-70 4, de-71 9, de-72 3, de-73 14, de-74 4, de-75 1, de-76 6, de-77 2, de-78 16, de-79 4, de-80 10, de-81 47, de-82 25, de-83 1, de-84 17, de-85 24, de-86 21, de-87 1, de-88 1, de-89 14, de-90 3, de-91 30, de-92 3, de-93 6, de-94 3, de-95 1, de-96 9, de-97 21, de-98 28, de-99 1, de-100 6, de-101 9, de-102 2, de-103 1, de-104 1, de-105 115, de-106 20, de-107 4, de-108 3, de-109 2, de-110 1, de-111 11, de-112 2, de-113 63, de-114 1, de-115 6, de-116 5, de-117 13, de-118 1, de-119 10, de-120 6
+
+speicher vorher: MemFree: 3449724 kB SwapTotal: 9437184 kB SwapFree: 7531220 kB 
+model         WORK\granite-int8-a\model.onnx
+tokenizer     WORK\granite
+dataset       de.jsonl
+prefixes      off
+vector-dtype  int8
+pooling       cls
+cases         120
+Recall@1      0.4000
+Recall@5      0.6750
+MRR           0.5279
+worst ranks   de-29 rank 73, de-30 rank 72, de-97 rank 64, de-91 rank 60, de-57 rank 58
+per case      de-01 1, de-02 15, de-03 4, de-04 1, de-05 1, de-06 1, de-07 1, de-08 1, de-09 1, de-10 6, de-11 2, de-12 1, de-13 1, de-14 14, de-15 1, de-16 1, de-17 3, de-18 14, de-19 16, de-20 2, de-21 1, de-22 7, de-23 34, de-24 1, de-25 1, de-26 1, de-27 1, de-28 3, de-29 73, de-30 72, de-31 8, de-32 1, de-33 3, de-34 3, de-35 15, de-36 4, de-37 4, de-38 1, de-39 1, de-40 2, de-41 1, de-42 1, de-43 2, de-44 5, de-45 1, de-46 20, de-47 7, de-48 2, de-49 1, de-50 1, de-51 26, de-52 43, de-53 4, de-54 11, de-55 12, de-56 20, de-57 58, de-58 2, de-59 1, de-60 6, de-61 2, de-62 1, de-63 5, de-64 1, de-65 1, de-66 1, de-67 8, de-68 1, de-69 1, de-70 1, de-71 1, de-72 6, de-73 4, de-74 2, de-75 20, de-76 3, de-77 1, de-78 2, de-79 12, de-80 5, de-81 55, de-82 10, de-83 4, de-84 9, de-85 6, de-86 1, de-87 2, de-88 1, de-89 1, de-90 1, de-91 60, de-92 2, de-93 5, de-94 1, de-95 1, de-96 6, de-97 64, de-98 57, de-99 1, de-100 1, de-101 5, de-102 6, de-103 3, de-104 1, de-105 2, de-106 6, de-107 7, de-108 7, de-109 4, de-110 1, de-111 1, de-112 1, de-113 13, de-114 1, de-115 2, de-116 1, de-117 11, de-118 5, de-119 13, de-120 2
+
+speicher vorher: MemFree: 3477000 kB SwapTotal: 9437184 kB SwapFree: 7531220 kB 
+model         WORK\e5\model.onnx
+tokenizer     WORK\e5
+dataset       en.jsonl
+prefixes      on
+vector-dtype  int8
+pooling       mean
+cases         42
+Recall@1      0.3333
+Recall@5      0.7143
+MRR           0.5010
+worst ranks   en-10 rank 39, en-21 rank 20, en-32 rank 19, en-04 rank 13, en-25 rank 12
+per case      en-01 3, en-02 3, en-03 7, en-04 13, en-05 5, en-06 4, en-07 5, en-08 1, en-09 1, en-10 39, en-11 1, en-12 1, en-13 3, en-14 8, en-15 3, en-16 1, en-17 2, en-18 1, en-19 1, en-20 1, en-21 20, en-22 2, en-23 5, en-24 1, en-25 12, en-26 1, en-27 7, en-28 1, en-29 1, en-30 2, en-31 2, en-32 19, en-33 1, en-34 2, en-35 4, en-36 2, en-37 1, en-38 9, en-39 11, en-40 2, en-41 8, en-42 12
+
+speicher vorher: MemFree: 3457812 kB SwapTotal: 9437184 kB SwapFree: 7531228 kB 
+model         WORK\granite-int8-a\model.onnx
+tokenizer     WORK\granite
+dataset       en.jsonl
+prefixes      off
+vector-dtype  int8
+pooling       cls
+cases         42
+Recall@1      0.3810
+Recall@5      0.7857
+MRR           0.5515
+worst ranks   en-10 rank 31, en-25 rank 24, en-42 rank 20, en-38 rank 15, en-34 rank 10
+per case      en-01 1, en-02 2, en-03 5, en-04 9, en-05 2, en-06 5, en-07 1, en-08 1, en-09 1, en-10 31, en-11 2, en-12 3, en-13 4, en-14 1, en-15 3, en-16 1, en-17 1, en-18 1, en-19 2, en-20 2, en-21 2, en-22 1, en-23 1, en-24 1, en-25 24, en-26 5, en-27 1, en-28 1, en-29 1, en-30 3, en-31 1, en-32 7, en-33 1, en-34 10, en-35 3, en-36 7, en-37 3, en-38 15, en-39 8, en-40 3, en-41 2, en-42 20
+
+speicher vorher: MemFree: 3436960 kB SwapTotal: 9437184 kB SwapFree: 7531228 kB 
+model         WORK\e5\model.onnx
+tokenizer     WORK\e5
+dataset       fr.jsonl
+prefixes      on
+vector-dtype  int8
+pooling       mean
+cases         120
+Recall@1      0.1583
+Recall@5      0.3417
+MRR           0.2604
+worst ranks   fr-64 rank 107, fr-73 rank 97, fr-107 rank 82, fr-115 rank 82, fr-43 rank 76
+per case      fr-01 1, fr-02 43, fr-03 9, fr-04 1, fr-05 1, fr-06 1, fr-07 14, fr-08 1, fr-09 19, fr-10 2, fr-11 1, fr-12 3, fr-13 31, fr-14 33, fr-15 1, fr-16 1, fr-17 2, fr-18 2, fr-19 28, fr-20 6, fr-21 25, fr-22 6, fr-23 1, fr-24 9, fr-25 4, fr-26 16, fr-27 17, fr-28 2, fr-29 6, fr-30 44, fr-31 4, fr-32 4, fr-33 39, fr-34 36, fr-35 71, fr-36 18, fr-37 2, fr-38 3, fr-39 1, fr-40 8, fr-41 56, fr-42 19, fr-43 76, fr-44 36, fr-45 9, fr-46 14, fr-47 3, fr-48 1, fr-49 3, fr-50 8, fr-51 5, fr-52 40, fr-53 9, fr-54 34, fr-55 5, fr-56 1, fr-57 5, fr-58 3, fr-59 34, fr-60 10, fr-61 8, fr-62 6, fr-63 18, fr-64 107, fr-65 63, fr-66 23, fr-67 20, fr-68 32, fr-69 20, fr-70 56, fr-71 54, fr-72 2, fr-73 97, fr-74 23, fr-75 26, fr-76 18, fr-77 19, fr-78 22, fr-79 15, fr-80 1, fr-81 71, fr-82 20, fr-83 1, fr-84 8, fr-85 1, fr-86 1, fr-87 38, fr-88 66, fr-89 6, fr-90 1, fr-91 25, fr-92 5, fr-93 13, fr-94 23, fr-95 5, fr-96 22, fr-97 30, fr-98 3, fr-99 1, fr-100 52, fr-101 61, fr-102 29, fr-103 10, fr-104 49, fr-105 13, fr-106 12, fr-107 82, fr-108 29, fr-109 9, fr-110 1, fr-111 48, fr-112 6, fr-113 2, fr-114 54, fr-115 82, fr-116 37, fr-117 2, fr-118 24, fr-119 55, fr-120 30
+
+speicher vorher: MemFree: 3459820 kB SwapTotal: 9437184 kB SwapFree: 7531272 kB 
+model         WORK\granite-int8-a\model.onnx
+tokenizer     WORK\granite
+dataset       fr.jsonl
+prefixes      off
+vector-dtype  int8
+pooling       cls
+cases         120
+Recall@1      0.1917
+Recall@5      0.5250
+MRR           0.3397
+worst ranks   fr-54 rank 98, fr-64 rank 79, fr-65 rank 63, fr-14 rank 61, fr-26 rank 57
+per case      fr-01 1, fr-02 40, fr-03 5, fr-04 7, fr-05 9, fr-06 13, fr-07 9, fr-08 1, fr-09 2, fr-10 41, fr-11 3, fr-12 2, fr-13 7, fr-14 61, fr-15 3, fr-16 1, fr-17 42, fr-18 8, fr-19 11, fr-20 8, fr-21 5, fr-22 1, fr-23 3, fr-24 5, fr-25 1, fr-26 57, fr-27 3, fr-28 6, fr-29 8, fr-30 44, fr-31 3, fr-32 3, fr-33 36, fr-34 3, fr-35 55, fr-36 9, fr-37 1, fr-38 2, fr-39 1, fr-40 26, fr-41 4, fr-42 53, fr-43 33, fr-44 3, fr-45 1, fr-46 1, fr-47 16, fr-48 1, fr-49 2, fr-50 6, fr-51 2, fr-52 3, fr-53 2, fr-54 98, fr-55 2, fr-56 1, fr-57 1, fr-58 4, fr-59 19, fr-60 1, fr-61 37, fr-62 1, fr-63 4, fr-64 79, fr-65 63, fr-66 8, fr-67 9, fr-68 25, fr-69 1, fr-70 44, fr-71 11, fr-72 1, fr-73 22, fr-74 3, fr-75 26, fr-76 10, fr-77 4, fr-78 25, fr-79 12, fr-80 2, fr-81 52, fr-82 13, fr-83 2, fr-84 1, fr-85 1, fr-86 1, fr-87 4, fr-88 4, fr-89 1, fr-90 4, fr-91 10, fr-92 1, fr-93 22, fr-94 31, fr-95 10, fr-96 4, fr-97 12, fr-98 1, fr-99 2, fr-100 50, fr-101 6, fr-102 9, fr-103 10, fr-104 4, fr-105 2, fr-106 26, fr-107 30, fr-108 5, fr-109 28, fr-110 2, fr-111 13, fr-112 5, fr-113 2, fr-114 4, fr-115 1, fr-116 49, fr-117 19, fr-118 3, fr-119 3, fr-120 55

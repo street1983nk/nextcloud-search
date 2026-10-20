@@ -1,0 +1,15 @@
+schritt 5 image-zuwachs, 2026-10-20T00:14:44Z
+speicher vorher: MemFree: 2947160 kB SwapTotal: 9437184 kB SwapFree: 7747164 kB 
+datei | unkomprimiert byte | gzip byte | sha256
+model.onnx (eigener int8-Build) | 97858099 | 67103762 | 704c1ebca5fbb7cd83ced41827658ac4c9990c64f7f2874d22b78044e5022e22
+tokenizer.json | 25301672 | 4016312 | 4f2842d568e2724370aec203652a42ac783c7937f8347a1a2cc7506d71f1582f
+tokenizer_config.json | 12860 | 914 | 6ed69389e30a8ecabfce2f9ebcdf0c908b34056f24d994340f2f216521c057d5
+special_tokens_map.json | 871 | 192 | 013787ee251ff611722479197c00853b62113ad303cb0a36524231783c676c69
+config.json | 1216 | 530 | de948b0bdc6f356afad7a84b276d8dd7e7fe10fb9add1bb5e610621c28e41ebc
+1_Pooling/config.json | 313 | 158 | 8bc5c9a40814fcf48d2fbe7cfeff4bee6736c3c2a823ba0ce098985c59d12ab7
+Lizenztext Apache-2.0 (Platzhalter: COPYING.sqlite-vec) | 11132 | 3980 | a71350041b24fe07bf85a941695e2f9956dcb9b35268570427ff2cc6e27e78e7
+summe | 123186163 | 71125848 |
+summe in MB (10^6): unkomprimiert 123.2, gzip 71.1
+zum vergleich e5 heute (model.onnx, tokenizer.json, tokenizer_config.json, special_tokens_map.json, config.json; ohne sentencepiece.bpe.model): unkomprimiert 135185084, gzip 83087883
+probe-image: nicht gebaut (Speicher), Zuwachs aus den Dateigroessen
+schritt 5 fertig

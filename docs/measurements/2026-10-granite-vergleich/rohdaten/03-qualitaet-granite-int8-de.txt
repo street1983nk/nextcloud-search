@@ -1,0 +1,18 @@
+schritt 3, 2026-10-20T00:04:43Z, image ghcr.io/street1983nk/findling_backend:1.4.3, network none
+speicher vorher: MemFree: 2152284 kB SwapTotal: 9437184 kB SwapFree: 7399780 kB 
+modell sha256 704c1ebca5fbb7cd83ced41827658ac4c9990c64f7f2874d22b78044e5022e22
+testset sha256 (LF) 700c74d2c40d30ad26ad2cbd0ad8567a4b51346ea2b7f570abe884a0811e4f51
+model         /work/granite-int8-a/model.onnx
+tokenizer     /work/granite
+dataset       de.jsonl
+prefixes      off
+vector-dtype  int8
+pooling       cls
+cases         120
+Recall@1      0.4000
+Recall@5      0.6750
+MRR           0.5279
+worst ranks   de-29 rank 73, de-30 rank 72, de-97 rank 64, de-91 rank 60, de-57 rank 58
+per case      de-01 1, de-02 15, de-03 4, de-04 1, de-05 1, de-06 1, de-07 1, de-08 1, de-09 1, de-10 6, de-11 2, de-12 1, de-13 1, de-14 14, de-15 1, de-16 1, de-17 3, de-18 14, de-19 16, de-20 2, de-21 1, de-22 7, de-23 34, de-24 1, de-25 1, de-26 1, de-27 1, de-28 3, de-29 73, de-30 72, de-31 8, de-32 1, de-33 3, de-34 3, de-35 15, de-36 4, de-37 4, de-38 1, de-39 1, de-40 2, de-41 1, de-42 1, de-43 2, de-44 5, de-45 1, de-46 20, de-47 7, de-48 2, de-49 1, de-50 1, de-51 26, de-52 43, de-53 4, de-54 11, de-55 12, de-56 20, de-57 58, de-58 2, de-59 1, de-60 6, de-61 2, de-62 1, de-63 5, de-64 1, de-65 1, de-66 1, de-67 8, de-68 1, de-69 1, de-70 1, de-71 1, de-72 6, de-73 4, de-74 2, de-75 20, de-76 3, de-77 1, de-78 2, de-79 12, de-80 5, de-81 55, de-82 10, de-83 4, de-84 9, de-85 6, de-86 1, de-87 2, de-88 1, de-89 1, de-90 1, de-91 60, de-92 2, de-93 5, de-94 1, de-95 1, de-96 6, de-97 64, de-98 57, de-99 1, de-100 1, de-101 5, de-102 6, de-103 3, de-104 1, de-105 2, de-106 6, de-107 7, de-108 7, de-109 4, de-110 1, de-111 1, de-112 1, de-113 13, de-114 1, de-115 2, de-116 1, de-117 11, de-118 5, de-119 13, de-120 2
+dauer 5 s
+speicher nachher: MemFree: 2524280 kB SwapTotal: 9437184 kB SwapFree: 7399780 kB 

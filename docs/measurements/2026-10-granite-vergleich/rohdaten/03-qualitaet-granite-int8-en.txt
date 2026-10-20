@@ -1,0 +1,18 @@
+schritt 3, 2026-10-20T00:05:23Z, image ghcr.io/street1983nk/findling_backend:1.4.3, network none
+speicher vorher: MemFree: 2064228 kB SwapTotal: 9437184 kB SwapFree: 7400172 kB 
+modell sha256 704c1ebca5fbb7cd83ced41827658ac4c9990c64f7f2874d22b78044e5022e22
+testset sha256 (LF) 95173d6e92d324a28f38b59122e7803a9fc84f7228325e42bb60d6f16bde0631
+model         /work/granite-int8-a/model.onnx
+tokenizer     /work/granite
+dataset       en.jsonl
+prefixes      off
+vector-dtype  int8
+pooling       cls
+cases         42
+Recall@1      0.3810
+Recall@5      0.7857
+MRR           0.5515
+worst ranks   en-10 rank 31, en-25 rank 24, en-42 rank 20, en-38 rank 15, en-34 rank 10
+per case      en-01 1, en-02 2, en-03 5, en-04 9, en-05 2, en-06 5, en-07 1, en-08 1, en-09 1, en-10 31, en-11 2, en-12 3, en-13 4, en-14 1, en-15 3, en-16 1, en-17 1, en-18 1, en-19 2, en-20 2, en-21 2, en-22 1, en-23 1, en-24 1, en-25 24, en-26 5, en-27 1, en-28 1, en-29 1, en-30 3, en-31 1, en-32 7, en-33 1, en-34 10, en-35 3, en-36 7, en-37 3, en-38 15, en-39 8, en-40 3, en-41 2, en-42 20
+dauer 4 s
+speicher nachher: MemFree: 2546596 kB SwapTotal: 9437184 kB SwapFree: 7400172 kB 

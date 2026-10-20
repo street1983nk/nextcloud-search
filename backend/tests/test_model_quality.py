@@ -472,3 +472,121 @@ def test_the_help_names_all_five_switches(capsys: pytest.CaptureFixture[str]) ->
     printed = capsys.readouterr().out
     for switch in ("--model", "--tokenizer", "--dataset", "--prefixes", "--vector-dtype"):
         assert switch in printed, switch
+
+
+# ---------------------------------------------------------------------------
+# The pooling switch, from plan 35-09 (STR-02, pitfall 11 of the research).
+#
+# granite-embedding-97m-multilingual-r2 is trained with CLS pooling and no
+# prefixes, e5 with mean pooling and its two prefixes. A tool that pools granite
+# by the mean still produces plausible numbers, which is the danger: the
+# measurement runs and is wrong. The default stays mean so every older run of
+# this tool reads the same, and the difference between the two pools is the
+# positive control that the switch reaches the arithmetic.
+# ---------------------------------------------------------------------------
+
+_REQUIRED_ARGUMENTS: Final = (
+    *("--model", "/model/model.onnx"),
+    *("--tokenizer", "/model"),
+    *("--dataset", "/testdata/semantik/de.jsonl"),
+    *("--prefixes", "off"),
+    *("--vector-dtype", "int8"),
+)
+
+
+def test_the_pooling_defaults_to_mean_and_takes_cls() -> None:
+    assert quality.parse_args(list(_REQUIRED_ARGUMENTS)).pooling == "mean"
+    assert quality.parse_args([*_REQUIRED_ARGUMENTS, "--pooling", "cls"]).pooling == "cls"
+    assert quality.parse_args([*_REQUIRED_ARGUMENTS, "--pooling", "mean"]).pooling == "mean"
+
+
+def test_an_unknown_pooling_is_refused(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as raised:
+        quality.parse_args([*_REQUIRED_ARGUMENTS, "--pooling", "max"])
+    assert raised.value.code != 0
+    assert "--pooling" in capsys.readouterr().err
+
+
+def test_cls_pooling_takes_the_first_token_and_differs_from_the_mean() -> None:
+    """The positive control of the switch, on numbers small enough to read."""
+    import numpy as np
+
+    hidden = np.array(
+        [
+            [[1.0, 0.0], [0.0, 1.0], [0.0, 1.0]],
+            [[0.0, 2.0], [4.0, 0.0], [9.0, 9.0]],
+        ],
+        dtype=np.float32,
+    )
+    mask = np.array([[1, 1, 1], [1, 1, 0]], dtype=np.int64)
+
+    pooled = quality.cls_pool(hidden)
+    assert np.array_equal(pooled, hidden[:, 0, :])
+    assert not np.allclose(pooled, quality.mean_pool(hidden, mask))
+
+
+def test_the_report_names_the_pooling_in_its_head() -> None:
+    metrics = quality.Metrics(cases=3, recall_at_1=1 / 3, recall_at_5=1.0, mrr=0.6)
+    arguments = (Path("/model/model.onnx"), Path("/model"), DATASET_DIR / "fr.jsonl", "off", "int8")
+
+    head = quality.format_report(*arguments, metrics, [("fr-01", 1)], pooling="cls").splitlines()[:7]
+    assert "pooling       cls" in head
+    assert "pooling       mean" in quality.format_report(*arguments, metrics, [("fr-01", 1)]).splitlines()
+
+
+def test_the_pad_token_falls_back_to_the_tokenizer_config(tmp_path: Path) -> None:
+    """Pitfall 12: granite names its pad token only in tokenizer_config.json."""
+    assert quality._pad_token(tmp_path) == "<pad>"
+
+    config = tmp_path / "tokenizer_config.json"
+    config.write_text(json.dumps({"pad_token": "<|endoftext|>"}), encoding="utf-8")
+    assert quality._pad_token(tmp_path) == "<|endoftext|>"
+
+    config.write_text(json.dumps({"pad_token": {"content": "<|pad|>", "lstrip": False}}), encoding="utf-8")
+    assert quality._pad_token(tmp_path) == "<|pad|>"
+
+    # A special tokens map without a pad token does not end the search.
+    special = tmp_path / "special_tokens_map.json"
+    special.write_text(json.dumps({"unk_token": "<unk>"}), encoding="utf-8")
+    assert quality._pad_token(tmp_path) == "<|pad|>"
+
+    # One with a pad token still wins, so e5 reads exactly what it read before.
+    special.write_text(json.dumps({"pad_token": "<pad>"}), encoding="utf-8")
+    assert quality._pad_token(tmp_path) == "<pad>"
+
+
+def test_a_run_without_the_pooling_switch_prints_the_old_report_plus_one_line(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Older command lines keep working and keep their report; mean pooling is named in one added line."""
+    metrics = quality.Metrics(cases=3, recall_at_1=1 / 3, recall_at_5=1.0, mrr=0.6)
+    ranked = [("de-01", 1), ("de-02", 2), ("de-03", 4)]
+    handed: list[object] = []
+
+    def fake_measure(*args: object, **kwargs: object) -> tuple[object, list[tuple[str, int]]]:
+        handed.extend(args)
+        handed.extend(kwargs.values())
+        return metrics, ranked
+
+    monkeypatch.setattr(quality, "measure", fake_measure)
+    code = quality.main(list(_REQUIRED_ARGUMENTS))
+    printed = capsys.readouterr().out.splitlines()
+    assert code == 0
+    assert "mean" in handed
+
+    # The report as it read before plan 35-09, written out rather than produced
+    # by the function under test.
+    old_form = [
+        f"model         {Path('/model/model.onnx')}",
+        f"tokenizer     {Path('/model')}",
+        "dataset       de.jsonl",
+        "prefixes      off",
+        "vector-dtype  int8",
+        "cases         3",
+        "Recall@1      0.3333",
+        "Recall@5      1.0000",
+        "MRR           0.6000",
+        "worst ranks   de-03 rank 4, de-02 rank 2",
+    ]
+    assert [line for line in printed if not line.startswith("pooling ")] == old_form
+    assert [line for line in printed if line.startswith("pooling ")] == ["pooling       mean"]

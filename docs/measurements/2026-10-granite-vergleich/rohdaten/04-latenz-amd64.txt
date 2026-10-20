@@ -1,0 +1,215 @@
+schritt 4 latenz amd64, 2026-10-20T00:17:21Z
+image ghcr.io/street1983nk/findling_backend@sha256:036eb67e3e1144bc371142e18fcbfe94327b2a6edbfc0d1aea2f32d93302fc6d
+cpu host: 13th Gen Intel(R) Core(TM) i5-1335U, 12 logische kerne
+cpuset 2,3, threads 2, network none, browser geschlossen, keine parallellast
+speicher host vorher: MemFree: 3134596 kB SwapTotal: 9437184 kB SwapFree: 7780892 kB 
+speicher vm vorher: MemTotal: 7972040 kB MemFree: 4337428 kB MemAvailable: 6217528 kB SwapTotal: 2097152 kB SwapFree: 2097152 kB 
+
+== e5-int8, modell sha256 8da4c9ba0ad59f58e8566839425d7fd6339d31414d0ce5cba2d7d0afb75dd8b6
+speicher host vor e5-int8: MemFree: 3092332 kB SwapTotal: 9437184 kB SwapFree: 7780892 kB 
+speicher vm vor e5-int8: MemTotal: 7972040 kB MemFree: 4340380 kB MemAvailable: 6220532 kB SwapTotal: 2097152 kB SwapFree: 2097152 kB 
+-- A durchsatz (findling.embed.bench --mode tokens-per-second)
+mode=tokens-per-second
+arch=x86_64
+cpus=2
+python=3.13.15
+sqlite=3.46.1
+model_dir=/model
+batch=8
+sequence=512
+threads=2
+rounds=20
+tokens_per_round=4096
+tokens_total=81920
+p50_ms=1130.191
+p95_ms=1533.745
+max_ms=1834.325
+tokens_per_second_p50=3624.2
+tokens_per_second_p95=2670.6
+tokens_per_second_mean=3392.6
+wall_seconds=24.147
+-- B einzelanfrage, 5 frische container, je 100 warme anfragen aus de.jsonl
+start 1
+cpus_visible=2
+onnxruntime=1.30.0
+threads=2
+pooling=mean
+prefix_chars=7
+max_sequence_tokens=512
+startup_to_import_ms=19.3
+load_ms=1774.3
+first_query_ms=4.4
+cold_ms=1778.7
+warm_queries=100
+warm_p50_ms=3.12
+warm_p95_ms=3.68
+warm_max_ms=4.28
+start 2
+cpus_visible=2
+onnxruntime=1.30.0
+threads=2
+pooling=mean
+prefix_chars=7
+max_sequence_tokens=512
+startup_to_import_ms=11.8
+load_ms=1343.8
+first_query_ms=5.4
+cold_ms=1349.2
+warm_queries=100
+warm_p50_ms=3.14
+warm_p95_ms=3.71
+warm_max_ms=6.74
+start 3
+cpus_visible=2
+onnxruntime=1.30.0
+threads=2
+pooling=mean
+prefix_chars=7
+max_sequence_tokens=512
+startup_to_import_ms=14.6
+load_ms=1363.8
+first_query_ms=4.3
+cold_ms=1368.1
+warm_queries=100
+warm_p50_ms=3.28
+warm_p95_ms=6.74
+warm_max_ms=7.98
+start 4
+cpus_visible=2
+onnxruntime=1.30.0
+threads=2
+pooling=mean
+prefix_chars=7
+max_sequence_tokens=512
+startup_to_import_ms=8.8
+load_ms=1196.9
+first_query_ms=4.3
+cold_ms=1201.2
+warm_queries=100
+warm_p50_ms=3.19
+warm_p95_ms=4.04
+warm_max_ms=5.58
+start 5
+cpus_visible=2
+onnxruntime=1.30.0
+threads=2
+pooling=mean
+prefix_chars=7
+max_sequence_tokens=512
+startup_to_import_ms=10.8
+load_ms=1399.6
+first_query_ms=4.8
+cold_ms=1404.4
+warm_queries=100
+warm_p50_ms=3.19
+warm_p95_ms=4.21
+warm_max_ms=11.70
+speicher host nach e5-int8: MemFree: 2680956 kB SwapTotal: 9437184 kB SwapFree: 7791096 kB 
+speicher vm nach e5-int8: MemTotal: 7972040 kB MemFree: 4342288 kB MemAvailable: 6223856 kB SwapTotal: 2097152 kB SwapFree: 2097152 kB 
+
+== granite-int8, modell sha256 704c1ebca5fbb7cd83ced41827658ac4c9990c64f7f2874d22b78044e5022e22
+speicher host vor granite-int8: MemFree: 2674132 kB SwapTotal: 9437184 kB SwapFree: 7791096 kB 
+speicher vm vor granite-int8: MemTotal: 7972040 kB MemFree: 4338956 kB MemAvailable: 6220360 kB SwapTotal: 2097152 kB SwapFree: 2097152 kB 
+-- A durchsatz (findling.embed.bench --mode tokens-per-second)
+mode=tokens-per-second
+arch=x86_64
+cpus=2
+python=3.13.15
+sqlite=3.46.1
+model_dir=/model
+batch=8
+sequence=512
+threads=2
+rounds=20
+tokens_per_round=4096
+tokens_total=81920
+p50_ms=1421.850
+p95_ms=1585.167
+max_ms=1610.349
+tokens_per_second_p50=2880.8
+tokens_per_second_p95=2584.0
+tokens_per_second_mean=2814.5
+wall_seconds=29.107
+-- B einzelanfrage, 5 frische container, je 100 warme anfragen aus de.jsonl
+start 1
+cpus_visible=2
+onnxruntime=1.30.0
+threads=2
+pooling=cls
+prefix_chars=0
+max_sequence_tokens=512
+startup_to_import_ms=8.8
+load_ms=1539.1
+first_query_ms=8.3
+cold_ms=1547.4
+warm_queries=100
+warm_p50_ms=4.27
+warm_p95_ms=5.37
+warm_max_ms=7.80
+start 2
+cpus_visible=2
+onnxruntime=1.30.0
+threads=2
+pooling=cls
+prefix_chars=0
+max_sequence_tokens=512
+startup_to_import_ms=10.4
+load_ms=1296.3
+first_query_ms=5.3
+cold_ms=1301.6
+warm_queries=100
+warm_p50_ms=4.19
+warm_p95_ms=5.01
+warm_max_ms=8.29
+start 3
+cpus_visible=2
+onnxruntime=1.30.0
+threads=2
+pooling=cls
+prefix_chars=0
+max_sequence_tokens=512
+startup_to_import_ms=10.7
+load_ms=1881.9
+first_query_ms=7.0
+cold_ms=1888.9
+warm_queries=100
+warm_p50_ms=5.55
+warm_p95_ms=10.54
+warm_max_ms=13.89
+start 4
+cpus_visible=2
+onnxruntime=1.30.0
+threads=2
+pooling=cls
+prefix_chars=0
+max_sequence_tokens=512
+startup_to_import_ms=10.2
+load_ms=1365.3
+first_query_ms=5.3
+cold_ms=1370.6
+warm_queries=100
+warm_p50_ms=4.04
+warm_p95_ms=4.79
+warm_max_ms=6.55
+start 5
+cpus_visible=2
+onnxruntime=1.30.0
+threads=2
+pooling=cls
+prefix_chars=0
+max_sequence_tokens=512
+startup_to_import_ms=10.8
+load_ms=1305.2
+first_query_ms=5.3
+cold_ms=1310.5
+warm_queries=100
+warm_p50_ms=4.12
+warm_p95_ms=5.25
+warm_max_ms=5.71
+speicher host nach granite-int8: MemFree: 2736936 kB SwapTotal: 9437184 kB SwapFree: 7791112 kB 
+speicher vm nach granite-int8: MemTotal: 7972040 kB MemFree: 4341104 kB MemAvailable: 6223312 kB SwapTotal: 2097152 kB SwapFree: 2097152 kB 
+
+== zusammenfassung
+e5-int8 tokens_per_second_p50 3624.2, kalt p50 1368.1 ms max 1778.7 ms (starts: 1778.7 1349.2 1368.1 1201.2 1404.4), warm p50 3.19 ms, warm p95 4.04 ms
+granite-int8 tokens_per_second_p50 2880.8, kalt p50 1370.6 ms max 1888.9 ms (starts: 1547.4 1301.6 1888.9 1370.6 1310.5), warm p50 4.19 ms, warm p95 5.25 ms
+schritt 4 fertig

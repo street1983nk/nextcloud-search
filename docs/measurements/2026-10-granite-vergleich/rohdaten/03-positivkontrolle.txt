@@ -1,0 +1,61 @@
+positivkontrolle: granite int8 mit --pooling mean gegen --pooling cls, sonst gleich
+
+schritt 3, 2026-10-20T00:05:06Z, image ghcr.io/street1983nk/findling_backend:1.4.3, network none
+speicher vorher: MemFree: 2892860 kB SwapTotal: 9437184 kB SwapFree: 7400044 kB 
+modell sha256 704c1ebca5fbb7cd83ced41827658ac4c9990c64f7f2874d22b78044e5022e22
+testset sha256 (LF) 700c74d2c40d30ad26ad2cbd0ad8567a4b51346ea2b7f570abe884a0811e4f51
+model         /work/granite-int8-a/model.onnx
+tokenizer     /work/granite
+dataset       de.jsonl
+prefixes      off
+vector-dtype  int8
+pooling       mean
+cases         120
+Recall@1      0.2333
+Recall@5      0.5167
+MRR           0.3582
+worst ranks   de-30 rank 118, de-98 rank 102, de-108 rank 97, de-57 rank 92, de-81 rank 90
+per case      de-01 1, de-02 62, de-03 31, de-04 1, de-05 1, de-06 1, de-07 1, de-08 1, de-09 2, de-10 3, de-11 44, de-12 4, de-13 4, de-14 39, de-15 4, de-16 1, de-17 16, de-18 50, de-19 58, de-20 78, de-21 1, de-22 73, de-23 28, de-24 2, de-25 1, de-26 5, de-27 2, de-28 3, de-29 67, de-30 118, de-31 2, de-32 4, de-33 3, de-34 4, de-35 38, de-36 3, de-37 4, de-38 2, de-39 2, de-40 1, de-41 6, de-42 3, de-43 2, de-44 11, de-45 1, de-46 19, de-47 38, de-48 6, de-49 1, de-50 2, de-51 2, de-52 40, de-53 13, de-54 22, de-55 28, de-56 50, de-57 92, de-58 9, de-59 49, de-60 1, de-61 15, de-62 16, de-63 43, de-64 1, de-65 1, de-66 1, de-67 32, de-68 1, de-69 1, de-70 1, de-71 1, de-72 32, de-73 61, de-74 54, de-75 16, de-76 5, de-77 4, de-78 4, de-79 15, de-80 4, de-81 90, de-82 6, de-83 9, de-84 25, de-85 22, de-86 34, de-87 12, de-88 1, de-89 1, de-90 2, de-91 45, de-92 64, de-93 6, de-94 1, de-95 1, de-96 9, de-97 36, de-98 102, de-99 1, de-100 4, de-101 4, de-102 69, de-103 4, de-104 2, de-105 17, de-106 45, de-107 20, de-108 97, de-109 8, de-110 2, de-111 1, de-112 1, de-113 19, de-114 2, de-115 1, de-116 4, de-117 15, de-118 27, de-119 3, de-120 39
+dauer 4 s
+speicher nachher: MemFree: 2911044 kB SwapTotal: 9437184 kB SwapFree: 7400044 kB 
+vergleich de: MRR mean 0.3582, MRR cls 0.5279, mean schlechter: OK
+
+schritt 3, 2026-10-20T00:05:41Z, image ghcr.io/street1983nk/findling_backend:1.4.3, network none
+speicher vorher: MemFree: 2549352 kB SwapTotal: 9437184 kB SwapFree: 7400428 kB 
+modell sha256 704c1ebca5fbb7cd83ced41827658ac4c9990c64f7f2874d22b78044e5022e22
+testset sha256 (LF) 95173d6e92d324a28f38b59122e7803a9fc84f7228325e42bb60d6f16bde0631
+model         /work/granite-int8-a/model.onnx
+tokenizer     /work/granite
+dataset       en.jsonl
+prefixes      off
+vector-dtype  int8
+pooling       mean
+cases         42
+Recall@1      0.3571
+Recall@5      0.6667
+MRR           0.4981
+worst ranks   en-10 rank 38, en-26 rank 35, en-03 rank 30, en-25 rank 26, en-38 rank 19
+per case      en-01 18, en-02 1, en-03 30, en-04 15, en-05 18, en-06 11, en-07 1, en-08 2, en-09 1, en-10 38, en-11 1, en-12 1, en-13 3, en-14 4, en-15 3, en-16 1, en-17 2, en-18 1, en-19 1, en-20 2, en-21 2, en-22 1, en-23 9, en-24 1, en-25 26, en-26 35, en-27 1, en-28 1, en-29 1, en-30 7, en-31 5, en-32 11, en-33 2, en-34 5, en-35 1, en-36 6, en-37 1, en-38 19, en-39 2, en-40 4, en-41 4, en-42 7
+dauer 3 s
+speicher nachher: MemFree: 2554292 kB SwapTotal: 9437184 kB SwapFree: 7400428 kB 
+vergleich en: MRR mean 0.4981, MRR cls 0.5515, mean schlechter: OK
+
+schritt 3, 2026-10-20T00:06:21Z, image ghcr.io/street1983nk/findling_backend:1.4.3, network none
+speicher vorher: MemFree: 2404128 kB SwapTotal: 9437184 kB SwapFree: 7531100 kB 
+modell sha256 704c1ebca5fbb7cd83ced41827658ac4c9990c64f7f2874d22b78044e5022e22
+testset sha256 (LF) d5ef6d1c84256dc840c1b9832c180b2972304f078846c8846ef6558171a089a3
+model         /work/granite-int8-a/model.onnx
+tokenizer     /work/granite
+dataset       fr.jsonl
+prefixes      off
+vector-dtype  int8
+pooling       mean
+cases         120
+Recall@1      0.1917
+Recall@5      0.4333
+MRR           0.3148
+worst ranks   fr-64 rank 112, fr-11 rank 106, fr-76 rank 99, fr-54 rank 98, fr-10 rank 97
+per case      fr-01 1, fr-02 14, fr-03 69, fr-04 4, fr-05 28, fr-06 28, fr-07 2, fr-08 1, fr-09 9, fr-10 97, fr-11 106, fr-12 15, fr-13 3, fr-14 24, fr-15 3, fr-16 1, fr-17 13, fr-18 13, fr-19 14, fr-20 83, fr-21 6, fr-22 2, fr-23 1, fr-24 17, fr-25 4, fr-26 89, fr-27 1, fr-28 15, fr-29 58, fr-30 94, fr-31 2, fr-32 8, fr-33 14, fr-34 23, fr-35 57, fr-36 18, fr-37 2, fr-38 4, fr-39 1, fr-40 34, fr-41 2, fr-42 28, fr-43 76, fr-44 5, fr-45 1, fr-46 2, fr-47 61, fr-48 1, fr-49 9, fr-50 20, fr-51 1, fr-52 8, fr-53 1, fr-54 98, fr-55 1, fr-56 1, fr-57 1, fr-58 2, fr-59 3, fr-60 7, fr-61 70, fr-62 1, fr-63 3, fr-64 112, fr-65 86, fr-66 5, fr-67 11, fr-68 30, fr-69 1, fr-70 39, fr-71 36, fr-72 4, fr-73 15, fr-74 7, fr-75 3, fr-76 99, fr-77 2, fr-78 90, fr-79 2, fr-80 3, fr-81 28, fr-82 10, fr-83 1, fr-84 6, fr-85 1, fr-86 1, fr-87 1, fr-88 4, fr-89 55, fr-90 1, fr-91 8, fr-92 2, fr-93 31, fr-94 10, fr-95 22, fr-96 2, fr-97 3, fr-98 1, fr-99 9, fr-100 57, fr-101 17, fr-102 53, fr-103 47, fr-104 2, fr-105 7, fr-106 63, fr-107 19, fr-108 2, fr-109 5, fr-110 5, fr-111 26, fr-112 12, fr-113 1, fr-114 6, fr-115 1, fr-116 72, fr-117 12, fr-118 30, fr-119 7, fr-120 86
+dauer 5 s
+speicher nachher: MemFree: 3144836 kB SwapTotal: 9437184 kB SwapFree: 7531100 kB 
+vergleich fr: MRR mean 0.3148, MRR cls 0.3397, mean schlechter: OK

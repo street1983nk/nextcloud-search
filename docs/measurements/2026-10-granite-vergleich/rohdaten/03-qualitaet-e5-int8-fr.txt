@@ -1,0 +1,18 @@
+schritt 3, 2026-10-20T00:05:45Z, image ghcr.io/street1983nk/findling_backend:1.4.3, network none
+speicher vorher: MemFree: 2529140 kB SwapTotal: 9437184 kB SwapFree: 7400428 kB 
+modell sha256 8da4c9ba0ad59f58e8566839425d7fd6339d31414d0ce5cba2d7d0afb75dd8b6
+testset sha256 (LF) d5ef6d1c84256dc840c1b9832c180b2972304f078846c8846ef6558171a089a3
+model         /work/e5/model.onnx
+tokenizer     /work/e5
+dataset       fr.jsonl
+prefixes      on
+vector-dtype  int8
+pooling       mean
+cases         120
+Recall@1      0.1583
+Recall@5      0.3417
+MRR           0.2604
+worst ranks   fr-64 rank 107, fr-73 rank 97, fr-107 rank 82, fr-115 rank 82, fr-43 rank 76
+per case      fr-01 1, fr-02 43, fr-03 9, fr-04 1, fr-05 1, fr-06 1, fr-07 14, fr-08 1, fr-09 19, fr-10 2, fr-11 1, fr-12 3, fr-13 31, fr-14 33, fr-15 1, fr-16 1, fr-17 2, fr-18 2, fr-19 28, fr-20 6, fr-21 25, fr-22 6, fr-23 1, fr-24 9, fr-25 4, fr-26 16, fr-27 17, fr-28 2, fr-29 6, fr-30 44, fr-31 4, fr-32 4, fr-33 39, fr-34 36, fr-35 71, fr-36 18, fr-37 2, fr-38 3, fr-39 1, fr-40 8, fr-41 56, fr-42 19, fr-43 76, fr-44 36, fr-45 9, fr-46 14, fr-47 3, fr-48 1, fr-49 3, fr-50 8, fr-51 5, fr-52 40, fr-53 9, fr-54 34, fr-55 5, fr-56 1, fr-57 5, fr-58 3, fr-59 34, fr-60 10, fr-61 8, fr-62 6, fr-63 18, fr-64 107, fr-65 63, fr-66 23, fr-67 20, fr-68 32, fr-69 20, fr-70 56, fr-71 54, fr-72 2, fr-73 97, fr-74 23, fr-75 26, fr-76 18, fr-77 19, fr-78 22, fr-79 15, fr-80 1, fr-81 71, fr-82 20, fr-83 1, fr-84 8, fr-85 1, fr-86 1, fr-87 38, fr-88 66, fr-89 6, fr-90 1, fr-91 25, fr-92 5, fr-93 13, fr-94 23, fr-95 5, fr-96 22, fr-97 30, fr-98 3, fr-99 1, fr-100 52, fr-101 61, fr-102 29, fr-103 10, fr-104 49, fr-105 13, fr-106 12, fr-107 82, fr-108 29, fr-109 9, fr-110 1, fr-111 48, fr-112 6, fr-113 2, fr-114 54, fr-115 82, fr-116 37, fr-117 2, fr-118 24, fr-119 55, fr-120 30
+dauer 4 s
+speicher nachher: MemFree: 2509588 kB SwapTotal: 9437184 kB SwapFree: 7400556 kB 
