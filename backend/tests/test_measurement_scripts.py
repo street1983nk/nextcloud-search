@@ -1010,8 +1010,14 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # PHP_FILES_TODAY stays at 106. The controller reads the address value similar as a GET state of the one
 # result page, builds the similar address of every hit and the way back of the view; the template renders
 # the second link of a hit, the heading branch, the way back and the two states of the view.
-PHP_FILES_TODAY = 106
-PHP_TREE_HASH_TODAY = "9aa79bb73926212910b0e58d3def6eb0fef82ef650a28c3f1bf8f66df5fe853a"
+# Moved on 2026-10-20 by Plan 36-03 (HART-06, D-36-14, M-32-02): lib/Service/StorageService.php takes
+# IDBConnection and learned classifyAbsent, which reads oc_storages and oc_mounts in bands of 200 and
+# tells deleted storages (no row in oc_storages) from storages only a switched off provider carries. One
+# test came, php/tests/Unit/StorageServiceTest.php (deleted and switched off told apart, switch on, empty
+# question, 300 ids in bands, a storage the mount list still carries). No file went, so PHP_FILES_TODAY
+# moves to 107.
+PHP_FILES_TODAY = 107
+PHP_TREE_HASH_TODAY = "d6e456ef4efb41d7c05fe689d1f72ed709f96dee4a5d1d9d0d77410000fe0a21"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

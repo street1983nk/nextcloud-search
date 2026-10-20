@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace OCA\Findling\Service;
 
+use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\Files\Cache\ICacheEntry;
 use OCP\Files\Cache\IFileAccess;
 use OCP\Files\FileInfo;
 use OCP\Files\IMimeTypeLoader;
+use OCP\IDBConnection;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -29,6 +31,12 @@ use Psr\Log\LoggerInterface;
  * until plan 04-08 and is now the default of two switches (ADM-04, D-08): the
  * three provider lists below are the documented default and providers()
  * composes the list in force out of them.
+ *
+ * One question is answered with two queries of their own, and neither of them
+ * touches the file cache: classifyAbsent() reads oc_storages and oc_mounts to
+ * tell the container which of its storages are deleted and which are only
+ * switched off (plan 36-03, D-36-14). The reason it cannot go through the mount
+ * list stands at the method.
  */
 class StorageService {
 	/**
@@ -178,10 +186,21 @@ class StorageService {
 	 */
 	private array $rootPaths = [];
 
+	/**
+	 * Storage ids per IN query of classifyAbsent().
+	 *
+	 * The band exists for the dialects and not for the size of the answer, the
+	 * same reasoning as FileStateService::verdictsFor: every database has a
+	 * ceiling on bound parameters and they differ. The route in front of this
+	 * method takes at most 256 ids, so a request is two bands at most.
+	 */
+	private const ABSENT_LOOKUP_BAND = 200;
+
 	public function __construct(
 		private IFileAccess $fileAccess,
 		private IMimeTypeLoader $mimeTypeLoader,
 		private SettingsService $settingsService,
+		private IDBConnection $db,
 		private LoggerInterface $logger,
 	) {
 	}
@@ -343,6 +362,138 @@ class StorageService {
 		}
 
 		return isset($this->indexedStorages[$storageId]);
+	}
+
+	/**
+	 * Which of the asked storages are deleted, and which are only switched off.
+	 *
+	 * The container asks this for storages it still holds rows of and no longer
+	 * finds in the mount list (plan 36-03, M-32-02). Three classes come out of it
+	 * there, and this method answers the two that allow a deletion in the same
+	 * reconcile round:
+	 *
+	 * - gone: the storage has no row in oc_storages any more. The user or the
+	 *   external storage was deleted, and nothing will ever mount it again.
+	 * - deselected: the storage still exists, at least one row of oc_mounts
+	 *   carries it through a provider that a Findling switch turned off (Team
+	 *   Folders or external storage), and the mount list in force does not
+	 *   carry it through any other provider. D-36-14: a switch turned off is a
+	 *   decision of the admin like an exclusion, so it clears without a grace
+	 *   period.
+	 *
+	 * Everything else stays out of both lists, and the container keeps its
+	 * grace period for it (D-36-05): a storage that exists and is mounted
+	 * nowhere is just as likely a mount that is about to come back.
+	 *
+	 * Why oc_mounts and not the mount list. getMounts() answers which mounts are
+	 * IN, composed out of providers(), and a storage that a switch left out is by
+	 * definition not in that answer, so it cannot say why the storage is absent.
+	 * oc_mounts holds the provider class every mount was set up by, which is
+	 * exactly the reason. The composed list is still consulted, through
+	 * isIndexedStorage(), so a storage that a listed provider carries as well is
+	 * never reported as switched off; and backend/tests/test_exclusion_path_space.py
+	 * keeps the mount query at its one call site.
+	 *
+	 * Nothing but the asked numbers leaves this method: no path, no mount point,
+	 * no storage key and no user. Ids that are not positive are dropped, so an
+	 * answer never names a storage the caller did not ask about.
+	 *
+	 * @param list<int> $storageIds
+	 * @return array{gone: list<int>, deselected: list<int>}
+	 */
+	public function classifyAbsent(array $storageIds): array {
+		$wanted = [];
+		foreach ($storageIds as $storageId) {
+			if (is_int($storageId) && $storageId > 0) {
+				$wanted[$storageId] = true;
+			}
+		}
+		$wanted = array_keys($wanted);
+		sort($wanted);
+
+		if ($wanted === []) {
+			return ['gone' => [], 'deselected' => []];
+		}
+
+		$existing = [];
+		foreach (array_chunk($wanted, self::ABSENT_LOOKUP_BAND) as $band) {
+			$qb = $this->db->getQueryBuilder();
+			$qb->select('numeric_id')
+				->from('storages')
+				->where($qb->expr()->in('numeric_id', $qb->createNamedParameter($band, IQueryBuilder::PARAM_INT_ARRAY)));
+
+			$result = $qb->executeQuery();
+			try {
+				while (($row = $result->fetch()) !== false) {
+					$existing[(int)($row['numeric_id'] ?? 0)] = true;
+				}
+			} finally {
+				$result->closeCursor();
+			}
+		}
+
+		$gone = array_values(array_filter($wanted, static fn (int $storageId): bool => !isset($existing[$storageId])));
+
+		return ['gone' => $gone, 'deselected' => $this->deselected(array_keys($existing))];
+	}
+
+	/**
+	 * The existing storages among the asked ones that only a switched off
+	 * provider carries. The second half of classifyAbsent().
+	 *
+	 * The provider filter travels into the query, so that a Team Folder with
+	 * hundreds of members comes back as one row and not as one row per member,
+	 * and it is checked once more on every row, so that the decision does not
+	 * rest on the dialect getting the comparison right.
+	 *
+	 * @param list<int> $existing
+	 * @return list<int>
+	 */
+	private function deselected(array $existing): array {
+		$switchedOff = [];
+		if (!$this->settingsService->indexTeamFolders()) {
+			$switchedOff[] = self::TEAM_FOLDER_MOUNT_PROVIDER;
+		}
+		if (!$this->settingsService->indexExternalStorage()) {
+			$switchedOff[] = self::EXTERNAL_STORAGE_MOUNT_PROVIDER;
+		}
+
+		$existing = array_values(array_filter($existing, static fn (int $storageId): bool => $storageId > 0));
+		if ($switchedOff === [] || $existing === []) {
+			return [];
+		}
+
+		$deselected = [];
+		foreach (array_chunk($existing, self::ABSENT_LOOKUP_BAND) as $band) {
+			$qb = $this->db->getQueryBuilder();
+			$qb->selectDistinct(['storage_id', 'mount_provider_class'])
+				->from('mounts')
+				->where($qb->expr()->in('storage_id', $qb->createNamedParameter($band, IQueryBuilder::PARAM_INT_ARRAY)))
+				->andWhere($qb->expr()->in('mount_provider_class', $qb->createNamedParameter($switchedOff, IQueryBuilder::PARAM_STR_ARRAY)));
+
+			$result = $qb->executeQuery();
+			try {
+				while (($row = $result->fetch()) !== false) {
+					$storageId = (int)($row['storage_id'] ?? 0);
+					$provider = (string)($row['mount_provider_class'] ?? '');
+					if ($storageId > 0 && in_array($provider, $switchedOff, true)) {
+						$deselected[$storageId] = true;
+					}
+				}
+			} finally {
+				$result->closeCursor();
+			}
+		}
+
+		$ids = [];
+		foreach (array_keys($deselected) as $storageId) {
+			if (!$this->isIndexedStorage($storageId)) {
+				$ids[] = $storageId;
+			}
+		}
+		sort($ids);
+
+		return $ids;
 	}
 
 	/**
