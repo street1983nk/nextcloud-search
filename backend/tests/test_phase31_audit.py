@@ -10,8 +10,8 @@ plans.** The tests of plans 31-04 to 31-08 build their ZIP files with zipfile
 and patch them, their compound files with helpers of their own and their mails
 with the email package, and they call the readers in this process. Here every
 ZIP file is written byte by byte from the PKWARE records, every compound file
-by the small writer below (FAT, MiniFAT, directory, DIFAT), every workbook
-record by record, every mail as raw bytes, and every HEIC is encoded by
+by the small writer of hostile.py (FAT, MiniFAT, directory, DIFAT), every
+workbook record by record, every mail as raw bytes, and every HEIC is encoded by
 pillow-heif and then cut or patched box by box. Every file goes through the
 real sandbox path, ``ExtractionWorker``: a spawned child with RLIMIT_AS (on
 Linux) and a deadline. Each case asserts a named verdict, a living worker and
@@ -43,17 +43,14 @@ import re
 import struct
 import subprocess
 import sys
-import time
-import zlib
 from collections.abc import Callable, Iterator, Sequence
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
 import pytest
 
 from findling.extract import sandbox
-from findling.extract.errors import STATE_REASONS, ExtractionOutcome, Reason, State
+from findling.extract.errors import STATE_REASONS, Reason, State
 from findling.nc.client import AsyncNextcloudApp
 from findling.nc.files import FileRow, Mount, MountResult, SliceResult
 from findling.nc.queue import (
@@ -68,17 +65,34 @@ from findling.nc.queue import (
 from findling.store.repo import CATCHUP_DONE, CATCHUP_MARK, CATCHUP_RECONCILE, RECHECK_MARK, FileMeta, Store, open_store
 from findling.worker.catchup import catchup_step
 from findling.worker.reconcile import GIVEN_UP_REASON, GIVEN_UP_STATE, ROUND_WALKED, Reconcile
+from hostile import (
+    _COMPRESSED,
+    _HEAD,
+    _TEXT_AT,
+    CORPUS_DEADLINE_SECONDS,
+    Member,
+    Ran,
+    _clx,
+    _difat_cycle,
+    _directory_cycle,
+    _fat_cycle,
+    _fat_declared_far_past_the_file,
+    _minifat_cycle,
+    _record,
+    _same_offset_twice,
+    _with_end,
+    build_cfb_sectors,
+    build_doc,
+    build_workbook,
+    build_zip,
+    corpus_case,
+    nested_rfc822,
+    text_member,
+)
 
 REPO = Path(__file__).resolve().parents[2]
 DEPLOY_HARP = REPO / ".github" / "workflows" / "deploy-harp.yml"
 CORRESPONDING_SOURCE = REPO / "scripts" / "release" / "corresponding_source.py"
-
-# The deadline of the corpus worker and the time one case may take. Half the
-# product deadline (120 s) for the worker, so that a hang costs one minute and
-# not two; a quarter of it for a case, so that a reader that is merely slow on
-# this machine shows up as well.
-CORPUS_DEADLINE_SECONDS = 60.0
-CASE_SECONDS = 30.0
 
 ZIP = "application/zip"
 MAIL = "message/rfc822"
@@ -109,27 +123,6 @@ def worker() -> Iterator[sandbox.ExtractionWorker]:
     started.stop()
 
 
-@dataclass(frozen=True)
-class Ran:
-    outcome: ExtractionOutcome
-    seconds: float
-
-
-def _run(worker: sandbox.ExtractionWorker, path: Path, mime: str) -> Ran:
-    started = time.monotonic()
-    outcome = worker.run(str(path), mime, path.stat().st_size)
-    return Ran(outcome, time.monotonic() - started)
-
-
-def _named_and_quick(ran: Ran, worker: sandbox.ExtractionWorker) -> None:
-    """The three promises of every case: a verdict with a name, a living worker, a short run."""
-    assert ran.outcome.reason in STATE_REASONS[ran.outcome.state]
-    assert ran.outcome.reason is not Reason.TIMEOUT
-    assert ran.seconds < CASE_SECONDS
-    # The next job is answered: by the same child, or by a fresh one after a recycle.
-    assert worker.run(__file__, "application/x-not-allowed", 10).reason is Reason.MIME_NOT_ALLOWED
-
-
 def _expect(ran: Ran, state: State, reason: Reason | None = None, *, contains: str = "", lacks: str = "") -> None:
     assert (ran.outcome.state, ran.outcome.reason) == (state, reason), ran.outcome.detail
     if contains:
@@ -138,91 +131,20 @@ def _expect(ran: Ran, state: State, reason: Reason | None = None, *, contains: s
         assert lacks not in ran.outcome.text
 
 
-def _corpus_case(
-    worker: sandbox.ExtractionWorker, tmp_path: Path, name: str, data: bytes, mime: str
-) -> tuple[Ran, list[str]]:
-    path = tmp_path / name
-    path.write_bytes(data)
-    ran = _run(worker, path, mime)
-    _named_and_quick(ran, worker)
-    return ran, sorted(entry.name for entry in tmp_path.iterdir())
-
-
 # -- ZIP files, written record by record (APPNOTE 4.3.7, 4.3.12, 4.3.16) ------------
-
-
-@dataclass(frozen=True)
-class Member:
-    name: bytes
-    data: bytes
-    deflate: bool = False
-    declared: int | None = None  # the uncompressed size the records claim, when not the true one
-    offset: int | None = None  # the local header offset the directory claims, when not the true one
-
-
-def _local(member: Member, payload: bytes, crc: int, declared: int) -> bytes:
-    method = 8 if member.deflate else 0
-    head = struct.pack(
-        "<4sHHHHHIIIHH", b"PK\x03\x04", 20, 0, method, 0, 0x21, crc, len(payload), declared, len(member.name), 0
-    )
-    return head + member.name + payload
-
-
-def _central(member: Member, payload: bytes, crc: int, declared: int, offset: int) -> bytes:
-    method = 8 if member.deflate else 0
-    fields = (b"PK\x01\x02", 0x031E, 20, 0, method, 0, 0x21, crc, len(payload), declared, len(member.name))
-    return struct.pack("<4sHHHHHHIIIHHHHHII", *fields, 0, 0, 0, 0, 0o100644 << 16, offset) + member.name
-
-
-def _end(count: int, size: int, offset: int, comment: bytes = b"") -> bytes:
-    return struct.pack("<4sHHHHIIH", b"PK\x05\x06", 0, 0, count, count, size, offset, len(comment)) + comment
-
-
-def _deflated(data: bytes) -> bytes:
-    packer = zlib.compressobj(9, zlib.DEFLATED, -15)
-    return packer.compress(data) + packer.flush()
-
-
-def build_zip(members: Sequence[Member], *, comment: bytes = b"") -> bytes:
-    body = b""
-    directory = b""
-    for member in members:
-        payload = _deflated(member.data) if member.deflate else member.data
-        crc = zlib.crc32(member.data)
-        declared = len(member.data) if member.declared is None else member.declared
-        at = len(body)
-        body += _local(member, payload, crc, declared)
-        directory += _central(member, payload, crc, declared, at if member.offset is None else member.offset)
-    return body + directory + _end(len(members), len(directory), len(body), comment)
-
-
-def _same_offset_twice(name: bytes, data: bytes) -> bytes:
-    """Two directory entries for one local header: the overlap zipfile only warns about."""
-    crc = zlib.crc32(data)
-    body = _local(Member(name, data), data, crc, len(data))
-    directory = _central(Member(name, data), data, crc, len(data), 0) * 2
-    return body + directory + _end(2, len(directory), len(body))
-
-
-def _text(word: str) -> Member:
-    return Member(f"{word}.txt".encode(), f"{word} steht hier".encode())
 
 
 def _end_record_in_comment() -> bytes:
     """A second end record with lying numbers inside the comment; zipfile takes the last one it finds."""
-    plain = build_zip([_text("kommentarwort")])
+    plain = build_zip([text_member("kommentarwort")])
     lying = struct.pack("<4sHHHHIIH", b"PK\x05\x06", 0, 0, 5, 5, 999_999, 3, 0)
     comment = b"xx" + lying + b"yy"
     return plain[:-2] + struct.pack("<H", len(comment)) + comment
 
 
 def _zip64_locator_that_lies() -> bytes:
-    plain = build_zip([_text("y")])
+    plain = build_zip([text_member("y")])
     return plain[:-22] + struct.pack("<4sLQL", b"PK\x06\x07", 0, 10**12, 1) + plain[-22:]
-
-
-def _with_end(plain: bytes, size: int, offset: int) -> bytes:
-    return plain[:-22] + struct.pack("<4sHHHHIIH", b"PK\x05\x06", 0, 0, 1, 1, size, offset, 0)
 
 
 _ZIP_CASES: dict[str, tuple[Callable[[], bytes], tuple[State, Reason | None], str, str | None]] = {
@@ -230,7 +152,9 @@ _ZIP_CASES: dict[str, tuple[Callable[[], bytes], tuple[State, Reason | None], st
     # Declared small, real 20 MiB of zeros: zipfile stops at the declaration, the
     # CRC fails, the member keeps its name and the next member is read.
     "lying-small": (
-        lambda: build_zip([Member(b"a.txt", b"\0" * (20 << 20), deflate=True, declared=1000), _text("kleinwort")]),
+        lambda: build_zip(
+            [Member(b"a.txt", b"\0" * (20 << 20), deflate=True, declared=1000), text_member("kleinwort")]
+        ),
         (State.INDEXED, None),
         "kleinwort",
         None,
@@ -244,7 +168,7 @@ _ZIP_CASES: dict[str, tuple[Callable[[], bytes], tuple[State, Reason | None], st
     "end-record-in-comment": (_end_record_in_comment, (State.FAILED, Reason.CORRUPT), "", None),
     "zip64-locator-contradicts": (_zip64_locator_that_lies, (State.FAILED, Reason.CORRUPT), "", None),
     "offsets-overflow": (
-        lambda: _with_end(build_zip([_text("x")]), 0xFFFFFFFF, 0xFFFFFFFF),
+        lambda: _with_end(build_zip([text_member("x")]), 0xFFFFFFFF, 0xFFFFFFFF),
         (State.FAILED, Reason.CORRUPT),
         "",
         None,
@@ -258,7 +182,7 @@ _ZIP_CASES: dict[str, tuple[Callable[[], bytes], tuple[State, Reason | None], st
         "L-31-02",
     ),
     "local-header-past-the-end": (
-        lambda: build_zip([Member(b"weg.txt", b"x", offset=10_000_000), _text("bleibwort")]),
+        lambda: build_zip([Member(b"weg.txt", b"x", offset=10_000_000), text_member("bleibwort")]),
         (State.INDEXED, None),
         "bleibwort",
         None,
@@ -290,7 +214,9 @@ _ZIP_CASES: dict[str, tuple[Callable[[], bytes], tuple[State, Reason | None], st
         None,
     ),
     "inner-zip-with-overlap": (
-        lambda: build_zip([Member(b"innen.zip", _same_offset_twice(b"o.txt", b"overlapwort")), _text("aussenwort")]),
+        lambda: build_zip(
+            [Member(b"innen.zip", _same_offset_twice(b"o.txt", b"overlapwort")), text_member("aussenwort")]
+        ),
         (State.INDEXED, None),
         "aussenwort",
         None,
@@ -299,7 +225,7 @@ _ZIP_CASES: dict[str, tuple[Callable[[], bytes], tuple[State, Reason | None], st
         lambda: build_zip(
             [
                 Member(b"innen.zip", _with_end(build_zip([Member(b"a.txt", b"x")]), 46 + 5, 0x7FFFFFFF)),
-                _text("aussenwort"),
+                text_member("aussenwort"),
             ]
         ),
         (State.INDEXED, None),
@@ -307,7 +233,7 @@ _ZIP_CASES: dict[str, tuple[Callable[[], bytes], tuple[State, Reason | None], st
         "L-31-02",
     ),
     "depth-three": (
-        lambda: build_zip([Member(b"e2.zip", build_zip([Member(b"e3.zip", build_zip([_text("tiefwort")]))]))]),
+        lambda: build_zip([Member(b"e2.zip", build_zip([Member(b"e3.zip", build_zip([text_member("tiefwort")]))]))]),
         (State.SKIPPED, Reason.ARCHIVE_LIMIT),
         "",
         None,
@@ -329,7 +255,7 @@ def test_every_zip_of_the_corpus_ends_in_a_named_verdict(
 ) -> None:
     build, (state, reason), word, _ = _ZIP_CASES[case]
 
-    ran, left = _corpus_case(worker, tmp_path, "korpus.zip", build(), ZIP)
+    ran, left = corpus_case(worker, tmp_path, "korpus.zip", build(), ZIP)
 
     _expect(ran, state, reason, contains=word)
     # Members go into scratch files named by a number next to the job file and are
@@ -340,7 +266,7 @@ def test_every_zip_of_the_corpus_ends_in_a_named_verdict(
 def test_a_zip_as_attachment_of_a_mail_is_never_opened(worker: sandbox.ExtractionWorker, tmp_path: Path) -> None:
     import base64
 
-    inner = base64.b64encode(build_zip([_text("anhanginhaltwort")]))
+    inner = base64.b64encode(build_zip([text_member("anhanginhaltwort")]))
     mail = (
         b"From: a@b.de\r\nSubject: postmitzip\r\nMIME-Version: 1.0\r\n"
         b'Content-Type: multipart/mixed; boundary="g"\r\n\r\n--g\r\nContent-Type: text/plain\r\n\r\ntext\r\n'
@@ -348,22 +274,12 @@ def test_a_zip_as_attachment_of_a_mail_is_never_opened(worker: sandbox.Extractio
         b"Content-Transfer-Encoding: base64\r\n\r\n" + inner + b"\r\n--g--\r\n"
     )
 
-    ran, _ = _corpus_case(worker, tmp_path, "post.eml", mail, MAIL)
+    ran, _ = corpus_case(worker, tmp_path, "post.eml", mail, MAIL)
 
     _expect(ran, State.INDEXED, contains="paket.zip", lacks="anhanginhaltwort")
 
 
 # -- mails, as raw bytes ------------------------------------------------------------
-
-_HEAD = b"From: a@b.de\r\nTo: c@d.de\r\nSubject: hallo\r\n"
-
-
-def _nested_rfc822(levels: int) -> bytes:
-    mail = _HEAD + b"Content-Type: text/plain\r\n\r\nkern\r\n"
-    for _ in range(levels):
-        mail = b"Subject: s\r\nContent-Type: message/rfc822\r\n\r\n" + mail
-    return mail
-
 
 _MAIL_CASES: dict[str, tuple[Callable[[], bytes], tuple[State, Reason | None], str, str | None]] = {
     "5000-header-lines": (
@@ -438,7 +354,7 @@ _MAIL_CASES: dict[str, tuple[Callable[[], bytes], tuple[State, Reason | None], s
         "hallo",
         None,
     ),
-    "rfc822-nested-1000-times": (lambda: _nested_rfc822(1000), (State.FAILED, Reason.CORRUPT), "", None),
+    "rfc822-nested-1000-times": (lambda: nested_rfc822(1000), (State.FAILED, Reason.CORRUPT), "", None),
     # The structural headers are parsed by the email package itself, part by
     # part and more than once, so a limit on the four indexed headers alone
     # would leave these two.
@@ -473,7 +389,7 @@ def test_every_mail_of_the_corpus_ends_in_a_named_verdict(
 ) -> None:
     build, (state, reason), word, _ = _MAIL_CASES[case]
 
-    ran, _ = _corpus_case(worker, tmp_path, "korpus.eml", build(), MAIL)
+    ran, _ = corpus_case(worker, tmp_path, "korpus.eml", build(), MAIL)
 
     _expect(ran, state, reason, contains=word)
 
@@ -519,196 +435,10 @@ def test_an_html_part_reads_no_entity_and_no_doctype(worker: sandbox.ExtractionW
     )
 
     for name, mail in (("xml.eml", xml), ("html.eml", html)):
-        ran, _ = _corpus_case(worker, tmp_path, name, mail, MAIL)
+        ran, _ = corpus_case(worker, tmp_path, name, mail, MAIL)
         assert ran.outcome.state is State.INDEXED
         assert "kanarienwort" not in ran.outcome.text
         assert "hallo" in ran.outcome.text
-
-
-# -- compound files, written sector by sector ([MS-CFB] 2.2, 2.3, 2.6) -----------------
-
-_SECTOR = 512
-_MINI = 64
-_END_OF_CHAIN = 0xFFFFFFFE
-_FREE = 0xFFFFFFFF
-_FAT_SECTOR = 0xFFFFFFFD
-_NO_STREAM = 0xFFFFFFFF
-
-
-@dataclass
-class Layout:
-    """What a compound file is made of, editable before it is written."""
-
-    fat: list[int]
-    minifat: list[int]
-    entries: list[list[Any]]  # name, type, left, right, child, start, size
-    header: dict[str, Any]
-    tail: bytes = b""
-
-
-def _entry(name: str, kind: int, left: int, right: int, child: int, start: int, size: int) -> bytes:
-    raw = name.encode("utf-16-le") + b"\0\0" if name else b""
-    return (
-        raw.ljust(64, b"\0")
-        + struct.pack("<HBB3I", len(raw), kind, 1, left, right, child)
-        + b"\0" * 36
-        + struct.pack("<IQ", start, size)
-    )
-
-
-def _chain(table: list[int], start: int, count: int) -> None:
-    for index in range(count):
-        table[start + index] = start + index + 1 if index < count - 1 else _END_OF_CHAIN
-
-
-def build_cfb(streams: dict[str, bytes], edit: Callable[[Layout], None] | None = None) -> bytes:
-    """Version 3, 512 byte sectors. Streams under 4096 bytes go into the mini stream, as the specification wants."""
-    names = list(streams)
-    small = [name for name in names if 0 < len(streams[name]) < 4096]
-    minifat: list[int] = []
-    container = b""
-    mini_start: dict[str, int] = {}
-    for name in small:
-        data = streams[name]
-        count = -(-len(data) // _MINI)
-        mini_start[name] = len(minifat)
-        minifat += [_FREE] * count
-        _chain(minifat, mini_start[name], count)
-        container += data.ljust(count * _MINI, b"\0")
-    minifat_sectors = -(-len(minifat) * 4 // _SECTOR)
-    container_sectors = -(-len(container) // _SECTOR)
-    big = [name for name in names if len(streams[name]) >= 4096]
-    big_sectors = sum(-(-len(streams[name]) // _SECTOR) for name in big)
-    dir_sectors = -(-(1 + len(names)) * 128 // _SECTOR)
-    fat_sectors = 1
-    while fat_sectors * 128 < fat_sectors + dir_sectors + minifat_sectors + container_sectors + big_sectors:
-        fat_sectors += 1
-    fat = [_FREE] * (fat_sectors * 128)
-    for index in range(fat_sectors):
-        fat[index] = _FAT_SECTOR
-    at = fat_sectors
-    _chain(fat, at, dir_sectors)
-    dir_start, at = at, at + dir_sectors
-    _chain(fat, at, minifat_sectors)
-    minifat_start, at = (at if minifat_sectors else _END_OF_CHAIN), at + minifat_sectors
-    _chain(fat, at, container_sectors)
-    container_start, at = (at if container_sectors else _END_OF_CHAIN), at + container_sectors
-    body = b""
-    starts: dict[str, int] = {}
-    for name in big:
-        count = -(-len(streams[name]) // _SECTOR)
-        _chain(fat, at, count)
-        starts[name] = at
-        body += streams[name].ljust(count * _SECTOR, b"\0")
-        at += count
-    entries: list[list[Any]] = [["Root Entry", 5, _NO_STREAM, _NO_STREAM, 1 if names else _NO_STREAM]]
-    entries[0] += [container_start, len(container)]
-    for index, name in enumerate(names):
-        start = mini_start.get(name, starts.get(name, _END_OF_CHAIN))
-        right = index + 2 if index + 1 < len(names) else _NO_STREAM
-        entries.append([name, 2, _NO_STREAM, right, _NO_STREAM, start, len(streams[name])])
-    layout = Layout(
-        fat,
-        minifat,
-        entries,
-        {
-            "fat_sectors": fat_sectors,
-            "dir_start": dir_start,
-            "minifat_start": minifat_start,
-            "minifat_sectors": minifat_sectors,
-            "difat_start": _END_OF_CHAIN,
-            "difat_sectors": 0,
-            "next_sector": at,
-        },
-    )
-    if edit is not None:
-        edit(layout)
-    header = layout.header
-    difat = ([*range(fat_sectors)] + [_FREE] * 109)[:109]
-    head = (
-        bytes.fromhex("d0cf11e0a1b11ae1")
-        + b"\0" * 16
-        + struct.pack("<5H", 0x3E, 3, 0xFFFE, 9, 6)
-        + b"\0" * 6
-        + struct.pack("<4I", 0, header["fat_sectors"], header["dir_start"], 0)
-        + struct.pack("<4I", 4096, header["minifat_start"], header["minifat_sectors"], header["difat_start"])
-        + struct.pack("<I", header["difat_sectors"])
-        + struct.pack("<109I", *difat)
-    )
-    directory = b"".join(_entry(*entry) for entry in layout.entries).ljust(dir_sectors * _SECTOR, b"\0")
-    minifat_bytes = struct.pack(f"<{len(layout.minifat)}I", *layout.minifat).ljust(minifat_sectors * _SECTOR, b"\xff")
-    return (
-        head
-        + struct.pack(f"<{len(layout.fat)}I", *layout.fat)
-        + directory
-        + minifat_bytes
-        + container.ljust(container_sectors * _SECTOR, b"\0")
-        + body
-        + layout.tail
-    )
-
-
-# Word: a FibBase with the counts every Word from 97 on writes ([MS-DOC] 2.5.1),
-# the Clx at the front of the table stream, one compressed piece at 0x800.
-_TEXT_AT = 0x800
-_COMPRESSED = 0x40000000
-
-
-def _word_stream(n_fib: int, lcb_clx: int, text: bytes, at: int = _TEXT_AT) -> bytes:
-    word = bytearray(0x1000)
-    struct.pack_into("<HH", word, 0, 0xA5EC, n_fib)
-    struct.pack_into("<H", word, 0x0A, 0x0200)  # fWhichTblStm: 1Table
-    struct.pack_into("<H", word, 0x20, 0x000E)
-    struct.pack_into("<H", word, 0x3E, 0x0016)
-    struct.pack_into("<H", word, 0x98, 0x005D)
-    struct.pack_into("<II", word, 0x01A2, 0, lcb_clx)
-    word[at : at + len(text)] = text
-    return bytes(word)
-
-
-def _clx(pieces: Sequence[int], cps: Sequence[int]) -> bytes:
-    plc = struct.pack(f"<{len(cps)}I", *cps) + b"".join(struct.pack("<HIH", 0, fc, 0) for fc in pieces)
-    return b"\x02" + struct.pack("<I", len(plc)) + plc
-
-
-def build_doc(
-    text: bytes = b"olegeheim im text\r",
-    *,
-    n_fib: int = 0x00C1,
-    pieces: Sequence[int] | None = None,
-    cps: Sequence[int] | None = None,
-    lcb_clx: int | None = None,
-    at: int = _TEXT_AT,
-    edit: Callable[[Layout], None] | None = None,
-) -> bytes:
-    table = _clx([(at * 2) | _COMPRESSED] if pieces is None else pieces, [0, len(text)] if cps is None else cps)
-    word = _word_stream(n_fib, len(table) if lcb_clx is None else lcb_clx, text, at)
-    return build_cfb({"WordDocument": word, "1Table": table}, edit)
-
-
-def _difat_cycle(layout: Layout) -> None:
-    sector = layout.header["next_sector"]
-    layout.header["difat_start"] = sector
-    layout.header["difat_sectors"] = 1
-    layout.tail = struct.pack("<128I", *([_FREE] * 127), sector)
-
-
-def _minifat_cycle(layout: Layout) -> None:
-    last = max(index for index, link in enumerate(layout.minifat) if link == _END_OF_CHAIN)
-    layout.minifat[last] = 0
-
-
-def _directory_cycle(layout: Layout) -> None:
-    layout.entries[1][3] = 1
-
-
-def _fat_cycle(layout: Layout) -> None:
-    start = layout.entries[1][5]
-    layout.fat[start + 3] = start
-
-
-def _fat_declared_far_past_the_file(layout: Layout) -> None:
-    layout.header["fat_sectors"] = 20_000
 
 
 _MILLIONS = 3_000_000
@@ -741,7 +471,7 @@ _DOC_CASES: dict[str, tuple[Callable[[], bytes], tuple[State, Reason | None], st
     "nfib-00c1": (lambda: build_doc(n_fib=0x00C1), (State.INDEXED, None), "olegeheim"),
     "nfib-ffff": (lambda: build_doc(n_fib=0xFFFF), (State.INDEXED, None), "olegeheim"),
     "worddocument-of-0-bytes": (
-        lambda: build_cfb({"WordDocument": b"", "1Table": _clx([0], [0, 1])}),
+        lambda: build_cfb_sectors({"WordDocument": b"", "1Table": _clx([0], [0, 1])}),
         (State.FAILED, Reason.CORRUPT),
         "",
     ),
@@ -763,7 +493,7 @@ def test_every_word_file_of_the_corpus_ends_in_a_named_verdict(
 ) -> None:
     build, (state, reason), word = _DOC_CASES[case]
 
-    ran, _ = _corpus_case(worker, tmp_path, "korpus.doc", build(), DOC)
+    ran, _ = corpus_case(worker, tmp_path, "korpus.doc", build(), DOC)
 
     _expect(ran, state, reason, contains=word)
     if case in _REFUSED_BY_THE_READER:
@@ -799,58 +529,11 @@ def test_a_word_6_or_95_file_is_an_unsupported_variant_and_not_a_damaged_one(
 ) -> None:
     # D-31-03 names Word 6 and 95 skipped(unsupported_variant), and the docstring
     # of legacy_doc.py says so; the identifier of their FIB is not the one of 97.
-    data = build_cfb({"WordDocument": _word6_stream(flags)})
+    data = build_cfb_sectors({"WordDocument": _word6_stream(flags)})
 
-    ran, _ = _corpus_case(worker, tmp_path, "word95.doc", data, DOC)
+    ran, _ = corpus_case(worker, tmp_path, "word95.doc", data, DOC)
 
     _expect(ran, State.SKIPPED, reason)
-
-
-# Excel: BIFF8 records ([MS-XLS] 2.4), one sheet of LABELSST cells.
-
-
-def _record(opcode: int, data: bytes = b"") -> bytes:
-    return struct.pack("<HH", opcode, len(data)) + data
-
-
-def _bof(kind: int, version: int) -> bytes:
-    return _record(0x0809, struct.pack("<HHHHII", version, kind, 0x0DBB, 0x07CC, 0, 0x0006))
-
-
-def _short_string(text: str) -> bytes:
-    raw = text.encode("latin-1")
-    return struct.pack("<HB", len(raw), 0) + raw
-
-
-def _sst(strings: Sequence[str], unique: int | None) -> bytes:
-    """SST and CONTINUE records, split between strings, each at most 8224 bytes."""
-    records = [struct.pack("<II", len(strings), len(strings) if unique is None else unique)]
-    for text in strings:
-        piece = _short_string(text)
-        if len(records[-1]) + len(piece) > 8224:
-            records.append(b"")
-        records[-1] += piece
-    return _record(0x00FC, records[0]) + b"".join(_record(0x003C, more) for more in records[1:])
-
-
-def build_workbook(
-    cells: Sequence[tuple[int, int, int]],
-    strings: Sequence[str],
-    *,
-    unique: int | None = None,
-    after_bof: bytes = b"",
-    version: int = 0x0600,
-    edit: Callable[[Layout], None] | None = None,
-) -> bytes:
-    """Globals (BOF, BOUNDSHEET, SST, EOF) and one sheet of LABELSST cells, in a compound file."""
-    sheet_name = struct.pack("<BB", len("blattgeheim"), 0) + b"blattgeheim"
-    sst = _sst(strings, unique)
-    head = _bof(0x0005, version) + after_bof
-    sheet_at = len(head) + 4 + 6 + len(sheet_name) + len(sst) + 4
-    head += _record(0x0085, struct.pack("<IBB", sheet_at, 0, 0) + sheet_name) + sst + _record(0x000A)
-    sheet = _bof(0x0010, version)
-    sheet += b"".join(_record(0x00FD, struct.pack("<HHHI", row, col, 0, index)) for row, col, index in cells)
-    return build_cfb({"Workbook": head + sheet + _record(0x000A)}, edit)
 
 
 def _workbook_minifat_cycle() -> bytes:
@@ -897,7 +580,7 @@ def test_every_excel_file_of_the_corpus_ends_in_a_named_verdict(
 ) -> None:
     build, (state, reason), word = _XLS_CASES[case]
 
-    ran, _ = _corpus_case(worker, tmp_path, "korpus.xls", build(), XLS)
+    ran, _ = corpus_case(worker, tmp_path, "korpus.xls", build(), XLS)
 
     _expect(ran, state, reason, contains=word)
 
@@ -983,7 +666,7 @@ def test_every_heic_of_the_corpus_ends_in_a_named_verdict(
 ) -> None:
     build, allowed = _HEIC_CASES[case]
 
-    ran, _ = _corpus_case(worker, tmp_path, "korpus.heic", build(), HEIC)
+    ran, _ = corpus_case(worker, tmp_path, "korpus.heic", build(), HEIC)
 
     assert (ran.outcome.state, ran.outcome.reason) in allowed, ran.outcome.detail
 
@@ -1031,7 +714,7 @@ def _log_corpus() -> dict[str, tuple[bytes, str]]:
         "overlap.zip": (_same_offset_twice(b"ueberlappgeheim.txt", b"x"), ZIP),
         "inner.zip": (build_zip([Member(b"innen.zip", _same_offset_twice(b"ueberlappgeheim.txt", b"x"))]), ZIP),
         "attachment.eml": (attachment, MAIL),
-        "nested.eml": (b"Subject: betreffgeheim\r\n" + _nested_rfc822(1000), MAIL),
+        "nested.eml": (b"Subject: betreffgeheim\r\n" + nested_rfc822(1000), MAIL),
         "broken.doc": (build_doc(edit=_minifat_cycle), DOC),
         "word.doc": (build_doc(), DOC),
         "sheet.xls": (build_workbook([(0, 0, 0)], ["zellgeheim"]), XLS),
