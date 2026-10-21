@@ -302,7 +302,7 @@ Plans:
   4. Beide Apps 1.5.0 sind eingereicht (2x HTTP 201), der Beleg steht in docs/store-listing.md
   5. M-32-02 behoben (Owner 13.10.2026): Dokumente geloeschter Nutzer verlassen den Index beim naechsten Abgleich; Dokumente verschwundener externer Speicher nach 30 Tagen Karenz; Beleg auf einer Instanz mit Positivkontrolle
 
-**Plans**: 16 plans
+**Plans**: 17 plans
 Plans:
 
 **Wave 1**
@@ -335,37 +335,41 @@ Plans:
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 36-08-PLAN.md: Erkennung ZIP-, Paket- und XML-Signaturen, Saat seed-bomb.zip
+- [ ] 36-17-PLAN.md: Pillow 13.0.0 und certifi 2026.10.19 (pip-audit grün, F-36-07-2), Bildpfad-Prüfung, Wiedervorlage TIFF-Shim
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
-- [ ] 36-09-PLAN.md: Erkennung Bild-, Mail- und OLE-Signaturen, Korpus vollständig grün
+- [ ] 36-08-PLAN.md: Erkennung ZIP-, Paket- und XML-Signaturen, Saat seed-bomb.zip
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
-- [ ] 36-10-PLAN.md: Upgrade-Strecke mit Ausschlüssen
+- [ ] 36-09-PLAN.md: Erkennung Bild-, Mail- und OLE-Signaturen, TIFF-Rahmenlauf an der Seitengrenze (F-36-07-1), Korpus vollständig grün
 
 **Wave 11** *(blocked on Wave 10 completion)*
 
-- [ ] 36-11-PLAN.md: Abgenommene Texte in info.xml, READMEs, CHANGELOG, embeddings.md
+- [ ] 36-10-PLAN.md: Upgrade-Strecke mit Ausschlüssen
 
 **Wave 12** *(blocked on Wave 11 completion)*
 
-- [ ] 36-12-PLAN.md: Launch-Audit Security/Bugs/Performance, 0 CRIT / 0 HIGH
+- [ ] 36-11-PLAN.md: Abgenommene Texte in info.xml, READMEs, CHANGELOG, embeddings.md
 
 **Wave 13** *(blocked on Wave 12 completion)*
 
-- [ ] 36-13-PLAN.md: Bump 1.5.0, UPGRADE_FROM_TAG v1.4.3, Bump-Push mit Owner-Wort, Spiegel-Entscheid
+- [ ] 36-12-PLAN.md: Launch-Audit Security/Bugs/Performance, 0 CRIT / 0 HIGH
 
 **Wave 14** *(blocked on Wave 13 completion)*
 
-- [ ] 36-14-PLAN.md: Tag v1.5.0, Release mit Quellpflicht, Tag-Links, CI-Fremdinstallation
+- [ ] 36-13-PLAN.md: Bump 1.5.0, UPGRADE_FROM_TAG v1.4.3, Bump-Push mit Owner-Wort, Spiegel-Entscheid
 
 **Wave 15** *(blocked on Wave 14 completion)*
 
-- [ ] 36-15-PLAN.md: Lokale Fremdinstallation und gemeinsame Playwright-Abnahme Text und Produkt
+- [ ] 36-14-PLAN.md: Tag v1.5.0, Release mit Quellpflicht, Tag-Links, CI-Fremdinstallation
 
 **Wave 16** *(blocked on Wave 15 completion)*
+
+- [ ] 36-15-PLAN.md: Lokale Fremdinstallation und gemeinsame Playwright-Abnahme Text und Produkt
+
+**Wave 17** *(blocked on Wave 16 completion)*
 
 - [ ] 36-16-PLAN.md: Einreichung 2x HTTP 201, Beleg, Zustandspflege
 
