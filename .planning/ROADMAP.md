@@ -343,7 +343,7 @@ Plans:
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
-- [ ] 36-09-PLAN.md: Erkennung Bild-, Mail- und OLE-Signaturen, TIFF-Rahmenlauf an der Seitengrenze (F-36-07-1), Korpus vollständig grün
+- [x] 36-09-PLAN.md: Erkennung Bild-, Mail- und OLE-Signaturen, TIFF-Rahmenlauf an der Seitengrenze (F-36-07-1), Korpus vollständig grün
 
 **Wave 11** *(blocked on Wave 10 completion)*
 
@@ -388,7 +388,7 @@ Plans:
 | 33. Ausschlussmuster und Admin-Feinschliff | v1.5 | 11/11 | Executed, verification pending | - |
 | 34. Umstiegsweg | v1.5 | 6/6 | Complete   | 2026-10-19 |
 | 35. Stretch: Aehnliche Dokumente und Spikes | v1.5 | 14/13 | Complete    | 2026-10-20 |
-| 36. Haertung und Store-Einreichung 1.5.0 | v1.5 | 9/17 | In Progress|  |
+| 36. Haertung und Store-Einreichung 1.5.0 | v1.5 | 10/17 | In Progress|  |
 
 ## Nach v1.3 (Wiedervorlage)
 
