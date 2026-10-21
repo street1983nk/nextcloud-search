@@ -540,6 +540,9 @@ class QueueController extends OCSController {
 	 *
 	 * OCS delivers numbers from a JSON body as integers and the same numbers
 	 * from a query string as strings, so both are accepted, and nothing else is.
+	 * A string only in its canonical form, the one that reads back as itself
+	 * (launch audit L-36-02): the cast clamps a number past PHP_INT_MAX and
+	 * drops leading noughts, which would name a row nobody sent.
 	 */
 	private function positiveId(mixed $value): ?int {
 		if (is_int($value)) {
@@ -548,6 +551,9 @@ class QueueController extends OCSController {
 
 		if (is_string($value) && ctype_digit($value)) {
 			$id = (int)$value;
+			if ((string)$id !== $value) {
+				return null;
+			}
 
 			return $id > 0 ? $id : null;
 		}

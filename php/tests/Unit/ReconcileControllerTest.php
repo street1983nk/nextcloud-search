@@ -350,6 +350,9 @@ final class ReconcileControllerTest extends TestCase {
 			'a fraction' => [1.5],
 			'a nested list' => [['77123']],
 			'not a list' => 'secretvalue',
+			// L-36-02: digits that do not read back as themselves.
+			'past the largest integer' => ['12345678901234567890'],
+			'a leading nought' => ['014'],
 		];
 		foreach ($malformed as $case => $ids) {
 			$response = $this->storageController($this->backendAppId(), $ids)->goneStorages();

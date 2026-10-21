@@ -286,7 +286,6 @@ def _php_method(source: str, signature: str) -> str:
     return tail if after is None else tail[: after.start() + 1]
 
 
-@pytest.mark.xfail(strict=True, reason="L-36-02")
 def test_the_id_parsers_of_the_container_routes_take_canonical_numbers_only() -> None:
     """L-36-02: a digit string is an id only if it reads back as itself.
 
@@ -294,15 +293,18 @@ def test_the_id_parsers_of_the_container_routes_take_canonical_numbers_only() ->
     answered 200 with ``"gone": [9223372036854775807]``, because the cast
     clamps; ``014`` read as 14. The container intersects the answer with what it
     asked and never sends such a value, so nothing reached the index. The same
-    parser shape stands in QueueController::positiveId.
+    parser shape stands in QueueController::positiveId. Fixed in plan 36-12;
+    after the fix both forms answer 400 live, and the PHPUnit cases in
+    ReconcileControllerTest and QueueControllerTest hold the behaviour.
     """
+    round_trip = re.compile(r"\$id = \(int\)\$value;\s+if \(\(string\)\$id !== \$value\) \{\s+return null;")
     for path, signature in (
         (RECONCILE_CONTROLLER, "private function storageIdList("),
         (QUEUE_CONTROLLER, "private function positiveId("),
     ):
         body = _php_method(path.read_text(encoding="utf-8"), signature)
         assert "ctype_digit(" in body, path.name
-        assert "(string)$id === $value" in body, path.name
+        assert round_trip.search(body), path.name
 
 
 # -- S5: no deletion out of an unsure position --------------------------------------

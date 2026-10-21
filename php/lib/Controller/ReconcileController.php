@@ -453,6 +453,11 @@ class ReconcileController extends OCSController {
 	 * on the first entry that is not. A partially answered question would let
 	 * the container read an id that was dropped here as "not gone".
 	 *
+	 * A string of digits counts only in its canonical form, the one that reads
+	 * back as itself (launch audit L-36-02): the cast clamps a number past
+	 * PHP_INT_MAX and drops leading noughts, and the answer would then name a
+	 * storage nobody asked about.
+	 *
 	 * @return list<int>|null
 	 */
 	private function storageIdList(mixed $raw): ?array {
@@ -466,6 +471,9 @@ class ReconcileController extends OCSController {
 				$id = $value;
 			} elseif (is_string($value) && ctype_digit($value)) {
 				$id = (int)$value;
+				if ((string)$id !== $value) {
+					return null;
+				}
 			} else {
 				return null;
 			}

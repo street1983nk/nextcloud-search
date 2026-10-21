@@ -1039,8 +1039,15 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # (REASON_PATTERN, ERROR_CLASS_PATTERN) and lib/Service/ExAppService.php (VERSION_PATTERN). No file came
 # or went, so PHP_FILES_TODAY stays at 107. Recomputed independently with find, sort, tr and sha256sum
 # over the CRLF normalised tree: f830ac26... both ways.
+# Moved on 2026-10-21 a second time by Plan 36-12 (HART-06, launch audit, finding L-36-02):
+# lib/Controller/ReconcileController.php (storageIdList) and lib/Controller/QueueController.php
+# (positiveId) take a string of digits only in the form that reads back as itself, so twenty digits no
+# longer clamp to PHP_INT_MAX and a leading nought no longer vanishes; tests/Unit/ReconcileControllerTest.php
+# and tests/Unit/QueueControllerTest.php hold the cases. No file came or went, so PHP_FILES_TODAY stays at
+# 107. Recomputed independently with find, sort, tr and sha256sum over the CRLF normalised tree:
+# f8eaf591... both ways.
 PHP_FILES_TODAY = 107
-PHP_TREE_HASH_TODAY = "f830ac26ed032598501db5a502d67b3ba4597d80636f77f245b0683e95ca173e"
+PHP_TREE_HASH_TODAY = "f8eaf591d79298fbc64bfffa2840f5e5346e74eebe7dc4a7249bbde54ec817c8"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

@@ -162,4 +162,33 @@ final class QueueControllerTest extends TestCase {
 		self::assertArrayNotHasKey('lane', $data);
 		self::assertArrayNotHasKey('files', $data);
 	}
+
+	/**
+	 * Launch audit L-36-02: a string of digits is an id only in the form that
+	 * reads back as itself. Twenty digits used to clamp to PHP_INT_MAX and a
+	 * leading nought used to vanish, so the row named was not the row sent.
+	 */
+	public function testAFileIdThatDoesNotReadBackAsItselfIsRefused(): void {
+		$this->queueService->expects(self::never())->method('requeue');
+
+		foreach (['12345678901234567890', '014'] as $id) {
+			$response = $this->controller($this->backendAppId())->requeue([$id], 'delete');
+
+			self::assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus(), $id);
+			self::assertSame(['error' => 'Malformed list of queue ids.'], $response->getData(), $id);
+		}
+	}
+
+	public function testACanonicalFileIdStillReachesTheService(): void {
+		// The positive control of the case above: the same route, the same kind,
+		// digits that do read back as themselves, and an int from a JSON body.
+		$this->queueService->expects(self::once())->method('requeue')
+			->with([14, 9223372036854775807], 'delete')
+			->willReturn(2);
+
+		$response = $this->controller($this->backendAppId())->requeue(['14', '9223372036854775807'], 'delete');
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame(['requeued' => 2], $response->getData());
+	}
 }
