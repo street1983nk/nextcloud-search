@@ -2233,8 +2233,15 @@ PHP_TREE_HASH_TODAY = "f8eaf591d79298fbc64bfffa2840f5e5346e74eebe7dc4a7249bbde54
 # a cycle as cfb_cycle. No file came or went, so PACKAGE_FILES_TODAY stays at
 # 80. The PHP pair does not move. Recomputed independently with find, sort, tr
 # and sha256sum over the CRLF normalised tree: 73e0501d... both ways.
+#
+# Moved on 2026-10-21 by Plan 36-12 (HART-06, launch audit, finding L-36-03):
+# worker/reconcile.py names at most SWEEP_LOG_STORAGES (20) storage ids per
+# list in the line of the storage sweep and the rest as a count, the counters
+# stay exact. No file came or went, so PACKAGE_FILES_TODAY stays at 80. The PHP
+# pair does not move in this step. Recomputed independently with find, sort, tr
+# and sha256sum over the CRLF normalised tree: 569925a1... both ways.
 PACKAGE_FILES_TODAY = 80
-PACKAGE_TREE_HASH_TODAY = "73e0501dc895fdc077771aa3685732ef7bdc218ad484a4738a410339046a02e2"
+PACKAGE_TREE_HASH_TODAY = "569925a1916b9ed66dfa19b6d84b3b8c53e2a76a3c5d1544cf5301a754c2f222"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

@@ -512,7 +512,8 @@ darum steht er dort und nicht nur in der Python-Suite.
 
 Ausschließlich Zähler: Mounts, Scheiben, gesehene Dateien, eingereihte Dateien je
 Art. Der Nachlauf über verschwundene Speicher schreibt eine Zeile mit seinen
-Zählern (`gone`, `deselected`, `stamped`, `removed`) und den Storage-IDs. Kein
+Zählern (`gone`, `deselected`, `stamped`, `removed`) und den Storage-IDs,
+höchstens 20 je Liste, der Rest als Anzahl ("and 281 more"). Kein
 Pfad, kein Dateiname, kein Titel, keine Datei-Id. Die Dateiliste ist das Privateste,
 was dieser Container liest, und ein Protokoll, das sie mitschreibt, wäre eine
 Preisgabe (T-03-1205). Ein Test prüft das mit einem Grep über das Modul, weil

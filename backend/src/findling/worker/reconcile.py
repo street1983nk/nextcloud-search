@@ -185,6 +185,13 @@ REQUEUE_BAND: Final = 200
 # a whole storage. The tests rehearse the grace by moving the stamp back in SQL.
 VANISHED_STORAGE_GRACE_SECONDS: Final = 30 * 86_400
 
+# How many storage ids the line of the sweep names per list; the counters in
+# front of the lists stay exact (launch audit L-36-03). One round with 300
+# deleted storages wrote all 300 ids into one line, and a stamped storage is
+# named again in every due round of its 30 days. Twenty is enough to recognise
+# a case on the admin's own instance and keeps the line bounded.
+SWEEP_LOG_STORAGES: Final = 20
+
 # Everything the round talks to, as a type. The defaults are the production
 # wiring and a test replaces them one by one.
 ClientFactory = Callable[[], AsyncNextcloudApp]
@@ -221,6 +228,13 @@ class _Tally:
 def _local_hour() -> int:
     """The hour of the container clock, which is the only clock this round has."""
     return time.localtime().tm_hour
+
+
+def _first_storages(storage_ids: Sequence[int]) -> str:
+    """The first SWEEP_LOG_STORAGES ids of a list for the log line, and how many more there are."""
+    shown = "[" + ", ".join(str(storage_id) for storage_id in storage_ids[:SWEEP_LOG_STORAGES]) + "]"
+    more = len(storage_ids) - SWEEP_LOG_STORAGES
+    return shown if more <= 0 else f"{shown} and {more} more"
 
 
 def _catchup_requested(store: Store) -> bool:
@@ -836,7 +850,8 @@ class Reconcile:
             await asyncio.to_thread(store.forget_storage, storage_id)
             removed.append(storage_id)
 
-        # Counters and storage ids, never a path and never a file id (T-36-17).
+        # Counters and storage ids, never a path and never a file id (T-36-17),
+        # and at most SWEEP_LOG_STORAGES ids per list (L-36-03).
         LOGGER.info(
             "storage sweep, absent=%d gone=%d deselected=%d stamped=%d removed=%d, removed storages %s, waiting %s",
             len(absent),
@@ -844,8 +859,8 @@ class Reconcile:
             len(deselected),
             len(stamped),
             len(removed),
-            removed,
-            stamped,
+            _first_storages(removed),
+            _first_storages(stamped),
         )
 
     # -- the two gates ---------------------------------------------------
@@ -1015,6 +1030,7 @@ __all__ = [
     "ROUND_QUEUE_UNAVAILABLE",
     "ROUND_UNAVAILABLE",
     "ROUND_WALKED",
+    "SWEEP_LOG_STORAGES",
     "VANISHED_STORAGE_GRACE_SECONDS",
     "Reconcile",
     "RoundResult",

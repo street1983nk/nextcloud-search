@@ -488,7 +488,6 @@ async def test_the_sweep_runs_for_a_walked_round_only(
 # -- L-36-03: the sweep line stays short ---------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="L-36-03")
 async def test_the_sweep_line_names_a_bounded_number_of_storages(
     store: Store, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -496,7 +495,8 @@ async def test_the_sweep_line_names_a_bounded_number_of_storages(
 
     Found live (P3): a round with 300 deleted storages wrote one line with all
     300 ids, and a stamped storage is named again in every due round for 30
-    days. The counters stay exact; the lists end after a fixed number.
+    days. The counters stay exact; the lists end after a fixed number. Red
+    before the fix of plan 36-12 with all 301 ids in the line.
     """
     for offset in range(300):
         _record(store, 900_001 + offset, (95_100_000 + offset,))
