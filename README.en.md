@@ -25,12 +25,16 @@ You bring the model, and no content leaves your server.
 
 - Full text search with German word handling: compounds, inflection, umlauts,
   phrases, exclusions, a file type filter
+- Filter by file type or folder directly in the Nextcloud search
 - OCR for scanned PDFs and images: ten languages available (German, English,
   French, Spanish, Italian, Dutch, Portuguese, Danish, Estonian, Czech),
   German, English and French switched on by default
 - Semantic search: finds documents through paraphrases
+- Similar documents: a link at every hit on the results page lists files with
+  related content
 - Every result is permission-checked by Nextcloud
 - No configuration: the first index run starts on its own
+- Exclude folders or patterns such as *.photoslibrary from the index
 - Performance profiles: Economy by default, Standard and Performance after a
   pre-check of the hardware
 - Search model: int8 built in, the more accurate fp32 can be downloaded once
@@ -57,7 +61,8 @@ Limits and details: [docs/formats.md](docs/formats.md).
 - CPU: 2 cores are enough, amd64 and arm64, no GPU
 - Without any change on your side, Findling keeps running as economically as
   before. Anyone with more hardware can use a profile to free at most half of
-  the box (Standard profile) or everything but one core (Performance profile).
+  the machine the backend runs on (Standard profile) or everything but one core
+  (Performance profile).
 - The two additional profiles enable several OCR slots and a parallel embedding
   lane, which shortens indexing. Switch with one click in the admin settings
   under Findling; a suggestion matching your box is shown next to it.

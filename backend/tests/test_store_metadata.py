@@ -421,19 +421,25 @@ CONNECTOR_SENTENCES = {
 # owner accepted with the text draft of plan 29-02 on 06.10.2026
 # (docs/store-listing.md, section "Entwurf 1.4.0 (Phase 29)", part 1). It stands
 # once in each of the six descriptions and once in each README.
+#
+# Moved on 21.10.2026 by plan 36-11 (REL-05, D-36-08): "half of the box" names
+# the machine the backend runs on, in all three languages. The wording is the
+# one the owner accepted on 20.10.2026 with the text plan of phase 36
+# (36-WORTLAUT.md, part B1), taken over character for character.
 SHARE_SENTENCE_DE = (
     "Ohne Zutun läuft Findling unverändert sparsam wie bisher. Wer mehr Hardware hat, gibt per Profil "
-    "höchstens die Hälfte der Box frei (Profil Standard) oder alles bis auf einen Kern (Profil Leistung)."
+    "frei: höchstens die Hälfte der Maschine, auf der das Backend läuft (Profil Standard), oder alles bis "
+    "auf einen Kern (Profil Leistung)."
 )
 SHARE_SENTENCE_EN = (
     "Without any change on your side, Findling keeps running as economically as before. Anyone with more "
-    "hardware can use a profile to free at most half of the box (Standard profile) or everything but one "
-    "core (Performance profile)."
+    "hardware can use a profile to free at most half of the machine the backend runs on (Standard profile) "
+    "or everything but one core (Performance profile)."
 )
 SHARE_SENTENCE_FR = (
     "Sans aucune intervention, Findling continue de fonctionner aussi sobrement qu'avant. Avec plus de "
-    "matériel, un profil libère au plus la moitié de la machine (profil Standard) ou tout sauf un cœur "
-    "(profil Performance)."
+    "matériel, un profil libère au plus la moitié de la machine sur laquelle tourne le service (profil "
+    "Standard) ou tout sauf un cœur (profil Performance)."
 )
 SHARE_SENTENCES = {DEFAULT_LANGUAGE: SHARE_SENTENCE_EN, "de": SHARE_SENTENCE_DE, "fr": SHARE_SENTENCE_FR}
 
@@ -464,6 +470,17 @@ LANGUAGE_LINE_OPENINGS = {
     DEFAULT_LANGUAGE: "- Search languages:",
     "de": "- Suchsprachen:",
     "fr": "- Langues de recherche :",
+}
+
+# Moved on 21.10.2026 by plan 36-11 (REL-05, D-36-08, D-36-16): the owner
+# accepted on 20.10.2026 (36-WORTLAUT.md, part B1) that the migration line of
+# phase 34 stands as a paragraph of its own right behind the feature list and
+# before the limitation heading. The language line stays the last point of the
+# first block; between it and the heading only this one paragraph may stand.
+MIGRATION_LINE_OPENINGS = {
+    DEFAULT_LANGUAGE: "Switching from fulltextsearch/Elasticsearch:",
+    "de": "Umstieg von fulltextsearch/Elasticsearch:",
+    "fr": "Passer de fulltextsearch/Elasticsearch à Findling :",
 }
 
 # The file type list of the store texts and of the READMEs (FMT-01 to FMT-05,
@@ -1076,6 +1093,8 @@ def scan_language_line(name: str, source: str) -> list[str]:
         lines = [line.rstrip() for line in text.splitlines()]
         heading = LIMITATION_HEADINGS[language]
         at = lines.index(heading) if heading in lines else -1
+        if at >= 4 and lines[at - 2].startswith(MIGRATION_LINE_OPENINGS[language]) and lines[at - 3] == "":
+            at -= 2
         if at < 2 or lines[at - 1] != "" or not lines[at - 2].startswith(LANGUAGE_LINE_OPENINGS[language]):
             violations.append(
                 f"{name}: the description for {_named(language)} does not carry the language line "

@@ -26,13 +26,18 @@ Le modèle, c'est vous qui l'apportez, et aucun contenu ne quitte votre serveur.
 
 - Recherche plein texte avec traitement des mots allemands : mots composés,
   flexion, trémas, phrases, exclusions, filtre par type de fichier
+- Filtre par type de fichier ou par dossier directement dans la recherche
+  Nextcloud
 - Reconnaissance optique pour les PDF numérisés et les images : dix langues
   disponibles (allemand, anglais, français, espagnol, italien, néerlandais,
   portugais, danois, estonien, tchèque), allemand, anglais et français activés
   par défaut
 - Recherche sémantique : trouve les documents par des périphrases
+- Documents similaires : un lien sur chaque résultat de la page de résultats
+  liste les fichiers au contenu proche
 - Chaque résultat est vérifié par Nextcloud selon vos droits
 - Aucune configuration : la première indexation démarre d'elle-même
+- Exclure de l'index des dossiers ou des motifs comme *.photoslibrary
 - Profils de performance : Économe par défaut, Standard et Performance après
   une vérification préalable du matériel
 - Modèle de recherche : int8 intégré, le fp32 plus précis se télécharge une
@@ -62,7 +67,8 @@ Limites et détails : [docs/formats.md](docs/formats.md).
 - CPU : 2 cœurs suffisent, amd64 et arm64, pas de GPU
 - Sans aucune intervention, Findling continue de fonctionner aussi sobrement
   qu'avant. Avec plus de matériel, un profil libère au plus la moitié de la
-  machine (profil Standard) ou tout sauf un cœur (profil Performance).
+  machine sur laquelle tourne le service (profil Standard) ou tout sauf un cœur
+  (profil Performance).
 - Les deux profils supplémentaires activent plusieurs emplacements OCR et une
   voie d'intégration parallèle, ce qui raccourcit l'indexation. Le changement se
   fait en un clic dans les paramètres d'administration sous Findling ; une

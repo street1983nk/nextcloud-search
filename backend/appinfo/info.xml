@@ -87,8 +87,13 @@
 - Runs entirely inside your own instance and does nothing without the Findling app
 - Never modifies your files
 - Performance profile and search model are chosen on the admin page of the Findling app
+- Filter by file type or folder directly in the Nextcloud search
+- Similar documents: a link at every hit on the results page lists files with related content
+- Exclude folders or patterns such as *.photoslibrary from the index
 - Privacy: everything runs locally, no telemetry, nothing leaves your server
 - Search languages: German and English by default, Spanish, Italian, Dutch, Portuguese and Czech available
+
+Switching from fulltextsearch/Elasticsearch: [steps in the documentation](https://github.com/street1983nk/nextcloud-search/blob/v1.5.0/docs/migrate-from-fulltextsearch.en.md)
 
 Known limitations:
 - Spanish: año and ano are treated as the same word
@@ -110,7 +115,7 @@ Requirements:
 - RAM: 4 GB is enough, 730.2 MB resident after an index run, under a hard 2 GB limit (measured)
 - CPU: 2 cores are enough, amd64 and arm64
 
-Without any change on your side, Findling keeps running as economically as before. Anyone with more hardware can use a profile to free at most half of the box (Standard profile) or everything but one core (Performance profile).
+Without any change on your side, Findling keeps running as economically as before. Anyone with more hardware can use a profile to free at most half of the machine the backend runs on (Standard profile) or everything but one core (Performance profile).
 
 Enterprise support and paid add-ons: request a quote at admin@infranode.dev]]></description>
 	<description lang="de"><![CDATA[Was Findling Backend ist:
@@ -118,8 +123,13 @@ Enterprise support and paid add-ons: request a quote at admin@infranode.dev]]></
 - Läuft komplett in Ihrer eigenen Instanz und tut ohne die App Findling nichts
 - Verändert nie Ihre Dateien
 - Leistungsprofil und Suchmodell werden in der Verwaltung der App Findling gewählt
+- Filter nach Dateityp oder Ordner direkt in der Nextcloud-Suche
+- Ähnliche Dokumente: ein Link an jedem Treffer der Ergebnisseite listet Dateien mit verwandtem Inhalt
+- Ordner oder Muster wie *.photoslibrary vom Index ausschließen
 - Datenschutz: alles läuft lokal, keine Telemetrie, nichts verlässt den Server
 - Suchsprachen: Deutsch und Englisch voreingestellt, Spanisch, Italienisch, Niederländisch, Portugiesisch und Tschechisch verfügbar
+
+Umstieg von fulltextsearch/Elasticsearch: [Schritte in der Dokumentation](https://github.com/street1983nk/nextcloud-search/blob/v1.5.0/docs/migrate-from-fulltextsearch.md)
 
 Bekannte Grenzen:
 - Spanisch: año und ano gelten als dasselbe Wort
@@ -141,7 +151,7 @@ Anforderungen:
 - RAM: 4 GB genügen, 730,2 MB resident nach einem Indexlauf, unter einer harten 2-GB-Grenze (gemessen)
 - CPU: 2 Kerne genügen, amd64 und arm64
 
-Ohne Zutun läuft Findling unverändert sparsam wie bisher. Wer mehr Hardware hat, gibt per Profil höchstens die Hälfte der Box frei (Profil Standard) oder alles bis auf einen Kern (Profil Leistung).
+Ohne Zutun läuft Findling unverändert sparsam wie bisher. Wer mehr Hardware hat, gibt per Profil frei: höchstens die Hälfte der Maschine, auf der das Backend läuft (Profil Standard), oder alles bis auf einen Kern (Profil Leistung).
 
 Enterprise-Support und bezahlte Add-ons: Angebot anfordern unter admin@infranode.dev]]></description>
 	<description lang="fr"><![CDATA[Ce qu'est Findling Backend :
@@ -149,8 +159,13 @@ Enterprise-Support und bezahlte Add-ons: Angebot anfordern unter admin@infranode
 - Fonctionne entièrement dans votre propre instance et ne fait rien sans l'application Findling
 - Ne modifie jamais vos fichiers
 - Le profil de performance et le modèle de recherche se choisissent dans la page d'administration de l'application Findling
+- Filtre par type de fichier ou par dossier directement dans la recherche Nextcloud
+- Documents similaires : un lien sur chaque résultat de la page de résultats liste les fichiers au contenu proche
+- Exclure de l'index des dossiers ou des motifs comme *.photoslibrary
 - Confidentialité : tout fonctionne localement, aucune télémétrie, rien ne quitte votre serveur
 - Langues de recherche : allemand et anglais par défaut, espagnol, italien, néerlandais, portugais et tchèque disponibles
+
+Passer de fulltextsearch/Elasticsearch à Findling : [étapes dans la documentation](https://github.com/street1983nk/nextcloud-search/blob/v1.5.0/docs/migrate-from-fulltextsearch.fr.md)
 
 Limites connues :
 - Espagnol : año et ano sont traités comme le même mot
@@ -172,7 +187,7 @@ Prérequis :
 - RAM : 4 Go suffisent, 730,2 Mo résidents après une indexation, sous une limite stricte de 2 Go (mesuré)
 - CPU : 2 cœurs suffisent, amd64 et arm64
 
-Sans aucune intervention, Findling continue de fonctionner aussi sobrement qu'avant. Avec plus de matériel, un profil libère au plus la moitié de la machine (profil Standard) ou tout sauf un cœur (profil Performance).
+Sans aucune intervention, Findling continue de fonctionner aussi sobrement qu'avant. Avec plus de matériel, un profil libère au plus la moitié de la machine sur laquelle tourne le service (profil Standard) ou tout sauf un cœur (profil Performance).
 
 Support entreprise et modules payants : demande de devis à admin@infranode.dev]]></description>
 	<version>1.4.2</version>

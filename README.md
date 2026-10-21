@@ -25,13 +25,17 @@ Das Modell bringen Sie mit, kein Inhalt verlässt Ihren Server.
 
 - Volltextsuche mit deutscher Wortbehandlung: Komposita, Flexion, Umlaute,
   Phrasen, Ausschlüsse, Dateityp-Filter
+- Filter nach Dateityp oder Ordner direkt in der Nextcloud-Suche
 - Texterkennung für gescannte PDFs und Bilder: zehn Sprachen verfügbar
   (Deutsch, Englisch, Französisch, Spanisch, Italienisch, Niederländisch,
   Portugiesisch, Dänisch, Estnisch, Tschechisch), voreingestellt sind Deutsch,
   Englisch und Französisch
 - Semantische Suche: findet Dokumente auch über Umschreibungen
+- Ähnliche Dokumente: ein Link an jedem Treffer der Ergebnisseite listet
+  Dateien mit verwandtem Inhalt
 - Jeder Treffer wird von Nextcloud rechtegeprüft
 - Keine Konfiguration: der erste Indexlauf startet von selbst
+- Ordner oder Muster wie *.photoslibrary vom Index ausschließen
 - Leistungsprofile: Sparsam voreingestellt, Standard und Leistung nach einer
   Vorab-Prüfung der Hardware
 - Suchmodell: int8 eingebaut, das genauere fp32 unter Standard und Leistung
@@ -58,8 +62,9 @@ Grenzen und Details: [docs/formats.md](docs/formats.md).
   [docs/performance.md](docs/performance.md)).
 - CPU: 2 Kerne genügen, amd64 und arm64, keine GPU
 - Ohne Zutun läuft Findling unverändert sparsam wie bisher. Wer mehr Hardware
-  hat, gibt per Profil höchstens die Hälfte der Box frei (Profil Standard) oder
-  alles bis auf einen Kern (Profil Leistung).
+  hat, gibt per Profil frei: höchstens die Hälfte der Maschine, auf der das
+  Backend läuft (Profil Standard), oder alles bis auf einen Kern (Profil
+  Leistung).
 - Die beiden zusätzlichen Profile schalten mehrere OCR-Slots und eine parallele
   Einbettungsspur frei und verkürzen so die Indexierung. Umgestellt wird mit
   einem Klick in den Verwaltungseinstellungen unter Findling; ein Vorschlag
