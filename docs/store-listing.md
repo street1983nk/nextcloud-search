@@ -2796,9 +2796,33 @@ Matrixzeilen), Python gates 39589670676, Integration 39589670579, Resilience
    zeichengleich mit der abgenommenen Fassung, P1 bis P8 grün
    (`.planning/phases/36-haertung-und-store-einreichung-1-5-0/36-ABNAHME.md`).
    Urteil wörtlich: "okok".
+10. Owner-Wort zur Einreichung am 21.10.2026 auf die Frage "Darf ich v1.5.0
+    beider Apps einreichen (store-submit.yml)?", wörtlich: "einreichen".
+    APPSTORE_TOKEN nicht neu geholt (unverändert seit der Einreichung 1.4.3).
+    Eingereicht über den Workflow "Store submission" (`store-submit.yml`,
+    `--ref main -f tag=v1.5.0`, `register` aus), Lauf 39598694849
+    (workflow_dispatch, Job 119217379907), erstellt 2026-10-21T12:19:35Z,
+    success, Kopf 6c953a76 (der Tag-Commit).
+11. Antwortcodes aus dem Log des Laufs, Schritt "Submit both releases":
+    - release findling v1.5.0: HTTP 201, 12:19:46Z
+    - release findling_backend v1.5.0: HTTP 201, 12:19:47Z
+12. Gegenprobe von außen, 2026-10-21:
+    - 12:22:50Z `curl -s https://apps.nextcloud.com/apps/findling`: 200, die
+      Tabelle "Stable channel" nennt 1.5.0 für Nextcloud 35, 34 und 33, der
+      Download zeigt auf `releases/download/v1.5.0/findling.tar.gz`.
+    - 12:22:50Z `curl -s https://apps.nextcloud.com/apps/findling_backend`:
+      200, ebenso 1.5.0 für Nextcloud 35, 34 und 33, Download
+      `releases/download/v1.5.0/findling_backend.tar.gz`.
+    - 12:22:17Z Katalog `api/v1/platform/34.0.3/apps.json`: findling führt
+      1.5.0, 1.4.3, 1.4.2, `created` 2026-10-21T12:19:46.159338Z,
+      sekundengleich mit dem ersten HTTP 201.
+    - 12:22:44Z und 12:23:47Z Katalog `api/v1/appapi_apps.json`:
+      findling_backend führt noch 1.4.3 als neueste Fassung (Katalog-Cache
+      wie bei 1.4.3); die App-Seite nennt 1.5.0 bereits. Nachprüfung siehe
+      unten.
 
-Offen: Einreichung (36-16); die lokalen Beleg-Commits gehen mit dem
-Owner-Wort in 36-16 hinaus.
+Offen: Push der lokalen Beleg-Commits 36-14 bis 36-16 mit eigenem
+Owner-Wort.
 
 # Release 1.4.3 (12.10.2026): Scroll-Fix ohne Textänderung
 
