@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 36-08-PLAN.md, next 36-09
-last_updated: "2026-10-21T07:15:19.029Z"
+stopped_at: Completed 36-11-PLAN.md, next 36-12
+last_updated: "2026-10-21T08:15:36.537Z"
 last_activity: 2026-10-21
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 79
-  completed_plans: 74
+  completed_plans: 75
   percent: 86
 ---
 
@@ -26,11 +26,11 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 36 (Haertung und Store-Einreichung 1.5.0) , EXECUTING
-Plan: 12 of 16
+Plan: 13 of 16
 Status: Ready to execute
 Last activity: 2026-10-21
 
-Progress: [█████████░] 94%
+Progress: [██████████] 95%
 
 ## Performance Metrics
 
@@ -146,6 +146,7 @@ Progress: [█████████░] 94%
 - 36-03: GET /storages/gone (ExAppRequired plus rejectForeignCaller, höchstens 256 positive IDs, 400 ohne Werte, 500 statisch) antwortet {gone, deselected} aus StorageService::classifyAbsent. gone heißt: keine Zeile in oc_storages. deselected heißt: eine oc_mounts-Zeile trägt den abgeschalteten Team-Ordner- oder External-Provider UND isIndexedStorage() ist false (D-36-14). Alles andere ist Karenz im Container. Provider-Filter in SQL plus Zeilenprüfung in PHP, Bänder zu 200, bei beiden Schaltern an keine oc_mounts-Abfrage. PHPUnit 837 auf 846. Baumhash c5642f59, PHP_FILES_TODAY 107, Routen-Untergrenze 19. Lehre: TestCase::result() ist in PHPUnit 11 final, php -l sieht das nicht. CI cd111208 acht grün. docs/reconcile.md folgt mit 36-04.
 - 36-07: Korpus-Generatoren an einer Stelle (backend/tests/hostile.py, deterministisch, gedeckelt, keine Binärdatei im Baum, D-36-01); ATTACK_RATIO = 1000 (O12), 36-08 belegt Gleichheit mit config.ARCHIVE_MALICIOUS_RATIO. test_phase36_hostile_corpus.py: sieben Familien, 64 Fälle durch das Sandbox-Kind, 34 grün, 30 xfail(strict=True) mit wörtlichem reason "built in 36-08" (21) bzw. "built in 36-09" (9); die drei 1-Mio.-Pakete mit run=False bis 36-08 vor ZipFile zählt. XML-Tiefe 10 000 gemessen: lxml xml_invalid, XLSX empty_text. Commits 2b57201a, 1d97d932; Python gates 39524695753 (ubuntu, RLIMIT_AS) grün.
 - 36-08: ZIP- und Paket-Signaturen als skipped(blocked_malicious): zip_ratio über ARCHIVE_MALICIOUS_RATIO = 1000 (100 bis 1000 bleibt archive_limit), zip_overlap auf jeder Ebene (Ablehnung und Warnung von zipfile), zip_traversal an ZipInfo.orig_filename (filename schneidet am NUL ab), package_entries per count_central_directory vor jedem ZipFile in odf.py/office.py, xml_entities über errors.is_entity_bomb (sonst Ausnahme unverändert weiter). seed-bomb.zip reine Tiefe 3 (O4 (a)), deploy-harp unverändert archive_limit. Korpus ohne xfail 36-08, 9 xfail 36-09 bleiben. Commits 2b6ab1f2, b9ec1b33; Python gates 39541530987, HaRP deploy 39541531048 grün.
+- 36-11: Abgenommener Gesamttext 1.5.0 (36-WORTLAUT.md B1 bis B5) zeichengleich eingespielt: sechs info.xml-Beschreibungen (ElementTree-Gegenprobe je Block identisch, Zeichenzahlen wie B7), READMEs de/en/fr, CHANGELOG [Unreleased] = B3 (Kopf bleibt bis 36-13), embeddings.md D-36-07, store-listing.md "Entwurf v1.5.0 (Gesamttext), abgenommen am 20.10.2026". Gates: SHARE_SENTENCES auf D-36-08, scan_language_line lässt genau den Umstiegsabsatz zu. REL-05 erfüllt. Commits fdccef86, 7a4c3b2c; CI acht grün (HaRP 39563847139).
 
 ### Offene Faeden (kein aktiver Auftrag)
 
@@ -181,6 +182,6 @@ Progress: [█████████░] 94%
 
 ## Session Continuity
 
-Last session: 2026-10-21T07:15:19.006Z
-Stopped at: Completed 36-08-PLAN.md, next 36-09
+Last session: 2026-10-21T08:15:36.515Z
+Stopped at: Completed 36-11-PLAN.md, next 36-12
 Resume file: None

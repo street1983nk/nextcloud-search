@@ -351,7 +351,7 @@ Plans:
 
 **Wave 12** *(blocked on Wave 11 completion)*
 
-- [ ] 36-11-PLAN.md: Abgenommene Texte in info.xml, READMEs, CHANGELOG, embeddings.md
+- [x] 36-11-PLAN.md: Abgenommene Texte in info.xml, READMEs, CHANGELOG, embeddings.md
 
 **Wave 13** *(blocked on Wave 12 completion)*
 
@@ -388,7 +388,7 @@ Plans:
 | 33. Ausschlussmuster und Admin-Feinschliff | v1.5 | 11/11 | Executed, verification pending | - |
 | 34. Umstiegsweg | v1.5 | 6/6 | Complete   | 2026-10-19 |
 | 35. Stretch: Aehnliche Dokumente und Spikes | v1.5 | 14/13 | Complete    | 2026-10-20 |
-| 36. Haertung und Store-Einreichung 1.5.0 | v1.5 | 11/17 | In Progress|  |
+| 36. Haertung und Store-Einreichung 1.5.0 | v1.5 | 12/17 | In Progress|  |
 
 ## Nach v1.3 (Wiedervorlage)
 
