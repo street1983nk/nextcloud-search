@@ -9,6 +9,7 @@
 - **Korpus:** `tiff-of-100000-ifds` in `test_phase36_hostile_corpus.py` verlangt einen Lauf unter 5 s (`_FRAME_WALK_SECONDS`) und ist mit `xfail(strict=True, reason="built in 36-09")` markiert.
 - **Vorschlag für 36-09:** Den Rahmenlauf an der Seitengrenze (`ocr_max_pages`) beenden, statt `n_frames` zu lesen, zum Beispiel per `seek(ocr_max_pages)` als Probe auf "mehr Rahmen" für `indexed(truncated)`. Danach die Markierung entfernen. Das steht noch nicht im Plan 36-09 und muss dort ergänzt werden.
 - **Warum nicht in 36-07:** Der Fehler ist schon da und liegt in Produktcode, den 36-09 ohnehin anfasst (image.py). Laut Scope-Grenze wird er hier nicht behoben.
+- **ERLEDIGT 21.10.2026 durch Plan 36-09 (Task 2):** `image._has_frame` fragt Rahmen per `seek` ab, `_decode_smaller` und `_read_frames` lesen `n_frames` nicht mehr; der Lauf endet nach `ocr_max_pages` Rahmen plus einer Probe. `tiff-of-100000-ifds` lokal im Kind 0,20 s statt 27,8 s, `tiff_many_ifds(40_000)` im Prozess unter 1 s. Kein neuer Detailcode, das Urteil bleibt aus READABLE (D-08). Die xfail-Markierung ist entfernt.
 
 ### F-36-07-2: pip-audit rot durch neue Advisories (Pillow, certifi)
 

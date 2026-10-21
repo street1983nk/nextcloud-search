@@ -34,12 +34,14 @@ import shutil
 import struct
 import subprocess
 import sys
+import time
 import unicodedata
 import zlib
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from io import BytesIO
 from pathlib import Path
+from typing import cast
 
 import pypdfium2
 import pytest
@@ -49,6 +51,7 @@ from findling.config import settings
 from findling.extract import dispatch, image, ocr, raster
 from findling.extract.dispatch import Route
 from findling.extract.errors import KILLED_EXIT_CODE, EngineKilled, Reason, State
+from hostile import tiff_many_ifds
 
 CORPUS = Path(__file__).resolve().parents[2] / "testdata" / "corpus"
 
@@ -834,6 +837,180 @@ def test_a_lost_frame_of_a_multi_frame_tiff_is_visible_as_truncated(monkeypatch:
     assert "Seite 0" in outcome.text
     assert "Seite 2" in outcome.text
     assert len(engine.calls) == 3
+
+
+# -- the frame walk stops at the page cap (F-36-07-1, plan 36-09) -----------------------
+#
+# Pillow reads every IFD of the chain for n_frames, and that walk grows faster
+# than the chain (measured on 2026-10-21: 40 000 IFDs 5.51 s in this process).
+# Since plan 36-09 the walk asks for one frame after the other by seek, up to the
+# page cap and one probe beyond it, and never asks how many frames there are.
+
+
+def _pages(tmp_path: Path, count: int, name: str = "seiten.tif") -> str:
+    """A TIFF of ``count`` plain grey pages of 800 x 600, written by Pillow."""
+    frames = [Image.new("L", (800, 600), color=200 + number) for number in range(count)]
+    path = tmp_path / name
+    try:
+        frames[0].save(path, format="TIFF", save_all=True, append_images=frames[1:])
+    finally:
+        for frame in frames:
+            frame.close()
+    return str(path)
+
+
+@pytest.fixture
+def uncounted_frames(monkeypatch: pytest.MonkeyPatch) -> None:
+    """n_frames of a TIFF fails whenever answering it would walk the chain of IFDs.
+
+    Pillow's own bound check in ``seek`` reads n_frames once the end of the
+    chain is known; that answer is a stored number and walks nothing, so it is
+    let through. Every question asked before the end is known is the walk of
+    F-36-07-1 and fails the test.
+    """
+
+    def counted(self: TiffImagePlugin.TiffImageFile) -> int:
+        known = vars(self)["_n_frames"]
+        if known is None:
+            raise AssertionError("n_frames walks the whole chain of IFDs")
+        return known
+
+    monkeypatch.setattr(TiffImagePlugin.TiffImageFile, "n_frames", property(counted))
+
+
+@pytest.mark.usefixtures("uncounted_frames")
+def test_the_frame_walk_never_counts_the_frames(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    engine = _install_engine(monkeypatch, _page("Sendebericht"))
+
+    outcome = image.extract_image(_pages(tmp_path, 3))
+
+    assert (outcome.state, outcome.reason) == (State.INDEXED, None)
+    assert len(engine.calls) == 3
+
+
+@pytest.mark.usefixtures("uncounted_frames")
+def test_three_pages_over_a_cap_of_two_are_cut(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FINDLING_OCR_MAX_PAGES", "2")
+    engine = _install_engine(monkeypatch, _page("Sendebericht"))
+
+    outcome = image.extract_image(_pages(tmp_path, 3))
+
+    assert (outcome.state, outcome.reason) == (State.INDEXED, Reason.TRUNCATED)
+    assert len(engine.calls) == 2
+
+
+@pytest.mark.usefixtures("uncounted_frames")
+def test_two_pages_under_a_cap_of_two_are_whole(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The probe for a third frame finds none, so nothing was cut.
+    monkeypatch.setenv("FINDLING_OCR_MAX_PAGES", "2")
+    engine = _install_engine(monkeypatch, _page("Sendebericht"))
+
+    outcome = image.extract_image(_pages(tmp_path, 2))
+
+    assert (outcome.state, outcome.reason) == (State.INDEXED, None)
+    assert len(engine.calls) == 2
+
+
+@pytest.mark.usefixtures("uncounted_frames")
+def test_a_single_page_tiff_is_one_engine_call(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    engine = _install_engine(monkeypatch, _page("Sendebericht"))
+
+    outcome = image.extract_image(_pages(tmp_path, 1))
+
+    assert (outcome.state, outcome.reason) == (State.INDEXED, None)
+    assert len(engine.calls) == 1
+
+
+def test_a_large_jpeg_still_gets_its_draft(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    drafts: list[tuple[object, ...]] = []
+    real_draft = JpegImagePlugin.JpegImageFile.draft
+
+    def recording(self: JpegImagePlugin.JpegImageFile, mode: str | None, size: tuple[int, int] | None) -> object:
+        drafts.append((mode, size))
+        return real_draft(self, mode, size)
+
+    monkeypatch.setattr(JpegImagePlugin.JpegImageFile, "draft", recording)
+    engine = _install_engine(monkeypatch, _page("Lieferschein"))
+    path = tmp_path / "foto.jpg"
+    with Image.new("L", (5000, 4000), color=200) as picture:
+        picture.save(path, format="JPEG")
+
+    outcome = image.extract_image(str(path))
+
+    assert outcome.state is State.INDEXED
+    # The first draft is the one of _decode_smaller; thumbnail asks for its own after it.
+    assert drafts[0] == ("L", (3500, 2800))
+    assert len(engine.calls) == 1
+
+
+@pytest.mark.usefixtures("uncounted_frames")
+def test_a_tiff_of_40000_ifds_costs_the_page_cap_and_not_the_chain(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 5.51 s in this process before plan 36-09 (deferred-items.md F-36-07-1).
+    engine = _install_engine(monkeypatch, _page("Sendebericht"))
+    path = tmp_path / "fax.tif"
+    path.write_bytes(tiff_many_ifds(40_000))
+
+    started = time.monotonic()
+    outcome = image.extract_image(str(path))
+    took = time.monotonic() - started
+
+    assert (outcome.state, outcome.reason) == (State.INDEXED, Reason.TRUNCATED)
+    assert len(engine.calls) == settings().ocr_max_pages
+    assert took < 1.0
+
+
+def test_a_tiff_of_40000_ifds_without_an_engine_is_quick(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def answers(number: int) -> _Finished:
+        raise FileNotFoundError(2, "No such file or directory: 'tesseract'")
+
+    _install_engine(monkeypatch, answers)
+    path = tmp_path / "fax.tif"
+    path.write_bytes(tiff_many_ifds(40_000))
+
+    started = time.monotonic()
+    outcome = image.extract_image(str(path))
+
+    assert (outcome.state, outcome.reason) == (State.FAILED, Reason.OCR_UNAVAILABLE)
+    assert time.monotonic() - started < 1.0
+
+
+def _broken_after(data: bytes, pages: int) -> bytes:
+    """The TIFF with the link behind IFD number ``pages`` pointed far past the end of the file."""
+    out = bytearray(data)
+    (ifd,) = struct.unpack_from("<I", out, 4)
+    for _ in range(pages - 1):
+        (count,) = struct.unpack_from("<H", out, ifd)
+        (ifd,) = struct.unpack_from("<I", out, ifd + 2 + 12 * count)
+    (count,) = struct.unpack_from("<H", out, ifd)
+    struct.pack_into("<I", out, ifd + 2 + 12 * count, len(out) + 1_000_000)
+    return bytes(out)
+
+
+@pytest.mark.usefixtures("uncounted_frames")
+def test_a_broken_link_to_a_further_frame_ends_the_walk_with_what_was_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = _install_engine(monkeypatch, _page("Sendebericht"))
+    whole = Path(_pages(tmp_path, 3)).read_bytes()
+    assert whole[:4] == b"II*\x00"
+    path = tmp_path / "kaputt.tif"
+    path.write_bytes(_broken_after(whole, 2))
+
+    outcome = image.extract_image(str(path))
+
+    assert (outcome.state, outcome.reason) == (State.INDEXED, None)
+    assert len(engine.calls) == 2
+
+
+@pytest.mark.parametrize("error", [OSError, EOFError, SyntaxError, struct.error, ValueError, TypeError, KeyError])
+def test_every_structural_error_of_a_probe_means_no_further_frame(error: type[Exception]) -> None:
+    class Probed:
+        def seek(self, frame: int) -> None:
+            raise error("kaputte IFD")
+
+    assert image._has_frame(cast("Image.Image", Probed()), 1) is False
 
 
 def test_a_picture_under_the_character_threshold_is_skipped_empty_text(monkeypatch: pytest.MonkeyPatch) -> None:

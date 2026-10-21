@@ -2203,8 +2203,16 @@ PHP_TREE_HASH_TODAY = "60821e1a430226b2530194ac098bd7b50cc28df4be5a978b0ba85b9b6
 # PACKAGE_FILES_TODAY stays at 80. The PHP pair does not move. Recomputed
 # independently with find, sort, tr and sha256sum over the CRLF normalised
 # tree: f22a443b... both ways.
+#
+# Moved on 2026-10-21 a second time by Plan 36-09 (HART-06, D-36-17,
+# F-36-07-1): extract/image.py asks for the frames of a picture by a probe
+# (_has_frame) up to the page cap and one beyond, and reads n_frames nowhere.
+# No file came or went, so PACKAGE_FILES_TODAY stays at 80. The PHP pair does
+# not move. Recomputed independently with find, sort, tr and sha256sum over
+# the CRLF normalised tree: 9586dc89... both ways. The second picture open of
+# plan 36-09 spells its mode out, so the write ratchet reads it as a read.
 PACKAGE_FILES_TODAY = 80
-PACKAGE_TREE_HASH_TODAY = "f22a443b3d1029bb21804fb00cf3a5a184e3eb1c8c9a7b77fdea8f2f54a19ae4"
+PACKAGE_TREE_HASH_TODAY = "9586dc89938485cf3a8e3f013c79730d7115a6009ab78fe8cf9bd7e3a2ed95a3"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

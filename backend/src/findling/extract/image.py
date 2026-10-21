@@ -296,7 +296,9 @@ def _refused_by_pillow(path: str) -> ExtractionOutcome:
     previous = Image.MAX_IMAGE_PIXELS
     try:
         Image.MAX_IMAGE_PIXELS = None
-        with Image.open(path) as header:
+        # The mode spelled out, so the write ratchet of test_extract_edge_paths
+        # reads this open as the read it is.
+        with Image.open(path, mode="r") as header:
             width, height = header.size
         size = Path(path).stat().st_size
     except Exception:
@@ -363,8 +365,16 @@ def _decode_smaller(picture: Image.Image) -> None:
     and is reduced all the same. A picture of many frames is left alone, the
     draft holds for the whole file and a fax archive is not a camera (pitfall
     10). Neither is a picture that is already small enough.
+
+    Whether there is a second frame is asked by a probe and not by n_frames,
+    which walks every IFD of a TIFF (F-36-07-1, plan 36-09). The probe of a TIFF
+    loads the tags of frame 1, so the picture is sent back to frame 0 before
+    anything else is read; for a picture of one frame that seek does nothing,
+    and the draft is set after it, never before.
     """
-    if getattr(picture, "n_frames", 1) != 1:
+    several = _has_frame(picture, 1)
+    picture.seek(0)
+    if several:
         return
     width, height = picture.size
     if max(width, height) <= _MAX_EDGE_PIXELS:
@@ -632,6 +642,30 @@ def _implausible(picture: Image.Image) -> ExtractionOutcome | None:
     return None
 
 
+def _has_frame(picture: Image.Image, index: int) -> bool:
+    """Whether the picture has a frame ``index``, answered by seeking to it.
+
+    Pillow answers n_frames of a TIFF by reading every IFD of the chain, and
+    that walk grows faster than the chain: 5 000 IFDs 0.38 s, 10 000 0.66 s,
+    20 000 1.81 s, 40 000 5.51 s in the process, 100 000 27.8 s in the
+    extraction child (deferred-items.md F-36-07-1, measured on 2026-10-21).
+    ``seek(index)`` reads the IFDs up to ``index`` and no further. A cycle in
+    the chain is seen by Pillow at the seek and reads as the end.
+
+    EOFError is the end of the frames. OSError, SyntaxError, ValueError,
+    struct.error and the TypeError and KeyError of Pillow's ``_setup`` ("Missing
+    dimensions" of an IFD read from past the end of the file, measured) are
+    what a broken IFD raises on the way; a frame that cannot be reached is no
+    frame, and the caller ends with the pages it has. The probe does not seek
+    back: the caller decides where the picture stands.
+    """
+    try:
+        picture.seek(index)
+    except (EOFError, OSError, SyntaxError, ValueError, TypeError, KeyError, struct.error):
+        return False
+    return True
+
+
 def _read_frames(picture: Image.Image, resolved: Settings) -> ExtractionOutcome:
     """Walk the frames of the file under the same caps a scanned PDF gets.
 
@@ -640,23 +674,32 @@ def _read_frames(picture: Image.Image, resolved: Settings) -> ExtractionOutcome:
     walks around is not a cap (T-03-1004). The soft deadline is the same one for
     the same reason, and both cuts stay visible as indexed(truncated) rather than
     as a quietly thin result (D-08).
+
+    The frames are asked for one by one with a probe, never counted by n_frames
+    (F-36-07-1, plan 36-09): Pillow walks every IFD of the chain for that number,
+    and the walk grows faster than the chain (40 000 IFDs 5.51 s in the process,
+    100 000 IFDs 27.8 s in the extraction child, measured on 2026-10-21). A
+    probe reads the IFDs up to the frame it asks for, so a file costs at most
+    the page cap plus one probe beyond it, which is what tells a cut from the
+    end of the file. Many pages are no attack signature (36-WORTLAUT.md A3):
+    the verdict stays the one of D-08.
     """
-    frame_count = getattr(picture, "n_frames", 1)
-    read_frames = min(frame_count, resolved.ocr_max_pages)
     deadline = time.monotonic() + resolved.ocr_job_seconds
     languages = "+".join(resolved.ocr_languages)
 
     parts: list[str] = []
     attempted = 0
     lost = 0
-    cut = frame_count > read_frames
+    cut = False
+    walked = 0
 
-    for number in range(read_frames):
+    for number in range(resolved.ocr_max_pages):
         if time.monotonic() >= deadline:
             cut = True
             break
-        if frame_count > 1:
-            picture.seek(number)
+        if number > 0 and not _has_frame(picture, number):
+            break
+        walked += 1
         try:
             # Spelled out here and nowhere else, so the handler is as narrow as
             # the one call it is about. libheif reports pixel data that ends
@@ -674,6 +717,11 @@ def _read_frames(picture: Image.Image, resolved: Settings) -> ExtractionOutcome:
             parts.append(ocr.read_page(_encode_frame(picture), languages, resolved.ocr_page_seconds))
         except ocr.PageTimeout:
             lost += 1
+
+    if walked == resolved.ocr_max_pages and not cut:
+        # Every frame the cap allows was read: one probe beyond it tells a file
+        # that has more from one that ends exactly at the cap.
+        cut = _has_frame(picture, resolved.ocr_max_pages)
 
     if attempted > 0 and lost == attempted:
         # Nothing was read at all, so this is not a thin picture, it is a failure.

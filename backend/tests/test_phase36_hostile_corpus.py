@@ -301,7 +301,9 @@ def test_every_xml_bomb_of_the_corpus_ends_in_a_named_verdict(
 # 100 000 took 27.8 s of a 30 s case). A named verdict, but not a short run: a
 # 10 MB file holds the child for half a minute, and twice as many IFDs end at
 # the deadline. The case asks for the run of a frame walk bounded by the page
-# cap.
+# cap. Since plan 36-09 the walk ends at the page cap (F-36-07-1): frames are
+# asked for one by one with a probe, up to ocr_max_pages and one beyond, and
+# n_frames is never read (measured on 2026-10-21 in the child: 0.20 s).
 _FRAME_WALK_SECONDS = 5.0
 
 _IMAGE_CASES: dict[str, Case] = {
@@ -318,11 +320,8 @@ _IMAGE_CASES: dict[str, Case] = {
     ),
 }
 
-_IMAGE_PENDING = {
-    # Not in the plan of 36-09 yet: the frame walk has to stop at the page cap
-    # (finding of 36-07, deferred-items.md).
-    "tiff-of-100000-ifds": pytest.mark.xfail(strict=True, reason="built in 36-09"),
-}
+# Every case of this table runs (plan 36-09, D-36-17, F-36-07-1).
+_IMAGE_PENDING: dict[str, Any] = {}
 
 
 @pytest.mark.parametrize("case", _params(_IMAGE_CASES, _IMAGE_PENDING))
