@@ -593,5 +593,7 @@ def test_the_similar_documents_line_stands_in_all_six_descriptions_and_the_chang
         for lang, line in SIMILAR_LINE.items():
             assert descriptions[lang].count(line) == 1, (path.name, lang)
     changelog = (REPO / "CHANGELOG.md").read_text(encoding="utf-8")
-    unreleased = changelog.split("## [Unreleased]", 1)[1].split("\n## [", 1)[0]
-    assert "- Similar documents: " in unreleased
+    # Since the bump of 36-13 the line stands under the section of the release
+    # it ships with, and [Unreleased] above it is empty.
+    release = changelog.split("\n## [1.5.0] - ", 1)[1].split("\n## [", 1)[0]
+    assert "- Similar documents: " in release

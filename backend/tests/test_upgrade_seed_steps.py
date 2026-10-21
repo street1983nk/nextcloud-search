@@ -1,7 +1,8 @@
 """The gate over the seed of the upgrade proof in ``.github/workflows/deploy-harp.yml``.
 
-The upgrade proof starts from v1.4.2 since plan 30-06 (D-30-07); from plan 29-11
-(D-29-01) to then it started from v1.3.2. The seed of "Store upgrade 2b" is the
+The upgrade proof starts from v1.4.3 since plan 36-13 (D-36-13), which runs the
+container code of v1.4.2 unchanged; from plan 30-06 (D-30-07) to then it started
+from v1.4.2, and from plan 29-11 (D-29-01) to plan 30-06 from v1.3.2. The seed of "Store upgrade 2b" is the
 same two real files as before, an AppleDouble sidecar and a grey TIFF with an
 unspecified extra channel, but the released container judges them rightly now:
 1.4.2 skips the sidecar as skipped(system_file) before its first byte
@@ -94,15 +95,19 @@ def _bash_parses(run: str, tmp_path: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_the_proof_starts_from_v1_4_2() -> None:
-    assert _workflow()["env"]["UPGRADE_FROM_TAG"] == "v1.4.2"
+def test_the_proof_starts_from_v1_4_3() -> None:
+    # Since plan 36-13 (D-36-13): v1.4.3 is the version in the store, and it
+    # runs the container code of v1.4.2 byte for byte, so the seed and the
+    # assurances below stay as they were written for v1.4.2.
+    assert _workflow()["env"]["UPGRADE_FROM_TAG"] == "v1.4.3"
 
 
-def test_the_old_start_stands_in_comments_only() -> None:
-    # v1.3.2 may stay in the chronicle of the comments, never in a value or a
-    # line a shell runs.
+@pytest.mark.parametrize("old_start", ["1.3.2", "1.4.2"])
+def test_the_old_start_stands_in_comments_only(old_start: str) -> None:
+    # An earlier start may stay in the chronicle of the comments, never in a
+    # value or a line a shell runs.
     for number, line in enumerate(WORKFLOW.read_text(encoding="utf-8").splitlines(), start=1):
-        if "1.3.2" in line:
+        if old_start in line:
             assert line.lstrip().startswith("#"), f"line {number}: {line.strip()}"
 
 

@@ -6,6 +6,8 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-21
+
 ### Added
 
 - Mails (.eml): subject, sender, recipients, text and the names of

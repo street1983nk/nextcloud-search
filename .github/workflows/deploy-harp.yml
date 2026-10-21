@@ -90,7 +90,24 @@ env:
   # variable rather than as a literal inside a URL, so that a later release is
   # one line here and not a search through a step.
   #
-  # v1.4.2 since 2026-10-10 (plan 30-06, D-30-07), because it is the newest
+  # v1.4.3 since 2026-10-21 (plan 36-13, D-36-13), because it is the newest
+  # release and the version in the store (published 2026-10-12 from the branch
+  # release/1.4.x, tag 0f088d05; assets findling.tar.gz,
+  # findling_backend.tar.gz and both .sig, image
+  # ghcr.io/street1983nk/findling_backend:1.4.3 anonymous with linux/amd64 and
+  # linux/arm64, checked 2026-10-21). It differs from v1.4.2 only by the
+  # scroll fix of the result page in PHP (#27: php/css/search.css,
+  # php/templates/search.php, the version strings and their tests); not a
+  # byte under backend/src changed, so every statement below about what 1.4.2
+  # does in the container holds for 1.4.3 word for word. The value is set
+  # after the bump of this tree to 1.5.0 and in the same commit, never before
+  # it: a start tag newer than the version the tree carries lays an older
+  # companion on disk over the installed one, and "Store upgrade 4" turns red
+  # (pitfall 8 of phase 36). With the tree on 1.5.0 and the start on 1.4.3,
+  # "Store upgrade 4" runs its branch of differing versions and demands that
+  # installed_version reads 1.5.0 after the upgrade.
+  #
+  # v1.4.2 from 2026-10-10 until 2026-10-21 (plan 30-06, D-30-07), because it is the newest
   # release and the version in the store (published 2026-10-09, assets
   # findling.tar.gz, findling_backend.tar.gz and both .sig, image
   # ghcr.io/street1983nk/findling_backend:1.4.2 anonymous with linux/amd64 and
@@ -145,7 +162,7 @@ env:
   # about the newest published release, so it goes stale with every release and
   # the assurances hanging off it have to be read again each time, never
   # softened.
-  UPGRADE_FROM_TAG: v1.4.2
+  UPGRADE_FROM_TAG: v1.4.3
 
 jobs:
   deploy-harp:
@@ -3325,8 +3342,11 @@ jobs:
       # The upgrade proof of plan 11-07, and success criterion 2 of phase 11:
       # an installation that really came out of the release assets of
       # UPGRADE_FROM_TAG is brought to the state of this commit, and the index
-      # it built survives that untouched. Since plan 30-06 that tag is v1.4.2
-      # and the code of phase 30 is laid over it (D-30-07); plan 29-11 had
+      # it built survives that untouched. Since plan 36-13 that tag is v1.4.3
+      # and the jump is 1.4.3 to 1.5.0 (D-36-13; 1.4.3 runs the container code
+      # of 1.4.2, so the statements about 1.4.2 below hold for it). From plan
+      # 30-06 the tag was v1.4.2 and the code of phase 30 was laid over it
+      # (D-30-07); plan 29-11 had
       # v1.3.2 and the jump 1.3.2 to 1.4.0 (D-29-01; plan 18-12 had v1.2.0 and plan
       # 23-06 the jump 1.2.0 to 1.3.0, plan 16-09 v1.1.0 and 1.1.0 to 1.2.0);
       # the value and the reason for it stand at the top of this file and
@@ -3809,7 +3829,7 @@ jobs:
       # both halves, and the seed word finding exactly the picture. Until plan
       # 30-06 the step sowed the same files under 1.3.2 and asserted
       # failed(corrupt) for both.
-      - name: Store upgrade 2b, the seed of the released installation, judged by 1.4.2
+      - name: Store upgrade 2b, the seed of the released installation, judged by the released version
         if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
         run: |
           seed_dir=data/testuser/files/fix-seed
@@ -5468,8 +5488,10 @@ jobs:
 
           # The two cases, both named, and both branches stay. They were
           # written in plan 11-07 for a version step that had not happened yet.
-          # Since plan 30-06 tree and UPGRADE_FROM_TAG both carry 1.4.2, so the
-          # SECOND branch runs until the bump of the next release; from plan
+          # Since plan 36-13 the tree carries 1.5.0 against the 1.4.3 of the tag,
+          # so the FIRST branch runs and has to see installed_version 1.5.0
+          # after the upgrade. From plan 30-06 to 36-13 tree and
+          # UPGRADE_FROM_TAG both carried 1.4.2, so the SECOND branch ran; from plan
           # 29-11 to then the tree carried 1.4.0 against the 1.3.2 of the tag
           # and the first branch ran. The first one is the one that matters
           # whenever the versions differ: it demands that the instance really performed the
@@ -5501,7 +5523,7 @@ jobs:
             echo "the instance performed the app update: ${installed_before} to ${installed_after}"
           else
             echo "::notice::the companion of this commit carries ${new_companion}, the same version ${UPGRADE_FROM_TAG} published, so this run measures the file exchange without a version step"
-            echo "Since plan 30-06 the tag is v1.4.2 and the tree carries 1.4.2 as well, so this is the branch that is expected to run until the bump of the next release."
+            echo "Both sides carry the same version (${UPGRADE_FROM_TAG} and ${new_companion}), so this is the branch that is expected to run only between a published tag and the bump of the next release."
             if [ "${installed_after}" != "${installed_before}" ]; then
               echo "::error::installed_version moved from ${installed_before} to ${installed_after} although both sides carry the same version"
               exit 1
