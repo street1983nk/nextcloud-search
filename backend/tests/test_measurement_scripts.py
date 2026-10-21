@@ -1033,8 +1033,14 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # catalogues are not in the PHP tree. No file came or went, so PHP_FILES_TODAY stays at 107.
 # Recomputed independently with find, sort, tr and sha256sum over the CRLF normalised tree: 60821e1a...
 # both ways.
+# Moved on 2026-10-21 by Plan 36-12 (HART-06, launch audit, finding L-36-01): five anchored form checks
+# carry the D modifier, so that $ ends at the very end and a final newline no longer passes:
+# lib/Controller/PageController.php (similarId, fingerprintParam), lib/Service/AdminViewService.php
+# (REASON_PATTERN, ERROR_CLASS_PATTERN) and lib/Service/ExAppService.php (VERSION_PATTERN). No file came
+# or went, so PHP_FILES_TODAY stays at 107. Recomputed independently with find, sort, tr and sha256sum
+# over the CRLF normalised tree: f830ac26... both ways.
 PHP_FILES_TODAY = 107
-PHP_TREE_HASH_TODAY = "60821e1a430226b2530194ac098bd7b50cc28df4be5a978b0ba85b9b63dc034f"
+PHP_TREE_HASH_TODAY = "f830ac26ed032598501db5a502d67b3ba4597d80636f77f245b0683e95ca173e"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

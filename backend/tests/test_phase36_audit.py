@@ -243,7 +243,6 @@ def _anchored_without_d(source: str) -> list[str]:
     return [literal for literal in _PHP_LITERAL.findall(source) if "D" not in literal.rsplit("/", 1)[1]]
 
 
-@pytest.mark.xfail(strict=True, reason="L-36-01")
 def test_every_anchored_php_form_check_ends_at_the_very_end() -> None:
     """L-36-01: a form check anchored with $ carries D, so "14\\n" is not 14.
 
@@ -251,13 +250,20 @@ def test_every_anchored_php_form_check_ends_at_the_very_end() -> None:
     the docblock of PageController::similarId names only canonical numbers.
     Harmless in that place, but the five checks of this kind guard values that
     cross a trust boundary, and the companion spells the rule with D elsewhere.
+    Fixed in plan 36-12; after the fix the same address renders the start page.
     """
     findings: dict[str, list[str]] = {}
+    anchored = 0
     for path in sorted(PHP_LIB.rglob("*.php")):
-        bad = _anchored_without_d(path.read_text(encoding="utf-8"))
+        source = path.read_text(encoding="utf-8")
+        anchored += len(_PHP_LITERAL.findall(source))
+        bad = _anchored_without_d(source)
         if bad:
             findings[str(path.relative_to(REPO))] = bad
     assert findings == {}
+    # The five fixed checks and the four that carried D before: a probe that
+    # finds no literal at all would be green for nothing.
+    assert anchored >= 9
     php = _pcre(_php_pattern(ADMIN_VIEW.read_text(encoding="utf-8"), "ERROR_CLASS_PATTERN"))
     assert php.search("image_pixels\n") is None
 

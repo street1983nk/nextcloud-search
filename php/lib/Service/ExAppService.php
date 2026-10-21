@@ -266,7 +266,7 @@ class ExAppService {
 	 * ``drift``. A container that answers nonsense is a broken container, not a
 	 * reason to switch the search off.
 	 */
-	private const VERSION_PATTERN = '/^\d{1,5}\.\d{1,5}(?:\.[0-9A-Za-z][0-9A-Za-z.-]{0,19})?$/';
+	private const VERSION_PATTERN = '/^\d{1,5}\.\d{1,5}(?:\.[0-9A-Za-z][0-9A-Za-z.-]{0,19})?$/D';
 
 	public function __construct(
 		private IAppManager $appManager,

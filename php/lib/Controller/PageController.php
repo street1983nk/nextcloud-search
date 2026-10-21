@@ -477,7 +477,7 @@ final class PageController extends Controller {
 	 */
 	private function similarId(): ?int {
 		$raw = $this->request->getParam('similar', '');
-		if (!is_string($raw) || preg_match('/^[1-9][0-9]{0,18}$/', $raw) !== 1) {
+		if (!is_string($raw) || preg_match('/^[1-9][0-9]{0,18}$/D', $raw) !== 1) {
 			return null;
 		}
 
@@ -1025,7 +1025,7 @@ final class PageController extends Controller {
 	 */
 	private function fingerprintParam(): ?string {
 		$raw = $this->request->getParam('fp', '');
-		if (!is_string($raw) || preg_match('/^[0-9a-f]{8}$/', $raw) !== 1) {
+		if (!is_string($raw) || preg_match('/^[0-9a-f]{8}$/D', $raw) !== 1) {
 			return null;
 		}
 

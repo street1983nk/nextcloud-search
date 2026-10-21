@@ -309,7 +309,7 @@ final class AdminViewService {
 	 * container visible, which is the drift signal, while a code carrying markup
 	 * or a path never reaches the page.
 	 */
-	private const REASON_PATTERN = '/^[a-z][a-z_]{0,39}$/';
+	private const REASON_PATTERN = '/^[a-z][a-z_]{0,39}$/D';
 
 	/**
 	 * What the class of a reader error may look like before it is passed on
@@ -319,7 +319,7 @@ final class AdminViewService {
 	 * is printed on the card and in a terminal (T-29-18). A path, a message or
 	 * markup never fits it.
 	 */
-	private const ERROR_CLASS_PATTERN = '/^[A-Za-z0-9_.]{1,200}$/';
+	private const ERROR_CLASS_PATTERN = '/^[A-Za-z0-9_.]{1,200}$/D';
 
 	/**
 	 * The free space the container insists on keeping, in bytes.
