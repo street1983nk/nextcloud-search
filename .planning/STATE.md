@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 36-13-PLAN.md, next 36-14
-last_updated: "2026-10-21T10:55:33.678Z"
+stopped_at: Completed 36-14-PLAN.md, next 36-15 (Owner-Abnahme)
+last_updated: "2026-10-21T11:41:50.933Z"
 last_activity: 2026-10-21
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 79
-  completed_plans: 77
+  completed_plans: 78
   percent: 86
 ---
 
@@ -26,11 +26,11 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 36 (Haertung und Store-Einreichung 1.5.0) , EXECUTING
-Plan: 14 of 16
+Plan: 15 of 16
 Status: Ready to execute
 Last activity: 2026-10-21
 
-Progress: [██████████] 97%
+Progress: [██████████] 99%
 
 ## Performance Metrics
 
@@ -186,6 +186,6 @@ Progress: [██████████] 97%
 
 ## Session Continuity
 
-Last session: 2026-10-21T10:55:33.655Z
-Stopped at: Completed 36-13-PLAN.md, next 36-14
+Last session: 2026-10-21T11:41:50.888Z
+Stopped at: Completed 36-14-PLAN.md, next 36-15 (Owner-Abnahme)
 Resume file: None
