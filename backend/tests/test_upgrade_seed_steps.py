@@ -1287,3 +1287,61 @@ def test_the_exclusion_seed_exports_the_list_and_the_three_ids() -> None:
         "UPGRADE_EXCL_CONTROL_ID": "control_id",
         "UPGRADE_EXCL_PATTERN_ID": "pattern_id",
     }
+
+
+EXCLUSION_STEP = "Store upgrade 5b,"
+
+
+def test_the_exclusion_step_stands_once_between_the_assurances_and_the_rebuild() -> None:
+    names = [str(step.get("name", "")) for step in _steps()]
+    found = [index for index, name in enumerate(names) if name.startswith(EXCLUSION_STEP)]
+    assert len(found) == 1
+    assert names[found[0] - 1].startswith(ASSURANCE_STEP)
+    assert names[found[0] + 1].startswith(REBUILD_STEP)
+    assert _named(EXCLUSION_STEP)[0]["if"] == _named(ASSURANCE_STEP)[0]["if"]
+
+
+def test_the_exclusion_step_asks_the_words_and_the_list_of_the_seed() -> None:
+    seed = _exclusion_block()
+    run = _run(EXCLUSION_STEP)
+    for variable in ("excl_word", "control_word", "pattern_word"):
+        line = re.search(rf"^{variable}=([a-z]+)$", seed, re.MULTILINE)
+        assert line is not None, variable
+        assert f"{variable}={line.group(1)}\n" in run, variable
+    assert 'if [ "${exclusions_after}" != "${UPGRADE_EXCLUSIONS_BEFORE}" ]; then' in run
+    for name in ("UPGRADE_EXCL_EXCLUDED_ID", "UPGRADE_EXCL_CONTROL_ID", "UPGRADE_EXCL_PATTERN_ID"):
+        assert f"${{{name}}}" in run, name
+
+
+def test_the_exclusion_step_sets_the_pattern_runs_a_cycle_and_takes_it_back() -> None:
+    run = _run(EXCLUSION_STEP)
+    passive = run.index('echo "--- 11a, ')
+    listed = run.index('echo "--- 11b, ')
+    written = run.index('config:app:set findling exclusion_patterns --value="[\\"${excl_pattern}\\"]" --type=array')
+    first = run.index('one_cycle "pattern set"')
+    gone = run.index('if [ "${open}:${patterned}" = "0:none" ] && finds_nothing "${pattern_word}"; then')
+    deleted = run.index('"${RUNNER_TEMP}/nc-occ.sh" config:app:delete findling exclusion_patterns')
+    second = run.index('one_cycle "pattern taken back"')
+    assert passive < listed < written < first < gone < deleted < second
+    assert "Reconcile(min_interval_hours=0).run_once()" in run
+    assert '.state == "walked" and .stale >= 1' in run
+    # The file comes back with its vectors before the rebuild steps run.
+    assert "0:indexed/:[1-9]*)" in run[second:]
+
+
+def test_the_exclusion_step_writes_nothing_into_the_environment_or_a_table() -> None:
+    run = _run(EXCLUSION_STEP)
+    assert "GITHUB_ENV" not in run
+    for forbidden in ("UPDATE ", "INSERT ", "DELETE ", "--restart", "cron.php", "docker restart", "docker stop"):
+        assert forbidden not in run, forbidden
+    assert "${{" not in run
+
+
+def test_the_exclusion_step_parses_in_bash(tmp_path: Path) -> None:
+    done = _bash_parses(_run(EXCLUSION_STEP), tmp_path)
+    assert done.returncode == 0, done.stderr
+
+
+def test_the_exclusion_seed_parses_in_bash(tmp_path: Path) -> None:
+    done = _bash_parses(_run(SEED_STEP), tmp_path)
+    assert done.returncode == 0, done.stderr

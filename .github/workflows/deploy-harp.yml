@@ -6394,6 +6394,206 @@ jobs:
             echo "The reindex branch of D-05 is deliberately not driven here; its absence is what this run asserts."
           } >> "${GITHUB_STEP_SUMMARY}"
 
+      # Assurance 11, the exclusions (plan 36-10, finding F5 of the phase 36
+      # research, success criterion 2). A step of its own beside the ten above
+      # and not an eleventh inside them: "Store upgrade 5" asserts that the
+      # upgrade needs no admin (SC4, held by
+      # test_the_assurance_step_does_nothing_an_admin_would_do), and setting a
+      # pattern is exactly what an admin does. The prefix half is passive and
+      # comes first; the pattern half comes after every comparison of the ten,
+      # so the file it takes out of the index cannot move a counter, a digest
+      # or the vector stock "Store upgrade 5" compares.
+      #
+      #   a  the prefix Ausschluss36 that 1.4.2 wrote still holds under 1.5:
+      #      the word under it finds nothing, the control finds exactly its
+      #      file, and the file under the prefix has no row in state.db
+      #   b  the prefix list reads as it did on the released installation
+      #      (UPGRADE_EXCLUSIONS_BEFORE of "Store upgrade 2b")
+      #   c  a pattern of 1.5 written by occ, the scriptable second writer
+      #      patterns() normalises for (ExclusionService.php:509), into the
+      #      key exclusion_patterns (SettingsService::KEY_EXCLUSION_PATTERNS),
+      #      typed array like the prefixes. occ plans no sweep, so the net of
+      #      D-33-01 is what removes the hit: one comparison cycle, made due
+      #      with min_interval_hours=0 inside the container the way the
+      #      reconcile-and-dach job of integration.yml runs one, reads the
+      #      known file under the mark of today as work, describe() turns the
+      #      claim into the delete order and the poller tombstones it. The
+      #      word of the pattern file finds nothing afterwards, the control
+      #      still finds its file
+      #   d  the pattern taken back and one more cycle: the file is unknown
+      #      and under no rule, so it is indexed again with its vectors and
+      #      found again, and "Store upgrade 6" and "Store upgrade 7" start
+      #      from the installation "Store upgrade 5" left
+      #
+      # The container keeps its own reconcile task. It is not due (its last
+      # cycle is minutes old and the interval is a day), and the one moment it
+      # could join, a walk of ours cut in the middle, hands over the same
+      # files twice, which the queue takes once.
+      - name: Store upgrade 5b, the exclusions carried through the upgrade
+        if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
+        env:
+          MATRIX_SERVER_VERSION: ${{ matrix.server-version }}
+          MATRIX_RUNNER: ${{ matrix.runner }}
+        run: |
+          . "${RUNNER_TEMP}/upgrade-probe.sh"
+          . "${RUNNER_TEMP}/seed-probe.sh"
+
+          # The words and the pattern of "Store upgrade 2b".
+          excl_word=sperrquolvane
+          control_word=kontrollbrisetum
+          pattern_word=mustertavelor
+          excl_pattern='*.geheim36.txt'
+
+          # Exactly the one file, or nothing at all; an unreadable answer is
+          # a failure and never a count.
+          finds_exactly() {
+            found=$(term_hits "$1") || return 1
+            [ "${found}" = "1" ] \
+              && jq -e --arg id "$2" '.ocs.data.entries[0].attributes.fileId == $id' "${RUNNER_TEMP}/upgrade-term.json" > /dev/null
+          }
+          finds_nothing() {
+            found=$(term_hits "$1") || return 1
+            [ "${found}" = "0" ]
+          }
+          open_rows() {
+            "${RUNNER_TEMP}/nc-occ.sh" findling:index | awk '
+              $1 == "scheduled" { scheduled = $2 }
+              /^  handed to the worker/ { running = $NF }
+              END { print (scheduled + 0) + (running + 0) }'
+          }
+          cat > "${RUNNER_TEMP}/excl-reconcile.py" <<'PY'
+          import asyncio
+          import json
+
+          from findling.worker.reconcile import Reconcile
+
+          result = asyncio.run(Reconcile(min_interval_hours=0).run_once())
+          print(json.dumps({"state": result.state, "seen": result.seen, "stale": result.stale, "missing": result.missing}))
+          PY
+          # One cycle in the running container, the RoundResult as the last
+          # line; demanded is a walk over every mount with at least one file
+          # handed over.
+          one_cycle() {
+            cycle_container=$(docker ps --filter 'name=findling_backend' --format '{{.Names}}' | head -n 1)
+            if [ -z "${cycle_container}" ]; then
+              echo "::error::no running findling_backend container for the comparison cycle ($1)"
+              return 1
+            fi
+            report=$(docker exec -i "${cycle_container}" python - < "${RUNNER_TEMP}/excl-reconcile.py" | tail -n 1) || report="the cycle ended with an error"
+            echo "comparison cycle ($1): ${report}"
+            if ! jq -e '.state == "walked" and .stale >= 1' <<< "${report}" > /dev/null 2>&1; then
+              echo "::error::the comparison cycle ($1) reported '${report}' instead of a walk that handed at least the pattern file over"
+              return 1
+            fi
+          }
+
+          fail=0
+          echo "--- 11a, the prefix of ${UPGRADE_FROM_TAG} still holds ---"
+          if ! finds_nothing "${excl_word}"; then
+            echo "::error::the word under the prefix Ausschluss36 brings back ${found} file(s) after the upgrade, so the exclusion of ${UPGRADE_FROM_TAG} was lost"
+            fail=1
+          else
+            echo "the word under the prefix finds nothing after the upgrade"
+          fi
+          if ! finds_exactly "${control_word}" "${UPGRADE_EXCL_CONTROL_ID}"; then
+            echo "::error::the control word brings back ${found} file(s) after the upgrade instead of exactly the file id ${UPGRADE_EXCL_CONTROL_ID}, so the nought above proves nothing"
+            fail=1
+          else
+            echo "the control word finds exactly the file id ${UPGRADE_EXCL_CONTROL_ID}"
+          fi
+          excluded_rows=$(seed_probe rows "${UPGRADE_EXCL_EXCLUDED_ID}" || echo unreadable)
+          if [ "${excluded_rows}" != "0" ]; then
+            echo "::error::the file under the prefix has '${excluded_rows}' row(s) in state.db after the upgrade, and no version may ever have read it"
+            fail=1
+          else
+            echo "the file under the prefix has no row in state.db"
+          fi
+
+          echo "--- 11b, the prefix list reads as ${UPGRADE_FROM_TAG} wrote it ---"
+          exclusions_after=$("${RUNNER_TEMP}/nc-occ.sh" config:app:get findling exclusions | jq -c . || echo unreadable)
+          if [ "${exclusions_after}" != "${UPGRADE_EXCLUSIONS_BEFORE}" ]; then
+            echo "::error::the prefix list read ${UPGRADE_EXCLUSIONS_BEFORE} on ${UPGRADE_FROM_TAG} and reads '${exclusions_after}' after the upgrade"
+            fail=1
+          else
+            echo "unchanged  the prefix list = ${exclusions_after}"
+          fi
+          if ! finds_exactly "${pattern_word}" "${UPGRADE_EXCL_PATTERN_ID}"; then
+            echo "::error::the word of the pattern file brings back ${found} file(s) before any pattern was set instead of exactly the file id ${UPGRADE_EXCL_PATTERN_ID}"
+            fail=1
+          fi
+          if [ "${fail}" -ne 0 ]; then
+            exit 1
+          fi
+
+          echo "--- 11c, a pattern of 1.5 takes the hit out after one comparison cycle (D-33-01) ---"
+          "${RUNNER_TEMP}/nc-occ.sh" config:app:set findling exclusion_patterns --value="[\"${excl_pattern}\"]" --type=array
+          patterns=$("${RUNNER_TEMP}/nc-occ.sh" config:app:get findling exclusion_patterns | jq -c . || echo unreadable)
+          if [ "${patterns}" != "[\"${excl_pattern}\"]" ]; then
+            echo "::error::the pattern list reads '${patterns}' after the write instead of [\"${excl_pattern}\"]"
+            exit 1
+          fi
+          one_cycle "pattern set" || exit 1
+          deadline=$(( $(date +%s) + UPGRADE_DRAIN_BUDGET_SECONDS ))
+          gone=""
+          while [ "$(date +%s)" -lt "${deadline}" ]; do
+            open=$(open_rows)
+            patterned=$(seed_probe verdict "${UPGRADE_EXCL_PATTERN_ID}" || echo unreadable)
+            if [ "${open}:${patterned}" = "0:none" ] && finds_nothing "${pattern_word}"; then
+              gone="yes"
+              break
+            fi
+            echo "pattern set: open=${open} pattern file=${patterned}, $(( deadline - $(date +%s) ))s left"
+            sleep 5
+          done
+          if [ -z "${gone}" ]; then
+            echo "::error::the pattern ${excl_pattern} did not take the pattern file out of the index within UPGRADE_DRAIN_BUDGET_SECONDS=${UPGRADE_DRAIN_BUDGET_SECONDS} after a comparison cycle (state.db '${patterned}', open ${open})"
+            "${RUNNER_TEMP}/nc-occ.sh" findling:index || true
+            exit 1
+          fi
+          echo "the pattern file is tombstoned and its word finds nothing"
+          if ! finds_exactly "${control_word}" "${UPGRADE_EXCL_CONTROL_ID}"; then
+            echo "::error::the control word brings back ${found} file(s) under the pattern instead of exactly the file id ${UPGRADE_EXCL_CONTROL_ID}"
+            exit 1
+          fi
+          echo "the control word still finds exactly the file id ${UPGRADE_EXCL_CONTROL_ID}"
+
+          echo "--- 11d, the pattern taken back, the file comes back ---"
+          "${RUNNER_TEMP}/nc-occ.sh" config:app:delete findling exclusion_patterns
+          one_cycle "pattern taken back" || exit 1
+          deadline=$(( $(date +%s) + UPGRADE_DRAIN_BUDGET_SECONDS ))
+          back=""
+          while [ "$(date +%s)" -lt "${deadline}" ]; do
+            open=$(open_rows)
+            patterned=$(seed_probe verdict "${UPGRADE_EXCL_PATTERN_ID}" || echo unreadable)
+            chunks=$(seed_probe chunks "${UPGRADE_EXCL_PATTERN_ID}" || echo unreadable)
+            case "${open}:${patterned}:${chunks}" in
+              0:indexed/:[1-9]*)
+                if finds_exactly "${pattern_word}" "${UPGRADE_EXCL_PATTERN_ID}"; then
+                  back="yes"
+                  break
+                fi
+                ;;
+            esac
+            echo "pattern taken back: open=${open} pattern file=${patterned} with ${chunks} chunk(s), $(( deadline - $(date +%s) ))s left"
+            sleep 5
+          done
+          if [ -z "${back}" ]; then
+            echo "::error::the pattern file did not come back into the index within UPGRADE_DRAIN_BUDGET_SECONDS=${UPGRADE_DRAIN_BUDGET_SECONDS} after the pattern was taken back (state.db '${patterned}', ${chunks} chunk(s), open ${open})"
+            "${RUNNER_TEMP}/nc-occ.sh" findling:index || true
+            exit 1
+          fi
+          if ! finds_nothing "${excl_word}" || ! finds_exactly "${control_word}" "${UPGRADE_EXCL_CONTROL_ID}"; then
+            echo "::error::after the pattern was taken back the word under the prefix or the control word answers otherwise than nothing and exactly ${UPGRADE_EXCL_CONTROL_ID}"
+            exit 1
+          fi
+          echo "the pattern file is indexed again with ${chunks} chunk(s) and found, the prefix still holds, the control is found"
+
+          echo "all parts of assurance 11 hold"
+          {
+            echo ""
+            echo "- exclusions: prefix kept, pattern applied. The prefix \`Ausschluss36\` written on \`${UPGRADE_FROM_TAG}\` holds after the upgrade and the list reads \`${UPGRADE_EXCLUSIONS_BEFORE}\` unchanged; the pattern \`${excl_pattern}\` of 1.5 took its hit out after one comparison cycle, the control stayed found, and the file came back once the pattern was taken back (${MATRIX_SERVER_VERSION}, ${MATRIX_RUNNER})"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
       # =====================================================================
       # The other half of the upgrade proof, and it stands BESIDE the block
       # above rather than inside it (plan 18-12, success criterion 5).
