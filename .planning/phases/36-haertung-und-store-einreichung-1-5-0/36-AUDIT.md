@@ -9,15 +9,23 @@ findings:
   medium: 0
   low: 4
   total: 4
-status: offen
-fix_commits: []
-fixed: []
-still_open: [L-36-01, L-36-02, L-36-03, L-36-04]
+status: fixed
+fix_run: 2026-10-21
+fix_commits: [69815132, 38e54d32, 6dee66f4]
+fixed: [L-36-01, L-36-02, L-36-03]
+still_open: [L-36-04]
 ---
 
 # Phase 36: Launch-Audit 1.5.0 (Security, Bugs, Performance)
 
-**Stand:** offen (Task 1 abgeschlossen, Performance und Behandlung folgen).
+**Stand:** geschlossen am 21.10.2026, **0 CRIT / 0 HIGH**, auch kein MEDIUM.
+Vier LOW-Befunde, alle behandelt (Owner-Regel 20.10.): drei im Produkt gefixt
+mit Regressionstest und Live-Gegenprobe (L-36-01, L-36-02, L-36-03), einer
+begründet akzeptiert (L-36-04, Abschnitt "LOW-Entscheidungen"). Die
+Recherche-Befunde F1 bis F6 sind belegt geschlossen bzw. F2 mit Wächter an
+36-13 übergeben (Abschnitt "F1 bis F6"). Die 186 Abfragen je Poll sind
+gemessen (heute 169) und kein Release-Blocker (P5, Deferred v1.6). Kein
+`xfail` mehr in `test_phase36_audit.py`.
 
 **Umfang:** milestone-weit. Basis ist `git merge-base HEAD v1.4.3` =
 `17363bb2` (Tag v1.4.2, Zweigpunkt von `release/1.4.x`; v1.4.3 = 0f088d05
@@ -314,8 +322,13 @@ OCS-Aufrufe gezählt an `nc_py_api._session.AsyncNcSessionBasic.ocs`
 - **Einordnung:** kein Schaden nachweisbar (der Cast entfernt den Umbruch, die
   Werte landen per `textContent`), aber jede der fünf Prüfungen steht an einer
   Vertrauensgrenze und sagt mehr zu, als sie hält.
-- **Test:** `test_every_anchored_php_form_check_ends_at_the_very_end`
-  (xfail strict, L-36-01) mit Positivkontrolle
+- **Fix (69815132):** `D` an allen fünf Mustern. Gegenprobe im echten PHP des
+  Containers: `preg_match("/^[1-9][0-9]{0,18}$/D", "14\n")` = 0, ohne `D` = 1.
+  Live danach `?similar=14%0A` = Startseite ("Durchsuchen Sie den Inhalt Ihrer
+  Dateien"), `?similar=14` weiter "Ähnlich zu: Triangle.odp".
+- **Regressionstest:** `test_every_anchored_php_form_check_ends_at_the_very_end`
+  (vor dem Fix strict xfail, fünf Funde; danach grün, mindestens 9 verankerte
+  Literale gesehen) mit Positivkontrolle
   `test_the_dollar_probe_tells_the_two_spellings_apart`.
 
 ### L-36-02 (LOW): Die ID-Parser der Container-Routen nehmen nicht kanonische Ziffernfolgen
@@ -328,8 +341,18 @@ OCS-Aufrufe gezählt an `nc_py_api._session.AsyncNcSessionBasic.ocs`
   nur Zahlen aus state.db und schneidet die Antwort auf die gefragten IDs
   (36-04); kein Index-Schaden. Die Route antwortet aber auf eine Frage, die
   nicht gestellt wurde.
-- **Test:** `test_the_id_parsers_of_the_container_routes_take_canonical_numbers_only`
-  (xfail strict, L-36-02).
+- **Fix (38e54d32):** nach `ctype_digit` und Cast gilt der Wert nur, wenn
+  `(string)$id === $value`; sonst die bestehende 400-Antwort. Reflexionsprobe
+  im Container: `positiveId("014")` null, `("12345678901234567890")` null,
+  `("9223372036854775807")` 9223372036854775807, `("14\n")` null;
+  `storageIdList(["14", 15, "15"])` = [14, 15]. Live danach: 20 Ziffern
+  **400**, `014` **400**, Kontrolle `2, 999999` 200.
+- **Regressionstest:**
+  `test_the_id_parsers_of_the_container_routes_take_canonical_numbers_only`
+  (vor dem Fix strict xfail) und PHPUnit (CI):
+  `ReconcileControllerTest::testAMalformedStorageListIsRefusedWithoutItsValues`
+  um zwei Fälle erweitert, `QueueControllerTest::testAFileIdThatDoesNotReadBackAsItselfIsRefused`
+  mit Positivkontrolle `testACanonicalFileIdStillReachesTheService`.
 
 ### L-36-03 (LOW): Die Zeile des Storage-Nachlaufs nennt alle Storage-IDs ungekürzt
 
@@ -339,16 +362,86 @@ OCS-Aufrufe gezählt an `nc_py_api._session.AsyncNcSessionBasic.ocs`
   fälligen Runde in "waiting".
 - **Einordnung:** keine personenbezogenen Daten (Storage-IDs sind erlaubt,
   T-36-17), aber eine Logzeile ohne Obergrenze.
-- **Test:** `test_the_sweep_line_names_a_bounded_number_of_storages`
-  (xfail strict, L-36-03; rot belegt: 301 IDs genannt).
+- **Fix (6dee66f4):** `SWEEP_LOG_STORAGES` = 20 in `reconcile.py`; je Liste
+  höchstens 20 IDs, dahinter "and N more"; die Zähler bleiben exakt.
+  `docs/reconcile.md` (Abschnitt "Was im Protokoll steht") nachgezogen.
+- **Regressionstest:** `test_the_sweep_line_names_a_bounded_number_of_storages`
+  (vor dem Fix strict xfail, rot mit `assert 301 <= 20`; danach grün: 20 IDs,
+  "281 more", Zeile unter 400 Zeichen).
 
-### L-36-04 (LOW): Ein Löschauftrag je gelöschtem Storage
+### L-36-04 (LOW, akzeptiert): Ein Löschauftrag je gelöschtem Storage
 
 - **Ort:** `_sweep_vanished` ruft `_hand_over` je Storage; 300 Storages mit je
   einer Datei sind 300 `POST .../requeue`.
 - **Beleg:** P3, 19,0 s für die Runde mit 300 gelöschten Storages gegen 0,4 s
   ohne.
-- **Test:** siehe Entscheidung (Task 3).
+- **Entscheidung:** accept, siehe "LOW-Entscheidungen". Bestandstest der
+  Bänder: `test_a_large_storage_is_handed_over_in_bands` (36-04).
+
+## LOW-Entscheidungen
+
+| Befund | Entscheidung | Grund | Zielphase | Quelle |
+|---|---|---|---|---|
+| L-36-01 | fix | billig, keine Verhaltensänderung für gültige Werte, gleiche Schreibweise wie im Rest der App | 36 | Audit 36-12, S4 |
+| L-36-02 | fix | Route der Phase; eine Antwort auf eine nicht gestellte Frage ist an einer Vertrauensgrenze falsch, auch wenn der Container sie verwirft | 36 | Audit 36-12, S2 |
+| L-36-03 | fix | Logzeile ohne Obergrenze, 30 Tage Wiederholung je gestempeltem Storage | 36 | Audit 36-12, P3 |
+| L-36-04 | accept | einmalig je gelöschtem Speicher, nachts, hinter dem Ruhetor und dem Takt; ein Bündeln über Storages hinweg würde die Zusage "Lesezeichen erst nach dem letzten Band des Storage vergessen" (36-04, T-36-16) an fremde Bänder koppeln; 300 auf einmal gelöschte Nutzer sind der Ausnahmefall | keine | Audit 36-12, P3 |
+| L-32-01 | accept (bleibt) | Kernverhalten von NC 34, live erneut belegt | keine | B5 |
+| L-32-03 | accept (bleibt) | verlangt von USRCH-03/T-32-06 | keine | B5 |
+| L-32-04 | accept (bleibt) | nicht nachstellbar auf lokalem Speicher; Beobachtungspunkt der Fremdinstallation 36-15 | 36-15 | B5 |
+| L-32-05 | accept (bleibt) | höchstens ein Abgleich-Intervall, nie ein Treffer | keine | B5 |
+| L-32-07 | erledigt | Owner hat CHANGELOG/Releasetext 1.5.0 am 20.10. ohne die Zeile abgenommen (36-01 B3, 36-11) | keine | B5 |
+| L-35-02 | accept (bleibt) | beschränkt auf 120 s bzw. 300 s, Route intern | keine | B5 |
+| L-35-06 | geschlossen | 36-02, S3 live mit Positivkontrolle | 36 | B5 |
+
+## Fixes (Task 3)
+
+| Befund | Commit | Fix | GREEN |
+|---|---|---|---|
+| L-36-01 | 69815132 | `D` an fünf Mustern in PageController, AdminViewService, ExAppService; PHP-Baumhash 60821e1a auf f830ac26 (beide Wege), Journal "Plan 36-12" | Audit-Modul, measurement, trust boundary, Phase-35-Audit, admin contract: 808 passed |
+| L-36-02 | 38e54d32 | kanonische Ziffern in `storageIdList` und `positiveId`, drei PHPUnit-Fälle; PHP-Baumhash f830ac26 auf f8eaf591 (beide Wege), Journal "Plan 36-12" | 797 passed (Audit, measurement, trust boundary, readonly gate, files/queue client); PHPUnit in CI |
+| L-36-03 | 6dee66f4 | `SWEEP_LOG_STORAGES` und `_first_storages` in `reconcile.py`, docs/reconcile.md; Paket-Baumhash 73e0501d auf 569925a1 (beide Wege), Journal "Plan 36-12" | 116 passed (Audit, reconcile, reconcile_vanished); volle Suite siehe unten |
+
+Gates vor dem Commit von L-36-03: ruff check (src, tests, scripts), ruff format
+(233 Dateien), pyright latest 0 Fehler, vulture sauber; `php -l` im Container
+auf allen sieben geänderten PHP-Dateien (fünf aus lib, zwei Tests). Volle
+Suite lokal auf dem Endstand: **6135 passed, 264 skipped** in 13:02 (ohne
+`test_v14_zelle.py`, den bekannten Lastflake), danach `test_v14_zelle.py`
+allein **72 passed**. `reuse lint` lokal nicht lauffähig (libmagic), in CI.
+CI-Läufe im Abschlussvermerk von 36-12-SUMMARY.md.
+
+## F1 bis F6 (Befunde der Recherche)
+
+| Befund | Stufe | Geschlossen durch | Test | Stand |
+|---|---|---|---|---|
+| F1 Quellpakete x265 4.3 / libheif 1.23.6 | HIGH (Lizenzpflicht vor Release) | 36-02, d67a7863 (Liste, Hashes, THIRD-PARTY), f180d650 (release.yml) | `test_the_recipe_stamp_follows_the_locked_pillow_heif`, `test_the_stamp_gate_fires_on_a_stale_stamp`, `test_the_gate_fires_on_a_stale_row`; Probe 39439309752 | geschlossen (S7) |
+| F2 Upgrade-Ausgangsversion v1.4.3 | ohne Stufe (CI-Konfiguration) | Reihenfolge D-36-13/Pitfall 8: erst Bump, dann `UPGRADE_FROM_TAG: v1.4.3`, beides in 36-13 | Wächter `test_the_upgrade_start_is_never_ahead_of_the_tree` (diese Phase) | übergeben an 36-13, absichtlich nicht in 36-12 (kein Bump erlaubt) |
+| F3 ODF/OOXML-Vorzählung | MEDIUM | 36-08, b9ec1b33 | `test_a_package_of_a_million_records_is_blocked_before_zipfile`, Korpus `*-of-a-million-records`; P2: 447 MiB/3,7 s vorher, 0,4 ms/+0,3 MiB nachher | geschlossen |
+| F4 ewig unfinished | MEDIUM | 36-04, f8cf48b8 | `test_a_storage_that_vanished_mid_walk_leaves_no_walk_open_for_good`; live 36-05 (Waisen 12/13 weg) | geschlossen |
+| F5 Ausschlüsse in der Upgrade-Strecke | ohne Stufe (Testlücke) | 36-10, b333dd29 und 24c27454 | `test_the_exclusion_step_sets_the_pattern_runs_a_cycle_and_takes_it_back` u. a.; HaRP deploy 39557497418 | geschlossen |
+| F6 Phase 35 ohne Store-/CHANGELOG-Zeile | ohne Stufe (Text) | 36-11, fdccef86 und 7a4c3b2c | `test_the_similar_documents_line_stands_in_all_six_descriptions_and_the_changelog` (diese Phase) | geschlossen |
+
+Alle `test_phase3*_audit.py` (30 bis 36) gemeinsam auf dem Endstand 6dee66f4:
+**241 passed, 233 skipped** in 2:12 (die übersprungenen sind die
+Instanzproben ohne `FINDLING_AUDIT*`-Umgebung, wie in den Vorphasen), kein
+`xfail` in `test_phase36_audit.py` (`grep -c xfail` = 0).
+
+## Stand
+
+**0 CRIT / 0 HIGH**, 0 MEDIUM. Vier LOW, drei gefixt mit Regressionstest
+(L-36-01, L-36-02, L-36-03), einer akzeptiert (L-36-04). Alle offenen LOWs der
+Phasen 32 und 35 neu bewertet. Die 186 (heute 169) Abfragen je Poll sind kein
+Release-Blocker und bleiben Deferred v1.6. Kein Befund hält 36-13 auf.
+
+## Rückbau der Proben
+
+- Hochgeladene Probedateien (`audit3612-logprobe.txt`, `-debugprobe.txt`,
+  `-bomb.png`, `-ratio.zip`) per WebDAV gelöscht, je 204.
+- Synthetische state.db-Zeilen der P3-Läufe entfernt (Endstand wie vorher).
+- `query_log_file*` gelöscht, `/tmp/q3612.log` entfernt.
+- Host-Backend am Ende gestoppt (nur die eigenen PIDs per `taskkill /PID ... /T`),
+  wie vor dem Audit (Heartbeat 10035 war vorher nicht erreichbar).
+  Sicherung `.dev/backup-36-12/state.db.bak` bleibt bis Phasenende liegen.
 
 ## Was gegengeprüft wurde, nicht nur gelesen
 
