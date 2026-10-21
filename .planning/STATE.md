@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 36-06-PLAN.md, next 36-07
-last_updated: "2026-10-20T19:34:54.150Z"
-last_activity: 2026-10-20
+stopped_at: Completed 36-07-PLAN.md, next 36-08
+last_updated: "2026-10-21T01:32:01.732Z"
+last_activity: 2026-10-21
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 78
-  completed_plans: 69
+  completed_plans: 70
   percent: 86
 ---
 
@@ -26,11 +26,11 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 36 (Haertung und Store-Einreichung 1.5.0) , EXECUTING
-Plan: 7 of 16
+Plan: 8 of 16
 Status: Ready to execute
-Last activity: 2026-10-20
+Last activity: 2026-10-21
 
-Progress: [█████████░] 88%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
@@ -79,6 +79,7 @@ Progress: [█████████░] 88%
 - v1.5: 33-11 in ca. 9 h über zwei Sitzungen (Task 3 und 4 ca. 4 h 30 min inkl. ca. 55 min Abgleich am Ruhe-Tor, zwei Volltestläufen je ca. 11 min und CI; 4 Tasks, 8 Dateien)
 - v1.5: 34-01 in ca. 45 min inkl. Checkpoint und CI (2 Tasks, 2 Dateien)
 - v1.5: 34-02 in ca. 53 min inkl. voller Suite und CI (3 Tasks, 5 Dateien)
+- v1.5: 36-07 in ca. 60 min inkl. voller Suite (12:32 min) und CI (2 Tasks, 4 Dateien)
 
 ## Accumulated Context
 
@@ -142,6 +143,7 @@ Progress: [█████████░] 88%
 - Phase 35 (Kurzbilanz, 20.10.2026): Aehnlich-Ansicht geliefert und vom Owner abgenommen (35-01 Wortlaut, 35-05 POST /similar mit SIMILAR_CEILING 54,5 aus 35-04B Weg 2, 35-06 PHP-Rechtegrenze, 35-07/35-13 Ansicht und 16 Kataloge, 35-08 Playwright-Abnahme 19./20.10.). granite-Messbericht komplett (35-03 Regel vor der Messung, 35-09 amd64, 35-10 arm64 auf m7g.large fuer 0,0362 USD mit Abbau-Beleg, 35-11 Verdikt: Bedingung (a) verfehlt bei p=0,0944, Empfehlung "Wechsel nur mit Bedingung", e5-small bleibt in v1.5). Dedup-Notiz 35-02 (Empfehlung Weg B). Audit 35-12: 0 CRITICAL/HIGH/MEDIUM, 6 LOW alle behandelt (L-35-01 unknown-Marke liefert bei leerem Bestand nach, gefixt 5a98eee0; register-exapp.sh Stale-Probe gefixt 0e1e42f9; Massluecke dokumentiert c2b402cb; L-35-02/L-35-06 begruendet akzeptiert). STR-01 bis STR-03 Complete.
 - 34-06: Audit der Phase 34 geschlossen (34-AUDIT.md): 0 CRITICAL/HIGH/MEDIUM, 2 LOW. L-34-02 gefixt (151bc30b, fr-Pflichtformel ohne Zeilenumbruch), L-34-01 accept (Geviertstriche in STATE.md, Werkzeugausgabe, nicht ausgeliefert). Security/Bugs/Performance belegt (Poll -1,6 Prozent, keine zusätzliche DB-Abfrage), Audit-Modul test_phase34_audit.py (39 Tests mit Netz und Mutation). UMST-01..03 in REQUIREMENTS.md auf Complete. Merge 73f6a03e; volle Suite 5761 passed. Offen für Phase 36: docs/embeddings.md:497 "jahrelang verwaist" gegen Pflegestand der Umstiegs-Seite (Owner-Frage), Tag-Links blob/v1.5.0 nach Tag prüfen, Store-Entwurf in REL-05.
 - 36-03: GET /storages/gone (ExAppRequired plus rejectForeignCaller, höchstens 256 positive IDs, 400 ohne Werte, 500 statisch) antwortet {gone, deselected} aus StorageService::classifyAbsent. gone heißt: keine Zeile in oc_storages. deselected heißt: eine oc_mounts-Zeile trägt den abgeschalteten Team-Ordner- oder External-Provider UND isIndexedStorage() ist false (D-36-14). Alles andere ist Karenz im Container. Provider-Filter in SQL plus Zeilenprüfung in PHP, Bänder zu 200, bei beiden Schaltern an keine oc_mounts-Abfrage. PHPUnit 837 auf 846. Baumhash c5642f59, PHP_FILES_TODAY 107, Routen-Untergrenze 19. Lehre: TestCase::result() ist in PHPUnit 11 final, php -l sieht das nicht. CI cd111208 acht grün. docs/reconcile.md folgt mit 36-04.
+- 36-07: Korpus-Generatoren an einer Stelle (backend/tests/hostile.py, deterministisch, gedeckelt, keine Binärdatei im Baum, D-36-01); ATTACK_RATIO = 1000 (O12), 36-08 belegt Gleichheit mit config.ARCHIVE_MALICIOUS_RATIO. test_phase36_hostile_corpus.py: sieben Familien, 64 Fälle durch das Sandbox-Kind, 34 grün, 30 xfail(strict=True) mit wörtlichem reason "built in 36-08" (21) bzw. "built in 36-09" (9); die drei 1-Mio.-Pakete mit run=False bis 36-08 vor ZipFile zählt. XML-Tiefe 10 000 gemessen: lxml xml_invalid, XLSX empty_text. Commits 2b57201a, 1d97d932; Python gates 39524695753 (ubuntu, RLIMIT_AS) grün.
 
 ### Offene Faeden (kein aktiver Auftrag)
 
@@ -172,9 +174,11 @@ Progress: [█████████░] 88%
 ### Blockers/Concerns
 
 - Kill-Kriterium Nextcloud (ES-freie Volltextsuche mit OCR angekuendigt -> Neubewertung) weiter beobachten.
+- Seit 21.10.2026 pip-audit rot (Security scans 39524695697): pillow 12.3.0 mit 8 CVEs (Fix erst 13.0.0, Major-Sprung im Bildpfad), certifi 2026.7.22 (Fix 2026.10.19). Owner-Entscheid vor 1.5.0, ob in 36-09 oder eigenem Plan (F-36-07-2, deferred-items.md der Phase 36).
+- 36-09 muss den TIFF-Rahmenlauf an der Seitengrenze kappen (F-36-07-1: 100 000 IFDs 27,8 s im Kind); steht noch nicht im Plan 36-09, sonst bleibt der Korpusfall tiff-of-100000-ifds xfail.
 
 ## Session Continuity
 
-Last session: 2026-10-20T19:34:54.134Z
-Stopped at: Completed 36-06-PLAN.md, next 36-07
+Last session: 2026-10-21T01:31:56.518Z
+Stopped at: Completed 36-07-PLAN.md, next 36-08
 Resume file: None

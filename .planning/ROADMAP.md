@@ -331,7 +331,7 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 36-07-PLAN.md: Bösartiger Formatkorpus als Generatoren und Sandbox-Test
+- [x] 36-07-PLAN.md: Bösartiger Formatkorpus als Generatoren und Sandbox-Test
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
@@ -384,7 +384,7 @@ Plans:
 | 33. Ausschlussmuster und Admin-Feinschliff | v1.5 | 11/11 | Executed, verification pending | - |
 | 34. Umstiegsweg | v1.5 | 6/6 | Complete   | 2026-10-19 |
 | 35. Stretch: Aehnliche Dokumente und Spikes | v1.5 | 14/13 | Complete    | 2026-10-20 |
-| 36. Haertung und Store-Einreichung 1.5.0 | v1.5 | 6/16 | In Progress|  |
+| 36. Haertung und Store-Einreichung 1.5.0 | v1.5 | 7/16 | In Progress|  |
 
 ## Nach v1.3 (Wiedervorlage)
 
