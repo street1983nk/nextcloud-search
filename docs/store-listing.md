@@ -2672,6 +2672,17 @@ geändert; die Änderung gehört zu REL-05.
   wird rot, sobald `backend/uv.lock` eine andere pillow-heif-Version auflöst.
   Ein neuer Spiegel `source-1.5-dev.3` für das dev-Image wird hier nicht
   angelegt (Owner-Wort in Plan 36-13).
+- [ ] **Spiegel `source-1.5-dev.3` für das dev-Image: vorbereitet,
+  Veröffentlichung mit 36-14.** Owner-Entscheid in Plan 36-13 am 21.10.2026:
+  "Anlegen (Empfohlen)", mit der Einschränkung, dass `publish --tag
+  source-1.5-dev.3` erst mit dem nächsten Owner-Wort in Plan 36-14 läuft. Am
+  21.10.2026 lokal geholt (`fetch`) und mit `--verify-only` geprüft, alle vier
+  Zeilen "ok", Exitcode 0: pillow_heif-1.8.1.tar.gz (521ebffb...),
+  x265_4.3.tar.gz (83c53e4c...), libde265-1.1.3.tar.gz (554228bd...),
+  libheif-1.23.6.tar.gz (4484346d...). Offen in 36-14: `publish --tag
+  source-1.5-dev.3`, danach `gh release download source-1.5-dev.3` in ein
+  frisches Verzeichnis und `--verify-only` darauf grün; erst dann ist der
+  Punkt erledigt und `source-1.5-dev.3` der Spiegel für `:dev`.
 
 `publish --tag` des Skripts legt ein Pre-Release mit den vier Quellpaketen im
 selben Aufruf an (nie als latest markiert), weist ein schon veröffentlichtes
