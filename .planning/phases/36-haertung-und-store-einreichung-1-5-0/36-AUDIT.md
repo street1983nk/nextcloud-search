@@ -191,6 +191,116 @@ er entsteht zur Laufzeit aus `backend/tests/hostile.py` (D-36-01).
 | L-35-02 Requeue weckt den Poller nicht sofort | Code unverändert (`POLL_COOLDOWN_MAX_SECONDS` 120 s) | accept bleibt |
 | L-35-06 httpx-INFO mit fileid/userId | S3 live mit Positivkontrolle | **geschlossen** durch 36-02 |
 
+## Performance
+
+Gemessen am 21.10.2026 auf dem Entwicklungsrechner (Windows, Python 3.13 der
+uv-Umgebung), seriell, nach dem Stopp des Host-Backends für P1, P2 und P4; P3
+und P5 gegen 8090 mit laufendem Backend. Skripte und Rohdaten im Scratch der
+Session (`p2_count.py`, `p2.jsonl`, `p3_cycle.py`, `p3-ohne.jsonl`,
+`p3-mit.jsonl`), nicht im Repo.
+
+### P1 Laufzeit je Korpusfall
+
+- **Lokal:** `uv run python -m pytest tests/test_phase36_hostile_corpus.py
+  --durations=0`: 64 passed in 10,10 s. Langsamster Korpusfall
+  `package[docx]` **0,71 s** (erster Fall der Familie, enthält den Start des
+  Kinds), dann `ratio-about-150` 0,51 s, `honest-large-jpeg` 0,31 s,
+  `tiff-of-100000-ifds` 0,24 s, `xlsx-of-a-million-records` 0,15 s. Länger
+  sind nur die zwei Prüfungen über den ganzen Korpus (Log-Sonde 3,02 s,
+  Determinismus 1,84 s), keine davon ist ein Fall.
+- **CI (ubuntu, RLIMIT_AS):** `python.yml` ruft pytest ohne `--durations`, das
+  Log nennt keine Einzelzeiten. Jeder Fall prüft seine Frist selbst
+  (`named_and_quick`: `ran.seconds < case.seconds`, `CASE_SECONDS` = 30 s, für
+  `tiff-of-100000-ifds` 5 s); Python gates 39552834732 (d120f953, letzter Lauf
+  mit geändertem Extraktor) und 39563847299 (7a4c3b2c) grün.
+- **Urteil:** Maximum 0,71 s gegen 30 s; in Ordnung.
+
+### P2 Kosten der Vorzählung (F3)
+
+Je Datei ein frisches Kind (`p2_count.py`), 20 Läufe von
+`archive.count_central_directory(handle, size, limit=ARCHIVE_MAX_ENTRIES)`,
+Spitzen-Arbeitsspeicher des Kinds über `GetProcessMemoryInfo`
+(PeakWorkingSetSize; unter Linux nimmt das Skript `ru_maxrss`). Leerlauf des
+Kinds mit denselben Importen: **26,9 MiB**. Im Repo liegen keine echten
+PPTX/XLSX (`testdata/` hat nur DOCX/ODT bis 66 KB), deshalb die größten des
+Lastkorpus `.dev/probe-live/loadcorpus` wie in 36-08.
+
+| Datei | Größe | Einträge | p50 | p95 | max | Spitze |
+|---|---|---|---|---|---|---|
+| 00414-stellungnahme.pptx | 349 893 B | 22 | 0,049 ms | 0,103 ms | 0,271 ms | 27,1 MiB |
+| 00378-bescheid.xlsx | 346 874 B | 7 | 0,048 ms | 0,124 ms | 0,372 ms | 27,1 MiB |
+| 00410-vertrag.docx | 346 877 B | 4 | 0,040 ms | 0,097 ms | 0,292 ms | 27,1 MiB |
+| testdata 34-zip-bombe.docx | 66 154 B | 3 | 0,037 ms | 0,076 ms | 0,194 ms | 27,0 MiB |
+| Paket 10 001 Einträge (`package_with_entries`) | 470 087 B | 10 001 | 4,935 ms | 6,186 ms | 39,6 ms | 27,4 MiB |
+| Paket 150 000 Einträge | 7 050 040 B | Abbruch bei 10 001 | 4,993 ms | 18,291 ms | 24,9 ms | 27,1 MiB |
+| Paket 1 Mio. Einträge | 47 000 040 B | `OverLimit` (Verzeichnis > 8 MiB) | 0,137 ms | 0,387 ms | 0,637 ms | 27,2 MiB |
+
+**Vorher/nachher:** derselbe Weg wie vor dem Fix (`zipfile.ZipFile(path)`)
+im selben Kind: 1-Mio.-Paket **3 705 ms, Spitze 447,1 MiB**; 150 000 Einträge
+544 ms, 89,1 MiB. Die Recherche maß im Linux-Image 454 MiB und 32 s (F3); die
+Speicherzahl stimmt überein, die Zeit hängt an der Maschine. Nachher kostet
+dieselbe Datei 0,4 ms (p95) und 0,3 MiB über dem Leerlauf. **Urteil:** F3
+geschlossen, die Vorzählung kostet auf echten Dateien unter 0,4 ms (p95).
+
+### P3 Nachlauf M-32-02 auf 8090
+
+Je Zyklus ein eigener Prozess `Reconcile(min_interval_hours=0,
+pause_seconds=0.0).run_once()` mit der Umgebung des Host-Backends;
+OCS-Aufrufe gezählt an `nc_py_api._session.AsyncNcSessionBasic.ocs`
+(gezählt, nicht geschätzt); Zeit per `perf_counter` um den Zyklus. Bestand:
+3 Mounts (2, 3, 4), 481 Dateien.
+
+| Lauf | Abwesend | Zeit | OCS-Aufrufe | Nachlauf-Zeile |
+|---|---|---|---|---|
+| ohne (3 Läufe) | 0 | 0,432 / 0,397 / 0,458 s | 8: stats 4, mounts 1, slice 3 | keine |
+| 1 verschwunden (Storage 16, oc_storages vorhanden) + 1 gelöscht (49 Zeilen) | 2 | 0,689 s | 10: + `storages/gone` 1, + `requeue` 1 | `absent=2 gone=1 deselected=0 stamped=1 removed=1` |
+| 300 gelöscht (je 1 Zeile) + 1 verschwunden | 301 | **19,007 s** | 310: + `storages/gone` **2** (256 + 45), + `requeue` **300** | `absent=301 gone=300 stamped=1 removed=300`, mit allen 300 IDs |
+| nach Rückbau | 0 | 0,380 s | 8 | keine |
+
+- Die Storage-Frage hält "höchstens ein Band je 256 abwesende Storages" (2 für
+  301). Die Löschaufträge gehen je Storage einzeln: L-36-04. Die Zeile nennt
+  alle IDs: L-36-03.
+- Synthetische Zeilen (file_id 95 000 000 ff., Storages 16 und 900 001 ff.)
+  über die Store-API angelegt, nach dem Abarbeiten der Löschaufträge per SQL
+  wieder entfernt; Endstand lebend 2/3/4 = 59/371/49 wie vorher,
+  `vanished_storages` leer.
+- **Urteil:** im gewöhnlichen Fall +0,26 s und 2 Aufrufe; 300 gelöschte
+  Storages in einer Runde 19 s, einmalig, nachts und hinter dem Ruhetor.
+  In Ordnung, mit den zwei LOWs.
+
+### P4 Pixel-Zweig
+
+- **Quelltext:** `_refused_by_pillow` steht nur im `except
+  Image.DecompressionBombError` von `extract_image` (Zeile 266), das zweite
+  `Image.open(path, mode="r")` nur dort.
+- **Gezählt** (Image.open umwickelt): normales PNG 800 x 600 **1** Öffnung,
+  `honest_large_jpeg` (über 100 MP, ehrlich) 2, `png_bomb` 2.
+- **Zeit** `png_bomb` im Prozess, 20 Läufe: p50 **0,32 ms**, p95 0,93 ms, max
+  7,03 ms; Urteil `skipped/blocked_malicious/image_pixels`.
+- **Urteil:** in Ordnung.
+
+### P5 Datenbankabfragen je Poll
+
+- **Messung:** `occ config:system:set query_log_file --value=/tmp/q3612.log`,
+  `query_log_file_requestid yes` (später `query_log_file_backtrace yes` für
+  die Zuordnung), 1 Aufwärmaufruf, dann 5 x `GET
+  /index.php/apps/findling/admin/overview` als admin mit Session, je 87 bis
+  131 ms. Abfragen je Aufruf nach Request-ID: **169, 169, 169, 170, 169**
+  (34-AUDIT: 186).
+- **Zuordnung (Backtrace):** 126 der 172 Zeilen eines Aufrufs kommen über
+  `AdminViewService::examples` → `PathResolverService::describeMany` (81
+  Beispielzeilen in 12 Gruppen, je `getMountsForFileId` plus Nutzer), der Rest
+  sind Zähler (`oc_findling_file_state` 16, `oc_findling_queue` 12) und Kern.
+  Obergrenze: `EXAMPLES_PER_GROUP` = 20 je Gruppe, Gruppen aus der
+  geschlossenen Liste (25 Gründe); hochgerechnet mit 1,56 Abfragen je
+  Beispielzeile höchstens rund 830 je Aufruf.
+- **Urteil: kein Release-Blocker.** Gedeckelt durch Konstanten (T-04-34), nur
+  während eine Admin-Seite offen ist (Takt 5 s aktiv, 30 s im Leerlauf), kein
+  Nutzerpfad, gemessene Antwort 0,1 s. Bleibt Deferred für v1.6
+  (Bündelung der Mount-Abfragen in `describeMany`), keine Owner-Frage.
+- **Rückbau:** `config:system:delete` für alle drei Schlüssel,
+  `config:system:get query_log_file` Exit 1, `/tmp/q3612.log` gelöscht.
+
 ## Befunde
 
 ### L-36-01 (LOW): Fünf verankerte PHP-Formprüfungen ohne `D` lassen ein abschließendes `\n` durch
