@@ -290,6 +290,25 @@ class ExtractionOutcome:
         return cls.failed(Reason.CORRUPT, detail=detail)
 
 
+# The word libxml2 ("Maximum entity amplification factor exceeded") and expat
+# ("limit on input amplification factor ... breached") both use when entity
+# expansion grows past a multiple of the input (36-WORTLAUT.md A3, xml_entities).
+_AMPLIFICATION: Final = "amplification"
+
+
+def is_entity_bomb(error: BaseException) -> bool:
+    """True for a parser exception that reports entity amplification: an XML entity bomb.
+
+    The one place of this rule, for odf.py and office.py (D-36-17). The message
+    is compared and nothing else: it is never stored, returned or logged,
+    because the parser quotes line, column and sometimes text of the file in it
+    (T-36-30). A test raises the real exceptions of lxml and expat, so a library
+    that changes its wording turns that test red instead of letting the bomb
+    fall back to xml_invalid unnoticed.
+    """
+    return _AMPLIFICATION in str(error)
+
+
 def is_sidecar_name(name: str) -> bool:
     """True for the base name of a macOS AppleDouble file or an Office lock stub.
 

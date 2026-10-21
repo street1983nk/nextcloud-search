@@ -23,17 +23,28 @@ off entity resolution, network access and DTD loading, and together they close
 XXE and parser driven SSRF (T-02-83). A test measures this against a parser built
 without them: the same document leaks a local file through that one and does not
 through this one.
+
+**Two attack signatures end the file as skipped(blocked_malicious)** (D-36-17,
+finding F3). A directory of more than ARCHIVE_MAX_ENTRIES records is
+``package_entries``: it is counted by archive.count_central_directory before
+ZipFile builds one ZipInfo per record, which for a million records costs
+hundreds of MiB before anything else could count them. An entity expansion
+that libxml2 refuses as amplification is ``xml_entities``; with entity
+resolution off it still counts the expansion, and the refusal is the proof.
 """
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
 from zipfile import BadZipFile, ZipFile
 
 from lxml import etree  # pyright: ignore[reportAttributeAccessIssue]
 
-from findling.config import EXTRACT_ARCHIVE_MEMBER_MAX_BYTES
+from findling.config import ARCHIVE_MAX_ENTRIES, EXTRACT_ARCHIVE_MEMBER_MAX_BYTES
+from findling.extract import archive
 from findling.extract.dispatch import cap_text
-from findling.extract.errors import ExtractionOutcome, Reason
+from findling.extract.errors import ExtractionOutcome, Reason, is_entity_bomb
 
 # The single part of the archive that is read. Its name is fixed by the
 # OpenDocument specification, so this is a constant and not a search.
@@ -50,6 +61,23 @@ _TEXT_ELEMENTS = (f"{{{_TEXT_NAMESPACE}}}p", f"{{{_TEXT_NAMESPACE}}}h")
 _PARSER = etree.XMLParser(resolve_entities=False, no_network=True, load_dtd=False)
 
 
+def _too_many_entries(path: str) -> bool:
+    """True when the directory holds more than ARCHIVE_MAX_ENTRIES records, counted before ZipFile.
+
+    A directory the count calls corrupt, or a file that does not open, is left
+    to zipfile below, whose exception carries the better diagnosis; a directory
+    longer than ARCHIVE_MAX_CENTRAL_DIRECTORY_BYTES is too many entries as well.
+    """
+    try:
+        with Path(path).open("rb") as handle:
+            size = os.fstat(handle.fileno()).st_size
+            return archive.count_central_directory(handle, size, limit=ARCHIVE_MAX_ENTRIES) > ARCHIVE_MAX_ENTRIES
+    except archive.OverLimit:
+        return True
+    except (archive.CorruptDirectory, OSError):
+        return False
+
+
 def extract_odf(path: str) -> ExtractionOutcome:
     """The text of an ODT, ODS or ODP file.
 
@@ -60,15 +88,17 @@ def extract_odf(path: str) -> ExtractionOutcome:
     Defined at module level so it survives the process boundary of the extraction
     child.
     """
+    if _too_many_entries(path):
+        return ExtractionOutcome.skipped(Reason.BLOCKED_MALICIOUS, detail="package_entries")
     try:
-        with ZipFile(path) as archive:
+        with ZipFile(path) as package:
             # The declared size is checked before a byte is decompressed: a
             # bomb names its real size in the archive directory, and reading
             # first would be the attack (security audit M4). zipfile enforces
             # the declared size on read, so the check cannot be lied past.
-            if archive.getinfo(_CONTENT_PART).file_size > EXTRACT_ARCHIVE_MEMBER_MAX_BYTES:
+            if package.getinfo(_CONTENT_PART).file_size > EXTRACT_ARCHIVE_MEMBER_MAX_BYTES:
                 return ExtractionOutcome.skipped(Reason.TOO_LARGE)
-            content = archive.read(_CONTENT_PART)
+            content = package.read(_CONTENT_PART)
     except BadZipFile as error:
         return ExtractionOutcome.from_exception(error)
     except KeyError:
@@ -80,6 +110,8 @@ def extract_odf(path: str) -> ExtractionOutcome:
     try:
         root = etree.fromstring(content, parser=_PARSER)
     except etree.XMLSyntaxError as error:
+        if is_entity_bomb(error):
+            return ExtractionOutcome.skipped(Reason.BLOCKED_MALICIOUS, detail="xml_entities")
         # Its own reason on purpose: a package that will not open is a different
         # repair job from a package that opens and holds nonsense.
         return ExtractionOutcome.from_exception(error)

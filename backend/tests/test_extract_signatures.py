@@ -18,35 +18,60 @@ Here every edge of every rule stands on its own:
   display name.
 * **What stays a limit (answer O7).** Depth, entry count and the declared sum
   keep archive_limit.
+* **package_entries and xml_entities (finding F3).** An ODF or OOXML package
+  with more than ARCHIVE_MAX_ENTRIES directory records is counted before
+  ZipFile is ever called; an XML part whose parser reports entity
+  amplification is the entity bomb. Both rules are proven with real
+  exceptions of lxml and expat, so a changed library message turns a test red
+  instead of falling back to xml_invalid unnoticed.
 """
 
 from __future__ import annotations
 
 import inspect
 import io
+import logging
 import warnings
+import xml.etree.ElementTree as ElementTree
 import zipfile
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
+from typing import Any
 
+import openpyxl
+import pptx
 import pytest
+from lxml import etree  # pyright: ignore[reportAttributeAccessIssue]
 
 from findling import config
 from findling.config import (
     ARCHIVE_MALICIOUS_RATIO,
+    ARCHIVE_MAX_ENTRIES,
     ARCHIVE_MAX_RATIO,
     ARCHIVE_RATIO_MIN_BYTES,
     settings,
 )
-from findling.extract import archive
+from findling.extract import archive, odf, office
 from findling.extract.archive import extract_zip
-from findling.extract.errors import ExtractionOutcome, Reason, State
+from findling.extract.errors import ExtractionOutcome, Reason, State, is_entity_bomb
 from hostile import (
     ATTACK_RATIO,
+    DOCX_DOCUMENT,
+    ODT_CONTENT,
+    PPTX_SLIDE,
+    XLSX_SHEET,
     Member,
     _same_offset_twice,
+    billion_laughs_xml,
     build_zip,
+    docx_with,
+    odt_with,
+    package_with_entries,
+    pptx_with,
+    quadratic_blowup_xml,
     text_member,
+    xlsx_with,
+    xml_text,
     zip_depth_three,
     zip_entries,
     zip_moderate_ratio_member,
@@ -341,3 +366,201 @@ def test_a_lying_huge_declaration_is_an_archive_limit_before_the_ratio(tmp_path:
 def test_an_over_limit_without_a_signature_carries_no_code() -> None:
     assert archive.OverLimit().signature is None
     assert archive.OverLimit("zip_ratio").signature == "zip_ratio"
+
+
+# -- package_entries (F3) ---------------------------------------------------------------
+
+_READERS: dict[str, Callable[[str], ExtractionOutcome]] = {
+    "docx": office.extract_docx,
+    "pptx": office.extract_pptx,
+    "xlsx": office.extract_xlsx,
+    "odt": odf.extract_odf,
+}
+
+
+def _judged(read: Callable[[str], ExtractionOutcome], path: Path) -> ExtractionOutcome:
+    """A reader as the child calls it: what escapes is translated at the boundary."""
+    try:
+        return read(str(path))
+    except Exception as error:  # the boundary of the sandbox, in this process
+        return ExtractionOutcome.from_exception(error)
+
+
+def _package(tmp_path: Path, kind: str, count: int) -> Path:
+    # package_with_entries knows the first part of docx, xlsx and odt; a pptx
+    # names the same [Content_Types].xml as the other two OOXML formats.
+    path = tmp_path / f"paket-{kind}.part"
+    path.write_bytes(package_with_entries("docx" if kind == "pptx" else kind, count))
+    return path
+
+
+@pytest.fixture
+def no_zipfile(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    calls: list[str] = []
+
+    def refuse(*args: Any, **kwargs: Any) -> zipfile.ZipFile:
+        calls.append("ZipFile")
+        raise AssertionError("ZipFile must not be reached")
+
+    for module in (odf, office, zipfile):
+        monkeypatch.setattr(module, "ZipFile", refuse)
+    return calls
+
+
+@pytest.mark.parametrize("kind", list(_READERS))
+def test_a_package_of_10001_records_is_blocked_before_zipfile(kind: str, tmp_path: Path, no_zipfile: list[str]) -> None:
+    path = _package(tmp_path, kind, ARCHIVE_MAX_ENTRIES + 1)
+
+    outcome = _READERS[kind](str(path))
+
+    _blocked(outcome, "package_entries")
+    assert no_zipfile == []
+
+
+@pytest.mark.parametrize("kind", list(_READERS))
+def test_a_package_of_a_million_records_is_blocked_before_zipfile(
+    kind: str, tmp_path: Path, no_zipfile: list[str]
+) -> None:
+    # The directory of a million records is longer than
+    # ARCHIVE_MAX_CENTRAL_DIRECTORY_BYTES: the count ends at its length.
+    path = _package(tmp_path, kind, 1_000_000)
+
+    _blocked(_READERS[kind](str(path)), "package_entries")
+    assert no_zipfile == []
+
+
+@pytest.mark.parametrize("kind", list(_READERS))
+def test_a_package_of_10000_records_is_left_to_the_loader(kind: str, tmp_path: Path) -> None:
+    outcome = _judged(_READERS[kind], _package(tmp_path, kind, ARCHIVE_MAX_ENTRIES))
+
+    assert outcome.reason is not Reason.BLOCKED_MALICIOUS
+    assert outcome.state is State.FAILED
+
+
+@pytest.mark.parametrize("kind", list(_READERS))
+def test_a_directory_the_count_calls_corrupt_is_left_to_the_loader(kind: str, tmp_path: Path) -> None:
+    path = tmp_path / "kaputt.part"
+    path.write_bytes(b"PK\x03\x04 kein Verzeichnis")
+    with path.open("rb") as handle, pytest.raises(archive.CorruptDirectory):
+        archive.count_central_directory(handle, path.stat().st_size, limit=ARCHIVE_MAX_ENTRIES)
+
+    outcome = _judged(_READERS[kind], path)
+
+    assert (outcome.state, outcome.reason) == (State.FAILED, Reason.CORRUPT)
+
+
+def test_every_reader_counts_before_it_opens_the_package() -> None:
+    for module in (odf, office):
+        count = inspect.getsource(module._too_many_entries)
+        assert "count_central_directory" in count
+        assert "ZipFile(" not in count
+    for source in (inspect.getsource(odf.extract_odf), inspect.getsource(office._refused_before_the_loader)):
+        assert source.index("_too_many_entries(path)") < source.index("ZipFile(")
+    for reader in (office.extract_docx, office.extract_pptx, office.extract_xlsx):
+        source = inspect.getsource(reader)
+        assert "_refused_before_the_loader(path" in source
+        assert "ZipFile(" not in source
+
+
+# -- xml_entities (F3) -------------------------------------------------------------------
+
+_WRAPS: dict[str, tuple[Callable[[bytes | None], bytes], bytes]] = {
+    "odt": (odt_with, ODT_CONTENT),
+    "docx": (docx_with, DOCX_DOCUMENT),
+    "pptx": (pptx_with, PPTX_SLIDE),
+    "xlsx": (xlsx_with, XLSX_SHEET),
+}
+_BOMBS = {"billion-laughs": billion_laughs_xml, "quadratic-blowup": quadratic_blowup_xml}
+
+
+@pytest.mark.parametrize("bomb", list(_BOMBS))
+@pytest.mark.parametrize("kind", list(_WRAPS))
+def test_an_entity_bomb_in_a_package_is_blocked(
+    kind: str, bomb: str, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.DEBUG)
+    wrap, template = _WRAPS[kind]
+    path = tmp_path / f"bombe-{kind}.part"
+    path.write_bytes(wrap(_BOMBS[bomb](template=template)))
+
+    outcome = _READERS[kind](str(path))
+
+    _blocked(outcome, "xml_entities")
+    assert "amplification" not in repr(outcome)
+    assert "amplification" not in caplog.text
+
+
+@pytest.mark.parametrize("kind", list(_WRAPS))
+def test_an_ordinary_syntax_error_keeps_its_verdict(kind: str, tmp_path: Path) -> None:
+    wrap, template = _WRAPS[kind]
+    path = tmp_path / f"kaputt-{kind}.part"
+    path.write_bytes(wrap(xml_text(b"<offen", template)))
+
+    outcome = _judged(_READERS[kind], path)
+
+    # lxml says xml_invalid, expat under openpyxl corrupt: the verdicts the
+    # corpus of 36-07 measured before this plan.
+    expected = Reason.CORRUPT if kind == "xlsx" else Reason.XML_INVALID
+    assert (outcome.state, outcome.reason) == (State.FAILED, expected)
+
+
+def test_lxml_reports_amplification_and_the_rule_sees_it() -> None:
+    parser = etree.XMLParser(resolve_entities=False, no_network=True, load_dtd=False)
+    with pytest.raises(etree.XMLSyntaxError) as raised:
+        etree.fromstring(billion_laughs_xml(), parser=parser)
+
+    assert is_entity_bomb(raised.value)
+
+
+def test_expat_reports_amplification_and_the_rule_sees_it() -> None:
+    with pytest.raises(ElementTree.ParseError) as raised:
+        ElementTree.fromstring(billion_laughs_xml())  # noqa: S314 - the real expat exception is the point
+
+    assert is_entity_bomb(raised.value)
+
+
+def test_an_ordinary_syntax_error_is_no_entity_bomb() -> None:
+    with pytest.raises(etree.XMLSyntaxError) as of_lxml:
+        etree.fromstring(b"<r><offen</r>")
+    with pytest.raises(ElementTree.ParseError) as of_expat:
+        ElementTree.fromstring(b"<r><offen</r>")  # noqa: S314 - the real expat exception is the point
+
+    assert not is_entity_bomb(of_lxml.value)
+    assert not is_entity_bomb(of_expat.value)
+    assert not is_entity_bomb(ValueError("nothing of the kind"))
+
+
+# -- the counter-check: real packages written by their own libraries -------------------
+
+
+def test_a_large_real_xlsx_stays_indexed(tmp_path: Path) -> None:
+    book = openpyxl.Workbook()
+    sheet = book.active
+    assert sheet is not None
+    for row in range(5_000):
+        sheet.append([f"zeile{row}", row, row * 0.5, "tabellenwort"])
+    for number in range(20):
+        book.create_sheet(f"blatt{number}").append(["blattwort", number])
+    path = tmp_path / "gross.part"
+    book.save(path)
+
+    outcome = office.extract_xlsx(str(path))
+
+    assert outcome.state is State.INDEXED
+    assert "tabellenwort" in outcome.text
+
+
+def test_a_large_real_pptx_stays_indexed(tmp_path: Path) -> None:
+    deck = pptx.Presentation()
+    for number in range(200):
+        slide = deck.slides.add_slide(deck.slide_layouts[1])
+        title = slide.shapes.title
+        assert title is not None
+        title.text = f"folie{number} foliewort"
+    path = tmp_path / "gross.part"
+    deck.save(str(path))
+
+    outcome = office.extract_pptx(str(path))
+
+    assert outcome.state is State.INDEXED
+    assert "folie199" in outcome.text

@@ -2185,8 +2185,17 @@ PHP_TREE_HASH_TODAY = "60821e1a430226b2530194ac098bd7b50cc28df4be5a978b0ba85b9b6
 # the code. No file came or went, so PACKAGE_FILES_TODAY stays at 80. The PHP
 # pair does not move. Recomputed independently with find, sort, tr and
 # sha256sum over the CRLF normalised tree: 9b51ba91... both ways.
+#
+# Moved on 2026-10-21 a second time by Plan 36-08 (HART-06, D-36-17, F3):
+# extract/errors.py carries is_entity_bomb, the one place of the
+# amplification rule; extract/odf.py and extract/office.py count the central
+# directory before any ZipFile (package_entries over ARCHIVE_MAX_ENTRIES) and
+# end an XML part that libxml2 or expat refuses as amplification as
+# xml_entities. No file came or went, so PACKAGE_FILES_TODAY stays at 80. The
+# PHP pair does not move. Recomputed independently with find, sort, tr and
+# sha256sum over the CRLF normalised tree: d832586d... both ways.
 PACKAGE_FILES_TODAY = 80
-PACKAGE_TREE_HASH_TODAY = "9b51ba915a9c103aabb18f6a2a7400089d7802482ccda8b6e1c1c3590d4984fc"
+PACKAGE_TREE_HASH_TODAY = "d832586d8f3a92197e385e1c2dabacb3a5b7eb541bec06cc70ae36fb9f27c354"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

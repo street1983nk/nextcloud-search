@@ -157,7 +157,8 @@ def test_the_seed_word_is_drawn_more_than_once() -> None:
 # above: a mail with its word only in the HTML part, a ZIP file with its word in
 # innen/notiz.txt, a Word 97 and an Excel 97 file, a HEIC photo with its word as
 # pixels, a Word 97 file under a .docx name, a text file whose size in the file
-# cache is made stale on purpose, and a small ZIP bomb without any word. What
+# cache is made stale on purpose, and a small ZIP bomb without any word (depth 3
+# alone since plan 36-08, D-36-17, answer O4 (a): no zero filler). What
 # 1.4.2 makes of them is read out of the code of the tag (31-12-SUMMARY); what
 # has to hold of the bytes is asked here, because a wrong seed would make the
 # upgrade proof green or red for a reason that has nothing to do with 1.5.
@@ -332,28 +333,31 @@ def test_the_bomb_carries_no_seed_word() -> None:
             assert word not in text, word
 
 
-def test_the_bomb_is_three_levels_deep_with_a_zero_member_over_the_ratio() -> None:
-    # The two limits it crosses, read off the bytes rather than believed of the
-    # generator: a ZIP in a ZIP in a ZIP that ends in a text file, and next to
-    # them one member of zero bytes compressed far past the ratio of 31-08.
+def _over_the_ratio(info: zipfile.ZipInfo) -> bool:
+    return info.file_size >= archive.ARCHIVE_RATIO_MIN_BYTES and info.file_size > archive.ARCHIVE_MAX_RATIO * max(
+        info.compress_size, 1
+    )
+
+
+def test_the_bomb_is_three_levels_deep_without_a_member_over_the_ratio() -> None:
+    # The one limit it crosses, read off the bytes rather than believed of the
+    # generator: a ZIP in a ZIP in a ZIP that ends in a text file, exactly one
+    # nested ZIP per level and no member over the ratio of 31-08 on any level
+    # (D-36-17, plan 36-08, answer O4 (a): the zero member is gone).
     with zipfile.ZipFile(_seed(SEED_BOMB)) as outer:
-        infos = {info.filename: info for info in outer.infolist()}
-        zeros = [info for info in infos.values() if not info.filename.endswith(".zip")]
-        assert len(zeros) == 1
-        member = zeros[0]
-        assert member.file_size >= archive.ARCHIVE_RATIO_MIN_BYTES
-        assert member.file_size > archive.ARCHIVE_MAX_RATIO * member.compress_size
-        assert outer.read(member) == b"\0" * member.file_size
-        nested = [name for name in infos if name.endswith(".zip")]
-        assert len(nested) == 1
-        middle = outer.read(nested[0])
+        (middle_name,) = outer.namelist()
+        assert middle_name.endswith(".zip")
+        assert not any(_over_the_ratio(info) for info in outer.infolist())
+        middle = outer.read(middle_name)
     with zipfile.ZipFile(io.BytesIO(middle)) as level_two:
         (inner_name,) = level_two.namelist()
         assert inner_name.endswith(".zip")
+        assert not any(_over_the_ratio(info) for info in level_two.infolist())
         inner = level_two.read(inner_name)
     with zipfile.ZipFile(io.BytesIO(inner)) as level_three:
         (note,) = level_three.namelist()
         assert note.endswith(".txt")
+        assert not any(_over_the_ratio(info) for info in level_three.infolist())
     assert archive.ARCHIVE_MAX_DEPTH == 2
 
 
@@ -366,16 +370,17 @@ def test_the_bomb_is_an_archive_limit_for_this_code(tmp_path: Path) -> None:
     assert outcome.reason is Reason.ARCHIVE_LIMIT
 
 
-def test_each_limit_alone_judges_the_bomb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    # The depth alone, the ratio alone, and with both lifted the file is an
-    # ordinary archive again: the verdict above comes from these two limits and
-    # from nothing else, so a change to either one turns this gate red.
+def test_the_depth_alone_judges_the_bomb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The depth alone, and with it lifted the file is an ordinary archive
+    # again: the verdict above comes from this limit and from nothing else, so
+    # a change to it turns this gate red. The ratio part of the gate is gone
+    # with the zero member: the seed has no member over the ratio since
+    # D-36-17 (plan 36-08, answer O4 (a)).
     path = _copied(SEED_BOMB, tmp_path)
-    monkeypatch.setattr(archive, "ARCHIVE_MAX_RATIO", 10**9)
     assert archive.extract_zip(str(path)).reason is Reason.ARCHIVE_LIMIT
     monkeypatch.setattr(archive, "ARCHIVE_MAX_DEPTH", 10)
     assert archive.extract_zip(str(path)).state is State.INDEXED
-    monkeypatch.setattr(archive, "ARCHIVE_MAX_RATIO", 100)
+    monkeypatch.setattr(archive, "ARCHIVE_MAX_DEPTH", 2)
     assert archive.extract_zip(str(path)).reason is Reason.ARCHIVE_LIMIT
 
 

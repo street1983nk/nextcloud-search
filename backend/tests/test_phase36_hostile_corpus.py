@@ -227,19 +227,10 @@ _PACKAGE_CASES: dict[str, Case] = {
     "xlsx-of-a-million-records": Case(lambda: package_with_entries("xlsx"), XLSX, BLOCKED, "package_entries", "A3"),
 }
 
-# A million records are not run before 36-08 counts them: today ZipFile builds
-# one ZipInfo per record first, measured at 55.9 MiB and 3.3 s per 100 000
-# (config.py), so about 560 MiB and half a minute per case, three times. That
-# is the attack itself, and the case would hold the RAM of the test box for it.
-# The 10 001 record cases above run now and show the same gap in milliseconds.
-_PACKAGE_PENDING = {
-    "docx-of-10001-records": pytest.mark.xfail(strict=True, reason="built in 36-08"),
-    "odt-of-10001-records": pytest.mark.xfail(strict=True, reason="built in 36-08"),
-    "xlsx-of-10001-records": pytest.mark.xfail(strict=True, reason="built in 36-08"),
-    "docx-of-a-million-records": pytest.mark.xfail(strict=True, run=False, reason="built in 36-08"),
-    "odt-of-a-million-records": pytest.mark.xfail(strict=True, run=False, reason="built in 36-08"),
-    "xlsx-of-a-million-records": pytest.mark.xfail(strict=True, run=False, reason="built in 36-08"),
-}
+# A million records run since plan 36-08 counts them before ZipFile: the count
+# stops at the length of the directory, so no ZipInfo is ever built (before,
+# ZipFile built one per record, about 560 MiB and half a minute per case).
+_PACKAGE_PENDING: dict[str, Any] = {}
 
 
 @pytest.mark.parametrize("case", _params(_PACKAGE_CASES, _PACKAGE_PENDING))
@@ -279,8 +270,6 @@ for _kind, _mime, _wrap, _template in (
         "xml_entities",
         "A3, F3",
     )
-    _XML_PENDING[f"billion-laughs-{_kind}"] = pytest.mark.xfail(strict=True, reason="built in 36-08")
-    _XML_PENDING[f"quadratic-blowup-{_kind}"] = pytest.mark.xfail(strict=True, reason="built in 36-08")
 
 # 10 000 nested elements: no signature, a named verdict (assumption A3 of the
 # research, measured on 2026-10-21). libxml2 stops at a depth of 256 without

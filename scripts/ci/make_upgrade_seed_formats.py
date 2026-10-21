@@ -24,17 +24,18 @@ repository, so a hit after the upgrade names exactly one file (SEED_WORDS):
 - ``seed-stale-size.txt``, a short text. The workflow makes its size in the
   file cache stale, and that is what lets 1.4.2 give up on it.
 - ``seed-bomb.zip`` (BOMB), a small ZIP bomb without any word: a ZIP in a ZIP
-  in a ZIP that ends in a text file, one level past ARCHIVE_MAX_DEPTH, and next
-  to it one member of zero bytes compressed far past ARCHIVE_MAX_RATIO. Both
-  limits are independent of any measured rate, and either one alone makes the
-  file skipped(archive_limit) for the code of this phase.
+  in a ZIP that ends in a short text file, one level past ARCHIVE_MAX_DEPTH,
+  and nothing else. The depth alone makes the file skipped(archive_limit), a
+  limit and no attack signature. Until plan 36-08 a member of zero bytes at
+  158.7 to 1 stood next to it; since D-36-17 (answer O4 (a)) the seed carries
+  no filler, so the verdict has exactly one cause and no bomb like filler lives
+  in the repository (D-36-01).
 
 Deterministic where the format allows it: the mail, the two ZIP files and the
 text file are written byte for byte the same on every run, and a test writes
-them again and compares. The ZIP files are put together by hand, with fixed
-dates, a fixed system byte and the zero member as a deflate stream encoded here
-with the fixed Huffman table, so neither the zlib of the machine nor the
-platform of the zipfile module changes a byte. The photo is encoded by libheif
+them again and compares. The ZIP files are put together by hand, stored and
+with fixed dates and a fixed system byte, so neither the zlib of the machine
+nor the platform of the zipfile module changes a byte. The photo is encoded by libheif
 and the three copies come from LibreOffice; neither promises the same bytes
 twice, so the test pins their SHA-256 instead. The photo is rendered only when
 it is missing or when ``--render-photo`` asks for it, so an ordinary run leaves
@@ -91,13 +92,6 @@ PHOTO_LINES = ("fotoquendel", "Urlaub am See", "fotoquendel")
 PHOTO_FONT = Path("testdata") / "fonts" / "DejaVuSans.ttf"
 PHOTO_QUALITY = 90
 
-# One mebibyte of zeros plus a little, chosen so that everything after the
-# first literal is a whole number of matches of 258 bytes: 1 + 258 * 4065. It
-# is at least ARCHIVE_RATIO_MIN_BYTES (1 MiB), the size from which the ratio is
-# asked at all.
-ZERO_MATCHES = 4065
-ZERO_BYTES = 1 + 258 * ZERO_MATCHES
-
 # 1980-01-01 00:00:00 in the DOS format of the ZIP headers, the earliest date the
 # format can carry and the same on every machine.
 _DOS_TIME = 0
@@ -107,7 +101,6 @@ _MADE_BY = (3 << 8) | 20
 _NEEDED = 20
 _EXTERNAL = 0o100644 << 16
 _STORED = 0
-_DEFLATED = 8
 
 
 def _mail() -> bytes:
@@ -135,55 +128,6 @@ def _mail() -> bytes:
 def _stale_text() -> bytes:
     word = SEED_WORDS["seed-stale-size.txt"]
     return f"Das {word} steht in einer kleinen Notiz im Keller.\n".encode("ascii")
-
-
-class _Bits:
-    """A bit writer in the order of RFC 1951: least significant bit first."""
-
-    def __init__(self) -> None:
-        self._out = bytearray()
-        self._value = 0
-        self._count = 0
-
-    def put(self, value: int, count: int) -> None:
-        """Write ``count`` bits of ``value``, least significant first (header, extra bits)."""
-        for shift in range(count):
-            self._value |= ((value >> shift) & 1) << self._count
-            self._count += 1
-            if self._count == 8:
-                self._out.append(self._value)
-                self._value = 0
-                self._count = 0
-
-    def code(self, value: int, count: int) -> None:
-        """Write a Huffman code, most significant bit first (RFC 1951, 3.1.1)."""
-        for shift in range(count - 1, -1, -1):
-            self.put((value >> shift) & 1, 1)
-
-    def done(self) -> bytes:
-        if self._count:
-            self._out.append(self._value)
-        return bytes(self._out)
-
-
-def _zeros_deflated() -> bytes:
-    """ZERO_BYTES zeros as one raw deflate block with the fixed Huffman table.
-
-    One literal 0, then ZERO_MATCHES matches of length 258 at distance 1, then
-    the end of the block. In the fixed table literal 0 is the eight bit code
-    0x30, length 258 is symbol 285 with the eight bit code 0xC5 and no extra
-    bits, distance 1 is the five bit code 0, the end of the block the seven bit
-    code 0 (RFC 1951, 3.2.6).
-    """
-    bits = _Bits()
-    bits.put(1, 1)  # BFINAL
-    bits.put(1, 2)  # BTYPE 01, fixed Huffman codes
-    bits.code(0x30, 8)  # literal 0
-    for _ in range(ZERO_MATCHES):
-        bits.code(0xC5, 8)  # length 258
-        bits.code(0, 5)  # distance 1
-    bits.code(0, 7)  # end of block
-    return bits.done()
 
 
 def _zip(members: list[tuple[str, bytes, int, bytes]]) -> bytes:
@@ -245,13 +189,10 @@ def _archive() -> bytes:
 
 
 def _bomb() -> bytes:
-    """Three levels of ZIP and a zero member past the ratio, no word anywhere."""
+    """Three levels of ZIP that end in a short note, no word anywhere and no filler (D-36-17, O4 (a))."""
     level_three = _zip([_stored("notiz.txt", b"Ganz unten liegt nur eine kurze Notiz.\n")])
     level_two = _zip([_stored("ebene3.zip", level_three)])
-    zeros = _zeros_deflated()
-    if zlib.decompress(zeros, -15) != b"\0" * ZERO_BYTES:
-        raise ValueError("the hand made deflate stream does not inflate to the zeros it stands for")
-    return _zip([_stored("ebene2.zip", level_two), ("nullen.bin", b"\0" * ZERO_BYTES, _DEFLATED, zeros)])
+    return _zip([_stored("ebene2.zip", level_two)])
 
 
 def render_deterministic() -> dict[str, bytes]:

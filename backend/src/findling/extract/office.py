@@ -25,34 +25,79 @@ same kind of border: the cells of a nested table are not walked.
 to ExtractionOutcome.from_exception, which is the single place that knows
 exception classes. A format module that invented its own reason codes would be
 the first step towards two lists that disagree.
+
+**Two attack signatures are the exception, and both are named before the
+taxonomy sees them** (D-36-17, finding F3). A directory of more than
+ARCHIVE_MAX_ENTRIES records ends as skipped(blocked_malicious) with the detail
+``package_entries``, counted before ZipFile builds one ZipInfo per record. An
+XML part whose parser refuses entity amplification (lxml under python-docx and
+python-pptx, expat under openpyxl, which raises only while the rows are walked)
+ends with ``xml_entities``; any other XML error is raised on to from_exception
+exactly as before. There is no ratio rule for a package: a real presentation
+with large uniform images is packed densely, and the declared sizes are capped
+below anyway.
 """
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
+from xml.etree.ElementTree import ParseError
 from zipfile import BadZipFile, ZipFile
 
 import docx
 import openpyxl
 import pptx
 from docx.opc.exceptions import PackageNotFoundError as DocxPackageNotFound
+from lxml import etree  # pyright: ignore[reportAttributeAccessIssue]
 from pptx.exc import PackageNotFoundError as PptxPackageNotFound
 
 from findling import config
-from findling.config import EXTRACT_ARCHIVE_MEMBER_MAX_BYTES, EXTRACT_ARCHIVE_TOTAL_MAX_BYTES
+from findling.config import ARCHIVE_MAX_ENTRIES, EXTRACT_ARCHIVE_MEMBER_MAX_BYTES, EXTRACT_ARCHIVE_TOTAL_MAX_BYTES
+from findling.extract import archive
 from findling.extract.dispatch import cap_text
-from findling.extract.errors import ExtractionOutcome, Reason
+from findling.extract.errors import ExtractionOutcome, Reason, is_entity_bomb
 
 # What a package that is not a package raises, measured against a file that is no
 # archive at all and against a truncated one. Both go to from_exception rather
 # than to a reason picked here.
 _BROKEN_PACKAGE = (BadZipFile, DocxPackageNotFound, PptxPackageNotFound)
 
+# What the XML parsers of the three loaders raise: lxml for python-docx and
+# python-pptx, expat through xml.etree for openpyxl.
+_XML_ERROR = (etree.XMLSyntaxError, ParseError)
 
-def _too_large_to_read(path: str, *, every_part_is_read: bool) -> ExtractionOutcome | None:
-    """The bomb check, before any loader touches the package.
 
-    The archive directory declares the uncompressed size of every part, and the
+def _entity_bomb_or_raise(error: Exception) -> ExtractionOutcome:
+    """xml_entities for an entity bomb; any other XML error goes on to from_exception unchanged."""
+    if is_entity_bomb(error):
+        return ExtractionOutcome.skipped(Reason.BLOCKED_MALICIOUS, detail="xml_entities")
+    raise error
+
+
+def _too_many_entries(path: str) -> bool:
+    """True when the directory holds more than ARCHIVE_MAX_ENTRIES records, counted before ZipFile.
+
+    A directory the count calls corrupt, or a file that does not open, is left
+    to the loader, whose exception carries the better diagnosis; a directory
+    longer than ARCHIVE_MAX_CENTRAL_DIRECTORY_BYTES is too many entries as well.
+    """
+    try:
+        with Path(path).open("rb") as handle:
+            size = os.fstat(handle.fileno()).st_size
+            return archive.count_central_directory(handle, size, limit=ARCHIVE_MAX_ENTRIES) > ARCHIVE_MAX_ENTRIES
+    except archive.OverLimit:
+        return True
+    except (archive.CorruptDirectory, OSError):
+        return False
+
+
+def _refused_before_the_loader(path: str, *, every_part_is_read: bool) -> ExtractionOutcome | None:
+    """The entry count and the bomb check, before any loader touches the package.
+
+    The count comes first and opens no ZipFile (package_entries, F3); every
+    loader below opens one of its own, so this is the one place in front of all
+    of them. The archive directory declares the uncompressed size of every part, and the
     loaders below read whole parts into memory; a bomb therefore has to be
     refused on the declaration, because after the read it is the attack
     (security audit M4). zipfile enforces the declared size on read, so the
@@ -68,9 +113,11 @@ def _too_large_to_read(path: str, *, every_part_is_read: bool) -> ExtractionOutc
     ``openpyxl`` in read only mode streams the sheets instead, so asking it the
     second question would refuse ordinary large exports and prevent nothing.
     """
+    if _too_many_entries(path):
+        return ExtractionOutcome.skipped(Reason.BLOCKED_MALICIOUS, detail="package_entries")
     try:
-        with ZipFile(path) as archive:
-            declared = [info.file_size for info in archive.infolist()]
+        with ZipFile(path) as package:
+            declared = [info.file_size for info in package.infolist()]
     except (BadZipFile, OSError):
         return None
 
@@ -87,10 +134,17 @@ def extract_docx(path: str) -> ExtractionOutcome:
     Defined at module level, like every extractor here, so it survives the
     process boundary of the extraction child.
     """
-    too_large = _too_large_to_read(path, every_part_is_read=True)
-    if too_large is not None:
-        return too_large
+    refused = _refused_before_the_loader(path, every_part_is_read=True)
+    if refused is not None:
+        return refused
 
+    try:
+        return _docx_text(path)
+    except _XML_ERROR as error:
+        return _entity_bomb_or_raise(error)
+
+
+def _docx_text(path: str) -> ExtractionOutcome:
     try:
         document = docx.Document(path)
     except _BROKEN_PACKAGE as error:
@@ -110,10 +164,17 @@ def extract_pptx(path: str) -> ExtractionOutcome:
     them for text raises rather than returning nothing, which is why the question
     is asked before the text is taken.
     """
-    too_large = _too_large_to_read(path, every_part_is_read=True)
-    if too_large is not None:
-        return too_large
+    refused = _refused_before_the_loader(path, every_part_is_read=True)
+    if refused is not None:
+        return refused
 
+    try:
+        return _pptx_text(path)
+    except _XML_ERROR as error:
+        return _entity_bomb_or_raise(error)
+
+
+def _pptx_text(path: str) -> ExtractionOutcome:
     try:
         presentation = pptx.Presentation(path)
     except _BROKEN_PACKAGE as error:
@@ -141,12 +202,21 @@ def extract_xlsx(path: str) -> ExtractionOutcome:
     The two keyword arguments are not tuning, they are the reason this function
     can run in a small container at all; the module docstring above says what
     happens without them. The workbook is closed in a finally, because the read
-    only mode keeps file handles on the archive open.
+    only mode keeps file handles on the archive open. openpyxl parses a sheet
+    only while its rows are walked, so an entity bomb in a sheet is raised by
+    expat inside the walk and not by the loader.
     """
-    too_large = _too_large_to_read(path, every_part_is_read=False)
-    if too_large is not None:
-        return too_large
+    refused = _refused_before_the_loader(path, every_part_is_read=False)
+    if refused is not None:
+        return refused
 
+    try:
+        return _xlsx_text(path)
+    except _XML_ERROR as error:
+        return _entity_bomb_or_raise(error)
+
+
+def _xlsx_text(path: str) -> ExtractionOutcome:
     limit = config.settings().max_cells
     parts: list[str] = []
     seen = 0
