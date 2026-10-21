@@ -270,7 +270,7 @@ release carries these archives as assets, attached in the create call of
 `release.yml` (release checklist REL-05 in `docs/store-listing.md`). Until the
 first release that does, the mirror for the development image
 `ghcr.io/street1983nk/findling_backend:dev` is the pre-release
-https://github.com/street1983nk/nextcloud-search/releases/tag/source-1.5-dev.2.
+https://github.com/street1983nk/nextcloud-search/releases/tag/source-1.5-dev.3.
 
 ## Czech stop word list (Apache Lucene)
 
