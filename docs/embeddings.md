@@ -495,7 +495,8 @@ Alle Angaben mit Stand 04.09.2026 aus der Phasenrecherche.
 
 **Warum dieses Projekt das aufschreibt, statt es zu verschweigen.** Findling
 existiert, weil `fulltextsearch` jahrelang verwaist war und niemand das dort
-stehen hatte. Dieselbe Lage im eigenen Baustein mit einem Absatz zu beantworten,
+stehen hatte; seit 2026 wird es wieder gepflegt, bleibt aber an Elasticsearch
+gekoppelt. Dieselbe Lage im eigenen Baustein mit einem Absatz zu beantworten,
 wäre genau der Fehler, gegen den das Produkt antritt. Die Antwort ist deshalb
 keine Absichtserklärung, sondern eine Datei: `store/vectors.py` ist drei
 Operationen breit, die zwei Auswege oben sind mit Kosten und Nutzen beziffert,

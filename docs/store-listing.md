@@ -2313,6 +2313,309 @@ Abnahme durch den Owner: Wortlaut und Entwurf erteilt am 19.10.2026 (Plan
 
 ---
 
+# Entwurf v1.5.0 (Gesamttext), abgenommen am 20.10.2026
+
+**Owner-Abnahme 20.10.2026 (Option A, alle Empfehlungen (a)); eingespielt in
+beide info.xml, die drei READMEs, CHANGELOG und `docs/embeddings.md` durch Plan
+36-11 am 21.10.2026. Eingereicht ist nichts.** Grundlage: Store-Text 1.4.3, die
+Teilentwürfe der Phasen 30 bis 34 oben, D-36-08 (Profilsatz nennt die Maschine,
+auf der das Backend läuft) und D-36-16 (Zeile Ähnliche Dokumente). Quelle des
+Wortlauts: `.planning/phases/36-haertung-und-store-einreichung-1-5-0/36-WORTLAUT.md`,
+Teil B und Abschnitt E.
+
+Die Teilentwürfe der Phasen 30 bis 34 sind in diesem Gesamttext aufgegangen; sie
+bleiben oben als Historie stehen, ihre offenen Abnahmen schließen mit dieser.
+Der Gesamttext trägt keine Zeile zur Sammelklasse blocked_malicious (O8 (a)),
+die Grenzliste bleibt bei fünf Einträgen (O10 (a)).
+
+## Teil 1: `findling`, en (ohne `lang`)
+
+```
+What Findling does:
+- Full text search in the normal Nextcloud search bar
+- Filter by file type or folder directly in the Nextcloud search
+- OCR for scanned PDFs and images: ten languages available, German, English and French are the default
+- Semantic search: finds documents through paraphrases
+- Similar documents: a link at every hit on the results page lists files with related content
+- Every result is permission-checked by Nextcloud
+- No configuration: the first index run starts on its own
+- Exclude folders or patterns such as *.photoslibrary from the index
+- Performance profiles: Economy by default, Standard and Performance after a pre-check of the hardware
+- Search model: int8 built in, the more accurate fp32 can be downloaded once under Standard and Performance
+- Privacy: everything runs locally, no telemetry, nothing leaves your server
+- Search languages: German and English by default, Spanish, Italian, Dutch, Portuguese and Czech available
+
+Switching from fulltextsearch/Elasticsearch: [steps in the documentation](https://github.com/street1983nk/nextcloud-search/blob/v1.5.0/docs/migrate-from-fulltextsearch.en.md)
+
+Known limitations:
+- Spanish: año and ano are treated as the same word
+- Portuguese: spellings before and after the spelling reform are not unified
+- Compound words are split for German and Dutch only
+- French has no full text analysis chain for document text
+- Czech: no stemming, inflected forms count as separate words
+
+Together with the [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector), Findling forms the retrieval layer for your own RAG: AI assistants search your document contents with exactly the rights of the asking user, and no content leaves your server.
+
+Supported file types:
+- PDF (scanned too), DOC, DOCX, PPTX, XLS, XLSX, ODT, ODS, ODP
+- HTML, RTF, TXT, Markdown, CSV, mails (EML)
+- ZIP files: the files inside, without OCR
+- Images through OCR: JPEG, PNG, TIFF, WebP, HEIC
+
+Requirements:
+- Nextcloud 33 to 35, apps: AppAPI, Findling Backend (External Apps), Findling
+- RAM: 4 GB is enough, 730.2 MB resident after an index run, under a hard 2 GB limit (measured)
+- CPU: 2 cores are enough, amd64 and arm64
+
+Without any change on your side, Findling keeps running as economically as before. Anyone with more hardware can use a profile to free at most half of the machine the backend runs on (Standard profile) or everything but one core (Performance profile).
+
+Enterprise support and paid add-ons: request a quote at admin@infranode.dev
+```
+
+## Teil 2: `findling`, de
+
+```
+Was Findling kann:
+- Volltextsuche über die normale Nextcloud-Suchleiste
+- Filter nach Dateityp oder Ordner direkt in der Nextcloud-Suche
+- Texterkennung für gescannte PDFs und Bilder: zehn Sprachen verfügbar, voreingestellt sind Deutsch, Englisch und Französisch
+- Semantische Suche: findet Dokumente auch über Umschreibungen
+- Ähnliche Dokumente: ein Link an jedem Treffer der Ergebnisseite listet Dateien mit verwandtem Inhalt
+- Jeder Treffer wird von Nextcloud rechtegeprüft
+- Keine Konfiguration: der erste Indexlauf startet von selbst
+- Ordner oder Muster wie *.photoslibrary vom Index ausschließen
+- Leistungsprofile: Sparsam voreingestellt, Standard und Leistung nach einer Vorab-Prüfung der Hardware
+- Suchmodell: int8 eingebaut, das genauere fp32 unter Standard und Leistung einmalig ladbar
+- Datenschutz: alles läuft lokal, keine Telemetrie, nichts verlässt den Server
+- Suchsprachen: Deutsch und Englisch voreingestellt, Spanisch, Italienisch, Niederländisch, Portugiesisch und Tschechisch verfügbar
+
+Umstieg von fulltextsearch/Elasticsearch: [Schritte in der Dokumentation](https://github.com/street1983nk/nextcloud-search/blob/v1.5.0/docs/migrate-from-fulltextsearch.md)
+
+Bekannte Grenzen:
+- Spanisch: año und ano gelten als dasselbe Wort
+- Portugiesisch: Schreibweisen vor und nach der Rechtschreibreform werden nicht vereinheitlicht
+- Zusammengesetzte Wörter werden nur für Deutsch und Niederländisch zerlegt
+- Französisch hat keine eigene Analysekette für den Dokumenttext
+- Tschechisch: keine Stammformreduktion, gebeugte Formen gelten als eigene Wörter
+
+Zusammen mit dem [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) ergibt Findling die Retrieval-Schicht für Ihr eigenes RAG: KI-Assistenten durchsuchen Ihre Dokumentinhalte mit genau den Rechten des fragenden Nutzers, und kein Inhalt verlässt Ihren Server.
+
+Unterstützte Dateitypen:
+- PDF (auch gescannt), DOC, DOCX, PPTX, XLS, XLSX, ODT, ODS, ODP
+- HTML, RTF, TXT, Markdown, CSV, Mails (EML)
+- ZIP-Dateien: die enthaltenen Dateien, ohne Texterkennung
+- Bilder per Texterkennung: JPEG, PNG, TIFF, WebP, HEIC
+
+Anforderungen:
+- Nextcloud 33 bis 35, Apps: AppAPI, Findling Backend (External Apps), Findling
+- RAM: 4 GB genügen, 730,2 MB resident nach einem Indexlauf, unter einer harten 2-GB-Grenze (gemessen)
+- CPU: 2 Kerne genügen, amd64 und arm64
+
+Ohne Zutun läuft Findling unverändert sparsam wie bisher. Wer mehr Hardware hat, gibt per Profil frei: höchstens die Hälfte der Maschine, auf der das Backend läuft (Profil Standard), oder alles bis auf einen Kern (Profil Leistung).
+
+Enterprise-Support und bezahlte Add-ons: Angebot anfordern unter admin@infranode.dev
+```
+
+## Teil 3: `findling`, fr
+
+```
+Ce que Findling sait faire :
+- Recherche plein texte dans la barre de recherche normale de Nextcloud
+- Filtre par type de fichier ou par dossier directement dans la recherche Nextcloud
+- Reconnaissance optique pour les PDF numérisés et les images : dix langues disponibles, allemand, anglais et français par défaut
+- Recherche sémantique : trouve les documents par des périphrases
+- Documents similaires : un lien sur chaque résultat de la page de résultats liste les fichiers au contenu proche
+- Chaque résultat est vérifié par Nextcloud selon vos droits
+- Aucune configuration : la première indexation démarre d'elle-même
+- Exclure de l'index des dossiers ou des motifs comme *.photoslibrary
+- Profils de performance : Économe par défaut, Standard et Performance après une vérification préalable du matériel
+- Modèle de recherche : int8 intégré, le fp32 plus précis se télécharge une fois sous Standard et Performance
+- Confidentialité : tout fonctionne localement, aucune télémétrie, rien ne quitte votre serveur
+- Langues de recherche : allemand et anglais par défaut, espagnol, italien, néerlandais, portugais et tchèque disponibles
+
+Passer de fulltextsearch/Elasticsearch à Findling : [étapes dans la documentation](https://github.com/street1983nk/nextcloud-search/blob/v1.5.0/docs/migrate-from-fulltextsearch.fr.md)
+
+Limites connues :
+- Espagnol : año et ano sont traités comme le même mot
+- Portugais : les graphies d'avant et d'après la réforme orthographique ne sont pas unifiées
+- Les mots composés ne sont découpés que pour l'allemand et le néerlandais
+- Le français n'a pas de chaîne d'analyse plein texte pour le contenu des documents
+- Tchèque : pas de racinisation, les formes fléchies comptent comme des mots distincts
+
+Avec le [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector), Findling forme la couche de récupération de votre propre RAG : les assistants IA cherchent dans le contenu de vos documents avec exactement les droits de l'utilisateur qui demande, et aucun contenu ne quitte votre serveur.
+
+Types de fichiers pris en charge :
+- PDF (numérisés aussi), DOC, DOCX, PPTX, XLS, XLSX, ODT, ODS, ODP
+- HTML, RTF, TXT, Markdown, CSV, e-mails (EML)
+- Fichiers ZIP : les fichiers contenus, sans OCR
+- Images par reconnaissance optique : JPEG, PNG, TIFF, WebP, HEIC
+
+Prérequis :
+- Nextcloud 33 à 35, applications : AppAPI, Findling Backend (External Apps), Findling
+- RAM : 4 Go suffisent, 730,2 Mo résidents après une indexation, sous une limite stricte de 2 Go (mesuré)
+- CPU : 2 cœurs suffisent, amd64 et arm64
+
+Sans aucune intervention, Findling continue de fonctionner aussi sobrement qu'avant. Avec plus de matériel, un profil libère au plus la moitié de la machine sur laquelle tourne le service (profil Standard) ou tout sauf un cœur (profil Performance).
+
+Support entreprise et modules payants : demande de devis à admin@infranode.dev
+```
+
+## Teil 4: `findling_backend`, en (ohne `lang`)
+
+```
+What Findling Backend is:
+- The External App behind the Findling search app: text extraction, OCR and the search index
+- Runs entirely inside your own instance and does nothing without the Findling app
+- Never modifies your files
+- Performance profile and search model are chosen on the admin page of the Findling app
+- Filter by file type or folder directly in the Nextcloud search
+- Similar documents: a link at every hit on the results page lists files with related content
+- Exclude folders or patterns such as *.photoslibrary from the index
+- Privacy: everything runs locally, no telemetry, nothing leaves your server
+- Search languages: German and English by default, Spanish, Italian, Dutch, Portuguese and Czech available
+
+Switching from fulltextsearch/Elasticsearch: [steps in the documentation](https://github.com/street1983nk/nextcloud-search/blob/v1.5.0/docs/migrate-from-fulltextsearch.en.md)
+
+Known limitations:
+- Spanish: año and ano are treated as the same word
+- Portuguese: spellings before and after the spelling reform are not unified
+- Compound words are split for German and Dutch only
+- French has no full text analysis chain for document text
+- Czech: no stemming, inflected forms count as separate words
+
+Together with the [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector), Findling forms the retrieval layer for your own RAG: AI assistants search your document contents with exactly the rights of the asking user, and no content leaves your server.
+
+Supported file types:
+- PDF (scanned too), DOC, DOCX, PPTX, XLS, XLSX, ODT, ODS, ODP
+- HTML, RTF, TXT, Markdown, CSV, mails (EML)
+- ZIP files: the files inside, without OCR
+- Images through OCR: JPEG, PNG, TIFF, WebP, HEIC
+
+Requirements:
+- Nextcloud 33 to 35, apps: AppAPI, Findling Backend (External Apps), Findling
+- RAM: 4 GB is enough, 730.2 MB resident after an index run, under a hard 2 GB limit (measured)
+- CPU: 2 cores are enough, amd64 and arm64
+
+Without any change on your side, Findling keeps running as economically as before. Anyone with more hardware can use a profile to free at most half of the machine the backend runs on (Standard profile) or everything but one core (Performance profile).
+
+Enterprise support and paid add-ons: request a quote at admin@infranode.dev
+```
+
+## Teil 5: `findling_backend`, de
+
+```
+Was Findling Backend ist:
+- Die External App hinter der Such-App Findling: Textauszug, Texterkennung und der Suchindex
+- Läuft komplett in Ihrer eigenen Instanz und tut ohne die App Findling nichts
+- Verändert nie Ihre Dateien
+- Leistungsprofil und Suchmodell werden in der Verwaltung der App Findling gewählt
+- Filter nach Dateityp oder Ordner direkt in der Nextcloud-Suche
+- Ähnliche Dokumente: ein Link an jedem Treffer der Ergebnisseite listet Dateien mit verwandtem Inhalt
+- Ordner oder Muster wie *.photoslibrary vom Index ausschließen
+- Datenschutz: alles läuft lokal, keine Telemetrie, nichts verlässt den Server
+- Suchsprachen: Deutsch und Englisch voreingestellt, Spanisch, Italienisch, Niederländisch, Portugiesisch und Tschechisch verfügbar
+
+Umstieg von fulltextsearch/Elasticsearch: [Schritte in der Dokumentation](https://github.com/street1983nk/nextcloud-search/blob/v1.5.0/docs/migrate-from-fulltextsearch.md)
+
+Bekannte Grenzen:
+- Spanisch: año und ano gelten als dasselbe Wort
+- Portugiesisch: Schreibweisen vor und nach der Rechtschreibreform werden nicht vereinheitlicht
+- Zusammengesetzte Wörter werden nur für Deutsch und Niederländisch zerlegt
+- Französisch hat keine eigene Analysekette für den Dokumenttext
+- Tschechisch: keine Stammformreduktion, gebeugte Formen gelten als eigene Wörter
+
+Zusammen mit dem [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) ergibt Findling die Retrieval-Schicht für Ihr eigenes RAG: KI-Assistenten durchsuchen Ihre Dokumentinhalte mit genau den Rechten des fragenden Nutzers, und kein Inhalt verlässt Ihren Server.
+
+Unterstützte Dateitypen:
+- PDF (auch gescannt), DOC, DOCX, PPTX, XLS, XLSX, ODT, ODS, ODP
+- HTML, RTF, TXT, Markdown, CSV, Mails (EML)
+- ZIP-Dateien: die enthaltenen Dateien, ohne Texterkennung
+- Bilder per Texterkennung: JPEG, PNG, TIFF, WebP, HEIC
+
+Anforderungen:
+- Nextcloud 33 bis 35, Apps: AppAPI, Findling Backend (External Apps), Findling
+- RAM: 4 GB genügen, 730,2 MB resident nach einem Indexlauf, unter einer harten 2-GB-Grenze (gemessen)
+- CPU: 2 Kerne genügen, amd64 und arm64
+
+Ohne Zutun läuft Findling unverändert sparsam wie bisher. Wer mehr Hardware hat, gibt per Profil frei: höchstens die Hälfte der Maschine, auf der das Backend läuft (Profil Standard), oder alles bis auf einen Kern (Profil Leistung).
+
+Enterprise-Support und bezahlte Add-ons: Angebot anfordern unter admin@infranode.dev
+```
+
+## Teil 6: `findling_backend`, fr
+
+```
+Ce qu'est Findling Backend :
+- L'External App derrière l'application de recherche Findling : extraction de texte, reconnaissance optique et index
+- Fonctionne entièrement dans votre propre instance et ne fait rien sans l'application Findling
+- Ne modifie jamais vos fichiers
+- Le profil de performance et le modèle de recherche se choisissent dans la page d'administration de l'application Findling
+- Filtre par type de fichier ou par dossier directement dans la recherche Nextcloud
+- Documents similaires : un lien sur chaque résultat de la page de résultats liste les fichiers au contenu proche
+- Exclure de l'index des dossiers ou des motifs comme *.photoslibrary
+- Confidentialité : tout fonctionne localement, aucune télémétrie, rien ne quitte votre serveur
+- Langues de recherche : allemand et anglais par défaut, espagnol, italien, néerlandais, portugais et tchèque disponibles
+
+Passer de fulltextsearch/Elasticsearch à Findling : [étapes dans la documentation](https://github.com/street1983nk/nextcloud-search/blob/v1.5.0/docs/migrate-from-fulltextsearch.fr.md)
+
+Limites connues :
+- Espagnol : año et ano sont traités comme le même mot
+- Portugais : les graphies d'avant et d'après la réforme orthographique ne sont pas unifiées
+- Les mots composés ne sont découpés que pour l'allemand et le néerlandais
+- Le français n'a pas de chaîne d'analyse plein texte pour le contenu des documents
+- Tchèque : pas de racinisation, les formes fléchies comptent comme des mots distincts
+
+Avec le [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector), Findling forme la couche de récupération de votre propre RAG : les assistants IA cherchent dans le contenu de vos documents avec exactement les droits de l'utilisateur qui demande, et aucun contenu ne quitte votre serveur.
+
+Types de fichiers pris en charge :
+- PDF (numérisés aussi), DOC, DOCX, PPTX, XLS, XLSX, ODT, ODS, ODP
+- HTML, RTF, TXT, Markdown, CSV, e-mails (EML)
+- Fichiers ZIP : les fichiers contenus, sans OCR
+- Images par reconnaissance optique : JPEG, PNG, TIFF, WebP, HEIC
+
+Prérequis :
+- Nextcloud 33 à 35, applications : AppAPI, Findling Backend (External Apps), Findling
+- RAM : 4 Go suffisent, 730,2 Mo résidents après une indexation, sous une limite stricte de 2 Go (mesuré)
+- CPU : 2 cœurs suffisent, amd64 et arm64
+
+Sans aucune intervention, Findling continue de fonctionner aussi sobrement qu'avant. Avec plus de matériel, un profil libère au plus la moitié de la machine sur laquelle tourne le service (profil Standard) ou tout sauf un cœur (profil Performance).
+
+Support entreprise et modules payants : demande de devis à admin@infranode.dev
+```
+
+## Teil 7: die README-Zeilen
+
+Je README drei neue Zeilen der Funktionsliste (Filter hinter der Volltextzeile,
+Ähnliche Dokumente hinter der semantischen Suche, Ausschlüsse hinter "Keine
+Konfiguration") mit dem Wortlaut der Store-Zeilen ihrer Sprache, dazu der
+Profilsatz der Anforderungen im Wortlaut von D-36-08. Die übrigen Zeilen bleiben.
+
+| README | Profilsatz (Anforderungen) |
+|---|---|
+| `README.md` | gibt per Profil frei: höchstens die Hälfte der Maschine, auf der das Backend läuft (Profil Standard), oder alles bis auf einen Kern (Profil Leistung) |
+| `README.en.md` | free at most half of the machine the backend runs on (Standard profile) or everything but one core (Performance profile) |
+| `README.fr.md` | un profil libère au plus la moitié de la machine sur laquelle tourne le service (profil Standard) ou tout sauf un cœur (profil Performance) |
+
+## Teil 8: die Release-Notiz v1.5.0
+
+```
+Findling 1.5.0. Both apps need to be on 1.5.0.
+- New formats: mails (EML), ZIP files, DOC, XLS and HEIC, read once after the upgrade without a full reindex.
+- Czech as a search language and for OCR.
+- Unified search: filter by type group or folder.
+- Exclusion patterns such as *.photoslibrary on the admin page (#22); limits per file shown (#21).
+- Similar documents from every hit on the results page.
+- Migration guide from fulltextsearch/Elasticsearch.
+- Hardening: hostile files end as blocked_malicious with a detail code; deleted users and storages leave the index.
+- Source of the tag and the corresponding source packages attached to this release.
+**Full Changelog**: https://github.com/street1983nk/nextcloud-search/compare/v1.4.3...v1.5.0
+```
+
+Tag-Links `blob/v1.5.0` und der Compare-Link lösen erst nach dem Tag auf;
+Prüfung vor der Einreichung.
+
+---
+
 # Release-Checkliste v1.5.0 (REL-05): Corresponding source
 
 Seit Plan 31-01 verteilt das Backend-Image mit dem pillow-heif-Wheel drei native

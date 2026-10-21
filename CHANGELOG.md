@@ -19,6 +19,8 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
 - A one time catch up after the upgrade, without a full reindex: files of
   the new types, old Word and Excel files under OOXML names, and files given
   up as repeatedly stuck are read once more.
+- Czech as a search language, without stemming, and Czech OCR; OCR
+  offers ten languages (docs/language-analyzers.md).
 - Unified search: filter Findling hits by type group (six entries) or by
   folder, sub folders included; unknown values are ignored
   (docs/search-filters.md).
@@ -32,6 +34,17 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
   French (docs/migrate-from-fulltextsearch.md).
 - A banner on the admin page while fulltextsearch or files_fulltextsearch is
   enabled, with a link to that page.
+- Similar documents: a link at every hit on the results page lists up
+  to ten files with related content, only files the user can read.
+- Hostile files end as skipped with the new code blocked_malicious and
+  a detail code on the admin page (zip_ratio, zip_overlap, zip_traversal,
+  package_entries, xml_entities, image_pixels, mail_nesting, cfb_cycle);
+  files that are only large keep their old verdict (docs/formats.md).
+- Index hygiene: documents of deleted users and deleted storages leave
+  the index at the next reconcile; a storage that still exists in Nextcloud
+  but is no longer mounted leaves after 30 days.
+- Releases carry the source of the tag and the four corresponding
+  source packages of the native libraries in the image.
 
 ### Changed
 
@@ -39,6 +52,11 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
   did not change, and their old entries leave the error list (#22).
 - The hint about too little hardware for a profile is reworded in all
   languages.
+- The httpx and httpcore loggers run at WARNING in the image, so file
+  ids and user ids no longer appear in the standard log; DEBUG still shows
+  them.
+- Store texts: the Standard profile frees at most half of the machine
+  the backend runs on (was: half of the box).
 
 ### Fixed
 
