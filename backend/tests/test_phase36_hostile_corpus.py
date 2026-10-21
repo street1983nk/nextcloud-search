@@ -196,15 +196,8 @@ _ARCHIVE_CASES: dict[str, Case] = {
     "10001-entries": Case(zip_entries, ZIP, LIMIT, None, "A3: honestly large, positive control"),
 }
 
-_ARCHIVE_PENDING = {
-    "ratio-over-the-attack-ratio": pytest.mark.xfail(strict=True, reason="built in 36-08"),
-    "overlap-outside": pytest.mark.xfail(strict=True, reason="built in 36-08"),
-    "overlap-inside": pytest.mark.xfail(strict=True, reason="built in 36-08"),
-    "traversal-dot-dot": pytest.mark.xfail(strict=True, reason="built in 36-08"),
-    "traversal-absolute": pytest.mark.xfail(strict=True, reason="built in 36-08"),
-    "traversal-drive-letter": pytest.mark.xfail(strict=True, reason="built in 36-08"),
-    "traversal-nul": pytest.mark.xfail(strict=True, reason="built in 36-08"),
-}
+# Every signature of this table is built (plan 36-08, D-36-17).
+_ARCHIVE_PENDING: dict[str, Any] = {}
 
 
 @pytest.mark.parametrize("case", _params(_ARCHIVE_CASES, _ARCHIVE_PENDING))

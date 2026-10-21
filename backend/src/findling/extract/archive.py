@@ -12,7 +12,18 @@ finds the ZIP file.
 **Three stages, and each one ends the whole ZIP file as skipped(archive_limit).**
 The limits and the measurements behind them are in config.py and in
 docs/measurements/2026-10-formate-v15/README.md, section "ZIP-Grenzwerte"
-(D-31-07).
+(D-31-07). Three attack signatures end it as skipped(blocked_malicious) with
+their code instead (D-36-17, 36-WORTLAUT.md A3); a limit alone never does:
+
+* ``zip_ratio``: a member from ARCHIVE_RATIO_MIN_BYTES on declares more than
+  ARCHIVE_MALICIOUS_RATIO times its compressed size. Over ARCHIVE_MAX_RATIO up
+  to and including that number it stays archive_limit (answer O12).
+* ``zip_overlap``: zipfile reports overlapping entries, by its refusal or by its
+  warning about two entries at one local header, on every level (answer O2).
+* ``zip_traversal``: the raw name of a member, as the directory carries it,
+  has a ``..`` segment (``/`` or ``\\`` as separator), starts with a separator
+  or a drive letter, or holds NUL (answer O5). Judged before any member of the
+  level is read; nothing is ever written under a member name anyway.
 
 1. *The central directory, before zipfile sees it.* ``ZipFile()`` builds one
    ZipInfo per directory header before any loop of ours can count anything,
@@ -24,8 +35,11 @@ docs/measurements/2026-10-formate-v15/README.md, section "ZIP-Grenzwerte"
    checked, and the headers are counted with zipfile's own loop, block by
    block, up to one past the limit. Only then is ZipFile opened.
 2. *The declarations.* The declared uncompressed sizes are summed, each member
-   from ARCHIVE_RATIO_MIN_BYTES on is held to ARCHIVE_MAX_RATIO, and an inner
-   ZIP file beyond ARCHIVE_MAX_DEPTH ends the whole file (a quine ends here).
+   from ARCHIVE_RATIO_MIN_BYTES on is held to ARCHIVE_MALICIOUS_RATIO and then
+   to ARCHIVE_MAX_RATIO, the raw names are held to the traversal rule, and an
+   inner ZIP file beyond ARCHIVE_MAX_DEPTH ends the whole file (a quine ends
+   here). The order is the one of answer O7: a single lying size over the sum
+   is a limit, not a ratio.
 3. *Reading with a count.* A member is streamed into a scratch file named by a
    running number, never by its name, read by the reader its extension
    selects, and deleted at once. zipfile holds every read to the declared size
@@ -58,6 +72,7 @@ names leave this module, as the detail of a failure.
 from __future__ import annotations
 
 import lzma
+import re
 import struct
 import time
 import warnings
@@ -70,6 +85,7 @@ from zipfile import BadZipFile, ZipFile, ZipInfo
 
 from findling import config
 from findling.config import (
+    ARCHIVE_MALICIOUS_RATIO,
     ARCHIVE_MAX_CENTRAL_DIRECTORY_BYTES,
     ARCHIVE_MAX_DEPTH,
     ARCHIVE_MAX_ENTRIES,
@@ -114,13 +130,31 @@ _BROKEN_MEMBER: Final = (BadZipFile, zlib.error, EOFError, lzma.LZMAError, OSErr
 # compared, never logged: it quotes the member name.
 _OVERLAP = "Overlapped entries"
 
+# The signature codes this module raises (36-WORTLAUT.md A3).
+_ZIP_RATIO: Final = "zip_ratio"
+_ZIP_OVERLAP: Final = "zip_overlap"
+
+# A drive letter in front of a raw member name; the separators of both worlds.
+_DRIVE: Final = re.compile(r"[A-Za-z]:")
+_SEPARATORS: Final = re.compile(r"[/\\]")
+
 
 class CorruptDirectory(Exception):
     """The end record or the central directory is not what zipfile could read."""
 
 
 class OverLimit(Exception):
-    """A limit of D-31-07 is reached; the whole ZIP file is skipped(archive_limit)."""
+    """A limit of D-31-07 is reached, or an attack signature of D-36-17 is found.
+
+    Without a signature the whole ZIP file is skipped(archive_limit). With one
+    it is skipped(blocked_malicious), and ``signature`` is the detail code: a
+    code of the closed list of 36-WORTLAUT.md A3 and never a name, a size or a
+    message, because it leaves the child as the detail of the verdict.
+    """
+
+    def __init__(self, signature: str | None = None) -> None:
+        super().__init__()
+        self.signature = signature
 
 
 class _Stop(Exception):
@@ -136,6 +170,21 @@ _UNREADABLE_DIRECTORY: Final = (CorruptDirectory, BadZipFile, NotImplementedErro
 def _is_overlap(error: Exception) -> bool:
     """True for zipfile's refusal of overlapping entries. The message is compared, never logged."""
     return isinstance(error, BadZipFile) and str(error).startswith(_OVERLAP)
+
+
+def _is_traversal(raw_name: str) -> bool:
+    """True for a raw member name that climbs out of the folder it would be unpacked to.
+
+    A ``..`` segment between ``/`` or ``\\``, a separator or a drive letter in
+    front, or a NUL anywhere: no packer writes such a name, it aims at an
+    unpacker that writes under it (D-36-17, answer O5). The raw name is the
+    one the directory carries (``ZipInfo.orig_filename``): zipfile cuts
+    ``ZipInfo.filename`` at NUL. Dots that are no segment of their own
+    (``..x.txt``, ``a..b``) are names like any other.
+    """
+    if "\x00" in raw_name or raw_name.startswith(("/", "\\")) or _DRIVE.match(raw_name):
+        return True
+    return ".." in _SEPARATORS.split(raw_name)
 
 
 @dataclass(slots=True)
@@ -214,11 +263,13 @@ def extract_zip(path: str) -> ExtractionOutcome:
     truncated = False
     try:
         _read_zip(Path(path), "", 1, budget, sections)
-    except OverLimit:
+    except OverLimit as over:
+        if over.signature is not None:
+            return ExtractionOutcome.skipped(Reason.BLOCKED_MALICIOUS, detail=over.signature)
         return ExtractionOutcome.skipped(Reason.ARCHIVE_LIMIT)
     except _UNREADABLE_DIRECTORY as error:
         if _is_overlap(error):
-            return ExtractionOutcome.skipped(Reason.ARCHIVE_LIMIT)
+            return ExtractionOutcome.skipped(Reason.BLOCKED_MALICIOUS, detail=_ZIP_OVERLAP)
         return ExtractionOutcome.from_exception(error)
     except _Stop:
         truncated = True
@@ -384,14 +435,28 @@ def _read_zip(path: Path, prefix: str, depth: int, budget: _ArchiveBudget, secti
         if len(members) > count:
             raise OverLimit
         budget.take_declared(sum(info.file_size for info in members))
+        _judge_ratios(members)
         for info in members:
-            if info.file_size >= ARCHIVE_RATIO_MIN_BYTES and info.file_size > ARCHIVE_MAX_RATIO * max(
-                info.compress_size, 1
-            ):
-                raise OverLimit
+            if _is_traversal(info.orig_filename):
+                raise OverLimit("zip_traversal")
         for info in members:
             if not info.is_dir():
                 _read_member(archive, info, prefix, depth, budget, sections)
+
+
+def _judge_ratios(members: list[ZipInfo]) -> None:
+    """The ratio of every member from ARCHIVE_RATIO_MIN_BYTES on, in two steps (answer O12).
+
+    The signature is looked for in all members first, so a member over the
+    attack ratio is named even behind one that is merely over the limit.
+    """
+    judged = [
+        (info.file_size, max(info.compress_size, 1)) for info in members if info.file_size >= ARCHIVE_RATIO_MIN_BYTES
+    ]
+    if any(size > ARCHIVE_MALICIOUS_RATIO * packed for size, packed in judged):
+        raise OverLimit(_ZIP_RATIO)
+    if any(size > ARCHIVE_MAX_RATIO * packed for size, packed in judged):
+        raise OverLimit
 
 
 def _read_member(
@@ -441,23 +506,28 @@ def _copy(archive: ZipFile, info: ZipInfo, member: Path, budget: _ArchiveBudget)
     refusal (security audit 31-15). zipfile only warns, instead of refusing,
     when the next entry starts at the very same local header, and its warning
     quotes the member name; a warning goes to stderr, which is the container
-    log (H-31-02). It is caught and dropped: the repeated reads it allows count
-    against the read budget like every other read. And a directory that claims
+    log (H-31-02). It is recorded and never shown: an overlap warning is the
+    same signature as the refusal (two directory entries for one local header
+    are written by no packer) and ends the file as zip_overlap (D-36-17,
+    answer O2); any other warning is dropped. And a directory that claims
     to sit behind the end of the file makes zipfile shift every local header
     below zero, so ``seek`` raises OSError; that member is broken, not the ZIP
     file around it (L-31-02).
     """
     with member.open("wb") as sink:
         try:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
                 source = archive.open(info)
         except BadZipFile as error:
             if _is_overlap(error):
-                raise OverLimit from None
+                raise OverLimit(_ZIP_OVERLAP) from None
             return False
         except OSError:
             return False
+        if any(str(warning.message).startswith(_OVERLAP) for warning in caught):
+            source.close()
+            raise OverLimit(_ZIP_OVERLAP)
         with source:
             while True:
                 try:
@@ -476,7 +546,7 @@ def _read_inner(member: Path, prefix: str, depth: int, budget: _ArchiveBudget, s
         _read_zip(member, prefix, depth + 1, budget, sections)
     except _UNREADABLE_DIRECTORY as error:
         if _is_overlap(error):
-            raise OverLimit from None
+            raise OverLimit(_ZIP_OVERLAP) from None
 
 
 def _member_text(reader: Callable[[str], ExtractionOutcome], path: str, budget: _ArchiveBudget) -> str:

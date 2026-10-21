@@ -699,12 +699,36 @@ def test_a_zip_file_inside_an_inner_one_ends_the_whole_file(tmp_path: Path) -> N
     assert outcome == LIMIT
 
 
-def test_a_member_over_the_ratio_is_an_archive_limit(tmp_path: Path) -> None:
-    raw = _zip([("vorn.txt", b"vornquendel"), ("nullen.txt", bytes(2 * 1024 * 1024))])
+def _measured_ratio(raw: bytes, name: str) -> float:
+    with zipfile.ZipFile(io.BytesIO(raw)) as check:
+        info = check.getinfo(name)
+    return info.file_size / max(info.compress_size, 1)
+
+
+def test_a_member_between_the_two_ratios_is_an_archive_limit(tmp_path: Path) -> None:
+    # D-36-17, plan 36-08, answer O12: densely packed but no bomb. Zeros with a
+    # byte of a fixed stream every 700 bytes, about 155 to 1 under deflate.
+    size = 2 * 1024 * 1024
+    data = bytearray(size)
+    data[::700] = hashlib.shake_128(b"36-08").digest(len(range(0, size, 700)))
+    raw = _zip([("vorn.txt", b"vornquendel"), ("dicht.bin", bytes(data))])
+    assert archive.ARCHIVE_MAX_RATIO < _measured_ratio(raw, "dicht.bin") < archive.ARCHIVE_MALICIOUS_RATIO
 
     outcome, _ = _guarded(tmp_path, raw)
 
     assert outcome == LIMIT
+    assert outcome.detail is None
+
+
+def test_a_member_over_the_attack_ratio_is_blocked_as_malicious(tmp_path: Path) -> None:
+    # D-36-17, plan 36-08, answer O12: 2 MiB of zeros reach 1023.5 to 1 under
+    # deflate, over the owner's 1000; deflate is enough, no bzip2 member needed.
+    raw = _zip([("vorn.txt", b"vornquendel"), ("nullen.txt", bytes(2 * 1024 * 1024))])
+    assert _measured_ratio(raw, "nullen.txt") > archive.ARCHIVE_MALICIOUS_RATIO
+
+    outcome, _ = _guarded(tmp_path, raw)
+
+    assert (outcome.state, outcome.reason, outcome.detail) == (State.SKIPPED, Reason.BLOCKED_MALICIOUS, "zip_ratio")
 
 
 def test_a_large_member_of_ordinary_text_is_under_the_ratio(tmp_path: Path) -> None:
@@ -724,34 +748,42 @@ def test_a_small_member_is_not_judged_by_its_ratio(tmp_path: Path) -> None:
     assert outcome.state is State.INDEXED
 
 
-def test_overlapping_entries_are_an_archive_limit(tmp_path: Path) -> None:
+def test_overlapping_entries_are_blocked_as_malicious(tmp_path: Path) -> None:
+    # D-36-17, plan 36-08: overlapping entries are an attack signature.
     raw = _overlapping()
     with zipfile.ZipFile(io.BytesIO(raw)) as check, pytest.raises(zipfile.BadZipFile, match="Overlapped"):
         check.read("a.txt")
 
     outcome, _ = _guarded(tmp_path, raw)
 
-    assert outcome == LIMIT
+    assert (outcome.state, outcome.reason, outcome.detail) == (State.SKIPPED, Reason.BLOCKED_MALICIOUS, "zip_overlap")
 
 
-def test_names_that_climb_out_stay_text(tmp_path: Path) -> None:
+def test_names_that_climb_out_are_blocked_as_malicious(tmp_path: Path) -> None:
+    # D-36-17, plan 36-08, answer O5: a name with a ".." segment or an absolute
+    # path is the traversal signature; nothing of the file reaches the index.
     absolute = f"{tmp_path.as_posix()}/flucht.txt"
-    raw = _zip(
-        [
-            ("../../etc/passwd", b"pfadquendel"),
-            ("../../etc/passwd.txt", b"kletterquendel"),
-            (absolute, b"absquendel"),
-        ]
-    )
+    for names in (["../../etc/passwd", "../../etc/passwd.txt"], [absolute]):
+        raw = _zip([("vorn.txt", b"vornquendel"), *((name, b"kletterquendel") for name in names)])
+
+        outcome, _ = _guarded(tmp_path, raw)
+
+        assert (outcome.state, outcome.reason, outcome.detail) == (
+            State.SKIPPED,
+            Reason.BLOCKED_MALICIOUS,
+            "zip_traversal",
+        )
+        assert outcome.text == ""
+
+
+def test_names_with_dots_that_do_not_climb_stay_text(tmp_path: Path) -> None:
+    # D-36-17, plan 36-08: the positive control, dots that are no segment.
+    raw = _zip([("..x.txt", b"punktquendel"), ("a..b/c.txt", b"mittequendel")])
 
     outcome, _ = _guarded(tmp_path, raw)
 
     assert outcome.state is State.INDEXED
-    assert _sections(outcome) == {
-        "../../etc/passwd": "",
-        "../../etc/passwd.txt": "kletterquendel",
-        absolute: "absquendel",
-    }
+    assert _sections(outcome) == {"..x.txt": "punktquendel", "a..b/c.txt": "mittequendel"}
 
 
 def test_an_encrypted_member_stays_a_name_next_to_a_readable_one(tmp_path: Path) -> None:

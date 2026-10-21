@@ -193,12 +193,14 @@ _ZIP_CASES: dict[str, tuple[Callable[[], bytes], tuple[State, Reason | None], st
         "langnamewort",
         None,
     ),
+    # D-36-17, plan 36-08, answer O5 (a): a raw name with NUL, ".." segments
+    # and a leading separator is the traversal signature, not a name to clean.
     "name-nul-and-both-separators": (
         lambda: build_zip(
             [Member(b"..\\..\\boese/../x\x00.txt.bin", b"nulwort"), Member(b"/abs/../../y.txt", b"abswort")]
         ),
-        (State.INDEXED, None),
-        "abswort",
+        (State.SKIPPED, Reason.BLOCKED_MALICIOUS),
+        "",
         None,
     ),
     "10000-entries-of-one-name": (
@@ -217,8 +219,10 @@ _ZIP_CASES: dict[str, tuple[Callable[[], bytes], tuple[State, Reason | None], st
         lambda: build_zip(
             [Member(b"innen.zip", _same_offset_twice(b"o.txt", b"overlapwort")), text_member("aussenwort")]
         ),
-        (State.INDEXED, None),
-        "aussenwort",
+        # D-36-17, plan 36-08, answer O2 (a): two entries at one local header
+        # are the overlap signature on every level, inside as well as outside.
+        (State.SKIPPED, Reason.BLOCKED_MALICIOUS),
+        "",
         None,
     ),
     "inner-zip-with-a-negative-member": (
@@ -249,6 +253,10 @@ _ZIP_CASES: dict[str, tuple[Callable[[], bytes], tuple[State, Reason | None], st
 }
 
 
+# The detail code of every case that ends in the signature class (plan 36-08).
+_ZIP_DETAILS = {"name-nul-and-both-separators": "zip_traversal", "inner-zip-with-overlap": "zip_overlap"}
+
+
 @pytest.mark.parametrize("case", list(_ZIP_CASES))
 def test_every_zip_of_the_corpus_ends_in_a_named_verdict(
     case: str, worker: sandbox.ExtractionWorker, tmp_path: Path
@@ -258,6 +266,8 @@ def test_every_zip_of_the_corpus_ends_in_a_named_verdict(
     ran, left = corpus_case(worker, tmp_path, "korpus.zip", build(), ZIP)
 
     _expect(ran, state, reason, contains=word)
+    if reason is Reason.BLOCKED_MALICIOUS:
+        assert ran.outcome.detail == _ZIP_DETAILS[case]
     # Members go into scratch files named by a number next to the job file and are
     # deleted at once; nothing is ever written under a member name.
     assert left == ["korpus.zip"]

@@ -420,6 +420,17 @@ ARCHIVE_MAX_CENTRAL_DIRECTORY_BYTES = 8 * 1024 * 1024
 ARCHIVE_MAX_RATIO = 100
 ARCHIVE_RATIO_MIN_BYTES = 1024 * 1024
 
+# The ratio from which a member is an attack signature and the whole ZIP file is
+# skipped(blocked_malicious) with the detail zip_ratio, judged from
+# ARCHIVE_RATIO_MIN_BYTES on like ARCHIVE_MAX_RATIO (D-36-17, owner answer O12 of
+# 2026-10-20). Over ARCHIVE_MAX_RATIO up to and including this number a member
+# stays skipped(archive_limit): sparse exports, dumps and logs reach a few
+# hundred to 1, and that is a limit, not a signature. Deflate ends at about
+# 1032 to 1 by its format (measured 1023.5 to 1 for 2 MiB of zeros), so over
+# 1000 to 1 it holds practically nothing but a filler of one byte; bzip2 and
+# LZMA members reach far more (43 690.7 and 5 447.1 to 1 for the same zeros).
+ARCHIVE_MALICIOUS_RATIO = 1000
+
 # Nesting: the ZIP file itself is level 1, a ZIP file inside it level 2 and read
 # with the same budget, a ZIP file inside that one ends the whole ZIP file as
 # skipped(archive_limit). A self reproducing ZIP file (a quine) ends here.

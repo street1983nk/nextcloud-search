@@ -2176,8 +2176,17 @@ PHP_TREE_HASH_TODAY = "60821e1a430226b2530194ac098bd7b50cc28df4be5a978b0ba85b9b6
 # file came or went, so PACKAGE_FILES_TODAY stays at 80. The PHP pair does not
 # move. Recomputed independently with find, sort, tr and sha256sum over the
 # CRLF normalised tree: 8367441d... both ways.
+#
+# Moved on 2026-10-21 by Plan 36-08 (HART-06, D-36-17, F3): config.py carries
+# ARCHIVE_MALICIOUS_RATIO (1000, answer O12), and extract/archive.py ends a ZIP
+# file with one of three attack signatures as skipped(blocked_malicious):
+# zip_ratio over that number, zip_overlap on every level (the refusal and the
+# warning of zipfile), zip_traversal on the raw member name; OverLimit carries
+# the code. No file came or went, so PACKAGE_FILES_TODAY stays at 80. The PHP
+# pair does not move. Recomputed independently with find, sort, tr and
+# sha256sum over the CRLF normalised tree: 9b51ba91... both ways.
 PACKAGE_FILES_TODAY = 80
-PACKAGE_TREE_HASH_TODAY = "8367441dc0adc8c7c24648fe187d212fab87ffe3b519eab3bb28714736048d1a"
+PACKAGE_TREE_HASH_TODAY = "9b51ba915a9c103aabb18f6a2a7400089d7802482ccda8b6e1c1c3590d4984fc"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
