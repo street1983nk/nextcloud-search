@@ -1244,3 +1244,46 @@ def test_the_probe_answers_every_question_of_3c_and_5(tmp_path: Path) -> None:
     digest = ask("digest", "4,5")
     assert re.fullmatch(r"[0-9a-f]{64}:3", digest)
     assert ask("digest", "") != digest
+
+
+# ---------------------------------------------------------------------------
+# The exclusions of the upgrade line (plan 36-10, finding F5 of the phase 36
+# research). "Store upgrade 2b" writes a prefix in the shape of the released
+# version before it uploads anything, so the listener of the tag refuses the
+# file under it; a control and a pattern file are indexed beside it.
+
+EXCLUSION_PREFIX = "Ausschluss36"
+
+
+def _exclusion_block() -> str:
+    """The part of "Store upgrade 2b" from the seed of the exclusions on."""
+    run = _run(SEED_STEP)
+    return run[run.index("The seed of the exclusions (plan 36-10") :]
+
+
+def test_the_exclusion_seed_writes_the_prefix_of_the_tag_before_any_upload() -> None:
+    block = _exclusion_block()
+    write = block.index(
+        '"${RUNNER_TEMP}/nc-occ.sh" config:app:set findling exclusions --value="[\\"${excl_folder}\\"]" --type=array'
+    )
+    assert f"excl_folder={EXCLUSION_PREFIX}" in block
+    assert write < block.index("-X MKCOL") < block.index('excl_upload "${RUNNER_TEMP}/excl-a.txt"')
+    # The shape is read out of the tag, and the comment says where.
+    assert "v1.4.2:php/lib/Service/ExclusionService.php:173" in block
+
+
+def test_the_exclusion_seed_is_judged_fail_closed_under_the_tag() -> None:
+    block = _exclusion_block()
+    assert 'if [ "${excluded_rows}" != "0" ] || [ "${excluded_recorded}" != "0:0" ]; then' in block
+    assert 'if [ "${hits_excluded}:${control_ok}:${pattern_ok}" = "0:true:true" ]; then' in block
+    assert "0:indexed/:indexed/:[1-9]*:[1-9]*)" in block
+
+
+def test_the_exclusion_seed_exports_the_list_and_the_three_ids() -> None:
+    names = {name: variable for _, name, variable in _env_writes(_exclusion_block())}
+    assert names == {
+        "UPGRADE_EXCLUSIONS_BEFORE": "exclusions_before",
+        "UPGRADE_EXCL_EXCLUDED_ID": "excluded_id",
+        "UPGRADE_EXCL_CONTROL_ID": "control_id",
+        "UPGRADE_EXCL_PATTERN_ID": "pattern_id",
+    }

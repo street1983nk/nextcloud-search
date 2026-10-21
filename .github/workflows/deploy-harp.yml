@@ -4462,6 +4462,167 @@ jobs:
             echo "UPGRADE_SEED_STALE_ID=${stale_id}"
           } >> "${GITHUB_ENV}"
 
+          # ---------------------------------------------------------------
+          # The seed of the exclusions (plan 36-10, finding F5 of the phase 36
+          # research): success criterion 2 names the exclusions, and until this
+          # plan no step of the upgrade line set one. Sown under the released
+          # version because the promise is about a rule an admin set on 1.4.x:
+          # it has to stay in force across the upgrade, and the 1.5 code has to
+          # read the list 1.4.x wrote, so the list is written in the shape of
+          # the tag and by nothing of this tree.
+          #
+          # The shape, read out of the code of the tag (git show
+          # v1.4.2:php/lib/Service/ExclusionService.php:173 and
+          # php/lib/Service/SettingsService.php:57): prefixes() reads the key
+          # exclusions with getValueArray, so the value is a JSON array of
+          # folder paths relative to the files folder, typed array. Written by
+          # occ config:app:set and not by the admin form: the docblock of
+          # prefixes() names occ as the documented second writer and
+          # normalises on the way out for it, and the form is a POST route
+          # with a CSRF token this job has no session for. The prefix is set
+          # BEFORE the uploads, so the listener of the tag (FileEventListener
+          # line 442 to 446) refuses the file under it and no window exists in
+          # which the file could be indexed first.
+          #
+          # Three files at the top of the home, by WebDAV like a user uploads:
+          #   Ausschluss36/a.txt          under the prefix, never queued
+          #   kontrolle36.txt             the control, indexed and found
+          #   muster36.geheim36.txt       indexed under 1.4.2; "Store upgrade
+          #                               5b" sets a pattern of 1.5 over it
+          # The pattern file ends in .txt so the allowlist of the tag queues
+          # it; an unknown ending would be application/octet-stream and never
+          # indexed, and the pattern would then remove a hit that never was.
+          # The three words are invented and decompose into nothing of the
+          # German word list, so each one can only ever find its own file.
+          # ---------------------------------------------------------------
+          excl_folder=Ausschluss36
+          excl_word=sperrquolvane
+          control_word=kontrollbrisetum
+          pattern_word=mustertavelor
+          control_name=kontrolle36.txt
+          pattern_name=muster36.geheim36.txt
+          excl_upload() {
+            excl_code=$(curl -s -o /dev/null -w '%{http_code}' \
+              -u "testuser:${TESTUSER_PASS}" \
+              -T "$1" \
+              "http://localhost:8080/remote.php/dav/files/testuser/$2")
+            case "${excl_code}" in
+              201|204) ;;
+              *)
+                echo "::error::the upload of $2 answered HTTP ${excl_code}"
+                return 1
+                ;;
+            esac
+          }
+          excl_id_of() {
+            q "SELECT fileid FROM oc_filecache WHERE storage = '${storage}' AND path = 'files/$1';"
+          }
+
+          for word in "${excl_word}" "${control_word}" "${pattern_word}"; do
+            found=$(word_hits "${word}") || exit 1
+            if [ "${found}" != "0" ]; then
+              echo "::error::${word} brings back ${found} file(s) before anything of the exclusions was sown, so it is not an invented word"
+              exit 1
+            fi
+          done
+
+          "${RUNNER_TEMP}/nc-occ.sh" config:app:set findling exclusions --value="[\"${excl_folder}\"]" --type=array
+          # Through jq -c, so the comparison after the upgrade is one of the
+          # list and not of the way occ happens to print it.
+          exclusions_before=$("${RUNNER_TEMP}/nc-occ.sh" config:app:get findling exclusions | jq -c .)
+          if ! [[ "${exclusions_before}" =~ ^\[\"Ausschluss36\"\]$ ]]; then
+            echo "::error::the prefix list reads '${exclusions_before}' after the write instead of [\"${excl_folder}\"]"
+            exit 1
+          fi
+          echo "the prefix list of ${UPGRADE_FROM_TAG} reads ${exclusions_before}"
+
+          mkcol=$(curl -s -o /dev/null -w '%{http_code}' -u "testuser:${TESTUSER_PASS}" -X MKCOL \
+            "http://localhost:8080/remote.php/dav/files/testuser/${excl_folder}")
+          if [ "${mkcol}" != "201" ]; then
+            echo "::error::the folder ${excl_folder} could not be created (MKCOL answered HTTP ${mkcol})"
+            exit 1
+          fi
+          printf '%s\n' "${excl_word}" > "${RUNNER_TEMP}/excl-a.txt"
+          printf '%s\n' "${control_word}" > "${RUNNER_TEMP}/excl-control.txt"
+          printf '%s\n' "${pattern_word}" > "${RUNNER_TEMP}/excl-pattern.txt"
+          excl_upload "${RUNNER_TEMP}/excl-a.txt" "${excl_folder}/a.txt" || exit 1
+          excl_upload "${RUNNER_TEMP}/excl-control.txt" "${control_name}" || exit 1
+          excl_upload "${RUNNER_TEMP}/excl-pattern.txt" "${pattern_name}" || exit 1
+          excluded_id=$(excl_id_of "${excl_folder}/a.txt")
+          control_id=$(excl_id_of "${control_name}")
+          pattern_id=$(excl_id_of "${pattern_name}")
+          if ! [[ "${excluded_id}" =~ ^[0-9]+$ ]] || ! [[ "${control_id}" =~ ^[0-9]+$ ]] || ! [[ "${pattern_id}" =~ ^[0-9]+$ ]]; then
+            echo "::error::an upload of the exclusion seed left no file id (excluded '${excluded_id}', control '${control_id}', pattern '${pattern_id}')"
+            exit 1
+          fi
+
+          # Waited out with the one budget of the drain: the queue empty, the
+          # control and the pattern file indexed with their vectors, because
+          # "Store upgrade 3c" digests the vector stock right after this step.
+          deadline=$(( $(date +%s) + UPGRADE_DRAIN_BUDGET_SECONDS ))
+          judged=""
+          while [ "$(date +%s)" -lt "${deadline}" ]; do
+            open=$(open_rows)
+            control=$(seed_probe verdict "${control_id}" || echo unreadable)
+            patterned=$(seed_probe verdict "${pattern_id}" || echo unreadable)
+            control_chunks=$(seed_probe chunks "${control_id}" || echo unreadable)
+            pattern_chunks=$(seed_probe chunks "${pattern_id}" || echo unreadable)
+            case "${open}:${control}:${patterned}:${control_chunks}:${pattern_chunks}" in
+              0:indexed/:indexed/:[1-9]*:[1-9]*) judged="yes"; break ;;
+            esac
+            echo "exclusion seed: open=${open} control=${control} (${control_chunks} chunks) pattern file=${patterned} (${pattern_chunks} chunks), $(( deadline - $(date +%s) ))s left"
+            sleep 5
+          done
+          if [ -z "${judged}" ]; then
+            echo "::error::the ${UPGRADE_FROM_TAG} container did not index the control and the pattern file within UPGRADE_DRAIN_BUDGET_SECONDS=${UPGRADE_DRAIN_BUDGET_SECONDS}"
+            "${RUNNER_TEMP}/nc-occ.sh" findling:index || true
+            exit 1
+          fi
+
+          # Fail closed: the file under the prefix has no row on either side
+          # and no queue row, its word finds nothing, and the two others find
+          # exactly their file, asked again within the budget because the
+          # verdict may stand a moment before the searcher sees the commit.
+          fail=0
+          excluded_rows=$(seed_probe rows "${excluded_id}" || echo unreadable)
+          excluded_recorded=$(q "SELECT (SELECT COUNT(*) FROM oc_findling_file_state WHERE file_id = ${excluded_id}) || ':' || (SELECT COUNT(*) FROM oc_findling_queue WHERE file_id = ${excluded_id});")
+          if [ "${excluded_rows}" != "0" ] || [ "${excluded_recorded}" != "0:0" ]; then
+            echo "::error::the file under the prefix has ${excluded_rows} row(s) in state.db and '${excluded_recorded}' (file state:queue) in Nextcloud, and ${UPGRADE_FROM_TAG} must never have queued it"
+            fail=1
+          else
+            echo "the file under the prefix has no row in state.db, none in findling_file_state and none in the queue"
+          fi
+          excl_found=""
+          while :; do
+            excl_found=""
+            hits_excluded=$(word_hits "${excl_word}") || exit 1
+            hits_control=$(word_hits "${control_word}") || exit 1
+            control_ok=$(jq -r --arg id "${control_id}" '(.ocs.data.entries | length == 1) and .ocs.data.entries[0].attributes.fileId == $id' "${RUNNER_TEMP}/seed-word-${control_word}.json")
+            hits_pattern=$(word_hits "${pattern_word}") || exit 1
+            pattern_ok=$(jq -r --arg id "${pattern_id}" '(.ocs.data.entries | length == 1) and .ocs.data.entries[0].attributes.fileId == $id' "${RUNNER_TEMP}/seed-word-${pattern_word}.json")
+            if [ "${hits_excluded}:${control_ok}:${pattern_ok}" = "0:true:true" ]; then
+              excl_found="yes"
+              break
+            fi
+            if [ "$(date +%s)" -ge "${deadline}" ]; then
+              break
+            fi
+            sleep 5
+          done
+          if [ -z "${excl_found}" ]; then
+            echo "::error::on ${UPGRADE_FROM_TAG} the word under the prefix finds ${hits_excluded} file(s) (demanded 0), the control word ${hits_control} (demanded exactly ${control_id}) and the pattern word ${hits_pattern} (demanded exactly ${pattern_id})"
+            fail=1
+          else
+            echo "on ${UPGRADE_FROM_TAG} the word under the prefix finds nothing, the control and the pattern word find exactly their file"
+          fi
+          if [ "${fail}" -ne 0 ]; then
+            exit 1
+          fi
+          echo "UPGRADE_EXCLUSIONS_BEFORE=${exclusions_before}" >> "${GITHUB_ENV}"
+          echo "UPGRADE_EXCL_EXCLUDED_ID=${excluded_id}" >> "${GITHUB_ENV}"
+          echo "UPGRADE_EXCL_CONTROL_ID=${control_id}" >> "${GITHUB_ENV}"
+          echo "UPGRADE_EXCL_PATTERN_ID=${pattern_id}" >> "${GITHUB_ENV}"
+
       # The tenth and eleventh value of a snapshot, since plan 30-07 (D-30-07):
       # czech counts the question smlouve and czechStop the question proc, both
       # against the Czech document of "Store upgrade 2", and both as keys of
