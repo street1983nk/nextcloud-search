@@ -2789,8 +2789,16 @@ Tag-Läufe auf v1.5.0, alle sieben success, keine Wiederholung: Release
 Matrixzeilen), Python gates 39589670676, Integration 39589670579, Resilience
 39589670752.
 
-Offen: Owner-Abnahme (36-15), danach Einreichung (36-16); die lokalen
-Beleg-Commits gehen mit dem Owner-Wort in 36-16 hinaus.
+9. Owner-Abnahme von Store-Text und Produkt am 21.10.2026, gemeinsam per
+   Playwright auf einer frischen Nextcloud 34.0.3 (http://localhost:8096,
+   HaRP), Companion und Backend nur aus den Release-Assets v1.5.0, Image
+   sha256:cf805dfa...49d8, echte Testdateien; die sechs Beschreibungen sind
+   zeichengleich mit der abgenommenen Fassung, P1 bis P8 grün
+   (`.planning/phases/36-haertung-und-store-einreichung-1-5-0/36-ABNAHME.md`).
+   Urteil wörtlich: "okok".
+
+Offen: Einreichung (36-16); die lokalen Beleg-Commits gehen mit dem
+Owner-Wort in 36-16 hinaus.
 
 # Release 1.4.3 (12.10.2026): Scroll-Fix ohne Textänderung
 

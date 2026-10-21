@@ -378,6 +378,25 @@ OCS-Aufrufe gezählt an `nc_py_api._session.AsyncNcSessionBasic.ocs`
 - **Entscheidung:** accept, siehe "LOW-Entscheidungen". Bestandstest der
   Bänder: `test_a_large_storage_is_handed_over_in_bands` (36-04).
 
+### L-36-05 (LOW, Nachtrag 36-15): "Bewusst ausgelassen: 0" mit Erklärsatz
+
+- **Ort:** `php/templates/admin.php:459-460`, `php/js/admin.js:402`, l10n.
+- **Beleg:** Fremdinstallation 36-15 (8096), Admin-Seite bei 0 ausgelassenen
+  Dateien: "Bewusst ausgelassen: 0" plus "Diese Dateien sind zu groß ...".
+- **Entscheidung:** fix in 1.5.1 (vom Owner akzeptiert, kein Blocker für
+  1.5.0): bei 0 eigener Satz oder Erklärung ausblenden, acht Sprachen.
+
+### L-36-06 (LOW, Nachtrag 36-15): Zähler nach einem neuen Ausschlussmuster verzögert
+
+- **Beleg:** Fremdinstallation 36-15 (8096), Muster `*.photoslibrary`
+  gespeichert: die Datei ist sofort aus der Suche, die Zähler Indexiert /
+  Durch Regel ausgeschlossen / Bewusst ausgelassen standen etwa 2 min später
+  (zwei cron.php-Läufe) noch auf 100 / 0 / 0.
+- **Ursache:** noch zu prüfen; Kandidat ist der Takt von `ScanRecountJob`
+  (`INTERVAL_SECONDS = 15 * 60`, `php/lib/BackgroundJobs/ScanRecountJob.php:65`).
+- **Entscheidung:** fix in 1.5.1 (vom Owner akzeptiert, kein Blocker für
+  1.5.0): sofortige Neuzählung nach dem Speichern der Regeln oder ein Hinweis.
+
 ## LOW-Entscheidungen
 
 | Befund | Entscheidung | Grund | Zielphase | Quelle |
@@ -386,6 +405,8 @@ OCS-Aufrufe gezählt an `nc_py_api._session.AsyncNcSessionBasic.ocs`
 | L-36-02 | fix | Route der Phase; eine Antwort auf eine nicht gestellte Frage ist an einer Vertrauensgrenze falsch, auch wenn der Container sie verwirft | 36 | Audit 36-12, S2 |
 | L-36-03 | fix | Logzeile ohne Obergrenze, 30 Tage Wiederholung je gestempeltem Storage | 36 | Audit 36-12, P3 |
 | L-36-04 | accept | einmalig je gelöschtem Speicher, nachts, hinter dem Ruhetor und dem Takt; ein Bündeln über Storages hinweg würde die Zusage "Lesezeichen erst nach dem letzten Band des Storage vergessen" (36-04, T-36-16) an fremde Bänder koppeln; 300 auf einmal gelöschte Nutzer sind der Ausnahmefall | keine | Audit 36-12, P3 |
+| L-36-05 | fix in 1.5.1 | Anzeigetext, vom Owner in 36-15 akzeptiert, kein Blocker | 1.5.1 | Abnahme 36-15 |
+| L-36-06 | fix in 1.5.1 | Suche wirkt sofort, nur die Zähler hängen nach; vom Owner in 36-15 akzeptiert | 1.5.1 | Abnahme 36-15 |
 | L-32-01 | accept (bleibt) | Kernverhalten von NC 34, live erneut belegt | keine | B5 |
 | L-32-03 | accept (bleibt) | verlangt von USRCH-03/T-32-06 | keine | B5 |
 | L-32-04 | accept (bleibt) | nicht nachstellbar auf lokalem Speicher; Beobachtungspunkt der Fremdinstallation 36-15 | 36-15 | B5 |
