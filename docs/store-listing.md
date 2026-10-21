@@ -2816,10 +2816,11 @@ Matrixzeilen), Python gates 39589670676, Integration 39589670579, Resilience
     - 12:22:17Z Katalog `api/v1/platform/34.0.3/apps.json`: findling führt
       1.5.0, 1.4.3, 1.4.2, `created` 2026-10-21T12:19:46.159338Z,
       sekundengleich mit dem ersten HTTP 201.
-    - 12:22:44Z und 12:23:47Z Katalog `api/v1/appapi_apps.json`:
-      findling_backend führt noch 1.4.3 als neueste Fassung (Katalog-Cache
-      wie bei 1.4.3); die App-Seite nennt 1.5.0 bereits. Nachprüfung siehe
-      unten.
+    - Katalog `api/v1/appapi_apps.json`, sechs neue Aufrufe um 12:22:44Z,
+      12:23:47Z, 12:24:01Z, 12:24:16Z, 12:25:23Z und 12:25:51Z:
+      findling_backend führt jedes Mal noch 1.4.3 als neueste Fassung
+      (Katalog-Cache wie bei 1.4.3), während die App-Seite 1.5.0 bereits
+      nennt. Die Nachführung des Katalogs wird nachgeholt.
 
 Offen: Push der lokalen Beleg-Commits 36-14 bis 36-16 mit eigenem
 Owner-Wort.

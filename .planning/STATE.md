@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 36-14-PLAN.md, next 36-15 (Owner-Abnahme)
-last_updated: "2026-10-21T12:21:15.521Z"
+stopped_at: Completed 36-16-PLAN.md (Einreichung 1.5.0, 2x HTTP 201), Doku-Push wartet auf Owner-Wort, danach Code-Review, Verifier, phase.complete
+last_updated: "2026-10-21T12:30:00.000Z"
 last_activity: 2026-10-21
 progress:
   total_phases: 7
@@ -26,8 +26,8 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 ## Current Position
 
 Phase: 36 (Haertung und Store-Einreichung 1.5.0) , EXECUTING
-Plan: 16 of 16
-Status: Ready to execute
+Plan: 17 of 17 (36-16 als letzte Welle ausgeführt)
+Status: Executed, Store-Einreichung 1.5.0 erledigt (Lauf 39598694849, 2x HTTP 201); offen: Owner-Wort zum Doku-Push, Code-Review, Verifier, Phasenabschluss
 Last activity: 2026-10-21
 
 Progress: [██████████] 100%
@@ -83,6 +83,7 @@ Progress: [██████████] 100%
 - v1.5: 36-08 in ca. 85 min inkl. voller Suite (12:52 min) und CI (2 Tasks, 13 Dateien)
 - v1.5: 36-12 in ca. 110 min inkl. voller Suite (13:02 min) und CI (3 Tasks, 12 Dateien)
 - v1.5: 36-13 in ca. 150 min inkl. voller Suite (17:09 min) und ca. 60 min CI (3 Tasks, 7 Dateien)
+- v1.5: 36-16 in ca. 15 min nach dem Dispatch (3 Tasks, 5 Dateien; Freigabe und Dispatch durch den Koordinator)
 
 ## Accumulated Context
 
@@ -151,6 +152,7 @@ Progress: [██████████] 100%
 - 36-11: Abgenommener Gesamttext 1.5.0 (36-WORTLAUT.md B1 bis B5) zeichengleich eingespielt: sechs info.xml-Beschreibungen (ElementTree-Gegenprobe je Block identisch, Zeichenzahlen wie B7), READMEs de/en/fr, CHANGELOG [Unreleased] = B3 (Kopf bleibt bis 36-13), embeddings.md D-36-07, store-listing.md "Entwurf v1.5.0 (Gesamttext), abgenommen am 20.10.2026". Gates: SHARE_SENTENCES auf D-36-08, scan_language_line lässt genau den Umstiegsabsatz zu. REL-05 erfüllt. Commits fdccef86, 7a4c3b2c; CI acht grün (HaRP 39563847139).
 - 36-12: Launch-Audit 1.5.0 milestone-weit (17363bb2..HEAD, 76 Dateien) geschlossen mit 0 CRIT / 0 HIGH / 0 MEDIUM. Gefixt: L-36-01 (D an fünf verankerten PHP-Mustern, similar=14%0A), L-36-02 (kanonische Ziffern in storageIdList/positiveId, 20 Ziffern klemmten auf PHP_INT_MAX), L-36-03 (Sweep-Zeile höchstens 20 IDs je Liste). Akzeptiert: L-36-04 (ein requeue je gelöschtem Storage, 300 Storages 19 s). P5: 169 Abfragen je Poll, kein Blocker, Deferred v1.6. F2 mit Wächtertest an 36-13 übergeben. Commits 884c8554, 1e356119, 69815132, 38e54d32, 6dee66f4.
 - 36-13: Bump 1.5.0 (beide info.xml, image-tag, CHANGELOG [1.5.0] - 2026-10-21) vor UPGRADE_FROM_TAG v1.4.3 im selben Commit 805308c4, Push auf Owner-Wort "ja"; CI acht grün, HaRP 39584388860 zitiert installed_version went from 1.4.3 to 1.5.0, zehn Zusicherungen und 11 grün. Version001500 verwirft backend_app_version bereits, keine neue Migration. Spiegel source-1.5-dev.3: Owner "Anlegen (Empfohlen)", Quellpakete lokal geprüft, publish erst mit Owner-Wort in 36-14 (Doku-Commit 2c379a47 lokal).
+- 36-16: Owner-Wort "einreichen" (21.10.2026), APPSTORE_TOKEN unverändert; store-submit 39598694849 auf 6c953a76: release findling v1.5.0 HTTP 201 12:19:46Z, release findling_backend v1.5.0 HTTP 201 12:19:47Z. Beide App-Seiten nennen 1.5.0 für NC 33 bis 35, Katalog Plattform 34.0.3 führt findling 1.5.0; appapi_apps.json hing beim Beleg noch auf 1.4.3 (Katalog-Cache). HART-06 und REL-05 mit Beleg in REQUIREMENTS.md, HART-06 mit Vermerk Upgrade ab v1.4.3 (D-36-13). state.db-Sicherung .dev/backup-36-05 gelöscht. Phasenabschluss bleibt beim Koordinator.
 
 ### Offene Faeden (kein aktiver Auftrag)
 
@@ -181,11 +183,11 @@ Progress: [██████████] 100%
 ### Blockers/Concerns
 
 - Kill-Kriterium Nextcloud (ES-freie Volltextsuche mit OCR angekuendigt -> Neubewertung) weiter beobachten.
-- Seit 21.10.2026 pip-audit rot (Security scans 39524695697): pillow 12.3.0 mit 8 CVEs (Fix erst 13.0.0, Major-Sprung im Bildpfad), certifi 2026.7.22 (Fix 2026.10.19). Owner-Entscheid vor 1.5.0, ob in 36-09 oder eigenem Plan (F-36-07-2, deferred-items.md der Phase 36).
-- 36-09 muss den TIFF-Rahmenlauf an der Seitengrenze kappen (F-36-07-1: 100 000 IFDs 27,8 s im Kind); steht noch nicht im Plan 36-09, sonst bleibt der Korpusfall tiff-of-100000-ifds xfail.
+- Erledigt mit 36-17 (Pillow 13.0.0, certifi 2026.10.19, Security scans 39533470359 grün): Seit 21.10.2026 pip-audit rot (Security scans 39524695697): pillow 12.3.0 mit 8 CVEs (Fix erst 13.0.0, Major-Sprung im Bildpfad), certifi 2026.7.22 (Fix 2026.10.19). Owner-Entscheid vor 1.5.0, ob in 36-09 oder eigenem Plan (F-36-07-2, deferred-items.md der Phase 36).
+- Erledigt mit 36-09 (tiff-of-100000-ifds 0,20 s, kein xfail mehr): 36-09 muss den TIFF-Rahmenlauf an der Seitengrenze kappen (F-36-07-1: 100 000 IFDs 27,8 s im Kind); steht noch nicht im Plan 36-09, sonst bleibt der Korpusfall tiff-of-100000-ifds xfail.
 
 ## Session Continuity
 
-Last session: 2026-10-21T12:21:15.496Z
-Stopped at: Completed 36-14-PLAN.md, next 36-15 (Owner-Abnahme)
+Last session: 2026-10-21T12:30:00.000Z
+Stopped at: Completed 36-16-PLAN.md, wartet auf Owner-Wort zum Doku-Push
 Resume file: None

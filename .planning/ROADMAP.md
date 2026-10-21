@@ -83,7 +83,8 @@ Details im Archiv: .planning/milestones/v1.4-ROADMAP.md
 - [x] **Phase 31: Neue Formate und Nachholweg** - .eml, ZIP-Inhalte, .doc, .xls, HEIC indexierbar; Altbestand wird nach dem Upgrade selbsttaetig nachgeholt; F-29-03 behoben
 - [x] **Phase 32: Filter in der Unified Search** - Dateityp- und Ordnerfilter direkt in der Nextcloud Unified Search
 - [x] **Phase 33: Ausschlussmuster und Admin-Feinschliff** - Platzhalter-Ausschluesse inkl. Mac-Bundles (#22), Grenzwerte sichtbar (#21), Hardware-Hinweis umformuliert
-- [x] **Phase 34: Umstiegsweg** - Umstiegs-Seite dreisprachig, Admin-Hinweis bei parallelem fulltextsearch, Verlinkung aus README und Store-Text (completed 2026-10-19)
+- [x] **Phase 34: Umstiegsweg** - Umstiegs-Seite dreisprachig, Admin-Hinweis bei parallelem fulltextsearch, Verlinkung aus README und Store-Text
+ (completed 2026-10-19)
 - [x] **Phase 35: Stretch: Aehnliche Dokumente und Spikes** - Aehnliche Dokumente ueber vorhandene Vektoren, granite-Messbericht, #25-Dedup-Designnotiz (entfaellt bei Bedarf ohne Release-Risiko) (completed 2026-10-20)
 - [ ] **Phase 36: Haertung und Store-Einreichung 1.5.0** - Launch-Haertung mit boesartigem Formatkorpus und Upgrade-Strecke 1.4.2 -> 1.5.0, danach Einreichung beider Apps
 
@@ -302,7 +303,16 @@ Plans:
   4. Beide Apps 1.5.0 sind eingereicht (2x HTTP 201), der Beleg steht in docs/store-listing.md
   5. M-32-02 behoben (Owner 13.10.2026): Dokumente geloeschter Nutzer verlassen den Index beim naechsten Abgleich; Dokumente verschwundener externer Speicher nach 30 Tagen Karenz; Beleg auf einer Instanz mit Positivkontrolle
 
-**Plans**: 17 plans
+**Plans**: 17 plans (36-01 bis 36-17; 36-17 lief als Welle 8 vor 36-08)
+
+**Urteile je Erfolgskriterium (36-16, 21.10.2026):**
+
+  1. Erfüllt: 36-AUDIT.md 0 CRIT / 0 HIGH / 0 MEDIUM, vier LOW (drei gefixt, einer akzeptiert; L-36-05/L-36-06 Ziel 1.5.1); generierter Korpus 64 Fälle aus sieben Familien in test_phase36_hostile_corpus.py, alle grün ohne xfail, Urteil `skipped(blocked_malicious)` mit Detailcode (36-07 bis 36-09)
+  2. Erfüllt mit Abweichung: Upgrade-Strecke 1.4.3 -> 1.5.0 per D-36-13 (Start an der Store-Version statt 1.4.2), HaRP-Lauf 39584388860 `installed_version went from 1.4.3 to 1.5.0`, Ausschlüsse durchs Upgrade (36-10); Fremdinstallation aus Release-Assets deploy-harp 39590105344 (vier Matrixzeilen) und lokal auf frischer NC 34.0.3 (36-15)
+  3. Erfüllt: gemeinsame Playwright-Abnahme 21.10.2026, P1 bis P8 grün, Urteil "okok" (36-ABNAHME.md)
+  4. Erfüllt: store-submit 39598694849, release findling v1.5.0 und release findling_backend v1.5.0 je HTTP 201, Beleg docs/store-listing.md Release 1.5.0 (10) bis (12)
+  5. Erfüllt: M-32-02 per CI-Integrationstest und Live-Beleg 8090 mit Positivkontrolle (36-05, 36-M3202-BELEG.md), 30 Tage Karenz (36-04)
+
 Plans:
 
 **Wave 1**
@@ -371,7 +381,7 @@ Plans:
 
 **Wave 17** *(blocked on Wave 16 completion)*
 
-- [ ] 36-16-PLAN.md: Einreichung 2x HTTP 201, Beleg, Zustandspflege
+- [x] 36-16-PLAN.md: Einreichung 2x HTTP 201, Beleg, Zustandspflege
 
 ## Progress
 
@@ -388,7 +398,7 @@ Plans:
 | 33. Ausschlussmuster und Admin-Feinschliff | v1.5 | 11/11 | Executed, verification pending | - |
 | 34. Umstiegsweg | v1.5 | 6/6 | Complete   | 2026-10-19 |
 | 35. Stretch: Aehnliche Dokumente und Spikes | v1.5 | 14/13 | Complete    | 2026-10-20 |
-| 36. Haertung und Store-Einreichung 1.5.0 | v1.5 | 16/17 | In Progress|  |
+| 36. Haertung und Store-Einreichung 1.5.0 | v1.5 | 17/17 | Executed, verification pending | - |
 
 ## Nach v1.3 (Wiedervorlage)
 

@@ -54,8 +54,8 @@
 
 ### Haertung und Release (HART/REL)
 
-- [x] **HART-06**: Launch-Haertung vor Abgabe: Audit Security/Bugs/Performance (0 CRIT/0 HIGH), boesartige Archive/Mails/OLE-Dateien als Testkorpus, Upgrade-Strecke 1.4.2 -> 1.5.0 in CI, Fremdinstallation
-- [x] **REL-05**: Store-Einreichung 1.5.0 beider Apps (Owner-Abnahme Text + Playwright-Runde vorher), Beleg in docs/store-listing.md. Teil der Textabnahme: Wortlaut des fuenften Grenz-Eintrags Tschechisch (D-30-06, Entwurf aus 30-08 in docs/store-listing.md 'Entwurf v1.5.0 (Teil Phase 30)'); Dateitypen-Liste, README-Zeilen, Urteils-Wortlaute und Grenzlisten-Frage (Entwurf aus 31-14, 'Entwurf v1.5.0 (Teil Phase 31)')
+- [x] **HART-06**: Launch-Haertung vor Abgabe: Audit Security/Bugs/Performance (0 CRIT/0 HIGH), boesartige Archive/Mails/OLE-Dateien als Testkorpus, Upgrade-Strecke 1.4.2 -> 1.5.0 in CI, Fremdinstallation. Vermerk 36-16: Die Upgrade-Strecke startet per D-36-13 von der Store-Version v1.4.3 (1.4.3 -> 1.5.0), Beleg HaRP-Lauf 39584388860.
+- [x] **REL-05**: Store-Einreichung 1.5.0 beider Apps (Owner-Abnahme Text + Playwright-Runde vorher), Beleg in docs/store-listing.md. Teil der Textabnahme: Wortlaut des fuenften Grenz-Eintrags Tschechisch (D-30-06, Entwurf aus 30-08 in docs/store-listing.md 'Entwurf v1.5.0 (Teil Phase 30)'); Dateitypen-Liste, README-Zeilen, Urteils-Wortlaute und Grenzlisten-Frage (Entwurf aus 31-14, 'Entwurf v1.5.0 (Teil Phase 31)'). Erfüllt 21.10.2026: store-submit 39598694849, zweimal HTTP 201 (12:19:46Z, 12:19:47Z), Beleg docs/store-listing.md Release 1.5.0 (10) bis (12).
 
 ## Future (v1.6, vorlaeufig)
 
@@ -106,8 +106,8 @@
 | STR-01 | Phase 35 | Complete |
 | STR-02 | Phase 35 | Complete |
 | STR-03 | Phase 35 | Complete |
-| HART-06 | Phase 36 | Complete |
-| REL-05 | Phase 36 | Complete |
+| HART-06 | Phase 36 | Complete (Audit 36-AUDIT.md 0 CRIT/0 HIGH/0 MEDIUM, 36-12; generierter Korpus test_phase36_hostile_corpus.py 64 Fälle ohne xfail, 36-07 bis 36-09; Upgrade-Strecke ab v1.4.3 per D-36-13, HaRP-Lauf 39584388860, 36-13; Fremdinstallation aus Release-Assets deploy-harp 39590105344 und lokal 8096, 36-14/36-15) |
+| REL-05 | Phase 36 | Complete (Owner-Abnahme Text und Produkt okok 21.10.2026, 36-ABNAHME.md; Einreichung store-submit 39598694849, findling und findling_backend je HTTP 201; Belegkette docs/store-listing.md Abschnitt Release 1.5.0, Zeilen 1 bis 12) |
 
 **Coverage:** 26/26 v1.5-Requirements zugeordnet, keine Waisen, keine Doppelungen. STR-* (Phase 35) duerfen ohne Release-Risiko entfallen.
 
