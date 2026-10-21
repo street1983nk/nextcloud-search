@@ -673,13 +673,29 @@ def _encode_frame(picture: Image.Image) -> bytes:
     # thumbnail keeps the aspect ratio and never scales up, so a picture that is
     # already small is left exactly as it is. It works in memory as well.
     picture.thumbnail((_MAX_EDGE_PIXELS, _MAX_EDGE_PIXELS))
-    grey = picture.convert("L")
+    grey = _grey_of(picture)
     try:
         sink = BytesIO()
         grey.save(sink, format="PNG", compress_level=_PNG_COMPRESS_LEVEL)
     finally:
         grey.close()
     return sink.getvalue()
+
+
+def _grey_of(picture: Image.Image) -> Image.Image:
+    """The single grey channel of a frame, a new picture the caller closes.
+
+    Grey with associated alpha opens as "La" since Pillow 13.0.0 (python-pillow
+    PR #10140, plan 36-17), and Pillow has no conversion from "La" to "L". Its
+    first band is the stored grey, which is exactly what this branch handed the
+    engine under Pillow 12.3.0, when the shim opened the same file as "LA" and
+    the conversion dropped the alpha: the picture as it lies on black. Undoing
+    the premultiplication instead would brighten every half transparent stroke
+    and change what is read. Every other mode converts as before.
+    """
+    if picture.mode == "La":
+        return picture.getchannel(0)
+    return picture.convert("L")
 
 
 def _verdict(text: str, *, truncated: bool) -> ExtractionOutcome:

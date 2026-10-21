@@ -7,8 +7,9 @@ again that 1.3.2 judged wrongly. One of the two seed files is this picture: grey
 with one extra channel declared as unspecified (ExtraSamples 0), big endian,
 uncompressed, eight bits per sample. That is the class of issue #18 the dump of
 03.10.2026 showed, the key ``(MM, 1, (1,), 1, (8, 8), (0,))`` of the TIFF shim of
-plan 29-07. Pillow 12.3.0 has no entry for it, so 1.3.2 books the file as
-failed(corrupt); 1.4.0 reads it through the shim and finds the seed word.
+plan 29-07. Pillow 12.3.0, the one in the image of 1.3.2, has no entry for it,
+so 1.3.2 books the file as failed(corrupt); 1.4.0 read it through the shim, and
+since Pillow 13.0.0 (python-pillow PR #10140, plan 36-17) Pillow maps it itself.
 
 The picture carries the seed word three times and one ordinary line, so the
 text the engine reads is above the twenty characters a picture needs before it

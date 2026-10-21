@@ -4,11 +4,13 @@
 "Store upgrade 2b" of ``.github/workflows/deploy-harp.yml`` sows on the 1.3.2
 installation (plan 29-11). The proof only means something if the picture is
 exactly of the class of issue #18 that 1.3.2 cannot read and 1.4.0 can: grey
-with one extra channel declared as unspecified, which Pillow 12.3.0 has no
-entry for and which the shim of plan 29-07 maps. A picture that Pillow could
-open on its own would let 1.3.2 index it, the seed word would answer before the
-upgrade, and the recheck would prove nothing. A picture the shim could not open
-would stay failed after the upgrade and turn the proof red for the wrong reason.
+with one extra channel declared as unspecified, which Pillow 12.3.0 in the
+image of 1.3.2 has no entry for. 1.4.0 read it through the shim of plan 29-07;
+since plan 36-17 this code runs on Pillow 13.0.0, which maps the class itself
+(python-pillow PR #10140). A picture that the Pillow of 1.3.2 could open would
+let 1.3.2 index it, the seed word would answer before the upgrade, and the
+recheck would prove nothing. A picture this code could not open would stay
+failed after the upgrade and turn the proof red for the wrong reason.
 Both are asked here, on the committed bytes, instead of in a CI run that costs
 an hour to find out.
 
@@ -47,6 +49,17 @@ _TAG_COMPRESSION = 259
 _TAG_PHOTOMETRIC = 262
 _TAG_SAMPLES_PER_PIXEL = 277
 _TAG_EXTRA_SAMPLES = 338
+_TAG_FILL_ORDER = 266
+_TAG_SAMPLE_FORMAT = 339
+
+# Every key of ``TiffImagePlugin.OPEN_INFO`` in Pillow 12.3.0, the Pillow of
+# v1.3.2, for grey (photometric 0 or 1) with two channels. Read once on
+# 2026-10-21 in plan 36-17 with ``uv run --no-project --with pillow==12.3.0
+# python -c`` over ``sorted(OPEN_INFO)``; only the unassociated alpha (2).
+PILLOW_12_3_0_GREY_TWO_CHANNEL_KEYS: dict[tuple[object, ...], tuple[str, str]] = {
+    (b"II", 1, (1,), 1, (8, 8), (2,)): ("LA", "LA"),
+    (b"MM", 1, (1,), 1, (8, 8), (2,)): ("LA", "LA"),
+}
 
 
 def _generator() -> ModuleType:
@@ -78,21 +91,39 @@ def test_the_fixture_is_big_endian_grey_with_an_unspecified_extra_channel() -> N
         assert tags[_TAG_COMPRESSION] == 1
 
 
-def test_without_the_shim_pillow_cannot_open_it(monkeypatch: pytest.MonkeyPatch) -> None:
-    # A fresh copy of the table without the keys the shim added, which is the
-    # table 1.3.2 runs with. UnidentifiedImageError is what 1.3.2 books as
-    # failed(corrupt).
-    assert image._SHIM_KEYS
-    untouched = {key: value for key, value in TiffImagePlugin.OPEN_INFO.items() if key not in image._SHIM_KEYS}
-    monkeypatch.setattr(TiffImagePlugin, "OPEN_INFO", untouched)
+def test_the_pillow_of_1_3_2_has_no_entry_for_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    # 1.3.2 runs with its own image and Pillow 12.3.0 in it (pin of the tag
+    # v1.3.2), not with the Pillow of this code, which maps the class itself
+    # since 13.0.0 (plan 36-17). So the statement is made against the table of
+    # 12.3.0: its grey keys of two channels, written down here, and the key of
+    # the seed missing among them. UnidentifiedImageError is what 1.3.2 books
+    # as failed(corrupt), so the open over that table is asked as well.
+    with Image.open(FIXTURE) as picture:
+        assert isinstance(picture, TiffImagePlugin.TiffImageFile)
+        tags = picture.tag_v2
+        key = (
+            b"MM",
+            tags[_TAG_PHOTOMETRIC],
+            tags.get(_TAG_SAMPLE_FORMAT, (1,) * tags[_TAG_SAMPLES_PER_PIXEL])[:1],
+            tags.get(_TAG_FILL_ORDER, 1),
+            tags[_TAG_BITS_PER_SAMPLE],
+            tags[_TAG_EXTRA_SAMPLES],
+        )
+    assert key == (b"MM", 1, (1,), 1, (8, 8), (0,))
+    assert key not in PILLOW_12_3_0_GREY_TWO_CHANNEL_KEYS
 
+    table = {k: v for k, v in TiffImagePlugin.OPEN_INFO.items() if k[1] not in (0, 1) or len(k[4]) != 2}
+    table.update(PILLOW_12_3_0_GREY_TWO_CHANNEL_KEYS)
+    monkeypatch.setattr(TiffImagePlugin, "OPEN_INFO", table)
     with pytest.raises(UnidentifiedImageError):
         Image.open(FIXTURE)
 
 
-def test_with_the_shim_it_is_read_and_turns_grey() -> None:
+def test_this_code_reads_it_and_it_turns_grey() -> None:
+    # Pillow 13.0.0 opens the unspecified extra channel as grey and skips it
+    # in the raw mode "LX" (python-pillow PR #10140), so the picture is "L".
     with Image.open(FIXTURE) as picture:
-        assert picture.mode == "LA"
+        assert picture.mode == "L"
         grey = picture.convert("L")
     # White paper and black writing, so the engine gets a page and not a void.
     assert grey.getextrema() == (0, 255)

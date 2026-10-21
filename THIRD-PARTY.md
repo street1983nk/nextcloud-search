@@ -167,7 +167,7 @@ plan 31-01 found seven of them one or more releases behind.
 | `striprtf` | 0.0.33 | BSD-3-Clause | github.com/joshy/striprtf | `/app/.venv/lib/python3.13/site-packages/striprtf` |
 | `charset-normalizer` | 3.5.2 | MIT | github.com/jawah/charset_normalizer | `/app/.venv/lib/python3.13/site-packages/charset_normalizer` |
 | `lxml` | 6.1.3 | BSD-3-Clause (bundled libxml2 and libxslt: MIT) | github.com/lxml/lxml | `/app/.venv/lib/python3.13/site-packages/lxml` |
-| `pillow` | 12.3.0 | MIT-CMU | github.com/python-pillow/Pillow | `/app/.venv/lib/python3.13/site-packages/PIL` |
+| `pillow` | 13.0.0 | MIT-CMU | github.com/python-pillow/Pillow | `/app/.venv/lib/python3.13/site-packages/PIL` |
 | `olefile` | 0.47 | BSD-2-Clause | github.com/decalage2/olefile | `/app/.venv/lib/python3.13/site-packages/olefile` |
 | `xlrd` | 2.0.2 | BSD-3-Clause | github.com/python-excel/xlrd | `/app/.venv/lib/python3.13/site-packages/xlrd` |
 | `pillow-heif` | 1.8.1 | BSD-3-Clause (source); binary wheel GPL-2.0-or-later, see below | github.com/bigcat88/pillow_heif | `/app/.venv/lib/python3.13/site-packages/pillow_heif` and `pillow_heif.libs` |

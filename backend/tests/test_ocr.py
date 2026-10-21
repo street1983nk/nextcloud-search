@@ -1104,9 +1104,9 @@ def test_a_grey_tiff_with_an_extra_channel_is_read(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, extra: int, compression: str, order: str
 ) -> None:
     # The file of #18: grey plus one extra channel declared as unspecified (0)
-    # or associated alpha (1). Pillow 12.3.0 only maps the unassociated alpha of
-    # value 2, so without the shim this is UnidentifiedImageError and was booked
-    # as a broken file.
+    # or associated alpha (1). Pillow 12.3.0 only mapped the unassociated alpha of
+    # value 2, so without the shim this was UnidentifiedImageError and was booked
+    # as a broken file; Pillow 13.0.0 maps both itself (plan 36-17).
     engine = _install_engine(monkeypatch, _page("Grauwert"))
     data = _in_order(_retagged(_tiff("LA", compression), _TAG_EXTRA_SAMPLES, extra), order)
 
@@ -1179,6 +1179,89 @@ def test_a_compressed_tiff_with_sample_format_zero_is_read(
         assert handed.getpixel((5, 5)) == _GREY
     # The buffer was patched, the file was not (IDX-07).
     assert Path(path).read_bytes() == data
+
+
+def _with_duplicate_sample_format(data: bytes, first: int, second: int) -> bytes:
+    """A little endian one band TIFF whose IFD carries SampleFormat twice, ``first`` then ``second``.
+
+    The IFD is written anew at the end of the file with the second entry right
+    behind the first, and the header points at it; the old IFD stays behind as
+    unused bytes. Every other entry keeps its offsets, because no byte they
+    point at moves. One band, so both values sit inside their entries.
+    """
+    assert data[:4] == b"II*\x00"
+    (ifd,) = struct.unpack_from("<I", data, 4)
+    (count,) = struct.unpack_from("<H", data, ifd)
+    entries: list[bytes] = []
+    for number in range(count):
+        entry = data[ifd + 2 + 12 * number : ifd + 14 + 12 * number]
+        tag, _kind, values = struct.unpack_from("<HHI", entry)
+        if tag == _TAG_SAMPLE_FORMAT:
+            assert values == 1
+            entries.append(struct.pack("<HHIHH", tag, 3, 1, first, 0))
+            entries.append(struct.pack("<HHIHH", tag, 3, 1, second, 0))
+        else:
+            entries.append(entry)
+    assert len(entries) == count + 1, "the file has no SampleFormat entry to double"
+    (following,) = struct.unpack_from("<I", data, ifd + 2 + 12 * count)
+    assert following == 0
+    moved = bytearray(data)
+    if len(moved) % 2:
+        moved += b"\x00"
+    struct.pack_into("<I", moved, 4, len(moved))
+    moved += struct.pack("<H", len(entries)) + b"".join(entries) + struct.pack("<I", 0)
+    return bytes(moved)
+
+
+@pytest.mark.parametrize("compression", _COMPRESSIONS)
+@pytest.mark.parametrize(("first", "second"), [(0, 1), (1, 0)])
+def test_a_tiff_with_a_duplicate_sample_format_tag_is_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, first: int, second: int, compression: str
+) -> None:
+    # Pillow 13.0.0 keeps the first of two equal tags, where 12.3.0 kept the
+    # last (release notes 13.0.0, "Duplicate TIFF tags"), and libtiff, which
+    # decodes every compressed file, keeps the first as well. Under 12.3.0 the
+    # order 0 then 1 compressed was failed(corrupt): Pillow saw 1, so the copy
+    # with the patched value was never made, and libtiff saw 0 and refused it
+    # (measured in plan 36-17). Now both see the same value, and both orders
+    # are read with the pixels drawn; the patch sets every 0 of the IFD, so the
+    # copy is right whichever entry libtiff takes.
+    engine = _install_engine(monkeypatch, _page("Grauwert"))
+    data = _with_duplicate_sample_format(_tiff("L", compression, sample_format=True), first, second)
+    path = _written(tmp_path, "doppelt.tif", data)
+
+    outcome = image.extract_image(path)
+
+    assert outcome.state is State.INDEXED
+    with Image.open(path) as picture:
+        assert isinstance(picture, TiffImagePlugin.TiffImageFile)
+        assert picture.tag_v2[_TAG_SAMPLE_FORMAT] == (first,)
+    with _handed_over(engine) as handed:
+        assert handed.getpixel((5, 5)) == _GREY
+    assert Path(path).read_bytes() == data
+
+
+def test_grey_with_associated_alpha_hands_the_stored_grey_scaled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Pillow 13.0.0 opens grey with associated alpha (ExtraSamples 1) as "La"
+    # and has no conversion from "La" to "L" (plan 36-17). The engine gets the
+    # stored grey, which is what 12.3.0 with the shim handed it: half alpha
+    # leaves the 200 at 200, an unpremultiplied grey would be 255. Over the
+    # edge cap, so the downscale of a "La" frame is part of the way.
+    engine = _install_engine(monkeypatch, _page("Grauwert"))
+    sink = BytesIO()
+    with Image.new("LA", (4000, 3000), color=(_GREY, 128)) as picture:
+        picture.save(sink, format="TIFF", compression="tiff_lzw")
+    data = _retagged(sink.getvalue(), _TAG_EXTRA_SAMPLES, 1)
+
+    outcome = image.extract_image(_written(tmp_path, "assoziiert.tif", data))
+
+    assert outcome.state is State.INDEXED
+    with _handed_over(engine) as handed:
+        assert handed.mode == "L"
+        assert handed.size == (3500, 2625)
+        assert handed.getpixel((5, 5)) == _GREY
 
 
 def test_a_compressed_sample_format_zero_tiff_over_the_buffer_cap_is_an_honest_verdict(
@@ -1481,9 +1564,54 @@ def test_on_windows_there_is_no_room_to_estimate_against() -> None:
     assert image._address_space_room() is None
 
 
-def test_the_shim_maps_grey_with_an_extra_channel_to_la() -> None:
-    # LA and not L;16B, which fails on the libtiff path, and not La, which does
-    # not convert to L (pitfall 2 of the phase research).
-    for order in (TiffImagePlugin.II, TiffImagePlugin.MM):
-        for extra in (0, 1):
-            assert TiffImagePlugin.OPEN_INFO[(order, 1, (1,), 1, (8, 8), (extra,))] == ("LA", "LA")
+# Run in a fresh interpreter that never imports findling, so neither the shim
+# nor anything else of this code is in the table: grey with an unspecified (0)
+# and an associated (1) extra channel, both orders, all three compressions.
+_UPSTREAM_PROBE = """
+import struct, sys
+from io import BytesIO
+from PIL import Image, TiffImagePlugin as T
+assert "findling" not in sys.modules
+keys = {}
+for order in (T.II, T.MM):
+    for extra in (0, 1):
+        keys[(order.decode(), extra)] = T.OPEN_INFO.get((order, 1, (1,), 1, (8, 8), (extra,)))
+read = {}
+for extra in (0, 1):
+    for compression in ("raw", "tiff_lzw", "tiff_adobe_deflate"):
+        sink = BytesIO()
+        Image.new("LA", (800, 600), (200, 255)).save(sink, format="TIFF", compression=compression)
+        data = bytearray(sink.getvalue())
+        (ifd,) = struct.unpack_from("<I", data, 4)
+        (count,) = struct.unpack_from("<H", data, ifd)
+        for number in range(count):
+            entry = ifd + 2 + 12 * number
+            if struct.unpack_from("<H", data, entry)[0] == 338:
+                struct.pack_into("<H", data, entry + 8, extra)
+        with Image.open(BytesIO(bytes(data))) as picture:
+            picture.load()
+            grey = picture.getchannel(0) if picture.mode == "La" else picture.convert("L")
+            read[(extra, compression)] = (picture.mode, grey.getpixel((5, 5)))
+print(repr((keys, read)))
+"""
+
+
+def test_pillow_itself_reads_grey_with_an_extra_channel() -> None:
+    # python-pillow#10139, closed by PR #10140 (merged 2026-10-07, in the tag
+    # 13.0.0, checked in plan 36-17 by the compare of the merge commit with the
+    # tag). Under 12.3.0 every key here was None and every open
+    # UnidentifiedImageError, which is why the shim of plan 29-07 existed.
+    # The modes are written down as Pillow ships them, not assumed: "L" with
+    # the raw mode "LX" that skips the unspecified channel, and "La" for the
+    # associated alpha, whose first band is the stored grey (image._grey_of).
+    answer = subprocess.run(  # noqa: S603 - a fixed program text, never a shell
+        [sys.executable, "-c", _UPSTREAM_PROBE], capture_output=True, check=True, text=True, timeout=60
+    )
+    keys, read = ast.literal_eval(answer.stdout)
+
+    for order in ("II", "MM"):
+        assert keys[(order, 0)] == ("L", "LX")
+        assert keys[(order, 1)] == ("La", "La")
+    for compression in _COMPRESSIONS:
+        assert read[(0, compression)] == ("L", _GREY)
+        assert read[(1, compression)] == ("La", _GREY)

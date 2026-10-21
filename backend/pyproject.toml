@@ -25,7 +25,7 @@ dependencies = [
     # dependency is the version that silently disappears when the package that
     # dragged it in stops needing it. So it becomes a direct edge here. Net new
     # PyPI packages of phase 3: zero.
-    "pillow==12.3.0",
+    "pillow==13.0.0",
     # Phase 31, three formats that need a reader of their own. All three are
     # pinned exactly because each decides what a file of its type yields, and
     # THIRD-PARTY.md carries their licences (test_third_party_versions.py holds

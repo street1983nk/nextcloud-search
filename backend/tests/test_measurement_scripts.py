@@ -2161,8 +2161,15 @@ PHP_TREE_HASH_TODAY = "60821e1a430226b2530194ac098bd7b50cc28df4be5a978b0ba85b9b6
 # stays at 80. The PHP pair moves in the same commit. Recomputed independently
 # with find, sort, tr and sha256sum over the CRLF normalised tree: 3271cb00...
 # both ways.
+#
+# Moved on 2026-10-21 by Plan 36-17 (HART-06, F-36-07-2): extract/image.py
+# carries _grey_of, because Pillow 13.0.0 opens grey with associated alpha as
+# "La" and has no conversion from "La" to "L"; its first band is the grey the
+# engine got under 12.3.0. No file came or went, so PACKAGE_FILES_TODAY stays
+# at 80. The PHP pair does not move. Recomputed independently with find, sort,
+# tr and sha256sum over the CRLF normalised tree: 2ed84a3c... both ways.
 PACKAGE_FILES_TODAY = 80
-PACKAGE_TREE_HASH_TODAY = "3271cb00e238dfaa19009daf0990581df60137420f279b0d364567acbf7e481a"
+PACKAGE_TREE_HASH_TODAY = "2ed84a3c103dc31109e0d15ea2cae56bbf3e1e05667d6041cf894feb6cf22e64"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
