@@ -61,7 +61,10 @@ length, so a cycle cannot hang it, but it does not notice one either: a cycle
 inside the declared length gives back repeated sectors as if they were the
 stream. So the chains of both streams we read, and the chain of the mini stream
 they may live in, are walked once more with a set of visited sectors, and a
-sector seen twice is CorruptCompoundFile. Before olefile opens the file, the
+sector seen twice is cfb.CompoundCycle, which ends as skipped(blocked_malicious)
+with the detail cfb_cycle (D-36-17, plan 36-09), as does a cycle in the DIFAT
+chain or the directory tree that cfb.check_cycles finds before olefile opens
+the file; every other chain defect is CorruptCompoundFile. Before that, the
 declared number of FAT sectors is held against the size of the file: olefile
 appends every FAT sector to an array by copying it, and measured on 0.47,
 20 000 declared FAT sectors in a file of 180 kB cost 29 s before it reports
@@ -201,6 +204,7 @@ def extract_doc(path: str) -> ExtractionOutcome:
     cap = config.settings().max_text_chars
     try:
         cfb.check_fat_size(path)
+        cfb.check_cycles(path)
         with olefile.OleFileIO(path, raise_defects=olefile.DEFECT_INCORRECT) as ole:
             if not ole.exists(_WORD_STREAM):
                 return ExtractionOutcome.skipped(Reason.UNSUPPORTED_VARIANT)
@@ -212,6 +216,10 @@ def extract_doc(path: str) -> ExtractionOutcome:
                 raise CorruptDocument
             table = _read_stream(ole, fib.table_stream)
         raw, complete = _piece_text(word, table, fib, cap * _RAW_PER_CAPPED_CHAR)
+    except cfb.CompoundCycle:
+        # A cycle in a chain or in the directory tree is an attack signature
+        # and not damage (D-36-17, plan 36-09); caught before its parent.
+        return ExtractionOutcome.skipped(Reason.BLOCKED_MALICIOUS, detail="cfb_cycle")
     except (OSError, ValueError, struct.error, RecursionError, CorruptDocument, cfb.CorruptCompoundFile) as error:
         return ExtractionOutcome.from_exception(error)
 

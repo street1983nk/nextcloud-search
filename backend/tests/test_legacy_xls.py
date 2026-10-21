@@ -349,6 +349,11 @@ def _corrupt(outcome: ExtractionOutcome) -> bool:
     return outcome.state is State.FAILED and outcome.reason is Reason.CORRUPT
 
 
+def _blocked_cycle(outcome: ExtractionOutcome) -> bool:
+    """The verdict of a cycle in a chain or in the directory tree (D-36-17, plan 36-09)."""
+    return (outcome.state, outcome.reason, outcome.detail) == (State.SKIPPED, Reason.BLOCKED_MALICIOUS, "cfb_cycle")
+
+
 def _fat_payload(**cfb: object) -> bytes:
     """The LibreOffice workbook in the FAT: build_cfb pads it to 4096 bytes, eight sectors."""
     return build_cfb([], streams={"Workbook": _workbook_stream()}, **cfb)  # pyright: ignore[reportArgumentType]
@@ -365,10 +370,11 @@ def test_the_workbook_in_the_fat_is_read(tmp_path: Path) -> None:
     assert _guarded(_write(tmp_path, _fat_payload())).text == VALUES_TEXT
 
 
-def test_a_fat_cycle_is_corrupt_in_time(tmp_path: Path) -> None:
+def test_a_fat_cycle_is_blocked_as_malicious_in_time(tmp_path: Path) -> None:
     start = _start_of(_fat_payload(), "Workbook")
 
-    assert _corrupt(_guarded(_write(tmp_path, _fat_payload(fat={start + 5: start + 1}))))
+    # D-36-17, plan 36-09: a cycle is the attack signature cfb_cycle, not damage.
+    assert _blocked_cycle(_guarded(_write(tmp_path, _fat_payload(fat={start + 5: start + 1}))))
 
 
 def test_a_fat_chain_past_the_end_of_the_file_is_corrupt_in_time(tmp_path: Path) -> None:
@@ -382,14 +388,17 @@ def test_a_fat_chain_past_the_end_of_the_file_is_corrupt_in_time(tmp_path: Path)
 
 
 @pytest.mark.parametrize("last_next", [None, CFB_END_OF_CHAIN], ids=["cycle", "control"])
-def test_a_difat_cycle_is_corrupt_in_time(tmp_path: Path, last_next: int | None) -> None:
+def test_a_difat_cycle_is_blocked_as_malicious_in_time(tmp_path: Path, last_next: int | None) -> None:
     # 110 FAT sectors need a file of about 7 MB before a DIFAT sector is due at all.
+    # "cycle" (last_next None) points the last DIFAT sector back at the first, a
+    # cycle; "control" ends the chain with ENDOFCHAIN, no cycle, and is read.
     payload = cfb_with_difat(_fat_payload(), sectors=13_960, fat_count=110, last_next=last_next)
 
     outcome = _guarded(_write(tmp_path, payload))
 
     if last_next is None:
-        assert _corrupt(outcome)
+        # D-36-17, plan 36-09: a cycle is the attack signature cfb_cycle, not damage.
+        assert _blocked_cycle(outcome)
     else:
         assert outcome.text == VALUES_TEXT
 
@@ -419,7 +428,7 @@ def _mini_chain(path: str) -> tuple[int, list[int]]:
 
 
 @pytest.mark.parametrize("cycle", [True, False], ids=["cycle", "control"])
-def test_a_minifat_cycle_is_corrupt_in_time(tmp_path: Path, cycle: bool) -> None:
+def test_a_minifat_cycle_is_blocked_as_malicious_in_time(tmp_path: Path, cycle: bool) -> None:
     # xlrd follows a chain in the mini stream without a set of seen sectors, so
     # a cycle there is a loop without end, not an error.
     minifat_at, chain = _mini_chain(_fixture("biff8-values.xls"))
@@ -431,13 +440,14 @@ def test_a_minifat_cycle_is_corrupt_in_time(tmp_path: Path, cycle: bool) -> None
     outcome = _guarded(_write(tmp_path, bytes(data)))
 
     if cycle:
-        assert _corrupt(outcome)
+        # D-36-17, plan 36-09: a cycle is the attack signature cfb_cycle, not damage.
+        assert _blocked_cycle(outcome)
     else:
         assert outcome.text == VALUES_TEXT
 
 
 @pytest.mark.parametrize("back", [0, 20], ids=["to-the-start", "into-the-middle"])
-def test_a_minifat_chain_that_runs_on_past_its_stream_into_a_cycle_is_corrupt_in_time(
+def test_a_minifat_chain_that_runs_on_past_its_stream_into_a_cycle_is_blocked_as_malicious_in_time(
     tmp_path: Path, back: int
 ) -> None:
     # The cycle hides behind the last sector of the stream: a walk bound by the
@@ -446,14 +456,30 @@ def test_a_minifat_chain_that_runs_on_past_its_stream_into_a_cycle_is_corrupt_in
     data = bytearray((FIXTURES / "biff8-values.xls").read_bytes())
     struct.pack_into("<I", data, minifat_at + 4 * chain[-1], chain[back])
 
-    assert _corrupt(_guarded(_write(tmp_path, bytes(data))))
+    # D-36-17, plan 36-09: a cycle is the attack signature cfb_cycle, not damage.
+    assert _blocked_cycle(_guarded(_write(tmp_path, bytes(data))))
 
 
-def test_a_fat_chain_that_runs_on_past_its_stream_is_corrupt_in_time(tmp_path: Path) -> None:
+def test_a_fat_chain_that_runs_on_past_its_stream_into_a_cycle_is_blocked_as_malicious_in_time(
+    tmp_path: Path,
+) -> None:
+    # The last of the eight sectors links back to the first: by its bytes a
+    # cycle, so cfb_cycle (D-36-17, plan 36-09), although the plan listed the
+    # test under the cases without a cycle; the bytes decide, not the name.
     payload = _fat_payload()
     start = _start_of(payload, "Workbook")
 
-    assert _corrupt(_guarded(_write(tmp_path, _fat_payload(fat={start + 7: start}))))
+    assert _blocked_cycle(_guarded(_write(tmp_path, _fat_payload(fat={start + 7: start}))))
+
+
+def test_a_fat_chain_that_runs_on_past_its_stream_without_a_cycle_is_corrupt_in_time(tmp_path: Path) -> None:
+    # The positive control of the case above: the last sector links out of the
+    # table (sector 100 lies behind the file), no sector comes twice.
+    payload = _fat_payload()
+    start = _start_of(payload, "Workbook")
+    assert len(payload) // 512 - 1 < 100 < 128
+
+    assert _corrupt(_guarded(_write(tmp_path, _fat_payload(fat={start + 7: 100}))))
 
 
 def _rename_entry(data: bytearray, old: str, new: str, *, start: int | None = None, size: int | None = None) -> None:
@@ -487,6 +513,7 @@ def test_the_book_stream_behind_an_empty_workbook_is_checked_too(tmp_path: Path,
     outcome = _guarded(_write(tmp_path, bytes(data)))
 
     if cycle:
-        assert _corrupt(outcome)
+        # D-36-17, plan 36-09: a cycle is the attack signature cfb_cycle, not damage.
+        assert _blocked_cycle(outcome)
     else:
         assert outcome.text == VALUES_TEXT

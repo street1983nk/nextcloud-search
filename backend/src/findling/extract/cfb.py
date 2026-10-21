@@ -63,6 +63,21 @@ cycle there is a loop without end (plan 31-06, measured). walk_stream follows
 the chain of one stream, and of the mini stream it may live in, once with a set
 of visited sectors and against the length of the table, which olefile has cut
 to the size of the file. A defect is CorruptCompoundFile.
+
+**A cycle is CompoundCycle (D-36-17, plan 36-09).** A sector chain of a valid
+compound file never reaches a sector twice, so every cycle is an attack
+signature and not damage: in the chain of a stream (FAT), of a small stream
+(MiniFAT), including a chain that runs on past the end of its stream into a
+cycle, in the chain of DIFAT sectors, in the chain of directory sectors and in
+the tree of directory entries. CompoundCycle is a subclass of
+CorruptCompoundFile, so a caller that knows only the parent keeps its verdict;
+the legacy readers catch it first and answer skipped(blocked_malicious) with
+the detail "cfb_cycle" (36-WORTLAUT.md A3). olefile notices a cycle in the
+DIFAT chain and in the tree itself, but as an OleFileError like any other
+defect, so check_cycles walks both before olefile opens the file. Every other
+defect stays what it was: check_cycles raises for a cycle and for nothing
+else, and leaves every other oddity to olefile. The sniff is unchanged: a
+cycle ends its walk and the sniff answers None.
 """
 
 from __future__ import annotations
@@ -136,6 +151,91 @@ class CorruptCompoundFile(Exception):
     """A sector chain or FAT of a compound file that the specification does not allow."""
 
 
+class CompoundCycle(CorruptCompoundFile):
+    """A sector chain or the directory tree of a compound file reaches an element twice.
+
+    A valid compound file cannot have one, so a cycle is an attack signature
+    (D-36-17) and the legacy readers report it as cfb_cycle.
+    """
+
+
+_DIFAT_START_AT: Final = 0x44
+
+
+def check_cycles(path: str) -> None:
+    """Raise CompoundCycle for a cycle in the DIFAT chain, the directory chain or the directory tree.
+
+    Run before olefile opens the file, after check_fat_size. Only a cycle
+    raises: a link out of the file, a short read or any other structure the
+    walk cannot follow ends the check silently, so that olefile reports it as
+    before. The walks are bounded by the sectors of the file and the entries of
+    the directory.
+    """
+    try:
+        with Path(path).open("rb") as handle:
+            size = handle.seek(0, 2)
+            header = _read_at(handle, 0, _HEADER_BYTES, size)
+            if header[: len(_SIGNATURE)] != _SIGNATURE:
+                return
+            (shift,) = struct.unpack_from("<H", header, _SECTOR_SHIFT_AT)
+            if shift not in _ALLOWED_SHIFTS:
+                return
+            _walk_difat(handle, size, 1 << shift, header)
+            entries = _directory(handle, size)
+    except (OSError, struct.error, UnicodeDecodeError, ValueError, _Malformed):
+        return
+    if entries:
+        _walk_tree(entries)
+
+
+def _walk_difat(handle: BinaryIO, size: int, sector: int, header: bytes) -> None:
+    """Follow the chain of DIFAT sectors to its end; a sector seen twice is a cycle.
+
+    The last four bytes of a DIFAT sector name the next one ([MS-CFB] 2.5). The
+    chain is followed whatever the count in the header says, because a link is
+    what a reader follows; it ends at the first marker (ENDOFCHAIN, FREESECT),
+    and a link out of the file ends it through _read_at.
+    """
+    (current,) = struct.unpack_from("<I", header, _DIFAT_START_AT)
+    seen: set[int] = set()
+    sectors_in_file = size // sector
+    while current <= _MAX_REGULAR_SECTOR:
+        if current in seen:
+            raise CompoundCycle
+        if len(seen) > sectors_in_file:
+            return
+        seen.add(current)
+        link = _read_at(handle, (current + 1) * sector + sector - 4, 4, size)
+        (current,) = struct.unpack("<I", link)
+
+
+def _walk_tree(entries: list[_Entry]) -> None:
+    """Walk the directory tree from the root; an entry reached again below itself is a cycle.
+
+    Depth first over child, left and right, with the entries on the current
+    path marked, so an entry shared by two branches is not mistaken for a
+    cycle; a link outside the directory (NOSTREAM among them) ends its branch.
+    Iterative, so a deep hostile tree costs a list and not the stack.
+    """
+    on_path: set[int] = set()
+    done: set[int] = set()
+    stack: list[tuple[int, bool]] = [(0, False)]
+    while stack:
+        number, leaving = stack.pop()
+        if leaving:
+            on_path.discard(number)
+            done.add(number)
+            continue
+        if number >= len(entries) or number in done:
+            continue
+        if number in on_path:
+            raise CompoundCycle
+        on_path.add(number)
+        stack.append((number, True))
+        entry = entries[number]
+        stack.extend((link, False) for link in (entry.child, entry.left, entry.right))
+
+
 def check_fat_size(path: str) -> None:
     """Refuse a FAT that declares more sectors than the file could need (see above).
 
@@ -193,6 +293,12 @@ def _visit_once(table: object, start: object, size: object, sector: object) -> N
     olefile reads only as many sectors as the size asks for and would not care,
     but xlrd follows a chain to its end marker whatever the size says, so a
     link past the last sector is where a cycle hides from a walk bound by size.
+
+    A sector seen twice is CompoundCycle. A chain that does not end with its
+    stream is followed on, bounded by the length of the table, to tell the two
+    defects apart: one that runs into a sector it already passed is a cycle,
+    one that ends anywhere else (another stream, a marker, a link out of the
+    table) stays CorruptCompoundFile.
     """
     if not (
         isinstance(table, array.array) and isinstance(start, int) and isinstance(size, int) and isinstance(sector, int)
@@ -201,12 +307,24 @@ def _visit_once(table: object, start: object, size: object, sector: object) -> N
     seen: set[int] = set()
     current = start
     for _ in range(-(-size // sector)):
-        if current in seen or current >= len(table):
+        if current in seen:
+            raise CompoundCycle
+        if current >= len(table):
             raise CorruptCompoundFile
         seen.add(current)
         current = table[current]
     if current != _END_OF_CHAIN:
+        _run_on(table, current, seen)
         raise CorruptCompoundFile
+
+
+def _run_on(table: array.array[int], current: int, seen: set[int]) -> None:
+    """Follow a chain past the end of its stream; CompoundCycle if it comes back to a sector it passed."""
+    while 0 <= current < len(table):
+        if current in seen:
+            raise CompoundCycle
+        seen.add(current)
+        current = table[current]
 
 
 def ole_kind(path: str) -> OleKind | None:
@@ -221,7 +339,7 @@ def ole_kind(path: str) -> OleKind | None:
         with open(path, "rb") as handle:
             size = handle.seek(0, 2)
             entries = _directory(handle, size)
-    except (OSError, struct.error, UnicodeDecodeError, ValueError, _Malformed):
+    except (OSError, struct.error, UnicodeDecodeError, ValueError, _Malformed, CompoundCycle):
         return None
     if entries is None:
         return None
@@ -270,7 +388,11 @@ def _directory(handle: BinaryIO, size: int) -> list[_Entry] | None:
     entries: list[_Entry] = []
     visited: set[int] = set()
     while current != _END_OF_CHAIN:
-        if current > _MAX_REGULAR_SECTOR or current in visited or len(visited) >= _MAX_DIRECTORY_SECTORS:
+        if current in visited:
+            # The directory chain comes back to a sector: a cycle (plan 36-09).
+            # The sniff answers None for it like for every other defect.
+            raise CompoundCycle
+        if current > _MAX_REGULAR_SECTOR or len(visited) >= _MAX_DIRECTORY_SECTORS:
             raise _Malformed
         visited.add(current)
         entries += _entries_in(chain.sector(current))

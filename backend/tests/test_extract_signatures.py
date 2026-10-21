@@ -29,6 +29,10 @@ Here every edge of every rule stands on its own:
   file, read from the header alone; a mail whose message/rfc822 parts nest
   deeper than 32 levels, measured on the parsed mail or, when the parser runs
   into RecursionError, counted over the raw bytes.
+* **cfb_cycle (plan 36-09).** A cycle in the FAT chain of a stream or of the
+  mini stream, in the MiniFAT, in the DIFAT chain, in the chain of directory
+  sectors and in the directory tree, for .doc and .xls; a structural error
+  without a cycle stays corrupt, and the sniff keeps its answers.
 """
 
 from __future__ import annotations
@@ -58,7 +62,7 @@ from findling.config import (
     ARCHIVE_RATIO_MIN_BYTES,
     settings,
 )
-from findling.extract import archive, image, mail, odf, office
+from findling.extract import archive, cfb, image, legacy_doc, legacy_xls, mail, odf, office
 from findling.extract.archive import extract_zip
 from findling.extract.errors import ExtractionOutcome, Reason, State, is_entity_bomb
 from hostile import (
@@ -67,10 +71,18 @@ from hostile import (
     ODT_CONTENT,
     PPTX_SLIDE,
     XLSX_SHEET,
+    Layout,
     Member,
+    _difat_cycle,
+    _directory_cycle,
+    _fat_cycle,
+    _fat_declared_far_past_the_file,
+    _minifat_cycle,
     _png_chunk,
     _same_offset_twice,
     billion_laughs_xml,
+    build_doc,
+    build_workbook,
     build_zip,
     docx_with,
     honest_large_jpeg,
@@ -753,3 +765,100 @@ def test_a_recursion_error_under_few_forward_headers_stays_corrupt(
     outcome = _mail(tmp_path, nested_rfc822(32))
 
     assert outcome == ExtractionOutcome.failed(Reason.CORRUPT, detail="RecursionError")
+
+
+# -- cfb_cycle (plan 36-09) -------------------------------------------------------------
+
+
+def _container_cycle(layout: Layout) -> None:
+    """The FAT chain of the mini stream container links its first sector to itself."""
+    start = layout.entries[0][5]
+    layout.fat[start] = start
+
+
+def _directory_chain_cycle(layout: Layout) -> None:
+    """The FAT chain of the directory sectors links its first sector to itself."""
+    start = layout.header["dir_start"]
+    layout.fat[start] = start
+
+
+_DOC_TEXT = b"olewort im text\r"
+
+_CYCLES: dict[str, Callable[[Layout], None]] = {
+    "fat": _fat_cycle,
+    "fat-of-the-mini-stream": _container_cycle,
+    "minifat": _minifat_cycle,
+    "difat": _difat_cycle,
+    "directory-chain": _directory_chain_cycle,
+    "directory-tree": _directory_cycle,
+}
+
+# The Workbook of build_workbook is small and lives in the mini stream, so the
+# FAT case of a workbook is the chain of the mini stream container.
+_XLS_CYCLES = {name: edit for name, edit in _CYCLES.items() if name != "fat"}
+
+
+def _ole(tmp_path: Path, raw: bytes, name: str = "ole.part") -> str:
+    path = tmp_path / name
+    path.write_bytes(raw)
+    return str(path)
+
+
+@pytest.mark.parametrize("cycle", list(_CYCLES))
+def test_every_cycle_of_a_word_file_is_blocked(cycle: str, tmp_path: Path) -> None:
+    _blocked(legacy_doc.extract_doc(_ole(tmp_path, build_doc(_DOC_TEXT, edit=_CYCLES[cycle]))), "cfb_cycle")
+
+
+@pytest.mark.parametrize("cycle", list(_XLS_CYCLES))
+def test_every_cycle_of_an_excel_file_is_blocked(cycle: str, tmp_path: Path) -> None:
+    raw = build_workbook([(0, 0, 0)], ["zellwort"], edit=_XLS_CYCLES[cycle])
+
+    _blocked(legacy_xls.extract_xls(_ole(tmp_path, raw)), "cfb_cycle")
+
+
+def test_the_untouched_files_are_read(tmp_path: Path) -> None:
+    assert "olewort" in legacy_doc.extract_doc(_ole(tmp_path, build_doc(_DOC_TEXT), "a.part")).text
+    assert (
+        "zellwort" in legacy_xls.extract_xls(_ole(tmp_path, build_workbook([(0, 0, 0)], ["zellwort"]), "b.part")).text
+    )
+
+
+def _fat_past_the_file(layout: Layout) -> None:
+    """A link of the WordDocument chain to a sector behind the end of the file: no cycle."""
+    start = layout.entries[1][5]
+    layout.fat[start + 2] = 100
+
+
+@pytest.mark.parametrize("edit", [_fat_declared_far_past_the_file, _fat_past_the_file], ids=["fat-count", "link"])
+def test_a_structural_error_without_a_cycle_stays_corrupt(edit: Callable[[Layout], None], tmp_path: Path) -> None:
+    outcome = legacy_doc.extract_doc(_ole(tmp_path, build_doc(_DOC_TEXT, edit=edit)))
+
+    assert (outcome.state, outcome.reason) == (State.FAILED, Reason.CORRUPT)
+
+
+def test_a_cycle_is_a_corrupt_compound_file_for_every_caller_of_the_parent() -> None:
+    assert issubclass(cfb.CompoundCycle, cfb.CorruptCompoundFile)
+
+
+def test_the_cycle_check_leaves_every_other_defect_to_olefile(tmp_path: Path) -> None:
+    # No cycle, so no raise, whatever else is wrong with the file.
+    for name, raw in {
+        "fat-count": build_doc(_DOC_TEXT, edit=_fat_declared_far_past_the_file),
+        "link": build_doc(_DOC_TEXT, edit=_fat_past_the_file),
+        "short": build_doc(_DOC_TEXT)[:700],
+        "no-ole": b"PK\x03\x04" + bytes(600),
+    }.items():
+        cfb.check_cycles(_ole(tmp_path, raw, f"{name}.part"))
+
+
+@pytest.mark.parametrize(
+    ("edit", "kind"),
+    [(_directory_cycle, "word"), (_directory_chain_cycle, None), (_fat_cycle, "word")],
+    ids=["tree", "directory-chain", "fat"],
+)
+def test_the_sniff_keeps_its_answer_for_a_cycle(
+    edit: Callable[[Layout], None], kind: str | None, tmp_path: Path
+) -> None:
+    # A cycle ends the walk of the sniff and not the sniff (cfb.py): the tree
+    # walk skips what it has seen, the directory chain ends in None as before.
+    assert cfb.ole_kind(_ole(tmp_path, build_doc(_DOC_TEXT, edit=edit))) == kind

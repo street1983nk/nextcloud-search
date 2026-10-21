@@ -491,10 +491,11 @@ _DOC_CASES: dict[str, tuple[Callable[[], bytes], tuple[State, Reason | None], st
         (State.FAILED, Reason.CORRUPT),
         "",
     ),
-    "difat-cycle": (lambda: build_doc(edit=_difat_cycle), (State.FAILED, Reason.CORRUPT), ""),
-    "minifat-cycle": (lambda: build_doc(edit=_minifat_cycle), (State.FAILED, Reason.CORRUPT), ""),
-    "directory-cycle": (lambda: build_doc(edit=_directory_cycle), (State.FAILED, Reason.CORRUPT), ""),
-    "fat-cycle": (lambda: build_doc(edit=_fat_cycle), (State.FAILED, Reason.CORRUPT), ""),
+    # D-36-17, plan 36-09: the four cycles are the attack signature cfb_cycle.
+    "difat-cycle": (lambda: build_doc(edit=_difat_cycle), (State.SKIPPED, Reason.BLOCKED_MALICIOUS), ""),
+    "minifat-cycle": (lambda: build_doc(edit=_minifat_cycle), (State.SKIPPED, Reason.BLOCKED_MALICIOUS), ""),
+    "directory-cycle": (lambda: build_doc(edit=_directory_cycle), (State.SKIPPED, Reason.BLOCKED_MALICIOUS), ""),
+    "fat-cycle": (lambda: build_doc(edit=_fat_cycle), (State.SKIPPED, Reason.BLOCKED_MALICIOUS), ""),
     "fat-declared-far-past-the-file": (
         lambda: build_doc(edit=_fat_declared_far_past_the_file),
         (State.FAILED, Reason.CORRUPT),
@@ -512,6 +513,8 @@ def test_every_word_file_of_the_corpus_ends_in_a_named_verdict(
     ran, _ = corpus_case(worker, tmp_path, "korpus.doc", build(), DOC)
 
     _expect(ran, state, reason, contains=word)
+    if reason is Reason.BLOCKED_MALICIOUS:
+        assert ran.outcome.detail == "cfb_cycle"
     if case in _REFUSED_BY_THE_READER:
         # The reader's own length check refuses these, not a struct.error that
         # happens to land on the same verdict further down.
@@ -586,7 +589,8 @@ _XLS_CASES: dict[str, tuple[Callable[[], bytes], tuple[State, Reason | None], st
         (State.FAILED, Reason.CORRUPT),
         "",
     ),
-    "minifat-cycle-under-the-workbook": (_workbook_minifat_cycle, (State.FAILED, Reason.CORRUPT), ""),
+    # D-36-17, plan 36-09: a cycle is the attack signature cfb_cycle.
+    "minifat-cycle-under-the-workbook": (_workbook_minifat_cycle, (State.SKIPPED, Reason.BLOCKED_MALICIOUS), ""),
 }
 
 
@@ -599,6 +603,8 @@ def test_every_excel_file_of_the_corpus_ends_in_a_named_verdict(
     ran, _ = corpus_case(worker, tmp_path, "korpus.xls", build(), XLS)
 
     _expect(ran, state, reason, contains=word)
+    if reason is Reason.BLOCKED_MALICIOUS:
+        assert ran.outcome.detail == "cfb_cycle"
 
 
 # -- HEIC: encoded by pillow-heif, then cut or patched box by box ----------------------

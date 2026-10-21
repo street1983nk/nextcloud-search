@@ -130,6 +130,10 @@ def extract_xls(path: str) -> ExtractionOutcome:
     try:
         if not _checked_workbook(path):
             return ExtractionOutcome.skipped(Reason.UNSUPPORTED_VARIANT)
+    except cfb.CompoundCycle:
+        # A cycle in a chain or in the directory tree is an attack signature
+        # and not damage (D-36-17, plan 36-09); caught before its parent.
+        return ExtractionOutcome.skipped(Reason.BLOCKED_MALICIOUS, detail="cfb_cycle")
     except _CONTAINER_FAILURES as error:
         return ExtractionOutcome.from_exception(error)
 
@@ -167,6 +171,7 @@ def _checked_workbook(path: str) -> bool:
     Workbook first and falls back to Book only when that comes back empty.
     """
     cfb.check_fat_size(path)
+    cfb.check_cycles(path)
     with olefile.OleFileIO(path, raise_defects=olefile.DEFECT_INCORRECT) as ole:
         present = [name for name in _WORKBOOK_STREAMS if ole.exists(name)]
         for name in present:

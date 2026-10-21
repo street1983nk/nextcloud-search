@@ -2211,8 +2211,17 @@ PHP_TREE_HASH_TODAY = "60821e1a430226b2530194ac098bd7b50cc28df4be5a978b0ba85b9b6
 # not move. Recomputed independently with find, sort, tr and sha256sum over
 # the CRLF normalised tree: 9586dc89... both ways. The second picture open of
 # plan 36-09 spells its mode out, so the write ratchet reads it as a read.
+#
+# Moved on 2026-10-21 a third time by Plan 36-09 (HART-06, D-36-02, D-36-17,
+# F-36-07-1): extract/cfb.py carries CompoundCycle (a CorruptCompoundFile) and
+# check_cycles (DIFAT chain, directory chain and directory tree before
+# olefile); walk_stream follows a chain that runs on past its stream to tell a
+# cycle from other damage; extract/legacy_doc.py and extract/legacy_xls.py end
+# a cycle as cfb_cycle. No file came or went, so PACKAGE_FILES_TODAY stays at
+# 80. The PHP pair does not move. Recomputed independently with find, sort, tr
+# and sha256sum over the CRLF normalised tree: 73e0501d... both ways.
 PACKAGE_FILES_TODAY = 80
-PACKAGE_TREE_HASH_TODAY = "9586dc89938485cf3a8e3f013c79730d7115a6009ab78fe8cf9bd7e3a2ed95a3"
+PACKAGE_TREE_HASH_TODAY = "73e0501dc895fdc077771aa3685732ef7bdc218ad484a4738a410339046a02e2"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

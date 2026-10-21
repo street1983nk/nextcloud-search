@@ -14,11 +14,10 @@ the child lives under RLIMIT_AS and an exhausted address space would end as
 failed(out_of_memory) instead of the expected verdict. Windows has no
 RLIMIT_AS; there the corpus proves the verdict and the run time only.
 
-**What is not built yet is marked, not left out.** A case whose detection
-plan 36-08 or 36-09 builds stands in its table with the target verdict and an
-``xfail(strict=True)`` that names the plan. Strict means an unexpected pass
-fails the run, so the plan that builds the detection has to lift the mark, and
-the corpus shows until then exactly what is missing.
+**Every detection is built (plans 36-08 and 36-09).** Until then a case whose
+detection was missing stood in its table with the target verdict and a strict
+expected failure that named the plan; the last of those marks went with plan
+36-09, and the pending tables stay as the place a new family marks its own.
 
 Each family has at least one positive control: an honest file, or a hostile
 looking one below the line of D-36-17, that keeps the verdict it had.
@@ -369,13 +368,8 @@ _CFB_CASES: dict[str, Case] = {
     ),
 }
 
-_CFB_PENDING = {
-    "doc-fat-cycle": pytest.mark.xfail(strict=True, reason="built in 36-09"),
-    "doc-minifat-cycle": pytest.mark.xfail(strict=True, reason="built in 36-09"),
-    "doc-difat-cycle": pytest.mark.xfail(strict=True, reason="built in 36-09"),
-    "doc-directory-cycle": pytest.mark.xfail(strict=True, reason="built in 36-09"),
-    "xls-minifat-cycle": pytest.mark.xfail(strict=True, reason="built in 36-09"),
-}
+# Every cycle of this table is built (plan 36-09, D-36-17).
+_CFB_PENDING: dict[str, Any] = {}
 
 
 @pytest.mark.parametrize("case", _params(_CFB_CASES, _CFB_PENDING))

@@ -145,6 +145,11 @@ def _corrupt(outcome: ExtractionOutcome) -> bool:
     return outcome.state is State.FAILED and outcome.reason is Reason.CORRUPT
 
 
+def _blocked_cycle(outcome: ExtractionOutcome) -> bool:
+    """The verdict of a cycle in a chain or in the directory tree (D-36-17, plan 36-09)."""
+    return (outcome.state, outcome.reason, outcome.detail) == (State.SKIPPED, Reason.BLOCKED_MALICIOUS, "cfb_cycle")
+
+
 def _fixture(name: str) -> str:
     return str(FIXTURES / name)
 
@@ -496,13 +501,14 @@ def _word_payload(**cfb: object) -> bytes:
 
 
 @pytest.mark.parametrize("stream", ["WordDocument", "1Table"])
-def test_a_fat_cycle_is_corrupt_in_time(tmp_path: Path, stream: str) -> None:
+def test_a_fat_cycle_is_blocked_as_malicious_in_time(tmp_path: Path, stream: str) -> None:
     start = _start_of(_word_payload(), stream)
 
     cycled = _timed(_write(tmp_path, _word_payload(fat={start + 3: start + 1}), "kreis.doc"))
     control = _timed(_write(tmp_path, _word_payload(), "heil.doc"))
 
-    assert _corrupt(cycled)
+    # D-36-17, plan 36-09: a cycle is the attack signature cfb_cycle, not damage.
+    assert _blocked_cycle(cycled)
     assert "kettenquendel" in control.text
 
 
@@ -518,7 +524,7 @@ def test_a_fat_chain_that_ends_early_is_corrupt_in_time(tmp_path: Path) -> None:
     assert _corrupt(_timed(_write(tmp_path, _word_payload(fat={start + 2: CFB_END_OF_CHAIN}))))
 
 
-def test_a_difat_cycle_is_corrupt_in_time(tmp_path: Path) -> None:
+def test_a_difat_cycle_is_blocked_as_malicious_in_time(tmp_path: Path) -> None:
     # 110 FAT sectors need a file of about 7 MB before a DIFAT sector is due at all.
     payload = _word_payload()
 
@@ -527,7 +533,8 @@ def test_a_difat_cycle_is_corrupt_in_time(tmp_path: Path) -> None:
         _write(tmp_path, cfb_with_difat(payload, sectors=13_960, fat_count=110, last_next=CFB_END_OF_CHAIN), "b.doc")
     )
 
-    assert _corrupt(cycled)
+    # D-36-17, plan 36-09: a cycle is the attack signature cfb_cycle, not damage.
+    assert _blocked_cycle(cycled)
     assert "kettenquendel" in control.text
 
 
@@ -576,13 +583,14 @@ def _patched(tmp_path: Path, offset: int, value: int) -> str:
 # the text of WordDocument and in a part of 1Table that is never read, so
 # without the walk over the chain the file would come out as indexed text.
 @pytest.mark.parametrize(("stream", "at", "back"), [("WordDocument", 50, 40), ("1Table", 20, 15)])
-def test_a_minifat_cycle_is_corrupt_in_time(tmp_path: Path, stream: str, at: int, back: int) -> None:
+def test_a_minifat_cycle_is_blocked_as_malicious_in_time(tmp_path: Path, stream: str, at: int, back: int) -> None:
     minifat_at, chain = _mini_chain(_fixture("word97-latin.doc"), stream)
     assert len(chain) > at
 
     outcome = _timed(_patched(tmp_path, minifat_at + 4 * chain[at], chain[back]))
 
-    assert _corrupt(outcome)
+    # D-36-17, plan 36-09: a cycle is the attack signature cfb_cycle, not damage.
+    assert _blocked_cycle(outcome)
     assert "wortquendel" in _timed(_fixture("word97-latin.doc")).text
 
 
@@ -592,7 +600,7 @@ def test_a_minifat_chain_past_the_mini_stream_is_corrupt_in_time(tmp_path: Path)
     assert _corrupt(_timed(_patched(tmp_path, minifat_at + 4 * chain[3], 0x0FFFFFF0)))
 
 
-def test_a_cycle_in_the_chain_of_the_mini_stream_itself_is_corrupt_in_time(tmp_path: Path) -> None:
+def test_a_cycle_in_the_chain_of_the_mini_stream_itself_is_blocked_as_malicious_in_time(tmp_path: Path) -> None:
     with olefile.OleFileIO(_fixture("word97-latin.doc")) as opened:
         ole: Any = opened
         chain = [ole.root.isectStart]
@@ -600,7 +608,8 @@ def test_a_cycle_in_the_chain_of_the_mini_stream_itself_is_corrupt_in_time(tmp_p
             chain.append(ole.fat[chain[-1]])
         fat_at = (struct.unpack_from("<I", (FIXTURES / "word97-latin.doc").read_bytes(), 0x4C)[0] + 1) * 512
 
-    assert _corrupt(_timed(_patched(tmp_path, fat_at + 4 * chain[5], chain[2])))
+    # D-36-17, plan 36-09: a cycle is the attack signature cfb_cycle, not damage.
+    assert _blocked_cycle(_timed(_patched(tmp_path, fat_at + 4 * chain[5], chain[2])))
 
 
 # --- the sniff in front of the OLE reader --------------------------------------
