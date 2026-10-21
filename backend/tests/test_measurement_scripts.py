@@ -2194,8 +2194,17 @@ PHP_TREE_HASH_TODAY = "60821e1a430226b2530194ac098bd7b50cc28df4be5a978b0ba85b9b6
 # xml_entities. No file came or went, so PACKAGE_FILES_TODAY stays at 80. The
 # PHP pair does not move. Recomputed independently with find, sort, tr and
 # sha256sum over the CRLF normalised tree: d832586d... both ways.
+#
+# Moved on 2026-10-21 by Plan 36-09 (HART-06, D-36-02, D-36-17): extract/image.py
+# carries IMAGE_BOMB_PIXELS_PER_BYTE (1000, answer O6) and ends a picture that
+# Pillow refuses with more pixels than that per byte as image_pixels;
+# extract/mail.py carries MAIL_MAX_NESTING (32, answer O6) and ends forwarding
+# deeper than that as mail_nesting. No file came or went, so
+# PACKAGE_FILES_TODAY stays at 80. The PHP pair does not move. Recomputed
+# independently with find, sort, tr and sha256sum over the CRLF normalised
+# tree: f22a443b... both ways.
 PACKAGE_FILES_TODAY = 80
-PACKAGE_TREE_HASH_TODAY = "d832586d8f3a92197e385e1c2dabacb3a5b7eb541bec06cc70ae36fb9f27c354"
+PACKAGE_TREE_HASH_TODAY = "f22a443b3d1029bb21804fb00cf3a5a184e3eb1c8c9a7b77fdea8f2f54a19ae4"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

@@ -364,7 +364,13 @@ _MAIL_CASES: dict[str, tuple[Callable[[], bytes], tuple[State, Reason | None], s
         "hallo",
         None,
     ),
-    "rfc822-nested-1000-times": (lambda: nested_rfc822(1000), (State.FAILED, Reason.CORRUPT), "", None),
+    # D-36-17, plan 36-09: deeper than MAIL_MAX_NESTING is the signature mail_nesting.
+    "rfc822-nested-1000-times": (
+        lambda: nested_rfc822(1000),
+        (State.SKIPPED, Reason.BLOCKED_MALICIOUS),
+        "",
+        None,
+    ),
     # The structural headers are parsed by the email package itself, part by
     # part and more than once, so a limit on the four indexed headers alone
     # would leave these two.
@@ -657,9 +663,12 @@ _READABLE = {(State.FAILED, Reason.OCR_UNAVAILABLE), (State.INDEXED, None), (Sta
 
 _HEIC_CASES: dict[str, tuple[Callable[[], bytes], set[tuple[State, Reason | None]]]] = {
     "control": (_heic, _READABLE),
+    # Ten gigapixels declared in a few KB: far over 1000 pixels per byte, the
+    # signature image_pixels (D-36-17, plan 36-09). control.heic of the log run
+    # below (60 MP, Pillow only warns) stays too_large.
     "declares-100000-by-100000": (
         lambda: _declaring(_heic(), 100_000, 100_000),
-        {(State.SKIPPED, Reason.TOO_LARGE)},
+        {(State.SKIPPED, Reason.BLOCKED_MALICIOUS)},
     ),
     "cut-after-the-ftyp": (lambda: _heic()[:12], {(State.FAILED, Reason.CORRUPT)}),
     "cut-inside-meta": (lambda: _heic()[:40], {(State.FAILED, Reason.CORRUPT)}),
@@ -679,6 +688,8 @@ def test_every_heic_of_the_corpus_ends_in_a_named_verdict(
     ran, _ = corpus_case(worker, tmp_path, "korpus.heic", build(), HEIC)
 
     assert (ran.outcome.state, ran.outcome.reason) in allowed, ran.outcome.detail
+    if ran.outcome.reason is Reason.BLOCKED_MALICIOUS:
+        assert ran.outcome.detail == "image_pixels"
 
 
 def test_only_the_primary_picture_of_a_heic_is_opened(tmp_path: Path) -> None:

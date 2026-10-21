@@ -76,6 +76,16 @@ _MAX_PIXELS: Final = 50_000_000
 # the handler around the open.
 Image.MAX_IMAGE_PIXELS = _MAX_PIXELS
 
+# Pixels a picture may declare per byte of its file before a refusal of Pillow
+# (over twice _MAX_PIXELS, so over 100 MP) is read as an attack and not as an
+# honestly large picture (D-36-17, 36-WORTLAUT.md A3, owner answer O6 (a)). A
+# white 1 bit scan in CCITT G4 reaches several thousand pixels per byte only at
+# sizes far under 100 MP; a real medium format photograph over 100 MP lies at
+# tens of pixels per byte. Assumption A1 of the phase research, not a
+# measurement. Above it: skipped(blocked_malicious) with "image_pixels"; at or
+# under it: skipped(too_large) as before.
+IMAGE_BOMB_PIXELS_PER_BYTE: Final = 1000
+
 # The two first words of a classic TIFF, little and big endian.
 _TIFF_MAGICS: Final = (b"II*\x00", b"MM\x00*")
 
@@ -250,8 +260,10 @@ def extract_image(path: str) -> ExtractionOutcome:
     except Image.DecompressionBombError:
         # Pillow's own refusal, which arrives at twice our budget and before a
         # single row is decoded. A decision and not a failure: nobody could have
-        # read this file, and skipped(too_large) is what an admin can act on.
-        return ExtractionOutcome.skipped(Reason.TOO_LARGE)
+        # read this file, and skipped(too_large) is what an admin can act on,
+        # unless the header declares far more pixels than the file has bytes
+        # for, which is the signature of a bomb (D-36-17).
+        return _refused_by_pillow(path)
     except OSError as error:
         # UnidentifiedImageError is a subclass of this, and so is the truncated
         # file. A picture whose header does not parse beat the parser, unless it
@@ -268,6 +280,33 @@ def extract_image(path: str) -> ExtractionOutcome:
         if _has_compressed_sample_format_zero(picture):
             return _read_normalised(path, resolved)
         return _read(picture, resolved)
+
+
+def _refused_by_pillow(path: str) -> ExtractionOutcome:
+    """The verdict on a picture Pillow refused as a decompression bomb: image_pixels or too_large.
+
+    Width and height are read from the header a second time with Pillow's
+    check switched off, and nothing else: ``.size`` decodes no row. The
+    switch is global to Pillow, which is why it lives only inside the
+    try/finally and is put back even when the second open raises; the
+    extraction child reads one file at a time on one thread, so no other
+    picture can open while it is off. Whatever goes wrong on the second open
+    keeps the verdict this branch gave before, too_large.
+    """
+    previous = Image.MAX_IMAGE_PIXELS
+    try:
+        Image.MAX_IMAGE_PIXELS = None
+        with Image.open(path) as header:
+            width, height = header.size
+        size = Path(path).stat().st_size
+    except Exception:
+        # The second look is a refinement of a refusal, never a new failure.
+        return ExtractionOutcome.skipped(Reason.TOO_LARGE)
+    finally:
+        Image.MAX_IMAGE_PIXELS = previous
+    if width * height > IMAGE_BOMB_PIXELS_PER_BYTE * max(size, 1):
+        return ExtractionOutcome.skipped(Reason.BLOCKED_MALICIOUS, detail="image_pixels")
+    return ExtractionOutcome.skipped(Reason.TOO_LARGE)
 
 
 def _read(picture: Image.Image, resolved: Settings) -> ExtractionOutcome:

@@ -414,12 +414,13 @@ def test_twenty_five_hundred_nested_levels_stop_at_the_count_before_parsing(tmp_
     assert "Tiefe Post" in outcome.text
 
 
-def test_twenty_five_hundred_forwarded_levels_end_as_corrupt(tmp_path: Path) -> None:
-    # message/rfc822 nests without a boundary, so no count sees it coming: the
-    # catch around the parser is what ends it.
+def test_twenty_five_hundred_forwarded_levels_end_as_mail_nesting(tmp_path: Path) -> None:
+    # message/rfc822 nests without a boundary, so no count of parts sees it
+    # coming: the catch around the parser ends it, and the count of forward
+    # headers names it (D-36-17, plan 36-09).
     outcome = extract_eml(_write(tmp_path, _forwarded_mail(2500)))
 
-    assert outcome == ExtractionOutcome.failed(Reason.CORRUPT, detail="RecursionError")
+    assert outcome == ExtractionOutcome.skipped(Reason.BLOCKED_MALICIOUS, detail="mail_nesting")
 
 
 def _raise_recursion(*args: object, **kwargs: object) -> None:

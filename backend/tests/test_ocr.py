@@ -723,19 +723,21 @@ def test_a_banner_over_the_aspect_ratio_is_skipped_image_not_ocrable(
     assert engine.calls == []
 
 
-def test_a_picture_over_the_pixel_cap_is_too_large_without_being_decoded(
+def test_a_picture_over_the_pixel_cap_is_blocked_malicious_without_being_decoded(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Four hundred megapixels declared in eighty bytes. Pillow refuses this one
     # itself, because MAX_IMAGE_PIXELS is set to our own budget and not to None,
     # and the branch turns that refusal into a verdict instead of into a failure
-    # (T-03-1001).
+    # (T-03-1001). Far over 1000 pixels per byte, so the verdict is the attack
+    # signature image_pixels (D-36-17, plan 36-09).
     engine = _install_engine(monkeypatch, _page("nie erreicht"))
 
     outcome = image.extract_image(_declares(tmp_path, "bombe.png", 20_000, 20_000))
 
     assert outcome.state is State.SKIPPED
-    assert outcome.reason is Reason.TOO_LARGE
+    assert outcome.reason is Reason.BLOCKED_MALICIOUS
+    assert outcome.detail == "image_pixels"
     assert engine.calls == []
 
 

@@ -46,14 +46,24 @@ the budget the body is given up and only the headers are read, as for a mail
 with too many parts. A cut header and a spent budget both make the verdict
 indexed(truncated).
 
-**RecursionError ends as failed(corrupt) with the detail "RecursionError".**
-Nesting needs no boundary at all (message/rfc822 inside message/rfc822), so no
-count before parsing sees every deep structure coming. The error is caught
+**Forwarding deeper than MAIL_MAX_NESTING is an attack signature (D-36-17,
+plan 36-09).** Nesting needs no boundary at all (message/rfc822 inside
+message/rfc822), so no count of parts sees it coming. After a parse that
+succeeded, a walk over a stack (no recursion of ours) measures the deepest
+chain of message/rfc822 parts before any text is collected; deeper than 32 is
+skipped(blocked_malicious) with the detail "mail_nesting" (36-WORTLAUT.md A3,
+owner answer O6 (a)). Forwarded chains of real mailboxes reach a few levels,
+32 leaves room for automatic forwarding, and a mail with hundreds of levels is
+no mail a person wrote.
+
+**RecursionError.** The parser itself recurses once per level, so 1000 levels
+end in RecursionError inside it before the walk could run. The error is caught
 around the parser and around get_body, iter_attachments and get_content, which
-recurse on their own. The verdict is failed and not a truncated text of the
-headers, although the headers may have been read by then: a mail with hundreds
-of levels is no mail a person wrote, and a status page that names it is worth
-more than its subject in the index.
+recurse on their own. Then a cheap count over the raw bytes decides: more than
+32 header lines "Content-Type: message/rfc822" (any case) make the verdict
+mail_nesting as well; otherwise it stays failed(corrupt) with the detail
+"RecursionError", as before: a structure deep enough to beat the parser
+without forwarding is a broken file, not a signature of A3.
 
 clean_display_name is shared: the reader of ZIP files uses it for the names of
 its members (plan 31-08), so both kinds of name are cleaned the same way.
@@ -99,6 +109,14 @@ MAX_DISPLAY_NAME_CHARS = 255
 # attachments of MAX_MAIL_PARTS and ordinary headers stays far below it.
 MAX_HEADER_CHARS = 32 * 1024
 MAX_HEADER_BUDGET = 1024 * 1024
+
+# The deepest chain of message/rfc822 parts a mail may carry (D-36-17,
+# 36-WORTLAUT.md A3, owner answer O6 (a)); one level deeper is mail_nesting.
+MAIL_MAX_NESTING: Final = 32
+
+# A header line that opens a forwarded mail, at the start of the mail or after a
+# line break, in any case. Only counted when the parser ran into RecursionError.
+_FORWARD_HEADER = re.compile(rb"(?:\A|(?<=[\r\n]))content-type:[ \t]*message/rfc822", re.IGNORECASE)
 
 _HEADERS = ("subject", "from", "to", "cc")
 
@@ -193,16 +211,55 @@ def extract_eml(path: str) -> ExtractionOutcome:
     budget = _HeaderBudget()
     try:
         message = cast("EmailMessage", BytesParser(policy=_policy_for(budget)).parse(io.BytesIO(raw)))
+        if forwarding_depth(message) > MAIL_MAX_NESTING:
+            return ExtractionOutcome.skipped(Reason.BLOCKED_MALICIOUS, detail="mail_nesting")
         lines = _header_lines(message)
         lines.append(_body_text(message))
         names, complete = _attachment_names(message)
     except _HeaderBudgetSpent:
         return _headers_only(raw)
     except RecursionError:
+        if count_forward_headers(raw) > MAIL_MAX_NESTING:
+            return ExtractionOutcome.skipped(Reason.BLOCKED_MALICIOUS, detail="mail_nesting")
         return ExtractionOutcome.failed(Reason.CORRUPT, detail="RecursionError")
 
     outcome = cap_text(_joined([*lines, *names]))
     return outcome if complete and not budget.cut else _cut(outcome)
+
+
+def forwarding_depth(message: Message) -> int:
+    """The deepest chain of message/rfc822 parts in a parsed mail, measured without recursion.
+
+    The content type is read from the raw header items and never through the
+    policy, so the walk spends nothing of the header budget and cannot be
+    beaten by a header parser that recurses. A mail that is itself
+    message/rfc822 counts as the first level, which is how a forwarded mail
+    stored on its own looks.
+    """
+    deepest = 0
+    stack: list[tuple[Message, int]] = [(message, 0)]
+    while stack:
+        part, depth = stack.pop()
+        if _raw_content_type(part) == "message/rfc822":
+            depth += 1
+            deepest = max(deepest, depth)
+        payload = part.get_payload()
+        if isinstance(payload, list):
+            stack.extend((child, depth) for child in cast("list[Message]", payload))
+    return deepest
+
+
+def _raw_content_type(part: Message) -> str:
+    """The media type of a part from its raw Content-Type item, lower case, empty when there is none."""
+    for name, value in part.raw_items():
+        if name.lower() == "content-type":
+            return str(value).split(";", 1)[0].strip().lower()
+    return ""
+
+
+def count_forward_headers(raw: bytes) -> int:
+    """How many header lines of the raw mail open a forwarded mail; an upper bound of its nesting."""
+    return sum(1 for _ in _FORWARD_HEADER.finditer(raw))
 
 
 def _headers_only(raw: bytes) -> ExtractionOutcome:

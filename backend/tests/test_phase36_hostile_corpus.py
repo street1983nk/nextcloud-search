@@ -319,7 +319,6 @@ _IMAGE_CASES: dict[str, Case] = {
 }
 
 _IMAGE_PENDING = {
-    "png-bomb": pytest.mark.xfail(strict=True, reason="built in 36-09"),
     # Not in the plan of 36-09 yet: the frame walk has to stop at the page cap
     # (finding of 36-07, deferred-items.md).
     "tiff-of-100000-ifds": pytest.mark.xfail(strict=True, reason="built in 36-09"),
@@ -341,10 +340,8 @@ _MAIL_CASES: dict[str, Case] = {
     "rfc822-nested-1000-times": Case(lambda: nested_rfc822(1000), MAIL, BLOCKED, "mail_nesting", "A3"),
 }
 
-_MAIL_PENDING = {
-    "rfc822-nested-33-times": pytest.mark.xfail(strict=True, reason="built in 36-09"),
-    "rfc822-nested-1000-times": pytest.mark.xfail(strict=True, reason="built in 36-09"),
-}
+# Both signatures of this table are built (plan 36-09, D-36-17).
+_MAIL_PENDING: dict[str, Any] = {}
 
 
 @pytest.mark.parametrize("case", _params(_MAIL_CASES, _MAIL_PENDING))

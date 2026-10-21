@@ -24,6 +24,11 @@ Here every edge of every rule stands on its own:
   amplification is the entity bomb. Both rules are proven with real
   exceptions of lxml and expat, so a changed library message turns a test red
   instead of falling back to xml_invalid unnoticed.
+* **image_pixels and mail_nesting (plan 36-09, answer O6).** A picture Pillow
+  refuses (over 100 MP) that declares more than 1000 pixels per byte of its
+  file, read from the header alone; a mail whose message/rfc822 parts nest
+  deeper than 32 levels, measured on the parsed mail or, when the parser runs
+  into RecursionError, counted over the raw bytes.
 """
 
 from __future__ import annotations
@@ -35,6 +40,7 @@ import warnings
 import xml.etree.ElementTree as ElementTree
 import zipfile
 from collections.abc import Callable, Iterator
+from email.message import EmailMessage
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +48,7 @@ import openpyxl
 import pptx
 import pytest
 from lxml import etree  # pyright: ignore[reportAttributeAccessIssue]
+from PIL import Image
 
 from findling import config
 from findling.config import (
@@ -51,7 +58,7 @@ from findling.config import (
     ARCHIVE_RATIO_MIN_BYTES,
     settings,
 )
-from findling.extract import archive, odf, office
+from findling.extract import archive, image, mail, odf, office
 from findling.extract.archive import extract_zip
 from findling.extract.errors import ExtractionOutcome, Reason, State, is_entity_bomb
 from hostile import (
@@ -61,12 +68,16 @@ from hostile import (
     PPTX_SLIDE,
     XLSX_SHEET,
     Member,
+    _png_chunk,
     _same_offset_twice,
     billion_laughs_xml,
     build_zip,
     docx_with,
+    honest_large_jpeg,
+    nested_rfc822,
     odt_with,
     package_with_entries,
+    png_bomb,
     pptx_with,
     quadratic_blowup_xml,
     text_member,
@@ -564,3 +575,181 @@ def test_a_large_real_pptx_stays_indexed(tmp_path: Path) -> None:
 
     assert outcome.state is State.INDEXED
     assert "folie199" in outcome.text
+
+
+# -- image_pixels (plan 36-09, answer O6) ----------------------------------------------
+
+
+def _picture(tmp_path: Path, raw: bytes, name: str = "bild.part") -> str:
+    path = tmp_path / name
+    path.write_bytes(raw)
+    return str(path)
+
+
+def _png_of_size(width: int, height: int, size: int) -> bytes:
+    """A PNG bomb padded with an unknown ancillary chunk to exactly ``size`` bytes."""
+    bare = png_bomb(width, height)
+    room = size - len(bare) - 12  # length, type and CRC of the padding chunk
+    assert room >= 0
+    # Behind the signature (8 bytes) and IHDR (25 bytes); Pillow skips a chunk it does not know.
+    raw = bare[:33] + _png_chunk(b"prVt", bytes(room)) + bare[33:]
+    assert len(raw) == size
+    return raw
+
+
+def test_the_bomb_number_of_the_code_is_the_owner_number() -> None:
+    assert image.IMAGE_BOMB_PIXELS_PER_BYTE == 1000
+    assert mail.MAIL_MAX_NESTING == 32
+
+
+def test_a_png_bomb_is_blocked_without_a_row_decoded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    loads: list[object] = []
+    monkeypatch.setattr(Image.Image, "load", lambda self: loads.append(self))
+    before = Image.MAX_IMAGE_PIXELS
+
+    outcome = image.extract_image(_picture(tmp_path, png_bomb()))
+
+    _blocked(outcome, "image_pixels")
+    assert loads == []
+    assert before == Image.MAX_IMAGE_PIXELS
+
+
+def test_an_honest_large_jpeg_stays_too_large(tmp_path: Path) -> None:
+    raw = honest_large_jpeg()
+    assert image.IMAGE_BOMB_PIXELS_PER_BYTE * len(raw) > 12_000 * 8_600
+
+    outcome = image.extract_image(_picture(tmp_path, raw))
+
+    assert (outcome.state, outcome.reason, outcome.detail) == (State.SKIPPED, Reason.TOO_LARGE, None)
+
+
+def test_exactly_1000_pixels_per_byte_stay_too_large_and_one_byte_less_is_blocked(tmp_path: Path) -> None:
+    # 20 000 x 20 000 = 400 MP over Pillow's doubled cap; 400 000 bytes are exactly 1000 pixels a byte.
+    at = image.extract_image(_picture(tmp_path, _png_of_size(20_000, 20_000, 400_000), "an.part"))
+    over = image.extract_image(_picture(tmp_path, _png_of_size(20_000, 20_000, 399_999), "drueber.part"))
+
+    assert (at.state, at.reason) == (State.SKIPPED, Reason.TOO_LARGE)
+    _blocked(over, "image_pixels")
+
+
+def test_a_picture_pillow_only_warns_about_stays_too_large(tmp_path: Path) -> None:
+    # 60 MP in a few hundred bytes: over the cap of image.py, under twice it, so
+    # Pillow does not refuse it and the bomb rule is never asked.
+    with pytest.warns(Image.DecompressionBombWarning):
+        outcome = image.extract_image(_picture(tmp_path, png_bomb(8000, 7500)))
+
+    assert (outcome.state, outcome.reason, outcome.detail) == (State.SKIPPED, Reason.TOO_LARGE, None)
+
+
+def test_the_pixel_cap_is_put_back_when_the_second_open_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    real_open = Image.open
+    seen: list[object] = []
+
+    def second_fails(*args: Any, **kwargs: Any) -> Any:
+        seen.append(Image.MAX_IMAGE_PIXELS)
+        if len(seen) == 2:
+            raise OSError("second look")
+        return real_open(*args, **kwargs)
+
+    monkeypatch.setattr(image.Image, "open", second_fails)
+    before = Image.MAX_IMAGE_PIXELS
+
+    outcome = image.extract_image(_picture(tmp_path, png_bomb()))
+
+    assert (outcome.state, outcome.reason, outcome.detail) == (State.SKIPPED, Reason.TOO_LARGE, None)
+    assert seen == [before, None]
+    assert before == Image.MAX_IMAGE_PIXELS
+
+
+def test_the_pixel_cap_is_put_back_after_the_bomb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    real_open = Image.open
+    seen: list[object] = []
+
+    def recording(*args: Any, **kwargs: Any) -> Any:
+        seen.append(Image.MAX_IMAGE_PIXELS)
+        return real_open(*args, **kwargs)
+
+    monkeypatch.setattr(image.Image, "open", recording)
+    before = Image.MAX_IMAGE_PIXELS
+
+    _blocked(image.extract_image(_picture(tmp_path, png_bomb())), "image_pixels")
+    assert seen == [before, None]
+    assert before == Image.MAX_IMAGE_PIXELS
+
+
+# -- mail_nesting (plan 36-09, answer O6) ------------------------------------------------
+
+
+def _mail(tmp_path: Path, raw: bytes) -> ExtractionOutcome:
+    path = tmp_path / "post.part"
+    path.write_bytes(raw)
+    return mail.extract_eml(str(path))
+
+
+def test_33_forwarded_levels_are_blocked(tmp_path: Path) -> None:
+    _blocked(_mail(tmp_path, nested_rfc822(33)), "mail_nesting")
+
+
+def test_32_forwarded_levels_are_read(tmp_path: Path) -> None:
+    # The outer subject is read; the forwarded mails are attachments, read by name only (D-31-04).
+    outcome = _mail(tmp_path, nested_rfc822(32))
+
+    assert (outcome.state, outcome.reason) == (State.INDEXED, None)
+    assert outcome.text == "s"
+
+
+def test_1000_forwarded_levels_are_blocked_and_not_corrupt(tmp_path: Path) -> None:
+    _blocked(_mail(tmp_path, nested_rfc822(1000)), "mail_nesting")
+
+
+def test_the_depth_is_measured_on_the_parsed_mail() -> None:
+    from email import message_from_bytes
+
+    for levels in (0, 1, 32, 33):
+        assert mail.forwarding_depth(message_from_bytes(nested_rfc822(levels))) == levels
+
+
+def test_40_forwarded_mails_side_by_side_are_read(tmp_path: Path) -> None:
+    outer = EmailMessage()
+    outer["Subject"] = "Sammelpost"
+    outer.set_content("Anbei vierzig Mails.")
+    for number in range(40):
+        inner = EmailMessage()
+        inner["Subject"] = f"Mail {number}"
+        inner.set_content(f"geschwisterwort {number}")
+        outer.add_attachment(inner)
+    raw = outer.as_bytes()
+    assert mail.count_forward_headers(raw) == 40
+
+    outcome = _mail(tmp_path, raw)
+
+    assert outcome.state is State.INDEXED
+    assert "Sammelpost" in outcome.text
+
+
+def test_the_raw_count_reads_every_spelling() -> None:
+    raw = b"content-type: MESSAGE/RFC822\r\n\r\nContent-Type:message/rfc822\rCONTENT-TYPE: \tMessage/Rfc822\n"
+    assert mail.count_forward_headers(raw) == 3
+    assert mail.count_forward_headers(b"X-Content-Type: message/rfc822\r\n") == 0
+
+
+def _raise_recursion(*args: object, **kwargs: object) -> None:
+    raise RecursionError
+
+
+def test_a_recursion_error_over_many_forward_headers_is_mail_nesting(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(mail.BytesParser, "parse", _raise_recursion)
+
+    _blocked(_mail(tmp_path, nested_rfc822(33)), "mail_nesting")
+
+
+def test_a_recursion_error_under_few_forward_headers_stays_corrupt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(mail.BytesParser, "parse", _raise_recursion)
+
+    outcome = _mail(tmp_path, nested_rfc822(32))
+
+    assert outcome == ExtractionOutcome.failed(Reason.CORRUPT, detail="RecursionError")
