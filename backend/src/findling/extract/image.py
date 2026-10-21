@@ -95,35 +95,32 @@ _SF0_PATCH_MAX_BYTES: Final = 32 * 1024 * 1024
 
 
 def _register_tiff_variants() -> frozenset[tuple[object, ...]]:
-    """Teach Pillow the TIFF variants of #18 it cannot map, and only those.
+    """Teach Pillow the TIFF variant of #18 it cannot map, and only that one.
 
     ``TiffImagePlugin.OPEN_INFO`` is the table ``_setup`` looks every file up
     in, and a key that is missing there is ``SyntaxError("unknown pixel mode")``,
-    which ``Image.open`` reports as a file it cannot identify. Two classes are
-    added (D-29-06, #18):
+    which ``Image.open`` reports as a file it cannot identify. One class is
+    added (D-29-06, #18): SampleFormat 0, which is not in the specification; 1
+    is its default, so every key Pillow has for 1 is offered for 0 with the
+    value Pillow gives it. Floating point (3) is never touched: its bits read
+    as integers are noise (T-29-23).
 
     Grey plus one extra channel declared as unspecified (ExtraSamples 0) or as
-    associated alpha (1). Pillow 12.3.0 maps only the unassociated alpha (2). The
-    target is ("LA", "LA"): the more exact looking grey mode with a sixteen bit
-    big endian raw mode works on the raw path only, because the libtiff path
-    rewrites that raw mode into the native order, and "La" does not convert to
-    "L" (pitfall 2 of the phase research, reproduced).
-
-    SampleFormat 0, which is not in the specification; 1 is its default, so
-    every key Pillow has for 1 is offered for 0 as well. Floating point (3) is
-    never touched: its bits read as integers are noise (T-29-23).
+    associated alpha (1) was the second class until plan 36-17. Pillow 12.3.0
+    mapped only the unassociated alpha (2), so the shim mapped both to ("LA",
+    "LA"). Pillow 13.0.0 maps them itself (python-pillow#10139, fixed by PR
+    #10140, which the tag 13.0.0 contains): 0 to ("L", "LX"), which skips the
+    channel, and 1 to ("La", "La"), whose first band ``_grey_of`` hands on.
+    Those keys left the shim, and their SampleFormat 0 mirrors now carry
+    Pillow's values like every other mirror.
 
     Only ``setdefault``, so an entry Pillow ships is never changed, and the keys
     that were really added are returned so a test turns red on the Pillow bump
-    that starts shipping one of them (pitfall 3). An upstream proposal is part
-    of plan 29-15.
+    that starts shipping one of them (pitfall 3).
     """
     info = TiffImagePlugin.OPEN_INFO
     wanted: dict[tuple[object, ...], tuple[str, str]] = {}
-    for order in (TiffImagePlugin.II, TiffImagePlugin.MM):
-        for extra in (0, 1):
-            wanted[(order, 1, (1,), 1, (8, 8), (extra,))] = ("LA", "LA")
-    for key, value in [*info.items(), *wanted.items()]:
+    for key, value in info.items():
         if key[2] == (1,):
             wanted[(*key[:2], (0,), *key[3:])] = value
     added = frozenset(key for key in wanted if key not in info)

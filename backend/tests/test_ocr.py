@@ -1395,6 +1395,42 @@ def test_the_shim_changes_no_entry_pillow_ships() -> None:
         assert TiffImagePlugin.OPEN_INFO[key] == value
 
 
+def test_the_shim_adds_only_sample_format_zero_mirrors_with_pillows_values() -> None:
+    # Plan 36-17: the grey keys with an extra channel left the shim, because
+    # Pillow 13.0.0 ships them. What stays is the mirror of SampleFormat 1 as
+    # 0, and each mirror carries the value Pillow gives its original, also for
+    # grey with an extra channel ("L", "LX") and ("La", "La"), not the ("LA",
+    # "LA") the shim wrote before.
+    pristine = _pristine_open_info()
+
+    for key in image._SHIM_KEYS:
+        assert key[2] == (0,)
+        assert TiffImagePlugin.OPEN_INFO[key] == pristine[(*key[:2], (1,), *key[3:])]
+    for order in (TiffImagePlugin.II, TiffImagePlugin.MM):
+        assert TiffImagePlugin.OPEN_INFO[(order, 1, (0,), 1, (8, 8), (0,))] == ("L", "LX")
+        assert TiffImagePlugin.OPEN_INFO[(order, 1, (0,), 1, (8, 8), (1,))] == ("La", "La")
+
+
+@pytest.mark.parametrize("compression", _COMPRESSIONS)
+@pytest.mark.parametrize("extra", [0, 1])
+def test_grey_with_an_extra_channel_and_sample_format_zero_is_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, extra: int, compression: str
+) -> None:
+    # Both classes of #18 in one file, over the mirrors that carry Pillow's
+    # values since plan 36-17: the raw file through the mirror, the compressed
+    # one through the patched copy.
+    engine = _install_engine(monkeypatch, _page("Grauwert"))
+    data = _retagged(_tiff("LA", compression, sample_format=True), _TAG_EXTRA_SAMPLES, extra)
+    data = _retagged(data, _TAG_SAMPLE_FORMAT, 0)
+
+    outcome = image.extract_image(_written(tmp_path, "beides.tif", data))
+
+    assert outcome.state is State.INDEXED
+    with _handed_over(engine) as handed:
+        assert handed.mode == "L"
+        assert handed.getpixel((5, 5)) == _GREY
+
+
 def _photo(tmp_path: Path, name: str, size: tuple[int, int], mode: str = "RGB", orientation: int = 6) -> str:
     """A uniform JPEG of a given size with an EXIF orientation, the shape of a phone photo."""
     exif = Image.Exif()

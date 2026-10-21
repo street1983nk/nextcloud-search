@@ -2168,8 +2168,16 @@ PHP_TREE_HASH_TODAY = "60821e1a430226b2530194ac098bd7b50cc28df4be5a978b0ba85b9b6
 # engine got under 12.3.0. No file came or went, so PACKAGE_FILES_TODAY stays
 # at 80. The PHP pair does not move. Recomputed independently with find, sort,
 # tr and sha256sum over the CRLF normalised tree: 2ed84a3c... both ways.
+#
+# Moved on 2026-10-21 a second time by Plan 36-17 (HART-06, F-36-07-2, the
+# recall of python-pillow#10139): extract/image.py no longer adds the grey keys
+# with an extra channel to OPEN_INFO, because Pillow 13.0.0 ships them (PR
+# #10140); _register_tiff_variants keeps the SampleFormat 0 mirrors only. No
+# file came or went, so PACKAGE_FILES_TODAY stays at 80. The PHP pair does not
+# move. Recomputed independently with find, sort, tr and sha256sum over the
+# CRLF normalised tree: 8367441d... both ways.
 PACKAGE_FILES_TODAY = 80
-PACKAGE_TREE_HASH_TODAY = "2ed84a3c103dc31109e0d15ea2cae56bbf3e1e05667d6041cf894feb6cf22e64"
+PACKAGE_TREE_HASH_TODAY = "8367441dc0adc8c7c24648fe187d212fab87ffe3b519eab3bb28714736048d1a"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
