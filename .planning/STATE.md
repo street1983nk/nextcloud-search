@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
 status: executing
-stopped_at: Completed 36-12-PLAN.md, next 36-13
-last_updated: "2026-10-21T09:16:07.626Z"
+stopped_at: Completed 36-13-PLAN.md, next 36-14
+last_updated: "2026-10-21T10:55:33.678Z"
 last_activity: 2026-10-21
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 79
-  completed_plans: 76
+  completed_plans: 77
   percent: 86
 ---
 
@@ -30,7 +30,7 @@ Plan: 14 of 16
 Status: Ready to execute
 Last activity: 2026-10-21
 
-Progress: [██████████] 96%
+Progress: [██████████] 97%
 
 ## Performance Metrics
 
@@ -82,6 +82,7 @@ Progress: [██████████] 96%
 - v1.5: 36-07 in ca. 60 min inkl. voller Suite (12:32 min) und CI (2 Tasks, 4 Dateien)
 - v1.5: 36-08 in ca. 85 min inkl. voller Suite (12:52 min) und CI (2 Tasks, 13 Dateien)
 - v1.5: 36-12 in ca. 110 min inkl. voller Suite (13:02 min) und CI (3 Tasks, 12 Dateien)
+- v1.5: 36-13 in ca. 150 min inkl. voller Suite (17:09 min) und ca. 60 min CI (3 Tasks, 7 Dateien)
 
 ## Accumulated Context
 
@@ -149,6 +150,7 @@ Progress: [██████████] 96%
 - 36-08: ZIP- und Paket-Signaturen als skipped(blocked_malicious): zip_ratio über ARCHIVE_MALICIOUS_RATIO = 1000 (100 bis 1000 bleibt archive_limit), zip_overlap auf jeder Ebene (Ablehnung und Warnung von zipfile), zip_traversal an ZipInfo.orig_filename (filename schneidet am NUL ab), package_entries per count_central_directory vor jedem ZipFile in odf.py/office.py, xml_entities über errors.is_entity_bomb (sonst Ausnahme unverändert weiter). seed-bomb.zip reine Tiefe 3 (O4 (a)), deploy-harp unverändert archive_limit. Korpus ohne xfail 36-08, 9 xfail 36-09 bleiben. Commits 2b6ab1f2, b9ec1b33; Python gates 39541530987, HaRP deploy 39541531048 grün.
 - 36-11: Abgenommener Gesamttext 1.5.0 (36-WORTLAUT.md B1 bis B5) zeichengleich eingespielt: sechs info.xml-Beschreibungen (ElementTree-Gegenprobe je Block identisch, Zeichenzahlen wie B7), READMEs de/en/fr, CHANGELOG [Unreleased] = B3 (Kopf bleibt bis 36-13), embeddings.md D-36-07, store-listing.md "Entwurf v1.5.0 (Gesamttext), abgenommen am 20.10.2026". Gates: SHARE_SENTENCES auf D-36-08, scan_language_line lässt genau den Umstiegsabsatz zu. REL-05 erfüllt. Commits fdccef86, 7a4c3b2c; CI acht grün (HaRP 39563847139).
 - 36-12: Launch-Audit 1.5.0 milestone-weit (17363bb2..HEAD, 76 Dateien) geschlossen mit 0 CRIT / 0 HIGH / 0 MEDIUM. Gefixt: L-36-01 (D an fünf verankerten PHP-Mustern, similar=14%0A), L-36-02 (kanonische Ziffern in storageIdList/positiveId, 20 Ziffern klemmten auf PHP_INT_MAX), L-36-03 (Sweep-Zeile höchstens 20 IDs je Liste). Akzeptiert: L-36-04 (ein requeue je gelöschtem Storage, 300 Storages 19 s). P5: 169 Abfragen je Poll, kein Blocker, Deferred v1.6. F2 mit Wächtertest an 36-13 übergeben. Commits 884c8554, 1e356119, 69815132, 38e54d32, 6dee66f4.
+- 36-13: Bump 1.5.0 (beide info.xml, image-tag, CHANGELOG [1.5.0] - 2026-10-21) vor UPGRADE_FROM_TAG v1.4.3 im selben Commit 805308c4, Push auf Owner-Wort "ja"; CI acht grün, HaRP 39584388860 zitiert installed_version went from 1.4.3 to 1.5.0, zehn Zusicherungen und 11 grün. Version001500 verwirft backend_app_version bereits, keine neue Migration. Spiegel source-1.5-dev.3: Owner "Anlegen (Empfohlen)", Quellpakete lokal geprüft, publish erst mit Owner-Wort in 36-14 (Doku-Commit 2c379a47 lokal).
 
 ### Offene Faeden (kein aktiver Auftrag)
 
@@ -184,6 +186,6 @@ Progress: [██████████] 96%
 
 ## Session Continuity
 
-Last session: 2026-10-21T09:16:01.095Z
-Stopped at: Completed 36-12-PLAN.md, next 36-13
+Last session: 2026-10-21T10:55:33.655Z
+Stopped at: Completed 36-13-PLAN.md, next 36-14
 Resume file: None
