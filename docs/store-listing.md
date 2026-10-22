@@ -123,12 +123,15 @@ READMEs. Der Entwurf mit allen Gegenüberstellungen steht unten im Abschnitt
 
 | Sprache | Element | Text |
 |---|---|---|
-| Englisch | `<name>` | Findling |
-| Deutsch | `<name lang="de">` | Findling |
-| Französisch | `<name lang="fr">` | Findling |
+| Englisch | `<name>` | Findling Search |
+| Deutsch | `<name lang="de">` | Findling Suche |
+| Französisch | `<name lang="fr">` | Findling Recherche |
 
-Der Name ist ein Eigenname und in allen drei Sprachen derselbe. Er steht
-trotzdem dreimal da: die Nachzieh-Regel prüft, ob eine Elementart eine Sprache
+Seit 1.5.1 trägt der Store-Name den Zusatz der jeweiligen Sprache (Owner-Entscheid
+vom 22.10.2026, Abschnitt "Release 1.5.1" unten). Der Eintrag in der Navigation
+(`<navigation><name>`) heißt weiterhin "Findling", ebenso die Oberfläche. Bis
+1.5.0 lautete der Name in allen drei Sprachen "Findling". Er steht
+dreimal da: die Nachzieh-Regel prüft, ob eine Elementart eine Sprache
 verloren hat, und eine Elementart, die nur eine Sprache führt, wäre von einer,
 die zwei davon eingebüßt hat, nicht zu unterscheiden. Der eingefrorene Name
 steht in `docs/store-identity.md` und wird hier nicht neu erfunden.
@@ -2701,6 +2704,36 @@ angelegt in Plan 31-01. Das erste Pre-Release
 seinem Text auf `source-1.5-dev.2`. Tags dieser Form starten keinen Workflow,
 seit alle Workflows mit push-Trigger nur Branches und `v[0-9]+.[0-9]+.[0-9]+`
 annehmen (`backend/tests/test_workflow_tag_triggers.py`).
+
+---
+
+# Release 1.5.1 (22.10.2026): Umbenennung
+
+Kein Funktionsentscheid und kein Entwurf der Beschreibungen: 1.5.1 ändert nur
+den Store-Namen der PHP-App `findling`. Owner-Entscheid und Abnahme der Namen
+am 22.10.2026:
+
+| Sprache | Element | bis 1.5.0 | ab 1.5.1 |
+|---|---|---|---|
+| Englisch | `<name>` | Findling | Findling Search |
+| Deutsch | `<name lang="de">` | Findling | Findling Suche |
+| Französisch | `<name lang="fr">` | Findling | Findling Recherche |
+
+Unverändert bleiben der Navigationseintrag (`<navigation><name>Findling</name>`),
+die Oberfläche, die Übersetzungen, die drei READMEs und der Name "Findling
+Backend" der External App. Die sechs Beschreibungen bleiben die abgenommene
+Fassung 1.5.0; nur ihre Doku-Links zeigen auf `blob/v1.5.1` statt
+`blob/v1.5.0` (je drei in beiden `info.xml`). Die Links der Admin-Seite in
+`php/templates/admin.php` bleiben auf `blob/v1.5.0`, weil die verlinkten
+Seiten in 1.5.1 unverändert sind und kein PHP-Byte sich ändert.
+
+Release-Notiz v1.5.1 (englisch, Faktenliste):
+
+```
+- Store name is now "Findling Search" (de: "Findling Suche", fr: "Findling Recherche")
+- No functional changes
+**Full Changelog**: https://github.com/street1983nk/nextcloud-search/compare/v1.5.0...v1.5.1
+```
 
 ---
 

@@ -6,6 +6,14 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-10-22
+
+### Changed
+
+- Store name of the companion app is now "Findling Search" (de: "Findling
+  Suche", fr: "Findling Recherche"); the navigation entry stays "Findling".
+  No functional changes.
+
 ## [1.5.0] - 2026-10-21
 
 ### Added
@@ -197,6 +205,8 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
   and every result permission checked by Nextcloud. The patch releases 1.0.1
   to 1.0.3 of the same days carried store metadata and packaging fixes.
 
+[1.5.1]: https://github.com/street1983nk/nextcloud-search/compare/v1.5.0...v1.5.1
+[1.5.0]: https://github.com/street1983nk/nextcloud-search/compare/v1.4.3...v1.5.0
 [1.4.3]: https://github.com/street1983nk/nextcloud-search/compare/v1.4.2...v1.4.3
 [1.4.2]: https://github.com/street1983nk/nextcloud-search/compare/v1.4.1...v1.4.2
 [1.4.1]: https://github.com/street1983nk/nextcloud-search/compare/v1.4.0...v1.4.1
