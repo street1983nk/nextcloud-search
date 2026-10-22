@@ -2727,11 +2727,19 @@ Fassung 1.5.0; nur ihre Doku-Links zeigen auf `blob/v1.5.1` statt
 `php/templates/admin.php` bleiben auf `blob/v1.5.0`, weil die verlinkten
 Seiten in 1.5.1 unverändert sind und kein PHP-Byte sich ändert.
 
-Release-Notiz v1.5.1 (englisch, Faktenliste):
+Dazu kam am 22.10.2026 der Owner-Entscheid, die von pip-audit gemeldeten CVEs
+in 1.5.1 zu beheben (Commit `d1f8d686`): pypdf 6.21.1 und opentelemetry-api
+1.45.1, keine weitere Änderung. Der Upgrade-Beweis läuft weiter von v1.4.3
+aus (`UPGRADE_FROM_TAG`), für 1.6.0 von v1.5.0.
+
+Release-Notiz v1.5.1 (englisch, Faktenliste, Owner-Wort 23.10.2026, so ins
+Release übernommen):
 
 ```
 - Store name is now "Findling Search" (de: "Findling Suche", fr: "Findling Recherche")
-- No functional changes
+- Security: pypdf 6.21.1 (CVE-2026-113786, -113789, -113790, -113791), opentelemetry-api 1.45.1 (CVE-2026-114603)
+- No other changes
+
 **Full Changelog**: https://github.com/street1983nk/nextcloud-search/compare/v1.5.0...v1.5.1
 ```
 
