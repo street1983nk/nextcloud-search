@@ -12,7 +12,7 @@ dependencies = [
     "httpx==0.28.1",
     "tantivy==0.26.2",
     "pypdfium2==5.14.0",
-    "pypdf==6.20.1",
+    "pypdf==6.21.1",
     "python-docx==1.2.0",
     "python-pptx==1.0.2",
     "openpyxl==3.1.5",

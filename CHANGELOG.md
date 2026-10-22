@@ -14,6 +14,11 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
   Suche", fr: "Findling Recherche"); the navigation entry stays "Findling".
   No functional changes.
 
+### Security
+
+- pypdf 6.21.1 (CVE-2026-113786, -113789, -113790, -113791) and
+  opentelemetry-api 1.45.1 (CVE-2026-114603).
+
 ## [1.5.0] - 2026-10-21
 
 ### Added

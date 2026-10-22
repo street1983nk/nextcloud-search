@@ -160,7 +160,7 @@ plan 31-01 found seven of them one or more releases behind.
 |---|---|---|---|---|
 | `tantivy` | 0.26.2 | MIT | github.com/quickwit-oss/tantivy-py | `/app/.venv/lib/python3.13/site-packages/tantivy` |
 | `pypdfium2` | 5.14.0 | Apache-2.0 or BSD-3-Clause (wrapper), BSD-3-Clause (bundled PDFium) | github.com/pypdfium2-team/pypdfium2 | `/app/.venv/lib/python3.13/site-packages/pypdfium2` |
-| `pypdf` | 6.20.1 | BSD-3-Clause | github.com/py-pdf/pypdf | `/app/.venv/lib/python3.13/site-packages/pypdf` |
+| `pypdf` | 6.21.1 | BSD-3-Clause | github.com/py-pdf/pypdf | `/app/.venv/lib/python3.13/site-packages/pypdf` |
 | `python-docx` | 1.2.0 | MIT | github.com/python-openxml/python-docx | `/app/.venv/lib/python3.13/site-packages/docx` |
 | `python-pptx` | 1.0.2 | MIT | github.com/scanny/python-pptx | `/app/.venv/lib/python3.13/site-packages/pptx` |
 | `openpyxl` | 3.1.5 | MIT | foss.heptapod.net/openpyxl/openpyxl | `/app/.venv/lib/python3.13/site-packages/openpyxl` |
