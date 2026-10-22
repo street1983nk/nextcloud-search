@@ -2743,6 +2743,11 @@ Release übernommen):
 **Full Changelog**: https://github.com/street1983nk/nextcloud-search/compare/v1.5.0...v1.5.1
 ```
 
+Einreichung (Owner-Freigabe 23.10.2026, nach grüner CI auf dem Tag inklusive
+HaRP deploy 39861096975 auf stable33/34/35 und arm64): Store submission
+39865809204, 22.10.2026 22:33Z UTC, `findling` v1.5.1 HTTP 201,
+`findling_backend` v1.5.1 HTTP 201.
+
 ---
 
 # Release 1.5.0 (21.10.2026)
