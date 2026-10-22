@@ -103,9 +103,12 @@ env:
   # after the bump of this tree to 1.5.0 and in the same commit, never before
   # it: a start tag newer than the version the tree carries lays an older
   # companion on disk over the installed one, and "Store upgrade 4" turns red
-  # (pitfall 8 of phase 36). With the tree on 1.5.0 and the start on 1.4.3,
+  # (pitfall 8 of phase 36). With the tree on 1.5.1 and the start on 1.4.3,
   # "Store upgrade 4" runs its branch of differing versions and demands that
-  # installed_version reads 1.5.0 after the upgrade.
+  # installed_version reads 1.5.1 after the upgrade. Release 1.5.1 (2026-10-22)
+  # keeps the start on v1.4.3 by owner decision: 1.5.1 only renames the store
+  # name of the companion, backend/src and every PHP file are byte identical
+  # to 1.5.0, and the seed steps are written for a start before 1.5.
   #
   # v1.4.2 from 2026-10-10 until 2026-10-21 (plan 30-06, D-30-07), because it is the newest
   # release and the version in the store (published 2026-10-09, assets
@@ -3343,7 +3346,7 @@ jobs:
       # an installation that really came out of the release assets of
       # UPGRADE_FROM_TAG is brought to the state of this commit, and the index
       # it built survives that untouched. Since plan 36-13 that tag is v1.4.3
-      # and the jump is 1.4.3 to 1.5.0 (D-36-13; 1.4.3 runs the container code
+      # and the jump is 1.4.3 to 1.5.1 (D-36-13, 1.5.1 since 2026-10-22; 1.4.3 runs the container code
       # of 1.4.2, so the statements about 1.4.2 below hold for it). From plan
       # 30-06 the tag was v1.4.2 and the code of phase 30 was laid over it
       # (D-30-07); plan 29-11 had
@@ -5488,8 +5491,8 @@ jobs:
 
           # The two cases, both named, and both branches stay. They were
           # written in plan 11-07 for a version step that had not happened yet.
-          # Since plan 36-13 the tree carries 1.5.0 against the 1.4.3 of the tag,
-          # so the FIRST branch runs and has to see installed_version 1.5.0
+          # Since plan 36-13 the tree carries 1.5.1 (1.5.0 until 2026-10-22) against the 1.4.3 of the tag,
+          # so the FIRST branch runs and has to see installed_version 1.5.1
           # after the upgrade. From plan 30-06 to 36-13 tree and
           # UPGRADE_FROM_TAG both carried 1.4.2, so the SECOND branch ran; from plan
           # 29-11 to then the tree carried 1.4.0 against the 1.3.2 of the tag
