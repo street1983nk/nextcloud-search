@@ -136,7 +136,11 @@ Details im Archiv: .planning/milestones/v1.5-ROADMAP.md
   3. Weg C ist geliefert: Bei einer Mount-Config mit nutzerspezifischer Anmeldung zaehlt die Abdeckung je Schluessel (Backend, Host, Share, Root nach Platzhalter-Ersetzung, Pfad) statt je Storage, belegt mit Test und Positivkontrolle (Weg C als erster Schritt der Phase, Owner-Entscheid D-37-03); Weg B ist nach D1 entweder gebaut oder mit Begruendung dokumentiert vertagt (Release-Rahmen 29.10., Owner-Entscheid D-37-01); die Messung A6/A7 ist auf einer SMB-Testfreigabe gelaufen (CI oder Testbox, weil Docker auf der Entwicklerbox haengt) und ihr Ergebnis steht im Phasen-Artefakt (Owner-Entscheid D-37-04); der Entscheid zu Weg A als Opt-in faellt mit dem Messergebnis und steht im Phasen-Artefakt; ohne Messergebnis in v1.6 gilt er als vertagt auf v1.7 (Owner-Entscheid D-37-02)
   4. docs/dev-setup.md, docs/embeddings.md und docs/install-check.md tragen echte Umlaute und ß in deutscher Prosa; Testkorpus-Begriffe (z. B. "Bahnhofstrasse", Gesetzes-Langwoerter) sind per Gegenprobe unveraendert
   5. IN-01 bis IN-06 aus 36-REVIEW.md sind je als "fix in v1.6" oder "accept mit Begruendung" entschieden und die Fixes umgesetzt
-**Plans**: TBD
+**Plans**: 4 plans
+- [ ] 39-01-PLAN.md - Weg C (Abdeckung je Schluessel, erster Schritt nach D-37-03) plus Erklaersatz bei 0 und Hinweis nach Regelaenderung in 16 Katalogen (ANZE-01, ANZE-02; DEDUP-02-Anteil Weg C)
+- [ ] 39-02-PLAN.md - Echte Umlaute in dev-setup.md, embeddings.md, install-check.md mit Schutz-Gegenprobe (DOCS-01)
+- [ ] 39-03-PLAN.md - IN-01 bis IN-06 entschieden, Fixes IN-01..IN-05, IN-06 accept (DOCS-02)
+- [ ] 39-04-PLAN.md - Abwerfbarer Schwanz: Messung A6/A7 in CI, Owner-Runde Weg A/Weg B, Weg B gebaut oder vertagt, Abschluss DEDUP-02
 **UI hint**: yes
 
 ### Phase 40: Haertung und Store-Einreichung 1.6.0
