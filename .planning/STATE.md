@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.5
-milestone_name: Umsteiger-Release
-status: Awaiting next milestone
-stopped_at: Phase 36 complete, Milestone v1.5 wird geschlossen
-last_updated: "2026-10-28T11:20:41.727Z"
-last_activity: 2026-10-28 — Milestone v1.5 completed and archived
+milestone: v1.6
+milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
+status: planning
+last_updated: "2026-10-28T11:27:47.560Z"
+last_activity: 2026-10-28
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 79
-  completed_plans: 80
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 
 ## Current Position
 
-Phase: Milestone v1.5 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-10-28 — Milestone v1.5 completed and archived
+Status: Defining requirements
+Last activity: 2026-10-28 — Milestone v1.6 started
 
 ## Performance Metrics
 

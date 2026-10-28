@@ -71,7 +71,7 @@ Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inkl
 
 ### Active
 
-(v1.6 noch nicht geschnitten, /gsd:new-milestone steht aus. Kandidaten:)
+(v1.6 Store-Sichtbarkeit und Betriebs-Feinschliff, gestartet 28.10.2026; REQ-IDs in REQUIREMENTS.md.)
 
 - L-36-05/L-36-06: Anzeigetext "Bewusst ausgelassen: 0" mit Erklaersatz, Zaehler-Verzoegerung nach Ausschlussmuster-Aenderung
 - #25-Dedup-Bau (Weg B der Designnotiz, Owner-Fragen D1-D4)
@@ -153,9 +153,20 @@ Weiter in der Wiedervorlage: Sortierung nach Name/Groesse (Schema-Sprung), Mimet
 | e5-small bleibt, granite nur mit Bedingung (Verdikt 35-11, p=0,0944) | Messung vor Modellwechsel | ✓ Good, Wechsel-Hype widerstanden, Bericht liegt fuer v1.6+ vor |
 | Boesartiger Formatkorpus deterministisch im Baum, Signaturen als skipped(blocked_malicious) (D-36-01) | Reproduzierbare Haertung statt Einmal-Fuzzing | ✓ Good, 64 Faelle durch das Sandbox-Kind, in 16 l10n-Katalogen erklaert |
 
-## Current Milestone: (keiner, v1.6 steht aus)
+## Current Milestone: v1.6 Store-Sichtbarkeit und Betriebs-Feinschliff
 
-Naechster Schritt: /gsd:new-milestone fuer v1.6 (Kandidaten siehe Active; Ziel-Einreichung 29.10.2026, Zeittreiber Zert-Rotation #33).
+**Goal:** Findling uebersteht den HaRP-Zertifikatswechsel ohne Admin-Eingriff (Issue #33), ist im Store besser auffindbar (Anzeigename "Findling Search", discussion-Link, Cross-Promo) und raeumt die aus v1.5 vertagten Feinschliff-Punkte ab.
+
+**Target features (Owner-Ansagen 22.-28.10.2026):**
+- Zert-Rotation #33: frpc liest /certs/frp bei x509-Fehler neu ein und startet neu (Zeittreiber des Releases)
+- L-36-05: Anzeigetext "Bewusst ausgelassen: 0" mit Erklaersatz; L-36-06: Zaehler-Verzoegerung nach Ausschlussmuster-Aenderung
+- #25-Dedup-Rest: Weg B der Designnotiz 35-DEDUP-NOTIZ.md, Owner-Fragen D1-D4 am Owner-Tor
+- Umlaut-Fixes in docs/dev-setup.md, docs/embeddings.md, docs/install-check.md (Testkorpus-Begriffe wie Bahnhofstrasse NICHT anfassen)
+- Store-Strategie 24.10.: discussion-Link auf Forum-Thread 249775, Cross-Promo-Satz zum MCP Connector, Anzeigename "Findling Search" (GO 22.10.)
+- UPGRADE_FROM_TAG auf v1.5.0; Review-Infos IN-01 bis IN-06 der Phase 36 sichten
+- Store-Einreichung 1.6.0 nach Owner-Abnahme; Ziel 29.10.2026
+
+**Key context:** Owner verreist, arbeitet ueber Remote Control; Abnahmen laufen remote. Kein neues Feature-Terrain, deshalb keine Domain-Recherche. Docker auf der Entwicklerbox haengt (Audit-Tests nur in CI). Deferred Items aus v1.5 in STATE.md.
 
 <details>
 <summary>Archiv: Milestone-Beschreibung v1.5 (abgeschlossen 2026-10-28)</summary>
