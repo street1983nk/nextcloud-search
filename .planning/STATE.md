@@ -2,14 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
-status: planning
-last_updated: "2026-10-28T11:27:47.560Z"
-last_activity: 2026-10-28
+status: executing
+stopped_at: Completed 37-01-PLAN.md (Owner-Tor geschlossen, D-37-01 bis D-37-09)
+last_updated: "2026-10-28T12:25:51.502Z"
+last_activity: 2026-10-28, Plan 37-01 abgeschlossen (Owner-Tor wie empfohlen)
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 2
+  completed_plans: 1
   percent: 0
 ---
 
@@ -25,11 +26,11 @@ Siehe .planning/PROJECT.md (Stand nach v1.5, Milestone v1.6 gestartet) und .plan
 ## Current Position
 
 Phase: 37 von 37-40 (Owner-Tor und Store-Sichtbarkeit)
-Plan: Noch keiner (Phase nicht geplant)
-Status: Ready to plan
-Last activity: 2026-10-28, Roadmap v1.6 erstellt (4 Phasen, 11/11 Anforderungen zugeordnet)
+Plan: 37-02 als naechster (37-01 erledigt, 1 von 2)
+Status: Ready to execute 37-02
+Last activity: 2026-10-28, Plan 37-01 abgeschlossen (Owner-Tor wie empfohlen, D-37-01 bis D-37-09)
 
-Progress: [----------] 0%
+Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 
@@ -213,14 +214,15 @@ Items acknowledged and deferred at milestone close on 2026-10-28 (Owner-Wiedervo
 | quick_task | 261003-d3y-d-24-07-nachschaerfung-p2-probe-prueft-v | missing (Altlast v1.4) |
 | quick_task | 261003-wxg-reconcile-beachtet-ausschluesse-zaehltor | missing (Altlast v1.4) |
 | quick_task | 261005-vit-vollindex-term | unknown (Altlast v1.4) |
+| Phase 37 P01 | 25min | 3 tasks | 5 files |
 
 ## Session Continuity
 
-Last session: 2026-10-28T11:30:00.000Z
-Stopped at: Roadmap v1.6 erstellt, Phase 37 bereit zur Planung
+Last session: 2026-10-28T12:25:45.802Z
+Stopped at: Completed 37-01-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
 
-- Phase 37 planen mit /gsd:plan-phase 37 (Owner-Tor-Vorlage D1-D4 plus Store-Wortlaute)
-- Parallel moeglich: /gsd:plan-phase 38 (Zertifikatsrotation, Issue #33)
+- Plan 37-02 ausfuehren (Store-Wortlaute nach D-37-05 bis D-37-08 einspielen)
+- Parallel moeglich: /gsd:plan-phase 38 gegen den neuen ZERT-Wortlaut (D-37-09)

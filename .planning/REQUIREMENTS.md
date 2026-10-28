@@ -19,7 +19,7 @@
 
 ### Dedup (DEDUP, Issue #25, Designnotiz Weg B)
 
-- [ ] **DEDUP-01**: Owner-Tor: die vier Fragen D1-D4 der 35-DEDUP-NOTIZ.md sind entschieden (Weg-Wahl, Weg-A-Opt-in, Weg-C-Vorziehen, Messung A6/A7); die Entscheide stehen im Phasen-Kontext
+- [x] **DEDUP-01**: Owner-Tor: die vier Fragen D1-D4 der 35-DEDUP-NOTIZ.md sind entschieden (Weg-Wahl, Weg-A-Opt-in, Weg-C-Vorziehen, Messung A6/A7); die Entscheide stehen im Phasen-Kontext
 - [ ] **DEDUP-02**: Der entschiedene Umfang ist umgesetzt: mindestens Weg C (billige Ergaenzung laut Notiz); Weg B nur, wenn D1 = (a) und der Bau in den Release-Zeitrahmen passt, sonst dokumentiert vertagt
 
 ### Doku-Hygiene (DOCS, Umlaut-Audit 28.10.)
@@ -59,7 +59,7 @@ Gefuellt vom Roadmap-Schritt am 2026-10-28. Abdeckung: 11/11 v1.6-Anforderungen 
 | ZERT-02 | Phase 38 | Pending |
 | ANZE-01 | Phase 39 | Pending |
 | ANZE-02 | Phase 39 | Pending |
-| DEDUP-01 | Phase 37 | Pending |
+| DEDUP-01 | Phase 37 | Complete |
 | DEDUP-02 | Phase 39 | Pending |
 | DOCS-01 | Phase 39 | Pending |
 | DOCS-02 | Phase 39 | Pending |

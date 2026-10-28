@@ -109,7 +109,7 @@ Details im Archiv: .planning/milestones/v1.5-ROADMAP.md
   3. Beide info.xml tragen den discussion-Link auf den Forum-Thread 249775; die URL ist erreichbar (Gegenprobe per Abruf)
   4. Die Store-Beschreibungen tragen den Cross-Promo-Satz zum Nextcloud MCP Connector zeichengleich zum vom Owner abgenommenen Wortlaut (en/de/fr), die Kurztext-Regel bleibt eingehalten, docs/store-listing.md fuehrt den Entwurf mit Abnahmedatum
 **Plans**: 2 plans
-- [ ] 37-01-PLAN.md - Owner-Tor: gebuendelte Vorlage D1-D4, S1-S4 und Z1 (ZERT-Wortlaut), eine Remote-Runde, Entscheide woertlich in 37-OWNER-ENTSCHEIDE.md samt Folgen fuer Phase 38 und 39 (DEDUP-01)
+- [x] 37-01-PLAN.md - Owner-Tor: gebuendelte Vorlage D1-D4, S1-S4 und Z1 (ZERT-Wortlaut), eine Remote-Runde, Entscheide woertlich in 37-OWNER-ENTSCHEIDE.md samt Folgen fuer Phase 38 und 39 (DEDUP-01)
 - [ ] 37-02-PLAN.md - Store-Sichtbarkeit: Gates fuer IDs/Namen/discussion/Cross-Promo, beide info.xml und docs/store-listing.md nach D-37-05..08 (STORE-01, STORE-02)
 
 ### Phase 38: Zertifikatsrotation ohne Admin-Eingriff
@@ -158,7 +158,7 @@ Details im Archiv: .planning/milestones/v1.5-ROADMAP.md
 | 17-23 (Archiv) | v1.3 | 69/69 | Complete | 2026-09-27 |
 | 24-29 (Archiv) | v1.4 | 78/78 | Complete | 2026-10-06 |
 | 30-36 (Archiv) | v1.5 | 79/79 | Complete | 2026-10-28 |
-| 37. Owner-Tor und Store-Sichtbarkeit | v1.6 | 0/? | Not started | - |
+| 37. Owner-Tor und Store-Sichtbarkeit | v1.6 | 1/2 | In Progress|  |
 | 38. Zertifikatsrotation ohne Admin-Eingriff | v1.6 | 0/? | Not started | - |
 | 39. Ausschluss-Anzeige, Dedup-Umfang und Doku-Hygiene | v1.6 | 0/? | Not started | - |
 | 40. Haertung und Store-Einreichung 1.6.0 | v1.6 | 0/? | Not started | - |
