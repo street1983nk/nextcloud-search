@@ -200,6 +200,13 @@ jobs:
           shellcheck --version
           shellcheck docker/harp_connect.sh docker/init.sh
 
+      # The probes of the launch audit 1.6.0 by name (plan 40-01). The tunnel
+      # watcher probes need bash, a FIFO and POSIX signals and run here only;
+      # -v prints each case with its result, and 40-AUDIT.md cites the PASSED
+      # lines of this step as the proof of its section S3.
+      - name: The audit probes of 1.6.0 by name (test_phase40_audit.py)
+        run: uv run pytest -v -rs tests/test_phase40_audit.py --no-header
+
       # -rs names every skip of the suite with its reason, so a case that falls
       # out silently on Linux shows up in the log instead of in a count. The
       # coverage floor (fail_under in pyproject.toml) rides along here: a
