@@ -2075,13 +2075,23 @@ final class AdminViewService {
 	public const LEAVE_OUT_MAX_IDS = 1000;
 
 	/**
+	 * The most characters the page writes into leaveOut (audit 40-01, F-40-04).
+	 *
+	 * The second ceiling of the container route next to the count. A thousand
+	 * ids of eight digits are within the count and beyond this one, and the
+	 * 422 of the container would read as "backend not reachable" on the page.
+	 */
+	public const LEAVE_OUT_MAX_LENGTH = 8000;
+
+	/**
 	 * The query parameters of the status call: leaveOut when a group left
 	 * storages out, nothing otherwise.
 	 *
 	 * Nothing when there is no group, which keeps the call of an instance
 	 * without shares mounted once per user exactly the call of 1.5, and
-	 * nothing above LEAVE_OUT_MAX_IDS, where the page falls back to the
-	 * ungrouped figure with the sentence about counting per mount.
+	 * nothing above LEAVE_OUT_MAX_IDS or LEAVE_OUT_MAX_LENGTH, where the page
+	 * falls back to the ungrouped figure with the sentence about counting per
+	 * mount.
 	 *
 	 * @param array<string,mixed> $scan the answer of ScanStatsService::totals()
 	 * @return array<string,string>
@@ -2098,7 +2108,12 @@ final class AdminViewService {
 			return [];
 		}
 
-		return ['leaveOut' => implode(',', $ids)];
+		$leaveOut = implode(',', $ids);
+		if (strlen($leaveOut) > self::LEAVE_OUT_MAX_LENGTH) {
+			return [];
+		}
+
+		return ['leaveOut' => $leaveOut];
 	}
 
 	/**

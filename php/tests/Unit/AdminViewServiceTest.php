@@ -1012,6 +1012,25 @@ final class AdminViewServiceTest extends TestCase {
 		self::assertTrue($coverage['duplicates']);
 	}
 
+	public function testLeftOutIdsLongerThanTheRouteTakesAreNotNamed(): void {
+		// Audit 40-01, F-40-04: a thousand ids of eight digits are within the
+		// count and beyond the 8000 characters of the container route, whose
+		// 422 the page would read as a backend that does not answer.
+		$long = self::groupedScan(range(10_000_000, 10_000_999));
+		self::assertSame([], AdminViewService::leaveOutParameters($long));
+
+		// The same count of short ids is still named.
+		$short = AdminViewService::leaveOutParameters(self::groupedScan(range(2, 1001)));
+		self::assertArrayHasKey('leaveOut', $short);
+		self::assertLessThanOrEqual(AdminViewService::LEAVE_OUT_MAX_LENGTH, strlen($short['leaveOut']));
+		self::assertSame(8000, AdminViewService::LEAVE_OUT_MAX_LENGTH);
+
+		// And the page then counts like 1.5, as above the count.
+		$coverage = self::coverageOf($long, ['indexed' => 150, 'embedded' => 0, 'indexedLeftOut' => 50, 'embeddedLeftOut' => 0]);
+		self::assertSame(200, $coverage['indexable']);
+		self::assertFalse($coverage['deduplicated']);
+	}
+
 	public function testWithoutAGroupTheCallAndTheFigureAreThoseOfOneFive(): void {
 		$scan = self::groupedScan([]);
 		$scan['grouped'] = array_intersect_key($scan, array_flip(['filesSeen', 'bytesSeen', 'ocrCandidates', 'pdfSeen', 'overCap', 'excluded', 'mountsTotal', 'mountsFinished']));

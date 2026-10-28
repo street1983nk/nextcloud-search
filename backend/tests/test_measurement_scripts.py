@@ -1095,8 +1095,14 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # (kept in the key) and of a domain login on SFTP with a port. No file came or went, so PHP_FILES_TODAY
 # stays at 108. Recomputed independently with find, sort, tr and sha256sum over the CRLF normalised
 # tree: 2b5effd0... both ways.
+# Moved on 2026-10-28 a second time by Plan 40-01 (audit fix F-40-04): lib/Service/AdminViewService.php
+# carries LEAVE_OUT_MAX_LENGTH = 8000 next to LEAVE_OUT_MAX_IDS and names no leaveOut longer than the
+# container route takes, so the page counts like 1.5 instead of reading the 422 as an unreachable
+# backend; tests/Unit/AdminViewServiceTest.php holds it. No file came or went, so PHP_FILES_TODAY stays
+# at 108. Recomputed independently with find, sort, tr and sha256sum over the CRLF normalised tree:
+# 3e366f7a... both ways.
 PHP_FILES_TODAY = 108
-PHP_TREE_HASH_TODAY = "2b5effd075becf1ee9cd04d1cc226f6df63d9770903be4e0a7a2aeba8083e595"
+PHP_TREE_HASH_TODAY = "3e366f7a0ff9747451dfb1da0c8499911c9d6412ba67c16cbb5ca71acc3b6e64"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

@@ -238,8 +238,12 @@ def _php_function(source: str, name: str) -> str:
     return source[start : min(ends)] if ends else source[start:]
 
 
-@pytest.mark.xfail(strict=True, reason="F-40-04: the page names up to 1000 ids without the ceiling of 8000 characters")
 def test_s1_f_40_04_the_page_holds_the_length_ceiling_of_the_route_too() -> None:
+    """F-40-04, fixed (strict xfail before the fix); the behaviour is held by PHPUnit.
+
+    AdminViewServiceTest::testLeftOutIdsLongerThanTheRouteTakesAreNotNamed runs
+    in the PHP gates; this probe keeps the two ceilings of the two sides equal.
+    """
     source = ADMIN_VIEW.read_text(encoding="utf-8")
 
     assert f"public const LEAVE_OUT_MAX_LENGTH = {status.LEAVE_OUT_MAX_LENGTH};" in source
