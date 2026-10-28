@@ -455,8 +455,19 @@ echo "harp_connect: starting frpc against ${HP_FRP_ADDRESS}:${HP_FRP_PORT} for s
 start_frpc
 last_check=${SECONDS}
 
+# What `read -t` had of an unfinished line when its timeout ran out. bash keeps
+# that part in the variable and the next read starts after it, so without this
+# carry the start of a line that arrives slower than the poll interval would be
+# lost, its rest would stand as a line of its own, and an x509 in it would go
+# unseen (finding F-40-02 of audit 40-01). Bounded: a carry above 64 KiB is
+# passed through as a line of its own.
+partial=""
+PARTIAL_MAX=65536
+
 while :; do
 	if IFS= read -r -t "${POLL_SECONDS}" line <&3; then
+		line="${partial}${line}"
+		partial=""
 		printf '%s\n' "${line}"
 		if [[ "${line}" == *"connect to server error:"* ]]; then
 			# A refused or unreachable dial means HaRP is not up; the
@@ -479,13 +490,20 @@ while :; do
 		if ((status <= 128)); then
 			# End of file: frpc is gone. A last line without a newline still
 			# belongs in the log.
-			if [ -n "${line:-}" ]; then
+			line="${partial}${line:-}"
+			if [ -n "${line}" ]; then
 				printf '%s\n' "${line}"
 			fi
 			break
 		fi
 		# Above 128: a timeout or a signal. Either way a moment to look at the
-		# files, unless the signal was a stop.
+		# files, unless the signal was a stop. Whatever the read had of an
+		# unfinished line is carried over to the next one.
+		partial="${partial}${line:-}"
+		if ((${#partial} > PARTIAL_MAX)); then
+			printf '%s\n' "${partial}"
+			partial=""
+		fi
 	fi
 	if ((stopping)); then
 		break

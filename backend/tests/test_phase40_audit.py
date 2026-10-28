@@ -489,9 +489,13 @@ exit 0
 """
 
 
-@pytest.mark.xfail(strict=True, reason="F-40-02: a line slower than the poll interval loses its first part")
 @_ON_LINUX_WITH_BASH
 def test_s3_f_40_02_a_line_slower_than_the_poll_interval_stays_whole(tmp_path: Path) -> None:
+    """F-40-02, fixed: the carry of an unfinished line (strict xfail before the fix).
+
+    Before the fix the first part was dropped and the rest, without the
+    "connect to server error:" in front, raised no remedy.
+    """
     finished = subprocess.run(  # noqa: S603 - an argument list, never a shell
         [shutil.which("bash") or "bash", str(WATCHER)],
         env=_watcher_environment(tmp_path, _SLOW_LINE_STUB),
