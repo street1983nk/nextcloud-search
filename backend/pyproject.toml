@@ -129,6 +129,12 @@ module-root = "src"
 # authorization), so the resolver may never fall below 1.0.1.
 [tool.uv]
 constraint-dependencies = ["starlette>=1.0.1"]
+# filelock comes in through nc-py-api and huggingface-hub; nc-py-api 0.30.3 caps
+# it at <4 while the ReadWriteLock advisories (CVE-2026-112907/112913/112940) are
+# fixed only in 4.2.1. Neither dependency touches ReadWriteLock, they use the
+# classic FileLock/Timeout API that 4.x keeps, so the cap is overridden until
+# nc-py-api lifts it upstream.
+override-dependencies = ["filelock>=4.2.1"]
 
 [tool.ruff]
 line-length = 120
