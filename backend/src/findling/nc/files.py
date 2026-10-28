@@ -360,9 +360,10 @@ class FileList:
 
         None means "no answer" and is the safe reading: a failed call, a 404 of
         a 1.4.x companion that has no such route, a broken shape or a band that
-        failed. The reconcile then treats every absent storage as vanished and
-        waits out the grace (D-36-05). Ids in the answer that were not asked
-        for are dropped (T-36-14).
+        failed. The reconcile then treats every absent storage as merely
+        vanished: nothing is deleted at once, and only a storage whose stamp has
+        already outlived the grace is swept (D-36-05, WR-36-02). Ids in the
+        answer that were not asked for are dropped (T-36-14).
         """
         asked = list(dict.fromkeys(ids))
         gone: set[int] = set()

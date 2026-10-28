@@ -2241,7 +2241,7 @@ PHP_TREE_HASH_TODAY = "f8eaf591d79298fbc64bfffa2840f5e5346e74eebe7dc4a7249bbde54
 # pair does not move in this step. Recomputed independently with find, sort, tr
 # and sha256sum over the CRLF normalised tree: 569925a1... both ways.
 PACKAGE_FILES_TODAY = 80
-PACKAGE_TREE_HASH_TODAY = "569925a1916b9ed66dfa19b6d84b3b8c53e2a76a3c5d1544cf5301a754c2f222"
+PACKAGE_TREE_HASH_TODAY = "d95ebc37e9359549e194e49a5c2526b6af5d20295799a8353ad2c37fd4d28311"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

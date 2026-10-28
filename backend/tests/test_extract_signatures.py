@@ -553,6 +553,24 @@ def test_an_ordinary_syntax_error_is_no_entity_bomb() -> None:
     assert not is_entity_bomb(ValueError("nothing of the kind"))
 
 
+def test_a_tag_named_amplification_is_no_entity_bomb() -> None:
+    """A corrupt document whose element names quote into the message (WR-36-01).
+
+    Parser messages carry tag and attribute names from the file, so the rule
+    must match the libraries' full wording "amplification factor" and never the
+    bare word, or a broken file with an element of that name would be branded
+    blocked_malicious against D-36-17.
+    """
+    with pytest.raises(etree.XMLSyntaxError) as of_lxml:
+        etree.fromstring(b"<amplification><offen</amplification>")
+    with pytest.raises(ElementTree.ParseError) as of_expat:
+        ElementTree.fromstring(b"<amplification><offen</amplification>")  # noqa: S314 - the real expat exception is the point
+
+    assert not is_entity_bomb(of_lxml.value)
+    assert not is_entity_bomb(of_expat.value)
+    assert not is_entity_bomb(ValueError("an amplification of nothing"))
+
+
 # -- the counter-check: real packages written by their own libraries -------------------
 
 

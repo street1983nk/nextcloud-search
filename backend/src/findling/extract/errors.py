@@ -290,10 +290,13 @@ class ExtractionOutcome:
         return cls.failed(Reason.CORRUPT, detail=detail)
 
 
-# The word libxml2 ("Maximum entity amplification factor exceeded") and expat
+# The words libxml2 ("Maximum entity amplification factor exceeded") and expat
 # ("limit on input amplification factor ... breached") both use when entity
 # expansion grows past a multiple of the input (36-WORTLAUT.md A3, xml_entities).
-_AMPLIFICATION: Final = "amplification"
+# Both words, not the bare "amplification": parser messages quote tag and
+# attribute names from the file, so a merely corrupt document with an element
+# of that name must stay xml_invalid instead of blocked_malicious (WR-36-01).
+_AMPLIFICATION: Final = "amplification factor"
 
 
 def is_entity_bomb(error: BaseException) -> bool:

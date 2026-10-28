@@ -816,7 +816,9 @@ class Reconcile:
         and deselected storages lose their documents at once (D-36-14); any
         other one is stamped on its first absence and loses them once the stamp
         is VANISHED_STORAGE_GRACE_SECONDS old (D-36-05). No answer to the
-        question means grace for all of them and never a deletion.
+        question means no storage counts as gone or deselected: every absent one
+        takes the stamped road, so nothing is deleted at once, but a storage
+        whose stamp has already outlived the grace is still swept (WR-36-02).
 
         Deleting means delete orders through the queue and nothing else, in
         bands of REQUEUE_BAND through _hand_over. The bookmark and the stamp of a
