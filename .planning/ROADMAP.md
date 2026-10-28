@@ -137,10 +137,10 @@ Details im Archiv: .planning/milestones/v1.5-ROADMAP.md
   4. docs/dev-setup.md, docs/embeddings.md und docs/install-check.md tragen echte Umlaute und ß in deutscher Prosa; Testkorpus-Begriffe (z. B. "Bahnhofstrasse", Gesetzes-Langwoerter) sind per Gegenprobe unveraendert
   5. IN-01 bis IN-06 aus 36-REVIEW.md sind je als "fix in v1.6" oder "accept mit Begruendung" entschieden und die Fixes umgesetzt
 **Plans**: 4 plans
-- [ ] 39-01-PLAN.md - Weg C (Abdeckung je Schluessel, erster Schritt nach D-37-03) plus Erklaersatz bei 0 und Hinweis nach Regelaenderung in 16 Katalogen (ANZE-01, ANZE-02; DEDUP-02-Anteil Weg C)
-- [ ] 39-02-PLAN.md - Echte Umlaute in dev-setup.md, embeddings.md, install-check.md mit Schutz-Gegenprobe (DOCS-01)
+- [x] 39-01-PLAN.md - Weg C (Abdeckung je Schluessel, erster Schritt nach D-37-03) plus Erklaersatz bei 0 und Hinweis nach Regelaenderung in 16 Katalogen (ANZE-01, ANZE-02; DEDUP-02-Anteil Weg C)
+- [x] 39-02-PLAN.md - Echte Umlaute in dev-setup.md, embeddings.md, install-check.md mit Schutz-Gegenprobe (DOCS-01)
 - [x] 39-03-PLAN.md - IN-01 bis IN-06 entschieden, Fixes IN-01..IN-05, IN-06 accept (DOCS-02)
-- [ ] 39-04-PLAN.md - Abwerfbarer Schwanz: Messung A6/A7 in CI, Owner-Runde Weg A/Weg B, Weg B gebaut oder vertagt, Abschluss DEDUP-02
+- [x] 39-04-PLAN.md - Abwerfbarer Schwanz: Messung A6/A7 in CI, Owner-Runde Weg A/Weg B, Weg B gebaut oder vertagt, Abschluss DEDUP-02
 **UI hint**: yes
 
 ### Phase 40: Haertung und Store-Einreichung 1.6.0
@@ -166,7 +166,7 @@ Details im Archiv: .planning/milestones/v1.5-ROADMAP.md
 | 30-36 (Archiv) | v1.5 | 79/79 | Complete | 2026-10-28 |
 | 37. Owner-Tor und Store-Sichtbarkeit | v1.6 | 2/2 | Complete   | 2026-10-28 |
 | 38. Zertifikatsrotation ohne Admin-Eingriff | v1.6 | 2/2 | Executed, Nachbesserung laeuft (SC2: flakige x509-Bedingung, shutdown-Erkennung) | - |
-| 39. Ausschluss-Anzeige, Dedup-Umfang und Doku-Hygiene | v1.6 | 3/4 | In Progress (39-01, 39-02, 39-03 fertig) | - |
+| 39. Ausschluss-Anzeige, Dedup-Umfang und Doku-Hygiene | v1.6 | 4/4 | Plans complete (Verifikation offen) | - |
 | 40. Haertung und Store-Einreichung 1.6.0 | v1.6 | 0/? | Not started | - |
 
 ## Nach v1.3 (Wiedervorlage)

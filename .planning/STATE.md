@@ -29,6 +29,7 @@ Phase: 38 von 37-40 (Zertifikatsrotation ohne Admin-Eingriff)
 Plan: 38-02 erledigt (2 von 2)
 Status: Phase 38 in progress
 Last activity: 2026-10-28, Plan 38-02 abgeschlossen (deploy-harp 40696292903 gruen auf allen vier Beinen, Heilung 8 bis 19 s nach dem Kopieren)
+Phase 39: 4 von 4 Plaenen erledigt (39-04 am 2026-10-28: Messung A6 Lauf 40716240639, D-39-01 = b Weg A nicht gebaut, D-39-02 Weg B vertagt auf v1.7, DEDUP-02 abgeschlossen); Verifikation offen
 
 Progress: [██████░░░░] 63%
 
