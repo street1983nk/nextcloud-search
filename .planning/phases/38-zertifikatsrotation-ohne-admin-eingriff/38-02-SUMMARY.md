@@ -87,6 +87,21 @@ Lokal vor Task 2: 11 failed, 20 passed, Exit 1. Rot: alle sieben Schritt-Tests (
 
 **4. Kleinigkeiten:** Commit-Typ `ci` statt `feat` fuer den Workflow-Schritt; zusaetzliche Pruefung, dass client.key nach dem Kopieren fuer den App-Nutzer lesbar ist; `set -o pipefail` im run-Block. Doku "Limits": Wechsel aus FINDLING_HARP_PLAINTEXT=1 auf mTLS geschieht mit dem frpc-Neustart des Waechters fuer die neuen Dateien (Code von 38-01), nicht erst bei einem Waechter-Neustart wie im Plantext.
 
+## Nacharbeit nach dem main-Lauf 40704387898 (shutdown-Pfad)
+
+Der erste main-Lauf war auf stable34 amd64 rot: nach der Neuausstellung kamen binnen 180 s nur "connect to server error: session shutdown"-Zeilen, keine einzige x509-Zeile. Damit haette ein Betreiber in dieser Lage vom Waechter nie die Abhilfe-Zeile bekommen, also ein Produktfehler und nicht nur einer der Probe (Koordinator-Auftrag, Produkt-Fix vor Harness-Patch).
+
+| Commit (main) | Inhalt |
+|---------------|--------|
+| a06b241e | RED: neue Waechterfaelle (nur shutdown -> Abhilfe nach N Fehlern und nach Zeitplan; Login dazwischen setzt zurueck, mit Positivkontrolle; x509 weiterhin beim ersten Fehler; "dial tcp ... refused" zaehlt nicht; Knopf 0 ergibt Exit 78) |
+| 6e98c525 | GREEN harp_connect.sh: FINDLING_HARP_SUSPECT_AFTER_ERRORS (Standard 6, mindestens 1) fehlgeschlagene Logins in Folge ohne Erfolg loesen dieselbe ratenbegrenzte Abhilfe-Zeile aus; ein Login setzt den Zaehler zurueck; "dial tcp" (HaRP nicht erreichbar) zaehlt nicht; Neustartlogik unveraendert. Wortlaut jetzt "the tunnel certificate is possibly no longer accepted by HaRP (x509 or repeated failed logins), ..." |
+| 95ebc201 | RED Vertragstest: x509-Zaehlung darf nicht mehr assertiert werden ('"${x509}" -' verboten), "connect to server error:" Pflicht, neuer Abhilfe-Marker, Doku muss die shutdown-Form nennen |
+| 297b69ba | Probe: tot = mindestens 3 fehlgeschlagene Dials, 0 Logins, Abhilfe-Zeile genau einmal (Fenster 90 x 3 s); x509 nur als Info; docs/harp-tunnel.md um die shutdown-Form und den neuen Wortlaut ergaenzt |
+
+- RED/GREEN lokal per Git-Bash-Kopie der Supervisor-Tests (Windows-Skip entfernt): RED 5 failed, 2 passed (die zwei gruenen sind die Faelle, die vor dem Fix vakuum-gruen sind, ihre Positivkontrolle war rot); GREEN 29 passed, 2 failed, 1 skipped, die zwei Fehlschlaege sind dieselben Windows-Artefakte wie in 38-01 (SIGTERM, Dateimodi), shellcheck-Fall mangels Binary geskippt; shellcheck-py ueber harp_connect.sh und init.sh Exit 0. Vertragstest 34 passed. ruff, format, pyright, vulture gruen.
+- Wegwerf-Branch gsd/38-rotation-probe2 (eigener git worktree, damit der Parallelstrang nicht hineincommittet): deploy-harp **40712263940 gruen auf allen vier Beinen**, beim ersten Versuch. stable34 amd64 hatte genau den neuen Fall: 7 fehlgeschlagene Dials, 0 x509, Abhilfe-Zeile 1x, Heilung 17 s. Die uebrigen: stable35 3 Dials/1 x509/5 s, stable33 3/1/5 s, arm64 4/1/15 s. Python gates dort rot nur durch test_store_vanished (RED-Commit e6ebf240 des Parallelstrangs 39-03, auf main inzwischen gruen), nicht durch diesen Plan.
+- Gelandet per Rebase auf origin/main und Fast-Forward (08cfa379..297b69ba), Branch remote geloescht. main-Lauf deploy-harp **40717960907**: Rotationsschritt auf allen vier Beinen gruen, drei Beine komplett gruen, stable34 amd64 beim Abschluss noch in den spaeteren Schritten; Python gates 40717960901, Integration 40717961312, Resilience 40717960698, Security 40717960826 gruen. Der Hintergrund-Watcher auf diesen Lauf wurde wegen Speicherknappheit vom System beendet und nicht neu gestartet.
+
 ## Hinweis Arbeitskopie
 
 Ein Parallelstrang hat waehrend der Ausfuehrung in derselben Arbeitskopie zwei Commits auf den Probe-Branch gesetzt (docs(39), fix(tests)); beide hat der Koordinator separat auf main gebracht, sie wurden beim Rebase als Duplikate verworfen. Ein lokaler Pytest-Lauf (test_phase34_audit plus ruff ueber den ganzen Baum) blieb ohne CPU-Last haengen; die Prozesse konnten nicht beendet werden (Freigabe verweigert), sie stoeren nichts Committetes.

@@ -86,6 +86,7 @@ done
 - CI step `Certificate rotation, a reissued HaRP CA heals after the three files are copied in`
   in `.github/workflows/deploy-harp.yml`, on all four legs including arm64: real
   reissue, tunnel shown dead without new files, healed after the copy above
-  without re-register and without container restart. Green in deploy-harp run
-  40696292903 (2026-10-28), healed 8 to 19 seconds after the copy.
+  without re-register and without container restart. Green in deploy-harp runs
+  40712263940 and 40717960907 (2026-10-28), one leg with session shutdown only
+  and no x509 line, healed 5 to 17 seconds after the copy.
 - Watcher logic: `backend/tests/test_harp_connect_supervisor.py`.
