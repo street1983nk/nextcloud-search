@@ -8,15 +8,15 @@ license = "AGPL-3.0-or-later"
 authors = [{ name = "street1983nk" }]
 dependencies = [
     "nc-py-api[app]==0.30.3",
-    "fastapi==0.143.2",
+    "fastapi==0.161.1",
     "httpx==0.28.1",
     "tantivy==0.26.2",
     "pypdfium2==5.14.0",
-    "pypdf==6.21.1",
+    "pypdf==6.21.2",
     "python-docx==1.2.0",
     "python-pptx==1.0.2",
     "openpyxl==3.1.5",
-    "striprtf==0.0.33",
+    "striprtf==0.0.34",
     "charset-normalizer==3.5.2",
     "lxml==6.1.3",
     # Pillow was already in uv.lock, pulled in transitively by python-pptx. The
@@ -94,7 +94,7 @@ skip_covered = true
 
 [dependency-groups]
 dev = [
-    "ruff==0.17.1",
+    "ruff==0.17.2",
     "pyright==1.1.414",
     "vulture==2.16",
     "pytest==9.1.1",
@@ -129,6 +129,12 @@ module-root = "src"
 # authorization), so the resolver may never fall below 1.0.1.
 [tool.uv]
 constraint-dependencies = ["starlette>=1.0.1"]
+# filelock comes in through nc-py-api and huggingface-hub; nc-py-api 0.30.3 caps
+# it at <4 while the ReadWriteLock advisories (CVE-2026-112907/112913/112940) are
+# fixed only in 4.2.1. Neither dependency touches ReadWriteLock, they use the
+# classic FileLock/Timeout API that 4.x keeps, so the cap is overridden until
+# nc-py-api lifts it upstream.
+override-dependencies = ["filelock>=4.2.1"]
 
 [tool.ruff]
 line-length = 120
