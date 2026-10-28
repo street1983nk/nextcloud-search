@@ -14,8 +14,8 @@
 
 ### Ausschluss-Anzeige (ANZE, aus 36-REVIEW L-36-05/06)
 
-- [ ] **ANZE-01**: Admin versteht die Karte "Bewusst ausgelassen: 0": neben der Zahl steht ein Erklaersatz, was "bewusst ausgelassen" umfasst (alle 16 Kataloge im Gleichstand)
-- [ ] **ANZE-02**: Nach einer Ausschlussmuster-Aenderung zeigt der Zaehler keinen irrefuehrenden Zwischenstand: die Verzoegerung bis zum naechsten Kehr-/Abgleichslauf ist am Zaehler erkennbar (Hinweis oder Stand-Zeitpunkt)
+- [x] **ANZE-01**: Admin versteht die Karte "Bewusst ausgelassen: 0": neben der Zahl steht ein Erklaersatz, was "bewusst ausgelassen" umfasst (alle 16 Kataloge im Gleichstand)
+- [x] **ANZE-02**: Nach einer Ausschlussmuster-Aenderung zeigt der Zaehler keinen irrefuehrenden Zwischenstand: die Verzoegerung bis zum naechsten Kehr-/Abgleichslauf ist am Zaehler erkennbar (Hinweis oder Stand-Zeitpunkt)
 
 ### Dedup (DEDUP, Issue #25, Designnotiz Weg B)
 
@@ -24,8 +24,8 @@
 
 ### Doku-Hygiene (DOCS, Umlaut-Audit 28.10.)
 
-- [ ] **DOCS-01**: docs/dev-setup.md, docs/embeddings.md und docs/install-check.md tragen echte Umlaute und ß in deutscher Prosa (kein ss-statt-ß, kein fuer/ueber); Testkorpus-Begriffe (z. B. "Bahnhofstrasse", Gesetzes-Langwoerter) bleiben unveraendert
-- [ ] **DOCS-02**: Review-Infos IN-01 bis IN-06 aus 36-REVIEW.md sind gesichtet und je als "fix in v1.6" oder "accept mit Begruendung" entschieden; Fixes sind umgesetzt
+- [x] **DOCS-01**: docs/dev-setup.md, docs/embeddings.md und docs/install-check.md tragen echte Umlaute und ß in deutscher Prosa (kein ss-statt-ß, kein fuer/ueber); Testkorpus-Begriffe (z. B. "Bahnhofstrasse", Gesetzes-Langwoerter) bleiben unveraendert
+- [x] **DOCS-02**: Review-Infos IN-01 bis IN-06 aus 36-REVIEW.md sind gesichtet und je als "fix in v1.6" oder "accept mit Begruendung" entschieden; Fixes sind umgesetzt
 
 ### Store-Sichtbarkeit (STORE, Strategie 24.10.)
 
