@@ -2556,7 +2556,8 @@ def test_the_duplicates_sentence_of_issue_25_stands_wherever_it_is_rendered() ->
     for catalogue in L10N_CATALOGUES:
         assert DUPLICATES_SENTENCE in catalogue_of(catalogue), catalogue.name
     for checked in (template, script, *(path.read_text(encoding="utf-8") for path in L10N_CATALOGUES)):
-        assert "The search itself holds every file once" not in checked
+        # The removed second half, by its end: no file of the page carries it.
+        assert "holds every file once." not in checked
 
 
 #: The two sentences of plan 39-01 next to "Deliberately left out" (ANZE-01,
