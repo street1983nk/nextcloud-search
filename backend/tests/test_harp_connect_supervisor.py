@@ -36,7 +36,7 @@ BASH = shutil.which("bash") or "bash"
 SHARED_KEY = "findling-38-secret-key"
 CERT_FILES = ("ca.crt", "client.crt", "client.key")
 
-REMEDY = "harp_connect: the tunnel certificate is no longer accepted by HaRP (x509)"
+REMEDY = "harp_connect: the tunnel certificate is possibly no longer accepted by HaRP"
 RESTART = "restarting frpc"
 FIRST_RESTART = "(restart 1 of at most"
 CAP_LINE = "restart cap reached"
@@ -83,11 +83,45 @@ fi
 X509='[W] [client/service.go:298] [5f1c2a9b] connect to server error: tls: failed to verify certificate: '
 X509+='x509: certificate signed by unknown authority (possibly because of "crypto/rsa: verification error" '
 X509+='while trying to verify candidate authority certificate "harp.nc")'
+SHUTDOWN='[W] [client/service.go:298] [5f1c2a9b] connect to server error: session shutdown'
+REFUSED='[W] [client/service.go:298] [5f1c2a9b] connect to server error: '
+REFUSED+='dial tcp 127.0.0.1:8782: connect: connection refused'
+LOGIN='[I] [client/service.go:310] [5f1c2a9b] login to server success, get run id [5f1c2a9b]'
 printf '%s\n' '[I] [client/service.go:295] [5f1c2a9b] try to connect to server...'
 case "${STUB_BEHAVIOUR}" in
 x509)
 	while :; do
 		printf '%s\n' "${X509}"
+		pause 0.2
+	done
+	;;
+shutdown)
+	# Run 40704387898: after a reissue frps may refuse every dial before frpc
+	# gets to verify the server, so no x509 line ever appears.
+	while :; do
+		printf '%s
+' "${SHUTDOWN}"
+		pause 0.2
+	done
+	;;
+flaky)
+	# Three refused logins, then a success, over and over: a tunnel that keeps
+	# coming back is not a certificate problem.
+	while :; do
+		for _ in 1 2 3; do
+			printf '%s
+' "${SHUTDOWN}"
+			pause 0.2
+		done
+		printf '%s
+' "${LOGIN}"
+		pause 0.2
+	done
+	;;
+refused)
+	while :; do
+		printf '%s
+' "${REFUSED}"
 		pause 0.2
 	done
 	;;
@@ -282,6 +316,13 @@ def test_a_remedy_schedule_with_a_word_in_it_is_a_configuration_error(tmp_path: 
     assert watcher.starts() == 0
 
 
+def test_a_suspect_threshold_of_zero_is_a_configuration_error(tmp_path: Path) -> None:
+    code, watcher = _run_to_exit(tmp_path, FINDLING_HARP_SUSPECT_AFTER_ERRORS="0")
+    assert code == 78
+    assert watcher.count("FINDLING_HARP_SUSPECT_AFTER_ERRORS") == 1
+    assert watcher.starts() == 0
+
+
 def test_a_cap_window_of_zero_is_a_configuration_error(tmp_path: Path) -> None:
     code, watcher = _run_to_exit(tmp_path, FINDLING_HARP_CAP_WINDOW_SECONDS="0")
     assert code == 78
@@ -332,6 +373,77 @@ def test_x509_with_unchanged_files_reports_once_and_never_restarts(tmp_path: Pat
         assert watcher.count(REMEDY) == 1
         assert watcher.count(RESTART) == 0
         assert watcher.count("x509: certificate signed by unknown authority") >= 10
+
+
+def _errors_before_first_remedy(lines: list[str]) -> int:
+    errors = 0
+    for line in lines:
+        if REMEDY in line:
+            return errors
+        if "connect to server error:" in line:
+            errors += 1
+    return -1
+
+
+def test_x509_reports_at_the_very_first_error(tmp_path: Path) -> None:
+    _write_certs(tmp_path / "certs", "OLD")
+    with _watch(tmp_path, FINDLING_HARP_SUSPECT_AFTER_ERRORS="5") as watcher:
+        assert _until(lambda: watcher.count(REMEDY) >= 1, 10), watcher.output()
+        assert _errors_before_first_remedy(watcher.output()) == 1
+
+
+def test_repeated_session_shutdown_reports_after_the_threshold(tmp_path: Path) -> None:
+    # The shutdown path of run 40704387898: no x509 line at all.
+    _write_certs(tmp_path / "certs", "OLD")
+    with _watch(tmp_path, "shutdown", FINDLING_HARP_SUSPECT_AFTER_ERRORS="4") as watcher:
+        assert _until(lambda: watcher.count(REMEDY) >= 1, 10), watcher.output()
+        assert _errors_before_first_remedy(watcher.output()) == 4
+        time.sleep(3)
+        assert watcher.count(REMEDY) == 1
+        assert watcher.count(RESTART) == 0
+        assert watcher.starts() == 1
+        assert watcher.count("x509: ") == 0
+
+
+def test_repeated_session_shutdown_follows_the_remedy_schedule(tmp_path: Path) -> None:
+    _write_certs(tmp_path / "certs", "OLD")
+    with _watch(
+        tmp_path,
+        "shutdown",
+        FINDLING_HARP_SUSPECT_AFTER_ERRORS="2",
+        FINDLING_HARP_REMEDY_SCHEDULE="0,2,4",
+        FINDLING_HARP_REMEDY_REPEAT_SECONDS="3",
+    ) as watcher:
+        assert _until(lambda: watcher.count(REMEDY) >= 1, 10), watcher.output()
+        first = time.monotonic()
+        time.sleep(max(0.0, first + 8.5 - time.monotonic()))
+        assert watcher.count(REMEDY) == 4
+        assert watcher.count(RESTART) == 0
+
+
+def test_a_login_between_failures_resets_the_count(tmp_path: Path) -> None:
+    _write_certs(tmp_path / "certs", "OLD")
+    with _watch(tmp_path, "flaky", FINDLING_HARP_SUSPECT_AFTER_ERRORS="4") as watcher:
+        assert _until(lambda: watcher.count("login to server success") >= 4, 10), watcher.output()
+        assert watcher.count(REMEDY) == 0
+        assert watcher.count(CONNECTED) == 0
+
+
+def test_the_same_failures_without_the_logins_do_report(tmp_path: Path) -> None:
+    # Positive control for the case above: the same threshold over shutdown
+    # lines alone reports, so the case above is silent because of the logins.
+    _write_certs(tmp_path / "certs", "OLD")
+    with _watch(tmp_path, "shutdown", FINDLING_HARP_SUSPECT_AFTER_ERRORS="4") as watcher:
+        assert _until(lambda: watcher.count(REMEDY) >= 1, 10), watcher.output()
+
+
+def test_a_refused_connection_is_not_taken_for_a_certificate_problem(tmp_path: Path) -> None:
+    # "dial tcp ... connection refused" means HaRP is not up; the certificate
+    # never got a say, so it does not count towards the threshold.
+    _write_certs(tmp_path / "certs", "OLD")
+    with _watch(tmp_path, "refused", FINDLING_HARP_SUSPECT_AFTER_ERRORS="2") as watcher:
+        assert _until(lambda: watcher.count("connection refused") >= 10, 10), watcher.output()
+        assert watcher.count(REMEDY) == 0
 
 
 def test_the_remedy_line_follows_its_schedule(tmp_path: Path) -> None:
