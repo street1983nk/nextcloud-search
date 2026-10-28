@@ -1026,7 +1026,13 @@ def test_assurance_12_proves_the_migration_ran_without_drift() -> None:
     assert '"${UPGRADE_BACKEND_VERSION_BEFORE_OCC}" != "${UPGRADE_OLD_COMPANION}"' in run
     assert '"${UPGRADE_BACKEND_VERSION_AFTER_OCC}" != ""' in run
     assert '"${backend_version_now}" != "${UPGRADE_NEW_COMPANION}"' in run
+    # Held against the count at the end of Store upgrade 4, never against
+    # nought: the lockstep probes of the developer pass write the warning on
+    # purpose before the upgrade (run 40780234240 measured 2 such lines).
     assert "grep -c 'the two halves report different versions' data/nextcloud.log" in run
+    assert '"${drift_lines}" != "${UPGRADE_DRIFT_LINES_AT_UPGRADE}"' in run
+    assert '"${drift_lines}" != "0"' not in run
+    assert 'echo "UPGRADE_DRIFT_LINES_AT_UPGRADE=' in upgrade
 
 
 def test_part_two_raises_the_hint_over_the_route_and_takes_it_back() -> None:

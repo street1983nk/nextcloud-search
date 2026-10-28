@@ -6160,6 +6160,20 @@ jobs:
               exit 1
             fi
           done
+          # The drift lines nextcloud.log carries at the end of the upgrade,
+          # for part 4 of assurance 12. The count is not nought and must not
+          # be demanded as nought: the lockstep probes of the developer pass
+          # drive a version drift on purpose and search through it
+          # (lockstep-newer and lockstep-older above), and each of them writes
+          # exactly this warning. Run 40780234240 measured 2 such lines and
+          # turned red on a demand of nought, so the demand is "no NEW line
+          # after the upgrade" and this is its before count.
+          drift_at_upgrade=$(grep -c 'the two halves report different versions' data/nextcloud.log || true)
+          if ! [[ "${drift_at_upgrade}" =~ ^[0-9]+$ ]]; then
+            echo "::error::the drift line count reads '${drift_at_upgrade}' and not a number, so it does not go into GITHUB_ENV"
+            exit 1
+          fi
+          echo "nextcloud.log carries ${drift_at_upgrade} drift line(s) at the end of the upgrade, all of them written by the lockstep probes before it"
           echo "the container after the upgrade has restarted ${restarts} time(s)"
           {
             echo "UPGRADE_NEW_CONTAINER=${container}"
@@ -6168,6 +6182,7 @@ jobs:
             echo "UPGRADE_FINISHED_AT=${finished}"
             echo "UPGRADE_BACKEND_VERSION_BEFORE_OCC=${backend_before_occ}"
             echo "UPGRADE_BACKEND_VERSION_AFTER_OCC=${backend_after_occ}"
+            echo "UPGRADE_DRIFT_LINES_AT_UPGRADE=${drift_at_upgrade}"
           } >> "${GITHUB_ENV}"
 
       # Five assurances about something that did NOT move and one about
@@ -6977,12 +6992,19 @@ jobs:
             echo "::error::the search after the overview call brings back ${drift_check} file(s) instead of one, so the search path does not answer out of the record"
             fail=1
           else
+            # Held against the count at the end of "Store upgrade 4" and not
+            # against nought: the lockstep probes of the developer pass write
+            # this warning on purpose, twice, before the upgrade ever starts
+            # (run 40780234240 measured exactly that). What may not happen is
+            # a NEW line after the upgrade: the migration dropped the record,
+            # the overview wrote it anew, and a search that still warns reads
+            # a drift nobody has.
             drift_lines=$(grep -c 'the two halves report different versions' data/nextcloud.log || true)
-            if [ "${drift_lines}" != "0" ]; then
-              echo "::error::nextcloud.log carries ${drift_lines} drift line(s) 'the two halves report different versions', so a search answered empty over a version drift"
+            if [ "${drift_lines}" != "${UPGRADE_DRIFT_LINES_AT_UPGRADE}" ]; then
+              echo "::error::nextcloud.log carries ${drift_lines} drift line(s) 'the two halves report different versions' against ${UPGRADE_DRIFT_LINES_AT_UPGRADE} at the end of the upgrade, so a search after the upgrade answered empty over a version drift"
               fail=1
             else
-              echo "the search answers with hits and nextcloud.log carries no drift line"
+              echo "the search answers with hits and nextcloud.log carries no drift line beyond the ${UPGRADE_DRIFT_LINES_AT_UPGRADE} the lockstep probes wrote before the upgrade"
             fi
           fi
 

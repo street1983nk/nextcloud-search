@@ -115,9 +115,70 @@ Ersatz je entfernter Guard (Schritt, was die Ersatzzeile prüft):
   Zähler je Snapshot-Seite (`all(type == "number")` auf before und after); die Bewegung
   selbst fängt unchanged() je Zähler mit eigener Fehlerzeile.
 
-## Probe-Lauf
+## Zusicherung 12: die Änderungen von 1.6 überleben das Upgrade (Task 2)
 
-Wird nach dem grünen Lauf auf gsd/40-03-probe ergänzt (Lauf-ID, vier Matrixzeilen).
+Fünf Teile; die vier lesenden stehen am Ende von Store upgrade 5 (Block "--- 12"),
+der eine schreibende (Teil 2) in Store upgrade 5b hinter dessen Regelschreibung,
+weil Store upgrade 5 nichts tut, was ein Admin tun würde (SC4,
+test_the_assurance_step_does_nothing_an_admin_would_do).
+
+1. coverage.deduplicated und coverage.rulesPending als Boolesche Werte in der
+   Übersicht (AdminViewService.php:1998/2001), rulesPending vor jeder
+   Regeländerung über die Route false.
+2. rulesPending true nach einer Regeländerung: NICHT über occ (der Weg von 5b),
+   sondern über POST /admin/rules. Begründung der Abweichung vom Planwortlaut:
+   rules_changed_at wird allein von der Route gestempelt
+   (SettingsController.php:466 ruft rememberRulesChange nach wirklich
+   geändertem Satz), occ config:app:set ist der dokumentierte zweite Weg in die
+   Schlüssel, der nie durch die Route läuft (SettingsService.php:316); ein
+   occ-Weg könnte den Hinweis nur per Hand-Stempel fälschen. Der POST nutzt das
+   App-Passwort und den OCS-APIRequest-Header (derselbe Weg wie overview.sh),
+   setzt den Satz in Kraft plus einen Präfix eines nicht existierenden Ordners
+   (NieVorhanden40) und nimmt ihn mit einem zweiten POST zurück; die Liste
+   liest danach wieder UPGRADE_EXCLUSIONS_BEFORE, Schritte 6 und 7 starten
+   unverändert (kein späterer Schritt liest coverage.rulesPending, und der
+   Sweep eines Präfixes ohne Dateien räumt nichts).
+3. Der installierte de-Katalog zeichengleich zu php/l10n/de.json des Commits
+   (jq --slurpfile, kein Literal im Workflow); die drei Sätze von Plan 39-01
+   hält backend/tests/test_phase40_audit.py (COVERAGE_SENTENCES) im selben Baum
+   fest, sodass eine Umformulierung in 40-04 Test und Katalog gemeinsam bewegt.
+4. indexedLeftOut/embeddedLeftOut: im Container über dasselbe report()
+   gefragt, das die Route ruft (api/status.py:753), indexedLeftOut gleich der
+   Zahl der lebenden indexierten Dokumente der Home-Storage aus state.db im
+   selben Zugriff, ohne leaveOut fehlen beide Felder (exclude_if,
+   api/status.py:423).
+5. Version001600 lief wirklich: Zeile in oc_migrations; backend_app_version
+   las vor occ upgrade die Startversion (von den Übersichtsabrufen der
+   Schritte 3/3c geschrieben), war unmittelbar danach leer (die Migration
+   löscht den Schlüssel), steht nach dem ersten Übersichtsabruf von Schritt 5
+   auf der neuen Version, und eine Suche als Nutzer liefert Treffer ohne die
+   Logzeile "the two halves report different versions".
+
+Store upgrade 5 heißt seit Task 2 "the eleven assurances after the upgrade"
+(1 bis 10 plus 12; 11 ist Store upgrade 5b). Der Zähler-Stichprobenname in
+test_cert_rotation_steps.py folgt dem Namen.
+
+## Probe-Läufe auf gsd/40-03-probe
+
+- Task 1 (Kopf c08d4daa, Umbau auf v1.5.0): HaRP deploy Lauf **40776866858**,
+  conclusion success, alle vier Matrixzeilen grün: deploy-harp (stable33, 8.2, false,
+  ubuntu-24.04), (stable34, 8.2, false, ubuntu-24.04), (stable34, 8.2, false,
+  ubuntu-24.04-arm), (stable35, 8.3, false, ubuntu-24.04). Daneben Integration,
+  Python gates und Resilience success auf demselben Kopf.
+- Task 2, Iteration 0 (Kopf 0bdd6b71): HaRP deploy Lauf **40780234240**, conclusion
+  failure. Genau eine rote Zusicherung, Teil 4 von Zusicherung 12 auf stable34 amd64:
+  "nextcloud.log carries 2 drift line(s)". Ursache (kein Befund gegen 1.6): die beiden
+  Lockstep-Proben des Entwickler-Passes (deploy-harp.yml, lockstep-newer um Zeile 2154
+  und lockstep-older um Zeile 2196) treiben vor dem Upgrade absichtlich eine
+  Versionsdrift und suchen hindurch, jede schreibt genau eine Zeile "the two halves
+  report different versions" in nextcloud.log. Die Zusicherung verlangte null über das
+  ganze Log statt "keine NEUE Zeile nach dem Upgrade". Korrektur ohne Abschwächung:
+  Store upgrade 4 zeichnet den Zählerstand am Ende des Upgrades auf
+  (UPGRADE_DRIFT_LINES_AT_UPGRADE), Teil 4 verlangt den identischen Stand nach der
+  Suche; alle übrigen Teile von Zusicherung 12 und alle elf Zusicherungen davor waren
+  in dem Lauf grün (drei andere Matrixzeilen success; Python gates, Integration,
+  Resilience auf dem Kopf success).
+- Task 2, Iteration 1: wird nach dem Lauf ergänzt.
 
 ## Mechanisches Inventar (Ausgangsstand 46df0ee1, 147 Treffer)
 
