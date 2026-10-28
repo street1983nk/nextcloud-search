@@ -108,7 +108,9 @@ Details im Archiv: .planning/milestones/v1.5-ROADMAP.md
   2. Im Store und in der Nextcloud-App-Verwaltung heisst die App sichtbar "Findling Search" (name-Element beider info.xml in allen Sprachvarianten); die App-IDs findling und findling_backend sind unveraendert, ein Gate haelt beides fest
   3. Beide info.xml tragen den discussion-Link auf den Forum-Thread 249775; die URL ist erreichbar (Gegenprobe per Abruf)
   4. Die Store-Beschreibungen tragen den Cross-Promo-Satz zum Nextcloud MCP Connector zeichengleich zum vom Owner abgenommenen Wortlaut (en/de/fr), die Kurztext-Regel bleibt eingehalten, docs/store-listing.md fuehrt den Entwurf mit Abnahmedatum
-**Plans**: TBD
+**Plans**: 2 plans
+- [ ] 37-01-PLAN.md - Owner-Tor: gebuendelte Vorlage D1-D4 plus S1-S4, eine Remote-Runde, Entscheide woertlich in 37-OWNER-ENTSCHEIDE.md samt DEDUP-02-Folge (DEDUP-01)
+- [ ] 37-02-PLAN.md - Store-Sichtbarkeit: Gates fuer IDs/Namen/discussion/Cross-Promo, beide info.xml und docs/store-listing.md nach D-37-05..08 (STORE-01, STORE-02)
 
 ### Phase 38: Zertifikatsrotation ohne Admin-Eingriff
 **Goal**: Das Backend uebersteht einen HaRP-Zertifikatswechsel ohne Unregister/Register, und die Selbstheilung ist bewiesen, gedeckelt und dokumentiert
