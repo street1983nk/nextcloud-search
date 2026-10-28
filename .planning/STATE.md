@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
 status: executing
-stopped_at: Completed 37-02-PLAN.md (Phase 37 komplett, STORE-01/02 im Repo)
-last_updated: "2026-10-28T12:39:48.820Z"
-last_activity: 2026-10-28, Plan 37-02 abgeschlossen (discussion-Link 249775 in beiden info.xml, Store-Gates)
+stopped_at: Completed 38-01-PLAN.md
+last_updated: "2026-10-28T12:58:24.075Z"
+last_activity: 2026-10-28, Plan 38-01 abgeschlossen (frpc-Waechter in harp_connect.sh, Stub-Tests, shellcheck-Gate; CI-Lauf nach Push offen)
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 4
-  completed_plans: 2
-  percent: 25
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 Siehe .planning/PROJECT.md (Stand nach v1.5, Milestone v1.6 gestartet) und .planning/MILESTONES.md (v1.0 bis v1.5).
 
 **Core Value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 37, Owner-Tor und Store-Sichtbarkeit (parallel startbar: Phase 38 Zertifikatsrotation)
+**Current focus:** Phase 38, Zertifikatsrotation ohne Admin-Eingriff (38-01 erledigt, 38-02 offen)
 
 ## Current Position
 
-Phase: 37 von 37-40 (Owner-Tor und Store-Sichtbarkeit)
-Plan: 37-02 erledigt (2 von 2, Phase 37 komplett; CI-Job app-metadata offen bis zum naechsten freigegebenen Push)
-Status: Phase 37 complete
-Last activity: 2026-10-28, Plan 37-02 abgeschlossen (discussion-Link 249775 in beiden info.xml, Store-Gates)
+Phase: 38 von 37-40 (Zertifikatsrotation ohne Admin-Eingriff)
+Plan: 38-01 erledigt (1 von 2; python.yml-Lauf mit Waechtertests und shellcheck offen bis zum Push durch den Koordinator)
+Status: Phase 38 in progress
+Last activity: 2026-10-28, Plan 38-01 abgeschlossen (frpc-Waechter in harp_connect.sh, Stub-Tests, shellcheck-Gate)
 
-Progress: [█████░░░░░] 50%
+Progress: [████████░░] 75%
 
 ## Performance Metrics
 
@@ -99,6 +99,7 @@ Progress: [█████░░░░░] 50%
 - ZERT-Wortlaut Phase 38 neu (D-37-09): Neuausstellung erkennen und mit Abhilfe melden, neue Dateien unter /certs/frp ohne Re-Register und ohne Container-Neustart uebernehmen, gedeckelt; Kopierbefehl in der Doku, HaRP-Upstream-Vorschlag und Issue-#33-Antwort als Entwurf fuer den Owner.
 - Store-Wortlaute fuer Plan 37-02 (D-37-05 bis D-37-08): Namen bleiben wie seit 1.5.1 (Findling Search/Suche/Recherche, Findling Backend), discussion-Link auf Forum-Thread 249775, Cross-Promo-Satz bleibt unveraendert.
 - 37-02 umgesetzt (c20d7c3d RED, e17ed7c5 GREEN): discussion-Element zwischen website und bugs in beiden info.xml, Namen und Beschreibungen Byte fuer Byte unveraendert; Gates scan_identity, scan_discussion, scan_phase_37_draft in backend/tests/test_store_metadata.py; Entwurf v1.6.0 (Teil Phase 37) in docs/store-listing.md.
+- 38-01 umgesetzt (13fbe79b RED, 4030301a GREEN): harp_connect.sh ist bash-Waechter vor frpc (FIFO plus read -t), x509 bei unveraenderten Dateien nur gemeldet (Plan 0/300/900/3600 s, dann stuendlich, Anker docs/harp-tunnel.md#repair-without-re-registering fuer 38-02), Neustart nur bei geaenderten und zweimal stabilen Dateien in mTLS, MIN_GAP 60 s, CAP 6 je Fenster, nie abwaerts, Exit 73 bei unschreibbarem Run-Verzeichnis, nie 0 nach frpc-Ende; shellcheck-Gate in python.yml (disable SC2317,SC2329 vor den Trap-Funktionen). WSL-Beweis nicht moeglich (nur docker-desktop-Distro), Ersatz Git-Bash-Lauf 22 von 24 gruen (2 Windows-Artefakte), CI-Lauf steht aus. ZERT-01 bleibt Pending bis 38-02 (Doku und Entwuerfe).
 
 ### Decisions (Roadmap v1.5)
 
@@ -217,11 +218,12 @@ Items acknowledged and deferred at milestone close on 2026-10-28 (Owner-Wiedervo
 | quick_task | 261005-vit-vollindex-term | unknown (Altlast v1.4) |
 | Phase 37 P01 | 25min | 3 tasks | 5 files |
 | Phase 37 P02 | 20min | 2 tasks | 4 files |
+| Phase 38 P01 | ca. 30 min | 2 tasks | 4 files |
 
 ## Session Continuity
 
-Last session: 2026-10-28T12:39:43.194Z
-Stopped at: Completed 37-02-PLAN.md
+Last session: 2026-10-28T12:58:24.060Z
+Stopped at: Completed 38-01-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
