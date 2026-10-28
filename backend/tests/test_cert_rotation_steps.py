@@ -66,7 +66,7 @@ HARP_DOC = REPO_ROOT / "docs" / "harp-tunnel.md"
 STEP = "Certificate rotation, a reissued HaRP CA heals after the three files are copied in"
 BEFORE = "Search over the ordinary OCS route"
 AFTER = "Language proof, the four new chains answer on the ordinary search route"
-COUNTER_SAMPLE = "Store upgrade 5, the ten assurances after the upgrade"
+COUNTER_SAMPLE = "Store upgrade 5, the eleven assurances after the upgrade"
 
 REQUIRED_SNIPPETS = (
     "docker exec appapi-harp rm -rf /certs/frp",
@@ -449,7 +449,7 @@ jobs:
         run: |
           echo proof
 
-      - name: Store upgrade 5, the ten assurances after the upgrade
+      - name: Store upgrade 5, the eleven assurances after the upgrade
         if: matrix.server-version == 'stable34'
         run: |
           echo gated

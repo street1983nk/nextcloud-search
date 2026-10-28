@@ -929,3 +929,116 @@ def test_p3_ten_idle_seconds_are_about_ten_looks_at_the_files_and_no_busy_wait(t
     print(f"P3 {looks:.0f} looks at the files in {idle:.1f} idle s, watcher CPU {cpu_seconds:.2f} s")
     assert 5 <= looks <= math.ceil(idle / poll) + 1
     assert cpu_seconds < 1.0
+
+
+# -- Assurance 12 of the upgrade line (plan 40-03): the 1.6 changes survive the upgrade --
+#
+# "Store upgrade 5" carries the read only parts: the coverage booleans of Weg C
+# (deduplicated, rulesPending), the installed de catalog char-identical to the
+# one of this commit, the leaveOut counters answered inside the container, and
+# the proof that Version001600Date20261028000000 ran (the recorded backend
+# version dropped and written anew, a search with hits and no drift line).
+# "Store upgrade 5b" carries the one writing part behind its own rule writing:
+# a changed set over POST /admin/rules raises coverage.rulesPending, because
+# the route alone stamps rules_changed_at (SettingsController.php:466); occ
+# config:app:set never passes through it.
+
+UPGRADE_STEP_PREFIX = "Store upgrade 4,"
+ASSURANCE_STEP_PREFIX = "Store upgrade 5,"
+EXCLUSION_STEP_PREFIX = "Store upgrade 5b,"
+
+# The three sentences of plan 39-01, keyed by their English source text in the
+# catalogs (never by the findling-coverage-* element ids). A rewording in
+# 40-04 changes the keys and this list with it, in the same tree.
+COVERAGE_SENTENCES = (
+    (
+        "Nothing is left out on purpose right now. Files that are too large, of a type Findling does not read,"
+        " or excluded by a rule would be counted here, and they are not in the denominator above."
+    ),
+    (
+        "The exclusion rules were changed. The search applies them at once, the counters on this page follow"
+        " once they have been worked out again."
+    ),
+    (
+        "External storages mounted once per user are counted once per mount here, so the same file can stand"
+        " in this figure several times."
+    ),
+)
+
+
+def _deploy_step(prefix: str) -> str:
+    import yaml
+
+    loaded = yaml.safe_load((WORKFLOWS / "deploy-harp.yml").read_text(encoding="utf-8"))
+    steps = [s for s in loaded["jobs"]["deploy-harp"]["steps"] if str(s.get("name", "")).startswith(prefix)]
+    assert len(steps) == 1, prefix
+    run = steps[0].get("run")
+    assert isinstance(run, str)
+    return run
+
+
+def test_the_de_catalog_carries_the_three_coverage_sentences() -> None:
+    import json
+
+    catalog = json.loads((REPO / "php" / "l10n" / "de.json").read_text(encoding="utf-8"))["translations"]
+    for sentence in COVERAGE_SENTENCES:
+        assert sentence in catalog, sentence[:40]
+        assert catalog[sentence].strip(), sentence[:40]
+
+
+def test_assurance_12_reads_the_coverage_booleans() -> None:
+    run = _deploy_step(ASSURANCE_STEP_PREFIX)
+    assert '(.coverage.deduplicated | type == "boolean") and (.coverage.rulesPending | type == "boolean")' in run
+    assert "'.coverage.rulesPending == false'" in run
+
+
+def test_assurance_12_holds_the_installed_catalog_against_the_commit() -> None:
+    # No literal sentence in the workflow: the keys and values come out of
+    # php/l10n/de.json of the commit, so a rewording in 40-04 follows along.
+    run = _deploy_step(ASSURANCE_STEP_PREFIX)
+    assert 'shipped_catalog="findling-src/php/l10n/de.json"' in run
+    assert 'installed_catalog="apps/findling/l10n/de.json"' in run
+    assert "--slurpfile shipped" in run
+    assert ".translations == $shipped[0].translations" in run
+    for sentence in COVERAGE_SENTENCES:
+        assert sentence not in run
+
+
+def test_assurance_12_asks_the_container_for_the_left_out_counters() -> None:
+    run = _deploy_step(ASSURANCE_STEP_PREFIX)
+    assert "from findling.api.status import report" in run
+    assert "report(leave_out=[storage])" in run
+    assert "SELECT COUNT(*) FROM files WHERE storage_id = ? AND state = 'indexed' AND deleted_at IS NULL" in run
+    assert ".indexedLeftOut == .counted" in run
+    assert ".withoutHasFields == false" in run
+    assert "home::testuser" in run
+
+
+def test_assurance_12_proves_the_migration_ran_without_drift() -> None:
+    migration = PHP_LIB / "Migration" / "Version001600Date20261028000000.php"
+    assert migration.is_file()
+    upgrade = _deploy_step(UPGRADE_STEP_PREFIX)
+    assert "configkey = 'backend_app_version'" in upgrade
+    assert 'echo "UPGRADE_BACKEND_VERSION_BEFORE_OCC=' in upgrade
+    assert 'echo "UPGRADE_BACKEND_VERSION_AFTER_OCC=' in upgrade
+    run = _deploy_step(ASSURANCE_STEP_PREFIX)
+    assert "oc_migrations WHERE app = 'findling' AND version = '001600Date20261028000000'" in run
+    assert '"${UPGRADE_BACKEND_VERSION_BEFORE_OCC}" != "${UPGRADE_OLD_COMPANION}"' in run
+    assert '"${UPGRADE_BACKEND_VERSION_AFTER_OCC}" != ""' in run
+    assert '"${backend_version_now}" != "${UPGRADE_NEW_COMPANION}"' in run
+    assert "grep -c 'the two halves report different versions' data/nextcloud.log" in run
+
+
+def test_part_two_raises_the_hint_over_the_route_and_takes_it_back() -> None:
+    run = _deploy_step(EXCLUSION_STEP_PREFIX)
+    assert "http://localhost:8080/index.php/apps/findling/admin/rules" in run
+    assert "configkey = 'rules_changed_at'" in run
+    assert "'.coverage.rulesPending == true'" in run
+    assert run.index("'.coverage.rulesPending == false'") < run.index("'.coverage.rulesPending == true'")
+    # The way back: the second POST restores the list of the seed, and the
+    # steps after 5b start from the installation they always started from.
+    assert '"${exclusions_restored}" != "${UPGRADE_EXCLUSIONS_BEFORE}"' in run
+    assert run.count("post_rules ") >= 2
+    # occ never stamps the hint, so no line may write the stamp by hand.
+    text = (WORKFLOWS / "deploy-harp.yml").read_text(encoding="utf-8")
+    assert "config:app:set findling rules_changed_at" not in text
