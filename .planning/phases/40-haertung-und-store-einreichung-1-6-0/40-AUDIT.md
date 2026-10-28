@@ -7,14 +7,14 @@ findings:
   critical: 0
   high: 0
   medium: 0
-  low: 4
-  total: 4
+  low: 6
+  total: 6
 status: open
 ---
 
 # Phase 40: Launch-Audit 1.6.0 (Security, Bugs, Performance)
 
-**Stand:** offen (Security-Teil gefahren, Bugs und Performance folgen in Task 2).
+**Stand:** offen (Security, Bugs und Performance gefahren; Fixes und LOW-Entscheidungen folgen in Task 3).
 
 **Umfang:** alle Änderungen des Milestones v1.6 (Phasen 37 bis 39). Basis ist
 der Tag `v1.5.1`, Kopf beim Start `336ccae7`. `git diff --stat v1.5.1..336ccae7
@@ -230,6 +230,160 @@ unter Git Bash als Gegenprobe gefahren, wo das möglich war.
   (`test_s7_the_lock_keeps_starlette_above_the_badhost_floor`).
 - "Security scans" auf dem Startkopf 336ccae7: Lauf **40736775766** success.
 
+## Bugs
+
+### B1 Weg C, Zählschlüssel
+
+- Vorhanden in `php/tests/Unit/StorageServiceTest.php`: "@" im Nutzernamen
+  (`testALoginNameWithAnAtSignKeepsTheHostAfterTheLastOne`), Port bei SFTP und
+  home::/local::/object::/webdav::/owncloud::/amazon:: nie gruppiert
+  (`testSftpIsGroupedWithItsPortAndOtherBackendsAreNot`), md5-gekürzte IDs
+  (`testAnIdNextcloudHashedIsNeverAGroup`), `$user` in der Wurzel
+  (`testARootWithTheUserInItIsNeverAGroup`).
+- Ergänzt (fehlte): `testADoubleSlashInTheLoginNameIsNeverAGroupAndOneInTheRootStaysInTheKey`.
+  Ein `//` im Login-Namen (`smb::corp//anna@fs.example//team//`) lässt vor dem
+  ersten `//` kein `@`, also keine Gruppe (sichere Richtung); ein `//` tiefer in
+  der Wurzel bleibt Teil des Schlüssels; Domänen-Login mit `@` und Port bei
+  SFTP ergibt denselben Schlüssel wie ein einfacher Login. Host = Text nach dem
+  LETZTEN `@` vor dem ersten `//`, wie in 39-01 belegt. Läuft nur in "PHP and
+  store metadata gates" (Lauf-ID unter "Stand").
+
+### B2 Nenner unter Weg C
+
+- Belegt vorhanden in `AdminViewServiceTest.php`:
+  `testANumeratorNeverFallsBelowNought` (indexedLeftOut 50 > indexed 10 ergibt
+  0, nicht negativ), `testAFigureIsNeverNegativeAndNeverAboveAHundred`
+  (`coverageShare`: mehr gezählt als indexierbar ergibt null, nie 100),
+  `testAContainerWithoutTheTwoFieldsGivesNullAndNotNought` und
+  `testHalfAnAnswerIsNoDeduplication` (Rückfall auf 1.5 ohne beide Felder).
+- Container-Seite neu: `test_b2_the_left_out_counter_never_exceeds_the_figure_it_is_subtracted_from`
+  (alle Storages ausgelassen, mit Tombstone): `indexedLeftOut <= indexed`,
+  `embeddedLeftOut <= embedded`. Die Klammer bei 0 in `figures()` ist also nur
+  Absicherung, keine Korrektur eines Normalfalls. Kein Befund.
+
+### B3 IN-Fixes aus 39-03
+
+- `archive.too_many_entries`: `test_b3_too_many_entries_judges_the_limit_like_1_5`
+  mit gesenkter Grenze 20: 19 und 20 Einträge False, 21 True; Grenze selbst
+  bleibt erlaubt wie in 1.5. Bestandstests mit der echten Grenze:
+  `test_extract_signatures.py` Zeile 435 (Grenze + 1 blockiert) und 457 (Grenze
+  liest), `test_10001_entries_are_an_archive_limit`. Kaputte Datei und fehlende
+  Datei ergeben False, der Leser selbst diagnostiziert
+  (`test_b3_a_file_that_is_no_package_is_left_to_its_reader`).
+- Verwaiste vanished_storages-Stempel: `test_b3_a_stamp_of_a_storage_with_a_living_row_and_a_bookmark_stays`:
+  Storage 7 (lebende Zeile, Lesezeichen, Stempel, nicht gelistet) behält
+  Stempel und Lesezeichen, der alte Stempelwert bleibt; Storage 8 (nur
+  Stempel) verliert ihn. Bestand: `test_an_orphan_stamp_is_dropped_with_the_orphan_bookmarks`,
+  `test_an_orphan_stamp_alone_is_dropped_without_any_bookmark`. Kein Befund.
+
+### B4 rules_changed_at: saveRules gegen rulesPendingNow
+
+- Lektüre `AdminViewService.php:2039-2056` und `SettingsService::forgetRulesChange`:
+  der Poll liest den Stempel, entscheidet "nicht mehr ausstehend" und ruft dann
+  `forgetRulesChange()`, das den Stempel ein zweites Mal liest und auf 0 setzt.
+  Speichert ein zweiter Admin genau zwischen diesen beiden Lesungen neue
+  Regeln, löscht der Poll den neuen Stempel mit, und der Hinweis für diese
+  Änderung erscheint nicht. Zweiter Fall: Stempel und Recount-Beginn haben
+  Sekundenauflösung; startet ein Recount in derselben Sekunde vor dem
+  Speichern, gilt er als "nach der Änderung" (`recountedAt >= changedAt`), und
+  der Hinweis endet, sobald keine Crawl- oder Sweep-Jobs mehr anstehen.
+- Folge in beiden Fällen: nur der Hinweissatz fehlt; die Suche wendet die
+  Regel sofort an, die Zähler stimmen nach dem nächsten Recount. Kein Einfluss
+  auf Rechte oder Suche. **F-40-05 (LOW)**.
+
+### B5 fastapi 0.143.2 auf 0.161.1
+
+Release-Notes 0.144 bis 0.161.1 (GitHub-API, Stand 28.10.2026) mit
+Verhaltensänderung für unsere Nutzung:
+
+- 0.148.0: Standardwerte weggelassener Query-Parameter werden nicht mehr
+  validiert. leaveOut hat den Standard `None`; abgedeckt durch
+  `test_s1_without_the_parameter_neither_counter_is_on_the_wire` und
+  `test_status_endpoint.py::test_an_old_companion_without_the_parameter_gets_no_new_field`.
+- 0.155.0: `**extra` an `Query()` entfernt (TypeError). Wir übergeben nur
+  `max_length` und `pattern`; der Import der App in jeder Testdatei mit
+  TestClient deckt es ab.
+- 0.156.0 bis 0.156.6: Field-Attribute in Request-Parametern erhalten.
+  Musterprüfung abgedeckt durch die 15 Werte von S1 und
+  `test_status_leave_out.py::test_anything_but_a_short_list_of_numbers_is_refused`.
+- `Field(exclude_if=...)` (pydantic, Antwortmodell): unverändert, abgedeckt
+  durch `test_status_endpoint.py::test_an_old_companion_without_the_parameter_gets_no_new_field`
+  und S1 (Felder fehlen ohne Parameter).
+- 0.146.0 (`root_path` deprecated), 0.147/0.149/0.150 (Formulare), 0.151
+  (JSON-Body `null`), 0.152 (Header-Modelle), 0.160 (Parametermodelle): nicht
+  genutzt (`grep root_path\|openapi_prefix\|Body(\|Form(` in backend/src
+  leer). Kein Befund.
+
+### B6 Tombstones: indexed gegen indexedLeftOut
+
+- `Store.counts()` (`repo.py:1052-1062`) zählt alle Zeilen mit Zustand
+  `indexed`, auch tombstoned (Stand 1.5, Feld `indexed` der Antwort);
+  `indexedLeftOut` zählt nur lebende (`deleted_at IS NULL`, so geplant in
+  39-01). Probe `test_b6_f_40_06_a_tombstone_stays_in_indexed_and_out_of_indexed_left_out`:
+  Storage 2 mit 2 lebenden und 1 Tombstone, `indexed` 5, `indexedLeftOut` 2,
+  Zähler nach Abzug 3, also bleibt der Tombstone im Zähler.
+- Beziffert: Zähler unter Weg C = lebende Dokumente des Repräsentanten plus
+  ALLE Tombstones der Gruppe. Beispiel: eine Freigabe für 10 Nutzer mit 1000
+  Dateien, 10 davon gelöscht und tombstoned (je Storage 10, zusammen 100
+  Zeilen). In 1.5 hebt das den Zähler um 100 bei 9900 indexierbar (rund 1
+  Punkt), unter Weg C um 100 bei 990 indexierbar (rund 10 Punkte), solange
+  die Erstindexierung läuft. Bei voller Abdeckung ist der Zähler in beiden
+  Fällen größer als indexierbar, und `coverageShare` zeigt keine Zahl statt
+  einer falschen (wie in 1.5). Die Verstärkung um die Gruppengröße ist neu in
+  v1.6. **F-40-06 (LOW)**.
+
+## Performance
+
+### P1 Kosten von GET /status mit leaveOut
+
+- `test_p1_the_status_call_with_leave_out_over_a_hundred_thousand_documents`
+  (`-m timing`, nur mit `FINDLING_TIMING=1`): synthetischer Bestand von
+  100 000 lebenden indexierten Dokumenten in 3 Storages (40 000, 30 000,
+  30 000), jedes mit einer Vektorzeile, `leaveOut=2,3` (60 000 Dokumente,
+  unter der Decke). Gemessen am 28.10.2026 auf dieser Box, Median von 5
+  Läufen über den TestClient: **ohne leaveOut 55,0 ms, mit leaveOut 95,2 ms**,
+  also rund 40 ms für beide Zähler über 60 000 Dokumente. Ergebnis
+  `(indexedLeftOut, embeddedLeftOut) = (60000, 60000)`.
+- Decke `LEFT_OUT_EMBEDDED_CEILING` mit der echten Zahl, nicht gesenkt:
+  `test_p1_the_vector_figure_stops_above_a_hundred_thousand_documents`,
+  Storage 2 mit genau 100 000 Dokumenten: `embeddedLeftOut` 100000 da; mit
+  100 001: Feld fehlt, `indexedLeftOut` 100001. Läuft ohne Timing-Schalter.
+  Kein Befund.
+
+### P2 Abfragen und Container-Aufrufe je Poll der Admin-Seite
+
+- **Container-Aufrufe je Poll:** v1.5.1 `AdminViewService.php:672`
+  `adminGet('/status', ..., [])`, HEAD `:655` `adminGet('/status', ...,
+  $parameters)`: leaveOut hängt am bestehenden Statusaufruf. Dazu in beiden
+  Ständen `/rates` in `estimate()` (v1.5.1 `:2139`, HEAD `:2352`), nur solange
+  die Erstindexierung läuft. Also **1 Aufruf je Poll nach der Erstindexierung,
+  2 währenddessen, in v1.5.1 und HEAD gleich**. Kein zusätzlicher Aufruf.
+- **Datenbankabfragen:** `ScanStatsService::totals` v1.5.1 zwei Abfragen je
+  Band von 500 Storages (Summen und `finished_at`), HEAD eine (Zeilen, im
+  Speicher summiert). Neu: `StorageService::countingKeyGroups` eine Abfrage
+  je Band von 200 Storages gegen oc_storages, nur mit externen Speichern und
+  ab zwei Mounts; `FileStateService::countByReason` für die ausgelassenen
+  Storages eine Abfrage, nur wenn eine Gruppe etwas ausließ;
+  `rulesWorkQueued` höchstens zwei Zeilen (je Jobklasse eine), nur solange ein
+  Stempel steht und der Recount danach begann; `forgetRulesChange` ein
+  Schreibzugriff, einmal je Änderung. Bei bis zu 500 Mounts ohne Gruppe:
+  v1.5.1 2, HEAD 2 (1 totals plus 1 Gruppenabfrage), mit Gruppe 3. Kein
+  Befund (P5 aus 36-12: keine Abfrage je Storage).
+
+### P3 Wächter: Leerlauf und Flut
+
+- Lektüre: die Leerlauf-Schleife wartet in `read -r -t "${POLL_SECONDS}"`
+  (`harp_connect.sh:468`), kein Busy-Wait; je Durchlauf höchstens ein
+  `check_files` (Fingerabdruck über zwei `sha256sum`).
+- Probe `test_p3_ten_idle_seconds_are_about_ten_looks_at_the_files_and_no_busy_wait`
+  (Linux): ein `sha256sum` vorn im PATH zählt die Aufrufe, 10 s Leerlauf bei
+  Poll 1 s müssen höchstens ceil(10/1)+1 Blicke auf die Dateien sein und
+  mindestens 5; CPU-Zeit des Wächters samt Kindern aus `/proc/<pid>/stat`
+  unter 1 s. Zahl aus dem CI-Lauf unter "Stand".
+- Flut: 10 000 x509-Zeilen unter 60 s (S3-Probe). Jede x509-Zeile kostet
+  einen Subshell-Fork für `remedy_due`; frpc wählt höchstens alle paar
+  Sekunden neu, im Betrieb sind das wenige Zeilen je Minute. Kein Befund.
+
 ## Befunde
 
 ### F-40-01 (LOW): leaveOut nimmt eine führende Null
@@ -271,6 +425,24 @@ unter Git Bash als Gegenprobe gefahren, wo das möglich war.
   ausgelassenen Storages; dann aber "Backend nicht erreichbar" statt der
   Zählung wie 1.5.
 
+### F-40-05 (LOW): Hinweis nach Regeländerung kann bei einem Rennen ausbleiben
+
+- **Ort:** `php/lib/Service/AdminViewService.php:2039-2056` (`rulesPendingNow`),
+  `SettingsService::forgetRulesChange`.
+- **Beleg:** B4 (Lektüre, zwei Lesungen des Stempels ohne Vergleich beim
+  Löschen; Sekundenauflösung von Stempel und Recount-Beginn).
+- **Einordnung:** nur der Hinweissatz fehlt, Suche und spätere Zähler stimmen.
+
+### F-40-06 (LOW): Tombstones ausgelassener Storages bleiben im Zähler
+
+- **Ort:** `backend/src/findling/store/repo.py:444-451`
+  (`_INDEXED_IN_STORAGES_SQL` mit `deleted_at IS NULL`) gegen
+  `Store.counts()` (`:1052`).
+- **Probe:** `test_b6_f_40_06_a_tombstone_stays_in_indexed_and_out_of_indexed_left_out`.
+- **Einordnung:** die Prozentzahl kann während der Erstindexierung um die
+  Tombstones der ganzen Gruppe zu hoch stehen (Beispiel B6: rund 10 statt 1
+  Punkt); bei voller Abdeckung keine falsche Zahl, sondern keine.
+
 ## Was gegengeprüft wurde, nicht nur gelesen
 
 | Prüfung | Verfahren (anders als die Umsetzung) | Ergebnis |
@@ -280,3 +452,7 @@ unter Git Bash als Gegenprobe gefahren, wo das möglich war.
 | S2 | Schreibanweisung in die Funktion gereicht statt Pragmas gelesen; WAL-Schreiber mit offener Transaktion | readonly, kein Block |
 | S3 | eigenes frpc-Double mit Bytes statt der Harness-Zeilen; Gegenprobe unter Git Bash | nichts ausgeführt; F-40-02, F-40-03 |
 | S4 | alle Senken von admin.js gesucht statt der neuen Zeilen | keine Markup-Senke |
+| B2 | Container-Zähler gegen ihre Minuenden statt der PHP-Klammer | nie größer |
+| B6 | Tombstone im Probebestand statt Lektüre von 39-01 | F-40-06 beziffert |
+| P1 | echte Decke 100 000 statt gesenkter, 100 000 Zeilen per Bulk-Insert | Feld fehlt ab 100 001 |
+| P3 | sha256sum vorn im PATH zählt die Schleife, CPU aus /proc | Zahl in Stand |
