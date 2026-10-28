@@ -154,7 +154,7 @@ Details im Archiv: .planning/milestones/v1.5-ROADMAP.md
   3. Der Owner hat Produkt und Store-Text 1.6.0 remote abgenommen (eine gebuendelte Runde, Protokoll im Phasenordner)
   4. Beide Apps 1.6.0 sind eingereicht (2x HTTP 201), der Beleg mit Lauf-ID steht in docs/store-listing.md und REQUIREMENTS.md
 **Plans**: 5 plans
-- [ ] 40-01-PLAN.md - Audit-Gate Security/Bugs/Performance ueber alle v1.6-Aenderungen mit Proben (leaveOut, ATTACH ro, Tunnel-Waechter), Fixes ab MEDIUM, 40-AUDIT.md, CI gruen
+- [x] 40-01-PLAN.md - Audit-Gate Security/Bugs/Performance ueber alle v1.6-Aenderungen mit Proben (leaveOut, ATTACH ro, Tunnel-Waechter), Fixes ab MEDIUM, 40-AUDIT.md, CI gruen
 - [ ] 40-02-PLAN.md - Version 1.6.0 in beiden Apps, Minor-Migration Version001600, CHANGELOG, Doku-Links blob/v1.6.0, CI-Sprung installed_after 1.6.0
 - [ ] 40-03-PLAN.md - UPGRADE_FROM_TAG v1.5.0 mit Neuableitung jeder startabhaengigen Zusicherung (40-03-ABLEITUNG.md), neue Zusicherung fuer die 1.6-Aenderungen, Probe-Zweig und main gruen
 - [ ] 40-04-PLAN.md - Eine Owner-Runde remote: drei Katalogsaetze, Store-Text, Release-Notiz, GO fuer Tag und Einreichung (40-ABNAHME.md)
@@ -173,7 +173,7 @@ Details im Archiv: .planning/milestones/v1.5-ROADMAP.md
 | 37. Owner-Tor und Store-Sichtbarkeit | v1.6 | 2/2 | Complete   | 2026-10-28 |
 | 38. Zertifikatsrotation ohne Admin-Eingriff | v1.6 | 2/2 | Complete | 2026-10-28 |
 | 39. Ausschluss-Anzeige, Dedup-Umfang und Doku-Hygiene | v1.6 | 4/4 | Complete | 2026-10-28 |
-| 40. Haertung und Store-Einreichung 1.6.0 | v1.6 | 0/5 | Planned | - |
+| 40. Haertung und Store-Einreichung 1.6.0 | v1.6 | 1/5 | In Progress|  |
 
 ## Nach v1.3 (Wiedervorlage)
 
