@@ -147,8 +147,26 @@ echo "positive control: usera reads verboten.txt, userb is refused (${denial:-no
 
 # --- Nextcloud ------------------------------------------------------------------
 
-"${OCC}" app:enable files_external > /dev/null
-"${OCC}" files_external:backends storage --output=json | grep -q '"smb"' \
+# Every call into Nextcloud carries a deadline: the first attempt of this run
+# hung silently somewhere after the positive control, and a step marker plus a
+# timeout turns that into a line in the log and a cell in the table.
+step() {
+  echo "--- $* ---"
+}
+nc_occ() {
+  timeout 120 "${OCC}" "$@"
+}
+probe() {
+  timeout 90 php "${PROBE}" "${SERVER_ROOT}" "$@"
+}
+
+# Debug level, so that "Hiding non readable entry" of the SMB backend reaches
+# data/nextcloud.log, which the failure step of the workflow prints.
+nc_occ config:system:set loglevel --value=0 --type=integer > /dev/null
+
+step "files_external"
+nc_occ app:enable files_external > /dev/null
+nc_occ files_external:backends storage --output=json | grep -q '"smb"' \
   || fail "files_external does not list the smb backend (smbclient binary missing?)"
 if php -m | grep -qi '^smbclient$'; then
   smb_client="libsmbclient-php"
@@ -156,21 +174,22 @@ else
   smb_client="smbclient binary (icewind/smb fallback)"
 fi
 
+step "users and mount"
 for uid in usera userb; do
-  OC_PASS=$(password_of "${uid}") "${OCC}" user:add --password-from-env --display-name "${uid}" "${uid}" > /dev/null
+  OC_PASS=$(password_of "${uid}") timeout 120 "${OCC}" user:add --password-from-env --display-name "${uid}" "${uid}" > /dev/null
 done
 
-created=$("${OCC}" files_external:create /messung smb password::logincredentials \
+created=$(nc_occ files_external:create /messung smb password::logincredentials \
   -c host=127.0.0.1 -c share=messung -c root= -c domain="${NETBIOS}")
 mount_id=$(printf '%s\n' "${created}" | grep -oE '[0-9]+' | tail -n 1 || true)
 [ -n "${mount_id}" ] || fail "files_external:create returned no mount id"
-"${OCC}" files_external:applicable "${mount_id}" --add-user usera --add-user userb > /dev/null
+nc_occ files_external:applicable "${mount_id}" --add-user usera --add-user userb > /dev/null
 
 dav() {
   # dav <uid> <method> <path> <outfile> [extra curl args]: prints the HTTP status
   local uid="$1" method="$2" path="$3" outfile="$4"
   shift 4
-  curl -s -o "${outfile}" -w '%{http_code}' -u "${uid}:$(password_of "${uid}")" -X "${method}" "$@" \
+  curl -s --max-time 90 -o "${outfile}" -w '%{http_code}' -u "${uid}:$(password_of "${uid}")" -X "${method}" "$@" \
     "${NC_URL}/remote.php/dav/files/${uid}/${path}"
 }
 
@@ -178,11 +197,14 @@ dav() {
 # the credentials from. If the store stays empty, they are seeded through the
 # credentials manager under the same identifier, and the table says so.
 auth_variant="password::logincredentials (Log-in credentials, save in database), stored at login"
+step "first login per user"
 for uid in usera userb; do
-  dav "${uid}" PROPFIND "" "${WORK}/login-${uid}.xml" -H 'Depth: 1' > /dev/null || true
-  state=$(php "${PROBE}" "${SERVER_ROOT}" creds "${uid}")
+  first=$(dav "${uid}" PROPFIND "" "${WORK}/login-${uid}.xml" -H 'Depth: 1' || true)
+  echo "first PROPFIND of ${uid}: HTTP ${first}"
+  state=$(probe creds "${uid}" || echo "probe-error")
+  echo "credentials of ${uid}: ${state}"
   if [ "${state}" != "stored" ]; then
-    PROBE_PASS=$(password_of "${uid}") php "${PROBE}" "${SERVER_ROOT}" seed "${uid}" > /dev/null
+    PROBE_PASS=$(password_of "${uid}") timeout 90 php "${PROBE}" "${SERVER_ROOT}" seed "${uid}" > /dev/null
     auth_variant="password::logincredentials (Log-in credentials, save in database), seeded through ICredentialsManager"
   fi
 done
@@ -193,6 +215,7 @@ invalid=""
 measure() {
   local pass="$1" uid="$2"
   local code listing readable download
+  step "${pass}, ${uid}"
   code=$(dav "${uid}" PROPFIND "messung/" "${WORK}/list-${pass}-${uid}.xml" -H 'Depth: 1' || true)
   if [ "${code}" = "207" ]; then
     if grep -q 'verboten.txt' "${WORK}/list-${pass}-${uid}.xml"; then
@@ -205,7 +228,7 @@ measure() {
     listing="HTTP ${code}"
   fi
 
-  readable=$(php "${PROBE}" "${SERVER_ROOT}" readable "${uid}" messung/verboten.txt 2> /dev/null || echo "probe-error")
+  readable=$(probe readable "${uid}" messung/verboten.txt 2> /dev/null || echo "probe-error")
 
   code=$(dav "${uid}" GET "messung/verboten.txt" "${WORK}/get-${pass}-${uid}.txt" || true)
   if grep -qx "${MARKER}" "${WORK}/get-${pass}-${uid}.txt" 2> /dev/null; then
@@ -214,6 +237,7 @@ measure() {
     download="HTTP ${code}, kein Inhalt"
   fi
 
+  echo "listing: ${listing}; isReadable: ${readable}; download: ${download}"
   rows+=("| ${pass} | ${uid} | ${listing} | ${readable} | ${download} |")
 
   # usera has no deny anywhere: if Nextcloud cannot list and read the file for
@@ -227,11 +251,12 @@ for uid in usera userb; do
   measure "check_acl aus" "${uid}"
 done
 
-"${OCC}" files_external:config "${mount_id}" check_acl true > /dev/null
+step "check_acl on"
+nc_occ files_external:config "${mount_id}" check_acl true > /dev/null
 # The file cache still holds the listing of the first pass; a scan per user
 # lists the folder again, now through the ACL check.
 for uid in usera userb; do
-  "${OCC}" files:scan --quiet --path="/${uid}/files/messung" || echo "files:scan for ${uid} ended non-zero"
+  nc_occ files:scan --quiet --path="/${uid}/files/messung" || echo "files:scan for ${uid} ended non-zero"
 done
 
 for uid in usera userb; do
