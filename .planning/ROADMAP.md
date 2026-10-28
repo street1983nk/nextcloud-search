@@ -92,7 +92,7 @@ Details im Archiv: .planning/milestones/v1.5-ROADMAP.md
 ### v1.6 Store-Sichtbarkeit und Betriebs-Feinschliff (In Arbeit)
 
 - [ ] **Phase 37: Owner-Tor und Store-Sichtbarkeit** - D1-D4 der Dedup-Notiz und alle Store-Wortlaute in einer Remote-Runde entschieden; Anzeigename "Findling Search", discussion-Link und Cross-Promo-Satz in beiden info.xml
-- [ ] **Phase 38: Zertifikatsrotation ohne Admin-Eingriff** - frpc liest /certs/frp bei x509-Fehler neu ein und startet gedeckelt neu (Issue #33, Zeittreiber, unabhaengig vom Owner-Tor)
+- [ ] **Phase 38: Zertifikatsrotation ohne Admin-Eingriff** - Neuausstellung erkennen und mit Abhilfe melden, neue Dateien unter /certs/frp ohne Re-Register und ohne Container-Neustart uebernehmen, gedeckelt (Issue #33, Zeittreiber; Wortlaut nach Owner-Entscheid D-37-09)
 - [ ] **Phase 39: Ausschluss-Anzeige, Dedup-Umfang und Doku-Hygiene** - L-36-05/06 auf der Admin-Seite, entschiedener Dedup-Umfang (mindestens Weg C), Umlaut-Fixes in drei docs-Dateien, IN-01 bis IN-06 entschieden
 - [ ] **Phase 40: Haertung und Store-Einreichung 1.6.0** - Audit-Gate, Upgrade-Strecke ab v1.5.0, Owner-Abnahme remote, Einreichung beider Apps
 
@@ -105,7 +105,7 @@ Details im Archiv: .planning/milestones/v1.5-ROADMAP.md
 **Owner-Tor (eine Runde, vor jedem Bau)**: D1 Weg-Wahl (Empfehlung a: Weg B), D2 Weg A als Opt-in (Empfehlung c: erst nach Messung), D3 Weg C vorziehen (Empfehlung a), D4 Messung A6/A7 (Empfehlung a, ausser D2 = b); dazu Anzeigename-Schreibweise je Sprache, Cross-Promo-Satz en/de/fr und discussion-URL. Owner ist verreist, Abnahme ueber Remote Control: Vorlage als eine Datei mit Empfehlung je Punkt, Antwort "wie empfohlen" muss reichen.
 **Success Criteria** (what must be TRUE):
   1. Der Owner hat D1 bis D4 der 35-DEDUP-NOTIZ.md entschieden; die Entscheide stehen woertlich im Phasen-Kontext, samt der Folge fuer den Umfang von DEDUP-02 (Weg C allein oder Weg C plus Weg B, Weg A gebaut oder nicht)
-  2. Im Store und in der Nextcloud-App-Verwaltung heisst die App sichtbar "Findling Search" (name-Element beider info.xml in allen Sprachvarianten); die App-IDs findling und findling_backend sind unveraendert, ein Gate haelt beides fest
+  2. Im Store und in der Nextcloud-App-Verwaltung heisst die App sichtbar "Findling Search" mit den freigegebenen Sprachvarianten (findling: en "Findling Search", de "Findling Suche", fr "Findling Recherche"; findling_backend: "Findling Backend" in allen drei Sprachen; Owner-Entscheide D-37-05 und D-37-06); die App-IDs findling und findling_backend sind unveraendert, ein Gate haelt beides fest
   3. Beide info.xml tragen den discussion-Link auf den Forum-Thread 249775; die URL ist erreichbar (Gegenprobe per Abruf)
   4. Die Store-Beschreibungen tragen den Cross-Promo-Satz zum Nextcloud MCP Connector zeichengleich zum vom Owner abgenommenen Wortlaut (en/de/fr), die Kurztext-Regel bleibt eingehalten, docs/store-listing.md fuehrt den Entwurf mit Abnahmedatum
 **Plans**: 2 plans
@@ -113,15 +113,15 @@ Details im Archiv: .planning/milestones/v1.5-ROADMAP.md
 - [ ] 37-02-PLAN.md - Store-Sichtbarkeit: Gates fuer IDs/Namen/discussion/Cross-Promo, beide info.xml und docs/store-listing.md nach D-37-05..08 (STORE-01, STORE-02)
 
 ### Phase 38: Zertifikatsrotation ohne Admin-Eingriff
-**Goal**: Das Backend uebersteht einen HaRP-Zertifikatswechsel ohne Unregister/Register, und die Selbstheilung ist bewiesen, gedeckelt und dokumentiert
+**Goal**: Das Backend erkennt einen HaRP-Zertifikatswechsel, meldet ihn mit Abhilfe und uebernimmt neue Zertifikate unter /certs/frp ohne Unregister/Register und ohne Container-Neustart; der Weg ist bewiesen, gedeckelt und dokumentiert (Owner-Entscheid D-37-09: /certs/frp ist eine Einmal-Kopie durch HaRP, ein blosses Neueinlesen unveraenderter Dateien heilt nichts)
 **Depends on**: Nichts (laeuft unabhaengig vom Owner-Tor und darf parallel zu Phase 37 starten; Zeittreiber des Releases)
 **Requirements**: ZERT-01, ZERT-02
 **Hinweis**: Docker auf der Entwicklerbox haengt; der Beweis laeuft deshalb in CI (deploy-harp oder eigener Container-Test), nicht lokal.
 **Success Criteria** (what must be TRUE):
-  1. Nach einer Neuausstellung der CA "harp.nc" (z. B. HaRP-Neustart mit neuen Zertifikaten) verbindet sich das Backend selbsttaetig wieder: frpc liest /certs/frp bei einem x509-Fehler neu ein und startet neu, die Unified Search liefert danach wieder Findling-Treffer, ohne dass der Admin occ app_api:app:unregister/register ausfuehrt
-  2. Ein Test oder CI-Schritt rotiert das Zertifikat wirklich und belegt die Wiederverbindung, mit Positivkontrolle (ohne die neue Logik bleibt der Tunnel nachweislich tot)
-  3. Bei dauerhaft ungueltigem Zertifikat entsteht kein Neustart-Sturm: Backoff oder Versuchsdeckel begrenzen die Neustarts, der Zustand ist im Log (und, falls vorhanden, in der Diagnose) erkennbar
-  4. Die Doku beschreibt Ursache, Selbstheilung und den Rueckfallweg fuer den Admin; dem Melder ist im Issue #33 kurz geantwortet (vor jedem "Closes #33")
+  1. Eine Neuausstellung der CA "harp.nc" wird erkannt (x509-Logmuster) und ratenbegrenzt mit Abhilfe im Log gemeldet; nach Austausch der drei Dateien unter /certs/frp verbindet sich das Backend ohne Re-Register und ohne Container-Neustart wieder, die Unified Search liefert wieder Findling-Treffer (Owner-Entscheid D-37-09)
+  2. Eine CI-Probe stellt die CA wirklich neu aus und belegt die Wiederverbindung nach dem Dateiaustausch, mit Positivkontrolle: ohne neue Dateien unter /certs/frp bleibt der Tunnel nachweislich tot (Owner-Entscheid D-37-09)
+  3. Bei dauerhaft ungueltigem Zertifikat entsteht kein Neustart-Sturm: ein Deckel begrenzt Wiederholungen und Meldungen, der Zustand ist im Log (und, falls vorhanden, in der Diagnose) erkennbar (Owner-Entscheid D-37-09)
+  4. Die Doku beschreibt Ursache, Erkennen, den Kopierbefehl und den Rueckfallweg (unregister/register ohne --rm-data) fuer den Admin; Entwuerfe fuer den HaRP-Upstream-Vorschlag und die kurze englische Antwort in Issue #33 liegen dem Owner vor (Owner sendet, Antwort vor jedem "Closes #33") (Owner-Entscheid D-37-09)
 **Plans**: TBD
 
 ### Phase 39: Ausschluss-Anzeige, Dedup-Umfang und Doku-Hygiene
@@ -131,7 +131,7 @@ Details im Archiv: .planning/milestones/v1.5-ROADMAP.md
 **Success Criteria** (what must be TRUE):
   1. Auf der Admin-Seite steht neben "Bewusst ausgelassen: 0" ein Erklaersatz, was "bewusst ausgelassen" umfasst; der Satz liegt in allen 16 Katalogen im Gleichstand (Katalog-Gates gruen)
   2. Nach einer Ausschlussmuster-Aenderung zeigt der Zaehler keinen irrefuehrenden Zwischenstand: ein Hinweis oder Stand-Zeitpunkt macht die Verzoegerung bis zum naechsten Kehr- oder Abgleichslauf erkennbar
-  3. Weg C ist geliefert: Bei einer Mount-Config mit nutzerspezifischer Anmeldung zaehlt die Abdeckung je Schluessel (Backend, Host, Share, Root nach Platzhalter-Ersetzung, Pfad) statt je Storage, belegt mit Test und Positivkontrolle; Weg B ist nach D1 entweder gebaut oder mit Begruendung dokumentiert vertagt (Release-Rahmen 29.10.)
+  3. Weg C ist geliefert: Bei einer Mount-Config mit nutzerspezifischer Anmeldung zaehlt die Abdeckung je Schluessel (Backend, Host, Share, Root nach Platzhalter-Ersetzung, Pfad) statt je Storage, belegt mit Test und Positivkontrolle (Weg C als erster Schritt der Phase, Owner-Entscheid D-37-03); Weg B ist nach D1 entweder gebaut oder mit Begruendung dokumentiert vertagt (Release-Rahmen 29.10., Owner-Entscheid D-37-01); die Messung A6/A7 ist auf einer SMB-Testfreigabe gelaufen (CI oder Testbox, weil Docker auf der Entwicklerbox haengt) und ihr Ergebnis steht im Phasen-Artefakt (Owner-Entscheid D-37-04); der Entscheid zu Weg A als Opt-in faellt mit dem Messergebnis und steht im Phasen-Artefakt; ohne Messergebnis in v1.6 gilt er als vertagt auf v1.7 (Owner-Entscheid D-37-02)
   4. docs/dev-setup.md, docs/embeddings.md und docs/install-check.md tragen echte Umlaute und ß in deutscher Prosa; Testkorpus-Begriffe (z. B. "Bahnhofstrasse", Gesetzes-Langwoerter) sind per Gegenprobe unveraendert
   5. IN-01 bis IN-06 aus 36-REVIEW.md sind je als "fix in v1.6" oder "accept mit Begruendung" entschieden und die Fixes umgesetzt
 **Plans**: TBD

@@ -9,8 +9,8 @@
 
 ### Zertifikatsrotation (ZERT, Issue #33, Zeittreiber)
 
-- [ ] **ZERT-01**: Backend uebersteht die HaRP-Zertifikatsrotation (Neuausstellung der CA "harp.nc", z. B. nach HaRP-Neustart) ohne Unregister/Register: bei einem x509-Fehler des frpc-Tunnels liest der Container /certs/frp neu ein und startet frpc neu; die Verbindung kommt selbsttaetig wieder
-- [ ] **ZERT-02**: Die Selbstheilung ist belegt (Test oder CI-Probe mit rotiertem Zertifikat) und begrenzt (kein Neustart-Sturm: Backoff oder Versuchsdeckel); der Weg ist in der Doku beschrieben und dem Melder im Issue #33 geantwortet
+- [ ] **ZERT-01**: Der Container erkennt die Neuausstellung der CA "harp.nc" (x509-Logmuster des frpc-Tunnels) und meldet sie ratenbegrenzt mit Abhilfe im Log; neue Dateien unter /certs/frp uebernimmt er ohne Re-Register und ohne Container-Neustart (frpc heilt binnen ca. 20 s, Waechter mit Deckel gegen Neustart-Sturm); der Admin repariert mit einem dokumentierten Kopierbefehl statt unregister/register; dazu ein Upstream-Vorschlag an nextcloud/HaRP (Entwurf, Owner sendet) und eine kurze englische Antwort in Issue #33 (Entwurf, Owner sieht sie vor dem Senden) (Owner-Entscheid D-37-09, ersetzt den Wortlaut vom 28.10.2026)
+- [ ] **ZERT-02**: Der Weg ist belegt per CI-Probe mit echter CA-Neuausstellung und Positivkontrolle (ohne neue Dateien unter /certs/frp bleibt der Tunnel nachweislich tot) und begrenzt (Deckel gegen Neustart-Sturm); die Doku beschreibt Ursache, Erkennen, Kopierbefehl und Rueckfallweg (unregister/register ohne --rm-data); die Entwuerfe fuer den HaRP-Upstream-Vorschlag und die Issue-#33-Antwort liegen dem Owner vor, Antwort vor jedem "Closes #33" (Owner-Entscheid D-37-09)
 
 ### Ausschluss-Anzeige (ANZE, aus 36-REVIEW L-36-05/06)
 
@@ -29,7 +29,7 @@
 
 ### Store-Sichtbarkeit (STORE, Strategie 24.10.)
 
-- [ ] **STORE-01**: Die App heisst im Store sichtbar "Findling Search" (Anzeigename in info.xml beider Apps, GO vom 22.10.); App-IDs bleiben unveraendert
+- [ ] **STORE-01**: Die App heisst im Store sichtbar "Findling Search" (Anzeigename in info.xml beider Apps, GO vom 22.10.; Sprachvarianten nach Owner-Entscheid D-37-05, findling_backend bleibt "Findling Backend" nach D-37-06); App-IDs bleiben unveraendert
 - [ ] **STORE-02**: Beide info.xml tragen den discussion-Link auf den Forum-Thread 249775; die Store-Texte tragen den Cross-Promo-Satz zum Nextcloud MCP Connector (Kurztext-Regel, Owner-Abnahme des Wortlauts vor Release)
 
 ### Release (REL)

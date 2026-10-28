@@ -93,6 +93,10 @@ Progress: [----------] 0%
 - Phase 38 (ZERT, Issue #33) haengt an keinem Owner-Entscheid und darf parallel zu Phase 37 starten; Beweis in CI, weil Docker auf der Entwicklerbox haengt.
 - Phase 39 buendelt alle Feinschliff-Punkte (ANZE, DEDUP-02, DOCS) und haengt nur wegen des Dedup-Umfangs an Phase 37; Weg B nur bei D1 = (a) und passendem Zeitrahmen, sonst dokumentiert vertagt.
 - Phase 40 traegt REL-06 (Audit-Gate, UPGRADE_FROM_TAG=v1.5.0, Owner-Abnahme remote, Einreichung).
+- Owner-Tor Phase 37 geschlossen am 28.10.2026 (Remote Control, Antwort "Wie empfohlen (Recommended)"); Details in .planning/phases/37-owner-tor-und-store-sichtbarkeit/37-OWNER-ENTSCHEIDE.md (D-37-01 bis D-37-09).
+- Dedup-Umfang Phase 39: Weg C als erster Schritt, Weg B nur im Rahmen der Einreichung 1.6.0 sonst dokumentiert vertagt, Weg A nicht in v1.6 (Entscheid nach Messung A6/A7 in CI oder auf der Testbox, ohne Ergebnis vertagt auf v1.7).
+- ZERT-Wortlaut Phase 38 neu (D-37-09): Neuausstellung erkennen und mit Abhilfe melden, neue Dateien unter /certs/frp ohne Re-Register und ohne Container-Neustart uebernehmen, gedeckelt; Kopierbefehl in der Doku, HaRP-Upstream-Vorschlag und Issue-#33-Antwort als Entwurf fuer den Owner.
+- Store-Wortlaute fuer Plan 37-02 (D-37-05 bis D-37-08): Namen bleiben wie seit 1.5.1 (Findling Search/Suche/Recherche, Findling Backend), discussion-Link auf Forum-Thread 249775, Cross-Promo-Satz bleibt unveraendert.
 
 ### Decisions (Roadmap v1.5)
 
