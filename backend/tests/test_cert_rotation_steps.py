@@ -23,7 +23,9 @@ What else is held:
 2. Its run block names the commands that make the proof a proof: the real
    reissue (``rm -rf /certs/frp`` in HaRP plus a restart), the CA digest before
    and after, the restart count and start time of the backend container, the
-   log lines of the watcher of plan 38-01, the copy through ``docker exec -i``
+   log lines of the watcher of plan 38-01 (x509 lines only as information,
+   never asserted, because a reissue can be refused with "session shutdown"
+   alone, run 40704387898), the copy through ``docker exec -i``
    into a temporary name moved over with ``mv -f`` under ``umask 077``, the
    canary search and the app list.
 3. Outside comment lines the run block never copies with ``docker cp`` (the
@@ -75,7 +77,8 @@ REQUIRED_SNIPPETS = (
     "StartedAt",
     "docker logs --since",
     "x509: ",
-    "no longer accepted by HaRP (x509)",
+    "possibly no longer accepted by HaRP",
+    "connect to server error:",
     "the certificate files in",
     "login to server success",
     "docker exec -i",
@@ -92,6 +95,9 @@ FORBIDDEN_SNIPPETS = (
     "app_api:app:register",
     "app_api:app:unregister",
     'docker restart "${EXAPP_CONTAINER}"',
+    # x509 lines are printed as information and never asserted: run
+    # 40704387898 refused every dial with "session shutdown" and no x509 at all.
+    '"${x509}" -',
 )
 
 ANCHOR = "docs/harp-tunnel.md#repair-without-re-registering"
@@ -113,6 +119,8 @@ DOC_COPY_SNIPPETS = (
     "client.crt",
     "client.key",
 )
+# The shutdown form of the failure (run 40704387898) has to be named in the doc.
+DOC_SHUTDOWN = "without any x509 line"
 
 _STEP_START = re.compile(r"^ {6}- name:[ \t]*(?P<name>.+?)[ \t]*$")
 _STEP_END = re.compile(r"^ {0,6}(?:#|- name:|[A-Za-z0-9_.-]+:)")
@@ -130,6 +138,7 @@ DOC_CLAIMS = (
     "the doc carries the repair heading exactly once",
     "the doc copies the three files the way the probe does",
     "the doc mentions docker cp only to advise against it",
+    "the doc names the session shutdown form of the failure",
 )
 
 
@@ -271,6 +280,8 @@ def scan_doc(text: str | None) -> list[str]:
         for line in lines
         if "docker cp" in line and "not" not in line.lower()
     )
+    if DOC_SHUTDOWN not in text:
+        findings.append(f"the doc does not say that the failure can come {DOC_SHUTDOWN}")
     return findings
 
 
@@ -358,7 +369,8 @@ def test_the_real_workflow_produces_no_finding() -> None:
 
 
 def test_doc_anchor_stands_in_the_remedy_line() -> None:
-    remedy = [line for line in HARP_CONNECT.read_text(encoding="utf-8").splitlines() if "(x509)" in line]
+    lines = HARP_CONNECT.read_text(encoding="utf-8").splitlines()
+    remedy = [line for line in lines if "no longer accepted by HaRP" in line]
     assert remedy
     assert all(ANCHOR in line for line in remedy)
 
@@ -386,6 +398,12 @@ def test_doc_mentions_docker_cp_only_to_advise_against_it() -> None:
     text = _real_doc()
     assert text is not None
     assert [line for line in text.splitlines() if "docker cp" in line and "not" not in line.lower()] == []
+
+
+def test_doc_names_the_session_shutdown_form() -> None:
+    text = _real_doc()
+    assert text is not None
+    assert DOC_SHUTDOWN in text
 
 
 def test_doc_produces_no_finding() -> None:
@@ -419,7 +437,8 @@ jobs:
             docker logs --since "${rotated}" "${EXAPP_CONTAINER}" 2>&1 | grep -c 'x509: '
           done
           echo > rotation-dead.code
-          grep -c 'no longer accepted by HaRP (x509)' log.txt
+          grep -c 'possibly no longer accepted by HaRP' log.txt
+          grep -c 'connect to server error:' log.txt
           grep -c 'the certificate files in' log.txt
           grep -c 'login to server success' log.txt
           docker exec appapi-harp cat /certs/frp/ca.crt \\
@@ -510,6 +529,15 @@ def test_a_re_register_or_a_backend_restart_in_code_is_reported() -> None:
     assert len(findings) == 2
 
 
+def test_an_assertion_on_the_x509_count_is_reported() -> None:
+    shortcut = '          [ "${x509}" -ge 2 ]\n'
+    source = _CLEAN.replace(_CANARY, _CANARY + shortcut, 1)
+    assert source != _CLEAN
+    findings = scan(source)
+    assert len(findings) == 1
+    assert "'\"${x509}\" -' outside a comment" in findings[0]
+
+
 def test_the_forbidden_words_in_a_comment_are_not_reported() -> None:
     # The clean sample carries "docker cp" and "app_api:app:register" in its
     # comment line; this asserts the filter that lets it stay clean.
@@ -530,6 +558,7 @@ for f in ca.crt client.crt client.key; do
   docker exec HARP cat "/certs/frp/$f" | docker exec -i nc_app_findling_backend sh -c 'umask 077; cat > x && mv -f x y'
 done
 Do not use docker cp.
+It can also show up as session shutdown without any x509 line.
 ## Fallback: re-register without --rm-data
 ## Limits
 ## Proof
@@ -555,6 +584,13 @@ def test_doc_recommending_docker_cp_is_reported() -> None:
     findings = scan_doc(_CLEAN_DOC + "Run docker cp HARP:/certs/frp/ca.crt .\n")
     assert len(findings) == 1
     assert "without advising against it" in findings[0]
+
+
+def test_doc_without_the_shutdown_form_is_reported() -> None:
+    sentence = "It can also show up as session shutdown without any x509 line.\n"
+    findings = scan_doc(_CLEAN_DOC.replace(sentence, "", 1))
+    assert len(findings) == 1
+    assert DOC_SHUTDOWN in findings[0]
 
 
 def test_doc_missing_section_is_reported() -> None:
