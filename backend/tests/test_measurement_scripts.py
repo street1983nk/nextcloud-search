@@ -1059,8 +1059,14 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # mounted storages in one query per band and answers totals() ungrouped and grouped, with the left out
 # members. No file came or went, so PHP_FILES_TODAY stays at 108. Recomputed independently with find,
 # sort, tr and sha256sum over the CRLF normalised tree: 5b42b31a... both ways.
+# Moved on 2026-10-28 a third time by Plan 39-01 (DEDUP-02, Weg C), the failing tests first:
+# tests/Unit/AdminViewServiceTest.php holds the coverage per counting key (one share for two users
+# counts once, an old container and half an answer count like 1.5, above a thousand left out storages
+# no parameter, no group no parameter, refused files of a left out storage, no numerator below nought).
+# No file came or went, so PHP_FILES_TODAY stays at 108. Recomputed independently with find, sort, tr
+# and sha256sum over the CRLF normalised tree: 9ea16618... both ways.
 PHP_FILES_TODAY = 108
-PHP_TREE_HASH_TODAY = "5b42b31a77e93814b9a77ec8f884e8051abe694c10c83a4a4c32cc19a7e177ed"
+PHP_TREE_HASH_TODAY = "9ea16618a4b8a87f8e769559086cc005c4fe6764f2dda7a603c9c34e5bd01477"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

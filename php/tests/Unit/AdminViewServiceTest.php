@@ -891,6 +891,163 @@ final class AdminViewServiceTest extends TestCase {
 		);
 	}
 
+	// -- Weg C: the coverage per counting key (plan 39-01, D-37-03) -----------
+
+	/** One private method of the service, on an instance without its constructor. */
+	private static function invokePrivate(string $method, mixed ...$arguments): mixed {
+		$service = (new \ReflectionClass(AdminViewService::class))->newInstanceWithoutConstructor();
+
+		return (new \ReflectionMethod(AdminViewService::class, $method))->invoke($service, ...$arguments);
+	}
+
+	/**
+	 * The coverage block exactly as overview() assembles it, for one totals()
+	 * answer and one status answer: leaveOutParameters, figures, coverage.
+	 *
+	 * @param array<string,mixed> $scan
+	 * @param array<mixed>|null $answer
+	 * @return array<string,mixed>
+	 */
+	private static function coverageOf(array $scan, ?array $answer, int $refused = 0, int $refusedLeftOut = 0): array {
+		$parameters = AdminViewService::leaveOutParameters($scan);
+		$figures = self::invokePrivate('figures', $scan, $answer, $parameters, $refused, $refusedLeftOut);
+		self::assertIsArray($figures);
+		$coverage = self::invokePrivate(
+			'coverage',
+			$figures['scan'],
+			$figures['backend'],
+			$answer !== null,
+			$figures['indexable'],
+			$figures['refusedByType'],
+			true,
+			true,
+			0,
+			$figures['deduplicated'],
+		);
+		self::assertIsArray($coverage);
+
+		return $coverage;
+	}
+
+	/**
+	 * A totals() answer: two storages of one share, both counted through, 100
+	 * indexable files each, and the grouped set that keeps one of them.
+	 *
+	 * @param list<int> $leftOut
+	 * @return array<string,mixed>
+	 */
+	private static function groupedScan(array $leftOut = [31]): array {
+		$eight = static fn (int $files, int $mounts): array => [
+			'filesSeen' => $files, 'bytesSeen' => $files * 1000, 'ocrCandidates' => 0, 'pdfSeen' => 0,
+			'overCap' => 0, 'excluded' => 0, 'mountsTotal' => $mounts, 'mountsFinished' => $mounts,
+		];
+
+		return $eight(200, 2) + [
+			'grouped' => $eight(100, 1),
+			'leftOutStorageIds' => $leftOut,
+			'groupsApplied' => $leftOut === [] ? 0 : 1,
+		];
+	}
+
+	public function testOneShareForTwoUsersCountsOnceWhenTheContainerAnswersForTheOther(): void {
+		$coverage = self::coverageOf(self::groupedScan(), [
+			'indexed' => 200,
+			'embedded' => 120,
+			'indexedLeftOut' => 100,
+			'embeddedLeftOut' => 60,
+		]);
+
+		self::assertSame(100, $coverage['indexable']);
+		self::assertSame(100, $coverage['indexed']);
+		self::assertSame(100, $coverage['percent']);
+		self::assertFalse($coverage['duplicates']);
+		self::assertTrue($coverage['deduplicated']);
+		// The second figure over the same denominator, with the documents of
+		// the left out storage taken out of its numerator as well.
+		self::assertSame(60, $coverage['embedded']);
+		self::assertSame(60, $coverage['embeddedPercent']);
+		self::assertSame(1, $coverage['mountsTotal']);
+		self::assertFalse($coverage['provisional']);
+	}
+
+	public function testAnOldContainerWithoutTheCountersGetsTheFigureOfOneFive(): void {
+		// The same instance, a container of 1.5: no indexedLeftOut in the answer.
+		$coverage = self::coverageOf(self::groupedScan(), ['indexed' => 150, 'embedded' => 0]);
+
+		self::assertSame(200, $coverage['indexable']);
+		self::assertSame(150, $coverage['indexed']);
+		self::assertSame(75, $coverage['percent']);
+		self::assertFalse($coverage['deduplicated']);
+		// Settled, external storages on, a gap no failure explains: the
+		// sentence of issue #25 as before.
+		self::assertTrue($coverage['duplicates']);
+	}
+
+	public function testHalfAnAnswerIsNoDeduplication(): void {
+		// The vector stock could not be read, so embeddedLeftOut is missing.
+		$coverage = self::coverageOf(self::groupedScan(), ['indexed' => 200, 'embedded' => 0, 'indexedLeftOut' => 100]);
+
+		self::assertSame(200, $coverage['indexable']);
+		self::assertSame(200, $coverage['indexed']);
+		self::assertFalse($coverage['deduplicated']);
+
+		foreach ([-1, '100', 1.5, null, true] as $value) {
+			self::assertNull(AdminViewService::leftOutCounts(['indexedLeftOut' => $value, 'embeddedLeftOut' => 0], true));
+		}
+		self::assertNull(AdminViewService::leftOutCounts(['indexedLeftOut' => 1, 'embeddedLeftOut' => 0], false));
+		self::assertSame(['indexed' => 1, 'embedded' => 0], AdminViewService::leftOutCounts(['indexedLeftOut' => 1, 'embeddedLeftOut' => 0], true));
+	}
+
+	public function testAboveAThousandLeftOutStoragesThePageAsksWithoutTheParameter(): void {
+		$scan = self::groupedScan(range(2, 1002));
+
+		self::assertSame([], AdminViewService::leaveOutParameters($scan));
+
+		// Even an answer that carried the counters is not used then.
+		$coverage = self::coverageOf($scan, ['indexed' => 150, 'embedded' => 0, 'indexedLeftOut' => 50, 'embeddedLeftOut' => 0]);
+		self::assertSame(200, $coverage['indexable']);
+		self::assertSame(150, $coverage['indexed']);
+		self::assertFalse($coverage['deduplicated']);
+		self::assertTrue($coverage['duplicates']);
+	}
+
+	public function testWithoutAGroupTheCallAndTheFigureAreThoseOfOneFive(): void {
+		$scan = self::groupedScan([]);
+		$scan['grouped'] = array_intersect_key($scan, array_flip(['filesSeen', 'bytesSeen', 'ocrCandidates', 'pdfSeen', 'overCap', 'excluded', 'mountsTotal', 'mountsFinished']));
+
+		self::assertSame([], AdminViewService::leaveOutParameters($scan));
+		self::assertSame(['leaveOut' => '31,40'], AdminViewService::leaveOutParameters(self::groupedScan([31, 40])));
+
+		$coverage = self::coverageOf($scan, ['indexed' => 200, 'embedded' => 200]);
+		self::assertSame(200, $coverage['indexable']);
+		self::assertSame(100, $coverage['percent']);
+		self::assertSame(100, $coverage['embeddedPercent']);
+		self::assertFalse($coverage['deduplicated']);
+		self::assertFalse($coverage['duplicates']);
+	}
+
+	public function testFilesRefusedByTypeOnALeftOutStorageLeaveTheSubtrahend(): void {
+		// Ten refused files on each of the two storages: twenty in all, ten on
+		// the storage the group leaves out.
+		$answer = ['indexed' => 180, 'embedded' => 0, 'indexedLeftOut' => 90, 'embeddedLeftOut' => 0];
+
+		$deduplicated = self::coverageOf(self::groupedScan(), $answer, 20, 10);
+		self::assertSame(90, $deduplicated['indexable']);
+		self::assertSame(10, $deduplicated['deliberatelyLeftOut']);
+		self::assertSame(100, $deduplicated['percent']);
+
+		$fallback = self::coverageOf(self::groupedScan(), ['indexed' => 180, 'embedded' => 0], 20, 10);
+		self::assertSame(180, $fallback['indexable']);
+		self::assertSame(20, $fallback['deliberatelyLeftOut']);
+	}
+
+	public function testANumeratorNeverFallsBelowNought(): void {
+		$coverage = self::coverageOf(self::groupedScan(), ['indexed' => 10, 'embedded' => 5, 'indexedLeftOut' => 50, 'embeddedLeftOut' => 9]);
+
+		self::assertSame(0, $coverage['indexed']);
+		self::assertSame(0, $coverage['embedded']);
+	}
+
 	public function testAForeignSourceOrAnUnknownProfileHidesThePageLimit(): void {
 		$foreign = self::profileAnswer();
 		$foreign['profile']['sources']['ocrMaxPages'] = '<b>env</b>';
