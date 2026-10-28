@@ -94,7 +94,7 @@ Details im Archiv: .planning/milestones/v1.5-ROADMAP.md
 - [x] **Phase 37: Owner-Tor und Store-Sichtbarkeit** - D1-D4 der Dedup-Notiz und alle Store-Wortlaute in einer Remote-Runde entschieden; Anzeigename "Findling Search", discussion-Link und Cross-Promo-Satz in beiden info.xml
  (completed 2026-10-28)
 - [x] **Phase 38: Zertifikatsrotation ohne Admin-Eingriff** - Neuausstellung erkennen und mit Abhilfe melden, neue Dateien unter /certs/frp ohne Re-Register und ohne Container-Neustart uebernehmen, gedeckelt (Issue #33, Zeittreiber; Wortlaut nach Owner-Entscheid D-37-09) (completed 2026-10-28)
-- [ ] **Phase 39: Ausschluss-Anzeige, Dedup-Umfang und Doku-Hygiene** - L-36-05/06 auf der Admin-Seite, entschiedener Dedup-Umfang (mindestens Weg C), Umlaut-Fixes in drei docs-Dateien, IN-01 bis IN-06 entschieden
+- [x] **Phase 39: Ausschluss-Anzeige, Dedup-Umfang und Doku-Hygiene** - L-36-05/06 auf der Admin-Seite, entschiedener Dedup-Umfang (mindestens Weg C), Umlaut-Fixes in drei docs-Dateien, IN-01 bis IN-06 entschieden (completed 2026-10-28)
 - [ ] **Phase 40: Haertung und Store-Einreichung 1.6.0** - Audit-Gate, Upgrade-Strecke ab v1.5.0, Owner-Abnahme remote, Einreichung beider Apps
 
 ## Phase Details
