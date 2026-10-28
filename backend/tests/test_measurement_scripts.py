@@ -1090,8 +1090,13 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # their row loops on anything that is not a row. No file came or went, so PHP_FILES_TODAY stays at 108.
 # Recomputed independently with find, sort, tr and sha256sum over the CRLF normalised tree: 9a6c99ed...
 # both ways.
+# Moved on 2026-10-28 by Plan 40-01 (audit 1.6.0, B1): tests/Unit/StorageServiceTest.php holds the
+# counting key of a login name with a '//' of its own (never a group), of a '//' further down the root
+# (kept in the key) and of a domain login on SFTP with a port. No file came or went, so PHP_FILES_TODAY
+# stays at 108. Recomputed independently with find, sort, tr and sha256sum over the CRLF normalised
+# tree: 2b5effd0... both ways.
 PHP_FILES_TODAY = 108
-PHP_TREE_HASH_TODAY = "9a6c99ed6c39ef0bb51bc479737abff189d83e4996d4a8652c9037c28aa11bb6"
+PHP_TREE_HASH_TODAY = "2b5effd075becf1ee9cd04d1cc226f6df63d9770903be4e0a7a2aeba8083e595"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

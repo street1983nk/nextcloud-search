@@ -331,6 +331,24 @@ final class StorageServiceTest extends TestCase {
 		self::assertSame([], $this->service(external: true)->countingKeyGroups([17, 31, 40]));
 	}
 
+	public function testADoubleSlashInTheLoginNameIsNeverAGroupAndOneInTheRootStaysInTheKey(): void {
+		// Audit 40-01, B1: the first '//' ends the host part. A login name with
+		// a '//' of its own leaves no '@' in front of it, so the id is not
+		// grouped, which is the safe direction; a '//' further down the root is
+		// part of the tree and stays in the key.
+		self::assertNull(StorageService::countingKey('smb::corp//anna@fs.example//team//'));
+		self::assertSame('smb::fs.example//team//a//b/', StorageService::countingKey('smb::anna@fs.example//team//a//b/'));
+		self::assertNotSame(
+			StorageService::countingKey('smb::anna@fs.example//team//a/'),
+			StorageService::countingKey('smb::bert@fs.example//team//b/'),
+		);
+		// A domain login with an '@' and a port on SFTP: the same key as a plain login.
+		self::assertSame(
+			StorageService::countingKey('sftp::anna@fs.example:22//data/'),
+			StorageService::countingKey('sftp::bert@corp.example@fs.example:22//data/'),
+		);
+	}
+
 	public function testTheAnswerCarriesNumbersOnlyAndAsksInBands(): void {
 		// 250 users of one share: one group of 250 storage ids, two bands.
 		$this->storageKeys = [];

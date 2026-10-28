@@ -20,6 +20,7 @@ Only ASCII in this file, like the other audit modules.
 
 from __future__ import annotations
 
+import math
 import os
 import re
 import shutil
@@ -28,6 +29,7 @@ import subprocess
 import sys
 import time
 import xml.etree.ElementTree as ET
+import zipfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -36,6 +38,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from findling.api import status
+from findling.extract import archive as archive_module
 from findling.store import repo
 from findling.store.repo import FileMeta, embedded_in_storages, open_read_only, open_store
 from findling.store.vectors import EMBEDDING_DIMENSIONS, Chunk, open_vectors
@@ -676,3 +679,229 @@ def test_s7_the_lock_keeps_starlette_above_the_badhost_floor() -> None:
     assert _locked("starlette") >= (1, 0, 1)
     assert 'constraints = [{ name = "starlette", specifier = ">=1.0.1" }]' in UV_LOCK.read_text(encoding="utf-8")
     assert _locked("fastapi") == (0, 161, 1)
+
+
+# == B2 and B6 the counters next to the figures they are subtracted from ==============
+
+
+@pytest.mark.usefixtures("appapi_environment")
+def test_b2_the_left_out_counter_never_exceeds_the_figure_it_is_subtracted_from(
+    client: TestClient,
+    sign: Sign,
+    volume: Path,
+) -> None:
+    # Every storage of the probe left out at once, tombstones included: the
+    # page subtracts indexedLeftOut from indexed, and that difference must not
+    # need the clamp at nought of figures() on the container side already.
+    _state(volume)
+    _vectors(volume, [11, 21, 22, 31])
+
+    answer = client.get("/status", params={"leaveOut": "1,2,3"}, headers=sign("admin")).json()
+
+    assert answer["indexedLeftOut"] <= answer["indexed"]
+    assert answer["embeddedLeftOut"] <= answer["embedded"]
+
+
+@pytest.mark.usefixtures("appapi_environment")
+def test_b6_f_40_06_a_tombstone_stays_in_indexed_and_out_of_indexed_left_out(
+    client: TestClient,
+    sign: Sign,
+    volume: Path,
+) -> None:
+    """F-40-06, accepted: the asymmetry of 39-01, held as it is.
+
+    ``indexed`` counts every row in the state indexed, tombstones included
+    (Store.counts, the figure of 1.5), ``indexedLeftOut`` only the living ones.
+    A tombstone of a left out storage therefore stays in the numerator of the
+    deduplicated figure. Storage 2 of the probe has two living documents and
+    one tombstone: the numerator keeps exactly that one row.
+    """
+    _state(volume)
+
+    answer = client.get("/status", params={"leaveOut": "2"}, headers=sign("admin")).json()
+
+    assert answer["indexed"] == 5
+    assert answer["indexedLeftOut"] == 2
+    assert answer["indexed"] - answer["indexedLeftOut"] == 3
+
+
+# == B3 the IN fixes of 39-03 =============================================================
+
+
+def _package(path: Path, entries: int) -> Path:
+    with zipfile.ZipFile(path, "w") as archive:
+        for number in range(entries):
+            archive.writestr(f"part-{number}.xml", "<a/>")
+    return path
+
+
+@pytest.mark.parametrize(("entries", "refused"), [(19, False), (20, False), (21, True)])
+def test_b3_too_many_entries_judges_the_limit_like_1_5(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    entries: int,
+    refused: bool,
+) -> None:
+    monkeypatch.setattr(archive_module, "ARCHIVE_MAX_ENTRIES", 20)
+
+    assert archive_module.too_many_entries(str(_package(tmp_path / "probe.docx", entries))) is refused
+
+
+def test_b3_a_file_that_is_no_package_is_left_to_its_reader(tmp_path: Path) -> None:
+    broken = tmp_path / "broken.docx"
+    broken.write_bytes(b"PK\x03\x04 not a directory")
+
+    assert archive_module.too_many_entries(str(broken)) is False
+    assert archive_module.too_many_entries(str(tmp_path / "missing.docx")) is False
+
+
+def test_b3_a_stamp_of_a_storage_with_a_living_row_and_a_bookmark_stays(tmp_path: Path) -> None:
+    store = open_store(tmp_path / "state.db")
+    try:
+        store.record(71, _meta(7, 71), "indexed")
+        store.set_reconcile_cursor(7, 500, at=1_800_000_000)
+        store.mark_vanished(7, 1_800_000_000)
+        store.mark_vanished(8, 1_800_000_000)
+
+        # Neither 7 nor 8 is listed; 7 still has a living row, 8 has nothing.
+        store.drop_orphan_bookmarks(frozenset())
+
+        stamps = [int(row[0]) for row in store._conn.execute("SELECT storage_id FROM vanished_storages")]
+        bookmarks = [int(row[0]) for row in store._conn.execute("SELECT storage_id FROM reconcile")]
+        assert stamps == [7]
+        assert bookmarks == [7]
+        assert store.mark_vanished(7, 1_900_000_000) == 1_800_000_000
+    finally:
+        store.close()
+
+
+# == P1 the cost of the status call with leaveOut ======================================
+
+
+def _bulk(root: Path, per_storage: dict[int, int], *, vectors: bool) -> None:
+    """A synthetic stock: living indexed documents per storage, one chunk each."""
+    open_store(root / "state.db").close()
+    open_vectors(root / "vectors.db").close()
+    rows: list[tuple[int, int]] = []
+    file_id = 1
+    for storage_id, count in per_storage.items():
+        for _ in range(count):
+            rows.append((file_id, storage_id))
+            file_id += 1
+    with sqlite3.connect(root / "state.db") as state:
+        state.executemany(
+            "INSERT INTO files (file_id, storage_id, root_id, path, mime, size, mtime, state) "
+            "VALUES (?, ?, 1, 'p', 'application/pdf', 1, 1, 'indexed')",
+            rows,
+        )
+    if vectors:
+        with sqlite3.connect(root / "vectors.db") as stock:
+            stock.executemany(
+                "INSERT INTO chunks (file_id, ordinal, char_start, char_end) VALUES (?, 0, 0, 1)",
+                [(row[0],) for row in rows],
+            )
+
+
+@pytest.mark.usefixtures("appapi_environment")
+@pytest.mark.parametrize(("left_out", "answered"), [(100_000, True), (100_001, False)])
+def test_p1_the_vector_figure_stops_above_a_hundred_thousand_documents(
+    client: TestClient,
+    sign: Sign,
+    volume: Path,
+    left_out: int,
+    answered: bool,
+) -> None:
+    # The real ceiling, not a lowered one: storage 2 holds exactly it or one more.
+    _bulk(volume, {1: 10, 2: left_out}, vectors=True)
+
+    answer = client.get("/status", params={"leaveOut": "2"}, headers=sign("admin")).json()
+
+    assert status.LEFT_OUT_EMBEDDED_CEILING == 100_000
+    assert answer["indexedLeftOut"] == left_out
+    assert ("embeddedLeftOut" in answer) is answered
+    if answered:
+        assert answer["embeddedLeftOut"] == left_out
+
+
+@pytest.mark.timing
+@pytest.mark.skipif(os.environ.get("FINDLING_TIMING") != "1", reason="timing series runs only with FINDLING_TIMING=1")
+@pytest.mark.usefixtures("appapi_environment")
+def test_p1_the_status_call_with_leave_out_over_a_hundred_thousand_documents(
+    client: TestClient,
+    sign: Sign,
+    volume: Path,
+) -> None:
+    # 100 000 documents in three storages, every one with a vector; the page
+    # leaves two of the three out, 60 000 documents, under the ceiling.
+    _bulk(volume, {1: 40_000, 2: 30_000, 3: 30_000}, vectors=True)
+    headers = sign("admin")
+
+    def timed(params: dict[str, str]) -> float:
+        started = time.perf_counter()
+        response = client.get("/status", params=params, headers=headers)
+        elapsed = time.perf_counter() - started
+        assert response.status_code == 200
+        return elapsed
+
+    timed({})
+    without = sorted(timed({}) for _ in range(5))
+    with_leave_out = sorted(timed({"leaveOut": "2,3"}) for _ in range(5))
+    answer = client.get("/status", params={"leaveOut": "2,3"}, headers=headers).json()
+
+    print(
+        f"P1 median of 5: without leaveOut {without[2] * 1000:.1f} ms, "
+        f"with leaveOut=2,3 {with_leave_out[2] * 1000:.1f} ms over 100000 documents"
+    )
+    assert (answer["indexedLeftOut"], answer["embeddedLeftOut"]) == (60_000, 60_000)
+    assert with_leave_out[2] < 5.0
+
+
+# == P3 the idle loop of the watcher (Linux only) ======================================
+
+_COUNTING_SHA = """#!/bin/bash
+printf 'x\\n' >>"${SHA_LOG}"
+exec "${REAL_SHA}" "$@"
+"""
+
+
+def _cpu_seconds(pid: int) -> float:
+    """User and system time of a process and its waited for children, from /proc."""
+    if sys.platform == "win32":
+        pytest.skip("no /proc on Windows")
+    fields = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").rsplit(")", 1)[1].split()
+    # utime, stime, cutime and cstime are the fields 14 to 17 of proc(5).
+    return sum(int(value) for value in fields[11:15]) / os.sysconf("SC_CLK_TCK")
+
+
+@_ON_LINUX_WITH_BASH
+def test_p3_ten_idle_seconds_are_about_ten_looks_at_the_files_and_no_busy_wait(tmp_path: Path) -> None:
+    from test_harp_connect_supervisor import _until, _watch, _write_certs
+
+    shim = tmp_path / "shim"
+    shim.mkdir()
+    (shim / "sha256sum").write_text(_COUNTING_SHA, encoding="utf-8", newline="\n")
+    (shim / "sha256sum").chmod(0o755)
+    sha_log = tmp_path / "sha.log"
+    _write_certs(tmp_path / "certs", "GOOD")
+    poll = 1
+    with _watch(
+        tmp_path,
+        "quiet",
+        PATH=f"{shim}:{os.environ.get('PATH', '/usr/bin:/bin')}",
+        SHA_LOG=str(sha_log),
+        REAL_SHA=shutil.which("sha256sum") or "/usr/bin/sha256sum",
+        FINDLING_HARP_CERT_POLL_SECONDS=str(poll),
+    ) as watcher:
+        assert _until(lambda: watcher.starts() >= 1, 10), watcher.output()
+        started = time.monotonic()
+        before = len(sha_log.read_text(encoding="utf-8").splitlines()) if sha_log.exists() else 0
+        time.sleep(10)
+        idle = time.monotonic() - started
+        after = len(sha_log.read_text(encoding="utf-8").splitlines())
+        cpu_seconds = _cpu_seconds(watcher.process.pid)
+
+    # One fingerprint is two sha256sum calls (the files, then the digest).
+    looks = (after - before) / 2
+    print(f"P3 {looks:.0f} looks at the files in {idle:.1f} idle s, watcher CPU {cpu_seconds:.2f} s")
+    assert 5 <= looks <= math.ceil(idle / poll) + 1
+    assert cpu_seconds < 1.0
