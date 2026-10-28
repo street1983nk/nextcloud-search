@@ -5873,6 +5873,16 @@ jobs:
           installed_before=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
             "SELECT configvalue FROM oc_appconfig WHERE appid = 'findling' AND configkey = 'installed_version';")
           echo "the instance has findling installed at ${installed_before}"
+          # The recorded container version before the upgrade, for part 4 of
+          # assurance 12 (plan 40-03): the overview calls of "Store upgrade 3"
+          # put it on record on the released installation
+          # (ExAppService::lockstep), the migration of this commit
+          # (Version001600Date20261028000000) drops it inside occ upgrade, and
+          # the first overview call after the upgrade writes it anew. Both
+          # readings are recorded here, judged in "Store upgrade 5".
+          backend_before_occ=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
+            "SELECT configvalue FROM oc_appconfig WHERE appid = 'findling' AND configkey = 'backend_app_version';")
+          echo "backend_app_version before occ upgrade: '${backend_before_occ}'"
 
           # The directory goes and the new one takes its place, because that is
           # what an update does: Installer::updateAppstoreApp removes the
@@ -5903,6 +5913,9 @@ jobs:
           installed_after=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
             "SELECT configvalue FROM oc_appconfig WHERE appid = 'findling' AND configkey = 'installed_version';")
           echo "installed_version went from ${installed_before} to ${installed_after}"
+          backend_after_occ=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
+            "SELECT configvalue FROM oc_appconfig WHERE appid = 'findling' AND configkey = 'backend_app_version';")
+          echo "backend_app_version right after occ upgrade: '${backend_after_occ}'"
 
           # The two cases, both named, and both branches stay. They were
           # written in plan 11-07 for a version step that had not happened yet.
@@ -6139,12 +6152,22 @@ jobs:
               exit 1
             fi
           done
+          # A version or the empty string, nothing else (L-30-03): assurance 12
+          # judges the values, this only keeps shell text out of GITHUB_ENV.
+          for value in "${backend_before_occ}" "${backend_after_occ}"; do
+            if ! [[ "${value}" =~ ^[0-9A-Za-z.-]*$ ]]; then
+              echo "::error::a recorded backend version reads '${value}', which is neither a version nor empty, so it does not go into GITHUB_ENV"
+              exit 1
+            fi
+          done
           echo "the container after the upgrade has restarted ${restarts} time(s)"
           {
             echo "UPGRADE_NEW_CONTAINER=${container}"
             echo "UPGRADE_NEW_COMPANION=${new_companion}"
             echo "UPGRADE_NEW_RESTARTS=${restarts}"
             echo "UPGRADE_FINISHED_AT=${finished}"
+            echo "UPGRADE_BACKEND_VERSION_BEFORE_OCC=${backend_before_occ}"
+            echo "UPGRADE_BACKEND_VERSION_AFTER_OCC=${backend_after_occ}"
           } >> "${GITHUB_ENV}"
 
       # Five assurances about something that did NOT move and one about
@@ -6273,7 +6296,7 @@ jobs:
       # again: the embedding mark stays, the whole vector stock, the picture
       # and the seed of the new formats included, is the same rows chunk id
       # for chunk id, and the profile in force is economy (D-29-01).
-      - name: Store upgrade 5, the ten assurances after the upgrade
+      - name: Store upgrade 5, the eleven assurances after the upgrade
         if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
         env:
           # As in "Store upgrade 6": the two matrix values arrive as plain
@@ -6823,13 +6846,153 @@ jobs:
             echo "unchanged  the digest of the old stock over ${after_stock#*:} file(s) = ${UPGRADE_OLD_STOCK_DIGEST}"
           fi
 
+          echo "--- 12, the 1.6 changes survive the upgrade (plan 40-03) ---"
+          # Four parts here, read only (SC4 of this step holds); the fifth
+          # part, the hint after a rule change, writes rules and therefore
+          # lives in "Store upgrade 5b" behind its rule writing. (1) The
+          # overview of the upgraded companion carries the two coverage fields
+          # of Weg C (plan 39-01, D-37-03) as booleans, and rulesPending is
+          # false, because rules_changed_at is stamped by POST /admin/rules
+          # alone (SettingsController.php:466) and nothing of this proof
+          # posted there yet; the occ writes of "Store upgrade 2b" never pass
+          # through the route. (2) The installed de catalog is the one of this
+          # commit, char for char: the keys are the English source sentences
+          # (the three coverage sentences of plan 39-01 among them, held by
+          # name in backend/tests/test_phase40_audit.py), so a packaging that
+          # drops or mangles an entry shows here and not on an admin's screen.
+          # (3) The container answers GET /status?leaveOut= with the two
+          # counters of plan 39-01: asked inside the container through the
+          # same report() the route calls, indexedLeftOut equals the living
+          # indexed documents of the storage counted out of state.db in the
+          # same breath, and an answer without the parameter carries neither
+          # field, which is what keeps a 1.5 companion working. (4) The
+          # migration Version001600Date20261028000000 really ran: its row
+          # stands in oc_migrations, backend_app_version read
+          # ${UPGRADE_OLD_COMPANION} before occ upgrade and was empty right
+          # after it ("Store upgrade 4" recorded both), the first overview
+          # call of this step wrote it anew as the container's version, and a
+          # search as the ordinary user answers with hits while the log
+          # carries no drift line, so the search path reads a record that is
+          # current rather than stale.
+          overview_json="${RUNNER_TEMP}/upgrade-overview.json"
+          if ! jq -e '(.coverage.deduplicated | type == "boolean") and (.coverage.rulesPending | type == "boolean")' "${overview_json}" > /dev/null; then
+            echo "::error::the overview after the upgrade does not carry coverage.deduplicated and coverage.rulesPending as booleans (plan 39-01, Weg C)"
+            head -c 400 "${overview_json}" || true
+            fail=1
+          else
+            echo "the overview carries coverage.deduplicated=$(jq -r '.coverage.deduplicated' "${overview_json}") and coverage.rulesPending=$(jq -r '.coverage.rulesPending' "${overview_json}"), both booleans"
+          fi
+          if ! jq -e '.coverage.rulesPending == false' "${overview_json}" > /dev/null; then
+            echo "::error::coverage.rulesPending reads true although no rule was saved over the route yet, so the hint of plan 39-01 rises without a rule change"
+            fail=1
+          else
+            echo "coverage.rulesPending is false before any rule change over the route"
+          fi
+          shipped_catalog="findling-src/php/l10n/de.json"
+          installed_catalog="apps/findling/l10n/de.json"
+          if [ ! -f "${installed_catalog}" ]; then
+            echo "::error::the installed companion carries no l10n/de.json, so none of the new sentences can reach a German admin"
+            fail=1
+          elif ! jq -e --slurpfile shipped "${shipped_catalog}" '.translations == $shipped[0].translations' "${installed_catalog}" > /dev/null; then
+            echo "::error::the installed de catalog differs from php/l10n/de.json of this commit, so an entry was dropped or changed on the way into the archive"
+            diff <(jq -S '.translations' "${shipped_catalog}") <(jq -S '.translations' "${installed_catalog}") | head -n 20 || true
+            fail=1
+          else
+            echo "the installed de catalog carries all $(jq '.translations | length' "${shipped_catalog}") entries of this commit char-identical, the coverage sentences of plan 39-01 among them"
+          fi
+          home_storage=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
+            "SELECT numeric_id FROM oc_storages WHERE id = 'home::testuser';")
+          if ! [[ "${home_storage}" =~ ^[0-9]+$ ]]; then
+            echo "::error::no numeric storage id for home::testuser ('${home_storage}'), so the leaveOut counter cannot be asked"
+            fail=1
+          else
+            cat > "${RUNNER_TEMP}/leaveout-probe.py" <<'PY'
+          import json
+          import os
+          import sqlite3
+          import sys
+
+          from findling.api.status import report
+
+          storage = int(sys.argv[1])
+          with_param = report(leave_out=[storage])
+          without = report()
+          state = os.environ["APP_PERSISTENT_STORAGE"] + "/state.db"
+          row = (
+              sqlite3.connect(f"file:{state}?mode=ro", uri=True, timeout=30)
+              .execute(
+                  "SELECT COUNT(*) FROM files WHERE storage_id = ? AND state = 'indexed' AND deleted_at IS NULL",
+                  (storage,),
+              )
+              .fetchone()
+          )
+          print(
+              json.dumps(
+                  {
+                      "indexedLeftOut": with_param.indexedLeftOut,
+                      "embeddedLeftOut": with_param.embeddedLeftOut,
+                      "counted": row[0],
+                      "withoutHasFields": (
+                          "indexedLeftOut" in without.model_dump_json() or "embeddedLeftOut" in without.model_dump_json()
+                      ),
+                  }
+              )
+          )
+          PY
+            left_out=$(docker exec -i "${UPGRADE_NEW_CONTAINER}" python - "${home_storage}" < "${RUNNER_TEMP}/leaveout-probe.py" | tail -n 1) || left_out=""
+            echo "the leaveOut answer of the container: ${left_out}"
+            if ! jq -e '(.indexedLeftOut | type == "number") and .indexedLeftOut == .counted and .indexedLeftOut > 0 and (.embeddedLeftOut | type == "number") and .withoutHasFields == false' <<< "${left_out}" > /dev/null 2>&1; then
+              echo "::error::the container does not answer leaveOut as plan 39-01 demands: indexedLeftOut has to equal the living indexed documents of storage ${home_storage}, embeddedLeftOut has to be a number, and an answer without the parameter has to carry neither field"
+              fail=1
+            else
+              echo "indexedLeftOut equals the $(jq -r '.counted' <<< "${left_out}") living indexed documents of storage ${home_storage}, embeddedLeftOut is $(jq -r '.embeddedLeftOut' <<< "${left_out}"), and without leaveOut neither field is in the answer"
+            fi
+          fi
+          migrated=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
+            "SELECT COUNT(*) FROM oc_migrations WHERE app = 'findling' AND version = '001600Date20261028000000';")
+          if [ "${migrated}" != "1" ]; then
+            echo "::error::oc_migrations carries ${migrated} row(s) for Version001600Date20261028000000 instead of one, so the migration of the version jump never ran"
+            fail=1
+          else
+            echo "oc_migrations carries the row of Version001600Date20261028000000"
+          fi
+          if [ "${UPGRADE_BACKEND_VERSION_BEFORE_OCC}" != "${UPGRADE_OLD_COMPANION}" ] || [ "${UPGRADE_BACKEND_VERSION_AFTER_OCC}" != "" ]; then
+            echo "::error::backend_app_version read '${UPGRADE_BACKEND_VERSION_BEFORE_OCC}' before occ upgrade (demanded ${UPGRADE_OLD_COMPANION}) and '${UPGRADE_BACKEND_VERSION_AFTER_OCC}' right after it (demanded empty), so the migration did not drop the recorded container version"
+            fail=1
+          else
+            echo "backend_app_version read ${UPGRADE_OLD_COMPANION} before occ upgrade and was dropped by the migration"
+          fi
+          backend_version_now=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
+            "SELECT configvalue FROM oc_appconfig WHERE appid = 'findling' AND configkey = 'backend_app_version';")
+          if [ "${backend_version_now}" != "${UPGRADE_NEW_COMPANION}" ]; then
+            echo "::error::backend_app_version reads '${backend_version_now}' after the first overview call instead of ${UPGRADE_NEW_COMPANION}, so the overview did not put the container version on record again"
+            fail=1
+          else
+            echo "backend_app_version reads ${UPGRADE_NEW_COMPANION} again after the first overview call"
+          fi
+          if ! drift_check=$(term_hits Belehrung); then
+            echo "::error::the search after the overview call did not answer readably, so the drift freedom of the search path cannot be read"
+            fail=1
+          elif [ "${drift_check}" != "1" ]; then
+            echo "::error::the search after the overview call brings back ${drift_check} file(s) instead of one, so the search path does not answer out of the record"
+            fail=1
+          else
+            drift_lines=$(grep -c 'the two halves report different versions' data/nextcloud.log || true)
+            if [ "${drift_lines}" != "0" ]; then
+              echo "::error::nextcloud.log carries ${drift_lines} drift line(s) 'the two halves report different versions', so a search answered empty over a version drift"
+              fail=1
+            else
+              echo "the search answers with hits and nextcloud.log carries no drift line"
+            fi
+          fi
+
           if [ "${fail}" -ne 0 ]; then
             echo "the two states side by side:"
             diff -u "${before}" "${after}" || true
             exit 1
           fi
 
-          echo "all ten assurances hold"
+          echo "all eleven assurances of this step hold"
           {
             echo ""
             echo "### Upgrade from \`${UPGRADE_FROM_TAG}\` on ${MATRIX_SERVER_VERSION} (${MATRIX_RUNNER})"
@@ -6846,6 +7009,7 @@ jobs:
             echo "- schemaVersion stays 3 and the languages mark stays de,en, the rebuild state is idle: nothing was stamped and nothing rebuilt without a language change"
             echo "- the Spanish question \`alemanes\` still answers with nought hits, because the field list of a question hangs on the stored schema mark and not on the code"
             echo "- the Czech questions \`smlouve\` and \`proc\` answer one document each, as before the upgrade"
+            echo "- the 1.6 changes survive the upgrade (assurance 12): coverage.deduplicated and coverage.rulesPending as booleans in the overview, the installed de catalog char-identical to the commit, indexedLeftOut equal to the living indexed documents of the home storage, Version001600 in oc_migrations, and backend_app_version dropped by the migration and written anew as ${UPGRADE_NEW_COMPANION} with no drift line"
             echo ""
             echo "The reindex branch of D-05 is deliberately not driven here; its absence is what this run asserts."
           } >> "${GITHUB_STEP_SUMMARY}"
@@ -7046,9 +7210,94 @@ jobs:
           echo "the pattern file is indexed again with ${chunks} chunk(s) and found, the prefix still holds, the control is found"
 
           echo "all parts of assurance 11 hold"
+
+          echo "--- 12 part 2, the hint after a rule change (plan 40-03, ANZE-02) ---"
+          # The one part of assurance 12 that writes rules, so it lives here
+          # and not in "Store upgrade 5" (SC4: that step does nothing an admin
+          # would do), and behind 11d, so the steps 11a to 11d judged the
+          # installation untouched by it. Why the route and not occ:
+          # rules_changed_at is stamped by POST /admin/rules alone
+          # (SettingsController.php:466 calls rememberRulesChange after a
+          # really changed set), occ config:app:set is the documented second
+          # way into the keys that never passes through the route
+          # (SettingsService.php:316), so only the route can prove the hint.
+          # The posted set is the set in force with ONE added prefix of a
+          # folder that does not exist, taken from the overview the companion
+          # itself reports (.rules), so no value is invented here; the second
+          # POST takes the prefix back, and the steps after this one start
+          # from the list "Store upgrade 2b" wrote. A lingering
+          # rules_changed_at stamp costs nothing below: no later step reads
+          # coverage.rulesPending, and the sweep of a prefix without files
+          # clears nothing.
+          sh "${RUNNER_TEMP}/overview.sh" "${RUNNER_TEMP}/rules-overview.json" > /dev/null 2>&1 || {
+            echo "::error::the overview could not be read before the rule change, so the set in force is unknown"
+            exit 1
+          }
+          if ! jq -e '(.coverage.rulesPending == false) and (.rules.maxFileBytes | type == "number") and (.rules.indexTeamFolders | type == "boolean") and (.rules.indexExternalStorage | type == "boolean")' "${RUNNER_TEMP}/rules-overview.json" > /dev/null; then
+            echo "::error::before the rule change the overview has to carry rulesPending false and the three rule values, and it does not"
+            head -c 400 "${RUNNER_TEMP}/rules-overview.json" || true
+            exit 1
+          fi
+          mfb=$(jq -r '.rules.maxFileBytes' "${RUNNER_TEMP}/rules-overview.json")
+          team=$(jq -r '.rules.indexTeamFolders' "${RUNNER_TEMP}/rules-overview.json")
+          ext=$(jq -r '.rules.indexExternalStorage' "${RUNNER_TEMP}/rules-overview.json")
+          # The credential of the POST, the portable way overview.sh also
+          # falls back to; Request.php::passesCSRFCheck lets a request with
+          # the OCS-APIRequest header through, exactly as for the GET above.
+          rules_pw=$(curl -s -u admin:password -H 'OCS-APIRequest: true' \
+            'http://localhost:8080/ocs/v2.php/core/getapppassword?format=json' \
+            | grep -o '"apppassword":"[^"]*"' | cut -d'"' -f4 || true)
+          if [ -z "${rules_pw}" ]; then
+            echo "::error::no app password for the rules POST, so the hint after a rule change cannot be driven"
+            exit 1
+          fi
+          post_rules() {
+            curl -s -u "admin:${rules_pw}" \
+              -H 'OCS-APIRequest: true' -H 'Content-Type: application/json' \
+              -H 'Accept: application/json' \
+              -o "${RUNNER_TEMP}/rules-post.json" -w '%{http_code}' \
+              -d "$1" \
+              http://localhost:8080/index.php/apps/findling/admin/rules
+          }
+          code=$(post_rules "{\"exclusions\":[\"Ausschluss36\",\"NieVorhanden40\"],\"maxFileBytes\":${mfb},\"indexTeamFolders\":${team},\"indexExternalStorage\":${ext},\"exclusionPatterns\":[]}")
+          if [ "${code}" != "200" ] || ! jq -e '.saved == true' "${RUNNER_TEMP}/rules-post.json" > /dev/null; then
+            echo "::error::the rules POST with the added prefix answered HTTP ${code} without saved=true"
+            head -c 400 "${RUNNER_TEMP}/rules-post.json" || true
+            exit 1
+          fi
+          stamp=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \n            "SELECT configvalue FROM oc_appconfig WHERE appid = 'findling' AND configkey = 'rules_changed_at';")
+          case "${stamp}" in
+            ''|0|*[!0-9]*)
+              echo "::error::rules_changed_at reads '${stamp}' after a changed set went through the route, and the route has to stamp a positive time (SettingsController.php:466)"
+              exit 1
+              ;;
+          esac
+          echo "the route saved the changed set and stamped rules_changed_at=${stamp}"
+          sh "${RUNNER_TEMP}/overview.sh" "${RUNNER_TEMP}/rules-overview-after.json" > /dev/null 2>&1 || {
+            echo "::error::the overview could not be read after the rule change"
+            exit 1
+          }
+          if ! jq -e '.coverage.rulesPending == true' "${RUNNER_TEMP}/rules-overview-after.json" > /dev/null; then
+            echo "::error::coverage.rulesPending reads $(jq -r '.coverage.rulesPending' "${RUNNER_TEMP}/rules-overview-after.json") after a rule change over the route, and the hint of plan 39-01 has to stand until the counters caught up"
+            exit 1
+          fi
+          echo "coverage.rulesPending reads true after the rule change, the hint of plan 39-01 stands"
+          code=$(post_rules "{\"exclusions\":[\"Ausschluss36\"],\"maxFileBytes\":${mfb},\"indexTeamFolders\":${team},\"indexExternalStorage\":${ext},\"exclusionPatterns\":[]}")
+          if [ "${code}" != "200" ] || ! jq -e '.saved == true' "${RUNNER_TEMP}/rules-post.json" > /dev/null; then
+            echo "::error::the rules POST that takes the prefix back answered HTTP ${code} without saved=true, so the installation does not stand where the steps below expect it"
+            exit 1
+          fi
+          exclusions_restored=$("${RUNNER_TEMP}/nc-occ.sh" config:app:get findling exclusions | jq -c . || echo unreadable)
+          if [ "${exclusions_restored}" != "${UPGRADE_EXCLUSIONS_BEFORE}" ]; then
+            echo "::error::the prefix list reads '${exclusions_restored}' after the way back instead of ${UPGRADE_EXCLUSIONS_BEFORE}"
+            exit 1
+          fi
+          echo "the prefix list reads ${UPGRADE_EXCLUSIONS_BEFORE} again, the hint was driven and the rules stand as before"
+          echo "all parts of assurance 11 and part 2 of assurance 12 hold"
           {
             echo ""
             echo "- exclusions: prefix kept, pattern applied. The prefix \`Ausschluss36\` written on \`${UPGRADE_FROM_TAG}\` holds after the upgrade and the list reads \`${UPGRADE_EXCLUSIONS_BEFORE}\` unchanged; the pattern \`${excl_pattern}\` of 1.5 took its hit out after one comparison cycle, the control stayed found, and the file came back once the pattern was taken back (${MATRIX_SERVER_VERSION}, ${MATRIX_RUNNER})"
+            echo "- the hint after a rule change (part 2 of assurance 12): a changed set over POST /admin/rules stamped rules_changed_at and raised coverage.rulesPending to true, and the second POST put the list back to \`${UPGRADE_EXCLUSIONS_BEFORE}\`"
           } >> "${GITHUB_STEP_SUMMARY}"
 
       # =====================================================================

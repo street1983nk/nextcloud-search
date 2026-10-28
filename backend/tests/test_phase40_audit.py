@@ -1034,7 +1034,7 @@ def test_part_two_raises_the_hint_over_the_route_and_takes_it_back() -> None:
     assert "http://localhost:8080/index.php/apps/findling/admin/rules" in run
     assert "configkey = 'rules_changed_at'" in run
     assert "'.coverage.rulesPending == true'" in run
-    assert run.index("'.coverage.rulesPending == false'") < run.index("'.coverage.rulesPending == true'")
+    assert run.index(".coverage.rulesPending == false") < run.index(".coverage.rulesPending == true")
     # The way back: the second POST restores the list of the seed, and the
     # steps after 5b start from the installation they always started from.
     assert '"${exclusions_restored}" != "${UPGRADE_EXCLUSIONS_BEFORE}"' in run
