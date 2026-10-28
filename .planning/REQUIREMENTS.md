@@ -57,12 +57,12 @@ Gefuellt vom Roadmap-Schritt am 2026-10-28. Abdeckung: 11/11 v1.6-Anforderungen 
 |--------|-------|--------|
 | ZERT-01 | Phase 38 | Complete |
 | ZERT-02 | Phase 38 | Complete |
-| ANZE-01 | Phase 39 | Pending |
-| ANZE-02 | Phase 39 | Pending |
+| ANZE-01 | Phase 39 | Complete |
+| ANZE-02 | Phase 39 | Complete |
 | DEDUP-01 | Phase 37 | Complete |
 | DEDUP-02 | Phase 39 | Complete |
-| DOCS-01 | Phase 39 | Pending |
-| DOCS-02 | Phase 39 | Pending |
+| DOCS-01 | Phase 39 | Complete |
+| DOCS-02 | Phase 39 | Complete |
 | STORE-01 | Phase 37 | Complete |
 | STORE-02 | Phase 37 | Complete |
 | REL-06 | Phase 40 | Pending |
