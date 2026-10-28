@@ -1,5 +1,28 @@
 # Project Milestones: Findling (Nextcloud Zero-Config-Suche)
 
+## v1.5 Umsteiger-Release (Shipped: 2026-10-28)
+
+**Delivered:** Findling 1.5.0 im Nextcloud App Store (beide Apps, Submission-Lauf 39598694849 mit 2x HTTP 201 am 21.10., Tag v1.5.0 auf 6c953a76; 1.5.1 als Nachzuegler ebenfalls im Store): Tschechisch als siebte Suchsprache (Stoppliste aus Lucene, cs ausserhalb Snowball, OCR-Option ces), sechs neue Dateitypen (DOC, XLS, Mails/EML, ZIP mit Auszug der inneren Datei, HEIC/HEIF) samt Nachholweg fuer Bestandsinstallationen, Typ- und Ordnerfilter in der Unified Search, Ausschlussmuster mit bitparallelem Matcher (#22) und sichtbare Grenzwerte (#21), dreisprachige Umstiegs-Seite vom fulltextsearch-Framework mit Admin-Banner bei Parallelbetrieb, Aehnliche-Dokumente-Ansicht, Launch-Haertung mit boesartigem Formatkorpus (blocked_malicious ueber die ganze Kette) und bewiesener Upgrade-Strecke.
+
+**Phases completed:** 30 bis 36 (7 Phasen, 79 Plaene)
+
+**Timeline:** 06.10. bis 28.10.2026 (402 Commits, 626 Dateien, ~100.000 Zeilen inkl. Mess-Rohdaten)
+
+**Key accomplishments:**
+
+- Tschechisch end-to-end: Schema 3 mit body_cs als 14. Feld, Re-Analyse ohne Neu-Einbettung in beide Richtungen in CI bewiesen (Store upgrade 6/7), Platzzuwachs gemessen 0,29 bis 0,36 unter dem 0,40-Budget
+- Sechs neue Formate in reinem Python mit eigener Haertung: FIB/Clx-Leser fuer DOC nach [MS-DOC], CFB-Kettenpruefung vor xlrd (Endlosschleifen-Befund), Mail-Vorzaehlung deklarierter Boundaries, ZIP mit einem Budget ueber alle Ebenen (Quine-, Overlap- und Traversal-Abwehr), HEIF-Speicherschaetzung mit mallopt-Deckel; Nachholweg recheck_1_5_0 holt Bestandsurteile in 303 s nach
+- Unified-Search-Filter ohne zweites Rechtemodell: Ordner-Scope ueber Mountliste plus Recheck in PHP, versteckter FilterProvider gegen Scheingruppen, Team-Folder-ACL-Faelle in CI belegt; Messregel vor der Messung (FOLDER_MAX_ROUNDS 12 aus Korpus 1000+11)
+- Ausschlussmuster als geschlossene Sprache (32 Muster zu 60 Zeichen, elf Fehlercodes, kein fnmatch/preg/eval), Differenztest gegen die byte-gleiche 1.4.2-Fixture, Weg A (Kehrjob) und Weg C (Abgleich) live belegt
+- Launch-Haertung Phase 36: Korpus aus sieben Angriffsfamilien (64 Faelle) durch das Sandbox-Kind, ZIP-/Paket-/XML-Signaturen als skipped(blocked_malicious), M-32-02 geschlossen (Karenz 30 Tage fuer verschwundene Storages mit CI-Integrationstest), Zert-Lift Pillow 13/certifi, Fremdinstallation und Upgrade-Strecke v1.4.3 -> 1.5.0 gruen, Owner-Abnahme per Playwright-Runde ("okok")
+- Release-Disziplin: Audit 36 mit 0 CRIT/HIGH/MEDIUM, Code-Review 0 Critical (2 Warnings gefixt), Verifier 5/5, Submission 2x HTTP 201 mit externer Gegenprobe
+
+**Vorbehalte:** L-36-05/L-36-06 (Anzeigetext "Bewusst ausgelassen: 0", Zaehler-Verzoegerung nach Ausschlussmuster) und der #25-Dedup-Rest bewusst nach 1.6 vertagt; Review-Infos IN-01 bis IN-06 der Phase 36 als 1.6-Kandidaten; Docker auf der Entwicklerbox defekt (Phase-33/34-Audit-Tests laufen nur in CI); Zert-Rotation Issue #33 offen.
+
+Known deferred items at close: 10 (see STATE.md Deferred Items)
+
+---
+
 ## v1.4 Leistungsprofile (Shipped: 2026-10-06)
 
 **Delivered:** Findling 1.4.0 im Nextcloud App Store (beide Apps, Submission-Lauf 37473805519 mit 2x HTTP 201, Tag v1.4.0 auf 99326ae2): Leistungsprofile als Opt-in (Sparsam bleibt unveraenderter Default; Standard gibt hoechstens die halbe Box frei, Leistung alles bis auf einen Kern), parallele OCR-Slots mit Speicherwaechter, parallele Einbettungsspur, Modellwahl int8/fp32, Settings-Oberflaeche mit Vorab-Pruefung, dazu alle sechs oeffentlich zugesagten #18-Fixklassen und die selbsttaetige Nachpruefung der Altbestaende nach dem Upgrade.
@@ -41,7 +64,6 @@
 **Vorbehalte:** Ladefenster D-08 nur in CI gemessen, nicht auf Zielhardware (akzeptiert als AR-23-01); Store-Rendering der Texte nicht nachgesehen (Zwei-Tempi-Cache). Offene Artefakte beim Close: keine (die zwei Debug-Sessions upgrade5/upgrade6 am 27.09. mit deploy-harp-Beleg 36305643230 resolved).
 
 ---
-
 
 ## v1.2 Messbeleg und Ausbau (Shipped: 2026-09-21)
 

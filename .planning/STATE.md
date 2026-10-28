@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
-status: phase_complete
-stopped_at: Phase 36 abgeschlossen (Code-Review 0 CRIT / 2 WR gefixt 3580cd45, Verifier passed 5/5, 36-VERIFICATION.md); naechster Schritt gsd-complete-milestone v1.5
-last_updated: "2026-10-28T10:30:00.000Z"
-last_activity: 2026-10-28
+status: Awaiting next milestone
+stopped_at: Phase 36 complete, Milestone v1.5 wird geschlossen
+last_updated: "2026-10-28T11:20:41.727Z"
+last_activity: 2026-10-28 — Milestone v1.5 completed and archived
 progress:
   total_phases: 7
   completed_phases: 7
   total_plans: 79
-  completed_plans: 79
+  completed_plans: 80
   percent: 100
 ---
 
@@ -25,12 +25,10 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 
 ## Current Position
 
-Phase: 36 (Haertung und Store-Einreichung 1.5.0) , COMPLETE (2026-10-28)
-Plan: 17 of 17
-Status: Phase 36 abgeschlossen. Code-Review 0 Critical, 2 Warnings (WR-36-01 amplification-Substring, WR-36-02 Reconcile-Prosa) gefixt in 3580cd45; Vollsuite 6177 passed (26 Docker-Audit-Tests nur lokal rot, CI gruen; 2 Last-Flakes isoliert 5x stabil); Verifier passed 5/5 (36-VERIFICATION.md). Offen: Milestone-v1.5-Abschluss (gsd-complete-milestone), danach Milestone v1.6.
-Last activity: 2026-10-28
-
-Progress: [██████████] 100%
+Phase: Milestone v1.5 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-10-28 — Milestone v1.5 completed and archived
 
 ## Performance Metrics
 
@@ -186,8 +184,29 @@ Progress: [██████████] 100%
 - Erledigt mit 36-17 (Pillow 13.0.0, certifi 2026.10.19, Security scans 39533470359 grün): Seit 21.10.2026 pip-audit rot (Security scans 39524695697): pillow 12.3.0 mit 8 CVEs (Fix erst 13.0.0, Major-Sprung im Bildpfad), certifi 2026.7.22 (Fix 2026.10.19). Owner-Entscheid vor 1.5.0, ob in 36-09 oder eigenem Plan (F-36-07-2, deferred-items.md der Phase 36).
 - Erledigt mit 36-09 (tiff-of-100000-ifds 0,20 s, kein xfail mehr): 36-09 muss den TIFF-Rahmenlauf an der Seitengrenze kappen (F-36-07-1: 100 000 IFDs 27,8 s im Kind); steht noch nicht im Plan 36-09, sonst bleibt der Korpusfall tiff-of-100000-ifds xfail.
 
+## Deferred Items
+
+Items acknowledged and deferred at milestone close on 2026-10-28 (Owner-Wiedervorlage):
+
+| Category | Item | Status |
+|----------|------|--------|
+| debug | issue14-acl-unreadable | diagnosed (29.09., groupfolders-inShare-Heuristik, wartet auf Weg ueber Upstream oder Workaround) |
+| quick_task | 260929-kii-deckungsgrad-nenner-waechst-mit-neuen-da | missing (Altlast v1.4) |
+| quick_task | 260929-s7p-issue14-acl-reader-context | missing (Altlast v1.4) |
+| quick_task | 261001-vl0-findling-28-07-zaehltor-fix-formel-auf-e | missing (Altlast v1.4) |
+| quick_task | 261002-93i-findling-restart-raeumt-arbeitsvorrat-nu | missing (Altlast v1.4) |
+| quick_task | 261002-af9-vorrats-tor-vor-die-bewaffnung-ziehen | missing (Altlast v1.4) |
+| quick_task | 261002-cvf-zaehltor-teilkorpus-scharfe-zaehlquelle | missing (Altlast v1.4) |
+| quick_task | 261003-d3y-d-24-07-nachschaerfung-p2-probe-prueft-v | missing (Altlast v1.4) |
+| quick_task | 261003-wxg-reconcile-beachtet-ausschluesse-zaehltor | missing (Altlast v1.4) |
+| quick_task | 261005-vit-vollindex-term | unknown (Altlast v1.4) |
+
 ## Session Continuity
 
-Last session: 2026-10-21T12:30:00.000Z
-Stopped at: Completed 36-16-PLAN.md, wartet auf Owner-Wort zum Doku-Push
+Last session: 2026-10-28T11:30:00.000Z
+Stopped at: Phase 36 complete, Milestone v1.5 wird geschlossen
 Resume file: None
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

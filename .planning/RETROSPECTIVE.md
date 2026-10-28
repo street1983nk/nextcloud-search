@@ -185,6 +185,34 @@
 - /tmp mit Windows-Python bleibt eine Falle (dritter Vorfall); explizite Pfade verwenden
 - Der Store-Submission-Plan verlangte das Wort "einreichen", die Freigabefrage nannte aber nur die Sache; Wort-Formulierungen in Plaenen und Checkpoint-Fragen von Anfang an gleich ziehen
 
+## Milestone: v1.5, Umsteiger-Release
+
+**Shipped:** 2026-10-28 (1.5.0 eingereicht 2026-10-21)
+**Phases:** 7 | **Plans:** 79 | **Commits:** 402
+
+### What Was Built
+
+- Tschechisch als siebte Suchsprache (Schema 3, cs ohne Stemmer, OCR-Option ces), Re-Analyse-Umbau in beide Richtungen in CI bewiesen
+- Sechs neue Dateitypen in reinem Python (DOC via FIB/Clx, XLS mit CFB-Vorpruefung, EML mit Boundary-Vorzaehlung, ZIP mit Ebenen-Budget, HEIC/HEIF mit Speicherschaetzung) plus Nachholweg recheck_1_5_0
+- Typ- und Ordnerfilter in der Unified Search ohne zweites Rechtemodell; Ausschlussmuster als geschlossene Sprache mit bitparallelem Matcher
+- Dreisprachige Umstiegs-Seite vom fulltextsearch-Framework mit Admin-Banner; Aehnliche-Dokumente-Ansicht; granite-Messbericht mit Verdikt gegen den Wechsel
+- Launch-Haertung mit deterministischem Angriffs-Korpus (64 Faelle, 7 Familien, blocked_malicious durch die ganze Kette), M-32-02-Karenz, Store-Release 1.5.0 (2x HTTP 201)
+
+### What Worked
+
+- Schema-Buendelung in Phase 30 (alle Marken-/Schemaaenderungen in EINEM Schritt) hielt: keine spaetere v1.5-Phase musste das Schema anfassen, der Umbau fiel genau einmal
+- Der Angriffs-Korpus als xfail(strict)-Treppe: 36-07 baute die Faelle rot ein, 36-08/36-09 machten sie planweise gruen; kein Fall ging verloren
+- Owner-Tore als Wortlaut-Plaene (33-WORTLAUT, 34-WORTLAUT, 36-WORTLAUT) vor dem Bau: alle Abnahmen liefen ohne Textkorrektur durch
+- Messregel vor der Messung (Ordnerbudget, SIMILAR_CEILING, granite-Verdikt): kein nachtraegliches Zurechtbiegen der Schwellen
+- Review-Verifier-Kette am Milestone-Ende fand und fixte zwei echte Warnings (amplification-Substring-Match, irrefuehrende Reconcile-Prosa) nach dem Release, vor dem Close
+
+### What Did Not Work / Lessons
+
+- Docker auf der Entwicklerbox haengt seit Ende Oktober komplett (docker run antwortet nie): 26 Audit-Tests der Phasen 33/34 laufen nur noch in CI; die Tests skippen nicht, weil der Daemon dem Version-Probe noch antwortet. Skip-Probe sollte einen echten Kurzlauf machen
+- Volle Suite (6400+ Tests) unter RAM-Druck: zwei Laeufe vom Reaper gekillt, zwei Tests kippten unter Volllast und bestanden isoliert 5x; Last-Flakes von echten Fehlern zu trennen kostete einen eigenen Pruefgang
+- Verifikation der mittleren Phasen (31-33) blieb bis zum Milestone-Close liegen (Status "verification pending" ueber Wochen); Phasen-Verifier direkt nach Phasenende fahren, nicht gesammelt am Schluss
+- Die automatische Accomplishment-Extraktion des Milestone-CLI liefert Abweichungszeilen statt One-Linern; der MILESTONES.md-Eintrag muss weiterhin von Hand geschrieben werden
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -195,6 +223,8 @@
 | v1.1 | 5 (7-11) | 37 | Erste Phase mit CONTEXT.md (discuss-phase); Checkpoint-Plaene mit Kostendeckel; Bestandsaufnahme vor Neubau |
 | v1.2 | 5 (12-16) | 63 | Messgroessen vor dem Bau festgeschrieben (Gate gegen die bequemere Groesse); fristgebundener Entscheid in Phase 1 verankert; eine Anfahrt fuer alle Belege |
 | v1.3 | 7 (17-23) | 69 | Sicherheitsbedingung als Phasenreihenfolge (17-18-19); Owner-Tor als eigene erste Phase; auto_advance-Ketten (ganze Phasen in einer Session); secure-phase je Milestone-Abschluss |
+| v1.4 | 6 (24-29) | 78 | Community-Issue (#18) als Release-Treiber; Checkpoint-Woertlichkeit; serielle src-Wellen gegen die Baumhash-Ratsche |
+| v1.5 | 7 (30-36) | 79 | Schema-Buendelung in der ersten Phase; Angriffs-Korpus als xfail(strict)-Treppe; Wortlaut-Plaene vor dem Bau; Review+Verifier nach Release, vor Close |
 
 ### Cumulative Quality
 
@@ -204,6 +234,8 @@
 | v1.1 | ~2.000 Python + 185 PHP | 52.111 Docs ohne OOM; 6 CI-Workflows inkl. Fremdinstallation + Upgrade |
 | v1.2 | 2.491 Python + PHP-Suite | 7/7 Tag-Laeufe gruen; Entladung belegt (377,5 MB Rueckkehr zur Grundlast); Audit 0 CRIT / 0 HIGH |
 | v1.3 | ~3.000 Python + PHP-Suite | 7/7 Tag-Laeufe gruen; Audit 0 CRIT / 0 HIGH; secure-phase SECURED 46/46; CI 6/6 inkl. HaRP |
+| v1.4 | ~5.000 Python + 666 PHP | Audit 0 CRIT / 0 HIGH (F-29-01 vor Release gefixt); secure-phase 28 = 71/71, 29 = 65/65; Submission 2x HTTP 201 |
+| v1.5 | 6.177 Python + 846 PHP | Audit 36: 0 CRIT/HIGH/MEDIUM; Code-Review 0 Critical; Verifier 5/5; 8 CI-Workflows gruen; Submission 2x HTTP 201 mit Gegenprobe |
 
 ### Top Lessons (Verified Across Milestones)
 

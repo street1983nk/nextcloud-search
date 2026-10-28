@@ -2,13 +2,17 @@
 
 ## What This Is
 
-Findling ist eine Nextcloud-ExApp, die die kaputte Suche repariert: ein Container mit OCR, klassischer Volltextsuche und semantischer Suche, per Klick aus dem Nextcloud App Store installierbar, ohne Elasticsearch-Gebastel. Ergebnisse erscheinen in der normalen Unified Search (via schlanker PHP-Companion-App) und seit v1.1 zusaetzlich auf einer eigenen Ergebnisseite mit Paginierung, seit v1.2 dort mit Dateityp-Filter, Zeitraumfilter und Datums-Sortierung. Optional gibt der Container sein Modell im Leerlauf frei (Schalter ab Werk aus). Seit v1.3 beherrscht die lexikalische Suche neben Deutsch und Englisch auch Spanisch, Italienisch, Niederlaendisch und Portugiesisch (Sprachwechsel per Re-Analyse-Umbau statt Vollreindex), die Oberflaeche spricht acht Sprachen (EN/DE/FR/ES/IT/NL/pt_PT/pt_BR). Zielgruppe: Selfhoster und kleine Organisationen auf typischer Hardware (4-8 GB RAM, oft ARM), für die das offizielle fulltextsearch-Framework (jahrelang verwaist, weiterhin Elasticsearch-gekoppelt) keine Option ist.
+Findling ist eine Nextcloud-ExApp, die die kaputte Suche repariert: ein Container mit OCR, klassischer Volltextsuche und semantischer Suche, per Klick aus dem Nextcloud App Store installierbar, ohne Elasticsearch-Gebastel. Ergebnisse erscheinen in der normalen Unified Search (via schlanker PHP-Companion-App) und seit v1.1 zusaetzlich auf einer eigenen Ergebnisseite mit Paginierung, seit v1.2 dort mit Dateityp-Filter, Zeitraumfilter und Datums-Sortierung. Optional gibt der Container sein Modell im Leerlauf frei (Schalter ab Werk aus). Seit v1.3 beherrscht die lexikalische Suche neben Deutsch und Englisch auch Spanisch, Italienisch, Niederlaendisch und Portugiesisch (Sprachwechsel per Re-Analyse-Umbau statt Vollreindex), die Oberflaeche spricht acht Sprachen (EN/DE/FR/ES/IT/NL/pt_PT/pt_BR). Seit v1.5 (Umsteiger-Release) kommen Tschechisch, sechs neue Dateitypen (DOC, XLS, Mails, ZIP-Inhalte, HEIC/HEIF), Typ- und Ordnerfilter direkt in der Unified Search, Ausschlussmuster, eine Aehnliche-Dokumente-Ansicht und ein dokumentierter Umstiegsweg vom fulltextsearch-Framework dazu. Zielgruppe: Selfhoster und kleine Organisationen auf typischer Hardware (4-8 GB RAM, oft ARM), für die das offizielle fulltextsearch-Framework (jahrelang verwaist, weiterhin Elasticsearch-gekoppelt) keine Option ist.
 
 ## Core Value
 
 Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
 
-## Current State (nach Phase 35, 2026-10-20)
+## Current State (nach v1.5, 2026-10-28)
+
+**Shipped:** Findling 1.5.0 im Nextcloud App Store (beide Apps signiert, Submission 21.10.2026, Lauf 39598694849, 2x HTTP 201, Tag v1.5.0 auf 6c953a76; 1.5.1 als Nachzuegler im Store). Milestone v1.5 am 28.10.2026 geschlossen und archiviert (.planning/milestones/v1.5-*): Phasen 30 bis 36, 79 Plaene, Phase 36 mit Code-Review (0 Critical, 2 Warnings gefixt) und Verifier passed 5/5 abgeschlossen. Offen fuer v1.6: L-36-05/L-36-06 (Ausschluss-Anzeigetexte), #25-Dedup-Rest, Umlaut-Fixes in drei docs-Dateien, Zert-Rotation Issue #33, discussion-Link auf Forum-Thread 249775, UPGRADE_FROM_TAG auf v1.5.0. Naechster Schritt: /gsd:new-milestone v1.6.
+
+## Frueherer Stand (nach Phase 35, 2026-10-20)
 
 **Phase 35 komplett (Stretch, Verifier passed, 14/13 Plaene inkl. Nachmessung 35-04B):** Aehnlich-Ansicht geliefert (STR-01: Link je Treffer, Serveransicht ?similar=fileId, POST /similar als undeklarierte Inhaltsroute, PHP-Recheck vor und nach dem Containeraufruf, SIMILAR_CEILING 54,5 aus Fassungspaar-Messung, Owner-Playwright-Abnahme 20.10.); granite-Messbericht mit Verdikt (STR-02: Bedingung (a) verfehlt bei p=0,0944, Ursache int8-Quantisierung, Empfehlung "Wechsel nur mit Bedingung", e5-small bleibt in v1.5; arm64 auf m7g.large fuer 0,0362 USD, Box abgebaut); Dedup-Entscheidungsvorlage (STR-03, Empfehlung Weg B, Owner-Fragen D1-D4 offen fuer v1.6). Audit 35-12: 0 CRIT/HIGH/MEDIUM, 6 LOW alle behandelt (u. a. unknown-Marke liefert bei leerem Vektorbestand jetzt nach). Validated in Phase 35: STR-01, STR-02, STR-03. Naechster Schritt: Phase 36 (Haertung + Store-Einreichung 1.5.0, REL-05, HART-06, M-32-02).
 
@@ -56,20 +60,28 @@ Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inkl
 - ✓ UI-Kataloge es/it/nl/pt_PT/pt_BR im Gleichstand, 202 Schluessel, Pluralfix (KAT-01..02), v1.3
 - ✓ Messanfahrt BL-F03: fuenf offene plus zwei neue Zahlen plus BL-F04-Basiszahlen aus einer Anfahrt, dismax-Entscheid auf Messbasis (MESS-07..09), v1.3
 - ✓ Aufraeumbefunde fastembed/numpy geschlossen, Grenzen des Sprachausbaus dokumentiert, Store-Einreichung 1.3.0 (HART-04..05, REL-03), v1.3
+- ✓ Umstiegsweg von fulltextsearch/Elasticsearch: dreisprachige Doku-Seite + Admin-Banner bei Parallelbetrieb (UMST-01..03), v1.5
+- ✓ Typ- und Ordnerfilter in der Unified Search ohne zweites Rechtemodell (USRCH-01..03), v1.5
+- ✓ Ausschlussmuster als Einstellung inkl. Mac-Bundles, bitparalleler Matcher, Weg A + Weg C (EXCL, #22), v1.5
+- ✓ Neue Formate .eml, ZIP-Inhalte, .doc/.xls ohne LibreOffice, HEIC/HEIF samt Nachholweg (FMT-01..06), v1.5
+- ✓ Tschechisch: OCR-Option ces + lexikalisches Feld ohne Stemmer, Schema 3 (CZ, #26), v1.5
+- ✓ Grenzwerte auf der Admin-Seite sichtbar, F-29-03, Wortlaut-Feinschliff (POL, #21), v1.5
+- ✓ Aehnliche Dokumente ueber vorhandene Vektoren, granite-Messbericht, Dedup-Designnotiz (STR-01..03), v1.5
+- ✓ Launch-Haertung mit boesartigem Formatkorpus, M-32-02-Karenz, Store-Einreichung 1.5.0 (HART-06, REL-05), v1.5
 
 ### Active
 
-(v1.5 Umsteiger-Release, Owner-Freigabe 10.10.2026; REQ-IDs in REQUIREMENTS.md.)
+(v1.6 noch nicht geschnitten, /gsd:new-milestone steht aus. Kandidaten:)
 
-- Umstiegsweg von fulltextsearch/Elasticsearch (Doku + Admin-Hinweis bei Doppel-Provider)
-- Typ- und Ordnerfilter direkt in der Unified Search
-- Ausschlussmuster als Einstellung inkl. Mac-Bundles (#22)
-- Neue Formate: .eml, ZIP-Inhalte, .doc/.xls ohne LibreOffice, HEIC
-- Tschechisch: OCR + lexikalisches Feld ohne Stemmer (#26)
-- Grenzwerte auf der Admin-Seite sichtbar (#21), F-29-03, Wortlaut-Feinschliff
-- Stretch: "Aehnliche Dokumente" ueber vorhandene Vektoren; Mess-Spike granite-embedding-97m-multilingual-r2 gegen e5-small; Design-Spike #25-Dedup
+- L-36-05/L-36-06: Anzeigetext "Bewusst ausgelassen: 0" mit Erklaersatz, Zaehler-Verzoegerung nach Ausschlussmuster-Aenderung
+- #25-Dedup-Bau (Weg B der Designnotiz, Owner-Fragen D1-D4)
+- Umlaut-Fixes in docs/dev-setup.md, docs/embeddings.md, docs/install-check.md (Testkorpus-Begriffe nicht anfassen)
+- Zert-Rotation Issue #33 (frpc liest /certs/frp bei x509-Fehler neu ein + Neustart)
+- Store-Sichtbarkeit: discussion-Link auf Forum-Thread 249775, Cross-Promo-Satz, Anzeigename "Findling Search" (GO vom 22.10.)
+- UPGRADE_FROM_TAG auf v1.5.0 heben
+- Review-Infos IN-01 bis IN-06 der Phase 36 pruefen
 
-Vorlaeufig v1.6: granite-Wechsel (nur bei Messgewinn), #25-Dedup-Bau, kleiner Reranker, CLIP-Bildsuche (SigLIP2, Lizenz je Modell), whisper.cpp-Transkription als Opt-in.
+Vorlaeufig spaeter: granite-Wechsel (nur mit Bedingung, Verdikt 35-11), kleiner Reranker, CLIP-Bildsuche (SigLIP2, Lizenz je Modell), whisper.cpp-Transkription als Opt-in.
 
 Nicht in v1.4 (Wiedervorlage): Franzoesisches Koerperfeld (benannte Luecke); F-23-04; idle-Guard EmbeddingModel.release() (Kandidat, beim Roadmapping pruefen).
 
@@ -86,7 +98,7 @@ Weiter in der Wiedervorlage: Sortierung nach Name/Groesse (Schema-Sprung), Mimet
 
 ## Context
 
-- Stand 27.09.2026: vier Milestones geliefert (v1.0 am 07.09., v1.1 am 11.09., v1.2 am 21.09., v1.3 am 27.09.), Backend Python 3.13/Tantivy (onnxruntime/tokenizers direkt, fastembed seit v1.3 raus), Companion PHP, ~3.000 Python-Tests + PHP-Suite, 6 CI-Workflows inkl. Fremdinstallations- und Upgrade-Strecke (deploy-harp), Messberichte unter docs/measurements/.
+- Stand 28.10.2026: sechs Milestones geliefert (v1.0 am 07.09., v1.1 am 11.09., v1.2 am 21.09., v1.3 am 27.09., v1.4 am 06.10., v1.5 am 21.10. eingereicht / 28.10. geschlossen), Backend Python 3.13/Tantivy (onnxruntime/tokenizers direkt), Companion PHP, ~6.400 Python-Tests + PHP-Suite (846 Tests), 8 CI-Workflows inkl. Fremdinstallations- und Upgrade-Strecke (deploy-harp), Messberichte unter docs/measurements/.
 - ZenDiS hat den Schwester-Connector installiert und praesentiert ihn auf der Smart Country Convention; ISV-Call mit Nextcloud (Fabrice Mous) am 14.09.2026, Findling + Backend + Connector tragen das Enterprise-Flag im Store.
 - Kill-Kriterium weiter aktiv: Nextcloud GmbH hat fulltextsearch am 12.08.2026 reaktiviert; kündigt sie eine Elasticsearch-freie Volltextsuche mit OCR an (Nextcloud Conference September), wird neu bewertet. Die Differenzierer bleiben: kein Elasticsearch, OCR eingebaut, Semantik, kleines RAM-Budget, deutsche Komposita, Ergebnisseite.
 - Historischer Rechercheteil (Marktlücke 15.08.2026, Stack-Entscheide, Pitfalls des alten fulltextsearch) steht im v1.0-Archiv und in docs/; die nicht verhandelbaren Betriebsregeln gelten weiter: Fortschritt in der DB, failed/skipped sichtbar, Nur-Lesen-Invariante auf Nutzerdateien, Rechteprüfung vor Snippet-Erzeugung, INDEX_WORKERS=1.
@@ -134,8 +146,19 @@ Weiter in der Wiedervorlage: Sortierung nach Name/Groesse (Schema-Sprung), Mimet
 | dismax gegen Score-Summe auf Messbasis entschieden | Rangverschiebung nur auf echten Daten beurteilbar | ✓ Good, gemessen und dokumentiert verworfen (MESS-09) |
 | Kein Vorwaermen beim Start, Kaltstart lexikalisch sofort, Ladefenster-Restrisiko akzeptiert (D-03/D-08) | RAM-Budget auf 4-GB-Boxen schlaegt Latenzkomfort | ✓ Good, Kaltsuche 973 ms MIT Treffern statt 0; Restrisiko als AR-23-01 dokumentiert |
 | gone-Reparaturlauf als Upgrade-Migration (D-04, Issue #14) | Arbeit ist genau die, die ohne den Bug angefallen waere | ✓ Good, Upgrade-CI-Beweis skipped 8→7; budachst-Bestaetigung steht aus (Issue offen) |
+| Re-Analyse-Umbau auch fuer Tschechisch: Schema traegt immer alle Koerperfelder, cs als 14. Feld ohne Stemmer (D-30-04) | Ein Schema statt Varianten, leere Felder kosten nichts | ✓ Good, Umbau in beide Richtungen in CI, Platz 0,29-0,36 unter 0,40-Budget |
+| Legacy-Formate in reinem Python statt LibreOffice (FIB/Clx fuer DOC, xlrd mit CFB-Vorpruefung) | LibreOffice = Imagegroesse + Prozess-Zoo | ✓ Good, Endlosschleifen-Befund in xlrd durch eigene Kettenpruefung abgefangen |
+| Ordnerfilter nur in PHP, Scope ueber Mountliste + Recheck (D-32-06) | Kein zweites Rechtemodell im Python-Index | ✓ Good, Team-Folder-ACL-Faelle in CI belegt, M-32-02 in Phase 36 geschlossen |
+| Ausschlussmuster als geschlossene Sprache ohne fnmatch/preg/eval (Gate methodengenau) | Angriffsflaeche und Laufzeit deckeln | ✓ Good, Differenztest gegen byte-gleiche 1.4.2-Fixture, feindlich 6,1 ms bei 4000 Zeichen |
+| e5-small bleibt, granite nur mit Bedingung (Verdikt 35-11, p=0,0944) | Messung vor Modellwechsel | ✓ Good, Wechsel-Hype widerstanden, Bericht liegt fuer v1.6+ vor |
+| Boesartiger Formatkorpus deterministisch im Baum, Signaturen als skipped(blocked_malicious) (D-36-01) | Reproduzierbare Haertung statt Einmal-Fuzzing | ✓ Good, 64 Faelle durch das Sandbox-Kind, in 16 l10n-Katalogen erklaert |
 
-## Current Milestone: v1.5 Umsteiger-Release
+## Current Milestone: (keiner, v1.6 steht aus)
+
+Naechster Schritt: /gsd:new-milestone fuer v1.6 (Kandidaten siehe Active; Ziel-Einreichung 29.10.2026, Zeittreiber Zert-Rotation #33).
+
+<details>
+<summary>Archiv: Milestone-Beschreibung v1.5 (abgeschlossen 2026-10-28)</summary>
 
 **Goal:** Wer heute fulltextsearch mit Elasticsearch betreibt, findet keinen Grund mehr zu bleiben: Findling deckt die erwarteten Funktionen (Filter in der Unified Search, Ausschlussmuster, Mail-/Archiv-/Altformate, weitere Sprache) ab und bietet einen klaren Umstiegsweg.
 
@@ -149,6 +172,10 @@ Weiter in der Wiedervorlage: Sortierung nach Name/Groesse (Schema-Sprung), Mimet
 - Stretch: "Aehnliche Dokumente" (Vektoren vorhanden), granite-Messung (nur Messung), #25-Dedup-Design
 
 **Key context:** Recherche 10.10.2026 (ES-Schmerzpunkte, Konkurrenz, Technik-Hebel) liegt vor, Gegenproben gemacht: tantivy-py 0.26.2 ist aktuell; granite r2 = ModernBERT, CLS-Pooling, keine Praefixe, eigener int8-Build noetig (quint8_avx2 ist x86-only); files_fulltextsearch_tesseract endet laut Store-Katalog bei NC 32. Ausgeschlossen: sqlite-vector (ELv2), Jina (CC BY-NC), EmbeddingGemma (Gemma Terms). .eml-Dateien IN Nextcloud sind Nextcloud-Files, kein Verstoss gegen "keine fremden Quellen".
+
+**Ergebnis:** Alles geliefert, 1.5.0 am 21.10.2026 eingereicht (2x HTTP 201, Lauf 39598694849, Tag v1.5.0 auf 6c953a76), 1.5.1 als Nachzuegler. Benannte Vorbehalte: L-36-05/06 und #25-Dedup-Rest nach v1.6 vertagt, Zert-Rotation #33 offen. Details: .planning/milestones/v1.5-ROADMAP.md und MILESTONES.md.
+
+</details>
 
 <details>
 <summary>Archiv: Milestone-Beschreibung v1.4 (abgeschlossen 2026-10-06)</summary>
@@ -216,4 +243,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-20, Phase 35 abgeschlossen (Verifier passed)*
+*Last updated: 2026-10-28 after v1.5 milestone*
