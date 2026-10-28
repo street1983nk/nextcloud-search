@@ -307,7 +307,7 @@ def test_the_record_step_reads_the_before_state_of_the_seed() -> None:
     assert '"${sidecar_chunks}" != "0"' in run
     # The seven indexed files of the new formats carry their vectors before the
     # stock is recorded, or the digest would move when the poller catches up.
-    assert 'for id in ${new_indexed_ids}; do' in run
+    assert "for id in ${new_indexed_ids}; do" in run
     assert 'if [ -n "${unembedded}" ]; then' in run
     # The stored schema mark of the start, read out of the snapshot of "Store
     # upgrade 3": 3 is what a fresh directory of v1.5.0 is stamped with.
@@ -727,11 +727,12 @@ def test_the_stale_file_follows_the_fixed_order() -> None:
     assert "grep -c 'download of one file came back short, fetching it once more'" in block
     assert "grep -c 'the file cache names a stale size, the same'" in block
     assert "grep -c 'download of one file stayed short twice'" in block
-    assert 'if [ "${short}:${accepted}:${stuck}" != "1:1:0" ]; then' in block
-    # The backdating of the claim is gone with the give up, and no line a
-    # shell runs claims the old verdict; the history may stay in comments.
+    assert 'if [ "${short}:${accepted}:${stuck}" != "1:1:0" ] || [ "${left}" != "0" ]; then' in block
+    # The backdating of the claim is gone with the give up, and no line of the
+    # order claims the old verdict; the history may stay in comments, and the
+    # written out catch-up rule of seed-probe.py keeps naming the reason.
     assert "locked_at = datetime(locked_at" not in block
-    for line in _run(SEED_STEP).splitlines():
+    for line in block[block.index('docker stop -t 60 "${container}"') :].splitlines():
         if "repeatedly_stuck" in line:
             assert line.lstrip().startswith("#"), line
 
@@ -755,11 +756,12 @@ def test_the_new_seed_is_asserted_fail_closed_under_the_start() -> None:
     )
     assert 'if [ "${verdict}" != "indexed/" ] || [ "${recorded}" != "0" ]; then' in block
     # The bomb: skipped/archive_limit on both sides, judged by the tag.
-    bomb_check = 'if [ "${bomb}" != "skipped/archive_limit" ] || [ "${bomb_recorded}" != "skipped/archive_limit" ]; then'
-    assert bomb_check in block
-    # The stale file: indexed in state.db, no verdict in Nextcloud and no queue
-    # row left, the determined values and not a range.
-    assert 'if [ "${stale}" != "indexed/" ] || [ "${stale_recorded}" != "0" ] || [ "${left}" != "0" ]; then' in block
+    assert 'if [ "${bomb}" != "skipped/archive_limit" ] || [ "${bomb_recorded}" != "skipped/archive_limit" ]' in block
+    # The stale file: the true size back in the cache, indexed in state.db, no
+    # verdict in Nextcloud and no queue row left, the determined values and
+    # not a range.
+    assert '[ "${restored}" != "${stale_bytes}" ] || [ "${stale}" != "indexed/" ]' in block
+    assert '[ "${stale_recorded}" != "0" ] || [ "${left}" != "0" ]; then' in block
     assert 'stale=$(seed_probe verdict "${stale_id}" || echo unreadable)' in block
     # The seven words find nothing before the seed and exactly their file after
     # it, with a positive control on both sides.

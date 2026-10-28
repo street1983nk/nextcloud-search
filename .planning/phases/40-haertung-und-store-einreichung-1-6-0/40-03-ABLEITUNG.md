@@ -88,17 +88,32 @@ Zählung: `grep -c '::error::'` über den Zeilenbereich des Schritts.
 | 0 | 0 | 0 | |
 | 1 | 2 | 2 | |
 | 2 | 2 | 2 | |
-| 2b | 35 | NACH_UMBAU | Ersatzzeilen siehe unten |
+| 2b | 35 | 36 | kein Schritt kleiner; Ersatz je entfernter Guard siehe unten |
 | 3 | 4 | 4 | |
 | 3b | 4 | 4 | |
-| 3c | 13 | NACH_UMBAU | |
+| 3c | 13 | 15 | neu: schemaVersion-3-Guard und Vektor-Guard der sieben Saatdateien |
 | 4 | 15 | 15 | |
-| 5 | 35 | NACH_UMBAU | |
+| 5 | 35 | 35 | |
 | 5b | 12 | 12 | |
 | 6 | 32 | 32 | |
 | 7 | 15 | 15 | |
 
-Ersatzzeilen (für jede entfernte Guard): wird nach dem Umbau ergänzt.
+Ersatz je entfernter Guard (Schritt, was die Ersatzzeile prüft):
+
+- 2b: die drei Guards der alten Give-up-Ordnung (Zeilen 4714/4723/4731: Queue-Zeile nach dem
+  Zurückdatieren, kein failed/repeatedly_stuck im Budget, genau drei kurze Auslieferungen)
+  sind ersetzt durch drei gleich scharfe Guards der Annahme-Ordnung: kein indexed/ im Budget
+  (POL-02-Regelverstoß), Logzeilen-Verhältnis `short:accepted:stuck != 1:1:0` oder Queue-Zeile
+  übrig, und die Endprüfung `restored/stale/stale_recorded/left` (wahre Größe, indexed, kein
+  Urteil, keine Queue-Zeile). Die Guard der sechs "nie gequeued"-Typen (4563) ist ersetzt
+  durch die Guard "indexed/ mit 0 Urteilen" je Datei; die Guard des Word-97 (4572,
+  legacy_format) durch dieselbe indexed-Guard plus die neue Bomben-Guard
+  (skipped/archive_limit in beiden Hälften). words_find_nothing nach der Saat (via 4475) ist
+  ersetzt durch die words_exact-Guard (jedes Wort genau seine Datei) plus Positivkontrolle.
+- 5: die zwei ::error::-Zweige des entfernten moved()-Helpers (unlesbarer Vorher-Wert,
+  Bewegung ungleich dem Schritt) sind ersetzt durch die zwei Zahlen-Guards über alle acht
+  Zähler je Snapshot-Seite (`all(type == "number")` auf before und after); die Bewegung
+  selbst fängt unchanged() je Zähler mit eigener Fehlerzeile.
 
 ## Probe-Lauf
 
