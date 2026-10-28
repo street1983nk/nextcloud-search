@@ -28,9 +28,9 @@ Der ehrliche Satz dazu, und er gehört genau so in den Store-Text (D-17b):
 > Die semantische Suche deckt den Anfang jedes Dokuments ab, die Volltextsuche
 > weiterhin alles.
 
-Was "der Anfang" in Zahlen heisst:
+Was "der Anfang" in Zahlen heißt:
 
-| Grösse | Wert | Herkunft |
+| Größe | Wert | Herkunft |
 |---|---|---|
 | Textzeichen je Dokument | 27.067 | **gemessen**, Volllauf 04.09.2026, `docs/performance.md` |
 | Zeichen je Token, deutsche Prosa | 3,2972 | **gemessen**, Welle 0, aarch64 |
@@ -75,7 +75,7 @@ und 30,8 Prozent der Ablenker die Kandidatenliste verlassen.
 e2e-Korpus lassen sich die zwei Anforderungen "eine einwörtige Anfrage erzeugt
 gar keinen semantischen Kandidaten" und "die Umschreibung findet weiterhin ihr
 Dokument" nicht zugleich erfüllen: die erste verlangt eine Obergrenze unter
-68,4544, die zweite eine über 79,5487. Der Riegel schliesst also das ferne Feld,
+68,4544, die zweite eine über 79,5487. Der Riegel schließt also das ferne Feld,
 und er macht aus einer kurzen Anfrage auf einem kleinen Bestand keine Antwort mit
 genau einer Datei. Das ist eine Produktentscheidung und keine Stellschraube; die
 Einzelheiten stehen im Bericht. Die Folgerung daraus ist die dritte Regel weiter
@@ -129,7 +129,7 @@ Admin-Seite fragt beide Listen auch dort, wo die Suche nur eine fragt: sie ist
 eine Lupe auf eine einzelne, bereits benannte Datei, und die Frage "liegt im
 Bestand überhaupt etwas nahe an dieser Zeile" hat auch dann eine Antwort, wenn
 die Suche sie nicht verwendet. Der Distanzriegel gilt dort sehr wohl, denn er
-legt fest, was "nahe" heisst, und zwei Antworten darauf wären zwei Bestände. Der
+legt fest, was "nahe" heißt, und zwei Antworten darauf wären zwei Bestände. Der
 Textausschnitt eines Treffers wird ebenfalls weiter über die Vektorseite
 gewählt: er entscheidet über keinen Kandidaten, sondern zitiert ein Dokument,
 das die Suche schon ausgegeben und die PHP-Seite schon bestätigt hat (D-13).
@@ -195,7 +195,7 @@ Definition keine wörtliche Übereinstimmung mit der Anfrage. Der
 SnippetGenerator liefert für ihn also ein leeres Fragment, und ohne die zwei
 Zahlen sähe der Nutzer einen Treffer ohne jede Textvorschau. Bei semantischen
 Treffern ist das der Normalfall und nicht die Ausnahme. Mit ihnen wird der
-Ausschnitt aus dem gespeicherten `body_de` geschnitten, und zwar ausschliesslich
+Ausschnitt aus dem gespeicherten `body_de` geschnitten, und zwar ausschließlich
 in `snippets_for()`, also nach dem Vorfilter und nach dem PHP-Recheck (D-13).
 
 Es sind **Zeichen** und keine Bytes. Die Verwechslung ist in diesem Projekt schon
@@ -230,12 +230,12 @@ bewusst erhalten (D-21). Damit sie erhalten bleibt, trägt die Fassung von
 `schema.sql` seit Phase 6 eine eigene Marke `store_schema_version`: der
 Schlüssel `schema_version` gehört der Tantivy-Schemafassung, und ein Sprung
 unter diesem Schlüssel hätte genau den stundenlangen Neuaufbau erzwungen, den
-D-21 ausschliesst.
+D-21 ausschließt.
 
 **Die Marke `embedding_version`** sagt, welcher Vektorbestand neben dem
 Zustand liegt: Modell, Quantisierung, Dimensionszahl und Tokendeckel, zum
 Beispiel `multilingual-e5-small/int8/384/1024`. Ändert sich eine der vier
-Grössen, passt ein gespeicherter Vektor nicht mehr zu einem frisch gerechneten
+Größen, passt ein gespeicherter Vektor nicht mehr zu einem frisch gerechneten
 Anfragevektor. Ihr Drift wird gemeldet und löst **keinen** Volltext-Reindex aus;
 die Folge gehört in den Vektorweg. Seit dem 06.09.2026 wird die Marke auch
 geschrieben und ihr Drift beantwortet, und was dabei geschieht, steht in
@@ -251,9 +251,9 @@ Abschnitt 8.
 | Chunks je Dokument beim Deckel aus D-01 | 2 | gerechnet: 1.024 Token bei 512 Token je Chunk | Welle-0-Bericht, Ableitung 1 |
 | Dokumente im Messkorpus | 50.068 | **gemessen**, Volllauf 04.09.2026 | `docs/performance.md` |
 | Chunks insgesamt | 100.136 | gerechnet aus den zwei Zeilen darüber | Welle-0-Bericht, Ableitung 1 |
-| Dateigrösse `vectors.db` bei dieser Chunkzahl | **43.859.968 Byte** | **gemessen**, 05.09.2026 | Kommandozeile unten |
-| **Byte je Chunk** | **438,0** | gerechnet aus der gemessenen Dateigrösse | |
-| **Byte je Dokument** | **876,0** | gerechnet aus der gemessenen Dateigrösse | |
+| Dateigröße `vectors.db` bei dieser Chunkzahl | **43.859.968 Byte** | **gemessen**, 05.09.2026 | Kommandozeile unten |
+| **Byte je Chunk** | **438,0** | gerechnet aus der gemessenen Dateigröße | |
+| **Byte je Dokument** | **876,0** | gerechnet aus der gemessenen Dateigröße | |
 | Verwaltungsanteil je Chunk | 54,0 Byte | gerechnet: 438,0 minus 384 | |
 | Tantivy-Index desselben Korpus | 761.374.910 Byte | **gemessen**, Volllauf 04.09.2026 | `docs/performance.md` |
 | **Zuwachs gegenüber dem heutigen Index** | **5,8 Prozent** | gerechnet | |
@@ -264,30 +264,30 @@ Die zweite Zeile der Tabelle war gerechnet, nicht gemessen: 1.024 Token geteilt
 durch 512 Token je Chunk ergibt zwei. Plan 06-05 hat den Chunker gegen den
 ausgelieferten Tokenizer laufen lassen, und dabei sind es **zwei bis drei**
 geworden. Der Grund ist die Arbeitsweise des Splitters: er schneidet an
-Satzgrenzen, und was nach dem letzten vollen Chunk uebrig bleibt, wird ein
+Satzgrenzen, und was nach dem letzten vollen Chunk übrig bleibt, wird ein
 eigener kleiner Chunk. Gemessen an einem Dokument von 18.240 Token, gedeckelt
 auf 1.024: drei Chunks mit 500, 507 und 17 Token.
 
 Zwei Zahlen der Tabelle sind damit Untergrenzen und keine Punktwerte:
 
-| Groesse | bei 2 Chunks je Dokument | bei 3 Chunks je Dokument |
+| Größe | bei 2 Chunks je Dokument | bei 3 Chunks je Dokument |
 |---|---|---|
 | Chunks insgesamt | 100.136 | 150.204 |
 | `vectors.db` | 43.859.968 Byte | rund 65.789.352 Byte |
 | Byte je Dokument | 876,0 | rund 1.314,0 |
-| Zuwachs gegenueber dem Tantivy-Index | 5,8 Prozent | rund 8,6 Prozent |
+| Zuwachs gegenüber dem Tantivy-Index | 5,8 Prozent | rund 8,6 Prozent |
 
-Die gemessene Groesse je Chunk (438,0 Byte) aendert sich dadurch nicht; sie ist
-gegen das ausgelieferte Schema gemessen und gilt je Chunk. Was sich aendert, ist
-die Zahl der Chunks, und das Abnahmekriterium 4 haelt auch am oberen Ende: bei
+Die gemessene Größe je Chunk (438,0 Byte) ändert sich dadurch nicht; sie ist
+gegen das ausgelieferte Schema gemessen und gilt je Chunk. Was sich ändert, ist
+die Zahl der Chunks, und das Abnahmekriterium 4 hält auch am oberen Ende: bei
 150.000 Chunks liegt die Scan-Latenz auf nativem aarch64 interpoliert bei rund
 56 ms p95 warm und rund 186 ms p95 kalt, gegen ein Abbruchkriterium von 300 ms
 je Runde (Welle-0-Bericht, Messung C).
 
-Die Chunkgroesse steht seit Plan 06-05 ausserdem auf **510** und nicht auf 512:
+Die Chunkgröße steht seit Plan 06-05 außerdem auf **510** und nicht auf 512:
 der Tokenizer setzt zwei Sondertoken um jeden Text, gemessen am ausgelieferten
-Artefakt, und ein Chunk mit 512 eigenen Token kaeme als 514 an der Sitzung an
-und verloere seine letzten beiden, ohne dass irgendetwas fehlschlaegt.
+Artefakt, und ein Chunk mit 512 eigenen Token käme als 514 an der Sitzung an
+und verlöre seine letzten beiden, ohne dass irgendetwas fehlschlägt.
 
 Die Schätzung aus der Phasenrecherche (06-RESEARCH.md 4.3) lag bei 432 Byte je
 Chunk, 864 Byte je Dokument, 48 Byte Verwaltung und 5,7 Prozent. Sie war also um
@@ -305,7 +305,7 @@ hat die Kennzahl gemessen, im Container, nach dem Lauf, Datei und WAL zusammen.
 **Die gemessene Zahl ersetzt die gerechnete.** Die gerechnete bleibt daneben
 stehen, weil eine Rechnung, die daneben lag, eine Warnung für das nächste Mal ist.
 
-| Grösse | gerechnet (05.09., oben) | **gemessen (06.09., Volllauf)** | Abweichung |
+| Größe | gerechnet (05.09., oben) | **gemessen (06.09., Volllauf)** | Abweichung |
 |---|---|---|---|
 | Dokumente mit Vektor | 50.068 | 51.961 | |
 | Chunks je Dokument | 2 (Boden), 2 bis 3 (Nachtrag) | **2,807** | |
@@ -318,8 +318,8 @@ stehen, weil eine Rechnung, die daneben lag, eine Warnung für das nächste Mal 
 Woran die Rechnung scheiterte, ist die Zeile, die der Nachtrag vom 05.09. schon
 als Boden markiert hatte: die Chunks je Dokument. 2,807 statt 2 erklärt fast den
 ganzen Unterschied; der Rest ist der nicht zurückgeschriebene WAL, der in einem
-laufenden Container zur Grösse auf der Platte gehört. Erfolgskriterium 4 hält
-mit der grösseren Zahl: 145.854 Chunks liegen innerhalb des Bereichs, für den die
+laufenden Container zur Größe auf der Platte gehört. Erfolgskriterium 4 hält
+mit der größeren Zahl: 145.854 Chunks liegen innerhalb des Bereichs, für den die
 Scan-Latenz oben interpoliert ist, und die gemessene p95 einer Nutzersuche nach
 dem Lauf lag bei 524 ms gegen ein Budget von 2.500 ms.
 
@@ -328,7 +328,7 @@ dem Lauf lag bei 524 ms gegen ein Budget von 2.500 ms.
 Gemessen wurde gegen genau das Schema, das ausgeliefert wird, über die drei
 Operationen des Moduls und nicht über handgeschriebenes SQL. Die Verbindung
 wird vor der Messung geschlossen, damit der WAL-Anteil in die Datei
-zurückgeschrieben ist und die gemessene Grösse die Grösse auf der Platte ist.
+zurückgeschrieben ist und die gemessene Größe die Größe auf der Platte ist.
 
 ```bash
 cd backend && uv run python - <<'PY'
@@ -408,7 +408,7 @@ Vektorspeicher hinter einer Schnittstelle mit drei Operationen (D-08).
 | Gewinn Platz | Faktor 8: 48 statt 384 Byte je Vektor, also 4,8 statt 38,4 MB Nutzlast bei 100.000 Chunks (**gemessen**) |
 | Gewinn Zeit | Faktor 5,3 bis 7,7, **gemessen** statt geschätzt: bei 100.000 Chunks warm p95 4,9 gegen 37,8 ms auf aarch64, bei 1.000.000 Chunks warm 63,7 gegen 338,5 ms auf dem x86-Notebook. Die Schätzung der Recherche (Faktor 8 bis 20) war zu optimistisch |
 | Verlust | Qualität. Wie viel, ist für e5-small auf Deutsch **nicht belegt**: dazu **fehlt** eine Messung, und eine plausible Zahl wird hier nicht erfunden |
-| Übliche Gegenmassnahme | zweistufig: binär grob vorsortieren, die besten zehn mal k mit den int8-Vektoren nachrechnen. Das setzt voraus, dass beide Fassungen gespeichert werden, kostet also Platz statt ihn zu sparen, und rettet dafür den Grossteil der Qualität |
+| Übliche Gegenmaßnahme | zweistufig: binär grob vorsortieren, die besten zehn mal k mit den int8-Vektoren nachrechnen. Das setzt voraus, dass beide Fassungen gespeichert werden, kostet also Platz statt ihn zu sparen, und rettet dafür den Großteil der Qualität |
 
 Eine Anmerkung zur Metrik, die auch für den heutigen Zustand gilt: die
 `int8[384]`-Spalte lässt vec0 seine Vorgabemetrik verwenden, gemessene Distanzen
@@ -431,7 +431,7 @@ Zweitens, und das ist der Messwert: Plan 06-03 hat genau diese zweite
 Quantisierungsstufe auf einem dreisprachigen Testset gegen die unquantisierte
 Fassung geprüft. Keiner der sechs Vergleiche erreicht den doppelten
 Standardfehler. Der Rangverlust durch die Vektorquantisierung ist auf diesem
-Testset also nicht messbar, und das ist die Grösse, um die es geht: nicht die
+Testset also nicht messbar, und das ist die Größe, um die es geht: nicht die
 Norm eines einzelnen Vektors, sondern die Reihenfolge, die aus ihr folgt.
 
 Was weiterhin **nicht** gemessen ist: die Norm eines quantisierten Vektors als
@@ -487,7 +487,7 @@ gelten; es ist der Grund, warum ein approximatives Verfahren an dieser Stelle
 | Letzter Commit im Repositorium | 18.05.2026 |
 | Offene Vorgänge | 204 |
 | Letzte stabile Fassung | v0.1.9 vom 31.03.2026 |
-| Was danach kam | ausschliesslich Alpha-Fassungen der 0.1.10 |
+| Was danach kam | ausschließlich Alpha-Fassungen der 0.1.10 |
 | Wie gepinnt | exakt: `sqlite-vec==0.1.9` in `backend/pyproject.toml`, kein `>=` |
 | Wie ausgeliefert | die `.so` liegt im Abbild, je Architektur gegen eine sha256 geprüft (D-09) |
 
@@ -572,13 +572,13 @@ die Tabelle oben nur hochrechnen konnte, auf der Hardware, für die die
 Store-Aussage gilt: AWS m7g.large, 2 vCPU Graviton3, auf 4 GB begrenzt, harte
 Containergrenze 2 GB, `INDEX_WORKERS=1`.
 
-| Grösse | gemessen |
+| Größe | gemessen |
 |---|---|
 | Dokumente eingebettet | 51.961, jedes indexierte |
 | Einbettung neben der laufenden OCR-Spur | rund 43 Dokumente je Minute |
 | Einbettung allein, nach dem Ende der ersten Spur | rund 170 Dokumente je Minute |
 | Verlängerung der ersten Spur durch die Einbettung nebenher | 12 h 49 min auf 18 h 04 min, +41 Prozent |
-| Dauer bis zum letzten Vektor | 18 h 56 min nach dem Anstoss |
+| Dauer bis zum letzten Vektor | 18 h 56 min nach dem Anstoß |
 | p95 einer Nutzersuche, während die zweite Spur lief | 1.129 ms gegen 2.500 ms Budget |
 
 Die 4 h 03 min der Tabelle oben waren also die Rechenzeit der Einbettung auf
@@ -627,11 +627,11 @@ geschrieben wird.
 Die Zahl zählt **Dokumente und nicht Chunks**: ein Dokument trägt unter dem
 Deckel zwei bis drei Chunks (gemessen 05.09.2026, Plan 06-05), also stünde eine
 Chunkzahl neben einer Dokumentzahl auf derselben Seite und wäre um das Zwei- bis
-Dreifache zu gross. Sie fehlt als Wert, wenn der Container sie nicht gemeldet
+Dreifache zu groß. Sie fehlt als Wert, wenn der Container sie nicht gemeldet
 hat, und ist 0, wenn kein Dokument einen Vektor trägt: "nicht gemeldet" und
 "null" sind zwei Auskünfte, und 0 Prozent wäre eine Aussage über die zweite.
 
-**Und der Zustand dazwischen heisst `degraded`.** Ist das Einbetten
+**Und der Zustand dazwischen heißt `degraded`.** Ist das Einbetten
 eingeschaltet und es gibt keinen Vektorbestand, meldet sich der Container als
 unvollständig. Das ist eine Aussage über Vollständigkeit und nicht über einen
 Fehler: ein Container, dessen zweite Spur noch nicht gelaufen ist, antwortet
@@ -654,7 +654,7 @@ Damit sind die beiden offenen Punkte aus Phase 6 geschlossen, die vor der
 Fassung v1.0.0 zu entscheiden waren: die Marke wird geschrieben, und der
 Vektorbestand wird beim Drift geleert.
 
-**Was ein Verwalter tun muss: nichts.** Ein Modellwechsel heisst in der Praxis,
+**Was ein Verwalter tun muss: nichts.** Ein Modellwechsel heißt in der Praxis,
 dass ein neues Abbild ein anderes Modell mitbringt oder dass jemand den
 Tokendeckel `FINDLING_EMBED_TOKEN_CAP` verstellt. In beiden Fällen läuft nach
 dem Neustart des Containers diese Kette ab, und ihre Reihenfolge ist der Kern
@@ -675,7 +675,7 @@ der Sache:
 
 Der Volltextindex wird dabei **nicht** angefasst. Die Marke gehört bewusst nicht
 zu der Menge, die die Indexgeneration anhebt, denn ein Sprung dort erzwänge den
-stundenlangen Neuaufbau des Tantivy-Index, den D-21 ausschliesst. Das
+stundenlangen Neuaufbau des Tantivy-Index, den D-21 ausschließt. Das
 Reindex-Banner der Verwaltungsseite bleibt aus, und die Suche antwortet die ganze
 Zeit über lexikalisch weiter.
 
@@ -765,13 +765,13 @@ nächste Stützstelle, damit niemand von 100.000 nach oben verlängert:
 Der Unterschied bei 250.000 liegt nicht im Prozessor, sondern in der Platte: der
 aarch64-Läufer hat eine NVMe-SSD, das Notebook eine WSL2-Datei darauf. Die
 vorsichtige Lesart bleibt deshalb die des Berichts: **250.000 Chunks sind der
-Grenzpunkt**, und eine von zwei gemessenen Maschinen reisst ihn kalt. Vollständige
+Grenzpunkt**, und eine von zwei gemessenen Maschinen reißt ihn kalt. Vollständige
 Reihen beider Maschinen:
 [`docs/measurements/2026-09-05-welle0-arm64/README.md`](measurements/2026-09-05-welle0-arm64/README.md).
 
 Für diese Phase ist die Aussage davon nicht betroffen: der reale Lauf liegt mit
 145.854 Vektoren unter dem Grenzpunkt. Ein Betreiber, der den Deckel aus D-01 auf
-volles Embedding aufdreht, landet in der Nähe einer Million Chunks und reisst das
+volles Embedding aufdreht, landet in der Nähe einer Million Chunks und reißt das
 Kriterium auch warm; der Ausweg dafür ist Abschnitt 5 und nicht diese Zeile im
 Protokoll.
 
@@ -785,7 +785,7 @@ kostet, was er bringt und wann er besser stehen bleibt.
 **Was passiert.** Ist das Modell länger als die eingestellte Ruhezeit nicht
 benutzt worden, gibt der Container den Tokenizer, den Splitter und die
 Inferenzsitzung frei und reicht die frei gewordenen Seiten an das Betriebssystem
-zurück. Freigegeben wird ausschliesslich im echten Leerlauf: läuft gerade ein
+zurück. Freigegeben wird ausschließlich im echten Leerlauf: läuft gerade ein
 Indexarbeiter, verschiebt die Prüfung die Freigabe auf den nächsten Takt. Das
 Modell ist danach nicht gelöscht, sondern nur nicht mehr im Speicher. Die Datei
 liegt weiter im Abbild, und der nächste Bedarf liest sie neu ein.
@@ -806,7 +806,7 @@ Mittag allein bleibt, ihren Speicher zurückbekommt. **Diese Zahl ist geraten un
 keine Messung.** Sie bleibt eine Schätzung, bis die Box-Anfahrt der Phase 15 die
 Wiederaufwärm-Kosten misst; `backend/src/findling/config.py` sagt an der Stelle,
 an der sie steht, dasselbe mit denselben Worten. Wer heute einschaltet, wählt
-also einen begründeten Startwert und keinen belegten. Ein Wert ausserhalb des
+also einen begründeten Startwert und keinen belegten. Ein Wert außerhalb des
 Fensters ist kein Startfehler: der Container schreibt eine Warnzeile, die den
 Variablennamen nennt, nimmt den Werksstand und startet trotzdem. Ein Tippfehler
 in dieser Zeile legt also keine Instanz still.
@@ -822,7 +822,7 @@ Beschreibung der Variablen in `backend/appinfo/info.xml`.
 **Was es kostet.** Die erste Suche nach einer Ruhephase antwortet mit
 Volltexttreffern statt mit semantischen. Sie wartet bewusst nicht auf die
 Gewichte: ein einzelner Containeraufruf ist nach 1,5 Sekunden gedeckelt
-(`php/lib/Service/ExAppService.php`), und ein Ladevorgang reisst diese Decke.
+(`php/lib/Service/ExAppService.php`), und ein Ladevorgang reißt diese Decke.
 Stattdessen bestellt die Suche das Nachwärmen im Hintergrund und antwortet
 sofort. Die zweite Suche ist wieder vollständig. Bezahlt wird das je warmem
 Fenster genau einmal: zehn gleichzeitige Suchen lösen einen Ladevorgang aus und

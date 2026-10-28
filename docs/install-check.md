@@ -13,7 +13,7 @@ leistet. Genau dafür gibt es `scripts/dev/aio_install_check.sh` und diese Seite
 
 Der Leitsatz ist derselbe wie in `docs/uninstall.md`: jede Aussage nennt auch
 ihre Grenze, und jede Abweichung vom Weg der CI steht hier als Befund und nicht
-als Fussnote. Der ganze Zweck dieses Laufs ist, das zu finden, was die CI sich
+als Fußnote. Der ganze Zweck dieses Laufs ist, das zu finden, was die CI sich
 erspart.
 
 ## 1. Der Lauf vom 06.09.2026, amd64
@@ -36,7 +36,7 @@ erspart.
 | Nutzer | `admin` für die Verwaltungsseite, `testuser` ohne Rechte für Hochladen und Suche |
 
 Der Lauf begann um 21:42:44 UTC und endete um 21:52:41 UTC, also knapp zehn
-Minuten für beide Hälften einschliesslich der sechs Deinstallations-Zusagen.
+Minuten für beide Hälften einschließlich der sechs Deinstallations-Zusagen.
 
 ### Annahme A6: der anonyme Pull
 
@@ -126,7 +126,7 @@ Installationszeit von dort.
 ### Die sechs Deinstallations-Feststellungen
 
 Wortgleich mit den sechs Feststellungen aus `deploy-harp.yml`, damit CI und
-frische Instanz einen Massstab haben und nicht zwei.
+frische Instanz einen Maßstab haben und nicht zwei.
 
 | # | Feststellung | Ergebnis auf dieser Instanz |
 |---|---|---|
@@ -165,7 +165,7 @@ den die Paketdatei nennt, existiert" ungeprüft.
 
 ### Befund 2: Die Code-Signatur trägt eine Ersatzidentität
 
-`docs/certificates.md` verbietet den Release-Schlüssel ausserhalb von
+`docs/certificates.md` verbietet den Release-Schlüssel außerhalb von
 `release.yml`. Ein Lauf von Hand kann also keine Store-Signatur herstellen. Wie
 in der CI wurde deshalb eine Wegwerf-CA mit einem Blattzertifikat `CN=findling`
 erzeugt und die CA an `resources/codesigning/root.crt` der Instanz angehängt.
@@ -241,7 +241,7 @@ Die beiden Paketdateien dieses Laufs wurden nach den Regeln von
 `scripts/release/store-archive.sh` gebaut, aber auf einem Wirt, dessen
 Arbeitsbaum wegen `core.autocrlf=true` CRLF-Zeilenenden trägt. Die Paketdatei trägt
 sie damit ebenfalls, während dieselben Dateien im Repository und in der CI LF
-tragen. Für die Auslieferung heisst das: **die Release-Paketdateien entstehen in
+tragen. Für die Auslieferung heißt das: **die Release-Paketdateien entstehen in
 `release.yml` und nirgendwo sonst.** Eine von Hand auf einem Windows-Rechner
 gebaute Paketdatei ist byteweise ein anderes Paket, und jede Datei in ihrer
 Signatur hat einen anderen Hash.
@@ -297,7 +297,7 @@ Umstiegspfad einer bestehenden Installation ist es nicht.
 
 ### Der Weg über die Weboberfläche
 
-Dieser Lauf ruft ausschliesslich occ. Die ExApps-Verwaltungsoberfläche von
+Dieser Lauf ruft ausschließlich occ. Die ExApps-Verwaltungsoberfläche von
 AppAPI, über die ein Admin dieselbe Installation klickt, ist nicht angefasst
 worden, und der Schalter "Daten löschen" der App-Verwaltung von Nextcloud 32 und
 33 bleibt aus demselben Grund ungemessen wie in `docs/uninstall.md`,
@@ -382,7 +382,7 @@ gegeneinander gehalten werden können statt nur nebeneinander zu stehen.
 | Hintergrundjobs | `unset`, was Nextcloud als `ajax` liest, deshalb `--cron-driver script` mit 300 s Takt |
 
 Der Lauf begann um 06:42:02 UTC und endete um 06:46:55 UTC, also **4 min 51 s**
-für beide Hälften einschliesslich der sechs Deinstallations-Zusagen. Der
+für beide Hälften einschließlich der sechs Deinstallations-Zusagen. Der
 amd64-Lauf brauchte 9 min 57 s; der Unterschied ist der Zero-Config-Nachweis, der
 hier nach einer Cron-Runde traf statt nach zwei.
 
@@ -411,7 +411,7 @@ bewusst, und hier sind ihre drei Gründe:
    die Box nach diesem Plan angehalten und für die v1.1-Messung erhalten wird
    (D-H3). Eine zweite all-in-one-Familie mit eigenem Mastercontainer,
    Datenbank, Redis und notify-push hätte auf 3,8 GiB neben der ersten nicht
-   Platz gefunden, und die erste abzureissen hätte den Bestand riskiert, der die
+   Platz gefunden, und die erste abzureißen hätte den Bestand riskiert, der die
    Grundlage der Nachmessung ist.
 3. **Was all-in-one auf arm64 betrifft, ist ohnehin belegt.** Die Box fährt seit
    Plan 05-21 all-in-one auf arm64, und die Messreihen dieser Phase und der
@@ -421,7 +421,7 @@ bewusst, und hier sind ihre drei Gründe:
 
 **Was damit nicht abgedeckt ist, ausdrücklich:** das all-in-one-Abbild
 `latest-arm64` als Installationsweg, also die Weboberfläche der
-ExApps-Verwaltung von all-in-one auf arm64. Wer diese Lücke schliessen will,
+ExApps-Verwaltung von all-in-one auf arm64. Wer diese Lücke schließen will,
 braucht eine eigene Box; das Skript trägt den Schalter dafür und dieser Lauf hat
 ihn nicht benutzt.
 
@@ -519,8 +519,8 @@ Einstellungen, und danach war alles auf null.
 |---|---|
 | **arm64-1** | HaRP scheitert im Container an `update-ca-certificates`: `cannot create /etc/ssl/certs/ca-certificates.crt.new: Permission denied`, Exit 2. Der Grund ist, dass das Abbild nicht als `root` läuft. Der Lauf ist dadurch **nicht** gescheitert, weder hier noch auf der AIO-Instanz derselben Box, wo dieselbe Zeile seit Tagen steht. Was dadurch nicht passiert: eine eigene CA der Instanz landet nicht im Vertrauensspeicher des Containers. Für eine Instanz mit selbst ausgestelltem Zertifikat kann das der Unterschied zwischen erreichbar und nicht erreichbar sein, und das ist ungemessen. |
 | **arm64-2** | Befund 4 des amd64-Laufs gilt wörtlich auch hier und hat diesen Lauf einmal gekostet: ohne eine `location /exapps/`-Regel im Frontproxy antwortet Nextcloud selbst mit 404, AppAPI meldet `heartbeat check failed`, und `register --wait-finish` läuft in seine Grenze. Der erste Anlauf um 06:25 ist genau daran gescheitert. **Richtigstellung vom 07.09.2026, nachgetragen bei der Abnahme:** dieser Befund hat in seiner ersten Fassung behauptet, `docs/dev-setup.md` trage die Regel weiterhin nicht. Das war falsch. Der Abschnitt "Eine Adresse vor Nextcloud und HaRP" steht dort seit Plan 06.1-22, mit derselben Begründung über die zwei Verwendungen von `nextcloud_url` und mit der `location /exapps/`-Regel als Konfiguration (`docs/dev-setup.md`, Abschnitt ab Zeile 346). Der dokumentarische Teil von Befund 4 ist damit **geschlossen** und war es schon, als dieser Lauf fuhr; die Anleitung stand im Basisstand dieses Plans, und ein Blick hinein hätte den Anlauf um 06:25 verhindert. Was bleibt, ist die Feststellung, dass die Regel nötig ist, und sie ist hier ein zweites Mal belegt. |
-| **arm64-4** | **Der schwerste Befund dieses Laufs, und er hat Daten gekostet.** Zusage 3 fuehrt `app_api:app:unregister --rm-data` aus. Der Name des Volumens leitet sich **allein aus der App-Kennung** ab (`nc_app_findling_backend_data`), und beide Nextcloud-Instanzen dieser Box hingen am **selben Docker-Dienst**. Der Lauf hat damit um 06:46Z das Volumen der **anderen**, produktiv genutzten Instanz gelöscht: `state.db`, `vectors.db`, den 785 MB grossen Tantivy-Index und die Wortliste des Messkorpus. Details, Schadensumfang und Wiederaufsatz stehen im Messbericht der Nachmessung. **Was das für jeden Betreiber bedeutet:** wer eine zweite Nextcloud zum Ausprobieren neben einer echten betreibt und beide am selben Docker-Dienst hängen lässt, kann mit einer Deinstallation in der Testinstanz den Datenbestand der echten löschen. Das ist kein Fehler dieser App und keiner dieses Skripts: der Volumenname ist eine Festlegung von AppAPI, und `--rm-data` tut genau, was es ankündigt. Es ist eine Falle der Topologie, sie ist hier zum ersten Mal ausgelöst worden, und sie gehört in jede Anleitung, die einen Testlauf neben einer echten Instanz beschreibt. |
-| **arm64-5** | Nach dem Verlust des Volumens durch arm64-4 blieb in der **anderen** Instanz eine AppAPI-Zeile ohne Container zurück. `app_api:app:unregister` scheitert dann mit `Failed to remove ExApp findling_backend` und nennt in seinem Hinweis selbst die Abhilfe: `--force`. Damit liess sich die Instanz sauber neu aufsetzen. Der Hinweis von AppAPI ist an dieser Stelle gut, und er ist hier festgehalten, weil ein Verwalter, der einen ExApp-Container von Hand entfernt hat, in genau dieselbe Lage kommt. |
+| **arm64-4** | **Der schwerste Befund dieses Laufs, und er hat Daten gekostet.** Zusage 3 führt `app_api:app:unregister --rm-data` aus. Der Name des Volumens leitet sich **allein aus der App-Kennung** ab (`nc_app_findling_backend_data`), und beide Nextcloud-Instanzen dieser Box hingen am **selben Docker-Dienst**. Der Lauf hat damit um 06:46Z das Volumen der **anderen**, produktiv genutzten Instanz gelöscht: `state.db`, `vectors.db`, den 785 MB großen Tantivy-Index und die Wortliste des Messkorpus. Details, Schadensumfang und Wiederaufsatz stehen im Messbericht der Nachmessung. **Was das für jeden Betreiber bedeutet:** wer eine zweite Nextcloud zum Ausprobieren neben einer echten betreibt und beide am selben Docker-Dienst hängen lässt, kann mit einer Deinstallation in der Testinstanz den Datenbestand der echten löschen. Das ist kein Fehler dieser App und keiner dieses Skripts: der Volumenname ist eine Festlegung von AppAPI, und `--rm-data` tut genau, was es ankündigt. Es ist eine Falle der Topologie, sie ist hier zum ersten Mal ausgelöst worden, und sie gehört in jede Anleitung, die einen Testlauf neben einer echten Instanz beschreibt. |
+| **arm64-5** | Nach dem Verlust des Volumens durch arm64-4 blieb in der **anderen** Instanz eine AppAPI-Zeile ohne Container zurück. `app_api:app:unregister` scheitert dann mit `Failed to remove ExApp findling_backend` und nennt in seinem Hinweis selbst die Abhilfe: `--force`. Damit ließ sich die Instanz sauber neu aufsetzen. Der Hinweis von AppAPI ist an dieser Stelle gut, und er ist hier festgehalten, weil ein Verwalter, der einen ExApp-Container von Hand entfernt hat, in genau dieselbe Lage kommt. |
 | **arm64-3** | Der `frpc`-Aufbau gelingt erst im zweiten Anlauf des Container-Starts. Der erste meldet `/certs/frp exists but client.crt, client.key or ca.crt is not readable by uid 1000`, konfiguriert den Tunnel ohne Client-Zertifikat und bekommt `connect to server error: EOF`; der Vorgang wird beendet (`status 143`), und der nächste Start findet die Zertifikate lesbar und baut den Tunnel mit gegenseitigem TLS auf. Das kostet rund eine halbe Sekunde und ist eine Zeitabhängigkeit zwischen HaRP und dem Container, nicht ein Fehler des Containers. Sie ist hier festgehalten, weil sie auf einer langsameren Maschine länger dauern könnte. |
 
 ### Was der arm64-Lauf gegenüber dem amd64-Lauf zeigt
@@ -609,7 +609,7 @@ Docker-Zustand (`compose down -v`, danach `compose up`).
    on this instance`. Protokoll: `.dev/sichtprobe/install-check-sichtprobe.log`.
 2. **Die Instanz des Owners.** Auf ihr laufen nur die Schritte 2 und 3 desselben
    Fahrplans, wörtlich in ihren Befehlen. Die Deinstallations-Zusagen sind hier
-   bewusst **nicht** wiederholt: sie reissen die Installation ab und bauen sie
+   bewusst **nicht** wiederholt: sie reißen die Installation ab und bauen sie
    wieder auf, und eine abgerissene und wieder aufgebaute Instanz ist nicht die
    Instanz, nach der D-H5 fragt.
 
@@ -636,7 +636,7 @@ Installation, danach keiner.
 
 ### Die fünf Dokumente, die der Owner durchsucht
 
-Nicht aus dem Referenzkorpus, und das ist Absicht: dessen Dateien heissen
+Nicht aus dem Referenzkorpus, und das ist Absicht: dessen Dateien heißen
 `09-bescheid.pdf` bis `39-...` und zehn von ihnen sind absichtlich beschädigt,
 weil der Fehlerweg das ist, worauf dieses Projekt geprüft wird. Eine Sichtprobe
 braucht das Gegenteil. Erzeugt von
@@ -673,7 +673,7 @@ Gefahren auf derselben Instanz, vor dem Hochladen der fünf Dokumente, weil die
 Probe den Index ausdrücklich antreibt und die Zero-Config-Aussage über die
 Dokumente des Owners eine Aussage über den gewöhnlichen Cron-Weg bleiben soll.
 Ergebnis: **bestanden**, vier Vergleiche, `guests` 4.9.0. Der Vorab-Vergleich des
-Eigentümers ist neu und schliesst DI-06.1-17. Die Einzelheiten stehen in
+Eigentümers ist neu und schließt DI-06.1-17. Die Einzelheiten stehen in
 `docs/testing.md`, Abschnitt "The guest user probe".
 
 ### Befund 8: Jedes Office-Dokument meldet sich als beschädigt, ab genügend CPU-Kernen
@@ -745,7 +745,7 @@ und **nicht im veröffentlichten Abbild**. Das Abbild
 deshalb bewusst auf dem **unveränderten** Abbild: sie zeigt, was das
 veröffentlichte Abbild heute tut, und nicht, was der Arbeitsbaum kann. Ein von
 Hand in den Container kopierter Fix hätte die Sichtprobe zu einer Probe über
-einen Arbeitsbaum gemacht, und das ist genau das, was D-H5 ausschliesst. Der
+einen Arbeitsbaum gemacht, und das ist genau das, was D-H5 ausschließt. Der
 Container ist nach der Nachstellung aus dem Abbild neu erzeugt worden;
 `docker diff` zeigt am Paket `findling` keine einzige Änderung.
 
@@ -772,14 +772,14 @@ nur diesen Lauf betreffen:
 
 ### APPSTORE_TOKEN: rotiert am 07.09.2026 um 11:01:21Z
 
-Pflichtpunkt 8 der Launch-Haertung, und er ist erledigt, bevor irgendetwas
-eingereicht wird. Das Token stand einmal im Gespraech und war damit im Umlauf.
+Pflichtpunkt 8 der Launch-Härtung, und er ist erledigt, bevor irgendetwas
+eingereicht wird. Das Token stand einmal im Gespräch und war damit im Umlauf.
 Der Betreiber hat es am 07.09.2026 ersetzt und das alte widerrufen; ein
-ersetztes Token, das noch gilt, waere kein rotiertes Token.
+ersetztes Token, das noch gilt, wäre kein rotiertes Token.
 
-Nachgeprueft und nicht geglaubt: `gh secret list` fuehrt `APPSTORE_TOKEN` mit
+Nachgeprüft und nicht geglaubt: `gh secret list` führt `APPSTORE_TOKEN` mit
 dem Zeitstempel `2026-09-07T11:01:21Z`, also mit dem Zeitpunkt der Rotation und
-nicht mit einem aelteren. Der Wert selbst existiert ausschliesslich im
+nicht mit einem älteren. Der Wert selbst existiert ausschließlich im
 Secret-Store von GitHub und steht in keinem Artefakt dieses Repositories, auch
 nicht in einer Zusammenfassung.
 
@@ -847,7 +847,7 @@ Erstinstallation steht in Abschnitt 6 und bleibt dort.
 Der Index ist mit `occ findling:index --restart` neu aufgebaut, dem Befehl, den
 die Verwaltungsseite selbst als `rules.restartCommand` nennt. Das ist ein
 getriebener Schritt und keine Zero-Config-Aussage: ohne ihn wären die Urteile des
-alten Baus stehen geblieben, einschliesslich der vier `corrupt`, die diese Runde
+alten Baus stehen geblieben, einschließlich der vier `corrupt`, die diese Runde
 widerlegen soll.
 
 ### Kontrollergebnis 1: die Suche
@@ -886,7 +886,7 @@ findbar, und die drei Wege, die schon vorher trugen, tragen weiter.
 | übersprungen | 16 | 16 |
 | **fehlgeschlagen (Container)** | **4** | **0** |
 | Fehlergründe des Containers | `corrupt 4` | **keine** |
-| Indexgrösse | 743.426 Byte | 851.188 Byte |
+| Indexgröße | 743.426 Byte | 851.188 Byte |
 | Lockstep | `match`, 1.0.0 / 1.0.0 | `match`, 1.0.0 / 1.0.0 |
 
 Die Deckung sinkt um einen Prozentpunkt und steigt in absoluten Zahlen, und beides
@@ -998,35 +998,35 @@ beseitigen soll:
 
 - `scripts/dev/aio_install_check.sh` liest in der Vorprüfung
   `overwrite.cli.url` und meldet einen **Befund**, wenn er nicht zu `--url` passt.
-  Ausdruecklich kein Abbruch: eine Instanz, die nur über API gefahren wird, ist so
+  Ausdrücklich kein Abbruch: eine Instanz, die nur über API gefahren wird, ist so
   zulässig eingerichtet, und die Abhilfe gehört dem, der sie aufgesetzt hat.
 - der Wegwerf-Stack der Sichtprobe setzt `OVERWRITECLIURL`, `OVERWRITEHOST` und
   `OVERWRITEPROTOCOL` aus dem Port, damit dieselbe Falle sich nicht wiederholt.
 
 ### Die Abnahme, 07.09.2026
 
-**Der Owner hat die Launch-Haertung abgenommen.** Der Wortlaut, zitiert und nicht
+**Der Owner hat die Launch-Härtung abgenommen.** Der Wortlaut, zitiert und nicht
 zusammengefasst:
 
 > ok abgenommen weiter der rest wie deine empfehlung
 
-Damit ist **D-H5 erfuellt**: der Owner hat auf einer frisch installierten
-Nextcloud, die beide Haelften ueber den Store-Weg aus den Release-Paketdateien
-bekommen hat, selbst gesucht und gefunden. Er hat die Treffer der fuenf Suchwoerter
-einschliesslich der beiden Office-Dokumente und die Verwaltungsseite im Browser
+Damit ist **D-H5 erfüllt**: der Owner hat auf einer frisch installierten
+Nextcloud, die beide Hälften über den Store-Weg aus den Release-Paketdateien
+bekommen hat, selbst gesucht und gefunden. Er hat die Treffer der fünf Suchwörter
+einschließlich der beiden Office-Dokumente und die Verwaltungsseite im Browser
 gesehen, in der zweiten Runde und damit auf dem Abbild, das den Fix des Befundes 8
-wirklich traegt. Die Bildschirmaufnahmen liegen beim Orchestrator.
+wirklich trägt. Die Bildschirmaufnahmen liegen beim Orchestrator.
 
 Zwei Punkte hat er im selben Zug mitentschieden, und beide sind damit von der
 Abnahme gedeckt statt Nacharbeit hinter ihr:
 
 | Punkt | Entscheidung |
 |---|---|
-| Befund 9, das stehengebliebene `failed`-Urteil der PHP-Haelfte | wird **vor der Abgabe** behoben, in einem eigenen Plan |
-| Die Regressionsluecke, durch die Befund 8 fuenf Phasen fiel (kein Integrationsjob fuehrt ein Office-Dokument ueber den bewachten Pfad auf einer vielkernigen Maschine) | wird **vor der Abgabe** geschlossen, im selben Plan |
+| Befund 9, das stehengebliebene `failed`-Urteil der PHP-Hälfte | wird **vor der Abgabe** behoben, in einem eigenen Plan |
+| Die Regressionslücke, durch die Befund 8 fünf Phasen fiel (kein Integrationsjob führt ein Office-Dokument über den bewachten Pfad auf einer vielkernigen Maschine) | wird **vor der Abgabe** geschlossen, im selben Plan |
 
 Beides legt der Orchestrator als Plan 06.1-24 an. Erst danach beginnt Plan 06-12,
-die gebuendelte Abgabe des Erstrelease.
+die gebündelte Abgabe des Erstrelease.
 
-Die Instanz auf Port 8097 bleibt zunaechst stehen, damit der Owner weiter
+Die Instanz auf Port 8097 bleibt zunächst stehen, damit der Owner weiter
 ausprobieren kann; ihr Abbau ist Sache des Orchestrators und nicht dieses Plans.

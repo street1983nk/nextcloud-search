@@ -345,7 +345,7 @@ sed -e 's|<registry>ghcr.io</registry>|<registry>localhost:5000</registry>|' \
     backend/appinfo/info.xml > .dev/harp/info-local.xml
 ```
 
-Die temporäre Datei ist ausschliesslich für die Anmeldung. Die Release-Paketdatei
+Die temporäre Datei ist ausschließlich für die Anmeldung. Die Release-Paketdatei
 trägt `backend/appinfo/info.xml` unverändert, weil AppAPI die Routenliste beim
 Installieren aus der Paketdatei liest: ein Tarball mit ersetzten Werten wäre eine App
 ohne Suchroute, und zwar ohne Fehlermeldung.
@@ -368,7 +368,7 @@ HaRP, dann kann der Container das Ende seiner Initialisierung nicht melden: das
 `PUT /ocs/v1.php/apps/app_api/ex-app/status` läuft in einen 404, und
 `app_api:app:register --wait-finish` wartet genau auf diese Meldung
 (`ExAppService::waitInitStepFinish`). Der Aufruf läuft in seinen Zeitdeckel,
-obwohl der Container gesund ist und die Suche antwortet. Wer das nicht weiss,
+obwohl der Container gesund ist und die Suche antwortet. Wer das nicht weiß,
 sucht den Fehler in Findling. Steht dort umgekehrt die Instanz selbst, gehen die
 Heartbeats an den Webserver, der ebenfalls mit 404 antwortet.
 
@@ -424,7 +424,7 @@ docker compose exec -T app curl -s -o /dev/null -w '%{http_code}\n' \
   http://findling-harp-frontproxy:8098/exapps/app_api/v1.44/_ping
 ```
 
-Zweimal `200` heisst, dass eine Adresse beide Hälften bedient. Der Vorproxy ist
+Zweimal `200` heißt, dass eine Adresse beide Hälften bedient. Der Vorproxy ist
 kein Bestandteil von `compose-harp.yaml`, weil er kein Bestandteil des Produkts
 ist: er ersetzt hier nur das, was auf einer echten Instanz der Webserver vor
 Nextcloud ohnehin tut.
@@ -481,9 +481,9 @@ docker volume ls --filter name=findling_backend --format '{{.Name}}'
 occ app_api:app:list
 ```
 
-Beide Filterbefehle müssen etwas ausgeben. Eine leere Ausgabe heisst, dass der
+Beide Filterbefehle müssen etwas ausgeben. Eine leere Ausgabe heißt, dass der
 Daemon nichts erzeugt hat, und ist der Fehlerfall, den dieser Stack sichtbar
-machen soll. Gemessen am 03.09.2026 heissen die beiden
+machen soll. Gemessen am 03.09.2026 heißen die beiden
 `nc_app_findling_backend` und `nc_app_findling_backend_data`; die Namen baut
 AppAPI aus der App-Id, sie sind nicht zu raten und deshalb hier nur als
 Orientierung notiert.
@@ -524,7 +524,7 @@ liegen. Was dabei genau verschwindet, steht in `docs/uninstall.md`.
 
 Für die tägliche Arbeit bleibt `scripts/dev/compose.yaml` der schnellere Weg.
 Jede Änderung am Backend kostet hier einen Bildneubau und ein erneutes
-Hochladen, also Minuten statt Sekunden, und der Container muss anschliessend neu
+Hochladen, also Minuten statt Sekunden, und der Container muss anschließend neu
 angelegt werden. Dieser Stack ist für die Frage da, ob die Installation
 funktioniert, nicht für die Frage, ob der Code funktioniert.
 
