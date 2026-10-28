@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
 status: executing
-stopped_at: 40-01 fertig (Audit 1.6.0 geschlossen, 0 CRIT/HIGH/MEDIUM, 4 LOW gefixt, 2 akzeptiert; Code-Kopf efcf26c5 auf acht Workflows gruen), naechster Plan 40-02
-last_updated: "2026-10-28T14:19:03.088Z"
-last_activity: 2026-10-28, Plan 40-01 abgeschlossen (40-AUDIT.md status fixed, head_green.sh)
+stopped_at: 40-02 fertig (Version 1.6.0 in beiden Apps, Migration Version001600, CHANGELOG 1.6.0; Kopf 631763b5 auf acht Workflows gruen, installed_version 1.4.3 -> 1.6.0), naechster Plan 40-03
+last_updated: "2026-10-28T19:50:00.000Z"
+last_activity: 2026-10-28, Plan 40-02 abgeschlossen (1.6.0, HaRP deploy 40750963299 gruen)
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 8
-  completed_plans: 5
+  completed_plans: 6
   percent: 50
 ---
 
@@ -62,6 +62,7 @@ Progress: [██████░░░░] 63%
 - v1.5: 31-15 in ca. 250 min inkl. ca. 75 min Volltestläufe und ca. 60 min CI (3 Tasks, 16 Dateien)
 - v1.6: 38-02 in ca. 130 min inkl. ca. 90 min CI (3 Tasks, 5 Dateien)
 - v1.6: 40-01 in ca. 190 min inkl. ca. 11 min Volltestlauf und ca. 55 min CI (3 Tasks, 13 Dateien)
+- v1.6: 40-02 in ca. 75 min inkl. ca. 40 min CI (2 Tasks, 7 Dateien)
 - v1.5: 32-01 in ca. 50 min inkl. ca. 12 min Volltestlauf und ca. 25 min CI (2 Tasks, 8 Dateien)
 - v1.5: 32-02 in ca. 120 min inkl. Flake-Fix vorab, ca. 25 min Volltestläufe und ca. 45 min CI (2 Tasks, 9 Dateien)
 - v1.5: 32-03 in ca. 150 min inkl. ca. 7 min Korpus, ca. 35 min Messung, ca. 25 min Volltestläufe und ca. 30 min CI (2 Tasks, 5 Dateien plus Rohdaten)
