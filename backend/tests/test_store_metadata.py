@@ -395,6 +395,10 @@ MEASURED_FIGURE = re.compile(r"\d+(?:[.,]\d+)?\s(?:MB|Mo)\b")
 # docs/store-listing.md says EXACTLY ONE cross reference to the MCP Connector,
 # so a second sentence breaks the rule just as a missing one does, and a gate
 # that only asked whether the sentence is there would be blind to half of it.
+#
+# Confirmed unchanged by the owner on 28.10.2026 (D-37-08, option a, phase 37):
+# the three sentences stay character for character, the tension between their
+# RAG wording and the rule of docs/store-listing.md left as it is on purpose.
 CONNECTOR_SENTENCES = {
     DEFAULT_LANGUAGE: (
         "Together with the [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector), Findling "
@@ -506,6 +510,35 @@ FORMATS_OF_1_5 = ("DOC", "XLS", "EML", "ZIP", "HEIC")
 # owner approves at REL-05 and the texts that travel with the release cannot
 # say two different things (the pattern of the Czech entry in plan 30-08).
 DRAFT_OF_PHASE_31 = "# Entwurf v1.5.0 (Teil Phase 31)"
+
+# The store ids of the two halves (STORE-01). The store entry, the update chain
+# of every installation and every occ command hang on them, so they never
+# change, not even when the visible name does: a renamed id is a new app in the
+# eyes of the store, and the installed one would stop receiving updates.
+APP_IDS = {PHP_INFO: "findling", BACKEND_INFO: "findling_backend"}
+
+# The visible names, by half and language (STORE-01, owner decisions D-37-05
+# and D-37-06, approved on 28.10.2026 in
+# .planning/phases/37-owner-tor-und-store-sichtbarkeit/37-OWNER-ENTSCHEIDE.md).
+# They are the names shipped since 1.5.1; the gate holds them so that the next
+# round of text work cannot quietly move the store ranking lever of 22.10.2026.
+STORE_NAMES = {
+    PHP_INFO: {DEFAULT_LANGUAGE: "Findling Search", "de": "Findling Suche", "fr": "Findling Recherche"},
+    BACKEND_INFO: {DEFAULT_LANGUAGE: "Findling Backend", "de": "Findling Backend", "fr": "Findling Backend"},
+}
+
+# The discussion link of both halves (STORE-02, owner decision D-37-07): the
+# forum thread 249775 of the owner strategy of 24.10.2026. The store page shows
+# it as "Discussion", and it is the one place where a question about Findling
+# lands in front of the people who answer it.
+DISCUSSION_URL = "https://help.nextcloud.com/t/findling-1-2-0-and-mcp-connector-0-2-1-released/249775"
+
+# Where the wordings of phase 37 are drafted, how the draft opens, and the
+# approval date its heading line has to carry (the pattern of the drafts of
+# phase 31 and of the full text of 1.5.0). The heading line goes on after the
+# opening, so it is matched with startswith and not as a whole line.
+DRAFT_OF_PHASE_37 = "# Entwurf v1.6.0 (Teil Phase 37)"
+APPROVAL_DATE = re.compile(r"abgenommen am \d{2}\.\d{2}\.\d{4}")
 
 
 def _named(language: str) -> str:
@@ -1241,6 +1274,144 @@ def scan_file_types_against_draft(name: str, source: str, listing: str) -> list[
     return violations
 
 
+def _table_language(language: str) -> str:
+    """How a language is spelled in the name table of the draft of phase 37."""
+    return "en" if language == DEFAULT_LANGUAGE else language
+
+
+def scan_identity(name: str, source: str, expected_id: str, expected_names: dict[str, str]) -> list[str]:
+    """The app id and the visible name in every language of one info.xml (STORE-01).
+
+    Only direct children of the root count: the navigation entry of the
+    companion half carries an id and a name of its own, and those are the
+    business of the navigation, not of the store entry.
+    """
+    try:
+        info = ElementTree.fromstring(strip_xml_comments(source))  # noqa: S314
+    except ElementTree.ParseError as broken:
+        return [f"{name}: is not well formed XML ({broken})"]
+
+    violations: list[str] = []
+    ids = [(element.text or "").strip() for element in info.findall("id")]
+    if ids != [expected_id]:
+        violations.append(
+            f"{name}: carries the app id {ids!r} where the store, the update chain and occ "
+            f"expect {expected_id!r} (STORE-01)"
+        )
+
+    for language, expected in expected_names.items():
+        names = [
+            (element.text or "").strip()
+            for element in info.findall("name")
+            if element.get("lang", DEFAULT_LANGUAGE) == language
+        ]
+        if names != [expected]:
+            violations.append(
+                f"{name}: the name for {_named(language)} is {names!r}, and the owner approved "
+                f"{expected!r} (STORE-01, D-37-05/D-37-06)"
+            )
+
+    return violations
+
+
+def scan_discussion(name: str, source: str) -> list[str]:
+    """Exactly one discussion element with the approved URL, between website and bugs (STORE-02).
+
+    The order is the schema's: info.xsd lists website, discussion and bugs in
+    this sequence, and a document that breaks it fails the store upload, which
+    would only show at the submission of phase 40.
+    """
+    try:
+        info = ElementTree.fromstring(strip_xml_comments(source))  # noqa: S314
+    except ElementTree.ParseError as broken:
+        return [f"{name}: is not well formed XML ({broken})"]
+
+    found = info.findall("discussion")
+    if len(found) != 1:
+        return [
+            (
+                f"{name}: carries {len(found)} discussion elements, and the store page links exactly one "
+                f"(STORE-02, D-37-07)"
+            )
+        ]
+
+    violations: list[str] = []
+    address = (found[0].text or "").strip()
+    if address != DISCUSSION_URL:
+        violations.append(
+            f"{name}: the discussion element points to {address!r}, and the owner approved {DISCUSSION_URL!r} (D-37-07)"
+        )
+
+    children = list(info)
+    position = children.index(found[0])
+    before = children[position - 1].tag if position > 0 else None
+    after = children[position + 1].tag if position + 1 < len(children) else None
+    if before != "website" or after != "bugs":
+        violations.append(
+            f"{name}: the discussion element stands between {before!r} and {after!r}, "
+            f"and the schema order is website, discussion, bugs"
+        )
+
+    return violations
+
+
+def scan_phase_37_draft(source: str) -> list[str]:
+    """The draft of phase 37 in docs/store-listing.md against the wordings the info.xml carry.
+
+    The section opens with the first line that starts with DRAFT_OF_PHASE_37
+    and reaches up to the next heading of the first level, or to the end of the
+    file. Whatever stands after that heading is another section and does not
+    count, so a wording cannot be found by accident further down the file.
+    """
+    offset = 0
+    heading = None
+    for line in source.splitlines(keepends=True):
+        if line.startswith(DRAFT_OF_PHASE_37):
+            heading = line.rstrip("\r\n")
+            break
+        offset += len(line)
+    if heading is None:
+        return [f"docs/store-listing.md: has no section {DRAFT_OF_PHASE_37!r}"]
+
+    section = source[offset:].split("\n# ", 1)[0]
+    flat = collapse(section)
+    violations: list[str] = []
+
+    if APPROVAL_DATE.search(heading) is None:
+        violations.append(
+            f"docs/store-listing.md: the heading {heading!r} carries no approval date "
+            f"in the form 'abgenommen am TT.MM.JJJJ'"
+        )
+    if DISCUSSION_URL not in flat:
+        violations.append(
+            f"docs/store-listing.md: the section {DRAFT_OF_PHASE_37!r} does not carry the discussion URL "
+            f"{DISCUSSION_URL!r} (D-37-07)"
+        )
+    for language, sentence in CONNECTOR_SENTENCES.items():
+        if sentence not in flat:
+            violations.append(
+                f"docs/store-listing.md: the section {DRAFT_OF_PHASE_37!r} does not carry the cross reference "
+                f"to the MCP Connector for {_named(language)} character for character (D-37-08)"
+            )
+
+    rows = [
+        [cell.strip() for cell in line.strip().strip("|").split("|")]
+        for line in section.splitlines()
+        if line.startswith("|")
+    ]
+    for path, names in STORE_NAMES.items():
+        app = APP_IDS[path]
+        for language, value in names.items():
+            label = _table_language(language)
+            if not any(len(row) >= 3 and row[0] == app and row[1] == label and row[-1] == value for row in rows):
+                violations.append(
+                    f"docs/store-listing.md: the section {DRAFT_OF_PHASE_37!r} has no table row naming "
+                    f"{app} for {_named(language)} as {value!r} (D-37-05/D-37-06)"
+                )
+
+    return violations
+
+
 def _sources() -> list[tuple[str, str]]:
     """The three files this gate reads, as (name, source)."""
     return [(path.name, path.read_text(encoding="utf-8")) for path in (PHP_INFO, BACKEND_INFO, README)]
@@ -1450,6 +1621,35 @@ def test_every_file_type_list_stands_in_the_draft_of_phase_31_character_for_char
     ]
 
     assert violations == []
+
+
+def test_both_info_files_keep_their_identity_the_app_ids_and_the_approved_names() -> None:
+    # STORE-01, D-37-05 and D-37-06: the ids never move, the names are the
+    # owner's of 28.10.2026.
+    violations = [
+        message
+        for path, app_id in APP_IDS.items()
+        for message in scan_identity(
+            f"{path.parent.parent.name}/appinfo/info.xml", path.read_text(encoding="utf-8"), app_id, STORE_NAMES[path]
+        )
+    ]
+
+    assert violations == []
+
+
+def test_both_info_files_carry_the_one_discussion_link_between_website_and_bugs() -> None:
+    # STORE-02, D-37-07.
+    violations = [
+        message
+        for path in (PHP_INFO, BACKEND_INFO)
+        for message in scan_discussion(f"{path.parent.parent.name}/appinfo/info.xml", path.read_text(encoding="utf-8"))
+    ]
+
+    assert violations == []
+
+
+def test_the_draft_of_phase_37_carries_its_approval_date_and_every_wording_it_holds() -> None:
+    assert scan_phase_37_draft(STORE_LISTING.read_text(encoding="utf-8")) == []
 
 
 # -- self tests: the gate has to report every shape it judges --------------
@@ -1965,6 +2165,230 @@ def test_a_store_listing_without_the_draft_of_phase_31_is_reported() -> None:
     violations = scan_file_types_against_draft("php/appinfo/info.xml", PHP_INFO.read_text(encoding="utf-8"), listing)
 
     assert violations == ["docs/store-listing.md: has no section '# Entwurf v1.5.0 (Teil Phase 31)'"]
+
+
+# -- self tests for the identity, the discussion link and the draft of phase 37 --
+
+
+def test_a_changed_app_id_is_reported_as_an_identity_finding_with_old_and_new_id() -> None:
+    source = PHP_INFO.read_text(encoding="utf-8")
+    assert source.count("\t<id>findling</id>\n\t<!--") == 1
+
+    violations = scan_identity(
+        "php/appinfo/info.xml",
+        source.replace("\t<id>findling</id>\n\t<!--", "\t<id>findling_search</id>\n\t<!--", 1),
+        APP_IDS[PHP_INFO],
+        STORE_NAMES[PHP_INFO],
+    )
+
+    assert violations == [
+        (
+            "php/appinfo/info.xml: carries the app id ['findling_search'] where the store, the update chain "
+            "and occ expect 'findling' (STORE-01)"
+        )
+    ]
+
+
+def test_a_name_that_differs_in_one_language_is_reported_as_an_identity_finding() -> None:
+    source = PHP_INFO.read_text(encoding="utf-8")
+    line = '<name lang="fr">Findling Recherche</name>'
+    assert line in source
+
+    violations = scan_identity(
+        "php/appinfo/info.xml",
+        source.replace(line, '<name lang="fr">Findling Search</name>', 1),
+        APP_IDS[PHP_INFO],
+        STORE_NAMES[PHP_INFO],
+    )
+
+    assert violations == [
+        (
+            "php/appinfo/info.xml: the name for lang=fr is ['Findling Search'], and the owner approved "
+            "'Findling Recherche' (STORE-01, D-37-05/D-37-06)"
+        )
+    ]
+
+
+def test_the_backend_name_is_held_in_every_language_by_the_identity_scan() -> None:
+    source = BACKEND_INFO.read_text(encoding="utf-8")
+    line = "\t<name>Findling Backend</name>\n"
+    assert line in source
+
+    violations = scan_identity(
+        "backend/appinfo/info.xml",
+        source.replace(line, "\t<name>Findling Search Backend</name>\n", 1),
+        APP_IDS[BACKEND_INFO],
+        STORE_NAMES[BACKEND_INFO],
+    )
+
+    assert len(violations) == 1
+    assert "the English default" in violations[0]
+
+
+_CLEAN_LINKS = f"""<?xml version="1.0"?>
+<info>
+\t<id>findling</id>
+\t<category>search</category>
+\t<website>https://github.com/street1983nk/nextcloud-search</website>
+\t<discussion>{DISCUSSION_URL}</discussion>
+\t<bugs>https://github.com/street1983nk/nextcloud-search/issues</bugs>
+\t<repository type="git">https://github.com/street1983nk/nextcloud-search.git</repository>
+</info>
+"""
+_DISCUSSION_LINE = f"\t<discussion>{DISCUSSION_URL}</discussion>\n"
+
+
+def test_the_clean_discussion_sample_is_clean() -> None:
+    assert scan_discussion("sample.xml", _CLEAN_LINKS) == []
+
+
+def test_a_missing_discussion_element_is_reported() -> None:
+    violations = scan_discussion("sample.xml", _CLEAN_LINKS.replace(_DISCUSSION_LINE, ""))
+
+    assert violations == [
+        "sample.xml: carries 0 discussion elements, and the store page links exactly one (STORE-02, D-37-07)"
+    ]
+
+
+def test_a_doubled_discussion_element_is_reported() -> None:
+    violations = scan_discussion("sample.xml", _CLEAN_LINKS.replace(_DISCUSSION_LINE, _DISCUSSION_LINE * 2))
+
+    assert violations == [
+        "sample.xml: carries 2 discussion elements, and the store page links exactly one (STORE-02, D-37-07)"
+    ]
+
+
+def test_a_discussion_element_with_another_url_is_reported() -> None:
+    other = "https://help.nextcloud.com/t/something-else/1"
+    violations = scan_discussion("sample.xml", _CLEAN_LINKS.replace(DISCUSSION_URL, other))
+
+    assert violations == [
+        (f"sample.xml: the discussion element points to {other!r}, and the owner approved {DISCUSSION_URL!r} (D-37-07)")
+    ]
+
+
+def test_a_discussion_element_behind_bugs_is_reported() -> None:
+    bugs = "\t<bugs>https://github.com/street1983nk/nextcloud-search/issues</bugs>\n"
+    moved = _CLEAN_LINKS.replace(_DISCUSSION_LINE, "").replace(bugs, bugs + _DISCUSSION_LINE)
+
+    violations = scan_discussion("sample.xml", moved)
+
+    assert violations == [
+        (
+            "sample.xml: the discussion element stands between 'bugs' and 'repository', "
+            "and the schema order is website, discussion, bugs"
+        )
+    ]
+
+
+def test_a_discussion_element_inside_a_comment_does_not_count() -> None:
+    commented = _CLEAN_LINKS.replace(_DISCUSSION_LINE, f"\t<!--{_DISCUSSION_LINE.strip()}-->\n")
+
+    assert len(scan_discussion("sample.xml", commented)) == 1
+
+
+def _phase_37_sample(heading: str = f"{DRAFT_OF_PHASE_37}, abgenommen am 28.10.2026") -> str:
+    """A store listing whose draft of phase 37 carries every wording the gate asks for."""
+    rows = [
+        f"| {APP_IDS[path]} | {_table_language(language)} | name | {value} |"
+        for path, names in STORE_NAMES.items()
+        for language, value in names.items()
+    ]
+    return "\n".join(
+        [
+            "# Entwurf v1.5.0 (Gesamttext), abgenommen am 20.10.2026",
+            "",
+            "Earlier text.",
+            "",
+            "---",
+            "",
+            heading,
+            "",
+            "| App | Sprache | Element | Wert |",
+            "|-----|---------|---------|------|",
+            *rows,
+            "",
+            f"discussion: {DISCUSSION_URL}",
+            "",
+            *CONNECTOR_SENTENCES.values(),
+            "",
+            "---",
+            "",
+            "# Release 1.5.1 (22.10.2026): Umbenennung",
+            "",
+            "Later text.",
+            "",
+        ]
+    )
+
+
+def test_the_clean_phase_37_sample_is_clean() -> None:
+    assert scan_phase_37_draft(_phase_37_sample()) == []
+
+
+def test_a_store_listing_without_the_draft_of_phase_37_is_reported() -> None:
+    listing = _phase_37_sample().replace(DRAFT_OF_PHASE_37, "# Gone", 1)
+
+    assert scan_phase_37_draft(listing) == ["docs/store-listing.md: has no section '# Entwurf v1.6.0 (Teil Phase 37)'"]
+
+
+def test_a_phase_37_heading_without_a_proper_approval_date_is_reported() -> None:
+    for heading in (DRAFT_OF_PHASE_37, f"{DRAFT_OF_PHASE_37}, abgenommen am 2.11.26"):
+        violations = scan_phase_37_draft(_phase_37_sample(heading))
+
+        assert violations == [
+            (
+                f"docs/store-listing.md: the heading {heading!r} carries no approval date "
+                f"in the form 'abgenommen am TT.MM.JJJJ'"
+            )
+        ]
+
+
+def test_a_phase_37_section_without_the_discussion_url_is_reported() -> None:
+    listing = _phase_37_sample().replace(f"discussion: {DISCUSSION_URL}", "discussion: none")
+
+    assert scan_phase_37_draft(listing) == [
+        (
+            f"docs/store-listing.md: the section {DRAFT_OF_PHASE_37!r} does not carry the discussion URL "
+            f"{DISCUSSION_URL!r} (D-37-07)"
+        )
+    ]
+
+
+def test_a_wording_after_the_next_heading_of_phase_37_does_not_count() -> None:
+    # The URL leaves the section and turns up in the section after it; the
+    # gate still misses it, because that text belongs to another section.
+    listing = (
+        _phase_37_sample()
+        .replace(f"discussion: {DISCUSSION_URL}", "discussion: none")
+        .replace("Later text.", f"Later text with {DISCUSSION_URL}.")
+    )
+
+    assert len(scan_phase_37_draft(listing)) == 1
+    assert "does not carry the discussion URL" in scan_phase_37_draft(listing)[0]
+
+
+def test_a_phase_37_section_with_a_reworded_connector_sentence_is_reported_by_language() -> None:
+    listing = _phase_37_sample().replace("ergibt Findling", "bildet Findling", 1)
+
+    violations = scan_phase_37_draft(listing)
+
+    assert len(violations) == 1
+    assert "lang=de" in violations[0]
+    assert "D-37-08" in violations[0]
+
+
+def test_a_phase_37_section_with_a_wrong_name_is_reported_with_app_and_language() -> None:
+    listing = _phase_37_sample().replace(
+        "| findling | fr | name | Findling Recherche |", "| findling | fr | name | Findling |"
+    )
+
+    assert scan_phase_37_draft(listing) == [
+        (
+            f"docs/store-listing.md: the section {DRAFT_OF_PHASE_37!r} has no table row naming "
+            f"findling for lang=fr as 'Findling Recherche' (D-37-05/D-37-06)"
+        )
+    ]
 
 
 # -- the store rules that no schema of ours states: images and the two lists --
