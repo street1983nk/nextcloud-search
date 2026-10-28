@@ -1,0 +1,100 @@
+name: SMB ACL measurement
+
+# Measurement A6 of the dedup note (35-DEDUP-NOTIZ, owner decision D-37-04,
+# plan 39-04). The question it answers: does a Nextcloud SMB mount with user
+# specific credentials list a file whose content the logged in user may not
+# read on the SMB server, does isReadable() say true for it, and what does a
+# download return, once without and once with the check_acl option of the SMB
+# backend. The answer decides whether Weg A (one canonical read per share path,
+# aliases for the other users) could ever be offered as an admin opt-in.
+#
+# What it builds. Samba from the Ubuntu archive on the runner, a share with
+# acl_xattr, two Samba users and two files, one of them with an explicit
+# DENY read ACE for the second user. A positive control at the Samba server
+# itself comes first: the first user reads the file, the second does not, and
+# a run where that fails is invalid and red. Then a throwaway Nextcloud through
+# setup-test-nc (no container image anywhere), the mount with "Log-in
+# credentials, save in database", and the three measurements per pass and
+# per user. The result table goes to the job summary and to an artifact.
+#
+# Dispatch only. It measures one property of Nextcloud, not of this code, and
+# nothing about the answer changes between two commits of this repository.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smb-acl-measure:
+    name: smb-acl-measure
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    env:
+      # setup-test-nc requires both inputs even when no ExApp is registered.
+      EXAPP_SECRET: '12345'
+      EXAPP_PORT: '10035'
+
+    steps:
+      # Same order as in integration.yml: the server checkout empties the
+      # workspace root, the second checkout brings the composite action.
+      - name: Check out nextcloud/server
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: nextcloud/server
+          ref: stable34
+          submodules: recursive
+
+      - name: Check out findling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: findling-src
+
+      - name: Set up the test Nextcloud without registering the ExApp
+        uses: ./findling-src/.github/actions/setup-test-nc
+        with:
+          server-version: stable34
+          php-version: '8.2'
+          exapp-secret: ${{ env.EXAPP_SECRET }}
+          exapp-port: ${{ env.EXAPP_PORT }}
+          register-exapp: 'false'
+
+      - name: Empty skeleton
+        run: ./occ config:system:set skeletondirectory --value=''
+
+      - name: Measure listing, isReadable() and download on the SMB mount
+        env:
+          NC_URL: 'http://localhost:8080'
+          OCC: './occ'
+          PROBE: 'findling-src/scripts/ci/smb_acl_probe.php'
+          RESULT_FILE: ${{ runner.temp }}/smb-acl-result.md
+        run: bash findling-src/scripts/ci/smb_acl_measure.sh
+
+      - name: Result table to the job summary
+        if: always()
+        env:
+          RESULT_FILE: ${{ runner.temp }}/smb-acl-result.md
+        run: |
+          if [ -f "${RESULT_FILE}" ]; then
+            cat "${RESULT_FILE}" >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "no result table written" >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+      - name: Upload the result table
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: smb-acl-result
+          path: ${{ runner.temp }}/smb-acl-result.md
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Everything the failure had to say
+        if: failure()
+        run: |
+          echo "--- nextcloud ---"
+          tail -n 200 data/nextcloud.log || echo "no data/nextcloud.log written"
+          echo "--- smbd ---"
+          sudo tail -n 100 /var/log/samba/log.smbd || echo "no smbd log written"
