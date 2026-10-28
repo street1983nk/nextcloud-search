@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
 status: executing
-stopped_at: Completed 38-01-PLAN.md
-last_updated: "2026-10-28T12:58:24.075Z"
-last_activity: 2026-10-28, Plan 38-01 abgeschlossen (frpc-Waechter in harp_connect.sh, Stub-Tests, shellcheck-Gate; CI-Lauf nach Push offen)
+stopped_at: Completed 38-02-PLAN.md
+last_updated: "2026-10-28T14:19:03.088Z"
+last_activity: 2026-10-28, Plan 38-02 abgeschlossen (deploy-harp 40696292903 gruen auf allen vier Beinen, Heilung 8 bis 19 s nach dem Kopieren)
 progress:
   total_phases: 4
-  completed_phases: 1
-  total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_phases: 2
+  total_plans: 8
+  completed_plans: 5
+  percent: 50
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 Siehe .planning/PROJECT.md (Stand nach v1.5, Milestone v1.6 gestartet) und .planning/MILESTONES.md (v1.0 bis v1.5).
 
 **Core Value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 38, Zertifikatsrotation ohne Admin-Eingriff (38-01 erledigt, 38-02 offen)
+**Current focus:** Phase 38, Zertifikatsrotation ohne Admin-Eingriff (38-01 und 38-02 erledigt, Phasenverifikation offen)
 
 ## Current Position
 
 Phase: 38 von 37-40 (Zertifikatsrotation ohne Admin-Eingriff)
-Plan: 38-01 erledigt (1 von 2; python.yml-Lauf mit Waechtertests und shellcheck offen bis zum Push durch den Koordinator)
+Plan: 38-02 erledigt (2 von 2)
 Status: Phase 38 in progress
-Last activity: 2026-10-28, Plan 38-01 abgeschlossen (frpc-Waechter in harp_connect.sh, Stub-Tests, shellcheck-Gate)
+Last activity: 2026-10-28, Plan 38-02 abgeschlossen (deploy-harp 40696292903 gruen auf allen vier Beinen, Heilung 8 bis 19 s nach dem Kopieren)
 
-Progress: [████████░░] 75%
+Progress: [██████░░░░] 63%
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ Progress: [████████░░] 75%
 - v1.5: 31-13 in ca. 115 min inkl. ca. 50 min CI und ca. 25 min Volltestläufe (2 Tasks, 4 Dateien)
 - v1.5: 31-14 in ca. 60 min inkl. ca. 27 min Volltestläufe und ca. 20 min CI (2 Tasks, 11 Dateien)
 - v1.5: 31-15 in ca. 250 min inkl. ca. 75 min Volltestläufe und ca. 60 min CI (3 Tasks, 16 Dateien)
+- v1.6: 38-02 in ca. 130 min inkl. ca. 90 min CI (3 Tasks, 5 Dateien)
 - v1.5: 32-01 in ca. 50 min inkl. ca. 12 min Volltestlauf und ca. 25 min CI (2 Tasks, 8 Dateien)
 - v1.5: 32-02 in ca. 120 min inkl. Flake-Fix vorab, ca. 25 min Volltestläufe und ca. 45 min CI (2 Tasks, 9 Dateien)
 - v1.5: 32-03 in ca. 150 min inkl. ca. 7 min Korpus, ca. 35 min Messung, ca. 25 min Volltestläufe und ca. 30 min CI (2 Tasks, 5 Dateien plus Rohdaten)
@@ -100,6 +101,7 @@ Progress: [████████░░] 75%
 - Store-Wortlaute fuer Plan 37-02 (D-37-05 bis D-37-08): Namen bleiben wie seit 1.5.1 (Findling Search/Suche/Recherche, Findling Backend), discussion-Link auf Forum-Thread 249775, Cross-Promo-Satz bleibt unveraendert.
 - 37-02 umgesetzt (c20d7c3d RED, e17ed7c5 GREEN): discussion-Element zwischen website und bugs in beiden info.xml, Namen und Beschreibungen Byte fuer Byte unveraendert; Gates scan_identity, scan_discussion, scan_phase_37_draft in backend/tests/test_store_metadata.py; Entwurf v1.6.0 (Teil Phase 37) in docs/store-listing.md.
 - 38-01 umgesetzt (13fbe79b RED, 4030301a GREEN): harp_connect.sh ist bash-Waechter vor frpc (FIFO plus read -t), x509 bei unveraenderten Dateien nur gemeldet (Plan 0/300/900/3600 s, dann stuendlich, Anker docs/harp-tunnel.md#repair-without-re-registering fuer 38-02), Neustart nur bei geaenderten und zweimal stabilen Dateien in mTLS, MIN_GAP 60 s, CAP 6 je Fenster, nie abwaerts, Exit 73 bei unschreibbarem Run-Verzeichnis, nie 0 nach frpc-Ende; shellcheck-Gate in python.yml (disable SC2317,SC2329 vor den Trap-Funktionen). WSL-Beweis nicht moeglich (nur docker-desktop-Distro), Ersatz Git-Bash-Lauf 22 von 24 gruen (2 Windows-Artefakte), CI-Lauf steht aus. ZERT-01 bleibt Pending bis 38-02 (Doku und Entwuerfe).
+- 38-02 umgesetzt (831e9351 RED, 701e7003 Probe, Fixes e8f1d236 und 76cabf39, 4889197f Doku und Entwuerfe, cf13ee09 Lauf-ID): deploy-harp-Schritt "Certificate rotation, a reissued HaRP CA heals after the three files are copied in" ohne if:, echte Neuausstellung (rm -rf /certs/frp plus HaRP-Neustart), Totfenster = mindestens 1 x509, mindestens 3 fehlgeschlagene Dials, 0 Logins (Abweichung von 'mindestens 2 x509', arm64 sagte nur jeden neunten Dial x509), Reparatur per docker exec -i ohne Re-Register und ohne Container-Neustart; Probe-Branch 40696292903 gruen, Heilung 8 bis 19 s. docs/harp-tunnel.md (Englisch). Entwuerfe Issue #33 und HaRP-Upstream im Phasenordner und auf dem Desktop, NICHT gepostet, kein 'Closes #33'.
 
 ### Decisions (Roadmap v1.5)
 
@@ -219,14 +221,18 @@ Items acknowledged and deferred at milestone close on 2026-10-28 (Owner-Wiedervo
 | Phase 37 P01 | 25min | 3 tasks | 5 files |
 | Phase 37 P02 | 20min | 2 tasks | 4 files |
 | Phase 38 P01 | ca. 30 min | 2 tasks | 4 files |
+| Phase 38 P02 | ca. 130 min | 3 tasks | 5 files |
 
 ## Session Continuity
 
-Last session: 2026-10-28T12:58:24.060Z
-Stopped at: Completed 38-01-PLAN.md
+Last session: 2026-10-28T14:19:03.071Z
+Stopped at: Completed 38-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
+
+- Phase 38 verifizieren (main-Lauf deploy-harp 40704387898 auf cf13ee09 pruefen)
+- Owner: Issue-#33-Antwort (Desktop/Findling_Issue33_Antwort_ENTWURF.md) posten, erst danach 'Closes #33'; HaRP-Upstream-Vorschlag (Desktop/Findling_HaRP_Upstream_Vorschlag_ENTWURF.md) nach erneutem Lesen von HaRP main senden
 
 - Plan 37-02 ausfuehren (Store-Wortlaute nach D-37-05 bis D-37-08 einspielen)
 - Parallel moeglich: /gsd:plan-phase 38 gegen den neuen ZERT-Wortlaut (D-37-09)

@@ -9,8 +9,8 @@
 
 ### Zertifikatsrotation (ZERT, Issue #33, Zeittreiber)
 
-- [ ] **ZERT-01**: Der Container erkennt die Neuausstellung der CA "harp.nc" (x509-Logmuster des frpc-Tunnels) und meldet sie ratenbegrenzt mit Abhilfe im Log; neue Dateien unter /certs/frp uebernimmt er ohne Re-Register und ohne Container-Neustart (frpc heilt binnen ca. 20 s, Waechter mit Deckel gegen Neustart-Sturm); der Admin repariert mit einem dokumentierten Kopierbefehl statt unregister/register; dazu ein Upstream-Vorschlag an nextcloud/HaRP (Entwurf, Owner sendet) und eine kurze englische Antwort in Issue #33 (Entwurf, Owner sieht sie vor dem Senden) (Owner-Entscheid D-37-09, ersetzt den Wortlaut vom 28.10.2026)
-- [ ] **ZERT-02**: Der Weg ist belegt per CI-Probe mit echter CA-Neuausstellung und Positivkontrolle (ohne neue Dateien unter /certs/frp bleibt der Tunnel nachweislich tot) und begrenzt (Deckel gegen Neustart-Sturm); die Doku beschreibt Ursache, Erkennen, Kopierbefehl und Rueckfallweg (unregister/register ohne --rm-data); die Entwuerfe fuer den HaRP-Upstream-Vorschlag und die Issue-#33-Antwort liegen dem Owner vor, Antwort vor jedem "Closes #33" (Owner-Entscheid D-37-09)
+- [x] **ZERT-01**: Der Container erkennt die Neuausstellung der CA "harp.nc" (x509-Logmuster des frpc-Tunnels) und meldet sie ratenbegrenzt mit Abhilfe im Log; neue Dateien unter /certs/frp uebernimmt er ohne Re-Register und ohne Container-Neustart (frpc heilt binnen ca. 20 s, Waechter mit Deckel gegen Neustart-Sturm); der Admin repariert mit einem dokumentierten Kopierbefehl statt unregister/register; dazu ein Upstream-Vorschlag an nextcloud/HaRP (Entwurf, Owner sendet) und eine kurze englische Antwort in Issue #33 (Entwurf, Owner sieht sie vor dem Senden) (Owner-Entscheid D-37-09, ersetzt den Wortlaut vom 28.10.2026)
+- [x] **ZERT-02**: Der Weg ist belegt per CI-Probe mit echter CA-Neuausstellung und Positivkontrolle (ohne neue Dateien unter /certs/frp bleibt der Tunnel nachweislich tot) und begrenzt (Deckel gegen Neustart-Sturm); die Doku beschreibt Ursache, Erkennen, Kopierbefehl und Rueckfallweg (unregister/register ohne --rm-data); die Entwuerfe fuer den HaRP-Upstream-Vorschlag und die Issue-#33-Antwort liegen dem Owner vor, Antwort vor jedem "Closes #33" (Owner-Entscheid D-37-09)
 
 ### Ausschluss-Anzeige (ANZE, aus 36-REVIEW L-36-05/06)
 
@@ -55,8 +55,8 @@ Gefuellt vom Roadmap-Schritt am 2026-10-28. Abdeckung: 11/11 v1.6-Anforderungen 
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| ZERT-01 | Phase 38 | Pending |
-| ZERT-02 | Phase 38 | Pending |
+| ZERT-01 | Phase 38 | Complete |
+| ZERT-02 | Phase 38 | Complete |
 | ANZE-01 | Phase 39 | Pending |
 | ANZE-02 | Phase 39 | Pending |
 | DEDUP-01 | Phase 37 | Complete |

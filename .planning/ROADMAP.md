@@ -92,7 +92,7 @@ Details im Archiv: .planning/milestones/v1.5-ROADMAP.md
 ### v1.6 Store-Sichtbarkeit und Betriebs-Feinschliff (In Arbeit)
 
 - [x] **Phase 37: Owner-Tor und Store-Sichtbarkeit** - D1-D4 der Dedup-Notiz und alle Store-Wortlaute in einer Remote-Runde entschieden; Anzeigename "Findling Search", discussion-Link und Cross-Promo-Satz in beiden info.xml (completed 2026-10-28)
-- [ ] **Phase 38: Zertifikatsrotation ohne Admin-Eingriff** - Neuausstellung erkennen und mit Abhilfe melden, neue Dateien unter /certs/frp ohne Re-Register und ohne Container-Neustart uebernehmen, gedeckelt (Issue #33, Zeittreiber; Wortlaut nach Owner-Entscheid D-37-09)
+- [x] **Phase 38: Zertifikatsrotation ohne Admin-Eingriff** - Neuausstellung erkennen und mit Abhilfe melden, neue Dateien unter /certs/frp ohne Re-Register und ohne Container-Neustart uebernehmen, gedeckelt (Issue #33, Zeittreiber; Wortlaut nach Owner-Entscheid D-37-09) (completed 2026-10-28)
 - [ ] **Phase 39: Ausschluss-Anzeige, Dedup-Umfang und Doku-Hygiene** - L-36-05/06 auf der Admin-Seite, entschiedener Dedup-Umfang (mindestens Weg C), Umlaut-Fixes in drei docs-Dateien, IN-01 bis IN-06 entschieden
 - [ ] **Phase 40: Haertung und Store-Einreichung 1.6.0** - Audit-Gate, Upgrade-Strecke ab v1.5.0, Owner-Abnahme remote, Einreichung beider Apps
 
@@ -124,7 +124,7 @@ Details im Archiv: .planning/milestones/v1.5-ROADMAP.md
   4. Die Doku beschreibt Ursache, Erkennen, den Kopierbefehl und den Rueckfallweg (unregister/register ohne --rm-data) fuer den Admin; Entwuerfe fuer den HaRP-Upstream-Vorschlag und die kurze englische Antwort in Issue #33 liegen dem Owner vor (Owner sendet, Antwort vor jedem "Closes #33") (Owner-Entscheid D-37-09)
 **Plans**: 2 plans
 - [x] 38-01-PLAN.md - Tunnel-Waechter in harp_connect.sh (x509 erkennen, ratenbegrenzte Abhilfe, gedeckelter frpc-Neustart nur bei geaenderten Dateien, nie abwaerts), Stub-frpc-Tests, shellcheck-Gate (ZERT-01)
-- [ ] 38-02-PLAN.md - CI-Probe mit echter CA-Neuausstellung, Positivkontrolle und Kopierweg in deploy-harp.yml, Vertragstest, docs/harp-tunnel.md, Entwuerfe Issue #33 und HaRP-Upstream (ZERT-01 Doku- und Entwurfsteil, ZERT-02)
+- [x] 38-02-PLAN.md - CI-Probe mit echter CA-Neuausstellung, Positivkontrolle und Kopierweg in deploy-harp.yml, Vertragstest, docs/harp-tunnel.md, Entwuerfe Issue #33 und HaRP-Upstream (ZERT-01 Doku- und Entwurfsteil, ZERT-02)
 
 ### Phase 39: Ausschluss-Anzeige, Dedup-Umfang und Doku-Hygiene
 **Goal**: Die aus v1.5 vertagten Feinschliff-Punkte sind abgeraeumt: Admins verstehen die Ausschluss-Zaehler, die Abdeckung zaehlt Mehrfach-Einbindungen nicht mehr doppelt, und die Doku ist sauber
@@ -165,7 +165,7 @@ Details im Archiv: .planning/milestones/v1.5-ROADMAP.md
 | 24-29 (Archiv) | v1.4 | 78/78 | Complete | 2026-10-06 |
 | 30-36 (Archiv) | v1.5 | 79/79 | Complete | 2026-10-28 |
 | 37. Owner-Tor und Store-Sichtbarkeit | v1.6 | 2/2 | Complete   | 2026-10-28 |
-| 38. Zertifikatsrotation ohne Admin-Eingriff | v1.6 | 1/2 | In Progress | - |
+| 38. Zertifikatsrotation ohne Admin-Eingriff | v1.6 | 2/2 | Complete   | 2026-10-28 |
 | 39. Ausschluss-Anzeige, Dedup-Umfang und Doku-Hygiene | v1.6 | 0/? | Not started | - |
 | 40. Haertung und Store-Einreichung 1.6.0 | v1.6 | 0/? | Not started | - |
 
