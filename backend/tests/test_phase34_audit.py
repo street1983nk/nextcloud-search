@@ -1081,7 +1081,8 @@ def test_the_link_check_sees_a_missing_target(tmp_path: Path) -> None:
 # Bugs: the steps of the page against the protocol of 34-02
 # ---------------------------------------------------------------------------
 
-NACHWEIS = REPO / ".planning" / "phases" / "34-umstiegsweg" / "34-02-NACHWEIS.md"
+# The phase directory moved into the milestone archive when v1.5 closed.
+NACHWEIS = REPO / ".planning" / "milestones" / "v1.5-phases" / "34-umstiegsweg" / "34-02-NACHWEIS.md"
 
 # Commands of the steps the protocol does not hold verbatim, with what covers them.
 COVERED_ELSEWHERE = {
