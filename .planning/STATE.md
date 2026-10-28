@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
 status: executing
-stopped_at: Completed 37-01-PLAN.md (Owner-Tor geschlossen, D-37-01 bis D-37-09)
-last_updated: "2026-10-28T12:25:51.502Z"
-last_activity: 2026-10-28, Plan 37-01 abgeschlossen (Owner-Tor wie empfohlen)
+stopped_at: Completed 37-02-PLAN.md (Phase 37 komplett, STORE-01/02 im Repo)
+last_updated: "2026-10-28T12:39:48.820Z"
+last_activity: 2026-10-28, Plan 37-02 abgeschlossen (discussion-Link 249775 in beiden info.xml, Store-Gates)
 progress:
   total_phases: 4
-  completed_phases: 0
-  total_plans: 2
-  completed_plans: 1
-  percent: 0
+  completed_phases: 1
+  total_plans: 4
+  completed_plans: 2
+  percent: 25
 ---
 
 # Project State
@@ -26,9 +26,9 @@ Siehe .planning/PROJECT.md (Stand nach v1.5, Milestone v1.6 gestartet) und .plan
 ## Current Position
 
 Phase: 37 von 37-40 (Owner-Tor und Store-Sichtbarkeit)
-Plan: 37-02 als naechster (37-01 erledigt, 1 von 2)
-Status: Ready to execute 37-02
-Last activity: 2026-10-28, Plan 37-01 abgeschlossen (Owner-Tor wie empfohlen, D-37-01 bis D-37-09)
+Plan: 37-02 erledigt (2 von 2, Phase 37 komplett; CI-Job app-metadata offen bis zum naechsten freigegebenen Push)
+Status: Phase 37 complete
+Last activity: 2026-10-28, Plan 37-02 abgeschlossen (discussion-Link 249775 in beiden info.xml, Store-Gates)
 
 Progress: [█████░░░░░] 50%
 
@@ -98,6 +98,7 @@ Progress: [█████░░░░░] 50%
 - Dedup-Umfang Phase 39: Weg C als erster Schritt, Weg B nur im Rahmen der Einreichung 1.6.0 sonst dokumentiert vertagt, Weg A nicht in v1.6 (Entscheid nach Messung A6/A7 in CI oder auf der Testbox, ohne Ergebnis vertagt auf v1.7).
 - ZERT-Wortlaut Phase 38 neu (D-37-09): Neuausstellung erkennen und mit Abhilfe melden, neue Dateien unter /certs/frp ohne Re-Register und ohne Container-Neustart uebernehmen, gedeckelt; Kopierbefehl in der Doku, HaRP-Upstream-Vorschlag und Issue-#33-Antwort als Entwurf fuer den Owner.
 - Store-Wortlaute fuer Plan 37-02 (D-37-05 bis D-37-08): Namen bleiben wie seit 1.5.1 (Findling Search/Suche/Recherche, Findling Backend), discussion-Link auf Forum-Thread 249775, Cross-Promo-Satz bleibt unveraendert.
+- 37-02 umgesetzt (c20d7c3d RED, e17ed7c5 GREEN): discussion-Element zwischen website und bugs in beiden info.xml, Namen und Beschreibungen Byte fuer Byte unveraendert; Gates scan_identity, scan_discussion, scan_phase_37_draft in backend/tests/test_store_metadata.py; Entwurf v1.6.0 (Teil Phase 37) in docs/store-listing.md.
 
 ### Decisions (Roadmap v1.5)
 
@@ -215,11 +216,12 @@ Items acknowledged and deferred at milestone close on 2026-10-28 (Owner-Wiedervo
 | quick_task | 261003-wxg-reconcile-beachtet-ausschluesse-zaehltor | missing (Altlast v1.4) |
 | quick_task | 261005-vit-vollindex-term | unknown (Altlast v1.4) |
 | Phase 37 P01 | 25min | 3 tasks | 5 files |
+| Phase 37 P02 | 20min | 2 tasks | 4 files |
 
 ## Session Continuity
 
-Last session: 2026-10-28T12:25:45.802Z
-Stopped at: Completed 37-01-PLAN.md
+Last session: 2026-10-28T12:39:43.194Z
+Stopped at: Completed 37-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

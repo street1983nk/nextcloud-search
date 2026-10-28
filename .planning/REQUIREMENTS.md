@@ -29,8 +29,8 @@
 
 ### Store-Sichtbarkeit (STORE, Strategie 24.10.)
 
-- [ ] **STORE-01**: Die App heisst im Store sichtbar "Findling Search" (Anzeigename in info.xml beider Apps, GO vom 22.10.; Sprachvarianten nach Owner-Entscheid D-37-05, findling_backend bleibt "Findling Backend" nach D-37-06); App-IDs bleiben unveraendert
-- [ ] **STORE-02**: Beide info.xml tragen den discussion-Link auf den Forum-Thread 249775; die Store-Texte tragen den Cross-Promo-Satz zum Nextcloud MCP Connector (Kurztext-Regel, Owner-Abnahme des Wortlauts vor Release)
+- [x] **STORE-01**: Die App heisst im Store sichtbar "Findling Search" (Anzeigename in info.xml beider Apps, GO vom 22.10.; Sprachvarianten nach Owner-Entscheid D-37-05, findling_backend bleibt "Findling Backend" nach D-37-06); App-IDs bleiben unveraendert
+- [x] **STORE-02**: Beide info.xml tragen den discussion-Link auf den Forum-Thread 249775; die Store-Texte tragen den Cross-Promo-Satz zum Nextcloud MCP Connector (Kurztext-Regel, Owner-Abnahme des Wortlauts vor Release)
 
 ### Release (REL)
 
@@ -63,6 +63,6 @@ Gefuellt vom Roadmap-Schritt am 2026-10-28. Abdeckung: 11/11 v1.6-Anforderungen 
 | DEDUP-02 | Phase 39 | Pending |
 | DOCS-01 | Phase 39 | Pending |
 | DOCS-02 | Phase 39 | Pending |
-| STORE-01 | Phase 37 | Pending |
-| STORE-02 | Phase 37 | Pending |
+| STORE-01 | Phase 37 | Complete |
+| STORE-02 | Phase 37 | Complete |
 | REL-06 | Phase 40 | Pending |

@@ -91,7 +91,7 @@ Details im Archiv: .planning/milestones/v1.5-ROADMAP.md
 
 ### v1.6 Store-Sichtbarkeit und Betriebs-Feinschliff (In Arbeit)
 
-- [ ] **Phase 37: Owner-Tor und Store-Sichtbarkeit** - D1-D4 der Dedup-Notiz und alle Store-Wortlaute in einer Remote-Runde entschieden; Anzeigename "Findling Search", discussion-Link und Cross-Promo-Satz in beiden info.xml
+- [x] **Phase 37: Owner-Tor und Store-Sichtbarkeit** - D1-D4 der Dedup-Notiz und alle Store-Wortlaute in einer Remote-Runde entschieden; Anzeigename "Findling Search", discussion-Link und Cross-Promo-Satz in beiden info.xml (completed 2026-10-28)
 - [ ] **Phase 38: Zertifikatsrotation ohne Admin-Eingriff** - Neuausstellung erkennen und mit Abhilfe melden, neue Dateien unter /certs/frp ohne Re-Register und ohne Container-Neustart uebernehmen, gedeckelt (Issue #33, Zeittreiber; Wortlaut nach Owner-Entscheid D-37-09)
 - [ ] **Phase 39: Ausschluss-Anzeige, Dedup-Umfang und Doku-Hygiene** - L-36-05/06 auf der Admin-Seite, entschiedener Dedup-Umfang (mindestens Weg C), Umlaut-Fixes in drei docs-Dateien, IN-01 bis IN-06 entschieden
 - [ ] **Phase 40: Haertung und Store-Einreichung 1.6.0** - Audit-Gate, Upgrade-Strecke ab v1.5.0, Owner-Abnahme remote, Einreichung beider Apps
@@ -110,7 +110,7 @@ Details im Archiv: .planning/milestones/v1.5-ROADMAP.md
   4. Die Store-Beschreibungen tragen den Cross-Promo-Satz zum Nextcloud MCP Connector zeichengleich zum vom Owner abgenommenen Wortlaut (en/de/fr), die Kurztext-Regel bleibt eingehalten, docs/store-listing.md fuehrt den Entwurf mit Abnahmedatum
 **Plans**: 2 plans
 - [x] 37-01-PLAN.md - Owner-Tor: gebuendelte Vorlage D1-D4, S1-S4 und Z1 (ZERT-Wortlaut), eine Remote-Runde, Entscheide woertlich in 37-OWNER-ENTSCHEIDE.md samt Folgen fuer Phase 38 und 39 (DEDUP-01)
-- [ ] 37-02-PLAN.md - Store-Sichtbarkeit: Gates fuer IDs/Namen/discussion/Cross-Promo, beide info.xml und docs/store-listing.md nach D-37-05..08 (STORE-01, STORE-02)
+- [x] 37-02-PLAN.md - Store-Sichtbarkeit: Gates fuer IDs/Namen/discussion/Cross-Promo, beide info.xml und docs/store-listing.md nach D-37-05..08 (STORE-01, STORE-02)
 
 ### Phase 38: Zertifikatsrotation ohne Admin-Eingriff
 **Goal**: Das Backend erkennt einen HaRP-Zertifikatswechsel, meldet ihn mit Abhilfe und uebernimmt neue Zertifikate unter /certs/frp ohne Unregister/Register und ohne Container-Neustart; der Weg ist bewiesen, gedeckelt und dokumentiert (Owner-Entscheid D-37-09: /certs/frp ist eine Einmal-Kopie durch HaRP, ein blosses Neueinlesen unveraenderter Dateien heilt nichts)
@@ -160,7 +160,7 @@ Details im Archiv: .planning/milestones/v1.5-ROADMAP.md
 | 17-23 (Archiv) | v1.3 | 69/69 | Complete | 2026-09-27 |
 | 24-29 (Archiv) | v1.4 | 78/78 | Complete | 2026-10-06 |
 | 30-36 (Archiv) | v1.5 | 79/79 | Complete | 2026-10-28 |
-| 37. Owner-Tor und Store-Sichtbarkeit | v1.6 | 1/2 | In Progress|  |
+| 37. Owner-Tor und Store-Sichtbarkeit | v1.6 | 2/2 | Complete   | 2026-10-28 |
 | 38. Zertifikatsrotation ohne Admin-Eingriff | v1.6 | 0/? | Not started | - |
 | 39. Ausschluss-Anzeige, Dedup-Umfang und Doku-Hygiene | v1.6 | 0/? | Not started | - |
 | 40. Haertung und Store-Einreichung 1.6.0 | v1.6 | 0/? | Not started | - |
