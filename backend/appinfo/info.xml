@@ -220,6 +220,13 @@ Support entreprise et modules payants : demande de devis à admin@infranode.dev]
 	<category>files</category>
 	<category>tools</category>
 	<website>https://github.com/street1983nk/nextcloud-search</website>
+	<!--
+		The forum thread for questions and feedback. The store page links it as
+		"Discussion". Owner decision D-37-07 (STORE-02), held by scan_discussion
+		in backend/tests/test_store_metadata.py, which also keeps it between
+		website and bugs, the order of the schema.
+	-->
+	<discussion>https://help.nextcloud.com/t/findling-1-2-0-and-mcp-connector-0-2-1-released/249775</discussion>
 	<bugs>https://github.com/street1983nk/nextcloud-search/issues</bugs>
 	<repository type="git">https://github.com/street1983nk/nextcloud-search.git</repository>
 	<!--

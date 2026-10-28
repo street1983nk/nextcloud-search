@@ -25,6 +25,7 @@ sich daran mechanisch prüfen lässt.
 | Keine Backticks und keine Tabellen in einer Beschreibung | der Store rendert Markdown anders als das Repository |
 | Keine Gedankenstriche, keine Emojis, echte Umlaute, echte Akzente | die Typografie-Regel dieses Projekts |
 | Genau EIN Satz Querverweis auf den MCP Connector | D-12 erfuellt seit 07.09.2026: der Content-Hit-Fidelity-Test (Connector-PR #2) misst die Rechte-Treue |
+| Genau ein discussion-Element je info.xml, URL des Forum-Threads 249775 | STORE-02, D-37-07 |
 
 Die englische Fassung steht in einem Element **ohne** `lang`-Attribut. Die XSD
 setzt für ein fehlendes Attribut den Vorgabewert `en` ein, ein zusätzliches
@@ -2704,6 +2705,49 @@ angelegt in Plan 31-01. Das erste Pre-Release
 seinem Text auf `source-1.5-dev.2`. Tags dieser Form starten keinen Workflow,
 seit alle Workflows mit push-Trigger nur Branches und `v[0-9]+.[0-9]+.[0-9]+`
 annehmen (`backend/tests/test_workflow_tag_triggers.py`).
+
+---
+
+# Entwurf v1.6.0 (Teil Phase 37), abgenommen am 28.10.2026
+
+Owner-Entscheide D-37-05 bis D-37-08 vom 28.10.2026 ("wie empfohlen",
+Phase 37, Plan 37-01). Neu in 1.6.0 ist nur das `discussion`-Element; Namen
+und Beschreibungen bleiben die ausgelieferte Fassung 1.5.1. Eingereicht wird
+erst mit 1.6.0 (Phase 40), die Version bleibt bis dahin 1.5.1.
+`backend/tests/test_store_metadata.py` hält diesen Abschnitt gegen beide
+`info.xml` (`scan_phase_37_draft`, `scan_identity`, `scan_discussion`).
+
+App-IDs findling und findling_backend unverändert.
+
+Namen (D-37-05 für `findling`, D-37-06 für `findling_backend`, Byte für Byte
+wie seit 1.5.1):
+
+| App | Sprache | Element | Wert |
+|---|---|---|---|
+| findling | en | `<name>` | Findling Search |
+| findling | de | `<name lang="de">` | Findling Suche |
+| findling | fr | `<name lang="fr">` | Findling Recherche |
+| findling_backend | en | `<name>` | Findling Backend |
+| findling_backend | de | `<name lang="de">` | Findling Backend |
+| findling_backend | fr | `<name lang="fr">` | Findling Backend |
+
+Discussion-Link (D-37-07, STORE-02), in beiden `info.xml` genau einmal,
+zwischen `<website>` und `<bugs>` wie in der Store-XSD:
+
+https://help.nextcloud.com/t/findling-1-2-0-and-mcp-connector-0-2-1-released/249775
+
+Gemessen am 28.10.2026 um 13:30 Uhr (12:30Z): HTTP 200, keine Weiterleitung.
+
+Querverweis auf den MCP Connector (D-37-08 = a): der Satz bleibt in allen
+sechs Beschreibungen unverändert, genau einmal je Beschreibung:
+
+- en: Together with the [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector), Findling forms the retrieval layer for your own RAG: AI assistants search your document contents with exactly the rights of the asking user, and no content leaves your server.
+- de: Zusammen mit dem [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) ergibt Findling die Retrieval-Schicht für Ihr eigenes RAG: KI-Assistenten durchsuchen Ihre Dokumentinhalte mit genau den Rechten des fragenden Nutzers, und kein Inhalt verlässt Ihren Server.
+- fr: Avec le [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector), Findling forme la couche de récupération de votre propre RAG : les assistants IA cherchent dans le contenu de vos documents avec exactement les droits de l'utilisateur qui demande, et aucun contenu ne quitte votre serveur.
+
+Die Regel "Nur EIN Satz zum MCP Connector, und keine RAG-Wortwahl" weiter
+oben bleibt unverändert; die Spannung zwischen ihr und dem ausgelieferten Satz
+hat der Owner mit D-37-08 bewusst so belassen.
 
 ---
 
