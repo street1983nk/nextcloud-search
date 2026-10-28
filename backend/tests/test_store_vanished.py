@@ -137,6 +137,36 @@ def test_an_orphan_bookmark_is_dropped_and_the_cadence_is_closed_again(store: St
     assert store.reconcile_state().unfinished == 1
 
 
+def test_an_orphan_stamp_is_dropped_with_the_orphan_bookmarks(store: Store) -> None:
+    # IN-04 of the phase 36 review: storage 9 was stamped, then lost its last
+    # living row through the ordinary delete path and never came back to the
+    # list. Nothing else would ever clear its stamp. Storage 3 is listed and
+    # keeps its stamp until clear_vanished; storage 5 still has a living row
+    # and its stamp is the sweep's grace, so it stays as well.
+    _record(store, 1, 5)
+    _record(store, 2, 9)
+    store.mark_vanished(3, 1_800_000_000)
+    store.mark_vanished(5, 1_800_000_000)
+    store.mark_vanished(9, 1_800_000_000)
+    store.tombstone(2, at=1_800_000_100)
+
+    store.drop_orphan_bookmarks(frozenset({3}))
+
+    assert _vanished_rows(store) == [3, 5]
+    assert store.mark_vanished(5, 1_900_000_000) == 1_800_000_000
+    store.clear_vanished(frozenset({3}))
+    assert _vanished_rows(store) == [5]
+
+
+def test_an_orphan_stamp_alone_is_dropped_without_any_bookmark(store: Store) -> None:
+    # IN-04: the early return for "no orphan bookmark" must not skip the stamps.
+    store.mark_vanished(9, 1_800_000_000)
+
+    store.drop_orphan_bookmarks(frozenset())
+
+    assert _vanished_rows(store) == []
+
+
 def test_only_a_storage_mid_walk_that_vanished_leaves_nothing_unfinished(store: Store) -> None:
     store.set_reconcile_cursor(3, 0, finished=True, at=1_800_000_000)
     store.set_reconcile_cursor(9, 4711, at=1_800_000_000)
