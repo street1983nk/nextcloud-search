@@ -342,6 +342,13 @@ def _child_main(pipe: PipeEnd, address_space_bytes: int) -> None:
     The dispatcher is imported here rather than at module level so that the cap is
     already in place while the extraction libraries are being loaded, and so that
     the parent, which imports this module too, never pays for them.
+
+    **One file at a time, on one thread (IN-05 of the phase 36 review).**
+    image._refused_by_pillow switches Pillow's process-wide bomb guard off
+    while it re-reads the header of a refused picture, and that is safe only
+    because nothing else in this child can open a picture during that window.
+    Whoever adds a thread to extraction here has to read that header another
+    way first.
     """
     if sys.platform != "win32":
         # Its own session, so a kill can take the whole process group with it.

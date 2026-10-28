@@ -473,12 +473,18 @@ def test_a_directory_the_count_calls_corrupt_is_left_to_the_loader(kind: str, tm
 
 
 def test_every_reader_counts_before_it_opens_the_package() -> None:
+    # One helper in archive.py since IN-03 of the phase 36 review: it counts
+    # and never opens a ZipFile itself, and both package modules use that one
+    # and keep no copy of their own.
+    count = inspect.getsource(archive.too_many_entries)
+    assert "count_central_directory" in count
+    assert "ZipFile(" not in count
     for module in (odf, office):
-        count = inspect.getsource(module._too_many_entries)
-        assert "count_central_directory" in count
-        assert "ZipFile(" not in count
+        assert not hasattr(module, "_too_many_entries")
+        assert module.too_many_entries is archive.too_many_entries
+        assert "from findling.extract.archive import too_many_entries" in inspect.getsource(module)
     for source in (inspect.getsource(odf.extract_odf), inspect.getsource(office._refused_before_the_loader)):
-        assert source.index("_too_many_entries(path)") < source.index("ZipFile(")
+        assert source.index("too_many_entries(path)") < source.index("ZipFile(")
     for reader in (office.extract_docx, office.extract_pptx, office.extract_xlsx):
         source = inspect.getsource(reader)
         assert "_refused_before_the_loader(path" in source

@@ -46,6 +46,7 @@ from findling.extract import archive
 from findling.extract.archive import count_central_directory, extract_zip
 from findling.extract.errors import ExtractionOutcome, Reason, State
 from test_extract_edge_paths import _one_page_pdf
+from test_phase36_audit import CLOSED_DETAILS
 
 MARK = ARCHIVE_MEMBER_MARK
 SCRATCH_NAME = "job-7.part"
@@ -784,6 +785,20 @@ def test_names_with_dots_that_do_not_climb_stay_text(tmp_path: Path) -> None:
 
     assert outcome.state is State.INDEXED
     assert _sections(outcome) == {"..x.txt": "punktquendel", "a..b/c.txt": "mittequendel"}
+
+
+def test_the_three_signature_codes_are_constants_of_the_closed_list() -> None:
+    # IN-01 of the phase 36 review: each code this module raises is one named
+    # constant, and each constant is a code of the closed list of 36-WORTLAUT
+    # A3 as the phase 36 audit writes it out. A bare literal one typo away
+    # from that list may not come back.
+    codes = {archive._ZIP_RATIO, archive._ZIP_OVERLAP, archive._ZIP_TRAVERSAL}
+    assert codes == {"zip_ratio", "zip_overlap", "zip_traversal"}
+    assert codes <= CLOSED_DETAILS
+    source = Path(archive.__file__).read_text(encoding="utf-8")
+    for code in codes:
+        assert source.count(f'"{code}"') == 1
+        assert f'OverLimit("{code}")' not in source
 
 
 def test_an_encrypted_member_stays_a_name_next_to_a_readable_one(tmp_path: Path) -> None:

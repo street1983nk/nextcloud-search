@@ -40,7 +40,6 @@ below anyway.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from xml.etree.ElementTree import ParseError
 from zipfile import BadZipFile, ZipFile
@@ -53,8 +52,8 @@ from lxml import etree  # pyright: ignore[reportAttributeAccessIssue]
 from pptx.exc import PackageNotFoundError as PptxPackageNotFound
 
 from findling import config
-from findling.config import ARCHIVE_MAX_ENTRIES, EXTRACT_ARCHIVE_MEMBER_MAX_BYTES, EXTRACT_ARCHIVE_TOTAL_MAX_BYTES
-from findling.extract import archive
+from findling.config import EXTRACT_ARCHIVE_MEMBER_MAX_BYTES, EXTRACT_ARCHIVE_TOTAL_MAX_BYTES
+from findling.extract.archive import too_many_entries
 from findling.extract.dispatch import cap_text
 from findling.extract.errors import ExtractionOutcome, Reason, is_entity_bomb
 
@@ -73,23 +72,6 @@ def _entity_bomb_or_raise(error: Exception) -> ExtractionOutcome:
     if is_entity_bomb(error):
         return ExtractionOutcome.skipped(Reason.BLOCKED_MALICIOUS, detail="xml_entities")
     raise error
-
-
-def _too_many_entries(path: str) -> bool:
-    """True when the directory holds more than ARCHIVE_MAX_ENTRIES records, counted before ZipFile.
-
-    A directory the count calls corrupt, or a file that does not open, is left
-    to the loader, whose exception carries the better diagnosis; a directory
-    longer than ARCHIVE_MAX_CENTRAL_DIRECTORY_BYTES is too many entries as well.
-    """
-    try:
-        with Path(path).open("rb") as handle:
-            size = os.fstat(handle.fileno()).st_size
-            return archive.count_central_directory(handle, size, limit=ARCHIVE_MAX_ENTRIES) > ARCHIVE_MAX_ENTRIES
-    except archive.OverLimit:
-        return True
-    except (archive.CorruptDirectory, OSError):
-        return False
 
 
 def _refused_before_the_loader(path: str, *, every_part_is_read: bool) -> ExtractionOutcome | None:
@@ -113,7 +95,7 @@ def _refused_before_the_loader(path: str, *, every_part_is_read: bool) -> Extrac
     ``openpyxl`` in read only mode streams the sheets instead, so asking it the
     second question would refuse ordinary large exports and prevent nothing.
     """
-    if _too_many_entries(path):
+    if too_many_entries(path):
         return ExtractionOutcome.skipped(Reason.BLOCKED_MALICIOUS, detail="package_entries")
     try:
         with ZipFile(path) as package:

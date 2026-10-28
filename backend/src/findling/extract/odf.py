@@ -26,7 +26,7 @@ through this one.
 
 **Two attack signatures end the file as skipped(blocked_malicious)** (D-36-17,
 finding F3). A directory of more than ARCHIVE_MAX_ENTRIES records is
-``package_entries``: it is counted by archive.count_central_directory before
+``package_entries``: it is counted by archive.too_many_entries before
 ZipFile builds one ZipInfo per record, which for a million records costs
 hundreds of MiB before anything else could count them. An entity expansion
 that libxml2 refuses as amplification is ``xml_entities``; with entity
@@ -35,14 +35,12 @@ resolution off it still counts the expansion, and the refusal is the proof.
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
 from zipfile import BadZipFile, ZipFile
 
 from lxml import etree  # pyright: ignore[reportAttributeAccessIssue]
 
-from findling.config import ARCHIVE_MAX_ENTRIES, EXTRACT_ARCHIVE_MEMBER_MAX_BYTES
-from findling.extract import archive
+from findling.config import EXTRACT_ARCHIVE_MEMBER_MAX_BYTES
+from findling.extract.archive import too_many_entries
 from findling.extract.dispatch import cap_text
 from findling.extract.errors import ExtractionOutcome, Reason, is_entity_bomb
 
@@ -61,23 +59,6 @@ _TEXT_ELEMENTS = (f"{{{_TEXT_NAMESPACE}}}p", f"{{{_TEXT_NAMESPACE}}}h")
 _PARSER = etree.XMLParser(resolve_entities=False, no_network=True, load_dtd=False)
 
 
-def _too_many_entries(path: str) -> bool:
-    """True when the directory holds more than ARCHIVE_MAX_ENTRIES records, counted before ZipFile.
-
-    A directory the count calls corrupt, or a file that does not open, is left
-    to zipfile below, whose exception carries the better diagnosis; a directory
-    longer than ARCHIVE_MAX_CENTRAL_DIRECTORY_BYTES is too many entries as well.
-    """
-    try:
-        with Path(path).open("rb") as handle:
-            size = os.fstat(handle.fileno()).st_size
-            return archive.count_central_directory(handle, size, limit=ARCHIVE_MAX_ENTRIES) > ARCHIVE_MAX_ENTRIES
-    except archive.OverLimit:
-        return True
-    except (archive.CorruptDirectory, OSError):
-        return False
-
-
 def extract_odf(path: str) -> ExtractionOutcome:
     """The text of an ODT, ODS or ODP file.
 
@@ -88,7 +69,7 @@ def extract_odf(path: str) -> ExtractionOutcome:
     Defined at module level so it survives the process boundary of the extraction
     child.
     """
-    if _too_many_entries(path):
+    if too_many_entries(path):
         return ExtractionOutcome.skipped(Reason.BLOCKED_MALICIOUS, detail="package_entries")
     try:
         with ZipFile(path) as package:

@@ -661,6 +661,11 @@ _FORGET_STORAGE_VANISHED_SQL: Final = "DELETE FROM vanished_storages WHERE stora
 # read that as an interrupted walk in every tick.
 _ORPHAN_RECONCILE_SQL: Final = "SELECT storage_id FROM reconcile"
 _ORPHAN_MOUNTS_SQL: Final = "SELECT storage_id FROM mounts"
+# A stamp outlives its storage the same way (IN-04 of the phase 36 review): a
+# stamped storage that loses its last living row through the ordinary delete
+# path and never returns to the list is cleared by neither clear_vanished nor
+# forget_storage.
+_ORPHAN_VANISHED_SQL: Final = "SELECT storage_id FROM vanished_storages"
 
 
 @dataclass(frozen=True, slots=True)
@@ -1518,23 +1523,29 @@ class Store:
             self._conn.execute(_FORGET_STORAGE_VANISHED_SQL, (storage_id,))
 
     def drop_orphan_bookmarks(self, listed: Iterable[int]) -> None:
-        """Drop reconcile and mounts rows of storages neither listed nor living (F4).
+        """Drop reconcile, mounts and vanished_storages rows of storages neither listed nor living.
 
-        A storage with living rows is left alone here: whether its documents go
-        is the sweep's decision, and its bookmark goes with them.
+        F4 for the bookmark and the mirror, IN-04 of the phase 36 review for the
+        stamp. A storage with living rows is left alone here: whether its
+        documents go is the sweep's decision, and its bookmark and its stamp go
+        with them. A listed storage keeps its stamp until clear_vanished drops it.
         """
         keep = frozenset(listed) | self.living_storages()
         reconcile = {int(row[0]) for row in self._conn.execute(_ORPHAN_RECONCILE_SQL)}
         mounts = {int(row[0]) for row in self._conn.execute(_ORPHAN_MOUNTS_SQL)}
+        vanished = {int(row[0]) for row in self._conn.execute(_ORPHAN_VANISHED_SQL)}
         orphans_reconcile = sorted(reconcile - keep)
         orphans_mounts = sorted(mounts - keep)
-        if not orphans_reconcile and not orphans_mounts:
+        orphans_vanished = sorted(vanished - keep)
+        if not orphans_reconcile and not orphans_mounts and not orphans_vanished:
             return
         with self._transaction():
             for storage_id in orphans_reconcile:
                 self._conn.execute(_FORGET_STORAGE_RECONCILE_SQL, (storage_id,))
             for storage_id in orphans_mounts:
                 self._conn.execute(_FORGET_STORAGE_MOUNTS_SQL, (storage_id,))
+            for storage_id in orphans_vanished:
+                self._conn.execute(_FORGET_STORAGE_VANISHED_SQL, (storage_id,))
 
     def replace_acl(self, file_id: int, uids: Iterable[str]) -> None:
         """Write the permissions of one file as a whole, never as a change.

@@ -72,6 +72,7 @@ names leave this module, as the detail of a failure.
 from __future__ import annotations
 
 import lzma
+import os
 import re
 import struct
 import time
@@ -133,6 +134,7 @@ _OVERLAP = "Overlapped entries"
 # The signature codes this module raises (36-WORTLAUT.md A3).
 _ZIP_RATIO: Final = "zip_ratio"
 _ZIP_OVERLAP: Final = "zip_overlap"
+_ZIP_TRAVERSAL: Final = "zip_traversal"
 
 # A drive letter in front of a raw member name; the separators of both worlds.
 _DRIVE: Final = re.compile(r"[A-Za-z]:")
@@ -313,6 +315,27 @@ def count_central_directory(handle: BinaryIO, size: int, *, limit: int) -> int:
     return count
 
 
+def too_many_entries(path: str) -> bool:
+    """True when the directory holds more than ARCHIVE_MAX_ENTRIES records, counted before ZipFile.
+
+    The package readers of odf.py and office.py ask this before they open a
+    ZipFile (package_entries, D-36-17, finding F3). It lives here, next to the
+    count and its two exceptions, so the refusal rule is written once (IN-03 of
+    the phase 36 review). A directory the count calls corrupt, or a file that
+    does not open, is left to the reader's own ZipFile or loader, whose
+    exception carries the better diagnosis; a directory longer than
+    ARCHIVE_MAX_CENTRAL_DIRECTORY_BYTES is too many entries as well.
+    """
+    try:
+        with Path(path).open("rb") as handle:
+            size = os.fstat(handle.fileno()).st_size
+            return count_central_directory(handle, size, limit=ARCHIVE_MAX_ENTRIES) > ARCHIVE_MAX_ENTRIES
+    except OverLimit:
+        return True
+    except (CorruptDirectory, OSError):
+        return False
+
+
 def _central_directory(handle: BinaryIO, size: int) -> tuple[int, int]:
     """Start and byte length of the central directory, as zipfile computes them."""
     location, length, offset = _end_record(handle, size)
@@ -438,7 +461,7 @@ def _read_zip(path: Path, prefix: str, depth: int, budget: _ArchiveBudget, secti
         _judge_ratios(members)
         for info in members:
             if _is_traversal(info.orig_filename):
-                raise OverLimit("zip_traversal")
+                raise OverLimit(_ZIP_TRAVERSAL)
         for info in members:
             if not info.is_dir():
                 _read_member(archive, info, prefix, depth, budget, sections)

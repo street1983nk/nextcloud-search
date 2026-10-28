@@ -2294,8 +2294,20 @@ PHP_TREE_HASH_TODAY = "9a6c99ed6c39ef0bb51bc479737abff189d83e4996d4a8652c9037c28
 # vector. No file came or went, so PACKAGE_FILES_TODAY stays at 80. The PHP
 # pair moves in the same commit. Recomputed independently with find, sort, tr
 # and sha256sum over the CRLF normalised tree: 5f4d6d18... both ways.
+#
+# Moved on 2026-10-28 by Plan 39-03 (DOCS-02, IN-01 IN-02 IN-03 IN-04 IN-05 of
+# the phase 36 review): extract/archive.py raises zip_traversal through the
+# constant _ZIP_TRAVERSAL and carries too_many_entries, the one entry count
+# helper that extract/odf.py and extract/office.py now import instead of a copy
+# each; store/repo.py drop_orphan_bookmarks also drops the vanished_storages
+# stamps of storages neither listed nor living; extract/image.py and
+# extract/sandbox.py gain a comment each on the Pillow header re-read and the
+# one thread invariant it rests on. No file came or went, so
+# PACKAGE_FILES_TODAY stays at 80. The PHP pair does not move. Recomputed
+# independently with find, sort, tr and sha256sum over the CRLF normalised
+# tree: 9c6fb4a1... both ways.
 PACKAGE_FILES_TODAY = 80
-PACKAGE_TREE_HASH_TODAY = "5f4d6d18eb9fff54610b47d6e66837533bb6764126d776014d57a94526c0dd61"
+PACKAGE_TREE_HASH_TODAY = "9c6fb4a1634eb0fdce332681e8f1b6993292d3b7f036216dc209a3552839ae7e"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

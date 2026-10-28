@@ -73,7 +73,9 @@ _MAX_PIXELS: Final = 50_000_000
 # branch needs; setting it to our own budget keeps it and makes it ours. Pillow
 # warns from this value on and raises at twice it, so both halves of the range
 # are covered: the warning is caught by the explicit check below, the error by
-# the handler around the open.
+# the handler around the open. The one sanctioned exception is
+# _refused_by_pillow: after Pillow refused a picture it re-reads only the
+# header with MAX_IMAGE_PIXELS = None and puts the value back in a finally.
 Image.MAX_IMAGE_PIXELS = _MAX_PIXELS
 
 # Pixels a picture may declare per byte of its file before a refusal of Pillow
