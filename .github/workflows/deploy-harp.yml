@@ -938,7 +938,8 @@ jobs:
             echo "EXAPP_CONTAINER is empty, so there is no backend container to rotate against"
             exit 1
           fi
-          tools=$(docker exec "${EXAPP_CONTAINER}" sh -c 'command -v bash mkfifo sha256sum' | wc -l || true)
+          # One name per command -v: dash prints only the first of several.
+          tools=$(docker exec "${EXAPP_CONTAINER}" sh -c 'for t in bash mkfifo sha256sum; do command -v "$t"; done' | wc -l || true)
           if [ "${tools}" != "3" ]; then
             echo "the backend image lacks bash, mkfifo or sha256sum (found ${tools} of 3), so the watcher cannot run"
             exit 1
