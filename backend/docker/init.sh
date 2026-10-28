@@ -14,6 +14,13 @@
 # failure mode this project already pays attention to elsewhere: healthy on the
 # outside, broken on the inside.
 #
+# There is exactly one deliberate restart, and it does not live here: the watcher
+# in harp_connect.sh restarts frpc, and only frpc, when the certificate files
+# under /certs/frp have changed, at most 6 times per hour (ZERT-01, D-37-09).
+# It is a takeover of new files, not the restart of a crashed program. The
+# coupling of lifetimes below is unchanged: when the tunnel dies, harp_connect.sh
+# exits non zero and the container stops.
+#
 # bash rather than sh on purpose: `wait -n -p` is what makes this loop correct.
 # The POSIX shell of this image cannot wait for "whichever child exits first", and
 # polling with `kill -0` cannot tell a live child from an unreaped zombie.
@@ -27,6 +34,7 @@ stopping=0
 # Signals are forwarded instead of swallowed, so "docker stop" reaches uvicorn and
 # frpc. Without this, PID 1 dies first and both children are left to the kill
 # timeout, which turns every stop into a ten second wait.
+# shellcheck disable=SC2317,SC2329 # invoked through the trap below
 forward_stop() {
 	stopping=1
 	if [[ -n "${frpc_pid:-}" ]]; then

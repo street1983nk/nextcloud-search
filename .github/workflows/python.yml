@@ -189,6 +189,17 @@ jobs:
       - name: The SIGKILL cases by name (test_slots_kill.py)
         run: uv run pytest -v -rs tests/test_slots_kill.py --no-header
 
+      # Two shell scripts carry the lifetime of the container: init.sh is PID 1
+      # and harp_connect.sh watches the HaRP tunnel (phase 38). Their tests in
+      # tests/test_harp_connect_supervisor.py run on Linux only, which means
+      # here, and shellcheck is the static half of that proof. It is installed
+      # when the runner image does not carry it.
+      - name: Shell check of the tunnel scripts
+        run: |
+          command -v shellcheck || sudo apt-get install -y shellcheck
+          shellcheck --version
+          shellcheck docker/harp_connect.sh docker/init.sh
+
       # -rs names every skip of the suite with its reason, so a case that falls
       # out silently on Linux shows up in the log instead of in a count. The
       # coverage floor (fail_under in pyproject.toml) rides along here: a
