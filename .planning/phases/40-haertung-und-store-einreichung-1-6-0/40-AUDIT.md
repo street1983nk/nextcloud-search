@@ -9,12 +9,20 @@ findings:
   medium: 0
   low: 6
   total: 6
-status: open
+status: fixed
+fix_run: 2026-10-28
+fix_commits: [7193cb5a, 12f7dfe0, 7a2a68a2, 0c875261]
+fixed: [F-40-01, F-40-02, F-40-03, F-40-04]
+still_open: [F-40-05, F-40-06]
 ---
 
 # Phase 40: Launch-Audit 1.6.0 (Security, Bugs, Performance)
 
-**Stand:** offen (Security, Bugs und Performance gefahren; Fixes und LOW-Entscheidungen folgen in Task 3).
+**Stand:** geschlossen am 28.10.2026, **0 CRIT / 0 HIGH / 0 MEDIUM**. Sechs
+LOW-Befunde: vier im Produkt gefixt mit Regressionstest (F-40-01 bis F-40-04),
+zwei begründet akzeptiert (F-40-05, F-40-06, Abschnitt "LOW-Entscheidungen").
+Kein `xfail` mehr in `test_phase40_audit.py`. Alle acht Workflows auf dem
+Code-Kopf efcf26c5 grün (Abschnitt "Stand").
 
 **Umfang:** alle Änderungen des Milestones v1.6 (Phasen 37 bis 39). Basis ist
 der Tag `v1.5.1`, Kopf beim Start `336ccae7`. `git diff --stat v1.5.1..336ccae7
@@ -121,7 +129,15 @@ unter Git Bash als Gegenprobe gefahren, wo das möglich war.
   es auf dieser Box nur als Git Bash (WSL ist nur die docker-desktop-Distro).
   Die Proben sind auf win32 übersprungen und laufen echt im Schritt "The audit
   probes of 1.6.0 by name (test_phase40_audit.py)" des gates-Jobs von
-  python.yml (Lauf-ID und PASSED-Zeilen trägt Task 3 unter "Stand" nach).
+  python.yml. Lauf **Python gates 40743288537** auf efcf26c5, Schritt "The
+  audit probes of 1.6.0 by name", `64 passed, 1 skipped in 29.83s` (der
+  übersprungene ist die Timing-Reihe P1), daraus wörtlich:
+  - `tests/test_phase40_audit.py::test_s3_hostile_frpc_lines_are_passed_through_and_never_run PASSED`
+  - `tests/test_phase40_audit.py::test_s3_f_40_02_a_line_slower_than_the_poll_interval_stays_whole PASSED`
+  - `tests/test_phase40_audit.py::test_s3_symlinked_files_in_a_directory_with_blanks_switch_to_mutual_tls_once PASSED`
+  - `tests/test_phase40_audit.py::test_s3_the_copy_command_replaces_a_file_with_what_it_reads PASSED`
+  - `tests/test_phase40_audit.py::test_s3_f_40_03_an_empty_read_leaves_the_file_as_it_was PASSED`
+  - `tests/test_phase40_audit.py::test_p3_ten_idle_seconds_are_about_ten_looks_at_the_files_and_no_busy_wait PASSED`
 - **Lektüre:** kein `eval`, keine unquotierte Expansion von `${line}`; jede
   frpc-Zeile geht über `printf '%s\n' "${line}"` hinaus (nie als
   Formatstring), erkannt wird nur per `[[ "${line}" == *"..."* ]]`; keine Zeile
@@ -379,8 +395,11 @@ Verhaltensänderung für unsere Nutzung:
   (Linux): ein `sha256sum` vorn im PATH zählt die Aufrufe, 10 s Leerlauf bei
   Poll 1 s müssen höchstens ceil(10/1)+1 Blicke auf die Dateien sein und
   mindestens 5; CPU-Zeit des Wächters samt Kindern aus `/proc/<pid>/stat`
-  unter 1 s. Zahl aus dem CI-Lauf unter "Stand".
-- Flut: 10 000 x509-Zeilen unter 60 s (S3-Probe). Jede x509-Zeile kostet
+  unter 1 s. Im Lauf 40743288537 PASSED (Zeile oben unter S3), die Schranken
+  hielten; die Testdauer laut Zeitstempeln rund 10,2 s, also genau die 10 s
+  Leerlauf plus Start.
+- Flut: 10 000 x509-Zeilen unter 60 s (S3-Probe); im Lauf 40743288537 rund
+  10,7 s für die ganze Probe (Zeitstempel 18:15:47,40 bis 18:15:58,14). Jede x509-Zeile kostet
   einen Subshell-Fork für `remedy_due`; frpc wählt höchstens alle paar
   Sekunden neu, im Betrieb sind das wenige Zeilen je Minute. Kein Befund.
 
@@ -443,6 +462,75 @@ Verhaltensänderung für unsere Nutzung:
   Tombstones der ganzen Gruppe zu hoch stehen (Beispiel B6: rund 10 statt 1
   Punkt); bei voller Abdeckung keine falsche Zahl, sondern keine.
 
+## LOW-Entscheidungen
+
+| Befund | Entscheidung | Grund | Zielphase | Quelle |
+|---|---|---|---|---|
+| F-40-01 | fix (7193cb5a) | billig, keine Verhaltensänderung für die Werte, die die Seite schreibt; an einer Vertrauensgrenze wird nur die gestellte Frage beantwortet (L-36-02) | 40 | S1 |
+| F-40-02 | fix (12f7dfe0) | eine verlorene Logzeile kann genau die x509-Meldung sein, für die der Wächter existiert; der Fix ist ein Übertrag von wenigen Zeilen, gedeckelt bei 64 KiB | 40 | S3 |
+| F-40-03 | fix (7a2a68a2) | ein Bedienfehler darf ein Zertifikat nicht leeren; `test -s` kostet nichts und deploy-harp beweist den Doku-Befehl auf vier Beinen | 40 | S3 |
+| F-40-04 | fix (0c875261) | die Seite soll oberhalb der Decke wie 1.5 zählen und nicht "nicht erreichbar" melden; gleiche Regel wie die Anzahldecke | 40 | S1 |
+| F-40-05 | accept | kein Risiko für Nutzer oder Rechte: nur ein Hinweissatz fehlt im Rennen zweier Admins in derselben Millisekunde bzw. Sekunde, Suche und Zähler stimmen nach dem nächsten Recount | keine | B4 |
+| F-40-06 | accept | kein Risiko für Nutzer oder Rechte: nur die Prozentzahl der Admin-Seite steht während der Erstindexierung zu hoch, bei voller Abdeckung erscheint keine falsche Zahl; die saubere Lösung ändert das Feld `indexed` von 1.5 (deferred-items.md, v1.7) | v1.7 | B6 |
+
+**Für die Owner-Runde 40-04:**
+
+- F-40-06 berührt die Zusage von Weg C (D-37-03, "jede Freigabe zählt
+  einmal"): während der Erstindexierung kann die Abdeckung um die Tombstones
+  der ganzen Gruppe zu hoch stehen. Entscheidung hier accept; der Owner kann
+  einen Fix vor 1.6.0 verlangen (dann `indexedLeftOut` mit Tombstones zählen
+  wie `indexed`, eine Zeile SQL plus Tests).
+- F-40-03 ändert den Kopierbefehl in docs/harp-tunnel.md (Ziel der
+  Abhilfe-Zeile und der Entwürfe zu Issue #33 und HaRP-Upstream). Die Entwürfe
+  verlinken nur die Doku und zitieren den Befehl nicht; kein Store-Text,
+  kein Katalogsatz betroffen.
+
+## Fixes
+
+| Befund | Commit | Fix | Regressionstest |
+|---|---|---|---|
+| F-40-01 | 7193cb5a | `LEAVE_OUT_PATTERN` = `^(0\|[1-9][0-9]{0,17})(,(0\|[1-9][0-9]{0,17}))*$`; Paket-Baumhash 9c6fb4a1 auf 3c7df60a (beide Wege), Journal "Plan 40-01 (audit fix F-40-01)" | `test_s1_f_40_01_only_canonical_numbers_are_taken` (vorher strict xfail), Positivkontrolle `test_s1_f_40_01_canonical_numbers_are_still_taken` |
+| F-40-02 | 12f7dfe0 | Übertrag `partial` der unfertigen Zeile in der Leseschleife von harp_connect.sh, gedeckelt bei 64 KiB | `test_s3_f_40_02_a_line_slower_than_the_poll_interval_stays_whole` (vorher strict xfail; rot und grün unter Git Bash, grün in Python gates 40743288537), dazu die 64-KiB-Zeile der Injektionsprobe |
+| F-40-03 | 7a2a68a2 | `test -s` vor `mv -f` im Kopierbefehl von docs/harp-tunnel.md und im Rotationsschritt von deploy-harp.yml, ein Satz dazu in der Doku | `test_s3_f_40_03_an_empty_read_leaves_the_file_as_it_was` (vorher strict xfail; mit sh unter Git Bash rot und grün), HaRP deploy 40743288892 heilt mit dem neuen Befehl |
+| F-40-04 | 0c875261 | `AdminViewService::LEAVE_OUT_MAX_LENGTH = 8000`, `leaveOutParameters` nennt nichts Längeres; PHP-Baumhash 2b5effd0 auf 3e366f7a (beide Wege), Journal "Plan 40-01 (audit fix F-40-04)" | `test_s1_f_40_04_the_page_holds_the_length_ceiling_of_the_route_too` (vorher strict xfail), PHPUnit `testLeftOutIdsLongerThanTheRouteTakesAreNotNamed` (PHP gates 40743288689) |
+
+Dazu ohne Befund: 4965dcc2 verschiebt den PHP-Baumhash 9a6c99ed auf 2b5effd0
+für den B1-Fall in StorageServiceTest; efcf26c5 bringt
+`scripts/ci/head_green.sh` und den Schritt "The audit probes of 1.6.0 by
+name" in python.yml (für die PASSED-Zeilen von S3).
+
+Gates vor jedem Code-Commit: ruff check, ruff format (239 Dateien), pyright
+latest 0 Fehler, vulture sauber, `-k tree_hash` grün. Volle Suite lokal auf
+efcf26c5 mit der Ignore-Liste der Phase (sechs docker-Module): **6095 passed,
+69 skipped** in 11:00. Python gates auf efcf26c5: **6400 passed, 254 skipped**
+in 9:54.
+
+## Stand
+
+**0 CRIT / 0 HIGH / 0 MEDIUM.** Sechs LOW, vier gefixt (F-40-01 bis
+F-40-04), zwei akzeptiert (F-40-05, F-40-06). Kein `xfail(` in
+test_phase40_audit.py.
+
+`scripts/ci/head_green.sh efcf26c5 "Python gates" "PHP and store metadata gates"
+"HaRP deploy" "Integration" "Resilience" "Multi-arch image" "Security scans"`
+endete mit Exit 0, alle Läufe des Code-Kopfs efcf26c5:
+
+| Lauf | Workflow | Ergebnis |
+|---|---|---|
+| 40743288537 | Python gates | success |
+| 40743288689 | PHP and store metadata gates | success |
+| 40743288892 | HaRP deploy | success |
+| 40743288570 | Integration | success |
+| 40743288490 | Resilience | success |
+| 40743288507 | Multi-arch image | success |
+| 40743288478 | Security scans | success |
+| 40743288696 | OpenSSF Scorecard | success |
+
+Damit ist der offene Punkt aus 39-01-SUMMARY ("php.yml- und python.yml-Lauf vor
+dem Audit-Gate") erledigt: PHP gates 40743288689 und Python gates 40743288537
+auf einem Kopf, der den 39-01-Stand enthält. Den Doku-Kopf nach diesem
+Abschluss belegt "Security scans" (Lauf-ID in 40-01-SUMMARY.md).
+
 ## Was gegengeprüft wurde, nicht nur gelesen
 
 | Prüfung | Verfahren (anders als die Umsetzung) | Ergebnis |
@@ -455,4 +543,4 @@ Verhaltensänderung für unsere Nutzung:
 | B2 | Container-Zähler gegen ihre Minuenden statt der PHP-Klammer | nie größer |
 | B6 | Tombstone im Probebestand statt Lektüre von 39-01 | F-40-06 beziffert |
 | P1 | echte Decke 100 000 statt gesenkter, 100 000 Zeilen per Bulk-Insert | Feld fehlt ab 100 001 |
-| P3 | sha256sum vorn im PATH zählt die Schleife, CPU aus /proc | Zahl in Stand |
+| P3 | sha256sum vorn im PATH zählt die Schleife, CPU aus /proc | Schranken halten (CI) |
