@@ -1086,7 +1086,7 @@ jobs:
           # file (pitfall 2).
           for f in ca.crt client.crt client.key; do
             docker exec appapi-harp cat "/certs/frp/${f}" \
-              | docker exec -i "${EXAPP_CONTAINER}" sh -c 'umask 077; cat > "/certs/frp/.$1.new" && mv -f "/certs/frp/.$1.new" "/certs/frp/$1"' sh "${f}"
+              | docker exec -i "${EXAPP_CONTAINER}" sh -c 'umask 077; cat > "/certs/frp/.$1.new" && test -s "/certs/frp/.$1.new" && mv -f "/certs/frp/.$1.new" "/certs/frp/$1"' sh "${f}"
           done
           repaired=${SECONDS}
           ca_inside=$(docker exec "${EXAPP_CONTAINER}" sha256sum /certs/frp/ca.crt | cut -d' ' -f1)

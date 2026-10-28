@@ -568,11 +568,13 @@ def test_s3_the_copy_command_replaces_a_file_with_what_it_reads(tmp_path: Path) 
     assert _mode(tmp_path / "client.key") == 0o600
 
 
-@pytest.mark.xfail(strict=True, reason="F-40-03: an empty read (wrong HaRP name) empties the file in the backend")
 @_ON_LINUX_WITH_BASH
 def test_s3_f_40_03_an_empty_read_leaves_the_file_as_it_was(tmp_path: Path) -> None:
-    # What the backend half gets when the first `docker exec "$HARP" cat` fails,
-    # for a mistyped HARP name for example: nothing at all on stdin.
+    """F-40-03, fixed: test -s in the copy command (strict xfail before the fix).
+
+    What the backend half gets when the first `docker exec "$HARP" cat` fails,
+    for a mistyped HARP name for example: nothing at all on stdin.
+    """
     (tmp_path / "client.key").write_bytes(b"OLD\n")
 
     _copy_in(tmp_path, "client.key", b"")

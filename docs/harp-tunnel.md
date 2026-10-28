@@ -49,13 +49,15 @@ it). The backend container is `nc_app_findling_backend`.
 HARP=appapi-harp
 for f in ca.crt client.crt client.key; do
   docker exec "$HARP" cat "/certs/frp/$f" \
-    | docker exec -i nc_app_findling_backend sh -c 'umask 077; cat > "/certs/frp/.$1.new" && mv -f "/certs/frp/.$1.new" "/certs/frp/$1"' sh "$f"
+    | docker exec -i nc_app_findling_backend sh -c 'umask 077; cat > "/certs/frp/.$1.new" && test -s "/certs/frp/.$1.new" && mv -f "/certs/frp/.$1.new" "/certs/frp/$1"' sh "$f"
 done
 ```
 
 - Do not use `docker cp` here: the files would belong to root and `client.key`
   would not be readable for the app user. `docker exec` writes as the app user.
 - The temporary name plus `mv -f` means frpc never reads half a file.
+- `test -s` keeps the file in place when nothing arrived, for example after a
+  mistyped `HARP` name: an empty read never replaces a certificate.
 - Expected within about 20 seconds in the backend log: `login to server success`,
   then `harp_connect: the tunnel is connected again`. No container restart is
   needed.
