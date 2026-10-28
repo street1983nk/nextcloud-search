@@ -1101,8 +1101,14 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # backend; tests/Unit/AdminViewServiceTest.php holds it. No file came or went, so PHP_FILES_TODAY stays
 # at 108. Recomputed independently with find, sort, tr and sha256sum over the CRLF normalised tree:
 # 3e366f7a... both ways.
-PHP_FILES_TODAY = 108
-PHP_TREE_HASH_TODAY = "3e366f7a0ff9747451dfb1da0c8499911c9d6412ba67c16cbb5ca71acc3b6e64"
+# Moved on 2026-10-28 by Plan 40-02 (REL-06): minor migration Version001600Date20261028000000 and its
+# test, the failing test first: one file came, php/tests/Unit/Version001600Date20261028000000Test.php
+# (the recorded version dropped and named, the no-op without one, a second run, the class name equal to
+# the file name, the app configuration as the only collaborator), so PHP_FILES_TODAY moves to 109.
+# Recomputed independently with find, sort, tr and sha256sum over the CRLF normalised tree: d3ab4f7d...
+# both ways.
+PHP_FILES_TODAY = 109
+PHP_TREE_HASH_TODAY = "d3ab4f7d8c060687b694877d1778288d143c486736d624b8bef00b3a76414cfe"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
