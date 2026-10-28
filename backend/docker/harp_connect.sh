@@ -11,8 +11,11 @@
 # of it as a small watcher (ZERT-01, owner decision D-37-09):
 #
 #   - every frpc line is passed through unchanged;
-#   - an x509 failure with unchanged certificate files is reported with its
-#     remedy, on a slowing schedule, and never answered with a restart: frpc
+#   - an x509 failure, or a run of failed logins that ends in no success (frps
+#     may refuse the old client certificate before frpc ever sees the new
+#     server one, run 40704387898), with unchanged certificate files is
+#     reported with its remedy, on a slowing schedule, and never answered with
+#     a restart: frpc
 #     reads the files on every dial and retries on its own, a restart would read
 #     the same files and fail the same way;
 #   - when ca.crt, client.crt and client.key under /certs/frp change and stay
@@ -111,6 +114,8 @@ check_port APP_PORT "${APP_PORT}"
 #                                          x509 since the last success at which
 #                                          the remedy line is printed
 #   FINDLING_HARP_REMEDY_REPEAT_SECONDS    interval after the last of those, >= 1
+#   FINDLING_HARP_SUSPECT_AFTER_ERRORS     failed logins in a row without a
+#                                          success that count like an x509, >= 1
 FRPC_BIN="${FINDLING_FRPC_BIN:-/usr/local/bin/frpc}"
 POLL_SECONDS="${FINDLING_HARP_CERT_POLL_SECONDS:-10}"
 MIN_GAP="${FINDLING_HARP_RESTART_MIN_GAP_SECONDS:-60}"
@@ -118,6 +123,8 @@ CAP="${FINDLING_HARP_RESTART_CAP:-6}"
 CAP_WINDOW="${FINDLING_HARP_CAP_WINDOW_SECONDS:-3600}"
 REMEDY_SCHEDULE="${FINDLING_HARP_REMEDY_SCHEDULE:-0,300,900,3600}"
 REMEDY_REPEAT="${FINDLING_HARP_REMEDY_REPEAT_SECONDS:-3600}"
+# Six failed logins are about two minutes at the 20 s backoff of frpc.
+SUSPECT_AFTER="${FINDLING_HARP_SUSPECT_AFTER_ERRORS:-6}"
 
 # Same shape as check_port: a value that is not a whole number would break the
 # arithmetic below in a way that reads like a bug in this file. Nine digits keep
@@ -144,11 +151,13 @@ check_count FINDLING_HARP_RESTART_MIN_GAP_SECONDS "${MIN_GAP}" 0
 check_count FINDLING_HARP_RESTART_CAP "${CAP}" 0
 check_count FINDLING_HARP_CAP_WINDOW_SECONDS "${CAP_WINDOW}" 1
 check_count FINDLING_HARP_REMEDY_REPEAT_SECONDS "${REMEDY_REPEAT}" 1
+check_count FINDLING_HARP_SUSPECT_AFTER_ERRORS "${SUSPECT_AFTER}" 1
 POLL_SECONDS=$((10#${POLL_SECONDS}))
 MIN_GAP=$((10#${MIN_GAP}))
 CAP=$((10#${CAP}))
 CAP_WINDOW=$((10#${CAP_WINDOW}))
 REMEDY_REPEAT=$((10#${REMEDY_REPEAT}))
+SUSPECT_AFTER=$((10#${SUSPECT_AFTER}))
 
 bad_schedule() {
 	echo "harp_connect: FINDLING_HARP_REMEDY_SCHEDULE is '${REMEDY_SCHEDULE}', which is not a list of whole seconds in ascending order" >&2
@@ -286,6 +295,7 @@ cap_reported=0
 x509_open=0
 x509_since=0
 remedy_sent=0
+failed_logins=0
 
 # docker stop reaches this script, not frpc, so the signal is passed on. After a
 # stop the script exits 0, which docker/init.sh ignores while it is stopping.
@@ -351,7 +361,7 @@ on_x509() {
 	if [ "$(fingerprint)" != "${running_fp}" ]; then
 		return 0
 	fi
-	echo "harp_connect: the tunnel certificate is no longer accepted by HaRP (x509), most likely HaRP was restarted without its /certs volume and issued a new CA; frpc keeps retrying and picks up new files in ${CERT_DIR} by itself; copy them in or re-register the app, see https://github.com/street1983nk/nextcloud-search/blob/main/docs/harp-tunnel.md#repair-without-re-registering" >&2
+	echo "harp_connect: the tunnel certificate is possibly no longer accepted by HaRP (x509 or repeated failed logins), most likely HaRP was restarted without its /certs volume and issued a new CA; frpc keeps retrying and picks up new files in ${CERT_DIR} by itself; copy them in or re-register the app, see https://github.com/street1983nk/nextcloud-search/blob/main/docs/harp-tunnel.md#repair-without-re-registering" >&2
 	remedy_sent=$((remedy_sent + 1))
 	# One line per x509, never a burst: offsets missed while the files were
 	# changing are skipped.
@@ -448,11 +458,21 @@ last_check=${SECONDS}
 while :; do
 	if IFS= read -r -t "${POLL_SECONDS}" line <&3; then
 		printf '%s\n' "${line}"
-		if [[ "${line}" == *"connect to server error:"* && "${line}" == *"x509: "* ]]; then
-			on_x509
-		elif [[ "${line}" == *"login to server success"* ]] && ((x509_open)); then
-			echo "harp_connect: the tunnel is connected again"
-			x509_open=0
+		if [[ "${line}" == *"connect to server error:"* ]]; then
+			# A refused or unreachable dial means HaRP is not up; the
+			# certificate never got a say, so it does not count.
+			if [[ "${line}" != *"dial tcp"* ]]; then
+				failed_logins=$((failed_logins + 1))
+			fi
+			if [[ "${line}" == *"x509: "* ]] || ((failed_logins >= SUSPECT_AFTER)); then
+				on_x509
+			fi
+		elif [[ "${line}" == *"login to server success"* ]]; then
+			failed_logins=0
+			if ((x509_open)); then
+				echo "harp_connect: the tunnel is connected again"
+				x509_open=0
+			fi
 		fi
 	else
 		status=$?
