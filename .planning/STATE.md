@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
 status: executing
-stopped_at: 38 komplett (Verifier laeuft), 39-01+39-02 fertig und auf main, 39-03 in Arbeit, 39-04 danach; Owner-Aufgaben Desktop-Entwuerfe #33 und HaRP-Upstream
+stopped_at: 38 komplett (Verifier laeuft), 39-01+39-02 fertig und auf main, 39-03 fertig (lokal, d26c3579), 39-04 danach; Owner-Aufgaben Desktop-Entwuerfe #33 und HaRP-Upstream
 last_updated: "2026-10-28T14:19:03.088Z"
 last_activity: 2026-10-28, Plan 38-02 abgeschlossen (deploy-harp 40696292903 gruen auf allen vier Beinen, Heilung 8 bis 19 s nach dem Kopieren)
 progress:
