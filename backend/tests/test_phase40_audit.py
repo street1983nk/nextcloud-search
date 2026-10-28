@@ -184,17 +184,31 @@ def test_s1_a_repeated_id_counts_once(client: TestClient, sign: Sign, volume: Pa
     assert (thrice["indexedLeftOut"], thrice["embeddedLeftOut"]) == (2, 2)
 
 
-@pytest.mark.xfail(strict=True, reason="F-40-01: leaveOut takes a leading zero and answers for storage 1")
 @pytest.mark.usefixtures("appapi_environment")
-@pytest.mark.parametrize("value", ["01", "1,02", "00"])
+@pytest.mark.parametrize("value", ["01", "1,02", "00", "0" + "9" * 17])
 def test_s1_f_40_01_only_canonical_numbers_are_taken(client: TestClient, sign: Sign, volume: Path, value: str) -> None:
-    # Lesson L-36-02: a route at a trust boundary answers the question that
-    # was asked and no other. "01" is not the storage id 1 as PHP writes it.
+    """F-40-01, fixed: a leading zero is a 422 (strict xfail before the fix).
+
+    Lesson L-36-02: a route at a trust boundary answers the question that was
+    asked and no other. "01" is not the storage id 1 as PHP writes it.
+    """
     _state(volume)
 
     response = client.get("/status", params={"leaveOut": value}, headers=sign("admin"))
 
     assert response.status_code == 422, response.text
+
+
+@pytest.mark.usefixtures("appapi_environment")
+@pytest.mark.parametrize("value", ["0", "1", "10", "1,20,300", "9" * 18, "100000000000000000"])
+def test_s1_f_40_01_canonical_numbers_are_still_taken(client: TestClient, sign: Sign, volume: Path, value: str) -> None:
+    # The positive control of the fix: every form the page writes still passes.
+    _state(volume)
+
+    response = client.get("/status", params={"leaveOut": value}, headers=sign("admin"))
+
+    assert response.status_code == 200, response.text
+    assert "indexedLeftOut" in response.json()
 
 
 @pytest.mark.usefixtures("appapi_environment")

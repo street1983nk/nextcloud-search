@@ -138,8 +138,11 @@ PROFILE_VALUE_KEYS: Final = {
 # The parameter leaveOut of plan 39-01 (Weg C, T-39-02): storage ids, digits and
 # commas only, at most 18 digits each so that every id fits the integer of
 # SQLite, at most LEAVE_OUT_MAX_IDS of them and LEAVE_OUT_MAX_LENGTH characters
-# in all. Anything else is a 422 before a statement runs.
-LEAVE_OUT_PATTERN: Final = r"^[0-9]{1,18}(,[0-9]{1,18})*$"
+# in all. Anything else is a 422 before a statement runs. Canonical numbers only,
+# no leading zero (finding F-40-01 of audit 40-01, the rule of L-36-02): "01" is
+# not how the page writes storage 1, and a route at a trust boundary answers the
+# question that was asked and no other.
+LEAVE_OUT_PATTERN: Final = r"^(0|[1-9][0-9]{0,17})(,(0|[1-9][0-9]{0,17}))*$"
 LEAVE_OUT_MAX_LENGTH: Final = 8000
 LEAVE_OUT_MAX_IDS: Final = 1000
 # Above this many living indexed documents in the left out storages, the vector
