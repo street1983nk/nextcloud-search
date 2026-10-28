@@ -216,6 +216,35 @@ def test_the_answer_carries_the_counters_the_versions_and_nothing_else(
     assert answer["wordlistHash"] == indexed_volume.digest
 
 
+def test_an_old_companion_without_the_parameter_gets_no_new_field(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    # Plan 39-01: the two counters of the deduplicated coverage exist only for
+    # a caller that names storages in leaveOut. A companion of 1.5 does not,
+    # and its answer stays the closed field set above, key for key.
+    answer = _status(client, sign("admin"))
+
+    assert set(answer) == FIELDS
+    assert "indexedLeftOut" not in answer
+    assert "embeddedLeftOut" not in answer
+
+
+def test_with_the_parameter_exactly_the_two_counters_join_the_field_set(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    response = client.get("/status", params={"leaveOut": "1"}, headers=sign("admin"))
+
+    assert response.status_code == 200, response.text
+    answer = response.json()
+    assert set(answer) == FIELDS | {"indexedLeftOut", "embeddedLeftOut"}
+    assert answer["indexedLeftOut"] == indexed_volume.documents
+    assert answer["embeddedLeftOut"] == 0
+
+
 def test_the_counters_name_every_state_including_the_empty_ones(
     client: TestClient,
     sign: Sign,

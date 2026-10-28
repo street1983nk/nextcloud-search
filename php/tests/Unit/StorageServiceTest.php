@@ -47,6 +47,9 @@ final class StorageServiceTest extends TestCase {
 	/** The numeric ids oc_storages holds. @var list<int> */
 	private array $storages = [];
 
+	/** The string id of oc_storages per numeric id, for countingKeyGroups(). @var array<int, string> */
+	private array $storageKeys = [];
+
 	/** The rows of oc_mounts. @var list<array{storage_id: int, mount_provider_class: string}> */
 	private array $mounts = [];
 
@@ -118,8 +121,11 @@ final class StorageServiceTest extends TestCase {
 
 			$rows = match ($table) {
 				'storages' => array_map(
-					static fn (int $id): array => ['numeric_id' => (string)$id],
-					array_values(array_intersect($this->storages, $ints)),
+					fn (int $id): array => ['numeric_id' => (string)$id, 'id' => $this->storageKeys[$id] ?? 'home::user' . $id],
+					array_values(array_intersect(
+						array_values(array_unique(array_merge($this->storages, array_keys($this->storageKeys)))),
+						$ints,
+					)),
 				),
 				'mounts' => array_values(array_filter(
 					$this->mounts,
@@ -240,5 +246,114 @@ final class StorageServiceTest extends TestCase {
 		$answer = $this->service(teamFolders: false, external: true)->classifyAbsent([12, 9, 12]);
 
 		self::assertSame(['gone' => [], 'deselected' => [12]], $answer);
+	}
+
+	// -- Weg C: the counting key of a share mounted once per user (plan 39-01) --
+
+	public function testOneShareMountedForTwoUsersIsOneGroup(): void {
+		// Root '/' as SMB.php writes it: share, slash, root with both slashes.
+		$this->storageKeys = [
+			31 => 'smb::bert@fs.example//team//',
+			17 => 'smb::anna@fs.example//team//',
+			5 => 'home::anna',
+		];
+
+		$groups = $this->service(external: true)->countingKeyGroups([31, 5, 17]);
+
+		self::assertSame([[17, 31]], $groups);
+		self::assertSame($this->opened, $this->closed, 'every cursor is closed');
+	}
+
+	public function testARootWithTheUserInItIsNeverAGroup(): void {
+		// The positive control of T-39-03: $user in the root is replaced per
+		// user before the id is built, so the two trees differ and stay apart.
+		$this->storageKeys = [
+			17 => 'smb::anna@fs.example//team/anna/',
+			31 => 'smb::bert@fs.example//team/bert/',
+		];
+
+		self::assertSame([], $this->service(external: true)->countingKeyGroups([17, 31]));
+	}
+
+	public function testAnotherHostOrAnotherShareIsNeverAGroup(): void {
+		$this->storageKeys = [
+			17 => 'smb::anna@fs.example//team//',
+			31 => 'smb::bert@fs2.example//team//',
+			40 => 'smb::carl@fs.example//archive//',
+		];
+
+		self::assertSame([], $this->service(external: true)->countingKeyGroups([17, 31, 40]));
+	}
+
+	public function testALoginNameWithAnAtSignKeepsTheHostAfterTheLastOne(): void {
+		self::assertSame('smb::fs.example//team//', StorageService::countingKey('smb::anna@corp.example@fs.example//team//'));
+
+		$this->storageKeys = [
+			17 => 'smb::anna@corp.example@fs.example//team//',
+			31 => 'smb::bert@fs.example//team//',
+		];
+
+		self::assertSame([[17, 31]], $this->service(external: true)->countingKeyGroups([17, 31]));
+	}
+
+	public function testSftpIsGroupedWithItsPortAndOtherBackendsAreNot(): void {
+		self::assertSame('sftp::fs.example:2222//data/', StorageService::countingKey('sftp::anna@fs.example:2222//data/'));
+		self::assertNotSame(
+			StorageService::countingKey('sftp::anna@fs.example:2222//data/'),
+			StorageService::countingKey('sftp::bert@fs.example//data/'),
+		);
+
+		foreach ([
+			'home::anna',
+			'local::/var/www/data/',
+			'object::store:amazon::bucket',
+			'object::user:anna',
+			'webdav::anna@dav.example/remote.php/webdav//',
+			'owncloud::anna@cloud.example//',
+			'amazon::bucket',
+			'smb::fs.example//team//',
+			'smb::@//team//',
+			'smb::anna@fs.example',
+			'',
+		] as $storageId) {
+			self::assertNull(StorageService::countingKey($storageId), $storageId);
+		}
+	}
+
+	public function testAnIdNextcloudHashedIsNeverAGroup(): void {
+		// Ids above 64 characters are stored as their md5 (Storage.php:100-103).
+		$hashedA = md5('smb::anna@fs.example//' . str_repeat('x', 80));
+		$hashedB = md5('smb::bert@fs.example//' . str_repeat('x', 80));
+		self::assertNull(StorageService::countingKey($hashedA));
+
+		$this->storageKeys = [17 => $hashedA, 31 => $hashedB, 40 => $hashedA];
+
+		self::assertSame([], $this->service(external: true)->countingKeyGroups([17, 31, 40]));
+	}
+
+	public function testTheAnswerCarriesNumbersOnlyAndAsksInBands(): void {
+		// 250 users of one share: one group of 250 storage ids, two bands.
+		$this->storageKeys = [];
+		foreach (range(1, 250) as $storageId) {
+			$this->storageKeys[$storageId] = 'smb::user' . $storageId . '@fs.example//team//';
+		}
+
+		$groups = $this->service(external: true)->countingKeyGroups(array_reverse(range(1, 250)));
+
+		self::assertSame([range(1, 250)], $groups);
+		foreach ($groups as $group) {
+			foreach ($group as $member) {
+				self::assertIsInt($member);
+			}
+		}
+		self::assertSame([['storages', 200], ['storages', 50]], $this->bands);
+	}
+
+	public function testFewerThanTwoStoragesAskNothing(): void {
+		$this->db->expects(self::never())->method('getQueryBuilder');
+
+		self::assertSame([], $this->service(external: true)->countingKeyGroups([]));
+		self::assertSame([], $this->service(external: true)->countingKeyGroups([17]));
+		self::assertSame([], $this->service(external: true)->countingKeyGroups([0, -3, 17]));
 	}
 }

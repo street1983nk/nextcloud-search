@@ -1046,8 +1046,15 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # and tests/Unit/QueueControllerTest.php hold the cases. No file came or went, so PHP_FILES_TODAY stays at
 # 107. Recomputed independently with find, sort, tr and sha256sum over the CRLF normalised tree:
 # f8eaf591... both ways.
-PHP_FILES_TODAY = 107
-PHP_TREE_HASH_TODAY = "f8eaf591d79298fbc64bfffa2840f5e5346e74eebe7dc4a7249bbde54ec817c8"
+# Moved on 2026-10-28 by Plan 39-01 (DEDUP-02, Weg C, D-37-03), the failing tests first:
+# tests/Unit/StorageServiceTest.php holds the counting key cases (one share for two users is one group,
+# a root with $user in it is none, another host or share is none, a login name with an @, sftp with its
+# port, an id Nextcloud hashed, numbers only in bands) and one test came,
+# tests/Unit/ScanStatsServiceTest.php (both sets of totals, the representative, members outside the
+# mount list, bands). No file went, so PHP_FILES_TODAY moves to 108. Recomputed independently with
+# find, sort, tr and sha256sum over the CRLF normalised tree: 7c10871b... both ways.
+PHP_FILES_TODAY = 108
+PHP_TREE_HASH_TODAY = "7c10871b73728fae048d9d99c07d659a493c86690814f8dc78ed8b5f83c63c7a"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
