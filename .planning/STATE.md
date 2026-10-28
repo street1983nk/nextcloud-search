@@ -6,7 +6,7 @@ status: planning
 last_updated: "2026-10-28T11:27:47.560Z"
 last_activity: 2026-10-28
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,17 +17,19 @@ progress:
 
 ## Project Reference
 
-Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .planning/MILESTONES.md (v1.0 bis v1.4).
+Siehe .planning/PROJECT.md (Stand nach v1.5, Milestone v1.6 gestartet) und .planning/MILESTONES.md (v1.0 bis v1.5).
 
 **Core Value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 36 , Haertung und Store-Einreichung 1.5.0
+**Current focus:** Phase 37, Owner-Tor und Store-Sichtbarkeit (parallel startbar: Phase 38 Zertifikatsrotation)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-10-28 — Milestone v1.6 started
+Phase: 37 von 37-40 (Owner-Tor und Store-Sichtbarkeit)
+Plan: Noch keiner (Phase nicht geplant)
+Status: Ready to plan
+Last activity: 2026-10-28, Roadmap v1.6 erstellt (4 Phasen, 11/11 Anforderungen zugeordnet)
+
+Progress: [----------] 0%
 
 ## Performance Metrics
 
@@ -83,6 +85,14 @@ Last activity: 2026-10-28 — Milestone v1.6 started
 - v1.5: 36-16 in ca. 15 min nach dem Dispatch (3 Tasks, 5 Dateien; Freigabe und Dispatch durch den Koordinator)
 
 ## Accumulated Context
+
+### Decisions (Roadmap v1.6)
+
+- Vier Phasen 37 bis 40 (Granularitaet coarse, kleiner Milestone, Ziel-Einreichung 29.10.2026).
+- Phase 37 ist das einzige Owner-Tor vor dem Bau: D1-D4 der Dedup-Notiz plus Anzeigename, discussion-Link und Cross-Promo-Wortlaut in EINER Remote-Runde (Owner verreist). STORE-01/02 werden direkt nach der Abnahme in beide info.xml eingespielt.
+- Phase 38 (ZERT, Issue #33) haengt an keinem Owner-Entscheid und darf parallel zu Phase 37 starten; Beweis in CI, weil Docker auf der Entwicklerbox haengt.
+- Phase 39 buendelt alle Feinschliff-Punkte (ANZE, DEDUP-02, DOCS) und haengt nur wegen des Dedup-Umfangs an Phase 37; Weg B nur bei D1 = (a) und passendem Zeitrahmen, sonst dokumentiert vertagt.
+- Phase 40 traegt REL-06 (Audit-Gate, UPGRADE_FROM_TAG=v1.5.0, Owner-Abnahme remote, Einreichung).
 
 ### Decisions (Roadmap v1.5)
 
@@ -203,9 +213,10 @@ Items acknowledged and deferred at milestone close on 2026-10-28 (Owner-Wiedervo
 ## Session Continuity
 
 Last session: 2026-10-28T11:30:00.000Z
-Stopped at: Phase 36 complete, Milestone v1.5 wird geschlossen
+Stopped at: Roadmap v1.6 erstellt, Phase 37 bereit zur Planung
 Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Phase 37 planen mit /gsd:plan-phase 37 (Owner-Tor-Vorlage D1-D4 plus Store-Wortlaute)
+- Parallel moeglich: /gsd:plan-phase 38 (Zertifikatsrotation, Issue #33)

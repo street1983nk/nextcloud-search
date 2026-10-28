@@ -51,18 +51,18 @@
 
 ## Traceability
 
-(Wird vom Roadmap-Schritt gefuellt.)
+Gefuellt vom Roadmap-Schritt am 2026-10-28. Abdeckung: 11/11 v1.6-Anforderungen je genau einer Phase zugeordnet.
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| ZERT-01 | TBD | Pending |
-| ZERT-02 | TBD | Pending |
-| ANZE-01 | TBD | Pending |
-| ANZE-02 | TBD | Pending |
-| DEDUP-01 | TBD | Pending |
-| DEDUP-02 | TBD | Pending |
-| DOCS-01 | TBD | Pending |
-| DOCS-02 | TBD | Pending |
-| STORE-01 | TBD | Pending |
-| STORE-02 | TBD | Pending |
-| REL-06 | TBD | Pending |
+| ZERT-01 | Phase 38 | Pending |
+| ZERT-02 | Phase 38 | Pending |
+| ANZE-01 | Phase 39 | Pending |
+| ANZE-02 | Phase 39 | Pending |
+| DEDUP-01 | Phase 37 | Pending |
+| DEDUP-02 | Phase 39 | Pending |
+| DOCS-01 | Phase 39 | Pending |
+| DOCS-02 | Phase 39 | Pending |
+| STORE-01 | Phase 37 | Pending |
+| STORE-02 | Phase 37 | Pending |
+| REL-06 | Phase 40 | Pending |
