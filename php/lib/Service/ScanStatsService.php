@@ -408,10 +408,9 @@ final class ScanStatsService {
 
 			$result = $qb->executeQuery();
 			try {
-				while (($row = $result->fetch()) !== false) {
-					if (!is_array($row)) {
-						continue;
-					}
+				// is_array() and not !== false: a cursor that answers anything but
+				// a row ends the loop instead of spinning on it.
+				while (is_array($row = $result->fetch())) {
 					$storageId = (int)($row['storage_id'] ?? 0);
 					if ($storageId <= 0) {
 						continue;

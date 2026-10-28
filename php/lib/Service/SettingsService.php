@@ -210,6 +210,20 @@ final class SettingsService {
 	public const KEY_SCAN_RECOUNTED_AT = 'scan_recounted_at';
 
 	/**
+	 * When an admin last saved a set of rules that differed from the one in
+	 * force, as a unix time; zero when there is nothing to tell (plan 39-01,
+	 * ANZE-02, L-36-06).
+	 *
+	 * Written by SettingsController::saveRules only when folders, patterns,
+	 * cap or one of the two switches changed, read by the status page against
+	 * KEY_SCAN_RECOUNTED_AT and the job list, and cleared by the page once the
+	 * recount and the sweep after the change are through. The search applies a
+	 * new rule at once; the counters of the page follow with the next recount,
+	 * and this stamp is what lets the page say so in between.
+	 */
+	public const KEY_RULES_CHANGED_AT = 'rules_changed_at';
+
+	/**
 	 * The longest a quiet instance goes without a recount, one day.
 	 *
 	 * A change that no event announced (occ files:scan, a file written straight
@@ -292,6 +306,46 @@ final class SettingsService {
 	public function beginRecount(int $now): void {
 		$this->appConfig->setValueInt(Application::APP_ID, self::KEY_SCAN_STALE_SINCE, 0);
 		$this->appConfig->setValueInt(Application::APP_ID, self::KEY_SCAN_RECOUNTED_AT, $now);
+	}
+
+	/** When the last recount started, as a unix time; zero before the first one. */
+	public function scanRecountedAt(): int {
+		return max(0, $this->appConfig->getValueInt(Application::APP_ID, self::KEY_SCAN_RECOUNTED_AT, 0));
+	}
+
+	/**
+	 * A changed set of rules was saved now (plan 39-01, ANZE-02).
+	 *
+	 * The caller decides that the set changed; this only stamps the time, at
+	 * least one so that the stamp is never the zero of "nothing to tell".
+	 * Without an argument the time comes from the time factory of this class.
+	 */
+	public function rememberRulesChange(?int $now = null): void {
+		$this->appConfig->setValueInt(
+			Application::APP_ID,
+			self::KEY_RULES_CHANGED_AT,
+			max(1, $now ?? $this->timeFactory->getTime()),
+		);
+	}
+
+	/** When a changed set of rules was last saved, zero when there is nothing to tell. */
+	public function rulesChangedAt(): int {
+		return max(0, $this->appConfig->getValueInt(Application::APP_ID, self::KEY_RULES_CHANGED_AT, 0));
+	}
+
+	/**
+	 * The counters caught up with the last change: the stamp goes back to zero.
+	 *
+	 * Called by the status page once the recount and the sweep after the
+	 * change are through, so that a later routine crawl does not bring the
+	 * hint back. Writes only while there is a stamp.
+	 */
+	public function forgetRulesChange(): void {
+		if ($this->rulesChangedAt() === 0) {
+			return;
+		}
+
+		$this->appConfig->setValueInt(Application::APP_ID, self::KEY_RULES_CHANGED_AT, 0);
 	}
 
 	/**

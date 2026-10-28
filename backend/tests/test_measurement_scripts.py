@@ -1080,8 +1080,18 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # not, and hands the job list to AdminViewService. No file came or went, so PHP_FILES_TODAY stays at 108.
 # Recomputed independently with find, sort, tr and sha256sum over the CRLF normalised tree: eb26f454...
 # both ways.
+# Moved on 2026-10-28 a sixth time by Plan 39-01 (ANZE-01, ANZE-02): lib/Service/SettingsService.php
+# carries rules_changed_at (rememberRulesChange, rulesChangedAt, forgetRulesChange) and scanRecountedAt;
+# lib/Controller/SettingsController.php stamps it in saveRules only when folders, patterns, cap or a
+# switch changed; lib/Service/AdminViewService.php takes the job list and answers coverage.rulesPending
+# (one row per job class at most, the stamp cleared once recount and sweep are through);
+# templates/admin.php renders findling-coverage-leftout-explain, findling-coverage-leftout-none and
+# findling-coverage-rules-pending. lib/Service/StorageService.php and lib/Service/ScanStatsService.php end
+# their row loops on anything that is not a row. No file came or went, so PHP_FILES_TODAY stays at 108.
+# Recomputed independently with find, sort, tr and sha256sum over the CRLF normalised tree: 9a6c99ed...
+# both ways.
 PHP_FILES_TODAY = 108
-PHP_TREE_HASH_TODAY = "eb26f4542335237de624e0f9b52e54fb6f52f433f775cc8efa037c274d1d30e0"
+PHP_TREE_HASH_TODAY = "9a6c99ed6c39ef0bb51bc479737abff189d83e4996d4a8652c9037c28aa11bb6"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

@@ -91,6 +91,10 @@ $recounting = ($coverage['recounting'] ?? false) === true;
 // user mount (issue #25). The sentence names the cause instead of selling the
 // gap as missing coverage.
 $duplicates = ($coverage['duplicates'] ?? false) === true;
+// The exclusion rules changed and the counters have not followed yet (plan
+// 39-01, ANZE-02): the search applies a new rule at once, the denominator and
+// "Deliberately left out" follow with the next recount.
+$rulesPending = ($coverage['rulesPending'] ?? false) === true;
 $mountsTotal = $whole($coverage['mountsTotal'] ?? 0);
 $mountsFinished = $whole($coverage['mountsFinished'] ?? 0);
 
@@ -458,8 +462,19 @@ $migrationDocsUrl = $migrationDocsUrls[str_starts_with($languageCode, 'de') ? 'd
 
 	<p class="settings-hint" id="findling-coverage-leftout"<?php if (!$hasDenominator) { ?> hidden<?php } ?>>
 		<span id="findling-coverage-leftout-count"><?php p($l->t('Deliberately left out: %s', [$count($leftOut)])); ?></span>
-		<?php p($l->t('Those files are too large, of a type Findling does not read, or excluded by a rule. They are not in the denominator above, so the coverage figure can reach a hundred per cent.')); ?>
+		<?php
+		/*
+		 * Two explanations and one of them on display (plan 39-01, ANZE-01,
+		 * L-36-05): above nought the sentence of what the figure counts, at
+		 * nought a sentence of its own, because "Those files are too large"
+		 * next to a nought reads as if something had been left out.
+		 */
+		?>
+		<span id="findling-coverage-leftout-explain"<?php if ($leftOut === 0) { ?> hidden<?php } ?>><?php p($l->t('Those files are too large, of a type Findling does not read, or excluded by a rule. They are not in the denominator above, so the coverage figure can reach a hundred per cent.')); ?></span>
+		<span id="findling-coverage-leftout-none"<?php if ($leftOut !== 0) { ?> hidden<?php } ?>><?php p($l->t('Nothing is left out on purpose right now. Files that are too large, of a type Findling does not read, or excluded by a rule would be counted here, and they are not in the denominator above.')); ?></span>
 	</p>
+
+	<p class="settings-hint" id="findling-coverage-rules-pending"<?php if (!$rulesPending) { ?> hidden<?php } ?>><?php p($l->t('The exclusion rules were changed. The search applies them at once, the counters on this page follow once they have been worked out again.')); ?></p>
 
 	<p class="settings-hint" id="findling-coverage-provisional"<?php if (!$hasDenominator || !$provisional) { ?> hidden<?php } ?>><?php p($l->t('Provisional figure, %1$s of %2$s storages have been counted through.', [$count($mountsFinished), $count($mountsTotal)])); ?></p>
 

@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace OCA\Findling\Service;
 
 use OCA\Findling\AppInfo\Application;
+use OCA\Findling\BackgroundJobs\ExclusionSweepJob;
 use OCA\Findling\BackgroundJobs\SchedulerJob;
+use OCA\Findling\BackgroundJobs\StorageCrawlJob;
 use OCA\Findling\Text\PlainText;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\BackgroundJob\IJobList;
 use OCP\IAppConfig;
 use OCP\IDateTimeFormatter;
 use OCP\IL10N;
@@ -589,6 +592,7 @@ final class AdminViewService {
 		private IL10N $l10n,
 		private IDateTimeFormatter $dateTimeFormatter,
 		private ParallelSearchService $parallelSearch,
+		private IJobList $jobList,
 	) {
 	}
 
@@ -763,6 +767,7 @@ final class AdminViewService {
 				($scheduled + $running) === 0,
 				(int)($states['failed'] ?? 0),
 				$figures['deduplicated'],
+				$this->rulesPendingNow(),
 			),
 			'estimate' => $this->estimate($figures['scan'], $figures['backend'], $backendReachable, $indexable, $scheduled + $running),
 			'errors' => $this->errors(),
@@ -1908,10 +1913,12 @@ final class AdminViewService {
 	 * @param bool $queuesIdle nothing scheduled and nothing running
 	 * @param int $failed failed verdicts, they explain a gap without duplicates
 	 * @param bool $deduplicated whether figures() applied the counting key groups
+	 * @param bool $rulesPending the hint after a rule change, rulesPendingNow()
 	 * @return array{
 	 *     indexed:int, indexable:int, deliberatelyLeftOut:int, percent:int|null,
 	 *     embedded:int, embeddedPercent:int|null, recounting:bool, duplicates:bool,
-	 *     deduplicated:bool, provisional:bool, mountsTotal:int, mountsFinished:int
+	 *     deduplicated:bool, rulesPending:bool, provisional:bool, mountsTotal:int,
+	 *     mountsFinished:int
 	 * }
 	 */
 	private function coverage(
@@ -1924,6 +1931,7 @@ final class AdminViewService {
 		bool $queuesIdle,
 		int $failed,
 		bool $deduplicated = false,
+		bool $rulesPending = false,
 	): array {
 		$overCap = max(0, (int)$scan['overCap']);
 		$excluded = max(0, (int)$scan['excluded']);
@@ -1988,6 +1996,9 @@ final class AdminViewService {
 			'recounting' => $recounting,
 			'duplicates' => $duplicates,
 			'deduplicated' => $deduplicated,
+			// A flag of its own and not folded into provisional or recounting:
+			// the hint stands next to either (ANZE-02).
+			'rulesPending' => $rulesPending,
 			// A scan that has not walked every mount to its end has counted a
 			// lower bound, and the page has to say so and name both figures. An
 			// estimate that quietly corrects itself upwards looks like a defect.
@@ -1996,6 +2007,63 @@ final class AdminViewService {
 			'mountsTotal' => $mountsTotal,
 			'mountsFinished' => $mountsFinished,
 		];
+	}
+
+	/**
+	 * Whether the hint after a rule change stands (plan 39-01, ANZE-02, L-36-06).
+	 *
+	 * From the save of a changed set of rules until the recount that started
+	 * after it and the sweep of the new rule are through: the recount stamp is
+	 * older than the change, or a crawl or sweep job is still in the list.
+	 * Without a remembered change it is false, so a routine crawl alone never
+	 * shows the hint. Static for the reason coverageShare() is.
+	 */
+	public static function rulesPending(int $rulesChangedAt, int $recountedAt, bool $workQueued): bool {
+		if ($rulesChangedAt <= 0) {
+			return false;
+		}
+
+		return $recountedAt < $rulesChangedAt || $workQueued;
+	}
+
+	/**
+	 * rulesPending() for this instance, and the one write it implies.
+	 *
+	 * The job list is asked only while a change is remembered and the recount
+	 * has started since, one row per job class and no walk over the list (P5 of
+	 * plan 36-12: no query per storage on a polled page). Once the hint is
+	 * through, the stamp is cleared, so a later routine recount does not bring
+	 * it back; that is a write on the first poll after the catch-up and on no
+	 * other.
+	 */
+	private function rulesPendingNow(): bool {
+		$changedAt = $this->settingsService->rulesChangedAt();
+		if ($changedAt <= 0) {
+			return false;
+		}
+
+		$recountedAt = $this->settingsService->scanRecountedAt();
+		$pending = self::rulesPending(
+			$changedAt,
+			$recountedAt,
+			$recountedAt >= $changedAt && $this->rulesWorkQueued(),
+		);
+		if (!$pending) {
+			$this->settingsService->forgetRulesChange();
+		}
+
+		return $pending;
+	}
+
+	/** Whether a crawl or a sweep job is still in the list, one row each at most. */
+	private function rulesWorkQueued(): bool {
+		foreach ([StorageCrawlJob::class, ExclusionSweepJob::class] as $class) {
+			foreach ($this->jobList->getJobsIterator($class, 1, 0) as $job) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**

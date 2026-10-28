@@ -390,6 +390,11 @@ final class SettingsController extends Controller {
 			);
 		}
 
+		// The set of rules in force before the write, for the hint after a
+		// change (plan 39-01, ANZE-02): saving the same set again is no change
+		// and must not tell the admin that the counters lag behind one.
+		$before = self::ruleSet($this->view->rules());
+
 		try {
 			// Both save() calls revalidate and answer with error codes, and those
 			// answers are judged rather than discarded (review finding WR-03).
@@ -455,13 +460,43 @@ final class SettingsController extends Controller {
 			);
 		}
 
+		$rules = $this->view->rules();
+		if (self::ruleSet($rules) !== $before) {
+			try {
+				$this->settingsService->rememberRulesChange();
+			} catch (\Throwable $e) {
+				// The rules are saved; a stamp that could not be written costs
+				// the hint and nothing else.
+				$this->logger->warning('Findling: could not remember the rule change', ['exception' => $e]);
+			}
+		}
+
 		return new DataResponse([
 			'saved' => true,
 			'fields' => [],
 			'exclusions' => [],
 			ExclusionService::FIELD_PATTERNS => [],
-			'rules' => $this->view->rules(),
+			'rules' => $rules,
 		]);
+	}
+
+	/**
+	 * The parts of the rules an admin can change, as AdminViewService::rules()
+	 * reads them: folders, patterns, cap and the two switches. The limits and
+	 * the remembered container ceiling stay out, because they are not part of
+	 * what an admin saved.
+	 *
+	 * @param array<string, mixed> $rules
+	 * @return array<string, mixed>
+	 */
+	private static function ruleSet(array $rules): array {
+		return [
+			'exclusions' => $rules['exclusions'] ?? [],
+			'exclusionPatterns' => $rules['exclusionPatterns'] ?? [],
+			'maxFileBytes' => $rules['maxFileBytes'] ?? 0,
+			'indexTeamFolders' => $rules['indexTeamFolders'] ?? true,
+			'indexExternalStorage' => $rules['indexExternalStorage'] ?? false,
+		];
 	}
 
 	/**

@@ -901,6 +901,20 @@ Einzeldatei rechnet live und zeigt "Durch Regel ausgeschlossen" sofort nach dem
 Speichern, mit der Abhilfe "Den passenden Eintrag unter "Ausgeschlossene Ordner"
 oder "Ausgeschlossene Muster" entfernen."
 
+Seit 1.6 sagt die Seite das auch selbst (Plan 39-01, L-36-06): nach dem
+Speichern geänderter Regeln steht im Block "Deckungsgrad der Suche" der Hinweis "Die
+Ausschlussregeln wurden geändert. Die Suche wendet sie sofort an, die Zähler
+auf dieser Seite folgen, sobald sie neu ermittelt sind." Er bleibt stehen, bis
+die Nachzählung nach der Änderung begonnen hat und weder ein Crawl- noch ein
+Räumjob mehr in der Jobliste steht, und verschwindet dann von selbst. Dieselben
+Regeln noch einmal zu speichern ist keine Änderung und zeigt ihn nicht.
+
+Neben "Bewusst ausgelassen: 0" steht seit 1.6 ein eigener Satz (L-36-05):
+"Derzeit ist nichts bewusst ausgelassen. Hier stünden Dateien, die zu groß sind,
+von einem Typ, den Findling nicht liest, oder durch eine Regel ausgeschlossen,
+und sie zählen nicht im Nenner darüber." Ab einer ausgelassenen Datei steht
+wieder der bisherige Erklärsatz.
+
 **Die Dateien selbst bleiben unverändert**, wie beim Räumen nach Präfixen: es
 verschwinden Indexzeilen, nichts auf der Platte.
 

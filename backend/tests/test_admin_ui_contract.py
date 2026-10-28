@@ -2604,7 +2604,7 @@ def test_nought_left_out_has_a_sentence_of_its_own() -> None:
     for catalogue in L10N_CATALOGUES:
         keys = catalogue_of(catalogue)
         assert LEFT_OUT_NONE_SENTENCE in keys, catalogue.name
-    assert catalogue_of(L10N_JSON)[LEFT_OUT_NONE_SENTENCE].startswith("Derzeit ist nichts bewusst ausgelassen.")
+    assert str(catalogue_of(L10N_JSON)[LEFT_OUT_NONE_SENTENCE]).startswith("Derzeit ist nichts bewusst ausgelassen.")
 
 
 def test_a_rule_change_shows_a_hint_until_the_counters_follow() -> None:
@@ -2634,7 +2634,7 @@ def test_a_rule_change_shows_a_hint_until_the_counters_follow() -> None:
 
     for catalogue in L10N_CATALOGUES:
         assert RULES_PENDING_SENTENCE in catalogue_of(catalogue), catalogue.name
-    assert catalogue_of(L10N_JSON)[RULES_PENDING_SENTENCE].startswith("Die Ausschlussregeln wurden geändert.")
+    assert str(catalogue_of(L10N_JSON)[RULES_PENDING_SENTENCE]).startswith("Die Ausschlussregeln wurden geändert.")
 
 
 # Plan 31-02 (D-31-03, Befund 13 of the plan check): every visible sentence of

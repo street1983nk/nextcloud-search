@@ -502,7 +502,7 @@ class StorageService {
 
 			$result = $qb->executeQuery();
 			try {
-				while (($row = $result->fetch()) !== false) {
+				while (is_array($row = $result->fetch())) {
 					$numericId = (int)($row['numeric_id'] ?? 0);
 					$key = self::countingKey((string)($row['id'] ?? ''));
 					if ($numericId > 0 && $key !== null) {

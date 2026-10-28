@@ -345,6 +345,10 @@
       // The model line of plan 25-04: the precision and whether the vectors
       // are computed again. A run that starts or ends moves nothing else here.
       (view.backend || {}).precisionActive, (view.backend || {}).reembedRunning,
+      // The two lines of plan 39-01: which explanation stands next to
+      // "Deliberately left out" (ANZE-01), and the hint after a rule change
+      // (ANZE-02), which can come and go while no other value here moves.
+      coverage.deliberatelyLeftOut === 0, coverage.rulesPending,
       coverage.provisional, coverage.duplicates, coverage.mountsFinished,
       coverage.mountsTotal, estimate.ocrMeasured, estimate.secondsLeft,
       estimate.bytesExpected, estimate.startupValues, estimate.spaceWarning,
@@ -416,6 +420,14 @@
     shown('findling-coverage-recounting', recounting)
     shown('findling-coverage-unknown', hasDenominator && !hasFraction && coverage.recounting !== true)
     shown('findling-coverage-leftout', hasDenominator)
+    // Both sentences are static and rendered by the template; the number
+    // decides which of the two stands next to it (ANZE-01, L-36-05).
+    const leftOut = whole(coverage.deliberatelyLeftOut)
+    shown('findling-coverage-leftout-explain', leftOut !== 0)
+    shown('findling-coverage-leftout-none', leftOut === 0)
+    // Its own flag, next to provisional and recounting and never folded into
+    // either (ANZE-02, L-36-06).
+    shown('findling-coverage-rules-pending', coverage.rulesPending === true)
     shown('findling-coverage-provisional', hasDenominator && coverage.provisional === true)
     // The sentence is static and rendered by the template; the script only
     // decides whether the settled gap of issue #25 is on display.
