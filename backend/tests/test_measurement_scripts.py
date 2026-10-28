@@ -1107,8 +1107,14 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # the file name, the app configuration as the only collaborator), so PHP_FILES_TODAY moves to 109.
 # Recomputed independently with find, sort, tr and sha256sum over the CRLF normalised tree: d3ab4f7d...
 # both ways.
-PHP_FILES_TODAY = 109
-PHP_TREE_HASH_TODAY = "d3ab4f7d8c060687b694877d1778288d143c486736d624b8bef00b3a76414cfe"
+# Moved on 2026-10-28 a second time by Plan 40-02 (REL-06): minor migration
+# Version001600Date20261028000000 and its test: one file came,
+# php/lib/Migration/Version001600Date20261028000000.php (drops the recorded backend version, no recount
+# mark, because Weg C groups in ScanStatsService::totals() at read time), so PHP_FILES_TODAY moves to
+# 110. Recomputed independently with find, sort, tr and sha256sum over the CRLF normalised tree:
+# 73bae603... both ways.
+PHP_FILES_TODAY = 110
+PHP_TREE_HASH_TODAY = "73bae603ef6cd62932bacdb956f5b69ee99d98df6bb24de31b99af7ca70b0702"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
