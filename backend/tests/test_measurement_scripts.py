@@ -1073,8 +1073,15 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # files of the left out storages. templates/admin.php carries the corrected sentence about counting per
 # mount. No file came or went, so PHP_FILES_TODAY stays at 108. Recomputed independently with find,
 # sort, tr and sha256sum over the CRLF normalised tree: 9b96923c... both ways.
+# Moved on 2026-10-28 a fifth time by Plan 39-01 (ANZE-01, ANZE-02), the failing tests first:
+# tests/Unit/AdminViewServiceTest.php holds the rule of the hint after a rule change and the flag in the
+# coverage block next to provisional and recounting; tests/Unit/SettingsControllerTest.php holds that a
+# changed set of rules is remembered (every part of it), the same set saved again and a refused set are
+# not, and hands the job list to AdminViewService. No file came or went, so PHP_FILES_TODAY stays at 108.
+# Recomputed independently with find, sort, tr and sha256sum over the CRLF normalised tree: eb26f454...
+# both ways.
 PHP_FILES_TODAY = 108
-PHP_TREE_HASH_TODAY = "9b96923c3c7387cba8e5ecd7f20687a9239b899bfd3d0675e3ad61cdbd67b57f"
+PHP_TREE_HASH_TODAY = "eb26f4542335237de624e0f9b52e54fb6f52f433f775cc8efa037c274d1d30e0"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

@@ -155,6 +155,7 @@ final class SettingsControllerTest extends TestCase {
 			// Final, so built for real over a doubled app manager that answers
 			// false for every app (plan 34-03).
 			new ParallelSearchService($this->createMock(IAppManager::class)),
+			$jobList,
 		);
 
 		return new SettingsController(
@@ -217,6 +218,65 @@ final class SettingsControllerTest extends TestCase {
 		self::assertSame(ExclusionService::MAX_PATTERN_LENGTH, $rules['maxPatternLength']);
 		self::assertSame(ExclusionService::MAX_PREFIXES, $rules['maxPrefixes']);
 		self::assertSame(ExclusionService::MAX_PREFIX_LENGTH, $rules['maxPrefixLength']);
+	}
+
+	// -- the hint after a rule change (plan 39-01, ANZE-02, L-36-06) ----------
+
+	public function testAChangedSetOfRulesIsRemembered(): void {
+		$this->values[SettingsService::KEY_EXCLUSIONS] = ['Archiv'];
+		$this->values[SettingsService::KEY_MAX_FILE_BYTES] = self::CAP;
+
+		$response = $this->controller()->saveRules(['Archiv', 'Privat'], self::CAP, true, false, []);
+
+		self::assertTrue(self::body($response)['saved']);
+		self::assertSame(1_800_000_000, $this->values[SettingsService::KEY_RULES_CHANGED_AT] ?? null);
+	}
+
+	/** @return array<string, array{list<string>, int, bool, bool, list<string>}> */
+	public static function everyRuleThatCanChange(): array {
+		return [
+			'a folder' => [['Archiv', 'Neu'], self::CAP, true, false, ['*.key']],
+			'a pattern' => [['Archiv'], self::CAP, true, false, ['*.key', '*.tmp']],
+			'the cap' => [['Archiv'], 2 * self::CAP, true, false, ['*.key']],
+			'the Team Folder switch' => [['Archiv'], self::CAP, false, false, ['*.key']],
+			'the external storage switch' => [['Archiv'], self::CAP, true, true, ['*.key']],
+		];
+	}
+
+	/**
+	 * @param list<string> $exclusions
+	 * @param list<string> $patterns
+	 */
+	#[DataProvider('everyRuleThatCanChange')]
+	public function testEveryPartOfTheRulesCountsAsAChange(array $exclusions, int $cap, bool $team, bool $external, array $patterns): void {
+		$this->values[SettingsService::KEY_EXCLUSIONS] = ['Archiv'];
+		$this->values[SettingsService::KEY_EXCLUSION_PATTERNS] = ['*.key'];
+		$this->values[SettingsService::KEY_MAX_FILE_BYTES] = self::CAP;
+		$this->values[SettingsService::KEY_INDEX_TEAM_FOLDERS] = true;
+		$this->values[SettingsService::KEY_INDEX_EXTERNAL_STORAGE] = false;
+
+		$this->controller()->saveRules($exclusions, $cap, $team, $external, $patterns);
+
+		self::assertContains(SettingsService::KEY_RULES_CHANGED_AT, $this->writes);
+	}
+
+	public function testTheSameRulesSavedAgainAreNoChange(): void {
+		$this->values[SettingsService::KEY_EXCLUSIONS] = ['Archiv'];
+		$this->values[SettingsService::KEY_EXCLUSION_PATTERNS] = ['*.key'];
+		$this->values[SettingsService::KEY_MAX_FILE_BYTES] = self::CAP;
+		$this->values[SettingsService::KEY_INDEX_TEAM_FOLDERS] = true;
+		$this->values[SettingsService::KEY_INDEX_EXTERNAL_STORAGE] = false;
+
+		$response = $this->controller()->saveRules(['Archiv'], self::CAP, true, false, ['*.key']);
+
+		self::assertTrue(self::body($response)['saved']);
+		self::assertNotContains(SettingsService::KEY_RULES_CHANGED_AT, $this->writes);
+	}
+
+	public function testARefusedSetOfRulesIsNoChange(): void {
+		$this->controller()->saveRules(['Archiv/../Privat'], self::CAP, true, false, []);
+
+		self::assertNotContains(SettingsService::KEY_RULES_CHANGED_AT, $this->writes);
 	}
 
 	public function testAnInvalidPatternNextToAValidPrefixWritesNothingAtAll(): void {

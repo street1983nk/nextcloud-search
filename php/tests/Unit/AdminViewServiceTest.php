@@ -908,7 +908,7 @@ final class AdminViewServiceTest extends TestCase {
 	 * @param array<mixed>|null $answer
 	 * @return array<string,mixed>
 	 */
-	private static function coverageOf(array $scan, ?array $answer, int $refused = 0, int $refusedLeftOut = 0): array {
+	private static function coverageOf(array $scan, ?array $answer, int $refused = 0, int $refusedLeftOut = 0, bool $rulesPending = false): array {
 		$parameters = AdminViewService::leaveOutParameters($scan);
 		$figures = self::invokePrivate('figures', $scan, $answer, $parameters, $refused, $refusedLeftOut);
 		self::assertIsArray($figures);
@@ -923,6 +923,7 @@ final class AdminViewServiceTest extends TestCase {
 			true,
 			0,
 			$figures['deduplicated'],
+			$rulesPending,
 		);
 		self::assertIsArray($coverage);
 
@@ -1039,6 +1040,37 @@ final class AdminViewServiceTest extends TestCase {
 		$fallback = self::coverageOf(self::groupedScan(), ['indexed' => 180, 'embedded' => 0], 20, 10);
 		self::assertSame(180, $fallback['indexable']);
 		self::assertSame(20, $fallback['deliberatelyLeftOut']);
+	}
+
+	// -- the hint after a rule change (plan 39-01, ANZE-02, L-36-06) ----------
+
+	public function testTheHintStandsFromTheChangeUntilRecountAndSweepAreThrough(): void {
+		$changed = self::NOW - 600;
+
+		// Saved, the recount has not started since.
+		self::assertTrue(AdminViewService::rulesPending($changed, $changed - 3600, false));
+		// The recount started after the change and its chains are walking, or
+		// the sweep of the new rule is still queued.
+		self::assertTrue(AdminViewService::rulesPending($changed, $changed + 60, true));
+		// Both through: the hint goes.
+		self::assertFalse(AdminViewService::rulesPending($changed, $changed + 60, false));
+		self::assertFalse(AdminViewService::rulesPending($changed, $changed, false));
+		// No change was ever remembered: a crawl alone is no reason for it.
+		self::assertFalse(AdminViewService::rulesPending(0, 0, true));
+		self::assertFalse(AdminViewService::rulesPending(0, self::NOW, false));
+	}
+
+	public function testTheHintTravelsInTheCoverageBlockNextToEveryOtherState(): void {
+		// Even while the figure is provisional or recounting, the hint is a
+		// flag of its own and is not swallowed by either.
+		$scan = self::groupedScan([]);
+		$scan['mountsFinished'] = 1;
+		$pending = self::coverageOf($scan, ['indexed' => 300, 'embedded' => 0], 0, 0, true);
+
+		self::assertTrue($pending['rulesPending']);
+		self::assertTrue($pending['provisional']);
+		self::assertTrue($pending['recounting']);
+		self::assertFalse(self::coverageOf($scan, ['indexed' => 300, 'embedded' => 0])['rulesPending']);
 	}
 
 	public function testANumeratorNeverFallsBelowNought(): void {

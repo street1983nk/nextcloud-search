@@ -2559,6 +2559,84 @@ def test_the_duplicates_sentence_of_issue_25_stands_wherever_it_is_rendered() ->
         assert "The search itself holds every file once" not in checked
 
 
+#: The two sentences of plan 39-01 next to "Deliberately left out" (ANZE-01,
+#: L-36-05, and ANZE-02, L-36-06), both static and rendered by the template, the
+#: script only toggles them.
+LEFT_OUT_NONE_SENTENCE = (
+    "Nothing is left out on purpose right now. Files that are too large, of a type Findling does not read, "
+    "or excluded by a rule would be counted here, and they are not in the denominator above."
+)
+RULES_PENDING_SENTENCE = (
+    "The exclusion rules were changed. The search applies them at once, the counters on this page follow "
+    "once they have been worked out again."
+)
+LEFT_OUT_EXPLAIN_SENTENCE = (
+    "Those files are too large, of a type Findling does not read, or excluded by a rule. They are not in "
+    "the denominator above, so the coverage figure can reach a hundred per cent."
+)
+
+
+def test_nought_left_out_has_a_sentence_of_its_own() -> None:
+    """ANZE-01 (L-36-05): at nought the page says what the figure would count.
+
+    The sentence that explains a figure above nought ("Those files are too
+    large ...") reads as if something had been left out when nothing was, so at
+    nought it gives way to a sentence of its own. Both carry an id, the template
+    renders both with the hidden attribute decided by the same number, and the
+    script flips the two on every poll; the number belongs in the fingerprint,
+    or a change from nought to five while nothing else moves is never drawn
+    (D-16).
+    """
+    template = TEMPLATE.read_text(encoding="utf-8")
+    script = SCRIPT.read_text(encoding="utf-8")
+
+    assert template.count('id="findling-coverage-leftout-none"') == 1
+    assert template.count('id="findling-coverage-leftout-explain"') == 1
+    assert '<span id="findling-coverage-leftout-explain"<?php if ($leftOut === 0) { ?> hidden<?php } ?>>' in template
+    assert '<span id="findling-coverage-leftout-none"<?php if ($leftOut !== 0) { ?> hidden<?php } ?>>' in template
+    assert LEFT_OUT_NONE_SENTENCE in template
+    assert LEFT_OUT_EXPLAIN_SENTENCE in template
+
+    assert "shown('findling-coverage-leftout-explain', leftOut !== 0)" in script
+    assert "shown('findling-coverage-leftout-none', leftOut === 0)" in script
+    assert "coverage.deliberatelyLeftOut === 0" in script
+
+    for catalogue in L10N_CATALOGUES:
+        keys = catalogue_of(catalogue)
+        assert LEFT_OUT_NONE_SENTENCE in keys, catalogue.name
+    assert catalogue_of(L10N_JSON)[LEFT_OUT_NONE_SENTENCE].startswith("Derzeit ist nichts bewusst ausgelassen.")
+
+
+def test_a_rule_change_shows_a_hint_until_the_counters_follow() -> None:
+    """ANZE-02 (L-36-06): after a save the page says why the counters lag.
+
+    The search applies a new rule at once, the denominator and "Deliberately
+    left out" follow with the next recount. The flag comes out of the service
+    (a stamp written by saveRules only when the set of rules changed, against
+    the start of the last recount and the crawl and sweep jobs in the list),
+    and the hint stands next to every other state of the block, provisional
+    and recounting included, so it is toggled on its own and travels in the
+    fingerprint.
+    """
+    template = TEMPLATE.read_text(encoding="utf-8")
+    script = SCRIPT.read_text(encoding="utf-8")
+    view = ADMIN_VIEW.read_text(encoding="utf-8")
+
+    assert template.count('id="findling-coverage-rules-pending"') == 1
+    assert (
+        '<p class="settings-hint" id="findling-coverage-rules-pending"<?php if (!$rulesPending) { ?> hidden<?php } ?>>'
+        in template
+    )
+    assert RULES_PENDING_SENTENCE in template
+    assert "shown('findling-coverage-rules-pending', coverage.rulesPending === true)" in script
+    assert "coverage.rulesPending," in script
+    assert "'rulesPending' => $rulesPending," in view
+
+    for catalogue in L10N_CATALOGUES:
+        assert RULES_PENDING_SENTENCE in catalogue_of(catalogue), catalogue.name
+    assert catalogue_of(L10N_JSON)[RULES_PENDING_SENTENCE].startswith("Die Ausschlussregeln wurden geändert.")
+
+
 # Plan 31-02 (D-31-03, Befund 13 of the plan check): every visible sentence of
 # phase 31 travels in one bundle, two new ones for the ZIP code archive_limit and
 # three changed ones. Each sentence is held in each catalogue as its own test
@@ -3660,7 +3738,19 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     one commit, the five language documents carry the rows, the German and
     French wording is the one the owner accepted in 36-WORTLAUT.md, the five
     other languages are machine drafts under the same dated reservation as the
-    rest. Whoever moves it next writes the next paragraph.
+    rest.
+
+    It stands at 353 since 28.10.2026, plan 39-01 (ANZE-01, ANZE-02): a
+    sentence of its own when nothing is deliberately left out (L-36-05), and
+    the hint after a change of the exclusion rules that the counters follow
+    with the next recount (L-36-06). The sentence about shares counted once
+    per user mount changed its key in the same plan (Weg C, D-37-03) and so
+    moved nothing. All sixteen files moved together, the five language
+    documents carry the rows; the German and French wording is derived from
+    the accepted sentences next to it and goes to the owner with the product
+    in phase 40, the five other languages are machine drafts under the same
+    dated reservation as the rest. Whoever moves it next writes the next
+    paragraph.
     """
     for language, twin in ((L10N_JSON, L10N_DE_DE_JSON), (L10N_JS, L10N_DE_DE_JS)):
         assert twin.is_file(), f"{twin.name} is missing, so everybody on de_DE reads this app in English"
@@ -3706,8 +3796,10 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     # documents view of STR-01, wording of 35-WORTLAUT.md), three of plan 36-06
     # (label and remedy of blocked_malicious and the detail line of a skipped
     # file, D-36-03, D-36-04); the sentence about shares counted once per user
-    # mount changed its key in plan 39-01 and so moved nothing
-    assert len(keys_of["de.json"]) == 351
+    # mount changed its key in plan 39-01 and so moved nothing; two of plan
+    # 39-01 (the sentence for nought left out, L-36-05, and the hint after a
+    # rule change, L-36-06)
+    assert len(keys_of["de.json"]) == 353
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:
