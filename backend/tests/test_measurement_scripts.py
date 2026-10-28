@@ -1053,8 +1053,14 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # tests/Unit/ScanStatsServiceTest.php (both sets of totals, the representative, members outside the
 # mount list, bands). No file went, so PHP_FILES_TODAY moves to 108. Recomputed independently with
 # find, sort, tr and sha256sum over the CRLF normalised tree: 7c10871b... both ways.
+# Moved on 2026-10-28 a second time by Plan 39-01 (DEDUP-02, Weg C, D-37-03): lib/Service/StorageService.php
+# learned countingKeyGroups and countingKey (smb and sftp ids with the login name taken out, md5 ids and
+# every other backend never grouped, numbers only), lib/Service/ScanStatsService.php reads the rows of the
+# mounted storages in one query per band and answers totals() ungrouped and grouped, with the left out
+# members. No file came or went, so PHP_FILES_TODAY stays at 108. Recomputed independently with find,
+# sort, tr and sha256sum over the CRLF normalised tree: 5b42b31a... both ways.
 PHP_FILES_TODAY = 108
-PHP_TREE_HASH_TODAY = "7c10871b73728fae048d9d99c07d659a493c86690814f8dc78ed8b5f83c63c7a"
+PHP_TREE_HASH_TODAY = "5b42b31a77e93814b9a77ec8f884e8051abe694c10c83a4a4c32cc19a7e177ed"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
@@ -2247,8 +2253,18 @@ PHP_TREE_HASH_TODAY = "7c10871b73728fae048d9d99c07d659a493c86690814f8dc78ed8b5f8
 # stay exact. No file came or went, so PACKAGE_FILES_TODAY stays at 80. The PHP
 # pair does not move in this step. Recomputed independently with find, sort, tr
 # and sha256sum over the CRLF normalised tree: 569925a1... both ways.
+#
+# Moved on 2026-10-28 by Plan 39-01 (DEDUP-02, Weg C, D-37-03): api/status.py
+# takes the optional query parameter leaveOut (digits and commas, at most 1000
+# ids and 8000 characters, otherwise 422) and answers indexedLeftOut and
+# embeddedLeftOut only with it, absent otherwise; store/repo.py counts the
+# living indexed documents of named storages and, on a read only connection
+# with the vector database attached read only, how many of them carry a
+# vector. No file came or went, so PACKAGE_FILES_TODAY stays at 80. The PHP
+# pair moves in the same commit. Recomputed independently with find, sort, tr
+# and sha256sum over the CRLF normalised tree: 5f4d6d18... both ways.
 PACKAGE_FILES_TODAY = 80
-PACKAGE_TREE_HASH_TODAY = "d95ebc37e9359549e194e49a5c2526b6af5d20295799a8353ad2c37fd4d28311"
+PACKAGE_TREE_HASH_TODAY = "5f4d6d18eb9fff54610b47d6e66837533bb6764126d776014d57a94526c0dd61"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

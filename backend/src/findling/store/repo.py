@@ -428,6 +428,28 @@ _INDEXED_ALIVE_SQL: Final = """
 SELECT COUNT(*) FROM files WHERE state = 'indexed' AND deleted_at IS NULL
 """
 
+# The two counters behind the deduplicated coverage figure of the admin page
+# (plan 39-01, Weg C of 35-DEDUP-NOTIZ). The PHP side groups the storages of one
+# share that is mounted once per user and keeps one of each group in its sum; it
+# names the others, and these two statements say how many living documents of
+# the named storages the index holds, and how many of them carry a vector.
+# Living for the same reason as _INDEXED_ALIVE_SQL above. Banded at
+# _LEFT_OUT_BAND storages, well under the variable limit of SQLite, and the
+# bands add up because a file belongs to exactly one storage. The vector count
+# reads the plain table chunks of the attached vector database through its index
+# chunks_file; EXISTS rather than COUNT(DISTINCT) over a join, so SQLite walks
+# the rows of the storage once and builds no temporary b-tree for the distinct
+# step (the reasoning of _ACL_DOCUMENTS_SQL above).
+_LEFT_OUT_BAND: Final = 500
+_INDEXED_IN_STORAGES_SQL: Final = (
+    "SELECT COUNT(*) FROM files WHERE state = 'indexed' AND deleted_at IS NULL AND storage_id IN ({placeholders})"
+)
+_EMBEDDED_IN_STORAGES_SQL: Final = (
+    "SELECT COUNT(*) FROM files f WHERE f.state = 'indexed' AND f.deleted_at IS NULL "
+    "AND f.storage_id IN ({placeholders}) "
+    "AND EXISTS (SELECT 1 FROM vec.chunks c WHERE c.file_id = f.file_id)"
+)
+
 _INDEXED_FILE_IDS_SQL: Final = """
 SELECT file_id FROM files
  WHERE state = 'indexed' AND deleted_at IS NULL AND file_id > ?
@@ -1603,6 +1625,24 @@ class Store:
         documents = self._conn.execute(_ACL_DOCUMENTS_SQL).fetchone()
         return int(rows[0]), int(documents[0])
 
+    def indexed_in_storages(self, storage_ids: Sequence[int]) -> int:
+        """How many living indexed documents the named storages hold.
+
+        The first of the two counters of plan 39-01: the admin page subtracts it
+        from ``indexed`` for the storages its deduplication leaves out. Numbers
+        in, one number out, nothing of a row leaves this method (T-04-06).
+        """
+        ids = sorted({int(storage_id) for storage_id in storage_ids})
+        total = 0
+        for start in range(0, len(ids), _LEFT_OUT_BAND):
+            band = ids[start : start + _LEFT_OUT_BAND]
+            placeholders = ",".join("?" * len(band))
+            # The parameters are placeholders, all of them. Only their number
+            # is formatted into the statement.
+            row = self._conn.execute(_INDEXED_IN_STORAGES_SQL.format(placeholders=placeholders), band).fetchone()
+            total += int(row[0]) if row else 0
+        return total
+
     def acl_rows(self) -> int:
         """Total number of permission rows, zero while the table is empty.
 
@@ -1898,3 +1938,46 @@ def open_read_only(path: Path | str) -> Store:
     connection = _connect(database, read_only=True)
     row = connection.execute("PRAGMA journal_mode").fetchone()
     return Store(connection, journal_mode=str(row[0]).lower() if row else "unknown")
+
+
+def embedded_in_storages(state_db: Path, vectors_db: Path, storage_ids: Sequence[int]) -> int:
+    """How many living indexed documents of the named storages carry a vector.
+
+    The second counter of plan 39-01. The vector stock is a file of its own and
+    knows no storage, so the question needs both files in one statement: the
+    vector database is attached read only to a connection on the state database
+    and the plain table ``chunks`` is read through its index. The vec0 extension
+    is not loaded for it, because ``chunks`` is an ordinary table.
+
+    A connection of its own and not the one of :func:`open_read_only`, for one
+    measured reason: SQLite reads a URI in ATTACH only on a connection that was
+    opened with URIs enabled, and only a URI carries ``mode=ro``. A plain path
+    would create an empty vector database where none exists, which reads as a
+    second track that never started (the discipline of
+    :func:`findling.store.vectors.open_vectors`). Both files are opened with
+    ``mode=ro`` and ``query_only`` on top, so nothing here can write either of
+    them. A missing file raises ``sqlite3.OperationalError`` and the caller
+    leaves the figure out; the DETACH runs in the finally.
+    """
+    ids = sorted({int(storage_id) for storage_id in storage_ids})
+    connection = sqlite3.connect(
+        f"{Path(state_db).as_uri()}?mode=ro", uri=True, autocommit=True, check_same_thread=False
+    )
+    try:
+        connection.execute(f"PRAGMA busy_timeout = {_BUSY_TIMEOUT_MS}")
+        connection.execute("PRAGMA query_only = 1")
+        connection.execute("ATTACH DATABASE ? AS vec", (f"{Path(vectors_db).as_uri()}?mode=ro",))
+        try:
+            total = 0
+            for start in range(0, len(ids), _LEFT_OUT_BAND):
+                band = ids[start : start + _LEFT_OUT_BAND]
+                placeholders = ",".join("?" * len(band))
+                # The parameters are placeholders, all of them. Only their
+                # number is formatted into the statement.
+                row = connection.execute(_EMBEDDED_IN_STORAGES_SQL.format(placeholders=placeholders), band).fetchone()
+                total += int(row[0]) if row else 0
+            return total
+        finally:
+            connection.execute("DETACH DATABASE vec")
+    finally:
+        connection.close()

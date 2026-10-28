@@ -358,65 +358,164 @@ final class ScanStatsService {
 	 * differ the number is a lower bound, and the caller has to label it as
 	 * provisional and name both figures.
 	 *
+	 * Since plan 39-01 (Weg C, D-37-03) the answer carries a second set of the
+	 * same eight keys under ``grouped``. $groups names storages that show one
+	 * tree, a share mounted once per user (StorageService::countingKeyGroups),
+	 * and in ``grouped`` each group counts once, through its representative:
+	 * the smallest storage id of the group with a finished_at, otherwise the
+	 * smallest storage id of the group that has a row, otherwise the smallest
+	 * one. Every other member is out of the sums and out of mountsTotal and
+	 * mountsFinished, and ``leftOutStorageIds`` names those members, so that
+	 * the container can say how much of its index belongs to them.
+	 * ``groupsApplied`` counts the groups that left anything out. The eight
+	 * keys on the top level stay the ungrouped figure, byte for byte the answer
+	 * of 1.5: which of the two sets the page shows is decided by the caller,
+	 * once the container has answered for the left out storages, and never
+	 * here. Without groups ``grouped`` equals the top level.
+	 *
+	 * One query per band, which is one query fewer than the two sums of 1.5: the
+	 * rows of the named storages are read and added up here, because the
+	 * representative is a decision per row. The number of rows is the number of
+	 * mounted storages, the size of the IN list the sums already had.
+	 *
 	 * @param list<int> $mountedStorageIds the storages the crawl walks today
+	 * @param list<list<int>> $groups storages that show one tree, two or more each
 	 * @return array{
 	 *     filesSeen:int, bytesSeen:int, ocrCandidates:int, pdfSeen:int,
-	 *     overCap:int, excluded:int, mountsTotal:int, mountsFinished:int
+	 *     overCap:int, excluded:int, mountsTotal:int, mountsFinished:int,
+	 *     grouped: array{
+	 *         filesSeen:int, bytesSeen:int, ocrCandidates:int, pdfSeen:int,
+	 *         overCap:int, excluded:int, mountsTotal:int, mountsFinished:int
+	 *     },
+	 *     leftOutStorageIds: list<int>, groupsApplied: int
 	 * }
 	 */
-	public function totals(array $mountedStorageIds): array {
-		$totals = array_fill_keys(array_values(self::COUNTERS), 0);
-		$totals['mountsTotal'] = 0;
-		$totals['mountsFinished'] = 0;
-
+	public function totals(array $mountedStorageIds, array $groups = []): array {
 		$ids = array_values(array_unique(array_filter(
 			array_map(intval(...), $mountedStorageIds),
 			static fn (int $id): bool => $id > 0,
 		)));
-		if ($ids === []) {
-			return $totals;
-		}
 
+		$rows = [];
 		foreach (array_chunk($ids, self::TOTALS_BAND) as $band) {
 			$qb = $this->db->getQueryBuilder();
-			$qb->selectAlias($qb->func()->count('*'), 'mounts_total');
-			foreach (array_keys(self::COUNTERS) as $column) {
-				$qb->selectAlias($qb->func()->sum($column), 'sum_' . $column);
-			}
-			$qb->from(self::TABLE_NAME)
+			$qb->select('storage_id', 'finished_at', ...array_keys(self::COUNTERS))
+				->from(self::TABLE_NAME)
 				->where($qb->expr()->in(
 					'storage_id',
 					$qb->createNamedParameter($band, IQueryBuilder::PARAM_INT_ARRAY),
 				));
 
 			$result = $qb->executeQuery();
-			$row = $result->fetch();
-			$result->closeCursor();
+			try {
+				while (($row = $result->fetch()) !== false) {
+					if (!is_array($row)) {
+						continue;
+					}
+					$storageId = (int)($row['storage_id'] ?? 0);
+					if ($storageId <= 0) {
+						continue;
+					}
+					$counted = ['finished' => ($row['finished_at'] ?? null) !== null];
+					foreach (self::COUNTERS as $column => $key) {
+						$counted[$key] = (int)($row[$column] ?? 0);
+					}
+					$rows[$storageId] = $counted;
+				}
+			} finally {
+				$result->closeCursor();
+			}
+		}
 
-			if (is_array($row)) {
-				$totals['mountsTotal'] += (int)($row['mounts_total'] ?? 0);
-				foreach (self::COUNTERS as $column => $key) {
-					// A sum over an empty band is null on all three databases,
-					// and null cast to int is the zero this method promises.
-					$totals[$key] += (int)($row['sum_' . $column] ?? 0);
+		$leftOut = $this->leftOutMembers($ids, $rows, $groups);
+
+		$totals = self::summed($rows, []);
+		$totals['grouped'] = self::summed($rows, $leftOut['ids']);
+		$totals['leftOutStorageIds'] = $leftOut['ids'];
+		$totals['groupsApplied'] = $leftOut['groups'];
+
+		return $totals;
+	}
+
+	/**
+	 * The members of every group that are not its representative.
+	 *
+	 * Only members among the mounted storages take part, so a group whose other
+	 * members left the mount list leaves nothing out.
+	 *
+	 * @param list<int> $mounted
+	 * @param array<int, array<string, int|bool>> $rows
+	 * @param list<list<int>> $groups
+	 * @return array{ids: list<int>, groups: int}
+	 */
+	private function leftOutMembers(array $mounted, array $rows, array $groups): array {
+		$isMounted = array_fill_keys($mounted, true);
+		$leftOut = [];
+		$applied = 0;
+
+		foreach ($groups as $group) {
+			if (!is_array($group)) {
+				continue;
+			}
+			$members = [];
+			foreach ($group as $member) {
+				$member = (int)$member;
+				if ($member > 0 && isset($isMounted[$member]) && !isset($leftOut[$member])) {
+					$members[$member] = true;
 				}
 			}
+			$members = array_keys($members);
+			sort($members);
+			if (count($members) < 2) {
+				continue;
+			}
 
-			$finished = $this->db->getQueryBuilder();
-			$finished->selectAlias($finished->func()->count('*'), 'mounts_finished')
-				->from(self::TABLE_NAME)
-				->where($finished->expr()->isNotNull('finished_at'))
-				->andWhere($finished->expr()->in(
-					'storage_id',
-					$finished->createNamedParameter($band, IQueryBuilder::PARAM_INT_ARRAY),
-				));
+			$finished = array_values(array_filter($members, static fn (int $id): bool => ($rows[$id]['finished'] ?? false) === true));
+			$counted = array_values(array_filter($members, static fn (int $id): bool => isset($rows[$id])));
+			$representative = $finished[0] ?? $counted[0] ?? $members[0];
 
-			$result = $finished->executeQuery();
-			$row = $result->fetch();
-			$result->closeCursor();
+			foreach ($members as $member) {
+				if ($member !== $representative) {
+					$leftOut[$member] = true;
+				}
+			}
+			$applied++;
+		}
 
-			if (is_array($row)) {
-				$totals['mountsFinished'] += (int)($row['mounts_finished'] ?? 0);
+		$ids = array_keys($leftOut);
+		sort($ids);
+
+		return ['ids' => $ids, 'groups' => $applied];
+	}
+
+	/**
+	 * The eight keys of totals() over the rows, without the named storages.
+	 *
+	 * Always all eight keys, zero where nothing was counted.
+	 *
+	 * @param array<int, array<string, int|bool>> $rows
+	 * @param list<int> $without
+	 * @return array{
+	 *     filesSeen:int, bytesSeen:int, ocrCandidates:int, pdfSeen:int,
+	 *     overCap:int, excluded:int, mountsTotal:int, mountsFinished:int
+	 * }
+	 */
+	private static function summed(array $rows, array $without): array {
+		$skip = array_fill_keys($without, true);
+		$totals = array_fill_keys(array_values(self::COUNTERS), 0);
+		$totals['mountsTotal'] = 0;
+		$totals['mountsFinished'] = 0;
+
+		foreach ($rows as $storageId => $row) {
+			if (isset($skip[$storageId])) {
+				continue;
+			}
+			$totals['mountsTotal']++;
+			if (($row['finished'] ?? false) === true) {
+				$totals['mountsFinished']++;
+			}
+			foreach (self::COUNTERS as $key) {
+				$totals[$key] += (int)($row[$key] ?? 0);
 			}
 		}
 

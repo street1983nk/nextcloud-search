@@ -80,9 +80,10 @@ import asyncio
 import logging
 import os
 import sqlite3
-from typing import Final
+from collections.abc import Sequence
+from typing import Annotated, Final
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from findling import guard, lane, precision, probe
@@ -93,7 +94,7 @@ from findling.index.open import LANGUAGES_MARK
 from findling.index.rebuild import rebuild_blocked_bytes, rebuild_progress
 from findling.instance import volume_is_shared
 from findling.profile import snapshot
-from findling.store.repo import EMBEDDING_BACKLOG_MARK, Store, index_bytes, open_read_only
+from findling.store.repo import EMBEDDING_BACKLOG_MARK, Store, embedded_in_storages, index_bytes, open_read_only
 from findling.store.vectors import VectorStoreError, open_vectors
 
 LOGGER = logging.getLogger("findling.api.status")
@@ -133,6 +134,24 @@ PROFILE_VALUE_KEYS: Final = {
     "ocr_dpi": "ocrDpi",
     "memory_reserve_share": "memoryReserveShare",
 }
+
+# The parameter leaveOut of plan 39-01 (Weg C, T-39-02): storage ids, digits and
+# commas only, at most 18 digits each so that every id fits the integer of
+# SQLite, at most LEAVE_OUT_MAX_IDS of them and LEAVE_OUT_MAX_LENGTH characters
+# in all. Anything else is a 422 before a statement runs.
+LEAVE_OUT_PATTERN: Final = r"^[0-9]{1,18}(,[0-9]{1,18})*$"
+LEAVE_OUT_MAX_LENGTH: Final = 8000
+LEAVE_OUT_MAX_IDS: Final = 1000
+# Above this many living indexed documents in the left out storages, the vector
+# count of those documents is not worked out and its field stays absent: a poll
+# of the admin page must not become a join over a corpus of that size. The page
+# then counts like 1.5, which is the safe direction.
+LEFT_OUT_EMBEDDED_CEILING = 100_000
+
+
+def _absent(value: object) -> bool:
+    """Whether a field of the answer is left out of the wire instead of sent as null."""
+    return value is None
 
 
 class HardwareReport(BaseModel):
@@ -389,6 +408,17 @@ class StatusResponse(BaseModel):
     # there and restores it at start.
     probe: ProbeReport = Field(default_factory=ProbeReport)
     note: str = ""
+    # The two counters of plan 39-01 (Weg C of 35-DEDUP-NOTIZ), and the only two
+    # fields of this answer that can be absent. They exist only for a caller that
+    # names storages in leaveOut: how many living indexed documents those
+    # storages hold, and how many of exactly those carry a vector. A caller
+    # without the parameter, a companion of 1.5 among them, gets the field set
+    # it always got, key for key, because None never reaches the wire for these
+    # two (exclude_if) while every other field keeps its null where it has one.
+    # embeddedLeftOut is also absent when the vector stock cannot be read or the
+    # left out storages hold more than LEFT_OUT_EMBEDDED_CEILING documents.
+    indexedLeftOut: int | None = Field(default=None, exclude_if=_absent)
+    embeddedLeftOut: int | None = Field(default=None, exclude_if=_absent)
 
 
 def _profile_report() -> ProfileReport:
@@ -717,8 +747,12 @@ def _of(store: Store, volume: StatusResponse) -> StatusResponse:
     )
 
 
-def report() -> StatusResponse:
+def report(leave_out: Sequence[int] | None = None) -> StatusResponse:
     """The state of this container. Runs in a worker thread, never raises.
+
+    ``leave_out`` names the storages the deduplicated coverage of the admin page
+    leaves out (plan 39-01); with it the answer carries the two counters for
+    them, without it the answer is the one of 1.5.
 
     Two steps, and the split exists for one reason: the shared volume of
     DI-06.1-22 is the only finding that outranks all four notes of the counting
@@ -729,13 +763,35 @@ def report() -> StatusResponse:
     are simply the numbers of another instance's index, and hiding them would
     take away the very evidence that shows the sharing.
     """
-    answer = _counted()
+    answer = _counted(leave_out)
     if volume_is_shared():
         return answer.model_copy(update={"note": VOLUME_SHARED})
     return answer
 
 
-def _counted() -> StatusResponse:
+def _left_out(store: Store, answer: StatusResponse, leave_out: Sequence[int]) -> StatusResponse:
+    """The answer with the two counters of the left out storages (plan 39-01).
+
+    ``indexedLeftOut`` comes out of the open state database like every counter
+    above, and a failure there is a failure of the whole read, handled by the
+    caller. ``embeddedLeftOut`` needs the vector stock next to it and has a try
+    of its own, in the shape of :func:`_embedded`: a stock that is missing,
+    empty or not a database costs this one figure and never the answer (review
+    finding WR-01). Above LEFT_OUT_EMBEDDED_CEILING documents it is not worked
+    out at all. Two numbers and nothing of a row (T-04-06, T-39-04).
+    """
+    indexed_left_out = store.indexed_in_storages(leave_out)
+    embedded_left_out: int | None = None
+    resolved = settings()
+    if indexed_left_out <= LEFT_OUT_EMBEDDED_CEILING and resolved.vectors_db.is_file():
+        try:
+            embedded_left_out = embedded_in_storages(resolved.state_db, resolved.vectors_db, leave_out)
+        except (OSError, sqlite3.Error) as error:
+            LOGGER.warning("the vector count of left out storages could not be read, an %s", type(error).__name__)
+    return answer.model_copy(update={"indexedLeftOut": indexed_left_out, "embeddedLeftOut": embedded_left_out})
+
+
+def _counted(leave_out: Sequence[int] | None = None) -> StatusResponse:
     """Everything this container can count, with the note of the counting half.
 
     The whole function runs off the event loop, which is what lets it sum the
@@ -777,7 +833,8 @@ def _counted() -> StatusResponse:
         return volume.model_copy(update={"note": STATE_UNREADABLE})
 
     try:
-        return _of(store, volume)
+        answer = _of(store, volume)
+        return answer if leave_out is None else _left_out(store, answer, leave_out)
     except sqlite3.Error as error:
         LOGGER.warning("the state database could not be read, an %s", type(error).__name__)
         return volume.model_copy(update={"note": STATE_UNREADABLE})
@@ -789,6 +846,27 @@ def _counted() -> StatusResponse:
 
 
 @ROUTER.get("/status")
-async def read_status() -> StatusResponse:
-    """Answer with the counters and the version marks of this container."""
-    return await asyncio.to_thread(report)
+async def read_status(
+    leaveOut: Annotated[
+        str | None,
+        Query(max_length=LEAVE_OUT_MAX_LENGTH, pattern=LEAVE_OUT_PATTERN),
+    ] = None,
+) -> StatusResponse:
+    """Answer with the counters and the version marks of this container.
+
+    ``leaveOut`` is optional, and without it the answer is exactly the one of
+    1.5. With it, a comma separated list of storage ids, the answer also carries
+    ``indexedLeftOut`` and ``embeddedLeftOut`` for those storages (plan 39-01).
+    The pattern and the length are checked by FastAPI, the number of ids here;
+    every refusal is a 422 before anything is read (T-39-02).
+    """
+    if leaveOut is None:
+        return await asyncio.to_thread(report)
+
+    storage_ids = [int(item) for item in leaveOut.split(",")]
+    if len(storage_ids) > LEAVE_OUT_MAX_IDS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"leaveOut names more than {LEAVE_OUT_MAX_IDS} storages",
+        )
+    return await asyncio.to_thread(report, storage_ids)

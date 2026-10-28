@@ -196,6 +196,24 @@ class StorageService {
 	 */
 	private const ABSENT_LOOKUP_BAND = 200;
 
+	/**
+	 * The backends whose storage id is known to read '<user>@<host>//<rest>'.
+	 *
+	 * Read in nextcloud/server, branch stable34 (head 4ce36f88, 28.10.2026):
+	 * - SMB, apps/files_external/lib/Lib/Storage/SMB.php:137-142, getId() is
+	 *   'smb::' . <auth user> . '@' . <host> . '//' . <share> . '/' . <root>,
+	 *   and lines 114-116 give the root a leading and a trailing slash.
+	 * - SFTP, apps/files_external/lib/Lib/Storage/SFTP.php:157-167, getId() is
+	 *   'sftp::' . <user> . '@' . <host>[':' . <port>] . '/' . <root>, and lines
+	 *   94-98 give the root a leading slash, so the host is followed by '//'.
+	 *
+	 * WebDAV and ownCloud are not in the list: their getId() (lib/private/Files/
+	 * Storage/DAV.php:201-203) puts a host that may carry a path in front of a
+	 * single slash, so host and root cannot be told apart in the id. A backend
+	 * that is not in the list is never grouped, which is the counting of 1.5.
+	 */
+	private const COUNTING_KEY_BACKENDS = ['smb::', 'sftp::'];
+
 	public function __construct(
 		private IFileAccess $fileAccess,
 		private IMimeTypeLoader $mimeTypeLoader,
@@ -435,6 +453,127 @@ class StorageService {
 		$gone = array_values(array_filter($wanted, static fn (int $storageId): bool => !isset($existing[$storageId])));
 
 		return ['gone' => $gone, 'deselected' => $this->deselected(array_keys($existing))];
+	}
+
+	/**
+	 * Groups of storages that show the same tree, for the coverage figure only.
+	 *
+	 * Weg C of 35-DEDUP-NOTIZ (owner decision D-37-03): an external storage that
+	 * connects with the credentials of each user gets one storage id per user,
+	 * because the login name is part of the id (F1), and so the crawl counts the
+	 * same share once per user. The key of a group is the id without the login
+	 * name: backend, host, share and root, and the root as Nextcloud wrote it
+	 * into the id, after the placeholders were replaced per user (F4). A root
+	 * with $user in it is therefore a different key per user and never a group.
+	 * The login name stays out of the key on purpose, it is exactly the part
+	 * that differs per user (section 3 of the note).
+	 *
+	 * Only groups of two or more come back, each in ascending order, and the
+	 * list is sorted by its first member. One query per band of
+	 * ABSENT_LOOKUP_BAND ids against oc_storages, nothing against the file
+	 * cache. Nothing but numbers leaves this method: no host, no share and no
+	 * user in the answer and in no log line (T-39-01). The answer feeds a figure
+	 * on the admin page and nothing else; crawl, index and permissions never see
+	 * it (T-39-03, T-39-05).
+	 *
+	 * @param list<int> $storageIds
+	 * @return list<list<int>>
+	 */
+	public function countingKeyGroups(array $storageIds): array {
+		$wanted = [];
+		foreach ($storageIds as $storageId) {
+			if (is_int($storageId) && $storageId > 0) {
+				$wanted[$storageId] = true;
+			}
+		}
+		$wanted = array_keys($wanted);
+		sort($wanted);
+
+		if (count($wanted) < 2) {
+			return [];
+		}
+
+		$byKey = [];
+		foreach (array_chunk($wanted, self::ABSENT_LOOKUP_BAND) as $band) {
+			$qb = $this->db->getQueryBuilder();
+			$qb->select('numeric_id', 'id')
+				->from('storages')
+				->where($qb->expr()->in('numeric_id', $qb->createNamedParameter($band, IQueryBuilder::PARAM_INT_ARRAY)));
+
+			$result = $qb->executeQuery();
+			try {
+				while (($row = $result->fetch()) !== false) {
+					$numericId = (int)($row['numeric_id'] ?? 0);
+					$key = self::countingKey((string)($row['id'] ?? ''));
+					if ($numericId > 0 && $key !== null) {
+						$byKey[$key][$numericId] = true;
+					}
+				}
+			} finally {
+				$result->closeCursor();
+			}
+		}
+
+		$groups = [];
+		foreach ($byKey as $members) {
+			if (count($members) < 2) {
+				continue;
+			}
+			$ids = array_keys($members);
+			sort($ids);
+			$groups[] = $ids;
+		}
+		usort($groups, static fn (array $a, array $b): int => $a[0] <=> $b[0]);
+
+		return $groups;
+	}
+
+	/**
+	 * The counting key of one storage id, or null when it must not be grouped.
+	 *
+	 * '<backend>::<user>@<host>//<rest>' becomes '<backend>::<host>//<rest>'.
+	 * The host is the text after the LAST '@' in front of the first '//', so a
+	 * login name that carries an '@' of its own (a mail address, a domain
+	 * login) stays out of the key whole. Null for every backend outside
+	 * COUNTING_KEY_BACKENDS, for an id without '@' or '//', and for an id that
+	 * Nextcloud shortened to its md5, because ids above 64 characters are
+	 * stored hashed (lib/private/Files/Cache/Storage.php:100-103, stable34) and
+	 * a hash says nothing about the tree behind it.
+	 *
+	 * Static and public for the reason coverageShare() of AdminViewService is:
+	 * it is string arithmetic, and a test can ask it without a database.
+	 */
+	public static function countingKey(string $storageId): ?string {
+		if (preg_match('/^[0-9a-f]{32}$/D', $storageId) === 1) {
+			return null;
+		}
+
+		foreach (self::COUNTING_KEY_BACKENDS as $prefix) {
+			if (!str_starts_with($storageId, $prefix)) {
+				continue;
+			}
+
+			$rest = substr($storageId, strlen($prefix));
+			$split = strpos($rest, '//');
+			if ($split === false || $split === 0) {
+				return null;
+			}
+
+			$credentialsAndHost = substr($rest, 0, $split);
+			$at = strrpos($credentialsAndHost, '@');
+			if ($at === false) {
+				return null;
+			}
+
+			$host = substr($credentialsAndHost, $at + 1);
+			if ($host === '') {
+				return null;
+			}
+
+			return $prefix . $host . substr($rest, $split);
+		}
+
+		return null;
 	}
 
 	/**
