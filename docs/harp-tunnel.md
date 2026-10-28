@@ -19,9 +19,12 @@ backend still holds the old certificates.
 - frpc in the backend container log, about every 20 seconds:
   `connect to server error: tls: failed to verify certificate: x509: certificate signed by unknown authority (possibly because of "crypto/rsa: verification error" while trying to verify candidate authority certificate "harp.nc")`
 - From Findling 1.6.0 on, the watcher in the same log names the cause:
-  `harp_connect: the tunnel certificate is no longer accepted by HaRP (x509), most likely HaRP was restarted without its /certs volume and issued a new CA; frpc keeps retrying and picks up new files in /certs/frp by itself; copy them in or re-register the app, see https://github.com/street1983nk/nextcloud-search/blob/main/docs/harp-tunnel.md#repair-without-re-registering`
-- `connect to server error: session shutdown` on its own is not a signal; it also
-  appears in other situations.
+  `harp_connect: the tunnel certificate is possibly no longer accepted by HaRP (x509 or repeated failed logins), most likely HaRP was restarted without its /certs volume and issued a new CA; frpc keeps retrying and picks up new files in /certs/frp by itself; copy them in or re-register the app, see https://github.com/street1983nk/nextcloud-search/blob/main/docs/harp-tunnel.md#repair-without-re-registering`
+- The failure can also show up as repeated
+  `connect to server error: session shutdown` lines without any x509 line, when
+  HaRP refuses the old client certificate first. A single such line is not a
+  signal; after 6 failed logins in a row without a successful one the watcher
+  prints the same remedy line.
 - The container stays `running`, the search finds nothing.
 - The admin page and `occ findling:diagnose` show that the backend does not
   answer (`backendReachable` false, the line `backend answered: no`), but not

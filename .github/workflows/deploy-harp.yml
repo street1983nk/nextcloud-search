@@ -901,7 +901,7 @@ jobs:
       # TrueNAS). The CA digest before and after shows that it happened.
       #
       # What the positive control proves: without new files the tunnel stays
-      # dead. frpc prints x509, the canary search finds nothing, the watcher of
+      # dead. frpc fails every dial, the canary search finds nothing, the watcher of
       # docker/harp_connect.sh names the cause once and restarts nothing, and
       # the container is neither restarted nor recreated. What it does not
       # prove: that the old image would stay dead after the copy. It would not,
@@ -917,7 +917,7 @@ jobs:
       # healed canary search, the unchanged RestartCount and StartedAt and the
       # unchanged app list are the claim.
       #
-      # Budget: the _ping loop up to 90 s, the dead window up to 180 s, the
+      # Budget: the _ping loop up to 90 s, the dead window up to 270 s, the
       # healing up to 90 s, the rest are measurements. The longest leg of the
       # last three green runs took 31 min 50 s, so the job cap of 45 minutes
       # holds with this step added.
@@ -1005,28 +1005,32 @@ jobs:
 
           # -- 3. positive control: without new files the tunnel stays dead ----
           # Only after the _ping above (pitfall 7), so "dead" cannot mean "HaRP
-          # is not up yet". Window 90 x 2 s.
+          # is not up yet". Window 90 x 3 s.
           #
-          # Measured in run 40695220173: the failed dials of frpc alternate
-          # between "x509: ..." (frpc refuses the new server certificate) and
-          # "session shutdown" (frps refuses the old client certificate), and
-          # which side speaks first is a race. On the arm64 leg one dial in nine
-          # said x509, so two x509 lines do not fit into 180 s reliably. The
-          # dead window is therefore: at least one x509 line, at least three
-          # failed dials in all, and not a single "login to server success"
-          # since the reissue.
-          x509=0
+          # The failed dials after a reissue are a race between "x509: ..."
+          # (frpc refuses the new server certificate) and "session shutdown"
+          # (frps refuses the old client certificate). Run 40695220173 saw one
+          # x509 in nine dials on arm64, run 40704387898 saw none at all on
+          # stable34 amd64. So x509 lines are printed for information and never
+          # asserted. Dead means: at least three failed dials, not a single
+          # "login to server success" since the reissue, and the remedy line of
+          # the watcher, which it prints at the first x509 or after six failed
+          # logins in a row (FINDLING_HARP_SUSPECT_AFTER_ERRORS), so it is due on
+          # every leg within about two minutes.
           failed_dials=0
+          remedy=0
           for _ in $(seq 1 90); do
-            x509=$(count_since 'x509: ')
             failed_dials=$(count_since 'connect to server error:')
-            if [ "${x509}" -ge 1 ] && [ "${failed_dials}" -ge 3 ]; then
+            remedy=$(count_since 'possibly no longer accepted by HaRP')
+            if [ "${failed_dials}" -ge 3 ] && [ "${remedy}" -ge 1 ]; then
               break
             fi
-            sleep 2
+            sleep 3
           done
-          if [ "${x509}" -lt 1 ] || [ "${failed_dials}" -lt 3 ]; then
-            echo "${x509} x509 line(s) and ${failed_dials} failed dial(s) within 180 s of the reissue, so the old certificate was never shown to be refused"
+          x509=$(count_since 'x509: ')
+          echo "since the reissue: ${failed_dials} failed dial(s), ${x509} of them x509 (information only), remedy line ${remedy} time(s)"
+          if [ "${failed_dials}" -lt 3 ]; then
+            echo "only ${failed_dials} failed dial(s) within 270 s of the reissue, so the old certificate was never shown to be refused"
             docker logs --since "${rotated}" "${EXAPP_CONTAINER}" 2>&1 | tail -n 80
             exit 1
           fi
@@ -1058,7 +1062,6 @@ jobs:
             echo "the canary search still found something after the reissue, so the tunnel was not dead and this probe proves nothing"
             exit 1
           fi
-          remedy=$(count_since 'no longer accepted by HaRP (x509)')
           if [ "${remedy}" != "1" ]; then
             echo "the watcher printed its remedy line ${remedy} time(s) since the reissue and not once"
             docker logs --since "${rotated}" "${EXAPP_CONTAINER}" 2>&1 | tail -n 80
@@ -1138,7 +1141,7 @@ jobs:
             echo "the watcher restarted frpc ${restart_lines} times for one copy, at most once is allowed"
             exit 1
           fi
-          remedy=$(count_since 'no longer accepted by HaRP (x509)')
+          remedy=$(count_since 'possibly no longer accepted by HaRP')
           if [ "${remedy}" -gt 1 ]; then
             echo "the remedy line stands ${remedy} times, its rate limit did not hold"
             exit 1
