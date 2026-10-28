@@ -1,21 +1,29 @@
 """The gate over the seed of the upgrade proof in ``.github/workflows/deploy-harp.yml``.
 
-The upgrade proof starts from v1.4.3 since plan 36-13 (D-36-13), which runs the
-container code of v1.4.2 unchanged; from plan 30-06 (D-30-07) to then it started
-from v1.4.2, and from plan 29-11 (D-29-01) to plan 30-06 from v1.3.2. The seed of "Store upgrade 2b" is the
-same two real files as before, an AppleDouble sidecar and a grey TIFF with an
-unspecified extra channel, but the released container judges them rightly now:
-1.4.2 skips the sidecar as skipped(system_file) before its first byte
-(worker/poller.py:1480 of v1.4.2) and reads the picture through the shim of plan
-29-07 (extract/image.py:127). Its recheck of D-29-10 has already run to "done"
-on the released installation (worker/recheck.py:129), so the upgrade to this
-code must move nothing at all: no counter, no verdict, no vector, no mark. If a
-part of this seed or of these assurances got lost in an edit, the proof would
-not turn red; it would stay green and prove less, and nobody reads a missing
-line. That is the whole reason this module exists. Since plan 31-12 (FMT-06) the
-same step sows the seed of the new formats where phase 31 was announced, and
-"Store upgrade 3c" records the catch-up mark and the old stock before the
-upgrade; their gate is the last section of this module.
+The upgrade proof starts from v1.5.0 since plan 40-03 (REL-06): the release the
+store carried before 1.5.1, whose backend/src and PHP files are byte identical
+to 1.5.1. Before that it started from v1.4.3 (plan 36-13, D-36-13), v1.4.2
+(plan 30-06, D-30-07) and v1.3.2 (plan 29-11, D-29-01). The seed of "Store
+upgrade 2b" is the same set of real files as before, and the released container
+judges every one of them itself now: the AppleDouble sidecar is
+skipped(system_file) before its first byte (worker/poller.py:1499 of v1.5.0),
+the grey TIFF is read through the shim of plan 29-07 (extract/image.py:118),
+the six new types are on the allowlist of the tag
+(php/lib/Service/StorageService.php:133 of v1.5.0) and indexed, the ZIP bomb
+ends skipped(archive_limit) (extract/archive.py), the Word file under .docx is
+read by content (extract/cfb.py:122, extract/legacy_doc.py) and the stale file
+is accepted at its first delivery (POL-02, worker/poller.py:2036 of v1.5.0: two
+short reads with the same count and hash). Both marks, recheck_1_4_0
+(worker/recheck.py:146) and recheck_1_5_0 (worker/reconcile.py:469), read done
+on the released installation, so the upgrade to this code must move nothing at
+all: no counter, no verdict, no vector, no mark. If a part of this seed or of
+these assurances got lost in an edit, the proof would not turn red; it would
+stay green and prove less, and nobody reads a missing line. That is the whole
+reason this module exists. Since plan 31-12 (FMT-06) the same step sows the
+seed of the new formats where phase 31 was announced, and "Store upgrade 3c"
+records both marks and the old stock before the upgrade; their gate is the last
+section of this module. Every derivation per assurance stands in
+.planning/phases/40-haertung-und-store-einreichung-1-6-0/40-03-ABLEITUNG.md.
 
 The workflow is loaded with yaml and every step is found by the start of its
 name, so a statement is about the step it names and not about a string that
@@ -95,14 +103,16 @@ def _bash_parses(run: str, tmp_path: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_the_proof_starts_from_v1_4_3() -> None:
-    # Since plan 36-13 (D-36-13): v1.4.3 is the version in the store, and it
-    # runs the container code of v1.4.2 byte for byte, so the seed and the
-    # assurances below stay as they were written for v1.4.2.
-    assert _workflow()["env"]["UPGRADE_FROM_TAG"] == "v1.4.3"
+def test_the_proof_starts_from_v1_5_0() -> None:
+    # Since plan 40-03 (REL-06): v1.5.0 is the release the store carried before
+    # 1.5.1, and 1.5.1 only renamed the store name of the companion, so a start
+    # on v1.5.0 proves the path of every 1.5.x installation. Every assurance
+    # that names the behaviour of the start was derived anew for 1.5.0 in
+    # 40-03-ABLEITUNG.md, none softened.
+    assert _workflow()["env"]["UPGRADE_FROM_TAG"] == "v1.5.0"
 
 
-@pytest.mark.parametrize("old_start", ["1.3.2", "1.4.2"])
+@pytest.mark.parametrize("old_start", ["1.3.2", "1.4.2", "1.4.3"])
 def test_the_old_start_stands_in_comments_only(old_start: str) -> None:
     # An earlier start may stay in the chronicle of the comments, never in a
     # value or a line a shell runs.
@@ -143,12 +153,13 @@ def test_the_seed_step_scans_and_lets_the_old_container_judge() -> None:
     assert "docker pause" not in run
 
 
-def test_the_seed_step_asserts_the_verdict_of_1_4_2_fail_closed() -> None:
+def test_the_seed_step_asserts_the_verdict_of_the_start_fail_closed() -> None:
     # Both halves, the state database of the container and findling_file_state
-    # of Nextcloud, and a red end in the branch that sees anything else. 1.4.2
-    # judges rightly: the sidecar skipped(system_file) on both sides, the
-    # picture indexed with no verdict left in Nextcloud (only skipped and
-    # failed are recorded there, php/lib/Command/IndexCommand.php:140).
+    # of Nextcloud, and a red end in the branch that sees anything else. 1.5.0
+    # judges rightly, exactly as 1.4.2 did: the sidecar skipped(system_file) on
+    # both sides (worker/poller.py:1499 of v1.5.0), the picture indexed with no
+    # verdict left in Nextcloud (only skipped and failed are recorded there,
+    # php/lib/Command/IndexCommand.php:140).
     run = _run(SEED_STEP)
     assert '"${sidecar}" != "skipped/system_file"' in run
     assert '"${sidecar_recorded}" != "skipped/system_file"' in run
@@ -202,21 +213,20 @@ ASSURANCE_STEP = "Store upgrade 5,"
 # does not apply to it; the bound stays a bound on growth.
 SNAPSHOT_RUN_MAX = 20957
 
-# The derivation of the comment above "Store upgrade 5". Since plan 30-06 the
-# recheck of D-29-10 is done on the released installation and hands nothing
-# back; since plan 31-13 the catch-up of 1.5 (FMT-06) moves exactly the seed of
-# the new formats: seven files indexed (mail, ZIP, doc, xls, HEIC, the stale
-# text file, and the Word file under .docx that leaves skipped(legacy_format)),
-# the ZIP bomb skipped(archive_limit) on both sides, and the failed verdict of
-# the stale file taken back by its success report. A nought is compared with
-# unchanged(), every other step with moved() and exactly that step.
+# The derivation of the comment above "Store upgrade 5". Since plan 40-03 the
+# start is v1.5.0, which indexed the whole seed itself: the recheck of D-29-10
+# and the catch-up of 1.5 both read done before the upgrade (recheck.py:146 and
+# reconcile.py:469 of v1.5.0, 40-03-ABLEITUNG.md), recheck_step and catchup_step
+# return at once on done, so the upgrade moves not one counter. From plan 31-13
+# to 40-03 the catch-up moved docs and indexed by +7 and Nextcloud's failed
+# files by -1; every step is a nought now and compared with unchanged().
 DERIVED_STEPS = {
-    ".container.docs": 7,
-    ".container.indexed": 7,
+    ".container.docs": 0,
+    ".container.indexed": 0,
     ".container.skipped": 0,
     ".container.failed": 0,
     ".nextcloud.skipped": 0,
-    ".nextcloud.failed": -1,
+    ".nextcloud.failed": 0,
     ".nextcloud.scheduled": 0,
     ".nextcloud.running": 0,
     ".container.rebuildState": 0,
@@ -254,19 +264,20 @@ def test_the_snapshot_expects_the_stamped_languages_mark() -> None:
 
 
 def test_the_rebuild_step_demands_the_schema_of_the_running_code() -> None:
-    # v1.4.2 stamps 2, this code stamps 3 after a rebuild. From plan 29-13 to
-    # 30-04 v1.3.2 and this code shared schema 2, so the language jump of
-    # "Store upgrade 6" moved no schema mark (deploy-harp run 37455892381).
-    # Plan 30-04 raised SCHEMA_VERSION to 3 (body_cs, D-30-08): the start of
-    # the proof (v1.4.2 since plan 30-06) carries 2, the rebuild builds and
-    # stamps the schema of this code, so the demand is 2 before and 3 after,
-    # and 3 on both sides of the way back in "Store upgrade 7". A further
-    # schema bump in config.py has to turn this gate red again.
+    # v1.5.0 stamps 3 at the fresh directory (config.py:58 of v1.5.0) and this
+    # code stamps 3 after a rebuild, so the demand is 3 on both sides of "Store
+    # upgrade 6" and of the way back in "Store upgrade 7"; what proves the
+    # rebuild stamped at all is the languages mark, which only stamp_after_swap
+    # writes into an existing directory. From plan 30-06 to 40-03 the start
+    # carried 2 and the demand was 2 before and 3 after (run 37455892381 for
+    # the 2/2 era before that). A schema bump in config.py has to turn this
+    # gate red again.
     from findling.config import SCHEMA_VERSION
 
     assert SCHEMA_VERSION == 3
     run = _run("Store upgrade 6,")
-    assert 'if [ "${was}" = "2" ] && [ "${now}" = "3" ]; then' in run
+    assert 'if [ "${was}" = "3" ] && [ "${now}" = "3" ]; then' in run
+    assert '[ "${was}" = "2" ]' not in run
     assert '[ "${now}" = "2" ]; then' not in run
     assert "which is exactly one step" not in run
     back = _run("Store upgrade 7,")
@@ -285,14 +296,22 @@ def test_the_record_step_reads_the_before_state_of_the_seed() -> None:
     run = _run(RECORD_STEP)
     assert '. "${RUNNER_TEMP}/seed-probe.sh"' in run
     assert "seed_probe meta recheck_1_4_0" in run
-    # 1.4.2 ran its recheck to the end before the upgrade (worker/recheck.py:129).
+    # 1.5.0 ran its recheck to the end before the upgrade (worker/recheck.py:146
+    # of v1.5.0, an empty scan still ends in done).
     assert 'if [ "${recheck}" != "done" ]; then' in run
     assert "seed_probe meta embedding_version" in run
-    # The whole stock, the picture included: it was embedded under 1.4.2 and
-    # must not be embedded again.
+    # The whole stock, the picture and the seed of the new formats included:
+    # all of it was embedded under 1.5.0 and none of it may be embedded again.
     assert "seed_probe stock 0" in run
     assert '"${tiff_chunks}" = "0"' in run
     assert '"${sidecar_chunks}" != "0"' in run
+    # The seven indexed files of the new formats carry their vectors before the
+    # stock is recorded, or the digest would move when the poller catches up.
+    assert 'for id in ${new_indexed_ids}; do' in run
+    assert 'if [ -n "${unembedded}" ]; then' in run
+    # The stored schema mark of the start, read out of the snapshot of "Store
+    # upgrade 3": 3 is what a fresh directory of v1.5.0 is stamped with.
+    assert """'.marks.schemaVersion == "3"' "${RUNNER_TEMP}/upgrade-before.json\"""" in run
     assert 'echo "UPGRADE_EMBEDDING_MARK=${embedding}"' in run
     assert 'echo "UPGRADE_VECTOR_STOCK=${stock}"' in run
 
@@ -329,23 +348,18 @@ def _assurance_comment() -> str:
 
 
 def test_every_counter_is_unchanged_or_moved_by_its_derived_step() -> None:
-    # Replaces test_every_counter_is_held_unchanged (plan 31-13): the seed of
-    # the new formats is caught up across the upgrade, so three counters move,
-    # each by the step the table derives and by nothing else.
+    # Since plan 40-03 every derived step is a nought: the start v1.5.0 indexed
+    # the whole seed itself, so a counter that moves at all is a finding. The
+    # moved() helper of plan 31-13 is gone with the last moved counter; a new
+    # seed that moves one has to bring the helper back with its exact step.
     run = _run(ASSURANCE_STEP)
     unchanged = _UNCHANGED.findall(run)
     moved = _MOVED.findall(run)
     for counter, step in DERIVED_STEPS.items():
-        if step == 0:
-            assert unchanged.count(counter) == 1, counter
-            assert counter not in [path for path, _ in moved], counter
-        else:
-            assert moved.count((counter, f"{step:+d}")) == 1, counter
-            assert counter not in unchanged, counter
-    assert len(moved) == len([step for step in DERIVED_STEPS.values() if step != 0])
-    # The helper compares exactly: the value after is the value before plus
-    # the step, never a bound.
-    assert 'if [ "${now}" != "$(( was + step ))" ]; then' in run
+        assert step == 0, counter
+        assert unchanged.count(counter) == 1, counter
+        assert counter not in [path for path, _ in moved], counter
+    assert moved == []
 
 
 def test_the_table_of_the_derived_steps_stands_above_the_step() -> None:
@@ -363,12 +377,14 @@ def test_no_counter_is_compared_with_at_least() -> None:
     assert 'if [ "${was}" != "${now}" ]; then' in run
 
 
-def test_the_assurance_step_demands_no_rebuild_and_schema_2() -> None:
+def test_the_assurance_step_demands_no_rebuild_and_schema_3() -> None:
     # A plain upgrade under de,en rebuilds nothing, so the stored schema mark
-    # stays the 2 of 1.4.2 although this code carries 3 (30-RESEARCH pitfall 8),
-    # and the rebuild state stays idle (T-30-26).
+    # stays the 3 a fresh directory of v1.5.0 was stamped with (config.py:58 and
+    # index/open.py:256 of v1.5.0); a 2 after the upgrade would be a start that
+    # was never 1.5.0. The rebuild state stays idle (T-30-26).
     run = _run(ASSURANCE_STEP)
-    assert '.marks.schemaVersion == "2"' in run
+    assert '.marks.schemaVersion == "3"' in run
+    assert '.marks.schemaVersion == "2"' not in run
     assert '.container.rebuildState == "idle"' in run
 
 
@@ -396,14 +412,13 @@ def test_the_assurance_step_states_that_nothing_was_embedded_again() -> None:
     run = _run(ASSURANCE_STEP)
     assert 'if [ "${embedding}" != "${UPGRADE_EMBEDDING_MARK}" ]; then' in run
     assert 'if [ "${stock}" != "${UPGRADE_VECTOR_STOCK}" ]; then' in run
-    # Since plan 31-13 the stock without the eight new seed ids: none of them
-    # carried a vector under 1.4.2, so the stock of 3c is the old stock, and
-    # the seven caught up files carry their own vectors after the upgrade.
-    assert 'stock=$(seed_probe stock "${new_seed_ids}" || echo "unreadable")' in run
-    assert "seed_probe stock 0" not in run
-    ids = run[run.index("new_seed_ids=") : run.index("\n", run.index("new_seed_ids="))]
-    for name in NEW_SEED_IDS:
-        assert f"${{{name}}}" in ids, name
+    # Since plan 40-03 the WHOLE stock, the seed of the new formats included:
+    # every one of its files was embedded under v1.5.0 before "Store upgrade
+    # 3c" recorded the stock, so not one vector may move across the upgrade.
+    # From plan 31-13 to 40-03 the eight new seed ids stood outside the digest,
+    # because the catch-up embedded them only after the upgrade.
+    assert 'stock=$(seed_probe stock 0 || echo "unreadable")' in run
+    assert 'seed_probe stock "${new_seed_ids}"' not in run
     assert "for mark in schemaVersion indexVersion analyzerVersion wordlistHash; do" in run
     assert "'.profileEffective'" in run
     assert 'if [ "${profile}" != "economy" ]; then' in run
@@ -587,12 +602,17 @@ def test_the_changed_steps_parse_in_bash(prefix: str, tmp_path: Path) -> None:
 
 # --- The seed of the new formats and the catch-up record (plan 31-12) -------
 #
-# FMT-06. "Store upgrade 2b" sows eight more files where phase 31 was announced:
-# six new types and a ZIP bomb that 1.4.2 never queues, a Word 97 file under a
-# .docx name that 1.4.2 books as skipped(legacy_format), and a text file that
-# 1.4.2 gives up on as failed(repeatedly_stuck), in a fixed order and with no
-# verdict written by hand. "Store upgrade 3c" records the catch-up mark, the
-# candidates of the catch-up in the old stock and a digest of that stock.
+# FMT-06. "Store upgrade 2b" sows eight more files where phase 31 was announced.
+# Since plan 40-03 the start is v1.5.0, which reads every one of them itself:
+# the six new types are indexed (allowlist of StorageService.php:133 of v1.5.0),
+# the ZIP bomb ends skipped(archive_limit), the Word 97 file under the .docx
+# name is read by content (cfb.py:122, legacy_doc.py), and the stale file of
+# the fixed order is accepted at its first delivery (POL-02, poller.py:2036 of
+# v1.5.0) and indexed. No verdict is written by hand. "Store upgrade 3c"
+# records both marks, the vectors of the seed and a digest of the old stock.
+# Until 40-03 the start was 1.4.x, the six were never queued, the Word file was
+# skipped(legacy_format) and the stale file failed(repeatedly_stuck); the
+# catch-up after the upgrade was what indexed them.
 
 FORMATS_GENERATOR = REPO_ROOT / "scripts" / "ci" / "make_upgrade_seed_formats.py"
 
@@ -687,23 +707,33 @@ def test_no_line_writes_a_verdict_into_a_table() -> None:
 
 def test_the_stale_file_follows_the_fixed_order() -> None:
     # Stop, upload, the larger size in oc_filecache and in the queue row,
-    # start, then the claim dated back per delivery (plan 31-12, Befund 3).
+    # start; then v1.5.0 accepts the file at its first delivery (POL-02,
+    # poller.py:2036 of the tag: the download comes back short, is fetched once
+    # more, and the same count and hash are taken as the file). No claim is
+    # dated back any more, and no give up is waited for.
     block = _new_seed_block()
     stop = block.index('docker stop -t 60 "${container}"')
     upload = block.index('upload "${stale_name}"')
     cache = block.index("UPDATE oc_filecache SET size = ${stale_size}")
     queue = block.index("UPDATE oc_findling_queue SET size = ${stale_size}")
     start = block.index('docker start "${container}"')
-    backdate = block.index("UPDATE oc_findling_queue SET locked_at = datetime(locked_at, '-3600 seconds')")
     assert stop < upload < cache < start
     assert upload < queue < start
-    assert start < backdate
     # The queue row has to exist before the container runs, which is the
     # proof that the listener queued without it.
     assert block.index('if [ "${queued}" != "1:0:content" ]; then') < start
-    # The give up after exactly the deliveries of MAX_DELIVERIES.
-    assert 'if [ "${short}" != "3" ] || [ "${left}" != "0" ]; then' in block
+    # The acceptance by the exact log lines of POL-02: one short answer, one
+    # acceptance, and never the "stayed short twice" of the old give up path.
+    assert "grep -c 'download of one file came back short, fetching it once more'" in block
+    assert "grep -c 'the file cache names a stale size, the same'" in block
     assert "grep -c 'download of one file stayed short twice'" in block
+    assert 'if [ "${short}:${accepted}:${stuck}" != "1:1:0" ]; then' in block
+    # The backdating of the claim is gone with the give up, and no line a
+    # shell runs claims the old verdict; the history may stay in comments.
+    assert "locked_at = datetime(locked_at" not in block
+    for line in _run(SEED_STEP).splitlines():
+        if "repeatedly_stuck" in line:
+            assert line.lstrip().startswith("#"), line
 
 
 def test_the_order_waits_for_the_first_reconcile_cycle_first() -> None:
@@ -716,23 +746,26 @@ def test_the_order_waits_for_the_first_reconcile_cycle_first() -> None:
     assert 'elif question == "reconcile":' in _run(SEED_STEP)
 
 
-def test_the_new_seed_is_asserted_fail_closed_under_1_4_2() -> None:
+def test_the_new_seed_is_asserted_fail_closed_under_the_start() -> None:
     block = _new_seed_block()
-    # The six types and the bomb: no row on either side.
+    # The six types and the Word file under .docx: indexed in state.db with no
+    # verdict in findling_file_state, because 1.5.0 reads all seven itself.
     assert (
-        '"eml=${mail_id}" "zip=${zip_id}" "bomb=${bomb_id}" "doc=${doc_id}" "xls=${xls_id}" "heic=${heic_id}"' in block
+        '"mail=${mail_id}" "zip=${zip_id}" "doc=${doc_id}" "xls=${xls_id}" "heic=${heic_id}" "ole=${ole_id}"' in block
     )
-    assert 'if [ "${rows}" != "0" ] || [ "${recorded}" != "0" ]; then' in block
-    # The Word file under .docx: skipped/legacy_format on both sides.
-    ole_check = 'if [ "${ole}" != "skipped/legacy_format" ] || [ "${ole_recorded}" != "skipped/legacy_format" ]; then'
-    assert ole_check in block
-    # The stale file: written off in Nextcloud, no row in state.db, the
-    # determined value and not "0 or 1" (Blocker 1).
-    assert '|| [ "${stale_recorded}" != "failed/repeatedly_stuck" ]' in block
-    assert '[ "${stale}" != "0" ]' in block
-    assert 'stale=$(seed_probe rows "${stale_id}" || echo unreadable)' in block
-    # The seven words find nothing, before and after, with a positive control.
-    assert block.count("words_find_nothing ") == 2
+    assert 'if [ "${verdict}" != "indexed/" ] || [ "${recorded}" != "0" ]; then' in block
+    # The bomb: skipped/archive_limit on both sides, judged by the tag.
+    bomb_check = 'if [ "${bomb}" != "skipped/archive_limit" ] || [ "${bomb_recorded}" != "skipped/archive_limit" ]; then'
+    assert bomb_check in block
+    # The stale file: indexed in state.db, no verdict in Nextcloud and no queue
+    # row left, the determined values and not a range.
+    assert 'if [ "${stale}" != "indexed/" ] || [ "${stale_recorded}" != "0" ] || [ "${left}" != "0" ]; then' in block
+    assert 'stale=$(seed_probe verdict "${stale_id}" || echo unreadable)' in block
+    # The seven words find nothing before the seed and exactly their file after
+    # it, with a positive control on both sides.
+    assert block.count("words_find_nothing ") == 1
+    assert "words_exact" in block
+    assert 'if [ -z "${words_ok}" ]; then' in block
     assert 'if [ "${control}" != "1" ]; then' in block
     assert 'if [ "${fail}" -ne 0 ]; then' in block
 
@@ -750,10 +783,16 @@ def test_every_new_seed_id_is_checked_before_it_goes_into_the_environment() -> N
         assert f'"${{{variable}}}"' in block[block.rindex("for value in", 0, check) : check], variable
 
 
-def test_the_record_step_demands_the_catch_up_mark_absent() -> None:
+def test_the_record_step_demands_the_catch_up_mark_done() -> None:
+    # 1.5.0 knows its own catch-up: part A runs at the first rounds
+    # (worker/catchup.py:148-190 of v1.5.0) and part B is the first reconcile
+    # cycle, which "Store upgrade 2b" waits out, so the mark reads done before
+    # the upgrade (worker/reconcile.py:469 of v1.5.0). Until plan 40-03 the
+    # start did not know the mark and the demand was absent.
     run = _run(RECORD_STEP)
     assert "catchup=$(seed_probe meta recheck_1_5_0) || exit 1" in run
-    assert 'if [ "${catchup}" != "absent" ]; then' in run
+    assert 'if [ "${catchup}" != "done" ]; then' in run
+    assert '"${catchup}" != "absent"' not in run
 
 
 def test_the_record_step_names_the_mark_of_the_store() -> None:
@@ -1273,8 +1312,10 @@ def test_the_exclusion_seed_writes_the_prefix_of_the_tag_before_any_upload() -> 
     )
     assert f"excl_folder={EXCLUSION_PREFIX}" in block
     assert write < block.index("-X MKCOL") < block.index('excl_upload "${RUNNER_TEMP}/excl-a.txt"')
-    # The shape is read out of the tag, and the comment says where.
-    assert "v1.4.2:php/lib/Service/ExclusionService.php:173" in block
+    # The shape is read out of the tag, and the comment says where: prefixes()
+    # of v1.5.0 reads the key exclusions with getValueArray and names occ as
+    # the documented second writer, exactly as 1.4.2 did.
+    assert "v1.5.0:php/lib/Service/ExclusionService.php:236" in block
 
 
 def test_the_exclusion_seed_is_judged_fail_closed_under_the_tag() -> None:
