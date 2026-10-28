@@ -165,7 +165,7 @@ Details im Archiv: .planning/milestones/v1.5-ROADMAP.md
 | 24-29 (Archiv) | v1.4 | 78/78 | Complete | 2026-10-06 |
 | 30-36 (Archiv) | v1.5 | 79/79 | Complete | 2026-10-28 |
 | 37. Owner-Tor und Store-Sichtbarkeit | v1.6 | 2/2 | Complete   | 2026-10-28 |
-| 38. Zertifikatsrotation ohne Admin-Eingriff | v1.6 | 2/2 | Complete   | 2026-10-28 |
+| 38. Zertifikatsrotation ohne Admin-Eingriff | v1.6 | 2/2 | Executed, Nachbesserung laeuft (SC2: flakige x509-Bedingung, shutdown-Erkennung) | - |
 | 39. Ausschluss-Anzeige, Dedup-Umfang und Doku-Hygiene | v1.6 | 2/4 | In Progress (39-01, 39-02 fertig) | - |
 | 40. Haertung und Store-Einreichung 1.6.0 | v1.6 | 0/? | Not started | - |
 
