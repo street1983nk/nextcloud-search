@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Umsteiger-Release
-status: executing
-stopped_at: Completed 36-16-PLAN.md (Einreichung 1.5.0, 2x HTTP 201), Doku-Push wartet auf Owner-Wort, danach Code-Review, Verifier, phase.complete
-last_updated: "2026-10-21T12:30:00.000Z"
-last_activity: 2026-10-21
+status: phase_complete
+stopped_at: Phase 36 abgeschlossen (Code-Review 0 CRIT / 2 WR gefixt 3580cd45, Verifier passed 5/5, 36-VERIFICATION.md); naechster Schritt gsd-complete-milestone v1.5
+last_updated: "2026-10-28T10:30:00.000Z"
+last_activity: 2026-10-28
 progress:
   total_phases: 7
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 79
   completed_plans: 79
-  percent: 86
+  percent: 100
 ---
 
 # Project State
@@ -25,10 +25,10 @@ Siehe .planning/PROJECT.md (Stand nach Phase 29, Milestone v1.5 gestartet) und .
 
 ## Current Position
 
-Phase: 36 (Haertung und Store-Einreichung 1.5.0) , EXECUTING
-Plan: 17 of 17 (36-16 als letzte Welle ausgeführt)
-Status: Executed, Store-Einreichung 1.5.0 erledigt (Lauf 39598694849, 2x HTTP 201); offen: Owner-Wort zum Doku-Push, Code-Review, Verifier, Phasenabschluss
-Last activity: 2026-10-21
+Phase: 36 (Haertung und Store-Einreichung 1.5.0) , COMPLETE (2026-10-28)
+Plan: 17 of 17
+Status: Phase 36 abgeschlossen. Code-Review 0 Critical, 2 Warnings (WR-36-01 amplification-Substring, WR-36-02 Reconcile-Prosa) gefixt in 3580cd45; Vollsuite 6177 passed (26 Docker-Audit-Tests nur lokal rot, CI gruen; 2 Last-Flakes isoliert 5x stabil); Verifier passed 5/5 (36-VERIFICATION.md). Offen: Milestone-v1.5-Abschluss (gsd-complete-milestone), danach Milestone v1.6.
+Last activity: 2026-10-28
 
 Progress: [██████████] 100%
 
