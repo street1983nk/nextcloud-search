@@ -882,6 +882,269 @@ jobs:
           jq -e '.ocs.data.entries[0].subline | endswith("for user testuser")' out.json
 
       # =====================================================================
+      # ZERT-02 after owner decision D-37-09: a reissued HaRP CA, on a real
+      # HaRP and on every leg of the matrix.
+      #
+      # THIS STEP CARRIES NO "if:" AND MUST NOT BE GIVEN ONE. The rotation is
+      # proven on all four legs, the native arm64 one included, and
+      # backend/tests/test_cert_rotation_steps.py holds the absence of the
+      # condition as an assertion, with "Store upgrade 5" as its counter sample.
+      #
+      # Why here: the installation is fresh and the canary search right above
+      # has just proven a healthy tunnel, and every later step builds on a
+      # healthy tunnel again, so the probe has to heal what it breaks before it
+      # ends.
+      #
+      # The reissue is real and not simulated: HaRP's start.sh issues a new CA
+      # "harp.nc" only when its own /certs/frp is missing, which is exactly what
+      # a restart without a persistent /certs volume looks like (Issue #33,
+      # TrueNAS). The CA digest before and after shows that it happened.
+      #
+      # What the positive control proves: without new files the tunnel stays
+      # dead. frpc prints x509, the canary search finds nothing, the watcher of
+      # docker/harp_connect.sh names the cause once and restarts nothing, and
+      # the container is neither restarted nor recreated. What it does not
+      # prove: that the old image would stay dead after the copy. It would not,
+      # frpc 0.61.1 reads the three files on every dial (38-RESEARCH pitfall 1),
+      # so the added value of the watcher (mode change, cap, remedy line) is
+      # proven in backend/tests/test_harp_connect_supervisor.py with a stub frpc.
+      #
+      # The repair is the command of docs/harp-tunnel.md, letter for letter in
+      # its shape: docker exec cat in HaRP piped into docker exec -i in the
+      # backend, umask 077, a temporary name, mv -f. Never docker cp: the files
+      # would belong to root and client.key would be unreadable for uid 1000
+      # (pitfall 3). No unregister, no register, no container restart: the
+      # healed canary search, the unchanged RestartCount and StartedAt and the
+      # unchanged app list are the claim.
+      #
+      # Budget: the _ping loop up to 90 s, the dead window up to 180 s, the
+      # healing up to 90 s, the rest are measurements. The longest leg of the
+      # last three green runs took 31 min 50 s, so the job cap of 45 minutes
+      # holds with this step added.
+      # =====================================================================
+      - name: Certificate rotation, a reissued HaRP CA heals after the three files are copied in
+        timeout-minutes: 10
+        run: |
+          set -o pipefail
+          search_url='http://localhost:8080/ocs/v2.php/search/providers/findling/search?term=findling-canary'
+          # Lines of the backend log since the reissue that carry $1. grep -c
+          # prints 0 and exits 1 on no match, and nought is a measurement here.
+          count_since() {
+            docker logs --since "${rotated}" "${EXAPP_CONTAINER}" 2>&1 | grep -c -F -- "$1" || true
+          }
+
+          # -- 0. preconditions ------------------------------------------------
+          if [ -z "${EXAPP_CONTAINER:-}" ]; then
+            echo "EXAPP_CONTAINER is empty, so there is no backend container to rotate against"
+            exit 1
+          fi
+          tools=$(docker exec "${EXAPP_CONTAINER}" sh -c 'command -v bash mkfifo sha256sum' | wc -l || true)
+          if [ "${tools}" != "3" ]; then
+            echo "the backend image lacks bash, mkfifo or sha256sum (found ${tools} of 3), so the watcher cannot run"
+            exit 1
+          fi
+          harp_files=$(docker exec appapi-harp ls /certs/frp)
+          for f in ca.crt client.crt client.key; do
+            if ! printf '%s\n' "${harp_files}" | grep -qx -- "${f}"; then
+              echo "HaRP has no /certs/frp/${f}, so there is nothing to rotate"
+              exit 1
+            fi
+          done
+          if ! docker logs "${EXAPP_CONTAINER}" 2>&1 | grep -qF 'harp_connect: client certificates in /certs/frp, configuring the tunnel with mutual TLS'; then
+            echo "the backend did not start the tunnel with mutual TLS, so a reissued CA proves nothing here"
+            docker logs "${EXAPP_CONTAINER}" 2>&1 | tail -n 40
+            exit 1
+          fi
+
+          # -- 1. before -------------------------------------------------------
+          restarts_before=$(docker inspect --format '{{.RestartCount}}' "${EXAPP_CONTAINER}")
+          started_before=$(docker inspect --format '{{.State.StartedAt}}' "${EXAPP_CONTAINER}")
+          ca_before=$(docker exec appapi-harp sha256sum /certs/frp/ca.crt | cut -d' ' -f1)
+          app_line_before=$(timeout 30 ./occ app_api:app:list | grep findling_backend || true)
+          for value in "${restarts_before}" "${started_before}" "${ca_before}" "${app_line_before}"; do
+            if [ -z "${value}" ]; then
+              echo "a measurement before the reissue came back empty, so nothing after it could be compared"
+              exit 1
+            fi
+          done
+          echo "before: RestartCount ${restarts_before}, StartedAt ${started_before}, CA ${ca_before:0:12}"
+
+          # -- 2. the real reissue ---------------------------------------------
+          rotated=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          docker exec appapi-harp rm -rf /certs/frp
+          docker restart appapi-harp
+          # The same gate as "Start HaRP": the docker engine route answers only
+          # once HAProxy, the agent and the frp server are up (pitfall 6).
+          ready=0
+          for _ in $(seq 1 45); do
+            code=$(curl -s -o /dev/null -m 5 -w '%{http_code}' \
+              -H "harp-shared-key: ${HARP_SHARED_KEY}" \
+              -H 'docker-engine-port: 24000' \
+              http://localhost:8780/exapps/app_api/v1.44/_ping || true)
+            if [ "${code}" = "200" ]; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "${ready}" != "1" ]; then
+            echo "harp did not answer the docker engine route on 8780 after its restart, last status '${code}'"
+            docker logs appapi-harp 2>&1 | tail -n 80
+            exit 1
+          fi
+          ca_after=$(docker exec appapi-harp sha256sum /certs/frp/ca.crt | cut -d' ' -f1)
+          if [ -z "${ca_after}" ] || [ "${ca_before}" = "${ca_after}" ]; then
+            echo "HaRP did not issue a new CA (before ${ca_before:0:12}, after ${ca_after:0:12})"
+            exit 1
+          fi
+          echo "HaRP issued a new CA: ${ca_before:0:12} -> ${ca_after:0:12}"
+
+          # -- 3. positive control: without new files the tunnel stays dead ----
+          # Only after the _ping above (pitfall 7), so "dead" cannot mean "HaRP
+          # is not up yet". Window 90 x 2 s.
+          x509=0
+          for _ in $(seq 1 90); do
+            x509=$(count_since 'x509: ')
+            if [ "${x509}" -ge 2 ]; then
+              break
+            fi
+            sleep 2
+          done
+          if [ "${x509}" -lt 2 ]; then
+            echo "only ${x509} x509 line(s) in the backend log within 180 s of the reissue, so the old certificate was never refused"
+            docker logs --since "${rotated}" "${EXAPP_CONTAINER}" 2>&1 | tail -n 80
+            exit 1
+          fi
+          # Assumption, documented: with the backend unreachable the companion
+          # answers either with an empty result or with an error status,
+          # depending on the server version. All three count as dead; only an
+          # answer with an entry in it fails, because then the tunnel was not
+          # dead and this probe measures nothing.
+          dead_code=$(curl -s -m 60 -o rotation-dead.json -w '%{http_code}' -u "testuser:${TESTUSER_PASS}" \
+            -H 'OCS-APIRequest: true' \
+            -H 'Accept: application/json' \
+            "${search_url}" || true)
+          printf '%s\n' "${dead_code}" > rotation-dead.code
+          echo "search during the dead window answered HTTP ${dead_code}: $(head -c 2000 rotation-dead.json 2> /dev/null || true)"
+          dead=0
+          if [ "${dead_code:-0}" -ge 400 ] 2> /dev/null; then
+            dead=1
+          elif ! jq -e . rotation-dead.json > /dev/null 2>&1; then
+            dead=1
+          elif jq -e '.ocs.data.entries | length == 0' rotation-dead.json > /dev/null 2>&1; then
+            dead=1
+          fi
+          if [ "${dead}" != "1" ]; then
+            echo "the canary search still found something after the reissue, so the tunnel was not dead and this probe proves nothing"
+            exit 1
+          fi
+          remedy=$(count_since 'no longer accepted by HaRP (x509)')
+          if [ "${remedy}" != "1" ]; then
+            echo "the watcher printed its remedy line ${remedy} time(s) since the reissue and not once"
+            docker logs --since "${rotated}" "${EXAPP_CONTAINER}" 2>&1 | tail -n 80
+            exit 1
+          fi
+          restart_lines=$(count_since 'harp_connect: the certificate files in')
+          if [ "${restart_lines}" != "0" ]; then
+            echo "the watcher restarted frpc ${restart_lines} time(s) with unchanged files, which is the restart storm ZERT-02 forbids"
+            exit 1
+          fi
+          if [ "$(docker inspect --format '{{.RestartCount}}' "${EXAPP_CONTAINER}")" != "${restarts_before}" ] \
+            || [ "$(docker inspect --format '{{.State.StartedAt}}' "${EXAPP_CONTAINER}")" != "${started_before}" ]; then
+            echo "the backend container was restarted during the dead window"
+            exit 1
+          fi
+          echo "dead window: ${x509} x509 line(s), remedy line once, no frpc restart, no container restart"
+
+          # -- 4. repair without unregister and register -----------------------
+          # The command of docs/harp-tunnel.md. docker exec runs as the image
+          # user, so the files belong to uid 1000; umask 077 keeps client.key
+          # private; the temporary name plus mv -f means frpc never reads half a
+          # file (pitfall 2).
+          for f in ca.crt client.crt client.key; do
+            docker exec appapi-harp cat "/certs/frp/${f}" \
+              | docker exec -i "${EXAPP_CONTAINER}" sh -c 'umask 077; cat > "/certs/frp/.$1.new" && mv -f "/certs/frp/.$1.new" "/certs/frp/$1"' sh "${f}"
+          done
+          repaired=${SECONDS}
+          ca_inside=$(docker exec "${EXAPP_CONTAINER}" sha256sum /certs/frp/ca.crt | cut -d' ' -f1)
+          if [ "${ca_inside}" != "${ca_after}" ]; then
+            echo "the ca.crt in the backend (${ca_inside:0:12}) is not the new CA (${ca_after:0:12}) after the copy"
+            exit 1
+          fi
+          if ! docker exec "${EXAPP_CONTAINER}" sh -c 'test -r /certs/frp/client.key'; then
+            echo "client.key is not readable for the app user after the copy"
+            exit 1
+          fi
+
+          # -- 5. healing ------------------------------------------------------
+          healed=0
+          for _ in $(seq 1 45); do
+            if curl -sf -m 10 -u "testuser:${TESTUSER_PASS}" \
+              -H 'OCS-APIRequest: true' \
+              -H 'Accept: application/json' \
+              "${search_url}" -o rotation-healed.json \
+              && jq -e '.ocs.data.entries | length == 1' rotation-healed.json > /dev/null \
+              && jq -e '.ocs.data.entries[0].title == "findling-canary"' rotation-healed.json > /dev/null \
+              && jq -e '.ocs.data.entries[0].subline | startswith("produced inside container ")' rotation-healed.json > /dev/null \
+              && jq -e '.ocs.data.entries[0].subline | endswith("for user testuser")' rotation-healed.json > /dev/null; then
+              healed=1
+              break
+            fi
+            sleep 2
+          done
+          heal_seconds=$((SECONDS - repaired))
+          if [ "${healed}" != "1" ]; then
+            echo "the canary search did not answer within 90 s of the copy"
+            docker logs --since "${rotated}" "${EXAPP_CONTAINER}" 2>&1 | tail -n 80
+            exit 1
+          fi
+          echo "the canary search answers again ${heal_seconds} s after the copy"
+          # The log lines may trail the answer by a moment; up to 10 s.
+          for _ in $(seq 1 5); do
+            logins=$(count_since 'login to server success')
+            again=$(count_since 'harp_connect: the tunnel is connected again')
+            if [ "${logins}" -ge 1 ] && [ "${again}" -ge 1 ]; then
+              break
+            fi
+            sleep 2
+          done
+          if [ "${logins}" -lt 1 ] || [ "${again}" -lt 1 ]; then
+            echo "login to server success: ${logins}, tunnel connected again: ${again}, both are needed"
+            docker logs --since "${rotated}" "${EXAPP_CONTAINER}" 2>&1 | tail -n 80
+            exit 1
+          fi
+          restart_lines=$(count_since 'harp_connect: the certificate files in')
+          if [ "${restart_lines}" -gt 1 ]; then
+            echo "the watcher restarted frpc ${restart_lines} times for one copy, at most once is allowed"
+            exit 1
+          fi
+          remedy=$(count_since 'no longer accepted by HaRP (x509)')
+          if [ "${remedy}" -gt 1 ]; then
+            echo "the remedy line stands ${remedy} times, its rate limit did not hold"
+            exit 1
+          fi
+          restarts_after=$(docker inspect --format '{{.RestartCount}}' "${EXAPP_CONTAINER}")
+          started_after=$(docker inspect --format '{{.State.StartedAt}}' "${EXAPP_CONTAINER}")
+          if [ "${restarts_after}" != "${restarts_before}" ] || [ "${started_after}" != "${started_before}" ]; then
+            echo "the backend container was restarted (RestartCount ${restarts_before} -> ${restarts_after}, StartedAt ${started_before} -> ${started_after})"
+            exit 1
+          fi
+          app_line_after=$(timeout 30 ./occ app_api:app:list | grep findling_backend || true)
+          if [ "${app_line_after}" != "${app_line_before}" ]; then
+            echo "app_api:app:list changed during the rotation (assumption A6):"
+            echo "before: ${app_line_before}"
+            echo "after:  ${app_line_after}"
+            exit 1
+          fi
+
+          # -- 6. summary ------------------------------------------------------
+          # The CA is a public certificate, so a shortened digest is no secret;
+          # client.key is never hashed into any output.
+          {
+            echo "- certificate rotation on ${{ matrix.server-version }} / ${{ matrix.runner }}: healed ${heal_seconds} s after the copy, ${x509} x509 line(s) in the dead window, ${restart_lines} frpc restart(s), CA \`${ca_before:0:12}\` -> \`${ca_after:0:12}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      # =====================================================================
       # Success criterion 1 of phase 19, on a real Nextcloud and on every leg
       # of the matrix.
       #
