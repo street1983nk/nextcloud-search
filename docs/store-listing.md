@@ -2713,7 +2713,9 @@ annehmen (`backend/tests/test_workflow_tag_triggers.py`).
 Owner-Entscheide D-37-05 bis D-37-08 vom 28.10.2026 ("wie empfohlen",
 Phase 37, Plan 37-01). Neu in 1.6.0 ist nur das `discussion`-Element; Namen
 und Beschreibungen bleiben die ausgelieferte Fassung 1.5.1. Eingereicht wird
-erst mit 1.6.0 (Phase 40), die Version bleibt bis dahin 1.5.1.
+erst mit 1.6.0 (Phase 40). Version 1.6.0 seit Plan 40-02 (28.10.2026); die
+Doku-Links der Beschreibungen zeigen auf blob/v1.6.0, sonst bleiben Namen
+und Beschreibungen die Fassung 1.5.1.
 `backend/tests/test_store_metadata.py` hält diesen Abschnitt gegen beide
 `info.xml` (`scan_phase_37_draft`, `scan_identity`, `scan_discussion`).
 

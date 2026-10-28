@@ -6,6 +6,36 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-28
+
+### Added
+
+- Discussion link to the forum thread in the store (both apps).
+- Coverage on the admin page counts SMB and SFTP mounts with a per-user
+  login once per share.
+- A sentence on the admin page when nothing is left out on purpose.
+- A hint on the admin page after a change of the exclusion rules, until
+  the recount under the new rules is through.
+- The tunnel watcher reports a reissued HaRP certificate, or a run of
+  failed logins after one, with the remedy, and takes over new files under
+  /certs/frp without a new registration or a container restart
+  (docs/harp-tunnel.md).
+
+### Changed
+
+- The sentence about counting per mount no longer claims the search holds
+  every file once.
+- Dependencies: fastapi 0.161.1, pypdf 6.21.2, striprtf 0.0.34.
+
+### Fixed
+
+- A document with an XML element named "amplification" is no longer
+  blocked as malicious.
+
+### Security
+
+- filelock 4.2.4 (CVE-2026-112907, -112913, -112940).
+
 ## [1.5.1] - 2026-10-22
 
 ### Changed
