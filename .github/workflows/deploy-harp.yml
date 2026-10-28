@@ -946,12 +946,15 @@ jobs:
           fi
           harp_files=$(docker exec appapi-harp ls /certs/frp)
           for f in ca.crt client.crt client.key; do
-            if ! printf '%s\n' "${harp_files}" | grep -qx -- "${f}"; then
+            if ! grep -qx -- "${f}" <<< "${harp_files}"; then
               echo "HaRP has no /certs/frp/${f}, so there is nothing to rotate"
               exit 1
             fi
           done
-          if ! docker logs "${EXAPP_CONTAINER}" 2>&1 | grep -qF 'harp_connect: client certificates in /certs/frp, configuring the tunnel with mutual TLS'; then
+          # Read into a file first: under pipefail, grep -q leaving early hands
+          # docker logs a SIGPIPE and a found line would read as a missing one.
+          docker logs "${EXAPP_CONTAINER}" > rotation-start.log 2>&1
+          if ! grep -qF 'harp_connect: client certificates in /certs/frp, configuring the tunnel with mutual TLS' rotation-start.log; then
             echo "the backend did not start the tunnel with mutual TLS, so a reissued CA proves nothing here"
             docker logs "${EXAPP_CONTAINER}" 2>&1 | tail -n 40
             exit 1
@@ -1003,17 +1006,33 @@ jobs:
           # -- 3. positive control: without new files the tunnel stays dead ----
           # Only after the _ping above (pitfall 7), so "dead" cannot mean "HaRP
           # is not up yet". Window 90 x 2 s.
+          #
+          # Measured in run 40695220173: the failed dials of frpc alternate
+          # between "x509: ..." (frpc refuses the new server certificate) and
+          # "session shutdown" (frps refuses the old client certificate), and
+          # which side speaks first is a race. On the arm64 leg one dial in nine
+          # said x509, so two x509 lines do not fit into 180 s reliably. The
+          # dead window is therefore: at least one x509 line, at least three
+          # failed dials in all, and not a single "login to server success"
+          # since the reissue.
           x509=0
+          failed_dials=0
           for _ in $(seq 1 90); do
             x509=$(count_since 'x509: ')
-            if [ "${x509}" -ge 2 ]; then
+            failed_dials=$(count_since 'connect to server error:')
+            if [ "${x509}" -ge 1 ] && [ "${failed_dials}" -ge 3 ]; then
               break
             fi
             sleep 2
           done
-          if [ "${x509}" -lt 2 ]; then
-            echo "only ${x509} x509 line(s) in the backend log within 180 s of the reissue, so the old certificate was never refused"
+          if [ "${x509}" -lt 1 ] || [ "${failed_dials}" -lt 3 ]; then
+            echo "${x509} x509 line(s) and ${failed_dials} failed dial(s) within 180 s of the reissue, so the old certificate was never shown to be refused"
             docker logs --since "${rotated}" "${EXAPP_CONTAINER}" 2>&1 | tail -n 80
+            exit 1
+          fi
+          dead_logins=$(count_since 'login to server success')
+          if [ "${dead_logins}" != "0" ]; then
+            echo "frpc logged in ${dead_logins} time(s) since the reissue without new files, so the tunnel was never dead"
             exit 1
           fi
           # Assumption, documented: with the backend unreachable the companion
@@ -1055,7 +1074,7 @@ jobs:
             echo "the backend container was restarted during the dead window"
             exit 1
           fi
-          echo "dead window: ${x509} x509 line(s), remedy line once, no frpc restart, no container restart"
+          echo "dead window: ${x509} x509 line(s), ${failed_dials} failed dial(s), no login, remedy line once, no frpc restart, no container restart"
 
           # -- 4. repair without unregister and register -----------------------
           # The command of docs/harp-tunnel.md. docker exec runs as the image
@@ -1142,7 +1161,7 @@ jobs:
           # The CA is a public certificate, so a shortened digest is no secret;
           # client.key is never hashed into any output.
           {
-            echo "- certificate rotation on ${{ matrix.server-version }} / ${{ matrix.runner }}: healed ${heal_seconds} s after the copy, ${x509} x509 line(s) in the dead window, ${restart_lines} frpc restart(s), CA \`${ca_before:0:12}\` -> \`${ca_after:0:12}\`"
+            echo "- certificate rotation on ${{ matrix.server-version }} / ${{ matrix.runner }}: healed ${heal_seconds} s after the copy, ${x509} x509 line(s) and ${failed_dials} failed dial(s) in the dead window, ${restart_lines} frpc restart(s), CA \`${ca_before:0:12}\` -> \`${ca_after:0:12}\`"
           } >> "${GITHUB_STEP_SUMMARY}"
 
       # =====================================================================
