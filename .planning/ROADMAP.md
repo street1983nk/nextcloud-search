@@ -124,7 +124,7 @@ Details im Archiv: .planning/milestones/v1.5-ROADMAP.md
   4. Die Doku beschreibt Ursache, Erkennen, den Kopierbefehl und den Rueckfallweg (unregister/register ohne --rm-data) fuer den Admin; Entwuerfe fuer den HaRP-Upstream-Vorschlag und die kurze englische Antwort in Issue #33 liegen dem Owner vor (Owner sendet, Antwort vor jedem "Closes #33") (Owner-Entscheid D-37-09)
 **Plans**: 2 plans
 - [ ] 38-01-PLAN.md - Tunnel-Waechter in harp_connect.sh (x509 erkennen, ratenbegrenzte Abhilfe, gedeckelter frpc-Neustart nur bei geaenderten Dateien, nie abwaerts), Stub-frpc-Tests, shellcheck-Gate (ZERT-01)
-- [ ] 38-02-PLAN.md - CI-Probe mit echter CA-Neuausstellung, Positivkontrolle und Kopierweg in deploy-harp.yml, Vertragstest, docs/harp-tunnel.md, Entwuerfe Issue #33 und HaRP-Upstream (ZERT-02)
+- [ ] 38-02-PLAN.md - CI-Probe mit echter CA-Neuausstellung, Positivkontrolle und Kopierweg in deploy-harp.yml, Vertragstest, docs/harp-tunnel.md, Entwuerfe Issue #33 und HaRP-Upstream (ZERT-01 Doku- und Entwurfsteil, ZERT-02)
 
 ### Phase 39: Ausschluss-Anzeige, Dedup-Umfang und Doku-Hygiene
 **Goal**: Die aus v1.5 vertagten Feinschliff-Punkte sind abgeraeumt: Admins verstehen die Ausschluss-Zaehler, die Abdeckung zaehlt Mehrfach-Einbindungen nicht mehr doppelt, und die Doku ist sauber
