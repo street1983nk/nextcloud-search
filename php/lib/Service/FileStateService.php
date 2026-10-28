@@ -672,11 +672,28 @@ class FileStateService {
 	 * denominator that no longer held it, and the share could stay hidden for
 	 * good. The trash paths are the two the walk of the crawl never enters: the
 	 * trash bin of a home storage and the trash of the Team Folders.
+	 *
+	 * $storageIds narrows the count to files of those storages (plan 39-01,
+	 * Weg C): the deduplicated coverage leaves storages out of its
+	 * denominator, and the files refused by type on them have to leave the
+	 * subtrahend with them, or the share is pushed above its real value. Null
+	 * counts every storage, the call of 1.5; an empty list counts nothing and
+	 * asks nothing. The page passes at most AdminViewService::LEAVE_OUT_MAX_IDS
+	 * ids.
+	 *
+	 * @param list<int>|null $storageIds
 	 */
-	public function countByReason(string $state, string $reason): int {
+	public function countByReason(string $state, string $reason, ?array $storageIds = null): int {
 		if (!in_array($state, self::STATES, true) || !in_array($reason, self::REASONS, true)) {
 			$this->reject();
 			return 0;
+		}
+
+		if ($storageIds !== null) {
+			$storageIds = array_values(array_filter($storageIds, static fn (mixed $id): bool => is_int($id) && $id > 0));
+			if ($storageIds === []) {
+				return 0;
+			}
 		}
 
 		$qb = $this->db->getQueryBuilder();
@@ -687,6 +704,9 @@ class FileStateService {
 			->andWhere($qb->expr()->eq('s.reason', $qb->createNamedParameter($reason, IQueryBuilder::PARAM_STR)))
 			->andWhere($qb->expr()->notLike('fc.path', $qb->createNamedParameter('files_trashbin/%', IQueryBuilder::PARAM_STR)))
 			->andWhere($qb->expr()->notLike('fc.path', $qb->createNamedParameter('__groupfolders/trash/%', IQueryBuilder::PARAM_STR)));
+		if ($storageIds !== null) {
+			$qb->andWhere($qb->expr()->in('fc.storage', $qb->createNamedParameter($storageIds, IQueryBuilder::PARAM_INT_ARRAY)));
+		}
 
 		$result = $qb->executeQuery();
 		$row = $result->fetch();

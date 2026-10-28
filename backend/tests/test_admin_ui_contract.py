@@ -2511,10 +2511,14 @@ def test_the_guard_lines_are_built_out_of_closed_sets() -> None:
 #: it. The denominator of the coverage figure counts an external storage once
 #: per user mount (reproduced with two sftp mounts of one directory: 30 files,
 #: denominator 60), and this sentence is what keeps the page honest about it
-#: until a dedup answers the ACL question.
+#: until a dedup answers the ACL question. Since plan 39-01 (Weg C, D-37-03)
+#: the figure counts a share of that kind once whenever it can, and the
+#: sentence stands only in the fallback of 1.5. Its second half ("The search
+#: itself holds every file once") went in the same plan, because it was wrong:
+#: the index holds every copy under its own file id (F6 of 35-DEDUP-NOTIZ).
 DUPLICATES_SENTENCE = (
-    "External storages mounted once per user are counted once per mount, so the same file can stand "
-    "in this figure several times. The search itself holds every file once."
+    "External storages mounted once per user are counted once per mount here, so the same file can stand "
+    "in this figure several times."
 )
 
 
@@ -2543,11 +2547,16 @@ def test_the_duplicates_sentence_of_issue_25_stands_wherever_it_is_rendered() ->
     assert "coverage.provisional, coverage.duplicates, coverage.mountsFinished," in script
 
     assert view.count("'duplicates' => ") == 1
-    assert "$duplicates = $externalStorageOn" in view
+    # Plan 39-01: the flag can only come up while the deduplication did not
+    # apply, so the sentence never stands next to a figure that has no
+    # duplicates in it.
+    assert "$duplicates = !$deduplicated\n\t\t\t&& $externalStorageOn" in view
     assert "&& $indexed + max(0, $failed) < $indexable;" in view
 
     for catalogue in L10N_CATALOGUES:
         assert DUPLICATES_SENTENCE in catalogue_of(catalogue), catalogue.name
+    for checked in (template, script, *(path.read_text(encoding="utf-8") for path in L10N_CATALOGUES)):
+        assert "The search itself holds every file once" not in checked
 
 
 # Plan 31-02 (D-31-03, Befund 13 of the plan check): every visible sentence of
@@ -3696,7 +3705,8 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     # plan 34-03 (the banner of UMST-02), seven of plan 35-13 (the similar
     # documents view of STR-01, wording of 35-WORTLAUT.md), three of plan 36-06
     # (label and remedy of blocked_malicious and the detail line of a skipped
-    # file, D-36-03, D-36-04)
+    # file, D-36-03, D-36-04); the sentence about shares counted once per user
+    # mount changed its key in plan 39-01 and so moved nothing
     assert len(keys_of["de.json"]) == 351
 
 

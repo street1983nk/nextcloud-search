@@ -1065,8 +1065,16 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # no parameter, no group no parameter, refused files of a left out storage, no numerator below nought).
 # No file came or went, so PHP_FILES_TODAY stays at 108. Recomputed independently with find, sort, tr
 # and sha256sum over the CRLF normalised tree: 9ea16618... both ways.
+# Moved on 2026-10-28 a fourth time by Plan 39-01 (DEDUP-02, Weg C, D-37-03):
+# lib/Service/AdminViewService.php groups the mounted storages when external storages are on, asks
+# /status with leaveOut for the left out members (at most 1000) and works the denominator out in
+# figures() after the answer, grouped only when both counters came back; duplicates needs deduplicated
+# false. lib/Service/FileStateService.php countByReason takes an optional storage list for the refused
+# files of the left out storages. templates/admin.php carries the corrected sentence about counting per
+# mount. No file came or went, so PHP_FILES_TODAY stays at 108. Recomputed independently with find,
+# sort, tr and sha256sum over the CRLF normalised tree: 9b96923c... both ways.
 PHP_FILES_TODAY = 108
-PHP_TREE_HASH_TODAY = "9ea16618a4b8a87f8e769559086cc005c4fe6764f2dda7a603c9c34e5bd01477"
+PHP_TREE_HASH_TODAY = "9b96923c3c7387cba8e5ecd7f20687a9239b899bfd3d0675e3ad61cdbd67b57f"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

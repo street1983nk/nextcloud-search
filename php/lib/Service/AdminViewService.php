@@ -630,48 +630,41 @@ final class AdminViewService {
 		foreach ($this->storageService->getMounts() as $mount) {
 			$mountedStorageIds[] = (int)$mount['storage_id'];
 		}
-		$scan = $this->scanStats->totals($mountedStorageIds);
+		// Weg C of 35-DEDUP-NOTIZ (plan 39-01, D-37-03): storages that show
+		// one tree, a share mounted once per user, count once. Only with
+		// external storages in the crawl, because without them there is no
+		// storage of that kind to group.
+		$groups = $this->settingsService->indexExternalStorage()
+			? $this->storageService->countingKeyGroups($mountedStorageIds)
+			: [];
+		$scan = $this->scanStats->totals($mountedStorageIds, $groups);
 
 		$scheduled = (int)($queue['scheduled'] ?? 0);
 		$running = (int)($queue['running'] ?? 0);
 
-		// The denominator of the coverage figure and the file count of the
-		// estimate are the same set of files, so the subtraction happens once,
-		// here, and both subtrees below are handed the result. Two places
-		// working it out would put two different numbers for one quantity on the
-		// same page, and the page would be right about neither.
-		//
-		// The third subtrahend is new in plan 05-11 and it is a consequence of
-		// DI-04-03 rather than a change of the figure's meaning. The files the
-		// container refuses by type were always part of deliberatelyLeftOut in
-		// coverage() below, and the sentence next to that number says word for
-		// word that those files are NOT in the denominator, so that the coverage
-		// figure can reach a hundred per cent. Until this plan the counter behind
-		// it was always nought, because nothing on this side ever wrote
-		// skipped(mime_not_allowed); now the container reports it, the number
-		// becomes real, and without this line the promise of that sentence would
-		// break on the same day: an instance with one video would sit at 99 per
-		// cent for good, waiting for a file nobody will ever index.
-		//
-		// Asked once and handed down for the same reason as the difference
-		// itself: coverage() names the number as deliberately left out and this
-		// line takes it out of the denominator, and the two have to be the same
-		// number or the sentence stops describing the figure above it.
 		$refusedByType = $this->fileStateService->countByReason('skipped', 'mime_not_allowed');
-		$indexable = max(
-			0,
-			(int)$scan['filesSeen']
-				- max(0, (int)$scan['overCap'])
-				- max(0, (int)$scan['excluded'])
-				- $refusedByType,
-		);
 
 		$lastJobRun = $this->appConfig->getValueInt(Application::APP_ID, SchedulerJob::LAST_JOB_RUN);
 		$now = $this->timeFactory->getTime();
 
-		$answer = $this->exAppService->adminGet('/status', $this->userId(), []);
+		$parameters = self::leaveOutParameters($scan);
+		$answer = $this->exAppService->adminGet('/status', $this->userId(), $parameters);
 		$backendReachable = $answer !== null;
 		$backend = $this->backend($answer);
+
+		// The files refused by type on the storages a group leaves out, asked
+		// only when there are any, so an instance without such a group asks
+		// exactly what 1.5 asked (plan 39-01).
+		$refusedLeftOut = $parameters === []
+			? 0
+			: $this->fileStateService->countByReason('skipped', 'mime_not_allowed', array_values((array)$scan['leftOutStorageIds']));
+
+		// The denominator of the coverage figure and the file count of the
+		// estimate, worked out once in figures() and handed to both subtrees
+		// below, after the answer of the container is in: whether the
+		// deduplication applies is decided by that answer (plan 39-01).
+		$figures = $this->figures($scan, $answer, $parameters, $refusedByType, $refusedLeftOut);
+		$indexable = $figures['indexable'];
 
 		// Read BEFORE the remembering below overwrites it. The difference between
 		// this figure and the one in the answer is the only evidence this side has
@@ -761,16 +754,17 @@ final class AdminViewService {
 			// which is ExAppService and the search provider.
 			'lockstep' => $this->exAppService->lockstep($answer),
 			'coverage' => $this->coverage(
-				$scan,
-				$backend,
+				$figures['scan'],
+				$figures['backend'],
 				$backendReachable,
 				$indexable,
-				$refusedByType,
+				$figures['refusedByType'],
 				$this->settingsService->indexExternalStorage(),
 				($scheduled + $running) === 0,
 				(int)($states['failed'] ?? 0),
+				$figures['deduplicated'],
 			),
-			'estimate' => $this->estimate($scan, $backend, $backendReachable, $indexable, $scheduled + $running),
+			'estimate' => $this->estimate($figures['scan'], $figures['backend'], $backendReachable, $indexable, $scheduled + $running),
 			'errors' => $this->errors(),
 			'rules' => $this->rules(),
 			// The four limits per file, read only (POL-01, plan 33-06).
@@ -1901,14 +1895,23 @@ final class AdminViewService {
 	 * count one file several times instead of selling the gap as missing
 	 * coverage.
 	 *
+	 * ``deduplicated`` is true since plan 39-01 (Weg C, D-37-03) when the
+	 * figure counts every group of storages that show one tree once, through
+	 * figures(). The cause ``duplicates`` names is then gone from the figure,
+	 * so ``duplicates`` can only be true while ``deduplicated`` is false: the
+	 * fallback of 1.5 (a container without the two counters, more than
+	 * LEAVE_OUT_MAX_IDS left out storages, a hashed storage id, a backend
+	 * without a known id format).
+	 *
 	 * @param int $refusedByType skipped(mime_not_allowed), counted once in overview()
 	 * @param bool $externalStorageOn whether external storages are indexed at all
 	 * @param bool $queuesIdle nothing scheduled and nothing running
 	 * @param int $failed failed verdicts, they explain a gap without duplicates
+	 * @param bool $deduplicated whether figures() applied the counting key groups
 	 * @return array{
 	 *     indexed:int, indexable:int, deliberatelyLeftOut:int, percent:int|null,
 	 *     embedded:int, embeddedPercent:int|null, recounting:bool, duplicates:bool,
-	 *     provisional:bool, mountsTotal:int, mountsFinished:int
+	 *     deduplicated:bool, provisional:bool, mountsTotal:int, mountsFinished:int
 	 * }
 	 */
 	private function coverage(
@@ -1920,6 +1923,7 @@ final class AdminViewService {
 		bool $externalStorageOn,
 		bool $queuesIdle,
 		int $failed,
+		bool $deduplicated = false,
 	): array {
 		$overCap = max(0, (int)$scan['overCap']);
 		$excluded = max(0, (int)$scan['excluded']);
@@ -1964,7 +1968,8 @@ final class AdminViewService {
 		// sftp mounts of one directory). Without external storages the flag
 		// stays off, because the sentence would name a cause that cannot
 		// exist on this instance.
-		$duplicates = $externalStorageOn
+		$duplicates = !$deduplicated
+			&& $externalStorageOn
 			&& $queuesIdle
 			&& $backendReachable
 			&& !$recounting
@@ -1982,6 +1987,7 @@ final class AdminViewService {
 			'embeddedPercent' => $embeddedPercent,
 			'recounting' => $recounting,
 			'duplicates' => $duplicates,
+			'deduplicated' => $deduplicated,
 			// A scan that has not walked every mount to its end has counted a
 			// lower bound, and the page has to say so and name both figures. An
 			// estimate that quietly corrects itself upwards looks like a defect.
@@ -1989,6 +1995,145 @@ final class AdminViewService {
 			'provisional' => $mountsTotal === 0 || $mountsFinished < $mountsTotal,
 			'mountsTotal' => $mountsTotal,
 			'mountsFinished' => $mountsFinished,
+		];
+	}
+
+	/**
+	 * The most storage ids the page names in leaveOut (plan 39-01).
+	 *
+	 * The ceiling of the container route, GET /status?leaveOut= (T-39-02).
+	 * Above it the page asks without the parameter and counts like 1.5.
+	 */
+	public const LEAVE_OUT_MAX_IDS = 1000;
+
+	/**
+	 * The query parameters of the status call: leaveOut when a group left
+	 * storages out, nothing otherwise.
+	 *
+	 * Nothing when there is no group, which keeps the call of an instance
+	 * without shares mounted once per user exactly the call of 1.5, and
+	 * nothing above LEAVE_OUT_MAX_IDS, where the page falls back to the
+	 * ungrouped figure with the sentence about counting per mount.
+	 *
+	 * @param array<string,mixed> $scan the answer of ScanStatsService::totals()
+	 * @return array<string,string>
+	 */
+	public static function leaveOutParameters(array $scan): array {
+		$ids = [];
+		foreach ((array)($scan['leftOutStorageIds'] ?? []) as $storageId) {
+			if (is_int($storageId) && $storageId > 0) {
+				$ids[] = $storageId;
+			}
+		}
+
+		if ($ids === [] || count($ids) > self::LEAVE_OUT_MAX_IDS) {
+			return [];
+		}
+
+		return ['leaveOut' => implode(',', $ids)];
+	}
+
+	/**
+	 * The two counters the container answered for the left out storages, or null.
+	 *
+	 * Null unless the page asked with leaveOut and BOTH fields came back as
+	 * non negative integers. A container of 1.5 answers without them, a
+	 * vector stock it could not read leaves embeddedLeftOut out, and either way
+	 * the deduplication does not apply and the page counts like 1.5: half a
+	 * deduplication would compare a grouped denominator with an ungrouped
+	 * numerator.
+	 *
+	 * @param array<mixed>|null $answer
+	 * @return array{indexed:int, embedded:int}|null
+	 */
+	public static function leftOutCounts(?array $answer, bool $asked): ?array {
+		if (!$asked || $answer === null) {
+			return null;
+		}
+
+		$indexed = self::nonNegativeInt($answer['indexedLeftOut'] ?? null);
+		$embedded = self::nonNegativeInt($answer['embeddedLeftOut'] ?? null);
+		if ($indexed === null || $embedded === null) {
+			return null;
+		}
+
+		return ['indexed' => $indexed, 'embedded' => $embedded];
+	}
+
+	/**
+	 * The scan counters, the judged container figures and the denominator the
+	 * coverage block and the estimate both read.
+	 *
+	 * Weg C of plan 39-01: when the container answered for the storages a group
+	 * left out, the grouped counters of ScanStatsService::totals() are the
+	 * denominator and the documents of those storages leave the numerators,
+	 * indexed and embedded, never below nought. Otherwise the ungrouped
+	 * counters stand, which is the figure of 1.5. totals() is asked once and
+	 * answers both sets; the choice is made here, after the answer, and only
+	 * here.
+	 *
+	 * The denominator of the coverage figure and the file count of the
+	 * estimate are the same set of files, so the subtraction happens once,
+	 * here, and both subtrees are handed the result. Two places working it out
+	 * would put two different numbers for one quantity on the same page, and
+	 * the page would be right about neither.
+	 *
+	 * The third subtrahend is new in plan 05-11 and it is a consequence of
+	 * DI-04-03 rather than a change of the figure's meaning. The files the
+	 * container refuses by type were always part of deliberatelyLeftOut in
+	 * coverage() below, and the sentence next to that number says word for
+	 * word that those files are NOT in the denominator, so that the coverage
+	 * figure can reach a hundred per cent. Without this subtraction an instance
+	 * with one video would sit at 99 per cent for good, waiting for a file
+	 * nobody will ever index. It is asked once in overview() and handed down
+	 * for the same reason as the difference itself: coverage() names the number
+	 * as deliberately left out and this line takes it out of the denominator.
+	 *
+	 * Under the deduplication the files refused by type on the left out
+	 * storages leave the subtrahend as well ($refusedLeftOut), because their
+	 * storages left the minuend.
+	 *
+	 * @param array<string,mixed> $scan the answer of ScanStatsService::totals()
+	 * @param array<mixed>|null $answer the status answer of the container
+	 * @param array<string,string> $parameters what the status call was asked with
+	 * @param int $refusedByType skipped(mime_not_allowed) over every storage
+	 * @param int $refusedLeftOut the same over the left out storages only
+	 * @return array{scan:array<string,int>, backend:array<string,mixed>, indexable:int, refusedByType:int, deduplicated:bool}
+	 */
+	private function figures(array $scan, ?array $answer, array $parameters, int $refusedByType, int $refusedLeftOut = 0): array {
+		$backend = $this->backend($answer);
+		$leftOut = self::leftOutCounts($answer, isset($parameters['leaveOut']));
+		$deduplicated = $leftOut !== null && is_array($scan['grouped'] ?? null);
+
+		$source = $deduplicated ? (array)$scan['grouped'] : $scan;
+		$counted = [];
+		foreach (['filesSeen', 'bytesSeen', 'ocrCandidates', 'pdfSeen', 'overCap', 'excluded', 'mountsTotal', 'mountsFinished'] as $key) {
+			$counted[$key] = max(0, (int)($source[$key] ?? 0));
+		}
+
+		if ($deduplicated) {
+			$backend['indexed'] = max(0, (int)$backend['indexed'] - $leftOut['indexed']);
+			if (is_int($backend['embedded'] ?? null)) {
+				$backend['embedded'] = max(0, $backend['embedded'] - $leftOut['embedded']);
+			}
+		}
+
+		$refused = max(0, $refusedByType);
+		if ($deduplicated) {
+			$refused = max(0, $refused - max(0, $refusedLeftOut));
+		}
+
+		$indexable = max(
+			0,
+			$counted['filesSeen'] - $counted['overCap'] - $counted['excluded'] - $refused,
+		);
+
+		return [
+			'scan' => $counted,
+			'backend' => $backend,
+			'indexable' => $indexable,
+			'refusedByType' => $refused,
+			'deduplicated' => $deduplicated,
 		];
 	}
 

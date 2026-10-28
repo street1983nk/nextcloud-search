@@ -138,15 +138,39 @@ Zählstände einer alten Mount-Konfiguration hatten den Nenner sonst für immer
 aufgebläht (gemeldet mit 7 Prozent Anzeige bei real vollständiger Abdeckung).
 Steht der Zähler dadurch über dem Nenner, greift der Abschnitt unten.
 
-Eine zweite Grenze benennt die Seite seit Issue #25 selbst: externe Speicher,
-die je Nutzer einmal eingebunden sind, bekommen je Einbindung einen eigenen
-Filecache-Baum, und der Crawl zählt dieselbe Share deshalb einmal pro Nutzer.
-Sind die Warteschlangen leer, alle Mounts durchgezählt, der Container
-erreichbar und bleibt trotzdem eine Lücke, die die fehlgeschlagenen Dateien
-nicht erklären, zeigt die Seite den Satz, dass dieselbe Datei mehrfach in der
-Zahl stehen kann. Eine echte Deduplizierung je Mount-Konfiguration braucht
-zuerst die ACL-Antwort (zwei Nutzer dürfen verschiedene Teilmengen derselben
-Share sehen) und ist ein Kandidat für 1.5.
+Eine zweite Grenze kam mit Issue #25: externe Speicher, die je Nutzer einmal
+eingebunden sind und mit der Anmeldung des Nutzers verbinden, bekommen je
+Einbindung eine eigene Storage-ID und einen eigenen Filecache-Baum, denn der
+Anmeldename steht in der ID. Der Crawl zählt dieselbe Share deshalb einmal pro
+Nutzer.
+
+Seit 1.6 zählt die Seite solche Einbindungen je Schlüssel einmal (Plan 39-01,
+Weg C der Notiz `35-DEDUP-NOTIZ.md`, Owner-Entscheid D-37-03). Der Schlüssel
+ist die Storage-ID ohne den Anmeldenamen, also Backend, Host, Share und Root
+nach der Platzhalter-Ersetzung. Ein Root mit `$user` ergibt deshalb je Nutzer
+einen anderen Schlüssel und wird nie zusammengefasst. Je Schlüssel zählt eine
+Repräsentanten-Einbindung (die kleinste durchgezählte Storage-ID) im Nenner,
+und der Container nennt auf Nachfrage (`GET /status?leaveOut=...`), wie viele
+indexierte und eingebettete Dokumente zu den übrigen Einbindungen gehören;
+diese Zahl verlässt den Zähler. Belegt ist das ID-Format für SMB
+(`SMB.php:137-142`) und SFTP (`SFTP.php:157-167`, jeweils `nextcloud/server`
+`stable34`); WebDAV und ownCloud werden nicht zusammengefasst, weil Host und
+Root in ihrer ID nicht sicher zu trennen sind.
+
+Der Satz zur Mehrfachzählung erscheint nur noch im Rückfall: ein Container ohne
+die beiden neuen Zähler (älter als 1.6, oder der Vektorbestand ist nicht
+lesbar), mehr als 1000 übrige Einbindungen, eine Storage-ID, die Nextcloud
+wegen ihrer Länge als md5 gespeichert hat, oder ein Backend ohne belegtes
+ID-Format. Dann rechnet die Seite wie in 1.5. Sind die Warteschlangen leer,
+alle Mounts durchgezählt, der Container erreichbar und bleibt trotzdem eine
+Lücke, die die fehlgeschlagenen Dateien nicht erklären, sagt sie, dass externe
+Speicher hier je Einbindung gezählt werden.
+
+Zwei Grenzen bleiben. Die Arbeit selbst ist nicht entdoppelt: jede Kopie wird
+weiter gelesen, beurteilt und unter ihrer eigenen Datei-ID indexiert (Weg B,
+siehe Plan 39-04). Und sehen Nutzer derselben Share mit `check_acl`
+verschiedene Teilmengen, misst die Zahl die Abdeckung der
+Repräsentanten-Einbindung.
 
 ### Wenn der Zähler über dem Nenner steht
 
