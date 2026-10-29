@@ -24,7 +24,7 @@ sich daran mechanisch prüfen lässt.
 | Kein Element bleibt leer | ein leeres Element löst beim Upload einen Serverfehler aus, gemessen am Schwesterprojekt |
 | Keine Backticks und keine Tabellen in einer Beschreibung | der Store rendert Markdown anders als das Repository |
 | Keine Gedankenstriche, keine Emojis, echte Umlaute, echte Akzente | die Typografie-Regel dieses Projekts |
-| Genau EIN Satz Querverweis auf den MCP Connector | D-12 erfuellt seit 07.09.2026: der Content-Hit-Fidelity-Test (Connector-PR #2) misst die Rechte-Treue |
+| Genau EIN Satz Querverweis auf den MCP Connector | D-12 erfüllt seit 07.09.2026: der Content-Hit-Fidelity-Test (Connector-PR #2) misst die Rechte-Treue |
 | Genau ein discussion-Element je info.xml, URL des Forum-Threads 249775 | STORE-02, D-37-07 |
 
 Die englische Fassung steht in einem Element **ohne** `lang`-Attribut. Die XSD
@@ -381,7 +381,7 @@ Gegenstand verschweigt, von niemandem nachgeprüft werden kann.
 - **Nur EIN Satz zum MCP Connector, und keine RAG-Wortwahl.** Der
   Querverweis ist seit 07.09.2026 erlaubt (Fidelity-Test bestanden und
   gemergt), bleibt im Store aber ein einzelner Satz in schlichter Sprache;
-  das RAG-Vokabular gehoert in die READMEs, nicht in den Store (Begruendung
+  das RAG-Vokabular gehört in die READMEs, nicht in den Store (Begründung
   im Connector-BACKLOG BL-01).
 - **Kein Vergleich mit einer anderen Suchlösung.** Eine App, die sich über die
   Konkurrenz definiert, sagt nichts über sich selbst.
@@ -853,7 +853,7 @@ Wiedervorlage steht seit dem 07.09.2026 offen.
 
 Textabnahme 1.2.0: **2026-09-21, abgenommen im vorgelegten Wortlaut.** Der
 Owner hat die sechs Texte und die drei README-Zeilen in allen drei Sprachen
-gesehen und ohne Änderung abgenommen, einschliesslich der neuen Messzahl, der
+gesehen und ohne Änderung abgenommen, einschließlich der neuen Messzahl, der
 weggefallenen Prozentzahl und der Sprachzeile "neun verfügbar, drei
 voreingestellt".
 

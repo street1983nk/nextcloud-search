@@ -775,7 +775,7 @@ sich auf den Baum beziehen (Testzahlen, Tupellänge), gelten sie für den Stand 
 | Werte gleich dem Wert der anderen Varietät | nicht messbar, die zweite Datei gab es noch nicht | 72 von 202, keine davon unter einem Schlüssel von `PORTUGUESE_WORDINGS_THAT_MUST_DIFFER` |
 | `test_the_two_portuguese_catalogues_are_two` mit einer Kopie von `pt_PT.json` als `pt_BR.json` | entfällt | rot, elf Funde; danach zurückgesetzt |
 | LF, UTF-8 ohne BOM, abschließender Zeilenumbruch | beide Dateien, byteweise geprüft | beide Dateien, byteweise geprüft |
-| Giessform gegen den unveränderten Bestand, vor der ersten neuen Zeile | 12 von 12 byteweise gleich | 14 von 14 byteweise gleich (`de`, `de_DE`, `fr`, `es`, `it`, `nl`, `pt_PT`, je `.json` und `.js`) |
+| Gießform gegen den unveränderten Bestand, vor der ersten neuen Zeile | 12 von 12 byteweise gleich | 14 von 14 byteweise gleich (`de`, `de_DE`, `fr`, `es`, `it`, `nl`, `pt_PT`, je `.json` und `.js`) |
 | Einträge in `L10N_CATALOGUES` | 14 | 16 |
 | `cd backend && uv run pytest -q tests/test_admin_ui_contract.py` | 52 passed | 53 passed |
 | `cd backend && uv run pytest -q` | 2879 passed, 15 skipped | 2880 passed, 15 skipped |

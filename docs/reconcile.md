@@ -289,41 +289,41 @@ einmal existiert statt zweimal.
 
 ## Die Wiederherstellung aus dem Papierkorb: was sofort passiert
 
-Ein Nutzer holt einen Ordner aus dem Papierkorb zurueck. Das ist keine
+Ein Nutzer holt einen Ordner aus dem Papierkorb zurück. Das ist keine
 Reparatur, sondern eine Absicht, und sie wird darum nicht vom Abgleich
 getragen, sondern vom Ereignisweg.
 
-**Was sofort passiert.** `NodeRestoredEvent` trifft die Companion-App. Fuer eine
-einzelne Datei reiht sie eine Inhaltsaufgabe ein, fuer einen Ordner denselben
-Teilbaum-Job, den auch die Ordner-Freigabe und die Ordner-Loeschung benutzen,
-mit dem wiederhergestellten Ordner als Wurzel und `kind=content`. Der Job loest
+**Was sofort passiert.** `NodeRestoredEvent` trifft die Companion-App. Für eine
+einzelne Datei reiht sie eine Inhaltsaufgabe ein, für einen Ordner denselben
+Teilbaum-Job, den auch die Ordner-Freigabe und die Ordner-Löschung benutzen,
+mit dem wiederhergestellten Ordner als Wurzel und `kind=content`. Der Job löst
 die Nachkommen bandweise auf und gibt jedem eine Inhaltsaufgabe. Die Dateien
-sind damit nach dem naechsten Poller-Durchgang wieder auffindbar und nicht nach
-dem naechsten Abgleichzyklus.
+sind damit nach dem nächsten Poller-Durchgang wieder auffindbar und nicht nach
+dem nächsten Abgleichzyklus.
 
-Inhaltsaufgaben sind fuer einen Teilbaum die Ausnahme und gelten nur hier: die
-Nachkommen eines geloeschten Ordners hat der Container aus dem Index genommen
+Inhaltsaufgaben sind für einen Teilbaum die Ausnahme und gelten nur hier: die
+Nachkommen eines gelöschten Ordners hat der Container aus dem Index genommen
 und mit einem Grabstein versehen, ihr Text ist also wirklich weg. Bei einer
 Umbenennung oder einer Freigabe ist er es nicht, und dort bleibt es bei den
 Arten, die nichts neu lesen.
 
 **Gemessen am 03.09.2026** auf einer lokalen Instanz (Ordner mit drei Dateien,
-Warteschlange vorher leer, kein Abgleich angestossen):
+Warteschlange vorher leer, kein Abgleich angestoßen):
 
 | Schritt | Zeilen in der Warteschlange |
 |---|---|
-| Ordner geloescht, Teilbaum abgearbeitet | 4 mal `delete` |
+| Ordner gelöscht, Teilbaum abgearbeitet | 4 mal `delete` |
 | Warteschlange geleert, Ordner wiederhergestellt, vor Plan 05-04 | 0 |
-| dasselbe mit dem Teilbaum-Job der Wiederherstellung | 3 mal `content`, mit ihrer echten Groesse |
+| dasselbe mit dem Teilbaum-Job der Wiederherstellung | 3 mal `content`, mit ihrer echten Größe |
 
-**Was der Abgleich zusaetzlich abdeckt.** Alles, was am Ereignis vorbeigeht: der
-Papierkorb wird geleert oder geraeumt, waehrend der Container steht; jemand
-spielt ein Backup zurueck; der Listener ist nach einem Update nicht registriert;
-eine Zeile geht verloren. In diesen Faellen ist der Abgleich der einzige Weg
-zurueck.
+**Was der Abgleich zusätzlich abdeckt.** Alles, was am Ereignis vorbeigeht: der
+Papierkorb wird geleert oder geräumt, während der Container steht; jemand
+spielt ein Backup zurück; der Listener ist nach einem Update nicht registriert;
+eine Zeile geht verloren. In diesen Fällen ist der Abgleich der einzige Weg
+zurück.
 
 **Die Grenze.** Der Abgleich ist die Sicherung, nicht der Weg. Wer die
-Wiederherstellung ihm allein ueberlaesst, verspricht dem Nutzer Sekunden und
+Wiederherstellung ihm allein überlässt, verspricht dem Nutzer Sekunden und
 liefert bis zu einen Tag.
 
 ## Warum der Cursor im Container liegt

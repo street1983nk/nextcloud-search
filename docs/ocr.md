@@ -375,7 +375,7 @@ oben bis zu 600 Sekunden CPU, für einen Text, der schon dastand.
 **Womit:** dem Referenzkorpus dieses Repositories im Stand des Messtags,
 33 Dateien, davon 19 PDFs, gelesen mit der `pypdfium2` 5.13.0 aus
 `backend/uv.lock`. Die Tabelle unten ist die Messung von damals und bleibt
-es; der Korpus ist seither gewachsen, und wie gross er heute ist, steht in
+es; der Korpus ist seither gewachsen, und wie groß er heute ist, steht in
 `testdata/CORPUS.md` und nirgends sonst.
 
 ```

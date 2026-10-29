@@ -596,7 +596,7 @@ Gefahren am 25.09.2026 über die beiden erzeugten Dateien, nicht per Augenmaß:
 | Pipe-Zeichen (der senkrechte Strich, mit dem Nextcloud Pluralformen verbindet) | 0 in Schlüsseln und in allen Formen |
 | Wert identisch mit dem englischen Quellstring | 3, alle drei oben benannt |
 | LF, UTF-8 ohne BOM, abschließender Zeilenumbruch | beide Dateien, byteweise geprüft |
-| Giessform gegen den unveränderten Bestand, vor der ersten neuen Zeile | 8 von 8 byteweise gleich (`de`, `de_DE`, `fr`, `es`, je `.json` und `.js`) |
+| Gießform gegen den unveränderten Bestand, vor der ersten neuen Zeile | 8 von 8 byteweise gleich (`de`, `de_DE`, `fr`, `es`, je `.json` und `.js`) |
 | `cd backend && uv run pytest -q tests/test_admin_ui_contract.py` | 52 passed |
 | `cd backend && uv run pytest -q` | 2879 passed, 15 skipped |
 

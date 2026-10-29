@@ -2464,10 +2464,10 @@ Protokoll steht der Grund im Klartext samt der Zahl, gegen die geprüft wurde.
 
 ### Drill 3, Nachtrag: die Suche während der Pause, und was die Pause wirklich kostet
 
-Der erste Durchgang liess eine Zusage offen. Das Banner sagt "Indexing is paused so
+Der erste Durchgang ließ eine Zusage offen. Das Banner sagt "Indexing is paused so
 the index stays intact. Search keeps working", und während der Pause war nicht
 gesucht worden. Also ein zweiter Durchgang, mit demselben Eingriff und einem
-grösseren Vorrat: 60 frische Kopien einseitiger Scans, über WebDAV hochgeladen,
+größeren Vorrat: 60 frische Kopien einseitiger Scans, über WebDAV hochgeladen,
 30 davon im Augenblick der Verknappung beim Arbeiter.
 
 **Die erste Hälfte der Zusage stimmt.** Während `lowDisk` wahr war, die
@@ -2512,7 +2512,7 @@ Die Pause verbraucht also das Wiederholungsbudget genau der Dateien, die sie
 schützen soll. Drei Zurückgaben im Protokoll haben gereicht; die Pause dauerte
 hundert Sekunden, und die Abschreibung war nach einem Fünftel davon vollzogen.
 
-Was das für einen Betreiber heisst, ist unangenehm konkret: **eine volle Platte,
+Was das für einen Betreiber heißt, ist unangenehm konkret: **eine volle Platte,
 die eine halbe Minute besteht, kostet den gesamten Arbeitsvorrat, der in diesem
 Moment unterwegs ist**, und die Oberfläche sagt in derselben Minute, es sei nur
 pausiert. Die Dateien sind nicht unbemerkt weg, sie stehen namentlich in der
@@ -3094,7 +3094,7 @@ und genau den muss die Store-Aussage tragen.
 
 Die OCR-Phase wurde an einer frischen Charge von 120 Scans gemessen, über WebDAV
 geladen: 120 indexiert, 0 übersprungen, 0 fehlgeschlagen, 8 min 36 s, rund 4,3 s
-je Datei einschliesslich Abholen, OCR, Einbettung und Schreiben. Der Bestand
+je Datei einschließlich Abholen, OCR, Einbettung und Schreiben. Der Bestand
 selbst trägt einen Inhaltshash und überspringt die Kette, an ihm ist eine
 OCR-Phase nicht messbar.
 
@@ -3205,7 +3205,7 @@ werden erst in `_load()` (Zeile 405) gelesen, und `_load()` wird erst aus
 dafür, dass der Halter existiert.
 
 **Es gibt keine sechste Stelle.** Ein `grep` nach `EmbeddingModel(` über
-`backend/src/findling/` findet ausser dem Halter nichts. Die übrigen
+`backend/src/findling/` findet außer dem Halter nichts. Die übrigen
 Konstruktionen im Baum stehen in `backend/tests/` und in
 `scripts/dev/vector_distances.py:812`, und beide laufen nie im ausgelieferten
 Container: `backend/Dockerfile` kopiert aus dem Backend nur `src` in die
@@ -3227,7 +3227,7 @@ einmal je gelesenem Artefaktpaar, in `_load()` und erst nach dem erfolgreichen
 Öffnen (`backend/src/findling/embed/model.py:453`).
 
 Der Grund für diese Bauform steht neben dem Zähler und ist der eigentliche Punkt
-dieses Abschnitts: von aussen sehen ein Cache-Treffer und ein billiges zweites
+dieses Abschnitts: von außen sehen ein Cache-Treffer und ein billiges zweites
 Laden gleich aus. Ein Zähler trennt die beiden, ohne eine Uhr zu lesen und ohne
 ein Byte zu messen. Eine Messung des Speicherbedarfs auf einem geteilten Läufer
 kann das nicht, und der Beleg dafür steht im Projekt selbst: der Messschritt in
@@ -3692,7 +3692,7 @@ Zuwachs JE ZYKLUS aus der Zielast des Vorprüflaufs und nicht der absolute
 Rückstand nach einem Zyklus. Der absolute Rückstand auf ARM m7g.large beträgt
 **628,0 MB**, und der Container steht nach einem Indexlauf mit entladenem Modell
 auf **731,9 MB** residentem Speicher. Beide Zahlen stehen im Abschnitt
-"Nachtrag vom 21.09.2026: MEM-02 an seiner Messgroesse" weiter unten; der Satz
+"Nachtrag vom 21.09.2026: MEM-02 an seiner Messgröße" weiter unten; der Satz
 oben bleibt gültig für die Messgröße, aus der er stammt.
 
 ### Was hier bewusst nicht steht: die Ladezeit nach einer Entladung
@@ -4320,7 +4320,7 @@ Vektorbestand und ein anderes Abbild als v1.1, und der Zähler des Werkzeugs
 zählt seit dem 10.09.2026 abgebrochene Aufrufe nicht mehr als beantwortet,
 misst denselben Zustand also strenger.
 
-### Nachtrag vom 21.09.2026: MEM-02 an seiner Messgroesse
+### Nachtrag vom 21.09.2026: MEM-02 an seiner Messgröße
 
 Die Messgröße heißt `Rueckkehr zur Grundlast nach einem Indexlauf`, und
 weiter oben in diesem Dokument steht seit dem 19.09.2026, warum sie so heißt.
@@ -4359,7 +4359,7 @@ verführerisch: sie ist auf anderer Hardware, ohne `malloc_trim` und **nicht** a
 der Messgröße `Rueckkehr zur Grundlast nach einem Indexlauf` entstanden. Sie
 belegt MEM-02 nicht. Belegt ist MEM-02 durch die 377,5 MB dieser Box.
 
-### Nachtrag vom 21.09.2026: die Wiederaufwaerm-Kosten der Entladung
+### Nachtrag vom 21.09.2026: die Wiederaufwärm-Kosten der Entladung
 
 Gemessen am 21.09.2026 von 02:47:32Z bis 02:54:34Z auf ARM m7g.large, in der
 Reihenfolge 1, 3, 2, 4, also kalt vor warm, belegt durch die
