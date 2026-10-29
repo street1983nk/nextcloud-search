@@ -190,7 +190,12 @@ test_cert_rotation_steps.py folgt dem Namen.
   Driftzeilen-Fensterung (UPGRADE_DRIFT_LINES_AT_UPGRADE=2). Korrektur: die Zeile ist
   wieder eine echte Fortsetzung; bash -n und die Vertragstests konnten das `\n` nicht
   sehen, weil `\n` im Shell-Sinn ein gültiges (escaptes) `n` ist.
-- Task 2, Iteration 2: wird nach dem Lauf ergänzt.
+- Task 2, Iteration 2 (Kopf 21c8a83a, stamp-Zeile repariert): HaRP deploy Lauf
+  **40817178890**, conclusion success, alle vier Matrixzeilen grün: deploy-harp
+  (stable33, 8.2, false, ubuntu-24.04), (stable34, 8.2, false, ubuntu-24.04),
+  (stable34, 8.2, false, ubuntu-24.04-arm), (stable35, 8.3, false, ubuntu-24.04).
+  Damit sind beide Tasks auf dem Probe-Zweig grün; die Zitate des main-Laufs stehen
+  in 40-03-SUMMARY.md.
 
 ## Mechanisches Inventar (Ausgangsstand 46df0ee1, 147 Treffer)
 
