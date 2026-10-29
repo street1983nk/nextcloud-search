@@ -412,8 +412,10 @@ class IndexBatchWriter:
         volume fails with an IO error and the index stays on its last good state,
         but an IO error in the poller is a crash report, while too little disk is
         an operating state somebody can act on. Below the floor nothing is
-        written, the batch stays pending and the next flush commits it once there
-        is room again.
+        written and the batch stays pending in this writer. The poller answers
+        that state with its abort, which rolls the pending batch back (issue
+        #36, Befund C) and hands the rows back for a redelivery; a caller that
+        flushes again instead commits the batch once there is room.
 
         The search keeps answering throughout: reading needs no writer, and the
         segments committed so far are untouched.
