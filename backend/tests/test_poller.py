@@ -1303,10 +1303,13 @@ async def test_a_refused_scan_under_several_slots_is_a_verdict_as_well(
 async def test_the_same_refusal_for_every_file_of_a_pass_is_an_outage(
     store: Store, writer: IndexBatchWriter, tmp_path: Path
 ) -> None:
-    # E-40-06-02: an app password that was taken away answers 401 for every
-    # file. Six files, the same status, the threshold of five reached: the pass
-    # is an outage, nothing is acknowledged, not even the verdicts gathered
-    # before the threshold, and the rows go back with their delivery refunded.
+    # E-40-06-02: the same status for every file of a pass. The threshold of
+    # five is reached at the fifth file: the pass is an outage, nothing is
+    # acknowledged, not even the verdicts gathered before the threshold. Since
+    # the owner decision of 29.10. ("escalate without refund", W-1 of the
+    # verification) the refused rows are NOT handed back: their delivery counts,
+    # so a stock of broken files reaches the give-up rule instead of circling.
+    # The sixth file was never fetched, it is unjudged and goes back refunded.
     jobs = tuple(_job(91 + offset, 4711 + offset) for offset in range(6))
     queue = _FakeQueue(ClaimResult(jobs=jobs))
     bodies: dict[int, bytes | BaseException | None] = {
@@ -1318,8 +1321,209 @@ async def test_the_same_refusal_for_every_file_of_a_pass_is_an_outage(
 
     assert result.state == ROUND_GATEWAY_UNAVAILABLE
     assert queue.acknowledged == []
-    assert queue.unlocked == [[91, 92, 93, 94, 95, 96]]
+    assert queue.unlocked == [[96]]
+    assert poller.busy is False
     assert all(store.file_row(4711 + offset) is None for offset in range(6))
+    assert poller_module.gateway_unavailable_since() is not None
+
+
+@pytest.mark.parametrize("claimed", [2, 3, 4])
+async def test_a_small_pass_of_only_refusals_escalates_without_a_refund(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, claimed: int
+) -> None:
+    # W-2: below five claimed files the threshold is the claim itself, so two
+    # of two, three of three and four of four are an escalation, and none of
+    # the refused rows is handed back (W-1, owner decision 29.10.).
+    jobs = tuple(_job(91 + offset, 4711 + offset) for offset in range(claimed))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    bodies: dict[int, bytes | BaseException | None] = {
+        4711 + offset: GatewayRefused(500, file_id=4711 + offset) for offset in range(claimed)
+    }
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies=bodies)
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_GATEWAY_UNAVAILABLE
+    assert queue.acknowledged == []
+    assert queue.unlocked == []
+    assert poller.busy is False
+
+
+async def test_two_refusals_of_three_stay_two_verdicts(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:
+    jobs = (_job(), _job(92, 4712), _job(93, 4713))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    bodies: dict[int, bytes | BaseException | None] = {
+        4711: GatewayRefused(500, file_id=4711),
+        4712: GatewayRefused(500, file_id=4712),
+    }
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies=bodies)
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert queue.unlocked == []
+    assert queue.acknowledged == [([93], {91: "gateway_error", 92: "gateway_error"})]
+
+
+async def test_mixed_refusals_are_counted_per_status(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:
+    # Two 500 and two 403 in a pass of four: each status stays below four, so
+    # these are four verdicts and no escalation.
+    jobs = tuple(_job(91 + offset, 4711 + offset) for offset in range(4))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    bodies: dict[int, bytes | BaseException | None] = {
+        4711: GatewayRefused(500, file_id=4711),
+        4712: GatewayRefused(403, file_id=4712),
+        4713: GatewayRefused(500, file_id=4713),
+        4714: GatewayRefused(403, file_id=4714),
+    }
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies=bodies)
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert result.failed == 4
+    assert queue.unlocked == []
+
+
+async def test_refused_scans_under_several_slots_escalate_without_a_refund(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The escalation out of the tasks of a pass under two slots: three scans,
+    # all refused with 500, the threshold is three. No refused row goes back.
+    jobs = (_ocr_row(0), _ocr_row(1), _ocr_row(2))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    poller = _slot_poller(
+        store=store,
+        writer=writer,
+        tmp_path=tmp_path,
+        queue=queue,
+        extract=_SlotExtractor(seconds=0.01),
+        ocr_slots=2,
+        bodies={7000 + offset: GatewayRefused(500, file_id=7000 + offset) for offset in range(3)},
+    )
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_GATEWAY_UNAVAILABLE
+    assert queue.acknowledged == []
+    assert queue.unlocked == []
+    assert poller.busy is False
+
+
+async def test_an_outage_by_status_still_refunds_every_row(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The other kind of outage keeps its refund (E-40-06-01): a refusal earlier
+    # in the pass does not turn a later 503 into a charged abort.
+    jobs = (_job(), _job(92, 4712), _job(93, 4713))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    bodies: dict[int, bytes | BaseException | None] = {
+        4711: GatewayRefused(500, file_id=4711),
+        4712: NextcloudException(503, reason="gateway is down"),
+    }
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies=bodies)
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_GATEWAY_UNAVAILABLE
+    assert queue.unlocked == [[91, 92, 93]]
+
+
+class _QueueWithBudget:
+    """A work stock with the delivery rules of QueueMapper and QueueService.
+
+    Modelled on the PHP side and nothing more: a claim hands out the lowest ids
+    that are not locked and counts one delivery per row; a row handed out more
+    than MAX_DELIVERIES times ends at the claim as failed(repeatedly_stuck)
+    (QueueService::claim); unlock gives the delivery back and frees the row
+    (QueueMapper::unlock); a row that is neither acknowledged nor unlocked
+    stays locked until its lock times out, here after ``lock_rounds`` claims.
+    """
+
+    MAX_DELIVERIES = 3
+
+    def __init__(self, jobs: list[QueueJob], *, batch: int, lock_rounds: int = 2) -> None:
+        self.rows = {job.queue_id: job for job in jobs}
+        self.retries = dict.fromkeys(self.rows, 0)
+        self.locked_until: dict[int, int] = {}
+        self.batch = batch
+        self.lock_rounds = lock_rounds
+        self.tick = 0
+        self.ended: dict[int, str] = {}
+
+    async def companion_choice(self) -> CompanionChoice:
+        return CompanionChoice(profile=None, precision=None, confirmed=None, verdicts=None)
+
+    async def claim(self, *, limit: int, max_bytes: int, lane: str | None = None) -> ClaimResult:
+        del limit, max_bytes, lane
+        self.tick += 1
+        free = [qid for qid in sorted(self.rows) if self.locked_until.get(qid, 0) <= self.tick]
+        handed: list[QueueJob] = []
+        for qid in free:
+            if len(handed) == self.batch:
+                break
+            self.retries[qid] += 1
+            if self.retries[qid] > self.MAX_DELIVERIES:
+                self.ended[self.rows.pop(qid).file_id] = "failed:repeatedly_stuck"
+                continue
+            self.locked_until[qid] = self.tick + self.lock_rounds
+            handed.append(self.rows[qid])
+        return ClaimResult(jobs=tuple(handed))
+
+    async def top_up(self) -> str:
+        return TOPUP_IDLE
+
+    async def acknowledge(self, done: Any, failed: Any, skipped: Any = None) -> CallResult:
+        del skipped
+        for qid in done:
+            self.ended[self.rows.pop(qid).file_id] = "done"
+        for qid, reason in dict(failed).items():
+            self.ended[self.rows.pop(qid).file_id] = f"failed:{reason}"
+        return CallResult(ok=True, count=len(done) + len(failed))
+
+    async def unlock(self, ids: Any) -> CallResult:
+        for qid in ids:
+            if qid in self.rows:
+                self.retries[qid] = max(0, self.retries[qid] - 1)
+                self.locked_until.pop(qid, None)
+        return CallResult(ok=True, count=len(list(ids)))
+
+    async def requeue(self, file_ids: Any, *, kind: str) -> CallResult:
+        del kind
+        return CallResult(ok=True, count=len(list(file_ids)))
+
+    async def stats(self) -> QueueStats:
+        return QueueStats()
+
+
+async def test_files_that_always_refuse_reach_the_give_up_rule_and_the_queue_drains(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # W-1 of the verification, the loop of issue #36 by the other door: two
+    # broken files with the lowest ids always land in the same escalating batch
+    # of two. With the refund of before the id sorted claim took them again on
+    # every pass and the give-up rule never fired. Without it their deliveries
+    # count, they end at the claim as failed(repeatedly_stuck), and the healthy
+    # files behind them are indexed in the meantime: the stock drains in a
+    # bounded number of passes.
+    broken = [_job(91, 4711), _job(92, 4712)]
+    healthy = [_job(93 + offset, 4713 + offset) for offset in range(4)]
+    queue = _QueueWithBudget(broken + healthy, batch=2)
+    bodies: dict[int, bytes | BaseException | None] = {
+        4711: GatewayRefused(500, file_id=4711),
+        4712: GatewayRefused(500, file_id=4712),
+    }
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=cast("Any", queue), bodies=bodies)
+
+    for _ in range(40):
+        await poller.run_once()
+        if not queue.rows:
+            break
+
+    assert queue.rows == {}, "the stock did not drain"
+    assert queue.ended[4711] == "failed:repeatedly_stuck"
+    assert queue.ended[4712] == "failed:repeatedly_stuck"
+    assert all(queue.ended[4713 + offset] == "done" for offset in range(4))
 
 
 async def test_four_refusals_beside_two_healthy_files_stay_four_verdicts(
