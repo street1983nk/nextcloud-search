@@ -101,6 +101,11 @@ class GatewayController extends OCSController {
 			// before the fix.
 			$stream = $file->fopen('r');
 			if (!$stream) {
+				// Befund E of issue #36: this branch used to leave no trace on the
+				// Nextcloud side, while the container only saw a 422. A static
+				// sentence and the file id, never a path or a user (security audit
+				// L6): the id is what an admin looks the file up by.
+				$this->logger->warning('Findling: a file could not be opened for reading, answered 422', ['fileId' => $fileId]);
 				return new DataResponse(['error' => 'File could not be opened for reading.'], Http::STATUS_UNPROCESSABLE_ENTITY);
 			}
 
@@ -119,6 +124,14 @@ class GatewayController extends OCSController {
 			$this->logger->debug('Findling: content gateway asked for a user that does not exist');
 			return new DataResponse(['error' => 'Node is not a file or could not be found.'], Http::STATUS_NOT_FOUND);
 		} catch (\Throwable $e) {
+			// This is where the case of issue #36 lands: a file on a mount whose
+			// storage is not available, fopen throws StorageNotAvailableException,
+			// and the answer is this 500 on purpose. The container judges the one
+			// file failed(gateway_error) and goes on with the pass (plan 40-06,
+			// task 1). A 404 here would be a lasting skipped(gone), a quiet write
+			// off of every file of a storage that is only down for an hour, and it
+			// is deliberately not introduced (E-40-06-03 struck).
+			//
 			// The exception travels in the exception field, which Nextcloud
 			// renders itself, and the message of this app is a static sentence
 			// (security audit L6). The rule of this project is that the log

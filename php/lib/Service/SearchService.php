@@ -11,6 +11,7 @@ use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\Node;
+use OCP\Files\StorageNotAvailableException;
 use OCP\IUser;
 use Psr\Log\LoggerInterface;
 
@@ -440,7 +441,26 @@ class SearchService {
 				// folder: the folder resolves it inside the folder, where the
 				// user folder might have answered with the other path. The path
 				// shown stays relative to the user folder.
-				$node = self::readableFile($scope ?? $userFolder, $candidate['fileId']);
+				//
+				// A candidate on a mount whose storage is not available throws
+				// out of the readability question (issue #36: a group folder
+				// with a broken share, StorageNotAvailableException). For the
+				// search that is a file this user cannot open right now, so it
+				// drops out like one, and the other hits still come; before 1.6.0
+				// the exception ended the whole search. Caught here and at the
+				// two calls of similar() and NOT in readableFile() or
+				// readableNode(): those two are shared with the content gateway
+				// (GatewayController), the reader choice of the queue
+				// (QueueService, SKIP_UNREADABLE) and the PathResolverService, and
+				// a catch inside them would turn a passing storage fault into an
+				// indexing verdict, a 404 at the gateway and a skipped reader in
+				// the queue (plan 40-06, "Warum kein PHP-404"). No log line per
+				// candidate: that would be a record of foreign file ids.
+				try {
+					$node = self::readableFile($scope ?? $userFolder, $candidate['fileId']);
+				} catch (StorageNotAvailableException) {
+					$node = null;
+				}
 				if ($node === null) {
 					continue;
 				}
@@ -577,8 +597,15 @@ class SearchService {
 
 		// The source first, through the one permission question of the
 		// product. No log line here: a line per refused source would be a
-		// record of which numbers somebody tried.
-		$sourceNode = $sourceId > 0 ? self::readableFile($userFolder, $sourceId) : null;
+		// record of which numbers somebody tried. A source on a storage that
+		// is not available is a source this user cannot open right now, the
+		// same answer as a refused one (issue #36, see search() for why the
+		// catch sits at the call and not in readableFile()).
+		try {
+			$sourceNode = $sourceId > 0 ? self::readableFile($userFolder, $sourceId) : null;
+		} catch (StorageNotAvailableException) {
+			$sourceNode = null;
+		}
 		$source = $sourceNode === null ? null : $this->hitOf($userFolder, $sourceNode, $sourceId);
 		if ($source === null) {
 			return new SimilarOutcome(null, [], false, SimilarOutcome::FAILURE_SOURCE_UNAVAILABLE);
@@ -638,7 +665,13 @@ class SearchService {
 			}
 
 			$rechecks++;
-			$node = self::readableFile($userFolder, $candidateId);
+			// A neighbour on a storage that is not available drops out like a
+			// neighbour this user cannot see (issue #36, see search()).
+			try {
+				$node = self::readableFile($userFolder, $candidateId);
+			} catch (StorageNotAvailableException) {
+				$node = null;
+			}
 			if ($node === null) {
 				continue;
 			}
