@@ -7287,7 +7287,8 @@ jobs:
             head -c 400 "${RUNNER_TEMP}/rules-post.json" || true
             exit 1
           fi
-          stamp=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \n            "SELECT configvalue FROM oc_appconfig WHERE appid = 'findling' AND configkey = 'rules_changed_at';")
+          stamp=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
+            "SELECT configvalue FROM oc_appconfig WHERE appid = 'findling' AND configkey = 'rules_changed_at';")
           case "${stamp}" in
             ''|0|*[!0-9]*)
               echo "::error::rules_changed_at reads '${stamp}' after a changed set went through the route, and the route has to stamp a positive time (SettingsController.php:466)"

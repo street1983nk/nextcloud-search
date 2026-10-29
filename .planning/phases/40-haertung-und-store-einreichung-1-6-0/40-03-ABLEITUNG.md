@@ -178,7 +178,19 @@ test_cert_rotation_steps.py folgt dem Namen.
   Suche; alle übrigen Teile von Zusicherung 12 und alle elf Zusicherungen davor waren
   in dem Lauf grün (drei andere Matrixzeilen success; Python gates, Integration,
   Resilience auf dem Kopf success).
-- Task 2, Iteration 1: wird nach dem Lauf ergänzt.
+- Task 2, Iteration 1 (Kopf 87085fd6, Driftzeilen-Fensterung): HaRP deploy Lauf
+  **40783812259**, conclusion failure, wieder nur stable34 amd64 (die drei anderen
+  Matrixzeilen success; Integration, Python gates, Resilience auf dem Kopf success).
+  Rot war diesmal ausschließlich ein Shell-Defekt des Einfügeskripts in "Store upgrade
+  5b" Teil 2: in der stamp-Zeile stand ein wörtliches `\n` statt der
+  Zeilenfortsetzung, sqlite3 bekam dadurch `n` als SQL ("near 'n': syntax error") und
+  der Schritt endete vor dem Stempel-Check. Keine Zusicherung war inhaltlich rot: 11a
+  bis 11d grün, der erste POST /admin/rules antwortete saved=true, und in "Store
+  upgrade 5" hielten alle elf Zusicherungen inklusive der korrigierten
+  Driftzeilen-Fensterung (UPGRADE_DRIFT_LINES_AT_UPGRADE=2). Korrektur: die Zeile ist
+  wieder eine echte Fortsetzung; bash -n und die Vertragstests konnten das `\n` nicht
+  sehen, weil `\n` im Shell-Sinn ein gültiges (escaptes) `n` ist.
+- Task 2, Iteration 2: wird nach dem Lauf ergänzt.
 
 ## Mechanisches Inventar (Ausgangsstand 46df0ee1, 147 Treffer)
 
