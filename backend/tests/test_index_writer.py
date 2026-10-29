@@ -772,8 +772,48 @@ def test_every_writing_method_holds_the_lock() -> None:
     batch = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "IndexBatchWriter")
     methods = {node.name: node for node in batch.body if isinstance(node, ast.FunctionDef)}
 
-    for name in ("pending", "pending_bytes", "add", "drop_document", "flush", "collect_garbage", "close"):
+    for name in ("pending", "pending_bytes", "add", "drop_document", "flush", "rollback", "collect_garbage", "close"):
         body = [node for node in methods[name].body if not isinstance(node, ast.Expr)]
         assert len(body) == 1, name
         assert isinstance(body[0], ast.With), name
         assert ast.unparse(body[0].items[0].context_expr) == "self._lock", name
+
+
+def test_a_rollback_drops_the_pending_batch_and_keeps_what_was_committed(
+    index: Index, batch_writer: IndexBatchWriter
+) -> None:
+    # Befund C of issue #36: an aborted pass must leave nothing behind for the
+    # next flush. The committed document stays, the pending one and the pending
+    # drop are gone, and the counters start over.
+    batch_writer.add(_record(1))
+    batch_writer.flush()
+    batch_writer.add(_record(2))
+    batch_writer.drop_document(1)
+
+    batch_writer.rollback()
+
+    assert batch_writer.pending == 0
+    assert batch_writer.pending_bytes == 0
+    assert batch_writer.flush().state == FLUSH_NOTHING_PENDING
+    index.reload()
+    assert index.searcher().num_docs == 1
+    assert _documents_with_id(index, 1) == 1
+    assert _documents_with_id(index, 2) == 0
+
+
+def test_the_writer_keeps_working_after_a_rollback(index: Index, batch_writer: IndexBatchWriter) -> None:
+    batch_writer.add(_record(1))
+    batch_writer.rollback()
+    batch_writer.add(_record(3))
+
+    assert batch_writer.flush().documents == 1
+    assert _documents_with_id(index, 3) == 1
+    assert _documents_with_id(index, 1) == 0
+
+
+def test_a_closed_writer_refuses_to_roll_back(index: Index, index_dir: Path) -> None:
+    writer = IndexBatchWriter(index, directory=index_dir)
+    writer.close()
+
+    with pytest.raises(RuntimeError):
+        writer.rollback()

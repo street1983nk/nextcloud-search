@@ -26,11 +26,13 @@ import httpx
 import pytest
 
 from findling import config
+from findling.nc import client as client_module
 from findling.nc.client import (
     CHUNK_SIZE,
     GATEWAY_PATH,
     AsyncNextcloudApp,
     FileTooLargeError,
+    GatewayRefused,
     NextcloudException,
     ShortRead,
     app_api_headers,
@@ -282,6 +284,42 @@ async def test_an_unexpected_error_is_not_swallowed() -> None:
     async with gateway.client() as client:
         with pytest.raises(NextcloudException):
             await fetch_file_stream(_app(), 1, "testuser", io.BytesIO(), client=client)
+
+
+@pytest.mark.parametrize("status", [500, 401, 403, 422, 423])
+async def test_an_answer_about_one_file_is_a_refusal_with_its_status(status: int) -> None:
+    # E-40-06-01: the gateway answered, so it is not down, and the answer is
+    # about this one file. The poller turns it into a verdict (issue #36).
+    gateway = _Gateway(status=status)
+
+    async with gateway.client() as client:
+        with pytest.raises(GatewayRefused) as refused:
+            await fetch_file_stream(_app(), 4712, "testuser", io.BytesIO(), client=client)
+
+    assert refused.value.status == status
+    assert refused.value.status_code == status
+    assert isinstance(refused.value, NextcloudException)
+    assert "4712" in str(refused.value)
+    assert "testuser" not in str(refused.value)
+
+
+@pytest.mark.parametrize("status", [502, 503, 504])
+async def test_a_proxy_answer_stays_an_outage_and_is_no_refusal(status: int) -> None:
+    # The answer of a proxy or of a server that is not there, never the answer
+    # about one file (E-40-06-01).
+    gateway = _Gateway(status=status)
+
+    async with gateway.client() as client:
+        with pytest.raises(NextcloudException) as raised:
+            await fetch_file_stream(_app(), 4712, "testuser", io.BytesIO(), client=client)
+
+    assert not isinstance(raised.value, GatewayRefused)
+    assert raised.value.status_code == status
+
+
+def test_the_outage_statuses_are_exactly_the_three_proxy_answers() -> None:
+    assert frozenset({502, 503, 504}) == client_module._OUTAGE_STATUS
+    assert frozenset({404, 998}) == client_module._NOT_ACCESSIBLE_STATUS
 
 
 def test_the_block_size_is_a_named_constant_of_one_mebibyte() -> None:

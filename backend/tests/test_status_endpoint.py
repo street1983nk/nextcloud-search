@@ -70,6 +70,7 @@ from findling.profile import Profile, ProfileValues, note_chosen, note_hardware
 from findling.query.rewrite import LEGACY_PLAN
 from findling.store.repo import EMBEDDING_BACKLOG_MARK, FileMeta, open_store
 from findling.store.vectors import EMBEDDING_DIMENSIONS, Chunk, open_vectors
+from findling.worker import poller as poller_module
 
 pytestmark = pytest.mark.usefixtures("appapi_environment")
 
@@ -133,6 +134,9 @@ FIELDS = {
     # it, and whether one runs right now, in another tab as well.
     "probe",
     "note",
+    # Befund D of issue #36 (plan 40-06): since when the content gateway has
+    # not answered, the first aborted pass of the streak, null while it answers.
+    "gatewayUnavailableSince",
 }
 
 # Six odd ids carry two permission rows, six even ones carry one.
@@ -1720,3 +1724,22 @@ def test_a_container_without_a_vector_stock_reports_nought_chunks(
     (indexed_volume.root / "vectors.db").unlink()
 
     assert _status(client, sign("admin"))["model"]["chunks"] == 0
+
+
+@pytest.mark.parametrize("branch", BRANCHES)
+def test_a_gateway_that_answers_reports_no_outage(
+    client: TestClient, sign: Sign, request: pytest.FixtureRequest, branch: str
+) -> None:
+    assert _answer(client, sign, request, branch)["gatewayUnavailableSince"] is None
+
+
+@pytest.mark.parametrize("branch", BRANCHES)
+def test_an_outage_of_the_gateway_is_reported_with_its_first_moment(
+    client: TestClient, sign: Sign, request: pytest.FixtureRequest, branch: str
+) -> None:
+    # Befund D of issue #36: ROUND_GATEWAY_UNAVAILABLE used to show nowhere.
+    # Both branches, because a process value that _of() does not carry over
+    # vanishes on every installation that has indexed anything (Pitfall 2).
+    poller_module._note_gateway_outage(1_800_000_000.5)
+
+    assert _answer(client, sign, request, branch)["gatewayUnavailableSince"] == 1_800_000_000

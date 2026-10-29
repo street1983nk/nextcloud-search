@@ -41,6 +41,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import IO, Any, cast
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 from tantivy import Index
@@ -58,7 +59,7 @@ from findling.index.schema import FIELD_BODY_DE, FIELD_FILE_ID, FIELD_NAME
 from findling.index.wordlist_nl import dutch_mark
 from findling.index.writer import IndexBatchWriter
 from findling.main import APP, active_poller, enabled_handler
-from findling.nc.client import AsyncNextcloudApp, NextcloudException, ShortRead
+from findling.nc.client import AsyncNextcloudApp, GatewayRefused, NextcloudException, ShortRead
 from findling.nc.queue import (
     LANE_INDEX,
     TOPUP_IDLE,
@@ -1174,11 +1175,12 @@ async def test_an_unchanged_picture_is_not_handed_over_a_second_time(
 async def test_a_gateway_error_aborts_the_batch_and_acknowledges_nothing(
     store: Store, writer: IndexBatchWriter, tmp_path: Path
 ) -> None:
-    # A 500 says nothing about the file. Recording a verdict from it would put a
-    # wrong reason on a document that is perfectly fine, and the state store is
-    # the thing phase 3 reads to decide what still needs work.
+    # A 503 says nothing about the file: it is the answer of a proxy or of a
+    # server that is not there (E-40-06-01). Recording a verdict from it would
+    # put a wrong reason on a document that is perfectly fine, and the state
+    # store is the thing phase 3 reads to decide what still needs work.
     queue = _FakeQueue(ClaimResult(jobs=(_job(), _job(92, 4712))))
-    broken = NextcloudException(500, reason="gateway is down")
+    broken = NextcloudException(503, reason="gateway is down")
     poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: broken})
     before = poller.cooldown
 
@@ -1189,6 +1191,299 @@ async def test_a_gateway_error_aborts_the_batch_and_acknowledges_nothing(
     assert store.file_row(4711) is None
     assert queue.unlocked == [[91, 92]]
     assert poller.cooldown > before
+
+
+async def test_a_transport_error_of_the_gateway_aborts_the_batch_as_before(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # No HTTP answer at all is never the answer about one file (E-40-06-01).
+    queue = _FakeQueue(ClaimResult(jobs=(_job(), _job(92, 4712))))
+    poller = _poller(
+        store=store,
+        writer=writer,
+        tmp_path=tmp_path,
+        queue=queue,
+        bodies={4712: httpx.ConnectError("connection refused")},
+    )
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_GATEWAY_UNAVAILABLE
+    assert queue.acknowledged == []
+    assert queue.unlocked == [[91, 92]]
+    assert store.file_row(4711) is None
+
+
+async def test_one_refused_file_is_a_verdict_and_the_rest_of_the_pass_goes_on(
+    store: Store, writer: IndexBatchWriter, index: Index, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # The budachst case of issue #36: one file on a broken mount, the gateway
+    # answers 500 for it, and before 1.6.0 the whole pass went back with the
+    # delivery refunded, the id sorted claim took the same head batch again and
+    # the queue stood for good. Now the refusal is a verdict about that one file.
+    jobs = (_job(), _job(92, 4712, title="Kaputt.xlsx", path="Gruppe/Kaputt.xlsx"), _job(93, 4713))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    poller = _poller(
+        store=store,
+        writer=writer,
+        tmp_path=tmp_path,
+        queue=queue,
+        bodies={4712: GatewayRefused(500, file_id=4712)},
+    )
+
+    with caplog.at_level("WARNING", logger="findling.worker.poller"):
+        result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert (result.indexed, result.failed) == (2, 1)
+    assert queue.acknowledged == [([91, 93], {92: "gateway_error"})]
+    assert queue.unlocked == []
+    row = store.file_row(4712)
+    assert row is not None
+    assert (row["state"], row["reason"]) == ("failed", "gateway_error")
+    assert sorted(_stored_ids(index)) == [4711, 4713]
+    refused = [line for line in _poller_lines(caplog) if "refused one file" in line]
+    assert len(refused) == 1
+    assert "500" in refused[0]
+    assert "4712" in refused[0]
+    assert "Kaputt" not in refused[0]
+    assert "Gruppe" not in refused[0]
+
+
+async def test_a_refused_scan_is_a_verdict_and_the_other_scans_are_read(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The same rule on the OCR track: a scan the gateway refuses ends as
+    # failed(gateway_error), the scans beside it are read as usual.
+    jobs = (_ocr_row(0), _ocr_row(1), _ocr_row(2))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    poller = _slot_poller(
+        store=store,
+        writer=writer,
+        tmp_path=tmp_path,
+        queue=queue,
+        extract=_SlotExtractor(seconds=0.01),
+        ocr_slots=None,
+        bodies={7001: GatewayRefused(500, file_id=7001)},
+    )
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert queue.unlocked == []
+    assert queue.acknowledged == [([300, 302], {301: "gateway_error"})]
+    row = store.file_row(7001)
+    assert row is not None
+    assert (row["state"], row["reason"]) == ("failed", "gateway_error")
+
+
+async def test_a_refused_scan_under_several_slots_is_a_verdict_as_well(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    jobs = (_ocr_row(0), _ocr_row(1), _ocr_row(2))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    poller = _slot_poller(
+        store=store,
+        writer=writer,
+        tmp_path=tmp_path,
+        queue=queue,
+        extract=_SlotExtractor(seconds=0.01),
+        ocr_slots=2,
+        bodies={7002: GatewayRefused(403, file_id=7002)},
+    )
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert queue.unlocked == []
+    assert queue.acknowledged == [([300, 301], {302: "gateway_error"})]
+
+
+async def test_the_same_refusal_for_every_file_of_a_pass_is_an_outage(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # E-40-06-02: an app password that was taken away answers 401 for every
+    # file. Six files, the same status, the threshold of five reached: the pass
+    # is an outage, nothing is acknowledged, not even the verdicts gathered
+    # before the threshold, and the rows go back with their delivery refunded.
+    jobs = tuple(_job(91 + offset, 4711 + offset) for offset in range(6))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    bodies: dict[int, bytes | BaseException | None] = {
+        4711 + offset: GatewayRefused(401, file_id=4711 + offset) for offset in range(6)
+    }
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies=bodies)
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_GATEWAY_UNAVAILABLE
+    assert queue.acknowledged == []
+    assert queue.unlocked == [[91, 92, 93, 94, 95, 96]]
+    assert all(store.file_row(4711 + offset) is None for offset in range(6))
+
+
+async def test_four_refusals_beside_two_healthy_files_stay_four_verdicts(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The counter proof of the threshold: four of six is below five.
+    jobs = tuple(_job(91 + offset, 4711 + offset) for offset in range(6))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    bodies: dict[int, bytes | BaseException | None] = {
+        4711 + offset: GatewayRefused(500, file_id=4711 + offset) for offset in range(4)
+    }
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies=bodies)
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert (result.indexed, result.failed) == (2, 4)
+    assert queue.unlocked == []
+    assert queue.acknowledged == [
+        ([95, 96], {91: "gateway_error", 92: "gateway_error", 93: "gateway_error", 94: "gateway_error"})
+    ]
+
+
+async def test_a_pass_of_one_refused_file_never_escalates(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # One claimed file is the budachst case and never an outage (E-40-06-02).
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)))
+    poller = _poller(
+        store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: GatewayRefused(500, file_id=4711)}
+    )
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert queue.unlocked == []
+    assert queue.acknowledged == [([], {91: "gateway_error"})]
+
+
+async def test_the_outage_line_names_the_http_status(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Befund A of issue #36: the line used to name the class and swallow the
+    # status. The words before the status stay, so a grep in the field still
+    # finds the line.
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)))
+    poller = _poller(
+        store=store,
+        writer=writer,
+        tmp_path=tmp_path,
+        queue=queue,
+        bodies={4711: NextcloudException(504, reason="gateway timeout")},
+    )
+
+    with caplog.at_level("WARNING", logger="findling.worker.poller"):
+        await poller.run_once()
+
+    lines = [line for line in _poller_lines(caplog) if "content gateway did not deliver" in line]
+    assert len(lines) == 1
+    assert "504" in lines[0]
+    assert "NextcloudException" in lines[0]
+    stopped = [line for line in _poller_lines(caplog) if "content gateway is unavailable" in line]
+    assert len(stopped) == 1
+
+
+async def test_an_aborted_pass_leaves_nothing_pending_in_the_writer(
+    store: Store, writer: IndexBatchWriter, index: Index, tmp_path: Path
+) -> None:
+    # Befund C of issue #36: the first file reached the writer, the second hit
+    # an outage. Before 1.6.0 the next flush committed that document, without
+    # an acl row and without a verdict. Now nothing of the aborted pass is left.
+    queue = _FakeQueue(ClaimResult(jobs=(_job(), _job(92, 4712))))
+    poller = _poller(
+        store=store,
+        writer=writer,
+        tmp_path=tmp_path,
+        queue=queue,
+        bodies={4712: NextcloudException(503, reason="gateway is down")},
+    )
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_GATEWAY_UNAVAILABLE
+    assert writer.pending == 0
+    assert writer.flush().documents == 0
+    assert _stored_ids(index) == []
+
+
+async def test_an_abort_hands_the_rows_back_even_when_the_rollback_fails(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken_rollback() -> int:
+        raise RuntimeError("the writer is gone")
+
+    monkeypatch.setattr(writer, "rollback", broken_rollback)
+    queue = _FakeQueue(ClaimResult(jobs=(_job(), _job(92, 4712))))
+    poller = _poller(
+        store=store,
+        writer=writer,
+        tmp_path=tmp_path,
+        queue=queue,
+        bodies={4712: NextcloudException(503, reason="gateway is down")},
+    )
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_GATEWAY_UNAVAILABLE
+    assert queue.unlocked == [[91, 92]]
+
+
+async def test_an_outage_is_remembered_from_its_first_pass_until_nextcloud_answers(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # Befund D of issue #36, the half of the container: the moment of the first
+    # aborted pass of a streak, for /status to show, and gone again once a pass
+    # ends normally.
+    down = NextcloudException(503, reason="gateway is down")
+    queue = _FakeQueue(
+        ClaimResult(jobs=(_job(),)),
+        ClaimResult(jobs=(_job(),)),
+        ClaimResult(unavailable=True),
+        ClaimResult(jobs=(_job(),)),
+    )
+    bodies: dict[int, bytes | BaseException | None] = {4711: down}
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies=bodies)
+
+    assert poller_module.gateway_unavailable_since() is None
+    before = int(time.time())
+    await poller.run_once()
+    since = poller_module.gateway_unavailable_since()
+    assert since is not None
+    assert before <= since <= int(time.time())
+    # The second abort of the same streak keeps the first moment. A moment far
+    # in the past stands in for it, so a second written over it would show.
+    poller_module.reset_gateway_outage()
+    poller_module._note_gateway_outage(1_700_000_000.0)
+    await poller.run_once()
+    assert poller_module.gateway_unavailable_since() == 1_700_000_000
+    # A queue that does not answer says nothing about the gateway.
+    assert (await poller.run_once()).state == ROUND_QUEUE_UNAVAILABLE
+    assert poller_module.gateway_unavailable_since() == 1_800_000_000
+    bodies[4711] = BODY_BYTES
+    assert (await poller.run_once()).state == ROUND_WORKED
+    assert poller_module.gateway_unavailable_since() is None
+
+
+async def test_an_empty_queue_ends_the_outage_as_well(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)))
+    poller = _poller(
+        store=store,
+        writer=writer,
+        tmp_path=tmp_path,
+        queue=queue,
+        bodies={4711: NextcloudException(502, reason="bad gateway")},
+    )
+
+    await poller.run_once()
+    assert poller_module.gateway_unavailable_since() is not None
+    assert (await poller.run_once()).state == ROUND_EMPTY
+    assert poller_module.gateway_unavailable_since() is None
+
+
+def test_the_outage_threshold_is_a_named_constant_of_five() -> None:
+    assert poller_module.GATEWAY_SAME_STATUS_OUTAGE_AFTER == 5
+    assert "E-40-06-02" in POLLER_SOURCE.read_text(encoding="utf-8")
 
 
 async def test_an_unchanged_file_is_acknowledged_without_doing_the_work_again(
