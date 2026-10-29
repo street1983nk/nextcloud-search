@@ -2364,8 +2364,17 @@ PHP_TREE_HASH_TODAY = "71443d7d69d7b50574d2bad39b884aaf8935e96c9591ac51bea25b675
 # PACKAGE_FILES_TODAY stays at 80. The PHP pair does not move. Recomputed
 # independently with find, sort, tr and sha256sum over the CRLF normalised
 # tree: 3c6f35e6... both ways.
+#
+# Moved on 2026-10-29 by Plan 40-06 (verification W-1, owner decision
+# 29.10.): worker/poller.py raises _RefusalsPiledUp at the threshold of
+# E-40-06-02 and keeps the refused rows of such a pass out of the unlock, so
+# their delivery counts and the give-up rule ends them; index/writer.py names
+# the rollback of an aborted pass in the docstring of flush(). No file came or
+# went, so PACKAGE_FILES_TODAY stays at 80. The PHP pair does not move.
+# Recomputed independently with find, sort, tr and sha256sum over the CRLF
+# normalised tree: c5da3ea5... both ways.
 PACKAGE_FILES_TODAY = 80
-PACKAGE_TREE_HASH_TODAY = "3c6f35e64df85b2d1d54b1d129ca1ddc91d6ec838230e96930032858479e1f7a"
+PACKAGE_TREE_HASH_TODAY = "c5da3ea5c9acc5583de0c84cfa10fa02839c6d5ac4493346b7f6cb1625cfe804"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
