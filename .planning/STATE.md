@@ -111,7 +111,8 @@ Progress: [██████████] 100%
 - 40-02: Version 1.6.0 in beiden Apps, Minor-Migration Version001600, CHANGELOG [1.6.0], Doku-Links blob/v1.6.0.
 - 40-03: UPGRADE_FROM_TAG v1.5.0 mit Neuableitung jeder startabhaengigen Zusicherung (40-03-ABLEITUNG.md) plus Zusicherung 12, HaRP deploy 40817178890 gruen.
 - 40-04: Owner-Runde 29.10.2026 alle Punkte wie empfohlen, GO fuer Tag und Einreichung, Tag-Kopf 91a0603f (40-ABNAHME.md).
-- 40-05: Tag v1.6.0 (91a0603f), Release 40864595574 mit 9 Assets, Fremdinstallation 40865691730, Store submission 40868132102 zweimal HTTP 201 (11:47:55Z, 11:47:57Z); appapi_apps.json fuehrte 15 min danach noch 1.5.1 (Cache-Verzug, Nachfuehrung offen).
+- 40-05: Tag v1.6.0 (91a0603f), Release 40864595574 mit 9 Assets, Fremdinstallation 40865691730, Store submission 40868132102 zweimal HTTP 201 (11:47:55Z, 11:47:57Z); appapi_apps.json fuehrte 15 min danach noch 1.5.1 (Cache-Verzug), um 12:05:28Z nachgefuehrt auf 1.6.0. Issue-Antworten nach dem Release: #36 issuecomment-6496180117, #19 issuecomment-6496180560.
+- 40-VERIFICATION (409a38b8): gaps_found, SC1 partial (Audit deckte efcf26c5..91a0603f nicht ab) -> Nachaudit 40-NACHAUDIT.md beauftragt; Luecke 2 (v1.7-Punkte) in deferred-items.md nachgetragen.
 
 ### Decisions (Roadmap v1.5)
 
@@ -242,9 +243,8 @@ Resume file: None
 
 ## Operator Next Steps
 
-- Phase 40 verifizieren, danach Phasenhaken in ROADMAP und Milestone v1.6 schliessen
-- appapi_apps.json pruefen: findling_backend muss 1.6.0 fuehren (am 29.10. 11:53Z noch 1.5.1, Cache-Verzug)
+- Nachaudit 40-NACHAUDIT.md (efcf26c5..91a0603f) auswerten; Befunde ab MEDIUM in 1.6.1, danach Phase 40 neu verifizieren, Phasenhaken in ROADMAP und Milestone v1.6 schliessen
 - Owner: UI-Sichtung der drei Saetze (plus Gateway-Satz) in einer laufenden 1.6.0-Instanz
 - Owner: Issue-#33-Antwort (Desktop/Findling_Issue33_Antwort_ENTWURF.md) posten, erst danach 'Closes #33'; HaRP-Upstream-Vorschlag (Desktop/Findling_HaRP_Upstream_Vorschlag_ENTWURF.md) nach erneutem Lesen von HaRP main senden
-- Issue-Antworten zu #36 und #19 sowie Forum-Post nach dem Store-Release (Koordinator)
+- Issue #36 offen lassen bis budachst bestaetigt (dann erst Closes); Forum-Post 1.6.0 nur als Entwurf fuer den Owner (Owner postet)
 - E1/E2: historische Umlaute in docs/audits und docs/measurements als eigener Doku-Commit

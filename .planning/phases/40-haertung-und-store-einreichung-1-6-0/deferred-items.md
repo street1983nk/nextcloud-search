@@ -36,3 +36,18 @@ Plan 40-06 in 1.6.0 (nach 40-03, vor 40-04/40-05). Die 1.6.1-Frage faellt damit
 aus der Owner-Runde 40-04; dort bleibt nur die Bestaetigung der Nachtraege
 (Block G: Kandidat F aus Issue #19 und der neue Anzeige-Satz). Der Fix-Link fuer
 den Melder ist Teil von 40-06 Task 3 (kein "Closes #36").
+
+## Aus der Owner-Runde 40-04 und dem Nachtrag 40-06 (29.10.2026), fuer v1.7
+
+- **Satz D bei Haeufung unscharf:** "The content gateway did not answer on the
+  last indexing pass" erscheint auch, wenn die Haeufungs-Schwelle eskaliert,
+  obwohl das Gateway dabei geantwortet hat (Owner: Variante a bestaetigt,
+  Unschaerfe fuer v1.7 notiert). Loesung braucht einen neuen Katalogsatz.
+- **Endverdikt gateway_error statt repeatedly_stuck:** Dateien, die bei einer
+  Haeufungs-Eskalation belastet werden, enden nach MAX_DELIVERIES als
+  failed(repeatedly_stuck). gateway_error am letzten Versuch braucht die
+  Lieferzahl im Container, also eine Protokollaenderung in beiden Haelften.
+- **Kaltstart der Sprachzeile (G1):** languagesFilled bleibt nach einem
+  Container-Start bis zum ersten Hintergrund-Refresh leer, die Admin-Zeile ist
+  dann kurz unvollstaendig. Owner hat Kandidat F so bestaetigt; ein eigener
+  Kaltstart-Satz waere ein neuer Katalogsatz.
