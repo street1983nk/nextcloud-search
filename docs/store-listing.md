@@ -2889,7 +2889,36 @@ Tag-Läufe auf v1.6.0, alle sieben success, keine Wiederholung: Release
 (`release.yml`) 40864595574, PHP and store metadata gates 40864595622,
 Multi-arch image 40864595511, HaRP deploy 40864595641 (vier Matrixzeilen,
 Pakete im Lauf gebaut), Python gates 40864595569, Integration 40864595676,
-Resilience 40864595571.
+Resilience 40864595571. Der Beleg-Commit cb65aa61 war mit Security scans
+40868095970 und OpenSSF Scorecard 40868095728 grün.
+
+9. Owner-GO am 29.10.2026 (40-ABNAHME.md, übermittelt 11:48 durch den
+   Koordinator): `GO: ja`, Punkt F wörtlich "GO"; das GO deckt Tag v1.6.0
+   und die Einreichung beider Apps. APPSTORE_TOKEN nicht neu geholt
+   (unverändert seit der Einreichung 1.5.1).
+10. Eingereicht über den Workflow "Store submission" (`store-submit.yml`,
+    `--ref main -f tag=v1.6.0`, `register` aus), Lauf 40868132102
+    (workflow_dispatch, Job 123427991816), erstellt 2026-10-29T11:47:44Z,
+    success, Kopf cb65aa61. Vorher kein Store-submission-Lauf seit
+    39865809204 (1.5.1), also keine Doppeleinreichung.
+11. Antwortcodes aus dem Log des Laufs, Schritt "Submit both releases":
+    - release findling v1.6.0: HTTP 201, 11:47:55Z
+    - release findling_backend v1.6.0: HTTP 201, 11:47:57Z
+12. Gegenprobe von außen, 2026-10-29:
+    - 11:48:25Z `curl -s https://apps.nextcloud.com/apps/findling`: 200, die
+      Tabelle "Stable channel" nennt 1.6.0 für Nextcloud 35, 34 und 33, der
+      Download zeigt auf `releases/download/v1.6.0/findling.tar.gz`.
+    - 11:48:26Z `curl -s https://apps.nextcloud.com/apps/findling_backend`:
+      200, ebenso 1.6.0 für Nextcloud 35, 34 und 33, Download
+      `releases/download/v1.6.0/findling_backend.tar.gz`.
+    - 11:48:27Z Katalog `api/v1/platform/34.0.3/apps.json`: findling führt
+      1.6.0, 1.5.1, 1.5.0, `created` 2026-10-29T11:47:55.560497Z,
+      sekundengleich mit dem ersten HTTP 201.
+    - Katalog `api/v1/appapi_apps.json`, sechs Aufrufe um 11:48:43Z,
+      11:49:20Z, 11:49:33Z, 11:49:55Z, 11:52:50Z und 11:53:11Z:
+      findling_backend führt jedes Mal noch 1.5.1 als neueste Fassung
+      (Katalog-Cache wie bei 1.4.3 und 1.5.0), während die App-Seite 1.6.0
+      bereits nennt. Die Nachführung des Katalogs wird nachgeholt.
 
 ---
 
