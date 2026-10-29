@@ -2748,6 +2748,12 @@ final class AdminViewService {
 			'slotsTarget' => self::guardCounter(self::guardField($answer, 'slotsTarget')),
 			'slotsInForce' => self::guardCounter(self::guardField($answer, 'slotsInForce')),
 			'slotsThrottled' => self::strictFlag(self::guardField($answer, 'throttled')),
+			// Since when the content gateway has not answered the indexing,
+			// epoch seconds of the first aborted pass, or null (issue #36,
+			// Befund D, plan 40-06). An optional counter: a container before
+			// 1.6.0 leaves the key out, a gateway that answers sends null, and
+			// both are a hidden sentence on the page, never a date of nought.
+			'gatewayUnavailableSince' => $this->optionalCounter($answer, 'gatewayUnavailableSince'),
 			'note' => $this->text($answer, 'note'),
 		];
 	}

@@ -345,6 +345,9 @@
       // The model line of plan 25-04: the precision and whether the vectors
       // are computed again. A run that starts or ends moves nothing else here.
       (view.backend || {}).precisionActive, (view.backend || {}).reembedRunning,
+      // The outage of the content gateway (issue #36, Befund D): the passes
+      // stop while it lasts, so nothing else in this line moves either.
+      (view.backend || {}).gatewayUnavailableSince,
       // The two lines of plan 39-01: which explanation stands next to
       // "Deliberately left out" (ANZE-01), and the hint after a rule change
       // (ANZE-02), which can come and go while no other value here moves.
@@ -436,6 +439,21 @@
 
     semanticBlock(coverage, hasDenominator, (view.backend || {}).engineState)
     modelLine(coverage, hasDenominator, view.backend || {})
+    gatewayLine(view.backend || {})
+  }
+
+  /**
+   * The sentence for a content gateway that does not answer (issue #36,
+   * Befund D, plan 40-06). The container sends the moment of the first pass of
+   * the outage, or null while the gateway answers; the page says the state in
+   * one catalogue sentence and never shows a value of the container as text.
+   */
+  function gatewayLine (backend) {
+    const down = Number.isInteger(backend.gatewayUnavailableSince) && backend.gatewayUnavailableSince > 0
+    if (down) {
+      text('findling-gateway-unavailable', t('findling', 'The content gateway did not answer on the last indexing pass. The affected files stay in the queue and are tried again; the search keeps answering.'))
+    }
+    shown('findling-gateway-unavailable', down)
   }
 
   /**

@@ -298,6 +298,9 @@ $slotsInForce = is_int($backend['slotsInForce'] ?? null) ? $backend['slotsInForc
 $slotsTarget = is_int($backend['slotsTarget'] ?? null) ? $backend['slotsTarget'] : 0;
 $slotsShown = ($backend['slotsThrottled'] ?? null) === true;
 $slotsLine = $l->t('OCR slots: %1$s of %2$s, memory tight', [$count($slotsInForce), $count($slotsTarget)]);
+// The content gateway that does not answer (issue #36, Befund D, plan 40-06):
+// a moment of the first aborted pass, or null while it answers.
+$gatewayDown = is_int($backend['gatewayUnavailableSince'] ?? null) && $backend['gatewayUnavailableSince'] > 0;
 
 $tiles = [
 	['id' => 'findling-tile-indexed', 'label' => $l->t('Indexed'), 'value' => $indexed],
@@ -575,6 +578,16 @@ $migrationDocsUrl = $migrationDocsUrls[str_starts_with($languageCode, 'de') ? 'd
 	?>
 	<p class="settings-hint" id="findling-guard"<?php if (!$guardShown) { ?> hidden<?php } ?>><?php p($guardLine); ?></p>
 	<p class="settings-hint" id="findling-slots"<?php if (!$slotsShown) { ?> hidden<?php } ?>><?php p($slotsLine); ?></p>
+	<?php
+	/*
+	 * The content gateway that does not answer (issue #36, Befund D, plan
+	 * 40-06), under the run state for the reason the guard lines stand there:
+	 * it is why the run does not move. One static catalogue sentence, hidden
+	 * while the gateway answers; the script flips the same element on every
+	 * poll, so both halves of the page say the same from the first frame on.
+	 */
+	?>
+	<p class="settings-hint" id="findling-gateway-unavailable"<?php if (!$gatewayDown) { ?> hidden<?php } ?>><?php p($l->t('The content gateway did not answer on the last indexing pass. The affected files stay in the queue and are tried again; the search keeps answering.')); ?></p>
 
 	<p class="findling-chips">
 		<span class="findling-chip findling-chip--queued">

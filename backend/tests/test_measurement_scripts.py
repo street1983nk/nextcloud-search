@@ -1113,8 +1113,18 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # mark, because Weg C groups in ScanStatsService::totals() at read time), so PHP_FILES_TODAY moves to
 # 110. Recomputed independently with find, sort, tr and sha256sum over the CRLF normalised tree:
 # 73bae603... both ways.
+# Moved on 2026-10-29 by Plan 40-06 (issue #36: the 422 log line, the search on a broken mount and the
+# outage sentence): lib/Controller/GatewayController.php logs its 422 branch and keeps the 500 of the
+# catch-all branch for a storage that is not available (no 404, E-40-06-03 struck);
+# lib/Service/SearchService.php catches StorageNotAvailableException at the three calls of the search
+# and of similar() and leaves readableFile() and readableNode() as they were;
+# lib/Service/AdminViewService.php hands gatewayUnavailableSince through; templates/admin.php renders
+# the one sentence of E-40-06-04; tests/Unit/GatewayControllerTest.php and
+# tests/Unit/SearchServiceTest.php hold all of it. No file came or went, so PHP_FILES_TODAY stays at
+# 110. The package pair does not move in this step. Recomputed independently with find, sort, tr and
+# sha256sum over the CRLF normalised tree: 71443d7d... both ways.
 PHP_FILES_TODAY = 110
-PHP_TREE_HASH_TODAY = "73bae603ef6cd62932bacdb956f5b69ee99d98df6bb24de31b99af7ca70b0702"
+PHP_TREE_HASH_TODAY = "71443d7d69d7b50574d2bad39b884aaf8935e96c9591ac51bea25b675c9348ff"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
