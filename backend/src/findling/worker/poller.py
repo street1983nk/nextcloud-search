@@ -100,6 +100,7 @@ from findling.nc.client import (
     AsyncNextcloudApp,
     FileTooLargeError,
     GatewayClient,
+    GatewayRefused,
     ShortRead,
     fetch_file_stream,
     new_gateway_client,
@@ -199,6 +200,19 @@ RETREAT_AFTER_ROUNDS: Final = 3
 # default): an empty queue is a question about work, an unanswered queue is a
 # question about the installation, and the second one is worth waiting longer on.
 RETREAT_MAX_SECONDS: Final = 300.0
+
+# How many files of one pass the gateway may refuse with the same status before
+# the pass counts as an outage after all (E-40-06-02, issue #36). A refusal is a
+# verdict about one file (GatewayRefused), and one broken file must cost exactly
+# that one verdict. But an app password that was taken away answers 401 for
+# every file, and a Nextcloud whose database is gone answers 500 for every file:
+# judging all of them failed(gateway_error) would spend the give-up budget of a
+# whole stock on a state of the instance (the lesson of DI-05-23). So once the
+# same status reaches min(this, claimed files) files of one pass, with at least
+# two claimed, the pass is aborted like an outage: the verdicts gathered so far
+# lapse with the abort and the rows go back with their delivery refunded. A pass
+# of one file never escalates, because one file is the case of the report.
+GATEWAY_SAME_STATUS_OUTAGE_AFTER: Final = 5
 
 # Everything the poller talks to, as a type. The defaults are the production
 # wiring and a test replaces them one by one.
@@ -574,6 +588,11 @@ class Poller:
         self._gateway: GatewayClient | None = None
         self._queue: DocumentQueue | None = None
         self._held: set[int] = set()
+        # The refusals of the pass in flight, HTTP status to the number of
+        # files, and how many files the pass claimed: the two figures the
+        # threshold of E-40-06-02 is decided on. Both start over in _work.
+        self._refusals: dict[int, int] = {}
+        self._claimed_in_pass = 0
         self._cooldown = 0.0
         # Passes in a row whose claim came back unanswered, and whether the
         # retreat has been said out loud already. Both belong to the poller and
@@ -1114,6 +1133,10 @@ class Poller:
         done: list[int] = []
         failed: dict[int, str] = {}
         verdicts: list[_Verdict] = []
+        # The threshold of E-40-06-02 counts per pass, so a refusal of the pass
+        # before never adds to this one.
+        self._refusals = {}
+        self._claimed_in_pass = len(jobs)
         # File ids, not queue ids: the requeue is about the file, and the row it
         # belongs to may not even exist for the caller that comes in plan 03-12.
         handover: list[int] = []
@@ -1518,6 +1541,21 @@ class Poller:
             # row leaves the queue with a reason a status page can show.
             self._collect(job, ExtractionOutcome.skipped(Reason.TOO_LARGE), done, failed, verdicts)
             return 0
+        except GatewayRefused as refused:
+            # The gateway answered, so it is up, and the answer is about this
+            # one file (E-40-06-01). The case of issue #36 ends here: a file on
+            # a mount whose storage is not available, fopen throws on the PHP
+            # side, the gateway answers 500, and before 1.6.0 the whole pass
+            # went back with the delivery refunded, the id sorted claim took
+            # the same head batch again and the queue stood for good. Now it is
+            # one verdict and no unlock, so the delivery counts and the rest of
+            # the pass is judged as usual. A 404 for such a mount is not the
+            # answer (E-40-06-03 struck): that would be a lasting skipped(gone)
+            # for a storage that may be back tomorrow. The count below turns
+            # the same refusal for many files into an outage (E-40-06-02).
+            self._count_refusal(refused)
+            self._collect(job, ExtractionOutcome.failed(Reason.GATEWAY_ERROR), done, failed, verdicts)
+            return 0
         except ShortRead:
             # Short twice in a row, and the two answers differ; the same short
             # answer twice is the file and never gets here (POL-02, see
@@ -1682,6 +1720,12 @@ class Poller:
             read = await self._fetch_file(job)
         except FileTooLargeError:
             return _ScanResult(job, ExtractionOutcome.skipped(Reason.TOO_LARGE))
+        except GatewayRefused as refused:
+            # The rule of the content branch: one verdict for the one file the
+            # gateway refused, and the count of E-40-06-02. Counted in the loop
+            # thread like everything else of a task, so no lock is needed.
+            self._count_refusal(refused)
+            return _ScanResult(job, ExtractionOutcome.failed(Reason.GATEWAY_ERROR))
         if read is None:
             return _ScanResult(job, ExtractionOutcome.skipped(Reason.GONE))
 
@@ -1979,8 +2023,12 @@ class Poller:
     async def _fetch_file(self, job: QueueJob) -> _Read | None:
         """Stream one file into scratch, hashing it on the way.
 
-        Returns None when the gateway refuses the file, and raises
-        :class:`_GatewayDown` for everything else: a permission verdict and an
+        Returns None when the gateway says the file is not this user's (404,
+        998), raises :class:`GatewayRefused` on to the caller when the gateway
+        answered with another error about this one file (E-40-06-01, the
+        caller judges it failed(gateway_error)), and raises :class:`_GatewayDown`
+        for a proxy answer (502, 503, 504) and for everything that is no HTTP
+        answer at all: a permission verdict, a verdict about one file and an
         unreachable server must never be mistaken for one another.
 
         **A short answer is fetched once more, at once** (D-29-04). The gateway
@@ -2041,6 +2089,15 @@ class Poller:
             # A passing fault of this one download and never a gateway
             # problem either: the cut bytes go, and the pass goes on.
             _discard(scratch)
+            raise
+        except GatewayRefused as refused:
+            # An answer about this one file and never an outage (E-40-06-01):
+            # the scratch goes like in the two branches above, and the caller
+            # judges the file. Status and file id, never a name (T-02-56).
+            _discard(scratch)
+            LOGGER.warning(
+                "content gateway refused one file, http status %d for file id %d", refused.status, job.file_id
+            )
             raise
         except Exception as error:
             _discard(scratch)
@@ -2225,6 +2282,25 @@ class Poller:
         if self.busy:
             return False
         return self._track.release_cutter()
+
+    def _count_refusal(self, refused: GatewayRefused) -> None:
+        """Count one refusal of this pass; raise _GatewayDown at the threshold.
+
+        The threshold is E-40-06-02: the same status for min(5, claimed) files
+        of one pass, with at least two claimed, is a state of the instance and
+        not of the files. The abort that follows drops whatever the pass
+        gathered, and the rows go back with their delivery refunded.
+        """
+        count = self._refusals.get(refused.status, 0) + 1
+        self._refusals[refused.status] = count
+        claimed = self._claimed_in_pass
+        if claimed >= 2 and count >= min(GATEWAY_SAME_STATUS_OUTAGE_AFTER, claimed):
+            LOGGER.warning(
+                "content gateway refused %d files of this pass with http status %d, taken as an outage",
+                count,
+                refused.status,
+            )
+            raise _GatewayDown
 
     async def _abort(
         self,
@@ -2516,6 +2592,7 @@ __all__ = [
     "EMBED_INCOMPLETE",
     "EMBED_NO_STORED_TEXT",
     "EMBED_WRITTEN",
+    "GATEWAY_SAME_STATUS_OUTAGE_AFTER",
     "POLLER_STOP_SECONDS",
     "RETREAT_AFTER_ROUNDS",
     "RETREAT_MAX_SECONDS",

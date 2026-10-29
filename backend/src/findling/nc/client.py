@@ -149,6 +149,16 @@ _NOT_ACCESSIBLE_STATUS = frozenset({404, 998})
 
 _FIRST_ERROR_STATUS = 400
 
+# Answers that mean "the gateway is not there", never "this file" (E-40-06-01,
+# issue #36). 502, 503 and 504 are what a reverse proxy says about a server
+# behind it that is down, overloaded or too slow, and that is a statement about
+# the whole instance: the pass stops and the rows go back with their delivery
+# refunded. Every other status from 400 on is the gateway answering, so it is
+# up, and the answer belongs to the one file it was asked about (GatewayRefused
+# below). The grid comes from the analysis of issue #36 in
+# .planning/phases/40-haertung-und-store-einreichung-1-6-0/deferred-items.md.
+_OUTAGE_STATUS = frozenset({502, 503, 504})
+
 # Fallbacks for the two environment variables the client library uses to
 # configure transport. Mirrored rather than invented, so an admin who sets
 # NPA_NC_CERT for a private CA or NPA_TIMEOUT_DAV for a slow disk keeps both
@@ -275,6 +285,29 @@ class ShortRead(Exception):
         self.content_hash = content_hash
 
 
+class GatewayRefused(NextcloudException):
+    """The gateway answered with an error about this one file (E-40-06-01).
+
+    Any status from 400 on except the two of "not yours" (None) and the three
+    of a proxy (an outage): the gateway is up and has said something about
+    this file, so the poller ends the file with failed(gateway_error) and the
+    pass goes on (issue #36, Befund B). This is where the case of the report
+    lands: a file on a mount whose storage is not available, where fopen
+    throws StorageNotAvailableException and the gateway answers 500 out of its
+    catch-all branch. A 404 for such a mount is deliberately not introduced on
+    the PHP side (E-40-06-03 struck, plan 40-06 "Warum kein PHP-404"): 404 is
+    a lasting skipped(gone), and a storage that is back tomorrow would never
+    bring its files into the index again.
+
+    ``status`` is the HTTP status. The message carries the file id and the
+    status and nothing else: no name, no path, no user (T-02-56).
+    """
+
+    def __init__(self, status: int, *, file_id: int) -> None:
+        super().__init__(status, reason=f"content gateway refused file id {file_id} with status {status}")
+        self.status = status
+
+
 async def _stream_file(
     client: httpx.AsyncClient,
     header_user: str,
@@ -305,7 +338,9 @@ async def _stream_file(
             # The body is deliberately not read. It may be an OCS error document,
             # it may be a page of HTML from a reverse proxy, and the status code
             # is the entire verdict either way.
-            raise NextcloudException(response.status_code, reason=f"content gateway refused file id {file_id}")
+            if response.status_code in _OUTAGE_STATUS:
+                raise NextcloudException(response.status_code, reason=f"content gateway refused file id {file_id}")
+            raise GatewayRefused(response.status_code, file_id=file_id)
 
         async for chunk in response.aiter_bytes(CHUNK_SIZE):
             written += len(chunk)

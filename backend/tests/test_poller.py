@@ -1254,8 +1254,9 @@ async def test_a_refused_scan_is_a_verdict_and_the_other_scans_are_read(
     store: Store, writer: IndexBatchWriter, tmp_path: Path
 ) -> None:
     # The same rule on the OCR track: a scan the gateway refuses ends as
-    # failed(gateway_error), the scans beside it are read as usual.
-    jobs = (_ocr_row(0), _ocr_row(1), _ocr_row(2))
+    # failed(gateway_error), the scan beside it is read as usual. Two rows,
+    # because Economy keeps two OCR rows per slot and hands the rest back.
+    jobs = (_ocr_row(0), _ocr_row(1))
     queue = _FakeQueue(ClaimResult(jobs=jobs))
     poller = _slot_poller(
         store=store,
@@ -1271,7 +1272,7 @@ async def test_a_refused_scan_is_a_verdict_and_the_other_scans_are_read(
 
     assert result.state == ROUND_WORKED
     assert queue.unlocked == []
-    assert queue.acknowledged == [([300, 302], {301: "gateway_error"})]
+    assert queue.acknowledged == [([300], {301: "gateway_error"})]
     row = store.file_row(7001)
     assert row is not None
     assert (row["state"], row["reason"]) == ("failed", "gateway_error")
