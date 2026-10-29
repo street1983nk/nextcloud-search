@@ -65,8 +65,8 @@ Tag-Läufe alle success, keine Wiederholung: Release 40864595574, PHP and store 
 | Commit | Inhalt |
 |---|---|
 | cb65aa61 | docs(40-05): release 1.6.0 evidence |
-| (folgt) | docs(40-05): store submission 1.6.0 evidence (docs/store-listing.md) |
-| (folgt) | docs(40-05): store submission 1.6.0 state (.planning) |
+| 09251d04 | docs(40-05): store submission 1.6.0 evidence (docs/store-listing.md) |
+| b8d804d3 | docs(40-05): store submission 1.6.0 state (.planning) |
 
 ## Deviations from Plan
 
