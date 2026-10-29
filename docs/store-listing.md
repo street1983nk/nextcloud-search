@@ -2708,6 +2708,63 @@ annehmen (`backend/tests/test_workflow_tag_triggers.py`).
 
 ---
 
+# Entwurf v1.6.0 (Gesamttext), abgenommen am 29.10.2026
+
+**Owner-Abnahme 29.10.2026 in einer Remote-Runde (alle Punkte wie empfohlen,
+GO für Tag und Einreichung); Wortlaut, Datum und Kanal in
+`.planning/phases/40-haertung-und-store-einreichung-1-6-0/40-ABNAHME.md`.**
+Grundlage: `40-OWNER-VORLAGE.md` derselben Phase.
+
+Namen und Beschreibungen wie 1.5.1, Doku-Links auf blob/v1.6.0, discussion-Link neu.
+Store-Changelog ist CHANGELOG.md, Abschnitt [1.6.0], unverändert.
+`backend/tests/test_store_metadata.py` hält diesen Abschnitt gegen
+`php/l10n/de.json` und die Release-Notiz gegen den Compare-Link
+(`scan_full_text_1_6_0`).
+
+## Teil 1: die Sätze der Admin-Seite
+
+Mehrfachzählungs-Satz (geändert, Plan 39-01):
+
+- en: External storages mounted once per user are counted once per mount here, so the same file can stand in this figure several times.
+- de: Je Nutzer einmal eingebundene externe Speicher werden hier je Einbindung gezählt, dieselbe Datei kann daher mehrfach in dieser Zahl stehen.
+- fr: Les stockages externes montés une fois par utilisateur sont comptés ici une fois par montage, le même fichier peut donc figurer plusieurs fois dans ce chiffre.
+
+Satz bei null bewusst ausgelassenen Dateien (neu, Plan 39-01):
+
+- en: Nothing is left out on purpose right now. Files that are too large, of a type Findling does not read, or excluded by a rule would be counted here, and they are not in the denominator above.
+- de: Derzeit ist nichts bewusst ausgelassen. Hier stünden Dateien, die zu groß sind, von einem Typ, den Findling nicht liest, oder durch eine Regel ausgeschlossen, und sie zählen nicht im Nenner darüber.
+- fr: Rien n'est volontairement laissé de côté pour l'instant. Seraient comptés ici les fichiers trop volumineux, d'un type que Findling ne lit pas, ou exclus par une règle, et ils ne figurent pas au dénominateur ci-dessus.
+
+Hinweis nach einer Änderung der Ausschlussregeln (neu, Plan 39-01):
+
+- en: The exclusion rules were changed. The search applies them at once, the counters on this page follow once they have been worked out again.
+- de: Die Ausschlussregeln wurden geändert. Die Suche wendet sie sofort an, die Zähler auf dieser Seite folgen, sobald sie neu ermittelt sind.
+- fr: Les règles d'exclusion ont été modifiées. La recherche les applique immédiatement, les compteurs de cette page suivent dès qu'ils ont été recalculés.
+
+Stummes Content-Gateway (neu, Plan 40-06, Issue #36):
+
+- en: The content gateway did not answer on the last indexing pass. The affected files stay in the queue and are tried again; the search keeps answering.
+- de: Das Content-Gateway hat beim letzten Indexierungslauf nicht geantwortet. Die betroffenen Dateien bleiben in der Warteschlange und werden erneut versucht; die Suche antwortet weiter.
+- fr: La passerelle de contenu n'a pas répondu lors du dernier passage d'indexation. Les fichiers concernés restent dans la file d'attente et seront réessayés. La recherche continue de répondre.
+
+## Teil 2: Release-Notiz v1.6.0
+
+```
+Findling 1.6.0. Both apps need to be on 1.6.0.
+- A file the content gateway refuses no longer blocks indexing: it ends as failed (gateway_error), the rest of the pass goes on, and the log names the HTTP status (#36).
+- A content gateway that does not answer is named on the admin page and in /status; an aborted pass leaves no half indexed document, and the search keeps answering on a broken mount (#36).
+- /status answers at once, the language fill level is measured in the background (#19).
+- Coverage counts SMB and SFTP mounts with a per-user login once per share; new hints when nothing is left out and after a change of the exclusion rules.
+- The tunnel watcher reports a reissued HaRP certificate and takes over new files under /certs/frp without a new registration (docs/harp-tunnel.md).
+- Discussion link in the store; security and dependency updates (filelock CVE fixes, fastapi, pypdf, striprtf).
+**Full Changelog**: https://github.com/street1983nk/nextcloud-search/compare/v1.5.1...v1.6.0
+```
+
+Tag-Links `blob/v1.6.0` und der Compare-Link lösen erst nach dem Tag auf;
+Prüfung vor der Einreichung (Plan 40-05).
+
+---
+
 # Entwurf v1.6.0 (Teil Phase 37), abgenommen am 28.10.2026
 
 Owner-Entscheide D-37-05 bis D-37-08 vom 28.10.2026 ("wie empfohlen",

@@ -107,6 +107,7 @@ zero elements and look healthy.
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 from typing import cast
@@ -1412,6 +1413,87 @@ def scan_phase_37_draft(source: str) -> list[str]:
     return violations
 
 
+FULL_TEXT_1_6_0 = "# Entwurf v1.6.0 (Gesamttext)"
+DE_CATALOGUE = REPO_ROOT / "php" / "l10n" / "de.json"
+# The English source sentences of the admin page that the owner accepted on
+# 29.10.2026 (plan 40-04): three of plan 39-01 and the one of plan 40-06. The
+# catalogue is keyed by them, so their German values are looked up, never typed.
+ACCEPTED_SENTENCES_1_6_0 = (
+    (
+        "External storages mounted once per user are counted once per mount here, "
+        "so the same file can stand in this figure several times."
+    ),
+    (
+        "Nothing is left out on purpose right now. Files that are too large, of a type Findling does not read, "
+        "or excluded by a rule would be counted here, and they are not in the denominator above."
+    ),
+    (
+        "The exclusion rules were changed. The search applies them at once, "
+        "the counters on this page follow once they have been worked out again."
+    ),
+    (
+        "The content gateway did not answer on the last indexing pass. "
+        "The affected files stay in the queue and are tried again; the search keeps answering."
+    ),
+)
+FULL_CHANGELOG_1_6_0 = "**Full Changelog**: https://github.com/street1983nk/nextcloud-search/compare/v1.5.1...v1.6.0"
+
+
+def scan_full_text_1_6_0(source: str, catalogue: dict[str, str]) -> list[str]:
+    """The full text 1.6.0 in docs/store-listing.md against php/l10n/de.json (plan 40-04).
+
+    The section opens with the line that starts with FULL_TEXT_1_6_0 and reaches
+    up to the next heading of the first level. It has to carry an approval date,
+    every accepted sentence in the German wording of the catalogue character for
+    character, and a release note whose last line in its code block is the Full
+    Changelog line v1.5.1...v1.6.0.
+    """
+    offset = 0
+    heading = None
+    for line in source.splitlines(keepends=True):
+        if line.startswith(FULL_TEXT_1_6_0):
+            heading = line.rstrip("\r\n")
+            break
+        offset += len(line)
+    if heading is None:
+        return [f"docs/store-listing.md: has no section {FULL_TEXT_1_6_0!r}"]
+
+    section = source[offset:].split("\n# ", 1)[0]
+    flat = collapse(section)
+    violations: list[str] = []
+
+    if APPROVAL_DATE.search(heading) is None:
+        violations.append(
+            f"docs/store-listing.md: the heading {heading!r} carries no approval date "
+            f"in the form 'abgenommen am TT.MM.JJJJ'"
+        )
+    for english in ACCEPTED_SENTENCES_1_6_0:
+        german = catalogue.get(english)
+        if german is None:
+            violations.append(f"php/l10n/de.json: has no entry for the accepted sentence {english!r}")
+        elif german not in flat:
+            violations.append(
+                f"docs/store-listing.md: the section {FULL_TEXT_1_6_0!r} does not carry {german!r} "
+                f"character for character as php/l10n/de.json has it"
+            )
+
+    blocks = section.split("```")
+    note = blocks[1] if len(blocks) >= 3 else ""
+    lines = [line.strip() for line in note.splitlines() if line.strip()]
+    if not lines or lines[-1] != FULL_CHANGELOG_1_6_0:
+        violations.append(
+            f"docs/store-listing.md: the release note in {FULL_TEXT_1_6_0!r} does not end with {FULL_CHANGELOG_1_6_0!r}"
+        )
+
+    return violations
+
+
+def _german_catalogue() -> dict[str, str]:
+    """The translations of php/l10n/de.json, English source sentence to German."""
+    data = json.loads(DE_CATALOGUE.read_text(encoding="utf-8"))
+    return cast("dict[str, str]", data["translations"])
+
+
 def _sources() -> list[tuple[str, str]]:
     """The three files this gate reads, as (name, source)."""
     return [(path.name, path.read_text(encoding="utf-8")) for path in (PHP_INFO, BACKEND_INFO, README)]
@@ -2659,3 +2741,80 @@ def test_the_privacy_scan_says_nothing_about_what_the_three_paragraphs_mean() ->
     rewritten = _CLEAN_PRIVACY.replace("kein Dateiinhalt geht vom Server fort.", "etwas ganz anderes.")
 
     assert scan_privacy_paragraph("sample.xml", rewritten) == []
+
+
+# -- the full text 1.6.0 (plan 40-04) ----------------------------------------
+def test_the_full_text_1_6_0_carries_its_date_the_accepted_sentences_and_the_release_note() -> None:
+    assert scan_full_text_1_6_0(STORE_LISTING.read_text(encoding="utf-8"), _german_catalogue()) == []
+
+
+_FULL_TEXT_CATALOGUE = {english: f"Deutsch {index}." for index, english in enumerate(ACCEPTED_SENTENCES_1_6_0)}
+
+
+def _full_text_sample(heading: str = f"{FULL_TEXT_1_6_0}, abgenommen am 29.10.2026") -> str:
+    """A store listing whose full text 1.6.0 carries every part the gate asks for."""
+    return "\n".join(
+        [
+            "# Earlier section",
+            "",
+            heading,
+            "",
+            *(f"- de: {german}" for german in _FULL_TEXT_CATALOGUE.values()),
+            "",
+            "```",
+            "Findling 1.6.0.",
+            FULL_CHANGELOG_1_6_0,
+            "```",
+            "",
+            "# Entwurf v1.6.0 (Teil Phase 37), abgenommen am 28.10.2026",
+            "",
+            "```",
+            FULL_CHANGELOG_1_6_0,
+            "```",
+            "",
+        ]
+    )
+
+
+def test_the_clean_full_text_sample_is_clean() -> None:
+    assert scan_full_text_1_6_0(_full_text_sample(), _FULL_TEXT_CATALOGUE) == []
+
+
+def test_a_store_listing_without_the_full_text_1_6_0_is_reported() -> None:
+    listing = _full_text_sample().replace(FULL_TEXT_1_6_0, "# Gone", 1)
+
+    assert scan_full_text_1_6_0(listing, _FULL_TEXT_CATALOGUE) == [
+        f"docs/store-listing.md: has no section {FULL_TEXT_1_6_0!r}"
+    ]
+
+
+def test_a_full_text_without_an_approval_date_is_reported() -> None:
+    violations = scan_full_text_1_6_0(_full_text_sample(FULL_TEXT_1_6_0), _FULL_TEXT_CATALOGUE)
+
+    assert len(violations) == 1
+    assert "carries no approval date" in violations[0]
+
+
+def test_a_german_sentence_that_drifted_from_the_catalogue_is_reported() -> None:
+    listing = _full_text_sample().replace("Deutsch 2.", "Deutsch zwei.", 1)
+    violations = scan_full_text_1_6_0(listing, _FULL_TEXT_CATALOGUE)
+
+    assert len(violations) == 1
+    assert "'Deutsch 2.'" in violations[0]
+
+
+def test_a_sentence_the_catalogue_lost_is_reported() -> None:
+    catalogue = dict(_FULL_TEXT_CATALOGUE)
+    del catalogue[ACCEPTED_SENTENCES_1_6_0[0]]
+    violations = scan_full_text_1_6_0(_full_text_sample(), catalogue)
+
+    assert len(violations) == 1
+    assert violations[0].startswith("php/l10n/de.json: has no entry")
+
+
+def test_a_release_note_without_the_full_changelog_line_is_reported_even_when_a_later_section_has_it() -> None:
+    listing = _full_text_sample().replace(f"{FULL_CHANGELOG_1_6_0}\n```\n\n# Entwurf", "```\n\n# Entwurf", 1)
+    violations = scan_full_text_1_6_0(listing, _FULL_TEXT_CATALOGUE)
+
+    assert len(violations) == 1
+    assert "does not end with" in violations[0]
