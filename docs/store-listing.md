@@ -2918,7 +2918,10 @@ Resilience 40864595571. Der Beleg-Commit cb65aa61 war mit Security scans
       11:49:20Z, 11:49:33Z, 11:49:55Z, 11:52:50Z und 11:53:11Z:
       findling_backend führt jedes Mal noch 1.5.1 als neueste Fassung
       (Katalog-Cache wie bei 1.4.3 und 1.5.0), während die App-Seite 1.6.0
-      bereits nennt. Die Nachführung des Katalogs wird nachgeholt.
+      bereits nennt.
+    - 12:05:28Z Katalog `api/v1/appapi_apps.json`: findling_backend führt
+      1.6.0 als neueste Fassung (Abruf alle fünf Minuten ab 12:00:28Z, dort
+      noch 1.5.1). Die Nachführung ist damit belegt.
 
 ---
 
