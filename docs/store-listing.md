@@ -2810,6 +2810,89 @@ hat der Owner mit D-37-08 bewusst so belassen.
 
 ---
 
+# Release 1.6.0 (29.10.2026)
+
+Store-Text und Release-Notiz sind die am 29.10.2026 abgenommene Fassung oben
+("Entwurf v1.6.0 (Gesamttext)"). Owner-GO für Tag und Einreichung in
+`.planning/phases/40-haertung-und-store-einreichung-1-6-0/40-ABNAHME.md`
+(Zeile `GO: ja`, 29.10.2026), dort auch der Tag-Kopf mit seinen grünen
+Läufen vor dem Tag.
+
+Belegkette:
+
+1. `git rev-list -n 1 v1.6.0` = `91a0603f2b69213037c0d8ac2101121f9ba767b2`
+   (der Tag-Kopf aus 40-ABNAHME.md), `git cat-file -t v1.6.0` = tag,
+   Tag-Objekt 82ffcaa0, Nachricht "Findling 1.6.0", gesetzt
+   2026-10-29T11:20:11Z.
+2. Release-Lauf 40864595574 (`release.yml`, Job 123416042926) success.
+   `gh release view v1.6.0 --json assets --jq '.assets | length'` = 9:
+   findling.tar.gz, findling.tar.gz.sig, findling_backend.tar.gz,
+   findling_backend.tar.gz.sig, findling-1.6.0-source.tar.gz,
+   pillow_heif-1.8.1.tar.gz, x265_4.3.tar.gz, libde265-1.1.3.tar.gz,
+   libheif-1.23.6.tar.gz. Release
+   https://github.com/street1983nk/nextcloud-search/releases/tag/v1.6.0,
+   veröffentlicht 2026-10-29T11:21:11Z, kein Draft, kein Pre-Release, latest.
+3. Bytezahlen: findling.tar.gz 642813, findling_backend.tar.gz 43647 (beide
+   unter 20.971.520 B), je .sig 684, findling-1.6.0-source.tar.gz 26252765,
+   pillow_heif-1.8.1.tar.gz 17395786, x265_4.3.tar.gz 2052112,
+   libde265-1.1.3.tar.gz 324452, libheif-1.23.6.tar.gz 2373898. Aus dem Log
+   des Release-Laufs:
+   - `dist/findling.tar.gz is 642813 bytes, the store limit is 20971520`, danach `Verified OK`
+   - `dist/findling_backend.tar.gz is 43647 bytes, the store limit is 20971520`, danach `Verified OK`
+
+   `gh release view v1.6.0 --json isImmutable` = `{"isImmutable":true}`;
+   Gegenprobe `gh api .../releases/tags/v1.6.0 --jq .immutable` = true.
+   SHA-256 der Pakete nach Download: findling.tar.gz
+   890d861d3d3f45139e8926f011504de4111d2d714047dfd880e5bcb1222c3f03,
+   findling_backend.tar.gz
+   12f3fe9bcec822be10facfcf8695b64d368c896bb559231cd8745a7c27e6ccab.
+4. Quellpflicht: `gh release download v1.6.0 -p 'pillow_heif-*' -p 'x265_*'
+   -p 'libde265-*' -p 'libheif-*'` in ein frisches Verzeichnis, darauf
+   `corresponding_source.py --verify-only`: alle vier Zeilen "ok" mit den
+   Hashes aus THIRD-PARTY.md, Exitcode 0. `tar -tzf
+   findling-1.6.0-source.tar.gz`: 3262 Einträge, alle mit Präfix
+   `findling-1.6.0/`; `git get-tar-commit-id` = 91a0603f (der Tag-Commit).
+5. Image `ghcr.io/street1983nk/findling_backend:1.6.0` anonym über die
+   Registry-API (Token von `ghcr.io/token`, kein lokales docker): OCI-Index
+   sha256:2107130e57b8be2f75b65458b873ff57ce46571eb7f98a518f52bfdcbe9e3662
+   mit linux/amd64
+   (sha256:5d3f0afd78c02e44ad0bd5b65c8307658fc96f8e3cb8ee35cfd98aa4d1e3a536)
+   und linux/arm64
+   (sha256:6a6784926bbe009fed016110726d11d189e37ac1d8cb5ecb5fafaa6f9c2737bf);
+   zwei weitere Einträge unknown/unknown sind Attestierungen. Image-Lauf
+   40864595511 success.
+6. Release-Notiz: `gh release edit v1.6.0 --notes-file <tmp>`, Exitcode 0;
+   die ersten acht Zeilen des Release-Texts sind per diff gleich dem
+   Codeblock "Teil 2: Release-Notiz v1.6.0" oben, danach der generierte
+   Block "What's Changed" (Dependabot-PRs #34 und #35). Die generierte Zeile
+   "Full Changelog" ist entfallen, weil die Notiz die abgenommene Zeile
+   trägt; der Vergleichslink v1.5.1...v1.6.0 antwortet mit 200. Das Release
+   bleibt danach `isImmutable: true` mit neun Assets.
+7. Tag-Links: alle URLs mit `blob/v1.6.0` oder `tree/v1.6.0` aus
+   docs/store-listing.md (keine vor diesem Abschnitt), den drei READMEs
+   (keine), php/templates/admin.php (keine, bleibt auf `blob/v1.5.0`) und
+   beiden info.xml (je 3), sortiert eindeutig, je `curl -sIL`:
+   - 200 https://github.com/street1983nk/nextcloud-search/blob/v1.6.0/docs/migrate-from-fulltextsearch.en.md
+   - 200 https://github.com/street1983nk/nextcloud-search/blob/v1.6.0/docs/migrate-from-fulltextsearch.fr.md
+   - 200 https://github.com/street1983nk/nextcloud-search/blob/v1.6.0/docs/migrate-from-fulltextsearch.md
+8. Fremdinstallation aus den echten Release-Assets: `gh workflow run
+   deploy-harp.yml --ref main -f release_tag=v1.6.0`, Lauf 40865691730
+   success, alle vier Matrixzeilen grün: stable33 amd64 (123419787027),
+   stable34 amd64 (123419787299), stable34 arm64 auf ubuntu-24.04-arm
+   (123419787416), stable35 amd64 (123419787533). Jede Zeile meldet
+   `RELEASE_TAG: v1.6.0`, lädt
+   `https://github.com/street1983nk/nextcloud-search/releases/download/v1.6.0/findling.tar.gz`
+   und `.../findling_backend.tar.gz` und nennt im Schritt "Store install 1
+   from the release" dieselben SHA-256 wie der Download unter (3).
+
+Tag-Läufe auf v1.6.0, alle sieben success, keine Wiederholung: Release
+(`release.yml`) 40864595574, PHP and store metadata gates 40864595622,
+Multi-arch image 40864595511, HaRP deploy 40864595641 (vier Matrixzeilen,
+Pakete im Lauf gebaut), Python gates 40864595569, Integration 40864595676,
+Resilience 40864595571.
+
+---
+
 # Release 1.5.1 (22.10.2026): Umbenennung
 
 Kein Funktionsentscheid und kein Entwurf der Beschreibungen: 1.5.1 ändert nur
