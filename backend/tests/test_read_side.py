@@ -33,7 +33,7 @@ from findling.api import resources
 from findling.config import settings
 from findling.index.open import LANGUAGES_MARK
 from findling.index.rebuild import stamp_after_swap
-from findling.index.schema import FIELD_BODY_ES, FIELD_BODY_NL, FIELD_FILE_ID
+from findling.index.schema import FIELD_BODY_DE, FIELD_BODY_ES, FIELD_BODY_NL, FIELD_FILE_ID
 from findling.index.writer import IndexRecord
 from findling.query.rewrite import LEGACY_PLAN, build_query
 from findling.store.repo import EMBEDDING_MARK, Store, open_store
@@ -632,6 +632,11 @@ def test_a_state_database_without_an_index_directory_is_none_and_not_an_error(vo
 
     assert resources.read_side() is None
     assert resources.filled_languages() == ()
+    # The fill level is measured by a background refresh since issue #19
+    # (candidate F), and the refresh has to find the same nothing: no index,
+    # no reading, no moment of one, and nothing raised on the way.
+    resources.join_fill_refresh()
+    assert resources.filled_languages_as_of() == ((), None)
 
 
 def test_the_read_side_answers_nothing_while_a_directory_swap_is_between_its_renames(
@@ -728,15 +733,24 @@ def test_a_fill_level_measured_before_a_reset_is_answered_and_not_remembered(
     This is the reading a rebuild exists to move. A cache entry filled from the
     retired directory has the admin page report the old chains for the whole
     thirty second window, right after the run that filled the new ones.
+
+    Since issue #19 (candidate F) the measurement runs in a background refresh
+    and no longer in the call, so the race sits in the write path of that
+    refresh: the reset lands while the refresh walks the dictionary, the
+    refresh measures de all the same, and its reading stays out of the cache.
     """
     del indexed_volume
     real = resources.read_side()
     assert real is not None
+    measured: list[str] = []
 
     class _AChainThatResetsWhileItIsAsked:
         def terms_with_prefix(self, field: str, prefix: str, limit: int | None = None) -> Sequence[object]:
             resources.reset_read_side()
-            return real.index.searcher().terms_with_prefix(field, prefix, limit=limit)
+            answer = real.index.searcher().terms_with_prefix(field, prefix, limit=limit)
+            if answer:
+                measured.append(field)
+            return answer
 
     class _AnIndexThatMovesUnderTheProbe:
         def searcher(self) -> _AChainThatResetsWhileItIsAsked:
@@ -751,7 +765,10 @@ def test_a_fill_level_measured_before_a_reset_is_answered_and_not_remembered(
     )
     monkeypatch.setattr(resources, "read_side", lambda: staged)
 
-    assert resources.filled_languages() == ("de",), "the reading is handed out"
+    assert resources.filled_languages() == ()
+    resources.join_fill_refresh()
+
+    assert measured == [FIELD_BODY_DE], "the refresh measured de, but did not write it"
     assert resources._FILLED is None, "and it is not remembered"
 
 

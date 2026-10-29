@@ -41,6 +41,8 @@ vector file that is not a database is the same answer for the same reason
 """
 
 import re
+import threading
+import time
 from collections.abc import Callable, Iterator
 from dataclasses import fields
 from pathlib import Path
@@ -137,6 +139,10 @@ FIELDS = {
     # Befund D of issue #36 (plan 40-06): since when the content gateway has
     # not answered, the first aborted pass of the streak, null while it answers.
     "gatewayUnavailableSince",
+    # Kandidat F of issue #19 (plan 40-06): the epoch second the fill level in
+    # languagesFilled was measured at, null while it never was. The fill level
+    # comes out of a cache that a background refresh keeps.
+    "languagesFilledAsOf",
 }
 
 # Six odd ids carry two permission rows, six even ones carry one.
@@ -1032,6 +1038,14 @@ def test_a_container_without_a_rebuild_answers_the_five_new_fields_with_their_de
     # it as the word "null" or as an empty line, depending on who renders it.
     assert answer["languagesActive"] == ",".join(settings().languages)
     assert answer["languagesFilled"] == ""
+    # The fill level is measured in the background since issue #19 (candidate
+    # F). With no index there is nothing to measure, so the answer after the
+    # refresh is the same empty line, and no moment of a measurement.
+    assert answer["languagesFilledAsOf"] is None
+    resources.join_fill_refresh()
+    again = _status(client, sign("admin"))
+    assert again["languagesFilled"] == ""
+    assert again["languagesFilledAsOf"] is None
     assert answer["rebuildRunning"] is False
     assert answer["rebuildDone"] == 0
     assert answer["rebuildTotal"] == 0
@@ -1077,9 +1091,14 @@ def test_the_filled_languages_name_the_chains_that_really_carry_terms(
     _index_with_a_second_chain(indexed_volume.root, "es")
     resources.reset_read_side()
 
+    # Since issue #19 (candidate F) the first poll starts the measurement and
+    # does not wait for it; the poll after the refresh carries the reading.
+    _status(client, sign("admin"))
+    resources.join_fill_refresh()
     answer = _status(client, sign("admin"))
 
     assert answer["languagesFilled"] == "de,es"
+    assert isinstance(answer["languagesFilledAsOf"], int)
 
 
 def test_the_searched_languages_name_the_chains_a_question_really_reaches(
@@ -1169,6 +1188,10 @@ def test_a_chain_that_is_switched_off_is_not_probed_at_all(
     )
     monkeypatch.setattr(resources, "read_side", lambda: staged)
 
+    # The refresh measures in the background since issue #19; the reading is
+    # there once it has run.
+    resources.filled_languages()
+    resources.join_fill_refresh()
     assert resources.filled_languages() == ("de",)
     assert counting.searcher_of_record.calls == 2, "German and the one switched on chain, and no other"
 
@@ -1207,6 +1230,8 @@ def test_one_chain_that_cannot_be_probed_does_not_take_the_other_five_with_it(
     )
     monkeypatch.setattr(resources, "read_side", lambda: staged)
 
+    resources.filled_languages()
+    resources.join_fill_refresh()
     assert resources.filled_languages() == ("de",), "the chain that answered is reported, the one that raised is not"
 
 
@@ -1237,17 +1262,35 @@ def test_the_fill_probe_runs_once_within_its_window_and_again_after_a_swap(
     # setting is de and en. Read out of the settings rather than written out, so
     # that the case says what it is about, namely the second round and not the
     # width of the first one.
+    # Since issue #19 (candidate F) a poll never measures; it starts one refresh
+    # and answers out of the cache. So the count is per refresh: the first poll
+    # finds nothing and starts one, every poll inside the window after it reads
+    # the cache and starts none.
     per_round = len(set(settings().languages) | {"de"})
+    assert resources.filled_languages() == ()
+    resources.join_fill_refresh()
     first = resources.filled_languages()
     second = resources.filled_languages()
+    resources.join_fill_refresh()
 
     assert first == second == ("de",)
-    assert counting.searcher_of_record.calls == per_round, "the second poll measured the volume a second time"
+    assert counting.searcher_of_record.calls == per_round, "a poll inside the window measured the volume a second time"
 
     # And the window is not a wall. The swap of a rebuild renames the directory
-    # under the process, so the verdict of the old one has to go with it.
+    # under the process, so the verdict of the old one has to go with it. The
+    # side after the swap is of the new generation, the one read_side() opens.
     resources.reset_read_side()
+    reopened = ReadSide(
+        index=cast(Index, counting),
+        store=real.store,
+        index_dir=real.index_dir,
+        vectors=real.vectors,
+        generation=resources._GENERATION,
+    )
+    monkeypatch.setattr(resources, "read_side", lambda: reopened)
 
+    assert resources.filled_languages() == ()
+    resources.join_fill_refresh()
     assert resources.filled_languages() == ("de",)
     assert counting.searcher_of_record.calls == 2 * per_round
 
@@ -1743,3 +1786,161 @@ def test_an_outage_of_the_gateway_is_reported_with_its_first_moment(
     poller_module._note_gateway_outage(1_800_000_000.5)
 
     assert _answer(client, sign, request, branch)["gatewayUnavailableSince"] == 1_800_000_000
+
+
+class _ASlowDictionary:
+    """A searcher whose probe waits until it is let go, and counts its rounds.
+
+    The stand-in for the walk over the term dictionary of a large index, 5.3 s
+    per chain on the 110k index of issue #19: the probe blocks on an event, so a
+    test can hold a refresh in the middle of its measurement for as long as it
+    asks its questions.
+    """
+
+    def __init__(self, real: Any) -> None:
+        self.real = real
+        self.release = threading.Event()
+        self.started = threading.Event()
+        self.calls = 0
+
+    def terms_with_prefix(self, field: str, prefix: str, limit: int | None = None) -> list[Any]:
+        self.calls += 1
+        self.started.set()
+        self.release.wait(timeout=10)
+        return self.real.terms_with_prefix(field, prefix, limit=limit)
+
+
+class _ASlowIndex:
+    def __init__(self, real: Index) -> None:
+        self.dictionary = _ASlowDictionary(real.searcher())
+        self.searchers = 0
+
+    def searcher(self) -> _ASlowDictionary:
+        self.searchers += 1
+        return self.dictionary
+
+
+# What "at once" means in the two cases below: far below the time the probe is
+# held, which is up to ten seconds, and above what one status answer of the
+# test volume costs on a slow runner.
+AT_ONCE_SECONDS = 2.0
+
+
+def _a_slow_side(monkeypatch: pytest.MonkeyPatch) -> _ASlowIndex:
+    real = resources.read_side()
+    assert real is not None
+    slow = _ASlowIndex(real.index)
+    staged = ReadSide(
+        index=cast(Index, slow),
+        store=real.store,
+        index_dir=real.index_dir,
+        vectors=real.vectors,
+        generation=real.generation,
+    )
+    monkeypatch.setattr(resources, "read_side", lambda: staged)
+    return slow
+
+
+def test_status_answers_at_once_while_a_fill_refresh_runs(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Issue #19, candidate F: /status ran into its timeout on a large index,
+    # because the fill level was measured inside the call and under the lock
+    # of the reading side. Now the first poll starts one refresh and answers at
+    # once, a poll while that refresh is in the middle of its walk answers at
+    # once as well and starts no second one, and a reader of the reading side
+    # is not held up by the walk either.
+    del indexed_volume
+    # The real reader, taken before the staging replaces it, because it is the
+    # one that runs under the lock of the reading side.
+    real_read_side = resources.read_side
+    slow = _a_slow_side(monkeypatch)
+
+    started = time.monotonic()
+    first = _status(client, sign("admin"))
+    assert time.monotonic() - started < AT_ONCE_SECONDS
+    assert slow.dictionary.started.wait(timeout=5), "the refresh never started its walk"
+
+    try:
+        started = time.monotonic()
+        during = _status(client, sign("admin"))
+        assert time.monotonic() - started < AT_ONCE_SECONDS
+        started = time.monotonic()
+        assert real_read_side() is not None
+        assert time.monotonic() - started < AT_ONCE_SECONDS
+        assert slow.searchers == 1, "a poll during the refresh started a second one"
+    finally:
+        slow.dictionary.release.set()
+    resources.join_fill_refresh()
+
+    assert first["languagesFilled"] == during["languagesFilled"] == ""
+    assert first["languagesFilledAsOf"] is None
+    assert during["languagesFilledAsOf"] is None
+    after = _status(client, sign("admin"))
+    assert after["languagesFilled"] == "de"
+    assert isinstance(after["languagesFilledAsOf"], int)
+    assert slow.searchers == 1
+
+
+def test_the_measurement_does_not_hold_the_lock_of_the_reading_side(
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The lock is the one read_side() and every search run under. The refresh
+    # takes it only to read and write the cache, never for the walk.
+    del indexed_volume
+    slow = _a_slow_side(monkeypatch)
+    resources.filled_languages()
+    assert slow.dictionary.started.wait(timeout=5)
+    try:
+        assert resources._LOCK.acquire(timeout=AT_ONCE_SECONDS), "the walk holds the lock of the reading side"
+        resources._LOCK.release()
+    finally:
+        slow.dictionary.release.set()
+    resources.join_fill_refresh()
+
+
+def test_a_stale_fill_level_is_answered_at_once_and_refreshed_once(
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Past the window the old reading still comes at once, with its own moment,
+    # and exactly one refresh replaces it. The moment never goes backwards and
+    # moves on to the new measurement.
+    del indexed_volume
+    resources.filled_languages()
+    resources.join_fill_refresh()
+    fresh, measured_at = resources.filled_languages_as_of()
+    assert fresh == ("de",)
+    assert isinstance(measured_at, int)
+    assert abs(measured_at - time.time()) < 60
+
+    # The window ran out: the monotonic moment of the entry is set back by more
+    # than FILLED_TTL_SECONDS, and the moment for the page is set back as well,
+    # so the refresh has to move it forward.
+    cached = resources._FILLED
+    assert cached is not None
+    resources._FILLED = (
+        cached[0],
+        cached[1] - resources.FILLED_TTL_SECONDS - 1,
+        measured_at - 120,
+        cached[3],
+    )
+    slow = _a_slow_side(monkeypatch)
+    try:
+        started = time.monotonic()
+        stale = [resources.filled_languages_as_of() for _ in range(3)]
+        assert time.monotonic() - started < AT_ONCE_SECONDS
+        assert stale == [(("de",), measured_at - 120)] * 3
+    finally:
+        slow.dictionary.release.set()
+    resources.join_fill_refresh()
+
+    assert slow.searchers == 1, "three stale reads started more than one refresh"
+    renewed, renewed_at = resources.filled_languages_as_of()
+    assert renewed == ("de",)
+    assert renewed_at is not None
+    assert renewed_at >= measured_at
