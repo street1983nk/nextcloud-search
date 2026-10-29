@@ -2336,8 +2336,19 @@ PHP_TREE_HASH_TODAY = "73bae603ef6cd62932bacdb956f5b69ee99d98df6bb24de31b99af7ca
 # PACKAGE_FILES_TODAY stays at 80. The PHP pair does not move. Recomputed
 # independently with find, sort, tr and sha256sum over the CRLF normalised
 # tree: 3c7df60a... both ways.
+#
+# Moved on 2026-10-29 by Plan 40-06 (issue #36 A, B, C, D): nc/client.py
+# raises GatewayRefused with the status for an answer about one file and keeps
+# 502, 503 and 504 an outage; worker/poller.py judges a refusal
+# failed(gateway_error) at both fetch sites, turns the same status for
+# min(5, claimed) files into an outage (E-40-06-02), logs the http status of an
+# outage, rolls the writer back in _abort and keeps the first moment of a
+# streak of outages; index/writer.py gains rollback(); api/status.py carries
+# gatewayUnavailableSince. No file came or went, so PACKAGE_FILES_TODAY stays at
+# 80. The PHP pair does not move. Recomputed independently with find, sort, tr
+# and sha256sum over the CRLF normalised tree: b05eb576... both ways.
 PACKAGE_FILES_TODAY = 80
-PACKAGE_TREE_HASH_TODAY = "3c7df60a708a2c90140797cb1557358db0e73f6da1d78d111059f98e1c50636c"
+PACKAGE_TREE_HASH_TODAY = "b05eb576d0189e1e7eebbefdfb4f1d3197ad6b89767fe2a428187676dabaf7c9"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
