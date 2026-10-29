@@ -34,7 +34,8 @@
 
 ### Release (REL)
 
-- [ ] **REL-06**: Findling 1.6.0 ist nach Owner-Abnahme im Store eingereicht (beide Apps, 2x HTTP 201 mit Beleg); UPGRADE_FROM_TAG steht auf v1.5.0, die Upgrade-Strecke 1.5.x -> 1.6.0 ist in CI gruen; Audit-Gate der Abschlussphase bestanden
+- [x] **REL-06**: Findling 1.6.0 ist nach Owner-Abnahme im Store eingereicht (beide Apps, 2x HTTP 201 mit Beleg); UPGRADE_FROM_TAG steht auf v1.5.0, die Upgrade-Strecke 1.5.x -> 1.6.0 ist in CI gruen; Audit-Gate der Abschlussphase bestanden
+  - Beleg (29.10.2026): Audit-Gate 40-AUDIT.md 0 CRIT / 0 HIGH / 0 MEDIUM; Upgrade-Strecke ab v1.5.0 gruen (40-03: HaRP deploy 40817178890, auf dem Tag HaRP deploy 40864595641 mit UPGRADE_FROM_TAG v1.5.0, vier Matrixzeilen); Owner-GO 40-ABNAHME.md (`GO: ja`); Tag v1.6.0 auf 91a0603f, Release 40864595574 mit 9 Assets, Fremdinstallation 40865691730; Store submission 40868132102: "release findling v1.6.0: HTTP 201" und "release findling_backend v1.6.0: HTTP 201" (docs/store-listing.md, Abschnitt "# Release 1.6.0")
 
 ## Future Requirements (nicht v1.6)
 
@@ -65,4 +66,4 @@ Gefuellt vom Roadmap-Schritt am 2026-10-28. Abdeckung: 11/11 v1.6-Anforderungen 
 | DOCS-02 | Phase 39 | Complete |
 | STORE-01 | Phase 37 | Complete |
 | STORE-02 | Phase 37 | Complete |
-| REL-06 | Phase 40 | Pending |
+| REL-06 | Phase 40 | Complete |

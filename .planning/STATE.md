@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
 status: executing
-stopped_at: Completed 38-02-PLAN.md
-last_updated: "2026-10-29T09:12:18.311Z"
-last_activity: 2026-10-28, Plan 38-02 abgeschlossen (deploy-harp 40696292903 gruen auf allen vier Beinen, Heilung 8 bis 19 s nach dem Kopieren)
+stopped_at: Completed 40-05-PLAN.md
+last_updated: "2026-10-29T11:55:00.000Z"
+last_activity: 2026-10-29, Plan 40-05 abgeschlossen (Tag v1.6.0, Store submission 40868132102 mit zweimal HTTP 201)
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 14
-  completed_plans: 12
-  percent: 75
+  completed_plans: 14
+  percent: 100
 ---
 
 # Project State
@@ -21,17 +21,16 @@ progress:
 Siehe .planning/PROJECT.md (Stand nach v1.5, Milestone v1.6 gestartet) und .planning/MILESTONES.md (v1.0 bis v1.5).
 
 **Core Value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 38, Zertifikatsrotation ohne Admin-Eingriff (38-01 und 38-02 erledigt, Phasenverifikation offen)
+**Current focus:** Phase 40, Haertung und Store-Einreichung 1.6.0 (alle sechs Plaene erledigt, 1.6.0 beider Apps eingereicht, Phasenverifikation offen)
 
 ## Current Position
 
-Phase: 38 von 37-40 (Zertifikatsrotation ohne Admin-Eingriff)
-Plan: 38-02 erledigt (2 von 2)
-Status: Phase 38 in progress
-Last activity: 2026-10-28, Plan 38-02 abgeschlossen (deploy-harp 40696292903 gruen auf allen vier Beinen, Heilung 8 bis 19 s nach dem Kopieren)
-Phase 39: 4 von 4 Plaenen erledigt (39-04 am 2026-10-28: Messung A6 Lauf 40716240639, D-39-01 = b Weg A nicht gebaut, D-39-02 Weg B vertagt auf v1.7, DEDUP-02 abgeschlossen); Verifikation offen
+Phase: 40 von 37-40 (Haertung und Store-Einreichung 1.6.0)
+Plan: 40-05 erledigt (6 von 6)
+Status: Phase 40 executed, Verifikation offen
+Last activity: 2026-10-29, Plan 40-05 abgeschlossen (Tag v1.6.0 auf 91a0603f, Store submission 40868132102 mit zweimal HTTP 201, beide App-Seiten nennen 1.6.0)
 
-Progress: [█████████░] 86%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -63,6 +62,7 @@ Progress: [█████████░] 86%
 - v1.6: 38-02 in ca. 130 min inkl. ca. 90 min CI (3 Tasks, 5 Dateien)
 - v1.6: 40-01 in ca. 190 min inkl. ca. 11 min Volltestlauf und ca. 55 min CI (3 Tasks, 13 Dateien)
 - v1.6: 40-02 in ca. 75 min inkl. ca. 40 min CI (2 Tasks, 7 Dateien)
+- v1.6: 40-05 in ca. 35 min (Fortsetzung nach Stopp) inkl. ca. 25 min CI (2 Tasks, 4 Dateien)
 - v1.5: 32-01 in ca. 50 min inkl. ca. 12 min Volltestlauf und ca. 25 min CI (2 Tasks, 8 Dateien)
 - v1.5: 32-02 in ca. 120 min inkl. Flake-Fix vorab, ca. 25 min Volltestläufe und ca. 45 min CI (2 Tasks, 9 Dateien)
 - v1.5: 32-03 in ca. 150 min inkl. ca. 7 min Korpus, ca. 35 min Messung, ca. 25 min Volltestläufe und ca. 30 min CI (2 Tasks, 5 Dateien plus Rohdaten)
@@ -107,6 +107,11 @@ Progress: [█████████░] 86%
 - 38-01 umgesetzt (13fbe79b RED, 4030301a GREEN): harp_connect.sh ist bash-Waechter vor frpc (FIFO plus read -t), x509 bei unveraenderten Dateien nur gemeldet (Plan 0/300/900/3600 s, dann stuendlich, Anker docs/harp-tunnel.md#repair-without-re-registering fuer 38-02), Neustart nur bei geaenderten und zweimal stabilen Dateien in mTLS, MIN_GAP 60 s, CAP 6 je Fenster, nie abwaerts, Exit 73 bei unschreibbarem Run-Verzeichnis, nie 0 nach frpc-Ende; shellcheck-Gate in python.yml (disable SC2317,SC2329 vor den Trap-Funktionen). WSL-Beweis nicht moeglich (nur docker-desktop-Distro), Ersatz Git-Bash-Lauf 22 von 24 gruen (2 Windows-Artefakte), CI-Lauf steht aus. ZERT-01 bleibt Pending bis 38-02 (Doku und Entwuerfe).
 - 38-02 umgesetzt (831e9351 RED, 701e7003 Probe, Fixes e8f1d236 und 76cabf39, 4889197f Doku und Entwuerfe, cf13ee09 Lauf-ID): deploy-harp-Schritt "Certificate rotation, a reissued HaRP CA heals after the three files are copied in" ohne if:, echte Neuausstellung (rm -rf /certs/frp plus HaRP-Neustart), Totfenster = mindestens 1 x509, mindestens 3 fehlgeschlagene Dials, 0 Logins (Abweichung von 'mindestens 2 x509', arm64 sagte nur jeden neunten Dial x509), Reparatur per docker exec -i ohne Re-Register und ohne Container-Neustart; Probe-Branch 40696292903 gruen, Heilung 8 bis 19 s. docs/harp-tunnel.md (Englisch). Entwuerfe Issue #33 und HaRP-Upstream im Phasenordner und auf dem Desktop, NICHT gepostet, kein 'Closes #33'.
 - 38-02 Nacharbeit shutdown-Pfad (a06b241e RED, 6e98c525 GREEN, 95ebc201 RED, 297b69ba Probe): Waechter meldet auch FINDLING_HARP_SUSPECT_AFTER_ERRORS (6) fehlgeschlagene Logins in Folge ohne x509, Probe assertiert x509 nicht mehr; probe2 40712263940 gruen auf vier Beinen (stable34 amd64 mit 0 x509), main 40717960907 Rotationsschritt auf vier Beinen gruen.
+- 40-01: Audit-Gate ueber alle v1.6-Aenderungen geschlossen mit 0 CRIT / 0 HIGH / 0 MEDIUM, sechs LOW (vier gefixt, F-40-06 accept fuer 1.6.0), 40-AUDIT.md.
+- 40-02: Version 1.6.0 in beiden Apps, Minor-Migration Version001600, CHANGELOG [1.6.0], Doku-Links blob/v1.6.0.
+- 40-03: UPGRADE_FROM_TAG v1.5.0 mit Neuableitung jeder startabhaengigen Zusicherung (40-03-ABLEITUNG.md) plus Zusicherung 12, HaRP deploy 40817178890 gruen.
+- 40-04: Owner-Runde 29.10.2026 alle Punkte wie empfohlen, GO fuer Tag und Einreichung, Tag-Kopf 91a0603f (40-ABNAHME.md).
+- 40-05: Tag v1.6.0 (91a0603f), Release 40864595574 mit 9 Assets, Fremdinstallation 40865691730, Store submission 40868132102 zweimal HTTP 201 (11:47:55Z, 11:47:57Z); appapi_apps.json fuehrte 15 min danach noch 1.5.1 (Cache-Verzug, Nachfuehrung offen).
 
 ### Decisions (Roadmap v1.5)
 
@@ -227,17 +232,19 @@ Items acknowledged and deferred at milestone close on 2026-10-28 (Owner-Wiedervo
 | Phase 37 P02 | 20min | 2 tasks | 4 files |
 | Phase 38 P01 | ca. 30 min | 2 tasks | 4 files |
 | Phase 38 P02 | ca. 130 min | 3 tasks | 5 files |
+| Phase 40 P05 | ca. 35 min inkl. ca. 25 min CI | 2 tasks | 4 files |
 
 ## Session Continuity
 
-Last session: 2026-10-29T09:12:18.291Z
-Stopped at: Completed 38-02-PLAN.md
+Last session: 2026-10-29T11:55:00Z
+Stopped at: Completed 40-05-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
 
-- Phase 38 verifizieren (main-Lauf deploy-harp 40704387898 auf cf13ee09 pruefen)
+- Phase 40 verifizieren, danach Phasenhaken in ROADMAP und Milestone v1.6 schliessen
+- appapi_apps.json pruefen: findling_backend muss 1.6.0 fuehren (am 29.10. 11:53Z noch 1.5.1, Cache-Verzug)
+- Owner: UI-Sichtung der drei Saetze (plus Gateway-Satz) in einer laufenden 1.6.0-Instanz
 - Owner: Issue-#33-Antwort (Desktop/Findling_Issue33_Antwort_ENTWURF.md) posten, erst danach 'Closes #33'; HaRP-Upstream-Vorschlag (Desktop/Findling_HaRP_Upstream_Vorschlag_ENTWURF.md) nach erneutem Lesen von HaRP main senden
-
-- Plan 37-02 ausfuehren (Store-Wortlaute nach D-37-05 bis D-37-08 einspielen)
-- Parallel moeglich: /gsd:plan-phase 38 gegen den neuen ZERT-Wortlaut (D-37-09)
+- Issue-Antworten zu #36 und #19 sowie Forum-Post nach dem Store-Release (Koordinator)
+- E1/E2: historische Umlaute in docs/audits und docs/measurements als eigener Doku-Commit
