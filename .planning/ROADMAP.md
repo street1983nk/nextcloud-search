@@ -153,12 +153,13 @@ Details im Archiv: .planning/milestones/v1.5-ROADMAP.md
   2. UPGRADE_FROM_TAG steht auf v1.5.0; die Upgrade-Strecke 1.5.x -> 1.6.0 laeuft in CI Ende zu Ende gruen, alle CI-Workflows sind auf dem Release-Commit gruen
   3. Der Owner hat Produkt und Store-Text 1.6.0 remote abgenommen (eine gebuendelte Runde, Protokoll im Phasenordner)
   4. Beide Apps 1.6.0 sind eingereicht (2x HTTP 201), der Beleg mit Lauf-ID steht in docs/store-listing.md und REQUIREMENTS.md
-**Plans**: 5 plans
+**Plans**: 6 plans
 - [x] 40-01-PLAN.md - Audit-Gate Security/Bugs/Performance ueber alle v1.6-Aenderungen mit Proben (leaveOut, ATTACH ro, Tunnel-Waechter), Fixes ab MEDIUM, 40-AUDIT.md, CI gruen
 - [x] 40-02-PLAN.md - Version 1.6.0 in beiden Apps, Minor-Migration Version001600, CHANGELOG, Doku-Links blob/v1.6.0, CI-Sprung installed_after 1.6.0
 - [ ] 40-03-PLAN.md - UPGRADE_FROM_TAG v1.5.0 mit Neuableitung jeder startabhaengigen Zusicherung (40-03-ABLEITUNG.md), neue Zusicherung fuer die 1.6-Aenderungen, Probe-Zweig und main gruen
 - [ ] 40-04-PLAN.md - Eine Owner-Runde remote: drei Katalogsaetze, Store-Text, Release-Notiz, GO fuer Tag und Einreichung (40-ABNAHME.md)
 - [ ] 40-05-PLAN.md - Tag v1.6.0, Release-Belegkette, Fremdinstallation, Einreichung 2x HTTP 201, REL-06 abgehakt (REL-06)
+- [ ] 40-06-PLAN.md - Issue-#36-Fix-Paket in 1.6.0 (Owner-Entscheid 28.10.): per-File-Gateway-Verdikt statt Pass-Abbruch, Writer-Rollback nach _abort, 404 fuer kaputte Share-Mounts, Ausfall sichtbar, Kandidat F /status ohne Blockade (laeuft nach 40-03, vor 40-04/40-05)
 
 ## Progress
 

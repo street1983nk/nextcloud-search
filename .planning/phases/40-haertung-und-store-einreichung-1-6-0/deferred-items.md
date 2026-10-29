@@ -31,6 +31,8 @@ Bestaetigter Bug im Content-Gateway-Pfad des Pollers (Analyse im Issue, Antworte
   occ findling:index --status sichtbar.
 - E: Der 422-Zweig (GatewayController.php:103-105, fopen false) loggt NC-seitig nichts.
 
-Entscheidung beim Owner in der 40-04-Runde: Fix-Paket als 1.6.1 sofort nach der
-1.6.0-Einreichung (Empfehlung; Audit 40-01 ist schon geschlossen, 1.6.0-Zug
-rollt) oder 1.6.0 verzoegern. Melder wartet auf Fix-Link im Issue.
+ENTSCHIEDEN (Owner, 28.10.): 1.6.0 wird verzoegert, das Fix-Paket faehrt als
+Plan 40-06 in 1.6.0 (nach 40-03, vor 40-04/40-05). Die 1.6.1-Frage faellt damit
+aus der Owner-Runde 40-04; dort bleibt nur die Bestaetigung der Nachtraege
+(Block G: Kandidat F aus Issue #19 und der neue Anzeige-Satz). Der Fix-Link fuer
+den Melder ist Teil von 40-06 Task 3 (kein "Closes #36").
