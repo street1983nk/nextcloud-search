@@ -255,3 +255,90 @@ Issue #19: nichts gepostet.
 
 Keine Stubs. Keine neue Angriffsfläche außerhalb des Threat-Registers (T-40-20 bis
 T-40-27 alle wie geplant mitigiert; neue Logzeilen tragen nur Status, file id und Zähler).
+
+## Nachtrag nach Verifikation (W-1/W-2)
+
+Anlass: 40-06-VERIFICATION.md (857142b0), Warnungen W-1/W-2. Owner-Entscheid 29.10.:
+"Eskalieren ohne Gutschrift". 40-06-VERIFICATION.md ist nicht verändert.
+
+**Wie das Budget heute arbeitet (gelesen, nicht vermutet):** QueueMapper zählt `retries + 1`
+beim Ausgeben einer Zeile (claimBatch); QueueService::claim beendet eine Zeile mit
+`retries > MAX_DELIVERIES` (3) vor dem Ausgeben als `failed(repeatedly_stuck)`;
+QueueMapper::unlock zieht vor der Freigabe `retries - 1` ab (die Gutschrift von DI-05-23).
+Eine Zeile, die weder bestätigt noch freigegeben wird, bleibt bis LOCK_TIMEOUT (Content
+900 s, OCR 1800 s) gesperrt und kommt dann mit gezähltem Versuch zurück. Eine Freigabe
+ohne Gutschrift kennt die PHP-Seite nicht; "ohne Gutschrift" heißt deshalb: nicht freigeben.
+
+**Umsetzung:** `_RefusalsPiledUp(_GatewayDown)` für die Häufungs-Schwelle (E-40-06-02).
+`_work` fängt ihn vor `_GatewayDown` und ruft `_abort(..., charged=<abgelehnte Zeilen>)`;
+`_abort` gibt nur `held - charged` frei (mit Gutschrift), die abgelehnten Zeilen bleiben
+gesperrt, ihr Versuch zählt, sie fallen bis zum Lock-Timeout aus dem Claim, und der
+id-sortierte Claim holt den nächsten Batch. Eine Datei, die immer ablehnt, endet beim
+vierten Ausgeben als `failed(repeatedly_stuck)`. Ausfall über das Statusraster (502/503/504,
+Transportfehler) bleibt unverändert mit Gutschrift für jede Zeile; die Unterscheidung steht
+im Docstring von `_RefusalsPiledUp` und an den beiden except-Zweigen in `_work`. Der Pass
+gilt weiter als Ausfall: backoff, Logzeile (jetzt mit "handed back" und "charged" als
+Zahlen), `gatewayUnavailableSince` gesetzt.
+
+**Entscheidung des Ausführenden:** belastet werden nur die abgelehnten Zeilen, nicht der
+ganze Batch. Die übrigen Zeilen sind ungeurteilt (abgebrochen oder nie geholt) und gehen mit
+Gutschrift zurück; sonst würden gesunde Dateien, die mit kaputten im selben Batch stehen,
+nach drei Runden als repeatedly_stuck abgeschrieben.
+
+**Grenzen (bekannt):**
+- Das Endverdikt ist `repeatedly_stuck`, nicht `gateway_error`: der Container kennt die
+  Lieferzahl einer Zeile nicht (QueueJob trägt sie nicht). `gateway_error` am letzten
+  Versuch bräuchte eine Protokolländerung beider Hälften; nicht gemacht.
+- Ein echter Instanzausfall, der für jede Datei denselben Status liefert (z. B. 401 für
+  alles), kostet jetzt Budget: nach drei Runden je Lock-Timeout enden die betroffenen
+  Zeilen als repeatedly_stuck. Das ist die Folge des Owner-Entscheids. In der Praxis
+  scheitert bei entzogenem App-Passwort oder fehlender NC-Datenbank meist schon der
+  Claim (queue_unavailable, kein Budget berührt).
+- Der Admin-Satz "did not answer" ist bei einer Häufungs-Eskalation unscharf (das Gateway
+  hat geantwortet, mit Fehlern). Ohne neuen Katalogsatz nicht präzisierbar; so belassen.
+
+**Kleinpunkte:** Docstring von `IndexBatchWriter.flush()` nennt jetzt, dass der Poller den
+pausierten Batch per `_abort` zurückrollt. CHANGELOG [1.6.0] Fixed: Satz über die begrenzte
+Wiederholung bei gehäuften gleichen Fehlern ergänzt.
+
+**Tests (RED 1b64c007 vor dem Fix 991b1eff), test_poller.py 199 -> 205 Funktionen:**
+- test_the_same_refusal_for_every_file_of_a_pass_is_an_outage (umgeschrieben: 6x401,
+  Eskalation bei der fünften, nur die nie geholte sechste Zeile freigegeben, `[[96]]`)
+- test_a_small_pass_of_only_refusals_escalates_without_a_refund[2|3|4] (alle 500, kein unlock)
+- test_two_refusals_of_three_stay_two_verdicts
+- test_mixed_refusals_are_counted_per_status (2x500 + 2x403 in vier: vier Verdikte)
+- test_refused_scans_under_several_slots_escalate_without_a_refund (drei Scans, zwei Slots)
+- test_an_outage_by_status_still_refunds_every_row (500 dann 503: alle drei freigegeben)
+- test_files_that_always_refuse_reach_the_give_up_rule_and_the_queue_drains (Modell der
+  PHP-Lieferregeln: Zählung beim Claim, Give-up bei > 3, unlock mit Gutschrift, Lock-Timeout;
+  zwei immer ablehnende Dateien an der Spitze im Batch von zwei: beide enden
+  failed:repeatedly_stuck, die vier gesunden done, der Bestand läuft leer; mit der alten
+  Gutschrift lief er in 40 Pässen nicht leer)
+
+**Baumhash Python-Paket:** 3c6f35e6... -> c5da3ea5c9acc558... (80 Dateien, Journalabsatz
+"Plan 40-06 (verification W-1, owner decision 29.10.)", beide Wege gerechnet). PHP-Paar
+unverändert (71443d7d, kein php/-Diff).
+
+**Lokale Suite:** 3448 passed/48 skipped + 2695 passed/21 skipped (zwei Vordergrund-Hälften,
+1,66 GB frei); ruff, ruff format, pyright, vulture grün.
+
+**Commits:** 1b64c007 (RED), 991b1eff (fix), 7af105a6 (flush-Docstring), 7734ed0b (CHANGELOG),
+23e54187 (Baumhash, Code-Kopf).
+
+**Kopf 23e54187, head_green.sh Exit 0** (sechs Workflows; "PHP and store metadata gates"
+startet per Pfadfilter nicht, `git diff --stat 4ed0f846..23e54187 -- php backend/appinfo
+.github/workflows/php.yml .github/workflows/release.yml scripts/dev/validate_info_xml.sh` ist
+leer, letzter grüner PHP-Lauf 40834773386 auf 4ed0f846):
+
+```
+40851958357 OpenSSF Scorecard success
+40851958179 HaRP deploy success
+40851958059 Security scans success
+40851958247 Multi-arch image success
+40851958098 Integration success
+40851958142 Python gates success
+40851958214 Resilience success
+```
+
+Keine Korrekturrunde. deploy-harp.yml weiter unverändert (`git log c75fb6cf..HEAD --
+.github/workflows/deploy-harp.yml` leer). Keine Issue-Kommentare.
