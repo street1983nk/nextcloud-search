@@ -437,6 +437,30 @@ class IndexBatchWriter:
             LOGGER.info("committed %d documents", committed)
             return FlushResult(FLUSH_COMMITTED, committed, free)
 
+    def rollback(self) -> int:
+        """Drop the pending batch, the additions and the drops; return how many there were.
+
+        The answer to an aborted pass (issue #36, Befund C). Before it the
+        pending documents of a pass that ended without its commit stayed in the
+        writer, and the flush of the next pass committed them: documents without
+        an acl row and without a verdict. The rows of the aborted pass come
+        back and are written again, so nothing that is dropped here is lost.
+        The vectors a pending drop took along are not brought back: that half is
+        a SQLite write and durable at once, and the row that comes back repeats
+        the drop, the same idempotence drop_document already rests on.
+
+        The committed state is untouched, and the writer stays open for the
+        next batch. Under the lock, like every other writing method.
+        """
+        with self._lock:
+            self._require_open().rollback()
+            dropped = self._pending
+            self._pending = 0
+            self._pending_bytes = 0
+            if dropped:
+                LOGGER.info("rolled back %d pending documents", dropped)
+            return dropped
+
     def collect_garbage(self) -> None:
         """Remove segment files no commit refers to any more.
 

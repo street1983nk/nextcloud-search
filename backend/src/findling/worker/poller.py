@@ -2319,10 +2319,12 @@ class Poller:
     ) -> RoundResult:
         """End the pass without a commit, a verdict or an acknowledgement.
 
-        Whatever the writer already holds stays pending and is written again by
-        the redelivery; the upsert makes that harmless. Handing the rows back is
-        the only thing worth doing here, because it turns the lock timeout into an
-        immediate retry.
+        Whatever the writer already holds is rolled back first (issue #36,
+        Befund C). Left pending, it was committed by the flush of the next pass:
+        documents of rows that went back unjudged, in the index without an acl
+        row and without a verdict. The redelivery writes them again. Handing the
+        rows back is the other thing worth doing here, because it turns the lock
+        timeout into an immediate retry.
 
         **And because it is the only way to say that nothing was judged.** The
         other half counts a delivery when it hands a row out and gives it back
@@ -2333,6 +2335,16 @@ class Poller:
         the page said the indexing was merely paused (DI-05-23). Which is why
         this method unlocks on every path out of it and never simply returns.
         """
+        writer = self._writer
+        if writer is not None:
+            try:
+                await asyncio.to_thread(writer.rollback)
+            except Exception as error:
+                # Best effort, and never at the price of the unlock below: a
+                # writer that cannot roll back leaves what it holds pending,
+                # which is the state of before 1.6.0, while rows that are not
+                # handed back would spend their give-up budget (DI-05-23).
+                LOGGER.warning("the pending batch could not be rolled back, %s", type(error).__name__)
         await queue.unlock(sorted(self._held))
         self._held.clear()
         self._back_off()
