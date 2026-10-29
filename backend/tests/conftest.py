@@ -69,6 +69,7 @@ from findling.index.wordlist_nl import artifact_path_nl
 from findling.main import APP
 from findling.store.repo import FileMeta, open_store
 from findling.store.vectors import open_vectors
+from findling.worker import poller as poller_module
 
 # Starlette 1.6 warns once, at the first import of starlette.testclient, that it
 # wants httpx2 instead of httpx. The filterwarnings entry in pyproject.toml
@@ -453,6 +454,21 @@ def forget_the_profile_state() -> Iterator[None]:
     lane_module.reset()
     guard_module.reset()
     probe_module.reset()
+
+
+@pytest.fixture(autouse=True)
+def forget_the_gateway_outage() -> Iterator[None]:
+    """No case inherits an outage of the content gateway from the case before it.
+
+    ``findling/worker/poller.py`` keeps the first moment of a streak of aborted
+    passes as a module value, because /status reads it as a fact about this
+    process (issue #36, Befund D). In a suite one process runs every case, so a
+    case whose gateway failed would otherwise decide what the status answer of
+    another file reports. Cleared on both sides, like the profile state above.
+    """
+    poller_module.reset_gateway_outage()
+    yield
+    poller_module.reset_gateway_outage()
 
 
 @pytest.fixture(autouse=True)

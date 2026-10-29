@@ -237,6 +237,41 @@ QueueFactory = Callable[[AsyncNextcloudApp], DocumentQueue]
 ClientFactory = Callable[[], AsyncNextcloudApp]
 
 
+# Since when the content gateway has not answered: the epoch second of the
+# first aborted pass of the streak, None while it answers (issue #36, Befund D).
+# A value of this process like the guard state, and for the same reason one
+# module name that is rebound and never mutated: the event loop writes it, the
+# status route reads it from a worker thread, and an int or None is read whole.
+# Only a pass that ended as gateway_unavailable starts a streak, and only a pass
+# that ended normally or found the queue empty ends it, because both mean that
+# Nextcloud answered. A queue that did not answer says nothing about the
+# gateway and leaves the value where it is.
+_GATEWAY_UNAVAILABLE_SINCE: int | None = None
+
+
+def gateway_unavailable_since() -> int | None:
+    """The first moment of the current streak of gateway outages, None without one."""
+    return _GATEWAY_UNAVAILABLE_SINCE
+
+
+def _note_gateway_outage(now: float) -> None:
+    """A pass ended as gateway_unavailable; only the first of a streak is kept."""
+    global _GATEWAY_UNAVAILABLE_SINCE
+    if _GATEWAY_UNAVAILABLE_SINCE is None:
+        _GATEWAY_UNAVAILABLE_SINCE = int(now)
+
+
+def _note_gateway_answered() -> None:
+    """A pass ended normally or found the queue empty: the streak is over."""
+    global _GATEWAY_UNAVAILABLE_SINCE
+    _GATEWAY_UNAVAILABLE_SINCE = None
+
+
+def reset_gateway_outage() -> None:
+    """Back to the resting state. For tests only; the container never forgets."""
+    _note_gateway_answered()
+
+
 class _GatewayDown(RuntimeError):
     """The content gateway did not answer, so the batch cannot be finished.
 
@@ -1024,6 +1059,7 @@ class Poller:
                     self._starved_announced = True
                     LOGGER.info("the work stock ran dry while the crawl is unfinished, asked for the next slice myself")
                 self._cooldown = self._cooldown_start
+                _note_gateway_answered()
                 return RoundResult(ROUND_EMPTY)
             # Said once per arming, and this is the only line an armed container
             # with nothing to do ever writes. Without it "armed and idle" and
@@ -1036,6 +1072,7 @@ class Poller:
                 self._idle_announced = True
                 LOGGER.info("indexing is armed and the work stock is empty, the next file is picked up as it arrives")
             self._back_off()
+            _note_gateway_answered()
             return RoundResult(ROUND_EMPTY)
 
         self._held = {job.queue_id for job in claim.jobs}
@@ -1237,6 +1274,7 @@ class Poller:
         ack = await queue.acknowledge(done, failed, _skip_verdicts(verdicts, handover))
         self._held.clear()
         self._reset_cooldown()
+        _note_gateway_answered()
 
         indexed = sum(1 for verdict in verdicts if verdict.outcome.state is State.INDEXED)
         skipped = sum(1 for verdict in verdicts if verdict.outcome.state is State.SKIPPED)
@@ -2348,6 +2386,11 @@ class Poller:
         await queue.unlock(sorted(self._held))
         self._held.clear()
         self._back_off()
+        if state == ROUND_GATEWAY_UNAVAILABLE:
+            # Befund D of issue #36: this state used to show nowhere, neither in
+            # the log nor on the page. A count, never a name (T-02-107).
+            LOGGER.warning("indexing pass stopped, the content gateway is unavailable, %d rows handed back", claimed)
+            _note_gateway_outage(time.time())
         return RoundResult(state, claimed=claimed)
 
     def _stamp_if_rebuilt(self) -> bool:
@@ -2626,4 +2669,6 @@ __all__ = [
     "Poller",
     "RoundResult",
     "default_poller",
+    "gateway_unavailable_since",
+    "reset_gateway_outage",
 ]

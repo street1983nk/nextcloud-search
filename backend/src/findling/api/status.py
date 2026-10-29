@@ -96,6 +96,7 @@ from findling.instance import volume_is_shared
 from findling.profile import snapshot
 from findling.store.repo import EMBEDDING_BACKLOG_MARK, Store, embedded_in_storages, index_bytes, open_read_only
 from findling.store.vectors import VectorStoreError, open_vectors
+from findling.worker import poller
 
 LOGGER = logging.getLogger("findling.api.status")
 
@@ -411,6 +412,12 @@ class StatusResponse(BaseModel):
     # there and restores it at start.
     probe: ProbeReport = Field(default_factory=ProbeReport)
     note: str = ""
+    # Since when the content gateway has not answered (issue #36, Befund D): the
+    # epoch second of the first pass of the current streak that ended as
+    # gateway_unavailable, null while the gateway answers. A process value like
+    # the guard, out of findling.worker.poller, so the state database knows
+    # nothing of it. The admin page names the state with one sentence.
+    gatewayUnavailableSince: int | None = None
     # The two counters of plan 39-01 (Weg C of 35-DEDUP-NOTIZ), and the only two
     # fields of this answer that can be absent. They exist only for a caller that
     # names storages in leaveOut: how many living indexed documents those
@@ -606,6 +613,7 @@ def _volume() -> StatusResponse:
         lane=_lane_report(),
         guard=_guard_report(),
         probe=_probe_report(),
+        gatewayUnavailableSince=poller.gateway_unavailable_since(),
         lowDisk=resources.low_disk(),
         diskFreeBytes=free,
         diskTotalBytes=total,
@@ -738,6 +746,8 @@ def _of(store: Store, volume: StatusResponse) -> StatusResponse:
         guard=volume.guard,
         # Carried over like the guard, for the same Pitfall 2.
         probe=volume.probe,
+        # Carried over like the probe, for the same Pitfall 2.
+        gatewayUnavailableSince=volume.gatewayUnavailableSince,
         note=volume.note,
         lowDisk=volume.lowDisk,
         diskFreeBytes=volume.diskFreeBytes,

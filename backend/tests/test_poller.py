@@ -1460,7 +1460,7 @@ async def test_an_outage_is_remembered_from_its_first_pass_until_nextcloud_answe
     assert poller_module.gateway_unavailable_since() == 1_700_000_000
     # A queue that does not answer says nothing about the gateway.
     assert (await poller.run_once()).state == ROUND_QUEUE_UNAVAILABLE
-    assert poller_module.gateway_unavailable_since() == 1_800_000_000
+    assert poller_module.gateway_unavailable_since() == 1_700_000_000
     bodies[4711] = BODY_BYTES
     assert (await poller.run_once()).state == ROUND_WORKED
     assert poller_module.gateway_unavailable_since() is None
