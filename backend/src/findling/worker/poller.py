@@ -281,6 +281,26 @@ class _GatewayDown(RuntimeError):
     """
 
 
+class _RefusalsPiledUp(_GatewayDown):
+    """The same refusal for too many files of one pass (E-40-06-02), an outage by count.
+
+    A subclass, so every path that carries _GatewayDown behind the barrier
+    carries this one too, and _work tells the two apart only at the abort. The
+    difference is the refund (W-1 of the verification, owner decision 29.10.,
+    "escalate without refund"). An outage by the status grid (502, 503, 504 or
+    no HTTP answer at all) says nothing about any file, so every row goes back
+    with its delivery refunded, as since DI-05-23. An outage by count is made
+    of answers about the files themselves: had their rows gone back refunded,
+    the id sorted claim would hand the same head batch out again on the next
+    pass and the give-up rule would never fire, which is the loop of issue #36
+    by another door (a mount with many broken files: five of 32, or two of two).
+    So the refused rows are kept out of the unlock, their delivery counts, they
+    are out of the claim until their lock times out, and a file that refuses
+    every time ends at the claim as failed(repeatedly_stuck). The rows of the
+    pass that were not refused are unjudged and go back refunded.
+    """
+
+
 @dataclass(frozen=True, slots=True)
 class RoundResult:
     """What one pass did, in a form the status page can render."""
@@ -628,6 +648,9 @@ class Poller:
         # threshold of E-40-06-02 is decided on. Both start over in _work.
         self._refusals: dict[int, int] = {}
         self._claimed_in_pass = 0
+        # The queue ids of the rows the gateway refused in the pass in flight,
+        # the rows an escalation by count does not hand back (W-1).
+        self._refused_rows: set[int] = set()
         self._cooldown = 0.0
         # Passes in a row whose claim came back unanswered, and whether the
         # retreat has been said out loud already. Both belong to the poller and
@@ -1174,6 +1197,7 @@ class Poller:
         # before never adds to this one.
         self._refusals = {}
         self._claimed_in_pass = len(jobs)
+        self._refused_rows = set()
         # File ids, not queue ids: the requeue is about the file, and the row it
         # belongs to may not even exist for the caller that comes in plan 03-12.
         handover: list[int] = []
@@ -1211,9 +1235,15 @@ class Poller:
             else:
                 for job in jobs:
                     unchanged += await self._handle(job, done, failed, verdicts, handover, embedding, embedded)
+        except _RefusalsPiledUp:
+            # An outage by count (E-40-06-02): no verdict is written, but the
+            # refused rows are charged and not handed back (W-1, see
+            # _RefusalsPiledUp); the rest of the batch goes back refunded.
+            return await self._abort(queue, len(jobs), charged=frozenset(self._refused_rows))
         except _GatewayDown:
-            # The gateway says nothing about the file, so no verdict may be
-            # written for any of them. Give the whole batch back and wait.
+            # An outage by the status grid (E-40-06-01): the gateway says
+            # nothing about the file, so no verdict may be written for any of
+            # them. Give the whole batch back, refunded, and wait.
             return await self._abort(queue, len(jobs))
         except _DiskTight:
             # The same answer the flush below gives to the same condition,
@@ -1591,7 +1621,7 @@ class Poller:
             # answer (E-40-06-03 struck): that would be a lasting skipped(gone)
             # for a storage that may be back tomorrow. The count below turns
             # the same refusal for many files into an outage (E-40-06-02).
-            self._count_refusal(refused)
+            self._count_refusal(refused, job)
             self._collect(job, ExtractionOutcome.failed(Reason.GATEWAY_ERROR), done, failed, verdicts)
             return 0
         except ShortRead:
@@ -1762,7 +1792,7 @@ class Poller:
             # The rule of the content branch: one verdict for the one file the
             # gateway refused, and the count of E-40-06-02. Counted in the loop
             # thread like everything else of a task, so no lock is needed.
-            self._count_refusal(refused)
+            self._count_refusal(refused, job)
             return _ScanResult(job, ExtractionOutcome.failed(Reason.GATEWAY_ERROR))
         if read is None:
             return _ScanResult(job, ExtractionOutcome.skipped(Reason.GONE))
@@ -2329,14 +2359,17 @@ class Poller:
             return False
         return self._track.release_cutter()
 
-    def _count_refusal(self, refused: GatewayRefused) -> None:
-        """Count one refusal of this pass; raise _GatewayDown at the threshold.
+    def _count_refusal(self, refused: GatewayRefused, job: QueueJob) -> None:
+        """Count one refusal of this pass; raise _RefusalsPiledUp at the threshold.
 
         The threshold is E-40-06-02: the same status for min(5, claimed) files
-        of one pass, with at least two claimed, is a state of the instance and
-        not of the files. The abort that follows drops whatever the pass
-        gathered, and the rows go back with their delivery refunded.
+        of one pass, with at least two claimed, is taken as a state of the
+        instance and not of the files. The abort that follows drops whatever
+        the pass gathered. The refused rows are charged (W-1, owner decision
+        29.10.), every other row of the pass goes back refunded; the reasoning
+        stands at :class:`_RefusalsPiledUp`.
         """
+        self._refused_rows.add(job.queue_id)
         count = self._refusals.get(refused.status, 0) + 1
         self._refusals[refused.status] = count
         claimed = self._claimed_in_pass
@@ -2346,7 +2379,7 @@ class Poller:
                 count,
                 refused.status,
             )
-            raise _GatewayDown
+            raise _RefusalsPiledUp
 
     async def _abort(
         self,
@@ -2354,8 +2387,14 @@ class Poller:
         claimed: int,
         *,
         state: str = ROUND_GATEWAY_UNAVAILABLE,
+        charged: frozenset[int] = frozenset(),
     ) -> RoundResult:
         """End the pass without a commit, a verdict or an acknowledgement.
+
+        ``charged`` are rows that are NOT handed back: the refused rows of an
+        outage by count (W-1, :class:`_RefusalsPiledUp`). They stay locked on
+        the other side, their delivery counts, and the lock timeout brings them
+        back. Every other caller passes nothing and every row goes back.
 
         Whatever the writer already holds is rolled back first (issue #36,
         Befund C). Left pending, it was committed by the flush of the next pass:
@@ -2371,7 +2410,9 @@ class Poller:
         disk pause of twenty seconds was enough to spend MAX_DELIVERIES for
         every row in flight, and they ended as failed(repeatedly_stuck) while
         the page said the indexing was merely paused (DI-05-23). Which is why
-        this method unlocks on every path out of it and never simply returns.
+        this method unlocks on every path out of it and never simply returns;
+        the one exception is ``charged`` above, rows that WERE judged by the
+        gateway, file by file.
         """
         writer = self._writer
         if writer is not None:
@@ -2383,13 +2424,19 @@ class Poller:
                 # which is the state of before 1.6.0, while rows that are not
                 # handed back would spend their give-up budget (DI-05-23).
                 LOGGER.warning("the pending batch could not be rolled back, %s", type(error).__name__)
-        await queue.unlock(sorted(self._held))
+        handed_back = sorted(self._held - charged)
+        if handed_back or not charged:
+            await queue.unlock(handed_back)
         self._held.clear()
         self._back_off()
         if state == ROUND_GATEWAY_UNAVAILABLE:
             # Befund D of issue #36: this state used to show nowhere, neither in
-            # the log nor on the page. A count, never a name (T-02-107).
-            LOGGER.warning("indexing pass stopped, the content gateway is unavailable, %d rows handed back", claimed)
+            # the log nor on the page. Counts, never a name (T-02-107).
+            LOGGER.warning(
+                "indexing pass stopped, the content gateway is unavailable, %d rows handed back, %d charged",
+                len(handed_back),
+                len(charged),
+            )
             _note_gateway_outage(time.time())
         return RoundResult(state, claimed=claimed)
 
