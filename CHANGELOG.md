@@ -26,11 +26,22 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
 - The sentence about counting per mount no longer claims the search holds
   every file once.
 - Dependencies: fastapi 0.161.1, pypdf 6.21.2, striprtf 0.0.34.
+- The language fill level in /status comes from a cache with a freshness
+  marker (languagesFilledAsOf) and is measured in the background, so the
+  status answer never waits for it (#19).
 
 ### Fixed
 
 - A document with an XML element named "amplification" is no longer
   blocked as malicious.
+- A gateway error for one file no longer blocks the queue: the file ends
+  as failed (gateway_error), the rest of the pass goes on, and the log
+  names the HTTP status (#36).
+- An aborted indexing pass leaves no unjudged document in the index (#36).
+- A content gateway that does not answer is named on the admin page and in
+  /status (#36).
+- The content gateway logs when it cannot open a file, and the search
+  skips files on a storage that is not available instead of failing (#36).
 
 ### Security
 
