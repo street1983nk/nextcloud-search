@@ -242,16 +242,12 @@ SearchServiceTest-Fälle (der Job druckt keine Testnamen, nur die Summe).
 
 ## Issue #36
 
-Genau ein Kommentar, englisch, ohne "Closes" (Wortlaut):
+Fix-Link in #36 folgt nach Store-Release 1.6.0 (Owner-Entscheid 29.10.).
 
-> The fix is on main now and ships with 1.6.0: a file the gateway refuses, like the one on
-> the broken share, now ends as failed (gateway_error) with its HTTP status in the log, and
-> the rest of the queue keeps going. Core change:
-> https://github.com/street1983nk/nextcloud-search/commit/6880fa1e, full package:
-> https://github.com/street1983nk/nextcloud-search/compare/c75fb6cf...4ed0f846 (see the
-> 1.6.0 entry in CHANGELOG.md). Thanks for the traces, they made this easy to pin down.
-
-Kommentar-URL: COMMENT_URL
+Hinweis: Die Änderung des Owners kam an, nachdem der eine Kommentar bereits gepostet war
+(https://github.com/street1983nk/nextcloud-search/issues/36#issuecomment-6492666744,
+englisch, ohne "Closes", Link auf 6880fa1e und den Vergleich c75fb6cf...4ed0f846). Er wurde
+nicht gelöscht; die Entscheidung darüber liegt beim Owner bzw. Koordinator.
 
 Issue #19: nichts gepostet.
 
