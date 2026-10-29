@@ -38,6 +38,7 @@ from findling import lane as lane_module
 from findling import precision as precision_module
 from findling import probe as probe_module
 from findling import profile as profile_module
+from findling.api import resources as resources_module
 from findling.config import settings
 from findling.embed import model as model_module
 from findling.embed.engine import note_cutter_failure
@@ -469,6 +470,21 @@ def forget_the_gateway_outage() -> Iterator[None]:
     poller_module.reset_gateway_outage()
     yield
     poller_module.reset_gateway_outage()
+
+
+@pytest.fixture(autouse=True)
+def quiesce_the_fill_refresh() -> Iterator[None]:
+    """No case starts while the fill refresh of the case before it still walks.
+
+    ``findling/api/resources.py`` measures the fill level of the body chains in
+    a background thread since issue #19 (candidate F), and the thread is a
+    single flight per process: one still walking the index of the case before
+    would keep the next case from starting its own and could write its reading
+    in the middle of it. Joined on both sides, like the states above.
+    """
+    resources_module.join_fill_refresh()
+    yield
+    resources_module.join_fill_refresh()
 
 
 @pytest.fixture(autouse=True)

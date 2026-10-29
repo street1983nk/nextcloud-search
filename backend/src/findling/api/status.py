@@ -366,6 +366,14 @@ class StatusResponse(BaseModel):
     # switched on yesterday and has seen no document is in the first and not in
     # the second, and so is every chain of a rebuild that is halfway through.
     languagesFilled: str = ""
+    # The epoch second the line above was measured at, null while it never was
+    # (issue #19, candidate F, plan 40-06). The fill level is a walk over the
+    # term dictionary of every chain, seconds per chain on a large index, so it
+    # is measured by a background refresh and this route answers out of its
+    # cache at once: the old reading while it is stale, the empty line before
+    # the first one. This field says how old the reading is. Both values come
+    # out of one call, so they always belong to the same measurement.
+    languagesFilledAsOf: int | None = None
     # Which of them a question really reaches, read out of the field plan of the
     # reading side (audit finding M-19-03). The third statement of the group and
     # the only one a search obeys: the two above are the marks and the term
@@ -598,11 +606,13 @@ def _volume() -> StatusResponse:
     resolved = settings()
     free, total = resources.disk_bytes()
     progress = rebuild_progress()
+    filled, filled_as_of = resources.filled_languages_as_of()
     return StatusResponse(
         appVersion=_app_version(),
         engineState=engine_state(),
         languagesActive=",".join(resolved.languages),
-        languagesFilled=",".join(resources.filled_languages()),
+        languagesFilled=",".join(filled),
+        languagesFilledAsOf=filled_as_of,
         languagesSearched=",".join(resources.searched_languages()),
         rebuildRunning=progress.running,
         rebuildDone=progress.documents_carried,
@@ -721,6 +731,7 @@ def _of(store: Store, volume: StatusResponse) -> StatusResponse:
         # are a property of the index directory, and the state database has
         # nothing to say about them.
         languagesFilled=volume.languagesFilled,
+        languagesFilledAsOf=volume.languagesFilledAsOf,
         # Carried over for the same reason, and it is the value to read next to
         # the mark above: that one is what the directory was built for, this one
         # is what a question reaches. Two lines that disagree are a fallback, and

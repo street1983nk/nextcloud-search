@@ -119,8 +119,9 @@ class ReadSide:
     # Which generation of the reading side these handles belong to, and the
     # whole reason the field exists is audit finding M-18-02.
     #
-    # The two measurements below, degraded() and filled_languages(), take the
-    # side OUTSIDE the lock and write their cache entry INSIDE it. A
+    # The two measurements below, degraded() and the background refresh behind
+    # filled_languages(), take the side OUTSIDE the lock and write their cache
+    # entry INSIDE it. A
     # reset_read_side() that lands between the two used to leave the later
     # writer filling the cache it had just emptied, with a reading taken from
     # the directory that was retired a moment ago. The path key cannot catch
@@ -168,7 +169,12 @@ class ReadSide:
 _OPEN: ReadSide | None = None
 _MARKS: tuple[Path, dict[str, str]] | None = None
 _DEGRADED: tuple[Path, float, bool] | None = None
-_FILLED: tuple[Path, float, tuple[str, ...]] | None = None
+# The fill level of the body chains: the directory, the monotonic moment the
+# window is counted from, the epoch second the page is told, and the reading.
+_FILLED: tuple[Path, float, float, tuple[str, ...]] | None = None
+# The one background refresh of the fill level while it runs, None otherwise
+# (issue #19, candidate F). It is the single flight flag of _start_fill_refresh.
+_FILL_REFRESH: threading.Thread | None = None
 
 # How often the reading side has been let go in this process. Read the reasoning
 # at ReadSide.generation; what matters here is only that it never goes backwards
@@ -997,49 +1003,142 @@ def filled_languages() -> tuple[str, ...]:
     swap of a rebuild, clears the cache through :func:`reset_read_side` instead
     of waiting the window out.
 
+    **Why this call never measures** (issue #19, candidate F, plan 40-06). The
+    walk used to run in here, under :data:`_LOCK`, which is the lock
+    :func:`read_side` and therefore every search runs under: on the 110k
+    index of the report it took about 5.3 s per chain, /status ran into the
+    timeout of the companion, and every reader of the reading side waited for
+    the walk. Now this call answers out of the cache at once, with the old
+    reading while it is stale and with the empty answer before the first one,
+    and starts the one background refresh of :func:`_start_fill_refresh` when
+    the reading is stale or missing. :func:`filled_languages_as_of` answers
+    the moment of the reading beside it, which is what the status route
+    carries as languagesFilledAsOf.
+
     Answers an empty tuple for a container that has no index yet and for one
     whose index cannot be read: both are states in which no chain carries
     anything this container can offer, and neither is a reason to fail an
     administration page.
     """
-    side = read_side()
-    if side is None:
-        return ()
+    return filled_languages_as_of()[0]
 
-    global _FILLED
+
+def filled_languages_as_of() -> tuple[tuple[str, ...], int | None]:
+    """The fill level of :func:`filled_languages` and the epoch second it was measured at.
+
+    One call for the two values, so that the status route never carries a
+    reading next to the moment of another one. The moment is None while this
+    directory has never been measured. Answers at once in every case: under
+    :data:`_LOCK` only the cache is read, and a reading that is stale or
+    missing starts one background refresh (single flight) and is answered as
+    it stands, the old one or the empty one. The reading is cached under the
+    directory the settings name; an entry of another directory is no reading.
+    """
     now = time.monotonic()
+    directory = settings().index_dir
     with _LOCK:
         cached = _FILLED
-        if cached is not None and cached[0] == side.index_dir and now - cached[1] < FILLED_TTL_SECONDS:
-            return cached[2]
+        if cached is not None and cached[0] == directory:
+            if now - cached[1] >= FILLED_TTL_SECONDS:
+                _start_fill_refresh()
+            return cached[3], int(cached[2])
+        _start_fill_refresh()
+        return (), None
+
+
+def _start_fill_refresh() -> None:
+    """Start the background refresh of the fill level, unless one runs. Under _LOCK.
+
+    A thread of its own and not the caller's: the callers already run in a
+    worker thread through asyncio.to_thread, and the whole point is that the
+    status thread answers instead of walking. Daemon, so a walk that is still
+    running at shutdown does not hold the process; its reading is lost and the
+    next start measures again. Single flight: the flag is the thread itself,
+    set here under the lock and cleared by the thread under the lock when it
+    ends, so a second caller while it runs finds it and starts nothing.
+    """
+    global _FILL_REFRESH
+    if _FILL_REFRESH is not None:
+        return
+    thread = threading.Thread(target=_refresh_fill, name="findling-fill-refresh", daemon=True)
+    _FILL_REFRESH = thread
+    thread.start()
+
+
+def _refresh_fill() -> None:
+    """The body of the refresh: take the side, measure outside the lock, write inside it.
+
+    The shape :func:`degraded` keeps for audit finding M-18-02, and here it is
+    the only shape: the side is taken through :func:`read_side`, which holds
+    the lock for its own few statements, the walk runs without the lock, and
+    the lock is taken again only to write the reading. The write happens only
+    when the generation and the directory are still the ones the walk was
+    measured under; a reset of the reading side while the walk ran keeps the
+    reading of the retired directory out of the cache, which is the race of
+    M-18-02 in the write path of the refresh. Never raises: whatever goes
+    wrong costs this one reading, and the next stale call starts another.
+    """
+    global _FILL_REFRESH, _FILLED
+    try:
+        side = read_side()
+        if side is None:
+            return
+        started = time.monotonic()
+        measured_at = time.time()
+        answer = _measure_fill(side)
+        if answer is None:
+            return
+        with _LOCK:
+            previous = _FILLED
+            current = side.generation == _GENERATION and side.index_dir == settings().index_dir
+            # A reading never moves the moment of the page backwards.
+            forward = previous is None or previous[0] != side.index_dir or previous[2] <= measured_at
+            if current and forward:
+                _FILLED = (side.index_dir, started, measured_at, answer)
+    # Deliberately every exception: a refresh that raised would end its thread
+    # with a traceback that carries whatever a library put into its message.
+    except Exception as error:
+        LOGGER.warning("the fill level refresh stopped, an %s", type(error).__name__)
+    finally:
+        with _LOCK:
+            if _FILL_REFRESH is threading.current_thread():
+                _FILL_REFRESH = None
+
+
+def _measure_fill(side: ReadSide) -> tuple[str, ...] | None:
+    """Walk the chains worth probing on one side, without any lock; None when no searcher opens."""
+    try:
+        searcher = side.index.searcher()
+    # Deliberately every exception, for the reason read_side() states: this
+    # value reaches an administration page, and a page that answers 500
+    # because one of its lines could not be measured tells an admin less
+    # than a page that leaves that line empty.
+    except Exception as error:
+        LOGGER.warning("the fill level of the body chains could not be read, an %s", type(error).__name__)
+        return None
+    filled: list[str] = []
+    for code in _chains_worth_probing():
         try:
-            searcher = side.index.searcher()
-        # Deliberately every exception, for the reason read_side() states: this
-        # value reaches an administration page, and a page that answers 500
-        # because one of its lines could not be measured tells an admin less
-        # than a page that leaves that line empty.
+            if searcher.terms_with_prefix(BODY_FIELD[code], "", limit=1):
+                filled.append(code)
+        # One chain, one answer. A directory of the old generation has no
+        # field beyond the first two, and asking it for one is the realistic
+        # shape of this failure rather than a fault worth a warning.
         except Exception as error:
-            LOGGER.warning("the fill level of the body chains could not be read, an %s", type(error).__name__)
-            return ()
-        filled: list[str] = []
-        for code in _chains_worth_probing():
-            try:
-                if searcher.terms_with_prefix(BODY_FIELD[code], "", limit=1):
-                    filled.append(code)
-            # One chain, one answer. A directory of the old generation has no
-            # field beyond the first two, and asking it for one is the realistic
-            # shape of this failure rather than a fault worth a warning.
-            except Exception as error:
-                LOGGER.debug("the chain %s could not be probed, an %s", code, type(error).__name__)
-        answer = tuple(filled)
-        if side.generation == _GENERATION:
-            # The same guard degraded() carries, and for the same race
-            # (M-18-02). This is the reading a rebuild exists to move, so a
-            # cache entry filled from the retired directory would have the admin
-            # page report the old chains for the whole window right after the
-            # run that filled the new ones.
-            _FILLED = (side.index_dir, now, answer)
-        return answer
+            LOGGER.debug("the chain %s could not be probed, an %s", code, type(error).__name__)
+    return tuple(filled)
+
+
+def join_fill_refresh(timeout: float | None = 10.0) -> None:
+    """Wait for a running fill refresh to end. For tests and nothing else.
+
+    The thread is taken under the lock and joined outside it, because the
+    refresh needs the lock to write its reading and to clear its flag.
+    """
+    with _LOCK:
+        thread = _FILL_REFRESH
+    if thread is not None:
+        thread.join(timeout)
 
 
 def _chains_worth_probing() -> tuple[str, ...]:
