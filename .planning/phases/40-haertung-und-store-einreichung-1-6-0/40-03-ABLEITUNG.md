@@ -194,8 +194,15 @@ test_cert_rotation_steps.py folgt dem Namen.
   **40817178890**, conclusion success, alle vier Matrixzeilen grün: deploy-harp
   (stable33, 8.2, false, ubuntu-24.04), (stable34, 8.2, false, ubuntu-24.04),
   (stable34, 8.2, false, ubuntu-24.04-arm), (stable35, 8.3, false, ubuntu-24.04).
-  Damit sind beide Tasks auf dem Probe-Zweig grün; die Zitate des main-Laufs stehen
-  in 40-03-SUMMARY.md.
+  Damit sind beide Tasks auf dem Probe-Zweig grün.
+- Kopf auf main: 5c659b4f, head_green.sh Exit 0 über alle sieben Läufe (HaRP deploy
+  40819967372, Python gates 40819967228, Integration 40819967257, Resilience
+  40819967269, Multi-arch image 40819967379, Security scans 40819967308, OpenSSF
+  Scorecard 40819967288). Wörtlich aus dem stable34-amd64-Log des Kopf-Laufs:
+  "installed_version went from 1.5.0 to 1.6.0", "all eleven assurances of this step
+  hold", "all parts of assurance 11 and part 2 of assurance 12 hold"; die
+  vollständigen Erfolgszeilen der Zusicherung 12 stehen in 40-03-SUMMARY.md. Der
+  Probe-Zweig gsd/40-03-probe ist gelöscht (git ls-remote leer).
 
 ## Mechanisches Inventar (Ausgangsstand 46df0ee1, 147 Treffer)
 
