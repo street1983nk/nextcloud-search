@@ -2101,7 +2101,15 @@ class Poller:
             raise
         except Exception as error:
             _discard(scratch)
-            LOGGER.warning("content gateway did not deliver, %s", type(error).__name__)
+            # The HTTP status where the error carries one (issue #36, Befund A):
+            # the class name alone said NextcloudException for a 502 and a 504
+            # alike. A status names no file and no user. The words before it
+            # stay as they were, so a search through an old log still matches.
+            status = getattr(error, "status_code", None)
+            if isinstance(status, int) and status > 0:
+                LOGGER.warning("content gateway did not deliver, %s with http status %d", type(error).__name__, status)
+            else:
+                LOGGER.warning("content gateway did not deliver, %s", type(error).__name__)
             raise _GatewayDown from error
 
         if written is None:
