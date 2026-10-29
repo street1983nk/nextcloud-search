@@ -2357,8 +2357,15 @@ PHP_TREE_HASH_TODAY = "71443d7d69d7b50574d2bad39b884aaf8935e96c9591ac51bea25b675
 # gatewayUnavailableSince. No file came or went, so PACKAGE_FILES_TODAY stays at
 # 80. The PHP pair does not move. Recomputed independently with find, sort, tr
 # and sha256sum over the CRLF normalised tree: b05eb576... both ways.
+#
+# Moved on 2026-10-29 by Plan 40-06 (issue #19, candidate F): api/resources.py
+# measures the fill level in a background refresh outside the lock and
+# api/status.py carries languagesFilledAsOf. No file came or went, so
+# PACKAGE_FILES_TODAY stays at 80. The PHP pair does not move. Recomputed
+# independently with find, sort, tr and sha256sum over the CRLF normalised
+# tree: 3c6f35e6... both ways.
 PACKAGE_FILES_TODAY = 80
-PACKAGE_TREE_HASH_TODAY = "b05eb576d0189e1e7eebbefdfb4f1d3197ad6b89767fe2a428187676dabaf7c9"
+PACKAGE_TREE_HASH_TODAY = "3c6f35e64df85b2d1d54b1d129ca1ddc91d6ec838230e96930032858479e1f7a"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
