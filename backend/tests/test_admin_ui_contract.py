@@ -2638,6 +2638,54 @@ def test_a_rule_change_shows_a_hint_until_the_counters_follow() -> None:
     assert str(catalogue_of(L10N_JSON)[RULES_PENDING_SENTENCE]).startswith("Die Ausschlussregeln wurden geändert.")
 
 
+#: The one sentence of plan 40-06 (E-40-06-04, issue #36 Befund D), written out
+#: here because four places carry it: the template renders it, the script writes
+#: and toggles it, the service hands the figure through, and every catalogue
+#: translates it.
+GATEWAY_UNAVAILABLE_SENTENCE = (
+    "The content gateway did not answer on the last indexing pass. The affected files stay in the queue and "
+    "are tried again; the search keeps answering."
+)
+
+
+def test_a_silent_content_gateway_has_a_sentence_on_the_page() -> None:
+    """Befund D of issue #36: a pass that ended as gateway_unavailable showed nowhere.
+
+    The container sends gatewayUnavailableSince, the epoch second of the first
+    aborted pass or null; the service hands it through as an optional counter,
+    the template renders the one static sentence hidden while the gateway
+    answers, and the script writes it through t() and textContent and toggles
+    it on every poll, the figure in the fingerprint (T-40-26).
+    """
+    template = TEMPLATE.read_text(encoding="utf-8")
+    script = SCRIPT.read_text(encoding="utf-8")
+    view = ADMIN_VIEW.read_text(encoding="utf-8")
+
+    assert template.count('id="findling-gateway-unavailable"') == 1
+    assert (
+        '<p class="settings-hint" id="findling-gateway-unavailable"<?php if (!$gatewayDown) { ?> hidden<?php } ?>>'
+        in template
+    )
+    assert f"<?php p($l->t('{GATEWAY_UNAVAILABLE_SENTENCE}')); ?>" in template
+    assert "$gatewayDown = is_int($backend['gatewayUnavailableSince'] ?? null)" in template
+
+    line = script[script.index("function gatewayLine (backend)") :]
+    line = line[: line.index("\n  }\n")]
+    assert f"text('findling-gateway-unavailable', t('findling', '{GATEWAY_UNAVAILABLE_SENTENCE}'))" in line
+    assert "shown('findling-gateway-unavailable', down)" in line
+    assert "innerHTML" not in line
+    assert "gatewayLine(view.backend || {})" in script
+    assert "(view.backend || {}).gatewayUnavailableSince," in script
+
+    assert view.count("'gatewayUnavailableSince' => ") == 1
+    assert "'gatewayUnavailableSince' => $this->optionalCounter($answer, 'gatewayUnavailableSince')," in view
+
+    assert len(L10N_CATALOGUES) == 16
+    for catalogue in L10N_CATALOGUES:
+        assert GATEWAY_UNAVAILABLE_SENTENCE in catalogue_of(catalogue), catalogue.name
+    assert str(catalogue_of(L10N_JSON)[GATEWAY_UNAVAILABLE_SENTENCE]).startswith("Das Content-Gateway hat")
+
+
 # Plan 31-02 (D-31-03, Befund 13 of the plan check): every visible sentence of
 # phase 31 travels in one bundle, two new ones for the ZIP code archive_limit and
 # three changed ones. Each sentence is held in each catalogue as its own test
@@ -3750,8 +3798,15 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     documents carry the rows; the German and French wording is derived from
     the accepted sentences next to it and goes to the owner with the product
     in phase 40, the five other languages are machine drafts under the same
-    dated reservation as the rest. Whoever moves it next writes the next
-    paragraph.
+    dated reservation as the rest.
+
+    It stands at 354 since 29.10.2026, plan 40-06 (issue #36, Befund D,
+    E-40-06-04): the one sentence for a content gateway that did not answer on
+    the last indexing pass. All sixteen files moved together, the five language
+    documents carry the row; the German and French wording goes to the owner
+    in the round of plan 40-04 (block G), the five other languages are machine
+    drafts under the same dated reservation as the rest. Whoever moves it next
+    writes the next paragraph.
     """
     for language, twin in ((L10N_JSON, L10N_DE_DE_JSON), (L10N_JS, L10N_DE_DE_JS)):
         assert twin.is_file(), f"{twin.name} is missing, so everybody on de_DE reads this app in English"
@@ -3799,8 +3854,9 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     # file, D-36-03, D-36-04); the sentence about shares counted once per user
     # mount changed its key in plan 39-01 and so moved nothing; two of plan
     # 39-01 (the sentence for nought left out, L-36-05, and the hint after a
-    # rule change, L-36-06)
-    assert len(keys_of["de.json"]) == 353
+    # rule change, L-36-06); one of plan 40-06 (the sentence for a content
+    # gateway that did not answer, issue #36, E-40-06-04)
+    assert len(keys_of["de.json"]) == 354
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:

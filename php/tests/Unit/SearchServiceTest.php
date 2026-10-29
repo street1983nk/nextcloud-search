@@ -20,6 +20,7 @@ use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
 use OCP\Files\NotPermittedException;
+use OCP\Files\StorageNotAvailableException;
 use OCP\IUser;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -1826,5 +1827,88 @@ final class SearchServiceTest extends TestCase {
 		self::assertNotNull($late->source);
 		self::assertSame([], $late->hits);
 		self::assertNull($late->failure);
+	}
+
+	// -- a storage that is not available (issue #36, plan 40-06) -------------
+
+	/**
+	 * A file on a mount whose storage is not available: the readability
+	 * question throws, the shape of the group folder with a broken share of
+	 * issue #36.
+	 */
+	private function fileOnABrokenMount(): File&MockObject {
+		$file = $this->createMock(File::class);
+		$file->method('isReadable')->willThrowException(new StorageNotAvailableException('Storage is temporarily not available'));
+		$file->expects(self::never())->method('getName');
+
+		return $file;
+	}
+
+	public function testACandidateOnAStorageThatIsNotAvailableDropsOutAndTheOtherHitsStillCome(): void {
+		// 22 sits on the broken mount and throws out of isReadable, 33 throws
+		// already out of the lookup. Both drop out like a file this user cannot
+		// see, 11 is the hit, and search() itself raises nothing.
+		$broken = $this->fileOnABrokenMount();
+		$file = $this->readableFile();
+		$userFolder = $this->createMock(Folder::class);
+		$userFolder->method('getFirstNodeById')->willReturnCallback(
+			static function (int $fileId) use ($broken, $file): ?File {
+				if ($fileId === 33) {
+					throw new StorageNotAvailableException('File by id 33 not found');
+				}
+
+				return $fileId === 22 ? $broken : ($fileId === 11 ? $file : null);
+			},
+		);
+		$userFolder->method('getRelativePath')->willReturn('/Board/Report.pdf');
+		$this->rootFolder->method('getUserFolder')->with('testuser')->willReturn($userFolder);
+		$this->mountCache->method('getMountsForUser')->willReturn([]);
+		$this->exApp->method('searchCandidates')->willReturn($this->page([
+			['fileId' => 22],
+			['fileId' => 33],
+			['fileId' => 11],
+		]));
+		$this->exApp->method('snippets')->willReturn([]);
+
+		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(), SearchFilters::none());
+
+		self::assertSame([11], array_map(static fn (ApprovedHit $hit): int => $hit->fileId, $outcome->hits));
+		self::assertNull($outcome->failure);
+	}
+
+	public function testANeighbourOnAStorageThatIsNotAvailableDropsOutOfTheSimilarList(): void {
+		$this->folderWith([
+			self::SOURCE_ID => $this->readableFile('Quelle.pdf'),
+			7 => $this->fileOnABrokenMount(),
+			8 => $this->readableFile('Nachbar.pdf'),
+		]);
+		$this->exApp->method('similarCandidates')->willReturn($this->neighbours([7, 8]));
+
+		$outcome = $this->service()->similar($this->user(), self::SOURCE_ID, $this->caps());
+
+		self::assertSame([8], array_map(static fn (ApprovedHit $hit): int => $hit->fileId, $outcome->hits));
+		self::assertNull($outcome->failure);
+	}
+
+	public function testASourceOnAStorageThatIsNotAvailableIsUnavailableAndNotAnError(): void {
+		$this->exApp->expects(self::never())->method('similarCandidates');
+		$this->folderWith([self::SOURCE_ID => $this->fileOnABrokenMount()]);
+
+		$outcome = $this->service()->similar($this->user(), self::SOURCE_ID, $this->caps());
+
+		self::assertNull($outcome->source);
+		self::assertSame([], $outcome->hits);
+		self::assertSame(SimilarOutcome::FAILURE_SOURCE_UNAVAILABLE, $outcome->failure);
+	}
+
+	public function testTheSharedReadabilityQuestionStillThrowsOnABrokenMount(): void {
+		// The counter proof: the catch sits at the three calls of the search
+		// and NOT in readableNode(), which the content gateway, the reader
+		// choice of the queue and the path resolver share. There a broken mount
+		// must stay an exception and never become "not readable", or a passing
+		// storage fault would turn into a 404 and a skipped reader.
+		$this->expectException(StorageNotAvailableException::class);
+
+		SearchService::readableNode($this->fileOnABrokenMount());
 	}
 }

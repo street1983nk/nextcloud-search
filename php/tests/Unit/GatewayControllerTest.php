@@ -13,6 +13,7 @@ use OCP\AppFramework\Http\StreamResponse;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
+use OCP\Files\StorageNotAvailableException;
 use OCP\IRequest;
 use OCP\IUser;
 use OCP\IUserManager;
@@ -250,6 +251,71 @@ final class GatewayControllerTest extends TestCase {
 		self::assertNull($this->active);
 
 		fclose($stream);
+	}
+
+	/**
+	 * A readable file of alice whose open behaves as the closure says.
+	 */
+	private function fileOpeningAs(\Closure $open): void {
+		$file = $this->createMock(File::class);
+		$file->method('isReadable')->willReturn(true);
+		$file->method('fopen')->with('r')->willReturnCallback($open);
+		$userFolder = $this->createMock(Folder::class);
+		$userFolder->method('getFirstNodeById')->with(11)->willReturn($file);
+		$this->rootFolder->method('getUserFolder')->with('alice')->willReturn($userFolder);
+	}
+
+	public function testAFileThatCannotBeOpenedAnswers422AndLeavesOneLogLine(): void {
+		// Befund E of issue #36: the branch used to leave no trace on the
+		// Nextcloud side. One static sentence and the file id, nothing else.
+		$this->fileOpeningAs(static fn () => false);
+		$this->logger->expects(self::once())
+			->method('warning')
+			->with('Findling: a file could not be opened for reading, answered 422', ['fileId' => 11]);
+		$this->logger->expects(self::never())->method('error');
+
+		$response = $this->controller($this->backendAppId())->getFileContents(11, 'alice');
+
+		self::assertInstanceOf(DataResponse::class, $response);
+		self::assertSame(Http::STATUS_UNPROCESSABLE_ENTITY, $response->getStatus());
+		self::assertSame(['error' => 'File could not be opened for reading.'], $response->getData());
+	}
+
+	public function testAStorageThatIsNotAvailableAtTheOpenStaysA500AndNeverA404(): void {
+		// The case of issue #36, and the regression guard of "Warum kein
+		// PHP-404" (plan 40-06, E-40-06-03 struck): a 404 would be a lasting
+		// skipped(gone) for every file of a storage that is only down for a
+		// while. The answer stays the 500 of the catch-all branch, and the
+		// container judges the one file failed(gateway_error).
+		$this->fileOpeningAs(static function (): never {
+			throw new StorageNotAvailableException('File by id 11 not found');
+		});
+		$this->logger->expects(self::once())
+			->method('error')
+			->with('Findling: unknown error reading a file', self::callback(
+				static fn (array $context): bool => array_keys($context) === ['exception']
+					&& $context['exception'] instanceof StorageNotAvailableException,
+			));
+
+		$response = $this->controller($this->backendAppId())->getFileContents(11, 'alice');
+
+		self::assertInstanceOf(DataResponse::class, $response);
+		self::assertSame(Http::STATUS_INTERNAL_SERVER_ERROR, $response->getStatus());
+		self::assertNotSame(Http::STATUS_NOT_FOUND, $response->getStatus());
+		self::assertSame(['error' => 'Unknown error occurred.'], $response->getData());
+	}
+
+	public function testAnyOtherThrowableAtTheOpenIsStillA500(): void {
+		$this->fileOpeningAs(static function (): never {
+			throw new \RuntimeException('something else broke');
+		});
+		$this->logger->expects(self::once())->method('error')->with('Findling: unknown error reading a file', self::anything());
+
+		$response = $this->controller($this->backendAppId())->getFileContents(11, 'alice');
+
+		self::assertInstanceOf(DataResponse::class, $response);
+		self::assertSame(Http::STATUS_INTERNAL_SERVER_ERROR, $response->getStatus());
+		self::assertSame(['error' => 'Unknown error occurred.'], $response->getData());
 	}
 
 	public function testAnUnknownUserStillGetsTheNotFoundBodyAndIsNotSwitchedTo(): void {
