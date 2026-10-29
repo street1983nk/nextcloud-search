@@ -36,7 +36,9 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
   blocked as malicious.
 - A gateway error for one file no longer blocks the queue: the file ends
   as failed (gateway_error), the rest of the pass goes on, and the log
-  names the HTTP status (#36).
+  names the HTTP status (#36). When many files of one pass fail the same
+  way, the pass pauses and those files are retried a limited number of
+  times before they end as failed, so the queue always moves on.
 - An aborted indexing pass leaves no unjudged document in the index (#36).
 - A content gateway that does not answer is named on the admin page and in
   /status (#36).
