@@ -8,15 +8,15 @@ license = "AGPL-3.0-or-later"
 authors = [{ name = "street1983nk" }]
 dependencies = [
     "nc-py-api[app]==0.30.3",
-    "fastapi==0.161.1",
+    "fastapi==0.162.0",
     "httpx==0.28.1",
     "tantivy==0.26.2",
     "pypdfium2==5.14.0",
-    "pypdf==6.21.2",
+    "pypdf==6.21.4",
     "python-docx==1.2.0",
     "python-pptx==1.0.2",
     "openpyxl==3.1.5",
-    "striprtf==0.0.34",
+    "striprtf==0.0.35",
     "charset-normalizer==3.5.2",
     "lxml==6.1.3",
     # Pillow was already in uv.lock, pulled in transitively by python-pptx. The
@@ -66,7 +66,7 @@ dependencies = [
     # dimensional vector, and the tool that quantises the model at build time.
     # The pinned 1.31.0 carries a cp313 manylinux_2_28_aarch64 wheel, which the
     # ARM box needs.
-    "onnxruntime==1.31.0",
+    "onnxruntime==1.31.1",
     # The vector store: a loadable SQLite extension, brute force KNN, no second
     # process. There is deliberately no >= here. Everything after 0.1.9
     # (2026-03-31) is a prerelease, and no commit has landed in the upstream
@@ -80,7 +80,7 @@ dependencies = [
     # Chunking. Splits a document into passages along sentence and paragraph
     # boundaries instead of every N characters. 0.33.0 (2026-09-24), cp310-abi3
     # wheel, so one wheel serves every Python from 3.10 on.
-    "semantic-text-splitter==0.33.0",
+    "semantic-text-splitter==0.33.1",
 ]
 
 # The unit suite covered 92 per cent of src/findling when the floor was
@@ -94,11 +94,11 @@ skip_covered = true
 
 [dependency-groups]
 dev = [
-    "ruff==0.17.2",
+    "ruff==0.17.3",
     "pyright==1.1.414",
     "vulture==2.16",
     "pytest==9.1.1",
-    "pytest-asyncio==1.4.0",
+    "pytest-asyncio==1.4.1",
     "pytest-cov==7.1.0",
 ]
 # Build time only, and deliberately a group of its own rather than a dependency.
