@@ -6,6 +6,18 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-11-02
+
+### Security
+
+- pypdf 6.21.4, which fixes CVE-2026-119203 to CVE-2026-119209 in the PDF
+  text extraction. pip-audit over the locked set is clean again.
+
+### Changed
+
+- Patch updates: striprtf 0.0.35, onnxruntime 1.31.1,
+  semantic-text-splitter 0.33.1. No functional changes.
+
 ## [1.6.0] - 2026-10-28
 
 ### Added
@@ -253,6 +265,8 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
   and every result permission checked by Nextcloud. The patch releases 1.0.1
   to 1.0.3 of the same days carried store metadata and packaging fixes.
 
+[1.6.1]: https://github.com/street1983nk/nextcloud-search/compare/v1.6.0...v1.6.1
+[1.6.0]: https://github.com/street1983nk/nextcloud-search/compare/v1.5.1...v1.6.0
 [1.5.1]: https://github.com/street1983nk/nextcloud-search/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/street1983nk/nextcloud-search/compare/v1.4.3...v1.5.0
 [1.4.3]: https://github.com/street1983nk/nextcloud-search/compare/v1.4.2...v1.4.3
