@@ -2842,7 +2842,7 @@ Belegkette (02.11.2026):
    findling.tar.gz (642916 B) und findling_backend.tar.gz (43752 B) mit
    je einer `.sig`. Beide Signaturen gegen die Zertifikate geprüft, die der
    Store selbst ausliefert (`apps.json` bzw. `appapi_apps.json`): "Verified
-   OK". Beide Archive tragen `<version>1.6.1`, das Backend `<image-tag>1.6.1`.
+   OK". Beide Tarballs tragen `<version>1.6.1`, das Backend `<image-tag>1.6.1`.
 3. Lauf 41409468778 ("Multi-arch image") success:
    `ghcr.io/street1983nk/findling_backend:1.6.1` ist ein OCI-Index mit
    `linux/amd64` und `linux/arm64`.
