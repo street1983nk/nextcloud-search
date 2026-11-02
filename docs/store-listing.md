@@ -2822,7 +2822,8 @@ weiter von v1.5.0 aus (`UPGRADE_FROM_TAG`). Die Versionsprüfung der PHP-App
 (`ExAppService::lockstep` und `driftOnRecord`) vergleicht nur Major und Minor, 1.6.0 und
 1.6.1 laufen also gemischt.
 
-Release-Notiz v1.6.1 (englisch, Faktenliste, ENTWURF, Owner-Wort offen):
+Release-Notiz v1.6.1 (englisch, Faktenliste, Owner-Wort 02.11.2026, so ins
+Release übernommen):
 
 ```
 Findling 1.6.1, a security release. The fix is in the backend; 1.6.0 and 1.6.1 work together.
