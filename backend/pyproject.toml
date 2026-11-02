@@ -8,7 +8,7 @@ license = "AGPL-3.0-or-later"
 authors = [{ name = "street1983nk" }]
 dependencies = [
     "nc-py-api[app]==0.30.3",
-    "fastapi==0.162.0",
+    "fastapi==0.161.1",
     "httpx==0.28.1",
     "tantivy==0.26.2",
     "pypdfium2==5.14.0",
