@@ -99,7 +99,11 @@ env:
   # ghcr.io/street1983nk/findling_backend:1.5.0 answers anonymously as an OCI
   # index with linux/amd64 and linux/arm64. The value is set after the bump of
   # this tree to 1.6.0 (plan 40-02) and never before it, for the pitfall 8
-  # reason the v1.4.3 paragraph below keeps. Every assurance that names the
+  # reason the v1.4.3 paragraph below keeps. Release 1.6.1 (2026-11-02) keeps
+  # the start on v1.5.0, as 1.5.1 kept v1.4.3: 1.6.1 is a dependency release
+  # (pypdf 6.21.4 and patch updates), backend/src and every PHP file are byte
+  # identical to 1.6.0, so the 1.5.0 to 1.6.1 jump proves the same path.
+  # Every assurance that names the
   # behaviour of the start was derived anew for 1.5.0 in
   # .planning/phases/40-haertung-und-store-einreichung-1-6-0/40-03-ABLEITUNG.md,
   # none softened: 1.5.0 reads the whole seed of "Store upgrade 2b" itself
@@ -3650,7 +3654,7 @@ jobs:
       # an installation that really came out of the release assets of
       # UPGRADE_FROM_TAG is brought to the state of this commit, and the index
       # it built survives that untouched. Since plan 40-03 that tag is v1.5.0
-      # and the jump is 1.5.0 to 1.6.0 (REL-06; 1.5.1 shares the code of 1.5.0
+      # and the jump is 1.5.0 to 1.6.1 (REL-06, 1.6.1 since 2026-11-02; 1.5.1 shares the code of 1.5.0
       # byte for byte, so the statements about 1.5.0 below hold for every 1.5.x
       # installation). From plan 36-13 the tag was v1.4.3 and the jump 1.4.3 to
       # 1.5.1 (D-36-13); from plan
@@ -5919,9 +5923,9 @@ jobs:
 
           # The two cases, both named, and both branches stay. They were
           # written in plan 11-07 for a version step that had not happened yet.
-          # Since plan 40-03 the tree carries 1.6.0 (plan 40-02) against the
+          # Since plan 40-03 the tree carries 1.6.1 (1.6.0 until 2026-11-02) against the
           # 1.5.0 of the tag, so the FIRST branch runs and has to see
-          # installed_version 1.6.0 after the upgrade. From plan 36-13 to 40-03
+          # installed_version 1.6.1 after the upgrade. From plan 36-13 to 40-03
           # the tree carried 1.5.1 (1.5.0 until 2026-10-22) against the 1.4.3
           # of the tag (first branch); from plan 30-06 to 36-13 tree and
           # UPGRADE_FROM_TAG both carried 1.4.2, so the SECOND branch ran; from plan
@@ -5989,7 +5993,7 @@ jobs:
 
           # The new image, and it is the one this run built out of this commit.
           # Why not the reference the archive of this commit names: since plan
-          # 40-02 backend/appinfo/info.xml says image-tag 1.6.0, and that tag is
+          # 40-02 backend/appinfo/info.xml says image-tag 1.6.0 (1.6.1 since 2026-11-02), and that tag is
           # not in the registry yet, because the release of phase 40 comes
           # after this proof (the same held for 1.4.0 between plan 29-11 and
           # the release of phase 29, for 1.3.0 between plan 23-06 and
