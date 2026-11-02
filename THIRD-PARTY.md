@@ -160,11 +160,11 @@ plan 31-01 found seven of them one or more releases behind.
 |---|---|---|---|---|
 | `tantivy` | 0.26.2 | MIT | github.com/quickwit-oss/tantivy-py | `/app/.venv/lib/python3.13/site-packages/tantivy` |
 | `pypdfium2` | 5.14.0 | Apache-2.0 or BSD-3-Clause (wrapper), BSD-3-Clause (bundled PDFium) | github.com/pypdfium2-team/pypdfium2 | `/app/.venv/lib/python3.13/site-packages/pypdfium2` |
-| `pypdf` | 6.21.2 | BSD-3-Clause | github.com/py-pdf/pypdf | `/app/.venv/lib/python3.13/site-packages/pypdf` |
+| `pypdf` | 6.21.4 | BSD-3-Clause | github.com/py-pdf/pypdf | `/app/.venv/lib/python3.13/site-packages/pypdf` |
 | `python-docx` | 1.2.0 | MIT | github.com/python-openxml/python-docx | `/app/.venv/lib/python3.13/site-packages/docx` |
 | `python-pptx` | 1.0.2 | MIT | github.com/scanny/python-pptx | `/app/.venv/lib/python3.13/site-packages/pptx` |
 | `openpyxl` | 3.1.5 | MIT | foss.heptapod.net/openpyxl/openpyxl | `/app/.venv/lib/python3.13/site-packages/openpyxl` |
-| `striprtf` | 0.0.34 | BSD-3-Clause | github.com/joshy/striprtf | `/app/.venv/lib/python3.13/site-packages/striprtf` |
+| `striprtf` | 0.0.35 | BSD-3-Clause | github.com/joshy/striprtf | `/app/.venv/lib/python3.13/site-packages/striprtf` |
 | `charset-normalizer` | 3.5.2 | MIT | github.com/jawah/charset_normalizer | `/app/.venv/lib/python3.13/site-packages/charset_normalizer` |
 | `lxml` | 6.1.3 | BSD-3-Clause (bundled libxml2 and libxslt: MIT) | github.com/lxml/lxml | `/app/.venv/lib/python3.13/site-packages/lxml` |
 | `pillow` | 13.0.0 | MIT-CMU | github.com/python-pillow/Pillow | `/app/.venv/lib/python3.13/site-packages/PIL` |
@@ -395,9 +395,9 @@ held.
 |---|---|---|---|---|
 | `tokenizers` | 0.23.3 | Apache-2.0 | github.com/huggingface/tokenizers | `/app/.venv/lib/python3.13/site-packages/tokenizers` |
 | `numpy` | 2.5.4 | BSD-3-Clause (wheel metadata: `BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0` for bundled parts) | github.com/numpy/numpy | `/app/.venv/lib/python3.13/site-packages/numpy` |
-| `onnxruntime` | 1.31.0 | MIT | github.com/microsoft/onnxruntime | `/app/.venv/lib/python3.13/site-packages/onnxruntime` |
+| `onnxruntime` | 1.31.1 | MIT | github.com/microsoft/onnxruntime | `/app/.venv/lib/python3.13/site-packages/onnxruntime` |
 | `sqlite-vec` | 0.1.9 | Apache-2.0 | github.com/asg017/sqlite-vec | `/app/.venv/lib/python3.13/site-packages/sqlite_vec`, and the extension itself a second time at `/usr/local/lib/findling/vec0.so` |
-| `semantic-text-splitter` | 0.33.0 | MIT | github.com/benbrandt/text-splitter | `/app/.venv/lib/python3.13/site-packages/semantic_text_splitter` |
+| `semantic-text-splitter` | 0.33.1 | MIT | github.com/benbrandt/text-splitter | `/app/.venv/lib/python3.13/site-packages/semantic_text_splitter` |
 
 `sqlite-vec` is the entry with the second copy, and the copy is the point. The
 package ships a prebuilt shared library inside its wheel, and that library is
