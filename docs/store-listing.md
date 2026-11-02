@@ -2810,6 +2810,28 @@ hat der Owner mit D-37-08 bewusst so belassen.
 
 ---
 
+# Release 1.6.1 (02.11.2026): Sicherheitsupdate
+
+Kein Funktionsentscheid und kein Entwurf der Beschreibungen: 1.6.1 behebt die
+von pip-audit gemeldeten CVEs in pypdf (Owner-GO 02.11.2026, "nur
+Sicherheit"; der Backup-Pause-Schalter wandert nach 1.6.2). Namen,
+Beschreibungen und `discussion`-Link bleiben die Fassung 1.6.0; nur die
+Doku-Links der sechs Beschreibungen zeigen auf `blob/v1.6.1`. `backend/src`
+und jede PHP-Datei sind Byte für Byte die von 1.6.0. Der Upgrade-Beweis läuft
+weiter von v1.5.0 aus (`UPGRADE_FROM_TAG`). Die Versionsprüfung der PHP-App
+(`ExAppService::lockstep` und `driftOnRecord`) vergleicht nur Major und Minor, 1.6.0 und
+1.6.1 laufen also gemischt.
+
+Release-Notiz v1.6.1 (englisch, Faktenliste, ENTWURF, Owner-Wort offen):
+
+```
+Findling 1.6.1, a security release. The fix is in the backend; 1.6.0 and 1.6.1 work together.
+- Security: pypdf 6.21.4 (CVE-2026-119203 to CVE-2026-119209)
+- Patch updates: striprtf 0.0.35, onnxruntime 1.31.1, semantic-text-splitter 0.33.1
+- No other changes
+**Full Changelog**: https://github.com/street1983nk/nextcloud-search/compare/v1.6.0...v1.6.1
+```
+
 # Release 1.6.0 (29.10.2026)
 
 Store-Text und Release-Notiz sind die am 29.10.2026 abgenommene Fassung oben
