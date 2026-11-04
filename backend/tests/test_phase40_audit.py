@@ -395,7 +395,12 @@ def test_s2_the_route_takes_both_paths_from_the_settings_only() -> None:
     source = Path(status.__file__).read_text(encoding="utf-8")
     calls = re.findall(r"embedded_in_storages\(([^)]*)\)", source)
 
-    assert calls == ["resolved.state_db, resolved.vectors_db, leave_out"]
+    # Since plan 41-02 a second call counts above the ceiling in the background
+    # thread, and it too takes both paths from the settings it resolves itself.
+    assert calls == [
+        "resolved.state_db, resolved.vectors_db, leave_out",
+        "resolved.state_db, resolved.vectors_db, storage_ids",
+    ]
 
 
 # == S3 the tunnel watcher (Linux only) ===============================================

@@ -39,6 +39,7 @@ from findling import precision as precision_module
 from findling import probe as probe_module
 from findling import profile as profile_module
 from findling.api import resources as resources_module
+from findling.api import status as status_module
 from findling.config import settings
 from findling.embed import model as model_module
 from findling.embed.engine import note_cutter_failure
@@ -485,6 +486,23 @@ def quiesce_the_fill_refresh() -> Iterator[None]:
     resources_module.join_fill_refresh()
     yield
     resources_module.join_fill_refresh()
+
+
+@pytest.fixture(autouse=True)
+def quiesce_the_left_out_refresh() -> Iterator[None]:
+    """No case inherits the left out vector count of the case before it.
+
+    ``findling/api/status.py`` counts the vectors of left out storages above
+    LEFT_OUT_EMBEDDED_SYNC_CEILING in a background thread since plan 41-02
+    (issue #25) and keeps the figures in a cache of the process. A thread still
+    counting the volume of the case before, or a figure it cached, would decide
+    what the next case reads. Joined and emptied on both sides.
+    """
+    status_module.join_left_out_refresh()
+    status_module.forget_left_out_counts()
+    yield
+    status_module.join_left_out_refresh()
+    status_module.forget_left_out_counts()
 
 
 @pytest.fixture(autouse=True)

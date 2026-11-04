@@ -80,7 +80,11 @@ import asyncio
 import logging
 import os
 import sqlite3
+import threading
+import time
+from collections import OrderedDict
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Annotated, Final
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -146,11 +150,35 @@ PROFILE_VALUE_KEYS: Final = {
 LEAVE_OUT_PATTERN: Final = r"^(0|[1-9][0-9]{0,17})(,(0|[1-9][0-9]{0,17}))*$"
 LEAVE_OUT_MAX_LENGTH: Final = 8000
 LEAVE_OUT_MAX_IDS: Final = 1000
-# Above this many living indexed documents in the left out storages, the vector
-# count of those documents is not worked out and its field stays absent: a poll
-# of the admin page must not become a join over a corpus of that size. The page
-# then counts like 1.5, which is the safe direction.
-LEFT_OUT_EMBEDDED_CEILING = 100_000
+# Up to this many living indexed documents in the left out storages, the vector
+# count of those documents is worked out inside the request: measured at about
+# 40 ms for 60 000 documents (40-AUDIT.md, P1). Above it, a poll of the admin
+# page must not become a join over a corpus of that size, so the count runs in a
+# background thread of its own and the answer takes it from a small cache (plan
+# 41-02, issue #25). Until then such an instance got no figure at all and the
+# deduplication of AdminViewService::leftOutCounts() fell away without a word.
+LEFT_OUT_EMBEDDED_SYNC_CEILING = 100_000
+# How long a figure of the background count is answered without a new count,
+# taken from the end of the count that made it (the lesson of F-40N-06: a long
+# count must not come back stale at once). A stale figure is still answered
+# while the next count runs, the way the fill level of candidate F is.
+LEFT_OUT_CACHE_SECONDS: Final = 300
+# How many leaveOut lists the cache keeps. The list comes from the companion and
+# changes only when the shares of an instance change, so a few cover every
+# realistic page; the bound keeps a caller with ever new lists from growing it.
+LEFT_OUT_CACHE_KEYS: Final = 4
+
+# What tells one vector stock from the one that replaced it: the path, the
+# device and the inode. The modification time is deliberately not part of it,
+# because every checkpoint of the embedding worker moves it, and a figure that
+# fell with every checkpoint would be absent for most polls of a busy instance.
+type _StockId = tuple[str, int, int]
+# The single flight of the background count, its flag and its cache, all under
+# _LEFT_OUT_LOCK. A cache entry is the figure, the monotonic moment its count
+# ended, and the stock it was counted on.
+_LEFT_OUT_LOCK = threading.Lock()
+_LEFT_OUT_REFRESH: threading.Thread | None = None
+_LEFT_OUT_CACHE: OrderedDict[frozenset[int], tuple[int, float, _StockId]] = OrderedDict()
 
 
 def _absent(value: object) -> bool:
@@ -433,8 +461,9 @@ class StatusResponse(BaseModel):
     # without the parameter, a companion of 1.5 among them, gets the field set
     # it always got, key for key, because None never reaches the wire for these
     # two (exclude_if) while every other field keeps its null where it has one.
-    # embeddedLeftOut is also absent when the vector stock cannot be read or the
-    # left out storages hold more than LEFT_OUT_EMBEDDED_CEILING documents.
+    # embeddedLeftOut is also absent when the vector stock cannot be read, and
+    # above LEFT_OUT_EMBEDDED_SYNC_CEILING documents while the background count
+    # of plan 41-02 has no figure for this list and this stock yet (issue #25).
     indexedLeftOut: int | None = Field(default=None, exclude_if=_absent)
     embeddedLeftOut: int | None = Field(default=None, exclude_if=_absent)
 
@@ -801,18 +830,136 @@ def _left_out(store: Store, answer: StatusResponse, leave_out: Sequence[int]) ->
     caller. ``embeddedLeftOut`` needs the vector stock next to it and has a try
     of its own, in the shape of :func:`_embedded`: a stock that is missing,
     empty or not a database costs this one figure and never the answer (review
-    finding WR-01). Above LEFT_OUT_EMBEDDED_CEILING documents it is not worked
-    out at all. Two numbers and nothing of a row (T-04-06, T-39-04).
+    finding WR-01). Up to LEFT_OUT_EMBEDDED_SYNC_CEILING documents it is
+    counted here; above it the figure comes from :func:`_cached_left_out`,
+    which answers at once and leaves the counting to a background thread
+    (D-41-09). Two numbers and nothing of a row (T-04-06, T-39-04).
     """
     indexed_left_out = store.indexed_in_storages(leave_out)
     embedded_left_out: int | None = None
     resolved = settings()
-    if indexed_left_out <= LEFT_OUT_EMBEDDED_CEILING and resolved.vectors_db.is_file():
+    if not resolved.vectors_db.is_file():
+        return answer.model_copy(update={"indexedLeftOut": indexed_left_out, "embeddedLeftOut": None})
+    if indexed_left_out > LEFT_OUT_EMBEDDED_SYNC_CEILING:
+        embedded_left_out = _cached_left_out(resolved.vectors_db, leave_out)
+    else:
         try:
             embedded_left_out = embedded_in_storages(resolved.state_db, resolved.vectors_db, leave_out)
         except (OSError, sqlite3.Error) as error:
             LOGGER.warning("the vector count of left out storages could not be read, an %s", type(error).__name__)
     return answer.model_copy(update={"indexedLeftOut": indexed_left_out, "embeddedLeftOut": embedded_left_out})
+
+
+def _stock_id(vectors_db: Path) -> _StockId | None:
+    """The identity of the vector stock at this path, None when it cannot be read."""
+    try:
+        found = vectors_db.stat()
+    except OSError:
+        return None
+    return (str(vectors_db), found.st_dev, found.st_ino)
+
+
+def _cached_left_out(vectors_db: Path, leave_out: Sequence[int]) -> int | None:
+    """The background figure of these left out storages, None while there is none.
+
+    Answers at once in every case. A figure of another stock (a refill put a
+    new file in place) is no figure. A figure older than LEFT_OUT_CACHE_SECONDS
+    from the end of its count is still answered and starts the next count; a
+    missing one is answered as None and starts one. Single flight: while a
+    count runs, for this list or another, nothing else starts, and the next
+    poll asks again.
+    """
+    key = frozenset(int(storage_id) for storage_id in leave_out)
+    stock = _stock_id(vectors_db)
+    now = time.monotonic()
+    with _LEFT_OUT_LOCK:
+        cached = _LEFT_OUT_CACHE.get(key)
+        if cached is not None and stock is not None and cached[2] == stock:
+            if now - cached[1] >= LEFT_OUT_CACHE_SECONDS:
+                _start_left_out_refresh(key)
+            return cached[0]
+        _start_left_out_refresh(key)
+        return None
+
+
+def _start_left_out_refresh(key: frozenset[int]) -> None:
+    """Start the background count of one list, unless a count runs. Under _LEFT_OUT_LOCK.
+
+    The pattern of :func:`findling.api.resources._start_fill_refresh`: daemon,
+    the flag is the thread itself, set here and cleared by the thread when it
+    ends. A start that fails (RuntimeError when the process has no thread left
+    to give, F-40N-03) puts the flag back to None, so the next poll tries again
+    instead of finding a thread that never ran.
+    """
+    global _LEFT_OUT_REFRESH
+    if _LEFT_OUT_REFRESH is not None:
+        return
+    thread = threading.Thread(
+        target=_refresh_left_out,
+        args=(key,),
+        name="findling-left-out-refresh",
+        daemon=True,
+    )
+    _LEFT_OUT_REFRESH = thread
+    try:
+        thread.start()
+    except RuntimeError as error:
+        _LEFT_OUT_REFRESH = None
+        LOGGER.warning("the left out vector count could not start, %s", type(error).__name__)
+
+
+def _refresh_left_out(key: frozenset[int]) -> None:
+    """The body of the background count: count outside the lock, write inside it.
+
+    The figure is written only when the stock is still the one it was counted
+    on and the settings still name it, the guard of
+    :func:`findling.api.resources._refresh_fill` for this cache (T-41-11). Its
+    moment is the end of the count. The cache keeps LEFT_OUT_CACHE_KEYS lists
+    and lets the oldest go. Never raises: a failure costs this one figure.
+    """
+    global _LEFT_OUT_REFRESH
+    try:
+        # Both paths from the settings and from nowhere else, like the count
+        # in the request (S2 of 40-AUDIT.md): the thread is handed the storage
+        # ids and nothing that names a file.
+        resolved = settings()
+        stock = _stock_id(resolved.vectors_db)
+        if stock is None:
+            return
+        storage_ids = sorted(key)
+        counted = embedded_in_storages(resolved.state_db, resolved.vectors_db, storage_ids)
+        ended = time.monotonic()
+        with _LEFT_OUT_LOCK:
+            current = settings().vectors_db
+            if current == resolved.vectors_db and _stock_id(current) == stock:
+                _LEFT_OUT_CACHE[key] = (counted, ended, stock)
+                _LEFT_OUT_CACHE.move_to_end(key)
+                while len(_LEFT_OUT_CACHE) > LEFT_OUT_CACHE_KEYS:
+                    _LEFT_OUT_CACHE.popitem(last=False)
+    except (OSError, sqlite3.Error) as error:
+        LOGGER.warning("the vector count of left out storages could not be read, an %s", type(error).__name__)
+    finally:
+        with _LEFT_OUT_LOCK:
+            if _LEFT_OUT_REFRESH is threading.current_thread():
+                _LEFT_OUT_REFRESH = None
+
+
+def join_left_out_refresh(timeout: float | None = 10.0) -> None:
+    """Wait for a running left out count to end. For tests and nothing else.
+
+    The thread is taken under the lock and joined outside it, because the
+    count needs the lock to write its figure and to clear its flag.
+    """
+    with _LEFT_OUT_LOCK:
+        thread = _LEFT_OUT_REFRESH
+    if thread is not None:
+        thread.join(timeout)
+
+
+def forget_left_out_counts() -> None:
+    """Empty the cache of the left out count. For tests and nothing else."""
+    with _LEFT_OUT_LOCK:
+        _LEFT_OUT_CACHE.clear()
 
 
 def _counted(leave_out: Sequence[int] | None = None) -> StatusResponse:
