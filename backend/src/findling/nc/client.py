@@ -157,7 +157,11 @@ _FIRST_ERROR_STATUS = 400
 # up, and the answer belongs to the one file it was asked about (GatewayRefused
 # below). The grid comes from the analysis of issue #36 in
 # .planning/phases/40-haertung-und-store-einreichung-1-6-0/deferred-items.md.
-_OUTAGE_STATUS = frozenset({502, 503, 504})
+# 408 and 429 joined in plan 41-01 (post audit F-40N-04): 408 is the timeout of a
+# proxy and 429 the rate limit of a proxy or a web application firewall. Both
+# speak about the instance and not about the file, so they stop the pass with
+# the delivery refunded and the back-off, instead of a verdict per file.
+_OUTAGE_STATUS = frozenset({408, 429, 502, 503, 504})
 
 # Fallbacks for the two environment variables the client library uses to
 # configure transport. Mirrored rather than invented, so an admin who sets
@@ -288,7 +292,7 @@ class ShortRead(Exception):
 class GatewayRefused(NextcloudException):
     """The gateway answered with an error about this one file (E-40-06-01).
 
-    Any status from 400 on except the two of "not yours" (None) and the three
+    Any status from 400 on except the two of "not yours" (None) and the five
     of a proxy (an outage): the gateway is up and has said something about
     this file, so the poller ends the file with failed(gateway_error) and the
     pass goes on (issue #36, Befund B). This is where the case of the report

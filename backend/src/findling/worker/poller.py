@@ -314,7 +314,7 @@ class _RefusalsPiledUp(_GatewayDown):
     A subclass, so every path that carries _GatewayDown behind the barrier
     carries this one too, and _work tells the two apart only at the abort. The
     difference is the refund (W-1 of the verification, owner decision 29.10.,
-    "escalate without refund"). An outage by the status grid (502, 503, 504 or
+    "escalate without refund"). An outage by the status grid (408, 429, 502, 503, 504 or
     no HTTP answer at all) says nothing about any file, so every row goes back
     with its delivery refunded, as since DI-05-23. An outage by count is made
     of answers about the files themselves: had their rows gone back refunded,
@@ -2128,7 +2128,7 @@ class Poller:
         998), raises :class:`GatewayRefused` on to the caller when the gateway
         answered with another error about this one file (E-40-06-01, the
         caller judges it failed(gateway_error)), and raises :class:`_GatewayDown`
-        for a proxy answer (502, 503, 504) and for everything that is no HTTP
+        for a proxy answer (408, 429, 502, 503, 504) and for everything that is no HTTP
         answer at all: a permission verdict, a verdict about one file and an
         unreachable server must never be mistaken for one another.
 
