@@ -1143,8 +1143,12 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # its sentence, and tests/Unit/SettingsControllerTest.php and tests/Unit/AdminViewServiceTest.php hold
 # both. No file came or went, so PHP_FILES_TODAY stays at 113. Recomputed independently with find,
 # sort, tr and sha256sum over the CRLF normalised tree: 54627d39... both ways.
+# Moved on 2026-11-04 by Plan 42-01 (PHP gates, local PHPUnit recipe): tests/bootstrap.php names
+# scripts/dev/phpunit_docker.sh instead of CI only. No file came or went, so PHP_FILES_TODAY stays at
+# 113. Recomputed independently with find, sort, tr and sha256sum over the CRLF normalised tree:
+# e7289079... both ways.
 PHP_FILES_TODAY = 113
-PHP_TREE_HASH_TODAY = "54627d39eb13c8d6f637acb868769eac73697ff42d731269eea1d72697c1ac22"
+PHP_TREE_HASH_TODAY = "e7289079bb595c3641b817415f7eab691590ec247914403513e0510ef0b4f9a0"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

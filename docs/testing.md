@@ -19,7 +19,7 @@ ever measured.
 |---|---|---|
 | Python backend | ruff, ruff format, pyright basic, vulture, pytest | locally before every commit, and in `python.yml` |
 | Dev and CI scripts under `scripts/` | ruff and ruff format only, with `--config backend/pyproject.toml` | `python.yml`, same job as the backend gates |
-| PHP companion | `php -l`, the textual gates in `backend/tests/`, plus both integration jobs end to end | `php.yml` and `integration.yml`, CI only |
+| PHP companion | `php -l`, the textual gates in `backend/tests/`, PHPUnit, plus both integration jobs end to end | `php.yml` and `integration.yml` in CI, and locally through `scripts/dev/phpunit_docker.sh` |
 
 The middle row is a **named limit**, added by the audit of phase 8. Until then
 `scripts/` fell through all four Python gates, because they run with
@@ -37,9 +37,14 @@ down here rather than discovered again.
 
 The reason for the difference is not a decision, it is the development machine:
 there is no PHP and no composer on it, and the local system Python is broken
-which is why the backend runs through `uv`. Every PHP change in this repository
-is therefore written once and verified in CI, never executed while it is written.
-That is worth knowing when reading a PHP diff here.
+which is why the backend runs through `uv`. There is Docker, though, and since
+plan 42-01 the PHPUnit suite runs locally in a container:
+`scripts/dev/phpunit_docker.sh` checks out `nextcloud/server` on the branch
+`SERVER_VERSION` of `php.yml`, mirrors `php/` into `apps/findling` of that
+checkout on every run, and runs the suite in `nextcloud:32.0.15-apache` with
+PHP 8.3. The integration jobs stay CI only, so a PHP change is still verified
+end to end in CI and not while it is written. That is worth knowing when reading
+a PHP diff here.
 
 What the PHP half is covered by today is therefore three things and not one:
 `php -l` over `php/lib`, `php/appinfo` and `php/templates` inside the container,
@@ -407,7 +412,7 @@ plan 06.1-24, which holds the arithmetic of the verdict revocation.
 
 ## What closed it
 
-A PHPUnit job in `php.yml`, CI only, following the pattern every Nextcloud app
+A PHPUnit job in `php.yml`, following the pattern every Nextcloud app
 uses: check out `nextcloud/server` at the same branch the integration jobs use,
 place the app in `apps/findling`, add PHPUnit as a dev dependency to
 `php/composer.json`, and run the suite with the server's `tests/bootstrap.php` so
@@ -426,10 +431,19 @@ proves that guard on every run before it runs the suite. And the job asserts how
 many tests actually executed, because a suite that reports success without
 executing anything is the failure mode this repository calls vacuous.
 
-The suite stays CI only, and that is a fact about the machine rather than a
-preference: there is no PHP on the development machine of this project, so it is
-not documented as a local command anywhere. That was also the reason the gap
-existed for three phases. Writing a PHPUnit suite and a new CI job without being
-able to run either of them once is how a workflow ends up red for reasons that
-have nothing to do with the code under test; what changed is that this phase
-builds the server checkout per version anyway.
+There is no PHP on the development machine of this project, and that was the
+reason the gap existed for three phases: writing a PHPUnit suite and a new CI job
+without being able to run either of them once is how a workflow ends up red for
+reasons that have nothing to do with the code under test. Since plan 42-01 the
+same arrangement runs locally in Docker:
+
+    scripts/dev/phpunit_docker.sh
+    scripts/dev/phpunit_docker.sh --filter RouteSecurity
+
+The script reads `SERVER_VERSION` and `MINIMUM_TESTS` out of `php.yml` instead
+of carrying its own copy, keeps the server checkout in
+`~/.cache/findling-phpunit/server` (`FINDLING_PHPUNIT_SERVER` moves it), and
+hands every argument to PHPUnit unchanged. The floor `MINIMUM_TESTS` is checked
+only on a run without arguments, because a filter is meant to run fewer tests.
+The textual gates in `backend/tests/` keep applying on top; the local run adds to
+them and replaces none.

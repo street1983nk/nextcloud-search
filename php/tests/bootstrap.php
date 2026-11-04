@@ -58,8 +58,8 @@ if (!is_file($serverBootstrap)) {
 		nextcloud/server with this app placed in apps/findling. Point
 		NEXTCLOUD_SERVER_ROOT at the root of that checkout, or move the app into
 		apps/findling of one. The job "phpunit" in .github/workflows/php.yml is
-		the reference layout; there is no PHP on the development machine, so the
-		suite is CI only by design.
+		the reference layout; scripts/dev/phpunit_docker.sh builds the same
+		layout locally in Docker.
 
 
 		MESSAGE);

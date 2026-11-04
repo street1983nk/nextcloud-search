@@ -217,14 +217,11 @@ jobs:
     # what can be slow here is a clone from somebody else's network.
     timeout-minutes: 15
 
-    # This suite is CI only, and that is a fact about the machine rather than a
-    # preference. There is no PHP on the development machine of this project, so
-    # nothing here can be run before it is committed, and docs/testing.md says so
-    # in the section that specifies these tests. That is also why the suite is
-    # not documented as a local command anywhere: an instruction nobody in this
-    # project can follow is worse than none. What makes the arrangement work is
-    # that the tests need nothing but mocks, so the only thing this job has to
-    # build is the autoload space of the server.
+    # The tests need nothing but mocks, so the only thing this job has to build
+    # is the autoload space of the server. scripts/dev/phpunit_docker.sh builds
+    # the same arrangement locally in Docker and reads the SERVER_VERSION and
+    # MINIMUM_TESTS keys out of this file instead of carrying a copy, so both
+    # keys have to stay below in exactly this spelling, one per line.
     env:
       # The branch the integration jobs use. It decides two things at once, and
       # they have to stay together: the OCP the tests mock against, and the
