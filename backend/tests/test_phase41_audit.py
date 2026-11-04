@@ -363,17 +363,19 @@ class _OneMount:
         )
 
 
-async def test_p_f_41a_02_the_catch_up_can_write_after_paused_when_the_hold_lands_in_its_mark_read(
+async def test_p_f_41a_02_a_hold_that_lands_in_the_mark_read_of_the_catch_up_keeps_pausing_and_nothing_writes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """F-41A-02 (LOW, open): a hold that lands while the catch-up reads its mark is seen too late.
+    """F-41A-02 (LOW, fixed): a hold that lands while the catch-up reads its mark is seen in time.
 
-    Reconcile.run(once=True) asks the hold, then awaits _catchup_mark() in a
-    thread, and only then raises in_flight. A pause that settles inside that
-    await sees no round in flight and reports "paused"; the round then starts
-    and its first catch-up round rewinds the bookmarks, a write into state.db.
-    The read is made to wait here so the window is hit every time. Pins
-    today's behaviour; the fix turns this red.
+    Before the fix Reconcile.run(once=True) asked the hold, awaited
+    _catchup_mark() in a thread and only then raised in_flight; a pause that
+    settled inside that await reported "paused", and the round then rewound the
+    bookmarks in state.db. Now in_flight goes up in the same step as the hold
+    check, with no await between them, and the hold is asked again after the
+    read. The read is made to wait here so the interleaving is forced every
+    time: the coordinator stays "pausing" while the read is open, the round
+    never starts, and "paused" follows only once the read is over.
     """
     path = tmp_path / "state.db"
     store = open_store(path)
@@ -426,17 +428,64 @@ async def test_p_f_41a_02_the_catch_up_can_write_after_paused_when_the_hold_land
         await asyncio.wait_for(in_the_read.wait(), timeout=5)
         wishes[0] = True
         await coordinator.tick()
-        assert coordinator.state == PAUSE_PAUSED, "no round in flight while the mark is read"
+        assert reconcile.in_flight, "the mark read counts as a round in flight"
+        assert coordinator.state == PAUSE_PAUSING, "no paused while the catch-up may still start a round"
         let_go.set()
-        await test_poller._until(lambda: bool(rewinds))
         await test_poller._until(lambda: not reconcile.in_flight)
+        await coordinator.tick()
+        assert coordinator.state == PAUSE_PAUSED
+        before = _snapshot(tmp_path)
+        await asyncio.sleep(0.2)
+        after = _snapshot(tmp_path)
     finally:
         let_go.set()
         stop.set()
         await asyncio.wait_for(task, timeout=5)
         store.close()
 
-    assert rewinds == [1], "a write into state.db after paused"
+    assert rewinds == [], "a write into state.db after the hold"
+    assert _data_moved(before, after) == {}
+
+
+async def test_p_f_41a_02_control_without_the_hold_the_same_catch_up_rewinds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Positive control of the probe above: with no pause the same round does rewind."""
+    path = tmp_path / "state.db"
+    store = open_store(path)
+    store.write_meta(CATCHUP_MARK, CATCHUP_RECONCILE)
+    reconcile = Reconcile(
+        store=store,
+        client_factory=lambda: cast("Any", None),
+        files_factory=lambda nc: cast("Any", _OneMount()),
+        queue_factory=lambda nc: cast("Any", _CalmQueue()),
+        slice_size=1,
+        quiet_max=100,
+        hour=2,
+        min_interval_hours=24,
+        pause_seconds=0.0,
+        tick_seconds=60.0,
+        clock=lambda: 1_800_000_000.0,
+        hour_of=lambda: 2,
+    )
+    reconcile.arm()
+    rewinds: list[int] = []
+    real_rewind = store.rewind_reconcile_walk
+
+    def counted_rewind() -> None:
+        rewinds.append(1)
+        real_rewind()
+
+    monkeypatch.setattr(store, "rewind_reconcile_walk", counted_rewind)
+    stop = asyncio.Event()
+    task = asyncio.create_task(reconcile.run(stop, once=True))
+    try:
+        await test_poller._until(lambda: bool(rewinds))
+    finally:
+        stop.set()
+        await asyncio.wait_for(task, timeout=5)
+        store.close()
+    assert rewinds == [1]
 
 
 # == Q nothing but the wish lifts the pause ============================================

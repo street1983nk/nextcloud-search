@@ -2439,8 +2439,14 @@ PHP_TREE_HASH_TODAY = "54627d39eb13c8d6f637acb868769eac73697ff42d731269eea1d7269
 # came or went, so PACKAGE_FILES_TODAY stays at 81. The PHP pair does not move.
 # Recomputed independently with find, sort, sed and sha256sum over the CRLF
 # normalised tree: 75e34151... both ways.
+#
+# Moved on 2026-11-04 by the fix of F-41A-02 (audit 41-09): worker/reconcile.py
+# raises in_flight in the same step as the hold check and asks the hold again
+# after the catch-up mark was read. No file came or went, so PACKAGE_FILES_TODAY
+# stays at 81. The PHP pair does not move. Recomputed independently with find,
+# sort, sed and sha256sum over the CRLF normalised tree: 3d8f694b... both ways.
 PACKAGE_FILES_TODAY = 81
-PACKAGE_TREE_HASH_TODAY = "75e34151cf7f50947d2419e0ac5aaa90613f3702dce94dacf1b5f6f9dcf5f60c"
+PACKAGE_TREE_HASH_TODAY = "3d8f694b036c7e324f7002a9c6f77c75aab2c5b80c8467aa84adc03d92865300"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

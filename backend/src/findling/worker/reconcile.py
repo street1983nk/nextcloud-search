@@ -435,28 +435,33 @@ class Reconcile:
                 # again afterwards, so a silence during the hold stays in force.
                 await _first_of(self._backup_release.wait(), stop_event.wait())
                 continue
-            if once:
-                mark = await self._catchup_mark()
-                if mark == CATCHUP_DONE:
-                    LOGGER.info("the catch-up cycle has run, the reconcile stays switched off")
-                    return
-                if mark != CATCHUP_RECONCILE:
-                    await _pause(self._tick, stop_event)
-                    continue
+            # Raised in the same step as the hold check above, with no await in
+            # between, and lowered in the finally below and nowhere else
+            # (issue #37, F-41A-02). The pause coordinator waits on it, so a
+            # hold that lands while the catch-up reads its mark keeps the state
+            # "pausing" until the read is over and the hold was asked again.
+            self._in_flight = True
             try:
-                # Raised and lowered around the call and nowhere else, the rule
-                # of the poller: the pause coordinator waits on it (issue #37).
-                self._in_flight = True
-                try:
-                    await self.run_once()
-                finally:
-                    self._in_flight = False
+                if once:
+                    mark = await self._catchup_mark()
+                    if mark == CATCHUP_DONE:
+                        LOGGER.info("the catch-up cycle has run, the reconcile stays switched off")
+                        return
+                    if mark != CATCHUP_RECONCILE:
+                        self._in_flight = False
+                        await _pause(self._tick, stop_event)
+                        continue
+                    if not self._backup_release.is_set():
+                        continue
+                await self.run_once()
             # Deliberately every exception, and only the type name is logged: a
             # traceback would carry whatever a library put into its message.
             except Exception as error:
                 kind_of_failure = type(error).__name__
                 LOGGER.error("reconcile round ended in an unexpected %s", kind_of_failure)
                 self._back_off()
+            finally:
+                self._in_flight = False
             if once and await self._catchup_mark() == CATCHUP_DONE:
                 LOGGER.info("the catch-up cycle has run, the reconcile stays switched off")
                 return
