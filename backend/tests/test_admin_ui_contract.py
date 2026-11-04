@@ -3862,7 +3862,17 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     sixteen files moved together, the five language documents carry the row;
     the German and French wording goes to the owner in the round of phase 41,
     the five other languages are machine drafts under the same dated
-    reservation as the rest. Whoever moves it next writes the next paragraph.
+    reservation as the rest.
+
+    It stands at 361 since 04.11.2026, Plan 41-06 (issue #37): six sentences
+    of the backup pause, the two labels of the switch ("Pause indexing",
+    "Resume indexing") and one sentence per state that is not running:
+    paused, pausing, unknown and a backend before 1.6.2 that does not know the
+    pause. All sixteen files moved together, the five language documents carry
+    the rows; the German and French wording goes to the owner in the round of
+    plan 41-10, the five other languages are machine drafts under the same
+    dated reservation as the rest. Whoever moves it next writes the next
+    paragraph.
     """
     for language, twin in ((L10N_JSON, L10N_DE_DE_JSON), (L10N_JS, L10N_DE_DE_JS)):
         assert twin.is_file(), f"{twin.name} is missing, so everybody on de_DE reads this app in English"
@@ -3912,8 +3922,9 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     # 39-01 (the sentence for nought left out, L-36-05, and the hint after a
     # rule change, L-36-06); one of plan 40-06 (the sentence for a content
     # gateway that did not answer, issue #36, E-40-06-04); one of plan 41-01
-    # (the remedy of gateway_error, F-40N-02, E-40-07-05)
-    assert len(keys_of["de.json"]) == 355
+    # (the remedy of gateway_error, F-40N-02, E-40-07-05); six of plan 41-06
+    # (the switch and the four state sentences of the backup pause, issue #37)
+    assert len(keys_of["de.json"]) == 361
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:
@@ -5151,3 +5162,80 @@ def test_the_script_writes_the_limits_as_text_only() -> None:
     # The option names stay in the template; the script never writes one.
     for variable in LIMIT_VARIABLES:
         assert variable not in body.group(1), variable
+
+
+# -- the backup pause of issue #37 (plan 41-06) -------------------------------
+
+PAUSE_SENTENCES = (
+    "Pause indexing",
+    "Resume indexing",
+    "Indexing is paused for a backup. Search keeps working.",
+    "Pausing: the current batch finishes first. Start the backup when the status says paused.",
+    "The pause state cannot be read yet, so indexing stays stopped.",
+    "The backend does not know the pause yet. Update both apps to the same version.",
+)
+
+_PAUSE_FUNCTION = re.compile(r"\n  function pauseBlock \(view\) \{\n(.*?)\n  \}\n", re.DOTALL)
+_PAUSE_SWITCH = re.compile(r"\n  function setupPause \(\) \{\n(.*?)\n  \}\n", re.DOTALL)
+
+
+def test_the_pause_sentences_are_in_every_catalogue() -> None:
+    """D-41-01, D-41-06: the six sentences of the pause in all sixteen files and five tables.
+
+    Each one is used in admin.js through t('findling', ...), and each one has a
+    row in exactly the five language documents, none in the catalogue overview.
+    """
+    script = SCRIPT.read_text(encoding="utf-8")
+    for sentence in PAUSE_SENTENCES:
+        assert f"t('findling', '{sentence}')" in script, sentence
+        for path in L10N_CATALOGUES:
+            assert sentence in catalogue_of(path), f"{path.name}: {sentence}"
+        tables = [
+            path.name
+            for path in sorted(DOCS_DIR.glob("l10n-*.md"))
+            if f"`{sentence}`" in path.read_text(encoding="utf-8")
+        ]
+        assert tables == [
+            "l10n-dutch.md",
+            "l10n-french.md",
+            "l10n-italian.md",
+            "l10n-portuguese.md",
+            "l10n-spanish.md",
+        ], sentence
+
+
+def test_the_pause_switch_posts_with_the_request_token() -> None:
+    """T-41-25: the switch is a POST on admin/pause through send(), which carries the token."""
+    script = SCRIPT.read_text(encoding="utf-8")
+    assert "const ROUTE_PAUSE = 'admin/pause'" in script
+    switch = _PAUSE_SWITCH.search(script)
+    assert switch is not None, "the script has no setupPause function"
+    assert "send(ROUTE_PAUSE, { paused: " in switch.group(1)
+    send = re.search(r"\n  async function send \(path, payload\) \{\n(.*?)\n  \}\n", script, re.DOTALL)
+    assert send is not None
+    assert "method: 'POST'" in send.group(1)
+    assert "requesttoken: " in send.group(1)
+    # The switch and the state line are elements of the template.
+    template = TEMPLATE.read_text(encoding="utf-8")
+    assert 'id="findling-pause-toggle"' in template
+    assert 'id="findling-pause-state"' in template
+
+
+def test_the_pause_sentences_are_rendered_as_text() -> None:
+    """T-41-27: the state is a word of a closed set, and its sentence reaches the page as text only."""
+    script = SCRIPT.read_text(encoding="utf-8")
+    block = _PAUSE_FUNCTION.search(script)
+    switch = _PAUSE_SWITCH.search(script)
+    assert block is not None, "the script has no pauseBlock function"
+    assert switch is not None
+    assert "pauseBlock(view)" in script
+    for sentence in PAUSE_SENTENCES[2:]:
+        assert f"t('findling', '{sentence}')" in block.group(1), sentence
+    for source in (block.group(1), switch.group(1)):
+        for writer in ("innerHTML", "outerHTML", "insertAdjacent", "createElement", "appendChild", "document.write"):
+            assert writer not in source, writer
+    # The text of the state line and of the switch goes through text(), which
+    # is textContent, and never a value of the answer itself.
+    assert "text('findling-pause-state', " in block.group(1)
+    assert "text('findling-pause-toggle', " in block.group(1)
+    assert "view.pause +" not in block.group(1)
