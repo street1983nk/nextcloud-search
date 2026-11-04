@@ -13,6 +13,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+import test_probe_run
+from conftest import wish_reader
 from findling import main, probe
 from findling.api.probe import probe_run
 from findling.config import settings
@@ -413,3 +415,43 @@ async def test_the_companion_reader_builds_its_client_on_the_first_read(monkeypa
     assert await read() is choice
     assert await read() is choice
     assert built == ["client"]
+
+
+# -- the backup pause (plan 41-04, issue #37) ---------------------------------
+
+
+def test_a_start_in_a_pause_is_refused_as_paused(client: TestClient, sign: Sign) -> None:
+    _install(FakeRun(("paused", "")))
+
+    code, answer = _start(client, sign, {"profile": "standard", "precision": "int8"})
+
+    assert code == 409
+    assert answer == {"state": "paused"}
+
+
+@pytest.mark.usefixtures("volume")
+def test_a_probe_cannot_start_in_a_pause(sign: Sign, monkeypatch: pytest.MonkeyPatch) -> None:
+    """T-41-19: the real check of the lifespan asks the pause, and nothing begins."""
+    monkeypatch.setattr(main, "pause_wish_reader", wish_reader(True))
+
+    with TestClient(APP) as running:
+        assert isinstance(main.active_probe_run(), ProbeRun)
+        response = running.post("/probe", json={"profile": "standard", "precision": "int8"}, headers=sign("admin"))
+
+        assert response.status_code == 409
+        assert response.json() == {"state": "paused"}
+        assert probe.snapshot().id == "", "probe.begin was never called"
+
+
+async def test_the_check_asks_the_pause_before_the_rebuild(tmp_path: Path) -> None:
+    rig = test_probe_run.Rig(tmp_path, pause_wanted=lambda: True)
+    rig.rebuild_may_start = False
+
+    assert await rig.run.start("standard", "int8") == (probe.START_PAUSED, "")
+    assert probe.snapshot().id == ""
+    assert rig.run.task is None
+    await rig.run.close()
+
+
+def test_the_paused_refusal_is_a_word_of_the_closed_set() -> None:
+    assert probe.START_PAUSED == "paused"

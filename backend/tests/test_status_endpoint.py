@@ -73,6 +73,7 @@ from findling.profile import Profile, ProfileValues, note_chosen, note_hardware
 from findling.query.rewrite import LEGACY_PLAN
 from findling.store.repo import EMBEDDING_BACKLOG_MARK, FileMeta, open_store
 from findling.store.vectors import EMBEDDING_DIMENSIONS, Chunk, open_vectors
+from findling.worker import pause as pause_module
 from findling.worker import poller as poller_module
 
 pytestmark = pytest.mark.usefixtures("appapi_environment")
@@ -144,6 +145,10 @@ FIELDS = {
     # languagesFilled was measured at, null while it never was. The fill level
     # comes out of a cache that a background refresh keeps.
     "languagesFilledAsOf",
+    # The backup pause of issue #37 (plan 41-04, D-41-06): the state word out
+    # of a closed set, and the epoch second "paused" was reached, null otherwise.
+    "pause",
+    "pausedSince",
 }
 
 # Six odd ids carry two permission rows, six even ones carry one.
@@ -1993,3 +1998,88 @@ def test_a_fill_refresh_that_cannot_start_is_tried_again(
     after = _status(client, sign("admin"))
     assert after["languagesFilled"] == "de"
     assert isinstance(after["languagesFilledAsOf"], int)
+
+
+# -- the backup pause (plan 41-04, issue #37) ---------------------------------
+
+
+class _PauseInState:
+    """A coordinator as the status route sees it: a state word and a moment."""
+
+    def __init__(self, state: str, since: int | None) -> None:
+        self.state = state
+        self.paused_since = since
+
+
+@pytest.fixture
+def published_pause() -> Iterator[Callable[[str, int | None], None]]:
+    def publish(state: str, since: int | None) -> None:
+        pause_module.publish(cast("Any", _PauseInState(state, since)))
+
+    yield publish
+    pause_module.publish(None)
+
+
+@pytest.mark.parametrize("branch", BRANCHES)
+def test_status_names_the_pause_state_without_a_coordinator(
+    client: TestClient, sign: Sign, request: pytest.FixtureRequest, branch: str
+) -> None:
+    # A test without a lifespan, and a process that holds nothing: running.
+    answer = _answer(client, sign, request, branch)
+
+    assert answer["pause"] == "running"
+    assert answer["pausedSince"] is None
+
+
+@pytest.mark.parametrize("branch", BRANCHES)
+@pytest.mark.parametrize(
+    ("state", "since", "expected_since"),
+    [
+        ("running", None, None),
+        ("pausing", None, None),
+        ("unknown", None, None),
+        ("paused", 1_800_000_000, 1_800_000_000),
+        # pausedSince only while paused, whatever the coordinator still carries.
+        ("pausing", 1_800_000_000, None),
+    ],
+)
+def test_status_names_the_pause_state(
+    client: TestClient,
+    sign: Sign,
+    request: pytest.FixtureRequest,
+    branch: str,
+    published_pause: Callable[[str, int | None], None],
+    state: str,
+    since: int | None,
+    expected_since: int | None,
+) -> None:
+    # D-41-03, D-41-06: the companion lets a backup begin only on "paused".
+    published_pause(state, since)
+
+    answer = _answer(client, sign, request, branch)
+
+    assert answer["pause"] == state
+    assert answer["pausedSince"] == expected_since
+
+
+def test_the_pause_field_is_a_closed_set() -> None:
+    from pydantic import ValidationError
+
+    from findling.api.status import StatusResponse
+
+    for word in ("running", "pausing", "paused", "unknown"):
+        assert StatusResponse(pause=cast("Any", word)).pause == word
+    with pytest.raises(ValidationError):
+        StatusResponse(pause=cast("Any", "stopped"))
+
+
+def test_the_pause_fields_never_name_a_path(
+    client: TestClient, sign: Sign, indexed_volume: Corpus, published_pause: Callable[[str, int | None], None]
+) -> None:
+    published_pause("paused", 1_800_000_000)
+
+    answer = _status(client, sign("admin"))
+
+    assert re.fullmatch(r"[a-z]+", answer["pause"])
+    assert isinstance(answer["pausedSince"], int)
+    assert str(indexed_volume.root) not in f"{answer['pause']}{answer['pausedSince']}"

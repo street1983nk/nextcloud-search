@@ -20,13 +20,16 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
+from fastapi.testclient import TestClient
 from tantivy import Index
 
 import test_poller
 import test_queue_client
-from conftest import write_wordlist
+import test_snippets_endpoint
+from conftest import Corpus, wish_reader, write_wordlist
 from findling import guard
 from findling import main as findling_main
+from findling.config import settings
 from findling.index.open import open_index
 from findling.index.writer import IndexBatchWriter
 from findling.nc.client import AsyncNextcloudApp
@@ -50,6 +53,9 @@ from findling.worker.reconcile import ROUND_HELD, Reconcile
 from findling.worker.watch import GuardWatch
 
 _until = test_poller._until
+
+# A word the corpus of conftest holds, the one the snippet suite asks.
+SEARCH_TERM = test_snippets_endpoint.TERM
 
 
 @pytest.fixture
@@ -950,3 +956,35 @@ async def test_the_wish_reader_of_main_maps_the_choice(monkeypatch: pytest.Monke
     assert await wish() is None
     with pytest.raises(TimeoutError):
         await wish()
+
+
+# -- search in the pause (plan 41-04, D-41-04) --------------------------------
+
+
+@pytest.mark.usefixtures("appapi_environment")
+def test_search_answers_while_paused(
+    indexed_volume: Corpus, sign: Callable[[str], dict[str, str]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """D-41-04: the pause stops the writers, and the search reads on out of the same index."""
+    monkeypatch.setattr(findling_main, "pause_wish_reader", wish_reader(True))
+    settings().armed_marker.write_text("", encoding="utf-8")
+
+    with TestClient(findling_main.APP) as running:
+        pause = findling_main._PAUSE
+        assert pause is not None
+        assert pause.state == PAUSE_PAUSED, "writer given back and both checkpoints through"
+        poller = findling_main.active_poller()
+        assert poller is not None
+        assert poller.backup_held
+
+        found = running.post("/search", json={"query": SEARCH_TERM}, headers=sign(indexed_volume.bob))
+        assert found.status_code == 200, found.text
+        assert found.json()["candidates"], "the indexed corpus answers this term in the pause"
+
+        snippets = running.post(
+            "/snippets",
+            json={"query": SEARCH_TERM, "fileIds": [test_snippets_endpoint.ALICE_FILE]},
+            headers=sign(indexed_volume.alice),
+        )
+        assert snippets.status_code == 200, snippets.text
+        assert str(test_snippets_endpoint.ALICE_FILE) in snippets.json()["snippets"]
