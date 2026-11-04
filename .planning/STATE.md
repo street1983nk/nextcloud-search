@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
 status: executing
-stopped_at: Completed 41-12-PLAN.md
-last_updated: "2026-11-04T18:35:00.000Z"
+stopped_at: Completed 41-11-PLAN.md
+last_updated: "2026-11-04T19:00:00.000Z"
 last_activity: 2026-11-04
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 17
-  completed_plans: 14
+  completed_plans: 15
   percent: 75
 ---
 
@@ -21,16 +21,16 @@ progress:
 Siehe .planning/PROJECT.md (Stand nach v1.5, Milestone v1.6 gestartet) und .planning/MILESTONES.md (v1.0 bis v1.5).
 
 **Core Value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 41 — findling-1-6-2-backup-pause-schalter-37-backup-doku-25-fixes
+**Current focus:** Phase 41: findling-1-6-2-backup-pause-schalter-37-backup-doku-25-fixes
 
 ## Current Position
 
-Phase: 41 (findling-1-6-2-backup-pause-schalter-37-backup-doku-25-fixes) — EXECUTING
-Plan: 12 of 12
+Phase: 41 (findling-1-6-2-backup-pause-schalter-37-backup-doku-25-fixes), EXECUTING
+Plan: 12 of 12 (alle 12 mit SUMMARY)
 Status: Executed, verification pending
 Last activity: 2026-11-04
 
-Progress: [████████░░] 82%
+Progress: [█████████░] 88%
 
 ## Performance Metrics
 
@@ -112,6 +112,7 @@ Progress: [████████░░] 82%
 - 40-03: UPGRADE_FROM_TAG v1.5.0 mit Neuableitung jeder startabhaengigen Zusicherung (40-03-ABLEITUNG.md) plus Zusicherung 12, HaRP deploy 40817178890 gruen.
 - 40-04: Owner-Runde 29.10.2026 alle Punkte wie empfohlen, GO fuer Tag und Einreichung, Tag-Kopf 91a0603f (40-ABNAHME.md).
 - 40-05: Tag v1.6.0 (91a0603f), Release 40864595574 mit 9 Assets, Fremdinstallation 40865691730, Store submission 40868132102 zweimal HTTP 201 (11:47:55Z, 11:47:57Z); appapi_apps.json fuehrte 15 min danach noch 1.5.1 (Cache-Verzug), um 12:05:28Z nachgefuehrt auf 1.6.0. Issue-Antworten nach dem Release: #36 issuecomment-6496180117, #19 issuecomment-6496180560.
+- 41-11: Tag v1.6.2 (Owner) auf ba098b00, sieben Tag-Läufe grün inkl. PHP 41869261491 (schließt den head_green-Vorbehalt), Store submission 41875127182 HTTP 401 Invalid token, nach erneuertem APPSTORE_TOKEN 41885026379 zweimal HTTP 201; Store-API nennt 1.6.2 für beide Apps.
 - 40-VERIFICATION (409a38b8): gaps_found, SC1 partial (Audit deckte efcf26c5..91a0603f nicht ab) -> Nachaudit 40-NACHAUDIT.md beauftragt; Luecke 2 (v1.7-Punkte) in deferred-items.md nachgetragen.
 
 ### Decisions (Roadmap v1.5)
@@ -236,16 +237,18 @@ Items acknowledged and deferred at milestone close on 2026-10-28 (Owner-Wiedervo
 | Phase 40 P05 | ca. 35 min inkl. ca. 25 min CI | 2 tasks | 4 files |
 | Phase 41 P04 | 60 min | 2 tasks | 16 files |
 | Phase 41 P12 | ca. 15 min (Doku) | 3 tasks | 4 files |
+| Phase 41 P11 | Owner-Lauf, Abschluss ca. 10 min (Doku) | 3 tasks | 3 files |
 
 ## Session Continuity
 
-Last session: 2026-11-04T18:35:00.000Z
-Stopped at: Completed 41-12-PLAN.md
+Last session: 2026-11-04T19:00:00.000Z
+Stopped at: Completed 41-11-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
 
-- Phase 41 verifizieren (/gsd:verify); 41-11-SUMMARY.md fehlt noch (Belegkette Tag v1.6.2 und Einreichung steht in 41-ISSUE-ANTWORTEN.md und ROADMAP Kriterium 6)
+- Phase 41 verifizieren (/gsd:verify); alle 12 Pläne mit SUMMARY (41-11: Tag v1.6.2, sieben Tag-Läufe grün, Store 41885026379 zweimal HTTP 201)
+- Regel: Store-API (apps.json) höchstens alle 10 Minuten abfragen; 40 Minuten Dauerabfrage führten am 04.11.2026 zu HTTP 429 für die Owner-IP
 - Owner: Forum-Post I1 (Thread 249775, Desktop/Findling_1.6.2_Forum_ENTWURF.md)
 - Owner: UI-Sichtung der Backup-Pause in einer laufenden 1.6.2-Instanz
 - Rückmeldungen auf issue 37, 25 und 44 beobachten (alle drei closed, Antworten gepostet); 33 und 43 offen, 45 als Kandidat für v1.7

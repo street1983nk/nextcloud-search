@@ -203,7 +203,7 @@ Aktiver Blocker unabhaengig vom Milestone: Kill-Kriterium Nextcloud Conference (
 **Goal:** Findling 1.6.2 (beide Apps) im Store mit den Zusagen aus Issue #37 und #25 und den vier Nachaudit-Befunden aus 40-NACHAUDIT.md, die 1.6.1 (nur Sicherheit, pypdf) bewusst nicht mitnahm.
 **Requirements**: Owner-GO 29.10./30.10./02.11.2026 (NEXT.md)
 **Depends on:** Phase 40
-**Plans:** 11/12 plans executed (41-11 ohne SUMMARY)
+**Plans:** 12/12 plans executed
 
 **Success Criteria:**
 1. Backup-Pause-Schalter (#37): `occ findling:pause` / `findling:resume` und ein Schalter auf der Admin-Seite; in der Pause ruhen Indexer, Embedding und Poller, SQLite-WAL ist gecheckpointet und Tantivy committet, die Suche läuft weiter; Zustand übersteht einen Neustart; Negativtests (Pause während laufendem Batch, doppeltes pause/resume, Neustart in der Pause).
@@ -225,7 +225,7 @@ Plans:
 - [x] 41-08-PLAN.md: Version 1.6.2, CHANGELOG, Upgrade-Strecke ab v1.5.0, grüner Kopf
 - [x] 41-09-PLAN.md: Audit v1.6.1..Kopf, Fixes ab MEDIUM
 - [x] 41-10-PLAN.md: Owner-Runde (Checkpoint), Gesamttext, Tag-Kopf
-- [ ] 41-11-PLAN.md: Tag v1.6.2 und Store-Einreichung (Owner führt aus), Belegkette
+- [x] 41-11-PLAN.md: Tag v1.6.2 und Store-Einreichung (Owner führt aus), Belegkette
 - [x] 41-12-PLAN.md: Issue-Antworten #37/#25/#44 nach Store-Release (Claude postet und schließt, Owner-Freigabe)
 
 ### Phase 42: PHP-Sicherheits-Gates für die Companion-App
