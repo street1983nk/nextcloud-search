@@ -233,7 +233,7 @@ Plans:
 **Goal:** Die PHP-Hälfte von Findling bekommt Gates auf dem Niveau der Python-Seite, damit keine Route versehentlich öffentlich oder ohne CSRF wird und verwundbare Abhängigkeiten auffallen.
 **Requirements**: Owner-GO 04.11.2026 (Vorschlag aus der PHP-Gates-Recherche)
 **Depends on:** Phase 41 (startet erst nach dem Store-Release 1.6.2)
-**Plans:** 0 plans
+**Plans:** 3 plans (Kern: Kriterien 1, 2 und 4; Owner-Entscheid 04.11.2026)
 
 **Success Criteria:**
 1. Routen-Attribut-Gate: ein Test vergleicht jede Controller-Methode und ihre Attribute (PublicPage, NoCSRFRequired, NoAdminRequired, AuthorizedAdminSetting, Ratelimits) mit einer committeten Allowlist; eine neue oder geänderte Route ohne Eintrag macht CI rot, mit Negativtest.
@@ -244,7 +244,11 @@ Plans:
 **Research:** 42-RESEARCH-GATES.md (Recherche 04.11.2026)
 
 Plans:
-- [ ] TBD (via /gsd-plan-phase 42)
+- [ ] 42-01-PLAN.md: lokales PHPUnit-Rezept als scripts/dev/phpunit_docker.sh, "CI only" in Doku, php.yml-Kommentar und Bootstrap ersetzt (Kriterium 4)
+- [ ] 42-02-PLAN.md: Routen-Attribut-Gate per Reflection gegen php/tests/route-security.json mit Negativtests (Kriterium 1)
+- [ ] 42-03-PLAN.md: composer validate --strict und composer audit --locked in php.yml, Dependabot composer, Strukturgate, Phasen-Schlussprüfung (Kriterien 2 und 4)
+
+Kriterium 3 (Psalm mit Taint, php-cs-fixer, zizmor, actionlint) ist nicht Teil dieser Phase und kommt als eigene Phase vor Findling 1.7.
 
 ---
 *Created: 2026-09-08. v1.1 archiviert: 2026-09-11. v1.2 archiviert: 2026-09-21. v1.3 archiviert: 2026-09-27. v1.4-Roadmap: 2026-09-27. v1.5-Roadmap: 2026-10-10. v1.5 archiviert: 2026-10-28. v1.6-Roadmap: 2026-10-28.*
