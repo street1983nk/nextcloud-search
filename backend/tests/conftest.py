@@ -18,12 +18,13 @@ exercise the same path a proxied request takes, including the empty user name of
 the unauthorized case.
 """
 
+import asyncio
 import importlib.util
 import struct
 import sys
 import warnings
 from base64 import b64encode
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
@@ -524,6 +525,83 @@ def forget_the_release_count() -> Iterator[None]:
     model_module._UNLOAD_COUNT = 0
     yield
     model_module._UNLOAD_COUNT = 0
+
+
+class BackupHoldDouble:
+    """What the backup pause of plan 41-04 asks of a writer double the lifespan builds.
+
+    The lifespan attaches every poller, runner, reconcile and guard watch to the
+    pause coordinator before it starts the task (D-41-19), so a stand in for any
+    of them needs the methods the coordinator calls. Mixed into the doubles of
+    the lifespan suites; ``backup_hold`` and ``backup_journal`` say afterwards
+    what the coordinator did to it.
+    """
+
+    pass_in_flight = False
+    in_flight = False
+
+    @property
+    def parked(self) -> asyncio.Event:
+        rested = asyncio.Event()
+        rested.set()
+        return rested
+
+    def _note(self, what: str) -> None:
+        journal: list[str] = self.__dict__.setdefault("backup_journal", [])
+        journal.append(what)
+
+    @property
+    def backup_hold(self) -> bool:
+        return bool(self.__dict__.get("_backup_hold", False))
+
+    def hold_for_backup(self) -> None:
+        self.__dict__["_backup_hold"] = True
+        self._note("hold")
+
+    def release_backup_hold(self) -> None:
+        self.__dict__["_backup_hold"] = False
+        self._note("release")
+
+    async def quiesce_for_backup(self) -> None:
+        self._note("quiesce")
+
+    async def reopen_after_backup(self) -> None:
+        self._note("reopen")
+
+    def suspend_persist(self) -> None:
+        self.__dict__["_backup_hold"] = True
+        self._note("suspend")
+
+    async def resume_persist(self) -> None:
+        self.__dict__["_backup_hold"] = False
+        self._note("resume")
+
+
+def wish_reader(*answers: bool | None) -> Callable[[], Callable[[], Awaitable[bool | None]]]:
+    """A stand in for ``findling.main.pause_wish_reader``: the last answer repeats."""
+    remaining = list(answers)
+
+    def factory() -> Callable[[], Awaitable[bool | None]]:
+        async def wish() -> bool | None:
+            if len(remaining) > 1:
+                return remaining.pop(0)
+            return remaining[0] if remaining else None
+
+        return wish
+
+    return factory
+
+
+@pytest.fixture(autouse=True)
+def the_companion_wants_no_pause(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every lifespan of the suite reads "not paused" unless a case says otherwise.
+
+    Since plan 41-04 a lifespan holds every writer until it has read the backup
+    pause wish over the profile route (D-41-19), and no case of the suite has a
+    companion behind that route. Without this every lifespan case would start a
+    container that never indexes; the cases about the pause replace it.
+    """
+    monkeypatch.setattr("findling.main.pause_wish_reader", wish_reader(False))
 
 
 @pytest.fixture

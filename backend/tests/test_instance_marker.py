@@ -43,6 +43,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from conftest import BackupHoldDouble
+
 from findling import instance
 from findling.api import status
 from findling.config import INSTANCE_MARKER_NAME, settings
@@ -57,7 +59,7 @@ OWN_URL = "http://localhost:8080"
 OTHER_URL = "http://localhost:8097"
 
 
-class _FakePoller:
+class _FakePoller(BackupHoldDouble):
     """A poller that records the arming and opens nothing.
 
     The real one opens the index and the state database as soon as it is armed,

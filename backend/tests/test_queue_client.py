@@ -567,7 +567,9 @@ async def test_companion_choice_survives_a_companion_without_the_route(
     session = _FakeSession(error=error)
 
     with caplog.at_level(logging.DEBUG, logger="findling.nc.queue"):
-        assert await _queue(session).companion_choice() == CompanionChoice(profile=None, precision=None)
+        assert await _queue(session).companion_choice() == CompanionChoice(
+            profile=None, precision=None, paused=None
+        )
 
     records = [r for r in caplog.records if r.name == "findling.nc.queue"]
     assert len(records) == 1
@@ -624,7 +626,9 @@ async def test_a_companion_without_the_confirmed_field_reads_as_none() -> None:
 async def test_a_failed_profile_call_leaves_all_three_values_none(error: Exception) -> None:
     session = _FakeSession(error=error)
 
-    assert await _queue(session).companion_choice() == CompanionChoice(profile=None, precision=None, confirmed=None)
+    assert await _queue(session).companion_choice() == CompanionChoice(
+        profile=None, precision=None, confirmed=None, paused=None
+    )
 
 
 async def test_stats_returns_the_counters_of_the_queue() -> None:

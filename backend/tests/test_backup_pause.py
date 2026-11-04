@@ -15,7 +15,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from pathlib import Path
 from typing import Any, cast
 
@@ -33,13 +33,15 @@ from findling.worker.pause import (
 from tantivy import Index
 
 import test_poller
+import test_queue_client
 from conftest import write_wordlist
 from findling import guard
+from findling import main as findling_main
 from findling.index.open import open_index
 from findling.index.writer import IndexBatchWriter
 from findling.nc.client import AsyncNextcloudApp
 from findling.nc.files import FileRow, Mount, MountResult, SliceResult
-from findling.nc.queue import CallResult, ClaimResult, QueueStats
+from findling.nc.queue import CallResult, ClaimResult, CompanionChoice, QueueStats
 from findling.profile import Profile
 from findling.store.repo import Store, open_store
 from findling.worker.embedding import EmbedRunner
@@ -884,3 +886,67 @@ async def test_the_run_loop_reaches_paused_and_ends_on_stop() -> None:
     finally:
         stop.set()
         await asyncio.wait_for(task, timeout=5)
+
+
+# -- the wish over the profile route (plan 41-04) ------------------------------
+
+
+@pytest.mark.parametrize(
+    ("answer", "expected"),
+    [
+        pytest.param({"profile": "standard", "paused": True}, True, id="true"),
+        pytest.param({"profile": "standard", "paused": False}, False, id="false"),
+        pytest.param({"profile": "standard"}, False, id="companion-1.6.1"),
+        pytest.param({"paused": "yes"}, False, id="string"),
+        pytest.param({"paused": 1}, False, id="one"),
+        pytest.param({"paused": None}, False, id="null"),
+        pytest.param([], False, id="empty-php-array"),
+    ],
+)
+async def test_companion_choice_reads_paused(answer: object, expected: bool) -> None:
+    """D-41-05, T-41-17: only a JSON true is a wish to pause; a readable answer without it is not."""
+    session = test_queue_client._FakeSession({("GET", test_queue_client.PROFILE_PATH): answer})
+
+    choice = await test_queue_client._queue(session).companion_choice()
+
+    assert choice.paused is expected
+
+
+async def test_a_failed_profile_read_is_no_wish_at_all() -> None:
+    """D-41-19: a call that failed is None, the one value that holds a starting container."""
+    session = test_queue_client._FakeSession(error=OSError("no such route"))
+
+    choice = await test_queue_client._queue(session).companion_choice()
+
+    assert choice.paused is None
+
+
+async def test_the_wish_reader_of_main_maps_the_choice(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The reader the lifespan builds: True, False, None, and a read that does not come in time raises."""
+    # The suite replaces pause_wish_reader with a stand in (conftest); undo
+    # brings the real one back for this case.
+    monkeypatch.undo()
+    answers: list[CompanionChoice | None] = [
+        CompanionChoice(profile=None, precision=None, paused=True),
+        CompanionChoice(profile="standard", precision=None),
+        None,
+    ]
+
+    def companion() -> Callable[[], Awaitable[CompanionChoice | None]]:
+        async def read() -> CompanionChoice | None:
+            if not answers:
+                await asyncio.sleep(1)
+                return None
+            return answers.pop(0)
+
+        return read
+
+    monkeypatch.setattr(findling_main, "companion_reader", companion)
+    monkeypatch.setattr(findling_main, "PAUSE_READ_SECONDS", 0.01)
+    wish = findling_main.pause_wish_reader()
+
+    assert await wish() is True
+    assert await wish() is False
+    assert await wish() is None
+    with pytest.raises(TimeoutError):
+        await wish()

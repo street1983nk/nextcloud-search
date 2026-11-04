@@ -22,6 +22,7 @@ import gc
 import inspect
 import logging
 import time
+from collections.abc import Awaitable, Callable
 from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
@@ -29,7 +30,7 @@ from typing import TYPE_CHECKING, cast
 import pytest
 from fastapi.testclient import TestClient
 
-from conftest import Corpus, write_wordlist
+from conftest import BackupHoldDouble, Corpus, wish_reader, write_wordlist
 from findling import lane
 from findling import main as findling_main
 from findling.api import resources, status
@@ -60,6 +61,7 @@ from findling.nc.queue import CallResult, QueueStats
 from findling.profile import snapshot
 from findling.store.repo import CATCHUP_MARK, Store, open_store
 from findling.worker.embedding import EmbeddingTrack, EmbedRunner
+from findling.worker.pause import PauseCoordinator
 from findling.worker.poller import Poller, default_poller
 from findling.worker.reconcile import Reconcile, RoundResult
 
@@ -542,7 +544,7 @@ def test_the_container_answers_the_heartbeat_with_the_real_task_running(monkeypa
 MAIN_SOURCE = Path(__file__).resolve().parents[1] / "src" / "findling" / "main.py"
 
 
-class _FakeIndexingTask:
+class _FakeIndexingTask(BackupHoldDouble):
     """A poller or a reconcile, as far as the lifespan is concerned.
 
     ``track`` and ``attach_runner`` are what the lifespan asks of a poller since
@@ -1239,7 +1241,7 @@ def test_the_hardware_is_read_off_the_loop_and_before_the_tasks() -> None:
 # ---------------------------------------------------------------------------
 
 
-class _FakeRunner:
+class _FakeRunner(BackupHoldDouble):
     """An embed runner as far as the lifespan is concerned, counting what it is asked."""
 
     def __init__(
@@ -1561,7 +1563,7 @@ def test_the_start_downloads_nothing_and_asks_no_precision() -> None:
 # ---------------------------------------------------------------------------
 
 
-class _FakeGuardWatch:
+class _FakeGuardWatch(BackupHoldDouble):
     """A GuardWatch as far as the lifespan is concerned, writing into a shared journal."""
 
     def __init__(self, journal: list[str], *, restore_raises: BaseException | None = None) -> None:
@@ -1707,7 +1709,7 @@ def test_a_restore_that_throws_does_not_keep_the_container_from_starting(
 # ---------------------------------------------------------------------------
 
 
-class _FakeCatchup:
+class _FakeCatchup(BackupHoldDouble):
     """The one time reconcile, as far as the lifespan is concerned."""
 
     def __init__(self, *, ignores_the_stop: bool = False) -> None:
@@ -2098,3 +2100,256 @@ def test_the_own_logger_is_not_touched_by_the_client_lift(monkeypatch: pytest.Mo
 
     assert own.level == logging.WARNING
     assert own.getEffectiveLevel() == logging.WARNING
+
+
+# ---------------------------------------------------------------------------
+# The backup pause of issue #37 in the lifespan (plan 41-04). The coordinator
+# itself is the subject of test_backup_pause.py; these cases ask the wiring:
+# every writer is held before its task exists and until the wish has been read
+# (D-41-19), an enable and the arm behind a rebuild do not lift the pause
+# (D-41-05), and a rebuild stops between two bands for it and resumes behind it
+# (D-41-20).
+# ---------------------------------------------------------------------------
+
+
+class _PausedRunner(_FakeRunner):
+    """A runner that says in the journal when it was held and when its task began."""
+
+    def __init__(self, journal: list[str]) -> None:
+        super().__init__()
+        self.journal = journal
+
+    def hold_for_backup(self) -> None:
+        super().hold_for_backup()
+        self.journal.append("runner held")
+
+    async def run(self, stop_event: asyncio.Event) -> None:
+        self.journal.append("runner runs")
+        await stop_event.wait()
+
+
+class _PausedTask(_FakeIndexingTask):
+    """A poller or reconcile that says in the journal when it was held and when its task began."""
+
+    def __init__(self, name: str, journal: list[str]) -> None:
+        super().__init__()
+        self.name = name
+        self.journal = journal
+
+    def hold_for_backup(self) -> None:
+        super().hold_for_backup()
+        self.journal.append(f"{self.name} held")
+
+    async def run(self, stop_event: asyncio.Event) -> None:
+        self.journal.append(f"{self.name} runs")
+        await stop_event.wait()
+
+
+def _install_paused_writers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[list[str], _PausedTask, _PausedTask, _PausedRunner]:
+    journal: list[str] = []
+    poller = _PausedTask("poller", journal)
+    reconcile = _PausedTask("reconcile", journal)
+    runner = _PausedRunner(journal)
+    monkeypatch.setattr("findling.main.default_poller", lambda **_: poller)
+    monkeypatch.setattr("findling.main.default_reconcile", lambda: reconcile)
+    monkeypatch.setattr("findling.main.EmbedRunner", lambda **_: runner)
+    monkeypatch.setattr("findling.main._rebuild_the_index_directory", _FakeRebuildTask().run)
+    settings().armed_marker.write_text("", encoding="utf-8")
+    return journal, poller, reconcile, runner
+
+
+@pytest.mark.usefixtures("volume")
+def test_a_restart_in_pause_runs_no_pass_before_the_wish_is_read(monkeypatch: pytest.MonkeyPatch) -> None:
+    """D-41-19: armed by the mark, and still nothing runs before the companion answered."""
+    journal, poller, reconcile, runner = _install_paused_writers(monkeypatch)
+    held_at_the_read: list[tuple[bool, bool, bool]] = []
+
+    def slow_paused_reader() -> Callable[[], Awaitable[bool | None]]:
+        async def wish() -> bool | None:
+            held_at_the_read.append((poller.backup_hold, runner.backup_hold, reconcile.backup_hold))
+            await asyncio.sleep(0.05)
+            return True
+
+        return wish
+
+    monkeypatch.setattr("findling.main.pause_wish_reader", slow_paused_reader)
+
+    with TestClient(APP):
+        pause = findling_main._PAUSE
+        assert pause is not None
+        assert pause.state in ("pausing", "paused")
+        assert (poller.armed, runner.armed, reconcile.armed) == (True, True, True), "the mark armed them"
+        assert (poller.backup_hold, runner.backup_hold, reconcile.backup_hold) == (True, True, True)
+
+    assert held_at_the_read, "the wish was read"
+    assert held_at_the_read[0] == (True, True, True), "every writer was held before the first read"
+    for name in ("poller", "runner", "reconcile"):
+        assert journal.index(f"{name} held") < journal.index(f"{name} runs"), f"{name} held before its task"
+    assert findling_main._PAUSE is None, "gone with the lifespan"
+
+
+@pytest.mark.usefixtures("volume")
+async def test_an_unreadable_profile_route_keeps_indexing_stopped(monkeypatch: pytest.MonkeyPatch) -> None:
+    """D-41-19: a route that never answers keeps every writer held, and the state says unknown."""
+    _, poller, reconcile, runner = _install_paused_writers(monkeypatch)
+    answers: list[bool | None] = [None]
+
+    def reader() -> Callable[[], Awaitable[bool | None]]:
+        async def wish() -> bool | None:
+            return answers[-1]
+
+        return wish
+
+    monkeypatch.setattr("findling.main.pause_wish_reader", reader)
+
+    async with lifespan(APP):
+        pause = findling_main._PAUSE
+        assert pause is not None
+        assert pause.state == "unknown"
+        assert (poller.backup_hold, runner.backup_hold, reconcile.backup_hold) == (True, True, True)
+        await pause.tick()
+        assert pause.state == "unknown", "a second unreadable answer changes nothing"
+        answers.append(False)
+        await pause.tick()
+        assert pause.state == "running"
+        assert (poller.backup_hold, runner.backup_hold, reconcile.backup_hold) == (False, False, False)
+
+
+@pytest.mark.usefixtures("volume")
+async def test_enable_does_not_lift_the_pause(monkeypatch: pytest.MonkeyPatch) -> None:
+    """D-41-05: the enable of AppAPI arms, and the backup hold stays where it is."""
+    _, poller, reconcile, runner = _install_paused_writers(monkeypatch)
+    monkeypatch.setattr("findling.main.pause_wish_reader", wish_reader(True))
+
+    async with lifespan(APP):
+        pause = findling_main._PAUSE
+        assert pause is not None
+        assert pause.state == "paused"
+        assert await enabled_handler(True, cast("AsyncNextcloudApp", None)) == ""
+        assert (poller.armed, runner.armed, reconcile.armed) == (True, True, True)
+        assert (poller.backup_hold, runner.backup_hold, reconcile.backup_hold) == (True, True, True)
+        assert pause.state == "paused"
+
+
+@pytest.mark.usefixtures("volume")
+async def test_the_rebuild_arm_does_not_lift_the_pause(monkeypatch: pytest.MonkeyPatch) -> None:
+    """D-41-05: the arm behind a rebuild is not the resume of a backup."""
+    _, poller, _, runner = _install_paused_writers(monkeypatch)
+    monkeypatch.setattr("findling.main.pause_wish_reader", wish_reader(True))
+
+    async with lifespan(APP):
+        pause = findling_main._PAUSE
+        assert pause is not None
+        assert pause.state == "paused"
+        _arm_the_poller()
+        assert (poller.armed, runner.armed) == (True, True)
+        assert (poller.backup_hold, runner.backup_hold) == (True, True)
+        assert pause.state == "paused"
+
+
+class _StubPause:
+    """The one question the band run asks of the pause, answered by a flag."""
+
+    def __init__(self) -> None:
+        self.wanted = False
+
+    def wants_pause(self) -> bool:
+        return self.wanted
+
+
+async def test_a_rebuild_stops_between_bands_on_a_pause_and_resumes(
+    indexed_volume: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """D-41-20: the wish arrives during band one, band two never starts, the resume goes on at the cursor."""
+    del indexed_volume
+    settings().armed_marker.write_text("", encoding="utf-8")
+    stub = _StubPause()
+    monkeypatch.setattr("findling.main._PAUSE", stub)
+    cursor: list[int] = []
+    asked: list[bool] = []
+
+    def bands(store: Store, *, should_stop: Callable[[], bool], **_: object) -> str:
+        del store
+        for band in range(len(cursor), 3):
+            stop = should_stop()
+            asked.append(stop)
+            if stop:
+                return "stopped early"
+            cursor.append(band)
+            if band == 0:
+                # The admin pauses while the first band is written.
+                stub.wanted = True
+        return REBUILD_THROUGH
+
+    monkeypatch.setattr("findling.main.rebuild_the_index", bands)
+    stop = asyncio.Event()
+
+    await _rebuild_the_index_directory(stop)
+
+    assert cursor == [0], "band two never started"
+    assert asked == [False, True]
+
+    # While the pause is wanted no rebuild starts at all.
+    monkeypatch.setattr("findling.main._STOP_REBUILD", stop)
+    monkeypatch.setattr("findling.main._REBUILDING", None)
+    monkeypatch.setattr("findling.main._rebuild_is_due", lambda: True)
+    assert await findling_main._start_the_rebuild_if_due() is False
+
+    # The resume asks the question again, and the run goes on at the cursor.
+    stub.wanted = False
+    await findling_main._resume_after_the_pause()
+    rebuilding = findling_main._REBUILDING
+    assert rebuilding is not None
+    await asyncio.wait_for(rebuilding, timeout=10)
+    assert cursor == [0, 1, 2]
+
+
+async def test_a_running_band_keeps_the_coordinator_pausing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The pause waits for the band in flight: rebuild_busy reads the rebuild task of main."""
+    release = asyncio.Event()
+
+    async def band() -> None:
+        await release.wait()
+
+    task = asyncio.create_task(band())
+    monkeypatch.setattr("findling.main._REBUILDING", task)
+    pause = PauseCoordinator(
+        read_wish=wish_reader(True)(),
+        databases=(),
+        rebuild_busy=findling_main._the_rebuild_is_busy,
+    )
+    await pause.tick()
+    assert pause.state == "pausing", "the band is still running"
+    release.set()
+    await task
+    await pause.tick()
+    assert pause.state == "paused"
+
+
+async def test_the_resume_asks_no_rebuild_without_the_mark(volume: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The resume keeps the two conditions of the enable: the mark, and a volume of this instance."""
+    del volume
+    asked: list[int] = []
+
+    async def spy() -> bool:
+        asked.append(1)
+        return False
+
+    monkeypatch.setattr("findling.main._start_the_rebuild_if_due", spy)
+    await findling_main._resume_after_the_pause()
+    assert asked == []
+    settings().armed_marker.write_text("", encoding="utf-8")
+    await findling_main._resume_after_the_pause()
+    assert asked == [1]
+
+
+def test_the_rebuild_asks_the_pause_between_its_bands() -> None:
+    """The source holds the wiring: the band run is led by the shutdown and the pause together."""
+    source = MAIN_SOURCE.read_text(encoding="utf-8")
+    assert "partial(_the_rebuild_should_stop, stop_event)" in source
+    stop = asyncio.Event()
+    assert findling_main._the_rebuild_should_stop(stop) is False
+    stop.set()
+    assert findling_main._the_rebuild_should_stop(stop) is True

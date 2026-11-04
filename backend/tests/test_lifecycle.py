@@ -23,7 +23,7 @@ from typing import Any, cast
 import pytest
 from fastapi.testclient import TestClient
 
-from conftest import Corpus
+from conftest import BackupHoldDouble, Corpus
 from findling.config import ARMED_MARKER_NAME, settings
 from findling.main import (
     APP,
@@ -139,7 +139,7 @@ def test_a_numeric_app_port_is_accepted(monkeypatch: pytest.MonkeyPatch) -> None
 # ---------------------------------------------------------------------------
 
 
-class _FakeReconcile:
+class _FakeReconcile(BackupHoldDouble):
     """A reconcile that only records what the lifespan did to it."""
 
     def __init__(self) -> None:
