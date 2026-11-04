@@ -6900,17 +6900,32 @@ jobs:
           # appconfig key findling/paused (SettingsService::KEY_PAUSED), absent
           # after an upgrade from 1.5.x or 1.6.x, and a missing key means not
           # paused; no migration and no key in the volume carry a pause over.
-          # The overview of the upgraded companion relays the pause word of the
-          # container's GET /status, so it has to read running with no wish on
-          # record, and the key itself has to be absent from oc_appconfig.
+          # The overview relays the pause word of the container's GET /status
+          # and is read afresh here, up to 60 s: unknown is allowed on the way
+          # (D-41-19, a started container has not read the wish yet, run
+          # 41799683340 saw it in the snapshot of step 4), paused and pausing
+          # never, and running has to come with no wish on record.
           paused_key=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}"             "SELECT COUNT(*) FROM oc_appconfig WHERE appid = 'findling' AND configkey = 'paused';")
-          pause_now=$(jq -r '.pause // "absent"' "${overview_json}" 2> /dev/null || echo "unreadable")
-          wished_now=$(jq -r '.pauseWished | tostring' "${overview_json}" 2> /dev/null || echo "unreadable")
+          pause_json="${RUNNER_TEMP}/upgrade-pause-overview.json"
+          pause_seen=""
+          pause_now="unread"
+          wished_now="unread"
+          for _ in $(seq 1 12); do
+            sh "${RUNNER_TEMP}/overview.sh" "${pause_json}" > /dev/null 2>&1 || true
+            pause_now=$(jq -r '.pause | tostring' "${pause_json}" 2> /dev/null || echo "unreadable")
+            wished_now=$(jq -r '.pauseWished | tostring' "${pause_json}" 2> /dev/null || echo "unreadable")
+            case " ${pause_seen} " in *" ${pause_now} "*) ;; *) pause_seen="${pause_seen} ${pause_now}" ;; esac
+            [ "${pause_now}" = "running" ] && break
+            sleep 5
+          done
+          case " ${pause_seen} " in
+            *" paused "* | *" pausing "*) pause_now="${pause_now}, after${pause_seen}" ;;
+          esac
           if [ "${pause_now}" != "running" ] || [ "${wished_now}" != "false" ] || [ "${paused_key}" != "0" ]; then
-            echo "::error::an upgrade must not leave indexing paused: the overview reads pause '${pause_now}' with pauseWished '${wished_now}', and oc_appconfig carries ${paused_key} row(s) of findling/paused (demanded running, false and 0)"
+            echo "::error::an upgrade must not leave indexing paused: the overview reads pause '${pause_now}' with pauseWished '${wished_now}' (states seen:${pause_seen}), and oc_appconfig carries ${paused_key} row(s) of findling/paused (demanded running, false and 0)"
             fail=1
           else
-            echo "pause reads running after the upgrade, pauseWished is false and oc_appconfig carries no findling/paused"
+            echo "pause reads running after the upgrade (states seen:${pause_seen}), pauseWished is false and oc_appconfig carries no findling/paused"
           fi
 
           if [ "${fail}" -ne 0 ]; then
