@@ -2373,8 +2373,17 @@ PHP_TREE_HASH_TODAY = "71443d7d69d7b50574d2bad39b884aaf8935e96c9591ac51bea25b675
 # went, so PACKAGE_FILES_TODAY stays at 80. The PHP pair does not move.
 # Recomputed independently with find, sort, tr and sha256sum over the CRLF
 # normalised tree: c5da3ea5... both ways.
+#
+# Moved on 2026-11-04 by Plan 41-01 (nachaudit F-40N-01, F-40N-03, F-40N-04):
+# worker/poller.py counts a refusal over storages and escalates only when the
+# same status comes from at least GATEWAY_OUTAGE_MIN_STORAGES (2) of them
+# (E-40-07-01), nc/client.py takes 408 and 429 as an outage and
+# api/resources.py lets a refresh that could not start be started again. No
+# file came or went, so PACKAGE_FILES_TODAY stays at 80. The PHP pair does not
+# move. Recomputed independently with find, sort, tr and sha256sum over the
+# CRLF normalised tree: a4a0cf66... both ways.
 PACKAGE_FILES_TODAY = 80
-PACKAGE_TREE_HASH_TODAY = "c5da3ea5c9acc5583de0c84cfa10fa02839c6d5ac4493346b7f6cb1625cfe804"
+PACKAGE_TREE_HASH_TODAY = "a4a0cf667e84cac7a68374a70da01f141b0013c0d4ccb90b65d26f01a6ae50bb"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
