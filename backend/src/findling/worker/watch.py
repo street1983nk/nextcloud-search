@@ -134,6 +134,10 @@ class GuardWatch:
         # Whether the last tick ran while a pre-check held the indexing; the
         # first tick after it is suspended as well (D-27-15).
         self._probe_trailing = False
+        # Whether a backup pause (issue #37) keeps the tick writes out of
+        # state.db. The change itself is not lost: the guard keeps its revision, and
+        # resume_persist() writes it once the pause is over.
+        self._persist_suspended = False
 
     # -- state.db --------------------------------------------------------
 
@@ -167,6 +171,8 @@ class GuardWatch:
             return True
 
     async def _persist_if_changed(self) -> None:
+        if self._persist_suspended:
+            return
         state = guard.snapshot()
         if state.revision == self._persisted_revision:
             return
@@ -174,6 +180,19 @@ class GuardWatch:
             self._persisted_revision = state.revision
 
     # -- lifecycle -------------------------------------------------------
+
+    def suspend_persist(self) -> None:
+        """Write nothing into state.db until :meth:`resume_persist` (issue #37).
+
+        The ticks go on and the guard still lowers in memory; only the write of
+        a change waits, so the WAL of state.db stays empty during a backup.
+        """
+        self._persist_suspended = True
+
+    async def resume_persist(self) -> None:
+        """Write the change of the pause, if there was one, and persist again."""
+        self._persist_suspended = False
+        await self._persist_if_changed()
 
     async def restore(self) -> None:
         """Bring the cap of the last run back, and answer an unclean end (D-26-01, D-26-16).

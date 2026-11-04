@@ -721,6 +721,19 @@ class Poller:
         # are touched. Set at birth, so a restart never starts held.
         self._probe_release = asyncio.Event()
         self._probe_release.set()
+        # Set while no backup pause holds the poller (issue #37, D-41-05). A
+        # third signal and not a second use of either of the two above: arm and
+        # silence belong to the enabled handler of AppAPI and to the lifespan,
+        # and the probe hold is lifted in the finally of ProbeRun.run, so a
+        # shared signal would end a backup the admin asked for the moment an
+        # enable or a pre-check came by. Only the pause coordinator touches it.
+        # Set at birth, so a poller without a coordinator runs as it always
+        # did; the coordinator clears it at once when it is attached.
+        self._backup_release = asyncio.Event()
+        self._backup_release.set()
+        # Whether quiesce_for_backup() gave the writer and the track back and
+        # reopen_after_backup() has not yet opened the track again.
+        self._backup_quiesced = False
         # Whether :meth:`run` is inside a pass right now. It is deliberately not
         # the same question as :attr:`busy`, and the difference is what makes
         # :meth:`stand_down` terminate: ``busy`` reads the held rows, and a pass
@@ -844,6 +857,71 @@ class Poller:
     def probe_held(self) -> bool:
         """True while a pre-check holds this poller."""
         return not self._probe_release.is_set()
+
+    def hold_for_backup(self) -> None:
+        """Start no further pass until :meth:`release_backup_hold` (issue #37).
+
+        The pass in flight is not interrupted (D-41-18): it works its claim to
+        the end and acknowledges it. The coordinator waits on
+        :attr:`pass_in_flight` for that and then calls
+        :meth:`quiesce_for_backup`.
+        """
+        self._backup_release.clear()
+
+    def release_backup_hold(self) -> None:
+        """Let the passes go on. Arms nothing: a silenced poller stays silent."""
+        self._backup_release.set()
+
+    @property
+    def backup_held(self) -> bool:
+        """True while a backup pause holds this poller."""
+        return not self._backup_release.is_set()
+
+    async def quiesce_for_backup(self) -> None:
+        """Hand the held rows back, close the writer and the track, and stay armed.
+
+        Steps 2 and 3 of :meth:`stand_down` without step 1. A backup is not a
+        disable: the armed flag belongs to AppAPI and the lifespan, and clearing
+        it here would leave a backend the admin enabled switched off after the
+        resume. The coordinator calls this only once the pass in flight has
+        ended, under a backup hold.
+
+        **Why the writer has to go.** ``IndexBatchWriter.close()`` waits for the
+        merging threads; afterwards no segment file of the index is created or
+        removed until the next pass opens a fresh writer, and the lock file of
+        the writer is not part of the copy. An open writer with a merge running
+        would change the index directory in the middle of the copy. The track
+        closes its connections to state.db and vectors.db, so the checkpoint of
+        the coordinator meets no reader of this process.
+
+        Idempotent: a second call without a resume in between has nothing left
+        to give back.
+        """
+        if self._backup_quiesced:
+            return
+        await self.unlock_held()
+        writer, self._writer = self._writer, None
+        if writer is not None:
+            await asyncio.to_thread(writer.close)
+        await asyncio.to_thread(self._track.close)
+        self._backup_quiesced = True
+        LOGGER.info("indexing gave the index handle back for a backup")
+
+    async def reopen_after_backup(self) -> None:
+        """Open the track again after a backup, before the runner may use it.
+
+        The embed runner drives the same track and may start its round before
+        the next pass of this poller rebuilds the writer, so the track is
+        opened here and the writer is left to ``_open()`` as after a stand down.
+        Nothing happens when nothing was given back, or when this poller never
+        opened anything: its first pass opens all of it.
+        """
+        if not self._backup_quiesced:
+            return
+        self._backup_quiesced = False
+        if self._queue is None:
+            return
+        await asyncio.to_thread(self._track.open, wire=self._owns_resources)
 
     async def stand_down(self, *, budget: float = STAND_DOWN_SECONDS) -> bool:
         """Silence, wait for the pass in flight, and give the index handle back.
@@ -970,6 +1048,11 @@ class Poller:
                 # A pre-check holds the indexing; the armed flag is asked again
                 # afterwards, so a silence during the hold stays in force.
                 await _first_of(self._probe_release.wait(), stop_event.wait())
+                continue
+            if not self._backup_release.is_set():
+                # A backup pause holds the indexing (issue #37); armed and the
+                # probe hold are asked again afterwards, for the same reason.
+                await _first_of(self._backup_release.wait(), stop_event.wait())
                 continue
             try:
                 # Raised and lowered around the call and nowhere else, so that
@@ -2345,6 +2428,9 @@ class Poller:
         signature check; ``tools/read_corpus.py`` carries a single client through
         its whole loop for the same reason.
         """
+        # Whatever a backup took away is opened again below, so the next
+        # backup has something to give back (quiesce_for_backup).
+        self._backup_quiesced = False
         if self._queue is not None:
             if self._writer is None:
                 # stand_down() gave the index handle back so that a rebuild

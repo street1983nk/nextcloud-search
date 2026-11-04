@@ -13,6 +13,7 @@ checkpointed to an empty WAL (D-41-03).
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, cast
@@ -380,21 +381,27 @@ async def test_the_reconcile_waits_on_a_backup_hold(store: Store) -> None:
         await _end(task, stop)
 
 
-async def test_a_backup_hold_ends_the_reconcile_after_the_slice_and_keeps_the_bookmark(store: Store) -> None:
+async def test_a_backup_hold_ends_the_reconcile_after_the_slice_and_keeps_the_bookmark(
+    store: Store, caplog: pytest.LogCaptureFixture
+) -> None:
     gate = _Gate()
     reconcile = _reconcile(store, gate)
     assert not reconcile.in_flight
-    round_task = asyncio.create_task(reconcile.run_once())
-    try:
-        await asyncio.wait_for(gate.started.wait(), timeout=5)
-        assert reconcile.in_flight, "the slice is running"
-        reconcile.hold_for_backup()
-        gate.release.set()
-        result = await asyncio.wait_for(round_task, timeout=5)
-    finally:
-        gate.release.set()
+    reconcile.arm()
+    with caplog.at_level(logging.INFO, logger="findling.worker.reconcile"):
+        task, stop = await _run(reconcile)
+        try:
+            await asyncio.wait_for(gate.started.wait(), timeout=5)
+            assert reconcile.in_flight, "the slice is running"
+            reconcile.hold_for_backup()
+            gate.release.set()
+            await _until(lambda: not reconcile.in_flight)
+            await asyncio.sleep(0.05)
+        finally:
+            gate.release.set()
+            await _end(task, stop)
 
-    assert result.state == ROUND_HELD
+    assert any(f"reconcile round {ROUND_HELD}," in record.getMessage() for record in caplog.records)
     assert gate.pages == 1, "the second slice did not start"
     assert not reconcile.in_flight
     cursor = store.reconcile_cursor(3)

@@ -78,6 +78,9 @@ ROUND_QUEUE_BUSY: Final = "queue_busy"
 ROUND_QUEUE_UNAVAILABLE: Final = "queue_unavailable"
 ROUND_UNAVAILABLE: Final = "unavailable"
 ROUND_NO_STATE: Final = "no_state"
+# A backup pause began while the round was walking (issue #37). The round ends
+# at the next slice boundary and keeps its bookmark, like every other early end.
+ROUND_HELD: Final = "held"
 
 # The one end state of the Nextcloud side that this round has to respect instead
 # of overwriting it every night (review finding IN-03 of phase 3).
@@ -342,6 +345,14 @@ class Reconcile:
         # in the middle of that cycle walks it again from the front, which costs
         # a repetition of metadata and never work.
         self._catchup_rewound = False
+        # Set while no backup pause holds the reconcile (issue #37, D-41-05),
+        # apart from the armed flag for the reason Poller gives. Set at birth;
+        # the pause coordinator clears it when it is attached.
+        self._backup_release = asyncio.Event()
+        self._backup_release.set()
+        # Whether a round is running right now; the pause coordinator waits for
+        # it to drop before it checkpoints the state database.
+        self._in_flight = False
 
     # -- lifecycle -------------------------------------------------------
 
@@ -362,6 +373,34 @@ class Reconcile:
         log while it works for an app the admin switched off.
         """
         self._armed.clear()
+
+    def hold_for_backup(self) -> None:
+        """Start no further round, and end the running one after its slice (issue #37).
+
+        The slice in flight is finished, its findings handed over and its
+        bookmark written; the next slice does not start. Whoever holds waits
+        on :attr:`in_flight`.
+        """
+        self._backup_release.clear()
+
+    def release_backup_hold(self) -> None:
+        """Let the rounds go on. Arms nothing: a silenced reconcile stays silent."""
+        self._backup_release.set()
+
+    @property
+    def backup_held(self) -> bool:
+        """True while a backup pause holds this reconcile."""
+        return not self._backup_release.is_set()
+
+    @property
+    def in_flight(self) -> bool:
+        """True while :meth:`run` is inside a round, from its quiet gate to its last slice.
+
+        A round is wider than a slice on purpose: the gate, the cadence check
+        and the sweep write into state.db as well. A hold ends the round at the
+        next slice boundary, so the wait is one slice and not a cycle.
+        """
+        return self._in_flight
 
     async def aclose(self) -> None:
         """Give back the state connection, if this object opened one."""
@@ -391,6 +430,11 @@ class Reconcile:
             if not self._armed.is_set():
                 await _first_of(self._armed.wait(), stop_event.wait())
                 continue
+            if not self._backup_release.is_set():
+                # A backup pause holds the reconcile (issue #37); armed is asked
+                # again afterwards, so a silence during the hold stays in force.
+                await _first_of(self._backup_release.wait(), stop_event.wait())
+                continue
             if once:
                 mark = await self._catchup_mark()
                 if mark == CATCHUP_DONE:
@@ -400,7 +444,13 @@ class Reconcile:
                     await _pause(self._tick, stop_event)
                     continue
             try:
-                await self.run_once()
+                # Raised and lowered around the call and nowhere else, the rule
+                # of the poller: the pause coordinator waits on it (issue #37).
+                self._in_flight = True
+                try:
+                    await self.run_once()
+                finally:
+                    self._in_flight = False
             # Deliberately every exception, and only the type name is logged: a
             # traceback would carry whatever a library put into its message.
             except Exception as error:
@@ -517,6 +567,12 @@ class Reconcile:
         after = cursor.after_file_id
 
         while True:
+            # A backup pause ends the walk between two slices (issue #37). The
+            # bookmark stands behind the last completed slice, so the next
+            # round after the resume picks up there.
+            if not self._backup_release.is_set():
+                return ROUND_HELD
+
             # The quiet gate again, before every single slice. A round that
             # started on a calm instance and ran into the working day stops here,
             # and it may stop here because everything before this point is either

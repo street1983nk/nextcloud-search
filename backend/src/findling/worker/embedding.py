@@ -1454,6 +1454,12 @@ class EmbedRunner:
         # starts held.
         self._probe_release = asyncio.Event()
         self._probe_release.set()
+        # Set while no backup pause holds the runner (issue #37, D-41-05), a
+        # signal of its own for the reason Poller gives: neither arm nor the
+        # end of a pre-check may end a backup. Set at birth; the pause
+        # coordinator clears it when it is attached.
+        self._backup_release = asyncio.Event()
+        self._backup_release.set()
         # Set whenever no round is running. The indexing loop waits on it after
         # the level turned Economy, before it claims without a lane.
         self.parked = asyncio.Event()
@@ -1489,6 +1495,23 @@ class EmbedRunner:
     def release_probe_hold(self) -> None:
         """Let the rounds go on. Arms nothing: a silenced runner stays silent."""
         self._probe_release.set()
+
+    def hold_for_backup(self) -> None:
+        """Start no further round until :meth:`release_backup_hold` (issue #37).
+
+        The round in flight ends as usual; :attr:`parked` is set once it has,
+        and that is what the pause coordinator waits on.
+        """
+        self._backup_release.clear()
+
+    def release_backup_hold(self) -> None:
+        """Let the rounds go on. Arms nothing: a silenced runner stays silent."""
+        self._backup_release.set()
+
+    @property
+    def backup_held(self) -> bool:
+        """True while a backup pause holds this runner."""
+        return not self._backup_release.is_set()
 
     async def stand_down(self, *, budget: float = RUNNER_STAND_DOWN_SECONDS) -> bool:
         """Silence, wait for the round in flight, and hand the held rows back.
@@ -1536,6 +1559,10 @@ class EmbedRunner:
             if not self._probe_release.is_set():
                 # A pre-check holds the lane; no round runs, so parked is set.
                 await _first_of(self._probe_release.wait(), stop_event.wait())
+                continue
+            if not self._backup_release.is_set():
+                # A backup pause holds the lane (issue #37), parked stays set.
+                await _first_of(self._backup_release.wait(), stop_event.wait())
                 continue
             state = ROUND_PAUSED
             try:
