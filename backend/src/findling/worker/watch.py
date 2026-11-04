@@ -170,6 +170,10 @@ class GuardWatch:
                 store.write_meta(key, value)
             return True
 
+    def _a_pass_mark_is_set(self) -> bool:
+        meta = self._read_meta()
+        return bool(meta.get(guard.META_MULTI_SLOT_PASS, "") or meta.get(guard.META_MULTI_SLOT_CHOSEN, ""))
+
     async def _persist_if_changed(self) -> None:
         if self._persist_suspended:
             return
@@ -275,8 +279,15 @@ class GuardWatch:
         Both keys go, PASS first, the same order the poller clears with: a
         death between the two deletes leaves a choice without a mark, never
         the reverse (review WR-02).
+
+        In a backup pause (issue #37, F-41A-01) the marks are read first and
+        written only when one of them is set. In "paused" no pass runs, so both
+        are empty and the stop leaves state.db alone; a pass still in flight
+        while pausing keeps its mark, and that one is cleared as always.
         """
         try:
+            if self._persist_suspended and not await asyncio.to_thread(self._a_pass_mark_is_set):
+                return
             await asyncio.to_thread(
                 self._write_meta, {guard.META_MULTI_SLOT_PASS: "", guard.META_MULTI_SLOT_CHOSEN: ""}
             )

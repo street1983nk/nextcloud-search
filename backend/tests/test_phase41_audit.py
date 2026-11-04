@@ -40,6 +40,7 @@ from tantivy import Index
 
 import test_poller
 from conftest import Corpus, wish_reader
+from findling import guard
 from findling import main as findling_main
 from findling.api import status
 from findling.config import settings
@@ -68,6 +69,8 @@ PHP_LIB = REPO / "php" / "lib"
 
 Sign = Callable[[str], dict[str, str]]
 Snapshot = dict[str, tuple[int, int, str]]
+META_PASS = guard.META_MULTI_SLOT_PASS
+META_CHOSEN = guard.META_MULTI_SLOT_CHOSEN
 
 
 def _snapshot(root: Path) -> Snapshot:
@@ -181,16 +184,14 @@ def test_p_the_snapshot_sees_a_single_meta_write(tmp_path: Path) -> None:
 
 
 @pytest.mark.usefixtures("appapi_environment")
-def test_p_f_41a_01_a_stop_in_the_pause_writes_two_meta_rows_into_the_log(
-    indexed_volume: Corpus, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """F-41A-01 (LOW, open): the shutdown of a paused container writes state.db.
+def test_p_f_41a_01_a_stop_in_the_pause_writes_nothing(indexed_volume: Corpus, monkeypatch: pytest.MonkeyPatch) -> None:
+    """F-41A-01 (LOW, fixed): the shutdown of a paused container leaves the volume as it was.
 
-    GuardWatch.note_shutdown_begins() clears the two pass marks of the memory
-    guard with a write of its own, past suspend_persist(). Measured: 16 512
-    bytes of log, the keys multi_slot_pass and multi_slot_chosen set to "".
-    The next start checkpoints that log into state.db before it says "paused"
-    again. Pins today's behaviour; the fix turns this red.
+    Before the fix GuardWatch.note_shutdown_begins() cleared the two pass marks
+    of the memory guard with a write of its own, past suspend_persist(): 16 512
+    bytes of log, multi_slot_pass and multi_slot_chosen set to "". Now a
+    suspended watch reads the marks first and writes only a mark that is set;
+    in "paused" no pass runs, so both are empty and nothing is written.
     """
     monkeypatch.setattr(findling_main, "pause_wish_reader", wish_reader(True))
     settings().armed_marker.write_text("", encoding="utf-8")
@@ -203,31 +204,67 @@ def test_p_f_41a_01_a_stop_in_the_pause_writes_two_meta_rows_into_the_log(
         before = _snapshot(root)
     after = _snapshot(root)
 
-    moved = _data_moved(before, after)
-    # Either the log keeps the two rows (16 512 bytes measured) or the close of
-    # the last connection has already checkpointed them into state.db itself.
-    assert moved, "the stop of a paused container wrote nothing"
-    assert set(moved) <= {"state.db", "state.db-wal"}
-    rows = _meta_rows(root / "state.db")
-    assert rows.get("multi_slot_pass") == ""
-    assert rows.get("multi_slot_chosen") == ""
+    assert _data_moved(before, after) == {}, "the stop of a paused container wrote the volume"
+
+
+def _guard_volume(tmp_path: Path, marks: dict[str, str]) -> Path:
+    path = tmp_path / "state.db"
+    store = open_store(path)
+    for key, value in marks.items():
+        store.write_meta(key, value)
+    store.close()
+    return path
+
+
+@pytest.mark.parametrize(
+    ("suspended", "marks", "writes"),
+    [
+        (False, {}, True),
+        (True, {}, False),
+        (True, {META_PASS: "standard", META_CHOSEN: "standard"}, True),
+        (True, {META_PASS: "", META_CHOSEN: "standard"}, True),
+    ],
+    ids=["running_writes_positive_control", "paused_writes_nothing", "pausing_clears_a_mark", "lone_choice"],
+)
+async def test_p_f_41a_01_the_shutdown_mark_writes_only_outside_the_pause_or_for_a_set_mark(
+    tmp_path: Path, suspended: bool, marks: dict[str, str], writes: bool
+) -> None:
+    """F-41A-01, the same path with and without the pause, judged by sha256 on disk.
+
+    Positive control: without the pause the shutdown clears the marks with a
+    write, and the snapshot sees state.db move. With the pause and no mark set
+    the snapshot stays byte for byte. A mark that is still set while pausing (a
+    pass in flight) is cleared all the same: an ordered stop must never read as
+    an unclean end at the next start (Pitfall 9).
+    """
+    path = _guard_volume(tmp_path, marks)
+    watch = GuardWatch(state_path=path, events=lambda: None, headroom=lambda: None)
+    try:
+        if suspended:
+            watch.suspend_persist()
+        before = _snapshot(tmp_path)
+        await watch.note_shutdown_begins()
+    finally:
+        await watch.aclose()
+    after = _snapshot(tmp_path)
+
+    assert bool(_data_moved(before, after)) is writes, _changed(before, after)
+    rows = _meta_rows(path)
+    assert rows.get(META_PASS, "") == ""
+    assert rows.get(META_CHOSEN, "") == ""
 
 
 @pytest.mark.usefixtures("appapi_environment")
-def test_p_without_the_shutdown_write_a_restart_in_the_pause_moves_no_data(
+def test_p_a_stop_and_a_restart_in_the_pause_move_no_data(
     indexed_volume: Corpus, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Hypothesis: apart from F-41A-01, a stop and a start in the pause leave the stock as it was.
+    """Hypothesis: a stop and a start in the pause leave the stock as it was.
 
-    Control of F-41A-01: the one write stood in for by nothing, the volume after
-    the stop and after a new start that reached "paused" again is byte for byte
-    the volume of the first "paused", logs of zero bytes and shared memory aside.
+    Until the fix of F-41A-01 this held only with the shutdown write stood in
+    for by nothing; now it is the real path. The volume after the stop and
+    after a new start that reached "paused" again is byte for byte the volume
+    of the first "paused", logs of zero bytes and shared memory aside.
     """
-
-    async def nothing(self: GuardWatch) -> None:
-        del self
-
-    monkeypatch.setattr(GuardWatch, "note_shutdown_begins", nothing)
     monkeypatch.setattr(findling_main, "pause_wish_reader", wish_reader(True))
     settings().armed_marker.write_text("", encoding="utf-8")
     root = indexed_volume.root
