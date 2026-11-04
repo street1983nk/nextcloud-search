@@ -1725,15 +1725,19 @@ async def test_a_large_broken_storage_does_not_hold_up_the_queue(
     poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=cast("Any", queue), bodies=bodies)
 
     states: list[str] = []
-    for _ in range(40):
+    for _ in range(60):
         states.append((await poller.run_once()).state)
         if not queue.rows:
             break
 
+    # Passes are counted as claims of the queue model, the clock its locks run
+    # on: a pass that ends before its claim (a runner that did not park, a
+    # volume below its floor) moves nothing, and is no pass of the rule under
+    # test.
     first_healthy = _first_pass_with(queue, {job.queue_id for job in healthy})
     assert first_healthy is not None
     assert first_healthy <= 8
-    assert len(states) <= 9, f"the queue took {len(states)} passes"
+    assert len(queue.handed) <= 9, f"the queue took {len(queue.handed)} passes"
     assert ROUND_GATEWAY_UNAVAILABLE not in states
     assert queue.unlocked == []
     assert all(queue.ended[job.file_id] == "failed:gateway_error" for job in broken)
@@ -1758,9 +1762,14 @@ async def test_one_storage_refusing_everything_is_judged_file_by_file(
         store=store, writer=writer, tmp_path=tmp_path, queue=cast("Any", queue), bodies=bodies, fetched=fetched
     )
 
-    states = [(await poller.run_once()).state for _ in range(3)]
+    states: list[str] = []
+    for _ in range(20):
+        states.append((await poller.run_once()).state)
+        if not queue.rows:
+            break
 
-    assert states == [ROUND_WORKED] * 3
+    assert [state for state in states if state != ROUND_WAITING_FOR_RUNNER] == [ROUND_WORKED] * 3
+    assert len(queue.handed) == 3
     assert queue.rows == {}
     assert len(queue.ended) == 70
     assert all(queue.ended[job.file_id] == "failed:gateway_error" for job in jobs)
@@ -1789,11 +1798,11 @@ async def test_two_broken_storages_in_a_row_only_charge_the_rows_at_the_border(
 
     charged: set[int] = set()
     escalations = 0
-    passes = 0
-    for _ in range(60):
+    states: list[str] = []
+    for _ in range(120):
         unlocks_before = len(queue.unlocked)
         result = await poller.run_once()
-        passes += 1
+        states.append(result.state)
         if result.state == ROUND_GATEWAY_UNAVAILABLE:
             escalations += 1
             handed_back = {qid for ids in queue.unlocked[unlocks_before:] for qid in ids}
@@ -1816,7 +1825,9 @@ async def test_two_broken_storages_in_a_row_only_charge_the_rows_at_the_border(
     # back after the lock timeout and escalate together twice more, then the
     # give-up rule ends them. Under the rule of 1.6.0 the same stock needed
     # 128 passes until the first healthy file (post audit).
-    assert (passes, escalations) == (28, 3)
+    # Passes are claims, for the reason given in the test of one large broken
+    # storage above.
+    assert (len(queue.handed), escalations) == (28, 3), states
 
 
 async def test_four_refusals_beside_two_healthy_files_stay_four_verdicts(
