@@ -1132,8 +1132,14 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # with the figures of the issue. No file came or went, so PHP_FILES_TODAY stays at 110. The package
 # pair moved in the step before. Recomputed independently with find, sort, tr and sha256sum over the
 # CRLF normalised tree: eb7fd98f... both ways.
-PHP_FILES_TODAY = 110
-PHP_TREE_HASH_TODAY = "eb7fd98f3e6e20d8613d32646e0fc58972705fb43ed4582164ab3cc1469e09e4"
+# Moved on 2026-11-04 by Plan 41-05 (issue #37): SettingsService.php and ProfileController.php carry the
+# pause wish, Command/PauseCommand.php and Command/ResumeCommand.php are new, and appinfo/info.xml (not
+# part of this glob) registers both. Two files came under lib/ and one under tests/
+# (tests/Unit/PauseCommandTest.php; SettingsServiceTest.php and ProfileControllerTest.php changed their
+# bytes), so PHP_FILES_TODAY moves to 113. Recomputed independently with find, sort, tr and sha256sum
+# over the CRLF normalised tree: 28223473... both ways.
+PHP_FILES_TODAY = 113
+PHP_TREE_HASH_TODAY = "2822347360e64a6879561d7ad0b1feeac476d00de9283eeb72f4ca832c41a8f8"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
