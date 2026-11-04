@@ -33,7 +33,7 @@ final class SettingsServiceTest extends TestCase {
 
 	private ITimeFactory&MockObject $time;
 
-	/** @var array<string, int|string|array<mixed>> the stored keys of the app */
+	/** @var array<string, bool|int|string|array<mixed>> the stored keys of the app */
 	private array $values = [];
 
 	protected function setUp(): void {
@@ -86,6 +86,20 @@ final class SettingsServiceTest extends TestCase {
 		);
 		$this->appConfig->method('setValueArray')->willReturnCallback(
 			function (string $app, string $key, array $value): bool {
+				$this->values[$key] = $value;
+
+				return true;
+			},
+		);
+		$this->appConfig->method('getValueBool')->willReturnCallback(
+			function (string $app, string $key, bool $default = false): bool {
+				$value = $this->values[$key] ?? $default;
+
+				return is_bool($value) ? $value : $default;
+			},
+		);
+		$this->appConfig->method('setValueBool')->willReturnCallback(
+			function (string $app, string $key, bool $value): bool {
 				$this->values[$key] = $value;
 
 				return true;
@@ -359,5 +373,33 @@ final class SettingsServiceTest extends TestCase {
 
 		self::assertSame([], $errors);
 		self::assertSame(self::NOW, $this->values[SettingsService::KEY_SCAN_STALE_SINCE]);
+	}
+
+	// -- the backup pause (issue #37, D-41-05) ----------------------------------
+
+	public function testPausedIsFalseWithoutAStoredKey(): void {
+		// No migration: a 1.6.1 instance has no such key and is not paused.
+		self::assertArrayNotHasKey(SettingsService::KEY_PAUSED, $this->values);
+		self::assertFalse($this->settings()->paused());
+	}
+
+	public function testSetPausedStoresABool(): void {
+		$appConfig = $this->createMock(IAppConfig::class);
+		$appConfig->expects(self::once())->method('setValueBool')
+			->with(Application::APP_ID, 'paused', true)
+			->willReturn(true);
+
+		(new SettingsService($appConfig, $this->logger, $this->time))->setPaused(true);
+	}
+
+	public function testPausedReadsTheStoredBool(): void {
+		$settings = $this->settings();
+
+		$settings->setPaused(true);
+		self::assertTrue($this->values[SettingsService::KEY_PAUSED]);
+		self::assertTrue($settings->paused());
+
+		$settings->setPaused(false);
+		self::assertFalse($settings->paused());
 	}
 }

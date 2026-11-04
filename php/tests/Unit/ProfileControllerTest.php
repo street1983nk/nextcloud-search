@@ -98,7 +98,7 @@ final class ProfileControllerTest extends TestCase {
 		$response = $this->controller($this->backendAppId())->profile();
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
-		self::assertSame(['profile' => 'standard', 'precision' => 'int8', 'confirmed' => null, 'verdicts' => 3], $response->getData());
+		self::assertSame(['profile' => 'standard', 'precision' => 'int8', 'confirmed' => null, 'verdicts' => 3, 'paused' => false], $response->getData());
 	}
 
 	public function testAMissingKeyMeansEconomy(): void {
@@ -107,7 +107,7 @@ final class ProfileControllerTest extends TestCase {
 		$response = $this->controller($this->backendAppId())->profile();
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
-		self::assertSame(['profile' => 'economy', 'precision' => 'int8', 'confirmed' => null, 'verdicts' => 3], $response->getData());
+		self::assertSame(['profile' => 'economy', 'precision' => 'int8', 'confirmed' => null, 'verdicts' => 3, 'paused' => false], $response->getData());
 	}
 
 	public function testAValueOutsideTheSetMeansEconomyAndIsNotLogged(): void {
@@ -123,7 +123,7 @@ final class ProfileControllerTest extends TestCase {
 		$response = $this->controller($this->backendAppId())->profile();
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
-		self::assertSame(['profile' => 'economy', 'precision' => 'int8', 'confirmed' => null, 'verdicts' => 3], $response->getData());
+		self::assertSame(['profile' => 'economy', 'precision' => 'int8', 'confirmed' => null, 'verdicts' => 3, 'paused' => false], $response->getData());
 	}
 
 	public function testAFailedReadAnswersAsAFailureWithoutAProfileName(): void {
@@ -173,7 +173,7 @@ final class ProfileControllerTest extends TestCase {
 		$response = $this->controller($this->backendAppId())->profile();
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
-		self::assertSame(['profile' => 'standard', 'precision' => 'fp32', 'confirmed' => null, 'verdicts' => 3], $response->getData());
+		self::assertSame(['profile' => 'standard', 'precision' => 'fp32', 'confirmed' => null, 'verdicts' => 3, 'paused' => false], $response->getData());
 	}
 
 	/** @return array<string, array{string}> */
@@ -203,7 +203,7 @@ final class ProfileControllerTest extends TestCase {
 		$response = $this->controller($this->backendAppId())->profile();
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
-		self::assertSame(['profile' => 'standard', 'precision' => null, 'confirmed' => null, 'verdicts' => 3], $response->getData());
+		self::assertSame(['profile' => 'standard', 'precision' => null, 'confirmed' => null, 'verdicts' => 3, 'paused' => false], $response->getData());
 	}
 
 	// -- the confirmation token (D-26-04) --------------------------------------
@@ -218,7 +218,7 @@ final class ProfileControllerTest extends TestCase {
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
 		self::assertSame(
-			['profile' => 'standard', 'precision' => 'int8', 'confirmed' => self::TOKEN, 'verdicts' => 3],
+			['profile' => 'standard', 'precision' => 'int8', 'confirmed' => self::TOKEN, 'verdicts' => 3, 'paused' => false],
 			$response->getData(),
 		);
 	}
@@ -266,7 +266,7 @@ final class ProfileControllerTest extends TestCase {
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
 		self::assertSame(
-			['profile' => 'standard', 'precision' => 'int8', 'confirmed' => null, 'verdicts' => 3],
+			['profile' => 'standard', 'precision' => 'int8', 'confirmed' => null, 'verdicts' => 3, 'paused' => false],
 			$response->getData(),
 		);
 	}
@@ -312,5 +312,52 @@ final class ProfileControllerTest extends TestCase {
 		self::assertSame(['int8', 'fp32'], SettingsService::PRECISIONS);
 		self::assertSame('int8', SettingsService::PRECISION_DEFAULT);
 		self::assertNotSame(SettingsService::KEY_PROFILE, SettingsService::KEY_MODEL_PRECISION);
+	}
+
+	// -- the backup pause (issue #37, D-41-05) ----------------------------------
+
+	/** @return array<string, array{bool}> */
+	public static function pauseWishes(): array {
+		return ['paused' => [true], 'running' => [false]];
+	}
+
+	#[DataProvider('pauseWishes')]
+	public function testTheProfileAnswerCarriesPaused(bool $wish): void {
+		// The container reads this field on every round (plan 41-04); a
+		// companion before 1.6.2 sends no such field, which the container
+		// takes as "not paused".
+		$this->stored('standard');
+		$this->appConfig->method('getValueBool')->willReturnCallback(
+			static fn (string $app, string $key, bool $default = false): bool => $key === SettingsService::KEY_PAUSED ? $wish : $default,
+		);
+
+		$response = $this->controller($this->backendAppId())->profile();
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		$data = $response->getData();
+		self::assertIsArray($data);
+		self::assertSame($wish, $data['paused']);
+		self::assertSame('standard', $data['profile']);
+	}
+
+	public function testAnUnreadablePauseKeyIsA500WithoutTheField(): void {
+		// The field sits in the same try as the others: a failed read is a
+		// failure, never a default "not paused" that would start indexing
+		// in the middle of a backup.
+		$this->stored('standard');
+		$this->appConfig->method('getValueBool')->willThrowException(new \RuntimeException('storage gone'));
+
+		$this->logger->expects(self::once())->method('error')->with(
+			self::isString(),
+			self::arrayHasKey('exception'),
+		);
+
+		$response = $this->controller($this->backendAppId())->profile();
+
+		self::assertSame(Http::STATUS_INTERNAL_SERVER_ERROR, $response->getStatus());
+		$data = $response->getData();
+		self::assertIsArray($data);
+		self::assertArrayNotHasKey('paused', $data);
+		self::assertSame(['error' => 'profile unreadable'], $data);
 	}
 }

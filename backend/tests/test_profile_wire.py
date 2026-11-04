@@ -139,3 +139,16 @@ def test_the_verdict_generation_travels_under_one_name_and_one_value() -> None:
     assert generation == [str(VERDICTS_GENERATION)]
     assert controller.count("'verdicts' => self::VERDICTS_GENERATION") == 1
     assert queue_client.count('payload.get("verdicts")') == 1
+
+
+def test_the_pause_wish_travels_under_one_name_on_both_sides() -> None:
+    # Issue #37, D-41-05: the companion stores the wish under the key paused,
+    # the profile route answers it as "paused", and the container reads exactly
+    # that key and only a JSON true (plan 41-04). A rename on one side only
+    # would read as "not paused" and index in the middle of a backup.
+    controller = PROFILE_CONTROLLER.read_text(encoding="utf-8")
+    queue_client = QUEUE_CLIENT.read_text(encoding="utf-8")
+
+    assert controller.count("'paused' => $this->settingsService->paused()") == 1
+    assert len(re.findall(r"public const KEY_PAUSED = 'paused';", _source())) == 1
+    assert queue_client.count('payload.get("paused") is True') == 1
