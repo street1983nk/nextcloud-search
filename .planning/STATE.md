@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
 status: executing
-stopped_at: Completed 42-02-PLAN.md
-last_updated: "2026-11-04T20:47:37.000Z"
+stopped_at: Completed 42-03-PLAN.md
+last_updated: "2026-11-04T21:19:47.000Z"
 last_activity: 2026-11-04
 progress:
   total_phases: 5
@@ -26,8 +26,8 @@ Siehe .planning/PROJECT.md (Stand nach v1.5, Milestone v1.6 gestartet) und .plan
 ## Current Position
 
 Phase: 42 (php-sicherheits-gates), EXECUTING
-Plan: 2 of 3
-Status: 42-02 abgeschlossen (e0ea3179), 42-03 als Nächstes
+Plan: 3 of 3
+Status: 42-03 abgeschlossen (a0cb12c5), alle 3 Pläne mit SUMMARY, Phase bereit zur Verifikation
 Last activity: 2026-11-04
 
 Progress: [█████████░] 88%
@@ -90,6 +90,7 @@ Progress: [█████████░] 88%
 - v1.5: 36-16 in ca. 15 min nach dem Dispatch (3 Tasks, 5 Dateien; Freigabe und Dispatch durch den Koordinator)
 - v1.7: 42-01 in ca. 40 min inkl. CI (2 Tasks, 5 Dateien)
 - v1.7: 42-02 in ca. 90 min inkl. Docker-Ausfall und CI (2 Tasks, 8 Dateien)
+- v1.7: 42-03 in ca. 60 min inkl. CI (2 Tasks, 4 Dateien)
 
 ## Accumulated Context
 
@@ -118,6 +119,7 @@ Progress: [█████████░] 88%
 - 40-VERIFICATION (409a38b8): gaps_found, SC1 partial (Audit deckte efcf26c5..91a0603f nicht ab) -> Nachaudit 40-NACHAUDIT.md beauftragt; Luecke 2 (v1.7-Punkte) in deferred-items.md nachgetragen.
 - 42-01: lokales PHPUnit über scripts/dev/phpunit_docker.sh (nextcloud:32.0.15-apache, PHP 8.3, stable34), SERVER_VERSION und MINIMUM_TESTS aus php.yml gelesen; 958 Tests lokal und im CI (PHP 41897060856) grün, Baumhash e7289079 (113).
 - 42-02: Routen-Attribut-Gate RouteSecurityTest (Reflection gegen php/tests/route-security.json, 20 Routen, R1 PublicPage braucht Ratelimit, R2 NoCSRFRequired nur GET oder ExAppRequired), php.yml-Schritt 'The route attribute gate ran' (ROUTE_GATE_MIN_TESTS 15), Strukturgate test_php_route_gate_presence.py; 973 Tests lokal und im CI (PHP 41905206023) grün, Baumhash 06a082a0 (116).
+- 42-03: Job composer-hygiene in php.yml (composer validate --strict --no-check-publish, composer audit --locked), php.yml wöchentlich Montag 05:50 UTC mit concurrency nach event_name, Dependabot composer /php ohne phpunit-Major, Strukturgate test_php_supply_chain_gates.py; CI a0cb12c5 zwölf Läufe grün (PHP 41909998607); Dependabot-PR #46 (phpunit 11.5.57) offen, nicht gemergt.
 
 ### Decisions (Roadmap v1.5)
 
@@ -245,8 +247,8 @@ Items acknowledged and deferred at milestone close on 2026-10-28 (Owner-Wiedervo
 
 ## Session Continuity
 
-Last session: 2026-11-04T20:47:37.000Z
-Stopped at: Completed 42-02-PLAN.md
+Last session: 2026-11-04T21:19:47.000Z
+Stopped at: Completed 42-03-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
