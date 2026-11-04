@@ -2810,59 +2810,80 @@ hat der Owner mit D-37-08 bewusst so belassen.
 
 ---
 
-# Entwurf v1.6.2, Stand Plan 41-08 (04.11.2026)
+# Entwurf v1.6.2 (Gesamttext), abgenommen am 04.11.2026
 
-Entwurf für die Owner-Runde in Plan 41-10, noch nicht abgenommen.
+**Owner-Abnahme 04.11.2026 in einer Runde ("Go für alles": alle Punkte wie
+empfohlen, GO für Tag und Einreichung); Wortlaut, Datum und Kanal in
+`.planning/phases/41-findling-1-6-2-backup-pause-schalter-37-backup-doku-25-fixes/41-ABNAHME.md`.**
+Grundlage: `41-OWNER-VORLAGE.md` derselben Phase.
 
-- Version 1.6.2 in beiden `info.xml`, `image-tag` 1.6.2.
-- Doku-Links der sechs Beschreibungen auf `blob/v1.6.2`.
-- Namen und Beschreibungen zeichengleich zur Fassung 1.6.1 (D-41-15: Store-Text
-  nur ändern, wenn nötig). Die Companion-`info.xml` trägt zusätzlich die zwei
-  neuen Befehle `findling:pause` und `findling:resume` unter `<commands>`.
-- Upgrade-Beweis weiter ab v1.5.0 (`UPGRADE_FROM_TAG`), mit der Zusicherung,
-  dass nach dem Upgrade nichts pausiert ist.
+Namen und Beschreibungen wie 1.6.1, Doku-Links auf blob/v1.6.2, Version und
+`image-tag` 1.6.2; die Companion-`info.xml` trägt zusätzlich die Befehle
+`findling:pause` und `findling:resume` unter `<commands>`. Store-Changelog ist
+CHANGELOG.md, Abschnitt [1.6.2], unverändert. `backend/tests/test_store_metadata.py`
+hält diesen Abschnitt gegen `php/l10n/de.json` und die Release-Notiz gegen den
+Compare-Link (`scan_full_text_1_6_2`).
 
-Neue nutzersichtbare Sätze zur Abnahme (en / de / fr):
+## Teil 1: die Sätze der Admin-Seite
 
-1. Hinweis zu `gateway_error` (Plan 41-01)
-   - en: Nextcloud could not open the file, often because its storage was not available. The nightly comparison tries it again up to three times, and a change to the file tries it at once.
-   - de: Nextcloud konnte die Datei nicht öffnen, oft weil ihr Speicher nicht verfügbar war. Der nächtliche Abgleich versucht es bis zu dreimal erneut, eine Änderung an der Datei sofort.
-   - fr: Nextcloud n'a pas pu ouvrir le fichier, souvent parce que son stockage n'était pas disponible. La comparaison nocturne réessaie jusqu'à trois fois, et une modification du fichier relance aussitôt.
-2. Schalter (Plan 41-06)
-   - en: Pause indexing
-   - de: Indexierung pausieren
-   - fr: Mettre l'indexation en pause
-3. Schalter (Plan 41-06)
-   - en: Resume indexing
-   - de: Indexierung fortsetzen
-   - fr: Reprendre l'indexation
-4. Zustand pausiert (Plan 41-06)
-   - en: Indexing is paused for a backup. Search keeps working.
-   - de: Die Indexierung ist für ein Backup pausiert. Die Suche läuft weiter.
-   - fr: L'indexation est en pause pour une sauvegarde. La recherche continue de fonctionner.
-5. Zustand wird pausiert (Plan 41-06)
-   - en: Pausing: the current batch finishes first. Start the backup when the status says paused.
-   - de: Pause wird vorbereitet: der laufende Stapel endet zuerst. Das Backup erst starten, wenn der Status pausiert meldet.
-   - fr: Mise en pause : le lot en cours se termine d'abord. Lancez la sauvegarde quand le statut indique en pause.
-6. Zustand unlesbar (Plan 41-06)
-   - en: The pause state cannot be read yet, so indexing stays stopped.
-   - de: Der Pausenzustand ist noch nicht lesbar, deshalb bleibt die Indexierung angehalten.
-   - fr: L'état de pause n'est pas encore lisible, l'indexation reste donc arrêtée.
-7. Backend zu alt (Plan 41-06)
-   - en: The backend does not know the pause yet. Update both apps to the same version.
-   - de: Das Backend kennt die Pause noch nicht. Beide Apps auf dieselbe Version aktualisieren.
-   - fr: Le backend ne connaît pas encore la pause. Mettez à jour les deux applications vers la même version.
+Hinweis zu `gateway_error` (geändert, Plan 41-01, Schlüsselwechsel):
 
-Entwurf der Release-Notiz v1.6.2 (englisch, Faktenliste, Owner-Wort steht aus):
+- en: Nextcloud could not open the file, often because its storage was not available. The nightly comparison tries it again up to three times, and a change to the file tries it at once.
+- de: Nextcloud konnte die Datei nicht öffnen, oft weil ihr Speicher nicht verfügbar war. Der nächtliche Abgleich versucht es bis zu dreimal erneut, eine Änderung an der Datei sofort.
+- fr: Nextcloud n'a pas pu ouvrir le fichier, souvent parce que son stockage n'était pas disponible. La comparaison nocturne réessaie jusqu'à trois fois, et une modification du fichier relance aussitôt.
+
+Schalter (neu, Plan 41-06):
+
+- en: Pause indexing
+- de: Indexierung pausieren
+- fr: Mettre l'indexation en pause
+
+Schalter (neu, Plan 41-06):
+
+- en: Resume indexing
+- de: Indexierung fortsetzen
+- fr: Reprendre l'indexation
+
+Zustand pausiert (neu, Plan 41-06):
+
+- en: Indexing is paused for a backup. Search keeps working.
+- de: Die Indexierung ist für ein Backup pausiert. Die Suche läuft weiter.
+- fr: L'indexation est en pause pour une sauvegarde. La recherche continue de fonctionner.
+
+Zustand wird pausiert (neu, Plan 41-06):
+
+- en: Pausing: the current batch finishes first. Start the backup when the status says paused.
+- de: Pause wird vorbereitet: der laufende Stapel endet zuerst. Das Backup erst starten, wenn der Status pausiert meldet.
+- fr: Mise en pause : le lot en cours se termine d'abord. Lancez la sauvegarde quand le statut indique en pause.
+
+Zustand unlesbar (neu, Plan 41-06):
+
+- en: The pause state cannot be read yet, so indexing stays stopped.
+- de: Der Pausenzustand ist noch nicht lesbar, deshalb bleibt die Indexierung angehalten.
+- fr: L'état de pause n'est pas encore lisible, l'indexation reste donc arrêtée.
+
+Backend zu alt (neu, Plan 41-06):
+
+- en: The backend does not know the pause yet. Update both apps to the same version.
+- de: Das Backend kennt die Pause noch nicht. Beide Apps auf dieselbe Version aktualisieren.
+- fr: Le backend ne connaît pas encore la pause. Mettez à jour les deux applications vers la même version.
+
+## Teil 2: Release-Notiz v1.6.2
 
 ```
-Findling 1.6.2. Update both apps; 1.6.x versions work together.
-- Backup pause: occ findling:pause [--wait], occ findling:resume and a switch on the admin page (#37)
-- Backup guide in German, English and French (#37)
-- Coverage fixes for large instances and share groups (#25)
-- Files of a storage that was away come back (#36)
+Findling 1.6.2. Update both apps; the backup pause needs both on 1.6.2.
+- Backup pause: occ findling:pause [--wait], occ findling:resume and a switch on the admin page. Indexing stops and everything is flushed to disk while search keeps working; the pause survives restarts (#37).
+- Backup guide in German, English and French (#37).
+- Coverage: the vector figure of left out storages is also counted above 100,000 documents, and the largest member represents a share group (#25).
+- Files of a storage that was away come back: the nightly comparison tries a gateway_error file again up to three times, and a large unavailable storage no longer holds up the files behind it (#36).
+- RTF files with emoji are indexed, and a file the index cannot take fails alone as corrupt and keeps its old version instead of stalling the queue (#44).
+- HTTP 408 and 429 from a proxy count as an outage; a fill level refresh that could not start no longer stops the language line.
+
 **Full Changelog**: https://github.com/street1983nk/nextcloud-search/compare/v1.6.1...v1.6.2
 ```
+
+Tag-Links `blob/v1.6.2` und der Compare-Link lösen erst nach dem Tag auf;
+Prüfung vor der Einreichung (Plan 41-11).
 
 # Release 1.6.1 (02.11.2026): Sicherheitsupdate
 
