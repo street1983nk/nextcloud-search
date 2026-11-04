@@ -698,6 +698,60 @@ def test_record_increments_attempts(store: Store) -> None:
     assert row["attempts"] == 2
 
 
+def _attempts(store: Store, file_id: int) -> int:
+    row = store.file_row(file_id)
+    assert row is not None
+    return int(row["attempts"])
+
+
+def test_record_starts_a_gateway_streak_at_one(store: Store) -> None:
+    # E-40-07-03 (plan 41-01, F-40N-02): attempts counts the streak of
+    # gateway_error on one version, which is what the reconcile caps its retry
+    # on. Entering the streak starts it at one, whatever the file went through
+    # before; the same refusal on the same etag counts on; a new etag is a new
+    # version and a new streak; every other verdict counts as it always did.
+    for _ in range(3):
+        store.record(1, a_file(1, etag="aaa"), "indexed", content_hash="h")
+    assert _attempts(store, 1) == 3
+
+    store.record(1, a_file(1, etag="aaa"), "failed", "gateway_error")
+    assert _attempts(store, 1) == 1
+    store.record(1, a_file(1, etag="aaa"), "failed", "gateway_error")
+    assert _attempts(store, 1) == 2
+    store.record(1, a_file(1, etag="bbb"), "failed", "gateway_error")
+    assert _attempts(store, 1) == 1
+    store.record(1, a_file(1, etag="bbb"), "indexed", content_hash="h")
+    assert _attempts(store, 1) == 2
+
+
+def test_another_failure_before_a_gateway_error_starts_the_streak_as_well(store: Store) -> None:
+    # The streak is about gateway_error alone: failed(corrupt) on the same etag
+    # is another verdict, so the refusal after it starts at one.
+    store.record(1, a_file(1, etag="aaa"), "failed", "corrupt")
+    store.record(1, a_file(1, etag="aaa"), "failed", "corrupt")
+    store.record(1, a_file(1, etag="aaa"), "failed", "gateway_error")
+
+    assert _attempts(store, 1) == 1
+
+
+def test_gateway_retry_candidates_are_the_short_streaks_of_gateway_error(store: Store) -> None:
+    # The question of the reconcile, once per page: which of these files carry
+    # failed(gateway_error) with a streak at or below the limit, tombstones aside.
+    store.record(1, a_file(1, etag="aaa"), "failed", "gateway_error")
+    for _ in range(3):
+        store.record(2, a_file(2, etag="aaa"), "failed", "gateway_error")
+    for _ in range(4):
+        store.record(3, a_file(3, etag="aaa"), "failed", "gateway_error")
+    store.record(4, a_file(4, etag="aaa"), "failed", "corrupt")
+    store.record(5, a_file(5, etag="aaa"), "indexed", content_hash="h")
+    store.record(6, a_file(6, etag="aaa"), "failed", "gateway_error")
+    store.tombstone(6)
+
+    assert store.gateway_retry_candidates([1, 2, 3, 4, 5, 6, 7], 3) == {1, 2}
+    assert store.gateway_retry_candidates([], 3) == set()
+    assert store.gateway_retry_candidates([1, 2], 1) == {1}
+
+
 def test_refresh_meta_moves_the_crawl_facts_and_leaves_the_verdict_alone(store: Store) -> None:
     # The write behind the fast path of the poller (review finding WR-02). A
     # touch moves the etag without moving a byte; without this narrow update the

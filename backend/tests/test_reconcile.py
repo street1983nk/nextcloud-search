@@ -39,6 +39,7 @@ from findling.nc.files import FileRow, Mount, MountResult, SliceResult
 from findling.nc.queue import KIND_CONTENT, KIND_DELETE, CallResult, QueueStats
 from findling.store import repo
 from findling.store.repo import FileMeta, Store, open_store
+from findling.worker import reconcile as reconcile_module
 from findling.worker.reconcile import (
     EXCLUDED_REASON,
     EXCLUDED_STATE,
@@ -1394,3 +1395,92 @@ def test_the_reconcile_log_carries_no_path_and_no_name() -> None:
     source = RECONCILE_SOURCE.read_text(encoding="utf-8")
 
     assert re.findall(r"LOGGER\.[a-z]+\(.*(?:path|name|title)", source) == []
+
+
+# -- the capped retry of gateway_error (plan 41-01, E-40-07-03, F-40N-02) -----
+
+
+def _refused(store: Store, file_id: int, times: int, *, etag: str = "aaa") -> None:
+    """A file the gateway refused ``times`` times on one version."""
+    for _ in range(times):
+        store.record(file_id, a_file(file_id, etag=etag), "failed", "gateway_error")
+
+
+@pytest.mark.parametrize("times", [1, 2, 3])
+@pytest.mark.parametrize(("state", "reason"), [("failed", "gateway_error"), (GIVEN_UP_STATE, GIVEN_UP_REASON)])
+def test_a_gateway_error_on_the_same_etag_is_work_while_the_streak_is_short(
+    store: Store, times: int, state: str, reason: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The finding of the post audit turned around (P-RECON): a file whose
+    # storage was away for a moment carries failed(gateway_error) here on an
+    # etag that did not move. Before plan 41-01 the branch "stored == etag"
+    # called that done, for good. Now it is work while the streak is at most
+    # GATEWAY_ERROR_RETRIES, whatever the Nextcloud side says: gateway_error
+    # out of the acknowledgement, or repeatedly_stuck after a charged
+    # escalation. Never written off here.
+    given_up: list[int] = []
+    monkeypatch.setattr(store, "give_up", lambda file_id, **_: given_up.append(file_id))
+    _refused(store, 10, times)
+
+    assert _compare_one(store, a_row(10, etag="aaa", state=state, reason=reason)) == [10]
+    assert given_up == []
+    # The controls: an unknown file is work as before, a file indexed on the
+    # same etag is none.
+    store.record(11, a_file(11, etag="aaa"), "indexed", content_hash="h")
+    assert _compare_one(store, a_row(12, etag="aaa")) == [12]
+    assert _compare_one(store, a_row(11, etag="aaa", state="indexed")) == []
+
+
+def test_a_gateway_error_past_the_limit_is_left_alone(store: Store, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The cap of IN-03: four refusals on one version, and the nights stay quiet.
+    given_up: list[int] = []
+    monkeypatch.setattr(store, "give_up", lambda file_id, **_: given_up.append(file_id))
+    _refused(store, 10, 4)
+    store.record(11, a_file(11, etag="aaa"), "failed", "corrupt")
+
+    assert _compare_one(store, a_row(10, etag="aaa", state="failed", reason="gateway_error")) == []
+    assert _compare_one(store, a_row(10, etag="aaa", state=GIVEN_UP_STATE, reason=GIVEN_UP_REASON)) == []
+    # The rule is about gateway_error alone: another failure on the same etag
+    # is no work.
+    assert _compare_one(store, a_row(11, etag="aaa", state="failed", reason="corrupt")) == []
+    assert given_up == []
+
+
+def test_a_gateway_error_on_a_moved_etag_is_ordinary_stale_work(store: Store) -> None:
+    _refused(store, 10, 4, etag="old")
+
+    assert _compare_one(store, a_row(10, etag="aaa", state="failed", reason="gateway_error")) == [10]
+
+
+def test_the_retry_candidates_are_asked_once_per_page(store: Store, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Once per page and only for rows whose etag did not move, banded like the
+    # other questions of _compare.
+    for file_id in range(1, 201):
+        _refused(store, file_id, 1)
+    asked: list[list[int]] = []
+    real = store.gateway_retry_candidates
+
+    def counting(file_ids: Any, limit: int) -> set[int]:
+        asked.append(list(file_ids))
+        return real(file_ids, limit)
+
+    monkeypatch.setattr(store, "gateway_retry_candidates", counting)
+    mount = Mount(storage_id=STORAGE, root_id=ROOT, overridden_root=ROOT + 1)
+    rows = [a_row(file_id, etag="aaa" if file_id <= 100 else "moved") for file_id in range(1, 201)]
+
+    stale, _ = Reconcile._compare(store, mount, rows)
+
+    assert stale == list(range(1, 201))
+    assert len(asked) == 1
+    assert asked[0] == list(range(1, 101))
+
+    # A page without a row on an unmoved etag asks nothing at all.
+    asked.clear()
+    Reconcile._compare(store, mount, [a_row(file_id, etag="moved") for file_id in range(1, 11)])
+    assert asked == []
+
+
+def test_the_number_of_retries_is_three() -> None:
+    # The admin page names the number in words (E-40-07-05); the contract test
+    # of the catalogue holds the sentence to this constant.
+    assert reconcile_module.GATEWAY_ERROR_RETRIES == 3

@@ -73,6 +73,7 @@ from findling.config import (
 )
 from findling.embed.engine import ENGINE_STATES
 from findling.embed.weights import FP32_BYTES
+from findling.worker import reconcile
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -2686,6 +2687,53 @@ def test_a_silent_content_gateway_has_a_sentence_on_the_page() -> None:
     assert str(catalogue_of(L10N_JSON)[GATEWAY_UNAVAILABLE_SENTENCE]).startswith("Das Content-Gateway hat")
 
 
+#: The remedy of gateway_error since plan 41-01 (E-40-07-05, post audit
+#: F-40N-02). "The next run tries again." was not true for this reason: a
+#: failed(gateway_error) on an unchanged etag was never tried again. Now the
+#: reconcile tries it up to GATEWAY_ERROR_RETRIES times, and the sentence says
+#: so in a number the test below binds to the constant.
+GATEWAY_ERROR_REMEDY = (
+    "Nextcloud could not open the file, often because its storage was not available. The nightly comparison "
+    "tries it again up to three times, and a change to the file tries it at once."
+)
+
+#: The number of retries in words, as the English and the German sentence spell it.
+RETRIES_IN_WORDS = {3: ("three times", "dreimal")}
+
+
+def _reason_entry(view: str, reason: str) -> str:
+    """The label and remedy pair of one reason in AdminViewService.php."""
+    entry = view[view.index(f"'{reason}' => [") :]
+    return entry[: entry.index("],")]
+
+
+def test_the_remedy_of_a_gateway_error_says_when_it_is_tried_again() -> None:
+    view = ADMIN_VIEW.read_text(encoding="utf-8")
+
+    gateway = _reason_entry(view, "gateway_error")
+    assert "'File was not retrievable'," in gateway
+    assert f"'{GATEWAY_ERROR_REMEDY}'," in gateway
+    assert "The next run tries again." not in gateway
+    # The old sentence stays where it is true: timeout and ocr_failed are
+    # tried again by the next pass that gets the file.
+    for reason in ("timeout", "ocr_failed"):
+        assert "'The next run tries again.'," in _reason_entry(view, reason), reason
+
+    english, german = RETRIES_IN_WORDS[reconcile.GATEWAY_ERROR_RETRIES]
+    assert f"up to {english}" in GATEWAY_ERROR_REMEDY
+
+    assert len(L10N_CATALOGUES) == 16
+    for catalogue in L10N_CATALOGUES:
+        assert GATEWAY_ERROR_REMEDY in catalogue_of(catalogue), catalogue.name
+    translated = str(catalogue_of(L10N_JSON)[GATEWAY_ERROR_REMEDY])
+    assert translated.startswith("Nextcloud konnte die Datei nicht")
+    assert f"bis zu {german}" in translated
+
+    documents = sorted((REPO_ROOT / "docs").glob("l10n-*.md"))
+    carrying = [path.name for path in documents if GATEWAY_ERROR_REMEDY in path.read_text(encoding="utf-8")]
+    assert carrying == sorted(document.name for document, _ in LANGUAGE_TABLES)
+
+
 # Plan 31-02 (D-31-03, Befund 13 of the plan check): every visible sentence of
 # phase 31 travels in one bundle, two new ones for the ZIP code archive_limit and
 # three changed ones. Each sentence is held in each catalogue as its own test
@@ -3805,8 +3853,16 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     the last indexing pass. All sixteen files moved together, the five language
     documents carry the row; the German and French wording goes to the owner
     in the round of plan 40-04 (block G), the five other languages are machine
-    drafts under the same dated reservation as the rest. Whoever moves it next
-    writes the next paragraph.
+    drafts under the same dated reservation as the rest.
+
+    It stands at 355 since 04.11.2026, Plan 41-01 (post audit F-40N-02,
+    E-40-07-05): the remedy of gateway_error says that the nightly comparison
+    tries the file again up to three times and a change at once, instead of
+    "The next run tries again.", which stays for timeout and ocr_failed. All
+    sixteen files moved together, the five language documents carry the row;
+    the German and French wording goes to the owner in the round of phase 41,
+    the five other languages are machine drafts under the same dated
+    reservation as the rest. Whoever moves it next writes the next paragraph.
     """
     for language, twin in ((L10N_JSON, L10N_DE_DE_JSON), (L10N_JS, L10N_DE_DE_JS)):
         assert twin.is_file(), f"{twin.name} is missing, so everybody on de_DE reads this app in English"
@@ -3855,8 +3911,9 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     # mount changed its key in plan 39-01 and so moved nothing; two of plan
     # 39-01 (the sentence for nought left out, L-36-05, and the hint after a
     # rule change, L-36-06); one of plan 40-06 (the sentence for a content
-    # gateway that did not answer, issue #36, E-40-06-04)
-    assert len(keys_of["de.json"]) == 354
+    # gateway that did not answer, issue #36, E-40-06-04); one of plan 41-01
+    # (the remedy of gateway_error, F-40N-02, E-40-07-05)
+    assert len(keys_of["de.json"]) == 355
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:

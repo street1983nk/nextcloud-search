@@ -61,6 +61,7 @@ from findling.index.writer import IndexBatchWriter
 from findling.main import APP, active_poller, enabled_handler
 from findling.nc import client as nc_client_module
 from findling.nc.client import AsyncNextcloudApp, GatewayRefused, NextcloudException, ShortRead
+from findling.nc.files import FileRow, Mount
 from findling.nc.queue import (
     LANE_INDEX,
     TOPUP_IDLE,
@@ -93,6 +94,7 @@ from findling.worker.poller import (
     _open_writer,
     _raise_generation_for_lost_index,
 )
+from findling.worker.reconcile import Reconcile
 
 POLLER_SOURCE = Path(__file__).resolve().parents[1] / "src" / "findling" / "worker" / "poller.py"
 MAIN_SOURCE = Path(__file__).resolve().parents[1] / "src" / "findling" / "main.py"
@@ -6152,3 +6154,148 @@ async def test_a_failing_catch_up_neither_ends_the_round_nor_gives_up(
     assert first.state == ROUND_WORKED
     assert len(calls) == 2
     assert any("catch-up after the upgrade stopped, OperationalError" in line for line in _poller_lines(caplog))
+
+
+# -- a storage that was away comes back (plan 41-01, F-40N-02) ----------------
+
+
+def _page_of(jobs: tuple[QueueJob, ...], *, state: str, reason: str) -> list[FileRow]:
+    """The page the reconcile reads for these files: same etag, the given state over there."""
+    return [
+        FileRow(
+            file_id=job.file_id,
+            etag=job.etag,
+            size=job.size,
+            mtime=job.mtime,
+            mime=job.mime,
+            state=state,
+            reason=reason,
+        )
+        for job in jobs
+    ]
+
+
+def _stale_of(store: Store, page: list[FileRow]) -> list[int]:
+    stale, _ = Reconcile._compare(store, Mount(storage_id=7, root_id=2, overridden_root=5), page)
+    return stale
+
+
+async def test_a_storage_that_was_away_comes_back_into_the_index(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # Scenario 2 of the post audit: storage 7 is away for one pass, its five
+    # files end as failed(gateway_error). Before plan 41-01 the reconcile read
+    # "stored etag == page etag" as done and the files never came back, while
+    # the admin page said the next run tries again. Now the reconcile hands
+    # them over, and the pass after the storage came back indexes them.
+    jobs = tuple(_job(91 + offset, 4711 + offset, storage_id=7) for offset in range(5))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    bodies: dict[int, bytes | BaseException | None] = {
+        job.file_id: GatewayRefused(500, file_id=job.file_id) for job in jobs
+    }
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies=bodies)
+
+    assert (await poller.run_once()).state == ROUND_WORKED
+    for job in jobs:
+        row = store.file_row(job.file_id)
+        assert row is not None
+        assert (row["state"], row["reason"], row["etag"]) == ("failed", "gateway_error", job.etag)
+
+    page = _page_of(jobs, state="failed", reason="gateway_error")
+    assert _stale_of(store, page) == [job.file_id for job in jobs]
+
+    bodies.clear()
+    queue._batches.append(ClaimResult(jobs=tuple(replace(job, queue_id=job.queue_id + 100) for job in jobs)))
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert result.indexed == 5
+    for job in jobs:
+        row = store.file_row(job.file_id)
+        assert row is not None
+        assert row["state"] == "indexed"
+    assert _stale_of(store, _page_of(jobs, state="indexed", reason="")) == []
+
+
+async def test_one_storage_refusing_everything_settles_within_four_requests_per_file(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # Scenario 3: a file that is refused every time costs one request in the
+    # pass that first fetches it and one in each of three reconcile cycles;
+    # the fourth cycle finds no work. Four requests per file and version, the
+    # load the cap of IN-03 allows.
+    job = _job(91, 4711, storage_id=7)
+    queue = _FakeQueue(ClaimResult(jobs=(job,)))
+    fetched: list[int] = []
+    poller = _poller(
+        store=store,
+        writer=writer,
+        tmp_path=tmp_path,
+        queue=queue,
+        bodies={4711: GatewayRefused(500, file_id=4711)},
+        fetched=fetched,
+    )
+    await poller.run_once()
+
+    cycles_with_work = 0
+    for cycle in range(4):
+        stale = _stale_of(store, _page_of((job,), state="failed", reason="gateway_error"))
+        if not stale:
+            break
+        cycles_with_work += 1
+        queue._batches.append(ClaimResult(jobs=(replace(job, queue_id=200 + cycle),)))
+        assert (await poller.run_once()).state == ROUND_WORKED
+
+    assert cycles_with_work == 3
+    assert fetched == [4711] * 4
+    row = store.file_row(4711)
+    assert row is not None
+    assert (row["state"], row["reason"], row["attempts"]) == ("failed", "gateway_error", 4)
+
+
+async def test_a_charged_row_carries_gateway_error_in_the_store(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # E-40-07-04: an escalation over two storages charges its refused rows and
+    # acknowledges nothing. Nextcloud ends a row charged three times as
+    # failed(repeatedly_stuck), and without a mark in here the reconcile read
+    # the file as unknown and gave it up for good. Now every charged row
+    # carries failed(gateway_error) against the etag of its job, so the
+    # reconcile finds a short streak and hands it over once more.
+    jobs = tuple(_job(91 + offset, 4711 + offset, storage_id=7 + offset % 2) for offset in range(6))
+    queue = _FakeQueue(*(ClaimResult(jobs=jobs) for _ in range(3)))
+    bodies: dict[int, bytes | BaseException | None] = {
+        job.file_id: GatewayRefused(401, file_id=job.file_id) for job in jobs
+    }
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies=bodies)
+
+    for _ in range(3):
+        assert (await poller.run_once()).state == ROUND_GATEWAY_UNAVAILABLE
+
+    assert queue.acknowledged == []
+    assert queue.unlocked == [[96]] * 3
+    charged = jobs[:5]
+    for job in charged:
+        row = store.file_row(job.file_id)
+        assert row is not None
+        assert (row["state"], row["reason"], row["etag"], row["attempts"]) == (
+            "failed",
+            "gateway_error",
+            job.etag,
+            3,
+        )
+    assert store.file_row(4716) is None
+    page = _page_of(charged, state="failed", reason="repeatedly_stuck")
+    assert _stale_of(store, page) == [job.file_id for job in charged]
+
+    # A record that raises costs that one mark and never the unlock of the
+    # rest of the pass.
+    def failing_record(*args: Any, **kwargs: Any) -> None:
+        del args, kwargs
+        raise sqlite3.OperationalError("disk I/O error")
+
+    monkeypatch.setattr(store, "record", failing_record)
+    queue._batches.append(ClaimResult(jobs=jobs))
+    assert (await poller.run_once()).state == ROUND_GATEWAY_UNAVAILABLE
+    assert queue.unlocked[-1] == [96]
+    assert poller.busy is False
