@@ -94,7 +94,7 @@ from findling.index.open import (
 from findling.index.rebuild import MARKS_A_REBUILD_ANSWERS
 from findling.index.wordlist import build_artifact
 from findling.index.wordlist_nl import dutch_digest_for, dutch_mark
-from findling.index.writer import FLUSH_PAUSED_LOW_DISK, IndexBatchWriter, IndexRecord
+from findling.index.writer import FLUSH_PAUSED_LOW_DISK, IndexBatchWriter, IndexRecord, UnwritableRecord
 from findling.nc import client as nc_client
 from findling.nc.client import (
     AsyncNextcloudApp,
@@ -1846,7 +1846,7 @@ class Poller:
             _discard(read.path)
 
         if outcome.state is State.INDEXED:
-            await asyncio.to_thread(self._writer_or_die().add, _record_of(job, outcome))
+            outcome = await self._write_or_fail(job, outcome)
         hand_over = self._goes_to_the_ocr_track(outcome)
         if hand_over:
             handover.append(job.file_id)
@@ -1944,8 +1944,50 @@ class Poller:
 
         if outcome.state is State.INDEXED:
             # Upsert on the file id under the writer's lock (T-26-19).
-            await self._pool.call(self._writer_or_die().add, _record_of(job, outcome))
+            outcome = await self._write_or_fail(job, outcome, on_the_pool=True)
         return _ScanResult(job, replace(outcome, text=""), read.content_hash)
+
+    async def _write_or_fail(
+        self, job: QueueJob, outcome: ExtractionOutcome, *, on_the_pool: bool = False
+    ) -> ExtractionOutcome:
+        """Write one file into the index, or turn the refusal into its verdict.
+
+        Issue #44: a value the index cannot take raised out of the pass, run()
+        handed the whole batch back, the next claim took the same rows and the
+        queue stood, while the verdicts of the innocent neighbours, written only
+        at the end of a pass, never landed. A record the writer refuses is a
+        fact about that one file, so it ends as failed(corrupt) here and the
+        batch goes on.
+
+        corrupt and not encoding_unknown. Both are existing codes with existing
+        texts; encoding_unknown tells the admin to save the file as UTF-8, which
+        is the wrong advice for a file whose text was read fine and whose
+        refusal can be any value of the record, and corrupt is what this app
+        already says for an exception nobody foresaw (ExtractionOutcome
+        .from_exception). The old version of the file stays in the index,
+        because the writer refuses before it queues the deletion.
+
+        Only :class:`UnwritableRecord` is caught. A failure of the writer itself
+        is not a fact about one file, and turning it into a verdict would write
+        a whole stock off as corrupt; it keeps ending the pass and the batch is
+        handed back as before.
+
+        The write itself stays where it was: on a worker thread, and for the OCR
+        track in the executor of the slot pool (T-26-19), which is what
+        ``on_the_pool`` chooses. The file id and the class name of the cause go
+        into the log, never a name, a path or text.
+        """
+        try:
+            if on_the_pool:
+                await self._pool.call(self._writer_or_die().add, _record_of(job, outcome))
+            else:
+                await asyncio.to_thread(self._writer_or_die().add, _record_of(job, outcome))
+        except UnwritableRecord as refused:
+            LOGGER.warning(
+                "file id %d could not be written to the index, %s, failed(corrupt)", job.file_id, refused.cause
+            )
+            return ExtractionOutcome.failed(Reason.CORRUPT)
+        return outcome
 
     async def _extract_on_the_pool(
         self,
@@ -2196,7 +2238,12 @@ class Poller:
         outcome = ExtractionOutcome.indexed(body, truncated=truncated)
         # writer.add replaces through the term deletion, so this is an upsert on
         # the file id and not a second document under a second name.
-        await asyncio.to_thread(self._writer_or_die().add, _record_of(job, outcome))
+        outcome = await self._write_or_fail(job, outcome)
+        if outcome.state is State.FAILED:
+            # The old version stays under the old name, see _write_or_fail; no
+            # track and no carried flag for a write that did not happen.
+            self._collect(job, outcome, done, failed, verdicts, content_hash)
+            return True
         # And on to the second track when this document has no vectors yet, but
         # not otherwise: a rename does not change a single character of the
         # text, so the vectors it already has are still the right ones and

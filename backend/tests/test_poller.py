@@ -36,6 +36,7 @@ import shutil
 import sqlite3
 import threading
 import time
+import unicodedata
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -6299,3 +6300,178 @@ async def test_a_charged_row_carries_gateway_error_in_the_store(
     assert (await poller.run_once()).state == ROUND_GATEWAY_UNAVAILABLE
     assert queue.unlocked[-1] == [96]
     assert poller.busy is False
+
+
+# -- one file the index cannot take (issue #44) ------------------------------
+
+# An RTF with an emoji, which striprtf 0.0.35 hands over as two UTF-16 halves.
+# The body is the one value of a file that goes to the index and nowhere else,
+# so it is the value that has to carry the poison: a poisoned path or title
+# would fail the state database as well and test something else.
+RTF_WITH_EMOJI = (
+    rb"{\rtf1\ansi\ansicpg1252\deff0 {\fonttbl {\f0 Arial;}}\f0 "
+    rb"Hallo \u-10179?\u-8704? und viele Gruesse zur Weltkugel aus dem Rathaus}"
+)
+RTF_WITHOUT_EMOJI = rb"{\rtf1\ansi\ansicpg1252\deff0 {\fonttbl {\f0 Arial;}}\f0 Hallo und Gruesse aus dem Rathaus}"
+
+
+@pytest.fixture
+def normalize_of_1_6_1(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The writer's normalisation as 1.6.1 shipped it, composition and no repair.
+
+    Fault injection and not a stand in for the writer: the body goes through the
+    real extractor and the real binding, and what this takes away is the repair
+    of part one, so that the containment of part two is tested on its own and on
+    the exact value of issue #44.
+    """
+    monkeypatch.setattr("findling.index.writer.normalize", lambda text: unicodedata.normalize("NFC", text))
+
+
+def _rtf_batch(rtf: bytes) -> tuple[ClaimResult, dict[int, bytes | BaseException | None]]:
+    middle = _job(92, 4712, mime="application/rtf", size=len(rtf), title="Gruss.rtf", path="Dropbox/Gruss.rtf")
+    return ClaimResult(jobs=(_job(), middle, _job(93, 4713))), {4712: rtf}
+
+
+@pytest.mark.usefixtures("normalize_of_1_6_1")
+async def test_one_file_the_index_cannot_take_fails_alone_and_the_pass_goes_on(
+    store: Store, writer: IndexBatchWriter, index: Index, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Before 1.6.2 the UnicodeEncodeError escaped the pass, run() refunded the
+    # whole batch, the next claim took the same rows and the queue stood. Now
+    # the file is failed(corrupt) and its neighbours get their verdicts.
+    batch, bodies = _rtf_batch(RTF_WITH_EMOJI)
+    queue = _FakeQueue(batch)
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies=bodies)
+
+    with caplog.at_level("WARNING", logger="findling.worker.poller"):
+        result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert (result.indexed, result.failed) == (2, 1)
+    assert queue.acknowledged == [([91, 93], {92: "corrupt"})]
+    assert queue.unlocked == []
+    for neighbour in (4711, 4713):
+        row = store.file_row(neighbour)
+        assert row is not None
+        assert row["state"] == "indexed"
+    row = store.file_row(4712)
+    assert row is not None
+    assert (row["state"], row["reason"]) == ("failed", "corrupt")
+    assert sorted(_stored_ids(index)) == [4711, 4713]
+    lines = [line for line in _poller_lines(caplog) if "could not be written" in line]
+    assert len(lines) == 1
+    assert "UnicodeEncodeError" in lines[0]
+    assert "4712" in lines[0]
+    assert "Gruss" not in lines[0]
+    assert "Dropbox" not in lines[0]
+    assert "Rathaus" not in caplog.text
+    assert "unexpected" not in caplog.text
+
+
+@pytest.mark.usefixtures("normalize_of_1_6_1")
+async def test_the_same_batch_without_the_emoji_indexes_all_three(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # Positive control one: the injected 1.6.1 normalisation alone fails
+    # nothing, so the failed(corrupt) above is the emoji and nothing else.
+    batch, bodies = _rtf_batch(RTF_WITHOUT_EMOJI)
+    queue = _FakeQueue(batch)
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies=bodies)
+
+    result = await poller.run_once()
+
+    assert (result.indexed, result.failed) == (3, 0)
+    assert queue.acknowledged == [([91, 92, 93], {})]
+
+
+async def test_the_batch_of_issue_44_indexes_all_three_with_the_repair(
+    store: Store, writer: IndexBatchWriter, index: Index, tmp_path: Path
+) -> None:
+    # Positive control two, and the end to end case of the issue: with the
+    # shipped normalisation the emoji RTF is indexed and keeps its emoji.
+    batch, bodies = _rtf_batch(RTF_WITH_EMOJI)
+    queue = _FakeQueue(batch)
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies=bodies)
+
+    result = await poller.run_once()
+
+    assert (result.indexed, result.failed) == (3, 0)
+    assert queue.acknowledged == [([91, 92, 93], {})]
+    stored = writer.stored_body(4712)
+    assert stored is not None
+    assert f"Hallo {chr(0x1F600)} und" in stored
+
+
+@pytest.mark.usefixtures("normalize_of_1_6_1")
+async def test_one_file_the_index_cannot_take_no_longer_stalls_the_loop(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The stall itself, through run() as the container runs it: before the fix
+    # the catch-all logged "indexing pass ended in an unexpected
+    # UnicodeEncodeError", handed [91, 92, 93] back and acknowledged nothing.
+    batch, bodies = _rtf_batch(RTF_WITH_EMOJI)
+    queue = _FakeQueue(batch)
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies=bodies)
+    poller.arm()
+    stop = asyncio.Event()
+    task = asyncio.create_task(poller.run(stop))
+    try:
+        for _ in range(200):
+            if queue.acknowledged or queue.unlocked:
+                break
+            await asyncio.sleep(0.01)
+    finally:
+        stop.set()
+        await asyncio.wait_for(task, timeout=5)
+
+    assert queue.unlocked == []
+    assert queue.acknowledged == [([91, 93], {92: "corrupt"})]
+
+
+@pytest.mark.usefixtures("normalize_of_1_6_1")
+async def test_a_scan_the_index_cannot_take_fails_alone(
+    store: Store, writer: IndexBatchWriter, index: Index, tmp_path: Path
+) -> None:
+    # The same rule on the OCR track, whose write goes through the pool.
+    queue = _FakeQueue(ClaimResult(jobs=(_ocr_job(len(SCAN_BYTES)),)))
+    poller = _poller(
+        store=store,
+        writer=writer,
+        tmp_path=tmp_path,
+        queue=queue,
+        bodies={4711: SCAN_BYTES},
+        extract=_Extractor(outcome=ExtractionOutcome.indexed(f"{BODY} {chr(0xD83D)}")),
+    )
+
+    result = await poller.run_once()
+
+    assert (result.indexed, result.failed) == (0, 1)
+    assert queue.acknowledged == [([], {91: "corrupt"})]
+    assert queue.unlocked == []
+    assert _documents(index) == 0
+
+
+async def test_a_rename_the_index_cannot_take_fails_alone_and_keeps_the_old_name(
+    store: Store, writer: IndexBatchWriter, index: Index, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The rename route writes the stored text again under the new name, and a
+    # stored text is clean by construction, so the refusal is injected into the
+    # build of the document for the new name only. The write is refused before
+    # the deletion, so the file stays findable under the name it had, which is
+    # the truth of the index until the next good write.
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)), ClaimResult(jobs=(_renamed(),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+    await poller.run_once()
+
+    def refusing(text: str) -> str:
+        if text == RENAMED_TITLE:
+            raise ValueError(text)
+        return unicodedata.normalize("NFC", text)
+
+    monkeypatch.setattr("findling.index.writer.normalize", refusing)
+    result = await poller.run_once()
+
+    assert (result.indexed, result.failed) == (0, 1)
+    assert queue.acknowledged[1] == ([], {92: "corrupt"})
+    assert _by_name(index, "kuendigung") == [4711]
+    assert _by_name(index, "aufhebungsvertrag") == []

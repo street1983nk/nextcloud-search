@@ -26,6 +26,7 @@ import shutil
 import warnings
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -52,6 +53,7 @@ from findling.index.writer import (
     IndexBatchWriter,
     IndexLockedError,
     IndexRecord,
+    UnwritableRecord,
     disk_is_tight,
     free_bytes,
     stored_body,
@@ -817,3 +819,69 @@ def test_a_closed_writer_refuses_to_roll_back(index: Index, index_dir: Path) -> 
 
     with pytest.raises(RuntimeError):
         writer.rollback()
+
+
+# -- a record that cannot be written (issue #44) -----------------------------
+
+# A path with a lone UTF-16 half. The path is the one text value the writer does
+# not normalise, so this is the record that still reaches tantivy's add_text with
+# a string UTF-8 cannot carry, through the real binding and without a stand in.
+POISONED_PATH = f"/Briefe/kaputt{chr(0xDC00)}.rtf"
+
+
+def _poisoned(file_id: int) -> IndexRecord:
+    return IndexRecord(
+        file_id=file_id,
+        storage_id=7,
+        name="Kündigung.pdf",
+        title="Kündigung",
+        path=POISONED_PATH,
+        ext="pdf",
+        body="Die neue Widerrufsfrist beträgt zwei Wochen.",
+        mtime=1_700_000_001,
+    )
+
+
+def test_a_record_that_cannot_be_written_raises_the_writer_error(batch_writer: IndexBatchWriter) -> None:
+    with pytest.raises(UnwritableRecord) as raised:
+        batch_writer.add(_poisoned(42))
+
+    # The class of the cause and nothing of its message, which carries the text.
+    assert raised.value.cause == "UnicodeEncodeError"
+    assert "kaputt" not in str(raised.value)
+    assert batch_writer.pending == 0
+
+
+def test_a_record_that_cannot_be_written_leaves_the_old_version_in_place(
+    index: Index, batch_writer: IndexBatchWriter
+) -> None:
+    # The deletion of the old version is the first half of the upsert. Before
+    # issue #44 it was queued ahead of the field writes, so a raise in between
+    # left it pending and the next commit took the old version away in silence.
+    batch_writer.add(_record(42))
+    batch_writer.flush()
+    assert _hits(index, "frist") == 1
+
+    with pytest.raises(UnwritableRecord):
+        batch_writer.add(_poisoned(42))
+    batch_writer.add(_record(43, body="Ein Nachbar mit einem Mietvertrag."))
+    batch_writer.flush()
+
+    assert _hits(index, "frist") == 1, "the old version of 42 has to survive the failed write"
+    assert _hits(index, "wochen") == 0
+    assert stored_body(index, index.schema, 42) == GERMAN_BODY
+    assert _hits(index, "mietvertrag") == 1
+
+
+def test_a_writable_record_still_replaces_the_old_version(index: Index, batch_writer: IndexBatchWriter) -> None:
+    # The positive control of the two tests above: the same replacement with a
+    # clean path goes through, so the order change did not break the upsert.
+    batch_writer.add(_record(42))
+    batch_writer.flush()
+
+    batch_writer.add(replace(_poisoned(42), path="/Briefe/heil.rtf"))
+    batch_writer.flush()
+
+    assert stored_body(index, index.schema, 42) == "Die neue Widerrufsfrist beträgt zwei Wochen."
+    index.reload()
+    assert index.searcher().num_docs == 1

@@ -132,6 +132,24 @@ class IndexLockedError(RuntimeError):
     """
 
 
+class UnwritableRecord(ValueError):
+    """One record whose values the index cannot take (issue #44).
+
+    Raised by :meth:`IndexBatchWriter.add` when building the document fails,
+    which is a property of that one file and of nothing else, so the caller
+    fails that file and goes on with the batch. The deletion of the old version
+    has not been queued yet when this is raised, so the old version stays.
+
+    ``cause`` is the class name of the original exception and the only text this
+    carries: the message of an encoding error quotes the string it choked on,
+    and that string is file content or a file name.
+    """
+
+    def __init__(self, cause: str) -> None:
+        super().__init__(f"the index cannot take this record ({cause})")
+        self.cause = cause
+
+
 class IndexBatchWriter:
     """Holds the single IndexWriter of the process and commits in batches.
 
@@ -282,54 +300,34 @@ class IndexBatchWriter:
         PHP 8.2 a character outside the BMP leaves as the escaped pair
         ``\\ud83d\\ude00``, which ``json.loads`` joins into the one character, and
         a name holding an encoded surrogate is malformed UTF-8 that makes
-        ``json_encode`` fail as a whole instead of emitting a lone half.
+        ``json_encode`` fail as a whole instead of emitting a lone half. Should
+        one arrive anyway, it raises :class:`UnwritableRecord` and fails that one
+        file, with the old version of it left in place.
         """
         with self._lock:
             writer = self._require_open()
+            # Built in full BEFORE the deletion is queued (issue #44). A value the
+            # binding refuses, a string UTF-8 cannot carry or a number out of the
+            # range of its field, raises while the document is built, and raised
+            # after the deletion it left that deletion pending: the next commit
+            # took the old version of the file away although nothing replaced it.
+            # Raised here, the index still holds the old version, which is the
+            # truth until a write of this file succeeds. Every exception, because
+            # every one of them is about this record; what happens on the writer
+            # itself, add_document and the deletion, stays outside and keeps ending
+            # the pass. The class name travels and the message does not, see
+            # UnwritableRecord, and neither does the chain.
+            try:
+                document, body = self._document_of(record)
+            except Exception as error:
+                raise UnwritableRecord(type(error).__name__) from None
+
             # Through the schema, so the term carries the type of the field. The
             # deletion by term name takes the value as it comes and builds an I64
             # term, which never matches the U64 key and deletes nothing at all; see
             # the module docstring for the measurement. Deletes apply to documents
             # with a lower opstamp only, so the insert right below survives this.
             writer.delete_documents_by_query(Query.term_query(self._schema, FIELD_FILE_ID, record.file_id))
-
-            name = normalize(record.name)
-            title = normalize(record.title)
-            body = normalize(record.body)
-
-            document = Document()
-            document.add_unsigned(FIELD_FILE_ID, record.file_id)
-            document.add_unsigned(FIELD_STORAGE_ID, record.storage_id)
-            document.add_text(FIELD_NAME, name)
-            document.add_text(FIELD_TITLE, title)
-            document.add_text(FIELD_PATH, record.path)
-            document.add_text(FIELD_EXT, record.ext)
-            # Two properties live on this one line, and the next reader will take
-            # them for one. "Stored" and "analysed by the German chain" are both
-            # true of body_de and they do not follow each other:
-            #
-            #   stored is why it is written here whatever the language set says. It
-            #   is the only stored copy of the text in the whole system, the snippet
-            #   generator cuts out of it, and an instance running on Spanish alone
-            #   that stopped writing it would answer every search without a preview.
-            #
-            #   analysed by the German chain is what the language set decides. With
-            #   de out of the set the field still carries the text and still gets
-            #   tokenised, but no query is routed at it, and the loop below adds the
-            #   fields that are searched.
-            #
-            # So the write is unconditional and the loop skips de, because writing a
-            # field twice would double its postings for nothing.
-            document.add_text(FIELD_BODY_DE, body)
-            for language in self._languages:
-                field = BODY_FIELD[language]
-                if field == FIELD_BODY_DE:
-                    continue
-                # From the mapping and never composed from the code: measured, a
-                # field name the schema does not know is dropped by add_document
-                # without a word, and a whole language would go missing in silence.
-                document.add_text(field, body)
-            document.add_integer(FIELD_MTIME, record.mtime)
             writer.add_document(document)
 
             self._pending += 1
@@ -342,6 +340,51 @@ class IndexBatchWriter:
             # by one code point per umlaut, and a bound must not describe a value
             # that was never written.
             self._pending_bytes += len(body) if body.isascii() else _MAX_UTF8_BYTES * len(body)
+
+    def _document_of(self, record: IndexRecord) -> tuple[Document, str]:
+        """The document of one record, and its normalised body for the byte bound.
+
+        Builds and does not write. :meth:`add` calls it before it touches the
+        writer, so that a record the binding refuses leaves the index as it was.
+        """
+        name = normalize(record.name)
+        title = normalize(record.title)
+        body = normalize(record.body)
+
+        document = Document()
+        document.add_unsigned(FIELD_FILE_ID, record.file_id)
+        document.add_unsigned(FIELD_STORAGE_ID, record.storage_id)
+        document.add_text(FIELD_NAME, name)
+        document.add_text(FIELD_TITLE, title)
+        document.add_text(FIELD_PATH, record.path)
+        document.add_text(FIELD_EXT, record.ext)
+        # Two properties live on this one line, and the next reader will take
+        # them for one. "Stored" and "analysed by the German chain" are both
+        # true of body_de and they do not follow each other:
+        #
+        #   stored is why it is written here whatever the language set says. It
+        #   is the only stored copy of the text in the whole system, the snippet
+        #   generator cuts out of it, and an instance running on Spanish alone
+        #   that stopped writing it would answer every search without a preview.
+        #
+        #   analysed by the German chain is what the language set decides. With
+        #   de out of the set the field still carries the text and still gets
+        #   tokenised, but no query is routed at it, and the loop below adds the
+        #   fields that are searched.
+        #
+        # So the write is unconditional and the loop skips de, because writing a
+        # field twice would double its postings for nothing.
+        document.add_text(FIELD_BODY_DE, body)
+        for language in self._languages:
+            field = BODY_FIELD[language]
+            if field == FIELD_BODY_DE:
+                continue
+            # From the mapping and never composed from the code: measured, a
+            # field name the schema does not know is dropped by add_document
+            # without a word, and a whole language would go missing in silence.
+            document.add_text(field, body)
+        document.add_integer(FIELD_MTIME, record.mtime)
+        return document, body
 
     def drop_document(self, file_id: int) -> None:
         """Take one file out of the index and out of the vector stock.
