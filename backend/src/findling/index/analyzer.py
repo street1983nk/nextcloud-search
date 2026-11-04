@@ -249,8 +249,42 @@ def normalize(text: str) -> str:
     It is deliberately not a filter of the chains above. A filter runs after the
     tokenizer, and the tokenizer is what splits on the combining character in the
     first place, so a filter would arrive one step too late.
+
+    **Surrogate code points are repaired first (issue #44).** striprtf 0.0.35
+    turns an RTF emoji, written as the two control words ``\\u-10179?\\u-8704?``,
+    into the two UTF-16 halves as two separate code points. Python holds such a
+    string without complaint, NFC keeps the halves, and tantivy's ``add_text``
+    raised ``UnicodeEncodeError: surrogates not allowed`` on it. A pair that
+    belongs together is joined into the one character it spells, a half without
+    its partner becomes U+FFFD. Here and not in the extractor, because this is
+    the one place every field of every format passes on its way to the index,
+    and the question side gets the same text space for free.
+
+    The repair is cheap in the common case, measured on 2026-11-04 over a
+    German body at the MAX_TEXT_CHARS cap of 524_288 characters, best of seven:
+    an ASCII text costs nothing, because ``isascii`` is a stored flag; any other
+    text pays the strict UTF-8 probe, which took the whole call from 0.75 ms
+    (composition alone) to 1.04 ms; only a text the probe caught pays the UTF-16
+    round trip on top, 2.15 ms in all. A regular expression over the surrogate
+    range was the slower probe at 1.2 ms on its own. The probe's bytes are a
+    transient copy dropped on the spot, never held per document.
     """
-    return unicodedata.normalize("NFC", text)
+    return unicodedata.normalize("NFC", _without_surrogates(text))
+
+
+def _without_surrogates(text: str) -> str:
+    """Join surrogate pairs and replace a lone half with U+FFFD; see :func:`normalize`."""
+    if text.isascii():
+        return text
+    try:
+        text.encode("utf-8")
+    except UnicodeEncodeError:
+        # surrogatepass writes every half as it stands, so a pair becomes the
+        # four bytes of its character, and the strict reading back turns the
+        # halves that have no partner into U+FFFD. Little endian on both sides,
+        # so no byte order mark is added or eaten.
+        return text.encode("utf-16-le", "surrogatepass").decode("utf-16-le", "replace")
+    return text
 
 
 def german_analyzer(constituents: Sequence[str]) -> TextAnalyzer:

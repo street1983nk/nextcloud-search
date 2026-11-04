@@ -275,6 +275,14 @@ class IndexBatchWriter:
         goes into the raw tokenizer, and it is ASCII in every case this app
         accepts. The path is not normalised either: its analyzer produces no
         token at all, so there is nothing there to compare.
+
+        Neither of the two can carry the surrogate halves of issue #44, and that
+        was measured rather than assumed on 2026-11-04. Both come out of the
+        OCS JSON of the queue, which Nextcloud writes with ``json_encode``: on
+        PHP 8.2 a character outside the BMP leaves as the escaped pair
+        ``\\ud83d\\ude00``, which ``json.loads`` joins into the one character, and
+        a name holding an encoded surrogate is malformed UTF-8 that makes
+        ``json_encode`` fail as a whole instead of emitting a lone half.
         """
         with self._lock:
             writer = self._require_open()

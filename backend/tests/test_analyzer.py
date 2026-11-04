@@ -31,6 +31,7 @@ from pathlib import Path
 import pytest
 from tantivy import Index, TextAnalyzer
 
+from findling.extract.dispatch import extract
 from findling.index.analyzer import (
     ANALYZER_VERSION,
     TOKENIZER_DE,
@@ -44,6 +45,7 @@ from findling.index.analyzer import (
     normalize,
 )
 from findling.index.open import open_index
+from findling.index.schema import FIELD_BODY_DE
 from findling.index.wordlist import wordlist_hash
 from findling.index.writer import IndexBatchWriter, IndexRecord
 from findling.query.rewrite import build_query
@@ -418,6 +420,84 @@ def test_a_name_with_a_control_character_breaks_neither_side(name: str, index: I
     writer.flush()
 
     assert _hits(index, "Bericht") == 1
+
+
+# -- surrogate code points (issue #44) ----------------------------------------
+
+# The two UTF-16 halves of the grinning face U+1F600, built with chr() so that no
+# editor and no tool on the way can join them back into the one character.
+HIGH = chr(0xD83D)
+LOW = chr(0xDE00)
+EMOJI = chr(0x1F600)
+REPLACEMENT = chr(0xFFFD)
+
+# An RTF file spells a character outside the Basic Multilingual Plane as its two
+# UTF-16 halves, each a signed u control word, exactly as Word and TextEdit write
+# it. The sentence around it is long enough for the printable share check of the
+# RTF extractor, which counts the two halves as unprintable.
+RTF_WITH_EMOJI = (
+    r"{\rtf1\ansi\ansicpg1252\deff0 {\fonttbl {\f0 Arial;}}\f0 "
+    r"Hallo \u-10179?\u-8704? und viele Gruesse zur Weltkugel aus dem Rathaus}"
+)
+
+
+def test_a_surrogate_pair_is_joined_into_the_one_character_it_spells() -> None:
+    assert normalize(f"a {HIGH}{LOW} b") == f"a {EMOJI} b"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [HIGH, LOW, f"x{LOW}y", f"{LOW}{HIGH}", f"Ende {HIGH}"],
+    ids=["high-alone", "low-alone", "low-inside", "reversed-pair", "high-at-the-end"],
+)
+def test_a_lone_surrogate_becomes_the_replacement_character(text: str) -> None:
+    normalised = normalize(text)
+
+    assert REPLACEMENT in normalised
+    assert not any(0xD800 <= ord(character) <= 0xDFFF for character in normalised)
+    # The property the writer needs: the string encodes.
+    normalised.encode("utf-8")
+
+
+def test_text_without_surrogates_is_only_composed() -> None:
+    # The control: the repair changes nothing it was not written for, a byte
+    # order mark, a character outside the BMP and a replacement character that
+    # already stand in the text included.
+    text = f"{chr(0xFEFF)}K{chr(0x0308)}ndigung {EMOJI} {REPLACEMENT}"
+
+    assert normalize(text) == unicodedata.normalize("NFC", text)
+
+
+def test_an_rtf_with_an_emoji_is_indexed_and_keeps_the_emoji(
+    index: Index, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The reproduction of issue #44 through the real extractor: striprtf 0.0.35
+    # hands the two halves over as two code points, and before the repair the
+    # writer raised UnicodeEncodeError on them and took the whole pass with it.
+    path = tmp_path / "gruss.rtf"
+    path.write_bytes(RTF_WITH_EMOJI.encode("cp1252"))
+    outcome = extract(str(path), "application/rtf", path.stat().st_size)
+    assert f"{HIGH}{LOW}" in outcome.text
+
+    writer.add(
+        IndexRecord(
+            file_id=44,
+            storage_id=7,
+            name="gruss.rtf",
+            title="gruss.rtf",
+            path="/Briefe/gruss.rtf",
+            ext="rtf",
+            body=outcome.text,
+            mtime=1_700_000_000,
+        )
+    )
+    writer.flush()
+
+    stored = writer.stored_body(44)
+    assert stored is not None
+    assert f"Hallo {EMOJI} und" in stored
+    index.reload()
+    assert len(index.searcher().search(index.parse_query("weltkugel", [FIELD_BODY_DE]), 10).hits) == 1
 
 
 def test_the_normalisation_does_not_build_a_second_automaton(index: Index, writer: IndexBatchWriter) -> None:

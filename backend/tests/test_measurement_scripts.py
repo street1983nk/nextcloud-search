@@ -2458,8 +2458,15 @@ PHP_TREE_HASH_TODAY = "54627d39eb13c8d6f637acb868769eac73697ff42d731269eea1d7269
 # or went, so PACKAGE_FILES_TODAY stays at 81. The PHP pair does not move.
 # Recomputed independently with find, sort, sed and sha256sum over the CRLF
 # normalised tree: 98687977... both ways.
+#
+# Moved on 2026-11-04 by the fix of issue #44, part one: index/analyzer.py
+# joins surrogate pairs and replaces a lone half with U+FFFD in normalize, and the
+# docstring of index/writer.py says why path and extension cannot carry one. No
+# file came or went, so PACKAGE_FILES_TODAY stays at 81. The PHP pair does not
+# move. Recomputed independently with find, sort, sed and sha256sum over the CRLF
+# normalised tree: 26537789... both ways.
 PACKAGE_FILES_TODAY = 81
-PACKAGE_TREE_HASH_TODAY = "986879777471015dd20151962c6709591f277c83415fd80155b866107907f003"
+PACKAGE_TREE_HASH_TODAY = "265377894879338d88600e4add99d981d9ec1e53c1807015869997d50d7e4500"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
