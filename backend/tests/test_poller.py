@@ -59,6 +59,7 @@ from findling.index.schema import FIELD_BODY_DE, FIELD_FILE_ID, FIELD_NAME
 from findling.index.wordlist_nl import dutch_mark
 from findling.index.writer import IndexBatchWriter
 from findling.main import APP, active_poller, enabled_handler
+from findling.nc import client as nc_client_module
 from findling.nc.client import AsyncNextcloudApp, GatewayRefused, NextcloudException, ShortRead
 from findling.nc.queue import (
     LANE_INDEX,
@@ -148,11 +149,12 @@ def _job(
     title: str = "Kuendigung.txt",
     path: str = "Vertraege/Kuendigung.txt",
     users: tuple[str, ...] = ("alice", "bob"),
+    storage_id: int = 3,
 ) -> QueueJob:
     return QueueJob(
         queue_id=queue_id,
         file_id=file_id,
-        storage_id=3,
+        storage_id=storage_id,
         root_id=2,
         path=path,
         title=title,
@@ -1310,7 +1312,10 @@ async def test_the_same_refusal_for_every_file_of_a_pass_is_an_outage(
     # verification) the refused rows are NOT handed back: their delivery counts,
     # so a stock of broken files reaches the give-up rule instead of circling.
     # The sixth file was never fetched, it is unjudged and goes back refunded.
-    jobs = tuple(_job(91 + offset, 4711 + offset) for offset in range(6))
+    # Since plan 41-01 (E-40-07-01, F-40N-01) the rows come from two storages,
+    # because only a refusal over at least two of them is an outage; the same
+    # pass on one storage is the sister below.
+    jobs = tuple(_job(91 + offset, 4711 + offset, storage_id=7 + offset % 2) for offset in range(6))
     queue = _FakeQueue(ClaimResult(jobs=jobs))
     bodies: dict[int, bytes | BaseException | None] = {
         4711 + offset: GatewayRefused(401, file_id=4711 + offset) for offset in range(6)
@@ -1323,8 +1328,63 @@ async def test_the_same_refusal_for_every_file_of_a_pass_is_an_outage(
     assert queue.acknowledged == []
     assert queue.unlocked == [[96]]
     assert poller.busy is False
-    assert all(store.file_row(4711 + offset) is None for offset in range(6))
+    assert store.file_row(4716) is None
     assert poller_module.gateway_unavailable_since() is not None
+
+
+async def test_the_same_refusal_for_every_file_of_one_storage_is_six_verdicts(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The sister of the test above (E-40-07-01): the same six refusals from one
+    # storage are what one broken mount looks like, so they are six verdicts,
+    # nothing goes back and the gateway counts as answering.
+    jobs = tuple(_job(91 + offset, 4711 + offset, storage_id=7) for offset in range(6))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    bodies: dict[int, bytes | BaseException | None] = {
+        4711 + offset: GatewayRefused(401, file_id=4711 + offset) for offset in range(6)
+    }
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies=bodies)
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert result.failed == 6
+    assert queue.unlocked == []
+    assert queue.acknowledged == [([], {91 + offset: "gateway_error" for offset in range(6)})]
+    assert poller_module.gateway_unavailable_since() is None
+
+
+async def test_the_same_refusal_from_two_storages_is_still_an_outage(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # E-40-07-01: a pass whose refusals come from two storages is a state of
+    # the instance. The fifth refusal escalates, nothing is acknowledged, only
+    # the sixth row that was never fetched goes back, the five refused rows
+    # stay charged (W-1 stays). The line names the count, the status and the
+    # number of storages, never a storage id, a name or a path.
+    jobs = tuple(_job(91 + offset, 4711 + offset, storage_id=7 + offset % 2) for offset in range(6))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    bodies: dict[int, bytes | BaseException | None] = {
+        4711 + offset: GatewayRefused(401, file_id=4711 + offset) for offset in range(6)
+    }
+    fetched: list[int] = []
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies=bodies, fetched=fetched)
+
+    with caplog.at_level("WARNING", logger="findling"):
+        result = await poller.run_once()
+
+    assert result.state == ROUND_GATEWAY_UNAVAILABLE
+    assert queue.acknowledged == []
+    assert queue.unlocked == [[96]]
+    assert fetched == [4711, 4712, 4713, 4714, 4715]
+    lines = [record.getMessage() for record in caplog.records if "taken as an outage" in record.getMessage()]
+    assert lines == [
+        "content gateway refused 5 files of this pass with http status 401 from 2 storages, taken as an outage"
+    ]
+    for line in (record.getMessage() for record in caplog.records):
+        assert "Kuendigung" not in line
+        assert "Vertraege" not in line
+        assert "alice" not in line
 
 
 @pytest.mark.parametrize("claimed", [2, 3, 4])
@@ -1333,8 +1393,9 @@ async def test_a_small_pass_of_only_refusals_escalates_without_a_refund(
 ) -> None:
     # W-2: below five claimed files the threshold is the claim itself, so two
     # of two, three of three and four of four are an escalation, and none of
-    # the refused rows is handed back (W-1, owner decision 29.10.).
-    jobs = tuple(_job(91 + offset, 4711 + offset) for offset in range(claimed))
+    # the refused rows is handed back (W-1, owner decision 29.10.). Over two
+    # storages since plan 41-01 (E-40-07-01).
+    jobs = tuple(_job(91 + offset, 4711 + offset, storage_id=7 + offset % 2) for offset in range(claimed))
     queue = _FakeQueue(ClaimResult(jobs=jobs))
     bodies: dict[int, bytes | BaseException | None] = {
         4711 + offset: GatewayRefused(500, file_id=4711 + offset) for offset in range(claimed)
@@ -1347,6 +1408,25 @@ async def test_a_small_pass_of_only_refusals_escalates_without_a_refund(
     assert queue.acknowledged == []
     assert queue.unlocked == []
     assert poller.busy is False
+
+
+@pytest.mark.parametrize("claimed", [2, 3, 4])
+async def test_a_small_pass_of_only_refusals_on_one_storage_is_judged_file_by_file(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, claimed: int
+) -> None:
+    # The sister of the test above: one storage, so every refusal is a verdict.
+    jobs = tuple(_job(91 + offset, 4711 + offset, storage_id=7) for offset in range(claimed))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    bodies: dict[int, bytes | BaseException | None] = {
+        4711 + offset: GatewayRefused(500, file_id=4711 + offset) for offset in range(claimed)
+    }
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies=bodies)
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert queue.unlocked == []
+    assert queue.acknowledged == [([], {91 + offset: "gateway_error" for offset in range(claimed)})]
 
 
 async def test_two_refusals_of_three_stay_two_verdicts(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:
@@ -1390,7 +1470,8 @@ async def test_refused_scans_under_several_slots_escalate_without_a_refund(
 ) -> None:
     # The escalation out of the tasks of a pass under two slots: three scans,
     # all refused with 500, the threshold is three. No refused row goes back.
-    jobs = (_ocr_row(0), _ocr_row(1), _ocr_row(2))
+    # The scans lie on two storages since plan 41-01 (E-40-07-01).
+    jobs = (_ocr_row(0, storage_id=7), _ocr_row(1, storage_id=8), _ocr_row(2, storage_id=7))
     queue = _FakeQueue(ClaimResult(jobs=jobs))
     poller = _slot_poller(
         store=store,
@@ -1407,6 +1488,31 @@ async def test_refused_scans_under_several_slots_escalate_without_a_refund(
     assert result.state == ROUND_GATEWAY_UNAVAILABLE
     assert queue.acknowledged == []
     assert queue.unlocked == []
+    assert poller.busy is False
+
+
+async def test_refused_scans_of_one_storage_under_several_slots_are_verdicts(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The sister of the test above: the same three scans on one storage are
+    # three verdicts out of the tasks, nothing goes back.
+    jobs = (_ocr_row(0, storage_id=7), _ocr_row(1, storage_id=7), _ocr_row(2, storage_id=7))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    poller = _slot_poller(
+        store=store,
+        writer=writer,
+        tmp_path=tmp_path,
+        queue=queue,
+        extract=_SlotExtractor(seconds=0.01),
+        ocr_slots=2,
+        bodies={7000 + offset: GatewayRefused(500, file_id=7000 + offset) for offset in range(3)},
+    )
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert queue.unlocked == []
+    assert queue.acknowledged == [([], {300: "gateway_error", 301: "gateway_error", 302: "gateway_error"})]
     assert poller.busy is False
 
 
@@ -1427,6 +1533,40 @@ async def test_an_outage_by_status_still_refunds_every_row(
 
     assert result.state == ROUND_GATEWAY_UNAVAILABLE
     assert queue.unlocked == [[91, 92, 93]]
+
+
+def _by_the_grid(status: int, file_id: int) -> NextcloudException:
+    """The exception the content gateway client raises for ``status``.
+
+    Read off the grid of nc/client.py rather than written out here, so the
+    poller tests below follow the client: an outage status raises the plain
+    NextcloudException, every other status from 400 on a GatewayRefused.
+    """
+    if status in nc_client_module._OUTAGE_STATUS:
+        return NextcloudException(status, reason=f"content gateway refused file id {file_id}")
+    return GatewayRefused(status, file_id=file_id)
+
+
+@pytest.mark.parametrize("status", [408, 429, 502, 503, 504])
+async def test_a_proxy_status_is_an_outage_with_a_refund(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, status: int
+) -> None:
+    # F-40N-04: 408 is the timeout of a proxy, 429 the rate limit of a proxy
+    # or a firewall. Both speak about the instance, never about a file, so the
+    # pass stops, every row goes back refunded and no verdict is written.
+    jobs = (_job(), _job(92, 4712), _job(93, 4713))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    bodies: dict[int, bytes | BaseException | None] = {
+        4711 + offset: _by_the_grid(status, 4711 + offset) for offset in range(3)
+    }
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies=bodies)
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_GATEWAY_UNAVAILABLE
+    assert queue.acknowledged == []
+    assert queue.unlocked == [[91, 92, 93]]
+    assert all(store.file_row(4711 + offset) is None for offset in range(3))
 
 
 class _QueueWithBudget:
@@ -1450,6 +1590,9 @@ class _QueueWithBudget:
         self.lock_rounds = lock_rounds
         self.tick = 0
         self.ended: dict[int, str] = {}
+        # Per claim, the queue ids it handed out; per unlock, the ids it got.
+        self.handed: list[list[int]] = []
+        self.unlocked: list[list[int]] = []
 
     async def companion_choice(self) -> CompanionChoice:
         return CompanionChoice(profile=None, precision=None, confirmed=None, verdicts=None)
@@ -1468,6 +1611,7 @@ class _QueueWithBudget:
                 continue
             self.locked_until[qid] = self.tick + self.lock_rounds
             handed.append(self.rows[qid])
+        self.handed.append([job.queue_id for job in handed])
         return ClaimResult(jobs=tuple(handed))
 
     async def top_up(self) -> str:
@@ -1482,6 +1626,8 @@ class _QueueWithBudget:
         return CallResult(ok=True, count=len(done) + len(failed))
 
     async def unlock(self, ids: Any) -> CallResult:
+        ids = list(ids)
+        self.unlocked.append(ids)
         for qid in ids:
             if qid in self.rows:
                 self.retries[qid] = max(0, self.retries[qid] - 1)
@@ -1505,8 +1651,9 @@ async def test_files_that_always_refuse_reach_the_give_up_rule_and_the_queue_dra
     # every pass and the give-up rule never fired. Without it their deliveries
     # count, they end at the claim as failed(repeatedly_stuck), and the healthy
     # files behind them are indexed in the meantime: the stock drains in a
-    # bounded number of passes.
-    broken = [_job(91, 4711), _job(92, 4712)]
+    # bounded number of passes. The two broken files lie on two storages since
+    # plan 41-01 (E-40-07-01), the escalation needs that.
+    broken = [_job(91, 4711, storage_id=7), _job(92, 4712, storage_id=8)]
     healthy = [_job(93 + offset, 4713 + offset) for offset in range(4)]
     queue = _QueueWithBudget(broken + healthy, batch=2)
     bodies: dict[int, bytes | BaseException | None] = {
@@ -1524,6 +1671,152 @@ async def test_files_that_always_refuse_reach_the_give_up_rule_and_the_queue_dra
     assert queue.ended[4711] == "failed:repeatedly_stuck"
     assert queue.ended[4712] == "failed:repeatedly_stuck"
     assert all(queue.ended[4713 + offset] == "done" for offset in range(4))
+
+
+async def test_files_of_one_storage_that_always_refuse_end_as_verdicts_and_the_queue_drains(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The sister of the test above: the two broken files on one storage are
+    # two verdicts in the first pass, failed(gateway_error), nothing charged.
+    broken = [_job(91, 4711, storage_id=7), _job(92, 4712, storage_id=7)]
+    healthy = [_job(93 + offset, 4713 + offset) for offset in range(4)]
+    queue = _QueueWithBudget(broken + healthy, batch=2)
+    bodies: dict[int, bytes | BaseException | None] = {
+        4711: GatewayRefused(500, file_id=4711),
+        4712: GatewayRefused(500, file_id=4712),
+    }
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=cast("Any", queue), bodies=bodies)
+
+    for _ in range(40):
+        await poller.run_once()
+        if not queue.rows:
+            break
+
+    assert queue.rows == {}, "the stock did not drain"
+    assert queue.ended[4711] == "failed:gateway_error"
+    assert queue.ended[4712] == "failed:gateway_error"
+    assert all(queue.ended[4713 + offset] == "done" for offset in range(4))
+    assert queue.unlocked == []
+
+
+def _first_pass_with(queue: _QueueWithBudget, qids: set[int]) -> int | None:
+    """The 1-based number of the first claim that handed out one of ``qids``."""
+    for number, handed in enumerate(queue.handed, start=1):
+        if qids & set(handed):
+            return number
+    return None
+
+
+async def test_a_large_broken_storage_does_not_hold_up_the_queue(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # F-40N-01: a large broken mount at the head of the id sorted queue. Under
+    # the rule of 1.6.0 every pass escalated at its fifth refusal, charged five
+    # rows and handed the other 27 back, so the stock moved by five rows per
+    # lock timeout: 121 passes until the first healthy file in the post audit.
+    # Since plan 41-01 one storage refusing is judged file by file, so the 200
+    # broken files cost seven passes of verdicts and nothing else.
+    broken = [_job(offset, 10_000 + offset, storage_id=7) for offset in range(1, 201)]
+    healthy = [_job(200 + offset, 20_000 + offset, storage_id=8) for offset in range(1, 33)]
+    queue = _QueueWithBudget(broken + healthy, batch=32, lock_rounds=8)
+    bodies: dict[int, bytes | BaseException | None] = {
+        job.file_id: GatewayRefused(500, file_id=job.file_id) for job in broken
+    }
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=cast("Any", queue), bodies=bodies)
+
+    states: list[str] = []
+    for _ in range(40):
+        states.append((await poller.run_once()).state)
+        if not queue.rows:
+            break
+
+    first_healthy = _first_pass_with(queue, {job.queue_id for job in healthy})
+    assert first_healthy is not None
+    assert first_healthy <= 8
+    assert len(states) <= 9, f"the queue took {len(states)} passes"
+    assert ROUND_GATEWAY_UNAVAILABLE not in states
+    assert queue.unlocked == []
+    assert all(queue.ended[job.file_id] == "failed:gateway_error" for job in broken)
+    assert all(queue.ended[job.file_id] == "done" for job in healthy)
+    assert poller_module.gateway_unavailable_since() is None
+
+
+async def test_one_storage_refusing_everything_is_judged_file_by_file(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # E-40-07-02: a global 500 on an instance with one storage. The container
+    # cannot tell it from one broken mount of many and does not try to: every
+    # file is a verdict in the first pass that fetches it, one request each,
+    # and the stock is through after ceil(70 / 32) = 3 passes.
+    jobs = [_job(offset, 10_000 + offset, storage_id=7) for offset in range(1, 71)]
+    queue = _QueueWithBudget(jobs, batch=32, lock_rounds=8)
+    bodies: dict[int, bytes | BaseException | None] = {
+        job.file_id: GatewayRefused(500, file_id=job.file_id) for job in jobs
+    }
+    fetched: list[int] = []
+    poller = _poller(
+        store=store, writer=writer, tmp_path=tmp_path, queue=cast("Any", queue), bodies=bodies, fetched=fetched
+    )
+
+    states = [(await poller.run_once()).state for _ in range(3)]
+
+    assert states == [ROUND_WORKED] * 3
+    assert queue.rows == {}
+    assert len(queue.ended) == 70
+    assert all(queue.ended[job.file_id] == "failed:gateway_error" for job in jobs)
+    assert queue.unlocked == []
+    assert sorted(fetched) == sorted(job.file_id for job in jobs)
+    assert poller_module.gateway_unavailable_since() is None
+
+
+async def test_two_broken_storages_in_a_row_only_charge_the_rows_at_the_border(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The edge of E-40-07-02: two broken mounts one after the other in crawl
+    # order. Only the pass that straddles the border of the two runs sees
+    # refusals from two storages, and only its five refused rows are charged;
+    # after their lock timeout the same five may escalate together again until
+    # the give-up rule ends them. Every other broken file is a verdict and the
+    # healthy files behind are not held up.
+    first = [_job(offset, 10_000 + offset, storage_id=7) for offset in range(1, 101)]
+    second = [_job(100 + offset, 20_000 + offset, storage_id=8) for offset in range(1, 101)]
+    healthy = [_job(200 + offset, 30_000 + offset, storage_id=9) for offset in range(1, 33)]
+    queue = _QueueWithBudget(first + second + healthy, batch=32, lock_rounds=8)
+    bodies: dict[int, bytes | BaseException | None] = {
+        job.file_id: GatewayRefused(500, file_id=job.file_id) for job in first + second
+    }
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=cast("Any", queue), bodies=bodies)
+
+    charged: set[int] = set()
+    escalations = 0
+    passes = 0
+    for _ in range(60):
+        unlocks_before = len(queue.unlocked)
+        result = await poller.run_once()
+        passes += 1
+        if result.state == ROUND_GATEWAY_UNAVAILABLE:
+            escalations += 1
+            handed_back = {qid for ids in queue.unlocked[unlocks_before:] for qid in ids}
+            charged |= set(queue.handed[-1]) - handed_back
+        if not queue.rows:
+            break
+
+    assert queue.rows == {}, "the stock did not drain"
+    assert 1 <= len(charged) <= 5
+    first_healthy = _first_pass_with(queue, {job.queue_id for job in healthy})
+    assert first_healthy is not None
+    assert first_healthy <= 10
+    assert all(queue.ended[job.file_id] == "done" for job in healthy)
+    broken = first + second
+    judged = [job for job in broken if job.queue_id not in charged]
+    assert len(judged) >= 195
+    assert all(queue.ended[job.file_id] == "failed:gateway_error" for job in judged)
+    assert all(queue.ended[job.file_id] == "failed:repeatedly_stuck" for job in broken if job.queue_id in charged)
+    # Pass 4 straddles the border and escalates, its five refused rows come
+    # back after the lock timeout and escalate together twice more, then the
+    # give-up rule ends them. Under the rule of 1.6.0 the same stock needed
+    # 128 passes until the first healthy file (post audit).
+    assert (passes, escalations) == (28, 3)
 
 
 async def test_four_refusals_beside_two_healthy_files_stay_four_verdicts(
@@ -4507,7 +4800,7 @@ class _SlotExtractor:
 _ROOM_FOR_EVERY_SLOT = 1 << 40
 
 
-def _ocr_row(offset: int) -> QueueJob:
+def _ocr_row(offset: int, *, storage_id: int = 3) -> QueueJob:
     return _job(
         300 + offset,
         7000 + offset,
@@ -4515,6 +4808,7 @@ def _ocr_row(offset: int) -> QueueJob:
         mime="application/pdf",
         title=f"Scan{offset}.pdf",
         path=f"Scans/Scan{offset}.pdf",
+        storage_id=storage_id,
     )
 
 

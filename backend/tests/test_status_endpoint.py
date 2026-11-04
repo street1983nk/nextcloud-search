@@ -46,6 +46,7 @@ import time
 from collections.abc import Callable, Iterator
 from dataclasses import fields
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
@@ -1944,3 +1945,51 @@ def test_a_stale_fill_level_is_answered_at_once_and_refreshed_once(
     assert renewed == ("de",)
     assert renewed_at is not None
     assert renewed_at >= measured_at
+
+
+def test_a_fill_refresh_that_cannot_start_is_tried_again(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # F-40N-03: Thread.start raises RuntimeError when the process is out of
+    # threads. Before plan 41-01 the flag of the single flight already pointed
+    # at the thread that never ran, nothing ever cleared it, and no later poll
+    # measured again until the container restarted. Now /status answers from
+    # the cache as it stands, the flag is back to None, the line names the
+    # class alone, and the next poll starts a refresh.
+    del indexed_volume
+    # Restored before the autouse fixture joins, so a red run of this test does
+    # not leave a thread that was never started behind for the next case.
+    monkeypatch.setattr(resources, "_FILL_REFRESH", None)
+
+    class _Unstartable(threading.Thread):
+        """A thread whose start fails the way it fails without free threads.
+
+        Only the name the refresh module sees is replaced, never Thread in
+        the threading module: the test client and asyncio.to_thread start
+        threads of their own while the request runs.
+        """
+
+        def start(self) -> None:
+            raise RuntimeError("can't start new thread")
+
+    seen_by_resources = SimpleNamespace(Thread=_Unstartable, current_thread=threading.current_thread)
+    with monkeypatch.context() as patch:
+        patch.setattr(resources, "threading", seen_by_resources)
+        with caplog.at_level("WARNING", logger="findling"):
+            refused = _status(client, sign("admin"))
+
+    assert refused["languagesFilled"] == ""
+    assert refused["languagesFilledAsOf"] is None
+    assert resources._FILL_REFRESH is None
+    lines = [record.getMessage() for record in caplog.records if "fill level refresh" in record.getMessage()]
+    assert lines == ["the fill level refresh could not start, RuntimeError"]
+
+    _status(client, sign("admin"))
+    resources.join_fill_refresh()
+    after = _status(client, sign("admin"))
+    assert after["languagesFilled"] == "de"
+    assert isinstance(after["languagesFilledAsOf"], int)
