@@ -2396,8 +2396,14 @@ PHP_TREE_HASH_TODAY = "599393dcc62b3ec83090ee884d3a059073f87973a8b686d75ca34d26d
 # PACKAGE_FILES_TODAY stays at 80. The PHP pair moves in the same step.
 # Recomputed independently with find, sort, tr and sha256sum over the CRLF
 # normalised tree: b8769239... both ways.
+#
+# Moved on 2026-11-04 by Plan 41-02 (issue #25): api/status.py counts the vectors
+# of left out storages above a hundred thousand documents in the background.
+# No file came or went, so PACKAGE_FILES_TODAY stays at 80. The PHP pair does not
+# move. Recomputed independently with find, sort, tr and sha256sum over the CRLF
+# normalised tree: 906e72a0... both ways.
 PACKAGE_FILES_TODAY = 80
-PACKAGE_TREE_HASH_TODAY = "b87692392411fd12a804c0c038b372a4dd22d4657b719211a946aca3ff98e85d"
+PACKAGE_TREE_HASH_TODAY = "906e72a0c2fa708145b0d31dc6ebeeb48f65f6301a4561d6072acb0c6f9047b6"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
