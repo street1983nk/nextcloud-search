@@ -3,8 +3,9 @@
 The check itself lives in :mod:`findling.worker.probe_run`; this module is its
 door. POST starts one check and answers at once, because a check runs for
 minutes and no caller waits for its verdict (D-27-04): 202 with the id of the
-check, 409 while another check runs (with the id of that one) or while the
-index directory is rebuilt, 503 while no lifespan holds a check at all. GET
+check, 409 while another check runs (with the id of that one), while the
+backup pause of issue #37 holds the writers or while the index directory is
+rebuilt, 503 while no lifespan holds a check at all. GET
 reads the probe state of this process and measures nothing: a poll of the admin
 page must not become a second measurement (T-07-04).
 
@@ -141,6 +142,8 @@ async def start_probe(
         return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content={"state": STATE_UNAVAILABLE})
     if outcome == probe.START_BUSY:
         return JSONResponse(status_code=status.HTTP_409_CONFLICT, content={"state": probe.START_BUSY, "id": probe_id})
+    if outcome == probe.START_PAUSED:
+        return JSONResponse(status_code=status.HTTP_409_CONFLICT, content={"state": probe.START_PAUSED})
     if outcome == probe.START_REBUILDING:
         return JSONResponse(status_code=status.HTTP_409_CONFLICT, content={"state": probe.START_REBUILDING})
     return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content={"id": probe_id})

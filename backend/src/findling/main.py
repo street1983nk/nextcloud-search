@@ -561,6 +561,7 @@ def build_the_probe(poller: Poller | None, runner: EmbedRunner | None, *, persis
             pool=poller.pool,
             models_dir=settings().models_dir,
             rebuild_may_start=_a_rebuild_may_start,
+            pause_wanted=_a_pause_is_wanted,
             engine_loaded=_engine_is_loaded,
             cutter_built=lambda: poller.track.cutter_built,
             embed_slots=_embed_slots_in_force,

@@ -100,6 +100,10 @@ STATES: Final = frozenset({STATE_IDLE, STATE_RUNNING, STATE_DONE})
 # The refusals of a start, apart from the causes of a finished check.
 START_BUSY: Final = "busy"
 START_REBUILDING: Final = "rebuilding"
+# The backup pause of issue #37 holds every writer (D-41-05, T-41-19); a check
+# measures with the poller and the runner held and writes its state, so it
+# does not start while the volume is to stand still.
+START_PAUSED: Final = "paused"
 
 NUMBER_KEYS: Final = frozenset({"slots", "need", "available", "reserve", "required", "seconds", "rateInt8", "rateFp32"})
 
@@ -592,6 +596,7 @@ __all__ = [
     "PROBE_SCAN_NAME",
     "PROBE_SCAN_SHA256",
     "START_BUSY",
+    "START_PAUSED",
     "START_REBUILDING",
     "STATES",
     "STATE_DONE",

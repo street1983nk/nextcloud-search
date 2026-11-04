@@ -85,7 +85,7 @@ import time
 from collections import OrderedDict
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Annotated, Final
+from typing import Annotated, Final, Literal
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -100,7 +100,7 @@ from findling.instance import volume_is_shared
 from findling.profile import snapshot
 from findling.store.repo import EMBEDDING_BACKLOG_MARK, Store, embedded_in_storages, index_bytes, open_read_only
 from findling.store.vectors import VectorStoreError, open_vectors
-from findling.worker import poller
+from findling.worker import pause, poller
 
 LOGGER = logging.getLogger("findling.api.status")
 
@@ -466,6 +466,17 @@ class StatusResponse(BaseModel):
     # of plan 41-02 has no figure for this list and this stock yet (issue #25).
     indexedLeftOut: int | None = Field(default=None, exclude_if=_absent)
     embeddedLeftOut: int | None = Field(default=None, exclude_if=_absent)
+    # The backup pause of issue #37 (D-41-03, D-41-06): one word of a closed
+    # set, and a backup may begin only on "paused", which this container says
+    # only after the pass in flight ended, the index writer was given back and
+    # both SQLite files were checkpointed. "unknown" is a start that has not
+    # read the wish yet and holds every writer (D-41-19). pausedSince is the
+    # epoch second "paused" was reached and null in every other state. A
+    # process value like the guard, out of findling.worker.pause, so the state
+    # database knows nothing of it; a companion that finds no field at all is
+    # talking to a backend before 1.6.2.
+    pause: Literal["running", "pausing", "paused", "unknown"] = "running"
+    pausedSince: int | None = None
 
 
 def _profile_report() -> ProfileReport:
@@ -816,7 +827,8 @@ def report(leave_out: Sequence[int] | None = None) -> StatusResponse:
     are simply the numbers of another instance's index, and hiding them would
     take away the very evidence that shows the sharing.
     """
-    answer = _counted(leave_out)
+    state, since = pause.pause_state()
+    answer = _counted(leave_out).model_copy(update={"pause": state, "pausedSince": since})
     if volume_is_shared():
         return answer.model_copy(update={"note": VOLUME_SHARED})
     return answer

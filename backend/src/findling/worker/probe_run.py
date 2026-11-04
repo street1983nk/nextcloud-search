@@ -333,6 +333,9 @@ class ProbeRun:
         min_free_bytes: int | None = None,
         takeover_seconds: float = PROBE_TAKEOVER_SECONDS,
         takeover_poll: float = PROBE_TAKEOVER_POLL_SECONDS,
+        # True while the backup pause holds the writers (issue #37); the
+        # lifespan hands in the question of its coordinator.
+        pause_wanted: Callable[[], bool] = lambda: False,
     ) -> None:
         self._poller = poller
         self._runner = runner
@@ -340,6 +343,7 @@ class ProbeRun:
         self._models_dir = models_dir
         self._fetch = fetch
         self._rebuild_may_start = rebuild_may_start
+        self._pause_wanted = pause_wanted
         self._engine_loaded = engine_loaded
         self._cutter_built = cutter_built
         # The parallel embed slots the box runs right now; their activations
@@ -420,10 +424,16 @@ class ProbeRun:
         return self.task is not None and not self.task.done()
 
     async def start(self, profile_name: str, precision: str) -> tuple[str, str]:
-        """Start a check; ("started", id), ("busy", running id) or ("rebuilding", "")."""
+        """Start a check; ("started", id), ("busy", running id), ("paused", "") or ("rebuilding", "")."""
         async with self._start_lock:
             if self._running():
                 return (probe.START_BUSY, probe.snapshot().id)
+            # Not in a backup pause (T-41-19): a check writes its state and
+            # drives the poller and the runner, and the volume is to stand still.
+            # Asked before the rebuild, so a pause that holds a rebuild names
+            # the pause.
+            if self._pause_wanted():
+                return (probe.START_PAUSED, "")
             if not self._rebuild_may_start():
                 return (probe.START_REBUILDING, "")
             probe_id = secrets.token_hex(8)
