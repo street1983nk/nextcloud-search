@@ -565,3 +565,14 @@ dem Fix rot gesehen.
 sind behoben und mit umgedrehten Proben samt Positivkontrolle belegt; der Fix
 bringt keinen neuen Befund. `audited_head` = `efdca6840ee89b3373d9706b0e3c94039c4ef8d4`.
 CI-Beleg des Kopfes siehe unten.
+
+### CI-Beleg des Fix-Kopfes
+
+Push 605b7dbe..e27b17de (e27b17de = efdca684 plus nur `.planning/`), alle Läufe
+auf e27b17de success: Python gates 41821538047, Integration 41821538106,
+Resilience 41821538078, HaRP deploy 41821537851, Multi-arch image 41821538102,
+Security scans 41821538411, OpenSSF Scorecard 41821538083. PHP and store
+metadata gates läuft wegen des Pfadfilters nicht (php/, backend/appinfo und die
+Filterpfade seit f12649a2 unverändert, `git diff --stat f12649a2 HEAD` darüber
+leer); Beleg Lauf 41792859857 success auf f12649a2, "OK (958 tests, 5851
+assertions)".
