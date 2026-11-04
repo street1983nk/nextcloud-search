@@ -318,7 +318,7 @@ Support entreprise et modules payants : demande de devis à admin@infranode.dev]
 	-->
 	<background-jobs><job>OCA\Findling\BackgroundJobs\ScanRecountJob</job></background-jobs>
 	<repair-steps><install><step>OCA\Findling\Repair\AppInstallStep</step></install><uninstall><step>OCA\Findling\Repair\AppUninstallStep</step></uninstall></repair-steps>
-	<commands><command>OCA\Findling\Command\IndexCommand</command><command>OCA\Findling\Command\DiagnoseCommand</command><command>OCA\Findling\Command\PurgeCommand</command></commands>
+	<commands><command>OCA\Findling\Command\IndexCommand</command><command>OCA\Findling\Command\DiagnoseCommand</command><command>OCA\Findling\Command\PurgeCommand</command><command>OCA\Findling\Command\PauseCommand</command><command>OCA\Findling\Command\ResumeCommand</command></commands>
 	<!--
 		The settings block, written on one line for the same reason as the two
 		above, and standing here because there is nowhere else to put it:
