@@ -410,6 +410,23 @@ the scaffold in plan 05-15 and grew in plan 05-20,
 `GroupEventListenerTest.php` from plan 06.1-08, and `QueueServiceTest.php` from
 plan 06.1-24, which holds the arithmetic of the verdict revocation.
 
+`RouteSecurityTest.php` from plan 42-02 is the route attribute gate. It reads
+every public method under `php/lib/Controller` that carries a route attribute by
+reflection, with every attribute out of `OCP\AppFramework\Http\Attribute` on the
+method and on its class, rate limit and brute force arguments included, and
+requires an exact match with `php/tests/route-security.json`. A new route, a
+changed attribute set, a changed verb or url and an orphaned allowlist entry turn
+it red, each named by `Controller::method`; so do `PublicPage` without
+`AnonRateLimit` or `BruteForceProtection`, `NoCSRFRequired` on anything but GET
+without `ExAppRequired`, and a route in `appinfo/routes.php`. A change to the
+attack surface is therefore always a line in `route-security.json` that a review
+reads. The step "The route attribute gate ran" in `php.yml` reads the JUnit log
+and requires the suite with at least `ROUTE_GATE_MIN_TESTS` cases and nothing
+skipped, and `backend/tests/test_php_route_gate_presence.py` holds the shape of
+all three pieces from the Python side. What it does not claim: it reads
+attributes, not method bodies, so the `rejectForeignCaller` call inside the
+ExApp endpoints stays the business of `test_php_trust_boundary.py`.
+
 ## What closed it
 
 A PHPUnit job in `php.yml`, following the pattern every Nextcloud app

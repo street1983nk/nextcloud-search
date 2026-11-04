@@ -347,4 +347,52 @@ jobs:
             echo "fewer tests ran than this job requires, so the run proves nothing"
             exit 1
           fi
+
+      # The route attribute gate of plan 42-02 has to have run, in full, inside
+      # the suite above. python.yml does not start on a change under php/tests,
+      # so a PHP only commit that deletes, renames or skips RouteSecurityTest
+      # would be visible to nobody but this workflow, and this workflow starts
+      # on exactly php/**. The JUnit log is read rather than the summary, same
+      # as the step before; that step no longer removes junit.xml, this one does
+      # after the check, because the check needs the file.
+      #
+      # The file and the floor come only from the env below, and the expression
+      # contains no single quote: the local proof of plan 42-02 extracts it out
+      # of this file and runs it unchanged, and backend/tests/
+      # test_php_route_gate_presence.py holds the shape of this step.
+      - name: The route attribute gate ran
+        working-directory: apps/findling
+        env:
+          JUNIT_FILE: junit.xml
+          # The number of test methods of RouteSecurityTest, as a floor like
+          # MINIMUM_TESTS: a new test method may raise it, and deleting,
+          # renaming or skipping the gate makes it tear.
+          ROUTE_GATE_MIN_TESTS: 15
+        run: |
+          php -r '
+            $file = getenv("JUNIT_FILE");
+            if ($file === false || $file === "") { fwrite(STDERR, "JUNIT_FILE is not set\n"); exit(1); }
+            $min = getenv("ROUTE_GATE_MIN_TESTS");
+            if ($min === false || $min === "" || !ctype_digit($min) || (int)$min <= 0) {
+              fwrite(STDERR, "ROUTE_GATE_MIN_TESTS is missing or not a positive integer\n"); exit(1);
+            }
+            $log = @simplexml_load_file($file);
+            if ($log === false) { fwrite(STDERR, "$file is not readable\n"); exit(1); }
+            $suites = $log->xpath("//testsuite");
+            $suite = null;
+            foreach (is_array($suites) ? $suites : [] as $s) {
+              if ((string)$s["name"] === "OCA\Findling\Tests\Unit\RouteSecurityTest") { $suite = $s; break; }
+            }
+            if ($suite === null) { fwrite(STDERR, "no testsuite RouteSecurityTest in $file, the route attribute gate did not run\n"); exit(1); }
+            $tests = (int)$suite["tests"];
+            if ($tests < (int)$min) { fwrite(STDERR, "the route attribute gate ran $tests tests, fewer than the floor $min\n"); exit(1); }
+            $skipped = (int)$suite["skipped"];
+            $failures = (int)$suite["failures"];
+            $errors = (int)$suite["errors"];
+            if ($skipped !== 0 || $failures !== 0 || $errors !== 0) {
+              fwrite(STDERR, "the route attribute gate has $skipped skipped, $failures failures and $errors errors\n"); exit(1);
+            }
+            echo "the route attribute gate ran $tests tests, the floor is $min\n";
+            exit(0);
+          '
           rm -f junit.xml

@@ -1147,8 +1147,13 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # scripts/dev/phpunit_docker.sh instead of CI only. No file came or went, so PHP_FILES_TODAY stays at
 # 113. Recomputed independently with find, sort, tr and sha256sum over the CRLF normalised tree:
 # e7289079... both ways.
-PHP_FILES_TODAY = 113
-PHP_TREE_HASH_TODAY = "e7289079bb595c3641b817415f7eab691590ec247914403513e0510ef0b4f9a0"
+# Moved on 2026-11-04 by Plan 42-02 (PHP gates, route attribute gate): three files came,
+# tests/RouteSecurity/RouteProfiles.php, tests/RouteSecurity/Fixtures.php and
+# tests/Unit/RouteSecurityTest.php; the allowlist tests/route-security.json is not in this glob. No
+# file went, so PHP_FILES_TODAY moves to 116. Recomputed independently with find, sort, tr and
+# sha256sum over the CRLF normalised tree: 06a082a0... both ways.
+PHP_FILES_TODAY = 116
+PHP_TREE_HASH_TODAY = "06a082a024c6e8a595f46e273193cd4ff753e7de1cca85a56916e33efeb193d9"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

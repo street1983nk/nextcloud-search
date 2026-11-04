@@ -1,0 +1,91 @@
+{
+	"_comment": [
+		"The allowlist of the route attribute gate: every controller method under lib/Controller that carries a route attribute, with its route and every attribute out of OCP\\AppFramework\\Http\\Attribute on the method and on its class.",
+		"tests/Unit/RouteSecurityTest.php reads the controllers by reflection and requires an exact match. A new route, a changed attribute set, a changed verb or url and an entry without a method all turn the suite red.",
+		"A change to a route or to its attributes is therefore entered here by hand and on purpose, and the entry is where a review answers the question why this route may do that.",
+		"The format is the one tests/RouteSecurity/RouteProfiles.php produces: route is the short name of the route attribute, the verb and the url, followed by the canonical JSON of any further route argument; attributes are short names, sorted, with arguments as Name(key=value, ...).",
+		"The textual gate backend/tests/test_php_trust_boundary.py stays beside this one: it checks the rejectForeignCaller call in the method bodies, which attributes cannot show."
+	],
+	"routes": {
+		"GatewayController::getFileContents": {
+			"route": "ApiRoute GET /files/{fileId} {\"requirements\":{\"fileId\":\"\\\\d+\"}}",
+			"attributes": ["ExAppRequired", "NoCSRFRequired"]
+		},
+		"PageController::index": {
+			"route": "FrontpageRoute GET /",
+			"attributes": ["NoAdminRequired", "NoCSRFRequired"]
+		},
+		"ProfileController::profile": {
+			"route": "ApiRoute GET /profile",
+			"attributes": ["ExAppRequired", "NoCSRFRequired"]
+		},
+		"ProfileSettingsController::checkState": {
+			"route": "FrontpageRoute GET /admin/profile/check",
+			"attributes": []
+		},
+		"ProfileSettingsController::saveProfile": {
+			"route": "FrontpageRoute POST /admin/profile",
+			"attributes": []
+		},
+		"ProfileSettingsController::startCheck": {
+			"route": "FrontpageRoute POST /admin/profile/check",
+			"attributes": []
+		},
+		"QueueController::acknowledgeDocuments": {
+			"route": "ApiRoute DELETE /queues/documents",
+			"attributes": ["ExAppRequired", "NoCSRFRequired"]
+		},
+		"QueueController::documentStats": {
+			"route": "ApiRoute GET /queues/documents/stats",
+			"attributes": ["ExAppRequired", "NoCSRFRequired"]
+		},
+		"QueueController::getDocuments": {
+			"route": "ApiRoute GET /queues/documents",
+			"attributes": ["ExAppRequired", "NoCSRFRequired"]
+		},
+		"QueueController::requeue": {
+			"route": "ApiRoute POST /queues/documents/requeue",
+			"attributes": ["ExAppRequired", "NoCSRFRequired"]
+		},
+		"QueueController::topUpDocuments": {
+			"route": "ApiRoute POST /queues/documents/topup",
+			"attributes": ["ExAppRequired", "NoCSRFRequired"]
+		},
+		"QueueController::unlockDocuments": {
+			"route": "ApiRoute POST /queues/documents/unlock",
+			"attributes": ["ExAppRequired", "NoCSRFRequired"]
+		},
+		"ReconcileController::filesSlice": {
+			"route": "ApiRoute GET /files/slice",
+			"attributes": ["ExAppRequired", "NoCSRFRequired"]
+		},
+		"ReconcileController::goneStorages": {
+			"route": "ApiRoute GET /storages/gone",
+			"attributes": ["ExAppRequired", "NoCSRFRequired"]
+		},
+		"ReconcileController::mounts": {
+			"route": "ApiRoute GET /mounts",
+			"attributes": ["ExAppRequired", "NoCSRFRequired"]
+		},
+		"SettingsController::diagnose": {
+			"route": "FrontpageRoute GET /admin/diagnose",
+			"attributes": []
+		},
+		"SettingsController::overview": {
+			"route": "FrontpageRoute GET /admin/overview",
+			"attributes": []
+		},
+		"SettingsController::previewRules": {
+			"route": "FrontpageRoute POST /admin/rules/preview",
+			"attributes": []
+		},
+		"SettingsController::saveRules": {
+			"route": "FrontpageRoute POST /admin/rules",
+			"attributes": []
+		},
+		"SettingsController::setPause": {
+			"route": "FrontpageRoute POST /admin/pause",
+			"attributes": []
+		}
+	}
+}
