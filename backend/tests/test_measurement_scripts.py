@@ -2445,8 +2445,14 @@ PHP_TREE_HASH_TODAY = "54627d39eb13c8d6f637acb868769eac73697ff42d731269eea1d7269
 # after the catch-up mark was read. No file came or went, so PACKAGE_FILES_TODAY
 # stays at 81. The PHP pair does not move. Recomputed independently with find,
 # sort, sed and sha256sum over the CRLF normalised tree: 3d8f694b... both ways.
+#
+# Moved on 2026-11-04 by the fix of F-41A-03 (audit 41-09): worker/pause.py
+# spaces unreadable reads of the wish on a ladder up to 300 s and says so in one
+# warning after three of them. No file came or went, so PACKAGE_FILES_TODAY stays
+# at 81. The PHP pair does not move. Recomputed independently with find, sort, sed
+# and sha256sum over the CRLF normalised tree: a8864566... both ways.
 PACKAGE_FILES_TODAY = 81
-PACKAGE_TREE_HASH_TODAY = "3d8f694b036c7e324f7002a9c6f77c75aab2c5b80c8467aa84adc03d92865300"
+PACKAGE_TREE_HASH_TODAY = "a88645667044949bca4e26b9020a806da9ba1e2f2f06b3dcf1ffbd7c78f3d430"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

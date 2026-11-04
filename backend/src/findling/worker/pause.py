@@ -68,6 +68,17 @@ PAUSE_POLL_SECONDS: Final = 15
 # and, once those agree, one checkpoint per file; a second is short enough that
 # "paused" follows the end of the batch closely.
 PAUSE_SETTLE_SECONDS: Final = 1
+# How many unreadable reads in a row make the one warning (F-41A-03). One is a
+# lost packet, two a restart of Nextcloud, three a companion that is not there,
+# the threshold of the poller's retreat (RETREAT_AFTER_ROUNDS).
+PAUSE_UNREADABLE_WARN_AFTER: Final = 3
+# The cap of the read ladder, the cap of the poller's retreat
+# (RETREAT_MAX_SECONDS): a container without its companion reads twelve times
+# an hour instead of 240, and a reinstalled companion is seen within five
+# minutes. The poller is not imported for it; a test holds the two equal.
+PAUSE_RETREAT_MAX_SECONDS: Final = 300.0
+# Doublings beyond this change nothing under the cap; it keeps the power small.
+_LADDER_STEPS: Final = 16
 
 Clock = Callable[[], float]
 Checkpoint = Callable[[Path], bool]
@@ -184,6 +195,10 @@ class PauseCoordinator:
         # Whether the poller gave its writer back on this entry into pausing,
         # so a busy checkpoint retries without a second quiesce.
         self._quiesced = False
+        # Unreadable reads in a row, and whether that streak was said out loud
+        # (F-41A-03): the ladder of the reads and its one warning.
+        self._unreadable = 0
+        self._unreadable_announced = False
         self._pollers: list[_Poller] = []
         self._runners: list[_Runner] = []
         self._reconciles: list[_Reconcile] = []
@@ -200,6 +215,18 @@ class PauseCoordinator:
     def paused_since(self) -> int | None:
         """Epoch seconds of the moment "paused" was reached, None otherwise."""
         return self._paused_since
+
+    @property
+    def read_interval(self) -> float:
+        """Seconds until the next read of the wish: the poll, or a step of the ladder.
+
+        Every unreadable read in a row doubles the wait from the poll on, up to
+        PAUSE_RETREAT_MAX_SECONDS; the first answer puts it back to the poll.
+        """
+        if not self._unreadable:
+            return self._poll
+        steps = min(self._unreadable - 1, _LADDER_STEPS)
+        return min(self._poll * 2**steps, max(self._poll, PAUSE_RETREAT_MAX_SECONDS))
 
     def wants_pause(self) -> bool:
         """True while the writers are to stand still: pausing, paused or unknown.
@@ -251,7 +278,7 @@ class PauseCoordinator:
             # Deliberately every exception, the rule of the other workers.
             except Exception as error:
                 LOGGER.error("backup pause: a step ended in an unexpected %s", type(error).__name__)
-            deadline = time.monotonic() + self._poll
+            deadline = time.monotonic() + self.read_interval
             while self._state == PAUSE_PAUSING and not stop_event.is_set():
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
@@ -267,6 +294,7 @@ class PauseCoordinator:
     async def tick(self) -> None:
         """One step: read the wish, act on it, and settle once while pausing."""
         wish = await self._read()
+        self._note_the_read(wish)
         if wish is False and self._state != PAUSE_RUNNING:
             await self._resume()
         elif wish is True and self._state in (PAUSE_RUNNING, PAUSE_UNKNOWN):
@@ -280,8 +308,38 @@ class PauseCoordinator:
         # Any failure of the read is no answer, which holds a waiting start and
         # changes nothing otherwise.
         except Exception as error:
-            LOGGER.warning("backup pause: the wish could not be read, %s", type(error).__name__)
+            # One line per failure only until the streak is announced; after
+            # that the warning of _note_the_read has said it (F-41A-03).
+            log = LOGGER.debug if self._unreadable_announced else LOGGER.warning
+            log("backup pause: the wish could not be read, %s", type(error).__name__)
             return None
+
+    def _note_the_read(self, wish: bool | None) -> None:
+        """Climb or leave the ladder of the reads, and say it once each way (F-41A-03).
+
+        Nothing here changes the state: an unreadable read holds a waiting
+        start and leaves the last answer in force (D-41-19), the ladder only
+        spaces the reads, like the retreat of the poller (D-17).
+        """
+        if wish is None:
+            self._unreadable += 1
+            if self._unreadable >= PAUSE_UNREADABLE_WARN_AFTER and not self._unreadable_announced:
+                self._unreadable_announced = True
+                LOGGER.warning(
+                    "backup pause: the wish has not been readable for %d reads, the state stays %s "
+                    "and the reads back off to at most one every %d s; the Nextcloud half looks removed "
+                    "or unreachable",
+                    self._unreadable,
+                    self._state,
+                    int(max(self._poll, PAUSE_RETREAT_MAX_SECONDS)),
+                )
+            return
+        if not self._unreadable:
+            return
+        reads, self._unreadable = self._unreadable, 0
+        announced, self._unreadable_announced = self._unreadable_announced, False
+        if announced:
+            LOGGER.info("backup pause: the wish is readable again after %d reads without an answer", reads)
 
     # -- the transitions ----------------------------------------------------------
 
@@ -387,9 +445,11 @@ __all__ = [
     "PAUSE_PAUSED",
     "PAUSE_PAUSING",
     "PAUSE_POLL_SECONDS",
+    "PAUSE_RETREAT_MAX_SECONDS",
     "PAUSE_RUNNING",
     "PAUSE_SETTLE_SECONDS",
     "PAUSE_UNKNOWN",
+    "PAUSE_UNREADABLE_WARN_AFTER",
     "PauseCoordinator",
     "PauseState",
     "checkpoint_wal",

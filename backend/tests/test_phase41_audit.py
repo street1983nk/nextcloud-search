@@ -56,11 +56,13 @@ from findling.worker.pause import (
     PAUSE_PAUSED,
     PAUSE_PAUSING,
     PAUSE_POLL_SECONDS,
+    PAUSE_RETREAT_MAX_SECONDS,
     PAUSE_RUNNING,
     PAUSE_UNKNOWN,
+    PAUSE_UNREADABLE_WARN_AFTER,
     PauseCoordinator,
 )
-from findling.worker.poller import RETREAT_MAX_SECONDS, Poller
+from findling.worker.poller import RETREAT_AFTER_ROUNDS, RETREAT_MAX_SECONDS, Poller
 from findling.worker.reconcile import GATEWAY_ERROR_RETRIES, Reconcile
 from findling.worker.watch import GuardWatch
 
@@ -884,15 +886,15 @@ async def test_u_the_outage_grid_over_every_status_from_400_to_599() -> None:
 # == V what the pause costs ============================================================
 
 
-async def test_v_the_coordinator_reads_the_wish_once_per_poll_and_no_more() -> None:
-    """Hypothesis: the reads are paced by the poll, idle or not; 3600 / 15 = 240 an hour.
+async def test_v_the_coordinator_reads_at_the_pace_of_the_poll_and_backs_off_without_an_answer() -> None:
+    """Hypothesis: answered reads are paced by the poll, unanswered ones back off (F-41A-03, fixed).
 
-    Run with a poll of 50 ms for one second: about twenty reads, and the
-    default poll gives the hourly figure. The same pace holds in "unknown"
-    with no companion behind the route (F-41A-03): there is no back-off like
-    the retreat of the poller, which ends at one claim every RETREAT_MAX_SECONDS.
+    Run with a poll of 50 ms for one second. An answering companion gets about
+    twenty reads; with no companion behind the route the ladder doubles the
+    wait from the poll on (50, 100, 200, 400 ms ...), so about five. Before the
+    fix both cases read twenty times, 240 an hour at the default poll.
     """
-    for answer in (False, None):
+    for answer, low, high in ((False, 15, 22), (None, 3, 6)):
         reads = 0
 
         async def wish(answer: bool | None = answer) -> bool | None:
@@ -906,6 +908,88 @@ async def test_v_the_coordinator_reads_the_wish_once_per_poll_and_no_more() -> N
         await asyncio.sleep(1.0)
         stop.set()
         await asyncio.wait_for(task, timeout=5)
-        assert 15 <= reads <= 22, (answer, reads)
+        assert low <= reads <= high, (answer, reads)
     assert 3600 / PAUSE_POLL_SECONDS == 240
     assert 3600 / RETREAT_MAX_SECONDS == 12
+
+
+@pytest.mark.parametrize("error", [False, True], ids=["no_answer", "read_raises"])
+async def test_v_f_41a_03_the_ladder_retreats_to_twelve_reads_an_hour_and_an_answer_resets_it(error: bool) -> None:
+    """F-41A-03 (LOW, fixed): the reads of a coordinator without an answer climb a ladder like the poller's.
+
+    At the default poll of 15 s the wait doubles from the poll on and ends at
+    RETREAT_MAX_SECONDS of the poller, 300 s, which is 12 reads an hour. The
+    state stays "unknown" all the while and every writer stays held (D-41-19,
+    D-17). The first answer puts the wait back to the poll and the state
+    follows the wish at once.
+    """
+    answers: list[bool | None] = [None] * 8
+
+    async def wish() -> bool | None:
+        if answers:
+            value = answers.pop(0)
+            if value is None and error:
+                raise httpx.ConnectError("no companion")
+            return value
+        return False
+
+    coordinator = PauseCoordinator(read_wish=wish, databases=(), clock=lambda: 1_800_000_000.0)
+    assert coordinator.read_interval == PAUSE_POLL_SECONDS
+    seen: list[float] = []
+    for _ in range(8):
+        await coordinator.tick()
+        seen.append(coordinator.read_interval)
+        assert coordinator.state == PAUSE_UNKNOWN
+        assert coordinator.wants_pause()
+    assert seen == [15, 30, 60, 120, 240, 300, 300, 300]
+    assert 3600 / seen[-1] == 12
+    assert seen[-1] == RETREAT_MAX_SECONDS == PAUSE_RETREAT_MAX_SECONDS
+    assert PAUSE_UNREADABLE_WARN_AFTER == RETREAT_AFTER_ROUNDS
+    await coordinator.tick()
+    assert coordinator.state == PAUSE_RUNNING
+    assert coordinator.read_interval == PAUSE_POLL_SECONDS
+
+
+async def test_v_f_41a_03_one_warning_after_three_unreadable_reads_and_one_info_on_the_way_back(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """F-41A-03 (LOW, fixed): a container without its companion says so once, and says it again only after a recovery.
+
+    Three unreadable reads in a row give one WARNING with the state word and
+    the cap of the ladder, never a path; ten more give nothing; the first
+    answer gives one INFO line. A new streak warns once more.
+    """
+    answers: list[bool | None] = [None] * 13 + [True] + [None] * 3
+
+    async def wish() -> bool | None:
+        return answers.pop(0) if answers else None
+
+    coordinator = PauseCoordinator(read_wish=wish, databases=(), clock=lambda: 1_800_000_000.0)
+    caplog.set_level("DEBUG", logger="findling.worker.pause")
+
+    def warnings() -> list[str]:
+        return [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+
+    def infos_back() -> list[str]:
+        return [r.getMessage() for r in caplog.records if r.levelname == "INFO" and "readable again" in r.getMessage()]
+
+    await coordinator.tick()
+    await coordinator.tick()
+    assert warnings() == []
+    await coordinator.tick()
+    assert len(warnings()) == 1
+    line = warnings()[0]
+    assert "unknown" in line
+    assert "300" in line
+    assert line.isascii()
+    for _ in range(10):
+        await coordinator.tick()
+    assert len(warnings()) == 1
+    assert infos_back() == []
+    await coordinator.tick()
+    assert len(infos_back()) == 1
+    assert coordinator.read_interval == PAUSE_POLL_SECONDS
+    for _ in range(3):
+        await coordinator.tick()
+    assert len(warnings()) == 2
+    assert coordinator.state == PAUSE_PAUSED, "the last answer stays in force"
