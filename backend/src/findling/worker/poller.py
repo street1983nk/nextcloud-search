@@ -324,7 +324,10 @@ class _RefusalsPiledUp(_GatewayDown):
     So the refused rows are kept out of the unlock, their delivery counts, they
     are out of the claim until their lock times out, and a file that refuses
     every time ends at the claim as failed(repeatedly_stuck). The rows of the
-    pass that were not refused are unjudged and go back refunded.
+    pass that were not refused are unjudged and go back refunded. Since plan
+    41-01 every charged row carries failed(gateway_error) in the state
+    database (E-40-07-04, :meth:`Poller._mark_the_charged`), so the reconcile
+    brings it back while its streak is short instead of writing it off.
     """
 
 
@@ -682,6 +685,10 @@ class Poller:
         # The queue ids of the rows the gateway refused in the pass in flight,
         # the rows an escalation by count does not hand back (W-1).
         self._refused_rows: set[int] = set()
+        # The same rows with their jobs, queue id to job, because _abort marks
+        # each charged row in the state database and needs the file id, the
+        # crawl facts and the etag for that (E-40-07-04).
+        self._refused_jobs: dict[int, QueueJob] = {}
         self._cooldown = 0.0
         # Passes in a row whose claim came back unanswered, and whether the
         # retreat has been said out loud already. Both belong to the poller and
@@ -1230,6 +1237,7 @@ class Poller:
         self._claimed_in_pass = len(jobs)
         self._refusal_storages = {}
         self._refused_rows = set()
+        self._refused_jobs = {}
         # File ids, not queue ids: the requeue is about the file, and the row it
         # belongs to may not even exist for the caller that comes in plan 03-12.
         handover: list[int] = []
@@ -1268,9 +1276,10 @@ class Poller:
                 for job in jobs:
                     unchanged += await self._handle(job, done, failed, verdicts, handover, embedding, embedded)
         except _RefusalsPiledUp:
-            # An outage by count (E-40-06-02): no verdict is written, but the
-            # refused rows are charged and not handed back (W-1, see
-            # _RefusalsPiledUp); the rest of the batch goes back refunded.
+            # An outage by count (E-40-06-02): no verdict is acknowledged, but
+            # the refused rows are charged and not handed back (W-1, see
+            # _RefusalsPiledUp) and carry failed(gateway_error) in the state
+            # database (E-40-07-04); the rest of the batch goes back refunded.
             return await self._abort(queue, len(jobs), charged=frozenset(self._refused_rows))
         except _GatewayDown:
             # An outage by the status grid (E-40-06-01): the gateway says
@@ -2405,6 +2414,7 @@ class Poller:
         stands at :class:`_RefusalsPiledUp`.
         """
         self._refused_rows.add(job.queue_id)
+        self._refused_jobs[job.queue_id] = job
         count = self._refusals.get(refused.status, 0) + 1
         self._refusals[refused.status] = count
         storages = self._refusal_storages.setdefault(refused.status, set())
@@ -2438,7 +2448,9 @@ class Poller:
         ``charged`` are rows that are NOT handed back: the refused rows of an
         outage by count (W-1, :class:`_RefusalsPiledUp`). They stay locked on
         the other side, their delivery counts, and the lock timeout brings them
-        back. Every other caller passes nothing and every row goes back.
+        back. Before the unlock each of them is marked failed(gateway_error) in
+        the state database (E-40-07-04), never in an acknowledgement. Every
+        other caller passes nothing and every row goes back.
 
         Whatever the writer already holds is rolled back first (issue #36,
         Befund C). Left pending, it was committed by the flush of the next pass:
@@ -2468,6 +2480,8 @@ class Poller:
                 # which is the state of before 1.6.0, while rows that are not
                 # handed back would spend their give-up budget (DI-05-23).
                 LOGGER.warning("the pending batch could not be rolled back, %s", type(error).__name__)
+        if charged:
+            await self._mark_the_charged(charged)
         handed_back = sorted(self._held - charged)
         if handed_back or not charged:
             await queue.unlock(handed_back)
@@ -2483,6 +2497,38 @@ class Poller:
             )
             _note_gateway_outage(time.time())
         return RoundResult(state, claimed=claimed)
+
+    async def _mark_the_charged(self, charged: frozenset[int]) -> None:
+        """Write failed(gateway_error) for every charged row, before the unlock.
+
+        E-40-07-04 (plan 41-01, post audit F-40N-02). A charged row is never
+        acknowledged: its delivery counts on the other side, and after three
+        charges Nextcloud writes it off as failed(repeatedly_stuck). Without a
+        row in here the reconcile then read the file as unknown and wrote it
+        off for good, so a storage that was away during an escalation lost its
+        files. With the mark the reconcile finds a known file on an unmoved
+        etag with a short streak of gateway_error and hands it over again
+        (GATEWAY_ERROR_RETRIES); the charges count as that streak.
+
+        In the state database and not in an acknowledgement: the charge is the
+        guarantee that the queue ends (W-1), and an acknowledgement would end
+        the row over there with a verdict the escalation has decided not to
+        give. Never skipped(gone) either: that is a lasting end for a storage
+        that may be back tomorrow (E-40-06-03 struck).
+
+        One write per row, each on its own: a write that fails costs that one
+        mark and is logged with the class alone, and it never keeps the other
+        rows of the pass from being handed back.
+        """
+        for queue_id in sorted(charged):
+            job = self._refused_jobs.get(queue_id)
+            if job is None:
+                continue
+            try:
+                store = self._store_or_die()
+                await asyncio.to_thread(store.record, job.file_id, _meta_of(job), "failed", "gateway_error")
+            except Exception as error:
+                LOGGER.warning("a charged row could not be marked, %s", type(error).__name__)
 
     def _stamp_if_rebuilt(self) -> bool:
         """Write the version marks again once the last file has been re-judged.
