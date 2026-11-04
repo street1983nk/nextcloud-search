@@ -4,14 +4,14 @@ milestone: v1.6
 milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
 status: executing
 stopped_at: Completed 40-05-PLAN.md
-last_updated: "2026-10-29T11:55:00.000Z"
-last_activity: 2026-10-29, Plan 40-05 abgeschlossen (Tag v1.6.0, Store submission 40868132102 mit zweimal HTTP 201)
+last_updated: "2026-11-04T05:23:45.063Z"
+last_activity: 2026-11-04
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 14
+  total_plans: 17
   completed_plans: 14
-  percent: 100
+  percent: 75
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 Siehe .planning/PROJECT.md (Stand nach v1.5, Milestone v1.6 gestartet) und .planning/MILESTONES.md (v1.0 bis v1.5).
 
 **Core Value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 40, Haertung und Store-Einreichung 1.6.0 (alle sechs Plaene erledigt, 1.6.0 beider Apps eingereicht, Phasenverifikation offen)
+**Current focus:** Phase 41 — findling-1-6-2-backup-pause-schalter-37-backup-doku-25-fixes
 
 ## Current Position
 
-Phase: 40 von 37-40 (Haertung und Store-Einreichung 1.6.0)
-Plan: 40-05 erledigt (6 von 6)
-Status: Phase 40 executed, Verifikation offen
-Last activity: 2026-10-29, Plan 40-05 abgeschlossen (Tag v1.6.0 auf 91a0603f, Store submission 40868132102 mit zweimal HTTP 201, beide App-Seiten nennen 1.6.0)
+Phase: 41 (findling-1-6-2-backup-pause-schalter-37-backup-doku-25-fixes) — EXECUTING
+Plan: 2 of 12
+Status: Ready to execute
+Last activity: 2026-11-04
 
-Progress: [██████████] 100%
+Progress: [████████░░] 82%
 
 ## Performance Metrics
 
@@ -237,7 +237,7 @@ Items acknowledged and deferred at milestone close on 2026-10-28 (Owner-Wiedervo
 
 ## Session Continuity
 
-Last session: 2026-10-29T11:55:00Z
+Last session: 2026-11-04T05:23:45.044Z
 Stopped at: Completed 40-05-PLAN.md
 Resume file: None
 

@@ -202,7 +202,7 @@ Aktiver Blocker unabhaengig vom Milestone: Kill-Kriterium Nextcloud Conference (
 **Goal:** Findling 1.6.2 (beide Apps) im Store mit den Zusagen aus Issue #37 und #25 und den vier Nachaudit-Befunden aus 40-NACHAUDIT.md, die 1.6.1 (nur Sicherheit, pypdf) bewusst nicht mitnahm.
 **Requirements**: Owner-GO 29.10./30.10./02.11.2026 (NEXT.md)
 **Depends on:** Phase 40
-**Plans:** 12 plans
+**Plans:** 1/12 plans executed
 
 **Success Criteria:**
 1. Backup-Pause-Schalter (#37): `occ findling:pause` / `findling:resume` und ein Schalter auf der Admin-Seite; in der Pause ruhen Indexer, Embedding und Poller, SQLite-WAL ist gecheckpointet und Tantivy committet, die Suche läuft weiter; Zustand übersteht einen Neustart; Negativtests (Pause während laufendem Batch, doppeltes pause/resume, Neustart in der Pause).
@@ -213,7 +213,7 @@ Aktiver Blocker unabhaengig vom Milestone: Kill-Kriterium Nextcloud Conference (
 6. Owner-Runde mit Release-Notiz und Store-Text vor dem Tag (Vorlage 40-09), dann Tag v1.6.2, beide Archive signiert, beide Store-Uploads HTTP 201; Issue-Antworten #37 und #25 erst NACH Store-Release.
 
 Plans:
-- [ ] 41-01-PLAN.md: Nachaudit-Fixes F-40N-01..04 (Schwelle über Speicher, Reconcile-Retry gateway_error, 408/429, Fill-Refresh-Start)
+- [x] 41-01-PLAN.md: Nachaudit-Fixes F-40N-01..04 (Schwelle über Speicher, Reconcile-Retry gateway_error, 408/429, Fill-Refresh-Start)
 - [ ] 41-02-PLAN.md: #25 embeddedLeftOut hybrid über 100 000, Repräsentant = größtes files_seen
 - [ ] 41-03-PLAN.md: Backup-Pause Backend-Kern (Holds je Schreiber, PauseCoordinator, WAL-Checkpoint)
 - [ ] 41-04-PLAN.md: Backup-Pause Verdrahtung (Lifespan, /profile-Wunsch, Rebuild-Stop, Status, Probe 409)
