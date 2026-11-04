@@ -1062,7 +1062,17 @@ def _start_fill_refresh() -> None:
         return
     thread = threading.Thread(target=_refresh_fill, name="findling-fill-refresh", daemon=True)
     _FILL_REFRESH = thread
-    thread.start()
+    try:
+        thread.start()
+    except RuntimeError as error:
+        # What Thread.start raises when the process has no thread left to give
+        # (post audit F-40N-03, plan 41-01). Without the fallback the flag
+        # pointed at a thread that never ran and so never cleared it, and no
+        # later poll measured again until the container restarted. The answer
+        # comes from the cache as it stands, and the next stale call tries
+        # again. Only RuntimeError: anything else stays an error.
+        _FILL_REFRESH = None
+        LOGGER.warning("the fill level refresh could not start, %s", type(error).__name__)
 
 
 def _refresh_fill() -> None:
