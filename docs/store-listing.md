@@ -2810,6 +2810,60 @@ hat der Owner mit D-37-08 bewusst so belassen.
 
 ---
 
+# Entwurf v1.6.2, Stand Plan 41-08 (04.11.2026)
+
+Entwurf für die Owner-Runde in Plan 41-10, noch nicht abgenommen.
+
+- Version 1.6.2 in beiden `info.xml`, `image-tag` 1.6.2.
+- Doku-Links der sechs Beschreibungen auf `blob/v1.6.2`.
+- Namen und Beschreibungen zeichengleich zur Fassung 1.6.1 (D-41-15: Store-Text
+  nur ändern, wenn nötig). Die Companion-`info.xml` trägt zusätzlich die zwei
+  neuen Befehle `findling:pause` und `findling:resume` unter `<commands>`.
+- Upgrade-Beweis weiter ab v1.5.0 (`UPGRADE_FROM_TAG`), mit der Zusicherung,
+  dass nach dem Upgrade nichts pausiert ist.
+
+Neue nutzersichtbare Sätze zur Abnahme (en / de / fr):
+
+1. Hinweis zu `gateway_error` (Plan 41-01)
+   - en: Nextcloud could not open the file, often because its storage was not available. The nightly comparison tries it again up to three times, and a change to the file tries it at once.
+   - de: Nextcloud konnte die Datei nicht öffnen, oft weil ihr Speicher nicht verfügbar war. Der nächtliche Abgleich versucht es bis zu dreimal erneut, eine Änderung an der Datei sofort.
+   - fr: Nextcloud n'a pas pu ouvrir le fichier, souvent parce que son stockage n'était pas disponible. La comparaison nocturne réessaie jusqu'à trois fois, et une modification du fichier relance aussitôt.
+2. Schalter (Plan 41-06)
+   - en: Pause indexing
+   - de: Indexierung pausieren
+   - fr: Mettre l'indexation en pause
+3. Schalter (Plan 41-06)
+   - en: Resume indexing
+   - de: Indexierung fortsetzen
+   - fr: Reprendre l'indexation
+4. Zustand pausiert (Plan 41-06)
+   - en: Indexing is paused for a backup. Search keeps working.
+   - de: Die Indexierung ist für ein Backup pausiert. Die Suche läuft weiter.
+   - fr: L'indexation est en pause pour une sauvegarde. La recherche continue de fonctionner.
+5. Zustand wird pausiert (Plan 41-06)
+   - en: Pausing: the current batch finishes first. Start the backup when the status says paused.
+   - de: Pause wird vorbereitet: der laufende Stapel endet zuerst. Das Backup erst starten, wenn der Status pausiert meldet.
+   - fr: Mise en pause : le lot en cours se termine d'abord. Lancez la sauvegarde quand le statut indique en pause.
+6. Zustand unlesbar (Plan 41-06)
+   - en: The pause state cannot be read yet, so indexing stays stopped.
+   - de: Der Pausenzustand ist noch nicht lesbar, deshalb bleibt die Indexierung angehalten.
+   - fr: L'état de pause n'est pas encore lisible, l'indexation reste donc arrêtée.
+7. Backend zu alt (Plan 41-06)
+   - en: The backend does not know the pause yet. Update both apps to the same version.
+   - de: Das Backend kennt die Pause noch nicht. Beide Apps auf dieselbe Version aktualisieren.
+   - fr: Le backend ne connaît pas encore la pause. Mettez à jour les deux applications vers la même version.
+
+Entwurf der Release-Notiz v1.6.2 (englisch, Faktenliste, Owner-Wort steht aus):
+
+```
+Findling 1.6.2. Update both apps; 1.6.x versions work together.
+- Backup pause: occ findling:pause [--wait], occ findling:resume and a switch on the admin page (#37)
+- Backup guide in German, English and French (#37)
+- Coverage fixes for large instances and share groups (#25)
+- Files of a storage that was away come back (#36)
+**Full Changelog**: https://github.com/street1983nk/nextcloud-search/compare/v1.6.1...v1.6.2
+```
+
 # Release 1.6.1 (02.11.2026): Sicherheitsupdate
 
 Kein Funktionsentscheid und kein Entwurf der Beschreibungen: 1.6.1 behebt die

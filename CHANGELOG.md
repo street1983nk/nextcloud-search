@@ -6,6 +6,29 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
 
 ## [Unreleased]
 
+## [1.6.2] - 2026-11-04
+
+### Added
+
+- Backup pause: `occ findling:pause [--wait]`, `occ findling:resume` and a
+  switch on the admin page. Indexing stops and everything is flushed to disk
+  while search keeps working. The pause survives restarts (#37).
+- Backup guide in German, English and French (#37).
+
+### Fixed
+
+- The vector figure of left out storages is also counted above 100,000
+  documents, so the coverage dedup no longer drops out (#25).
+- The largest member represents a share group in the coverage
+  denominator (#25).
+- A large storage that is not available no longer holds up the files
+  behind it (#36).
+- Files of a storage that was away come back: the nightly comparison tries
+  a gateway_error file again up to three times (#36).
+- HTTP 408 and 429 from a proxy count as an outage.
+- A fill level refresh that could not start no longer stops the language
+  line until a restart.
+
 ## [1.6.1] - 2026-11-02
 
 ### Security
@@ -265,6 +288,7 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
   and every result permission checked by Nextcloud. The patch releases 1.0.1
   to 1.0.3 of the same days carried store metadata and packaging fixes.
 
+[1.6.2]: https://github.com/street1983nk/nextcloud-search/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/street1983nk/nextcloud-search/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/street1983nk/nextcloud-search/compare/v1.5.1...v1.6.0
 [1.5.1]: https://github.com/street1983nk/nextcloud-search/compare/v1.5.0...v1.5.1
