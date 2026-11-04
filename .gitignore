@@ -35,3 +35,10 @@ build/
 # Agent scratch state, must never reach the public repository
 .claude-active
 .claude/worktrees/
+
+# Impeccable: lokale Hook-Einstellungen pro Entwickler, nie committen
+.impeccable/config.local.json
+.impeccable/hook.cache.json
+.impeccable/hook.pending.json
+.claude/settings.local.json
+.claude/skills/impeccable
