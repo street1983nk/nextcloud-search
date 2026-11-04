@@ -71,6 +71,12 @@ Der Container zieht, die PHP-App liefert nur. Der Ablauf je Scheibe:
    Endurteil der Nextcloud-Seite kein Endurteil, sondern eine verlorene
    Übergabe an die OCR-Spur, und die Datei wird eingereiht.
 
+   Die Dauerlast aus IN-03 bleibt auch beim Gateway-Fehler ausgeschlossen: eine
+   Datei mit `failed(gateway_error)` bei gleichem ETag reiht der Abgleich bis
+   zu dreimal erneut ein (`GATEWAY_ERROR_RETRIES`), danach erst wieder nach
+   einer Änderung der Datei, siehe den Abschnitt "Ein Speicher, der kurz weg
+   war (F-40N-02)".
+
    Und eine Datei unter einer Ausschlussregel folgt eigenen Regeln, siehe den
    Abschnitt "Dateien unter einer Ausschlussregel (D-33-01)".
 6. Beides über `POST /queues/documents/requeue` einreihen, getrennt nach Art.
@@ -141,6 +147,30 @@ nächtlicher Download jedes Scans der Instanz.
 ein, weil der Neuaufbau jede Datei neu beurteilt. Er ist der schnelle Weg, wenn
 jemand die Fehlerliste ansieht und nicht bis zur nächsten Nacht warten will; der
 Abgleich ist der Weg, der auch ohne Zuschauer funktioniert.
+
+## Ein Speicher, der kurz weg war (F-40N-02)
+
+War der Speicher einer Datei beim Abholen nicht verfügbar (Issue #36), antwortet
+das Content-Gateway mit einem Fehler, und der Container urteilt
+`failed(gateway_error)`. Seit 1.6.2 ist das bei unverändertem ETag kein
+Endurteil mehr:
+
+| Wer | Urteil |
+|---|---|
+| Container | `failed(gateway_error)`, `attempts` höchstens 3 |
+| Nextcloud | `failed(gateway_error)` oder, nach einer Eskalation, `failed(repeatedly_stuck)` |
+
+Der Abgleich reiht eine solche Datei bei gleichem ETag bis zu dreimal erneut
+ein, einmal je Zyklus. `attempts` zählt dafür die Strähne der Ablehnungen auf
+derselben Version: der Übergang in `failed(gateway_error)` setzt den Zähler auf
+1, jede weitere Ablehnung derselben Version zählt weiter. Eine Datei, die immer
+abgelehnt wird, kostet so höchstens vier Anfragen je Version. Ein neuer ETag ist
+eine neue Version und eine neue Strähne; `occ findling:index --restart` holt
+die Datei jederzeit sofort.
+
+Bekannte Grenze: Zeilen, die 1.6.0 oder 1.6.1 geschrieben haben, tragen die alte,
+über alle Schreibvorgänge kumulierte Zählung. Liegt sie über 3, wiederholt der
+Abgleich die Datei nicht von selbst; Abhilfe ist `occ findling:index --restart`.
 
 ## Dateien unter einer Ausschlussregel (D-33-01)
 
