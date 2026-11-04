@@ -149,11 +149,13 @@ Weg C der Notiz `35-DEDUP-NOTIZ.md`, Owner-Entscheid D-37-03). Der Schlüssel
 ist die Storage-ID ohne den Anmeldenamen, also Backend, Host, Share und Root
 nach der Platzhalter-Ersetzung. Ein Root mit `$user` ergibt deshalb je Nutzer
 einen anderen Schlüssel und wird nie zusammengefasst. Je Schlüssel zählt eine
-Repräsentanten-Einbindung (die kleinste durchgezählte Storage-ID) im Nenner,
-und der Container nennt auf Nachfrage (`GET /status?leaveOut=...`), wie viele
-indexierte und eingebettete Dokumente zu den übrigen Einbindungen gehören;
-diese Zahl verlässt den Zähler. Belegt ist das ID-Format für SMB
-(`SMB.php:137-142`) und SFTP (`SFTP.php:157-167`, jeweils `nextcloud/server`
+Repräsentanten-Einbindung im Nenner, seit 1.6.2 das Mitglied mit den meisten
+gesehenen Dateien (bei Gleichstand das fertig durchgezählte, dann die kleinste
+Storage-ID; Issue #25). Die größte Einbindung sieht am meisten von der Share,
+die kleinste fertige drückte den Nenner. Der Container nennt auf Nachfrage
+(`GET /status?leaveOut=...`), wie viele indexierte und eingebettete Dokumente
+zu den übrigen Einbindungen gehören; diese Zahl verlässt den Zähler. Belegt
+ist das ID-Format für SMB (`SMB.php:137-142`) und SFTP (`SFTP.php:157-167`, jeweils `nextcloud/server`
 `stable34`); WebDAV und ownCloud werden nicht zusammengefasst, weil Host und
 Root in ihrer ID nicht sicher zu trennen sind.
 
@@ -161,8 +163,12 @@ Der Satz zur Mehrfachzählung erscheint nur noch im Rückfall: ein Container ohn
 die beiden neuen Zähler (älter als 1.6, oder der Vektorbestand ist nicht
 lesbar), mehr als 1000 übrige Einbindungen, eine Storage-ID, die Nextcloud
 wegen ihrer Länge als md5 gespeichert hat, oder ein Backend ohne belegtes
-ID-Format. Dann rechnet die Seite wie in 1.5. Sind die Warteschlangen leer,
-alle Mounts durchgezählt, der Container erreichbar und bleibt trotzdem eine
+ID-Format. Dann rechnet die Seite wie in 1.5. Gehören zu den übrigen
+Einbindungen mehr als 100 000 Dokumente, zählt der Container die Vektoren
+seit 1.6.2 im Hintergrund und hält das Ergebnis fünf Minuten vor; bis die
+erste Zählung fertig ist, rechnet die Seite ebenfalls wie in 1.5. Sind die
+Warteschlangen leer, alle Mounts durchgezählt, der Container erreichbar und
+bleibt trotzdem eine
 Lücke, die die fehlgeschlagenen Dateien nicht erklären, sagt sie, dass externe
 Speicher hier je Einbindung gezählt werden.
 
@@ -170,7 +176,8 @@ Zwei Grenzen bleiben. Die Arbeit selbst ist nicht entdoppelt: jede Kopie wird
 weiter gelesen, beurteilt und unter ihrer eigenen Datei-ID indexiert (Weg B,
 siehe Plan 39-04). Und sehen Nutzer derselben Share mit `check_acl`
 verschiedene Teilmengen, misst die Zahl die Abdeckung der
-Repräsentanten-Einbindung.
+Repräsentanten-Einbindung, also des Mitglieds mit den meisten gesehenen
+Dateien.
 
 ### Wenn der Zähler über dem Nenner steht
 
