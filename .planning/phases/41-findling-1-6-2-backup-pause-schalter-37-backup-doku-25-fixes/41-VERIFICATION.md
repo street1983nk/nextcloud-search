@@ -1,12 +1,13 @@
 ---
 phase: 41-findling-1-6-2-backup-pause-schalter-37-backup-doku-25-fixes
 verified: 2026-11-04T18:37:06Z
-status: gaps_found
-score: 6/7 must-haves verified (6/6 ROADMAP-Kriterien, 1 Plan-Wahrheit aus 41-11 offen)
+re_verified: 2026-11-04
+status: passed
+score: 7/7 must-haves verified
 overrides_applied: 0
-gaps:
+gaps_closed:
   - truth: "Belegkette steht in docs/store-listing.md '# Release 1.6.2 (<Datum>)'; STATE.md und ROADMAP.md tragen den Stand (41-11-PLAN must_haves)"
-    status: failed
+    status: closed
     reason: "docs/store-listing.md hat keinen Abschnitt '# Release 1.6.2'. Jede Version seit 1.4.1 hat einen solchen Abschnitt (Zeilen 2888 bis 3248), 41-CONTEXT nennt ihn als kanonisches Belegmuster, und das automatische verify von 41-11 (grep '# Release 1.6.2' und beide HTTP-201-Zeilen in docs/store-listing.md) schlägt am Kopf fehl. Die Belege selbst existieren (41-11-SUMMARY.md, 41-ISSUE-ANTWORTEN.md, ROADMAP Kriterium 6), nur nicht an der Stelle, an der der nächste Release-Plan sie als Vorlage sucht. Kein Einfluss auf das Produkt."
     artifacts:
       - path: "docs/store-listing.md"
@@ -15,14 +16,17 @@ gaps:
       - "Abschnitt '# Release 1.6.2 (04.11.2026)' direkt vor '# Release 1.6.1 (02.11.2026): Sicherheitsupdate' (heute Zeile 2888) einfügen, Form wie 1.6.1/1.6.0"
       - "Inhalt: Tag v1.6.2 annotiert auf ba098b00f61cb57dfa8bc127c264e198e4afa313; sieben Tag-Läufe success (Release archives 41869261561 mit zweimal 'Verified OK', PHP 41869261491, Python 41869261151, Integration 41869261583, Resilience 41869261405, Multi-arch 41869261338, HaRP 41869261143 inkl. Schritt 'Backup pause, across restarts'); Release immutable, findling.tar.gz 656 338 B und findling_backend.tar.gz 44 225 B je mit .sig; Store submission 41875127182 HTTP 401 (Token), 41885026379 mit den wörtlichen Zeilen 'release findling v1.6.2: HTTP 201' und 'release findling_backend v1.6.2: HTTP 201'; Store-API apps.json findling und appapi_apps.json findling_backend nennen 1.6.2 (04.11.2026 18:28Z); Verweis auf die Release-Notiz im Abschnitt 'Entwurf v1.6.2 (Gesamttext)'"
       - "Reiner Doku-Commit auf main (Tag bleibt unberührt), danach: grep -q '# Release 1.6.2' docs/store-listing.md && grep -q 'release findling_backend v1.6.2: HTTP 201' docs/store-listing.md; backend/tests/test_store_metadata.py und das Gate scan_full_text_1_6_2 lokal grün"
+re_verification:
+  date: 2026-11-04
+  note: "Abschnitt '# Release 1.6.2 (04.11.2026)' in docs/store-listing.md nachgetragen (Doku-Commit auf main, Tag unberührt); beide greps grün, backend/tests/test_store_metadata.py lokal 126 passed"
 ---
 
 # Phase 41: Findling 1.6.2 Verifikationsbericht
 
 **Phasenziel:** Findling 1.6.2 (beide Apps) im Store mit den Zusagen aus Issue #37 und #25 und den vier Nachaudit-Befunden aus 40-NACHAUDIT.md, die 1.6.1 bewusst nicht mitnahm.
 **Geprüft:** 2026-11-04T18:37:06Z
-**Status:** gaps_found (Produktziel erreicht; eine Doku-Lücke aus Plan 41-11)
-**Re-Verifikation:** Nein, erste Prüfung
+**Status:** passed (nach Re-Verifikation; die Doku-Lücke aus Plan 41-11 ist geschlossen)
+**Re-Verifikation:** Ja, 04.11.2026 (siehe Abschnitt Re-Verifikation am Ende)
 
 Code-Stand: Tag `v1.6.2` = `ba098b00f61cb57dfa8bc127c264e198e4afa313` (lokal per `git rev-parse v1.6.2^{}`). `git diff ba098b00 HEAD` ändert nur `.planning/`, der geprüfte Code ist also der ausgelieferte. Nicht abgefragt: apps.nextcloud.com (Rate-Limit-Vorgabe); Store-Stand aus 41-ISSUE-ANTWORTEN.md und dem Log von Lauf 41885026379.
 
@@ -38,9 +42,9 @@ Code-Stand: Tag `v1.6.2` = `ba098b00f61cb57dfa8bc127c264e198e4afa313` (lokal per
 | 4 | SC4 F-40N-01..04 behoben, Negativtest zuerst | VERIFIED | Commit-Reihenfolge RED b535151f vor den fix-Commits 59119398, a30eb009, a4b5f4d8, 2a9c3511, 8397d93f (alle im Tag); Tests mit F-40N-01..04 in test_poller.py, test_reconcile.py, test_gateway_client.py, test_status_endpoint.py, test_store_repo.py |
 | 5 | SC5 Audit über den ganzen Delta v1.6.1..Kopf, Fixes ab MEDIUM | VERIFIED | 41-AUDIT.md: v1.6.1..738a1373 (0 CRIT/HIGH/MEDIUM, 4 LOW), Nachaudit 738a1373..efdca684 (LOW-Fixes) und efdca684..5dc1aa12 (#44); Code-Diff 5dc1aa12..ba098b00 nur CHANGELOG.md, docs/store-listing.md, backend/tests/test_store_metadata.py, also kein unauditierter Code im Tag |
 | 6 | SC6 Owner-Runde vor dem Tag, Tag v1.6.2, beide Archive signiert, beide Uploads HTTP 201, Antworten #37/#25 nach Store-Release | VERIFIED | 41-ABNAHME.md "GO: ja", Gesamttext-Abschnitt in store-listing.md; alle sieben Tag-Läufe success auf ba098b00 (gh run view); Release archives 41869261561 zweimal "Verified OK"; Release immutable mit beiden .sig; Store submission 41885026379 Log "release findling v1.6.2: HTTP 201" (18:13:54Z) und "release findling_backend v1.6.2: HTTP 201" (18:13:55Z); Kommentare #25 18:19:27Z, #44 18:19:29Z, #37 18:24:04Z, alle nach dem Upload; Lockstep 1.6.2 in beiden info.xml und image-tag, CHANGELOG [1.6.2]. Abweichung #37 (vorzeitig geschlossen 15:21:48Z durch Commit-Schlüsselwort, kein Kommentar vor dem Release, angepasster Schlussabsatz mit Owner-Freigabe) ist vom Owner akzeptiert |
-| 7 | 41-11 Plan-Wahrheit: Belegkette in docs/store-listing.md "# Release 1.6.2 (<Datum>)" | FAILED | Kein solcher Abschnitt; letzter Release-Abschnitt ist "# Release 1.6.1 (02.11.2026)" (Zeile 2888). Siehe Gaps |
+| 7 | 41-11 Plan-Wahrheit: Belegkette in docs/store-listing.md "# Release 1.6.2 (<Datum>)" | VERIFIED (Re-Verifikation) | Abschnitt "# Release 1.6.2 (04.11.2026)" direkt vor 1.6.1 nachgetragen. Erstbefund: Kein solcher Abschnitt; letzter Release-Abschnitt ist "# Release 1.6.1 (02.11.2026)" (Zeile 2888). Siehe Gaps |
 
-**Score:** 6/7 (alle sechs ROADMAP-Kriterien erfüllt)
+**Score:** 7/7 (nach Re-Verifikation; erste Prüfung 6/7)
 
 ### Erforderliche Artefakte
 
@@ -51,7 +55,7 @@ Code-Stand: Tag `v1.6.2` = `ba098b00f61cb57dfa8bc127c264e198e4afa313` (lokal per
 | `php/lib/Controller/SettingsController.php`, `php/js/admin.js`, `php/templates/admin.php` | Admin-Schalter | VERIFIED | POST /admin/pause, l10n in 16 Katalogen |
 | `docs/backup*.md` | Doku DE/EN/FR | VERIFIED | siehe Wahrheit 2 |
 | `scripts/ci/backup_pause_proof.sh` | CI-Beweis über Neustarts | VERIFIED | aus deploy-harp.yml:1971 aufgerufen, auf dem Tag grün |
-| `docs/store-listing.md` "# Release 1.6.2" | Belegkette | MISSING | siehe Gaps |
+| `docs/store-listing.md` "# Release 1.6.2" | Belegkette | VERIFIED | nachgetragen, siehe Re-Verifikation |
 
 ### Key-Links
 
@@ -112,6 +116,15 @@ Keine `scripts/*/tests/probe-*.sh` in der Phase deklariert. Übersprungen.
 Das Produktziel ist erreicht: beide Apps 1.6.2 laut Upload-Log im Store, alle Zusagen aus #37 und #25 sowie F-40N-01..04 im Code mit Tests und grünem CI auf dem Tag, Audit ohne unauditierten Code-Rest.
 
 Offen ist eine reine Doku-Lücke aus Plan 41-11: der Abschnitt "# Release 1.6.2" in docs/store-listing.md fehlt. Urteil: echte, aber kleine Lücke. Sie bricht die Belegkette, die seit 1.4.1 für jede Version an genau dieser Stelle steht und die der nächste Release-Plan als Vorlage liest; das automatische verify von 41-11 ist am Kopf rot. Behebung ohne Tag-Bewegung per Doku-Commit (Inhalt siehe `gaps.missing`). Kein Blocker für Phase 42.
+
+
+## Re-Verifikation (04.11.2026)
+
+- Abschnitt "# Release 1.6.2 (04.11.2026)" in docs/store-listing.md direkt vor "# Release 1.6.1 (02.11.2026)" eingefügt: Tag ba098b00 annotiert (Tag-Objekt d4fb4025), sieben Tag-Läufe, zweimal "Verified OK", Release immutable mit Größen und .sig, Store 41875127182 HTTP 401 und 41885026379 mit beiden HTTP-201-Zeilen, Store-API 18:28Z, Verweis auf "Entwurf v1.6.2 (Gesamttext)".
+- Lauf-IDs, Größen und Logzeilen per `gh run view` und `gh release view` gegengeprüft; apps.nextcloud.com nicht abgefragt.
+- `grep -q '# Release 1.6.2' docs/store-listing.md && grep -q 'release findling_backend v1.6.2: HTTP 201' docs/store-listing.md`: grün.
+- `uv run pytest tests/test_store_metadata.py` (inklusive scan_full_text_1_6_2): 126 passed. Der Workflowname des Release-Laufs wurde als "Release (`release.yml`)" geschrieben, weil das Gate E-H2 den gesperrten Begriff in jeder Zeile zählt (wie im Abschnitt 1.6.0).
+- Für v1.7 in deferred-items.md: Test, der nach Status paused einen festgeschriebenen Tantivy-Index nachweist.
 
 ---
 

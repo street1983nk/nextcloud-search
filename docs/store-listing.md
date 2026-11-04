@@ -2885,6 +2885,55 @@ Findling 1.6.2. Update both apps; the backup pause needs both on 1.6.2.
 Tag-Links `blob/v1.6.2` und der Compare-Link lösen erst nach dem Tag auf;
 Prüfung vor der Einreichung (Plan 41-11).
 
+# Release 1.6.2 (04.11.2026)
+
+Store-Text und Release-Notiz sind die am 04.11.2026 abgenommene Fassung oben
+("Entwurf v1.6.2 (Gesamttext)"). Owner-GO für Tag und Einreichung in
+`.planning/phases/41-findling-1-6-2-backup-pause-schalter-37-backup-doku-25-fixes/41-ABNAHME.md`
+(Zeile `GO: ja`, 04.11.2026). Tag-Push und Einreichung hat der Owner
+ausgelöst (D-41-16). Der Abschnitt ist nachgetragen (Verifikation 41), die
+Belege stammen aus den Läufen und aus 41-11-SUMMARY.md.
+
+Belegkette:
+
+1. `git rev-list -n 1 v1.6.2` = `ba098b00f61cb57dfa8bc127c264e198e4afa313`,
+   `git cat-file -t v1.6.2` = tag (annotiert), Tag-Objekt d4fb4025,
+   Nachricht "Findling 1.6.2", gesetzt 2026-11-04T16:37:48Z.
+2. Tag-Läufe auf ba098b00, alle sieben success: Release (`release.yml`)
+   41869261561, PHP and store metadata gates 41869261491, Python gates
+   41869261151, Integration 41869261583, Resilience 41869261405, Multi-arch
+   image 41869261338, HaRP deploy 41869261143 (inklusive Schritt "Backup
+   pause, across restarts of the backend and of Nextcloud"). Damit liefen die
+   PHP-Gates auf dem Tag selbst grün.
+3. Aus dem Log des Release-Laufs 41869261561:
+   - `dist/findling.tar.gz is 656338 bytes, the store limit is 20971520`, danach `Verified OK`
+   - `dist/findling_backend.tar.gz is 44225 bytes, the store limit is 20971520`, danach `Verified OK`
+4. `gh release view v1.6.2 --json isImmutable` = `{"isImmutable":true}`,
+   veröffentlicht 2026-11-04T16:38:54Z, neun Assets: findling.tar.gz 656338,
+   findling.tar.gz.sig 684, findling_backend.tar.gz 44225,
+   findling_backend.tar.gz.sig 684, findling-1.6.2-source.tar.gz 26495206,
+   pillow_heif-1.8.1.tar.gz 17395786, x265_4.3.tar.gz 2052112,
+   libde265-1.1.3.tar.gz 324452, libheif-1.23.6.tar.gz 2373898.
+5. Image `ghcr.io/street1983nk/findling_backend:1.6.2`: Manifest HTTP 200 vor
+   der Einreichung.
+6. Eingereicht über den Workflow "Store submission" (`store-submit.yml`,
+   `-f tag=v1.6.2`). Erster Lauf 41875127182 failure,
+   `release findling v1.6.2: HTTP 401` mit `{"detail":"Invalid token."}`,
+   keine Store-Änderung. Der Owner hat das Secret `APPSTORE_TOKEN` erneuert.
+7. Wiederholung 41885026379 success, Antwortcodes aus dem Log, Schritt
+   "Submit both releases":
+   - release findling v1.6.2: HTTP 201, 18:13:54Z
+   - release findling_backend v1.6.2: HTTP 201, 18:13:55Z
+8. Gegenprobe Store-API am 04.11.2026: 18:28:43Z `api/v1/apps.json` id
+   `findling` führt 1.6.2, 1.6.1, 1.6.0, 1.5.1; 18:28:59Z
+   `api/v1/appapi_apps.json` id `findling_backend` führt ebenso 1.6.2 als
+   neueste Fassung. Kein Mischbetrieb. Store-API höchstens alle zehn Minuten
+   abfragen (sonst HTTP 429, siehe 41-11-SUMMARY.md).
+
+Nicht erneut geprüft: SHA-256 der Pakete, Quellpflicht-Prüfung, Tag-Links per
+curl, Diff der Release-Notiz; die grünen Läufe 41869261561 und 41869261143
+(Fremdinstallation aus den Paketen) decken Signatur und Installation ab.
+
 # Release 1.6.1 (02.11.2026): Sicherheitsupdate
 
 Kein Funktionsentscheid und kein Entwurf der Beschreibungen: 1.6.1 behebt die

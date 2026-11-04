@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
 status: executing
-stopped_at: Completed 41-11-PLAN.md
+stopped_at: Phase 41 complete (verified)
 last_updated: "2026-11-04T19:00:00.000Z"
 last_activity: 2026-11-04
 progress:
-  total_phases: 4
-  completed_phases: 3
+  total_phases: 5
+  completed_phases: 4
   total_plans: 17
   completed_plans: 15
-  percent: 75
+  percent: 80
 ---
 
 # Project State
@@ -25,9 +25,9 @@ Siehe .planning/PROJECT.md (Stand nach v1.5, Milestone v1.6 gestartet) und .plan
 
 ## Current Position
 
-Phase: 41 (findling-1-6-2-backup-pause-schalter-37-backup-doku-25-fixes), EXECUTING
+Phase: 41 (findling-1-6-2-backup-pause-schalter-37-backup-doku-25-fixes), COMPLETE
 Plan: 12 of 12 (alle 12 mit SUMMARY)
-Status: Executed, verification pending
+Status: Complete, verifiziert 04.11.2026 (41-VERIFICATION.md passed)
 Last activity: 2026-11-04
 
 Progress: [█████████░] 88%
@@ -242,12 +242,12 @@ Items acknowledged and deferred at milestone close on 2026-10-28 (Owner-Wiedervo
 ## Session Continuity
 
 Last session: 2026-11-04T19:00:00.000Z
-Stopped at: Completed 41-11-PLAN.md
+Stopped at: Phase 41 complete (verified)
 Resume file: None
 
 ## Operator Next Steps
 
-- Phase 41 verifizieren (/gsd:verify); alle 12 Pläne mit SUMMARY (41-11: Tag v1.6.2, sieben Tag-Läufe grün, Store 41885026379 zweimal HTTP 201)
+- Phase 41 abgeschlossen und verifiziert (04.11.2026); Belegkette "# Release 1.6.2 (04.11.2026)" in docs/store-listing.md nachgetragen. Nächste Phase: 42 (/gsd:plan-phase 42)
 - Regel: Store-API (apps.json) höchstens alle 10 Minuten abfragen; 40 Minuten Dauerabfrage führten am 04.11.2026 zu HTTP 429 für die Owner-IP
 - Owner: Forum-Post I1 (Thread 249775, Desktop/Findling_1.6.2_Forum_ENTWURF.md)
 - Owner: UI-Sichtung der Backup-Pause in einer laufenden 1.6.2-Instanz

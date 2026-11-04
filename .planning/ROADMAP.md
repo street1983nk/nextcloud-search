@@ -180,7 +180,7 @@ Details im Archiv: .planning/milestones/v1.5-ROADMAP.md
 | 38. Zertifikatsrotation ohne Admin-Eingriff | v1.6 | 2/2 | Complete | 2026-10-28 |
 | 39. Ausschluss-Anzeige, Dedup-Umfang und Doku-Hygiene | v1.6 | 4/4 | Complete | 2026-10-28 |
 | 40. Haertung und Store-Einreichung 1.6.0 | v1.6 | 6/6 | Executed, verification pending |  |
-| 41. Findling 1.6.2: Backup-Pause, Backup-Doku, #25-Fixes | v1.6 | 11/12 | Executed, verification pending |  |
+| 41. Findling 1.6.2: Backup-Pause, Backup-Doku, #25-Fixes | v1.6 | 12/12 | Complete | 2026-11-04 |
 
 ## Nach v1.3 (Wiedervorlage)
 
@@ -203,7 +203,7 @@ Aktiver Blocker unabhaengig vom Milestone: Kill-Kriterium Nextcloud Conference (
 **Goal:** Findling 1.6.2 (beide Apps) im Store mit den Zusagen aus Issue #37 und #25 und den vier Nachaudit-Befunden aus 40-NACHAUDIT.md, die 1.6.1 (nur Sicherheit, pypdf) bewusst nicht mitnahm.
 **Requirements**: Owner-GO 29.10./30.10./02.11.2026 (NEXT.md)
 **Depends on:** Phase 40
-**Plans:** 12/12 plans executed
+**Plans:** 12/12 plans complete (verifiziert 04.11.2026, 41-VERIFICATION.md passed)
 
 **Success Criteria:**
 1. Backup-Pause-Schalter (#37): `occ findling:pause` / `findling:resume` und ein Schalter auf der Admin-Seite; in der Pause ruhen Indexer, Embedding und Poller, SQLite-WAL ist gecheckpointet und Tantivy committet, die Suche läuft weiter; Zustand übersteht einen Neustart; Negativtests (Pause während laufendem Batch, doppeltes pause/resume, Neustart in der Pause).

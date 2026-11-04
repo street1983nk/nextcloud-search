@@ -23,3 +23,7 @@ gepinnten Proben der LOW werden mit dem Fix rot und sind dann umzudrehen.
 ## Aus 41-10 (CI auf dem Tag-Kopf ba098b00), für v1.7
 
 - **Flake im Harness "Store upgrade 2b", Schritt 5 (deploy-harp.yml):** HaRP deploy 41856594365, Versuch 1, nur das Bein stable34 auf ubuntu-24.04 rot mit "short=1 accepted=1 stayed-short-twice=0 and 1 queue row(s)". Die drei Logzeilen stimmen; die Schleife bricht ab, sobald state.db "indexed/" meldet, und zählt die Queue-Zeile im selben Augenblick, bevor das freigegebene Image v1.5.0 (UPGRADE_FROM_TAG) die Zeile nach dem Commit entfernt ("pass finished" erscheint 20 ms nach der Fehlerzeile). Kein Produktcode betroffen: Code-Diff 5dc1aa12..ba098b00 leer, dasselbe Bein war auf fea4c535 grün. Vorgehen 1.6.2: nur das rote Bein neu gestartet (`gh run rerun --failed`), kein Workflow-Patch vor dem Tag (er verschöbe den Tag-Kopf). Vorschlag v1.7: in Schritt 5 auf `left = 0` mit derselben Frist warten, statt einmal zu zählen.
+
+## Aus der Verifikation 41, für v1.7
+
+- Test, der nach Status paused einen festgeschriebenen Tantivy-Index nachweist (Verifikation 41, Punkt Zu prüfen)
