@@ -113,6 +113,8 @@ nicht verschlüsselt gespeichert. Die Abhilfen, Festplattenverschlüsselung des
 Hosts und ein bewusster Umgang mit Sicherungen, stehen mit Begründung in
 [docs/privacy.md](docs/privacy.md).
 
+Backup des Index-Volumes, mit und ohne Pause: [docs/backup.md](docs/backup.md).
+
 ## Messwerte
 
 Alle Zahlen (Speicher, Laufzeiten, Suchlast, Ausfalltests, Modellqualität)

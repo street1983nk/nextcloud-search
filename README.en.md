@@ -110,6 +110,8 @@ rest. The remedies, full disk encryption of the host and a deliberate backup
 policy, are laid out with their reasoning in [docs/privacy.md](docs/privacy.md)
 (German).
 
+How to back up the index volume, with and without the pause: [docs/backup.en.md](docs/backup.en.md).
+
 ## Measurements
 
 Every number (memory, run times, search load, failure drills, model quality)

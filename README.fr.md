@@ -119,6 +119,8 @@ le contient, et l'index n'est pas chiffré au repos. Les remèdes, chiffrement
 du disque de l'hôte et politique de sauvegarde réfléchie, sont expliqués avec
 leurs raisons dans [docs/privacy.md](docs/privacy.md) (en allemand).
 
+Sauvegarder le volume d'index, avec ou sans pause : [docs/backup.fr.md](docs/backup.fr.md).
+
 ## Mesures
 
 Chaque chiffre (mémoire, durées, charge de recherche, tests de panne, qualité

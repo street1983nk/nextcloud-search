@@ -1111,7 +1111,7 @@ beziehungsweise "Indexierung fortsetzen" (Issue #37).
 - In der Pause blendet die Seite die Restzeit-Schätzung, den Satz zum nicht
   antwortenden Content-Gateway und den Stillstands-Satz aus. Die Zahlen der
   Nextcloud-Seite bleiben sichtbar.
-- Ablauf eines Backups mit Pause: `docs/backup.md`.
+- Ablauf eines Backups mit Pause: [backup.md](backup.md).
 
 ## Der occ-Zweitzugang
 
