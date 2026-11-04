@@ -224,6 +224,18 @@ final class SettingsService {
 	public const KEY_RULES_CHANGED_AT = 'rules_changed_at';
 
 	/**
+	 * The wish of the admin to pause indexing for a backup (issue #37).
+	 *
+	 * The one source of the wish (D-41-05): occ findling:pause and the admin
+	 * page write it, the container reads it through the profile route and
+	 * stops its writers. It lives in the Nextcloud database and not in the
+	 * volume of the container (D-41-07), so a restored volume does not bring
+	 * an old wish back. A missing key is "not paused", so no migration exists
+	 * for it, and occ findling:purge removes it with all other keys.
+	 */
+	public const KEY_PAUSED = 'paused';
+
+	/**
 	 * The longest a quiet instance goes without a recount, one day.
 	 *
 	 * A change that no event announced (occ files:scan, a file written straight
@@ -687,6 +699,16 @@ final class SettingsService {
 	 */
 	public function rememberProfileCheck(array $check): void {
 		$this->appConfig->setValueArray(Application::APP_ID, self::KEY_PROFILE_CHECK, $check);
+	}
+
+	/** Whether the admin wants indexing paused for a backup; false without a stored key. */
+	public function paused(): bool {
+		return $this->appConfig->getValueBool(Application::APP_ID, self::KEY_PAUSED, false);
+	}
+
+	/** Store or clear the wish to pause indexing for a backup. */
+	public function setPaused(bool $paused): void {
+		$this->appConfig->setValueBool(Application::APP_ID, self::KEY_PAUSED, $paused);
 	}
 
 	/**

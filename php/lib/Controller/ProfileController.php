@@ -77,6 +77,11 @@ class ProfileController extends OCSController {
 	 * because the container's rule for a failed read is to keep the LAST KNOWN
 	 * profile (D-24-02). A valid-looking default here would downgrade a running
 	 * standard or performance box to economy for at least one polling round.
+	 *
+	 * Since 1.6.2 the answer also carries "paused", the backup pause wish of
+	 * issue #37 (SettingsService::paused()); the container reads it on every
+	 * round, and a missing field of an older companion means "not paused".
+	 * It is read in the same try, so a failed read never answers "not paused".
 	 */
 	#[\OCP\AppFramework\Http\Attribute\ExAppRequired]
 	#[\OCP\AppFramework\Http\Attribute\NoCSRFRequired]
@@ -93,6 +98,7 @@ class ProfileController extends OCSController {
 				'precision' => $this->settingsService->modelPrecision(),
 				'confirmed' => $this->settingsService->profileConfirmed(),
 				'verdicts' => self::VERDICTS_GENERATION,
+				'paused' => $this->settingsService->paused(),
 			]);
 		} catch (\Throwable $e) {
 			// A static sentence; the exception travels in its own field, which
