@@ -2414,8 +2414,16 @@ PHP_TREE_HASH_TODAY = "eb7fd98f3e6e20d8613d32646e0fc58972705fb43ed4582164ab3cc14
 # PACKAGE_FILES_TODAY moves to 81. The PHP pair does not move. Recomputed
 # independently with find, sort, tr and sha256sum over the CRLF normalised tree:
 # 9465a3ab... both ways.
+#
+# Moved on 2026-11-04 by Plan 41-04 (issue #37): nc/queue.py reads the pause wish,
+# main.py holds every writer until it is read and stops a rebuild between bands,
+# api/status.py names the pause, worker/probe_run.py and api/probe.py refuse a
+# check in it, probe.py names that refusal and worker/pause.py publishes its state
+# for the status route. No file came or went, so PACKAGE_FILES_TODAY stays at 81.
+# The PHP pair does not move. Recomputed independently with find, sort, sed and
+# sha256sum over the CRLF normalised tree: 24580a26... both ways.
 PACKAGE_FILES_TODAY = 81
-PACKAGE_TREE_HASH_TODAY = "9465a3abb27d1acedce1e9f3efac6e957056a452392f1bf59656aa878e3eb24e"
+PACKAGE_TREE_HASH_TODAY = "24580a262a1730a367dfe7e49c9b36badf654c04aa6a127b32548959dec0d1aa"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
