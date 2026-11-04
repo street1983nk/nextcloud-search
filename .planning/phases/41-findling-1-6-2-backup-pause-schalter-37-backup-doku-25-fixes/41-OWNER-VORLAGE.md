@@ -242,4 +242,4 @@ EIN Wort für ZWEI unumkehrbare Handlungen, die der Owner selbst ausführt (D-41
 
 ## CI-Beleg der Vorlage
 
-Wird nach dem Push dieser Vorlage ergänzt.
+Push 1eee910b..78d326e0 (nur .planning): Security scans 41838289772 und OpenSSF Scorecard 41838289773 success auf 78d326e0. Die Code-Läufe gelten von fea4c535 (Block D).
