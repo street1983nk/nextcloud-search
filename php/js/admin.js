@@ -57,6 +57,9 @@
   // probe, started by a POST and read by a GET, and the way down without one.
   const ROUTE_PROFILE = 'admin/profile'
   const ROUTE_PROFILE_CHECK = 'admin/profile/check'
+  // The switch of the backup pause (issue #37, plan 41-06), the same appconfig
+  // key as occ findling:pause and occ findling:resume.
+  const ROUTE_PAUSE = 'admin/pause'
 
   // How often the state of a running probe is asked, and never slower than the
   // active cadence of the status poll: the admin who pressed the button is
@@ -99,6 +102,9 @@
   // The patterns as they are stored, for the same reason and with the same
   // lifetime as the prefixes above (plan 33-05).
   let inForcePatterns = []
+  // The stored wish of the backup pause, which decides what the switch says and
+  // sends. Taken from the template once and then out of every overview.
+  let pauseWished = false
   let timer = null
   let unchanged = 0
   let signature = ''
@@ -306,6 +312,10 @@
         // for the reason written down there (DI-05-22).
         return t('findling', 'Indexing has not progressed for %s. Neither a background job nor the backend finished anything in that time.')
           .replace('%s', span(whole(view.stalledFor)))
+      case 'paused':
+        // The backup pause says itself in its own line (plan 41-06); this
+        // line is hidden then, see render().
+        return ''
       default:
         return t('findling', 'No background job of this app has run yet. Background jobs may not be running.')
     }
@@ -348,6 +358,9 @@
       // The outage of the content gateway (issue #36, Befund D): the passes
       // stop while it lasts, so nothing else in this line moves either.
       (view.backend || {}).gatewayUnavailableSince,
+      // The backup pause (issue #37): pausing turns into paused while no
+      // counter moves, and the wish changes with a press of the switch.
+      view.pause, view.pauseWished,
       // The two lines of plan 39-01: which explanation stands next to
       // "Deliberately left out" (ANZE-01), and the hint after a rule change
       // (ANZE-02), which can come and go while no other value here moves.
@@ -1859,6 +1872,33 @@
     return !(target === stored && storedPrecision === 'fp32' && precision === 'int8')
   }
 
+  /**
+   * The switch of the backup pause (issue #37, D-41-01). A press sends the
+   * opposite of the stored wish through send(), which carries the request
+   * token, and then asks the overview again at once, so the state line shows
+   * what the backend says rather than what was pressed. No confirmation: the
+   * pause is undone by pressing again. Polling keeps its own cadence, no
+   * faster one is added for "pausing".
+   */
+  function setupPause () {
+    const toggle = element('findling-pause-toggle')
+    if (toggle === null) {
+      return
+    }
+    pauseWished = toggle.dataset.findlingPaused === 'true'
+    toggle.addEventListener('click', async function () {
+      toggle.disabled = true
+      try {
+        await send(ROUTE_PAUSE, { paused: !pauseWished })
+      } catch {
+        // The overview below says what holds; a failed press changes nothing.
+      } finally {
+        toggle.disabled = false
+        schedule(0)
+      }
+    })
+  }
+
   function element (id) {
     return document.getElementById(id)
   }
@@ -2484,6 +2524,8 @@
     text('findling-running', numbers.format(whole(view.running)))
     shown('findling-processing-chip', whole(view.running) > 0)
     text('findling-run-state', runStateText(view))
+    shown('findling-run-state', view.runState !== 'paused')
+    pauseBlock(view)
 
     // The percentage is worked out once, on the server, and arrives ready made.
     // Working it out here as well would be a second rule for the same number,
@@ -2607,6 +2649,32 @@
     shown('findling-limits-pages-profile', fromProfile)
   }
 
+  /**
+   * The backup pause of issue #37 (plan 41-06, D-41-06): one sentence per
+   * state out of the catalogue and the label of the switch, both through
+   * text(). The state is compared against the five words AdminViewService
+   * hands over and never written out itself; "running" has no sentence and
+   * hides the line. The switch follows the stored wish, not the state, so a
+   * wish the backend has not read yet already shows the way back.
+   */
+  function pauseBlock (view) {
+    let sentence = ''
+    if (view.pause === 'paused') {
+      sentence = t('findling', 'Indexing is paused for a backup. Search keeps working.')
+    } else if (view.pause === 'pausing') {
+      sentence = t('findling', 'Pausing: the current batch finishes first. Start the backup when the status says paused.')
+    } else if (view.pause === 'unknown') {
+      sentence = t('findling', 'The pause state cannot be read yet, so indexing stays stopped.')
+    } else if (view.pause === 'unsupported') {
+      sentence = t('findling', 'The backend does not know the pause yet. Update both apps to the same version.')
+    }
+    text('findling-pause-state', sentence)
+    shown('findling-pause-state', sentence !== '')
+
+    pauseWished = view.pauseWished === true
+    text('findling-pause-toggle', pauseWished ? t('findling', 'Resume indexing') : t('findling', 'Pause indexing'))
+  }
+
   function cadence (view) {
     const open = whole(view.scheduled) + whole(view.running)
     if (open === 0 || unchanged >= UNCHANGED_LIMIT) {
@@ -2673,6 +2741,7 @@
   setupErrorGroups()
   setupDiagnosis()
   setupRules()
+  setupPause()
 
   const bootstrap = initialState('bootstrap')
   // With the bootstrap, so that a page opened during a probe is in Z6 at once.

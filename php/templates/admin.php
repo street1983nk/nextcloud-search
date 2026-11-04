@@ -229,6 +229,10 @@ $status = match ($runState) {
 	// Blaming the jobs alone was true of the measure and false of the situation,
 	// and on the target hardware it was false for most of a run (DI-05-22).
 	'stalled' => $l->t('Indexing has not progressed for %s. Neither a background job nor the backend finished anything in that time.', [$span($stalledFor)]),
+	// The backup pause says itself in its own line below (plan 41-06), and in
+	// a pause "running" and "stalled" would both be false, so this line is
+	// empty and hidden then.
+	'paused' => '',
 	default => $l->t('No background job of this app has run yet. Background jobs may not be running.'),
 };
 
@@ -301,6 +305,23 @@ $slotsLine = $l->t('OCR slots: %1$s of %2$s, memory tight', [$count($slotsInForc
 // The content gateway that does not answer (issue #36, Befund D, plan 40-06):
 // a moment of the first aborted pass, or null while it answers.
 $gatewayDown = is_int($backend['gatewayUnavailableSince'] ?? null) && $backend['gatewayUnavailableSince'] > 0;
+
+// The backup pause of issue #37 (plan 41-06). The state is a word of the closed
+// set AdminViewService hands over, and the sentence is chosen here out of the
+// catalogue, never taken from the answer. "running" has no sentence and the
+// line stays hidden; the switch says what pressing it does, out of the stored
+// wish and not out of the state, so a wish the backend has not read yet still
+// shows the way back.
+$pause = is_string($_['pause'] ?? null) ? $_['pause'] : 'running';
+$pauseWished = ($_['pauseWished'] ?? false) === true;
+$pauseSentence = match ($pause) {
+	'paused' => $l->t('Indexing is paused for a backup. Search keeps working.'),
+	'pausing' => $l->t('Pausing: the current batch finishes first. Start the backup when the status says paused.'),
+	'unknown' => $l->t('The pause state cannot be read yet, so indexing stays stopped.'),
+	'unsupported' => $l->t('The backend does not know the pause yet. Update both apps to the same version.'),
+	default => '',
+};
+$pauseLabel = $pauseWished ? $l->t('Resume indexing') : $l->t('Pause indexing');
 
 $tiles = [
 	['id' => 'findling-tile-indexed', 'label' => $l->t('Indexed'), 'value' => $indexed],
@@ -565,7 +586,7 @@ $migrationDocsUrl = $migrationDocsUrls[str_starts_with($languageCode, 'de') ? 'd
 		<p class="settings-hint"><?php p($l->t('The first indexing pass has not finished. Findling started on its own, there is nothing to configure.')); ?></p>
 	</div>
 
-	<p class="findling-run-state" id="findling-run-state" role="status" aria-live="polite"><?php p($status); ?></p>
+	<p class="findling-run-state" id="findling-run-state" role="status" aria-live="polite"<?php if ($runState === 'paused') { ?> hidden<?php } ?>><?php p($status); ?></p>
 
 	<?php
 	/*
@@ -588,6 +609,21 @@ $migrationDocsUrl = $migrationDocsUrls[str_starts_with($languageCode, 'de') ? 'd
 	 */
 	?>
 	<p class="settings-hint" id="findling-gateway-unavailable"<?php if (!$gatewayDown) { ?> hidden<?php } ?>><?php p($l->t('The content gateway did not answer on the last indexing pass. The affected files stay in the queue and are tried again; the search keeps answering.')); ?></p>
+
+	<?php
+	/*
+	 * The backup pause of issue #37 (plan 41-06, D-41-01): the same switch as
+	 * occ findling:pause and occ findling:resume, one appconfig key behind both.
+	 * The state line names the pause as the backend reports it, and a backup
+	 * may begin only on "paused"; "pausing" can last as long as the batch in
+	 * flight, with OCR up to about half an hour (D-41-18). No confirmation: the
+	 * switch is undone by pressing it again.
+	 */
+	?>
+	<div id="findling-pause">
+		<p class="settings-hint" id="findling-pause-state" role="status" aria-live="polite"<?php if ($pauseSentence === '') { ?> hidden<?php } ?>><?php p($pauseSentence); ?></p>
+		<p><button type="button" id="findling-pause-toggle" data-findling-paused="<?php p($pauseWished ? 'true' : 'false'); ?>"><?php p($pauseLabel); ?></button></p>
+	</div>
 
 	<p class="findling-chips">
 		<span class="findling-chip findling-chip--queued">
