@@ -286,18 +286,20 @@ def test_p_a_stop_and_a_restart_in_the_pause_move_no_data(
 
 
 @pytest.mark.usefixtures("appapi_environment")
-def test_p_f_41a_04_the_sweep_of_a_pre_check_writes_and_deletes_in_the_pause(
+def test_p_f_41a_04_the_sweep_of_a_pre_check_waits_for_the_end_of_the_pause(
     indexed_volume: Corpus, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """F-41A-04 (LOW, open): the fp32 sweep of a pre-check is no writer the pause knows.
+    """F-41A-04 (LOW, fixed): the fp32 sweep of a pre-check is a writer the pause holds.
 
     A pre-check that fetched the fp32 weights leaves probe_fp32_fetched=1; the
     sweep in the lifespan (ProbeRun.recover) removes the file and clears the
-    mark once the companion says int8, whatever the pause says. Here a start
-    in the pause with such a mark, the companion answering only after "paused":
-    the sweep deletes the weights and writes state.db inside the pause. The fetch of the
-    fp32 weights (EmbeddingTrack._procure) is the same kind of task and is not
-    asked either. Pins today's behaviour; the fix turns this red.
+    mark once the companion says int8. Before the fix it did so inside the
+    pause. Here a start in the pause with such a mark, the companion ready to
+    answer int8 once "paused" is reached: the sweep does not even ask it, and
+    the volume stands still byte for byte while paused. Positive control on the
+    same path: once the wish turns to "not paused" the same sweep asks, deletes
+    the weights and clears the mark. The read of the companion spanning the
+    arrival of the pause is forced in the probe after this one.
     """
     from findling.embed.weights import fp32_weights_path
     from findling.nc.queue import CompanionChoice
@@ -310,22 +312,32 @@ def test_p_f_41a_04_the_sweep_of_a_pre_check_writes_and_deletes_in_the_pause(
     weights = fp32_weights_path(settings().models_dir)
     weights.parent.mkdir(parents=True, exist_ok=True)
     weights.write_bytes(b"fp32")
+    answered = threading.Event()
 
     def companion() -> Callable[[], Awaitable[CompanionChoice | None]]:
         async def read() -> CompanionChoice | None:
             # The answer comes only once the pause has said "paused", so the
-            # sweep below runs inside the pause and not in the start before it.
+            # sweep below would run inside the pause and not in the start before it.
             for _ in range(500):
                 pause = findling_main._PAUSE
                 if pause is not None and pause.state == PAUSE_PAUSED:
                     break
                 await asyncio.sleep(0.01)
+            answered.set()
             return CompanionChoice(profile=None, precision="int8")
 
         return read
 
+    wishes: list[bool] = [True]
+
+    def wish_factory() -> Callable[[], Awaitable[bool | None]]:
+        async def wish() -> bool | None:
+            return wishes[0]
+
+        return wish
+
     monkeypatch.setattr(findling_main, "companion_reader", companion)
-    monkeypatch.setattr(findling_main, "pause_wish_reader", wish_reader(True))
+    monkeypatch.setattr(findling_main, "pause_wish_reader", wish_factory)
     settings().armed_marker.write_text("", encoding="utf-8")
 
     with TestClient(findling_main.APP) as running:
@@ -335,13 +347,102 @@ def test_p_f_41a_04_the_sweep_of_a_pre_check_writes_and_deletes_in_the_pause(
         assert portal is not None
         portal.call(pause.tick)
         assert pause.state == PAUSE_PAUSED
-        deadline = time.monotonic() + 5
-        while weights.exists() and time.monotonic() < deadline:
-            time.sleep(0.02)
+        before = _snapshot(root)
+        time.sleep(1.0)
+        portal.call(pause.tick)
         assert pause.state == PAUSE_PAUSED
+        after = _snapshot(root)
+        assert weights.exists(), "the sweep deleted a file of the volume while paused"
+        assert _data_moved(before, after) == {}
+        assert _meta_rows(root / "state.db").get(META_PROBE_FP32_FETCHED) == "1"
+        assert not answered.is_set(), "the sweep asked the companion inside the pause"
 
-    assert not weights.exists(), "the sweep deleted a file of the volume while paused"
+        wishes[0] = False
+        portal.call(pause.tick)
+        assert pause.state == PAUSE_RUNNING
+        deadline = time.monotonic() + 15
+        while weights.exists() and time.monotonic() < deadline:
+            time.sleep(0.05)
+
+    assert answered.is_set()
+    assert not weights.exists(), "positive control: outside the pause the same sweep removes the file"
     assert _meta_rows(root / "state.db").get(META_PROBE_FP32_FETCHED) == ""
+
+
+async def test_p_f_41a_04_a_pause_that_arrives_during_the_read_of_the_companion_holds_the_sweep(
+    tmp_path: Path,
+) -> None:
+    """F-41A-04 (LOW, fixed): the pause is asked again after the read that may span its arrival.
+
+    The interleaving is forced: the pause turns on inside the read of the
+    companion, which then answers int8. The sweep deletes nothing and writes
+    nothing (sha256 of every file), and it never raised ``sweeping``. Positive
+    control on the same ProbeRun: the pause lifted, the next attempt sweeps.
+    """
+    from findling.nc.queue import CompanionChoice
+    from findling.probe import META_PROBE_FP32_FETCHED
+    from test_probe_run import PAYLOAD, Rig, _fetched_mark
+
+    wanted = [False]
+    rig = Rig(tmp_path, pause_wanted=lambda: wanted[0])
+    target = _fetched_mark(rig, PAYLOAD)
+    reads = [0]
+    sweeping_seen: list[bool] = []
+
+    async def read() -> CompanionChoice | None:
+        reads[0] += 1
+        if reads[0] == 1:
+            wanted[0] = True
+        return CompanionChoice(profile="standard", precision="int8")
+
+    before = _snapshot(tmp_path)
+    task = asyncio.create_task(rig.run.recover(read, retry=0.05))
+    await test_poller._until(lambda: reads[0] >= 1)
+    for _ in range(10):
+        sweeping_seen.append(rig.run.sweeping)
+        await asyncio.sleep(0.02)
+    after = _snapshot(tmp_path)
+    assert target.exists(), "the sweep deleted the weights in the pause"
+    assert _data_moved(before, after) == {}
+    assert reads[0] == 1, "no further read while the pause holds"
+    assert not any(sweeping_seen)
+
+    wanted[0] = False
+    await asyncio.wait_for(task, timeout=5)
+    assert not target.exists(), "positive control: without the pause the same sweep removes the file"
+    assert rig.meta()[META_PROBE_FP32_FETCHED] == ""
+    await rig.run.close()
+
+
+@pytest.mark.usefixtures("appapi_environment")
+@pytest.mark.parametrize("fetching", [True, False], ids=["fetch_in_flight", "control_no_fetch"])
+async def test_p_f_41a_04_a_running_fp32_fetch_keeps_the_pause_on_pausing_until_it_ended(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fetching: bool
+) -> None:
+    """F-41A-04 (LOW, fixed): a fetch of the fp32 weights that began before the pause is waited for.
+
+    The fetch (EmbeddingTrack._procure) writes a .part file into models/ for as
+    long as it runs, and it reports its run to findling.precision. The
+    coordinator the lifespan builds (main._build_the_pause) counts it as a
+    writer: while it runs the state stays "pausing", "paused" comes only after
+    its end. Control: the same coordinator without a fetch says "paused" on the
+    first tick. No writer is attached, so nothing else can hold it.
+    """
+    from findling import precision
+
+    del tmp_path
+    monkeypatch.setattr(findling_main, "pause_wish_reader", wish_reader(True))
+    coordinator = findling_main._build_the_pause(shared_volume=True)
+    if fetching:
+        precision.begin_procurement()
+        try:
+            for _ in range(3):
+                await coordinator.tick()
+                assert coordinator.state == PAUSE_PAUSING, "paused while the fetch still writes into models/"
+        finally:
+            precision.end_procurement(succeeded=True)
+    await coordinator.tick()
+    assert coordinator.state == PAUSE_PAUSED
 
 
 class _CalmQueue:

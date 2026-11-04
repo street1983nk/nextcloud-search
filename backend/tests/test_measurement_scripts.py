@@ -2451,8 +2451,15 @@ PHP_TREE_HASH_TODAY = "54627d39eb13c8d6f637acb868769eac73697ff42d731269eea1d7269
 # warning after three of them. No file came or went, so PACKAGE_FILES_TODAY stays
 # at 81. The PHP pair does not move. Recomputed independently with find, sort, sed
 # and sha256sum over the CRLF normalised tree: a8864566... both ways.
+#
+# Moved on 2026-11-04 by the fix of F-41A-04 (audit 41-09): worker/probe_run.py
+# holds the fp32 sweep in a backup pause and says when it sweeps, worker/pause.py
+# waits for a running fp32 fetch, main.py hands both questions to it. No file came
+# or went, so PACKAGE_FILES_TODAY stays at 81. The PHP pair does not move.
+# Recomputed independently with find, sort, sed and sha256sum over the CRLF
+# normalised tree: 98687977... both ways.
 PACKAGE_FILES_TODAY = 81
-PACKAGE_TREE_HASH_TODAY = "a88645667044949bca4e26b9020a806da9ba1e2f2f06b3dcf1ffbd7c78f3d430"
+PACKAGE_TREE_HASH_TODAY = "986879777471015dd20151962c6709591f277c83415fd80155b866107907f003"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

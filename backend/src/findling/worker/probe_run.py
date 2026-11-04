@@ -374,6 +374,10 @@ class ProbeRun:
         self._read_choice: Callable[[], Awaitable[CompanionChoice | None]] | None = None
         self._sweeper: asyncio.Task[None] | None = None
         self._recover_lock = asyncio.Lock()
+        # True while the sweep writes: the backup pause waits for it (F-41A-04).
+        self.sweeping = False
+        # Whether the last attempt of the sweep found a takeover of PHP open.
+        self._sweep_waits_for_takeover = False
         self._takeover_seconds = takeover_seconds
         self._takeover_poll = takeover_poll
 
@@ -799,7 +803,8 @@ class ProbeRun:
 
         Deleted only when the key says int8; kept when it says fp32; nothing is
         decided without a successful read, which is tried again every ``retry``
-        seconds until one comes or :meth:`close` is called.
+        seconds until one comes or :meth:`close` is called. While a backup pause
+        holds the writers nothing is read or written either (F-41A-04).
 
         The mark belongs to the file and not to a check id, so a later check
         does not end the sweep; it only waits while a check runs. A "fits" for
@@ -813,22 +818,46 @@ class ProbeRun:
             return  # a sweep is already on it
         async with self._recover_lock:
             while not self._closed.is_set():
-                if (await self._read_meta()).get(probe.META_PROBE_FP32_FETCHED, "") != "1":
-                    return
                 wait = retry
-                if not self._running():
-                    precision = await self._read_precision(read_choice)
-                    if precision == _FP32:
-                        await self._write_meta({probe.META_PROBE_FP32_FETCHED: ""})
-                        return
-                    if self._takeover_open():
-                        # Nothing is urgent while PHP may still take it over.
-                        wait = max(retry, self._takeover_poll)
-                    elif precision == _INT8:
-                        await self._sweep()
-                        return
+                if not self._pause_wanted() and await self._sweep_step(read_choice):
+                    return
+                if self._sweep_waits_for_takeover:
+                    # Nothing is urgent while PHP may still take it over.
+                    wait = max(retry, self._takeover_poll)
                 with contextlib.suppress(TimeoutError):
                     await asyncio.wait_for(self._closed.wait(), timeout=wait)
+
+    async def _sweep_step(self, read_choice: Callable[[], Awaitable[CompanionChoice | None]]) -> bool:
+        """One attempt of the sweep; True when it is done for good.
+
+        A backup pause holds the sweep (issue #37, F-41A-04): it deletes a file
+        of models/ and writes state.db. The pause is asked again after the read
+        of the companion, which may span its arrival, in the same step as
+        :attr:`sweeping` goes up, so the coordinator either sees the sweep at
+        work and waits, or the sweep sees the pause and waits for its end.
+        """
+        self._sweep_waits_for_takeover = False
+        if (await self._read_meta()).get(probe.META_PROBE_FP32_FETCHED, "") != "1":
+            return True
+        if self._running():
+            return False
+        precision = await self._read_precision(read_choice)
+        if self._pause_wanted():
+            return False
+        self.sweeping = True
+        try:
+            if precision == _FP32:
+                await self._write_meta({probe.META_PROBE_FP32_FETCHED: ""})
+                return True
+            if self._takeover_open():
+                self._sweep_waits_for_takeover = True
+                return False
+            if precision == _INT8:
+                await self._sweep()
+                return True
+            return False
+        finally:
+            self.sweeping = False
 
     def _takeover_open(self) -> bool:
         """Whether the last check is a "fits" for fp32 that PHP may still take over."""

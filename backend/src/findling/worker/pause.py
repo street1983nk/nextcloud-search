@@ -175,6 +175,7 @@ class PauseCoordinator:
         databases: Sequence[Path],
         rebuild_busy: Callable[[], bool] = lambda: False,
         probe_busy: Callable[[], bool] = lambda: False,
+        fetch_busy: Callable[[], bool] = lambda: False,
         on_resume: Callable[[], Awaitable[None]] | None = None,
         clock: Clock = time.time,
         checkpoint: Checkpoint = checkpoint_wal,
@@ -185,6 +186,9 @@ class PauseCoordinator:
         self._databases = tuple(databases)
         self._rebuild_busy = rebuild_busy
         self._probe_busy = probe_busy
+        # A fetch of the fp32 weights writes a .part file into models/ for as
+        # long as it runs (F-41A-04); it is waited for like a batch, no abort.
+        self._fetch_busy = fetch_busy
         self._on_resume = on_resume or _never
         self._clock = clock
         self._checkpoint = checkpoint
@@ -361,14 +365,14 @@ class PauseCoordinator:
         LOGGER.info("backup pause: pausing")
 
     def _writers_rest(self) -> bool:
-        """True when no writer is inside a pass, a round, a slice, a band or a pre-check."""
+        """True when no writer is inside a pass, a round, a slice, a band, a pre-check or a fetch."""
         if any(poller.pass_in_flight for poller in self._pollers):
             return False
         if not all(runner.parked.is_set() for runner in self._runners):
             return False
         if any(reconcile.in_flight for reconcile in self._reconciles):
             return False
-        return not (self._rebuild_busy() or self._probe_busy())
+        return not (self._rebuild_busy() or self._probe_busy() or self._fetch_busy())
 
     async def _settle(self) -> None:
         """Give the writer back once the batch ended, checkpoint, and say paused on success."""

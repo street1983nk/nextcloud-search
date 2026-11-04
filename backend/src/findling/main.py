@@ -66,6 +66,7 @@ from findling.nc.client import (
     set_handlers,
 )
 from findling.nc.queue import CompanionChoice, DocumentQueue
+from findling.precision import snapshot as precision_snapshot
 from findling.profile import note_hardware
 from findling.profile import snapshot as profile_snapshot
 from findling.store.repo import CATCHUP_DONE, CATCHUP_MARK, open_read_only, open_store
@@ -629,9 +630,16 @@ def _the_rebuild_is_busy() -> bool:
 
 
 def _the_probe_is_busy() -> bool:
-    """True while a pre-check runs; the pause waits for it to end (T-41-19)."""
+    """True while a pre-check or its fp32 sweep runs; the pause waits for it to end (T-41-19, F-41A-04)."""
     run = _PROBE_RUN
-    return run is not None and run.task is not None and not run.task.done()
+    if run is None:
+        return False
+    return run.sweeping or (run.task is not None and not run.task.done())
+
+
+def _an_fp32_fetch_runs() -> bool:
+    """True while the fetch of the fp32 weights writes into models/; the pause waits for it (F-41A-04)."""
+    return precision_snapshot().procuring
 
 
 async def _resume_after_the_pause() -> None:
@@ -664,6 +672,7 @@ def _build_the_pause(*, shared_volume: bool) -> PauseCoordinator:
         databases=() if shared_volume else (resolved.state_db, resolved.vectors_db),
         rebuild_busy=_the_rebuild_is_busy,
         probe_busy=_the_probe_is_busy,
+        fetch_busy=_an_fp32_fetch_runs,
         on_resume=_resume_after_the_pause,
     )
 
