@@ -1,10 +1,16 @@
 # Phase 41: Owner-Vorlage Abnahme Findling 1.6.2 (eine Runde)
 
-Stand: 04.11.2026, 11:05 Uhr
+Stand: 04.11.2026, 14:25 Uhr (erneuert; erste Fassung 605b7dbe auf dem Code-Kopf 738a1373)
 
 Antwort "wie empfohlen" übernimmt jede Empfehlung; Abweichungen als "H1 b" nennen. Nicht genannte Punkte gelten als wie empfohlen. Bei einem eigenen Wortlaut bitte en, de und fr nennen.
 
 Ehrlich vorab: eine Sichtung der Pause in einer laufenden Instanz ist ohne lokales docker nicht möglich. Diese Runde legt Texte, Diffs und CI-Belege vor; die UI-Sichtung ist ein Owner-Punkt nach dem Release. Nichts ist getaggt, nichts eingereicht.
+
+Neu seit der ersten Fassung:
+- Die vier Audit-LOW F-41A-01 bis -04 sind behoben (Owner: "Lows nachgehen"), keine Owner-Frage mehr.
+- #44 (Emoji im RTF ließ den ganzen Pass hängen) ist in 1.6.2 behoben (Owner-Entscheid), ohne neuen nutzersichtbaren Text.
+- Neuer audited_head 5dc1aa12, CI grün.
+- Issue-Antworten auf #37, #25 und #44 postet nach dem Store-Release Claude und schließt die drei Issues (Owner-Freigabe); die Wortlaute stehen in Block I.
 
 ## Schon entschieden, nur protokolliert (keine Frage)
 
@@ -15,15 +21,19 @@ Ehrlich vorab: eine Sichtung der Pause in einer laufenden Instanz ist ohne lokal
 - D-41-09 bis D-41-11 (#25): Vektorzahl auch über 100 000 im Hintergrund gezählt; größtes Mitglied vertritt die Share-Gruppe.
 - D-41-12: Nachaudit-Fixes F-40N-01 bis F-40N-04 (u. a. Retry für gateway_error, 408/429 als Ausfall).
 - D-41-13, D-41-14: 1.6.2 in beiden Apps; Audit über v1.6.1..Kopf, Fixes ab MEDIUM.
-- D-41-16: Tag, Einreichung und Issue-Antworten nur nach Owner-Wort; Issue-Antworten erst nach dem Store-Release.
+- D-41-16: Tag und Einreichung nur nach Owner-Wort; Issue-Antworten erst nach dem Store-Release.
 - D-41-17: keine Inhalte verlassen den Server, kein externer Dienst.
 - D-41-18: Pause wartet auf das Ende des laufenden Stapels (kein Abbruch).
 - D-41-20: ein Rebuild hält zwischen zwei Bändern an und setzt nach dem Resume fort.
 - D-41-21: PHP-Crawl-Jobs laufen in der Pause weiter (schreiben nur in die NC-Datenbank).
+- 04.11.2026: alle vier Audit-LOW vor dem Release beheben (b0c10754, c8fa6d98, 6b9d0995, efdca684).
+- 04.11.2026: #44 in 1.6.2 (aef9966f, 5dc1aa12); Reason-Code bleibt das vorhandene `corrupt`.
+- 04.11.2026: Erstantworten in #44 und #45 gepostet; #45 (Ausschluss je Mount) ist für v1.7 geplant.
+- 04.11.2026: nach dem Store-Release postet Claude die Fix-Antworten in #37, #25, #44 und schließt sie; #43 und #45 bleiben offen.
 
 ## Block H: neue Katalogsätze (Admin-Seite)
 
-Die Kataloge sind nach dem englischen Quellsatz gekeyt: ein neuer en-Wortlaut ändert den Schlüssel in allen 16 Katalogen (php/l10n/*.json und *.js), in admin.js bzw. AdminViewService.php, im Vertragstest und den fünf Tabellen docs/l10n-*.md, und er braucht vor dem Tag eine neue grüne CI-Runde. es, it, nl, pt_PT und pt_BR sind maschineller Entwurf unter Vorbehalt und gehen mit. Wortlaute zeichengleich aus php/l10n/de.json und fr.json.
+Unverändert seit der ersten Fassung (#44 und die LOW-Fixes bringen keinen Satz). Die Kataloge sind nach dem englischen Quellsatz gekeyt: ein neuer en-Wortlaut ändert den Schlüssel in allen 16 Katalogen (php/l10n/*.json und *.js), in admin.js bzw. AdminViewService.php, im Vertragstest und den fünf Tabellen docs/l10n-*.md, und er braucht vor dem Tag eine neue grüne CI-Runde. es, it, nl, pt_PT und pt_BR sind maschineller Entwurf unter Vorbehalt und gehen mit. Wortlaute zeichengleich aus php/l10n/de.json und fr.json.
 
 **H1: Hinweis zu gateway_error (Plan 41-01, Schlüsselwechsel)**
 
@@ -56,7 +66,7 @@ Grund: der alte Satz versprach einen Neuversuch beim nächsten Lauf, den es bei 
 
 ## Block B: Store-Text 1.6.2
 
-Was sich gegenüber 1.6.1 ändert: Version und image-tag 1.6.2, die sechs Doku-Links auf blob/v1.6.2, in der Companion-info.xml zwei neue `<command>`-Einträge (PauseCommand, ResumeCommand; nicht sichtbar im Store-Text). Namen, die sechs Beschreibungen, der discussion-Link 249775 und der Cross-Promo-Satz bleiben Wort für Wort wie 1.6.1 (D-41-15: nur ändern, wenn nötig). Was 1.6.2 bringt, zeigt der Store über CHANGELOG.md [1.6.2].
+Unverändert seit der ersten Fassung (`git diff 605b7dbe..HEAD -- backend/appinfo php/appinfo` leer). Was sich gegenüber 1.6.1 ändert: Version und image-tag 1.6.2, die sechs Doku-Links auf blob/v1.6.2, in der Companion-info.xml zwei neue `<command>`-Einträge (PauseCommand, ResumeCommand; nicht sichtbar im Store-Text). Namen, die sechs Beschreibungen, der discussion-Link 249775 und der Cross-Promo-Satz bleiben Wort für Wort wie 1.6.1 (D-41-15). Was 1.6.2 bringt, zeigt der Store über CHANGELOG.md [1.6.2].
 
 Diff-Auszug (`git diff v1.6.1..HEAD -- backend/appinfo/info.xml php/appinfo/info.xml`, je Sprache gleich):
 
@@ -77,12 +87,15 @@ Diff-Auszug (`git diff v1.6.1..HEAD -- backend/appinfo/info.xml php/appinfo/info
 
 ## Block C: Release-Notiz v1.6.2 (englisch, Faktenliste)
 
+Gegen das ganze CHANGELOG [1.6.2] geprüft: alle zehn Einträge (2 Added, 8 Fixed) sind in sechs Punkten abgedeckt, neu ist der Punkt zu #44.
+
 ```
 Findling 1.6.2. Update both apps; the backup pause needs both on 1.6.2.
 - Backup pause: occ findling:pause [--wait], occ findling:resume and a switch on the admin page. Indexing stops and everything is flushed to disk while search keeps working; the pause survives restarts (#37).
 - Backup guide in German, English and French (#37).
 - Coverage: the vector figure of left out storages is also counted above 100,000 documents, and the largest member represents a share group (#25).
 - Files of a storage that was away come back: the nightly comparison tries a gateway_error file again up to three times, and a large unavailable storage no longer holds up the files behind it (#36).
+- RTF files with emoji are indexed, and a file the index cannot take fails alone as corrupt and keeps its old version instead of stalling the queue (#44).
 - HTTP 408 and 429 from a proxy count as an outage; a fill level refresh that could not start no longer stops the language line.
 
 **Full Changelog**: https://github.com/street1983nk/nextcloud-search/compare/v1.6.1...v1.6.2
@@ -90,38 +103,19 @@ Findling 1.6.2. Update both apps; the backup pause needs both on 1.6.2.
 
 - (a) so ins Release übernehmen.
 - (b) Änderung nennen.
-- Empfehlung: (a); fünf Punkte aus CHANGELOG [1.6.2], keine Messgeschichte.
+- Empfehlung: (a); sechs Punkte (Obergrenze), keine Messgeschichte.
 
-## Block D: Audit 1.6.2
+## Block D: Audit 1.6.2 (keine Owner-Frage mehr)
 
-Audit 41-09 über v1.6.1..738a1373 (audited_head 738a13731f6448aa97f0a752d5553c6c54db3e85): 0 CRIT, 0 HIGH, 0 MEDIUM, 4 LOW, 4 INFO; kein Fix nötig, seitdem kein Code-Pfad geändert (danach nur backend/tests/test_phase41_audit.py und .planning). CI auf 738a1373: HaRP deploy 41803255633 (Upgrade-Strecke mit Zusicherung 13), Security scans 41803255432, OpenSSF Scorecard 41803255431; Python gates 41793610965, Integration 41793611053, Resilience 41793610962, Multi-arch image 41793610951 auf eb4284bc (vom Kopf nur in deploy-harp.yml verschieden); PHP and store metadata gates 41792859857 auf f12649a2 (gleicher php/-Baum), alle success.
-
-F-41A-02 (Catch-up-Fenster von Millisekunden, einmal je Upgrade) geht ohne Owner-Frage nach v1.7. Drei Owner-LOW:
-
-**D1: F-41A-03, Container ohne Companion bleibt still auf "unknown"**
-
-Ohne Companion hält das Backend alle Schreiber (wie D-41-19 entschieden), schreibt aber keine Erklärung ins Log und liest den Wunsch 240 mal je Stunde ohne Rückzugsleiter. Keine Daten in Gefahr (ohne Companion gibt es ohnehin keine Queue).
-
-- (a) annehmen für 1.6.2; v1.7: einmalige WARNING-Zeile und Rückzugsleiter.
-- (b) wie (a), plus ein Doku-Satz in docs/backup*.md (dreisprachig, neuer Doku-Commit vor dem Tag).
-- Empfehlung: (a); kein Nutzerfall verletzt, der Satz würde einen Zustand erklären, den die Backup-Doku sonst nicht berührt.
-
-**D2: F-41A-01, Stopp eines pausierten Containers schreibt zwei leere Meta-Zeilen**
-
-Nur wenn während einer Kopie nach Weg B der Container gestoppt oder neu gestartet wird. Werte logisch gleich, Volume neu aufbaubar.
-
-- (a) Fix in v1.7 (drei Zeilen in watch.py).
-- (b) Fix in 1.6.2 (neuer Code-Kopf, Nachaudit, volle CI-Runde vor dem Tag).
-- (c) nur Doku-Satz jetzt: "während der Kopie den Container nicht neu starten" (dreisprachig).
-- Empfehlung: (a); Randfall, kein Datenverlust, ein Fix vor dem Tag kostet Nachaudit und volle CI.
-
-**D3: F-41A-04, fp32-Sweep und fp32-Abruf schreiben in der Pause**
-
-Nur nach einem Vorab-Check mit fp32; betrifft models/, nicht den Index; Gewichte werden bei Bedarf neu geholt.
-
-- (a) Fix in v1.7.
-- (b) Fix in 1.6.2 (wie D2 b).
-- Empfehlung: (a).
+- Audit 41-09 über v1.6.1..738a1373: 0 CRIT, 0 HIGH, 0 MEDIUM, 4 LOW, 4 INFO.
+- Die vier LOW sind behoben, je ein Commit, Probe zuerst umgedreht und rot gesehen: F-41A-01 b0c10754 (Stopp in der Pause schreibt nichts), F-41A-02 c8fa6d98 (Catch-up), F-41A-03 6b9d0995 (WARNING und Rückzugsleiter ohne Companion), F-41A-04 efdca684 (fp32-Sweep und -Abruf achten die Pause). Nachaudit: 0 offen.
+- #44: aef9966f (Surrogat-Hälften werden zusammengefügt oder ersetzt) und 5dc1aa12 (eine Datei, die der Index nicht nimmt, scheitert allein als `corrupt`, alte Version bleibt). Nachaudit #44: 0 offen.
+- audited_head = 5dc1aa127a495c78ec4ef5272a275c6788c92af0 (= Code-Kopf). HEAD 1eee910b; danach nur CHANGELOG.md und .planning.
+- CI auf fea4c535 (= 5dc1aa12 plus CHANGELOG und .planning), alle success: Python gates 41833569599, Integration 41833569554, Resilience 41833569479, HaRP deploy 41833569459, Multi-arch image 41833569571, Security scans 41833569648, OpenSSF Scorecard 41833569705.
+- PHP and store metadata gates lief am Kopf nicht (Pfadfilter: php/, backend/appinfo, php.yml, release.yml, validate_info_xml.sh). Beleg: Lauf 41792859857 success auf f12649a2, "OK (958 tests, 5851 assertions)"; `git diff --stat f12649a2..HEAD` über die Filterpfade leer.
+- Hinweis für 41-11: Vorprüfung (c) ruft `head_green.sh` mit "PHP and store metadata gates"; das scheitert auf dem Tag-Kopf mit "no run", weil auch Task 3 (docs/store-listing.md, backend/tests) keinen Filterpfad berührt. Für diesen Workflow gilt der Beleg 41792859857 samt leerem Diff der Filterpfade f12649a2..Tag-Kopf; die übrigen sechs prüft head_green.sh direkt.
+- Ein Hinweis bleibt (kein Befund): ein sehr kurzes RTF, das zu mehr als 10 Prozent aus Emoji besteht, bleibt wie bisher skipped(empty_text).
+- Empfehlung: zur Kenntnis.
 
 ## Block E: Umlaut-Audit (Regel 24.10.2026)
 
@@ -136,12 +130,14 @@ Umfang: alle in 1.6.2 neuen oder geänderten deutschen Texte. Vorfilter `grep -n
 | docs/reconcile.md, 30 neue Zeilen | 2 (Dauerlast, neuer) | 0 |
 | docs/store-listing.md, Entwurf v1.6.2 (deutsche Prosa) | 4 (neuen, dass, zuerst, englisches does) | 0 |
 | README.md, neue Zeile | 0 | 0 |
+| Nachtrag: Delta 605b7dbe..HEAD außerhalb .planning | kein deutscher Nutzertext (nur backend/src, backend/tests, CHANGELOG englisch; neue Logzeilen englisch, ASCII) | 0 |
+| Nachtrag: diese Vorlage (deutsche Prosa) | siehe Abschnitt "Prüfung dieser Vorlage" | 0 |
 
-Ergebnis: 11 Vorfilter-Treffer, 0 echte Funde; keine Korrektur, also kein Block-E-Punkt zur Entscheidung.
+Ergebnis: 0 echte Funde; keine Korrektur, also kein Block-E-Punkt zur Entscheidung.
 
 ## Block G: Backup-Doku (#37)
 
-Drei Dateien, gleiche Gliederung, Kurzfassung als Faktenliste (D-41-08):
+Unverändert seit der ersten Fassung. Drei Dateien, gleiche Gliederung, Kurzfassung als Faktenliste (D-41-08):
 
 | Datei | Zeilen | Abschnitte |
 |---|---|---|
@@ -159,12 +155,15 @@ Inhalt: Einstellungen liegen in appconfig (normales NC-Backup), Volume ist neu a
 
 - K1: Instanz mit nur einer Storage und globalem 500: jede Datei endet failed(gateway_error) mit höchstens vier Anfragen je Datei und Version; der Gateway-Satz erscheint dabei bewusst nicht (E-40-07-02).
 - K2: W-1 (gehäufte gleiche Fehler eskalieren ohne Gutschrift) bleibt, greift aber nur, wenn ein zweiter Speicher betroffen ist; ein einzelner Speicher (auch Storage 0) eskaliert allein nie.
-- K3: UPGRADE_FROM_TAG bleibt v1.5.0; die Upgrade-Strecke belegt, dass nach dem Upgrade nichts pausiert ist (Zusicherung 13, HaRP deploy 41803255633: running, pauseWished false, kein `findling/paused` in oc_appconfig).
-- K4: bekannte Grenze: Zeilen, die 1.6.0/1.6.1 als gateway_error geschrieben haben, tragen eine alte, hohe Versuchszahl und werden nicht automatisch wiederholt; Abhilfe `occ findling:index --restart` (steht in docs/reconcile.md).
-- K5: "Pause wird vorbereitet" kann bei OCR bis etwa 30 Minuten dauern (kein Abbruch, D-41-18); steht in der Doku und im Satz H2.4.
+- K3: UPGRADE_FROM_TAG bleibt v1.5.0; die Upgrade-Strecke belegt, dass nach dem Upgrade nichts pausiert ist (Zusicherung 13; zuletzt HaRP deploy 41833569459 auf fea4c535 success).
+- K4: bekannte Grenze: Zeilen, die 1.6.0/1.6.1 als gateway_error oder (bei #44) als repeatedly_stuck geschrieben haben, werden nicht automatisch wiederholt; Abhilfe `occ findling:index --restart` (steht in docs/reconcile.md, für #44 so im Issue gesagt).
+- K5: "Pause wird vorbereitet" kann bei OCR bis etwa 30 Minuten dauern (kein Abbruch, D-41-18); ein vor der Pause begonnener fp32-Abruf (bis 470 MB) verlängert sie ebenso. Steht in der Doku und im Satz H2.4 ("Backup erst bei pausiert").
 - K6: Mischbetrieb: Companion 1.6.2 mit Backend 1.6.1 zeigt H2.6 "Update both apps to the same version.", occ pause endet mit Exit 1; Companion 1.6.1 mit Backend 1.6.2 läuft normal ohne Pause.
+- K7: ohne Companion bleibt das Backend auf "unknown" (D-41-19), schreibt jetzt aber nach drei unlesbaren Lesungen eine WARNING ins Log und fragt höchstens alle 300 s (12 statt 240 Lesungen je Stunde).
 
-## Block I: Außentexte (Entwürfe, Owner postet)
+## Block I: Außentexte (Entwürfe, englisch)
+
+Forum postet der Owner. Die drei Issue-Antworten postet Claude nach dem Store-Release (App-Store-API nennt 1.6.2 für beide Apps) und schließt danach das jeweilige Issue; vorher wird der Verlauf seit heute erneut gelesen, neue Fragen gehen als geänderter Entwurf an den Owner. Kein "Closes".
 
 **I1: Forum-Post** (Thread 249775, Datei `C:/Users/Student/Desktop/Findling_1.6.2_Forum_ENTWURF.md`), wörtlich:
 
@@ -172,16 +171,16 @@ Inhalt: Einstellungen liegen in appconfig (normales NC-Backup), Volume ist neu a
 Findling 1.6.2 is in the store (update both apps together).
 
 New in 1.6.2:
-- Backup pause: occ findling:pause --wait, occ findling:resume, or a switch on the admin page. Indexing stops and everything is on disk, search keeps working
-- The pause survives restarts of the container and Nextcloud
+- Backup pause: occ findling:pause --wait, occ findling:resume, or a switch on the admin page. Indexing stops and everything is on disk, search keeps working, and the pause survives restarts
 - Backup guide in German, English and French
 - Coverage on large instances with per-user mounts: the dedup no longer switches itself off above 100,000 documents
 - Files of a storage that was away are tried again by the nightly comparison
+- RTF files with emoji no longer stall indexing
 
 Changelog: https://github.com/street1983nk/nextcloud-search/releases/tag/v1.6.2
 ```
 
-**I2: Antwort Issue #37** (erst nach dem Store-Release), wörtlich:
+**I2: Antwort Issue #37** (Claude postet nach dem Store-Release, dann schließen), wörtlich:
 
 ```
 1.6.2 is in the app store now (update both apps), with the pause I mentioned. A backup now works like this:
@@ -192,28 +191,37 @@ Changelog: https://github.com/street1983nk/nextcloud-search/releases/tag/v1.6.2
 
 Search keeps working the whole time. The full guide, including restore: https://github.com/street1983nk/nextcloud-search/blob/v1.6.2/docs/backup.en.md
 
-Let me know if this fits your backup setup.
+I'll close this one. If it doesn't fit your backup setup, just reopen it.
 ```
 
-**I3: Antwort Issue #25** (erst nach dem Store-Release), wörtlich:
+**I3: Antwort Issue #25** (Claude postet nach dem Store-Release, dann schließen), wörtlich:
 
 ```
 1.6.2 is in the app store now (update both apps). Both points from your last comment are in: the vector figure is now worked out in the background above 100,000 documents too, so the dedup no longer switches itself off, and the member with the most files seen represents a share group. The first figure can take a reload or two after the update, since the count runs in the background.
 
-Could you check whether the page now shows something close to 100% for your four shares?
+I'll close this one. If the page still doesn't show something close to 100% for your four shares, please reopen it.
 ```
 
+**I4: Antwort Issue #44** (Claude postet nach dem Store-Release, dann schließen), wörtlich:
+
+```
+1.6.2 is in the app store now (update both apps) with the fix. An emoji in an RTF file is now kept as it is, and if the index still can't take a single file, only that file fails (as corrupt) and the rest of the batch goes on.
+
+The 7 files that were written off as repeatedly_stuck come back with `occ findling:index --restart`, as mentioned. I'll close this one, just reopen it if anything stalls again.
+```
+
+**#33 (TrueNAS/HaRP-Zertifikate):** ganzer Verlauf gelesen. Ursache war HaRP auf TrueNAS (truenas/apps #6254), Findling 1.6.0 meldet den Zustand und nimmt kopierte Zertifikate auf; 1.6.2 ändert an diesem Pfad nichts. Letzte Nachricht ist die Owner-Frage vom 29.10., keine Antwort des Melders. 1.6.2 löst #33 also nicht nachweisbar: keine Antwort, nicht schließen.
+
 - (a) so.
-- (b) Änderung je Text nennen.
-- Empfehlung: (a); kurz, ohne "Closes", die Issues schließt der Owner nach der Rückmeldung.
+- (b) Änderung je Text nennen (z. B. "I3 b: erst nach Rückmeldung von mbozem schließen").
+- Empfehlung: (a); kurz, menschlich, je Issue ein Satz zum Wiedereröffnen. Bei #25 ist das Risiko am größten (1.6.0 hat dort schon einmal nicht gegriffen), der Satz zum Wiedereröffnen fängt das auf.
 
 ## Block F: GO für Tag und Einreichung
 
 EIN Wort für ZWEI unumkehrbare Handlungen, die der Owner selbst ausführt (D-41-16): (1) Tag v1.6.2 annotiert auf den grünen, auditierten Kopf <sha> und Push des Tags, (2) danach Auslösen des Workflows Store submission für beide Apps. Claude bereitet Befehle und Belege vor und prüft danach jede Belegzeile.
 
-Kopf heute: Code-Kopf 738a1373 = audited_head; letzter Commit außerhalb .planning ist 4e369f55 (nur backend/tests/test_phase41_audit.py). Nach dem Entscheid setzt Task 3 den Gesamttext in docs/store-listing.md mit Gate in backend/tests/test_store_metadata.py; der Tag-Kopf ist dann dieser Commit (`git log -1 --format=%H -- . ':!.planning'`), Bedingung: leerer Code-Diff zu 738a1373 und alle sieben Workflows grün per `scripts/ci/head_green.sh`. Da Task 3 backend/tests berührt, laufen Python gates dort neu und decken auch test_phase41_audit.py ab (auf 4e369f55 und 703aad3e gibt es noch keinen CI-Lauf, siehe Belegzeile unten). Der sha steht danach in 41-ABNAHME.md.
-
-CI zum Stand dieser Vorlage: siehe Abschnitt "CI-Beleg der Vorlage" am Ende.
+- Kopf heute: Code-Kopf 5dc1aa12 = audited_head; letzter Commit außerhalb .planning ist fea4c535 (CHANGELOG), dort alle sieben Läufe grün (Block D).
+- Nach dem Entscheid setzt Task 3 den Gesamttext in docs/store-listing.md mit Gate in backend/tests/test_store_metadata.py. Der Tag-Kopf ist dann dieser Commit (`git log -1 --format=%H -- . ':!.planning'`); Bedingung: leerer Code-Diff zu 5dc1aa12, Python gates, Integration, Resilience, HaRP deploy, Multi-arch image und Security scans grün per `scripts/ci/head_green.sh`, PHP-Gates per Beleg 41792859857 (Block D). Der sha steht danach in 41-ABNAHME.md.
 
 - (a) GO.
 - (b) warten.
@@ -221,10 +229,16 @@ CI zum Stand dieser Vorlage: siehe Abschnitt "CI-Beleg der Vorlage" am Ende.
 
 ## Nach dem Release (keine Entscheidung, nur Kenntnis)
 
-- Issue-Antworten #37 und #25 (I2, I3) postet der Owner (Plan 41-12), erst danach ggf. Schließen.
+- Issue-Antworten I2 (#37), I3 (#25), I4 (#44) postet Claude und schließt die drei Issues (Plan 41-12 wird dafür angepasst; dort steht noch "Owner postet"). #33, #43 und #45 bleiben offen.
 - Forum-Post (I1) postet der Owner.
 - UI-Sichtung der Pause (Schalter, Sätze H2.1 bis H2.6) und des Hinweises H1 auf einer laufenden Instanz durch den Owner.
-- v1.7-Merkliste: F-41A-01 bis F-41A-04 (deferred-items.md).
+- v1.7-Merkliste: #45 (Ausschluss je Mount, freie Plätze anzeigen); F-41A-01 bis -04 sind erledigt.
+
+## Prüfung dieser Vorlage
+
+- Umlaut-Vorfilter über diese Datei (Prosa ohne Codeblöcke): 33 Treffer, davon 10 die Suchwörter der Methodenzeile in Block E selbst; die übrigen sind korrekt (Ausschluss, dass, erneuert, neuer, neuen, aktuellen, dauert, dauern, Dauerlast, zuerst, Quellsatz, Cross-Promo, englisch: Pass, Issues, success, does, truenas, Commit-Hash aef9966f). 0 echte Funde.
+- Forum-Entwurf und I1 bis I4: englisch, keine Umlaute nötig.
+- Keine U+2013 und keine U+2014, keine Emojis (Byte-Suche).
 
 ## CI-Beleg der Vorlage
 
