@@ -14,11 +14,22 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sqlite3
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, cast
 
 import pytest
+from findling.worker.pause import (
+    PAUSE_PAUSED,
+    PAUSE_PAUSING,
+    PAUSE_POLL_SECONDS,
+    PAUSE_RUNNING,
+    PAUSE_SETTLE_SECONDS,
+    PAUSE_UNKNOWN,
+    PauseCoordinator,
+    checkpoint_wal,
+)
 from tantivy import Index
 
 import test_poller
@@ -436,3 +447,440 @@ async def test_the_guard_watch_does_not_persist_while_held(tmp_path: Path) -> No
     await watch.run_once()
     assert len(writes) == 1
     await watch.aclose()
+
+
+# -- the checkpoint -----------------------------------------------------------------
+
+
+def _wal_database(path: Path) -> sqlite3.Connection:
+    """A WAL database with frames in its log, and the connection that keeps the log alive.
+
+    The connection stays open on purpose: the last connection to close
+    checkpoints and removes the log itself, and then there would be nothing
+    left to prove.
+    """
+    connection = sqlite3.connect(path, autocommit=True)
+    connection.execute("PRAGMA journal_mode = WAL")
+    connection.execute("PRAGMA wal_autocheckpoint = 0")
+    connection.execute("CREATE TABLE t (x INTEGER)")
+    for value in range(50):
+        connection.execute("INSERT INTO t VALUES (?)", (value,))
+    return connection
+
+
+def _wal_of(path: Path) -> Path:
+    return path.with_name(path.name + "-wal")
+
+
+def test_checkpoint_empties_the_wal(tmp_path: Path) -> None:
+    path = tmp_path / "state.db"
+    connection = _wal_database(path)
+    try:
+        assert _wal_of(path).stat().st_size > 0
+        assert checkpoint_wal(path) is True
+        assert _wal_of(path).stat().st_size == 0
+        assert connection.execute("SELECT count(*) FROM t").fetchone() == (50,)
+    finally:
+        connection.close()
+
+
+def test_checkpoint_with_a_reader_in_a_transaction_is_busy(tmp_path: Path) -> None:
+    path = tmp_path / "vectors.db"
+    connection = _wal_database(path)
+    reader = sqlite3.connect(path, autocommit=True)
+    try:
+        reader.execute("BEGIN")
+        assert reader.execute("SELECT count(*) FROM t").fetchone() == (50,)
+        connection.execute("INSERT INTO t VALUES (99)")
+
+        assert checkpoint_wal(path, busy_timeout_ms=0) is False
+        assert _wal_of(path).stat().st_size > 0
+
+        reader.execute("COMMIT")
+        assert checkpoint_wal(path, busy_timeout_ms=0) is True
+        assert _wal_of(path).stat().st_size == 0
+    finally:
+        reader.close()
+        connection.close()
+
+
+def test_checkpoint_of_a_missing_file_is_true_and_creates_nothing(tmp_path: Path) -> None:
+    path = tmp_path / "vectors.db"
+    assert checkpoint_wal(path) is True
+    assert not path.exists()
+    assert not _wal_of(path).exists()
+
+
+def test_checkpoint_without_wal_mode_is_true(tmp_path: Path) -> None:
+    # The NFS fallback of enable_wal: rollback journal, log -1.
+    path = tmp_path / "state.db"
+    connection = sqlite3.connect(path, autocommit=True)
+    try:
+        connection.execute("PRAGMA journal_mode = DELETE")
+        connection.execute("CREATE TABLE t (x INTEGER)")
+        assert checkpoint_wal(path) is True
+        assert not _wal_of(path).exists()
+    finally:
+        connection.close()
+
+
+def test_a_broken_file_is_no_checkpoint_and_names_no_path(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    path = tmp_path / "state.db"
+    path.write_bytes(b"this is not a database at all, " * 100)
+    with caplog.at_level(logging.WARNING, logger="findling.worker.pause"):
+        assert checkpoint_wal(path) is False
+    assert caplog.records
+    for record in caplog.records:
+        assert str(tmp_path) not in record.getMessage()
+        assert "state.db" not in record.getMessage()
+
+
+# -- the coordinator ----------------------------------------------------------------
+
+
+class _Writer:
+    """A poller, runner, reconcile and guard watch in one double, as the coordinator sees them."""
+
+    def __init__(self) -> None:
+        self.backup_held = False
+        self.pass_in_flight = False
+        self.in_flight = False
+        self.parked = asyncio.Event()
+        self.parked.set()
+        self.quiesces = 0
+        self.reopens = 0
+        self.suspended = False
+        self.resumes = 0
+
+    def hold_for_backup(self) -> None:
+        self.backup_held = True
+
+    def release_backup_hold(self) -> None:
+        self.backup_held = False
+
+    async def quiesce_for_backup(self) -> None:
+        self.quiesces += 1
+
+    async def reopen_after_backup(self) -> None:
+        self.reopens += 1
+
+    def suspend_persist(self) -> None:
+        self.suspended = True
+
+    async def resume_persist(self) -> None:
+        self.suspended = False
+        self.resumes += 1
+
+
+class _Wish:
+    """The wish of the admin as the companion answers it, one answer per read."""
+
+    def __init__(self, *answers: bool | None) -> None:
+        self.answers = list(answers)
+        self.reads = 0
+
+    def set(self, *answers: bool | None) -> None:
+        self.answers = list(answers)
+
+    async def __call__(self) -> bool | None:
+        self.reads += 1
+        if len(self.answers) > 1:
+            return self.answers.pop(0)
+        return self.answers[0] if self.answers else None
+
+
+class _Checkpoints:
+    def __init__(self, *answers: bool) -> None:
+        self.answers = list(answers)
+        self.calls: list[Path] = []
+
+    def __call__(self, path: Path) -> bool:
+        self.calls.append(path)
+        if len(self.answers) > 1:
+            return self.answers.pop(0)
+        return self.answers[0] if self.answers else True
+
+
+class _Flag:
+    def __init__(self) -> None:
+        self.value = False
+
+    def __call__(self) -> bool:
+        return self.value
+
+
+def _all_held(poller: _Writer, runner: _Writer, reconcile: _Writer, watch: _Writer) -> bool:
+    return all((poller.backup_held, runner.backup_held, reconcile.backup_held, watch.suspended))
+
+
+def _none_held(poller: _Writer, runner: _Writer, reconcile: _Writer, watch: _Writer) -> bool:
+    return not any((poller.backup_held, runner.backup_held, reconcile.backup_held, watch.suspended))
+
+
+DATABASES = (Path("state.db"), Path("vectors.db"))
+
+
+def _coordinator(
+    wish: _Wish,
+    checkpoints: _Checkpoints | None = None,
+    *,
+    rebuild: _Flag | None = None,
+    probe: _Flag | None = None,
+    resumed: list[int] | None = None,
+) -> PauseCoordinator:
+    async def on_resume() -> None:
+        if resumed is not None:
+            resumed.append(1)
+
+    return PauseCoordinator(
+        read_wish=wish,
+        databases=DATABASES,
+        rebuild_busy=rebuild or _Flag(),
+        probe_busy=probe or _Flag(),
+        on_resume=on_resume,
+        clock=lambda: 1_800_000_000.0,
+        checkpoint=checkpoints or _Checkpoints(True),
+    )
+
+
+def _attach_all(coordinator: PauseCoordinator) -> tuple[_Writer, _Writer, _Writer, _Writer]:
+    poller, runner, reconcile, watch = _Writer(), _Writer(), _Writer(), _Writer()
+    coordinator.attach_poller(cast("Any", poller))
+    coordinator.attach_runner(cast("Any", runner))
+    coordinator.attach_reconcile(cast("Any", reconcile))
+    coordinator.attach_guard_watch(cast("Any", watch))
+    return poller, runner, reconcile, watch
+
+
+def test_the_state_words_are_a_closed_set() -> None:
+    assert (PAUSE_RUNNING, PAUSE_PAUSING, PAUSE_PAUSED, PAUSE_UNKNOWN) == ("running", "pausing", "paused", "unknown")
+    assert PAUSE_POLL_SECONDS == 15
+    assert PAUSE_SETTLE_SECONDS == 1
+
+
+async def test_the_coordinator_is_born_unknown_and_holding() -> None:
+    coordinator = _coordinator(_Wish(False))
+    assert coordinator.state == PAUSE_UNKNOWN
+    assert coordinator.wants_pause()
+    assert coordinator.paused_since is None
+    poller, runner, reconcile, watch = _attach_all(coordinator)
+    assert _all_held(poller, runner, reconcile, watch)
+
+    await coordinator.tick()
+    assert coordinator.state == PAUSE_RUNNING
+    assert not coordinator.wants_pause()
+
+    late = _Writer()
+    coordinator.attach_reconcile(cast("Any", late))
+    assert not late.backup_held, "a writer born into a running instance is not held"
+
+
+async def test_an_unreadable_wish_keeps_the_writers_held() -> None:
+    # D-41-19: no answer is no permission.
+    wish = _Wish(None)
+    coordinator = _coordinator(wish)
+    poller, runner, reconcile, watch = _attach_all(coordinator)
+
+    await coordinator.tick()
+    await coordinator.tick()
+    assert coordinator.state == PAUSE_UNKNOWN
+    assert _all_held(poller, runner, reconcile, watch)
+
+    wish.set(False)
+    await coordinator.tick()
+    assert coordinator.state == PAUSE_RUNNING
+    assert _none_held(poller, runner, reconcile, watch)
+
+
+async def test_a_read_that_raises_counts_as_unreadable() -> None:
+    async def broken() -> bool | None:
+        raise RuntimeError
+
+    coordinator = PauseCoordinator(read_wish=broken, databases=DATABASES, checkpoint=_Checkpoints(True))
+    await coordinator.tick()
+    assert coordinator.state == PAUSE_UNKNOWN
+
+
+async def test_a_failed_read_while_running_does_not_stop_the_indexing() -> None:
+    wish = _Wish(False)
+    coordinator = _coordinator(wish)
+    poller, *_ = _attach_all(coordinator)
+    await coordinator.tick()
+    wish.set(None)
+    await coordinator.tick()
+    assert coordinator.state == PAUSE_RUNNING
+    assert not poller.backup_held
+
+
+async def test_pause_waits_for_the_batch_then_checkpoints() -> None:
+    wish = _Wish(False)
+    checkpoints = _Checkpoints(True)
+    coordinator = _coordinator(wish, checkpoints)
+    poller, runner, reconcile, watch = _attach_all(coordinator)
+    await coordinator.tick()
+
+    poller.pass_in_flight = True
+    runner.parked.clear()
+    reconcile.in_flight = True
+    wish.set(True)
+    await coordinator.tick()
+    assert coordinator.state == PAUSE_PAUSING
+    assert _all_held(poller, runner, reconcile, watch)
+    assert poller.quiesces == 0
+    assert checkpoints.calls == []
+    assert coordinator.paused_since is None
+
+    poller.pass_in_flight = False
+    await coordinator.tick()
+    runner.parked.set()
+    await coordinator.tick()
+    assert coordinator.state == PAUSE_PAUSING, "the reconcile is still in its slice"
+    assert poller.quiesces == 0
+
+    reconcile.in_flight = False
+    await coordinator.tick()
+    assert coordinator.state == PAUSE_PAUSED
+    assert poller.quiesces == 1
+    assert checkpoints.calls == list(DATABASES)
+    assert coordinator.paused_since == 1_800_000_000
+
+    await coordinator.tick()
+    assert poller.quiesces == 1
+    assert checkpoints.calls == list(DATABASES), "paused stays paused without a second checkpoint"
+
+
+async def test_a_busy_checkpoint_stays_pausing_and_retries() -> None:
+    checkpoints = _Checkpoints(True, False, True)
+    coordinator = _coordinator(_Wish(True), checkpoints)
+    poller, *_ = _attach_all(coordinator)
+
+    await coordinator.tick()
+    assert coordinator.state == PAUSE_PAUSING, "vectors.db was busy, so nothing is copyable yet"
+    assert coordinator.paused_since is None
+    assert poller.quiesces == 1
+
+    await coordinator.tick()
+    assert coordinator.state == PAUSE_PAUSED
+    assert poller.quiesces == 1, "the writer was given back once for this entry"
+    assert len(checkpoints.calls) == 4
+
+
+async def test_pause_twice_and_resume_twice_are_idempotent() -> None:
+    wish = _Wish(True)
+    resumed: list[int] = []
+    coordinator = _coordinator(wish, resumed=resumed)
+    poller, *_ = _attach_all(coordinator)
+
+    await coordinator.tick()
+    await coordinator.tick()
+    assert coordinator.state == PAUSE_PAUSED
+    assert poller.quiesces == 1
+
+    wish.set(False)
+    await coordinator.tick()
+    await coordinator.tick()
+    assert coordinator.state == PAUSE_RUNNING
+    assert resumed == [1]
+    assert poller.reopens == 1
+    assert not poller.backup_held
+
+
+async def test_resume_while_pausing_releases_without_a_checkpoint() -> None:
+    wish = _Wish(False)
+    checkpoints = _Checkpoints(True)
+    coordinator = _coordinator(wish, checkpoints)
+    poller, runner, reconcile, watch = _attach_all(coordinator)
+    await coordinator.tick()
+
+    poller.pass_in_flight = True
+    wish.set(True)
+    await coordinator.tick()
+    assert coordinator.state == PAUSE_PAUSING
+
+    wish.set(False)
+    await coordinator.tick()
+    poller.pass_in_flight = False
+    await coordinator.tick()
+    assert coordinator.state == PAUSE_RUNNING
+    assert checkpoints.calls == []
+    assert poller.quiesces == 0
+    assert _none_held(poller, runner, reconcile, watch)
+
+
+async def test_rebuild_and_probe_keep_the_coordinator_pausing() -> None:
+    rebuild, probe = _Flag(), _Flag()
+    rebuild.value = True
+    coordinator = _coordinator(_Wish(True), rebuild=rebuild, probe=probe)
+    poller, *_ = _attach_all(coordinator)
+
+    await coordinator.tick()
+    assert coordinator.state == PAUSE_PAUSING
+    rebuild.value = False
+    probe.value = True
+    await coordinator.tick()
+    assert coordinator.state == PAUSE_PAUSING
+    assert poller.quiesces == 0
+    probe.value = False
+    await coordinator.tick()
+    assert coordinator.state == PAUSE_PAUSED
+
+
+async def test_resume_after_paused_lifts_all_holds_and_calls_on_resume() -> None:
+    wish = _Wish(True)
+    resumed: list[int] = []
+    coordinator = _coordinator(wish, resumed=resumed)
+    poller, runner, reconcile, watch = _attach_all(coordinator)
+    await coordinator.tick()
+    assert coordinator.state == PAUSE_PAUSED
+    assert resumed == []
+
+    wish.set(False)
+    await coordinator.tick()
+    assert coordinator.state == PAUSE_RUNNING
+    assert coordinator.paused_since is None
+    assert resumed == [1]
+    assert _none_held(poller, runner, reconcile, watch)
+    assert watch.resumes == 1
+    assert poller.reopens == 1
+
+
+async def test_a_writer_without_runner_or_reconcile_counts_as_resting() -> None:
+    coordinator = PauseCoordinator(read_wish=_Wish(True), databases=DATABASES, checkpoint=_Checkpoints(True))
+    await coordinator.tick()
+    assert coordinator.state == PAUSE_PAUSED
+
+
+async def test_paused_leaves_both_wal_files_empty(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    state, vectors = tmp_path / "state.db", tmp_path / "vectors.db"
+    first, second = _wal_database(state), _wal_database(vectors)
+    try:
+        coordinator = PauseCoordinator(read_wish=_Wish(True), databases=(state, vectors))
+        with caplog.at_level(logging.INFO, logger="findling.worker.pause"):
+            await coordinator.tick()
+        assert coordinator.state == PAUSE_PAUSED
+        assert _wal_of(state).stat().st_size == 0
+        assert _wal_of(vectors).stat().st_size == 0
+        messages = [record.getMessage() for record in caplog.records]
+        assert "backup pause: pausing" in messages
+        assert "backup pause: paused" in messages
+        assert all(str(tmp_path) not in message for message in messages)
+    finally:
+        first.close()
+        second.close()
+
+
+async def test_the_run_loop_reaches_paused_and_ends_on_stop() -> None:
+    coordinator = PauseCoordinator(
+        read_wish=_Wish(True),
+        databases=DATABASES,
+        checkpoint=_Checkpoints(False, True),
+        poll_seconds=0.05,
+        settle_seconds=0.01,
+    )
+    stop = asyncio.Event()
+    task = asyncio.create_task(coordinator.run(stop))
+    try:
+        await _until(lambda: coordinator.state == PAUSE_PAUSED)
+    finally:
+        stop.set()
+        await asyncio.wait_for(task, timeout=5)
