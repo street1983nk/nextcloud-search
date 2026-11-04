@@ -250,7 +250,7 @@ Plans:
 - [ ] 42-04-PLAN.md: Lückenschluss SK1 (gap closure): Routen wie Router::getAttributeRoutes aufzählen, Server-Reflector als Orakel, Docblock-Annotationen R3, static/nicht public/__call/Deklarationsort R5 (Vektoren 1, 4, 5)
 - [ ] 42-05-PLAN.md: kanonische Attributnamen, fremde und nicht ladbare Attribute, Rate-Limit-Unterklassen R6 (Vektoren 2, 8)
 - [ ] 42-06-PLAN.md: Regeln auf dem Orakel: Klassenattribute verboten R4, R1 nur mit AnonRateLimit, root/postfix/defaults R7, Verbotsliste R8, Doku (Vektoren 7, 12, 14)
-- [ ] 42-07-PLAN.md: Controller final (Owner-Entscheid), Elternkette/Traits gepinnt, kein IDelegatedSettings (Vektoren 6, 10, 13 Reflection-Teil)
+- [ ] 42-07-PLAN.md: Controller final (Owner-Entscheid 04.11.2026: "final setzen"), Elternkette/Traits gepinnt, kein IDelegatedSettings (Vektoren 6, 10, 13 Reflection-Teil)
 - [ ] 42-08-PLAN.md: routes.php Token-Whitelist, kein Router-/Container-Zugriff in lib, Application-Registrierungen exakt (Vektoren 3, 11)
 - [ ] 42-09-PLAN.md: Python-Textsperren php/lib und routes.php, info.xml remote/public/settings, ExApp-Routentabelle exakt, keine AppAPI-Registrierung zur Laufzeit (Vektoren 9, 13, Textseite 1, 3, 6, 11)
 
