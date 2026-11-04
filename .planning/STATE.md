@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
 status: executing
-stopped_at: Completed 42-01-PLAN.md
-last_updated: "2026-11-04T19:46:42.000Z"
+stopped_at: Completed 42-02-PLAN.md
+last_updated: "2026-11-04T20:47:37.000Z"
 last_activity: 2026-11-04
 progress:
   total_phases: 5
@@ -26,8 +26,8 @@ Siehe .planning/PROJECT.md (Stand nach v1.5, Milestone v1.6 gestartet) und .plan
 ## Current Position
 
 Phase: 42 (php-sicherheits-gates), EXECUTING
-Plan: 1 of 3
-Status: 42-01 abgeschlossen (80d819f3), 42-02 als Nächstes
+Plan: 2 of 3
+Status: 42-02 abgeschlossen (e0ea3179), 42-03 als Nächstes
 Last activity: 2026-11-04
 
 Progress: [█████████░] 88%
@@ -89,6 +89,7 @@ Progress: [█████████░] 88%
 - v1.5: 36-13 in ca. 150 min inkl. voller Suite (17:09 min) und ca. 60 min CI (3 Tasks, 7 Dateien)
 - v1.5: 36-16 in ca. 15 min nach dem Dispatch (3 Tasks, 5 Dateien; Freigabe und Dispatch durch den Koordinator)
 - v1.7: 42-01 in ca. 40 min inkl. CI (2 Tasks, 5 Dateien)
+- v1.7: 42-02 in ca. 90 min inkl. Docker-Ausfall und CI (2 Tasks, 8 Dateien)
 
 ## Accumulated Context
 
@@ -116,6 +117,7 @@ Progress: [█████████░] 88%
 - 41-11: Tag v1.6.2 (Owner) auf ba098b00, sieben Tag-Läufe grün inkl. PHP 41869261491 (schließt den head_green-Vorbehalt), Store submission 41875127182 HTTP 401 Invalid token, nach erneuertem APPSTORE_TOKEN 41885026379 zweimal HTTP 201; Store-API nennt 1.6.2 für beide Apps.
 - 40-VERIFICATION (409a38b8): gaps_found, SC1 partial (Audit deckte efcf26c5..91a0603f nicht ab) -> Nachaudit 40-NACHAUDIT.md beauftragt; Luecke 2 (v1.7-Punkte) in deferred-items.md nachgetragen.
 - 42-01: lokales PHPUnit über scripts/dev/phpunit_docker.sh (nextcloud:32.0.15-apache, PHP 8.3, stable34), SERVER_VERSION und MINIMUM_TESTS aus php.yml gelesen; 958 Tests lokal und im CI (PHP 41897060856) grün, Baumhash e7289079 (113).
+- 42-02: Routen-Attribut-Gate RouteSecurityTest (Reflection gegen php/tests/route-security.json, 20 Routen, R1 PublicPage braucht Ratelimit, R2 NoCSRFRequired nur GET oder ExAppRequired), php.yml-Schritt 'The route attribute gate ran' (ROUTE_GATE_MIN_TESTS 15), Strukturgate test_php_route_gate_presence.py; 973 Tests lokal und im CI (PHP 41905206023) grün, Baumhash 06a082a0 (116).
 
 ### Decisions (Roadmap v1.5)
 
@@ -243,8 +245,8 @@ Items acknowledged and deferred at milestone close on 2026-10-28 (Owner-Wiedervo
 
 ## Session Continuity
 
-Last session: 2026-11-04T19:46:42.000Z
-Stopped at: Completed 42-01-PLAN.md
+Last session: 2026-11-04T20:47:37.000Z
+Stopped at: Completed 42-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

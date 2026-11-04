@@ -60,7 +60,7 @@ Mitgepusht: der lokale Docs-Commit 2b7d4962 (Wortlaut 42-02 Schritt 3a).
 ## CI-Beleg (Kopf 80d819f3)
 
 - PHP and store metadata gates 41897060856 success, CI-Zeile `OK (958 tests, 5851 assertions)`, "the suite executed 958 tests, the floor is 28".
-- Python gates 41897061088 success; Security scans 41897060798, Multi-arch image 41897060603, OpenSSF Scorecard 41897060552, Resilience 41897060575, Integration 41897060153 success; HaRP deploy 41897060193 (Ergebnis siehe 42-03-SUMMARY, head_green-Lauf).
+- Python gates 41897061088 success; Security scans 41897060798, Multi-arch image 41897060603, OpenSSF Scorecard 41897060552, Resilience 41897060575, Integration 41897060153 success; HaRP deploy 41897060193 success. `head_green.sh` rc 0.
 
 ## Deviations from Plan
 
