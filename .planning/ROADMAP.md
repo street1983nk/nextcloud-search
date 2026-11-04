@@ -180,6 +180,7 @@ Details im Archiv: .planning/milestones/v1.5-ROADMAP.md
 | 38. Zertifikatsrotation ohne Admin-Eingriff | v1.6 | 2/2 | Complete | 2026-10-28 |
 | 39. Ausschluss-Anzeige, Dedup-Umfang und Doku-Hygiene | v1.6 | 4/4 | Complete | 2026-10-28 |
 | 40. Haertung und Store-Einreichung 1.6.0 | v1.6 | 6/6 | Executed, verification pending |  |
+| 41. Findling 1.6.2: Backup-Pause, Backup-Doku, #25-Fixes | v1.6 | 11/12 | Executed, verification pending |  |
 
 ## Nach v1.3 (Wiedervorlage)
 
@@ -202,7 +203,7 @@ Aktiver Blocker unabhaengig vom Milestone: Kill-Kriterium Nextcloud Conference (
 **Goal:** Findling 1.6.2 (beide Apps) im Store mit den Zusagen aus Issue #37 und #25 und den vier Nachaudit-Befunden aus 40-NACHAUDIT.md, die 1.6.1 (nur Sicherheit, pypdf) bewusst nicht mitnahm.
 **Requirements**: Owner-GO 29.10./30.10./02.11.2026 (NEXT.md)
 **Depends on:** Phase 40
-**Plans:** 10/12 plans executed
+**Plans:** 11/12 plans executed (41-11 ohne SUMMARY)
 
 **Success Criteria:**
 1. Backup-Pause-Schalter (#37): `occ findling:pause` / `findling:resume` und ein Schalter auf der Admin-Seite; in der Pause ruhen Indexer, Embedding und Poller, SQLite-WAL ist gecheckpointet und Tantivy committet, die Suche läuft weiter; Zustand übersteht einen Neustart; Negativtests (Pause während laufendem Batch, doppeltes pause/resume, Neustart in der Pause).
@@ -211,6 +212,7 @@ Aktiver Blocker unabhaengig vom Milestone: Kill-Kriterium Nextcloud Conference (
 4. F-40N-01..04 behoben (Vorlage: Entwurf 40-07-PLAN.md), jeweils mit Negativtest zuerst.
 5. Audit Security/Bugs/Performance über das gesamte Delta v1.6.1..Kopf, Fixes ab MEDIUM (Vorlage 40-08).
 6. Owner-Runde mit Release-Notiz und Store-Text vor dem Tag (Vorlage 40-09), dann Tag v1.6.2, beide Archive signiert, beide Store-Uploads HTTP 201; Issue-Antworten #37 und #25 erst NACH Store-Release.
+   erfüllt: Tag v1.6.2 auf ba098b00, sieben Tag-Läufe grün (Release-Archive 41869261561, PHP 41869261491, Python 41869261151, Integration 41869261583, Resilience 41869261405, Multi-arch 41869261338, HaRP 41869261143); store-submit 41885026379 (nach 401 in 41875127182 und erneuertem APPSTORE_TOKEN): findling v1.6.2 HTTP 201, findling_backend v1.6.2 HTTP 201; Store-API apps.json findling und appapi_apps.json findling_backend nennen 1.6.2 (04.11.2026); Antworten #37 (issuecomment-6638602142, letzter Absatz mit Owner-Freigabe angepasst), #25 (issuecomment-6638501178), #44 (issuecomment-6638502123), alle drei closed; #33, #43, #45 offen (41-ISSUE-ANTWORTEN.md)
 
 Plans:
 - [x] 41-01-PLAN.md: Nachaudit-Fixes F-40N-01..04 (Schwelle über Speicher, Reconcile-Retry gateway_error, 408/429, Fill-Refresh-Start)
@@ -224,7 +226,7 @@ Plans:
 - [x] 41-09-PLAN.md: Audit v1.6.1..Kopf, Fixes ab MEDIUM
 - [x] 41-10-PLAN.md: Owner-Runde (Checkpoint), Gesamttext, Tag-Kopf
 - [ ] 41-11-PLAN.md: Tag v1.6.2 und Store-Einreichung (Owner führt aus), Belegkette
-- [ ] 41-12-PLAN.md: Issue-Antworten #37/#25 nach Store-Release (Owner postet)
+- [x] 41-12-PLAN.md: Issue-Antworten #37/#25/#44 nach Store-Release (Claude postet und schließt, Owner-Freigabe)
 
 ### Phase 42: PHP-Sicherheits-Gates für die Companion-App
 

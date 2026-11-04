@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
 status: executing
-stopped_at: Completed 40-05-PLAN.md
-last_updated: "2026-11-04T16:24:46.632Z"
+stopped_at: Completed 41-12-PLAN.md
+last_updated: "2026-11-04T18:35:00.000Z"
 last_activity: 2026-11-04
 progress:
   total_phases: 4
@@ -26,8 +26,8 @@ Siehe .planning/PROJECT.md (Stand nach v1.5, Milestone v1.6 gestartet) und .plan
 ## Current Position
 
 Phase: 41 (findling-1-6-2-backup-pause-schalter-37-backup-doku-25-fixes) — EXECUTING
-Plan: 11 of 12
-Status: Ready to execute
+Plan: 12 of 12
+Status: Executed, verification pending
 Last activity: 2026-11-04
 
 Progress: [████████░░] 82%
@@ -235,15 +235,21 @@ Items acknowledged and deferred at milestone close on 2026-10-28 (Owner-Wiedervo
 | Phase 38 P02 | ca. 130 min | 3 tasks | 5 files |
 | Phase 40 P05 | ca. 35 min inkl. ca. 25 min CI | 2 tasks | 4 files |
 | Phase 41 P04 | 60 min | 2 tasks | 16 files |
+| Phase 41 P12 | ca. 15 min (Doku) | 3 tasks | 4 files |
 
 ## Session Continuity
 
-Last session: 2026-11-04T16:24:46.614Z
-Stopped at: Completed 40-05-PLAN.md
+Last session: 2026-11-04T18:35:00.000Z
+Stopped at: Completed 41-12-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
 
+- Phase 41 verifizieren (/gsd:verify); 41-11-SUMMARY.md fehlt noch (Belegkette Tag v1.6.2 und Einreichung steht in 41-ISSUE-ANTWORTEN.md und ROADMAP Kriterium 6)
+- Owner: Forum-Post I1 (Thread 249775, Desktop/Findling_1.6.2_Forum_ENTWURF.md)
+- Owner: UI-Sichtung der Backup-Pause in einer laufenden 1.6.2-Instanz
+- Rückmeldungen auf issue 37, 25 und 44 beobachten (alle drei closed, Antworten gepostet); 33 und 43 offen, 45 als Kandidat für v1.7
+- Regel: Commit-Nachrichten nie mit close/fix/resolve-Schlüsselwort direkt vor einer Issue-Nummer
 - Nachaudit 40-NACHAUDIT.md (efcf26c5..91a0603f) auswerten; Befunde ab MEDIUM in 1.6.1, danach Phase 40 neu verifizieren, Phasenhaken in ROADMAP und Milestone v1.6 schliessen
 - Owner: UI-Sichtung der drei Saetze (plus Gateway-Satz) in einer laufenden 1.6.0-Instanz
 - Owner: Issue-#33-Antwort (Desktop/Findling_Issue33_Antwort_ENTWURF.md) posten, erst danach 'Closes #33'; HaRP-Upstream-Vorschlag (Desktop/Findling_HaRP_Upstream_Vorschlag_ENTWURF.md) nach erneutem Lesen von HaRP main senden
