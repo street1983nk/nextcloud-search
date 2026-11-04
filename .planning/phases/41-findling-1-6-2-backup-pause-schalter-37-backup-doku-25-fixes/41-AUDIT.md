@@ -700,3 +700,12 @@ Kontrollen grün; danach 6 grün.
 der Ursache behoben und zusätzlich je Datei eingedämmt, beides mit umgedrehten
 Proben samt Positivkontrollen belegt. `audited_head` =
 `5dc1aa127a495c78ec4ef5272a275c6788c92af0`. CI-Beleg siehe unten.
+
+### CI-Beleg des Kopfes nach #44
+
+Push 9cde3a7e..fea4c535 (fea4c535 = 5dc1aa12 plus nur CHANGELOG.md und
+`.planning/`), alle Läufe auf fea4c535 success: Python gates 41833569599,
+Integration 41833569554, Resilience 41833569479, HaRP deploy 41833569459 (stable33,
+stable34 amd64 und arm64, stable35), Multi-arch image 41833569571, Security scans
+41833569648, OpenSSF Scorecard 41833569705. PHP and store metadata gates läuft
+wegen des Pfadfilters nicht (php/ und backend/appinfo unverändert).
