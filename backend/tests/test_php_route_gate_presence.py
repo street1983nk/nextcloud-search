@@ -20,8 +20,12 @@ removes what it guards is no gate, so each piece is checked here:
 3. The allowlist is valid JSON and has as many entries under "routes" as the
    controllers have fully qualified ApiRoute and FrontpageRoute lines.
 4. The JUnit step of php.yml exists, takes the file and the floor only from its
-   env, keeps the floor at 15 or above, and runs exactly one ``php -r``
-   expression without a fixed file name and without a single quote.
+   env, keeps the floor at 22 or above, equal to the number of test methods,
+   and runs exactly one ``php -r`` expression without a fixed file name and
+   without a single quote. Since plan 42-04 the floor of php.yml, MIN_FLOOR
+   below and the count of ``public function test`` lines in
+   RouteSecurityTest.php move in lockstep, so a plan that adds a test cannot
+   forget the floor, and a floor cannot run ahead of the tests.
 
 **The limit.** This reads text and YAML. Whether the PHP expression is correct
 is proven by running it, which plan 42-02 did locally and php.yml does on
@@ -48,7 +52,7 @@ PHP_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "php.yml"
 CLASS_LINE = "final class RouteSecurityTest extends TestCase"
 SUITE_NAME = "OCA\\Findling\\Tests\\Unit\\RouteSecurityTest"
 STEP_NAME = "The route attribute gate ran"
-MIN_FLOOR = 15
+MIN_FLOOR = 22
 
 SKIP_MARKERS = (
     "markTestSkipped",
@@ -61,6 +65,7 @@ SKIP_MARKERS = (
 
 _ROUTE_LINE = re.compile(r"#\[\\OCP\\AppFramework\\Http\\Attribute\\(?:ApiRoute|FrontpageRoute)\(")
 _PHP_R = "php -r '"
+_TEST_METHOD = re.compile(r"^\s*public function test", re.MULTILINE)
 
 
 def scan_test_source(source: str) -> list[str]:
@@ -74,6 +79,18 @@ def scan_test_source(source: str) -> list[str]:
         if marker in source
     )
     return findings
+
+
+def count_test_methods(source: str) -> int:
+    """The number of test methods, the way the floors count them."""
+    return len(_TEST_METHOD.findall(source))
+
+
+def workflow_floor(text: str) -> object:
+    """ROUTE_GATE_MIN_TESTS of the JUnit step of php.yml, None when absent."""
+    step = _gate_step(yaml.safe_load(text))
+    env = step.get("env") if step is not None else None
+    return env.get("ROUTE_GATE_MIN_TESTS") if isinstance(env, dict) else None
 
 
 def count_route_lines(sources: list[str]) -> int:
@@ -171,6 +188,15 @@ def test_php_yml_proves_the_gate_ran() -> None:
     assert scan_workflow(PHP_WORKFLOW.read_text(encoding="utf-8")) == []
 
 
+def test_the_floors_equal_the_number_of_test_methods() -> None:
+    source = GATE_TEST.read_text(encoding="utf-8")
+    methods = count_test_methods(source)
+    assert methods == workflow_floor(PHP_WORKFLOW.read_text(encoding="utf-8")) == MIN_FLOOR
+    # Negative probe: one test method more breaks the equality.
+    grown = source + "\n\tpublic function testOneMore(): void {\n\t}\n"
+    assert count_test_methods(grown) == methods + 1 != MIN_FLOOR
+
+
 # Probes: every finding is reported.
 
 _CLEAN_TEST = """<?php
@@ -263,7 +289,7 @@ def test_route_lines_are_counted_fully_qualified_only() -> None:
     assert count_route_lines([source, source]) == 4
 
 
-_CLEAN_WORKFLOW = """
+_CLEAN_WORKFLOW = f"""
 jobs:
   phpunit:
     steps:
@@ -273,7 +299,7 @@ jobs:
         working-directory: apps/findling
         env:
           JUNIT_FILE: junit.xml
-          ROUTE_GATE_MIN_TESTS: 15
+          ROUTE_GATE_MIN_TESTS: {MIN_FLOOR}
         run: |
           php -r '
             $file = getenv("JUNIT_FILE");
@@ -296,17 +322,24 @@ def test_a_workflow_without_the_step_is_reported() -> None:
 
 
 def test_a_step_without_the_floor_is_reported() -> None:
-    source = _CLEAN_WORKFLOW.replace("          ROUTE_GATE_MIN_TESTS: 15\n", "")
+    source = _CLEAN_WORKFLOW.replace(f"          ROUTE_GATE_MIN_TESTS: {MIN_FLOOR}\n", "")
     findings = scan_workflow(source)
     assert len(findings) == 1
     assert "sets no ROUTE_GATE_MIN_TESTS" in findings[0]
 
 
 def test_a_floor_of_zero_is_reported() -> None:
-    source = _CLEAN_WORKFLOW.replace("ROUTE_GATE_MIN_TESTS: 15", "ROUTE_GATE_MIN_TESTS: 0")
+    source = _CLEAN_WORKFLOW.replace(f"ROUTE_GATE_MIN_TESTS: {MIN_FLOOR}", "ROUTE_GATE_MIN_TESTS: 0")
     findings = scan_workflow(source)
     assert len(findings) == 1
-    assert "at least 15" in findings[0]
+    assert f"at least {MIN_FLOOR}" in findings[0]
+
+
+def test_a_floor_below_the_test_count_is_reported() -> None:
+    source = _CLEAN_WORKFLOW.replace(f"ROUTE_GATE_MIN_TESTS: {MIN_FLOOR}", f"ROUTE_GATE_MIN_TESTS: {MIN_FLOOR - 1}")
+    findings = scan_workflow(source)
+    assert len(findings) == 1
+    assert f"at least {MIN_FLOOR}" in findings[0]
 
 
 def test_a_fixed_junit_name_in_the_expression_is_reported() -> None:
