@@ -1031,14 +1031,16 @@ def test_the_assurance_step_does_nothing_an_admin_would_do() -> None:
 
 
 def test_the_step_name_counts_its_assurances() -> None:
-    # Eleven since plan 40-03: assurance 12 (the 1.6 changes survive the
-    # upgrade) stands at the end of the step; 11 lives in "Store upgrade 5b",
-    # which also carries the writing part 2 of 12 behind its rule writing.
-    assert _named(ASSURANCE_STEP)[0]["name"] == "Store upgrade 5, the eleven assurances after the upgrade"
+    # Twelve since plan 41-08: assurance 13 (an upgrade leaves indexing
+    # running) follows 12 (the 1.6 changes survive the upgrade, since plan
+    # 40-03) at the end of the step; 11 lives in "Store upgrade 5b", which
+    # also carries the writing part 2 of 12 behind its rule writing.
+    assert _named(ASSURANCE_STEP)[0]["name"] == "Store upgrade 5, the twelve assurances after the upgrade"
     run = _run(ASSURANCE_STEP)
-    for number in [*range(1, 11), 12]:
+    for number in [*range(1, 11), 12, 13]:
         assert f'echo "--- {number}, ' in run, number
-    assert 'echo "all eleven assurances of this step hold"' in run
+    assert "an upgrade must not leave indexing paused" in run
+    assert 'echo "all twelve assurances of this step hold"' in run
 
 
 def test_every_seed_word_finds_exactly_its_file_within_the_budget() -> None:

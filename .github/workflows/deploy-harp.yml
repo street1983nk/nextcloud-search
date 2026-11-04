@@ -103,6 +103,10 @@ env:
   # the start on v1.5.0, as 1.5.1 kept v1.4.3: 1.6.1 is a dependency release
   # (pypdf 6.21.4 and patch updates), backend/src and every PHP file are byte
   # identical to 1.6.0, so the 1.5.0 to 1.6.1 jump proves the same path.
+  # Release 1.6.2 keeps the start on v1.5.0 (plan 41-08): the installed base
+  # jumps from 1.5.x and 1.6.x, and 1.6.2 adds no migration, no schema and no
+  # stored key in the volume; the pause wish is an appconfig key that is
+  # absent after an upgrade, so "Store upgrade 5" demands pause running.
   # Every assurance that names the
   # behaviour of the start was derived anew for 1.5.0 in
   # .planning/phases/40-haertung-und-store-einreichung-1-6-0/40-03-ABLEITUNG.md,
@@ -3969,7 +3973,7 @@ jobs:
       # an installation that really came out of the release assets of
       # UPGRADE_FROM_TAG is brought to the state of this commit, and the index
       # it built survives that untouched. Since plan 40-03 that tag is v1.5.0
-      # and the jump is 1.5.0 to 1.6.1 (REL-06, 1.6.1 since 2026-11-02; 1.5.1 shares the code of 1.5.0
+      # and the jump is 1.5.0 to 1.6.2 (REL-06, 1.6.2 since 2026-11-04, 1.6.1 since 2026-11-02; 1.5.1 shares the code of 1.5.0
       # byte for byte, so the statements about 1.5.0 below hold for every 1.5.x
       # installation). From plan 36-13 the tag was v1.4.3 and the jump 1.4.3 to
       # 1.5.1 (D-36-13); from plan
@@ -6238,9 +6242,9 @@ jobs:
 
           # The two cases, both named, and both branches stay. They were
           # written in plan 11-07 for a version step that had not happened yet.
-          # Since plan 40-03 the tree carries 1.6.1 (1.6.0 until 2026-11-02) against the
+          # Since plan 40-03 the tree carries 1.6.2 (1.6.1 until 2026-11-04, 1.6.0 until 2026-11-02) against the
           # 1.5.0 of the tag, so the FIRST branch runs and has to see
-          # installed_version 1.6.1 after the upgrade. From plan 36-13 to 40-03
+          # installed_version 1.6.2 after the upgrade. From plan 36-13 to 40-03
           # the tree carried 1.5.1 (1.5.0 until 2026-10-22) against the 1.4.3
           # of the tag (first branch); from plan 30-06 to 36-13 tree and
           # UPGRADE_FROM_TAG both carried 1.4.2, so the SECOND branch ran; from plan
@@ -6308,7 +6312,7 @@ jobs:
 
           # The new image, and it is the one this run built out of this commit.
           # Why not the reference the archive of this commit names: since plan
-          # 40-02 backend/appinfo/info.xml says image-tag 1.6.0 (1.6.1 since 2026-11-02), and that tag is
+          # 40-02 backend/appinfo/info.xml says image-tag 1.6.0 (1.6.1 since 2026-11-02, 1.6.2 since 2026-11-04), and that tag is
           # not in the registry yet, because the release of phase 40 comes
           # after this proof (the same held for 1.4.0 between plan 29-11 and
           # the release of phase 29, for 1.3.0 between plan 23-06 and
@@ -6630,7 +6634,7 @@ jobs:
       # again: the embedding mark stays, the whole vector stock, the picture
       # and the seed of the new formats included, is the same rows chunk id
       # for chunk id, and the profile in force is economy (D-29-01).
-      - name: Store upgrade 5, the eleven assurances after the upgrade
+      - name: Store upgrade 5, the twelve assurances after the upgrade
         if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
         env:
           # As in "Store upgrade 6": the two matrix values arrive as plain
@@ -7327,13 +7331,31 @@ jobs:
             fi
           fi
 
+          echo "--- 13, an upgrade leaves indexing running (plan 41-08, D-41-13) ---"
+          # The backup pause of issue #37 arrives with 1.6.2. Its wish is the
+          # appconfig key findling/paused (SettingsService::KEY_PAUSED), absent
+          # after an upgrade from 1.5.x or 1.6.x, and a missing key means not
+          # paused; no migration and no key in the volume carry a pause over.
+          # The overview of the upgraded companion relays the pause word of the
+          # container's GET /status, so it has to read running with no wish on
+          # record, and the key itself has to be absent from oc_appconfig.
+          paused_key=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}"             "SELECT COUNT(*) FROM oc_appconfig WHERE appid = 'findling' AND configkey = 'paused';")
+          pause_now=$(jq -r '.pause // "absent"' "${overview_json}" 2> /dev/null || echo "unreadable")
+          wished_now=$(jq -r '.pauseWished // "absent"' "${overview_json}" 2> /dev/null || echo "unreadable")
+          if [ "${pause_now}" != "running" ] || [ "${wished_now}" != "false" ] || [ "${paused_key}" != "0" ]; then
+            echo "::error::an upgrade must not leave indexing paused: the overview reads pause '${pause_now}' with pauseWished '${wished_now}', and oc_appconfig carries ${paused_key} row(s) of findling/paused (demanded running, false and 0)"
+            fail=1
+          else
+            echo "pause reads running after the upgrade, pauseWished is false and oc_appconfig carries no findling/paused"
+          fi
+
           if [ "${fail}" -ne 0 ]; then
             echo "the two states side by side:"
             diff -u "${before}" "${after}" || true
             exit 1
           fi
 
-          echo "all eleven assurances of this step hold"
+          echo "all twelve assurances of this step hold"
           {
             echo ""
             echo "### Upgrade from \`${UPGRADE_FROM_TAG}\` on ${MATRIX_SERVER_VERSION} (${MATRIX_RUNNER})"
