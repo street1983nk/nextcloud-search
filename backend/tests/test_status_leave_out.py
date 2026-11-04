@@ -13,12 +13,21 @@ stock, a file of its own without a storage column. A vector stock that is
 missing or broken costs that one figure and never the answer. And the parameter
 is refused with a 422 unless it is a short list of numbers (T-39-02).
 
+Since plan 41-02 (issue #25) the vector figure no longer stops at a hundred
+thousand left out documents: up to LEFT_OUT_EMBEDDED_SYNC_CEILING it is counted
+in the request, above it in a background thread of its own and answered from a
+small cache. Single flight, a start that fails is tried again, the age runs from
+the end of the count, at most four lists, and a replaced vector stock drops it.
+
 The other half of the wire contract, that a call without the parameter carries
 neither key, is held in test_status_endpoint.py next to the closed field set.
 """
 
-from collections.abc import Callable
+import os
+import threading
+from collections.abc import Callable, Sequence
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -163,27 +172,216 @@ def test_a_broken_vector_database_costs_the_vector_figure_and_never_the_answer(
     assert "embeddedLeftOut" not in answer
 
 
-def test_above_the_ceiling_the_vector_figure_is_not_worked_out(
+def test_left_out_up_to_the_ceiling_is_counted_at_once(
     client: TestClient,
     sign: Sign,
     volume: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # The ceiling is 100000 documents; lowered here so that two documents are
-    # above it instead of building a hundred thousand rows.
+    # Up to LEFT_OUT_EMBEDDED_SYNC_CEILING the figure is worked out inside the
+    # request, as before plan 41-02: no thread, nothing cached. Lowered so that
+    # the two documents of storage 2 sit exactly on it.
     _state(volume)
     _vectors(volume, [21, 22])
-    monkeypatch.setattr(status, "LEFT_OUT_EMBEDDED_CEILING", 1)
+    monkeypatch.setattr(status, "LEFT_OUT_EMBEDDED_SYNC_CEILING", 2)
 
     answer = _status(client, sign("admin"), "2")
 
-    assert status.LEFT_OUT_EMBEDDED_CEILING == 1
-    assert answer["indexedLeftOut"] == 2
-    assert "embeddedLeftOut" not in answer
+    assert (answer["indexedLeftOut"], answer["embeddedLeftOut"]) == (2, 2)
+    assert status._LEFT_OUT_REFRESH is None
+    assert not status._LEFT_OUT_CACHE
 
 
-def test_the_ceiling_of_the_vector_figure_is_a_hundred_thousand_documents() -> None:
-    assert status.LEFT_OUT_EMBEDDED_CEILING == 100_000
+def test_left_out_above_the_ceiling_comes_from_the_background(
+    client: TestClient,
+    sign: Sign,
+    volume: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Issue #25 (D-41-11): an instance whose left out storages hold 113 851
+    # documents got no embeddedLeftOut at all, and the deduplication of
+    # AdminViewService::leftOutCounts() fell away without a word. The ceiling
+    # is lowered here so that two documents are above it; the real numbers run
+    # in test_phase40_audit.py. The first answer leaves the field out and starts
+    # the count in the background, the answer after it carries the figure.
+    _state(volume)
+    _vectors(volume, [21, 22])
+    monkeypatch.setattr(status, "LEFT_OUT_EMBEDDED_SYNC_CEILING", 1)
+
+    first = _status(client, sign("admin"), "2")
+    status.join_left_out_refresh()
+    second = _status(client, sign("admin"), "2")
+
+    assert first["indexedLeftOut"] == 2
+    assert "embeddedLeftOut" not in first
+    assert (second["indexedLeftOut"], second["embeddedLeftOut"]) == (2, 2)
+
+
+def test_a_left_out_refresh_that_cannot_start_is_tried_again(
+    client: TestClient,
+    sign: Sign,
+    volume: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # The lesson of F-40N-03: a flag that points at a thread that never ran is
+    # never cleared, and no later poll counts again until the container restarts.
+    _state(volume)
+    _vectors(volume, [21, 22])
+    monkeypatch.setattr(status, "LEFT_OUT_EMBEDDED_SYNC_CEILING", 1)
+    monkeypatch.setattr(status, "_LEFT_OUT_REFRESH", None)
+
+    class _Unstartable(threading.Thread):
+        """A thread whose start fails the way it fails without free threads.
+
+        Only the name the status module sees is replaced: the test client and
+        asyncio.to_thread start threads of their own while the request runs.
+        """
+
+        def start(self) -> None:
+            raise RuntimeError("can't start new thread")
+
+    seen_by_status = SimpleNamespace(Thread=_Unstartable, current_thread=threading.current_thread)
+    with monkeypatch.context() as patch:
+        patch.setattr(status, "threading", seen_by_status)
+        with caplog.at_level("WARNING", logger="findling"):
+            refused = _status(client, sign("admin"), "2")
+
+    assert refused["indexedLeftOut"] == 2
+    assert "embeddedLeftOut" not in refused
+    assert status._LEFT_OUT_REFRESH is None
+    lines = [record.getMessage() for record in caplog.records if "left out vector count" in record.getMessage()]
+    assert lines == ["the left out vector count could not start, RuntimeError"]
+
+    _status(client, sign("admin"), "2")
+    status.join_left_out_refresh()
+    after = _status(client, sign("admin"), "2")
+    assert after["embeddedLeftOut"] == 2
+
+
+class _Clock:
+    """A monotonic clock the test moves by hand."""
+
+    def __init__(self) -> None:
+        self.now = 0.0
+
+    def monotonic(self) -> float:
+        return self.now
+
+
+def test_the_left_out_cache_ages_from_the_end_of_the_count(
+    client: TestClient,
+    sign: Sign,
+    volume: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The lesson of F-40N-06: a count that took long must not come back stale
+    # at once. The count here takes 1000 seconds of the clock, far more than
+    # the 300 of LEFT_OUT_CACHE_SECONDS, so an age taken from its start would
+    # expire the figure the moment it is written.
+    _state(volume)
+    _vectors(volume, [21, 22])
+    monkeypatch.setattr(status, "LEFT_OUT_EMBEDDED_SYNC_CEILING", 1)
+    clock = _Clock()
+    monkeypatch.setattr(status, "time", SimpleNamespace(monotonic=clock.monotonic))
+    real = status.embedded_in_storages
+    counts: list[float] = []
+
+    def _slow(state_db: Path, vectors_db: Path, storage_ids: Sequence[int]) -> int:
+        counts.append(clock.now)
+        clock.now += 1000
+        return real(state_db, vectors_db, storage_ids)
+
+    monkeypatch.setattr(status, "embedded_in_storages", _slow)
+
+    _status(client, sign("admin"), "2")
+    status.join_left_out_refresh()
+    assert counts == [0.0]
+
+    clock.now = 1000 + status.LEFT_OUT_CACHE_SECONDS - 1
+    fresh = _status(client, sign("admin"), "2")
+    status.join_left_out_refresh()
+    assert fresh["embeddedLeftOut"] == 2
+    assert len(counts) == 1
+
+    clock.now = 1000 + status.LEFT_OUT_CACHE_SECONDS
+    stale = _status(client, sign("admin"), "2")
+    status.join_left_out_refresh()
+    # The stale figure is answered while the next count runs, the way the fill
+    # level of candidate F does it, so the page does not jump for one poll.
+    assert stale["embeddedLeftOut"] == 2
+    assert len(counts) == 2
+
+
+def test_the_left_out_cache_holds_at_most_four_lists(
+    client: TestClient,
+    sign: Sign,
+    volume: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The list comes from the companion, and every new one would otherwise be
+    # a new entry for the life of the process.
+    _state(volume)
+    _vectors(volume, [11, 21, 22, 31])
+    monkeypatch.setattr(status, "LEFT_OUT_EMBEDDED_SYNC_CEILING", 1)
+
+    for leave_out in ("1", "2", "1,2", "1,3", "2,3"):
+        _status(client, sign("admin"), leave_out)
+        status.join_left_out_refresh()
+
+    assert status.LEFT_OUT_CACHE_KEYS == 4
+    assert len(status._LEFT_OUT_CACHE) == 4
+    assert frozenset({1}) not in status._LEFT_OUT_CACHE
+    assert _status(client, sign("admin"), "2,3")["embeddedLeftOut"] == 3
+    assert "embeddedLeftOut" not in _status(client, sign("admin"), "1")
+
+
+def _replace_the_stock(volume: Path, file_ids: list[int]) -> None:
+    """Put a new vector stock in place of the old one, the way a refill would."""
+    fresh = volume / "fresh"
+    fresh.mkdir(exist_ok=True)
+    _vectors(fresh, file_ids)
+    os.replace(fresh / "vectors.db", volume / "vectors.db")
+
+
+def test_a_refilled_vector_stock_drops_the_cached_figure(
+    client: TestClient,
+    sign: Sign,
+    volume: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The guard of _refresh_fill in another shape (T-41-11): a figure counted
+    # on a vector stock that was replaced while the count ran is not cached,
+    # and a cached figure of a stock that is gone is no figure.
+    _state(volume)
+    _vectors(volume, [21, 22])
+    monkeypatch.setattr(status, "LEFT_OUT_EMBEDDED_SYNC_CEILING", 1)
+    real = status.embedded_in_storages
+
+    def _refilled_meanwhile(state_db: Path, vectors_db: Path, storage_ids: Sequence[int]) -> int:
+        counted = real(state_db, vectors_db, storage_ids)
+        _replace_the_stock(volume, [21])
+        return counted
+
+    with monkeypatch.context() as patch:
+        patch.setattr(status, "embedded_in_storages", _refilled_meanwhile)
+        _status(client, sign("admin"), "2")
+        status.join_left_out_refresh()
+
+    assert frozenset({2}) not in status._LEFT_OUT_CACHE
+    assert "embeddedLeftOut" not in _status(client, sign("admin"), "2")
+    status.join_left_out_refresh()
+    assert _status(client, sign("admin"), "2")["embeddedLeftOut"] == 1
+
+    _replace_the_stock(volume, [21, 22])
+    assert "embeddedLeftOut" not in _status(client, sign("admin"), "2")
+    status.join_left_out_refresh()
+    assert _status(client, sign("admin"), "2")["embeddedLeftOut"] == 2
+
+
+def test_the_ceiling_of_the_synchronous_count_is_a_hundred_thousand_documents() -> None:
+    assert status.LEFT_OUT_EMBEDDED_SYNC_CEILING == 100_000
+    assert not hasattr(status, "LEFT_OUT_EMBEDDED_CEILING")
 
 
 def test_without_a_state_database_neither_counter_is_answered(

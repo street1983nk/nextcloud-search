@@ -827,24 +827,31 @@ def _bulk(root: Path, per_storage: dict[int, int], *, vectors: bool) -> None:
 
 
 @pytest.mark.usefixtures("appapi_environment")
-@pytest.mark.parametrize(("left_out", "answered"), [(100_000, True), (100_001, False)])
-def test_p1_the_vector_figure_stops_above_a_hundred_thousand_documents(
+@pytest.mark.parametrize(("left_out", "at_once"), [(100_000, True), (100_001, False), (113_851, False)])
+def test_p1_the_vector_figure_above_a_hundred_thousand_documents_comes_from_the_background(
     client: TestClient,
     sign: Sign,
     volume: Path,
     left_out: int,
-    answered: bool,
+    at_once: bool,
 ) -> None:
-    # The real ceiling, not a lowered one: storage 2 holds exactly it or one more.
+    # The real ceiling, not a lowered one: storage 2 holds exactly it, one more,
+    # or the 113 851 left out documents of issue #25 (D-41-11). Up to the
+    # ceiling the first answer carries the figure; above it the first answer
+    # leaves it out and the answer after the background count carries it
+    # (plan 41-02, before which the field never came above the ceiling).
     _bulk(volume, {1: 10, 2: left_out}, vectors=True)
 
-    answer = client.get("/status", params={"leaveOut": "2"}, headers=sign("admin")).json()
+    first = client.get("/status", params={"leaveOut": "2"}, headers=sign("admin")).json()
+    status.join_left_out_refresh()
+    second = client.get("/status", params={"leaveOut": "2"}, headers=sign("admin")).json()
 
-    assert status.LEFT_OUT_EMBEDDED_CEILING == 100_000
-    assert answer["indexedLeftOut"] == left_out
-    assert ("embeddedLeftOut" in answer) is answered
-    if answered:
-        assert answer["embeddedLeftOut"] == left_out
+    assert status.LEFT_OUT_EMBEDDED_SYNC_CEILING == 100_000
+    assert first["indexedLeftOut"] == left_out
+    assert ("embeddedLeftOut" in first) is at_once
+    if at_once:
+        assert first["embeddedLeftOut"] == left_out
+    assert (second["indexedLeftOut"], second["embeddedLeftOut"]) == (left_out, left_out)
 
 
 @pytest.mark.timing
