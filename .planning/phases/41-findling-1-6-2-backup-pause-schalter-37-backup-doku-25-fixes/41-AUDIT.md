@@ -1,9 +1,12 @@
 ---
 phase: 41-findling-1-6-2-backup-pause-schalter-37-backup-doku-25-fixes
 audited: 2026-11-04
-audited_head: 738a13731f6448aa97f0a752d5553c6c54db3e85
-diff: v1.6.1..738a1373
+audited_head: efdca6840ee89b3373d9706b0e3c94039c4ef8d4
+audited_head_before_fixes: 738a13731f6448aa97f0a752d5553c6c54db3e85
+diff: v1.6.1..efdca684
+fix_delta: 738a1373..efdca684
 files_reviewed: 46
+fix_files_reviewed: 5
 findings:
   critical: 0
   high: 0
@@ -11,8 +14,10 @@ findings:
   low: 4
   info: 4
   total: 8
+low_fixed: 4
+low_open: 0
 status: passed
-recommendation: 1.6.2 ohne Code-Fix; vier LOW als Owner-Punkte (41-10) bzw. v1.7
+recommendation: 1.6.2 mit den vier LOW-Fixes (Owner-Entscheid 04.11.2026); 41-11 taggt gegen audited_head efdca684 oder einen Kopf mit leerem Code-Diff dazu
 ---
 
 # Phase 41: Audit 1.6.2 (Security, Bugs, Performance)
@@ -437,3 +442,126 @@ CI-Lauf; das ist eine Owner-Abwägung, keine Pflicht aus diesem Audit.
    dreisprachig).
 3. **F-41A-04**: fp32-Sweep und fp32-Abruf schreiben in `models/` (und eine
    Meta-Zeile) auch in der Pause. Vorschlag: v1.7; Gewichte sind neu holbar.
+
+## Nachaudit: Fix-Delta 738a1373..efdca684 (04.11.2026)
+
+**Anlass:** Owner-Entscheid 04.11.2026: alle vier LOW (F-41A-01 bis -04) vor
+dem Release beheben statt v1.7. Damit gilt der Abschnitt "Für die Owner-Runde
+41-10" oben als erledigt; die Befundtabelle bleibt als Stand von 738a1373
+stehen, der Entscheid je LOW steht hier.
+
+**Code-Kopf mechanisch** (`git log -1 --format=%H -- backend/src backend/docker
+backend/appinfo php/appinfo php/lib php/js php/templates php/l10n
+.github/workflows scripts`): `efdca6840ee89b3373d9706b0e3c94039c4ef8d4`, neuer
+`audited_head`. 41-11 taggt diesen Kopf oder einen Kopf, dessen Code-Diff zu
+`efdca684` leer ist.
+
+**Commits** (Autor street1983nk, ohne Trailer, je Befund ein Commit, Probe zuerst
+umgedreht und rot gesehen, dann Fix):
+
+| Commit | Befund |
+|---|---|
+| b0c10754 | fix(41): the stop of a paused container writes no shutdown mark (F-41A-01) |
+| c8fa6d98 | fix(41): the catch-up raises in_flight with its hold check (F-41A-02) |
+| 6b9d0995 | fix(41): the reads of the pause wish back off and say so once (F-41A-03) |
+| efdca684 | fix(41): the fp32 sweep and the fp32 fetch respect the backup pause (F-41A-04) |
+
+`git diff --stat 738a1373..efdca684` über die Code-Pfade: 5 Dateien in
+backend/src (main.py 13, worker/pause.py 72, worker/probe_run.py 57,
+worker/reconcile.py 35, worker/watch.py 11 Zeilen), dazu backend/tests
+(test_phase41_audit.py, test_measurement_scripts.py). Kein PHP, kein l10n, kein
+Workflow, kein Skript, kein nutzersichtbarer Text; PHPUnit deshalb nicht neu
+gefahren (Stand 958 OK am alten Kopf, php/ unverändert).
+
+### Urteil je Datei
+
+| Datei | Befund | Urteil |
+|---|---|---|
+| worker/watch.py | F-41A-01 | `note_shutdown_begins` liest bei `_persist_suspended` erst die zwei Pass-Marken und schreibt nur, wenn eine gesetzt ist. In "paused" läuft kein Pass, beide sind leer, also kein Schreiben. Ein Pass, der während "pausing" noch läuft, behält seine Marke und wird wie bisher geräumt (sonst läse der nächste Start ein unsauberes Ende, Pitfall 9). Das Lesen öffnet nur die vorhandene Verbindung bzw. legt `-shm` und ein leeres `-wal` an (I-41A-01). ok |
+| worker/reconcile.py | F-41A-02 | `in_flight` geht im selben Schritt wie die Hold-Prüfung hoch, ohne `await` dazwischen, und fällt nur im `finally`. Nach dem Lesen der Catch-up-Marke wird der Hold erneut gefragt; gehalten, startet keine Runde. Der Zweig "Marke noch nicht CATCHUP_RECONCILE" senkt `in_flight` vor dem langen Warten. Ausnahmen von `run_once` wie bisher gefangen; `_catchup_mark` fängt selbst. Im asyncio-Modell wettlauffrei: der Koordinator sieht entweder die Runde oder die Runde den Hold. ok |
+| worker/pause.py | F-41A-03, F-41A-04 | Leiter: jede unlesbare Lesung in Folge verdoppelt das Warten ab dem Poll bis `PAUSE_RETREAT_MAX_SECONDS` = 300 (= `RETREAT_MAX_SECONDS` des Pollers, per Test gleich gehalten), Exponent gedeckelt. Eine WARNING nach `PAUSE_UNREADABLE_WARN_AFTER` = 3 (= `RETREAT_AFTER_ROUNDS`), mit Zustandswort und Deckel, ASCII, kein Pfad; die Zeile je Ausnahme des Lesens nur bis zu dieser Ansage, danach DEBUG. Erste Antwort setzt die Leiter zurück, eine INFO-Zeile nur, wenn die WARNING kam (wie `_recovered` des Pollers). Der Zustand ändert sich durch eine unlesbare Lesung nicht: unknown hält alle Schreiber (D-41-19), sonst gilt die letzte Antwort (D-17-Muster: still zurückziehen, nicht anhalten). Neu `fetch_busy` in `_writers_rest`: ein laufender fp32-Abruf hält "pausing", ohne Abbruch (wie D-41-18). ok |
+| worker/probe_run.py | F-41A-04 | `recover` fragt die Pause vor jedem Versuch (dann auch kein Lesen der Companion) und in `_sweep_step` erneut nach dem Lesen, im selben Schritt, in dem `sweeping` hochgeht. Reihenfolge der Entscheidungen (fp32, Übernahme offen, int8) unverändert; Übernahme-Warten über `_sweep_waits_for_takeover` wie zuvor `max(retry, takeover_poll)`. ok |
+| main.py | F-41A-04 | `_the_probe_is_busy` zählt einen laufenden Sweep, `_an_fp32_fetch_runs` liest `precision.snapshot().procuring` und geht als `fetch_busy` in den Koordinator. Nur Lesen von Flags, kein I/O. ok |
+
+S3 (Logzeilen) über den Fix-Delta: `git diff 738a1373..efdca684 -- backend/src |
+grep -E "^\+.*(LOGGER\.|https?://)"`: drei neue Zeilen in pause.py (WARNING der
+Leiter, INFO der Rückkehr, Umschalter warning/debug), eine verschobene in
+reconcile.py; nur Zustandswörter, Zahlen und Klassennamen. Keine URL.
+
+### Proben (backend/tests/test_phase41_audit.py, jetzt 26 Tests)
+
+Methode wie oben: Plattenzustand Datei für Datei (Größe, mtime_ns, sha256), jede
+Probe mit Positivkontrolle auf demselben Pfad. Alle vier umgedrehten Proben vor
+dem Fix rot gesehen.
+
+- **F-41A-01:** `test_p_f_41a_01_a_stop_in_the_pause_writes_nothing` (echte
+  Lifespan, Wunsch paused, Stopp: `_data_moved == {}`; vor dem Fix
+  `{'state.db': 'changed'}`).
+  `test_p_f_41a_01_the_shutdown_mark_writes_only_outside_the_pause_or_for_a_set_mark`,
+  vier Fälle: ohne Pause schreibt derselbe Pfad (Positivkontrolle, sha256 von
+  state.db ändert sich); Pause ohne Marke schreibt nichts (vor dem Fix rot);
+  Pause mit gesetzter Marke räumt sie; einzelne Wahl ohne Pass-Marke wird
+  geräumt. `test_p_a_stop_and_a_restart_in_the_pause_move_no_data` läuft jetzt
+  über den echten Abbau ohne Platzhalter (vor dem Fix rot).
+- **F-41A-02:**
+  `test_p_f_41a_02_a_hold_that_lands_in_the_mark_read_of_the_catch_up_keeps_pausing_and_nothing_writes`
+  erzwingt die Verschränkung (das Lesen der Marke wartet auf ein Event, der
+  Pausen-Eintritt fällt hinein): `in_flight` True, Zustand "pausing" (vor dem Fix
+  rot: `in_flight` False, Zustand paused), nach dem Lesen kein
+  `rewind_reconcile_walk`, dann "paused" und 0,2 s später kein Byte bewegt.
+  Kontrolle `..._control_without_the_hold_the_same_catch_up_rewinds`: ohne Hold
+  spult dieselbe Runde zurück.
+- **F-41A-03:** `test_v_f_41a_03_the_ladder_retreats_to_twelve_reads_an_hour_and_an_answer_resets_it`
+  (keine Antwort und werfendes Lesen): Wartezeiten 15, 30, 60, 120, 240, 300,
+  300, 300 s, also 12 Lesungen je Stunde statt 240; Zustand bleibt unknown,
+  `wants_pause()` True; die erste Antwort setzt auf 15 s und den Zustand auf
+  running. `test_v_f_41a_03_one_warning_after_three_unreadable_reads_and_one_info_on_the_way_back`:
+  zwei Fehlversuche ohne Zeile, beim dritten genau eine WARNING (enthält
+  "unknown" und "300"), zehn weitere ohne Zeile, eine INFO bei der Rückkehr, neue
+  Serie warnt wieder einmal; die letzte Antwort (paused) bleibt in Kraft.
+  `test_v_the_coordinator_reads_at_the_pace_of_the_poll_and_backs_off_without_an_answer`:
+  Laufschleife mit 50 ms Poll, mit Antwort 15 bis 22 Lesungen je Sekunde, ohne
+  Antwort 3 bis 6 (vor dem Fix 16).
+- **F-41A-04:** `test_p_f_41a_04_the_sweep_of_a_pre_check_waits_for_the_end_of_the_pause`
+  (echte Lifespan, Start in der Pause mit `probe_fp32_fetched=1` und fp32-Datei):
+  in "paused" 1 s und ein weiterer Takt ohne geänderte Datei, Gewichte da, Marke
+  "1", Companion nicht gefragt (vor dem Fix rot: Datei gelöscht). Positivkontrolle
+  im selben Test: Wunsch "nicht pausiert", derselbe Sweep fragt, löscht und leert
+  die Marke. `test_p_f_41a_04_a_pause_that_arrives_during_the_read_of_the_companion_holds_the_sweep`
+  erzwingt die Pause innerhalb des Lesens: nichts gelöscht, sha256 gleich, kein
+  zweites Lesen, `sweeping` nie True; nach der Freigabe sweept derselbe ProbeRun.
+  Gegenprobe: mit entfernter Nachfrage nach dem Lesen wird diese Probe rot (1
+  failed), mit ihr grün. `test_p_f_41a_04_a_running_fp32_fetch_keeps_the_pause_on_pausing_until_it_ended`
+  am Koordinator aus `main._build_the_pause`: laufender Abruf, drei Takte
+  "pausing" (vor dem Fix rot: sofort paused), nach dem Ende "paused"; Kontrolle
+  ohne Abruf sofort paused.
+
+### Gates am Fix-Kopf (lokal, vor jedem der vier Commits)
+
+- ruff check (Vollsatz) "All checks passed!" für backend und scripts, ruff format
+  --check "244 files already formatted" bzw. "21 files", pyright (latest)
+  "0 errors, 0 warnings, 0 informations", vulture 80 Exit 0.
+- Volltestsuite in zwei Hälften mit den sechs --ignore, am Kopf efdca684:
+  `tests/test_[a-m]*.py` 3185 passed, 41 skipped; `tests/test_[n-z]*.py` 3415
+  passed, 262 skipped; 0 failed.
+- test_phase41_audit.py dreimal hintereinander: 35 passed, 35 passed, 35 passed.
+- Baumhash-Ratsche des Pakets je Commit nachgezogen und unabhängig mit find,
+  sort, sed, sha256sum nachgerechnet: 75e34151, 3d8f694b, a8864566, 98687977;
+  81 Dateien, PHP-Paar unverändert.
+
+### Verbleibendes, bewusst
+
+- Ein fp32-Abruf, der vor der Pause begann, verlängert "pausing" bis zu seinem
+  Ende (bis 470 MB); kein Abbruch, dasselbe Prinzip wie der OCR-Batch (D-41-18).
+  Die Doku sagt schon: Backup erst bei "paused".
+- Nach einem Resume holt der Sweep spätestens nach `RECOVER_RETRY_SECONDS` (5 s)
+  nach.
+- Eine wieder installierte Companion wird nach einer langen Serie spätestens nach
+  300 s gelesen, wie beim Rückzug des Pollers.
+
+### Urteil Nachaudit
+
+0 CRIT / 0 HIGH / 0 MEDIUM / 0 LOW offen über `v1.6.1..efdca684`. Die vier LOW
+sind behoben und mit umgedrehten Proben samt Positivkontrolle belegt; der Fix
+bringt keinen neuen Befund. `audited_head` = `efdca6840ee89b3373d9706b0e3c94039c4ef8d4`.
+CI-Beleg des Kopfes siehe unten.
