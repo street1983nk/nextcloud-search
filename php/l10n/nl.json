@@ -131,6 +131,7 @@
         "Save the file as UTF-8 and upload it again.": "Het bestand als UTF-8 opslaan en opnieuw uploaden.",
         "Timed out while reading": "Tijdslimiet overschreden bij het lezen",
         "The next run tries again.": "De volgende doorloop probeert het opnieuw.",
+        "Nextcloud could not open the file, often because its storage was not available. The nightly comparison tries it again up to three times, and a change to the file tries it at once.": "Nextcloud kon het bestand niet openen, vaak omdat de opslag ervan niet beschikbaar was. De nachtelijke vergelijking probeert het tot drie keer opnieuw, en een wijziging aan het bestand probeert het meteen.",
         "Not enough memory while reading": "Te weinig geheugen bij het lezen",
         "The next run tries again. If it happens again, give each document more memory: deploy Findling Backend with a larger FINDLING_EXTRACT_ADDRESS_SPACE_BYTES, for example 1073741824 (1 GiB).": "De volgende doorloop probeert het opnieuw. Gebeurt het nog eens, geef dan elk document meer geheugen: rol Findling Backend uit met een grotere FINDLING_EXTRACT_ADDRESS_SPACE_BYTES, bijvoorbeeld 1073741824 (1 GiB).",
         "File was not retrievable": "Bestand was niet op te halen",

@@ -132,6 +132,7 @@ OC.L10N.register(
     "Save the file as UTF-8 and upload it again.": "Guarde o ficheiro como UTF-8 e volte a carregá-lo.",
     "Timed out while reading": "Tempo de espera esgotado durante a leitura",
     "The next run tries again.": "A próxima passagem tenta de novo.",
+    "Nextcloud could not open the file, often because its storage was not available. The nightly comparison tries it again up to three times, and a change to the file tries it at once.": "O Nextcloud não conseguiu abrir o ficheiro, muitas vezes porque o respetivo armazenamento não estava disponível. A comparação noturna tenta de novo até três vezes, e uma alteração ao ficheiro tenta de imediato.",
     "Not enough memory while reading": "Memória insuficiente durante a leitura",
     "The next run tries again. If it happens again, give each document more memory: deploy Findling Backend with a larger FINDLING_EXTRACT_ADDRESS_SPACE_BYTES, for example 1073741824 (1 GiB).": "A próxima passagem tenta de novo. Se voltar a acontecer, dê mais memória a cada documento: implemente o Findling Backend com um FINDLING_EXTRACT_ADDRESS_SPACE_BYTES maior, por exemplo 1073741824 (1 GiB).",
     "File was not retrievable": "Não foi possível obter o ficheiro",

@@ -561,7 +561,7 @@ final class AdminViewService {
 		],
 		'gateway_error' => [
 			'File was not retrievable',
-			'The next run tries again.',
+			'Nextcloud could not open the file, often because its storage was not available. The nightly comparison tries it again up to three times, and a change to the file tries it at once.',
 		],
 		'repeatedly_stuck' => [
 			'Stuck repeatedly',
