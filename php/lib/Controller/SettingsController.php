@@ -16,7 +16,12 @@ use OCP\IUserSession;
 use Psr\Log\LoggerInterface;
 
 /**
- * The four addresses the admin page asks, and the only four.
+ * The five addresses the admin page asks, and the only five.
+ *
+ * The fifth is the switch of the backup pause (issue #37, plan 41-06), a
+ * second writing route next to the rules: it writes one appconfig key, the
+ * same one occ writes, and nothing else. The paragraphs below were written
+ * when there were four and still hold for each of them.
  *
  * One reads the whole page and is polled; one looks up a single file and is
  * asked when somebody types into a field; one previews what a new exclusion
@@ -478,6 +483,55 @@ final class SettingsController extends Controller {
 			ExclusionService::FIELD_PATTERNS => [],
 			'rules' => $rules,
 		]);
+	}
+
+	/**
+	 * POST /apps/findling/admin/pause
+	 *
+	 * The switch of the backup pause (issue #37, D-41-01): the same appconfig
+	 * key as ``occ findling:pause`` and ``occ findling:resume``, written through
+	 * the same SettingsService::setPaused(), so there is one source of truth
+	 * and two ways to it. The route stores the wish and nothing else; whether
+	 * the backend already holds still is what the overview reads out of its
+	 * status answer, and a backup may begin only when that says "paused".
+	 *
+	 * Protected by the same absence of attributes as every route of this class
+	 * (T-41-24, T-41-25): an administrator with the request token of the
+	 * session, nobody else.
+	 *
+	 * Only a real boolean is taken, or the exact words "true" and "false" of a
+	 * form value. Anything else, a number, another word or no value at all, is
+	 * refused with 400 and writes nothing (T-41-26): a switch that read "yes" or
+	 * 1 as a pause would stop the indexing of an instance on a guess.
+	 */
+	#[\OCP\AppFramework\Http\Attribute\FrontpageRoute(verb: 'POST', url: '/admin/pause')]
+	public function setPause(mixed $paused = null): DataResponse {
+		$wish = match (true) {
+			$paused === true, $paused === 'true' => true,
+			$paused === false, $paused === 'false' => false,
+			default => null,
+		};
+		if ($wish === null) {
+			$this->logger->warning('Findling: refused a pause switch without a boolean');
+
+			return new DataResponse(
+				['error' => 'paused must be a boolean'],
+				Http::STATUS_BAD_REQUEST,
+			);
+		}
+
+		try {
+			$this->settingsService->setPaused($wish);
+		} catch (\Throwable $e) {
+			$this->logger->error('Findling: could not store the pause switch', ['exception' => $e]);
+
+			return new DataResponse(
+				['error' => 'The pause could not be saved.'],
+				Http::STATUS_INTERNAL_SERVER_ERROR,
+			);
+		}
+
+		return new DataResponse(['paused' => $wish]);
 	}
 
 	/**

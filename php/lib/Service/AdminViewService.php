@@ -123,14 +123,35 @@ final class AdminViewService {
 	private const KEY_INDEX_PROGRESS = 'last_index_progress';
 
 	/**
-	 * The run states, and there are exactly four. Anything the page wants to say
-	 * about progress has to be one of them, so that a fifth case cannot appear
+	 * The run states, and there are exactly five. Anything the page wants to say
+	 * about progress has to be one of them, so that a sixth case cannot appear
 	 * as an empty status line.
+	 *
+	 * The fifth, ``paused``, is set by quietInPause() alone (issue #37, plan
+	 * 41-06): while the backup pause holds, "running" and "stalled" are both
+	 * false, and the page says the pause in its own line instead.
 	 */
 	public const RUN_NEVER = 'never_run';
 	public const RUN_STALLED = 'stalled';
 	public const RUN_RUNNING = 'running';
 	public const RUN_IDLE = 'idle';
+	public const RUN_PAUSED = 'paused';
+
+	/**
+	 * The states of the backup pause on this page (issue #37, D-41-06).
+	 *
+	 * The first four are the closed set the backend sends in the field
+	 * ``pause`` of its status answer. The fifth exists on this side only: a
+	 * stored wish and a status answer without the field is a backend before
+	 * 1.6.2, which passes the lockstep check of Major.Minor and ignores the
+	 * wish (pitfall 3), and the page must not show that as a pause.
+	 */
+	public const PAUSE_RUNNING = 'running';
+	public const PAUSE_PAUSING = 'pausing';
+	public const PAUSE_PAUSED = 'paused';
+	public const PAUSE_UNKNOWN = 'unknown';
+	public const PAUSE_UNSUPPORTED = 'unsupported';
+	private const PAUSE_STATES = [self::PAUSE_RUNNING, self::PAUSE_PAUSING, self::PAUSE_PAUSED, self::PAUSE_UNKNOWN];
 
 	/**
 	 * The states of a single file that no verdict table holds.
@@ -617,7 +638,8 @@ final class AdminViewService {
 	 *     probeStep:string, profileCheck:?array<string,mixed>,
 	 *     profileEnv:list<array{field:string, value:int, variable:string}>,
 	 *     reindexDocuments:int, reindexSecondsInt8:?int, reindexSecondsFp32:?int,
-	 *     fp32DownloadBytes:int, parallelSearch:bool
+	 *     fp32DownloadBytes:int, parallelSearch:bool,
+	 *     pause:string, pausedSince:?int, pauseWished:bool
 	 * }
 	 */
 	public function overview(): array {
@@ -719,7 +741,13 @@ final class AdminViewService {
 		$check = $this->profileCheckView($this->settingsService->profileCheck());
 		$chunks = self::nonNegativeInt(self::modelField($answered, 'chunks')) ?? 0;
 
-		return [
+		// The backup pause of issue #37: the wish out of appconfig, the state
+		// out of the status answer. Worked out before the estimate, because in
+		// a pause the throughput call has nothing to say (pitfall 6).
+		$pauseWished = $this->settingsService->paused();
+		$pause = self::pauseState($answer, $pauseWished);
+
+		return self::quietInPause([
 			'indexed' => $indexed,
 			'skipped' => (int)($states['skipped'] ?? 0),
 			'failed' => (int)($states['failed'] ?? 0),
@@ -769,7 +797,7 @@ final class AdminViewService {
 				$figures['deduplicated'],
 				$this->rulesPendingNow(),
 			),
-			'estimate' => $this->estimate($figures['scan'], $figures['backend'], $backendReachable, $indexable, $scheduled + $running),
+			'estimate' => $this->estimate($figures['scan'], $figures['backend'], $backendReachable, $indexable, $scheduled + $running, $pause === self::PAUSE_RUNNING),
 			'errors' => $this->errors(),
 			'rules' => $this->rules(),
 			// The four limits per file, read only (POL-01, plan 33-06).
@@ -810,7 +838,86 @@ final class AdminViewService {
 			// the template only; the script leaves the banner alone, because the
 			// apps are switched on the apps page and the admin reloads after it.
 			'parallelSearch' => $this->parallelSearch->active(),
-		];
+			// The backup pause (issue #37, D-41-01, D-41-06): the state out of
+			// the closed set plus "unsupported", the moment "paused" was
+			// reached, and the stored wish, which decides what the switch says.
+			'pause' => $pause,
+			'pausedSince' => self::pausedSince($answer, $pause),
+			'pauseWished' => $pauseWished,
+		], $pause);
+	}
+
+	/**
+	 * The state of the backup pause as the page shows it (issue #37).
+	 *
+	 * A word of the closed set the backend sends is passed through, compared
+	 * strictly; any other value of the field is "unknown", never a cast and
+	 * never container text on the page (T-41-27). Without the field the stored
+	 * wish decides: with a wish it is a backend before 1.6.2 that ignores it,
+	 * "unsupported" (pitfall 3); without one nothing is paused. A backend that
+	 * did not answer at all is no old backend, so a wish then reads "unknown".
+	 *
+	 * @param array<mixed>|null $answer the decoded status answer, or null when there was none
+	 */
+	public static function pauseState(?array $answer, bool $wished): string {
+		if ($answer === null) {
+			return $wished ? self::PAUSE_UNKNOWN : self::PAUSE_RUNNING;
+		}
+		if (!array_key_exists('pause', $answer)) {
+			return $wished ? self::PAUSE_UNSUPPORTED : self::PAUSE_RUNNING;
+		}
+		$value = $answer['pause'];
+
+		return is_string($value) && in_array($value, self::PAUSE_STATES, true) ? $value : self::PAUSE_UNKNOWN;
+	}
+
+	/**
+	 * The epoch second the pause was reached, only in the state "paused" and
+	 * only as a non negative integer, otherwise null.
+	 *
+	 * @param array<mixed>|null $answer
+	 */
+	public static function pausedSince(?array $answer, string $pause): ?int {
+		if ($pause !== self::PAUSE_PAUSED || $answer === null) {
+			return null;
+		}
+
+		return self::nonNegativeInt($answer['pausedSince'] ?? null);
+	}
+
+	/**
+	 * The overview with what a pause makes false taken out (pitfall 6).
+	 *
+	 * In the pause the queue stands still on purpose, and the PHP crawl jobs
+	 * keep filling it, because they write only into the Nextcloud database and
+	 * never touch the volume (D-41-21). So the time left would be a figure of
+	 * a run that does not run, the sentence about a silent content gateway
+	 * would name an outage that is a pause, and the stall verdict would blame
+	 * a standstill somebody asked for. The three go; every count of the crawl
+	 * and of the Nextcloud side stays as it was. "idle" and "never run" say
+	 * nothing a pause makes false and stay too. While nothing is paused the
+	 * overview passes through untouched.
+	 *
+	 * @param array<string,mixed> $overview
+	 * @return array<string,mixed>
+	 */
+	public static function quietInPause(array $overview, string $pause): array {
+		if ($pause === self::PAUSE_RUNNING) {
+			return $overview;
+		}
+
+		if (is_array($overview['estimate'] ?? null)) {
+			$overview['estimate']['secondsLeft'] = null;
+		}
+		if (is_array($overview['backend'] ?? null)) {
+			$overview['backend']['gatewayUnavailableSince'] = null;
+		}
+		$runState = $overview['runState'] ?? null;
+		if ($runState === self::RUN_RUNNING || $runState === self::RUN_STALLED) {
+			$overview['runState'] = self::RUN_PAUSED;
+		}
+
+		return $overview;
 	}
 
 	/**
@@ -2315,6 +2422,7 @@ final class AdminViewService {
 	 * @param array<string,mixed> $backend
 	 * @param int $indexable the same figure as coverage.indexable
 	 * @param int $openWork queue entries waiting plus queue entries running
+	 * @param bool $timeLeftWanted false in the backup pause, which asks no throughput
 	 * @return array{
 	 *     files:int, ocrMin:int, ocrMax:int, ocrMeasured:int|null,
 	 *     secondsLeft:int|null, bytesExpected:int|null, bytesPerDoc:int|null,
@@ -2322,7 +2430,7 @@ final class AdminViewService {
 	 *     mountsFinished:int, startupValues:bool, firstIndexDone:bool
 	 * }
 	 */
-	private function estimate(array $scan, array $backend, bool $backendReachable, int $indexable, int $openWork): array {
+	private function estimate(array $scan, array $backend, bool $backendReachable, int $indexable, int $openWork, bool $timeLeftWanted = true): array {
 		$mountsTotal = max(0, (int)$scan['mountsTotal']);
 		$mountsFinished = max(0, (int)$scan['mountsFinished']);
 		$provisional = $mountsTotal === 0 || $mountsFinished < $mountsTotal;
@@ -2363,9 +2471,13 @@ final class AdminViewService {
 		$judged = max(0, (int)$backend['indexed']) + max(0, (int)$backend['skipped']) + max(0, (int)$backend['failed']);
 		$shape['ocrMeasured'] = $this->measuredOcr($backend, $ocrMin, $ocrMax, $indexable, $judged);
 
-		$rest = max(0, $indexable - $judged);
-		$rates = $this->rates($this->exAppService->adminGet('/rates', $this->userId(), []));
-		[$shape['secondsLeft'], $shape['startupValues']] = $this->timeLeft($rest, $rates, $shape);
+		// In the backup pause the time left is no figure at all (pitfall 6), so
+		// the throughput is not asked for: quietInPause() would drop the answer.
+		if ($timeLeftWanted) {
+			$rest = max(0, $indexable - $judged);
+			$rates = $this->rates($this->exAppService->adminGet('/rates', $this->userId(), []));
+			[$shape['secondsLeft'], $shape['startupValues']] = $this->timeLeft($rest, $rates, $shape);
+		}
 
 		$docs = max(0, (int)$backend['docs']);
 		if ($docs > 0) {

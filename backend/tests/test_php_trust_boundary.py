@@ -319,10 +319,13 @@ def test_the_gate_sees_every_route_the_sources_declare() -> None:
     # question of D-36-14. Counted on 2026-10-20 before it, the sources declared
     # eighteen routes, so the bound had fallen behind; it moves to the count of
     # today, nineteen, and the branch without the page controller to one less.
+    #
+    # Plan 41-06 adds POST /admin/pause on SettingsController, the switch of
+    # the backup pause (issue #37), so the bound stands one higher.
     if PAGE_CONTROLLER.is_file():
-        assert len(routes) >= 19  # plan 36-03: eighteen routes plus /storages/gone
+        assert len(routes) >= 20  # plan 41-06: nineteen routes plus /admin/pause
     else:
-        assert len(routes) >= 18  # plan 36-03: eighteen routes plus /storages/gone
+        assert len(routes) >= 19  # plan 41-06: nineteen routes plus /admin/pause
 
 
 def test_every_controller_of_the_app_carries_at_least_one_route() -> None:
