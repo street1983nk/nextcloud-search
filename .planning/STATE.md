@@ -4,7 +4,7 @@ milestone: v1.6
 milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
 status: executing
 stopped_at: Completed 40-05-PLAN.md
-last_updated: "2026-11-04T05:52:28.865Z"
+last_updated: "2026-11-04T06:19:49.574Z"
 last_activity: 2026-11-04
 progress:
   total_phases: 4
@@ -26,7 +26,7 @@ Siehe .planning/PROJECT.md (Stand nach v1.5, Milestone v1.6 gestartet) und .plan
 ## Current Position
 
 Phase: 41 (findling-1-6-2-backup-pause-schalter-37-backup-doku-25-fixes) — EXECUTING
-Plan: 4 of 12
+Plan: 5 of 12
 Status: Ready to execute
 Last activity: 2026-11-04
 
@@ -234,10 +234,11 @@ Items acknowledged and deferred at milestone close on 2026-10-28 (Owner-Wiedervo
 | Phase 38 P01 | ca. 30 min | 2 tasks | 4 files |
 | Phase 38 P02 | ca. 130 min | 3 tasks | 5 files |
 | Phase 40 P05 | ca. 35 min inkl. ca. 25 min CI | 2 tasks | 4 files |
+| Phase 41 P04 | 60 min | 2 tasks | 16 files |
 
 ## Session Continuity
 
-Last session: 2026-11-04T05:52:28.849Z
+Last session: 2026-11-04T06:19:45.533Z
 Stopped at: Completed 40-05-PLAN.md
 Resume file: None
 
