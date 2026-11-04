@@ -28,6 +28,10 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
 - HTTP 408 and 429 from a proxy count as an outage.
 - A fill level refresh that could not start no longer stops the language
   line until a restart.
+- RTF files with emoji are indexed: split UTF-16 halves in extracted text
+  are joined or replaced before they reach the index (#44).
+- A file the index cannot take fails alone as `corrupt` and keeps its old
+  version, instead of failing the whole batch and stalling the queue (#44).
 
 ## [1.6.1] - 2026-11-02
 

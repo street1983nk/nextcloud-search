@@ -1,10 +1,12 @@
 ---
 phase: 41-findling-1-6-2-backup-pause-schalter-37-backup-doku-25-fixes
 audited: 2026-11-04
-audited_head: efdca6840ee89b3373d9706b0e3c94039c4ef8d4
+audited_head: 5dc1aa127a495c78ec4ef5272a275c6788c92af0
+audited_head_before_issue_44: efdca6840ee89b3373d9706b0e3c94039c4ef8d4
 audited_head_before_fixes: 738a13731f6448aa97f0a752d5553c6c54db3e85
 diff: v1.6.1..efdca684
 fix_delta: 738a1373..efdca684
+fix_delta_issue_44: efdca684..5dc1aa12
 files_reviewed: 46
 fix_files_reviewed: 5
 findings:
@@ -17,7 +19,7 @@ findings:
 low_fixed: 4
 low_open: 0
 status: passed
-recommendation: 1.6.2 mit den vier LOW-Fixes (Owner-Entscheid 04.11.2026); 41-11 taggt gegen audited_head efdca684 oder einen Kopf mit leerem Code-Diff dazu
+recommendation: 1.6.2 mit den vier LOW-Fixes und dem Fix von #44 (Owner-Entscheide 04.11.2026); 41-11 taggt gegen audited_head 5dc1aa12 oder einen Kopf mit leerem Code-Diff dazu
 ---
 
 # Phase 41: Audit 1.6.2 (Security, Bugs, Performance)
@@ -576,3 +578,125 @@ metadata gates läuft wegen des Pfadfilters nicht (php/, backend/appinfo und die
 Filterpfade seit f12649a2 unverändert, `git diff --stat f12649a2 HEAD` darüber
 leer); Beleg Lauf 41792859857 success auf f12649a2, "OK (958 tests, 5851
 assertions)".
+
+## Nachaudit #44: Fix-Delta efdca684..5dc1aa12
+
+Owner-Entscheid 04.11.2026: Issue #44 (einzelne UTF-16-Surrogate im extrahierten
+Text, `UnicodeEncodeError` in `add_text`, Stillstand des ganzen Passes) kommt in
+1.6.2. Zwei Code-Commits: aef9966f (Teil 1, Reparatur in `normalize`) und
+5dc1aa12 (Teil 2, Eindämmung je Datei). Gelesen: `git diff efdca684..5dc1aa12`,
+7 Dateien, 515 Zeilen dazu, 44 weg.
+
+### Ursache, selbst nachgestellt
+
+- striprtf 0.0.35 liefert für `\u-10179?\u-8704?` die zwei Hälften als zwei
+  Codepunkte: `'Hallo 😀 Welt'`. `normalize` (NFC) ließ sie stehen,
+  tantivy 0.26.2 `Document.add_text` warf `UnicodeEncodeError: surrogates not
+  allowed` (writer.py Zeile 315 am Kopf efdca684, wie im Issue).
+- `add` reihte `delete_documents_by_query` VOR den Feldern ein. Gemessen mit dem
+  Writer von efdca684: alte Version von 42 committet, vergifteter Satz für 42
+  wirft, Nachbar 43 geschrieben, Commit: danach 1 Dokument, die alte Version von
+  42 ist still weg. Mit 5dc1aa12: 2 Dokumente, alte Version da.
+- Der Fehler lief aus `_work` und `run_once` in den Catch-all von `run()`, der
+  `unlock_held()` rief; die Probe unten zeigt vor dem Fix `unlocked == [[91, 92,
+  93]]` und keine Quittung, also derselbe Kopf-Batch beim nächsten Claim.
+
+### Urteil je Datei
+
+| Datei | Teil | Urteil |
+|-------|------|--------|
+| index/analyzer.py | 1 | `normalize` ruft zuerst `_without_surrogates`: ASCII-Text (gespeichertes Flag) geht durch, sonst eine strikte UTF-8-Probe, und nur wenn sie wirft der Round-Trip `utf-16-le` mit `surrogatepass` hin und `replace` zurück. Paare werden zu einem Zeichen, einzelne Hälften zu U+FFFD; kein BOM wird erzeugt oder geschluckt (Little Endian auf beiden Seiten, Kontrolltest mit führendem U+FEFF). Gemessen bei MAX_TEXT_CHARS (524.288 Zeichen deutsch, best of 7): 0,75 ms vorher, 1,04 ms mit Probe, 2,15 ms mit Reparatur; Regex über den Surrogatbereich wäre allein 1,2 ms. Die Zahlen stehen im Docstring. Weiterhin genau zwei Aufrufer (writer.py, rewrite.py), der Zähltest ist unverändert grün. ANALYZER_VERSION bleibt: ein Text mit Surrogaten kam nie in den Index (er warf), also ändert sich kein vorhandener Term. ok |
+| index/writer.py | 1, 2 | `add` baut das Dokument in `_document_of` vollständig, BEVOR die Löschung eingereiht wird; jede Ausnahme beim Bau wird `UnwritableRecord(cause=Klassenname)` mit `from None`, also ohne Nachricht und ohne Kette (die Nachricht eines Encode-Fehlers zitiert den Text). Löschung und `add_document` bleiben außerhalb: ein Fehler des Writers selbst ist kein Befund über eine Datei und beendet den Pass wie bisher. `_pending` und `_pending_bytes` zählen erst nach dem Einreihen. Pfad und Endung bleiben unnormalisiert, Begründung mit Messung im Docstring (siehe unten). ok |
+| worker/poller.py | 2 | Neuer `_write_or_fail` an allen drei Schreibstellen (Inhalt, OCR-Spur über den Pool, Umbenennung). Gefangen wird nur `UnwritableRecord`; daraus wird `failed(corrupt)`, die Nachbarn laufen weiter und bekommen in `_record_verdicts` ihr Urteil. Der Schreibaufruf selbst steht unverändert in `to_thread` bzw. `self._pool.call` (T-26-19); der Quelltext-Ratchet `test_the_blocking_work_runs_off_the_event_loop` hielt das fest und blieb unverändert, das Produkt wurde ihm angepasst. Beim Umbenennen wird ein abgelehnter Satz als failed gesammelt, ohne Embedding-Spur und ohne übernommenes OCR-Flag; die alte Version bleibt unter dem alten Namen. Logzeile: WARNING mit Datei-ID und Klassenname, kein Name, kein Pfad, kein Text. ok |
+| tests/test_analyzer.py | 1 | 8 neue Tests; Surrogate über `chr()` gebaut, weil ein Editor `😀` im Quelltext zu einem Emoji zusammenzieht (beim Schreiben dieses Fixes passiert). ok |
+| tests/test_index_writer.py | 2 | 3 neue Tests (Fehlerart ohne Inhalt, alte Version bleibt, Positivkontrolle Ersetzen). ok |
+| tests/test_poller.py | 2 | 6 neue Tests, siehe Proben. ok |
+| tests/test_measurement_scripts.py | 1, 2 | Baumhash-Ratsche je Commit mit Begründung nachgezogen, unabhängig mit find, sort, sed, sha256sum gerechnet: 26537789 (aef9966f), f6716e41 (5dc1aa12); 81 Dateien, PHP-Paar unverändert. EXPECTED_TRAVEL_PATH_WRITES unberührt und grün. ok |
+
+### Wahl des Reason-Codes: corrupt
+
+Bestehender Code, kein neuer Text. `encoding_unknown` sagt dem Admin "Zeichensatz
+nicht erkannt, als UTF-8 speichern"; das ist für eine Datei, deren Text sauber
+gelesen wurde und deren Ablehnung jeder Wert des Satzes sein kann, der falsche
+Rat. `corrupt` ("Datei beschädigt, außerhalb von Nextcloud prüfen und neu
+hochladen") ist zugleich das, was die App schon für jede unvorhergesehene
+Ausnahme sagt (`ExtractionOutcome.from_exception`). Nach Teil 1 erreicht ein
+Emoji-RTF diesen Pfad nicht mehr; er ist die Absicherung für alles, was künftig
+an einem Wert scheitert.
+
+### Pfad und Endung: Beleg statt Annahme
+
+Beide kommen aus dem OCS-JSON der Queue, das Nextcloud mit `json_encode($array,
+JSON_HEX_TAG)` schreibt (BaseResponse.php:101, Image nextcloud:35.0.2-apache).
+Gemessen mit php:8.2-cli: ein Zeichen außerhalb der BMP geht als Escape-Paar
+`😀` hinaus, das `json.loads` zu einem Codepunkt zusammenfügt (in
+Python nachgeprüft); ein Name mit UTF-8-kodiertem Surrogat (`\xED\xA0\xBD`) ist
+"Malformed UTF-8" und lässt `json_encode` ganz scheitern, statt eine Hälfte
+auszugeben. Eine einzelne Hälfte entsteht in Python nur aus einem einzelnen
+Escape, und das schreibt PHP nicht. Käme doch eine an, fängt Teil 2 sie für diese
+eine Datei ab (in den Writer-Tests genau so geprobt). Pfad und Titel gehen
+zusätzlich in die State-DB; das ist der Grund, warum die Poller-Proben den Body
+vergiften und nicht den Pfad.
+
+### Proben
+
+Methode: Fault-Injection statt Ersatzteil. Der Body läuft durch das echte
+striprtf und die echte tantivy-Bindung; die Fixture `normalize_of_1_6_1` setzt
+nur `findling.index.writer.normalize` auf das NFC ohne Reparatur von 1.6.1
+zurück, damit Teil 2 allein und am exakten Wert von #44 geprüft wird. Vor dem
+Fix gegen poller.py und writer.py von aef9966f laufen lassen: 4 rot, 2
+Kontrollen grün; danach 6 grün.
+
+- `test_one_file_the_index_cannot_take_fails_alone_and_the_pass_goes_on`: Batch
+  91, 92 (Emoji-RTF), 93. Vorher `UnicodeEncodeError` aus `run_once`. Nachher
+  `(indexed, failed) == (2, 1)`, Quittung `([91, 93], {92: "corrupt"})`, kein
+  Unlock, State 4711 und 4713 indexed, 4712 failed/corrupt, Index nur 4711 und
+  4713; genau eine WARNING mit "UnicodeEncodeError" und "4712", ohne Name, Pfad
+  oder Text, kein "unexpected".
+- `test_one_file_the_index_cannot_take_no_longer_stalls_the_loop`: derselbe
+  Batch durch `run()`. Vorher `unlocked == [[91, 92, 93]]`, keine Quittung (der
+  Stillstand aus dem Issue). Nachher kein Unlock, Quittung wie oben.
+- `test_a_scan_the_index_cannot_take_fails_alone` (OCR-Spur über den Pool) und
+  `test_a_rename_the_index_cannot_take_fails_alone_and_keeps_the_old_name`
+  (Bau beim neuen Namen abgelehnt): vorher rot, nachher failed(corrupt), die
+  Datei bleibt unter "kuendigung" auffindbar, nicht unter dem neuen Namen.
+- Positivkontrolle 1 `test_the_same_batch_without_the_emoji_indexes_all_three`:
+  gleiche Injektion, RTF ohne Emoji, alle drei indexed. Positivkontrolle 2
+  `test_the_batch_of_issue_44_indexes_all_three_with_the_repair`: ausgelieferte
+  Normalisierung, Emoji-RTF, alle drei indexed, gespeicherter Body enthält
+  U+1F600.
+- Teil 1 allein: `test_an_rtf_with_an_emoji_is_indexed_and_keeps_the_emoji`
+  (echte Extraktion, vorher `UnicodeEncodeError` in writer.py:315, nachher
+  gespeichert "Hallo U+1F600 und ...", "weltkugel" findet das Dokument).
+
+### Gates am Kopf 5dc1aa12 (lokal)
+
+- ruff check (Vollsatz) "All checks passed!", ruff format --check "244 files
+  already formatted", pyright (latest) "0 errors, 0 warnings, 0 informations",
+  vulture 80 Exit 0.
+- Volltestsuite in zwei Hälften mit den sechs --ignore: `tests/test_[a-m]*.py`
+  3196 passed, 41 skipped; `tests/test_[n-z]*.py` 3420
+  passed, 262 skipped, 1 failed: `test_a_large_broken_storage_does_not_hold_up_the_queue`
+  mit `os error 5` im tantivy-Commit (gesperrte Segmentdatei unter Windows,
+  bekannt aus 05-03 und 30-09, der Test berührt keinen der geänderten Pfade);
+  test_poller.py danach dreimal einzeln 242 passed, 1 skipped, und der Lauf von
+  Hälfte 2 vor der letzten Änderung an poller.py hatte ihn grün. CI ist der Beleg.
+- test_phase41_audit.py dreimal hintereinander: 35 passed, 35 passed, 35 passed.
+
+### Verbleibendes, bewusst
+
+- Die RTF-Plausibilitätsprüfung zählt die zwei Hälften als nicht druckbar. Ein
+  sehr kurzes RTF, das zu mehr als 10 Prozent aus Emoji besteht, bleibt
+  skipped(empty_text) wie bisher; beim Bau des Regressionstests mit einem
+  Satz von 20 Zeichen gesehen. Kein Stillstand, kein falsches Urteil über
+  Nachbarn, nur eine Grenze, die es schon gab.
+- Die 7 Dateien des Melders stehen nach 1.6.1 auf failed(repeatedly_stuck);
+  nach dem Update holt `occ findling:index --restart` sie zurück (so im Issue
+  beantwortet).
+
+### Urteil Nachaudit #44
+
+0 CRIT / 0 HIGH / 0 MEDIUM / 0 LOW offen über `efdca684..5dc1aa12`. #44 ist an
+der Ursache behoben und zusätzlich je Datei eingedämmt, beides mit umgedrehten
+Proben samt Positivkontrollen belegt. `audited_head` =
+`5dc1aa127a495c78ec4ef5272a275c6788c92af0`. CI-Beleg siehe unten.
