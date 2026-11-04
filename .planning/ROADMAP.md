@@ -226,5 +226,23 @@ Plans:
 - [ ] 41-11-PLAN.md: Tag v1.6.2 und Store-Einreichung (Owner führt aus), Belegkette
 - [ ] 41-12-PLAN.md: Issue-Antworten #37/#25 nach Store-Release (Owner postet)
 
+### Phase 42: PHP-Sicherheits-Gates für die Companion-App
+
+**Goal:** Die PHP-Hälfte von Findling bekommt Gates auf dem Niveau der Python-Seite, damit keine Route versehentlich öffentlich oder ohne CSRF wird und verwundbare Abhängigkeiten auffallen.
+**Requirements**: Owner-GO 04.11.2026 (Vorschlag aus der PHP-Gates-Recherche)
+**Depends on:** Phase 41 (startet erst nach dem Store-Release 1.6.2)
+**Plans:** 0 plans
+
+**Success Criteria:**
+1. Routen-Attribut-Gate: ein Test vergleicht jede Controller-Methode und ihre Attribute (PublicPage, NoCSRFRequired, NoAdminRequired, AuthorizedAdminSetting, Ratelimits) mit einer committeten Allowlist; eine neue oder geänderte Route ohne Eintrag macht CI rot, mit Negativtest.
+2. Abhängigkeiten: `composer validate --strict` und `composer audit --locked` in php.yml, Dependabot-Eintrag für composer.
+3. Danach (eigene Pläne): Psalm gegen ocp 33/34/35 mit Taint-Analyse (SARIF selbst auszählen, Psalm endet sonst mit 0), php-cs-fixer mit nextcloud/coding-standard als dry-run, zizmor und actionlint für die Workflows.
+4. PHPUnit läuft lokal über Docker (Rezept aus Phase 41) und in CI; alle Gates lokal grün vor Commit.
+
+**Research:** 42-RESEARCH-GATES.md (Recherche 04.11.2026)
+
+Plans:
+- [ ] TBD (via /gsd-plan-phase 42)
+
 ---
 *Created: 2026-09-08. v1.1 archiviert: 2026-09-11. v1.2 archiviert: 2026-09-21. v1.3 archiviert: 2026-09-27. v1.4-Roadmap: 2026-09-27. v1.5-Roadmap: 2026-10-10. v1.5 archiviert: 2026-10-28. v1.6-Roadmap: 2026-10-28.*
