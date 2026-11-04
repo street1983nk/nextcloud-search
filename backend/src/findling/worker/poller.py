@@ -209,10 +209,37 @@ RETREAT_MAX_SECONDS: Final = 300.0
 # judging all of them failed(gateway_error) would spend the give-up budget of a
 # whole stock on a state of the instance (the lesson of DI-05-23). So once the
 # same status reaches min(this, claimed files) files of one pass, with at least
-# two claimed, the pass is aborted like an outage: the verdicts gathered so far
-# lapse with the abort and the rows go back with their delivery refunded. A pass
-# of one file never escalates, because one file is the case of the report.
+# two claimed, and those files lie on at least GATEWAY_OUTAGE_MIN_STORAGES
+# storages, the pass is aborted like an outage: the verdicts gathered so far
+# lapse with the abort and the refused rows stay charged (W-1, see
+# _RefusalsPiledUp). A pass of one file never escalates, because one file is the
+# case of the report.
 GATEWAY_SAME_STATUS_OUTAGE_AFTER: Final = 5
+
+# How many different storages the refusals of one status must come from before
+# the threshold above may call the pass an outage (E-40-07-01, plan 41-01,
+# post audit F-40N-01). Counting files alone turned one large broken mount at
+# the head of the id sorted queue into a blockade: every pass escalated at its
+# fifth refusal, five rows were charged and the rest went back, so the stock
+# moved by five rows per lock timeout, about 72 s per broken file, some 20 h for
+# 1 000 files and days for ten thousand. One storage refusing is what one broken
+# mount looks like, and its files are judged one by one at the full pace of the
+# batch. A state of the instance hits several storages, because every user has a
+# home storage of their own and the id sorted claim runs through the stock of
+# many of them; storage id 0 (a row requeueAs could not resolve) counts as a key
+# of its own, which errs towards no escalation and so towards no blockade.
+# 401 and 403 do not escalate at once: 403 is a legitimate answer about one
+# file (access rules), and an app password that was taken away hits several
+# storages anyway, if the claim gets through at all.
+# No extra rule for an instance with a single storage (E-40-07-02): within one
+# pass "the only storage is gone" looks exactly like "one large storage of many
+# is gone", and such an instance has nothing healthy behind the outage to
+# protect, so every file ends as failed(gateway_error) with at most four
+# requests per file and version (one refusal and three reconciles).
+# The charge without refund of an escalation stays (owner decision 29.10.):
+# two mounts that are broken for good and share a pass would otherwise hand the
+# same head batch out forever.
+GATEWAY_OUTAGE_MIN_STORAGES: Final = 2
 
 # Everything the poller talks to, as a type. The defaults are the production
 # wiring and a test replaces them one by one.
@@ -282,7 +309,7 @@ class _GatewayDown(RuntimeError):
 
 
 class _RefusalsPiledUp(_GatewayDown):
-    """The same refusal for too many files of one pass (E-40-06-02), an outage by count.
+    """The same refusal for too many files over several storages (E-40-06-02, E-40-07-01).
 
     A subclass, so every path that carries _GatewayDown behind the barrier
     carries this one too, and _work tells the two apart only at the abort. The
@@ -648,6 +675,10 @@ class Poller:
         # threshold of E-40-06-02 is decided on. Both start over in _work.
         self._refusals: dict[int, int] = {}
         self._claimed_in_pass = 0
+        # The storages the refusals of each status came from in the pass in
+        # flight, HTTP status to storage ids: the third figure of the threshold
+        # since E-40-07-01. Starts over in _work with the two above.
+        self._refusal_storages: dict[int, set[int]] = {}
         # The queue ids of the rows the gateway refused in the pass in flight,
         # the rows an escalation by count does not hand back (W-1).
         self._refused_rows: set[int] = set()
@@ -1197,6 +1228,7 @@ class Poller:
         # before never adds to this one.
         self._refusals = {}
         self._claimed_in_pass = len(jobs)
+        self._refusal_storages = {}
         self._refused_rows = set()
         # File ids, not queue ids: the requeue is about the file, and the row it
         # belongs to may not even exist for the caller that comes in plan 03-12.
@@ -1620,7 +1652,8 @@ class Poller:
             # the pass is judged as usual. A 404 for such a mount is not the
             # answer (E-40-06-03 struck): that would be a lasting skipped(gone)
             # for a storage that may be back tomorrow. The count below turns
-            # the same refusal for many files into an outage (E-40-06-02).
+            # the same refusal for many files over several storages into an
+            # outage (E-40-06-02, E-40-07-01); one storage stays file by file.
             self._count_refusal(refused, job)
             self._collect(job, ExtractionOutcome.failed(Reason.GATEWAY_ERROR), done, failed, verdicts)
             return 0
@@ -2362,22 +2395,33 @@ class Poller:
     def _count_refusal(self, refused: GatewayRefused, job: QueueJob) -> None:
         """Count one refusal of this pass; raise _RefusalsPiledUp at the threshold.
 
-        The threshold is E-40-06-02: the same status for min(5, claimed) files
-        of one pass, with at least two claimed, is taken as a state of the
-        instance and not of the files. The abort that follows drops whatever
-        the pass gathered. The refused rows are charged (W-1, owner decision
+        The threshold is E-40-06-02 with E-40-07-01: the same status for
+        min(5, claimed) files of one pass, with at least two claimed, and those
+        files on at least two storages, is taken as a state of the instance and
+        not of the files. Refusals from one storage stay verdicts, however many
+        (one broken mount, F-40N-01). The abort that follows drops whatever the
+        pass gathered. The refused rows are charged (W-1, owner decision
         29.10.), every other row of the pass goes back refunded; the reasoning
         stands at :class:`_RefusalsPiledUp`.
         """
         self._refused_rows.add(job.queue_id)
         count = self._refusals.get(refused.status, 0) + 1
         self._refusals[refused.status] = count
+        storages = self._refusal_storages.setdefault(refused.status, set())
+        storages.add(job.storage_id)
         claimed = self._claimed_in_pass
-        if claimed >= 2 and count >= min(GATEWAY_SAME_STATUS_OUTAGE_AFTER, claimed):
+        if (
+            claimed >= 2
+            and count >= min(GATEWAY_SAME_STATUS_OUTAGE_AFTER, claimed)
+            and len(storages) >= GATEWAY_OUTAGE_MIN_STORAGES
+        ):
+            # Counts and the status, never a storage id, a name or a path.
             LOGGER.warning(
-                "content gateway refused %d files of this pass with http status %d, taken as an outage",
+                "content gateway refused %d files of this pass with http status %d from %d storages, "
+                "taken as an outage",
                 count,
                 refused.status,
+                len(storages),
             )
             raise _RefusalsPiledUp
 
