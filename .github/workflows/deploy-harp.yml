@@ -2451,8 +2451,27 @@ jobs:
       - name: Uninstall 5, a remove with intent clears tables and settings
         run: |
           timeout 300 ./occ app:enable findling
+          registered_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           timeout 600 ./occ app_api:app:register findling_backend harp_proxy_host \
             --info-xml "${RUNNER_TEMP}/info-citest.xml" --wait-finish
+          # D-41-19: a started container holds every writer until it has read
+          # the backup pause wish once over the profile route, and without a
+          # companion it never can, so it would neither poll nor retreat. The
+          # half removal of step 6 is that of a container that ran with its
+          # companion, so the wish is read before the companion goes. Only the
+          # log since the registration counts, because a restarted container
+          # keeps the log of its earlier run.
+          for _ in $(seq 1 18); do
+            read_now=$(docker logs --since "${registered_at}" "${EXAPP_CONTAINER}" 2>&1 | grep -c 'backup pause: running' || true)
+            [ "${read_now}" -gt 0 ] && break
+            sleep 5
+          done
+          if ! [ "${read_now}" -gt 0 ]; then
+            echo "the container did not read the pause wish within 90 s of the registration, so it still holds every writer (D-41-19)"
+            docker logs "${EXAPP_CONTAINER}" 2>&1 | tail -n 20
+            exit 1
+          fi
+          echo "the container read the pause wish: running"
           timeout 300 ./occ findling:purge --arm --no-interaction
           timeout 300 ./occ app:remove findling
           tables=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'oc_findling_%' ORDER BY name;" | tr '\n' ' ' | sed -e 's/ *$//')
@@ -3424,8 +3443,27 @@ jobs:
       - name: Store uninstall 5, a remove with intent clears tables and settings
         run: |
           "${RUNNER_TEMP}/nc-occ.sh" app:enable findling
+          registered_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           "${RUNNER_TEMP}/nc-occ.sh" app_api:app:register findling_backend harp_proxy_host \
             --info-xml "${STORE_INFO_XML}" --wait-finish
+          # D-41-19: a started container holds every writer until it has read
+          # the backup pause wish once over the profile route, and without a
+          # companion it never can, so it would neither poll nor retreat. The
+          # half removal of step 6 is that of a container that ran with its
+          # companion, so the wish is read before the companion goes. Only the
+          # log since the registration counts, because a restarted container
+          # keeps the log of its earlier run.
+          for _ in $(seq 1 18); do
+            read_now=$(docker logs --since "${registered_at}" "${EXAPP_CONTAINER}" 2>&1 | grep -c 'backup pause: running' || true)
+            [ "${read_now}" -gt 0 ] && break
+            sleep 5
+          done
+          if ! [ "${read_now}" -gt 0 ]; then
+            echo "the container did not read the pause wish within 90 s of the registration, so it still holds every writer (D-41-19)"
+            docker logs "${EXAPP_CONTAINER}" 2>&1 | tail -n 20
+            exit 1
+          fi
+          echo "the container read the pause wish: running"
           "${RUNNER_TEMP}/nc-occ.sh" findling:purge --arm --no-interaction
           "${RUNNER_TEMP}/nc-occ.sh" app:remove findling
           tables=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'oc_findling_%' ORDER BY name;" | tr '\n' ' ' | sed -e 's/ *$//')
