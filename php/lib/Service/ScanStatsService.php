@@ -362,9 +362,10 @@ final class ScanStatsService {
 	 * same eight keys under ``grouped``. $groups names storages that show one
 	 * tree, a share mounted once per user (StorageService::countingKeyGroups),
 	 * and in ``grouped`` each group counts once, through its representative:
-	 * the smallest storage id of the group with a finished_at, otherwise the
-	 * smallest storage id of the group that has a row, otherwise the smallest
-	 * one. Every other member is out of the sums and out of mountsTotal and
+	 * the member with the most files seen, on equal counts the one with a
+	 * finished_at, then the smallest storage id (plan 41-02, D-41-10); a group
+	 * where no member has a row yet is represented by its smallest storage id.
+	 * Every other member is out of the sums and out of mountsTotal and
 	 * mountsFinished, and ``leftOutStorageIds`` names those members, so that
 	 * the container can say how much of its index belongs to them.
 	 * ``groupsApplied`` counts the groups that left anything out. The eight
@@ -469,9 +470,25 @@ final class ScanStatsService {
 				continue;
 			}
 
-			$finished = array_values(array_filter($members, static fn (int $id): bool => ($rows[$id]['finished'] ?? false) === true));
+			// The member that sees the most files represents the group (plan 41-02,
+			// D-41-10). The largest mount sees the most of the share, and the
+			// smallest finished one, the pick of 1.6.0, cut the denominator down
+			// to its smallest mount: 178 551 instead of about 246 000 on the
+			// instance of issue #25. Equal counts prefer a finished member, then
+			// the smaller id, so the pick is the same on every poll: a
+			// representative that changed between two polls would change the
+			// leaveOut list and with it the cache key of the container's count.
 			$counted = array_values(array_filter($members, static fn (int $id): bool => isset($rows[$id])));
-			$representative = $finished[0] ?? $counted[0] ?? $members[0];
+			usort($counted, static fn (int $a, int $b): int => [
+				-(int)($rows[$a]['filesSeen'] ?? 0),
+				($rows[$a]['finished'] ?? false) === true ? 0 : 1,
+				$a,
+			] <=> [
+				-(int)($rows[$b]['filesSeen'] ?? 0),
+				($rows[$b]['finished'] ?? false) === true ? 0 : 1,
+				$b,
+			]);
+			$representative = $counted[0] ?? $members[0];
 
 			foreach ($members as $member) {
 				if ($member !== $representative) {
