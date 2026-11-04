@@ -1123,8 +1123,12 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # tests/Unit/SearchServiceTest.php hold all of it. No file came or went, so PHP_FILES_TODAY stays at
 # 110. The package pair does not move in this step. Recomputed independently with find, sort, tr and
 # sha256sum over the CRLF normalised tree: 71443d7d... both ways.
+# Moved on 2026-11-04 by Plan 41-01 (nachaudit F-40N-02): AdminViewService.php names when a
+# gateway_error is tried again. No file came or went, so PHP_FILES_TODAY stays at 110. The package pair
+# moves in the same step. Recomputed independently with find, sort, tr and sha256sum over the CRLF
+# normalised tree: 599393dc... both ways.
 PHP_FILES_TODAY = 110
-PHP_TREE_HASH_TODAY = "71443d7d69d7b50574d2bad39b884aaf8935e96c9591ac51bea25b675c9348ff"
+PHP_TREE_HASH_TODAY = "599393dcc62b3ec83090ee884d3a059073f87973a8b686d75ca34d26ddfcd88c"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
@@ -2382,8 +2386,18 @@ PHP_TREE_HASH_TODAY = "71443d7d69d7b50574d2bad39b884aaf8935e96c9591ac51bea25b675
 # file came or went, so PACKAGE_FILES_TODAY stays at 80. The PHP pair does not
 # move. Recomputed independently with find, sort, tr and sha256sum over the
 # CRLF normalised tree: a4a0cf66... both ways.
+#
+# Moved on 2026-11-04 a second time by Plan 41-01 (nachaudit F-40N-02):
+# store/repo.py starts attempts at 1 when a streak of gateway_error begins and
+# answers gateway_retry_candidates once per page, worker/reconcile.py hands a
+# short streak on an unmoved etag over again (GATEWAY_ERROR_RETRIES, 3), and
+# worker/poller.py marks every charged row failed(gateway_error) in the state
+# database before the unlock (E-40-07-04). No file came or went, so
+# PACKAGE_FILES_TODAY stays at 80. The PHP pair moves in the same step.
+# Recomputed independently with find, sort, tr and sha256sum over the CRLF
+# normalised tree: b8769239... both ways.
 PACKAGE_FILES_TODAY = 80
-PACKAGE_TREE_HASH_TODAY = "a4a0cf667e84cac7a68374a70da01f141b0013c0d4ccb90b65d26f01a6ae50bb"
+PACKAGE_TREE_HASH_TODAY = "b87692392411fd12a804c0c038b372a4dd22d4657b719211a946aca3ff98e85d"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
