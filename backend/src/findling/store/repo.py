@@ -340,6 +340,13 @@ STATE_REASONS: Final[Mapping[str, frozenset[str | None]]] = {
 # verdict and the metadata, because the crawl may have handed over a moved or
 # renamed file, and raises attempts, which is the only counter that must survive
 # the overwrite.
+#
+# One exception since plan 41-01 (E-40-07-03, post audit F-40N-02): entering a
+# streak of failed(gateway_error) sets attempts to 1. A streak is the same
+# refusal on the same etag, so the counter answers the one question the
+# reconcile asks of such a row, how often this version was refused, and not the
+# life story of the file. Every other write counts on as before, a refusal on
+# the same etag after a refusal included. No schema change: the column exists.
 _RECORD_SQL: Final = """
 INSERT INTO files (file_id, storage_id, root_id, path, title, mime, size, mtime,
                    etag, content_hash, text_chars, state, reason, attempts, ocr_used,
@@ -358,7 +365,12 @@ ON CONFLICT(file_id) DO UPDATE SET
     text_chars    = excluded.text_chars,
     state         = excluded.state,
     reason        = excluded.reason,
-    attempts      = files.attempts + 1,
+    attempts      = CASE
+        WHEN excluded.state = 'failed' AND excluded.reason = 'gateway_error'
+             AND NOT (files.state = 'failed' AND files.reason = 'gateway_error' AND files.etag IS excluded.etag)
+        THEN 1
+        ELSE files.attempts + 1
+    END,
     -- Overwritten rather than accumulated, and that is the caller's job to get
     -- right: the value describes the attempt that is being written, so a caller
     -- that re-records an existing verdict has to carry the old flag over. The
@@ -978,6 +990,12 @@ class Store:
         judged once per attempt, and a file that is still to be done has no row
         here at all.
 
+        The one transition there is: failed(gateway_error) after anything other
+        than failed(gateway_error) on the same etag starts ``attempts`` at 1
+        (E-40-07-03, plan 41-01). From there it counts the streak of refusals
+        of this version, which is what the reconcile caps its retry on
+        (:meth:`gateway_retry_candidates`, GATEWAY_ERROR_RETRIES).
+
         ``ocr_used`` is set as soon as an OCR run happened, including the run that
         came back as skipped(empty_text). The flag says that the time was spent,
         not that it paid off, and that is the whole reason phase 4 can tell a
@@ -1424,6 +1442,35 @@ class Store:
             )
             reasons.update({int(file_id): str(reason) for file_id, reason in rows})
         return reasons
+
+    def gateway_retry_candidates(self, file_ids: Sequence[int], limit: int) -> set[int]:
+        """The living rows among these files that carry a short streak of gateway_error.
+
+        The question of the capped retry of plan 41-01 (E-40-07-03, post audit
+        F-40N-02, worker/reconcile.py ``_compare``): a file the gateway refused
+        on a version that did not move is work again while its streak, counted
+        in ``attempts`` (see :meth:`record`), is at most ``limit``. Asked once
+        per page for the rows with an unmoved etag, banded like
+        :meth:`known_skip_reasons` and for the same reason.
+        """
+        if not file_ids:
+            return set()
+
+        candidates: set[int] = set()
+        # One placeholder less per band, because the limit takes one: the
+        # statement never binds more than _ACL_BAND values.
+        step = _ACL_BAND - 1
+        for start in range(0, len(file_ids), step):
+            band = file_ids[start : start + step]
+            placeholders = ",".join("?" * len(band))
+            rows = self._conn.execute(
+                # Placeholders only, as in known_etags above.
+                "SELECT file_id FROM files WHERE deleted_at IS NULL AND state = 'failed' "  # noqa: S608
+                f"AND reason = 'gateway_error' AND attempts <= ? AND file_id IN ({placeholders})",
+                (limit, *band),
+            )
+            candidates.update(int(file_id) for (file_id,) in rows)
+        return candidates
 
     def rewind_reconcile_walk(self) -> None:
         """Put every reconcile bookmark back at the front (:data:`_REWIND_RECONCILE_SQL`)."""

@@ -97,6 +97,31 @@ ROUND_NO_STATE: Final = "no_state"
 GIVEN_UP_STATE: Final = "failed"
 GIVEN_UP_REASON: Final = "repeatedly_stuck"
 
+# How often the reconcile hands a file over again that this container judged
+# failed(gateway_error) on a version that did not move (E-40-07-03, plan 41-01,
+# post audit F-40N-02).
+#
+# Such a file is the case of issue #36: its storage was not available when the
+# poller fetched it, the gateway answered 500, and the verdict was right for
+# that moment. Before 1.6.2 the branch "stored == etag" below read it as done,
+# so a storage that came back the next morning never brought its files back
+# into the index, while the admin page said "The next run tries again". A file
+# charged by an escalation lands here as well: the poller writes the same
+# verdict for it (E-40-07-04), and Nextcloud may meanwhile have written the row
+# off as failed(repeatedly_stuck), which is why the Nextcloud side of the page
+# does not matter for this rule.
+#
+# Capped, because IN-03 above forbids load that comes back every night for
+# good: the poller counts the streak of refusals of one version in attempts
+# (store/repo.py, record), and the file is work only while that streak is at
+# most this number. One retry per cycle follows from the walk itself, so a file
+# that is refused every time costs four requests per version, the first one and
+# three nights. A new etag is a new version and a new streak; a refusal that
+# outlasts three nights waits for the next change of the file or for
+# occ findling:index --restart. The admin page names the number in words, and
+# tests/test_admin_ui_contract.py binds the sentence to this constant.
+GATEWAY_ERROR_RETRIES: Final = 3
+
 # The verdict of this container that is not an end state, spelled out here for
 # the same reason as the two codes above: this module recognises it, it never
 # produces it, and the vocabulary of the wire is held against drift by
@@ -649,6 +674,17 @@ class Reconcile:
         of the three codes AND the page carries exactly its substitute; in every
         other case, the right order above all, where both halves agree, it is
         left alone. The stored codes are asked once per page.
+
+        **A file the gateway refused on a version that did not move is work
+        again, a few times** (E-40-07-03, plan 41-01, post audit F-40N-02).
+        failed(gateway_error) is a verdict about a moment, mostly a storage
+        that was not available, and it is the one verdict on an unchanged etag
+        that is not done: while the streak of refusals counted in ``attempts``
+        is at most :data:`GATEWAY_ERROR_RETRIES`, the file is stale, whatever
+        the Nextcloud side carries for it, the code out of the acknowledgement
+        or repeatedly_stuck after a charged escalation. It is never written off
+        here. The candidates are asked once per page, and only for rows with an
+        unmoved etag; a page without such a row asks nothing.
         """
         known = store.known_etags([row.file_id for row in rows])
         # Asked once per page rather than once per row: it is a cached lookup,
@@ -661,6 +697,8 @@ class Reconcile:
         catchup = catchup_round and mark == CATCHUP_RECONCILE
         held = mark not in ("", CATCHUP_DONE) and not catchup
         ours = Reconcile._substitute_candidates(store, rows, known) if catchup else {}
+        unmoved = [row.file_id for row in rows if row.file_id in known and known[row.file_id] == row.etag]
+        retry = store.gateway_retry_candidates(unmoved, GATEWAY_ERROR_RETRIES) if unmoved else set()
         stale: list[int] = []
         given_up = 0
         for row in rows:
@@ -676,6 +714,11 @@ class Reconcile:
                 stale.append(row.file_id)
                 continue
             if stored == row.etag:
+                if row.file_id in retry:
+                    # The capped retry of a refusal (E-40-07-03): see the
+                    # constant and the docstring.
+                    stale.append(row.file_id)
+                    continue
                 reason = ours.get(row.file_id)
                 if reason is not None and SKIPPED_FALLBACK_WITHOUT_SIGNAL.get(reason) == row.reason:
                     stale.append(row.file_id)
