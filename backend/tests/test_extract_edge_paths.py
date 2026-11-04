@@ -236,8 +236,15 @@ QUALIFIED_WRITING_CALLS: frozenset[tuple[str, str]] = frozenset(
 #                                 behind goes through the same function rather
 #                                 than unlinking a second time, which is why one
 #                                 entry covers both callers.
+#   worker/poller.py: open        a second one, in reopen_after_backup (plan
+#                                 41-03): the embedding track is opened again
+#                                 after a backup pause, handed to a worker thread
+#                                 as a reference. It is the same track _open()
+#                                 opens directly, so the same state database and
+#                                 index directory under APP_PERSISTENT_STORAGE,
+#                                 and no name in it comes from a queue row.
 #
-# This is a ratchet and not a tautology. An eleventh entry means the container puts
+# This is a ratchet and not a tautology. A twelfth entry means the container puts
 # something on a disk in a place nobody has looked at yet, and the three
 # questions that belong to it are which directory, what is in the name, and who
 # chose that name. Failing here is the moment those questions can still be asked.
@@ -250,6 +257,7 @@ EXPECTED_TRAVEL_PATH_WRITES = (
     "extract/sandbox.py: write_text",
     "extract/sandbox.py: write_text",
     "worker/poller.py: mkdir",
+    "worker/poller.py: open",
     "worker/poller.py: open",
     "worker/poller.py: unlink",
 )
