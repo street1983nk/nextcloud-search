@@ -36,14 +36,27 @@ on:
       - '.github/workflows/php.yml'
       - '.github/workflows/release.yml'
       - 'scripts/dev/validate_info_xml.sh'
+  # Weekly, for the composer-hygiene job below (plan 42-03). The path filter
+  # above means that job only runs when something under php/ changes, and a new
+  # advisory against an unchanged composer.lock would otherwise surface at the
+  # next PHP commit, whenever that is. Monday 05:50 UTC sits after python.yml
+  # (04:17), resilience.yml (04:31), security.yml (05:30), scorecard.yml (05:45)
+  # and after the dependabot run at 05:00 Europe/Berlin. The scheduled run starts
+  # every job of this file, and that is wanted: it is also a weekly look at
+  # whether stable34 drifted under the phpunit job, for a few runner minutes.
+  schedule:
+    - cron: '50 5 * * 1'
 
 permissions:
   contents: read
 
 # One run per branch, same reasoning as in python.yml: the older run's verdict is
-# worthless the moment a newer commit exists.
+# worthless the moment a newer commit exists. The event name is part of the
+# group since plan 42-03 added the schedule: without it a scheduled run on main
+# would cancel a push run on main that is still in progress, and the other way
+# round.
 concurrency:
-  group: php-${{ github.ref }}
+  group: php-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -206,6 +219,51 @@ jobs:
           fi
           echo "pre-info.xslt dropped the settings block entirely; the assumption behind the packaging step changed"
           exit 1
+
+  # The supply chain of the PHP half (plan 42-03). php/composer.lock pins
+  # PHPUnit and everything it pulls in, and all of that runs inside the phpunit
+  # job below, on a runner that checks out a whole Nextcloud. Two commands, both
+  # red on any finding, and nothing here is softened by continue-on-error or an
+  # "|| true"; backend/tests/test_php_supply_chain_gates.py holds that shape.
+  composer-hygiene:
+    name: composer validate and audit
+    runs-on: ubuntu-24.04
+    # The slow part is Packagist, somebody else's network, for the advisory
+    # data; the commands themselves take seconds. Ten minutes like the other two
+    # short jobs of this file.
+    timeout-minutes: 10
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing in this job pushes or calls the API, so the token has no
+          # business in the working tree.
+          persist-credentials: false
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: '8.2'
+          coverage: none
+          tools: composer:v2
+
+      # --strict turns every warning into an error, and validate checks that
+      # composer.lock still matches composer.json, so a hand edited requirement
+      # without a lock update is red here and not a surprise in the phpunit job.
+      # --no-check-publish because this package is never published on Packagist,
+      # and the publish checks would only report fields it does not need.
+      - name: composer.json is valid and composer.lock matches it
+        working-directory: php
+        run: composer validate --strict --no-check-publish
+
+      # --locked reads composer.lock alone: nothing is installed and no package
+      # code runs, which is why this job has no composer install at all. The
+      # advisory data comes from Packagist; the only thing that leaves the
+      # runner is the list of package names and versions of the lock file, no
+      # code. Any advisory turns the job red.
+      - name: No known advisory against composer.lock
+        working-directory: php
+        run: composer audit --locked --no-interaction
 
   phpunit:
     name: PHPUnit over the companion app

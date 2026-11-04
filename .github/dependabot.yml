@@ -1,4 +1,4 @@
-# Update automation for the three dependency surfaces of this repository.
+# Update automation for the four dependency surfaces of this repository.
 #
 # Everything in here is pinned somewhere: actions by commit SHA, the base image
 # and uv by digest, Python packages exactly in uv.lock. Pinning without an update
@@ -117,3 +117,38 @@ updates:
           - version-update:semver-major
           - version-update:semver-minor
           - version-update:semver-patch
+
+  # The PHP companion (plan 42-03). Composer was the one ecosystem of this
+  # repository without an entry here, and the PHP research of 04.11.2026 found
+  # exactly that gap. Everything in php/composer.json that moves is a dev
+  # dependency: PHPUnit and what it pulls in, which runs in the phpunit job of
+  # php.yml and never reaches the release archive (scripts/release/
+  # store-archive.sh ships no vendor directory and no tests).
+  #
+  # PHPUnit majors stay a manual step. The suite runs inside the autoload space
+  # of nextcloud/server, so the PHPUnit major has to match vendor-bin/phpunit of
+  # the server branch SERVER_VERSION in php.yml; the _comment of
+  # php/composer.json says why the pin is exact. A grouped weekly pull request
+  # is the wrong place to move it.
+  - package-ecosystem: composer
+    directory: "/php"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope
+    groups:
+      php-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: "phpunit/phpunit"
+        update-types:
+          - version-update:semver-major

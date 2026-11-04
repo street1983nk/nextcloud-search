@@ -78,6 +78,20 @@ zero violations over zero routes and look healthy.
 | `test_php_acl_boundary.py` | A second recheck loop in the PHP tree. The readability question is asked at exactly one place, `SearchService.php`, and every file that resolves a file id stands in a named register with its count, so a fourth resolution cannot appear quietly. It says nothing about whether the one recheck decides correctly; that is `SearchServiceTest.php` and the parity job. |
 | `test_search_limits_lockstep.py` | A drift between `SEARCH_LIMIT_MAX` and `SEARCH_OFFSET_MAX` of the container and their two PHP mirrors. A mirror above the container turns a refused request into "the search does not answer", which is a false statement about the state of the server. It says nothing about whether either number is right; that argument stands at the constants themselves. |
 | `test_status_endpoint.py`, `test_rates_endpoint.py`, `test_diagnose_endpoint.py` | The three container routes the admin page reads: the shape of the answer, the privacy boundary (numbers, never names) and the answer for a file nothing knows. |
+| `test_php_supply_chain_gates.py` | A quiet removal of the composer gates. The job `composer-hygiene` of `php.yml` has to run `composer validate --strict` and `composer audit --locked` in `php/`, with a deadline and without `\|\| true` or `continue-on-error`; `php.yml` has to carry its weekly schedule and an event aware concurrency group; `dependabot.yml` has to keep composer under `/php`, with PHPUnit majors left to a human. It says nothing about whether composer finds an advisory; that was proven against a throwaway lock in plan 42-03. |
+
+The job `composer-hygiene` (plan 42-03) turns red on a `composer.json` that
+fails `composer validate --strict`, on a `composer.lock` that no longer matches
+it, and on any known advisory against the lock. It installs nothing and runs no
+package code: `--locked` reads the lock file alone. Its limit is when it runs:
+through the path filter only on a change under `php/**`, and otherwise weekly by
+schedule on Monday at 05:50 UTC, after the dependabot run at 05:00
+Europe/Berlin. Between two Mondays a new advisory against an unchanged lock
+reaches this repository only through dependabot and the security alerts of the
+repository.
+
+Psalm with taint analysis, php-cs-fixer, zizmor and actionlint are deliberately
+not part of these gates; they are reserved for a later phase before Findling 1.7.
 
 ## What the integration jobs do cover
 
