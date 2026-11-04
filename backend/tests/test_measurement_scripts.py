@@ -1127,8 +1127,13 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # gateway_error is tried again. No file came or went, so PHP_FILES_TODAY stays at 110. The package pair
 # moves in the same step. Recomputed independently with find, sort, tr and sha256sum over the CRLF
 # normalised tree: 599393dc... both ways.
+# Moved on 2026-11-04 by Plan 41-02 (issue #25): ScanStatsService.php takes the member with the most
+# files seen as the representative of a share group, and tests/Unit/ScanStatsServiceTest.php holds it
+# with the figures of the issue. No file came or went, so PHP_FILES_TODAY stays at 110. The package
+# pair moved in the step before. Recomputed independently with find, sort, tr and sha256sum over the
+# CRLF normalised tree: eb7fd98f... both ways.
 PHP_FILES_TODAY = 110
-PHP_TREE_HASH_TODAY = "599393dcc62b3ec83090ee884d3a059073f87973a8b686d75ca34d26ddfcd88c"
+PHP_TREE_HASH_TODAY = "eb7fd98f3e6e20d8613d32646e0fc58972705fb43ed4582164ab3cc1469e09e4"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
