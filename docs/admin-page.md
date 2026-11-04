@@ -1088,6 +1088,31 @@ Hinweis beim nächsten Laden der Seite weg; das Abfragen alle fünf Sekunden
 schaltet ihn nicht um, weil die Apps auf der Apps-Seite gewechselt werden und
 die Statusseite danach ohnehin neu geladen wird.
 
+## Backup-Pause
+
+Unter der Zeile zum Laufzustand steht der Schalter "Indexierung pausieren"
+beziehungsweise "Indexierung fortsetzen" (Issue #37).
+
+- Schalter und `occ findling:pause` / `occ findling:resume` wirken gleich: beide
+  schreiben denselben Schlüssel `findling/paused`. Der Schalter folgt dem
+  gespeicherten Wunsch, die Zeile darüber dem Zustand, den das Backend meldet.
+- **Pause wird vorbereitet:** der laufende Stapel endet regulär, bei OCR kann
+  das bis etwa 30 Minuten dauern. In diesem Zustand noch kein Backup starten.
+- **Pausiert:** das Backend schreibt nichts mehr auf sein Volume. Erst jetzt das
+  Backup starten.
+- **Unbekannt:** das Backend kann den Pausenwunsch noch nicht lesen und hält
+  die Indexierung deshalb an.
+- **Backend kennt die Pause nicht:** ein Backend vor 1.6.2 ignoriert den Wunsch.
+  Beide Apps auf dieselbe Version aktualisieren.
+- Die Suche läuft in der Pause weiter.
+- Die Crawl-Jobs der Companion-App laufen weiter. Sie schreiben nur in die
+  Nextcloud-Datenbank, nicht auf das Volume des Backends; die Warteschlange
+  wächst also und wird nach dem Fortsetzen abgearbeitet.
+- In der Pause blendet die Seite die Restzeit-Schätzung, den Satz zum nicht
+  antwortenden Content-Gateway und den Stillstands-Satz aus. Die Zahlen der
+  Nextcloud-Seite bleiben sichtbar.
+- Ablauf eines Backups mit Pause: `docs/backup.md`.
+
 ## Der occ-Zweitzugang
 
 Für einen Support-Fall ist der wichtigste Zugang der ohne Browser, und die Seite
