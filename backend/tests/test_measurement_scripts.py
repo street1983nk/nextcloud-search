@@ -2407,8 +2407,15 @@ PHP_TREE_HASH_TODAY = "eb7fd98f3e6e20d8613d32646e0fc58972705fb43ed4582164ab3cc14
 # No file came or went, so PACKAGE_FILES_TODAY stays at 80. The PHP pair does not
 # move. Recomputed independently with find, sort, tr and sha256sum over the CRLF
 # normalised tree: 906e72a0... both ways.
-PACKAGE_FILES_TODAY = 80
-PACKAGE_TREE_HASH_TODAY = "906e72a0c2fa708145b0d31dc6ebeeb48f65f6301a4561d6072acb0c6f9047b6"
+#
+# Moved on 2026-11-04 by Plan 41-03 (issue #37): worker/pause.py is new and holds
+# every writer for a backup, worker/poller.py, worker/embedding.py,
+# worker/reconcile.py and worker/watch.py carry a backup hold. One file came, so
+# PACKAGE_FILES_TODAY moves to 81. The PHP pair does not move. Recomputed
+# independently with find, sort, tr and sha256sum over the CRLF normalised tree:
+# 9465a3ab... both ways.
+PACKAGE_FILES_TODAY = 81
+PACKAGE_TREE_HASH_TODAY = "9465a3abb27d1acedce1e9f3efac6e957056a452392f1bf59656aa878e3eb24e"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
