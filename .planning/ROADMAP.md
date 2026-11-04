@@ -197,5 +197,34 @@ Offene Punkte, die bewusst NICHT in v1.3 lagen (Kandidaten fuer v1.4 und spaeter
 
 Aktiver Blocker unabhaengig vom Milestone: Kill-Kriterium Nextcloud Conference (kuendigt Nextcloud eine Elasticsearch-freie Volltextsuche mit OCR an, wird das Projekt neu bewertet; geprueft 21.09.2026, nicht ausgeloest).
 
+### Phase 41: Findling 1.6.2: Backup-Pause-Schalter (#37), Backup-Doku, #25-Fixes, Nachaudit-Fixes F-40N-01..04, Audit, Owner-Runde, Store-Einreichung
+
+**Goal:** Findling 1.6.2 (beide Apps) im Store mit den Zusagen aus Issue #37 und #25 und den vier Nachaudit-Befunden aus 40-NACHAUDIT.md, die 1.6.1 (nur Sicherheit, pypdf) bewusst nicht mitnahm.
+**Requirements**: Owner-GO 29.10./30.10./02.11.2026 (NEXT.md)
+**Depends on:** Phase 40
+**Plans:** 12 plans
+
+**Success Criteria:**
+1. Backup-Pause-Schalter (#37): `occ findling:pause` / `findling:resume` und ein Schalter auf der Admin-Seite; in der Pause ruhen Indexer, Embedding und Poller, SQLite-WAL ist gecheckpointet und Tantivy committet, die Suche läuft weiter; Zustand übersteht einen Neustart; Negativtests (Pause während laufendem Batch, doppeltes pause/resume, Neustart in der Pause).
+2. Backup-Doku: docker stop/start-Weg, Einstellungen liegen in der NC-appconfig, Index liegt unverschlüsselt im Volume; dreisprachig wie die übrige Doku.
+3. #25: embeddedLeftOut wird auch über 100 000 gezählt (asynchron und gecacht, Muster Kandidat F, kein Deckel), damit der Dedup nicht still ausfällt; Repräsentant einer Share-Gruppe = größtes files_seen statt kleinster ID; Tests mit 113 851 left-out und ungleichen Mitgliedern.
+4. F-40N-01..04 behoben (Vorlage: Entwurf 40-07-PLAN.md), jeweils mit Negativtest zuerst.
+5. Audit Security/Bugs/Performance über das gesamte Delta v1.6.1..Kopf, Fixes ab MEDIUM (Vorlage 40-08).
+6. Owner-Runde mit Release-Notiz und Store-Text vor dem Tag (Vorlage 40-09), dann Tag v1.6.2, beide Archive signiert, beide Store-Uploads HTTP 201; Issue-Antworten #37 und #25 erst NACH Store-Release.
+
+Plans:
+- [ ] 41-01-PLAN.md: Nachaudit-Fixes F-40N-01..04 (Schwelle über Speicher, Reconcile-Retry gateway_error, 408/429, Fill-Refresh-Start)
+- [ ] 41-02-PLAN.md: #25 embeddedLeftOut hybrid über 100 000, Repräsentant = größtes files_seen
+- [ ] 41-03-PLAN.md: Backup-Pause Backend-Kern (Holds je Schreiber, PauseCoordinator, WAL-Checkpoint)
+- [ ] 41-04-PLAN.md: Backup-Pause Verdrahtung (Lifespan, /profile-Wunsch, Rebuild-Stop, Status, Probe 409)
+- [ ] 41-05-PLAN.md: Companion appconfig paused, /profile-Feld, occ findling:pause/resume
+- [ ] 41-06-PLAN.md: Admin-Schalter, Zustandssätze, l10n-Kette
+- [ ] 41-07-PLAN.md: Backup-Doku DE/EN/FR, CI-Beweis Pause über Neustarts
+- [ ] 41-08-PLAN.md: Version 1.6.2, CHANGELOG, Upgrade-Strecke ab v1.5.0, grüner Kopf
+- [ ] 41-09-PLAN.md: Audit v1.6.1..Kopf, Fixes ab MEDIUM
+- [ ] 41-10-PLAN.md: Owner-Runde (Checkpoint), Gesamttext, Tag-Kopf
+- [ ] 41-11-PLAN.md: Tag v1.6.2 und Store-Einreichung (Owner führt aus), Belegkette
+- [ ] 41-12-PLAN.md: Issue-Antworten #37/#25 nach Store-Release (Owner postet)
+
 ---
 *Created: 2026-09-08. v1.1 archiviert: 2026-09-11. v1.2 archiviert: 2026-09-21. v1.3 archiviert: 2026-09-27. v1.4-Roadmap: 2026-09-27. v1.5-Roadmap: 2026-10-10. v1.5 archiviert: 2026-10-28. v1.6-Roadmap: 2026-10-28.*
