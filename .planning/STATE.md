@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
 status: executing
-stopped_at: Phase 41 complete (verified)
-last_updated: "2026-11-04T19:00:00.000Z"
+stopped_at: Completed 42-01-PLAN.md
+last_updated: "2026-11-04T19:46:42.000Z"
 last_activity: 2026-11-04
 progress:
   total_phases: 5
@@ -21,13 +21,13 @@ progress:
 Siehe .planning/PROJECT.md (Stand nach v1.5, Milestone v1.6 gestartet) und .planning/MILESTONES.md (v1.0 bis v1.5).
 
 **Core Value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 41: findling-1-6-2-backup-pause-schalter-37-backup-doku-25-fixes
+**Current focus:** Phase 42: php-sicherheits-gates
 
 ## Current Position
 
-Phase: 41 (findling-1-6-2-backup-pause-schalter-37-backup-doku-25-fixes), COMPLETE
-Plan: 12 of 12 (alle 12 mit SUMMARY)
-Status: Complete, verifiziert 04.11.2026 (41-VERIFICATION.md passed)
+Phase: 42 (php-sicherheits-gates), EXECUTING
+Plan: 1 of 3
+Status: 42-01 abgeschlossen (80d819f3), 42-02 als Nächstes
 Last activity: 2026-11-04
 
 Progress: [█████████░] 88%
@@ -88,6 +88,7 @@ Progress: [█████████░] 88%
 - v1.5: 36-12 in ca. 110 min inkl. voller Suite (13:02 min) und CI (3 Tasks, 12 Dateien)
 - v1.5: 36-13 in ca. 150 min inkl. voller Suite (17:09 min) und ca. 60 min CI (3 Tasks, 7 Dateien)
 - v1.5: 36-16 in ca. 15 min nach dem Dispatch (3 Tasks, 5 Dateien; Freigabe und Dispatch durch den Koordinator)
+- v1.7: 42-01 in ca. 40 min inkl. CI (2 Tasks, 5 Dateien)
 
 ## Accumulated Context
 
@@ -114,6 +115,7 @@ Progress: [█████████░] 88%
 - 40-05: Tag v1.6.0 (91a0603f), Release 40864595574 mit 9 Assets, Fremdinstallation 40865691730, Store submission 40868132102 zweimal HTTP 201 (11:47:55Z, 11:47:57Z); appapi_apps.json fuehrte 15 min danach noch 1.5.1 (Cache-Verzug), um 12:05:28Z nachgefuehrt auf 1.6.0. Issue-Antworten nach dem Release: #36 issuecomment-6496180117, #19 issuecomment-6496180560.
 - 41-11: Tag v1.6.2 (Owner) auf ba098b00, sieben Tag-Läufe grün inkl. PHP 41869261491 (schließt den head_green-Vorbehalt), Store submission 41875127182 HTTP 401 Invalid token, nach erneuertem APPSTORE_TOKEN 41885026379 zweimal HTTP 201; Store-API nennt 1.6.2 für beide Apps.
 - 40-VERIFICATION (409a38b8): gaps_found, SC1 partial (Audit deckte efcf26c5..91a0603f nicht ab) -> Nachaudit 40-NACHAUDIT.md beauftragt; Luecke 2 (v1.7-Punkte) in deferred-items.md nachgetragen.
+- 42-01: lokales PHPUnit über scripts/dev/phpunit_docker.sh (nextcloud:32.0.15-apache, PHP 8.3, stable34), SERVER_VERSION und MINIMUM_TESTS aus php.yml gelesen; 958 Tests lokal und im CI (PHP 41897060856) grün, Baumhash e7289079 (113).
 
 ### Decisions (Roadmap v1.5)
 
@@ -241,8 +243,8 @@ Items acknowledged and deferred at milestone close on 2026-10-28 (Owner-Wiedervo
 
 ## Session Continuity
 
-Last session: 2026-11-04T19:00:00.000Z
-Stopped at: Phase 41 complete (verified)
+Last session: 2026-11-04T19:46:42.000Z
+Stopped at: Completed 42-01-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
