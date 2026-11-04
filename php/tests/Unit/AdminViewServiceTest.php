@@ -893,6 +893,103 @@ final class AdminViewServiceTest extends TestCase {
 
 	// -- Weg C: the coverage per counting key (plan 39-01, D-37-03) -----------
 
+	// -- the backup pause of issue #37 (plan 41-06) ---------------------------
+
+	/** @return array<string, array{array<mixed>, string, ?int}> */
+	public static function everyPauseTheBackendCanReport(): array {
+		return [
+			'paused with its moment' => [['pause' => 'paused', 'pausedSince' => 1_800_000_000], 'paused', 1_800_000_000],
+			'pausing' => [['pause' => 'pausing', 'pausedSince' => null], 'pausing', null],
+			'unknown' => [['pause' => 'unknown', 'pausedSince' => null], 'unknown', null],
+			'running' => [['pause' => 'running', 'pausedSince' => null], 'running', null],
+			'a word outside the set' => [['pause' => 'stopped'], 'unknown', null],
+			'not a word at all' => [['pause' => 1], 'unknown', null],
+			'a moment that is no counter' => [['pause' => 'paused', 'pausedSince' => '1800000000'], 'paused', null],
+			'a moment outside paused' => [['pause' => 'pausing', 'pausedSince' => 1_800_000_000], 'pausing', null],
+		];
+	}
+
+	/**
+	 * The state comes only out of the closed set the backend speaks (D-41-06,
+	 * T-41-27), whatever the wish says, and the moment only for "paused".
+	 *
+	 * @param array<mixed> $answer
+	 */
+	#[DataProvider('everyPauseTheBackendCanReport')]
+	public function testOverviewCarriesThePauseState(array $answer, string $state, ?int $since): void {
+		foreach ([true, false] as $wished) {
+			self::assertSame($state, AdminViewService::pauseState($answer, $wished));
+		}
+		self::assertSame($since, AdminViewService::pausedSince($answer, $state));
+	}
+
+	/**
+	 * Pitfall 3: a backend before 1.6.2 passes the lockstep check of Major.Minor
+	 * and never sends the field. With a stored wish the page must not believe
+	 * in a pause nobody holds; without one nothing is paused.
+	 */
+	public function testAMissingPauseFieldWithAStoredWishIsTheOldBackendCase(): void {
+		$old = ['indexed' => 3];
+		self::assertSame(AdminViewService::PAUSE_UNSUPPORTED, AdminViewService::pauseState($old, true));
+		self::assertSame(AdminViewService::PAUSE_RUNNING, AdminViewService::pauseState($old, false));
+		// A silent backend is no old backend: it cannot be read, nothing more.
+		self::assertSame(AdminViewService::PAUSE_UNKNOWN, AdminViewService::pauseState(null, true));
+		self::assertSame(AdminViewService::PAUSE_RUNNING, AdminViewService::pauseState(null, false));
+		self::assertNull(AdminViewService::pausedSince($old, AdminViewService::PAUSE_UNSUPPORTED));
+	}
+
+	/** @return array<string, mixed> the parts of an overview the pause touches */
+	private static function overviewInMotion(string $runState): array {
+		return [
+			'runState' => $runState,
+			'estimate' => ['files' => 100, 'secondsLeft' => 3600, 'startupValues' => false, 'firstIndexDone' => false],
+			'backend' => ['indexed' => 40, 'gatewayUnavailableSince' => 1_799_999_000],
+			'scheduled' => 12,
+			'coverage' => ['indexed' => 40, 'indexable' => 100],
+		];
+	}
+
+	/** @return array<string, array{string}> */
+	public static function everyStateThatIsNotRunning(): array {
+		return [
+			'pausing' => ['pausing'],
+			'paused' => ['paused'],
+			'unknown' => ['unknown'],
+			'unsupported' => ['unsupported'],
+		];
+	}
+
+	/**
+	 * Pitfall 6: in the pause the queue stands still on purpose and the crawl
+	 * keeps filling it (D-41-21), so the time left, the outage of the gateway
+	 * and the stall verdict would all be false. The crawl figures stay.
+	 */
+	#[DataProvider('everyStateThatIsNotRunning')]
+	public function testPauseHidesTheEstimateAndTheOutageSentences(string $pause): void {
+		foreach ([AdminViewService::RUN_RUNNING, AdminViewService::RUN_STALLED] as $runState) {
+			$quiet = AdminViewService::quietInPause(self::overviewInMotion($runState), $pause);
+
+			self::assertNull($quiet['estimate']['secondsLeft']);
+			self::assertNull($quiet['backend']['gatewayUnavailableSince']);
+			self::assertSame(AdminViewService::RUN_PAUSED, $quiet['runState']);
+			// The figures of the Nextcloud side and of the crawl stay as they were.
+			self::assertSame(100, $quiet['estimate']['files']);
+			self::assertSame(12, $quiet['scheduled']);
+			self::assertSame(['indexed' => 40, 'indexable' => 100], $quiet['coverage']);
+		}
+		// Idle and never run say nothing a pause makes false, so they stay.
+		foreach ([AdminViewService::RUN_IDLE, AdminViewService::RUN_NEVER] as $runState) {
+			self::assertSame($runState, AdminViewService::quietInPause(self::overviewInMotion($runState), $pause)['runState']);
+		}
+	}
+
+	public function testRunningKeepsTheOverviewAsBefore(): void {
+		foreach ([AdminViewService::RUN_RUNNING, AdminViewService::RUN_STALLED, AdminViewService::RUN_IDLE] as $runState) {
+			$view = self::overviewInMotion($runState);
+			self::assertSame($view, AdminViewService::quietInPause($view, AdminViewService::PAUSE_RUNNING));
+		}
+	}
+
 	/** One private method of the service, on an instance without its constructor. */
 	private static function invokePrivate(string $method, mixed ...$arguments): mixed {
 		$service = (new \ReflectionClass(AdminViewService::class))->newInstanceWithoutConstructor();

@@ -558,6 +558,82 @@ final class SettingsControllerTest extends TestCase {
 		self::assertSame([], $this->writes);
 	}
 
+	// -- POST admin/pause (issue #37, plan 41-06) ------------------------------
+
+	/** @return array<string, array{mixed}> */
+	public static function everyWayOfSayingTrue(): array {
+		return [
+			'JSON true' => [true],
+			'form value true' => ['true'],
+		];
+	}
+
+	#[DataProvider('everyWayOfSayingTrue')]
+	public function testPauseRouteStoresTrue(mixed $value): void {
+		$response = $this->controller()->setPause($value);
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame(['paused' => true], self::body($response));
+		self::assertTrue($this->values[SettingsService::KEY_PAUSED] ?? null);
+		self::assertSame([SettingsService::KEY_PAUSED], $this->writes);
+	}
+
+	public function testPauseRouteStoresFalse(): void {
+		$this->values[SettingsService::KEY_PAUSED] = true;
+
+		foreach ([false, 'false'] as $value) {
+			$this->writes = [];
+			$response = $this->controller()->setPause($value);
+
+			self::assertSame(Http::STATUS_OK, $response->getStatus());
+			self::assertSame(['paused' => false], self::body($response));
+			self::assertFalse($this->values[SettingsService::KEY_PAUSED] ?? null);
+			self::assertSame([SettingsService::KEY_PAUSED], $this->writes);
+		}
+	}
+
+	/** @return array<string, array{mixed}> */
+	public static function everythingThatIsNotABoolean(): array {
+		return [
+			'a word' => ['yes'],
+			'one' => [1],
+			'nought' => [0],
+			'missing' => [null],
+			'upper case' => ['TRUE'],
+			'the string one' => ['1'],
+			'empty string' => [''],
+			'a list' => [[true]],
+		];
+	}
+
+	#[DataProvider('everythingThatIsNotABoolean')]
+	public function testPauseRouteRejectsANonBool(mixed $value): void {
+		$response = $this->controller()->setPause($value);
+
+		self::assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		self::assertSame(['error' => 'paused must be a boolean'], self::body($response));
+		self::assertSame([], $this->writes, 'a refused pause wrote a key');
+		self::assertArrayNotHasKey(SettingsService::KEY_PAUSED, $this->values);
+	}
+
+	/**
+	 * Only an administrator with the request token of the session reaches the
+	 * switch (T-41-24, T-41-25): the route carries none of the attributes that
+	 * would lift either check, and it is a POST on /admin/pause.
+	 */
+	public function testPauseRouteIsAdminOnly(): void {
+		$route = self::routeOf('setPause');
+		self::assertSame('POST', $route['verb'] ?? null);
+		self::assertSame('/admin/pause', $route['url'] ?? null);
+
+		$method = new \ReflectionMethod(SettingsController::class, 'setPause');
+		foreach ($method->getAttributes() as $attribute) {
+			foreach (['NoAdminRequired', 'CSRF', 'PublicPage', 'ExAppRequired'] as $lifted) {
+				self::assertStringNotContainsString($lifted, $attribute->getName());
+			}
+		}
+	}
+
 	public function testTheOverviewCarriesParallelSearchAsFalseWithoutTheFramework(): void {
 		// UMST-02, plan 34-03: the key is always there and a bool. The app
 		// manager double answers false for every app, which is an instance
