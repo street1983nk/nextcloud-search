@@ -1138,8 +1138,13 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # (tests/Unit/PauseCommandTest.php; SettingsServiceTest.php and ProfileControllerTest.php changed their
 # bytes), so PHP_FILES_TODAY moves to 113. Recomputed independently with find, sort, tr and sha256sum
 # over the CRLF normalised tree: 28223473... both ways.
+# Moved on 2026-11-04 by Plan 41-06 (issue #37): SettingsController.php has the pause route and
+# AdminViewService.php hands the pause state to the page; templates/admin.php renders the switch and
+# its sentence, and tests/Unit/SettingsControllerTest.php and tests/Unit/AdminViewServiceTest.php hold
+# both. No file came or went, so PHP_FILES_TODAY stays at 113. Recomputed independently with find,
+# sort, tr and sha256sum over the CRLF normalised tree: 54627d39... both ways.
 PHP_FILES_TODAY = 113
-PHP_TREE_HASH_TODAY = "2822347360e64a6879561d7ad0b1feeac476d00de9283eeb72f4ca832c41a8f8"
+PHP_TREE_HASH_TODAY = "54627d39eb13c8d6f637acb868769eac73697ff42d731269eea1d72697c1ac22"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
