@@ -320,12 +320,20 @@ class CompanionChoice:
     ``verdicts`` is the capability signal of K6: one of KNOWN_VERDICTS_GENERATIONS
     (2: the companion stores the three skipped codes of release 1.4.0; 3: also
     archive_limit and blocked_malicious of release 1.5.0), None otherwise.
+
+    ``paused`` is the backup pause wish of the admin (issue #37, D-41-05): True
+    only for a JSON ``true`` in the answer, anything else in a readable answer
+    is False (T-41-17). A companion before 1.6.2 does not know the field, and
+    that reads as False as well, because a readable answer without a wish to
+    pause means "not paused". None means the answer could not be read at all,
+    which is the one value that holds a starting container (D-41-19).
     """
 
     profile: str | None
     precision: str | None
     confirmed: str | None = None
     verdicts: int | None = None
+    paused: bool | None = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -730,7 +738,7 @@ class DocumentQueue:
             # (D-24-02). No value and no exception text in the line (T-24-19).
             LOGGER.debug("could not read the profile route")
             self._companion_verdicts = None
-            return CompanionChoice(profile=None, precision=None, confirmed=None, verdicts=None)
+            return CompanionChoice(profile=None, precision=None, confirmed=None, verdicts=None, paused=None)
 
         payload = _mapping(answer) or {}
         profile = payload.get("profile")
@@ -743,6 +751,9 @@ class DocumentQueue:
             precision=precision if isinstance(precision, str) and precision in PRECISION_NAMES else None,
             confirmed=confirmed if isinstance(confirmed, str) and _TOKEN_PATTERN.fullmatch(confirmed) else None,
             verdicts=verdicts,
+            # Only a JSON true counts (T-41-17); a missing field is a companion
+            # before 1.6.2 and reads as "not paused" (D-41-05).
+            paused=payload.get("paused") is True,
         )
 
     async def requeue(self, file_ids: Sequence[int], *, kind: str) -> CallResult:

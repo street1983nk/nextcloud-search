@@ -44,7 +44,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from conftest import BackupHoldDouble
-
 from findling import instance
 from findling.api import status
 from findling.config import INSTANCE_MARKER_NAME, settings

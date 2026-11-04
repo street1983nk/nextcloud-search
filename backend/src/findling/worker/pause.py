@@ -354,6 +354,30 @@ class PauseCoordinator:
         await self._on_resume()
 
 
+# The coordinator of the running lifespan, published for the status route
+# (D-41-06). The route lives in the API package and the coordinator in the
+# lifespan of main, and main imports the routes; one module value here is what
+# lets the route read the state without an import cycle. None outside a
+# lifespan, which reads as "running": a process without a coordinator holds
+# nothing.
+_ACTIVE: PauseCoordinator | None = None
+
+
+def publish(coordinator: PauseCoordinator | None) -> None:
+    """Make ``coordinator`` the one the status route reads; None at the end of a lifespan."""
+    global _ACTIVE
+    _ACTIVE = coordinator
+
+
+def pause_state() -> tuple[PauseState, int | None]:
+    """The state word and, only while paused, the epoch second it was reached."""
+    coordinator = _ACTIVE
+    if coordinator is None:
+        return (PAUSE_RUNNING, None)
+    state = coordinator.state
+    return (state, coordinator.paused_since if state == PAUSE_PAUSED else None)
+
+
 async def _wait(stop_event: asyncio.Event, seconds: float) -> None:
     with contextlib.suppress(TimeoutError):
         await asyncio.wait_for(stop_event.wait(), timeout=seconds)
@@ -369,4 +393,6 @@ __all__ = [
     "PauseCoordinator",
     "PauseState",
     "checkpoint_wal",
+    "pause_state",
+    "publish",
 ]

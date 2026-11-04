@@ -70,6 +70,7 @@ from findling.profile import note_hardware
 from findling.profile import snapshot as profile_snapshot
 from findling.store.repo import CATCHUP_DONE, CATCHUP_MARK, open_read_only, open_store
 from findling.worker.embedding import EmbedRunner
+from findling.worker.pause import PauseCoordinator, WishReader, publish
 from findling.worker.poller import POLLER_STOP_SECONDS, STAND_DOWN_SECONDS, Poller, _pause, default_poller
 from findling.worker.probe_run import ProbeRun
 from findling.worker.reconcile import RECONCILE_STOP_SECONDS, Reconcile, default_catchup_reconcile, default_reconcile
@@ -130,6 +131,25 @@ _STOP_REBUILD: asyncio.Event | None = None
 # above so that its route reaches it. It exists while the lifespan is up and
 # holds a poller, and it is None outside it: POST /probe answers 503 then.
 _PROBE_RUN: ProbeRun | None = None
+
+# The backup pause of issue #37 (D-41-05, D-41-19), at module level like the
+# tasks above: the rebuild asks it between two bands and the pre-check asks it
+# before a start, and neither of them is handed an application object. It is
+# built before the first writer of the lifespan, every writer is attached to it
+# before its task exists, and it is None outside a lifespan.
+_PAUSE: PauseCoordinator | None = None
+
+# How long one read of the pause wish may take. The read is one GET of the
+# profile route; over this it counts as unreadable, which holds a waiting start
+# and changes nothing otherwise (D-41-19). Bounded because the lifespan waits
+# for the first read before it lets the server answer, and a Nextcloud that does
+# not answer must not keep the heartbeat away for the whole client timeout.
+PAUSE_READ_SECONDS: Final = 5.0
+
+# How long the shutdown waits for the pause task: a read of the wish at most,
+# or one checkpoint. Over it the task is cancelled; the wish lives in the
+# companion and is read again at the next start.
+PAUSE_STOP_SECONDS: Final = 5.0
 
 # How long the shutdown waits for the sweep of the check after close() told it
 # to end. It is between two reads of the companion or inside one, and a read
@@ -411,12 +431,15 @@ async def _start_the_rebuild_if_due() -> bool:
     them either.
     """
     global _REBUILDING
-    if not _a_rebuild_may_start():
+    # Not while the backup pause holds the writers (D-41-05, D-41-20): a band
+    # run writes the index a second time, the largest write of this app. The
+    # resume asks this question again through _resume_after_the_pause.
+    if _a_pause_is_wanted() or not _a_rebuild_may_start():
         return False
     if not await asyncio.to_thread(_rebuild_is_due):
         return False
     stop = _STOP_REBUILD
-    if stop is None or not _a_rebuild_may_start():
+    if stop is None or _a_pause_is_wanted() or not _a_rebuild_may_start():
         return False
     _REBUILDING = asyncio.create_task(_rebuild_the_index_directory(stop))
     LOGGER.info("findling rebuilds the index directory the changed version marks ask for")
@@ -565,6 +588,93 @@ def companion_reader() -> Callable[[], Awaitable[CompanionChoice | None]]:
         return await queue.companion_choice()
 
     return read
+
+
+def pause_wish_reader() -> WishReader:
+    """The read of the backup pause wish over the profile route (D-41-05, D-41-19).
+
+    Built on :func:`companion_reader`, so it has a client of its own, built on
+    the first read. True only for a JSON true in a readable answer, False for a
+    readable answer without it (a companion before 1.6.2 included), None when
+    the answer could not be read or did not come within PAUSE_READ_SECONDS.
+    """
+    read = companion_reader()
+
+    async def wish() -> bool | None:
+        choice = await asyncio.wait_for(read(), timeout=PAUSE_READ_SECONDS)
+        return None if choice is None else choice.paused
+
+    return wish
+
+
+def _a_pause_is_wanted() -> bool:
+    """True while the backup pause holds the writers: pausing, paused or not yet read (D-41-19)."""
+    pause = _PAUSE
+    return pause is not None and pause.wants_pause()
+
+
+def _the_rebuild_should_stop(stop_event: asyncio.Event) -> bool:
+    """The question the band run asks between two bands: a shutdown, or a backup pause (D-41-20).
+
+    Asked from the worker thread of the rebuild; both answers are reads of a
+    flag, so nothing here needs the loop.
+    """
+    return stop_event.is_set() or _a_pause_is_wanted()
+
+
+def _the_rebuild_is_busy() -> bool:
+    """True while a rebuild task of this process runs; the pause waits for its band to end."""
+    return _REBUILDING is not None and not _REBUILDING.done()
+
+
+def _the_probe_is_busy() -> bool:
+    """True while a pre-check runs; the pause waits for it to end (T-41-19)."""
+    run = _PROBE_RUN
+    return run is not None and run.task is not None and not run.task.done()
+
+
+async def _resume_after_the_pause() -> None:
+    """What a resume of the backup pause starts again beyond the held writers (D-41-20).
+
+    A rebuild that stopped between two bands for the pause resumes at its
+    cursor, and a start that held the rebuild until the wish was read asks the
+    question now. The two conditions the enable and the lifespan check in front
+    of :func:`_start_the_rebuild_if_due` hold here as well: the mark of the last
+    enable and a volume of this instance. Caught whole with the type name only,
+    by the rule of this module: a resume is never undone by a rebuild question.
+    """
+    try:
+        if not _was_enabled_before_this_start() or await asyncio.to_thread(volume_is_shared):
+            return
+        await _start_the_rebuild_if_due()
+    except Exception as error:
+        LOGGER.error("the rebuild question could not be asked after the pause, an %s", type(error).__name__)
+
+
+def _build_the_pause(*, shared_volume: bool) -> PauseCoordinator:
+    """The coordinator of this lifespan, built without I/O and born holding (D-41-19).
+
+    On a volume of another instance it checkpoints nothing: those files are not
+    ours to write, and every writer of this container is silenced there anyway.
+    """
+    resolved = settings()
+    return PauseCoordinator(
+        read_wish=pause_wish_reader(),
+        databases=() if shared_volume else (resolved.state_db, resolved.vectors_db),
+        rebuild_busy=_the_rebuild_is_busy,
+        probe_busy=_the_probe_is_busy,
+        on_resume=_resume_after_the_pause,
+    )
+
+
+async def _guarded_pause(pause: PauseCoordinator, stop_event: asyncio.Event) -> None:
+    """Run the pause task and let nothing out of it but a log line, like the tasks beside it."""
+    try:
+        await pause.run(stop_event)
+    except asyncio.CancelledError:
+        raise
+    except Exception as error:
+        LOGGER.error("the backup pause ended in an unexpected %s", type(error).__name__)
 
 
 async def _guarded_recover(run: ProbeRun) -> None:
@@ -867,7 +977,13 @@ async def _rebuild_the_index_directory(stop_event: asyncio.Event) -> None:
         # The loop travels with the call because standing the poller down is a
         # coroutine and the worker thread has no loop of its own; the reasoning
         # stands at _stand_the_poller_down.
-        verdict = await asyncio.to_thread(_run_the_rebuild, stop_event.is_set, asyncio.get_running_loop())
+        #
+        # The backup pause stops the run between two bands like a shutdown does
+        # (D-41-20); the cursor in the half filled directory is where the run
+        # after the resume goes on.
+        verdict = await asyncio.to_thread(
+            _run_the_rebuild, partial(_the_rebuild_should_stop, stop_event), asyncio.get_running_loop()
+        )
         LOGGER.info("the index rebuild ended: %s", verdict)
     except asyncio.CancelledError:
         raise
@@ -1055,8 +1171,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # set died inside a pass with more than one slot and lowers once more. On a
     # volume of another instance the guard keeps to memory: that state.db is not
     # ours to read or write. A failure costs the restore and never the start.
+    # The backup pause of issue #37 (D-41-05, D-41-19), built before the first
+    # writer and born holding: every writer below is attached to it right after
+    # it is built and before its task exists, so a restart in the middle of a
+    # backup runs no pass, no embed round and no reconcile slice before the wish
+    # of the admin has been read once. Published for the status route.
+    global _PAUSE
+    _PAUSE = _build_the_pause(shared_volume=bool(shared_volume.other))
+    publish(_PAUSE)
+
     global _GUARD_WATCH
     _GUARD_WATCH = GuardWatch(persist=not shared_volume.other)
+    # D-41-19: attached before the task, so its writes wait for the first read.
+    _PAUSE.attach_guard_watch(_GUARD_WATCH)
     try:
         await _GUARD_WATCH.restore()
     except Exception as error:
@@ -1075,6 +1202,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # the two halves of the bar are handed into the rebuild, so that the worker
     # package keeps importing nothing from the API package.
     _POLLER = default_poller(marks_stamped=resources.reset_read_side)
+    # D-41-19: held before the task exists; arm and silence do not touch it.
+    _PAUSE.attach_poller(_POLLER)
     indexing = asyncio.create_task(_POLLER.run(stop_indexing))
 
     # The embed runner, over the track of that very poller (PAR-01). One track
@@ -1088,6 +1217,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     stop_embedding = asyncio.Event()
     _EMBEDDING = EmbedRunner(track=_POLLER.track)
     _POLLER.attach_runner(_EMBEDDING)
+    # D-41-19: held before the task exists, like the poller.
+    _PAUSE.attach_runner(_EMBEDDING)
     embedding = asyncio.create_task(_guarded_embedding(_EMBEDDING, stop_embedding))
 
     # The pre-check (PRUEF-01), over the poller and the runner it holds. Its
@@ -1115,6 +1246,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     repairing: asyncio.Task[None] | None = None
     if settings().reconcile_enabled:
         _RECONCILE = default_reconcile()
+        # D-41-19: held before the task exists, like the poller.
+        _PAUSE.attach_reconcile(_RECONCILE)
         repairing = asyncio.create_task(_guarded_reconcile(_RECONCILE, stop_reconcile))
     else:
         LOGGER.info("findling reconcile is switched off, the index follows events only")
@@ -1133,6 +1266,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     catching_up: asyncio.Task[None] | None = None
     if not settings().reconcile_enabled and await asyncio.to_thread(_the_catch_up_is_open):
         _CATCHUP_RECONCILE = default_catchup_reconcile()
+        # D-41-19: the catch-up cycle writes state.db like the ordinary one.
+        _PAUSE.attach_reconcile(_CATCHUP_RECONCILE)
         catching_up = asyncio.create_task(_guarded_reconcile(_CATCHUP_RECONCILE, stop_catchup, once=True))
         LOGGER.info("one catch-up cycle after the upgrade runs once")
 
@@ -1219,6 +1354,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     stop_rebuild = asyncio.Event()
     _STOP_REBUILD = stop_rebuild
     _REBUILDING = None
+
+    # The first read of the backup pause wish (D-41-05, D-41-19), behind the
+    # arming and the rebuild event and before the server answers. A wish of
+    # "not paused" lifts the holds and asks the rebuild question through the
+    # resume; "paused" keeps every writer held and begins the pause; an answer
+    # that cannot be read keeps everything held and says "unknown" until the
+    # task below reads one. The read is bounded by PAUSE_READ_SECONDS, and a
+    # failure of the step costs the step, never the start.
+    try:
+        await _PAUSE.tick()
+    except Exception as error:
+        LOGGER.error("the backup pause wish could not be read at the start, an %s", type(error).__name__)
+    stop_pause = asyncio.Event()
+    pausing = asyncio.create_task(_guarded_pause(_PAUSE, stop_pause))
+
+    # Held by the pause until the wish was read as "not paused"; the resume
+    # then asks this question itself (D-41-20).
     if was_enabled and not shared_volume.other:
         await _start_the_rebuild_if_due()
 
@@ -1247,6 +1399,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 recovering.cancel()
             await asyncio.gather(recovering, return_exceptions=True)
         _PROBE_RUN = None
+        # The pause task next, before the writers it holds come down: a step of
+        # it gives the writer of the poller back and checkpoints, and neither
+        # belongs in the middle of the shutdown below. The holds stay as they
+        # are; every writer ends on its stop event whether held or not.
+        stop_pause.set()
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(asyncio.shield(pausing), timeout=PAUSE_STOP_SECONDS)
+        if not pausing.done():
+            pausing.cancel()
+        await asyncio.gather(pausing, return_exceptions=True)
         stop_indexing.set()
         stop_embedding.set()
         stop_reconcile.set()
@@ -1312,6 +1474,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await asyncio.gather(watching, return_exceptions=True)
         await _GUARD_WATCH.aclose()
         _GUARD_WATCH = None
+        publish(None)
+        _PAUSE = None
 
         if repairing is not None:
             with contextlib.suppress(TimeoutError):

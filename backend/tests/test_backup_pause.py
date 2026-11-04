@@ -20,16 +20,6 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from findling.worker.pause import (
-    PAUSE_PAUSED,
-    PAUSE_PAUSING,
-    PAUSE_POLL_SECONDS,
-    PAUSE_RUNNING,
-    PAUSE_SETTLE_SECONDS,
-    PAUSE_UNKNOWN,
-    PauseCoordinator,
-    checkpoint_wal,
-)
 from tantivy import Index
 
 import test_poller
@@ -45,6 +35,16 @@ from findling.nc.queue import CallResult, ClaimResult, CompanionChoice, QueueSta
 from findling.profile import Profile
 from findling.store.repo import Store, open_store
 from findling.worker.embedding import EmbedRunner
+from findling.worker.pause import (
+    PAUSE_PAUSED,
+    PAUSE_PAUSING,
+    PAUSE_POLL_SECONDS,
+    PAUSE_RUNNING,
+    PAUSE_SETTLE_SECONDS,
+    PAUSE_UNKNOWN,
+    PauseCoordinator,
+    checkpoint_wal,
+)
 from findling.worker.poller import Poller
 from findling.worker.reconcile import ROUND_HELD, Reconcile
 from findling.worker.watch import GuardWatch
