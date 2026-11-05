@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
 status: executing
-stopped_at: Completed 42-05-PLAN.md
-last_updated: "2026-11-05T00:49:32.000Z"
+stopped_at: Completed 42-06-PLAN.md
+last_updated: "2026-11-05T01:18:05.000Z"
 last_activity: 2026-11-05
 progress:
   total_phases: 5
@@ -26,8 +26,8 @@ Siehe .planning/PROJECT.md (Stand nach v1.5, Milestone v1.6 gestartet) und .plan
 ## Current Position
 
 Phase: 42 (php-sicherheits-gates), EXECUTING
-Plan: 5 of 9
-Status: 42-05 abgeschlossen (c26beb3a, CI grün), weiter mit 42-06
+Plan: 6 of 9
+Status: 42-06 abgeschlossen (587c758c, CI grün), weiter mit 42-07
 Last activity: 2026-11-05
 
 Progress: [█████████░] 88%
@@ -93,6 +93,7 @@ Progress: [█████████░] 88%
 - v1.7: 42-03 in ca. 60 min inkl. CI (2 Tasks, 4 Dateien)
 - v1.7: 42-04 in ca. 150 min inkl. ca. 60 min CI (3 Tasks, 8 Dateien)
 - v1.7: 42-05 in ca. 60 min inkl. ca. 40 min CI (2 Tasks, 6 Dateien)
+- v1.7: 42-06 in ca. 50 min inkl. ca. 40 min CI (2 Tasks, 7 Dateien)
 
 ## Accumulated Context
 
@@ -124,6 +125,7 @@ Progress: [█████████░] 88%
 - 42-03: Job composer-hygiene in php.yml (composer validate --strict --no-check-publish, composer audit --locked), php.yml wöchentlich Montag 05:50 UTC mit concurrency nach event_name, Dependabot composer /php ohne phpunit-Major, Strukturgate test_php_supply_chain_gates.py; CI a0cb12c5 zwölf Läufe grün (PHP 41909998607); Dependabot-PR #46 (phpunit 11.5.57) offen, nicht gemergt.
 - 42-04: Routen-Gate zählt wie Router::getAttributeRoutes auf (nur *Controller.php, getMethods() ohne Filter, strayEntries) und fragt den ControllerMethodReflector des Server-Checkouts als Orakel (annotations, effective); R3 Docblock-Annotation, R5 static/nicht public/außerhalb deklariert/__call; Untergrenzen 22 im Gleichschritt; 980 Tests lokal und im CI (PHP 41936951308), Baumhash 2ba29624 (117); Server-Cache auf stable34 ec467246.
 - 42-05: Attribute werden kanonisch gelesen (Tabelle der OCP-Attributklassen aus dem Checkout, sonst ReflectionClass::getName); R6 für fremde und nicht ladbare Attribute (auch AnonRateLimit-Unterklassen); Orakel bestätigt: klein geschriebener Namespace oder Kurzname wirkt auf dem Server als PublicPage; 983 Tests lokal und im CI (PHP 41941138211), Baumhash a5fd4a1c (117).
+- 42-06: Klassenattribute zählen für keine Route und sind R4; R1/R2 lesen effective des Orakels, R1 nur mit exaktem AnonRateLimit an der Methode; R7 defaults/root/postfix (ALLOWED_ROUTE_EXTRAS leer); R8 Verbotsliste lockernder Attribute und PublicPage mit ExAppRequired; docs/testing.md Absatz neu; 987 Tests lokal und im CI (PHP 41944202656), Baumhash ca8905b5 (117).
 
 ### Decisions (Roadmap v1.5)
 
@@ -251,8 +253,8 @@ Items acknowledged and deferred at milestone close on 2026-10-28 (Owner-Wiedervo
 
 ## Session Continuity
 
-Last session: 2026-11-05T00:49:32.000Z
-Stopped at: Completed 42-05-PLAN.md
+Last session: 2026-11-05T01:18:05.000Z
+Stopped at: Completed 42-06-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

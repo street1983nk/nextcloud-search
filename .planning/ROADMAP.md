@@ -233,7 +233,7 @@ Plans:
 **Goal:** Die PHP-Hälfte von Findling bekommt Gates auf dem Niveau der Python-Seite, damit keine Route versehentlich öffentlich oder ohne CSRF wird und verwundbare Abhängigkeiten auffallen.
 **Requirements**: Owner-GO 04.11.2026 (Vorschlag aus der PHP-Gates-Recherche)
 **Depends on:** Phase 41 (startet erst nach dem Store-Release 1.6.2)
-**Plans:** 5/9 plans executed
+**Plans:** 6/9 plans executed
 
 **Success Criteria:**
 1. Routen-Attribut-Gate: ein Test vergleicht jede Controller-Methode und ihre Attribute (PublicPage, NoCSRFRequired, NoAdminRequired, AuthorizedAdminSetting, Ratelimits) mit einer committeten Allowlist; eine neue oder geänderte Route ohne Eintrag macht CI rot, mit Negativtest.
@@ -249,7 +249,7 @@ Plans:
 - [x] 42-03-PLAN.md: composer validate --strict und composer audit --locked in php.yml, Dependabot composer, Strukturgate, Phasen-Schlussprüfung (Kriterien 2 und 4)
 - [x] 42-04-PLAN.md: Lückenschluss SK1 (gap closure): Routen wie Router::getAttributeRoutes aufzählen, Server-Reflector als Orakel, Docblock-Annotationen R3, static/nicht public/__call/Deklarationsort R5 (Vektoren 1, 4, 5)
 - [x] 42-05-PLAN.md: kanonische Attributnamen, fremde und nicht ladbare Attribute, Rate-Limit-Unterklassen R6 (Vektoren 2, 8)
-- [ ] 42-06-PLAN.md: Regeln auf dem Orakel: Klassenattribute verboten R4, R1 nur mit AnonRateLimit, root/postfix/defaults R7, Verbotsliste R8, Doku (Vektoren 7, 12, 14)
+- [x] 42-06-PLAN.md: Regeln auf dem Orakel: Klassenattribute verboten R4, R1 nur mit AnonRateLimit, root/postfix/defaults R7, Verbotsliste R8, Doku (Vektoren 7, 12, 14)
 - [ ] 42-07-PLAN.md: Controller final (Owner-Entscheid 04.11.2026: "final setzen"), Elternkette/Traits gepinnt, kein IDelegatedSettings (Vektoren 6, 10, 13 Reflection-Teil)
 - [ ] 42-08-PLAN.md: routes.php Token-Whitelist, kein Router-/Container-Zugriff in lib, Application-Registrierungen exakt (Vektoren 3, 11)
 - [ ] 42-09-PLAN.md: Python-Textsperren php/lib und routes.php, info.xml remote/public/settings, ExApp-Routentabelle exakt, keine AppAPI-Registrierung zur Laufzeit (Vektoren 9, 13, Textseite 1, 3, 6, 11)
