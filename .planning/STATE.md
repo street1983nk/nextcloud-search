@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
 status: executing
-stopped_at: Completed 42-02-PLAN.md
-last_updated: "2026-11-04T20:47:37.000Z"
-last_activity: 2026-11-04
+stopped_at: Lückenschluss 42-10 (Groß-/Kleinschreibung der Router- und Containersperre)
+last_updated: "2026-11-05T03:09:59.000Z"
+last_activity: 2026-11-05
 progress:
   total_phases: 5
   completed_phases: 4
@@ -26,9 +26,9 @@ Siehe .planning/PROJECT.md (Stand nach v1.5, Milestone v1.6 gestartet) und .plan
 ## Current Position
 
 Phase: 42 (php-sicherheits-gates), EXECUTING
-Plan: 2 of 3
-Status: 42-02 abgeschlossen (e0ea3179), 42-03 als Nächstes
-Last activity: 2026-11-04
+Plan: 9 of 9
+Status: Re-Verifikation fand eine Lücke (Vektoren 3 und 6, Groß-/Kleinschreibung); Lückenschluss 42-10 (dca4478d) umgesetzt, Phase bereit zur erneuten Verifikation
+Last activity: 2026-11-05
 
 Progress: [█████████░] 88%
 
@@ -90,6 +90,13 @@ Progress: [█████████░] 88%
 - v1.5: 36-16 in ca. 15 min nach dem Dispatch (3 Tasks, 5 Dateien; Freigabe und Dispatch durch den Koordinator)
 - v1.7: 42-01 in ca. 40 min inkl. CI (2 Tasks, 5 Dateien)
 - v1.7: 42-02 in ca. 90 min inkl. Docker-Ausfall und CI (2 Tasks, 8 Dateien)
+- v1.7: 42-03 in ca. 60 min inkl. CI (2 Tasks, 4 Dateien)
+- v1.7: 42-04 in ca. 150 min inkl. ca. 60 min CI (3 Tasks, 8 Dateien)
+- v1.7: 42-05 in ca. 60 min inkl. ca. 40 min CI (2 Tasks, 6 Dateien)
+- v1.7: 42-06 in ca. 50 min inkl. ca. 40 min CI (2 Tasks, 7 Dateien)
+- v1.7: 42-07 in ca. 90 min inkl. ca. 70 min CI mit einem Rerun (3 Tasks, 11 Dateien)
+- v1.7: 42-08 in ca. 60 min inkl. ca. 40 min CI (2 Tasks, 6 Dateien)
+- v1.7: 42-09 in ca. 50 min inkl. ca. 40 min CI (2 Tasks, 2 Dateien)
 
 ## Accumulated Context
 
@@ -118,6 +125,14 @@ Progress: [█████████░] 88%
 - 40-VERIFICATION (409a38b8): gaps_found, SC1 partial (Audit deckte efcf26c5..91a0603f nicht ab) -> Nachaudit 40-NACHAUDIT.md beauftragt; Luecke 2 (v1.7-Punkte) in deferred-items.md nachgetragen.
 - 42-01: lokales PHPUnit über scripts/dev/phpunit_docker.sh (nextcloud:32.0.15-apache, PHP 8.3, stable34), SERVER_VERSION und MINIMUM_TESTS aus php.yml gelesen; 958 Tests lokal und im CI (PHP 41897060856) grün, Baumhash e7289079 (113).
 - 42-02: Routen-Attribut-Gate RouteSecurityTest (Reflection gegen php/tests/route-security.json, 20 Routen, R1 PublicPage braucht Ratelimit, R2 NoCSRFRequired nur GET oder ExAppRequired), php.yml-Schritt 'The route attribute gate ran' (ROUTE_GATE_MIN_TESTS 15), Strukturgate test_php_route_gate_presence.py; 973 Tests lokal und im CI (PHP 41905206023) grün, Baumhash 06a082a0 (116).
+- 42-03: Job composer-hygiene in php.yml (composer validate --strict --no-check-publish, composer audit --locked), php.yml wöchentlich Montag 05:50 UTC mit concurrency nach event_name, Dependabot composer /php ohne phpunit-Major, Strukturgate test_php_supply_chain_gates.py; CI a0cb12c5 zwölf Läufe grün (PHP 41909998607); Dependabot-PR #46 (phpunit 11.5.57) offen, nicht gemergt.
+- 42-04: Routen-Gate zählt wie Router::getAttributeRoutes auf (nur *Controller.php, getMethods() ohne Filter, strayEntries) und fragt den ControllerMethodReflector des Server-Checkouts als Orakel (annotations, effective); R3 Docblock-Annotation, R5 static/nicht public/außerhalb deklariert/__call; Untergrenzen 22 im Gleichschritt; 980 Tests lokal und im CI (PHP 41936951308), Baumhash 2ba29624 (117); Server-Cache auf stable34 ec467246.
+- 42-05: Attribute werden kanonisch gelesen (Tabelle der OCP-Attributklassen aus dem Checkout, sonst ReflectionClass::getName); R6 für fremde und nicht ladbare Attribute (auch AnonRateLimit-Unterklassen); Orakel bestätigt: klein geschriebener Namespace oder Kurzname wirkt auf dem Server als PublicPage; 983 Tests lokal und im CI (PHP 41941138211), Baumhash a5fd4a1c (117).
+- 42-06: Klassenattribute zählen für keine Route und sind R4; R1/R2 lesen effective des Orakels, R1 nur mit exaktem AnonRateLimit an der Methode; R7 defaults/root/postfix (ALLOWED_ROUTE_EXTRAS leer); R8 Verbotsliste lockernder Attribute und PublicPage mit ExAppRequired; docs/testing.md Absatz neu; 987 Tests lokal und im CI (PHP 41944202656), Baumhash ca8905b5 (117).
+- 42-07: Owner-Entscheid 04.11.2026 'final setzen' umgesetzt: Gateway-, Profile-, Queue-, ReconcileController final (je eine Zeile), alle 7 Controller final; C1 nicht final, C3 IDelegatedSettings; Objekt classes in route-security.json (final, Elternkette, Traits, Interfaces, von Hand); 992 Tests lokal und im CI (PHP 41947587570), Baumhash 04f4443d (117); HaRP stable34/x86 einmal rot im v1.5.0-Upgrade-Schritt (Zeitfehler), Rerun grün.
+- 42-08: routes.php nur literale Tokens (token_get_all-Whitelist), keine Router-/Container-Namen unter php/lib (Tokenprüfung), Application::register gegen aufzeichnenden Stub von IRegistrationContext exakt gleich php/tests/app-surface.json (16 Registrierungen), boot() leer; 997 Tests lokal und im CI (PHP 41953527552), Baumhash 2efff5b9 (118).
+- 42-09: Python-Textsperren test_php_surface_bans.py (18 Server-Annotationen in php/lib im Gleichschritt mit RouteProfiles, Router-/Container-Texte, routes.php, info.xml ohne remote/public/sabre u. a., settings exakt) und test_exapp_surface.py (ExApp-Routentabelle exakt, PUBLIC/headers_to_exclude als Regel, keine AppAPI-Registrierung zur Laufzeit, nur eigene OCS-Pfade); CI 0aed7906 grün (Python 41956536303).
+- 42-10: Lückenschluss der Re-Verifikation: AppSurface::sourceFindings und LIB_BANS vergleichen die Router- und Containernamen ohne Rücksicht auf Groß-/Kleinschreibung (irouter, actioninclude, getrouter, getcontainer()->registerservice am echten Baum rot belegt); Untergrenzen 40; python.yml startet auf php/**; 998 Tests lokal grün, Baumhash eb5b2dc1 (118).
 
 ### Decisions (Roadmap v1.5)
 
@@ -245,8 +260,8 @@ Items acknowledged and deferred at milestone close on 2026-10-28 (Owner-Wiedervo
 
 ## Session Continuity
 
-Last session: 2026-11-04T20:47:37.000Z
-Stopped at: Completed 42-02-PLAN.md
+Last session: 2026-11-05T03:09:59.000Z
+Stopped at: Completed 42-09-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

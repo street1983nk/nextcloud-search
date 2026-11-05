@@ -424,22 +424,43 @@ the scaffold in plan 05-15 and grew in plan 05-20,
 `GroupEventListenerTest.php` from plan 06.1-08, and `QueueServiceTest.php` from
 plan 06.1-24, which holds the arithmetic of the verdict revocation.
 
-`RouteSecurityTest.php` from plan 42-02 is the route attribute gate. It reads
-every public method under `php/lib/Controller` that carries a route attribute by
-reflection, with every attribute out of `OCP\AppFramework\Http\Attribute` on the
-method and on its class, rate limit and brute force arguments included, and
-requires an exact match with `php/tests/route-security.json`. A new route, a
-changed attribute set, a changed verb or url and an orphaned allowlist entry turn
-it red, each named by `Controller::method`; so do `PublicPage` without
-`AnonRateLimit` or `BruteForceProtection`, `NoCSRFRequired` on anything but GET
-without `ExAppRequired`, and a route in `appinfo/routes.php`. A change to the
-attack surface is therefore always a line in `route-security.json` that a review
+`RouteSecurityTest.php` from plan 42-02 is the route attribute gate. It
+enumerates the controllers exactly like `Router::getAttributeRoutes` does on
+the server: only the files `php/lib/Controller/*Controller.php`, every method
+of each class without a filter (inherited, from a trait, any visibility,
+static), route attributes matched by instanceof, keyed by the short name of the
+concrete class; any other entry of that directory is a finding. For every route
+method it asks the `ControllerMethodReflector` of the server checkout the suite
+runs against, so what counts as effective is the verdict of the server and not
+a rebuilt copy of its logic. Each route and its method attributes, read by
+their canonical class name whatever their spelling, rate limit and brute force
+arguments included, have to match `php/tests/route-security.json` exactly: a
+new route, a changed attribute set, a changed verb, url or requirement and an
+orphaned allowlist entry turn it red, each named by `Controller::method`. On top
+of that, whatever the allowlist says: `PublicPage` only together with an
+`AnonRateLimit` attribute on the method, because `BruteForceProtection` alone
+registers an attempt only when the response calls `throttle()` (R1);
+`NoCSRFRequired` on anything but GET only with `ExAppRequired` (R2); no docblock
+annotation of a security marker on a route method, in any form, the ones the
+server ignores included (R3); no attribute on a controller class, because the
+server reads only method attributes (R4); a route method is public, not static
+and declared inside the controller directory, and no controller defines
+`__call` or `__callStatic` (R5); every attribute is a loadable OCP attribute or
+a harmless PHP one (R6); no `defaults`, `root` or `postfix` in a route attribute
+(R7); none of `CORS`, `AppApiAdminAccessWithoutUser`, `NoTwoFactorRequired`,
+`NoSameSiteCookieRequired`, `SubAdminRequired`, `AuthorizedAdminSetting` and
+`UseSession`, and never `PublicPage` together with `ExAppRequired` (R8). The
+class pins, the app surface test and the Python surface bans extend the same
+idea to the controller classes, to the routes file and the registrations of
+the app, and to commits that touch only the backend. A change to the attack
+surface is therefore always a line in `route-security.json` that a review
 reads. The step "The route attribute gate ran" in `php.yml` reads the JUnit log
 and requires the suite with at least `ROUTE_GATE_MIN_TESTS` cases and nothing
 skipped, and `backend/tests/test_php_route_gate_presence.py` holds the shape of
-all three pieces from the Python side. What it does not claim: it reads
-attributes, not method bodies, so the `rejectForeignCaller` call inside the
-ExApp endpoints stays the business of `test_php_trust_boundary.py`.
+all three pieces from the Python side, the floor in lockstep with the number of
+test methods. What it does not claim: it reads attributes and docblocks, not
+method bodies, so the `rejectForeignCaller` call inside the ExApp endpoints
+stays the business of `test_php_trust_boundary.py`.
 
 ## What closed it
 

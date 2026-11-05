@@ -35,6 +35,12 @@ scripts/ops/*.py text eol=lf
 # shebang before this rule existed.
 docs/measurements/**/skripte/*.py text eol=lf
 
+# The fixtures and the reader of the route attribute gate (plan 42-04). Their
+# docblocks are read line by line by the regular expression of the server's
+# ControllerMethodReflector, which anchors on the end of the line, so a
+# checkout with autocrlf must not hand them a carriage return.
+php/tests/RouteSecurity/** text eol=lf
+
 # The reference corpus is byte exact test data. Its checksums are the evidence
 # of the read only invariant, so no checkout may ever rewrite a byte in it. Two
 # of the files would not merely change their hash: a carriage return inside a

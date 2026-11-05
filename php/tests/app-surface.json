@@ -1,0 +1,26 @@
+{
+	"_comment": [
+		"The allowlist of every registration Application::register() makes (plan 42-08), written by hand from lib/AppInfo/Application.php with every loop counted out.",
+		"tests/Unit/RouteSecurityTest.php runs register() against a stub of IRegistrationContext that records every method of the interface of the server checkout, and requires exactly this list, duplicates included; boot() has to record nothing.",
+		"A search provider, a capability, declarative settings, a middleware, an event listener or any other registration serves a surface of the app beside the controller routes, so a new one is a deliberate line here.",
+		"Format: name(arg, ...) with class names without a leading backslash; PHPUnit hands the stub every declared parameter, so registerEventListener carries its default priority 0."
+	],
+	"registrations": [
+		"registerSearchProvider(OCA\\Findling\\Search\\Provider)",
+		"registerSearchProvider(OCA\\Findling\\Search\\FilterProvider)",
+		"registerEventListener(OCP\\Files\\Events\\Node\\NodeCreatedEvent, OCA\\Findling\\Listener\\FileEventListener, 0)",
+		"registerEventListener(OCP\\Files\\Events\\Node\\NodeWrittenEvent, OCA\\Findling\\Listener\\FileEventListener, 0)",
+		"registerEventListener(OCP\\Files\\Events\\Node\\NodeTouchedEvent, OCA\\Findling\\Listener\\FileEventListener, 0)",
+		"registerEventListener(OCP\\Files\\Events\\Node\\NodeCopiedEvent, OCA\\Findling\\Listener\\FileEventListener, 0)",
+		"registerEventListener(OCP\\Files\\Events\\Node\\NodeRenamedEvent, OCA\\Findling\\Listener\\FileEventListener, 0)",
+		"registerEventListener(OCP\\Files\\Events\\Node\\NodeDeletedEvent, OCA\\Findling\\Listener\\FileEventListener, 0)",
+		"registerEventListener(OCA\\Files_Trashbin\\Events\\MoveToTrashEvent, OCA\\Findling\\Listener\\FileEventListener, 0)",
+		"registerEventListener(OCA\\Files_Trashbin\\Events\\NodeRestoredEvent, OCA\\Findling\\Listener\\FileEventListener, 0)",
+		"registerEventListener(OCP\\Share\\Events\\ShareCreatedEvent, OCA\\Findling\\Listener\\ShareEventListener, 0)",
+		"registerEventListener(OCP\\Share\\Events\\ShareDeletedEvent, OCA\\Findling\\Listener\\ShareEventListener, 0)",
+		"registerEventListener(OCP\\Share\\Events\\ShareDeletedFromSelfEvent, OCA\\Findling\\Listener\\ShareEventListener, 0)",
+		"registerEventListener(OCP\\Group\\Events\\UserAddedEvent, OCA\\Findling\\Listener\\GroupEventListener, 0)",
+		"registerEventListener(OCP\\Group\\Events\\UserRemovedEvent, OCA\\Findling\\Listener\\GroupEventListener, 0)",
+		"registerEventListener(OCP\\AppFramework\\Http\\Events\\BeforeTemplateRenderedEvent, OCA\\Findling\\Listener\\LoadUnifiedSearchFiltersListener, 0)"
+	]
+}

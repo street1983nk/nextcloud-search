@@ -18,10 +18,19 @@ removes what it guards is no gate, so each piece is checked here:
    no abstract class, no Requires attribute in short or fully qualified form and
    no ``@requires`` annotation, which PHPUnit 11 still evaluates.
 3. The allowlist is valid JSON and has as many entries under "routes" as the
-   controllers have fully qualified ApiRoute and FrontpageRoute lines.
+   controllers have fully qualified ApiRoute and FrontpageRoute lines, and since
+   plan 42-07 an object "classes" with one entry per controller file, each
+   with ``"final": true``.
 4. The JUnit step of php.yml exists, takes the file and the floor only from its
-   env, keeps the floor at 15 or above, and runs exactly one ``php -r``
-   expression without a fixed file name and without a single quote.
+   env, keeps the floor at 40 or above, equal to the number of test methods,
+   and runs exactly one ``php -r`` expression without a fixed file name and
+   without a single quote. Since plan 42-04 the floor of php.yml, MIN_FLOOR
+   below and the count of ``public function test`` lines in
+   RouteSecurityTest.php move in lockstep, so a plan that adds a test cannot
+   forget the floor, and a floor cannot run ahead of the tests.
+5. Since plan 42-08 the registration allowlist php/tests/app-surface.json is
+   valid JSON with a non empty list of strings, and its helper
+   php/tests/RouteSecurity/AppSurface.php exists.
 
 **The limit.** This reads text and YAML. Whether the PHP expression is correct
 is proven by running it, which plan 42-02 did locally and php.yml does on
@@ -44,11 +53,13 @@ ALLOWLIST = PHP_ROOT / "tests" / "route-security.json"
 PHPUNIT_XML = PHP_ROOT / "phpunit.xml"
 CONTROLLER_ROOT = PHP_ROOT / "lib" / "Controller"
 PHP_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "php.yml"
+APP_SURFACE = PHP_ROOT / "tests" / "app-surface.json"
+APP_SURFACE_HELPER = PHP_ROOT / "tests" / "RouteSecurity" / "AppSurface.php"
 
 CLASS_LINE = "final class RouteSecurityTest extends TestCase"
 SUITE_NAME = "OCA\\Findling\\Tests\\Unit\\RouteSecurityTest"
 STEP_NAME = "The route attribute gate ran"
-MIN_FLOOR = 15
+MIN_FLOOR = 40
 
 SKIP_MARKERS = (
     "markTestSkipped",
@@ -61,6 +72,7 @@ SKIP_MARKERS = (
 
 _ROUTE_LINE = re.compile(r"#\[\\OCP\\AppFramework\\Http\\Attribute\\(?:ApiRoute|FrontpageRoute)\(")
 _PHP_R = "php -r '"
+_TEST_METHOD = re.compile(r"^\s*public function test", re.MULTILINE)
 
 
 def scan_test_source(source: str) -> list[str]:
@@ -76,13 +88,29 @@ def scan_test_source(source: str) -> list[str]:
     return findings
 
 
+def count_test_methods(source: str) -> int:
+    """The number of test methods, the way the floors count them."""
+    return len(_TEST_METHOD.findall(source))
+
+
+def workflow_floor(text: str) -> object:
+    """ROUTE_GATE_MIN_TESTS of the JUnit step of php.yml, None when absent."""
+    step = _gate_step(yaml.safe_load(text))
+    env = step.get("env") if step is not None else None
+    return env.get("ROUTE_GATE_MIN_TESTS") if isinstance(env, dict) else None
+
+
 def count_route_lines(sources: list[str]) -> int:
     """Fully qualified ApiRoute and FrontpageRoute attribute lines over all controllers."""
     return sum(len(_ROUTE_LINE.findall(source)) for source in sources)
 
 
-def scan_allowlist(text: str, route_count: int) -> list[str]:
-    """Findings about route-security.json against the number of route lines."""
+def scan_allowlist(text: str, route_count: int, controller_count: int | None = None) -> list[str]:
+    """Findings about route-security.json against the number of route lines.
+
+    With controller_count, the object "classes" has to hold exactly that many
+    entries, each of them with ``"final": true``.
+    """
     try:
         data: Any = json.loads(text)
     except json.JSONDecodeError as error:
@@ -92,6 +120,35 @@ def scan_allowlist(text: str, route_count: int) -> list[str]:
         return ["route-security.json has no routes object"]
     if len(routes) != route_count:
         return [f"route-security.json has {len(routes)} entries, the controllers declare {route_count} routes"]
+    if controller_count is None:
+        return []
+    classes = data.get("classes")
+    if not isinstance(classes, dict):
+        return ["route-security.json has no classes object"]
+    findings: list[str] = []
+    if len(classes) != controller_count:
+        findings.append(
+            f"route-security.json has {len(classes)} class entries, lib/Controller has {controller_count} controllers"
+        )
+    findings.extend(
+        f"the class entry {name} is not final"
+        for name, entry in sorted(classes.items())
+        if not isinstance(entry, dict) or entry.get("final") is not True
+    )
+    return findings
+
+
+def scan_app_surface(text: str) -> list[str]:
+    """Findings about app-surface.json: valid JSON with a non empty list of strings."""
+    try:
+        data: Any = json.loads(text)
+    except json.JSONDecodeError as error:
+        return [f"app-surface.json is not valid JSON: {error}"]
+    registrations = data.get("registrations") if isinstance(data, dict) else None
+    if not isinstance(registrations, list) or not registrations:
+        return ["app-surface.json has no non empty registrations list"]
+    if not all(isinstance(entry, str) for entry in registrations):
+        return ["app-surface.json has a registration that is not a string"]
     return []
 
 
@@ -164,11 +221,39 @@ def test_the_allowlist_has_one_entry_per_route() -> None:
     sources = [path.read_text(encoding="utf-8") for path in sorted(CONTROLLER_ROOT.glob("*.php"))]
     route_count = count_route_lines(sources)
     assert route_count >= 20  # plan 42-02: twenty routes in seven controllers on 2026-11-04
-    assert scan_allowlist(ALLOWLIST.read_text(encoding="utf-8"), route_count) == []
+    controller_count = len(list(CONTROLLER_ROOT.glob("*Controller.php")))
+    assert controller_count == 7  # plan 42-07: seven controllers, all final, on 2026-11-05
+    assert scan_allowlist(ALLOWLIST.read_text(encoding="utf-8"), route_count, controller_count) == []
+
+
+def test_the_app_surface_allowlist_exists() -> None:
+    assert APP_SURFACE_HELPER.is_file(), APP_SURFACE_HELPER
+    assert scan_app_surface(APP_SURFACE.read_text(encoding="utf-8")) == []
+
+
+def test_an_empty_app_surface_list_is_reported() -> None:
+    assert scan_app_surface(json.dumps({"registrations": ["registerSearchProvider(A)"]})) == []
+    assert scan_app_surface(json.dumps({"registrations": []})) == [
+        "app-surface.json has no non empty registrations list"
+    ]
+    assert scan_app_surface(json.dumps({"_comment": ["x"]})) == ["app-surface.json has no non empty registrations list"]
+    assert scan_app_surface(json.dumps({"registrations": [1]})) == [
+        "app-surface.json has a registration that is not a string"
+    ]
+    assert scan_app_surface("{")[0].startswith("app-surface.json is not valid JSON")
 
 
 def test_php_yml_proves_the_gate_ran() -> None:
     assert scan_workflow(PHP_WORKFLOW.read_text(encoding="utf-8")) == []
+
+
+def test_the_floors_equal_the_number_of_test_methods() -> None:
+    source = GATE_TEST.read_text(encoding="utf-8")
+    methods = count_test_methods(source)
+    assert methods == workflow_floor(PHP_WORKFLOW.read_text(encoding="utf-8")) == MIN_FLOOR
+    # Negative probe: one test method more breaks the equality.
+    grown = source + "\n\tpublic function testOneMore(): void {\n\t}\n"
+    assert count_test_methods(grown) == methods + 1 != MIN_FLOOR
 
 
 # Probes: every finding is reported.
@@ -248,6 +333,40 @@ def test_a_wrong_entry_count_is_reported() -> None:
     assert "1 entries" in findings[0]
 
 
+def _with_classes(count: int, *, final: bool = True) -> str:
+    classes = {
+        f"C{index}Controller": {"final": final, "parents": [], "traits": [], "interfaces": []} for index in range(count)
+    }
+    return json.dumps({"routes": {"A::b": {"route": "r", "attributes": []}}, "classes": classes})
+
+
+def test_a_complete_class_allowlist_is_clean() -> None:
+    assert scan_allowlist(_with_classes(2), 1, 2) == []
+
+
+def test_a_missing_class_entry_is_reported() -> None:
+    findings = scan_allowlist(_with_classes(1), 1, 2)
+    assert findings == ["route-security.json has 1 class entries, lib/Controller has 2 controllers"]
+
+
+def test_an_extra_class_entry_is_reported() -> None:
+    findings = scan_allowlist(_with_classes(3), 1, 2)
+    assert findings == ["route-security.json has 3 class entries, lib/Controller has 2 controllers"]
+
+
+def test_a_class_entry_that_is_not_final_is_reported() -> None:
+    findings = scan_allowlist(_with_classes(2, final=False), 1, 2)
+    assert findings == [
+        "the class entry C0Controller is not final",
+        "the class entry C1Controller is not final",
+    ]
+
+
+def test_a_missing_classes_object_is_reported() -> None:
+    text = json.dumps({"routes": {"A::b": {"route": "r", "attributes": []}}})
+    assert scan_allowlist(text, 1, 2) == ["route-security.json has no classes object"]
+
+
 def test_invalid_json_is_reported() -> None:
     findings = scan_allowlist("{", 1)
     assert len(findings) == 1
@@ -263,7 +382,7 @@ def test_route_lines_are_counted_fully_qualified_only() -> None:
     assert count_route_lines([source, source]) == 4
 
 
-_CLEAN_WORKFLOW = """
+_CLEAN_WORKFLOW = f"""
 jobs:
   phpunit:
     steps:
@@ -273,7 +392,7 @@ jobs:
         working-directory: apps/findling
         env:
           JUNIT_FILE: junit.xml
-          ROUTE_GATE_MIN_TESTS: 15
+          ROUTE_GATE_MIN_TESTS: {MIN_FLOOR}
         run: |
           php -r '
             $file = getenv("JUNIT_FILE");
@@ -296,17 +415,24 @@ def test_a_workflow_without_the_step_is_reported() -> None:
 
 
 def test_a_step_without_the_floor_is_reported() -> None:
-    source = _CLEAN_WORKFLOW.replace("          ROUTE_GATE_MIN_TESTS: 15\n", "")
+    source = _CLEAN_WORKFLOW.replace(f"          ROUTE_GATE_MIN_TESTS: {MIN_FLOOR}\n", "")
     findings = scan_workflow(source)
     assert len(findings) == 1
     assert "sets no ROUTE_GATE_MIN_TESTS" in findings[0]
 
 
 def test_a_floor_of_zero_is_reported() -> None:
-    source = _CLEAN_WORKFLOW.replace("ROUTE_GATE_MIN_TESTS: 15", "ROUTE_GATE_MIN_TESTS: 0")
+    source = _CLEAN_WORKFLOW.replace(f"ROUTE_GATE_MIN_TESTS: {MIN_FLOOR}", "ROUTE_GATE_MIN_TESTS: 0")
     findings = scan_workflow(source)
     assert len(findings) == 1
-    assert "at least 15" in findings[0]
+    assert f"at least {MIN_FLOOR}" in findings[0]
+
+
+def test_a_floor_below_the_test_count_is_reported() -> None:
+    source = _CLEAN_WORKFLOW.replace(f"ROUTE_GATE_MIN_TESTS: {MIN_FLOOR}", f"ROUTE_GATE_MIN_TESTS: {MIN_FLOOR - 1}")
+    findings = scan_workflow(source)
+    assert len(findings) == 1
+    assert f"at least {MIN_FLOOR}" in findings[0]
 
 
 def test_a_fixed_junit_name_in_the_expression_is_reported() -> None:

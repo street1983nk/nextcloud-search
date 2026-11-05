@@ -425,7 +425,7 @@ jobs:
           # The number of test methods of RouteSecurityTest, as a floor like
           # MINIMUM_TESTS: a new test method may raise it, and deleting,
           # renaming or skipping the gate makes it tear.
-          ROUTE_GATE_MIN_TESTS: 15
+          ROUTE_GATE_MIN_TESTS: 40
         run: |
           php -r '
             $file = getenv("JUNIT_FILE");

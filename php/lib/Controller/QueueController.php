@@ -42,7 +42,7 @@ use Psr\Log\LoggerInterface;
  * exemption is not a weakening; the credential on these routes is the signed
  * AppAPI header, and there is no session involved that a token could protect.
  */
-class QueueController extends OCSController {
+final class QueueController extends OCSController {
 	/**
 	 * Thirty two files or sixty four megabytes, whichever comes first. The byte
 	 * budget exists because thirty two invoices and thirty two scans are not the

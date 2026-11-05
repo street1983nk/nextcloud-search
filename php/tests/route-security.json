@@ -4,7 +4,9 @@
 		"tests/Unit/RouteSecurityTest.php reads the controllers by reflection and requires an exact match. A new route, a changed attribute set, a changed verb or url and an entry without a method all turn the suite red.",
 		"A change to a route or to its attributes is therefore entered here by hand and on purpose, and the entry is where a review answers the question why this route may do that.",
 		"The format is the one tests/RouteSecurity/RouteProfiles.php produces: route is the short name of the route attribute, the verb and the url, followed by the canonical JSON of any further route argument; attributes are short names, sorted, with arguments as Name(key=value, ...).",
-		"The textual gate backend/tests/test_php_trust_boundary.py stays beside this one: it checks the rejectForeignCaller call in the method bodies, which attributes cannot show."
+		"The textual gate backend/tests/test_php_trust_boundary.py stays beside this one: it checks the rejectForeignCaller call in the method bodies, which attributes cannot show.",
+		"classes pins every controller class itself (plan 42-07): final, the parent chain up to the root, the traits of the class and its parents, and the interfaces. A subclass, another base class such as OCSController instead of Controller, or a new trait changes what stands behind the pinned routes, so it is a line here as well.",
+		"Every entry is written by hand from the controller source and the OCP chain of the server checkout; the reader in RouteProfiles::classProfiles is the cross check, not the source."
 	],
 	"routes": {
 		"GatewayController::getFileContents": {
@@ -86,6 +88,50 @@
 		"SettingsController::setPause": {
 			"route": "FrontpageRoute POST /admin/pause",
 			"attributes": []
+		}
+	},
+	"classes": {
+		"GatewayController": {
+			"final": true,
+			"parents": ["OCP\\AppFramework\\OCSController", "OCP\\AppFramework\\ApiController", "OCP\\AppFramework\\Controller"],
+			"traits": [],
+			"interfaces": []
+		},
+		"PageController": {
+			"final": true,
+			"parents": ["OCP\\AppFramework\\Controller"],
+			"traits": [],
+			"interfaces": []
+		},
+		"ProfileController": {
+			"final": true,
+			"parents": ["OCP\\AppFramework\\OCSController", "OCP\\AppFramework\\ApiController", "OCP\\AppFramework\\Controller"],
+			"traits": [],
+			"interfaces": []
+		},
+		"ProfileSettingsController": {
+			"final": true,
+			"parents": ["OCP\\AppFramework\\Controller"],
+			"traits": [],
+			"interfaces": []
+		},
+		"QueueController": {
+			"final": true,
+			"parents": ["OCP\\AppFramework\\OCSController", "OCP\\AppFramework\\ApiController", "OCP\\AppFramework\\Controller"],
+			"traits": [],
+			"interfaces": []
+		},
+		"ReconcileController": {
+			"final": true,
+			"parents": ["OCP\\AppFramework\\OCSController", "OCP\\AppFramework\\ApiController", "OCP\\AppFramework\\Controller"],
+			"traits": [],
+			"interfaces": []
+		},
+		"SettingsController": {
+			"final": true,
+			"parents": ["OCP\\AppFramework\\Controller"],
+			"traits": [],
+			"interfaces": []
 		}
 	}
 }

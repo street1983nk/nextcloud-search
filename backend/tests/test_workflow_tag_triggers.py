@@ -72,7 +72,10 @@ PATHS_BEFORE: dict[str, list[str]] = {
         "scripts/**",
         ".github/workflows/python.yml",
         "docs/measurements/**",
-        "php/l10n/**",
+        # Widened from php/l10n/** by plan 42-10, the one deliberate path move
+        # since plan 31-01: the PHP text bans of test_php_surface_bans.py judge
+        # the whole PHP half and have to start on a commit that touches it.
+        "php/**",
         "docs/l10n-*.md",
     ],
     "resilience.yml": [

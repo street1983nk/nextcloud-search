@@ -24,7 +24,7 @@ use Psr\Log\LoggerInterface;
  * real Nextcloud permission model answers the question. There is no second,
  * drifting permission model in Python.
  */
-class GatewayController extends OCSController {
+final class GatewayController extends OCSController {
 	public function __construct(
 		IRequest $request,
 		private IRootFolder $rootFolder,

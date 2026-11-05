@@ -35,7 +35,7 @@ use Psr\Log\LoggerInterface;
  * exemption is not a weakening: the credential is the signed AppAPI header and
  * no session is involved.
  */
-class ProfileController extends OCSController {
+final class ProfileController extends OCSController {
 	/**
 	 * The generation of the verdict vocabulary this companion stores (K6).
 	 *
