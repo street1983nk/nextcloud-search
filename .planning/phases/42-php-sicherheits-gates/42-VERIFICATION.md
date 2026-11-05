@@ -1,38 +1,36 @@
 ---
 phase: 42-php-sicherheits-gates
-verified: 2026-11-05T03:30:15Z
-status: gaps_found
-score: "SK2 und SK4 verifiziert, SK1 teilweise; Vektoren 12/14 voll, 2/14 teilweise (3 und 6, Groß-/Kleinschreibung)"
+verified: 2026-11-05T12:00:00Z
+status: passed
+score: "SK1, SK2 und SK4 verifiziert; Vektoren 14/14 voll"
 overrides_applied: 0
-scope: "Erfolgskriterien 1, 2 und 4 der ROADMAP plus die 14 Vektoren aus 42-04 bis 42-09; Kriterium 3 (Psalm, php-cs-fixer, zizmor, actionlint) bewusst vertagt"
+scope: "Erfolgskriterien 1, 2 und 4 der ROADMAP plus die 14 Vektoren aus 42-04 bis 42-10; Kriterium 3 (Psalm, php-cs-fixer, zizmor, actionlint) bewusst vertagt"
 re_verification:
   previous_status: gaps_found
-  previous_score: "2/3 Erfolgskriterien, SK1 teilweise"
+  previous_score: "SK1 teilweise; Vektoren 12/14 voll, 2/14 teilweise (3 und 6, Groß-/Kleinschreibung)"
   gaps_closed:
-    - "Docblock-Annotationen (@PublicPage, @NoCSRFRequired, ...) auf Routenmethoden: R3 plus Server-Orakel, am echten Baum rot belegt"
-    - "Geerbte Routenmethoden: Aufzählung wie Router::getAttributeRoutes, unlisted plus R5 (Deklarationsort), am echten Baum per Trait rot belegt"
-    - "ROUTE_GATE_MIN_TESTS und MIN_FLOOR im Gleichschritt (39)"
-    - "Textsperre unter php/lib für Annotationen (Python, test_php_surface_bans.py)"
+    - "Vektoren 3 und 6, Textseite: Router- und Containernamen werden in AppSurface::sourceFindings und LIB_BANS jetzt ohne Rücksicht auf Groß-/Kleinschreibung gesperrt (42-10, dca4478d)"
   gaps_remaining: []
   regressions: []
-gaps:
-  - truth: "Kein Quelltext unter php/lib nennt IRouter, getRouter, actionInclude, OC\\Route, registerService, registerServiceAlias, registerParameter, registerMiddleware oder getContainer (Wahrheit 42-08, Textseite 42-09; Vektoren 3 und 6)"
-    status: partial
-    reason: "Beide Sperren vergleichen die Namen case-sensitiv. PHP löst Klassen-, Interface-, Funktions- und Methodennamen aber ohne Rücksicht auf Groß-/Kleinschreibung auf, so wie das Gate es für Attribute (Vektor 2) selbst schon berücksichtigt. Unabhängige Proben am echten Baum: (a) neue Datei php/lib/Service/RedRouterProbe.php mit 'use OCP\\Route\\irouter;', '->actioninclude(' und '->getrouter()': PHPUnit 'OK (39 tests)', pytest 86 passed, also ganz grün. (b) '$this->getcontainer()->registerservice(PageController::class, ...)' im Konstruktor von Application (DI-Austausch eines Controllers, den 'final' nicht verhindert): PHPUnit 'OK (39 tests)', pytest 86 passed. Gegenprobe mit exakter Schreibweise derselben Zeile: Tokenprüfung und Python-Text rot. Die Sperre greift also nur bei kanonischer Schreibweise."
-    artifacts:
-      - path: "php/tests/RouteSecurity/AppSurface.php"
-        issue: "sourceFindings(): in_array($last, BANNED_NAMES, true) case-sensitiv; nur der Namespace OC\\Route\\ wird kleingeschrieben verglichen"
-      - path: "backend/tests/test_php_surface_bans.py"
-        issue: "LIB_BANS per 'ban in line' case-sensitiv (Kommentar 'case-sensitiv wie PHP-Bezeichner' trifft für PHP nicht zu); nur 'OC\\Route\\' wird kleingeschrieben verglichen"
-    missing:
-      - "AppSurface::sourceFindings: strtolower($last) gegen kleingeschriebene BANNED_NAMES vergleichen; Probe mit 'use OCP\\Route\\irouter;' und '$this->getcontainer()->registerservice(...)' als Negativtest"
-      - "test_php_surface_bans.py: LIB_BANS case-insensitiv prüfen (line.lower() gegen ban.lower()), Negativproben in Kleinschreibung ergänzen"
-      - "Untergrenzen (ROUTE_GATE_MIN_TESTS, MIN_FLOOR) nur anheben, falls eine neue Testmethode entsteht"
-deferred:
-  - truth: "Erfolgskriterium 3: Psalm mit Taint gegen ocp 33/34/35, php-cs-fixer dry-run, zizmor, actionlint"
-    addressed_in: "eigene Phase vor Findling 1.7 (noch ohne Phasennummer)"
-    evidence: "ROADMAP.md, Abschnitt Phase 42: 'Kriterium 3 (Psalm mit Taint, php-cs-fixer, zizmor, actionlint) ist nicht Teil dieser Phase und kommt als eigene Phase vor Findling 1.7.'"
 ---
+
+## Finale Re-Verifikation nach 42-10 (2026-11-05)
+
+Frühere Läufe: Lauf 1 fand vier Lücken (Docblocks, geerbte Methoden, Untergrenzen, Textsperre), 42-09 schloss sie. Lauf 2 fand nur noch die case-sensitive Textsperre (Vektoren 3 und 6). Dieser Lauf prüft nur diese Lücke.
+
+Unabhängige Rotproben am echten Baum (andere Dateien und Methoden als der Executor, danach zurückgesetzt, git status sauber bis auf fremde untracked Dateien):
+
+| Probe | PHPUnit (scripts/dev/phpunit_docker.sh) | pytest test_php_surface_bans.py |
+| ----- | ---------------------------------------- | ------------------------------- |
+| Neue Datei php/lib/Db/ZzProbe.php: `use OCP\Route\IrOuTeR as R;` und `$s->GetRouter();` | rot: testNoSourceUnderLibTouchesTheRouterOrTheContainer meldet `ZzProbe.php:4: OCP\Route\IrOuTeR` und `:6: GetRouter` | rot: `php/lib/Db/ZzProbe.php:4: IRouter` (plus getRouter) |
+| Application::register: `$context->registerSERVICE("x", fn () => \oc::$server->get(\ocpoute\irouter::class));` | rot: dieselbe Methode meldet `Application.php:55: registerSERVICE` und `\ocpoute\irouter` | rot: `Application.php:55: registerService(` und `IRouter` |
+
+Baseline ohne Probe: `OK (998 tests, 6049 assertions)`; pytest (Textsperren + Gate-Präsenz) 106 passed. Gate-Untergrenze ROUTE_GATE_MIN_TESTS: 40 in php.yml, MIN_FLOOR = 40 in test_php_route_gate_presence.py.
+
+CI auf main HEAD c99f499738c78fa26c5cca07f3cf9aaf59c5c332: alle acht Workflows success (u. a. PHP and store metadata gates, Python gates). python.yml triggert jetzt auf `php/**` (push und pull_request).
+
+Ergebnis: Lücke geschlossen, Status passed.
+
 
 # Phase 42: PHP-Sicherheits-Gates für die Companion-App, Verifikationsbericht (Re-Verifikation)
 
