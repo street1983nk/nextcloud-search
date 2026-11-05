@@ -23,7 +23,10 @@ use OCP\AppFramework\Bootstrap\IRegistrationContext;
  * OC\Route, registerService, registerServiceAlias, registerParameter,
  * registerMiddleware and getContainer. It reads PHP tokens, not text, so a
  * comment or a string does not count, and simple, qualified and fully
- * qualified names all do.
+ * qualified names all do. The comparison ignores case, because PHP resolves
+ * class, interface, function and method names without regard to it, so
+ * irouter, getrouter and registerservice reach the same place as the
+ * canonical spelling.
  *
  * register() and boot() run the bootstrap of the app against a recording
  * double that the test builds from the interface of the server checkout; the
@@ -116,7 +119,8 @@ final class AppSurface {
 			$segments = explode('\\', $name);
 			$last = end($segments);
 			$normalised = strtolower(ltrim($name, '\\'));
-			if (in_array($last, self::BANNED_NAMES, true) || str_starts_with($normalised, self::BANNED_NAMESPACE)) {
+			$banned = array_map(strtolower(...), self::BANNED_NAMES);
+			if (in_array(strtolower($last), $banned, true) || str_starts_with($normalised, self::BANNED_NAMESPACE)) {
 				$findings[] = "{$relativePath}:{$token[2]}: {$name}";
 			}
 		}

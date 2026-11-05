@@ -609,6 +609,32 @@ final class RouteSecurityTest extends TestCase {
 		$this->assertSame([], AppSurface::sourceFindings('x.php', "<?php\n// IRouter in a comment\n\$a = 'getContainer';\n\$this->container;\n"));
 	}
 
+	public function testABannedNameInAnyCaseIsReported(): void {
+		// PHP resolves class, interface, function and method names without
+		// regard to case, so a lowercase spelling reaches the router or the
+		// container exactly like the canonical one (gap of the re-verification).
+		$probes = [
+			"<?php\nuse OCP\\Route\\irouter;\n" => 'x.php:2: OCP\\Route\\irouter',
+			"<?php\n\$router->actioninclude('x.php');\n" => 'x.php:2: actioninclude',
+			"<?php\n\$server->getrouter();\n" => 'x.php:2: getrouter',
+			"<?php\n\$r = \\OCP\\Route\\IROUTER::class;\n" => 'x.php:2: \\OCP\\Route\\IROUTER',
+			"<?php\n\$context->REGISTERMIDDLEWARE(X::class);\n" => 'x.php:2: REGISTERMIDDLEWARE',
+			"<?php\n\$context->registerservicealias('A', 'B');\n" => 'x.php:2: registerservicealias',
+			"<?php\n\$context->RegisterParameter('a', 1);\n" => 'x.php:2: RegisterParameter',
+		];
+		foreach ($probes as $source => $expected) {
+			$this->assertSame([$expected], AppSurface::sourceFindings('x.php', $source));
+		}
+
+		$application = "<?php\n\$this->getcontainer()->registerservice(PageController::class, fn () => new X());\n";
+		$this->assertSame(
+			['x.php:2: getcontainer', 'x.php:2: registerservice'],
+			AppSurface::sourceFindings('x.php', $application),
+		);
+
+		$this->assertSame([], AppSurface::sourceFindings('x.php', "<?php\n// irouter in a comment\n\$a = 'getcontainer';\n\$this->registerservices();\n\$this->routerx;\n"));
+	}
+
 	public function testTheApplicationRegistersExactlyTheAllowlistedSurfaces(): void {
 		$allowed = AppSurface::loadRegistrations(dirname(__DIR__) . '/app-surface.json');
 		$recorded = $this->recordRegistrations();

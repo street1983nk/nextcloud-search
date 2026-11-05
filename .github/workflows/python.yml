@@ -41,13 +41,19 @@ on:
       # gate that does not start cannot fall red: a catalogue that lost a key,
       # declared the wrong plural rule or carried an em dash would ship, and the
       # breakage would surface on the next commit that happens to touch
-      # backend/** and be blamed on the wrong one. The entry names the catalogue
-      # directory and deliberately not the whole of php/, because the rule at
-      # the head of this file says a commit must not spend runner minutes on
-      # gates that do not judge it, and a change to a template or to the PHP
-      # service is judged by integration.yml, which carries php/** in both of
-      # its lists already. Only the l10n catalogues are this workflow's business.
-      - 'php/l10n/**'
+      # backend/** and be blamed on the wrong one. Until plan 42-10 the entry
+      # named the catalogue directory and deliberately not the whole of php/,
+      # because the rule at the head of this file says a commit must not spend
+      # runner minutes on gates that do not judge it. Since phase 42 this
+      # workflow judges the whole PHP half: backend/tests/test_php_surface_bans.py
+      # reads every file under php/lib, php/appinfo/routes.php,
+      # php/appinfo/info.xml and php/tests/RouteSecurity/RouteProfiles.php,
+      # test_php_route_gate_presence.py reads php/tests, and
+      # test_measurement_scripts.py pins the hash of every php/**/*.php. A
+      # commit that only touched php/lib would otherwise meet the text bans on
+      # the next Monday and not on its own run, so the entry is php/** now, and
+      # it covers the catalogues as before.
+      - 'php/**'
       # And once more for the l10n documents, since the review of phase 20.
       # test_the_rule_table_of_the_documentation_and_the_constant_are_one_string
       # parses the rule block of docs/l10n-catalogues.md, and
@@ -70,10 +76,11 @@ on:
       # scripts has to see its own subject.
       - 'docs/measurements/**'
       # Same reason as in the push list above: the catalogue gates of
-      # test_admin_ui_contract.py have to see their own subject, and a pull
-      # request that changed nothing but a catalogue would otherwise be merged
-      # without a single l10n gate ever having run.
-      - 'php/l10n/**'
+      # test_admin_ui_contract.py and, since plan 42-10, the PHP text bans of
+      # test_php_surface_bans.py have to see their own subject, and a pull
+      # request that changed nothing but PHP would otherwise be merged without
+      # a single one of them having run.
+      - 'php/**'
       # Same reason as in the push list above: the rule table gate and the
       # vocabulary exceptions have to see the l10n documents they judge.
       - 'docs/l10n-*.md'

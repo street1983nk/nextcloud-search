@@ -3,9 +3,10 @@
 The route attribute gate in php/tests/Unit/RouteSecurityTest.php already holds
 docblock annotations, the routes file, the router and the container, and the
 registrations of the app, but it runs in php.yml, and php.yml starts only on
-php/**. python.yml runs on backend/** and scripts/** and every Monday. This
-file is the text side of the same bans, so they also hold on a commit that
-touches only the backend and on the weekly run against a tree nobody touched:
+php/**. python.yml runs on backend/**, scripts/**, since plan 42-10 on php/**
+as well, and every Monday. This file is the text side of the same bans, so
+they also hold on a commit that touches only the backend, on a commit that
+touches only PHP, and on the weekly run against a tree nobody touched:
 
 - every annotation name stable34 reads, in any file under php/lib, at any
   position (class docblocks and methods without a route included), in any
@@ -14,7 +15,9 @@ touches only the backend and on the weekly run against a tree nobody touched:
 - under php/lib the texts that reach the router or the container: IRouter,
   OC\\Route\\, getRouter(, actionInclude(, ->action(, registerService(,
   registerServiceAlias(, registerParameter(, registerMiddleware( and
-  getContainer( (vectors 3, 6 and 11)
+  getContainer( (vectors 3, 6 and 11), in any case, because PHP resolves
+  class, interface, function and method names and namespaces without regard
+  to it (gap of the phase 42 re-verification, plan 42-10)
 - in php/appinfo/routes.php: $this, ->create(, include, require and eval,
   because that file runs inside a method of the router (vector 3)
 - in php/appinfo/info.xml: none of remote, public, sabre, collaboration,
@@ -69,8 +72,10 @@ MIN_LIB_FILES = 65  # files under php/lib on 2026-11-04
 
 _ANNOTATION = re.compile(r"@(?P<name>[A-Za-z]\w*)")
 
-# Compared case sensitively, like PHP identifiers; OC\Route\ in addition
-# case insensitively, because PHP resolves namespaces that way.
+# Compared case insensitively: PHP resolves class, interface, function and
+# method names and namespaces without regard to case, so irouter, getrouter(
+# and registerservice( reach the router and the container like the canonical
+# spelling. A finding names the ban in its canonical spelling.
 LIB_BANS = (
     "IRouter",
     "OC\\Route\\",
@@ -83,7 +88,6 @@ LIB_BANS = (
     "registerMiddleware(",
     "getContainer(",
 )
-_ROUTE_NAMESPACE = "oc\\route\\"
 
 ROUTES_BANS = (
     ("$this", re.compile(r"\$this\b")),
@@ -127,12 +131,8 @@ def scan_lib_bans(path: str, source: str) -> list[str]:
     """Every banned router or container text, as path:line."""
     findings: list[str] = []
     for number, line in enumerate(source.splitlines(), start=1):
-        for ban in LIB_BANS:
-            hit = ban in line
-            if ban == "OC\\Route\\":
-                hit = _ROUTE_NAMESPACE in line.lower()
-            if hit:
-                findings.append(f"{path}:{number}: {ban}")
+        lowered = line.lower()
+        findings.extend(f"{path}:{number}: {ban}" for ban in LIB_BANS if ban.lower() in lowered)
     return findings
 
 
@@ -270,6 +270,27 @@ def test_every_lib_ban_is_reported(ban: str) -> None:
 
 def test_a_lowercase_route_namespace_is_reported() -> None:
     assert scan_lib_bans("x.php", "$r = \\oc\\route\\Router::class;\n") == ["x.php:1: OC\\Route\\"]
+
+
+@pytest.mark.parametrize(
+    ("line", "bans"),
+    [
+        ("use OCP\\Route\\irouter;", ["IRouter"]),
+        ("$router->actioninclude('x.php');", ["actionInclude("]),
+        ("$server->getrouter();", ["getRouter("]),
+        ("$r = \\OCP\\Route\\IROUTER::class;", ["IRouter"]),
+        ("$context->REGISTERMIDDLEWARE(X::class);", ["registerMiddleware("]),
+        ("$context->registerservicealias('A', 'B');", ["registerServiceAlias("]),
+        ("$context->RegisterParameter('a', 1);", ["registerParameter("]),
+        ("$router->ACTION('x');", ["->action("]),
+        (
+            "$this->getcontainer()->registerservice(PageController::class, fn () => new X());",
+            ["registerService(", "getContainer("],
+        ),
+    ],
+)
+def test_a_lib_ban_in_any_case_is_reported(line: str, bans: list[str]) -> None:
+    assert scan_lib_bans("x.php", f"<?php\n{line}\n") == [f"x.php:2: {ban}" for ban in bans]
 
 
 def test_similar_texts_are_not_lib_bans() -> None:
