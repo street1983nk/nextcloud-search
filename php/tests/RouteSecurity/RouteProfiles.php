@@ -29,20 +29,23 @@ use OCP\AppFramework\Http\Attribute\Route;
  * "route" is "<route attribute short name> [<type>] <VERB> <url>", the type
  * only for the base class Route itself, followed by the canonical JSON of every
  * further key of Route::toArray() (requirements, defaults, root, postfix), so
- * a loosened requirement is a change as well. "attributes" is the sorted,
- * unique list of every other attribute on the method and on its class, read by
+ * a loosened requirement is a change as well; "verb" and "extras" (which of
+ * defaults, root and postfix are set) come from the same toArray(). "attributes"
+ * is the sorted, unique list of every other attribute on the method, read by
  * its canonical class name and not by its spelling in the source (plan 42-05):
  * an OCP\AppFramework\Http\Attribute as its short name, any other one by its
  * full name, each followed, if it has arguments, by "(key=value, ...)" with
  * sorted keys and JSON values. Override, ReturnTypeWillChange and Deprecated
  * drop out. "foreign" lists every attribute outside OCP, "unknown" every one
- * that cannot be loaded; both are R6. stable34 reads only method attributes,
- * the mixing in of class attributes goes with plan 42-06. "annotations" is every docblock annotation the oracle reads plus
- * every one of SERVER_ANNOTATION_NAMES in a form the server ignores today.
- * "effective" is the sorted list of security markers the oracle reports as
- * set. "visibility", "static", "declaredIn" and "outside" describe where and
- * how the method is declared. compare() looks at route and attributes only;
- * the other parts feed the rules.
+ * that cannot be loaded; both are R6. Attributes on the class are not part of
+ * any profile: the server reads only method attributes (stable33 to 35), so
+ * a class attribute counts for nothing and is forbidden as R4 (plan 42-06).
+ * "annotations" is every docblock annotation the oracle reads plus every one
+ * of SERVER_ANNOTATION_NAMES in a form the server ignores today. "effective"
+ * is the sorted list of security markers the oracle reports as set; R1, R2
+ * and R8 read it. "visibility", "static", "declaredIn" and "outside" describe
+ * where and how the method is declared. compare() looks at route and
+ * attributes only; the other parts feed the rules.
  *
  * Nothing is instantiated but route attributes, whose constructors only store
  * their arguments, and the oracle.
@@ -120,7 +123,32 @@ final class RouteProfiles {
 	 */
 	private const HARMLESS_ATTRIBUTES = ['Override', 'ReturnTypeWillChange', 'Deprecated'];
 
-	private const BROAD_ANNOTATION ='/@(?P<annotation>[A-Za-z]\w*)/';
+	/** The keys of Route::toArray() that R7 forbids. */
+	private const ROUTE_EXTRAS = ['defaults', 'root', 'postfix'];
+
+	/**
+	 * Exceptions to R7, keyed "ShortClassName::method" to the list of route
+	 * argument names that route may carry. Empty on purpose: root can lay a
+	 * route over a core OCS route, and every entry here is a deliberate line a
+	 * review reads.
+	 */
+	private const ALLOWED_ROUTE_EXTRAS = [];
+
+	/**
+	 * Attributes that loosen a check of the server and that Findling does not
+	 * use (R8), as the short names the oracle reports in effective.
+	 */
+	private const FORBIDDEN_MARKERS = [
+		'CORS',
+		'AppApiAdminAccessWithoutUser',
+		'NoTwoFactorRequired',
+		'NoSameSiteCookieRequired',
+		'SubAdminRequired',
+		'AuthorizedAdminSetting',
+		'UseSession',
+	];
+
+	private const BROAD_ANNOTATION = '/@(?P<annotation>[A-Za-z]\w*)/';
 
 	/**
 	 * The route profiles of one class, every method the router would see.
@@ -134,8 +162,6 @@ final class RouteProfiles {
 	public static function ofClass(string $class, ?string $controllerDir = null): array {
 		$reflection = new \ReflectionClass($class);
 		$short = $reflection->getShortName();
-		$classAttributes = self::readAttributes($reflection->getAttributes());
-
 		$appRoot = null;
 		$controllerPath = null;
 		if ($controllerDir !== null) {
@@ -150,9 +176,9 @@ final class RouteProfiles {
 				continue;
 			}
 			$methodAttributes = self::readAttributes($method->getAttributes());
-			$attributes = self::sortedUnique(array_merge($classAttributes['described'], $methodAttributes['described']));
-			$foreign = self::sortedUnique(array_merge($classAttributes['foreign'], $methodAttributes['foreign']));
-			$unknown = self::sortedUnique(array_merge($classAttributes['unknown'], $methodAttributes['unknown']));
+			$attributes = self::sortedUnique($methodAttributes['described']);
+			$foreign = self::sortedUnique($methodAttributes['foreign']);
+			$unknown = self::sortedUnique($methodAttributes['unknown']);
 
 			$oracle = self::oracle($class, $method->getName());
 			$file = self::realPath((string)$method->getFileName());
@@ -179,7 +205,13 @@ final class RouteProfiles {
 			$key = $short . '::' . $method->getName();
 			$multiple = count($routes) > 1;
 			foreach ($routes as $index => $route) {
-				$profiles[$multiple ? $key . '#' . ($index + 1) : $key] = ['route' => self::describeRoute($route)] + $common;
+				$instance = self::routeInstance($route);
+				$serialised = $instance->toArray();
+				$profiles[$multiple ? $key . '#' . ($index + 1) : $key] = [
+					'route' => self::describeRoute($instance),
+					'verb' => strtoupper((string)$serialised['verb']),
+					'extras' => array_values(array_intersect(self::ROUTE_EXTRAS, array_keys($serialised))),
+				] + $common;
 			}
 		}
 		ksort($profiles, SORT_STRING);
@@ -289,12 +321,20 @@ final class RouteProfiles {
 	/**
 	 * The rules that hold whatever the allowlist says.
 	 *
-	 * R1: PublicPage only together with AnonRateLimit or BruteForceProtection.
-	 * R2: NoCSRFRequired only on GET or together with ExAppRequired.
+	 * R1: PublicPage, as the oracle sees it, only together with an exact
+	 * AnonRateLimit attribute on the method; BruteForceProtection alone does
+	 * not count, it registers an attempt only when the response calls
+	 * throttle().
+	 * R2: NoCSRFRequired, as the oracle sees it, only on GET or together with
+	 * ExAppRequired.
 	 * R3: no docblock annotation on a route method, in any form.
 	 * R5: a route method is public, not static and declared in the controller
 	 * directory.
 	 * R6: every attribute is a loadable OCP attribute or a harmless PHP one.
+	 * R7: no defaults, root or postfix in a route attribute, except as listed
+	 * in ALLOWED_ROUTE_EXTRAS.
+	 * R8: none of FORBIDDEN_MARKERS, and never PublicPage together with
+	 * ExAppRequired.
 	 *
 	 * @param array<string, array<string, mixed>> $profiles
 	 * @return list<string>
@@ -306,17 +346,30 @@ final class RouteProfiles {
 				static fn (string $attribute): string => explode('(', $attribute, 2)[0],
 				$profile['attributes'],
 			);
-			$verb = explode(' ', $profile['route'], 3)[1] ?? '';
+			$effective = $profile['effective'];
+			$verb = $profile['verb'];
 
-			if (in_array('PublicPage', $names, true)
-				&& !in_array('AnonRateLimit', $names, true)
-				&& !in_array('BruteForceProtection', $names, true)) {
-				$violations[] = "R1 {$key}: PublicPage without AnonRateLimit or BruteForceProtection";
+			if (in_array('PublicPage', $effective, true) && !in_array('AnonRateLimit', $names, true)) {
+				$violations[] = "R1 {$key}: PublicPage without AnonRateLimit";
 			}
-			if (in_array('NoCSRFRequired', $names, true)
+			if (in_array('NoCSRFRequired', $effective, true)
 				&& $verb !== 'GET'
-				&& !in_array('ExAppRequired', $names, true)) {
+				&& !in_array('ExAppRequired', $effective, true)) {
 				$violations[] = "R2 {$key}: NoCSRFRequired on {$verb} without ExAppRequired";
+			}
+			$allowedExtras = self::ALLOWED_ROUTE_EXTRAS[explode('#', $key, 2)[0]] ?? [];
+			foreach ($profile['extras'] as $extra) {
+				if (!in_array($extra, $allowedExtras, true)) {
+					$violations[] = "R7 {$key}: route argument {$extra} is not allowed";
+				}
+			}
+			foreach (self::FORBIDDEN_MARKERS as $marker) {
+				if (in_array($marker, $effective, true)) {
+					$violations[] = "R8 {$key}: {$marker} is not allowed in Findling";
+				}
+			}
+			if (in_array('PublicPage', $effective, true) && in_array('ExAppRequired', $effective, true)) {
+				$violations[] = "R8 {$key}: PublicPage together with ExAppRequired";
 			}
 			foreach ($profile['annotations'] as $annotation) {
 				$violations[] = "R3 {$key}: docblock annotation @{$annotation}";
@@ -342,8 +395,11 @@ final class RouteProfiles {
 	}
 
 	/**
-	 * R5 on the class: a controller with __call or __callStatic of its own
-	 * would let the dispatcher reach methods no route attribute names.
+	 * The rules on the class. R4: no attribute on a controller class at all;
+	 * stable33 to 35 read only method attributes, so a class attribute counts
+	 * for no route and only pretends a protection. R5: a controller with
+	 * __call or __callStatic of its own would let the dispatcher reach methods
+	 * no route attribute names.
 	 *
 	 * @param class-string $class
 	 * @return list<string>
@@ -352,6 +408,11 @@ final class RouteProfiles {
 		$reflection = new \ReflectionClass($class);
 		$short = $reflection->getShortName();
 		$violations = [];
+		$read = self::readAttributes($reflection->getAttributes());
+		foreach (array_merge($read['described'], $read['routes']) as $described) {
+			$name = explode('(', $described, 2)[0];
+			$violations[] = "R4 {$short}: class attribute {$name} has no effect on routes";
+		}
 		foreach (['__call', '__callStatic'] as $magic) {
 			if ($reflection->hasMethod($magic)
 				&& !str_starts_with($reflection->getMethod($magic)->getDeclaringClass()->getName(), 'OCP\\')) {
@@ -568,16 +629,16 @@ final class RouteProfiles {
 	/**
 	 * The attributes of a method or class, each by its canonical class name:
 	 * the OCP table first, then ReflectionClass::getName() of a loadable class,
-	 * so the spelling in the source never decides. Route attributes and the
-	 * harmless PHP attributes drop out. OCP attributes are described by their
+	 * so the spelling in the source never decides. Route attributes go to
+	 * "routes" only, the harmless PHP attributes drop out. OCP attributes are described by their
 	 * short name, every other one by its full canonical name and is also listed
 	 * as foreign; a name that cannot be loaded is listed as unknown.
 	 *
 	 * @param list<\ReflectionAttribute<object>> $attributes
-	 * @return array{described: list<string>, foreign: list<string>, unknown: list<string>}
+	 * @return array{described: list<string>, foreign: list<string>, unknown: list<string>, routes: list<string>}
 	 */
 	private static function readAttributes(array $attributes): array {
-		$read = ['described' => [], 'foreign' => [], 'unknown' => []];
+		$read = ['described' => [], 'foreign' => [], 'unknown' => [], 'routes' => []];
 		$harmless = array_map('strtolower', self::HARMLESS_ATTRIBUTES);
 		foreach ($attributes as $attribute) {
 			$raw = ltrim($attribute->getName(), '\\');
@@ -596,6 +657,9 @@ final class RouteProfiles {
 				continue;
 			}
 			if (is_a($name, Route::class, true)) {
+				$read['routes'][] = str_starts_with($name, self::ATTRIBUTE_NAMESPACE)
+					? substr($name, strlen(self::ATTRIBUTE_NAMESPACE))
+					: $name;
 				continue;
 			}
 
@@ -619,17 +683,20 @@ final class RouteProfiles {
 		return $read;
 	}
 
-	/**
-	 * The route as the router serialises it: Route::toArray() of the instance,
-	 * which normalises positional and named arguments alike.
-	 *
-	 * @param \ReflectionAttribute<object> $route
-	 */
-	private static function describeRoute(\ReflectionAttribute $route): string {
+	/** @param \ReflectionAttribute<object> $route */
+	private static function routeInstance(\ReflectionAttribute $route): Route {
 		$instance = $route->newInstance();
 		if (!$instance instanceof Route) {
 			throw new \RuntimeException('a route attribute is not a ' . Route::class);
 		}
+		return $instance;
+	}
+
+	/**
+	 * The route as the router serialises it: Route::toArray() of the instance,
+	 * which normalises positional and named arguments alike.
+	 */
+	private static function describeRoute(Route $instance): string {
 		$name = get_class($instance);
 		$short = str_starts_with($name, self::ATTRIBUTE_NAMESPACE)
 			? substr($name, strlen(self::ATTRIBUTE_NAMESPACE))

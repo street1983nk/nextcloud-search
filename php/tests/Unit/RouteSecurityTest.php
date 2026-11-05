@@ -8,10 +8,13 @@ use OCA\Findling\Tests\RouteSecurity\Fixture\AnnotationFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\BaseRouteFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\CaseFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\ClassLevelFixture;
+use OCA\Findling\Tests\RouteSecurity\Fixture\ClassRateLimitFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\CsrfFixture;
+use OCA\Findling\Tests\RouteSecurity\Fixture\ExtrasFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\ForeignAttributeFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\InheritedFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\LooseLimitFixture;
+use OCA\Findling\Tests\RouteSecurity\Fixture\LooseningFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\PlainFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\PublicFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\RateLimitFixture;
@@ -32,8 +35,8 @@ require_once dirname(__DIR__) . '/RouteSecurity/Fixtures.php';
  * attributes matched by instanceof, keyed by the short name of the concrete
  * class. Any other entry of lib/Controller is a finding of its own.
  *
- * Each route method, together with every attribute out of
- * OCP\AppFramework\Http\Attribute on the method and on its class, has to match
+ * Each route method, together with every attribute on the method, read by its
+ * canonical class name, has to match
  * tests/route-security.json exactly. A new route, a changed attribute set, a
  * changed verb or url and an orphaned allowlist entry each turn this red with
  * the Controller::method in the message, so a change to the attack surface of
@@ -44,12 +47,17 @@ require_once dirname(__DIR__) . '/RouteSecurity/Fixtures.php';
  * oracle, and records its annotations and the security markers it reports as
  * effective.
  *
- * Rules that hold independently of the allowlist: R1, PublicPage only together
- * with AnonRateLimit or BruteForceProtection; R2, NoCSRFRequired only on GET or
+ * Rules that hold independently of the allowlist, R1, R2 and R8 on what the
+ * oracle reports as effective: R1, PublicPage only together with an
+ * AnonRateLimit attribute on the method; R2, NoCSRFRequired only on GET or
  * together with ExAppRequired; R3, no docblock annotation of a security marker
- * on a route method, in any form; R5, a route method is public, not static and
- * declared inside the controller directory, and no controller defines __call
- * or __callStatic.
+ * on a route method, in any form; R4, no attribute on a controller class,
+ * because the server never reads it; R5, a route method is public, not static
+ * and declared inside the controller directory, and no controller defines
+ * __call or __callStatic; R6, every attribute is a loadable OCP attribute,
+ * whatever its spelling; R7, no defaults, root or postfix in a route; R8, none
+ * of the loosening attributes Findling does not use, and never PublicPage
+ * together with ExAppRequired.
  *
  * What this does not claim: it reads attributes and docblocks, not method
  * bodies. The check rejectForeignCaller inside the ExApp endpoints stays the
@@ -71,8 +79,9 @@ final class RouteSecurityTest extends TestCase {
 			'PlainFixture::route' => ['route' => 'FrontpageRoute GET /plain', 'attributes' => ['NoAdminRequired']],
 			'PublicFixture::open' => ['route' => 'FrontpageRoute GET /open', 'attributes' => ['PublicPage']],
 			'PublicFixture::limited' => ['route' => 'FrontpageRoute GET /limited', 'attributes' => ['AnonRateLimit(limit=5, period=60)', 'PublicPage']],
-			'ClassLevelFixture::first' => ['route' => 'FrontpageRoute GET /first', 'attributes' => ['NoAdminRequired']],
-			'ClassLevelFixture::second' => ['route' => 'FrontpageRoute POST /second', 'attributes' => ['NoAdminRequired']],
+			'PublicFixture::guarded' => ['route' => 'FrontpageRoute GET /guarded', 'attributes' => ['BruteForceProtection(action="x")', 'PublicPage']],
+			'ClassLevelFixture::first' => ['route' => 'FrontpageRoute GET /first', 'attributes' => []],
+			'ClassLevelFixture::second' => ['route' => 'FrontpageRoute POST /second', 'attributes' => []],
 			'RateLimitFixture::limited' => ['route' => 'FrontpageRoute POST /limited', 'attributes' => ['UserRateLimit(limit=5, period=60)']],
 			'CsrfFixture::post' => ['route' => 'FrontpageRoute POST /post', 'attributes' => ['NoCSRFRequired']],
 			'CsrfFixture::get' => ['route' => 'FrontpageRoute GET /get', 'attributes' => ['NoCSRFRequired']],
@@ -152,20 +161,65 @@ final class RouteSecurityTest extends TestCase {
 		$this->assertStringContainsString('UserRateLimit(limit=5, period=60)', $findings[0]);
 	}
 
-	public function testAClassAttributeCountsForEveryRouteMethod(): void {
+	/** The server reads only method attributes, so a class attribute protects nothing. */
+	public function testAClassAttributeIsAViolationAndCountsForNothing(): void {
 		$profiles = RouteProfiles::ofClass(ClassLevelFixture::class);
 
 		$this->assertSame(['ClassLevelFixture::first', 'ClassLevelFixture::second'], array_keys($profiles));
-		$this->assertSame(['NoAdminRequired'], $profiles['ClassLevelFixture::first']['attributes']);
-		$this->assertSame(['NoAdminRequired'], $profiles['ClassLevelFixture::second']['attributes']);
+		$this->assertSame([], $profiles['ClassLevelFixture::first']['attributes']);
+		$this->assertSame([], $profiles['ClassLevelFixture::second']['attributes']);
+		$this->assertSame(
+			['R4 ClassLevelFixture: class attribute NoAdminRequired has no effect on routes'],
+			RouteProfiles::classViolations(ClassLevelFixture::class),
+		);
 	}
 
-	public function testPublicPageNeedsARateLimitOrBruteForceProtection(): void {
+	public function testAClassRateLimitDoesNotSatisfyR1(): void {
+		$this->assertSame(
+			['R1 ClassRateLimitFixture::open: PublicPage without AnonRateLimit'],
+			RouteProfiles::violations(RouteProfiles::ofClass(ClassRateLimitFixture::class)),
+		);
+		$this->assertSame(
+			['R4 ClassRateLimitFixture: class attribute AnonRateLimit has no effect on routes'],
+			RouteProfiles::classViolations(ClassRateLimitFixture::class),
+		);
+	}
+
+	/** BruteForceProtection registers an attempt only when the response calls throttle(). */
+	public function testBruteForceProtectionAloneDoesNotSatisfyR1(): void {
 		$violations = RouteProfiles::violations(RouteProfiles::ofClass(PublicFixture::class));
 
-		$this->assertCount(1, $violations);
-		$this->assertStringContainsString('PublicFixture::open', $violations[0]);
-		$this->assertStringContainsString('PublicPage', $violations[0]);
+		$this->assertContains('R1 PublicFixture::guarded: PublicPage without AnonRateLimit', $violations);
+		$this->assertNotContains('R1 PublicFixture::limited: PublicPage without AnonRateLimit', $violations);
+	}
+
+	public function testRootPostfixOrDefaultsInARouteIsAViolation(): void {
+		$this->assertSame([
+			'R7 ExtrasFixture::defaulted: route argument defaults is not allowed',
+			'R7 ExtrasFixture::positional: route argument root is not allowed',
+			'R7 ExtrasFixture::postfixed: route argument postfix is not allowed',
+			'R7 ExtrasFixture::rooted: route argument root is not allowed',
+		], RouteProfiles::violations(RouteProfiles::ofClass(ExtrasFixture::class)));
+	}
+
+	public function testALooseningAttributeIsForbidden(): void {
+		$this->assertSame([
+			'R8 LooseningFixture::cors: CORS is not allowed in Findling',
+			'R8 LooseningFixture::delegated: AuthorizedAdminSetting is not allowed in Findling',
+			'R8 LooseningFixture::noSameSite: NoSameSiteCookieRequired is not allowed in Findling',
+			'R8 LooseningFixture::noTwoFactor: NoTwoFactorRequired is not allowed in Findling',
+			'R8 LooseningFixture::publicExApp: PublicPage together with ExAppRequired',
+			'R8 LooseningFixture::session: UseSession is not allowed in Findling',
+			'R8 LooseningFixture::subAdmin: SubAdminRequired is not allowed in Findling',
+			'R8 LooseningFixture::withoutUser: AppApiAdminAccessWithoutUser is not allowed in Findling',
+		], RouteProfiles::violations(RouteProfiles::ofClass(LooseningFixture::class)));
+	}
+
+	public function testPublicPageNeedsAnAnonRateLimit(): void {
+		$this->assertSame([
+			'R1 PublicFixture::guarded: PublicPage without AnonRateLimit',
+			'R1 PublicFixture::open: PublicPage without AnonRateLimit',
+		], RouteProfiles::violations(RouteProfiles::ofClass(PublicFixture::class)));
 	}
 
 	public function testNoCsrfRequiredNeedsGetOrExAppRequired(): void {
@@ -197,8 +251,8 @@ final class RouteSecurityTest extends TestCase {
 		$this->assertContains('PublicPage', $profiles['CaseFixture::lowerNamespace']['effective']);
 		$this->assertContains('PublicPage', $profiles['CaseFixture::lowerShortName']['effective']);
 		$this->assertSame([
-			'R1 CaseFixture::lowerNamespace: PublicPage without AnonRateLimit or BruteForceProtection',
-			'R1 CaseFixture::lowerShortName: PublicPage without AnonRateLimit or BruteForceProtection',
+			'R1 CaseFixture::lowerNamespace: PublicPage without AnonRateLimit',
+			'R1 CaseFixture::lowerShortName: PublicPage without AnonRateLimit',
 		], RouteProfiles::violations($profiles));
 	}
 
@@ -214,7 +268,7 @@ final class RouteSecurityTest extends TestCase {
 		$profiles = RouteProfiles::ofClass(LooseLimitFixture::class);
 
 		$this->assertSame([
-			'R1 LooseLimitFixture::open: PublicPage without AnonRateLimit or BruteForceProtection',
+			'R1 LooseLimitFixture::open: PublicPage without AnonRateLimit',
 			'R6 LooseLimitFixture::open: attribute OCA\\Findling\\Tests\\RouteSecurity\\Fixture\\LooseLimit is not an OCP attribute',
 		], RouteProfiles::violations($profiles));
 		$this->assertContains('AnonRateLimit', $profiles['LooseLimitFixture::open']['effective']);
@@ -230,6 +284,10 @@ final class RouteSecurityTest extends TestCase {
 		$profiles = RouteProfiles::ofClass(AnnotationFixture::class);
 
 		$this->assertSame([
+			'R1 AnnotationFixture::open: PublicPage without AnonRateLimit',
+			'R1 AnnotationFixture::prose: PublicPage without AnonRateLimit',
+			'R2 AnnotationFixture::post: NoCSRFRequired on POST without ExAppRequired',
+			'R2 AnnotationFixture::shouted: NoCSRFRequired on POST without ExAppRequired',
 			'R3 AnnotationFixture::inline: docblock annotation @publicpage',
 			'R3 AnnotationFixture::open: docblock annotation @publicpage',
 			'R3 AnnotationFixture::post: docblock annotation @nocsrfrequired',
@@ -298,6 +356,10 @@ final class RouteSecurityTest extends TestCase {
 		$this->assertSame(['NoAdminRequired'], $profiles['InheritedFixture::inherited']['attributes']);
 		$this->assertContains(
 			'R3 InheritedFixture::annotated: docblock annotation @nocsrfrequired',
+			RouteProfiles::violations($profiles),
+		);
+		$this->assertContains(
+			'R2 InheritedFixture::annotated: NoCSRFRequired on POST without ExAppRequired',
 			RouteProfiles::violations($profiles),
 		);
 	}

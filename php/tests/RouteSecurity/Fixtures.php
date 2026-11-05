@@ -14,12 +14,21 @@ declare(strict_types=1);
 namespace OCA\Findling\Tests\RouteSecurity\Fixture;
 
 use OCP\AppFramework\Http\Attribute\AnonRateLimit;
+use OCP\AppFramework\Http\Attribute\ApiRoute;
+use OCP\AppFramework\Http\Attribute\AppApiAdminAccessWithoutUser;
+use OCP\AppFramework\Http\Attribute\AuthorizedAdminSetting;
+use OCP\AppFramework\Http\Attribute\BruteForceProtection;
+use OCP\AppFramework\Http\Attribute\CORS;
 use OCP\AppFramework\Http\Attribute\ExAppRequired;
 use OCP\AppFramework\Http\Attribute\FrontpageRoute;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
+use OCP\AppFramework\Http\Attribute\NoSameSiteCookieRequired;
+use OCP\AppFramework\Http\Attribute\NoTwoFactorRequired;
 use OCP\AppFramework\Http\Attribute\PublicPage;
 use OCP\AppFramework\Http\Attribute\Route;
+use OCP\AppFramework\Http\Attribute\SubAdminRequired;
+use OCP\AppFramework\Http\Attribute\UseSession;
 use OCP\AppFramework\Http\Attribute\UserRateLimit;
 use OCP\IRequest;
 
@@ -43,7 +52,11 @@ final class PlainFixture {
 	}
 }
 
-/** PublicPage once without and once with a rate limit, for rule R1. */
+/**
+ * PublicPage without a rate limit, with one, and with BruteForceProtection
+ * alone, which registers an attempt only when the response calls throttle(),
+ * for rule R1.
+ */
 final class PublicFixture {
 	#[PublicPage]
 	#[FrontpageRoute(verb: 'GET', url: '/open')]
@@ -55,9 +68,15 @@ final class PublicFixture {
 	#[FrontpageRoute(verb: 'GET', url: '/limited')]
 	public function limited(): void {
 	}
+
+	#[PublicPage]
+	#[BruteForceProtection(action: 'x')]
+	#[FrontpageRoute(verb: 'GET', url: '/guarded')]
+	public function guarded(): void {
+	}
 }
 
-/** An attribute on the class, which has to reach the profile of every route method. */
+/** An attribute on the class, which the server never reads: R4, and it counts for no route method. */
 #[NoAdminRequired]
 final class ClassLevelFixture {
 	#[FrontpageRoute(verb: 'GET', url: '/first')]
@@ -287,5 +306,85 @@ final class LooseLimitFixture {
 	#[LooseLimit(limit: 5, period: 60)]
 	#[FrontpageRoute(verb: 'GET', url: '/loose')]
 	public function open(): void {
+	}
+}
+
+/**
+ * A rate limit on the class (plan 42-06). The server reads only method
+ * attributes, so it limits nothing, and PublicPage on the method stays open.
+ */
+#[AnonRateLimit(limit: 5, period: 60)]
+final class ClassRateLimitFixture {
+	#[PublicPage]
+	#[FrontpageRoute(verb: 'GET', url: '/class-limited')]
+	public function open(): void {
+	}
+}
+
+/** root, postfix and defaults in a route attribute, named and positional. */
+final class ExtrasFixture {
+	#[ApiRoute(verb: 'GET', url: '/rooted', root: '/cloud')]
+	public function rooted(): void {
+	}
+
+	#[ApiRoute(verb: 'GET', url: '/postfixed', postfix: 'x')]
+	public function postfixed(): void {
+	}
+
+	#[ApiRoute(verb: 'GET', url: '/defaulted', defaults: ['a' => 1])]
+	public function defaulted(): void {
+	}
+
+	#[ApiRoute('GET', '/positional', null, null, '/cloud', null)]
+	public function positional(): void {
+	}
+
+	#[ApiRoute(verb: 'GET', url: '/constrained/{id}', requirements: ['id' => '\d+'])]
+	public function constrained(): void {
+	}
+}
+
+/** Loosening attributes Findling does not use, one per method. */
+final class LooseningFixture {
+	#[CORS]
+	#[FrontpageRoute(verb: 'GET', url: '/cors')]
+	public function cors(): void {
+	}
+
+	#[AppApiAdminAccessWithoutUser]
+	#[FrontpageRoute(verb: 'GET', url: '/without-user')]
+	public function withoutUser(): void {
+	}
+
+	#[NoTwoFactorRequired]
+	#[FrontpageRoute(verb: 'GET', url: '/no-two-factor')]
+	public function noTwoFactor(): void {
+	}
+
+	#[NoSameSiteCookieRequired]
+	#[FrontpageRoute(verb: 'GET', url: '/no-same-site')]
+	public function noSameSite(): void {
+	}
+
+	#[SubAdminRequired]
+	#[FrontpageRoute(verb: 'GET', url: '/sub-admin')]
+	public function subAdmin(): void {
+	}
+
+	#[AuthorizedAdminSetting(settings: 'X')]
+	#[FrontpageRoute(verb: 'GET', url: '/delegated')]
+	public function delegated(): void {
+	}
+
+	#[UseSession]
+	#[FrontpageRoute(verb: 'GET', url: '/session')]
+	public function session(): void {
+	}
+
+	#[PublicPage]
+	#[ExAppRequired]
+	#[AnonRateLimit(limit: 5, period: 60)]
+	#[FrontpageRoute(verb: 'GET', url: '/public-exapp')]
+	public function publicExApp(): void {
 	}
 }
