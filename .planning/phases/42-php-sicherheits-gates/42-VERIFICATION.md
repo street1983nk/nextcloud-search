@@ -1,124 +1,147 @@
 ---
 phase: 42-php-sicherheits-gates
-verified: 2026-11-04T21:24:00Z
+verified: 2026-11-05T03:30:15Z
 status: gaps_found
-score: 2/3 Erfolgskriterien verifiziert (Kriterium 1 teilweise)
+score: "SK2 und SK4 verifiziert, SK1 teilweise; Vektoren 12/14 voll, 2/14 teilweise (3 und 6, Groß-/Kleinschreibung)"
 overrides_applied: 0
-scope: "Erfolgskriterien 1, 2 und 4 der ROADMAP; Kriterium 3 (Psalm, php-cs-fixer, zizmor, actionlint) bewusst vertagt, geprüft wird nur die Vertagung"
+scope: "Erfolgskriterien 1, 2 und 4 der ROADMAP plus die 14 Vektoren aus 42-04 bis 42-09; Kriterium 3 (Psalm, php-cs-fixer, zizmor, actionlint) bewusst vertagt"
+re_verification:
+  previous_status: gaps_found
+  previous_score: "2/3 Erfolgskriterien, SK1 teilweise"
+  gaps_closed:
+    - "Docblock-Annotationen (@PublicPage, @NoCSRFRequired, ...) auf Routenmethoden: R3 plus Server-Orakel, am echten Baum rot belegt"
+    - "Geerbte Routenmethoden: Aufzählung wie Router::getAttributeRoutes, unlisted plus R5 (Deklarationsort), am echten Baum per Trait rot belegt"
+    - "ROUTE_GATE_MIN_TESTS und MIN_FLOOR im Gleichschritt (39)"
+    - "Textsperre unter php/lib für Annotationen (Python, test_php_surface_bans.py)"
+  gaps_remaining: []
+  regressions: []
 gaps:
-  - truth: "Routen-Attribut-Gate: eine neue oder geänderte Route ohne Allowlist-Eintrag macht CI rot (Ziel: keine Route versehentlich öffentlich oder ohne CSRF)"
+  - truth: "Kein Quelltext unter php/lib nennt IRouter, getRouter, actionInclude, OC\\Route, registerService, registerServiceAlias, registerParameter, registerMiddleware oder getContainer (Wahrheit 42-08, Textseite 42-09; Vektoren 3 und 6)"
     status: partial
-    reason: "Der Leser RouteProfiles sieht nur PHP-Attribute. Nextcloud stable34 wertet für PublicPage, NoCSRFRequired, NoAdminRequired, ExAppRequired, AuthorizedAdminSetting und SubAdminRequired weiterhin auch Docblock-Annotationen aus (ControllerMethodReflector::hasAnnotationOrAttribute, Zeile 136 bis 147; SecurityMiddleware Zeile 123, 193, 232). Ein '* @PublicPage' oder '* @NoCSRFRequired' im Docblock einer Routenmethode macht die Route öffentlich bzw. CSRF-frei, ohne dass RouteSecurityTest, die Regeln R1/R2 oder test_php_trust_boundary.py rot werden. Zweite, kleinere Lücke derselben Art: ofClass() überspringt geerbte Methoden (getDeclaringClass() !== $class), Router::getAttributeRoutes registriert aber per getMethods() auch geerbte Routen; eine Routenmethode in einer Basisklasse außerhalb von lib/Controller wäre unsichtbar."
+    reason: "Beide Sperren vergleichen die Namen case-sensitiv. PHP löst Klassen-, Interface-, Funktions- und Methodennamen aber ohne Rücksicht auf Groß-/Kleinschreibung auf, so wie das Gate es für Attribute (Vektor 2) selbst schon berücksichtigt. Unabhängige Proben am echten Baum: (a) neue Datei php/lib/Service/RedRouterProbe.php mit 'use OCP\\Route\\irouter;', '->actioninclude(' und '->getrouter()': PHPUnit 'OK (39 tests)', pytest 86 passed, also ganz grün. (b) '$this->getcontainer()->registerservice(PageController::class, ...)' im Konstruktor von Application (DI-Austausch eines Controllers, den 'final' nicht verhindert): PHPUnit 'OK (39 tests)', pytest 86 passed. Gegenprobe mit exakter Schreibweise derselben Zeile: Tokenprüfung und Python-Text rot. Die Sperre greift also nur bei kanonischer Schreibweise."
     artifacts:
-      - path: "php/tests/RouteSecurity/RouteProfiles.php"
-        issue: "ofClass() liest weder getDocComment() noch geerbte öffentliche Methoden"
-      - path: "php/tests/RouteSecurity/Fixtures.php"
-        issue: "keine Fixture mit Docblock-Annotation und keine mit geerbter Routenmethode"
-      - path: "php/tests/Unit/RouteSecurityTest.php"
-        issue: "kein Negativtest für Annotation oder Vererbung"
+      - path: "php/tests/RouteSecurity/AppSurface.php"
+        issue: "sourceFindings(): in_array($last, BANNED_NAMES, true) case-sensitiv; nur der Namespace OC\\Route\\ wird kleingeschrieben verglichen"
+      - path: "backend/tests/test_php_surface_bans.py"
+        issue: "LIB_BANS per 'ban in line' case-sensitiv (Kommentar 'case-sensitiv wie PHP-Bezeichner' trifft für PHP nicht zu); nur 'OC\\Route\\' wird kleingeschrieben verglichen"
     missing:
-      - "RouteProfiles::ofClass: Docblock jeder Routenmethode mit demselben Muster wie der Server lesen (preg_match_all('/^\\h+\\*\\h+@(?P<annotation>[A-Z]\\w+)/m', ...)) und jede der Annotationen PublicPage, NoCSRFRequired, NoAdminRequired, ExAppRequired, AuthorizedAdminSetting, SubAdminRequired, BruteForceProtection, UserRateThrottle, AnonRateThrottle, CORS, PasswordConfirmationRequired als eigenen Befund 'R3 <Key>: docblock annotation @<Name>' in violations() melden (Annotationen ganz verbieten statt erlauben)"
-      - "Fixture 'AnnotationFixture' mit '/** @PublicPage */' und '/** @NoCSRFRequired */' über einer FrontpageRoute-Methode plus Negativtest, der genau diese Befunde erwartet"
-      - "RouteProfiles::ofClass: den Filter getDeclaringClass() !== $class entfernen (oder geerbte Routenmethoden unter dem Kurznamen der konkreten Klasse profilieren), plus Fixture 'InheritedFixture extends BaseFixture' und Negativtest 'unlisted route InheritedFixture::...'"
-      - "ROUTE_GATE_MIN_TESTS in php.yml auf die neue Zahl der Testmethoden anheben; MIN_FLOOR in backend/tests/test_php_route_gate_presence.py mitziehen"
-      - "Optional im selben Zug: in test_php_trust_boundary.py oder test_php_route_gate_presence.py eine Textsperre gegen '@PublicPage', '@NoCSRFRequired', '@NoAdminRequired' unter php/lib/Controller, damit der Schutz auch bei reinen Backend-Commits greift"
+      - "AppSurface::sourceFindings: strtolower($last) gegen kleingeschriebene BANNED_NAMES vergleichen; Probe mit 'use OCP\\Route\\irouter;' und '$this->getcontainer()->registerservice(...)' als Negativtest"
+      - "test_php_surface_bans.py: LIB_BANS case-insensitiv prüfen (line.lower() gegen ban.lower()), Negativproben in Kleinschreibung ergänzen"
+      - "Untergrenzen (ROUTE_GATE_MIN_TESTS, MIN_FLOOR) nur anheben, falls eine neue Testmethode entsteht"
 deferred:
   - truth: "Erfolgskriterium 3: Psalm mit Taint gegen ocp 33/34/35, php-cs-fixer dry-run, zizmor, actionlint"
     addressed_in: "eigene Phase vor Findling 1.7 (noch ohne Phasennummer)"
-    evidence: "ROADMAP.md Zeile 251: 'Kriterium 3 (Psalm mit Taint, php-cs-fixer, zizmor, actionlint) ist nicht Teil dieser Phase und kommt als eigene Phase vor Findling 1.7.'; docs/testing.md nennt dieselbe Vertagung"
-human_verification:
-  - test: "scripts/dev/phpunit_docker.sh einmal ohne Argumente und einmal mit --filter RouteSecurity lokal laufen lassen"
-    expected: "ohne Argumente 'OK (973 tests, ...)' und 'phpunit_docker: 973 tests executed, floor 28', rc 0; mit Filter 15 Tests und der Hinweis, dass die Untergrenze übersprungen wird"
-    why_human: "Docker war für diese Verifikation ausgeschlossen; das Skript ist nur statisch geprüft (bash -n, Schlüssel-Extraktion, Logik)"
+    evidence: "ROADMAP.md, Abschnitt Phase 42: 'Kriterium 3 (Psalm mit Taint, php-cs-fixer, zizmor, actionlint) ist nicht Teil dieser Phase und kommt als eigene Phase vor Findling 1.7.'"
 ---
 
-# Phase 42: PHP-Sicherheits-Gates für die Companion-App, Verifikationsbericht
+# Phase 42: PHP-Sicherheits-Gates für die Companion-App, Verifikationsbericht (Re-Verifikation)
 
 **Phasenziel:** Die PHP-Hälfte von Findling bekommt Gates auf dem Niveau der Python-Seite, damit keine Route versehentlich öffentlich oder ohne CSRF wird und verwundbare Abhängigkeiten auffallen.
-**Umfang (vereinbart):** nur Erfolgskriterien 1, 2 und 4; Kriterium 3 ist vertagt, geprüft wird nur, dass die Vertagung in der ROADMAP steht.
-**Verifiziert:** 2026-11-04T21:24:00Z
-**Status:** gaps_found
-**Re-Verifikation:** Nein, Erstverifikation
+**Umfang:** Erfolgskriterien 1, 2 und 4 sowie die 14 Vektoren der Lückenschluss-Pläne 42-04 bis 42-09. Kriterium 3 ist vertagt.
+**Verifiziert:** 2026-11-05T03:30:15Z auf main `1a9e6998e54d83479dceaee1025ab2f3141d3b6b`
+**Status:** gaps_found (eine Lücke, klein und eng umrissen)
+**Re-Verifikation:** Ja, nach dem Lückenschluss 42-04 bis 42-09
+
+## Vorheriger Lauf (2026-11-04T21:24:00Z)
+
+Status gaps_found, 2/3: SK1 teilweise, weil der Leser Docblock-Annotationen und geerbte Routenmethoden nicht sah. Die damals offene menschliche Prüfung (lokales PHPUnit-Rezept) ist mit diesem Lauf erledigt: lokal `OK (997 tests, 6040 assertions)`, `phpunit_docker: 997 tests executed, floor 28`, rc 0. Beide alten Lücken sind geschlossen und am echten Baum mit eigenen Proben rot belegt (Vektoren 1 und 5 unten).
 
 ## Zielerreichung
 
-### Beobachtbare Wahrheiten
+### Erfolgskriterien
 
 | # | Wahrheit | Status | Beleg |
 |---|---|---|---|
-| 1 | SK1: ein Test vergleicht jede Controller-Methode und ihre Attribute mit einer committeten Allowlist; neue oder geänderte Route ohne Eintrag macht CI rot, mit Negativtest | TEILWEISE (Lücke) | Attribut-Seite trägt: RouteSecurityTest liest per Reflection Methoden- und Klassenattribute aus `OCP\AppFramework\Http\Attribute` inklusive Ratelimit-Argumenten; `compare()` meldet unlisted, changed (Attribut, Verb, URL, weitere Routenargumente) und stale; `violations()` R1/R2; Negativtests gegen Fixtures (unlisted, added attribute, verb/url, stale, Ratelimit-Argumente, Klassenattribut, R1, R2, Fremdattribut) und gegen den echten Baum (setPause fehlt, PublicPage an requeue). Allowlist von mir unabhängig per grep gegen die 7 Controller abgeglichen: 20 Routen, deckungsgleich, keine Klassenattribute. Lücke: Docblock-Annotationen (`@PublicPage`, `@NoCSRFRequired`, ...) wertet Nextcloud stable34 weiterhin aus, das Gate sieht sie nicht; geerbte Routenmethoden werden übersprungen, der Router registriert sie. |
-| 2 | SK2: `composer validate --strict` und `composer audit --locked` in php.yml, Dependabot-Eintrag für composer | VERIFIZIERT | Job `composer-hygiene` (timeout 10, persist-credentials false, kein `|| true`, kein continue-on-error, `working-directory: php`); dependabot.yml: composer, `/php`, weekly Montag 05:00 Europe/Berlin, Gruppe minor/patch, phpunit-Majors ignoriert; php.yml schedule `50 5 * * 1`, concurrency-Gruppe mit `github.event_name`. CI 41909998607 (a0cb12c5): `./composer.json is valid`, `No security vulnerability advisories found.`; Dependabot-Lauf `composer in /php` 41910010415 success. |
-| 3 | SK4: PHPUnit läuft lokal über Docker und in CI; alle Gates lokal grün vor Commit | VERIFIZIERT (lokaler Lauf nur statisch, siehe menschliche Prüfung) | `scripts/dev/phpunit_docker.sh` (100755) liest SERVER_VERSION (`stable34`) und MINIMUM_TESTS (`28`) per sed aus php.yml, von mir nachgestellt; `bash -n` ok; Untergrenze nur ohne Argumente, mit Argumenten ausdrücklich übersprungen; Exit-Code von PHPUnit bzw. 1 unter der Untergrenze. "CI only" aus php.yml-Kommentar, bootstrap.php und docs/testing.md für PHPUnit entfernt (Rest betrifft nur Integrationsjobs). CI-PHPUnit auf allen drei Code-Commits grün: 41897060856, 41905206023, 41909998607 (`OK (973 tests, 5887 assertions)`, `the suite executed 973 tests, the floor is 28`). |
+| SK1 | Routen-Attribut-Gate mit Allowlist und Negativtests; neue oder geänderte Route ohne Eintrag macht CI rot | TEILWEISE | Routen-, Klassen- und Registrierungsseite trägt für alle 14 Vektoren (Tabelle unten), 39 Testmethoden, CI-Log `the route attribute gate ran 39 tests, the floor is 39`. Lücke: die Namenssperren gegen Router- und Container-Zugriff (Vektoren 3 und 6, Textseite) sind case-sensitiv und lassen sich mit Kleinschreibung umgehen. |
+| SK2 | `composer validate --strict` und `composer audit --locked` in php.yml, Dependabot composer | VERIFIZIERT | Job `composer-hygiene` (php.yml Z. 225 ff.): `composer validate --strict --no-check-publish`, `composer audit --locked --no-interaction`, `working-directory: php`, `persist-credentials: false`, kein `|| true`. dependabot.yml Z. 133: `package-ecosystem: composer`, `/php`, weekly. CI 41953527552: `./composer.json is valid`, `No security vulnerability advisories found.` |
+| SK4 | PHPUnit lokal über Docker und in CI | VERIFIZIERT | Lokal selbst ausgeführt: `bash scripts/dev/phpunit_docker.sh` rc 0, `OK (997 tests, 6040 assertions)`. CI 41953527552 (4798b5dc, letzter PHP-Commit): `OK (997 tests, 6040 assertions)`, `the suite executed 997 tests, the floor is 28`. |
 
-**Score:** 2/3 vollständig, 1 teilweise.
+### Die 14 Vektoren, je mit eigener Rot-Probe am echten Baum
 
-### Vertagte Punkte
+Alle Proben sind eigene Muster, bewusst andere Dateien, Methoden und Formen als die Rot-Beweise der Executor-Summaries. Ablauf je Probe: Python-Ersetzung, `scripts/dev/phpunit_docker.sh --filter RouteSecurity`, danach `pytest tests/test_php_surface_bans.py tests/test_exapp_surface.py`, danach `git checkout -- <pfad>`, neue Dateien gelöscht; nach jeder Probe `git status --porcelain` gleich dem Ausgangszustand und `git diff --stat` leer (`clean_after_revert=True` in allen 19 Läufen).
 
-| # | Punkt | Wo | Beleg |
-|---|---|---|---|
-| 1 | SK3: Psalm mit Taint, php-cs-fixer, zizmor, actionlint | eigene Phase vor Findling 1.7 | ROADMAP.md Zeile 251, ebenso docs/testing.md. Hinweis: eine eigene Phasenzeile existiert in der ROADMAP noch nicht, nur der Satz. |
+| V | Vektor | Test, der ihn fängt | Eigene Probe | Ergebnis | Status |
+|---|---|---|---|---|---|
+| 1 | Docblock-Annotationen | testADocblockAnnotation..., testTheServerOracle..., Python scan_annotations | `* @NoCSRFRequired` im Docblock von ProfileSettingsController::saveProfile (POST), `* @UserRateThrottle(limit=1000, period=1)` an checkState | `R3 ...saveProfile: docblock annotation @nocsrfrequired`, `R2 ...saveProfile: NoCSRFRequired on POST without ExAppRequired` (Orakel sieht die Annotation als wirksam), `R3 ...checkState: ... @userratethrottle`; pytest 1 failed mit Datei und Zeile | VERIFIZIERT |
+| 2 | Schreibweise von Attributnamen | testALowercaseAttributeNamespace... | `#[\OCP\AppFramework\Http\Attribute\noadminrequired]` an SettingsController::overview | `changed route SettingsController::overview: ... actual ... [NoAdminRequired]` (kanonisiert) | VERIFIZIERT |
+| 3 | Legacy-Routen über routes.php oder IRouter | testAppinfoRoutesDeclaresNoRoute, testAppinfoRoutesUsesOnlyLiteralTokens, testNoSourceUnderLib..., Python LIB_BANS/ROUTES_BANS | (a) reine Literal-Route `'routes' => [['name' => 'page#index', 'url' => '/legacy', 'verb' => 'GET']]`; (b) `use OCP\Route\irouter;`, `->actioninclude(`, `->getrouter()` in neuer Service-Datei | (a) rot, 1 Failure (testAppinfoRoutesDeclaresNoRoute); (b) **PHPUnit OK (39 tests), pytest 86 passed** | TEILWEISE |
+| 4 | static, nicht public, __call/__callStatic | testAStaticOrNonPublicRouteMethod... | private Routenmethode `redPrivate` in ProfileController, `__callStatic` in PageController | `R5 ProfileController::redPrivate: route method is private`, `unlisted route ProfileController::redPrivate`, `R5 PageController: defines __callStatic` | VERIFIZIERT |
+| 5 | Vererbung, Trait | testAnInheritedRoute..., testARouteMethodDeclaredOutside... | Trait `OCA\Findling\Service\RedRouteTrait` mit FrontpageRoute, per `use` in PageController | `unlisted route PageController::redTrait`, `R5 ... declared in lib/Service/RedRouteTrait.php, outside the controller directory`, `changed class PageController: ... traits` | VERIFIZIERT |
+| 6 | Controller-Austausch (Unterklasse, DI) | testANonFinalControllerIsReported, testEveryControllerIsFinal, Container-Namenssperre | (a) `final` an PageController entfernt; (b) `$this->getcontainer()->registerservice(PageController::class, ...)` im Application-Konstruktor; (c) Kontrolle mit exakter Schreibweise | (a) `C1 PageController: controller is not final` plus changed class; (b) **PHPUnit OK (39 tests), pytest 86 passed**; (c) Tokenprüfung rot, pytest `registerService(`/`getContainer(` rot | TEILWEISE |
+| 7 | Klassenattribute | testAClassAttributeIsAViolation... | `#[...\PublicPage]` an der Klasse GatewayController | `R4 GatewayController: class attribute PublicPage has no effect on routes` | VERIFIZIERT |
+| 8 | fremde Attribute, Rate-Limit-Unterklasse | testAForeignOrUnknown..., testARateLimitSubclass... | neue Klasse `OCA\Findling\Service\RedLimit extends UserRateLimit` an ProfileSettingsController::startCheck | `R6 ...startCheck: attribute OCA\Findling\Service\RedLimit is not an OCP attribute` plus changed route | VERIFIZIERT |
+| 9 | ExApp-Routentabelle, Laufzeitregistrierung | test_exapp_surface.py | `bruteforce_protection` von `^/diagnose$` auf `[]`; f-String `/ocs/v1.php/cloud/apps/{app}` in nc/client.py | Tabellenbefund an Index 2 und `OCS path outside /ocs/v2.php/apps/findling/`, 2 failed | VERIFIZIERT |
+| 10 | Basisklassenwechsel | testTheParentChainAndTraitsMatchTheAllowlist | ProfileSettingsController `extends \OCP\AppFramework\ApiController` | `changed class ProfileSettingsController: ... parents [ApiController, Controller]` | VERIFIZIERT |
+| 11 | Registrierungen in IBootstrap | testTheApplicationRegistersExactly..., testAnUnlistedOrMissing... | (a) `registerDeclarativeSettings(Admin::class)` in register(); (b) nur `injectFn(...)` in boot() | (a) `unlisted registration registerDeclarativeSettings(OCA\Findling\Settings\Admin)`; (b) rot, 1 Failure (boot zeichnet etwas auf) | VERIFIZIERT |
+| 12 | R1 mit falschem Limit | testBruteForceProtectionAlone..., testAClassRateLimitDoesNotSatisfyR1 | `PublicPage` plus `UserRateLimit(limit: 5, period: 60)` an PageController::index | `R1 PageController::index: PublicPage without AnonRateLimit` plus changed route | VERIFIZIERT |
+| 13 | IDelegatedSettings, info.xml | testNoSettingsClassIsDelegated, Python scan_info_xml | neue Klasse `OCA\Findling\Settings\Personal implements IDelegatedSettings`; `<personal>` in den settings von php/appinfo/info.xml | `C3 Personal: implements IDelegatedSettings`; pytest `info.xml settings are (...) expected (...)` | VERIFIZIERT |
+| 14 | root, postfix, defaults | testRootPostfixOrDefaults... | `defaults: ['n' => 5]` an QueueController::getDocuments | `R7 QueueController::getDocuments: route argument defaults is not allowed` plus changed route | VERIFIZIERT |
+
+**Score:** SK2 und SK4 verifiziert, SK1 teilweise; Vektoren 12 von 14 voll, 3 und 6 teilweise (nur die Groß-/Kleinschreibungs-Umgehung der Namenssperren).
 
 ### Artefakte
 
-| Artefakt | Erwartet | Status | Details |
-|---|---|---|---|
-| `php/tests/Unit/RouteSecurityTest.php` | Gate mit Negativtests | VERIFIZIERT, Lücke s. o. | 15 Testmethoden, `final class`, kein Skip-Marker |
-| `php/tests/RouteSecurity/RouteProfiles.php` | Leser, Vergleich, Regeln | TEILWEISE | Attribute korrekt; Docblock und geerbte Methoden nicht gelesen |
-| `php/tests/RouteSecurity/Fixtures.php` | Fixtures für R1, R2, Klassenattribut, Fremdattribut | VERIFIZIERT | per require_once, PSR-4-Warnung beim dump-autoload dokumentiert |
-| `php/tests/route-security.json` | 20 Einträge | VERIFIZIERT | unabhängig gegen grep der Controller abgeglichen |
-| `.github/workflows/php.yml` | composer-hygiene, schedule, JUnit-Schritt | VERIFIZIERT | in CI 41909998607 alle vier Jobs success |
-| `.github/dependabot.yml` | composer-Eintrag | VERIFIZIERT | |
-| `backend/tests/test_php_route_gate_presence.py` | Python-Strukturgate | VERIFIZIERT | |
-| `backend/tests/test_php_supply_chain_gates.py` | Python-Strukturgate | VERIFIZIERT | |
-| `scripts/dev/phpunit_docker.sh` | lokales Rezept | VERIFIZIERT (statisch) | |
-| `docs/testing.md` | Doku ohne "CI only" für PHPUnit | VERIFIZIERT | |
+| Artefakt | Status | Details |
+|---|---|---|
+| `php/tests/RouteSecurity/RouteProfiles.php` | VERIFIZIERT | Aufzählung per `getMethods()` ohne Filter, Orakel `OC\AppFramework\Utility\ControllerMethodReflector` fail closed, R1 bis R8, C1, C3, Klassenprofile |
+| `php/tests/RouteSecurity/AppSurface.php` | TEILWEISE | Token-Whitelist routes.php und Registrierungs-Recorder tragen; `sourceFindings()` case-sensitiv |
+| `php/tests/RouteSecurity/Fixtures.php`, `Outside/BaseFixture.php` | VERIFIZIERT | je Regel eine rote Fixture |
+| `php/tests/Unit/RouteSecurityTest.php` | VERIFIZIERT | 39 Testmethoden (`grep -cE '^\s*public function test'`), keine Skip-Marker |
+| `php/tests/route-security.json`, `php/tests/app-surface.json` | VERIFIZIERT | echte Läufe grün, jede Abweichung in den Proben rot |
+| `backend/tests/test_php_surface_bans.py` | TEILWEISE | Annotationen case-insensitiv, LIB_BANS case-sensitiv |
+| `backend/tests/test_exapp_surface.py` | VERIFIZIERT | |
+| `.github/workflows/php.yml` | VERIFIZIERT | `ROUTE_GATE_MIN_TESTS: 39`, `MINIMUM_TESTS: 28`, composer-hygiene |
+| `.github/dependabot.yml` | VERIFIZIERT | composer `/php` |
+| `backend/tests/test_php_route_gate_presence.py` | VERIFIZIERT | `MIN_FLOOR = 39` |
 
 ### Schlüsselverbindungen
 
-| Von | Nach | Über | Status | Details |
-|---|---|---|---|---|
-| RouteSecurityTest | php/lib/Controller | `RouteProfiles::ofDirectory` + Untergrenze 7 Klassen, mindestens 20 Routen | VERDRAHTET | Anti-Vakuität im Test |
-| RouteSecurityTest | route-security.json | `loadAllowlist` | VERDRAHTET | |
-| php.yml phpunit | RouteSecurityTest | JUnit-Schritt "The route attribute gate ran", Suite-Name, Untergrenze 15, skipped/failures/errors = 0 | VERDRAHTET | CI-Log: `the route attribute gate ran 15 tests, the floor is 15` |
-| python.yml | php.yml / dependabot.yml | zwei Python-Strukturgates | VERDRAHTET | Mutationsprobe unten |
-| phpunit_docker.sh | php.yml | sed-Extraktion SERVER_VERSION, MINIMUM_TESTS | VERDRAHTET | liefert `stable34`, `28` |
-| appinfo/routes.php | Gate | `testAppinfoRoutesDeclaresNoRoute` | VERDRAHTET | Datei leer bis auf zwei leere Arrays |
+| Von | Nach | Status | Details |
+|---|---|---|---|
+| RouteSecurityTest | Server-Checkout stable34 (Orakel) | VERDRAHTET | Probe V1: R2 entsteht aus dem Orakel, nicht aus Attributen |
+| RouteSecurityTest | php/lib/Controller | VERDRAHTET | 7 Klassen, mindestens 20 Routen, keine Fremdeinträge |
+| php.yml phpunit | RouteSecurityTest | VERDRAHTET | CI-Log `the route attribute gate ran 39 tests, the floor is 39` |
+| Untergrenzen | Testanzahl | VERDRAHTET | 39 Methoden = ROUTE_GATE_MIN_TESTS = MIN_FLOOR |
+| python.yml | test_php_surface_bans.py | TEILWEISE (Info) | python.yml startet auf backend/**, scripts/** und montags, nicht auf php/**; die Textseite greift bei reinen PHP-Commits erst im Wochenlauf. Die PHPUnit-Seite deckt dieselben Vektoren in php.yml ab, außer der Lücke oben. |
 
 ### Verhaltens-Stichproben
 
 | Verhalten | Befehl | Ergebnis | Status |
 |---|---|---|---|
-| Python-Gates grün | `uv run --frozen pytest -q tests/test_php_route_gate_presence.py tests/test_php_supply_chain_gates.py tests/test_measurement_scripts.py tests/test_php_trust_boundary.py` | 630 passed | PASS |
-| Strukturgates werden rot auf echter, mutierter Datei (eigenes Skript im Scratchpad, nicht die Testproben) | Untergrenze 14, Schritt umbenannt, markTestSkipped eingefügt, `|| true` am Audit, schedule entfernt, composer-Eintrag entfernt | je genau ein Befund, unverändert 0 Befunde | PASS |
-| SERVER_VERSION/MINIMUM_TESTS-Extraktion des Skripts | sed-Ausdruck des Skripts gegen php.yml | `stable34`, `28` | PASS |
-| PHP-Lauf in CI auf a0cb12c5 | `gh run view 41909998607` | 4 Jobs success, Schritt "The route attribute gate ran" success | PASS |
-| Server wertet Docblock-Annotationen aus | Lesen von stable34 (lokaler Checkout, nur gelesen) `ControllerMethodReflector.php` Z. 136 bis 147, `SecurityMiddleware.php` Z. 123, 193, 232 | Annotation reicht für PublicPage/NoCSRFRequired, nur Debug-Log | FAIL für SK1 |
-| Router registriert geerbte Routen | `lib/private/Route/Router.php` Z. 493 bis 515 (`$class->getMethods()`) | auch geerbte Methoden | FAIL für SK1 (Randfall) |
+| Volle PHPUnit-Suite lokal | `bash scripts/dev/phpunit_docker.sh` | rc 0, `OK (997 tests, 6040 assertions)`, floor 28 | PASS |
+| Python-Tests aus 42-09 | `uv run --frozen pytest -q tests/test_php_surface_bans.py tests/test_exapp_surface.py tests/test_info_xml_defaults.py tests/test_phase40_audit.py` | 160 passed, 7 skipped (67 + 19 + 9 + 65) | PASS |
+| Struktur- und Grenzgates | `pytest tests/test_php_route_gate_presence.py tests/test_php_supply_chain_gates.py tests/test_php_trust_boundary.py`; `test_measurement_scripts.py -k php_half` | 67 passed; 2 passed | PASS |
+| 19 Rot-Proben (Tabelle oben) | eigenes Skript im Scratchpad | 17 rot aus dem erwarteten Grund, 2 grün (Lücke) | siehe Lücke |
 
-### CI-Läufe (selbst abgefragt)
+### CI auf main (selbst abgefragt, volle SHA)
 
-Alle in den Summaries genannten Läufe per `gh run view` geprüft, alle `completed success`: 80d819f3 (8 Läufe, PHP 41897060856), e0ea3179 (8 Läufe, PHP 41905206023), a0cb12c5 (8 Läufe, PHP 41909998607, plus 4 Dependabot-Läufe 41910010415, 41910010567, 41910011173, 41910011569). Der wöchentliche Lauf von php.yml ist noch nicht angefallen (erster Montag nach dem Commit).
+- `1a9e6998e54d83479dceaee1025ab2f3141d3b6b` (HEAD = origin/main, nur Planung): Security scans 41959864516 success, OpenSSF Scorecard 41959864544 success; die übrigen Workflows starten wegen ihrer Pfadfilter nicht.
+- `0aed7906d0d8cfaffae3f644a544c76ce635edea` (42-09, Python): 7 Läufe success, darunter Python gates 41956536303.
+- `4798b5dc6ee8a1d196aaf573a7b6d9728090f0ea` (42-08, letzter PHP-Commit): 8 Läufe success, PHP and store metadata gates 41953527552 (997 Tests, Routen-Gate 39/39, composer valid, keine Advisories).
+- Ebenso grün: 9a234b94 (42-07), 587c758c (42-06), c26beb3a (42-05), 593e194c (42-04), je 8 Läufe success.
 
-### Produktcode und Version
+### Produktcode, Commits
 
-`git diff --stat 2b7d4962 HEAD -- php/lib php/appinfo php/templates php/js php/css php/l10n php/composer.json php/composer.lock backend/src backend/appinfo CHANGELOG.md`: leer. Kein Tag seit 2b7d4962. Geändert sind nur Tests, Workflows, dependabot.yml, Doku, Skript und Planung. Alle sechs Commits seit 2b7d4962 von street1983nk.
+`git diff a0cb12c5 HEAD` unter php/lib, php/appinfo, backend/src, backend/appinfo, composer.*, CHANGELOG.md: genau vier Zeilen, `class` zu `final class` in Gateway-, Profile-, Queue- und ReconcileController (Owner-Entscheid 42-07). Kein Tag. Alle 19 Commits seit a0cb12c5 von `street1983nk <k.cherif@outlook.de>`, keine Trailer, kein close/fix/resolve vor `#N`.
 
 ### Anti-Pattern
 
-| Datei | Zeile | Muster | Schwere | Wirkung |
-|---|---|---|---|---|
-| keine | | TBD/FIXME/XXX in den geänderten Dateien | | keine Funde |
-| scripts/dev/phpunit_docker.sh | RUNTIME_IMAGE | lokal PHP 8.3 (nextcloud:32.0.15-apache), CI PHP 8.2 | Info | dokumentiert in docs/testing.md; ein 8.3-only-Konstrukt fiele lokal nicht auf, aber in CI und `php -l` |
+| Datei | Muster | Schwere | Wirkung |
+|---|---|---|---|
+| geänderte Dateien seit a0cb12c5 | TBD/FIXME/XXX | | keine Funde |
+| `backend/tests/test_php_surface_bans.py` | Kommentar "case-sensitiv wie PHP-Bezeichner" | Warnung | sachlich falsch für PHP, Ursache der Lücke |
+| `RouteSecurityTest::testTheGateFiresOnTheRealTree` | setzt Annotationen ins Profil und erwartet genau einen Befund | Info | bei einer echten Annotation an anderer Stelle fällt zusätzlich dieser Test, harmlos (rot bleibt rot) |
+| `backend/tests/test_exapp_surface.py` | AST-Prüfung von Attributnamen | Info | `getattr(nc, "web" + "hooks")` oder zusammengesetzte Pfade sieht eine statische Prüfung grundsätzlich nicht; gezielte Verschleierung, kein versehentlicher Fall |
 
 ### Menschliche Prüfung
 
-1. **Lokales PHPUnit-Rezept:** `bash scripts/dev/phpunit_docker.sh` und `bash scripts/dev/phpunit_docker.sh --filter RouteSecurity`. Erwartet: 973 Tests, `floor 28`, rc 0; gefiltert 15 Tests mit dem Hinweis auf die übersprungene Untergrenze. Grund: Docker war für diese Prüfung ausgeschlossen.
+Keine. Docker-Lauf und alle Proben wurden in diesem Lauf selbst ausgeführt.
 
 ### Zusammenfassung der Lücke
 
-Kriterien 2 und 4 sind im Code und in CI belegt, nicht nur in den Summaries. Kriterium 1 hält für alles, was als PHP-Attribut geschrieben ist, und ist dort sauber mit Negativtests auf Fixtures und auf dem echten Baum abgesichert. Das Phasenziel "keine Route versehentlich öffentlich oder ohne CSRF" hat aber einen offenen Seiteneingang: Nextcloud stable34 akzeptiert `@PublicPage` und `@NoCSRFRequired` weiterhin als Docblock-Annotation, und weder RouteSecurityTest noch test_php_trust_boundary.py sehen sie. Heute steht keine solche Annotation unter php/lib (grep leer), es gibt also keine aktuelle Exposition, nur eine Lücke im Gate. Daneben überspringt der Leser geerbte Routenmethoden, die der Router registriert. Beides hat dieselbe Wurzel (der Leser liest weniger als der Server auswertet) und lässt sich in einem kleinen Folgeplan schließen, Schritte stehen im Frontmatter unter `gaps.missing`.
+Die beiden Lücken des Vorlaufs sind geschlossen, und von den 14 Vektoren tragen 12 vollständig: jede eigene Probe wurde aus dem erwarteten Grund rot, oft doppelt (Allowlist und Regel). Offen ist eine einzige, eng umrissene Lücke: die Namenssperren gegen Router- und Container-Zugriff (AppSurface::sourceFindings und LIB_BANS in test_php_surface_bans.py) vergleichen case-sensitiv. Da PHP Klassen- und Methodennamen ohne Rücksicht auf Groß-/Kleinschreibung auflöst, laufen `use OCP\Route\irouter;`, `->actioninclude(` und `$this->getcontainer()->registerservice(...)` durch beide Gates (PHPUnit 39/39 grün, pytest grün). Damit sind die Textseiten von Vektor 3 (Route ohne Middleware über den Router) und Vektor 6 (Controller-Austausch per DI, den `final` nicht verhindert) umgehbar. Heute steht keine solche Zeile im Baum, es gibt also keine aktuelle Exposition. Der Fix ist klein: Namen kleingeschrieben vergleichen, je eine Negativprobe in Kleinschreibung. Wer das als bewusste Verschleierung außerhalb des Ziels "versehentlich" einstuft, kann es per Override annehmen; der Verifier empfiehlt den Fix, weil das Gate dieselbe Regel für Attribute (Vektor 2) bereits selbst umsetzt.
 
 ---
 
-_Verifiziert: 2026-11-04T21:24:00Z_
+_Verifiziert: 2026-11-05T03:30:15Z_
 _Verifier: Claude (gsd-verifier)_
