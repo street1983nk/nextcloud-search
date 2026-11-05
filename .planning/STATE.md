@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
 status: executing
-stopped_at: Completed 42-07-PLAN.md
-last_updated: "2026-11-05T02:11:05.000Z"
+stopped_at: Completed 42-08-PLAN.md
+last_updated: "2026-11-05T02:38:16.000Z"
 last_activity: 2026-11-05
 progress:
   total_phases: 5
@@ -26,8 +26,8 @@ Siehe .planning/PROJECT.md (Stand nach v1.5, Milestone v1.6 gestartet) und .plan
 ## Current Position
 
 Phase: 42 (php-sicherheits-gates), EXECUTING
-Plan: 7 of 9
-Status: 42-07 abgeschlossen (9a234b94, CI grün nach Rerun des HaRP-Jobs), weiter mit 42-08
+Plan: 8 of 9
+Status: 42-08 abgeschlossen (4798b5dc, CI grün), weiter mit 42-09
 Last activity: 2026-11-05
 
 Progress: [█████████░] 88%
@@ -95,6 +95,7 @@ Progress: [█████████░] 88%
 - v1.7: 42-05 in ca. 60 min inkl. ca. 40 min CI (2 Tasks, 6 Dateien)
 - v1.7: 42-06 in ca. 50 min inkl. ca. 40 min CI (2 Tasks, 7 Dateien)
 - v1.7: 42-07 in ca. 90 min inkl. ca. 70 min CI mit einem Rerun (3 Tasks, 11 Dateien)
+- v1.7: 42-08 in ca. 60 min inkl. ca. 40 min CI (2 Tasks, 6 Dateien)
 
 ## Accumulated Context
 
@@ -128,6 +129,7 @@ Progress: [█████████░] 88%
 - 42-05: Attribute werden kanonisch gelesen (Tabelle der OCP-Attributklassen aus dem Checkout, sonst ReflectionClass::getName); R6 für fremde und nicht ladbare Attribute (auch AnonRateLimit-Unterklassen); Orakel bestätigt: klein geschriebener Namespace oder Kurzname wirkt auf dem Server als PublicPage; 983 Tests lokal und im CI (PHP 41941138211), Baumhash a5fd4a1c (117).
 - 42-06: Klassenattribute zählen für keine Route und sind R4; R1/R2 lesen effective des Orakels, R1 nur mit exaktem AnonRateLimit an der Methode; R7 defaults/root/postfix (ALLOWED_ROUTE_EXTRAS leer); R8 Verbotsliste lockernder Attribute und PublicPage mit ExAppRequired; docs/testing.md Absatz neu; 987 Tests lokal und im CI (PHP 41944202656), Baumhash ca8905b5 (117).
 - 42-07: Owner-Entscheid 04.11.2026 'final setzen' umgesetzt: Gateway-, Profile-, Queue-, ReconcileController final (je eine Zeile), alle 7 Controller final; C1 nicht final, C3 IDelegatedSettings; Objekt classes in route-security.json (final, Elternkette, Traits, Interfaces, von Hand); 992 Tests lokal und im CI (PHP 41947587570), Baumhash 04f4443d (117); HaRP stable34/x86 einmal rot im v1.5.0-Upgrade-Schritt (Zeitfehler), Rerun grün.
+- 42-08: routes.php nur literale Tokens (token_get_all-Whitelist), keine Router-/Container-Namen unter php/lib (Tokenprüfung), Application::register gegen aufzeichnenden Stub von IRegistrationContext exakt gleich php/tests/app-surface.json (16 Registrierungen), boot() leer; 997 Tests lokal und im CI (PHP 41953527552), Baumhash 2efff5b9 (118).
 
 ### Decisions (Roadmap v1.5)
 
@@ -255,8 +257,8 @@ Items acknowledged and deferred at milestone close on 2026-10-28 (Owner-Wiedervo
 
 ## Session Continuity
 
-Last session: 2026-11-05T02:11:05.000Z
-Stopped at: Completed 42-07-PLAN.md
+Last session: 2026-11-05T02:38:16.000Z
+Stopped at: Completed 42-08-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
