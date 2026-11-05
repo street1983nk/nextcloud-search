@@ -23,7 +23,7 @@ Unabhängige Rotproben am echten Baum (andere Dateien und Methoden als der Execu
 | Probe | PHPUnit (scripts/dev/phpunit_docker.sh) | pytest test_php_surface_bans.py |
 | ----- | ---------------------------------------- | ------------------------------- |
 | Neue Datei php/lib/Db/ZzProbe.php: `use OCP\Route\IrOuTeR as R;` und `$s->GetRouter();` | rot: testNoSourceUnderLibTouchesTheRouterOrTheContainer meldet `ZzProbe.php:4: OCP\Route\IrOuTeR` und `:6: GetRouter` | rot: `php/lib/Db/ZzProbe.php:4: IRouter` (plus getRouter) |
-| Application::register: `$context->registerSERVICE("x", fn () => \oc::$server->get(\ocpoute\irouter::class));` | rot: dieselbe Methode meldet `Application.php:55: registerSERVICE` und `\ocpoute\irouter` | rot: `Application.php:55: registerService(` und `IRouter` |
+| Application::register: `$context->registerSERVICE("x", fn () => \oc::$server->get(\ocp\route\irouter::class));` | rot: dieselbe Methode meldet `Application.php:55: registerSERVICE` und `\ocp\route\irouter` | rot: `Application.php:55: registerService(` und `IRouter` |
 
 Baseline ohne Probe: `OK (998 tests, 6049 assertions)`; pytest (Textsperren + Gate-Präsenz) 106 passed. Gate-Untergrenze ROUTE_GATE_MIN_TESTS: 40 in php.yml, MIN_FLOOR = 40 in test_php_route_gate_presence.py.
 
