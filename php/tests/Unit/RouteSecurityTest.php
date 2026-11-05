@@ -6,9 +6,12 @@ namespace OCA\Findling\Tests\Unit;
 
 use OCA\Findling\Tests\RouteSecurity\Fixture\AnnotationFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\BaseRouteFixture;
+use OCA\Findling\Tests\RouteSecurity\Fixture\CaseFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\ClassLevelFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\CsrfFixture;
+use OCA\Findling\Tests\RouteSecurity\Fixture\ForeignAttributeFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\InheritedFixture;
+use OCA\Findling\Tests\RouteSecurity\Fixture\LooseLimitFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\PlainFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\PublicFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\RateLimitFixture;
@@ -173,11 +176,48 @@ final class RouteSecurityTest extends TestCase {
 		$this->assertStringContainsString('NoCSRFRequired', $violations[0]);
 	}
 
-	public function testForeignAttributesAndMethodsWithoutARouteStayOut(): void {
+	public function testMethodsWithoutARouteStayOut(): void {
 		$profiles = RouteProfiles::ofClass(PlainFixture::class);
 
 		$this->assertSame(['PlainFixture::route'], array_keys($profiles));
 		$this->assertSame(['NoAdminRequired'], $profiles['PlainFixture::route']['attributes']);
+		$this->assertSame([], RouteProfiles::violations($profiles));
+	}
+
+	/**
+	 * PHP resolves attribute class names case insensitively, so a lower case
+	 * namespace or short name acts on the server; the profile has to name the
+	 * canonical class.
+	 */
+	public function testALowercaseAttributeNamespaceIsCanonicalisedAndEffective(): void {
+		$profiles = RouteProfiles::ofClass(CaseFixture::class);
+
+		$this->assertSame(['PublicPage'], $profiles['CaseFixture::lowerNamespace']['attributes']);
+		$this->assertSame(['PublicPage'], $profiles['CaseFixture::lowerShortName']['attributes']);
+		$this->assertContains('PublicPage', $profiles['CaseFixture::lowerNamespace']['effective']);
+		$this->assertContains('PublicPage', $profiles['CaseFixture::lowerShortName']['effective']);
+		$this->assertSame([
+			'R1 CaseFixture::lowerNamespace: PublicPage without AnonRateLimit or BruteForceProtection',
+			'R1 CaseFixture::lowerShortName: PublicPage without AnonRateLimit or BruteForceProtection',
+		], RouteProfiles::violations($profiles));
+	}
+
+	public function testAForeignOrUnknownAttributeIsAViolation(): void {
+		$this->assertSame([
+			'R6 ForeignAttributeFixture::foreign: attribute OCA\\Findling\\Tests\\RouteSecurity\\Fixture\\Foreign is not an OCP attribute',
+			'R6 ForeignAttributeFixture::missing: attribute OCA\\Findling\\Tests\\RouteSecurity\\Fixture\\DoesNotExist cannot be loaded',
+		], RouteProfiles::violations(RouteProfiles::ofClass(ForeignAttributeFixture::class)));
+	}
+
+	/** A subclass of AnonRateLimit acts as a rate limit on the server and can switch itself off. */
+	public function testARateLimitSubclassIsAViolation(): void {
+		$profiles = RouteProfiles::ofClass(LooseLimitFixture::class);
+
+		$this->assertSame([
+			'R1 LooseLimitFixture::open: PublicPage without AnonRateLimit or BruteForceProtection',
+			'R6 LooseLimitFixture::open: attribute OCA\\Findling\\Tests\\RouteSecurity\\Fixture\\LooseLimit is not an OCP attribute',
+		], RouteProfiles::violations($profiles));
+		$this->assertContains('AnonRateLimit', $profiles['LooseLimitFixture::open']['effective']);
 	}
 
 	/**

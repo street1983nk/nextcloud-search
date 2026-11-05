@@ -20,7 +20,7 @@ removes what it guards is no gate, so each piece is checked here:
 3. The allowlist is valid JSON and has as many entries under "routes" as the
    controllers have fully qualified ApiRoute and FrontpageRoute lines.
 4. The JUnit step of php.yml exists, takes the file and the floor only from its
-   env, keeps the floor at 22 or above, equal to the number of test methods,
+   env, keeps the floor at 25 or above, equal to the number of test methods,
    and runs exactly one ``php -r`` expression without a fixed file name and
    without a single quote. Since plan 42-04 the floor of php.yml, MIN_FLOOR
    below and the count of ``public function test`` lines in
@@ -52,7 +52,7 @@ PHP_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "php.yml"
 CLASS_LINE = "final class RouteSecurityTest extends TestCase"
 SUITE_NAME = "OCA\\Findling\\Tests\\Unit\\RouteSecurityTest"
 STEP_NAME = "The route attribute gate ran"
-MIN_FLOOR = 22
+MIN_FLOOR = 25
 
 SKIP_MARKERS = (
     "markTestSkipped",

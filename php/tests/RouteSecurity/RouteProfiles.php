@@ -30,11 +30,14 @@ use OCP\AppFramework\Http\Attribute\Route;
  * only for the base class Route itself, followed by the canonical JSON of every
  * further key of Route::toArray() (requirements, defaults, root, postfix), so
  * a loosened requirement is a change as well. "attributes" is the sorted,
- * unique list of every other attribute out of OCP\AppFramework\Http\Attribute
- * on the method and on its class, each as its short name and, if it has
- * arguments, "Name(key=value, ...)" with sorted keys and JSON values; stable34
- * reads only method attributes, the mixing in of class attributes goes with
- * plan 42-06. "annotations" is every docblock annotation the oracle reads plus
+ * unique list of every other attribute on the method and on its class, read by
+ * its canonical class name and not by its spelling in the source (plan 42-05):
+ * an OCP\AppFramework\Http\Attribute as its short name, any other one by its
+ * full name, each followed, if it has arguments, by "(key=value, ...)" with
+ * sorted keys and JSON values. Override, ReturnTypeWillChange and Deprecated
+ * drop out. "foreign" lists every attribute outside OCP, "unknown" every one
+ * that cannot be loaded; both are R6. stable34 reads only method attributes,
+ * the mixing in of class attributes goes with plan 42-06. "annotations" is every docblock annotation the oracle reads plus
  * every one of SERVER_ANNOTATION_NAMES in a form the server ignores today.
  * "effective" is the sorted list of security markers the oracle reports as
  * set. "visibility", "static", "declaredIn" and "outside" describe where and
@@ -110,7 +113,14 @@ final class RouteProfiles {
 		'userratethrottle',
 	];
 
-	private const BROAD_ANNOTATION = '/@(?P<annotation>[A-Za-z]\w*)/';
+	/**
+	 * PHP attributes without a meaning for routing or security; they leave the
+	 * profile and are no finding. Compared case insensitively, without a leading
+	 * backslash, as global names only.
+	 */
+	private const HARMLESS_ATTRIBUTES = ['Override', 'ReturnTypeWillChange', 'Deprecated'];
+
+	private const BROAD_ANNOTATION ='/@(?P<annotation>[A-Za-z]\w*)/';
 
 	/**
 	 * The route profiles of one class, every method the router would see.
@@ -124,7 +134,7 @@ final class RouteProfiles {
 	public static function ofClass(string $class, ?string $controllerDir = null): array {
 		$reflection = new \ReflectionClass($class);
 		$short = $reflection->getShortName();
-		$classAttributes = self::securityAttributes($reflection->getAttributes());
+		$classAttributes = self::readAttributes($reflection->getAttributes());
 
 		$appRoot = null;
 		$controllerPath = null;
@@ -139,11 +149,10 @@ final class RouteProfiles {
 			if ($routes === []) {
 				continue;
 			}
-			$attributes = array_values(array_unique(array_merge(
-				$classAttributes,
-				self::securityAttributes($method->getAttributes()),
-			)));
-			sort($attributes, SORT_STRING);
+			$methodAttributes = self::readAttributes($method->getAttributes());
+			$attributes = self::sortedUnique(array_merge($classAttributes['described'], $methodAttributes['described']));
+			$foreign = self::sortedUnique(array_merge($classAttributes['foreign'], $methodAttributes['foreign']));
+			$unknown = self::sortedUnique(array_merge($classAttributes['unknown'], $methodAttributes['unknown']));
 
 			$oracle = self::oracle($class, $method->getName());
 			$file = self::realPath((string)$method->getFileName());
@@ -157,6 +166,8 @@ final class RouteProfiles {
 
 			$common = [
 				'attributes' => $attributes,
+				'foreign' => $foreign,
+				'unknown' => $unknown,
 				'annotations' => self::annotationsOf($method, $oracle),
 				'effective' => self::effectiveOf($method, $oracle),
 				'visibility' => $method->isPrivate() ? 'private' : ($method->isProtected() ? 'protected' : 'public'),
@@ -283,6 +294,7 @@ final class RouteProfiles {
 	 * R3: no docblock annotation on a route method, in any form.
 	 * R5: a route method is public, not static and declared in the controller
 	 * directory.
+	 * R6: every attribute is a loadable OCP attribute or a harmless PHP one.
 	 *
 	 * @param array<string, array<string, mixed>> $profiles
 	 * @return list<string>
@@ -317,6 +329,12 @@ final class RouteProfiles {
 			}
 			if ($profile['outside']) {
 				$violations[] = "R5 {$key}: route method is declared in {$profile['declaredIn']}, outside the controller directory";
+			}
+			foreach ($profile['foreign'] as $name) {
+				$violations[] = "R6 {$key}: attribute {$name} is not an OCP attribute";
+			}
+			foreach ($profile['unknown'] as $name) {
+				$violations[] = "R6 {$key}: attribute {$name} cannot be loaded";
 			}
 		}
 		sort($violations, SORT_STRING);
@@ -509,20 +527,86 @@ final class RouteProfiles {
 	}
 
 	/**
-	 * @param list<\ReflectionAttribute<object>> $attributes
+	 * @param list<string> $values
 	 * @return list<string>
 	 */
-	private static function securityAttributes(array $attributes): array {
-		$described = [];
+	private static function sortedUnique(array $values): array {
+		$values = array_values(array_unique($values));
+		sort($values, SORT_STRING);
+		return $values;
+	}
+
+	/**
+	 * Every class of OCP\AppFramework\Http\Attribute in the server checkout,
+	 * loaded under its real name and keyed by its lowercased name (plan 42-05).
+	 * The autoloader looks names up case sensitively, so a lower case spelling
+	 * in an attribute is resolved here and not by class_exists(). An empty table
+	 * is an error, never an empty answer.
+	 *
+	 * @return array<string, string>
+	 */
+	private static function ocpAttributes(): array {
+		static $table = null;
+		if ($table !== null) {
+			return $table;
+		}
+		$files = glob(\OC::$SERVERROOT . '/lib/public/AppFramework/Http/Attribute/*.php');
+		$table = [];
+		foreach ($files === false ? [] : $files as $file) {
+			$class = self::ATTRIBUTE_NAMESPACE . basename($file, '.php');
+			if (class_exists($class)) {
+				$table[strtolower($class)] = (new \ReflectionClass($class))->getName();
+			}
+		}
+		if ($table === []) {
+			$table = null;
+			throw new \RuntimeException('no class of OCP\\AppFramework\\Http\\Attribute is loadable from the server checkout');
+		}
+		return $table;
+	}
+
+	/**
+	 * The attributes of a method or class, each by its canonical class name:
+	 * the OCP table first, then ReflectionClass::getName() of a loadable class,
+	 * so the spelling in the source never decides. Route attributes and the
+	 * harmless PHP attributes drop out. OCP attributes are described by their
+	 * short name, every other one by its full canonical name and is also listed
+	 * as foreign; a name that cannot be loaded is listed as unknown.
+	 *
+	 * @param list<\ReflectionAttribute<object>> $attributes
+	 * @return array{described: list<string>, foreign: list<string>, unknown: list<string>}
+	 */
+	private static function readAttributes(array $attributes): array {
+		$read = ['described' => [], 'foreign' => [], 'unknown' => []];
+		$harmless = array_map('strtolower', self::HARMLESS_ATTRIBUTES);
 		foreach ($attributes as $attribute) {
-			$name = $attribute->getName();
-			if (!str_starts_with($name, self::ATTRIBUTE_NAMESPACE) || is_a($name, Route::class, true)) {
+			$raw = ltrim($attribute->getName(), '\\');
+			$lower = strtolower($raw);
+			if (in_array($lower, $harmless, true)) {
 				continue;
 			}
-			$short = substr($name, strlen(self::ATTRIBUTE_NAMESPACE));
+			$ocp = self::ocpAttributes();
+			if (isset($ocp[$lower])) {
+				$name = $ocp[$lower];
+			} elseif (class_exists($raw)) {
+				$name = (new \ReflectionClass($raw))->getName();
+			} else {
+				$read['unknown'][] = $raw;
+				$read['described'][] = $raw;
+				continue;
+			}
+			if (is_a($name, Route::class, true)) {
+				continue;
+			}
+
+			$isOcp = str_starts_with($name, self::ATTRIBUTE_NAMESPACE);
+			$label = $isOcp ? substr($name, strlen(self::ATTRIBUTE_NAMESPACE)) : $name;
+			if (!$isOcp) {
+				$read['foreign'][] = $name;
+			}
 			$arguments = $attribute->getArguments();
 			if ($arguments === []) {
-				$described[] = $short;
+				$read['described'][] = $label;
 				continue;
 			}
 			$pairs = [];
@@ -530,9 +614,9 @@ final class RouteProfiles {
 				$pairs[(string)$key] = (string)$key . '=' . self::canonicalJson($value);
 			}
 			ksort($pairs, SORT_STRING);
-			$described[] = $short . '(' . implode(', ', $pairs) . ')';
+			$read['described'][] = $label . '(' . implode(', ', $pairs) . ')';
 		}
-		return $described;
+		return $read;
 	}
 
 	/**

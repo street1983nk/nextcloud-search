@@ -21,6 +21,7 @@ use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\Attribute\PublicPage;
 use OCP\AppFramework\Http\Attribute\Route;
 use OCP\AppFramework\Http\Attribute\UserRateLimit;
+use OCP\IRequest;
 
 require_once __DIR__ . '/Outside/BaseFixture.php';
 
@@ -29,10 +30,9 @@ require_once __DIR__ . '/Outside/BaseFixture.php';
 final class Foreign {
 }
 
-/** One plain route, one public method without a route, and two foreign attributes. */
+/** One plain route, one public method without a route, and a harmless PHP attribute. */
 final class PlainFixture {
 	#[NoAdminRequired]
-	#[Foreign]
 	#[\ReturnTypeWillChange]
 	#[FrontpageRoute(verb: 'GET', url: '/plain')]
 	public function route(): void {
@@ -233,5 +233,59 @@ final class StaticMagicFixture {
 final class BaseRouteFixture {
 	#[Route(Route::TYPE_API, verb: 'GET', url: '/base-route')]
 	public function index(): void {
+	}
+}
+
+/**
+ * Attribute names in another spelling (plan 42-05). PHP resolves class names
+ * case insensitively, so both act as PublicPage on the server.
+ */
+final class CaseFixture {
+	#[\ocp\appframework\http\attribute\PublicPage]
+	#[FrontpageRoute(verb: 'GET', url: '/lower-namespace')]
+	public function lowerNamespace(): void {
+	}
+
+	#[\OCP\AppFramework\Http\Attribute\publicpage]
+	#[FrontpageRoute(verb: 'GET', url: '/lower-short')]
+	public function lowerShortName(): void {
+	}
+}
+
+/** A foreign attribute, one that cannot be loaded, and a harmless PHP one. */
+final class ForeignAttributeFixture {
+	#[Foreign]
+	#[FrontpageRoute(verb: 'GET', url: '/foreign')]
+	public function foreign(): void {
+	}
+
+	#[\OCA\Findling\Tests\RouteSecurity\Fixture\DoesNotExist]
+	#[FrontpageRoute(verb: 'GET', url: '/missing')]
+	public function missing(): void {
+	}
+
+	#[\ReturnTypeWillChange]
+	#[FrontpageRoute(verb: 'GET', url: '/harmless')]
+	public function harmless(): void {
+	}
+}
+
+/**
+ * A rate limit that never applies: RateLimitingMiddleware takes subclasses of
+ * AnonRateLimit by IS_INSTANCEOF and asks shouldApply().
+ */
+#[\Attribute(\Attribute::TARGET_METHOD)]
+final class LooseLimit extends AnonRateLimit {
+	public function shouldApply(IRequest $request): bool {
+		return false;
+	}
+}
+
+/** PublicPage behind the loose limit. */
+final class LooseLimitFixture {
+	#[PublicPage]
+	#[LooseLimit(limit: 5, period: 60)]
+	#[FrontpageRoute(verb: 'GET', url: '/loose')]
+	public function open(): void {
 	}
 }
