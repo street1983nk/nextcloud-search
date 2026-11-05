@@ -707,7 +707,9 @@ def _locked(package: str) -> tuple[int, ...]:
 def test_s7_the_lock_keeps_starlette_above_the_badhost_floor() -> None:
     assert _locked("starlette") >= (1, 0, 1)
     assert 'constraints = [{ name = "starlette", specifier = ">=1.0.1" }]' in UV_LOCK.read_text(encoding="utf-8")
-    assert _locked("fastapi") == (0, 161, 1)
+    pinned = re.search(r'"fastapi==([0-9.]+)"', (BACKEND / "pyproject.toml").read_text(encoding="utf-8"))
+    assert pinned is not None
+    assert _locked("fastapi") == tuple(int(part) for part in pinned.group(1).split("."))
 
 
 # == B2 and B6 the counters next to the figures they are subtracted from ==============

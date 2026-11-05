@@ -446,7 +446,7 @@ list of distributed material.
 |---|---|---|---|---|
 | `python:3.13-slim-trixie` base image | digest `sha256:ffb752e1…c6e30a` | Debian base: mixed free licences, per package under `/usr/share/doc/*/copyright`; CPython: PSF-2.0 | docker-library/python | the image itself |
 | `nc-py-api[app]` | 0.30.3 | BSD-3-Clause | github.com/cloud-py-api/nc_py_api | `/app/.venv` |
-| `fastapi` | 0.161.1 | MIT | github.com/fastapi/fastapi | `/app/.venv` |
+| `fastapi` | 0.162.0 | MIT | github.com/fastapi/fastapi | `/app/.venv` |
 | `httpx` | 0.28.1 | BSD-3-Clause | github.com/encode/httpx | `/app/.venv` |
 | `frpc` | frp 0.61.1 | Apache-2.0 | fatedier/frp, fetched from the pinned commit of nextcloud/HaRP that vendors the byte identical tarball | `/usr/local/bin/frpc` |
 
