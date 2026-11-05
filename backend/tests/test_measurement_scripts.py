@@ -1175,8 +1175,13 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # tests/Unit/RouteSecurityTest.php changed their bytes, tests/route-security.json is not in this glob.
 # No file came or went, so PHP_FILES_TODAY stays at 117. Recomputed independently with find, sort, tr
 # and sha256sum over the CRLF normalised tree: 04f4443d... both ways.
-PHP_FILES_TODAY = 117
-PHP_TREE_HASH_TODAY = "04f4443dc4a94434c0cb9d4d612bbada3e7fc9890ddbbf06f267bf9210006434"
+# Moved on 2026-11-05 by Plan 42-08 (PHP gates, routes file tokens and app registrations): one file
+# came, tests/RouteSecurity/AppSurface.php, and tests/Unit/RouteSecurityTest.php changed its bytes;
+# the allowlist tests/app-surface.json is not in this glob. No file went, so PHP_FILES_TODAY moves to
+# 118. Recomputed independently with find, sort, tr and sha256sum over the CRLF normalised tree:
+# 2efff5b9... both ways.
+PHP_FILES_TODAY = 118
+PHP_TREE_HASH_TODAY = "2efff5b9516e27310612cd63ed618fd44d67336c28af0f2bf30a9431a9218c46"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

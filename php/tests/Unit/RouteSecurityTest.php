@@ -22,7 +22,10 @@ use OCA\Findling\Tests\RouteSecurity\Fixture\PublicFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\RateLimitFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\StaticMagicFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\VisibilityFixture;
+use OCA\Findling\Tests\RouteSecurity\AppSurface;
 use OCA\Findling\Tests\RouteSecurity\RouteProfiles;
+use OCP\AppFramework\Bootstrap\IBootContext;
+use OCP\AppFramework\Bootstrap\IRegistrationContext;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
 
@@ -545,5 +548,140 @@ final class RouteSecurityTest extends TestCase {
 			['R3 SettingsController::setPause: docblock annotation @publicpage'],
 			RouteProfiles::violations($annotated),
 		);
+	}
+
+	/**
+	 * routes.php runs inside a method of the router, so $this there is the
+	 * router; nothing but literal tokens may stand in it (plan 42-08).
+	 */
+	public function testAppinfoRoutesUsesOnlyLiteralTokens(): void {
+		$source = file_get_contents(dirname(__DIR__, 2) . '/appinfo/routes.php');
+		$this->assertIsString($source);
+
+		$this->assertSame([], AppSurface::routesFileFindings($source));
+	}
+
+	public function testARoutesFileThatTouchesTheRouterIsReported(): void {
+		$router = "<?php\n\ndeclare(strict_types=1);\n\n"
+			. "if (\$this instanceof \\OC\\Route\\Router) { \$this->create('findling_x', '/apps/findling/x')->actionInclude('x.php'); }\n\n"
+			. "return ['routes' => [], 'ocs' => []];\n";
+		$findings = AppSurface::routesFileFindings($router);
+		$this->assertContains('T_VARIABLE $this at line 5', $findings);
+		$this->assertContains('T_STRING create at line 5', $findings);
+		$this->assertContains('T_STRING actionInclude at line 5', $findings);
+
+		$this->assertContains('T_REQUIRE require at line 2', AppSurface::routesFileFindings("<?php\nrequire 'x.php';\nreturn [];\n"));
+		$this->assertContains('T_EVAL eval at line 2', AppSurface::routesFileFindings("<?php\neval('1;');\nreturn [];\n"));
+		$this->assertContains('T_STRING strtolower at line 2', AppSurface::routesFileFindings("<?php\nreturn [strtolower('x') => []];\n"));
+
+		$clean = "<?php\n\ndeclare(strict_types=1);\n\n/** Empty on purpose. */\nreturn [\n\t'routes' => [],\n\t'ocs' => [],\n\t'x' => [1, 'a' => 'b'],\n];\n";
+		$this->assertSame([], AppSurface::routesFileFindings($clean));
+	}
+
+	public function testNoSourceUnderLibTouchesTheRouterOrTheContainer(): void {
+		$lib = dirname(__DIR__, 2) . '/lib';
+		$files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($lib, \FilesystemIterator::SKIP_DOTS));
+		$findings = [];
+		$count = 0;
+		foreach ($files as $file) {
+			if (!$file instanceof \SplFileInfo || $file->getExtension() !== 'php') {
+				continue;
+			}
+			$source = file_get_contents($file->getPathname());
+			$this->assertIsString($source);
+			$relative = 'lib/' . str_replace('\\', '/', substr($file->getPathname(), strlen($lib) + 1));
+			$findings = array_merge($findings, AppSurface::sourceFindings($relative, $source));
+			$count++;
+		}
+		$this->assertGreaterThanOrEqual(65, $count);
+		$this->assertSame([], $findings, implode("\n", $findings));
+
+		$probes = [
+			"<?php\nuse OCP\\Route\\IRouter;\n" => 'x.php:2: OCP\\Route\\IRouter',
+			"<?php\n\$name = \\OC\\Route\\Router::class;\n" => 'x.php:2: \\OC\\Route\\Router',
+			"<?php\n\$context->registerServiceAlias('A', 'B');\n" => 'x.php:2: registerServiceAlias',
+			"<?php\n\$this->getContainer();\n" => 'x.php:2: getContainer',
+			"<?php\n\$context->registerMiddleware(X::class, true);\n" => 'x.php:2: registerMiddleware',
+		];
+		foreach ($probes as $source => $expected) {
+			$this->assertSame([$expected], AppSurface::sourceFindings('x.php', $source));
+		}
+		$this->assertSame([], AppSurface::sourceFindings('x.php', "<?php\n// IRouter in a comment\n\$a = 'getContainer';\n\$this->container;\n"));
+	}
+
+	public function testTheApplicationRegistersExactlyTheAllowlistedSurfaces(): void {
+		$allowed = AppSurface::loadRegistrations(dirname(__DIR__) . '/app-surface.json');
+		$recorded = $this->recordRegistrations();
+
+		$this->assertNotSame([], $recorded);
+		$findings = AppSurface::compareRegistrations($recorded, $allowed);
+		$this->assertSame([], $findings, implode("\n", $findings));
+		$this->assertSame([], $this->recordBoot());
+	}
+
+	public function testAnUnlistedOrMissingRegistrationIsReported(): void {
+		$allowed = AppSurface::loadRegistrations(dirname(__DIR__) . '/app-surface.json');
+		$recorded = $this->recordRegistrations();
+
+		$this->assertSame(
+			['unlisted registration registerMiddleware(X, true)'],
+			AppSurface::compareRegistrations([...$recorded, 'registerMiddleware(X, true)'], $allowed),
+		);
+		$last = array_pop($recorded);
+		$this->assertIsString($last);
+		$this->assertSame(['missing registration ' . $last], AppSurface::compareRegistrations($recorded, $allowed));
+	}
+
+	/**
+	 * Application::register() against a stub of IRegistrationContext whose
+	 * every method, as the interface of the server checkout lists them, records
+	 * its call.
+	 *
+	 * @return list<string>
+	 */
+	private function recordRegistrations(): array {
+		$calls = [];
+		$context = $this->createStub(IRegistrationContext::class);
+		$this->recordEveryMethod($context, IRegistrationContext::class, $calls);
+		AppSurface::register($context);
+		return $calls;
+	}
+
+	/** @return list<string> */
+	private function recordBoot(): array {
+		$calls = [];
+		$context = $this->createStub(IBootContext::class);
+		$this->recordEveryMethod($context, IBootContext::class, $calls);
+		AppSurface::boot($context);
+		return $calls;
+	}
+
+	/**
+	 * @param class-string $interface
+	 * @param list<string> $calls
+	 */
+	private function recordEveryMethod(\PHPUnit\Framework\MockObject\Stub $stub, string $interface, array &$calls): void {
+		foreach ((new \ReflectionClass($interface))->getMethods() as $method) {
+			$name = $method->getName();
+			$type = $method->getReturnType();
+			$stub->method($name)->willReturnCallback(function (mixed ...$arguments) use (&$calls, $name, $type): mixed {
+				$calls[] = AppSurface::describeCall($name, $arguments);
+				if (!$type instanceof \ReflectionNamedType || $type->allowsNull() || $type->getName() === 'void') {
+					return null;
+				}
+				if (!$type->isBuiltin()) {
+					/** @var class-string $class */
+					$class = $type->getName();
+					return $this->createStub($class);
+				}
+				return match ($type->getName()) {
+					'array' => [],
+					'string' => '',
+					'int' => 0,
+					'bool' => false,
+					default => null,
+				};
+			});
+		}
 	}
 }

@@ -22,12 +22,15 @@ removes what it guards is no gate, so each piece is checked here:
    plan 42-07 an object "classes" with one entry per controller file, each
    with ``"final": true``.
 4. The JUnit step of php.yml exists, takes the file and the floor only from its
-   env, keeps the floor at 34 or above, equal to the number of test methods,
+   env, keeps the floor at 39 or above, equal to the number of test methods,
    and runs exactly one ``php -r`` expression without a fixed file name and
    without a single quote. Since plan 42-04 the floor of php.yml, MIN_FLOOR
    below and the count of ``public function test`` lines in
    RouteSecurityTest.php move in lockstep, so a plan that adds a test cannot
    forget the floor, and a floor cannot run ahead of the tests.
+5. Since plan 42-08 the registration allowlist php/tests/app-surface.json is
+   valid JSON with a non empty list of strings, and its helper
+   php/tests/RouteSecurity/AppSurface.php exists.
 
 **The limit.** This reads text and YAML. Whether the PHP expression is correct
 is proven by running it, which plan 42-02 did locally and php.yml does on
@@ -50,11 +53,13 @@ ALLOWLIST = PHP_ROOT / "tests" / "route-security.json"
 PHPUNIT_XML = PHP_ROOT / "phpunit.xml"
 CONTROLLER_ROOT = PHP_ROOT / "lib" / "Controller"
 PHP_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "php.yml"
+APP_SURFACE = PHP_ROOT / "tests" / "app-surface.json"
+APP_SURFACE_HELPER = PHP_ROOT / "tests" / "RouteSecurity" / "AppSurface.php"
 
 CLASS_LINE = "final class RouteSecurityTest extends TestCase"
 SUITE_NAME = "OCA\\Findling\\Tests\\Unit\\RouteSecurityTest"
 STEP_NAME = "The route attribute gate ran"
-MIN_FLOOR = 34
+MIN_FLOOR = 39
 
 SKIP_MARKERS = (
     "markTestSkipped",
@@ -133,6 +138,20 @@ def scan_allowlist(text: str, route_count: int, controller_count: int | None = N
     return findings
 
 
+def scan_app_surface(text: str) -> list[str]:
+    """Findings about app-surface.json: valid JSON with a non empty list of strings."""
+    try:
+        data: Any = json.loads(text)
+    except json.JSONDecodeError as error:
+        return [f"app-surface.json is not valid JSON: {error}"]
+    registrations = data.get("registrations") if isinstance(data, dict) else None
+    if not isinstance(registrations, list) or not registrations:
+        return ["app-surface.json has no non empty registrations list"]
+    if not all(isinstance(entry, str) for entry in registrations):
+        return ["app-surface.json has a registration that is not a string"]
+    return []
+
+
 def _gate_step(workflow: Any) -> dict[str, Any] | None:
     jobs = workflow.get("jobs") if isinstance(workflow, dict) else None
     job = jobs.get("phpunit") if isinstance(jobs, dict) else None
@@ -205,6 +224,23 @@ def test_the_allowlist_has_one_entry_per_route() -> None:
     controller_count = len(list(CONTROLLER_ROOT.glob("*Controller.php")))
     assert controller_count == 7  # plan 42-07: seven controllers, all final, on 2026-11-05
     assert scan_allowlist(ALLOWLIST.read_text(encoding="utf-8"), route_count, controller_count) == []
+
+
+def test_the_app_surface_allowlist_exists() -> None:
+    assert APP_SURFACE_HELPER.is_file(), APP_SURFACE_HELPER
+    assert scan_app_surface(APP_SURFACE.read_text(encoding="utf-8")) == []
+
+
+def test_an_empty_app_surface_list_is_reported() -> None:
+    assert scan_app_surface(json.dumps({"registrations": ["registerSearchProvider(A)"]})) == []
+    assert scan_app_surface(json.dumps({"registrations": []})) == [
+        "app-surface.json has no non empty registrations list"
+    ]
+    assert scan_app_surface(json.dumps({"_comment": ["x"]})) == ["app-surface.json has no non empty registrations list"]
+    assert scan_app_surface(json.dumps({"registrations": [1]})) == [
+        "app-surface.json has a registration that is not a string"
+    ]
+    assert scan_app_surface("{")[0].startswith("app-surface.json is not valid JSON")
 
 
 def test_php_yml_proves_the_gate_ran() -> None:
