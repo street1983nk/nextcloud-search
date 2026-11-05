@@ -399,7 +399,8 @@ final class RouteProfiles {
 	 * stable33 to 35 read only method attributes, so a class attribute counts
 	 * for no route and only pretends a protection. R5: a controller with
 	 * __call or __callStatic of its own would let the dispatcher reach methods
-	 * no route attribute names.
+	 * no route attribute names. C1 (plan 42-07): a controller is final, so no
+	 * subclass can take its place through the container.
 	 *
 	 * @param class-string $class
 	 * @return list<string>
@@ -412,6 +413,9 @@ final class RouteProfiles {
 		foreach (array_merge($read['described'], $read['routes']) as $described) {
 			$name = explode('(', $described, 2)[0];
 			$violations[] = "R4 {$short}: class attribute {$name} has no effect on routes";
+		}
+		if (!$reflection->isFinal()) {
+			$violations[] = "C1 {$short}: controller is not final";
 		}
 		foreach (['__call', '__callStatic'] as $magic) {
 			if ($reflection->hasMethod($magic)
@@ -434,6 +438,155 @@ final class RouteProfiles {
 		}
 		sort($violations, SORT_STRING);
 		return $violations;
+	}
+
+	/**
+	 * Every class of a directory, one class per *.php file, sorted; for
+	 * directories that are not enumerated by the router, such as lib/Settings.
+	 * A file whose class cannot be loaded is an error.
+	 *
+	 * @return list<class-string>
+	 */
+	public static function classesOf(string $dir, string $namespace): array {
+		$files = glob(rtrim($dir, '/') . '/*.php');
+		if ($files === false || $files === []) {
+			throw new \RuntimeException("no PHP file in {$dir}");
+		}
+		sort($files, SORT_STRING);
+		$classes = [];
+		foreach ($files as $file) {
+			$class = rtrim($namespace, '\\') . '\\' . basename($file, '.php');
+			if (!class_exists($class)) {
+				throw new \RuntimeException("{$file} does not declare the class {$class}");
+			}
+			$classes[] = $class;
+		}
+		return $classes;
+	}
+
+	/**
+	 * The class profile of each controller (plan 42-07), keyed by short name:
+	 * whether it is final, its parent chain up to the root, the traits of the
+	 * class and of every parent, and its interfaces, each by canonical name.
+	 *
+	 * @param list<class-string> $classes
+	 * @return array<string, array{final: bool, parents: list<string>, traits: list<string>, interfaces: list<string>}>
+	 */
+	public static function classProfiles(array $classes): array {
+		$profiles = [];
+		foreach ($classes as $class) {
+			$reflection = new \ReflectionClass($class);
+			$parents = [];
+			$traits = $reflection->getTraitNames();
+			for ($parent = $reflection->getParentClass(); $parent !== false; $parent = $parent->getParentClass()) {
+				$parents[] = $parent->getName();
+				$traits = array_merge($traits, $parent->getTraitNames());
+			}
+			$interfaces = $reflection->getInterfaceNames();
+			$short = $reflection->getShortName();
+			if (isset($profiles[$short])) {
+				throw new \RuntimeException("the class {$short} exists twice");
+			}
+			$profiles[$short] = [
+				'final' => $reflection->isFinal(),
+				'parents' => $parents,
+				'traits' => self::sortedUnique($traits),
+				'interfaces' => self::sortedUnique($interfaces),
+			];
+		}
+		ksort($profiles, SORT_STRING);
+		return $profiles;
+	}
+
+	/**
+	 * Class profiles against the "classes" allowlist: unlisted, changed and
+	 * stale, sorted.
+	 *
+	 * @param array<string, array<string, mixed>> $actual
+	 * @param array<string, array<string, mixed>> $allowed
+	 * @return list<string>
+	 */
+	public static function compareClasses(array $actual, array $allowed): array {
+		$findings = [];
+		foreach ($actual as $short => $profile) {
+			if (!array_key_exists($short, $allowed)) {
+				$findings[] = "unlisted class {$short}";
+				continue;
+			}
+			$expected = self::canonicalJson($allowed[$short]);
+			$found = self::canonicalJson($profile);
+			if ($expected !== $found) {
+				$findings[] = "changed class {$short}: expected {$expected}, actual {$found}";
+			}
+		}
+		foreach (array_keys($allowed) as $short) {
+			if (!array_key_exists($short, $actual)) {
+				$findings[] = "stale class entry {$short}";
+			}
+		}
+		sort($findings, SORT_STRING);
+		return $findings;
+	}
+
+	/**
+	 * The "classes" object of the allowlist file. Missing or malformed is an
+	 * error, never an empty allowlist.
+	 *
+	 * @return array<string, array{final: bool, parents: list<string>, traits: list<string>, interfaces: list<string>}>
+	 */
+	public static function loadClassAllowlist(string $path): array {
+		$raw = file_get_contents($path);
+		if ($raw === false) {
+			throw new \RuntimeException("{$path} is not readable");
+		}
+		$data = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+		if (!is_array($data) || !isset($data['classes']) || !is_array($data['classes']) || $data['classes'] === []) {
+			throw new \RuntimeException("{$path} has no classes object");
+		}
+		$classes = [];
+		foreach ($data['classes'] as $short => $entry) {
+			if (!is_string($short) || !is_array($entry) || !isset($entry['final'], $entry['parents'], $entry['traits'], $entry['interfaces'])
+				|| !is_bool($entry['final'])) {
+				throw new \RuntimeException("{$path}: the class entry {$short} is malformed");
+			}
+			$lists = [];
+			foreach (['parents', 'traits', 'interfaces'] as $field) {
+				if (!is_array($entry[$field]) || !array_is_list($entry[$field])) {
+					throw new \RuntimeException("{$path}: {$field} of the class entry {$short} is not a list");
+				}
+				foreach ($entry[$field] as $value) {
+					if (!is_string($value)) {
+						throw new \RuntimeException("{$path}: {$field} of the class entry {$short} has a non string value");
+					}
+				}
+				$lists[$field] = $entry[$field];
+			}
+			$classes[$short] = [
+				'final' => $entry['final'],
+				'parents' => $lists['parents'],
+				'traits' => $lists['traits'],
+				'interfaces' => $lists['interfaces'],
+			];
+		}
+		return $classes;
+	}
+
+	/**
+	 * C3: no admin setting may be delegable to a non admin.
+	 *
+	 * @param list<class-string> $classes
+	 * @return list<string>
+	 */
+	public static function delegatedSettings(array $classes): array {
+		$findings = [];
+		foreach ($classes as $class) {
+			$reflection = new \ReflectionClass($class);
+			if ($reflection->implementsInterface('OCP\\Settings\\IDelegatedSettings')) {
+				$findings[] = "C3 {$reflection->getShortName()}: implements IDelegatedSettings";
+			}
+		}
+		sort($findings, SORT_STRING);
+		return $findings;
 	}
 
 	/**

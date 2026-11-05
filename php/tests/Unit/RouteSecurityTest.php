@@ -10,11 +10,13 @@ use OCA\Findling\Tests\RouteSecurity\Fixture\CaseFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\ClassLevelFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\ClassRateLimitFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\CsrfFixture;
+use OCA\Findling\Tests\RouteSecurity\Fixture\DelegatedFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\ExtrasFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\ForeignAttributeFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\InheritedFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\LooseLimitFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\LooseningFixture;
+use OCA\Findling\Tests\RouteSecurity\Fixture\OpenFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\PlainFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\PublicFixture;
 use OCA\Findling\Tests\RouteSecurity\Fixture\RateLimitFixture;
@@ -413,6 +415,38 @@ final class RouteSecurityTest extends TestCase {
 		$this->assertSame([], RouteProfiles::strayEntries(self::controllerDir()));
 	}
 
+	public function testANonFinalControllerIsReported(): void {
+		$this->assertSame(['C1 OpenFixture: controller is not final'], RouteProfiles::classViolations(OpenFixture::class));
+	}
+
+	public function testAChangedBaseClassIsReported(): void {
+		$profiles = RouteProfiles::classProfiles([PlainFixture::class]);
+		$exact = ['PlainFixture' => ['final' => true, 'parents' => [], 'traits' => [], 'interfaces' => []]];
+		$this->assertSame([], RouteProfiles::compareClasses($profiles, $exact));
+
+		$based = $exact;
+		$based['PlainFixture']['parents'] = ['OCP\\AppFramework\\Controller'];
+		$changed = RouteProfiles::compareClasses($profiles, $based);
+		$this->assertCount(1, $changed);
+		$this->assertStringStartsWith('changed class PlainFixture: expected ', $changed[0]);
+		$this->assertStringContainsString('OCP\\\\AppFramework\\\\Controller', $changed[0]);
+
+		$this->assertSame(['unlisted class PlainFixture'], RouteProfiles::compareClasses($profiles, []));
+		$extra = $exact;
+		$extra['GoneFixture'] = ['final' => true, 'parents' => [], 'traits' => [], 'interfaces' => []];
+		$this->assertSame(['stale class entry GoneFixture'], RouteProfiles::compareClasses($profiles, $extra));
+	}
+
+	public function testNoSettingsClassIsDelegated(): void {
+		$settings = RouteProfiles::classesOf(dirname(__DIR__, 2) . '/lib/Settings', 'OCA\\Findling\\Settings');
+		$this->assertGreaterThanOrEqual(2, count($settings));
+		$this->assertSame([], RouteProfiles::delegatedSettings($settings));
+		$this->assertSame(
+			['C3 DelegatedFixture: implements IDelegatedSettings'],
+			RouteProfiles::delegatedSettings([DelegatedFixture::class]),
+		);
+	}
+
 	private static function controllerDir(): string {
 		return dirname(__DIR__, 2) . '/lib/Controller';
 	}
@@ -457,6 +491,24 @@ final class RouteSecurityTest extends TestCase {
 		$this->assertCount(7, $classes);
 		$this->assertGreaterThanOrEqual(20, count(self::realProfiles()));
 		$this->assertSame([], RouteProfiles::strayEntries(self::controllerDir()));
+	}
+
+	/** Owner decision of 04.11.2026: every controller is final, so no subclass can take its place. */
+	public function testEveryControllerIsFinal(): void {
+		foreach (RouteProfiles::classesIn(self::controllerDir(), 'OCA\\Findling\\Controller') as $class) {
+			$this->assertTrue((new \ReflectionClass($class))->isFinal(), "{$class} is not final");
+		}
+		$this->assertSame([], RouteProfiles::classViolationsOfDirectory(self::controllerDir(), 'OCA\\Findling\\Controller'));
+	}
+
+	/** A change of base class, a new trait or interface of a controller is a visible line in the allowlist. */
+	public function testTheParentChainAndTraitsMatchTheAllowlist(): void {
+		$classes = RouteProfiles::classesIn(self::controllerDir(), 'OCA\\Findling\\Controller');
+		$allowed = RouteProfiles::loadClassAllowlist(dirname(__DIR__) . '/route-security.json');
+
+		$this->assertCount(7, $allowed);
+		$findings = RouteProfiles::compareClasses(RouteProfiles::classProfiles($classes), $allowed);
+		$this->assertSame([], $findings, implode("\n", $findings));
 	}
 
 	/** A route declared in appinfo/routes.php would bypass this gate entirely. */

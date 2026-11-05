@@ -30,7 +30,9 @@ use OCP\AppFramework\Http\Attribute\Route;
 use OCP\AppFramework\Http\Attribute\SubAdminRequired;
 use OCP\AppFramework\Http\Attribute\UseSession;
 use OCP\AppFramework\Http\Attribute\UserRateLimit;
+use OCP\AppFramework\Http\TemplateResponse;
 use OCP\IRequest;
+use OCP\Settings\IDelegatedSettings;
 
 require_once __DIR__ . '/Outside/BaseFixture.php';
 
@@ -386,5 +388,39 @@ final class LooseningFixture {
 	#[AnonRateLimit(limit: 5, period: 60)]
 	#[FrontpageRoute(verb: 'GET', url: '/public-exapp')]
 	public function publicExApp(): void {
+	}
+}
+
+/**
+ * A controller that is not final (plan 42-07): a subclass could replace it
+ * through the container under its short name and change every route behind
+ * the pinned attributes.
+ */
+class OpenFixture {
+	#[FrontpageRoute(verb: 'GET', url: '/open-class')]
+	public function index(): void {
+	}
+}
+
+/** An admin setting whose form a delegated non admin could open (C3). */
+final class DelegatedFixture implements IDelegatedSettings {
+	public function getForm(): TemplateResponse {
+		return new TemplateResponse('findling', 'admin');
+	}
+
+	public function getSection(): ?string {
+		return 'findling';
+	}
+
+	public function getPriority(): int {
+		return 0;
+	}
+
+	public function getName(): ?string {
+		return null;
+	}
+
+	public function getAuthorizedAppConfig(): array {
+		return [];
 	}
 }

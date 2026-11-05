@@ -56,7 +56,7 @@ use Psr\Log\LoggerInterface;
  * exemption is not a weakening: the credential on these routes is the signed
  * AppAPI header and no session is involved that a token could protect.
  */
-class ReconcileController extends OCSController {
+final class ReconcileController extends OCSController {
 	/**
 	 * Rows per page. Five hundred is the slice size the reconcile of plan 03-12
 	 * walks with; it is small enough that one page stays a cheap query at midday

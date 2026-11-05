@@ -1168,8 +1168,15 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # tests/Unit/RouteSecurityTest.php changed their bytes. No file came or went, so PHP_FILES_TODAY stays
 # at 117. Recomputed independently with find, sort, tr and sha256sum over the CRLF normalised tree:
 # ca8905b5... both ways.
+# Moved on 2026-11-05 by Plan 42-07 (PHP gates, controller classes pinned; owner decision of
+# 2026-11-04, "final setzen"): lib/Controller/GatewayController.php, ProfileController.php,
+# QueueController.php and ReconcileController.php become final, one line each and no behaviour change;
+# tests/RouteSecurity/RouteProfiles.php, tests/RouteSecurity/Fixtures.php and
+# tests/Unit/RouteSecurityTest.php changed their bytes, tests/route-security.json is not in this glob.
+# No file came or went, so PHP_FILES_TODAY stays at 117. Recomputed independently with find, sort, tr
+# and sha256sum over the CRLF normalised tree: 04f4443d... both ways.
 PHP_FILES_TODAY = 117
-PHP_TREE_HASH_TODAY = "ca8905b5d21990a71e025634717b1eb8c1edbf7b3684f09f4f41205ef2632217"
+PHP_TREE_HASH_TODAY = "04f4443dc4a94434c0cb9d4d612bbada3e7fc9890ddbbf06f267bf9210006434"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

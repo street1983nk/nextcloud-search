@@ -18,9 +18,11 @@ removes what it guards is no gate, so each piece is checked here:
    no abstract class, no Requires attribute in short or fully qualified form and
    no ``@requires`` annotation, which PHPUnit 11 still evaluates.
 3. The allowlist is valid JSON and has as many entries under "routes" as the
-   controllers have fully qualified ApiRoute and FrontpageRoute lines.
+   controllers have fully qualified ApiRoute and FrontpageRoute lines, and since
+   plan 42-07 an object "classes" with one entry per controller file, each
+   with ``"final": true``.
 4. The JUnit step of php.yml exists, takes the file and the floor only from its
-   env, keeps the floor at 29 or above, equal to the number of test methods,
+   env, keeps the floor at 34 or above, equal to the number of test methods,
    and runs exactly one ``php -r`` expression without a fixed file name and
    without a single quote. Since plan 42-04 the floor of php.yml, MIN_FLOOR
    below and the count of ``public function test`` lines in
@@ -52,7 +54,7 @@ PHP_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "php.yml"
 CLASS_LINE = "final class RouteSecurityTest extends TestCase"
 SUITE_NAME = "OCA\\Findling\\Tests\\Unit\\RouteSecurityTest"
 STEP_NAME = "The route attribute gate ran"
-MIN_FLOOR = 29
+MIN_FLOOR = 34
 
 SKIP_MARKERS = (
     "markTestSkipped",
@@ -98,8 +100,12 @@ def count_route_lines(sources: list[str]) -> int:
     return sum(len(_ROUTE_LINE.findall(source)) for source in sources)
 
 
-def scan_allowlist(text: str, route_count: int) -> list[str]:
-    """Findings about route-security.json against the number of route lines."""
+def scan_allowlist(text: str, route_count: int, controller_count: int | None = None) -> list[str]:
+    """Findings about route-security.json against the number of route lines.
+
+    With controller_count, the object "classes" has to hold exactly that many
+    entries, each of them with ``"final": true``.
+    """
     try:
         data: Any = json.loads(text)
     except json.JSONDecodeError as error:
@@ -109,7 +115,22 @@ def scan_allowlist(text: str, route_count: int) -> list[str]:
         return ["route-security.json has no routes object"]
     if len(routes) != route_count:
         return [f"route-security.json has {len(routes)} entries, the controllers declare {route_count} routes"]
-    return []
+    if controller_count is None:
+        return []
+    classes = data.get("classes")
+    if not isinstance(classes, dict):
+        return ["route-security.json has no classes object"]
+    findings: list[str] = []
+    if len(classes) != controller_count:
+        findings.append(
+            f"route-security.json has {len(classes)} class entries, lib/Controller has {controller_count} controllers"
+        )
+    findings.extend(
+        f"the class entry {name} is not final"
+        for name, entry in sorted(classes.items())
+        if not isinstance(entry, dict) or entry.get("final") is not True
+    )
+    return findings
 
 
 def _gate_step(workflow: Any) -> dict[str, Any] | None:
@@ -181,7 +202,9 @@ def test_the_allowlist_has_one_entry_per_route() -> None:
     sources = [path.read_text(encoding="utf-8") for path in sorted(CONTROLLER_ROOT.glob("*.php"))]
     route_count = count_route_lines(sources)
     assert route_count >= 20  # plan 42-02: twenty routes in seven controllers on 2026-11-04
-    assert scan_allowlist(ALLOWLIST.read_text(encoding="utf-8"), route_count) == []
+    controller_count = len(list(CONTROLLER_ROOT.glob("*Controller.php")))
+    assert controller_count == 7  # plan 42-07: seven controllers, all final, on 2026-11-05
+    assert scan_allowlist(ALLOWLIST.read_text(encoding="utf-8"), route_count, controller_count) == []
 
 
 def test_php_yml_proves_the_gate_ran() -> None:
@@ -272,6 +295,40 @@ def test_a_wrong_entry_count_is_reported() -> None:
     findings = scan_allowlist(text, 2)
     assert len(findings) == 1
     assert "1 entries" in findings[0]
+
+
+def _with_classes(count: int, *, final: bool = True) -> str:
+    classes = {
+        f"C{index}Controller": {"final": final, "parents": [], "traits": [], "interfaces": []} for index in range(count)
+    }
+    return json.dumps({"routes": {"A::b": {"route": "r", "attributes": []}}, "classes": classes})
+
+
+def test_a_complete_class_allowlist_is_clean() -> None:
+    assert scan_allowlist(_with_classes(2), 1, 2) == []
+
+
+def test_a_missing_class_entry_is_reported() -> None:
+    findings = scan_allowlist(_with_classes(1), 1, 2)
+    assert findings == ["route-security.json has 1 class entries, lib/Controller has 2 controllers"]
+
+
+def test_an_extra_class_entry_is_reported() -> None:
+    findings = scan_allowlist(_with_classes(3), 1, 2)
+    assert findings == ["route-security.json has 3 class entries, lib/Controller has 2 controllers"]
+
+
+def test_a_class_entry_that_is_not_final_is_reported() -> None:
+    findings = scan_allowlist(_with_classes(2, final=False), 1, 2)
+    assert findings == [
+        "the class entry C0Controller is not final",
+        "the class entry C1Controller is not final",
+    ]
+
+
+def test_a_missing_classes_object_is_reported() -> None:
+    text = json.dumps({"routes": {"A::b": {"route": "r", "attributes": []}}})
+    assert scan_allowlist(text, 1, 2) == ["route-security.json has no classes object"]
 
 
 def test_invalid_json_is_reported() -> None:
