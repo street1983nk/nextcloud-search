@@ -57,6 +57,10 @@
 			"route": "ApiRoute POST /queues/documents/unlock",
 			"attributes": ["ExAppRequired", "NoCSRFRequired"]
 		},
+		"ReconcileController::docKeys": {
+			"route": "ApiRoute GET /reconcile/doc-keys",
+			"attributes": ["ExAppRequired", "NoCSRFRequired"]
+		},
 		"ReconcileController::filesSlice": {
 			"route": "ApiRoute GET /files/slice",
 			"attributes": ["ExAppRequired", "NoCSRFRequired"]

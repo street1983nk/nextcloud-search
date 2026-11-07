@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\Findling\Controller;
 
 use OCA\Findling\AppInfo\Application;
+use OCA\Findling\Service\DocKeyService;
 use OCA\Findling\Service\ExclusionService;
 use OCA\Findling\Service\FileStateService;
 use OCA\Findling\Service\StorageService;
@@ -18,9 +19,12 @@ use Psr\Log\LoggerInterface;
  * What Nextcloud really has, so that the container can compare it against what
  * it indexed.
  *
- * Three routes, all reading, and that is the whole class. The third one, the
+ * Four routes, all reading, and that is the whole class. The third one, the
  * storage question of plan 36-03, answers which storages the container no longer
- * finds in the mount list are deleted or only switched off. The comparison itself
+ * finds in the mount list are deleted or only switched off. The fourth, the
+ * document key route of plan 43-15, hands out a sha256 key of the internal
+ * path per file id, so the container counts a document of a shared storage
+ * once and never learns the path (D-43-14). The comparison itself
  * runs in the container (plan 03-12), because findling_file_state holds no
  * indexed rows at all: phase 2 records failures and skips there and nothing
  * else, so this side cannot form "in the index, but no longer on disk" without
@@ -98,12 +102,24 @@ final class ReconcileController extends OCSController {
 	 */
 	private const MAX_STORAGE_IDS = 256;
 
+	/**
+	 * File ids per question of the document key route (plan 43-15, D-43-14).
+	 *
+	 * Has to stay identical to DOC_KEY_BAND in backend/src/findling/nc/files.py
+	 * (plan 43-16), the band the backfill of the container asks in. A longer
+	 * list is refused before any lookup and not clamped: the container checks
+	 * every asked id against the answer, and a clamped answer would read as an
+	 * incomplete one (W8).
+	 */
+	public const DOC_KEY_BAND = 200;
+
 	public function __construct(
 		IRequest $request,
 		private StorageService $storageService,
 		private FileStateService $fileStateService,
 		private ExclusionService $exclusionService,
 		private LoggerInterface $logger,
+		private DocKeyService $docKeyService,
 	) {
 		parent::__construct(Application::APP_ID, $request);
 	}
@@ -198,6 +214,67 @@ final class ReconcileController extends OCSController {
 		]);
 
 		return new DataResponse(['gone' => $answer['gone'], 'deselected' => $answer['deselected']]);
+	}
+
+	/**
+	 * GET /ocs/v2.php/apps/findling/reconcile/doc-keys?ids=1,2,3
+	 *
+	 * Answers with {"keys": {"<fileId>": "<64 hex>"}, "absent": [<fileId>]} for
+	 * at most DOC_KEY_BAND file ids (plan 43-15, D-43-14). It is the backfill
+	 * half of the document key: jobs carry the key from 1.6.3 on, and the rows
+	 * the container indexed before ask for it here, band by band (plan 43-16).
+	 * The key comes out of DocKeyService::docKeysFor, the same method the jobs
+	 * use, so a job and the backfill cannot disagree about a file.
+	 *
+	 * Every asked id stands in exactly one of the two lists (W8). absent means
+	 * "no row in the file cache, or a row in a trash bin", and nothing else; an
+	 * id that is in neither list would be a defect, and the container treats
+	 * such an answer as unavailable instead of guessing.
+	 *
+	 * The ids come as one comma separated value or as ids[]=, the form of the
+	 * storage route; both are validated the same way, canonical positive
+	 * integers only, and a malformed or too long list is refused with 400
+	 * before the file cache is asked (T-43-48). Only ids and hex values leave
+	 * this method, and the log carries counters (T-43-46). A companion of an
+	 * older release answers 404 here, which the container reads as "too old,
+	 * wait" (W3).
+	 */
+	#[\OCP\AppFramework\Http\Attribute\ExAppRequired]
+	#[\OCP\AppFramework\Http\Attribute\NoCSRFRequired]
+	#[\OCP\AppFramework\Http\Attribute\ApiRoute(verb: 'GET', url: '/reconcile/doc-keys')]
+	public function docKeys(): DataResponse {
+		$foreign = $this->rejectForeignCaller();
+		if ($foreign !== null) {
+			return $foreign;
+		}
+
+		$ids = $this->fileIdList($this->request->getParam('ids', ''));
+		if ($ids === null) {
+			return $this->badFileList();
+		}
+
+		try {
+			$answer = $this->docKeyService->docKeysFor($ids);
+		} catch (\Throwable $e) {
+			// Same rule as in mounts(): no library message in the log.
+			$this->logger->error('Findling: could not read the document keys', ['exception' => $e]);
+			return new DataResponse(['error' => 'Document keys are not available.'], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+
+		// Keyed by file id; ids are positive, so the map never reads as a list.
+		$keys = $answer['keys'];
+
+		$this->logger->debug('Findling: handed out document keys', [
+			'asked' => count($ids),
+			'keys' => count($keys),
+			'absent' => count($answer['absent']),
+		]);
+
+		// An object even when it is empty, so the container always reads a map.
+		return new DataResponse([
+			'keys' => $keys === [] ? new \stdClass() : $keys,
+			'absent' => array_values($answer['absent']),
+		]);
 	}
 
 	/**
@@ -486,6 +563,71 @@ final class ReconcileController extends OCSController {
 		}
 
 		return array_keys($ids);
+	}
+
+	/**
+	 * The ids of the document key route as a list of positive integers, or null.
+	 *
+	 * One comma separated value ("12,13") or a list (ids[]=12&ids[]=13), at
+	 * most DOC_KEY_BAND distinct entries, at least one. Every entry in the
+	 * canonical form of storageIdList (L-36-02): an int, or a string of digits
+	 * that reads back as itself, positive. A doubled id is asked once. The
+	 * whole list is refused on the first entry that is not, because a partial
+	 * answer would read as incomplete on the other side.
+	 *
+	 * The raw length is bounded before it is split, so an oversized value costs
+	 * no more than one strlen.
+	 *
+	 * @return list<int>|null
+	 */
+	private function fileIdList(mixed $raw): ?array {
+		if (is_string($raw)) {
+			// Twenty characters per id and a comma, generous for any real id.
+			if ($raw === '' || strlen($raw) > self::DOC_KEY_BAND * 21) {
+				return null;
+			}
+			$raw = explode(',', $raw);
+		}
+
+		if (!is_array($raw) || $raw === [] || count($raw) > self::DOC_KEY_BAND) {
+			return null;
+		}
+
+		$ids = [];
+		foreach ($raw as $value) {
+			if (is_int($value)) {
+				$id = $value;
+			} elseif (is_string($value) && ctype_digit($value)) {
+				$id = (int)$value;
+				if ((string)$id !== $value) {
+					return null;
+				}
+			} else {
+				return null;
+			}
+
+			if ($id <= 0) {
+				return null;
+			}
+
+			$ids[$id] = true;
+		}
+
+		return array_keys($ids);
+	}
+
+	/**
+	 * A document key question that is not a list of file ids, refused before
+	 * the file cache is asked. The values are not logged, for the same reason
+	 * as in badMount().
+	 */
+	private function badFileList(): DataResponse {
+		$this->logger->warning('Findling: rejected a document key question without a usable id list');
+
+		return new DataResponse(
+			['error' => 'File id list is not valid.'],
+			Http::STATUS_BAD_REQUEST,
+		);
 	}
 
 	/**

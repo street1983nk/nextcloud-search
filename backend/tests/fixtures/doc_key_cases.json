@@ -1,0 +1,92 @@
+{
+	"_comment": [
+		"The shared catalogue of the document key (plan 43-15, D-43-14): an internal path out of oc_filecache.path and the key both sides must derive from it.",
+		"The key is sha256 hex over the path in Unicode normalisation form C with every leading slash removed, otherwise unchanged: no lower casing, and the prefix files/ is NOT cut (W2), because home storages are never grouped and an external path that starts with files/ must stay apart from the same path without it.",
+		"Every expected value was computed by hand with the command in its derivation field, never with the code under test. A path with a decomposed character is hashed in its composed form, so its derivation names the composed spelling.",
+		"php/tests/Unit/DocKeyServiceTest.php reads this file and so does the verify of plan 43-15 in Python; the container of plan 43-16 never hashes a path itself, it only stores the key it is handed."
+	],
+	"cases": [
+		{
+			"name": "home storage keeps its files/ prefix",
+			"path": "files/Projekte/Vertrag.pdf",
+			"expected": "a343ef55c05956adb3b29b9f0770d0bafefa75bfc7b2fb4013203f940abc07a3",
+			"derivation": "printf '%s' 'files/Projekte/Vertrag.pdf' | sha256sum"
+		},
+		{
+			"name": "a leading slash is removed and nothing else",
+			"path": "/files/Projekte/Vertrag.pdf",
+			"expected": "a343ef55c05956adb3b29b9f0770d0bafefa75bfc7b2fb4013203f940abc07a3",
+			"derivation": "printf '%s' 'files/Projekte/Vertrag.pdf' | sha256sum"
+		},
+		{
+			"name": "external storage path",
+			"path": "Buchhaltung/2026/Rechnung.pdf",
+			"expected": "e187a20ecee6523b11205a095534cdda959bf6a0b4fcacc0564b8c1cb5d8c359",
+			"derivation": "printf '%s' 'Buchhaltung/2026/Rechnung.pdf' | sha256sum"
+		},
+		{
+			"name": "external path that starts with files/",
+			"path": "files/Rechnung.pdf",
+			"expected": "549cfe7bb97ed96f67d4a0b30be0b899472d06538dc3e639553c39ea2709a468",
+			"derivation": "printf '%s' 'files/Rechnung.pdf' | sha256sum",
+			"differsFrom": "Rechnung.pdf"
+		},
+		{
+			"name": "the same external path without the prefix",
+			"path": "Rechnung.pdf",
+			"expected": "41b5e18400f136a58d0ccdb0e7ee5398d4322163dd09c77691071785a4011c46",
+			"derivation": "printf '%s' 'Rechnung.pdf' | sha256sum"
+		},
+		{
+			"name": "umlaut in composed form (NFC)",
+			"path": "Pr\u00fcfung/Bericht.pdf",
+			"expected": "f5bec98da46bfa0b9f27abd83eda06d42798ff0d70908135ed9e0b89b949f42e",
+			"derivation": "printf '%s' 'Pr\u00fcfung/Bericht.pdf' | sha256sum"
+		},
+		{
+			"name": "the same umlaut decomposed (NFD) yields the same key",
+			"path": "Pru\u0308fung/Bericht.pdf",
+			"expected": "f5bec98da46bfa0b9f27abd83eda06d42798ff0d70908135ed9e0b89b949f42e",
+			"derivation": "printf '%s' 'Pr\u00fcfung/Bericht.pdf' | sha256sum",
+			"sameAs": "Pr\u00fcfung/Bericht.pdf"
+		},
+		{
+			"name": "spaces stay as they are",
+			"path": "Team Ordner/Angebot 2026 final.docx",
+			"expected": "141e5e5ff4f47bf4c99ad6730d21f52b648ebe4123f4096decdd36a0c3e8288f",
+			"derivation": "printf '%s' 'Team Ordner/Angebot 2026 final.docx' | sha256sum"
+		},
+		{
+			"name": "deeply nested",
+			"path": "a/b/c/d/e/f/g/h/i/j/tief.txt",
+			"expected": "53767bcd23112c3522847eb1008aff589ef484b7ba81bbdaaddd6ce73a047f30",
+			"derivation": "printf '%s' 'a/b/c/d/e/f/g/h/i/j/tief.txt' | sha256sum"
+		},
+		{
+			"name": "one file under two mount points of one group has one internal path",
+			"path": "Gemeinsam/Plan.xlsx",
+			"expected": "d77d617730bb0c2ac6e5d761da300ddd86ed9714d56c10f5bac6fd50ebbfac5c",
+			"derivation": "printf '%s' 'Gemeinsam/Plan.xlsx' | sha256sum",
+			"mountPoints": ["/anna/files/Abteilung/", "/bernd/files/Projekte/Abteilung-SMB/"]
+		},
+		{
+			"name": "case is kept",
+			"path": "Akte.PDF",
+			"expected": "ba26477545a33f2cb94fb610394f3bb2b961bc84b961118a9519c42b46701498",
+			"derivation": "printf '%s' 'Akte.PDF' | sha256sum",
+			"differsFrom": "akte.pdf"
+		},
+		{
+			"name": "the same name in lower case",
+			"path": "akte.pdf",
+			"expected": "99033f832d7e6fe948e599b96b855af76f14b5474e6de73635c2fca90f734a86",
+			"derivation": "printf '%s' 'akte.pdf' | sha256sum"
+		},
+		{
+			"name": "team folder storage path",
+			"path": "__groupfolders/4/Protokoll.odt",
+			"expected": "766b40ac26c432bf5b5f764dacd40e989ef0d76361d9eaa48984b1b9b0abb9d7",
+			"derivation": "printf '%s' '__groupfolders/4/Protokoll.odt' | sha256sum"
+		}
+	]
+}

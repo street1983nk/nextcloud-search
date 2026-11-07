@@ -231,6 +231,7 @@ class QueueService {
 		private IDBConnection $db,
 		private LoggerInterface $logger,
 		private ReaderContext $readerContext,
+		private DocKeyService $docKeyService,
 	) {
 	}
 
@@ -344,6 +345,8 @@ class QueueService {
 				$sources[$row->getId()] = $source;
 			}
 		}
+
+		$sources = $this->withDocKeys($sources);
 
 		if ($gone > 0) {
 			$this->logger->info('Findling: dropped queued files that are gone', ['count' => $gone]);
@@ -935,6 +938,71 @@ class QueueService {
 			'fetchAs' => $fetchAs,
 			'isUpdate' => $row->getIsUpdate(),
 		];
+	}
+
+	/**
+	 * Put the document key next to the path of every job that has a file to
+	 * name (plan 43-15, D-43-14).
+	 *
+	 * One lookup for the whole claim and not one per row: docKeysFor reads the
+	 * file cache in bands of at most two hundred ids, and it is the same method
+	 * the backfill route of the container asks, so a job and the backfill can
+	 * never derive two different keys for one file.
+	 *
+	 * The key comes from oc_filecache.path of the FILE ID and never from
+	 * getInternalPath() of the node describe() resolved. That node is the node
+	 * of the reader (readerOf below, the lookup inside actAs), and for a reader
+	 * who sees the file through a share it lives on a SharedMount whose
+	 * internal path is relative to the shared folder, the same reason
+	 * SearchService works with the cache entry rather than the node
+	 * (SearchService::reduceIds). The key would then depend on who reads, which
+	 * is the double count this key exists to remove.
+	 *
+	 * Every kind but delete carries it, acl and metadata included: a rename
+	 * arrives as metadata, and its new key has to replace the old one in the
+	 * container (W4). A delete order names a file that may be gone, and an
+	 * exclusion turns a row into a delete order as well; neither needs a key.
+	 *
+	 * A file without a row in the file cache, or in a trash bin, gets no field
+	 * at all, and so does every job when the lookup fails: the container keeps
+	 * the key it holds and its backfill asks again (plan 43-16). Failing the
+	 * claim over a key would stop the indexing it exists to count. The log line
+	 * carries the exception in its own field and a count, never a path.
+	 *
+	 * @param array<int, array<string, mixed>> $sources
+	 * @return array<int, array<string, mixed>>
+	 */
+	private function withDocKeys(array $sources): array {
+		$fileIds = [];
+		foreach ($sources as $source) {
+			if (($source['kind'] ?? null) !== QueueMapper::KIND_DELETE && is_int($source['fileId'] ?? null)) {
+				$fileIds[] = $source['fileId'];
+			}
+		}
+
+		if ($fileIds === []) {
+			return $sources;
+		}
+
+		try {
+			$keys = $this->docKeyService->docKeysFor($fileIds)['keys'] ?? [];
+		} catch (\Throwable $e) {
+			$this->logger->warning('Findling: could not read the document keys of a claim', ['exception' => $e, 'count' => count($fileIds)]);
+			return $sources;
+		}
+
+		foreach ($sources as $queueId => $source) {
+			if (($source['kind'] ?? null) === QueueMapper::KIND_DELETE) {
+				continue;
+			}
+
+			$key = $keys[$source['fileId'] ?? 0] ?? null;
+			if (is_string($key)) {
+				$sources[$queueId] = $source + ['docKey' => $key];
+			}
+		}
+
+		return $sources;
 	}
 
 	/**

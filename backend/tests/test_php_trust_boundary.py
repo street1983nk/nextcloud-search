@@ -322,10 +322,13 @@ def test_the_gate_sees_every_route_the_sources_declare() -> None:
     #
     # Plan 41-06 adds POST /admin/pause on SettingsController, the switch of
     # the backup pause (issue #37), so the bound stands one higher.
+    #
+    # Plan 43-15 adds GET /reconcile/doc-keys on ReconcileController, the
+    # document key route of D-43-14, so the bound stands one higher again.
     if PAGE_CONTROLLER.is_file():
-        assert len(routes) >= 20  # plan 41-06: nineteen routes plus /admin/pause
+        assert len(routes) >= 21  # plan 43-15: twenty routes plus /reconcile/doc-keys
     else:
-        assert len(routes) >= 19  # plan 41-06: nineteen routes plus /admin/pause
+        assert len(routes) >= 20  # plan 43-15: twenty routes plus /reconcile/doc-keys
 
 
 def test_every_controller_of_the_app_carries_at_least_one_route() -> None:

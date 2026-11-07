@@ -1185,8 +1185,16 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # test of lowercase probes; both changed their bytes. No file came or went, so PHP_FILES_TODAY stays
 # at 118. Recomputed independently with find, sort, tr and sha256sum over the CRLF normalised tree:
 # eb5b2dc1... both ways.
-PHP_FILES_TODAY = 118
-PHP_TREE_HASH_TODAY = "eb5b2dc118bb71e3b6b2c3096859af8fcb0cfae1d6bab953772c2e98381e641d"
+# Moved on 2026-11-07 by Plan 43-15 (document key from the internal path): two files came,
+# lib/Service/DocKeyService.php and tests/Unit/DocKeyServiceTest.php, and lib/Service/QueueService.php,
+# lib/Controller/ReconcileController.php, appinfo/routes.php (docblock only),
+# tests/Unit/QueueServiceTest.php, tests/Unit/QueueServiceReaderTest.php and
+# tests/Unit/ReconcileControllerTest.php changed their bytes; tests/route-security.json is not in this
+# glob. No file went, so PHP_FILES_TODAY moves to 120. Recomputed independently with find, sort, tr and
+# sha256sum over the CRLF normalised tree: 422c02f7... both ways; the same pipeline over git archive
+# HEAD before the step gave eb5b2dc1.
+PHP_FILES_TODAY = 120
+PHP_TREE_HASH_TODAY = "422c02f73b37c27e590ff24a8cf4b0b52ffec5e80380d35e9d8fd75991afc651"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

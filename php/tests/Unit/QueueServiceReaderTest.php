@@ -6,6 +6,7 @@ namespace OCA\Findling\Tests\Unit;
 
 use OCA\Findling\Db\QueueFile;
 use OCA\Findling\Db\QueueMapper;
+use OCA\Findling\Service\DocKeyService;
 use OCA\Findling\Service\ExclusionService;
 use OCA\Findling\Service\FileStateService;
 use OCA\Findling\Service\QueueService;
@@ -120,6 +121,7 @@ final class QueueServiceReaderTest extends TestCase {
 			$this->createMock(IDBConnection::class),
 			$this->createMock(LoggerInterface::class),
 			$this->readerContext(),
+			$this->createMock(DocKeyService::class),
 		);
 	}
 

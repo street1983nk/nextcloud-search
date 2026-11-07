@@ -6,12 +6,15 @@ namespace OCA\Findling\Tests\Unit;
 
 use OCA\Findling\AppInfo\Application;
 use OCA\Findling\Controller\ReconcileController;
+use OCA\Findling\Service\DocKeyService;
 use OCA\Findling\Service\ExclusionService;
 use OCA\Findling\Service\FileStateService;
 use OCA\Findling\Service\SettingsService;
 use OCA\Findling\Service\StorageService;
 use OCP\AppFramework\Http;
 use OCP\BackgroundJob\IJobList;
+use OCP\Files\Cache\ICacheEntry;
+use OCP\Files\Cache\IFileAccess;
 use OCP\IAppConfig;
 use OCP\IRequest;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -40,6 +43,10 @@ use Psr\Log\LoggerInterface;
  * a foreign caller never reaches it, a malformed list is refused without its
  * values in the log, a valid list is answered out of the service, and a
  * failing lookup answers with a static sentence.
+ *
+ * Since plan 43-15 the same holds for the document key route, plus the two
+ * promises of its answer: every asked id stands in exactly one of keys and
+ * absent, and only ids and 64 hex characters travel (W8, T-43-46).
  */
 #[CoversClass(ReconcileController::class)]
 final class ReconcileControllerTest extends TestCase {
@@ -51,6 +58,7 @@ final class ReconcileControllerTest extends TestCase {
 
 	private StorageService&MockObject $storageService;
 	private FileStateService&MockObject $fileStateService;
+	private DocKeyService&MockObject $docKeyService;
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -58,6 +66,7 @@ final class ReconcileControllerTest extends TestCase {
 		$this->storageService = $this->createMock(StorageService::class);
 		$this->storageService->method('mountRootPath')->willReturn('files');
 		$this->fileStateService = $this->createMock(FileStateService::class);
+		$this->docKeyService = $this->createMock(DocKeyService::class);
 	}
 
 	/**
@@ -99,6 +108,7 @@ final class ReconcileControllerTest extends TestCase {
 			$this->fileStateService,
 			new ExclusionService($appConfig, $this->storageService, $this->createMock(IJobList::class), $logger),
 			$logger,
+			$this->docKeyService,
 		);
 	}
 
@@ -303,7 +313,7 @@ final class ReconcileControllerTest extends TestCase {
 	 * A controller whose request carries the given caller and the given ids
 	 * parameter, and whose logger records everything it is handed.
 	 */
-	private function storageController(string $callerAppId, mixed $ids): ReconcileController {
+	private function storageController(string $callerAppId, mixed $ids, ?DocKeyService $docKeys = null): ReconcileController {
 		$request = $this->createMock(IRequest::class);
 		$request->method('getHeader')->willReturnCallback(
 			static fn (string $name): string => $name === 'EX-APP-ID' ? $callerAppId : '',
@@ -327,6 +337,7 @@ final class ReconcileControllerTest extends TestCase {
 			$this->fileStateService,
 			new ExclusionService($this->createMock(IAppConfig::class), $this->storageService, $this->createMock(IJobList::class), $logger),
 			$logger,
+			$docKeys ?? $this->docKeyService,
 		);
 	}
 
@@ -392,5 +403,163 @@ final class ReconcileControllerTest extends TestCase {
 		self::assertCount(1, $errors);
 		self::assertSame(['exception'], array_keys($errors[0][2]));
 		self::assertStringNotContainsString('secretcolumn', $errors[0][1]);
+	}
+
+	// -- the document key route of plan 43-15 (D-43-14, W8, T-43-46 to T-43-48) --
+
+	/**
+	 * A real DocKeyService over a file cache double: the ids of $paths have an
+	 * entry with that internal path, every other id has none.
+	 *
+	 * @param array<int, string> $paths
+	 */
+	private function docKeysOver(array $paths): DocKeyService {
+		$access = $this->createMock(IFileAccess::class);
+		$access->method('getByFileIds')->willReturnCallback(function (array $fileIds) use ($paths): array {
+			$found = [];
+			foreach ($fileIds as $fileId) {
+				if (isset($paths[$fileId])) {
+					$entry = $this->createMock(ICacheEntry::class);
+					$entry->method('getPath')->willReturn($paths[$fileId]);
+					$found[$fileId] = $entry;
+				}
+			}
+
+			return $found;
+		});
+
+		return new DocKeyService($access);
+	}
+
+	public function testTheBandIsTwoHundred(): void {
+		self::assertSame(200, ReconcileController::DOC_KEY_BAND);
+	}
+
+	public function testAForeignCallerNeverReachesTheDocumentKeys(): void {
+		$this->docKeyService->expects($this->never())->method('docKeysFor');
+
+		$response = $this->storageController('some_other_exapp', '9')->docKeys();
+
+		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+		self::assertSame(['error' => 'This route is reserved for the Findling backend.'], $response->getData());
+	}
+
+	public function testAMalformedOrTooLongIdListIsRefusedBeforeAnyLookup(): void {
+		$this->docKeyService->expects($this->never())->method('docKeysFor');
+
+		$malformed = [
+			'missing' => null,
+			'empty' => '',
+			'one too many as a value' => implode(',', range(900001, 900201)),
+			'one too many as a list' => range(900001, 900201),
+			'an empty list' => [],
+			'not a number' => 'secretvalue',
+			'an empty entry' => '12,,13',
+			'a space' => '12, 13',
+			'a trailing comma' => '12,',
+			'negative' => '-4711',
+			'nought' => '0',
+			'a leading nought' => '014',
+			'past the largest integer' => '12345678901234567890',
+			'a fraction' => [1.5],
+			'a nested list' => [['77123']],
+			'a value far too long' => str_repeat('9', 5000),
+		];
+		foreach ($malformed as $case => $ids) {
+			$response = $this->storageController($this->backendAppId(), $ids)->docKeys();
+
+			self::assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus(), $case);
+			self::assertSame(['error' => 'File id list is not valid.'], $response->getData(), $case);
+		}
+
+		$log = (string)json_encode($this->logged);
+		self::assertCount(count($malformed), $this->logged);
+		foreach (['secretvalue', '4711', '900001', '900201', '77123'] as $value) {
+			self::assertStringNotContainsString($value, $log);
+		}
+	}
+
+	public function testExactlyTwoHundredIdsAreAnswered(): void {
+		$ids = range(1, 200);
+		$this->docKeyService->expects($this->once())->method('docKeysFor')
+			->with($ids)
+			->willReturn(['keys' => [], 'absent' => $ids]);
+
+		$response = $this->storageController($this->backendAppId(), implode(',', $ids))->docKeys();
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame($ids, $response->getData()['absent']);
+	}
+
+	public function testTheValueAndTheListFormAreTheSameQuestion(): void {
+		$this->docKeyService->expects($this->exactly(2))->method('docKeysFor')
+			->with([14, 15, 9])
+			->willReturn(['keys' => [14 => str_repeat('a', 64)], 'absent' => [15, 9]]);
+
+		foreach (['14,15,9,9', ['14', 15, 9, '9']] as $ids) {
+			$response = $this->storageController($this->backendAppId(), $ids)->docKeys();
+
+			self::assertSame(Http::STATUS_OK, $response->getStatus());
+			self::assertSame(['keys' => [14 => str_repeat('a', 64)], 'absent' => [15, 9]], $response->getData());
+		}
+	}
+
+	public function testEveryAskedIdStandsInExactlyOneListAndOnlyHexTravels(): void {
+		$docKeys = $this->docKeysOver([
+			11 => 'files/Geheim/Vertrag.pdf',
+			12 => 'files_trashbin/files/Geheim.pdf.d1700000000',
+			14 => 'Gemeinsam/Plan.xlsx',
+		]);
+
+		$response = $this->storageController($this->backendAppId(), '11,12,13,14', $docKeys)->docKeys();
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		$data = $response->getData();
+		self::assertSame([11, 14], array_keys($data['keys']));
+		self::assertSame([12, 13], $data['absent']);
+
+		$all = array_merge(array_keys($data['keys']), $data['absent']);
+		sort($all);
+		self::assertSame([11, 12, 13, 14], $all);
+
+		foreach ($data['keys'] as $key) {
+			self::assertMatchesRegularExpression('/^[0-9a-f]{64}$/D', $key);
+		}
+		self::assertSame(DocKeyService::docKeyOf('Gemeinsam/Plan.xlsx'), $data['keys'][14]);
+
+		$wire = (string)json_encode($data);
+		$log = (string)json_encode($this->logged);
+		foreach (['Geheim', 'Vertrag', 'Gemeinsam', 'Plan', 'trashbin'] as $secret) {
+			self::assertStringNotContainsString($secret, $wire);
+			self::assertStringNotContainsString($secret, $log);
+		}
+		foreach ($data['keys'] as $key) {
+			self::assertStringNotContainsString($key, $log);
+		}
+
+		$debug = array_values(array_filter($this->logged, static fn (array $entry): bool => $entry[0] === 'debug'));
+		self::assertCount(1, $debug);
+		self::assertSame(['asked' => 4, 'keys' => 2, 'absent' => 2], $debug[0][2]);
+	}
+
+	public function testAnAnswerWithoutKeysStillCarriesAMap(): void {
+		$response = $this->storageController($this->backendAppId(), '13', $this->docKeysOver([]))->docKeys();
+
+		self::assertSame('{"keys":{},"absent":[13]}', json_encode($response->getData()));
+	}
+
+	public function testAFailingKeyLookupAnswersWithAStaticSentenceAndLogsNoMessage(): void {
+		$this->docKeyService->method('docKeysFor')
+			->willThrowException(new \RuntimeException('SELECT path FROM oc_filecache: files/Geheim'));
+
+		$response = $this->storageController($this->backendAppId(), '9')->docKeys();
+
+		self::assertSame(Http::STATUS_INTERNAL_SERVER_ERROR, $response->getStatus());
+		self::assertSame(['error' => 'Document keys are not available.'], $response->getData());
+
+		$errors = array_values(array_filter($this->logged, static fn (array $entry): bool => $entry[0] === 'error'));
+		self::assertCount(1, $errors);
+		self::assertSame(['exception'], array_keys($errors[0][2]));
+		self::assertStringNotContainsString('Geheim', $errors[0][1]);
 	}
 }
