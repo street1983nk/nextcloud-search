@@ -143,7 +143,7 @@ final class ScriptedStream {
 		return $this->eof && $this->pending === '';
 	}
 
-	public function stream_set_option(int $option, int $arg1, ?int $arg2): bool {
+	public function stream_set_option(int $option, mixed $arg1, mixed $arg2): bool {
 		if ($option === STREAM_OPTION_BLOCKING) {
 			self::$stats[$this->id]['blocking']++;
 

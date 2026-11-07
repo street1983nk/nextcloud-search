@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace OCA\Findling\Controller;
 
 use OCA\Findling\AppInfo\Application;
+use OCA\Findling\Http\BoundedStreamReader;
+use OCA\Findling\Http\BoundedStreamResponse;
 use OCA\Findling\Service\ReaderContext;
 use OCA\Findling\Service\SearchService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\DataResponse;
-use OCP\AppFramework\Http\StreamResponse;
 use OCP\AppFramework\OCSController;
 use OCP\Files\File;
 use OCP\Files\IRootFolder;
@@ -25,11 +26,29 @@ use Psr\Log\LoggerInterface;
  * drifting permission model in Python.
  */
 final class GatewayController extends OCSController {
+	/**
+	 * The three classes the gateway asks about, as strings on purpose:
+	 * files_external does not have to be enabled, icewind/smb does not have to
+	 * be in the autoload space, and instanceOfStorage and is_a take a name and
+	 * do not load anything that is not there.
+	 */
+	private const SMB_STORAGE = 'OCA\Files_External\Lib\Storage\SMB';
+	private const ENCRYPTED_STORAGE = 'OC\Files\Storage\Wrapper\Encryption';
+	private const SMB_FILE_IN_USE = 'Icewind\SMB\Exception\FileInUseException';
+
+	/**
+	 * The reader comes from the container like every other collaborator. Its
+	 * constructor takes nothing but closures and floats with defaults, and the
+	 * container of Nextcloud falls back to the default value of a parameter it
+	 * cannot resolve (SimpleContainer::buildClassConstructorParameters), so it
+	 * builds the reader with the real clock, usleep and connection_aborted.
+	 */
 	public function __construct(
 		IRequest $request,
 		private IRootFolder $rootFolder,
 		private LoggerInterface $logger,
 		private ReaderContext $readerContext,
+		private BoundedStreamReader $streamReader,
 	) {
 		parent::__construct(Application::APP_ID, $request);
 	}
@@ -61,7 +80,7 @@ final class GatewayController extends OCSController {
 	#[\OCP\AppFramework\Http\Attribute\ExAppRequired]
 	#[\OCP\AppFramework\Http\Attribute\NoCSRFRequired]
 	#[\OCP\AppFramework\Http\Attribute\ApiRoute(verb: 'GET', url: '/files/{fileId}', requirements: ['fileId' => '\d+'])]
-	public function getFileContents(int $fileId, string $userId): DataResponse|StreamResponse {
+	public function getFileContents(int $fileId, string $userId): DataResponse|BoundedStreamResponse {
 		$foreign = $this->rejectForeignCaller();
 		if ($foreign !== null) {
 			return $foreign;
@@ -99,17 +118,56 @@ final class GatewayController extends OCSController {
 			// switch, and read hooks (admin_audit, activity) must not attribute a
 			// read of Findling to the member: they see the same identity as
 			// before the fix.
+			//
+			// The size and the storage are asked before the open. The size is the
+			// one of the file cache and only tells an empty file from one whose
+			// open failed; it is never promised to the client (see
+			// BoundedStreamResponse).
+			//
+			// Non blocking only for an SMB storage without server side
+			// encryption (D-43-16). The decision is the storage's and not the
+			// stream's (N1): the View wraps nearly every stream in a
+			// CallbackWrapper when locking is on, so the outermost layer says
+			// nothing about the storage, and stream_set_blocking travels through
+			// the encryption stream down to the source, where the first empty read
+			// would cut a cipher block in half (B1). instanceOfStorage looks
+			// through the whole wrapper chain of the storage, Jail and Shared
+			// included. Every other storage is read blocking, as before.
+			$size = max(0, (int)$file->getSize());
+			$storage = $file->getStorage();
+			$nonBlocking = $storage->instanceOfStorage(self::SMB_STORAGE)
+				&& !$storage->instanceOfStorage(self::ENCRYPTED_STORAGE);
 			$stream = $file->fopen('r');
 			if (!$stream) {
-				// Befund E of issue #36: this branch used to leave no trace on the
-				// Nextcloud side, while the container only saw a 422. A static
-				// sentence and the file id, never a path or a user (security audit
-				// L6): the id is what an admin looks the file up by.
-				$this->logger->warning('Findling: a file could not be opened for reading, answered 422', ['fileId' => $fileId]);
-				return new DataResponse(['error' => 'File could not be opened for reading.'], Http::STATUS_UNPROCESSABLE_ENTITY);
+				return $this->cannotOpen($fileId);
 			}
 
-			return new StreamResponse($stream);
+			// The answer is decided after the first block and before any header.
+			// An SMB open that failed on the server does not fail in fopen in the
+			// wrapped mode: it is a stream that never delivers (the hang of run
+			// 42404849768) or, once smbclient has been nudged into reading its
+			// exit, a stream that ends without a byte. Either is the 422 of the
+			// branch above, and so is a read that fails. Zero bytes of a file the
+			// cache says is empty are a complete answer.
+			$primed = $this->streamReader->prime($stream, $nonBlocking);
+			$outcome = $primed['outcome'];
+			if ($outcome === BoundedStreamReader::OUTCOME_ERROR
+				|| $outcome === BoundedStreamReader::OUTCOME_TIMEOUT
+				|| ($outcome === BoundedStreamReader::OUTCOME_EMPTY && $size > 0)) {
+				fclose($stream);
+				return $this->cannotOpen($fileId);
+			}
+
+			return new BoundedStreamResponse(
+				$stream,
+				$primed['head'],
+				$size,
+				$primed['reads'],
+				$primed['nonBlocking'],
+				$fileId,
+				$this->streamReader,
+				$this->logger,
+			);
 		} catch (\OC\User\NoUserException) {
 			// Word for word the answer of the not-found branch above, on purpose.
 			// A 500 for "no such user" next to a 404 for "not your file" is
@@ -124,6 +182,16 @@ final class GatewayController extends OCSController {
 			$this->logger->debug('Findling: content gateway asked for a user that does not exist');
 			return new DataResponse(['error' => 'Node is not a file or could not be found.'], Http::STATUS_NOT_FOUND);
 		} catch (\Throwable $e) {
+			// A sharing violation (EBUSY in the native mode of icewind/smb) is a
+			// statement about this one file, not about the storage: SMB::fopen
+			// does not catch it, and it lands here. It gets the 422 of a file that
+			// cannot be opened, and deliberately no error line with the exception:
+			// its message carries the path on the share (security audit L6).
+			// is_a with a string, so icewind/smb need not be loaded.
+			if (is_a($e, self::SMB_FILE_IN_USE)) {
+				return $this->cannotOpen($fileId);
+			}
+
 			// This is where the case of issue #36 lands: a file on a mount whose
 			// storage is not available, fopen throws StorageNotAvailableException,
 			// and the answer is this 500 on purpose. The container judges the one
@@ -143,6 +211,21 @@ final class GatewayController extends OCSController {
 			$this->logger->error('Findling: unknown error reading a file', ['exception' => $e]);
 			return new DataResponse(['error' => 'Unknown error occurred.'], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
+	}
+
+	/**
+	 * The one 422 of this route, for every file that cannot be opened for
+	 * reading: fopen false, a first block that never comes or is empty while
+	 * the file is not, a failed read, a sharing violation.
+	 *
+	 * Befund E of issue #36: this branch used to leave no trace on the
+	 * Nextcloud side, while the container only saw a 422. A static sentence and
+	 * the file id, never a path or a user (security audit L6): the id is what an
+	 * admin looks the file up by.
+	 */
+	private function cannotOpen(int $fileId): DataResponse {
+		$this->logger->warning('Findling: a file could not be opened for reading, answered 422', ['fileId' => $fileId]);
+		return new DataResponse(['error' => 'File could not be opened for reading.'], Http::STATUS_UNPROCESSABLE_ENTITY);
 	}
 
 	/**

@@ -1230,8 +1230,15 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # came or went, so PHP_FILES_TODAY stays at 124. Recomputed independently with find, sort, tr and
 # sha256sum over the CRLF normalised tree: abd32292... both ways; the same pipeline over git archive
 # HEAD before the step gave 93271961.
-PHP_FILES_TODAY = 124
-PHP_TREE_HASH_TODAY = "abd32292c17e111897f22c061fcc6c66ea797704675568bb9e22483d0fd26158"
+# Moved on 2026-11-07 by Plan 43-17 (content gateway reads with a deadline): lib/Http/
+# BoundedStreamReader.php and lib/Http/BoundedStreamResponse.php came, Controller/GatewayController.php
+# reads ahead before it answers, and tests/Unit/ScriptedStream.php, tests/Unit/BlockCollectingStream.php
+# and tests/Unit/BoundedStreamReaderTest.php came with tests/Unit/GatewayControllerTest.php gaining
+# cases. No file went, so PHP_FILES_TODAY moves to 129. Recomputed independently with find, sort, tr
+# and sha256sum over the CRLF normalised tree: e67c5d95... both ways; the same pipeline over git
+# archive HEAD before the plan gave abd32292.
+PHP_FILES_TODAY = 129
+PHP_TREE_HASH_TODAY = "e67c5d95859f156c8178c5ca27876bd371dc06f7064f473f16afe8452d911591"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

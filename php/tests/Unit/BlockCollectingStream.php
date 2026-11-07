@@ -41,6 +41,14 @@ final class BlockCollectingStream extends Wrapper {
 		return true;
 	}
 
+	/**
+	 * Required by the Directory interface of Wrapper; this stand in only ever
+	 * wraps a file.
+	 */
+	public function dir_opendir($path, $options) {
+		return false;
+	}
+
 	public function stream_read($count) {
 		$remaining = self::BLOCK_BYTES;
 		$data = '';
