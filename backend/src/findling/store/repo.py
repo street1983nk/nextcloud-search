@@ -195,6 +195,15 @@ CATCHUP_MARK: Final = "recheck_1_5_0"
 CATCHUP_RECONCILE: Final = "reconcile"
 CATCHUP_DONE: Final = "done"
 
+# The moment the storage sweep of the reconcile last got through completely,
+# whole seconds as a string, or missing while it never did (D-43-01, plan 43-02).
+# A meta key of its own because the sweep keeps a cadence of its own since
+# 1.6.3: it no longer follows the walk, which the quiet gate can hold back for
+# days on an instance whose crawl does not end (issue #25). Written only after
+# every band of every swept storage reached the queue, so a refused band or a
+# backup pause leaves it alone and the next due round sweeps again.
+SWEEP_MARK: Final = "storage_sweep_at"
+
 # The marks that say nothing about the tantivy index.
 #
 # :meth:`Store.version_mismatch` reports every divergence it finds, including

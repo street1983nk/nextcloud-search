@@ -2515,8 +2515,17 @@ PHP_TREE_HASH_TODAY = "eb5b2dc118bb71e3b6b2c3096859af8fcb0cfae1d6bab953772c2e983
 # went, so PACKAGE_FILES_TODAY stays at 81. The PHP pair does not move.
 # Recomputed independently with find, sort, sed and sha256sum over the CRLF
 # normalised tree: f6716e41... both ways.
+#
+# Moved on 2026-11-07 by Plan 43-02 (storage sweep decoupled from the quiet
+# gate): worker/reconcile.py gives the sweep its own cadence under the meta key
+# storage_sweep_at, runs it in front of the walk and behind a busy queue, ends it
+# for a backup pause and leaves storage ids below one alone; store/repo.py names
+# the key as SWEEP_MARK. No file came or went, so PACKAGE_FILES_TODAY stays at
+# 81. The PHP pair does not move. Recomputed independently with find, sort, tr
+# and sha256sum over the CRLF normalised tree: c9147c42... both ways, and the
+# same pipeline over HEAD before the step gave f6716e41... (positive control).
 PACKAGE_FILES_TODAY = 81
-PACKAGE_TREE_HASH_TODAY = "f6716e41c279e60604fac8e2171939ad91b0ada1901ff95229f4ce6fb4856c33"
+PACKAGE_TREE_HASH_TODAY = "c9147c42c8ee727f0f23e6eda4f3319703fd277c9cb5f542f7c30b0acdb85af4"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

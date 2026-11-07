@@ -326,23 +326,26 @@ def _calls_to(node: ast.AST, name: str) -> list[ast.Call]:
     ]
 
 
-def test_the_sweep_is_reached_only_behind_a_full_walk_of_a_clean_list() -> None:
-    """S5, syntax tree: one call of the sweep, under the guard, after the walk loop."""
+def test_the_sweep_is_reached_only_behind_a_clean_list() -> None:
+    """S5, syntax tree: one call of the sweep, under the guard of T-36-13, in front of the walk loop.
+
+    Moved by plan 43-02 (D-43-01, issue #25): the sweep needs a whole mount
+    list, not a whole walk, and a walk the quiet gate holds back must not hold
+    the sweep back with it. The guard on the list is unchanged.
+    """
     run_once = _run_once_tree()
     assert len(_calls_to(run_once, "_sweep_vanished")) == 1
     guarded = [node for node in run_once.body if isinstance(node, ast.If) and _calls_to(node, "_sweep_vanished")]
     assert len(guarded) == 1
-    assert ast.unparse(guarded[0].test) == "found.mounts and (not found.discarded)"
+    assert "found.mounts and (not found.discarded)" in ast.unparse(guarded[0].test)
     loop = next(node for node in run_once.body if isinstance(node, ast.For))
     assert ast.unparse(loop.iter) == "found.mounts"
-    # An early end of a mount returns out of the loop, so the guard is behind
-    # nothing but a complete walk.
-    assert any(isinstance(node, ast.Return) for node in ast.walk(loop))
-    assert run_once.body.index(loop) < run_once.body.index(guarded[0])
+    assert not _calls_to(loop, "_sweep_vanished")
+    assert run_once.body.index(guarded[0]) < run_once.body.index(loop)
     unavailable = next(
         node for node in run_once.body if isinstance(node, ast.If) and ast.unparse(node.test) == "found.unavailable"
     )
-    assert run_once.body.index(unavailable) < run_once.body.index(loop)
+    assert run_once.body.index(unavailable) < run_once.body.index(guarded[0])
 
 
 def test_delete_orders_of_the_reconcile_leave_through_one_place() -> None:
@@ -449,13 +452,15 @@ def store(tmp_path: Path) -> Iterator[Store]:
 
 
 @pytest.mark.parametrize("position", ["walked", "empty", "discarded", "unavailable", "ended_early"])
-async def test_the_sweep_runs_for_a_walked_round_only(
+async def test_the_sweep_runs_for_a_clean_list_only(
     store: Store, monkeypatch: pytest.MonkeyPatch, position: str
 ) -> None:
-    """S5 with the sweep replaced: only the walked round over a clean list reaches it.
+    """S5 with the sweep replaced: only a round over a clean list reaches it.
 
     The positive control is the first parameter: the same store and the same
     deleted storage, a clean round, and the recorder is called exactly once.
+    Since plan 43-02 the sweep stands in front of the walk, so a walk that
+    ended early over a clean list has already reached it (D-43-01).
     """
     reached: list[frozenset[int]] = []
 
@@ -479,6 +484,9 @@ async def test_the_sweep_runs_for_a_walked_round_only(
 
     if position == "walked":
         assert result.state == ROUND_WALKED
+        assert reached == [frozenset({CONTROL})]
+    elif position == "ended_early":
+        assert result.state != ROUND_WALKED
         assert reached == [frozenset({CONTROL})]
     else:
         assert reached == []

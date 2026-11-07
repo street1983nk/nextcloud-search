@@ -724,3 +724,16 @@ def test_the_sweep_stands_behind_a_whole_list_and_in_front_of_the_walk() -> None
 
     assert guard < call < loop
     assert source.count("_sweep_vanished(") == 1
+
+
+@pytest.mark.parametrize("raw", ["", "soon", "inf", "nan", "1.5"])
+async def test_an_unreadable_stamp_reads_as_never_swept(store: Store, raw: str) -> None:
+    store.write_meta(SWEEP_KEY, raw)
+    _record_all(store, 14, (10, 11))
+    files = _Files(store, [CONTROL], GoneResult(gone=frozenset({14})))
+    queue = _Queue(state=CRAWLING)
+
+    await _reconcile(store, files, queue, [START]).run_once()
+
+    assert queue.deleted() == [10, 11]
+    assert _sweep_stamp(store) == str(int(START))

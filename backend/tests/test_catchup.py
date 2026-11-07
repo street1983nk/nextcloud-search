@@ -35,6 +35,7 @@ from findling.store.repo import (
     CATCHUP_RECONCILE,
     EMBEDDING_BACKLOG_MARK,
     RECHECK_MARK,
+    SWEEP_MARK,
     FileMeta,
     Store,
     open_store,
@@ -104,11 +105,18 @@ def _stuck(store: Store, file_id: int, path: str | None = None) -> None:
 
 
 def _digest(db: Path) -> str:
-    """Every row and every meta value apart from the mark of this run, hashed."""
+    """Every row and every meta value apart from the mark of this run, hashed.
+
+    The stamp of the storage sweep is left out as well (plan 43-02): every
+    round with a due sweep writes it, it is bookkeeping of the reconcile and
+    says nothing about a file row.
+    """
     conn = sqlite3.connect(db)
     try:
         rows = conn.execute("SELECT * FROM files ORDER BY file_id").fetchall()
-        meta = conn.execute("SELECT key, value FROM meta WHERE key != ? ORDER BY key", (CATCHUP_MARK,)).fetchall()
+        meta = conn.execute(
+            "SELECT key, value FROM meta WHERE key NOT IN (?, ?) ORDER BY key", (CATCHUP_MARK, SWEEP_MARK)
+        ).fetchall()
     finally:
         conn.close()
     return hashlib.sha256(repr((rows, meta)).encode()).hexdigest()

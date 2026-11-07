@@ -36,10 +36,11 @@ the hour ``FINDLING_RECONCILE_HOUR``, and only while the queue is quiet (D-03).
 The maintenance window of Nextcloud is not a substitute and cannot be relied on;
 ``docs/reconcile.md`` carries that argument together with the numbers.
 
-**Storages that are no longer listed are swept, never guessed at.** After a
-walk that got through every mount of a non empty list without a refused entry,
-the documents of a storage Nextcloud deleted or of a provider the admin switched
-off go to the queue as delete orders in the same round; a storage that merely
+**Storages that are no longer listed are swept, never guessed at.** Once per
+cycle under a stamp of its own, behind a non empty mount list without a refused
+entry and in front of the walk, also while the quiet gate holds the walk back
+(D-43-01, issue #25), the documents of a storage Nextcloud deleted or of a
+provider the admin switched off go to the queue as delete orders; a storage that merely
 stopped being listed keeps them for VANISHED_STORAGE_GRACE_SECONDS (plan 36-04,
 M-32-02, D-36-05, D-36-14). A storage that vanished in the middle of a walk no
 longer leaves a bookmark above zero behind that held the cadence open for good
@@ -65,7 +66,7 @@ from findling.nc import client as nc_client
 from findling.nc.client import AsyncNextcloudApp
 from findling.nc.files import FileList, FileRow, Mount
 from findling.nc.queue import KIND_CONTENT, KIND_DELETE, SKIPPED_FALLBACK_WITHOUT_SIGNAL, DocumentQueue
-from findling.store.repo import CATCHUP_DONE, CATCHUP_MARK, CATCHUP_RECONCILE, Store, open_store
+from findling.store.repo import CATCHUP_DONE, CATCHUP_MARK, CATCHUP_RECONCILE, SWEEP_MARK, Store, open_store
 
 LOGGER = logging.getLogger("findling.worker.reconcile")
 
@@ -493,29 +494,38 @@ class Reconcile:
 
         # 1. The quiet gate (D-03), and it stands before everything that costs
         #    anything at all. An instance still working off its initial index or
-        #    an OCR backlog must not also be walking its whole file list. Ending
-        #    here costs nothing: not a single page has been asked for.
+        #    an OCR backlog must not also be walking its whole file list. A busy
+        #    queue holds the walk only: the storage sweep below keeps its own
+        #    cadence behind it (D-43-01, issue #25). An unreadable queue holds
+        #    both, because "we do not know" is no licence to delete (D-43-02);
+        #    _quiet has already backed off.
         gate = await self._quiet(queue)
-        if gate is not None:
+        if gate == ROUND_QUEUE_UNAVAILABLE:
             return RoundResult(gate)
 
         # 1b. The catch-up cycle of 1.5 (worker/catchup.py, part B), read once
-        #     per round. Only a round that starts under the mark may end it, and
-        #     the first such round of this object goes back to the front of
-        #     every mount: a walk begun before the mark carried the catch-up
-        #     rules for none of its pages, and finishing its rest would end the
-        #     catch-up after half a cycle.
-        catchup = await asyncio.to_thread(_catchup_requested, store)
-        if catchup and not self._catchup_rewound:
-            await asyncio.to_thread(store.rewind_reconcile_walk)
-            self._catchup_rewound = True
+        #     per round and only on the quiet path. Only a round that starts
+        #     under the mark may end it, and the first such round of this object
+        #     goes back to the front of every mount: a walk begun before the mark
+        #     carried the catch-up rules for none of its pages, and finishing its
+        #     rest would end the catch-up after half a cycle.
+        catchup = False
+        if gate is None:
+            catchup = await asyncio.to_thread(_catchup_requested, store)
+            if catchup and not self._catchup_rewound:
+                await asyncio.to_thread(store.rewind_reconcile_walk)
+                self._catchup_rewound = True
 
-        # 2. The cadence, decided against our own clock and the stamps in the
-        #    reconcile table, never against Nextcloud. An interrupted walk
-        #    outranks the interval, because a round that was cut in half has to
-        #    be finished rather than waited out for another day.
-        if not await asyncio.to_thread(self._is_due, store):
-            return RoundResult(ROUND_NOT_DUE)
+        # 2. The cadence of the walk and of the sweep, decided against our own
+        #    clock and our own stamps, never against Nextcloud. An interrupted
+        #    walk outranks the interval, because a round that was cut in half
+        #    has to be finished rather than waited out for another day. The
+        #    sweep has a stamp of its own (SWEEP_MARK) under the same rule, so a
+        #    busy queue reads the mount list once per cycle and not every tick.
+        walk_due = gate is None and await asyncio.to_thread(self._is_due, store)
+        sweep_due = await asyncio.to_thread(self._sweep_due, store)
+        if not walk_due and not sweep_due:
+            return RoundResult(gate or ROUND_NOT_DUE)
 
         # 3. The mount list. Unreachable is not empty: an instance without a
         #    single mount is a fresh installation, an unreachable Nextcloud means
@@ -524,6 +534,28 @@ class Reconcile:
         if found.unavailable:
             self._back_off()
             return RoundResult(ROUND_UNAVAILABLE)
+
+        # 3b. The storage sweep (plan 36-04, M-32-02, plan 43-02), in front of
+        #     the walk and independent of it: it needs a whole mount list, not a
+        #     whole walk. Only a list that is neither empty nor short of a
+        #     refused entry counts. An empty or incomplete list looks exactly
+        #     like an instance whose storages all went away, and reading it that
+        #     way would empty the index (T-36-13). Such a list behind a due sweep
+        #     backs off, so a list that stays refused is not read every tick
+        #     (W11). The stamp follows a sweep that handed every band over; a
+        #     refused band backs off, a backup pause ends it without either.
+        swept: bool | None = None
+        if sweep_due and found.mounts and not found.discarded and self._backup_release.is_set():
+            swept = await self._sweep_vanished(store, files, queue, frozenset(m.storage_id for m in found.mounts))
+            if swept is True:
+                await asyncio.to_thread(store.write_meta, SWEEP_MARK, str(int(self._clock())))
+                self._reset_cooldown()
+            elif swept is False:
+                self._back_off()
+        elif sweep_due and not walk_due and (not found.mounts or found.discarded):
+            self._back_off()
+        if not walk_due:
+            return RoundResult(gate or ROUND_NOT_DUE)
 
         # 4. Mount by mount. Every early end carries its own state and leaves the
         #    bookmark where the last completed slice put it, so the next round
@@ -534,15 +566,9 @@ class Reconcile:
             if ended is not None:
                 return self._report(ended, len(found.mounts), tally)
 
-        # 5. The storage sweep (plan 36-04, M-32-02), only behind a walk that got
-        #    through every mount of a list that was neither empty nor short of a
-        #    refused entry. An empty or incomplete list looks exactly like an
-        #    instance whose storages all went away, and reading it that way
-        #    would empty the index (T-36-13).
-        if found.mounts and not found.discarded:
-            await self._sweep_vanished(store, files, queue, frozenset(m.storage_id for m in found.mounts))
-
-        self._reset_cooldown()
+        # A sweep that a refused band ended keeps its back-off through the walk.
+        if swept is not False:
+            self._reset_cooldown()
         if catchup:
             # Every mount walked to its end, all of it under the catch-up rules:
             # the catch-up is over and never comes back (FMT-06).
@@ -911,10 +937,12 @@ class Reconcile:
 
     async def _sweep_vanished(
         self, store: Store, files: FileList, queue: DocumentQueue, listed: frozenset[int]
-    ) -> None:
+    ) -> bool | None:
         """Hand the documents of deleted, switched off and long vanished storages to the queue.
 
-        Runs after a full walk only (run_once). A storage the list carries again
+        Runs once per cycle under its own stamp (SWEEP_MARK), behind a whole
+        mount list and in front of the walk, whether the quiet gate lets the
+        walk go or not (run_once, D-43-01). A storage the list carries again
         loses its stamp, a bookmark nobody needs any more goes (F4), and every
         storage with living rows the list no longer carries is asked about. Gone
         and deselected storages lose their documents at once (D-36-14); any
@@ -928,13 +956,21 @@ class Reconcile:
         bands of REQUEUE_BAND through _hand_over. The bookmark and the stamp of a
         storage are forgotten only after all its bands arrived; a failed band
         ends the sweep, and the next due round asks again.
+
+        Storage ids below one are never asked about, stamped or swept: the PHP
+        half drops them from the question, so they would only ever take the
+        stamped road and go after the grace (plan 43-02).
+
+        True means every band of every storage arrived, also when nothing was
+        absent; False means the queue refused a band; None means a backup pause
+        (issue #37) ended the sweep between two storages, which is no failure.
         """
         known = await asyncio.to_thread(store.living_storages)
         await asyncio.to_thread(store.clear_vanished, listed)
         await asyncio.to_thread(store.drop_orphan_bookmarks, listed)
-        absent = sorted(known - listed)
+        absent = sorted(storage_id for storage_id in known - listed if storage_id > 0)
         if not absent:
-            return
+            return True
 
         answer = await files.gone_storages(absent)
         gone = answer.gone if answer is not None else frozenset()
@@ -943,7 +979,14 @@ class Reconcile:
 
         stamped: list[int] = []
         removed: list[int] = []
+        complete: bool | None = True
         for storage_id in absent:
+            if not self._backup_release.is_set():
+                # A backup pause must not wait behind every band of the sweep
+                # (issue #37); the next due round sweeps the rest.
+                LOGGER.info("storage sweep paused for a backup, %d storages handed over", len(removed))
+                complete = None
+                break
             if storage_id not in gone and storage_id not in deselected:
                 first = await asyncio.to_thread(store.mark_vanished, storage_id, now)
                 if now - first < VANISHED_STORAGE_GRACE_SECONDS:
@@ -952,6 +995,7 @@ class Reconcile:
             file_ids = await asyncio.to_thread(store.living_file_ids, storage_id)
             if not await self._hand_over(queue, (), file_ids):
                 LOGGER.warning("storage sweep stopped, %d storages handed over before the queue refused", len(removed))
+                complete = False
                 break
             await asyncio.to_thread(store.forget_storage, storage_id)
             removed.append(storage_id)
@@ -968,6 +1012,7 @@ class Reconcile:
             _first_storages(removed),
             _first_storages(stamped),
         )
+        return complete
 
     # -- the two gates ---------------------------------------------------
 
@@ -1020,10 +1065,28 @@ class Reconcile:
         state = store.reconcile_state()
         if state.unfinished:
             return True
-        if state.last_finished_at is None:
+        return self._cadence_due(state.last_finished_at)
+
+    def _sweep_due(self, store: Store) -> bool:
+        """Whether the storage sweep may run now, against its own stamp (D-43-01).
+
+        The same cadence as the walk: due at once while it never got through,
+        then the minimum pause, the preferred hour and the escape at twice the
+        pause. A stamp nobody could have written reads as never.
+        """
+        raw = store.read_meta().get(SWEEP_MARK)
+        try:
+            last_at = float(int(raw)) if raw is not None else None
+        except ValueError:
+            last_at = None
+        return self._cadence_due(last_at)
+
+    def _cadence_due(self, last_at: float | None) -> bool:
+        """The cadence rule shared by the walk and the sweep, after the last time either got through."""
+        if last_at is None:
             return True
 
-        elapsed = self._clock() - state.last_finished_at
+        elapsed = self._clock() - last_at
         interval = self._min_interval * 3600.0
         if elapsed < interval:
             return False
