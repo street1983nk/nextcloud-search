@@ -48,6 +48,8 @@ Daraus folgt für diese Phase:
 
 - **D-43-13:** KEIN öffentliches GitHub-Pre-Release. mbozem hat ein GitHub-Konto; der Testbuild geht als Workflow-Artefakt (signiertes Companion-Archiv) plus unveränderliches Image :<sha> und eine Test-info.xml an ihn. Der Kommentar erklärt den Download (angemeldet) und nennt den Ablauf der Artefakte (Aufbewahrung in Tagen).
 
+- **D-43-14:** Die Doppelzählung bei Weiterteilung eines SMB-Ordners per Nextcloud-Freigabe und bei verschiedenen Einhängepunkten (Recherche A1) wird in 1.6.3 RICHTIG behoben, nicht nur sichtbar gemacht: Dokumentschlüssel ist der interne Pfad innerhalb der Freigabe (aus oc_filecache.path des Speichers, zusammen mit dem countingKey), nicht files.path (Leserpfad). Dafür eine neue Container-Spalte mit Backfill (erlaubt, STOPP-Regel ausdrücklich erweitert: eine Spalte samt Backfill-Weg, sonst nichts). PHP liefert den Schlüssel gehasht, Pfade bleiben aus Logs (T-36-17). Der Backfill bestehender Zeilen (mbozem: 190.000) ist begrenzt, fortsetzbar und in Upgrade-E2E (1.6.2 -> 1.6.3) und Audit abgedeckt. Das Konzept "known double count" entfällt: der Fall zählt genau einmal.
+
 ### Claude's Discretion
 - Wo genau der Sweep in run_once eingehängt wird (vor dem Quiet-Gate mit eigener Fälligkeit oder als eigener Zweig nach der Mountliste), solange D-43-01/02 gelten.
 - Format der storage-zu-key-Map und der leaveOut-Liste im PHP-Container-Vertrag, Bandgrößen, Indexe für die distinct-Zählung.
