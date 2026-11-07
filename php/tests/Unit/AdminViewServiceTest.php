@@ -8,10 +8,12 @@ use OCA\Findling\Service\AdminViewService;
 use OCA\Findling\Service\ExAppService;
 use OCA\Findling\Service\FileStateService;
 use OCA\Findling\Service\ScanStatsService;
+use OCA\Findling\Service\SettingsService;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\DB\IResult;
 use OCP\DB\QueryBuilder\IExpressionBuilder;
 use OCP\DB\QueryBuilder\IQueryBuilder;
+use OCP\IAppConfig;
 use OCP\IDBConnection;
 use OCP\IUserSession;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -1604,5 +1606,116 @@ final class AdminViewServiceTest extends TestCase {
 		self::assertSame(50000, AdminViewService::COVERAGE_MAX_MOUNTED);
 		self::assertSame(1000, AdminViewService::COVERAGE_MAX_MEMBERS);
 		self::assertLessThan(AdminViewService::COVERAGE_MAX_MOUNTED, AdminViewService::COVERAGE_MAX_SINGLES);
+	}
+
+	// -- the one time hint after the switch (plan 43-06, D-43-06, D-43-12) ----
+
+	private const HINT_NOW = 1_800_000_000;
+
+	/**
+	 * A view with a real SettingsService over an appconfig that keeps its
+	 * values in the array behind the reference, so a write is visible to the
+	 * read that follows it.
+	 *
+	 * @param array<string, int> $values
+	 */
+	private function viewWithHint(array &$values): AdminViewService {
+		$appConfig = $this->createMock(IAppConfig::class);
+		$appConfig->method('getValueInt')->willReturnCallback(
+			static function (string $app, string $key, int $default = 0) use (&$values): int {
+				return $values[$key] ?? $default;
+			},
+		);
+		$appConfig->method('setValueInt')->willReturnCallback(
+			static function (string $app, string $key, int $value) use (&$values): bool {
+				$values[$key] = $value;
+
+				return true;
+			},
+		);
+		$time = $this->createMock(ITimeFactory::class);
+		$time->method('getTime')->willReturn(self::HINT_NOW);
+		$settings = new SettingsService($appConfig, $this->createMock(LoggerInterface::class), $time);
+
+		return $this->viewWith(['settingsService' => $settings]);
+	}
+
+	public function testAFirstCompleteCountStampsTheHintAndItStaysVisible(): void {
+		$values = [SettingsService::KEY_COVERAGE_PER_DOCUMENT_HINT => 1];
+		$view = $this->viewWithHint($values);
+
+		self::assertTrue(self::invokeOn($view, 'perDocumentHintNow', AdminViewService::PER_DOCUMENT_OK, self::HINT_NOW));
+		self::assertSame(self::HINT_NOW, $values[SettingsService::KEY_COVERAGE_PER_DOCUMENT_HINT]);
+
+		// A later complete count does not move the stamp.
+		self::assertTrue(self::invokeOn($view, 'perDocumentHintNow', AdminViewService::PER_DOCUMENT_OK, self::HINT_NOW + 3600));
+		self::assertSame(self::HINT_NOW, $values[SettingsService::KEY_COVERAGE_PER_DOCUMENT_HINT]);
+	}
+
+	/** @return iterable<string, array{0: string}> */
+	public static function kindsThatNeverStamp(): iterable {
+		yield 'counting' => [AdminViewService::PER_DOCUMENT_COUNTING];
+		yield 'legacy, missing or limits' => [AdminViewService::PER_DOCUMENT_LEGACY];
+		yield 'fallback' => [AdminViewService::PER_DOCUMENT_FALLBACK];
+	}
+
+	#[DataProvider('kindsThatNeverStamp')]
+	public function testOnlyAFirstCompleteCountStamps(string $kind): void {
+		// A container of 1.6.2 (missing), the fallback above the limits, a
+		// count still running and an unreachable container leave the hint
+		// pending and visible; the seven days have not started.
+		$values = [SettingsService::KEY_COVERAGE_PER_DOCUMENT_HINT => 1];
+		$view = $this->viewWithHint($values);
+
+		self::assertTrue(self::invokeOn($view, 'perDocumentHintNow', $kind, self::HINT_NOW));
+		self::assertSame(1, $values[SettingsService::KEY_COVERAGE_PER_DOCUMENT_HINT]);
+	}
+
+	public function testAStampSixDaysAnd23HoursOldStillShowsTheHint(): void {
+		$stamp = self::HINT_NOW - 6 * 86400 - 23 * 3600;
+		$values = [SettingsService::KEY_COVERAGE_PER_DOCUMENT_HINT => $stamp];
+		$view = $this->viewWithHint($values);
+
+		self::assertTrue(self::invokeOn($view, 'perDocumentHintNow', AdminViewService::PER_DOCUMENT_OK, self::HINT_NOW));
+		self::assertSame($stamp, $values[SettingsService::KEY_COVERAGE_PER_DOCUMENT_HINT]);
+	}
+
+	public function testAStampSevenDaysOldTurnsTheHintOffForGood(): void {
+		$values = [SettingsService::KEY_COVERAGE_PER_DOCUMENT_HINT => self::HINT_NOW - SettingsService::COVERAGE_HINT_SECONDS];
+		$view = $this->viewWithHint($values);
+
+		self::assertFalse(self::invokeOn($view, 'perDocumentHintNow', AdminViewService::PER_DOCUMENT_OK, self::HINT_NOW));
+		self::assertSame(0, $values[SettingsService::KEY_COVERAGE_PER_DOCUMENT_HINT]);
+
+		// And it never comes back, not even with the next complete count.
+		self::assertFalse(self::invokeOn($view, 'perDocumentHintNow', AdminViewService::PER_DOCUMENT_OK, self::HINT_NOW + 60));
+		self::assertSame(0, $values[SettingsService::KEY_COVERAGE_PER_DOCUMENT_HINT]);
+	}
+
+	public function testAnInstanceWithoutTheHintNeverShowsIt(): void {
+		$values = [];
+		$view = $this->viewWithHint($values);
+
+		foreach ([AdminViewService::PER_DOCUMENT_OK, AdminViewService::PER_DOCUMENT_COUNTING, AdminViewService::PER_DOCUMENT_LEGACY] as $kind) {
+			self::assertFalse(self::invokeOn($view, 'perDocumentHintNow', $kind, self::HINT_NOW));
+		}
+		self::assertSame([], $values, 'the page wrote a key on an instance without the hint');
+	}
+
+	public function testTheCoverageBlockHandsTheHintThrough(): void {
+		$scan = self::groupedScan([]);
+		$parameters = AdminViewService::leaveOutParameters($scan);
+		$figures = self::invokePrivate('figures', $scan, ['indexed' => 10], $parameters, 0, 0);
+		self::assertIsArray($figures);
+		foreach ([true, false] as $hint) {
+			$coverage = self::invokePrivate(
+				'coverage',
+				$figures['scan'], $figures['backend'], true, $figures['indexable'], $figures['refusedByType'],
+				true, true, 0, $figures['deduplicated'], false,
+				$figures['perDocument'], $figures['counting'], $figures['notReadable'], null, $hint,
+			);
+			self::assertIsArray($coverage);
+			self::assertSame($hint, $coverage['perDocumentHint']);
+		}
 	}
 }

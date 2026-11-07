@@ -1208,8 +1208,17 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # PHP half of the per document count into perDocumentFiguresFor(). No file went, so PHP_FILES_TODAY
 # moves to 122. Recomputed independently with find, sort, tr and sha256sum over the CRLF normalised
 # tree: df3a2adc... both ways; the same pipeline over git archive HEAD before the step gave be729b12.
-PHP_FILES_TODAY = 122
-PHP_TREE_HASH_TODAY = "df3a2adcfa61b355e9021eff5b9b6be193a40913eb8004ff6f6c86d2644544ce"
+# Moved on 2026-11-07 by Plan 43-06 (one time coverage hint): two files came,
+# lib/Migration/Version001603Date20261108000000.php (the hint is pending on an instance with scan
+# counters, D-43-06) and tests/Unit/Version001603Date20261108000000Test.php; lib/Service/
+# SettingsService.php learned the three states of coverage_per_document_hint, lib/Service/
+# AdminViewService.php stamps it at the first complete per document count and clears it seven days
+# later (D-43-12), and tests/Unit/SettingsServiceTest.php and tests/Unit/AdminViewServiceTest.php
+# gained cases. No file went, so PHP_FILES_TODAY moves to 124. Recomputed independently with find,
+# sort, tr and sha256sum over the CRLF normalised tree: 2423b3a6... both ways; the same pipeline over
+# git archive HEAD before the step gave df3a2adc.
+PHP_FILES_TODAY = 124
+PHP_TREE_HASH_TODAY = "2423b3a6198fe1b96bc4e4e956ccac857a1d70777a6899ea4ff71739d94b3a44"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

@@ -683,6 +683,7 @@ final class AdminViewService {
 		$coverageBody = self::coverageBody($mountedStorageIds, $groups);
 		$perDocument = $this->perDocumentCoverage($coverageBody);
 		$legacyReason = $perDocument['kind'] === self::PER_DOCUMENT_LEGACY ? $perDocument['reason'] : null;
+		$perDocumentHint = $this->perDocumentHintNow($perDocument['kind'], $now);
 
 		if ($perDocument['answer'] !== null) {
 			// No leaveOut: the container counts every member of a group
@@ -824,6 +825,7 @@ final class AdminViewService {
 				$figures['counting'],
 				$figures['notReadable'],
 				$legacyReason,
+				$perDocumentHint,
 			),
 			'estimate' => $this->estimate($figures['scan'], $figures['backend'], $backendReachable, $indexable, $scheduled + $running, $pause === self::PAUSE_RUNNING),
 			'errors' => $this->errors(),
@@ -2053,12 +2055,13 @@ final class AdminViewService {
 	 * @param bool $counting whether the container still counts them
 	 * @param int $notReadable documents only this side judged not readable or stuck
 	 * @param string|null $legacyReason missing or limits when the page shows the figure of 1.6.2 visibly
+	 * @param bool $perDocumentHint whether the one time hint after the update stands (plan 43-06)
 	 * @return array{
 	 *     indexed:int, indexable:int, deliberatelyLeftOut:int, percent:int|null,
 	 *     embedded:int, embeddedPercent:int|null, recounting:bool, duplicates:bool,
 	 *     deduplicated:bool, rulesPending:bool, provisional:bool, mountsTotal:int,
 	 *     mountsFinished:int, counting:bool, perDocument:bool, notReadable:int,
-	 *     legacyCount:bool, legacyReason:string|null
+	 *     legacyCount:bool, legacyReason:string|null, perDocumentHint:bool
 	 * }
 	 */
 	private function coverage(
@@ -2076,6 +2079,7 @@ final class AdminViewService {
 		bool $counting = false,
 		int $notReadable = 0,
 		?string $legacyReason = null,
+		bool $perDocumentHint = false,
 	): array {
 		$overCap = max(0, (int)$scan['overCap']);
 		$excluded = max(0, (int)$scan['excluded']);
@@ -2175,6 +2179,10 @@ final class AdminViewService {
 			'notReadable' => $perDocument ? max(0, $notReadable) : 0,
 			'legacyCount' => $legacyReason !== null,
 			'legacyReason' => $legacyReason,
+			// The one time hint after the switch to the per document count
+			// (plan 43-06, D-43-06, D-43-12), worked out in
+			// perDocumentHintNow() and only handed through here.
+			'perDocumentHint' => $perDocumentHint,
 		];
 	}
 
@@ -2337,6 +2345,31 @@ final class AdminViewService {
 	public const PER_DOCUMENT_COUNTING = 'counting';
 	public const PER_DOCUMENT_LEGACY = 'legacy';
 	public const PER_DOCUMENT_FALLBACK = 'fallback';
+
+	/**
+	 * Whether the one time hint after the update stands, and the two writes
+	 * of its life (plan 43-06, D-43-06, D-43-12).
+	 *
+	 * Pending and a first complete per document count (kind ok: counting
+	 * false, the answer checked, documents and judgedDocuments whole numbers)
+	 * stamp the time, so the seven days start with a real count. counting,
+	 * legacy (missing, limits) and fallback never stamp. A stamp older than
+	 * SettingsService::COVERAGE_HINT_SECONDS sets the key to 0, and the hint
+	 * never comes back. The answer is read after both writes.
+	 */
+	private function perDocumentHintNow(string $kind, int $now): bool {
+		$state = $this->settingsService->coveragePerDocumentHintState();
+		if ($state === SettingsService::COVERAGE_HINT_PENDING && $kind === self::PER_DOCUMENT_OK) {
+			$this->settingsService->stampCoveragePerDocumentHint($now);
+			$state = $this->settingsService->coveragePerDocumentHintState();
+		}
+		if ($state > SettingsService::COVERAGE_HINT_PENDING && !SettingsService::coverageHintVisible($state, $now)) {
+			$this->settingsService->clearCoveragePerDocumentHint();
+			$state = 0;
+		}
+
+		return SettingsService::coverageHintVisible($state, $now);
+	}
 
 	/**
 	 * The body of POST /coverage: the mount list and the share groups that

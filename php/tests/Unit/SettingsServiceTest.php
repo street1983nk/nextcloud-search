@@ -402,4 +402,89 @@ final class SettingsServiceTest extends TestCase {
 		$settings->setPaused(false);
 		self::assertFalse($settings->paused());
 	}
+
+	// -- the one time hint after the switch to the per document count (plan 43-06) --
+
+	public function testTheHintIsOffWithoutAStoredKey(): void {
+		self::assertSame(0, $this->settings()->coveragePerDocumentHintState());
+	}
+
+	public function testTheKeyIsTheOneTheStopRuleAllows(): void {
+		self::assertSame('coverage_per_document_hint', SettingsService::KEY_COVERAGE_PER_DOCUMENT_HINT);
+		self::assertSame(7 * 86400, SettingsService::COVERAGE_HINT_SECONDS);
+		self::assertSame(1, SettingsService::COVERAGE_HINT_PENDING);
+	}
+
+	public function testPendingIsOne(): void {
+		$settings = $this->settings();
+
+		$settings->setCoveragePerDocumentHintPending();
+
+		self::assertSame(1, $this->values[SettingsService::KEY_COVERAGE_PER_DOCUMENT_HINT]);
+		self::assertSame(1, $settings->coveragePerDocumentHintState());
+	}
+
+	public function testANegativeValueReadsAsOff(): void {
+		$this->values[SettingsService::KEY_COVERAGE_PER_DOCUMENT_HINT] = -5;
+
+		self::assertSame(0, $this->settings()->coveragePerDocumentHintState());
+	}
+
+	public function testTheStampIsOnlyWrittenFromPending(): void {
+		$settings = $this->settings();
+
+		// Off: nothing to stamp, a fresh installation never gets the hint.
+		$settings->stampCoveragePerDocumentHint(self::NOW);
+		self::assertArrayNotHasKey(SettingsService::KEY_COVERAGE_PER_DOCUMENT_HINT, $this->values);
+
+		$settings->setCoveragePerDocumentHintPending();
+		$settings->stampCoveragePerDocumentHint(self::NOW);
+		self::assertSame(self::NOW, $settings->coveragePerDocumentHintState());
+
+		// A later count never moves the stamp.
+		$settings->stampCoveragePerDocumentHint(self::NOW + 3600);
+		self::assertSame(self::NOW, $settings->coveragePerDocumentHintState());
+	}
+
+	public function testTheStampIsNeverThePendingOne(): void {
+		$settings = $this->settings();
+		$settings->setCoveragePerDocumentHintPending();
+
+		$settings->stampCoveragePerDocumentHint(1);
+
+		self::assertSame(2, $settings->coveragePerDocumentHintState());
+	}
+
+	public function testClearWritesOnlyWhileTheKeyIsNotOff(): void {
+		$appConfig = $this->createMock(IAppConfig::class);
+		$appConfig->method('getValueInt')->willReturn(0);
+		$appConfig->expects(self::never())->method('setValueInt');
+
+		(new SettingsService($appConfig, $this->logger, $this->time))->clearCoveragePerDocumentHint();
+
+		$settings = $this->settings();
+		$this->values[SettingsService::KEY_COVERAGE_PER_DOCUMENT_HINT] = self::NOW;
+		$settings->clearCoveragePerDocumentHint();
+		self::assertSame(0, $this->values[SettingsService::KEY_COVERAGE_PER_DOCUMENT_HINT]);
+	}
+
+	/** @return iterable<string, array{0: int, 1: int, 2: bool}> */
+	public static function hintStates(): iterable {
+		$now = 1_800_000_000;
+		$week = SettingsService::COVERAGE_HINT_SECONDS;
+		yield 'off' => [0, $now, false];
+		yield 'negative' => [-1, $now, false];
+		yield 'pending' => [1, $now, true];
+		yield 'stamped just now' => [$now, $now, true];
+		yield 'six days and 23 hours old' => [$now - 6 * 86400 - 23 * 3600, $now, true];
+		yield 'one second before seven days' => [$now - $week + 1, $now, true];
+		yield 'exactly seven days old' => [$now - $week, $now, false];
+		yield 'eight days old' => [$now - 8 * 86400, $now, false];
+		yield 'a stamp from the future' => [$now + 60, $now, true];
+	}
+
+	#[DataProvider('hintStates')]
+	public function testTheHintStandsSevenDaysAfterTheStamp(int $state, int $now, bool $visible): void {
+		self::assertSame($visible, SettingsService::coverageHintVisible($state, $now));
+	}
 }

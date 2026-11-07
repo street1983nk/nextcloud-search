@@ -236,6 +236,28 @@ final class SettingsService {
 	public const KEY_PAUSED = 'paused';
 
 	/**
+	 * The one time hint after the switch to the per document count (plan
+	 * 43-06, D-43-06, D-43-12), in three states.
+	 *
+	 * 0 (or missing) is off: a fresh installation never gets the hint, and an
+	 * instance whose hint ran out never gets it back. 1 is pending: the
+	 * migration Version001603Date20261108000000 writes it on an instance that
+	 * has counted before, and the hint stands until the first complete per
+	 * document count. A value above 1 is the unix time of that first complete
+	 * count; the hint stands for COVERAGE_HINT_SECONDS after it and the page
+	 * then writes 0. A container of 1.6.2 and the visible fallback above the
+	 * limits never stamp, so the seven days only start with a real count.
+	 * occ findling:purge removes it with all other keys of the app.
+	 */
+	public const KEY_COVERAGE_PER_DOCUMENT_HINT = 'coverage_per_document_hint';
+
+	/** How long the hint above stands after the first complete count, seven days (D-43-12). */
+	public const COVERAGE_HINT_SECONDS = 7 * 86400;
+
+	/** The pending state of KEY_COVERAGE_PER_DOCUMENT_HINT. */
+	public const COVERAGE_HINT_PENDING = 1;
+
+	/**
 	 * The longest a quiet instance goes without a recount, one day.
 	 *
 	 * A change that no event announced (occ files:scan, a file written straight
@@ -358,6 +380,60 @@ final class SettingsService {
 		}
 
 		$this->appConfig->setValueInt(Application::APP_ID, self::KEY_RULES_CHANGED_AT, 0);
+	}
+
+	/**
+	 * The state of the one time hint (plan 43-06): 0 off, 1 pending, above 1
+	 * the unix time of the first complete per document count. A negative
+	 * value written through occ reads as off.
+	 */
+	public function coveragePerDocumentHintState(): int {
+		return max(0, $this->appConfig->getValueInt(Application::APP_ID, self::KEY_COVERAGE_PER_DOCUMENT_HINT, 0));
+	}
+
+	/** The hint is pending until the first complete count; written by the migration of 1.6.3 only. */
+	public function setCoveragePerDocumentHintPending(): void {
+		$this->appConfig->setValueInt(Application::APP_ID, self::KEY_COVERAGE_PER_DOCUMENT_HINT, self::COVERAGE_HINT_PENDING);
+	}
+
+	/**
+	 * The first complete per document count arrived now: the seven days start.
+	 *
+	 * Only from pending, so a later count never moves the stamp and an
+	 * instance without the hint never gets one. The stamp is at least 2,
+	 * because 1 is the pending state.
+	 */
+	public function stampCoveragePerDocumentHint(int $now): void {
+		if ($this->coveragePerDocumentHintState() !== self::COVERAGE_HINT_PENDING) {
+			return;
+		}
+
+		$this->appConfig->setValueInt(Application::APP_ID, self::KEY_COVERAGE_PER_DOCUMENT_HINT, max(self::COVERAGE_HINT_PENDING + 1, $now));
+	}
+
+	/** The hint ran out: the key goes to 0 for good. Writes only while it is not 0. */
+	public function clearCoveragePerDocumentHint(): void {
+		if ($this->coveragePerDocumentHintState() === 0) {
+			return;
+		}
+
+		$this->appConfig->setValueInt(Application::APP_ID, self::KEY_COVERAGE_PER_DOCUMENT_HINT, 0);
+	}
+
+	/**
+	 * Whether the hint stands for a state and a time (D-43-12): pending
+	 * stands, a stamp stands while it is younger than COVERAGE_HINT_SECONDS,
+	 * off never. Static because it is the arithmetic and nothing else.
+	 */
+	public static function coverageHintVisible(int $state, int $now): bool {
+		if ($state === self::COVERAGE_HINT_PENDING) {
+			return true;
+		}
+		if ($state <= 0) {
+			return false;
+		}
+
+		return $now - $state < self::COVERAGE_HINT_SECONDS;
 	}
 
 	/**
