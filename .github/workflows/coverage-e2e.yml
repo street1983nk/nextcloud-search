@@ -1,0 +1,126 @@
+name: Coverage end to end
+
+# The acceptance test D-43-08 of plan 43-07 (issue #25). Three fixes of the
+# coverage figure were green in their parts and wrong in the figure an admin
+# reads; this job measures that figure on a real Nextcloud with a real Samba
+# server, against a truth computed without Findling code, in four variants of
+# one topology:
+#
+#   gate-crawl  the head, the crawl is unfinished while the sweep runs
+#   gate-queue  the head, scheduled >= quiet_max while the sweep runs
+#   v1.6.2      the released 1.6.2 on the same topology; it has to miss the
+#               truth, otherwise the topology tells nothing apart (positive
+#               control 2)
+#   upgrade     indexed by 1.6.2, updated to the head (doc key backfill), the
+#               gate-queue proof, back to 1.6.2 and up again with a rename
+#
+# The scripts always come from the head (checkout findling-harness), the
+# instance is set up from findling-src, which is v1.6.2 for the two variants
+# that start there. What is built and why is in scripts/ci/coverage_e2e.sh,
+# the truth in scripts/ci/coverage_truth.sh.
+#
+# Dispatch only, and only after an owner decision per run (43-FREIGABEN.md).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  coverage-e2e:
+    name: coverage-e2e (${{ matrix.variant }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [gate-crawl, gate-queue, v1.6.2, upgrade]
+
+    # Job level env takes no runner context (GitHub evaluates it before a
+    # runner exists, backend/tests/test_workflow_contexts.py); every path
+    # under the runner temp directory is read from RUNNER_TEMP in the script.
+    env:
+      EXAPP_SECRET: '12345'
+      EXAPP_PORT: '10035'
+      # The reconcile stays off while the instance is indexed, so no cycle of
+      # its own choosing runs before phase A; the restart for phase A switches
+      # it on for that process only. Job level, so that it reaches the backend
+      # the composite action starts.
+      FINDLING_RECONCILE_ENABLED: 'false'
+      # The vector track measures nothing here and costs minutes per variant.
+      FINDLING_EMBED_ENABLED: 'false'
+
+    steps:
+      # Same order as in integration.yml: the server checkout empties the
+      # workspace root, the second checkout brings the composite action.
+      - name: Check out nextcloud/server
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: nextcloud/server
+          ref: stable34
+          submodules: recursive
+
+      - name: Check out the state the instance is set up from
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: findling-src
+          ref: ${{ (matrix.variant == 'v1.6.2' || matrix.variant == 'upgrade') && 'v1.6.2' || github.sha }}
+
+      - name: Check out the harness at the head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: findling-harness
+
+      - name: Set up the test Nextcloud with both halves and register the ExApp
+        uses: ./findling-src/.github/actions/setup-test-nc
+        with:
+          server-version: stable34
+          php-version: '8.2'
+          exapp-secret: ${{ env.EXAPP_SECRET }}
+          exapp-port: ${{ env.EXAPP_PORT }}
+
+      - name: Install the OCR engine for the backlog images
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq tesseract-ocr tesseract-ocr-deu tesseract-ocr-eng tesseract-ocr-osd fonts-dejavu-core
+          tesseract --version | head -1
+
+      - name: Build the topology, measure both phases against the truth
+        env:
+          VARIANT: ${{ matrix.variant }}
+          NC_URL: 'http://localhost:8080'
+          HARNESS: findling-harness
+          SRC: findling-src
+          RESULT_FILE: ${{ runner.temp }}/coverage-e2e-result.md
+        run: bash findling-harness/scripts/ci/coverage_e2e.sh
+
+      - name: Result table to the job summary
+        if: always()
+        env:
+          RESULT_FILE: ${{ runner.temp }}/coverage-e2e-result.md
+        run: |
+          if [ -f "${RESULT_FILE}" ]; then
+            cat "${RESULT_FILE}" >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "no result table written" >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+      - name: Upload the result table
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-e2e-${{ matrix.variant }}
+          path: ${{ runner.temp }}/coverage-e2e-result.md
+          if-no-files-found: warn
+          retention-days: 30
+
+      # Counters, ids and the log lines of the backend; no file content.
+      - name: Everything the failure had to say
+        if: failure()
+        run: |
+          echo "--- backend ---"
+          tail -n 300 "${RUNNER_TEMP}/exapp.log" || echo "no backend log written"
+          echo "--- nextcloud ---"
+          tail -n 200 data/nextcloud.log || echo "no data/nextcloud.log written"
+          echo "--- smbd ---"
+          sudo tail -n 100 /var/log/samba/log.smbd || echo "no smbd log written"
