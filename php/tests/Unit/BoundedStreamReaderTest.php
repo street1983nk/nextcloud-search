@@ -324,6 +324,137 @@ final class BoundedStreamReaderTest extends TestCase {
 		self::assertLessThan(12_000, ScriptedStream::reads('slow'));
 	}
 
+	public function testBothDeadlinesAreEightySecondsUnderTheNinetyOfTheContainer(): void {
+		// Fix round 1 of 43-18 (run 42418778026): smbclient hands the data of a
+		// get on in blocks of the SMB2 read size, 8 MiB by default, so a slow
+		// line shows long silences before the first byte and between blocks.
+		// Eighty seconds wait for a whole block and stay under the 90 s read
+		// timeout of the container (backend nc/client.py).
+		self::assertSame(80.0, BoundedStreamReader::FIRST_BYTE_SECONDS);
+		self::assertSame(80.0, BoundedStreamReader::IDLE_SECONDS);
+	}
+
+	public function testTheFirstDataAfterSeventyNineSecondsStillArriveWhole(): void {
+		$sent = false;
+		$stream = ScriptedStream::open('late', function () use (&$sent): string {
+			if ($sent) {
+				return ScriptedStream::EOF;
+			}
+			if ($this->clock < 79.0) {
+				return ScriptedStream::EMPTY;
+			}
+			$sent = true;
+
+			return 'late';
+		});
+		$reader = $this->reader();
+
+		$primed = $reader->prime($stream, true);
+		self::assertSame(BoundedStreamReader::OUTCOME_DATA, $primed['outcome']);
+		self::assertSame('late', $primed['head']);
+
+		$out = '';
+		$end = $reader->pump($stream, $primed['head'], 4, $primed['reads'], function (string $block) use (&$out): void {
+			$out .= $block;
+		});
+		self::assertSame(BoundedStreamReader::END_COMPLETE, $end);
+		self::assertSame('late', $out);
+		self::assertGreaterThanOrEqual(79.0, $this->clock);
+		self::assertTrue(ScriptedStream::closed('late'));
+	}
+
+	public function testNoDataForEightyOneSecondsIsATimeout(): void {
+		$stream = ScriptedStream::open('silent', function (): string {
+			return $this->clock >= 81.0 ? 'too late' : ScriptedStream::EMPTY;
+		});
+
+		$primed = $this->reader()->prime($stream, true);
+
+		self::assertSame(BoundedStreamReader::OUTCOME_TIMEOUT, $primed['outcome']);
+		self::assertSame('', $primed['head']);
+		self::assertGreaterThanOrEqual(80.0, $this->clock);
+		self::assertLessThan(81.0, $this->clock);
+		fclose($stream);
+	}
+
+	public function testAGapOfSeventyNineSecondsBetweenBlocksCompletesAndEightyOneStalls(): void {
+		foreach ([[79.0, BoundedStreamReader::END_COMPLETE], [81.0, BoundedStreamReader::END_STALLED]] as [$gap, $expected]) {
+			$this->clock = 0.0;
+			$this->pauses = [];
+			$step = 0;
+			$id = 'gap' . (int)$gap;
+			$secondAt = null;
+			$stream = ScriptedStream::open($id, function () use (&$step, &$secondAt, $gap): string {
+				if ($step === 0) {
+					$step = 1;
+					$secondAt = $this->clock + $gap;
+
+					return 'abcd';
+				}
+				if ($step === 1) {
+					if ($this->clock < $secondAt) {
+						return ScriptedStream::EMPTY;
+					}
+					$step = 2;
+
+					return 'efgh';
+				}
+
+				return ScriptedStream::EOF;
+			});
+			$reader = $this->reader();
+
+			$primed = $reader->prime($stream, true);
+			self::assertSame(BoundedStreamReader::OUTCOME_DATA, $primed['outcome']);
+			$out = '';
+			$end = $reader->pump($stream, $primed['head'], 8, $primed['reads'], function (string $block) use (&$out): void {
+				$out .= $block;
+			});
+
+			self::assertSame($expected, $end, 'gap of ' . $gap . ' s');
+			self::assertSame($expected === BoundedStreamReader::END_COMPLETE ? 'abcdefgh' : 'abcd', $out);
+			self::assertTrue(ScriptedStream::closed($id));
+		}
+	}
+
+	public function testFiftyMegabytesInEightMegabyteBlocksSeventyNineSecondsApartStayUnderTheCap(): void {
+		// The shape smbclient produces (source3/libsmb/clireadwrite.c:363-366 of
+		// Samba 4.19.5): a whole SMB2 read block of 8 MiB, then a silence until
+		// the next one is complete. Block k is there at 79 s * (k + 1), a line
+		// of about 106 KB/s. The first wait costs about 4000 empty reads at the
+		// 20 ms pause, each later gap about 400 at the 200 ms pause, the data
+		// 6400 reads of 8 KiB.
+		$block = 8 * 1024 * 1024;
+		$total = 50 * 1024 * 1024;
+		$delivered = 0;
+		$stream = ScriptedStream::open('blocks', function (int $count) use (&$delivered, $block, $total): string {
+			if ($delivered >= $total) {
+				return ScriptedStream::EOF;
+			}
+			$arrived = min($total, (int)floor($this->clock / 79.0) * $block);
+			if ($delivered >= $arrived) {
+				return ScriptedStream::EMPTY;
+			}
+			$length = min($count, $arrived - $delivered);
+			$delivered += $length;
+
+			return str_repeat('a', $length);
+		});
+		$reader = $this->reader();
+
+		$primed = $reader->prime($stream, true);
+		self::assertSame(BoundedStreamReader::OUTCOME_DATA, $primed['outcome']);
+		$bytes = 0;
+		$end = $reader->pump($stream, $primed['head'], $total, $primed['reads'], static function (string $data) use (&$bytes): void {
+			$bytes += strlen($data);
+		});
+
+		self::assertSame(BoundedStreamReader::END_COMPLETE, $end);
+		self::assertSame($total, $bytes);
+		self::assertLessThan(15_000, ScriptedStream::reads('blocks'));
+		self::assertLessThan(BoundedStreamReader::MAX_READS, ScriptedStream::reads('blocks'));
+	}
+
 	public function testAClientThatWentAwayEndsTheAnswerAfterTheBlockInFlight(): void {
 		$writes = 0;
 		$stream = ScriptedStream::open('gone', ['abc', 'def', 'ghi', ScriptedStream::EOF]);
