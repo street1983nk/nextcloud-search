@@ -18,3 +18,9 @@ Vollzug: Push 53090f80 (Freigabe Push 43-07), Push e65e34c3 (Freigabe Push 43-07
 Freigabe Push und Dispatch 43-07 Fix 2: "Ja, pushen und E2E (Empfohlen)" (2026-11-07, Claude Code Terminal) Entscheid: ja
 
 Umfang Fix 2: genau ein Push von 22f6f441, c2037b29, 5c30b0f9 plus dieser Freigabezeile auf origin main, genau ein Dispatch von "Coverage end to end", wenn alle Push-Workflows grün sind.
+
+Vollzug Fix 2: Push e038ee13, die vier ausgelösten Push-Workflows grün; genau ein Dispatch "Coverage end to end", Lauf 42394655350, rot in allen vier Varianten: "the queue did not drain within 1500 s", jeder Abruf des Content-Gateways endet im ReadTimeout, danach auch Pause-Wunsch und Queue (php -S antwortet nicht mehr). Ursache offen.
+
+Freigabe Diagnose-Patch, Push und Dispatch 43-07 Fix 3: "Go" (2026-11-07, Claude Code Terminal) Entscheid: ja
+
+Umfang Fix 3: Diagnose im Harness (Gateway-Probe Home und SMB vor dem Crawl, Abbruch nach drei Gateway-Ausfällen mit Prozessliste, Log von php -S in eine Datei), genau ein Push auf origin main, genau ein Dispatch von "Coverage end to end", wenn die Push-Workflows grün sind.
