@@ -6,13 +6,16 @@ namespace OCA\Findling\Tests\Unit;
 
 use OCA\Findling\AppInfo\Application;
 use OCA\Findling\Controller\GatewayController;
+use OCA\Findling\Http\BoundedStreamReader;
+use OCA\Findling\Http\BoundedStreamResponse;
 use OCA\Findling\Service\ReaderContext;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\DataResponse;
-use OCP\AppFramework\Http\StreamResponse;
+use OCP\AppFramework\Http\IOutput;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
+use OCP\Files\Storage\IStorage;
 use OCP\Files\StorageNotAvailableException;
 use OCP\IRequest;
 use OCP\IUser;
@@ -53,9 +56,12 @@ final class GatewayControllerTest extends TestCase {
 	private IUserSession&MockObject $session;
 	private IUserManager&MockObject $userManager;
 	private ?IUser $active = null;
+	private float $clock = 0.0;
 
 	protected function setUp(): void {
 		parent::setUp();
+		ScriptedStream::register();
+		$this->clock = 0.0;
 
 		$this->rootFolder = $this->createMock(IRootFolder::class);
 		$this->logger = $this->createMock(LoggerInterface::class);
@@ -76,6 +82,11 @@ final class GatewayControllerTest extends TestCase {
 
 			return $user;
 		});
+	}
+
+	protected function tearDown(): void {
+		ScriptedStream::unregister();
+		parent::tearDown();
 	}
 
 	/**
@@ -108,7 +119,32 @@ final class GatewayControllerTest extends TestCase {
 			$this->rootFolder,
 			$this->logger,
 			new ReaderContext($this->session, $this->userManager),
+			// The reader on a fake clock, so the thirty second deadline of the
+			// first block costs no real time in the cases that run into it.
+			new BoundedStreamReader(
+				fn (): float => $this->clock,
+				function (int $microseconds): void {
+					$this->clock += $microseconds / 1_000_000;
+				},
+			),
 		);
+	}
+
+	/**
+	 * A storage double that answers instanceOfStorage for the two classes the
+	 * gateway asks about. Everything else is not this storage.
+	 */
+	private function storage(bool $smb, bool $encrypted): IStorage&MockObject {
+		$storage = $this->createMock(IStorage::class);
+		$storage->method('instanceOfStorage')->willReturnCallback(
+			static fn (string $class): bool => match ($class) {
+				'OCA\\Files_External\\Lib\\Storage\\SMB' => $smb,
+				'OC\\Files\\Storage\\Wrapper\\Encryption' => $encrypted,
+				default => false,
+			},
+		);
+
+		return $storage;
 	}
 
 	public function testACallFromTheBackendUnderItsOwnAppIdDeliversTheFileContents(): void {
@@ -121,6 +157,7 @@ final class GatewayControllerTest extends TestCase {
 		// backend/tests holds the allowlist of ways to open a file at all.
 		$file->expects(self::once())->method('fopen')->with('r')->willReturn($stream);
 		$file->method('isReadable')->willReturn(true);
+		$file->method('getStorage')->willReturn($this->storage(false, false));
 
 		$userFolder = $this->createMock(Folder::class);
 		$userFolder->method('getFirstNodeById')->with(11)->willReturn($file);
@@ -128,7 +165,7 @@ final class GatewayControllerTest extends TestCase {
 
 		$response = $this->controller($this->backendAppId())->getFileContents(11, 'alice');
 
-		self::assertInstanceOf(StreamResponse::class, $response);
+		self::assertInstanceOf(BoundedStreamResponse::class, $response);
 
 		fclose($stream);
 	}
@@ -227,6 +264,7 @@ final class GatewayControllerTest extends TestCase {
 
 		$file = $this->createMock(File::class);
 		$file->method('isReadable')->willReturn(true);
+		$file->method('getStorage')->willReturn($this->storage(false, false));
 		$file->method('fopen')->willReturnCallback(function () use ($stream, &$steps) {
 			$steps[] = ['fopen', $this->active?->getUID()];
 
@@ -246,7 +284,7 @@ final class GatewayControllerTest extends TestCase {
 
 		$response = $this->controller($this->backendAppId())->getFileContents(11, 'alice');
 
-		self::assertInstanceOf(StreamResponse::class, $response);
+		self::assertInstanceOf(BoundedStreamResponse::class, $response);
 		self::assertSame([['folder', 'alice'], ['lookup', 'alice'], ['fopen', null]], $steps);
 		self::assertNull($this->active);
 
@@ -254,11 +292,14 @@ final class GatewayControllerTest extends TestCase {
 	}
 
 	/**
-	 * A readable file of alice whose open behaves as the closure says.
+	 * A readable file of alice whose open behaves as the closure says, of the
+	 * given size, on a storage of the given kind (local unless said otherwise).
 	 */
-	private function fileOpeningAs(\Closure $open): void {
+	private function fileOpeningAs(\Closure $open, int $size = 0, bool $smb = false, bool $encrypted = false): void {
 		$file = $this->createMock(File::class);
 		$file->method('isReadable')->willReturn(true);
+		$file->method('getSize')->willReturn($size);
+		$file->method('getStorage')->willReturn($this->storage($smb, $encrypted));
 		$file->method('fopen')->with('r')->willReturnCallback($open);
 		$userFolder = $this->createMock(Folder::class);
 		$userFolder->method('getFirstNodeById')->with(11)->willReturn($file);
@@ -329,5 +370,150 @@ final class GatewayControllerTest extends TestCase {
 		self::assertInstanceOf(DataResponse::class, $unknown);
 		self::assertSame(Http::STATUS_NOT_FOUND, $unknown->getStatus());
 		self::assertSame(['error' => 'Node is not a file or could not be found.'], $unknown->getData());
+	}
+
+	/**
+	 * Everything the response writes, by running its callback against an
+	 * output double, the way App.php does after the headers.
+	 */
+	private function body(BoundedStreamResponse $response): string {
+		$body = '';
+		$output = $this->createStub(IOutput::class);
+		$output->method('setOutput')->willReturnCallback(static function (string $block) use (&$body): void {
+			$body .= $block;
+		});
+		$response->callback($output);
+
+		return $body;
+	}
+
+	/**
+	 * The one answer every refusal before the headers has to be: the 422 of the
+	 * branch that existed before plan 43-17, with its one log line.
+	 */
+	private function expectTheCannotOpenAnswer(): void {
+		$this->logger->expects(self::once())
+			->method('warning')
+			->with('Findling: a file could not be opened for reading, answered 422', ['fileId' => 11]);
+		$this->logger->expects(self::never())->method('error');
+	}
+
+	private static function assertTheCannotOpenAnswer(mixed $response): void {
+		self::assertInstanceOf(DataResponse::class, $response);
+		self::assertSame(Http::STATUS_UNPROCESSABLE_ENTITY, $response->getStatus());
+		self::assertSame(['error' => 'File could not be opened for reading.'], $response->getData());
+	}
+
+	public function testAnUnencryptedSmbStorageIsReadNonBlocking(): void {
+		// D-43-16: the storage decides, through instanceOfStorage, which sees
+		// through every wrapper of the storage (Jail, Shared). The switch reached
+		// the source of the stream, so the reader was told to read non blocking.
+		$stream = ScriptedStream::open('smb', ['hello', ScriptedStream::EOF]);
+		$this->fileOpeningAs(static fn () => $stream, 5, smb: true);
+
+		$response = $this->controller($this->backendAppId())->getFileContents(11, 'alice');
+
+		self::assertInstanceOf(BoundedStreamResponse::class, $response);
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame(1, ScriptedStream::blockingCalls('smb'));
+		self::assertSame('hello', $this->body($response));
+		self::assertTrue(ScriptedStream::closed('smb'));
+	}
+
+	public function testSmbUnderServerSideEncryptionIsReadBlockingAsBefore(): void {
+		// B1: the switch would travel through the encryption stream to the
+		// source, and stream_read_block would hand half a cipher block to the
+		// decryption at the first empty read.
+		$stream = ScriptedStream::open('enc', ['hello', ScriptedStream::EOF]);
+		$this->fileOpeningAs(static fn () => $stream, 5, smb: true, encrypted: true);
+
+		$response = $this->controller($this->backendAppId())->getFileContents(11, 'alice');
+
+		self::assertInstanceOf(BoundedStreamResponse::class, $response);
+		self::assertSame(0, ScriptedStream::blockingCalls('enc'));
+		self::assertSame('hello', $this->body($response));
+	}
+
+	public function testALocalStorageIsReadBlockingAsBefore(): void {
+		$stream = ScriptedStream::open('local', ['hello', ScriptedStream::EOF]);
+		$this->fileOpeningAs(static fn () => $stream, 5);
+
+		$response = $this->controller($this->backendAppId())->getFileContents(11, 'alice');
+
+		self::assertInstanceOf(BoundedStreamResponse::class, $response);
+		self::assertSame(0, ScriptedStream::blockingCalls('local'));
+		self::assertSame('hello', $this->body($response));
+	}
+
+	public function testAFileThatNeverDeliversItsFirstBlockAnswers422AndIsClosed(): void {
+		// The hang of run 42404849768: smbclient waits, nothing arrives. The
+		// deadline ends it before the headers, so the answer can still be the
+		// 422 of the existing branch.
+		$stream = ScriptedStream::open('stuck', static fn (): string => ScriptedStream::EMPTY);
+		$this->fileOpeningAs(static fn () => $stream, 100, smb: true);
+		$this->expectTheCannotOpenAnswer();
+
+		$response = $this->controller($this->backendAppId())->getFileContents(11, 'alice');
+
+		self::assertTheCannotOpenAnswer($response);
+		self::assertTrue(ScriptedStream::closed('stuck'));
+		self::assertGreaterThanOrEqual(BoundedStreamReader::FIRST_BYTE_SECONDS, $this->clock);
+	}
+
+	public function testANonEmptyFileThatEndsWithoutAByteAnswers422(): void {
+		// The nudged smbclient read its exit and ended: zero bytes of a file the
+		// cache says has 100.
+		$stream = ScriptedStream::open('denied', [ScriptedStream::EMPTY, ScriptedStream::EOF]);
+		$this->fileOpeningAs(static fn () => $stream, 100, smb: true);
+		$this->expectTheCannotOpenAnswer();
+
+		$response = $this->controller($this->backendAppId())->getFileContents(11, 'alice');
+
+		self::assertTheCannotOpenAnswer($response);
+		self::assertTrue(ScriptedStream::closed('denied'));
+	}
+
+	public function testAFailedFirstReadAnswers422(): void {
+		$stream = ScriptedStream::open('broken', [ScriptedStream::ERROR]);
+		$this->fileOpeningAs(static fn () => $stream, 100, smb: true);
+		$this->expectTheCannotOpenAnswer();
+
+		$response = $this->controller($this->backendAppId())->getFileContents(11, 'alice');
+
+		self::assertTheCannotOpenAnswer($response);
+		self::assertTrue(ScriptedStream::closed('broken'));
+	}
+
+	public function testAnEmptyFileIsAnEmptyOkWithoutWaiting(): void {
+		$stream = ScriptedStream::open('zero', [ScriptedStream::EOF]);
+		$this->fileOpeningAs(static fn () => $stream, 0, smb: true);
+		$this->logger->expects(self::never())->method('warning');
+
+		$response = $this->controller($this->backendAppId())->getFileContents(11, 'alice');
+
+		self::assertInstanceOf(BoundedStreamResponse::class, $response);
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame('', $this->body($response));
+		self::assertSame(0.0, $this->clock);
+	}
+
+	public function testASharingViolationAtTheOpenAnswers422WithoutTheExceptionText(): void {
+		// Native mode: libsmbclient reports EBUSY, icewind/smb throws
+		// FileInUseException, and SMB::fopen does not catch it. It is a
+		// statement about this one file, so it is the 422 of a file that cannot
+		// be opened and not the 500 of a storage. Its message carries the path,
+		// which is why there is no error line with the exception (L6).
+		$class = 'Icewind\\SMB\\Exception\\FileInUseException';
+		if (!class_exists($class)) {
+			self::markTestSkipped('icewind/smb is not in the autoload space of this server checkout');
+		}
+		$this->fileOpeningAs(static function () use ($class): never {
+			throw new $class('/secret/share/path.docx');
+		});
+		$this->expectTheCannotOpenAnswer();
+
+		$response = $this->controller($this->backendAppId())->getFileContents(11, 'alice');
+
+		self::assertTheCannotOpenAnswer($response);
 	}
 }
