@@ -30,3 +30,5 @@ Vollzug Fix 3: Push 62d88c9c, sechs Push-Workflows grün; genau ein Dispatch "Co
 Freigabe Diagnose, Push und Dispatch 43-07 Fix 4: "Ok" (2026-11-07, Claude Code Terminal) Entscheid: ja
 
 Umfang Fix 4: Gateway-Proben für bob auf gesperrt-bob.txt und alice auf gesperrt-alle.txt vor dem Crawl (je 60 s, beide laufen, danach Abbruch mit Bericht bei einem Hänger), Datei-IDs 80 bis 110 mit Pfad im Hang-Bericht; genau ein Push von 9d0fb3bb plus diesem Stand auf origin main, genau ein Dispatch von "Coverage end to end", wenn die Push-Workflows grün sind.
+
+Vollzug Fix 4: Push 1c254392, vier Push-Workflows grün; genau ein Dispatch "Coverage end to end", Lauf 42404849768, rot in allen vier Varianten wie erwartet. Befund belegt: Home- und SMB-Probe 200 in unter 0,17 s, der Gateway-Abruf von gesperrt-bob.txt (Datei 92, bob) und von gesperrt-alle.txt (Datei 68, alice) antwortet in 60 s nicht (http 000), in allen vier Varianten, also auch mit 1.6.2. Ohne smbclient-PHP-Erweiterung liefert icewind/smb Share::read() eine Pipe aus smbclient "get"; bei einer DENY-ACE bleibt sie offen.
