@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\Findling\Service;
 
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\DB\QueryBuilder\ICompositeExpression;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
 use Psr\Log\LoggerInterface;
@@ -713,6 +714,272 @@ class FileStateService {
 		$result->closeCursor();
 
 		return is_array($row) ? (int)($row['total'] ?? 0) : 0;
+	}
+
+	/**
+	 * The most storage ids of one IN list in the per storage counts of the
+	 * per document coverage (plan 43-05).
+	 *
+	 * The ceiling AdminViewService::LEAVE_OUT_MAX_IDS already names, and well
+	 * under the parameter limits of the databases Nextcloud supports (Oracle
+	 * takes at most 1000 entries in one IN list, MySQL and PostgreSQL more).
+	 */
+	public const STORAGE_BAND = 1000;
+
+	/**
+	 * The verdicts only this side writes, and none of them ever reaches the
+	 * container: a file the crawl lists but cannot read, a job given up after
+	 * it got stuck again and again (QueueService::finish), and a file the
+	 * queue found gone. The first two are what the admin page names as "not
+	 * readable or stuck" (D-43-11); the third belongs to the denominator only.
+	 *
+	 * @var list<array{0: string, 1: string}>
+	 */
+	public const PHP_ONLY_NOT_READABLE = [['skipped', 'unreadable'], ['failed', 'repeatedly_stuck']];
+	/** @var list<array{0: string, 1: string}> */
+	public const PHP_ONLY_GONE = [['skipped', 'gone']];
+
+	/**
+	 * How many files carry exactly this verdict, per storage, over the named
+	 * storages only (plan 43-05, finding B1).
+	 *
+	 * The per document coverage builds its denominator per share group and
+	 * per single storage, so the files refused by type have to be known per
+	 * storage, and only for the mounted ones: a refused file on a storage that
+	 * left the mount list is in no denominator and must not shrink one. The
+	 * filters of countByReason() apply (the pair against the closed lists,
+	 * the file cache join, the two trash paths); the ids go out in bands of
+	 * STORAGE_BAND. An empty list asks nothing. Storages without such a file
+	 * are absent from the answer.
+	 *
+	 * @param list<int> $storageIds
+	 * @return array<int, int>
+	 */
+	public function countByReasonPerStorage(string $state, string $reason, array $storageIds): array {
+		if (!in_array($state, self::STATES, true) || !in_array($reason, self::REASONS, true)) {
+			$this->reject();
+			return [];
+		}
+
+		$ids = self::storageIds($storageIds);
+		$counts = [];
+		foreach (array_chunk($ids, self::STORAGE_BAND) as $band) {
+			$qb = $this->db->getQueryBuilder();
+			$qb->select('fc.storage')
+				->selectAlias($qb->func()->count('*'), 'total')
+				->from(self::TABLE_NAME, 's')
+				->innerJoin('s', 'filecache', 'fc', $qb->expr()->eq('fc.fileid', 's.file_id'))
+				->where($qb->expr()->eq('s.state', $qb->createNamedParameter($state, IQueryBuilder::PARAM_STR)))
+				->andWhere($qb->expr()->eq('s.reason', $qb->createNamedParameter($reason, IQueryBuilder::PARAM_STR)))
+				->andWhere($qb->expr()->notLike('fc.path', $qb->createNamedParameter('files_trashbin/%', IQueryBuilder::PARAM_STR)))
+				->andWhere($qb->expr()->notLike('fc.path', $qb->createNamedParameter('__groupfolders/trash/%', IQueryBuilder::PARAM_STR)))
+				->andWhere($qb->expr()->in('fc.storage', $qb->createNamedParameter($band, IQueryBuilder::PARAM_INT_ARRAY)))
+				->groupBy('fc.storage');
+
+			$result = $qb->executeQuery();
+			try {
+				while (is_array($row = $result->fetch())) {
+					$storageId = (int)($row['storage'] ?? 0);
+					$total = (int)($row['total'] ?? 0);
+					if ($storageId > 0 && $total > 0) {
+						$counts[$storageId] = ($counts[$storageId] ?? 0) + $total;
+					}
+				}
+			} finally {
+				$result->closeCursor();
+			}
+		}
+
+		return $counts;
+	}
+
+	/**
+	 * How many documents carry only a verdict of this side, per share group
+	 * and per single storage, and how many of them are not readable or stuck
+	 * (plan 43-05, D-43-11).
+	 *
+	 * A document is a distinct internal path inside a group: oc_filecache.path
+	 * relative to the root of the storage, the same for every member of a
+	 * share, the key space of the document key of the container (plan 43-15,
+	 * D-43-14). A file no member can read has one row per member and is one
+	 * document. Two rules keep the figure a subset of what nobody else counts:
+	 *
+	 * - N1: a document of a group counts only while no member of that group
+	 *   holds the same internal path without a verdict of this side. Such a
+	 *   member was indexed, judged otherwise by the container or is still
+	 *   queued, and in all three cases the container counts the document (or
+	 *   will), so counting it here as well would count it twice. The check runs
+	 *   over the file cache and not over findling_file_state, because this side
+	 *   never writes indexed: an indexed member has no row in that table.
+	 * - W-b: a verdict without a file cache row counts nowhere. The inner join
+	 *   drops it: the file left Nextcloud, and the recount drops it from
+	 *   files_seen as well.
+	 *
+	 * The paths never leave this method; it compares path hashes and answers
+	 * with counts (T-43-44). Storage ids go out in bands of STORAGE_BAND, the
+	 * path hashes of the N1 check as well.
+	 *
+	 * @param list<list<int>> $groups the share groups, each a list of mounted members
+	 * @param list<int> $singles the mounted storages outside every group
+	 * @return array{byGroup: list<int>, byStorage: array<int,int>, notReadableByGroup: list<int>, notReadableByStorage: array<int,int>}
+	 */
+	public function distinctPathsByReasons(array $groups, array $singles): array {
+		$groups = array_values($groups);
+		$groupOf = [];
+		$answer = [
+			'byGroup' => array_fill(0, count($groups), 0),
+			'byStorage' => [],
+			'notReadableByGroup' => array_fill(0, count($groups), 0),
+			'notReadableByStorage' => [],
+		];
+		foreach ($groups as $index => $group) {
+			foreach (self::storageIds((array)$group) as $member) {
+				$groupOf[$member] ??= $index;
+			}
+		}
+		$singles = array_values(array_filter(self::storageIds($singles), static fn (int $id): bool => !isset($groupOf[$id])));
+		$all = array_merge(array_keys($groupOf), $singles);
+		if ($all === []) {
+			return $answer;
+		}
+
+		// Per group index, or 's' and the id of a single storage: path hash =>
+		// whether one of its verdicts is not readable or stuck.
+		$candidates = [];
+		foreach (array_chunk($all, self::STORAGE_BAND) as $band) {
+			foreach ($this->phpOnlyRows($band) as [$storageId, $hash, $notReadable]) {
+				if (isset($groupOf[$storageId])) {
+					$key = $groupOf[$storageId];
+				} else {
+					$key = 's' . $storageId;
+				}
+				$known = $candidates[$key][$hash] ?? false;
+				$candidates[$key][$hash] = $known || $notReadable;
+			}
+		}
+
+		foreach ($candidates as $key => $hashes) {
+			if (is_int($key)) {
+				$members = self::storageIds((array)$groups[$key]);
+				$hashes = $this->withoutOtherVerdicts($hashes, $members);
+				$answer['byGroup'][$key] = count($hashes);
+				$answer['notReadableByGroup'][$key] = count(array_filter($hashes));
+				continue;
+			}
+			$storageId = (int)substr((string)$key, 1);
+			$answer['byStorage'][$storageId] = count($hashes);
+			$notReadable = count(array_filter($hashes));
+			if ($notReadable > 0) {
+				$answer['notReadableByStorage'][$storageId] = $notReadable;
+			}
+		}
+
+		return $answer;
+	}
+
+	/**
+	 * The verdicts of this side over one band of storages: storage, path
+	 * hash, and whether the verdict is "not readable or stuck".
+	 *
+	 * @param list<int> $band
+	 * @return list<array{0: int, 1: string, 2: bool}>
+	 */
+	private function phpOnlyRows(array $band): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('fc.storage', 'fc.path_hash', 's.state', 's.reason')
+			->from(self::TABLE_NAME, 's')
+			->innerJoin('s', 'filecache', 'fc', $qb->expr()->eq('fc.fileid', 's.file_id'))
+			->where($this->phpOnlyCondition($qb, 's'))
+			->andWhere($qb->expr()->notLike('fc.path', $qb->createNamedParameter('files_trashbin/%', IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->notLike('fc.path', $qb->createNamedParameter('__groupfolders/trash/%', IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->in('fc.storage', $qb->createNamedParameter($band, IQueryBuilder::PARAM_INT_ARRAY)));
+
+		$rows = [];
+		$result = $qb->executeQuery();
+		try {
+			while (is_array($row = $result->fetch())) {
+				$storageId = (int)($row['storage'] ?? 0);
+				$hash = (string)($row['path_hash'] ?? '');
+				if ($storageId <= 0 || $hash === '') {
+					continue;
+				}
+				$pair = [(string)($row['state'] ?? ''), (string)($row['reason'] ?? '')];
+				$rows[] = [$storageId, $hash, in_array($pair, self::PHP_ONLY_NOT_READABLE, true)];
+			}
+		} finally {
+			$result->closeCursor();
+		}
+
+		return $rows;
+	}
+
+	/**
+	 * The candidates of one group without those that a member holds without a
+	 * verdict of this side (N1).
+	 *
+	 * @param array<string, bool> $hashes
+	 * @param list<int> $members
+	 * @return array<string, bool>
+	 */
+	private function withoutOtherVerdicts(array $hashes, array $members): array {
+		if ($hashes === [] || count($members) < 2) {
+			return $hashes;
+		}
+
+		foreach (array_chunk(array_keys($hashes), self::STORAGE_BAND) as $band) {
+			$band = array_map(strval(...), $band);
+			$qb = $this->db->getQueryBuilder();
+			$qb->select('fc.path_hash')
+				->from('filecache', 'fc')
+				->leftJoin('fc', self::TABLE_NAME, 's', $qb->expr()->andX(
+					$qb->expr()->eq('s.file_id', 'fc.fileid'),
+					$this->phpOnlyCondition($qb, 's'),
+				))
+				->where($qb->expr()->in('fc.storage', $qb->createNamedParameter($members, IQueryBuilder::PARAM_INT_ARRAY)))
+				->andWhere($qb->expr()->in('fc.path_hash', $qb->createNamedParameter($band, IQueryBuilder::PARAM_STR_ARRAY)))
+				->andWhere($qb->expr()->isNull('s.file_id'));
+
+			$result = $qb->executeQuery();
+			try {
+				while (is_array($row = $result->fetch())) {
+					unset($hashes[(string)($row['path_hash'] ?? '')]);
+				}
+			} finally {
+				$result->closeCursor();
+			}
+		}
+
+		return $hashes;
+	}
+
+	/** The three verdicts of this side as one condition over the alias. */
+	private function phpOnlyCondition(IQueryBuilder $qb, string $alias): ICompositeExpression {
+		$pairs = [];
+		foreach ([...self::PHP_ONLY_NOT_READABLE, ...self::PHP_ONLY_GONE] as [$state, $reason]) {
+			$pairs[] = $qb->expr()->andX(
+				$qb->expr()->eq($alias . '.state', $qb->createNamedParameter($state, IQueryBuilder::PARAM_STR)),
+				$qb->expr()->eq($alias . '.reason', $qb->createNamedParameter($reason, IQueryBuilder::PARAM_STR)),
+			);
+		}
+
+		return $qb->expr()->orX(...$pairs);
+	}
+
+	/**
+	 * Positive whole storage ids, each once, in the given order.
+	 *
+	 * @param array<mixed> $storageIds
+	 * @return list<int>
+	 */
+	private static function storageIds(array $storageIds): array {
+		$ids = [];
+		foreach ($storageIds as $id) {
+			if (is_int($id) && $id > 0) {
+				$ids[$id] = true;
+			}
+		}
+
+		return array_keys($ids);
 	}
 
 	private function reject(): void {

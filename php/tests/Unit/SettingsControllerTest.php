@@ -156,6 +156,8 @@ final class SettingsControllerTest extends TestCase {
 			// false for every app (plan 34-03).
 			new ParallelSearchService($this->createMock(IAppManager::class)),
 			$jobList,
+			// The logger of the per document count (plan 43-05).
+			$logger,
 		);
 
 		return new SettingsController(

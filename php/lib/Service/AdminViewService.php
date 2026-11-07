@@ -15,6 +15,7 @@ use OCP\IAppConfig;
 use OCP\IDateTimeFormatter;
 use OCP\IL10N;
 use OCP\IUserSession;
+use Psr\Log\LoggerInterface;
 
 /**
  * The one place where the numbers of Nextcloud and the numbers of the container
@@ -614,6 +615,7 @@ final class AdminViewService {
 		private IDateTimeFormatter $dateTimeFormatter,
 		private ParallelSearchService $parallelSearch,
 		private IJobList $jobList,
+		private LoggerInterface $logger,
 	) {
 	}
 
@@ -668,28 +670,55 @@ final class AdminViewService {
 		$scheduled = (int)($queue['scheduled'] ?? 0);
 		$running = (int)($queue['running'] ?? 0);
 
-		$refusedByType = $this->fileStateService->countByReason('skipped', 'mime_not_allowed');
-
 		$lastJobRun = $this->appConfig->getValueInt(Application::APP_ID, SchedulerJob::LAST_JOB_RUN);
 		$now = $this->timeFactory->getTime();
 
-		$parameters = self::leaveOutParameters($scan);
-		$answer = $this->exAppService->adminGet('/status', $this->userId(), $parameters);
-		$backendReachable = $answer !== null;
-		$backend = $this->backend($answer);
+		// The per document count of 1.6.3 (plan 43-05, D-43-07, D-43-11):
+		// the container counts every document of the mounted storages once,
+		// and the denominator is worked out per share group. Asked first,
+		// because its answer decides how the status call below is asked. A
+		// container without the route (1.6.2) and an instance above the limits
+		// get the figure of 1.6.2, and the page says so (legacyCount); any
+		// other failure is the path of 1.6.2 without a word, as before.
+		$coverageBody = self::coverageBody($mountedStorageIds, $groups);
+		$perDocument = $this->perDocumentCoverage($coverageBody);
+		$legacyReason = $perDocument['kind'] === self::PER_DOCUMENT_LEGACY ? $perDocument['reason'] : null;
 
-		// The files refused by type on the storages a group leaves out, asked
-		// only when there are any, so an instance without such a group asks
-		// exactly what 1.5 asked (plan 39-01).
-		$refusedLeftOut = $parameters === []
-			? 0
-			: $this->fileStateService->countByReason('skipped', 'mime_not_allowed', array_values((array)$scan['leftOutStorageIds']));
+		if ($perDocument['answer'] !== null) {
+			// No leaveOut: the container counts every member of a group
+			// itself, so nothing is subtracted afterwards (W9).
+			$parameters = [];
+			$answer = $this->exAppService->adminGet('/status', $this->userId(), $parameters);
+			$backendReachable = $answer !== null;
+			$backend = $this->backend($answer);
 
-		// The denominator of the coverage figure and the file count of the
-		// estimate, worked out once in figures() and handed to both subtrees
-		// below, after the answer of the container is in: whether the
-		// deduplication applies is decided by that answer (plan 39-01).
-		$figures = $this->figures($scan, $answer, $parameters, $refusedByType, $refusedLeftOut);
+			// Only over the mounted storages (B1): a refused file on a storage
+			// that left the mount list is in no denominator.
+			$refusedPerStorage = $this->fileStateService->countByReasonPerStorage('skipped', 'mime_not_allowed', $coverageBody['mounted']);
+			$parts = $this->scanStats->groupParts($coverageBody['mounted'], $coverageBody['groups'], $refusedPerStorage);
+			$phpOnly = $this->fileStateService->distinctPathsByReasons($coverageBody['groups'], array_keys($parts['singles']));
+			$figures = self::perDocumentFigures($scan, $backend, $perDocument['answer'], $parts, $phpOnly);
+		} else {
+			$refusedByType = $this->fileStateService->countByReason('skipped', 'mime_not_allowed');
+
+			$parameters = self::leaveOutParameters($scan);
+			$answer = $this->exAppService->adminGet('/status', $this->userId(), $parameters);
+			$backendReachable = $answer !== null;
+			$backend = $this->backend($answer);
+
+			// The files refused by type on the storages a group leaves out, asked
+			// only when there are any, so an instance without such a group asks
+			// exactly what 1.5 asked (plan 39-01).
+			$refusedLeftOut = $parameters === []
+				? 0
+				: $this->fileStateService->countByReason('skipped', 'mime_not_allowed', array_values((array)$scan['leftOutStorageIds']));
+
+			// The denominator of the coverage figure and the file count of the
+			// estimate, worked out once in figures() and handed to both subtrees
+			// below, after the answer of the container is in: whether the
+			// deduplication applies is decided by that answer (plan 39-01).
+			$figures = $this->figures($scan, $answer, $parameters, $refusedByType, $refusedLeftOut);
+		}
 		$indexable = $figures['indexable'];
 
 		// Read BEFORE the remembering below overwrites it. The difference between
@@ -796,6 +825,10 @@ final class AdminViewService {
 				(int)($states['failed'] ?? 0),
 				$figures['deduplicated'],
 				$this->rulesPendingNow(),
+				$figures['perDocument'],
+				$figures['counting'],
+				$figures['notReadable'],
+				$legacyReason,
 			),
 			'estimate' => $this->estimate($figures['scan'], $figures['backend'], $backendReachable, $indexable, $scheduled + $running, $pause === self::PAUSE_RUNNING),
 			'errors' => $this->errors(),
@@ -2021,11 +2054,16 @@ final class AdminViewService {
 	 * @param int $failed failed verdicts, they explain a gap without duplicates
 	 * @param bool $deduplicated whether figures() applied the counting key groups
 	 * @param bool $rulesPending the hint after a rule change, rulesPendingNow()
+	 * @param bool $perDocument whether the figures come from the per document count (plan 43-05)
+	 * @param bool $counting whether the container still counts them
+	 * @param int $notReadable documents only this side judged not readable or stuck
+	 * @param string|null $legacyReason missing or limits when the page shows the figure of 1.6.2 visibly
 	 * @return array{
 	 *     indexed:int, indexable:int, deliberatelyLeftOut:int, percent:int|null,
 	 *     embedded:int, embeddedPercent:int|null, recounting:bool, duplicates:bool,
 	 *     deduplicated:bool, rulesPending:bool, provisional:bool, mountsTotal:int,
-	 *     mountsFinished:int
+	 *     mountsFinished:int, counting:bool, perDocument:bool, notReadable:int,
+	 *     legacyCount:bool, legacyReason:string|null
 	 * }
 	 */
 	private function coverage(
@@ -2039,6 +2077,10 @@ final class AdminViewService {
 		int $failed,
 		bool $deduplicated = false,
 		bool $rulesPending = false,
+		bool $perDocument = false,
+		bool $counting = false,
+		int $notReadable = 0,
+		?string $legacyReason = null,
 	): array {
 		$overCap = max(0, (int)$scan['overCap']);
 		$excluded = max(0, (int)$scan['excluded']);
@@ -2077,6 +2119,19 @@ final class AdminViewService {
 		// a sentence of its own instead of "backend does not answer".
 		$recounting = $backendReachable && $indexable > 0 && $indexed > $indexable;
 
+		// The per document count (plan 43-05): per construction documents_g
+		// <= judged_g <= denominator_g in every group and every single
+		// storage (D-43-09, D-43-11), so the counter cannot pass the
+		// denominator and there is no recount window to name. While the
+		// container still counts, there is no share at all, never an old one.
+		if ($perDocument) {
+			$recounting = false;
+			if ($counting) {
+				$percent = null;
+				$embeddedPercent = null;
+			}
+		}
+
 		// Everything settled and still a gap the failed files do not explain:
 		// with external storages in the index the one remaining cause is a
 		// share counted once per user mount (issue #25, reproduced with two
@@ -2113,6 +2168,18 @@ final class AdminViewService {
 			'provisional' => $mountsTotal === 0 || $mountsFinished < $mountsTotal,
 			'mountsTotal' => $mountsTotal,
 			'mountsFinished' => $mountsFinished,
+			// The per document count of 1.6.3 (plan 43-05). counting: the
+			// container counts, the shares are null. notReadable: documents
+			// only this side judged as not readable or stuck, part of the
+			// denominator (D-43-11). legacyCount and legacyReason: the page
+			// shows the figure of 1.6.2 because the container lacks the route
+			// (missing) or the instance is above the limits (limits); the
+			// sentences come with plan 43-06.
+			'counting' => $perDocument && $counting,
+			'perDocument' => $perDocument,
+			'notReadable' => $perDocument ? max(0, $notReadable) : 0,
+			'legacyCount' => $legacyReason !== null,
+			'legacyReason' => $legacyReason,
 		];
 	}
 
@@ -2251,6 +2318,337 @@ final class AdminViewService {
 	}
 
 	/**
+	 * The bounds of the body of POST /coverage, mirrored from
+	 * backend/src/findling/api/coverage.py (COVERAGE_MAX_MOUNTED,
+	 * COVERAGE_MAX_MEMBERS). Above them the page does not ask and shows the
+	 * figure of 1.6.2 with legacyReason limits, instead of a 422 that would
+	 * read as an unreachable container.
+	 */
+	public const COVERAGE_MAX_MOUNTED = 50000;
+	public const COVERAGE_MAX_MEMBERS = 1000;
+
+	/**
+	 * The most single storages the page sends (plan 43-05). Not a bound of the
+	 * container: the answer carries two [storage id, figure] pairs per single
+	 * storage with documents, and ExAppService refuses an answer above one
+	 * megabyte (MAX_BODY_BYTES). Measured in plan 43-04: 1 400 238 bytes for
+	 * 50 000 single storages, so 25 000 keep the answer under 0.75 megabytes
+	 * with room for longer ids. Above it the same visible fallback as above.
+	 */
+	public const COVERAGE_MAX_SINGLES = 25000;
+
+	/** The outcomes of perDocumentCoverage(). */
+	public const PER_DOCUMENT_OK = 'ok';
+	public const PER_DOCUMENT_COUNTING = 'counting';
+	public const PER_DOCUMENT_LEGACY = 'legacy';
+	public const PER_DOCUMENT_FALLBACK = 'fallback';
+
+	/**
+	 * The body of POST /coverage: the mount list and the share groups that
+	 * build the denominator, and nothing else (plan 43-05).
+	 *
+	 * mounted: positive ids, each once, ascending. groups: only mounted
+	 * members, each once over all groups (the first group keeps a storage
+	 * named twice), only groups with two members or more, in the order of
+	 * $groups. The same list goes to ScanStatsService::groupParts() and
+	 * FileStateService::distinctPathsByReasons(), so the n-th figure of every
+	 * side is about the same group.
+	 *
+	 * @param list<int> $mountedStorageIds
+	 * @param list<list<int>> $groups
+	 * @return array{mounted: list<int>, groups: list<list<int>>}
+	 */
+	public static function coverageBody(array $mountedStorageIds, array $groups): array {
+		$mounted = [];
+		foreach ($mountedStorageIds as $storageId) {
+			if (is_int($storageId) && $storageId > 0) {
+				$mounted[$storageId] = true;
+			}
+		}
+		$taken = [];
+		$kept = [];
+		foreach ($groups as $group) {
+			$members = [];
+			foreach ((array)$group as $member) {
+				if (is_int($member) && isset($mounted[$member]) && !isset($taken[$member])) {
+					$members[$member] = true;
+				}
+			}
+			if (count($members) < 2) {
+				continue;
+			}
+			$members = array_keys($members);
+			sort($members);
+			foreach ($members as $member) {
+				$taken[$member] = true;
+			}
+			$kept[] = $members;
+		}
+		$ids = array_keys($mounted);
+		sort($ids);
+
+		return ['mounted' => $ids, 'groups' => $kept];
+	}
+
+	/**
+	 * Ask the container for the per document count, or say why not.
+	 *
+	 * ok and counting carry the checked answer; legacy (missing, limits)
+	 * means the page shows the figure of 1.6.2 and says so, with one warning
+	 * of numbers only; fallback is every other failure, unreachable, busy,
+	 * refused or an answer that does not hold up, and the page goes the way
+	 * of 1.6.2 as it did before this plan.
+	 *
+	 * @param array{mounted: list<int>, groups: list<list<int>>} $body
+	 * @return array{kind: string, answer: ?array<string,mixed>, reason: ?string}
+	 */
+	private function perDocumentCoverage(array $body): array {
+		$members = 0;
+		foreach ($body['groups'] as $group) {
+			$members += count($group);
+		}
+		$singles = count($body['mounted']) - $members;
+		if (count($body['mounted']) > self::COVERAGE_MAX_MOUNTED || $members > self::COVERAGE_MAX_MEMBERS || $singles > self::COVERAGE_MAX_SINGLES) {
+			$this->logger->warning('Findling: the per document count is over its limits, the page shows the 1.6.2 figure', [
+				'mounted' => count($body['mounted']),
+				'members' => $members,
+				'singles' => $singles,
+			]);
+
+			return ['kind' => self::PER_DOCUMENT_LEGACY, 'answer' => null, 'reason' => 'limits'];
+		}
+
+		$outcome = $this->exAppService->adminSend('/coverage', $this->userId(), $body);
+		if ($outcome['kind'] === ExAppService::ADMIN_MISSING) {
+			$this->logger->warning('Findling: the backend has no per document count, the page shows the 1.6.2 figure');
+
+			return ['kind' => self::PER_DOCUMENT_LEGACY, 'answer' => null, 'reason' => 'missing'];
+		}
+		if ($outcome['kind'] !== ExAppService::ADMIN_OK) {
+			return ['kind' => self::PER_DOCUMENT_FALLBACK, 'answer' => null, 'reason' => null];
+		}
+
+		$answer = self::perDocumentAnswer($outcome['body'], $body);
+		if ($answer === null) {
+			$this->logger->warning('Findling: the per document count of the backend does not hold up, the page shows the 1.6.2 figure');
+
+			return ['kind' => self::PER_DOCUMENT_FALLBACK, 'answer' => null, 'reason' => null];
+		}
+
+		return [
+			'kind' => $answer['counting'] ? self::PER_DOCUMENT_COUNTING : self::PER_DOCUMENT_OK,
+			'answer' => $answer,
+			'reason' => null,
+		];
+	}
+
+	/**
+	 * The answer of POST /coverage checked against the body it answers, or
+	 * null (T-43-14).
+	 *
+	 * counting must be a boolean; while it is true nothing else is read. A
+	 * figure is a whole number of nought or more; both group lists have
+	 * exactly one figure per group of the body; the storage lists are
+	 * [storage id, figure] pairs of single storages of the body, each id once;
+	 * the sums are the sums of the parts; and in every group and every single
+	 * storage the documents stay within the verdicts, embedded within the
+	 * documents. Anything else is a defect of the container and costs the
+	 * figure, never the page.
+	 *
+	 * @param array<mixed>|null $answer
+	 * @param array{mounted: list<int>, groups: list<list<int>>} $body
+	 * @return array{counting: bool, documents: int, embeddedDocuments: int, judgedDocuments: int, documentsByGroup: list<int>, judgedByGroup: list<int>, documentsByStorage: array<int,int>, judgedByStorage: array<int,int>}|null
+	 */
+	public static function perDocumentAnswer(?array $answer, array $body): ?array {
+		if ($answer === null || !is_bool($answer['counting'] ?? null)) {
+			return null;
+		}
+		$empty = [
+			'counting' => true, 'documents' => 0, 'embeddedDocuments' => 0, 'judgedDocuments' => 0,
+			'documentsByGroup' => [], 'judgedByGroup' => [], 'documentsByStorage' => [], 'judgedByStorage' => [],
+		];
+		if ($answer['counting'] === true) {
+			return $empty;
+		}
+
+		$documents = self::nonNegativeInt($answer['documents'] ?? null);
+		$embedded = self::nonNegativeInt($answer['embeddedDocuments'] ?? null);
+		$judged = self::nonNegativeInt($answer['judgedDocuments'] ?? null);
+		$documentsByGroup = self::figureList($answer['documentsByGroup'] ?? null, count($body['groups']));
+		$judgedByGroup = self::figureList($answer['judgedByGroup'] ?? null, count($body['groups']));
+		$inGroup = [];
+		foreach ($body['groups'] as $group) {
+			foreach ($group as $member) {
+				$inGroup[$member] = true;
+			}
+		}
+		$singles = array_fill_keys(array_values(array_filter($body['mounted'], static fn (int $id): bool => !isset($inGroup[$id]))), true);
+		$documentsByStorage = self::figurePairs($answer['documentsByStorage'] ?? null, $singles);
+		$judgedByStorage = self::figurePairs($answer['judgedByStorage'] ?? null, $singles);
+		if ($documents === null || $embedded === null || $judged === null || $documentsByGroup === null
+			|| $judgedByGroup === null || $documentsByStorage === null || $judgedByStorage === null) {
+			return null;
+		}
+
+		if ($documents !== array_sum($documentsByGroup) + array_sum($documentsByStorage)
+			|| $judged !== array_sum($judgedByGroup) + array_sum($judgedByStorage)
+			|| $embedded > $documents) {
+			return null;
+		}
+		foreach ($documentsByGroup as $index => $figure) {
+			if ($figure > $judgedByGroup[$index]) {
+				return null;
+			}
+		}
+		foreach ($documentsByStorage as $storageId => $figure) {
+			if ($figure > ($judgedByStorage[$storageId] ?? 0)) {
+				return null;
+			}
+		}
+
+		return [
+			'counting' => false,
+			'documents' => $documents,
+			'embeddedDocuments' => $embedded,
+			'judgedDocuments' => $judged,
+			'documentsByGroup' => $documentsByGroup,
+			'judgedByGroup' => $judgedByGroup,
+			'documentsByStorage' => $documentsByStorage,
+			'judgedByStorage' => $judgedByStorage,
+		];
+	}
+
+	/**
+	 * A list of exactly $length figures, or null.
+	 *
+	 * @return list<int>|null
+	 */
+	private static function figureList(mixed $value, int $length): ?array {
+		if (!is_array($value) || !array_is_list($value) || count($value) !== $length) {
+			return null;
+		}
+		$figures = [];
+		foreach ($value as $figure) {
+			$figure = self::nonNegativeInt($figure);
+			if ($figure === null) {
+				return null;
+			}
+			$figures[] = $figure;
+		}
+
+		return $figures;
+	}
+
+	/**
+	 * [storage id, figure] pairs of the named storages, each id once, or null.
+	 *
+	 * @param array<int, true> $allowed
+	 * @return array<int, int>|null
+	 */
+	private static function figurePairs(mixed $value, array $allowed): ?array {
+		if (!is_array($value) || !array_is_list($value)) {
+			return null;
+		}
+		$figures = [];
+		foreach ($value as $pair) {
+			if (!is_array($pair) || !array_is_list($pair) || count($pair) !== 2) {
+				return null;
+			}
+			[$storageId, $figure] = $pair;
+			$figure = self::nonNegativeInt($figure);
+			if (!is_int($storageId) || !isset($allowed[$storageId]) || isset($figures[$storageId]) || $figure === null) {
+				return null;
+			}
+			$figures[$storageId] = $figure;
+		}
+
+		return $figures;
+	}
+
+	/**
+	 * The denominator of the per document count (D-43-11): over every share
+	 * group and every mounted single storage, the larger of the PHP part and
+	 * the verdicts of the container plus the verdicts only this side wrote.
+	 *
+	 * Per part and not one maximum over the sums: a group whose members have
+	 * judged more than its representative has seen and a group still being
+	 * walked must not trade against each other. Every part is at least its
+	 * documents (documents_g <= judged_g, checked in perDocumentAnswer()), so
+	 * the share never passes a hundred per cent (D-43-09). Without a leaveOut
+	 * subtraction (W9).
+	 *
+	 * @param array{groups: list<int>, singles: array<int,int>} $parts ScanStatsService::groupParts()
+	 * @param array{judgedByGroup: list<int>, judgedByStorage: array<int,int>} $answer perDocumentAnswer()
+	 * @param array{byGroup: list<int>, byStorage: array<int,int>} $phpOnly FileStateService::distinctPathsByReasons()
+	 */
+	public static function perDocumentDenominator(array $parts, array $answer, array $phpOnly): int {
+		$denominator = 0;
+		foreach ($parts['groups'] as $index => $php) {
+			$denominator += max(
+				max(0, (int)$php),
+				max(0, (int)($answer['judgedByGroup'][$index] ?? 0)) + max(0, (int)($phpOnly['byGroup'][$index] ?? 0)),
+			);
+		}
+		foreach ($parts['singles'] as $storageId => $php) {
+			$denominator += max(
+				max(0, (int)$php),
+				max(0, (int)($answer['judgedByStorage'][$storageId] ?? 0)) + max(0, (int)($phpOnly['byStorage'][$storageId] ?? 0)),
+			);
+		}
+
+		return $denominator;
+	}
+
+	/**
+	 * The figures() of the per document count: the same keys, filled from
+	 * the answer of POST /coverage, the parts of ScanStatsService::groupParts()
+	 * and the verdicts only this side wrote (plan 43-05).
+	 *
+	 * The scan counters are those of the grouped set, the representatives the
+	 * parts are taken from; the numerators are the documents and the embedded
+	 * documents of the container; the denominator is perDocumentDenominator().
+	 * While the container counts, the denominator is the PHP side alone and
+	 * coverage() shows no share. Static for the reason coverageShare() is.
+	 *
+	 * @param array<string,mixed> $scan the answer of ScanStatsService::totals()
+	 * @param array<string,mixed> $backend backend() of the status answer
+	 * @param array<string,mixed> $answer perDocumentAnswer()
+	 * @param array{groups: list<int>, singles: array<int,int>, refused: int} $parts
+	 * @param array{byGroup: list<int>, byStorage: array<int,int>, notReadableByGroup: list<int>, notReadableByStorage: array<int,int>} $phpOnly
+	 * @return array{scan:array<string,int>, backend:array<string,mixed>, indexable:int, refusedByType:int, deduplicated:bool, perDocument:bool, counting:bool, notReadable:int}
+	 */
+	public static function perDocumentFigures(array $scan, array $backend, array $answer, array $parts, array $phpOnly): array {
+		$source = is_array($scan['grouped'] ?? null) ? (array)$scan['grouped'] : $scan;
+		$counted = [];
+		foreach (['filesSeen', 'bytesSeen', 'ocrCandidates', 'pdfSeen', 'overCap', 'excluded', 'mountsTotal', 'mountsFinished'] as $key) {
+			$counted[$key] = max(0, (int)($source[$key] ?? 0));
+		}
+
+		$counting = ($answer['counting'] ?? true) === true;
+		if ($counting) {
+			$indexable = array_sum(array_map(intval(...), $parts['groups'])) + array_sum(array_map(intval(...), $parts['singles']));
+		} else {
+			$indexable = self::perDocumentDenominator($parts, $answer, $phpOnly);
+			$backend['indexed'] = (int)$answer['documents'];
+			$backend['embedded'] = (int)$answer['embeddedDocuments'];
+		}
+
+		$notReadable = array_sum(array_map(intval(...), $phpOnly['notReadableByGroup']))
+			+ array_sum(array_map(intval(...), $phpOnly['notReadableByStorage']));
+
+		return [
+			'scan' => $counted,
+			'backend' => $backend,
+			'indexable' => max(0, $indexable),
+			'refusedByType' => max(0, (int)$parts['refused']),
+			'deduplicated' => true,
+			'perDocument' => true,
+			'counting' => $counting,
+			'notReadable' => max(0, $notReadable),
+		];
+	}
+
+	/**
 	 * The scan counters, the judged container figures and the denominator the
 	 * coverage block and the estimate both read.
 	 *
@@ -2288,7 +2686,7 @@ final class AdminViewService {
 	 * @param array<string,string> $parameters what the status call was asked with
 	 * @param int $refusedByType skipped(mime_not_allowed) over every storage
 	 * @param int $refusedLeftOut the same over the left out storages only
-	 * @return array{scan:array<string,int>, backend:array<string,mixed>, indexable:int, refusedByType:int, deduplicated:bool}
+	 * @return array{scan:array<string,int>, backend:array<string,mixed>, indexable:int, refusedByType:int, deduplicated:bool, perDocument:bool, counting:bool, notReadable:int}
 	 */
 	private function figures(array $scan, ?array $answer, array $parameters, int $refusedByType, int $refusedLeftOut = 0): array {
 		$backend = $this->backend($answer);
@@ -2324,6 +2722,9 @@ final class AdminViewService {
 			'indexable' => $indexable,
 			'refusedByType' => $refused,
 			'deduplicated' => $deduplicated,
+			'perDocument' => false,
+			'counting' => false,
+			'notReadable' => 0,
 		];
 	}
 

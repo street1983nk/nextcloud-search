@@ -392,40 +392,8 @@ final class ScanStatsService {
 	 * }
 	 */
 	public function totals(array $mountedStorageIds, array $groups = []): array {
-		$ids = array_values(array_unique(array_filter(
-			array_map(intval(...), $mountedStorageIds),
-			static fn (int $id): bool => $id > 0,
-		)));
-
-		$rows = [];
-		foreach (array_chunk($ids, self::TOTALS_BAND) as $band) {
-			$qb = $this->db->getQueryBuilder();
-			$qb->select('storage_id', 'finished_at', ...array_keys(self::COUNTERS))
-				->from(self::TABLE_NAME)
-				->where($qb->expr()->in(
-					'storage_id',
-					$qb->createNamedParameter($band, IQueryBuilder::PARAM_INT_ARRAY),
-				));
-
-			$result = $qb->executeQuery();
-			try {
-				// is_array() and not !== false: a cursor that answers anything but
-				// a row ends the loop instead of spinning on it.
-				while (is_array($row = $result->fetch())) {
-					$storageId = (int)($row['storage_id'] ?? 0);
-					if ($storageId <= 0) {
-						continue;
-					}
-					$counted = ['finished' => ($row['finished_at'] ?? null) !== null];
-					foreach (self::COUNTERS as $column => $key) {
-						$counted[$key] = (int)($row[$column] ?? 0);
-					}
-					$rows[$storageId] = $counted;
-				}
-			} finally {
-				$result->closeCursor();
-			}
-		}
+		$ids = self::positiveIds($mountedStorageIds);
+		$rows = $this->rowsOf($ids);
 
 		$leftOut = $this->leftOutMembers($ids, $rows, $groups);
 
@@ -478,17 +446,7 @@ final class ScanStatsService {
 			// the smaller id, so the pick is the same on every poll: a
 			// representative that changed between two polls would change the
 			// leaveOut list and with it the cache key of the container's count.
-			$counted = array_values(array_filter($members, static fn (int $id): bool => isset($rows[$id])));
-			usort($counted, static fn (int $a, int $b): int => [
-				-(int)($rows[$a]['filesSeen'] ?? 0),
-				($rows[$a]['finished'] ?? false) === true ? 0 : 1,
-				$a,
-			] <=> [
-				-(int)($rows[$b]['filesSeen'] ?? 0),
-				($rows[$b]['finished'] ?? false) === true ? 0 : 1,
-				$b,
-			]);
-			$representative = $counted[0] ?? $members[0];
+			$representative = self::representative($members, $rows);
 
 			foreach ($members as $member) {
 				if ($member !== $representative) {
@@ -502,6 +460,168 @@ final class ScanStatsService {
 		sort($ids);
 
 		return ['ids' => $ids, 'groups' => $applied];
+	}
+
+	/**
+	 * The member that represents a group: the most files seen, on equal counts
+	 * a finished one, then the smaller id; without a counted member the
+	 * smallest id (plan 41-02, D-41-10). One rule for totals() and groupParts(),
+	 * so the denominator of 1.6.2 and the per group part of 1.6.3 always name
+	 * the same member.
+	 *
+	 * @param list<int> $members sorted, at least one
+	 * @param array<int, array<string, int|bool>> $rows
+	 */
+	private static function representative(array $members, array $rows): int {
+		$counted = array_values(array_filter($members, static fn (int $id): bool => isset($rows[$id])));
+		usort($counted, static fn (int $a, int $b): int => [
+			-(int)($rows[$a]['filesSeen'] ?? 0),
+			($rows[$a]['finished'] ?? false) === true ? 0 : 1,
+			$a,
+		] <=> [
+			-(int)($rows[$b]['filesSeen'] ?? 0),
+			($rows[$b]['finished'] ?? false) === true ? 0 : 1,
+			$b,
+		]);
+
+		return $counted[0] ?? $members[0];
+	}
+
+	/**
+	 * The PHP part of the per document denominator, per share group and per
+	 * single storage (plan 43-05, D-43-11).
+	 *
+	 * A group counts through its representative, the member of representative()
+	 * above: files seen minus over the cap, excluded and refused by type of
+	 * that member, never below nought. A single storage counts the same way on
+	 * its own row. $groups are the groups the page sends to the container, in
+	 * that order, each of mounted members only; a storage of $mountedStorageIds
+	 * outside every group is a single storage, also without a row (nought).
+	 * Without any leaveOut logic (W9): the container counts every member of a
+	 * group, so nothing of the group leaves this part.
+	 *
+	 * $refusedPerStorage comes from FileStateService::countByReasonPerStorage()
+	 * over the mounted storages (B1). ``refused`` sums what this method took
+	 * off, the refused files of the representatives and of the single storages,
+	 * for the "deliberately left out" line of the page.
+	 *
+	 * @param list<int> $mountedStorageIds
+	 * @param list<list<int>> $groups
+	 * @param array<int, int> $refusedPerStorage
+	 * @return array{groups: list<int>, singles: array<int, int>, refused: int, representatives: list<int>}
+	 */
+	public function groupParts(array $mountedStorageIds, array $groups, array $refusedPerStorage): array {
+		$ids = self::positiveIds($mountedStorageIds);
+
+		return self::partsOf($ids, $ids === [] ? [] : $this->rowsOf($ids), $groups, $refusedPerStorage);
+	}
+
+	/**
+	 * The arithmetic of groupParts() over rows already read. Public and static
+	 * for the reason AdminViewService::coverageShare() is.
+	 *
+	 * @param list<int> $mounted
+	 * @param array<int, array<string, int|bool>> $rows
+	 * @param list<list<int>> $groups
+	 * @param array<int, int> $refusedPerStorage
+	 * @return array{groups: list<int>, singles: array<int, int>, refused: int, representatives: list<int>}
+	 */
+	public static function partsOf(array $mounted, array $rows, array $groups, array $refusedPerStorage): array {
+		$isMounted = array_fill_keys($mounted, true);
+		$inGroup = [];
+		$parts = ['groups' => [], 'singles' => [], 'refused' => 0, 'representatives' => []];
+
+		$indexable = static function (int $storageId) use ($rows, $refusedPerStorage, &$parts): int {
+			$row = $rows[$storageId] ?? [];
+			$refused = max(0, (int)($refusedPerStorage[$storageId] ?? 0));
+			$parts['refused'] += $refused;
+
+			return max(0, (int)($row['filesSeen'] ?? 0) - (int)($row['overCap'] ?? 0) - (int)($row['excluded'] ?? 0) - $refused);
+		};
+
+		foreach ($groups as $group) {
+			$members = [];
+			foreach ((array)$group as $member) {
+				$member = (int)$member;
+				if ($member > 0 && isset($isMounted[$member]) && !isset($inGroup[$member])) {
+					$members[$member] = true;
+				}
+			}
+			$members = array_keys($members);
+			sort($members);
+			foreach ($members as $member) {
+				$inGroup[$member] = true;
+			}
+			if ($members === []) {
+				$parts['groups'][] = 0;
+				$parts['representatives'][] = 0;
+				continue;
+			}
+			$representative = self::representative($members, $rows);
+			$parts['representatives'][] = $representative;
+			$parts['groups'][] = $indexable($representative);
+		}
+
+		foreach ($mounted as $storageId) {
+			if (!isset($inGroup[$storageId])) {
+				$parts['singles'][$storageId] = $indexable($storageId);
+			}
+		}
+
+		return $parts;
+	}
+
+	/**
+	 * Positive storage ids, each once, in the given order.
+	 *
+	 * @param array<mixed> $storageIds
+	 * @return list<int>
+	 */
+	private static function positiveIds(array $storageIds): array {
+		return array_values(array_unique(array_filter(
+			array_map(intval(...), $storageIds),
+			static fn (int $id): bool => $id > 0,
+		)));
+	}
+
+	/**
+	 * The counter rows of the named storages, by storage id, one query per band.
+	 *
+	 * @param list<int> $ids
+	 * @return array<int, array<string, int|bool>>
+	 */
+	private function rowsOf(array $ids): array {
+		$rows = [];
+		foreach (array_chunk($ids, self::TOTALS_BAND) as $band) {
+			$qb = $this->db->getQueryBuilder();
+			$qb->select('storage_id', 'finished_at', ...array_keys(self::COUNTERS))
+				->from(self::TABLE_NAME)
+				->where($qb->expr()->in(
+					'storage_id',
+					$qb->createNamedParameter($band, IQueryBuilder::PARAM_INT_ARRAY),
+				));
+
+			$result = $qb->executeQuery();
+			try {
+				// is_array() and not !== false: a cursor that answers anything but
+				// a row ends the loop instead of spinning on it.
+				while (is_array($row = $result->fetch())) {
+					$storageId = (int)($row['storage_id'] ?? 0);
+					if ($storageId <= 0) {
+						continue;
+					}
+					$counted = ['finished' => ($row['finished_at'] ?? null) !== null];
+					foreach (self::COUNTERS as $column => $key) {
+						$counted[$key] = (int)($row[$column] ?? 0);
+					}
+					$rows[$storageId] = $counted;
+				}
+			} finally {
+				$result->closeCursor();
+			}
+		}
+
+		return $rows;
 	}
 
 	/**
