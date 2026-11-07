@@ -1,6 +1,6 @@
 # Phase 43: Wortlaute zur Freigabe (D-43-06)
 
-Stand: 2026-11-07 10:05, Plan 43-01 Task 1 (Entwurf, noch nicht freigegeben)
+Stand: 2026-11-07 12:01, Plan 43-01 Task 2 (freigegeben, Maschinenzeilen am Ende)
 
 Vier Blöcke mit neuen Sätzen für den Abschnitt "Deckungsgrad der Suche" der Admin-Seite.
 Der englische Satz ist der Katalogschlüssel und steht so im Template und in admin.js;
@@ -151,19 +151,19 @@ chiffre est donc compté comme dans la version 1.6.2." Dann kämen die Zeilen
 
 ## Maschinenzeilen (Task 2 füllt sie nach der Antwort des Owners)
 
-Freigabe: 
-Zitat: 
-Datum: 
-Kanal: 
-EN-HINT: 
-DE-HINT: 
-FR-HINT: 
-EN-COUNTING: 
-DE-COUNTING: 
-FR-COUNTING: 
-EN-UNREADABLE: 
-DE-UNREADABLE: 
-FR-UNREADABLE: 
-EN-LEGACY: 
-DE-LEGACY: 
-FR-LEGACY: 
+Freigabe: ja
+Zitat: Go
+Datum: 2026-11-07 12:01
+Kanal: Claude Code Terminal, Owner-Antwort über den Koordinator auf die Vorlage (wie empfohlen: H b, Z a, U a, L a, kein eigener L-missing-Satz, französische Leerzeichen nach docs/l10n-french.md)
+EN-HINT: Since version 1.6.3, every document counts only once. Until now, external storage mounted separately for each user was counted once per mount, which is why the figures can now be lower than before. This note disappears seven days after the first complete count.
+DE-HINT: Seit Version 1.6.3 zählt jedes Dokument nur einmal. Bisher wurde ein externer Speicher, der für jeden Nutzer einzeln eingebunden ist, je Einbindung gezählt, deshalb können die Zahlen jetzt niedriger sein als vorher. Dieser Hinweis verschwindet sieben Tage nach der ersten vollständigen Zählung.
+FR-HINT: Depuis la version 1.6.3, chaque document ne compte qu'une seule fois. Jusqu'ici, un stockage externe monté séparément pour chaque utilisateur était compté une fois par montage, c'est pourquoi les chiffres peuvent désormais être plus bas qu'avant. Cette note disparaît sept jours après le premier comptage complet.
+EN-COUNTING: The coverage is being counted document by document. On large instances this can take some time, and the search keeps working normally meanwhile. The figure appears here as soon as the count is finished.
+DE-COUNTING: Der Deckungsgrad wird gerade pro Dokument gezählt. Auf großen Instanzen kann das einige Zeit dauern, die Suche arbeitet währenddessen normal weiter. Die Zahl erscheint hier, sobald die Zählung fertig ist.
+FR-COUNTING: La couverture est en cours de comptage, document par document. Sur les grandes instances, cela peut prendre un certain temps, et la recherche continue de fonctionner normalement. Le chiffre s'affiche ici dès que le comptage est terminé.
+EN-UNREADABLE: %s files could not be read or got stuck repeatedly. They count as not searchable and lower the coverage figure.
+DE-UNREADABLE: %s Dateien konnten nicht gelesen werden oder sind mehrfach hängen geblieben. Sie zählen als nicht durchsuchbar und senken den Deckungsgrad.
+FR-UNREADABLE: %s fichiers n'ont pas pu être lus ou sont restés bloqués à plusieurs reprises. Ils ne peuvent pas être trouvés par la recherche et font donc baisser la couverture.
+EN-LEGACY: This instance has more storages than the count per document can handle. The figure is therefore counted per storage as in version 1.6.2, and a file mounted for several users can stand in it several times.
+DE-LEGACY: Diese Instanz hat mehr Speicherorte, als die Zählung pro Dokument verarbeiten kann. Die Zahl wird deshalb wie in Version 1.6.2 je Speicherort gezählt, und eine Datei, die für mehrere Nutzer eingebunden ist, kann mehrfach darin stehen.
+FR-LEGACY: Cette instance compte plus d'espaces de stockage que le comptage par document ne peut en traiter. Le chiffre est donc compté par espace de stockage comme dans la version 1.6.2, et un fichier monté pour plusieurs utilisateurs peut y figurer plusieurs fois.
