@@ -12,3 +12,5 @@ Umfang: genau ein Push des entstandenen HEAD (43-01 bis 43-07 plus Fix) auf orig
 Freigabe Push 43-07 Fix 1: "Ja, pushen und dann E2E" (2026-11-07 15:00, Claude Code Terminal) Entscheid: ja
 
 Umfang Fix 1: genau ein Push von e65e34c3 (20fafb7e und e65e34c3: Fixture-Pfad im phpunit-Job, Controller-Double, sechs geprüfte Routen); derselbe Wortlaut deckt zusammen mit "Ja, starten" genau einen Dispatch von "Coverage end to end", wenn alle acht Push-Workflows grün sind.
+
+Vollzug: Push 53090f80 (Freigabe Push 43-07), Push e65e34c3 (Freigabe Push 43-07 Fix 1), alle acht Push-Workflows auf e65e34c3 grün; genau ein Dispatch "Coverage end to end" auf main, Lauf 42381671975 (gedeckt durch Freigabe Dispatch 43-07 und Fix 1), rot wegen des Harness (Speicher-Suche local::%), Korrektur c2037b29 lokal, nicht gepusht.
