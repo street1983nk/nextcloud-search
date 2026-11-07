@@ -377,16 +377,24 @@ hang_report() {
   ss -tn state established '( sport = :8080 )' 2> /dev/null | tail -n +2 | wc -l
   echo "--- php extensions (smbclient) ---"
   php -m | grep -i smbclient || echo "no smbclient extension, icewind/smb drives the smbclient binary"
+  echo "--- file ids next to the hanging fetch (test files only) ---"
+  ncdb "SELECT fileid || ' ' || storage || ' ' || path FROM oc_filecache WHERE fileid BETWEEN 80 AND 110 ORDER BY fileid;" || true
   echo "--- php -S, last lines ---"
   tail -n 60 "${PHP_SERVER_LOG}" 2> /dev/null || echo "no php server log"
 }
 
-# gateway_probe <label> <uid> <file id>: one fetch the way the backend does it,
-# prints status and seconds. Fails the run on a timeout: a worker of php -S
-# that hangs here stays taken after curl gives up.
+# gateway_probe <label> <uid> <file id> [soft]: one fetch the way the backend
+# does it, prints status and seconds. Fails the run on a timeout: a worker of
+# php -S that hangs here stays taken after curl gives up. With soft, a timeout
+# is only counted in probe_hangs, so the next probe still runs.
+probe_hangs=0
 gateway_probe() {
-  local label="$1" uid="$2" fid="$3" auth result
-  [ -n "${fid}" ] || fail "gateway probe ${label}: no file id"
+  local label="$1" uid="$2" fid="$3" mode="${4:-}" auth result
+  if [ -z "${fid}" ]; then
+    [ "${mode}" = "soft" ] || fail "gateway probe ${label}: no file id"
+    note "gateway probe ${label} (${uid}): no file cache row"
+    return 0
+  fi
   auth=$(printf '%s:%s' "${uid}" "${EXAPP_SECRET}" | base64 -w0)
   result=$(curl -s -m 60 -o /dev/null -w '%{http_code} %{time_total}' \
     -H 'AA-VERSION: 2.2.0' \
@@ -398,6 +406,10 @@ gateway_probe() {
   note "gateway probe ${label} (file ${fid}, ${uid}): http ${result:-none}"
   case "${result}" in
     000* | "")
+      if [ "${mode}" = "soft" ]; then
+        probe_hangs=$((probe_hangs + 1))
+        return 0
+      fi
       hang_report
       fail "gateway probe ${label} did not answer within 60 s"
       ;;
@@ -744,6 +756,16 @@ gateway_probe home alice "$(ncdb "SELECT fc.fileid FROM oc_filecache AS fc JOIN 
                                     WHERE s.id = 'home::alice' AND fc.name = 'notiz.txt' LIMIT 1;")"
 gateway_probe smb alice "$(ncdb "SELECT fileid FROM oc_filecache
                                   WHERE storage = ${daten_alice} AND name = 'daten-alice-1.txt' LIMIT 1;")"
+# The files with a DENY ACE (run 42401892996: one fetch after 87 to 90 of bob
+# never ended). Soft, so both answers are seen before the run stops.
+gateway_probe locked-for-bob bob "$(ncdb "SELECT fileid FROM oc_filecache
+                                            WHERE storage = ${daten_bob} AND name = 'gesperrt-bob.txt' LIMIT 1;")" soft
+gateway_probe locked-for-all alice "$(ncdb "SELECT fileid FROM oc_filecache
+                                              WHERE storage = ${daten_alice} AND name = 'gesperrt-alle.txt' LIMIT 1;")" soft
+if [ "${probe_hangs}" -gt 0 ]; then
+  hang_report
+  fail "${probe_hangs} gateway probe(s) of a locked SMB file did not answer within 60 s"
+fi
 
 step "crawl and drain"
 nc_occ findling:index --restart --no-interaction > /dev/null
