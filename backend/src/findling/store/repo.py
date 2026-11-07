@@ -477,6 +477,10 @@ _LEFT_OUT_BAND: Final = 500
 # check of the poller, living rows only (plan 43-03). None of the three wants a
 # tombstone: a deleted file is neither indexed, skipped nor failed any more.
 _COUNTS_SQL: Final = "SELECT state, COUNT(*) FROM files WHERE deleted_at IS NULL GROUP BY state"
+_LIVING_IN_STORAGES_SQL: Final = (
+    "SELECT COUNT(*) FROM json_each(?) j CROSS JOIN files f INDEXED BY files_storage "
+    "ON f.storage_id = CAST(j.value AS INTEGER) WHERE f.deleted_at IS NULL"
+)
 _INDEXED_IN_STORAGES_SQL: Final = (
     "SELECT COUNT(*) FROM files WHERE state = 'indexed' AND deleted_at IS NULL AND storage_id IN ({placeholders})"
 )
@@ -1790,6 +1794,20 @@ class Store:
         rows = self._conn.execute(_ACL_ROWS_SQL).fetchone()
         documents = self._conn.execute(_ACL_DOCUMENTS_SQL).fetchone()
         return int(rows[0]), int(documents[0])
+
+    def living_rows_in_storages(self, storage_ids: Sequence[int]) -> int:
+        """How many living rows, whatever their verdict, the named storages hold.
+
+        The threshold of the coverage route (plan 43-04): up to a ceiling the
+        per document count runs in the request, above it in the background. One
+        statement for any number of storages, the list bound as one JSON value,
+        and ids below 1 never count.
+        """
+        ids = sorted({int(storage_id) for storage_id in storage_ids if int(storage_id) > 0})
+        if not ids:
+            return 0
+        row = self._conn.execute(_LIVING_IN_STORAGES_SQL, (json.dumps(ids),)).fetchone()
+        return int(row[0]) if row else 0
 
     def indexed_in_storages(self, storage_ids: Sequence[int]) -> int:
         """How many living indexed documents the named storages hold.

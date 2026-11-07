@@ -692,6 +692,24 @@ def test_counts_leave_a_tombstone_out(store: Store) -> None:
     assert store.counts() == {"indexed": 1, "skipped": 0, "failed": 0}
 
 
+def test_living_rows_in_storages_counts_every_verdict_and_no_tombstone(store: Store) -> None:
+    # The threshold of the coverage route (plan 43-04): every living row of the
+    # named storages, whatever its verdict, and nothing of another storage.
+    store.record(1, a_file(1, storage_id=5), "indexed")
+    store.record(2, a_file(2, storage_id=5), "skipped", "too_large")
+    store.record(3, a_file(3, storage_id=6), "failed", "corrupt")
+    store.record(4, a_file(4, storage_id=6), "indexed")
+    store.record(5, a_file(5, storage_id=7), "indexed")
+    store.tombstone(4)
+
+    assert store.living_rows_in_storages([5, 6]) == 3
+    assert store.living_rows_in_storages([6, 6, 5]) == 3
+    assert store.living_rows_in_storages([7]) == 1
+    assert store.living_rows_in_storages([0, -1]) == 0
+    assert store.living_rows_in_storages([]) == 0
+    assert store.living_rows_in_storages(list(range(1, 50_001))) == 4
+
+
 def test_reasons_by_state_breaks_the_counters_down(store: Store) -> None:
     store.record(1, a_file(1), "failed", "corrupt")
     store.record(2, a_file(2), "failed", "corrupt")

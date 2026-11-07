@@ -5,8 +5,9 @@ container itself offers and asks for has to be held on the Python side:
 
 - The route table of backend/appinfo/info.xml is the only surface a browser
   session or an app password reaches through /exapps/. It is pinned here as a
-  whole, five routes in this order, each with url, verb, access_level,
-  headers_to_exclude and bruteforce_protection. PUBLIC and a non empty
+  whole, six routes in this order (five until plan 43-04 added /coverage),
+  each with url, verb, access_level, headers_to_exclude and
+  bruteforce_protection. PUBLIC and a non empty
   headers_to_exclude are in addition reported by a rule of their own, because
   either would hand the route to somebody the table never meant.
 - AppAPI lets an ExApp register surfaces at run time without any change of the
@@ -43,6 +44,8 @@ EXPECTED_ROUTES: tuple[Route, ...] = (
     ("^/diagnose$", "GET", "ADMIN", "[]", "[401]"),
     ("^/probe$", "POST", "ADMIN", "[]", "[401]"),
     ("^/probe/state$", "GET", "ADMIN", "[]", "[401]"),
+    # Plan 43-04 (issue #25): the per document coverage of the admin page.
+    ("^/coverage$", "POST", "ADMIN", "[]", "[401]"),
 )
 _FIELDS = ("url", "verb", "access_level", "headers_to_exclude", "bruteforce_protection")
 

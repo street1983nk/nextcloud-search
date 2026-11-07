@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 
 from findling.api import coverage
@@ -103,7 +104,9 @@ def test_the_topology_gives_the_hand_derived_numbers_through_the_route(
     assert answer["judgedByGroup"] == expected["judgedByGroup"]
     assert answer["documentsByStorage"] == _pairs(expected["documentsByStorage"])
     assert answer["judgedByStorage"] == _pairs(expected["judgedByStorage"])
-    assert answer["docKeysMissing"] == 0
+    # docKeysMissing counts the whole state: 3106 of the single storage 31 and
+    # row 1 of storage 0 have no key, and neither holds the figure back.
+    assert answer["docKeysMissing"] == 2
     assert answer["docKeysUnresolved"] == 1  # the sentinel row 1213
 
 
@@ -258,7 +261,8 @@ def test_a_second_request_while_the_count_runs_starts_no_second_thread(
 
     _post(client, sign("admin"), _body(data))
     _post(client, sign("admin"), _body(data))
-    _post(client, sign("admin"), {"mounted": [41], "groups": []})
+    # Another request above the ceiling as well: another key, still no start.
+    _post(client, sign("admin"), {"mounted": data["mounted"], "groups": []})
     gate.set()
     coverage.join_coverage_refresh()
 
@@ -465,7 +469,7 @@ def test_the_answer_for_fifty_thousand_storages_stays_small(capsys: pytest.Captu
     )
     started = time.perf_counter()
     answer = coverage.answer_of(counts, missing=0, unresolved=0, corrected=0)
-    body = APP.router.default_response_class(answer.model_dump(by_alias=True)).body
+    body = JSONResponse(content=answer.model_dump(mode="json")).body
     took = time.perf_counter() - started
 
     assert len(body) < 2 * 1024 * 1024

@@ -269,10 +269,13 @@ def test_each_probe_route_is_declared_once() -> None:
     assert manifest.count("<url>^/probe/state$</url>") == 1
     # The header comment names the count and has to move with the list. Phase
     # 27 took it from five to seven; the content routes /search and /snippets
-    # left afterwards, so it is five again, and the guard points the other way.
-    assert manifest.count("<route>") == 5
-    assert "Five routes" in manifest
-    assert "these five" in manifest
+    # left afterwards, so it was five again, and plan 43-04 added /coverage,
+    # so it is six; the guard points at both older counts.
+    assert manifest.count("<route>") == 6
+    assert "Six routes" in manifest
+    assert "these six" in manifest
+    assert "Five routes" not in manifest
+    assert "these five" not in manifest
     assert "Seven routes" not in manifest
     assert "these seven" not in manifest
 

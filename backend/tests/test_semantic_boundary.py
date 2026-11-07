@@ -70,8 +70,18 @@ HTTP_VERBS = frozenset({"get", "post", "put", "patch", "delete", "head", "option
 # parser that stopped recognising decorators would find zero forbidden paths
 # over zero routes and look perfectly healthy. Every plan that adds a route
 # adds it here too, otherwise the clause stops being a ratchet. Plan 35-05 added
-# /similar.
-KNOWN_ROUTES = ("/diagnose", "/probe", "/probe/state", "/rates", "/search", "/similar", "/snippets", "/status")
+# /similar, plan 43-04 /coverage.
+KNOWN_ROUTES = (
+    "/coverage",
+    "/diagnose",
+    "/probe",
+    "/probe/state",
+    "/rates",
+    "/search",
+    "/similar",
+    "/snippets",
+    "/status",
+)
 
 
 # -- the hygienic readers --------------------------------------------------

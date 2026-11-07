@@ -2554,8 +2554,19 @@ PHP_TREE_HASH_TODAY = "422c02f73b37c27e590ff24a8cf4b0b52ffec5e80380d35e9d8fd7599
 # Recomputed independently with find, sort, tr and sha256sum over the CRLF
 # normalised tree: cdd2a8e2... both ways, and the same pipeline over HEAD
 # before the step gave 91a917c4... (positive control).
-PACKAGE_FILES_TODAY = 82
-PACKAGE_TREE_HASH_TODAY = "cdd2a8e28fe9c6552b57d24fe7a792af69a3e0f0459354b3fb6072fdd3ca1d7c"
+#
+# Moved on 2026-11-07 by Plan 43-04 (coverage route): the new api/coverage.py
+# answers POST /coverage with the per document coverage of a mount list and its
+# share groups, bounded by pydantic before any database, in the request up to
+# a ceiling and above it in a background thread with a single flight and a
+# cache of four keys; store/repo.py adds living_rows_in_storages for the
+# ceiling and main.py mounts the router. One file came, so PACKAGE_FILES_TODAY
+# moves to 83. The PHP pair does not move. Recomputed independently with find,
+# sort, tr and sha256sum over the CRLF normalised tree: d7627c12... both ways,
+# and the same pipeline over HEAD before the step gave cdd2a8e2... (positive
+# control).
+PACKAGE_FILES_TODAY = 83
+PACKAGE_TREE_HASH_TODAY = "d7627c127f60da58a3e1eec42043f979f30245f991b79d98ef2198a84cde4994"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

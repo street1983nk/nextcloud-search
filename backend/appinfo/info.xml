@@ -295,7 +295,7 @@ Support entreprise et modules payants : demande de devis à admin@infranode.dev]
 		</docker-install>
 		<routes>
 			<!--
-				Five routes, and that is the whole surface a browser session or
+				Six routes, and that is the whole surface a browser session or
 				an app password can reach through /exapps/. /enabled, /heartbeat
 				and /init need no entry: AppAPI addresses those directly instead
 				of going through the proxy, so declaring them would only widen it
@@ -332,7 +332,7 @@ Support entreprise et modules payants : demande de devis à admin@infranode.dev]
 				Every url below is anchored, ^/<name>$ and not <name>. That is not
 				decoration: HaRP matches with re.match against a target path that
 				begins with a slash, so an unanchored name matches nothing at all.
-				The reasoning is at the top of this file; do not shorten these five
+				The reasoning is at the top of this file; do not shorten these six
 				back into plain names.
 			-->
 			<!--
@@ -411,6 +411,24 @@ Support entreprise et modules payants : demande de devis à admin@infranode.dev]
 			<route>
 				<url>^/probe/state$</url>
 				<verb>GET</verb>
+				<access_level>ADMIN</access_level>
+				<headers_to_exclude>[]</headers_to_exclude>
+				<bruteforce_protection>[401]</bruteforce_protection>
+			</route>
+			<!--
+				The per document coverage of the admin page, plan 43-04 (issue
+				#25). The body is the mount list and the share groups of the
+				companion, numbers only, and the answer is numbers, storage ids
+				and one flag: how many documents of those storages the search
+				finds, per group and per single storage, never a path. POST and
+				not a parameter of /status, because the mount list of a large
+				instance does not fit into a query string. It reads and writes
+				nothing but a cache in memory. ADMIN like /status, for the same
+				reason: the figures belong to the operator.
+			-->
+			<route>
+				<url>^/coverage$</url>
+				<verb>POST</verb>
 				<access_level>ADMIN</access_level>
 				<headers_to_exclude>[]</headers_to_exclude>
 				<bruteforce_protection>[401]</bruteforce_protection>
