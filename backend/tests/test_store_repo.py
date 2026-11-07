@@ -678,6 +678,20 @@ def test_counts_names_every_state_even_the_empty_ones(store: Store) -> None:
     assert store.counts() == {"indexed": 0, "skipped": 0, "failed": 1}
 
 
+def test_counts_leave_a_tombstone_out(store: Store) -> None:
+    # Plan 43-03: a tombstone only sets deleted_at and keeps its state, so a
+    # deleted file stayed in "indexed" on the status page until its row was
+    # reused. The figure has to sink the moment the file is gone, also for a
+    # companion 1.6.2 that still reads it from /status.
+    store.record(1, a_file(1), "indexed")
+    store.record(2, a_file(2), "indexed")
+    store.record(3, a_file(3), "skipped", "too_large")
+    store.tombstone(2)
+    store.tombstone(3)
+
+    assert store.counts() == {"indexed": 1, "skipped": 0, "failed": 0}
+
+
 def test_reasons_by_state_breaks_the_counters_down(store: Store) -> None:
     store.record(1, a_file(1), "failed", "corrupt")
     store.record(2, a_file(2), "failed", "corrupt")
