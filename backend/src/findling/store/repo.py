@@ -29,6 +29,7 @@ the callers decide where their database lives.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import sqlite3
@@ -471,6 +472,11 @@ SELECT COUNT(*) FROM files WHERE state = 'indexed' AND deleted_at IS NULL
 # the rows of the storage once and builds no temporary b-tree for the distinct
 # step (the reasoning of _ACL_DOCUMENTS_SQL above).
 _LEFT_OUT_BAND: Final = 500
+
+# The three state counters of /status, the diagnosis tool and the empty index
+# check of the poller, living rows only (plan 43-03). None of the three wants a
+# tombstone: a deleted file is neither indexed, skipped nor failed any more.
+_COUNTS_SQL: Final = "SELECT state, COUNT(*) FROM files WHERE deleted_at IS NULL GROUP BY state"
 _INDEXED_IN_STORAGES_SQL: Final = (
     "SELECT COUNT(*) FROM files WHERE state = 'indexed' AND deleted_at IS NULL AND storage_id IN ({placeholders})"
 )
@@ -1129,9 +1135,13 @@ class Store:
         The zeros are the point. A status output that omits an empty state makes
         "no failures" and "the counter is broken" look identical, and telling
         those two apart is the entire promise this app makes.
+
+        Tombstones stay out (plan 43-03): a tombstone keeps its state and only
+        sets deleted_at, and a deleted file that still counted as indexed kept
+        the figure of /status up until its row was reused.
         """
         counters = dict.fromkeys(STATE_REASONS, 0)
-        for state, total in self._conn.execute("SELECT state, COUNT(*) FROM files GROUP BY state"):
+        for state, total in self._conn.execute(_COUNTS_SQL):
             counters[str(state)] = int(total)
         return counters
 
@@ -2161,3 +2171,189 @@ def embedded_in_storages(state_db: Path, vectors_db: Path, storage_ids: Sequence
             connection.execute("DETACH DATABASE vec")
     finally:
         connection.close()
+
+
+# -- the per document coverage (plan 43-03, D-43-07, D-43-09, D-43-14) ------
+
+# The three figures of the coverage, one expression each. They are constants of
+# this module and never input: the only values a caller brings are the two JSON
+# lists bound to ?1 and ?2 (T-43-07).
+#
+# documents: what the search can find. embedded: what the semantic search can
+# find as well; without a vector stock the expression is the constant 0.
+# judged: every verdict that belongs to the denominator of the admin page,
+# which is everything except the three reasons the denominator takes out itself
+# or that are no document any more: mime_not_allowed (the page subtracts it as
+# refused), excluded (an exclusion rule, subtracted as excluded) and the
+# container verdict gone. too_large stays in: a file the container refused for
+# its size is a file the admin expects to find.
+_COVERAGE_DOCUMENTS: Final = "f.state = 'indexed'"
+_COVERAGE_EMBEDDED: Final = "f.state = 'indexed' AND EXISTS (SELECT 1 FROM vec.chunks c WHERE c.file_id = f.file_id)"
+_COVERAGE_NO_VECTORS: Final = "0"
+_COVERAGE_JUDGED: Final = (
+    "NOT (f.state = 'skipped' AND COALESCE(f.reason, '') IN ('mime_not_allowed', 'excluded', 'gone'))"
+)
+
+# The sets the statement starts from. listed is the mount list without ids
+# below 1, member holds the listed members of the groups with the index of their
+# group (a storage named in two groups keeps the first), single every other
+# listed storage. All MATERIALIZED and the join pinned to files_storage: without
+# the two, the planner picks files_state and scans every indexed row once per
+# group (0.15 to 0.2 s per group, 43-RESEARCH.md).
+_COVERAGE_SETS: Final = """
+WITH listed(storage_id) AS MATERIALIZED (
+    SELECT DISTINCT CAST(value AS INTEGER) FROM json_each(?2) WHERE CAST(value AS INTEGER) > 0
+),
+member(storage_id, grp) AS MATERIALIZED (
+    SELECT CAST(m.value AS INTEGER), MIN(CAST(g.key AS INTEGER))
+      FROM json_each(?1) g, json_each(g.value) m
+     WHERE CAST(m.value AS INTEGER) IN (SELECT storage_id FROM listed)
+     GROUP BY CAST(m.value AS INTEGER)
+),
+single(storage_id) AS MATERIALIZED (
+    SELECT storage_id FROM listed WHERE storage_id NOT IN (SELECT storage_id FROM member)
+)
+"""
+
+# One statement, one pass over the rows of the listed storages, all figures and
+# all parts at once: three statements of the same form took 2.5 s over 188 600
+# rows, this one 1.1 s (43-03-SUMMARY.md).
+#
+# Inside a group the key is (group, doc_key): the internal path of the file in
+# the share, the same for every member, where files.path is the path of the
+# reader and differs for a reshare or a second mount point (A1 of
+# 43-RESEARCH.md, D-43-14). A document counts for a figure when one of its rows
+# does, hence MAX per key. The sentinel '' is a document of its own, keyed by
+# its file id, which is unique in the table and can never meet a 64 digit hex
+# key. A NULL key is never guessed: those rows gather under the key NULL, count
+# for no figure and only as missing. A single storage counts rows, because
+# there (storage_id, file_id) is one document already.
+_COVERAGE_SQL: Final = """
+{sets}
+SELECT 0, grp,
+       SUM(CASE WHEN k IS NULL THEN 0 ELSE d END),
+       SUM(CASE WHEN k IS NULL THEN 0 ELSE e END),
+       SUM(CASE WHEN k IS NULL THEN 0 ELSE j END),
+       SUM(n)
+  FROM (
+    SELECT m.grp AS grp, CASE WHEN f.doc_key = '' THEN '#' || f.file_id ELSE f.doc_key END AS k,
+           MAX({documents}) AS d, MAX({embedded}) AS e, MAX({judged}) AS j, SUM(f.doc_key IS NULL) AS n
+      FROM member m CROSS JOIN files f INDEXED BY files_storage ON f.storage_id = m.storage_id
+     WHERE f.deleted_at IS NULL
+     GROUP BY m.grp, k
+  )
+ GROUP BY grp
+UNION ALL
+SELECT 1, s.storage_id, SUM({documents}), SUM({embedded}), SUM({judged}), 0
+  FROM single s CROSS JOIN files f INDEXED BY files_storage ON f.storage_id = s.storage_id
+ WHERE f.deleted_at IS NULL
+ GROUP BY s.storage_id
+"""
+
+
+@dataclass(frozen=True)
+class CoverageCounts:
+    """The per document coverage of the mounted storages, numbers only (T-43-09).
+
+    The sums are the sums of the parts. ``*_by_group`` follow the order of the
+    groups of the request, ``*_by_storage`` name listed storages outside every
+    group and only those with a value above zero. ``doc_keys_missing`` counts
+    living rows of group members that still wait for their key; while it is
+    above zero the figures leave those rows out, and the route answers counting.
+    """
+
+    documents: int
+    embedded_documents: int
+    judged_documents: int
+    documents_by_group: tuple[int, ...]
+    judged_by_group: tuple[int, ...]
+    documents_by_storage: Mapping[int, int]
+    judged_by_storage: Mapping[int, int]
+    doc_keys_missing: int
+
+
+def coverage_counts(
+    state_db: Path, vectors_db: Path, mounted: Sequence[int], groups: Sequence[Sequence[int]]
+) -> CoverageCounts:
+    """Count every document of the mounted storages once (D-43-07, D-43-14).
+
+    ``mounted`` is the mount list of the companion, the same list that builds
+    the denominator of the admin page, and ``groups`` are its share groups (the
+    storages of one share mounted once per user). Rows of storages outside
+    ``mounted``, tombstones and rows of storage ids below 1 never count.
+
+    Inside a group a document is (group, doc_key), the internal path in the
+    share as the companion hashes it, and never ``files.path``: that is the path
+    of the reader, and a folder reshared to a user who sorts before the owner,
+    or a second mount point of the same share, gives one file two of them (A1
+    of 43-RESEARCH.md). Outside a group a row is a document, because the key
+    (storage_id, file_id) is unique per storage already.
+
+    ``judged_documents`` is the lower bound of the denominator: every indexed
+    document is judged, so documents <= judged holds per group, per storage and
+    in the sum, and the companion takes max(its own figure, judged + its PHP
+    only verdicts) per group (D-43-11). The share can therefore never pass a
+    hundred per cent, whatever the views of the members are (D-43-09).
+
+    One read only connection with the vector database attached read only (the
+    discipline of :func:`embedded_in_storages`). A missing vector database costs
+    the vector figure only, which is then 0.
+    """
+    listed = sorted({int(storage_id) for storage_id in mounted})
+    shaped = [sorted({int(member) for member in group}) for group in groups]
+    parameters = (json.dumps(shaped), json.dumps(listed))
+    with_vectors = Path(vectors_db).is_file()
+    # Every piece formatted into the statement is a module constant, never input.
+    statement = _COVERAGE_SQL.format(
+        sets=_COVERAGE_SETS,
+        documents=_COVERAGE_DOCUMENTS,
+        embedded=_COVERAGE_EMBEDDED if with_vectors else _COVERAGE_NO_VECTORS,
+        judged=_COVERAGE_JUDGED,
+    )
+    documents_by_group = [0] * len(shaped)
+    embedded_by_group = [0] * len(shaped)
+    judged_by_group = [0] * len(shaped)
+    documents_by_storage: dict[int, int] = {}
+    judged_by_storage: dict[int, int] = {}
+    embedded_singles = 0
+    missing = 0
+    connection = sqlite3.connect(
+        f"{Path(state_db).as_uri()}?mode=ro", uri=True, autocommit=True, check_same_thread=False
+    )
+    try:
+        connection.execute(f"PRAGMA busy_timeout = {_BUSY_TIMEOUT_MS}")
+        connection.execute("PRAGMA query_only = 1")
+        if with_vectors:
+            connection.execute("ATTACH DATABASE ? AS vec", (f"{Path(vectors_db).as_uri()}?mode=ro",))
+        else:
+            _LOG.warning("coverage count without a vector stock, the vector figure is 0")
+        try:
+            for kind, ident, documents, embedded, judged, unkeyed in connection.execute(statement, parameters):
+                part = int(ident)
+                if int(kind) == 0:
+                    if 0 <= part < len(shaped):
+                        documents_by_group[part] = int(documents or 0)
+                        embedded_by_group[part] = int(embedded or 0)
+                        judged_by_group[part] = int(judged or 0)
+                        missing += int(unkeyed or 0)
+                    continue
+                if int(documents or 0) > 0:
+                    documents_by_storage[part] = int(documents)
+                if int(judged or 0) > 0:
+                    judged_by_storage[part] = int(judged)
+                embedded_singles += int(embedded or 0)
+        finally:
+            if with_vectors:
+                connection.execute("DETACH DATABASE vec")
+    finally:
+        connection.close()
+    return CoverageCounts(
+        documents=sum(documents_by_group) + sum(documents_by_storage.values()),
+        embedded_documents=sum(embedded_by_group) + embedded_singles,
+        judged_documents=sum(judged_by_group) + sum(judged_by_storage.values()),
+        documents_by_group=tuple(documents_by_group),
+        judged_by_group=tuple(judged_by_group),
+        documents_by_storage=documents_by_storage,
+        judged_by_storage=judged_by_storage,
+        doc_keys_missing=missing,
+    )

@@ -734,26 +734,27 @@ def test_b2_the_left_out_counter_never_exceeds_the_figure_it_is_subtracted_from(
 
 
 @pytest.mark.usefixtures("appapi_environment")
-def test_b6_f_40_06_a_tombstone_stays_in_indexed_and_out_of_indexed_left_out(
+def test_b6_f_40_06_a_tombstone_is_out_of_indexed_and_out_of_indexed_left_out(
     client: TestClient,
     sign: Sign,
     volume: Path,
 ) -> None:
-    """F-40-06, accepted: the asymmetry of 39-01, held as it is.
+    """F-40-06, accepted in phase 40 and closed by plan 43-03.
 
-    ``indexed`` counts every row in the state indexed, tombstones included
-    (Store.counts, the figure of 1.5), ``indexedLeftOut`` only the living ones.
-    A tombstone of a left out storage therefore stays in the numerator of the
-    deduplicated figure. Storage 2 of the probe has two living documents and
-    one tombstone: the numerator keeps exactly that one row.
+    Until 1.6.2 ``indexed`` counted every row in the state indexed, tombstones
+    included (Store.counts, the figure of 1.5), and ``indexedLeftOut`` only the
+    living ones, so a tombstone of a left out storage stayed in the numerator.
+    Since plan 43-03 Store.counts leaves tombstones out, and both figures count
+    the same living rows. Storage 2 of the probe has two living documents and
+    one tombstone: the tombstone is in neither figure.
     """
     _state(volume)
 
     answer = client.get("/status", params={"leaveOut": "2"}, headers=sign("admin")).json()
 
-    assert answer["indexed"] == 5
+    assert answer["indexed"] == 4
     assert answer["indexedLeftOut"] == 2
-    assert answer["indexed"] - answer["indexedLeftOut"] == 3
+    assert answer["indexed"] - answer["indexedLeftOut"] == 2
 
 
 # == B3 the IN fixes of 39-03 =============================================================

@@ -1529,11 +1529,11 @@ async def test_an_empty_stock_under_the_unknown_mark_starts_the_redelivery(
 async def test_a_deleted_document_does_not_hold_the_mark_back_for_ever(
     store: Store, writer: IndexBatchWriter, vectors: VectorStore, tmp_path: Path
 ) -> None:
-    # Store.counts keeps a tombstoned row under its old verdict, because the
-    # status page wants every verdict this container ever wrote. The condition
-    # cannot use that figure: a tombstone loses its vectors in the same call, so
-    # counting it would put the two numbers one apart for good and leave the
-    # mark unwritten on every instance where somebody removed a file.
+    # A tombstone loses its vectors in the same call, so counting it would put
+    # the two numbers one apart for good and leave the mark unwritten on every
+    # instance where somebody removed a file. Store.counts kept a tombstoned row
+    # under its old verdict until plan 43-03; since then it leaves the row out
+    # as well, and the condition reads indexed_alive either way.
     store.attach_vectors(vectors)
     _judged(store, 4711)
     _judged(store, 4712)
@@ -1544,7 +1544,7 @@ async def test_a_deleted_document_does_not_hold_the_mark_back_for_ever(
 
     await poller.run_once()
 
-    assert store.counts()["indexed"] == 2
+    assert store.counts()["indexed"] == 1
     assert store.indexed_alive() == 1
     assert store.read_meta()[EMBEDDING_MARK] == _wanted_mark()
 

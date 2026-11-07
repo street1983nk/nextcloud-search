@@ -2544,8 +2544,18 @@ PHP_TREE_HASH_TODAY = "422c02f73b37c27e590ff24a8cf4b0b52ffec5e80380d35e9d8fd7599
 # independently with find, sort, tr and sha256sum over the CRLF normalised
 # tree: 91a917c4... both ways, and the same pipeline over HEAD before the step
 # gave c9147c42... (positive control).
+#
+# Moved on 2026-11-07 by Plan 43-03 (per document coverage counts):
+# store/repo.py gains coverage_counts and CoverageCounts, one read only pass
+# that counts every document of the mounted storages once, keyed by
+# (group, doc_key) inside a share group and by row outside, with the parts per
+# group and per storage, and Store.counts() leaves tombstones out. No file came
+# or went, so PACKAGE_FILES_TODAY stays at 82. The PHP pair does not move.
+# Recomputed independently with find, sort, tr and sha256sum over the CRLF
+# normalised tree: cdd2a8e2... both ways, and the same pipeline over HEAD
+# before the step gave 91a917c4... (positive control).
 PACKAGE_FILES_TODAY = 82
-PACKAGE_TREE_HASH_TODAY = "91a917c4030491f1ea37c746384cc21396157d293e89b00552087c851d6827a4"
+PACKAGE_TREE_HASH_TODAY = "cdd2a8e28fe9c6552b57d24fe7a792af69a3e0f0459354b3fb6072fdd3ca1d7c"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
