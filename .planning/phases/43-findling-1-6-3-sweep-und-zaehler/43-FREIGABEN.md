@@ -41,3 +41,8 @@ Entscheid F1 43-17: B, in 43-17 selbst: "Als 'nicht lesbar' zählen (Empfohlen)"
 Entscheid F2 43-17: "Ja, wenn RAM reicht (Empfohlen)": PHPUnit lokal per scripts/dev/phpunit_docker.sh nur bei mindestens 4 GB freiem RAM, sonst seriell abwarten.
 Entscheid F3 43-17: "Ja (Empfohlen)": v1.6.2 und upgrade nativ (php-smbclient), gate-crawl und gate-queue Wrapped, gate-queue zusätzlich nativ.
 Entscheid F4 43-17: "Ja, in 43-17 (Empfohlen)": 422 zählt nicht zur Ausfall-Schwelle GATEWAY_SAME_STATUS_OUTAGE_AFTER, mit Test.
+
+Freigabe Push 43-18: "Go bitte sorgfältig das Ziel bleibt das Beste für die User zu liefern" (2026-11-07 22:34, Claude Code Terminal) Entscheid: ja
+Freigabe Dispatch 43-18: "Go bitte sorgfältig das Ziel bleibt das Beste für die User zu liefern" (2026-11-07 22:34, Claude Code Terminal) Entscheid: ja
+
+Umfang 43-18: genau ein Push des entstandenen HEAD (Commits von 43-17 und 43-18 samt Planung, fdfc573a bis 296d428a plus diese Zeilen) auf origin main, genau ein Dispatch von "Coverage end to end" nach grünen Push-Workflows. Kein Tag, kein Release, kein Store, kein Kommentar.
