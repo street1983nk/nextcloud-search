@@ -119,6 +119,33 @@ Zeilen failed(gateway_error), die 1.6.2 für eine 422 geschrieben hat, werden ni
 - v1.6.2 und upgrade vor dem Update: ein toleranter drain läuft bis DRAIN_TIMEOUT (1500 s) je drain; endet er dort mehrfach, kann das Bein die Jobfrist von 90 min erreichen.
 - Die Erwartungen der Proben für die 1.6.2-Companion (Sperrproben 422 nativ, leer.txt 400) stammen aus dem Plan (StreamResponse.php:47-49 mit Output.php:37) und sind lokal nicht gelaufen; eine Abweichung bricht das Bein ab und ist dann ein Befund.
 
+## Fix-Runde 1 (Lauf 42418778026, 2026-11-07)
+
+Anlass: Dispatch-Lauf 42418778026 rot in allen fünf Beinen, Kern-Fix belegt (gesperrte Dateien 422 in rund 0,1 s). Drei Abweichungen, drei Aufgaben. Lokal committet, nicht gepusht, kein Dispatch.
+
+| Aufgabe | Commit | Betreff |
+|---------|--------|---------|
+| 1 (RED) | 5d0918c0 | test(43-18): a slow smb line waits eighty seconds for a whole read block |
+| 1 (GREEN) | efa39712 | fix(43-18): the gateway waits for a whole smb read block before it gives up |
+| 2 und 3 | 1456ffa2 | ci(43-18): empty file 200 from both companions, smb at 200 KB/s, named search misses |
+
+**1. Produkt, Fristen 80 s.** Beleg des Koordinators: Samba 4.19.5 source3/libsmb/clireadwrite.c:363-366, bei SMB2 ist chunk_size = smb2cli_conn_max_read_size, Server-Standard "smb2 max read" 8 MiB; cli_pull reicht erst nach einem vollständigen Block an FD 5. `FIRST_BYTE_SECONDS` und `IDLE_SECONDS` von 30.0 auf 80.0, unter `_DEFAULT_TIMEOUT_SECONDS = 90.0` (backend nc/client.py:179, httpx-Lesetimeout zwischen zwei Teilen der Antwort). Am Code geprüft:
+- DENY unberührt: Wrapped endet über den Anstupser beim ersten leeren Read mit EOF ohne Daten (OUTCOME_EMPTY, 422 über den 0-Bytes-Zweig, keine Frist beteiligt); nativ scheitert schon fopen.
+- MAX_READS 60000 bleibt: je Read eine Zeile (PHP_EOL, 1 Byte) in die stdin-Pipe (65536). Erste Wartezeit 80 s bei 20 ms Pause rund 4000 leere Reads, je Lücke 80 s bei 200 ms rund 400; 50 MiB in 8-MiB-Blöcken: 6400 Datenreads, eine erste Wartezeit, sechs Lücken, rund 13000 Reads.
+- Tests (BoundedStreamReaderTest): Konstanten 80.0; erste Daten nach 79 s ergeben DATA und END_COMPLETE; 81 s ohne Daten ergeben TIMEOUT zwischen 80 und 81 s (im Controller 422 über den bestehenden Fall mit FIRST_BYTE_SECONDS); Lücke 79 s zwischen Blöcken COMPLETE, 81 s STALLED; 50 MiB in 8-MiB-Blöcken 79 s auseinander COMPLETE unter 15000 Reads. Kommentar mit Beleg in BoundedStreamReader.php, D-43-16 in 43-CONTEXT.md um einen Satz ergänzt.
+- Baumhash PHP 129 Dateien, 7cc9aa68 auf 6d1847e61ab8be280337b230b231b857b4e6c441858ac4b350a66e3d2266b79a, zweimal gerechnet (40b-baumhash.py und find, LC_ALL=C sort, tr -d '\r', sha256sum); Positivkontrolle `git archive HEAD~1` vor GREEN ergab 7cc9aa68.
+- **PHPUnit lokal: nein** (kein Docker, kein lokales PHP). Beleg erst im CI-Job nach einem freigegebenen Push.
+
+**2. Harness, leer.txt.** Befund: die Plan-Annahme "1.6.2-Companion antwortet 400 auf leer.txt" (43-18-PLAN.md, T-43-62, aus StreamResponse.php:47-49 mit Output.php:37) war falsch; gemessen in Lauf 42418778026 sind 200 mit 0 Bytes auf v1.6.2/native und upgrade/native. Erwartung jetzt 200 mit 0 Bytes für beide Companions, die 0-Bytes-Prüfung gilt für beide. Die Unterscheidung alt und neu trägt allein das Container-Urteil failed/gateway_error von v1.6.2. 43-18-PLAN.md unverändert; 43-07-PLAN.md Task 3 korrigiert.
+
+**3. Harness, Drosselung und Suchgegenprobe.**
+- gross.bin: `THROTTLE_RATE=1600kbit` (rund 200 KB/s), ein 8-MiB-Block in rund 42 s, 10 MB in zwei Blöcken, gesamt rund 52 s; curl -m 150 (`LARGE_MAX_SECONDS`); neu und strenger: ein gedrosselter Abruf unter 40 s (`LARGE_MIN_SECONDS`) ist ein Fehler, weil dann keine lange Lücke geprüft wurde.
+- Suchgegenprobe: Befund im Log von 42418778026, die fehlenden Namen standen schon in den notes (45 Namen), aber vermischt mit nie suchbaren Dateien (backlog-*.png, gesperrte Dateien). Jetzt je fehlendem Namen eine note "search miss in the numerator truth" bzw. "outside the numerator truth" (Abgleich gegen die Dateinamen in numerator.tsv) mit der Kurzform der Rohantwort für den ersten Nutzer (Anzahl entries und Titel, sonst OCS-Status und die ersten 120 Bytes). Die Kurzform geht in eine Datei, nicht auf stdout, die Zählung des Aufrufers bleibt unverändert (auch für die Rückweg-Probe). Soll bleibt 23, keine Erwartung gelockert. jq-Ausdruck lokal mit drei Beispielantworten geprüft (Liste, leere Liste, HTML).
+
+**Tests der Runde:** test_workflow_pins, test_workflow_contexts, test_workflow_size, test_measurement_scripts 608 passed; `bash -n` beider Skripte grün; ruff check, ruff format --check, pyright latest 0 errors auf test_measurement_scripts.py, vulture leer.
+
+**Grenze für Known limitations (43-08):** Unter etwa 100 KB/s (8 MiB in 80 s, genau 105 KB/s) weist der Gateway im Wrapped-Modus Dateien größer als ein SMB2-Leseblock ab (422 vor den Headern) oder beendet sie kurz (stalled zwischen zwei Blöcken); der Container hätte dort ohnehin seinen 90-s-Timeout. Mit den längeren Lücken sinkt die Größengrenze aus MAX_READS bei langsamen Leitungen etwas (bei 200 KB/s rund 1230 Reads je 8-MiB-Block, also rund 390 MiB statt 469 MiB); betrifft nur FINDLING_MAX_FILE_BYTES über der Vorgabe.
+
 ## Threat Flags
 
 Keine neue Angriffsfläche: keine Route, kein Schlüssel, keine Schemaänderung; die Probe- und Urteilszeilen tragen nur Status, Sekunden, Bytes, Datei-IDs.
