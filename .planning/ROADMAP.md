@@ -181,6 +181,7 @@ Details im Archiv: .planning/milestones/v1.5-ROADMAP.md
 | 39. Ausschluss-Anzeige, Dedup-Umfang und Doku-Hygiene | v1.6 | 4/4 | Complete | 2026-10-28 |
 | 40. Haertung und Store-Einreichung 1.6.0 | v1.6 | 6/6 | Executed, verification pending |  |
 | 41. Findling 1.6.2: Backup-Pause, Backup-Doku, #25-Fixes | v1.6 | 12/12 | Complete | 2026-11-04 |
+| 43. Findling 1.6.3: Löschlauf und Zähler pro Dokument (#25) | v1.6 | 8/16 | In Progress (nächster: 43-07 Push-Checkpoint) |  |
 
 ## Nach v1.3 (Wiedervorlage)
 
@@ -264,14 +265,14 @@ Kriterium 3 (Psalm mit Taint, php-cs-fixer, zizmor, actionlint) ist nicht Teil d
 **Plans:** 16 plans
 
 Plans:
-- [ ] 43-01-PLAN.md: Owner-Freigabe der Texte DE/EN/FR (Hinweis D-43-06, Zählsatz) vor Umsetzung
-- [ ] 43-02-PLAN.md: Sweep mit eigenem Stempel storage_sweep_at, unabhängig vom Quiet-Gate (TDD)
-- [ ] 43-15-PLAN.md: PHP-Dokumentschlüssel aus dem internen Pfad (D-43-14), mit jedem Auftrag und per Route /reconcile/doc-keys
-- [ ] 43-16-PLAN.md: Container-Spalte doc_key und begrenzter, fortsetzbarer Backfill (D-43-14, TDD)
-- [ ] 43-03-PLAN.md: Zählung pro Dokument in der Store-Schicht, Tombstones raus aus counts() (TDD)
-- [ ] 43-04-PLAN.md: Container-Route POST /coverage mit Hintergrundzählung und Cache (TDD)
-- [ ] 43-05-PLAN.md: PHP: Nenner pro Gruppe max(PHP_g, judged_g + phpOnly_g) (D-43-11), Abzüge nur eingebundener Speicher, counting, sichtbarer Fallback 1.6.2
-- [ ] 43-06-PLAN.md: Hinweis 7 Tage (D-43-06, D-43-12), Sätze zu Zählung, unlesbaren Dateien und Rückfall, Migration, 16 Kataloge
+- [x] 43-01-PLAN.md: Owner-Freigabe der Texte DE/EN/FR (Hinweis D-43-06, Zählsatz) vor Umsetzung
+- [x] 43-02-PLAN.md: Sweep mit eigenem Stempel storage_sweep_at, unabhängig vom Quiet-Gate (TDD)
+- [x] 43-15-PLAN.md: PHP-Dokumentschlüssel aus dem internen Pfad (D-43-14), mit jedem Auftrag und per Route /reconcile/doc-keys
+- [x] 43-16-PLAN.md: Container-Spalte doc_key und begrenzter, fortsetzbarer Backfill (D-43-14, TDD)
+- [x] 43-03-PLAN.md: Zählung pro Dokument in der Store-Schicht, Tombstones raus aus counts() (TDD)
+- [x] 43-04-PLAN.md: Container-Route POST /coverage mit Hintergrundzählung und Cache (TDD)
+- [x] 43-05-PLAN.md: PHP: Nenner pro Gruppe max(PHP_g, judged_g + phpOnly_g) (D-43-11), Abzüge nur eingebundener Speicher, counting, sichtbarer Fallback 1.6.2
+- [x] 43-06-PLAN.md: Hinweis 7 Tage (D-43-06, D-43-12), Sätze zu Zählung, unlesbaren Dateien und Rückfall, Migration, 16 Kataloge
 - [ ] 43-07-PLAN.md: Pflicht-Abnahme D-43-08 auf Samba-Harness mit unabhängiger Wahrheit, erster Push (Owner)
 - [ ] 43-08-PLAN.md: Bump 1.6.3, CHANGELOG, Upgrade-Zusicherungen, Push (Owner)
 - [ ] 43-09-PLAN.md: Audit Security/Bugs/Performance des 1.6.3-Deltas, Fixes ab MEDIUM

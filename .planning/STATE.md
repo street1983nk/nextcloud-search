@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
-status: planned
-stopped_at: Phase 43 geplant (16 Pläne, 15 Wellen, Planprüfung Runde 6 bestanden), bereit zur Ausführung
+status: executing
+stopped_at: Completed 43-06-PLAN.md, nächster Schritt 43-07 (Push-Checkpoint, Owner-Freigabe)
 last_updated: "2026-11-07T23:00:00.000Z"
 last_activity: 2026-11-07
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 33
-  completed_plans: 17
-  percent: 52
+  completed_plans: 25
+  percent: 76
 ---
 
 # Project State
@@ -25,9 +25,9 @@ Siehe .planning/PROJECT.md (Stand nach v1.5, Milestone v1.6 gestartet) und .plan
 
 ## Current Position
 
-Phase: 43 (findling-1-6-3-sweep-und-zaehler), PLANNED, bereit zur Ausführung
-Plan: 0 of 16 (Start: 43-01 Owner-Texte und 43-02 Sweep parallel in Welle 1)
-Status: Pläne lokal committet, nichts gepusht; Phase 42 Verifikation bestanden (42-VERIFICATION.md status passed). Jeder Push, Dispatch, Tag, Kommentar nur mit Owner-Freigabe (43-FREIGABEN.md)
+Phase: 43 (findling-1-6-3-sweep-und-zaehler), EXECUTING
+Plan: 8 of 16 erledigt (43-01, 43-02, 43-15, 43-16, 43-03, 43-04, 43-05, 43-06); nächster 43-07 = erster Push, Checkpoint mit Owner-Freigabe
+Status: alles lokal committet, nichts gepusht; PHPUnit der Pläne 43-05/43-06 läuft erst im CI nach dem freigegebenen Push; Phase 42 Verifikation bestanden (42-VERIFICATION.md status passed). Jeder Push, Dispatch, Tag, Kommentar nur mit Owner-Freigabe (43-FREIGABEN.md)
 Last activity: 2026-11-07
 
 Progress: [█████████░] 88%
@@ -136,6 +136,7 @@ Progress: [█████████░] 88%
 - 42-07: Owner-Entscheid 04.11.2026 'final setzen' umgesetzt: Gateway-, Profile-, Queue-, ReconcileController final (je eine Zeile), alle 7 Controller final; C1 nicht final, C3 IDelegatedSettings; Objekt classes in route-security.json (final, Elternkette, Traits, Interfaces, von Hand); 992 Tests lokal und im CI (PHP 41947587570), Baumhash 04f4443d (117); HaRP stable34/x86 einmal rot im v1.5.0-Upgrade-Schritt (Zeitfehler), Rerun grün.
 - 42-08: routes.php nur literale Tokens (token_get_all-Whitelist), keine Router-/Container-Namen unter php/lib (Tokenprüfung), Application::register gegen aufzeichnenden Stub von IRegistrationContext exakt gleich php/tests/app-surface.json (16 Registrierungen), boot() leer; 997 Tests lokal und im CI (PHP 41953527552), Baumhash 2efff5b9 (118).
 - 42-09: Python-Textsperren test_php_surface_bans.py (18 Server-Annotationen in php/lib im Gleichschritt mit RouteProfiles, Router-/Container-Texte, routes.php, info.xml ohne remote/public/sabre u. a., settings exakt) und test_exapp_surface.py (ExApp-Routentabelle exakt, PUBLIC/headers_to_exclude als Regel, keine AppAPI-Registrierung zur Laufzeit, nur eigene OCS-Pfade); CI 0aed7906 grün (Python 41956536303).
+- 43-06: AppConfig coverage_per_document_hint mit drei Zuständen (0 aus, 1 wartet, > 1 Zeitstempel der ersten vollständigen /coverage-Zählung), Migration Version001603Date20261108000000 setzt 1 nur bei Zeilen in findling_scan_stats; Hinweis 7 Tage, danach 0 für immer; Satz L nur bei legacyReason limits; de-Schlüsselzahl 365; PHP-Baumhash 93271961 (124 Dateien); Commits 13819d06, 40f92864, 08762e4a.
 - 42-10: Lückenschluss der Re-Verifikation: AppSurface::sourceFindings und LIB_BANS vergleichen die Router- und Containernamen ohne Rücksicht auf Groß-/Kleinschreibung (irouter, actioninclude, getrouter, getcontainer()->registerservice am echten Baum rot belegt); Untergrenzen 40; python.yml startet auf php/**; 998 Tests lokal grün, Baumhash eb5b2dc1 (118).
 
 ### Decisions (Roadmap v1.5)
@@ -261,11 +262,12 @@ Items acknowledged and deferred at milestone close on 2026-10-28 (Owner-Wiedervo
 | Phase 41 P04 | 60 min | 2 tasks | 16 files |
 | Phase 41 P12 | ca. 15 min (Doku) | 3 tasks | 4 files |
 | Phase 41 P11 | Owner-Lauf, Abschluss ca. 10 min (Doku) | 3 tasks | 3 files |
+| Phase 43 P06 | ca. 80 min | 2 tasks | 31 files |
 
 ## Session Continuity
 
-Last session: 2026-11-05T03:09:59.000Z
-Stopped at: Completed 42-09-PLAN.md
+Last session: 2026-11-07T13:05:00.000Z
+Stopped at: Completed 43-06-PLAN.md (nächster: 43-07 Push-Checkpoint)
 Resume file: None
 
 ## Operator Next Steps
