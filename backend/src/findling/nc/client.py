@@ -735,6 +735,25 @@ async def gone_storages(nc: AsyncNextcloudApp, ids: Sequence[int]) -> object:
     )
 
 
+async def doc_keys(nc: AsyncNextcloudApp, ids: Sequence[int]) -> object:
+    """The document keys of these file ids, the backfill question of plan 43-16.
+
+    Answers with {"keys": {"<id>": "<hex>"}, "absent": [int]}, at most
+    ReconcileController::DOC_KEY_BAND ids per call (plan 43-15). The ids travel
+    as one comma separated value, a single query key, so the dict rebuild of
+    nc_py_api described at :func:`gone_storage_params` cannot drop any of them.
+
+    Returned untyped on purpose, exactly like :func:`mounts`. A GET, therefore
+    no entry in OCS_WRITE_ALLOWLIST, for the reason given at the top of this
+    block.
+    """
+    return await nc._session.ocs(
+        "GET",
+        "/ocs/v2.php/apps/findling/reconcile/doc-keys",
+        params={"ids": ",".join(str(file_id) for file_id in ids)},
+    )
+
+
 def gone_storage_params(ids: Sequence[int]) -> dict[str, int]:
     """The id list of the storage question as query parameters with an index each.
 

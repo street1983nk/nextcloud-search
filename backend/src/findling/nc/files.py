@@ -44,14 +44,16 @@ verdict, and :attr:`SliceResult.complete` is how a page says so.
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
-from typing import Any
+from dataclasses import dataclass, field
+from typing import Any, Final
 
 # The mount call is renamed on the way in. The method below carries the name the
 # caller uses, and a call to the plain name inside a method of the same name
 # reads like recursion to everybody who has ever debugged one.
 from findling.nc.client import AsyncNextcloudApp, files_slice
+from findling.nc.client import doc_keys as ask_doc_keys
 from findling.nc.client import gone_storages as ask_gone_storages
 from findling.nc.client import mounts as read_mounts
 
@@ -62,6 +64,20 @@ LOGGER = logging.getLogger("findling.nc.files")
 # list with HTTP 400; a test in tests/test_files_client.py reads the PHP constant
 # and holds the two numbers together.
 GONE_LOOKUP_BAND = 256
+
+# How many file ids one document key question may carry. Equal to
+# ReconcileController::DOC_KEY_BAND on the PHP side (plan 43-15), which refuses
+# a longer list with HTTP 400; tests/test_doc_keys.py reads the PHP constant and
+# holds the two numbers together.
+DOC_KEY_BAND: Final = 200
+
+# The status a companion without the document key route answers with (W3).
+_NOT_FOUND: Final = 404
+
+# sha256 in lower case hex, the only value a key may have (T-43-49). The store
+# checks it once more; this layer drops everything else so that an answer with
+# a value of another shape reads as incomplete and never as a key.
+_DOC_KEY_SHAPE: Final = re.compile(r"[0-9a-f]{64}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,6 +154,33 @@ class GoneResult:
 
     gone: frozenset[int] = frozenset()
     deselected: frozenset[int] = frozenset()
+
+
+@dataclass(frozen=True, slots=True)
+class DocKeyAnswer:
+    """The answer of the document key question (plan 43-16, D-43-14).
+
+    ``keys`` and ``absent`` hold only ids that were asked, and ``keys`` only
+    values of the key shape. ``complete`` says that every asked id stands in
+    one of the two: an answer that leaves one out is no answer (W8), and the
+    backfill neither stores a sentinel nor moves its cursor on it.
+    ``route_missing`` is the 404 of a companion from before 1.6.3 (W3).
+    """
+
+    asked: tuple[int, ...] = ()
+    keys: Mapping[int, str] = field(default_factory=dict)
+    absent: frozenset[int] = frozenset()
+    route_missing: bool = False
+
+    @property
+    def unanswered(self) -> frozenset[int]:
+        """Asked ids that are neither in keys nor in absent."""
+        return frozenset(self.asked) - frozenset(self.keys) - self.absent
+
+    @property
+    def complete(self) -> bool:
+        """True when the answer names every asked id and the route exists."""
+        return not self.route_missing and not self.unanswered
 
 
 @dataclass(frozen=True, slots=True)
@@ -269,6 +312,27 @@ def _row(entry: object) -> FileRow | None:
     )
 
 
+def _key_map(value: object, wanted: frozenset[int]) -> dict[int, str] | None:
+    """The key map of an answer, only asked ids with a value of the key shape.
+
+    PHP renders an empty map as ``[]``, which is an empty map and no defect.
+    A value of another shape is dropped and leaves its id unanswered.
+    """
+    if isinstance(value, list) and not value:
+        return {}
+    fields = _mapping(value)
+    if fields is None:
+        return None
+    found: dict[int, str] = {}
+    for raw, key in fields.items():
+        file_id = _positive_int(raw)
+        if file_id is None or file_id not in wanted:
+            continue
+        if isinstance(key, str) and _DOC_KEY_SHAPE.fullmatch(key):
+            found[file_id] = key
+    return found
+
+
 def _id_set(value: object) -> frozenset[int] | None:
     """A list of positive whole numbers as a set, or None when any entry is not one.
 
@@ -390,3 +454,39 @@ class FileList:
             deselected |= band_deselected & wanted
 
         return GoneResult(gone=frozenset(gone), deselected=frozenset(deselected))
+
+    async def doc_keys(self, file_ids: Sequence[int]) -> DocKeyAnswer | None:
+        """Ask the companion for the document keys of these file ids, band by band.
+
+        None means "no answer": a failed call or a broken shape, logged with
+        the class name and never the message (T-43-52). A 404 is the one
+        failure with an answer of its own, ``route_missing``, because it says
+        that the companion is older than 1.6.3 and asking again soon is
+        pointless (W3). Ids the answer names but nobody asked are dropped.
+        """
+        asked = tuple(dict.fromkeys(file_id for file_id in file_ids if file_id > 0))
+        keys: dict[int, str] = {}
+        absent: set[int] = set()
+        for start in range(0, len(asked), DOC_KEY_BAND):
+            band = asked[start : start + DOC_KEY_BAND]
+            try:
+                answer = await ask_doc_keys(self._nc, band)
+            except Exception as error:
+                if getattr(error, "status_code", None) == _NOT_FOUND:
+                    return DocKeyAnswer(asked=asked, route_missing=True)
+                # Every exception, for the reason given in mounts(); the class
+                # name only, because a message is where a path would travel.
+                LOGGER.warning("could not ask for document keys, %s", type(error).__name__)
+                return None
+
+            payload = _mapping(answer)
+            wanted = frozenset(band)
+            band_keys = None if payload is None else _key_map(payload.get("keys"), wanted)
+            band_absent = None if payload is None else _id_set(payload.get("absent"))
+            if band_keys is None or band_absent is None:
+                LOGGER.warning("the answer about document keys was unusable")
+                return None
+            keys.update(band_keys)
+            absent |= (band_absent & wanted) - frozenset(band_keys)
+
+        return DocKeyAnswer(asked=asked, keys=keys, absent=frozenset(absent))

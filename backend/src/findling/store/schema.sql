@@ -55,7 +55,8 @@ CREATE TABLE IF NOT EXISTS files (
     ocr_used      INTEGER NOT NULL DEFAULT 0,   -- phase 3, created now
     indexed_at    INTEGER,
     index_version INTEGER NOT NULL DEFAULT 0,
-    deleted_at    INTEGER                       -- tombstone, written by Store.tombstone
+    deleted_at    INTEGER,                      -- tombstone, written by Store.tombstone
+    doc_key       TEXT                          -- sha256 hex of the internal path, '' = none known (43-16)
 );
 
 -- files_state carries the status page: three counters over a hundred thousand
@@ -70,6 +71,18 @@ CREATE INDEX IF NOT EXISTS files_storage ON files (storage_id);
 -- A poll that gets slower the more the container has achieved is the kind of
 -- self inflicted load that only shows up on the instances that need the page.
 CREATE INDEX IF NOT EXISTS files_indexed_at ON files (indexed_at);
+
+-- files_storage_doc_key carries the per document coverage (D-43-14, plan 43-16):
+-- distinct (storage, doc_key) inside a storage group, and the count of rows that
+-- still wait for a key. doc_key is the sha256 hex of the internal path of the
+-- file in the file cache, computed by the companion and never by this container;
+-- NULL means not asked yet, the empty string means the companion knows no key.
+--
+-- The column came after the table, so an existing database gets it from
+-- open_store through ALTER TABLE before this script runs (a CREATE TABLE IF NOT
+-- EXISTS does not add columns). Additive and nullable like the tables of phase
+-- 6: no reindex and no new store schema mark.
+CREATE INDEX IF NOT EXISTS files_storage_doc_key ON files (storage_id, doc_key);
 
 -- The prefilter table. It carries no rowid because the composite key *is* the table:
 -- an ordinary table would keep a second B-tree on an invisible rowid and pay for

@@ -61,6 +61,13 @@ _SCHEMA_FILE: Final = Path(__file__).with_name("schema.sql")
 # (D-21). That property is valuable and is kept on purpose: a rebuild of the
 # tantivy index costs hours on the box this project targets, and nothing about a
 # vector table justifies one.
+#
+# Not raised by plan 43-16 either, for the same reason. The column files.doc_key
+# and its index files_storage_doc_key are additive and nullable: open_store adds
+# the column to an existing table before schema.sql runs (_add_doc_key_column),
+# every row keeps its verdict, and a NULL only means "not asked yet", which the
+# backfill in worker/doc_keys.py answers band by band. Nothing about it needs a
+# reindex, so nothing about it may claim one.
 SCHEMA_VERSION: Final = "2"
 
 # The meta key the number above is written under, and it is deliberately not
@@ -359,9 +366,11 @@ STATE_REASONS: Final[Mapping[str, frozenset[str | None]]] = {
 _RECORD_SQL: Final = """
 INSERT INTO files (file_id, storage_id, root_id, path, title, mime, size, mtime,
                    etag, content_hash, text_chars, state, reason, attempts, ocr_used,
-                   indexed_at, index_version)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+                   indexed_at, index_version, doc_key)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
 ON CONFLICT(file_id) DO UPDATE SET
+    -- A verdict without a key keeps the stored one (R2, plan 43-16).
+    doc_key       = COALESCE(excluded.doc_key, files.doc_key),
     storage_id    = excluded.storage_id,
     root_id       = excluded.root_id,
     path          = excluded.path,
@@ -525,7 +534,7 @@ SELECT 1 FROM files
 # counting real attempts; deleted_at stays a condition because lifting a
 # tombstone is the business of the upsert in record() alone.
 _REFRESH_META_SQL: Final = """
-UPDATE files SET path = ?, title = ?, mtime = ?, etag = ?
+UPDATE files SET path = ?, title = ?, mtime = ?, etag = ?, doc_key = COALESCE(?, doc_key)
  WHERE file_id = ? AND deleted_at IS NULL
 """
 
@@ -597,6 +606,40 @@ _FORGET_ORPHAN_ERRORS_SQL: Final = "DELETE FROM file_errors WHERE file_id NOT IN
 # the shape is what keeps a path, a message or markup out of a column an admin
 # page shows (T-29-18, T-29-19).
 _ERROR_CLASS_SHAPE: Final = re.compile(r"[A-Za-z0-9_.]{1,200}")
+
+# The one shape a document key may have: sha256 in lower case hex, as the
+# companion computes it over the internal path (plan 43-15). Anything else is
+# dropped and never stored (T-43-49), because the column is counted and a free
+# value there is a path that found its way into a place no path belongs.
+_DOC_KEY_SHAPE: Final = re.compile(r"[0-9a-f]{64}")
+
+# The sentinel of a row the companion knows no key for: no file cache row, a
+# trash bin path, or an id that stayed unanswered after the bisection of the
+# backfill (W12). Not NULL on purpose, because NULL is what the backfill asks
+# for and what keeps the coverage counting; the verify pass asks '' rows again.
+DOC_KEY_NONE: Final = ""
+
+
+def valid_doc_key(value: object) -> str | None:
+    """The value when it is a document key, None for everything else."""
+    return value if isinstance(value, str) and _DOC_KEY_SHAPE.fullmatch(value) else None
+
+
+# A key travels with a verdict and never erases one: a job of a companion that
+# sends none, a give-up and a rename without a file cache row all write NULL,
+# and COALESCE keeps what is there (R2). A job with a key overwrites, which is
+# what carries a rename or a move to the new internal path (W4).
+_SET_DOC_KEY_SQL: Final = "UPDATE files SET doc_key = ? WHERE file_id = ?"
+_MISSING_DOC_KEYS_SQL: Final = (
+    "SELECT file_id FROM files WHERE file_id > ? AND doc_key IS NULL AND deleted_at IS NULL ORDER BY file_id LIMIT ?"
+)
+_EXISTING_DOC_KEYS_SQL: Final = (
+    "SELECT file_id, doc_key FROM files "
+    "WHERE file_id > ? AND doc_key IS NOT NULL AND deleted_at IS NULL ORDER BY file_id LIMIT ?"
+)
+_DOC_KEYS_MISSING_SQL: Final = "SELECT COUNT(*) FROM files WHERE doc_key IS NULL AND deleted_at IS NULL"
+_DOC_KEYS_UNRESOLVED_SQL: Final = "SELECT COUNT(*) FROM files WHERE doc_key = '' AND deleted_at IS NULL"
+_RESET_DOC_KEYS_SQL: Final = "UPDATE files SET doc_key = NULL WHERE doc_key IS NOT NULL"
 
 _RECORD_MOUNT_SQL: Final = """
 INSERT INTO mounts (storage_id, root_id, cursor_file_id, files_seen, updated_at)
@@ -736,6 +779,9 @@ class FileMeta:
     size: int
     mtime: int
     etag: str | None = None
+    # The document key of the job (plan 43-16), or None when the job carried
+    # none. A None never erases a stored key; see _RECORD_SQL.
+    doc_key: str | None = None
 
 
 def enable_wal(connection: sqlite3.Connection) -> str:
@@ -1052,6 +1098,7 @@ class Store:
                     int(ocr_used),
                     now,
                     self.index_version,
+                    valid_doc_key(meta.doc_key),
                 ),
             )
 
@@ -1166,7 +1213,7 @@ class Store:
         with self._transaction():
             cursor = self._conn.execute(
                 _REFRESH_META_SQL,
-                (meta.path, meta.title, meta.mtime, meta.etag, file_id),
+                (meta.path, meta.title, meta.mtime, meta.etag, valid_doc_key(meta.doc_key), file_id),
             )
         return cursor.rowcount
 
@@ -1536,6 +1583,48 @@ class Store:
     def living_file_ids(self, storage_id: int) -> list[int]:
         """The living file ids of one storage, ordered, tombstones aside."""
         return [int(row[0]) for row in self._conn.execute(_LIVING_FILE_IDS_SQL, (storage_id,))]
+
+    # -- the document key (plan 43-16, D-43-14) ------------------------------
+
+    def set_doc_keys(self, keys: Mapping[int, str], absent: Iterable[int] = ()) -> int:
+        """Write the keys the companion named and the sentinel for the ids it called absent.
+
+        Only ids the companion named in ``absent`` (or ids the backfill set
+        aside after a bisection) reach the second argument; an answer that
+        left an id out never gets here (W8). A key outside the shape is
+        dropped. Returns how many rows were written.
+        """
+        rows = [(key, file_id) for file_id, value in keys.items() if (key := valid_doc_key(value)) is not None]
+        rows += [(DOC_KEY_NONE, file_id) for file_id in absent]
+        if not rows:
+            return 0
+        with self._transaction():
+            self._conn.executemany(_SET_DOC_KEY_SQL, rows)
+        return len(rows)
+
+    def missing_doc_keys(self, *, after: int, limit: int) -> list[int]:
+        """Living file ids above ``after`` that carry no key yet (NULL only), ascending."""
+        return [int(row[0]) for row in self._conn.execute(_MISSING_DOC_KEYS_SQL, (after, limit))]
+
+    def existing_doc_keys(self, *, after: int, limit: int) -> list[tuple[int, str]]:
+        """Living rows above ``after`` with a key or the sentinel, for the verify pass."""
+        return [(int(row[0]), str(row[1])) for row in self._conn.execute(_EXISTING_DOC_KEYS_SQL, (after, limit))]
+
+    def doc_keys_missing(self) -> int:
+        """Living rows without a key (NULL); the sentinel does not count (R2)."""
+        row = self._conn.execute(_DOC_KEYS_MISSING_SQL).fetchone()
+        return int(row[0]) if row else 0
+
+    def doc_keys_unresolved(self) -> int:
+        """Living rows with the sentinel: the companion knew no key for them."""
+        row = self._conn.execute(_DOC_KEYS_UNRESOLVED_SQL).fetchone()
+        return int(row[0]) if row else 0
+
+    def reset_doc_keys(self) -> int:
+        """Forget every key, for a deliberate change of the key format only."""
+        with self._transaction():
+            cursor = self._conn.execute(_RESET_DOC_KEYS_SQL)
+        return cursor.rowcount
 
     def mark_vanished(self, storage_id: int, now: int) -> int:
         """Stamp the first round without this storage and return that stamp.
@@ -1954,11 +2043,35 @@ def open_store(path: Path | str, *, meta: Mapping[str, str] | None = None) -> St
 
     connection = _connect(database, read_only=False)
     journal_mode = enable_wal(connection)
+    _add_doc_key_column(connection)
     connection.executescript(_SCHEMA_FILE.read_text(encoding="utf-8"))
 
     store = Store(connection, journal_mode=journal_mode)
     _seed_meta(store, meta)
     return store
+
+
+def _add_doc_key_column(connection: sqlite3.Connection) -> None:
+    """Give an existing files table the column doc_key, once (plan 43-16).
+
+    Before schema.sql, because its index on (storage_id, doc_key) needs the
+    column and CREATE TABLE IF NOT EXISTS never adds one to a table that is
+    there. A fresh database has no table yet and gets the column from the
+    script. Inside BEGIN IMMEDIATE, so the poller and the reconcile opening the
+    same old file at the same moment add it once and not twice. Nothing else
+    moves: no mark, no row, no reindex.
+    """
+    connection.execute("BEGIN IMMEDIATE")
+    try:
+        exists = connection.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'files'").fetchone()
+        if exists is not None:
+            columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(files)")}
+            if "doc_key" not in columns:
+                connection.execute("ALTER TABLE files ADD COLUMN doc_key TEXT")
+    except BaseException:
+        connection.execute("ROLLBACK")
+        raise
+    connection.execute("COMMIT")
 
 
 def _seed_meta(store: Store, meta: Mapping[str, str] | None) -> None:

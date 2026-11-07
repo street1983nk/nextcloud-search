@@ -22,7 +22,7 @@ slowly, and a stale one is replaced (G1); a pass without a correction rests for
 a day. None of it ever logs a path or a key value (T-43-52).
 """
 
-from __future__ import annotations  # noqa: I001 - the worker module arrives with the GREEN step
+from __future__ import annotations
 
 import hashlib
 import logging
@@ -164,8 +164,8 @@ def _mark(store: Store) -> str | None:
 def _old_database(path: Path) -> None:
     """A state.db of 1.6.2: the files table without doc_key, one judged row."""
     schema = (PACKAGE_ROOT / "store" / "schema.sql").read_text(encoding="utf-8")
-    schema = schema.replace("    deleted_at    INTEGER", "    deleted_at    INTEGER -- end")
-    schema = re.sub(r",\s*doc_key\s+TEXT[^\n]*", "", schema)
+    schema = schema.replace("    deleted_at    INTEGER,", "    deleted_at    INTEGER ")
+    schema = re.sub(r"(?m)^\s*doc_key\s+TEXT.*$", "", schema)
     schema = re.sub(r"CREATE INDEX IF NOT EXISTS files_storage_doc_key[^;]*;", "", schema)
     connection = sqlite3.connect(path)
     connection.executescript(schema)
@@ -488,6 +488,7 @@ async def test_the_backfill_asks_only_rows_without_a_key_and_only_living_ones(st
     _insert_rows(store, range(1, 6))
     _insert_rows(store, range(6, 9), doc_key=key_of(0))
     store._conn.execute("UPDATE files SET deleted_at = 1 WHERE file_id = 5")
+    store.write_meta(DOC_KEY_MARK, f"{DOC_KEY_GENERATION}:0:0")
     keys = _Keys()
 
     await _backfill(store, keys, [START]).run_once()

@@ -70,6 +70,7 @@ from findling.precision import snapshot as precision_snapshot
 from findling.profile import note_hardware
 from findling.profile import snapshot as profile_snapshot
 from findling.store.repo import CATCHUP_DONE, CATCHUP_MARK, open_read_only, open_store
+from findling.worker.doc_keys import DocKeyBackfill
 from findling.worker.embedding import EmbedRunner
 from findling.worker.pause import PauseCoordinator, WishReader, publish
 from findling.worker.poller import POLLER_STOP_SECONDS, STAND_DOWN_SECONDS, Poller, _pause, default_poller
@@ -97,6 +98,12 @@ _RECONCILE: Reconcile | None = None
 # exactly that. The lifespan creates it, the enable arms it like every task, and
 # it ends by itself after its one cycle.
 _CATCHUP_RECONCILE: Reconcile | None = None
+
+# The document key backfill of plan 43-16 (D-43-14). Its own task and not part
+# of the reconcile, because the per document coverage needs a key on every row
+# and an admin who switched the reconcile off must not leave it counting for
+# good. Armed, silenced and held for a backup like the reconcile.
+_DOC_KEYS: DocKeyBackfill | None = None
 
 # The embed runner beside the poller (PAR-01), at module level for the same
 # reason: the AppAPI handler arms and silences it, and the rebuild stands it down
@@ -287,7 +294,7 @@ def _armable_tasks(*, after_rebuild: bool = False) -> list[_Armable]:
     if after_rebuild:
         candidates: tuple[_Armable | None, ...] = (active_poller(), active_embedding())
     else:
-        candidates = (active_poller(), active_reconcile(), active_embedding(), _CATCHUP_RECONCILE)
+        candidates = (active_poller(), active_reconcile(), active_embedding(), _CATCHUP_RECONCILE, _DOC_KEYS)
     return [task for task in candidates if task is not None]
 
 
@@ -499,6 +506,20 @@ async def _guarded_reconcile(reconcile: Reconcile, stop_event: asyncio.Event, *,
     except Exception as error:
         kind_of_failure = type(error).__name__
         LOGGER.error("the reconcile task ended in an unexpected %s; search and indexing continue", kind_of_failure)
+
+
+async def _guarded_doc_keys(backfill: DocKeyBackfill, stop_event: asyncio.Event) -> None:
+    """Run the document key backfill and let nothing out of it but a log line.
+
+    The same ranking as :func:`_guarded_reconcile`: a key that waits costs a
+    number on the admin page, never a search and never the indexing.
+    """
+    try:
+        await backfill.run(stop_event)
+    except asyncio.CancelledError:
+        raise
+    except Exception as error:
+        LOGGER.error("the doc key task ended in an unexpected %s; search and indexing continue", type(error).__name__)
 
 
 async def _guarded_embedding(runner: EmbedRunner, stop_event: asyncio.Event) -> None:
@@ -1262,6 +1283,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     else:
         LOGGER.info("findling reconcile is switched off, the index follows events only")
 
+    # The document key backfill (plan 43-16), whatever the switch above says:
+    # the coverage counts per document over the key, and rows without one keep
+    # it counting. Held before the task exists, like every writer of state.db.
+    global _DOC_KEYS
+    stop_doc_keys = asyncio.Event()
+    _DOC_KEYS = DocKeyBackfill()
+    _PAUSE.attach_reconcile(_DOC_KEYS)
+    filling = asyncio.create_task(_guarded_doc_keys(_DOC_KEYS, stop_doc_keys))
+
     # The one exception to the switch above (FMT-06, D-31-01, plan 31-11). The
     # upgrade to 1.5 promises the catch-up of the stock without an admin doing
     # anything, and its second part is one reconcile cycle: the files of the new
@@ -1422,6 +1452,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         stop_indexing.set()
         stop_embedding.set()
         stop_reconcile.set()
+        stop_doc_keys.set()
         stop_catchup.set()
         stop_release.set()
         stop_rebuild.set()
@@ -1499,6 +1530,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if _RECONCILE is not None:
             await _RECONCILE.aclose()
             _RECONCILE = None
+
+        # The document key backfill inside the same budget: a round ends after
+        # its band, and a band is one short question to the companion.
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(asyncio.shield(filling), timeout=RECONCILE_STOP_SECONDS)
+        if not filling.done():
+            filling.cancel()
+            await asyncio.gather(filling, return_exceptions=True)
+        if _DOC_KEYS is not None:
+            await _DOC_KEYS.aclose()
+            _DOC_KEYS = None
 
         # The one time reconcile the same way and inside the same budget: its
         # cycle is a reconcile cycle, bounded by the same slices.

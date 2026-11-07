@@ -2197,6 +2197,10 @@ class Poller:
         failed(repeatedly_stuck) although every one of them worked.
         """
         await asyncio.to_thread(self._store_or_die().replace_acl, job.file_id, acl_users(job))
+        # A permission change after a move carries the key of the new internal
+        # path (W4, plan 43-16); a job without one leaves the stored key alone.
+        if job.doc_key is not None:
+            await asyncio.to_thread(self._store_or_die().set_doc_keys, {job.file_id: job.doc_key})
         done.append(job.queue_id)
 
     async def _rewrite_metadata(
@@ -2862,6 +2866,9 @@ def _meta_of(job: QueueJob) -> FileMeta:
         # a stored value it would have to fetch every file to find out that none
         # of them changed.
         etag=job.etag,
+        # The document key of plan 43-16, written with the verdict; None keeps
+        # whatever key the row already has.
+        doc_key=job.doc_key,
     )
 
 

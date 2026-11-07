@@ -284,6 +284,11 @@ class QueueJob:
     # the ordinary case, and reading a missing mark as "capped" would make every
     # file a candidate for every user on every search.
     users_truncated: bool = False
+    # The document key of the file (plan 43-15/43-16, D-43-14): sha256 hex of
+    # the internal path in the file cache, sent with every kind but delete.
+    # None when the companion sent none or a value of another shape; a None
+    # never erases a stored key (Store.record, R2).
+    doc_key: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -403,6 +408,17 @@ def _text(value: object) -> str:
     return value if isinstance(value, str) else ""
 
 
+# The shape of a document key, sha256 in lower case hex (plan 43-15). A copy of
+# findling.store.repo._DOC_KEY_SHAPE rather than an import: this layer imports
+# nothing from the store, and the store checks the shape a second time anyway.
+_DOC_KEY_SHAPE: Final = re.compile(r"[0-9a-f]{64}")
+
+
+def _doc_key(value: object) -> str | None:
+    """The document key of a job, or None for a missing value or one of another shape."""
+    return value if isinstance(value, str) and _DOC_KEY_SHAPE.fullmatch(value) else None
+
+
 def _kind(value: object) -> str:
     """The job kind, or ``content`` for anything this container cannot run.
 
@@ -509,6 +525,8 @@ def _job(queue_id_raw: object, source: object) -> QueueJob | None:
         # prefilter through a typo on the PHP side; anything this container
         # cannot read as the explicit truth falls to the strict side.
         users_truncated=fields.get("userIdsTruncated") is True,
+        # Only 64 lower case hex digits; anything else reads as no key (T-43-49).
+        doc_key=_doc_key(fields.get("docKey")),
     )
 
 

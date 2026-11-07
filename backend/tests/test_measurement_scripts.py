@@ -2532,8 +2532,20 @@ PHP_TREE_HASH_TODAY = "422c02f73b37c27e590ff24a8cf4b0b52ffec5e80380d35e9d8fd7599
 # 81. The PHP pair does not move. Recomputed independently with find, sort, tr
 # and sha256sum over the CRLF normalised tree: c9147c42... both ways, and the
 # same pipeline over HEAD before the step gave f6716e41... (positive control).
-PACKAGE_FILES_TODAY = 81
-PACKAGE_TREE_HASH_TODAY = "c9147c42c8ee727f0f23e6eda4f3319703fd277c9cb5f542f7c30b0acdb85af4"
+#
+# Moved on 2026-11-07 by Plan 43-16 (document key column and backfill): the new
+# worker/doc_keys.py fills files.doc_key for old rows band by band through
+# GET /reconcile/doc-keys, with a verify pass, a 404 cooldown and a resumable
+# cursor under doc_key_backfill_after; store/repo.py adds the column on open
+# and keeps a key under COALESCE, nc/queue.py, nc/files.py and nc/client.py
+# carry docKey and the new route, worker/poller.py writes it with every verdict
+# and acl job, main.py starts and stops the task. One file came, so
+# PACKAGE_FILES_TODAY moves to 82. The PHP pair does not move. Recomputed
+# independently with find, sort, tr and sha256sum over the CRLF normalised
+# tree: 91a917c4... both ways, and the same pipeline over HEAD before the step
+# gave c9147c42... (positive control).
+PACKAGE_FILES_TODAY = 82
+PACKAGE_TREE_HASH_TODAY = "91a917c4030491f1ea37c746384cc21396157d293e89b00552087c851d6827a4"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
