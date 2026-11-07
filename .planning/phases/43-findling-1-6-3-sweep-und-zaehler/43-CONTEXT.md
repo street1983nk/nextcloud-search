@@ -113,3 +113,6 @@ Daraus folgt für diese Phase:
 
 *Phase: 43-findling-1-6-3-sweep-und-zaehler*
 *Context gathered: 2026-11-07*
+
+### Nachtrag Owner 07.11. (W1, verschiedene Wurzeln)
+- **D-43-15:** Zwei Konfigurationen derselben Freigabe mit verschiedener Wurzel zählen in 1.6.3 noch doppelt. Der Kommentar an mbozem (43-11) fragt, ob er so eine Konfiguration hat. Bestätigt er es, wird es vor dem Store-Release behoben (eigener Zusatzplan und Audit-Nachtrag). Verneint er, bleibt es in 1.6.3 eine bekannte Grenze im Changelog und wird in 1.6.4 behoben. Entscheidungspunkt ist K6 in 43-12.
