@@ -22,7 +22,7 @@ use PHPUnit\Framework\TestCase;
  * the CallbackWrapper the View puts around every stream when locking is on, the
  * CallbackWrapper of Wrapped/Share::read whose read callback nudges smbclient,
  * and a stand in for the encryption stream that collects blocks. The clock and
- * the pause are closures over one float, so the thirty second deadlines run in
+ * the pause are closures over one float, so the eighty second deadlines run in
  * microseconds of real time. One case at the end uses a real pipe and a real
  * process, because the nudge is a claim about pipes and processes and nothing
  * else proves it.

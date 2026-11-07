@@ -47,15 +47,35 @@ namespace OCA\Findling\Http;
  * nudges nothing that could fill up, and the native mode of icewind/smb has no
  * pipe at all (NativeStream refuses the switch, so it stays blocking).
  *
- * Both deadlines lie under the 90 seconds the backend waits for an answer, so
- * the container always hears from the gateway before it gives up on its own.
+ * Both deadlines are eighty seconds, because smbclient hands the data of a get
+ * on in whole blocks. Over SMB2 the block of cli_pull is the read size the
+ * server granted (smb2cli_conn_max_read_size, Samba 4.19.5 source3/libsmb/
+ * clireadwrite.c:363-366), 8 MiB with the default "smb2 max read" of a Samba
+ * server, and the sink on descriptor 5 sees nothing before a block is
+ * complete. On a line of 100 KB/s the first byte comes after about 84 s, and
+ * the later blocks come just as far apart (run 42418778026: a 10 MB file
+ * behind 100 KB/s ended in a 422 after 30 s). Eighty seconds hold a whole
+ * block down to about 105 KB/s; below that a file larger than one block is
+ * refused or ends short in the wrapped mode, where the container would run
+ * into its own timeout anyway. Both deadlines lie under the 90 seconds the
+ * backend waits between two pieces of an answer (_DEFAULT_TIMEOUT_SECONDS in
+ * backend nc/client.py), so a stream that really stalls ends as a verdict
+ * about this one file and never as an outage of the gateway.
+ *
+ * The longer deadlines do not touch the denied file: in the wrapped mode the
+ * first empty read nudges smbclient, it ends at once and the reader sees the
+ * end without data; in the native mode fopen already fails. Nor do they come
+ * near the cap: eighty seconds at the 20 ms pause before data are about 4000
+ * empty reads, a gap of eighty seconds at the 200 ms pause after data about
+ * 400. 50 MiB in 8 MiB blocks are 6400 reads with data, one first wait and six
+ * gaps, about 13000 reads in all.
  *
  * The clock, the pause and the check for a client that went away are closures
- * with defaults, so the tests can run thirty second deadlines on a fake clock.
+ * with defaults, so the tests can run eighty second deadlines on a fake clock.
  */
 final class BoundedStreamReader {
-	public const FIRST_BYTE_SECONDS = 30.0;
-	public const IDLE_SECONDS = 30.0;
+	public const FIRST_BYTE_SECONDS = 80.0;
+	public const IDLE_SECONDS = 80.0;
 
 	public const PAUSE_MIN_MICROSECONDS = 1000;
 	public const PAUSE_FIRST_BYTE_MAX_MICROSECONDS = 20000;

@@ -1242,8 +1242,15 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # went, so PHP_FILES_TODAY stays at 129. Recomputed independently with find, sort, tr and sha256sum
 # over the CRLF normalised tree: 7cc9aa68... both ways; the same pipeline over git archive HEAD
 # before the plan gave e67c5d95.
+# Moved on 2026-11-07 by fix round 1 of Plan 43-18 (run 42418778026): lib/Http/
+# BoundedStreamReader.php waits 80 s instead of 30 s for the first data and between two blocks,
+# because smbclient hands a get on in whole SMB2 read blocks of 8 MiB, and tests/Unit/
+# BoundedStreamReaderTest.php gained the cases at 79 and 81 s. No file came or went, so
+# PHP_FILES_TODAY stays at 129. Recomputed independently with find, sort, tr and sha256sum over the
+# CRLF normalised tree: 6d1847e6... both ways; the same pipeline over git archive HEAD before the
+# round gave 7cc9aa68.
 PHP_FILES_TODAY = 129
-PHP_TREE_HASH_TODAY = "7cc9aa68bf4bafeb49029f17c5e648f7d34cd8c30f04188a39940e197d36b900"
+PHP_TREE_HASH_TODAY = "6d1847e61ab8be280337b230b231b857b4e6c441858ac4b350a66e3d2266b79a"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
