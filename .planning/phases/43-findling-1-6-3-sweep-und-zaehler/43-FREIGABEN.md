@@ -35,3 +35,9 @@ Vollzug Fix 4: Push 1c254392, vier Push-Workflows grün; genau ein Dispatch "Cov
 
 Owner-Entscheid DENY-ACE-Hänger (2026-11-07, Claude Code Terminal): "Fix in 1.6.3 (Empfohlen)": Gateway liest SMB-Streams mit Zeitdeckel, Abbruch mit 422, smbclient-Prozess beenden, Datei zählt als unlesbar (D-43-11); TDD, PHPUnit, E2E-Variante mit smbclient-PHP-Erweiterung; Push und Dispatch einzeln fragen.
 Owner zum Upstream-Bericht: "Bitte keine voreiligen Issues, mache eine reichere [Recherche] vorher und dann können wir darüber sprechen." Kein Issue, kein Kommentar ohne neue Freigabe.
+
+Owner-Entscheide zu 43-17 (2026-11-07, Claude Code Terminal):
+Entscheid F1 43-17: B, in 43-17 selbst: "Als 'nicht lesbar' zählen (Empfohlen)": vom Gateway mit 422 abgelehnte Dateien zählen in "nicht lesbar", nicht als Fehler; der Dispatch wartet darauf.
+Entscheid F2 43-17: "Ja, wenn RAM reicht (Empfohlen)": PHPUnit lokal per scripts/dev/phpunit_docker.sh nur bei mindestens 4 GB freiem RAM, sonst seriell abwarten.
+Entscheid F3 43-17: "Ja (Empfohlen)": v1.6.2 und upgrade nativ (php-smbclient), gate-crawl und gate-queue Wrapped, gate-queue zusätzlich nativ.
+Entscheid F4 43-17: "Ja, in 43-17 (Empfohlen)": 422 zählt nicht zur Ausfall-Schwelle GATEWAY_SAME_STATUS_OUTAGE_AFTER, mit Test.
