@@ -85,7 +85,8 @@ DOC_KEY_INCOMPLETE_RETRIES: Final = 3
 DOC_KEY_COOLDOWN_START_SECONDS: Final = 300.0
 DOC_KEY_COOLDOWN_MAX_SECONDS: Final = 3_600.0
 
-# The rest of the verify pass after a full pass without a correction.
+# The rest of the verify pass after a full pass without a correction, within one
+# running process: a new process verifies at once (plan 43-07, G1).
 DOC_KEY_VERIFY_REST_SECONDS: Final = 86_400
 
 _IDLE: Final = "idle"
@@ -236,6 +237,12 @@ class DocKeyBackfill:
         self._incomplete: dict[tuple[int, ...], int] = {}
         self._pass_corrected = False
         self._corrected = 0
+        # The rest after a clean verify pass belongs to one running process. A
+        # stored rest is read as nothing on the first round of a new process,
+        # because a process start is exactly when keys may have gone stale
+        # behind this container: a rollback to 1.6.2 keeps the meta value and
+        # renames files without a key (plan 43-07, G1 of plan 43-16).
+        self._stored_rest_checked = False
 
     # -- lifecycle -------------------------------------------------------
 
@@ -335,6 +342,12 @@ class DocKeyBackfill:
             await asyncio.to_thread(store.reset_doc_keys)
             mark = _Mark(generation=DOC_KEY_GENERATION)
             await asyncio.to_thread(store.write_meta, DOC_KEY_MARK, mark.render())
+
+        if not self._stored_rest_checked:
+            self._stored_rest_checked = True
+            if mark.idle_until is not None:
+                await self._write_mark(store, mark, verify=0)
+                mark = _Mark(generation=DOC_KEY_GENERATION, cursor=mark.cursor)
 
         if await asyncio.to_thread(store.doc_keys_missing) > 0:
             return await self._backfill(store, files, mark)

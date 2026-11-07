@@ -2595,8 +2595,17 @@ PHP_TREE_HASH_TODAY = "932719613f3b8e87120297365d36e4cad9d2cf04bb40ece08c1365394
 # sort, tr and sha256sum over the CRLF normalised tree: d7627c12... both ways,
 # and the same pipeline over HEAD before the step gave cdd2a8e2... (positive
 # control).
+#
+# Moved on 2026-11-07 by Plan 43-16 (fix after the 43-07 push checkpoint):
+# worker/doc_keys.py reads a stored rest of the verify pass as nothing on the
+# first round of a new process, so a rollback to 1.6.2 with a rename and the
+# way up again gets the stale key corrected at once instead of after a day.
+# No file came or went, so PACKAGE_FILES_TODAY stays at 83. The PHP pair does
+# not move. Recomputed independently with find, sort, tr and sha256sum over the
+# CRLF normalised tree: 1c5a8954... both ways, and the same pipeline over HEAD
+# before the step gave d7627c12... (positive control).
 PACKAGE_FILES_TODAY = 83
-PACKAGE_TREE_HASH_TODAY = "d7627c127f60da58a3e1eec42043f979f30245f991b79d98ef2198a84cde4994"
+PACKAGE_TREE_HASH_TODAY = "1c5a8954a06c94e9bed40e638b8a89cdef6adcd09eda51a473134c4d998f5bb2"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
