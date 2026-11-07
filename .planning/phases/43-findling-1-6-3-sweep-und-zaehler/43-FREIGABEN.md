@@ -48,3 +48,8 @@ Freigabe Dispatch 43-18: "Go bitte sorgfältig das Ziel bleibt das Beste für di
 Umfang 43-18: genau ein Push des entstandenen HEAD (Commits von 43-17 und 43-18 samt Planung, fdfc573a bis 296d428a plus diese Zeilen) auf origin main, genau ein Dispatch von "Coverage end to end" nach grünen Push-Workflows. Kein Tag, kein Release, kein Store, kein Kommentar.
 
 Vollzug 43-18: Push 84a5ce84, alle acht Push-Workflows grün (PHPUnit 1135 Tests OK); genau ein Dispatch "Coverage end to end", Lauf 42418778026, rot in allen fünf Beinen. Kern-Fix belegt: gesperrte Dateien 422 in rund 0,1 s in Wrapped und nativ, leer.txt 200 mit 0 Bytes, kein smbclient-Prozess bleibt hängen; gate-queue/native: Zähler, Nenner, notReadable, Urteile skipped/unreadable gleich der Wahrheit. Abweichungen: (1) Wrapped, gross.bin gedrosselt: 422 nach 30,2 s (Frist für erste Daten), vermutlich große SMB-Leseblöcke von smbclient bei 100 KB/s, Produktrelevanz offen; (2) 1.6.2-Companion nativ: leer.txt 200 statt erwarteter 400, Harness-Erwartung falsch; (3) Suchgegenprobe 15 statt 23 Wörter, fehlende Namen nicht protokolliert.
+
+Freigabe Push 43-18 Fix 1: "J" (2026-11-07 23:57, Claude Code Terminal) Entscheid: ja
+Freigabe Dispatch 43-18 Fix 1: "J" (2026-11-07 23:57, Claude Code Terminal) Entscheid: ja
+
+Umfang Fix 1: genau ein Push von 555dae83 bis ad2aba47 plus diesen Zeilen (Fristen 80 s, Harness-Befunde aus Lauf 42418778026), genau ein Dispatch von "Coverage end to end" nach grünen Push-Workflows.
