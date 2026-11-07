@@ -692,12 +692,7 @@ final class AdminViewService {
 			$backendReachable = $answer !== null;
 			$backend = $this->backend($answer);
 
-			// Only over the mounted storages (B1): a refused file on a storage
-			// that left the mount list is in no denominator.
-			$refusedPerStorage = $this->fileStateService->countByReasonPerStorage('skipped', 'mime_not_allowed', $coverageBody['mounted']);
-			$parts = $this->scanStats->groupParts($coverageBody['mounted'], $coverageBody['groups'], $refusedPerStorage);
-			$phpOnly = $this->fileStateService->distinctPathsByReasons($coverageBody['groups'], array_keys($parts['singles']));
-			$figures = self::perDocumentFigures($scan, $backend, $perDocument['answer'], $parts, $phpOnly);
+			$figures = $this->perDocumentFiguresFor($scan, $coverageBody, $backend, $perDocument['answer']);
 		} else {
 			$refusedByType = $this->fileStateService->countByReason('skipped', 'mime_not_allowed');
 
@@ -2597,6 +2592,26 @@ final class AdminViewService {
 		}
 
 		return $denominator;
+	}
+
+	/**
+	 * The PHP half of the per document count, asked over the mounted storages
+	 * of the body only (B1): refused by type per storage, the PHP part per
+	 * group and per single storage, the documents only this side judged.
+	 * Never countByReason() over every storage.
+	 *
+	 * @param array<string,mixed> $scan the answer of ScanStatsService::totals()
+	 * @param array{mounted: list<int>, groups: list<list<int>>} $body coverageBody()
+	 * @param array<string,mixed> $backend backend() of the status answer
+	 * @param array<string,mixed> $answer perDocumentAnswer()
+	 * @return array{scan:array<string,int>, backend:array<string,mixed>, indexable:int, refusedByType:int, deduplicated:bool, perDocument:bool, counting:bool, notReadable:int}
+	 */
+	private function perDocumentFiguresFor(array $scan, array $body, array $backend, array $answer): array {
+		$refusedPerStorage = $this->fileStateService->countByReasonPerStorage('skipped', 'mime_not_allowed', $body['mounted']);
+		$parts = $this->scanStats->groupParts($body['mounted'], $body['groups'], $refusedPerStorage);
+		$phpOnly = $this->fileStateService->distinctPathsByReasons($body['groups'], array_keys($parts['singles']));
+
+		return self::perDocumentFigures($scan, $backend, $answer, $parts, $phpOnly);
 	}
 
 	/**

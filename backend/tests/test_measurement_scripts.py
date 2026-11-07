@@ -1201,8 +1201,15 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # No file came or went, so PHP_FILES_TODAY stays at 120. Recomputed independently with find, sort,
 # tr and sha256sum over the CRLF normalised tree: be729b12... both ways; the same pipeline over git
 # archive HEAD before the step gave 422c02f7.
-PHP_FILES_TODAY = 120
-PHP_TREE_HASH_TODAY = "be729b12ab01142812dfe5d81c40832f0b52a6943be79e3b5bd9ce0b60f5d61d"
+# Moved again on 2026-11-07 by Plan 43-05 (PHPUnit cases and parity with the container fixture):
+# two files came, tests/Unit/FileStateServiceCoverageTest.php and
+# tests/Unit/CoverageTopologyParityTest.php; tests/Unit/AdminViewServiceTest.php and
+# tests/Unit/ScanStatsServiceTest.php gained cases, and lib/Service/AdminViewService.php moved the
+# PHP half of the per document count into perDocumentFiguresFor(). No file went, so PHP_FILES_TODAY
+# moves to 122. Recomputed independently with find, sort, tr and sha256sum over the CRLF normalised
+# tree: df3a2adc... both ways; the same pipeline over git archive HEAD before the step gave be729b12.
+PHP_FILES_TODAY = 122
+PHP_TREE_HASH_TODAY = "df3a2adcfa61b355e9021eff5b9b6be193a40913eb8004ff6f6c86d2644544ce"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

@@ -5,9 +5,19 @@ declare(strict_types=1);
 namespace OCA\Findling\Tests\Unit;
 
 use OCA\Findling\Service\AdminViewService;
+use OCA\Findling\Service\ExAppService;
+use OCA\Findling\Service\FileStateService;
+use OCA\Findling\Service\ScanStatsService;
+use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\DB\IResult;
+use OCP\DB\QueryBuilder\IExpressionBuilder;
+use OCP\DB\QueryBuilder\IQueryBuilder;
+use OCP\IDBConnection;
+use OCP\IUserSession;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
 
 /**
  * The three judgements of the status page that can be asked without a
@@ -1210,5 +1220,389 @@ final class AdminViewServiceTest extends TestCase {
 			self::assertSame('', $pages['source']);
 			self::assertSame('', $pages['profile']);
 		}
+	}
+
+	// -- the per document count of 1.6.3 (plan 43-05, D-43-07, D-43-11) ------
+
+	/**
+	 * A view without its constructor and with only the named collaborators,
+	 * for the methods of the per document count that ask somebody.
+	 *
+	 * @param array<string, object> $collaborators property name => double
+	 */
+	private function viewWith(array $collaborators): AdminViewService {
+		$class = new \ReflectionClass(AdminViewService::class);
+		$view = $class->newInstanceWithoutConstructor();
+		$collaborators += ['userSession' => $this->createMock(IUserSession::class)];
+		foreach ($collaborators as $name => $value) {
+			$class->getProperty($name)->setValue($view, $value);
+		}
+
+		return $view;
+	}
+
+	/** One private method of a prepared view. */
+	private static function invokeOn(AdminViewService $view, string $method, mixed ...$arguments): mixed {
+		return (new \ReflectionMethod(AdminViewService::class, $method))->invoke($view, ...$arguments);
+	}
+
+	/**
+	 * A ScanStatsService over a database that holds no rows: every part is
+	 * nought, which is all the tests of the orchestration need.
+	 */
+	private function emptyScanStats(): ScanStatsService {
+		$db = $this->createMock(IDBConnection::class);
+		$db->method('getQueryBuilder')->willReturnCallback(function (): IQueryBuilder {
+			$qb = $this->createMock(IQueryBuilder::class);
+			foreach (['select', 'from', 'where', 'andWhere'] as $method) {
+				$qb->method($method)->willReturnSelf();
+			}
+			$qb->method('expr')->willReturn($this->createMock(IExpressionBuilder::class));
+			$qb->method('createNamedParameter')->willReturn(':p');
+			$result = $this->createMock(IResult::class);
+			$result->method('fetch')->willReturn(false);
+			$qb->method('executeQuery')->willReturn($result);
+
+			return $qb;
+		});
+
+		return new ScanStatsService($db, $this->createMock(ITimeFactory::class), $this->createMock(LoggerInterface::class));
+	}
+
+	/**
+	 * A checked container answer for one body.
+	 *
+	 * @param list<int> $documentsByGroup
+	 * @param list<int> $judgedByGroup
+	 * @param array<int,int> $documentsByStorage
+	 * @param array<int,int> $judgedByStorage
+	 * @return array<string,mixed>
+	 */
+	private static function perDocumentAnswerOf(array $documentsByGroup, array $judgedByGroup, array $documentsByStorage = [], array $judgedByStorage = [], ?int $embedded = null): array {
+		$documents = array_sum($documentsByGroup) + array_sum($documentsByStorage);
+
+		return [
+			'counting' => false,
+			'documents' => $documents,
+			'embeddedDocuments' => $embedded ?? $documents,
+			'judgedDocuments' => array_sum($judgedByGroup) + array_sum($judgedByStorage),
+			'documentsByGroup' => $documentsByGroup,
+			'judgedByGroup' => $judgedByGroup,
+			'documentsByStorage' => $documentsByStorage,
+			'judgedByStorage' => $judgedByStorage,
+		];
+	}
+
+	/**
+	 * The coverage block of the per document count, as overview() assembles it.
+	 *
+	 * @param array<string,mixed> $answer
+	 * @param array{groups: list<int>, singles: array<int,int>, refused: int} $parts
+	 * @param array{byGroup: list<int>, byStorage: array<int,int>, notReadableByGroup: list<int>, notReadableByStorage: array<int,int>} $phpOnly
+	 * @return array<string,mixed>
+	 */
+	private static function perDocumentCoverageOf(array $answer, array $parts, array $phpOnly, ?string $legacyReason = null): array {
+		$backend = ['indexed' => 999, 'embedded' => 999];
+		$figures = AdminViewService::perDocumentFigures(['grouped' => ['mountsTotal' => 1, 'mountsFinished' => 1]], $backend, $answer, $parts, $phpOnly);
+		$coverage = self::invokePrivate(
+			'coverage',
+			$figures['scan'],
+			$figures['backend'],
+			true,
+			$figures['indexable'],
+			$figures['refusedByType'],
+			true,
+			true,
+			0,
+			$figures['deduplicated'],
+			false,
+			$figures['perDocument'],
+			$figures['counting'],
+			$figures['notReadable'],
+			$legacyReason,
+		);
+		self::assertIsArray($coverage);
+
+		return $coverage;
+	}
+
+	/** @return array{byGroup: list<int>, byStorage: array<int,int>, notReadableByGroup: list<int>, notReadableByStorage: array<int,int>} */
+	private static function noPhpOnly(int $groups): array {
+		return [
+			'byGroup' => array_fill(0, $groups, 0),
+			'byStorage' => [],
+			'notReadableByGroup' => array_fill(0, $groups, 0),
+			'notReadableByStorage' => [],
+		];
+	}
+
+	public function testKindOkCountsTheDocumentsOverTheDenominatorPerGroup(): void {
+		$answer = self::perDocumentAnswerOf([40], [60], [5 => 10], [5 => 10]);
+		$parts = ['groups' => [80], 'singles' => [5 => 20], 'refused' => 0];
+
+		$coverage = self::perDocumentCoverageOf($answer, $parts, self::noPhpOnly(1));
+
+		// Numerator: documents 50, never the 999 rows of /status. Denominator:
+		// max(80, 60) + max(20, 10) = 100.
+		self::assertSame(50, $coverage['indexed']);
+		self::assertSame(100, $coverage['indexable']);
+		self::assertSame(50, $coverage['percent']);
+		self::assertFalse($coverage['recounting']);
+		self::assertTrue($coverage['perDocument']);
+		self::assertFalse($coverage['counting']);
+		self::assertFalse($coverage['legacyCount']);
+	}
+
+	public function testKindOkKeepsTheGroupedDenominator(): void {
+		// W9: fewer verdicts than the representative has seen keep the PHP
+		// part, and nothing of the other members is subtracted from it.
+		$answer = self::perDocumentAnswerOf([30], [40]);
+		$parts = ['groups' => [100], 'singles' => [], 'refused' => 0];
+		$phpOnly = self::noPhpOnly(1);
+		$phpOnly['byGroup'] = [5];
+
+		self::assertSame(100, AdminViewService::perDocumentDenominator($parts, $answer, $phpOnly));
+		self::assertSame(30, self::perDocumentCoverageOf($answer, $parts, $phpOnly)['percent']);
+	}
+
+	public function testTheMaximumIsTakenPerGroupAndNotOverTheSums(): void {
+		// Group 0: the container side wins (20 + 2 > 10); group 1: the PHP
+		// side wins (50 > 10). 22 + 50 = 72, where one maximum over the sums
+		// would give max(60, 32) = 60.
+		$answer = self::perDocumentAnswerOf([15, 10], [20, 10]);
+		$parts = ['groups' => [10, 50], 'singles' => [], 'refused' => 0];
+		$phpOnly = self::noPhpOnly(2);
+		$phpOnly['byGroup'] = [2, 0];
+
+		self::assertSame(72, AdminViewService::perDocumentDenominator($parts, $answer, $phpOnly));
+	}
+
+	public function testUnreadableFilesLowerTheShareAndAreNamedAsNotReadable(): void {
+		// D-43-11: 200 files listed, 190 searchable, 10 unreadable for PHP.
+		$answer = self::perDocumentAnswerOf([], [], [7 => 190], [7 => 190]);
+		$parts = ['groups' => [], 'singles' => [7 => 200], 'refused' => 0];
+		$phpOnly = ['byGroup' => [], 'byStorage' => [7 => 10], 'notReadableByGroup' => [], 'notReadableByStorage' => [7 => 10]];
+
+		$coverage = self::perDocumentCoverageOf($answer, $parts, $phpOnly);
+
+		self::assertSame(200, $coverage['indexable']);
+		self::assertSame(95, $coverage['percent']);
+		self::assertSame(10, $coverage['notReadable']);
+	}
+
+	public function testVerdictsAboveTheFilesSeenRaiseTheDenominatorAndTheShareStaysBelowAHundred(): void {
+		// files_seen lags behind: 2 seen, 3 judged plus 1 unreadable.
+		$answer = self::perDocumentAnswerOf([], [], [9 => 3], [9 => 3]);
+		$parts = ['groups' => [], 'singles' => [9 => 2], 'refused' => 0];
+		$phpOnly = ['byGroup' => [], 'byStorage' => [9 => 1], 'notReadableByGroup' => [], 'notReadableByStorage' => [9 => 1]];
+
+		$coverage = self::perDocumentCoverageOf($answer, $parts, $phpOnly);
+
+		self::assertSame(4, $coverage['indexable']);
+		self::assertSame(75, $coverage['percent']);
+		self::assertFalse($coverage['recounting']);
+	}
+
+	public function testThePhpHalfAsksOverTheMountedStoragesOnlyAndNeverOverEveryStorage(): void {
+		// B1: a refused file on a storage that left the mount list is in no
+		// denominator, so the count is asked with the mount list of the body
+		// and countByReason() without a list is never called on this path.
+		$files = $this->createMock(FileStateService::class);
+		$files->expects(self::never())->method('countByReason');
+		$files->expects(self::once())->method('countByReasonPerStorage')
+			->with('skipped', 'mime_not_allowed', [11, 12, 31])
+			->willReturn([11 => 1]);
+		$files->expects(self::once())->method('distinctPathsByReasons')
+			->with([[11, 12]], [31])
+			->willReturn(self::noPhpOnly(1));
+		$view = $this->viewWith(['fileStateService' => $files, 'scanStats' => $this->emptyScanStats()]);
+
+		$figures = self::invokeOn(
+			$view,
+			'perDocumentFiguresFor',
+			['grouped' => []],
+			['mounted' => [11, 12, 31], 'groups' => [[11, 12]]],
+			['indexed' => 0, 'embedded' => 0],
+			self::perDocumentAnswerOf([0], [0]),
+		);
+
+		self::assertIsArray($figures);
+		self::assertTrue($figures['perDocument']);
+		self::assertSame(1, $figures['refusedByType']);
+	}
+
+	public function testWhileTheContainerCountsThereIsNoShare(): void {
+		$parts = ['groups' => [10], 'singles' => [], 'refused' => 0];
+
+		$coverage = self::perDocumentCoverageOf(['counting' => true], $parts, self::noPhpOnly(1));
+
+		self::assertTrue($coverage['counting']);
+		self::assertNull($coverage['percent']);
+		self::assertNull($coverage['embeddedPercent']);
+		self::assertFalse($coverage['recounting']);
+		self::assertSame(10, $coverage['indexable']);
+	}
+
+	/** @return array{0: AdminViewService, 1: \ArrayObject<int, array{level: string, message: string, context: array<mixed>}>} */
+	private function viewAsking(?array $outcome, bool $expectSend = true): array {
+		$lines = new \ArrayObject();
+		$logger = $this->createMock(LoggerInterface::class);
+		$logger->method('warning')->willReturnCallback(static function (string|\Stringable $message, array $context = []) use ($lines): void {
+			$lines[] = ['level' => 'warning', 'message' => (string)$message, 'context' => $context];
+		});
+		$exApp = $this->createMock(ExAppService::class);
+		if ($expectSend) {
+			$exApp->expects(self::once())->method('adminSend')->with('/coverage', self::anything(), self::anything())->willReturn($outcome);
+		} else {
+			$exApp->expects(self::never())->method('adminSend');
+		}
+		$view = $this->viewWith(['exAppService' => $exApp, 'logger' => $logger]);
+
+		return [$view, $lines];
+	}
+
+	public function testAContainerWithoutTheRouteGivesTheVisibleFigureOf162(): void {
+		[$view, $lines] = $this->viewAsking(['kind' => ExAppService::ADMIN_MISSING, 'body' => null]);
+
+		$outcome = self::invokeOn($view, 'perDocumentCoverage', ['mounted' => [1, 2], 'groups' => [[1, 2]]]);
+
+		self::assertSame(['kind' => AdminViewService::PER_DOCUMENT_LEGACY, 'answer' => null, 'reason' => 'missing'], $outcome);
+		self::assertCount(1, $lines);
+		self::assertSame('Findling: the backend has no per document count, the page shows the 1.6.2 figure', $lines[0]['message']);
+
+		$coverage = self::coverageOf(self::groupedScan([]), ['indexed' => 10]);
+		self::assertFalse($coverage['legacyCount']);
+		$legacy = self::perDocumentLegacyCoverage('missing');
+		self::assertTrue($legacy['legacyCount']);
+		self::assertSame('missing', $legacy['legacyReason']);
+	}
+
+	/** The coverage block of the 1.6.2 path with a legacy reason. @return array<string,mixed> */
+	private static function perDocumentLegacyCoverage(string $reason): array {
+		$scan = self::groupedScan([]);
+		$parameters = AdminViewService::leaveOutParameters($scan);
+		$figures = self::invokePrivate('figures', $scan, ['indexed' => 10], $parameters, 0, 0);
+		self::assertIsArray($figures);
+		self::assertFalse($figures['perDocument']);
+		$coverage = self::invokePrivate(
+			'coverage',
+			$figures['scan'], $figures['backend'], true, $figures['indexable'], $figures['refusedByType'],
+			true, true, 0, $figures['deduplicated'], false,
+			$figures['perDocument'], $figures['counting'], $figures['notReadable'], $reason,
+		);
+		self::assertIsArray($coverage);
+		self::assertFalse($coverage['perDocument']);
+		self::assertSame(0, $coverage['notReadable']);
+
+		return $coverage;
+	}
+
+	public function testAboveTheMountLimitThePageDoesNotAskAndSaysWhy(): void {
+		[$view, $lines] = $this->viewAsking(null, false);
+		$mounted = range(1, AdminViewService::COVERAGE_MAX_MOUNTED + 1);
+
+		$outcome = self::invokeOn($view, 'perDocumentCoverage', ['mounted' => $mounted, 'groups' => []]);
+
+		self::assertSame(['kind' => AdminViewService::PER_DOCUMENT_LEGACY, 'answer' => null, 'reason' => 'limits'], $outcome);
+		self::assertCount(1, $lines);
+		self::assertSame(AdminViewService::COVERAGE_MAX_MOUNTED + 1, $lines[0]['context']['mounted']);
+		self::assertSame(0, $lines[0]['context']['members']);
+		self::assertSame('limits', self::perDocumentLegacyCoverage('limits')['legacyReason']);
+	}
+
+	public function testAboveTheMemberAndTheSingleLimitsThePageDoesNotAskEither(): void {
+		[$view] = $this->viewAsking(null, false);
+		$members = range(1, AdminViewService::COVERAGE_MAX_MEMBERS + 2);
+		$outcome = self::invokeOn($view, 'perDocumentCoverage', ['mounted' => $members, 'groups' => [array_slice($members, 0, 501), array_slice($members, 501)]]);
+		self::assertSame('limits', $outcome['reason']);
+
+		[$view] = $this->viewAsking(null, false);
+		$outcome = self::invokeOn($view, 'perDocumentCoverage', ['mounted' => range(1, AdminViewService::COVERAGE_MAX_SINGLES + 1), 'groups' => []]);
+		self::assertSame('limits', $outcome['reason']);
+	}
+
+	public function testUnreachableBusyAndRefusedFallBackWithoutTheLegacyFlag(): void {
+		foreach ([ExAppService::ADMIN_UNREACHABLE, ExAppService::ADMIN_BUSY, ExAppService::ADMIN_REFUSED] as $kind) {
+			[$view, $lines] = $this->viewAsking(['kind' => $kind, 'body' => null]);
+
+			$outcome = self::invokeOn($view, 'perDocumentCoverage', ['mounted' => [1], 'groups' => []]);
+
+			self::assertSame(AdminViewService::PER_DOCUMENT_FALLBACK, $outcome['kind'], $kind);
+			self::assertNull($outcome['reason'], $kind);
+			self::assertCount(0, $lines, $kind);
+		}
+	}
+
+	public function testAGoodAnswerIsOkAndACountingAnswerIsCounting(): void {
+		$body = ['mounted' => [1, 2, 3], 'groups' => [[1, 2]]];
+		[$view] = $this->viewAsking(['kind' => ExAppService::ADMIN_OK, 'body' => [
+			'documents' => 3, 'embeddedDocuments' => 1, 'judgedDocuments' => 4,
+			'documentsByGroup' => [2], 'judgedByGroup' => [3],
+			'documentsByStorage' => [[3, 1]], 'judgedByStorage' => [[3, 1]],
+			'counting' => false, 'docKeysMissing' => 0, 'docKeysUnresolved' => 0, 'docKeysCorrected' => 0,
+		]]);
+		$ok = self::invokeOn($view, 'perDocumentCoverage', $body);
+		self::assertSame(AdminViewService::PER_DOCUMENT_OK, $ok['kind']);
+		self::assertSame([3 => 1], $ok['answer']['judgedByStorage']);
+
+		[$view] = $this->viewAsking(['kind' => ExAppService::ADMIN_OK, 'body' => ['counting' => true, 'documents' => null]]);
+		$counting = self::invokeOn($view, 'perDocumentCoverage', $body);
+		self::assertSame(AdminViewService::PER_DOCUMENT_COUNTING, $counting['kind']);
+		self::assertTrue($counting['answer']['counting']);
+	}
+
+	/** @return iterable<string, array{0: array<string,mixed>}> */
+	public static function brokenAnswers(): iterable {
+		$good = [
+			'documents' => 3, 'embeddedDocuments' => 1, 'judgedDocuments' => 4,
+			'documentsByGroup' => [2], 'judgedByGroup' => [3],
+			'documentsByStorage' => [[3, 1]], 'judgedByStorage' => [[3, 1]],
+			'counting' => false,
+		];
+		yield 'counting missing' => [array_diff_key($good, ['counting' => true])];
+		yield 'counting a string' => [['counting' => 'false'] + $good];
+		yield 'a string figure' => [['documents' => '3'] + $good];
+		yield 'a negative figure' => [['judgedDocuments' => -1] + $good];
+		yield 'a float figure' => [['embeddedDocuments' => 1.0] + $good];
+		yield 'a group list too short' => [['judgedByGroup' => []] + $good];
+		yield 'a group list too long' => [['documentsByGroup' => [1, 1], 'documents' => 3] + $good];
+		yield 'a group list as an object' => [['judgedByGroup' => ['a' => 3]] + $good];
+		yield 'a storage that is a group member' => [['documentsByStorage' => [[1, 1]], 'judgedByStorage' => [[1, 1]]] + $good];
+		yield 'a storage that is not mounted' => [['documentsByStorage' => [[9, 1]], 'judgedByStorage' => [[9, 1]]] + $good];
+		yield 'a storage named twice' => [['judgedByStorage' => [[3, 1], [3, 0]]] + $good];
+		yield 'a pair of three' => [['judgedByStorage' => [[3, 1, 1]]] + $good];
+		yield 'sums that are not the sums of the parts' => [['documents' => 4] + $good];
+		yield 'more documents than verdicts in a group' => [['documentsByGroup' => [3], 'judgedByGroup' => [2], 'documents' => 4, 'judgedDocuments' => 3] + $good];
+		yield 'more embedded than documents' => [['embeddedDocuments' => 4] + $good];
+	}
+
+	#[DataProvider('brokenAnswers')]
+	public function testAnAnswerThatDoesNotHoldUpIsNoFigure(array $answer): void {
+		$body = ['mounted' => [1, 2, 3], 'groups' => [[1, 2]]];
+
+		self::assertNull(AdminViewService::perDocumentAnswer($answer, $body));
+
+		[$view, $lines] = $this->viewAsking(['kind' => ExAppService::ADMIN_OK, 'body' => $answer]);
+		$outcome = self::invokeOn($view, 'perDocumentCoverage', $body);
+		self::assertSame(AdminViewService::PER_DOCUMENT_FALLBACK, $outcome['kind']);
+		self::assertCount(1, $lines);
+	}
+
+	public function testTheBodyHoldsTheMountedStoragesAndTheGroupsOfTwoOrMore(): void {
+		$body = AdminViewService::coverageBody(
+			[31, 12, 11, 12, 0, -4, 13, 21, 22, 40],
+			[[13, 11, 12, 99], [31], [21, 22, 11], [40, 41]],
+		);
+
+		// Sorted, each id once, nothing below one; 99 and 41 are not mounted,
+		// [31] and [40] are no groups, and 11 stays in the first group.
+		self::assertSame([11, 12, 13, 21, 22, 31, 40], $body['mounted']);
+		self::assertSame([[11, 12, 13], [21, 22]], $body['groups']);
+	}
+
+	public function testTheLimitsMirrorTheContainer(): void {
+		self::assertSame(50000, AdminViewService::COVERAGE_MAX_MOUNTED);
+		self::assertSame(1000, AdminViewService::COVERAGE_MAX_MEMBERS);
+		self::assertLessThan(AdminViewService::COVERAGE_MAX_MOUNTED, AdminViewService::COVERAGE_MAX_SINGLES);
 	}
 }

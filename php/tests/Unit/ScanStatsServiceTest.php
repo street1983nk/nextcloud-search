@@ -297,4 +297,95 @@ final class ScanStatsServiceTest extends TestCase {
 		self::assertCount(499, $totals['leftOutStorageIds']);
 		self::assertSame([500, 100], $this->bands);
 	}
+
+	// -- groupParts, the PHP part of the per document denominator (plan 43-05) --
+
+	/** The topology of backend/tests/fixtures/coverage_topology.json, its scanStats. */
+	private function topologyRows(): void {
+		$this->row(11, 12, true, 1, 1);
+		$this->row(12, 10, true, 0, 1);
+		$this->row(13, 7, true);
+		$this->row(21, 9, false);
+		$this->row(22, 6, true);
+		$this->row(31, 8, true);
+		$this->row(32, 2, true);
+	}
+
+	public function testGroupPartsCountThroughTheRepresentativeWithItsOwnRefusedFiles(): void {
+		$this->topologyRows();
+
+		$parts = $this->service()->groupParts(
+			[11, 12, 13, 21, 22, 31, 32, 33],
+			[[11, 12, 13], [21, 22]],
+			[11 => 1, 12 => 1, 22 => 1, 31 => 1],
+		);
+
+		// Group 0: 11 sees the most, 12 - 1 - 1 - 1 = 9; refused of 12 stays
+		// out, it is no representative. Group 1: 21 (9 > 6), nothing refused.
+		self::assertSame([9, 9], $parts['groups']);
+		self::assertSame([11, 21], $parts['representatives']);
+		// 31: 8 - 1; 32: 2; 33 has no row and is a single storage with nought.
+		self::assertSame([31 => 7, 32 => 2, 33 => 0], $parts['singles']);
+		self::assertSame(2, $parts['refused']);
+	}
+
+	public function testGroupPartsIgnoreRefusedFilesOfAStorageOutsideTheMountList(): void {
+		$this->topologyRows();
+
+		$with = $this->service()->groupParts([11, 12, 13, 31], [[11, 12, 13]], [11 => 1, 31 => 1, 41 => 50]);
+
+		self::assertSame([9], $with['groups']);
+		self::assertSame([31 => 7], $with['singles']);
+		self::assertSame(2, $with['refused']);
+	}
+
+	public function testGroupPartsHaveNoLeaveOutSubtraction(): void {
+		$this->row(1, 100, true);
+		$this->row(2, 100, true);
+
+		// Two members of one share: the part is the representative's 100 and
+		// not 100 minus anything of the other member (W9).
+		$parts = $this->service()->groupParts([1, 2], [[1, 2]], []);
+
+		self::assertSame([100], $parts['groups']);
+		self::assertSame([], $parts['singles']);
+	}
+
+	public function testGroupPartsNeverGoBelowNought(): void {
+		$this->row(5, 3, true, 2, 2);
+
+		$parts = $this->service()->groupParts([5], [], [5 => 4]);
+
+		self::assertSame([5 => 0], $parts['singles']);
+	}
+
+	public function testGroupPartsWithoutMountsAskNothing(): void {
+		$this->db->expects(self::never())->method('getQueryBuilder');
+
+		$parts = $this->service()->groupParts([], [], []);
+
+		self::assertSame(['groups' => [], 'singles' => [], 'refused' => 0, 'representatives' => []], $parts);
+	}
+
+	public function testPartsOfKeepThePositionOfAGroupWithoutMountedMembers(): void {
+		$parts = ScanStatsService::partsOf([1], [1 => ['filesSeen' => 4, 'overCap' => 0, 'excluded' => 0, 'finished' => true]], [[7, 8], [1, 9]], []);
+
+		// The first group has no mounted member: nought in its position, so
+		// the n-th part still belongs to the n-th group of the body.
+		self::assertSame([0, 4], $parts['groups']);
+		self::assertSame([], $parts['singles']);
+	}
+
+	public function testGroupPartsAndTotalsNameTheSameRepresentative(): void {
+		$this->row(1, 50, false);
+		$this->row(2, 50, true);
+		$this->row(3, 10, true);
+
+		$totals = $this->service()->totals([1, 2, 3], [[1, 2, 3]]);
+		$parts = $this->service()->groupParts([1, 2, 3], [[1, 2, 3]], []);
+
+		// Equal files seen prefer the finished member in both.
+		self::assertSame([1, 3], $totals['leftOutStorageIds']);
+		self::assertSame([2], $parts['representatives']);
+	}
 }
