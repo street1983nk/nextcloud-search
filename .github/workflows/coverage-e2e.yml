@@ -122,5 +122,7 @@ jobs:
           tail -n 300 "${RUNNER_TEMP}/exapp.log" || echo "no backend log written"
           echo "--- nextcloud ---"
           tail -n 200 data/nextcloud.log || echo "no data/nextcloud.log written"
+          echo "--- php -S ---"
+          tail -n 200 "${RUNNER_TEMP}/php-server.log" || echo "no php server log written"
           echo "--- smbd ---"
           sudo tail -n 100 /var/log/samba/log.smbd || echo "no smbd log written"

@@ -288,12 +288,14 @@ runs:
 
     # composer run serve is PHP_CLI_SERVER_WORKERS=${NEXTCLOUD_WORKERS:=4}
     # php -S ${NEXTCLOUD_HOST:=localhost}:${NEXTCLOUD_PORT:=8080}, so the binding
-    # is loopback unless this variable says otherwise (pitfall 12).
+    # is loopback unless this variable says otherwise (pitfall 12). The request
+    # lines of php -S go to a file: the output of a background process is lost
+    # with the end of this step, and coverage-e2e reads it on a hang.
     - name: Start the PHP builtin server
       shell: bash
       env:
         NEXTCLOUD_HOST: ${{ inputs.nextcloud-host }}
-      run: composer run serve &
+      run: composer run serve > "${RUNNER_TEMP}/php-server.log" 2>&1 &
 
     - name: Wait for the server
       shell: bash

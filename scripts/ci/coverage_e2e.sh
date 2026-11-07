@@ -218,8 +218,16 @@ living_rows() {
 
 # drain: queue empty, no crawl row, and the state database still for 20 s.
 drain() {
-  local deadline=$(($(date +%s) + DRAIN_TIMEOUT)) open crawl last="" now
+  local deadline=$(($(date +%s) + DRAIN_TIMEOUT)) open crawl last="" now mark outages
+  mark=$(log_mark)
   while :; do
+    # Three passes stopped on an unavailable gateway: nothing drains after
+    # that, the report says why instead of the timeout.
+    outages=$(log_since "${mark}" | grep -c 'the content gateway is unavailable' || true)
+    if [ "${outages}" -ge 3 ]; then
+      hang_report
+      fail "the content gateway stopped ${outages} indexing passes, the queue cannot drain"
+    fi
     open=$(open_rows)
     crawl=$(crawl_pending)
     now="$(living_rows)/$(statedb "SELECT COALESCE(MAX(indexed_at), 0) || ':' || COUNT(*) FROM files;" 2> /dev/null || echo -)"
@@ -352,6 +360,48 @@ log_mark() {
 
 log_since() {
   tail -n +"$(($1 + 1))" "${EXAPP_LOG}"
+}
+
+# -- diagnosis of a hanging content gateway -----------------------------------------
+
+# The second dispatch (run 42394655350) drained nothing on all four variants:
+# every gateway call of the backend ran into its read timeout, and after that
+# the pause wish and the queue as well, so all workers of php -S were taken.
+# These helpers say which request hangs before the drain waits 25 minutes.
+PHP_SERVER_LOG="${RUNNER_TEMP}/php-server.log"
+
+hang_report() {
+  echo "--- processes (smbclient, php) ---"
+  ps -eo pid,etimes,stat,args | grep -E 'smbclient|php' | grep -v grep || echo "none"
+  echo "--- connections to 8080 ---"
+  ss -tn state established '( sport = :8080 )' 2> /dev/null | tail -n +2 | wc -l
+  echo "--- php extensions (smbclient) ---"
+  php -m | grep -i smbclient || echo "no smbclient extension, icewind/smb drives the smbclient binary"
+  echo "--- php -S, last lines ---"
+  tail -n 60 "${PHP_SERVER_LOG}" 2> /dev/null || echo "no php server log"
+}
+
+# gateway_probe <label> <uid> <file id>: one fetch the way the backend does it,
+# prints status and seconds. Fails the run on a timeout: a worker of php -S
+# that hangs here stays taken after curl gives up.
+gateway_probe() {
+  local label="$1" uid="$2" fid="$3" auth result
+  [ -n "${fid}" ] || fail "gateway probe ${label}: no file id"
+  auth=$(printf '%s:%s' "${uid}" "${EXAPP_SECRET}" | base64 -w0)
+  result=$(curl -s -m 60 -o /dev/null -w '%{http_code} %{time_total}' \
+    -H 'AA-VERSION: 2.2.0' \
+    -H 'EX-APP-ID: findling_backend' \
+    -H "EX-APP-VERSION: $(backend_version "${BACKEND_DIR}")" \
+    -H "AUTHORIZATION-APP-API: ${auth}" \
+    -H 'OCS-APIRequest: true' \
+    "${NC_URL}/ocs/v2.php/apps/findling/files/${fid}?userId=${uid}" || true)
+  note "gateway probe ${label} (file ${fid}, ${uid}): http ${result:-none}"
+  case "${result}" in
+    000* | "")
+      hang_report
+      fail "gateway probe ${label} did not answer within 60 s"
+      ;;
+  esac
 }
 
 # coverage_body: the body the companion would send, built from oc_mounts and
@@ -686,6 +736,14 @@ note "carol mounts archiv ${mounts_of_carol_archiv} times (second mount point of
 # ===================================================================================
 # 3. Indexing, with the reconcile switched off (job env)
 # ===================================================================================
+
+step "gateway probes before the crawl"
+# Before the queue fills, so no backend fetch holds a worker yet: a home file
+# without SMB first, then a readable file of alice on daten.
+gateway_probe home alice "$(ncdb "SELECT fc.fileid FROM oc_filecache AS fc JOIN oc_storages AS s ON s.numeric_id = fc.storage
+                                    WHERE s.id = 'home::alice' AND fc.name = 'notiz.txt' LIMIT 1;")"
+gateway_probe smb alice "$(ncdb "SELECT fileid FROM oc_filecache
+                                  WHERE storage = ${daten_alice} AND name = 'daten-alice-1.txt' LIMIT 1;")"
 
 step "crawl and drain"
 nc_occ findling:index --restart --no-interaction > /dev/null
