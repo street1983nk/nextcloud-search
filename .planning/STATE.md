@@ -100,6 +100,10 @@ Progress: [█████████░] 88%
 
 ## Accumulated Context
 
+### Roadmap Evolution
+
+- Phase 43 added (2026-11-07): Findling 1.6.3, Löschlauf unabhängig vom Quiet-Gate und Zähler pro Dokument (#25)
+
 ### Decisions (Roadmap v1.6)
 
 - Vier Phasen 37 bis 40 (Granularitaet coarse, kleiner Milestone, Ziel-Einreichung 29.10.2026).

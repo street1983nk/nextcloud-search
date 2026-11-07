@@ -256,5 +256,15 @@ Plans:
 
 Kriterium 3 (Psalm mit Taint, php-cs-fixer, zizmor, actionlint) ist nicht Teil dieser Phase und kommt als eigene Phase vor Findling 1.7.
 
+### Phase 43: Findling 1.6.3: Löschlauf unabhängig vom Quiet-Gate und Zähler pro Dokument (#25)
+
+**Goal:** Index-Einträge nicht mehr eingebundener Speicher werden zuverlässig entfernt, auch wenn die Ruhe-Schwelle (quiet_max) den vollen Abgleich blockiert: Stempel und `_sweep_vanished` laufen, sobald eine vollständige Mountliste vorliegt. Die Fortschrittszählung zählt pro Dokument (Speicher-Schlüssel plus Pfad), die PHP-App liefert dafür die Zuordnung storage zu key mit. Danach Audit, Owner-Runde, Store-Einreichung 1.6.3 und Antwort in #25 (erst nach Store-Release).
+**Requirements**: TBD
+**Depends on:** Phase 42
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 43 to break down)
+
 ---
 *Created: 2026-09-08. v1.1 archiviert: 2026-09-11. v1.2 archiviert: 2026-09-21. v1.3 archiviert: 2026-09-27. v1.4-Roadmap: 2026-09-27. v1.5-Roadmap: 2026-10-10. v1.5 archiviert: 2026-10-28. v1.6-Roadmap: 2026-10-28.*
