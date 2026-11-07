@@ -365,6 +365,10 @@
       // "Deliberately left out" (ANZE-01), and the hint after a rule change
       // (ANZE-02), which can come and go while no other value here moves.
       coverage.deliberatelyLeftOut === 0, coverage.rulesPending,
+      // The four lines of plan 43-06: the count still running, the one time
+      // hint, the files not readable and the visible fallback can change
+      // while no other value here moves.
+      coverage.counting, coverage.perDocumentHint, coverage.notReadable, coverage.legacyReason,
       coverage.provisional, coverage.duplicates, coverage.mountsFinished,
       coverage.mountsTotal, estimate.ocrMeasured, estimate.secondsLeft,
       estimate.bytesExpected, estimate.startupValues, estimate.spaceWarning,
@@ -395,7 +399,13 @@
     // the two cases and neither of them is a number.
     const percent = Number.isInteger(coverage.percent) ? coverage.percent : null
     const hasDenominator = indexable > 0
-    const hasFraction = hasDenominator && percent !== null
+    // The per document count of 1.6.3 (plans 43-05, 43-06): while the
+    // container still counts, a sentence of its own and no share, neither the
+    // recount sentence nor the one about a silent backend. The same rules as
+    // the template.
+    const counting = coverage.counting === true
+    const notReadable = whole(coverage.notReadable)
+    const hasFraction = hasDenominator && percent !== null && !counting
     // More searchable than indexable: the recount of the denominator has not
     // caught up yet (quick task 260929-kii). Neither a share nor a fraction
     // with a numerator above its denominator, and not the sentence about a
@@ -419,6 +429,11 @@
       .replace('%s', numbers.format(searchable)))
     text('findling-coverage-unknown', t('findling', 'The share cannot be worked out right now because the backend does not answer. %s files of this instance are indexable.')
       .replace('%s', numbers.format(indexable)))
+    text('findling-coverage-per-document', t('findling', 'Since version 1.6.3, every document counts only once. Until now, external storage mounted separately for each user was counted once per mount, which is why the figures can now be lower than before. This note disappears seven days after the first complete count.'))
+    text('findling-coverage-counting', t('findling', 'The coverage is being counted document by document. On large instances this can take some time, and the search keeps working normally meanwhile. The figure appears here as soon as the count is finished.'))
+    text('findling-coverage-not-readable', t('findling', '%s files could not be read or got stuck repeatedly. They count as not searchable and lower the coverage figure.')
+      .replace('%s', numbers.format(notReadable)))
+    text('findling-coverage-legacy', t('findling', 'This instance has more storages than the count per document can handle. The figure is therefore counted per storage as in version 1.6.2, and a file mounted for several users can stand in it several times.'))
     text('findling-coverage-leftout-count', t('findling', 'Deliberately left out: %s')
       .replace('%s', numbers.format(whole(coverage.deliberatelyLeftOut))))
     text('findling-coverage-provisional', t('findling', 'Provisional figure, %1$s of %2$s storages have been counted through.')
@@ -433,8 +448,12 @@
     shown('findling-coverage-figure', hasFraction)
     shown('findling-coverage-bar', hasFraction)
     shown('findling-coverage-subline', hasFraction)
-    shown('findling-coverage-recounting', recounting)
-    shown('findling-coverage-unknown', hasDenominator && !hasFraction && coverage.recounting !== true)
+    shown('findling-coverage-per-document', coverage.perDocumentHint === true)
+    shown('findling-coverage-counting', counting)
+    shown('findling-coverage-not-readable', notReadable > 0)
+    shown('findling-coverage-legacy', coverage.legacyReason === 'limits')
+    shown('findling-coverage-recounting', recounting && !counting)
+    shown('findling-coverage-unknown', hasDenominator && !hasFraction && coverage.recounting !== true && !counting)
     shown('findling-coverage-leftout', hasDenominator)
     // Both sentences are static and rendered by the template; the number
     // decides which of the two stands next to it (ANZE-01, L-36-05).
@@ -555,7 +574,9 @@
     // yet, and the empty block below says so in its own words. While the
     // recount has not caught up, the sentence of the first block says why no
     // share is shown, and "cannot be worked out" would be the wrong reason.
-    shown('findling-semantic-unknown', hasDenominator && !hasFraction && coverage.recounting !== true)
+    // Not while the per document count runs (plan 43-06): the backend
+    // answers, the share only has to wait for the count.
+    shown('findling-semantic-unknown', hasDenominator && !hasFraction && coverage.recounting !== true && coverage.counting !== true)
   }
 
   /**

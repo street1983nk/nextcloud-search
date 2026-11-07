@@ -2168,10 +2168,12 @@ def test_the_engine_line_is_not_hidden_behind_a_denominator_that_does_not_exist_
     # line also stays hidden while the recount has not caught up, because the
     # recount sentence of the first block says why no share is shown.
     assert (
-        'id="findling-semantic-unknown"<?php if (!$hasDenominator || $hasEmbeddedFraction || $recounting)' in template
+        'id="findling-semantic-unknown"<?php if (!$hasDenominator || $hasEmbeddedFraction || $recounting || $counting)'
+        in template
     )
     assert (
-        "shown('findling-semantic-unknown', hasDenominator && !hasFraction && coverage.recounting !== true)" in script
+        "shown('findling-semantic-unknown', hasDenominator && !hasFraction && coverage.recounting !== true "
+        "&& coverage.counting !== true)" in script
     )
 
 
@@ -2205,17 +2207,23 @@ def test_a_numerator_above_its_denominator_shows_the_recount_sentence_in_both_ha
     assert sentence in catalogue_of(L10N_JSON)
 
     assert "$recounting = ($coverage['recounting'] ?? false) === true;" in template
-    assert 'id="findling-coverage-recounting"<?php if (!$hasDenominator || !$recounting) { ?> hidden' in template
+    # Since plan 43-06 neither sentence stands while the per document count
+    # runs: the counting sentence says why no share is shown.
     assert (
-        'id="findling-coverage-unknown"<?php if (!$hasDenominator || $hasFraction || $recounting) { ?> hidden'
+        'id="findling-coverage-recounting"<?php if (!$hasDenominator || !$recounting || $counting) { ?> hidden'
         in template
+    )
+    assert (
+        'id="findling-coverage-unknown"<?php if (!$hasDenominator || $hasFraction || $recounting || $counting) { ?> '
+        "hidden" in template
     )
     assert sentence in template
 
     assert "const recounting = hasDenominator && coverage.recounting === true" in script
-    assert "shown('findling-coverage-recounting', recounting)" in script
+    assert "shown('findling-coverage-recounting', recounting && !counting)" in script
     assert (
-        "shown('findling-coverage-unknown', hasDenominator && !hasFraction && coverage.recounting !== true)" in script
+        "shown('findling-coverage-unknown', hasDenominator && !hasFraction && coverage.recounting !== true "
+        "&& !counting)" in script
     )
     assert sentence in script
     assert "coverage.percent, coverage.recounting," in script
@@ -2637,6 +2645,115 @@ def test_a_rule_change_shows_a_hint_until_the_counters_follow() -> None:
     for catalogue in L10N_CATALOGUES:
         assert RULES_PENDING_SENTENCE in catalogue_of(catalogue), catalogue.name
     assert str(catalogue_of(L10N_JSON)[RULES_PENDING_SENTENCE]).startswith("Die Ausschlussregeln wurden geändert.")
+
+
+#: The four sentences of plan 43-06 (D-43-06, D-43-11, D-43-12, W10), character
+#: for character the English lines of 43-TEXTE.md the owner accepted. Four places
+#: carry each: the template renders it, the script writes and toggles it, the
+#: service hands the flag through, and every catalogue translates it.
+PER_DOCUMENT_HINT_SENTENCE = (
+    "Since version 1.6.3, every document counts only once. Until now, external storage mounted separately "
+    "for each user was counted once per mount, which is why the figures can now be lower than before. "
+    "This note disappears seven days after the first complete count."
+)
+COUNTING_SENTENCE = (
+    "The coverage is being counted document by document. On large instances this can take some time, and "
+    "the search keeps working normally meanwhile. The figure appears here as soon as the count is finished."
+)
+NOT_READABLE_SENTENCE = (
+    "%s files could not be read or got stuck repeatedly. They count as not searchable and lower the coverage figure."
+)
+LEGACY_SENTENCE = (
+    "This instance has more storages than the count per document can handle. The figure is therefore "
+    "counted per storage as in version 1.6.2, and a file mounted for several users can stand in it "
+    "several times."
+)
+PHASE_43_TEXTS = REPO_ROOT / ".planning" / "phases" / "43-findling-1-6-3-sweep-und-zaehler" / "43-TEXTE.md"
+
+
+def test_the_per_document_count_shows_its_four_sentences_in_both_halves() -> None:
+    """Plan 43-06: hint, counting, not readable and fallback, the same rules on both sides.
+
+    The hint stands while the service says so (pending, or younger than seven
+    days after the first complete count); the counting sentence exactly while
+    the container counts, with figure, recount sentence and the sentence about
+    a silent backend hidden; the not readable sentence with its number above
+    nought; the fallback sentence only for legacyReason limits, because a
+    container of 1.6.2 (missing) already has the lockstep banner. German and
+    French are character identical with the accepted lines of 43-TEXTE.md.
+    """
+    template = TEMPLATE.read_text(encoding="utf-8")
+    script = SCRIPT.read_text(encoding="utf-8")
+    view = ADMIN_VIEW.read_text(encoding="utf-8")
+
+    for element in (
+        "findling-coverage-per-document",
+        "findling-coverage-counting",
+        "findling-coverage-not-readable",
+        "findling-coverage-legacy",
+    ):
+        assert template.count(f'id="{element}"') == 1, element
+        assert f"shown('{element}', " in script, element
+        assert f"text('{element}', " in script, element
+
+    assert (
+        '<p class="settings-hint" id="findling-coverage-per-document"'
+        "<?php if (!$perDocumentHint) { ?> hidden<?php } ?>>"
+        f"<?php p($l->t('{PER_DOCUMENT_HINT_SENTENCE}')); ?></p>" in template
+    )
+    assert (
+        '<p class="settings-hint" id="findling-coverage-counting"<?php if (!$counting) { ?> hidden<?php } ?>>'
+        f"<?php p($l->t('{COUNTING_SENTENCE}')); ?></p>" in template
+    )
+    assert (
+        '<p class="settings-hint" id="findling-coverage-not-readable"'
+        "<?php if ($notReadable === 0) { ?> hidden<?php } ?>>"
+        f"<?php p($l->t('{NOT_READABLE_SENTENCE}', [$count($notReadable)])); ?></p>" in template
+    )
+    assert (
+        '<p class="settings-hint" id="findling-coverage-legacy"<?php if (!$legacyLimits) { ?> hidden<?php } ?>>'
+        f"<?php p($l->t('{LEGACY_SENTENCE}')); ?></p>" in template
+    )
+    assert "$counting = ($coverage['counting'] ?? false) === true;" in template
+    assert "$perDocumentHint = ($coverage['perDocumentHint'] ?? false) === true;" in template
+    assert "$notReadable = $whole($coverage['notReadable'] ?? 0);" in template
+    assert "$legacyLimits = ($coverage['legacyReason'] ?? null) === 'limits';" in template
+    assert "$hasFraction = $hasDenominator && $percent !== null && !$counting;" in template
+
+    assert "const counting = coverage.counting === true" in script
+    assert "const hasFraction = hasDenominator && percent !== null && !counting" in script
+    assert "shown('findling-coverage-per-document', coverage.perDocumentHint === true)" in script
+    assert "shown('findling-coverage-counting', counting)" in script
+    assert "shown('findling-coverage-not-readable', notReadable > 0)" in script
+    assert "shown('findling-coverage-legacy', coverage.legacyReason === 'limits')" in script
+    assert f"text('findling-coverage-per-document', t('findling', '{PER_DOCUMENT_HINT_SENTENCE}'))" in script
+    assert f"text('findling-coverage-counting', t('findling', '{COUNTING_SENTENCE}'))" in script
+    assert f"text('findling-coverage-not-readable', t('findling', '{NOT_READABLE_SENTENCE}')" in script
+    assert f"text('findling-coverage-legacy', t('findling', '{LEGACY_SENTENCE}'))" in script
+    assert "coverage.counting, coverage.perDocumentHint, coverage.notReadable, coverage.legacyReason," in script
+
+    assert "'perDocumentHint' => $perDocumentHint," in view
+    assert "'counting' => $perDocument && $counting," in view
+
+    accepted: dict[str, str] = {}
+    for line in PHASE_43_TEXTS.read_text(encoding="utf-8").splitlines():
+        tag, _, rest = line.partition(": ")
+        if tag.count("-") == 1 and tag.split("-")[0] in {"EN", "DE", "FR"}:
+            accepted[tag] = rest
+    assert "Freigabe: ja" in PHASE_43_TEXTS.read_text(encoding="utf-8")
+    english = {
+        "HINT": PER_DOCUMENT_HINT_SENTENCE,
+        "COUNTING": COUNTING_SENTENCE,
+        "UNREADABLE": NOT_READABLE_SENTENCE,
+        "LEGACY": LEGACY_SENTENCE,
+    }
+    for block, sentence in english.items():
+        assert accepted[f"EN-{block}"] == sentence, block
+        for catalogue in L10N_CATALOGUES:
+            assert sentence in catalogue_of(catalogue), (catalogue.name, block)
+        assert catalogue_of(L10N_JSON)[sentence] == accepted[f"DE-{block}"], block
+        assert catalogue_of(L10N_DE_DE_JSON)[sentence] == accepted[f"DE-{block}"], block
+        assert catalogue_of(L10N_FR_JSON)[sentence] == accepted[f"FR-{block}"], block
 
 
 #: The one sentence of plan 40-06 (E-40-06-04, issue #36 Befund D), written out
@@ -3871,6 +3988,16 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     pause. All sixteen files moved together, the five language documents carry
     the rows; the German and French wording goes to the owner in the round of
     plan 41-10, the five other languages are machine drafts under the same
+    dated reservation as the rest.
+
+    It stands at 365 since 07.11.2026, plan 43-06 (D-43-06 hint, counting,
+    not readable and fallback sentences): the one time hint after the switch
+    to the per document count, the sentence while the container still
+    counts, the files that could not be read or got stuck (D-43-11) and the
+    visible fallback to the count of 1.6.2 above the limits (W10). All
+    sixteen files moved together, the five language documents carry the
+    rows; the German and French wording is the one the owner accepted in
+    43-TEXTE.md, the five other languages are machine drafts under the same
     dated reservation as the rest. Whoever moves it next writes the next
     paragraph.
     """
@@ -3923,8 +4050,10 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     # rule change, L-36-06); one of plan 40-06 (the sentence for a content
     # gateway that did not answer, issue #36, E-40-06-04); one of plan 41-01
     # (the remedy of gateway_error, F-40N-02, E-40-07-05); six of plan 41-06
-    # (the switch and the four state sentences of the backup pause, issue #37)
-    assert len(keys_of["de.json"]) == 361
+    # (the switch and the four state sentences of the backup pause, issue #37);
+    # four of plan 43-06 (the one time hint, the counting sentence, the files
+    # not readable and the visible fallback, D-43-06, D-43-11, W10)
+    assert len(keys_of["de.json"]) == 365
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:

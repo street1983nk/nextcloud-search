@@ -97,6 +97,17 @@ $duplicates = ($coverage['duplicates'] ?? false) === true;
 $rulesPending = ($coverage['rulesPending'] ?? false) === true;
 $mountsTotal = $whole($coverage['mountsTotal'] ?? 0);
 $mountsFinished = $whole($coverage['mountsFinished'] ?? 0);
+// The per document count of 1.6.3 (plans 43-05, 43-06). counting: the
+// container still counts, the page shows a sentence instead of a share and
+// neither the recount sentence nor the one about a silent backend.
+// perDocumentHint: the one time hint after the update (D-43-06, D-43-12).
+// notReadable: files only this side judged not readable or stuck, part of the
+// denominator (D-43-11). legacyReason limits: the visible fallback to the
+// count of 1.6.2 above the limits (W10); missing has the lockstep banner.
+$counting = ($coverage['counting'] ?? false) === true;
+$perDocumentHint = ($coverage['perDocumentHint'] ?? false) === true;
+$notReadable = $whole($coverage['notReadable'] ?? 0);
+$legacyLimits = ($coverage['legacyReason'] ?? null) === 'limits';
 
 $indexed = $whole($_['indexedDisplay'] ?? 0);
 $scheduled = $whole($_['scheduled'] ?? 0);
@@ -247,7 +258,7 @@ $status = match ($runState) {
 // The one rule behind all of it: no percentage without a named denominator, and
 // a division by zero is never sold as nought per cent.
 $hasDenominator = $indexable > 0;
-$hasFraction = $hasDenominator && $percent !== null;
+$hasFraction = $hasDenominator && $percent !== null && !$counting;
 // The same two questions for the second figure, and the same rule behind them.
 // The block below carries its own hidden rules rather than sharing those of the
 // first figure: the two tracks become available at different moments, and a
@@ -480,9 +491,13 @@ $migrationDocsUrl = $migrationDocsUrls[str_starts_with($languageCode, 'de') ? 'd
 	</p>
 	<progress id="findling-coverage-bar" max="100" value="<?php p((string)($percent ?? 0)); ?>" aria-labelledby="findling-coverage-heading"<?php if (!$hasFraction) { ?> hidden<?php } ?>></progress>
 	<p class="settings-hint" id="findling-coverage-subline"<?php if (!$hasFraction) { ?> hidden<?php } ?>><?php p($l->t('%1$s of %2$s indexable files are searchable', [$count($searchable), $count($indexable)])); ?></p>
-	<p class="settings-hint" id="findling-coverage-recounting"<?php if (!$hasDenominator || !$recounting) { ?> hidden<?php } ?>><?php p($l->t('%s files are searchable. The count of indexable files is being updated, and the share is shown again afterwards.', [$count($searchable)])); ?></p>
+	<p class="settings-hint" id="findling-coverage-per-document"<?php if (!$perDocumentHint) { ?> hidden<?php } ?>><?php p($l->t('Since version 1.6.3, every document counts only once. Until now, external storage mounted separately for each user was counted once per mount, which is why the figures can now be lower than before. This note disappears seven days after the first complete count.')); ?></p>
+	<p class="settings-hint" id="findling-coverage-counting"<?php if (!$counting) { ?> hidden<?php } ?>><?php p($l->t('The coverage is being counted document by document. On large instances this can take some time, and the search keeps working normally meanwhile. The figure appears here as soon as the count is finished.')); ?></p>
+	<p class="settings-hint" id="findling-coverage-not-readable"<?php if ($notReadable === 0) { ?> hidden<?php } ?>><?php p($l->t('%s files could not be read or got stuck repeatedly. They count as not searchable and lower the coverage figure.', [$count($notReadable)])); ?></p>
+	<p class="settings-hint" id="findling-coverage-legacy"<?php if (!$legacyLimits) { ?> hidden<?php } ?>><?php p($l->t('This instance has more storages than the count per document can handle. The figure is therefore counted per storage as in version 1.6.2, and a file mounted for several users can stand in it several times.')); ?></p>
+	<p class="settings-hint" id="findling-coverage-recounting"<?php if (!$hasDenominator || !$recounting || $counting) { ?> hidden<?php } ?>><?php p($l->t('%s files are searchable. The count of indexable files is being updated, and the share is shown again afterwards.', [$count($searchable)])); ?></p>
 
-	<p class="settings-hint" id="findling-coverage-unknown"<?php if (!$hasDenominator || $hasFraction || $recounting) { ?> hidden<?php } ?>><?php p($l->t('The share cannot be worked out right now because the backend does not answer. %s files of this instance are indexable.', [$count($indexable)])); ?></p>
+	<p class="settings-hint" id="findling-coverage-unknown"<?php if (!$hasDenominator || $hasFraction || $recounting || $counting) { ?> hidden<?php } ?>><?php p($l->t('The share cannot be worked out right now because the backend does not answer. %s files of this instance are indexable.', [$count($indexable)])); ?></p>
 
 	<p class="settings-hint" id="findling-coverage-leftout"<?php if (!$hasDenominator) { ?> hidden<?php } ?>>
 		<span id="findling-coverage-leftout-count"><?php p($l->t('Deliberately left out: %s', [$count($leftOut)])); ?></span>
@@ -558,7 +573,7 @@ $migrationDocsUrl = $migrationDocsUrls[str_starts_with($languageCode, 'de') ? 'd
 		<p class="settings-hint" id="findling-semantic-subline"<?php if (!$hasEmbeddedFraction) { ?> hidden<?php } ?>><?php p($l->t('%1$s of %2$s indexable files can also be found by meaning', [$count($embedded), $count($indexable)])); ?></p>
 		<p class="settings-hint" id="findling-semantic-model"<?php if ($modelName === '') { ?> hidden<?php } ?>><?php p($modelLine); ?></p>
 
-		<p class="settings-hint" id="findling-semantic-unknown"<?php if (!$hasDenominator || $hasEmbeddedFraction || $recounting) { ?> hidden<?php } ?>><?php p($l->t('The semantic share cannot be worked out right now. The backend does not answer, or it does not report this figure yet.')); ?></p>
+		<p class="settings-hint" id="findling-semantic-unknown"<?php if (!$hasDenominator || $hasEmbeddedFraction || $recounting || $counting) { ?> hidden<?php } ?>><?php p($l->t('The semantic share cannot be worked out right now. The backend does not answer, or it does not report this figure yet.')); ?></p>
 
 		<?php
 		/*

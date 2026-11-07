@@ -1217,8 +1217,14 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # gained cases. No file went, so PHP_FILES_TODAY moves to 124. Recomputed independently with find,
 # sort, tr and sha256sum over the CRLF normalised tree: 2423b3a6... both ways; the same pipeline over
 # git archive HEAD before the step gave df3a2adc.
+# Moved again on 2026-11-07 by Plan 43-06 (hint, counting, not readable and fallback sentences):
+# templates/admin.php renders the four new sentences of the coverage block and hides the share, the
+# recount sentence and the two sentences about a silent backend while the container counts. No file
+# came or went, so PHP_FILES_TODAY stays at 124. Recomputed independently with find, sort, tr and
+# sha256sum over the CRLF normalised tree: 93271961... both ways; the same pipeline over git archive
+# HEAD before the step gave 2423b3a6.
 PHP_FILES_TODAY = 124
-PHP_TREE_HASH_TODAY = "2423b3a6198fe1b96bc4e4e956ccac857a1d70777a6899ea4ff71739d94b3a44"
+PHP_TREE_HASH_TODAY = "932719613f3b8e87120297365d36e4cad9d2cf04bb40ece08c136539461c29d5"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
