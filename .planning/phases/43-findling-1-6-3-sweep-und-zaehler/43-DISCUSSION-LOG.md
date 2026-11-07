@@ -10,3 +10,6 @@
 | Neue Abdeckungszahl | einmaliger Hinweis / ohne Hinweis | einmaliger Hinweis, dreisprachig |
 
 Claude entscheidet: Einhängepunkt in run_once, Vertragsformat PHP/Container, Bandgrößen.
+| Abschluss #25 | Vorab-Test mbozem / Store zuerst | Vorab-Test mit Testbuild, schließen erst nach Bestätigung |
+
+Owner 07.11.: #25 genau ansehen, galt als gelöst und war es nicht. Ursachenanalyse in CONTEXT (D-43-08 bis D-43-10).

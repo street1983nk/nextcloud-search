@@ -31,6 +31,17 @@ Danach: Audit (Security, Bugs, Performance), Owner-Runde, Store-Einreichung 1.6.
 - **D-43-06:** Nach dem Update zeigt die Admin-Seite einmalig einen kurzen Hinweis neben der Abdeckungszahl, sinngemäß: "Ab 1.6.3 zählt jedes Dokument einmal, die Zahl kann sinken." Er verschwindet nach dem ersten vollständigen Zähllauf mit der neuen Zählweise. Dreisprachig DE/EN/FR, nicht extrem kurz, nur nicht sinnlos lang, Text vor Umsetzung dem Owner zeigen.
 - **D-43-07:** Die Zählung pro Dokument ersetzt die gruppierte Zahl als Hauptzahl. Dokumente, die nur noch auf einem nicht eingebundenen Speicher liegen (mbozem: 206), zählen nicht als durchsuchbar.
 
+### Warum #25 dreimal als gelöst galt (Owner 07.11.: genau hinsehen)
+Verlauf: 1.4.2 (nur eingebundene Speicher im Nenner), 1.6.0 (Gruppierung per countingKey), 1.6.2 (Vektorzahl im Hintergrund, größtes Mitglied vertritt) und am 04.11. von uns geschlossen, ohne Bestätigung des Melders. Jede Release hat die gerade gemeldete Schicht korrigiert, und mbozem fand danach die nächste:
+- 1.6.0: Die Korrektur schaltete sich bei mehr als 100.000 ausgelassenen Dokumenten selbst ab (LEFT_OUT_EMBEDDED_CEILING), und der Vertreter war die kleinste ID statt des größten Mitglieds.
+- 1.6.2: Der Nenner zählt pro Dokument, der Zähler zieht nur Zeilen pro Speicher ab. Der Index hält eine Zeile pro Mount derselben Freigabe (Schlüssel storage_id, file_id). Dazu kommen Zeilen verschwundener Speicher, die der Sweep nie entfernt.
+- Gemeinsame Ursache: Die Tests prüfen Einzelteile (z. B. test_status_leave_out.py). Unser Nachbau (zwei sftp-Mounts, gleiche Sicht, eine Freigabe) bildet die echte Lage nicht ab. Es fehlte die End-to-End-Prüfung "angezeigte Zahl gleich unabhängig berechnete Wahrheit".
+
+Daraus folgt für diese Phase:
+- **D-43-08:** Pflicht-Abnahmetest mit einer Topologie wie bei mbozem: mehrere Freigaben, mehrere Nutzer pro Freigabe mit UNTERSCHIEDLICHER Sicht (files_seen je Mitglied verschieden), dieselbe Datei auf zwei Freigaben, Dokumente nur in ausgelassenen Mitgliedern, Dokumente nur auf verschwundenen Speichern, gelöschte Nutzer ohne oc_storages-Zeile, Crawl unfertig und Warteschlange über quiet_max. Die erwartete Zahl wird UNABHÄNGIG berechnet (eigene SQL-/Python-Zählung distinct (Freigabe, Pfad), nicht mit dem Code der Umsetzung, Regel "Gegenprobe nie mit dem Muster der Umsetzung"), dazu eine Positivkontrolle.
+- **D-43-09:** Die Recherche prüft, ob Zähler und Nenner danach wirklich dieselbe Menge messen. Offene Frage aus #25: Der Nenner nimmt das größte Mitglied je Gruppe. Bei unterschiedlicher Sicht pro Nutzer (Archiv: 28.303 bis 112.053) kann die Vereinigung größer sein als das größte Mitglied, dann wäre der Nenner zu klein und die Quote könnte über 100 % gehen. Invariante: Quote nie über 100 %, und bei leerer Warteschlange und fertigem Crawl muss die Zahl die tatsächliche Abdeckung zeigen (das war die Ursprungsbeschwerde).
+- **D-43-10:** Vor der Store-Einreichung bekommt mbozem einen Testbuild (er hat das angeboten) und prüft seine Zahl, Ziel etwa 18 % bei laufendem Crawl. Den Kommentar mit der Anfrage formuliert Claude, er geht nur mit Owner-Freigabe raus. #25 wird erst geschlossen, wenn mbozem bestätigt, nie vorher von uns.
+
 ### Claude's Discretion
 - Wo genau der Sweep in run_once eingehängt wird (vor dem Quiet-Gate mit eigener Fälligkeit oder als eigener Zweig nach der Mountliste), solange D-43-01/02 gelten.
 - Format der storage-zu-key-Map und der leaveOut-Liste im PHP-Container-Vertrag, Bandgrößen, Indexe für die distinct-Zählung.
