@@ -131,10 +131,15 @@ final class SettingsControllerTest extends TestCase {
 		$exclusions = new ExclusionService($appConfig, $storage, $jobList, $logger);
 		$session = $this->createMock(IUserSession::class);
 
+		// The real adminSend() always names a kind; a bare double would hand
+		// back [] and the overview would read a key that is not there.
+		$exApp = $this->createMock(ExAppService::class);
+		$exApp->method('adminSend')->willReturn(['kind' => ExAppService::ADMIN_UNREACHABLE, 'body' => null]);
+
 		$view = new AdminViewService(
 			$this->createMock(FileStateService::class),
 			$this->createMock(QueueService::class),
-			$this->createMock(ExAppService::class),
+			$exApp,
 			new ScanStatsService($this->createMock(IDBConnection::class), $time, $logger),
 			new PathResolverService(
 				$this->createMock(IUserMountCache::class),

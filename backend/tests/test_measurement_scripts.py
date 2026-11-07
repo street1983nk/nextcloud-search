@@ -1223,8 +1223,15 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # came or went, so PHP_FILES_TODAY stays at 124. Recomputed independently with find, sort, tr and
 # sha256sum over the CRLF normalised tree: 93271961... both ways; the same pipeline over git archive
 # HEAD before the step gave 2423b3a6.
+# Moved on 2026-11-07 by Plan 43-07 (first CI run of phase 43, PHPUnit): tests/Unit/
+# DocKeyServiceTest.php and tests/Unit/CoverageTopologyParityTest.php look for the shared fixture one
+# directory above apps/ as well, where the phpunit job keeps findling-src, and tests/Unit/
+# SettingsControllerTest.php gives its ExAppService double an adminSend answer with a kind. No file
+# came or went, so PHP_FILES_TODAY stays at 124. Recomputed independently with find, sort, tr and
+# sha256sum over the CRLF normalised tree: abd32292... both ways; the same pipeline over git archive
+# HEAD before the step gave 93271961.
 PHP_FILES_TODAY = 124
-PHP_TREE_HASH_TODAY = "932719613f3b8e87120297365d36e4cad9d2cf04bb40ece08c136539461c29d5"
+PHP_TREE_HASH_TODAY = "abd32292c17e111897f22c061fcc6c66ea797704675568bb9e22483d0fd26158"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

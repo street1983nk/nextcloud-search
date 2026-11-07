@@ -41,6 +41,9 @@ final class CoverageTopologyParityTest extends TestCase {
 		}
 		$candidates[] = $base . '/' . self::FIXTURE;
 		$candidates[] = $base . '/findling-src/' . self::FIXTURE;
+		// The phpunit job: apps/findling/tests/Unit, the repository in
+		// findling-src at the workspace root, one directory above $base.
+		$candidates[] = dirname(__DIR__, 4) . '/findling-src/' . self::FIXTURE;
 
 		foreach ($candidates as $file) {
 			if (!is_file($file)) {

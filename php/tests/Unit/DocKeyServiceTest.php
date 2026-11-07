@@ -19,8 +19,8 @@ use PHPUnit\Framework\TestCase;
  * The catalogue sits on the backend side of the repository. Locally that is
  * dirname(__DIR__, 3)/backend; in the phpunit job the php directory is moved
  * to apps/findling of the server checkout while the repository stays in
- * findling-src at the workspace root, which is the same dirname(__DIR__, 3)
- * one directory further down. A missing catalogue fails the suite rather than
+ * findling-src at the workspace root, which is dirname(__DIR__, 4)
+ * (measured in the first CI run of 43-07). A missing catalogue fails the suite rather than
  * skipping it, because a skipped catalogue is a green run that proved nothing.
  */
 #[CoversClass(DocKeyService::class)]
@@ -39,6 +39,9 @@ final class DocKeyServiceTest extends TestCase {
 		}
 		$candidates[] = $base . '/' . self::CATALOGUE;
 		$candidates[] = $base . '/findling-src/' . self::CATALOGUE;
+		// The phpunit job: apps/findling/tests/Unit, the repository in
+		// findling-src at the workspace root, one directory above $base.
+		$candidates[] = dirname(__DIR__, 4) . '/findling-src/' . self::CATALOGUE;
 
 		foreach ($candidates as $file) {
 			if (!is_file($file)) {
