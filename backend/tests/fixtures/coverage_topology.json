@@ -64,6 +64,75 @@
         "judgedDocuments": 18,
         "derivation": "1114 (member 11, living, NULL) and 2206 (member 22, living, NULL) are missing; 1215 is a tombstone; 3106 and row 1 are no group members. documents and judgedDocuments stay those of the main topology."
       }
+    },
+    {
+      "name": "gateway_unreadable",
+      "about": "D-43-16 with D-43-11 (plan 43-18): the container judges a gateway 422 as skipped/unreadable and acknowledges it, so the same verdict stands in oc_findling_file_state (phpOnlyRows). The PHP side counts the document there, with N1, in the denominator and in notReadable; the container leaves unreadable out of judged, otherwise the document would stand twice in the denominator. A topology of its own: group 0 = [51, 52] where every member carries the verdict, group 1 = [61, 62] where member 61 reads the file (N1), and the single storage 71.",
+      "mounted": [51, 52, 61, 62, 71],
+      "groups": [[51, 52], [61, 62]],
+      "rows": [
+        {"file_id": 5101, "storage_id": 51, "path": "P/p/r1.txt", "doc_key": "p/r1.txt", "state": "indexed", "reason": null, "deleted": false, "chunks": 0},
+        {"file_id": 5201, "storage_id": 52, "path": "P/p/r1.txt", "doc_key": "p/r1.txt", "state": "indexed", "reason": null, "deleted": false, "chunks": 0},
+        {"file_id": 5102, "storage_id": 51, "path": "P/p/u1.txt", "doc_key": "p/u1.txt", "state": "skipped", "reason": "unreadable", "deleted": false, "chunks": 0, "note": "the gateway answered 422 for every member"},
+        {"file_id": 5202, "storage_id": 52, "path": "P/p/u1.txt", "doc_key": "p/u1.txt", "state": "skipped", "reason": "unreadable", "deleted": false, "chunks": 0},
+        {"file_id": 6101, "storage_id": 61, "path": "Q/q/r2.txt", "doc_key": "q/r2.txt", "state": "indexed", "reason": null, "deleted": false, "chunks": 0},
+        {"file_id": 6201, "storage_id": 62, "path": "Q/q/r2.txt", "doc_key": "q/r2.txt", "state": "indexed", "reason": null, "deleted": false, "chunks": 0},
+        {"file_id": 6102, "storage_id": 61, "path": "Q/q/u2.txt", "doc_key": "q/u2.txt", "state": "indexed", "reason": null, "deleted": false, "chunks": 0, "note": "N1: member 61 reads the file"},
+        {"file_id": 6202, "storage_id": 62, "path": "Q/q/u2.txt", "doc_key": "q/u2.txt", "state": "skipped", "reason": "unreadable", "deleted": false, "chunks": 0, "note": "member 62 got a 422 for the same file"},
+        {"file_id": 7101, "storage_id": 71, "path": "files/u3.txt", "doc_key": "files/u3.txt", "state": "skipped", "reason": "unreadable", "deleted": false, "chunks": 0},
+        {"file_id": 7102, "storage_id": 71, "path": "files/r3.txt", "doc_key": "files/r3.txt", "state": "indexed", "reason": null, "deleted": false, "chunks": 0}
+      ],
+      "expected": {
+        "documents": 4,
+        "embeddedDocuments": 0,
+        "judgedDocuments": 4,
+        "docKeysMissing": 0,
+        "documentsByGroup": [1, 2],
+        "judgedByGroup": [1, 2],
+        "documentsByStorage": {"71": 1},
+        "judgedByStorage": {"71": 1},
+        "derivation": "group 0: documents p/r1.txt = 1, judged p/r1.txt = 1 (p/u1.txt is unreadable and counted by PHP). group 1: documents q/r2.txt, q/u2.txt (6102) = 2, judged the same 2 (6202 is unreadable, its key is counted over 6102 anyway). 71: documents 7102 = 1, judged 7102 = 1 (7101 is unreadable). Sums 4 and 4; with unreadable in judged they would be 4 and 6",
+        "php": {
+          "scanStats": {
+            "51": {"filesSeen": 2, "overCap": 0, "excluded": 0, "finished": true},
+            "52": {"filesSeen": 2, "overCap": 0, "excluded": 0, "finished": true},
+            "61": {"filesSeen": 2, "overCap": 0, "excluded": 0, "finished": true},
+            "62": {"filesSeen": 2, "overCap": 0, "excluded": 0, "finished": true},
+            "71": {"filesSeen": 2, "overCap": 0, "excluded": 0, "finished": true}
+          },
+          "refusedPerStorage": {},
+          "phpOnlyRows": [
+            {"storage_id": 51, "internalPath": "p/u1.txt", "state": "skipped", "reason": "unreadable", "filecache": true, "note": "the acknowledgement of the container"},
+            {"storage_id": 52, "internalPath": "p/u1.txt", "state": "skipped", "reason": "unreadable", "filecache": true},
+            {"storage_id": 62, "internalPath": "q/u2.txt", "state": "skipped", "reason": "unreadable", "filecache": true, "note": "N1: member 61 holds the same internal path without a PHP-only verdict, so it counts once over judged and not here"},
+            {"storage_id": 71, "internalPath": "files/u3.txt", "state": "skipped", "reason": "unreadable", "filecache": true}
+          ],
+          "phpOnly": {
+            "byGroup": [1, 0],
+            "byStorage": {"71": 1},
+            "notReadableByGroup": [1, 0],
+            "notReadableByStorage": {"71": 1},
+            "derivation": "group 0: p/u1.txt (two rows, one path) = 1, not readable 1. group 1: q/u2.txt is N1 = 0. 71: files/u3.txt = 1, not readable 1"
+          },
+          "groupParts": {
+            "groups": [2, 2],
+            "singles": {"71": 2},
+            "derivation": "every storage sees 2 files, nothing over the cap, excluded or refused"
+          },
+          "denominatorParts": {
+            "groups": [2, 2],
+            "singles": {"71": 2},
+            "derivation": "group 0: max(2, judged 1 + phpOnly 1) = 2. group 1: max(2, 2 + 0) = 2. 71: max(2, 1 + 1) = 2. With unreadable in judged, group 0 and 71 would read max(2, 2 + 1) = 3"
+          },
+          "denominator": 6,
+          "counted": 4,
+          "embedded": 0,
+          "notReadable": 2,
+          "percent": 66,
+          "embeddedPercent": 0,
+          "derivation": "denominator 2 + 2 + 2 = 6, every document exactly once; counted = documents 4 (p/u1.txt and files/u3.txt never in the numerator, q/u2.txt once); notReadable 1 + 0 + 1 = 2; percent floor(4 * 100 / 6) = 66"
+        }
+      }
     }
   ],
   "expected": {

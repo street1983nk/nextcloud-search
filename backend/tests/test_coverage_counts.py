@@ -190,6 +190,46 @@ def test_rows_without_a_key_in_a_group_are_named_and_never_guessed(tmp_path: Pat
     assert counts.judged_documents == variant["expected"]["judgedDocuments"]
 
 
+def _variant(name: str) -> dict[str, Any]:
+    return next(item for item in _topology()["variants"] if item["name"] == name)
+
+
+def test_a_gateway_422_counts_once_and_never_in_judged(tmp_path: Path) -> None:
+    # D-43-16 with D-43-11 (plan 43-18): the container verdict skipped/unreadable
+    # of a gateway 422 is counted by the PHP side out of oc_findling_file_state,
+    # with N1, in the denominator and in notReadable. judged leaves it out, so
+    # the document stands in the denominator exactly once and the share never
+    # passes a hundred per cent.
+    variant = _variant("gateway_unreadable")
+    expected = variant["expected"]
+    state_db, vectors_db = _build(tmp_path, variant["rows"])
+
+    counts = coverage_counts(state_db, vectors_db, variant["mounted"], variant["groups"])
+
+    assert counts.documents == expected["documents"]
+    assert counts.embedded_documents == expected["embeddedDocuments"]
+    assert counts.judged_documents == expected["judgedDocuments"]
+    assert counts.doc_keys_missing == expected["docKeysMissing"]
+    assert list(counts.documents_by_group) == expected["documentsByGroup"]
+    assert list(counts.judged_by_group) == expected["judgedByGroup"]
+    assert dict(counts.documents_by_storage) == _by_storage(expected["documentsByStorage"])
+    assert dict(counts.judged_by_storage) == _by_storage(expected["judgedByStorage"])
+    php = expected["php"]
+    parts = php["denominatorParts"]
+    for index, judged in enumerate(counts.judged_by_group):
+        part = parts["groups"][index]
+        assert part == max(php["groupParts"]["groups"][index], judged + php["phpOnly"]["byGroup"][index])
+        assert counts.documents_by_group[index] <= part
+    for storage_id, judged in counts.judged_by_storage.items():
+        key = str(storage_id)
+        part = parts["singles"][key]
+        assert part == max(php["groupParts"]["singles"][key], judged + php["phpOnly"]["byStorage"][key])
+        assert counts.documents_by_storage[storage_id] <= part
+    assert php["denominator"] == sum(parts["groups"]) + sum(parts["singles"].values())
+    assert php["counted"] == counts.documents
+    assert php["counted"] * 100 // php["denominator"] == php["percent"] <= 100
+
+
 def test_the_sentinel_counts_as_a_document_of_its_own_and_is_no_missing_key(tmp_path: Path) -> None:
     rows = [
         {"file_id": 1, "storage_id": 11, "path": "Daten/a.txt", "doc_key": ""},
@@ -308,6 +348,7 @@ _STATES: tuple[tuple[str, str | None], ...] = (
     ("skipped", "gone"),
     ("skipped", "encrypted"),
     ("failed", "corrupt"),
+    ("skipped", "unreadable"),
 )
 
 
@@ -364,7 +405,7 @@ def _truth(
             documents.add(key)
             if row["chunks"] > 0:
                 embedded.add(key)
-        if not (row["state"] == "skipped" and row["reason"] in {"mime_not_allowed", "excluded", "gone"}):
+        if not (row["state"] == "skipped" and row["reason"] in {"mime_not_allowed", "excluded", "gone", "unreadable"}):
             judged.add(key)
     return {"documents": len(documents), "embedded": len(embedded), "judged": len(judged), "missing": missing}
 

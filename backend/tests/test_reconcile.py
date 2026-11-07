@@ -1452,6 +1452,34 @@ def test_a_gateway_error_on_a_moved_etag_is_ordinary_stale_work(store: Store) ->
     assert _compare_one(store, a_row(10, etag="aaa", state="failed", reason="gateway_error")) == [10]
 
 
+@pytest.mark.parametrize(("times", "work"), [(1, True), (3, True), (4, False)])
+def test_an_unreadable_verdict_of_the_container_is_retried_like_a_refusal(
+    store: Store, times: int, work: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # D-43-16 (plan 43-18): skipped(unreadable) out of a gateway 422 is the
+    # same streak as failed(gateway_error), so a sharing violation or a file
+    # that was offline for a moment is asked again while the streak is at most
+    # GATEWAY_ERROR_RETRIES, and left alone once it is spent. The Nextcloud
+    # side carries the acknowledged skipped(unreadable) of the same file.
+    given_up: list[int] = []
+    monkeypatch.setattr(store, "give_up", lambda file_id, **_: given_up.append(file_id))
+    for _ in range(times):
+        store.record(10, a_file(10, etag="aaa"), "skipped", "unreadable")
+
+    expected = [10] if work else []
+    assert _compare_one(store, a_row(10, etag="aaa", state="skipped", reason="unreadable")) == expected
+    assert given_up == []
+
+
+def test_a_stock_gateway_error_of_1_6_2_with_budget_is_asked_again(store: Store) -> None:
+    # A row 1.6.2 wrote for a gateway 422 is failed(gateway_error) and stays
+    # so (no rewrite); with a streak left it is work, and the head judges it
+    # skipped(unreadable) on the next fetch.
+    _refused(store, 10, 2)
+
+    assert _compare_one(store, a_row(10, etag="aaa", state="failed", reason="gateway_error")) == [10]
+
+
 def test_the_retry_candidates_are_asked_once_per_page(store: Store, monkeypatch: pytest.MonkeyPatch) -> None:
     # Once per page and only for rows whose etag did not move, banded like the
     # other questions of _compare.

@@ -225,4 +225,47 @@ final class CoverageTopologyParityTest extends TestCase {
 			self::assertLessThanOrEqual(self::byId($php['denominatorParts']['singles'])[$storageId], $documents);
 		}
 	}
+
+	/**
+	 * The case of plan 43-18 (D-43-16 with D-43-11): the container judges a
+	 * gateway 422 as skipped/unreadable and leaves it out of judged, the PHP
+	 * side counts it out of oc_findling_file_state with N1. Every document
+	 * stands in the denominator exactly once, the unreadable one in
+	 * notReadable and never in the numerator, and no part passes a hundred
+	 * per cent.
+	 */
+	public function testAGatewayUnreadableFileCountsOnceAndAsNotReadable(): void {
+		$variant = null;
+		foreach (self::topology()['variants'] as $candidate) {
+			if ($candidate['name'] === 'gateway_unreadable') {
+				$variant = $candidate;
+			}
+		}
+		self::assertIsArray($variant);
+		$expected = $variant['expected'];
+		$php = $expected['php'];
+		$body = self::body($variant);
+		$answer = AdminViewService::perDocumentAnswer(self::containerAnswer($expected), $body);
+		self::assertIsArray($answer);
+		$parts = ScanStatsService::partsOf($body['mounted'], self::rows($php), $body['groups'], array_map(intval(...), self::byId($php['refusedPerStorage'])));
+		$phpOnly = self::phpOnly($php);
+
+		self::assertSame($php['groupParts']['groups'], $parts['groups']);
+		self::assertSame(array_map(intval(...), self::byId($php['groupParts']['singles'])), $parts['singles']);
+
+		$figures = AdminViewService::perDocumentFigures(['grouped' => []], ['indexed' => 0, 'embedded' => 0], $answer, $parts, $phpOnly);
+
+		self::assertSame($php['denominator'], AdminViewService::perDocumentDenominator($parts, $answer, $phpOnly));
+		self::assertSame($php['denominator'], $figures['indexable']);
+		self::assertSame($php['counted'], $figures['backend']['indexed']);
+		self::assertSame($php['notReadable'], $figures['notReadable']);
+		self::assertSame($php['percent'], AdminViewService::coverageShare($figures['backend']['indexed'], $figures['indexable'], true));
+		self::assertLessThanOrEqual($figures['indexable'], $figures['backend']['indexed']);
+		foreach ($expected['documentsByGroup'] as $index => $documents) {
+			self::assertLessThanOrEqual($php['denominatorParts']['groups'][$index], $documents);
+		}
+		foreach (self::byId($expected['documentsByStorage']) as $storageId => $documents) {
+			self::assertLessThanOrEqual(self::byId($php['denominatorParts']['singles'])[$storageId], $documents);
+		}
+	}
 }

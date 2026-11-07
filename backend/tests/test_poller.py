@@ -1519,6 +1519,199 @@ async def test_refused_scans_of_one_storage_under_several_slots_are_verdicts(
     assert poller.busy is False
 
 
+# -- a gateway 422 is an unreadable file, never an outage (plan 43-18, D-43-16) --
+
+
+def test_the_unreadable_status_of_the_gateway_is_422() -> None:
+    # Only the cannotOpen branch of the gateway answers 422 (plan 43-17).
+    # Read through vars, so the RED state of the test is an assertion and no import error.
+    assert vars(nc_client_module).get("GATEWAY_UNREADABLE_STATUS") == 422
+
+
+async def test_a_gateway_422_is_an_unreadable_file_and_the_pass_goes_on(
+    store: Store, writer: IndexBatchWriter, index: Index, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # The DENY-ACE case of plan 43-17: the gateway could not open the file and
+    # says so with 422. That is the file, counted under "not readable" (D-43-11,
+    # owner decision F1), and never failed(gateway_error).
+    jobs = (_job(), _job(92, 4712, title="Gesperrt.txt", path="Gruppe/Gesperrt.txt"), _job(93, 4713))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    poller = _poller(
+        store=store,
+        writer=writer,
+        tmp_path=tmp_path,
+        queue=queue,
+        bodies={4712: GatewayRefused(422, file_id=4712)},
+    )
+
+    with caplog.at_level("WARNING", logger="findling"):
+        result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert (result.indexed, result.failed) == (2, 0)
+    assert queue.acknowledged == [([91, 92, 93], {})]
+    assert queue.skips == [{4712: "unreadable"}]
+    assert queue.unlocked == []
+    row = store.file_row(4712)
+    assert row is not None
+    assert (row["state"], row["reason"]) == ("skipped", "unreadable")
+    assert sorted(_stored_ids(index)) == [4711, 4713]
+    assert not [line for line in _poller_lines(caplog) if "taken as an outage" in line]
+    for line in (record.getMessage() for record in caplog.records):
+        assert "Gesperrt" not in line
+        assert "Gruppe" not in line
+
+
+@pytest.mark.parametrize(("status", "escalates"), [(422, False), (500, True)])
+async def test_422_for_every_file_over_three_storages_is_no_outage(
+    store: Store,
+    writer: IndexBatchWriter,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+    status: int,
+    escalates: bool,
+) -> None:
+    # F4 (owner decision): eight files on three storages, every one refused. A
+    # 500 is a state of the instance and escalates at the fifth refusal as
+    # before (E-40-06-02, E-40-07-01); a 422 is eight unreadable files and
+    # never counts towards the threshold.
+    jobs = tuple(_job(91 + offset, 4711 + offset, storage_id=7 + offset % 3) for offset in range(8))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    bodies: dict[int, bytes | BaseException | None] = {
+        4711 + offset: GatewayRefused(status, file_id=4711 + offset) for offset in range(8)
+    }
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies=bodies)
+
+    with caplog.at_level("WARNING", logger="findling"):
+        result = await poller.run_once()
+
+    outage_lines = [record.getMessage() for record in caplog.records if "taken as an outage" in record.getMessage()]
+    if escalates:
+        assert result.state == ROUND_GATEWAY_UNAVAILABLE
+        assert queue.acknowledged == []
+        assert len(outage_lines) == 1
+        return
+    assert result.state == ROUND_WORKED
+    assert result.failed == 0
+    assert queue.unlocked == []
+    assert queue.acknowledged == [([91 + offset for offset in range(8)], {})]
+    assert queue.skips == [{4711 + offset: "unreadable" for offset in range(8)}]
+    assert outage_lines == []
+    assert poller_module.gateway_unavailable_since() is None
+    for offset in range(8):
+        row = store.file_row(4711 + offset)
+        assert row is not None
+        assert (row["state"], row["reason"]) == ("skipped", "unreadable")
+
+
+async def test_in_a_mixed_pass_only_the_other_refusals_count_towards_the_threshold(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # Five 422 and three 500 over three storages: the five 422 would have
+    # reached the threshold before 1.6.3, now only the three 500 count, and
+    # three stay below five.
+    jobs = tuple(_job(91 + offset, 4711 + offset, storage_id=7 + offset % 3) for offset in range(8))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    bodies: dict[int, bytes | BaseException | None] = {
+        4711 + offset: GatewayRefused(422 if offset < 5 else 500, file_id=4711 + offset) for offset in range(8)
+    }
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies=bodies)
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert queue.unlocked == []
+    assert queue.acknowledged == [
+        ([91, 92, 93, 94, 95], {96: "gateway_error", 97: "gateway_error", 98: "gateway_error"})
+    ]
+    assert queue.skips == [{4711 + offset: "unreadable" for offset in range(5)}]
+
+
+async def test_the_422_rows_of_an_escalated_pass_go_back_refunded_and_unjudged(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # W11: the pass escalates on its fifth 500. The two 422 rows of the same
+    # pass are no charged rows: they go back refunded with the unfetched row,
+    # and their verdict lapses with the abort like every other one. Only the
+    # five refused rows stay charged and carry failed(gateway_error).
+    statuses = {0: 422, 1: 500, 2: 422, 3: 500, 4: 500, 5: 500, 6: 500}
+    jobs = tuple(_job(91 + offset, 4711 + offset, storage_id=7 + offset % 2) for offset in range(8))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    bodies: dict[int, bytes | BaseException | None] = {
+        4711 + offset: GatewayRefused(status, file_id=4711 + offset) for offset, status in statuses.items()
+    }
+    fetched: list[int] = []
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies=bodies, fetched=fetched)
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_GATEWAY_UNAVAILABLE
+    assert fetched == [4711 + offset for offset in range(7)]
+    assert queue.acknowledged == []
+    assert queue.unlocked == [[91, 93, 98]]
+    assert store.file_row(4711) is None
+    assert store.file_row(4713) is None
+    assert store.file_row(4718) is None
+    for offset in (1, 3, 4, 5, 6):
+        row = store.file_row(4711 + offset)
+        assert row is not None
+        assert (row["state"], row["reason"]) == ("failed", "gateway_error")
+
+
+async def test_a_scan_refused_with_422_is_an_unreadable_file(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The scan branch keeps the rule of the content branch.
+    jobs = (_ocr_row(0), _ocr_row(1))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    poller = _slot_poller(
+        store=store,
+        writer=writer,
+        tmp_path=tmp_path,
+        queue=queue,
+        extract=_SlotExtractor(seconds=0.01),
+        ocr_slots=None,
+        bodies={7001: GatewayRefused(422, file_id=7001)},
+    )
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert queue.unlocked == []
+    assert queue.acknowledged == [([300, 301], {})]
+    assert queue.skips == [{7001: "unreadable"}]
+    row = store.file_row(7001)
+    assert row is not None
+    assert (row["state"], row["reason"]) == ("skipped", "unreadable")
+
+
+async def test_scans_refused_with_422_under_several_slots_never_escalate(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The sister of test_refused_scans_under_several_slots_escalate_without_a_refund:
+    # the same three scans on two storages, refused with 422 instead of 500,
+    # are three unreadable files and no outage.
+    jobs = (_ocr_row(0, storage_id=7), _ocr_row(1, storage_id=8), _ocr_row(2, storage_id=7))
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    poller = _slot_poller(
+        store=store,
+        writer=writer,
+        tmp_path=tmp_path,
+        queue=queue,
+        extract=_SlotExtractor(seconds=0.01),
+        ocr_slots=2,
+        bodies={7000 + offset: GatewayRefused(422, file_id=7000 + offset) for offset in range(3)},
+    )
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert queue.unlocked == []
+    assert queue.acknowledged == [([300, 301, 302], {})]
+    assert queue.skips == [{7000: "unreadable", 7001: "unreadable", 7002: "unreadable"}]
+    assert poller.busy is False
+
+
 async def test_an_outage_by_status_still_refunds_every_row(
     store: Store, writer: IndexBatchWriter, tmp_path: Path
 ) -> None:

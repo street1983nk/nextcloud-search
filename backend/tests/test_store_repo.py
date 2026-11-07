@@ -784,6 +784,49 @@ def test_gateway_retry_candidates_are_the_short_streaks_of_gateway_error(store: 
     assert store.gateway_retry_candidates([1, 2], 1) == {1}
 
 
+def test_an_unreadable_verdict_continues_the_streak_of_a_refusal(store: Store) -> None:
+    # D-43-16 (plan 43-18): failed(gateway_error) and the container verdict
+    # skipped(unreadable) of a gateway 422 are one streak of refusals on one
+    # etag, so a sharing violation that turns into a 500 and back does not
+    # reset the cap of the reconcile.
+    store.record(1, a_file(1, etag="aaa"), "indexed", content_hash="h")
+    store.record(1, a_file(1, etag="aaa"), "skipped", "unreadable")
+    assert _attempts(store, 1) == 1
+    store.record(1, a_file(1, etag="aaa"), "failed", "gateway_error")
+    assert _attempts(store, 1) == 2
+    store.record(1, a_file(1, etag="aaa"), "skipped", "unreadable")
+    assert _attempts(store, 1) == 3
+    # A new etag is a new version and a new streak, from either pair.
+    store.record(1, a_file(1, etag="bbb"), "skipped", "unreadable")
+    assert _attempts(store, 1) == 1
+    store.record(1, a_file(1, etag="ccc"), "failed", "gateway_error")
+    assert _attempts(store, 1) == 1
+
+
+def test_another_skip_before_an_unreadable_verdict_starts_the_streak(store: Store) -> None:
+    store.record(1, a_file(1, etag="aaa"), "skipped", "too_large")
+    store.record(1, a_file(1, etag="aaa"), "skipped", "too_large")
+    store.record(1, a_file(1, etag="aaa"), "skipped", "unreadable")
+
+    assert _attempts(store, 1) == 1
+
+
+def test_gateway_retry_candidates_hold_both_pairs_of_a_refusal(store: Store) -> None:
+    # Both pairs with a streak at or below the limit, no other reason.
+    store.record(1, a_file(1, etag="aaa"), "skipped", "unreadable")
+    for _ in range(3):
+        store.record(2, a_file(2, etag="aaa"), "skipped", "unreadable")
+    for _ in range(4):
+        store.record(3, a_file(3, etag="aaa"), "skipped", "unreadable")
+    store.record(4, a_file(4, etag="aaa"), "failed", "gateway_error")
+    store.record(5, a_file(5, etag="aaa"), "skipped", "too_large")
+    store.record(6, a_file(6, etag="aaa"), "skipped", "gone")
+    store.record(8, a_file(8, etag="aaa"), "skipped", "unreadable")
+    store.tombstone(8)
+
+    assert store.gateway_retry_candidates([1, 2, 3, 4, 5, 6, 8], 3) == {1, 2, 4}
+
+
 def test_refresh_meta_moves_the_crawl_facts_and_leaves_the_verdict_alone(store: Store) -> None:
     # The write behind the fast path of the poller (review finding WR-02). A
     # touch moves the etag without moving a byte; without this narrow update the
