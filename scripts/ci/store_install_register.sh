@@ -106,8 +106,8 @@ echo "oc_ex_apps_routes after the archive registration: ${routes_now}"
 #      this step was built for: AppAPI reads the routes out of the file
 #      the registration is handed, and a dropped or rewritten row shows
 #      here.
-#   2. does the archive declare exactly the five reviewed routes? That
-#      is the ratchet. A sixth route or a widened access level is a
+#   2. does the archive declare exactly the six reviewed routes? That
+#      is the ratchet. A seventh route or a widened access level is a
 #      decision and has to be made here as well as in
 #      backend/appinfo/info.xml. A derived expectation on its own would
 #      accept a widened surface without a word.
@@ -120,6 +120,12 @@ echo "oc_ex_apps_routes after the archive registration: ${routes_now}"
 # signed path, which never reads this table, and declared with USER
 # they were open to every logged in user (routes comment in
 # backend/appinfo/info.xml).
+#
+# Plan 43-04 made that decision for /coverage (POST, ADMIN): the per
+# document count of the admin page, a body of storage ids only and an
+# answer of numbers only (T-43-10 to T-43-13), five to six. The first
+# CI run of phase 43 (run 42378151024) failed here before the literal
+# knew.
 #
 # The access level crosses from a name in the XML to a number in the
 # table, PUBLIC 0, USER 1, ADMIN 2, see
@@ -138,9 +144,9 @@ routes_declared=$(awk '
 ' "${ARCHIVE_INFO_XML}" | sort | tr '\n' ' ' | sed -e 's/ *$//')
 echo "the archive declares: ${routes_declared}"
 
-routes_want='^/diagnose$:GET:2 ^/probe$:POST:2 ^/probe/state$:GET:2 ^/rates$:GET:2 ^/status$:GET:2'
+routes_want='^/coverage$:POST:2 ^/diagnose$:GET:2 ^/probe$:POST:2 ^/probe/state$:GET:2 ^/rates$:GET:2 ^/status$:GET:2'
 if [ "${routes_declared}" != "${routes_want}" ]; then
-  echo "the archive declares '${routes_declared}' instead of the five reviewed routes '${routes_want}'"
+  echo "the archive declares '${routes_declared}' instead of the six reviewed routes '${routes_want}'"
   echo "widening or renaming the reachable surface of the container is a decision, and it has to be made here too"
   exit 1
 fi
