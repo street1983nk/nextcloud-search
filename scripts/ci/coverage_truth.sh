@@ -119,8 +119,14 @@ truth_not_readable() {
 #                 (finished first, then the lower id), never below nought.
 #   judged:       distinct internal paths of living container rows with a
 #                 verdict that is a document (not mime_not_allowed, excluded,
-#                 gone); a row the file cache cannot resolve counts on its own.
-#                 In a single storage every row counts.
+#                 gone, unreadable); a row the file cache cannot resolve counts
+#                 on its own. In a single storage every row counts.
+#                 unreadable is left out since D-43-16 (plan 43-18): a file the
+#                 gateway refused with 422 is judged skipped/unreadable by the
+#                 container and acknowledged, and the PHP side counts it out of
+#                 oc_findling_file_state (PHP only below), not the container.
+#                 A 1.6.2 container never writes that pair, so the expectation
+#                 of the variant v1.6.2 does not move.
 #   PHP only:     verdicts only Nextcloud writes (skipped/unreadable,
 #                 failed/repeatedly_stuck, skipped/gone) on a file that still
 #                 has a file cache row; in a group distinct by internal path and
@@ -165,7 +171,7 @@ WITH mounted(sid) AS (SELECT DISTINCT storage_id FROM oc_mounts),
          JOIN part AS p ON p.sid = sf.storage_id
          LEFT JOIN oc_filecache AS fc ON fc.fileid = sf.file_id
         WHERE sf.deleted_at IS NULL
-          AND NOT (sf.state = 'skipped' AND sf.reason IN ('mime_not_allowed', 'excluded', 'gone'))),
+          AND NOT (sf.state = 'skipped' AND sf.reason IN ('mime_not_allowed', 'excluded', 'gone', 'unreadable'))),
      judged(pkey, n) AS (
        SELECT pkey, COUNT(DISTINCT CASE WHEN pkey LIKE 'single:%' OR path IS NULL
                                         THEN 'id:' || file_id ELSE 'p:' || path END)

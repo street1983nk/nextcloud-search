@@ -14,6 +14,13 @@ name: Coverage end to end
 #   upgrade     indexed by 1.6.2, updated to the head (doc key backfill), the
 #               gate-queue proof, back to 1.6.2 and up again with a rename
 #
+# and in two SMB modes (plan 43-18, owner decision F3): wrapped, where
+# icewind/smb drives the smbclient binary, and native, where the php-smbclient
+# extension does the work. The 1.6.2 companion hangs in the wrapped mode on the
+# file with a DENY ACE (run 42404849768), so v1.6.2 and upgrade run native;
+# gate-crawl and gate-queue run wrapped, gate-queue native as well. Every leg
+# proves its mode with function_exists('smbclient_state_new') before it counts.
+#
 # The scripts always come from the head (checkout findling-harness), the
 # instance is set up from findling-src, which is v1.6.2 for the two variants
 # that start there. What is built and why is in scripts/ci/coverage_e2e.sh,
@@ -28,13 +35,23 @@ permissions:
 
 jobs:
   coverage-e2e:
-    name: coverage-e2e (${{ matrix.variant }})
+    name: coverage-e2e (${{ matrix.variant }}, ${{ matrix.smb }})
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
-        variant: [gate-crawl, gate-queue, v1.6.2, upgrade]
+        include:
+          - variant: gate-crawl
+            smb: wrapped
+          - variant: gate-queue
+            smb: wrapped
+          - variant: gate-queue
+            smb: native
+          - variant: v1.6.2
+            smb: native
+          - variant: upgrade
+            smb: native
 
     # Job level env takes no runner context (GitHub evaluates it before a
     # runner exists, backend/tests/test_workflow_contexts.py); every path
@@ -71,6 +88,19 @@ jobs:
         with:
           path: findling-harness
 
+      # The native legs get php-smbclient here, before the composite action,
+      # and not through it: for v1.6.2 and upgrade the action comes out of the
+      # 1.6.2 tree. The second setup-php inside the action keeps the extension,
+      # and the script checks the mode before it counts anything. On ubuntu
+      # setup-php takes php8.2-smbclient out of ppa:ondrej/php.
+      - name: Set up PHP with the smbclient extension for a native leg
+        if: matrix.smb == 'native'
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: '8.2'
+          extensions: smbclient
+          coverage: none
+
       - name: Set up the test Nextcloud with both halves and register the ExApp
         uses: ./findling-src/.github/actions/setup-test-nc
         with:
@@ -88,6 +118,7 @@ jobs:
       - name: Build the topology, measure both phases against the truth
         env:
           VARIANT: ${{ matrix.variant }}
+          SMB_MODE: ${{ matrix.smb }}
           NC_URL: 'http://localhost:8080'
           HARNESS: findling-harness
           SRC: findling-src
@@ -109,7 +140,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: coverage-e2e-${{ matrix.variant }}
+          name: coverage-e2e-${{ matrix.variant }}-${{ matrix.smb }}
           path: ${{ runner.temp }}/coverage-e2e-result.md
           if-no-files-found: warn
           retention-days: 30

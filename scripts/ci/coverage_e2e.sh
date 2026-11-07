@@ -35,14 +35,20 @@
 #               one container row without a file cache row), the gate-queue
 #               proof, then back to 1.6.2 and up again with a rename (W5, G1)
 #
+# SMB modes (SMB_MODE, plan 43-18, owner decision F3): wrapped, icewind/smb
+# drives the smbclient binary; native, the php-smbclient extension. The leg
+# proves its mode with function_exists('smbclient_state_new') before anything
+# is counted, a leg in the wrong mode is an invalid run.
+#
 # Runs from the root of the Nextcloud server checkout. Expects VARIANT,
-# NC_URL, HARNESS (checkout of the head), SRC (checkout the instance was set
-# up from), RESULT_FILE, EXAPP_SECRET, EXAPP_PORT, RUNNER_TEMP. Passwords are
-# fixed test values of a throwaway runner and are never printed.
+# SMB_MODE, NC_URL, HARNESS (checkout of the head), SRC (checkout the instance
+# was set up from), RESULT_FILE, EXAPP_SECRET, EXAPP_PORT, RUNNER_TEMP.
+# Passwords are fixed test values of a throwaway runner and are never printed.
 
 set -euo pipefail
 
 : "${VARIANT:?VARIANT is required}"
+: "${SMB_MODE:?SMB_MODE is required}"
 : "${NC_URL:?NC_URL is required}"
 : "${HARNESS:?HARNESS is required}"
 : "${SRC:?SRC is required}"
@@ -55,6 +61,13 @@ case "${VARIANT}" in
   gate-crawl | gate-queue | v1.6.2 | upgrade) ;;
   *)
     echo "::error::unknown variant ${VARIANT}"
+    exit 1
+    ;;
+esac
+case "${SMB_MODE}" in
+  wrapped | native) ;;
+  *)
+    echo "::error::unknown smb mode ${SMB_MODE}"
     exit 1
     ;;
 esac
@@ -82,6 +95,9 @@ umask 022
 failures=0
 rows=()
 notes=()
+# The two figures of a 1.6.2 companion that may not drain (see drain).
+outage_abort_tolerated=0
+drain_incomplete=0
 
 fail() {
   echo "::error::$*"
@@ -126,6 +142,20 @@ source "${HARNESS}/scripts/ci/coverage_truth.sh"
 
 head_under_test() {
   [ "${VARIANT}" != "v1.6.2" ]
+}
+
+# head_companion: the PHP half of the head answers the gateway right now. True
+# for gate-crawl and gate-queue, for upgrade only between an update to the
+# head and the rollback (companion_updated), never for v1.6.2. The probes and
+# the verdicts of plan 43-18 depend on it: a 1.6.2 companion answers 400 for
+# the empty file and its container judges a 422 failed/gateway_error.
+companion_updated=0
+head_companion() {
+  case "${VARIANT}" in
+    gate-crawl | gate-queue) return 0 ;;
+    upgrade) [ "${companion_updated}" = "1" ] ;;
+    *) return 1 ;;
+  esac
 }
 
 # -- words --------------------------------------------------------------------
@@ -217,28 +247,55 @@ living_rows() {
 }
 
 # drain: queue empty, no crawl row, and the state database still for 20 s.
+#
+# Behind a 1.6.2 companion (v1.6.2, and upgrade before the update) an abort
+# is the expected answer and no failure (plan 43-18): 1.6.2 counts a 422
+# towards its outage threshold (poller.py of 1.6.2, _count_refusal), so a pass
+# may end as an outage. There the abort after three outages becomes the note
+# outage_abort_tolerated=<lines>, the drain goes on until DRAIN_TIMEOUT and
+# ends there with drain_incomplete=1 instead of a failure, and the run goes on
+# to its next phase; positive control 2 still reads the figures. Behind the
+# head companion both stay failures.
 drain() {
-  local deadline=$(($(date +%s) + DRAIN_TIMEOUT)) open crawl last="" now mark outages
+  local deadline=$(($(date +%s) + DRAIN_TIMEOUT)) open crawl last="" now mark outages tolerant=0
+  head_companion || tolerant=1
   mark=$(log_mark)
   while :; do
     # Three passes stopped on an unavailable gateway: nothing drains after
     # that, the report says why instead of the timeout.
     outages=$(log_since "${mark}" | grep -c 'the content gateway is unavailable' || true)
-    if [ "${outages}" -ge 3 ]; then
+    if [ "${outages}" -ge 3 ] && [ "${tolerant}" = "0" ]; then
       hang_report
       fail "the content gateway stopped ${outages} indexing passes, the queue cannot drain"
     fi
     open=$(open_rows)
     crawl=$(crawl_pending)
     now="$(living_rows)/$(statedb "SELECT COALESCE(MAX(indexed_at), 0) || ':' || COUNT(*) FROM files;" 2> /dev/null || echo -)"
-    echo "draining: open=${open} crawl=${crawl} state=${now}"
+    echo "draining: open=${open} crawl=${crawl} state=${now} outages=${outages}"
     if [ "${open}" = "0" ] && [ "${crawl}" = "0" ] && [ "${now}" = "${last}" ]; then
+      drain_tolerated "${tolerant}" "${outages}"
       return 0
     fi
     last="${now}"
-    [ "$(date +%s)" -lt "${deadline}" ] || fail "the queue did not drain within ${DRAIN_TIMEOUT} s"
+    if [ "$(date +%s)" -ge "${deadline}" ]; then
+      if [ "${tolerant}" = "1" ]; then
+        drain_tolerated "${tolerant}" "${outages}"
+        drain_incomplete=1
+        note "drain_incomplete=1 (a 1.6.2 companion, the queue did not drain within ${DRAIN_TIMEOUT} s, open=${open})"
+        return 0
+      fi
+      fail "the queue did not drain within ${DRAIN_TIMEOUT} s"
+    fi
     sleep 20
   done
+}
+
+# drain_tolerated <tolerant> <outage lines>: the note of a tolerated abort.
+drain_tolerated() {
+  if [ "$1" = "1" ] && [ "$2" -ge 3 ]; then
+    outage_abort_tolerated=$((outage_abort_tolerated + $2))
+    note "outage_abort_tolerated=$2 (a 1.6.2 companion, counted towards its outage threshold)"
+  fi
 }
 
 # -- the admin overview ------------------------------------------------------------
@@ -383,37 +440,177 @@ hang_report() {
   tail -n 60 "${PHP_SERVER_LOG}" 2> /dev/null || echo "no php server log"
 }
 
-# gateway_probe <label> <uid> <file id> [soft]: one fetch the way the backend
-# does it, prints status and seconds. Fails the run on a timeout: a worker of
-# php -S that hangs here stays taken after curl gives up. With soft, a timeout
-# is only counted in probe_hangs, so the next probe still runs.
-probe_hangs=0
-gateway_probe() {
-  local label="$1" uid="$2" fid="$3" mode="${4:-}" auth result
-  if [ -z "${fid}" ]; then
-    [ "${mode}" = "soft" ] || fail "gateway probe ${label}: no file id"
-    note "gateway probe ${label} (${uid}): no file cache row"
-    return 0
-  fi
+# The time a probe may take (plan 43-18, B2). The nudge of the head companion
+# ends smbclient in under one second, and the product deadline of 30 s must
+# never be the answer here; a probe at or over this limit is a failure. Not for
+# gross.bin, which is slow on purpose (large_probe).
+PROBE_MAX_SECONDS=10
+probe_failures=0
+# The file id of gemeinsam/leer.txt of alice, set before the probes.
+leer_fid=""
+
+# gateway_curl <uid> <file id> <outfile> <max seconds>: one fetch the way the
+# backend does it. Prints "<status> <seconds> <bytes>", 000 when curl gave up.
+gateway_curl() {
+  local uid="$1" fid="$2" outfile="$3" max="$4" auth
   auth=$(printf '%s:%s' "${uid}" "${EXAPP_SECRET}" | base64 -w0)
-  result=$(curl -s -m 60 -o /dev/null -w '%{http_code} %{time_total}' \
+  curl -s -m "${max}" -o "${outfile}" -w '%{http_code} %{time_total} %{size_download}' \
     -H 'AA-VERSION: 2.2.0' \
     -H 'EX-APP-ID: findling_backend' \
     -H "EX-APP-VERSION: $(backend_version "${BACKEND_DIR}")" \
     -H "AUTHORIZATION-APP-API: ${auth}" \
     -H 'OCS-APIRequest: true' \
-    "${NC_URL}/ocs/v2.php/apps/findling/files/${fid}?userId=${uid}" || true)
-  note "gateway probe ${label} (file ${fid}, ${uid}): http ${result:-none}"
-  case "${result}" in
-    000* | "")
-      if [ "${mode}" = "soft" ]; then
-        probe_hangs=$((probe_hangs + 1))
-        return 0
-      fi
-      hang_report
-      fail "gateway probe ${label} did not answer within 60 s"
-      ;;
-  esac
+    "${NC_URL}/ocs/v2.php/apps/findling/files/${fid}?userId=${uid}" || true
+}
+
+# probe_problem <label> <problem> [collect]: without collect the run stops at
+# once with the hang report (a worker of php -S that hangs stays taken after
+# curl gives up); with collect the problem is counted in probe_failures and
+# the next probe still runs, the run stops after all of them.
+probe_problem() {
+  if [ "${3:-}" = "collect" ]; then
+    probe_failures=$((probe_failures + 1))
+    echo "::warning::gateway probe $1: $2"
+    return 0
+  fi
+  hang_report
+  fail "gateway probe $1: $2"
+}
+
+# gateway_probe <label> <uid> <file id> <expected status> [collect]: one fetch
+# that must answer the expected status in under PROBE_MAX_SECONDS; for
+# leer.txt behind the head companion it must also carry zero bytes.
+gateway_probe() {
+  local label="$1" uid="$2" fid="$3" expected="$4" mode="${5:-}" result code seconds size problem=""
+  [ -n "${fid}" ] || fail "gateway probe ${label}: no file id"
+  result=$(gateway_curl "${uid}" "${fid}" /dev/null 60)
+  read -r code seconds size <<< "${result:-000 0 0}"
+  note "gateway probe ${label} (file ${fid}, ${uid}): http ${code}, ${seconds} s, ${size} bytes, expected ${expected}"
+  rows+=("| probe | ${label} (${uid}) | ${expected} | ${code} in ${seconds} s |")
+  [ "${code}" = "${expected}" ] || problem="http ${code} instead of ${expected}"
+  if awk -v took="${seconds}" -v limit="${PROBE_MAX_SECONDS}" 'BEGIN { exit !(took + 0 >= limit + 0) }'; then
+    problem="${problem:+${problem}, }${seconds} s, the limit is ${PROBE_MAX_SECONDS} s"
+  fi
+  if [ "${fid}" = "${leer_fid}" ] && head_companion && [ "${size}" != "0" ]; then
+    problem="${problem:+${problem}, }${size} bytes for the empty file"
+  fi
+  [ -z "${problem}" ] || probe_problem "${label}" "${problem}" "${mode}"
+}
+
+# throttle_smb / unthrottle_smb: SMB traffic on 127.0.0.1:445 (both
+# directions) down to about 100 KB/s, one htb class with a filter on the port,
+# everything else on lo unshaped. The EXIT trap removes it in every case.
+throttle_smb() {
+  sudo tc qdisc add dev lo root handle 1: htb default 10 || return 1
+  sudo tc class add dev lo parent 1: classid 1:10 htb rate 10gbit \
+    && sudo tc class add dev lo parent 1: classid 1:20 htb rate 800kbit ceil 800kbit \
+    && sudo tc filter add dev lo parent 1: protocol ip prio 1 u32 match ip dport 445 0xffff flowid 1:20 \
+    && sudo tc filter add dev lo parent 1: protocol ip prio 1 u32 match ip sport 445 0xffff flowid 1:20 \
+    || {
+      unthrottle_smb
+      return 1
+    }
+}
+unthrottle_smb() {
+  sudo tc qdisc del dev lo root 2> /dev/null || true
+}
+trap unthrottle_smb EXIT
+
+# large_probe <file id> [collect]: gross.bin (10 MB) through the gateway while
+# SMB is throttled (W1, W1b), so pauses of up to 200 ms and many empty reads
+# really happen in the wrapped mode. 200, the bytes equal to the source, no
+# hang; the number of reads against MAX_READS is the PHPUnit case of 43-17.
+large_probe() {
+  local fid="$1" mode="${2:-}" want have result code seconds size throttled=0 problem=""
+  [ -n "${fid}" ] || fail "gateway probe large: no file id"
+  want=$(sudo sha256sum /srv/daten/gemeinsam/gross.bin | cut -d' ' -f1)
+  if throttle_smb; then
+    throttled=1
+  else
+    note "tc could not throttle port 445 on lo, gross.bin runs unthrottled"
+  fi
+  result=$(gateway_curl alice "${fid}" "${WORK}/gross.out" 240)
+  unthrottle_smb
+  read -r code seconds size <<< "${result:-000 0 0}"
+  have=$(sha256sum "${WORK}/gross.out" 2> /dev/null | cut -d' ' -f1 || true)
+  rm -f "${WORK}/gross.out"
+  note "gateway probe large (file ${fid}, alice): http ${code}, ${seconds} s, ${size} bytes, throttled=${throttled}, sha256 $([ "${have}" = "${want}" ] && echo equal || echo different)"
+  rows+=("| probe | large gross.bin (alice), throttled=${throttled} | 200, same sha256 | ${code} in ${seconds} s |")
+  [ "${code}" = "200" ] || problem="http ${code} instead of 200"
+  [ "${have}" = "${want}" ] || problem="${problem:+${problem}, }the bytes differ from the source"
+  [ -z "${problem}" ] || probe_problem large "${problem}" "${mode}"
+}
+
+# no_stale_smbclient <label>: no smbclient process below a php -S process older
+# than 60 s (W12). The parents are the php -S processes of composer run serve
+# (pgrep -f 'php -S', the workers carry the command line of their master).
+# Below and not only directly below: icewind/smb starts the binary through
+# proc_open, so a shell or stdbuf may sit in between.
+no_stale_smbclient() {
+  local label="$1" parents stale
+  parents=$(pgrep -f 'php -S' | tr '\n' ' ' || true)
+  [ -n "${parents// /}" ] || fail "no php -S process found, the check for a stale smbclient tests nothing"
+  stale=$(ps -eo pid=,ppid=,etimes=,comm= | awk -v parents=" ${parents} " '
+    { parent[$1] = $2; age[$1] = $3; name[$1] = $4 }
+    END {
+      for (pid in name) {
+        if (name[pid] != "smbclient" || age[pid] <= 60) continue
+        up = parent[pid]
+        for (depth = 0; depth < 5 && up > 1; depth++) {
+          if (index(parents, " " up " ")) { print pid " " age[pid] "s"; break }
+          up = parent[up]
+        }
+      }
+    }')
+  if [ -n "${stale}" ]; then
+    hang_report
+    fail "a smbclient process outlived its request (${label}): $(printf '%s' "${stale}" | tr '\n' ' ')"
+  fi
+  note "no smbclient below php -S older than 60 s (${label})"
+}
+
+# locked_ids <name> [storage]: the file ids of a locked file, comma separated.
+locked_ids() {
+  if [ -n "${2:-}" ]; then
+    ncdb "SELECT fileid FROM oc_filecache WHERE name = '$1' AND storage = $2;"
+  else
+    ncdb "SELECT fileid FROM oc_filecache WHERE name = '$1';"
+  fi | paste -sd, -
+}
+
+# judge_locked <label> <state/reason> <log mark> [container]: every living
+# container row of gesperrt-alle.txt and the row of bob of gesperrt-bob.txt
+# carry the verdict, oc_findling_file_state as well (unless container), and no
+# pass since the mark was taken as an outage (B3).
+judge_locked() {
+  local label="$1" want="$2" mark="$3" only="${4:-}" all bob ids rows_st match_st rows_nc match_nc outage_lines
+  all=$(locked_ids gesperrt-alle.txt)
+  bob=$(locked_ids gesperrt-bob.txt "${daten_bob}")
+  [ -n "${all}" ] && [ -n "${bob}" ] || fail "no file cache row of the locked files"
+  ids="${all},${bob}"
+  rows_st=$(statedb "SELECT COUNT(*) FROM files WHERE deleted_at IS NULL AND file_id IN (${ids});")
+  match_st=$(statedb "SELECT COUNT(*) FROM files WHERE deleted_at IS NULL AND file_id IN (${ids})
+                        AND state || '/' || COALESCE(reason, '-') = '${want}';")
+  note "${label}: ${match_st} of ${rows_st} container rows of the locked files are ${want}"
+  rows+=("| ${label} | container rows of the locked files ${want} | ${rows_st} | ${match_st} |")
+  [ "${rows_st}" -ge 2 ] || {
+    failures=$((failures + 1))
+    echo "::warning::${label}: only ${rows_st} living container rows of the locked files, the check tests nothing"
+  }
+  check "${label} container verdicts ${want}" "${rows_st}" "${match_st}"
+  [ "${only}" = "container" ] && return 0
+  rows_nc=$(ncdb "SELECT COUNT(*) FROM oc_findling_file_state WHERE file_id IN (${ids});")
+  match_nc=$(ncdb "SELECT COUNT(*) FROM oc_findling_file_state WHERE file_id IN (${ids})
+                     AND state || '/' || COALESCE(reason, '-') = '${want}';")
+  rows+=("| ${label} | oc_findling_file_state rows of the locked files ${want} | ${rows_nc} | ${match_nc} |")
+  [ "${rows_nc}" -ge 2 ] || {
+    failures=$((failures + 1))
+    echo "::warning::${label}: only ${rows_nc} oc_findling_file_state rows of the locked files"
+  }
+  check "${label} oc_findling_file_state verdicts ${want}" "${rows_nc}" "${match_nc}"
+  outage_lines=$(log_since "${mark}" | grep -c 'taken as an outage' || true)
+  rows+=("| ${label} | log lines 'taken as an outage' | 0 | ${outage_lines} |")
+  check "${label} no pass taken as an outage" 0 "${outage_lines}"
 }
 
 # coverage_body: the body the companion would send, built from oc_mounts and
@@ -456,19 +653,23 @@ put_companion() {
 
 write_result() {
   {
-    echo "## Coverage end to end, variant ${VARIANT} (plan 43-07)"
+    echo "## Coverage end to end, variant ${VARIANT}, smb ${SMB_MODE} (plan 43-07, 43-18)"
     echo
     echo "| Phase | Figure | Truth | Shown |"
     echo "|-------|--------|-------|-------|"
     if [ "${#rows[@]}" -gt 0 ]; then
       printf '%s\n' "${rows[@]}"
     fi
+    echo "| drain | outage_abort_tolerated | - | ${outage_abort_tolerated} |"
+    echo "| drain | drain_incomplete | - | ${drain_incomplete} |"
     echo
     if [ "${#notes[@]}" -gt 0 ]; then
       printf -- '- %s\n' "${notes[@]}"
     fi
     echo
     echo "failures=${failures}"
+    echo "outage_abort_tolerated=${outage_abort_tolerated}"
+    echo "drain_incomplete=${drain_incomplete}"
   } > "${RESULT_FILE}"
 }
 
@@ -573,6 +774,10 @@ for share in daten archiv; do
   head -c 4096 /dev/urandom | sudo tee "/srv/${share}/gemeinsam/daten-${share}.bin" > /dev/null
   sudo chmod 0644 "/srv/${share}/gemeinsam/daten-${share}.bin"
 done
+# gross.bin (plan 43-18, W1): 10 MB for the slow fetch of the wrapped legs. A
+# type outside TRUTH_TYPES_REGEX and refused by type, so it moves no truth.
+head -c 10485760 /dev/urandom | sudo tee /srv/daten/gemeinsam/gross.bin > /dev/null
+sudo chmod 0644 /srv/daten/gemeinsam/gross.bin
 
 # The two locked files, put by alice through SMB so she owns them.
 locked_all_word=$(next_word)
@@ -581,6 +786,11 @@ printf 'Coverage proof %s\n' "${locked_all_word}" > "${WORK}/gesperrt-alle.txt"
 printf 'Coverage proof %s\n' "${locked_bob_word}" > "${WORK}/gesperrt-bob.txt"
 printf '%s\t%s\n' "${locked_all_word}" gesperrt-alle.txt >> "${WORDS}"
 printf '%s\t%s\n' "${locked_bob_word}" gesperrt-bob.txt >> "${WORDS}"
+# leer.txt (plan 43-18, B2): readable, zero bytes, no word of its own and not
+# in WORDS. It counts in the denominator truth (find, type txt) and never in
+# the numerator, the head judges it failed/empty_file. A product that takes it
+# out of the denominator in phase B is a finding, the truth stays.
+: > "${WORK}/leer.txt"
 sudo systemctl restart smbd
 up=0
 for _ in $(seq 1 30); do
@@ -592,8 +802,9 @@ for _ in $(seq 1 30); do
 done
 [ "${up}" = 1 ] || fail "smbd did not answer on 127.0.0.1:445"
 smbclient //127.0.0.1/daten -A "${WORK}/auth-alice" \
-  -c "cd gemeinsam; lcd ${WORK}; put gesperrt-alle.txt; put gesperrt-bob.txt" > /dev/null \
-  || fail "alice could not put the two locked files onto daten"
+  -c "cd gemeinsam; lcd ${WORK}; put gesperrt-alle.txt; put gesperrt-bob.txt; put leer.txt" > /dev/null \
+  || fail "alice could not put the two locked files and the empty file onto daten"
+[ "$(stat -c %s /srv/daten/gemeinsam/leer.txt)" = "0" ] || fail "leer.txt on daten is not empty"
 for uid in bob carol alice; do
   smbcacls //127.0.0.1/daten gemeinsam/gesperrt-alle.txt -A "${WORK}/auth-alice" \
     --add "ACL:${NETBIOS}\\${uid}:DENIED/0x0/READ" > /dev/null \
@@ -643,6 +854,11 @@ note "positive control at Samba: bob cannot enter a folder of alice, nobody read
 # ===================================================================================
 
 step "nextcloud"
+# The mode of the leg (F3, T-43-57): php -S runs on the same PHP as this CLI.
+smb_mode_seen=$(php -r 'echo function_exists("smbclient_state_new") ? "native" : "wrapped";')
+rows+=("| setup | smb mode (function_exists smbclient_state_new) | ${SMB_MODE} | ${smb_mode_seen} |")
+[ "${smb_mode_seen}" = "${SMB_MODE}" ] || fail "the leg runs ${smb_mode_seen}, not ${SMB_MODE}, the run is invalid"
+note "smb mode: ${smb_mode_seen}"
 nc_occ config:system:set skeletondirectory --value='' > /dev/null
 nc_occ background:cron > /dev/null
 nc_occ app:enable files_external > /dev/null
@@ -750,29 +966,65 @@ note "carol mounts archiv ${mounts_of_carol_archiv} times (second mount point of
 # ===================================================================================
 
 step "gateway probes before the crawl"
+# W10: a short answer for a file the container expects with 0 bytes counts as
+# whole there (requeueAs rows carry size 0). Apart from leer.txt no test file
+# has size 0 in the file cache, so that limit meets no file of this run.
+zero_sized=$(ncdb "SELECT COUNT(*) FROM oc_filecache AS fc JOIN oc_mimetypes AS m ON m.id = fc.mimetype
+                    WHERE fc.size = 0 AND m.mimetype <> 'httpd/unix-directory' AND fc.name <> 'leer.txt'
+                      AND (fc.name LIKE '%.txt' OR fc.name LIKE '%.png' OR fc.name LIKE '%.bin');")
+check "test files of size 0 besides leer.txt (W10)" 0 "${zero_sized}"
+leer_fid=$(ncdb "SELECT fileid FROM oc_filecache WHERE storage = ${daten_alice} AND name = 'leer.txt' LIMIT 1;")
+[ -n "${leer_fid}" ] || fail "leer.txt has no file cache row"
 # Before the queue fills, so no backend fetch holds a worker yet: a home file
 # without SMB first, then a readable file of alice on daten.
 gateway_probe home alice "$(ncdb "SELECT fc.fileid FROM oc_filecache AS fc JOIN oc_storages AS s ON s.numeric_id = fc.storage
-                                    WHERE s.id = 'home::alice' AND fc.name = 'notiz.txt' LIMIT 1;")"
+                                    WHERE s.id = 'home::alice' AND fc.name = 'notiz.txt' LIMIT 1;")" 200
 gateway_probe smb alice "$(ncdb "SELECT fileid FROM oc_filecache
-                                  WHERE storage = ${daten_alice} AND name = 'daten-alice-1.txt' LIMIT 1;")"
+                                  WHERE storage = ${daten_alice} AND name = 'daten-alice-1.txt' LIMIT 1;")" 200
 # The files with a DENY ACE (run 42401892996: one fetch after 87 to 90 of bob
-# never ended). Soft, so both answers are seen before the run stops.
+# never ended). 422 from both companions: the head through its deadline or
+# its nudge, 1.6.2 only in the native mode, where fopen returns false. Both run
+# before any hard stop, so both answers are seen.
 gateway_probe locked-for-bob bob "$(ncdb "SELECT fileid FROM oc_filecache
-                                            WHERE storage = ${daten_bob} AND name = 'gesperrt-bob.txt' LIMIT 1;")" soft
+                                            WHERE storage = ${daten_bob} AND name = 'gesperrt-bob.txt' LIMIT 1;")" 422 collect
 gateway_probe locked-for-all alice "$(ncdb "SELECT fileid FROM oc_filecache
-                                              WHERE storage = ${daten_alice} AND name = 'gesperrt-alle.txt' LIMIT 1;")" soft
-if [ "${probe_hangs}" -gt 0 ]; then
-  hang_report
-  fail "${probe_hangs} gateway probe(s) of a locked SMB file did not answer within 60 s"
+                                              WHERE storage = ${daten_alice} AND name = 'gesperrt-alle.txt' LIMIT 1;")" 422 collect
+# The empty file: 200 with zero bytes from the head companion; 400 from the
+# 1.6.2 companion, whose StreamResponse.php:47-49 with Output.php:37 answers an
+# empty stream that way. The positive control that the probe tells the old
+# companion from the new one (B2, T-43-62).
+if head_companion; then
+  gateway_probe empty alice "${leer_fid}" 200 collect
+else
+  gateway_probe empty alice "${leer_fid}" 400 collect
 fi
+if [ "${SMB_MODE}" = "wrapped" ]; then
+  large_probe "$(ncdb "SELECT fileid FROM oc_filecache WHERE storage = ${daten_alice} AND name = 'gross.bin' LIMIT 1;")" collect
+fi
+if [ "${probe_failures}" -gt 0 ]; then
+  hang_report
+  fail "${probe_failures} gateway probe(s) answered other than expected"
+fi
+sleep 5
+no_stale_smbclient "after the probes"
 
 step "crawl and drain"
+crawl_mark=$(log_mark)
 nc_occ findling:index --restart --no-interaction > /dev/null
 run_crawl
 drain
 note "indexed: $(statedb "SELECT COUNT(*) FROM files WHERE deleted_at IS NULL AND state = 'indexed';") living rows indexed, $(living_rows) living rows"
 note "verdict of the file locked for all: container $(statedb "SELECT state || '/' || COALESCE(reason, '-') FROM files WHERE deleted_at IS NULL AND path LIKE '%gesperrt-alle.txt' LIMIT 1;" || echo none), Nextcloud $(ncdb "SELECT r.state || '/' || COALESCE(r.reason, '-') FROM oc_findling_file_state AS r JOIN oc_filecache AS fc ON fc.fileid = r.file_id WHERE fc.name = 'gesperrt-alle.txt' LIMIT 1;" || echo none)"
+note "verdict of leer.txt: container $(statedb "SELECT state || '/' || COALESCE(reason, '-') FROM files WHERE deleted_at IS NULL AND file_id = ${leer_fid};" || echo none)"
+# The verdicts of plan 43-18 (B3). Behind the head companion a 422 is
+# skipped/unreadable on both sides and no pass was taken as an outage; v1.6.2
+# is the counter check with failed/gateway_error in the container. upgrade is
+# judged after phase B, see there.
+if head_companion; then
+  judge_locked "after the first drain" "skipped/unreadable" "${crawl_mark}"
+elif [ "${VARIANT}" = "v1.6.2" ]; then
+  judge_locked "1.6.2 after the first drain" "failed/gateway_error" "${crawl_mark}" container
+fi
 
 # ===================================================================================
 # 3b. The update of the upgrade variant (D-43-14, R2)
@@ -792,6 +1044,7 @@ if [ "${VARIANT}" = "upgrade" ]; then
 
   step "container first: the head backend next to the 1.6.2 companion"
   stop_backend
+  head_mark=$(log_mark)
   start_backend "${HARNESS}/backend"
   sleep 10
   answer=$(post_coverage)
@@ -804,6 +1057,7 @@ if [ "${VARIANT}" = "upgrade" ]; then
   started=$(date +%s)
   put_companion "${HARNESS}/php" 1.6.3
   nc_occ upgrade > /dev/null
+  companion_updated=1
   hint=$(nc_occ config:app:get findling coverage_per_document_hint || echo absent)
   check "upgrade hint coverage_per_document_hint" 1 "${hint}"
   backfill_mark=$(log_mark)
@@ -1030,6 +1284,15 @@ else
   note "positive control 2: 1.6.2 shows ${b_num_shown} of ${b_den_shown}, truth ${b_num_truth} of ${b_den_truth}"
 fi
 
+sleep 5
+no_stale_smbclient "after phase B"
+if [ "${VARIANT}" = "upgrade" ]; then
+  # Only now (B3): the reconcile hands the 1.6.2 rows failed/gateway_error
+  # with budget out again, and the head judges them skipped/unreadable. A
+  # different verdict is a finding for the coordinator, never a looser check.
+  judge_locked "upgrade after phase B" "skipped/unreadable" "${head_mark}"
+fi
+
 step "search cross check"
 # shellcheck disable=SC2086 # the user list is a word list on purpose
 found=$(search_crosscheck "${WORDS}" ${users_left})
@@ -1053,6 +1316,7 @@ if [ "${VARIANT}" = "upgrade" ]; then
   tar -xzf "${WORK}/findling-1.6.2.tar.gz" -C "${WORK}/release"
   [ -f "${WORK}/release/findling/appinfo/info.xml" ] || fail "the 1.6.2 archive carries no findling/appinfo/info.xml"
   put_companion "${WORK}/release/findling" 1.6.2
+  companion_updated=0
   nc_occ config:app:set findling installed_version --value=1.6.2 > /dev/null
   start_backend "${SRC}/backend"
   has_column=$(statedb "SELECT COUNT(*) FROM pragma_table_info('files') WHERE name = 'doc_key';")
@@ -1099,6 +1363,7 @@ if [ "${VARIANT}" = "upgrade" ]; then
   stop_backend
   put_companion "${HARNESS}/php" 1.6.3
   nc_occ upgrade > /dev/null
+  companion_updated=1
   bands=$(sed -n 's/^DOC_KEY_BACKFILL_BANDS_PER_ROUND: Final = \([0-9]*\).*/\1/p' "${HARNESS}/backend/src/findling/worker/doc_keys.py")
   tick=$(sed -n 's/^DOC_KEY_TICK_SECONDS: Final = \([0-9]*\).*/\1/p' "${HARNESS}/backend/src/findling/worker/doc_keys.py")
   [ -n "${bands}" ] && [ -n "${tick}" ] || fail "the backfill constants could not be read"
