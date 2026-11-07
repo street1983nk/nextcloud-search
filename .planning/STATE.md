@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
-status: executing
-stopped_at: Lückenschluss 42-10 (Groß-/Kleinschreibung der Router- und Containersperre)
-last_updated: "2026-11-05T03:09:59.000Z"
-last_activity: 2026-11-05
+status: planned
+stopped_at: Phase 43 geplant (16 Pläne, 15 Wellen, Planprüfung Runde 6 bestanden), bereit zur Ausführung
+last_updated: "2026-11-07T23:00:00.000Z"
+last_activity: 2026-11-07
 progress:
-  total_phases: 5
-  completed_phases: 4
-  total_plans: 17
-  completed_plans: 15
-  percent: 80
+  total_phases: 6
+  completed_phases: 5
+  total_plans: 33
+  completed_plans: 17
+  percent: 52
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 Siehe .planning/PROJECT.md (Stand nach v1.5, Milestone v1.6 gestartet) und .planning/MILESTONES.md (v1.0 bis v1.5).
 
 **Core Value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 42: php-sicherheits-gates
+**Current focus:** Phase 43: Findling 1.6.3, Löschlauf unabhängig vom Quiet-Gate und Zähler pro Dokument (#25)
 
 ## Current Position
 
-Phase: 42 (php-sicherheits-gates), EXECUTING
-Plan: 9 of 9
-Status: Re-Verifikation fand eine Lücke (Vektoren 3 und 6, Groß-/Kleinschreibung); Lückenschluss 42-10 (dca4478d) umgesetzt, Phase bereit zur erneuten Verifikation
-Last activity: 2026-11-05
+Phase: 43 (findling-1-6-3-sweep-und-zaehler), PLANNED, bereit zur Ausführung
+Plan: 0 of 16 (Start: 43-01 Owner-Texte und 43-02 Sweep parallel in Welle 1)
+Status: Pläne lokal committet, nichts gepusht; Phase 42 Verifikation bestanden (42-VERIFICATION.md status passed). Jeder Push, Dispatch, Tag, Kommentar nur mit Owner-Freigabe (43-FREIGABEN.md)
+Last activity: 2026-11-07
 
 Progress: [█████████░] 88%
 
