@@ -803,6 +803,46 @@ async def test_a_pass_with_a_correction_starts_again_and_one_without_rests_a_day
     assert keys.asked
 
 
+async def test_after_a_restart_a_stored_rest_is_ignored_and_a_stale_key_is_corrected_in_the_first_round(
+    store: Store,
+) -> None:
+    # The way back to 1.6.2 and up again (plan 43-07, G1): the rest of a clean
+    # pass is in the meta value, 1.6.2 never touches it, and a file renamed
+    # under 1.6.2 keeps the key of its old path. The rest belongs to one
+    # running process; a new process verifies at once.
+    _insert_rows(store, range(1, 11), doc_key=None)
+    for file_id in range(1, 11):
+        store._conn.execute("UPDATE files SET doc_key = ? WHERE file_id = ?", (key_of(file_id), file_id))
+    store._conn.execute("UPDATE files SET doc_key = ? WHERE file_id = 4", (key_of(4, generation="old"),))
+    store.write_meta(DOC_KEY_MARK, f"{DOC_KEY_GENERATION}:0:idle{int(START + DAY)}")
+    keys = _Keys()
+
+    restarted = _backfill(store, keys, [START], bands=25)
+    result = await restarted.run_once()
+
+    assert result.state == ROUND_VERIFIED
+    assert keys.asked
+    assert result.corrected == 1
+    assert _doc_key(store, 4) == key_of(4)
+
+
+async def test_the_rest_still_holds_within_one_running_process(store: Store) -> None:
+    _insert_rows(store, range(1, 11), doc_key=None)
+    for file_id in range(1, 11):
+        store._conn.execute("UPDATE files SET doc_key = ? WHERE file_id = ?", (key_of(file_id), file_id))
+    store.write_meta(DOC_KEY_MARK, f"{DOC_KEY_GENERATION}:0:idle{int(START + DAY)}")
+    keys = _Keys()
+    clock = [START]
+    backfill = _backfill(store, keys, clock, bands=25)
+
+    # The first round of the process verifies, finds nothing and rests again.
+    assert (await backfill.run_once()).state == ROUND_VERIFIED
+    keys.asked.clear()
+    clock[0] += 300
+    assert (await backfill.run_once()).state == ROUND_RESTING
+    assert keys.asked == []
+
+
 async def test_the_verify_pass_respects_the_backup_pause(store: Store) -> None:
     _insert_rows(store, range(1, 1001), doc_key=key_of(0))
     store.write_meta(DOC_KEY_MARK, f"{DOC_KEY_GENERATION}:0:0")
