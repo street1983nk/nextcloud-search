@@ -670,7 +670,10 @@ daten_bob=$(sid_like 'smb::bob@%//daten/%')
 daten_carol=$(sid_like 'smb::carol@%//daten/%')
 archiv_carol=$(sid_like 'smb::carol@%//archiv/%')
 home_dave=$(sid_like 'home::dave')
-local_sid=$(sid_like 'local::%')
+# Not 'local::%': the data directory itself is a local storage of its own
+# (local::<datadir>/) with the lowest id and no oc_mounts row (first dispatch,
+# run 42381671975, failed here on all four variants).
+local_sid=$(sid_like 'local::/srv/lokal%')
 for pair in "daten_alice:${daten_alice}" "daten_bob:${daten_bob}" "daten_carol:${daten_carol}" \
   "archiv_carol:${archiv_carol}" "home_dave:${home_dave}" "local:${local_sid}"; do
   [ -n "${pair#*:}" ] || fail "no storage row for ${pair%%:*}"
