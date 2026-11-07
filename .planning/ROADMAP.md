@@ -259,7 +259,7 @@ Kriterium 3 (Psalm mit Taint, php-cs-fixer, zizmor, actionlint) ist nicht Teil d
 ### Phase 43: Findling 1.6.3: Löschlauf unabhängig vom Quiet-Gate und Zähler pro Dokument (#25)
 
 **Goal:** Index-Einträge nicht mehr eingebundener Speicher werden zuverlässig entfernt, auch wenn die Ruhe-Schwelle (quiet_max) den vollen Abgleich blockiert: Stempel und `_sweep_vanished` laufen, sobald eine vollständige Mountliste vorliegt. Die Fortschrittszählung zählt pro Dokument (Speicher-Schlüssel plus Pfad), die PHP-App liefert dafür die Zuordnung storage zu key mit. Danach Audit, Owner-Runde, Store-Einreichung 1.6.3 und Antwort in #25 (erst nach Store-Release).
-**Requirements**: D-43-01, D-43-02, D-43-03, D-43-04, D-43-05, D-43-06, D-43-07, D-43-08, D-43-09, D-43-10
+**Requirements**: D-43-01, D-43-02, D-43-03, D-43-04, D-43-05, D-43-06, D-43-07, D-43-08, D-43-09, D-43-10, D-43-11, D-43-12, D-43-13
 **Depends on:** Phase 42
 **Plans:** 14 plans
 
@@ -268,12 +268,12 @@ Plans:
 - [ ] 43-02-PLAN.md: Sweep mit eigenem Stempel storage_sweep_at, unabhängig vom Quiet-Gate (TDD)
 - [ ] 43-03-PLAN.md: Zählung pro Dokument in der Store-Schicht, Tombstones raus aus counts() (TDD)
 - [ ] 43-04-PLAN.md: Container-Route POST /coverage mit Hintergrundzählung und Cache (TDD)
-- [ ] 43-05-PLAN.md: PHP: Nenner max(PHP, judgedDocuments), counting statt Fehlbeschriftung, Fallback 1.6.2
-- [ ] 43-06-PLAN.md: Einmaliger Hinweis: AppConfig-Schlüssel, Migration, 16 Kataloge, Glossare
+- [ ] 43-05-PLAN.md: PHP: Nenner pro Gruppe max(PHP_g, judged_g + phpOnly_g) (D-43-11), Abzüge nur eingebundener Speicher, counting, sichtbarer Fallback 1.6.2
+- [ ] 43-06-PLAN.md: Hinweis 7 Tage (D-43-06, D-43-12), Sätze zu Zählung, unlesbaren Dateien und Rückfall, Migration, 16 Kataloge
 - [ ] 43-07-PLAN.md: Pflicht-Abnahme D-43-08 auf Samba-Harness mit unabhängiger Wahrheit, erster Push (Owner)
 - [ ] 43-08-PLAN.md: Bump 1.6.3, CHANGELOG, Upgrade-Zusicherungen, Push (Owner)
 - [ ] 43-09-PLAN.md: Audit Security/Bugs/Performance des 1.6.3-Deltas, Fixes ab MEDIUM
-- [ ] 43-10-PLAN.md: Testbuild 1.6.3-rc.1 mit A5/A6-Nachweis auf frischer Instanz (Owner-Push)
+- [ ] 43-10-PLAN.md: Testbuild 1.6.3-rc.1 als Artefakt ohne Pre-Release (D-43-13), A5 auf HaRP und A6 auf frischer Instanz (Owner-Push)
 - [ ] 43-11-PLAN.md: Testbuild-Kommentar an mbozem (Owner-Freigabe), Rückmeldung abwarten
 - [ ] 43-12-PLAN.md: Owner-Runde 1.6.3, Gesamttext, Tag-Kopf
 - [ ] 43-13-PLAN.md: Tag v1.6.3 und Store-Einreichung (Owner führt aus), Belege

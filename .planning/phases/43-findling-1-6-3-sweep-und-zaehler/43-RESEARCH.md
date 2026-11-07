@@ -366,13 +366,13 @@ with _LEFT_OUT_LOCK:
 | A6 | Nextcloud akzeptiert eine Companion-Version `1.6.3-rc.1` bei manueller Installation | Release | Testbuild der Companion nur über Versionsnummer der Endversion möglich |
 | A7 | Synchrone Schwelle 100.000 lebender Zeilen bleibt auf ARM unter ~1 s | Pattern 2 | Seite lädt langsamer; Schwelle senken |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Neue Route `/coverage` oder Erweiterung von `GET /status`?**
+1. **(RESOLVED) Neue Route `/coverage` oder Erweiterung von `GET /status`?** Entschieden in 43-04: neue Route POST /coverage, `leaveOut` auf /status bleibt für gemischte Versionen.
    - Bekannt: GET-Parameter sind auf 8000 Zeichen begrenzt; die Mountliste großer Instanzen passt nicht hinein; HaRP verlangt deklarierte Routen.
    - Empfehlung: neue POST-Route, Abwägung im Plan dokumentieren. Alternative ohne neue Route: `GET /status?groups=` plus Container-seitiger Ausschluss über `vanished_storages`, mit den oben genannten Lücken.
-2. **Wie bekommt mbozem den Testbuild technisch?** Siehe Release-Abschnitt; Owner entscheidet über Version und Weg, A5/A6 vorher in einer frischen Testinstanz (CI oder lokal per Docker) nachweisen.
-3. **Gibt es auf mbozems Instanz Tombstones mit state indexed?** Seine 190.080 "living indexed" passen zur angezeigten Zahl; ob `counts()` dort mehr zählt, lässt sich nur dort prüfen. Für den Fix egal, der neue Zähler filtert `deleted_at`.
+2. **(RESOLVED) Wie bekommt mbozem den Testbuild technisch?** Entschieden in 43-10 (Branch rc/1.6.3-rc.1, signiertes Archiv per release.yml-Dispatch, Image :<sha>, Test-info.xml, A5/A6-Nachweis auf frischer Instanz und HaRP) und 43-11 (Kommentar mit Owner-Freigabe). Siehe Release-Abschnitt; Owner entscheidet über Version und Weg, A5/A6 vorher in einer frischen Testinstanz (CI oder lokal per Docker) nachweisen.
+3. **(RESOLVED) Gibt es auf mbozems Instanz Tombstones mit state indexed?** Für den Fix nicht relevant: 43-03 filtert `deleted_at` in `counts()` und in der neuen Zählung. Seine 190.080 "living indexed" passen zur angezeigten Zahl; ob `counts()` dort mehr zählt, lässt sich nur dort prüfen. Für den Fix egal, der neue Zähler filtert `deleted_at`.
 
 ## Environment Availability
 

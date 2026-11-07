@@ -42,6 +42,12 @@ Daraus folgt für diese Phase:
 - **D-43-09:** Die Recherche prüft, ob Zähler und Nenner danach wirklich dieselbe Menge messen. Offene Frage aus #25: Der Nenner nimmt das größte Mitglied je Gruppe. Bei unterschiedlicher Sicht pro Nutzer (Archiv: 28.303 bis 112.053) kann die Vereinigung größer sein als das größte Mitglied, dann wäre der Nenner zu klein und die Quote könnte über 100 % gehen. Invariante: Quote nie über 100 %, und bei leerer Warteschlange und fertigem Crawl muss die Zahl die tatsächliche Abdeckung zeigen (das war die Ursprungsbeschwerde).
 - **D-43-10:** Vor der Store-Einreichung bekommt mbozem einen Testbuild (er hat das angeboten) und prüft seine Zahl, Ziel etwa 18 % bei laufendem Crawl. Den Kommentar mit der Anfrage formuliert Claude, er geht nur mit Owner-Freigabe raus. #25 wird erst geschlossen, wenn mbozem bestätigt, nie vorher von uns.
 
+### Nachträge des Owners (07.11., Planrevision 1)
+- **D-43-11:** Dateien, die gelistet, aber nicht lesbar sind (skipped/unreadable, z. B. SMB-ACL), die PHP als failed/repeatedly_stuck aufgibt, und skipped/gone, das nur PHP entscheidet, GEHÖREN ZUM NENNER: nicht durchsuchbar senkt die Abdeckung ehrlich (z. B. 190/200 = 95 %). Die Seite zeigt daneben, wie viele Dateien nicht lesbar oder hängen geblieben sind. Rechnung pro Freigabegruppe, nicht ein globales Maximum: Nenner = Summe über Gruppen und Einzelspeicher von max(PHP_g, judged_g + phpOnly_g); der Zähler ist immer eine Teilmenge; die Quote geht nie über 100 %.
+- **D-43-12:** Der einmalige Hinweis (D-43-06) bleibt nach der ersten vollständigen Zählung mit /coverage noch 7 Tage sichtbar und verschwindet dann von selbst (Zeitstempel speichern, nicht beim ersten Ergebnis löschen). Ersetzt den Satz "Er verschwindet nach dem ersten vollständigen Zähllauf" in D-43-06.
+
+- **D-43-13:** KEIN öffentliches GitHub-Pre-Release. mbozem hat ein GitHub-Konto; der Testbuild geht als Workflow-Artefakt (signiertes Companion-Archiv) plus unveränderliches Image :<sha> und eine Test-info.xml an ihn. Der Kommentar erklärt den Download (angemeldet) und nennt den Ablauf der Artefakte (Aufbewahrung in Tagen).
+
 ### Claude's Discretion
 - Wo genau der Sweep in run_once eingehängt wird (vor dem Quiet-Gate mit eigener Fälligkeit oder als eigener Zweig nach der Mountliste), solange D-43-01/02 gelten.
 - Format der storage-zu-key-Map und der leaveOut-Liste im PHP-Container-Vertrag, Bandgrößen, Indexe für die distinct-Zählung.
