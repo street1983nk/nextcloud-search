@@ -163,6 +163,15 @@ _FIRST_ERROR_STATUS = 400
 # the delivery refunded and the back-off, instead of a verdict per file.
 _OUTAGE_STATUS = frozenset({408, 429, 502, 503, 504})
 
+# The answer "this file could not be opened" (D-43-16, plan 43-17). Only the
+# cannotOpen branch of the gateway answers 422: no first byte within its
+# deadline, zero bytes for a file with a size, a read that failed, or a file in
+# use on the storage. It is no status a proxy sends and no state of the
+# instance, so the poller judges the file skipped(unreadable) and never counts
+# it towards an outage (plan 43-18). A 1.6.2 companion answers 422 only when
+# fopen returned false. It still travels as GatewayRefused, the poller decides.
+GATEWAY_UNREADABLE_STATUS: Final = 422
+
 # Fallbacks for the two environment variables the client library uses to
 # configure transport. Mirrored rather than invented, so an admin who sets
 # NPA_NC_CERT for a private CA or NPA_TIMEOUT_DAV for a slow disk keeps both
@@ -295,7 +304,8 @@ class GatewayRefused(NextcloudException):
     Any status from 400 on except the two of "not yours" (None) and the five
     of a proxy (an outage): the gateway is up and has said something about
     this file, so the poller ends the file with failed(gateway_error) and the
-    pass goes on (issue #36, Befund B). This is where the case of the report
+    pass goes on (issue #36, Befund B); a 422 (:data:`GATEWAY_UNREADABLE_STATUS`)
+    ends it with skipped(unreadable) instead (D-43-16). This is where the case of the report
     lands: a file on a mount whose storage is not available, where fopen
     throws StorageNotAvailableException and the gateway answers 500 out of its
     catch-all branch. A 404 for such a mount is deliberately not introduced on

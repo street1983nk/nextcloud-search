@@ -364,6 +364,12 @@ STATE_REASONS: Final[Mapping[str, frozenset[str | None]]] = {
 # reconcile asks of such a row, how often this version was refused, and not the
 # life story of the file. Every other write counts on as before, a refusal on
 # the same etag after a refusal included. No schema change: the column exists.
+#
+# Since plan 43-18 (D-43-16) a refusal is either pair: failed(gateway_error) or
+# skipped(unreadable), the container verdict of a gateway 422. Both are one
+# streak on the same etag, so a sharing violation or a file that was offline
+# is asked again a few times instead of staying unreadable for good, and a
+# change between 500 and 422 does not reset the cap.
 _RECORD_SQL: Final = """
 INSERT INTO files (file_id, storage_id, root_id, path, title, mime, size, mtime,
                    etag, content_hash, text_chars, state, reason, attempts, ocr_used,
@@ -385,8 +391,11 @@ ON CONFLICT(file_id) DO UPDATE SET
     state         = excluded.state,
     reason        = excluded.reason,
     attempts      = CASE
-        WHEN excluded.state = 'failed' AND excluded.reason = 'gateway_error'
-             AND NOT (files.state = 'failed' AND files.reason = 'gateway_error' AND files.etag IS excluded.etag)
+        WHEN ((excluded.state = 'failed' AND excluded.reason = 'gateway_error')
+              OR (excluded.state = 'skipped' AND excluded.reason = 'unreadable'))
+             AND NOT (((files.state = 'failed' AND files.reason = 'gateway_error')
+                       OR (files.state = 'skipped' AND files.reason = 'unreadable'))
+                      AND files.etag IS excluded.etag)
         THEN 1
         ELSE files.attempts + 1
     END,
@@ -1514,7 +1523,7 @@ class Store:
         return reasons
 
     def gateway_retry_candidates(self, file_ids: Sequence[int], limit: int) -> set[int]:
-        """The living rows among these files that carry a short streak of gateway_error.
+        """The living rows among these files that carry a short streak of refusals.
 
         The question of the capped retry of plan 41-01 (E-40-07-03, post audit
         F-40N-02, worker/reconcile.py ``_compare``): a file the gateway refused
@@ -1522,6 +1531,10 @@ class Store:
         in ``attempts`` (see :meth:`record`), is at most ``limit``. Asked once
         per page for the rows with an unmoved etag, banded like
         :meth:`known_skip_reasons` and for the same reason.
+
+        A refusal is failed(gateway_error) or skipped(unreadable), the
+        container verdict of a gateway 422 (D-43-16, plan 43-18): one streak,
+        one cap, no other reason.
         """
         if not file_ids:
             return set()
@@ -1535,8 +1548,10 @@ class Store:
             placeholders = ",".join("?" * len(band))
             rows = self._conn.execute(
                 # Placeholders only, as in known_etags above.
-                "SELECT file_id FROM files WHERE deleted_at IS NULL AND state = 'failed' "  # noqa: S608
-                f"AND reason = 'gateway_error' AND attempts <= ? AND file_id IN ({placeholders})",
+                "SELECT file_id FROM files WHERE deleted_at IS NULL "  # noqa: S608
+                "AND ((state = 'failed' AND reason = 'gateway_error') "
+                "OR (state = 'skipped' AND reason = 'unreadable')) "
+                f"AND attempts <= ? AND file_id IN ({placeholders})",
                 (limit, *band),
             )
             candidates.update(int(file_id) for (file_id,) in rows)
@@ -2205,11 +2220,15 @@ def embedded_in_storages(state_db: Path, vectors_db: Path, storage_ids: Sequence
 # refused), excluded (an exclusion rule, subtracted as excluded) and the
 # container verdict gone. too_large stays in: a file the container refused for
 # its size is a file the admin expects to find.
+# unreadable is out as well since plan 43-18 (D-43-16): the container writes it
+# for a gateway 422 and acknowledges it, and the PHP side counts that document
+# out of oc_findling_file_state, with N1, in notReadable and in the
+# denominator. Counted here too, it would stand twice in the denominator.
 _COVERAGE_DOCUMENTS: Final = "f.state = 'indexed'"
 _COVERAGE_EMBEDDED: Final = "f.state = 'indexed' AND EXISTS (SELECT 1 FROM vec.chunks c WHERE c.file_id = f.file_id)"
 _COVERAGE_NO_VECTORS: Final = "0"
 _COVERAGE_JUDGED: Final = (
-    "NOT (f.state = 'skipped' AND COALESCE(f.reason, '') IN ('mime_not_allowed', 'excluded', 'gone'))"
+    "NOT (f.state = 'skipped' AND COALESCE(f.reason, '') IN ('mime_not_allowed', 'excluded', 'gone', 'unreadable'))"
 )
 
 # The sets the statement starts from. listed is the mount list without ids

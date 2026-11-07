@@ -108,7 +108,9 @@ class Reason(StrEnum):
     GONE = "gone"
     IMAGE_NOT_OCRABLE = "image_not_ocrable"  # a picture too small or too flat to carry text
     EXCLUDED = "excluded"  # an admin rule keeps this file out of the index, the file itself is untouched
-    UNREADABLE = "unreadable"  # written by the PHP half: no user asked may read it, a Team Folder ACL (#14)
+    # written by the PHP half: no user asked may read it, a Team Folder ACL (#14);
+    # also written by the container for a gateway 422, D-43-16
+    UNREADABLE = "unreadable"
     SYSTEM_FILE = "system_file"  # macOS AppleDouble (._) or Office lock stub (~$), no document content (#18, #22)
     LEGACY_FORMAT = "legacy_format"  # an old OLE container under an OOXML extension
     # a variant of a readable format the reader cannot map: an image encoding, Word 95, BIFF before 5

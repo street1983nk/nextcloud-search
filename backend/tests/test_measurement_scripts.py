@@ -1237,8 +1237,13 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # cases. No file went, so PHP_FILES_TODAY moves to 129. Recomputed independently with find, sort, tr
 # and sha256sum over the CRLF normalised tree: e67c5d95... both ways; the same pipeline over git
 # archive HEAD before the plan gave abd32292.
+# Moved on 2026-11-07 by Plan 43-18 (a gateway 422 is an unreadable file): tests/Unit/
+# CoverageTopologyParityTest.php reads the new fixture case gateway_unreadable. No file came or
+# went, so PHP_FILES_TODAY stays at 129. Recomputed independently with find, sort, tr and sha256sum
+# over the CRLF normalised tree: 7cc9aa68... both ways; the same pipeline over git archive HEAD
+# before the plan gave e67c5d95.
 PHP_FILES_TODAY = 129
-PHP_TREE_HASH_TODAY = "e67c5d95859f156c8178c5ca27876bd371dc06f7064f473f16afe8452d911591"
+PHP_TREE_HASH_TODAY = "7cc9aa68bf4bafeb49029f17c5e648f7d34cd8c30f04188a39940e197d36b900"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
@@ -2618,8 +2623,18 @@ PHP_TREE_HASH_TODAY = "e67c5d95859f156c8178c5ca27876bd371dc06f7064f473f16afe8452
 # not move. Recomputed independently with find, sort, tr and sha256sum over the
 # CRLF normalised tree: 1c5a8954... both ways, and the same pipeline over HEAD
 # before the step gave d7627c12... (positive control).
+#
+# Moved on 2026-11-07 by Plan 43-18 (a gateway 422 is an unreadable file):
+# nc/client.py names GATEWAY_UNREADABLE_STATUS, worker/poller.py judges a 422
+# skipped(unreadable) and never counts it towards an outage, store/repo.py
+# leaves unreadable out of judged and treats failed(gateway_error) and
+# skipped(unreadable) as one streak of refusals, extract/errors.py gains a
+# comment. No file came or went, so PACKAGE_FILES_TODAY stays at 83. The PHP
+# pair moves on its own (see there). Recomputed independently with find, sort,
+# tr and sha256sum over the CRLF normalised tree: 2908e94b... both ways, and the
+# same pipeline over HEAD before the step gave 1c5a8954... (positive control).
 PACKAGE_FILES_TODAY = 83
-PACKAGE_TREE_HASH_TODAY = "1c5a8954a06c94e9bed40e638b8a89cdef6adcd09eda51a473134c4d998f5bb2"
+PACKAGE_TREE_HASH_TODAY = "2908e94bc47220eb5dc82491ebce61300a9d66575673a9f079f784d3b01d6ed3"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

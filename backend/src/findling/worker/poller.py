@@ -97,6 +97,7 @@ from findling.index.wordlist_nl import dutch_digest_for, dutch_mark
 from findling.index.writer import FLUSH_PAUSED_LOW_DISK, IndexBatchWriter, IndexRecord, UnwritableRecord
 from findling.nc import client as nc_client
 from findling.nc.client import (
+    GATEWAY_UNREADABLE_STATUS,
     AsyncNextcloudApp,
     FileTooLargeError,
     GatewayClient,
@@ -1746,8 +1747,11 @@ class Poller:
             # for a storage that may be back tomorrow. The count below turns
             # the same refusal for many files over several storages into an
             # outage (E-40-06-02, E-40-07-01); one storage stays file by file.
+            # A 422 is the gateway saying it could not open the file (D-43-16):
+            # skipped(unreadable), counted under "not readable" and never
+            # towards an outage.
             self._count_refusal(refused, job)
-            self._collect(job, ExtractionOutcome.failed(Reason.GATEWAY_ERROR), done, failed, verdicts)
+            self._collect(job, _refusal_outcome(refused), done, failed, verdicts)
             return 0
         except ShortRead:
             # Short twice in a row, and the two answers differ; the same short
@@ -1917,8 +1921,9 @@ class Poller:
             # The rule of the content branch: one verdict for the one file the
             # gateway refused, and the count of E-40-06-02. Counted in the loop
             # thread like everything else of a task, so no lock is needed.
+            # A 422 is skipped(unreadable) here as well (D-43-16).
             self._count_refusal(refused, job)
-            return _ScanResult(job, ExtractionOutcome.failed(Reason.GATEWAY_ERROR))
+            return _ScanResult(job, _refusal_outcome(refused))
         if read is None:
             return _ScanResult(job, ExtractionOutcome.skipped(Reason.GONE))
 
@@ -2549,7 +2554,16 @@ class Poller:
         pass gathered. The refused rows are charged (W-1, owner decision
         29.10.), every other row of the pass goes back refunded; the reasoning
         stands at :class:`_RefusalsPiledUp`.
+
+        A 422 returns before any count (D-43-16, owner decision F4): many
+        unreadable files are many files and no outage, so they never reach
+        the threshold, and their rows are never charged. When the pass
+        escalates on other refusals, a 422 row goes back refunded with the
+        unjudged rows and its verdict lapses with the abort (W11). Every other
+        status escalates as in E-40-06-02 and E-40-07-01.
         """
+        if refused.status == GATEWAY_UNREADABLE_STATUS:
+            return
         self._refused_rows.add(job.queue_id)
         self._refused_jobs[job.queue_id] = job
         count = self._refusals.get(refused.status, 0) + 1
@@ -2814,6 +2828,19 @@ def default_poller(*, marks_stamped: Callable[[], None] | None = None) -> Poller
     already the place that hands the reading side into the rebuild.
     """
     return Poller(marks_stamped=marks_stamped)
+
+
+def _refusal_outcome(refused: GatewayRefused) -> ExtractionOutcome:
+    """The verdict of a refusal: skipped(unreadable) for a 422, failed(gateway_error) else.
+
+    Only the cannotOpen branch of the gateway answers 422 (D-43-16), so that
+    file is not readable for the user it was fetched for, which the admin page
+    counts under "not readable" (D-43-11). A 500 out of StorageNotAvailable, a
+    401, a 403 and every other status from 400 on stay failed(gateway_error).
+    """
+    if refused.status == GATEWAY_UNREADABLE_STATUS:
+        return ExtractionOutcome.skipped(Reason.UNREADABLE)
+    return ExtractionOutcome.failed(Reason.GATEWAY_ERROR)
 
 
 def _skip_verdicts(verdicts: Sequence[_Verdict], handover: Sequence[int]) -> dict[int, str]:
