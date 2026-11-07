@@ -24,3 +24,5 @@ Vollzug Fix 2: Push e038ee13, die vier ausgelösten Push-Workflows grün; genau 
 Freigabe Diagnose-Patch, Push und Dispatch 43-07 Fix 3: "Go" (2026-11-07, Claude Code Terminal) Entscheid: ja
 
 Umfang Fix 3: Diagnose im Harness (Gateway-Probe Home und SMB vor dem Crawl, Abbruch nach drei Gateway-Ausfällen mit Prozessliste, Log von php -S in eine Datei), genau ein Push auf origin main, genau ein Dispatch von "Coverage end to end", wenn die Push-Workflows grün sind.
+
+Vollzug Fix 3: Push 62d88c9c, sechs Push-Workflows grün; genau ein Dispatch "Coverage end to end", Lauf 42401892996, rot in allen vier Varianten, jetzt nach rund 6 Minuten statt 25. Gateway-Proben vor dem Crawl grün (Home und SMB je 200 in unter 0,13 s). Befund: im ersten Indexierungsdurchgang liefert der Gateway die Dateien 87 bis 90 für bob, die nächste Dateianfrage wird angenommen und nie beendet; je Durchgang bleibt ein PHP-Worker mit zwei smbclient-Prozessen (ohne smbclient-Erweiterung, icewind/smb mit Binary) hängen.
