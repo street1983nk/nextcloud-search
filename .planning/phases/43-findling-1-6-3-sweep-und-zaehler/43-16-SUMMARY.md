@@ -112,3 +112,10 @@ Keine neue Oberfläche außer der GET-Route aus 43-15 (nur IDs hinaus, nur Hex h
 
 - backend/src/findling/worker/doc_keys.py und backend/tests/test_doc_keys.py vorhanden; grep-Prüfungen des Plans (doc_key_backfill_after, `DOC_KEY_GENERATION: Final = 1`, "doc key verify", `DOC_KEY_INCOMPLETE_RETRIES: Final = 3`, `SCHEMA_VERSION: Final = "2"`) treffen.
 - Commits 94484ae1 (test) und 308e8ebb (feat) im Log, Autor street1983nk <k.cherif@outlook.de>, kein Trailer, 0 Treffer für closes/fixes/resolves #N, keine Löschungen.
+
+## Nachtrag 07.11. (Befund aus dem 43-07-Checkpoint, Owner: "Erst fixen, dann pushen")
+
+- **Befund G1 nach Rückweg:** Ein Prüflauf ohne Korrektur schrieb `idle<epoch>` in `doc_key_backfill_after` und ruhte einen Tag. 1.6.2 lässt den Meta-Wert beim Rückweg stehen; eine Umbenennung unter 1.6.2 behält den alten Schlüssel. Nach dem zweiten Update auf 1.6.3 hätte der Prüflauf bis zu einem Tag geruht, der veraltete Schlüssel wäre so lange geblieben (Fall `second_upgrade_rename` der Abnahme 43-07).
+- **Fix:** `DocKeyBackfill` liest eine gespeicherte Ruhe in der ersten Runde eines neuen Prozesses als nicht vorhanden (Ruhe gelöscht, Prüflauf ab 0); innerhalb eines laufenden Prozesses gilt die Ruhe weiter. Der Prozess hält genau ein Objekt (`main._DOC_KEYS`).
+- **TDD:** RED df7905fc (`test_after_a_restart_a_stored_rest_is_ignored_and_a_stale_key_is_corrected_in_the_first_round`, `test_the_rest_still_holds_within_one_running_process`, beide rot), GREEN im fix-Commit, tests/test_doc_keys.py 65 passed.
+- **Baumhash PACKAGE:** 83 Dateien, d7627c12... -> 1c5a8954a06c94e9bed40e638b8a89cdef6adcd09eda51a473134c4d998f5bb2, zweimal gerechnet (Rezept 40b-baumhash.py und find | LC_ALL=C sort | tr -d '\r' | sha256sum), Positivkontrolle über `git archive HEAD` vor dem Schritt: d7627c12. PHP-Paare unberührt.
