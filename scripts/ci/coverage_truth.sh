@@ -227,18 +227,28 @@ a1_rows_checked() {
 # is asked through the unified search with the Findling provider, once per user
 # that still exists; a word counts as found when one entry carries the file
 # name the word was written into. Prints the number of words found and writes
-# the missing ones to ${WORK}/crosscheck-missing.txt.
+# the missing ones to ${WORK}/crosscheck-missing.txt. For every missing name
+# ${WORK}/crosscheck-raw.txt gets one line "<name>\t<short form>" with the
+# answer for the first user: the number of entries and their titles (file
+# names of the test topology, never content), or what came back instead of a
+# result list. Nothing of it goes to stdout, the caller reads the count there.
 search_crosscheck() {
-  local words="$1" word name user found=0
+  local words="$1" word name user first found=0
   shift
+  first="${1:-}"
   : > "${WORK}/crosscheck-missing.txt"
+  : > "${WORK}/crosscheck-raw.txt"
   while IFS=$'\t' read -r word name; do
     local hit=0
+    rm -f "${WORK}/first-hit.json"
     for user in "$@"; do
       curl -s -G -u "${user}:$(password_of "${user}")" \
         -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
         --data-urlencode "term=${word}" \
         "${NC_URL}/ocs/v2.php/search/providers/findling/search" -o "${WORK}/hit.json" || true
+      if [ "${user}" = "${first}" ]; then
+        cp "${WORK}/hit.json" "${WORK}/first-hit.json" 2> /dev/null || true
+      fi
       if jq -e --arg name "${name}" '[.ocs.data.entries[]? | select(.title == $name)] | length > 0' \
         "${WORK}/hit.json" > /dev/null 2>&1; then
         hit=1
@@ -249,9 +259,29 @@ search_crosscheck() {
       found=$((found + 1))
     else
       printf '%s\n' "${name}" >> "${WORK}/crosscheck-missing.txt"
+      printf '%s\t%s\n' "${name}" "$(crosscheck_short_form "${first}" "${WORK}/first-hit.json")" \
+        >> "${WORK}/crosscheck-raw.txt"
     fi
   done < "${words}"
   echo "${found}"
+}
+
+# crosscheck_short_form <user> <answer file>: "<user>: <n> entries [titles]",
+# or the OCS status and the first bytes when the answer is no result list.
+crosscheck_short_form() {
+  local user="$1" answer="$2" short
+  if [ ! -s "${answer}" ]; then
+    printf '%s: no answer' "${user}"
+    return 0
+  fi
+  if short=$(jq -er '.ocs.data.entries | if type == "array" then "\(length) entries [\(map(.title // "?") | join(", "))]" else empty end' \
+    "${answer}" 2> /dev/null); then
+    printf '%s: %s' "${user}" "${short}"
+    return 0
+  fi
+  printf '%s: no entry list, ocs status %s, %s' "${user}" \
+    "$(jq -r '.ocs.meta.statuscode // "none"' "${answer}" 2> /dev/null || echo unparsable)" \
+    "$(head -c 120 "${answer}" | tr -d '\r\n')"
 }
 
 # -- comparison --------------------------------------------------------------------

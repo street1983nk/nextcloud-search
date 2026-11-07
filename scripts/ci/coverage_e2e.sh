@@ -147,8 +147,9 @@ head_under_test() {
 # head_companion: the PHP half of the head answers the gateway right now. True
 # for gate-crawl and gate-queue, for upgrade only between an update to the
 # head and the rollback (companion_updated), never for v1.6.2. The probes and
-# the verdicts of plan 43-18 depend on it: a 1.6.2 companion answers 400 for
-# the empty file and its container judges a 422 failed/gateway_error.
+# the verdicts of plan 43-18 depend on it: the container of 1.6.2 judges a 422
+# failed/gateway_error. The empty file is no tell, both companions answer it
+# with 200 and zero bytes (run 42418778026).
 companion_updated=0
 head_companion() {
   case "${VARIANT}" in
@@ -441,7 +442,7 @@ hang_report() {
 }
 
 # The time a probe may take (plan 43-18, B2). The nudge of the head companion
-# ends smbclient in under one second, and the product deadline of 30 s must
+# ends smbclient in under one second, and the product deadline of 80 s must
 # never be the answer here; a probe at or over this limit is a failure. Not for
 # gross.bin, which is slow on purpose (large_probe).
 PROBE_MAX_SECONDS=10
@@ -479,7 +480,7 @@ probe_problem() {
 
 # gateway_probe <label> <uid> <file id> <expected status> [collect]: one fetch
 # that must answer the expected status in under PROBE_MAX_SECONDS; for
-# leer.txt behind the head companion it must also carry zero bytes.
+# leer.txt it must also carry zero bytes, from either companion.
 gateway_probe() {
   local label="$1" uid="$2" fid="$3" expected="$4" mode="${5:-}" result code seconds size problem=""
   [ -n "${fid}" ] || fail "gateway probe ${label}: no file id"
@@ -491,19 +492,25 @@ gateway_probe() {
   if awk -v took="${seconds}" -v limit="${PROBE_MAX_SECONDS}" 'BEGIN { exit !(took + 0 >= limit + 0) }'; then
     problem="${problem:+${problem}, }${seconds} s, the limit is ${PROBE_MAX_SECONDS} s"
   fi
-  if [ "${fid}" = "${leer_fid}" ] && head_companion && [ "${size}" != "0" ]; then
+  if [ "${fid}" = "${leer_fid}" ] && [ "${size}" != "0" ]; then
     problem="${problem:+${problem}, }${size} bytes for the empty file"
   fi
   [ -z "${problem}" ] || probe_problem "${label}" "${problem}" "${mode}"
 }
 
 # throttle_smb / unthrottle_smb: SMB traffic on 127.0.0.1:445 (both
-# directions) down to about 100 KB/s, one htb class with a filter on the port,
+# directions) down to about 200 KB/s, one htb class with a filter on the port,
 # everything else on lo unshaped. The EXIT trap removes it in every case.
+# 200 KB/s and not less: smbclient hands a get on in whole SMB2 read blocks of
+# 8 MiB (Samba source3/libsmb/clireadwrite.c:363-366), so one block takes about
+# 42 s here, a long silence before the first data and between the two blocks
+# of gross.bin, and still well inside the 80 s deadlines of the gateway. At
+# 100 KB/s a block takes about 84 s, past the deadline (run 42418778026).
+THROTTLE_RATE=1600kbit
 throttle_smb() {
   sudo tc qdisc add dev lo root handle 1: htb default 10 || return 1
   sudo tc class add dev lo parent 1: classid 1:10 htb rate 10gbit \
-    && sudo tc class add dev lo parent 1: classid 1:20 htb rate 800kbit ceil 800kbit \
+    && sudo tc class add dev lo parent 1: classid 1:20 htb rate "${THROTTLE_RATE}" ceil "${THROTTLE_RATE}" \
     && sudo tc filter add dev lo parent 1: protocol ip prio 1 u32 match ip dport 445 0xffff flowid 1:20 \
     && sudo tc filter add dev lo parent 1: protocol ip prio 1 u32 match ip sport 445 0xffff flowid 1:20 \
     || {
@@ -520,6 +527,11 @@ trap unthrottle_smb EXIT
 # SMB is throttled (W1, W1b), so pauses of up to 200 ms and many empty reads
 # really happen in the wrapped mode. 200, the bytes equal to the source, no
 # hang; the number of reads against MAX_READS is the PHPUnit case of 43-17.
+# 10 MiB at 200 KB/s are about 52 s; a throttled fetch under
+# LARGE_MIN_SECONDS did not wait for a block and tested no long silence. The
+# curl limit leaves room for the two deadlines and stays far from the job.
+LARGE_MIN_SECONDS=40
+LARGE_MAX_SECONDS=150
 large_probe() {
   local fid="$1" mode="${2:-}" want have result code seconds size throttled=0 problem=""
   [ -n "${fid}" ] || fail "gateway probe large: no file id"
@@ -529,7 +541,7 @@ large_probe() {
   else
     note "tc could not throttle port 445 on lo, gross.bin runs unthrottled"
   fi
-  result=$(gateway_curl alice "${fid}" "${WORK}/gross.out" 240)
+  result=$(gateway_curl alice "${fid}" "${WORK}/gross.out" "${LARGE_MAX_SECONDS}")
   unthrottle_smb
   read -r code seconds size <<< "${result:-000 0 0}"
   have=$(sha256sum "${WORK}/gross.out" 2> /dev/null | cut -d' ' -f1 || true)
@@ -538,6 +550,10 @@ large_probe() {
   rows+=("| probe | large gross.bin (alice), throttled=${throttled} | 200, same sha256 | ${code} in ${seconds} s |")
   [ "${code}" = "200" ] || problem="http ${code} instead of 200"
   [ "${have}" = "${want}" ] || problem="${problem:+${problem}, }the bytes differ from the source"
+  if [ "${throttled}" = "1" ] \
+    && awk -v took="${seconds}" -v floor="${LARGE_MIN_SECONDS}" 'BEGIN { exit !(took + 0 < floor + 0) }'; then
+    problem="${problem:+${problem}, }${seconds} s throttled, under ${LARGE_MIN_SECONDS} s, so no long silence was tested"
+  fi
   [ -z "${problem}" ] || probe_problem large "${problem}" "${mode}"
 }
 
@@ -989,15 +1005,12 @@ gateway_probe locked-for-bob bob "$(ncdb "SELECT fileid FROM oc_filecache
                                             WHERE storage = ${daten_bob} AND name = 'gesperrt-bob.txt' LIMIT 1;")" 422 collect
 gateway_probe locked-for-all alice "$(ncdb "SELECT fileid FROM oc_filecache
                                               WHERE storage = ${daten_alice} AND name = 'gesperrt-alle.txt' LIMIT 1;")" 422 collect
-# The empty file: 200 with zero bytes from the head companion; 400 from the
-# 1.6.2 companion, whose StreamResponse.php:47-49 with Output.php:37 answers an
-# empty stream that way. The positive control that the probe tells the old
-# companion from the new one (B2, T-43-62).
-if head_companion; then
-  gateway_probe empty alice "${leer_fid}" 200 collect
-else
-  gateway_probe empty alice "${leer_fid}" 400 collect
-fi
+# The empty file: 200 with zero bytes from both companions. The plan assumed
+# 400 from the 1.6.2 companion (StreamResponse.php:47-49 with Output.php:37);
+# run 42418778026 measured 200 with 0 bytes on v1.6.2/native and on
+# upgrade/native, so the empty file tells the companions apart no longer. The
+# probe still holds both to a readable answer without bytes (B2, T-43-62).
+gateway_probe empty alice "${leer_fid}" 200 collect
 if [ "${SMB_MODE}" = "wrapped" ]; then
   large_probe "$(ncdb "SELECT fileid FROM oc_filecache WHERE storage = ${daten_alice} AND name = 'gross.bin' LIMIT 1;")" collect
 fi
@@ -1300,6 +1313,19 @@ rows+=("| B | words found through the search (W4) | ${b_num_truth} | ${found} |"
 check "search cross check" "${b_num_truth}" "${found}"
 if [ -s "${WORK}/crosscheck-missing.txt" ]; then
   note "files whose word the search does not find: $(sort "${WORK}/crosscheck-missing.txt" | tr '\n' ' ')"
+  # Run 42418778026 listed 45 names for 8 missing words: most of them are
+  # never searchable (backlog images, locked files). The names in the
+  # numerator truth are the misses that count; each missing name comes with
+  # the short form of the raw answer for the first user (entries and titles,
+  # file names of the test topology, no content).
+  in_truth=$(cut -f2 "${WORK}/numerator.tsv" | sed 's#.*/##' | sort -u)
+  while IFS=$'\t' read -r miss_name miss_raw; do
+    if printf '%s\n' "${in_truth}" | grep -qxF -- "${miss_name}"; then
+      note "search miss in the numerator truth: ${miss_name}, ${miss_raw}"
+    else
+      note "search miss outside the numerator truth: ${miss_name}, ${miss_raw}"
+    fi
+  done < "${WORK}/crosscheck-raw.txt"
 fi
 
 # ===================================================================================
