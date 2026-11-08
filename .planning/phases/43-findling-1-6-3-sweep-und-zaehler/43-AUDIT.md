@@ -358,3 +358,23 @@ Security scans, Multi-arch, Scorecard; PHP lief pfadbedingt nicht, Beleg bleibt
 42513966089 auf unveraendertem php/). Dispatch "Coverage end to end"
 42525415627: alle fuenf Beine gruen. Der MEDIUM-Fix F-43A-01 ist damit auch
 end to end belegt.
+
+## Fix-Delta nach dem Audit (09.11.2026)
+
+Die rc-Branch-Läufe 42530680761 (HaRP) und 42530680760 (Python gates) deckten
+zwei HARNESS-Fehler auf, kein Produktcode ist berührt; `audited_head` 37b518d6
+bleibt unverändert gültig.
+
+| Commit | Inhalt |
+|---|---|
+| 9f99df1f | `fix(43-10)`: das F2-Gate in tests/test_phase36_audit.py liest jetzt auch eine Prerelease-Version (`[0-9.]+` traf 1.6.3-rc.1 nicht, AssertionError in Lauf 42530680760); `_version()` ordnet eine Prerelease UNTER ihr Release (version_compare-Semantik: 1.6.2 <= 1.6.3-rc.1 < 1.6.3); Selbsttest mit dem rc-Beispiel erst rot gesehen, dann grün |
+| bcab9012 | `ci(43-10)`: Zusicherung 18 (doc key backfill, D-43-14) pollt das Container-Log alle 5 s mit 240-s-Deckel statt genau einmal (Race gegen die Worker-Kadenz: Lauf 42513966073 prüfte bei Sekunde 62 und bestand, 42530680761 bei Sekunde 61 und scheiterte); bei Ablauf steht der bestehende ::error:: unverändert; dafür wandert der Schritt "Store upgrade 1" nach dem Muster 41-08 in scripts/ci/upgrade_from_release_assets.sh (deploy-harp.yml stand 36 Bytes unter dem 512000-Byte-Gate, jetzt 505990 Bytes, 6010 darunter); Wächter in test_upgrade_seed_steps.py erst rot gesehen, MOVED_STEPS nachgeführt |
+
+Nur Workflow, Tests und scripts/ci; backend/src, php/ und l10n unberührt
+(`git diff --stat 37b518d6..` belegt es). Baumhash-Journal unberührt, denn das
+Rezept hasht nur backend/src/findling und php/. Gates am neuen Kopf lokal
+gruen: ruff check, ruff format --check, pyright (latest) 0 errors, vulture 80
+Exit 0; pytest test_phase36_audit (19 passed), test_workflow_size/pins/
+contexts/tag_triggers, test_lockstep_versions, test_upgrade_seed_steps und die
+übrigen Workflow-Wächter (zusammen 476 passed, 8 skipped); bash -n für das
+neue Skript, YAML-Parse von deploy-harp.yml.

@@ -85,6 +85,49 @@ Sonst exakt nach Plan.
 - **Task 2 (checkpoint:decision, Owner):** Freigaben für (1) Push main, (2) Push rc/1.6.3-rc.1, (3) Dispatch release.yml auf dem Branch mit create_release=false, (4) Dispatch rc-version-proof.yml. 43-FREIGABEN.md ist absichtlich NICHT beschrieben; Zeilen-Wortlaute siehe Koordinator-Bericht.
 - **Task 3 (nach Freigaben):** git pull --rebase, Push main, Security-Workflow grün; Push Branch; release.yml-Dispatch (liefert archive_run_id, Bytezahl, Verified OK, SHA-256, expires_at für `Aufbewahrung: 30 Tage, Ablauf <JJJJ-MM-TT>`); Proof-Dispatch mit image_sha 655fe197...; A5/A6 und Store-Erkennung wörtlich in 43-TESTBUILD.md; bei failed: Abschnitt "Befund und Alternativen", Stopp, Entscheid in 43-11.
 
+## Fix-Delta nach dem Audit (09.11.2026)
+
+Die rc-Branch-Läufe 42530680761 (HaRP) und 42530680760 (Python gates) waren
+rot; das Risiko "Rot dort wäre ein Befund" unten ist damit eingetreten. Beide
+Ursachen lagen im HARNESS, kein Produktcode ist berührt, audited_head 37b518d6
+gilt unverändert (Details in 43-AUDIT.md, Abschnitt "Fix-Delta nach dem
+Audit").
+
+| Branch | Commit | Betreff |
+| --- | --- | --- |
+| main (lokal, NICHT gepusht) | 9f99df1f | fix(43-10): the F2 gate reads a prerelease version and orders it below its release |
+| main (lokal, NICHT gepusht) | bcab9012 | ci(43-10): assurance 18 waits bounded for the backfill line |
+
+- **Fix 1 (Lauf 42530680761):** Zusicherung 18 in deploy-harp.yml grepte das
+  Container-Log genau einmal und verlor das Rennen gegen die Worker-Kadenz
+  (grüner Lauf bei Sekunde 62, roter bei Sekunde 61). Jetzt Poll alle 5 s,
+  Deckel 240 s, bei Ablauf der bestehende ::error::. Platz dafür: Schritt
+  "Store upgrade 1" nach Muster 41-08 in
+  scripts/ci/upgrade_from_release_assets.sh ausgelagert; deploy-harp.yml
+  505990 Bytes (vorher 511964, Gate 512000), MOVED_STEPS nachgeführt,
+  Wächter test_the_backfill_assurance_waits_bounded_instead_of_looking_once
+  erst rot gesehen.
+- **Fix 2 (Lauf 42530680760):** das F2-Gate in test_phase36_audit.py las
+  `[0-9.]+` und traf 1.6.3-rc.1 nicht (version is None, AssertionError).
+  Jetzt optionales Prerelease-Suffix und _version() mit
+  version_compare-Ordnung (1.6.2 <= 1.6.3-rc.1 < 1.6.3); Selbsttest mit dem
+  rc-Beispiel erst rot gesehen. test_lockstep_versions brauchte nichts: sein
+  _SEMVER trägt den Prerelease-Teil des Store-Schemas bereits.
+- **rc/1.6.3-rc.1 neu aufgesetzt:** alter Stand f6c5a6ce verworfen, Branch
+  auf den neuen main-Kopf gesetzt (der Commit dieses Nachtrags), wieder exakt
+  drei Versionsstellen auf 1.6.3-rc.1 plus
+  testbuild/findling_backend-1.6.3-rc.1-info.xml (Inhalt vom alten Branch,
+  image-tag 655fe197cc4363e7da2f7c6a7e8000c561f3b31e). Diff gegen den neuen
+  main-Kopf: nur die drei Versionszeilen und testbuild/. Commit-SHA im
+  Koordinator-Bericht; NICHT gepusht.
+- **Gates am neuen Kopf (lokal, alle grün):** ruff check, ruff format
+  --check, pyright (latest) 0 errors, vulture 80; pytest
+  test_phase36_audit, test_workflow_size/pins/contexts/tag_triggers,
+  test_lockstep_versions, test_upgrade_seed_steps und die übrigen
+  Workflow-Wächter; bash -n für das neue Skript, YAML-Parse deploy-harp.yml.
+  Baumhash-Journal unberührt (Rezept hasht nur backend/src/findling und
+  php/).
+
 ## Risiken
 
 - A5/A6 sind inhaltlich offen bis zum Proof-Lauf (LOW-Quelle 43-RESEARCH.md: version_compare-Verhalten bei rc-Versionen in Nextcloud/AppAPI dort nicht geprüft; die PHP-Semantik spricht dafür, der Lauf beweist es).
