@@ -695,19 +695,30 @@ locked_diagnosis() {
     "$(grep -o 'refusal streaks renewed once after the update, rows=[0-9]*' "${EXAPP_LOG}" | tail -n 2 | tr '\n' ' ' || true)"
 }
 
-# judge_locked <label> <state/reason> <log mark> [container]: every living
-# container row of gesperrt-alle.txt and the row of bob of gesperrt-bob.txt
-# carry the verdict, oc_findling_file_state as well (unless container), and no
-# pass since the mark was taken as an outage (B3).
+# judge_locked <label> <state/reason> <log mark> [container] [gone storage]:
+# every living container row of gesperrt-alle.txt and the row of bob of
+# gesperrt-bob.txt carry the verdict, oc_findling_file_state as well (unless
+# container), and no pass since the mark was taken as an outage (B3). A gone
+# storage is one the topology change removed before this judgement: its copy of
+# gesperrt-alle.txt can never be judged again, so it leaves the verdict count
+# and must instead stand skipped/gone in the return channel (the immediate
+# gone of issue 25, proven by run 42498330790: the row of carol was the one of
+# four that stayed failed/gateway_error in the container and gone towards
+# Nextcloud).
 judge_locked() {
-  local label="$1" want="$2" mark="$3" only="${4:-}" all bob ids rows_st match_st rows_nc match_nc outage_lines
+  local label="$1" want="$2" mark="$3" only="${4:-}" gone_sid="${5:-}" all bob ids gone not_gone="" rows_st match_st rows_nc match_nc gone_rows gone_match outage_lines
   all=$(locked_ids gesperrt-alle.txt)
   bob=$(locked_ids gesperrt-bob.txt "${daten_bob}")
   [ -n "${all}" ] && [ -n "${bob}" ] || fail "no file cache row of the locked files"
   ids="${all},${bob}"
   locked_diagnosis "${label}" "${ids}"
-  rows_st=$(statedb "SELECT COUNT(*) FROM files WHERE deleted_at IS NULL AND file_id IN (${ids});")
-  match_st=$(statedb "SELECT COUNT(*) FROM files WHERE deleted_at IS NULL AND file_id IN (${ids})
+  if [ -n "${gone_sid}" ]; then
+    gone=$(locked_ids gesperrt-alle.txt "${gone_sid}")
+    [ -n "${gone}" ] || fail "${label}: no file cache row of gesperrt-alle.txt on the gone storage ${gone_sid}, the gone check tests nothing"
+    not_gone=" AND file_id NOT IN (${gone})"
+  fi
+  rows_st=$(statedb "SELECT COUNT(*) FROM files WHERE deleted_at IS NULL AND file_id IN (${ids})${not_gone};")
+  match_st=$(statedb "SELECT COUNT(*) FROM files WHERE deleted_at IS NULL AND file_id IN (${ids})${not_gone}
                         AND state || '/' || COALESCE(reason, '-') = '${want}';")
   note "${label}: ${match_st} of ${rows_st} container rows of the locked files are ${want}"
   rows+=("| ${label} | container rows of the locked files ${want} | ${rows_st} | ${match_st} |")
@@ -717,8 +728,8 @@ judge_locked() {
   }
   check "${label} container verdicts ${want}" "${rows_st}" "${match_st}"
   [ "${only}" = "container" ] && return 0
-  rows_nc=$(ncdb "SELECT COUNT(*) FROM oc_findling_file_state WHERE file_id IN (${ids});")
-  match_nc=$(ncdb "SELECT COUNT(*) FROM oc_findling_file_state WHERE file_id IN (${ids})
+  rows_nc=$(ncdb "SELECT COUNT(*) FROM oc_findling_file_state WHERE file_id IN (${ids})${not_gone};")
+  match_nc=$(ncdb "SELECT COUNT(*) FROM oc_findling_file_state WHERE file_id IN (${ids})${not_gone}
                      AND state || '/' || COALESCE(reason, '-') = '${want}';")
   rows+=("| ${label} | oc_findling_file_state rows of the locked files ${want} | ${rows_nc} | ${match_nc} |")
   [ "${rows_nc}" -ge 2 ] || {
@@ -726,6 +737,17 @@ judge_locked() {
     echo "::warning::${label}: only ${rows_nc} oc_findling_file_state rows of the locked files"
   }
   check "${label} oc_findling_file_state verdicts ${want}" "${rows_nc}" "${match_nc}"
+  if [ -n "${gone_sid}" ]; then
+    gone_rows=$(ncdb "SELECT COUNT(*) FROM oc_findling_file_state WHERE file_id IN (${gone});")
+    gone_match=$(ncdb "SELECT COUNT(*) FROM oc_findling_file_state WHERE file_id IN (${gone})
+                         AND state || '/' || COALESCE(reason, '-') = 'skipped/gone';")
+    rows+=("| ${label} | oc_findling_file_state rows of the locked file on the gone storage skipped/gone | ${gone_rows} | ${gone_match} |")
+    [ "${gone_rows}" -ge 1 ] || {
+      failures=$((failures + 1))
+      echo "::warning::${label}: no oc_findling_file_state row of the locked file on the gone storage, the gone check tests nothing"
+    }
+    check "${label} gone storage verdicts skipped/gone" "${gone_rows}" "${gone_match}"
+  fi
   outage_lines=$(log_since "${mark}" | grep -c 'taken as an outage' || true)
   rows+=("| ${label} | log lines 'taken as an outage' | 0 | ${outage_lines} |")
   check "${label} no pass taken as an outage" 0 "${outage_lines}"
@@ -1451,7 +1473,10 @@ if [ "${VARIANT}" = "upgrade" ]; then
   # Only now (B3): the reconcile hands the 1.6.2 rows failed/gateway_error
   # with budget out again, and the head judges them skipped/unreadable. A
   # different verdict is a finding for the coordinator, never a looser check.
-  judge_locked "upgrade after phase B" "skipped/unreadable" "${head_mark}"
+  # The topology change removed the daten storage of carol before this point:
+  # its copy of gesperrt-alle.txt stands skipped/gone, the three reachable
+  # locked rows stand skipped/unreadable.
+  judge_locked "upgrade after phase B" "skipped/unreadable" "${head_mark}" "" "${daten_carol}"
 fi
 
 step "search cross check"
