@@ -475,6 +475,9 @@ def _open_state() -> Store:
     expected = expected_versions(build_artifact().digest, ",".join(languages), dutch_mark=dutch_mark(languages))
     store = open_store(settings().state_db, meta=expected)
     start_rebuild_on_drift(store, expected, answered_elsewhere=MARKS_A_REBUILD_ANSWERS)
+    # Once per database (plan 43-20): here and not in open_store, because this
+    # runs inside a pass, behind the hold of a backup pause (D-41-19).
+    store.renew_refusal_streaks()
     return store
 
 

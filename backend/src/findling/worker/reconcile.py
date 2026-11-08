@@ -286,7 +286,12 @@ def _open_state() -> Store | None:
     path = settings().state_db
     if not path.exists():
         return None
-    return open_store(path)
+    store = open_store(path)
+    # The same once as in the poller (plan 43-20), and for the case where a
+    # round opens the database before the first pass did: the rows this round
+    # reads are then already renewed. Behind the backup hold as well.
+    store.renew_refusal_streaks()
+    return store
 
 
 class Reconcile:
@@ -771,7 +776,10 @@ class Reconcile:
         the Nextcloud side carries for it, the code out of the acknowledgement
         or repeatedly_stuck after a charged escalation. It is never written off
         here. The candidates are asked once per page, and only for rows with an
-        unmoved etag; a page without such a row asks nothing.
+        unmoved etag; a page without such a row asks nothing. A streak 1.6.2
+        spent is renewed once on the first open (plan 43-20,
+        Store.renew_refusal_streaks), so such a file reaches the gateway of
+        1.6.3 again and gets its verdict.
         """
         known = store.known_etags([row.file_id for row in rows])
         # Asked once per page rather than once per row: it is a cached lookup,

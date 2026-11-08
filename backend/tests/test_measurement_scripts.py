@@ -2640,8 +2640,16 @@ PHP_TREE_HASH_TODAY = "6d1847e61ab8be280337b230b231b857b4e6c441858ac4b350a66e3d2
 # pair moves on its own (see there). Recomputed independently with find, sort,
 # tr and sha256sum over the CRLF normalised tree: 2908e94b... both ways, and the
 # same pipeline over HEAD before the step gave 1c5a8954... (positive control).
+#
+# Moved on 2026-11-08 by Plan 43-20 (one new streak for the refusals of 1.6.2):
+# store/repo.py gains REFUSAL_RENEW_MARK and Store.renew_refusal_streaks,
+# worker/poller.py and worker/reconcile.py call it in their _open_state. No file
+# came or went, so PACKAGE_FILES_TODAY stays at 83. The PHP pair does not move.
+# Recomputed independently with find, sort, tr and sha256sum over the CRLF
+# normalised tree: 3d704f65... both ways, and the same pipeline over HEAD before
+# the step gave 2908e94b... (positive control).
 PACKAGE_FILES_TODAY = 83
-PACKAGE_TREE_HASH_TODAY = "2908e94bc47220eb5dc82491ebce61300a9d66575673a9f079f784d3b01d6ed3"
+PACKAGE_TREE_HASH_TODAY = "3d704f659a6cd83491e15673b2cfa2882b221dccc35d9b535d71564d279d0bbb"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

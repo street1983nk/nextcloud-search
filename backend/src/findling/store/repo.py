@@ -212,6 +212,26 @@ CATCHUP_DONE: Final = "done"
 # backup pause leaves it alone and the next due round sweeps again.
 SWEEP_MARK: Final = "storage_sweep_at"
 
+# Whether the refusal streaks 1.6.2 left behind have been renewed once (plan
+# 43-20, D-43-16, run 42482017221). 1.6.2 knew no skipped(unreadable): every
+# refusal of the gateway was failed(gateway_error) and lengthened the streak in
+# attempts, so on a long running instance the cap of the reconcile is spent and
+# such a file never reaches the gateway of 1.6.3, which would judge it
+# unreadable with a remedy. Missing means not yet, RENEW_DONE means done for
+# good. A meta key of its own for the reasons of RECHECK_MARK above.
+REFUSAL_RENEW_MARK: Final = "refusal_streaks_1_6_3"
+RENEW_DONE: Final = "done"
+
+# The renewal itself: attempts back to 1, the value a streak starts at in
+# _RECORD_SQL, so the stored refusal counts as the first one of a new streak and
+# the reconcile asks again up to its cap, exactly as after a fresh refusal. Only
+# failed(gateway_error): skipped(unreadable) does not exist before 1.6.3, and
+# repeatedly_stuck is a give-up with a count of its own.
+_RENEW_REFUSALS_SQL: Final = """
+UPDATE files SET attempts = 1
+WHERE deleted_at IS NULL AND state = 'failed' AND reason = 'gateway_error' AND attempts > 1
+"""
+
 # The marks that say nothing about the tantivy index.
 #
 # :meth:`Store.version_mismatch` reports every divergence it finds, including
@@ -1556,6 +1576,24 @@ class Store:
             )
             candidates.update(int(file_id) for (file_id,) in rows)
         return candidates
+
+    def renew_refusal_streaks(self) -> int | None:
+        """Give every spent refusal of 1.6.2 one new streak, once (plan 43-20).
+
+        See :data:`REFUSAL_RENEW_MARK`. One transaction reads the mark, resets
+        the rows and writes the mark, so the poller and the reconcile opening
+        the same database at the same moment renew once and not twice, and a
+        later start never touches a streak that ran up under this code. The
+        number of rows that moved, or None when the mark was already there.
+        """
+        with self._transaction():
+            if self._conn.execute("SELECT 1 FROM meta WHERE key = ?", (REFUSAL_RENEW_MARK,)).fetchone() is not None:
+                return None
+            renewed = self._conn.execute(_RENEW_REFUSALS_SQL).rowcount
+            self.write_meta(REFUSAL_RENEW_MARK, RENEW_DONE)
+        # The count and nothing else: no id, no path.
+        _LOG.info("refusal streaks renewed once after the update, rows=%d", renewed)
+        return renewed
 
     def rewind_reconcile_walk(self) -> None:
         """Put every reconcile bookmark back at the front (:data:`_REWIND_RECONCILE_SQL`)."""
