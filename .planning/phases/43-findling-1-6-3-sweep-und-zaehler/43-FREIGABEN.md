@@ -87,3 +87,10 @@ Freigabe Push 43-09: "Ja, Push + 1 Dispatch" (2026-11-08 22:01, Claude Code Term
 Freigabe Dispatch 43-09: "Ja, Push + 1 Dispatch" (2026-11-08 22:01, Claude Code Terminal) Entscheid: ja
 
 Umfang 43-09: genau ein Push der sechs lokalen Commits (43-08-Nachtraege 9f6ddc79/800d58e4/12f00467, Audit-Fix 37b518d6, Audit e8c052e3, Summary 757127e6) plus dieser Zeilen, genau ein Dispatch von "Coverage end to end" nach gruenen gestarteten Push-Workflows. Kein Tag, kein Release, kein Store, kein Kommentar. Audit-Ergebnis lag dem Owner vor (0 CRIT/HIGH/MEDIUM offen, F-43A-01 MEDIUM gefixt, 2 LOW akzeptiert).
+
+Freigabe Push 43-10 main: "Ja, alle vier" (2026-11-08 23:31, Claude Code Terminal) Entscheid: ja
+Freigabe Push 43-10 rc: "Ja, alle vier" (2026-11-08 23:31, Claude Code Terminal) Entscheid: ja
+Freigabe Dispatch 43-10 release: "Ja, alle vier" (2026-11-08 23:31, Claude Code Terminal) Entscheid: ja
+Freigabe Dispatch 43-10 proof: "Ja, alle vier" (2026-11-08 23:31, Claude Code Terminal) Entscheid: ja
+
+Umfang 43-10: genau ein Push auf main (Proof-Workflow, Skript, TESTBUILD, SUMMARY, 43-09-Nachtraege, diese Zeilen), genau ein Push des Branches rc/1.6.3-rc.1 (nie mergen), genau ein Dispatch release.yml auf rc/1.6.3-rc.1 mit create_release=false (Archiv nur als Workflow-Artefakt, 30 Tage), genau ein Dispatch rc-version-proof.yml. Kein Tag, kein oeffentliches Release, kein Store, kein Kommentar.
