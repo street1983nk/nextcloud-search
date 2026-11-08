@@ -88,6 +88,15 @@ Autor street1983nk <k.cherif@outlook.de>, ohne Trailer, keine closes-Wörter (je
 - Nach Freigabe: `git pull --rebase`, Push, head_green.sh über die sieben Workflows, Zitate "installed_version went from 1.5.0 to 1.6.3" und die Zusicherungszeilen 14-18 aus HaRP deploy, `gh workflow run coverage-e2e.yml --ref main`, Lauf-ID als Nachtrag in 43-E2E.md.
 - CI-abhängige Plan-verify-Teile (head_green, gh run view auf HaRP deploy) sind damit offen.
 
+## Nachtrag des Koordinators (08.11.2026, nach Owner-Freigabe)
+
+Owner-Freigabe "Ja, Push + 1 Dispatch" (20:13, in 43-FREIGABEN.md), CHANGELOG lag wörtlich vor. Push d9f8a65d auf main, alle acht gestarteten Push-Workflows grün, darunter:
+
+- HaRP deploy, Lauf 42513966073 (27 min 54 s): Upgrade-Strecke grün, wörtlich im Log "installed_version went from 1.5.0 to 1.6.3"; Version001603Date20261108000000.php im ausgerollten Baum. Die Zusicherungen 14-18 melden sich nur im Fehlerfall (je eigenes ::error:: mit Abbruch); der grüne Job ist ihr Beleg, eine Erfolgszeile je Zusicherung gibt es konstruktionsbedingt nicht.
+- PHP and store metadata gates, Lauf 42513966089: PHPUnit-Beleg für 43-19 (lokal war PHPUnit nicht lauffähig, Docker Desktop kam nicht hoch).
+
+E2E-Dispatch 42516315101 auf d9f8a65d gestartet (genau einer, von der Freigabe gedeckt); Lauf-ID-Nachtrag in 43-E2E.md folgt mit der Auswertung.
+
 ## Deviations from Plan
 
 1. **[Rule 3] STOPP-grep des Plans an die erlaubte Spalte angeglichen.** Die Teilprüfung `grep '^[+-][^+-]' | grep -v 'doc_key'` auf schema.sql ließ das Komma-Paar der Vorzeile `deleted_at` übrig, den syntaktischen Träger der von der STOPP-Regel (43-02, Fassung 43-20) ausdrücklich erlaubten Spalte `doc_key` (43-16). Verify-grep in 43-08-PLAN.md um `|deleted_at    INTEGER,? ` erweitert und den Prosa-Satz präzisiert (Präzedenz: 43-20 hat 43-08-PLAN.md ebenso an den Code-Bestand angeglichen). Kein inhaltlicher STOPP-Fall; beide Zeilen sind bis auf das Komma identisch.
