@@ -232,6 +232,10 @@ a1_rows_checked() {
 # answer for the first user: the number of entries and their titles (file
 # names of the test topology, never content), or what came back instead of a
 # result list. Nothing of it goes to stdout, the caller reads the count there.
+# limit=25: without it the route answers SearchQuery::LIMIT_DEFAULT (5) entries,
+# and 25 is the cap unified-search.max-results-per-request sets by default
+# (core/Controller/UnifiedSearchController.php::search, stable34), so a rank
+# below the fifth never counts as a miss.
 search_crosscheck() {
   local words="$1" word name user first found=0
   shift
@@ -244,7 +248,7 @@ search_crosscheck() {
     for user in "$@"; do
       curl -s -G -u "${user}:$(password_of "${user}")" \
         -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
-        --data-urlencode "term=${word}" \
+        --data-urlencode "term=${word}" --data-urlencode "limit=25" \
         "${NC_URL}/ocs/v2.php/search/providers/findling/search" -o "${WORK}/hit.json" || true
       if [ "${user}" = "${first}" ]; then
         cp "${WORK}/hit.json" "${WORK}/first-hit.json" 2> /dev/null || true

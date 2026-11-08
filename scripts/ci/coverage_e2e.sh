@@ -165,9 +165,15 @@ head_companion() {
 # the shapes OCR confuses (no i, l, o), far apart from each other in edit
 # distance, so neither a fuzzy match nor a stemmer can make one word find a
 # second file.
+#
+# next_word puts the word into NEXT_WORD and prints nothing. It must never run
+# as $(next_word): a command substitution is a subshell, the increment of
+# word_count stays there, and every file got the same word (since a5182e98,
+# run 42425348629, 43-DEBUG-SUCHE.md). words_unique holds the run to it.
 WORDS="${WORK}/words.tsv"
 : > "${WORDS}"
 word_count=0
+NEXT_WORD=""
 next_word() {
   local hex letters='abcdefghjkmnpqrs' word='zq' i
   word_count=$((word_count + 1))
@@ -175,13 +181,27 @@ next_word() {
   for ((i = 0; i < 8; i++)); do
     word+="${letters:$((16#${hex:i:1})):1}"
   done
-  printf '%s' "${word}"
+  NEXT_WORD="${word}"
+}
+
+# words_unique <label>: no word twice in WORDS, otherwise the search cross
+# check counts ranks of one shared word and not files.
+words_unique() {
+  local twice lines distinct
+  twice=$(cut -f1 "${WORDS}" | sort | uniq -d | tr '\n' ' ')
+  [ -z "${twice// /}" ] || fail "$1: words used for more than one file: ${twice}"
+  lines=$(wc -l < "${WORDS}")
+  distinct=$(cut -f1 "${WORDS}" | sort -u | wc -l)
+  [ "${lines}" -gt 1 ] && [ "${lines}" -eq "${distinct}" ] \
+    || fail "$1: ${distinct} distinct words for ${lines} files"
+  note "$1: ${lines} files, ${distinct} distinct words"
 }
 
 # samba_file <share> <relative path> [extra word]: a text file written by root.
 samba_file() {
   local word
-  word=$(next_word)
+  next_word
+  word="${NEXT_WORD}"
   printf 'Coverage proof %s %s\n' "${word}" "${3:-}" | sudo tee "/srv/$1/$2" > /dev/null
   sudo chmod 0644 "/srv/$1/$2"
   printf '%s\t%s\n' "${word}" "$(basename "$2")" >> "${WORDS}"
@@ -498,19 +518,32 @@ gateway_probe() {
   [ -z "${problem}" ] || probe_problem "${label}" "${problem}" "${mode}"
 }
 
-# throttle_smb / unthrottle_smb: SMB traffic on 127.0.0.1:445 (both
-# directions) down to about 200 KB/s, one htb class with a filter on the port,
-# everything else on lo unshaped. The EXIT trap removes it in every case.
-# 200 KB/s and not less: smbclient hands a get on in whole SMB2 read blocks of
-# 8 MiB (Samba source3/libsmb/clireadwrite.c:363-366), so one block takes about
-# 42 s here, a long silence before the first data and between the two blocks
-# of gross.bin, and still well inside the 80 s deadlines of the gateway. At
-# 100 KB/s a block takes about 84 s, past the deadline (run 42418778026).
-THROTTLE_RATE=1600kbit
+# throttle_smb <rate> / unthrottle_smb: SMB traffic on 127.0.0.1:445 (both
+# directions) down to the given tc rate, one htb class with a filter on the
+# port, everything else on lo unshaped. The EXIT trap removes it in every case.
+#
+# Two limits decide the rate. smbclient hands a get on in whole SMB2 read
+# blocks of 8 MiB (Samba source3/libsmb/clireadwrite.c:363-366), and
+# icewind/smb starts smbclient with -t 20 (3rdparty/icewind/smb/src/Options.php:14,
+# raised only through the storage option timeout,
+# apps/files_external/lib/Lib/Storage/SMB.php:103-106): one block has to
+# arrive within those 20 s, so the default storage needs about 420 KB/s
+# (run 42425348629: 422 after 60 s at 200 KB/s). Below that the remedy is the
+# option timeout or php-smbclient.
+#
+# THROTTLE_RATE, about 1 MB/s: a block in about 8.4 s, inside the 20 s of a
+# default storage, and still a silence of seconds before the first data and
+# between the two blocks of gross.bin.
+# THROTTLE_RATE_SLOW, about 200 KB/s: a block in about 42 s, past the 20 s,
+# inside the 80 s deadlines of the gateway; fetched with timeout=120 on the
+# storage, which proves the remedy for an admin (large_probe_long).
+THROTTLE_RATE=8mbit
+THROTTLE_RATE_SLOW=1600kbit
 throttle_smb() {
+  local rate="$1"
   sudo tc qdisc add dev lo root handle 1: htb default 10 || return 1
   sudo tc class add dev lo parent 1: classid 1:10 htb rate 10gbit \
-    && sudo tc class add dev lo parent 1: classid 1:20 htb rate "${THROTTLE_RATE}" ceil "${THROTTLE_RATE}" \
+    && sudo tc class add dev lo parent 1: classid 1:20 htb rate "${rate}" ceil "${rate}" \
     && sudo tc filter add dev lo parent 1: protocol ip prio 1 u32 match ip dport 445 0xffff flowid 1:20 \
     && sudo tc filter add dev lo parent 1: protocol ip prio 1 u32 match ip sport 445 0xffff flowid 1:20 \
     || {
@@ -523,38 +556,73 @@ unthrottle_smb() {
 }
 trap unthrottle_smb EXIT
 
-# large_probe <file id> [collect]: gross.bin (10 MB) through the gateway while
-# SMB is throttled (W1, W1b), so pauses of up to 200 ms and many empty reads
-# really happen in the wrapped mode. 200, the bytes equal to the source, no
-# hang; the number of reads against MAX_READS is the PHPUnit case of 43-17.
-# 10 MiB at 200 KB/s are about 52 s; a throttled fetch under
-# LARGE_MIN_SECONDS did not wait for a block and tested no long silence. The
-# curl limit leaves room for the two deadlines and stays far from the job.
-LARGE_MIN_SECONDS=40
-LARGE_MAX_SECONDS=150
-large_probe() {
-  local fid="$1" mode="${2:-}" want have result code seconds size throttled=0 problem=""
-  [ -n "${fid}" ] || fail "gateway probe large: no file id"
+# large_fetch <label> <file id> <rate> <min seconds> <max seconds> [collect]:
+# gross.bin (10 MiB) through the gateway while SMB is throttled (W1, W1b), so
+# pauses of up to 200 ms and many empty reads really happen in the wrapped
+# mode. 200, the bytes equal to the source, no hang; the number of reads
+# against MAX_READS is the PHPUnit case of 43-17. A throttled fetch under the
+# minimum did not wait for a whole block, so the throttle did not work and the
+# probe tested no silence. curl gives up at the maximum.
+large_fetch() {
+  local label="$1" fid="$2" rate="$3" floor="$4" max="$5" mode="${6:-}"
+  local want have result code seconds size throttled=0 problem=""
+  [ -n "${fid}" ] || fail "gateway probe ${label}: no file id"
   want=$(sudo sha256sum /srv/daten/gemeinsam/gross.bin | cut -d' ' -f1)
-  if throttle_smb; then
+  if throttle_smb "${rate}"; then
     throttled=1
   else
-    note "tc could not throttle port 445 on lo, gross.bin runs unthrottled"
+    note "tc could not throttle port 445 on lo, gross.bin runs unthrottled (${label})"
   fi
-  result=$(gateway_curl alice "${fid}" "${WORK}/gross.out" "${LARGE_MAX_SECONDS}")
+  result=$(gateway_curl alice "${fid}" "${WORK}/gross.out" "${max}")
   unthrottle_smb
   read -r code seconds size <<< "${result:-000 0 0}"
   have=$(sha256sum "${WORK}/gross.out" 2> /dev/null | cut -d' ' -f1 || true)
   rm -f "${WORK}/gross.out"
-  note "gateway probe large (file ${fid}, alice): http ${code}, ${seconds} s, ${size} bytes, throttled=${throttled}, sha256 $([ "${have}" = "${want}" ] && echo equal || echo different)"
-  rows+=("| probe | large gross.bin (alice), throttled=${throttled} | 200, same sha256 | ${code} in ${seconds} s |")
+  note "gateway probe ${label} (file ${fid}, alice, ${rate}): http ${code}, ${seconds} s, ${size} bytes, throttled=${throttled}, sha256 $([ "${have}" = "${want}" ] && echo equal || echo different)"
+  rows+=("| probe | ${label} gross.bin (alice), ${rate}, throttled=${throttled} | 200, same sha256, ${floor} to ${max} s | ${code} in ${seconds} s |")
   [ "${code}" = "200" ] || problem="http ${code} instead of 200"
   [ "${have}" = "${want}" ] || problem="${problem:+${problem}, }the bytes differ from the source"
   if [ "${throttled}" = "1" ] \
-    && awk -v took="${seconds}" -v floor="${LARGE_MIN_SECONDS}" 'BEGIN { exit !(took + 0 < floor + 0) }'; then
-    problem="${problem:+${problem}, }${seconds} s throttled, under ${LARGE_MIN_SECONDS} s, so no long silence was tested"
+    && awk -v took="${seconds}" -v floor="${floor}" 'BEGIN { exit !(took + 0 < floor + 0) }'; then
+    problem="${problem:+${problem}, }${seconds} s throttled, under ${floor} s, so the throttle did not hold back a block"
   fi
-  [ -z "${problem}" ] || probe_problem large "${problem}" "${mode}"
+  [ -z "${problem}" ] || probe_problem "${label}" "${problem}" "${mode}"
+}
+
+# large_probe <file id> [collect]: the default storage (smbclient -t 20) at
+# about 1 MB/s. 10 MiB are about 10.5 s; 8 s is under a single 8 MiB block at
+# that rate (8.4 s), and an unthrottled fetch takes well under a second.
+# 60 s leave room for the 20 s of each of the two blocks.
+LARGE_MIN_SECONDS=8
+LARGE_MAX_SECONDS=60
+large_probe() {
+  large_fetch large "$1" "${THROTTLE_RATE}" "${LARGE_MIN_SECONDS}" "${LARGE_MAX_SECONDS}" "${2:-}"
+}
+
+# large_probe_long <file id> <mount id> [collect]: the remedy for a slow line.
+# The storage gets the backend option timeout=120 (files_external:config, the
+# option is hidden in the web form), smbclient then waits 120 s per
+# operation, and gross.bin at about 200 KB/s must arrive whole: 10 MiB in
+# about 52 s, a block in about 42 s, so under 40 s the throttle did not work.
+# The option is cleared afterwards (an empty value is no timeout,
+# SMB.php:103-106), so the crawl runs with the default of a fresh storage.
+LONG_TIMEOUT_SECONDS=120
+LARGE_LONG_MIN_SECONDS=40
+LARGE_LONG_MAX_SECONDS=150
+large_probe_long() {
+  local fid="$1" mid="$2" mode="${3:-}" set_to
+  [ -n "${mid}" ] || fail "gateway probe large-long: no mount id"
+  nc_occ files_external:config "${mid}" timeout "${LONG_TIMEOUT_SECONDS}" > /dev/null \
+    || fail "files_external:config could not set the timeout of mount ${mid}"
+  set_to=$(nc_occ files_external:config "${mid}" timeout | tr -d '\r\n ')
+  [ "${set_to}" = "${LONG_TIMEOUT_SECONDS}" ] \
+    || fail "the timeout of mount ${mid} reads '${set_to}' instead of ${LONG_TIMEOUT_SECONDS}, the remedy probe tests nothing"
+  note "mount ${mid}: backend option timeout=${set_to} for large-long"
+  large_fetch large-long "${fid}" "${THROTTLE_RATE_SLOW}" "${LARGE_LONG_MIN_SECONDS}" "${LARGE_LONG_MAX_SECONDS}" "${mode}"
+  nc_occ files_external:config "${mid}" timeout "" > /dev/null \
+    || fail "files_external:config could not clear the timeout of mount ${mid}"
+  set_to=$(nc_occ files_external:config "${mid}" timeout | tr -d '\r\n ')
+  [ -z "${set_to}" ] || fail "the timeout of mount ${mid} still reads '${set_to}' after the remedy probe"
 }
 
 # no_stale_smbclient <label>: no smbclient process below a php -S process older
@@ -796,8 +864,10 @@ head -c 10485760 /dev/urandom | sudo tee /srv/daten/gemeinsam/gross.bin > /dev/n
 sudo chmod 0644 /srv/daten/gemeinsam/gross.bin
 
 # The two locked files, put by alice through SMB so she owns them.
-locked_all_word=$(next_word)
-locked_bob_word=$(next_word)
+next_word
+locked_all_word="${NEXT_WORD}"
+next_word
+locked_bob_word="${NEXT_WORD}"
 printf 'Coverage proof %s\n' "${locked_all_word}" > "${WORK}/gesperrt-alle.txt"
 printf 'Coverage proof %s\n' "${locked_bob_word}" > "${WORK}/gesperrt-bob.txt"
 printf '%s\t%s\n' "${locked_all_word}" gesperrt-alle.txt >> "${WORDS}"
@@ -939,7 +1009,8 @@ done
 # way back to 1.6.2).
 home_file() {
   local word
-  word=$(next_word)
+  next_word
+  word="${NEXT_WORD}"
   mkdir -p "$(dirname "${NC_DATA}/$1/files/$2")"
   printf 'Coverage proof %s\n' "${word}" > "${NC_DATA}/$1/files/$2"
   printf '%s\t%s\n' "${word}" "$(basename "$2")" >> "${WORDS}"
@@ -1012,7 +1083,9 @@ gateway_probe locked-for-all alice "$(ncdb "SELECT fileid FROM oc_filecache
 # probe still holds both to a readable answer without bytes (B2, T-43-62).
 gateway_probe empty alice "${leer_fid}" 200 collect
 if [ "${SMB_MODE}" = "wrapped" ]; then
-  large_probe "$(ncdb "SELECT fileid FROM oc_filecache WHERE storage = ${daten_alice} AND name = 'gross.bin' LIMIT 1;")" collect
+  gross_fid=$(ncdb "SELECT fileid FROM oc_filecache WHERE storage = ${daten_alice} AND name = 'gross.bin' LIMIT 1;")
+  large_probe "${gross_fid}" collect
+  large_probe_long "${gross_fid}" "${daten_mount}" collect
 fi
 if [ "${probe_failures}" -gt 0 ]; then
   hang_report
@@ -1021,6 +1094,7 @@ fi
 sleep 5
 no_stale_smbclient "after the probes"
 
+words_unique "words before the crawl"
 step "crawl and drain"
 crawl_mark=$(log_mark)
 nc_occ findling:index --restart --no-interaction > /dev/null
@@ -1152,7 +1226,8 @@ else
   step "a backlog of ${BACKLOG_IMAGES} OCR images in the home of alice"
   mkdir -p "${WORK}/backlog"
   for n in $(seq 1 "${BACKLOG_IMAGES}"); do
-    word=$(next_word)
+    next_word
+    word="${NEXT_WORD}"
     printf '%s\t%s\n' "${word}" "backlog-${n}.png" >> "${WORDS}"
     printf '%s\n' "${word}" > "${WORK}/backlog/backlog-${n}.word"
   done
@@ -1307,6 +1382,7 @@ if [ "${VARIANT}" = "upgrade" ]; then
 fi
 
 step "search cross check"
+words_unique "words before the search cross check"
 # shellcheck disable=SC2086 # the user list is a word list on purpose
 found=$(search_crosscheck "${WORDS}" ${users_left})
 rows+=("| B | words found through the search (W4) | ${b_num_truth} | ${found} |")
@@ -1348,7 +1424,13 @@ if [ "${VARIANT}" = "upgrade" ]; then
   has_column=$(statedb "SELECT COUNT(*) FROM pragma_table_info('files') WHERE name = 'doc_key';")
   has_index=$(statedb "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'files_storage_doc_key';")
   before_at=$(statedb "SELECT COALESCE(indexed_at, 0) FROM files WHERE file_id = ${notiz};")
-  rollback_word=$(next_word)
+  next_word
+  rollback_word="${NEXT_WORD}"
+  # A word no file carried before (it used to be the one word of all files):
+  # only the new content of notiz.txt can find it now.
+  if cut -f1 "${WORDS}" | grep -qxF -- "${rollback_word}"; then
+    fail "the rollback word is already in use, the rollback search tests nothing"
+  fi
   printf 'Coverage proof %s\n' "${rollback_word}" > "${WORK}/notiz.txt"
   code=$(dav alice PUT notiz.txt /dev/null -T "${WORK}/notiz.txt")
   case "${code}" in 201 | 204) ;; *) fail "the change of notiz.txt answered HTTP ${code}" ;; esac
