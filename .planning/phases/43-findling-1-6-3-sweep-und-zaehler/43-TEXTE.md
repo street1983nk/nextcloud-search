@@ -1,6 +1,8 @@
 # Phase 43: Wortlaute zur Freigabe (D-43-06)
 
 Stand: 2026-11-07 12:01, Plan 43-01 Task 2 (freigegeben, Maschinenzeilen am Ende)
+Nachtrag 2026-11-08, Plan 43-19: Block V ergänzt (Abhilfe zu "Not readable for the
+users asked" samt SMB-Zusatzsatz); der Owner gibt ihn in der Owner-Runde 43-12 frei.
 
 Vier Blöcke mit neuen Sätzen für den Abschnitt "Deckungsgrad der Suche" der Admin-Seite.
 Der englische Satz ist der Katalogschlüssel und steht so im Template und in admin.js;
@@ -141,24 +143,50 @@ est encore dans une version plus ancienne et ne peut pas encore compter par docu
 chiffre est donc compté comme dans la version 1.6.2." Dann kämen die Zeilen
 `EN-LEGACY-MISSING`, `DE-LEGACY-MISSING` und `FR-LEGACY-MISSING` dazu.
 
-## Vorab-Entwurf zu Block V: Zusatzsatz für SMB-Speicher ohne php-smbclient (43-18 Fix 2)
+## Block V: Abhilfe zu "Not readable for the users asked" (D-43-16)
 
-Block V selbst schreibt 43-19 (Abhilfe zu "Not readable for the users asked"). Dieser
-Zusatzsatz kommt dort mit hinein und geht mit Block V in der Owner-Runde 43-12 zur
-Freigabe; hier nur Entwurf, keine Maschinenzeile.
+Geschrieben von Plan 43-19 und seit 43-19 in allen 16 Katalogen; der Owner gibt den
+Wortlaut in der Owner-Runde 43-12 vor dem Release frei (bis dahin keine Maschinenzeile).
+Die Sprachen es, it, nl, pt_BR und pt_PT sind maschineller Entwurf unter Vorbehalt
+(Muster 39-01).
+
+- **Zweck:** Seit 1.6.3 landen unter diesem Grund auch Dateien, die der externe
+  Speicher verweigert, gesperrt oder ausgelagert hat (eine Gateway-Antwort 422 wird
+  skipped/unreadable, D-43-16). Die alte Abhilfe nannte nur die Team-Folder-Rechte
+  und schickte den Admin bei einer gesperrten SMB-Datei in die falsche Liste.
+- **Ort:** Abhilfespalte der Fehlerliste der Admin-Seite; ersetzt den bisherigen Satz,
+  der alte Schlüssel ist aus allen 16 Katalogen entfernt.
+
+| | Wortlaut |
+|---|---|
+| EN | The file is still there. Check the advanced permissions of the Team Folder or the access rights on the external storage: Findling reads a file only as a user who may open it and asks the first 20 of its users in alphabetical order. A file that is locked or offline is tried again a few times. |
+| DE | Die Datei ist noch vorhanden. Die erweiterten Berechtigungen des Team Folders oder die Zugriffsrechte auf dem externen Speicher prüfen: Findling liest eine Datei nur als Nutzer, der sie öffnen darf, und fragt die ersten 20 ihrer Nutzer in alphabetischer Reihenfolge. Eine gesperrte oder ausgelagerte Datei wird noch einige Male erneut versucht. |
+| FR | Le fichier existe toujours. Vérifiez les permissions avancées du Team Folder ou les droits d'accès sur le stockage externe : Findling ne lit un fichier qu'en tant qu'utilisateur autorisé à l'ouvrir et interroge les 20 premiers de ses utilisateurs par ordre alphabétique. Un fichier verrouillé ou hors ligne est réessayé quelques fois. |
+
+**Begriffe:** "Team Folder" bleibt im Französischen unübersetzt wie im abgelösten
+fr.json-Eintrag ("du Team Folder"), der Planentwurf "dossier d'équipe" ist daran
+angeglichen. Der französische Satz trägt wie der abgelöste ein " : " mit gewöhnlichem
+Leerzeichen; die Regel "kein Doppelpunkt" aus dem Kopf dieser Datei galt den vier
+Blöcken der ersten Vorlage. Der deutsche Satz bleibt im Infinitiv-Stil des Bestands.
+
+### Zusatzsatz für SMB-Speicher ohne php-smbclient (43-18 Fix 2)
 
 - **Anlass:** Ohne die Erweiterung php-smbclient startet Nextcloud für SMB das Programm
   smbclient mit 20 s Frist je Vorgang (icewind/smb, Options.php:14). Auf einer langsamen
   Leitung (unter etwa 420 KB/s) kommt ein Leseblock von 8 MiB nicht rechtzeitig an, die
   Datei landet als nicht lesbar. Die Speicher-Option timeout ist im Web-Formular verborgen
   und nur per occ setzbar.
-- **Sichtbar:** nur wenn die Erweiterung fehlt (Erkennung siehe 43-19-PLAN.md).
+- **Sichtbar:** nur wenn die Erweiterung fehlt (function_exists('smbclient_state_new'),
+  dieselbe Prüfung wie icewind/smb System::libSmbclientAvailable). Eigener Schlüssel in
+  allen 16 Katalogen, in AdminViewService an die Abhilfe von unreadable angehängt. Ob
+  eine einzelne Datei auf SMB liegt, wird nicht geprüft, der Satz beginnt deshalb mit
+  dem Speichertyp und gilt für sich.
 
-| | Wortlaut (Entwurf) |
+| | Wortlaut |
 |---|---|
 | EN | On SMB storage without the php-smbclient extension, install this extension recommended by Nextcloud, or raise the timeout option of the storage (occ files_external:config). |
 | DE | Bei SMB-Speichern ohne die Erweiterung php-smbclient diese von Nextcloud empfohlene Erweiterung installieren, alternativ die Speicher-Option timeout erhöhen (occ files_external:config). |
-| FR | schreibt 43-19 nach docs/l10n-french.md |
+| FR | Sur les stockages SMB sans l'extension php-smbclient, installez cette extension recommandée par Nextcloud, ou augmentez l'option timeout du stockage (occ files_external:config). |
 
 ## Selbstprüfung
 

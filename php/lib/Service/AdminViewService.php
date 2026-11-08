@@ -535,7 +535,7 @@ final class AdminViewService {
 		],
 		'unreadable' => [
 			'Not readable for the users asked',
-			'The file is still there. Check the advanced permissions of the Team Folder: Findling reads a file only as a user who may open it and asks the first 20 of its users in alphabetical order.',
+			'The file is still there. Check the advanced permissions of the Team Folder or the access rights on the external storage: Findling reads a file only as a user who may open it and asks the first 20 of its users in alphabetical order. A file that is locked or offline is tried again a few times.',
 		],
 		'system_file' => [
 			'System or helper file',
@@ -599,6 +599,23 @@ final class AdminViewService {
 		],
 	];
 
+	/**
+	 * The sentence appended to the remedy of ``unreadable`` when the PHP
+	 * extension php-smbclient is missing (plan 43-19, addition of 43-18 fix 2).
+	 *
+	 * Without the extension Nextcloud drives the smbclient program with a
+	 * fixed deadline of 20 seconds per operation (icewind/smb Options.php),
+	 * and smbclient hands a get on in whole SMB2 read blocks of 8 MiB, so on
+	 * a line under roughly 420 KB/s a healthy file misses the deadline and
+	 * lands here as unreadable. The remedy is the extension, which the
+	 * Nextcloud admin manual strongly recommends, or the timeout option of
+	 * the mount, which the web form hides (FLAG_HIDDEN) and only
+	 * ``occ files_external:config`` can set. Whether one single file lives on
+	 * SMB is not known here, which is why the sentence names SMB storage
+	 * itself and stands on its own.
+	 */
+	private const UNREADABLE_SMB_HINT = 'On SMB storage without the php-smbclient extension, install this extension recommended by Nextcloud, or raise the timeout option of the storage (occ files_external:config).';
+
 	public function __construct(
 		private FileStateService $fileStateService,
 		private QueueService $queueService,
@@ -616,6 +633,13 @@ final class AdminViewService {
 		private ParallelSearchService $parallelSearch,
 		private IJobList $jobList,
 		private LoggerInterface $logger,
+		// The probe for the PHP extension php-smbclient, a seam in the shape
+		// of the clock and pause closures of BoundedStreamReader: the class is
+		// final, the answer of function_exists depends on the host PHP, and
+		// the unit test has to drive both branches of the unreadable remedy on
+		// a PHP without the extension. Production passes nothing and gets the
+		// real probe (plan 43-19).
+		private ?\Closure $smbclientProbe = null,
 	) {
 	}
 
@@ -1967,7 +1991,28 @@ final class AdminViewService {
 			];
 		}
 
-		return [$this->l10n->t($row[0]), $this->l10n->t($row[1])];
+		$remedy = $this->l10n->t($row[1]);
+		if ($reason === 'unreadable' && !$this->smbclientLoaded()) {
+			// Since 1.6.3 a gateway answer 422 is judged skipped(unreadable)
+			// as well (D-43-16), and without php-smbclient the likeliest cause
+			// is the 20 second deadline of the smbclient program, so the
+			// remedy says where that lever sits (43-18 fix 2).
+			$remedy .= ' ' . $this->l10n->t(self::UNREADABLE_SMB_HINT);
+		}
+
+		return [$this->l10n->t($row[0]), $remedy];
+	}
+
+	/**
+	 * Whether the PHP extension php-smbclient is loaded, probed the way
+	 * icewind/smb System::libSmbclientAvailable probes it. The closure seam
+	 * of the constructor wins when it is set, so the unit test drives both
+	 * branches on a PHP without the extension.
+	 */
+	private function smbclientLoaded(): bool {
+		$probe = $this->smbclientProbe ?? static fn (): bool => function_exists('smbclient_state_new');
+
+		return (bool)$probe();
 	}
 
 	/**

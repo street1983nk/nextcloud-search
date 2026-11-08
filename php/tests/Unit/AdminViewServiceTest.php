@@ -15,6 +15,7 @@ use OCP\DB\QueryBuilder\IExpressionBuilder;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IAppConfig;
 use OCP\IDBConnection;
+use OCP\IL10N;
 use OCP\IUserSession;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -805,6 +806,53 @@ final class AdminViewServiceTest extends TestCase {
 			['Excluded by a rule', 'Remove the matching entry under "Excluded folders" or "Excluded patterns".'],
 			$table['excluded'] ?? null,
 		);
+	}
+
+	// -- the remedy of unreadable and the missing php-smbclient (plan 43-19) --
+
+	/**
+	 * reasonText() of one reason, on an instance whose translator answers the
+	 * key itself and whose smbclient probe is scripted. The seam exists for
+	 * exactly this table: the class is final, function_exists answers for the
+	 * host PHP, and both branches have to run on a PHP without the extension.
+	 *
+	 * @return array{0:string, 1:string}
+	 */
+	private function reasonTextWithProbe(string $reason, bool $loaded): array {
+		$service = (new \ReflectionClass(AdminViewService::class))->newInstanceWithoutConstructor();
+		$l10n = $this->createMock(IL10N::class);
+		$l10n->method('t')->willReturnArgument(0);
+		(new \ReflectionProperty(AdminViewService::class, 'l10n'))->setValue($service, $l10n);
+		(new \ReflectionProperty(AdminViewService::class, 'smbclientProbe'))
+			->setValue($service, static fn (): bool => $loaded);
+		$pair = (new \ReflectionMethod(AdminViewService::class, 'reasonText'))->invoke($service, $reason);
+		self::assertIsArray($pair);
+		self::assertCount(2, $pair);
+
+		return $pair;
+	}
+
+	public function testTheRemedyOfUnreadableStaysBareWhenSmbclientIsLoaded(): void {
+		[$label, $remedy] = $this->reasonTextWithProbe('unreadable', true);
+
+		self::assertSame('Not readable for the users asked', $label);
+		self::assertStringContainsString('or the access rights on the external storage', $remedy);
+		self::assertStringContainsString('A file that is locked or offline is tried again a few times.', $remedy);
+		self::assertStringNotContainsString('php-smbclient', $remedy);
+	}
+
+	public function testTheRemedyOfUnreadableNamesTheMissingSmbclientExtension(): void {
+		[, $bare] = $this->reasonTextWithProbe('unreadable', true);
+		[$label, $remedy] = $this->reasonTextWithProbe('unreadable', false);
+
+		self::assertSame('Not readable for the users asked', $label);
+		self::assertStringStartsWith($bare . ' ', $remedy);
+		self::assertStringContainsString('On SMB storage without the php-smbclient extension', $remedy);
+		self::assertStringContainsString('occ files_external:config', $remedy);
+		// And the hint belongs to unreadable alone: a gateway_error without
+		// the extension reads as before.
+		[, $gateway] = $this->reasonTextWithProbe('gateway_error', false);
+		self::assertStringNotContainsString('php-smbclient', $gateway);
 	}
 
 	// -- the limits per file, read only (POL-01, plan 33-06) -----------------

@@ -727,11 +727,16 @@ class FileStateService {
 	public const STORAGE_BAND = 1000;
 
 	/**
-	 * The verdicts only this side writes, and none of them ever reaches the
-	 * container: a file the crawl lists but cannot read, a job given up after
-	 * it got stuck again and again (QueueService::finish), and a file the
-	 * queue found gone. The first two are what the admin page names as "not
-	 * readable or stuck" (D-43-11); the third belongs to the denominator only.
+	 * The verdicts this side writes: a file the crawl lists but cannot read,
+	 * a job given up after it got stuck again and again (QueueService::finish),
+	 * and a file the queue found gone. Since 1.6.3 skipped(unreadable) is also
+	 * the receipt this side writes for a gateway answer 422, a file the content
+	 * gateway could not open within its deadline (D-43-16), so not every one of
+	 * these rows stayed on this side of the boundary; the count treats both
+	 * origins alike, and the container takes such rows out of its judged
+	 * expression either way. The first two pairs are what the admin page names
+	 * as "not readable or stuck" (D-43-11); the third belongs to the
+	 * denominator only.
 	 *
 	 * @var list<array{0: string, 1: string}>
 	 */

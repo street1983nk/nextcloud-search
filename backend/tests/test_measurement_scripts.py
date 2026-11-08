@@ -1249,8 +1249,17 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # PHP_FILES_TODAY stays at 129. Recomputed independently with find, sort, tr and sha256sum over the
 # CRLF normalised tree: 6d1847e6... both ways; the same pipeline over git archive HEAD before the
 # round gave 7cc9aa68.
+# Moved on 2026-11-08 by Plan 43-19 (unreadable remedy text): lib/Service/AdminViewService.php
+# replaces the remedy of unreadable and appends the SMB hint when php-smbclient is missing behind
+# a closure seam, lib/Service/FileStateService.php corrects the docblock over PHP_ONLY_NOT_READABLE
+# (a gateway 422 is also written as skipped(unreadable) since 1.6.3, D-43-16), and tests/Unit/
+# AdminViewServiceTest.php gained one case per probe branch; the sixteen catalogues and the five
+# language documents moved as well, but the recipe globs **/*.php. No file came or went, so
+# PHP_FILES_TODAY stays at 129. Recomputed independently with find, sort, tr and sha256sum over the
+# CRLF normalised tree: 20dac366... both ways; the same pipeline over git archive HEAD before the
+# plan gave 6d1847e6.
 PHP_FILES_TODAY = 129
-PHP_TREE_HASH_TODAY = "6d1847e61ab8be280337b230b231b857b4e6c441858ac4b350a66e3d2266b79a"
+PHP_TREE_HASH_TODAY = "20dac366f67114217d13d20eac6d82739ac22e2ee298882b2f21cfdc940713a2"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

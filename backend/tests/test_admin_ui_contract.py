@@ -3998,8 +3998,18 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     sixteen files moved together, the five language documents carry the
     rows; the German and French wording is the one the owner accepted in
     43-TEXTE.md, the five other languages are machine drafts under the same
-    dated reservation as the rest. Whoever moves it next writes the next
-    paragraph.
+    dated reservation as the rest.
+
+    It stands at 366 since 2026-11-08, plan 43-19 (D-43-16, addition of 43-18
+    fix 2): the one sentence appended to the remedy of unreadable when the PHP
+    extension php-smbclient is missing. The remedy of unreadable itself now
+    also names the access rights on the external storage and the retried
+    locked or offline file, but it changed its key and so moved nothing. All
+    sixteen files moved together, the five language documents carry the rows;
+    the German and French wording goes to the owner with block V of 43-TEXTE.md
+    in the round of plan 43-12, the five other languages are machine drafts
+    under the same dated reservation as the rest. Whoever moves it next writes
+    the next paragraph.
     """
     for language, twin in ((L10N_JSON, L10N_DE_DE_JSON), (L10N_JS, L10N_DE_DE_JS)):
         assert twin.is_file(), f"{twin.name} is missing, so everybody on de_DE reads this app in English"
@@ -4052,8 +4062,10 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     # (the remedy of gateway_error, F-40N-02, E-40-07-05); six of plan 41-06
     # (the switch and the four state sentences of the backup pause, issue #37);
     # four of plan 43-06 (the one time hint, the counting sentence, the files
-    # not readable and the visible fallback, D-43-06, D-43-11, W10)
-    assert len(keys_of["de.json"]) == 365
+    # not readable and the visible fallback, D-43-06, D-43-11, W10); one of
+    # plan 43-19 (the SMB hint behind the remedy of unreadable, D-43-16; the
+    # remedy of unreadable changed its key and so moved nothing)
+    assert len(keys_of["de.json"]) == 366
 
 
 def test_every_catalogue_carries_the_same_keys() -> None:
