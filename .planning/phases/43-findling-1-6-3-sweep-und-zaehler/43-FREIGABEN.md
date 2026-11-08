@@ -65,3 +65,8 @@ Freigabe Push 43-18 Fix 3: "Ja , aber bitte Check die Lage nochmal , es sollte e
 Freigabe Dispatch 43-18 Fix 3: "Ja , aber bitte Check die Lage nochmal , es sollte ein einfacher Fix sein und wir sind schon Wochen damit beschäftigt" (2026-11-08, Claude Code Terminal) Entscheid: ja
 
 Umfang Fix 3: genau ein Push von 7e658fc0 bis 24093fc6 plus diesen Zeilen (Soll der Suchgegenprobe aus eingepflanzten Wörtern der Wahrheit, Catch-up von 1.5 unter 1.6.2 abwarten), genau ein Dispatch von "Coverage end to end" nach grünen gestarteten Push-Workflows. Kein Tag, kein Release, kein Store, kein Kommentar.
+
+Vollzug 43-18 Fix 3: Push fa0ab5e7, vier gestartete Push-Workflows grün; genau ein Dispatch, Lauf 42482017221: gate-crawl/wrapped, gate-queue/wrapped, gate-queue/native, v1.6.2/native grün; upgrade/native rot vor dem Crawl ("Error: in prepare, database is locked (5)" beim Lesen der Nextcloud-SQLite, gateway probe locked-for-all: no file id), Harness-Zufall. Wahrheitszeile ohne Wort belegt: home::admin files/welcome.txt.
+
+Freigabe Rerun 43-18 Fix 3 upgrade: "Ja" (2026-11-08, Claude Code Terminal) Entscheid: ja
+Umfang: genau ein gh run rerun 42482017221 --failed, ohne Code-Änderung.
