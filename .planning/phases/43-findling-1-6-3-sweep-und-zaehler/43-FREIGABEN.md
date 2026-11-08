@@ -77,3 +77,8 @@ Freigabe Push 43-20: "Go" (2026-11-08, Claude Code Terminal) Entscheid: ja
 Freigabe Dispatch 43-20: "Go" (2026-11-08, Claude Code Terminal) Entscheid: ja
 
 Umfang 43-20: genau ein Push von 06dd3c12 bis 054ab685 plus diesen Zeilen (Vollzug Fix 3, einmaliger neuer Wiederholungszähler für Weigerungszeilen von 1.6.2, sqlite3-Wartezeit im Harness), genau ein Dispatch von "Coverage end to end" nach grünen gestarteten Push-Workflows. Kein Tag, kein Release, kein Store, kein Kommentar.
+
+Freigabe Push 43-08: "Ja, Push + 1 Dispatch" (2026-11-08 20:13, Claude Code Terminal) Entscheid: ja
+Freigabe Dispatch 43-08: "Ja, Push + 1 Dispatch" (2026-11-08 20:13, Claude Code Terminal) Entscheid: ja
+
+Umfang 43-08: genau ein Push der acht lokalen Commits 11127790..684ded20 plus dieser Zeilen (43-07-Doku und Summary, 43-19 Abhilfetexte, 43-08 Bump 1.6.3, Upgrade-Strecke, STATE), genau ein Dispatch von "Coverage end to end" nach gruenen gestarteten Push-Workflows auf dem neuen Kopf. Kein Tag, kein Release, kein Store, kein Kommentar. CHANGELOG [1.6.3] lag dem Owner woertlich vor (inkl. fuenfter Known-limitations-Satz aus 43-18-SUMMARY).
