@@ -84,6 +84,11 @@ RELEASE_COMPANION_URL='https://github.com/street1983nk/nextcloud-search/releases
 BACKLOG_IMAGES=30
 DRAIN_TIMEOUT=1500
 SWEEP_TIMEOUT=240
+# The catch-up of 1.5 under 1.6.2 (upgrade leg, run 42477570073): its once
+# task looks at the mark every 300 s (RECONCILE_TICK_SECONDS of 1.6.2) and a
+# round behind a busy queue waits one more tick, so two ticks, the round and
+# a margin.
+CATCHUP_TIMEOUT=900
 # The backend the instance runs right now; the upgrade variant moves it.
 BACKEND_DIR="${SRC}/backend"
 
@@ -1118,6 +1123,45 @@ fi
 # ===================================================================================
 
 if [ "${VARIANT}" = "upgrade" ]; then
+  # Run 42477570073: the head container started next to the 1.6.2 companion
+  # with the reconcile off found the one time catch-up of 1.5 still open
+  # (main.py _the_catch_up_is_open), ran its cycle, and that cycle sweeps since
+  # 43-02 (reconcile.py, SWEEP_MARK), so W5 stopped the run before phase A.
+  # Right for a user: 1.6.2 had simply not finished it in the few minutes of
+  # this job. 1.6.2 runs the cycle with the reconcile off as well (v1.6.2
+  # main.py:1277-1282, a once task): part A in the poller on verdicts
+  # generation 3, part B one reconcile round behind the quiet gate (crawl
+  # over, fewer than RECONCILE_QUIET_MAX scheduled rows), checked every
+  # RECONCILE_TICK_SECONDS (300 s). So the leg waits here, under 1.6.2, as a
+  # longer running 1.6.2 instance would have, until CATCHUP_MARK says done.
+  # Before the orphan below: the catch-up walk would otherwise take verwaist.txt
+  # as gone, and the unresolved key case would test nothing (the same run
+  # answered docKeysUnresolved 0 after the backfill). 1.6.2 writes no
+  # storage_sweep_at at all, so W5 keeps its meaning: a sweep of the head
+  # before phase A is still an invalid run.
+  step "upgrade: the catch-up of 1.5 finishes under 1.6.2"
+  catchup_key=$(sed -n 's/^CATCHUP_MARK: Final = "\([a-z0-9_]*\)".*/\1/p' "${SRC}/backend/src/findling/store/repo.py")
+  catchup_done=$(sed -n 's/^CATCHUP_DONE: Final = "\([a-z]*\)".*/\1/p' "${SRC}/backend/src/findling/store/repo.py")
+  [ -n "${catchup_key}" ] && [ -n "${catchup_done}" ] \
+    || fail "the catch-up mark of 1.6.2 could not be read from store/repo.py"
+  catchup_started=$(date +%s)
+  deadline=$((catchup_started + CATCHUP_TIMEOUT))
+  while :; do
+    catchup_now=$(statedb "SELECT value FROM meta WHERE key = '${catchup_key}';" || true)
+    [ "${catchup_now}" = "${catchup_done}" ] && break
+    [ "$(date +%s)" -lt "${deadline}" ] \
+      || fail "1.6.2 did not finish the catch-up of 1.5 within ${CATCHUP_TIMEOUT} s (${catchup_key}='${catchup_now}'), the upgrade leg cannot start the head without a catch-up round"
+    sleep 10
+  done
+  catchup_seconds=$(($(date +%s) - catchup_started))
+  # The catch-up round may hand rows back to the queue; they settle under
+  # 1.6.2 before anything of the head runs.
+  drain
+  swept_162=$(statedb "SELECT value FROM meta WHERE key = 'storage_sweep_at';" || true)
+  [ -z "${swept_162}" ] || fail "storage_sweep_at is set under 1.6.2, W5 would read a sweep that is not the head's"
+  note "upgrade: ${catchup_key}=${catchup_done} under 1.6.2 after ${catchup_seconds} s of waiting"
+  rows+=("| upgrade | catch-up of 1.5 done under 1.6.2 before the head starts | ${catchup_done} | ${catchup_done} after ${catchup_seconds} s |")
+
   step "a container row without a file cache row"
   orphan=$(ncdb "SELECT fc.fileid FROM oc_filecache AS fc WHERE fc.storage = ${home_dave} AND fc.path = 'files/verwaist.txt';")
   [ -n "${orphan}" ] || fail "verwaist.txt has no file cache row"
@@ -1383,10 +1427,41 @@ fi
 
 step "search cross check"
 words_unique "words before the search cross check"
+# The expected count (run 42477570073): not the number of truth rows. In four
+# legs the truth held 23 rows and only 22 of them carried a planted word, all
+# 36 misses were outside the truth, so one indexed document of the truth has
+# no word of the harness and no search can count it. The expected count is
+# the number of WORDS lines whose file name is a basename in the truth: a
+# word counts once per file it was written into, so the two gleich.txt (daten
+# and archiv, one word each) stay two expected hits when both are in the
+# truth. That is never looser than before: a word of a truth name must find
+# its file (the title match of search_crosscheck), a word outside the truth
+# that is found pushes found above the expected count, and the misses in the
+# truth are a check of their own, so a hit outside cannot hide a miss inside.
+in_truth=$(cut -f2 "${WORK}/numerator.tsv" | sed 's#.*/##' | sort -u)
+cut -f2 "${WORDS}" | sort -u > "${WORK}/word-names.txt"
+search_expected=0
+while IFS=$'\t' read -r _ word_name; do
+  if printf '%s\n' "${in_truth}" | grep -qxF -- "${word_name}"; then
+    search_expected=$((search_expected + 1))
+  fi
+done < "${WORDS}"
+# Every truth row without a planted word, with its full key (storage and
+# path, never content), so the next run names the document.
+no_word=0
+while IFS=$'\t' read -r nw_space nw_path; do
+  if ! grep -qxF -- "${nw_path##*/}" "${WORK}/word-names.txt"; then
+    no_word=$((no_word + 1))
+    note "numerator truth row without a planted word: ${nw_space} ${nw_path}"
+  fi
+done < "${WORK}/numerator.tsv"
+rows+=("| B | numerator truth rows without a planted word (not searchable by the harness) | - | ${no_word} |")
+[ "${search_expected}" -gt 0 ] || fail "no planted word belongs to the numerator truth, the search cross check tests nothing"
 # shellcheck disable=SC2086 # the user list is a word list on purpose
 found=$(search_crosscheck "${WORDS}" ${users_left})
-rows+=("| B | words found through the search (W4) | ${b_num_truth} | ${found} |")
-check "search cross check" "${b_num_truth}" "${found}"
+rows+=("| B | words found through the search (W4), expected words of truth names | ${search_expected} | ${found} |")
+check "search cross check" "${search_expected}" "${found}"
+truth_misses=0
 if [ -s "${WORK}/crosscheck-missing.txt" ]; then
   note "files whose word the search does not find: $(sort "${WORK}/crosscheck-missing.txt" | tr '\n' ' ')"
   # Run 42418778026 listed 45 names for 8 missing words: most of them are
@@ -1394,15 +1469,17 @@ if [ -s "${WORK}/crosscheck-missing.txt" ]; then
   # numerator truth are the misses that count; each missing name comes with
   # the short form of the raw answer for the first user (entries and titles,
   # file names of the test topology, no content).
-  in_truth=$(cut -f2 "${WORK}/numerator.tsv" | sed 's#.*/##' | sort -u)
   while IFS=$'\t' read -r miss_name miss_raw; do
     if printf '%s\n' "${in_truth}" | grep -qxF -- "${miss_name}"; then
+      truth_misses=$((truth_misses + 1))
       note "search miss in the numerator truth: ${miss_name}, ${miss_raw}"
     else
       note "search miss outside the numerator truth: ${miss_name}, ${miss_raw}"
     fi
   done < "${WORK}/crosscheck-raw.txt"
 fi
+rows+=("| B | search misses in the numerator truth | 0 | ${truth_misses} |")
+check "search misses in the numerator truth" 0 "${truth_misses}"
 
 # ===================================================================================
 # 7. Upgrade variant: back to 1.6.2, then up again with a rename (W5, G1)
