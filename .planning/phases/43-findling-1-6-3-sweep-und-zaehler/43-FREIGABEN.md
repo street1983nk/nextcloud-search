@@ -72,3 +72,8 @@ Freigabe Rerun 43-18 Fix 3 upgrade: "Ja" (2026-11-08, Claude Code Terminal) Ents
 Umfang: genau ein gh run rerun 42482017221 --failed, ohne Code-Änderung.
 
 Entscheid 43-20: "Ok" (2026-11-08, Claude Code Terminal): einmaliger neuer Wiederholungszähler für Weigerungszeilen beim ersten Start von 1.6.3.
+
+Freigabe Push 43-20: "Go" (2026-11-08, Claude Code Terminal) Entscheid: ja
+Freigabe Dispatch 43-20: "Go" (2026-11-08, Claude Code Terminal) Entscheid: ja
+
+Umfang 43-20: genau ein Push von 06dd3c12 bis 054ab685 plus diesen Zeilen (Vollzug Fix 3, einmaliger neuer Wiederholungszähler für Weigerungszeilen von 1.6.2, sqlite3-Wartezeit im Harness), genau ein Dispatch von "Coverage end to end" nach grünen gestarteten Push-Workflows. Kein Tag, kein Release, kein Store, kein Kommentar.
