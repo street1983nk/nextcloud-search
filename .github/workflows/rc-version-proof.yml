@@ -1,0 +1,187 @@
+name: RC version proof
+
+# The dispatch proof A5/A6 of plan 43-10 (D-43-10, D-43-13), run BEFORE the
+# reporter of issue #25 gets the 1.6.3-rc.1 test build. The question both jobs
+# answer is Pitfall 6 of 43-RESEARCH.md: does a test build at 1.6.3-rc.1 leave
+# the later store release 1.6.3 visible as an update, on a fresh instance and
+# on the exact path the reporter uses.
+#
+#   a6-companion (stable33 and stable34): a FRESH Nextcloud starts at the
+#   released companion 1.6.2, the signed rc archive out of a release.yml
+#   dispatch is verified against the public certificate and installed over it,
+#   occ upgrade runs, app:list shows 1.6.3-rc.1, the 1.6.3 migration ran and
+#   the per document hint flag stands at 1. Then the comparison the server
+#   itself uses for "update available" is grepped out of the server checkout,
+#   file and line go to the log, and php -r proves 1.6.3 > 1.6.3-rc.1 > 1.6.2
+#   in exactly that form.
+#
+#   a5-backend (stable34, HaRP after the pattern of deploy-harp.yml): the
+#   backend 1.6.2 is registered from the info.xml of tag v1.6.2 (pulls the
+#   public :1.6.2), the comparison AppAPI uses is grepped out of the AppAPI
+#   checkout with file and line, php -r proves both pairs, and then
+#   occ app_api:app:update findling_backend --info-xml <raw URL of the
+#   testbuild info.xml> pulls the immutable image :<sha> and lands at
+#   1.6.3-rc.1; a store shaped info.xml with version 1.6.3 on the same image
+#   is applied over it. Every occ output is verbatim; a refusal without
+#   --force-update is repeated with it and both outputs are shown.
+#
+# The run blocks live in scripts/ci/rc_version_proof.sh, because
+# deploy-harp.yml sits 36 bytes under the 500 KB workflow cap and
+# backend/tests/test_workflow_size.py holds every file under it.
+#
+# Dispatch only, nothing here runs on a push: the proof needs the run id of a
+# release.yml dispatch and the rc branch to exist, and both arrive as inputs
+# after the owner gate of 43-10 task 2. Read rights only (T-43-32):
+# contents for the checkouts and the release download, actions for the
+# artifact of the named run. Inputs reach the script as environment variables
+# and never as interpolated text, and the script validates their shapes.
+on:
+  workflow_dispatch:
+    inputs:
+      rc_ref:
+        description: 'Branch of the test build, whose testbuild/ info.xml the reporter path reads'
+        type: string
+        default: 'rc/1.6.3-rc.1'
+      archive_run_id:
+        description: 'Run id of the release.yml dispatch whose store-release artifact carries the signed rc companion'
+        type: string
+        required: true
+      image_sha:
+        description: 'Commit of the immutable backend image tag, 40 hex characters'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  a6-companion:
+    name: a6-companion ${{ matrix.server-version }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      # Both lines have to answer, and the stable33 verdict is worth having
+      # even on a day stable34 breaks for an unrelated reason.
+      fail-fast: false
+      matrix:
+        server-version: [stable33, stable34]
+
+    env:
+      # setup-test-nc requires both inputs even when no ExApp is registered.
+      EXAPP_SECRET: '12345'
+      EXAPP_PORT: '10035'
+
+    steps:
+      # Same order as in integration.yml: the server checkout empties the
+      # workspace root, the second checkout brings the composite action.
+      - name: Check out nextcloud/server
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: nextcloud/server
+          ref: ${{ matrix.server-version }}
+          submodules: recursive
+
+      - name: Check out findling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: findling-src
+
+      # Before setup-test-nc, so the instance starts its life at the released
+      # 1.6.2 and the upgrade below is a real upgrade and not a reinstall.
+      - name: Swap the companion of the checkout for the released 1.6.2
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash findling-src/scripts/ci/rc_version_proof.sh a6-swap
+
+      - name: Set up the test Nextcloud without registering the ExApp
+        uses: ./findling-src/.github/actions/setup-test-nc
+        with:
+          server-version: ${{ matrix.server-version }}
+          php-version: '8.2'
+          exapp-secret: ${{ env.EXAPP_SECRET }}
+          exapp-port: ${{ env.EXAPP_PORT }}
+          register-exapp: 'false'
+
+      - name: A6, the rc archive over the 1.6.2 instance and the version order of the server
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARCHIVE_RUN_ID: ${{ inputs.archive_run_id }}
+        run: bash findling-src/scripts/ci/rc_version_proof.sh a6
+
+      - name: Everything the failure had to say
+        if: failure()
+        run: tail -n 200 data/nextcloud.log || echo "no data/nextcloud.log written"
+
+  a5-backend:
+    name: a5-backend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    env:
+      EXAPP_SECRET: '12345'
+      EXAPP_PORT: '10035'
+      # The digest deploy-harp.yml pins, resolved there on 2026-09-03 from the
+      # tag "release"; an index with linux/amd64 and linux/arm64.
+      HARP_IMAGE: ghcr.io/nextcloud/nextcloud-appapi-harp@sha256:603fdf5ca2802235fd4e40301476dd2fafff409e84a42f8cb3b8f2e17c22ce39
+
+    steps:
+      - name: Check out nextcloud/server
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: nextcloud/server
+          ref: stable34
+          submodules: recursive
+
+      # fetch-depth 0, because the registration file of the released 1.6.2 is
+      # read with git show out of the tag v1.6.2 of this repository.
+      - name: Check out findling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: findling-src
+          fetch-depth: 0
+
+      # 0.0.0.0 for the same reason as in deploy-harp.yml: a proxy sits in
+      # front of the instance and the builtin server would otherwise bind only
+      # the first address localhost resolves to.
+      - name: Set up the test Nextcloud without registering the ExApp
+        uses: ./findling-src/.github/actions/setup-test-nc
+        with:
+          server-version: stable34
+          php-version: '8.2'
+          exapp-secret: ${{ env.EXAPP_SECRET }}
+          exapp-port: ${{ env.EXAPP_PORT }}
+          register-exapp: 'false'
+          nextcloud-host: '0.0.0.0'
+
+      - name: Start HaRP
+        run: bash findling-src/scripts/ci/rc_version_proof.sh a5-harp
+
+      - name: Put one address in front of Nextcloud and HaRP
+        run: bash findling-src/scripts/ci/rc_version_proof.sh a5-proxy
+
+      - name: Register the HaRP daemon and the released 1.6.2 backend
+        run: bash findling-src/scripts/ci/rc_version_proof.sh a5-register
+
+      - name: A5, the update path of the reporter with verbatim outputs
+        env:
+          RC_REF: ${{ inputs.rc_ref }}
+          IMAGE_SHA: ${{ inputs.image_sha }}
+        run: bash findling-src/scripts/ci/rc_version_proof.sh a5
+
+      - name: Everything the failure had to say
+        if: failure()
+        run: |
+          echo "--- nextcloud ---"
+          tail -n 200 data/nextcloud.log || echo "no data/nextcloud.log written"
+          echo "--- harp ---"
+          docker logs appapi-harp 2>&1 | tail -n 100 || echo "no harp container"
+          echo "--- front proxy ---"
+          docker logs exapps-proxy 2>&1 | tail -n 50 || echo "no proxy container"
+          echo "--- exapp container ---"
+          container=$(docker ps -a --filter 'name=findling_backend' --format '{{.Names}}' | head -n 1)
+          if [ -n "${container}" ]; then
+            docker logs "${container}" 2>&1 | tail -n 100
+          else
+            echo "no exapp container exists"
+          fi
