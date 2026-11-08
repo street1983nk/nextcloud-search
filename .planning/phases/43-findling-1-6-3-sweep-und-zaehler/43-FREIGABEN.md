@@ -94,3 +94,8 @@ Freigabe Dispatch 43-10 release: "Ja, alle vier" (2026-11-08 23:31, Claude Code 
 Freigabe Dispatch 43-10 proof: "Ja, alle vier" (2026-11-08 23:31, Claude Code Terminal) Entscheid: ja
 
 Umfang 43-10: genau ein Push auf main (Proof-Workflow, Skript, TESTBUILD, SUMMARY, 43-09-Nachtraege, diese Zeilen), genau ein Push des Branches rc/1.6.3-rc.1 (nie mergen), genau ein Dispatch release.yml auf rc/1.6.3-rc.1 mit create_release=false (Archiv nur als Workflow-Artefakt, 30 Tage), genau ein Dispatch rc-version-proof.yml. Kein Tag, kein oeffentliches Release, kein Store, kein Kommentar.
+
+Freigabe Push 43-10 Proof-Fix: "Ja, Push + Proof-Retry" (2026-11-09 00:59, Claude Code Terminal) Entscheid: ja
+Freigabe Dispatch 43-10 proof Wiederholung: "Ja, Push + Proof-Retry" (2026-11-09 00:59, Claude Code Terminal) Entscheid: ja
+
+Umfang: genau ein Push der Skript-Fixes (SIGPIPE, Heartbeat 300 s) plus dieser Zeilen auf main, genau EIN erneuter Dispatch rc-version-proof.yml mit denselben Parametern (archive_run_id 42537119924, image_sha 655fe197...). Kein weiterer Archiv-Lauf, kein Tag, kein Store.
