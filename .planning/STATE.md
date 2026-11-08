@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
 status: executing
-stopped_at: Completed 43-08 (1.6.3 gepusht d9f8a65d, 8/8 grün, E2E 42516315101 grün 5/5), nächster Schritt 43-09 Audit
-last_updated: "2026-11-08T20:45:00.000Z"
+stopped_at: Completed 43-09 (Audit 0/0/0 offen, F-43A-01 gefixt, E2E 42525415627 grün auf 37b518d6), nächster Schritt 43-10 rc-Testbuild
+last_updated: "2026-11-08T22:15:00.000Z"
 last_activity: 2026-11-08
 progress:
   total_phases: 6
@@ -26,7 +26,7 @@ Siehe .planning/PROJECT.md (Stand nach v1.5, Milestone v1.6 gestartet) und .plan
 ## Current Position
 
 Phase: 43 (findling-1-6-3-sweep-und-zaehler), EXECUTING
-Plan: 15 of 20 erledigt (43-01..08, 43-15..20); nächster 43-09 Audit, dann 43-10..14; Block V + SMB-Zusatzsatz + Store-Text warten auf Owner-Freigabe in 43-12
+Plan: 16 of 20 erledigt (43-01..09, 43-15..20); nächster 43-10 rc-Testbuild mbozem, dann 43-11..14; Block V + SMB-Zusatzsatz + Store-Text + F-43A-01-Satz warten auf Owner-Freigabe in 43-12
 Status: E2E-Abnahmetest GRÜN 5/5 (Lauf 42503731869, Kopf 17f81918, Beleg 43-E2E.md): Sweep hinter Gate, Zähler pro Dokument, DENY-Fix, Erneuerung 43-20, Rückweg ok; upgrade-Rot war Harness-Erwartung (Carol-Zeile = gone, Fix 17f81918). PHPUnit CI 1140 grün. Jeder Push, Dispatch, Tag, Kommentar nur mit Owner-Freigabe (43-FREIGABEN.md)
 Last activity: 2026-11-08
 
