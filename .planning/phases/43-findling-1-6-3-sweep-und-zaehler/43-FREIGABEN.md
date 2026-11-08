@@ -55,3 +55,8 @@ Freigabe Dispatch 43-18 Fix 1: "J" (2026-11-07 23:57, Claude Code Terminal) Ents
 Umfang Fix 1: genau ein Push von 555dae83 bis ad2aba47 plus diesen Zeilen (Fristen 80 s, Harness-Befunde aus Lauf 42418778026), genau ein Dispatch von "Coverage end to end" nach grünen Push-Workflows.
 
 Vollzug 43-18 Fix 1: Push 71933631, acht Push-Workflows grün; genau ein Dispatch, Lauf 42425348629, rot in allen fünf Beinen. Befunde: (1) Wrapped gross.bin bei 200 KB/s: 422 nach 60 s trotz 80-s-Frist; Ursache icewind/smb Options::$timeout = 20 (smbclient -t 20 je Operation, Server 3rdparty/icewind/smb/src/Options.php:14), ein 8-MiB-Block braucht bei 200 KB/s rund 42 s; Admin-Stellschraube Speicher-Option timeout (apps/files_external/lib/Lib/Storage/SMB.php:103-106). (2) upgrade: occ upgrade bricht ab, "The files of the app viewer were not correctly replaced" (Harness, viewer fehlt im Server-Checkout). (3) Suchgegenprobe 15/23 in gate-queue/native und v1.6.2: aaron bekommt für jedes Suchwort dieselben drei Treffer projekt-1..3, alle Suchwörter beginnen mit "zq"; Ursache offen (Präfix/Fuzzy-Treffer vermutet).
+
+Freigabe Push 43-18 Fix 2: "Ok" (2026-11-08, Claude Code Terminal) Entscheid: ja
+Freigabe Dispatch 43-18 Fix 2: "Ok" (2026-11-08, Claude Code Terminal) Entscheid: ja
+
+Umfang Fix 2: genau ein Push von ef42dc3f bis c11f749a plus diesen Zeilen (ein Wort je Datei, Suche mit limit 25, viewer im Server-Checkout, gross.bin innerhalb des smbclient-Timeouts plus Nachweis mit timeout=120), genau ein Dispatch von "Coverage end to end" nach grünen Push-Workflows. Kein Tag, kein Release, kein Store, kein Kommentar.
