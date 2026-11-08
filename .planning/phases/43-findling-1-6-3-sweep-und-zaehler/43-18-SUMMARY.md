@@ -175,6 +175,34 @@ Anlass: Vollzug Fix 1 (43-FREIGABEN.md), alle fünf Beine rot mit drei Harness-B
 
 **Known limitations für 43-08 (ersetzt die Grenze aus Fix-Runde 1 für SMB ohne Erweiterung):** Im Wrapped-Modus (SMB ohne php-smbclient) startet icewind/smb smbclient mit `-t 20`; ein SMB2-Leseblock von 8 MiB muss innerhalb dieses timeout (Standard 20 s) ankommen, also ab etwa 420 KB/s (8 MiB / 20 s). Langsamer: Dateien größer als ein Block werden 422 und zählen als nicht lesbar. Abhilfe: Erweiterung php-smbclient installieren (Admin-Handbuch: "strongly recommended") oder Backend-Option timeout des Speichers erhöhen (`occ files_external:config <mount> timeout <s>`, nicht im Web-Formular); mit erhöhtem timeout greift die Gateway-Grenze von rund 105 KB/s (80 s je Block) aus Fix-Runde 1.
 
+## Fix-Runde 3 (Lauf 42477570073, 2026-11-08)
+
+Anlass: Dispatch-Lauf 42477570073 (Kopf fbd5626c). Alle Produktvergleiche (Zähler 23, Nenner 55, notReadable 1, Urteile gesperrt/leer, Gateway-Proben, große Datei) gleich der Wahrheit; zwei Harness-Befunde. Kein Produktcode geändert. Lokal committet, nicht gepusht, kein Dispatch.
+
+| Aufgabe | Commit | Betreff |
+|---------|--------|---------|
+| 1 und 2 | 7e658fc0 | ci(43-18): search expectation from planted words of truth names, catch-up of 1.5 done under 1.6.2 |
+
+**1. Suchgegenprobe (gate-crawl/wrapped, gate-queue/wrapped, gate-queue/native, v1.6.2/native: Soll 23, gefunden 22).** Alle Fehltreffer lagen außerhalb der Wahrheit, keiner in ihr; gate-crawl: 28 Wörter, 6 außerhalb (daten-carol-1/2, dave-1/2, verwaist, gesperrt-alle), also 22 Wörter für 23 Wahrheitszeilen. Eine indexierte Wahrheitszeile trägt kein Wort des Harness. Welche, ist unbelegt (Verdacht: eine Skeleton-Datei aus einem Home, das vor dem Leeren von skeletondirectory entstand); die neue note nennt sie im nächsten Lauf.
+- Soll jetzt = Zahl der WORDS-Zeilen, deren Dateiname als Basename in numerator.tsv steht. Ein Wort zählt einmal je Datei, in die es geschrieben wurde; die zwei gleich.txt (daten und archiv, je ein Wort) bleiben zwei Soll-Treffer, solange beide in der Wahrheit stehen.
+- Nicht lockerer: das Wort eines Wahrheitsnamens muss seine Datei finden (Titelvergleich in search_crosscheck); ein gefundenes Wort außerhalb der Wahrheit hebt found über das Soll; neu ist die eigene Prüfung "search misses in the numerator truth" mit Soll 0, damit ein Treffer außerhalb keinen Miss innerhalb verdecken kann.
+- Jede Wahrheitszeile ohne Wort: note "numerator truth row without a planted word: <Speicher> <Pfad>" (Schlüssel, kein Inhalt), Anzahl als eigene Zeile der Ergebnistabelle. Soll 0 Wörter der Wahrheit ergibt fail ("tests nothing").
+- Lokal geprüft mit Beispieldaten: zwei gleich.txt in der Wahrheit, eine Zeile home::admin files/Nextcloud.png ohne Wort, ein Wort außerhalb: Soll 3, 1 Zeile ohne Wort, wie erwartet.
+- Rückweg-Probe (rollback-word.tsv, ein Wort, Soll 1): nichts zu tun, sie nutzt nur search_crosscheck und vergleicht mit 1.
+
+**2. upgrade/native: "a catch-up round swept before phase A".** Befund zur Catch-up-Marke unter 1.6.2, am Tag v1.6.2 gelesen:
+- Schlüssel `recheck_1_5_0` (CATCHUP_MARK, store/repo.py:194), Werte leer, Cursor-Ziffern, `reconcile`, `done` (CATCHUP_DONE).
+- 1.6.2 fährt die Runde auch bei FINDLING_RECONCILE_ENABLED=false (main.py:1277-1282, once-Task): Teil A im Poller bei verdicts-Generation 3 (1.6.2-Companion meldet 3, ProfileController.php:53) und nach `recheck_1_4_0`; Teil B eine Abgleichsrunde hinter dem Ruhetor (Crawl vorbei, weniger als RECONCILE_QUIET_MAX = 100 offene Zeilen), die once-Task schaut alle RECONCILE_TICK_SECONDS = 300 s nach der Marke. 1.6.2 kann sie also fertigstellen, sie hatte im Job nur nicht genug Zeit.
+- 1.6.2 fegt in dieser Runde auch (reconcile.py, Schritt 5), schreibt aber kein `storage_sweep_at` (SWEEP_MARK gibt es erst im Kopf). W5 behält damit seine Bedeutung für alle Beine: es fängt nur einen Feger des Kopfes vor Phase A.
+- Fix: im upgrade-Bein nach dem ersten drain und vor der verwaisten Zeile warten, bis `recheck_1_5_0` = `done` ist (Schlüssel und Wert aus `${SRC}/backend/src/findling/store/repo.py` gelesen), hart `CATCHUP_TIMEOUT=900` (zwei Ticks, die Runde, Puffer), sonst fail mit Schlüssel und aktuellem Wert. Danach ein drain (die Runde kann Zeilen zurückgeben) und die Prüfung, dass unter 1.6.2 kein `storage_sweep_at` steht. note und Tabellenzeile mit der Wartezeit. Der Guard W5 bleibt unverändert.
+- Warum vor der verwaisten Zeile: der Catch-up-Gang hätte verwaist.txt als verschwunden gewertet. Im selben Lauf meldete /coverage nach dem Backfill docKeysUnresolved 0 statt mindestens 1 (Warnung, failures+1); wahrscheinliche Ursache, unbelegt: die Catch-up-Runde des Kopfes hat die verwaiste Zeile vorher zum Grabstein gemacht (Backfill done=48 bei 53 lebenden Zeilen vor dem Update).
+
+**Grenzen der Runde:**
+- Gibt die 1.6.2-Runde die Zeilen failed(gateway_error) der gesperrten Dateien neu aus (Restbudget), steigt attempts unter 1.6.2 um eins mehr; reicht danach das Budget für die Neuvergabe durch den Kopf in Phase B nicht, scheitert judge_locked "upgrade after phase B". Das wäre ein Befund, keine Lockerung.
+- Schafft 1.6.2 die Runde nicht in 900 s, bricht das Bein mit klarer Meldung ab. Saubere Alternative, nicht umgesetzt: vor dem Start des Kopfes `recheck_1_5_0` von Hand auf `done` setzen (1.6.2 selbst sieht das vor, reconcile.py:756 "a hand set CATCHUP_DONE ends the second chance at once"); Begründung: der Test misst die Kopf-Runde aus 43-02, nicht den Abschluss der 1.5-Nachholung.
+
+**Tests der Runde:** `bash -n` beider Skripte grün; shellcheck lokal nicht verfügbar; test_workflow_pins, test_workflow_contexts, test_workflow_size, test_workflow_tag_triggers, test_measurement_scripts, test_ops_scripts 756 passed. Harness nicht lokal gelaufen; Beleg erst im nächsten freigegebenen Dispatch.
+
 ## Threat Flags
 
 Keine neue Angriffsfläche: keine Route, kein Schlüssel, keine Schemaänderung; die Probe- und Urteilszeilen tragen nur Status, Sekunden, Bytes, Datei-IDs.
