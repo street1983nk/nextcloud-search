@@ -29,10 +29,10 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
   the queue is empty (#25). File types refused on storages that are no
   longer mounted no longer shrink it.
 - Deleted files no longer count as indexed in the status figures.
-- On SMB storage without the php-smbclient extension, a file that cannot
-  be opened (access denied, sharing violation, offline) no longer blocks a
-  PHP worker, and such files count as not readable. A readable empty file
-  is answered 200, not 400.
+- On SMB storage without the php-smbclient extension, a file that cannot be
+  opened (access denied, sharing violation, offline)
+  no longer blocks a PHP worker, and such files count as not readable.
+  A readable empty file is answered 200, not 400.
 - Files that 1.6.2 recorded as a gateway error are checked once more after
   the update, also when their retries were used up, so a locked or refused
   file shows as not readable with its remedy.

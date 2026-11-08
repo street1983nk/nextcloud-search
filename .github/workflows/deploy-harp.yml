@@ -107,6 +107,10 @@ env:
   # jumps from 1.5.x and 1.6.x, and 1.6.2 adds no migration, no schema and no
   # stored key in the volume; the pause wish is an appconfig key that is
   # absent after an upgrade, so "Store upgrade 5" demands pause running.
+  # Release 1.6.3 keeps the start on v1.5.0 (plan 43-08): 1.6.3 adds one
+  # migration that only sets an app config flag, and meta keys in state.db
+  # for the storage sweep, the doc key backfill and the one time renewal of
+  # refusal streaks (plan 43-20); "Store upgrade 5" demands them in 14 to 18.
   # Every assurance that names the
   # behaviour of the start was derived anew for 1.5.0 in
   # .planning/phases/40-haertung-und-store-einreichung-1-6-0/40-03-ABLEITUNG.md,
@@ -3537,7 +3541,7 @@ jobs:
       # an installation that really came out of the release assets of
       # UPGRADE_FROM_TAG is brought to the state of this commit, and the index
       # it built survives that untouched. Since plan 40-03 that tag is v1.5.0
-      # and the jump is 1.5.0 to 1.6.2 (REL-06, 1.6.2 since 2026-11-04, 1.6.1 since 2026-11-02; 1.5.1 shares the code of 1.5.0
+      # and the jump is 1.5.0 to 1.6.3 (REL-06, 1.6.3 since 2026-11-08, 1.6.2 since 2026-11-04, 1.6.1 since 2026-11-02; 1.5.1 shares the code of 1.5.0
       # byte for byte, so the statements about 1.5.0 below hold for every 1.5.x
       # installation). From plan 36-13 the tag was v1.4.3 and the jump 1.4.3 to
       # 1.5.1 (D-36-13); from plan
@@ -5770,6 +5774,11 @@ jobs:
           backend_before_occ=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
             "SELECT configvalue FROM oc_appconfig WHERE appid = 'findling' AND configkey = 'backend_app_version';")
           echo "backend_app_version before occ upgrade: '${backend_before_occ}'"
+          # For assurance 15: the migration of 1.6.3 leaves the hint pending
+          # only on an instance that counted before (plan 43-08).
+          scan_rows_before=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
+            "SELECT COUNT(*) FROM oc_findling_scan_stats;")
+          echo "oc_findling_scan_stats rows before occ upgrade: ${scan_rows_before}"
 
           # The directory goes and the new one takes its place, because that is
           # what an update does: Installer::updateAppstoreApp removes the
@@ -5803,12 +5812,16 @@ jobs:
           backend_after_occ=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
             "SELECT configvalue FROM oc_appconfig WHERE appid = 'findling' AND configkey = 'backend_app_version';")
           echo "backend_app_version right after occ upgrade: '${backend_after_occ}'"
+          # Read before any overview call could stamp it (assurance 15).
+          hint_after_occ=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
+            "SELECT configvalue FROM oc_appconfig WHERE appid = 'findling' AND configkey = 'coverage_per_document_hint';")
+          echo "coverage_per_document_hint right after occ upgrade: '${hint_after_occ}'"
 
           # The two cases, both named, and both branches stay. They were
           # written in plan 11-07 for a version step that had not happened yet.
-          # Since plan 40-03 the tree carries 1.6.2 (1.6.1 until 2026-11-04, 1.6.0 until 2026-11-02) against the
+          # Since plan 40-03 the tree carries 1.6.3 (1.6.2 until 2026-11-08, 1.6.1 until 2026-11-04, 1.6.0 until 2026-11-02) against the
           # 1.5.0 of the tag, so the FIRST branch runs and has to see
-          # installed_version 1.6.2 after the upgrade. From plan 36-13 to 40-03
+          # installed_version 1.6.3 after the upgrade. From plan 36-13 to 40-03
           # the tree carried 1.5.1 (1.5.0 until 2026-10-22) against the 1.4.3
           # of the tag (first branch); from plan 30-06 to 36-13 tree and
           # UPGRADE_FROM_TAG both carried 1.4.2, so the SECOND branch ran; from plan
@@ -5876,7 +5889,7 @@ jobs:
 
           # The new image, and it is the one this run built out of this commit.
           # Why not the reference the archive of this commit names: since plan
-          # 40-02 backend/appinfo/info.xml says image-tag 1.6.0 (1.6.1 since 2026-11-02, 1.6.2 since 2026-11-04), and that tag is
+          # 40-02 backend/appinfo/info.xml says image-tag 1.6.0 (1.6.1 since 2026-11-02, 1.6.2 since 2026-11-04, 1.6.3 since 2026-11-08), and that tag is
           # not in the registry yet, because the release of phase 40 comes
           # after this proof (the same held for 1.4.0 between plan 29-11 and
           # the release of phase 29, for 1.3.0 between plan 23-06 and
@@ -6033,12 +6046,17 @@ jobs:
             echo "::error::the companion of this commit carries the version '${new_companion}', which is not major.minor.patch, so it does not go into GITHUB_ENV"
             exit 1
           fi
-          for value in "${restarts}" "${finished}"; do
+          for value in "${restarts}" "${finished}" "${scan_rows_before}"; do
             if ! [[ "${value}" =~ ^[0-9]+$ ]]; then
               echo "::error::a count of the container after the upgrade reads '${value}' and not a number, so it does not go into GITHUB_ENV"
               exit 1
             fi
           done
+          # A number or the empty string of an absent key (L-30-03).
+          if ! [[ "${hint_after_occ}" =~ ^[0-9]*$ ]]; then
+            echo "::error::the hint flag reads '${hint_after_occ}', neither a number nor empty, so it does not go into GITHUB_ENV"
+            exit 1
+          fi
           # A version or the empty string, nothing else (L-30-03): assurance 12
           # judges the values, this only keeps shell text out of GITHUB_ENV.
           for value in "${backend_before_occ}" "${backend_after_occ}"; do
@@ -6070,6 +6088,8 @@ jobs:
             echo "UPGRADE_BACKEND_VERSION_BEFORE_OCC=${backend_before_occ}"
             echo "UPGRADE_BACKEND_VERSION_AFTER_OCC=${backend_after_occ}"
             echo "UPGRADE_DRIFT_LINES_AT_UPGRADE=${drift_at_upgrade}"
+            echo "UPGRADE_SCAN_ROWS_BEFORE=${scan_rows_before}"
+            echo "UPGRADE_HINT_AFTER_OCC=${hint_after_occ}"
           } >> "${GITHUB_ENV}"
 
       # Five assurances about something that did NOT move and one about
@@ -6198,7 +6218,7 @@ jobs:
       # again: the embedding mark stays, the whole vector stock, the picture
       # and the seed of the new formats included, is the same rows chunk id
       # for chunk id, and the profile in force is economy (D-29-01).
-      - name: Store upgrade 5, the twelve assurances after the upgrade
+      - name: Store upgrade 5, the seventeen assurances after the upgrade
         if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
         env:
           # As in "Store upgrade 6": the two matrix values arrive as plain
@@ -6928,13 +6948,108 @@ jobs:
             echo "pause reads running after the upgrade (states seen:${pause_seen}), pauseWished is false and oc_appconfig carries no findling/paused"
           fi
 
+          # Assurances 14 to 18: the per document count of 1.6.3 arrives with
+          # the upgrade (plan 43-08), all read only (SC4 holds); 15 reads what
+          # "Store upgrade 4" recorded before the first overview call (43-06).
+          echo "--- 14, the migration of 1.6.3 ran (plan 43-08) ---"
+          migrated_1603=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
+            "SELECT COUNT(*) FROM oc_migrations WHERE app = 'findling' AND version = '001603Date20261108000000';")
+          if [ "${migrated_1603}" != "1" ]; then
+            echo "::error::oc_migrations carries ${migrated_1603} row(s) for Version001603Date20261108000000 instead of one"
+            fail=1
+          else
+            echo "oc_migrations carries the row of Version001603Date20261108000000"
+          fi
+
+          echo "--- 15, the hint is pending after occ upgrade (plan 43-06) ---"
+          if [ "${UPGRADE_SCAN_ROWS_BEFORE}" = "0" ]; then
+            echo "::error::the seed left no row in oc_findling_scan_stats, so this proof cannot show the hint of an instance that counted"
+            fail=1
+          elif [ "${UPGRADE_HINT_AFTER_OCC}" != "1" ]; then
+            echo "::error::coverage_per_document_hint read '${UPGRADE_HINT_AFTER_OCC}' right after occ upgrade instead of the pending 1, with ${UPGRADE_SCAN_ROWS_BEFORE} counter row(s) in the seed"
+            fail=1
+          else
+            echo "the hint is pending (1) on an instance with ${UPGRADE_SCAN_ROWS_BEFORE} counter row(s)"
+          fi
+
+          echo "--- 16, the coverage route answered (plan 43-08) ---"
+          cov_json="${RUNNER_TEMP}/upgrade-coverage-overview.json"
+          cov_deadline=$(( $(date +%s) + UPGRADE_DRAIN_BUDGET_SECONDS ))
+          per_doc="unread"; cov_counting="unread"; hint_now="unread"; legacy_reason="unread"
+          while :; do
+            sh "${RUNNER_TEMP}/overview.sh" "${cov_json}" > /dev/null 2>&1 || true
+            read -r per_doc cov_counting hint_now legacy_reason <<< "$(jq -r \
+              '.coverage | "\(.perDocument) \(.counting) \(.perDocumentHint) \(.legacyReason)"' \
+              "${cov_json}" 2> /dev/null || echo "unreadable unreadable unreadable unreadable")"
+            [ "${per_doc}" = "true" ] && [ "${cov_counting}" = "false" ] && break
+            [ "$(date +%s)" -lt "${cov_deadline}" ] || break
+            echo "waiting for the count: perDocument ${per_doc}, counting ${cov_counting}, legacyReason ${legacy_reason}, $(( cov_deadline - $(date +%s) ))s left"
+            sleep 5
+          done
+          if [ "${legacy_reason}" = "missing" ]; then
+            echo "::error::the coverage route did not answer the companion (legacyReason missing), the page fell back to the 1.6.2 figure"
+            fail=1
+          else
+            echo "the coverage route answered (legacyReason ${legacy_reason})"
+          fi
+
+          echo "--- 17, the count finished and the hint stands (D-43-12) ---"
+          if [ "${per_doc}" != "true" ] || [ "${cov_counting}" != "false" ]; then
+            echo "::error::the count did not finish within UPGRADE_DRAIN_BUDGET_SECONDS: perDocument '${per_doc}', counting '${cov_counting}', legacyReason '${legacy_reason}'"
+            fail=1
+          elif [ "${hint_now}" != "true" ]; then
+            echo "::error::perDocumentHint reads '${hint_now}' after the finished count, and the hint of D-43-06 has to stand"
+            fail=1
+          else
+            hint_flag=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
+              "SELECT configvalue FROM oc_appconfig WHERE appid = 'findling' AND configkey = 'coverage_per_document_hint';")
+            now_after_count=$(date +%s)
+            if ! [[ "${hint_flag}" =~ ^[0-9]+$ ]] || [ "${hint_flag}" -le 1 ] \
+               || [ "${hint_flag}" -lt "${UPGRADE_FINISHED_AT}" ] || [ "${hint_flag}" -gt "${now_after_count}" ]; then
+              echo "::error::coverage_per_document_hint reads '${hint_flag}' instead of a unix time between the upgrade end (${UPGRADE_FINISHED_AT}) and now (${now_after_count})"
+              fail=1
+            else
+              sh "${RUNNER_TEMP}/overview.sh" "${cov_json}" > /dev/null 2>&1 || true
+              hint_again=$(jq -r '.coverage.perDocumentHint | tostring' "${cov_json}" 2> /dev/null || echo "unreadable")
+              if [ "${hint_again}" != "true" ]; then
+                echo "::error::the hint went away right after its stamp ${hint_flag}, and D-43-12 keeps it for seven days"
+                fail=1
+              else
+                echo "the count finished per document, the hint stands and the flag is the stamp ${hint_flag}"
+              fi
+            fi
+          fi
+
+          echo "--- 18, the doc key backfill ran to the end (D-43-14) ---"
+          cat > "${RUNNER_TEMP}/dockeys-probe.py" <<'PY'
+          import json, os, sqlite3
+
+          conn = sqlite3.connect("file:" + os.environ["APP_PERSISTENT_STORAGE"] + "/state.db?mode=ro", uri=True, timeout=30)
+          columns = [row[1] for row in conn.execute("PRAGMA table_info(files)")]
+          missing = conn.execute("SELECT COUNT(*) FROM files WHERE doc_key IS NULL AND deleted_at IS NULL").fetchone()[0] if "doc_key" in columns else -1
+          print(json.dumps({"hasColumn": "doc_key" in columns, "missing": missing}))
+          PY
+          if ! docker logs "${UPGRADE_NEW_CONTAINER}" 2>&1 | grep -q 'doc key backfill, done='; then
+            echo "::error::the container log carries no 'doc key backfill, done=' line (D-43-14)"
+            fail=1
+          else
+            doc_keys=$(docker exec -i "${UPGRADE_NEW_CONTAINER}" python - < "${RUNNER_TEMP}/dockeys-probe.py" | tail -n 1) || doc_keys=""
+            echo "doc key answer: ${doc_keys}"
+            if ! jq -e '.hasColumn == true and .missing == 0' <<< "${doc_keys}" > /dev/null 2>&1; then
+              echo "::error::state.db has to carry the doc_key column with no living row missing a key (D-43-14)"
+              fail=1
+            else
+              echo "state.db carries the doc_key column and no living row is without a key"
+            fi
+          fi
+
           if [ "${fail}" -ne 0 ]; then
             echo "the two states side by side:"
             diff -u "${before}" "${after}" || true
             exit 1
           fi
 
-          echo "all twelve assurances of this step hold"
+          echo "all seventeen assurances of this step hold"
           {
             echo ""
             echo "### Upgrade from \`${UPGRADE_FROM_TAG}\` on ${MATRIX_SERVER_VERSION} (${MATRIX_RUNNER})"

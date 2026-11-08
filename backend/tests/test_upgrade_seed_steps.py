@@ -1031,16 +1031,55 @@ def test_the_assurance_step_does_nothing_an_admin_would_do() -> None:
 
 
 def test_the_step_name_counts_its_assurances() -> None:
-    # Twelve since plan 41-08: assurance 13 (an upgrade leaves indexing
-    # running) follows 12 (the 1.6 changes survive the upgrade, since plan
-    # 40-03) at the end of the step; 11 lives in "Store upgrade 5b", which
-    # also carries the writing part 2 of 12 behind its rule writing.
-    assert _named(ASSURANCE_STEP)[0]["name"] == "Store upgrade 5, the twelve assurances after the upgrade"
+    # Seventeen since plan 43-08: assurances 14 to 18 (the per document count
+    # of 1.6.3) follow 13 (an upgrade leaves indexing running, plan 41-08)
+    # and 12 (the 1.6 changes survive the upgrade, plan 40-03) at the end of
+    # the step; 11 lives in "Store upgrade 5b", which also carries the
+    # writing part 2 of 12 behind its rule writing.
+    assert _named(ASSURANCE_STEP)[0]["name"] == "Store upgrade 5, the seventeen assurances after the upgrade"
     run = _run(ASSURANCE_STEP)
-    for number in [*range(1, 11), 12, 13]:
+    for number in [*range(1, 11), *range(12, 19)]:
         assert f'echo "--- {number}, ' in run, number
     assert "an upgrade must not leave indexing paused" in run
-    assert 'echo "all twelve assurances of this step hold"' in run
+    assert 'echo "all seventeen assurances of this step hold"' in run
+
+
+def test_the_1_6_3_assurances_check_the_migration_the_route_and_the_hint() -> None:
+    # The five assurances of plan 43-08, each with its own error word: the
+    # migration row (14), the pending hint right after occ upgrade on an
+    # instance whose seed counted (15), the answered coverage route (16),
+    # the finished count with the standing hint and its stamp (17), and the
+    # finished doc key backfill with the doc_key column (18).
+    run = _run(ASSURANCE_STEP)
+    assert "version = '001603Date20261108000000'" in run
+    assert '"${UPGRADE_SCAN_ROWS_BEFORE}" = "0"' in run
+    assert '"${UPGRADE_HINT_AFTER_OCC}" != "1"' in run
+    assert "the coverage route did not answer the companion (legacyReason missing)" in run
+    assert '"\\(.perDocument) \\(.counting) \\(.perDocumentHint) \\(.legacyReason)"' in run
+    assert "the count did not finish within UPGRADE_DRAIN_BUDGET_SECONDS" in run
+    # The stamp is a unix time no older than the end of the upgrade and the
+    # hint stands on a fresh overview after it (D-43-12, seven days).
+    assert '[ "${hint_flag}" -lt "${UPGRADE_FINISHED_AT}" ]' in run
+    assert "D-43-12 keeps it for seven days" in run
+    assert "doc key backfill, done=" in run
+    # The probe mirrors _DOC_KEYS_MISSING_SQL of the store, read only.
+    assert "SELECT COUNT(*) FROM files WHERE doc_key IS NULL AND deleted_at IS NULL" in run
+    assert ".hasColumn == true and .missing == 0" in run
+
+
+def test_the_upgrade_step_records_the_scan_rows_and_the_hint_around_occ_upgrade() -> None:
+    # Assurance 15 is only honest when both values are read in "Store upgrade
+    # 4": the counter rows before occ upgrade (the signal the migration
+    # reads) and the hint flag right after it, before the first overview call
+    # could stamp the pending 1 to a unix time (plan 43-06).
+    run = _run(UPGRADE_STEP)
+    occ = run.index('"${RUNNER_TEMP}/nc-occ.sh" upgrade')
+    scan = run.index("SELECT COUNT(*) FROM oc_findling_scan_stats;")
+    hint = run.index("configkey = 'coverage_per_document_hint';")
+    overview = len(run)  # no overview call in this step, the read stands before any
+    assert scan < occ < hint < overview
+    names = {name for _, name, _ in _env_writes(run)}
+    assert {"UPGRADE_SCAN_ROWS_BEFORE", "UPGRADE_HINT_AFTER_OCC"} <= names
 
 
 def test_every_seed_word_finds_exactly_its_file_within_the_budget() -> None:
