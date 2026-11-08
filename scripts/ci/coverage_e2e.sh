@@ -670,6 +670,31 @@ locked_ids() {
   fi | paste -sd, -
 }
 
+# locked_diagnosis <label> <ids>: one line per row of the locked files, from
+# the container (storage, state, reason, attempts, etag, deleted_at, the
+# tombstoned rows too) and from the return channel, plus whether the one time
+# streak renewal of plan 43-20 ever logged. Ids and reason codes only, never a
+# path or content.
+locked_diagnosis() {
+  local label="$1" ids="$2" line
+  note "${label}: storages daten_alice=${daten_alice} daten_bob=${daten_bob} daten_carol=${daten_carol}"
+  while IFS= read -r line; do
+    note "${label}: container ${line}"
+  done < <(statedb "SELECT 'file_id=' || file_id || ' storage=' || storage_id
+                        || ' state=' || state || '/' || COALESCE(reason, '-')
+                        || ' attempts=' || attempts
+                        || ' etag=' || COALESCE(etag, '-')
+                        || ' deleted_at=' || COALESCE(deleted_at, '-')
+                      FROM files WHERE file_id IN (${ids}) ORDER BY file_id;")
+  while IFS= read -r line; do
+    note "${label}: file_state ${line}"
+  done < <(ncdb "SELECT 'file_id=' || file_id || ' state=' || state || '/' || COALESCE(reason, '-')
+                     || ' updated_at=' || updated_at
+                   FROM oc_findling_file_state WHERE file_id IN (${ids}) ORDER BY file_id;")
+  note "${label}: renewal log lines: $(grep -c 'refusal streaks renewed once after the update' "${EXAPP_LOG}" || true)" \
+    "$(grep -o 'refusal streaks renewed once after the update, rows=[0-9]*' "${EXAPP_LOG}" | tail -n 2 | tr '\n' ' ' || true)"
+}
+
 # judge_locked <label> <state/reason> <log mark> [container]: every living
 # container row of gesperrt-alle.txt and the row of bob of gesperrt-bob.txt
 # carry the verdict, oc_findling_file_state as well (unless container), and no
@@ -680,6 +705,7 @@ judge_locked() {
   bob=$(locked_ids gesperrt-bob.txt "${daten_bob}")
   [ -n "${all}" ] && [ -n "${bob}" ] || fail "no file cache row of the locked files"
   ids="${all},${bob}"
+  locked_diagnosis "${label}" "${ids}"
   rows_st=$(statedb "SELECT COUNT(*) FROM files WHERE deleted_at IS NULL AND file_id IN (${ids});")
   match_st=$(statedb "SELECT COUNT(*) FROM files WHERE deleted_at IS NULL AND file_id IN (${ids})
                         AND state || '/' || COALESCE(reason, '-') = '${want}';")
