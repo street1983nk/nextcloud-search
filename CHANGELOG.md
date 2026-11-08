@@ -6,6 +6,54 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
 
 ## [Unreleased]
 
+## [1.6.3] - 2026-11-08
+
+### Added
+
+- A note next to the coverage figure for seven days after the first count
+  of 1.6.3, a sentence while the count is running, and the number of files
+  that are listed but could not be read or got stuck, which now count as
+  not searchable (#25).
+
+### Fixed
+
+- The storage sweep runs once per reconcile cadence even while the crawl
+  or a long queue holds the full comparison back, so documents of deleted
+  or unmounted storages leave the index (#25).
+- The coverage figure counts every document once, also when a share is
+  mounted separately for each user, and documents only on storages that
+  are no longer mounted no longer count (#25).
+- The denominator is worked out per share group and never falls below the
+  documents judged in that group plus the files Nextcloud could not read,
+  so the share never exceeds 100 per cent and shows the real coverage once
+  the queue is empty (#25). File types refused on storages that are no
+  longer mounted no longer shrink it.
+- Deleted files no longer count as indexed in the status figures.
+- On SMB storage without the php-smbclient extension, a file that cannot
+  be opened (access denied, sharing violation, offline) no longer blocks a
+  PHP worker, and such files count as not readable. A readable empty file
+  is answered 200, not 400.
+- Files that 1.6.2 recorded as a gateway error are checked once more after
+  the update, also when their retries were used up, so a locked or refused
+  file shows as not readable with its remedy.
+
+### Known limitations
+
+- SMB storage under server side encryption is read as before, without the
+  deadline.
+- A network error between the check and the open of a file counts as not
+  readable; a few retries follow.
+- A short answer for a file whose size Nextcloud does not know is taken as
+  complete.
+- On SMB without the php-smbclient extension a file above about 469 MiB
+  ends short and is given up as stuck (only with FINDLING_MAX_FILE_BYTES
+  raised above the default 50 MB).
+- On SMB without the php-smbclient extension a line below about 420 KB/s
+  cannot deliver an 8 MiB read block within the 20 s timeout of
+  smbclient, so files larger than one block count as not readable; install
+  the extension or raise the timeout option of the storage
+  (occ files_external:config).
+
 ## [1.6.2] - 2026-11-04
 
 ### Added
@@ -292,6 +340,7 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
   and every result permission checked by Nextcloud. The patch releases 1.0.1
   to 1.0.3 of the same days carried store metadata and packaging fixes.
 
+[1.6.3]: https://github.com/street1983nk/nextcloud-search/compare/v1.6.2...v1.6.3
 [1.6.2]: https://github.com/street1983nk/nextcloud-search/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/street1983nk/nextcloud-search/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/street1983nk/nextcloud-search/compare/v1.5.1...v1.6.0

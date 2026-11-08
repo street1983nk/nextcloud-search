@@ -2885,6 +2885,59 @@ Findling 1.6.2. Update both apps; the backup pause needs both on 1.6.2.
 Tag-Links `blob/v1.6.2` und der Compare-Link lösen erst nach dem Tag auf;
 Prüfung vor der Einreichung (Plan 41-11).
 
+# Entwurf v1.6.3, Stand Plan 43-08 (08.11.2026)
+
+Entwurf für die Owner-Runde in Plan 43-12/43-13, noch nicht abgenommen.
+
+- Version 1.6.3 in beiden `info.xml`, `image-tag` 1.6.3.
+- Doku-Links der sechs Beschreibungen auf `blob/v1.6.3`.
+- Namen und Beschreibungen zeichengleich zur Fassung 1.6.2 ("Entwurf v1.6.2
+  (Gesamttext)", Store-Text nur ändern, wenn nötig).
+- Upgrade-Beweis weiter ab v1.5.0 (`UPGRADE_FROM_TAG`), neu mit den
+  Zusicherungen zur Migration `Version001603Date20261108000000`, zur
+  Deckungsgrad-Route und zum Hinweis-Flag (D-43-12, D-43-14).
+
+Neue nutzersichtbare Sätze zur Abnahme (en / de / fr), Wortlaute aus
+`43-TEXTE.md` (Blöcke H, Z, U, L am 07.11.2026 freigegeben: H Variante b,
+Z/U/L Variante a; Block V und der SMB-Zusatzsatz stehen zur Freigabe in der
+Owner-Runde 43-12):
+
+1. Hinweis nach dem Update (Block H, D-43-06 mit D-43-12)
+   - en: Since version 1.6.3, every document counts only once. Until now, external storage mounted separately for each user was counted once per mount, which is why the figures can now be lower than before. This note disappears seven days after the first complete count.
+   - de: Seit Version 1.6.3 zählt jedes Dokument nur einmal. Bisher wurde ein externer Speicher, der für jeden Nutzer einzeln eingebunden ist, je Einbindung gezählt, deshalb können die Zahlen jetzt niedriger sein als vorher. Dieser Hinweis verschwindet sieben Tage nach der ersten vollständigen Zählung.
+   - fr: Depuis la version 1.6.3, chaque document ne compte qu'une seule fois. Jusqu'ici, un stockage externe monté séparément pour chaque utilisateur était compté une fois par montage, c'est pourquoi les chiffres peuvent désormais être plus bas qu'avant. Cette note disparaît sept jours après le premier comptage complet.
+2. Zählung läuft noch (Block Z)
+   - en: The coverage is being counted document by document. On large instances this can take some time, and the search keeps working normally meanwhile. The figure appears here as soon as the count is finished.
+   - de: Der Deckungsgrad wird gerade pro Dokument gezählt. Auf großen Instanzen kann das einige Zeit dauern, die Suche arbeitet währenddessen normal weiter. Die Zahl erscheint hier, sobald die Zählung fertig ist.
+   - fr: La couverture est en cours de comptage, document par document. Sur les grandes instances, cela peut prendre un certain temps, et la recherche continue de fonctionner normalement. Le chiffre s'affiche ici dès que le comptage est terminé.
+3. Nicht lesbare oder hängen gebliebene Dateien (Block U, D-43-11, `%s` = Anzahl)
+   - en: %s files could not be read or got stuck repeatedly. They count as not searchable and lower the coverage figure.
+   - de: %s Dateien konnten nicht gelesen werden oder sind mehrfach hängen geblieben. Sie zählen als nicht durchsuchbar und senken den Deckungsgrad.
+   - fr: %s fichiers n'ont pas pu être lus ou sont restés bloqués à plusieurs reprises. Ils ne peuvent pas être trouvés par la recherche et font donc baisser la couverture.
+4. Rückfall auf die Zählweise von 1.6.2 (Block L, W10)
+   - en: This instance has more storages than the count per document can handle. The figure is therefore counted per storage as in version 1.6.2, and a file mounted for several users can stand in it several times.
+   - de: Diese Instanz hat mehr Speicherorte, als die Zählung pro Dokument verarbeiten kann. Die Zahl wird deshalb wie in Version 1.6.2 je Speicherort gezählt, und eine Datei, die für mehrere Nutzer eingebunden ist, kann mehrfach darin stehen.
+   - fr: Cette instance compte plus d'espaces de stockage que le comptage par document ne peut en traiter. Le chiffre est donc compté par espace de stockage comme dans la version 1.6.2, et un fichier monté pour plusieurs utilisateurs peut y figurer plusieurs fois.
+5. Abhilfe zu "Not readable for the users asked" (Block V, D-43-16, seit 43-19 in den Katalogen)
+   - en: The file is still there. Check the advanced permissions of the Team Folder or the access rights on the external storage: Findling reads a file only as a user who may open it and asks the first 20 of its users in alphabetical order. A file that is locked or offline is tried again a few times.
+   - de: Die Datei ist noch vorhanden. Die erweiterten Berechtigungen des Team Folders oder die Zugriffsrechte auf dem externen Speicher prüfen: Findling liest eine Datei nur als Nutzer, der sie öffnen darf, und fragt die ersten 20 ihrer Nutzer in alphabetischer Reihenfolge. Eine gesperrte oder ausgelagerte Datei wird noch einige Male erneut versucht.
+   - fr: Le fichier existe toujours. Vérifiez les permissions avancées du Team Folder ou les droits d'accès sur le stockage externe : Findling ne lit un fichier qu'en tant qu'utilisateur autorisé à l'ouvrir et interroge les 20 premiers de ses utilisateurs par ordre alphabétique. Un fichier verrouillé ou hors ligne est réessayé quelques fois.
+6. Zusatzsatz für SMB ohne php-smbclient (zu Block V, 43-18 Fix 2)
+   - en: On SMB storage without the php-smbclient extension, install this extension recommended by Nextcloud, or raise the timeout option of the storage (occ files_external:config).
+   - de: Bei SMB-Speichern ohne die Erweiterung php-smbclient diese von Nextcloud empfohlene Erweiterung installieren, alternativ die Speicher-Option timeout erhöhen (occ files_external:config).
+   - fr: Sur les stockages SMB sans l'extension php-smbclient, installez cette extension recommandée par Nextcloud, ou augmentez l'option timeout du stockage (occ files_external:config).
+
+Entwurf der Release-Notiz v1.6.3 (englisch, Faktenliste, Owner-Wort steht aus):
+
+```
+Findling 1.6.3. Update both apps; 1.6.x versions work together.
+- The coverage figure counts every document once; share groups and storages that are no longer mounted no longer inflate it (#25)
+- The storage sweep removes documents of deleted or unmounted storages even on busy instances (#25)
+- A note on the admin page explains the lower figures after the update; files that could not be read are named with a remedy (#25)
+- Locked or refused files on SMB storage no longer block a PHP worker and count as not readable
+**Full Changelog**: https://github.com/street1983nk/nextcloud-search/compare/v1.6.2...v1.6.3
+```
+
 # Release 1.6.2 (04.11.2026)
 
 Store-Text und Release-Notiz sind die am 04.11.2026 abgenommene Fassung oben
