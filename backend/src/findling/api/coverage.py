@@ -17,8 +17,10 @@ members is no group: it is dropped and its member counts as a single storage,
 and the answer keeps the order of the remaining groups of the request.
 
 Up to COVERAGE_SYNC_CEILING living rows in the listed storages the count runs
-in the request (1.1 s for 188 600 rows, 43-03-SUMMARY.md). Above it the pattern
-of the left out count of /status: a background thread with a single flight, a
+in the request (about 7.3 us per row on the development machine, probe P-b of
+plan 43-09; the ceiling keeps a five times slower ARM box under the 2 second
+admin timeout of the companion). Above it the pattern of the left out count of
+/status: a background thread with a single flight, a
 small cache keyed by the canonical request and by the identity of both stocks,
 the age taken from the end of the count. Until a figure exists the answer says
 counting with null figures, never an old number.
@@ -68,8 +70,18 @@ COVERAGE_MAX_MEMBERS: Final = 1000
 # Eighteen digits, the bound of LEAVE_OUT_PATTERN on /status.
 COVERAGE_MAX_ID: Final = 10**18 - 1
 # Up to this many living rows in the listed storages the count runs in the
-# request; above it in the background (the ceiling of the left out count).
-COVERAGE_SYNC_CEILING: Final = 100_000
+# request; above it in the background, as in the left out count of /status.
+# 25,000 and not the 100,000 of that count (finding F-43A-01 of 43-AUDIT.md):
+# the companion hangs up after its admin timeout of 2.0 seconds, the count
+# costs about 7.3 us per row on the x86 development machine (probe P-b of plan
+# 43-09, 102,311 rows in 0.738 s) and five times that on the ARM boxes this
+# app targets, so 25,000 rows stay near 0.9 s there and leave the other half
+# of the timeout to the HTTP hop, the signature check and the three small
+# reads beside the count. At 100,000 an ARM box with about 56,000 rows or more
+# answered after the companion had hung up, and the page fell back to the
+# figure of 1.6.2 for good, without a word. Above the ceiling the page says
+# counting once and reads the figure of the background count from the cache.
+COVERAGE_SYNC_CEILING: Final = 25_000
 # How long a background figure is answered without a new count, from the end
 # of the count that made it, and how many requests the cache keeps.
 COVERAGE_CACHE_SECONDS: Final = 300

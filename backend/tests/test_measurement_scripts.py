@@ -2657,8 +2657,17 @@ PHP_TREE_HASH_TODAY = "20dac366f67114217d13d20eac6d82739ac22e2ee298882b2f21cfdc9
 # Recomputed independently with find, sort, tr and sha256sum over the CRLF
 # normalised tree: 3d704f65... both ways, and the same pipeline over HEAD before
 # the step gave 2908e94b... (positive control).
+#
+# Moved on 2026-11-08 by Plan 43-09 (audit finding F-43A-01): api/coverage.py
+# lowers COVERAGE_SYNC_CEILING to 25,000, so the in-request count of
+# POST /coverage stays under the 2 second admin timeout of the companion on an
+# ARM box five times slower than the development machine. No file came or went,
+# so PACKAGE_FILES_TODAY stays at 83. The PHP pair does not move. Recomputed
+# independently with find, sort, tr and sha256sum over the CRLF normalised
+# tree: 75212e53... both ways, and the same pipeline over the tree of
+# d9f8a65d before the fix gave 3d704f65... (positive control).
 PACKAGE_FILES_TODAY = 83
-PACKAGE_TREE_HASH_TODAY = "3d704f659a6cd83491e15673b2cfa2882b221dccc35d9b535d71564d279d0bbb"
+PACKAGE_TREE_HASH_TODAY = "75212e537b0404e1d079514f4c80e3abd706bfa568f83663b6b11e7c2358a6f1"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
