@@ -42,6 +42,7 @@ from findling.store.repo import (
     LEGACY_LANGUAGES,
     LEGACY_SCHEMA_STEPS,
     RECHECK_MARK,
+    REFUSAL_RENEW_MARK,
     SCHEMA_VERSION,
     STATE_REASONS,
     STORE_SCHEMA_MARK,
@@ -58,6 +59,7 @@ from findling.store.repo import (
     open_read_only,
     open_store,
 )
+from findling.worker.reconcile import GATEWAY_ERROR_RETRIES
 
 
 @pytest.fixture
@@ -825,6 +827,71 @@ def test_gateway_retry_candidates_hold_both_pairs_of_a_refusal(store: Store) -> 
     store.tombstone(8)
 
     assert store.gateway_retry_candidates([1, 2, 3, 4, 5, 6, 8], 3) == {1, 2, 4}
+
+
+def _a_spent_refusal(store: Store, file_id: int) -> None:
+    """failed(gateway_error) on one etag, refused past the cap the way 1.6.2 did it."""
+    for _ in range(GATEWAY_ERROR_RETRIES + 2):
+        store.record(file_id, a_file(file_id, etag="aaa"), "failed", "gateway_error")
+
+
+def test_renewed_refusal_streaks_bring_a_spent_row_back(store: Store) -> None:
+    # Plan 43-20 (D-43-16), run 42482017221: 1.6.2 knew no skipped(unreadable)
+    # and wrote failed(gateway_error) for every refusal, so a long running
+    # instance has spent the cap and the reconcile never hands the file to 1.6.3.
+    _a_spent_refusal(store, 1)
+    assert _attempts(store, 1) == GATEWAY_ERROR_RETRIES + 2
+
+    assert store.renew_refusal_streaks() == 1
+
+    assert _attempts(store, 1) == 1
+    assert store.gateway_retry_candidates([1], GATEWAY_ERROR_RETRIES) == {1}
+    assert store.read_meta()[REFUSAL_RENEW_MARK] == "done"
+
+
+def test_without_the_renewal_a_spent_row_stays_out(store: Store) -> None:
+    # The counter check of the case above: the same row, no renewal, no candidate.
+    _a_spent_refusal(store, 1)
+
+    assert store.gateway_retry_candidates([1], GATEWAY_ERROR_RETRIES) == set()
+    assert REFUSAL_RENEW_MARK not in store.read_meta()
+
+
+def test_the_renewal_runs_once(tmp_path: Path) -> None:
+    # A second start changes nothing, also not a streak that ran up meanwhile.
+    path = tmp_path / "state.db"
+    first = open_store(path)
+    _a_spent_refusal(first, 1)
+    assert first.renew_refusal_streaks() == 1
+    _a_spent_refusal(first, 1)
+    spent = _attempts(first, 1)
+    first.close()
+
+    second = open_store(path)
+    try:
+        assert second.renew_refusal_streaks() is None
+        assert _attempts(second, 1) == spent
+        assert second.gateway_retry_candidates([1], GATEWAY_ERROR_RETRIES) == set()
+    finally:
+        second.close()
+
+
+def test_the_renewal_leaves_every_other_row_alone(store: Store) -> None:
+    # Only living failed(gateway_error) rows: skipped(unreadable) does not exist
+    # before 1.6.3, repeatedly_stuck is a give-up and keeps its count, and a
+    # tombstone is no living row.
+    for _ in range(GATEWAY_ERROR_RETRIES + 2):
+        store.record(2, a_file(2, etag="aaa"), "skipped", "unreadable")
+        store.record(3, a_file(3, etag="aaa"), "failed", "repeatedly_stuck")
+        store.record(4, a_file(4, etag="aaa"), "failed", "corrupt")
+        store.record(5, a_file(5, etag="aaa"), "indexed", content_hash="h")
+    _a_spent_refusal(store, 6)
+    store.tombstone(6)
+    before = {file_id: _attempts(store, file_id) for file_id in (2, 3, 4, 5, 6)}
+
+    assert store.renew_refusal_streaks() == 0
+
+    assert {file_id: _attempts(store, file_id) for file_id in (2, 3, 4, 5, 6)} == before
 
 
 def test_refresh_meta_moves_the_crawl_facts_and_leaves_the_verdict_alone(store: Store) -> None:
