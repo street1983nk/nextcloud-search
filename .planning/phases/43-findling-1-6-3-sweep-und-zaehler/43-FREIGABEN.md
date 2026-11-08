@@ -70,3 +70,5 @@ Vollzug 43-18 Fix 3: Push fa0ab5e7, vier gestartete Push-Workflows grün; genau 
 
 Freigabe Rerun 43-18 Fix 3 upgrade: "Ja" (2026-11-08, Claude Code Terminal) Entscheid: ja
 Umfang: genau ein gh run rerun 42482017221 --failed, ohne Code-Änderung.
+
+Entscheid 43-20: "Ok" (2026-11-08, Claude Code Terminal): einmaliger neuer Wiederholungszähler für Weigerungszeilen beim ersten Start von 1.6.3.
