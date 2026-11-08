@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
 status: executing
-stopped_at: Completed 43-07 (E2E grün 5/5, Lauf 42503731869, 43-E2E.md), nächster Schritt 43-19
-last_updated: "2026-11-08T18:15:00.000Z"
+stopped_at: Completed 43-19 (Abhilfetext 16 Kataloge, Block V, SMB-Zusatz), nächster Schritt 43-08
+last_updated: "2026-11-08T18:50:00.000Z"
 last_activity: 2026-11-08
 progress:
   total_phases: 6
@@ -26,7 +26,7 @@ Siehe .planning/PROJECT.md (Stand nach v1.5, Milestone v1.6 gestartet) und .plan
 ## Current Position
 
 Phase: 43 (findling-1-6-3-sweep-und-zaehler), EXECUTING
-Plan: 13 of 20 erledigt (43-01..07, 43-15..18, 43-20, dazu 43-02); nächster 43-19 (Abhilfetext 16 Kataloge), dann 43-08..14
+Plan: 14 of 20 erledigt (43-01..07, 43-15..20); nächster 43-08, dann 43-09..14; Block V + SMB-Zusatzsatz warten auf Owner-Freigabe in 43-12
 Status: E2E-Abnahmetest GRÜN 5/5 (Lauf 42503731869, Kopf 17f81918, Beleg 43-E2E.md): Sweep hinter Gate, Zähler pro Dokument, DENY-Fix, Erneuerung 43-20, Rückweg ok; upgrade-Rot war Harness-Erwartung (Carol-Zeile = gone, Fix 17f81918). PHPUnit CI 1140 grün. Jeder Push, Dispatch, Tag, Kommentar nur mit Owner-Freigabe (43-FREIGABEN.md)
 Last activity: 2026-11-08
 
