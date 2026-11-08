@@ -82,3 +82,8 @@ Freigabe Push 43-08: "Ja, Push + 1 Dispatch" (2026-11-08 20:13, Claude Code Term
 Freigabe Dispatch 43-08: "Ja, Push + 1 Dispatch" (2026-11-08 20:13, Claude Code Terminal) Entscheid: ja
 
 Umfang 43-08: genau ein Push der acht lokalen Commits 11127790..684ded20 plus dieser Zeilen (43-07-Doku und Summary, 43-19 Abhilfetexte, 43-08 Bump 1.6.3, Upgrade-Strecke, STATE), genau ein Dispatch von "Coverage end to end" nach gruenen gestarteten Push-Workflows auf dem neuen Kopf. Kein Tag, kein Release, kein Store, kein Kommentar. CHANGELOG [1.6.3] lag dem Owner woertlich vor (inkl. fuenfter Known-limitations-Satz aus 43-18-SUMMARY).
+
+Freigabe Push 43-09: "Ja, Push + 1 Dispatch" (2026-11-08 22:01, Claude Code Terminal) Entscheid: ja
+Freigabe Dispatch 43-09: "Ja, Push + 1 Dispatch" (2026-11-08 22:01, Claude Code Terminal) Entscheid: ja
+
+Umfang 43-09: genau ein Push der sechs lokalen Commits (43-08-Nachtraege 9f6ddc79/800d58e4/12f00467, Audit-Fix 37b518d6, Audit e8c052e3, Summary 757127e6) plus dieser Zeilen, genau ein Dispatch von "Coverage end to end" nach gruenen gestarteten Push-Workflows. Kein Tag, kein Release, kein Store, kein Kommentar. Audit-Ergebnis lag dem Owner vor (0 CRIT/HIGH/MEDIUM offen, F-43A-01 MEDIUM gefixt, 2 LOW akzeptiert).
