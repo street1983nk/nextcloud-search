@@ -1067,6 +1067,20 @@ def test_the_1_6_3_assurances_check_the_migration_the_route_and_the_hint() -> No
     assert ".hasColumn == true and .missing == 0" in run
 
 
+def test_the_backfill_assurance_waits_bounded_instead_of_looking_once() -> None:
+    # Assurance 18 raced the worker cadence: the backfill line lands one
+    # cadence after the /coverage call of assurance 16, run 42513966073 looked
+    # at second 62 of the step and passed, run 42530680761 looked at second 61
+    # and went red with the same tree. The step therefore polls the container
+    # log every 5 s under a 240 s cap, and on expiry the error word of D-43-14
+    # stands exactly as before, so a backfill that never ran still goes red.
+    run = _run(ASSURANCE_STEP)
+    assert "backfill_deadline=$(( $(date +%s) + 240 ))" in run
+    assert "until docker logs \"${UPGRADE_NEW_CONTAINER}\" 2>&1 | grep -q 'doc key backfill, done='; do" in run
+    assert '[ "$(date +%s)" -lt "${backfill_deadline}" ] || break' in run
+    assert "the container log carries no 'doc key backfill, done=' line (D-43-14)" in run
+
+
 def test_the_upgrade_step_records_the_scan_rows_and_the_hint_around_occ_upgrade() -> None:
     # Assurance 15 is only honest when both values are read in "Store upgrade
     # 4": the counter rows before occ upgrade (the signal the migration

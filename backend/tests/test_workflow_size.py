@@ -21,6 +21,11 @@ CAP_BYTES = 500 * 1024
 MOVED_STEPS = {
     "Backup pause, across restarts of the backend and of Nextcloud": "scripts/ci/backup_pause_proof.sh",
     "Store install 6, the ExApp out of the archive, image out of the registry": "scripts/ci/store_install_register.sh",
+    # Moved in plan 43-10: the bounded wait of assurance 18 (run 42530680761)
+    # needed room in a file that stood 36 bytes under the cap.
+    "Store upgrade 1, both halves out of the release assets of the previous version": (
+        "scripts/ci/upgrade_from_release_assets.sh"
+    ),
 }
 
 
