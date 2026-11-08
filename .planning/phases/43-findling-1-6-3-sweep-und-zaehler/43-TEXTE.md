@@ -141,6 +141,25 @@ est encore dans une version plus ancienne et ne peut pas encore compter par docu
 chiffre est donc compté comme dans la version 1.6.2." Dann kämen die Zeilen
 `EN-LEGACY-MISSING`, `DE-LEGACY-MISSING` und `FR-LEGACY-MISSING` dazu.
 
+## Vorab-Entwurf zu Block V: Zusatzsatz für SMB-Speicher ohne php-smbclient (43-18 Fix 2)
+
+Block V selbst schreibt 43-19 (Abhilfe zu "Not readable for the users asked"). Dieser
+Zusatzsatz kommt dort mit hinein und geht mit Block V in der Owner-Runde 43-12 zur
+Freigabe; hier nur Entwurf, keine Maschinenzeile.
+
+- **Anlass:** Ohne die Erweiterung php-smbclient startet Nextcloud für SMB das Programm
+  smbclient mit 20 s Frist je Vorgang (icewind/smb, Options.php:14). Auf einer langsamen
+  Leitung (unter etwa 420 KB/s) kommt ein Leseblock von 8 MiB nicht rechtzeitig an, die
+  Datei landet als nicht lesbar. Die Speicher-Option timeout ist im Web-Formular verborgen
+  und nur per occ setzbar.
+- **Sichtbar:** nur wenn die Erweiterung fehlt (Erkennung siehe 43-19-PLAN.md).
+
+| | Wortlaut (Entwurf) |
+|---|---|
+| EN | On SMB storage without the php-smbclient extension, install this extension recommended by Nextcloud, or raise the timeout option of the storage (occ files_external:config). |
+| DE | Bei SMB-Speichern ohne die Erweiterung php-smbclient diese von Nextcloud empfohlene Erweiterung installieren, alternativ die Speicher-Option timeout erhöhen (occ files_external:config). |
+| FR | schreibt 43-19 nach docs/l10n-french.md |
+
 ## Selbstprüfung
 
 - Deutsche Zeilen mit echten Umlauten (zählt, für, können, verschwindet, vollständigen,

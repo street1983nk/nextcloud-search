@@ -146,6 +146,35 @@ Anlass: Dispatch-Lauf 42418778026 rot in allen fünf Beinen, Kern-Fix belegt (ge
 
 **Grenze für Known limitations (43-08):** Unter etwa 100 KB/s (8 MiB in 80 s, genau 105 KB/s) weist der Gateway im Wrapped-Modus Dateien größer als ein SMB2-Leseblock ab (422 vor den Headern) oder beendet sie kurz (stalled zwischen zwei Blöcken); der Container hätte dort ohnehin seinen 90-s-Timeout. Mit den längeren Lücken sinkt die Größengrenze aus MAX_READS bei langsamen Leitungen etwas (bei 200 KB/s rund 1230 Reads je 8-MiB-Block, also rund 390 MiB statt 469 MiB); betrifft nur FINDLING_MAX_FILE_BYTES über der Vorgabe.
 
+## Fix-Runde 2 (Lauf 42425348629, 2026-11-08)
+
+Anlass: Vollzug Fix 1 (43-FREIGABEN.md), alle fünf Beine rot mit drei Harness-Befunden. Kein Produktcode geändert. Lokal committet, nicht gepusht, kein Dispatch.
+
+| Aufgabe | Commit | Betreff |
+|---------|--------|---------|
+| 2 (viewer) | c7c53bfc | ci(43-18): the coverage legs carry the shipped app viewer for occ upgrade |
+| 1 und 3 | 289c0120 | ci(43-18): one word per file, search with limit 25, gross.bin inside the smb timeout |
+| 4 und 5 | dieser docs-Commit | Texte-Entwurf, 43-19-Ergänzung, 43-DEBUG-SUCHE.md, diese Runde |
+
+**1. Suchwörter.** `next_word` setzt `NEXT_WORD` statt zu drucken; alle sechs Aufrufer (samba_file, gesperrt-alle/-bob, home_file, backlog-*.png, Rückweg) per grep gefunden und umgestellt, kein `$(next_word)` mehr. `words_unique` (`cut -f1 words.tsv | sort | uniq -d` leer, Zeilen gleich verschiedene Wörter, sonst fail) vor dem Crawl und vor der Gegenprobe (die Backlog-Wörter kommen erst in Phase A dazu). Positiv- und Negativkontrolle lokal in bash: 60 Aufrufe ergeben 60 verschiedene Wörter, das alte Muster `a=$(next_word)` ergibt leer, `words_unique` scheitert an einem doppelten Wort. Gegenprobe mit `--data-urlencode limit=25`: belegt am Server stable34, `UnifiedSearchController::search(?int $limit)` mit `SearchQuery::LIMIT_DEFAULT = 5`, Deckel `unified-search.max-results-per-request` 25. Rückweg-Prüfung: wird erst jetzt aussagekräftig, denn bisher trug der alte Inhalt von notiz.txt dasselbe Wort, die Suche fand die Datei also auch ohne den neuen Inhalt; jetzt ist das Wort neu (eigener fail, falls es schon in words.tsv steht). Die beiden gleich.txt tragen jetzt je ein eigenes Wort plus `zqgleichdoc`, wie 43-07-PLAN.md es beschreibt ("Inhalt mit zwei Wörtern je Share"). Soll 23 unverändert.
+
+**2. viewer.** Eigener Schritt in coverage-e2e.yml nach dem Server-Checkout: `actions/checkout@3d3c42e5... # v7.0.1`, `repository: nextcloud/viewer`, `ref: stable34`, `path: apps/viewer` (Muster aus nextcloud-audio-video-search deploy-harp.yml). setup-test-nc kann es nicht (kein viewer-Eingang, sie checkt den Server nicht selbst aus). Für alle fünf Beine, damit die Instanz überall gleich ist; nur das upgrade-Bein braucht es (Updater::checkAppsRequirements, Lauf 42425348629). viewer stable34 existiert (7ca0059c), info.xml min/max 34, composer/ und js/ liegen im Repo. Andere Workflows unverändert.
+
+**3. gross.bin.** `throttle_smb <rate>`; `large_probe` bei `THROTTLE_RATE=8mbit` (rund 1 MB/s, 8 MiB in rund 8,4 s, innerhalb smbclient -t 20), Mindestdauer 8 s (unter einem einzigen 8-MiB-Block bei dieser Rate, ungedrosselt deutlich unter 1 s), curl -m 60. Neu `large_probe_long`: `files_external:config <daten_mount> timeout 120`, Rücklesen muss 120 ergeben (sonst fail "tests nothing"), Abruf bei 1600kbit (rund 200 KB/s, 10 MiB in rund 52 s), Pflicht 200, gleiches sha256, Mindestdauer 40 s, curl -m 150; danach Option geleert und rückgelesen (leer = Standard 20, SMB.php:103-106), damit der Crawl mit dem Stand eines frischen Speichers läuft. Beide nur in den Wrapped-Beinen, beide collect.
+
+**4. Texte.** 43-TEXTE.md: Abschnitt "Vorab-Entwurf zu Block V" mit EN und DE (FR macht 43-19). 43-19-PLAN.md: must_have und Aktion ergänzt; Erkennung über `function_exists('smbclient_state_new')` (icewind/smb System::libSmbclientAvailable), Satz als eigener Schlüssel nur bei fehlender Erweiterung, de-Schlüsselzahl dann 355.
+
+**5.** 43-DEBUG-SUCHE.md mit Nachtrag (V1 belegt, Fix umgesetzt) committet.
+
+**Abweichungen:**
+- [Befund] Die Option heißt nicht Mount-Option: `files_external:option` setzt Mount-Optionen, die SMB::__construct nie sieht; `timeout` ist eine Backend-Option (`Lib/Backend/SMB.php`, DefinitionParameter `timeout`, FLAG_OPTIONAL und FLAG_HIDDEN, also im Web-Formular unsichtbar) und wird mit `occ files_external:config <mount> timeout 120` gesetzt (`Command/Config.php::setOption` → setBackendOption; ConfigAdapter reicht getBackendOptions an den Konstruktor). Per occ setzbar, daher kein STOPP; Harness und Texte nennen files_external:config.
+- [Befund] Block V gibt es in 43-TEXTE.md noch nicht (schreibt erst 43-19); der Zusatzsatz steht deshalb als Vorab-Entwurf davor, 43-19 übernimmt ihn.
+- Die frühere Grenze "unter etwa 100 KB/s" (Fix-Runde 1) gilt nur mit erhöhtem timeout; ohne Erweiterung und mit Standard-timeout liegt die Grenze bei etwa 420 KB/s (siehe unten).
+
+**Tests der Runde:** `bash -n` beider Skripte grün; test_workflow_pins, test_workflow_contexts, test_workflow_size, test_measurement_scripts 608 passed. Kein Python berührt, daher kein ruff/pyright/vulture. Harness nicht lokal gelaufen (kein Docker, kein lokales PHP); Beleg erst im nächsten freigegebenen Dispatch.
+
+**Known limitations für 43-08 (ersetzt die Grenze aus Fix-Runde 1 für SMB ohne Erweiterung):** Im Wrapped-Modus (SMB ohne php-smbclient) startet icewind/smb smbclient mit `-t 20`; ein SMB2-Leseblock von 8 MiB muss innerhalb dieses timeout (Standard 20 s) ankommen, also ab etwa 420 KB/s (8 MiB / 20 s). Langsamer: Dateien größer als ein Block werden 422 und zählen als nicht lesbar. Abhilfe: Erweiterung php-smbclient installieren (Admin-Handbuch: "strongly recommended") oder Backend-Option timeout des Speichers erhöhen (`occ files_external:config <mount> timeout <s>`, nicht im Web-Formular); mit erhöhtem timeout greift die Gateway-Grenze von rund 105 KB/s (80 s je Block) aus Fix-Runde 1.
+
 ## Threat Flags
 
 Keine neue Angriffsfläche: keine Route, kein Schlüssel, keine Schemaänderung; die Probe- und Urteilszeilen tragen nur Status, Sekunden, Bytes, Datei-IDs.
