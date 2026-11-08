@@ -7,6 +7,7 @@ diff: v1.6.2..d9f8a65d
 fix_delta: d9f8a65d..37b518d6
 files_reviewed: 53
 fix_files_reviewed: 3
+e2e_run: 42525415627
 findings:
   critical: 0
   high: 0
@@ -348,3 +349,12 @@ Kopfes folgt nach der Owner-Freigabe (Task 3).
    sichtbaren Banner).
 3. **D-43-15** (verschiedene Wurzeln derselben Freigabe zählen doppelt) bleibt
    die bekannte Grenze aus dem CHANGELOG, Entscheidungspunkt K6 wie geplant.
+
+## Läufe auf audited_head
+
+Push 655fe197 (traegt den Fix-Kopf 37b518d6): alle gestarteten Push-Workflows
+gruen (Python gates mit den 15 Audit-Proben, Resilience, HaRP deploy 26m41s,
+Security scans, Multi-arch, Scorecard; PHP lief pfadbedingt nicht, Beleg bleibt
+42513966089 auf unveraendertem php/). Dispatch "Coverage end to end"
+42525415627: alle fuenf Beine gruen. Der MEDIUM-Fix F-43A-01 ist damit auch
+end to end belegt.
