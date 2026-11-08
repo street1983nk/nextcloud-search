@@ -567,9 +567,50 @@ SIMILAR_LINE = {
     "fr": "- Documents similaires : ",
 }
 
+# The <version> of an info.xml as this gate reads it. One pattern for the two
+# places that read it, so that the self test below and the gate over the real
+# tree can never drift apart. The optional tail is the prerelease of the store
+# schema: run 42530680760 went red on the rc branch of plan 43-10 because the
+# bare [0-9.]+ could not read 1.6.3-rc.1 at all.
+_INFO_VERSION = re.compile(r"^\t<version>([0-9.]+(?:-[0-9A-Za-z.]+)?)</version>", re.M)
 
-def _version(text: str) -> tuple[int, ...]:
-    return tuple(int(part) for part in text.lstrip("v").split("."))
+
+def _version(text: str) -> tuple[tuple[int, ...], int, tuple[tuple[int, int, str], ...]]:
+    """A sortable key with the order of PHP version_compare over prereleases.
+
+    The middle element parts release from prerelease: a release (1) stands
+    above every prerelease (0) of the same numbers, so 1.6.3-rc.1 < 1.6.3.
+    Every prerelease identifier becomes one comparable triple, numeric ones
+    before alphanumeric ones and each kind ordered within itself, which is
+    the precedence rule of semver and what version_compare does with rc.
+    """
+    core, _, prerelease = text.lstrip("v").partition("-")
+    numbers = tuple(int(part) for part in core.split("."))
+    if not prerelease:
+        return (numbers, 1, ())
+    parts = tuple((0, int(part), "") if part.isdigit() else (1, 0, part) for part in prerelease.split("."))
+    return (numbers, 0, parts)
+
+
+def test_the_version_reading_accepts_a_prerelease_and_orders_it_below_its_release() -> None:
+    """The rc example of run 42530680760: 1.6.3-rc.1 is a version this gate can read.
+
+    The rc branch of plan 43-10 carries 1.6.3-rc.1 in both info.xml, which is
+    a version of the shape the store schema accepts (test_lockstep_versions
+    holds it to that schema). The reading here has to accept it as well, and
+    the order has to be the one of PHP version_compare and of semver: a
+    prerelease stands BELOW the release it announces, so
+    1.6.2 <= 1.6.3-rc.1 <= 1.6.3 and the upgrade start v1.5.0 stays behind it.
+    """
+    sample = "\t<version>1.6.3-rc.1</version>\n"
+    match = _INFO_VERSION.search(sample)
+    assert match is not None
+    assert match.group(1) == "1.6.3-rc.1"
+    assert _version("1.6.2") <= _version("1.6.3-rc.1")
+    assert _version("1.6.3-rc.1") < _version("1.6.3")
+    assert _version("v1.5.0") <= _version("1.6.3-rc.1")
+    # Two prereleases of the same release keep their own order as well.
+    assert _version("1.6.3-rc.1") < _version("1.6.3-rc.2")
 
 
 def test_the_upgrade_start_is_never_ahead_of_the_tree() -> None:
@@ -585,7 +626,7 @@ def test_the_upgrade_start_is_never_ahead_of_the_tree() -> None:
     assert match is not None
     start = _version(match.group(1))
     for path in INFO_XMLS:
-        version = re.search(r"^\t<version>([0-9.]+)</version>", path.read_text(encoding="utf-8"), re.M)
+        version = _INFO_VERSION.search(path.read_text(encoding="utf-8"))
         assert version is not None, path
         assert start <= _version(version.group(1)), path
 
