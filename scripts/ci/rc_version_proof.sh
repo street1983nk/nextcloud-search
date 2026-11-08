@@ -101,11 +101,11 @@ check_image_sha() {
 }
 
 read_xml_version() {
-  sed -n 's:.*<version>\(.*\)</version>.*:\1:p' "$1" | head -n 1
+  sed -n 's:.*<version>\(.*\)</version>.*:\1:p' "$1" | sed -n '1p'
 }
 
 read_xml_image_tag() {
-  sed -n 's:.*<image-tag>\(.*\)</image-tag>.*:\1:p' "$1" | head -n 1
+  sed -n 's:.*<image-tag>\(.*\)</image-tag>.*:\1:p' "$1" | sed -n '1p'
 }
 
 # occ with a verbatim transcript: the plan demands the outputs word for word,
