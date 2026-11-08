@@ -77,6 +77,19 @@ jobs:
           ref: stable34
           submodules: recursive
 
+      # The server repository lacks the shipped app viewer, which a release
+      # tarball carries. occ upgrade of the upgrade leg refuses an enabled
+      # shipped app without files ("The files of the app viewer were not
+      # correctly replaced", Updater::checkAppsRequirements, run 42425348629).
+      # Every leg gets it, so the instance is the same in all of them. After
+      # the server checkout, which empties the workspace root.
+      - name: Check out nextcloud/viewer like a release tarball carries it
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: nextcloud/viewer
+          ref: stable34
+          path: apps/viewer
+
       - name: Check out the state the instance is set up from
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
