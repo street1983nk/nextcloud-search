@@ -129,8 +129,11 @@ backend_listed_at() {
 }
 
 wait_for_exapp_heartbeat() {
+  # 300 s: a cold container pulls nothing here, but it builds its word list
+  # and automaton before it binds, and 60 s lost the race in proof run
+  # 42537244567 while deploy-harp waits minutes for the same moment.
   local i
-  for i in $(seq 1 30); do
+  for i in $(seq 1 150); do
     if curl -sf http://localhost:8090/exapps/findling_backend/heartbeat > /dev/null; then
       echo "the container answers on /exapps/findling_backend/heartbeat"
       return 0
@@ -152,7 +155,10 @@ a6_swap() {
   mkdir -p "${dir}"
   gh release download "v${BASE_VERSION}" --pattern findling.tar.gz \
     --repo "${REPO}" -D "${dir}"
-  top=$(tar -tzf "${dir}/findling.tar.gz" | head -n 1 | cut -d/ -f1)
+  # sed reads the listing to its end, so tar never sees a closed pipe (the
+  # head of the first try died of SIGPIPE under pipefail: "tar: stdout:
+  # write error", proof run 42537244567).
+  top=$(tar -tzf "${dir}/findling.tar.gz" | sed -n '1p' | cut -d/ -f1)
   if [ "${top}" != "findling" ]; then
     echo "the companion archive of v${BASE_VERSION} does not carry the single top directory 'findling' but '${top}'"
     exit 1
@@ -201,8 +207,8 @@ a6_proof() {
   local dist="${RUNNER_TEMP}/rc-dist" archive sig
   mkdir -p "${dist}"
   gh run download "${ARCHIVE_RUN_ID}" -n store-release -d "${dist}" --repo "${REPO}"
-  archive=$(find "${dist}" -name findling.tar.gz -not -path '*source*' | head -n 1)
-  sig=$(find "${dist}" -name findling.tar.gz.sig | head -n 1)
+  archive=$(find "${dist}" -name findling.tar.gz -not -path '*source*' | sed -n '1p')
+  sig=$(find "${dist}" -name findling.tar.gz.sig | sed -n '1p')
   if [ -z "${archive}" ] || [ -z "${sig}" ]; then
     fail_a6 "run ${ARCHIVE_RUN_ID} does not carry findling.tar.gz and its .sig in the store-release artifact"
   fi
@@ -396,7 +402,7 @@ a5_register() {
     fail_a5 "no running container matches findling_backend after the ${BASE_VERSION} registration"
   fi
   running=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "${container}" \
-    | sed -n 's/^APP_VERSION=//p' | head -n 1)
+    | sed -n 's/^APP_VERSION=//p' | sed -n '1p')
   echo "container ${container} runs APP_VERSION ${running}"
   if [ "${running}" != "${BASE_VERSION}" ]; then
     fail_a5 "the container runs APP_VERSION '${running}' and not ${BASE_VERSION}"
