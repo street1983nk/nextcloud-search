@@ -34,8 +34,9 @@ snapshot_dbs() {
   SNAP_NC="${WORK}/snap-$1-nc.db"
   SNAP_ST="${WORK}/snap-$1-state.db"
   rm -f "${SNAP_NC}" "${SNAP_ST}"
-  sqlite3 "${NC_DB}" ".backup '${SNAP_NC}'" || fail "the Nextcloud database could not be copied"
-  sqlite3 "${STATE_DB}" ".backup '${SNAP_ST}'" || fail "the state database could not be copied"
+  # Waits up to 10 s for a writer, like ncdb and statedb in coverage_e2e.sh.
+  sqlite3 -cmd ".timeout 10000" "${NC_DB}" ".backup '${SNAP_NC}'" || fail "the Nextcloud database could not be copied"
+  sqlite3 -cmd ".timeout 10000" "${STATE_DB}" ".backup '${SNAP_ST}'" || fail "the state database could not be copied"
 }
 
 # sql <query>: one query over the Nextcloud snapshot with the state snapshot

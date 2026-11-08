@@ -228,12 +228,15 @@ login() {
   [ "${code}" = "207" ] || fail "the PROPFIND of $1 answered HTTP ${code}"
 }
 
+# Run 42482017221: a read that met a writer of Nextcloud or of the container
+# ended the leg with "database is locked (5)". .timeout waits up to 10 s for
+# the lock and prints nothing (sqlite3_busy_timeout in shell.c.in).
 ncdb() {
-  sqlite3 -readonly "${NC_DB}" "$1"
+  sqlite3 -readonly -cmd ".timeout 10000" "${NC_DB}" "$1"
 }
 
 statedb() {
-  sqlite3 -readonly "${STATE_DB}" "$1"
+  sqlite3 -readonly -cmd ".timeout 10000" "${STATE_DB}" "$1"
 }
 
 sid_like() {
@@ -1170,7 +1173,7 @@ if [ "${VARIANT}" = "upgrade" ]; then
   # Past every event: the file goes from the disk and its row from the file
   # cache, so no job ever tells the container.
   rm -f "${NC_DATA}/dave/files/verwaist.txt"
-  sqlite3 "${NC_DB}" "DELETE FROM oc_filecache WHERE fileid = ${orphan};"
+  sqlite3 -cmd ".timeout 10000" "${NC_DB}" "DELETE FROM oc_filecache WHERE fileid = ${orphan};"
   note "upgrade: one container row without a file cache row, made by deleting the file and its oc_filecache row after the indexing"
 
   step "container first: the head backend next to the 1.6.2 companion"
