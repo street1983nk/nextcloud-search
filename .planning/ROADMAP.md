@@ -262,9 +262,9 @@ Kriterium 3 (Psalm mit Taint, php-cs-fixer, zizmor, actionlint) ist nicht Teil d
 **Goal:** Index-Einträge nicht mehr eingebundener Speicher werden zuverlässig entfernt, auch wenn die Ruhe-Schwelle (quiet_max) den vollen Abgleich blockiert: Stempel und `_sweep_vanished` laufen, sobald eine vollständige Mountliste vorliegt. Die Fortschrittszählung zählt pro Dokument (Speicher-Schlüssel plus Pfad), die PHP-App liefert dafür die Zuordnung storage zu key mit. Danach Audit, Owner-Runde, Store-Einreichung 1.6.3 und Antwort in #25 (erst nach Store-Release).
 **Requirements**: D-43-01, D-43-02, D-43-03, D-43-04, D-43-05, D-43-06, D-43-07, D-43-08, D-43-09, D-43-10, D-43-11, D-43-12, D-43-13, D-43-14, D-43-15, D-43-16, D-43-17
 **Depends on:** Phase 42
-**Plans:** 28 plans
+**Plans:** 29 plans
 
-Nachtrag 09.11.2026: mbozem bestätigt dieselbe Freigabe mit verschiedenen Wurzeln (D-43-15) und meldet dieselbe Freigabe in zwei Schreibweisen; D-43-17 = Faltung der Schreibweise von Host und Freigabe (Freigabe Planung 43-21, 43-FREIGABEN.md). Zusatzpläne 43-21 bis 43-28 laufen vor der zweiten Owner-Runde 43-12; Owner-Entscheide OE-1 bis OE-6 in 43-21 Task 1.
+Nachtrag 09.11.2026: mbozem bestätigt dieselbe Freigabe mit verschiedenen Wurzeln (D-43-15) und meldet dieselbe Freigabe in zwei Schreibweisen; D-43-17 = Faltung der Schreibweise von Host und Freigabe (Freigabe Planung 43-21, 43-FREIGABEN.md). Zusatzpläne 43-21 bis 43-29 laufen vor der zweiten Owner-Runde 43-12; Owner-Entscheide OE-1 bis OE-8 in 43-21 Task 1.
 
 Plans:
 - [x] 43-01-PLAN.md: Owner-Freigabe der Texte DE/EN/FR (Hinweis D-43-06, Zählsatz) vor Umsetzung
@@ -284,15 +284,16 @@ Plans:
 - [x] 43-18-PLAN.md: Container wertet 422 als skipped(unreadable), Fix-Runde 80 s (D-43-16)
 - [x] 43-19-PLAN.md: Abhilfetext V1/V2 in 16 Katalogen (D-43-16)
 - [x] 43-20-PLAN.md: einmalige Erneuerung der Ablehnungsserien nach dem Update
-- [ ] 43-21-PLAN.md: Owner-Entscheide OE-1 bis OE-6, Freigabe-Identität je Speicher (Host und Freigabe gefaltet, Wurzel getrennt, gehashte IDs mit md5-Gegenprobe), Gruppierung nach Freigabe (D-43-15, D-43-17, TDD)
+- [ ] 43-21-PLAN.md: Owner-Entscheide OE-1 bis OE-8, Freigabe-Identität je Speicher (Host und Freigabe gefaltet, Wurzel getrennt, gehashte IDs nur mit md5-Gegenprobe, [homes] und SFTP je Anmeldung), Gruppierung nach Freigabe (D-43-15, D-43-17, TDD)
 - [ ] 43-22-PLAN.md: Dokumentschlüssel Format 2 über den Freigabe-Pfad, docKeyFormat in Auftrag und Backfill-Antwort (TDD)
-- [ ] 43-23-PLAN.md: PHP-only und N1 je Mitglied auf den Freigabe-Pfad umgerechnet, docKeyFormat im /coverage-Vertrag, Fixture-Variante roots, CHANGELOG-Entwurf (TDD)
-- [ ] 43-24-PLAN.md: Container DOC_KEY_GENERATION 2 mit einmaligem Neuaufbau, Formatmarke an allen Übergängen (TDD)
-- [ ] 43-25-PLAN.md: Abnahmetest mit mbozem-Topologie (Unterwurzeln, Schreibweisen, Linkfreigabe, gehashte ID), unabhängige Wahrheit, Bein upgrade-rc1, Push/Dispatch (Owner)
-- [ ] 43-26-PLAN.md: Audit-Nachtrag Wurzeln und Schreibweisen, neuer audited_head, d_43_15 (Owner-Push)
-- [ ] 43-27-PLAN.md: Testbuild 1.6.3-rc.2 mit Versionsnachweis rc.1 -> rc.2 -> 1.6.3 (Owner-Push und -Dispatch)
-- [ ] 43-28-PLAN.md: Kommentar rc.2 an mbozem (Owner-Freigabe), Rückmeldung als Ergebnis
-- [ ] 43-12-PLAN.md: Owner-Runde 1.6.3, Gesamttext, Tag-Kopf (Runde 1 am 09.11. mit GO: nein; Runde 2 nach 43-28)
+- [ ] 43-23-PLAN.md: PHP-only und N1 je Mitglied auf den Freigabe-Pfad, docKeyFormat im /coverage-Vertrag, Zahlenfeld coverage.shareIdentity, Fixture roots, CHANGELOG-Entwurf (TDD)
+- [ ] 43-24-PLAN.md: Container DOC_KEY_GENERATION 2 mit Generationssperre in /coverage und Formatmarke an allen Übergängen (TDD)
+- [ ] 43-25-PLAN.md: Abnahmetest-Topologie wie bei mbozem, physische Wahrheit über Inode, Positivkontrolle 3, e2e_head_proof.sh
+- [ ] 43-26-PLAN.md: Beine upgrade-rc1 und upgrade-rc1-cf (Mischbetrieb, Backup-Pause), rc-Proof parametrisiert, Push/Dispatch (Owner), sieben Beine grün
+- [ ] 43-27-PLAN.md: Audit-Nachtrag Wurzeln und Schreibweisen, neuer audited_head mit E2E-Bindung, d_43_15 (Owner-Push)
+- [ ] 43-28-PLAN.md: Testbuild 1.6.3-rc.2 mit Versionsnachweis rc.1 -> rc.2 -> 1.6.3 (Owner-Push und -Dispatch)
+- [ ] 43-29-PLAN.md: Kommentar rc.2 an mbozem (Owner-Freigabe), Rückmeldung als Ergebnis
+- [ ] 43-12-PLAN.md: Owner-Runde 1.6.3, Gesamttext, Tag-Kopf (Runde 1 am 09.11. mit GO: nein; Runde 2 nach 43-29)
 - [ ] 43-13-PLAN.md: Tag v1.6.3 und Store-Einreichung (Owner führt aus), Belege
 - [ ] 43-14-PLAN.md: Antwort in #25 nach Store-Release (Owner-Freigabe), Issue bleibt offen
 

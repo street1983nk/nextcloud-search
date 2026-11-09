@@ -122,3 +122,10 @@ Daraus folgt für diese Phase:
 - Container (43-18): 422 wird skipped(unreadable) und zählt einmal im Nenner und in "nicht lesbar" (präzisiert D-43-11); 500 und alle anderen Ablehnungen bleiben failed(gateway_error). Die gedeckelte Wiederholung gilt für beide Paare als eine Serie. 422 zählt nicht zur Ausfall-Schwelle. Bestandszeilen failed(gateway_error) aus 1.6.2 werden nicht umgeschrieben.
 - E2E: gate-crawl und gate-queue im Wrapped-Modus, gate-queue zusätzlich nativ, v1.6.2 und upgrade nativ. Abhilfetext in 43-19.
 - Quelle: 43-FREIGABEN.md (Owner-Entscheid DENY-ACE-Hänger, Entscheide F1 bis F4).
+
+### Nachtrag Owner 09.11. (Wurzel-Frage ja, Schreibweisen)
+- **D-43-15 bestätigt:** mbozem hat dieselbe Freigabe mit verschiedenen Wurzeln (https://github.com/street1983nk/nextcloud-search/issues/25#issuecomment-6735344512: `192.168.98.246 //Daten` 25-mal mit Wurzel `/`, 17-mal mit `/Arbeitssicherheit` (11), `/Projekte` (2), `/Fue`, `/Allgemein`, `/Arbeitsvorbereitung`, `/QM`). Behebung vor dem Store-Release (Zusatzpläne 43-21 bis 43-29).
+- **D-43-17:** Dieselbe Freigabe in zwei Schreibweisen (`192.168.98.246//Daten` 42 Speicher, `//daten` 5, Paare auch auf `.2` und `.231`) zählt einmal: Host und Freigabename werden für die Zählung gefaltet. Quelle: 43-FREIGABEN.md `Freigabe Planung 43-21: "Ja go" (2026-11-09 09:25, Claude Code Terminal) Entscheid: ja`.
+- **Leitregel für 43-21 bis 43-29:** Zwei verschiedene Dateien verschmelzen nie zu einem Dokument; im Zweifel nicht gruppieren (zu hoch, nie verschmolzen). Dokumentschlüssel und Freigabe-Identität dienen nur der Zählung.
+- Offene Owner-Entscheide OE-1 bis OE-8 stehen in 43-21-PLAN.md Task 1; die Antworten werden dort als Maschinenzeilen in 43-FREIGABEN.md festgehalten und danach hier nachgetragen.
+- Owner-Vorgabe 09.11.: "Zeit spielt keine Rolle, Hauptsache alles funktioniert."
