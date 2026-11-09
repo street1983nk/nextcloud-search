@@ -129,18 +129,21 @@ backend_listed_at() {
 }
 
 wait_for_exapp_heartbeat() {
-  # 300 s: a cold container pulls nothing here, but it builds its word list
-  # and automaton before it binds, and 60 s lost the race in proof run
-  # 42537244567 while deploy-harp waits minutes for the same moment.
+  # The probe reads the answer where AppAPI reads it: the container log. The
+  # front proxy of this job does not route /exapps/ (proof runs 42537244567
+  # and 42538879801: the container answered heartbeat, init and enabled with
+  # 200 through the HaRP tunnel and spoke to Nextcloud over OCS while the
+  # curl against localhost:8090 starved), so an outside curl here probes the
+  # nginx of the harness and not the product. 300 s for the cold start.
   local i
   for i in $(seq 1 150); do
-    if curl -sf http://localhost:8090/exapps/findling_backend/heartbeat > /dev/null; then
-      echo "the container answers on /exapps/findling_backend/heartbeat"
+    if docker logs nc_app_findling_backend 2>&1 | grep -q '"GET /heartbeat HTTP/1.1" 200'; then
+      echo "the container answered heartbeat with 200 through the HaRP tunnel (its own log)"
       return 0
     fi
     sleep 2
   done
-  echo "the container did not answer on /exapps/findling_backend/heartbeat"
+  echo "the container log never showed a heartbeat answered with 200"
   return 1
 }
 
@@ -206,7 +209,9 @@ a6_proof() {
   # The signed rc archive out of the release.yml dispatch named by the input.
   local dist="${RUNNER_TEMP}/rc-dist" archive sig
   mkdir -p "${dist}"
-  gh run download "${ARCHIVE_RUN_ID}" -n store-release -d "${dist}" --repo "${REPO}"
+  # --dir spelled out: the -d shorthand is not known to the gh of the runner
+  # (proof run 42538879801).
+  gh run download "${ARCHIVE_RUN_ID}" -n store-release --dir "${dist}" --repo "${REPO}"
   archive=$(find "${dist}" -name findling.tar.gz -not -path '*source*' | sed -n '1p')
   sig=$(find "${dist}" -name findling.tar.gz.sig | sed -n '1p')
   if [ -z "${archive}" ] || [ -z "${sig}" ]; then
