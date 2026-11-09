@@ -1265,8 +1265,17 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # backend/tests/fixtures/share_identity_cases.json. No file came or went, so PHP_FILES_TODAY stays at
 # 129. Recomputed independently with find, sort, tr and sha256sum over the CRLF normalised tree:
 # b3f9109f... both ways; the same pipeline over git archive HEAD before the plan gave 20dac366.
+# Moved on 2026-11-09 by Plan 43-22 (document key format 2 over the share path): lib/Service/
+# DocKeyService.php hashes '2', the share and the share path (root joined in front of the internal
+# path) and asks StorageService::shareIdentities once per band, lib/Service/QueueService.php hands
+# docKeyFormat out next to every docKey, lib/Controller/ReconcileController.php answers format next
+# to keys and absent, and tests/Unit/DocKeyServiceTest.php, QueueServiceTest.php and
+# ReconcileControllerTest.php hold them to the extended catalogue doc_key_cases.json. No file came or
+# went, so PHP_FILES_TODAY stays at 129. Recomputed independently with find, sort, tr and sha256sum
+# over the CRLF normalised tree: af5413cd... both ways; the same pipeline over git archive HEAD
+# before the plan gave b3f9109f.
 PHP_FILES_TODAY = 129
-PHP_TREE_HASH_TODAY = "b3f9109f1542f248223f3ed21ef924214c1f9dc2d2dc56f0fd38e72653ad561f"
+PHP_TREE_HASH_TODAY = "af5413cdbfb3025ac83a3d55a2e50484c766a8168b2cf4893836f7bfb12c250d"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

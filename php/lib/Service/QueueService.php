@@ -958,6 +958,9 @@ class QueueService {
 	 * (SearchService::reduceIds). The key would then depend on who reads, which
 	 * is the double count this key exists to remove.
 	 *
+	 * Every key travels with docKeyFormat, the format of DocKeyService, so a
+	 * container never counts keys of two formats as one (plan 43-24).
+	 *
 	 * Every kind but delete carries it, acl and metadata included: a rename
 	 * arrives as metadata, and its new key has to replace the old one in the
 	 * container (W4). A delete order names a file that may be gone, and an
@@ -998,7 +1001,7 @@ class QueueService {
 
 			$key = $keys[$source['fileId'] ?? 0] ?? null;
 			if (is_string($key)) {
-				$sources[$queueId] = $source + ['docKey' => $key];
+				$sources[$queueId] = $source + ['docKey' => $key, 'docKeyFormat' => DocKeyService::DOC_KEY_FORMAT];
 			}
 		}
 

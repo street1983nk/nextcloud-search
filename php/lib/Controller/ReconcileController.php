@@ -226,6 +226,9 @@ final class ReconcileController extends OCSController {
 	 * The key comes out of DocKeyService::docKeysFor, the same method the jobs
 	 * use, so a job and the backfill cannot disagree about a file.
 	 *
+	 * format names the format of the keys (DocKeyService::DOC_KEY_FORMAT), so
+	 * the container takes no key of a format it does not count with.
+	 *
 	 * Every asked id stands in exactly one of the two lists (W8). absent means
 	 * "no row in the file cache, or a row in a trash bin", and nothing else; an
 	 * id that is in neither list would be a defect, and the container treats
@@ -274,6 +277,7 @@ final class ReconcileController extends OCSController {
 		return new DataResponse([
 			'keys' => $keys === [] ? new \stdClass() : $keys,
 			'absent' => array_values($answer['absent']),
+			'format' => DocKeyService::DOC_KEY_FORMAT,
 		]);
 	}
 
