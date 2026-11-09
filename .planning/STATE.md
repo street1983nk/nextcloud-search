@@ -9,7 +9,7 @@ last_activity: 2026-11-09
 progress:
   total_phases: 6
   completed_phases: 5
-  total_plans: 33
+  total_plans: 41
   completed_plans: 25
   percent: 76
 ---
@@ -26,7 +26,7 @@ Siehe .planning/PROJECT.md (Stand nach v1.5, Milestone v1.6 gestartet) und .plan
 ## Current Position
 
 Phase: 43 (findling-1-6-3-sweep-und-zaehler), EXECUTING
-Plan: 17 of 20 erledigt (43-01..10, 43-15..20); nächster 43-11 Kommentar an mbozem (nur mit Owner-Freigabe), dann 43-12..14; Block V + SMB-Zusatzsatz + Store-Text + F-43A-01-Satz warten auf Owner-Freigabe in 43-12
+Plan: 17 of 28 erledigt (43-01..10, 43-15..20); 43-11 wartet auf die rc.1-Zahl von mbozem (Ergebnis abweichend, Wurzel-Frage ja); geplant 09.11.: 43-21..28 (Wurzeln und Schreibweisen derselben Freigabe, D-43-15, D-43-17, Audit-Nachtrag, rc.2), nächster Schritt 43-21 Task 1 Owner-Entscheide OE-1 bis OE-6; danach 43-12 Runde 2, 43-13, 43-14
 Status: Testbuild 1.6.3-rc.1 belegt (43-TESTBUILD.md): Proof-Lauf 42565361965 grün (A5: ok auf HaRP ohne --force-update, A6: ok auf stable33+stable34), Archiv-Lauf 42537119924 (findling.tar.gz 692014 Bytes, SHA-256 fa9c3874..., Ablauf 2026-12-08), Branch rc/1.6.3-rc.1 Kopf 47c4ce4e, Image :655fe197 unveränderlich. Jeder Push, Dispatch, Tag, Kommentar nur mit Owner-Freigabe (43-FREIGABEN.md)
 Last activity: 2026-11-09
 
