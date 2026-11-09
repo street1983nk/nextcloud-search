@@ -99,3 +99,8 @@ Freigabe Push 43-10 Proof-Fix: "Ja, Push + Proof-Retry" (2026-11-09 00:59, Claud
 Freigabe Dispatch 43-10 proof Wiederholung: "Ja, Push + Proof-Retry" (2026-11-09 00:59, Claude Code Terminal) Entscheid: ja
 
 Umfang: genau ein Push der Skript-Fixes (SIGPIPE, Heartbeat 300 s) plus dieser Zeilen auf main, genau EIN erneuter Dispatch rc-version-proof.yml mit denselben Parametern (archive_run_id 42537119924, image_sha 655fe197...). Kein weiterer Archiv-Lauf, kein Tag, kein Store.
+
+Freigabe Push 43-10 Sonden-Fix: "Ja, Push + Retry 2" (2026-11-09 03:23, Claude Code Terminal) Entscheid: ja
+Freigabe Dispatch 43-10 proof Wiederholung 2: "Ja, Push + Retry 2" (2026-11-09 03:23, Claude Code Terminal) Entscheid: ja
+
+Umfang: genau ein Push (Heartbeat-Sonde liest Container-Log, gh download --dir) plus dieser Zeilen, genau EIN erneuter Proof-Dispatch mit denselben Parametern (Archiv 42537119924). Kein Tag, kein Store.
