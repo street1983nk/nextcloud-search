@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
 status: executing
-stopped_at: Completed 43-09 (Audit 0/0/0 offen, F-43A-01 gefixt, E2E 42525415627 grün auf 37b518d6), nächster Schritt 43-10 rc-Testbuild
-last_updated: "2026-11-08T22:15:00.000Z"
-last_activity: 2026-11-08
+stopped_at: Completed 43-10 (Proof 42565361965 grün, A5/A6 ok, Archiv 42537119924 mit Ablauf 2026-12-08, 43-TESTBUILD.md vollständig), nächster Schritt 43-11
+last_updated: "2026-11-09T06:30:00.000Z"
+last_activity: 2026-11-09
 progress:
   total_phases: 6
   completed_phases: 5
@@ -26,9 +26,9 @@ Siehe .planning/PROJECT.md (Stand nach v1.5, Milestone v1.6 gestartet) und .plan
 ## Current Position
 
 Phase: 43 (findling-1-6-3-sweep-und-zaehler), EXECUTING
-Plan: 16 of 20 erledigt (43-01..09, 43-15..20); nächster 43-10 rc-Testbuild mbozem, dann 43-11..14; Block V + SMB-Zusatzsatz + Store-Text + F-43A-01-Satz warten auf Owner-Freigabe in 43-12
-Status: E2E-Abnahmetest GRÜN 5/5 (Lauf 42503731869, Kopf 17f81918, Beleg 43-E2E.md): Sweep hinter Gate, Zähler pro Dokument, DENY-Fix, Erneuerung 43-20, Rückweg ok; upgrade-Rot war Harness-Erwartung (Carol-Zeile = gone, Fix 17f81918). PHPUnit CI 1140 grün. Jeder Push, Dispatch, Tag, Kommentar nur mit Owner-Freigabe (43-FREIGABEN.md)
-Last activity: 2026-11-08
+Plan: 17 of 20 erledigt (43-01..10, 43-15..20); nächster 43-11 Kommentar an mbozem (nur mit Owner-Freigabe), dann 43-12..14; Block V + SMB-Zusatzsatz + Store-Text + F-43A-01-Satz warten auf Owner-Freigabe in 43-12
+Status: Testbuild 1.6.3-rc.1 belegt (43-TESTBUILD.md): Proof-Lauf 42565361965 grün (A5: ok auf HaRP ohne --force-update, A6: ok auf stable33+stable34), Archiv-Lauf 42537119924 (findling.tar.gz 692014 Bytes, SHA-256 fa9c3874..., Ablauf 2026-12-08), Branch rc/1.6.3-rc.1 Kopf 47c4ce4e, Image :655fe197 unveränderlich. Jeder Push, Dispatch, Tag, Kommentar nur mit Owner-Freigabe (43-FREIGABEN.md)
+Last activity: 2026-11-09
 
 Progress: [█████████░] 88%
 

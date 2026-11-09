@@ -9,8 +9,8 @@ requires:
 provides:
   - .github/workflows/rc-version-proof.yml (Dispatch-Nachweis A5/A6)
   - scripts/ci/rc_version_proof.sh (Run-Blöcke, 6 Subkommandos)
-  - Branch rc/1.6.3-rc.1 lokal (f6c5a6ce, nur Versionsstellen + testbuild/)
-  - 43-TESTBUILD.md (Image-Digest belegt, CI-Felder AUSSTEHEND)
+  - Branch rc/1.6.3-rc.1 gepusht (47c4ce4e, nur Versionsstellen + testbuild/ gegen den main-Kopf 7725bba8)
+  - 43-TESTBUILD.md (vollständig: Proof-Lauf 42565361965, Artefakt-Lauf 42537119924, SHA-256, Aufbewahrung, Installationsweg)
 affects:
   - 43-11 (Kommentar an mbozem mit Installationsweg)
   - 43-12 (Owner-Runde, K6)
@@ -30,10 +30,10 @@ decisions:
   - "A6-Job tauscht die Companion im Checkout VOR setup-test-nc gegen die Release-1.6.2, damit die Instanz wirklich bei 1.6.2 beginnt und occ upgrade ein echtes Upgrade ist"
   - "Scan-Zeile im A6-Job per SQL mit Begründung im Log: der Crawl braucht einen registrierten Backend-Container, der Job registriert bewusst keinen; die Migration liest nur 'mindestens eine Zeile'"
 metrics:
-  duration: "rund 1,5 h lokale Arbeit"
-  completed: 2026-11-08
-  tasks: 1 von 3 (Task 2 Checkpoint:decision und Task 3 Push/Dispatch stehen aus)
-  commits: 2 (1x main, 1x Branch)
+  duration: "rund 1,5 h lokale Arbeit (Task 1) plus Fix-Delta und CI-Begleitung (Task 3)"
+  completed: 2026-11-09
+  tasks: 3 von 3 (Task 2 Freigaben in 43-FREIGABEN.md, Task 3 abgeschlossen)
+  commits: "Task 1: 2; Fix-Delta: 2; Task 3 Doku: 1 (0fbfdfa6, lokal)"
 ---
 
 # Phase 43 Plan 10: Testbuild 1.6.3-rc.1 und Versionsnachweis Summary
@@ -80,10 +80,15 @@ Autor beider Commits: street1983nk <k.cherif@outlook.de>, keine Trailer, kein cl
 
 Sonst exakt nach Plan.
 
-## Offen (Task 2 und Task 3, über den Koordinator)
+## Task 2 und Task 3 (abgeschlossen, 2026-11-09)
 
-- **Task 2 (checkpoint:decision, Owner):** Freigaben für (1) Push main, (2) Push rc/1.6.3-rc.1, (3) Dispatch release.yml auf dem Branch mit create_release=false, (4) Dispatch rc-version-proof.yml. 43-FREIGABEN.md ist absichtlich NICHT beschrieben; Zeilen-Wortlaute siehe Koordinator-Bericht.
-- **Task 3 (nach Freigaben):** git pull --rebase, Push main, Security-Workflow grün; Push Branch; release.yml-Dispatch (liefert archive_run_id, Bytezahl, Verified OK, SHA-256, expires_at für `Aufbewahrung: 30 Tage, Ablauf <JJJJ-MM-TT>`); Proof-Dispatch mit image_sha 655fe197...; A5/A6 und Store-Erkennung wörtlich in 43-TESTBUILD.md; bei failed: Abschnitt "Befund und Alternativen", Stopp, Entscheid in 43-11.
+- **Task 2 (checkpoint:decision, Owner):** alle vier Freigaben mit "Entscheid: ja" in 43-FREIGABEN.md (Push main, Push rc, Dispatch release, Dispatch proof; dazu die Freigaben der Harness-Fixes und Wiederholungen).
+- **Task 3 (ERGEBNIS):**
+  - Branch rc/1.6.3-rc.1 gepusht, Kopf `47c4ce4e` (Neuaufsatz auf dem main-Kopf 7725bba8 nach dem Fix-Delta; Diff weiterhin genau drei Versionszeilen plus testbuild/).
+  - Archiv-Lauf release.yml 42537119924 (create_release=false, grün): Artefakt `store-release`, findling.tar.gz 692 014 Bytes, SHA-256 `fa9c38745ec79dd21411d17aaa4bb46455987893f4ab13d2f8f3204861c333be`, `Aufbewahrung: 30 Tage, Ablauf 2026-12-08` (expires_at 2026-12-08T23:51:31Z).
+  - Proof-Lauf rc-version-proof.yml 42565361965 GRÜN: `A5: ok` (HaRP, Raw-URL-Update 1.6.2 zu 1.6.3-rc.1 und Store-förmig 1.6.3 darüber, beides ohne --force-update, Image :655fe197 belegt, Heartbeat 200) und `A6: ok` auf stable33 UND stable34 (occ upgrade auf 1.6.3-rc.1, Migration 001603Date20261108000000, Hinweis-Flag 1, Verified OK). `Store-Erkennung AppAPI: apps/app_api/lib/Fetcher/ExAppFetcher.php:124 nutzt version_compare` (W7). Drei rote Vorläufer (42537244567 nginx-/exapps-401-Sonde, 42538879801 gh -d statt --dir, 42551978920 viewer/shipped.json), alle Harness; Einzeiler in 43-TESTBUILD.md, Abschnitt "Proof-Historie".
+  - Alle Belege wörtlich in 43-TESTBUILD.md; Installationsweg für mbozem belegt (Kommentar entsteht in 43-11, nur mit Owner-Freigabe).
+  - Plan-Task-3-verify wortgleich gefahren: PASS.
 
 ## Fix-Delta nach dem Audit (09.11.2026)
 
@@ -138,6 +143,7 @@ Audit").
 
 - .github/workflows/rc-version-proof.yml: FOUND
 - scripts/ci/rc_version_proof.sh: FOUND
-- 43-TESTBUILD.md: FOUND
-- Commit 3dba38dd (main): FOUND; Commit f6c5a6ce (rc/1.6.3-rc.1): FOUND
-- rc-Diff gegen audited_head: nur info.xml-Versionszeilen und testbuild/
+- 43-TESTBUILD.md: FOUND, keine AUSSTEHEND-Felder mehr
+- Commit 0fbfdfa6 (main, Task-3-Doku): FOUND; rc/1.6.3-rc.1 bei origin: 47c4ce4e (git ls-remote exit 0)
+- rc-Diff gegen 7725bba8: nur info.xml-Versionszeilen und testbuild/
+- Task-3-verify des Plans: PASS (A5/A6-Zeilen, sha256, Aufbewahrungszeile, Store-Erkennung, Remote-Branch)
