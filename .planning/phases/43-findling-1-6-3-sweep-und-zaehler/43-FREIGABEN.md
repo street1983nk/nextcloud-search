@@ -104,3 +104,8 @@ Freigabe Push 43-10 Sonden-Fix: "Ja, Push + Retry 2" (2026-11-09 03:23, Claude C
 Freigabe Dispatch 43-10 proof Wiederholung 2: "Ja, Push + Retry 2" (2026-11-09 03:23, Claude Code Terminal) Entscheid: ja
 
 Umfang: genau ein Push (Heartbeat-Sonde liest Container-Log, gh download --dir) plus dieser Zeilen, genau EIN erneuter Proof-Dispatch mit denselben Parametern (Archiv 42537119924). Kein Tag, kein Store.
+
+Freigabe Push 43-10 a6-Korrektur: "Ja, Push + Retry 3" (2026-11-09 05:52, Claude Code Terminal) Entscheid: ja
+Freigabe Dispatch 43-10 proof Wiederholung 3: "Ja, Push + Retry 3" (2026-11-09 05:52, Claude Code Terminal) Entscheid: ja
+
+Umfang: genau ein Push (a6 shipped.json-Korrektur nach deploy-harp-Muster) plus dieser Zeilen, genau EIN erneuter Proof-Dispatch (Archiv 42537119924). A5 war im Lauf 42551978920 ok. Kein Tag, kein Store.
