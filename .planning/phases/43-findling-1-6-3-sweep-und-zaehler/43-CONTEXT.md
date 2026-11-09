@@ -129,3 +129,14 @@ Daraus folgt für diese Phase:
 - **Leitregel für 43-21 bis 43-29:** Zwei verschiedene Dateien verschmelzen nie zu einem Dokument; im Zweifel nicht gruppieren (zu hoch, nie verschmolzen). Dokumentschlüssel und Freigabe-Identität dienen nur der Zählung.
 - Offene Owner-Entscheide OE-1 bis OE-8 stehen in 43-21-PLAN.md Task 1; die Antworten werden dort als Maschinenzeilen in 43-FREIGABEN.md festgehalten und danach hier nachgetragen.
 - Owner-Vorgabe 09.11.: "Zeit spielt keine Rolle, Hauptsache alles funktioniert."
+
+### Nachtrag Owner 09.11.: Entscheide OE-1 bis OE-8 (Plan 43-21 Task 1, "Wie empfohlen")
+
+- OE-1 a: Host und Freigabename ASCII-klein verglichen, Wurzel und Pfad ungefaltet, Unicode-Form NFC wie der Dateicache von Nextcloud.
+- OE-2 a: lange (gehashte) Speicher-IDs nur über die Konfiguration des externen Speichers und nur bei genau passendem md5 der nachgebauten ID; $user durch die Nutzer-ID ersetzt; nicht Nachbaubares bleibt getrennt und wird als Zahlenfeld in der Overview und stündlich im Log gezeigt (warning bei hashedUngrouped > 0); Passwörter werden nie gelesen.
+- OE-3 a: Samba [homes] oder Freigabe gleich Anmeldename nie gruppieren.
+- OE-4 a: SFTP nur je Anmeldung (Nutzer@Host[:Port]) gruppieren.
+- OE-5 a: Schlüsselformat 2 mit Formatmarke und einmaligem Neuaufbau, im Mischbetrieb nie eine falsche Zahl.
+- OE-6 a: PHPUnit lokal per scripts/dev/phpunit_docker.sh für alle PHP-Änderungen in 43-21 bis 43-27 (mindestens 4 GB frei).
+- OE-7 a: Samba path mit %U/%S als bekannte Grenze, ein englischer Satz unter Known limitations.
+- OE-8 a: 43-11 schließt als "abweichend, abgelöst durch rc.2".

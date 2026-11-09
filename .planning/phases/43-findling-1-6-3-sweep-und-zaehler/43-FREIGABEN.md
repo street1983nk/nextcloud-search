@@ -120,3 +120,13 @@ Freigabe Kommentar 43-11 Rückmeldung: "Ja go" (2026-11-09 09:25, Claude Code Te
 Umfang: genau ein kurzer Kommentar in #25 (Wortlaut vom Owner gesehen), gepostet: https://github.com/street1983nk/nextcloud-search/issues/25#issuecomment-6735423819. Kein Schließen.
 Freigabe Planung 43-21: "Ja go" (2026-11-09 09:25, Claude Code Terminal) Entscheid: ja
 Umfang: Zusatzplan vor dem Store für die Unterwurzeln derselben Freigabe (D-43-15) und die Faltung der Schreibweise von Host und Freigabe; nur Planung, Ausführung und jeder Push brauchen eigene Freigaben.
+
+Freigabe Entscheid 43-21 OE-1: "Wie empfohlen" (2026-11-09 10:36, Claude Code Terminal) Entscheid: a
+Freigabe Entscheid 43-21 OE-2: "Wie empfohlen" (2026-11-09 10:36, Claude Code Terminal) Entscheid: a
+Freigabe Entscheid 43-21 OE-3: "Wie empfohlen" (2026-11-09 10:36, Claude Code Terminal) Entscheid: a
+Freigabe Entscheid 43-21 OE-4: "Wie empfohlen" (2026-11-09 10:36, Claude Code Terminal) Entscheid: a
+Freigabe Entscheid 43-21 OE-5: "Wie empfohlen" (2026-11-09 10:36, Claude Code Terminal) Entscheid: a
+Freigabe Entscheid 43-21 OE-6: "Wie empfohlen" (2026-11-09 10:36, Claude Code Terminal) Entscheid: a
+Freigabe Entscheid 43-21 OE-7: "Wie empfohlen" (2026-11-09 10:36, Claude Code Terminal) Entscheid: a
+Freigabe Entscheid 43-21 OE-8: "Wie empfohlen" (2026-11-09 10:36, Claude Code Terminal) Entscheid: a
+Umfang: nur Entscheide für 43-21 bis 43-29, kein Push, kein Dispatch, kein Kommentar.
