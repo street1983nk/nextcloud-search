@@ -9,6 +9,11 @@ the code under test: its form, every md5 of a hashed id recomputed with hashlib,
 the folded parts in ASCII lower case, the roots without edge slashes and in NFC,
 and the counters it promises.
 
+The document key catalogue backend/tests/fixtures/doc_key_cases.json is
+recomputed here as well, both formats, from its fields and with hashlib only:
+format 2 (plan 43-22) over the share and the share path, format 1 (plan 43-15)
+over the path alone, kept as history.
+
 It also holds where the identity and the document key may be used at all: only
 in the counting services, never in search, path, permission, gateway or
 listener code (T-43-63).
@@ -27,10 +32,12 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 CATALOGUE = Path(__file__).resolve().parent / "fixtures" / "share_identity_cases.json"
+DOC_KEYS = Path(__file__).resolve().parent / "fixtures" / "doc_key_cases.json"
 PHP_LIB = REPO / "php" / "lib"
 PHP_TESTS = REPO / "php" / "tests" / "Unit"
 DECISIONS = REPO / ".planning" / "phases" / "43-findling-1-6-3-sweep-und-zaehler" / "43-FREIGABEN.md"
 HEX32 = re.compile(r"[0-9a-f]{32}")
+HEX64 = re.compile(r"[0-9a-f]{64}")
 OUTCOMES = {"verified", "ungrouped", "placeholder", "excluded"}
 STAT_KEYS = ["parsed", "hashedVerified", "hashedUngrouped", "placeholder", "excluded"]
 
@@ -255,3 +262,92 @@ def test_document_keys_are_asked_by_the_counting_services_only(needle: str) -> N
 def test_no_search_path_gateway_or_listener_code_touches_the_counting(needle: str) -> None:
     users = _users(PHP_LIB, needle)
     assert sorted(user for user in users if _forbidden(user)) == []
+
+
+# -- the document key (plan 43-22) ----------------------------------------------
+
+
+def _doc_key_cases(fmt: int) -> list[dict[str, Any]]:
+    cases = cast("list[dict[str, Any]]", json.loads(DOC_KEYS.read_text(encoding="ascii"))["cases"])
+    return [case for case in cases if case["format"] == fmt]
+
+
+def _share_path(case: dict[str, Any]) -> str:
+    """root '/' path, the path without leading slashes, an empty part left out, in NFC."""
+    path = str(case["path"]).lstrip("/")
+    root = str(case["root"])
+    if root == "":
+        joined = path
+    elif path == "":
+        joined = root
+    else:
+        joined = root + "/" + path
+    return unicodedata.normalize("NFC", joined)
+
+
+def test_the_document_key_catalogue_is_ascii_and_holds_both_formats() -> None:
+    DOC_KEYS.read_bytes().decode("ascii")
+    cases = cast("list[dict[str, Any]]", json.loads(DOC_KEYS.read_text(encoding="ascii"))["cases"])
+
+    assert {case["format"] for case in cases} == {1, 2}
+    assert len(_doc_key_cases(1)) == 13
+    assert len(_doc_key_cases(2)) >= 11
+    names = [case["name"] for case in cases]
+    assert len(names) == len(set(names))
+
+
+@pytest.mark.parametrize("case", _doc_key_cases(2), ids=lambda case: case["name"])
+def test_every_format_2_key_is_recomputed_over_share_and_share_path(case: dict[str, Any]) -> None:
+    assert set(case) <= {"name", "format", "share", "root", "path", "expected", "derivation", "sameAs", "differsFrom"}
+    share = case["share"]
+    joined = _share_path(case)
+
+    assert HEX64.fullmatch(case["expected"])
+    assert "\x00" not in share + joined
+    assert hashlib.sha256(b"2\x00" + share.encode() + b"\x00" + joined.encode()).hexdigest() == case["expected"]
+    assert case["derivation"] == f"printf '2\\000%s\\000%s' '{share}' '{joined}' | sha256sum"
+    if share == "":
+        assert case["root"] == "", "a storage without identity has no root"
+
+
+@pytest.mark.parametrize("case", _doc_key_cases(1), ids=lambda case: case["name"])
+def test_every_format_1_key_is_still_the_hash_of_the_path_alone(case: dict[str, Any]) -> None:
+    path = unicodedata.normalize("NFC", str(case["path"]).lstrip("/"))
+
+    assert hashlib.sha256(path.encode()).hexdigest() == case["expected"]
+    assert case["derivation"] == f"printf '%s' '{path}' | sha256sum"
+
+
+def test_the_relations_of_format_2_hold() -> None:
+    by_name = {case["name"]: case for case in _doc_key_cases(2)}
+    same = differs = 0
+    for case in by_name.values():
+        if "sameAs" in case:
+            assert case["expected"] == by_name[case["sameAs"]]["expected"], case["name"]
+            same += 1
+        if "differsFrom" in case:
+            assert case["expected"] != by_name[case["differsFrom"]]["expected"], case["name"]
+            differs += 1
+
+    assert same >= 7
+    assert differs >= 4
+
+
+def test_format_2_keys_never_meet_format_1_keys() -> None:
+    old = {case["expected"] for case in _doc_key_cases(1)}
+    new = {case["expected"] for case in _doc_key_cases(2)}
+    assert old.isdisjoint(new)
+
+
+def test_the_named_cases_of_the_plan_are_there() -> None:
+    by_name = {case["name"]: case for case in _doc_key_cases(2)}
+    top = by_name["share at its top"]
+
+    assert by_name["the same file under the root Projekte"]["expected"] == top["expected"]
+    assert by_name["Unterweisung under the root Arbeitssicherheit"]["sameAs"] == "Unterweisung at the top of the share"
+    assert by_name["bericht.txt is another file"]["differsFrom"] == "Bericht.txt"
+    assert by_name["a storage without share identity"]["share"] == ""
+    assert by_name["a storage without share identity"]["path"] == top["path"]
+    assert by_name["a storage without share identity"]["expected"] != top["expected"]
+    assert any(case["share"].startswith("sftp::") for case in by_name.values())
+    assert by_name["a home storage keeps its files/ prefix"]["path"].startswith("files/")

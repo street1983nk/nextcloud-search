@@ -428,7 +428,7 @@ final class ReconcileControllerTest extends TestCase {
 			return $found;
 		});
 
-		return new DocKeyService($access);
+		return new DocKeyService($access, $this->createMock(StorageService::class));
 	}
 
 	public function testTheBandIsTwoHundred(): void {
@@ -500,7 +500,7 @@ final class ReconcileControllerTest extends TestCase {
 			$response = $this->storageController($this->backendAppId(), $ids)->docKeys();
 
 			self::assertSame(Http::STATUS_OK, $response->getStatus());
-			self::assertSame(['keys' => [14 => str_repeat('a', 64)], 'absent' => [15, 9]], $response->getData());
+			self::assertSame(['keys' => [14 => str_repeat('a', 64)], 'absent' => [15, 9], 'format' => 2], $response->getData());
 		}
 	}
 
@@ -545,7 +545,26 @@ final class ReconcileControllerTest extends TestCase {
 	public function testAnAnswerWithoutKeysStillCarriesAMap(): void {
 		$response = $this->storageController($this->backendAppId(), '13', $this->docKeysOver([]))->docKeys();
 
-		self::assertSame('{"keys":{},"absent":[13]}', json_encode($response->getData()));
+		self::assertSame('{"keys":{},"absent":[13],"format":2}', json_encode($response->getData()));
+	}
+
+	public function testTheAnswerNamesTheFormatOfItsKeys(): void {
+		$response = $this->storageController($this->backendAppId(), '14', $this->docKeysOver([14 => 'Gemeinsam/Plan.xlsx']))->docKeys();
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		$data = $response->getData();
+		self::assertSame(['keys', 'absent', 'format'], array_keys($data));
+		self::assertSame(DocKeyService::DOC_KEY_FORMAT, $data['format']);
+		self::assertSame(2, $data['format']);
+		self::assertSame(DocKeyService::docKeyOf('Gemeinsam/Plan.xlsx'), $data['keys'][14]);
+	}
+
+	public function testAFailedAnswerNamesNoFormat(): void {
+		$this->docKeyService->method('docKeysFor')->willThrowException(new \RuntimeException('x'));
+
+		$response = $this->storageController($this->backendAppId(), '9')->docKeys();
+
+		self::assertArrayNotHasKey('format', $response->getData());
 	}
 
 	public function testAFailingKeyLookupAnswersWithAStaticSentenceAndLogsNoMessage(): void {

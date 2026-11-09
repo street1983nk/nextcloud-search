@@ -370,8 +370,9 @@ final class QueueServiceTest extends TestCase {
 	 * @param array<int, list<string>> $readers
 	 * @param array<string, array{File, string}> $nodes
 	 * @param array<int, string> $internal
+	 * @param array<int, array{share: string, root: string}> $identities share identity per storage; every cache entry lies on storage 31
 	 */
-	private function claimWith(array $rows, array $readers, array $nodes, array $internal, ?DocKeyService $docKeys = null): array {
+	private function claimWith(array $rows, array $readers, array $nodes, array $internal, ?DocKeyService $docKeys = null, array $identities = []): array {
 		$this->logged = [];
 		$this->active = null;
 
@@ -407,6 +408,11 @@ final class QueueServiceTest extends TestCase {
 		$rootFolder = $this->createMock(IRootFolder::class);
 		$rootFolder->method('getUserFolder')->willReturnCallback(static fn (string $userId): Folder => $folders[$userId]);
 
+		$storageService = $this->createMock(StorageService::class);
+		$storageService->method('shareIdentities')->willReturnCallback(
+			static fn (array $storageIds): array => array_intersect_key($identities, array_flip($storageIds)),
+		);
+
 		if ($docKeys === null) {
 			$fileAccess = $this->createMock(IFileAccess::class);
 			$fileAccess->method('getByFileIds')->willReturnCallback(function (array $fileIds) use ($internal): array {
@@ -415,13 +421,14 @@ final class QueueServiceTest extends TestCase {
 					if (isset($internal[$fileId])) {
 						$entry = $this->createMock(ICacheEntry::class);
 						$entry->method('getPath')->willReturn($internal[$fileId]);
+						$entry->method('getStorageId')->willReturn(31);
 						$found[$fileId] = $entry;
 					}
 				}
 
 				return $found;
 			});
-			$docKeys = new DocKeyService($fileAccess);
+			$docKeys = new DocKeyService($fileAccess, $storageService);
 		}
 
 		$session = $this->createMock(IUserSession::class);
@@ -446,7 +453,6 @@ final class QueueServiceTest extends TestCase {
 			);
 		}
 
-		$storageService = $this->createMock(StorageService::class);
 		$service = new QueueService(
 			$mapper,
 			$this->createMock(FileStateService::class),
@@ -502,6 +508,8 @@ final class QueueServiceTest extends TestCase {
 		);
 
 		self::assertSame(DocKeyService::docKeyOf(self::SHARED_INTERNAL), $sources[1]['docKey'] ?? null);
+		self::assertSame(2, $sources[1]['docKeyFormat'] ?? null);
+		self::assertSame(DocKeyService::DOC_KEY_FORMAT, $sources[1]['docKeyFormat'] ?? null);
 		// The path of the reader still travels, unchanged, next to the key.
 		self::assertSame('Abteilung/Plan.xlsx', $sources[1]['path'] ?? null);
 	}
@@ -534,6 +542,40 @@ final class QueueServiceTest extends TestCase {
 		self::assertSame($owner[1]['docKey'] ?? null, $viaShare[1]['docKey'] ?? null);
 		self::assertSame(DocKeyService::docKeyOf(self::SHARED_INTERNAL), $viaShare[1]['docKey'] ?? null);
 		self::assertNotSame(DocKeyService::docKeyOf('Plan.xlsx'), $viaShare[1]['docKey'] ?? null);
+	}
+
+	public function testTheKeyOfAJobFollowsTheShareOfItsStorage(): void {
+		// The file lies on storage 31, a member of the share under the root
+		// Abteilung; the key is the one of the share path, for the owner and
+		// for a reader through a Nextcloud share alike.
+		$identity = ['share' => 'smb::192.168.98.246//daten', 'root' => 'Abteilung'];
+		$owner = $this->claimWith(
+			[self::row(1, self::SHARED_FILE, QueueMapper::KIND_CONTENT)],
+			[self::SHARED_FILE => ['bernd']],
+			['bernd' => [$this->node(self::SHARED_INTERNAL, 'external'), 'SMB/Gemeinsam/Plan.xlsx']],
+			[self::SHARED_FILE => self::SHARED_INTERNAL],
+			null,
+			[31 => $identity],
+		);
+		$viaShare = $this->claimWith(
+			[self::row(1, self::SHARED_FILE, QueueMapper::KIND_CONTENT)],
+			[self::SHARED_FILE => ['aaron', 'bernd']],
+			[
+				'aaron' => [$this->node('Plan.xlsx', 'shared'), 'Gemeinsam/Plan.xlsx'],
+				'bernd' => [$this->node(self::SHARED_INTERNAL, 'external'), 'SMB/Gemeinsam/Plan.xlsx'],
+			],
+			[self::SHARED_FILE => self::SHARED_INTERNAL],
+			null,
+			[31 => $identity],
+		);
+
+		$expected = DocKeyService::docKeyOf(self::SHARED_INTERNAL, $identity);
+		self::assertSame($expected, $owner[1]['docKey'] ?? null);
+		self::assertSame($expected, $viaShare[1]['docKey'] ?? null);
+		self::assertSame(DocKeyService::docKeyOf('Abteilung/' . self::SHARED_INTERNAL, ['share' => $identity['share'], 'root' => '']), $expected);
+		self::assertNotSame(DocKeyService::docKeyOf(self::SHARED_INTERNAL), $expected);
+		self::assertSame(2, $owner[1]['docKeyFormat'] ?? null);
+		self::assertSame(2, $viaShare[1]['docKeyFormat'] ?? null);
 	}
 
 	public function testTwoMountPointsOfOneGroupYieldOneKey(): void {
@@ -579,6 +621,9 @@ final class QueueServiceTest extends TestCase {
 		self::assertSame(str_repeat('a', 64), $sources[1]['docKey'] ?? null);
 		self::assertSame(str_repeat('b', 64), $sources[2]['docKey'] ?? null);
 		self::assertSame(str_repeat('c', 64), $sources[3]['docKey'] ?? null);
+		foreach ([1, 2, 3] as $queueId) {
+			self::assertSame(2, $sources[$queueId]['docKeyFormat'] ?? null);
+		}
 	}
 
 	public function testADeleteOrderCarriesNoKeyAndAsksForNone(): void {
@@ -589,6 +634,7 @@ final class QueueServiceTest extends TestCase {
 
 		self::assertSame(QueueMapper::KIND_DELETE, $sources[1]['kind'] ?? null);
 		self::assertArrayNotHasKey('docKey', $sources[1]);
+		self::assertArrayNotHasKey('docKeyFormat', $sources[1]);
 	}
 
 	public function testAFileWithoutACacheRowTravelsWithoutAKey(): void {
@@ -602,6 +648,7 @@ final class QueueServiceTest extends TestCase {
 
 		self::assertArrayHasKey(1, $sources);
 		self::assertArrayNotHasKey('docKey', $sources[1]);
+		self::assertArrayNotHasKey('docKeyFormat', $sources[1]);
 	}
 
 	public function testAFailingKeyLookupNeitherStopsTheClaimNorLogsAPath(): void {
@@ -618,6 +665,7 @@ final class QueueServiceTest extends TestCase {
 
 		self::assertArrayHasKey(1, $sources);
 		self::assertArrayNotHasKey('docKey', $sources[1]);
+		self::assertArrayNotHasKey('docKeyFormat', $sources[1]);
 
 		$warnings = array_values(array_filter($this->logged, static fn (array $entry): bool => $entry[0] === 'warning'));
 		self::assertCount(1, $warnings);
