@@ -112,3 +112,6 @@ Umfang: genau ein Push (a6 shipped.json-Korrektur nach deploy-harp-Muster) plus 
 
 Freigabe Kommentar 43-11: "Ja, so posten" (2026-11-09 06:23, Claude Code Terminal) Entscheid: ja
 Umfang: genau ein Kommentar in #25 (gekuerzte Fassung, vom Owner zeichengenau gesehen), kein Schliessen, kein weiterer Kommentar.
+
+Freigabe Push 43-12: "Wie empfohlen" und "Wie ja" (2026-11-09 07:05, Claude Code Terminal) Entscheid: ja
+Umfang: genau ein Push auf main nach git pull --rebase: CHANGELOG-Satz D2, Gesamttext v1.6.3 in docs/store-listing.md, Gate scan_full_text_1_6_3, 43-ABNAHME.md, diese Zeilen, dazu die 5 lokalen Doku-Commits davor. Kein Tag, kein Dispatch, kein Store, kein Kommentar.

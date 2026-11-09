@@ -36,6 +36,9 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
 - Files that 1.6.2 recorded as a gateway error are checked once more after
   the update, also when their retries were used up, so a locked or refused
   file shows as not readable with its remedy.
+- The synchronous coverage count is capped at 25,000 rows, so the answer
+  stays within the admin timeout of the companion on slow hardware; larger
+  instances see the figure counted in the background once after the update.
 
 ### Known limitations
 
