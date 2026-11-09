@@ -431,3 +431,109 @@ def test_a_random_topology_matches_a_plain_set_computation(tmp_path: Path, seed:
 
 def _indexed(row: Mapping[str, Any]) -> dict[str, Any]:
     return {**row, "state": "indexed", "reason": None, "deleted": False, "chunks": 0}
+
+
+# -- one share under several roots and spellings (plans 43-21 to 43-23) ------
+
+
+def _roots() -> tuple[dict[str, Any], dict[str, Any]]:
+    data = _topology()
+    return data, next(item for item in data["variants"] if item["name"] == "roots")
+
+
+def _format_two(share: str, share_path: str) -> str:
+    return hashlib.sha256(b"2\x00" + share.encode("utf-8") + b"\x00" + share_path.encode("utf-8")).hexdigest()
+
+
+def test_the_keys_of_the_roots_variant_are_format_two_over_the_share_path() -> None:
+    # The fixture keys are recomputed from the identity and the internal path
+    # by the rule of plan 43-22, never taken from the code under test.
+    _, variant = _roots()
+    identities = variant["identities"]
+    for row in variant["extraRows"]:
+        identity = identities[str(row["storage_id"])]
+        root = identity["root"]
+        share_path = row["internalPath"] if root == "" else root + "/" + row["internalPath"]
+        assert share_path == row["sharePath"], row["file_id"]
+        assert _format_two(identity["share"], share_path) == row["doc_key"], row["file_id"]
+    for row in variant["expected"]["php"]["extraPhpOnlyRows"]:
+        root = identities[str(row["storage_id"])]["root"]
+        assert (row["internalPath"] if root == "" else root + "/" + row["internalPath"]) == row["sharePath"]
+    for row in variant["expected"]["php"]["fileCacheWithoutVerdict"]:
+        assert hashlib.md5(row["internalPath"].encode("utf-8"), usedforsecurity=False).hexdigest() == row["pathHash"]
+    shares = {identity["share"] for key, identity in identities.items() if int(key) in variant["groups"][0]}
+    assert shares == {"smb::fs.example//daten"}
+
+
+def test_one_share_under_two_roots_and_two_spellings_counts_every_file_once(tmp_path: Path) -> None:
+    # The container needs no change for the roots: equal keys are enough.
+    data, variant = _roots()
+    expected = variant["expected"]
+    state_db, vectors_db = _build(tmp_path, [*data["rows"], *variant["extraRows"]])
+
+    counts = coverage_counts(state_db, vectors_db, variant["mounted"], variant["groups"])
+
+    assert counts.documents == expected["documents"]
+    assert counts.embedded_documents == expected["embeddedDocuments"]
+    assert counts.judged_documents == expected["judgedDocuments"]
+    assert counts.doc_keys_missing == expected["docKeysMissing"]
+    assert list(counts.documents_by_group) == expected["documentsByGroup"]
+    assert list(counts.judged_by_group) == expected["judgedByGroup"]
+    assert dict(counts.documents_by_storage) == _by_storage(expected["documentsByStorage"])
+    assert dict(counts.judged_by_storage) == _by_storage(expected["judgedByStorage"])
+
+
+def test_the_share_path_keeps_one_file_together_and_two_files_apart(tmp_path: Path) -> None:
+    # The total of the variant is the same under the internal path by accident
+    # (r1 twice, r3 merged), so this holds the two cases one by one.
+    _, variant = _roots()
+    rows = {row["file_id"]: row for row in variant["extraRows"]}
+    together = [_indexed(rows[file_id]) for file_id in (1121, 1421, 1521)]
+    apart = [_indexed(rows[file_id]) for file_id in (1123, 1423)]
+
+    for chosen, documents in ((together, 1), (apart, 2)):
+        root = tmp_path / str(documents)
+        root.mkdir()
+        state_db, vectors_db = _build(root, chosen)
+        counts = coverage_counts(state_db, vectors_db, [11, 14, 15], [[11, 14, 15]])
+        assert counts.documents == documents
+
+
+def test_the_roots_variant_keeps_every_part_within_its_denominator() -> None:
+    _, variant = _roots()
+    expected = variant["expected"]
+    php = expected["php"]
+    parts = php["denominatorParts"]
+
+    for index, judged in enumerate(expected["judgedByGroup"]):
+        assert parts["groups"][index] == max(
+            php["groupParts"]["groups"][index], judged + php["phpOnly"]["byGroup"][index]
+        )
+        assert expected["documentsByGroup"][index] <= parts["groups"][index]
+    for key, judged in expected["judgedByStorage"].items():
+        assert parts["singles"][key] == max(
+            php["groupParts"]["singles"][key], judged + php["phpOnly"]["byStorage"][key]
+        )
+        assert expected["documentsByStorage"][key] <= parts["singles"][key]
+    assert php["denominator"] == sum(parts["groups"]) + sum(parts["singles"].values())
+    assert php["counted"] == expected["documents"]
+    assert php["counted"] * 100 // php["denominator"] == php["percent"] <= 100
+    assert php["embedded"] * 100 // php["denominator"] == php["embeddedPercent"]
+    assert php["notReadable"] == sum(php["phpOnly"]["notReadableByGroup"]) + sum(
+        php["phpOnly"]["notReadableByStorage"].values()
+    )
+
+
+def test_without_the_roots_variant_the_main_topology_is_unchanged(
+    topology: tuple[dict[str, Any], Path, Path],
+) -> None:
+    data, state_db, vectors_db = topology
+    _, variant = _roots()
+
+    counts = coverage_counts(state_db, vectors_db, data["mounted"], data["groups"])
+
+    assert list(counts.documents_by_group) == data["expected"]["documentsByGroup"]
+    assert data["expected"]["php"]["phpOnly"]["byGroup"] == [3, 1]
+    assert 14 not in data["mounted"]
+    assert 15 not in data["mounted"]
+    assert variant["mounted"] == sorted([*data["mounted"], 14, 15])

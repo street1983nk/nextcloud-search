@@ -101,6 +101,8 @@ final class CoverageTopologyParityTest extends TestCase {
 			'docKeysMissing' => 0,
 			'docKeysUnresolved' => 0,
 			'docKeysCorrected' => 0,
+			// The format of the keys counted (plan 43-23, T-43-69).
+			'docKeyFormat' => 2,
 		];
 	}
 
@@ -266,6 +268,48 @@ final class CoverageTopologyParityTest extends TestCase {
 		}
 		foreach (self::byId($expected['documentsByStorage']) as $storageId => $documents) {
 			self::assertLessThanOrEqual(self::byId($php['denominatorParts']['singles'])[$storageId], $documents);
+		}
+	}
+
+	/**
+	 * The variant roots (plan 43-23, D-43-15, D-43-17): the same share under
+	 * the root projekt and spelled DATEN in group 0. The PHP only figures of
+	 * the variant come out of FileStateServiceCoverageTest against the same
+	 * file; here the page arithmetic holds the hand derived denominator and
+	 * share, every subtree once and no part over a hundred per cent.
+	 */
+	public function testOneShareUnderTwoRootsAndTwoSpellingsCountsEverySubtreeOnce(): void {
+		$variant = null;
+		foreach (self::topology()['variants'] as $candidate) {
+			if ($candidate['name'] === 'roots') {
+				$variant = $candidate;
+			}
+		}
+		self::assertIsArray($variant);
+		$expected = $variant['expected'];
+		$php = $expected['php'];
+		$body = self::body($variant);
+		self::assertSame($variant['groups'], $body['groups']);
+		$answer = AdminViewService::perDocumentAnswer(self::containerAnswer($expected), $body);
+		self::assertIsArray($answer);
+		$parts = ScanStatsService::partsOf($body['mounted'], self::rows($php), $body['groups'], array_map(intval(...), self::byId($php['refusedPerStorage'])));
+		$phpOnly = self::phpOnly($php);
+
+		self::assertSame($php['groupParts']['groups'], $parts['groups']);
+		self::assertSame(array_map(intval(...), self::byId($php['groupParts']['singles'])), $parts['singles']);
+
+		$figures = AdminViewService::perDocumentFigures(['grouped' => []], ['indexed' => 0, 'embedded' => 0], $answer, $parts, $phpOnly);
+
+		self::assertSame($php['denominator'], AdminViewService::perDocumentDenominator($parts, $answer, $phpOnly));
+		self::assertSame($php['denominator'], $figures['indexable']);
+		self::assertSame($php['counted'], $figures['backend']['indexed']);
+		self::assertSame($php['embedded'], $figures['backend']['embedded']);
+		self::assertSame($php['notReadable'], $figures['notReadable']);
+		self::assertSame($php['percent'], AdminViewService::coverageShare($figures['backend']['indexed'], $figures['indexable'], true));
+		self::assertSame($php['embeddedPercent'], AdminViewService::coverageShare($figures['backend']['embedded'], $figures['indexable'], true));
+		self::assertLessThanOrEqual(100, $php['percent']);
+		foreach ($expected['documentsByGroup'] as $index => $documents) {
+			self::assertLessThanOrEqual($php['denominatorParts']['groups'][$index], $documents);
 		}
 	}
 }

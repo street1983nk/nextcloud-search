@@ -5380,3 +5380,44 @@ def test_the_pause_sentences_are_rendered_as_text() -> None:
     assert "text('findling-pause-state', " in block.group(1)
     assert "text('findling-pause-toggle', " in block.group(1)
     assert "view.pause +" not in block.group(1)
+
+
+#: The five counters of StorageService::shareIdentityStats, the only content of
+#: coverage.shareIdentity (plan 43-23, A-5, T-43-71).
+SHARE_IDENTITY_KEYS = ("parsed", "hashedVerified", "hashedUngrouped", "placeholder", "excluded")
+
+
+def test_the_share_identity_counters_are_five_whole_numbers_and_no_sentence() -> None:
+    """Plan 43-23 (OE-2 a, A-5): coverage.shareIdentity carries numbers only.
+
+    The overview hands the counters of its one shareIdentities() call on as
+    five whole numbers of nought or more; no host, share, root or login, and
+    the page renders none of it (no new visible sentence). The positive
+    control is that the same search finds the field in the view.
+    """
+    view = ADMIN_VIEW.read_text(encoding="utf-8")
+    template = TEMPLATE.read_text(encoding="utf-8")
+    script = SCRIPT.read_text(encoding="utf-8")
+
+    assert "'shareIdentity' => self::shareIdentityCounters($shareIdentity)," in view
+    counters = view[view.index("public static function shareIdentityCounters(") :]
+    counters = counters[: counters.index("\n\t}\n")]
+    for key in SHARE_IDENTITY_KEYS:
+        assert f"'{key}'" in counters, key
+    assert "is_int($value) && $value > 0 ? $value : 0" in counters
+    assert "share" not in counters.replace("shareIdentityCounters", "").replace("$shareIdentity", "").lower()
+
+    # One call per overview, the counters read right after it (43-22 note).
+    assert view.count("->shareIdentities(") == 1
+    assert view.count("->shareIdentityStats()") == 1
+    shares = view[view.index("private function countingShares(") :]
+    shares = shares[: shares.index("\n\t}\n")]
+    assert (
+        shares.index("->shareIdentities(")
+        < shares.index("->shareIdentityStats()")
+        < shares.index("->countingKeyGroups(")
+    )
+
+    for half in (template, script):
+        assert "shareIdentity" not in half
+        assert "hashedUngrouped" not in half

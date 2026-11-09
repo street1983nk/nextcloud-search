@@ -5,15 +5,19 @@ declare(strict_types=1);
 namespace OCA\Findling\Tests\Unit;
 
 use OCA\Findling\Service\AdminViewService;
+use OCA\Findling\Service\DocKeyService;
 use OCA\Findling\Service\ExAppService;
 use OCA\Findling\Service\FileStateService;
 use OCA\Findling\Service\ScanStatsService;
 use OCA\Findling\Service\SettingsService;
+use OCA\Findling\Service\StorageService;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\DB\IResult;
 use OCP\DB\QueryBuilder\IExpressionBuilder;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IAppConfig;
+use OCP\ICache;
+use OCP\ICacheFactory;
 use OCP\IDBConnection;
 use OCP\IL10N;
 use OCP\IUserSession;
@@ -1462,8 +1466,14 @@ final class AdminViewServiceTest extends TestCase {
 		$files->expects(self::once())->method('countByReasonPerStorage')
 			->with('skipped', 'mime_not_allowed', [11, 12, 31])
 			->willReturn([11 => 1]);
+		// The identities of the overview travel along (plan 43-23): the PHP
+		// only documents are keyed over the share path of each member.
+		$identities = [
+			11 => ['share' => 'smb::fs.example//daten', 'root' => ''],
+			12 => ['share' => 'smb::fs.example//daten', 'root' => 'projekt'],
+		];
 		$files->expects(self::once())->method('distinctPathsByReasons')
-			->with([[11, 12]], [31])
+			->with([[11, 12]], [31], $identities)
 			->willReturn(self::noPhpOnly(1));
 		$view = $this->viewWith(['fileStateService' => $files, 'scanStats' => $this->emptyScanStats()]);
 
@@ -1471,9 +1481,10 @@ final class AdminViewServiceTest extends TestCase {
 			$view,
 			'perDocumentFiguresFor',
 			['grouped' => []],
-			['mounted' => [11, 12, 31], 'groups' => [[11, 12]]],
+			['mounted' => [11, 12, 31], 'groups' => [[11, 12]], 'docKeyFormat' => DocKeyService::DOC_KEY_FORMAT],
 			['indexed' => 0, 'embedded' => 0],
 			self::perDocumentAnswerOf([0], [0]),
+			$identities,
 		);
 
 		self::assertIsArray($figures);
@@ -1590,12 +1601,13 @@ final class AdminViewServiceTest extends TestCase {
 			'documentsByGroup' => [2], 'judgedByGroup' => [3],
 			'documentsByStorage' => [[3, 1]], 'judgedByStorage' => [[3, 1]],
 			'counting' => false, 'docKeysMissing' => 0, 'docKeysUnresolved' => 0, 'docKeysCorrected' => 0,
+			'docKeyFormat' => 2,
 		]]);
 		$ok = self::invokeOn($view, 'perDocumentCoverage', $body);
 		self::assertSame(AdminViewService::PER_DOCUMENT_OK, $ok['kind']);
 		self::assertSame([3 => 1], $ok['answer']['judgedByStorage']);
 
-		[$view] = $this->viewAsking(['kind' => ExAppService::ADMIN_OK, 'body' => ['counting' => true, 'documents' => null]]);
+		[$view] = $this->viewAsking(['kind' => ExAppService::ADMIN_OK, 'body' => ['counting' => true, 'documents' => null, 'docKeyFormat' => 2]]);
 		$counting = self::invokeOn($view, 'perDocumentCoverage', $body);
 		self::assertSame(AdminViewService::PER_DOCUMENT_COUNTING, $counting['kind']);
 		self::assertTrue($counting['answer']['counting']);
@@ -1608,6 +1620,7 @@ final class AdminViewServiceTest extends TestCase {
 			'documentsByGroup' => [2], 'judgedByGroup' => [3],
 			'documentsByStorage' => [[3, 1]], 'judgedByStorage' => [[3, 1]],
 			'counting' => false,
+			'docKeyFormat' => 2,
 		];
 		yield 'counting missing' => [array_diff_key($good, ['counting' => true])];
 		yield 'counting a string' => [['counting' => 'false'] + $good];
@@ -1765,5 +1778,216 @@ final class AdminViewServiceTest extends TestCase {
 			self::assertIsArray($coverage);
 			self::assertSame($hint, $coverage['perDocumentHint']);
 		}
+	}
+
+	// -- the format of the document keys and the share identities (plan 43-23) --
+
+	public function testTheBodyCarriesTheFormatOfTheDocumentKeys(): void {
+		$body = AdminViewService::coverageBody([11, 12], [[11, 12]]);
+
+		self::assertSame(2, DocKeyService::DOC_KEY_FORMAT);
+		self::assertSame(DocKeyService::DOC_KEY_FORMAT, $body['docKeyFormat']);
+		self::assertSame(['mounted', 'groups', 'docKeyFormat'], array_keys($body));
+	}
+
+	/** @return iterable<string, array{0: array<string,mixed>}> */
+	public static function answersOfAnotherFormat(): iterable {
+		$good = [
+			'documents' => 3, 'embeddedDocuments' => 1, 'judgedDocuments' => 4,
+			'documentsByGroup' => [2], 'judgedByGroup' => [3],
+			'documentsByStorage' => [[3, 1]], 'judgedByStorage' => [[3, 1]],
+			'counting' => false,
+		];
+		foreach (['a figure' => $good, 'counting' => ['counting' => true]] as $name => $answer) {
+			yield $name . ' without docKeyFormat' => [$answer];
+			yield $name . ' with docKeyFormat 1' => [['docKeyFormat' => 1] + $answer];
+			yield $name . ' with docKeyFormat 3' => [['docKeyFormat' => 3] + $answer];
+			yield $name . ' with docKeyFormat as a string' => [['docKeyFormat' => '2'] + $answer];
+			yield $name . ' with docKeyFormat as a float' => [['docKeyFormat' => 2.0] + $answer];
+			yield $name . ' with docKeyFormat null' => [['docKeyFormat' => null] + $answer];
+		}
+	}
+
+	#[DataProvider('answersOfAnotherFormat')]
+	public function testAnAnswerWithoutFormatTwoDoesNotHoldUp(array $answer): void {
+		// T-43-69: a container that counted keys of another format, or that
+		// does not say which, must not give a figure; the page goes the way of
+		// 1.6.2 with the existing warning.
+		$body = ['mounted' => [1, 2, 3], 'groups' => [[1, 2]], 'docKeyFormat' => DocKeyService::DOC_KEY_FORMAT];
+
+		self::assertNull(AdminViewService::perDocumentAnswer($answer, $body));
+		self::assertNotNull(AdminViewService::perDocumentAnswer(['docKeyFormat' => 2] + $answer, $body));
+
+		[$view, $lines] = $this->viewAsking(['kind' => ExAppService::ADMIN_OK, 'body' => $answer]);
+		$outcome = self::invokeOn($view, 'perDocumentCoverage', $body);
+		self::assertSame(AdminViewService::PER_DOCUMENT_FALLBACK, $outcome['kind']);
+		self::assertCount(1, $lines);
+		self::assertSame('Findling: the per document count of the backend does not hold up, the page shows the 1.6.2 figure', $lines[0]['message']);
+	}
+
+	private const STAT_KEYS = ['parsed', 'hashedVerified', 'hashedUngrouped', 'placeholder', 'excluded'];
+
+	/** Identities with every kind of value the log must never name. @return array<int, array{share: string, root: string}> */
+	private static function namedIdentities(): array {
+		return [
+			11 => ['share' => 'smb::fs.example//daten', 'root' => ''],
+			12 => ['share' => 'smb::fs.example//daten', 'root' => 'Arbeitssicherheit'],
+			14 => ['share' => 'sftp::dora@sftp.example', 'root' => 'projekt'],
+		];
+	}
+
+	/**
+	 * A view over a StorageService double that records the order of its
+	 * calls, a logger that records every line and a local cache over the
+	 * array behind $cacheValues.
+	 *
+	 * @param array<string, mixed> $stats
+	 * @param \ArrayObject<string, mixed>|null $cacheValues
+	 * @return array{0: AdminViewService, 1: \ArrayObject<int, array{level: string, message: string, context: array<mixed>}>, 2: \ArrayObject<int, string>}
+	 */
+	private function viewCountingShares(array $stats, bool $localCache = true, ?\ArrayObject $cacheValues = null): array {
+		$lines = new \ArrayObject();
+		$logger = $this->createMock(LoggerInterface::class);
+		foreach (['debug', 'info', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency'] as $level) {
+			$logger->method($level)->willReturnCallback(static function (string|\Stringable $message, array $context = []) use ($lines, $level): void {
+				$lines[] = ['level' => $level, 'message' => (string)$message, 'context' => $context];
+			});
+		}
+
+		$order = new \ArrayObject();
+		$mounted = [11, 12, 14, 31];
+		$identities = self::namedIdentities();
+		$storage = $this->createMock(StorageService::class);
+		$storage->expects(self::once())->method('shareIdentities')->with($mounted)
+			->willReturnCallback(static function () use ($order, $identities): array {
+				$order[] = 'shareIdentities';
+
+				return $identities;
+			});
+		$storage->expects(self::once())->method('shareIdentityStats')
+			->willReturnCallback(static function () use ($order, $stats): array {
+				$order[] = 'shareIdentityStats';
+
+				return $stats;
+			});
+		$storage->expects(self::once())->method('countingKeyGroups')->with($mounted, $identities)
+			->willReturnCallback(static function () use ($order): array {
+				$order[] = 'countingKeyGroups';
+
+				return [[11, 12]];
+			});
+
+		$cacheValues ??= new \ArrayObject();
+		$cache = $this->createMock(ICache::class);
+		$cache->method('get')->willReturnCallback(static fn (string $key): mixed => $cacheValues[$key][0] ?? null);
+		$cache->method('set')->willReturnCallback(static function (string $key, mixed $value, int $ttl = 0) use ($cacheValues): bool {
+			$cacheValues[$key] = [$value, $ttl];
+
+			return true;
+		});
+		$factory = $this->createMock(ICacheFactory::class);
+		$factory->method('isLocalCacheAvailable')->willReturn($localCache);
+		if ($localCache) {
+			$factory->method('createLocal')->with('findling')->willReturn($cache);
+		} else {
+			$factory->expects(self::never())->method('createLocal');
+		}
+
+		$view = $this->viewWith(['storageService' => $storage, 'logger' => $logger, 'cacheFactory' => $factory]);
+
+		return [$view, $lines, $order];
+	}
+
+	/** @return array<string, int> */
+	private static function stats(int $hashedUngrouped): array {
+		return ['parsed' => 40, 'hashedVerified' => 7, 'hashedUngrouped' => $hashedUngrouped, 'placeholder' => min(1, $hashedUngrouped), 'excluded' => 2];
+	}
+
+	public function testTheIdentitiesAreAskedOnceAndHandedToTheGroupingAndTheCount(): void {
+		[$view, , $order] = $this->viewCountingShares(self::stats(0));
+
+		$shares = self::invokeOn($view, 'countingShares', [11, 12, 14, 31]);
+
+		self::assertSame([[11, 12]], $shares['groups']);
+		self::assertSame(self::namedIdentities(), $shares['identities']);
+		self::assertSame(self::stats(0), $shares['stats']);
+		// The counters are read right after the own call: a later call of
+		// shareIdentities (docKeysFor) would set them anew.
+		self::assertSame(['shareIdentities', 'shareIdentityStats', 'countingKeyGroups'], $order->getArrayCopy());
+	}
+
+	public function testAnUngroupedHashedStorageLogsOneWarningAnHour(): void {
+		$cacheValues = new \ArrayObject();
+		[$view, $lines] = $this->viewCountingShares(self::stats(3), true, $cacheValues);
+
+		self::invokeOn($view, 'countingShares', [11, 12, 14, 31]);
+
+		self::assertCount(1, $lines);
+		self::assertSame('warning', $lines[0]['level']);
+		self::assertStringStartsWith('Findling: share identities of the counting', $lines[0]['message']);
+		self::assertSame(self::stats(3), $lines[0]['context']);
+		self::assertSame([1, 3600], $cacheValues['share-identity-logged']);
+
+		// The second overview within the hour logs nothing.
+		[$again, $linesAgain] = $this->viewCountingShares(self::stats(3), true, $cacheValues);
+		self::invokeOn($again, 'countingShares', [11, 12, 14, 31]);
+		self::assertCount(0, $linesAgain);
+	}
+
+	public function testWithEveryHashedStorageGroupedTheLineIsInfo(): void {
+		[$view, $lines] = $this->viewCountingShares(self::stats(0));
+
+		self::invokeOn($view, 'countingShares', [11, 12, 14, 31]);
+
+		self::assertCount(1, $lines);
+		self::assertSame('info', $lines[0]['level']);
+		self::assertSame(self::stats(0), $lines[0]['context']);
+	}
+
+	public function testWithoutALocalCacheTheLineIsDebugOnly(): void {
+		[$view, $lines] = $this->viewCountingShares(self::stats(3), false);
+
+		self::invokeOn($view, 'countingShares', [11, 12, 14, 31]);
+
+		self::assertCount(1, $lines);
+		self::assertSame('debug', $lines[0]['level']);
+		self::assertSame(self::stats(3), $lines[0]['context']);
+	}
+
+	public function testTheLogLineCarriesFiveWholeNumbersAndNoName(): void {
+		// T-43-71: no host, share, root or login, in message or context.
+		[$view, $lines] = $this->viewCountingShares(['parsed' => '4', 'hashedVerified' => -2, 'hashedUngrouped' => 1, 'excluded' => 'smb::fs.example//daten']);
+
+		self::invokeOn($view, 'countingShares', [11, 12, 14, 31]);
+
+		self::assertCount(1, $lines);
+		self::assertSame(self::STAT_KEYS, array_keys($lines[0]['context']));
+		foreach ($lines[0]['context'] as $value) {
+			self::assertIsInt($value);
+			self::assertGreaterThanOrEqual(0, $value);
+		}
+		self::assertSame(['parsed' => 0, 'hashedVerified' => 0, 'hashedUngrouped' => 1, 'placeholder' => 0, 'excluded' => 0], $lines[0]['context']);
+		$written = json_encode($lines->getArrayCopy(), JSON_THROW_ON_ERROR);
+		foreach (['fs.example', 'daten', 'Arbeitssicherheit', 'sftp', 'dora', 'projekt', 'smb::'] as $name) {
+			self::assertStringNotContainsStringIgnoringCase($name, $written);
+		}
+	}
+
+	public function testTheCoverageCarriesTheFiveCountersAsWholeNumbers(): void {
+		$arguments = [
+			['overCap' => 0, 'excluded' => 0, 'mountsTotal' => 1, 'mountsFinished' => 1], ['indexed' => 1], true, 2, 0,
+			true, true, 0, false, false, false, false, 0, null, false,
+		];
+
+		$coverage = self::invokePrivate('coverage', ...[...$arguments, self::stats(3)]);
+		self::assertIsArray($coverage);
+		self::assertSame(self::stats(3), $coverage['shareIdentity']);
+
+		// Fixed and never sparse: without counters five zeros, and nothing but
+		// whole numbers of nought or more out of anything else.
+		$empty = self::invokePrivate('coverage', ...$arguments);
+		self::assertSame(array_fill_keys(self::STAT_KEYS, 0), $empty['shareIdentity']);
+		$broken = self::invokePrivate('coverage', ...[...$arguments, ['parsed' => '4', 'hashedVerified' => -1, 'excluded' => 1.5, 'host' => 'fs.example']]);
+		self::assertSame(array_fill_keys(self::STAT_KEYS, 0), $broken['shareIdentity']);
 	}
 }

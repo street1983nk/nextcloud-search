@@ -133,6 +133,107 @@
           "derivation": "denominator 2 + 2 + 2 = 6, every document exactly once; counted = documents 4 (p/u1.txt and files/u3.txt never in the numerator, q/u2.txt once); notReadable 1 + 0 + 1 = 2; percent floor(4 * 100 / 6) = 66"
         }
       }
+    },
+    {
+      "name": "roots",
+      "about": "D-43-15 and D-43-17 (plans 43-21 to 43-23): the main topology plus two members of the same share in group 0. Member 14 mounts the share with the root projekt, so its internal path of a file is the share path without 'projekt/'; member 15 writes the share name in upper case (DATEN) with the root '', so its internal paths are those of 11. The share identities are those of StorageService::shareIdentities (host and share name folded, root apart). The extra rows carry the real document key of format 2 (DocKeyService::docKeyOf), computed by hand with the command in keyDerivation; the labels of the main rows stay labels, a key is compared with keys only. Everything not named here is the main topology, whose figures stay the same without this variant.",
+      "storages": [
+        {"id": 14, "mounted": true, "group": 0, "note": "share Daten, member of user dora, root projekt (smb::dora@fs.example//Daten//projekt/)"},
+        {"id": 15, "mounted": true, "group": 0, "note": "share Daten spelled DATEN on host FS.example, member of user emil, root '' (smb::emil@FS.example//DATEN//)"}
+      ],
+      "identities": {
+        "11": {"storageId": "smb::anna@fs.example//Daten//", "share": "smb::fs.example//daten", "root": ""},
+        "12": {"storageId": "smb::bert@fs.example//daten//", "share": "smb::fs.example//daten", "root": ""},
+        "13": {"storageId": "smb::carl@fs.example//Daten//", "share": "smb::fs.example//daten", "root": ""},
+        "14": {"storageId": "smb::dora@fs.example//Daten//projekt/", "share": "smb::fs.example//daten", "root": "projekt"},
+        "15": {"storageId": "smb::emil@FS.example//DATEN//", "share": "smb::fs.example//daten", "root": ""},
+        "21": {"storageId": "smb::anna@fs.example//Archiv//", "share": "smb::fs.example//archiv", "root": ""},
+        "22": {"storageId": "smb::bert@fs.example//Archiv//", "share": "smb::fs.example//archiv", "root": ""}
+      },
+      "mounted": [11, 12, 13, 14, 15, 21, 22, 31, 32, 33],
+      "groups": [[11, 12, 13, 14, 15], [21, 22]],
+      "extraRows": [
+        {"file_id": 1121, "storage_id": 11, "path": "Daten/projekt/r1.txt", "internalPath": "projekt/r1.txt", "sharePath": "projekt/r1.txt", "doc_key": "53808de073e28ab8d57dc5b31d16e841b8691b34a2e39c2c12e397cacfe8677d", "keyDerivation": "printf '2\\000%s\\000%s' 'smb::fs.example//daten' 'projekt/r1.txt' | sha256sum", "state": "indexed", "reason": null, "deleted": false, "chunks": 1},
+        {"file_id": 1421, "storage_id": 14, "path": "Projekt/r1.txt", "internalPath": "r1.txt", "sharePath": "projekt/r1.txt", "doc_key": "53808de073e28ab8d57dc5b31d16e841b8691b34a2e39c2c12e397cacfe8677d", "keyDerivation": "printf '2\\000%s\\000%s' 'smb::fs.example//daten' 'projekt/r1.txt' | sha256sum", "state": "indexed", "reason": null, "deleted": false, "chunks": 0, "note": "the same file under the root projekt: another internal path, the same key"},
+        {"file_id": 1521, "storage_id": 15, "path": "DATEN/projekt/r1.txt", "internalPath": "projekt/r1.txt", "sharePath": "projekt/r1.txt", "doc_key": "53808de073e28ab8d57dc5b31d16e841b8691b34a2e39c2c12e397cacfe8677d", "keyDerivation": "printf '2\\000%s\\000%s' 'smb::fs.example//daten' 'projekt/r1.txt' | sha256sum", "state": "indexed", "reason": null, "deleted": false, "chunks": 0, "note": "the same file over the share spelled DATEN: the same key"},
+        {"file_id": 1422, "storage_id": 14, "path": "Projekt/r2.txt", "internalPath": "r2.txt", "sharePath": "projekt/r2.txt", "doc_key": "e8e5ffd539e3a51e457666f4db0443b9976bd7aa2ca959926dcf30cb3b48bc2e", "keyDerivation": "printf '2\\000%s\\000%s' 'smb::fs.example//daten' 'projekt/r2.txt' | sha256sum", "state": "indexed", "reason": null, "deleted": false, "chunks": 0, "note": "only member 14 sees it: one document"},
+        {"file_id": 1123, "storage_id": 11, "path": "Daten/r3.txt", "internalPath": "r3.txt", "sharePath": "r3.txt", "doc_key": "1fbdcdd6e76823b6fdb5994e0ff50b16731c01f26f8412917a273e4b4c6e6c1b", "keyDerivation": "printf '2\\000%s\\000%s' 'smb::fs.example//daten' 'r3.txt' | sha256sum", "state": "indexed", "reason": null, "deleted": false, "chunks": 0, "note": "control: r3.txt at the top of the share"},
+        {"file_id": 1423, "storage_id": 14, "path": "Projekt/r3.txt", "internalPath": "r3.txt", "sharePath": "projekt/r3.txt", "doc_key": "960d3c66f20fc118c2bbfdb8a033d8620ffd9143f09da281d61180962873183c", "keyDerivation": "printf '2\\000%s\\000%s' 'smb::fs.example//daten' 'projekt/r3.txt' | sha256sum", "state": "indexed", "reason": null, "deleted": false, "chunks": 0, "note": "control: the same internal path as 1123, another file (projekt/r3.txt), another key, two documents"},
+        {"file_id": 1125, "storage_id": 11, "path": "Daten/projekt/r5.pdf", "internalPath": "projekt/r5.pdf", "sharePath": "projekt/r5.pdf", "doc_key": "179782203e3bb809efc7ec87f06e039ce5581b0b481ae30f7737eb92b95f6bb7", "keyDerivation": "printf '2\\000%s\\000%s' 'smb::fs.example//daten' 'projekt/r5.pdf' | sha256sum", "state": "failed", "reason": "corrupt", "deleted": false, "chunks": 0},
+        {"file_id": 1425, "storage_id": 14, "path": "Projekt/r5.pdf", "internalPath": "r5.pdf", "sharePath": "projekt/r5.pdf", "doc_key": "179782203e3bb809efc7ec87f06e039ce5581b0b481ae30f7737eb92b95f6bb7", "keyDerivation": "printf '2\\000%s\\000%s' 'smb::fs.example//daten' 'projekt/r5.pdf' | sha256sum", "state": "failed", "reason": "corrupt", "deleted": false, "chunks": 0, "note": "judged once, no document"},
+        {"file_id": 1126, "storage_id": 11, "path": "Daten/projekt/n6.txt", "internalPath": "projekt/n6.txt", "sharePath": "projekt/n6.txt", "doc_key": "a2537398809266bb01d860fd5028e2122dd5610765696a7562dce1afe64e102c", "keyDerivation": "printf '2\\000%s\\000%s' 'smb::fs.example//daten' 'projekt/n6.txt' | sha256sum", "state": "indexed", "reason": null, "deleted": false, "chunks": 0, "note": "N1: indexed for anna, PHP-only skipped/unreadable for dora under n6.txt (expected.php.extraPhpOnlyRows)"}
+      ],
+      "expected": {
+        "documents": 18,
+        "embeddedDocuments": 6,
+        "judgedDocuments": 24,
+        "docKeysMissing": 0,
+        "documentsByGroup": [11, 3],
+        "judgedByGroup": [14, 4],
+        "documentsByStorage": {"31": 3, "32": 1},
+        "judgedByStorage": {"31": 4, "32": 2},
+        "derivation": {
+          "documentsByGroup": "group 0: the 6 of the main topology plus projekt/r1.txt (1121, 1421, 1521: three rows, one key), projekt/r2.txt (1422, only member 14), r3.txt (1123) and projekt/r3.txt (1423: the same internal path, two files), projekt/n6.txt (1126) = 6 + 5 = 11. group 1 unchanged = 3",
+          "embeddedDocuments": "the 5 of the main topology plus projekt/r1.txt (chunks on 1121) = 6",
+          "judgedByGroup": "group 0: the 8 of the main topology plus the 5 new documents plus projekt/r5.pdf (1125, 1425 failed corrupt, one key) = 14. group 1 unchanged = 4",
+          "documents": "11 + 3 + 3 + 1 = 18",
+          "judgedDocuments": "14 + 4 + 4 + 2 = 24",
+          "docKeysMissing": "every extra row carries a key",
+          "withoutTheSharePath": "keyed over the internal path (format 1 of rc.1) group 0 would read 6 + 2 (r1.txt of 1421 apart from projekt/r1.txt of 1121 and 1521) + 1 + 1 (r3.txt of 1123 and 1423 merged, two different files) + 1 = 11, the same figure by accident with one file twice and two files merged; the share path keeps r1 together and r3 apart, which tests/test_coverage_counts.py checks per key"
+        },
+        "php": {
+          "about": "The PHP half of this variant: the main phpOnlyRows plus extraPhpOnlyRows, with the identities above handed to FileStateService::distinctPathsByReasons. fileCacheWithoutVerdict lists the file cache rows without a PHP-only verdict whose path meets a candidate (the N1 holders); internalPath is oc_filecache.path, its md5 is path_hash.",
+          "scanStats": {
+            "11": {"filesSeen": 17, "overCap": 1, "excluded": 1, "finished": true},
+            "12": {"filesSeen": 10, "overCap": 0, "excluded": 1, "finished": true},
+            "13": {"filesSeen": 7, "overCap": 0, "excluded": 0, "finished": true},
+            "14": {"filesSeen": 7, "overCap": 0, "excluded": 0, "finished": true},
+            "15": {"filesSeen": 2, "overCap": 0, "excluded": 0, "finished": true},
+            "21": {"filesSeen": 9, "overCap": 0, "excluded": 0, "finished": false},
+            "22": {"filesSeen": 6, "overCap": 0, "excluded": 0, "finished": true},
+            "31": {"filesSeen": 8, "overCap": 0, "excluded": 0, "finished": true},
+            "32": {"filesSeen": 2, "overCap": 0, "excluded": 0, "finished": true},
+            "33": {"filesSeen": 0, "overCap": 0, "excluded": 0, "finished": true}
+          },
+          "scanStatsDerivation": "11: the 12 of the main topology plus projekt/r1.txt, r3.txt, projekt/r5.pdf, projekt/n6.txt, projekt/u7.txt = 17. 14: r1.txt, r2.txt, r3.txt, r5.pdf, n6.txt, u7.txt, s8.txt = 7. 15: projekt/r1.txt, projekt/s8.txt = 2. The rest as in the main topology",
+          "refusedPerStorage": {"11": 1, "12": 1, "22": 1, "31": 1},
+          "extraPhpOnlyRows": [
+            {"storage_id": 11, "internalPath": "projekt/u7.txt", "sharePath": "projekt/u7.txt", "state": "skipped", "reason": "unreadable", "filecache": true},
+            {"storage_id": 14, "internalPath": "u7.txt", "sharePath": "projekt/u7.txt", "state": "skipped", "reason": "unreadable", "filecache": true, "note": "the same unreadable file under the root projekt: one document with 11"},
+            {"storage_id": 14, "internalPath": "s8.txt", "sharePath": "projekt/s8.txt", "state": "failed", "reason": "repeatedly_stuck", "filecache": true},
+            {"storage_id": 15, "internalPath": "projekt/s8.txt", "sharePath": "projekt/s8.txt", "state": "failed", "reason": "repeatedly_stuck", "filecache": true, "note": "root and spelling at once: one document with 14"},
+            {"storage_id": 14, "internalPath": "n6.txt", "sharePath": "projekt/n6.txt", "state": "skipped", "reason": "unreadable", "filecache": true, "note": "N1: member 11 (root '') holds projekt/n6.txt without a PHP-only verdict (container row 1126, indexed), so it counts once over judged and not here"}
+          ],
+          "fileCacheWithoutVerdict": [
+            {"storage_id": 11, "internalPath": "n/a12.txt", "pathHash": "17a8b55786ae885c2c0ee9112350a3ba", "hashDerivation": "printf '%s' 'n/a12.txt' | md5sum", "note": "N1 of the main topology"},
+            {"storage_id": 11, "internalPath": "projekt/n6.txt", "pathHash": "3fd3d75b9a7bf810968746d3586cc0cc", "hashDerivation": "printf '%s' 'projekt/n6.txt' | md5sum; the md5 of n6.txt (40fc2a8f63c9fdfb1c01822b267c1c7f) is what a check over the internal path of 14 would ask, and member 11 holds no such row"}
+          ],
+          "phpOnly": {
+            "byGroup": [5, 1],
+            "byStorage": {"31": 1, "32": 1},
+            "notReadableByGroup": [4, 1],
+            "notReadableByStorage": {"31": 1, "32": 1},
+            "derivation": "group 0: the 3 of the main topology (x/u1.txt, x/st1.txt, x/g1.txt; n/a12.txt is N1) plus projekt/u7.txt (11 projekt/u7.txt and 14 u7.txt, one share path) plus projekt/s8.txt (14 s8.txt and 15 projekt/s8.txt, one share path) = 5; projekt/n6.txt is N1 over member 11. not readable or stuck: u1, st1, u7, s8 = 4. Over path_hash alone u7 and s8 would count twice each and n6 would not be found by N1: 3 + 2 + 2 + 1 = 8. group 1 and the single storages as in the main topology"
+          },
+          "groupParts": {
+            "groups": [14, 9],
+            "singles": {"31": 7, "32": 2, "33": 0},
+            "derivation": "group 0: the representative is 11 (files_seen 17 > 10 > 7, 7 > 2): 17 - overCap 1 - excluded 1 - refused 1 = 14. group 1: 21, 9. 31: 8 - refused 1 = 7. 32: 2. 33: 0"
+          },
+          "denominatorParts": {
+            "groups": [19, 9],
+            "singles": {"31": 7, "32": 3, "33": 0},
+            "derivation": "group 0: max(PHP 14, judged 14 + phpOnly 5 = 19) = 19: every subtree once, r2.txt of 14 and s8 of 14 and 15 included although the representative 11 never saw them. group 1: max(9, 4 + 1) = 9. 31: max(7, 4 + 1) = 7. 32: max(2, 2 + 1) = 3. 33: 0"
+          },
+          "denominator": 38,
+          "counted": 18,
+          "embedded": 6,
+          "notReadable": 7,
+          "percent": 47,
+          "embeddedPercent": 15,
+          "derivation": "denominator 19 + 9 + 7 + 3 + 0 = 38; counted = documents 18; notReadable 4 + 1 + 1 + 1 = 7; percent floor(18 * 100 / 38) = 47; embeddedPercent floor(6 * 100 / 38) = 15"
+        }
+      }
     }
   ],
   "expected": {
