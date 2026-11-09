@@ -78,8 +78,10 @@ stage_companion() {
 	done
 	# CHANGELOG.md travels because the store renders it on the release listing;
 	# an app whose store page answers "what changed" beats one that points at
-	# the compare view.
-	cp LICENSE THIRD-PARTY.md CHANGELOG.md "${app}/"
+	# the compare view. CHANGELOG.de.md and CHANGELOG.fr.md travel with it: the
+	# store reads CHANGELOG.<code>.md per language, and the app management in
+	# Nextcloud shows the entry in the language of the signed-in user.
+	cp LICENSE THIRD-PARTY.md CHANGELOG.md CHANGELOG.de.md CHANGELOG.fr.md "${app}/"
 	find "${app}" -name '.gitkeep' -delete
 	echo "staged tree:"
 	find "${app}" -maxdepth 1 -mindepth 1 -printf '  %P\n' | sort
@@ -111,7 +113,7 @@ stage_backend() {
 	app="${stage}/findling_backend"
 	mkdir -p "${app}/appinfo"
 	cp backend/appinfo/info.xml "${app}/appinfo/info.xml"
-	cp LICENSE THIRD-PARTY.md CHANGELOG.md "${app}/"
+	cp LICENSE THIRD-PARTY.md CHANGELOG.md CHANGELOG.de.md CHANGELOG.fr.md "${app}/"
 	cmp backend/appinfo/info.xml "${app}/appinfo/info.xml"
 	echo "info.xml is byte identical to the working tree, so AppAPI will read the routes it expects"
 }

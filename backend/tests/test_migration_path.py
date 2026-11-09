@@ -108,6 +108,8 @@ SCOPE_FILES: tuple[Path, ...] = (
     REPO_ROOT / "README.en.md",
     REPO_ROOT / "README.fr.md",
     REPO_ROOT / "CHANGELOG.md",
+    REPO_ROOT / "CHANGELOG.de.md",
+    REPO_ROOT / "CHANGELOG.fr.md",
     REPO_ROOT / "php" / "appinfo" / "info.xml",
     REPO_ROOT / "backend" / "appinfo" / "info.xml",
 )
