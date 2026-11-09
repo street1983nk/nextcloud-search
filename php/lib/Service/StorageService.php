@@ -36,7 +36,11 @@ use Psr\Log\LoggerInterface;
  * touches the file cache: classifyAbsent() reads oc_storages and oc_mounts to
  * tell the container which of its storages are deleted and which are only
  * switched off (plan 36-03, D-36-14). The reason it cannot go through the mount
- * list stands at the method.
+ * list stands at the method. Since plan 43-21 shareIdentities() reads
+ * oc_storages as well and, for ids Nextcloud stored as their md5 only,
+ * oc_mounts, oc_external_mounts and five keys of oc_external_config, read
+ * only, to tell which storages show one share; that answer feeds the coverage
+ * figure and nothing else.
  */
 class StorageService {
 	/**
@@ -213,6 +217,33 @@ class StorageService {
 	 * that is not in the list is never grouped, which is the counting of 1.5.
 	 */
 	private const COUNTING_KEY_BACKENDS = ['smb::', 'sftp::'];
+
+	/**
+	 * The files_external backends whose hashed ids shareIdentities() rebuilds,
+	 * by their identifiers in oc_external_mounts.storage_backend
+	 * (apps/files_external/lib/Lib/Backend/SMB.php :30, SFTP.php :20).
+	 *
+	 * @var list<string>
+	 */
+	private const REBUILT_BACKENDS = ['smb', 'sftp'];
+
+	/**
+	 * The only keys of oc_external_config that are ever read (exception A-3 of
+	 * plan 43-21). The password is not among them and is never asked for; it
+	 * is the only value files_external encrypts (DBConfigService setConfig),
+	 * and the identity does not need it.
+	 *
+	 * @var list<string>
+	 */
+	private const REBUILT_CONFIG_KEYS = ['host', 'share', 'root', 'user', 'port'];
+
+	/**
+	 * The counters of the last shareIdentities() call, numbers only. Not a
+	 * cache: the identities themselves are never kept over a call.
+	 *
+	 * @var array{parsed: int, hashedVerified: int, hashedUngrouped: int, placeholder: int, excluded: int}
+	 */
+	private array $identityStats = ['parsed' => 0, 'hashedVerified' => 0, 'hashedUngrouped' => 0, 'placeholder' => 0, 'excluded' => 0];
 
 	public function __construct(
 		private IFileAccess $fileAccess,
@@ -456,44 +487,253 @@ class StorageService {
 	}
 
 	/**
-	 * Groups of storages that show the same tree, for the coverage figure only.
+	 * Groups of storages that show the same share, for the coverage figure only.
 	 *
 	 * Weg C of 35-DEDUP-NOTIZ (owner decision D-37-03): an external storage that
 	 * connects with the credentials of each user gets one storage id per user,
 	 * because the login name is part of the id (F1), and so the crawl counts the
-	 * same share once per user. The key of a group is the id without the login
-	 * name: backend, host, share and root, and the root as Nextcloud wrote it
-	 * into the id, after the placeholders were replaced per user (F4). A root
-	 * with $user in it is therefore a different key per user and never a group.
-	 * The login name stays out of the key on purpose, it is exactly the part
-	 * that differs per user (section 3 of the note).
+	 * same share once per user. Since 1.6.3 (plan 43-21, D-43-15, D-43-17) the
+	 * key of a group is the share of shareIdentity(), without the root and with
+	 * host and share name folded: one share mounted with different roots or in
+	 * two spellings is one group. The roots stay apart in the identity, and the
+	 * document key of 43-22 carries them, so two different files never become
+	 * one document. Storages without an identity are never grouped.
 	 *
 	 * Only groups of two or more come back, each in ascending order, and the
-	 * list is sorted by its first member. One query per band of
-	 * ABSENT_LOOKUP_BAND ids against oc_storages, nothing against the file
-	 * cache. Nothing but numbers leaves this method: no host, no share and no
-	 * user in the answer and in no log line (T-39-01). The answer feeds a figure
-	 * on the admin page and nothing else; crawl, index and permissions never see
-	 * it (T-39-03, T-39-05).
+	 * list is sorted by its first member. The identities come from one call of
+	 * shareIdentities(), whose queries are banded. Nothing but numbers leaves
+	 * this method: no host, no share and no user in the answer and in no log
+	 * line (T-39-01). The answer feeds a figure on the admin page and nothing
+	 * else; crawl, index and permissions never see it (T-39-03, T-39-05).
 	 *
 	 * @param list<int> $storageIds
 	 * @return list<list<int>>
 	 */
 	public function countingKeyGroups(array $storageIds): array {
-		$wanted = [];
-		foreach ($storageIds as $storageId) {
-			if (is_int($storageId) && $storageId > 0) {
-				$wanted[$storageId] = true;
-			}
-		}
-		$wanted = array_keys($wanted);
-		sort($wanted);
-
-		if (count($wanted) < 2) {
+		if (count(self::positiveIds($storageIds)) < 2) {
 			return [];
 		}
 
-		$byKey = [];
+		$byShare = [];
+		foreach ($this->shareIdentities($storageIds) as $storageId => $identity) {
+			$byShare[$identity['share']][] = $storageId;
+		}
+
+		$groups = [];
+		foreach ($byShare as $members) {
+			if (count($members) < 2) {
+				continue;
+			}
+			sort($members);
+			$groups[] = $members;
+		}
+		usort($groups, static fn (array $a, array $b): int => $a[0] <=> $b[0]);
+
+		return $groups;
+	}
+
+	/**
+	 * The counting key of one storage id, or null when it must not be grouped.
+	 *
+	 * Since 1.6.3 this is the share of shareIdentity(): backend, host and share
+	 * name folded to ASCII lower case, for SFTP the login name in front of the
+	 * host, and no root (plan 43-21). Until 1.6.2 the key carried the root as
+	 * written into the id and compared it character by character.
+	 *
+	 * Static and public for the reason coverageShare() of AdminViewService is:
+	 * it is string arithmetic, and a test can ask it without a database.
+	 */
+	public static function countingKey(string $storageId): ?string {
+		return self::shareIdentity($storageId)['share'] ?? null;
+	}
+
+	/**
+	 * The share identity of one written out storage id, or null when the id
+	 * must never be grouped.
+	 *
+	 * The leading rule of plans 43-21 to 43-29: two different files must never
+	 * become one document. Every doubt therefore ends in null, which is the
+	 * counting of 1.5 (a figure too high, never a merge). The identity serves
+	 * the counting only and never search, paths, permissions or the gateway
+	 * (backend/tests/test_share_identity_cases.py holds the callers).
+	 *
+	 * The forms, read in nextcloud/server stable33 4dd6d385, stable34 350ee0c4
+	 * and stable35 b3adc84c (09.11.2026):
+	 * - SMB, apps/files_external/lib/Lib/Storage/SMB.php getId (stable33
+	 *   :136-141, stable34/35 :137-142): 'smb::' . <login> . '@' . <host> .
+	 *   '//' . <share name> . '/' . <root>; the root always reads '/x/' and the
+	 *   root '/' stays '/' (:114-116), so 'smb::u@h//Daten//' and
+	 *   'smb::u@h//Daten//Projekte/'; the share name is trim(share, '/')
+	 *   (:112); the login carries no workgroup (splitUser :126-134).
+	 * - SFTP, SFTP.php getId (stable33 :155-163, stable34 :157-166, stable35
+	 *   :164-173): 'sftp::' . <login> . '@' . <host> [':' . <port> unless 22]
+	 *   . '/' . <root>, root cleaned and written as '/x/'.
+	 *
+	 * The identity: share is 'smb::' . host . '//' . share name, both in ASCII
+	 * lower case, because Samba section names and host names ignore case
+	 * (smb.conf(5), RFC 4343; OE-1 a); for SFTP 'sftp::' . login . '@' .
+	 * host[:port], the host folded and the login as written, so that two logins
+	 * on one host, a chroot per user among them, never merge (OE-4 a). root is
+	 * the root without leading and trailing slashes, doubled slashes and '.'
+	 * segments removed, never folded (Bericht.txt and bericht.txt are two files
+	 * on a Linux server and two rows in Nextcloud), in Unicode NFC like the
+	 * file cache of Nextcloud (lib/private/Files/Cache/Cache.php normalize,
+	 * stable34 :1253-1255), which normalises paths but not the root of an id.
+	 *
+	 * Null for a backend outside COUNTING_KEY_BACKENDS (WebDAV and ownCloud
+	 * cannot tell host and root apart in their id), for an id Nextcloud
+	 * shortened to its md5 (only shareIdentities() can resolve it), for an id
+	 * without '@' in front of the first '//' or without '//', for an empty host
+	 * or share name, a share name with '/' or a backslash, a root with a '..'
+	 * segment or a backslash, and for the Samba share 'homes' or a share named
+	 * like the login of the id, which give every user an own tree under one
+	 * name (OE-3 a). The host is the text after the LAST '@' in front of the
+	 * first '//', so a login with an '@' of its own stays out of it whole.
+	 *
+	 * @return array{share: string, root: string}|null
+	 */
+	public static function shareIdentity(string $storageId): ?array {
+		if (preg_match('/^[0-9a-f]{32}$/D', $storageId) === 1) {
+			return null;
+		}
+
+		$prefix = null;
+		foreach (self::COUNTING_KEY_BACKENDS as $backend) {
+			if (str_starts_with($storageId, $backend)) {
+				$prefix = $backend;
+				break;
+			}
+		}
+		if ($prefix === null) {
+			return null;
+		}
+
+		$rest = substr($storageId, strlen($prefix));
+		$split = strpos($rest, '//');
+		if ($split === false || $split === 0) {
+			return null;
+		}
+
+		$loginAndHost = substr($rest, 0, $split);
+		$behind = substr($rest, $split + 2);
+		$at = strrpos($loginAndHost, '@');
+		if ($at === false) {
+			return null;
+		}
+		$login = substr($loginAndHost, 0, $at);
+		$host = substr($loginAndHost, $at + 1);
+		if ($host === '') {
+			return null;
+		}
+
+		if ($prefix === 'smb::') {
+			$shareEnd = strpos($behind, '//');
+			if ($shareEnd === false || $shareEnd === 0) {
+				return null;
+			}
+			$shareName = substr($behind, 0, $shareEnd);
+			if (str_contains($shareName, '/') || str_contains($shareName, '\\')) {
+				return null;
+			}
+			$folded = strtolower($shareName);
+			if ($folded === 'homes' || $folded === strtolower($login)) {
+				return null;
+			}
+			$share = 'smb::' . strtolower($host) . '//' . $folded;
+			$rootPart = substr($behind, $shareEnd + 2);
+		} else {
+			$share = 'sftp::' . $login . '@' . strtolower($host);
+			$rootPart = $behind;
+		}
+
+		$root = self::cleanRoot($rootPart);
+		if ($root === null) {
+			return null;
+		}
+
+		return ['share' => $share, 'root' => $root];
+	}
+
+	/**
+	 * The root part of an id without edge slashes, doubled slashes and '.'
+	 * segments, in NFC; null for a '..' segment or a backslash, which could
+	 * leave the tree or split a name on the server.
+	 */
+	private static function cleanRoot(string $rootPart): ?string {
+		if (str_contains($rootPart, '\\')) {
+			return null;
+		}
+
+		$segments = [];
+		foreach (explode('/', $rootPart) as $segment) {
+			if ($segment === '' || $segment === '.') {
+				continue;
+			}
+			if ($segment === '..') {
+				return null;
+			}
+			$segments[] = $segment;
+		}
+		$root = implode('/', $segments);
+
+		// The same fallback as DocKeyService::docKeyOf: without intl the root
+		// stays as it is, and an id that is not valid UTF-8 as well.
+		if (class_exists(\Normalizer::class)) {
+			$composed = \Normalizer::normalize($root, \Normalizer::FORM_C);
+			if (is_string($composed)) {
+				$root = $composed;
+			}
+		}
+
+		return $root;
+	}
+
+	/**
+	 * The share identities of the asked storages, keyed and ordered by storage
+	 * id; storages without an identity are left out.
+	 *
+	 * A written out id goes through shareIdentity(). An id above 64 characters
+	 * Nextcloud stores as its md5 (lib/private/Files/Cache/Storage.php
+	 * adjustStorageId, stable33 :85-90, stable34 :100-105, stable35 :102-107),
+	 * and such an id is resolved over the configuration of the external
+	 * storage (OE-2 a, exception A-3), read only and with five keys:
+	 * - oc_mounts gives storage_id, user_id and mount_id of the mounts of
+	 *   files_external (mount_provider_class ConfigAdapter); the mount id is
+	 *   the id of the storage configuration (UserMountCache, ConfigAdapter
+	 *   storageConfigToMount).
+	 * - oc_external_mounts gives the backend, only 'smb' and 'sftp'.
+	 * - oc_external_config gives host, share, root, user and port, never the
+	 *   password and never another key.
+	 * Per mount the login candidates are the configured user (for SMB without
+	 * workgroup, like SMB.php splitUser) and the user id of the mount; '$user'
+	 * is replaced by the user id the way files_external does it (str_ireplace,
+	 * SimpleSubstitutionTrait :65), and any other '$' left in a value means
+	 * no identity, because another placeholder may stand there. The id is
+	 * rebuilt like SMB.php and SFTP.php getId, and only when its md5 is the
+	 * stored id exactly does it count, with the identity of the rebuilt id. A
+	 * wrong guess therefore never merges anything, it stays ungrouped.
+	 * Global, user provided and Kerberos credentials and a login name other
+	 * than the user id (LDAP, AD) cannot be rebuilt and stay ungrouped.
+	 *
+	 * No cache over the call: cron.php lives over many jobs and a stored
+	 * answer would outlive a changed configuration. The overview gets one
+	 * answer by asking once and handing it on (43-23). The counters of the call
+	 * are kept for shareIdentityStats(). The values read stay inside this call;
+	 * a failing query of the configuration leaves the hashed ids ungrouped and
+	 * logs counters only.
+	 *
+	 * @param list<int> $storageIds
+	 * @return array<int, array{share: string, root: string}>
+	 */
+	public function shareIdentities(array $storageIds): array {
+		$this->identityStats = self::emptyIdentityStats();
+		$wanted = self::positiveIds($storageIds);
+		if ($wanted === []) {
+			return [];
+		}
+
+		$identities = [];
+		$hashed = [];
 		foreach (array_chunk($wanted, self::ABSENT_LOOKUP_BAND) as $band) {
 			$qb = $this->db->getQueryBuilder();
 			$qb->select('numeric_id', 'id')
@@ -504,9 +744,20 @@ class StorageService {
 			try {
 				while (is_array($row = $result->fetch())) {
 					$numericId = (int)($row['numeric_id'] ?? 0);
-					$key = self::countingKey((string)($row['id'] ?? ''));
-					if ($numericId > 0 && $key !== null) {
-						$byKey[$key][$numericId] = true;
+					$id = (string)($row['id'] ?? '');
+					if ($numericId <= 0) {
+						continue;
+					}
+					if (preg_match('/^[0-9a-f]{32}$/D', $id) === 1) {
+						$hashed[$numericId] = $id;
+						continue;
+					}
+					$identity = self::shareIdentity($id);
+					if ($identity !== null) {
+						$identities[$numericId] = $identity;
+						$this->identityStats['parsed']++;
+					} elseif (self::isCountingBackend($id)) {
+						$this->identityStats['excluded']++;
 					}
 				}
 			} finally {
@@ -514,66 +765,296 @@ class StorageService {
 			}
 		}
 
-		$groups = [];
-		foreach ($byKey as $members) {
-			if (count($members) < 2) {
-				continue;
+		if ($hashed !== []) {
+			try {
+				$resolved = $this->resolveHashed($hashed);
+			} catch (\Exception $e) {
+				$this->identityStats['hashedUngrouped'] += count($hashed);
+				$this->logger->warning(
+					'Findling: the configuration of external storages could not be read, hashed={hashed} storage ids stay ungrouped',
+					['hashed' => count($hashed), 'exception' => get_class($e)],
+				);
+				$resolved = [];
 			}
-			$ids = array_keys($members);
-			sort($ids);
-			$groups[] = $ids;
+			foreach ($resolved as $numericId => $identity) {
+				$identities[$numericId] = $identity;
+			}
 		}
-		usort($groups, static fn (array $a, array $b): int => $a[0] <=> $b[0]);
 
-		return $groups;
+		ksort($identities);
+
+		return $identities;
 	}
 
 	/**
-	 * The counting key of one storage id, or null when it must not be grouped.
+	 * The counters of the last shareIdentities() call, numbers only.
 	 *
-	 * '<backend>::<user>@<host>//<rest>' becomes '<backend>::<host>//<rest>'.
-	 * The host is the text after the LAST '@' in front of the first '//', so a
-	 * login name that carries an '@' of its own (a mail address, a domain
-	 * login) stays out of the key whole. Null for every backend outside
-	 * COUNTING_KEY_BACKENDS, for an id without '@' or '//', and for an id that
-	 * Nextcloud shortened to its md5, because ids above 64 characters are
-	 * stored hashed (lib/private/Files/Cache/Storage.php:100-103, stable34) and
-	 * a hash says nothing about the tree behind it.
+	 * parsed: written out ids with an identity. hashedVerified: hashed ids
+	 * whose rebuilt id has the stored md5 and an identity. hashedUngrouped:
+	 * hashed ids with at least one smb or sftp mount of files_external and no
+	 * match, or all hashed ids when the configuration could not be read.
+	 * placeholder: those of hashedUngrouped for which a candidate was given up
+	 * because a '$' other than '$user' was left. excluded: smb and sftp ids,
+	 * written out or rebuilt with a matching md5, that shareIdentity() refuses
+	 * (homes, a share named like the login, '..', a backslash, a malformed id).
 	 *
-	 * Static and public for the reason coverageShare() of AdminViewService is:
-	 * it is string arithmetic, and a test can ask it without a database.
+	 * @return array{parsed: int, hashedVerified: int, hashedUngrouped: int, placeholder: int, excluded: int}
 	 */
-	public static function countingKey(string $storageId): ?string {
-		if (preg_match('/^[0-9a-f]{32}$/D', $storageId) === 1) {
-			return null;
+	public function shareIdentityStats(): array {
+		return $this->identityStats;
+	}
+
+	/**
+	 * Resolves hashed ids over the configuration of files_external, see
+	 * shareIdentities(). Throws when a query throws; the caller counts.
+	 *
+	 * @param array<int, string> $hashed md5 per storage id
+	 * @return array<int, array{share: string, root: string}>
+	 */
+	private function resolveHashed(array $hashed): array {
+		// storage id => list of [user id, mount id]
+		$mountsOf = [];
+		foreach (array_chunk(array_keys($hashed), self::ABSENT_LOOKUP_BAND) as $band) {
+			$qb = $this->db->getQueryBuilder();
+			$qb->select('storage_id', 'user_id', 'mount_id', 'mount_provider_class')
+				->from('mounts')
+				->where($qb->expr()->in('storage_id', $qb->createNamedParameter($band, IQueryBuilder::PARAM_INT_ARRAY)))
+				->andWhere($qb->expr()->eq('mount_provider_class', $qb->createNamedParameter(self::EXTERNAL_STORAGE_MOUNT_PROVIDER, IQueryBuilder::PARAM_STR)))
+				->andWhere($qb->expr()->isNotNull('mount_id'));
+
+			$result = $qb->executeQuery();
+			try {
+				while (is_array($row = $result->fetch())) {
+					$storageId = (int)($row['storage_id'] ?? 0);
+					$mountId = (int)($row['mount_id'] ?? 0);
+					$userId = (string)($row['user_id'] ?? '');
+					if (!isset($hashed[$storageId]) || $mountId <= 0 || $userId === ''
+						|| (string)($row['mount_provider_class'] ?? '') !== self::EXTERNAL_STORAGE_MOUNT_PROVIDER) {
+						continue;
+					}
+					$mountsOf[$storageId][] = [$userId, $mountId];
+				}
+			} finally {
+				$result->closeCursor();
+			}
 		}
 
+		$mountIds = [];
+		foreach ($mountsOf as $mounts) {
+			foreach ($mounts as [, $mountId]) {
+				$mountIds[$mountId] = true;
+			}
+		}
+		$mountIds = array_keys($mountIds);
+		sort($mountIds);
+
+		$backendOf = [];
+		foreach (array_chunk($mountIds, self::ABSENT_LOOKUP_BAND) as $band) {
+			$qb = $this->db->getQueryBuilder();
+			$qb->select('mount_id', 'storage_backend')
+				->from('external_mounts')
+				->where($qb->expr()->in('mount_id', $qb->createNamedParameter($band, IQueryBuilder::PARAM_INT_ARRAY)))
+				->andWhere($qb->expr()->in('storage_backend', $qb->createNamedParameter(self::REBUILT_BACKENDS, IQueryBuilder::PARAM_STR_ARRAY)));
+
+			$result = $qb->executeQuery();
+			try {
+				while (is_array($row = $result->fetch())) {
+					$backend = (string)($row['storage_backend'] ?? '');
+					if (in_array($backend, self::REBUILT_BACKENDS, true)) {
+						$backendOf[(int)($row['mount_id'] ?? 0)] = $backend;
+					}
+				}
+			} finally {
+				$result->closeCursor();
+			}
+		}
+
+		$configOf = [];
+		$configured = array_keys($backendOf);
+		sort($configured);
+		foreach (array_chunk($configured, self::ABSENT_LOOKUP_BAND) as $band) {
+			$qb = $this->db->getQueryBuilder();
+			$qb->select('mount_id', 'key', 'value')
+				->from('external_config')
+				->where($qb->expr()->in('mount_id', $qb->createNamedParameter($band, IQueryBuilder::PARAM_INT_ARRAY)))
+				->andWhere($qb->expr()->in('key', $qb->createNamedParameter(self::REBUILT_CONFIG_KEYS, IQueryBuilder::PARAM_STR_ARRAY)));
+
+			$result = $qb->executeQuery();
+			try {
+				while (is_array($row = $result->fetch())) {
+					$key = (string)($row['key'] ?? '');
+					if (in_array($key, self::REBUILT_CONFIG_KEYS, true)) {
+						$configOf[(int)($row['mount_id'] ?? 0)][$key] = (string)($row['value'] ?? '');
+					}
+				}
+			} finally {
+				$result->closeCursor();
+			}
+		}
+
+		$identities = [];
+		foreach ($hashed as $storageId => $stored) {
+			$relevant = false;
+			$placeholder = false;
+			$matched = null;
+			foreach ($mountsOf[$storageId] ?? [] as [$userId, $mountId]) {
+				if (!isset($backendOf[$mountId])) {
+					continue;
+				}
+				$relevant = true;
+				foreach (self::rebuiltIds($backendOf[$mountId], $configOf[$mountId] ?? [], $userId, $placeholder) as $rebuilt) {
+					if (hash_equals($stored, md5($rebuilt))) {
+						$matched = $rebuilt;
+						break 2;
+					}
+				}
+			}
+
+			if ($matched !== null) {
+				$identity = self::shareIdentity($matched);
+				if ($identity !== null) {
+					$identities[$storageId] = $identity;
+					$this->identityStats['hashedVerified']++;
+				} else {
+					$this->identityStats['excluded']++;
+				}
+			} elseif ($relevant) {
+				$this->identityStats['hashedUngrouped']++;
+				if ($placeholder) {
+					$this->identityStats['placeholder']++;
+				}
+			}
+		}
+
+		return $identities;
+	}
+
+	/**
+	 * The storage ids files_external would build out of one configuration for
+	 * one user, one per login candidate. Sets $placeholder when a '$' other
+	 * than '$user' is left, and gives nothing then.
+	 *
+	 * @param array<string, string> $config
+	 * @return list<string>
+	 */
+	private static function rebuiltIds(string $backend, array $config, string $userId, bool &$placeholder): array {
+		$values = [];
+		foreach (self::REBUILT_CONFIG_KEYS as $key) {
+			if (isset($config[$key])) {
+				$values[$key] = str_ireplace('$user', $userId, $config[$key]);
+			}
+		}
+		foreach ($values as $value) {
+			if (str_contains($value, '$')) {
+				$placeholder = true;
+
+				return [];
+			}
+		}
+		if (($values['host'] ?? '') === '') {
+			return [];
+		}
+
+		$logins = [];
+		if (isset($values['user']) && $values['user'] !== '') {
+			$logins[] = $backend === 'smb' ? self::smbLogin($values['user']) : $values['user'];
+		}
+		$logins[] = $userId;
+		$logins = array_values(array_unique($logins));
+
+		$ids = [];
+		if ($backend === 'smb') {
+			if (!isset($values['share'])) {
+				return [];
+			}
+			// SMB.php :112-116.
+			$root = '/' . ltrim($values['root'] ?? '/', '/');
+			$root = rtrim($root, '/') . '/';
+			foreach ($logins as $login) {
+				$ids[] = 'smb::' . $login . '@' . $values['host'] . '//' . trim($values['share'], '/') . '/' . $root;
+			}
+
+			return $ids;
+		}
+
+		// SFTP.php splitHost, port and root (stable34 :49-64, :94-98).
+		$parsed = parse_url(str_contains($values['host'], '://') ? $values['host'] : 'http://' . $values['host']);
+		if (!is_array($parsed) || !isset($parsed['host'])) {
+			return [];
+		}
+		$host = $parsed['host'];
+		$port = isset($values['port']) && is_numeric($values['port'])
+			? (int)$values['port']
+			: (int)($parsed['port'] ?? 22);
+		$root = isset($values['root']) ? self::sftpCleanPath($values['root']) : '/';
+		$root = '/' . ltrim($root, '/');
+		$root = rtrim($root, '/') . '/';
+		foreach ($logins as $login) {
+			$ids[] = 'sftp::' . $login . '@' . $host . ($port !== 22 ? ':' . $port : '') . '/' . $root;
+		}
+
+		return $ids;
+	}
+
+	/** The login of SMB.php splitUser: without a workgroup in front of '/' or '\'. */
+	private static function smbLogin(string $user): string {
+		if (str_contains($user, '/')) {
+			return explode('/', $user, 2)[1];
+		}
+		if (str_contains($user, '\\')) {
+			return explode('\\', $user)[1];
+		}
+
+		return $user;
+	}
+
+	/** lib/private/Files/Storage/Common.php cleanPath (stable34 :433-448), which SFTP uses for its root. */
+	private static function sftpCleanPath(string $path): string {
+		if ($path === '' || $path[0] !== '/') {
+			$path = '/' . $path;
+		}
+		$output = [];
+		foreach (explode('/', $path) as $chunk) {
+			if ($chunk === '..') {
+				array_pop($output);
+			} elseif ($chunk !== '.') {
+				$output[] = $chunk;
+			}
+		}
+
+		return implode('/', $output);
+	}
+
+	private static function isCountingBackend(string $storageId): bool {
 		foreach (self::COUNTING_KEY_BACKENDS as $prefix) {
-			if (!str_starts_with($storageId, $prefix)) {
-				continue;
+			if (str_starts_with($storageId, $prefix)) {
+				return true;
 			}
-
-			$rest = substr($storageId, strlen($prefix));
-			$split = strpos($rest, '//');
-			if ($split === false || $split === 0) {
-				return null;
-			}
-
-			$credentialsAndHost = substr($rest, 0, $split);
-			$at = strrpos($credentialsAndHost, '@');
-			if ($at === false) {
-				return null;
-			}
-
-			$host = substr($credentialsAndHost, $at + 1);
-			if ($host === '') {
-				return null;
-			}
-
-			return $prefix . $host . substr($rest, $split);
 		}
 
-		return null;
+		return false;
+	}
+
+	/**
+	 * @param list<mixed> $storageIds
+	 * @return list<int> positive, without doubles, ascending
+	 */
+	private static function positiveIds(array $storageIds): array {
+		$wanted = [];
+		foreach ($storageIds as $storageId) {
+			if (is_int($storageId) && $storageId > 0) {
+				$wanted[$storageId] = true;
+			}
+		}
+		$wanted = array_keys($wanted);
+		sort($wanted);
+
+		return $wanted;
+	}
+
+	/** @return array{parsed: int, hashedVerified: int, hashedUngrouped: int, placeholder: int, excluded: int} */
+	private static function emptyIdentityStats(): array {
+		return ['parsed' => 0, 'hashedVerified' => 0, 'hashedUngrouped' => 0, 'placeholder' => 0, 'excluded' => 0];
 	}
 
 	/**

@@ -1258,8 +1258,15 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # PHP_FILES_TODAY stays at 129. Recomputed independently with find, sort, tr and sha256sum over the
 # CRLF normalised tree: 20dac366... both ways; the same pipeline over git archive HEAD before the
 # plan gave 6d1847e6.
+# Moved on 2026-11-09 by Plan 43-21 (one share identity per storage, roots apart, spellings folded):
+# lib/Service/StorageService.php learned shareIdentity, shareIdentities with the md5 check of hashed
+# ids over oc_mounts, oc_external_mounts and five keys of oc_external_config, shareIdentityStats and
+# the grouping by share, and tests/Unit/StorageServiceTest.php reads the new catalogue
+# backend/tests/fixtures/share_identity_cases.json. No file came or went, so PHP_FILES_TODAY stays at
+# 129. Recomputed independently with find, sort, tr and sha256sum over the CRLF normalised tree:
+# b3f9109f... both ways; the same pipeline over git archive HEAD before the plan gave 20dac366.
 PHP_FILES_TODAY = 129
-PHP_TREE_HASH_TODAY = "20dac366f67114217d13d20eac6d82739ac22e2ee298882b2f21cfdc940713a2"
+PHP_TREE_HASH_TODAY = "b3f9109f1542f248223f3ed21ef924214c1f9dc2d2dc56f0fd38e72653ad561f"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
