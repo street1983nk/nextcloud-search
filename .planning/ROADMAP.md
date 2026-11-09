@@ -285,7 +285,7 @@ Plans:
 - [x] 43-19-PLAN.md: Abhilfetext V1/V2 in 16 Katalogen (D-43-16)
 - [x] 43-20-PLAN.md: einmalige Erneuerung der Ablehnungsserien nach dem Update
 - [x] 43-21-PLAN.md: Owner-Entscheide OE-1 bis OE-8, Freigabe-Identität je Speicher (Host und Freigabe gefaltet, Wurzel getrennt, gehashte IDs nur mit md5-Gegenprobe, [homes] und SFTP je Anmeldung), Gruppierung nach Freigabe (D-43-15, D-43-17, TDD)
-- [ ] 43-22-PLAN.md: Dokumentschlüssel Format 2 über den Freigabe-Pfad, docKeyFormat in Auftrag und Backfill-Antwort (TDD)
+- [x] 43-22-PLAN.md: Dokumentschlüssel Format 2 über den Freigabe-Pfad, docKeyFormat in Auftrag und Backfill-Antwort (TDD)
 - [ ] 43-23-PLAN.md: PHP-only und N1 je Mitglied auf den Freigabe-Pfad, docKeyFormat im /coverage-Vertrag, Zahlenfeld coverage.shareIdentity, Fixture roots, CHANGELOG-Entwurf (TDD)
 - [ ] 43-24-PLAN.md: Container DOC_KEY_GENERATION 2 mit Generationssperre in /coverage und Formatmarke an allen Übergängen (TDD)
 - [ ] 43-25-PLAN.md: Abnahmetest-Topologie wie bei mbozem, physische Wahrheit über Inode, Positivkontrolle 3, e2e_head_proof.sh
