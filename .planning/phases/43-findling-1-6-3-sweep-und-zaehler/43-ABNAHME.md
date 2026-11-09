@@ -20,3 +20,7 @@ Das GO deckt Tag v1.6.3 und die Einreichung beider Apps; beides führt der Owner
 - F GO: nein bis zur Rückmeldung von mbozem oder bis 12.11.2026 (siehe Zitat oben). Diese Zeile wird dann neu gesetzt.
 
 Hinweis zur Prüfung: Der Kommentar an mbozem ist vom 09.11.2026 05:23 UTC; die Runde lief eine knappe Stunde danach.
+
+## Nachtrag 2026-11-09 09:20: Wurzel-Frage ja
+
+mbozem hat geantwortet (https://github.com/street1983nk/nextcloud-search/issues/25#issuecomment-6735344512): dieselbe Freigabe mit verschiedenen Wurzeln kommt auf seiner Instanz vor (//Daten mit Wurzel / 25-mal und mit sechs Unterwurzeln 17-mal), dazu dieselbe Freigabe in zwei Schreibweisen (//Daten und //daten). Nach D-43-15 und der G2-Sperre bleibt GO: nein; die Frist 12.11.2026 entfällt. Weiter geht es mit einem Zusatzplan vor dem Store, danach Audit-Nachtrag und neue Owner-Runde für das GO.

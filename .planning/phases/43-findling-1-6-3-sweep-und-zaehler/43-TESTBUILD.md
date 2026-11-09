@@ -141,6 +141,18 @@ Two quick questions about your setup: does anyone reshare a folder of an SMB mou
 
 If the number checks out, 1.6.3 goes to the store the normal way. Curious what you end up with.
 
-Rueckmeldung: ausstehend
+Rueckmeldung: teilweise (Installation und erste Runde bestätigt, Zahl steht noch aus)
 
-Wurzel-Frage: keine Antwort (ausstehend)
+Link: https://github.com/street1983nk/nextcloud-search/issues/25#issuecomment-6735344512 (mbozem, 2026-11-09 08:13 UTC)
+
+- Installation: beide Apps in einem Zug, sha256 von findling.tar.gz stimmt, Backend über die info.xml von rc/1.6.3-rc.1 (Image 655fe197), /status meldet appVersion 1.6.3-rc.1, alle 20 FINDLING_*-Variablen erhalten, Index intakt.
+- Sweep wie vorhergesagt: "storage sweep, absent=10 gone=5 deselected=0 stamped=5 removed=5, removed storages [215, 216, 221, 226, 231], waiting [54, 135, 136, 152, 173]".
+- Backfill: "doc key backfill, done=5000 missing=474149 unresolved=0", etwa 5000 Schlüssel je Minute, Rest etwa 1,5 h; Seite zeigt perDocumentHint=true. Die gelandete Zahl meldet er nach.
+- Frage A1 (Weiterteilung): keine Nutzer- oder Gruppenfreigaben, aber zwei Linkfreigaben von Ordnern auf einem SMB-Mount von //Daten.
+- Neuer Befund (nicht gefragt): dieselbe Samba-Freigabe unter zwei Schreibweisen, 192.168.98.246//Daten (42 Speicher) und //daten (5), dazu je ein Daten/daten-Paar auf den Hosts .2 und .231. StorageService::countingKey vergleicht Host und Freigabe zeichengenau (kein strtolower), also zwei Gruppen für einen Baum; im Code bestätigt 09.11.
+
+Wurzel-Frage: ja
+
+Zitat: "Same share with two roots: yes, we have exactly that case" und "please fix it before the store release. `192.168.98.246 //Daten` is configured 25 times with root `/` **and** 17 more times with sub-roots: `/Arbeitssicherheit` (11 user mounts), `/Projekte` (2), and `/Fue`, `/Allgemein`, `/Arbeitsvorbereitung`, `/QM` once each."
+
+Folge nach D-43-15: Stopp vor GO, Tag und Store. Zusatzplan für die Wurzel-Behebung (Dokumentschlüssel über host//share plus Wurzel plus filecache-Pfad, PHP-Gruppierung nach Freigabe, N1/phpOnly je Mitglied umgerechnet) plus die Schreibweisen-Faltung von Host und Freigabe, danach Audit-Nachtrag.
