@@ -248,6 +248,38 @@ a6_proof() {
   rm -rf apps/findling
   mv "${unpack}/findling" apps/findling
 
+  # The always enabled apps this checkout does not carry, the correction of
+  # deploy-harp "Store upgrade 3b" in short: a git checkout of the server
+  # promises bundle apps (viewer on stable33/34) that only a release tarball
+  # brings along, and doUpgrade dies on the first of them ("The files of the
+  # app viewer were not correctly replaced", proof run 42551978920). The list
+  # is reduced to the apps that are really here; the two guards of the
+  # original stand: the files anchor against editing from the wrong
+  # directory, the cap of 3 against a wrong path test, and shipped.json must
+  # never name a half of Findling.
+  test -f core/shipped.json || fail_a6 "core/shipped.json is not here, so this is not the server root"
+  [ -f "apps/files/appinfo/info.xml" ] || fail_a6 "apps/files is missing, so this step is not in the Nextcloud root and must not edit shipped.json"
+  local app missing="" count=0 drop
+  for app in $(jq -r '.alwaysEnabled[]' core/shipped.json | tr -d '\r'); do
+    if [ ! -f "apps/${app}/appinfo/info.xml" ]; then
+      missing="${missing} ${app}"
+      count=$((count + 1))
+      echo "core/shipped.json promises ${app}, but apps/${app}/appinfo/info.xml is not in this checkout"
+    fi
+  done
+  [ "${count}" -le 3 ] || fail_a6 "${count} always enabled apps appear to be missing, refusing to edit shipped.json"
+  if [ -n "${missing}" ]; then
+    drop=$(printf '%s\n' ${missing} | jq -R . | jq -s .)
+    jq --argjson drop "${drop}" '.alwaysEnabled = (.alwaysEnabled - $drop)' \
+      core/shipped.json > "${RUNNER_TEMP}/shipped.json.new"
+    mv "${RUNNER_TEMP}/shipped.json.new" core/shipped.json
+    echo "removed from alwaysEnabled:${missing}"
+  fi
+  if jq -e '[.shippedApps[], .alwaysEnabled[], .defaultEnabled[]] | any(. == "findling" or . == "findling_backend")' \
+       core/shipped.json > /dev/null; then
+    fail_a6 "shipped.json names a half of Findling, which this step must never be able to touch"
+  fi
+
   echo "--- occ upgrade ---"
   timeout 300 ./occ upgrade || fail_a6 "occ upgrade went red"
 
