@@ -169,9 +169,18 @@ exit "${rc}"
 EOF
 )
 
+# The shared catalogues under backend/tests/fixtures (doc_key_cases.json,
+# share_identity_cases.json and others) are read by the PHP suites as well.
+# The CI job keeps the whole repository in findling-src; here only that one
+# directory is mounted, read-only, and FINDLING_REPO_ROOT points the suites
+# at it.
+FIXTURES_MOUNT=$(to_mount_path "${REPO_ROOT}/backend/tests/fixtures")
+
 set +e
 MSYS_NO_PATHCONV=1 docker run --rm \
 	-v "${SERVER_MOUNT}:/srv/server" -w /srv/server/apps/findling \
+	-v "${FIXTURES_MOUNT}:/findling-repo/backend/tests/fixtures:ro" \
+	-e "FINDLING_REPO_ROOT=/findling-repo" \
 	-e "MINIMUM_TESTS=${MINIMUM_TESTS}" \
 	--entrypoint sh "${RUNTIME_IMAGE}" -c "${INNER}" phpunit_docker "$@"
 rc=$?

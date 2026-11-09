@@ -1,0 +1,755 @@
+{
+	"_comment": [
+		"The shared catalogue of the share identity (plan 43-21, D-43-15, D-43-17, owner decisions OE-1 a, OE-2 a, OE-3 a, OE-4 a in 43-FREIGABEN.md).",
+		"A storage id of the smb or sftp backend gives one identity {share, root}: share is backend, host (ASCII lower case) and for SMB the share name (ASCII lower case), for SFTP the login name (as written) in front of the host; root is the root without leading and trailing slashes, unfolded, in Unicode NFC like the Nextcloud file cache. Null means never grouped, the counting of 1.5.",
+		"cases: an id out of oc_storages.id and the identity typed by hand. hashed: ids above 64 characters that Nextcloud stores as md5 (Storage.php adjustStorageId); actual is the id Nextcloud wrote, stored = md5(actual) computed with the command in derivation, reconstructed is what the companion rebuilds from oc_external_config and the user id of the mount (null when a placeholder other than $user is left), and only reconstructed == actual gives an identity.",
+		"groups: the mbozem situation of #25 with invented login names, and the expected counting groups. stats: the five counters when every case and every hashed entry is asked in one call.",
+		"Nothing here was computed with the code under test. php/tests/Unit/StorageServiceTest.php reads this file, backend/tests/test_share_identity_cases.py recomputes every md5 with hashlib."
+	],
+	"decisions": {
+		"OE-1": "a",
+		"OE-2": "a",
+		"OE-3": "a",
+		"OE-4": "a"
+	},
+	"cases": [
+		{
+			"id": "smb::a@192.168.98.246//Daten//",
+			"expected": {
+				"share": "smb::192.168.98.246//daten",
+				"root": ""
+			},
+			"why": "root / as SMB.php writes it, share name folded",
+			"decision": "OE-1"
+		},
+		{
+			"id": "smb::b@192.168.98.246//daten//",
+			"expected": {
+				"share": "smb::192.168.98.246//daten",
+				"root": ""
+			},
+			"why": "the same share in lower case is the same share (Samba section names ignore case)",
+			"decision": "OE-1"
+		},
+		{
+			"id": "smb::c@192.168.98.246//Daten//Projekte/",
+			"expected": {
+				"share": "smb::192.168.98.246//daten",
+				"root": "Projekte"
+			},
+			"why": "a sub root of the same share is the same share with its own root",
+			"decision": "OE-1"
+		},
+		{
+			"id": "smb::d@192.168.98.246//DATEN//Arbeitssicherheit/",
+			"expected": {
+				"share": "smb::192.168.98.246//daten",
+				"root": "Arbeitssicherheit"
+			},
+			"why": "share name in capitals folds, the root keeps its spelling",
+			"decision": "OE-1"
+		},
+		{
+			"id": "smb::a@FileServer.local//Daten//",
+			"expected": {
+				"share": "smb::fileserver.local//daten",
+				"root": ""
+			},
+			"why": "host names ignore case (RFC 4343)",
+			"decision": "OE-1"
+		},
+		{
+			"id": "smb::b@fileserver.local//Daten//",
+			"expected": {
+				"share": "smb::fileserver.local//daten",
+				"root": ""
+			},
+			"why": "same host in lower case, same share"
+		},
+		{
+			"id": "smb::a@192.168.98.2//Daten//",
+			"expected": {
+				"share": "smb::192.168.98.2//daten",
+				"root": ""
+			},
+			"why": "another host is another share"
+		},
+		{
+			"id": "smb::a@fs.example//Daten//Projekte/",
+			"expected": {
+				"share": "smb::fs.example//daten",
+				"root": "Projekte"
+			},
+			"why": "root keeps its capital",
+			"decision": "OE-1"
+		},
+		{
+			"id": "smb::a@fs.example//Daten//projekte/",
+			"expected": {
+				"share": "smb::fs.example//daten",
+				"root": "projekte"
+			},
+			"why": "a root that differs only in case is another root (two folders on a Linux server)",
+			"decision": "OE-1"
+		},
+		{
+			"id": "smb::a@fs.example//Daten//Gr\u00fc\u00dfe/",
+			"expected": {
+				"share": "smb::fs.example//daten",
+				"root": "Gr\u00fc\u00dfe"
+			},
+			"why": "a composed umlaut stays as it is"
+		},
+		{
+			"id": "smb::b@fs.example//Daten//Gru\u0308\u00dfe/",
+			"expected": {
+				"share": "smb::fs.example//daten",
+				"root": "Gr\u00fc\u00dfe"
+			},
+			"why": "a decomposed umlaut in the root becomes NFC, the form of the Nextcloud file cache (Cache.php normalize)"
+		},
+		{
+			"id": "smb::a@fs.example//Daten//a//b/",
+			"expected": {
+				"share": "smb::fs.example//daten",
+				"root": "a/b"
+			},
+			"why": "doubled slashes inside the root collapse"
+		},
+		{
+			"id": "smb::a@fs.example//Daten//./a/",
+			"expected": {
+				"share": "smb::fs.example//daten",
+				"root": "a"
+			},
+			"why": "a '.' segment is dropped"
+		},
+		{
+			"id": "smb::a@fs.example//Daten//./",
+			"expected": {
+				"share": "smb::fs.example//daten",
+				"root": ""
+			},
+			"why": "a root of only '.' is the share root"
+		},
+		{
+			"id": "smb::a@fs.example//Daten//a/../b/",
+			"expected": null,
+			"why": "a '..' segment could leave the tree, never grouped"
+		},
+		{
+			"id": "smb::a@fs.example//Daten//a\\b/",
+			"expected": null,
+			"why": "a backslash in the root is a separator on the server, never grouped"
+		},
+		{
+			"id": "home::alice",
+			"expected": null,
+			"why": "home storage, not an external share"
+		},
+		{
+			"id": "local::/srv/",
+			"expected": null,
+			"why": "local storage, not in the backend list"
+		},
+		{
+			"id": "0123456789abcdef0123456789abcdef",
+			"expected": null,
+			"why": "a hashed id says nothing by itself, only the configuration with a matching md5 can"
+		},
+		{
+			"id": "webdav::anna@dav.example/remote.php/webdav//",
+			"expected": null,
+			"why": "WebDAV is not in the backend list"
+		},
+		{
+			"id": "owncloud::anna@cloud.example//",
+			"expected": null,
+			"why": "ownCloud is not in the backend list"
+		},
+		{
+			"id": "smb::host//Daten//",
+			"expected": null,
+			"why": "no '@' in front of the first '//'"
+		},
+		{
+			"id": "smb::a@//Daten//",
+			"expected": null,
+			"why": "empty host"
+		},
+		{
+			"id": "smb::a@fs.example////",
+			"expected": null,
+			"why": "empty share name"
+		},
+		{
+			"id": "smb::a@fs.example//Daten/",
+			"expected": null,
+			"why": "no '//' between share and root, not the form of SMB.php getId"
+		},
+		{
+			"id": "smb::a@fs.example//Daten/Sub//",
+			"expected": null,
+			"why": "share name with '/'"
+		},
+		{
+			"id": "smb::a@fs.example//Daten\\Sub//",
+			"expected": null,
+			"why": "share name with a backslash"
+		},
+		{
+			"id": "smb::corp//anna@fs.example//team//",
+			"expected": null,
+			"why": "the first '//' ends the host part, so there is no '@' in front of it"
+		},
+		{
+			"id": "",
+			"expected": null,
+			"why": "empty id"
+		},
+		{
+			"id": "smb::alice@fs.example//homes//",
+			"expected": null,
+			"why": "[homes] gives every user an own tree under one name",
+			"decision": "OE-3"
+		},
+		{
+			"id": "smb::alice@fs.example//HOMES//x/",
+			"expected": null,
+			"why": "[homes] in capitals",
+			"decision": "OE-3"
+		},
+		{
+			"id": "smb::alice@fs.example//Alice//",
+			"expected": null,
+			"why": "a share equal to the login name is a home share",
+			"decision": "OE-3"
+		},
+		{
+			"id": "smb::max@firma.de@192.168.98.246//Daten//",
+			"expected": {
+				"share": "smb::192.168.98.246//daten",
+				"root": ""
+			},
+			"why": "the host is the text after the LAST '@'"
+		},
+		{
+			"id": "sftp::a@Host.example//",
+			"expected": {
+				"share": "sftp::a@host.example",
+				"root": ""
+			},
+			"why": "SFTP share is login plus host, host folded",
+			"decision": "OE-4"
+		},
+		{
+			"id": "sftp::a@host.example//srv/data/",
+			"expected": {
+				"share": "sftp::a@host.example",
+				"root": "srv/data"
+			},
+			"why": "same login, another root, same share",
+			"decision": "OE-4"
+		},
+		{
+			"id": "sftp::b@host.example//",
+			"expected": {
+				"share": "sftp::b@host.example",
+				"root": ""
+			},
+			"why": "another login is another share (chroot per user never merges)",
+			"decision": "OE-4"
+		},
+		{
+			"id": "sftp::Anna@host.example//",
+			"expected": {
+				"share": "sftp::Anna@host.example",
+				"root": ""
+			},
+			"why": "the login name is not folded",
+			"decision": "OE-4"
+		},
+		{
+			"id": "sftp::a@host.example:2222//",
+			"expected": {
+				"share": "sftp::a@host.example:2222",
+				"root": ""
+			},
+			"why": "the port stays in the share",
+			"decision": "OE-4"
+		},
+		{
+			"id": "sftp::anna@corp.example@Host.example//data/",
+			"expected": {
+				"share": "sftp::anna@corp.example@host.example",
+				"root": "data"
+			},
+			"why": "a login with '@' stays whole, only the host is folded",
+			"decision": "OE-4"
+		}
+	],
+	"hashed": [
+		{
+			"name": "mbozem sub root with a long login, workgroup in the configured user",
+			"backend": "smb",
+			"config": {
+				"host": "192.168.98.246",
+				"share": "Daten",
+				"root": "/Arbeitssicherheit",
+				"user": "FIRMA\\maximilian.mustermann"
+			},
+			"mount_user": "mmustermann",
+			"actual": "smb::maximilian.mustermann@192.168.98.246//Daten//Arbeitssicherheit/",
+			"reconstructed": "smb::maximilian.mustermann@192.168.98.246//Daten//Arbeitssicherheit/",
+			"stored": "b1c830c1101d1e2d57d8812f909f76d1",
+			"derivation": "printf '%s' 'smb::maximilian.mustermann@192.168.98.246//Daten//Arbeitssicherheit/' | md5sum",
+			"expected": {
+				"share": "smb::192.168.98.246//daten",
+				"root": "Arbeitssicherheit"
+			},
+			"outcome": "verified",
+			"decision": "OE-2"
+		},
+		{
+			"name": "the configuration no longer matches the stored id",
+			"backend": "smb",
+			"config": {
+				"host": "192.168.98.246",
+				"share": "Daten",
+				"root": "/Arbeitssicherheit",
+				"user": "FIRMA\\maximilian.mustermann"
+			},
+			"mount_user": "mmustermann",
+			"actual": "smb::maximilian.mustermann@192.168.98.246//Daten//Arbeitssicherheit-Alt/",
+			"reconstructed": "smb::maximilian.mustermann@192.168.98.246//Daten//Arbeitssicherheit/",
+			"stored": "13a1155ac91c91acf2ec7a22dd6f8b79",
+			"derivation": "printf '%s' 'smb::maximilian.mustermann@192.168.98.246//Daten//Arbeitssicherheit-Alt/' | md5sum",
+			"expected": null,
+			"outcome": "ungrouped",
+			"decision": "OE-2"
+		},
+		{
+			"name": "$user in the root is replaced by the user id of the mount",
+			"backend": "smb",
+			"config": {
+				"host": "fileserver.example.org",
+				"share": "Daten",
+				"root": "$user/Projekte",
+				"user": "verwaltung.service.konto"
+			},
+			"mount_user": "anna",
+			"actual": "smb::verwaltung.service.konto@fileserver.example.org//Daten//anna/Projekte/",
+			"reconstructed": "smb::verwaltung.service.konto@fileserver.example.org//Daten//anna/Projekte/",
+			"stored": "e87e83f974e11736402bb80ff43e4913",
+			"derivation": "printf '%s' 'smb::verwaltung.service.konto@fileserver.example.org//Daten//anna/Projekte/' | md5sum",
+			"expected": {
+				"share": "smb::fileserver.example.org//daten",
+				"root": "anna/Projekte"
+			},
+			"outcome": "verified",
+			"decision": "OE-2"
+		},
+		{
+			"name": "another placeholder than $user is never rebuilt",
+			"backend": "smb",
+			"config": {
+				"host": "fileserver.example.org",
+				"share": "Daten",
+				"root": "$home/Vorlagen",
+				"user": "verwaltung.service.konto"
+			},
+			"mount_user": "anna",
+			"actual": "smb::verwaltung.service.konto@fileserver.example.org//Daten//home/anna/Vorlagen/",
+			"reconstructed": null,
+			"stored": "4b578dccefdfee85dfb4808cfc4a9f17",
+			"derivation": "printf '%s' 'smb::verwaltung.service.konto@fileserver.example.org//Daten//home/anna/Vorlagen/' | md5sum",
+			"expected": null,
+			"outcome": "placeholder",
+			"decision": "OE-2"
+		},
+		{
+			"name": "login credentials whose login name is not the user id (LDAP, AD)",
+			"backend": "smb",
+			"config": {
+				"host": "192.168.98.246",
+				"share": "Daten",
+				"root": "/Arbeitsvorbereitung"
+			},
+			"mount_user": "u4711",
+			"actual": "smb::max.mustermann.extern@192.168.98.246//Daten//Arbeitsvorbereitung/",
+			"reconstructed": "smb::u4711@192.168.98.246//Daten//Arbeitsvorbereitung/",
+			"stored": "6a632d929416a6178d8baf79cc35f495",
+			"derivation": "printf '%s' 'smb::max.mustermann.extern@192.168.98.246//Daten//Arbeitsvorbereitung/' | md5sum",
+			"expected": null,
+			"outcome": "ungrouped",
+			"decision": "OE-2"
+		},
+		{
+			"name": "SFTP with the port in the host and no port option",
+			"backend": "sftp",
+			"config": {
+				"host": "sftp.example.org:2222",
+				"root": "/srv/projekte/archiv",
+				"user": "backup-service-account-lang"
+			},
+			"mount_user": "backup",
+			"actual": "sftp::backup-service-account-lang@sftp.example.org:2222//srv/projekte/archiv/",
+			"reconstructed": "sftp::backup-service-account-lang@sftp.example.org:2222//srv/projekte/archiv/",
+			"stored": "363dc28d6e89794ff4ebc0abbbed48a1",
+			"derivation": "printf '%s' 'sftp::backup-service-account-lang@sftp.example.org:2222//srv/projekte/archiv/' | md5sum",
+			"expected": {
+				"share": "sftp::backup-service-account-lang@sftp.example.org:2222",
+				"root": "srv/projekte/archiv"
+			},
+			"outcome": "verified",
+			"decision": "OE-4"
+		},
+		{
+			"name": "Samba homes rebuilt with a matching md5 is still never grouped, $USER in capitals",
+			"backend": "smb",
+			"config": {
+				"host": "fileserver.example.org",
+				"share": "homes",
+				"root": "/",
+				"user": "FIRMA\\$USER"
+			},
+			"mount_user": "anna.beispielfrau.verwaltung",
+			"actual": "smb::anna.beispielfrau.verwaltung@fileserver.example.org//homes//",
+			"reconstructed": "smb::anna.beispielfrau.verwaltung@fileserver.example.org//homes//",
+			"stored": "f190bf875a3d5f11ebf339c4b404051b",
+			"derivation": "printf '%s' 'smb::anna.beispielfrau.verwaltung@fileserver.example.org//homes//' | md5sum",
+			"expected": null,
+			"outcome": "excluded",
+			"decision": "OE-3"
+		},
+		{
+			"name": "login credentials whose login name is the user id, root without a leading slash",
+			"backend": "smb",
+			"config": {
+				"host": "192.168.98.246",
+				"share": "daten",
+				"root": "Qualitaetsmanagement/Audits"
+			},
+			"mount_user": "maximilian.mustermann",
+			"actual": "smb::maximilian.mustermann@192.168.98.246//daten//Qualitaetsmanagement/Audits/",
+			"reconstructed": "smb::maximilian.mustermann@192.168.98.246//daten//Qualitaetsmanagement/Audits/",
+			"stored": "4e099f5b14451c03d5f82d7c1d07ab97",
+			"derivation": "printf '%s' 'smb::maximilian.mustermann@192.168.98.246//daten//Qualitaetsmanagement/Audits/' | md5sum",
+			"expected": {
+				"share": "smb::192.168.98.246//daten",
+				"root": "Qualitaetsmanagement/Audits"
+			},
+			"outcome": "verified",
+			"decision": "OE-2"
+		},
+		{
+			"name": "SFTP with port option 22, which the id leaves out",
+			"backend": "sftp",
+			"config": {
+				"host": "sftp.example.org",
+				"port": "22",
+				"root": "/srv/projekte/archiv/",
+				"user": "backup-service-account-lang"
+			},
+			"mount_user": "backup",
+			"actual": "sftp::backup-service-account-lang@sftp.example.org//srv/projekte/archiv/",
+			"reconstructed": "sftp::backup-service-account-lang@sftp.example.org//srv/projekte/archiv/",
+			"stored": "afe92e0ca757980be0d0e051f33fa1bf",
+			"derivation": "printf '%s' 'sftp::backup-service-account-lang@sftp.example.org//srv/projekte/archiv/' | md5sum",
+			"expected": {
+				"share": "sftp::backup-service-account-lang@sftp.example.org",
+				"root": "srv/projekte/archiv"
+			},
+			"outcome": "verified",
+			"decision": "OE-4"
+		},
+		{
+			"name": "a hidden share with '$' is never rebuilt (conservative rule of the plan)",
+			"backend": "smb",
+			"config": {
+				"host": "192.168.98.246",
+				"share": "Daten$",
+				"root": "/Arbeitssicherheit",
+				"user": "maximilian.mustermann"
+			},
+			"mount_user": "mmustermann",
+			"actual": "smb::maximilian.mustermann@192.168.98.246//Daten$//Arbeitssicherheit/",
+			"reconstructed": null,
+			"stored": "bc71e0feba11b4dec03c7d4595789cbb",
+			"derivation": "printf '%s' 'smb::maximilian.mustermann@192.168.98.246//Daten$//Arbeitssicherheit/' | md5sum",
+			"expected": null,
+			"outcome": "placeholder",
+			"decision": "OE-2"
+		}
+	],
+	"groups": {
+		"storages": [
+			{
+				"numeric_id": 101,
+				"id": "smb::u01@192.168.98.246//Daten//"
+			},
+			{
+				"numeric_id": 102,
+				"id": "smb::u02@192.168.98.246//Daten//"
+			},
+			{
+				"numeric_id": 103,
+				"id": "smb::u03@192.168.98.246//Daten//"
+			},
+			{
+				"numeric_id": 104,
+				"id": "smb::u04@192.168.98.246//Daten//"
+			},
+			{
+				"numeric_id": 105,
+				"id": "smb::u05@192.168.98.246//Daten//"
+			},
+			{
+				"numeric_id": 106,
+				"id": "smb::u06@192.168.98.246//Daten//"
+			},
+			{
+				"numeric_id": 107,
+				"id": "smb::u07@192.168.98.246//Daten//"
+			},
+			{
+				"numeric_id": 108,
+				"id": "smb::u08@192.168.98.246//Daten//"
+			},
+			{
+				"numeric_id": 109,
+				"id": "smb::u09@192.168.98.246//Daten//"
+			},
+			{
+				"numeric_id": 110,
+				"id": "smb::u10@192.168.98.246//Daten//"
+			},
+			{
+				"numeric_id": 111,
+				"id": "smb::u11@192.168.98.246//Daten//"
+			},
+			{
+				"numeric_id": 112,
+				"id": "smb::u12@192.168.98.246//Daten//"
+			},
+			{
+				"numeric_id": 113,
+				"id": "smb::u13@192.168.98.246//Daten//"
+			},
+			{
+				"numeric_id": 114,
+				"id": "smb::u14@192.168.98.246//Daten//"
+			},
+			{
+				"numeric_id": 115,
+				"id": "smb::u15@192.168.98.246//Daten//"
+			},
+			{
+				"numeric_id": 116,
+				"id": "smb::u16@192.168.98.246//Daten//"
+			},
+			{
+				"numeric_id": 117,
+				"id": "smb::u17@192.168.98.246//Daten//"
+			},
+			{
+				"numeric_id": 118,
+				"id": "smb::u18@192.168.98.246//Daten//"
+			},
+			{
+				"numeric_id": 119,
+				"id": "smb::u19@192.168.98.246//Daten//"
+			},
+			{
+				"numeric_id": 120,
+				"id": "smb::u20@192.168.98.246//Daten//"
+			},
+			{
+				"numeric_id": 121,
+				"id": "smb::u21@192.168.98.246//Daten//"
+			},
+			{
+				"numeric_id": 122,
+				"id": "smb::u22@192.168.98.246//Daten//"
+			},
+			{
+				"numeric_id": 123,
+				"id": "smb::u23@192.168.98.246//Daten//"
+			},
+			{
+				"numeric_id": 124,
+				"id": "smb::u24@192.168.98.246//Daten//"
+			},
+			{
+				"numeric_id": 125,
+				"id": "smb::u25@192.168.98.246//Daten//"
+			},
+			{
+				"numeric_id": 126,
+				"id": "smb::u26@192.168.98.246//Daten//Arbeitssicherheit/"
+			},
+			{
+				"numeric_id": 127,
+				"id": "smb::u27@192.168.98.246//Daten//Arbeitssicherheit/"
+			},
+			{
+				"numeric_id": 128,
+				"id": "smb::u28@192.168.98.246//Daten//Arbeitssicherheit/"
+			},
+			{
+				"numeric_id": 129,
+				"id": "smb::u29@192.168.98.246//Daten//Arbeitssicherheit/"
+			},
+			{
+				"numeric_id": 130,
+				"id": "smb::u30@192.168.98.246//Daten//Arbeitssicherheit/"
+			},
+			{
+				"numeric_id": 131,
+				"id": "smb::u31@192.168.98.246//Daten//Arbeitssicherheit/"
+			},
+			{
+				"numeric_id": 132,
+				"id": "smb::u32@192.168.98.246//Daten//Arbeitssicherheit/"
+			},
+			{
+				"numeric_id": 133,
+				"id": "smb::u33@192.168.98.246//Daten//Arbeitssicherheit/"
+			},
+			{
+				"numeric_id": 134,
+				"id": "smb::u34@192.168.98.246//Daten//Arbeitssicherheit/"
+			},
+			{
+				"numeric_id": 135,
+				"id": "smb::u35@192.168.98.246//Daten//Arbeitssicherheit/"
+			},
+			{
+				"numeric_id": 136,
+				"id": "smb::u36@192.168.98.246//Daten//Arbeitssicherheit/"
+			},
+			{
+				"numeric_id": 137,
+				"id": "smb::u37@192.168.98.246//Daten//Projekte/"
+			},
+			{
+				"numeric_id": 138,
+				"id": "smb::u38@192.168.98.246//Daten//Projekte/"
+			},
+			{
+				"numeric_id": 139,
+				"id": "smb::u39@192.168.98.246//Daten//Fue/"
+			},
+			{
+				"numeric_id": 140,
+				"id": "smb::u40@192.168.98.246//Daten//Allgemein/"
+			},
+			{
+				"numeric_id": 141,
+				"id": "smb::u41@192.168.98.246//Daten//Arbeitsvorbereitung/"
+			},
+			{
+				"numeric_id": 142,
+				"id": "smb::u42@192.168.98.246//Daten//QM/"
+			},
+			{
+				"numeric_id": 143,
+				"id": "smb::u43@192.168.98.246//daten//"
+			},
+			{
+				"numeric_id": 144,
+				"id": "smb::u44@192.168.98.246//daten//"
+			},
+			{
+				"numeric_id": 145,
+				"id": "smb::u45@192.168.98.246//daten//"
+			},
+			{
+				"numeric_id": 146,
+				"id": "smb::u46@192.168.98.246//daten//"
+			},
+			{
+				"numeric_id": 147,
+				"id": "smb::u47@192.168.98.246//daten//"
+			},
+			{
+				"numeric_id": 201,
+				"id": "smb::u01@192.168.98.2//Daten//"
+			},
+			{
+				"numeric_id": 202,
+				"id": "smb::u02@192.168.98.2//daten//Projekte/"
+			},
+			{
+				"numeric_id": 301,
+				"id": "smb::u01@192.168.98.246//Archiv//"
+			},
+			{
+				"numeric_id": 401,
+				"id": "home::u01"
+			}
+		],
+		"expected": [
+			[
+				101,
+				102,
+				103,
+				104,
+				105,
+				106,
+				107,
+				108,
+				109,
+				110,
+				111,
+				112,
+				113,
+				114,
+				115,
+				116,
+				117,
+				118,
+				119,
+				120,
+				121,
+				122,
+				123,
+				124,
+				125,
+				126,
+				127,
+				128,
+				129,
+				130,
+				131,
+				132,
+				133,
+				134,
+				135,
+				136,
+				137,
+				138,
+				139,
+				140,
+				141,
+				142,
+				143,
+				144,
+				145,
+				146,
+				147
+			],
+			[
+				201,
+				202
+			]
+		]
+	},
+	"stats": {
+		"parsed": 21,
+		"hashedVerified": 5,
+		"hashedUngrouped": 4,
+		"placeholder": 2,
+		"excluded": 13
+	}
+}
