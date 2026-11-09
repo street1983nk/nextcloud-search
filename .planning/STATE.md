@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
 status: executing
-stopped_at: Completed 43-10 (Proof 42565361965 grün, A5/A6 ok, Archiv 42537119924 mit Ablauf 2026-12-08, 43-TESTBUILD.md vollständig), nächster Schritt 43-11
-last_updated: "2026-11-09T06:30:00.000Z"
+stopped_at: "Completed 43-21 (shareIdentity/shareIdentities/shareIdentityStats, Gruppierung nach Freigabe; PHPUnit lokal RED 26/12E/5F, GREEN 26 Tests, volle Suite 1154 grün), nächster Schritt 43-22"
+last_updated: "2026-11-09T11:25:00.000Z"
 last_activity: 2026-11-09
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 42
-  completed_plans: 25
+  completed_plans: 26
   percent: 76
 ---
 
@@ -26,7 +26,7 @@ Siehe .planning/PROJECT.md (Stand nach v1.5, Milestone v1.6 gestartet) und .plan
 ## Current Position
 
 Phase: 43 (findling-1-6-3-sweep-und-zaehler), EXECUTING
-Plan: 17 of 29 erledigt (43-01..10, 43-15..20); 43-11 wartet auf die rc.1-Zahl von mbozem (Ergebnis abweichend, Wurzel-Frage ja); geplant 09.11. (Revision nach Plan-Check): 43-21..29 (Wurzeln und Schreibweisen derselben Freigabe, D-43-15, D-43-17, Audit-Nachtrag, rc.2), nächster Schritt 43-21 Task 1 Owner-Entscheide OE-1 bis OE-8; danach 43-12 Runde 2, 43-13, 43-14
+Plan: 18 of 29 erledigt (43-01..10, 43-15..21); 43-11 wird nach OE-8 a als "abweichend, abgelöst durch rc.2" abgeschlossen; 43-21 erledigt 09.11. (Freigabe-Identität je Speicher, Host und Freigabename gefaltet, Wurzel getrennt, gehashte IDs nur mit md5-Treffer, Commits 662e7b63, 38d2e375, f772dbb5, nur lokal); nächster Schritt 43-22 (Dokumentschlüssel Format 2 über die Freigabe), danach 43-23 bis 43-29, 43-12 Runde 2, 43-13, 43-14
 Status: Testbuild 1.6.3-rc.1 belegt (43-TESTBUILD.md): Proof-Lauf 42565361965 grün (A5: ok auf HaRP ohne --force-update, A6: ok auf stable33+stable34), Archiv-Lauf 42537119924 (findling.tar.gz 692014 Bytes, SHA-256 fa9c3874..., Ablauf 2026-12-08), Branch rc/1.6.3-rc.1 Kopf 47c4ce4e, Image :655fe197 unveränderlich. Jeder Push, Dispatch, Tag, Kommentar nur mit Owner-Freigabe (43-FREIGABEN.md)
 Last activity: 2026-11-09
 
@@ -138,6 +138,7 @@ Progress: [█████████░] 88%
 - 42-09: Python-Textsperren test_php_surface_bans.py (18 Server-Annotationen in php/lib im Gleichschritt mit RouteProfiles, Router-/Container-Texte, routes.php, info.xml ohne remote/public/sabre u. a., settings exakt) und test_exapp_surface.py (ExApp-Routentabelle exakt, PUBLIC/headers_to_exclude als Regel, keine AppAPI-Registrierung zur Laufzeit, nur eigene OCS-Pfade); CI 0aed7906 grün (Python 41956536303).
 - 43-06: AppConfig coverage_per_document_hint mit drei Zuständen (0 aus, 1 wartet, > 1 Zeitstempel der ersten vollständigen /coverage-Zählung), Migration Version001603Date20261108000000 setzt 1 nur bei Zeilen in findling_scan_stats; Hinweis 7 Tage, danach 0 für immer; Satz L nur bei legacyReason limits; de-Schlüsselzahl 365; PHP-Baumhash 93271961 (124 Dateien); Commits 13819d06, 40f92864, 08762e4a.
 - 42-10: Lückenschluss der Re-Verifikation: AppSurface::sourceFindings und LIB_BANS vergleichen die Router- und Containernamen ohne Rücksicht auf Groß-/Kleinschreibung (irouter, actioninclude, getrouter, getcontainer()->registerservice am echten Baum rot belegt); Untergrenzen 40; python.yml startet auf php/**; 998 Tests lokal grün, Baumhash eb5b2dc1 (118).
+- 43-21: Freigabe-Identität {share, root} je SMB/SFTP-Speicher (Host und Freigabename ASCII-klein, Wurzel ungefaltet in NFC, SFTP je Anmeldung, homes und Freigabe gleich Anmeldename nie gruppiert); gehashte IDs nur über oc_mounts, oc_external_mounts und fünf Schlüssel von oc_external_config mit exakter md5-Gegenprobe; Zähler parsed/hashedVerified/hashedUngrouped/placeholder/excluded (placeholder Teilmenge von hashedUngrouped, gehashte IDs ohne smb/sftp-Mount zählen nirgends); phpunit_docker.sh hängt backend/tests/fixtures schreibgeschützt ein.
 
 ### Decisions (Roadmap v1.5)
 
