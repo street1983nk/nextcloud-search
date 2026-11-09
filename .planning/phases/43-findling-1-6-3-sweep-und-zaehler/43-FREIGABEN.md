@@ -115,3 +115,8 @@ Umfang: genau ein Kommentar in #25 (gekuerzte Fassung, vom Owner zeichengenau ge
 
 Freigabe Push 43-12: "Wie empfohlen" und "Wie ja" (2026-11-09 07:05, Claude Code Terminal) Entscheid: ja
 Umfang: genau ein Push auf main nach git pull --rebase: CHANGELOG-Satz D2, Gesamttext v1.6.3 in docs/store-listing.md, Gate scan_full_text_1_6_3, 43-ABNAHME.md, diese Zeilen, dazu die 5 lokalen Doku-Commits davor. Kein Tag, kein Dispatch, kein Store, kein Kommentar.
+
+Freigabe Kommentar 43-11 Rückmeldung: "Ja go" (2026-11-09 09:25, Claude Code Terminal) Entscheid: ja
+Umfang: genau ein kurzer Kommentar in #25 (Wortlaut vom Owner gesehen), gepostet: https://github.com/street1983nk/nextcloud-search/issues/25#issuecomment-6735423819. Kein Schließen.
+Freigabe Planung 43-21: "Ja go" (2026-11-09 09:25, Claude Code Terminal) Entscheid: ja
+Umfang: Zusatzplan vor dem Store für die Unterwurzeln derselben Freigabe (D-43-15) und die Faltung der Schreibweise von Host und Freigabe; nur Planung, Ausführung und jeder Push brauchen eigene Freigaben.
