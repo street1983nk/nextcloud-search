@@ -118,34 +118,29 @@ Hinweis: Der Kommentar an mbozem mit diesem Weg entsteht in 43-11 und geht nur m
 3. Dispatch release.yml auf rc/1.6.3-rc.1 mit create_release=false. ERLEDIGT: Lauf 42537119924 (archive_run_id), kein docker.yml-Dispatch nötig, das Image existiert bereits (siehe Image-Digest).
 4. Dispatch rc-version-proof.yml auf main mit rc_ref, archive_run_id, image_sha. ERLEDIGT: grüner Lauf 42565361965 nach drei roten Harness-Vorläufern (siehe Proof-Historie).
 
-## Kommentar-Entwurf an mbozem
+## Kommentar an mbozem (gepostet 09.11.2026)
 
-Stand 2026-11-09, verfasst nach vollständiger Lektüre von `gh issue view 25 --comments`. Neue Punkte seit dem 05.11. sind eingearbeitet: seine Storage-Tabelle vom 05.11. (31.571 Zeilen auf 13 verschwundenen Storages, 5 gelöschte Nutzer-Homes ohne oc_storages-Zeile), sein Testangebot ("Happy to test any variant on this topology") und seine eigene Hochrechnung 43,602 / 247,123 = etwa 18 %. A5/A6 sind ok, daher kein Abschnitt "Owner-Entscheid Versionsweg". Rückweg-Satz ist erlaubt (43-E2E.md führt `rollback_1_6_2: ok`). Der Entwurf geht NUR nach Owner-Freigabe (Task 2) zeichengleich per `gh issue comment 25 --body-file` raus.
+Link: https://github.com/street1983nk/nextcloud-search/issues/25#issuecomment-6732932582
+Freigabe: "Ja, so posten" (43-FREIGABEN.md). Gekuerzte Fassung, vom Owner zeichengenau gesehen.
 
-### Wortlaut (englisch, zeichengleich zu posten)
+Wortlaut:
 
-Thanks for the offer to test, I am taking you up on it. 1.6.3-rc.1 is ready with both fixes: the sweep now runs independent of the queue, the numerator is counted per document, and the denominator never drops below what was already judged.
+Thanks, I'll take you up on that. 1.6.3-rc.1 is ready: the sweep no longer waits for the queue, and the figure is counted per document.
 
-No GitHub pre-release this time, the build is a workflow artifact, so you need to be logged in to GitHub to download it. The artifact expires on 2026-12-08 (30 days retention). Please update both apps in one go, otherwise the counting waits until the companion is updated too.
+No pre-release this time, the build sits as workflow artifact `store-release` on https://github.com/street1983nk/nextcloud-search/actions/runs/42537119924 (GitHub login needed, expires 2026-12-08). sha256 of findling.tar.gz: `fa9c38745ec79dd21411d17aaa4bb46455987893f4ab13d2f8f3204861c333be`
 
-1. Download the `store-release` artifact from https://github.com/street1983nk/nextcloud-search/actions/runs/42537119924 and verify the companion archive (692014 bytes):
-
-```
-sha256sum findling.tar.gz
-# fa9c38745ec79dd21411d17aaa4bb46455987893f4ab13d2f8f3204861c333be
-```
-
-2. Extract it over `custom_apps/findling` (replaces the 1.6.2 there), then `occ upgrade`.
-3. Backend right after:
+Install: extract it over `custom_apps/findling`, run `occ upgrade`, then right after:
 
 ```
 occ app_api:app:update findling_backend --info-xml https://raw.githubusercontent.com/street1983nk/nextcloud-search/rc/1.6.3-rc.1/testbuild/findling_backend-1.6.3-rc.1-info.xml
 ```
 
-Back to 1.6.2 if anything goes wrong: companion from release v1.6.2 (`gh release download v1.6.2 --pattern findling.tar.gz`, extract, `occ upgrade`), backend with the info.xml of tag v1.6.2 plus `--force-update`.
+Both apps in one go please, otherwise the counting waits for the companion. First thing after the update is a key backfill (log line `doc key backfill, done=`), the page says "being counted" meanwhile, on your ~190k rows up to maybe 3.5 h. Then you should land around 18 % while the crawl runs, 43,602 of 247,123 from your table, and the first round should log `storage sweep, absent=... gone=5` for the deleted homes. Going back to 1.6.2 works if anything acts up (companion from the v1.6.2 release, backend with the v1.6.2 info.xml plus `--force-update`).
 
-After the update the document keys are backfilled first; the page shows "being counted" and the log a `doc key backfill, done=` line. On your roughly 190k rows that is about 3.5 hours worst case (measured around 65 s per 1,000 rows). Afterwards you should see about 18 % while the crawl runs, 43,602 of 247,123 from your table, with a one time note next to the figure. The sweep should log `storage sweep, absent=... gone=5` within the first round (the five deleted-user homes go right away, the other absent storages get the 30 day stamp and drop out after it).
+Two quick questions about your setup: does anyone reshare a folder of an SMB mount as a Nextcloud share, or is the same share mounted twice at different mount points? Those count once now. And is the same share configured with two different roots somewhere, like /Daten and /Daten/Projekte? That case still counts twice, I'd fix it before the store release if you have it, otherwise in 1.6.4.
 
-Two questions on your topology: does anyone reshare a folder of one of the SMB mounts as a Nextcloud share, or do you have two configurations of the same share with different mount points? 1.6.3 counts those once now, and your answer tells me whether your test covers that path. And do you have two configurations of the same share with different roots, say /Daten and /Daten/Projekte? Those 1.6.3 still counts twice; if you have that case I will fix it before the store release, otherwise in 1.6.4.
+If the number checks out, 1.6.3 goes to the store the normal way. Curious what you end up with.
 
-1.6.3 then goes to the store the regular way. Your figure plus the two log lines would be great.
+Rueckmeldung: ausstehend
+
+Wurzel-Frage: keine Antwort (ausstehend)

@@ -109,3 +109,6 @@ Freigabe Push 43-10 a6-Korrektur: "Ja, Push + Retry 3" (2026-11-09 05:52, Claude
 Freigabe Dispatch 43-10 proof Wiederholung 3: "Ja, Push + Retry 3" (2026-11-09 05:52, Claude Code Terminal) Entscheid: ja
 
 Umfang: genau ein Push (a6 shipped.json-Korrektur nach deploy-harp-Muster) plus dieser Zeilen, genau EIN erneuter Proof-Dispatch (Archiv 42537119924). A5 war im Lauf 42551978920 ok. Kein Tag, kein Store.
+
+Freigabe Kommentar 43-11: "Ja, so posten" (2026-11-09 06:23, Claude Code Terminal) Entscheid: ja
+Umfang: genau ein Kommentar in #25 (gekuerzte Fassung, vom Owner zeichengenau gesehen), kein Schliessen, kein weiterer Kommentar.
