@@ -130,3 +130,9 @@ Freigabe Entscheid 43-21 OE-6: "Wie empfohlen" (2026-11-09 10:36, Claude Code Te
 Freigabe Entscheid 43-21 OE-7: "Wie empfohlen" (2026-11-09 10:36, Claude Code Terminal) Entscheid: a
 Freigabe Entscheid 43-21 OE-8: "Wie empfohlen" (2026-11-09 10:36, Claude Code Terminal) Entscheid: a
 Umfang: nur Entscheide für 43-21 bis 43-29, kein Push, kein Dispatch, kein Kommentar.
+
+## Freigabe 09.11.2026 (Abend): Antwort an mbozem, rc.2 gestrichen
+
+Owner-Wort: "Rc2 Streichen und antworten und Mittwoch geht es weiter".
+
+Umfang: genau ein Kommentar auf #25 (Wortlaut lag dem Owner im Chat vor, gepostet 09.11.2026 abends), 43-28 (Testbuild rc.2) gestrichen, Versionsnachweis kuenftig rc.1 -> 1.6.3 in 43-26/43-27. Kein Push, kein Tag, kein Store. Weiter am Mittwoch 11.11. mit 43-23 (PHPUnit bei RAM >= 4 GB).

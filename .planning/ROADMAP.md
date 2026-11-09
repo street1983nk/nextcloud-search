@@ -291,7 +291,7 @@ Plans:
 - [ ] 43-25-PLAN.md: Abnahmetest-Topologie wie bei mbozem, physische Wahrheit über Inode, Positivkontrolle 3, e2e_head_proof.sh
 - [ ] 43-26-PLAN.md: Beine upgrade-rc1 und upgrade-rc1-cf (Mischbetrieb, Backup-Pause), rc-Proof parametrisiert, Push/Dispatch (Owner), sieben Beine grün
 - [ ] 43-27-PLAN.md: Audit-Nachtrag Wurzeln und Schreibweisen, neuer audited_head mit E2E-Bindung, d_43_15 (Owner-Push)
-- [ ] 43-28-PLAN.md: Testbuild 1.6.3-rc.2 mit Versionsnachweis rc.1 -> rc.2 -> 1.6.3 (Owner-Push und -Dispatch)
+- [ ] 43-28-PLAN.md: GESTRICHEN (Owner 09.11.2026, nach dem Landebericht von mbozem): kein rc.2; der Versionsnachweis wird rc.1 -> 1.6.3 (mbozem geht von rc.1 direkt auf das Store-Release) und wandert in die Beine von 43-26/43-27
 - [ ] 43-29-PLAN.md: Kommentar rc.2 an mbozem (Owner-Freigabe), Rückmeldung als Ergebnis
 - [ ] 43-12-PLAN.md: Owner-Runde 1.6.3, Gesamttext, Tag-Kopf (Runde 1 am 09.11. mit GO: nein; Runde 2 nach 43-29)
 - [ ] 43-13-PLAN.md: Tag v1.6.3 und Store-Einreichung (Owner führt aus), Belege
