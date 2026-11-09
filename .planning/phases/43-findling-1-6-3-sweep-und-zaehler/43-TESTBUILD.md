@@ -156,3 +156,15 @@ Wurzel-Frage: ja
 Zitat: "Same share with two roots: yes, we have exactly that case" und "please fix it before the store release. `192.168.98.246 //Daten` is configured 25 times with root `/` **and** 17 more times with sub-roots: `/Arbeitssicherheit` (11 user mounts), `/Projekte` (2), and `/Fue`, `/Allgemein`, `/Arbeitsvorbereitung`, `/QM` once each."
 
 Folge nach D-43-15: Stopp vor GO, Tag und Store. Zusatzplan für die Wurzel-Behebung (Dokumentschlüssel über host//share plus Wurzel plus filecache-Pfad, PHP-Gruppierung nach Freigabe, N1/phpOnly je Mitglied umgerechnet) plus die Schreibweisen-Faltung von Host und Freigabe, danach Audit-Nachtrag.
+
+Rueckmeldung: vollständig (Zahl gelandet, rc.1 ohne Zwischenfall)
+
+Link: https://github.com/street1983nk/nextcloud-search/issues/25#issuecomment-6746382180 (mbozem, 2026-11-09 17:10 UTC)
+
+- Backfill fertig: "doc key backfill, done=3099 missing=0 unresolved=54" (17:41 CET), 7,5 h für ~497k Ledger-Zeilen (Nutzerkopien), ~5k/min in Blöcken done=5000, danach zwei Läufe "doc key verify, checked=5000 corrected=0". Erster voller /coverage auf dem gestempelten Ledger ~2 min, Hinweis gestempelt 1794243565.
+- Zahl: "coverage: documents=42156 indexable=251758 percent=16 counting=false provisional=false deduplicated=true legacyCount=false".
+- Abweichung zur Vorhersage (18 %, 43.602/247.123): die Lücke sitzt im Nenner. Die 17 Unterwurzel-Mounts von //Daten und die 5 Schreibweisen-Speicher //daten bilden eigene Gruppen im Nenner, ihre Dateien gehören im Zähler zur //Daten-Gruppe; ~4,6k doppelt gezählte Dateien = die fehlenden zwei Punkte. Das ist exakt D-43-15 und D-43-17 (43-21 bis 43-23); mbozem erwartet nach der Faltung ~18 % ohne weitere Messung. Crawl lief weiter (247,1k -> 251,8k über den Tag).
+- unresolved=54 = 0,01 % der Zeilen, bekannter Rest verwaister Dateien (206 Dokumente auf entfernten Speichern plus Pfadkollisionen); erste Sweep-Runde gone=5 vor der Zählung; fünf gestempelte Nutzer-Mounts fallen am Samstag (Gnadenfrist) aus beiden Seiten, Zahl bewegt sich dann nach oben.
+- Urteil mbozem: Sweep-Entkopplung und Zählung je Dokument funktionieren, nichts hat sich gemeldet, durchgehend rc.1. Zitat: "1.6.3 is good to go to the store from our side; we'll take the store release over the artifact whenever it lands."
+
+Maschinenzeile Ergebnis: 16 % (42.156/251.758), Abweichung erklärt durch D-43-15/D-43-17, kein neuer Befund.
