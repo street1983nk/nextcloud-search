@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
 status: executing
-stopped_at: "Completed 43-22 (Dokumentschlüssel Format 2 über Freigabe und Freigabe-Pfad, docKeyFormat im Auftrag, format in /reconcile/doc-keys; PHPUnit lokal RED 114/1E/19F, GREEN 114 Tests, volle Suite 1165 grün), nächster Schritt 43-23"
-last_updated: "2026-11-09T12:25:00.000Z"
-last_activity: 2026-11-09
+stopped_at: "Completed 43-23 (PHP-only und N1 über den Freigabe-Pfad, docKeyFormat im /coverage-Vertrag, coverage.shareIdentity; PHPUnit lokal GREEN 246 Tests, Gegenprobe 6E/25F, volle Suite 1197 grün), nächster Schritt 43-24 nur mit Owner-Go"
+last_updated: "2026-11-10T04:15:00.000Z"
+last_activity: 2026-11-10
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 42
-  completed_plans: 27
+  completed_plans: 28
   percent: 76
 ---
 
@@ -26,7 +26,7 @@ Siehe .planning/PROJECT.md (Stand nach v1.5, Milestone v1.6 gestartet) und .plan
 ## Current Position
 
 Phase: 43 (findling-1-6-3-sweep-und-zaehler), EXECUTING
-Plan: 19 of 29 erledigt (43-01..10, 43-15..22); 43-11 wird nach OE-8 a als "abweichend, abgelöst durch rc.2" abgeschlossen; 43-21 erledigt 09.11. (Freigabe-Identität je Speicher, Host und Freigabename gefaltet, Wurzel getrennt, gehashte IDs nur mit md5-Treffer, Commits 662e7b63, 38d2e375, f772dbb5, nur lokal); 43-22 erledigt 09.11. (Dokumentschlüssel Format 2 über Freigabe und Freigabe-Pfad, docKeyFormat 2 im Auftrag, format 2 in /reconcile/doc-keys, Commits 11850d86, c0e124c1, nur lokal; PHP liefert ab hier nur Format 2, erst mit 43-24 auslieferbar); nächster Schritt 43-23, danach 43-24 bis 43-29, 43-12 Runde 2, 43-13, 43-14
+Plan: 20 of 29 erledigt (43-01..10, 43-15..23); 43-11 wird nach OE-8 a als "abweichend, abgelöst durch rc.2" abgeschlossen; 43-21 erledigt 09.11. (Freigabe-Identität je Speicher, Host und Freigabename gefaltet, Wurzel getrennt, gehashte IDs nur mit md5-Treffer, Commits 662e7b63, 38d2e375, f772dbb5, nur lokal); 43-22 erledigt 09.11. (Dokumentschlüssel Format 2 über Freigabe und Freigabe-Pfad, docKeyFormat 2 im Auftrag, format 2 in /reconcile/doc-keys, Commits 11850d86, c0e124c1, nur lokal; PHP liefert ab hier nur Format 2, erst mit 43-24 auslieferbar); 43-23 erledigt 10.11. (PHP-only-Zählung und N1 über den Freigabe-Pfad, docKeyFormat 2 im Body und Pflicht in der Antwort von POST /coverage, coverage.shareIdentity, Commits 0fa2a665, 2ef75e83, nur lokal); nächster Schritt 43-24 (nur mit Owner-Go), danach 43-25 bis 43-27 und 43-29 (43-28 gestrichen), 43-12 Runde 2, 43-13, 43-14
 Status: Testbuild 1.6.3-rc.1 belegt (43-TESTBUILD.md): Proof-Lauf 42565361965 grün (A5: ok auf HaRP ohne --force-update, A6: ok auf stable33+stable34), Archiv-Lauf 42537119924 (findling.tar.gz 692014 Bytes, SHA-256 fa9c3874..., Ablauf 2026-12-08), Branch rc/1.6.3-rc.1 Kopf 47c4ce4e, Image :655fe197 unveränderlich. Jeder Push, Dispatch, Tag, Kommentar nur mit Owner-Freigabe (43-FREIGABEN.md)
 Last activity: 2026-11-09
 
@@ -140,6 +140,7 @@ Progress: [█████████░] 88%
 - 42-10: Lückenschluss der Re-Verifikation: AppSurface::sourceFindings und LIB_BANS vergleichen die Router- und Containernamen ohne Rücksicht auf Groß-/Kleinschreibung (irouter, actioninclude, getrouter, getcontainer()->registerservice am echten Baum rot belegt); Untergrenzen 40; python.yml startet auf php/**; 998 Tests lokal grün, Baumhash eb5b2dc1 (118).
 - 43-21: Freigabe-Identität {share, root} je SMB/SFTP-Speicher (Host und Freigabename ASCII-klein, Wurzel ungefaltet in NFC, SFTP je Anmeldung, homes und Freigabe gleich Anmeldename nie gruppiert); gehashte IDs nur über oc_mounts, oc_external_mounts und fünf Schlüssel von oc_external_config mit exakter md5-Gegenprobe; Zähler parsed/hashedVerified/hashedUngrouped/placeholder/excluded (placeholder Teilmenge von hashedUngrouped, gehashte IDs ohne smb/sftp-Mount zählen nirgends); phpunit_docker.sh hängt backend/tests/fixtures schreibgeschützt ein.
 - 43-22: Dokumentschlüssel Format 2 = sha256('2' NUL Freigabe NUL Freigabe-Pfad), Freigabe-Pfad = Wurzel '/' filecache-Pfad in NFC, ungefaltet; ohne Identität leere Freigabe; docKeysFor fragt shareIdentities einmal je Band und scheitert als Ganzes, wenn die Identitätsabfrage wirft (nie ein Schlüssel ohne Freigabe); docKeyFormat 2 in jedem Auftrag mit docKey, format 2 in der Antwort von /reconcile/doc-keys; PHP-Baumhash af5413cd (129).
+- 43-23: PHP-only-Dokumente zählen je Gruppe über den Dokumentschlüssel Format 2; N1 fragt je Wurzel gebündelt unter dem Pfad unterhalb der Wurzel; die Regel des Freigabe-Pfads steht nur in DocKeyService::sharePathOf; AdminViewService ruft shareIdentities einmal je Overview und reicht die Identitäten an countingKeyGroups und distinctPathsByReasons; POST /coverage trägt docKeyFormat 2 und verlangt es in der Antwort (Container sendet es ab 43-24, bis dahin 1.6.2-Weg); coverage.shareIdentity mit fünf Zählern, Logzeile höchstens stündlich über ICacheFactory::createLocal; PHP-Baumhash f3165a57 (129).
 
 ### Decisions (Roadmap v1.5)
 
