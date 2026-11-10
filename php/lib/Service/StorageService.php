@@ -506,17 +506,28 @@ class StorageService {
 	 * line (T-39-01). The answer feeds a figure on the admin page and nothing
 	 * else; crawl, index and permissions never see it (T-39-03, T-39-05).
 	 *
+	 * The overview asks shareIdentities() once and hands the answer in
+	 * (plan 43-23), so the grouping and the per document count work on the
+	 * same identities and the configuration is read once per page. Only the
+	 * identities of the asked ids are taken.
+	 *
 	 * @param list<int> $storageIds
+	 * @param array<int, array{share: string, root: string}>|null $identities the answer of shareIdentities($storageIds)
 	 * @return list<list<int>>
 	 */
-	public function countingKeyGroups(array $storageIds): array {
-		if (count(self::positiveIds($storageIds)) < 2) {
+	public function countingKeyGroups(array $storageIds, ?array $identities = null): array {
+		$asked = self::positiveIds($storageIds);
+		if (count($asked) < 2) {
 			return [];
 		}
 
+		$identities ??= $this->shareIdentities($storageIds);
 		$byShare = [];
-		foreach ($this->shareIdentities($storageIds) as $storageId => $identity) {
-			$byShare[$identity['share']][] = $storageId;
+		foreach ($asked as $storageId) {
+			$identity = $identities[$storageId] ?? null;
+			if (is_array($identity) && is_string($identity['share'] ?? null) && $identity['share'] !== '') {
+				$byShare[$identity['share']][] = $storageId;
+			}
 		}
 
 		$groups = [];

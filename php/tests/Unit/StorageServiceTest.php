@@ -765,4 +765,24 @@ final class StorageServiceTest extends TestCase {
 		self::assertSame([], $this->service(external: true)->countingKeyGroups([17]));
 		self::assertSame([], $this->service(external: true)->countingKeyGroups([0, -3, 17]));
 	}
+
+	public function testHandedInIdentitiesAreGroupedWithoutAQuery(): void {
+		// Plan 43-23: the overview asks shareIdentities() once and hands the
+		// answer in; the grouping then reads nothing and takes only the
+		// identities of the asked ids.
+		$this->db->expects(self::never())->method('getQueryBuilder');
+		$identities = [
+			11 => ['share' => 'smb::fs.example//daten', 'root' => ''],
+			14 => ['share' => 'smb::fs.example//daten', 'root' => 'projekt'],
+			15 => ['share' => 'smb::fs.example//daten', 'root' => ''],
+			21 => ['share' => 'smb::fs.example//archiv', 'root' => ''],
+			22 => ['share' => 'smb::fs.example//archiv', 'root' => ''],
+			99 => ['share' => 'smb::fs.example//archiv', 'root' => ''],
+		];
+
+		$groups = $this->service(external: true)->countingKeyGroups([22, 15, 11, 14, 21, 31], $identities);
+
+		self::assertSame([[11, 14, 15], [21, 22]], $groups);
+		self::assertSame([], $this->service(external: true)->countingKeyGroups([21, 31], $identities));
+	}
 }

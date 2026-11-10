@@ -12,6 +12,7 @@ use OCA\Findling\Text\PlainText;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\BackgroundJob\IJobList;
 use OCP\IAppConfig;
+use OCP\ICacheFactory;
 use OCP\IDateTimeFormatter;
 use OCP\IL10N;
 use OCP\IUserSession;
@@ -633,6 +634,9 @@ final class AdminViewService {
 		private ParallelSearchService $parallelSearch,
 		private IJobList $jobList,
 		private LoggerInterface $logger,
+		// The local cache that keeps the line about the share identities to
+		// one an hour (plan 43-23, A-5). Nothing durable, no appconfig.
+		private ICacheFactory $cacheFactory,
 		// The probe for the PHP extension php-smbclient, a seam in the shape
 		// of the clock and pause closures of BoundedStreamReader: the class is
 		// final, the answer of function_exists depends on the host PHP, and
@@ -685,10 +689,13 @@ final class AdminViewService {
 		// Weg C of 35-DEDUP-NOTIZ (plan 39-01, D-37-03): storages that show
 		// one tree, a share mounted once per user, count once. Only with
 		// external storages in the crawl, because without them there is no
-		// storage of that kind to group.
-		$groups = $this->settingsService->indexExternalStorage()
-			? $this->storageService->countingKeyGroups($mountedStorageIds)
-			: [];
+		// storage of that kind to group. Since 1.6.3 one share under several
+		// roots and spellings is one group (plan 43-21), and the identities of
+		// that one call also key the documents only this side judged (43-23).
+		$shares = $this->settingsService->indexExternalStorage()
+			? $this->countingShares($mountedStorageIds)
+			: ['groups' => [], 'identities' => [], 'stats' => self::shareIdentityCounters([])];
+		$groups = $shares['groups'];
 		$scan = $this->scanStats->totals($mountedStorageIds, $groups);
 
 		$scheduled = (int)($queue['scheduled'] ?? 0);
@@ -717,7 +724,7 @@ final class AdminViewService {
 			$backendReachable = $answer !== null;
 			$backend = $this->backend($answer);
 
-			$figures = $this->perDocumentFiguresFor($scan, $coverageBody, $backend, $perDocument['answer']);
+			$figures = $this->perDocumentFiguresFor($scan, $coverageBody, $backend, $perDocument['answer'], $shares['identities']);
 		} else {
 			$refusedByType = $this->fileStateService->countByReason('skipped', 'mime_not_allowed');
 
@@ -850,6 +857,7 @@ final class AdminViewService {
 				$figures['notReadable'],
 				$legacyReason,
 				$perDocumentHint,
+				$shares['stats'],
 			),
 			'estimate' => $this->estimate($figures['scan'], $figures['backend'], $backendReachable, $indexable, $scheduled + $running, $pause === self::PAUSE_RUNNING),
 			'errors' => $this->errors(),
@@ -2101,12 +2109,14 @@ final class AdminViewService {
 	 * @param int $notReadable documents only this side judged not readable or stuck
 	 * @param string|null $legacyReason missing or limits when the page shows the figure of 1.6.2 visibly
 	 * @param bool $perDocumentHint whether the one time hint after the update stands (plan 43-06)
+	 * @param array<mixed> $shareIdentity the counters of StorageService::shareIdentityStats() (plan 43-23)
 	 * @return array{
 	 *     indexed:int, indexable:int, deliberatelyLeftOut:int, percent:int|null,
 	 *     embedded:int, embeddedPercent:int|null, recounting:bool, duplicates:bool,
 	 *     deduplicated:bool, rulesPending:bool, provisional:bool, mountsTotal:int,
 	 *     mountsFinished:int, counting:bool, perDocument:bool, notReadable:int,
-	 *     legacyCount:bool, legacyReason:string|null, perDocumentHint:bool
+	 *     legacyCount:bool, legacyReason:string|null, perDocumentHint:bool,
+	 *     shareIdentity:array{parsed:int, hashedVerified:int, hashedUngrouped:int, placeholder:int, excluded:int}
 	 * }
 	 */
 	private function coverage(
@@ -2125,6 +2135,7 @@ final class AdminViewService {
 		int $notReadable = 0,
 		?string $legacyReason = null,
 		bool $perDocumentHint = false,
+		array $shareIdentity = [],
 	): array {
 		$overCap = max(0, (int)$scan['overCap']);
 		$excluded = max(0, (int)$scan['excluded']);
@@ -2228,7 +2239,91 @@ final class AdminViewService {
 			// (plan 43-06, D-43-06, D-43-12), worked out in
 			// perDocumentHintNow() and only handed through here.
 			'perDocumentHint' => $perDocumentHint,
+			// How the storages of the counting got their share identity (plan
+			// 43-23, OE-2 a, A-5): five whole numbers, no sentence on the page.
+			// hashedUngrouped above nought are hashed storage ids that could
+			// not be rebuilt and are counted per storage.
+			'shareIdentity' => self::shareIdentityCounters($shareIdentity),
 		];
+	}
+
+	/** The key of the local cache that holds the line about the share identities back. */
+	private const SHARE_IDENTITY_LOGGED = 'share-identity-logged';
+
+	/** At most one line about the share identities in this many seconds. */
+	private const SHARE_IDENTITY_LOG_SECONDS = 3600;
+
+	/**
+	 * The share groups of the counting, the identities they were made of and
+	 * the counters of that one call (plans 43-21, 43-23).
+	 *
+	 * shareIdentities() is asked exactly once per overview and its answer is
+	 * handed to the grouping and to the PHP only count, so both work on the
+	 * same identities. The counters are read right after that call:
+	 * DocKeyService::docKeysFor calls it as well and sets them anew. The
+	 * line about them goes out here, see logShareIdentities().
+	 *
+	 * @param list<int> $mountedStorageIds
+	 * @return array{groups: list<list<int>>, identities: array<int, array{share: string, root: string}>, stats: array{parsed:int, hashedVerified:int, hashedUngrouped:int, placeholder:int, excluded:int}}
+	 */
+	private function countingShares(array $mountedStorageIds): array {
+		$identities = $this->storageService->shareIdentities($mountedStorageIds);
+		$stats = self::shareIdentityCounters($this->storageService->shareIdentityStats());
+		$groups = $this->storageService->countingKeyGroups($mountedStorageIds, $identities);
+		$this->logShareIdentities($stats);
+
+		return ['groups' => $groups, 'identities' => $identities, 'stats' => $stats];
+	}
+
+	/**
+	 * One line with the five counters, at most once an hour (plan 43-23,
+	 * A-5): warning while a hashed storage id stays ungrouped, because
+	 * Nextcloud logs from warning on by default (loglevel 2) and the admin
+	 * should see that such storages are counted per storage; info otherwise.
+	 * The hour is held in the local cache only, nothing durable. Without a
+	 * local cache every overview would log, so the line drops to debug; the
+	 * field coverage.shareIdentity is the source that always holds. The
+	 * context is the five numbers and nothing else: no host, share, root or
+	 * login (T-43-71).
+	 *
+	 * @param array{parsed:int, hashedVerified:int, hashedUngrouped:int, placeholder:int, excluded:int} $stats
+	 */
+	private function logShareIdentities(array $stats): void {
+		$message = 'Findling: share identities of the counting, parsed={parsed} hashedVerified={hashedVerified} '
+			. 'hashedUngrouped={hashedUngrouped} placeholder={placeholder} excluded={excluded}';
+		if (!$this->cacheFactory->isLocalCacheAvailable()) {
+			$this->logger->debug($message, $stats);
+
+			return;
+		}
+
+		$cache = $this->cacheFactory->createLocal(Application::APP_ID);
+		if ($cache->get(self::SHARE_IDENTITY_LOGGED) !== null) {
+			return;
+		}
+		$cache->set(self::SHARE_IDENTITY_LOGGED, 1, self::SHARE_IDENTITY_LOG_SECONDS);
+		if ($stats['hashedUngrouped'] > 0) {
+			$this->logger->warning($message, $stats);
+		} else {
+			$this->logger->info($message, $stats);
+		}
+	}
+
+	/**
+	 * The five counters of StorageService::shareIdentityStats() as whole
+	 * numbers of nought or more, every key present; anything else is nought.
+	 *
+	 * @param array<mixed> $stats
+	 * @return array{parsed:int, hashedVerified:int, hashedUngrouped:int, placeholder:int, excluded:int}
+	 */
+	public static function shareIdentityCounters(array $stats): array {
+		$counters = ['parsed' => 0, 'hashedVerified' => 0, 'hashedUngrouped' => 0, 'placeholder' => 0, 'excluded' => 0];
+		foreach (array_keys($counters) as $key) {
+			$value = $stats[$key] ?? null;
+			$counters[$key] = is_int($value) && $value > 0 ? $value : 0;
+		}
+
+		return $counters;
 	}
 
 	/**
@@ -2425,11 +2520,13 @@ final class AdminViewService {
 	 * named twice), only groups with two members or more, in the order of
 	 * $groups. The same list goes to ScanStatsService::groupParts() and
 	 * FileStateService::distinctPathsByReasons(), so the n-th figure of every
-	 * side is about the same group.
+	 * side is about the same group. docKeyFormat: the format of the document
+	 * keys this side hands out (plan 43-23, A-2); the container counts only
+	 * with keys of that format and says so in its answer.
 	 *
 	 * @param list<int> $mountedStorageIds
 	 * @param list<list<int>> $groups
-	 * @return array{mounted: list<int>, groups: list<list<int>>}
+	 * @return array{mounted: list<int>, groups: list<list<int>>, docKeyFormat: int}
 	 */
 	public static function coverageBody(array $mountedStorageIds, array $groups): array {
 		$mounted = [];
@@ -2460,7 +2557,7 @@ final class AdminViewService {
 		$ids = array_keys($mounted);
 		sort($ids);
 
-		return ['mounted' => $ids, 'groups' => $kept];
+		return ['mounted' => $ids, 'groups' => $kept, 'docKeyFormat' => DocKeyService::DOC_KEY_FORMAT];
 	}
 
 	/**
@@ -2519,6 +2616,10 @@ final class AdminViewService {
 	 * The answer of POST /coverage checked against the body it answers, or
 	 * null (T-43-14).
 	 *
+	 * docKeyFormat must be the format of the keys this side hands out, as a
+	 * whole number, before anything else (plan 43-23, T-43-69): a container
+	 * that counted keys of another format, or that does not say which (rc.1),
+	 * gives no figure and no counting either; the page goes the way of 1.6.2.
 	 * counting must be a boolean; while it is true nothing else is read. A
 	 * figure is a whole number of nought or more; both group lists have
 	 * exactly one figure per group of the body; the storage lists are
@@ -2533,7 +2634,10 @@ final class AdminViewService {
 	 * @return array{counting: bool, documents: int, embeddedDocuments: int, judgedDocuments: int, documentsByGroup: list<int>, judgedByGroup: list<int>, documentsByStorage: array<int,int>, judgedByStorage: array<int,int>}|null
 	 */
 	public static function perDocumentAnswer(?array $answer, array $body): ?array {
-		if ($answer === null || !is_bool($answer['counting'] ?? null)) {
+		if ($answer === null || ($answer['docKeyFormat'] ?? null) !== DocKeyService::DOC_KEY_FORMAT) {
+			return null;
+		}
+		if (!is_bool($answer['counting'] ?? null)) {
 			return null;
 		}
 		$empty = [
@@ -2682,12 +2786,13 @@ final class AdminViewService {
 	 * @param array{mounted: list<int>, groups: list<list<int>>} $body coverageBody()
 	 * @param array<string,mixed> $backend backend() of the status answer
 	 * @param array<string,mixed> $answer perDocumentAnswer()
+	 * @param array<int, array{share: string, root: string}> $identities countingShares(), the same call the groups came from
 	 * @return array{scan:array<string,int>, backend:array<string,mixed>, indexable:int, refusedByType:int, deduplicated:bool, perDocument:bool, counting:bool, notReadable:int}
 	 */
-	private function perDocumentFiguresFor(array $scan, array $body, array $backend, array $answer): array {
+	private function perDocumentFiguresFor(array $scan, array $body, array $backend, array $answer, array $identities): array {
 		$refusedPerStorage = $this->fileStateService->countByReasonPerStorage('skipped', 'mime_not_allowed', $body['mounted']);
 		$parts = $this->scanStats->groupParts($body['mounted'], $body['groups'], $refusedPerStorage);
-		$phpOnly = $this->fileStateService->distinctPathsByReasons($body['groups'], array_keys($parts['singles']));
+		$phpOnly = $this->fileStateService->distinctPathsByReasons($body['groups'], array_keys($parts['singles']), $identities);
 
 		return self::perDocumentFigures($scan, $backend, $answer, $parts, $phpOnly);
 	}

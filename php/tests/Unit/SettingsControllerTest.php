@@ -27,6 +27,7 @@ use OCP\Files\Cache\IFileAccess;
 use OCP\Files\Config\IUserMountCache;
 use OCP\Files\IRootFolder;
 use OCP\IAppConfig;
+use OCP\ICacheFactory;
 use OCP\IDateTimeFormatter;
 use OCP\IDBConnection;
 use OCP\IL10N;
@@ -163,6 +164,8 @@ final class SettingsControllerTest extends TestCase {
 			$jobList,
 			// The logger of the per document count (plan 43-05).
 			$logger,
+			// The local cache of the line about the share identities (plan 43-23).
+			$this->createMock(ICacheFactory::class),
 		);
 
 		return new SettingsController(

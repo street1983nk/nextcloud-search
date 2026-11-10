@@ -52,7 +52,14 @@ DOC_KEY_ALLOWED = {
     "Service/QueueService.php",
     "Controller/ReconcileController.php",
 }
-COUNTING_CALLS = ("shareIdentity(", "shareIdentities(", "shareIdentityStats(", "docKeyOf(", "docKeysFor(")
+COUNTING_CALLS = (
+    "shareIdentity(",
+    "shareIdentities(",
+    "shareIdentityStats(",
+    "docKeyOf(",
+    "docKeysFor(",
+    "sharePathOf(",
+)
 
 
 def _catalogue() -> dict[str, Any]:
@@ -253,7 +260,7 @@ def test_share_identities_are_asked_by_the_counting_services_only() -> None:
     assert _users(PHP_LIB, "shareIdentities(") <= SHARE_IDENTITIES_ALLOWED
 
 
-@pytest.mark.parametrize("needle", ["docKeyOf(", "docKeysFor("])
+@pytest.mark.parametrize("needle", ["docKeyOf(", "docKeysFor(", "sharePathOf("])
 def test_document_keys_are_asked_by_the_counting_services_only(needle: str) -> None:
     assert _users(PHP_LIB, needle) <= DOC_KEY_ALLOWED
 

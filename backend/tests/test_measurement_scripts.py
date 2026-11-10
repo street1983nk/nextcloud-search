@@ -1274,8 +1274,19 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # went, so PHP_FILES_TODAY stays at 129. Recomputed independently with find, sort, tr and sha256sum
 # over the CRLF normalised tree: af5413cd... both ways; the same pipeline over git archive HEAD
 # before the plan gave b3f9109f.
+# Moved on 2026-11-09 by Plan 43-23 (judged by Nextcloud only, counted per share path): lib/Service/
+# FileStateService.php keys the PHP only documents of a group over the document key of format 2 and
+# runs N1 per member below its root, lib/Service/DocKeyService.php hands out the share path rule as
+# sharePathOf, lib/Service/StorageService.php groups handed in identities, lib/Service/
+# AdminViewService.php asks the identities once per overview, sends and requires docKeyFormat, carries
+# coverage.shareIdentity and logs the counters at most once an hour, and tests/Unit/
+# FileStateServiceCoverageTest.php, AdminViewServiceTest.php, CoverageTopologyParityTest.php,
+# StorageServiceTest.php and SettingsControllerTest.php follow, the first and the third against the new
+# fixture variant roots. No file came or went, so PHP_FILES_TODAY stays at 129. Recomputed independently
+# with find, sort, tr and sha256sum over the CRLF normalised tree: f3165a57... both ways; the same
+# pipeline over git archive HEAD before the plan gave af5413cd.
 PHP_FILES_TODAY = 129
-PHP_TREE_HASH_TODAY = "af5413cdbfb3025ac83a3d55a2e50484c766a8168b2cf4893836f7bfb12c250d"
+PHP_TREE_HASH_TODAY = "f3165a57c3aeed687c255f9c66b35f7ddff8a817df61ef421a0234234f3fe60f"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

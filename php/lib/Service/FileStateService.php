@@ -801,34 +801,57 @@ class FileStateService {
 	/**
 	 * How many documents carry only a verdict of this side, per share group
 	 * and per single storage, and how many of them are not readable or stuck
-	 * (plan 43-05, D-43-11).
+	 * (plans 43-05 and 43-23, D-43-11, D-43-15, D-43-17).
 	 *
-	 * A document is a distinct internal path inside a group: oc_filecache.path
-	 * relative to the root of the storage, the same for every member of a
-	 * share, the key space of the document key of the container (plan 43-15,
-	 * D-43-14). A file no member can read has one row per member and is one
-	 * document. Two rules keep the figure a subset of what nobody else counts:
+	 * A document of a group is one document key of format 2
+	 * (DocKeyService::docKeyOf over the share identity of its member), the key
+	 * space of the container. A group may hold one share under several roots
+	 * and in several spellings (StorageService::shareIdentities), and then the
+	 * same file has a different oc_filecache.path, and so a different
+	 * path_hash, in every member: Projekte/a.doc under the root '' and a.doc
+	 * under the root Projekte. Keyed over path_hash it counted twice and N1
+	 * missed it; keyed over the share path it is one document. A file no
+	 * member can read has one row per member and is one document. Two rules
+	 * keep the figure a subset of what nobody else counts:
 	 *
-	 * - N1: a document of a group counts only while no member of that group
-	 *   holds the same internal path without a verdict of this side. Such a
+	 * - N1 per member: a document of a group counts only while no member of
+	 *   that group holds the same file without a verdict of this side. Such a
 	 *   member was indexed, judged otherwise by the container or is still
 	 *   queued, and in all three cases the container counts the document (or
-	 *   will), so counting it here as well would count it twice. The check runs
-	 *   over the file cache and not over findling_file_state, because this side
-	 *   never writes indexed: an indexed member has no row in that table.
+	 *   will), so counting it here as well would count it twice. The check
+	 *   runs over the file cache and not over findling_file_state, because
+	 *   this side never writes indexed: an indexed member has no row in that
+	 *   table. Member n with root R holds the file with share path S under
+	 *   p = S without R: R empty gives S, S equal to R gives '', S below R + '/'
+	 *   gives the rest. Its path_hash is md5(p), because the file cache stores
+	 *   the md5 of the path in NFC without slashes at the ends
+	 *   (lib/private/Files/Cache/Cache.php normalize stable34 :1253-1255,
+	 *   path_hash :492). A member whose root does not hold S cannot see the
+	 *   file at all, its tree starts below another folder of the share, so it
+	 *   is not asked. Members with the same root are asked in one query.
 	 * - W-b: a verdict without a file cache row counts nowhere. The inner join
 	 *   drops it: the file left Nextcloud, and the recount drops it from
 	 *   files_seen as well.
 	 *
-	 * The paths never leave this method; it compares path hashes and answers
-	 * with counts (T-43-44). Storage ids go out in bands of STORAGE_BAND, the
+	 * A group member without an identity cannot occur, because groups are
+	 * made of identities; should it, its documents keep a key of their own
+	 * storage and its N1 check asks that storage alone, so it never merges
+	 * with another member (the leading rule of 43-21). A single storage
+	 * counts per storage over path_hash, as before.
+	 *
+	 * The identities come in from the one call of
+	 * StorageService::shareIdentities of the overview; this class never asks
+	 * for them. The paths never leave this method; it compares keys and path
+	 * hashes and answers with counts
+	 * (T-43-44, T-43-68). Storage ids go out in bands of STORAGE_BAND, the
 	 * path hashes of the N1 check as well.
 	 *
 	 * @param list<list<int>> $groups the share groups, each a list of mounted members
 	 * @param list<int> $singles the mounted storages outside every group
+	 * @param array<int, array{share: string, root: string}> $identities per storage id, out of StorageService::shareIdentities
 	 * @return array{byGroup: list<int>, byStorage: array<int,int>, notReadableByGroup: list<int>, notReadableByStorage: array<int,int>}
 	 */
-	public function distinctPathsByReasons(array $groups, array $singles): array {
+	public function distinctPathsByReasons(array $groups, array $singles, array $identities): array {
 		$groups = array_values($groups);
 		$groupOf = [];
 		$answer = [
@@ -848,30 +871,40 @@ class FileStateService {
 			return $answer;
 		}
 
-		// Per group index, or 's' and the id of a single storage: path hash =>
-		// whether one of its verdicts is not readable or stuck.
+		// Per group index: document key => [share path, or the path hash for
+		// a member without identity; that storage or null; whether one of its
+		// verdicts is not readable or stuck]. Per single storage: path hash =>
+		// not readable or stuck.
 		$candidates = [];
+		$perStorage = [];
 		foreach (array_chunk($all, self::STORAGE_BAND) as $band) {
-			foreach ($this->phpOnlyRows($band) as [$storageId, $hash, $notReadable]) {
-				if (isset($groupOf[$storageId])) {
-					$key = $groupOf[$storageId];
-				} else {
-					$key = 's' . $storageId;
+			foreach ($this->phpOnlyRows($band) as [$storageId, $hash, $path, $notReadable]) {
+				if (!isset($groupOf[$storageId])) {
+					$perStorage[$storageId][$hash] = ($perStorage[$storageId][$hash] ?? false) || $notReadable;
+					continue;
 				}
-				$known = $candidates[$key][$hash] ?? false;
-				$candidates[$key][$hash] = $known || $notReadable;
+				$identity = self::identityOf($identities, $storageId);
+				if ($identity === null) {
+					$key = 's' . $storageId . "\0" . $hash;
+					$candidate = [$hash, $storageId, $notReadable];
+				} else {
+					$key = DocKeyService::docKeyOf($path, $identity);
+					$candidate = [DocKeyService::sharePathOf($path, $identity), null, $notReadable];
+				}
+				$known = $candidates[$groupOf[$storageId]][$key] ?? null;
+				$candidates[$groupOf[$storageId]][$key] = $known === null
+					? $candidate
+					: [$known[0], $known[1], $known[2] || $notReadable];
 			}
 		}
 
-		foreach ($candidates as $key => $hashes) {
-			if (is_int($key)) {
-				$members = self::storageIds((array)$groups[$key]);
-				$hashes = $this->withoutOtherVerdicts($hashes, $members);
-				$answer['byGroup'][$key] = count($hashes);
-				$answer['notReadableByGroup'][$key] = count(array_filter($hashes));
-				continue;
-			}
-			$storageId = (int)substr((string)$key, 1);
+		foreach ($candidates as $index => $keys) {
+			$members = self::storageIds((array)$groups[$index]);
+			$keys = $this->withoutOtherVerdicts($keys, $members, $identities);
+			$answer['byGroup'][$index] = count($keys);
+			$answer['notReadableByGroup'][$index] = count(array_filter($keys, static fn (array $candidate): bool => $candidate[2]));
+		}
+		foreach ($perStorage as $storageId => $hashes) {
 			$answer['byStorage'][$storageId] = count($hashes);
 			$notReadable = count(array_filter($hashes));
 			if ($notReadable > 0) {
@@ -884,14 +917,16 @@ class FileStateService {
 
 	/**
 	 * The verdicts of this side over one band of storages: storage, path
-	 * hash, and whether the verdict is "not readable or stuck".
+	 * hash, internal path, and whether the verdict is "not readable or
+	 * stuck". The path is read to build the share path and stays inside
+	 * distinctPathsByReasons() (T-43-68).
 	 *
 	 * @param list<int> $band
-	 * @return list<array{0: int, 1: string, 2: bool}>
+	 * @return list<array{0: int, 1: string, 2: string, 3: bool}>
 	 */
 	private function phpOnlyRows(array $band): array {
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('fc.storage', 'fc.path_hash', 's.state', 's.reason')
+		$qb->select('fc.storage', 'fc.path', 'fc.path_hash', 's.state', 's.reason')
 			->from(self::TABLE_NAME, 's')
 			->innerJoin('s', 'filecache', 'fc', $qb->expr()->eq('fc.fileid', 's.file_id'))
 			->where($this->phpOnlyCondition($qb, 's'))
@@ -909,7 +944,7 @@ class FileStateService {
 					continue;
 				}
 				$pair = [(string)($row['state'] ?? ''), (string)($row['reason'] ?? '')];
-				$rows[] = [$storageId, $hash, in_array($pair, self::PHP_ONLY_NOT_READABLE, true)];
+				$rows[] = [$storageId, $hash, (string)($row['path'] ?? ''), in_array($pair, self::PHP_ONLY_NOT_READABLE, true)];
 			}
 		} finally {
 			$result->closeCursor();
@@ -920,41 +955,132 @@ class FileStateService {
 
 	/**
 	 * The candidates of one group without those that a member holds without a
-	 * verdict of this side (N1).
+	 * verdict of this side (N1 per member, see distinctPathsByReasons()).
 	 *
-	 * @param array<string, bool> $hashes
+	 * @param array<string, array{0: string, 1: int|null, 2: bool}> $candidates document key => [share path or path hash, own storage or null, not readable]
 	 * @param list<int> $members
-	 * @return array<string, bool>
+	 * @param array<int, array{share: string, root: string}> $identities
+	 * @return array<string, array{0: string, 1: int|null, 2: bool}>
 	 */
-	private function withoutOtherVerdicts(array $hashes, array $members): array {
-		if ($hashes === [] || count($members) < 2) {
-			return $hashes;
+	private function withoutOtherVerdicts(array $candidates, array $members, array $identities): array {
+		if ($candidates === [] || count($members) < 2) {
+			return $candidates;
 		}
 
-		foreach (array_chunk(array_keys($hashes), self::STORAGE_BAND) as $band) {
-			$band = array_map(strval(...), $band);
-			$qb = $this->db->getQueryBuilder();
-			$qb->select('fc.path_hash')
-				->from('filecache', 'fc')
-				->leftJoin('fc', self::TABLE_NAME, 's', $qb->expr()->andX(
-					$qb->expr()->eq('s.file_id', 'fc.fileid'),
-					$this->phpOnlyCondition($qb, 's'),
-				))
-				->where($qb->expr()->in('fc.storage', $qb->createNamedParameter($members, IQueryBuilder::PARAM_INT_ARRAY)))
-				->andWhere($qb->expr()->in('fc.path_hash', $qb->createNamedParameter($band, IQueryBuilder::PARAM_STR_ARRAY)))
-				->andWhere($qb->expr()->isNull('s.file_id'));
-
-			$result = $qb->executeQuery();
-			try {
-				while (is_array($row = $result->fetch())) {
-					unset($hashes[(string)($row['path_hash'] ?? '')]);
-				}
-			} finally {
-				$result->closeCursor();
+		// The members with an identity, by root, in the order of the group.
+		$byRoot = [];
+		foreach ($members as $member) {
+			$identity = self::identityOf($identities, $member);
+			if ($identity !== null) {
+				$byRoot[$identity['root']][] = $member;
 			}
 		}
 
-		return $hashes;
+		// Per asked storage list: path hash => the keys it stands for.
+		$asks = [];
+		foreach ($byRoot as $root => $rootMembers) {
+			$hashes = [];
+			foreach ($candidates as $key => [$sharePath, $own]) {
+				if ($own !== null) {
+					continue;
+				}
+				$below = self::belowRoot($sharePath, (string)$root);
+				if ($below !== null) {
+					$hashes[md5($below)][] = (string)$key;
+				}
+			}
+			if ($hashes !== []) {
+				$asks[] = [$rootMembers, $hashes];
+			}
+		}
+		foreach ($candidates as $key => [$hash, $own]) {
+			if ($own !== null) {
+				$asks[] = [[$own], [$hash => [(string)$key]]];
+			}
+		}
+
+		foreach ($asks as [$storages, $hashes]) {
+			foreach (array_chunk($storages, self::STORAGE_BAND) as $storageBand) {
+				foreach (array_chunk(array_keys($hashes), self::STORAGE_BAND) as $hashBand) {
+					foreach ($this->heldWithoutVerdict($storageBand, array_map(strval(...), $hashBand)) as $hash) {
+						foreach ($hashes[$hash] ?? [] as $key) {
+							unset($candidates[$key]);
+						}
+					}
+				}
+			}
+		}
+
+		return $candidates;
+	}
+
+	/**
+	 * The path hashes of this band that one of these storages holds without
+	 * a verdict of this side.
+	 *
+	 * @param list<int> $storages
+	 * @param list<string> $hashes
+	 * @return list<string>
+	 */
+	private function heldWithoutVerdict(array $storages, array $hashes): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('fc.path_hash')
+			->from('filecache', 'fc')
+			->leftJoin('fc', self::TABLE_NAME, 's', $qb->expr()->andX(
+				$qb->expr()->eq('s.file_id', 'fc.fileid'),
+				$this->phpOnlyCondition($qb, 's'),
+			))
+			->where($qb->expr()->in('fc.storage', $qb->createNamedParameter($storages, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->in('fc.path_hash', $qb->createNamedParameter($hashes, IQueryBuilder::PARAM_STR_ARRAY)))
+			->andWhere($qb->expr()->isNull('s.file_id'));
+
+		$held = [];
+		$result = $qb->executeQuery();
+		try {
+			while (is_array($row = $result->fetch())) {
+				$held[] = (string)($row['path_hash'] ?? '');
+			}
+		} finally {
+			$result->closeCursor();
+		}
+
+		return $held;
+	}
+
+	/**
+	 * The path of a file with this share path inside a member with this root,
+	 * or null when the root does not hold it. Root and share path are in NFC
+	 * already (StorageService, DocKeyService::sharePathOf); the rest is
+	 * composed once more, as the file cache stores it.
+	 */
+	private static function belowRoot(string $sharePath, string $root): ?string {
+		if ($root === '') {
+			return $sharePath;
+		}
+		if ($sharePath === $root) {
+			return '';
+		}
+		if (str_starts_with($sharePath, $root . '/')) {
+			return DocKeyService::composed(substr($sharePath, strlen($root) + 1));
+		}
+
+		return null;
+	}
+
+	/**
+	 * The identity of a storage out of the handed in map, or null when it has
+	 * none or it is not of the expected shape.
+	 *
+	 * @param array<mixed> $identities
+	 * @return array{share: string, root: string}|null
+	 */
+	private static function identityOf(array $identities, int $storageId): ?array {
+		$identity = $identities[$storageId] ?? null;
+		if (!is_array($identity) || !is_string($identity['share'] ?? null) || $identity['share'] === '' || !is_string($identity['root'] ?? null)) {
+			return null;
+		}
+
+		return ['share' => $identity['share'], 'root' => $identity['root']];
 	}
 
 	/** The three verdicts of this side as one condition over the alias. */

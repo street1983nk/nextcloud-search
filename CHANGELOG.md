@@ -23,6 +23,10 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
 - The coverage figure counts every document once, also when a share is
   mounted separately for each user, and documents only on storages that
   are no longer mounted no longer count (#25).
+- The coverage figure counts a document once also when one share is
+  configured with different roots, or with the server or share name
+  spelled in a different case (#25). A Samba [homes] share is never grouped
+  across users, and SFTP storages are grouped per login only.
 - The denominator is worked out per share group and never falls below the
   documents judged in that group plus the files Nextcloud could not read,
   so the share never exceeds 100 per cent and shows the real coverage once
@@ -56,6 +60,11 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
   smbclient, so files larger than one block count as not readable; install
   the extension or raise the timeout option of the storage
   (occ files_external:config).
+- A Samba share whose folder depends on the user on the server side (a
+  path with %U or %S) still counts as one tree for all users.
+- Storages with an id longer than 64 characters that cannot be rebuilt from
+  their configuration (global or user provided credentials, a login name
+  other than the user id) are counted per storage.
 
 ## [1.6.2] - 2026-11-04
 

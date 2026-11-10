@@ -113,24 +113,37 @@ class DocKeyService {
 	 * @param array{share: string, root: string}|null $identity
 	 */
 	public static function docKeyOf(string $filecachePath, ?array $identity = null): string {
+		return hash('sha256', self::DOC_KEY_FORMAT . "\0" . ($identity['share'] ?? '') . "\0" . self::sharePathOf($filecachePath, $identity));
+	}
+
+	/**
+	 * The share path docKeyOf() hashes, by the rule written there, for the
+	 * N1 check of FileStateService::distinctPathsByReasons, which has to find
+	 * the same file below the root of every member (plan 43-23). One rule in
+	 * one place, so key and check can never disagree.
+	 *
+	 * @param array{share: string, root: string}|null $identity
+	 */
+	public static function sharePathOf(string $filecachePath, ?array $identity = null): string {
 		$path = ltrim($filecachePath, '/');
-		$share = '';
-		if ($identity !== null) {
-			$share = $identity['share'];
-			$root = $identity['root'];
-			if ($root !== '') {
-				$path = $path === '' ? $root : $root . '/' . $path;
-			}
+		$root = $identity['root'] ?? '';
+		if ($root !== '') {
+			$path = $path === '' ? $root : $root . '/' . $path;
 		}
 
+		return self::composed($path);
+	}
+
+	/** NFC where it can be composed, otherwise the value as it came (see docKeyOf). */
+	public static function composed(string $path): string {
 		if (class_exists(\Normalizer::class)) {
 			$composed = \Normalizer::normalize($path, \Normalizer::FORM_C);
 			if (is_string($composed)) {
-				$path = $composed;
+				return $composed;
 			}
 		}
 
-		return hash('sha256', self::DOC_KEY_FORMAT . "\0" . $share . "\0" . $path);
+		return $path;
 	}
 
 	/**
