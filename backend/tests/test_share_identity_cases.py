@@ -17,6 +17,11 @@ over the path alone, kept as history.
 It also holds where the identity and the document key may be used at all: only
 in the counting services, never in search, path, permission, gateway or
 listener code (T-43-63).
+
+Plan 43-24 adds the container half: the format of the key is one number on
+both sides (DocKeyService::DOC_KEY_FORMAT, the generation of the backfill and
+the format a job and a backfill answer must name), and the search, snippet,
+similar and index code of the container never reads a document key (T-43-74).
 """
 
 from __future__ import annotations
@@ -34,6 +39,7 @@ REPO = Path(__file__).resolve().parents[2]
 CATALOGUE = Path(__file__).resolve().parent / "fixtures" / "share_identity_cases.json"
 DOC_KEYS = Path(__file__).resolve().parent / "fixtures" / "doc_key_cases.json"
 PHP_LIB = REPO / "php" / "lib"
+PACKAGE = REPO / "backend" / "src" / "findling"
 PHP_TESTS = REPO / "php" / "tests" / "Unit"
 DECISIONS = REPO / ".planning" / "phases" / "43-findling-1-6-3-sweep-und-zaehler" / "43-FREIGABEN.md"
 HEX32 = re.compile(r"[0-9a-f]{32}")
@@ -358,3 +364,46 @@ def test_the_named_cases_of_the_plan_are_there() -> None:
     assert by_name["a storage without share identity"]["expected"] != top["expected"]
     assert any(case["share"].startswith("sftp::") for case in by_name.values())
     assert by_name["a home storage keeps its files/ prefix"]["path"].startswith("files/")
+
+
+# -- the container half (plan 43-24) ---------------------------------------------
+
+
+def test_doc_key_format_parity() -> None:
+    """One number on both sides: what PHP hashes is what the container keeps and counts."""
+    from findling.nc import files as files_module
+    from findling.nc import queue as queue_module
+    from findling.worker import doc_keys as doc_keys_module
+
+    php = (PHP_LIB / "Service" / "DocKeyService.php").read_text(encoding="utf-8")
+    found = re.findall(r"public const DOC_KEY_FORMAT = (\d+);", php)
+    assert len(found) == 1
+    php_format = int(found[0])
+
+    catalogue = cast("list[dict[str, Any]]", json.loads(DOC_KEYS.read_text(encoding="ascii"))["cases"])
+    sides = {
+        "DocKeyService::DOC_KEY_FORMAT": php_format,
+        "worker.doc_keys.DOC_KEY_GENERATION": getattr(doc_keys_module, "DOC_KEY_GENERATION", None),
+        "nc.queue._DOC_KEY_FORMAT": getattr(queue_module, "_DOC_KEY_FORMAT", None),
+        "nc.files.DOC_KEY_FORMAT": getattr(files_module, "DOC_KEY_FORMAT", None),
+        "doc_key_cases.json": max(case["format"] for case in catalogue),
+    }
+
+    assert sides == dict.fromkeys(sides, 2)
+    assert all(type(value) is int for value in sides.values())
+
+
+def test_the_search_never_reads_a_doc_key() -> None:
+    """The key serves the counting and nothing else (T-43-74, the rule of plan 43-21)."""
+    searched = [PACKAGE / "api" / name for name in ("search.py", "snippets.py", "similar.py")]
+    searched += sorted((PACKAGE / "index").rglob("*.py"))
+
+    assert len(searched) >= 10
+    for path in searched:
+        text = path.read_text(encoding="utf-8").lower()
+        assert "doc_key" not in text, path.name
+        assert "dockey" not in text, path.name
+
+    # Positive control: the same search finds the key where it lives.
+    assert "doc_key" in (PACKAGE / "store" / "repo.py").read_text(encoding="utf-8").lower()
+    assert "dockey" in (PACKAGE / "nc" / "queue.py").read_text(encoding="utf-8").lower()

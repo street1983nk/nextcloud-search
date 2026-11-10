@@ -320,7 +320,7 @@ def _source(**extra: object) -> dict[str, object]:
 
 @pytest.mark.parametrize("kind", ["content", "ocr", "metadata", "acl", "embed"])
 def test_every_job_kind_carries_the_key(kind: str) -> None:
-    job = queue_module._job(91, _source(kind=kind, docKey=key_of(4711)))
+    job = queue_module._job(91, _source(kind=kind, docKey=key_of(4711), docKeyFormat=2))
     assert job is not None
     assert job.doc_key == key_of(4711)
     assert poller_module._meta_of(job).doc_key == key_of(4711)
@@ -328,7 +328,7 @@ def test_every_job_kind_carries_the_key(kind: str) -> None:
 
 @pytest.mark.parametrize("value", [None, 7, True, "A" * 64, "0" * 63, ["0" * 64]])
 def test_a_job_without_a_usable_key_carries_none(value: object) -> None:
-    source = _source() if value is None else _source(docKey=value)
+    source = _source(docKeyFormat=2) if value is None else _source(docKey=value, docKeyFormat=2)
     job = queue_module._job(91, source)
     assert job is not None
     assert job.doc_key is None
@@ -337,7 +337,7 @@ def test_a_job_without_a_usable_key_carries_none(value: object) -> None:
 async def test_an_acl_job_after_a_move_writes_the_new_key(store: Store, tmp_path: Path) -> None:
     store.record(4711, _meta(doc_key=key_of(4711)), "indexed")
     moved = key_of(4711, generation="moved")
-    job = queue_module._job(91, _source(kind="acl", docKey=moved))
+    job = queue_module._job(91, _source(kind="acl", docKey=moved, docKeyFormat=2))
     assert job is not None
     poller = poller_module.Poller(store=store, writer=cast("Any", None), tmp_dir=tmp_path)
     done: list[int] = []
@@ -351,6 +351,43 @@ async def test_an_acl_job_after_a_move_writes_the_new_key(store: Store, tmp_path
     assert plain is not None
     await poller._replace_access(plain, done)
     assert _doc_key(store, 4711) == moved
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {},
+        {"docKeyFormat": "2"},
+        {"docKeyFormat": True},
+        {"docKeyFormat": 1},
+        {"docKeyFormat": 2.0},
+        {"docKeyFormat": 3},
+    ],
+    ids=["none", "string", "boolean", "format-1", "float", "format-3"],
+)
+async def test_a_job_without_format_two_writes_no_key(store: Store, tmp_path: Path, extra: dict[str, object]) -> None:
+    """A key of another format, or of none, is not a key of this container (OE-5 a, A-2)."""
+    stored = key_of(4711)
+    store.record(4711, _meta(doc_key=stored), "indexed")
+    arrived = key_of(4711, generation="another format")
+    poller = poller_module.Poller(store=store, writer=cast("Any", None), tmp_dir=tmp_path)
+    done: list[int] = []
+
+    job = queue_module._job(91, _source(kind="acl", docKey=arrived, **extra))
+    assert job is not None
+    assert job.doc_key is None
+    assert poller_module._meta_of(job).doc_key is None
+    await poller._replace_access(job, done)
+
+    # Not written, and the stored one not erased either (COALESCE, plan 43-16).
+    assert done == [91]
+    assert _doc_key(store, 4711) == stored
+
+    marked = queue_module._job(92, _source(kind="acl", docKey=arrived, docKeyFormat=2))
+    assert marked is not None
+    assert marked.doc_key == arrived
+    await poller._replace_access(marked, done)
+    assert _doc_key(store, 4711) == arrived
 
 
 # -- the reading layer ------------------------------------------------------------------
@@ -385,7 +422,7 @@ class _NotFound(Exception):
 
 
 async def test_the_reading_layer_asks_in_bands_of_the_php_limit() -> None:
-    session = _Session(lambda ids: {"keys": {str(i): key_of(i) for i in ids}, "absent": []})
+    session = _Session(lambda ids: {"keys": {str(i): key_of(i) for i in ids}, "absent": [], "format": 2})
 
     answer = await _list(session).doc_keys(list(range(1, 451)))
 
@@ -399,7 +436,7 @@ async def test_the_reading_layer_asks_in_bands_of_the_php_limit() -> None:
 async def test_the_reading_layer_keeps_only_hex_keys_of_asked_ids() -> None:
     def answer(ids: list[int]) -> object:
         del ids
-        return {"keys": {"1": key_of(1), "2": "X" * 64, "99": key_of(99)}, "absent": [3, 98]}
+        return {"keys": {"1": key_of(1), "2": "X" * 64, "99": key_of(99)}, "absent": [3, 98], "format": 2}
 
     result = await _list(_Session(answer)).doc_keys([1, 2, 3])
 
@@ -411,7 +448,7 @@ async def test_the_reading_layer_keeps_only_hex_keys_of_asked_ids() -> None:
 
 
 async def test_an_empty_key_map_may_arrive_as_a_list() -> None:
-    result = await _list(_Session(lambda ids: {"keys": [], "absent": ids})).doc_keys([4, 5])
+    result = await _list(_Session(lambda ids: {"keys": [], "absent": ids, "format": 2})).doc_keys([4, 5])
     assert result is not None
     assert result.complete
     assert result.absent == frozenset({4, 5})
@@ -428,7 +465,14 @@ async def test_a_404_reads_as_a_missing_route_and_anything_else_as_no_answer(cap
     assert "OSError" in caplog.text
     assert "/secret/path" not in caplog.text
 
-    for broken in ([], "x", {"keys": {}}, {"absent": []}, {"keys": {}, "absent": "1"}, {"keys": 5, "absent": []}):
+    for broken in (
+        [],
+        "x",
+        {"keys": {}, "format": 2},
+        {"absent": [], "format": 2},
+        {"keys": {}, "absent": "1", "format": 2},
+        {"keys": 5, "absent": [], "format": 2},
+    ):
         assert await _list(_Session(lambda ids, value=broken: value)).doc_keys([1]) is None, broken
 
 
@@ -543,6 +587,88 @@ async def test_a_missing_route_waits_with_a_doubling_cooldown_and_keeps_the_curs
     assert all(line.startswith("doc key backfill waits, the companion has no doc key route") for line in lines)
     assert _mark(store) == f"{DOC_KEY_GENERATION}:200:0"
     assert store.doc_keys_missing() == 500
+
+
+_NO_FORMAT = object()
+
+
+def _companion_of_format(value: object) -> Callable[[list[int]], object]:
+    """A companion that knows every key and names this format, or none at all."""
+
+    def answer(ids: list[int]) -> object:
+        body: dict[str, object] = {"keys": {str(i): key_of(i) for i in ids}, "absent": []}
+        if value is not _NO_FORMAT:
+            body["format"] = value
+        return body
+
+    return answer
+
+
+@pytest.mark.parametrize(
+    "value", [_NO_FORMAT, 1, 3, "2", True, 2.0, None], ids=["none", "1", "3", "string", "boolean", "float", "null"]
+)
+async def test_a_backfill_answer_of_another_format_waits_like_a_missing_route(
+    store: Store, caplog: pytest.LogCaptureFixture, value: object
+) -> None:
+    """Keys of another format are no keys: nothing stored, no sentinel, the cursor stays (OE-5 a)."""
+    read = await _list(_Session(_companion_of_format(value))).doc_keys([1, 2])
+    assert read is not None
+    assert getattr(read, "format_mismatch", None) is True
+    assert not read.complete
+    assert not read.route_missing
+    assert read.keys == {}
+    assert read.absent == frozenset()
+
+    _insert_rows(store, range(1, 501))
+    store.write_meta(DOC_KEY_MARK, f"{DOC_KEY_GENERATION}:200:0")
+    session = _Session(_companion_of_format(value))
+    clock = [START]
+    backfill = DocKeyBackfill(
+        store=store,
+        client_factory=lambda: cast("AsyncNextcloudApp", None),
+        files_factory=lambda nc: _list(session),
+        bands_per_round=2,
+        pause_seconds=0.0,
+        tick_seconds=300.0,
+        clock=lambda: clock[0],
+    )
+
+    with caplog.at_level(logging.DEBUG):
+        waits: list[float] = []
+        for _ in range(8):
+            result = await backfill.run_once()
+            assert result.state == ROUND_WAITING
+            calls = len(session.calls)
+            # Inside the cooldown nothing is asked.
+            clock[0] += 1
+            assert (await backfill.run_once()).state == ROUND_WAITING
+            assert len(session.calls) == calls
+            waits.append(backfill.retry_at - clock[0] + 1)
+            clock[0] = backfill.retry_at
+
+    assert waits == [300, 600, 1200, 2400, 3600, 3600, 3600, 3600]
+    lines = [record.getMessage() for record in caplog.records if record.name.startswith("findling")]
+    waiting = [line for line in lines if "waits" in line]
+    assert len(waiting) == 5
+    assert all(
+        line.startswith("doc key backfill waits, the companion has another doc key format, next try in ")
+        for line in waiting
+    )
+    for line in lines:
+        assert not HEX64.search(line), line
+        assert "/" not in line, line
+    assert _mark(store) == f"{DOC_KEY_GENERATION}:200:0"
+    assert store.doc_keys_missing() == 500
+    assert store.doc_keys_unresolved() == 0
+
+    # The same companion after its update: format 2, and the backfill goes on.
+    session._answer = _companion_of_format(2)
+    result = await backfill.run_once()
+    assert result.state == ROUND_FILLED
+    assert backfill.retry_at == 0.0
+    assert _mark(store) == f"{DOC_KEY_GENERATION}:500:0"
+    assert _doc_key(store, 201) == key_of(201)
+    assert store.doc_keys_missing() == 200
 
 
 async def test_a_coverage_call_ends_the_cooldown_at_once(store: Store) -> None:
@@ -740,11 +866,55 @@ async def test_a_mark_of_the_two_part_form_is_read_and_completed(store: Store) -
     assert _doc_key(store, 1) is None
 
 
-def test_the_generation_is_one_and_only_for_a_format_change() -> None:
+@pytest.mark.parametrize("stored", ["1:400:0", "1:400", "1:400:idle1800000000"])
+async def test_a_rc1_mark_rebuilds_every_key_once(store: Store, stored: str) -> None:
+    """Generation 1 is the format of 1.6.3-rc.1: every key goes once, then comes back (A-1)."""
+    _insert_rows(store, range(1, 6), doc_key=key_of(0, generation="format 1"))
+    store.write_meta(DOC_KEY_MARK, stored)
+    keys = _Keys()
+    keys.unavailable = True
+    clock = [START]
+    backfill = _backfill(store, keys, clock)
+
+    await backfill.run_once()
+
+    assert [_doc_key(store, file_id) for file_id in range(1, 6)] == [None] * 5
+    assert store.doc_keys_missing() == 5
+    assert _mark(store) == "2:0:0"
+
+    keys.unavailable = False
+    assert (await backfill.run_once()).state == ROUND_FILLED
+    assert [_doc_key(store, file_id) for file_id in range(1, 6)] == [key_of(file_id) for file_id in range(1, 6)]
+    assert _mark(store) == "2:5:0"
+
+    # The mark of generation 2 forgets nothing, in this process and in the next.
+    for later in (backfill, _backfill(store, keys, clock)):
+        keys.unavailable = True
+        await later.run_once()
+        assert store.doc_keys_missing() == 0
+        assert _doc_key(store, 1) == key_of(1)
+        assert str(_mark(store)).startswith("2:")
+
+
+def test_the_generation_is_two_and_only_for_a_format_change() -> None:
     source = (PACKAGE_ROOT / "worker" / "doc_keys.py").read_text(encoding="utf-8")
-    assert "DOC_KEY_GENERATION: Final = 1" in source
+    assert DOC_KEY_GENERATION == 2
+    assert "DOC_KEY_GENERATION: Final = 2" in source
+    assert source.count("DOC_KEY_GENERATION: Final") == 1
     assert "doc_key_backfill_after" in source
     assert DOC_KEY_MARK == "doc_key_backfill_after"
+    # The reader of the route and the reader of the worker are one function.
+    stored_generation = getattr(doc_keys_module, "stored_generation", None)
+    assert stored_generation is not None
+    assert [stored_generation(value) for value in (None, "", "500", "x:1:1", "1:400:0", "2:0", "2:7:idle9")] == [
+        None,
+        None,
+        None,
+        None,
+        1,
+        2,
+        2,
+    ]
 
 
 # -- the verify pass ------------------------------------------------------------------------
