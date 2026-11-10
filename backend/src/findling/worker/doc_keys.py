@@ -23,7 +23,9 @@ on where the last band ended. A full pass that still leaves rows without a key
 **Honest about missing answers.** A companion of 1.6.2 answers 404: one log
 line per step of a cooldown that doubles up to an hour, and the first call of
 the coverage route ends it, because only a 1.6.3 companion asks that (W3,
-W11). An answer that leaves an asked id out is no answer: no sentinel, no
+W11). A companion of 1.6.3-rc.1 answers without the format of its keys, and
+keys of another format are no keys: the same cooldown, a log line of its own
+(plan 43-24). An answer that leaves an asked id out is no answer: no sentinel, no
 cursor step (W8). The third such answer for the same band bisects it, and an
 id that stays unanswered alone is set aside with the sentinel '' so that the
 coverage does not wait for it forever (W12, W15).
@@ -32,6 +34,13 @@ coverage does not wait for it forever (W12, W15).
 just as slowly, and a stale one is replaced: the key of a file renamed while a
 1.6.2 companion was in place, or an empty one the companion knows by now (G1).
 A full verify pass without a single correction rests for a day.
+
+**One format.** The key of 1.6.3 is format 2, sha256 over the share and the
+path below it (plan 43-22); 1.6.3-rc.1 hashed the path alone, format 1. The
+generation in the meta value is that format: a stored generation other than
+DOC_KEY_GENERATION forgets every key once in the first round, and until the
+meta value carries the generation the coverage route counts nothing, read
+through :func:`stored_generation` (plan 43-24, OE-5 a).
 
 The task never reads the document queue, so a busy crawl does not hold it.
 Every log line carries numbers only, never a path and never a key (T-43-52).
@@ -76,12 +85,21 @@ DOC_KEY_TICK_SECONDS: Final = 300.0
 # again. It is raised on a deliberate change of what the companion hashes and
 # never for anything else; a way back to 1.6.2 does not touch the value at all,
 # which is why the verify pass exists (G1).
-DOC_KEY_GENERATION: Final = 1
+#
+# 2 since plan 43-24: the companion hashes the share and the path below it
+# (plan 43-22, DocKeyService::DOC_KEY_FORMAT), no longer the path alone.
+# Generation 1 is the format of 1.6.3-rc.1, the only build that ever stored it;
+# under the grouping by share its keys would merge a file of a sub root with
+# another file of the same name at the top of the share. Equal to the PHP
+# constant, to _DOC_KEY_FORMAT of nc/queue.py and to DOC_KEY_FORMAT of
+# nc/files.py; tests/test_share_identity_cases.py holds the four together.
+DOC_KEY_GENERATION: Final = 2
 
 # How often the same band may come back incomplete before it is bisected (W12).
 DOC_KEY_INCOMPLETE_RETRIES: Final = 3
 
-# The cooldown after a 404 of a companion without the route (W3).
+# The cooldown after a 404 of a companion without the route (W3), and after
+# an answer that names another key format or none (plan 43-24).
 DOC_KEY_COOLDOWN_START_SECONDS: Final = 300.0
 DOC_KEY_COOLDOWN_MAX_SECONDS: Final = 3_600.0
 
@@ -166,6 +184,16 @@ def _read_mark(value: str | None) -> _Mark:
     if verify.startswith(_IDLE) and verify[len(_IDLE) :].isdigit():
         return _Mark(generation=generation, cursor=cursor, idle_until=int(verify[len(_IDLE) :]))
     return _Mark(generation=generation, cursor=cursor)
+
+
+def stored_generation(value: str | None) -> int | None:
+    """The generation a stored meta value carries, None for a missing or unreadable one.
+
+    For the coverage route, which counts nothing while this is not
+    DOC_KEY_GENERATION (plan 43-24). The same reading as the worker's, so the
+    route and the reset can never disagree about a value.
+    """
+    return _read_mark(value).generation
 
 
 @dataclass(frozen=True, slots=True)
@@ -508,24 +536,38 @@ class DocKeyBackfill:
         return left.merge(right)
 
     def _stop_reason(self, answer: DocKeyAnswer) -> str | None:
-        """ROUND_WAITING for a 404, None to go on; a real answer ends any cooldown."""
-        if answer.route_missing:
-            self._wait_for_the_route()
+        """ROUND_WAITING for a 404 or another key format, None to go on.
+
+        A real answer ends any cooldown. Keys of another format are treated
+        like a missing route: a companion that hashes something else has, for
+        this container, no key to give (plan 43-24).
+        """
+        if answer.route_missing or answer.format_mismatch:
+            self._wait_for_the_route(another_format=answer.format_mismatch)
             return ROUND_WAITING
         self._cooldown = 0.0
         self._retry_at = None
         return None
 
-    def _wait_for_the_route(self) -> None:
+    def _wait_for_the_route(self, *, another_format: bool = False) -> None:
         """Double the cooldown up to an hour; one log line per step (W3)."""
         before = self._cooldown
         self._cooldown = (
             DOC_KEY_COOLDOWN_START_SECONDS if before <= 0 else min(before * 2, DOC_KEY_COOLDOWN_MAX_SECONDS)
         )
         self._retry_at = self._clock() + self._cooldown
-        # Only a coverage call after this 404 ends the cooldown (W11).
+        # Only a coverage call after this 404 ends the cooldown (W11). The
+        # route refuses a body without the format with a 422 before it gets
+        # that far, so a companion of rc.1 does not end it (T-43-73).
         _COVERAGE_SEEN.clear()
-        if self._cooldown != before:
+        if self._cooldown == before:
+            return
+        if another_format:
+            LOGGER.info(
+                "doc key backfill waits, the companion has another doc key format, next try in %d s",
+                int(self._cooldown),
+            )
+        else:
             LOGGER.info(
                 "doc key backfill waits, the companion has no doc key route, next try in %d s", int(self._cooldown)
             )
@@ -581,4 +623,5 @@ __all__ = [
     "DocKeyRound",
     "doc_keys_corrected",
     "note_coverage_call",
+    "stored_generation",
 ]

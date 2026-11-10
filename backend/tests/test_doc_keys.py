@@ -885,7 +885,8 @@ async def test_a_rc1_mark_rebuilds_every_key_once(store: Store, stored: str) -> 
     keys.unavailable = False
     assert (await backfill.run_once()).state == ROUND_FILLED
     assert [_doc_key(store, file_id) for file_id in range(1, 6)] == [key_of(file_id) for file_id in range(1, 6)]
-    assert _mark(store) == "2:5:0"
+    # The pass is through: the cursor is back at the front (R2), the generation stays.
+    assert _mark(store) == "2:0:0"
 
     # The mark of generation 2 forgets nothing, in this process and in the next.
     for later in (backfill, _backfill(store, keys, clock)):
@@ -894,6 +895,29 @@ async def test_a_rc1_mark_rebuilds_every_key_once(store: Store, stored: str) -> 
         assert store.doc_keys_missing() == 0
         assert _doc_key(store, 1) == key_of(1)
         assert str(_mark(store)).startswith("2:")
+
+
+async def test_the_keys_are_gone_before_the_mark_says_generation_two(
+    store: Store, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """First the reset, then the mark: the coverage route never sees generation 2 over old keys."""
+    _insert_rows(store, range(1, 6), doc_key=key_of(0, generation="format 1"))
+    store.write_meta(DOC_KEY_MARK, "1:400:0")
+    written: list[tuple[str, int]] = []
+    real_write = store.write_meta
+
+    def write(key: str, value: str) -> None:
+        if key == DOC_KEY_MARK:
+            written.append((value, store.doc_keys_missing()))
+        real_write(key, value)
+
+    monkeypatch.setattr(store, "write_meta", write)
+    keys = _Keys()
+    keys.unavailable = True
+
+    await _backfill(store, keys, [START]).run_once()
+
+    assert written[0] == ("2:0:0", 5)
 
 
 def test_the_generation_is_two_and_only_for_a_format_change() -> None:

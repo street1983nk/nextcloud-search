@@ -414,8 +414,24 @@ def _text(value: object) -> str:
 _DOC_KEY_SHAPE: Final = re.compile(r"[0-9a-f]{64}")
 
 
-def _doc_key(value: object) -> str | None:
-    """The document key of a job, or None for a missing value or one of another shape."""
+# The format a job must name next to its key (plan 43-24), as docKeyFormat. A
+# copy of findling.worker.doc_keys.DOC_KEY_GENERATION rather than an import,
+# for the reason given at _DOC_KEY_SHAPE: this layer imports nothing from the
+# worker. Equal to DocKeyService::DOC_KEY_FORMAT on the PHP side;
+# tests/test_share_identity_cases.py holds the numbers together.
+_DOC_KEY_FORMAT: Final = 2
+
+
+def _doc_key(value: object, key_format: object) -> str | None:
+    """The document key of a job, or None for a missing value or one of another shape.
+
+    Only a job that names the format of this container carries a key: the
+    whole number, not True, not "2", not 2.0. A companion of 1.6.3-rc.1 sends
+    keys without a format, and they hash something else (plan 43-24). None
+    writes nothing and erases nothing (COALESCE in the store, plan 43-16).
+    """
+    if type(key_format) is not int or key_format != _DOC_KEY_FORMAT:
+        return None
     return value if isinstance(value, str) and _DOC_KEY_SHAPE.fullmatch(value) else None
 
 
@@ -525,8 +541,9 @@ def _job(queue_id_raw: object, source: object) -> QueueJob | None:
         # prefilter through a typo on the PHP side; anything this container
         # cannot read as the explicit truth falls to the strict side.
         users_truncated=fields.get("userIdsTruncated") is True,
-        # Only 64 lower case hex digits; anything else reads as no key (T-43-49).
-        doc_key=_doc_key(fields.get("docKey")),
+        # Only 64 lower case hex digits next to the format of this container;
+        # anything else reads as no key (T-43-49, plan 43-24).
+        doc_key=_doc_key(fields.get("docKey"), fields.get("docKeyFormat")),
     )
 
 

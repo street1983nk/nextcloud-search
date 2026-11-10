@@ -66,6 +66,7 @@ ANSWER_KEYS = frozenset(
         "docKeysMissing",
         "docKeysUnresolved",
         "docKeysCorrected",
+        "docKeyFormat",
     }
 )
 
@@ -84,6 +85,13 @@ def _send(client: TestClient, headers: dict[str, str], body: object) -> Any:
 
 
 def _post(client: TestClient, headers: dict[str, str], body: object) -> Any:
+    """The body as a 1.6.3 companion sends it: an object gets docKeyFormat 2 unless it names one.
+
+    So every test about a bound of the body fails on that bound alone, and not
+    on a missing format (plan 43-24).
+    """
+    if isinstance(body, dict) and "docKeyFormat" not in body:
+        body = {**body, "docKeyFormat": 2}
     return _send(client, headers, body)
 
 

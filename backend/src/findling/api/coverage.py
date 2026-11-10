@@ -31,6 +31,15 @@ key would rest on reader paths (D-43-14). Every call ends the 404 cooldown of
 that backfill, because a companion that asks this route knows the route the
 backfill asks.
 
+The key has a format (plan 43-24, OE-5 a). The body must name docKeyFormat 2,
+the format this container keeps, or it is a 422 like every other body outside
+the bounds, and the answer names it back. And while the meta value of the
+backfill does not carry generation 2, every key in the state is of another
+format or of none: the answer says counting for the living rows of the request
+before any count and before the cache is looked at, whether the backfill has
+run, waits to be armed or is held by a backup pause. A key of 1.6.3-rc.1 never
+reaches a figure.
+
 The answer carries numbers, storage ids, one boolean and null, never a path
 (T-43-13). Declared ADMIN in appinfo/info.xml next to /status.
 """
@@ -48,14 +57,20 @@ from collections import OrderedDict
 from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
-from typing import Annotated, Final, Self
+from typing import Annotated, Final, Literal, Self
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from findling.config import settings
 from findling.store.repo import CoverageCounts, coverage_counts, open_read_only
-from findling.worker.doc_keys import doc_keys_corrected, note_coverage_call
+from findling.worker.doc_keys import (
+    DOC_KEY_GENERATION,
+    DOC_KEY_MARK,
+    doc_keys_corrected,
+    note_coverage_call,
+    stored_generation,
+)
 
 LOGGER = logging.getLogger("findling.api.coverage")
 
@@ -107,6 +122,19 @@ class CoverageRequest(BaseModel):
 
     mounted: list[StorageId] = Field(max_length=COVERAGE_MAX_MOUNTED)
     groups: list[list[StorageId]] = Field(max_length=COVERAGE_MAX_MEMBERS)
+    # The format of the keys the companion hands out, DOC_KEY_GENERATION of the
+    # backfill. Required: a companion of 1.6.3-rc.1 sends none and gets a 422,
+    # which it reads as "no per document figure" (plan 43-24).
+    docKeyFormat: Literal[2]
+
+    @field_validator("docKeyFormat", mode="before")
+    @classmethod
+    def _the_format_is_a_whole_number(cls, value: object) -> object:
+        """Only the whole number: a strict literal still takes 2.0 for 2, this does not."""
+        if type(value) is not int:
+            message = "docKeyFormat is not a whole number"
+            raise ValueError(message)
+        return value
 
     @model_validator(mode="after")
     def _groups_fit_the_mount_list(self) -> Self:
@@ -137,7 +165,10 @@ class CoverageResponse(BaseModel):
     outside every group, ascending, only figures above zero. ``docKeysMissing``
     is the number of living rows of the whole state without a document key,
     ``docKeysUnresolved`` those with the sentinel, ``docKeysCorrected`` the
-    keys the verify pass replaced since this process started.
+    keys the verify pass replaced since this process started. While the keys
+    of the state are of another generation, ``docKeysMissing`` is the number of
+    living rows in the storages of the request instead: all of them wait for
+    their key. ``docKeyFormat`` is the format of the keys behind the figures.
     """
 
     documents: int | None
@@ -151,6 +182,7 @@ class CoverageResponse(BaseModel):
     docKeysMissing: int
     docKeysUnresolved: int
     docKeysCorrected: int
+    docKeyFormat: int
 
 
 def answer_of(counts: CoverageCounts | None, *, missing: int, unresolved: int, corrected: int) -> CoverageResponse:
@@ -172,6 +204,7 @@ def answer_of(counts: CoverageCounts | None, *, missing: int, unresolved: int, c
             docKeysMissing=missing,
             docKeysUnresolved=unresolved,
             docKeysCorrected=corrected,
+            docKeyFormat=DOC_KEY_GENERATION,
         )
     return CoverageResponse(
         documents=counts.documents,
@@ -185,6 +218,7 @@ def answer_of(counts: CoverageCounts | None, *, missing: int, unresolved: int, c
         docKeysMissing=missing,
         docKeysUnresolved=unresolved,
         docKeysCorrected=corrected,
+        docKeyFormat=DOC_KEY_GENERATION,
     )
 
 
@@ -358,8 +392,18 @@ def _answer(request: CoverageRequest) -> CoverageResponse:
             rows = store.living_rows_in_storages(mounted)
             missing = store.doc_keys_missing()
             unresolved = store.doc_keys_unresolved()
+            generation = stored_generation(store.read_meta().get(DOC_KEY_MARK))
         finally:
             store.close()
+        if generation != DOC_KEY_GENERATION and rows > 0:
+            # The gate of plan 43-24, before the count and before the cache:
+            # the keys of these rows are of another format (1.6.3-rc.1) or
+            # missing (1.6.2), and the reset of the backfill has not written
+            # its mark yet. It may wait behind its arming or a backup pause;
+            # this does not. Between the reset and the mark the route still
+            # reads the old generation here, after the mark the keys are NULL
+            # and the count below says counting through doc_keys_missing.
+            return answer_of(None, missing=rows, unresolved=unresolved, corrected=corrected)
         if rows <= COVERAGE_SYNC_CEILING:
             counts: CoverageCounts | None = coverage_counts(resolved.state_db, resolved.vectors_db, mounted, canonical)
         else:

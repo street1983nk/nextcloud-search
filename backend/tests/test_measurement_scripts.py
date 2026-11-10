@@ -2693,8 +2693,21 @@ PHP_TREE_HASH_TODAY = "f3165a57c3aeed687c255f9c66b35f7ddff8a817df61ef421a0234234
 # independently with find, sort, tr and sha256sum over the CRLF normalised
 # tree: 75212e53... both ways, and the same pipeline over the tree of
 # d9f8a65d before the fix gave 3d704f65... (positive control).
+#
+# Moved on 2026-11-10 by Plan 43-24 (doc key generation 2 with a gate and a
+# format mark): worker/doc_keys.py raises DOC_KEY_GENERATION to 2, so the keys
+# of 1.6.3-rc.1 are forgotten once and built again, treats a backfill answer of
+# another format like a missing route and offers stored_generation; nc/files.py
+# reads format from the answer of the document key route, nc/queue.py takes the
+# key of a job only next to docKeyFormat 2, and api/coverage.py requires
+# docKeyFormat 2 in the body, names it in the answer and counts nothing while
+# the meta value does not carry generation 2. No file came or went, so
+# PACKAGE_FILES_TODAY stays at 83. The PHP pair does not move. Recomputed
+# independently with find, sort, tr and sha256sum over the CRLF normalised
+# tree: 5b1ace06... both ways, and the same pipeline over git archive HEAD
+# before the step gave 75212e53... (positive control).
 PACKAGE_FILES_TODAY = 83
-PACKAGE_TREE_HASH_TODAY = "75212e537b0404e1d079514f4c80e3abd706bfa568f83663b6b11e7c2358a6f1"
+PACKAGE_TREE_HASH_TODAY = "5b1ace068d56ec458fbc4241dfecaf3e11ae63e0c4017ba19fba9e7d4d359af2"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

@@ -71,6 +71,14 @@ GONE_LOOKUP_BAND = 256
 # holds the two numbers together.
 DOC_KEY_BAND: Final = 200
 
+# The format of the keys this container keeps (plan 43-24): the answer of the
+# document key route must name it as ``format``, a whole number and nothing
+# that merely compares equal to one. Equal to DocKeyService::DOC_KEY_FORMAT on
+# the PHP side and to DOC_KEY_GENERATION of worker/doc_keys.py, which imports
+# from this layer and not the other way round; tests/test_share_identity_cases.py
+# holds the numbers together.
+DOC_KEY_FORMAT: Final = 2
+
 # The status a companion without the document key route answers with (W3).
 _NOT_FOUND: Final = 404
 
@@ -165,12 +173,17 @@ class DocKeyAnswer:
     one of the two: an answer that leaves one out is no answer (W8), and the
     backfill neither stores a sentinel nor moves its cursor on it.
     ``route_missing`` is the 404 of a companion from before 1.6.3 (W3).
+    ``format_mismatch`` is an answer that does not name DOC_KEY_FORMAT, the
+    companion of 1.6.3-rc.1 or a later one with another format: it carries no
+    key and no absent id, because a key of another format is no key (plan
+    43-24).
     """
 
     asked: tuple[int, ...] = ()
     keys: Mapping[int, str] = field(default_factory=dict)
     absent: frozenset[int] = frozenset()
     route_missing: bool = False
+    format_mismatch: bool = False
 
     @property
     def unanswered(self) -> frozenset[int]:
@@ -179,8 +192,8 @@ class DocKeyAnswer:
 
     @property
     def complete(self) -> bool:
-        """True when the answer names every asked id and the route exists."""
-        return not self.route_missing and not self.unanswered
+        """True when the answer names every asked id in the format of this container."""
+        return not self.route_missing and not self.format_mismatch and not self.unanswered
 
 
 @dataclass(frozen=True, slots=True)
@@ -333,6 +346,11 @@ def _key_map(value: object, wanted: frozenset[int]) -> dict[int, str] | None:
     return found
 
 
+def _names_the_format(value: object) -> bool:
+    """True for the whole number DOC_KEY_FORMAT only; True, "2" and 2.0 are not it."""
+    return type(value) is int and value == DOC_KEY_FORMAT
+
+
 def _id_set(value: object) -> frozenset[int] | None:
     """A list of positive whole numbers as a set, or None when any entry is not one.
 
@@ -462,7 +480,10 @@ class FileList:
         the class name and never the message (T-43-52). A 404 is the one
         failure with an answer of its own, ``route_missing``, because it says
         that the companion is older than 1.6.3 and asking again soon is
-        pointless (W3). Ids the answer names but nobody asked are dropped.
+        pointless (W3). An answer of any band without ``format`` equal to
+        DOC_KEY_FORMAT is ``format_mismatch`` for the whole question, with
+        nothing of it kept (plan 43-24). Ids the answer names but nobody asked
+        are dropped.
         """
         asked = tuple(dict.fromkeys(file_id for file_id in file_ids if file_id > 0))
         keys: dict[int, str] = {}
@@ -480,6 +501,8 @@ class FileList:
                 return None
 
             payload = _mapping(answer)
+            if payload is not None and not _names_the_format(payload.get("format")):
+                return DocKeyAnswer(asked=asked, format_mismatch=True)
             wanted = frozenset(band)
             band_keys = None if payload is None else _key_map(payload.get("keys"), wanted)
             band_absent = None if payload is None else _id_set(payload.get("absent"))
