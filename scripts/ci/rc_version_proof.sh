@@ -8,12 +8,12 @@
 # What the two jobs prove, before anybody hands the reporter a test build:
 #
 #   A6 (subcommands a6-swap, a6): on a FRESH Nextcloud of each supported line
-#   a companion 1.6.3-rc.1 installs OVER a released 1.6.2 (occ upgrade green,
-#   app:list shows 1.6.3-rc.1, the 1.6.3 migration ran, the per document hint
-#   flag stands at 1), and the comparison the server itself uses for "update
-#   available" reads 1.6.3 as newer than 1.6.3-rc.1. The comparison is not
-#   assumed, it is grepped out of the server checkout of this very run, file
-#   and line go to the log, and php -r executes that form.
+#   the companion of the release candidate installs OVER a released 1.6.2 (occ
+#   upgrade green, app:list shows the candidate, the 1.6.3 migration ran, the
+#   per document hint flag stands at 1), and the comparison the server itself
+#   uses for "update available" reads 1.6.3 as newer than the candidate. The
+#   comparison is not assumed, it is grepped out of the server checkout of
+#   this very run, file and line go to the log, and php -r executes that form.
 #
 #   A5 (subcommands a5-harp, a5-proxy, a5-register, a5): on the path of the
 #   reporter (a HaRP deploy daemon, the pattern of deploy-harp.yml) a backend
@@ -29,15 +29,26 @@
 # A failed verdict means: no test build for the reporter, the findings go to
 # the owner and the decision is taken in 43-11 (must_have 5 of 43-10-PLAN.md).
 #
+# Which release candidate is proven is an input since plan 43-26 and no
+# longer written into this file: RC_VERSION names it, RC_REF the branch of its
+# testbuild info.xml, ARCHIVE_RUN_ID the run with its signed companion. Two
+# optional inputs put an EARLIER candidate in front, for a reporter who
+# already runs one: FROM_ARCHIVE_RUN_ID (A6: 1.6.2, then the companion of that
+# run, then the candidate) and FROM_RC_REF (A5: 1.6.2, then the testbuild
+# info.xml of that branch, then the candidate, then the store shaped 1.6.3).
+# The version of the earlier candidate is never typed in: A6 reads it out of
+# the signed archive, A5 out of the branch name rc/<version>. Left empty, both
+# jobs run exactly the path of plan 43-10. Each job prints one line
+# "proof inputs rc_version=... from_archive_run_id=..." before it starts.
+#
 # Inputs arrive as environment variables and never as interpolated text
-# (Sec-L7 shape, T-43-32): RC_REF, ARCHIVE_RUN_ID, IMAGE_SHA, HARP_IMAGE,
-# HARP_SHARED_KEY, GH_TOKEN. Every one of them is validated against a fixed
-# shape before it is used.
+# (Sec-L7 shape, T-43-32): RC_VERSION, RC_REF, ARCHIVE_RUN_ID, IMAGE_SHA,
+# FROM_RC_REF, FROM_ARCHIVE_RUN_ID, HARP_IMAGE, HARP_SHARED_KEY, GH_TOKEN.
+# Every one of them is validated against a fixed shape before it is used.
 
 set -eo pipefail
 
 REPO='street1983nk/nextcloud-search'
-RC_VERSION='1.6.3-rc.1'
 BASE_VERSION='1.6.2'
 STORE_VERSION='1.6.3'
 MIGRATION_163='001603Date20261108000000'
@@ -78,6 +89,27 @@ compare_pair() {
   if [ "${verdict}" != "true" ]; then
     "${fail_fn}" "php reads '${newer}' as not newer than '${older}', so the version order does not hold"
   fi
+}
+
+# The shape of a release candidate version, <n>.<n>.<n>-rc.<n> and nothing
+# else: the value goes into a URL, a file name and a grep.
+is_rc_version() {
+  printf '%s' "$1" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$'
+}
+
+# The inputs that name the candidate, checked and printed once per job. The
+# printed line is what a later reader holds against the dispatch (W8).
+check_proof_inputs() {
+  local fail_fn="$1"
+  is_rc_version "${RC_VERSION}" \
+    || "${fail_fn}" "RC_VERSION '${RC_VERSION}' is not a release candidate version of the form 1.2.3-rc.4"
+  case "${FROM_ARCHIVE_RUN_ID}" in
+    *[!0-9]*) "${fail_fn}" "FROM_ARCHIVE_RUN_ID '${FROM_ARCHIVE_RUN_ID}' is not a run id" ;;
+  esac
+  case "${FROM_RC_REF}" in
+    *[!A-Za-z0-9._/-]*) "${fail_fn}" "FROM_RC_REF '${FROM_RC_REF}' is not a plain ref name" ;;
+  esac
+  summary "proof inputs rc_version=${RC_VERSION} from_archive_run_id=${FROM_ARCHIVE_RUN_ID:-none} from_rc_ref=${FROM_RC_REF:-none}"
 }
 
 require_env() {
@@ -124,8 +156,14 @@ run_occ_update() {
   return "${rc}"
 }
 
+# The list shows the backend at exactly this version. The version has to end
+# where it ends: a plain substring search read "1.6.3-rc.1" as a list entry at
+# "1.6.3" too, so an update from a candidate to the release that never landed
+# would have passed (found in plan 43-26, when the candidate became an input).
 backend_listed_at() {
-  timeout 60 ./occ app_api:app:list | grep -F -q "$1"
+  local listed
+  listed=$(timeout 60 ./occ app_api:app:list)
+  printf '%s\n' "${listed}" | grep -F -- "$1" | grep -Eq -- "(^|[^0-9A-Za-z.-])${1//./\\.}([^0-9A-Za-z.-]|\$)"
 }
 
 wait_for_exapp_heartbeat() {
@@ -179,14 +217,80 @@ a6_swap() {
 }
 
 # ---------------------------------------------------------------------------
+# The signed companion archives of a6.
+# ---------------------------------------------------------------------------
+
+# The public certificate, proven to belong to our key before it greens
+# anything (same canonical DER reading as release.yml, T-43-29).
+fetch_certificate() {
+  curl -fsSL \
+    "https://github.com/nextcloud/app-certificate-requests/raw/master/findling/findling.crt" \
+    -o "${RUNNER_TEMP}/findling.crt"
+  local fpr
+  fpr=$(openssl x509 -in "${RUNNER_TEMP}/findling.crt" -noout -pubkey \
+    | openssl pkey -pubin -outform DER | openssl sha256 -r | cut -d' ' -f1)
+  if [ "${fpr}" != "${FINDLING_CERT_FPR}" ]; then
+    fail_a6 "the fetched certificate does not belong to the key of docs/certificates.md"
+  fi
+  openssl x509 -in "${RUNNER_TEMP}/findling.crt" -noout -pubkey > "${RUNNER_TEMP}/findling.pub"
+}
+
+# fetch_signed_companion <run id> <label>: the store-release artifact of a
+# release.yml dispatch, its signature verified, unpacked to
+# ${RUNNER_TEMP}/<label>-app/findling. Nothing is installed here.
+fetch_signed_companion() {
+  local run_id="$1" label="$2"
+  local dist="${RUNNER_TEMP}/${label}-dist" unpack="${RUNNER_TEMP}/${label}-app" archive sig
+  mkdir -p "${dist}" "${unpack}"
+  # --dir spelled out: the -d shorthand is not known to the gh of the runner
+  # (proof run 42538879801).
+  gh run download "${run_id}" -n store-release --dir "${dist}" --repo "${REPO}"
+  archive=$(find "${dist}" -name findling.tar.gz -not -path '*source*' | sed -n '1p')
+  sig=$(find "${dist}" -name findling.tar.gz.sig | sed -n '1p')
+  if [ -z "${archive}" ] || [ -z "${sig}" ]; then
+    fail_a6 "run ${run_id} does not carry findling.tar.gz and its .sig in the store-release artifact"
+  fi
+  echo "archive of run ${run_id}: $(wc -c < "${archive}") bytes, signature $(wc -c < "${sig}") bytes"
+  openssl base64 -d -A -in "${sig}" -out "${dist}/findling.sig.bin"
+  openssl dgst -sha512 -verify "${RUNNER_TEMP}/findling.pub" \
+    -signature "${dist}/findling.sig.bin" "${archive}" \
+    || fail_a6 "the release signature over the archive of run ${run_id} does not verify"
+  tar -xzf "${archive}" -C "${unpack}"
+}
+
+# install_companion <label> <version>: the unpacked archive over apps/findling,
+# occ upgrade, and app:list has to show the version. The version is read out
+# of the archive rather than trusted from the input.
+install_companion() {
+  local label="$1" expected="$2" unpack="${RUNNER_TEMP}/$1-app" carried
+  carried=$(read_xml_version "${unpack}/findling/appinfo/info.xml")
+  if [ "${carried}" != "${expected}" ]; then
+    fail_a6 "the ${label} archive carries version '${carried}' and not ${expected}"
+  fi
+  rm -rf apps/findling
+  mv "${unpack}/findling" apps/findling
+
+  echo "--- occ upgrade to ${expected} ---"
+  timeout 300 ./occ upgrade || fail_a6 "occ upgrade to ${expected} went red"
+
+  timeout 60 ./occ app:list --output=json > "${RUNNER_TEMP}/app-list.json"
+  if ! grep -F -q "\"findling\":\"${expected}\"" "${RUNNER_TEMP}/app-list.json"; then
+    grep -o '"findling":"[^"]*"' "${RUNNER_TEMP}/app-list.json" || true
+    fail_a6 "app:list does not show findling at ${expected} after the upgrade"
+  fi
+  echo "app:list shows findling at ${expected}"
+}
+
+# ---------------------------------------------------------------------------
 # a6: the upgrade proof on the fresh instance, run from the workspace root of
 # the server checkout after setup-test-nc.
 # ---------------------------------------------------------------------------
 a6_proof() {
-  require_env GH_TOKEN RUNNER_TEMP ARCHIVE_RUN_ID
+  require_env GH_TOKEN RUNNER_TEMP ARCHIVE_RUN_ID RC_VERSION
   case "${ARCHIVE_RUN_ID}" in
     *[!0-9]*|'') fail_a6 "ARCHIVE_RUN_ID '${ARCHIVE_RUN_ID}' is not a run id" ;;
   esac
+  check_proof_inputs fail_a6
 
   local installed
   installed=$(timeout 60 ./occ config:app:get findling installed_version)
@@ -206,47 +310,22 @@ a6_proof() {
     "INSERT INTO oc_findling_scan_stats (storage_id, files_seen, updated_at) VALUES (999001, 1, datetime('now'));"
   sqlite3 data/owncloud.db "SELECT count(*) FROM oc_findling_scan_stats;"
 
-  # The signed rc archive out of the release.yml dispatch named by the input.
-  local dist="${RUNNER_TEMP}/rc-dist" archive sig
-  mkdir -p "${dist}"
-  # --dir spelled out: the -d shorthand is not known to the gh of the runner
-  # (proof run 42538879801).
-  gh run download "${ARCHIVE_RUN_ID}" -n store-release --dir "${dist}" --repo "${REPO}"
-  archive=$(find "${dist}" -name findling.tar.gz -not -path '*source*' | sed -n '1p')
-  sig=$(find "${dist}" -name findling.tar.gz.sig | sed -n '1p')
-  if [ -z "${archive}" ] || [ -z "${sig}" ]; then
-    fail_a6 "run ${ARCHIVE_RUN_ID} does not carry findling.tar.gz and its .sig in the store-release artifact"
+  # The signed archives out of the release.yml dispatches named by the inputs,
+  # each verified against the public certificate before anything is unpacked:
+  # the candidate, and in front of it the earlier candidate when one is named.
+  fetch_certificate
+  local from_version=''
+  if [ -n "${FROM_ARCHIVE_RUN_ID}" ]; then
+    fetch_signed_companion "${FROM_ARCHIVE_RUN_ID}" from
+    from_version=$(read_xml_version "${RUNNER_TEMP}/from-app/findling/appinfo/info.xml")
+    is_rc_version "${from_version}" \
+      || fail_a6 "the archive of run ${FROM_ARCHIVE_RUN_ID} carries version '${from_version}', which is no release candidate"
+    if [ "${from_version}" = "${RC_VERSION}" ]; then
+      fail_a6 "the archive of run ${FROM_ARCHIVE_RUN_ID} carries ${RC_VERSION} itself, so it is no earlier candidate"
+    fi
+    echo "the earlier candidate out of run ${FROM_ARCHIVE_RUN_ID} is ${from_version}"
   fi
-  echo "archive $(wc -c < "${archive}") bytes, signature $(wc -c < "${sig}") bytes"
-
-  # The public certificate, proven to belong to our key before it greens
-  # anything (same canonical DER reading as release.yml, T-43-29).
-  curl -fsSL \
-    "https://github.com/nextcloud/app-certificate-requests/raw/master/findling/findling.crt" \
-    -o "${RUNNER_TEMP}/findling.crt"
-  local fpr
-  fpr=$(openssl x509 -in "${RUNNER_TEMP}/findling.crt" -noout -pubkey \
-    | openssl pkey -pubin -outform DER | openssl sha256 -r | cut -d' ' -f1)
-  if [ "${fpr}" != "${FINDLING_CERT_FPR}" ]; then
-    fail_a6 "the fetched certificate does not belong to the key of docs/certificates.md"
-  fi
-  openssl x509 -in "${RUNNER_TEMP}/findling.crt" -noout -pubkey > "${RUNNER_TEMP}/findling.pub"
-  openssl base64 -d -A -in "${sig}" -out "${RUNNER_TEMP}/findling.sig.bin"
-  openssl dgst -sha512 -verify "${RUNNER_TEMP}/findling.pub" \
-    -signature "${RUNNER_TEMP}/findling.sig.bin" "${archive}" \
-    || fail_a6 "the release signature over the rc archive does not verify"
-
-  # Unpack, read the version out of the archive rather than trusting the
-  # input, and put it over apps/findling exactly as the reporter would.
-  local unpack="${RUNNER_TEMP}/rc-app" rc_version
-  mkdir -p "${unpack}"
-  tar -xzf "${archive}" -C "${unpack}"
-  rc_version=$(read_xml_version "${unpack}/findling/appinfo/info.xml")
-  if [ "${rc_version}" != "${RC_VERSION}" ]; then
-    fail_a6 "the archive carries version '${rc_version}' and not ${RC_VERSION}"
-  fi
-  rm -rf apps/findling
-  mv "${unpack}/findling" apps/findling
+  fetch_signed_companion "${ARCHIVE_RUN_ID}" rc
 
   # The always enabled apps this checkout does not carry, the correction of
   # deploy-harp "Store upgrade 3b" in short: a git checkout of the server
@@ -280,15 +359,12 @@ a6_proof() {
     fail_a6 "shipped.json names a half of Findling, which this step must never be able to touch"
   fi
 
-  echo "--- occ upgrade ---"
-  timeout 300 ./occ upgrade || fail_a6 "occ upgrade went red"
-
-  timeout 60 ./occ app:list --output=json > "${RUNNER_TEMP}/app-list.json"
-  if ! grep -F -q "\"findling\":\"${RC_VERSION}\"" "${RUNNER_TEMP}/app-list.json"; then
-    grep -o '"findling":"[^"]*"' "${RUNNER_TEMP}/app-list.json" || true
-    fail_a6 "app:list does not show findling at ${RC_VERSION} after the upgrade"
+  # Over apps/findling exactly as the reporter would put it there, the earlier
+  # candidate first when one is named, each followed by occ upgrade.
+  if [ -n "${from_version}" ]; then
+    install_companion from "${from_version}"
   fi
-  echo "app:list shows findling at ${RC_VERSION}"
+  install_companion rc "${RC_VERSION}"
 
   local migrated
   migrated=$(sqlite3 data/owncloud.db \
@@ -315,10 +391,13 @@ a6_proof() {
     fail_a6 "no version_compare call was found in lib/private/Installer.php or lib/private/App/AppStore of this server checkout"
   fi
   compare_pair "${STORE_VERSION}" "${RC_VERSION}" fail_a6
+  if [ -n "${from_version}" ]; then
+    compare_pair "${RC_VERSION}" "${from_version}" fail_a6
+  fi
   compare_pair "${RC_VERSION}" "${BASE_VERSION}" fail_a6
 
   summary "A6: ok"
-  echo "A6 detail: ${BASE_VERSION} to ${RC_VERSION} upgraded, migration ran, hint flag 1, server comparison reads ${STORE_VERSION} as newer than ${RC_VERSION}"
+  echo "A6 detail: ${BASE_VERSION} to ${from_version:+${from_version} to }${RC_VERSION} upgraded, migration ran, hint flag 1, server comparison reads ${STORE_VERSION} as newer than ${RC_VERSION}"
 }
 
 # ---------------------------------------------------------------------------
@@ -448,14 +527,88 @@ a5_register() {
 }
 
 # ---------------------------------------------------------------------------
+# update_over_raw_url <ref> <version> <image sha or ''>: one step of the
+# reporter, occ app_api:app:update over the raw URL of a testbuild info.xml.
+# The file has to carry the version and an immutable image tag (the given one,
+# or any 40 hex characters when none is given), the list has to show the
+# version afterwards and the running container has to carry that tag. A
+# refusal without --force-update is repeated with it, both outputs verbatim;
+# UPDATE_FORCE says which it was.
+# ---------------------------------------------------------------------------
+UPDATE_FORCE='not needed'
+update_over_raw_url() {
+  local ref="$1" version="$2" want_tag="$3"
+  # The URL form the reporter uses, letter for letter, read once up front so a
+  # missing branch fails here with a sentence and not inside occ.
+  local url="https://raw.githubusercontent.com/${REPO}/${ref}/testbuild/findling_backend-${version}-info.xml"
+  local file="${RUNNER_TEMP}/testbuild-info-${version}.xml" tb_version tb_tag
+  echo "testbuild info.xml of the reporter path: ${url}"
+  curl -fsSL "${url}" -o "${file}" \
+    || fail_a5 "the testbuild info.xml is not reachable under ${url}"
+  tb_version=$(read_xml_version "${file}")
+  tb_tag=$(read_xml_image_tag "${file}")
+  echo "testbuild info.xml carries version ${tb_version}, image-tag ${tb_tag}"
+  if [ "${tb_version}" != "${version}" ]; then
+    fail_a5 "the testbuild info.xml carries version '${tb_version}' and not ${version}"
+  fi
+  if [ -n "${want_tag}" ] && [ "${tb_tag}" != "${want_tag}" ]; then
+    fail_a5 "the testbuild info.xml of ${version} does not carry the image-tag ${want_tag}"
+  fi
+  if ! printf '%s' "${tb_tag}" | grep -Eq '^[0-9a-f]{40}$'; then
+    fail_a5 "the image-tag '${tb_tag}' of the testbuild info.xml of ${version} is no immutable commit tag"
+  fi
+
+  UPDATE_FORCE='not needed'
+  if ! run_occ_update app_api:app:update findling_backend --info-xml "${url}" \
+    || ! backend_listed_at "${version}"; then
+    echo "the plain update did not land at ${version}, repeating with --force-update"
+    UPDATE_FORCE='needed'
+    run_occ_update app_api:app:update findling_backend --info-xml "${url}" --force-update \
+      || fail_a5 "the update to ${version} went red even with --force-update"
+    backend_listed_at "${version}" \
+      || fail_a5 "app_api:app:list does not show ${version} even after --force-update"
+  fi
+  timeout 60 ./occ app_api:app:list
+  echo "update to ${version} over the raw URL landed, --force-update ${UPDATE_FORCE}"
+
+  # The pull of the immutable image is asserted on the running container, not
+  # on the pull log: the reference it runs from has to carry the tag.
+  local container image
+  container=$(docker ps --filter 'name=findling_backend' --format '{{.Names}}')
+  if [ -z "${container}" ]; then
+    docker ps -a
+    fail_a5 "no running container matches findling_backend after the update to ${version}"
+  fi
+  image=$(docker inspect --format '{{.Config.Image}}' "${container}")
+  echo "container ${container} runs image ${image}"
+  case "${image}" in
+    *"${tb_tag}"*) echo "the image reference carries the immutable tag :${tb_tag}" ;;
+    *) fail_a5 "the container image '${image}' does not carry the immutable tag ${tb_tag}" ;;
+  esac
+  wait_for_exapp_heartbeat || fail_a5 "the ${version} container never answered its heartbeat"
+}
+
+# ---------------------------------------------------------------------------
 # a5: the update proof on the path of the reporter, verbatim outputs.
 # ---------------------------------------------------------------------------
 a5_proof() {
-  require_env HARP_SHARED_KEY RUNNER_TEMP RC_REF IMAGE_SHA
+  require_env HARP_SHARED_KEY RUNNER_TEMP RC_REF IMAGE_SHA RC_VERSION
   check_image_sha
   case "${RC_REF}" in
     *[!A-Za-z0-9._/-]*|'') fail_a5 "RC_REF '${RC_REF}' is not a plain ref name" ;;
   esac
+  check_proof_inputs fail_a5
+  # The earlier candidate of the reporter path, named by its branch
+  # rc/<version>; the version is the rest of the branch name.
+  local from_version=''
+  if [ -n "${FROM_RC_REF}" ]; then
+    from_version="${FROM_RC_REF#rc/}"
+    is_rc_version "${from_version}" \
+      || fail_a5 "FROM_RC_REF '${FROM_RC_REF}' is not a branch of the form rc/<release candidate version>"
+    if [ "${from_version}" = "${RC_VERSION}" ]; then
+      fail_a5 "FROM_RC_REF names ${RC_VERSION} itself, so it is no earlier candidate"
+    fi
+  fi
 
   # The comparison AppAPI uses on app_api:app:update, found in the AppAPI
   # checkout of this very run, file and line to the log (W7).
@@ -487,52 +640,23 @@ a5_proof() {
   echo "Store-Erkennung AppAPI: ${store_hit%%:*}:$(printf '%s' "${store_hit}" | cut -d: -f2) nutzt version_compare"
 
   compare_pair "${RC_VERSION}" "${BASE_VERSION}" fail_a5
+  if [ -n "${from_version}" ]; then
+    compare_pair "${RC_VERSION}" "${from_version}" fail_a5
+  fi
   compare_pair "${STORE_VERSION}" "${RC_VERSION}" fail_a5
 
-  # The URL form the reporter uses, letter for letter, read once up front so a
-  # missing branch fails here with a sentence and not inside occ.
-  local url="https://raw.githubusercontent.com/${REPO}/${RC_REF}/testbuild/findling_backend-${RC_VERSION}-info.xml"
-  echo "testbuild info.xml of the reporter path: ${url}"
-  curl -fsSL "${url}" -o "${RUNNER_TEMP}/testbuild-info.xml" \
-    || fail_a5 "the testbuild info.xml is not reachable under ${url}"
-  local tb_version tb_tag
-  tb_version=$(read_xml_version "${RUNNER_TEMP}/testbuild-info.xml")
-  tb_tag=$(read_xml_image_tag "${RUNNER_TEMP}/testbuild-info.xml")
-  echo "testbuild info.xml carries version ${tb_version}, image-tag ${tb_tag}"
-  if [ "${tb_version}" != "${RC_VERSION}" ] || [ "${tb_tag}" != "${IMAGE_SHA}" ]; then
-    fail_a5 "the testbuild info.xml does not carry ${RC_VERSION} with image-tag ${IMAGE_SHA}"
+  # A reporter who already runs an earlier candidate: 1.6.2 to that candidate
+  # first, over the raw URL of its own branch. Its image tag is read out of
+  # its info.xml, the input IMAGE_SHA belongs to the candidate under proof.
+  local from_force='not run'
+  if [ -n "${from_version}" ]; then
+    update_over_raw_url "${FROM_RC_REF}" "${from_version}" ''
+    from_force="${UPDATE_FORCE}"
   fi
 
-  # Step one of the reporter: 1.6.2 to 1.6.3-rc.1 over the raw URL. A refusal
-  # without --force-update is repeated with it, both outputs verbatim.
-  local rc_force='not needed'
-  if ! run_occ_update app_api:app:update findling_backend --info-xml "${url}" \
-    || ! backend_listed_at "${RC_VERSION}"; then
-    echo "the plain update did not land at ${RC_VERSION}, repeating with --force-update"
-    rc_force='needed'
-    run_occ_update app_api:app:update findling_backend --info-xml "${url}" --force-update \
-      || fail_a5 "the update to ${RC_VERSION} went red even with --force-update"
-    backend_listed_at "${RC_VERSION}" \
-      || fail_a5 "app_api:app:list does not show ${RC_VERSION} even after --force-update"
-  fi
-  timeout 60 ./occ app_api:app:list
-  echo "update ${BASE_VERSION} to ${RC_VERSION} over the raw URL landed, --force-update ${rc_force}"
-
-  # The pull of the immutable image is asserted on the running container, not
-  # on the pull log: the reference it runs from has to carry the input sha.
-  local container image
-  container=$(docker ps --filter 'name=findling_backend' --format '{{.Names}}')
-  if [ -z "${container}" ]; then
-    docker ps -a
-    fail_a5 "no running container matches findling_backend after the rc update"
-  fi
-  image=$(docker inspect --format '{{.Config.Image}}' "${container}")
-  echo "container ${container} runs image ${image}"
-  case "${image}" in
-    *"${IMAGE_SHA}"*) echo "the image reference carries the immutable tag :${IMAGE_SHA}" ;;
-    *) fail_a5 "the container image '${image}' does not carry the immutable tag ${IMAGE_SHA}" ;;
-  esac
-  wait_for_exapp_heartbeat || fail_a5 "the ${RC_VERSION} container never answered its heartbeat"
+  # Step one of the reporter: to the candidate over the raw URL.
+  update_over_raw_url "${RC_REF}" "${RC_VERSION}" "${IMAGE_SHA}"
+  local rc_force="${UPDATE_FORCE}"
 
   # Step two, the question Pitfall 6 is about: a store shaped info.xml with
   # version 1.6.3 on the SAME image is offered and applied as an update over
@@ -562,7 +686,7 @@ a5_proof() {
   echo "update ${RC_VERSION} to ${STORE_VERSION} applied, --force-update ${store_force}"
 
   summary "A5: ok"
-  echo "A5 detail: ${BASE_VERSION} registered over HaRP, raw URL update to ${RC_VERSION} (--force-update ${rc_force}), store shaped ${STORE_VERSION} applied over it (--force-update ${store_force})"
+  echo "A5 detail: ${BASE_VERSION} registered over HaRP, ${from_version:+raw URL update to ${from_version} (--force-update ${from_force}), }raw URL update to ${RC_VERSION} (--force-update ${rc_force}), store shaped ${STORE_VERSION} applied over it (--force-update ${store_force})"
 }
 
 case "$1" in

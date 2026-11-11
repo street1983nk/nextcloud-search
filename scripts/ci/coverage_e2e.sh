@@ -53,6 +53,19 @@
 #   upgrade     indexed by 1.6.2, then updated to the head (doc key backfill,
 #               one container row without a file cache row), the gate-queue
 #               proof, then back to 1.6.2 and up again with a rename (W5, G1)
+#   upgrade-rc1     indexed by the test build rc.1 (document keys of
+#                   generation 1, which count a file once per root), then the
+#                   container alone goes to the head and runs next to the rc.1
+#                   companion, then the companion follows and every key is
+#                   rebuilt; the gate-queue proof, then back to 1.6.2 and up
+#                   again like upgrade (plan 43-26)
+#   upgrade-rc1-cf  the same start, the other order: the companion goes to the
+#                   head first and runs next to the rc.1 container, then a
+#                   backup pause, then the head container. While the pause
+#                   holds no key is rebuilt and the generation gate of
+#                   POST /coverage alone keeps the old keys out of the figure
+#                   (B1 of plan 43-24, T-43-79); after the resume the rebuild,
+#                   then the gate-queue proof
 #
 # SMB modes (SMB_MODE, plan 43-18, owner decision F3): wrapped, icewind/smb
 # drives the smbclient binary; native, the php-smbclient extension. The leg
@@ -61,7 +74,8 @@
 #
 # Runs from the root of the Nextcloud server checkout. Expects VARIANT,
 # SMB_MODE, NC_URL, HARNESS (checkout of the head), SRC (checkout the instance
-# was set up from), RESULT_FILE, EXAPP_SECRET, EXAPP_PORT, RUNNER_TEMP.
+# was set up from), RESULT_FILE, EXAPP_SECRET, EXAPP_PORT, RUNNER_TEMP, and
+# for upgrade-rc1 BASE_SRC (a checkout of v1.6.2 for the way back).
 # Passwords are fixed test values of a throwaway runner and are never printed.
 
 set -euo pipefail
@@ -77,7 +91,7 @@ set -euo pipefail
 : "${RUNNER_TEMP:?RUNNER_TEMP is required}"
 
 case "${VARIANT}" in
-  gate-crawl | gate-queue | v1.6.2 | upgrade) ;;
+  gate-crawl | gate-queue | v1.6.2 | upgrade | upgrade-rc1 | upgrade-rc1-cf) ;;
   *)
     echo "::error::unknown variant ${VARIANT}"
     exit 1
@@ -119,8 +133,30 @@ SWEEP_TIMEOUT=240
 # round behind a busy queue waits one more tick, so two ticks, the round and
 # a margin.
 CATCHUP_TIMEOUT=900
-# The backend the instance runs right now; the upgrade variant moves it.
+# The backend the instance runs right now; the upgrade variants move it.
 BACKEND_DIR="${SRC}/backend"
+# The backend of the released 1.6.2 for the way back: the tree the instance
+# was set up from in the variant upgrade, a checkout of its own in upgrade-rc1.
+OLD_BACKEND_DIR=""
+case "${VARIANT}" in
+  upgrade) OLD_BACKEND_DIR="${SRC}/backend" ;;
+  upgrade-rc1)
+    : "${BASE_SRC:?BASE_SRC is required for upgrade-rc1}"
+    OLD_BACKEND_DIR="${BASE_SRC}/backend"
+    ;;
+esac
+# The longest wait for a rebuild of the document keys after an update from
+# rc.1. A round starts every DOC_KEY_TICK_SECONDS (300 s) and a round that met
+# a companion of another key format first waits out its cooldown (300 s, then
+# doubled) unless a coverage call ends it, so three ticks and a margin.
+REBUILD_TIMEOUT=1200
+# How long the generation gate is watched under the backup pause: four reads
+# of the wish (PAUSE_POLL_SECONDS, 15 s). Without the pause the first round of
+# the document keys runs as soon as the container is armed.
+PAUSE_HOLD_SECONDS=60
+# By how much a storage sweep stamp of rc.1 is aged before the head starts,
+# see age_sweep_stamp.
+SWEEP_AGE_SECONDS=10800
 
 mkdir -p "${WORK}"
 # The mount log (plan 43-25): one line per configuration as it was created,
@@ -136,6 +172,9 @@ umask 022
 failures=0
 rows=()
 notes=()
+# The verdict lines of the upgrade variants, "<name>: ok (<detail>)", printed
+# at the start of a line in the result file (plan 43-26).
+verdicts=()
 # The two figures of a 1.6.2 companion that may not drain (see drain).
 outage_abort_tolerated=0
 drain_incomplete=0
@@ -160,6 +199,14 @@ check() {
   if ! compare "$1" "$2" "$3"; then
     failures=$((failures + 1))
   fi
+}
+
+# verdict <name> <ok|failed> <detail>: one verdict line; anything but ok counts
+# as a failure of the leg.
+verdict() {
+  echo "$1: $2 ($3)"
+  verdicts+=("$1: $2 ($3)")
+  [ "$2" = "ok" ] || failures=$((failures + 1))
 }
 
 password_of() {
@@ -194,11 +241,27 @@ head_under_test() {
 # the verdicts of plan 43-18 depend on it: the container of 1.6.2 judges a 422
 # failed/gateway_error. The empty file is no tell, both companions answer it
 # with 200 and zero bytes (run 42418778026).
+#
+# The two variants that start at rc.1 begin with the flag set: the test build
+# was cut after plans 43-17 to 43-20 and carries the gateway and the verdicts
+# of the head, the document keys are what tells it apart. Only the way back to
+# 1.6.2 in upgrade-rc1 clears the flag.
 companion_updated=0
+case "${VARIANT}" in
+  upgrade-rc1 | upgrade-rc1-cf) companion_updated=1 ;;
+esac
 head_companion() {
   case "${VARIANT}" in
     gate-crawl | gate-queue) return 0 ;;
-    upgrade) [ "${companion_updated}" = "1" ] ;;
+    upgrade | upgrade-rc1 | upgrade-rc1-cf) [ "${companion_updated}" = "1" ] ;;
+    *) return 1 ;;
+  esac
+}
+
+# from_rc1: the instance was set up from the test build rc.1.
+from_rc1() {
+  case "${VARIANT}" in
+    upgrade-rc1 | upgrade-rc1-cf) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -827,9 +890,17 @@ judge_locked() {
 # (no folded spelling, the root in the key, no hashed id) and no figure is read
 # from the answer; the callers read counting and the doc key counters only.
 # docKeyFormat 2 goes in for the container of the head and for no other one,
-# see head_container.
+# see head_container. A style as the first argument overrides that choice
+# (plan 43-26): with-format is the body of a head companion, without-format
+# the body of a companion of rc.1, whichever container answers.
 coverage_body() {
-  local mounted groups
+  local style="${1:-}" mounted groups
+  if [ -z "${style}" ]; then
+    style=without-format
+    if head_container; then
+      style=with-format
+    fi
+  fi
   mounted=$(ncdb "SELECT DISTINCT storage_id FROM oc_mounts ORDER BY storage_id;" | jq -R 'tonumber' | jq -cs '.')
   groups=$(ncdb "SELECT s.numeric_id || char(9) || 'smb::' || substr(s.id, instr(s.id, '@') + 1)
                    FROM oc_storages AS s
@@ -837,12 +908,37 @@ coverage_body() {
                   ORDER BY s.numeric_id;" \
     | jq -R 'split("\t") | {id: (.[0] | tonumber), key: .[1]}' \
     | jq -cs 'group_by(.key) | map(map(.id)) | map(select(length >= 2))')
-  if head_container; then
-    jq -cn --argjson mounted "${mounted}" --argjson groups "${groups}" \
-      '{mounted: $mounted, groups: $groups, docKeyFormat: 2}'
-  else
-    jq -cn --argjson mounted "${mounted}" --argjson groups "${groups}" '{mounted: $mounted, groups: $groups}'
-  fi
+  case "${style}" in
+    with-format)
+      jq -cn --argjson mounted "${mounted}" --argjson groups "${groups}" \
+        '{mounted: $mounted, groups: $groups, docKeyFormat: 2}'
+      ;;
+    without-format)
+      jq -cn --argjson mounted "${mounted}" --argjson groups "${groups}" '{mounted: $mounted, groups: $groups}'
+      ;;
+    *)
+      # To stderr: the caller redirects stdout into the body file.
+      echo "::error::unknown body style ${style}" >&2
+      return 1
+      ;;
+  esac
+}
+
+# coverage_status <style>: POST /coverage with a body of the given style and
+# print the HTTP status, 000 when curl gave up. The answer stays in
+# ${WORK}/coverage.json.
+coverage_status() {
+  local auth
+  auth=$(printf 'admin:%s' "${EXAPP_SECRET}" | base64 -w0)
+  # No status at all for a style nobody knows: the caller compares against
+  # 200 or 422 and counts the empty answer as a difference.
+  coverage_body "$1" > "${WORK}/coverage-body.json" || return 1
+  curl -s -m 120 -X POST "http://127.0.0.1:${EXAPP_PORT}/coverage" \
+    -H 'Content-Type: application/json' \
+    -H 'EX-APP-ID: findling_backend' \
+    -H "EX-APP-VERSION: $(backend_version "${BACKEND_DIR}")" \
+    -H "AUTHORIZATION-APP-API: ${auth}" \
+    --data @"${WORK}/coverage-body.json" -o "${WORK}/coverage.json" -w '%{http_code}' || true
 }
 
 # post_coverage: POST /coverage straight to the container, with the AppAPI
@@ -869,9 +965,386 @@ put_companion() {
   sed -i "s:<version>[^<]*</version>:<version>$2</version>:" apps/findling/appinfo/info.xml
 }
 
+# ===================================================================================
+# The variants that start at the test build rc.1 (plan 43-26)
+# ===================================================================================
+
+doc_key_mark() {
+  statedb "SELECT value FROM meta WHERE key = 'doc_key_backfill_after';" 2> /dev/null || echo unreadable
+}
+
+# keyed_rows: living container rows that carry a document key. "unreadable"
+# and never 0 when the database gave no answer, so a failed read cannot pass
+# for "no key was written".
+keyed_rows() {
+  statedb "SELECT COUNT(*) FROM files WHERE deleted_at IS NULL AND doc_key IS NOT NULL;" 2> /dev/null || echo unreadable
+}
+
+doc_key_tick() {
+  sed -n 's/^DOC_KEY_TICK_SECONDS: Final = \([0-9]*\).*/\1/p' "${HARNESS}/backend/src/findling/worker/doc_keys.py"
+}
+
+# log_count <mark> <text>: the log lines since the mark that carry the text.
+log_count() {
+  log_since "$1" | grep -c -- "$2" || true
+}
+
+# generation_one_with_keys <meta value> <keyed rows>: the keys of rc.1 are
+# still there. The meta value of rc.1 begins with its generation, "1:", and a
+# living row carries a key. Both are needed for the generation gate of the
+# head to be what answers: a value of generation 2 or no key at all means the
+# rebuild already ran, or that there never was anything to rebuild.
+generation_one_with_keys() {
+  case "$1" in
+    1:*) ;;
+    *) return 1 ;;
+  esac
+  case "$2" in
+    '' | *[!0-9]*) return 1 ;;
+  esac
+  [ "$2" -gt 0 ]
+}
+
+# counts_above <shown> <floor>: both are numbers and the first is larger.
+counts_above() {
+  case "$1" in
+    '' | *[!0-9]*) return 1 ;;
+  esac
+  case "$2" in
+    '' | *[!0-9]*) return 1 ;;
+  esac
+  [ "$1" -gt "$2" ]
+}
+
+# wait_counted <label> <limit>: POST /coverage until the container answers
+# counting false with no key missing; the seconds it took are left in
+# COUNTED_SECONDS, the last answer in ${WORK}/coverage.json. Never run as
+# $(wait_counted): fail has to end the run, not a subshell.
+COUNTED_SECONDS=0
+wait_counted() {
+  local label="$1" limit="$2" started answer
+  started=$(date +%s)
+  while :; do
+    answer=$(post_coverage)
+    if jq -e '.counting == false and .docKeysMissing == 0' "${WORK}/coverage.json" > /dev/null 2>&1; then
+      COUNTED_SECONDS=$(($(date +%s) - started))
+      echo "${label}: counting false and no key missing after ${COUNTED_SECONDS} s"
+      return 0
+    fi
+    [ "$(($(date +%s) - started))" -lt "${limit}" ] \
+      || fail "${label}: the container still counts after ${limit} s: ${answer}"
+    sleep 10
+  done
+}
+
+# wait_for_catchup <version>: the one time catch-up of 1.5 finishes under the
+# version the instance was set up from, before anything of the head runs (run
+# 42477570073, the whole reasoning stands at the update of the variant
+# upgrade). The mark and its done word are read from the tree of that version.
+# The seconds are left in CATCHUP_SECONDS.
+CATCHUP_SECONDS=0
+wait_for_catchup() {
+  local version="$1" key done_word started deadline now
+  key=$(sed -n 's/^CATCHUP_MARK: Final = "\([a-z0-9_]*\)".*/\1/p' "${SRC}/backend/src/findling/store/repo.py")
+  done_word=$(sed -n 's/^CATCHUP_DONE: Final = "\([a-z]*\)".*/\1/p' "${SRC}/backend/src/findling/store/repo.py")
+  [ -n "${key}" ] && [ -n "${done_word}" ] \
+    || fail "the catch-up mark of ${version} could not be read from store/repo.py"
+  started=$(date +%s)
+  deadline=$((started + CATCHUP_TIMEOUT))
+  while :; do
+    now=$(statedb "SELECT value FROM meta WHERE key = '${key}';" || true)
+    [ "${now}" = "${done_word}" ] && break
+    [ "$(date +%s)" -lt "${deadline}" ] \
+      || fail "${version} did not finish the catch-up of 1.5 within ${CATCHUP_TIMEOUT} s (${key}='${now}'), the leg cannot start the head without a catch-up round"
+    sleep 10
+  done
+  CATCHUP_SECONDS=$(($(date +%s) - started))
+  # The catch-up round may hand rows back to the queue; they settle under the
+  # old version before anything of the head runs.
+  drain
+  note "${VARIANT}: ${key}=${done_word} under ${version} after ${CATCHUP_SECONDS} s of waiting"
+  rows+=("| ${VARIANT} | catch-up of 1.5 done under ${version} before the head starts | ${done_word} | ${done_word} after ${CATCHUP_SECONDS} s |")
+}
+
+# age_sweep_stamp: called while no container runs, between rc.1 and the head.
+#
+# 1.6.2 writes no storage_sweep_at, rc.1 does: its catch-up cycle sweeps (plan
+# 43-02), minutes before phase A. The sweep has a cadence of its own
+# (reconcile.py _sweep_due: the minimum pause, then the preferred hour or
+# twice the pause), so a stamp that young would keep the head from sweeping
+# in phase A for an hour and the leg could never show the first sweep after
+# the topology change. An instance that ran rc.1 for days has an old stamp;
+# this makes the stamp that old (SWEEP_AGE_SECONDS, three times the pause of
+# phase A) and changes nothing else. W5 keeps its meaning: the stamp has to
+# be exactly this value before phase A, a sweep of the head before that moves
+# it and the run is invalid.
+sweep_stamp_expected=""
+age_sweep_stamp() {
+  local stamp
+  stamp=$(statedb "SELECT value FROM meta WHERE key = 'storage_sweep_at';" || true)
+  if [ -z "${stamp}" ]; then
+    note "${VARIANT}: rc.1 left no storage_sweep_at, nothing to age"
+    return 0
+  fi
+  case "${stamp}" in
+    *[!0-9]*) fail "storage_sweep_at of rc.1 reads '${stamp}', which is no time" ;;
+  esac
+  sweep_stamp_expected=$((stamp - SWEEP_AGE_SECONDS))
+  sqlite3 -cmd ".timeout 10000" "${STATE_DB}" \
+    "UPDATE meta SET value = '${sweep_stamp_expected}' WHERE key = 'storage_sweep_at';"
+  [ "$(statedb "SELECT value FROM meta WHERE key = 'storage_sweep_at';" || true)" = "${sweep_stamp_expected}" ] \
+    || fail "the storage sweep stamp of rc.1 could not be aged"
+  note "${VARIANT}: storage_sweep_at of rc.1 aged by ${SWEEP_AGE_SECONDS} s while no container ran, as on an instance that ran rc.1 for hours"
+}
+
+# page_shows <label> <kind>: the admin overview, read through the companion
+# that is installed right now, goes the way named by kind:
+#   old-way   the figure of 1.6.2 (no per document count, nothing counting),
+#             the answer of a companion to a container it cannot talk keys with
+#   no-figure the per document count is counting and the share is null
+# A page that does not answer is a failure, never a pass.
+page_shows() {
+  local label="$1" kind="$2" filter seen=unreadable
+  case "${kind}" in
+    old-way) filter='.coverage.perDocument == false and .coverage.counting == false' ;;
+    no-figure) filter='.coverage.perDocument == true and .coverage.counting == true and .coverage.percent == null' ;;
+    *) fail "unknown page kind ${kind}" ;;
+  esac
+  for _ in $(seq 1 12); do
+    if overview; then
+      seen=$(jq -c '.coverage | {perDocument, counting, percent}' "${WORK}/overview.json" 2> /dev/null || echo unreadable)
+      break
+    fi
+    sleep 5
+  done
+  rows+=("| mixed | ${label}: the page, ${kind} | ${kind} | ${seen} |")
+  if [ "${seen}" != "unreadable" ] && jq -e "${filter}" "${WORK}/overview.json" > /dev/null 2>&1; then
+    echo "compare ${label}, the page ${kind}: ${seen}, as expected"
+    return 0
+  fi
+  failures=$((failures + 1))
+  echo "::warning::compare ${label}, the page ${kind}: ${seen}, different"
+}
+
+# update_companion_to_head: the PHP half of the head over the one of rc.1,
+# through occ upgrade. This is the version proof of the test build since rc.2
+# was struck (owner decision of 2026-11-09): the reporter goes from rc.1
+# straight to the release, so the installed version has to stand at rc.1
+# before, php has to read the head as newer in the operator form the server
+# uses, and occ upgrade has to leave the head version behind.
+update_companion_to_head() {
+  local head_version before after newer
+  head_version=$(backend_version "${HARNESS}/php")
+  [ -n "${head_version}" ] || fail "the companion of the head carries no version"
+  before=$(nc_occ config:app:get findling installed_version || echo unreadable)
+  check "installed_version of the companion before the update" "${rc1_version}" "${before}"
+  newer=$(php -r 'var_export(version_compare($argv[1], $argv[2], ">"));' "${head_version}" "${rc1_version}" || echo unreadable)
+  check "php reads ${head_version} as newer than ${rc1_version}" true "${newer}"
+  put_companion "${HARNESS}/php" "${head_version}"
+  nc_occ upgrade > /dev/null
+  companion_updated=1
+  after=$(nc_occ config:app:get findling installed_version || echo unreadable)
+  rows+=("| update | installed_version of the companion, from ${before} | ${head_version} | ${after} |")
+  check "installed_version of the companion after occ upgrade" "${head_version}" "${after}"
+}
+
+# rc1_baseline: what both variants need from rc.1 before anything of the head
+# runs. The catch-up of 1.5 is over, rc.1 has finished its own count, its keys
+# are of generation 1, and positive control 4: the figure rc.1 shows lies
+# above the files on the host by more than the head may (EXPECTED_SEPARATE_K).
+# rc.1 keys a file by the root it was reached through, so this topology has to
+# make it count the files below the sub roots more than once; if it does not,
+# an update that shows the truth afterwards proves nothing.
+rc1_keyed=0
+rc1_baseline() {
+  local mark truth shown floor
+  step "rc.1: the catch-up of 1.5 finishes under rc.1"
+  wait_for_catchup "${rc1_version}"
+  step "rc.1: its own count is finished"
+  wait_counted "rc.1 before the update" "${REBUILD_TIMEOUT}"
+  mark=$(doc_key_mark)
+  rc1_keyed=$(keyed_rows)
+  rows+=("| rc.1 | living rows with a key of generation 1 before the update | more than 0 | ${rc1_keyed} |")
+  generation_one_with_keys "${mark}" "${rc1_keyed}" \
+    || fail "rc.1 left no keys of generation 1 (${rc1_keyed} keyed rows), the update has nothing to rebuild, the run is invalid"
+  read_settled rc1-baseline
+  [ "$(jq -r '.coverage.perDocument' "${WORK}/overview-rc1-baseline.json")" = "true" ] \
+    || fail "rc.1 does not show a per document count, the run is invalid"
+  truth_physical
+  truth=$(truth_numerator_list | wc -l)
+  shown=$(jq -r '.coverage.indexed' "${WORK}/overview-rc1-baseline.json")
+  floor=$(with_separate_k "${truth}")
+  rows+=("| rc.1 | positive control 4, numerator of rc.1 (files on the host: ${truth}) | more than ${floor} | ${shown} |")
+  counts_above "${shown}" "${floor}" \
+    || fail "rc.1 does not count the roots twice here, the run is invalid"
+  note "positive control 4: rc.1 shows ${shown} documents, ${truth} files are on the host, the head may show ${floor}"
+}
+
+# mixed_container_first: the head container next to the companion of rc.1, then
+# the companion.
+mixed_container_first() {
+  local before_failures="${failures}" tick deadline status mark keyed fid state key living answer
+  step "container first: the head backend next to the rc.1 companion"
+  stop_backend
+  age_sweep_stamp
+  head_mark=$(log_mark)
+  start_backend "${HARNESS}/backend"
+  tick=$(doc_key_tick)
+  [ -n "${tick}" ] || fail "DOC_KEY_TICK_SECONDS could not be read"
+
+  # The first round forgets the keys of generation 1 and asks the companion
+  # for new ones; rc.1 answers without the format, and the round waits.
+  deadline=$(($(date +%s) + tick + 120))
+  while [ "$(log_count "${head_mark}" 'the companion has another doc key format')" = "0" ]; do
+    [ "$(date +%s)" -lt "${deadline}" ] \
+      || fail "the head container never logged 'another doc key format' next to the rc.1 companion"
+    sleep 5
+  done
+  note "container first: the backfill logged 'another doc key format' $(log_count "${head_mark}" 'the companion has another doc key format') time(s)"
+  keyed=$(keyed_rows)
+  rows+=("| mixed | container first: living rows with a key after the first round (before: ${rc1_keyed}) | 0 | ${keyed} |")
+  check "container first, the keys of generation 1 are forgotten" 0 "${keyed}"
+
+  # The body of an rc.1 companion carries no format.
+  status=$(coverage_status without-format)
+  rows+=("| mixed | container first: /coverage for the body of an rc.1 companion | 422 | ${status} |")
+  check "container first, /coverage for the body of an rc.1 companion" 422 "${status}"
+  page_shows "container first" old-way
+
+  # No job writes a key: a new file is indexed through a job of the rc.1
+  # companion, which carries a key of the old format.
+  next_word
+  printf 'Coverage proof %s\n' "${NEXT_WORD}" > "${WORK}/mischbetrieb.txt"
+  printf '%s\tmischbetrieb.txt\n' "${NEXT_WORD}" >> "${WORDS}"
+  status=$(dav alice PUT mischbetrieb.txt /dev/null -T "${WORK}/mischbetrieb.txt")
+  case "${status}" in
+    201 | 204) ;;
+    *) fail "the upload of mischbetrieb.txt answered HTTP ${status}" ;;
+  esac
+  fid=$(ncdb "SELECT fc.fileid FROM oc_filecache AS fc JOIN oc_storages AS s ON s.numeric_id = fc.storage
+               WHERE s.id = 'home::alice' AND fc.path = 'files/mischbetrieb.txt';")
+  [ -n "${fid}" ] || fail "mischbetrieb.txt has no file cache row"
+  deadline=$(($(date +%s) + 600))
+  while :; do
+    state=$(statedb "SELECT state FROM files WHERE file_id = ${fid} AND deleted_at IS NULL;" || true)
+    [ "${state}" = "indexed" ] && break
+    [ "$(date +%s)" -lt "${deadline}" ] \
+      || fail "the head container did not index a new file next to the rc.1 companion within 600 s (state '${state}'), the job case tests nothing"
+    sleep 5
+  done
+  key=$(statedb "SELECT COALESCE(doc_key, 'none') FROM files WHERE file_id = ${fid};" || echo unreadable)
+  rows+=("| mixed | container first: key of a file indexed through a job of the rc.1 companion | none | ${key} |")
+  check "container first, a job of the rc.1 companion writes no key" none "${key}"
+  check "container first, no living row carries a key" 0 "$(keyed_rows)"
+
+  # The container itself answers: with the format of the head it counts, and
+  # says that every key is missing. So the 422 above was the format.
+  status=$(coverage_status with-format)
+  check "container first, /coverage for a body with the format of the head" 200 "${status}"
+  answer=$(jq -c '{counting, docKeysMissing}' "${WORK}/coverage.json" 2> /dev/null || echo unreadable)
+  if ! jq -e '.counting == true and .docKeysMissing > 0' "${WORK}/coverage.json" > /dev/null 2>&1; then
+    failures=$((failures + 1))
+    echo "::warning::container first: before the companion update /coverage answers ${answer}, not counting with missing keys"
+  fi
+  note "container first: before the companion update /coverage answers ${answer}"
+
+  step "container first: the companion follows"
+  update_companion_to_head
+  wait_counted "container first, the rebuild" "${REBUILD_TIMEOUT}"
+  mark=$(doc_key_mark)
+  living=$(living_rows)
+  rows+=("| mixed | container first: generation of the keys after the rebuild | 2 | ${mark%%:*} |")
+  check "container first, generation of the keys after the rebuild" 2 "${mark%%:*}"
+  if [ "${failures}" = "${before_failures}" ]; then
+    verdict mixed_container_first ok "rebuild ${COUNTED_SECONDS} s until counting false, ${living} living rows"
+  else
+    verdict mixed_container_first failed "$((failures - before_failures)) checks differ, rebuild ${COUNTED_SECONDS} s, ${living} living rows"
+  fi
+}
+
+# mixed_companion_first_pause: the head companion next to the container of
+# rc.1, then a backup pause, then the head container (B1 of plan 43-24).
+mixed_companion_first_pause() {
+  local before_failures="${failures}" status mark keyed mark_after keyed_after answer living paused
+  step "companion first: the head companion next to the rc.1 container"
+  update_companion_to_head
+  # The container of rc.1 forbids the field the head companion sends.
+  status=$(coverage_status with-format)
+  rows+=("| mixed | companion first: /coverage of the rc.1 container for the body of the head companion | 422 | ${status} |")
+  check "companion first, /coverage of the rc.1 container for the body of the head companion" 422 "${status}"
+  status=$(coverage_status without-format)
+  check "companion first, the rc.1 container answers a body of its own format" 200 "${status}"
+  page_shows "companion first" old-way
+
+  step "companion first: backup pause, then the head container"
+  # --wait: exit 0 only when the container said paused, so nothing of it is
+  # still writing when it is stopped.
+  timeout 400 ./occ findling:pause --wait 300 > "${WORK}/pause.out" 2>&1 || {
+    cat "${WORK}/pause.out"
+    fail "harness finding: the rc.1 container did not say paused within 300 s after occ findling:pause"
+  }
+  stop_backend
+  age_sweep_stamp
+  head_mark=$(log_mark)
+  start_backend "${HARNESS}/backend"
+
+  # The moment plan 43-24 is about: the head container holds keys of the old
+  # generation and may not rebuild them. The answer is read between two reads
+  # of the state, and both have to show the old generation with keys;
+  # otherwise the rebuild already ran and the answer says nothing about the
+  # gate.
+  mark=$(doc_key_mark)
+  keyed=$(keyed_rows)
+  status=$(coverage_status with-format)
+  answer=$(jq -c '{counting, docKeysMissing}' "${WORK}/coverage.json" 2> /dev/null || echo unreadable)
+  mark_after=$(doc_key_mark)
+  keyed_after=$(keyed_rows)
+  rows+=("| mixed | companion first: keys of generation 1 while the pause holds (meta ${mark%%:*}:, ${mark_after%%:*}:) | more than 0 | ${keyed}, ${keyed_after} |")
+  generation_one_with_keys "${mark}" "${keyed}" && generation_one_with_keys "${mark_after}" "${keyed_after}" \
+    || fail "the gate was not exercised, the run is invalid"
+  rows+=("| mixed | companion first: /coverage of the head container under the pause | 200 counting | ${status} ${answer} |")
+  check "companion first, /coverage of the head container under the pause" 200 "${status}"
+  if ! jq -e '.counting == true and .docKeysMissing > 0' "${WORK}/coverage.json" > /dev/null 2>&1; then
+    failures=$((failures + 1))
+    echo "::warning::companion first: under the pause /coverage answers ${answer}, not counting"
+  fi
+  page_shows "companion first, under the pause" no-figure
+
+  # As long as the pause holds: several reads of the wish later the keys are
+  # still the old ones and the answer is still counting.
+  sleep "${PAUSE_HOLD_SECONDS}"
+  paused=$(nc_occ findling:pause 2>&1 | sed -n 's/^Status: //p' | tail -n 1 || true)
+  mark=$(doc_key_mark)
+  keyed=$(keyed_rows)
+  status=$(coverage_status with-format)
+  answer=$(jq -c '{counting, docKeysMissing}' "${WORK}/coverage.json" 2> /dev/null || echo unreadable)
+  generation_one_with_keys "${mark}" "${keyed}" \
+    || fail "the keys were rebuilt while the backup pause held (status '${paused}'): the gate was not exercised, the run is invalid"
+  rows+=("| mixed | companion first: after ${PAUSE_HOLD_SECONDS} s under the pause (status ${paused:-unknown}) | 200 counting | ${status} ${answer} |")
+  check "companion first, /coverage after ${PAUSE_HOLD_SECONDS} s under the pause" 200 "${status}"
+  if ! jq -e '.counting == true and .docKeysMissing > 0' "${WORK}/coverage.json" > /dev/null 2>&1; then
+    failures=$((failures + 1))
+    echo "::warning::companion first: after ${PAUSE_HOLD_SECONDS} s under the pause /coverage answers ${answer}, not counting"
+  fi
+  note "companion first: under the pause the meta value stays generation 1 with ${keyed} keyed rows, /coverage ${answer}, pause status ${paused:-unknown}"
+
+  step "companion first: resume, the rebuild"
+  nc_occ findling:resume > /dev/null
+  wait_counted "companion first, the rebuild after the resume" "${REBUILD_TIMEOUT}"
+  mark=$(doc_key_mark)
+  living=$(living_rows)
+  rows+=("| mixed | companion first: generation of the keys after the rebuild | 2 | ${mark%%:*} |")
+  check "companion first, generation of the keys after the rebuild" 2 "${mark%%:*}"
+  if [ "${failures}" = "${before_failures}" ]; then
+    verdict mixed_companion_first_pause ok "rebuild ${COUNTED_SECONDS} s after the resume until counting false, ${living} living rows"
+  else
+    verdict mixed_companion_first_pause failed "$((failures - before_failures)) checks differ, rebuild ${COUNTED_SECONDS} s, ${living} living rows"
+  fi
+}
+
 write_result() {
   {
-    echo "## Coverage end to end, variant ${VARIANT}, smb ${SMB_MODE} (plan 43-07, 43-18, 43-25)"
+    echo "## Coverage end to end, variant ${VARIANT}, smb ${SMB_MODE} (plan 43-07, 43-18, 43-25, 43-26)"
     echo
     echo "| Phase | Figure | Truth | Shown |"
     echo "|-------|--------|-------|-------|"
@@ -888,6 +1361,10 @@ write_result() {
     echo "failures=${failures}"
     echo "outage_abort_tolerated=${outage_abort_tolerated}"
     echo "drain_incomplete=${drain_incomplete}"
+    if [ "${#verdicts[@]}" -gt 0 ]; then
+      echo
+      printf '%s\n' "${verdicts[@]}"
+    fi
   } > "${RESULT_FILE}"
 }
 
@@ -1163,6 +1640,29 @@ smb_mode_seen=$(php -r 'echo function_exists("smbclient_state_new") ? "native" :
 rows+=("| setup | smb mode (function_exists smbclient_state_new) | ${SMB_MODE} | ${smb_mode_seen} |")
 [ "${smb_mode_seen}" = "${SMB_MODE}" ] || fail "the leg runs ${smb_mode_seen}, not ${SMB_MODE}, the run is invalid"
 note "smb mode: ${smb_mode_seen}"
+# Where the leg starts (plan 43-26). A variant that starts at rc.1 has to find
+# a release candidate in both halves and in the installed version, otherwise
+# it would prove an update from the head to the head. The way back needs the
+# tree of the released 1.6.2.
+rc1_version=""
+if from_rc1; then
+  rc1_version=$(backend_version "${SRC}/php")
+  case "${rc1_version}" in
+    *-rc.*) ;;
+    *) fail "${VARIANT} was set up from version '${rc1_version}', which is no release candidate, the run is invalid" ;;
+  esac
+  [ "$(backend_version "${SRC}/backend")" = "${rc1_version}" ] \
+    || fail "the two halves of the release candidate carry different versions, the run is invalid"
+  rc1_installed=$(nc_occ config:app:get findling installed_version || echo unreadable)
+  rows+=("| setup | installed_version of the companion the leg starts at | ${rc1_version} | ${rc1_installed} |")
+  [ "${rc1_installed}" = "${rc1_version}" ] \
+    || fail "the instance runs the companion '${rc1_installed}' and not ${rc1_version}, the run is invalid"
+  note "${VARIANT} starts at ${rc1_version} in both halves"
+fi
+if [ -n "${OLD_BACKEND_DIR}" ]; then
+  [ "$(backend_version "${OLD_BACKEND_DIR}")" = "1.6.2" ] \
+    || fail "the tree for the way back carries '$(backend_version "${OLD_BACKEND_DIR}")' and not 1.6.2"
+fi
 nc_occ config:system:set skeletondirectory --value='' > /dev/null
 nc_occ background:cron > /dev/null
 nc_occ app:enable files_external > /dev/null
@@ -1510,27 +2010,9 @@ if [ "${VARIANT}" = "upgrade" ]; then
   # storage_sweep_at at all, so W5 keeps its meaning: a sweep of the head
   # before phase A is still an invalid run.
   step "upgrade: the catch-up of 1.5 finishes under 1.6.2"
-  catchup_key=$(sed -n 's/^CATCHUP_MARK: Final = "\([a-z0-9_]*\)".*/\1/p' "${SRC}/backend/src/findling/store/repo.py")
-  catchup_done=$(sed -n 's/^CATCHUP_DONE: Final = "\([a-z]*\)".*/\1/p' "${SRC}/backend/src/findling/store/repo.py")
-  [ -n "${catchup_key}" ] && [ -n "${catchup_done}" ] \
-    || fail "the catch-up mark of 1.6.2 could not be read from store/repo.py"
-  catchup_started=$(date +%s)
-  deadline=$((catchup_started + CATCHUP_TIMEOUT))
-  while :; do
-    catchup_now=$(statedb "SELECT value FROM meta WHERE key = '${catchup_key}';" || true)
-    [ "${catchup_now}" = "${catchup_done}" ] && break
-    [ "$(date +%s)" -lt "${deadline}" ] \
-      || fail "1.6.2 did not finish the catch-up of 1.5 within ${CATCHUP_TIMEOUT} s (${catchup_key}='${catchup_now}'), the upgrade leg cannot start the head without a catch-up round"
-    sleep 10
-  done
-  catchup_seconds=$(($(date +%s) - catchup_started))
-  # The catch-up round may hand rows back to the queue; they settle under
-  # 1.6.2 before anything of the head runs.
-  drain
+  wait_for_catchup 1.6.2
   swept_162=$(statedb "SELECT value FROM meta WHERE key = 'storage_sweep_at';" || true)
   [ -z "${swept_162}" ] || fail "storage_sweep_at is set under 1.6.2, W5 would read a sweep that is not the head's"
-  note "upgrade: ${catchup_key}=${catchup_done} under 1.6.2 after ${catchup_seconds} s of waiting"
-  rows+=("| upgrade | catch-up of 1.5 done under 1.6.2 before the head starts | ${catchup_done} | ${catchup_done} after ${catchup_seconds} s |")
 
   step "a container row without a file cache row"
   orphan=$(ncdb "SELECT fc.fileid FROM oc_filecache AS fc WHERE fc.storage = ${home_dave} AND fc.path = 'files/verwaist.txt';")
@@ -1574,13 +2056,39 @@ if [ "${VARIANT}" = "upgrade" ]; then
   backfill_seconds=$(($(date +%s) - started))
   log_since "${backfill_mark}" | grep 'doc key backfill, done=' | sed 's/^/backfill: /' || true
   answer=$(post_coverage)
-  jq -e '.counting == false and .docKeysMissing == 0 and .docKeysUnresolved >= 1' "${WORK}/coverage.json" > /dev/null \
-    || {
-      failures=$((failures + 1))
-      echo "::warning::after the backfill /coverage answers ${answer}"
-    }
+  if jq -e '.counting == false and .docKeysMissing == 0 and .docKeysUnresolved >= 1' "${WORK}/coverage.json" > /dev/null; then
+    verdict upgrade_1_6_2 ok "1.6.2 to the head, container first, backfill ${backfill_seconds} s until counting false, $(living_rows) living rows"
+  else
+    echo "::warning::after the backfill /coverage answers ${answer}"
+    verdict upgrade_1_6_2 failed "after the backfill /coverage answers ${answer}"
+  fi
   note "upgrade: backfill done after ${backfill_seconds} s, $(log_since "${backfill_mark}" | grep -c 'doc key backfill, done=' || true) rounds, /coverage ${answer}"
   rows+=("| upgrade | docKeysMissing after the backfill | 0 | $(jq -r '.docKeysMissing' "${WORK}/coverage.json") |")
+fi
+
+# ===================================================================================
+# 3c. The update of the two variants that start at rc.1 (plan 43-26)
+# ===================================================================================
+
+if from_rc1; then
+  rc1_failures_before="${failures}"
+  rc1_baseline
+  if [ "${VARIANT}" = "upgrade-rc1" ]; then
+    rc1_order="container first"
+    mixed_container_first
+  else
+    rc1_order="companion first with a backup pause"
+    mixed_companion_first_pause
+  fi
+  # Both halves are the head now. The figures against the truth follow in the
+  # phases A and B like in every head leg; this line stands for the update
+  # itself: the version moved through occ upgrade, the keys were rebuilt once
+  # and the count ended.
+  if [ "${failures}" = "${rc1_failures_before}" ]; then
+    verdict upgrade_rc1 ok "${rc1_version} to $(backend_version "${HARNESS}/php"), ${rc1_order}, rebuild ${COUNTED_SECONDS} s until counting false, $(living_rows) living rows"
+  else
+    verdict upgrade_rc1 failed "${rc1_version} to $(backend_version "${HARNESS}/php"), ${rc1_order}, $((failures - rc1_failures_before)) checks differ"
+  fi
 fi
 
 # ===================================================================================
@@ -1608,9 +2116,14 @@ stop_backend
 
 # W5: a catch-up round may sweep even with the reconcile off; then phase A
 # would measure a second sweep and not the first one.
+#
+# The variants that start at rc.1 carry the stamp rc.1 wrote, aged before the
+# head started (age_sweep_stamp); there the stamp has to be exactly that value,
+# so a sweep of the head before phase A still ends the run here. Everywhere
+# else the expected value is empty and the check is the one it always was.
 swept_before=$(statedb "SELECT value FROM meta WHERE key = 'storage_sweep_at';" || true)
-[ -z "${swept_before}" ] || fail "a catch-up round swept before phase A, the run is invalid"
-note "storage_sweep_at before phase A: not set"
+[ "${swept_before}" = "${sweep_stamp_expected}" ] || fail "a catch-up round swept before phase A, the run is invalid"
+note "storage_sweep_at before phase A: ${swept_before:-not set}${sweep_stamp_expected:+ (the aged stamp of rc.1, untouched by the head)}"
 
 step "topology change"
 nc_occ files_external:applicable "${daten_mount}" --remove-user carol > /dev/null
@@ -1923,10 +2436,10 @@ search_probe "bob gets no entry for the word of the privat.txt of alice" bob "${
 search_probe "alice gets no entry for the word of the privat.txt of bob" alice "${word_privat_bob}" '' none
 
 # ===================================================================================
-# 7. Upgrade variant: back to 1.6.2, then up again with a rename (W5, G1)
+# 7. upgrade and upgrade-rc1: back to 1.6.2, then up again with a rename (W5, G1)
 # ===================================================================================
 
-if [ "${VARIANT}" = "upgrade" ]; then
+if [ -n "${OLD_BACKEND_DIR}" ]; then
   step "rollback to 1.6.2"
   notiz=$(ncdb "SELECT fc.fileid FROM oc_filecache AS fc JOIN oc_storages AS s ON s.numeric_id = fc.storage WHERE s.id = 'home::alice' AND fc.path = 'files/notiz.txt';")
   [ -n "${notiz}" ] || fail "notiz.txt has no file cache row"
@@ -1938,7 +2451,7 @@ if [ "${VARIANT}" = "upgrade" ]; then
   put_companion "${WORK}/release/findling" 1.6.2
   companion_updated=0
   nc_occ config:app:set findling installed_version --value=1.6.2 > /dev/null
-  start_backend "${SRC}/backend"
+  start_backend "${OLD_BACKEND_DIR}"
   has_column=$(statedb "SELECT COUNT(*) FROM pragma_table_info('files') WHERE name = 'doc_key';")
   has_index=$(statedb "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'files_storage_doc_key';")
   before_at=$(statedb "SELECT COALESCE(indexed_at, 0) FROM files WHERE file_id = ${notiz};")
@@ -1968,7 +2481,8 @@ if [ "${VARIANT}" = "upgrade" ]; then
   [ "${has_column}" = "1" ] && [ "${has_index}" = "1" ] || rollback=failed
   echo "rollback_1_6_2=${rollback}"
   note "rollback_1_6_2=${rollback} (doc_key column ${has_column}, index ${has_index}, a changed file judged and found by 1.6.2)"
-  [ "${rollback}" = "ok" ] || failures=$((failures + 1))
+  # The same result once more as a verdict line, which also counts a failure.
+  verdict rollback_1_6_2 "${rollback}" "doc_key column ${has_column}, index ${has_index}, a changed file judged and found by 1.6.2"
 
   step "rename under 1.6.2"
   code=$(dav alice MOVE notiz.txt /dev/null -H "Destination: ${NC_URL}/remote.php/dav/files/alice/notiz-umbenannt.txt")
@@ -2019,7 +2533,7 @@ if [ "${VARIANT}" = "upgrade" ]; then
   fi
   echo "second_upgrade_rename=${second}"
   note "second_upgrade_rename=${second} (bound ${rounds} rounds of ${tick} s plus 60 s for the start, ${living} living rows, took $(($(date +%s) - started)) s, /coverage ${answer})"
-  [ "${second}" = "ok" ] || failures=$((failures + 1))
+  verdict second_upgrade_rename "${second}" "${living} living rows, bound ${bound} s"
 fi
 
 write_result

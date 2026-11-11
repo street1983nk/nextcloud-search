@@ -3,7 +3,7 @@ name: Coverage end to end
 # The acceptance test D-43-08 of plan 43-07 (issue #25). Three fixes of the
 # coverage figure were green in their parts and wrong in the figure an admin
 # reads; this job measures that figure on a real Nextcloud with a real Samba
-# server, against a truth computed without Findling code, in four variants of
+# server, against a truth computed without Findling code, in six variants of
 # one topology:
 #
 #   gate-crawl  the head, the crawl is unfinished while the sweep runs
@@ -13,18 +13,38 @@ name: Coverage end to end
 #               control 2)
 #   upgrade     indexed by 1.6.2, updated to the head (doc key backfill), the
 #               gate-queue proof, back to 1.6.2 and up again with a rename
+#   upgrade-rc1     indexed by the test build rc.1, then the container alone
+#                   goes to the head and runs next to the rc.1 companion, then
+#                   the companion follows and every document key is rebuilt;
+#                   the gate-queue proof, back to 1.6.2 and up again
+#   upgrade-rc1-cf  the other order: the companion first, then a backup pause
+#                   (occ findling:pause), then the head container, which must
+#                   answer "counting" for as long as the pause keeps it from
+#                   rebuilding the keys; resume, rebuild, the gate-queue proof
 #
 # and in two SMB modes (plan 43-18, owner decision F3): wrapped, where
 # icewind/smb drives the smbclient binary, and native, where the php-smbclient
 # extension does the work. The 1.6.2 companion hangs in the wrapped mode on the
 # file with a DENY ACE (run 42404849768), so v1.6.2 and upgrade run native;
-# gate-crawl and gate-queue run wrapped, gate-queue native as well. Every leg
-# proves its mode with function_exists('smbclient_state_new') before it counts.
+# gate-crawl and gate-queue run wrapped, gate-queue native as well. The two
+# legs that start at rc.1 run native like upgrade. Every leg proves its mode
+# with function_exists('smbclient_state_new') before it counts. That makes
+# seven legs, the number scripts/ci/e2e_head_proof.sh asks of a run.
 #
 # The scripts always come from the head (checkout findling-harness), the
 # instance is set up from findling-src, which is v1.6.2 for the two variants
-# that start there. What is built and why is in scripts/ci/coverage_e2e.sh,
-# the truth in scripts/ci/coverage_truth.sh.
+# that start there and the branch rc/1.6.3-rc.1 for the two that start at the
+# test build (matrix field src; a leg without it starts at the head). What is
+# built and why is in scripts/ci/coverage_e2e.sh, the truth in
+# scripts/ci/coverage_truth.sh.
+#
+# Each leg has its own time limit (matrix field timeout, in minutes), set on
+# the step that builds and measures: the two legs from rc.1 wait for the
+# catch-up of 1.5, for two container changes and for a rebuild of every key
+# behind a tick of 300 s, and upgrade-rc1 goes back to 1.6.2 and up again on
+# top of that. The job itself keeps a plain number above the longest leg,
+# because backend/tests/test_workflow_pins.py holds every job to a deadline it
+# can read without evaluating an expression.
 #
 # Dispatch only, and only after an owner decision per run (43-FREIGABEN.md).
 on:
@@ -37,21 +57,39 @@ jobs:
   coverage-e2e:
     name: coverage-e2e (${{ matrix.variant }}, ${{ matrix.smb }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    # The ceiling of a whole leg: the setup before the measuring step (about
+    # 15 minutes) and the 150 minutes of the longest leg. The limit that
+    # counts is the one of the measuring step, matrix.timeout.
+    timeout-minutes: 170
     strategy:
       fail-fast: false
       matrix:
         include:
           - variant: gate-crawl
             smb: wrapped
+            timeout: 90
           - variant: gate-queue
             smb: wrapped
+            timeout: 90
           - variant: gate-queue
             smb: native
+            timeout: 90
           - variant: v1.6.2
             smb: native
+            src: v1.6.2
+            timeout: 90
           - variant: upgrade
             smb: native
+            src: v1.6.2
+            timeout: 90
+          - variant: upgrade-rc1
+            smb: native
+            src: rc/1.6.3-rc.1
+            timeout: 150
+          - variant: upgrade-rc1-cf
+            smb: native
+            src: rc/1.6.3-rc.1
+            timeout: 150
 
     # Job level env takes no runner context (GitHub evaluates it before a
     # runner exists, backend/tests/test_workflow_contexts.py); every path
@@ -94,16 +132,26 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: findling-src
-          ref: ${{ (matrix.variant == 'v1.6.2' || matrix.variant == 'upgrade') && 'v1.6.2' || github.sha }}
+          ref: ${{ matrix.src || github.sha }}
 
       - name: Check out the harness at the head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: findling-harness
 
+      # upgrade-rc1 starts at rc.1 and still goes back to the released 1.6.2,
+      # so it needs that backend from a tree of its own.
+      - name: Check out the released 1.6.2 for the way back
+        if: matrix.variant == 'upgrade-rc1'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: findling-162
+          ref: v1.6.2
+
       # The native legs get php-smbclient here, before the composite action,
       # and not through it: for v1.6.2 and upgrade the action comes out of the
-      # 1.6.2 tree. The second setup-php inside the action keeps the extension,
+      # 1.6.2 tree, for the two legs from rc.1 out of that branch. The second
+      # setup-php inside the action keeps the extension,
       # and the script checks the mode before it counts anything. On ubuntu
       # setup-php takes php8.2-smbclient out of ppa:ondrej/php.
       - name: Set up PHP with the smbclient extension for a native leg
@@ -129,12 +177,14 @@ jobs:
           tesseract --version | head -1
 
       - name: Build the topology, measure both phases against the truth
+        timeout-minutes: ${{ matrix.timeout }}
         env:
           VARIANT: ${{ matrix.variant }}
           SMB_MODE: ${{ matrix.smb }}
           NC_URL: 'http://localhost:8080'
           HARNESS: findling-harness
           SRC: findling-src
+          BASE_SRC: findling-162
           RESULT_FILE: ${{ runner.temp }}/coverage-e2e-result.md
         run: bash findling-harness/scripts/ci/coverage_e2e.sh
 

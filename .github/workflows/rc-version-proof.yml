@@ -1,10 +1,19 @@
 name: RC version proof
 
 # The dispatch proof A5/A6 of plan 43-10 (D-43-10, D-43-13), run BEFORE the
-# reporter of issue #25 gets the 1.6.3-rc.1 test build. The question both jobs
-# answer is Pitfall 6 of 43-RESEARCH.md: does a test build at 1.6.3-rc.1 leave
-# the later store release 1.6.3 visible as an update, on a fresh instance and
-# on the exact path the reporter uses.
+# reporter of issue #25 gets a test build. The question both jobs answer is
+# Pitfall 6 of 43-RESEARCH.md: does a test build at a release candidate
+# version leave the later store release 1.6.3 visible as an update, on a fresh
+# instance and on the exact path the reporter uses.
+#
+# Since plan 43-26 the candidate is an input (rc_version, with rc_ref,
+# archive_run_id and image_sha that belong to it) and the script names no
+# candidate of its own; the defaults are the test build 1.6.3-rc.1 of plan
+# 43-10, which is the candidate the reporter runs. from_rc_ref and
+# from_archive_run_id are optional and put an earlier candidate in front
+# (1.6.2, the earlier candidate, the candidate, 1.6.3); left empty, the jobs
+# run the path described below. The lines below name 1.6.3-rc.1 where they
+# mean "the candidate".
 #
 #   a6-companion (stable33 and stable34): a FRESH Nextcloud starts at the
 #   released companion 1.6.2, the signed rc archive out of a release.yml
@@ -38,6 +47,10 @@ name: RC version proof
 on:
   workflow_dispatch:
     inputs:
+      rc_version:
+        description: 'Version of the release candidate under proof, the one the archive and the testbuild info.xml carry'
+        type: string
+        default: '1.6.3-rc.1'
       rc_ref:
         description: 'Branch of the test build, whose testbuild/ info.xml the reporter path reads'
         type: string
@@ -50,6 +63,14 @@ on:
         description: 'Commit of the immutable backend image tag, 40 hex characters'
         type: string
         required: true
+      from_rc_ref:
+        description: 'Optional: branch rc/<version> of an earlier candidate the reporter path passes through first (A5)'
+        type: string
+        default: ''
+      from_archive_run_id:
+        description: 'Optional: run id of the release.yml dispatch with the signed companion of an earlier candidate, installed first (A6)'
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -106,7 +127,10 @@ jobs:
       - name: A6, the rc archive over the 1.6.2 instance and the version order of the server
         env:
           GH_TOKEN: ${{ github.token }}
+          RC_VERSION: ${{ inputs.rc_version }}
           ARCHIVE_RUN_ID: ${{ inputs.archive_run_id }}
+          FROM_ARCHIVE_RUN_ID: ${{ inputs.from_archive_run_id }}
+          FROM_RC_REF: ${{ inputs.from_rc_ref }}
         run: bash findling-src/scripts/ci/rc_version_proof.sh a6
 
       - name: Everything the failure had to say
@@ -165,8 +189,11 @@ jobs:
 
       - name: A5, the update path of the reporter with verbatim outputs
         env:
+          RC_VERSION: ${{ inputs.rc_version }}
           RC_REF: ${{ inputs.rc_ref }}
           IMAGE_SHA: ${{ inputs.image_sha }}
+          FROM_RC_REF: ${{ inputs.from_rc_ref }}
+          FROM_ARCHIVE_RUN_ID: ${{ inputs.from_archive_run_id }}
         run: bash findling-src/scripts/ci/rc_version_proof.sh a5
 
       - name: Everything the failure had to say
