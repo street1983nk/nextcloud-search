@@ -222,3 +222,10 @@ Auftrag Ausführung 43-13: "Kannst das machen ich bin nicht am Rechner" (2026-11
 Freigabe ReleaseEdit 43-13: "Kannst das machen ich bin nicht am Rechner" (2026-11-11 23:48, Claude Code Terminal) Entscheid: ja
 Freigabe Dispatch 43-13: "Kannst das machen ich bin nicht am Rechner" (2026-11-11 23:48, Claude Code Terminal) Entscheid: ja
 Freigabe Push 43-13: "Kannst das machen ich bin nicht am Rechner" (2026-11-11 23:48, Claude Code Terminal) Entscheid: ja
+
+## Freigabe 12.11.2026: Kommentar in #25 (43-14)
+
+Dem Owner lagen im Chat vor: der Wortlaut der Antwort in #25 (I2 aus Runde 2 mit der gemessenen Dauer von 7,5 Stunden), der Forum-Entwurf und der Hinweis, dass die Store-API für findling noch 1.6.2 liefert, für findling_backend schon 1.6.3, mit der Empfehlung, mit dem Posten zu warten. Vorher hatte der Owner geschrieben: "Ok 1.6.3 ist im Store zeig mir die Antworten für beide issues". Antwort des Owners: "Poste die Antwort auf 25".
+
+Freigabe Kommentar 43-14: "Poste die Antwort auf 25" (2026-11-12 00:49, Claude Code Terminal) Entscheid: ja
+Umfang: genau ein Kommentar in #25 mit dem abgenommenen Wortlaut, gepostet als https://github.com/street1983nk/nextcloud-search/issues/25#issuecomment-6810021534. Kein Schließen. Zur Löschung des Branches rc/1.6.3-rc.1 und zum Push der Zustandspflege von 43-14 liegt kein Wort des Owners vor, dafür gibt es keine Zeile.
