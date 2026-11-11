@@ -782,7 +782,7 @@ WARNING-Zeile im Containerlog.
 Nichts davon steht heute im Frontmatter. Reihenfolge, damit die Workflows
 auf A selbst laufen: zuerst genau bis A pushen (`git push origin <A>:main`),
 A ist der letzte Commit außerhalb von .planning (`git log -1 --format=%H --
-. ':!.planning'`, nach der Fix-Runde bdec190e oder ein späterer Commit
+. ':!.planning'`, nach der Fix-Runde 9bf7dddf oder ein späterer Commit
 außerhalb von .planning, vor dem Push und nach einem `git pull --rebase` neu
 lesen), danach die Planungs-Commits.
 
