@@ -136,3 +136,11 @@ Umfang: nur Entscheide für 43-21 bis 43-29, kein Push, kein Dispatch, kein Komm
 Owner-Wort: "Rc2 Streichen und antworten und Mittwoch geht es weiter".
 
 Umfang: genau ein Kommentar auf #25 (Wortlaut lag dem Owner im Chat vor, gepostet 09.11.2026 abends), 43-28 (Testbuild rc.2) gestrichen, Versionsnachweis kuenftig rc.1 -> 1.6.3 in 43-26/43-27. Kein Push, kein Tag, kein Store. Weiter am Mittwoch 11.11. mit 43-23 (PHPUnit bei RAM >= 4 GB).
+
+## Freigabe 11.11.2026: Push von main und Dispatch des Abnahmetests (43-26)
+
+Frage im Wortlaut des Plans mit den Optionen a, b, nein gestellt; der Owner antwortete "Go für Findling". Gelesen als Option a (Push und Dispatch), die Changelog-Sätze aus 43-23 stehen damit vor der Textrunde 43-12 öffentlich auf main.
+
+Freigabe Push 43-26: "Go für Findling" (2026-11-11 09:29, Claude Code Terminal) Entscheid: ja
+Freigabe Dispatch 43-26: "Go für Findling" (2026-11-11 09:29, Claude Code Terminal) Entscheid: ja
+Umfang: genau ein Push auf main nach git pull --rebase mit den lokalen Commits von 43-21 bis 43-26 Task 1, dem Reset der Dokumentschlüssel in Bändern (53373888, c93a6f1e) und diesen Zeilen; genau ein Dispatch von coverage-e2e.yml auf dem gepushten Kopf. Kein Tag, kein Release, kein Store, kein Kommentar. Jede Wiederholung nach einem roten Bein braucht neue Zeilen.
