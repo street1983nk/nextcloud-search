@@ -390,6 +390,18 @@ Das Frontmatter ist bewusst NICHT angefasst: `audited_head`, `status_43_27`
 und `d_43_15` lassen sich erst nach dem Push binden (Abschnitt "Was nach dem
 Push noch einzutragen ist").
 
+**Fortschreibung 11.11.2026 (Fix-Runde, lokal, vor dem Push):** Der Owner hat
+auf die Frage zu den drei offenen LOW mit "A" entschieden (jetzt beheben).
+F-43B-01, F-43B-02 und F-43B-03 sind per TDD behoben, F-43B-04 bleibt
+akzeptiert. Stand danach: **0 CRIT / 0 HIGH / 0 MEDIUM / 4 LOW (3 behoben,
+1 akzeptiert, 0 offen) / 7 INFO.** Damit gilt der Satz oben "Kein Produktcode
+geändert, kein Baumhash bewegt" nur für den Stand des Audits selbst: die
+Fix-Runde ändert drei Python-Quellen (reconcile.py, repo.py, coverage.py)
+und zwei PHP-Quellen (StorageService.php, DocKeyService.php) und bewegt
+beide Baumhashes. Einzelheiten im Abschnitt
+"Fix-Runde 11.11.2026". Nichts davon ist gepusht, das Frontmatter ist weiter
+unberührt.
+
 ### Umfang
 
 `git diff --stat 37b518d6..2261167b -- . ':!.planning'`: 49 Dateien, 8.628
@@ -488,7 +500,7 @@ Zweifel endet ungruppiert (Zahl zu hoch, nie verschmolzen).
 | Wurzel-Normalisierung ('.', '//', '..', Backslash) | '.' und leere Segmente fallen, '..' und Backslash geben keine Identität | Katalog share_identity_cases.json, testEveryCatalogueCaseYieldsItsHandTypedIdentity, testADoubleSlashInTheLoginNameIsNeverAGroupAndOneInTheRootCollapses | hält |
 | Groß- und Kleinschreibung in Wurzel und Pfad | nie gefaltet | test_a_root_that_differs_only_in_case_is_another_root, testRootAndPathAreNeverFolded; E2E: Bericht.txt und bericht.txt zwei Zeilen und getrennt gefunden | hält |
 | Unicode | NFC wie Nextcloud (Cache.php normalize, stable34 :1253-1255); NFC/NFD-Zwillinge sind schon in Nextcloud eine Zeile | Katalogfall Wurzel mit NFD-Umlaut; Grenze von Nextcloud, nicht von Findling | hält, Grenze benannt |
-| Gehashte IDs | Identität nur bei exaktem md5-Treffer des nachgebauten Namens | testEveryHashedCatalogueEntryNeedsAMatchingMd5, test_every_stored_md5_is_recomputed_and_only_a_match_gives_an_identity; E2E: hashedVerified 3, hashedUngrouped 2 in sechs Beinen | hält; Lücke F-43B-01 beim Schlüssel, nicht bei der Gruppe |
+| Gehashte IDs | Identität nur bei exaktem md5-Treffer des nachgebauten Namens | testEveryHashedCatalogueEntryNeedsAMatchingMd5, test_every_stored_md5_is_recomputed_and_only_a_match_gives_an_identity; E2E: hashedVerified 3, hashedUngrouped 2 in sechs Beinen | hält; die Lücke F-43B-01 beim Schlüssel ist mit 9bf7dddf geschlossen |
 | $user und andere Platzhalter | $user ersetzt, jedes andere $ gibt keine Identität | Katalogfälle "$user in the root", "another placeholder than $user is never rebuilt", "a hidden share with '$'" | hält (versteckte Freigaben mit $ bei gehashter ID bleiben ungruppiert) |
 | [homes] und Freigabe gleich Anmeldename | nie gruppiert (OE-3 a) | Katalogfall "Samba homes rebuilt with a matching md5 is still never grouped"; E2E: privat.txt je Nutzer 2 von 2, W5 vier Zeilen | hält |
 | SFTP | je Anmeldung und Host mit Port (OE-4 a) | testSftpIsGroupedPerLoginWithItsPortAndOtherBackendsAreNot | hält |
@@ -498,7 +510,7 @@ Zweifel endet ungruppiert (Zahl zu hoch, nie verschmolzen).
 | Mischbetrieb Kopf-Companion mit rc.1-Container | 422, 1.6.2-Weg; rc.1 nimmt Format 2 ungeprüft, das Update setzt zurück | Bein upgrade-rc1-cf: E 22, E 23 | hält |
 | Kopf mit Kopf nach rc.1, vor dem Reset (Zeitfenster, Generationssperre) | counting, keine Zahl aus Format 1 | Bein upgrade-rc1-cf: E 24 bis E 27 unter der Backup-Pause; test_coverage_counts_nothing_during_a_backup_pause_before_the_reset; Probe R1 für den abgebrochenen Reset | hält |
 | Kopf-Companion mit 1.6.2-Container | 404, 1.6.2-Weg | test_status_with_leave_out_still_answers_for_a_companion_1_6_2; Bein upgrade (Rückweg) | hält |
-| Identität ändert sich zwischen Auftrag und Zählung | Annahme des Plans: nur Überzählung, weil die Freigabe im Schlüssel steht | Probe test_p_f_43b_01: ein Mitglied ohne Identität zählt zu viel (2 statt 1), zwei Mitglieder ohne Identität unter zwei Wurzeln verschmelzen zwei Dateien (1 statt 2) | **Annahme trifft in einem Fall nicht zu, F-43B-01 (LOW)** |
+| Identität ändert sich zwischen Auftrag und Zählung | Annahme des Plans: nur Überzählung, weil die Freigabe im Schlüssel steht | Vor dem Fix: zwei Mitglieder ohne Identität unter zwei Wurzeln verschmolzen zwei Dateien (1 statt 2). Seit 9bf7dddf trägt der Schlüssel eines gehashten Speichers ohne Identität '#' plus Speichernummer: Probe test_p_f_43b_01 (2 und 2), PHPUnit testAHashedIdWithoutIdentityCarriesItsStorageNumberForTheKeyAndStaysOutOfTheGrouping, testTwoHashedStoragesWithoutIdentityNeverShareAKey | **hält seit dem Fix von F-43B-01 (nur Überzählung bis zum Prüflauf)** |
 | Geänderte Konfiguration mit alter oc_mounts-Zeile | der md5 des Nachbaus trifft die alte ID nicht, also keine Identität | Katalogfall "the configuration no longer matches the stored id", testASecondCallReadsTheConfigurationAfresh | hält (ungruppiert) |
 | Überlappende Unterwurzeln /a und /a/b | Freigabe-Pfad ist Wurzel plus Pfad, N1 fragt je Wurzel den Rest; Grenze `root + '/'`, also trifft /a nicht /ab | testOneUnreadableFileUnderTwoRootsIsOneDocument, testTwoFilesWithOneInternalPathUnderTwoRootsStayTwoDocuments, testN1ForAMemberUnderARootAsksThePathBelowItsRoot, testAMemberWhoseRootDoesNotHoldThePathIsNotAsked; E2E: Wurzeln /, sicherheit, projekt | hält |
 
@@ -610,7 +622,11 @@ WARNING-Zeile im Containerlog.
 
 ### Befunde
 
-#### F-43B-01 (LOW, offen, Owner-Punkt): Schlüssel ohne Identität für gehashte Speicher
+#### F-43B-01 (LOW, behoben mit 9bf7dddf): Schlüssel ohne Identität für gehashte Speicher
+
+- **Stand 11.11.2026: behoben** (Owner-Entscheid "A"). RED 2b5bd60d, GREEN
+  9bf7dddf, Einzelheiten im Abschnitt "Fix-Runde 11.11.2026" unten. Der Text
+  darunter beschreibt den Zustand vor dem Fix; die Fix-Skizze ist so umgesetzt.
 
 - **Fundstelle:** `php/lib/Service/DocKeyService.php:202-205`,
   `php/lib/Service/StorageService.php:779-789` und `:907-938`,
@@ -648,7 +664,11 @@ WARNING-Zeile im Containerlog.
   beginnt so), dann kann nichts mehr verschmelzen. PHP-Änderung mit Katalog,
   PHPUnit, PHP-Baumhash und neuem E2E-Lauf.
 
-#### F-43B-02 (LOW, offen, Owner-Punkt): Disable im Blick auf die Catch-up-Marke
+#### F-43B-02 (LOW, behoben mit b1cddb8b): Disable im Blick auf die Catch-up-Marke
+
+- **Stand 11.11.2026: behoben** (Owner-Entscheid "A"). RED 0c7146b2, GREEN
+  b1cddb8b, Einzelheiten im Abschnitt "Fix-Runde 11.11.2026" unten. Der Text
+  darunter beschreibt den Zustand vor dem Fix.
 
 - **Fundstelle:** `backend/src/findling/worker/reconcile.py:451-462`
   (außerhalb des Deltas, gefunden über den flakigen Test).
@@ -664,7 +684,11 @@ WARNING-Zeile im Containerlog.
   mitfragen (`or not self._armed.is_set()`); damit war der alte Test 300 von
   300 grün. Produktänderung, also Paket-Baumhash und neuer E2E-Lauf.
 
-#### F-43B-03 (LOW, offen, Owner-Punkt): WARNING je Zählung ohne Vektorbestand
+#### F-43B-03 (LOW, behoben mit c36ffc0e): WARNING je Zählung ohne Vektorbestand
+
+- **Stand 11.11.2026: behoben** (Owner-Entscheid "A"). RED 79a79466, GREEN
+  c36ffc0e, Einzelheiten im Abschnitt "Fix-Runde 11.11.2026" unten. Der Text
+  darunter beschreibt den Zustand vor dem Fix.
 
 - **Fundstelle:** `backend/src/findling/store/repo.py:2441` (außerhalb des
   Deltas, aus 43-03).
@@ -740,12 +764,15 @@ WARNING-Zeile im Containerlog.
 
 ### Für die Owner-Runde
 
-1. **Drei offene LOW (F-43B-01, F-43B-02, F-43B-03):** jetzt beheben (ein
-   weiterer Arbeitsgang mit TDD, PHPUnit per Docker für F-43B-01,
-   beide Baumhashes, danach Push und EIN neuer E2E-Lauf, der dann auch den
-   PHP-Workflow auf dem Kopf mitbringt) oder nach v1.7 (dann bleibt die
-   Bindung am Lauf 43016026129, und das verify von Task 3 braucht für den
-   PHP-Workflow eine ausdrückliche Owner-Ausnahme wie in 43-26).
+1. **Drei LOW (F-43B-01, F-43B-02, F-43B-03): entschieden und behoben.**
+   Owner-Entscheid 11.11.2026 im Claude Code Terminal, Antwort "A" (jetzt
+   beheben). Umgesetzt lokal, siehe "Fix-Runde 11.11.2026". Offen sind nur
+   noch die zwei Freigaben aus Task 2 des Plans: Push und, weil es jetzt
+   einen Code-Fix gibt, der erneute Dispatch von coverage-e2e.yml. Die
+   Bindung am Lauf 43016026129 reicht für den neuen Kopf nicht mehr.
+1a. **Der Changelog-Punkt zu F-43B-02** (ein Satz in 1.6.3 "Fixed", in drei
+   Sprachen, Commit bdec190e) ist ein Entwurf wie die übrigen Punkte und
+   gehört in die Textrunde von 43-12.
 2. **I-43B-04** für die Texte: nach dem Update zeigt eine Instanz mit
    491.000 Zeilen rund neun Stunden "wird gezählt".
 3. **F-43B-04** akzeptiert, keine Entscheidung nötig.
@@ -755,31 +782,141 @@ WARNING-Zeile im Containerlog.
 Nichts davon steht heute im Frontmatter. Reihenfolge, damit die Workflows
 auf A selbst laufen: zuerst genau bis A pushen (`git push origin <A>:main`),
 A ist der letzte Commit außerhalb von .planning (`git log -1 --format=%H --
-. ':!.planning'`, heute cdd16d05, nach einem `git pull --rebase` neu lesen),
-danach die Planungs-Commits.
+. ':!.planning'`, nach der Fix-Runde bdec190e oder ein späterer Commit
+außerhalb von .planning, vor dem Push und nach einem `git pull --rebase` neu
+lesen), danach die Planungs-Commits.
+
+Stand nach der Fix-Runde vom 11.11.2026: es gibt jetzt Code-Fixes in
+backend/src und php/lib. Daraus folgt: (1) der Lauf 43016026129 bindet den
+neuen Kopf nicht mehr, es braucht EINEN neuen Lauf von coverage-e2e.yml auf
+A (eigene Owner-Freigabe "Dispatch 43-27"); (2) der Push bis A startet durch
+die Änderung unter php/ auch "PHP and store metadata gates" auf A, die
+Owner-Ausnahme für diesen Workflow entfällt also, sofern A selbst der Commit
+ist, bis zu dem gepusht wird; (3) keine der Zeilen unten gilt schon.
 
 | Zeile im Frontmatter | Wert | Bedingung |
 |---|---|---|
-| `audited_head:` (die eine vorhandene Zeile ersetzen) | A, 40 hex | A liegt auf origin/main, `scripts/ci/e2e_head_proof.sh <A> 43-E2E-WURZEL.md` Exit 0 (ohne Code-Fix über den Lauf 43016026129, weil backend/tests nicht zu den Code-Pfaden des Skripts zählt; mit Code-Fix erst nach `Lauf-ID-Fix` und `Kopf-SHA-Fix` unter "## Nachtrag 43-27" in 43-E2E-WURZEL.md) |
+| `audited_head:` (die eine vorhandene Zeile ersetzen) | A, 40 hex | A liegt auf origin/main, in 43-E2E-WURZEL.md stehen unter "## Nachtrag 43-27" `Lauf-ID-Fix: <id>` und `Kopf-SHA-Fix: <A>` eines grünen Laufs, und `scripts/ci/e2e_head_proof.sh <A> 43-E2E-WURZEL.md` endet mit Exit 0 |
 | `audited_head_43_09:` | 37b518d6754a4a8a8593dc537a13b27644caf986 | zusammen mit der Zeile darüber |
 | `diff_43_27:` | 37b518d6..A | |
-| `findings_43_27:` | 11 (0 CRIT, 0 HIGH, 0 MEDIUM, 4 LOW, 7 INFO), bei Fixes neu zählen | |
+| `findings_43_27:` | 11 (0 CRIT, 0 HIGH, 0 MEDIUM, 4 LOW, 7 INFO); davon 3 LOW behoben, 1 LOW akzeptiert | die Zahl der Befunde bleibt 11, offen ist keiner |
 | `critical_open_43_27:`, `high_open_43_27:`, `medium_open_43_27:` | je 0 | |
-| `status_43_27:` | passed | erst wenn head_green.sh für A grün ist (sieben Workflows, oder sechs plus Owner-Ausnahme für den PHP-Workflow) und e2e_head_proof.sh Exit 0 |
-| `recommendation_43_27:` | Text nach dem Owner-Entscheid zu den drei LOW | |
+| `status_43_27:` | passed | erst wenn head_green.sh für A grün ist (sieben Workflows, der PHP-Workflow läuft durch die PHP-Änderung mit) und e2e_head_proof.sh Exit 0 |
+| `recommendation_43_27:` | 1.6.3 mit den drei LOW-Fixes der Fix-Runde, F-43B-04 akzeptiert | nach dem grünen Lauf |
 | `d_43_15:` | behoben | nur zusammen mit status_43_27 passed |
+
+Was der neue E2E-Lauf auf A zeigen muss: alle sieben Beine grün mit denselben
+Zahlen wie im Lauf 43016026129 (hashedVerified 3, hashedUngrouped 2, k = 4,
+Suchprobe W5 15 von 15), keine Zeile "coverage count without a vector stock"
+mehr im Containerlog (das Harness startet mit FINDLING_EMBED_ENABLED=false;
+im alten Lauf 72), und die zwei ungruppierten gehashten Speicher zählen
+weiter je Speicher (ihr Schlüssel trägt jetzt '#' plus Speichernummer, die
+Zahl ändert sich dadurch nicht).
 
 `status:` und `recommendation:` der Runde 43-09 bleiben unverändert (T-43-86).
 Dazu der Abschnitt "Läufe auf audited_head" mit den Lauf-IDs der Workflows
 auf A und dem E2E-Lauf.
 
+### Fix-Runde 11.11.2026 (Owner-Entscheid "A", lokal, nicht gepusht)
+
+Sieben lokale Commits auf main hinter f5739046, alle als street1983nk:
+
+| Commit | Art | Inhalt |
+|---|---|---|
+| 0c7146b2 | RED F-43B-02 | Probe test_p_f_43b_02 verlangt jetzt "keine Runde": 1 failed, 8 passed |
+| 79a79466 | RED F-43B-03 | zwei Fälle über die Route (Zählung in der Anfrage, im Hintergrund): 2 failed (6 und 1 WARNING für drei Blicke), Kontrolle "Embeddings an" grün |
+| b1cddb8b | GREEN F-43B-02 | reconcile.py fragt das Arming hinter dem Blick auf die Marke neu, in derselben Bedingung wie die Backup-Pause |
+| c36ffc0e | GREEN F-43B-03 | coverage_counts nimmt `vectors_expected`, die Route reicht `embed_enabled` durch; dazu die Probe "Backup-Pause im offenen Blick" |
+| bdec190e | docs und Test | Changelog-Punkt zu F-43B-02 in drei Sprachen, Test der vorsichtigen Voreinstellung |
+| 2b5bd60d | RED F-43B-01 | PHPUnit-Fälle für docKeyIdentities, Katalogfall '#18', Probe test_p_f_43b_01 auf den behobenen Zustand |
+| 9bf7dddf | GREEN F-43B-01 | StorageService::docKeyIdentities, DocKeyService fragt dort |
+
+**F-43B-02, was und warum so:** eine Zusatzbedingung in der Zeile, die der
+Audit benannt hat (`or not self._armed.is_set()`). Kein anderer Weg nötig:
+das Arming wird vor dem Blick gefragt, der Blick verlässt die Schleife, also
+muss dahinter neu gefragt werden, genau wie bei der Backup-Pause (F-41A-02).
+Gegenprobe mit vier Mutationen der Bedingung (Arming nicht gefragt, falsch
+herum gefragt, nur das Arming ohne die Pause, "und" statt "oder"): 4 von 4
+rot, Wiederherstellung per sha256sum -c. Die dritte Mutation überlebte
+zuerst, weil kein Test die Backup-Pause durch den offen gehaltenen Blick
+trieb; dafür gibt es jetzt die Probe
+test_a_backup_hold_that_lands_in_the_look_at_the_mark_starts_no_round_until_it_is_released.
+
+**F-43B-03, was und warum so:** store/repo.py liest bewusst keine
+Einstellungen. Die Stelle erkennt "bewusst abgeschaltet" deshalb nicht
+selbst, sondern bekommt den Schalter von der Route gereicht
+(`vectors_expected=resolved.embed_enabled`, beide Aufrufer in
+api/coverage.py). Keine neue Konfiguration, keine Drossel nötig: bei
+FINDLING_EMBED_ENABLED=false fällt keine Zeile, bei eingeschalteten
+Embeddings bleibt die WARNING je Zählung (echter Defekt oder die ersten
+Augenblicke eines frischen Volumes). Die Voreinstellung des Parameters ist
+die vorsichtige (True). Gegenprobe mit sechs Mutationen (Schalter ignoriert,
+falsch herum, nie eine Warnung, Anfrage reicht ihn nicht durch,
+Hintergrundzählung reicht ihn nicht durch, Voreinstellung False): 6 von 6
+rot, die sechste erst nach dem Test der Voreinstellung in bdec190e.
+
+**F-43B-01, was und warum so:** Für einen Speicher mit gehashter ID hängt die
+Identität vom Augenblick ab, ein Schlüssel aber bleibt im Container stehen.
+Deshalb bekommt der Schlüsselweg eine eigene Abfrage,
+`StorageService::docKeyIdentities`, mit zwei Unterschieden zu
+shareIdentities: (1) scheitert eine der drei Konfigurationsabfragen, wirft
+sie, und docKeysFor scheitert als Ganzes (Vorgabe aus 43-22; der Auftrag
+reist dann ohne Schlüssel, die Route antwortet mit einem Fehler, beides
+bestand schon); (2) eine gehashte ID ohne Identität (ausgehängt, md5 trifft
+nicht, Platzhalter, [homes]) bekommt als Freigabe-Teil '#' plus
+Speichernummer und eine leere Wurzel. Ihr Schlüssel kann damit keinen
+Schlüssel eines anderen Speichers treffen: sie zählt je Speicher, wie nicht
+auflösbare gehashte IDs seit 43-21, höchstens zu viel, nie verschmolzen, und
+der Prüflauf heilt. Die Gruppierung fragt weiter shareIdentities und sieht
+die Nummer nie. Verworfene Wege: "kein Schlüssel" (absent oder ausgelassen)
+für nicht auflösbare gehashte IDs hätte Instanzen mit LDAP-Anmeldenamen
+dauerhaft auf "wird gezählt" oder auf die Sentinel gesetzt; "immer werfen"
+ebenso. Ausgeschriebene IDs sind nicht betroffen, ihre Identität steht in
+der ID. STOPP-Regeln: kein Meta- oder AppConfig-Schlüssel, keine Migration,
+kein Schema, keine Route, kein sichtbarer Satz; DOC_KEY_FORMAT bleibt 2,
+weil kein veröffentlichter Stand Format 2 trägt und der Prüflauf Schlüssel
+ohnehin gegen die Companion abgleicht.
+
+**Gates und Tests:** vor jedem Commit ruff check "All checks passed!", ruff
+format "258 files already formatted", pyright (latest) "0 errors, 0
+warnings", vulture 80 Exit 0. pytest mit Modulauswahl und timeout 540: alle
+58 Module, die die geänderten Quellen importieren oder im Auftrag genannt
+sind, in vier Stapeln 737, 1163, 984 und 580 passed (zusammen 3464, 12
+skipped); nach dem PHP-Fix zwölf Module um Schlüssel, Kataloge, Baumhash und
+Allowlists 1108 passed. Die volle Suite lief lokal nicht.
+
+**Baumhashes:** Paket 6ef6beba nach 872596c6 (b1cddb8b) nach 76a4f649
+(c36ffc0e), 83 Dateien. PHP f3165a57 nach ea247ffd (9bf7dddf), 129 Dateien.
+Je mit dem Rezept und unabhängig mit find, sort, tr -d '\r', sha256sum
+gleich; Positivkontrolle über git archive des Standes davor ergibt den alten
+Wert.
+
+**Changelog:** F-43B-02 gilt auch in 1.6.2 (`git show
+v1.6.2:backend/src/findling/worker/reconcile.py`, dieselbe Bedingung ohne
+Arming): ein Punkt unter 1.6.3 "Fixed" in CHANGELOG.md, CHANGELOG.de.md und
+CHANGELOG.fr.md. F-43B-03 gilt NICHT in 1.6.2 (die Zeile "coverage count
+without a vector stock" gibt es am Tag v1.6.2 nicht, coverage_counts stammt
+aus 43-03), F-43B-01 betrifft unveröffentlichten Code aus 43-21/43-22: beide
+ohne Punkt.
+
+**PHPUnit lokal (scripts/dev/phpunit_docker.sh):** gelaufen, je nur bei
+freiem Docker (kein fremder Container) und mindestens 4 GB freiem RAM.
+Filterlauf über StorageServiceTest, DocKeyServiceTest, QueueServiceTest und
+ReconcileControllerTest auf dem Fix: "OK (102 tests, 1184 assertions)".
+Gegenprobe gegen die Quellen von 2b5bd60d (vor dem Fix): rot, "Tests: 102,
+Assertions: 1057, Errors: 22". Fünf Mutationen der PHP-Quellen, anderes
+Muster als die Umsetzung, je derselbe Filterlauf: der Fehler wirft nicht (1
+Failure), '#' ohne Speichernummer (1), docKeysFor fragt shareIdentities (7),
+die Gruppierung bekommt die Nummer (2 Errors, 5 Failures), kein Platzhalter
+(1): 5 von 5 rot, nach jeder `git diff --quiet HEAD -- php` leer. Volle
+Suite auf dem Fix: "OK (1200 tests, 7694 assertions)" (vorher 1197 im
+CI-Lauf 42987540725, drei neue Fälle).
+
 ### Nicht belegt
 
-- PHPUnit lokal nicht gelaufen (keine PHP-Änderung in diesem Plan); der
-  PHP-Stand ist durch den CI-Lauf 42987540725 auf a42d2dc6 bei leerem Diff
-  unter php/ belegt, nicht durch einen Lauf auf 2261167b.
-- Die PHP-Hälfte von F-43B-01 und die Kosten von F-43B-04 nur per Durchsicht
-  und Rechnung.
+- Der neue Kopf ist nicht end to end belegt: kein E2E-Lauf, kein CI-Lauf
+  auf einem der Fix-Commits (nichts gepusht).
+- Die Kosten von F-43B-04 nur per Rechnung.
 - Welche drei Datei-IDs der Prüflauf korrigiert hat (keine state.db in den
   Artefakten).
 - Bandsperre und Neuaufbau auf ARM und bei 491.000 Zeilen in echt; MySQL

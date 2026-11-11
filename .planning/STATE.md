@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
 status: executing
-stopped_at: "43-27: Audit lokal, Checkpoint Push offen"
-last_updated: "2026-11-11T16:36:14.000Z"
+stopped_at: "43-27: drei LOW-Fixes lokal (F-43B-01 bis -03), Checkpoint Push und Dispatch offen"
+last_updated: "2026-11-11T17:31:08.000Z"
 last_activity: 2026-11-11
 progress:
   total_phases: 6
