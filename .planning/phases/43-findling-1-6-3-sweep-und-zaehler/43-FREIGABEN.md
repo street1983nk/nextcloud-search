@@ -159,3 +159,10 @@ Dem Owner lag im Chat vor: Audit-Nachtrag ohne CRITICAL, HIGH, MEDIUM; die drei 
 
 Freigabe Push 43-27: "Push erstmal dann mach ich clear" (2026-11-11 19:03, Claude Code Terminal) Entscheid: ja
 Umfang: Push von main nach git pull --rebase, zuerst genau bis 9bf7dddf (letzter Commit außerhalb von .planning), nach grünen Workflows auf diesem Kopf die Planungs-Commits danach (4ae8c833, 6d6f7740, diese Zeilen). Kein Dispatch von coverage-e2e.yml: dafür liegt noch KEINE Freigabe vor, die Zeile "Freigabe Dispatch 43-27" fehlt bewusst. Kein Tag, kein Release, kein Store, kein Kommentar.
+
+## Freigabe 11.11.2026 (Abend): Dispatch von coverage-e2e.yml nach der Fix-Runde (43-27)
+
+Dem Owner lag im Chat vor: fünf von acht Workflows auf 9bf7dddf grün, drei liefen noch; nach Grün folgen die Planungs-Commits aus der Freigabe Push 43-27. Frage: "Darf ich danach EINEN Dispatch von coverage-e2e.yml auf main starten (7 Beine, etwa 45 Minuten)? Der Code ist zwischen A und dem späteren Kopf identisch, nur Planungsdateien kommen dazu." Antwort des Owners: "Ja ok".
+
+Freigabe Dispatch 43-27: "Ja ok" (2026-11-11 19:19, Claude Code Terminal) Entscheid: ja
+Umfang: genau ein Dispatch von coverage-e2e.yml auf main, nachdem alle Workflows auf 9bf7dddf grün sind und die Planungs-Commits gepusht wurden (kein Code-Unterschied zu 9bf7dddf). Kein Tag, kein Release, kein Store, kein Kommentar. Jede Wiederholung braucht eine neue Zeile.
