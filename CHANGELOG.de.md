@@ -27,9 +27,9 @@ Deutsche Fassung ab 1.6.3; ältere Einträge stehen in [CHANGELOG.md](CHANGELOG.
   eingehängten Speichern liegen, zählen nicht mehr (#25).
 - Die Abdeckungszahl zählt ein Dokument auch dann einmal, wenn eine Freigabe
   mit verschiedenen Wurzeln konfiguriert ist oder Server- oder Freigabename
-  in anderer Groß- und Kleinschreibung stehen (#25). Eine Samba-[homes]-
-  Freigabe wird nie über Nutzer hinweg gruppiert, SFTP-Speicher nur je
-  Anmeldename.
+  in anderer Groß- und Kleinschreibung stehen (#25). Eine
+  Samba-[homes]-Freigabe wird nie über Nutzer hinweg gruppiert, SFTP-Speicher
+  nur je Anmeldename.
 - Der Nenner wird je Freigabegruppe ermittelt und fällt nie unter die in
   dieser Gruppe beurteilten Dokumente plus die Dateien, die Nextcloud nicht
   lesen konnte, sodass der Anteil nie über 100 Prozent liegt und die echte
