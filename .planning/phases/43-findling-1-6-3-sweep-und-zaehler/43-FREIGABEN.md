@@ -196,3 +196,11 @@ Dem Owner lag im Chat vor: 43-29 verlangt einen Kommentar zu rc.2 an mbozem, rc.
 Entscheid 43-29 gestrichen: "Ok" (2026-11-11 22:34, Claude Code Terminal) Entscheid: ja
 Entscheid 43-11 abweichend, abgelöst: "Ok" (2026-11-11 22:34, Claude Code Terminal) Entscheid: ja
 Umfang: nur Planungsdateien (ROADMAP, STATE, 43-TESTBUILD-RC2.md). Kein Kommentar in #25, kein Push ohne eigene Frage.
+
+## Freigabe 11.11.2026: Owner-Runde 2 zu 1.6.3 (43-12)
+
+Dem Owner lag im Chat die Vorlage Runde 2 vor (43-OWNER-VORLAGE.md, Abschnitt # Runde 2) mit den Punkten B, C, T1 bis T6, D, R, E, K, I1, I2, F und P. Er fragte "Was empfehlst du"; Claude empfahl alles wie in der Vorlage, I2 mit der gemessenen Dauer von 7,5 Stunden, GO, Push ja. Antwort des Owners: "Wie empfohlen". Protokoll in 43-ABNAHME.md, Abschnitt "## Runde 2".
+
+Freigabe Push 43-12 Runde 2: "Wie empfohlen" (2026-11-11 22:53, Claude Code Terminal) Entscheid: ja
+Freigabe Text 43-12 Runde 2: "Wie empfohlen" (2026-11-11 22:53, Claude Code Terminal) Entscheid: ja
+Umfang Push: die Abnahme-Commits dieser Runde nach git pull --rebase auf main (Planungs-Commits 95e19139 und 3711d4a0, 43-ABNAHME.md, 43-FREIGABEN.md, CHANGELOG nach Punkt T, Gesamttext Runde 2 in docs/store-listing.md, Gate). Kein Tag, kein Release, kein Store, kein Kommentar: Tag und Einreichung führt der Owner aus, die Antwort in #25 braucht eine eigene Freigabe (43-14).
