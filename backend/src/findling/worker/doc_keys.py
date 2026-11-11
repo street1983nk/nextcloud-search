@@ -13,7 +13,9 @@ instance of issue #25, and this task asks the companion for them:
 
 **Bounded.** One band of DOC_KEY_BAND file ids per request, at most
 DOC_KEY_BACKFILL_BANDS_PER_ROUND bands per round, a pause between two bands
-and one round per tick. A backup pause ends the round between two bands.
+and one round per tick. A backup pause ends the round between two bands. Only
+a round that found no state.db yet comes back within seconds, so that a fresh
+database carries the generation before its first row (plan 43-26).
 
 **Resumable.** The cursor lives in the meta value doc_key_backfill_after as
 ``<generation>:<cursor>:<verify>``, written after every band, so a restart goes
@@ -79,6 +81,18 @@ DOC_KEY_MARK: Final = "doc_key_backfill_after"
 DOC_KEY_BACKFILL_BANDS_PER_ROUND: Final = 25
 DOC_KEY_BACKFILL_PAUSE_SECONDS: Final = 1.0
 DOC_KEY_TICK_SECONDS: Final = 300.0
+
+# The wait after a round that found no state.db, instead of a whole tick. The
+# enable arms the poller and this task in the same step and only the poller
+# creates the database, so on a fresh installation the first round comes a
+# moment too early. A tick later the generation gate of the coverage route had
+# kept every figure back for five minutes, and that round forgot the keys the
+# jobs had written in between and asked the companion for all of them again
+# (run 42991291089: 95 rows, 3.5 minutes of "counting" on three legs). A round
+# without a state opens nothing and asks nobody, it looks for one file, so
+# this wait costs one stat call per period and only until the poller's first
+# pass. Every other outcome of a round keeps the tick.
+DOC_KEY_NO_STATE_SECONDS: Final = 5.0
 
 # The format of the key, and only that. A different stored generation, or none
 # (every database of before 1.6.3), forgets every key once and builds them
@@ -329,12 +343,17 @@ class DocKeyBackfill:
             if not self._backup_release.is_set():
                 await _first_of(self._backup_release.wait(), stop_event.wait())
                 continue
+            wait = self._tick
             try:
-                await self.run_once()
+                if (await self.run_once()).state == ROUND_NO_STATE:
+                    # Not a tick: see DOC_KEY_NO_STATE_SECONDS. The loop asks
+                    # for the arming and the backup pause again before the
+                    # next round, so a hold that lands in this wait holds.
+                    wait = min(self._tick, DOC_KEY_NO_STATE_SECONDS)
             # Every exception, the type name only: a message may carry a path.
             except Exception as error:
                 LOGGER.error("doc key round ended in an unexpected %s", type(error).__name__)
-            await _pause(self._tick, stop_event)
+            await _pause(wait, stop_event)
 
     async def run_once(self) -> DocKeyRound:
         """One round: the backfill while rows miss a key, the verify pass otherwise."""

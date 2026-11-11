@@ -2716,8 +2716,18 @@ PHP_TREE_HASH_TODAY = "f3165a57c3aeed687c255f9c66b35f7ddff8a817df61ef421a0234234
 # independently with find, sort, tr and sha256sum over the CRLF normalised
 # tree: 71385c59... both ways, and the same pipeline over git archive HEAD
 # before the step gave 5b1ace06... (positive control).
+#
+# Moved on 2026-11-11 by Plan 43-26, the fix after the first coverage run
+# (42991291089): worker/doc_keys.py waits DOC_KEY_NO_STATE_SECONDS and not a
+# whole tick after a round that found no state.db, so a fresh database carries
+# the key generation within seconds of its birth and the coverage route does
+# not answer "counting" for five minutes. No file came or went, so
+# PACKAGE_FILES_TODAY stays at 83. The PHP pair does not move. Recomputed
+# independently with find, sort, tr and sha256sum over the CRLF normalised
+# tree: 6ef6beba... both ways, and the same pipeline over git archive HEAD
+# before the step gave 71385c59... (positive control).
 PACKAGE_FILES_TODAY = 83
-PACKAGE_TREE_HASH_TODAY = "71385c5906c61dd505b6ae8c922ea92cc6aca790a4e46e92fd92c13ec04d0675"
+PACKAGE_TREE_HASH_TODAY = "6ef6beba8cc950a8addaf22ce31de29e68918341e8e3bd348007248b1685c3e2"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

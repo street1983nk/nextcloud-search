@@ -58,6 +58,7 @@ from findling.worker.doc_keys import (
     ROUND_VERIFIED,
     ROUND_WAITING,
     DocKeyBackfill,
+    DocKeyRound,
     note_coverage_call,
 )
 
@@ -1052,8 +1053,13 @@ async def test_a_backup_pause_that_arrives_before_the_state_still_holds_the_firs
     task = asyncio.create_task(backfill.run(stop))
     try:
         await asyncio.sleep(RETRY * 5)
-        # The pause lands while the worker waits for a state, then the state arrives with
+        # The pause lands while the worker waits for a state, between two rounds: a round in
+        # flight may end what it began, which is why the pause coordinator waits for
+        # in_flight to drop before it says "paused". _until returns in the very step in
+        # which it saw the condition, so the loop does not turn between that look and the
+        # hold and the worker cannot start a round in between. Then the state arrives with
         # keys of the test build (generation 1), as after an update behind a backup.
+        assert await _until(lambda: not backfill.in_flight)
         backfill.hold_for_backup()
         poller_side = open_store(path)
         try:
@@ -1075,6 +1081,50 @@ async def test_a_backup_pause_that_arrives_before_the_state_still_holds_the_firs
             poller_side.close()
     finally:
         await _end(task, stop, backfill)
+
+
+@pytest.mark.parametrize("companion", ["unavailable", "route_missing", "raises"])
+async def test_only_a_missing_state_shortens_the_wait_and_a_silent_companion_keeps_the_tick(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, companion: str
+) -> None:
+    keys = _Keys()
+    if companion == "raises":
+
+        def broken() -> None:
+            raise RuntimeError("Daten/x.pdf")
+
+        keys.on_ask = broken
+    else:
+        setattr(keys, companion, True)
+    backfill, path, clients = _stateless(tmp_path, monkeypatch, keys)
+    rounds: list[int] = []
+    one_round = backfill.run_once
+
+    async def counted() -> DocKeyRound:
+        rounds.append(1)
+        return await one_round()
+
+    monkeypatch.setattr(backfill, "run_once", counted)
+    poller_side = open_store(path)
+    stop = asyncio.Event()
+    try:
+        _insert_rows(poller_side, range(1, 6))
+        backfill.arm()
+        task = asyncio.create_task(backfill.run(stop))
+        try:
+            assert await _until(lambda: keys.calls == 1)
+            # Twenty five periods of the short wait later there was one round and one
+            # question: the round after an answer that is none waits its whole tick, and a
+            # cooldown is not walked through in rounds that return at once.
+            await asyncio.sleep(RETRY * 25)
+            assert len(rounds) == 1
+            assert keys.calls == 1
+            assert clients == [1]
+            assert _mark_at(path) == f"{DOC_KEY_GENERATION}:0:0"
+        finally:
+            await _end(task, stop, backfill)
+    finally:
+        poller_side.close()
 
 
 # -- the verify pass ------------------------------------------------------------------------
