@@ -315,3 +315,14 @@ Mit Fix 1 dauert B1 selbst 1 s. Die Reserve hängt damit an allem davor: Samba, 
 8. **Der parametrisierte rc-Proof (rc-version-proof.yml, rc_version_proof.sh aus Task 1) ist auf diesem Kopf nicht gelaufen.** Der letzte Lauf dieses Workflows ist 42565361965 vom 09.11. auf einem älteren Stand. Er ist nicht Teil des verify von Task 3; belegt ist für ihn nur die lokale Prüfung aus Task 1.
 9. **Warnzeilen in den Containerlogs**, alle sieben Beine zusammen: 76 mal "content gateway refused one file, http status 422" (die gesperrten Dateien, erwartet), 72 mal "coverage count without a vector stock" und 24 mal "the vector stock could not be opened, an FileNotFoundError, the search stays lexical" (das Harness startet den Container mit FINDLING_EMBED_ENABLED=false; nicht weiter untersucht), 2 mal "taken as an outage" und 2 mal "indexing pass stopped" (1.6.2-Phase des Beins upgrade, siehe oben). Kein Traceback, keine Zeile ERROR oder CRITICAL.
 10. **Nicht Teil dieses Laufs:** Impersonation, ARM, eine echte Fremdinstanz, HaRP im Abnahmetest (HaRP deploy lief als eigener Workflow), mehr als 96 Zeilen im Neuaufbau.
+
+## Nachtrag 43-27
+
+Kein neuer Lauf und kein Code-Fix in 43-27 (Stand 11.11.2026, vor dem Owner-Checkpoint): dieser Abschnitt trägt deshalb keine Fix-Zeile, gültig bleibt das Paar des Abschnitts "Fix 1". Kommt nach dem Owner-Entscheid ein Code-Fix dazu, stehen sein Lauf und sein Kopf hier als Fix-Zeilen.
+
+Drei der offenen Punkte oben sind im Audit-Nachtrag (43-AUDIT.md, "Nachtrag 43-27") am Code geklärt:
+
+- Punkt 2 (Nenner in Phase A): die Vermutung trifft zu. Ein Rückstau-Bild ist ab seinem ersten Urteil skipped(no_text_layer) judged und hebt den Nenner; die Beine mit 35 lasen die Übersicht vor dem Ende des ersten Passes (gate-queue / native X 65 gegen X 70, upgrade-rc1-cf X 129 gegen X 134), gate-queue / wrapped danach (X 62 gegen X 67). Erwartetes Verhalten.
+- Punkt 3 (corrected=3, im Bein upgrade 2): die Vermutung trifft NICHT zu. Es sind die drei indexierten Dateien im Home des gelöschten Nutzers dave, deren Dateicache-Zeilen mit dem Nutzer gehen; im Bein upgrade trägt eine davon die Sentinel schon vorher. Die Zeilen des Carol entzogenen Speichers ändern ihren Schlüssel nicht. Richtiges Verhalten; welche Datei-IDs es waren, steht in keinem Artefakt.
+- Punkt 4 (Zeitreserve): bleibt offen als Harness-Befund mit Empfehlung, nicht umgesetzt.
+- Punkt 9 (Warnzeilen): eine Zeile je synchroner Zählung und eine je Prozessstart, Folge von FINDLING_EMBED_ENABLED=false im Harness; als LOW F-43B-03 geführt.

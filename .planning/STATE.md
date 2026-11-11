@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
 status: executing
-stopped_at: "43-26 erledigt: Lauf 43016026129 auf 2261167b grün in sieben Beinen (Fix 1), e2e_head_proof.sh Exit 0, Auswertung in 43-E2E-WURZEL.md Abschnitt Fix 1; offen für 43-27: gone_path=not_exercised, schwankender Nenner in Phase A, doc key verify corrected=3; Commits f0ab98f4 und die SUMMARY nur lokal; nächster Schritt 43-27 (Audit-Nachtrag, Push nur mit Owner-Freigabe)"
-last_updated: "2026-11-11T12:55:00.000Z"
+stopped_at: "43-27: Audit lokal, Checkpoint Push offen"
+last_updated: "2026-11-11T16:36:14.000Z"
 last_activity: 2026-11-11
 progress:
   total_phases: 6
