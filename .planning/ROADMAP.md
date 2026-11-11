@@ -279,7 +279,7 @@ Plans:
 - [ ] 43-08-PLAN.md: Bump 1.6.3, CHANGELOG, Upgrade-Zusicherungen, Push (Owner)
 - [ ] 43-09-PLAN.md: Audit Security/Bugs/Performance des 1.6.3-Deltas, Fixes ab MEDIUM
 - [ ] 43-10-PLAN.md: Testbuild 1.6.3-rc.1 als Artefakt ohne Pre-Release (D-43-13), A5 auf HaRP und A6 auf frischer Instanz (Owner-Push)
-- [ ] 43-11-PLAN.md: Testbuild-Kommentar an mbozem (Owner-Freigabe), Rückmeldung abwarten
+- [x] 43-11-PLAN.md: Testbuild-Kommentar an mbozem (Owner-Freigabe), Rückmeldung abwarten; abgeschlossen als "abweichend, abgelöst" (Owner 11.11.2026): Kommentar zu rc.1 gepostet, Landebericht von mbozem am 09.11. in #25, die gemeldeten Wurzel- und Schreibweisenfälle sind mit 43-21 bis 43-27 behoben
 - [x] 43-17-PLAN.md: Content-Gateway liest SMB ohne Server-Verschlüsselung nicht blockierend mit Fristen (D-43-16)
 - [x] 43-18-PLAN.md: Container wertet 422 als skipped(unreadable), Fix-Runde 80 s (D-43-16)
 - [x] 43-19-PLAN.md: Abhilfetext V1/V2 in 16 Katalogen (D-43-16)
@@ -292,8 +292,8 @@ Plans:
 - [x] 43-26-PLAN.md: Beine upgrade-rc1 und upgrade-rc1-cf (Mischbetrieb, Backup-Pause), rc-Proof parametrisiert, Push/Dispatch (Owner), sieben Beine grün
 - [x] 43-27-PLAN.md: Audit-Nachtrag Wurzeln und Schreibweisen, neuer audited_head mit E2E-Bindung, d_43_15 (Owner-Push)
 - [ ] 43-28-PLAN.md: GESTRICHEN (Owner 09.11.2026, nach dem Landebericht von mbozem): kein rc.2; der Versionsnachweis wird rc.1 -> 1.6.3 (mbozem geht von rc.1 direkt auf das Store-Release) und wandert in die Beine von 43-26/43-27
-- [ ] 43-29-PLAN.md: Kommentar rc.2 an mbozem (Owner-Freigabe), Rückmeldung als Ergebnis
-- [ ] 43-12-PLAN.md: Owner-Runde 1.6.3, Gesamttext, Tag-Kopf (Runde 1 am 09.11. mit GO: nein; Runde 2 nach 43-29)
+- [ ] 43-29-PLAN.md: GESTRICHEN (Owner 11.11.2026): es gibt kein rc.2, also keinen Kommentar und kein Warten; Ergebnis-Zeile für 43-12 in 43-TESTBUILD-RC2.md
+- [ ] 43-12-PLAN.md: Owner-Runde 1.6.3, Gesamttext, Tag-Kopf (Runde 1 am 09.11. mit GO: nein; Runde 2 ist der nächste Schritt, 43-29 gestrichen)
 - [ ] 43-13-PLAN.md: Tag v1.6.3 und Store-Einreichung (Owner führt aus), Belege
 - [ ] 43-14-PLAN.md: Antwort in #25 nach Store-Release (Owner-Freigabe), Issue bleibt offen
 

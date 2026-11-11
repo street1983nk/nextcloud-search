@@ -181,3 +181,18 @@ Dem Owner lag im Chat vor: der Lauf 43094681914 steht auf failure, alle sieben B
 
 Freigabe Dispatch 43-27 Fix 2 Wiederholung: "Ok" (2026-11-11 22:09, Claude Code Terminal) Entscheid: ja
 Umfang: genau ein Neustart der fehlgeschlagenen Jobs des Laufs 43094681914 (gleiche Lauf-ID, zweiter Versuch), nachdem githubstatus.com "All Systems Operational" meldet (geprüft 21:09 UTC). Kein Push von Code, kein Tag, kein Release, kein Store, kein Kommentar. Jede weitere Wiederholung braucht eine neue Zeile.
+
+## Freigabe 11.11.2026 (Nacht): Push des Belegs zu 43-27
+
+Dem Owner lag im Chat vor: der Lauf 43094681914 im zweiten Versuch grün, audited_head 2dacf753, zwei lokale Planungs-Commits ohne Code (49fb104a, e909e276). Frage: "Darf ich sie auf main pushen?" Antwort des Owners: "Go". Der Push ist erfolgt (origin/main e909e276); diese Zeile ist nachgetragen.
+
+Freigabe Push 43-27 Beleg: "Go" (2026-11-11 23:15, Claude Code Terminal) Entscheid: ja
+Umfang: Push der zwei Planungs-Commits 49fb104a und e909e276. Kein Code, kein Tag, kein Release, kein Store, kein Kommentar.
+
+## Owner-Entscheid 11.11.2026 (Nacht): 43-29 gestrichen, 43-11 abgelöst
+
+Dem Owner lag im Chat vor: 43-29 verlangt einen Kommentar zu rc.2 an mbozem, rc.2 gibt es nicht (43-28 gestrichen, Antwort des Owners an mbozem in #25 vom 09.11.2026). Vorschlag: 43-29 als gestrichen führen, 43-11 formal als "abweichend, abgelöst" schließen, danach 43-12 Runde 2. Antwort des Owners: "Ok".
+
+Entscheid 43-29 gestrichen: "Ok" (2026-11-11 22:34, Claude Code Terminal) Entscheid: ja
+Entscheid 43-11 abweichend, abgelöst: "Ok" (2026-11-11 22:34, Claude Code Terminal) Entscheid: ja
+Umfang: nur Planungsdateien (ROADMAP, STATE, 43-TESTBUILD-RC2.md). Kein Kommentar in #25, kein Push ohne eigene Frage.
