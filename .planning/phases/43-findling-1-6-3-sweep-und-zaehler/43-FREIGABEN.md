@@ -229,3 +229,11 @@ Dem Owner lagen im Chat vor: der Wortlaut der Antwort in #25 (I2 aus Runde 2 mit
 
 Freigabe Kommentar 43-14: "Poste die Antwort auf 25" (2026-11-12 00:49, Claude Code Terminal) Entscheid: ja
 Umfang: genau ein Kommentar in #25 mit dem abgenommenen Wortlaut, gepostet als https://github.com/street1983nk/nextcloud-search/issues/25#issuecomment-6810021534. Kein Schließen. Zur Löschung des Branches rc/1.6.3-rc.1 und zum Push der Zustandspflege von 43-14 liegt kein Wort des Owners vor, dafür gibt es keine Zeile.
+
+## Freigabe 12.11.2026: Push der Zustandspflege und Branch-Entscheid (43-14)
+
+Dem Owner lag im Chat vor: vier lokale Commits (Belegkette in docs/store-listing.md, Summaries, STATE, ROADMAP, Protokoll der Antwort in #25) und die Empfehlung "Push ja, Test-Branch rc/1.6.3-rc.1 behalten, bis mbozem bestätigt hat". Antwort des Owners: "Ok wie empfohlen".
+
+Freigabe Push 43-14: "Ok wie empfohlen" (2026-11-12 00:54, Claude Code Terminal) Entscheid: ja
+Freigabe BranchDelete 43-14: "Ok wie empfohlen" (2026-11-12 00:54, Claude Code Terminal) Entscheid: nein
+Umfang: Push der Planungs- und Beleg-Commits auf main. Der Branch rc/1.6.3-rc.1 bleibt bestehen, bis mbozem die Zahl bestätigt hat; die Löschung braucht dann ein neues Wort.
