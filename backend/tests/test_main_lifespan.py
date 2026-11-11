@@ -2027,6 +2027,19 @@ def test_a_disable_while_the_cycle_waits_silences_it_again(volume: Path, monkeyp
         assert _enable_on_the_loop_of_the_lifespan(client) == ""
         _wait_on_the_loop(client, 0.05)
         client.portal.call(enabled_handler, False, cast("AsyncNextcloudApp", None))
+        # The cycle looks at its mark off the loop, here once a millisecond. A
+        # look that was under way when the disable arrived could still read the
+        # mark written below and start a round: 7 of 300 runs of this test were
+        # red that way. That window is a finding of its own with a probe of its
+        # own (F-43B-02 of 43-AUDIT.md, tests/test_phase43_audit_roots.py);
+        # this test is about a cycle that waits, so the look ends first. After
+        # the disable in_flight can only fall, because run() asks for the
+        # arming and raises in_flight in one step.
+        for _ in range(500):
+            if not once.in_flight:
+                break
+            _wait_on_the_loop(client, 0.01)
+        assert once.in_flight is False
         _the_catch_up_mark("reconcile")
         _wait_on_the_loop(client, 0.1)
 
