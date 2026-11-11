@@ -294,8 +294,8 @@ Plans:
 - [ ] 43-28-PLAN.md: GESTRICHEN (Owner 09.11.2026, nach dem Landebericht von mbozem): kein rc.2; der Versionsnachweis wird rc.1 -> 1.6.3 (mbozem geht von rc.1 direkt auf das Store-Release) und wandert in die Beine von 43-26/43-27
 - [ ] 43-29-PLAN.md: GESTRICHEN (Owner 11.11.2026): es gibt kein rc.2, also keinen Kommentar und kein Warten; Ergebnis-Zeile für 43-12 in 43-TESTBUILD-RC2.md
 - [x] 43-12-PLAN.md: Owner-Runde 1.6.3, Gesamttext, Tag-Kopf (Runde 1 am 09.11. mit GO: nein; Runde 2 am 11.11. mit GO: ja, Tag-Kopf 8b00d610)
-- [ ] 43-13-PLAN.md: Tag v1.6.3 und Store-Einreichung (Owner führt aus), Belege
-- [ ] 43-14-PLAN.md: Antwort in #25 nach Store-Release (Owner-Freigabe), Issue bleibt offen
+- [x] 43-13-PLAN.md: Tag v1.6.3 und Store-Einreichung (12.11.2026, von Claude im Auftrag des Owners ausgeführt), Belege in docs/store-listing.md "# Release 1.6.3 (12.11.2026)"
+- [x] 43-14-PLAN.md: Antwort in #25 nach Store-Release (Owner-Freigabe, gepostet 12.11.2026), Issue bleibt offen; Schließen nach Bestätigung durch mbozem, offen; Branch rc/1.6.3-rc.1 bleibt
 
 ---
 *Created: 2026-09-08. v1.1 archiviert: 2026-09-11. v1.2 archiviert: 2026-09-21. v1.3 archiviert: 2026-09-27. v1.4-Roadmap: 2026-09-27. v1.5-Roadmap: 2026-10-10. v1.5 archiviert: 2026-10-28. v1.6-Roadmap: 2026-10-28.*

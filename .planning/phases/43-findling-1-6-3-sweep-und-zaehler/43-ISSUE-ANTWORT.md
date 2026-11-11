@@ -37,6 +37,6 @@ Das Issue wird von uns nicht geschlossen. Es bleibt offen, bis mbozem die Zahl a
 
 ## Offen
 
-- Gegenprobe apps.json für findling (1.6.3) nachtragen.
+- Gegenprobe apps.json für findling: nachgetragen, 2026-11-11T23:52Z führt `api/v1/apps.json` für id findling 1.6.3 und `api/v1/appapi_apps.json` für id findling_backend 1.6.3. Der Kommentar in #25 trägt den Zeitstempel 2026-11-11T23:48:34Z, er ging also wenige Minuten vor dem Umspringen der Liste hinaus.
 - Remote-Branch rc/1.6.3-rc.1: keine Entscheidung des Owners, bleibt bestehen.
 - Push dieser Zustandspflege: eigene Freigabe.
