@@ -2960,6 +2960,168 @@ Findling 1.6.3. Update both apps; 1.6.x versions work together.
 Tag-Links `blob/v1.6.3` und der Compare-Link lösen erst nach dem Tag auf;
 Prüfung vor der Einreichung (Plan 43-13).
 
+# Entwurf v1.6.3 (Gesamttext, Runde 2), abgenommen am 11.11.2026
+
+**Owner-Abnahme 11.11.2026 in Runde 2 (Plan 43-12, "Wie empfohlen"): Store-Text
+unverändert, Release-Notiz mit fünf Punkten und der Grenzzeile zu %U und %S, die
+CHANGELOG-Sätze T1 bis T5, das Datum der Überschrift und die Außentexte, dazu
+das GO für Tag und Einreichung; Wortlaut, Datum und Kanal in
+`.planning/phases/43-findling-1-6-3-sweep-und-zaehler/43-ABNAHME.md`, Abschnitt
+"Runde 2".** Grundlage: `43-OWNER-VORLAGE.md` derselben Phase, Abschnitt
+"Runde 2". Der Abschnitt "Entwurf v1.6.3 (Gesamttext), abgenommen am
+09.11.2026" darüber ist Runde 1 und bleibt als Geschichte stehen; für das
+Release gilt dieser Abschnitt.
+
+Was sich gegenüber Runde 1 ändert: Dieselbe Freigabe mit verschiedenen Wurzeln
+(roots) oder in anderer Groß- und Kleinschreibung zählt einmal (D-43-15,
+D-43-17). Die Release-Notiz bekommt dafür einen eigenen Punkt, die in Runde 1
+vorgesehene Grenzzeile zu Wurzeln entfällt, neu ist die Grenzzeile zu
+Samba-Pfaden mit %U oder %S.
+
+Namen und Beschreibungen wie 1.6.2, Doku-Links auf blob/v1.6.3, Version und
+`image-tag` 1.6.3; die Backend-`info.xml` trägt zusätzlich die Route
+`^/coverage$` (POST, ADMIN). Seit Runde 1 hat sich kein Text in den beiden
+`info.xml`, in `php/l10n`, `php/templates` und `php/js` geändert. Store-Changelog
+ist CHANGELOG.md, Abschnitt [1.6.3]. `backend/tests/test_store_metadata.py` hält
+diesen Abschnitt mit `scan_full_text_1_6_3`: die Sätze der Admin-Seite gegen
+`php/l10n/de.json`, die Release-Notiz Zeile für Zeile gegen den abgenommenen
+Wortlaut und die CHANGELOG-Sätze aus Teil 3 gegen den Abschnitt [1.6.3] der drei
+CHANGELOG-Dateien.
+
+## Teil 1: die Sätze der Admin-Seite
+
+Unverändert seit Runde 1, hier wiederholt, damit der Abschnitt für sich steht.
+
+Hinweis nach dem Update (Block H, freigegeben 07.11.2026):
+
+- en: Since version 1.6.3, every document counts only once. Until now, external storage mounted separately for each user was counted once per mount, which is why the figures can now be lower than before. This note disappears seven days after the first complete count.
+- de: Seit Version 1.6.3 zählt jedes Dokument nur einmal. Bisher wurde ein externer Speicher, der für jeden Nutzer einzeln eingebunden ist, je Einbindung gezählt, deshalb können die Zahlen jetzt niedriger sein als vorher. Dieser Hinweis verschwindet sieben Tage nach der ersten vollständigen Zählung.
+- fr: Depuis la version 1.6.3, chaque document ne compte qu'une seule fois. Jusqu'ici, un stockage externe monté séparément pour chaque utilisateur était compté une fois par montage, c'est pourquoi les chiffres peuvent désormais être plus bas qu'avant. Cette note disparaît sept jours après le premier comptage complet.
+
+Zählung läuft noch (Block Z, freigegeben 07.11.2026):
+
+- en: The coverage is being counted document by document. On large instances this can take some time, and the search keeps working normally meanwhile. The figure appears here as soon as the count is finished.
+- de: Der Deckungsgrad wird gerade pro Dokument gezählt. Auf großen Instanzen kann das einige Zeit dauern, die Suche arbeitet währenddessen normal weiter. Die Zahl erscheint hier, sobald die Zählung fertig ist.
+- fr: La couverture est en cours de comptage, document par document. Sur les grandes instances, cela peut prendre un certain temps, et la recherche continue de fonctionner normalement. Le chiffre s'affiche ici dès que le comptage est terminé.
+
+Nicht lesbare oder hängen gebliebene Dateien (Block U, freigegeben 07.11.2026, `%s` = Anzahl):
+
+- en: %s files could not be read or got stuck repeatedly. They count as not searchable and lower the coverage figure.
+- de: %s Dateien konnten nicht gelesen werden oder sind mehrfach hängen geblieben. Sie zählen als nicht durchsuchbar und senken den Deckungsgrad.
+- fr: %s fichiers n'ont pas pu être lus ou sont restés bloqués à plusieurs reprises. Ils ne peuvent pas être trouvés par la recherche et font donc baisser la couverture.
+
+Rückfall auf die Zählweise von 1.6.2 (Block L, freigegeben 07.11.2026):
+
+- en: This instance has more storages than the count per document can handle. The figure is therefore counted per storage as in version 1.6.2, and a file mounted for several users can stand in it several times.
+- de: Diese Instanz hat mehr Speicherorte, als die Zählung pro Dokument verarbeiten kann. Die Zahl wird deshalb wie in Version 1.6.2 je Speicherort gezählt, und eine Datei, die für mehrere Nutzer eingebunden ist, kann mehrfach darin stehen.
+- fr: Cette instance compte plus d'espaces de stockage que le comptage par document ne peut en traiter. Le chiffre est donc compté par espace de stockage comme dans la version 1.6.2, et un fichier monté pour plusieurs utilisateurs peut y figurer plusieurs fois.
+
+Abhilfe zu "Not readable for the users asked" (Block V1, abgenommen 09.11.2026):
+
+- en: The file is still there. Check the advanced permissions of the Team Folder or the access rights on the external storage: Findling reads a file only as a user who may open it and asks the first 20 of its users in alphabetical order. A file that is locked or offline is tried again a few times.
+- de: Die Datei ist noch vorhanden. Die erweiterten Berechtigungen des Team Folders oder die Zugriffsrechte auf dem externen Speicher prüfen: Findling liest eine Datei nur als Nutzer, der sie öffnen darf, und fragt die ersten 20 ihrer Nutzer in alphabetischer Reihenfolge. Eine gesperrte oder ausgelagerte Datei wird noch einige Male erneut versucht.
+- fr: Le fichier existe toujours. Vérifiez les permissions avancées du Team Folder ou les droits d'accès sur le stockage externe : Findling ne lit un fichier qu'en tant qu'utilisateur autorisé à l'ouvrir et interroge les 20 premiers de ses utilisateurs par ordre alphabétique. Un fichier verrouillé ou hors ligne est réessayé quelques fois.
+
+Zusatzsatz für SMB ohne php-smbclient (Block V2, abgenommen 09.11.2026):
+
+- en: On SMB storage without the php-smbclient extension, install this extension recommended by Nextcloud, or raise the timeout option of the storage (occ files_external:config).
+- de: Bei SMB-Speichern ohne die Erweiterung php-smbclient diese von Nextcloud empfohlene Erweiterung installieren, alternativ die Speicher-Option timeout erhöhen (occ files_external:config).
+- fr: Sur les stockages SMB sans l'extension php-smbclient, installez cette extension recommandée par Nextcloud, ou augmentez l'option timeout du stockage (occ files_external:config).
+
+Die Sprachen es, it, nl, pt_BR und pt_PT gehen als maschineller Entwurf unter
+Vorbehalt mit (Muster 39-01).
+
+## Teil 2: Release-Notiz v1.6.3
+
+Punkt C der Runde 2, Variante (a): fünf Punkte und die Grenzzeile, ohne den
+sechsten Punkt zur Wartezeit.
+
+```
+Findling 1.6.3. Update both apps; 1.6.x versions work together.
+- The coverage figure counts every document once; share groups and storages that are no longer mounted no longer inflate it (#25)
+- One share configured with different roots, or with the server or share name spelled in a different case, counts once (#25)
+- The storage sweep removes documents of deleted or unmounted storages even on busy instances (#25)
+- A note on the admin page explains the lower figures after the update; files that could not be read are named with a remedy (#25)
+- Locked or refused files on SMB storage no longer block a PHP worker and count as not readable
+
+Known limitation: a Samba share whose folder depends on the user on the server side (a path with %U or %S) still counts as one tree for all users.
+
+**Full Changelog**: https://github.com/street1983nk/nextcloud-search/compare/v1.6.2...v1.6.3
+```
+
+Tag-Links `blob/v1.6.3` und der Compare-Link lösen erst nach dem Tag auf;
+Prüfung vor der Einreichung (Plan 43-13).
+
+## Teil 3: die neuen Sätze im CHANGELOG, Abschnitt [1.6.3]
+
+Punkte T1 bis T5 der Runde 2, alle Variante (a). Die Sätze stehen so in
+CHANGELOG.md (en), CHANGELOG.de.md (de) und CHANGELOG.fr.md (fr); dort sind sie
+umbrochen, hier steht jeder in einer Zeile.
+
+Fixed, Wurzeln und Schreibweisen (T1; D-43-15, D-43-17, OE-3 a, OE-4 a):
+
+- en: The coverage figure counts a document once also when one share is configured with different roots, or with the server or share name spelled in a different case (#25). A Samba [homes] share is never grouped across users, and SFTP storages are grouped per login only.
+- de: Die Abdeckungszahl zählt ein Dokument auch dann einmal, wenn eine Freigabe mit verschiedenen Wurzeln konfiguriert ist oder Server- oder Freigabename in anderer Groß- und Kleinschreibung stehen (#25). Eine Samba-[homes]-Freigabe wird nie über Nutzer hinweg gruppiert, SFTP-Speicher nur je Anmeldename.
+- fr: Le chiffre de couverture compte un document une seule fois aussi lorsqu'un partage est configuré avec des racines différentes, ou lorsque le nom du serveur ou du partage est écrit avec une casse différente (#25). Un partage Samba [homes] n'est jamais regroupé entre utilisateurs, et les stockages SFTP ne sont regroupés que par identifiant de connexion.
+
+Known limitations, Samba-Pfad mit %U oder %S (T2; OE-7 a):
+
+- en: A Samba share whose folder depends on the user on the server side (a path with %U or %S) still counts as one tree for all users.
+- de: Eine Samba-Freigabe, deren Ordner serverseitig vom Nutzer abhängt (ein Pfad mit %U oder %S), zählt weiterhin als ein Baum für alle Nutzer.
+- fr: Un partage Samba dont le dossier dépend de l'utilisateur côté serveur (un chemin avec %U ou %S) compte toujours comme un seul arbre pour tous les utilisateurs.
+
+Known limitations, lange Speicher-IDs ohne Zuordnung (T3; OE-2 a):
+
+- en: Storages with an id longer than 64 characters that cannot be rebuilt from their configuration (global or user provided credentials, a login name other than the user id) are counted per storage.
+- de: Speicher mit einer Id länger als 64 Zeichen, die sich nicht aus ihrer Konfiguration neu bilden lässt (globale oder vom Nutzer hinterlegte Zugangsdaten, ein Anmeldename ungleich der Nutzer-Id), werden je Speicher gezählt.
+- fr: Les stockages dont l'identifiant dépasse 64 caractères et qui ne peuvent pas être reconstruits à partir de leur configuration (identifiants globaux ou fournis par l'utilisateur, un nom de connexion différent de l'identifiant utilisateur) sont comptés par stockage.
+
+Fixed, Nachhol-Durchlauf (T4; F-43B-02):
+
+- en: The one time catch-up cycle after an update no longer starts a round when the reconcile is switched off at that very moment.
+- de: Der einmalige Nachhol-Durchlauf nach einem Update startet keine Runde mehr, wenn der Abgleich genau in diesem Augenblick ausgeschaltet wird.
+- fr: Le cycle de rattrapage unique après une mise à jour ne lance plus de tour lorsque le rapprochement est désactivé à cet instant précis.
+
+Fixed, vorübergehende Datenbanksperre (T5; F-43B-05):
+
+- en: A passing database lock during the first index no longer ends the crawl of a storage; the slice is tried again a few seconds later, up to five times in a row.
+- de: Eine vorübergehende Datenbanksperre während des ersten Index beendet den Durchlauf eines Speichers nicht mehr; der Abschnitt wird wenige Sekunden später erneut versucht, bis zu fünfmal hintereinander.
+- fr: Un verrou passager de la base de données pendant le premier index ne met plus fin au parcours d'un stockage ; la tranche est retentée quelques secondes plus tard, jusqu'à cinq fois de suite.
+
+Datum der Überschrift (T6): alle drei Dateien führen `## [1.6.3] - 2026-11-12`,
+den geplanten Tag des Tags.
+
+## Teil 4: die Außentexte
+
+Entwürfe, englisch, vom Gate nicht gehalten. Der Owner postet beide selbst.
+
+Forum-Post (I1, Variante a):
+
+```
+Findling 1.6.3 is in the store (update both apps together).
+
+New in 1.6.3:
+- Coverage counts every document once: per-user mounts of the same share no longer inflate the figure
+- One share configured with different roots, or with the server or share name in a different case, counts once
+- Documents of deleted or unmounted storages leave the index even while the crawl is busy
+- A note on the admin page explains the lower figures after the update, and files that could not be read are shown with a remedy
+- Locked or refused files on SMB storage no longer block a PHP worker
+
+Changelog: https://github.com/street1983nk/nextcloud-search/releases/tag/v1.6.3
+```
+
+Antwort in #25 (I2, Variante b: mit der gemessenen Dauer des Aufbaus unter rc.1
+statt der gerechneten 8 bis 9 Stunden). Sie geht erst nach dem Store-Release
+hinaus, mit eigener Freigabe in Plan 43-14, und schließt das Issue nicht:
+
+```
+1.6.3 is in the app store now, update both apps together. Thanks again for the rc.1 test and the two topology posts, the fold for sub-roots and spelling is built on them.
+
+Coming from rc.1 (or straight from 1.6.2) the document keys are rebuilt once, so the page says "being counted" again. On an instance your size that takes hours, about as long as the rc.1 backfill took (7.5 h on yours), and the search works normally meanwhile. After that you should land around 18 %.
+
+Could you confirm the figure on the store build? I'll leave this one open until then.
+```
+
 # Entwurf v1.6.3, Stand Plan 43-08 (08.11.2026)
 
 Entwurf für die Owner-Runde in Plan 43-12/43-13, noch nicht abgenommen.

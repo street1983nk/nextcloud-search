@@ -8,7 +8,7 @@ dans [CHANGELOG.md](CHANGELOG.md).
 
 ## [Unreleased]
 
-## [1.6.3] - 2026-11-08
+## [1.6.3] - 2026-11-12
 
 ### Ajouté
 

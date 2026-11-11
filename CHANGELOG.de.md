@@ -7,7 +7,7 @@ Deutsche Fassung ab 1.6.3; ältere Einträge stehen in [CHANGELOG.md](CHANGELOG.
 
 ## [Unreleased]
 
-## [1.6.3] - 2026-11-08
+## [1.6.3] - 2026-11-12
 
 ### Hinzugefügt
 
