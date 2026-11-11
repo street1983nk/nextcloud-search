@@ -52,6 +52,8 @@ dans [CHANGELOG.md](CHANGELOG.md).
   que la réponse reste dans le délai d'administration de l'app compagnon sur
   du matériel lent ; les instances plus grandes voient le chiffre compté en
   arrière-plan une fois après la mise à jour.
+- Le cycle de rattrapage unique après une mise à jour ne lance plus de tour
+  lorsque le rapprochement est désactivé à cet instant précis.
 
 ### Limites connues
 

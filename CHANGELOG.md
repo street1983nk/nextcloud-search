@@ -43,6 +43,8 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
 - The synchronous coverage count is capped at 25,000 rows, so the answer
   stays within the admin timeout of the companion on slow hardware; larger
   instances see the figure counted in the background once after the update.
+- The one time catch-up cycle after an update no longer starts a round when
+  the reconcile is switched off at that very moment.
 
 ### Known limitations
 

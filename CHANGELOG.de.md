@@ -48,6 +48,8 @@ Deutsche Fassung ab 1.6.3; ältere Einträge stehen in [CHANGELOG.md](CHANGELOG.
   Antwort auf langsamer Hardware innerhalb des Admin-Timeouts der Begleit-App
   bleibt; größere Instanzen sehen die Zahl nach dem Update einmal im
   Hintergrund gezählt.
+- Der einmalige Nachhol-Durchlauf nach einem Update startet keine Runde mehr,
+  wenn der Abgleich genau in diesem Augenblick ausgeschaltet wird.
 
 ### Bekannte Einschränkungen
 

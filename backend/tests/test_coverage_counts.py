@@ -499,6 +499,23 @@ def test_the_share_path_keeps_one_file_together_and_two_files_apart(tmp_path: Pa
         assert counts.documents == documents
 
 
+def test_a_count_that_is_told_nothing_expects_a_vector_stock(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """The default of ``vectors_expected`` is the careful one (audit finding F-43B-03).
+
+    Only a caller that knows the switch of the admin may silence the line; a
+    caller that says nothing keeps the warning for a stock that is not there.
+    """
+    state_db, vectors_db = _build(tmp_path, [])
+    vectors_db.unlink()
+    caplog.set_level("DEBUG", logger="findling.store.repo")
+
+    coverage_counts(state_db, vectors_db, [7], [])
+
+    assert [(record.levelname, record.getMessage()) for record in caplog.records] == [
+        ("WARNING", "coverage count without a vector stock, the vector figure is 0")
+    ]
+
+
 def test_the_roots_variant_keeps_every_part_within_its_denominator() -> None:
     _, variant = _roots()
     expected = variant["expected"]
