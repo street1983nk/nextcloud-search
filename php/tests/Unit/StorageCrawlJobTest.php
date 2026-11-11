@@ -15,7 +15,9 @@ use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\BackgroundJob\IJobList;
 use OCP\DB\IResult;
 use OCP\DB\QueryBuilder\IExpressionBuilder;
+use OCP\DB\QueryBuilder\IFunctionBuilder;
 use OCP\DB\QueryBuilder\IQueryBuilder;
+use OCP\DB\QueryBuilder\IQueryFunction;
 use OCP\Files\Cache\ICacheEntry;
 use OCP\IAppConfig;
 use OCP\IDBConnection;
@@ -505,7 +507,7 @@ final class StorageCrawlJobTest extends TestCase {
 			$storageService,
 			$queue,
 			$this->createMock(FileStateService::class),
-			$this->scanStats(null),
+			$this->bandStats(),
 			new SettingsService($appConfig, $logger, $time),
 			new ExclusionService($appConfig, $storageService, $jobList, $logger),
 			$appConfig,
@@ -513,6 +515,38 @@ final class StorageCrawlJobTest extends TestCase {
 			$locking,
 			$logger,
 		);
+	}
+
+	/**
+	 * A real ScanStatsService (it is final) whose band update finds its row.
+	 * The helper scanStats() above knows no function builder, and the band of
+	 * a crawl adds its deltas through one.
+	 */
+	private function bandStats(): ScanStatsService {
+		$db = $this->createMock(IDBConnection::class);
+		$db->method('getQueryBuilder')->willReturnCallback(function (): IQueryBuilder {
+			$expr = $this->createMock(IExpressionBuilder::class);
+			$expr->method('eq')->willReturn('eq');
+
+			$func = $this->createMock(IFunctionBuilder::class);
+			$func->method('add')->willReturn($this->createMock(IQueryFunction::class));
+
+			$qb = $this->createMock(IQueryBuilder::class);
+			$qb->method('expr')->willReturn($expr);
+			$qb->method('func')->willReturn($func);
+			$qb->method('update')->willReturnSelf();
+			$qb->method('set')->willReturnSelf();
+			$qb->method('where')->willReturnSelf();
+			$qb->method('createNamedParameter')->willReturn(':value');
+			$qb->method('executeStatement')->willReturn(1);
+
+			return $qb;
+		});
+
+		$time = $this->createMock(ITimeFactory::class);
+		$time->method('getDateTime')->willReturn(new \DateTime('@' . self::NOW));
+
+		return new ScanStatsService($db, $time, $this->createMock(LoggerInterface::class));
 	}
 
 	/**

@@ -14,6 +14,7 @@ use OCA\Findling\Service\StorageService;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\BackgroundJob\IJobList;
 use OCP\BackgroundJob\QueuedJob;
+use OCP\DB\Exception as DbException;
 use OCP\Files\Cache\ICacheEntry;
 use OCP\IAppConfig;
 use OCP\IDBConnection;
@@ -73,6 +74,18 @@ class StorageCrawlJob extends QueuedJob {
 	 * monopolise consecutive cron runs.
 	 */
 	private const INTERVAL = 5;
+
+	/**
+	 * How often in a row a slice may come back after a database error without
+	 * having committed a single band. A lock that passes ("database is locked"
+	 * on SQLite, a deadlock or a lock wait timeout elsewhere) is gone a few
+	 * seconds later, and until plan 43-27 it still ended the crawl of the
+	 * mount for good: being a QueuedJob the row is removed before run(), so a
+	 * rethrow without a successor left nothing behind that would try again. A
+	 * database that refuses this often in a row is no passing lock any more,
+	 * and there the slice ends as before, with the error in the log.
+	 */
+	private const MAX_RETRIES = 5;
 
 	/**
 	 * The one lock every slice of every mount runs under, whichever door it came
@@ -200,6 +213,7 @@ class StorageCrawlJob extends QueuedJob {
 		$lastFileId = (int)($argument['last_file_id'] ?? 0);
 		$recount = is_array($argument) && ($argument['mode'] ?? null) === self::MODE_RECOUNT;
 		$sums = $recount ? self::sumsFrom($argument) : [];
+		$retries = is_array($argument) ? max(0, (int)($argument['retries'] ?? 0)) : 0;
 
 		if ($storageId <= 0 || $overriddenRoot <= 0) {
 			// A malformed argument would otherwise reschedule itself forever
@@ -219,7 +233,7 @@ class StorageCrawlJob extends QueuedJob {
 			$this->jobList->scheduleAfter(
 				self::class,
 				$this->time->getTime() + self::INTERVAL,
-				self::successorArgument($storageId, $rootId, $overriddenRoot, $lastFileId, $recount, $sums),
+				self::successorArgument($storageId, $rootId, $overriddenRoot, $lastFileId, $recount, $sums, $retries),
 			);
 			return;
 		}
@@ -228,7 +242,7 @@ class StorageCrawlJob extends QueuedJob {
 			if ($recount) {
 				$this->recountSlice(self::budgetSeconds($argument), $storageId, $rootId, $overriddenRoot, $lastFileId, $sums);
 			} else {
-				$this->crawlSlice(self::budgetSeconds($argument), $storageId, $rootId, $overriddenRoot, $lastFileId);
+				$this->crawlSlice(self::budgetSeconds($argument), $storageId, $rootId, $overriddenRoot, $lastFileId, $retries);
 			}
 		} finally {
 			$this->lockingProvider->releaseLock(self::LOCK_NAME, ILockingProvider::LOCK_EXCLUSIVE);
@@ -238,7 +252,11 @@ class StorageCrawlJob extends QueuedJob {
 	/**
 	 * One slice of one mount, under the lock the caller holds.
 	 */
-	private function crawlSlice(int $budgetSeconds, int $storageId, int $rootId, int $overriddenRoot, int $lastFileId): void {
+	private function crawlSlice(int $budgetSeconds, int $storageId, int $rootId, int $overriddenRoot, int $lastFileId, int $retries): void {
+		// The cursor of the last commit. A band that is rolled back was never
+		// crawled, so a retry starts here and not at the entry that failed.
+		$committedFileId = $lastFileId;
+
 		if ($lastFileId === 0) {
 			// This mount starts from the beginning: a fresh installation or occ
 			// findling:index --restart. The scan counters of this storage go
@@ -340,6 +358,10 @@ class StorageCrawlJob extends QueuedJob {
 					$bandCounts = self::zeroSums();
 
 					$this->db->commit();
+					$committedFileId = $lastFileId;
+					// A committed band is progress, and progress is what tells
+					// a passing lock from a database that refuses for good.
+					$retries = 0;
 					$this->db->beginTransaction();
 					$band = 0;
 				}
@@ -358,7 +380,29 @@ class StorageCrawlJob extends QueuedJob {
 			$this->db->commit();
 		} catch (\Throwable $e) {
 			$this->db->rollBack();
-			throw $e;
+
+			if (!($e instanceof DbException) || $retries + 1 >= self::MAX_RETRIES) {
+				// No database error, or one that came back too often: the
+				// slice ends loudly, as it always did.
+				throw $e;
+			}
+
+			// Only the database is retried. The row of this job is gone since
+			// before run(), so this successor is the one thing that keeps the
+			// mount in the crawl; without it its files stay out of the index
+			// until somebody runs occ findling:index.
+			$this->logger->warning('Findling: a crawl slice met a database error and will be tried again', [
+				'storage_id' => $storageId,
+				'cursor' => $committedFileId,
+				'retries' => $retries + 1,
+				'exception' => $e,
+			]);
+			$this->jobList->scheduleAfter(
+				self::class,
+				$this->time->getTime() + self::INTERVAL,
+				self::successorArgument($storageId, $rootId, $overriddenRoot, $committedFileId, false, [], $retries + 1),
+			);
+			return;
 		}
 
 		$this->appConfig->setValueInt(Application::APP_ID, SchedulerJob::LAST_JOB_RUN, $this->time->getTime());
@@ -572,13 +616,18 @@ class StorageCrawlJob extends QueuedJob {
 	 * @param array<string, int> $sums
 	 * @return array<string, int|string>
 	 */
-	private static function successorArgument(int $storageId, int $rootId, int $overriddenRoot, int $lastFileId, bool $recount, array $sums): array {
+	private static function successorArgument(int $storageId, int $rootId, int $overriddenRoot, int $lastFileId, bool $recount, array $sums, int $retries = 0): array {
 		$argument = [
 			'storage_id' => $storageId,
 			'root_id' => $rootId,
 			'overridden_root' => $overriddenRoot,
 			'last_file_id' => $lastFileId,
 		];
+		if ($retries > 0) {
+			// Only when there is something to count, so that every argument
+			// written before plan 43-27 keeps its shape.
+			$argument['retries'] = $retries;
+		}
 		if (!$recount) {
 			return $argument;
 		}

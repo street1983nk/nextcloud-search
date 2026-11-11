@@ -1293,8 +1293,14 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # at 129. Recomputed independently with find, sort, tr and sha256sum over the CRLF normalised tree:
 # ea247ffd... both ways; the same pipeline over git archive of cdd16d05, the last commit before the
 # step, gave f3165a57 (positive control).
+# Moved on 2026-11-11 by the fix after the red end-to-end run 43079756645 (plan 43-27): lib/
+# BackgroundJobs/StorageCrawlJob.php schedules a successor with the last committed cursor when a
+# slice meets a database error, at most five times in a row without progress, instead of ending the
+# crawl of the mount, and tests/Unit/StorageCrawlJobTest.php follows. No file came or went, so
+# PHP_FILES_TODAY stays at 129. The recipe over git archive of 9bf7dddf, the last commit before the
+# step, gave ea247ffd (positive control).
 PHP_FILES_TODAY = 129
-PHP_TREE_HASH_TODAY = "ea247ffd9a9ec52fb024e41c3f3ebada82645e315d0bf157d16d69ad5a07da1e"
+PHP_TREE_HASH_TODAY = "78dc4e850b304207a9566f7a13a2ffcd25058e258680f53f072e11b33ad8e1ff"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

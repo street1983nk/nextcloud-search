@@ -54,6 +54,9 @@ dans [CHANGELOG.md](CHANGELOG.md).
   arrière-plan une fois après la mise à jour.
 - Le cycle de rattrapage unique après une mise à jour ne lance plus de tour
   lorsque le rapprochement est désactivé à cet instant précis.
+- Un verrou passager de la base de données pendant le premier index ne met
+  plus fin au parcours d'un stockage ; la tranche est retentée quelques
+  secondes plus tard, jusqu'à cinq fois de suite.
 
 ### Limites connues
 

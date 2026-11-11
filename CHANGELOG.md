@@ -45,6 +45,9 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
   instances see the figure counted in the background once after the update.
 - The one time catch-up cycle after an update no longer starts a round when
   the reconcile is switched off at that very moment.
+- A passing database lock during the first index no longer ends the crawl of
+  a storage; the slice is tried again a few seconds later, up to five times
+  in a row.
 
 ### Known limitations
 

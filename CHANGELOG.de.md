@@ -50,6 +50,9 @@ Deutsche Fassung ab 1.6.3; ältere Einträge stehen in [CHANGELOG.md](CHANGELOG.
   Hintergrund gezählt.
 - Der einmalige Nachhol-Durchlauf nach einem Update startet keine Runde mehr,
   wenn der Abgleich genau in diesem Augenblick ausgeschaltet wird.
+- Eine vorübergehende Datenbanksperre während des ersten Index beendet den
+  Durchlauf eines Speichers nicht mehr; der Abschnitt wird wenige Sekunden
+  später erneut versucht, bis zu fünfmal hintereinander.
 
 ### Bekannte Einschränkungen
 
