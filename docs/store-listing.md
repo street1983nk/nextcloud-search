@@ -3175,6 +3175,61 @@ Findling 1.6.3. Update both apps; 1.6.x versions work together.
 **Full Changelog**: https://github.com/street1983nk/nextcloud-search/compare/v1.6.2...v1.6.3
 ```
 
+# Release 1.6.3 (12.11.2026)
+
+Store-Text und Release-Notiz sind die am 11.11.2026 abgenommene Fassung oben
+("Entwurf v1.6.3 (Gesamttext, Runde 2)"). Owner-GO für Tag und Einreichung in
+`.planning/phases/43-findling-1-6-3-sweep-und-zaehler/43-ABNAHME.md` (Zeile
+`GO: ja`, Runde 2). Tag-Push und Einreichung hat Claude im Auftrag des Owners
+ausgeführt (Zeile `Auftrag Ausführung 43-13` in 43-FREIGABEN.md, Owner-Wort
+"Kannst das machen ich bin nicht am Rechner").
+
+Belegkette:
+
+1. `git rev-list -n 1 v1.6.3` = `8b00d6100be0133fd436fd2f277736f5d9e86a9b`,
+   `git cat-file -t v1.6.3` = tag (annotiert), Tag-Objekt 9220179c,
+   Nachricht "Findling 1.6.3", gesetzt 2026-11-12T00:00:23+01:00. Der Tag-Kopf
+   ist der in 43-ABNAHME.md festgehaltene; Code-Diff zum audited_head 2dacf753
+   leer.
+2. Tag-Läufe auf 8b00d610, alle sieben success: Release (`release.yml`)
+   43116399950, PHP and store metadata gates 43116400115, Python gates
+   43116399985, Integration 43116399951, Resilience 43116399938, Multi-arch
+   image 43116399919, HaRP deploy 43116399913. Damit liefen die PHP-Gates auf
+   dem Tag selbst grün (Bedingung der Owner-Ausnahme aus 43-12).
+3. Aus dem Log des Release-Laufs 43116399950:
+   - `dist/findling.tar.gz is 707721 bytes, the store limit is 20971520`, danach `Verified OK`
+   - `dist/findling_backend.tar.gz is 49637 bytes, the store limit is 20971520`, danach `Verified OK`
+4. `gh release view v1.6.3 --json isImmutable` = `{"isImmutable":true}`,
+   veröffentlicht 2026-11-11T23:01:19Z, neun Assets: findling.tar.gz 707721,
+   findling.tar.gz.sig 684, findling_backend.tar.gz 49637,
+   findling_backend.tar.gz.sig 684, findling-1.6.3-source.tar.gz 27266854,
+   pillow_heif-1.8.1.tar.gz 17395786, x265_4.3.tar.gz 2052112,
+   libde265-1.1.3.tar.gz 324452, libheif-1.23.6.tar.gz 2373898.
+5. Image `ghcr.io/street1983nk/findling_backend:1.6.3`: Manifest HTTP 200,
+   Index sha256:5182c5a7052abed908bd1afea8b9e03cc7e7e1b99e0f26147caf251f1be38637
+   mit linux/amd64 und linux/arm64, geprüft vor der Einreichung.
+6. Tag-Links: `blob/v1.6.3/docs/migrate-from-fulltextsearch.md`, `.en.md` und
+   `.fr.md` liefern HTTP 200.
+7. Eingereicht über den Workflow "Store submission" (`store-submit.yml`,
+   `-f tag=v1.6.3`), ein Lauf, 43120250685, success. Antwortcodes aus dem Log:
+   - release findling v1.6.3: HTTP 201, 23:30:00Z
+   - release findling_backend v1.6.3: HTTP 201, 23:30:01Z
+8. Gegenprobe Store-API: 2026-11-11T23:31Z `api/v1/appapi_apps.json` id
+   `findling_backend` führt 1.6.3 als neueste Fassung; `api/v1/apps.json` id
+   `findling` führte um 23:31Z, 23:46Z und 23:48Z noch 1.6.2
+   (Zwischenspeicher der Liste, die Seite apps/findling/releases nannte 1.6.3
+   bereits) und führt um 23:52Z 1.6.3. Kein Mischbetrieb mehr ab 23:52Z.
+9. Release-Notiz: mit `gh release edit v1.6.3 --notes-file` durch den
+   abgenommenen Text (Punkt C, fünf Punkte, Grenzzeile, Full-Changelog-Zeile)
+   ersetzt und gegen den Entwurf verglichen (Freigabe ReleaseEdit 43-13).
+10. Fremdinstallation aus den Release-Assets: Dispatch `deploy-harp.yml` mit
+    `release_tag=v1.6.3`, ein Lauf, 43120397524, success in allen vier Beinen
+    (stable33, stable34, stable35 auf ubuntu-24.04, stable34 auf
+    ubuntu-24.04-arm) (Freigabe Dispatch 43-13).
+
+Nicht erneut geprüft: SHA-256 der Pakete und die Quellpflicht-Prüfung einzeln;
+der grüne Release-Lauf 43116399950 deckt Signatur und Paketbau ab.
+
 # Release 1.6.2 (04.11.2026)
 
 Store-Text und Release-Notiz sind die am 04.11.2026 abgenommene Fassung oben
