@@ -6,9 +6,10 @@ probes build their own rows and their own companion and compute every key
 themselves, so none of them reuses the pattern of the code it judges (owner
 rule "Gegenprobe nie mit dem Muster der Umsetzung").
 
-Three of them hold a finding of the audit in place as it is today. Their names
-start with ``test_p_f_43b_``; each says in its docstring what has to change in
-it on the day the finding is fixed.
+Three of them held a finding of the audit in place as it was on the day of the
+audit. Their names start with ``test_p_f_43b_``; each is turned into the probe
+of the fixed state with the fix of its finding and says in its docstring what
+changed.
 """
 
 from __future__ import annotations
@@ -30,7 +31,6 @@ from findling.nc.files import DocKeyAnswer, Mount, MountResult, SliceResult
 from findling.nc.queue import CallResult, QueueStats
 from findling.store import repo as repo_module
 from findling.store.repo import (
-    CATCHUP_DONE,
     CATCHUP_MARK,
     CATCHUP_RECONCILE,
     FileMeta,
@@ -435,19 +435,21 @@ def _catch_up_mark(value: str | None = None) -> str:
 
 
 @pytest.mark.usefixtures("volume")
-async def test_p_f_43b_02_a_disable_that_lands_in_the_look_at_the_mark_still_starts_one_round() -> None:
-    """Finding F-43B-02 (LOW), as it is today, and the cause of the flaky lifespan test.
+async def test_p_f_43b_02_a_disable_that_lands_in_the_look_at_the_mark_starts_no_round() -> None:
+    """Finding F-43B-02 (LOW), fixed: the arming is asked again behind the look at the mark.
 
     The one time cycle asks for its arming, then looks at CATCHUP_MARK off the
-    loop, then runs. A backup hold that lands in that look is asked again
-    behind it (F-41A-02); a disable is not, so the round starts on a container
-    that was just switched off. tests/test_main_lifespan.py
+    loop, then runs. A backup hold that lands in that look was asked again
+    behind it (F-41A-02); a disable was not, so the round started on a
+    container that was just switched off. tests/test_main_lifespan.py
     test_a_disable_while_the_cycle_waits_silences_it_again hit this window in
-    7 of 300 runs: its cycle looks every millisecond, and the mark it writes
-    after the disable could still reach a look that was under way.
+    7 of 300 runs.
 
-    On the day run() asks for the arming again behind the look, rounds is 0
-    here and the mark stays as it was.
+    Until the fix this probe held the finding in place (rounds == 1, the mark
+    on CATCHUP_DONE). What changed: run() asks for the arming again behind the
+    look. The look is held open here, the disable lands in it, and no round
+    starts and the mark stays as it was. The cycle then waits for its arming
+    with in_flight down, like every silenced reconcile.
     """
     _catch_up_mark(CATCHUP_RECONCILE)
     once = _OnceWithASlowLook()
@@ -458,14 +460,20 @@ async def test_p_f_43b_02_a_disable_that_lands_in_the_look_at_the_mark_still_sta
         await asyncio.wait_for(once.looking.wait(), timeout=5.0)
         once.silence()
         once.look_on.set()
-        await asyncio.wait_for(task, timeout=5.0)
+        for _ in range(5000):
+            if not once.in_flight:
+                break
+            await asyncio.sleep(0.001)
+        await asyncio.sleep(0.05)
+        assert once.in_flight is False
+        assert task.done() is False
     finally:
         stop.set()
         await asyncio.wait_for(task, timeout=5.0)
         await once.aclose()
 
-    assert once.rounds == 1
-    assert _catch_up_mark() == CATCHUP_DONE
+    assert once.rounds == 0
+    assert _catch_up_mark() == CATCHUP_RECONCILE
 
 
 @pytest.mark.usefixtures("volume")
