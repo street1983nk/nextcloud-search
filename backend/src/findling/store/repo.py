@@ -678,7 +678,31 @@ _EXISTING_DOC_KEYS_SQL: Final = (
 )
 _DOC_KEYS_MISSING_SQL: Final = "SELECT COUNT(*) FROM files WHERE doc_key IS NULL AND deleted_at IS NULL"
 _DOC_KEYS_UNRESOLVED_SQL: Final = "SELECT COUNT(*) FROM files WHERE doc_key = '' AND deleted_at IS NULL"
-_RESET_DOC_KEYS_SQL: Final = "UPDATE files SET doc_key = NULL WHERE doc_key IS NOT NULL"
+# The reset forgets the keys in bands of rows, each band in its own transaction,
+# so that the time one writer holds the lock stops growing with the table.
+# Measured on a store of 491,000 rows with random keys (real schema and
+# pragmas, SSD, a second writer busy the whole time): one UPDATE over the whole
+# table held the write lock for 7.7 to 9.1 s, and the second writer waited that
+# long of its _BUSY_TIMEOUT_MS. In bands of 100,000 it waited 2.4 s at most and
+# the reset took 9 to 10 s in all.
+#
+# The band is large on purpose. The keys are hashes, so a band of rows in file
+# id order touches the index files_storage_doc_key all over, and every band
+# writes those pages again: bands of 10,000 took 17 to 29 s and wrote 1.2 GB
+# of WAL while another connection kept the checkpoint from finishing, against
+# 0.3 GB for bands of 100,000 and 0.2 GB for the single UPDATE. Below 25,000
+# the wait of the second writer did not get shorter either, a checkpoint
+# inside a commit sets a floor of one to three seconds. A store under 100,000
+# rows is one band and behaves as before. A band is a count of rows, found
+# through the primary key, so gaps in the file ids cost nothing.
+_RESET_DOC_KEYS_BAND: Final = 100_000
+_BEFORE_ANY_FILE_ID: Final = -(2**63)
+_RESET_DOC_KEYS_EDGE_SQL: Final = (
+    "SELECT MAX(file_id) FROM (SELECT file_id FROM files WHERE file_id > ? ORDER BY file_id LIMIT ?)"
+)
+_RESET_DOC_KEYS_SQL: Final = (
+    "UPDATE files SET doc_key = NULL WHERE doc_key IS NOT NULL AND file_id > ? AND file_id <= ?"
+)
 
 _RECORD_MOUNT_SQL: Final = """
 INSERT INTO mounts (storage_id, root_id, cursor_file_id, files_seen, updated_at)
@@ -1688,10 +1712,23 @@ class Store:
         return int(row[0]) if row else 0
 
     def reset_doc_keys(self) -> int:
-        """Forget every key, for a deliberate change of the key format only."""
-        with self._transaction():
-            cursor = self._conn.execute(_RESET_DOC_KEYS_SQL)
-        return cursor.rowcount
+        """Forget every key, for a deliberate change of the key format only.
+
+        In bands, each its own transaction, so that no other writer waits for
+        the whole table. Stopping in the middle is harmless: the caller writes
+        the generation only after this returned, and a second run forgets the
+        rest.
+        """
+        changed = 0
+        last = _BEFORE_ANY_FILE_ID
+        while True:
+            row = self._conn.execute(_RESET_DOC_KEYS_EDGE_SQL, (last, _RESET_DOC_KEYS_BAND)).fetchone()
+            edge = None if row is None else row[0]
+            if edge is None:
+                return changed
+            with self._transaction():
+                changed += self._conn.execute(_RESET_DOC_KEYS_SQL, (last, edge)).rowcount
+            last = int(edge)
 
     def mark_vanished(self, storage_id: int, now: int) -> int:
         """Stamp the first round without this storage and return that stamp.

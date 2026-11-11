@@ -2706,8 +2706,18 @@ PHP_TREE_HASH_TODAY = "f3165a57c3aeed687c255f9c66b35f7ddff8a817df61ef421a0234234
 # independently with find, sort, tr and sha256sum over the CRLF normalised
 # tree: 5b1ace06... both ways, and the same pipeline over git archive HEAD
 # before the step gave 75212e53... (positive control).
+#
+# Moved on 2026-11-11 by the banded reset of the document keys (phase 43,
+# hardening before the first push): store/repo.py forgets the keys in bands of
+# 100,000 rows, each band its own transaction, instead of one UPDATE over the
+# whole table. Measured on 491,000 keyed rows: a second writer waited up to
+# 8.8 s before and 2.4 s at most after. No file came or went, so
+# PACKAGE_FILES_TODAY stays at 83. The PHP pair does not move. Recomputed
+# independently with find, sort, tr and sha256sum over the CRLF normalised
+# tree: 71385c59... both ways, and the same pipeline over git archive HEAD
+# before the step gave 5b1ace06... (positive control).
 PACKAGE_FILES_TODAY = 83
-PACKAGE_TREE_HASH_TODAY = "5b1ace068d56ec458fbc4241dfecaf3e11ae63e0c4017ba19fba9e7d4d359af2"
+PACKAGE_TREE_HASH_TODAY = "71385c5906c61dd505b6ae8c922ea92cc6aca790a4e46e92fd92c13ec04d0675"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
