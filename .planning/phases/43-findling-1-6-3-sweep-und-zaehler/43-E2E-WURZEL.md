@@ -326,3 +326,14 @@ Drei der offenen Punkte oben sind im Audit-Nachtrag (43-AUDIT.md, "Nachtrag 43-2
 - Punkt 3 (corrected=3, im Bein upgrade 2): die Vermutung trifft NICHT zu. Es sind die drei indexierten Dateien im Home des gelöschten Nutzers dave, deren Dateicache-Zeilen mit dem Nutzer gehen; im Bein upgrade trägt eine davon die Sentinel schon vorher. Die Zeilen des Carol entzogenen Speichers ändern ihren Schlüssel nicht. Richtiges Verhalten; welche Datei-IDs es waren, steht in keinem Artefakt.
 - Punkt 4 (Zeitreserve): bleibt offen als Harness-Befund mit Empfehlung, nicht umgesetzt.
 - Punkt 9 (Warnzeilen): eine Zeile je synchroner Zählung und eine je Prozessstart, Folge von FINDLING_EMBED_ENABLED=false im Harness; als LOW F-43B-03 geführt.
+
+### Roter Lauf nach der Fix-Runde (11.11.2026) und Fix 2, lokal
+
+Der Lauf 43079756645 auf dem Kopf 57271f63 (Code gleich 9bf7dddf, Owner-Freigabe "Freigabe Dispatch 43-27") endete rot. Er ist kein Beleg für einen Kopf und trägt deshalb keine Fix-Zeile.
+
+- Sechs Beine grün: gate-queue / wrapped, gate-crawl / wrapped, v1.6.2 / native, upgrade / native, upgrade-rc1 / native, upgrade-rc1-cf / native. Die Werte der Fix-Runde stimmen dort (hashedVerified 3, hashedUngrouped 2, k = 4).
+- Rot: gate-queue / native (Job 130728900145), vier Vergleiche: Zähler 31 statt 33 und Nenner 63 statt 65, in Phase A und in Phase B. Schon nach dem ersten Drain 83 statt 85 indexierte und 93 statt 95 lebende Zeilen, 38 statt 40 Läufe von StorageCrawlJob.
+- Ursache, belegt im nextcloud.log des Beins (18:40:35 UTC): ein StorageCrawlJob (storage_id 17, root_id 51) traf beim Einreihen einer Datei auf "database is locked" (SQLite), rollte zurück und warf. Als QueuedJob war seine Zeile schon entfernt, der Crawl dieses Mounts endete ohne Nachfolger, zwei Dateien kamen nie in die Warteschlange.
+- Die Fix-Runde ist nicht der Auslöser: ihr Diff berührt weder QueueMapper noch QueueService noch StorageCrawlJob, und im grünen Lauf 43016026129 kommt die Sperre im selben Bein nicht vor.
+- Owner-Entscheid 11.11.2026 ("A"): Produkt-Fix statt bloßer Wiederholung. RED ae44f61d, GREEN 2dacf753 (F-43B-05 in 43-AUDIT.md): ein Datenbankfehler in einem Abschnitt plant einen Nachfolger mit dem letzten committeten Cursor ein, höchstens fünfmal in Folge ohne Fortschritt.
+- Offen: Push bis 2dacf753 und EIN neuer Lauf brauchen neue Zeilen in 43-FREIGABEN.md. Erst ein grüner Lauf auf diesem Kopf liefert das Paar aus Lauf-ID und Kopf-SHA für diesen Nachtrag.

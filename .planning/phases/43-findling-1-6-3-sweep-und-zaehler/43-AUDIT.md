@@ -738,6 +738,51 @@ WARNING-Zeile im Containerlog.
   nicht auf dem Kopf des Laufs (Pfadfilter), der parametrisierte rc-Proof
   nicht auf dem Kopf gelaufen, Linkfreigabe ohne eigene Ergebniszeile.
 
+#### F-43B-05 (LOW, behoben mit 2dacf753): ein Datenbankfehler beendet den Crawl eines Mounts
+
+- **Herkunft:** nicht aus dem Delta dieses Nachtrags, sondern aus dem roten
+  E2E-Lauf 43079756645 vom 11.11.2026 (Bein gate-queue / native, Job
+  130728900145). Der Code steht so seit dem ersten Release; die Fix-Runde
+  (2261167b..9bf7dddf) berührt weder QueueMapper noch QueueService noch
+  StorageCrawlJob.
+- **Fundstelle:** `php/lib/BackgroundJobs/StorageCrawlJob.php`, catch-Zweig
+  von crawlSlice (vor dem Fix Zeilen 359 bis 361: rollBack, dann throw).
+- **Beleg:** nextcloud.log des Beins, 18:40:35 UTC: "Error while running
+  background job StorageCrawlJob (storage_id 17, root_id 51)", SQLSTATE[HY000]
+  General error 5 "database is locked" (LockWaitTimeoutException) in
+  QueueMapper.php:229 insertIgnoreConflict, gerufen aus QueueService::enqueue
+  und StorageCrawlJob.php:330. Folge im Lauf: 38 statt 40 Crawl-Jobs, 83 statt
+  85 indexierte und 93 statt 95 lebende Zeilen, Zähler 31 statt 33, Nenner 63
+  statt 65 in Phase A und B. Im grünen Lauf 43016026129 kommt die Sperre im
+  selben Bein nicht vor (0 Zeilen "database is locked").
+- **Szenario:** Ein vorübergehender Datenbankfehler (Sperre auf SQLite,
+  Deadlock oder Lock-Wait-Timeout anderswo) trifft einen Abschnitt. Als
+  QueuedJob ist die Zeile des Jobs vor run() entfernt, der Abschnitt rollt
+  zurück und wirft, es gibt keinen Nachfolger. Der Mount bleibt ohne
+  finished_at, seine restlichen Dateien kommen nicht in die Warteschlange.
+  SchedulerJob läuft nur bei der Installation und bei occ findling:index.
+- **Auswirkung:** Dateien eines Mounts fehlen im Index, die Seite zeigt die
+  Zahl als vorläufig. Nach Codelage holt der Abgleich (reconcile, Zähler
+  "missing") fehlende Dateien später nach; im Harness ist er abgeschaltet
+  (FINDLING_RECONCILE_ENABLED=false). Wie lange das in Produktion dauert, ist
+  NICHT gemessen. Kein Rechte- und kein Datenschutzbezug.
+- **Fix (RED ae44f61d, GREEN 2dacf753):** Bei einer OCP\DB\Exception plant der
+  Abschnitt nach dem Rollback einen Nachfolger mit dem Cursor des letzten
+  committeten Bands und zählt den Versuch im Argument (retries). Fünf
+  Fehlschläge in Folge ohne committetes Band beenden den Abschnitt wie bisher
+  mit dem Fehler im Log; ein committetes Band setzt die Zahl zurück. Andere
+  Fehler werden nicht wiederholt. Der Neuplan nach verlorener Sperre trägt die
+  Zahl mit. Fünf PHPUnit-Fälle in StorageCrawlJobTest; Gegenprobe gegen die
+  Quelle ohne Fix: 2 Errors, 1 Failure; mit Fix 12 von 12, volle Suite 1205
+  Tests, 7719 Assertions grün. Changelog-Punkt in drei Sprachen (Entwurf für
+  die Textrunde 43-12). PHP-Baumhash ea247ffd nach 78dc4e85, 129 Dateien.
+- **Zählung:** Mit diesem Befund sind es 12 Befunde im Nachtrag (0 CRIT,
+  0 HIGH, 0 MEDIUM, 5 LOW, 7 INFO), davon 4 LOW behoben, 1 LOW akzeptiert.
+  Die Tabelle "Was nach dem Push noch einzutragen ist" nennt noch 11; beim
+  Eintragen gilt 12. Der Kopf A ist nach diesem Fix 2dacf753 oder ein
+  späterer Commit außerhalb von .planning, und er braucht einen eigenen
+  grünen E2E-Lauf (neue Owner-Freigaben für Push und Dispatch).
+
 ### Abweichungen vom Plan
 
 1. **rc.2 gestrichen (Owner 09.11.2026, 43-28 entfällt).** Betroffene Stellen
