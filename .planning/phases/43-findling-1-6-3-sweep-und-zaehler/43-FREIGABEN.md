@@ -174,3 +174,10 @@ Dem Owner lag im Chat vor: der Lauf 43079756645 war in einem von sieben Beinen r
 Freigabe Push 43-27 Fix 2: "Go" (2026-11-11 20:46, Claude Code Terminal) Entscheid: ja
 Freigabe Dispatch 43-27 Fix 2: "Go" (2026-11-11 20:46, Claude Code Terminal) Entscheid: ja
 Umfang: Push von main nach git pull --rebase, zuerst genau bis 2dacf753 (letzter Commit außerhalb von .planning), nach grünen Workflows auf diesem Kopf die Planungs-Commits danach (5a37961a, diese Zeilen); genau ein Dispatch von coverage-e2e.yml auf main ohne Code-Unterschied zu 2dacf753. Kein Tag, kein Release, kein Store, kein Kommentar. Jede Wiederholung braucht neue Zeilen.
+
+## Freigabe 11.11.2026 (Nacht): Wiederholung der fehlgeschlagenen Jobs des Laufs 43094681914 (43-27)
+
+Dem Owner lag im Chat vor: der Lauf 43094681914 steht auf failure, alle sieben Beine messen failures=0; sechs Beine scheiterten erst im Schritt "Upload the result table and the backend log" mit "Failed to CreateArtifact" während eines Ausfalls von GitHub Actions (githubstatus.com, Incident ab 20:48 UTC), nur upgrade / native lud hoch. Frage: "Darf ich die 6 fehlgeschlagenen Jobs genau einmal neu starten (gh run rerun 43094681914 --failed), sobald GitHub Actions wieder als funktionsfähig gemeldet ist?" Antwort des Owners: "Ok".
+
+Freigabe Dispatch 43-27 Fix 2 Wiederholung: "Ok" (2026-11-11 22:09, Claude Code Terminal) Entscheid: ja
+Umfang: genau ein Neustart der fehlgeschlagenen Jobs des Laufs 43094681914 (gleiche Lauf-ID, zweiter Versuch), nachdem githubstatus.com "All Systems Operational" meldet (geprüft 21:09 UTC). Kein Push von Code, kein Tag, kein Release, kein Store, kein Kommentar. Jede weitere Wiederholung braucht eine neue Zeile.
