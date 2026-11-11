@@ -166,3 +166,11 @@ Dem Owner lag im Chat vor: fünf von acht Workflows auf 9bf7dddf grün, drei lie
 
 Freigabe Dispatch 43-27: "Ja ok" (2026-11-11 19:19, Claude Code Terminal) Entscheid: ja
 Umfang: genau ein Dispatch von coverage-e2e.yml auf main, nachdem alle Workflows auf 9bf7dddf grün sind und die Planungs-Commits gepusht wurden (kein Code-Unterschied zu 9bf7dddf). Kein Tag, kein Release, kein Store, kein Kommentar. Jede Wiederholung braucht eine neue Zeile.
+
+## Freigabe 11.11.2026 (späterer Abend): Push und Dispatch nach Fix 2 (43-27)
+
+Dem Owner lag im Chat vor: der Lauf 43079756645 war in einem von sieben Beinen rot (gate-queue / native, ein StorageCrawlJob starb an "database is locked", zwei Dateien fehlten); nach seinem Entscheid "A" der Produkt-Fix lokal (RED ae44f61d, GREEN 2dacf753, Doku 5a37961a), Gegenprobe ohne Fix rot, volle PHPUnit-Suite 1205 Tests grün, Python-Gates grün; Befund F-43B-05 als LOW eingestuft, Changelog-Satz als Entwurf für die Textrunde 43-12. Frage: "Darf ich main pushen (erst genau bis 2dacf753, nach grünen Workflows den Doku-Commit und die Freigabe-Zeilen), und danach EINEN neuen Lauf von coverage-e2e.yml starten?" Antwort des Owners: "Go".
+
+Freigabe Push 43-27 Fix 2: "Go" (2026-11-11 20:46, Claude Code Terminal) Entscheid: ja
+Freigabe Dispatch 43-27 Fix 2: "Go" (2026-11-11 20:46, Claude Code Terminal) Entscheid: ja
+Umfang: Push von main nach git pull --rebase, zuerst genau bis 2dacf753 (letzter Commit außerhalb von .planning), nach grünen Workflows auf diesem Kopf die Planungs-Commits danach (5a37961a, diese Zeilen); genau ein Dispatch von coverage-e2e.yml auf main ohne Code-Unterschied zu 2dacf753. Kein Tag, kein Release, kein Store, kein Kommentar. Jede Wiederholung braucht neue Zeilen.
