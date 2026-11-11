@@ -204,3 +204,10 @@ Dem Owner lag im Chat die Vorlage Runde 2 vor (43-OWNER-VORLAGE.md, Abschnitt # 
 Freigabe Push 43-12 Runde 2: "Wie empfohlen" (2026-11-11 22:53, Claude Code Terminal) Entscheid: ja
 Freigabe Text 43-12 Runde 2: "Wie empfohlen" (2026-11-11 22:53, Claude Code Terminal) Entscheid: ja
 Umfang Push: die Abnahme-Commits dieser Runde nach git pull --rebase auf main (Planungs-Commits 95e19139 und 3711d4a0, 43-ABNAHME.md, 43-FREIGABEN.md, CHANGELOG nach Punkt T, Gesamttext Runde 2 in docs/store-listing.md, Gate). Kein Tag, kein Release, kein Store, kein Kommentar: Tag und Einreichung führt der Owner aus, die Antwort in #25 braucht eine eigene Freigabe (43-14).
+
+## Owner-Entscheid 11.11.2026: Ausnahme für den PHP-Workflow auf dem Tag-Kopf (43-12)
+
+Dem Owner lag im Chat vor: auf dem Tag-Kopf 8b00d6100be0133fd436fd2f277736f5d9e86a9b sind sieben Workflows grün, "PHP and store metadata gates" lief per Pfadfilter nicht (seit 2dacf753 keine Änderung unter php/ oder backend/appinfo/, kein workflow_dispatch). Beleg: derselbe Workflow grün auf 2dacf753 (Lauf 43090328230), `git diff 2dacf753 8b00d610 -- php backend/appinfo` leer; beim Tag-Push v1.6.3 läuft der Workflow auf dem Tag selbst. Vorschlag A: Ausnahme, die PHP-Gates gelten über den Lauf auf 2dacf753 bei unverändertem PHP-Stand, und der Lauf auf dem Tag wird vor der Store-Einreichung geprüft. Antwort des Owners: "Ok".
+
+Ausnahme PHP-Workflow 43-12: "Ok" (2026-11-11 23:45, Claude Code Terminal) Entscheid: ja
+Umfang: nur der fehlende Lauf von "PHP and store metadata gates" auf 8b00d610. Der Lauf desselben Workflows auf dem Tag v1.6.3 muss grün sein, bevor der Owner die Store-Einreichung auslöst. Kein künstlicher Commit unter php/.
