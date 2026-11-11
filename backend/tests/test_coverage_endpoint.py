@@ -28,6 +28,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import os
 import sqlite3
 import threading
@@ -41,6 +42,7 @@ from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 
 from findling.api import coverage
+from findling.config import settings
 from findling.main import APP
 from findling.nc.files import DocKeyAnswer
 from findling.store import repo
@@ -451,6 +453,72 @@ def test_a_count_that_fails_in_the_background_leaves_no_entry_and_is_tried_again
     _post(client, sign("admin"), _body(data))
     coverage.join_coverage_refresh()
     assert _post(client, sign("admin"), _body(data)).json()["counting"] is False
+
+
+# -- a count without a vector stock (F-43B-03) -----------------------------
+
+
+_NO_VECTOR_STOCK = "coverage count without a vector stock, the vector figure is 0"
+
+
+def _warnings_without_a_vector_stock(caplog: pytest.LogCaptureFixture) -> int:
+    return sum(
+        1
+        for record in caplog.records
+        if record.name == "findling.store.repo"
+        and record.levelno >= logging.WARNING
+        and record.getMessage() == _NO_VECTOR_STOCK
+    )
+
+
+@pytest.mark.parametrize("ceiling", [coverage.COVERAGE_SYNC_CEILING, 5], ids=["in the request", "in the background"])
+def test_no_warning_per_count_while_embeddings_are_switched_off(
+    client: TestClient,
+    sign: Sign,
+    volume: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    ceiling: int,
+) -> None:
+    """Audit finding F-43B-03: no vectors.db is the normal state of FINDLING_EMBED_ENABLED=false.
+
+    Such an instance never builds a vector stock, and the admin page asks for
+    the figures with every look. The count must not write a warning for a
+    state the admin chose; the vector figure is 0 and the rest is right.
+    """
+    data = _topology_on(volume)
+    (volume / "vectors.db").unlink()
+    monkeypatch.setenv("FINDLING_EMBED_ENABLED", "false")
+    monkeypatch.setattr(coverage, "COVERAGE_SYNC_CEILING", ceiling)
+    settings.cache_clear()
+    caplog.set_level(logging.DEBUG, logger="findling.store.repo")
+
+    answers = []
+    for _ in range(3):
+        _post(client, sign("admin"), _body(data))
+        coverage.join_coverage_refresh()
+        answers.append(_post(client, sign("admin"), _body(data)).json())
+
+    assert [answer["counting"] for answer in answers] == [False, False, False]
+    assert [answer["embeddedDocuments"] for answer in answers] == [0, 0, 0]
+    assert [answer["documents"] for answer in answers] == [data["expected"]["documents"]] * 3
+    assert _warnings_without_a_vector_stock(caplog) == 0
+
+
+def test_a_missing_vector_stock_is_still_a_warning_per_count_while_embeddings_are_on(
+    client: TestClient, sign: Sign, volume: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The other half of F-43B-03: with embeddings on, a stock that is not there stays visible."""
+    data = _topology_on(volume)
+    (volume / "vectors.db").unlink()
+    monkeypatch.setenv("FINDLING_EMBED_ENABLED", "true")
+    settings.cache_clear()
+    caplog.set_level(logging.DEBUG, logger="findling.store.repo")
+
+    answers = [_post(client, sign("admin"), _body(data)).json() for _ in range(3)]
+
+    assert [answer["embeddedDocuments"] for answer in answers] == [0, 0, 0]
+    assert _warnings_without_a_vector_stock(caplog) == 3
 
 
 # -- the document key backfill -------------------------------------------
