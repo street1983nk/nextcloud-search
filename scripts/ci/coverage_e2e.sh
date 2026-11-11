@@ -76,6 +76,15 @@
 # SMB_MODE, NC_URL, HARNESS (checkout of the head), SRC (checkout the instance
 # was set up from), RESULT_FILE, EXAPP_SECRET, EXAPP_PORT, RUNNER_TEMP, and
 # for upgrade-rc1 BASE_SRC (a checkout of v1.6.2 for the way back).
+#
+# What stands where once the setup action is through (coverage-e2e.yml and
+# .github/actions/setup-test-nc):
+#   ${SRC}/backend       the backend the instance was set up from, in place
+#   ${SRC}/php           gone, the action moved it to apps/findling
+#   apps/findling        the companion that is installed right now
+#   ${HARNESS}/backend, ${HARNESS}/php   the head, both in place
+#   ${BASE_SRC}/backend  the released 1.6.2, upgrade-rc1 only; its companion
+#                        comes out of the release archive, not out of this tree
 # Passwords are fixed test values of a throwaway runner and are never printed.
 
 set -euo pipefail
@@ -515,7 +524,15 @@ read_settled() {
 
 # -- the container ----------------------------------------------------------------
 
+# backend_version <dir>: the version in <dir>/appinfo/info.xml, of either half.
+# A directory without that file ends the run with its name: the setup action
+# moves findling-src/php to apps/findling, and run 42991291089 read the moved
+# directory and ended on a bare "sed: can't read".
 backend_version() {
+  [ -f "$1/appinfo/info.xml" ] || {
+    echo "::error::harness finding: no appinfo/info.xml below $1, a version was asked of a directory that is not there" >&2
+    return 1
+  }
   sed -n 's:.*<version>\(.*\)</version>.*:\1:p' "$1/appinfo/info.xml" | head -n 1
 }
 
@@ -1644,9 +1661,15 @@ note "smb mode: ${smb_mode_seen}"
 # a release candidate in both halves and in the installed version, otherwise
 # it would prove an update from the head to the head. The way back needs the
 # tree of the released 1.6.2.
+#
+# The companion is read where it is installed: the setup action moves
+# findling-src/php to apps/findling (setup-test-nc, "Move the PHP companion to
+# apps/findling"), so ${SRC}/php does not exist once the instance is up (run
+# 42991291089, both legs from rc.1 ended here). ${SRC}/backend stays where the
+# checkout put it, and the harness and the tree of 1.6.2 are never moved.
 rc1_version=""
 if from_rc1; then
-  rc1_version=$(backend_version "${SRC}/php")
+  rc1_version=$(backend_version apps/findling) || fail "the installed companion carries no readable version"
   case "${rc1_version}" in
     *-rc.*) ;;
     *) fail "${VARIANT} was set up from version '${rc1_version}', which is no release candidate, the run is invalid" ;;
