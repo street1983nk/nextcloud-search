@@ -818,6 +818,21 @@ locked_ids() {
   fi | paste -sd, -
 }
 
+# locked_file_ids: every file cache row a login is refused on, comma separated.
+# gesperrt-alle.txt on each storage of the root of daten (nobody reads it) and
+# gesperrt-bob.txt on the two storages bob reaches that root through: daten,
+# and since plan 43-25 the same share in its other spelling (spelled_bob). The
+# second one was missing here until run 42991291089, whose head legs logged
+# six refusals (file ids 85, 121, 122, 158, 159, 182) and judged five.
+locked_file_ids() {
+  local all bob
+  all=$(locked_ids gesperrt-alle.txt)
+  bob=$(ncdb "SELECT fileid FROM oc_filecache WHERE name = 'gesperrt-bob.txt'
+                 AND storage IN (${daten_bob}, ${spelled_bob});" | paste -sd, -)
+  [ -n "${all}" ] && [ -n "${bob}" ] || fail "no file cache row of the locked files"
+  printf '%s,%s' "${all}" "${bob}"
+}
+
 # locked_diagnosis <label> <ids>: one line per row of the locked files, from
 # the container (storage, state, reason, attempts, etag, deleted_at, the
 # tombstoned rows too) and from the return channel, plus whether the one time
@@ -843,22 +858,94 @@ locked_diagnosis() {
     "$(grep -o 'refusal streaks renewed once after the update, rows=[0-9]*' "${EXAPP_LOG}" | tail -n 2 | tr '\n' ' ' || true)"
 }
 
-# judge_locked <label> <state/reason> <log mark> [container] [gone storage]:
+# locked_queue <label> <ids>: one line per queue row of the locked files, ids
+# and counters only. Which of these rows 1.6.2 leaves behind decides what the
+# head can say about them later (see judge_locked), and run 42991291089 kept
+# no line of it.
+locked_queue() {
+  local label="$1" ids="$2" line seen=0
+  while IFS= read -r line; do
+    seen=$((seen + 1))
+    note "${label}: queue ${line}"
+  # locked_at as it is stored: the epoch marks a free row (QueueMapper
+  # freeMark), any later moment the claim that holds it.
+  done < <(ncdb "SELECT 'file_id=' || file_id || ' storage=' || storage_id || ' kind=' || COALESCE(kind, '-')
+                     || ' retries=' || retries || ' locked_at=' || COALESCE(locked_at, '-')
+                   FROM oc_findling_queue WHERE file_id IN (${ids}) ORDER BY file_id;")
+  [ "${seen}" -gt 0 ] || note "${label}: queue holds no row of the locked files"
+}
+
+# gone_copy_before <storage>: called while no container runs, right before the
+# topology change takes the storage away. Leaves in GONE_COPY_QUEUED how many
+# queue rows are open for the copy of gesperrt-alle.txt on it and in
+# GONE_COPY_VERDICT what oc_findling_file_state says about that copy
+# ("state/reason updated_at", or "none").
+GONE_COPY_QUEUED=""
+GONE_COPY_VERDICT=""
+gone_copy_before() {
+  local sid="$1" copy
+  copy=$(locked_ids gesperrt-alle.txt "${sid}")
+  [ -n "${copy}" ] || fail "no file cache row of gesperrt-alle.txt on the storage ${sid} that is about to go, the gone check tests nothing"
+  locked_queue "before the topology change" "$(locked_file_ids)"
+  GONE_COPY_QUEUED=$(ncdb "SELECT COUNT(*) FROM oc_findling_queue WHERE file_id IN (${copy});")
+  GONE_COPY_VERDICT=$(gone_copy_verdict "${copy}")
+  case "${GONE_COPY_QUEUED}" in
+    '' | *[!0-9]*) fail "the queue rows of the copy on the storage that is about to go could not be counted" ;;
+  esac
+  note "before the topology change: the copy of gesperrt-alle.txt on the storage ${sid} has ${GONE_COPY_QUEUED} open queue row(s), oc_findling_file_state says ${GONE_COPY_VERDICT}"
+}
+
+# gone_copy_verdict <ids>: "state/reason updated_at" per row, "none" without one.
+gone_copy_verdict() {
+  local seen
+  seen=$(ncdb "SELECT state || '/' || COALESCE(reason, '-') || ' ' || updated_at
+                 FROM oc_findling_file_state WHERE file_id IN ($1) ORDER BY file_id;" | paste -sd';' -)
+  printf '%s' "${seen:-none}"
+}
+
+# judge_locked <label> <state/reason> <log mark> [container] [gone storage]
+#              [queue rows of the gone copy] [verdict of the gone copy before]:
 # every living container row of gesperrt-alle.txt and the row of bob of
 # gesperrt-bob.txt carry the verdict, oc_findling_file_state as well (unless
 # container), and no pass since the mark was taken as an outage (B3). A gone
 # storage is one the topology change removed before this judgement: its copy of
-# gesperrt-alle.txt can never be judged again, so it leaves the verdict count
-# and must instead stand skipped/gone in the return channel (the immediate
-# gone of issue 25, proven by run 42498330790: the row of carol was the one of
-# four that stayed failed/gateway_error in the container and gone towards
-# Nextcloud).
+# gesperrt-alle.txt can never be judged again, so it leaves the verdict count.
+#
+# What Nextcloud says about that copy afterwards has one writer and one
+# condition. skipped/gone is written by QueueService::describe and nowhere
+# else, at the claim of a queue row whose file no mount shows any more
+# (usersFor answers nobody). The head hands no new row out for such a file:
+# the reconcile walks mounted storages only, and the sweep stamps a storage
+# that merely left the mount list (plan 43-02). So the copy stands
+# skipped/gone exactly when a queue row for it was still open at the moment
+# the storage went, and whether one is depends on 1.6.2 alone. A pass of 1.6.2
+# whose refusals reach min(5, claimed) files on two storages is taken as an
+# outage: the refused rows stay charged in the queue until their lock times
+# out, the rest of the pass goes back refunded (poller.py of 1.6.2,
+# _count_refusal, GATEWAY_SAME_STATUS_OUTAGE_AFTER). A pass of one file never
+# escalates, its refusal is acknowledged failed/gateway_error and the row is
+# gone.
+#   Four locked rows (until plan 43-25, run 42498330790): the retry pass
+#   claims four, escalates at the fourth, the row of carol stays charged, and
+#   the head reads it skipped/gone after the storage went.
+#   Six locked rows (plan 43-25 added the storage of bob in the other
+#   spelling with two more, run 42991291089): the retry pass claims six in
+#   the order the walk queued them, storage by storage, escalates at the
+#   fifth (09:06:09, open=6, outages=1), and the sixth, the copy of carol on
+#   the storage walked last, goes back refunded. Two minutes later it is claimed alone and acknowledged
+#   (09:08:09, open=5, its verdict in oc_findling_file_state carries that
+#   second). No row of it is left for the head, which never touched the copy;
+#   the check demanded skipped/gone without looking at the queue and failed.
+#
+# So both outcomes are held to their condition, measured by gone_copy_before
+# while no container ran:
+#   a row was open   the copy must stand skipped/gone
+#   no row was open  the verdict must be byte for byte the one from before the
+#                    topology change, the head had nothing to judge
+# A copy that is neither is a finding about the head and stays a failure.
 judge_locked() {
-  local label="$1" want="$2" mark="$3" only="${4:-}" gone_sid="${5:-}" all bob ids gone not_gone="" rows_st match_st rows_nc match_nc gone_rows gone_match outage_lines
-  all=$(locked_ids gesperrt-alle.txt)
-  bob=$(locked_ids gesperrt-bob.txt "${daten_bob}")
-  [ -n "${all}" ] && [ -n "${bob}" ] || fail "no file cache row of the locked files"
-  ids="${all},${bob}"
+  local label="$1" want="$2" mark="$3" only="${4:-}" gone_sid="${5:-}" gone_queued="${6:-}" gone_before="${7:-}" ids gone not_gone="" rows_st match_st rows_nc match_nc gone_rows gone_match gone_now outage_lines
+  ids=$(locked_file_ids)
   locked_diagnosis "${label}" "${ids}"
   if [ -n "${gone_sid}" ]; then
     gone=$(locked_ids gesperrt-alle.txt "${gone_sid}")
@@ -886,15 +973,27 @@ judge_locked() {
   }
   check "${label} oc_findling_file_state verdicts ${want}" "${rows_nc}" "${match_nc}"
   if [ -n "${gone_sid}" ]; then
+    case "${gone_queued}" in
+      '' | *[!0-9]*) fail "${label}: the queue rows of the copy on the gone storage were not counted before the topology change" ;;
+    esac
+    locked_queue "${label}" "${ids}"
     gone_rows=$(ncdb "SELECT COUNT(*) FROM oc_findling_file_state WHERE file_id IN (${gone});")
-    gone_match=$(ncdb "SELECT COUNT(*) FROM oc_findling_file_state WHERE file_id IN (${gone})
-                         AND state || '/' || COALESCE(reason, '-') = 'skipped/gone';")
-    rows+=("| ${label} | oc_findling_file_state rows of the locked file on the gone storage skipped/gone | ${gone_rows} | ${gone_match} |")
     [ "${gone_rows}" -ge 1 ] || {
       failures=$((failures + 1))
       echo "::warning::${label}: no oc_findling_file_state row of the locked file on the gone storage, the gone check tests nothing"
     }
-    check "${label} gone storage verdicts skipped/gone" "${gone_rows}" "${gone_match}"
+    if [ "${gone_queued}" -ge 1 ]; then
+      gone_match=$(ncdb "SELECT COUNT(*) FROM oc_findling_file_state WHERE file_id IN (${gone})
+                           AND state || '/' || COALESCE(reason, '-') = 'skipped/gone';")
+      rows+=("| ${label} | oc_findling_file_state rows of the locked file on the gone storage skipped/gone (${gone_queued} queue row(s) open when it went) | ${gone_rows} | ${gone_match} |")
+      check "${label} gone storage verdicts skipped/gone" "${gone_rows}" "${gone_match}"
+      note "${label}: gone_path=exercised (${gone_queued} queue row(s) were open for the copy when its storage went)"
+    else
+      gone_now=$(gone_copy_verdict "${gone}")
+      rows+=("| ${label} | verdict of the locked file on the gone storage, no queue row was open when it went | ${gone_before} | ${gone_now} |")
+      check "${label} gone storage verdict untouched without a queue row" "${gone_before}" "${gone_now}"
+      note "${label}: gone_path=not_exercised (1.6.2 left no queue row for the copy on the gone storage, the head had nothing to claim)"
+    fi
   fi
   outage_lines=$(log_since "${mark}" | grep -c 'taken as an outage' || true)
   rows+=("| ${label} | log lines 'taken as an outage' | 0 | ${outage_lines} |")
@@ -1881,6 +1980,11 @@ nc_occ files:scan --all > /dev/null
 daten_alice=$(sid_is "smb::alice@${SMB_HOST}//daten//")
 daten_bob=$(sid_is "smb::bob@${SMB_HOST}//daten//")
 daten_carol=$(sid_is "smb::carol@${SMB_HOST}//daten//")
+# The root of daten once more for bob, through the other spelling of host and
+# share (plan 43-25): a storage of its own, with its own copies of the locked
+# files (locked_file_ids).
+spelled_bob=$(sid_is "smb::bob@${SMB_HOST_UPPER}//Daten//")
+[ -n "${spelled_bob}" ] || fail "harness finding: no storage row for the other spelling of the share of bob"
 archiv_carol=$(sid_is "smb::carol@${SMB_HOST}//archiv//")
 home_dave=$(sid_like 'home::dave')
 # Not 'local::%': the data directory itself is a local storage of its own
@@ -2036,6 +2140,11 @@ if [ "${VARIANT}" = "upgrade" ]; then
   wait_for_catchup 1.6.2
   swept_162=$(statedb "SELECT value FROM meta WHERE key = 'storage_sweep_at';" || true)
   [ -z "${swept_162}" ] || fail "storage_sweep_at is set under 1.6.2, W5 would read a sweep that is not the head's"
+  # What 1.6.2 leaves in the queue for the locked files, and how it judged
+  # them, before anything of the head runs (see judge_locked).
+  locked_queue "under 1.6.2 before the update" "$(locked_file_ids)"
+  locked_diagnosis "under 1.6.2 before the update" "$(locked_file_ids)"
+  note "under 1.6.2 before the update: every queue row as file id:kind:retries: $(ncdb "SELECT COALESCE(group_concat(file_id || ':' || COALESCE(kind, '-') || ':' || retries, ' '), 'none') FROM oc_findling_queue;" || echo unreadable)"
 
   step "a container row without a file cache row"
   orphan=$(ncdb "SELECT fc.fileid FROM oc_filecache AS fc WHERE fc.storage = ${home_dave} AND fc.path = 'files/verwaist.txt';")
@@ -2182,6 +2291,13 @@ swept_before=$(statedb "SELECT value FROM meta WHERE key = 'storage_sweep_at';" 
 [ "${swept_before}" = "${sweep_stamp_expected}" ] \
   || fail "a catch-up round swept before phase A, the run is invalid (storage_sweep_at '${swept_before}', expected '${sweep_stamp_expected}', B1 took ${b1_seconds} s)"
 note "storage_sweep_at before phase A: ${swept_before:-not set}${sweep_stamp_expected:+ (the aged stamp of rc.1, untouched by the head)}"
+
+# The copy of the locked file on the storage the topology change is about to
+# take from carol (variant upgrade, see judge_locked): whether 1.6.2 left a
+# queue row for it decides what the head can say about it after phase B.
+if [ "${VARIANT}" = "upgrade" ]; then
+  gone_copy_before "${daten_carol}"
+fi
 
 step "topology change"
 nc_occ files_external:applicable "${daten_mount}" --remove-user carol > /dev/null
@@ -2386,9 +2502,11 @@ if [ "${VARIANT}" = "upgrade" ]; then
   # with budget out again, and the head judges them skipped/unreadable. A
   # different verdict is a finding for the coordinator, never a looser check.
   # The topology change removed the daten storage of carol before this point:
-  # its copy of gesperrt-alle.txt stands skipped/gone, the three reachable
-  # locked rows stand skipped/unreadable.
-  judge_locked "upgrade after phase B" "skipped/unreadable" "${head_mark}" "" "${daten_carol}"
+  # the reachable locked rows stand skipped/unreadable, and its copy of
+  # gesperrt-alle.txt stands skipped/gone if 1.6.2 left a queue row for it,
+  # untouched if it did not (judge_locked, gone_copy_before).
+  judge_locked "upgrade after phase B" "skipped/unreadable" "${head_mark}" "" "${daten_carol}" \
+    "${GONE_COPY_QUEUED}" "${GONE_COPY_VERDICT}"
 fi
 
 step "search cross check"

@@ -199,12 +199,19 @@ jobs:
             echo "no result table written" >> "${GITHUB_STEP_SUMMARY}"
           fi
 
-      - name: Upload the result table
+      # The whole backend log goes with the table since run 42991291089: the
+      # step below prints its last 300 lines, and the passes of 1.6.2 that
+      # decided a check of the upgrade leg half an hour earlier were not among
+      # them. The log carries counters, ids and route names of a throwaway
+      # instance, no path and no file content (T-43-52).
+      - name: Upload the result table and the backend log
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-e2e-${{ matrix.variant }}-${{ matrix.smb }}
-          path: ${{ runner.temp }}/coverage-e2e-result.md
+          path: |
+            ${{ runner.temp }}/coverage-e2e-result.md
+            ${{ runner.temp }}/exapp.log
           if-no-files-found: warn
           retention-days: 30
 
