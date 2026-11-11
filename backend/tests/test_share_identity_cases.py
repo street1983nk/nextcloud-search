@@ -61,6 +61,7 @@ DOC_KEY_ALLOWED = {
 COUNTING_CALLS = (
     "shareIdentity(",
     "shareIdentities(",
+    "docKeyIdentities(",
     "shareIdentityStats(",
     "docKeyOf(",
     "docKeysFor(",
@@ -264,6 +265,11 @@ def test_the_search_for_callers_finds_a_known_caller() -> None:
 
 def test_share_identities_are_asked_by_the_counting_services_only() -> None:
     assert _users(PHP_LIB, "shareIdentities(") <= SHARE_IDENTITIES_ALLOWED
+
+
+def test_the_identities_for_document_keys_are_asked_by_the_key_service_only() -> None:
+    """The share '#' plus storage number is no identity and must never reach the grouping (F-43B-01)."""
+    assert _users(PHP_LIB, "docKeyIdentities(") == {"Service/StorageService.php", "Service/DocKeyService.php"}
 
 
 @pytest.mark.parametrize("needle", ["docKeyOf(", "docKeysFor(", "sharePathOf("])

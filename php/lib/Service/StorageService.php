@@ -201,6 +201,14 @@ class StorageService {
 	private const ABSENT_LOOKUP_BAND = 200;
 
 	/**
+	 * The share part of a document key for a storage whose id is an md5 and
+	 * has no share identity, in front of its storage number (see
+	 * docKeyIdentities()). No share identity starts like this: they start
+	 * with 'smb::' or 'sftp::'.
+	 */
+	public const HASHED_WITHOUT_IDENTITY = '#';
+
+	/**
 	 * The backends whose storage id is known to read '<user>@<host>//<rest>'.
 	 *
 	 * Read in nextcloud/server, branch stable34 (head 4ce36f88, 28.10.2026):
@@ -737,6 +745,47 @@ class StorageService {
 	 * @return array<int, array{share: string, root: string}>
 	 */
 	public function shareIdentities(array $storageIds): array {
+		return $this->identitiesOf($storageIds, false);
+	}
+
+	/**
+	 * What DocKeyService::docKeysFor takes the share and the root of a key
+	 * from: shareIdentities() with two differences, both because a key is
+	 * stored in the container and outlives the moment it was asked in (audit
+	 * finding F-43B-01).
+	 *
+	 * A failing query of the configuration throws. The grouping may go on
+	 * without the hashed ids, which costs a figure too high for one overview;
+	 * a key taken from an error would stay.
+	 *
+	 * A hashed id without identity gets the share HASHED_WITHOUT_IDENTITY and
+	 * its storage number, with an empty root. Its identity depends on the
+	 * moment: out of the mount list while its rows wait for the sweep, a
+	 * configuration that changed, a login that cannot be rebuilt. With an
+	 * empty share two such members of one share under two roots gave two
+	 * files with the same rest path one key, and back in their group the two
+	 * files were one document. With its number in the share the key of such a
+	 * storage meets no key of another storage: it counts per storage, like
+	 * every hashed id that cannot be resolved (43-21), too much at worst and
+	 * never merged, and the verify pass puts the keys right once the identity
+	 * is back. A written out id needs none of this, its identity is in the id
+	 * and never changes.
+	 *
+	 * The number is no identity: the grouping never asks this method, and
+	 * shareIdentityStats() counts as after shareIdentities().
+	 *
+	 * @param list<int> $storageIds
+	 * @return array<int, array{share: string, root: string}>
+	 */
+	public function docKeyIdentities(array $storageIds): array {
+		return $this->identitiesOf($storageIds, true);
+	}
+
+	/**
+	 * @param list<int> $storageIds
+	 * @return array<int, array{share: string, root: string}>
+	 */
+	private function identitiesOf(array $storageIds, bool $forDocKeys): array {
 		$this->identityStats = self::emptyIdentityStats();
 		$wanted = self::positiveIds($storageIds);
 		if ($wanted === []) {
@@ -780,6 +829,9 @@ class StorageService {
 			try {
 				$resolved = $this->resolveHashed($hashed);
 			} catch (\Exception $e) {
+				if ($forDocKeys) {
+					throw $e;
+				}
 				$this->identityStats['hashedUngrouped'] += count($hashed);
 				$this->logger->warning(
 					'Findling: the configuration of external storages could not be read, hashed={hashed} storage ids stay ungrouped',
@@ -789,6 +841,11 @@ class StorageService {
 			}
 			foreach ($resolved as $numericId => $identity) {
 				$identities[$numericId] = $identity;
+			}
+			if ($forDocKeys) {
+				foreach (array_keys($hashed) as $numericId) {
+					$identities[$numericId] ??= ['share' => self::HASHED_WITHOUT_IDENTITY . $numericId, 'root' => ''];
+				}
 			}
 		}
 

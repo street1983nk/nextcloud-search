@@ -25,7 +25,11 @@ use OCP\Files\Cache\IFileAccess;
  * storage (StorageService::shareIdentities): the share, and the root joined in
  * front of the internal path. A storage without identity (a home, a team
  * folder, any backend that is never grouped) keeps its internal path with an
- * empty share.
+ * empty share. The one exception is a storage whose id Nextcloud keeps as an
+ * md5: whether it has an identity depends on the moment, so without one its
+ * key carries '#' and its storage number in place of the share and can never
+ * meet the key of another storage (StorageService::docKeyIdentities, audit
+ * finding F-43B-01).
  *
  * Why the share is part of the hash. Even a wrong grouping can then never
  * merge files of two shares, and a key without identity never meets one with
@@ -157,10 +161,11 @@ class DocKeyService {
 	 *
 	 * Banded internally to LOOKUP_BAND ids, so a claim may hand in any number
 	 * of ids. Per band the share identities of its storages are asked once,
-	 * from the same source as the grouping of the coverage. A failing lookup
-	 * fails the whole answer rather than handing out a key without the share of
-	 * its storage; the claim then travels without keys and the route answers
-	 * with an error. Nothing is logged here, and paths and identities never
+	 * from the same source as the grouping of the coverage. A failing lookup,
+	 * the one of the storages and each one of the configuration of external
+	 * storages, fails the whole answer rather than handing out a key without
+	 * the share of its storage; the claim then travels without keys and the
+	 * route answers with an error. Nothing is logged here, and paths and identities never
 	 * leave this method: the answer holds ids and hex values only.
 	 *
 	 * @param list<int> $fileIds
@@ -199,7 +204,7 @@ class DocKeyService {
 				continue;
 			}
 
-			$identities = $this->storageService->shareIdentities(array_keys($storages));
+			$identities = $this->storageService->docKeyIdentities(array_keys($storages));
 			foreach ($found as $fileId => [$path, $storageId]) {
 				$keys[$fileId] = self::docKeyOf($path, $identities[$storageId] ?? null);
 			}

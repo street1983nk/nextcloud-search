@@ -1285,8 +1285,16 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # fixture variant roots. No file came or went, so PHP_FILES_TODAY stays at 129. Recomputed independently
 # with find, sort, tr and sha256sum over the CRLF normalised tree: f3165a57... both ways; the same
 # pipeline over git archive HEAD before the plan gave af5413cd.
+# Moved on 2026-11-11 by the fix of audit finding F-43B-01 (plan 43-27): lib/Service/StorageService.php
+# gets docKeyIdentities, which throws when the configuration of external storages cannot be read and
+# gives a hashed id without identity the share '#' plus its storage number, lib/Service/
+# DocKeyService.php takes its identities from there, and tests/Unit/StorageServiceTest.php,
+# DocKeyServiceTest.php and QueueServiceTest.php follow. No file came or went, so PHP_FILES_TODAY stays
+# at 129. Recomputed independently with find, sort, tr and sha256sum over the CRLF normalised tree:
+# ea247ffd... both ways; the same pipeline over git archive of cdd16d05, the last commit before the
+# step, gave f3165a57 (positive control).
 PHP_FILES_TODAY = 129
-PHP_TREE_HASH_TODAY = "f3165a57c3aeed687c255f9c66b35f7ddff8a817df61ef421a0234234f3fe60f"
+PHP_TREE_HASH_TODAY = "ea247ffd9a9ec52fb024e41c3f3ebada82645e315d0bf157d16d69ad5a07da1e"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
