@@ -31,6 +31,7 @@ from findling.nc.files import DocKeyAnswer, Mount, MountResult, SliceResult
 from findling.nc.queue import CallResult, QueueStats
 from findling.store import repo as repo_module
 from findling.store.repo import (
+    CATCHUP_DONE,
     CATCHUP_MARK,
     CATCHUP_RECONCILE,
     FileMeta,
@@ -477,6 +478,43 @@ async def test_p_f_43b_02_a_disable_that_lands_in_the_look_at_the_mark_starts_no
 
 
 @pytest.mark.usefixtures("volume")
+async def test_a_backup_hold_that_lands_in_the_look_at_the_mark_starts_no_round_until_it_is_released() -> None:
+    """The neighbour of the probe above in the same line of run(): the hold of F-41A-02.
+
+    The fix of F-43B-02 put the arming next to the backup hold in one
+    condition. This probe keeps the hold half of it in place, which no test
+    drove through the open look before: no round while the hold stands, and
+    the one round of the cycle once it is released.
+    """
+    _catch_up_mark(CATCHUP_RECONCILE)
+    once = _OnceWithASlowLook()
+    stop = asyncio.Event()
+    once.arm()
+    task = asyncio.create_task(once.run(stop, once=True))
+    try:
+        await asyncio.wait_for(once.looking.wait(), timeout=5.0)
+        once.hold_for_backup()
+        once.look_on.set()
+        for _ in range(5000):
+            if not once.in_flight:
+                break
+            await asyncio.sleep(0.001)
+        await asyncio.sleep(0.05)
+        assert (once.in_flight, once.rounds, task.done()) == (False, 0, False)
+        assert _catch_up_mark() == CATCHUP_RECONCILE
+
+        once.release_backup_hold()
+        await asyncio.wait_for(task, timeout=5.0)
+    finally:
+        stop.set()
+        await asyncio.wait_for(task, timeout=5.0)
+        await once.aclose()
+
+    assert once.rounds == 1
+    assert _catch_up_mark() == CATCHUP_DONE
+
+
+@pytest.mark.usefixtures("volume")
 async def test_a_disable_while_the_cycle_waits_between_two_looks_starts_no_round() -> None:
     """The control of the probe above: outside the look the disable holds.
 
@@ -512,19 +550,22 @@ async def test_a_disable_while_the_cycle_waits_between_two_looks_starts_no_round
 # -- F-43B-03: the warning of a count without a vector stock -------------------
 
 
-def test_p_f_43b_03_every_count_without_a_vector_stock_writes_a_warning(
+def test_p_f_43b_03_a_count_without_a_vector_stock_warns_only_while_embeddings_are_on(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """Finding F-43B-03 (LOW), as it is today: one warning per count, not one per process.
+    """Finding F-43B-03 (LOW), fixed: no warning per count while embeddings are switched off.
 
     The legs of run 43016026129 start the container with
     FINDLING_EMBED_ENABLED=false, so no vectors.db exists, and each of the 72
     counts in the request wrote the line (72 lines, 72 POST /coverage with a
-    figure). An instance that runs without embeddings on purpose gets the same
+    figure). An instance that runs without embeddings on purpose got the same
     line for every look at the admin page. The figure itself is right: 0.
 
-    On the day the line is written once per process, or below warning while
-    embeddings are switched off, the count below is 1 or 0.
+    Until the fix this probe held three lines for three counts in place. What
+    changed: the route hands the switch of the admin to the count
+    (``vectors_expected``), and a count that expects no vector stock writes no
+    line. With embeddings on the missing stock is a defect and keeps its
+    warning per count, which is the second half below.
     """
     state = tmp_path / "state.db"
     opened = open_store(state)
@@ -532,11 +573,17 @@ def test_p_f_43b_03_every_count_without_a_vector_stock_writes_a_warning(
         opened.record(70, _meta(7, "files/akte.pdf"), "indexed")
     finally:
         opened.close()
-    caplog.set_level(logging.WARNING, logger="findling.store.repo")
+    caplog.set_level(logging.DEBUG, logger="findling.store.repo")
 
-    figures = [coverage_counts(state, tmp_path / "vectors.db", [7], []) for _ in range(3)]
+    def lines() -> list[tuple[int, str]]:
+        return [(record.levelno, record.getMessage()) for record in caplog.records if "vector stock" in record.message]
 
-    lines = [record.getMessage() for record in caplog.records if record.levelno == logging.WARNING]
-    assert lines == ["coverage count without a vector stock, the vector figure is 0"] * 3
-    assert [figure.embedded_documents for figure in figures] == [0, 0, 0]
-    assert [figure.documents for figure in figures] == [1, 1, 1]
+    switched_off = [coverage_counts(state, tmp_path / "vectors.db", [7], [], vectors_expected=False) for _ in range(3)]
+    assert lines() == []
+
+    switched_on = [coverage_counts(state, tmp_path / "vectors.db", [7], [], vectors_expected=True) for _ in range(3)]
+    assert lines() == [(logging.WARNING, "coverage count without a vector stock, the vector figure is 0")] * 3
+
+    for figures in (switched_off, switched_on):
+        assert [figure.embedded_documents for figure in figures] == [0, 0, 0]
+        assert [figure.documents for figure in figures] == [1, 1, 1]

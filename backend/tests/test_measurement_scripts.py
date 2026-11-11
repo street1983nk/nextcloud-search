@@ -2735,8 +2735,18 @@ PHP_TREE_HASH_TODAY = "f3165a57c3aeed687c255f9c66b35f7ddff8a817df61ef421a0234234
 # sha256sum over the CRLF normalised tree: 872596c6... both ways, and the same
 # pipeline over git archive HEAD before the step gave 6ef6beba... (positive
 # control).
+#
+# Moved on 2026-11-11 by the fix of audit finding F-43B-03 (plan 43-27):
+# store/repo.py takes vectors_expected into coverage_counts and api/coverage.py
+# hands it the switch embed_enabled, so a count on an instance that runs
+# without embeddings writes no warning for the vector stock it never builds.
+# No file came or went, so PACKAGE_FILES_TODAY stays at 83. The PHP pair does
+# not move with this step. Recomputed independently with find, sort, tr and
+# sha256sum over the CRLF normalised tree: 76a4f649... both ways, and the same
+# pipeline over git archive HEAD before the step gave 872596c6... (positive
+# control).
 PACKAGE_FILES_TODAY = 83
-PACKAGE_TREE_HASH_TODAY = "872596c6168f2027c5c5237122c76e51371b9caa1e0ecdc8d515d5defd851972"
+PACKAGE_TREE_HASH_TODAY = "76a4f6499b4a9e06f5165f80b8afed67848ff658858658a2f2827dc3ee893a08"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

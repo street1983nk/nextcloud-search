@@ -331,7 +331,9 @@ def _refresh(key: str, mounted: list[int], canonical: list[list[int]]) -> None:
         stock = _stock_id(resolved.state_db, resolved.vectors_db)
         if stock is None:
             return
-        counted = coverage_counts(resolved.state_db, resolved.vectors_db, mounted, canonical)
+        counted = coverage_counts(
+            resolved.state_db, resolved.vectors_db, mounted, canonical, vectors_expected=resolved.embed_enabled
+        )
         ended = _monotonic()
         with _COVERAGE_LOCK:
             current = settings()
@@ -405,7 +407,9 @@ def _answer(request: CoverageRequest) -> CoverageResponse:
             # and the count below says counting through doc_keys_missing.
             return answer_of(None, missing=rows, unresolved=unresolved, corrected=corrected)
         if rows <= COVERAGE_SYNC_CEILING:
-            counts: CoverageCounts | None = coverage_counts(resolved.state_db, resolved.vectors_db, mounted, canonical)
+            counts: CoverageCounts | None = coverage_counts(
+                resolved.state_db, resolved.vectors_db, mounted, canonical, vectors_expected=resolved.embed_enabled
+            )
         else:
             counts = _cached(canonical_key(mounted, canonical), mounted, canonical)
     except (OSError, sqlite3.Error) as error:

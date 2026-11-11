@@ -2385,7 +2385,12 @@ class CoverageCounts:
 
 
 def coverage_counts(
-    state_db: Path, vectors_db: Path, mounted: Sequence[int], groups: Sequence[Sequence[int]]
+    state_db: Path,
+    vectors_db: Path,
+    mounted: Sequence[int],
+    groups: Sequence[Sequence[int]],
+    *,
+    vectors_expected: bool = True,
 ) -> CoverageCounts:
     """Count every document of the mounted storages once (D-43-07, D-43-14).
 
@@ -2410,6 +2415,14 @@ def coverage_counts(
     One read only connection with the vector database attached read only (the
     discipline of :func:`embedded_in_storages`). A missing vector database costs
     the vector figure only, which is then 0.
+
+    ``vectors_expected`` is the switch of the admin (``embed_enabled``), handed
+    in by the route, because this module reads no settings. An instance that
+    runs without embeddings never builds a vector database, and the admin page
+    asks for these figures with every look: a warning per count would report a
+    state the admin chose (audit finding F-43B-03). With embeddings on a
+    missing vector database stays a warning per count; that is a defect, or the
+    first moments of a fresh volume.
     """
     listed = sorted({int(storage_id) for storage_id in mounted})
     shaped = [sorted({int(member) for member in group}) for group in groups]
@@ -2437,7 +2450,7 @@ def coverage_counts(
         connection.execute("PRAGMA query_only = 1")
         if with_vectors:
             connection.execute("ATTACH DATABASE ? AS vec", (f"{Path(vectors_db).as_uri()}?mode=ro",))
-        else:
+        elif vectors_expected:
             _LOG.warning("coverage count without a vector stock, the vector figure is 0")
         try:
             for kind, ident, documents, embedded, judged, unkeyed in connection.execute(statement, parameters):
