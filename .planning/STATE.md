@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
 status: executing
-stopped_at: "Completed 43-25 (Abnahmetest: Topologie mit Unterwurzeln, anderer Schreibweise, vier gehashten Speicher-IDs, Zwillingen, Linkfreigabe und homes; physische Wahrheit über dev:ino mit k=4 und Positivkontrolle 3; e2e_head_proof.sh mit Selbsttest 24 Fälle; lokal: verify beider Tasks grün, Sandbox 29 Prüfungen, 13 von 14 Mutationen rot und eine gleichwertige, 12 Module 1248 passed; kein Lauf auf einem Runner), nächster Schritt 43-26 mit Owner-Freigabe für Push und Dispatch"
-last_updated: "2026-11-11T06:45:00.000Z"
+stopped_at: "43-26 Task 1 lokal fertig, Checkpoint Push/Dispatch offen (Beine upgrade-rc1 und upgrade-rc1-cf, sieben Beine mit eigenen Fristen, rc-Proof parametrisiert mit Standard 1.6.3-rc.1, weil rc.2 gestrichen ist; nur lokal belegt, kein Lauf auf einem Runner; Task 2 und 3 brauchen die Owner-Freigabe für Push und Dispatch)"
+last_updated: "2026-11-11T09:30:00.000Z"
 last_activity: 2026-11-11
 progress:
   total_phases: 6
