@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Store-Sichtbarkeit und Betriebs-Feinschliff
 status: executing
-stopped_at: "43-26 Task 1 lokal fertig, Checkpoint Push/Dispatch offen (Beine upgrade-rc1 und upgrade-rc1-cf, sieben Beine mit eigenen Fristen, rc-Proof parametrisiert mit Standard 1.6.3-rc.1, weil rc.2 gestrichen ist; nur lokal belegt, kein Lauf auf einem Runner; Task 2 und 3 brauchen die Owner-Freigabe für Push und Dispatch)"
-last_updated: "2026-11-11T09:30:00.000Z"
+stopped_at: "43-26: erster Lauf rot, Fix 1 lokal, Freigabe Push/Dispatch Fix 1 offen (Lauf 42991291089 auf a42d2dc6: v1.6.2 grün, sechs Beine rot; Befunde und Fix 1 in 43-E2E-WURZEL.md; nichts gepusht, kein Workflow gestartet)"
+last_updated: "2026-11-11T10:35:00.000Z"
 last_activity: 2026-11-11
 progress:
   total_phases: 6
