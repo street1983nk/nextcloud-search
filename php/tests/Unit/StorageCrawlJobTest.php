@@ -472,4 +472,224 @@ final class StorageCrawlJobTest extends TestCase {
 
 		$this->runJob($job, array_merge(self::recountArgument(4711, $sums), ['budget_seconds' => 20]));
 	}
+
+	// -- a database error inside a slice (plan 43-27, red end-to-end run) ---------
+
+	/**
+	 * The job on a crawl path: real final services, a queue double the test
+	 * steers, and a connection double that counts the transaction calls.
+	 */
+	private function crawlJob(
+		IJobList $jobList,
+		StorageService $storageService,
+		QueueService $queue,
+		IDBConnection $db,
+		ILockingProvider $locking,
+	): StorageCrawlJob {
+		$time = $this->createMock(ITimeFactory::class);
+		$time->method('getTime')->willReturn(self::NOW);
+
+		$appConfig = $this->createMock(IAppConfig::class);
+		$appConfig->method('getValueInt')->willReturnCallback(
+			static fn (string $app, string $key, int $default = 0): int => $default,
+		);
+		$appConfig->method('getValueArray')->willReturnCallback(
+			static fn (string $app, string $key, array $default = []): array => $default,
+		);
+
+		$logger = $this->createMock(LoggerInterface::class);
+
+		return new StorageCrawlJob(
+			$time,
+			$jobList,
+			$storageService,
+			$queue,
+			$this->createMock(FileStateService::class),
+			$this->scanStats(null),
+			new SettingsService($appConfig, $logger, $time),
+			new ExclusionService($appConfig, $storageService, $jobList, $logger),
+			$appConfig,
+			$db,
+			$locking,
+			$logger,
+		);
+	}
+
+	/**
+	 * @return list<ICacheEntry&MockObject> text files with the ids $from to $to
+	 */
+	private function entries(int $from, int $to): array {
+		$entries = [];
+		for ($id = $from; $id <= $to; $id++) {
+			$entries[] = $this->entry($id, 'files/datei-' . $id . '.txt', 100, 'text/plain');
+		}
+
+		return $entries;
+	}
+
+	/**
+	 * @return array<string, int>
+	 */
+	private static function crawlArgument(int $lastFileId, int $retries = 0): array {
+		$argument = [
+			'storage_id' => 3,
+			'root_id' => 12,
+			'overridden_root' => 12,
+			'last_file_id' => $lastFileId,
+		];
+		if ($retries > 0) {
+			$argument['retries'] = $retries;
+		}
+
+		return $argument;
+	}
+
+	/**
+	 * The red leg of run 43079756645: "database is locked" while a file was put
+	 * into the queue. Being a QueuedJob the row was gone before run(), so the
+	 * rethrow alone ended the crawl of the mount for good and its files never
+	 * reached the index. The slice has to come back with the cursor it arrived
+	 * with, because the band it was in is rolled back.
+	 */
+	public function testADatabaseErrorInASliceReschedulesTheCursorItArrivedWith(): void {
+		$storageService = $this->createMock(StorageService::class);
+		$storageService->method('mountRootPath')->willReturn('files');
+		$storageService->method('getFilesInMount')->willReturn($this->entries(4712, 4714));
+
+		$queue = $this->createMock(QueueService::class);
+		$calls = 0;
+		$queue->method('enqueue')->willReturnCallback(function () use (&$calls): void {
+			if (++$calls === 2) {
+				throw new \OCP\DB\Exception('database is locked');
+			}
+		});
+
+		$db = $this->createMock(IDBConnection::class);
+		$db->expects($this->once())->method('beginTransaction');
+		$db->expects($this->once())->method('rollBack');
+		$db->expects($this->never())->method('commit');
+
+		$locking = $this->createMock(ILockingProvider::class);
+		$locking->expects($this->once())->method('releaseLock')
+			->with(StorageCrawlJob::LOCK_NAME, ILockingProvider::LOCK_EXCLUSIVE);
+
+		$jobList = $this->createMock(IJobList::class);
+		$jobList->expects($this->once())->method('scheduleAfter')
+			->with(StorageCrawlJob::class, self::NOW + 5, self::crawlArgument(4711, 1));
+
+		$this->runJob(
+			$this->crawlJob($jobList, $storageService, $queue, $db, $locking),
+			self::crawlArgument(4711),
+		);
+	}
+
+	/**
+	 * A band that was committed stays committed: the retry starts behind it and
+	 * counts from one again, because the chain made progress.
+	 */
+	public function testARetryStartsBehindTheLastCommittedBand(): void {
+		$storageService = $this->createMock(StorageService::class);
+		$storageService->method('mountRootPath')->willReturn('files');
+		$storageService->method('getFilesInMount')->willReturn($this->entries(5001, 5300));
+
+		$queue = $this->createMock(QueueService::class);
+		$calls = 0;
+		$queue->method('enqueue')->willReturnCallback(function () use (&$calls): void {
+			// The first band of 250 goes through, the first file of the second
+			// one meets the lock.
+			if (++$calls === 251) {
+				throw new \OCP\DB\Exception('database is locked');
+			}
+		});
+
+		$db = $this->createMock(IDBConnection::class);
+		$db->expects($this->exactly(2))->method('beginTransaction');
+		$db->expects($this->once())->method('commit');
+		$db->expects($this->once())->method('rollBack');
+
+		$jobList = $this->createMock(IJobList::class);
+		$jobList->expects($this->once())->method('scheduleAfter')
+			->with(StorageCrawlJob::class, self::NOW + 5, self::crawlArgument(5250, 1));
+
+		$this->runJob(
+			$this->crawlJob($jobList, $storageService, $queue, $db, $this->createMock(ILockingProvider::class)),
+			self::crawlArgument(5000, 4),
+		);
+	}
+
+	/**
+	 * The bound: a slice that failed five times in a row without committing a
+	 * single band is no passing lock. It ends as it did before, with the error
+	 * in the log of the instance, instead of trying again forever.
+	 */
+	public function testTheFifthFailureInARowWithoutProgressEndsTheChainLoudly(): void {
+		$storageService = $this->createMock(StorageService::class);
+		$storageService->method('mountRootPath')->willReturn('files');
+		$storageService->method('getFilesInMount')->willReturn($this->entries(4712, 4714));
+
+		$queue = $this->createMock(QueueService::class);
+		$queue->method('enqueue')->willThrowException(new \OCP\DB\Exception('database is locked'));
+
+		$db = $this->createMock(IDBConnection::class);
+		$db->expects($this->once())->method('rollBack');
+
+		$locking = $this->createMock(ILockingProvider::class);
+		$locking->expects($this->once())->method('releaseLock');
+
+		$jobList = $this->createMock(IJobList::class);
+		$jobList->expects($this->never())->method('scheduleAfter');
+
+		$this->expectException(\OCP\DB\Exception::class);
+		$this->runJob(
+			$this->crawlJob($jobList, $storageService, $queue, $db, $locking),
+			self::crawlArgument(4711, 4),
+		);
+	}
+
+	/**
+	 * Only the database is retried. Any other error is a defect of this app,
+	 * and a defect that comes back every five seconds is no better than one
+	 * that is visible once.
+	 */
+	public function testAnErrorThatIsNoDatabaseErrorIsNotRetried(): void {
+		$storageService = $this->createMock(StorageService::class);
+		$storageService->method('mountRootPath')->willReturn('files');
+		$storageService->method('getFilesInMount')->willReturn($this->entries(4712, 4714));
+
+		$queue = $this->createMock(QueueService::class);
+		$queue->method('enqueue')->willThrowException(new \LogicException('a defect'));
+
+		$db = $this->createMock(IDBConnection::class);
+		$db->expects($this->once())->method('rollBack');
+
+		$jobList = $this->createMock(IJobList::class);
+		$jobList->expects($this->never())->method('scheduleAfter');
+
+		$this->expectException(\LogicException::class);
+		$this->runJob(
+			$this->crawlJob($jobList, $storageService, $queue, $db, $this->createMock(ILockingProvider::class)),
+			self::crawlArgument(4711),
+		);
+	}
+
+	/**
+	 * The count travels through the other reschedule too: a slice that lost
+	 * the lock of the two doors has not made progress.
+	 */
+	public function testALostLockKeepsTheRetryCount(): void {
+		$locking = $this->createMock(ILockingProvider::class);
+		$locking->method('acquireLock')->willThrowException(new LockedException(StorageCrawlJob::LOCK_NAME));
+
+		$jobList = $this->createMock(IJobList::class);
+		$jobList->expects($this->once())->method('scheduleAfter')
+			->with(StorageCrawlJob::class, self::NOW + 5, self::crawlArgument(4711, 3));
+
+		$storageService = $this->createMock(StorageService::class);
+		$storageService->expects($this->never())->method('getFilesInMount');
+
+		$this->runJob(
+			$this->crawlJob($jobList, $storageService, $this->createMock(QueueService::class), $this->createMock(IDBConnection::class), $locking),
+			self::crawlArgument(4711, 3),
+		);
+	}
 }
