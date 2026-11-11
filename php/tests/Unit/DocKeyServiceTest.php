@@ -195,7 +195,7 @@ final class DocKeyServiceTest extends TestCase {
 	 * A file cache double and a storage service double: the ids of $files have
 	 * an entry with that internal path on that storage, every other id has
 	 * none; the storages of $identities have that identity. Every band handed
-	 * to getByFileIds lands in $bands, every list handed to shareIdentities in
+	 * to getByFileIds lands in $bands, every list handed to docKeyIdentities in
 	 * $asked.
 	 *
 	 * @param array<int, array{string, int}> $files
@@ -222,7 +222,7 @@ final class DocKeyServiceTest extends TestCase {
 		);
 
 		$storages = $this->createMock(StorageService::class);
-		$storages->method('shareIdentities')->willReturnCallback(
+		$storages->method('docKeyIdentities')->willReturnCallback(
 			static function (array $storageIds) use ($identities, &$asked): array {
 				$asked[] = $storageIds;
 
@@ -334,6 +334,32 @@ final class DocKeyServiceTest extends TestCase {
 		self::assertSame(DocKeyService::docKeyOf('Projekte/a.doc'), $answer['keys'][21]);
 	}
 
+	public function testTwoHashedStoragesWithoutIdentityNeverShareAKey(): void {
+		// Audit finding F-43B-01. Two members of one share whose ids are md5
+		// values and whose identity cannot be had at the moment (out of the
+		// mount list, a login that cannot be rebuilt) hold bericht.txt under
+		// two roots. With an empty share both files had one key and counted
+		// as one document once the members were back in their group. The key
+		// of such a storage carries its number, so it meets no other key.
+		$answer = $this->service(
+			[
+				41 => ['bericht.txt', 18],
+				42 => ['bericht.txt', 19],
+				43 => ['bericht.txt', 5],
+			],
+			[
+				18 => ['share' => '#18', 'root' => ''],
+				19 => ['share' => '#19', 'root' => ''],
+			],
+		)->docKeysFor([41, 42, 43]);
+
+		$keys = $answer['keys'];
+		self::assertSame(self::caseNamed('a hashed storage without share identity carries its number')['expected'], $keys[41]);
+		self::assertSame(hash('sha256', "2\0#19\0bericht.txt"), $keys[42]);
+		self::assertSame(DocKeyService::docKeyOf('bericht.txt'), $keys[43]);
+		self::assertCount(3, array_unique($keys));
+	}
+
 	public function testABandOfTrashAndMissingRowsAsksForNoIdentity(): void {
 		$answer = $this->service([12 => ['files_trashbin/files/Alt.pdf.d1700000000', 1]], [], $bands, $asked)
 			->docKeysFor([12, 13]);
@@ -349,7 +375,7 @@ final class DocKeyServiceTest extends TestCase {
 		$access = $this->createMock(IFileAccess::class);
 		$access->method('getByFileIds')->willReturn([31 => $this->entry('a.doc', 1)]);
 		$storages = $this->createMock(StorageService::class);
-		$storages->method('shareIdentities')->willThrowException(new \RuntimeException('storages'));
+		$storages->method('docKeyIdentities')->willThrowException(new \RuntimeException('storages'));
 
 		$this->expectException(\RuntimeException::class);
 		(new DocKeyService($access, $storages))->docKeysFor([31]);

@@ -409,7 +409,7 @@ final class QueueServiceTest extends TestCase {
 		$rootFolder->method('getUserFolder')->willReturnCallback(static fn (string $userId): Folder => $folders[$userId]);
 
 		$storageService = $this->createMock(StorageService::class);
-		$storageService->method('shareIdentities')->willReturnCallback(
+		$storageService->method('docKeyIdentities')->willReturnCallback(
 			static fn (array $storageIds): array => array_intersect_key($identities, array_flip($storageIds)),
 		);
 

@@ -323,26 +323,27 @@ def test_a_picture_that_waits_for_ocr_is_judged_from_its_first_pass_on_and_no_do
 # -- F-43B-01: keys taken while a hashed storage had no identity ---------------
 
 
-def test_p_f_43b_01_keys_without_identity_of_two_members_under_two_roots_count_two_files_as_one(
+def test_p_f_43b_01_keys_of_two_hashed_members_without_identity_never_count_two_files_as_one(
     tmp_path: Path,
 ) -> None:
-    """Finding F-43B-01 (LOW), the container half, as it is today.
+    """Finding F-43B-01 (LOW), fixed, the container half.
 
     A storage whose id Nextcloud keeps as an md5 has its share identity only
-    while the configuration can be read and oc_mounts shows it. A key asked
-    in between (the verify pass while the storage is out of the mount list, a
-    job or a backfill band while the configuration query fails) is taken
-    without identity: an empty share and the path inside the storage alone
-    (DocKeyService::docKeysFor, which StorageService::shareIdentities gives no
-    error to fail on). Back in its group, two such members under the roots
-    sicherheit and projekt name sicherheit/bericht.txt and projekt/bericht.txt
-    with one key, and the group counts one document where two files are. The
-    verify pass puts the keys right, a day later at most.
+    while the configuration can be read and oc_mounts shows it. A key asked in
+    between (the verify pass while the storage is out of the mount list) was
+    taken with an empty share and the path inside the storage alone. Back in
+    its group, two such members under the roots sicherheit and projekt named
+    sicherheit/bericht.txt and projekt/bericht.txt with one key, and the group
+    counted one document where two files are.
 
-    One member alone with such a key counts too much and never merges, which
-    is the direction the plans allow. On the day the companion stops handing
-    out a key without identity for a hashed id, the first assertion below
-    stays a statement about the container and the docstring loses its case.
+    Until the fix this probe held that merge in place. What changed, on the
+    PHP side: StorageService::docKeyIdentities gives a hashed id without
+    identity the share '#' and its storage number, so its key meets no key of
+    another storage, and a configuration that cannot be read fails the whole
+    answer instead of handing out a key. Such a member counts too much until
+    the verify pass has put its keys right (the direction the plans allow) and
+    never merges. The last assertion keeps the reason in place: the container
+    counts what it is handed, a key with an empty share would still merge.
     """
     share = "smb::fs.example//daten"
     state = tmp_path / "state.db"
@@ -364,15 +365,19 @@ def test_p_f_43b_01_keys_without_identity_of_two_members_under_two_roots_count_t
 
     right_sicherheit = _format_two(share, "sicherheit/bericht.txt")
     right_projekt = _format_two(share, "projekt/bericht.txt")
-    without_identity = _format_two("", "bericht.txt")
-    assert len({right_sicherheit, right_projekt, without_identity}) == 3
+    hashed_41 = _format_two("#41", "bericht.txt")
+    hashed_42 = _format_two("#42", "bericht.txt")
+    with_an_empty_share = _format_two("", "bericht.txt")
+    assert len({right_sicherheit, right_projekt, hashed_41, hashed_42, with_an_empty_share}) == 5
 
     # Keys taken with the identity: two files under two roots, one file under the top and its root.
     assert counted(right_sicherheit, right_projekt, right_sicherheit) == (2, 1)
     # One member without identity: nothing merges, the file it shares with the top counts twice.
-    assert counted(without_identity, right_projekt, right_sicherheit) == (2, 2)
-    # Both members without identity: two different files are one document.
-    assert counted(without_identity, without_identity, right_sicherheit) == (1, 2)
+    assert counted(hashed_41, right_projekt, right_sicherheit) == (2, 2)
+    # Both members without identity: still two files, the keys carry their storages.
+    assert counted(hashed_41, hashed_42, right_sicherheit) == (2, 2)
+    # What the companion handed out before the fix, and why it must not: one document for two files.
+    assert counted(with_an_empty_share, with_an_empty_share, right_sicherheit) == (1, 2)
 
 
 # -- F-43B-02: a disable that lands while the catch-up looks at its mark -------

@@ -581,6 +581,57 @@ final class StorageServiceTest extends TestCase {
 		self::assertSame($this->opened, $this->closed, 'every cursor is closed');
 	}
 
+	public function testTheIdentitiesForDocumentKeysFailAsAWholeWhenTheConfigurationCannotBeRead(): void {
+		// Audit finding F-43B-01: the grouping may go on without the hashed
+		// ids (a figure too high), a document key must not. A key taken from
+		// an error would be a key without the share of its storage.
+		$this->stageHashed(17, 900, self::catalogue()['hashed'][0]);
+		$this->storageKeys[31] = 'smb::u01@192.168.98.246//Daten//';
+		$service = $this->service(external: true);
+
+		foreach (['mounts', 'external_mounts', 'external_config'] as $table) {
+			$this->failing = $table;
+			$answer = null;
+			try {
+				$answer = $service->docKeyIdentities([17, 31]);
+			} catch (\Exception) {
+			}
+			self::assertNull($answer, 'an answer although ' . $table . ' could not be read');
+		}
+
+		self::assertSame([], array_values(array_filter($this->logs, static fn (array $log): bool => $log[0] === 'warning')));
+		self::assertSame($this->opened, $this->closed, 'every cursor is closed');
+	}
+
+	public function testAHashedIdWithoutIdentityCarriesItsStorageNumberForTheKeyAndStaysOutOfTheGrouping(): void {
+		// Audit finding F-43B-01. 18 and 19 are out of the mount list (their
+		// rows live until the sweep), 20 is mounted and its rebuilt id does
+		// not match. None of them has a share identity, and none of them may
+		// get a key that a second storage could get as well.
+		$catalogue = self::catalogue();
+		$ungrouped = array_values(array_filter($catalogue['hashed'], static fn (array $entry): bool => $entry['outcome'] === 'ungrouped'))[0];
+		$this->stageHashed(17, 900, $catalogue['hashed'][0]);
+		$this->storageKeys[18] = md5('smb::u02@192.168.98.246//Daten//sicherheit/' . str_repeat('x', 64));
+		$this->storageKeys[19] = md5('smb::u03@192.168.98.246//Daten//projekt/' . str_repeat('x', 64));
+		$this->stageHashed(20, 901, $ungrouped);
+		$this->storageKeys[31] = 'smb::u01@192.168.98.246//Daten//';
+		$this->storageKeys[32] = 'home::anna';
+		$service = $this->service(external: true);
+
+		$forKeys = $service->docKeyIdentities([17, 18, 19, 20, 31, 32]);
+
+		self::assertSame([17, 18, 19, 20, 31], array_keys($forKeys));
+		self::assertSame($catalogue['hashed'][0]['expected'], $forKeys[17]);
+		self::assertSame(['share' => '#18', 'root' => ''], $forKeys[18]);
+		self::assertSame(['share' => '#19', 'root' => ''], $forKeys[19]);
+		self::assertSame(['share' => '#20', 'root' => ''], $forKeys[20]);
+		self::assertSame(['share' => 'smb::192.168.98.246//daten', 'root' => ''], $forKeys[31]);
+
+		// The grouping never sees the number: no identity, no group.
+		self::assertSame([17, 31], array_keys($service->shareIdentities([17, 18, 19, 20, 31, 32])));
+		self::assertSame($this->opened, $this->closed, 'every cursor is closed');
+	}
+
 	public function testNoLogLineCarriesAHostAShareARootOrALogin(): void {
 		$catalogue = self::catalogue();
 		$secrets = ['192.168.98.246', 'Daten', 'daten'];

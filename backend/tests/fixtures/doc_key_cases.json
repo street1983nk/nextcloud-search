@@ -270,6 +270,16 @@
 			"differsFrom": "share at its top"
 		},
 		{
+			"name": "a hashed storage without share identity carries its number",
+			"format": 2,
+			"share": "#18",
+			"root": "",
+			"path": "bericht.txt",
+			"expected": "1b685dca02495f182e8a87a57b42889a7863e4ad6ad49df89f76dc8bca93537a",
+			"derivation": "printf '2\\000%s\\000%s' '#18' 'bericht.txt' | sha256sum",
+			"differsFrom": "a storage without share identity"
+		},
+		{
 			"name": "a home storage keeps its files/ prefix",
 			"format": 2,
 			"share": "",
