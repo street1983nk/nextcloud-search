@@ -186,7 +186,7 @@ Umfang: genau ein Neustart der fehlgeschlagenen Jobs des Laufs 43094681914 (glei
 
 Dem Owner lag im Chat vor: der Lauf 43094681914 im zweiten Versuch grün, audited_head 2dacf753, zwei lokale Planungs-Commits ohne Code (49fb104a, e909e276). Frage: "Darf ich sie auf main pushen?" Antwort des Owners: "Go". Der Push ist erfolgt (origin/main e909e276); diese Zeile ist nachgetragen.
 
-Freigabe Push 43-27 Beleg: "Go" (2026-11-11 23:15, Claude Code Terminal) Entscheid: ja
+Freigabe Push 43-27 Beleg: "Go" (2026-11-11 22:20, Claude Code Terminal) Entscheid: ja
 Umfang: Push der zwei Planungs-Commits 49fb104a und e909e276. Kein Code, kein Tag, kein Release, kein Store, kein Kommentar.
 
 ## Owner-Entscheid 11.11.2026 (Nacht): 43-29 gestrichen, 43-11 abgelöst
