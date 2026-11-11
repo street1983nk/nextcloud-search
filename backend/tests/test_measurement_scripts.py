@@ -2726,8 +2726,17 @@ PHP_TREE_HASH_TODAY = "f3165a57c3aeed687c255f9c66b35f7ddff8a817df61ef421a0234234
 # independently with find, sort, tr and sha256sum over the CRLF normalised
 # tree: 6ef6beba... both ways, and the same pipeline over git archive HEAD
 # before the step gave 71385c59... (positive control).
+#
+# Moved on 2026-11-11 by the fix of audit finding F-43B-02 (plan 43-27):
+# worker/reconcile.py asks for the arming again behind the look at the
+# catch-up mark, next to the backup hold, so a disable that lands in that look
+# starts no round. No file came or went, so PACKAGE_FILES_TODAY stays at 83.
+# The PHP pair does not move. Recomputed independently with find, sort, tr and
+# sha256sum over the CRLF normalised tree: 872596c6... both ways, and the same
+# pipeline over git archive HEAD before the step gave 6ef6beba... (positive
+# control).
 PACKAGE_FILES_TODAY = 83
-PACKAGE_TREE_HASH_TODAY = "6ef6beba8cc950a8addaf22ce31de29e68918341e8e3bd348007248b1685c3e2"
+PACKAGE_TREE_HASH_TODAY = "872596c6168f2027c5c5237122c76e51371b9caa1e0ecdc8d515d5defd851972"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

@@ -457,7 +457,10 @@ class Reconcile:
                         self._in_flight = False
                         await _pause(self._tick, stop_event)
                         continue
-                    if not self._backup_release.is_set():
+                    if not self._backup_release.is_set() or not self._armed.is_set():
+                        # Both were asked in front of the look at the mark, and
+                        # the look leaves the loop: a backup hold (F-41A-02) or
+                        # a disable (F-43B-02) that landed in it holds the round.
                         continue
                 await self.run_once()
             # Deliberately every exception, and only the type name is logged: a
