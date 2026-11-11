@@ -1096,8 +1096,9 @@ smbcacls //127.0.0.1/daten gemeinsam/gesperrt-bob.txt -A "${WORK}/auth-alice" \
   --add "ACL:${NETBIOS}\\bob:DENIED/0x0/READ" > /dev/null \
   || fail "smbcacls could not add the DENY ACE of bob"
 
-# The unreadable files of the truth: locked for every user, and nothing else.
-printf 'smb:daten\tgemeinsam/gesperrt-alle.txt\n' > "${WORK}/unreadable.tsv"
+# The unreadable files of the truth, by their path on the host: locked for
+# every user, and nothing else.
+printf '/srv/daten/gemeinsam/gesperrt-alle.txt\n' > "${WORK}/unreadable.tsv"
 
 # -- positive control at the Samba server ------------------------------------------
 
@@ -1716,16 +1717,22 @@ else
 fi
 
 read_settled phase-a
+truth_physical
 a_num_truth=$(truth_numerator_list | wc -l)
 a_num_shown=$(jq -r '.coverage.indexed' "${WORK}/overview-phase-a.json")
 a_den_shown=$(jq -r '.coverage.indexable' "${WORK}/overview-phase-a.json")
 a_percent=$(jq -r '.coverage.percent' "${WORK}/overview-phase-a.json")
-rows+=("| A | numerator | ${a_num_truth} | ${a_num_shown} |")
+rows+=("| A | numerator, files on the host | ${a_num_truth} | ${a_num_shown} |")
 if head_under_test; then
-  a_den_expected=$(expected_denominator_phase_a)
-  rows+=("| A | denominator (D-43-11 rule in SQL) | ${a_den_expected} | ${a_den_shown} |")
+  # The head has to show the physical truth plus the two storages it cannot
+  # tell (EXPECTED_SEPARATE_K), in both figures, and nothing else.
+  a_num_expected=$(with_separate_k "${a_num_truth}")
+  a_den_truth=$(expected_denominator_phase_a)
+  a_den_expected=$(with_separate_k "${a_den_truth}")
+  rows+=("| A | numerator, truth plus k=${EXPECTED_SEPARATE_K} | ${a_num_expected} | ${a_num_shown} |")
+  rows+=("| A | denominator (D-43-11 rule in SQL over inodes: ${a_den_truth}) plus k=${EXPECTED_SEPARATE_K} | ${a_den_expected} | ${a_den_shown} |")
   rows+=("| A | percent | not null, at most 100 | ${a_percent} |")
-  check "phase A numerator" "${a_num_truth}" "${a_num_shown}"
+  check "phase A numerator" "${a_num_expected}" "${a_num_shown}"
   check "phase A denominator" "${a_den_expected}" "${a_den_shown}"
   if [ "${a_percent}" = "null" ] || [ "${a_percent}" -gt 100 ]; then
     failures=$((failures + 1))
@@ -1751,36 +1758,52 @@ read_settled phase-b-1
 sleep 30
 drain
 read_settled phase-b
+truth_physical
 
 users_left=$(nc_occ user:list --output=json | jq -r 'keys[]' | tr '\n' ' ')
+# Both lists are "<device:inode>\t<path on the host>", one line per inode and
+# sorted by it (plan 43-25); they are compared by the first column only.
 truth_numerator_list > "${WORK}/numerator.tsv"
-truth_denominator_list "daten:alice bob;archiv:alice bob carol" "${users_left}" > "${WORK}/denominator.tsv"
+truth_denominator_list "${users_left}" > "${WORK}/denominator.tsv"
 b_num_truth=$(wc -l < "${WORK}/numerator.tsv")
 b_den_truth=$(wc -l < "${WORK}/denominator.tsv")
 b_unreadable_truth=$(truth_not_readable "${WORK}/unreadable.tsv" "${WORK}/denominator.tsv")
 b_num_shown=$(jq -r '.coverage.indexed' "${WORK}/overview-phase-b.json")
 b_den_shown=$(jq -r '.coverage.indexable' "${WORK}/overview-phase-b.json")
 b_unreadable_shown=$(jq -r '.coverage.notReadable // "-"' "${WORK}/overview-phase-b.json")
-outside=$(comm -23 "${WORK}/numerator.tsv" "${WORK}/denominator.tsv" | wc -l)
-rows+=("| B | numerator | ${b_num_truth} | ${b_num_shown} |")
-rows+=("| B | denominator (Samba union and homes) | ${b_den_truth} | ${b_den_shown} |")
+outside=$(comm -23 <(cut -f1 "${WORK}/numerator.tsv") <(cut -f1 "${WORK}/denominator.tsv") | wc -l)
+rows+=("| B | numerator, files on the host | ${b_num_truth} | ${b_num_shown} |")
+rows+=("| B | denominator, files on the host (what every mounted login reaches, and the homes) | ${b_den_truth} | ${b_den_shown} |")
 rows+=("| B | notReadable | ${b_unreadable_truth} | ${b_unreadable_shown} |")
 rows+=("| B | searchable documents outside the denominator truth | 0 | ${outside} |")
-note "phase B: the D-43-11 rule in SQL gives $(expected_denominator_phase_a) for the same state"
-
-positive_control_compare "phase B numerator" "${b_num_truth}" "${b_num_shown}"
+note "phase B: the D-43-11 rule in SQL over inodes gives $(expected_denominator_phase_a) for the same state"
 
 if head_under_test; then
-  check "phase B numerator" "${b_num_truth}" "${b_num_shown}"
-  check "phase B denominator" "${b_den_truth}" "${b_den_shown}"
+  b_num_expected=$(with_separate_k "${b_num_truth}")
+  b_den_expected=$(with_separate_k "${b_den_truth}")
+  rows+=("| B | numerator, truth plus k=${EXPECTED_SEPARATE_K} | ${b_num_expected} | ${b_num_shown} |")
+  rows+=("| B | denominator, truth plus k=${EXPECTED_SEPARATE_K} | ${b_den_expected} | ${b_den_shown} |")
+  positive_control_compare "phase B numerator" "${b_num_expected}" "${b_num_shown}"
+  # Positive control 3: a truth that keys by share and root as written must
+  # miss the physical one by the planted number, otherwise this topology says
+  # nothing about roots and spellings.
+  b_num_naive=$(truth_numerator_naive | wc -l)
+  rows+=("| B | positive control 3, naive numerator minus files on the host | ${NAIVE_SURPLUS} | $((b_num_naive - b_num_truth)) |")
+  note "share identities of the counting (numbers only): $(jq -c '.coverage.shareIdentity // "absent"' "${WORK}/overview-phase-b.json")"
+  check "phase B numerator" "${b_num_expected}" "${b_num_shown}"
+  check "phase B denominator" "${b_den_expected}" "${b_den_shown}"
   check "phase B notReadable" "${b_unreadable_truth}" "${b_unreadable_shown}"
   check "phase B numerator inside the denominator" 0 "${outside}"
-  a1=$(a1_rows_checked projekt/projekt-1.txt projekt/projekt-2.txt projekt/projekt-3.txt)
-  rows+=("| B | a1_rows_checked (reshared files with two rows and one key) | 3 | ${a1} |")
+  # After the comparisons, so their lines are in the log when this one stops
+  # the run.
+  positive_control_naive "${b_num_naive}" "${b_num_truth}"
+  a1=$(a1_rows_checked /srv/daten/projekt/projekt-1.txt /srv/daten/projekt/projekt-2.txt /srv/daten/projekt/projekt-3.txt)
+  rows+=("| B | a1_rows_checked (files of the reshared folder: rows on two storages or more, one key) | 3 | ${a1} |")
   echo "a1_rows_checked=${a1}"
   [ "${a1}" -gt 0 ] || fail "the reshare case tests nothing, the run is invalid"
   check "a1_rows_checked" 3 "${a1}"
 else
+  positive_control_compare "phase B numerator" "${b_num_truth}" "${b_num_shown}"
   positive_control_reference "${b_num_truth}" "${b_num_shown}" "${b_den_truth}" "${b_den_shown}"
   note "positive control 2: 1.6.2 shows ${b_num_shown} of ${b_den_shown}, truth ${b_num_truth} of ${b_den_truth}"
 fi
@@ -1818,13 +1841,13 @@ while IFS=$'\t' read -r _ word_name; do
     search_expected=$((search_expected + 1))
   fi
 done < "${WORDS}"
-# Every truth row without a planted word, with its full key (storage and
-# path, never content), so the next run names the document.
+# Every truth row without a planted word, by its file name (never a path, a
+# host or content), so the next run names the document.
 no_word=0
-while IFS=$'\t' read -r nw_space nw_path; do
+while IFS=$'\t' read -r _ nw_path; do
   if ! grep -qxF -- "${nw_path##*/}" "${WORK}/word-names.txt"; then
     no_word=$((no_word + 1))
-    note "numerator truth row without a planted word: ${nw_space} ${nw_path}"
+    note "numerator truth row without a planted word: ${nw_path##*/}"
   fi
 done < "${WORK}/numerator.tsv"
 rows+=("| B | numerator truth rows without a planted word (not searchable by the harness) | - | ${no_word} |")
