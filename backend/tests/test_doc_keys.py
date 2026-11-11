@@ -24,13 +24,17 @@ a day. None of it ever logs a path or a key value (T-43-52).
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import hashlib
 import logging
 import math
 import re
 import sqlite3
+import time
 from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
@@ -939,6 +943,138 @@ def test_the_generation_is_two_and_only_for_a_format_change() -> None:
         2,
         2,
     ]
+
+
+# -- a state that is born after the arming ---------------------------------------------------
+#
+# Run 42991291089, the three head legs of the coverage proof: a fresh installation answered
+# "counting" for five minutes. The enable arms the poller and this task in the same step, the
+# poller is the one that creates state.db, and the first round of this task found no file yet.
+# It then slept a whole tick of 300 s, the generation gate of the coverage route kept every
+# figure back for that long, and the round after the tick forgot the 95 keys the jobs had
+# written in between and asked the companion for them again.
+
+RETRY = 0.02
+
+
+def _stateless(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, keys: _Keys) -> tuple[DocKeyBackfill, Path, list[int]]:
+    """A worker as the lifespan builds it: no store handed in, the real tick, a volume without state.db."""
+    path = tmp_path / "state.db"
+    monkeypatch.setattr(doc_keys_module, "settings", lambda: SimpleNamespace(state_db=path))
+    monkeypatch.setattr(doc_keys_module, "DOC_KEY_NO_STATE_SECONDS", RETRY, raising=False)
+    clients: list[int] = []
+
+    def client() -> AsyncNextcloudApp:
+        clients.append(1)
+        return cast("AsyncNextcloudApp", None)
+
+    backfill = DocKeyBackfill(client_factory=client, files_factory=lambda nc: cast("Any", keys), pause_seconds=0.0)
+    return backfill, path, clients
+
+
+def _mark_at(path: Path) -> str | None:
+    if not path.exists():
+        return None
+    with contextlib.closing(sqlite3.connect(path)) as conn:
+        try:
+            row = conn.execute("SELECT value FROM meta WHERE key = ?", (DOC_KEY_MARK,)).fetchone()
+        except sqlite3.OperationalError:
+            return None
+    return None if row is None else str(row[0])
+
+
+async def _until(condition: Callable[[], bool], seconds: float = 5.0) -> bool:
+    """Poll a condition; True as soon as it holds, False when the time is up."""
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if condition():
+            return True
+        await asyncio.sleep(0.01)
+    return condition()
+
+
+async def _end(task: asyncio.Task[None], stop: asyncio.Event, backfill: DocKeyBackfill) -> None:
+    stop.set()
+    await asyncio.wait_for(task, timeout=5.0)
+    await backfill.aclose()
+
+
+def test_the_wait_for_a_missing_state_is_seconds_and_never_a_tick() -> None:
+    wait = getattr(doc_keys_module, "DOC_KEY_NO_STATE_SECONDS", None)
+    assert isinstance(wait, float), "there is no wait of its own for a volume without state.db"
+    assert 0 < wait <= 10
+    assert wait < doc_keys_module.DOC_KEY_TICK_SECONDS / 10
+
+
+async def test_a_state_born_after_the_arming_gets_its_generation_within_seconds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    keys = _Keys()
+    backfill, path, clients = _stateless(tmp_path, monkeypatch, keys)
+    stop = asyncio.Event()
+    backfill.arm()
+    task = asyncio.create_task(backfill.run(stop))
+    try:
+        # The first round runs at once and finds no file.
+        await asyncio.sleep(RETRY * 5)
+        assert not path.exists(), "the worker created state.db, only the poller may"
+        assert clients == []
+
+        # The poller creates and seeds the database, a moment after the arming.
+        poller_side = open_store(path)
+        try:
+            assert await _until(lambda: (_mark_at(path) or "").startswith(f"{DOC_KEY_GENERATION}:")), (
+                f"no generation {DOC_KEY_GENERATION} in the meta value within seconds of the birth of state.db, "
+                f"it reads {_mark_at(path)!r}: a fresh installation says 'counting' until the next tick"
+            )
+            # Nothing was there to ask the companion for.
+            assert keys.calls == 0
+
+            # The jobs of the crawl bring their keys, and no later round forgets them.
+            _insert_rows(poller_side, range(1, 6), doc_key=key_of(7))
+            await asyncio.sleep(RETRY * 10)
+            assert [_doc_key(poller_side, file_id) for file_id in range(1, 6)] == [key_of(7)] * 5
+            assert poller_side.doc_keys_missing() == 0
+            assert keys.calls == 0
+        finally:
+            poller_side.close()
+    finally:
+        await _end(task, stop, backfill)
+
+
+async def test_a_backup_pause_that_arrives_before_the_state_still_holds_the_first_round(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    keys = _Keys()
+    backfill, path, _clients = _stateless(tmp_path, monkeypatch, keys)
+    stop = asyncio.Event()
+    backfill.arm()
+    task = asyncio.create_task(backfill.run(stop))
+    try:
+        await asyncio.sleep(RETRY * 5)
+        # The pause lands while the worker waits for a state, then the state arrives with
+        # keys of the test build (generation 1), as after an update behind a backup.
+        backfill.hold_for_backup()
+        poller_side = open_store(path)
+        try:
+            _insert_rows(poller_side, range(1, 6), doc_key=key_of(0, generation="1"))
+            poller_side.write_meta(DOC_KEY_MARK, "1:400:0")
+            await asyncio.sleep(RETRY * 15)
+            assert _mark_at(path) == "1:400:0", "a round wrote behind the backup pause"
+            assert poller_side.doc_keys_missing() == 0
+            assert keys.calls == 0
+            assert not backfill.in_flight
+
+            backfill.release_backup_hold()
+            assert await _until(lambda: (_mark_at(path) or "").startswith(f"{DOC_KEY_GENERATION}:")), (
+                f"after the resume the meta value still reads {_mark_at(path)!r}"
+            )
+            assert await _until(lambda: poller_side.doc_keys_missing() == 0 and keys.calls >= 1)
+            assert [_doc_key(poller_side, file_id) for file_id in range(1, 6)] == [key_of(n) for n in range(1, 6)]
+        finally:
+            poller_side.close()
+    finally:
+        await _end(task, stop, backfill)
 
 
 # -- the verify pass ------------------------------------------------------------------------
