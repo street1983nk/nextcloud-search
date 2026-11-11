@@ -2119,6 +2119,28 @@ fi
 # ===================================================================================
 
 step "B1: the denominator before and after removing the extra storage"
+if [ "${VARIANT}" = "gate-crawl" ] || [ "${VARIANT}" = "gate-queue" ]; then
+  # A fresh installation of the head (run 42991291089, the three legs of these
+  # two variants): the document key task found no state.db at its first round
+  # and came back a tick of 300 s later, so the generation gate of POST
+  # /coverage answered counting until then and the round after the tick forgot
+  # and asked again the 95 keys the jobs had written. read_settled below waited
+  # those minutes, and the catch-up cycle swept in them (W5). Since the fix the
+  # generation stands in the meta value seconds after the database is born,
+  # long before the crawl and two drain periods are over, and no round has a
+  # key to ask for. Both are states, not times: read here, before anything
+  # waits on the count.
+  fresh_mark=$(doc_key_mark)
+  rows+=("| B1 | generation of the document keys on the fresh installation after the first drain | 2 | ${fresh_mark%%:*} |")
+  case "${fresh_mark}" in
+    2:*) ;;
+    *) fail "product finding: the fresh database carries no key generation after the first drain (meta value '${fresh_mark}'), the per document count would wait for a tick of the document key task" ;;
+  esac
+  refilled=$(log_count 0 'doc key backfill, done=')
+  rows+=("| B1 | backfill rounds on the fresh installation (keys of jobs forgotten and asked again) | 0 | ${refilled} |")
+  check "B1 no backfill round on a fresh installation" 0 "${refilled}"
+fi
+b1_started=$(date +%s)
 read_settled b1-before
 b1_before=$(jq -r '.coverage.indexable' "${WORK}/overview-b1-before.json")
 nc_occ files_external:delete -y "${local_mount}" > /dev/null
@@ -2134,6 +2156,8 @@ rows+=("| B1 | denominator before / after removing the extra storage | ${b1_befo
 if head_under_test; then
   check "B1 denominator unchanged" "${b1_before}" "${b1_after}"
 fi
+b1_seconds=$(($(date +%s) - b1_started))
+note "B1: both settled reads took ${b1_seconds} s"
 
 stop_backend
 
@@ -2144,8 +2168,19 @@ stop_backend
 # head started (age_sweep_stamp); there the stamp has to be exactly that value,
 # so a sweep of the head before phase A still ends the run here. Everywhere
 # else the expected value is empty and the check is the one it always was.
+#
+# What this check rests on in gate-crawl and gate-queue, said once: a fresh
+# installation has the catch-up of 1.5 open, the once task of the head looks
+# at its mark when it is armed and then every RECONCILE_TICK_SECONDS (300 s),
+# and its cycle sweeps. So the container that the setup action armed has to be
+# stopped here within 300 s of that arming; run 42991291089 got here after
+# 335 s (B1 alone waited 213 s for the count) and the cycle had swept. The
+# cycle is right to sweep, so this is a limit of the harness and not of the
+# product, and the check turns a run past the limit into an invalid run, never
+# into a figure. The seconds B1 took are in the message for that reason.
 swept_before=$(statedb "SELECT value FROM meta WHERE key = 'storage_sweep_at';" || true)
-[ "${swept_before}" = "${sweep_stamp_expected}" ] || fail "a catch-up round swept before phase A, the run is invalid"
+[ "${swept_before}" = "${sweep_stamp_expected}" ] \
+  || fail "a catch-up round swept before phase A, the run is invalid (storage_sweep_at '${swept_before}', expected '${sweep_stamp_expected}', B1 took ${b1_seconds} s)"
 note "storage_sweep_at before phase A: ${swept_before:-not set}${sweep_stamp_expected:+ (the aged stamp of rc.1, untouched by the head)}"
 
 step "topology change"
