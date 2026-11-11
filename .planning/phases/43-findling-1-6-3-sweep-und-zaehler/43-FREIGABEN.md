@@ -211,3 +211,14 @@ Dem Owner lag im Chat vor: auf dem Tag-Kopf 8b00d6100be0133fd436fd2f277736f5d9e8
 
 Ausnahme PHP-Workflow 43-12: "Ok" (2026-11-11 23:45, Claude Code Terminal) Entscheid: ja
 Umfang: nur der fehlende Lauf von "PHP and store metadata gates" auf 8b00d610. Der Lauf desselben Workflows auf dem Tag v1.6.3 muss grün sein, bevor der Owner die Store-Einreichung auslöst. Kein künstlicher Commit unter php/.
+
+## Owner-Wort 11.11.2026: Ausführung von 43-13 durch Claude, drei Freigaben
+
+Dem Owner lagen im Chat vor: der Tag-Kopf 8b00d6100be0133fd436fd2f277736f5d9e86a9b mit Belegen, die Befehle für Tag und Tag-Push, der Befehl für die Store-Einreichung (erst nach grünem Release-Lauf und grünem PHP-Lauf auf dem Tag), die Empfehlung, erst am 12.11.2026 zu taggen (CHANGELOG-Datum), und drei Fragen mit der Empfehlung "dreimal ja": (1) Release-Notiz per gh release edit durch den abgenommenen Text ersetzen, (2) deploy-harp.yml mit release_tag=v1.6.3 einmal starten, (3) Belegdokumente auf main pushen. Antwort des Owners: "Kannst das machen ich bin nicht am Rechner".
+
+Lesart von Claude, hier offen benannt: Der Owner überträgt damit die Ausführung der vorgelegten Befehle (Tag, Tag-Push, Store-Einreichung) an Claude, weil er nicht am Rechner ist, und bejaht die drei Fragen. Das GO für Tag und Einreichung selbst hat er in Runde 2 gegeben (43-ABNAHME.md, "GO: ja"); neu ist nur, wer die Befehle tippt. Die Bedingungen bleiben: Tag genau auf den Tag-Kopf, Einreichung nur nach grünem Release-Lauf und grünem PHP-Lauf auf dem Tag, der Tag wird nie verschoben.
+
+Auftrag Ausführung 43-13: "Kannst das machen ich bin nicht am Rechner" (2026-11-11 23:48, Claude Code Terminal) Entscheid: ja
+Freigabe ReleaseEdit 43-13: "Kannst das machen ich bin nicht am Rechner" (2026-11-11 23:48, Claude Code Terminal) Entscheid: ja
+Freigabe Dispatch 43-13: "Kannst das machen ich bin nicht am Rechner" (2026-11-11 23:48, Claude Code Terminal) Entscheid: ja
+Freigabe Push 43-13: "Kannst das machen ich bin nicht am Rechner" (2026-11-11 23:48, Claude Code Terminal) Entscheid: ja
