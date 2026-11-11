@@ -152,3 +152,10 @@ Nach dem roten Lauf 42991291089 lag dem Owner im Chat der Befund vor (drei Ursac
 Freigabe Push 43-26 Fix1: "Go" (2026-11-11 12:28, Claude Code Terminal) Entscheid: ja
 Freigabe Dispatch 43-26 Fix1: "Go" (2026-11-11 12:28, Claude Code Terminal) Entscheid: ja
 Umfang: genau ein Push auf main nach git pull --rebase mit den Commits 07eadd03, e02ff71f, a311b827, f4375578, 76be7820, 893af895 und diesen Zeilen; genau ein Dispatch von coverage-e2e.yml auf dem gepushten Kopf. Kein Tag, kein Release, kein Store, kein Kommentar. Jede weitere Wiederholung braucht neue Zeilen.
+
+## Freigabe 11.11.2026 (Abend): Push des Audit-Nachtrags und der Fix-Runde (43-27)
+
+Dem Owner lag im Chat vor: Audit-Nachtrag ohne CRITICAL, HIGH, MEDIUM; die drei LOW-Befunde F-43B-01 bis -03 lokal per TDD behoben (PHPUnit 1200 Tests grün, Python-Module grün); zwei Hinweise: der Schlüsselinhalt für gehashte Speicher ohne Identität ändert sich innerhalb von Format 2 (unveröffentlicht), und der neue Changelog-Satz zu F-43B-02 ist ein Entwurf für die Textrunde 43-12. Antwort des Owners: "Push erstmal dann mach ich clear".
+
+Freigabe Push 43-27: "Push erstmal dann mach ich clear" (2026-11-11 19:03, Claude Code Terminal) Entscheid: ja
+Umfang: Push von main nach git pull --rebase, zuerst genau bis 9bf7dddf (letzter Commit außerhalb von .planning), nach grünen Workflows auf diesem Kopf die Planungs-Commits danach (4ae8c833, 6d6f7740, diese Zeilen). Kein Dispatch von coverage-e2e.yml: dafür liegt noch KEINE Freigabe vor, die Zeile "Freigabe Dispatch 43-27" fehlt bewusst. Kein Tag, kein Release, kein Store, kein Kommentar.
