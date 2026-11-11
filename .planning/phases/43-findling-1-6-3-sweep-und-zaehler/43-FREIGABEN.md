@@ -144,3 +144,11 @@ Frage im Wortlaut des Plans mit den Optionen a, b, nein gestellt; der Owner antw
 Freigabe Push 43-26: "Go für Findling" (2026-11-11 09:29, Claude Code Terminal) Entscheid: ja
 Freigabe Dispatch 43-26: "Go für Findling" (2026-11-11 09:29, Claude Code Terminal) Entscheid: ja
 Umfang: genau ein Push auf main nach git pull --rebase mit den lokalen Commits von 43-21 bis 43-26 Task 1, dem Reset der Dokumentschlüssel in Bändern (53373888, c93a6f1e) und diesen Zeilen; genau ein Dispatch von coverage-e2e.yml auf dem gepushten Kopf. Kein Tag, kein Release, kein Store, kein Kommentar. Jede Wiederholung nach einem roten Bein braucht neue Zeilen.
+
+## Freigabe 11.11.2026: Push und Dispatch von Fix 1 (43-26)
+
+Nach dem roten Lauf 42991291089 lag dem Owner im Chat der Befund vor (drei Ursachen, Fix 1 lokal in sechs Commits, Restrisiken des nächsten Laufs). Frage: "Darf ich main mit den sechs Commits von Fix 1 pushen und danach coverage-e2e.yml einmal auf dem neuen Kopf dispatchen?" Antwort des Owners: "Go".
+
+Freigabe Push 43-26 Fix1: "Go" (2026-11-11 12:28, Claude Code Terminal) Entscheid: ja
+Freigabe Dispatch 43-26 Fix1: "Go" (2026-11-11 12:28, Claude Code Terminal) Entscheid: ja
+Umfang: genau ein Push auf main nach git pull --rebase mit den Commits 07eadd03, e02ff71f, a311b827, f4375578, 76be7820, 893af895 und diesen Zeilen; genau ein Dispatch von coverage-e2e.yml auf dem gepushten Kopf. Kein Tag, kein Release, kein Store, kein Kommentar. Jede weitere Wiederholung braucht neue Zeilen.
