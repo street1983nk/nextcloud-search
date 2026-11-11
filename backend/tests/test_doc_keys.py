@@ -1104,3 +1104,106 @@ def test_the_worker_is_started_and_stopped_in_the_lifespan() -> None:
 def test_the_store_marks_stay_documented() -> None:
     assert repo_module.valid_doc_key(key_of(1)) == key_of(1)
     assert repo_module.valid_doc_key("A" * 64) is None
+
+
+# -- the reset in bands ---------------------------------------------------------------------
+#
+# Measured on a store of 491,000 keyed rows with the real schema and pragmas: one UPDATE over
+# the whole table held the write lock for up to 9.1 s and a second writer waited 8.8 s of its
+# 10 s busy timeout. In bands of 100,000 the second writer waited 2.4 s at most. The reasons
+# for a band that large stand at the constant in store/repo.py.
+
+
+def _statements(store: Store) -> list[str]:
+    seen: list[str] = []
+    store._conn.set_trace_callback(lambda statement: seen.append(" ".join(statement.split())))
+    return seen
+
+
+def test_the_reset_forgets_every_key_in_bands_and_never_in_one_transaction(
+    store: Store, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    band = 100
+    assert getattr(repo_module, "_RESET_DOC_KEYS_BAND", None) == 100_000
+    monkeypatch.setattr(repo_module, "_RESET_DOC_KEYS_BAND", band)
+    # File ids with gaps, as on a real instance: a band is a count of rows, not a span of ids.
+    keyed = [file_id * 37 for file_id in range(1, 2 * band + 8)]
+    for file_id in keyed:
+        _insert_rows(store, [file_id], doc_key=key_of(file_id))
+    _insert_rows(store, [5], doc_key="")
+    _insert_rows(store, [6], doc_key=None)
+    seen = _statements(store)
+
+    changed = store.reset_doc_keys()
+
+    store._conn.set_trace_callback(None)
+    assert changed == len(keyed) + 1
+    assert store._conn.execute("SELECT COUNT(*) FROM files WHERE doc_key IS NOT NULL").fetchone()[0] == 0
+    begins = [index for index, statement in enumerate(seen) if statement.upper().startswith("BEGIN")]
+    commits = [index for index, statement in enumerate(seen) if statement.upper().startswith("COMMIT")]
+    updates = [index for index, statement in enumerate(seen) if statement.upper().startswith("UPDATE FILES")]
+    assert len(updates) == 3
+    assert len(begins) == len(commits) == len(updates)
+    # Every band is its own transaction: begin, one update, commit, and only then the next one.
+    for begin, update, commit in zip(begins, updates, commits, strict=True):
+        assert begin < update < commit
+    assert all(commit < begin for commit, begin in zip(commits, begins[1:], strict=False))
+
+
+def test_no_band_of_the_reset_touches_more_rows_than_the_band(store: Store, monkeypatch: pytest.MonkeyPatch) -> None:
+    band = 50
+    monkeypatch.setattr(repo_module, "_RESET_DOC_KEYS_BAND", band, raising=False)
+    for file_id in range(1, 4 * band + 1):
+        _insert_rows(store, [file_id], doc_key=key_of(file_id))
+    left: list[int] = []
+    real_execute = store._conn.execute
+    count_sql = "SELECT COUNT(*) FROM files WHERE doc_key IS NOT NULL"
+
+    def watch(statement: str) -> None:
+        if statement.upper().startswith("COMMIT"):
+            left.append(int(real_execute(count_sql).fetchone()[0]))
+
+    store._conn.set_trace_callback(watch)
+    store.reset_doc_keys()
+    store._conn.set_trace_callback(None)
+
+    assert left == [150, 100, 50, 0]
+
+
+def test_a_second_writer_gets_in_between_two_bands_of_the_reset(
+    store: Store, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    band = 50
+    monkeypatch.setattr(repo_module, "_RESET_DOC_KEYS_BAND", band, raising=False)
+    for file_id in range(1, 3 * band + 1):
+        _insert_rows(store, [file_id], doc_key=key_of(file_id))
+    # No patience at all: this writer only gets through when the lock is free.
+    other = sqlite3.connect(tmp_path / "state.db", timeout=0)
+    wrote: list[int] = []
+    real_transaction = store._transaction
+    bands = 0
+
+    def transaction() -> Any:
+        nonlocal bands
+        if bands == 1:
+            # The first band is committed, the second has not begun.
+            other.execute("UPDATE files SET attempts = attempts + 1 WHERE file_id = 1")
+            other.commit()
+            wrote.append(1)
+        bands += 1
+        return real_transaction()
+
+    monkeypatch.setattr(store, "_transaction", transaction)
+
+    store.reset_doc_keys()
+
+    other.close()
+    assert bands == 3
+    assert wrote == [1]
+    assert store._conn.execute("SELECT attempts FROM files WHERE file_id = 1").fetchone()[0] == 1
+
+
+def test_an_empty_table_and_a_table_without_keys_reset_to_nothing(store: Store) -> None:
+    assert store.reset_doc_keys() == 0
+    _insert_rows(store, [1, 2, 3], doc_key=None)
+    assert store.reset_doc_keys() == 0
