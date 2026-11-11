@@ -26,6 +26,25 @@
 #   - After indexing: carol loses the daten configuration (oc_storages keeps
 #     the row: stamped), dave is deleted (no oc_storages row: gone), the
 #     local storage is removed.
+#   - Since plan 43-25 the case of issue #25 as it was reported (D-43-15,
+#     D-43-17): every mount names the Samba server by one host alias from
+#     /etc/hosts. The share daten is configured with the root / and with two
+#     sub roots (sicherheit for alice and carol, projekt for bob), and once
+#     more for bob in another spelling (share Daten, the host in upper case).
+#     The alias is exactly as long as it takes for the storage ids of the sub
+#     root sicherheit to pass 64 characters, which Nextcloud stores as an md5;
+#     four mounts on that sub root carry the four ways such an id gets its
+#     login: password::password with the user in the configuration,
+#     password::logincredentials, password::global and password::userprovided.
+#     The first two can be rebuilt from the configuration, the last two cannot
+#     and are counted on their own (EXPECTED_SEPARATE_K in coverage_truth.sh).
+#     Two files that differ in case only (Bericht.txt, bericht.txt), a public
+#     link on a folder of an SMB mount, and a share [homes] for alice and bob
+#     with a file of the same name in each home directory.
+#   - Every mount is written to ${WORK}/mounts.tsv as it was created (mount
+#     point, share, root, users, mechanism, login at the Samba server); the
+#     truth finds the file behind a file cache row through that log and
+#     through Samba itself, never through a storage id.
 #
 # Variants (VARIANT):
 #   gate-crawl  head, the crawl is unfinished during phase A
@@ -80,6 +99,17 @@ STATE_DB="${RUNNER_TEMP}/findling/state.db"
 EXAPP_LOG="${RUNNER_TEMP}/exapp.log"
 EXAPP_PID="${RUNNER_TEMP}/exapp.pid"
 NETBIOS=DECKUNG
+# The host every mount names (plan 43-25), an alias of 127.0.0.1 in /etc/hosts.
+# 38 characters on purpose. A storage id reads smb::<login>@<host>//<share>/<root>
+# with the root as /x/ (apps/files_external/lib/Lib/Storage/SMB.php getId), and
+# Nextcloud stores an id of more than 64 characters as its md5
+# (lib/private/Files/Cache/Storage.php adjustStorageId):
+#   root /            smb::alice@<38>//daten//             5+5+1+38+2+5+1+1  = 58, written out
+#   root projekt      smb::bob@<38>//daten//projekt/       5+3+1+38+2+5+1+9  = 64, written out
+#   root sicherheit   smb::bob@<38>//daten//sicherheit/    5+3+1+38+2+5+1+12 = 67, an md5
+# so the mounts on the sub root sicherheit are the hashed ones, with any login.
+SMB_HOST='samba.deckung-findling-abnahme.example'
+SMB_HOST_UPPER="${SMB_HOST^^}"
 RELEASE_COMPANION_URL='https://github.com/street1983nk/nextcloud-search/releases/download/v1.6.2/findling.tar.gz'
 BACKLOG_IMAGES=30
 DRAIN_TIMEOUT=1500
@@ -93,6 +123,12 @@ CATCHUP_TIMEOUT=900
 BACKEND_DIR="${SRC}/backend"
 
 mkdir -p "${WORK}"
+# The mount log (plan 43-25): one line per configuration as it was created,
+# "<mount point>\t<share>\t<root>\t<users>\t<mechanism>\t<login>". The login is
+# the account at the Samba server, "-" where every user logs in as himself.
+# No field is empty, the root of a share is written "/".
+MOUNTS="${WORK}/mounts.tsv"
+: > "${MOUNTS}"
 # One collation for sort and comm everywhere.
 export LC_ALL=C
 umask 022
@@ -134,6 +170,9 @@ password_of() {
     bob) printf '%s' 'Deckung-bob-43-m2' ;;
     carol) printf '%s' 'Deckung-carol-43-k9' ;;
     dave) printf '%s' 'Deckung-dave-43-v5' ;;
+    # Accounts of the Samba server only, no Nextcloud users (plan 43-25).
+    dglobal) printf '%s' 'Deckung-dglobal-43-h3' ;;
+    deigen) printf '%s' 'Deckung-deigen-43-n8' ;;
     *) fail "no test password for $1" ;;
   esac
 }
@@ -161,6 +200,18 @@ head_companion() {
     gate-crawl | gate-queue) return 0 ;;
     upgrade) [ "${companion_updated}" = "1" ] ;;
     *) return 1 ;;
+  esac
+}
+
+# head_container: the container that answers right now is the one of the head.
+# Always in gate-crawl and gate-queue; elsewhere only after start_backend took
+# it out of the harness checkout. It decides the body of POST /coverage: the
+# head demands docKeyFormat 2 and answers 422 without it (plan 43-24), every
+# older container forbids the field (extra forbid) and answers 422 with it.
+head_container() {
+  case "${VARIANT}" in
+    gate-crawl | gate-queue) return 0 ;;
+    *) [ "${BACKEND_DIR}" = "${HARNESS}/backend" ] ;;
   esac
 }
 
@@ -241,6 +292,23 @@ statedb() {
 
 sid_like() {
   ncdb "SELECT numeric_id FROM oc_storages WHERE id LIKE '$1' ORDER BY numeric_id LIMIT 1;"
+}
+
+# sid_is <storage id>: the numeric id of exactly this id string. LIKE folds
+# ASCII case in SQLite, and since plan 43-25 two storages differ in the
+# spelling of host and share only.
+sid_is() {
+  ncdb "SELECT numeric_id FROM oc_storages WHERE id = '$1';"
+}
+
+# hashed_id <login>: the storage id of a mount on the sub root sicherheit as
+# Nextcloud builds it; hashed_sid <login>: the row Nextcloud stores for it,
+# under the md5 of that id.
+hashed_id() {
+  printf 'smb::%s@%s//daten//sicherheit/' "$1" "${SMB_HOST}"
+}
+hashed_sid() {
+  sid_is "$(hashed_id "$1" | md5sum | cut -d' ' -f1)"
 }
 
 mounted_sid() {
@@ -753,8 +821,13 @@ judge_locked() {
   check "${label} no pass taken as an outage" 0 "${outage_lines}"
 }
 
-# coverage_body: the body the companion would send, built from oc_mounts and
-# the storage ids, groups of SMB storages mounted at least twice.
+# coverage_body: a body in the form the companion sends, built from oc_mounts
+# and the storage ids, groups of SMB storages with a written out id that are
+# mounted at least twice. The groups are not the ones of the head companion
+# (no folded spelling, the root in the key, no hashed id) and no figure is read
+# from the answer; the callers read counting and the doc key counters only.
+# docKeyFormat 2 goes in for the container of the head and for no other one,
+# see head_container.
 coverage_body() {
   local mounted groups
   mounted=$(ncdb "SELECT DISTINCT storage_id FROM oc_mounts ORDER BY storage_id;" | jq -R 'tonumber' | jq -cs '.')
@@ -764,7 +837,12 @@ coverage_body() {
                   ORDER BY s.numeric_id;" \
     | jq -R 'split("\t") | {id: (.[0] | tonumber), key: .[1]}' \
     | jq -cs 'group_by(.key) | map(map(.id)) | map(select(length >= 2))')
-  jq -cn --argjson mounted "${mounted}" --argjson groups "${groups}" '{mounted: $mounted, groups: $groups}'
+  if head_container; then
+    jq -cn --argjson mounted "${mounted}" --argjson groups "${groups}" \
+      '{mounted: $mounted, groups: $groups, docKeyFormat: 2}'
+  else
+    jq -cn --argjson mounted "${mounted}" --argjson groups "${groups}" '{mounted: $mounted, groups: $groups}'
+  fi
 }
 
 # post_coverage: POST /coverage straight to the container, with the AppAPI
@@ -793,7 +871,7 @@ put_companion() {
 
 write_result() {
   {
-    echo "## Coverage end to end, variant ${VARIANT}, smb ${SMB_MODE} (plan 43-07, 43-18)"
+    echo "## Coverage end to end, variant ${VARIANT}, smb ${SMB_MODE} (plan 43-07, 43-18, 43-25)"
     echo
     echo "| Phase | Figure | Truth | Shown |"
     echo "|-------|--------|-------|-------|"
@@ -825,12 +903,36 @@ note "samba: $(smbd --version)"
 for group in g_alice g_bob g_carol g_alicebob; do
   sudo groupadd -f "${group}"
 done
-for uid in aaron alice bob carol; do
+# dglobal and deigen (plan 43-25) are accounts of the Samba server only: the
+# logins behind the global credentials and behind the credentials bob enters
+# for one storage. Unix names of at most 32 characters, the long storage ids
+# come from the host alias and the sub root.
+for uid in aaron alice bob carol dglobal deigen; do
   id "${uid}" > /dev/null 2>&1 || sudo useradd -M -s /usr/sbin/nologin "${uid}"
 done
 sudo usermod -a -G g_alice,g_alicebob alice
 sudo usermod -a -G g_bob,g_alicebob bob
 sudo usermod -a -G g_carol carol
+
+# The host alias. Both spellings have to resolve before any mount names them,
+# otherwise the mount in upper case would test a dead storage.
+printf '127.0.0.1 %s\n' "${SMB_HOST}" | sudo tee -a /etc/hosts > /dev/null
+[ "${#SMB_HOST}" = "38" ] || fail "the host alias has ${#SMB_HOST} characters, the id lengths of the topology were derived for 38"
+for spelling in "${SMB_HOST}" "${SMB_HOST_UPPER}"; do
+  getent hosts "${spelling}" | grep -q '^127\.0\.0\.1[[:space:]]' \
+    || fail "harness finding: getent does not resolve the host alias in one of its two spellings to 127.0.0.1"
+done
+[ "${SMB_HOST}" != "${SMB_HOST_UPPER}" ] || fail "the host alias has no letter to spell in upper case"
+
+# The home directories behind [homes], where the account database says they
+# are. useradd -M made none.
+for uid in alice bob; do
+  home_dir=$(getent passwd "${uid}" | cut -d: -f6)
+  [ -n "${home_dir}" ] && [ "${home_dir}" != "/" ] || fail "${uid} has no home directory in the account database"
+  sudo mkdir -p "${home_dir}"
+  sudo chown "${uid}:" "${home_dir}"
+  sudo chmod 0700 "${home_dir}"
+done
 
 # acl_xattr exactly as measured in A6 (plan 39-04): the stored NT ACL decides
 # for the DENY ACEs, the Unix rights of the folders decide who may enter.
@@ -866,10 +968,16 @@ sudo tee /etc/samba/smb.conf > /dev/null << EOF
    vfs objects = acl_xattr
    acl_xattr:ignore system acls = yes
    store dos attributes = yes
+
+[homes]
+   read only = no
+   browseable = no
+   create mask = 0600
+   directory mask = 0700
 EOF
 testparm -s > /dev/null 2>&1 || fail "testparm rejected the generated smb.conf"
 
-for uid in alice bob carol; do
+for uid in alice bob carol dglobal deigen; do
   pass=$(password_of "${uid}")
   printf '%s\n%s\n' "${pass}" "${pass}" | sudo smbpasswd -a -s "${uid}" > /dev/null
   printf 'username = %s\npassword = %s\ndomain = %s\n' "${uid}" "${pass}" "${NETBIOS}" > "${WORK}/auth-${uid}"
@@ -890,6 +998,7 @@ daten projekt 0750 g_alicebob
 daten nur-alice 0750 g_alice
 daten nur-bob 0750 g_bob
 daten nur-carol 0750 g_carol
+daten sicherheit 0755 root
 archiv gemeinsam 0755 root
 archiv nur-alice 0750 g_alice
 archiv nur-bob 0750 g_bob
@@ -899,10 +1008,41 @@ EOF
 # daten: alice sees 3 + 3 + 4 (+ 2 locked + gleich), bob 3 + 3 + 1, carol 3 + 2.
 for n in 1 2 3; do samba_file daten "gemeinsam/daten-gemeinsam-${n}.txt"; done
 for n in 1 2 3; do samba_file daten "projekt/projekt-${n}.txt"; done
+word_projekt_3="${NEXT_WORD}"
 for n in 1 2 3 4; do samba_file daten "nur-alice/daten-alice-${n}.txt"; done
 samba_file daten "nur-bob/daten-bob-1.txt"
 for n in 1 2; do samba_file daten "nur-carol/daten-carol-${n}.txt"; done
 samba_file daten "gemeinsam/gleich.txt" "zqgleichdoc"
+# Plan 43-25. sicherheit: two files and nothing else, open to every account
+# (0755), reached through the mounts with the root / and through the mounts on
+# the sub root. EXPECTED_SEPARATE_K and NAIVE_SURPLUS in coverage_truth.sh are
+# derived from exactly these two files; a third one moves both.
+samba_file daten "sicherheit/sicherheit-1.txt"
+word_sicherheit_1="${NEXT_WORD}"
+samba_file daten "sicherheit/sicherheit-2.txt"
+word_sicherheit_2="${NEXT_WORD}"
+# Two files that differ in case only: two files on a Linux server, two rows in
+# the file cache, two documents.
+samba_file daten "gemeinsam/Bericht.txt"
+word_twin_upper="${NEXT_WORD}"
+samba_file daten "gemeinsam/bericht.txt"
+word_twin_lower="${NEXT_WORD}"
+# [homes]: a file of the same name in the home directory of alice and of bob.
+# Two files that must never become one document.
+homes_file() {
+  # homes_file <account> <name>: a text file in the home directory, owned by the account
+  local home_dir
+  next_word
+  home_dir=$(getent passwd "$1" | cut -d: -f6)
+  printf 'Coverage proof %s\n' "${NEXT_WORD}" | sudo tee "${home_dir}/$2" > /dev/null
+  sudo chown "$1:" "${home_dir}/$2"
+  sudo chmod 0644 "${home_dir}/$2"
+  printf '%s\t%s\n' "${NEXT_WORD}" "$2" >> "${WORDS}"
+}
+homes_file alice privat.txt
+word_privat_alice="${NEXT_WORD}"
+homes_file bob privat.txt
+word_privat_bob="${NEXT_WORD}"
 # archiv: bob is the largest member here, alice and carol hold one each alone.
 for n in 1 2; do samba_file archiv "gemeinsam/archiv-gemeinsam-${n}.txt"; done
 for n in 1 2 3; do samba_file archiv "nur-bob/archiv-bob-${n}.txt"; done
@@ -991,6 +1131,27 @@ fi
 smb_get bob daten gemeinsam/daten-gemeinsam-1.txt || fail "positive control: bob cannot read a free file, run invalid"
 note "positive control at Samba: bob cannot enter a folder of alice, nobody reads the file locked for all, alice reads the file locked for bob"
 
+# Plan 43-25: the cases of roots and spellings at the Samba server itself,
+# before Nextcloud sees any of them.
+smb_get_word() {
+  # smb_get_word <uid> <share> <path> <word> <other word>: the file arrives and
+  # carries its own word and not the one of its neighbour
+  smb_get "$1" "$2" "$3" && grep -q -- "$4" "${WORK}/get.out" && ! grep -q -- "$5" "${WORK}/get.out"
+}
+smb_get_word alice daten gemeinsam/Bericht.txt "${word_twin_upper}" "${word_twin_lower}" \
+  && smb_get_word alice daten gemeinsam/bericht.txt "${word_twin_lower}" "${word_twin_upper}" \
+  || fail "harness finding: Samba does not hand out the two files that differ in case as two files"
+smb_get_word alice homes privat.txt "${word_privat_alice}" "${word_privat_bob}" \
+  && smb_get_word bob homes privat.txt "${word_privat_bob}" "${word_privat_alice}" \
+  || fail "harness finding: the share homes does not give alice and bob each their own privat.txt"
+smbclient "//${SMB_HOST_UPPER}/Daten" -A "${WORK}/auth-bob" -c "ls sicherheit/*" > "${WORK}/smb-ls.log" 2>&1 \
+  && grep -q 'sicherheit-1.txt' "${WORK}/smb-ls.log" \
+  || fail "harness finding: Samba does not answer for the share in its other spelling behind the host in upper case"
+for uid in dglobal deigen; do
+  smb_ls "${uid}" daten sicherheit || fail "harness finding: the Samba account ${uid} cannot list the folder sicherheit"
+done
+note "positive control at Samba: the case twins are two files, homes gives each account its own file, the share answers as Daten behind the host in upper case"
+
 # ===================================================================================
 # 2. Nextcloud
 # ===================================================================================
@@ -1026,20 +1187,79 @@ mount_id_of() {
   printf '%s\n' "$1" | grep -oE '[0-9]+' | tail -n 1
 }
 smb_mount() {
-  # smb_mount <mount point> <share>: prints the mount id
-  mount_id_of "$(nc_occ files_external:create "$1" smb password::logincredentials \
-    -c host=127.0.0.1 -c share="$2" -c root= -c domain="${NETBIOS}")"
+  # smb_mount <mount point> <share> <root> <host> <mechanism> [-c key=value ...]:
+  # prints the mount id
+  local point="$1" share="$2" root="$3" host="$4" mechanism="$5"
+  shift 5
+  mount_id_of "$(nc_occ files_external:create "${point}" smb "${mechanism}" \
+    -c host="${host}" -c share="${share}" -c root="${root}" -c domain="${NETBIOS}" "$@")"
 }
-daten_mount=$(smb_mount /daten daten)
-archiv_mount=$(smb_mount /archiv archiv)
-archiv_two_mount=$(smb_mount /archiv-zwei archiv)
-for mid in "${daten_mount}" "${archiv_mount}" "${archiv_two_mount}"; do
+mount_users() {
+  # mount_users <mount id> <user> ...: sharing on, and the users it applies to
+  local mid="$1" uid applicable=()
+  shift
   [ -n "${mid}" ] || fail "files_external:create returned no mount id"
+  for uid in "$@"; do
+    applicable+=(--add-user "${uid}")
+  done
   nc_occ files_external:option "${mid}" enable_sharing true > /dev/null
-done
-nc_occ files_external:applicable "${daten_mount}" --add-user alice --add-user bob --add-user carol > /dev/null
-nc_occ files_external:applicable "${archiv_mount}" --add-user alice --add-user bob --add-user carol > /dev/null
-nc_occ files_external:applicable "${archiv_two_mount}" --add-user carol > /dev/null
+  nc_occ files_external:applicable "${mid}" "${applicable[@]}" > /dev/null
+}
+mount_log() {
+  # mount_log <mount point> <share> <root> <users> <mechanism> <login>: one line
+  # of the mount log, exactly what was typed into the configuration
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" "$5" "$6" >> "${MOUNTS}"
+}
+LOGIN_MECHANISM='password::logincredentials'
+
+daten_mount=$(smb_mount /daten daten / "${SMB_HOST}" "${LOGIN_MECHANISM}")
+mount_users "${daten_mount}" alice bob carol
+mount_log /daten daten / 'alice bob carol' "${LOGIN_MECHANISM}" -
+archiv_mount=$(smb_mount /archiv archiv / "${SMB_HOST}" "${LOGIN_MECHANISM}")
+mount_users "${archiv_mount}" alice bob carol
+mount_log /archiv archiv / 'alice bob carol' "${LOGIN_MECHANISM}" -
+archiv_two_mount=$(smb_mount /archiv-zwei archiv / "${SMB_HOST}" "${LOGIN_MECHANISM}")
+mount_users "${archiv_two_mount}" carol
+mount_log /archiv-zwei archiv / carol "${LOGIN_MECHANISM}" -
+
+# Plan 43-25: the same share daten once more, under sub roots, in another
+# spelling, with ids Nextcloud hashes, and the share homes.
+#
+# Two sub roots. sicherheit for two users, which is at the same time the
+# hashed case with log-in credentials: the product can rebuild the id from the
+# configuration and the user id of the mount. projekt for one user, an id of
+# exactly 64 characters that stays written out.
+sicherheit_mount=$(smb_mount /daten-sicherheit daten sicherheit "${SMB_HOST}" "${LOGIN_MECHANISM}")
+mount_users "${sicherheit_mount}" alice carol
+mount_log /daten-sicherheit daten sicherheit 'alice carol' "${LOGIN_MECHANISM}" -
+projekt_mount=$(smb_mount /daten-projekt daten projekt "${SMB_HOST}" "${LOGIN_MECHANISM}")
+mount_users "${projekt_mount}" bob
+mount_log /daten-projekt daten projekt bob "${LOGIN_MECHANISM}" -
+# The other spelling: share Daten, the host in upper case, for bob, who also
+# has the mount /daten. Two storages of one user on one tree.
+spelled_mount=$(smb_mount /Daten-gross Daten / "${SMB_HOST_UPPER}" "${LOGIN_MECHANISM}")
+mount_users "${spelled_mount}" bob
+mount_log /Daten-gross Daten / bob "${LOGIN_MECHANISM}" -
+# Hashed, the user in the configuration: bob logs in for carol. The product
+# can rebuild the id from the configured user (not from the user of the mount).
+password_mount=$(smb_mount /lang-kennwort daten sicherheit "${SMB_HOST}" password::password \
+  -c user=bob -c password="$(password_of bob)")
+mount_users "${password_mount}" carol
+mount_log /lang-kennwort daten sicherheit carol password::password bob
+# Hashed, global credentials of the admin: the account dglobal logs in for
+# alice. The login is in the credentials store only, the id cannot be rebuilt.
+global_mount=$(smb_mount /lang-global daten sicherheit "${SMB_HOST}" password::global)
+mount_users "${global_mount}" alice
+mount_log /lang-global daten sicherheit alice password::global dglobal
+# Hashed, credentials the user entered for this storage: the account deigen
+# logs in for bob. Cannot be rebuilt either.
+provided_mount=$(smb_mount /lang-eigen daten sicherheit "${SMB_HOST}" password::userprovided)
+mount_users "${provided_mount}" bob
+mount_log /lang-eigen daten sicherheit bob password::userprovided deigen
+# [homes]: one configuration, one share name, a different directory per login.
+homes_mount=$(smb_mount /heim homes / "${SMB_HOST}" "${LOGIN_MECHANISM}")
+mount_users "${homes_mount}" alice bob
+mount_log /heim homes / 'alice bob' "${LOGIN_MECHANISM}" -
 
 sudo mkdir -p /srv/lokal
 sudo chown "$(id -un):$(id -gn)" /srv/lokal
@@ -1047,6 +1267,43 @@ head -c 4096 /dev/urandom > /srv/lokal/zusatz.bin
 local_mount=$(mount_id_of "$(nc_occ files_external:create /lokal local null::null -c datadir=/srv/lokal)")
 [ -n "${local_mount}" ] || fail "the local storage could not be created"
 nc_occ files_external:applicable "${local_mount}" --add-user alice > /dev/null
+mount_log /lokal - /srv/lokal alice null::null "$(id -un)"
+
+# The credentials of the two mounts whose login no configuration names, put
+# where the settings pages of Nextcloud put them and under the same names
+# (apps/files_external/lib/Lib/Auth/Password/GlobalAuth.php: user '' and
+# password::global for an admin mount; UserProvided.php: the user and
+# password::userprovided/<mount id>), encrypted by the credentials manager.
+# No browser, the same call the pages end in.
+cat > "${WORK}/seed_credentials.php" << 'PHP'
+<?php
+
+declare(strict_types=1);
+
+// seed_credentials.php <server root> <user id or ''> <identifier> <login>
+// The password comes from SEED_PASS and is never printed.
+if (PHP_SAPI !== 'cli' || $argc !== 5) {
+	exit(2);
+}
+require_once $argv[1] . '/lib/base.php';
+$password = getenv('SEED_PASS');
+if (!is_string($password) || $password === '') {
+	fwrite(STDERR, "SEED_PASS is empty\n");
+	exit(2);
+}
+\OCP\Server::get(\OCP\Security\ICredentialsManager::class)
+	->store($argv[2], $argv[3], ['user' => $argv[4], 'password' => $password]);
+echo "seeded\n";
+PHP
+seed_credentials() {
+  # seed_credentials <user id or ''> <identifier> <login at the Samba server>
+  local seeded
+  seeded=$(SEED_PASS=$(password_of "$3") timeout 90 php "${WORK}/seed_credentials.php" "${SERVER_ROOT}" "$1" "$2" "$3" | tail -n 1 || true)
+  [ "${seeded}" = "seeded" ] \
+    || fail "harness finding: the credentials of ${2%%/*} could not be stored without a browser, the case cannot be built"
+}
+seed_credentials '' 'password::global' dglobal
+seed_credentials bob "password::userprovided/${provided_mount}" deigen
 
 step "first login per user"
 for uid in aaron alice bob carol dave; do
@@ -1084,12 +1341,23 @@ curl -s -u "alice:$(password_of alice)" -H 'OCS-APIRequest: true' -H 'Accept: ap
 jq -e '.ocs.meta.statuscode == 200' "${WORK}/share.json" > /dev/null \
   || fail "the share of daten/projekt to aaron was not created: $(jq -c '.ocs.meta' "${WORK}/share.json" 2> /dev/null)"
 login aaron
+
+step "public link on a folder of an SMB mount"
+# share_type 3 (plan 43-25): a link is no mount and no storage, it must not
+# move any figure.
+curl -s -u "alice:$(password_of alice)" -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+  -d 'path=/daten/gemeinsam' -d 'shareType=3' -d 'permissions=1' \
+  "${NC_URL}/ocs/v2.php/apps/files_sharing/api/v1/shares" -o "${WORK}/link.json"
+jq -e '.ocs.meta.statuscode == 200 and .ocs.data.share_type == 3' "${WORK}/link.json" > /dev/null \
+  || fail "the public link on daten/gemeinsam was not created: $(jq -c '.ocs.meta' "${WORK}/link.json" 2> /dev/null)"
 nc_occ files:scan --all > /dev/null
 
-daten_alice=$(sid_like 'smb::alice@%//daten/%')
-daten_bob=$(sid_like 'smb::bob@%//daten/%')
-daten_carol=$(sid_like 'smb::carol@%//daten/%')
-archiv_carol=$(sid_like 'smb::carol@%//archiv/%')
+# Exact ids from here on (sid_is): the storages of bob on daten and on Daten
+# differ in spelling only.
+daten_alice=$(sid_is "smb::alice@${SMB_HOST}//daten//")
+daten_bob=$(sid_is "smb::bob@${SMB_HOST}//daten//")
+daten_carol=$(sid_is "smb::carol@${SMB_HOST}//daten//")
+archiv_carol=$(sid_is "smb::carol@${SMB_HOST}//archiv//")
 home_dave=$(sid_like 'home::dave')
 # Not 'local::%': the data directory itself is a local storage of its own
 # (local::<datadir>/) with the lowest id and no oc_mounts row (first dispatch,
@@ -1103,6 +1371,56 @@ done
 [ "${daten_alice}" != "${daten_bob}" ] || fail "alice and bob share one storage id, the group case tests nothing"
 mounts_of_carol_archiv=$(ncdb "SELECT COUNT(*) FROM oc_mounts WHERE storage_id = ${archiv_carol} AND user_id = 'carol';")
 note "carol mounts archiv ${mounts_of_carol_archiv} times (second mount point of the same share)"
+
+step "the storages of plan 43-25 exist as planned"
+# Written out ids: the sub root projekt (64 characters), the other spelling,
+# and homes once per user.
+for pair in "projekt_bob:$(sid_is "smb::bob@${SMB_HOST}//daten//projekt/")" \
+  "spelled_bob:$(sid_is "smb::bob@${SMB_HOST_UPPER}//Daten//")" \
+  "homes_alice:$(sid_is "smb::alice@${SMB_HOST}//homes//")" \
+  "homes_bob:$(sid_is "smb::bob@${SMB_HOST}//homes//")"; do
+  [ -n "${pair#*:}" ] || fail "harness finding: no storage row with a written out id for ${pair%%:*}"
+  mounted_sid "${pair#*:}" || fail "harness finding: ${pair%%:*} is not in oc_mounts"
+done
+# Hashed ids, one per mechanism (W4). Each id string has more than 64
+# characters, Nextcloud keeps its md5, the storage is mounted and holds the
+# two files of the sub root. The login is the account whose name stands in the
+# id: alice herself, bob from the configuration, dglobal and deigen from the
+# credentials store. A case that could not be built stops the run here, it is
+# never left out.
+hashed_sids=""
+for pair in "password::logincredentials:alice" "password::password:bob" \
+  "password::global:dglobal" "password::userprovided:deigen"; do
+  hashed_login="${pair##*:}"
+  hashed_text=$(hashed_id "${hashed_login}")
+  [ "${#hashed_text}" -gt 64 ] || fail "the id of the ${pair%:*} mount has ${#hashed_text} characters, Nextcloud would not hash it"
+  hashed_row=$(hashed_sid "${hashed_login}")
+  [ -n "${hashed_row}" ] \
+    || fail "harness finding: no storage row under the md5 of the ${pair%:*} id, the case could not be built without a browser"
+  mounted_sid "${hashed_row}" || fail "harness finding: the ${pair%:*} storage is not in oc_mounts"
+  hashed_files=$(ncdb "SELECT COUNT(*) FROM oc_filecache WHERE storage = ${hashed_row}
+                         AND path IN ('sicherheit-1.txt', 'sicherheit-2.txt');")
+  [ "${hashed_files}" = "2" ] \
+    || fail "harness finding: the ${pair%:*} storage holds ${hashed_files} of the 2 files of its sub root, its login does not work"
+  hashed_sids="${hashed_sids:+${hashed_sids},}${hashed_row}"
+done
+hashed_hex=$(ncdb "SELECT COUNT(*) FROM oc_storages WHERE numeric_id IN (${hashed_sids})
+                     AND length(id) = 32 AND id NOT GLOB '*[^0-9a-f]*';")
+rows+=("| setup | storages whose id is 32 hex, one per mechanism (W4) | 4 | ${hashed_hex} |")
+[ "${hashed_hex}" = "4" ] || fail "${hashed_hex} of the 4 storages on the sub root carry a 32 hex id, the hashed case tests nothing"
+# The case twins: two rows in the file cache of one storage.
+twin_rows=$(ncdb "SELECT COUNT(*) FROM oc_filecache WHERE storage = ${daten_alice}
+                    AND path IN ('gemeinsam/Bericht.txt', 'gemeinsam/bericht.txt');")
+rows+=("| setup | file cache rows of the two files that differ in case | 2 | ${twin_rows} |")
+if [ "${twin_rows}" != "2" ]; then
+  note "case twins: $(ncdb "SELECT COUNT(*) FROM oc_filecache WHERE storage = ${daten_alice} AND path LIKE 'gemeinsam/_ericht.txt';") rows match without regard to case"
+  fail "harness finding: the file cache holds ${twin_rows} rows for the two files that differ in case"
+fi
+homes_rows=$(ncdb "SELECT COUNT(*) FROM oc_filecache AS fc JOIN oc_mounts AS m ON m.storage_id = fc.storage
+                    WHERE fc.path = 'privat.txt' AND m.mount_point IN ('/alice/files/heim/', '/bob/files/heim/');")
+rows+=("| setup | privat.txt through the share homes, one per user | 2 | ${homes_rows} |")
+[ "${homes_rows}" = "2" ] || fail "harness finding: ${homes_rows} file cache rows of privat.txt behind the share homes instead of 2"
+note "mount log: $(wc -l < "${MOUNTS}") configurations"
 
 # ===================================================================================
 # 3. Indexing, with the reconcile switched off (job env)
@@ -1303,7 +1621,7 @@ for _ in $(seq 1 30); do
 done
 mounted_sid "${daten_carol}" && fail "the daten storage of carol stays in oc_mounts after the configuration was taken away"
 mounted_sid "${home_dave}" && fail "the home of the deleted dave stays in oc_mounts"
-[ -n "$(sid_like 'smb::carol@%//daten/%')" ] || fail "the daten storage of carol lost its oc_storages row, it would be gone and not stamped"
+[ -n "$(sid_is "smb::carol@${SMB_HOST}//daten//")" ] || fail "the daten storage of carol lost its oc_storages row, it would be gone and not stamped"
 [ -z "$(sid_like 'home::dave')" ] || fail "the home of the deleted dave keeps its oc_storages row"
 
 # ===================================================================================
@@ -1535,6 +1853,52 @@ fi
 rows+=("| B | search misses in the numerator truth | 0 | ${truth_misses} |")
 check "search misses in the numerator truth" 0 "${truth_misses}"
 
+step "search and rights are untouched by the counting (W5)"
+# The document key and the share identity serve the count only (plan 43-21).
+# Per user, through the unified search: each of the case twins is found under
+# its own name and not under the other one, a user finds the files of his sub
+# root, and a file behind the share homes is found by its owner and gives the
+# other user no entry at all.
+search_entries() {
+  # search_entries <user> <word> [title]: the number of entries of the Findling
+  # provider for the word, all of them or the ones with this title
+  curl -s -G -u "$1:$(password_of "$1")" \
+    -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+    --data-urlencode "term=$2" --data-urlencode "limit=25" \
+    "${NC_URL}/ocs/v2.php/search/providers/findling/search" -o "${WORK}/probe.json" || true
+  if [ -n "${3:-}" ]; then
+    jq -r --arg name "$3" '[.ocs.data.entries[]? | select(.title == $name)] | length' "${WORK}/probe.json" 2> /dev/null || echo unreadable
+  else
+    jq -r '.ocs.data.entries | if type == "array" then length else "no-list" end' "${WORK}/probe.json" 2> /dev/null || echo unreadable
+  fi
+}
+search_probe() {
+  # search_probe <label> <user> <word> <title or ''> <found|none>
+  local label="$1" entries seen
+  entries=$(search_entries "$2" "$3" "$4")
+  case "${entries}" in
+    0) seen=none ;;
+    '' | *[!0-9]*) seen="no answer (${entries})" ;;
+    *) seen=found ;;
+  esac
+  rows+=("| W5 | ${label} | $5 | ${seen} |")
+  check "search probe ${label}" "$5" "${seen}"
+}
+for uid in alice bob; do
+  search_probe "${uid} finds Bericht.txt by its word" "${uid}" "${word_twin_upper}" Bericht.txt found
+  search_probe "${uid} finds bericht.txt by its word" "${uid}" "${word_twin_lower}" bericht.txt found
+  search_probe "${uid}, the word of Bericht.txt gives no bericht.txt" "${uid}" "${word_twin_upper}" bericht.txt none
+  search_probe "${uid}, the word of bericht.txt gives no Bericht.txt" "${uid}" "${word_twin_lower}" Bericht.txt none
+done
+# carol has nothing of daten left but the two mounts on the sub root.
+search_probe "carol finds sicherheit-1.txt below her sub root" carol "${word_sicherheit_1}" sicherheit-1.txt found
+search_probe "alice finds sicherheit-2.txt below her sub root" alice "${word_sicherheit_2}" sicherheit-2.txt found
+search_probe "bob finds projekt-3.txt below his sub root" bob "${word_projekt_3}" projekt-3.txt found
+search_probe "alice finds her privat.txt behind homes" alice "${word_privat_alice}" privat.txt found
+search_probe "bob finds his privat.txt behind homes" bob "${word_privat_bob}" privat.txt found
+search_probe "bob gets no entry for the word of the privat.txt of alice" bob "${word_privat_alice}" '' none
+search_probe "alice gets no entry for the word of the privat.txt of bob" alice "${word_privat_bob}" '' none
+
 # ===================================================================================
 # 7. Upgrade variant: back to 1.6.2, then up again with a rename (W5, G1)
 # ===================================================================================
@@ -1586,8 +1950,15 @@ if [ "${VARIANT}" = "upgrade" ]; then
   step "rename under 1.6.2"
   code=$(dav alice MOVE notiz.txt /dev/null -H "Destination: ${NC_URL}/remote.php/dav/files/alice/notiz-umbenannt.txt")
   case "${code}" in 201 | 204) ;; *) fail "the rename of notiz.txt answered HTTP ${code}" ;; esac
-  old_key=$(printf '%s' 'files/notiz.txt' | sha256sum | cut -d' ' -f1)
-  new_key=$(printf '%s' 'files/notiz-umbenannt.txt' | sha256sum | cut -d' ' -f1)
+  # Key format 2 (plans 43-22, 43-24): sha256 over '2' NUL share NUL share
+  # path. A home storage has no share, so the share is empty and the share
+  # path is the internal path. Written out here from that definition (the
+  # derivations in backend/tests/fixtures/coverage_topology.json have the same
+  # form), not read from the product. The first update rebuilt every key in
+  # this format, 1.6.2 leaves the column alone, so the stale key under 1.6.2
+  # is the format 2 key of the old path.
+  old_key=$(printf '2\000%s\000%s' '' 'files/notiz.txt' | sha256sum | cut -d' ' -f1)
+  new_key=$(printf '2\000%s\000%s' '' 'files/notiz-umbenannt.txt' | sha256sum | cut -d' ' -f1)
   deadline=$(($(date +%s) + 300))
   while :; do
     renamed=$(statedb "SELECT COUNT(*) FROM files WHERE file_id = ${notiz} AND path LIKE '%notiz-umbenannt.txt';")
