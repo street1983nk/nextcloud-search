@@ -1558,7 +1558,10 @@ def scan_full_text_1_6_2(source: str, catalogue: dict[str, str]) -> list[str]:
     return violations
 
 
-FULL_TEXT_1_6_3 = "# Entwurf v1.6.3 (Gesamttext)"
+# Round 2 of the owner approval (11.11.2026, plan 43-12 task 3). The section of
+# round 1, "# Entwurf v1.6.3 (Gesamttext), abgenommen am 09.11.2026", stays in
+# the file as history and does not start with this opening, so it cannot pass.
+FULL_TEXT_1_6_3 = "# Entwurf v1.6.3 (Gesamttext, Runde 2)"
 # The English source sentences of the admin page accepted for 1.6.3: blocks H,
 # Z, U and L on 07.11.2026, V1 and V2 on 09.11.2026 (plan 43-12). Their German
 # values are looked up in the catalogue, never typed.
@@ -1588,13 +1591,148 @@ ACCEPTED_SENTENCES_1_6_3 = (
     ),
 )
 FULL_CHANGELOG_1_6_3 = "**Full Changelog**: https://github.com/street1983nk/nextcloud-search/compare/v1.6.2...v1.6.3"
+# The release note the owner accepted in round 2 (point C, variant a): five
+# points and the known limitation for %U and %S, without the optional sixth
+# point. These are the non-empty lines of the first code block of the section.
+RELEASE_NOTE_1_6_3 = (
+    "Findling 1.6.3. Update both apps; 1.6.x versions work together.",
+    (
+        "- The coverage figure counts every document once; share groups and storages that are no longer mounted "
+        "no longer inflate it (#25)"
+    ),
+    (
+        "- One share configured with different roots, or with the server or share name spelled in a different "
+        "case, counts once (#25)"
+    ),
+    "- The storage sweep removes documents of deleted or unmounted storages even on busy instances (#25)",
+    (
+        "- A note on the admin page explains the lower figures after the update; files that could not be read "
+        "are named with a remedy (#25)"
+    ),
+    "- Locked or refused files on SMB storage no longer block a PHP worker and count as not readable",
+    (
+        "Known limitation: a Samba share whose folder depends on the user on the server side (a path with %U or %S) "
+        "still counts as one tree for all users."
+    ),
+    FULL_CHANGELOG_1_6_3,
+)
+# The English CHANGELOG sentences of 1.6.3 the owner accepted in round 2
+# (points T1 to T5). Their German and French wordings are read from the section
+# and held against CHANGELOG.de.md and CHANGELOG.fr.md, never typed.
+ACCEPTED_CHANGELOG_SENTENCES_1_6_3 = (
+    (
+        "The coverage figure counts a document once also when one share is configured with different roots, "
+        "or with the server or share name spelled in a different case (#25). A Samba [homes] share is never "
+        "grouped across users, and SFTP storages are grouped per login only."
+    ),
+    (
+        "A Samba share whose folder depends on the user on the server side (a path with %U or %S) "
+        "still counts as one tree for all users."
+    ),
+    (
+        "Storages with an id longer than 64 characters that cannot be rebuilt from their configuration "
+        "(global or user provided credentials, a login name other than the user id) are counted per storage."
+    ),
+    (
+        "The one time catch-up cycle after an update no longer starts a round when the reconcile is switched off "
+        "at that very moment."
+    ),
+    (
+        "A passing database lock during the first index no longer ends the crawl of a storage; "
+        "the slice is tried again a few seconds later, up to five times in a row."
+    ),
+)
+CHANGELOG_FILES_1_6_3 = {"en": "CHANGELOG.md", "de": "CHANGELOG.de.md", "fr": "CHANGELOG.fr.md"}
+CHANGELOG_HEADING_1_6_3 = re.compile(r"^## \[1\.6\.3\] - \d{4}-\d{2}-\d{2}$", re.MULTILINE)
+# The limitation of round 1 that the fix of D-43-15 made untrue (lock G2).
+RETIRED_LIMITATION_1_6_3 = "different roots still count shared files twice"
 
 
-def scan_full_text_1_6_3(source: str, catalogue: dict[str, str]) -> list[str]:
-    """The full text 1.6.3 in docs/store-listing.md against php/l10n/de.json (plan 43-12).
+def squeeze(text: str) -> str:
+    """The text without any whitespace, so a sentence compares across line wraps."""
+    return "".join(text.split())
 
-    Same rules as scan_full_text_1_6_2, with the six accepted sentences of 1.6.3
-    and the Full Changelog line v1.6.2...v1.6.3.
+
+def _scan_release_note_1_6_3(section: str) -> list[str]:
+    """The first code block of the section against the release note accepted in round 2."""
+    blocks = section.split("```")
+    note = blocks[1] if len(blocks) >= 3 else ""
+    lines = tuple(line.strip() for line in note.splitlines() if line.strip())
+    if not lines or lines[-1] != FULL_CHANGELOG_1_6_3:
+        return [
+            f"docs/store-listing.md: the release note in {FULL_TEXT_1_6_3!r} does not end with {FULL_CHANGELOG_1_6_3!r}"
+        ]
+    if lines != RELEASE_NOTE_1_6_3:
+        return [
+            (
+                f"docs/store-listing.md: the release note in {FULL_TEXT_1_6_3!r} is not the note accepted "
+                f"in round 2, it has {list(lines)!r}"
+            )
+        ]
+    return []
+
+
+def _scan_changelog_sentences_1_6_3(section: str, changelogs: dict[str, str]) -> list[str]:
+    """The CHANGELOG sentences of the section against the section [1.6.3] of the three CHANGELOG files."""
+    violations: list[str] = []
+    released: dict[str, str] = {}
+    headings: set[str] = set()
+    for code, name in CHANGELOG_FILES_1_6_3.items():
+        text = changelogs.get(code, "")
+        match = CHANGELOG_HEADING_1_6_3.search(text)
+        if match is None:
+            violations.append(f"{name}: has no heading '## [1.6.3] - JJJJ-MM-TT'")
+            continue
+        headings.add(match.group(0))
+        released[code] = squeeze(text[match.start() :].split("\n## [", 1)[0])
+    if violations:
+        return violations
+    if len(headings) != 1:
+        violations.append(f"CHANGELOG: the three files date the section [1.6.3] differently, {sorted(headings)!r}")
+    if squeeze(RETIRED_LIMITATION_1_6_3) in released["en"]:
+        violations.append(f"CHANGELOG.md: the section [1.6.3] still carries {RETIRED_LIMITATION_1_6_3!r}")
+
+    lines = [line.strip() for line in section.splitlines()]
+    for english in ACCEPTED_CHANGELOG_SENTENCES_1_6_3:
+        opening = f"- en: {english}"
+        if opening not in lines:
+            violations.append(
+                f"docs/store-listing.md: the section {FULL_TEXT_1_6_3!r} does not carry the CHANGELOG sentence "
+                f"{english!r} as a line '- en: ...'"
+            )
+            continue
+        index = lines.index(opening)
+        wordings = {"en": english}
+        for step, code in enumerate(("de", "fr"), start=1):
+            line = lines[index + step] if index + step < len(lines) else ""
+            if line.startswith(f"- {code}: "):
+                wordings[code] = line.removeprefix(f"- {code}: ")
+            else:
+                violations.append(
+                    f"docs/store-listing.md: the CHANGELOG sentence {english!r} "
+                    f"is not followed by its line '- {code}: ...'"
+                )
+        violations.extend(
+            f"{CHANGELOG_FILES_1_6_3[code]}: the section [1.6.3] does not carry {wording!r} "
+            f"as docs/store-listing.md has it in {FULL_TEXT_1_6_3!r}"
+            for code, wording in wordings.items()
+            if squeeze(wording) not in released[code]
+        )
+    return violations
+
+
+def scan_full_text_1_6_3(source: str, catalogue: dict[str, str], changelogs: dict[str, str]) -> list[str]:
+    """The full text 1.6.3, round 2, in docs/store-listing.md (plan 43-12 task 3).
+
+    The section opens with the line that starts with FULL_TEXT_1_6_3 and reaches
+    up to the next heading of the first level. It carries an approval date and
+    every accepted sentence of the admin page in the German wording of
+    php/l10n/de.json, character for character. Its first code block is the
+    release note accepted in round 2, line for line. Every accepted CHANGELOG
+    sentence stands in it in English, German and French, and each wording stands
+    in the section [1.6.3] of its CHANGELOG file (changelogs maps en, de and fr
+    to the text of the file); the three files date that section alike, and the
+    retired limitation on roots is gone.
     """
     offset = 0
     heading = None
@@ -1625,13 +1763,8 @@ def scan_full_text_1_6_3(source: str, catalogue: dict[str, str]) -> list[str]:
                 f"character for character as php/l10n/de.json has it"
             )
 
-    blocks = section.split("```")
-    note = blocks[1] if len(blocks) >= 3 else ""
-    lines = [line.strip() for line in note.splitlines() if line.strip()]
-    if not lines or lines[-1] != FULL_CHANGELOG_1_6_3:
-        violations.append(
-            f"docs/store-listing.md: the release note in {FULL_TEXT_1_6_3!r} does not end with {FULL_CHANGELOG_1_6_3!r}"
-        )
+    violations.extend(_scan_release_note_1_6_3(section))
+    violations.extend(_scan_changelog_sentences_1_6_3(section, changelogs))
 
     return violations
 
@@ -3062,16 +3195,58 @@ def test_a_1_6_2_release_note_with_the_compare_link_of_1_6_0_is_reported() -> No
     assert "does not end with" in violations[0]
 
 
-# -- the full text 1.6.3 (plan 43-12) ----------------------------------------
+# -- the full text 1.6.3, round 2 (plan 43-12) -------------------------------
+def _changelogs_1_6_3() -> dict[str, str]:
+    """The three CHANGELOG files of the repository, language code to text."""
+    return {code: (REPO_ROOT / name).read_text(encoding="utf-8") for code, name in CHANGELOG_FILES_1_6_3.items()}
+
+
 def test_the_full_text_1_6_3_carries_its_date_the_accepted_sentences_and_the_release_note() -> None:
-    assert scan_full_text_1_6_3(STORE_LISTING.read_text(encoding="utf-8"), _german_catalogue()) == []
+    listing = STORE_LISTING.read_text(encoding="utf-8")
+
+    assert scan_full_text_1_6_3(listing, _german_catalogue(), _changelogs_1_6_3()) == []
 
 
 _FULL_TEXT_CATALOGUE_1_6_3 = {english: f"Deutsch {index}." for index, english in enumerate(ACCEPTED_SENTENCES_1_6_3)}
+_CHANGELOG_WORDINGS_1_6_3 = {
+    "en": ACCEPTED_CHANGELOG_SENTENCES_1_6_3,
+    "de": tuple(f"Satz {index} der Fassung." for index in range(len(ACCEPTED_CHANGELOG_SENTENCES_1_6_3))),
+    "fr": tuple(f"Phrase {index} de la version." for index in range(len(ACCEPTED_CHANGELOG_SENTENCES_1_6_3))),
+}
 
 
-def _full_text_sample_1_6_3(heading: str = f"{FULL_TEXT_1_6_3}, abgenommen am 09.11.2026") -> str:
-    """A store listing whose full text 1.6.3 carries every part the gate asks for."""
+def _changelog_sample_1_6_3() -> dict[str, str]:
+    """Three CHANGELOG files whose section [1.6.3] carries every wording of the sample listing."""
+    return {
+        code: "\n".join(
+            [
+                "# Changelog",
+                "",
+                "## [Unreleased]",
+                "",
+                "## [1.6.3] - 2026-11-12",
+                "",
+                "### Fixed",
+                "",
+                *(f"- {wording}" for wording in wordings),
+                "",
+                "## [1.6.2] - 2026-11-04",
+                "",
+                "- An older entry.",
+                "",
+            ]
+        )
+        for code, wordings in _CHANGELOG_WORDINGS_1_6_3.items()
+    }
+
+
+def _full_text_sample_1_6_3(heading: str = f"{FULL_TEXT_1_6_3}, abgenommen am 11.11.2026") -> str:
+    """A store listing whose full text 1.6.3, round 2, carries every part the gate asks for."""
+    triples = [
+        line
+        for index in range(len(ACCEPTED_CHANGELOG_SENTENCES_1_6_3))
+        for line in (*(f"- {code}: {_CHANGELOG_WORDINGS_1_6_3[code][index]}" for code in ("en", "de", "fr")), "")
+    ]
     return "\n".join(
         [
             "# Earlier section",
@@ -3081,11 +3256,14 @@ def _full_text_sample_1_6_3(heading: str = f"{FULL_TEXT_1_6_3}, abgenommen am 09
             *(f"- de: {german}" for german in _FULL_TEXT_CATALOGUE_1_6_3.values()),
             "",
             "```",
-            "Findling 1.6.3.",
+            *RELEASE_NOTE_1_6_3[:-2],
+            "",
+            RELEASE_NOTE_1_6_3[-2],
             "",
             FULL_CHANGELOG_1_6_3,
             "```",
             "",
+            *triples,
             "# Entwurf v1.6.3, Stand Plan 43-08 (08.11.2026)",
             "",
             "```",
@@ -3096,28 +3274,43 @@ def _full_text_sample_1_6_3(heading: str = f"{FULL_TEXT_1_6_3}, abgenommen am 09
     )
 
 
+def _scan_sample_1_6_3(
+    listing: str | None = None,
+    catalogue: dict[str, str] | None = None,
+    changelogs: dict[str, str] | None = None,
+) -> list[str]:
+    """The gate over the clean sample, with the one part a test replaces."""
+    return scan_full_text_1_6_3(
+        _full_text_sample_1_6_3() if listing is None else listing,
+        _FULL_TEXT_CATALOGUE_1_6_3 if catalogue is None else catalogue,
+        _changelog_sample_1_6_3() if changelogs is None else changelogs,
+    )
+
+
 def test_the_clean_full_text_1_6_3_sample_is_clean() -> None:
-    assert scan_full_text_1_6_3(_full_text_sample_1_6_3(), _FULL_TEXT_CATALOGUE_1_6_3) == []
+    assert _scan_sample_1_6_3() == []
 
 
 def test_a_store_listing_without_the_full_text_1_6_3_is_reported() -> None:
     listing = _full_text_sample_1_6_3().replace(FULL_TEXT_1_6_3, "# Gone", 1)
 
-    assert scan_full_text_1_6_3(listing, _FULL_TEXT_CATALOGUE_1_6_3) == [
-        f"docs/store-listing.md: has no section {FULL_TEXT_1_6_3!r}"
-    ]
+    assert _scan_sample_1_6_3(listing) == [f"docs/store-listing.md: has no section {FULL_TEXT_1_6_3!r}"]
 
 
 def test_the_draft_heading_of_plan_43_08_does_not_pass_as_the_full_text_1_6_3() -> None:
     listing = _full_text_sample_1_6_3("# Entwurf v1.6.3, Stand Plan 43-08 (08.11.2026)")
 
-    assert scan_full_text_1_6_3(listing, _FULL_TEXT_CATALOGUE_1_6_3) == [
-        f"docs/store-listing.md: has no section {FULL_TEXT_1_6_3!r}"
-    ]
+    assert _scan_sample_1_6_3(listing) == [f"docs/store-listing.md: has no section {FULL_TEXT_1_6_3!r}"]
+
+
+def test_the_heading_of_round_1_does_not_pass_as_the_full_text_1_6_3() -> None:
+    listing = _full_text_sample_1_6_3("# Entwurf v1.6.3 (Gesamttext), abgenommen am 09.11.2026")
+
+    assert _scan_sample_1_6_3(listing) == [f"docs/store-listing.md: has no section {FULL_TEXT_1_6_3!r}"]
 
 
 def test_a_full_text_1_6_3_without_an_approval_date_is_reported() -> None:
-    violations = scan_full_text_1_6_3(_full_text_sample_1_6_3(FULL_TEXT_1_6_3), _FULL_TEXT_CATALOGUE_1_6_3)
+    violations = _scan_sample_1_6_3(_full_text_sample_1_6_3(FULL_TEXT_1_6_3))
 
     assert len(violations) == 1
     assert "carries no approval date" in violations[0]
@@ -3125,7 +3318,7 @@ def test_a_full_text_1_6_3_without_an_approval_date_is_reported() -> None:
 
 def test_a_german_1_6_3_sentence_that_drifted_from_the_catalogue_is_reported() -> None:
     listing = _full_text_sample_1_6_3().replace("Deutsch 4.", "Deutsch vier.", 1)
-    violations = scan_full_text_1_6_3(listing, _FULL_TEXT_CATALOGUE_1_6_3)
+    violations = _scan_sample_1_6_3(listing)
 
     assert len(violations) == 1
     assert "'Deutsch 4.'" in violations[0]
@@ -3134,15 +3327,15 @@ def test_a_german_1_6_3_sentence_that_drifted_from_the_catalogue_is_reported() -
 def test_a_1_6_3_sentence_the_catalogue_lost_is_reported() -> None:
     catalogue = dict(_FULL_TEXT_CATALOGUE_1_6_3)
     del catalogue[ACCEPTED_SENTENCES_1_6_3[5]]
-    violations = scan_full_text_1_6_3(_full_text_sample_1_6_3(), catalogue)
+    violations = _scan_sample_1_6_3(catalogue=catalogue)
 
     assert len(violations) == 1
     assert violations[0].startswith("php/l10n/de.json: has no entry")
 
 
 def test_a_1_6_3_release_note_without_its_full_changelog_line_is_reported_even_when_a_later_section_has_it() -> None:
-    listing = _full_text_sample_1_6_3().replace(f"{FULL_CHANGELOG_1_6_3}\n```\n\n# Entwurf", "```\n\n# Entwurf", 1)
-    violations = scan_full_text_1_6_3(listing, _FULL_TEXT_CATALOGUE_1_6_3)
+    listing = _full_text_sample_1_6_3().replace(f"{FULL_CHANGELOG_1_6_3}\n```\n\n- en:", "```\n\n- en:", 1)
+    violations = _scan_sample_1_6_3(listing)
 
     assert len(violations) == 1
     assert "does not end with" in violations[0]
@@ -3150,7 +3343,139 @@ def test_a_1_6_3_release_note_without_its_full_changelog_line_is_reported_even_w
 
 def test_a_1_6_3_release_note_with_the_compare_link_of_1_6_2_is_reported() -> None:
     listing = _full_text_sample_1_6_3().replace(FULL_CHANGELOG_1_6_3, FULL_CHANGELOG_1_6_2, 1)
-    violations = scan_full_text_1_6_3(listing, _FULL_TEXT_CATALOGUE_1_6_3)
+    violations = _scan_sample_1_6_3(listing)
 
     assert len(violations) == 1
     assert "does not end with" in violations[0]
+
+
+def test_a_1_6_3_release_note_with_a_changed_point_is_reported() -> None:
+    listing = _full_text_sample_1_6_3().replace("case, counts once (#25)", "case, counts twice (#25)", 1)
+    violations = _scan_sample_1_6_3(listing)
+
+    assert len(violations) == 1
+    assert "is not the note accepted in round 2" in violations[0]
+
+
+def test_a_1_6_3_release_note_with_a_sixth_point_is_reported() -> None:
+    sixth = "- After the update the admin page says the coverage is being counted until the count is rebuilt"
+    listing = _full_text_sample_1_6_3().replace(
+        f"\n\n{RELEASE_NOTE_1_6_3[-2]}", f"\n{sixth}\n\n{RELEASE_NOTE_1_6_3[-2]}", 1
+    )
+    violations = _scan_sample_1_6_3(listing)
+
+    assert sixth in listing
+    assert len(violations) == 1
+    assert "is not the note accepted in round 2" in violations[0]
+
+
+def test_a_1_6_3_release_note_without_the_known_limitation_is_reported() -> None:
+    listing = _full_text_sample_1_6_3().replace(f"{RELEASE_NOTE_1_6_3[-2]}\n", "", 1)
+    violations = _scan_sample_1_6_3(listing)
+
+    assert len(violations) == 1
+    assert "is not the note accepted in round 2" in violations[0]
+
+
+def test_the_release_note_of_round_1_does_not_pass_as_the_note_of_round_2() -> None:
+    listing = _full_text_sample_1_6_3().replace(f"{RELEASE_NOTE_1_6_3[2]}\n", "", 1)
+    listing = listing.replace(f"{RELEASE_NOTE_1_6_3[-2]}\n\n", "", 1)
+    violations = _scan_sample_1_6_3(listing)
+
+    assert len(violations) == 1
+    assert "is not the note accepted in round 2" in violations[0]
+
+
+def test_a_full_text_1_6_3_without_an_accepted_changelog_sentence_is_reported() -> None:
+    english = ACCEPTED_CHANGELOG_SENTENCES_1_6_3[1]
+    listing = _full_text_sample_1_6_3().replace(f"- en: {english}", f"- en: {english} And more.", 1)
+    violations = _scan_sample_1_6_3(listing)
+
+    assert len(violations) == 1
+    assert violations[0].startswith("docs/store-listing.md")
+    assert "does not carry the CHANGELOG sentence" in violations[0]
+
+
+def test_a_changelog_sentence_without_its_german_line_is_reported() -> None:
+    listing = _full_text_sample_1_6_3().replace("- de: Satz 3 der Fassung.\n", "", 1)
+    violations = _scan_sample_1_6_3(listing)
+
+    assert len(violations) == 2
+    assert all("is not followed by its line" in violation for violation in violations)
+
+
+def test_a_german_changelog_wording_that_drifted_from_the_changelog_is_reported() -> None:
+    listing = _full_text_sample_1_6_3().replace("Satz 2 der Fassung.", "Satz zwei der Fassung.", 1)
+    violations = _scan_sample_1_6_3(listing)
+
+    assert len(violations) == 1
+    assert violations[0].startswith("CHANGELOG.de.md: the section [1.6.3] does not carry 'Satz zwei der Fassung.'")
+
+
+def test_a_french_changelog_sentence_that_changed_in_the_file_is_reported() -> None:
+    changelogs = _changelog_sample_1_6_3()
+    changelogs["fr"] = changelogs["fr"].replace("Phrase 0 de la version.", "Phrase 0 de la nouvelle version.", 1)
+    violations = _scan_sample_1_6_3(changelogs=changelogs)
+
+    assert len(violations) == 1
+    assert violations[0].startswith("CHANGELOG.fr.md: the section [1.6.3] does not carry 'Phrase 0 de la version.'")
+
+
+def test_an_english_changelog_sentence_that_changed_in_the_file_is_reported() -> None:
+    changelogs = _changelog_sample_1_6_3()
+    changelogs["en"] = changelogs["en"].replace("up to five times in a row", "up to three times in a row", 1)
+    violations = _scan_sample_1_6_3(changelogs=changelogs)
+
+    assert len(violations) == 1
+    assert violations[0].startswith("CHANGELOG.md: the section [1.6.3] does not carry")
+
+
+def test_a_changelog_sentence_wrapped_over_lines_still_counts() -> None:
+    changelogs = _changelog_sample_1_6_3()
+    changelogs["en"] = (
+        changelogs["en"]
+        .replace("a Samba [homes] share", "a Samba [homes]\n  share")
+        .replace("A Samba [homes] share", "A Samba [homes]\n  share")
+    )
+
+    assert "[homes]\n  share" in changelogs["en"]
+    assert _scan_sample_1_6_3(changelogs=changelogs) == []
+
+
+def test_a_changelog_sentence_that_stands_only_under_an_older_version_is_reported() -> None:
+    changelogs = _changelog_sample_1_6_3()
+    moved = f"- {ACCEPTED_CHANGELOG_SENTENCES_1_6_3[3]}\n"
+    changelogs["en"] = (
+        changelogs["en"].replace(moved, "", 1).replace("- An older entry.\n", f"- An older entry.\n{moved}")
+    )
+    violations = _scan_sample_1_6_3(changelogs=changelogs)
+
+    assert ACCEPTED_CHANGELOG_SENTENCES_1_6_3[3] in changelogs["en"]
+    assert len(violations) == 1
+    assert violations[0].startswith("CHANGELOG.md: the section [1.6.3] does not carry")
+
+
+def test_a_changelog_without_the_heading_1_6_3_is_reported() -> None:
+    changelogs = _changelog_sample_1_6_3()
+    changelogs["de"] = changelogs["de"].replace("## [1.6.3] - 2026-11-12", "## [Unreleased]", 1)
+
+    assert _scan_sample_1_6_3(changelogs=changelogs) == ["CHANGELOG.de.md: has no heading '## [1.6.3] - JJJJ-MM-TT'"]
+
+
+def test_changelogs_that_date_the_section_1_6_3_differently_are_reported() -> None:
+    changelogs = _changelog_sample_1_6_3()
+    changelogs["fr"] = changelogs["fr"].replace("## [1.6.3] - 2026-11-12", "## [1.6.3] - 2026-11-08", 1)
+    violations = _scan_sample_1_6_3(changelogs=changelogs)
+
+    assert len(violations) == 1
+    assert "date the section [1.6.3] differently" in violations[0]
+
+
+def test_the_retired_limitation_on_roots_in_the_changelog_is_reported() -> None:
+    changelogs = _changelog_sample_1_6_3()
+    retired = f"- Two configurations of the same share with {RETIRED_LIMITATION_1_6_3}.\n"
+    changelogs["en"] = changelogs["en"].replace("\n## [1.6.2]", f"{retired}\n## [1.6.2]", 1)
+    violations = _scan_sample_1_6_3(changelogs=changelogs)
+
+    assert len(violations) == 1
+    assert "still carries" in violations[0]
