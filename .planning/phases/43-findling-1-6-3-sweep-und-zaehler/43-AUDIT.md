@@ -1,7 +1,20 @@
 ---
 phase: 43-findling-1-6-3-sweep-und-zaehler
 audited: 2026-11-08
-audited_head: 37b518d6754a4a8a8593dc537a13b27644caf986
+audited_head: 2dacf753fdaacca0c0e6341fc816006bc4d42001
+audited_head_43_09: 37b518d6754a4a8a8593dc537a13b27644caf986
+diff_43_27: 37b518d6..2dacf753
+findings_43_27: 12
+low_fixed_43_27: 4
+low_accepted_43_27: 1
+info_43_27: 7
+critical_open_43_27: 0
+high_open_43_27: 0
+medium_open_43_27: 0
+e2e_run_43_27: 43094681914
+status_43_27: passed
+recommendation_43_27: 1.6.3 mit den vier LOW-Fixes (F-43B-01 bis -03 und F-43B-05), F-43B-04 akzeptiert
+d_43_15: behoben
 audited_head_before_fix: d9f8a65d364d6b1bd65b7599da388d04dc746439
 diff: v1.6.2..d9f8a65d
 fix_delta: d9f8a65d..37b518d6
@@ -358,6 +371,17 @@ Security scans, Multi-arch, Scorecard; PHP lief pfadbedingt nicht, Beleg bleibt
 42513966089 auf unveraendertem php/). Dispatch "Coverage end to end"
 42525415627: alle fuenf Beine gruen. Der MEDIUM-Fix F-43A-01 ist damit auch
 end to end belegt.
+
+Nachtrag 43-27 (11.11.2026), audited_head 2dacf753: Push genau bis 2dacf753,
+alle acht Workflows auf diesem Commit grün (Python gates 43090328318, PHP and
+store metadata gates 43090328230, Security scans 43090328404, Integration
+43090328401, Resilience 43090328283, HaRP deploy 43090328202, Multi-arch image
+43090328467, OpenSSF Scorecard 43090328481). Dispatch "Coverage end to end"
+43094681914 auf aabc17cc (nur Planungs-Commits hinter 2dacf753): success, alle
+sieben Beine grün, sechs davon im zweiten Versuch nach einem Ausfall von
+GitHub Actions beim Hochladen der Artefakte; Einzelheiten in
+43-E2E-WURZEL.md, "Grüner Lauf auf dem Kopf mit Fix 2". Der Lauf davor,
+43079756645 auf 57271f63, war in einem Bein rot und führte zu F-43B-05.
 
 ## Fix-Delta nach dem Audit (09.11.2026)
 

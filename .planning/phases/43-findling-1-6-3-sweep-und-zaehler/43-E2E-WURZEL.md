@@ -337,3 +337,15 @@ Der Lauf 43079756645 auf dem Kopf 57271f63 (Code gleich 9bf7dddf, Owner-Freigabe
 - Die Fix-Runde ist nicht der Auslöser: ihr Diff berührt weder QueueMapper noch QueueService noch StorageCrawlJob, und im grünen Lauf 43016026129 kommt die Sperre im selben Bein nicht vor.
 - Owner-Entscheid 11.11.2026 ("A"): Produkt-Fix statt bloßer Wiederholung. RED ae44f61d, GREEN 2dacf753 (F-43B-05 in 43-AUDIT.md): ein Datenbankfehler in einem Abschnitt plant einen Nachfolger mit dem letzten committeten Cursor ein, höchstens fünfmal in Folge ohne Fortschritt.
 - Offen: Push bis 2dacf753 und EIN neuer Lauf brauchen neue Zeilen in 43-FREIGABEN.md. Erst ein grüner Lauf auf diesem Kopf liefert das Paar aus Lauf-ID und Kopf-SHA für diesen Nachtrag.
+
+### Grüner Lauf auf dem Kopf mit Fix 2 (11.11.2026)
+
+Lauf-ID-Fix: 43094681914
+Kopf-SHA-Fix: aabc17cc1f311c21d5daa329c2a7b8af547e917f
+
+Der Kopf des Laufs trägt nur Planungs-Commits hinter 2dacf753fdaacca0c0e6341fc816006bc4d42001 (letzter Commit außerhalb von .planning, Fix 2), der Code ist gleich. Owner-Freigaben: "Freigabe Dispatch 43-27 Fix 2" und "Freigabe Dispatch 43-27 Fix 2 Wiederholung" in 43-FREIGABEN.md.
+
+- Erster Versuch (20:14 UTC): alle sieben Beine maßen failures=0, sechs scheiterten erst im Schritt "Upload the result table and the backend log" mit "Failed to CreateArtifact" während eines Ausfalls von GitHub Actions (githubstatus.com, Incident ab 20:48 UTC); upgrade / native lud hoch und war grün.
+- Zweiter Versuch der sechs Jobs (21:10 UTC, `gh run rerun --failed`): alle grün. Der Lauf endet success mit sieben grünen Jobs.
+- Werte in den sechs neu gelaufenen Beinen: failures=0, 85 von 95 lebenden Zeilen indexiert, W5 15 von 15; in den fünf Beinen mit 1.6.3-Zählung hashedVerified 3, hashedUngrouped 2, k = 4. Keine Zeile "coverage count without a vector stock", kein abweichender Vergleich.
+- "database is locked": im zweiten Versuch 0 Zeilen. Im ersten Versuch eine Zeile, im Bein v1.6.2 / native, also im Code von 1.6.2 ohne Fix 2 (StorageCrawlJob, addBand, storage_id 7). In den Beinen mit Fix 2 trat die Sperre nicht auf; der Wiederholungsweg ist in diesem Lauf also nicht ausgelöst worden, er ist durch die fünf PHPUnit-Fälle belegt, nicht end to end.
