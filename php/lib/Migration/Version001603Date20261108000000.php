@@ -5,9 +5,6 @@ declare(strict_types=1);
 namespace OCA\Findling\Migration;
 
 use Closure;
-use OCA\Findling\AppInfo\Application;
-use OCA\Findling\Service\ScanStatsService;
-use OCA\Findling\Service\SettingsService;
 use OCP\IAppConfig;
 use OCP\IDBConnection;
 use OCP\Migration\IOutput;
@@ -19,7 +16,7 @@ use OCP\Migration\SimpleMigrationStep;
  *
  * Since 1.6.3 the coverage figure counts every document once, so on an
  * instance with external storage mounted once per user the figures go down
- * after the update. This step sets SettingsService::KEY_COVERAGE_PER_DOCUMENT_HINT
+ * after the update. This step sets the key coverage_per_document_hint
  * to pending on an instance that counted before, and the admin page explains
  * the drop once and lets the hint run out seven days after the first complete
  * count.
@@ -32,6 +29,15 @@ use OCP\Migration\SimpleMigrationStep;
  * the same as no row: nothing is set and one warning without a value goes to
  * the output, because a hint is never worth a broken update (T-43-17).
  *
+ * This file names no class of the app, on purpose (issue #51). An update runs
+ * in the process that already loaded the classes of the OLD version, and the
+ * autoloader never loads a class twice: a constant that came with this very
+ * release is undefined there, and occ app:update died on it in 1.6.3. So the
+ * app id, the key, its pending value and the table stand here as literals, and
+ * Version001603Date20261108000000Test holds each of them against the constant
+ * of the service it mirrors. MigrationSelfContainedTest keeps every later
+ * migration to the same rule.
+ *
  * Only a read and one appconfig value, no schema step, nothing asked of the
  * container. Guarded so a second run is a no-op: a key that is already set
  * (pending or stamped) stays as it is.
@@ -42,6 +48,18 @@ use OCP\Migration\SimpleMigrationStep;
  * error anywhere.
  */
 class Version001603Date20261108000000 extends SimpleMigrationStep {
+	/** Application::APP_ID, as a literal (see the class comment). */
+	public const APP_ID = 'findling';
+
+	/** SettingsService::KEY_COVERAGE_PER_DOCUMENT_HINT, as a literal. */
+	public const HINT_KEY = 'coverage_per_document_hint';
+
+	/** SettingsService::COVERAGE_HINT_PENDING, as a literal. */
+	public const HINT_PENDING = 1;
+
+	/** ScanStatsService::TABLE_NAME, as a literal. */
+	public const SCAN_STATS_TABLE = 'findling_scan_stats';
+
 	public function __construct(
 		private IDBConnection $db,
 		private IAppConfig $appConfig,
@@ -52,7 +70,7 @@ class Version001603Date20261108000000 extends SimpleMigrationStep {
 	 * After the schema, because this touches data and no table.
 	 */
 	public function postSchemaChange(IOutput $output, Closure $schemaClosure, array $options): void {
-		if ($this->appConfig->getValueInt(Application::APP_ID, SettingsService::KEY_COVERAGE_PER_DOCUMENT_HINT, 0) !== 0) {
+		if ($this->appConfig->getValueInt(self::APP_ID, self::HINT_KEY, 0) !== 0) {
 			$output->info('the per document hint is already set');
 
 			return;
@@ -73,9 +91,9 @@ class Version001603Date20261108000000 extends SimpleMigrationStep {
 		}
 
 		$this->appConfig->setValueInt(
-			Application::APP_ID,
-			SettingsService::KEY_COVERAGE_PER_DOCUMENT_HINT,
-			SettingsService::COVERAGE_HINT_PENDING,
+			self::APP_ID,
+			self::HINT_KEY,
+			self::HINT_PENDING,
 		);
 		$output->info('the per document hint is pending until the first complete count');
 	}
@@ -84,7 +102,7 @@ class Version001603Date20261108000000 extends SimpleMigrationStep {
 	private function hasScanRow(): bool {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('storage_id')
-			->from(ScanStatsService::TABLE_NAME)
+			->from(self::SCAN_STATS_TABLE)
 			->setMaxResults(1);
 
 		$result = $qb->executeQuery();

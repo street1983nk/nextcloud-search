@@ -6,6 +6,8 @@ namespace OCA\Findling\Tests\Unit;
 
 use Closure;
 use OCA\Findling\Migration\Version001603Date20261108000000;
+use OCA\Findling\AppInfo\Application;
+use OCA\Findling\Service\ScanStatsService;
 use OCA\Findling\Service\SettingsService;
 use OCP\DB\IResult;
 use OCP\DB\QueryBuilder\IQueryBuilder;
@@ -125,6 +127,19 @@ final class Version001603Date20261108000000Test extends TestCase {
 		$migration->postSchemaChange($output, $this->schemaClosure(), []);
 
 		self::assertArrayNotHasKey(SettingsService::KEY_COVERAGE_PER_DOCUMENT_HINT, $this->values);
+	}
+
+	/**
+	 * Issue #51: the migration names no class of the app, because an update
+	 * runs with the classes of the old version loaded. The literals it carries
+	 * instead are held against the constants here, where the new classes are
+	 * the loaded ones.
+	 */
+	public function testTheLiteralsMirrorTheConstantsOfTheApp(): void {
+		self::assertSame(Application::APP_ID, Version001603Date20261108000000::APP_ID);
+		self::assertSame(SettingsService::KEY_COVERAGE_PER_DOCUMENT_HINT, Version001603Date20261108000000::HINT_KEY);
+		self::assertSame(SettingsService::COVERAGE_HINT_PENDING, Version001603Date20261108000000::HINT_PENDING);
+		self::assertSame(ScanStatsService::TABLE_NAME, Version001603Date20261108000000::SCAN_STATS_TABLE);
 	}
 
 	public function testTheMigrationHasNoSchemaStep(): void {

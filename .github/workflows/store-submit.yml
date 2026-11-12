@@ -50,6 +50,9 @@ on:
 
 permissions:
   contents: read
+  # Read only, for the step "The update gate of the tag is green": it reads the
+  # runs of php.yml on the tag and nothing else.
+  actions: read
 
 concurrency:
   group: store-submit
@@ -132,6 +135,35 @@ jobs:
             200|201) echo "the direct release is in the store" ;;
             *) echo "the direct submission failed"; exit 1 ;;
           esac
+
+      # Issue 51: 1.6.3 reached the store with a migration that broke the update
+      # of every instance, and nothing in this file could have known. The gates
+      # of the tag were read by hand before the dispatch, and the gate that
+      # would have seen it did not exist. Now it exists (job "Store update in
+      # one process (issue 51)" of php.yml, the update the store performs, in
+      # one PHP process), and this step refuses to submit unless the run of
+      # php.yml on this very tag is green and that job is green in it. A tag
+      # without such a run is refused as well: no gate is not a green gate.
+      - name: The update gate of the tag is green
+        if: inputs.direct_download == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          GATE_JOB: 'Store update in one process (issue 51)'
+        run: |
+          set -euo pipefail
+          case "${TAG}" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "the tag '${TAG}' is not a release tag"; exit 1 ;;
+          esac
+          sha=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${TAG}" --jq .sha)
+          run_id=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/php.yml/runs?head_sha=${sha}&event=push&per_page=50"                      --jq "[.workflow_runs[] | select(.head_branch == \"${TAG}\")] | sort_by(.run_number) | last | .id // empty")
+          test -n "${run_id}" || { echo "php.yml has no run on the tag ${TAG} (${sha}), so the update gate did not run"; exit 1; }
+          conclusion=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.conclusion // "pending"')
+          job=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100"                   --jq "[.jobs[] | select(.name == \"${GATE_JOB}\")] | last | .conclusion // \"missing\"")
+          echo "php.yml run ${run_id} on ${TAG}: ${conclusion}; job '${GATE_JOB}': ${job}"
+          test "${conclusion}" = "success" || { echo "the gates of ${TAG} are not green, nothing is submitted"; exit 1; }
+          test "${job}" = "success" || { echo "the update gate of ${TAG} is not green, nothing is submitted"; exit 1; }
 
       - name: Submit both releases
         if: inputs.direct_download == ''

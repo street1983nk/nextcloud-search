@@ -29,6 +29,8 @@ on:
       - '.github/workflows/php.yml'
       - '.github/workflows/release.yml'
       - 'scripts/dev/validate_info_xml.sh'
+      - 'scripts/ci/update_in_process_proof.sh'
+      - 'scripts/ci/update_in_process_driver.php'
   pull_request:
     paths:
       - 'php/**'
@@ -36,6 +38,8 @@ on:
       - '.github/workflows/php.yml'
       - '.github/workflows/release.yml'
       - 'scripts/dev/validate_info_xml.sh'
+      - 'scripts/ci/update_in_process_proof.sh'
+      - 'scripts/ci/update_in_process_driver.php'
   # Weekly, for the composer-hygiene job below (plan 42-03). The path filter
   # above means that job only runs when something under php/ changes, and a new
   # advisory against an unchanged composer.lock would otherwise surface at the
@@ -454,3 +458,38 @@ jobs:
             exit(0);
           '
           rm -f junit.xml
+
+  update-in-process:
+    name: Store update in one process (issue 51)
+    runs-on: ubuntu-24.04
+    # Measured locally on 12.11.2026: three throwaway instances, a little under
+    # four minutes with the image already pulled. Fifteen minutes is the
+    # deadline for the same reason the jobs above have one.
+    timeout-minutes: 15
+
+    # What this job is for, in one paragraph, because the next reader will ask
+    # why the phpunit job and the upgrade proofs of deploy-harp.yml are not
+    # enough. occ app:update and the update button of the apps page load the
+    # installed app, replace its files and run the new migrations in ONE PHP
+    # process, with the classes of the old release loaded. 1.6.3 shipped a
+    # migration that read a constant new in 1.6.3, and every update from the
+    # store died with "Undefined constant" (issue 51). The phpunit job runs with
+    # the new classes and the upgrade proofs run occ upgrade, a fresh process,
+    # so neither could see it. This job runs the path of the store, and it
+    # sits in this workflow on purpose: this workflow runs on every release
+    # tag, and store-submit.yml refuses to submit a tag whose run of this
+    # workflow, and this job in it, is not green. The name of the job is read
+    # there, so it has to stay as it is.
+    #
+    # The script carries its own positive control: the released 1.6.2 updated to
+    # the released 1.6.3 has to fail with exactly that message, or the run is
+    # red, because a harness that cannot see the bug vouches for nothing.
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The releases the candidate is updated from are named in the script
+      # (FROM_TAGS), next to the control pair, so that the local run and this
+      # job cannot drift apart.
+      - name: Update the released companion to this checkout, in one process
+        run: bash scripts/ci/update_in_process_proof.sh

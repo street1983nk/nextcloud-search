@@ -66,6 +66,10 @@ PATHS_BEFORE: dict[str, list[str]] = {
         ".github/workflows/php.yml",
         ".github/workflows/release.yml",
         "scripts/dev/validate_info_xml.sh",
+        # Added with the job "Store update in one process (issue 51)": the two
+        # files are that job, so a change to either has to run it.
+        "scripts/ci/update_in_process_proof.sh",
+        "scripts/ci/update_in_process_driver.php",
     ],
     "python.yml": [
         "backend/**",

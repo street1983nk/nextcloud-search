@@ -1299,8 +1299,8 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # crawl of the mount, and tests/Unit/StorageCrawlJobTest.php follows. No file came or went, so
 # PHP_FILES_TODAY stays at 129. The recipe over git archive of 9bf7dddf, the last commit before the
 # step, gave ea247ffd (positive control).
-PHP_FILES_TODAY = 129
-PHP_TREE_HASH_TODAY = "78dc4e850b304207a9566f7a13a2ffcd25058e258680f53f072e11b33ad8e1ff"
+PHP_FILES_TODAY = 130
+PHP_TREE_HASH_TODAY = "3577bd320b901cb68fced37bcc004893da66cf85cd35dbbce5a037d21061e5ce"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
