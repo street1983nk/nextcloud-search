@@ -3209,6 +3209,76 @@ Full changelog: https://github.com/street1983nk/nextcloud-search/compare/v1.6.3.
 
 Tag-Links `blob/v1.6.4` und der Compare-Link lösen erst nach dem Tag auf.
 
+# Release 1.6.4 (12.11.2026)
+
+Update-Fix zu Issue #51, Store-Text unverändert. Changelog-Wortlaut und
+Release-Notiz sind die am 12.11.2026 abgenommene Fassung oben ("Entwurf
+v1.6.4"). Owner-Worte vom 12.11.2026 in der Claude-Code-Sitzung, je auf die
+einzelne Frage: Fix "Das hat Priorität, bitte fixen", Antwort in #51 und
+Changelog-Wortlaut "Ja bitte", Push des Branches und Release-Notiz "Go",
+Merge "Ok", Tag "Ok", Store-Einreichung "Ja bitte". Tag-Push und Einreichung
+hat Claude im Auftrag des Owners ausgeführt.
+
+Belegkette:
+
+1. Ursache am Code und live belegt: die Migration
+   `Version001603Date20261108000000` las zwei Konstanten aus
+   `SettingsService`, die erst mit 1.6.3 kamen; `occ app:update` führt die
+   Migration im Prozess aus, der die Klassen von 1.6.2 schon geladen hat.
+   `scripts/ci/update_in_process_proof.sh` stellt das nach: 1.6.2 auf das
+   veröffentlichte 1.6.3 scheitert mit "Undefined constant ...
+   KEY_COVERAGE_PER_DOCUMENT_HINT in Version001603Date20261108000000.php:55".
+2. Ausweg für Betroffene, auf Nextcloud 33.0.10 gemessen: `occ upgrade`, oder
+   `occ app:disable findling` und `occ app:enable findling`; danach 14
+   Migrationen, 1.6.3, `needsDbUpgrade: false`.
+3. `git rev-list -n 1 v1.6.4` = `01db26004e73e431a285cb250269f14702ad47da`,
+   `git cat-file -t v1.6.4` = tag (annotiert), Tag-Objekt 4ea86cfa, Nachricht
+   "Findling 1.6.4", Tagger street1983nk. Der Tag-Kopf ist der Kopf des
+   Hauptzweigs, auf dem alle acht Läufe grün waren (PHP gates 43204748950,
+   Python 43204748934, Integration 43204749034, Resilience 43204749284, HaRP
+   deploy 43204748969, Multi-arch 43204748974, Security scans 43204749032,
+   Scorecard 43204748947).
+4. Tag-Läufe auf 01db2600, alle sieben success: Release (`release.yml`)
+   43210900898, PHP and store metadata gates 43210900922, Python gates
+   43210900695, Integration 43210900622, Resilience 43210900589, Multi-arch
+   image 43210900606, HaRP deploy 43210900560.
+5. Aus dem Log des PHP-Laufs 43199620716 (derselbe Commit, Branch-Lauf), Job
+   "Store update in one process (issue 51)":
+   - `control ok: the failure of v1.6.3 is reproduced`
+   - `UPDATE-PROOF ok findling 1.6.2 -> 1.6.4, migrations applied in this run: 001603Date20261108000000`
+   - `UPDATE-PROOF ok findling 1.6.3 -> 1.6.4, migrations applied in this run: none`
+   Derselbe Job ist im Tag-Lauf 43210900922 success.
+6. Aus dem Log des Release-Laufs 43210900898: zweimal `Verified OK`,
+   `dist/findling.tar.gz is 708313 bytes, the store limit is 20971520`;
+   findling_backend.tar.gz hat 49881 Bytes.
+7. `gh release view v1.6.4`: `isImmutable` true, veröffentlicht
+   2026-11-12T11:39:26Z, neun Assets: findling.tar.gz 708313,
+   findling.tar.gz.sig 684, findling_backend.tar.gz 49881,
+   findling_backend.tar.gz.sig 684, findling-1.6.4-source.tar.gz 27288182,
+   pillow_heif-1.8.1.tar.gz 17395786, x265_4.3.tar.gz 2052112,
+   libde265-1.1.3.tar.gz 324452, libheif-1.23.6.tar.gz 2373898. Release-Notiz
+   mit `gh release edit v1.6.4 --notes-file` gesetzt und gegen den Entwurf
+   verglichen.
+8. Image `ghcr.io/street1983nk/findling_backend:1.6.4`: Index mit linux/amd64
+   und linux/arm64, geprüft vor der Einreichung.
+9. Tag-Links: `blob/v1.6.4/docs/migrate-from-fulltextsearch.md`, `.en.md` und
+   `.fr.md` liefern HTTP 200.
+10. Eingereicht über `store-submit.yml` (`-f tag=v1.6.4`), ein Lauf,
+    43215774533, success. Der neue Schritt "The update gate of the tag is
+    green" lief dabei zum ersten Mal: `php.yml run 43210900922 on v1.6.4:
+    success; job 'Store update in one process (issue 51)': success`.
+    Antwortcodes aus dem Log:
+    - release findling v1.6.4: HTTP 201, 12:12:32Z
+    - release findling_backend v1.6.4: HTTP 201, 12:12:33Z
+11. Gegenprobe Store-API 2026-11-12T12:16Z: `api/v1/appapi_apps.json` id
+    `findling_backend` führt 1.6.4; `api/v1/apps.json` id `findling` führte
+    zu diesem Zeitpunkt noch 1.6.3 (Zwischenspeicher der Liste, wie bei
+    1.6.3). Der Owner hat 1.6.4 im Store selbst gesehen (12.11.2026).
+
+Nicht geprüft: die Fremdinstallation aus den Release-Assets als eigener
+Dispatch von `deploy-harp.yml` mit `release_tag=v1.6.4`; der HaRP-Lauf auf
+dem Tag (43210900560) ist grün.
+
 # Release 1.6.3 (12.11.2026)
 
 Store-Text und Release-Notiz sind die am 11.11.2026 abgenommene Fassung oben
