@@ -1,0 +1,109 @@
+name: Store release removal
+
+# Removes ONE release of ONE app from the Nextcloud app store. Dispatch only,
+# and it exists for one situation: a release that must not be installed any
+# more. The first use is the companion 1.6.3, whose update from the store
+# failed with "Undefined constant" (issue 51); 1.6.4 replaced it, and the
+# broken archive should not stay downloadable from the store page.
+#
+# What it does not do: it does not touch the GitHub release, the tag or the
+# image, and it does not remove an app. An instance that already runs the
+# removed version keeps running it; the store simply stops offering it.
+#
+# The removal cannot be undone from here. A removed version can only come
+# back by submitting it again with store-submit.yml, which the store accepts
+# for an unchanged archive. So the dispatch asks for the version twice: once
+# as the input and once as the confirmation, and the two have to be equal.
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: 'App id in the store'
+        required: true
+        type: choice
+        options:
+          - findling
+          - findling_backend
+      version:
+        description: 'Version to remove from the store, for example 1.6.3'
+        required: true
+        type: string
+      confirm:
+        description: 'The same version again, as the confirmation'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# The same group as store-submit.yml: a submission and a removal never run at
+# the same time.
+concurrency:
+  group: store-submit
+  cancel-in-progress: false
+
+jobs:
+  remove:
+    name: Remove one release from the store
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # The checkout is not read by any step below; it exists because every
+      # workflow of this repository carries at least one pinned uses line and
+      # the pin gate (backend/tests/test_workflow_pins.py) holds that shape.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Refuse to run outside this repository
+        run: |
+          if [ "${GITHUB_REPOSITORY}" != "street1983nk/nextcloud-search" ]; then
+            echo "this workflow uses the store token of street1983nk/nextcloud-search and must not run elsewhere"
+            exit 1
+          fi
+
+      # The inputs reach the script as environment variables and never as
+      # interpolated text, and their shape is checked before anything is sent.
+      # The newest release of the app is refused: removing it would leave the
+      # store offering an older version as the update, which is never what a
+      # removal is for.
+      - name: Remove the release
+        env:
+          APPSTORE_TOKEN: ${{ secrets.APPSTORE_TOKEN }}
+          APP: ${{ inputs.app }}
+          VERSION: ${{ inputs.version }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          set -euo pipefail
+          case "${APP}" in
+            findling) list='apps.json' ;;
+            findling_backend) list='appapi_apps.json' ;;
+            *) echo "unknown app id '${APP}'"; exit 1 ;;
+          esac
+          if ! printf '%s' "${VERSION}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "'${VERSION}' is not a version of the form 1.2.3"; exit 1
+          fi
+          test "${VERSION}" = "${CONFIRM}" || { echo "the confirmation '${CONFIRM}' is not the version '${VERSION}'"; exit 1; }
+          test -n "${APPSTORE_TOKEN}" || { echo "APPSTORE_TOKEN is empty; the secret is missing"; exit 1; }
+
+          versions=$(curl -sfL "https://apps.nextcloud.com/api/v1/${list}" \
+                       | jq -r --arg id "${APP}" '.[] | select(.id == $id) | .releases[].version')
+          test -n "${versions}" || { echo "the store lists no release of ${APP}"; exit 1; }
+          newest=$(printf '%s\n' "${versions}" | sort -V | tail -1)
+          echo "the store lists ${APP} with the newest release ${newest}"
+          if [ "${VERSION}" = "${newest}" ]; then
+            echo "${VERSION} is the newest release of ${APP}; removing it would make the store offer an older one"; exit 1
+          fi
+          if ! printf '%s\n' "${versions}" | grep -qxF -- "${VERSION}"; then
+            echo "note: the list of the store does not name ${APP} ${VERSION} (the list can lag by some minutes); the removal is sent anyway and the answer decides"
+          fi
+
+          code=$(curl -s -o "${RUNNER_TEMP}/remove.json" -w '%{http_code}' \
+                   -X DELETE "https://apps.nextcloud.com/api/v1/apps/${APP}/releases/${VERSION}" \
+                   -H "Authorization: Token ${APPSTORE_TOKEN}")
+          echo "remove ${APP} ${VERSION}: HTTP ${code}"
+          cat "${RUNNER_TEMP}/remove.json" 2>/dev/null || true; echo
+          case "${code}" in
+            204) echo "${APP} ${VERSION} is removed from the store" ;;
+            404) echo "${APP} ${VERSION} is not in the store (already removed, or never there)"; exit 1 ;;
+            *) echo "${APP} ${VERSION}: unexpected answer, nothing is assumed about the state of the store"; exit 1 ;;
+          esac
