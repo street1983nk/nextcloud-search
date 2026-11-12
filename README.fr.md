@@ -94,6 +94,10 @@ différentes, la recherche répond par rien plutôt que par des résultats
 potentiellement faux, et la page d'administration affiche les deux numéros de
 version.
 
+Si la file d'attente n'avance pas après le clic sur « Deploy and enable » et
+que `occ app_api:app:list` affiche le backend comme `disabled`,
+`occ app_api:app:enable findling_backend` l'active.
+
 ## Architecture
 
 Findling se compose de deux applications sous une même version :

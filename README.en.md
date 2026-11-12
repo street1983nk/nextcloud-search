@@ -85,6 +85,10 @@ If the two apps run in different major or minor versions, the search answers
 with nothing instead of possibly wrong results, and the admin page names both
 version numbers.
 
+If the queue does not move after the click on "Deploy and enable" and
+`occ app_api:app:list` shows the backend as `disabled`,
+`occ app_api:app:enable findling_backend` enables it.
+
 ## Architecture
 
 Findling is two apps under one version:

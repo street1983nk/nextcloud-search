@@ -88,6 +88,10 @@ Laufen die beiden Apps in unterschiedlicher Major- oder Minor-Version,
 antwortet die Suche mit nichts statt mit womöglich falschen Treffern, und die
 Verwaltungsseite nennt beide Versionsnummern.
 
+Bleibt nach dem Klick auf "Deploy and enable" die Warteschlange stehen und
+zeigt `occ app_api:app:list` das Backend als `disabled`, schaltet
+`occ app_api:app:enable findling_backend` es frei.
+
 ## Architektur
 
 Findling besteht aus zwei Apps unter einer Version:
