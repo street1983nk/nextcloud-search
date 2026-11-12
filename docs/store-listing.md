@@ -3275,6 +3275,17 @@ Belegkette:
     zu diesem Zeitpunkt noch 1.6.3 (Zwischenspeicher der Liste, wie bei
     1.6.3). Der Owner hat 1.6.4 im Store selbst gesehen (12.11.2026).
 
+12. Die fehlerhafte Fassung 1.6.3 der Begleit-App ist aus dem Store entfernt
+    (Owner, 12.11.2026, "Go"): `store-release-delete.yml` mit `app=findling`,
+    `version=1.6.3`, ein Lauf, 43219137034, success, Antwort aus dem Log
+    `remove findling 1.6.3: HTTP 204`. `findling_backend` 1.6.3 bleibt, der
+    Fehler lag nur in der Begleit-App. Die Seite apps/findling/releases nannte 1.6.3 um 12:35Z noch
+    (Zwischenspeicher der Seite);
+    der Owner sieht im Store nur noch 1.6.4 (12.11.2026). Die Release-Notiz
+    von v1.6.3 auf GitHub trägt oben den Hinweis "Use 1.6.4 instead".
+13. Meldung in #51 nach dem Store-Release (Owner, "Go"):
+    issuecomment-6823682720; das Issue bleibt offen, bis der Melder bestätigt.
+
 Nicht geprüft: die Fremdinstallation aus den Release-Assets als eigener
 Dispatch von `deploy-harp.yml` mit `release_tag=v1.6.4`; der HaRP-Lauf auf
 dem Tag (43210900560) ist grün.
