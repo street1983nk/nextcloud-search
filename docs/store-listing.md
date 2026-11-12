@@ -3175,6 +3175,40 @@ Findling 1.6.3. Update both apps; 1.6.x versions work together.
 **Full Changelog**: https://github.com/street1983nk/nextcloud-search/compare/v1.6.2...v1.6.3
 ```
 
+# Entwurf v1.6.4 (12.11.2026): Update-Fix ohne Änderung am Store-Text
+
+Anlass ist Issue #51: das Update aus dem Store von 1.6.2 auf 1.6.3 brach mit
+"Undefined constant" in der Migration `Version001603Date20261108000000` ab.
+Owner-Auftrag vom 12.11.2026: "Das hat Priorität, bitte fixen".
+
+- Version 1.6.4 in beiden `info.xml`, `image-tag` 1.6.4.
+- Doku-Links der sechs Beschreibungen auf `blob/v1.6.4`.
+- Namen und Beschreibungen zeichengleich zur Fassung 1.6.3.
+- Keine neuen nutzersichtbaren Sätze in der App.
+- Neu im Gate: Job "Store update in one process (issue 51)" in `php.yml`
+  (Update in einem PHP-Prozess, wie der Store es ausführt, mit dem
+  veröffentlichten 1.6.3 als Kontrolle, die scheitern muss), und
+  `store-submit.yml` reicht einen Tag nur ein, wenn dieser Job auf dem Tag
+  grün ist.
+
+Changelog-Eintrag, Wortlaut vom Owner am 12.11.2026 freigegeben ("Ja bitte"):
+
+- en: Updating from the app store no longer fails with "Undefined constant" in the migration to 1.6.3 (#51). If the update to 1.6.3 failed: `occ upgrade` completes it.
+- de: Das Update aus dem App Store bricht nicht mehr mit "Undefined constant" in der Migration zu 1.6.3 ab (#51). Wer betroffen war: `occ upgrade` schließt das Update ab.
+- fr: La mise à jour depuis l'App Store n'échoue plus avec « Undefined constant » dans la migration vers 1.6.3 (#51). Si la mise à jour vers 1.6.3 a échoué : `occ upgrade` la termine.
+
+Entwurf der Release-Notiz v1.6.4 (englisch, Faktenliste, Owner-Wort steht aus):
+
+```
+Findling 1.6.4. Update both apps; 1.6.x versions work together.
+- Updating from the app store no longer fails with "Undefined constant" in the migration to 1.6.3 (#51)
+- If the update to 1.6.3 failed: occ upgrade completes it, no data or index is lost
+
+Full changelog: https://github.com/street1983nk/nextcloud-search/compare/v1.6.3...v1.6.4
+```
+
+Tag-Links `blob/v1.6.4` und der Compare-Link lösen erst nach dem Tag auf.
+
 # Release 1.6.3 (12.11.2026)
 
 Store-Text und Release-Notiz sind die am 11.11.2026 abgenommene Fassung oben

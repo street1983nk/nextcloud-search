@@ -8,6 +8,14 @@ dans [CHANGELOG.md](CHANGELOG.md).
 
 ## [Unreleased]
 
+## [1.6.4] - 2026-11-12
+
+### Corrigé
+
+- La mise à jour depuis l'App Store n'échoue plus avec « Undefined constant »
+  dans la migration vers 1.6.3 (#51). Si la mise à jour vers 1.6.3 a échoué :
+  `occ upgrade` la termine.
+
 ## [1.6.3] - 2026-11-12
 
 ### Ajouté

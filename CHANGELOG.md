@@ -6,6 +6,14 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
 
 ## [Unreleased]
 
+## [1.6.4] - 2026-11-12
+
+### Fixed
+
+- Updating from the app store no longer fails with "Undefined constant" in
+  the migration to 1.6.3 (#51). If the update to 1.6.3 failed: `occ upgrade`
+  completes it.
+
 ## [1.6.3] - 2026-11-12
 
 ### Added
@@ -357,6 +365,7 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
   and every result permission checked by Nextcloud. The patch releases 1.0.1
   to 1.0.3 of the same days carried store metadata and packaging fixes.
 
+[1.6.4]: https://github.com/street1983nk/nextcloud-search/compare/v1.6.3...v1.6.4
 [1.6.3]: https://github.com/street1983nk/nextcloud-search/compare/v1.6.2...v1.6.3
 [1.6.2]: https://github.com/street1983nk/nextcloud-search/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/street1983nk/nextcloud-search/compare/v1.6.0...v1.6.1

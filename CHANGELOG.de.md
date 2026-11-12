@@ -7,6 +7,14 @@ Deutsche Fassung ab 1.6.3; ältere Einträge stehen in [CHANGELOG.md](CHANGELOG.
 
 ## [Unreleased]
 
+## [1.6.4] - 2026-11-12
+
+### Behoben
+
+- Das Update aus dem App Store bricht nicht mehr mit "Undefined constant" in
+  der Migration zu 1.6.3 ab (#51). Wer betroffen war: `occ upgrade` schließt
+  das Update ab.
+
 ## [1.6.3] - 2026-11-12
 
 ### Hinzugefügt
