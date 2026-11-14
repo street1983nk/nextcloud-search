@@ -3417,6 +3417,26 @@ Findling 1.6.1, a security release. The fix is in the backend; 1.6.0 and 1.6.1 w
 **Full Changelog**: https://github.com/street1983nk/nextcloud-search/compare/v1.6.0...v1.6.1
 ```
 
+Belegkette (02.11.2026):
+
+1. PR #41 per Rebase auf main, Kopf `eb39b538`; sein Baum `b4bcfedf` ist
+   derselbe wie der des grün geprüften PR-Kopfs `9769dc53`. Tag `v1.6.1`
+   (annotiert, "Findling 1.6.1") auf `eb39b538`.
+2. Release-Lauf 41409468878 (`release.yml`) success, 9 Assets, darunter
+   findling.tar.gz (642916 B) und findling_backend.tar.gz (43752 B) mit
+   je einer `.sig`. Beide Signaturen gegen die Zertifikate geprüft, die der
+   Store selbst ausliefert (`apps.json` bzw. `appapi_apps.json`): "Verified
+   OK". Beide Tarballs tragen `<version>1.6.1`, das Backend `<image-tag>1.6.1`.
+3. Lauf 41409468778 ("Multi-arch image") success:
+   `ghcr.io/street1983nk/findling_backend:1.6.1` ist ein OCI-Index mit
+   `linux/amd64` und `linux/arm64`.
+4. Release-Notiz oben im GitHub-Release (`gh release edit`), darunter die
+   generierte Liste.
+5. Lauf 41410450941 (`store-submit.yml`, Tag-Modus): `release findling
+   v1.6.1: HTTP 201`, `release findling_backend v1.6.1: HTTP 201`. Um 08:05Z
+   nennen beide Detailseiten 1.6.1; `appapi_apps.json` lag noch auf 1.6.0
+   (bekannter Cache).
+
 # Release 1.6.0 (29.10.2026)
 
 Store-Text und Release-Notiz sind die am 29.10.2026 abgenommene Fassung oben
