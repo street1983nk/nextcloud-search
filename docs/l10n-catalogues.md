@@ -179,8 +179,8 @@ Formen wäre eine Wortlautänderung ohne Nutzen. Die Zeile ist aber der Grund, w
 während `es` auf drei geht.
 
 Was die Konstante `PLURAL_FORM_OF` in `backend/tests/test_admin_ui_contract.py` deshalb trägt,
-ist **die Regel, die Findling ausliefert**, und die ist für sieben von acht Codes die Kernregel
-und für `fr` die eigene:
+ist **die Regel, die Findling ausliefert**, und die ist für acht von neun Codes die Kernregel
+und für `fr` die eigene (neun seit `zh_TW`, Issue #53):
 
 ```
 de     nplurals=2; plural=(n != 1);
@@ -191,6 +191,7 @@ it     nplurals=3; plural=n == 1 ? 0 : n != 0 && n % 1000000 == 0 ? 1 : 2;
 nl     nplurals=2; plural=(n != 1);
 pt_PT  nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % 1000000 == 0 ? 1 : 2;
 pt_BR  nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % 1000000 == 0 ? 1 : 2;
+zh_TW  nplurals=1; plural=0;
 ```
 
 Dieser Block ist die Vorlage für die Konstante, und die Konstante ist zeichengleich mit ihm. Er
@@ -433,6 +434,7 @@ Unter `php/l10n/` liegen **16** Dateien: **acht** Sprachcodes, je eine `.json` f
 | `nl` | `nl.json`, `nl.js` | `docs/l10n-dutch.md` | Plan 20-06 |
 | `pt_PT` | `pt_PT.json`, `pt_PT.js` | `docs/l10n-portuguese.md` | Plan 20-07 |
 | `pt_BR` | `pt_BR.json`, `pt_BR.js` | `docs/l10n-portuguese.md` | Plan 20-08 |
+| `zh_TW` | `zh_TW.json`, `zh_TW.js` | `docs/l10n-chinese.md` | Issue #53 |
 
 Deutsch hat kein eigenes Sprachdokument, weil es die Sprache ist, gegen die jede andere
 Tabelle geschrieben wird: die Schlüsselmenge von `de.json` ist die Menge, die alle anderen
