@@ -518,7 +518,9 @@ def chinese_analyzer() -> TextAnalyzer:
     **Known limits.** A two character search can match across a word boundary
     (``日本`` inside ``今日本店``). There is no conversion between Traditional and
     Simplified characters: ``天氣`` does not find ``天气``. Variant characters
-    such as 臺 and 台 stay as the document writes them.
+    such as 臺 and 台 are answered on the query side by
+    :func:`findling.query.rewrite.han_variants`, not here, so that a changed
+    variant table needs no rebuild.
 
     ANALYZER_VERSION does not move for this chain, for the reason czech_analyzer
     gives: it is new, it serves a new field, and it changes no tokenisation of

@@ -1,4 +1,4 @@
-"""From a search line to a query: filters, umlaut variants, lenient parsing.
+"""From a search line to a query: filters, umlaut and Han variants, lenient parsing.
 
 The order of the three steps is fixed and it is the reason this module exists as
 one function instead of three call sites. Cutting the filter prefix has to happen
@@ -55,6 +55,22 @@ LOGGER = logging.getLogger("findling.query")
 # not always German, and a fair share of file names and search terms carries the
 # transcription rather than the character.
 UMLAUTS: Final = (("ue", "ü"), ("oe", "ö"), ("ae", "ä"), ("ss", "ß"))
+
+# Han characters that Taiwanese text writes in two shapes for the same word,
+# as (traditional shape, common shape) pairs. 臺灣 and 台灣, 臺北 and 台北 are
+# the same names; official text prefers the first shape and everyday text the
+# second, and the Chinese chain (findling.index.analyzer.chinese_analyzer)
+# indexes whichever shape the document carries. The query side answers the gap,
+# like UMLAUTS answers the written out umlaut: no index space, no version mark,
+# and a changed table needs no rebuild.
+#
+# A closed table and deliberately a short one. Each pair is a promise that the
+# two shapes mean the same thing in every word they occur in, which holds for
+# 臺 and 台 in Taiwanese usage and does not hold for most pairs a variant
+# dictionary would offer. A pair is added here with a word it was needed for,
+# never in bulk; a bulk table would be a conversion between scripts by another
+# name, which is outside issue #53.
+HAN_VARIANTS: Final = (("臺", "台"),)
 
 
 @dataclass(frozen=True, slots=True)
@@ -293,6 +309,29 @@ def umlaut_variants(term: str) -> list[str]:
     return [term] if variant == term else [term, variant]
 
 
+def han_variants(term: str) -> list[str]:
+    """Return the term, plus its other spellings under :data:`HAN_VARIANTS`.
+
+    Three branches at most: the term as typed, every variant character turned
+    into its common shape, and every common shape turned into its variant, with
+    duplicates dropped in that order. ``台灣`` comes back as ``台灣`` and ``臺灣``,
+    ``臺北市`` as ``臺北市`` and ``台北市``. A term that carries no character of
+    the table comes back alone, which is every term outside Chinese.
+
+    A term that mixes both shapes, ``臺灣台北``, comes back as itself and its two
+    uniform spellings, so a document that mixes them the other way round
+    (``台灣臺北``) is not found through this term. That is the documented gap of
+    the query side approach (docs/language-analyzers.md), and it is the price
+    of keeping the index free of a folding step.
+    """
+    common = term
+    traditional = term
+    for variant, usual in HAN_VARIANTS:
+        common = common.replace(variant, usual)
+        traditional = traditional.replace(usual, variant)
+    return list(dict.fromkeys((term, common, traditional)))
+
+
 def carried_operators(text: str) -> frozenset[str]:
     """Which marks of precision the raw search line carries, if any.
 
@@ -426,6 +465,13 @@ def add_umlaut_variants(text: str) -> str:
     ``kuendigung`` becomes ``(kuendigung OR kündigung)``, and a leading plus,
     minus or field prefix is kept in front of the group so that the operator
     still applies to both spellings.
+
+    The same step carries the Han variants of :func:`han_variants` since issue
+    #53, through the same token rewrite: ``台灣`` becomes ``(台灣 OR 臺灣)``,
+    with the same rules for operators, field prefixes and quoted segments,
+    which are left alone. The name stayed, because every caller and every test
+    of this step knows it by it, and the umlaut is still the case it was built
+    for.
     """
     segments: list[tuple[bool, str]] = []
     for quoted, part in _segments(text):
@@ -442,7 +488,12 @@ def _rewrite_token(token: str) -> str:
     match = _PLAIN_TOKEN.match(token)
     if match is None:
         return token
-    variants = umlaut_variants(match["term"])
+    # Umlaut first and Han second, each umlaut spelling with its Han spellings,
+    # duplicates dropped. A term needs both only if it mixes German and Chinese
+    # in one word, and even then the group stays at six branches.
+    variants = list(
+        dict.fromkeys(spelling for umlaut in umlaut_variants(match["term"]) for spelling in han_variants(umlaut))
+    )
     if len(variants) == 1:
         return token
     field = f"{match['field']}:" if match["field"] else ""
