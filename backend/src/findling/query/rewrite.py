@@ -123,7 +123,9 @@ TITLE_BOOST: Final = 2.0
 # 0.8, and that is the literal promise of success criterion 3 of the roadmap.
 # Czech (plan 30-04) joins at the same 0.6, assumption A3 of 30-RESEARCH: a
 # build out language like the four, not a measured figure of its own.
-BODY_BOOST: Final = {"de": 1.0, "en": 0.8, "es": 0.6, "it": 0.6, "nl": 0.6, "pt": 0.6, "cs": 0.6}
+# Chinese (issue #53) joins at 0.6 as well, for the same reason; the measurement
+# report of that issue is where a figure of its own would come from.
+BODY_BOOST: Final = {"de": 1.0, "en": 0.8, "es": 0.6, "it": 0.6, "nl": 0.6, "pt": 0.6, "cs": 0.6, "zh": 0.6}
 
 # What a bare word searches on an index of every release up to 1.2.0. In schema
 # order, and the German body first because it is the field that carries the

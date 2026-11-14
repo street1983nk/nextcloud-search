@@ -3180,8 +3180,21 @@ PHP_TREE_HASH_TODAY = "7ce0ad5c8146a8ecfecc096d3bcf10cdc328e3159106d622b6e0a3dda
 # tree: d031ba6c... both ways, and the recipe and the same pipeline over git
 # archive of 2a7befdc, the last commit before this change, gave 961cd6ae...
 # with 83 files (positive control).
+#
+# Moved on 2026-11-15 by issue #53, the Chinese chain and body_zh: config.py
+# raises SCHEMA_VERSION to 4 and adds zh to SUPPORTED_LANGUAGES,
+# STEMMERLESS_LANGUAGES and the new SCANNERLESS_LANGUAGES, main.py counts a
+# scannerless code as uncovered, index/analyzer.py brings chinese_analyzer,
+# index/schema.py and index/open.py the field and its registration,
+# store/repo.py and api/resources.py the steps and the generation of schema 4,
+# query/rewrite.py the weight of zh and index/rebuild.py the measured growth
+# beside GROWTH_PER_LANGUAGE. No file came or went, so PACKAGE_FILES_TODAY
+# stays at 83. The PHP pair does not move. Recomputed independently with find,
+# sort, sed and sha256sum over the CRLF normalised tree: 2169b783... both ways,
+# and the same pipeline over git archive HEAD before the step gave d031ba6c...
+# (positive control).
 PACKAGE_FILES_TODAY = 83
-PACKAGE_TREE_HASH_TODAY = "d031ba6c76651582db17eb55754cece37426ed0062e7881955ae0c5f4bea6325"
+PACKAGE_TREE_HASH_TODAY = "2169b783b9091f2775e6d766b95009e3c7dae4727b6e0577f58cdb4f85f6bd14"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

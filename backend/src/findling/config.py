@@ -55,7 +55,14 @@ LOGGER = logging.getLogger("findling.config")
 # field plan keeps reading a schema 2 directory through
 # findling.api.resources.QUERYABLE_SCHEMA_GENERATIONS. GOLD_V1_5 in the same test
 # file holds the step, GOLD_V1_3 stays as the witness of schema 2.
-SCHEMA_VERSION = 3
+#
+# It walked from 3 to 4 for issue #53: one field, body_zh, joined for Chinese,
+# on a chain of its own (findling.index.analyzer.chinese_analyzer). The same
+# rule as for cs: an installation that does not switch zh on does not rebuild
+# for it, because findling.store.repo.LEGACY_SCHEMA_STEPS carries ("3", "4"),
+# ("2", "4") and ("1", "4"), and findling.api.resources.QUERYABLE_SCHEMA_GENERATIONS
+# keeps reading a schema 2 or 3 directory under schema 4 code.
+SCHEMA_VERSION = 4
 
 # Layout of the on disk index directory, including the tantivy index format.
 # tantivy 0.26.0 reports index_format v7 and does not promise stability across
@@ -161,7 +168,13 @@ LANGUAGE_ALLOWLIST = frozenset(
 # already carries byte for byte the same; "cs,de" reads as "de,cs". It has a
 # body field and a chain like the six before it, and no Snowball name: see
 # STEMMERLESS_LANGUAGES below.
-SUPPORTED_LANGUAGES = ("de", "en", "es", "it", "nl", "pt", "cs")
+#
+# zh joined at the end for issue #53, for the same reason and in the same way:
+# "zh,de" reads as "de,zh", and every set an installation already carries stays
+# byte for byte the same. It has a body field and a chain of its own and no
+# Snowball name, and it is the one code of this tuple without a Tesseract model
+# in the image yet: see SCANNERLESS_LANGUAGES further down.
+SUPPORTED_LANGUAGES = ("de", "en", "es", "it", "nl", "pt", "cs", "zh")
 
 # The only place where a schema field code turns into a tantivy language name.
 # Every value here has to stand in LANGUAGE_ALLOWLIST above: an entry without
@@ -177,13 +190,16 @@ SNOWBALL_NAME = {
 }
 
 # The product languages without a tantivy Snowball stemmer. Their chain comes
-# from a factory of its own (findling.index.analyzer.czech_analyzer for cs),
+# from a factory of its own (findling.index.analyzer.czech_analyzer for cs,
+# findling.index.analyzer.chinese_analyzer for zh),
 # which never touches Filter.stopword or Filter.stemmer and therefore never
 # LANGUAGE_ALLOWLIST. Together with the keys of SNOWBALL_NAME they make up
 # SUPPORTED_LANGUAGES exactly, and the two sets do not overlap;
 # backend/tests/test_language_allowlist.py holds both. A code here is never
 # entered in SNOWBALL_NAME, and its tantivy name never in LANGUAGE_ALLOWLIST:
-# tantivy 0.26.2 knows no Czech, and either entry is a ValueError at start up.
+# tantivy 0.26.2 knows no Czech and no Chinese, and either entry is a
+# ValueError at start up. Chinese needs no stemmer in the first place: it does
+# not inflect, and its chain cuts one token per Han character instead.
 #
 # The set steers no code path: the chain of each such code is registered by
 # hand in findling.index.open.open_index and its field spelled out in
@@ -192,7 +208,7 @@ SNOWBALL_NAME = {
 # (test_every_stemmerless_language_has_a_field_and_a_registered_chain in
 # backend/tests/test_index_open.py), which turns red for a code here that has
 # no body field, no field on the chain of its name, or no registered chain.
-STEMMERLESS_LANGUAGES = frozenset({"cs"})
+STEMMERLESS_LANGUAGES = frozenset({"cs", "zh"})
 
 # The two measured recipes of the constituent dictionary. full is recipe A
 # (276496 entries, 14 of 16 test compounds), nouns is recipe C (86345 entries,
@@ -526,6 +542,12 @@ OCR_LANGUAGE_ALLOWLIST = frozenset({"deu", "eng", "fra", "spa", "ita", "nld", "p
 # French is in the OCR list and has no entry here on purpose: there is no body
 # field and no chain for French, so it is an OCR language this build cannot
 # analyse, which is the one direction that is harmless.
+#
+# One entry per code of SUPPORTED_LANGUAGES, except the codes of
+# SCANNERLESS_LANGUAGES below, which have no Tesseract model in this image and
+# therefore no name to map to. The two together make up SUPPORTED_LANGUAGES
+# exactly, the same shape SNOWBALL_NAME and STEMMERLESS_LANGUAGES have one
+# section further up.
 TESSERACT_NAME = {
     "de": "deu",
     "en": "eng",
@@ -535,6 +557,26 @@ TESSERACT_NAME = {
     "pt": "por",
     "cs": "ces",
 }
+
+# The body languages this image has no Tesseract model for, and the other
+# direction of the harmless one named above: a language the index analyses
+# and no scanner can read. zh is the one entry, since issue #53: born digital
+# Chinese text (a PDF text layer, DOCX, ODT, plain text) is extracted without
+# OCR and is found through body_zh, while a scanned Chinese page is read with
+# the models FINDLING_OCR_LANGUAGES names and lands in the index as noise.
+#
+# So a code here is always uncovered: findling.main.warn_on_uncovered_languages
+# counts it whatever FINDLING_OCR_LANGUAGES says, which is the Buchstabensalat
+# warning saying the truth rather than staying quiet. It is a closed set and not
+# a missing key, so that the gap is named in one place and a test can hold it:
+# backend/tests/test_ocr_languages.py asserts that this set and the keys of
+# TESSERACT_NAME make up SUPPORTED_LANGUAGES exactly and do not overlap.
+#
+# The Tesseract pack for Traditional Chinese, chi_tra, follows in the next pull
+# request of issue #53. That change adds "zh": "chi_tra" above, puts chi_tra
+# into OCR_LANGUAGE_ALLOWLIST with its apt line, and retires this set together
+# with its branch in findling.main.warn_on_uncovered_languages.
+SCANNERLESS_LANGUAGES = frozenset({"zh"})
 
 # Pages per document before the OCR loop stops and the state becomes truncated.
 # 30, not the 100 that STACK.md names, and the deviation is deliberate: an OCR

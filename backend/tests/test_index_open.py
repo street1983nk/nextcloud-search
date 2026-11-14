@@ -72,6 +72,7 @@ from findling.index.schema import (
     FIELD_BODY_IT,
     FIELD_BODY_NL,
     FIELD_BODY_PT,
+    FIELD_BODY_ZH,
     FIELD_EXT,
     FIELD_FILE_ID,
     FIELD_MTIME,
@@ -196,12 +197,13 @@ def test_reopen_answers_the_same_query(index_dir: Path) -> None:
     assert _hits(reopened, "frist") == 1
 
 
-def test_the_schema_carries_exactly_the_fourteen_documented_fields() -> None:
-    # Nine until 2026-09-24, thirteen until plan 30-04, fourteen since: the four
-    # body fields of the v1.3 languages and body_cs of v1.5 sit between body_en
-    # and mtime, which is schema field order and therefore the order of this
-    # tuple as well. The thirteen of schema 2 stand frozen in
-    # tests/test_schema_generations.py as FIELDS_SCHEMA_2.
+def test_the_schema_carries_exactly_the_fifteen_documented_fields() -> None:
+    # Nine until 2026-09-24, thirteen until plan 30-04, fourteen until issue #53,
+    # fifteen since: the four body fields of the v1.3 languages, body_cs of v1.5
+    # and body_zh of schema 4 sit between body_en and mtime, which is schema
+    # field order and therefore the order of this tuple as well. The thirteen of
+    # schema 2 and the fourteen of schema 3 stand frozen in
+    # tests/test_schema_generations.py as FIELDS_SCHEMA_2 and FIELDS_SCHEMA_3.
     assert FIELDS == (
         FIELD_FILE_ID,
         FIELD_STORAGE_ID,
@@ -216,10 +218,11 @@ def test_the_schema_carries_exactly_the_fourteen_documented_fields() -> None:
         FIELD_BODY_NL,
         FIELD_BODY_PT,
         FIELD_BODY_CS,
+        FIELD_BODY_ZH,
         FIELD_MTIME,
     )
-    assert len(FIELDS) == 14
-    assert len(set(FIELDS)) == 14
+    assert len(FIELDS) == 15
+    assert len(set(FIELDS)) == 15
 
 
 def test_the_body_field_map_and_the_language_names_carry_the_same_codes() -> None:
@@ -234,7 +237,8 @@ def test_the_body_field_map_and_the_language_names_carry_the_same_codes() -> Non
     # Since plan 30-04 one code reaches its chain without a Snowball name: cs,
     # through czech_analyzer. SNOWBALL_NAME is therefore BODY_FIELD minus the
     # stemmerless codes, in the same order, and BODY_FIELD is SUPPORTED_LANGUAGES.
-    assert tuple(BODY_FIELD) == ("de", "en", "es", "it", "nl", "pt", "cs")
+    # zh (issue #53) is the second such code, through chinese_analyzer.
+    assert tuple(BODY_FIELD) == ("de", "en", "es", "it", "nl", "pt", "cs", "zh")
     assert tuple(BODY_FIELD) == SUPPORTED_LANGUAGES
     assert tuple(SNOWBALL_NAME) == tuple(code for code in BODY_FIELD if code not in STEMMERLESS_LANGUAGES)
     assert tuple(BODY_FIELD.values()) == FIELDS[FIELDS.index(FIELD_BODY_DE) : FIELDS.index(FIELD_MTIME)]
@@ -524,7 +528,7 @@ def test_the_schema_does_not_change_with_the_language_setting(monkeypatch: pytes
         index = open_index(index_dir, CONSTITUENTS)
         _write(index, body_en="The notice period is three months.")
 
-        assert len(FIELDS) == 14
+        assert len(FIELDS) == 15
         assert _hits(index, "notice", [FIELD_BODY_EN]) == 1
     finally:
         settings.cache_clear()
@@ -664,11 +668,12 @@ def test_the_only_index_opened_without_a_word_list_is_never_asked_a_question() -
 # that stopped importing has to be a red gate and not an error in collection.
 OPENING_SOURCE = PACKAGE_ROOT / OPENING_MODULE
 
-# Seven body chains (cs since plan 30-04), the file name chain, the chain that
-# indexes nothing. Not a tautology, a ratchet: eight means a body field whose
-# chain nobody registered and therefore a writer that raises on every document,
-# ten means a name the schema does not persist and that nothing can ever ask for.
-EXPECTED_REGISTRATIONS = 9
+# Eight body chains (cs since plan 30-04, zh since issue #53), the file name
+# chain, the chain that indexes nothing. Not a tautology, a ratchet: nine means
+# a body field whose chain nobody registered and therefore a writer that raises
+# on every document, eleven means a name the schema does not persist and that
+# nothing can ever ask for.
+EXPECTED_REGISTRATIONS = 10
 
 
 def registrations_of_open_index(source: str, filename: str = OPENING_MODULE) -> tuple[list[int], list[int]]:
@@ -752,7 +757,7 @@ def test_the_registration_reader_fires_on_a_staged_sample() -> None:
     assert elsewhere == ([], []), elsewhere
 
 
-def test_open_index_registers_nine_chains_and_hangs_none_of_them_on_a_condition() -> None:
+def test_open_index_registers_ten_chains_and_hangs_none_of_them_on_a_condition() -> None:
     free, conditional = registrations_of_open_index(OPENING_SOURCE.read_text(encoding="utf-8"))
 
     assert conditional == [], (
@@ -760,7 +765,7 @@ def test_open_index_registers_nine_chains_and_hangs_none_of_them_on_a_condition(
         "installation the condition is false on: " + ", ".join(f"{OPENING_MODULE}:{line}" for line in conditional)
     )
     assert len(free) == EXPECTED_REGISTRATIONS, free
-    # And the seven of them that belong to a body field are exactly the seven codes
+    # And the eight of them that belong to a body field are exactly the eight codes
     # the schema carries, so the count above cannot be met by registering one
     # chain twice and leaving a field without one.
     assert len(BODY_FIELD) + 2 == EXPECTED_REGISTRATIONS
@@ -1379,15 +1384,16 @@ def test_a_second_drift_during_a_rebuild_starts_a_new_one(tmp_path: Path) -> Non
     store.close()
 
 
-def _a_1_4_2_crawl_under_way(tmp_path: Path) -> tuple[Store, int]:
+def _a_1_4_2_crawl_under_way(tmp_path: Path, schema: str = "2") -> tuple[Store, int]:
     """A volume of 1.4.2 in the middle of a full crawl, as the update finds it.
 
     1.4.2 expected schema "2", found a word list drift and raised the
     generation, writing the fingerprint of its own expectation next to it.
+    ``schema`` "3" stages the same moment on a volume of 1.5.0 or later.
     """
     store = _drifted_store(tmp_path)
-    store.write_meta(SCHEMA_MARK, "2")
-    expected_of_1_4_2 = {**expected_versions(DIGEST, LANGUAGES), SCHEMA_MARK: "2"}
+    store.write_meta(SCHEMA_MARK, schema)
+    expected_of_1_4_2 = {**expected_versions(DIGEST, LANGUAGES), SCHEMA_MARK: schema}
     first = start_rebuild_on_drift(store, expected_of_1_4_2, answered_elsewhere=MARKS_A_REBUILD_ANSWERS)
     assert first is not None
     return store, first
@@ -1404,7 +1410,8 @@ def test_an_update_across_an_excused_schema_step_lets_the_crawl_carry_on(tmp_pat
     """
     store, first = _a_1_4_2_crawl_under_way(tmp_path)
     expected = expected_versions(DIGEST, LANGUAGES)
-    assert expected[SCHEMA_MARK] == "3"
+    # "4" since issue #53; the pair that excuses a schema 2 crawl is ("2", "4").
+    assert expected[SCHEMA_MARK] == "4"
 
     try:
         assert start_rebuild_on_drift(store, expected, answered_elsewhere=MARKS_A_REBUILD_ANSWERS) is None
@@ -1412,6 +1419,24 @@ def test_an_update_across_an_excused_schema_step_lets_the_crawl_carry_on(tmp_pat
         assert store.read_meta()[REBUILD_MARK] == fingerprint(expected)
         assert start_rebuild_on_drift(store, expected, answered_elsewhere=MARKS_A_REBUILD_ANSWERS) is None
         assert store.index_version == first
+    finally:
+        store.close()
+
+
+def test_an_update_across_the_step_to_schema_4_lets_the_crawl_carry_on(tmp_path: Path) -> None:
+    """The case above for the step of issue #53, from a volume of schema 3.
+
+    A crawl that a release since 1.5.0 started under schema "3" is taken over by schema 4 code
+    without a new generation, through the pair ("3", "4") of the ratchet.
+    """
+    store, first = _a_1_4_2_crawl_under_way(tmp_path, schema="3")
+    expected = expected_versions(DIGEST, LANGUAGES)
+    assert expected[SCHEMA_MARK] == "4"
+
+    try:
+        assert start_rebuild_on_drift(store, expected, answered_elsewhere=MARKS_A_REBUILD_ANSWERS) is None
+        assert store.index_version == first
+        assert store.read_meta()[REBUILD_MARK] == fingerprint(expected)
     finally:
         store.close()
 

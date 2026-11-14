@@ -113,6 +113,25 @@ directly behind the fold:
     |   |                               | Dutch                                 |
     | 7 | remove_long(48)               | Behind the splitter, German reasons   |
     | 8 | stemmer("dutch")              | Last                                  |
+
+Chinese chain of issue #53, the one chain that does not start with
+Tokenizer.simple, measured on 2026-11-15 against tantivy tag 0.26.2:
+
+    | # | Filter                        | Why exactly here                      |
+    |---|-------------------------------|---------------------------------------|
+    | 0 | Tokenizer.regex(ZH_PATTERN)   | One token per Han character, a run of |
+    |   |                               | other letters and digits stays one    |
+    |   |                               | word. Tokenizer.simple keeps a whole  |
+    |   |                               | Han run between two punctuation marks |
+    |   |                               | as one token                          |
+    | 1 | lowercase                     | As in every chain                     |
+    | 2 | ascii_fold                    | Folds full width letters and digits:  |
+    |   |                               | measured, ABC123 written in full      |
+    |   |                               | width (U+FF21, U+FF11 and on) becomes |
+    |   |                               | abc123, Han passes untouched          |
+    | 3 | remove_long(48)               | Bytes, not characters: a Han token is |
+    |   |                               | three or four bytes and never reaches |
+    |   |                               | it, a Latin run is cut as elsewhere   |
 """
 
 import gc
@@ -158,12 +177,27 @@ TOKENIZER_PT = "pt"
 # not by snowball_analyzer, because tantivy carries neither a Czech stemmer nor
 # a Czech stop word list.
 TOKENIZER_CS = "cs"
+# The Chinese chain of issue #53. Built by chinese_analyzer, outside the
+# Snowball factory for the same reason as Czech: tantivy knows no Chinese.
+TOKENIZER_ZH = "zh"
 TOKENIZER_NAME = "name"
 
 # Longest token that may reach the index. Generous on purpose: it exists to stop
 # base64 blobs and minified assets, not German words. Applied after the splitter
 # in the German chain, where the longest real part is far below it.
 MAX_TOKEN_CHARS = 48
+
+# The tokenizer of the Chinese chain: one token per Han character, and a run of
+# any other letters and digits as one word. ``&&`` is the class intersection of
+# the Rust regex crate tantivy builds the tokenizer with, so the second branch
+# reads "a letter or a digit that is not Han". Kana and Hangul are letters and
+# not Han, so a run of them stays one word: Japanese and Korean are not served
+# by this chain, and that is a documented limit rather than a design.
+#
+# A named constant, because the choice between Han and Latin and Han only is
+# one line here (docs/language-analyzers.md, section on Chinese, names the
+# measurements behind it).
+ZH_PATTERN = r"\p{Han}|[\p{L}\p{N}&&[^\p{Han}]]+"
 
 # File names are not split into constituents, so their limit is higher. Nothing
 # stems them either, so a long name stays one long term.
@@ -440,6 +474,60 @@ def czech_analyzer() -> TextAnalyzer:
         .filter(Filter.lowercase())
         .filter(Filter.ascii_fold())
         .filter(Filter.custom_stopword(list(CZECH_STOPWORDS_FOLDED)))
+        .filter(Filter.remove_long(MAX_TOKEN_CHARS))
+        .build()
+    )
+
+
+def chinese_analyzer() -> TextAnalyzer:
+    """Build the Chinese chain: one token per Han character, fold, no stemmer.
+
+    **Why one token per character.** Chinese writes no spaces between words,
+    and Tokenizer.simple splits on what is not a letter or a digit only, so it
+    keeps every Han run between two punctuation marks as one token. Measured on
+    the German chain: the sentence 今天台北的天氣很好 and 我們去開會, joined by a
+    full width comma, becomes exactly those two tokens, a search for ``天氣`` finds
+    nothing, and a run of sixteen or more Han characters is 48 bytes or more and
+    is dropped by remove_long altogether. Cutting one token per character
+    instead needs no dictionary, no segmenter and no new dependency.
+
+    **What makes it a word search all the same.** When one search term analyses
+    into several tokens, tantivy's query parser builds a phrase query with slop
+    0 from them, so ``天氣`` asks for 天 directly followed by 氣. Measured: it
+    finds ``今天台北的天氣很好`` and not ``氣象報告`` next to ``台中天晴``, which
+    carry both characters but never side by side, and ``會議`` finds ``會議記錄``
+    and not ``我們去開會``. That is why this field keeps positions
+    (findling.index.schema), and why it must never get the terms only option.
+
+    **Why letters and digits that are not Han stay words.** ``Nextcloud 33`` in
+    a Chinese document is two words and stays two terms, and a mixed search term
+    such as ``2026年`` becomes the phrase 2026 followed by 年. With Han only, the
+    same term would analyse to 年 alone and match every document that carries
+    the character anywhere. The price is that a Latin word also scores on
+    body_zh when en or de is switched on next to zh; docs/language-analyzers.md
+    carries the measurement of that.
+
+    **Why ascii_fold.** Taiwanese documents write digits and Latin letters in
+    full width as often as in half width. Measured, the fold turns ABC123
+    written in full width (U+FF21 to U+FF23, U+FF11 to U+FF13) into ``abc123``
+    and leaves Han, Kana and Hangul untouched, so a search typed
+    in half width finds the full width spelling and the other way round. It
+    folds accented Latin letters as well, like the English and every Snowball
+    chain does.
+
+    **Known limits.** A two character search can match across a word boundary
+    (``日本`` inside ``今日本店``). There is no conversion between Traditional and
+    Simplified characters: ``天氣`` does not find ``天气``. Variant characters
+    such as 臺 and 台 stay as the document writes them.
+
+    ANALYZER_VERSION does not move for this chain, for the reason czech_analyzer
+    gives: it is new, it serves a new field, and it changes no tokenisation of
+    any index already written.
+    """
+    return (
+        TextAnalyzerBuilder(Tokenizer.regex(ZH_PATTERN))
+        .filter(Filter.lowercase())
+        .filter(Filter.ascii_fold())
         .filter(Filter.remove_long(MAX_TOKEN_CHARS))
         .build()
     )

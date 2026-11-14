@@ -1,0 +1,11 @@
+documents 530 characters 1222722 queries 20
+Han and Latin, weight 0.6, en        overlap@10 mean 0.685  first hit kept 9/20  identical lists 1/20
+Han and Latin, weight 0.6, de,en     overlap@10 mean 0.900  first hit kept 17/20  identical lists 2/20
+Han and Latin, weight 0.3, en        overlap@10 mean 0.715  first hit kept 10/20  identical lists 1/20
+Han and Latin, weight 0.3, de,en     overlap@10 mean 0.925  first hit kept 19/20  identical lists 3/20
+Han and Latin, weight 0.15, en       overlap@10 mean 0.775  first hit kept 13/20  identical lists 2/20
+Han and Latin, weight 0.15, de,en    overlap@10 mean 0.965  first hit kept 20/20  identical lists 8/20
+Han and Latin, weight 0.05, en       overlap@10 mean 0.860  first hit kept 17/20  identical lists 3/20
+Han and Latin, weight 0.05, de,en    overlap@10 mean 0.995  first hit kept 20/20  identical lists 9/20
+Han only, weight 0.6, en             overlap@10 mean 1.000  first hit kept 20/20  identical lists 20/20
+Han only, weight 0.6, de,en          overlap@10 mean 1.000  first hit kept 20/20  identical lists 20/20

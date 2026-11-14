@@ -122,7 +122,10 @@ def test_a_stemmerless_language_never_reaches_the_snowball_side() -> None:
     assert STEMMERLESS_LANGUAGES.isdisjoint(LANGUAGE_ALLOWLIST)
     assert "czech" not in LANGUAGE_ALLOWLIST
     assert "czech" not in SNOWBALL_NAME.values()
-    assert sorted(STEMMERLESS_LANGUAGES) == ["cs"]
+    # Chinese since issue #53, and tantivy knows no Chinese stemmer either.
+    assert "chinese" not in LANGUAGE_ALLOWLIST
+    assert "chinese" not in SNOWBALL_NAME.values()
+    assert sorted(STEMMERLESS_LANGUAGES) == ["cs", "zh"]
 
 
 @pytest.mark.parametrize(
@@ -166,13 +169,13 @@ def test_the_thirteen_hold_and_the_seven_are_a_true_subset() -> None:
     # grew one, which is a measurement somebody has to redo and defend.
     assert len(LANGUAGE_ALLOWLIST) == 13
 
-    # Seven body fields since plan 30-04, six of them through Snowball and Czech
-    # through its own factory, at the end of the tuple. The six Snowball names
-    # stay a true subset of the thirteen: the product may never offer a language
-    # the engine refuses, and the allowlist has to stay the larger of the two,
-    # because it is the set the chain factory validates against and not the set
-    # it ships.
-    assert len(SUPPORTED_LANGUAGES) == 7
-    assert SUPPORTED_LANGUAGES[-1] == "cs"
+    # Eight body fields since issue #53, six of them through Snowball and Czech
+    # and Chinese through factories of their own, at the end of the tuple. The
+    # six Snowball names stay a true subset of the thirteen: the product may
+    # never offer a language the engine refuses, and the allowlist has to stay
+    # the larger of the two, because it is the set the chain factory validates
+    # against and not the set it ships.
+    assert len(SUPPORTED_LANGUAGES) == 8
+    assert SUPPORTED_LANGUAGES[-2:] == ("cs", "zh")
     assert len(SNOWBALL_NAME) == 6
     assert set(SNOWBALL_NAME.values()) < set(LANGUAGE_ALLOWLIST)

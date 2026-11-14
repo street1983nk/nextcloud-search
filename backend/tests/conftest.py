@@ -45,6 +45,7 @@ from findling.config import settings
 from findling.embed import model as model_module
 from findling.embed.engine import note_cutter_failure
 from findling.index.analyzer import (
+    TOKENIZER_CS,
     TOKENIZER_DE,
     TOKENIZER_EN,
     TOKENIZER_ES,
@@ -373,6 +374,47 @@ def write_schema_2_index(root: Path, documents: int) -> Index:
     index = open_schema_2_index(root / SCHEMA_2_DIRECTORY)
     fill_index(index, documents)
     return index
+
+
+# -- the index since 1.5.0, which is a schema of fourteen fields --------------
+#
+# Frozen by issue #53 for the reason the schema 2 block above gives: from then
+# on build_schema() carries body_zh, and a fixture built through it would stop
+# being the layout every installation of those releases has on disk.
+
+
+def build_schema_3() -> Schema:
+    """Return the fourteen field schema that shipped from 1.5.0 until schema 4.
+
+    Field for field with the flags of ``backend/src/findling/index/schema.py``
+    as it stood at commit e5c1da7, before body_zh joined.
+    """
+    builder = SchemaBuilder()
+
+    builder.add_unsigned_field("file_id", stored=True, indexed=True, fast=True)
+    builder.add_unsigned_field("storage_id", stored=True, indexed=True, fast=True)
+    builder.add_text_field("name", stored=True, tokenizer_name=TOKENIZER_NAME)
+    builder.add_text_field("title", stored=True, tokenizer_name=TOKENIZER_DE)
+    builder.add_text_field("path", stored=True, tokenizer_name=TOKENIZER_STORED_ONLY)
+    builder.add_text_field("ext", stored=True, tokenizer_name=TOKENIZER_RAW, index_option=INDEX_OPTION_TERMS_ONLY)
+    builder.add_text_field("body_de", stored=True, tokenizer_name=TOKENIZER_DE)
+    builder.add_text_field("body_en", stored=False, tokenizer_name=TOKENIZER_EN)
+    builder.add_text_field("body_es", stored=False, tokenizer_name=TOKENIZER_ES)
+    builder.add_text_field("body_it", stored=False, tokenizer_name=TOKENIZER_IT)
+    builder.add_text_field("body_nl", stored=False, tokenizer_name=TOKENIZER_NL)
+    builder.add_text_field("body_pt", stored=False, tokenizer_name=TOKENIZER_PT)
+    builder.add_text_field("body_cs", stored=False, tokenizer_name=TOKENIZER_CS)
+    builder.add_integer_field("mtime", stored=True, indexed=False, fast=True)
+
+    return builder.build()
+
+
+def open_schema_3_index(directory: Path) -> Index:
+    """Create a schema 3 directory if it is not there, then open it the real way."""
+    directory.mkdir(parents=True, exist_ok=True)
+    if not Index.exists(str(directory)):
+        Index(build_schema_3(), path=str(directory))
+    return open_index(directory, CONSTITUENTS)
 
 
 def write_state(root: Path, corpus: Corpus) -> None:

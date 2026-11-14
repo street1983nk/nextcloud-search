@@ -168,7 +168,7 @@ def test_the_computed_plan_of_a_stock_installation_goes_through_the_query_builde
     assert rewritten.query is not None
 
 
-@pytest.mark.parametrize("stored", ["4", "", "abc", "UNKNOWN_VERSION", UNKNOWN_VERSION])
+@pytest.mark.parametrize("stored", ["5", "", "abc", "UNKNOWN_VERSION", UNKNOWN_VERSION])
 def test_a_schema_generation_this_code_never_saw_is_no_permission(stored: str, schema_2_index: Index) -> None:
     # The gate falls closed, in the shape of store.repo._schema_is_legacy and for
     # its reason: an index whose schema names a generation nobody wrote could be

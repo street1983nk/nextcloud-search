@@ -271,17 +271,20 @@ def test_the_rebuild_step_demands_the_schema_of_the_running_code() -> None:
     # writes into an existing directory. From plan 30-06 to 40-03 the start
     # carried 2 and the demand was 2 before and 3 after (run 37455892381 for
     # the 2/2 era before that). A schema bump in config.py has to turn this
-    # gate red again.
+    # gate red again, and issue #53 did: SCHEMA_VERSION 4 (body_zh) makes the
+    # demand 3 before and 4 after in "Store upgrade 6", and 4 on both sides of
+    # the way back in "Store upgrade 7", which starts where 6 ended.
     from findling.config import SCHEMA_VERSION
 
-    assert SCHEMA_VERSION == 3
+    assert SCHEMA_VERSION == 4
     run = _run("Store upgrade 6,")
-    assert 'if [ "${was}" = "3" ] && [ "${now}" = "3" ]; then' in run
+    assert 'if [ "${was}" = "3" ] && [ "${now}" = "4" ]; then' in run
     assert '[ "${was}" = "2" ]' not in run
     assert '[ "${now}" = "2" ]; then' not in run
+    assert '[ "${now}" = "3" ]; then' not in run
     assert "which is exactly one step" not in run
     back = _run("Store upgrade 7,")
-    assert 'if [ "${was}" = "3" ] && [ "${now}" = "3" ]; then' in back
+    assert 'if [ "${was}" = "4" ] && [ "${now}" = "4" ]; then' in back
 
 
 def test_the_assurances_demand_the_languages_mark_unchanged() -> None:
@@ -581,7 +584,7 @@ def test_no_vector_is_written_across_both_rebuilds() -> None:
 def test_the_way_back_demands_the_factory_mark_and_no_drift() -> None:
     back = _run(BACK_STEP)
     assert 'if [ "${now}" != "${REBUILD_LANGUAGES_BACK}" ]; then' in back
-    assert "'.marks.languages == $set and .marks.schemaVersion == \"3\"'" in back
+    assert "'.marks.languages == $set and .marks.schemaVersion == \"4\"'" in back
     assert "grep -c 'built by different code'" in back
     assert 'if [ "${fail}" -ne 0 ]; then' in back
 

@@ -35,7 +35,9 @@ from findling.index.analyzer import (
     TOKENIZER_NAME,
     TOKENIZER_NL,
     TOKENIZER_PT,
+    TOKENIZER_ZH,
     cached_german_analyzer,
+    chinese_analyzer,
     czech_analyzer,
     dutch_chain_for,
     english_analyzer,
@@ -143,7 +145,7 @@ def stored_only_analyzer() -> TextAnalyzer:
 
 
 def open_index(path: Path, constituents: Sequence[str], *, dutch: str | None = None) -> Index:
-    """Create or open the index at ``path`` and register its nine analyzers.
+    """Create or open the index at ``path`` and register its ten analyzers.
 
     ``constituents`` is the prepared word list from
     :func:`findling.index.wordlist.load_constituents`; it decides how German text
@@ -197,6 +199,10 @@ def open_index(path: Path, constituents: Sequence[str], *, dutch: str | None = N
     # registered chain breaks every add_document, cs active or not. It costs
     # nothing, because the chain brings no automaton, only a folded stop list.
     index.register_tokenizer(TOKENIZER_CS, czech_analyzer())
+    # Chinese (issue #53), registered whatever the language set says, for the
+    # reason Czech gives above. The chain is a regex tokenizer and three
+    # filters, with no list behind it, so it costs nothing either.
+    index.register_tokenizer(TOKENIZER_ZH, chinese_analyzer())
     index.register_tokenizer(TOKENIZER_NAME, name_analyzer())
     index.register_tokenizer(TOKENIZER_STORED_ONLY, stored_only_analyzer())
     return index

@@ -1,0 +1,5 @@
+corpus wordlist documents 2000 characters 8002517 text_bytes 8003918
+de,en       10687956 byte  1.335 of the text
+de,en,zh    13680230 byte  growth 0.280 of the directory, 0.374 of the text
+de,en,cs    13677156 byte  growth 0.280 of the directory, 0.373 of the text
+9e66281f7e51445eab6857488ff6e3d768afffadb7fb1adbef5e4617bee4a53b  /usr/share/dict/american-english

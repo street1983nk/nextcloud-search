@@ -346,11 +346,12 @@ def test_every_producible_plan_keeps_its_build_out_fields_below_english(probe_in
                 continue
             assert plan.boosts[field] < plan.boosts[FIELD_BODY_EN], f"{field} weighs at least as much as body_en"
             checked += 1
-    # Five build out languages since plan 30-04 (cs joined the four), each of
-    # them in half of the sets that carry en: 5 * 2 ** (7 - 2). Written out so
+    # Six build out languages since issue #53 (cs joined the four in plan 30-04,
+    # zh joined the five), each of them in half of the sets that carry en:
+    # 6 * 2 ** (8 - 2), and 5 * 2 ** (7 - 2) = 160 before zh. Written out so
     # that a loop which silently stopped looking cannot pass as a loop that
     # looked and found nothing wrong.
-    assert checked == 160
+    assert checked == 384
 
 
 def test_the_two_hits_answer_the_question_through_chains_that_disagree(probe_index: Index) -> None:
@@ -371,6 +372,10 @@ def test_the_two_hits_answer_the_question_through_chains_that_disagree(probe_ind
         # "documents" nor "documento" and stays out of the disagreement: the
         # three against three above is untouched by the seventh field.
         "cs": [],
+        # The Chinese chain keeps Latin words whole and unstemmed, so it reaches
+        # neither form either, and the eighth field leaves the three against
+        # three as untouched as the seventh does.
+        "zh": [],
     }
 
 

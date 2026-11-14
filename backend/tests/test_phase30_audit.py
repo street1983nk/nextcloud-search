@@ -196,11 +196,17 @@ def test_ces_is_installed_and_proven_in_the_image_build() -> None:
 # -- 2. the mark pairs of the ratchet and of the read gate -------------------
 
 
-def test_the_ratchet_carries_exactly_the_three_forward_pairs() -> None:
-    assert frozenset({("1", "2"), ("2", "3"), ("1", "3")}) == LEGACY_SCHEMA_STEPS
+def test_the_ratchet_carries_exactly_the_six_forward_pairs() -> None:
+    # The three of phase 30, and since issue #53 the three to schema 4 (body_zh),
+    # each written down with its reason beside the constant.
+    phase_30 = frozenset({("1", "2"), ("2", "3"), ("1", "3")})
+    issue_53 = frozenset({("3", "4"), ("2", "4"), ("1", "4")})
+    assert phase_30 | issue_53 == LEGACY_SCHEMA_STEPS
 
 
-@pytest.mark.parametrize("pair", [("3", "2"), ("2", "1"), ("3", "1"), ("4", "3"), ("3", "4"), ("2", "2")])
+@pytest.mark.parametrize(
+    "pair", [("3", "2"), ("2", "1"), ("3", "1"), ("4", "3"), ("4", "2"), ("4", "5"), ("3", "5"), ("2", "2"), ("4", "4")]
+)
 def test_no_backward_or_unknown_pair_is_excused(pair: tuple[str, str]) -> None:
     assert pair not in LEGACY_SCHEMA_STEPS
     assert _schema_is_legacy(pair[0], pair[1]) is False
@@ -216,19 +222,22 @@ def test_an_absent_or_unknown_stored_mark_gets_no_excuse() -> None:
     assert _schema_is_legacy(UNKNOWN_VERSION, str(SCHEMA_VERSION)) is False
 
 
-@pytest.mark.parametrize("stored", ["1", "4", "", None, UNKNOWN_VERSION, " 3", "3.0"])
-def test_the_read_gate_gives_no_plan_outside_generations_2_and_3(stored: str | None) -> None:
+@pytest.mark.parametrize("stored", ["1", "5", "", None, UNKNOWN_VERSION, " 3", "3.0", "4.0"])
+def test_the_read_gate_gives_no_plan_outside_generations_2_to_4(stored: str | None) -> None:
     marks = {LANGUAGES_MARK: "de,en,es"} if stored is None else {SCHEMA_MARK: stored, LANGUAGES_MARK: "de,en,es"}
     assert _of_the_marks(marks) is None
 
 
-@pytest.mark.parametrize("stored", ["2", "3"])
-def test_the_read_gate_keeps_every_language_of_generations_2_and_3(stored: str) -> None:
-    """The Pflicht-Fix of 30-CONTEXT: no silent loss of es, it, nl, pt."""
+@pytest.mark.parametrize("stored", ["2", "3", "4"])
+def test_the_read_gate_keeps_every_language_of_generations_2_to_4(stored: str) -> None:
+    """The Pflicht-Fix of 30-CONTEXT: no silent loss of es, it, nl, pt.
+
+    Generation 4 joined with body_zh (issue #53), for the same reason 3 joined.
+    """
     plan = _of_the_marks({SCHEMA_MARK: stored, LANGUAGES_MARK: "de,en,es,it,nl,pt"})
     assert plan is not None
     assert plan.fields[:6] == tuple(BODY_FIELD[code] for code in ("de", "en", "es", "it", "nl", "pt"))
-    assert frozenset({"2", "3"}) == QUERYABLE_SCHEMA_GENERATIONS
+    assert frozenset({"2", "3", "4"}) == QUERYABLE_SCHEMA_GENERATIONS
 
 
 # -- 3. a half filled target of foreign marks --------------------------------
@@ -432,8 +441,10 @@ def test_no_code_reaches_snowball_name_through_a_variable_key() -> None:
     assert _variable_snowball_subscripts(ast.parse("SNOWBALL_NAME[code]\n")) == [1]
 
 
-def test_cs_is_the_last_body_field_and_the_last_supported_language() -> None:
-    assert SUPPORTED_LANGUAGES[-1] == "cs"
+def test_cs_is_appended_behind_the_v1_3_languages_and_only_zh_follows_it() -> None:
+    # Appended at the end in plan 30-04, the only place it could join. zh joined
+    # behind it for issue #53 by the same rule, so cs is the second to last now.
+    assert SUPPORTED_LANGUAGES[-2:] == ("cs", "zh")
     assert tuple(BODY_FIELD) == SUPPORTED_LANGUAGES
     assert BODY_FIELD["cs"] == FIELD_BODY_CS
 

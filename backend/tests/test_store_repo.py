@@ -544,8 +544,18 @@ def test_the_schema_exception_falls_closed() -> None:
     assert _schema_is_legacy("3", "2") is False
     assert _schema_is_legacy(None, "3") is False
     assert _schema_is_legacy(UNKNOWN_VERSION, "3") is False
-    assert _schema_is_legacy("3", "4") is False
-    assert set(LEGACY_SCHEMA_STEPS) == {("1", "2"), ("2", "3"), ("1", "3")}
+    # The three steps of issue #53 to schema 4 (body_zh), written down in the
+    # commit that raises the mark, with the reason beside the constant.
+    assert _schema_is_legacy("3", "4") is True
+    assert _schema_is_legacy("2", "4") is True
+    assert _schema_is_legacy("1", "4") is True
+    assert _schema_is_legacy("4", "3") is False
+    assert _schema_is_legacy(None, "4") is False
+    assert _schema_is_legacy(UNKNOWN_VERSION, "4") is False
+    # And the ratchet is still a ratchet: a schema 5 inherits nothing.
+    assert _schema_is_legacy("4", "5") is False
+    assert _schema_is_legacy("3", "5") is False
+    assert set(LEGACY_SCHEMA_STEPS) == {("1", "2"), ("2", "3"), ("1", "3"), ("3", "4"), ("2", "4"), ("1", "4")}
 
 
 # -- the step to schema 3 (plan 30-03, D-30-08) --------------------------------
@@ -573,6 +583,31 @@ def test_an_unnamed_schema_is_still_a_drift_under_schema_three(store: Store) -> 
     assert store.read_meta()[_SCHEMA_MARK] == UNKNOWN_VERSION
 
     assert store.version_mismatch({_SCHEMA_MARK: "3"}) == [_SCHEMA_MARK]
+
+
+# -- the step to schema 4 (issue #53, body_zh) ---------------------------------
+#
+# Written out as "4" for the reason given above the cases of schema 3: what is
+# held is the pair, not whatever SCHEMA_VERSION happens to read.
+
+
+@pytest.mark.parametrize("stored", ["1", "2", "3"])
+def test_a_stored_schema_of_one_two_or_three_is_no_drift_under_schema_four(store: Store, stored: str) -> None:
+    store.write_meta(_SCHEMA_MARK, stored)
+
+    assert store.version_mismatch({_SCHEMA_MARK: "4"}) == []
+
+
+def test_a_stored_schema_four_under_schema_three_is_a_drift(store: Store) -> None:
+    store.write_meta(_SCHEMA_MARK, "4")
+
+    assert store.version_mismatch({_SCHEMA_MARK: "3"}) == [_SCHEMA_MARK]
+
+
+def test_an_unnamed_schema_is_still_a_drift_under_schema_four(store: Store) -> None:
+    assert store.read_meta()[_SCHEMA_MARK] == UNKNOWN_VERSION
+
+    assert store.version_mismatch({_SCHEMA_MARK: "4"}) == [_SCHEMA_MARK]
 
 
 def test_the_other_marks_are_untouched_by_the_schema_exception(store: Store) -> None:

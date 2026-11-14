@@ -51,6 +51,7 @@ import pytest
 from findling.config import (
     OCR_DEFAULT_LANGUAGES,
     OCR_LANGUAGE_ALLOWLIST,
+    SCANNERLESS_LANGUAGES,
     SUPPORTED_LANGUAGES,
     TESSERACT_NAME,
     settings,
@@ -197,13 +198,22 @@ def test_every_body_language_has_a_tesseract_name_and_every_name_is_installed() 
     language it exists for. Backwards: every name in the mapping has to be a
     language this image installs, because a name outside the allowlist could
     never be covered and the warning would then be permanent and unfixable.
+
+    Since issue #53 the forwards direction has one named exception, held here
+    as exactly that: zh is a body language without a model in this image, and
+    it stands in SCANNERLESS_LANGUAGES instead of TESSERACT_NAME. The two make
+    up SUPPORTED_LANGUAGES exactly and do not overlap, so a code can be in
+    neither only by being forgotten, and the backwards direction is untouched:
+    no name outside the allowlist was put in to fill the gap.
     """
-    assert _uncovered(SUPPORTED_LANGUAGES, TESSERACT_NAME) == set()
+    assert _uncovered(SUPPORTED_LANGUAGES, TESSERACT_NAME) == set(SCANNERLESS_LANGUAGES)
+    assert set(SCANNERLESS_LANGUAGES) <= set(SUPPORTED_LANGUAGES)
+    assert SCANNERLESS_LANGUAGES.isdisjoint(TESSERACT_NAME)
     assert set(TESSERACT_NAME.values()) <= set(OCR_LANGUAGE_ALLOWLIST)
 
     # The staged probe, because a gate whose red state is never produced is a
-    # gate nobody has tested: a seventh body language added to the list alone.
-    assert _uncovered((*SUPPORTED_LANGUAGES, "fi"), TESSERACT_NAME) == {"fi"}
+    # gate nobody has tested: a further body language added to the list alone.
+    assert _uncovered((*SUPPORTED_LANGUAGES, "fi"), TESSERACT_NAME) == set(SCANNERLESS_LANGUAGES) | {"fi"}
 
 
 def test_the_factory_setting_needs_no_warning(
@@ -249,6 +259,34 @@ def test_a_body_language_without_a_scanner_is_named_by_its_count(
     message = caplog.records[0].getMessage()
     assert "FINDLING_LANGUAGES" in message
     assert " 1 " in message
+
+
+def test_a_body_language_without_a_model_in_the_image_is_always_counted(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """zh against the full OCR offer: still exactly one line, and it counts one.
+
+    SCANNERLESS_LANGUAGES of findling.config: no FINDLING_OCR_LANGUAGES can
+    cover Chinese in this image, so the warning has to say so whatever the OCR
+    list holds, and it must not raise on the code TESSERACT_NAME has no entry
+    for. Here the OCR list carries every language the image offers, so the one
+    counted language can only be zh.
+    """
+    monkeypatch.setenv("FINDLING_LANGUAGES", "de,en,zh")
+    monkeypatch.setenv("FINDLING_OCR_LANGUAGES", "+".join(sorted(OCR_LANGUAGE_ALLOWLIST)))
+    settings.cache_clear()
+    try:
+        assert settings().languages == ("de", "en", "zh")
+        with caplog.at_level(logging.WARNING, logger="findling"):
+            warn_on_uncovered_languages()
+    finally:
+        settings.cache_clear()
+
+    assert len(caplog.records) == 1
+    message = caplog.records[0].getMessage()
+    assert "FINDLING_LANGUAGES" in message
+    assert " 1 " in message
+    assert "zh" not in message
 
 
 def test_the_warning_line_carries_no_language_at_all(
