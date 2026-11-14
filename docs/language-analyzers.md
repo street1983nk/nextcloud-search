@@ -7,20 +7,24 @@ factory, English. German is the reasoned exception and has a page of its own in
 and neither of those decisions survives being copied here. Czech, available since
 1.5.0, is the second exception: tantivy carries no Czech stemmer, so its chain
 has none and comes out of a factory of its own, described in the section
-"Czech" below.
+"Czech" below. Chinese (issue #53) is the third: it does not inflect, writes no
+spaces between words and gets a chain that cuts one token per Han character,
+described in the section "Chinese" below.
 
 Everything below was measured rather than reasoned about. The run is
 `docs/measurements/2026-09-analyseketten/` of 2026-09-23, rerun on 2026-09-24
 after one Italian inflection family entered the fixture (section 9 of that
 report), and every number on this page can be traced to a line of
-`docs/measurements/2026-09-analyseketten/rohdaten/kennzahlen.txt`.
+`docs/measurements/2026-09-analyseketten/rohdaten/kennzahlen.txt`, except in the
+sections "Czech" and "Chinese", which name the runs their numbers come from.
 
 ## Switching a language on, and when it takes effect
 
 `FINDLING_LANGUAGES` takes a comma separated list out of `de`, `en`, `es`, `it`,
-`nl`, `pt` and, since 1.5.0, `cs`, and the factory setting is `de,en`. Since plan
+`nl`, `pt`, since 1.5.0 `cs`, and since issue #53 `zh`, and the factory setting
+is `de,en`. Since plan
 18-02 the value is filtered against the set this build has a body field and a
-chain for, so all seven codes are real choices and none of them falls out in
+chain for, so all eight codes are real choices and none of them falls out in
 silence. The order you type
 does not matter: the resolved set is always in schema field order, so `es,de` and
 `de,es` are the same setting and neither of them rebuilds an index the other one
@@ -53,7 +57,8 @@ mark and from then on it is compared like every other one.
 
 **The schema mark of an unchanged installation stays at 1, and that is the
 upgrade working.** The tantivy schema went from nine fields to thirteen with
-1.3.0, so `findling.config.SCHEMA_VERSION` is 2, while the mark in the state
+1.3.0, so `findling.config.SCHEMA_VERSION` became 2 (it is 4 today, after the
+steps for Czech and Chinese described in their sections), while the mark in the state
 database of an installation that upgraded still says 1. It says the truth: the
 directory on disk was written under the old layout, the container reads that
 layout back when it opens the index, and the mark is rewritten only once a
@@ -70,7 +75,7 @@ installation that was left alone, not at one that failed to migrate.
 
 **The body languages and the OCR languages are two settings, and they are set
 separately.** `FINDLING_LANGUAGES` decides which analysis chains an index
-carries: `de`, `en`, `es`, `it`, `nl`, `pt`, `cs`, factory setting `de,en`.
+carries: `de`, `en`, `es`, `it`, `nl`, `pt`, `cs`, `zh`, factory setting `de,en`.
 `FINDLING_OCR_LANGUAGES` decides which models tesseract loads when it reads a
 scan: `deu`, `eng`, `fra`, `spa`, `ita`, `nld`, `por`, `dan`, `est`, `ces`,
 factory setting `deu+eng+fra`. Neither follows the other, and that is deliberate: an
@@ -143,7 +148,8 @@ a live installation empty (measurement M-1 of the phase 19 research).
 
 **The field list hangs on `schema_version`, and that gate falls closed.** If the
 schema mark of the directory does not stand on a generation this code can query
-(2 and 3 since 1.5.0, `findling.api.resources.QUERYABLE_SCHEMA_GENERATIONS`), a
+(2 and 3 since 1.5.0, 2, 3 and 4 since issue #53,
+`findling.api.resources.QUERYABLE_SCHEMA_GENERATIONS`), a
 question searches exactly the fields every release up to 1.2.0 carried:
 `body_de`, `body_en`, the file name and the title, held as
 `findling.query.rewrite.LEGACY_PLAN`. Anything that is not literally one of those
@@ -495,6 +501,134 @@ measured what a 1.4.2 container does with an index directory or a `state.db`
 written by 1.5.0, and this page therefore makes no statement about it, in either
 direction. The way back is the usual backup of the app data volume
 (`APP_PERSISTENT_STORAGE`) taken before the upgrade.
+
+## Chinese
+
+Since issue #53 `zh` is the eighth search language. It is built for and tested on
+Traditional Chinese as written in Taiwan; Simplified Chinese text is indexed and
+found the same way, character for character, but the two scripts are not
+converted into each other. Its chain comes out of
+`findling.index.analyzer.chinese_analyzer` and is registered whatever the
+language set says, like the Czech one.
+
+**Switching it on.** `FINDLING_LANGUAGES=de,en,zh` and a container restart,
+exactly as for every other language on this page. The difference of the
+language mark starts the rebuild, and the rebuild re-analyses the stored German
+body text (`body_de`) into the fifteenth field `body_zh`. No file is read from
+Nextcloud again, no page goes through OCR again and no vector is computed
+again, held on a real index by `backend/tests/test_chinese_switch.py`, which
+also proves that the Chinese word is not found before the switch and is found
+after it. Switching `zh` off is a rebuild as well and leaves `body_zh` empty.
+
+**Scanned Chinese pages are not readable yet.** This image carries no
+Tesseract model for Chinese; `chi_tra` follows in the next pull request of
+issue #53. Until then a scanned Chinese page is read with the models
+`FINDLING_OCR_LANGUAGES` names and lands in the index as noise, and
+`zh` stands in `findling.config.SCANNERLESS_LANGUAGES`, so the startup line
+about uncovered languages counts it on every instance that switches it on.
+Chinese text that reaches the index without OCR (the text layer of a PDF, an
+office document, plain text) is found through `body_zh` today.
+
+**An installation that never names `zh` is left alone.** The fifteenth field
+moves `findling.config.SCHEMA_VERSION` from 3 to 4, and the update still starts
+no rebuild on its own: the stored marks 3, 2 and 1 are no difference, because
+`findling.store.repo.LEGACY_SCHEMA_STEPS` carries the pairs `("3", "4")`,
+`("2", "4")` and `("1", "4")`, and the reading side accepts the generations 2,
+3 and 4. The schema mark moves to 4 at the end of the first rebuild and at no
+earlier moment, the rule 1.3.0 introduced and 1.5.0 kept.
+
+**The chain.**
+
+```text
+regex(\p{Han} | other letters and digits) -> lowercase -> ascii_fold -> remove_long(48)
+```
+
+The tokenizer is the one change against every other chain: `Tokenizer.simple`
+splits on what is not a letter or a digit, and Han characters are letters, so
+it keeps a whole run between two punctuation marks as one token. Measured on
+the German chain, the sentence 今天台北的天氣很好，我們去開會。 becomes the two
+tokens `今天台北的天氣很好` and `我們去開會`, a search for 天氣 finds nothing, and
+a run of sixteen or more Han characters is 48 bytes or more and dropped. The
+Chinese chain cuts one token per Han character and keeps a run of other letters
+and digits as one word. `ascii_fold` turns full width letters and digits into
+ASCII (ＡＢＣ１２３ becomes `abc123`), so a search typed in half width finds the
+full width spelling. There is no stop word list and no stemmer: Chinese does
+not inflect.
+
+**What makes it a word search.** When one search term analyses into several
+tokens, the query parser of tantivy turns it into a phrase query with slop 0,
+so 天氣 asks for 天 directly followed by 氣. That is why `body_zh` keeps
+positions. Held by `backend/tests/test_chinese_search.py`:
+
+| Search | Finds | Does not find |
+|---|---|---|
+| `天氣` | 今天台北的天氣很好 | 氣象報告：台中天晴 (both characters, never side by side) |
+| `會議` | 會議記錄 | 我們去開會 |
+| `台北 天氣` | documents with both words | documents with only one of them |
+| `"台北的天氣"` | the five characters in this order | |
+| `2026年` | 2026年度預算 | 年度報告 (年 without the year) |
+
+**Han and Latin, or Han only.** The chain keeps runs of Latin letters and digits
+as words in `body_zh`. The alternative is a chain that indexes Han characters
+and nothing else. The choice is the one line `ZH_PATTERN` in
+`findling.index.analyzer`, and it was measured on 2026-11-15:
+
+| | Han and Latin (shipped) | Han only |
+|---|---|---|
+| `2026年` as a search term | the phrase 2026 followed by 年 | 年 alone, which matches every document with that character |
+| English words in a `zh` only installation | searchable | not searchable |
+| English queries, `en` against `en,zh`, 530 English documents, 20 queries | mean overlap of the top ten 0.685, same first hit in 9 of 20 | top ten identical in 20 of 20 |
+| the same, `de,en` against `de,en,zh` | mean overlap 0.900, same first hit in 17 of 20 | top ten identical in 20 of 20 |
+
+The ranking cost of the shipped variant is the summing of field scores this
+page describes for words that pass several chains unchanged: an English word
+also scores on `body_zh`, unstemmed, which favours documents with the exact
+form. A lower weight for `body_zh` reduces it (at 0.15 the first hit of
+`de,en,zh` stays in 20 of 20 queries, of `en,zh` in 13 of 20), and a
+disjunction max over the body fields would be the other lever; both are open
+and belong to the full measurement report of issue #53. Method, corpus and raw
+data of these figures: `docs/measurements/2026-11-zh-kette/`, section 2.
+
+**臺 and 台.** Taiwanese text writes 臺灣 and 台灣, 臺北 and 台北 for the same
+names. The index keeps the shape the document carries; the query side adds the
+other one, the way it adds the umlaut to a written out umlaut
+(`findling.query.rewrite.han_variants`): 台灣 is searched as
+`(台灣 OR 臺灣)`. The table holds this one pair and grows only with a word it
+was needed for. A changed table needs no rebuild. Quoted segments are left as
+typed, like for the umlaut, and so is a term inside parentheses: the rewrite
+looks at plain tokens only, and `(台灣)` is not one, the same limit the umlaut
+variant has. The other gap: a term that mixes the shapes the other way round
+than the document (台灣臺北 against 臺灣台北) is not found through that term.
+
+**Space.** One more filled chain, measured on 2026-11-15 through the real
+writer, `de,en` against `de,en,zh` on the same documents: the directory grows
+by 0.253 of what it held over 152 documents of Taiwanese statutes (478,164
+characters), where `cs` grows the same directory by 0.371, and by 0.280 for
+`zh` and for `cs` alike over 2000 documents of word list text
+(`docs/measurements/2026-11-zh-kette/`, section 1). The rebuild reserves 0.40
+per newly filled language (`GROWTH_PER_LANGUAGE`), which holds.
+The size of `body_zh` against the extracted text on a realistic corpus is the
+subject of the measurement report of issue #53.
+
+**Snippets.** The excerpt is cut out of `body_de` by the German chain, which
+knows a Chinese word only when it is a whole run between two punctuation marks.
+A Chinese hit therefore gets an empty excerpt in most cases today, and the hit
+stays a hit; `backend/tests/test_chinese_search.py` holds that state. Which of
+the options replaces it is decided after the measurement report.
+
+**Limits.** The first three are held by `backend/tests/test_chinese_search.py`.
+
+- No conversion between Traditional and Simplified characters: 天氣 does not
+  find 天气.
+- A two character search can match across a word boundary: 日本 is found in
+  今日本店.
+- A search term written without spaces is one exact phrase: 台北天氣 finds
+  台北天氣預報 and not 台北的天氣預報. Writing 台北 天氣 finds both.
+- Japanese Kana and Korean Hangul are letters and not Han characters, so a run
+  of them stays one word: Japanese and Korean are not served by this chain.
+- File names and titles are not split yet: `name` and `title` keep their
+  chains, so a Chinese file name is found only as a whole. That is a separate
+  step of issue #53.
 
 ## Known limits
 
