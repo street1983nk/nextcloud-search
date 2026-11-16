@@ -7,6 +7,13 @@ Deutsche Fassung ab 1.6.3; ältere Einträge stehen in [CHANGELOG.md](CHANGELOG.
 
 ## [Unreleased]
 
+## [1.6.5] - 2026-11-16
+
+### Sicherheit
+
+- Abhängigkeits-Update im Backend: opentelemetry-api 1.45.1 auf 1.45.2
+  (CVE-2026-126360). Keine funktionalen Änderungen.
+
 ## [1.6.4] - 2026-11-12
 
 ### Behoben

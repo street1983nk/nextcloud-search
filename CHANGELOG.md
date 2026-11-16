@@ -6,6 +6,13 @@ same version. The format follows [Keep a Changelog](https://keepachangelog.com/e
 
 ## [Unreleased]
 
+## [1.6.5] - 2026-11-16
+
+### Security
+
+- Dependency update in the backend: opentelemetry-api 1.45.1 to 1.45.2
+  (CVE-2026-126360). No functional changes.
+
 ## [1.6.4] - 2026-11-12
 
 ### Fixed

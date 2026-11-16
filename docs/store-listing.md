@@ -3283,6 +3283,36 @@ Belegkette:
     (Zwischenspeicher der Seite);
     der Owner sieht im Store nur noch 1.6.4 (12.11.2026). Die Release-Notiz
     von v1.6.3 auf GitHub trägt oben den Hinweis "Use 1.6.4 instead".
+
+# Entwurf v1.6.5 (16.11.2026): Sicherheits-Update ohne Änderung am Store-Text
+
+Anlass ist CVE-2026-126360 in opentelemetry-api; der Fix e5c1da70 hebt die
+Abhängigkeit im Backend-Lock von 1.45.1 auf 1.45.2 (nur `backend/uv.lock`,
+keine funktionalen Änderungen). Owner-Termin vom 14.11.2026: Sicherheits-
+Release 1.6.5 am Montag, 16.11.2026, Ablauf wie 1.6.4 mit Einzelfreigaben.
+
+- Version 1.6.5 in beiden `info.xml`, `image-tag` 1.6.5.
+- Doku-Links der sechs Beschreibungen auf `blob/v1.6.5`.
+- Namen und Beschreibungen zeichengleich zur Fassung 1.6.4.
+- Keine neuen nutzersichtbaren Sätze in der App.
+
+Changelog-Eintrag (Entwurf, Owner-Wort steht aus):
+
+- en: Dependency update in the backend: opentelemetry-api 1.45.1 to 1.45.2 (CVE-2026-126360). No functional changes.
+- de: Abhängigkeits-Update im Backend: opentelemetry-api 1.45.1 auf 1.45.2 (CVE-2026-126360). Keine funktionalen Änderungen.
+- fr: Mise à jour de dépendance dans le backend : opentelemetry-api 1.45.1 vers 1.45.2 (CVE-2026-126360). Aucun changement fonctionnel.
+
+Entwurf der Release-Notiz v1.6.5 (englisch, Faktenliste, Owner-Wort steht aus):
+
+```
+Findling 1.6.5. Update both apps; 1.6.x versions work together.
+- Security: the backend dependency opentelemetry-api is updated from 1.45.1 to 1.45.2 (CVE-2026-126360)
+- No functional changes
+
+Full changelog: https://github.com/street1983nk/nextcloud-search/compare/v1.6.4...v1.6.5
+```
+
+Tag-Links `blob/v1.6.5` und der Compare-Link lösen erst nach dem Tag auf.
 13. Meldung in #51 nach dem Store-Release (Owner, "Go"):
     issuecomment-6823682720; das Issue bleibt offen, bis der Melder bestätigt.
 
