@@ -8,10 +8,10 @@ license = "AGPL-3.0-or-later"
 authors = [{ name = "street1983nk" }]
 dependencies = [
     "nc-py-api[app]==0.30.3",
-    "fastapi==0.162.0",
+    "fastapi==0.162.5",
     "httpx==0.28.1",
     "tantivy==0.26.2",
-    "pypdfium2==5.14.0",
+    "pypdfium2==5.15.2",
     "pypdf==6.21.4",
     "python-docx==1.2.0",
     "python-pptx==1.0.2",
@@ -80,7 +80,7 @@ dependencies = [
     # Chunking. Splits a document into passages along sentence and paragraph
     # boundaries instead of every N characters. 0.33.0 (2026-09-24), cp310-abi3
     # wheel, so one wheel serves every Python from 3.10 on.
-    "semantic-text-splitter==0.33.1",
+    "semantic-text-splitter==0.33.2",
 ]
 
 # The unit suite covered 92 per cent of src/findling when the floor was
@@ -94,11 +94,11 @@ skip_covered = true
 
 [dependency-groups]
 dev = [
-    "ruff==0.17.4",
+    "ruff==0.17.5",
     "pyright==1.1.414",
     "vulture==2.16",
     "pytest==9.2.0",
-    "pytest-asyncio==1.4.1.post1",
+    "pytest-asyncio==1.5.0",
     "pytest-cov==7.1.0",
 ]
 # Build time only, and deliberately a group of its own rather than a dependency.
