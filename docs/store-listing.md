@@ -3313,6 +3313,43 @@ Full changelog: https://github.com/street1983nk/nextcloud-search/compare/v1.6.4.
 ```
 
 Tag-Links `blob/v1.6.5` und der Compare-Link lösen erst nach dem Tag auf.
+
+# Release 1.6.5 (16.11.2026)
+
+Sicherheits-Update (CVE-2026-126360, opentelemetry-api 1.45.1 auf 1.45.2),
+Store-Text unverändert. Changelog-Wortlaut und Release-Notiz sind die am
+16.11.2026 abgenommene Fassung oben ("Entwurf v1.6.5"). Owner-Worte vom
+16.11.2026 in der Claude-Code-Sitzung, je auf die einzelne Frage: Push des
+Release-Commits "Push (Empfohlen)", Tag samt Notiz-Wortlaut "Tag setzen
+(Empfohlen)", Einreichung "Einreichen (Empfohlen)". Tag-Push und Einreichung
+hat Claude im Auftrag des Owners ausgeführt.
+
+Belegkette:
+
+1. Fix e5c1da70 (nur backend/uv.lock, 1.45.1 auf 1.45.2) war vor dem Release
+   auf main; Release-Commit 06a0d7c8 (Version 1.6.5 in beiden info.xml,
+   image-tag, blob/v1.6.5-Links, Changelogs DE/EN/FR).
+2. Branch-CI auf 06a0d7c8: alle 8 Läufe grün (PHP/Store-Gates, Python,
+   Integration, Resilience, HaRP deploy, Multi-arch, Security scans,
+   Scorecard).
+3. `git rev-list -n 1 v1.6.5` = `06a0d7c8c9a33e7cce599c1c834d66a902ad0ce2`,
+   `git cat-file -t v1.6.5` = tag (annotiert), Nachricht "Findling 1.6.5",
+   Tagger street1983nk.
+4. Tag-Läufe auf v1.6.5, alle 7 success: Release archives for the app store,
+   PHP and store metadata gates, Python gates, Integration, Resilience,
+   Multi-arch image, HaRP deploy.
+5. `gh release view v1.6.5`: `isImmutable` true, veröffentlicht
+   2026-11-16T03:18:29Z, neun Assets (findling.tar.gz + .sig,
+   findling_backend.tar.gz + .sig, Quellarchive wie bei 1.6.4). Release-Notiz
+   mit `gh release edit v1.6.5 --notes-file` gesetzt und wortgleich gegen den
+   Entwurf verglichen.
+6. Eingereicht über `store-submit.yml` (`-f tag=v1.6.5`), ein Lauf,
+   43801394739, success, inkl. Update-Gate des Tags. Antwortcodes aus dem
+   Log:
+   - release findling v1.6.5: HTTP 201, 04:00:25Z
+   - release findling_backend v1.6.5: HTTP 201, 04:00:27Z
+7. Der Owner hat 1.6.5 im Store selbst gesehen (16.11.2026, "1.6.5 ist jetzt
+   im Store").
 13. Meldung in #51 nach dem Store-Release (Owner, "Go"):
     issuecomment-6823682720; das Issue bleibt offen, bis der Melder bestätigt.
 
